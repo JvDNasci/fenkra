@@ -26,6 +26,8 @@
 #include <BRepPrimAPI_MakeCylinder.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
 #include <BRepPrimAPI_MakeRevol.hxx>
+#include <BRepTools_History.hxx>
+#include <TopTools_ListOfShape.hxx>
 #include <BRep_Builder.hxx>
 #include <BRep_Tool.hxx>
 #include <Bnd_Box.hxx>
@@ -268,14 +270,90 @@ std::unique_ptr<Shape> compound(const Shape& a, const Shape& b) {
     return wrap(c);
 }
 
+namespace {
+
+// Propaga etiquetas (dono de cada face) de `src` para `res` usando o histórico da operação.
+// Faces sem origem em `src` recebem `fresh` (criadas pela operação).
+template <class Mod>
+std::vector<int> carry(const TopoDS_Shape& src, const std::vector<int>& tags, const TopoDS_Shape& res, Mod&& modified, int fresh) {
+    TopTools_IndexedMapOfShape sm, rm;
+    TopExp::MapShapes(src, TopAbs_FACE, sm);
+    TopExp::MapShapes(res, TopAbs_FACE, rm);
+    std::vector<int> out(rm.Extent(), fresh);
+    for (int i = 1; i <= sm.Extent(); ++i) {
+        const int tag = i - 1 < static_cast<int>(tags.size()) ? tags[i - 1] : fresh;
+        const TopoDS_Shape& f = sm(i);
+        const int k = rm.FindIndex(f);
+        if (k > 0) out[k - 1] = tag;
+        for (const TopoDS_Shape& img : modified(f)) {
+            const int j = rm.FindIndex(img);
+            if (j > 0) out[j - 1] = tag;
+        }
+    }
+    return out;
+}
+
+std::vector<int> to_vec(rust::Slice<const int32_t> s) { return std::vector<int>(s.begin(), s.end()); }
+
+void fill(rust::Vec<int32_t>& out, const std::vector<int>& v) {
+    out.clear();
+    for (int x : v) out.push_back(x);
+}
+
+template <class Mk>
+std::unique_ptr<Shape> edge_op_t(const char* what, const Shape& s, double v, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out) {
+    return guard(what, [&] {
+        Mk mk(s.s);
+        TopTools_IndexedMapOfShape edges;
+        TopExp::MapShapes(s.s, TopAbs_EDGE, edges);
+        for (int i = 1; i <= edges.Extent(); ++i) mk.Add(v, TopoDS::Edge(edges(i)));
+        mk.Build();
+        if (!mk.IsDone()) throw std::runtime_error("valor grande demais para a geometria");
+        fill(out, carry(s.s, to_vec(tags), mk.Shape(), [&](const TopoDS_Shape& f) -> const TopTools_ListOfShape& { return mk.Modified(f); }, -1));
+        return wrap(mk.Shape());
+    });
+}
+
+}  // namespace
+
+std::unique_ptr<Shape> boolean_t(const Shape& a, const Shape& b, uint8_t op, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out) {
+    return guard("booleana", [&] {
+        std::unique_ptr<BRepAlgoAPI_BooleanOperation> m;
+        if (op == 0) m.reset(new BRepAlgoAPI_Fuse(a.s, b.s));
+        else if (op == 1) m.reset(new BRepAlgoAPI_Cut(a.s, b.s));
+        else m.reset(new BRepAlgoAPI_Common(a.s, b.s));
+        if (m->HasErrors() || m->Shape().IsNull()) throw std::runtime_error("a operação booleana falhou");
+        const TopoDS_Shape r = m->Shape();
+        auto t1 = carry(a.s, to_vec(tags), r, [&](const TopoDS_Shape& f) -> const TopTools_ListOfShape& { return m->Modified(f); }, -1);
+        ShapeUpgrade_UnifySameDomain u(r, Standard_True, Standard_True, Standard_False);
+        u.Build();
+        Handle(BRepTools_History) h = u.History();
+        auto t2 = carry(r, t1, u.Shape(), [&](const TopoDS_Shape& f) -> const TopTools_ListOfShape& { return h->Modified(f); }, -1);
+        fill(out, t2);
+        return wrap(u.Shape());
+    });
+}
+
+std::unique_ptr<Shape> fillet_all_t(const Shape& s, double r, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out) {
+    return edge_op_t<BRepFilletAPI_MakeFillet>("filete", s, r, tags, out);
+}
+
+std::unique_ptr<Shape> chamfer_all_t(const Shape& s, double d, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out) {
+    return edge_op_t<BRepFilletAPI_MakeChamfer>("chanfro", s, d, tags, out);
+}
+
 MeshData tessellate(const Shape& s, double deflection) {
     return guard("tesselação", [&] {
         MeshData m;
         if (s.s.IsNull()) return m;
         BRepMesh_IncrementalMesh(s.s, deflection, Standard_False, 0.35, Standard_True);
 
-        for (TopExp_Explorer ex(s.s, TopAbs_FACE); ex.More(); ex.Next()) {
-            const TopoDS_Face& face = TopoDS::Face(ex.Current());
+        // mesma ordem de faces usada pelas etiquetas (IndexedMap)
+        TopTools_IndexedMapOfShape fmap;
+        TopExp::MapShapes(s.s, TopAbs_FACE, fmap);
+        for (int fi = 1; fi <= fmap.Extent(); ++fi) {
+            m.face_ranges.push_back(static_cast<uint32_t>(m.indices.size()));
+            const TopoDS_Face& face = TopoDS::Face(fmap(fi));
             TopLoc_Location loc;
             Handle(Poly_Triangulation) tri = BRep_Tool::Triangulation(face, loc);
             if (tri.IsNull()) continue;

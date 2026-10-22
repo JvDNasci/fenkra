@@ -1,11 +1,14 @@
 //! Aplicativo: estado, layout e comandos.
 //!
-//! Layout (RF-UI-001): menu mínimo + abas de módulo + barra de comandos no topo, árvore/projeto à
-//! esquerda, painel do objeto selecionado à direita, linha de tempo embaixo, viewport no centro.
+//! Layout (RF-UI-001): menu mínimo + abas de módulo + grupos de comandos (topo, lateral ou
+//! flutuantes), árvore/projeto à esquerda com a sequência de comandos, painel do objeto selecionado
+//! à direita, viewport no centro.
 
 use crate::editor;
 use crate::render::Viewport;
 use crate::scene;
+use crate::settings::{Dock, Settings, Theme, BACKGROUNDS};
+use crate::toolbar::{self, Act};
 use eframe::egui::{self, Color32, RichText};
 use glam::Vec3;
 use scc_core::*;
@@ -99,6 +102,12 @@ pub struct App {
     last_edit: f64,
     toasts: Vec<(String, f64, bool)>,
     left: LeftTab,
+    pub settings: Settings,
+    settings_open: bool,
+    /// ambiente de ocultos: mostra só o que está oculto (para reexibir)
+    pub hidden_env: bool,
+    /// sketch cuja vista deve ser alinhada quando o resultado chegar
+    align_pending: Option<Id>,
 }
 
 pub const MATERIALS: [(&str, f64); 8] = [
@@ -115,7 +124,13 @@ pub const MATERIALS: [(&str, f64); 8] = [
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         setup_fonts(&cc.egui_ctx);
-        let viewport = cc.wgpu_render_state.as_ref().map(Viewport::new);
+        egui_extras::install_image_loaders(&cc.egui_ctx);
+        let settings = Settings::load();
+        settings.apply(&cc.egui_ctx);
+        let mut viewport = cc.wgpu_render_state.as_ref().map(Viewport::new);
+        if let Some(v) = viewport.as_mut() {
+            v.camera.ortho = settings.ortho;
+        }
         let mut app = App {
             open: OpenDoc { doc: scc_solidos::example_document(), entry: None, frozen: None, file: None, modified: false },
             project: None,
@@ -135,6 +150,10 @@ impl App {
             last_edit: -10.,
             toasts: vec![],
             left: LeftTab::Peca,
+            settings,
+            settings_open: false,
+            hidden_env: false,
+            align_pending: None,
         };
         app.request_recompute();
         app
@@ -392,7 +411,78 @@ impl App {
                 Sel::Collector(id)
             }
         };
+        if let Sel::Feature(id) = new_sel {
+            let d = &mut self.open.doc;
+            let (consumed, is_sketch) = match d.feature(id).map(|f| &f.kind) {
+                Some(FeatureKind::Extrude(e)) => (Some(e.sketch), false),
+                Some(FeatureKind::Revolve(r)) => (Some(r.sketch), false),
+                Some(FeatureKind::Hole(h)) => (Some(h.sketch), false),
+                Some(FeatureKind::Sketch(_)) => (None, true),
+                _ => (None, false),
+            };
+            // sketch consumido por um comando fica oculto (pode ser reexibido pelo olho na árvore)
+            if let Some(f) = consumed.and_then(|s| d.feature_mut(s)) {
+                f.hidden = true;
+            }
+            if is_sketch {
+                self.align_pending = Some(id);
+            }
+        }
         self.sel = new_sel;
+    }
+
+    /// Executa uma ação da barra de ferramentas.
+    fn act(&mut self, a: Act) {
+        match a {
+            Act::Cmd(c) => self.command(c),
+            Act::Fit => self.fit_pending = true,
+            Act::View(y, p) => {
+                if let Some(v) = self.viewport.as_mut() {
+                    v.camera.set_view(y, p)
+                }
+            }
+            Act::Normal => self.align_to_selection(),
+            Act::Ortho => {
+                self.settings.ortho = !self.settings.ortho;
+                if let Some(v) = self.viewport.as_mut() {
+                    v.camera.ortho = self.settings.ortho
+                }
+            }
+            Act::HiddenEnv => {
+                self.hidden_env = !self.hidden_env;
+                self.scene_dirty = true;
+                let msg = if self.hidden_env { "Ambiente de ocultos: mostrando só os itens ocultos" } else { "Ambiente normal" };
+                self.toast(msg, false);
+            }
+            Act::Settings => self.settings_open = !self.settings_open,
+            Act::Dock(g, d) => self.settings.set_dock(g, d),
+        }
+    }
+
+    /// Olha de frente para o plano do item selecionado (sketch, plano da Origem ou referência).
+    fn align_to_selection(&mut self) {
+        let Some(r) = &self.result else { return };
+        let frame = match self.sel {
+            Sel::Feature(id) => r.sketches.iter().find(|s| s.feature == id).map(|s| s.frame),
+            Sel::Ref(id) => r.planes.iter().find(|p| p.id == Some(id)).map(|p| p.frame),
+            Sel::Origin(o) => Some(scc_solidos::origin_frame(o)),
+            _ => None,
+        };
+        match (frame, self.viewport.as_mut()) {
+            (Some(f), Some(v)) => {
+                let c = r
+                    .sketches
+                    .iter()
+                    .find(|s| matches!(self.sel, Sel::Feature(id) if id == s.feature))
+                    .and_then(|s| {
+                        let n = s.lines.len().max(1) as f32;
+                        (!s.lines.is_empty()).then(|| s.lines.iter().fold(Vec3::ZERO, |a, p| a + Vec3::from(*p)) / n)
+                    })
+                    .unwrap_or(Vec3::from(f.origin.map(|x| x as f32)));
+                v.camera.look_along(Vec3::from(f.normal.map(|x| x as f32)), c);
+            }
+            _ => self.toast("Selecione um sketch ou plano para alinhar a vista", true),
+        }
     }
 
     pub fn ask_delete(&mut self, id: Id) {
@@ -459,6 +549,33 @@ impl App {
                         ui.close();
                     }
                 });
+                ui.menu_button("Exibir", |ui| {
+                    ui.menu_button("Estilo de exibição", |ui| {
+                        for m in crate::render::DisplayMode::ALL {
+                            ui.radio_value(&mut self.settings.display, m, m.label());
+                        }
+                    });
+                    if ui.checkbox(&mut self.hidden_env, "Ambiente de ocultos   Shift+H").changed() {
+                        self.scene_dirty = true;
+                    }
+                    ui.menu_button("Barras de ferramentas", |ui| {
+                        for g in crate::settings::Group::ALL {
+                            ui.menu_button(g.label(), |ui| {
+                                for d in Dock::ALL {
+                                    if ui.radio(self.settings.dock(g) == d, d.label()).clicked() {
+                                        self.settings.set_dock(g, d);
+                                        ui.close();
+                                    }
+                                }
+                            });
+                        }
+                    });
+                    ui.separator();
+                    if ui.button("Configurações…").clicked() {
+                        self.settings_open = true;
+                        ui.close();
+                    }
+                });
                 ui.menu_button("Editar", |ui| {
                     if ui.add_enabled(!self.undo.is_empty(), egui::Button::new("Desfazer   Ctrl+Z")).clicked() {
                         self.undo();
@@ -486,53 +603,145 @@ impl App {
             });
         });
 
-        egui::Panel::top("comandos").show(root, |ui| {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 4.;
-                let b = |ui: &mut egui::Ui, icon: &str, label: &str, tip: &str| -> bool {
-                    ui.add(egui::Button::new(format!("{icon} {label}")).min_size(egui::vec2(0., 26.))).on_hover_text(tip).clicked()
-                };
-                let mut cmd = None;
-                if b(ui, "✏", "Sketch", "Novo sketch no plano selecionado (ou XY)") {
-                    cmd = Some(Cmd::Sketch)
-                }
-                ui.separator();
-                if b(ui, "⬆", "Extrusão", "Extrudar o sketch selecionado") {
-                    cmd = Some(Cmd::Extrude)
-                }
-                if b(ui, "⬇", "Recorte", "Remover material a partir do sketch") {
-                    cmd = Some(Cmd::Cut)
-                }
-                if b(ui, "⟳", "Revolução", "Revolucionar o sketch em torno de um eixo") {
-                    cmd = Some(Cmd::Revolve)
-                }
-                if b(ui, "◎", "Furo", "Furo inteligente nos pontos de um sketch") {
-                    cmd = Some(Cmd::Hole)
-                }
-                if b(ui, "◜", "Filete", "Arredondar arestas") {
-                    cmd = Some(Cmd::Fillet)
-                }
-                if b(ui, "◸", "Chanfro", "Chanfrar arestas") {
-                    cmd = Some(Cmd::Chamfer)
-                }
-                ui.separator();
-                if b(ui, "▱", "Plano", "Plano de referência deslocado do plano selecionado") {
-                    cmd = Some(Cmd::Plane)
-                }
-                if b(ui, "ƒ", "Parâmetro", "Novo parâmetro") {
-                    cmd = Some(Cmd::Param)
-                }
-                if b(ui, "🗀", "Pasta", "Nova pasta para organizar comandos") {
-                    cmd = Some(Cmd::Folder)
-                }
-                if b(ui, "▣", "Coletor", "Novo coletor de corpos (vira o ativo)") {
-                    cmd = Some(Cmd::Collector)
-                }
-                if let Some(c) = cmd {
-                    self.command(c);
-                }
+        let top = toolbar::groups_at(&self.settings, Dock::Topo);
+        if !top.is_empty() {
+            let mut acts = vec![];
+            egui::Panel::top("comandos").show(root, |ui| {
+                egui::ScrollArea::horizontal().id_salt("barra_topo").show(ui, |ui| {
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
+                        for (i, g) in top.iter().enumerate() {
+                            if i > 0 {
+                                ui.separator();
+                            }
+                            acts.extend(toolbar::show_group(ui, *g, &mut self.settings, self.hidden_env, false));
+                        }
+                    });
+                });
             });
+            for a in acts {
+                self.act(a);
+            }
+        }
+    }
+
+    /// Grupos fixos na lateral e grupos flutuantes.
+    fn side_toolbars(&mut self, root: &mut egui::Ui) {
+        let mut acts = vec![];
+        let side = toolbar::groups_at(&self.settings, Dock::Lateral);
+        if !side.is_empty() {
+            egui::Panel::left("barra_lateral").resizable(false).show(root, |ui| {
+                egui::ScrollArea::vertical().id_salt("barra_lat").show(ui, |ui| {
+                    for (i, g) in side.iter().enumerate() {
+                        if i > 0 {
+                            ui.separator();
+                        }
+                        acts.extend(toolbar::show_group(ui, *g, &mut self.settings, self.hidden_env, true));
+                    }
+                });
+            });
+        }
+        let ctx = root.ctx().clone();
+        for (i, g) in toolbar::groups_at(&self.settings, Dock::Flutuante).into_iter().enumerate() {
+            egui::Window::new(g.label())
+                .id(egui::Id::unique(("flutuante", g.label())))
+                .default_pos(egui::pos2(320. + 40. * i as f32, 140. + 40. * i as f32))
+                .resizable(false)
+                .collapsible(true)
+                .show(&ctx, |ui| {
+                    acts.extend(toolbar::show_group(ui, g, &mut self.settings, self.hidden_env, false));
+                });
+        }
+        for a in acts {
+            self.act(a);
+        }
+    }
+
+    fn settings_window(&mut self, ctx: &egui::Context) {
+        if !self.settings_open {
+            return;
+        }
+        let mut open = true;
+        let s = &mut self.settings;
+        egui::Window::new("Configurações").open(&mut open).default_width(380.).resizable(true).show(ctx, |ui| {
+            egui::CollapsingHeader::new("Interface").default_open(true).show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Tema");
+                    ui.radio_value(&mut s.theme, Theme::Escuro, "Escuro");
+                    ui.radio_value(&mut s.theme, Theme::Claro, "Claro");
+                });
+                ui.add(egui::Slider::new(&mut s.ui_scale, 0.75..=1.75).text("escala (fontes e controles)"));
+                ui.add(egui::Slider::new(&mut s.icon_size, 20.0..=48.0).text("tamanho dos ícones"));
+                ui.checkbox(&mut s.show_labels, "mostrar o nome embaixo dos ícones");
+            });
+            egui::CollapsingHeader::new("Fundo da viewport").default_open(true).show(ui, |ui| {
+                ui.checkbox(&mut s.gradient, "degradê de duas cores");
+                ui.horizontal(|ui| {
+                    ui.label(if s.gradient { "Topo" } else { "Cor" });
+                    if s.gradient {
+                        ui.color_edit_button_srgb(&mut s.bg_top);
+                        ui.label("Base");
+                    }
+                    ui.color_edit_button_srgb(&mut s.bg_bottom);
+                });
+                ui.horizontal_wrapped(|ui| {
+                    for (n, t, b) in BACKGROUNDS {
+                        if ui.small_button(n).clicked() {
+                            s.bg_top = t;
+                            s.bg_bottom = b;
+                            s.gradient = t != b;
+                        }
+                    }
+                });
+            });
+            egui::CollapsingHeader::new("Exibição").default_open(true).show(ui, |ui| {
+                for m in crate::render::DisplayMode::ALL {
+                    ui.radio_value(&mut s.display, m, m.label());
+                }
+                ui.checkbox(&mut s.edges_in_render, "arestas no semi-renderizado");
+                ui.checkbox(&mut s.ortho, "projeção ortogonal");
+            });
+            egui::CollapsingHeader::new("Barras de ferramentas").show(ui, |ui| {
+                for g in crate::settings::Group::ALL {
+                    ui.horizontal(|ui| {
+                        ui.add_sized([110., 18.], egui::Label::new(g.label()));
+                        let mut d = s.dock(g);
+                        egui::ComboBox::from_id_salt(("dock", g.label())).selected_text(d.label()).show_ui(ui, |ui| {
+                            for o in Dock::ALL {
+                                ui.selectable_value(&mut d, o, o.label());
+                            }
+                        });
+                        s.set_dock(g, d);
+                    });
+                }
+                ui.label(RichText::new("Dica: clique direito em um grupo para mudar onde ele fica.").weak().small());
+            });
+            egui::CollapsingHeader::new("Cotagem").show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Norma");
+                    egui::ComboBox::from_id_salt("norma").selected_text(s.dim_standard.clone()).show_ui(ui, |ui| {
+                        for n in ["ABNT NBR 10126", "ISO 129-1", "ASME Y14.5"] {
+                            ui.selectable_value(&mut s.dim_standard, n.to_string(), n);
+                        }
+                    });
+                });
+                ui.add(egui::Slider::new(&mut s.dim_decimals, 0..=4).text("casas decimais"));
+                ui.add(egui::Slider::new(&mut s.dim_text_height, 1.8..=7.0).text("altura do texto (mm)"));
+                ui.label(RichText::new("Usado pela ferramenta de cotagem do sketch e pelo desenho técnico.").weak().small());
+            });
+            egui::CollapsingHeader::new("Sketch").show(ui, |ui| {
+                ui.checkbox(&mut s.grid, "grade");
+                ui.add(egui::Slider::new(&mut s.grid_step, 1.0..=50.0).text("passo da grade (mm)"));
+                ui.checkbox(&mut s.snaps, "snaps");
+                ui.checkbox(&mut s.auto_constraints, "restrições automáticas");
+                ui.checkbox(&mut s.auto_dims, "cotas automáticas");
+                ui.label(RichText::new("Aplicado pelo editor de sketch interativo (próxima alpha).").weak().small());
+            });
+            ui.separator();
+            if ui.button("Restaurar padrões").clicked() {
+                *s = Settings::default();
+            }
         });
+        self.settings_open = open;
     }
 
     fn tree(&mut self, ui: &mut egui::Ui) {
@@ -547,6 +756,9 @@ impl App {
         if r.clicked() {
             new_sel = Some(Sel::Part);
         }
+        r.context_menu(|ui| {
+            appearance_menu(ui, doc.appearance, AppTarget::Part, &mut actions);
+        });
         if !doc.props.pn.is_empty() {
             ui.label(RichText::new(format!("   PN {} · {}", doc.props.pn, doc.props.part_type.label())).weak().small());
         }
@@ -571,7 +783,14 @@ impl App {
             for r in &doc.references {
                 let users = doc.dependents(r.id).len();
                 let txt = format!("▱ {}{}", r.name, if users > 0 { format!("  ·{users}") } else { String::new() });
-                let resp = pick(ui, Sel::Ref(r.id), RichText::new(txt));
+                let resp = ui
+                    .horizontal(|ui| {
+                        if eye(ui, !r.visible) {
+                            actions.push(TreeAction::RefVisible(r.id, !r.visible));
+                        }
+                        pick(ui, Sel::Ref(r.id), if r.visible { RichText::new(txt) } else { RichText::new(txt).weak() })
+                    })
+                    .inner;
                 if resp.clicked() {
                     new_sel = Some(Sel::Ref(r.id));
                 }
@@ -619,6 +838,13 @@ impl App {
                     if resp.double_clicked() {
                         actions.push(TreeAction::Activate(c.id));
                     }
+                    resp.context_menu(|ui| {
+                        if ui.button("Tornar ativo").clicked() {
+                            actions.push(TreeAction::Activate(c.id));
+                            ui.close();
+                        }
+                        appearance_menu(ui, Some(Appearance { color: c.color, finish: c.finish }), AppTarget::Collector(c.id), &mut actions);
+                    });
                 });
             }
         });
@@ -628,7 +854,7 @@ impl App {
         let mut drawn_folders = vec![];
         for (i, f) in doc.features.iter().enumerate() {
             if i == doc.rollback {
-                marker(ui);
+                marker(ui, i, doc.features.len(), &mut actions);
             }
             match f.folder {
                 Some(fid) if drawn_folders.contains(&fid) => continue,
@@ -648,7 +874,7 @@ impl App {
             }
         }
         if doc.rollback >= doc.features.len() {
-            marker(ui);
+            marker(ui, doc.features.len(), doc.features.len(), &mut actions);
         }
         for fo in doc.folders.iter().filter(|fo| !drawn_folders.contains(&fo.id)) {
             if pick(ui, Sel::Folder(fo.id), RichText::new(format!("🗀 {} (vazia)", fo.name)).weak()).clicked() {
@@ -676,7 +902,24 @@ impl App {
         if f.suppressed {
             text = text.strikethrough();
         }
-        let resp = ui.selectable_label(self.sel == Sel::Feature(f.id), text);
+        if f.hidden {
+            text = text.italics();
+        }
+        let resp = ui
+            .horizontal(|ui| {
+                if eye(ui, f.hidden) {
+                    actions.push(TreeAction::Hide(f.id, !f.hidden));
+                }
+                if let Some(a) = f.appearance {
+                    let (r, _) = ui.allocate_exact_size(egui::vec2(8., 8.), egui::Sense::hover());
+                    ui.painter().circle_filled(r.center(), 4., Color32::from_rgb(a.color[0], a.color[1], a.color[2]));
+                }
+                ui.selectable_label(self.sel == Sel::Feature(f.id), text)
+            })
+            .inner;
+        if resp.double_clicked() && matches!(f.kind, FeatureKind::Sketch(_)) {
+            actions.push(TreeAction::Align(f.id));
+        }
         let resp = match st.and_then(|s| s.message()) {
             Some(m) => resp.on_hover_text(m),
             None => resp,
@@ -689,6 +932,15 @@ impl App {
                 actions.push(TreeAction::Suppress(f.id));
                 ui.close();
             }
+            if ui.button(if f.hidden { "Mostrar   H" } else { "Ocultar   H" }).clicked() {
+                actions.push(TreeAction::Hide(f.id, !f.hidden));
+                ui.close();
+            }
+            if matches!(f.kind, FeatureKind::Sketch(_)) && ui.button("Alinhar vista ao sketch   N").clicked() {
+                actions.push(TreeAction::Align(f.id));
+                ui.close();
+            }
+            appearance_menu(ui, f.appearance, AppTarget::Feature(f.id), actions);
             if ui.button("Marcador até aqui").clicked() {
                 actions.push(TreeAction::Rollback(i + 1));
                 ui.close();
@@ -766,6 +1018,65 @@ impl App {
                 self.sel = Sel::Feature(id);
                 self.command(c);
             }
+            TreeAction::Hide(id, h) => {
+                if let Some(f) = d.feature_mut(id) {
+                    f.hidden = h
+                }
+            }
+            TreeAction::RefVisible(id, v) => {
+                if let Some(r) = d.references.iter_mut().find(|r| r.id == id) {
+                    r.visible = v
+                }
+            }
+            TreeAction::SetAppearance(t, a) => match t {
+                AppTarget::Part => d.appearance = a,
+                AppTarget::Feature(id) => {
+                    if let Some(f) = d.feature_mut(id) {
+                        f.appearance = a
+                    }
+                }
+                AppTarget::Collector(id) => {
+                    if let (Some(c), Some(a)) = (d.collectors.iter_mut().find(|c| c.id == id), a) {
+                        c.color = a.color;
+                        c.finish = a.finish;
+                    }
+                }
+            },
+            TreeAction::Customize(t) => {
+                self.sel = match t {
+                    AppTarget::Part => Sel::Part,
+                    AppTarget::Feature(id) => Sel::Feature(id),
+                    AppTarget::Collector(id) => Sel::Collector(id),
+                };
+            }
+            TreeAction::Align(id) => {
+                self.sel = Sel::Feature(id);
+                self.align_to_selection();
+            }
+        }
+    }
+
+    /// Alterna ocultar/mostrar o item selecionado (tecla H).
+    fn toggle_hide_selected(&mut self) {
+        let d = &mut self.open.doc;
+        match self.sel {
+            Sel::Feature(id) => {
+                if let Some(f) = d.feature_mut(id) {
+                    f.hidden = !f.hidden
+                }
+            }
+            Sel::Ref(id) => {
+                if let Some(r) = d.references.iter_mut().find(|r| r.id == id) {
+                    r.visible = !r.visible
+                }
+            }
+            Sel::Collector(id) => {
+                if let Some(c) = d.collectors.iter_mut().find(|c| c.id == id) {
+                    c.visible = !c.visible
+                }
+            }
+            Sel::Origin(_) => d.origin_visible = !d.origin_visible,
+            _ => {}
         }
     }
 
@@ -925,56 +1236,6 @@ impl App {
                 });
             });
         });
-
-        egui::Panel::bottom("timeline").resizable(false).show(root, |ui| {
-            ui.horizontal(|ui| {
-                ui.label(RichText::new("Linha de tempo").weak());
-                let n = self.open.doc.features.len();
-                let rb = &mut self.open.doc.rollback;
-                if ui.small_button("⏮").on_hover_text("marcador no início").clicked() {
-                    *rb = 0;
-                }
-                if ui.small_button("◀").on_hover_text("voltar um comando").clicked() {
-                    *rb = rb.saturating_sub(1);
-                }
-                if ui.small_button("▶").on_hover_text("avançar um comando").clicked() {
-                    *rb = (*rb + 1).min(n);
-                }
-                if ui.small_button("⏭").on_hover_text("marcador no fim").clicked() {
-                    *rb = n;
-                }
-                ui.separator();
-                egui::ScrollArea::horizontal().id_salt("tl").show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        let doc = &self.open.doc;
-                        let mut click = None;
-                        for (i, f) in doc.features.iter().enumerate() {
-                            if i == doc.rollback {
-                                ui.label(RichText::new("┃").strong().color(Color32::from_rgb(90, 160, 255)));
-                            }
-                            let st = self.result.as_ref().and_then(|r| r.status.get(&f.id));
-                            let mut t = RichText::new(format!("{} {}", f.kind.icon(), f.name));
-                            t = match st {
-                                Some(Status::Error(_)) => t.color(Color32::from_rgb(255, 110, 100)),
-                                Some(Status::Warning(_)) => t.color(Color32::from_rgb(240, 200, 90)),
-                                Some(Status::Inactive) => t.color(Color32::DARK_GRAY),
-                                _ => t,
-                            };
-                            let r = ui.add(egui::Button::new(t).selected(self.sel == Sel::Feature(f.id)));
-                            if r.clicked() {
-                                click = Some(f.id);
-                            }
-                        }
-                        if doc.rollback >= doc.features.len() {
-                            ui.label(RichText::new("┃").strong().color(Color32::from_rgb(90, 160, 255)));
-                        }
-                        if let Some(id) = click {
-                            self.sel = Sel::Feature(id);
-                        }
-                    });
-                });
-            });
-        });
     }
 
     fn viewport(&mut self, root: &mut egui::Ui, frame: &eframe::Frame) {
@@ -1011,35 +1272,39 @@ impl App {
 
             if let Some(rs) = frame.wgpu_render_state() {
                 let size = [(rect.width() * ppp) as u32, (rect.height() * ppp) as u32];
-                let tex = vp.render(rs, size);
+                let tex = vp.render(rs, size, self.settings.style());
                 ui.painter().image(tex, rect, egui::Rect::from_min_max(egui::pos2(0., 0.), egui::pos2(1., 1.)), Color32::WHITE);
             }
 
+            // texto legível sobre o fundo (claro ou escuro)
+            let lum = |c: [u8; 3]| 0.3 * c[0] as f32 + 0.59 * c[1] as f32 + 0.11 * c[2] as f32;
+            let light_bg = lum(self.settings.bg_bottom) > 140.;
+            let ink = if light_bg { Color32::from_black_alpha(170) } else { Color32::from_white_alpha(150) };
+
             // rótulos dos planos
-            if let Some(r) = &self.result {
+            if let (Some(r), true) = (&self.result, self.settings.filter.rotulos) {
                 for p in &r.planes {
                     let f = &p.frame;
                     let at = Vec3::from(f.origin.map(|v| v as f32));
                     let size = vp.bounds.map(|(a, b)| (b - a).max_element().max(20.) * 0.6).unwrap_or(60.);
                     let corner = at + (Vec3::from(f.x.map(|v| v as f32)) + Vec3::from(f.y().map(|v| v as f32))) * size * 0.45;
                     if let Some(pos) = vp.project(rect, corner) {
-                        ui.painter().text(pos, egui::Align2::LEFT_BOTTOM, &p.name, egui::FontId::proportional(11.), Color32::from_white_alpha(140));
+                        ui.painter().text(pos, egui::Align2::LEFT_BOTTOM, &p.name, egui::FontId::proportional(11.), ink);
                     }
                 }
             }
 
-            // botões de vista
-            let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect.shrink(8.)).layout(egui::Layout::left_to_right(egui::Align::Min)));
-            let views = [("Iso", -0.785, 0.6), ("Frente", -1.5708, 0.0), ("Topo", -1.5708, 1.5706), ("Direita", 0.0, 0.0)];
-            for (n, y, p) in views {
-                if child.small_button(n).clicked() {
-                    vp.camera.set_view(y, p);
-                }
-            }
-            if child.small_button("Ajustar").clicked() {
-                if let Some(b) = vp.bounds {
-                    vp.camera.fit(b);
-                }
+            // estado da vista no canto superior esquerdo
+            let info = format!(
+                "{}{} · {}",
+                if self.hidden_env { "AMBIENTE DE OCULTOS · " } else { "" },
+                if vp.camera.ortho { "Ortogonal" } else { "Perspectiva" },
+                self.settings.display.label()
+            );
+            let color = if self.hidden_env { Color32::from_rgb(255, 190, 80) } else { ink };
+            ui.painter().text(rect.left_top() + egui::vec2(10., 8.), egui::Align2::LEFT_TOP, info, egui::FontId::proportional(12.), color);
+            if self.hidden_env {
+                ui.painter().rect_stroke(rect.shrink(2.), 0., egui::Stroke::new(3., Color32::from_rgb(255, 170, 60)), egui::StrokeKind::Inside);
             }
 
             if !scc_kernel::AVAILABLE {
@@ -1060,7 +1325,7 @@ impl App {
                         format!("{name}: {:.0} mm³ · {} faces", b.mass.volume, b.faces)
                     })
                     .collect();
-                ui.painter().text(rect.right_bottom() - egui::vec2(10., 8.), egui::Align2::RIGHT_BOTTOM, mass.join("\n"), egui::FontId::proportional(11.), Color32::from_white_alpha(150));
+                ui.painter().text(rect.right_bottom() - egui::vec2(10., 8.), egui::Align2::RIGHT_BOTTOM, mass.join("\n"), egui::FontId::proportional(11.), ink);
             }
         });
     }
@@ -1194,7 +1459,52 @@ pub enum Cmd {
     Collector,
 }
 
+#[derive(Clone, Copy)]
+pub enum AppTarget {
+    Part,
+    Collector(Id),
+    Feature(Id),
+}
+
+/// Submenu "Aparência" com predefinições, personalizar e remover.
+fn appearance_menu(ui: &mut egui::Ui, current: Option<Appearance>, t: AppTarget, actions: &mut Vec<TreeAction>) {
+    ui.menu_button("🎨 Aparência", |ui| {
+        for (name, a) in APPEARANCE_PRESETS {
+            let resp = ui.horizontal(|ui| {
+                let (r, _) = ui.allocate_exact_size(egui::vec2(12., 12.), egui::Sense::hover());
+                ui.painter().rect_filled(r, 3., Color32::from_rgb(a.color[0], a.color[1], a.color[2]));
+                ui.selectable_label(current == Some(a), name)
+            });
+            if resp.inner.clicked() {
+                actions.push(TreeAction::SetAppearance(t, Some(a)));
+                ui.close();
+            }
+        }
+        ui.separator();
+        if ui.button("Personalizar cor e acabamento…").clicked() {
+            actions.push(TreeAction::Customize(t));
+            ui.close();
+        }
+        if !matches!(t, AppTarget::Collector(_)) && current.is_some() && ui.button("Remover aparência").clicked() {
+            actions.push(TreeAction::SetAppearance(t, None));
+            ui.close();
+        }
+    });
+}
+
+/// Ícone de olho clicável; devolve true se clicado.
+fn eye(ui: &mut egui::Ui, hidden: bool) -> bool {
+    let img = egui::Image::new(crate::icons::get(if hidden { "ocultar" } else { "mostrar" })).fit_to_exact_size(egui::vec2(15., 15.));
+    let img = if hidden { img.tint(Color32::from_white_alpha(120)) } else { img };
+    ui.add(egui::Button::image(img).frame(false)).on_hover_text(if hidden { "mostrar" } else { "ocultar" }).clicked()
+}
+
 enum TreeAction {
+    Hide(Id, bool),
+    RefVisible(Id, bool),
+    SetAppearance(AppTarget, Option<Appearance>),
+    Customize(AppTarget),
+    Align(Id),
     OriginVisible(bool),
     CollectorVisible(Id, bool),
     Activate(Id),
@@ -1213,9 +1523,21 @@ enum DelAction {
     Only(Id),
 }
 
-fn marker(ui: &mut egui::Ui) {
+/// Marcador de rollback na árvore: os comandos abaixo dele ficam desativados.
+fn marker(ui: &mut egui::Ui, at: usize, n: usize, actions: &mut Vec<TreeAction>) {
     ui.horizontal(|ui| {
-        ui.label(RichText::new("━━ marcador ━━").small().color(Color32::from_rgb(90, 160, 255)));
+        let blue = Color32::from_rgb(90, 160, 255);
+        ui.label(RichText::new("━━ marcador ━━").small().color(blue))
+            .on_hover_text("Comandos abaixo do marcador ficam desativados; novos comandos entram aqui");
+        if at > 0 && ui.small_button("▲").on_hover_text("subir o marcador").clicked() {
+            actions.push(TreeAction::Rollback(at - 1));
+        }
+        if at < n && ui.small_button("▼").on_hover_text("descer o marcador").clicked() {
+            actions.push(TreeAction::Rollback(at + 1));
+        }
+        if at < n && ui.small_button("⏬").on_hover_text("marcador no fim").clicked() {
+            actions.push(TreeAction::Rollback(n));
+        }
     });
 }
 
@@ -1275,9 +1597,36 @@ impl eframe::App for App {
         if del && !ctx.egui_wants_keyboard_input() {
             self.delete_selected();
         }
+        // atalhos de vista (só quando não há campo de texto em edição)
+        if !ctx.egui_wants_keyboard_input() {
+            let keys = ctx.input(|i| {
+                let c = i.modifiers.command;
+                let plain = !c && !i.modifiers.alt;
+                [
+                    (plain && i.key_pressed(egui::Key::F), Act::Fit),
+                    (plain && i.key_pressed(egui::Key::N), Act::Normal),
+                    (plain && i.key_pressed(egui::Key::O), Act::Ortho),
+                    (c && i.key_pressed(egui::Key::Num1), Act::View(-1.5708, 0.0)),
+                    (c && i.key_pressed(egui::Key::Num3), Act::View(0.0, 0.0)),
+                    (c && i.key_pressed(egui::Key::Num5), Act::View(-1.5708, 1.5706)),
+                    (c && i.key_pressed(egui::Key::Num7), Act::View(-0.785, 0.6)),
+                    (plain && i.modifiers.shift && i.key_pressed(egui::Key::H), Act::HiddenEnv),
+                ]
+            });
+            for (pressed, a) in keys {
+                if pressed {
+                    self.act(a);
+                }
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::H) && !i.modifiers.shift && !i.modifiers.command) {
+                self.toggle_hide_selected();
+            }
+        }
 
         let before = self.open.doc.clone();
         let sel_before = self.sel;
+        let settings_before = self.settings.clone();
+        let hidden_env_before = self.hidden_env;
 
         self.top(root);
         self.timeline(root);
@@ -1295,6 +1644,8 @@ impl eframe::App for App {
         egui::Panel::right("editor").default_size(330.).resizable(true).show(root, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| editor::show(self, ui));
         });
+        self.side_toolbars(root);
+        self.settings_window(ctx);
         self.dialogs(ctx);
         self.viewport(root, frame);
         self.toasts(ctx);
@@ -1319,16 +1670,43 @@ impl eframe::App for App {
                 self.request_recompute();
             }
         }
-        if self.sel != sel_before {
+        if self.sel != sel_before || self.hidden_env != hidden_env_before {
+            self.scene_dirty = true;
+        }
+        if self.settings != settings_before {
+            if self.settings.theme != settings_before.theme || self.settings.ui_scale != settings_before.ui_scale {
+                self.settings.apply(ctx);
+            }
+            if let Some(v) = self.viewport.as_mut() {
+                v.camera.ortho = self.settings.ortho;
+            }
+            self.settings.save();
             self.scene_dirty = true;
         }
 
         if self.scene_dirty {
             if let (Some(vp), Some(r), Some(rs)) = (self.viewport.as_mut(), &self.result, frame.wgpu_render_state()) {
-                let s = scene::build(&self.open.doc, r, &self.sel);
+                let lum = |c: [u8; 3]| 0.3 * c[0] as f32 + 0.59 * c[1] as f32 + 0.11 * c[2] as f32;
+                let opts = scene::SceneOpts {
+                    sel: &self.sel,
+                    filter: &self.settings.filter,
+                    hidden_env: self.hidden_env,
+                    dark_edges: !matches!(self.settings.display, crate::render::DisplayMode::Arame) || lum(self.settings.bg_bottom) > 140.,
+                };
+                let s = scene::build(&self.open.doc, r, &opts);
                 vp.set_scene(rs, &s);
                 self.scene_dirty = false;
                 ctx.request_repaint();
+            }
+        }
+        // alinha a vista ao sketch recém-criado assim que o resultado dele chega
+        if let Some(id) = self.align_pending {
+            if self.result.as_ref().is_some_and(|r| r.sketches.iter().any(|s| s.feature == id)) && self.gen_done == self.gen_sent {
+                self.align_pending = None;
+                let prev = self.sel;
+                self.sel = Sel::Feature(id);
+                self.align_to_selection();
+                self.sel = prev;
             }
         }
     }

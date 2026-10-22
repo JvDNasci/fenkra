@@ -36,11 +36,24 @@ pub struct BodyResult {
     pub mesh: Mesh,
     pub mass: MassProps,
     pub faces: u32,
+    /// Comando que gerou cada face (mesma ordem de `mesh.face_ranges`).
+    pub face_owner: Vec<Id>,
+}
+
+fn tags_for(owners: &[Id]) -> Vec<i32> {
+    (0..owners.len() as i32).collect()
+}
+
+/// Converte as etiquetas devolvidas pelo kernel em donos; -1 = face nova do comando `fid`.
+fn remap(owners: &[Id], out: &[i32], fid: Id) -> Vec<Id> {
+    out.iter().map(|t| if *t >= 0 { owners.get(*t as usize).copied().unwrap_or(fid) } else { fid }).collect()
 }
 
 /// Geometria de exibição de um sketch (segmentos 3D).
 pub struct SketchViz {
     pub feature: Id,
+    /// plano do sketch (para alinhar a câmera)
+    pub frame: Frame,
     pub lines: Vec<[f32; 3]>,
     pub construction: Vec<[f32; 3]>,
     pub points: Vec<[f32; 3]>,
@@ -83,7 +96,7 @@ pub fn origin_axis(a: OriginAxis) -> [f64; 3] {
 struct Ctx<'a> {
     doc: &'a Document,
     vars: Vars,
-    bodies: HashMap<Id, Shape>,
+    bodies: HashMap<Id, (Shape, Vec<Id>)>,
     sketches: HashMap<Id, (Frame, EvalSketch)>,
     /// sólido gerado por cada comando (base para filete/chanfro por comando)
     status: HashMap<Id, Status>,
@@ -118,7 +131,7 @@ impl Ctx<'_> {
     }
 
     fn body(&self, target: Id) -> Option<&Shape> {
-        self.bodies.get(&target).filter(|s| !s.is_null())
+        self.body_owned(target).map(|(s, _)| s)
     }
 
     /// Distância "passante": maior que o corpo inteiro.
@@ -144,14 +157,30 @@ impl Ctx<'_> {
         })
     }
 
-    fn apply(&mut self, target: Id, tool: Shape, op: BoolOp) -> Result<(), String> {
+    /// Corpo + dono (comando) de cada face, na ordem das faces do kernel.
+    fn body_owned(&self, target: Id) -> Option<&(Shape, Vec<Id>)> {
+        self.bodies.get(&target).filter(|(s, _)| !s.is_null())
+    }
+
+    /// Aplica a ferramenta ao corpo do coletor; faces novas passam a pertencer ao comando `fid`.
+    fn apply(&mut self, target: Id, tool: Shape, op: BoolOp, fid: Id) -> Result<(), String> {
         let k = |e: KernelError| e.0;
-        let next = match (self.body(target), op) {
-            (None, BoolOp::Add) => tool,
+        let next = match (self.body_owned(target), op) {
+            (None, BoolOp::Add) => {
+                let n = tool.face_count() as usize;
+                (tool, vec![fid; n])
+            }
             (None, _) => return Err("não há corpo no coletor de destino para esta operação".into()),
-            (Some(b), BoolOp::Add) => b.boolean(&tool, Bool::Fuse).map_err(k)?,
-            (Some(b), BoolOp::Cut) => b.boolean(&tool, Bool::Cut).map_err(k)?,
-            (Some(b), BoolOp::Intersect) => b.boolean(&tool, Bool::Common).map_err(k)?,
+            (Some((b, owners)), op) => {
+                let kop = match op {
+                    BoolOp::Add => Bool::Fuse,
+                    BoolOp::Cut => Bool::Cut,
+                    BoolOp::Intersect => Bool::Common,
+                };
+                let (s, out) = b.boolean_tagged(&tool, kop, &tags_for(owners)).map_err(k)?;
+                let own = remap(owners, &out, fid);
+                (s, own)
+            }
         };
         self.bodies.insert(target, next);
         Ok(())
@@ -179,7 +208,7 @@ impl Ctx<'_> {
                 let dir = if into { n.map(|x| -x) } else { n };
                 let (front, back) = self.extent(&e.extent, f.target)?;
                 let tool = face.extrude(dir, front, back).map_err(k)?;
-                self.apply(f.target, tool, e.op)?;
+                self.apply(f.target, tool, e.op, f.id)?;
                 Ok(None)
             }
             FeatureKind::Revolve(r) => {
@@ -200,7 +229,7 @@ impl Ctx<'_> {
                 let ang = ev(&r.angle, &self.vars, "ângulo")?;
                 let start = if r.symmetric { -ang / 2. } else { 0. };
                 let tool = face.revolve(origin, dir, ang, start).map_err(k)?;
-                self.apply(f.target, tool, r.op)?;
+                self.apply(f.target, tool, r.op, f.id)?;
                 Ok(None)
             }
             FeatureKind::Hole(h) => {
@@ -228,14 +257,17 @@ impl Ctx<'_> {
                     let t = Shape::hole_tool(frame.point(p[0], p[1]), dir, d, depth, shape).map_err(k)?;
                     tool = if tool.is_null() { t } else { tool.compound(&t) };
                 }
-                self.apply(f.target, tool, BoolOp::Cut)?;
+                self.apply(f.target, tool, BoolOp::Cut, f.id)?;
                 Ok(h.thread.as_ref().map(|t| format!("rosca cosmética {t}")))
             }
             FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => {
                 let v = ev(&o.value, &self.vars, "valor")?;
-                let b = self.body(f.target).ok_or("não há corpo para aplicar")?;
-                let r = if matches!(f.kind, FeatureKind::Fillet(_)) { b.fillet_all(v) } else { b.chamfer_all(v) };
-                self.bodies.insert(f.target, r.map_err(k)?);
+                let (b, owners) = self.body_owned(f.target).ok_or("não há corpo para aplicar")?;
+                let tags = tags_for(owners);
+                let r = if matches!(f.kind, FeatureKind::Fillet(_)) { b.fillet_tagged(v, &tags) } else { b.chamfer_tagged(v, &tags) };
+                let (s, out) = r.map_err(k)?;
+                let own = remap(owners, &out, f.id);
+                self.bodies.insert(f.target, (s, own));
                 Ok(match o.edges {
                     EdgeSel::AllOfBody => None,
                     EdgeSel::CreatedBy(_) => Some("seleção por comando ainda não implementada: aplicado a todas as arestas".into()),
@@ -283,7 +315,7 @@ pub fn recompute(doc: &Document) -> RecomputeResult {
     // sketches para exibição
     let mut sketches = vec![];
     for (id, (fr, es)) in &cx.sketches {
-        let mut v = SketchViz { feature: *id, lines: vec![], construction: vec![], points: vec![] };
+        let mut v = SketchViz { feature: *id, frame: *fr, lines: vec![], construction: vec![], points: vec![] };
         for (cons, pts) in &es.viz {
             let dst = if *cons { &mut v.construction } else { &mut v.lines };
             for w in pts.windows(2) {
@@ -298,13 +330,20 @@ pub fn recompute(doc: &Document) -> RecomputeResult {
     // malhas dos corpos
     let mut bodies = vec![];
     for c in &doc.collectors {
-        let Some(s) = cx.body(c.id) else { continue };
+        let Some((s, owners)) = cx.body_owned(c.id) else { continue };
         let defl = s
             .bbox()
             .map(|(a, b)| ((0..3).map(|i| (b[i] - a[i]).powi(2)).sum::<f64>().sqrt() * 0.0015).clamp(0.005, 1.0))
             .unwrap_or(0.1);
         match s.mesh(defl) {
-            Ok(mesh) => bodies.push(BodyResult { collector: c.id, color: c.color, mass: s.mass(), faces: s.face_count(), mesh }),
+            Ok(mesh) => bodies.push(BodyResult {
+                collector: c.id,
+                color: c.color,
+                mass: s.mass(),
+                faces: s.face_count(),
+                face_owner: owners.clone(),
+                mesh,
+            }),
             Err(e) => {
                 cx.status.insert(c.id, Status::Error(e.0));
             }
@@ -375,6 +414,9 @@ pub fn example_document() -> Document {
     }
     let skf = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Datum(topo), entities: pts }));
     d.feature_mut(skf).unwrap().name = s("Centros dos furos");
+    // sketches consumidos por comandos ficam ocultos, como nos CADs usuais
+    d.feature_mut(base).unwrap().hidden = true;
+    d.feature_mut(skf).unwrap().hidden = true;
     let m6 = hardware::metric("M6").unwrap();
     let furo = d.add_feature(FeatureKind::Hole(Hole {
         sketch: skf,
@@ -407,7 +449,15 @@ mod tests {
             assert_eq!(r.status[&f.id], Status::Ok, "{}: {:?}", f.name, r.status[&f.id]);
         }
         assert_eq!(r.bodies.len(), 1);
-        assert!(r.bodies[0].mass.volume > 0.);
+        let b = &r.bodies[0];
+        assert!(b.mass.volume > 0.);
+        // cada face tem dono; furo, filete e placa aparecem como donos
+        assert_eq!(b.face_owner.len(), b.mesh.face_ranges.len());
+        let owners: std::collections::HashSet<Id> = b.face_owner.iter().copied().collect();
+        for name in ["Placa", "Furos M6", "Filete1"] {
+            let id = d.features.iter().find(|f| f.name == name).unwrap().id;
+            assert!(owners.contains(&id), "{name} sem faces");
+        }
     }
 
     #[test]

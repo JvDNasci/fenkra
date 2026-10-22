@@ -29,6 +29,9 @@ std::unique_ptr<Shape> hole_tool(double ox, double oy, double oz, double dx, dou
 std::unique_ptr<Shape> fillet_all(const Shape& s, double radius);
 std::unique_ptr<Shape> chamfer_all(const Shape& s, double dist);
 std::unique_ptr<Shape> compound(const Shape& a, const Shape& b);
+std::unique_ptr<Shape> boolean_t(const Shape& a, const Shape& b, uint8_t op, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
+std::unique_ptr<Shape> fillet_all_t(const Shape& s, double r, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
+std::unique_ptr<Shape> chamfer_all_t(const Shape& s, double d, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
 
 MeshData tessellate(const Shape& s, double deflection);
 rust::Vec<double> bounding_box(const Shape& s);

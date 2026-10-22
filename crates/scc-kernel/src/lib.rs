@@ -65,6 +65,8 @@ pub struct Mesh {
     pub normals: Vec<f32>,
     pub indices: Vec<u32>,
     pub edges: Vec<f32>,
+    /// início (em `indices`) dos triângulos de cada face
+    pub face_ranges: Vec<u32>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -171,9 +173,26 @@ mod imp {
             Shape(b::compound(&self.0, &other.0))
         }
 
+        /// Booleana que propaga etiquetas de face: devolve (resultado, etiqueta de cada face; -1 = nova).
+        pub fn boolean_tagged(&self, other: &Shape, op: Bool, tags: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            let mut out = vec![];
+            let s = b::boolean_t(&self.0, &other.0, op as u8, tags, &mut out).map_err(err)?;
+            Ok((Shape(s), out))
+        }
+        pub fn fillet_tagged(&self, r: f64, tags: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            let mut out = vec![];
+            let s = b::fillet_all_t(&self.0, r, tags, &mut out).map_err(err)?;
+            Ok((Shape(s), out))
+        }
+        pub fn chamfer_tagged(&self, d: f64, tags: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            let mut out = vec![];
+            let s = b::chamfer_all_t(&self.0, d, tags, &mut out).map_err(err)?;
+            Ok((Shape(s), out))
+        }
+
         pub fn mesh(&self, deflection: f64) -> KResult<Mesh> {
             let m = b::tessellate(&self.0, deflection).map_err(err)?;
-            Ok(Mesh { positions: m.positions, normals: m.normals, indices: m.indices, edges: m.edges })
+            Ok(Mesh { positions: m.positions, normals: m.normals, indices: m.indices, edges: m.edges, face_ranges: m.face_ranges })
         }
         pub fn bbox(&self) -> Option<([f64; 3], [f64; 3])> {
             let v = b::bounding_box(&self.0);
@@ -250,6 +269,15 @@ mod imp {
         pub fn compound(&self, _: &Shape) -> Shape {
             Shape
         }
+        pub fn boolean_tagged(&self, _: &Shape, _: Bool, _: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            no()
+        }
+        pub fn fillet_tagged(&self, _: f64, _: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            no()
+        }
+        pub fn chamfer_tagged(&self, _: f64, _: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            no()
+        }
         pub fn mesh(&self, _: f64) -> KResult<Mesh> {
             no()
         }
@@ -309,6 +337,23 @@ mod tests {
         let furada = caixa.boolean(&t, Bool::Cut).unwrap();
         assert!(furada.mass().volume < caixa.mass().volume);
         assert!(caixa.fillet_all(1.).is_ok());
+    }
+
+    #[test]
+    fn etiquetas_de_face_sobrevivem_a_booleana() {
+        let caixa = Shape::face(&XY, &[rect(40., 40.)]).unwrap().extrude([0., 0., 1.], 10., 0.).unwrap();
+        let n = caixa.face_count() as i32;
+        assert_eq!(n, 6);
+        let tags = vec![7; n as usize];
+        let t = Shape::hole_tool([0., 0., 10.], [0., 0., -1.], 6., 10., HoleShape::Simple).unwrap();
+        let (furada, out) = caixa.boolean_tagged(&t, Bool::Cut, &tags).unwrap();
+        assert_eq!(out.len() as u32, furada.face_count());
+        // as 6 faces da caixa continuam com a etiqueta 7; a parede do furo é nova (-1)
+        assert_eq!(out.iter().filter(|t| **t == 7).count(), 6);
+        assert!(out.contains(&-1));
+        assert_eq!(furada.mesh(0.1).unwrap().face_ranges.len(), out.len());
+        let (_, fo) = furada.fillet_tagged(0.5, &out).unwrap();
+        assert!(fo.contains(&7) && fo.contains(&-1));
     }
 
     #[test]

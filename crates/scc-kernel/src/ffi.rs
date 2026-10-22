@@ -36,6 +36,8 @@ pub mod bridge {
         indices: Vec<u32>,
         /// pares de pontos (segmentos de linha) das arestas
         edges: Vec<f32>,
+        /// início (em `indices`) dos triângulos de cada face, na ordem das etiquetas
+        face_ranges: Vec<u32>,
     }
 
     unsafe extern "C++" {
@@ -63,6 +65,11 @@ pub mod bridge {
         fn fillet_all(s: &Shape, radius: f64) -> Result<UniquePtr<Shape>>;
         fn chamfer_all(s: &Shape, dist: f64) -> Result<UniquePtr<Shape>>;
         fn compound(a: &Shape, b: &Shape) -> UniquePtr<Shape>;
+        /// Versões com etiquetas: `tags` = dono de cada face de `a`; `out` = dono de cada face do
+        /// resultado (-1 = face criada pela operação).
+        fn boolean_t(a: &Shape, b: &Shape, op: u8, tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
+        fn fillet_all_t(s: &Shape, r: f64, tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
+        fn chamfer_all_t(s: &Shape, d: f64, tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
 
         fn tessellate(s: &Shape, deflection: f64) -> Result<MeshData>;
         /// [xmin, ymin, zmin, xmax, ymax, zmax]

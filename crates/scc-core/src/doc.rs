@@ -147,6 +147,67 @@ impl Default for Properties {
     }
 }
 
+// ---------------------------------------------------------------- Aparência
+
+/// Acabamento visual (pré-render rápido). Não confundir com o material de engenharia da peça.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum Finish {
+    Fosco,
+    #[default]
+    Acetinado,
+    Brilhante,
+    MetalEscovado,
+    MetalPolido,
+    Borracha,
+    Vidro,
+}
+
+impl Finish {
+    pub const ALL: [Finish; 7] =
+        [Finish::Fosco, Finish::Acetinado, Finish::Brilhante, Finish::MetalEscovado, Finish::MetalPolido, Finish::Borracha, Finish::Vidro];
+    pub fn label(self) -> &'static str {
+        match self {
+            Finish::Fosco => "Fosco",
+            Finish::Acetinado => "Acetinado",
+            Finish::Brilhante => "Plástico brilhante",
+            Finish::MetalEscovado => "Metal escovado",
+            Finish::MetalPolido => "Metal polido",
+            Finish::Borracha => "Borracha",
+            Finish::Vidro => "Vidro",
+        }
+    }
+    /// (rugosidade, metalicidade, opacidade)
+    pub fn params(self) -> (f32, f32, f32) {
+        match self {
+            Finish::Fosco => (0.95, 0.0, 1.0),
+            Finish::Acetinado => (0.6, 0.0, 1.0),
+            Finish::Brilhante => (0.25, 0.0, 1.0),
+            Finish::MetalEscovado => (0.45, 1.0, 1.0),
+            Finish::MetalPolido => (0.15, 1.0, 1.0),
+            Finish::Borracha => (1.0, 0.0, 1.0),
+            Finish::Vidro => (0.08, 0.0, 0.35),
+        }
+    }
+}
+
+/// Aparência de peça, coletor ou comando. Precedência na exibição: comando > peça > coletor.
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
+pub struct Appearance {
+    pub color: [u8; 3],
+    pub finish: Finish,
+}
+
+pub const APPEARANCE_PRESETS: [(&str, Appearance); 8] = [
+    ("Aço", Appearance { color: [168, 172, 178], finish: Finish::MetalEscovado }),
+    ("Alumínio", Appearance { color: [205, 208, 212], finish: Finish::MetalEscovado }),
+    ("Inox polido", Appearance { color: [215, 218, 222], finish: Finish::MetalPolido }),
+    ("Latão", Appearance { color: [201, 168, 92], finish: Finish::MetalPolido }),
+    ("ABS preto", Appearance { color: [38, 40, 44], finish: Finish::Acetinado }),
+    ("Plástico vermelho", Appearance { color: [200, 40, 40], finish: Finish::Brilhante }),
+    ("Borracha", Appearance { color: [30, 30, 32], finish: Finish::Borracha }),
+    ("Vidro", Appearance { color: [170, 210, 230], finish: Finish::Vidro }),
+];
+
 // ---------------------------------------------------------------- Coletores e pastas
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -155,6 +216,8 @@ pub struct BodyCollector {
     pub name: String,
     pub color: [u8; 3],
     pub visible: bool,
+    #[serde(default)]
+    pub finish: Finish,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -175,6 +238,12 @@ pub struct Feature {
     pub folder: Option<Id>,
     /// Coletor de corpos de destino (RF-ARV-042).
     pub target: Id,
+    /// Oculto na viewport (sketches; nos sólidos, oculta as faces geradas por ele).
+    #[serde(default)]
+    pub hidden: bool,
+    /// Aparência das faces geradas por este comando.
+    #[serde(default)]
+    pub appearance: Option<Appearance>,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -352,6 +421,9 @@ pub struct Document {
     pub format_version: u32,
     pub name: String,
     pub props: Properties,
+    /// Aparência da peça inteira (sobrepõe a cor dos coletores).
+    #[serde(default)]
+    pub appearance: Option<Appearance>,
     next_id: u64,
     pub origin_visible: bool,
     pub references: Vec<RefElement>,
@@ -391,6 +463,7 @@ impl Document {
             format_version: FORMAT_VERSION,
             name: name.into(),
             props: Properties::default(),
+            appearance: None,
             next_id: 1,
             origin_visible: true,
             references: vec![],
@@ -437,7 +510,7 @@ impl Document {
     pub fn add_collector(&mut self, name: &str) -> Id {
         let id = self.alloc();
         let color = PALETTE[self.collectors.len() % PALETTE.len()];
-        self.collectors.push(BodyCollector { id, name: name.into(), color, visible: true });
+        self.collectors.push(BodyCollector { id, name: name.into(), color, visible: true, finish: Finish::default() });
         id
     }
 
@@ -589,7 +662,7 @@ impl Document {
         let name = self.unique_name(kind.type_name());
         let target = self.active_collector;
         let at = self.rollback.min(self.features.len());
-        self.features.insert(at, Feature { id, name, kind, suppressed: false, folder: None, target });
+        self.features.insert(at, Feature { id, name, kind, suppressed: false, folder: None, target, hidden: false, appearance: None });
         self.rollback = at + 1;
         id
     }

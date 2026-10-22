@@ -235,6 +235,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             if bodies.is_empty() {
                 ui.label(RichText::new("sem corpos").weak());
             }
+            section(ui, "Aparência da peça");
+            ui.label(RichText::new("Sobrepõe a cor dos coletores; comandos com aparência própria têm prioridade.").weak().small());
+            appearance_opt(ui, "ap_peca", &mut doc.appearance);
         }
 
         Sel::Origin(o) => {
@@ -288,10 +291,10 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 ui.add_sized([96., 18.], egui::Label::new("Nome"));
                 ui.text_edit_singleline(&mut c.name);
             });
-            ui.horizontal(|ui| {
-                ui.add_sized([96., 18.], egui::Label::new("Cor"));
-                ui.color_edit_button_srgb(&mut c.color);
-            });
+            let mut a = Appearance { color: c.color, finish: c.finish };
+            appearance_fields(ui, "ap_col", &mut a);
+            c.color = a.color;
+            c.finish = a.finish;
             ui.checkbox(&mut c.visible, "visível");
             if active {
                 ui.label(RichText::new("✔ coletor ativo: novos comandos atuam nele").color(Color32::from_rgb(140, 210, 140)));
@@ -352,7 +355,18 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     }
                     _ => {}
                 }
-                ui.checkbox(&mut f.suppressed, "suprimido");
+                ui.horizontal(|ui| {
+                    ui.checkbox(&mut f.suppressed, "suprimido");
+                    let mut vis = !f.hidden;
+                    if ui.checkbox(&mut vis, "visível").changed() {
+                        f.hidden = !vis;
+                    }
+                });
+                if !matches!(f.kind, FeatureKind::Sketch(_)) {
+                    egui::CollapsingHeader::new("🎨 Aparência das faces deste comando").id_salt("ap_cmd").show(ui, |ui| {
+                        appearance_opt(ui, "ap_feat", &mut f.appearance);
+                    });
+                }
             }
             let mut target = doc.features[idx].target;
             let mut kind = doc.features[idx].kind.clone();
@@ -379,6 +393,44 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     }
     if let Some(id) = delete {
         app.ask_delete(id);
+    }
+}
+
+/// Cor + acabamento + predefinições.
+fn appearance_fields(ui: &mut egui::Ui, id: &str, a: &mut Appearance) {
+    ui.horizontal(|ui| {
+        ui.add_sized([96., 18.], egui::Label::new("Cor"));
+        ui.color_edit_button_srgb(&mut a.color);
+        egui::ComboBox::from_id_salt((id, "acab")).selected_text(a.finish.label()).show_ui(ui, |ui| {
+            for f in Finish::ALL {
+                ui.selectable_value(&mut a.finish, f, f.label());
+            }
+        });
+    });
+    ui.horizontal_wrapped(|ui| {
+        for (name, p) in APPEARANCE_PRESETS {
+            let c = Color32::from_rgb(p.color[0], p.color[1], p.color[2]);
+            if ui.add(egui::Button::new(RichText::new("■").color(c)).small()).on_hover_text(name).clicked() {
+                *a = p;
+            }
+        }
+    });
+}
+
+/// Aparência opcional (com botão para aplicar/remover).
+fn appearance_opt(ui: &mut egui::Ui, id: &str, a: &mut Option<Appearance>) {
+    match a {
+        Some(ap) => {
+            appearance_fields(ui, id, ap);
+            if ui.small_button("remover aparência").clicked() {
+                *a = None;
+            }
+        }
+        None => {
+            if ui.button("🎨 Definir aparência").clicked() {
+                *a = Some(APPEARANCE_PRESETS[0].1);
+            }
+        }
     }
 }
 
