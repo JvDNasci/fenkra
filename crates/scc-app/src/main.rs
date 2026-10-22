@@ -12,6 +12,7 @@ mod picking;
 mod viewcube;
 mod sketch_ui;
 mod geo_ui;
+mod keymap;
 
 use eframe::egui;
 

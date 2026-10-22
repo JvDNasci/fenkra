@@ -90,6 +90,8 @@ pub struct App {
     pub sel: Sel,
     pub result: Option<RecomputeResult>,
     pub delete_dialog: Option<DeleteDialog>,
+    /// reenquadrar a vista (suave) ao abrir um comando
+    reframe_pending: bool,
     /// início da tela de carregamento
     splash_t0: Option<f64>,
     /// comando a abrir como ambiente (duplo clique na face)
@@ -166,6 +168,7 @@ impl App {
             delete_dialog: None,
             open_pending: None,
             splash_t0: None,
+            reframe_pending: false,
             release_dialog: None,
             worker: Worker::spawn(cc.egui_ctx.clone()),
             gen_sent: 0,
@@ -204,6 +207,11 @@ impl App {
                 app.start_session(id, false, None);
                 app.started = true;
             }
+        }
+        // desenvolvimento: SCC_AJUSTES=1 abre as configurações ao iniciar
+        if std::env::var("SCC_AJUSTES").is_ok() {
+            app.settings_open = true;
+            app.started = true;
         }
         // desenvolvimento: SCC_VISTAS=1 abre o seletor de vistas ao iniciar
         if std::env::var("SCC_VISTAS").is_ok() {
@@ -740,7 +748,9 @@ impl App {
             Act::Fit => self.fit_pending = true,
             Act::View(y, p) => {
                 if let Some(v) = self.viewport.as_mut() {
-                    v.camera.set_view(y, p)
+                    let before = v.camera;
+                    v.camera.set_view(y, p);
+                    v.animate_from(before);
                 }
             }
             Act::Normal => self.align_to_selection(),
@@ -805,6 +815,7 @@ impl App {
         }
         let snapshot = snapshot.unwrap_or_else(|| self.open.doc.clone());
         self.session = Some(Session { id, snapshot, is_new });
+        self.reframe_pending = true;
         self.sel = if self.open.doc.reference(id).is_some() { Sel::Ref(id) } else { Sel::Feature(id) };
     }
 
@@ -883,7 +894,9 @@ impl App {
                         (!s.lines.is_empty()).then(|| s.lines.iter().fold(Vec3::ZERO, |a, p| a + Vec3::from(*p)) / n)
                     })
                     .unwrap_or(Vec3::from(f.origin.map(|x| x as f32)));
+                let before = v.camera;
                 v.camera.look_along(Vec3::from(f.normal.map(|x| x as f32)), c);
+                v.animate_from(before);
             }
             _ => self.toast("Selecione um sketch ou plano para alinhar a vista", true),
         }
@@ -1206,11 +1219,13 @@ impl App {
 
     pub fn apply_view(&mut self, v: &scc_core::NamedView) {
         if let Some(vp) = self.viewport.as_mut() {
+            let before = vp.camera;
             vp.camera.target = Vec3::from(v.target.map(|x| x as f32));
             vp.camera.yaw = v.yaw as f32;
             vp.camera.pitch = v.pitch as f32;
             vp.camera.dist = v.dist as f32;
             vp.camera.ortho = v.ortho;
+            vp.animate_from(before);
         }
     }
 
@@ -1250,6 +1265,67 @@ impl App {
                         }
                     }
                 });
+            });
+            egui::CollapsingHeader::new("Atalhos e navegação").default_open(true).show(ui, |ui| {
+                use crate::keymap::{Binding, KeyAction, Preset};
+                ui.horizontal(|ui| {
+                    ui.label("Adaptar ao meu CAD:");
+                    let cur = s.keys.preset;
+                    egui::ComboBox::from_id_salt("preset").selected_text(cur.label()).show_ui(ui, |ui| {
+                        for p in Preset::ALL {
+                            if ui.selectable_label(cur == p, p.label()).clicked() {
+                                s.keys.preset = p;
+                                s.keys.custom.clear();
+                                s.nav = p.nav();
+                            }
+                        }
+                    });
+                });
+                ui.label(RichText::new("Troca o teclado e o mouse juntos, com base nos atalhos de fábrica de cada software. Clique num atalho para gravar outro (Esc cancela, Delete remove).").weak().small());
+                let capturing: Option<KeyAction> = ui.ctx().data(|d| d.get_temp(egui::Id::unique("captura_atalho")));
+                egui::ScrollArea::vertical().max_height(260.).id_salt("atalhos").show(ui, |ui| {
+                    egui::Grid::new("grade_atalhos").num_columns(3).striped(true).show(ui, |ui| {
+                        let mut group = "";
+                        for a in KeyAction::ALL {
+                            if a.group() != group {
+                                group = a.group();
+                                ui.label(RichText::new(group).strong());
+                                ui.end_row();
+                            }
+                            ui.label(a.label());
+                            let txt = if capturing == Some(a) { "pressione…".to_string() } else { s.keys.binding(a).map(|b| b.text()).unwrap_or_else(|| "—".into()) };
+                            if ui.add(egui::Button::new(txt).min_size(egui::vec2(110., 0.))).clicked() {
+                                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::unique("captura_atalho"), a));
+                            }
+                            let conf = s.keys.conflicts(a);
+                            if conf.is_empty() {
+                                ui.label("");
+                            } else {
+                                ui.label(RichText::new(format!("⚠ igual a {}", conf[0].label())).color(Color32::from_rgb(255, 170, 60)).small());
+                            }
+                            ui.end_row();
+                        }
+                    });
+                });
+                if let Some(a) = capturing {
+                    let got = ui.ctx().input(|i| {
+                        i.events.iter().find_map(|e| match e {
+                            egui::Event::Key { key, pressed: true, modifiers, .. } => Some((*key, *modifiers)),
+                            _ => None,
+                        })
+                    });
+                    if let Some((key, m)) = got {
+                        match key {
+                            egui::Key::Escape => {}
+                            egui::Key::Delete | egui::Key::Backspace if !m.any() => s.keys.set(a, None),
+                            _ => s.keys.set(a, Some(Binding { key: key.name().to_string(), ctrl: m.command, shift: m.shift, alt: m.alt })),
+                        }
+                        ui.ctx().data_mut(|d| d.remove::<KeyAction>(egui::Id::unique("captura_atalho")));
+                    }
+                }
+                if ui.small_button("Restaurar atalhos da predefinição").clicked() {
+                    s.keys.custom.clear();
+                }
             });
             egui::CollapsingHeader::new("Navegação e seleção").default_open(true).show(ui, |ui| {
                 egui::ComboBox::from_id_salt("nav").selected_text(s.nav.label()).show_ui(ui, |ui| {
@@ -2027,8 +2103,9 @@ impl App {
             };
 
             // navegação
-            let (shift, ctrl, scroll, ppp, right_down) =
-                ctx.input(|i| (i.modifiers.shift, i.modifiers.command, i.smooth_scroll_delta.y, i.pixels_per_point, i.pointer.secondary_down()));
+            let (shift, ctrl, scroll, ppp, right_down, left_down) = ctx.input(|i| {
+                (i.modifiers.shift, i.modifiers.command, i.smooth_scroll_delta.y, i.pixels_per_point, i.pointer.secondary_down(), i.pointer.primary_down())
+            });
             let delta = resp.drag_delta();
             let (left, mid, right) = (
                 resp.dragged_by(egui::PointerButton::Primary),
@@ -2045,7 +2122,13 @@ impl App {
                 N::Catia => (mid && right_down, mid && !right_down, false),
                 N::Blender => (mid && !shift && !ctrl, mid && shift, mid && ctrl),
                 N::Onshape => (right && !ctrl, (right && ctrl) || mid, false),
+                N::FreeCad => (mid && (left_down || right_down), mid && !left_down && !right_down, false),
+                N::Inventor => (mid && shift, mid && !shift, false),
+                N::Rhino => (right && !shift && !ctrl, right && shift, right && ctrl),
             };
+            if pan || orbit || zoom_drag || (resp.hovered() && scroll != 0.) {
+                vp.stop_anim();
+            }
             if pan {
                 let (r, u) = vp.camera.basis();
                 let k = vp.camera.dist * 0.0012;
@@ -2061,11 +2144,31 @@ impl App {
                 let sc = if inv { scroll } else { -scroll };
                 vp.camera.dist = (vp.camera.dist * (sc * 0.0015).exp()).clamp(0.5, 1e6);
             }
-            if (resp.double_clicked() && self.sketch.is_none()) || self.fit_pending {
+            if (resp.double_clicked() && self.sketch.is_none() && self.hover_pick.is_none()) || self.fit_pending {
                 if let Some(b) = vp.bounds {
+                    let before = vp.camera;
                     vp.camera.fit(b);
+                    vp.animate_from(before);
                     self.fit_pending = false;
                 }
+            }
+            // reenquadra ao abrir um comando, se o modelo não couber na tela
+            if std::mem::take(&mut self.reframe_pending) {
+                if let Some((lo, hi)) = vp.bounds {
+                    let inside = (0..8).all(|c| {
+                        let q = Vec3::new(if c & 1 == 0 { lo.x } else { hi.x }, if c & 2 == 0 { lo.y } else { hi.y }, if c & 4 == 0 { lo.z } else { hi.z });
+                        vp.camera.project(rect, q).is_some_and(|p| rect.shrink(20.).contains(p))
+                    });
+                    let tiny = vp.camera.project(rect, lo).zip(vp.camera.project(rect, hi)).is_some_and(|(a, b)| (a - b).length() < rect.width().min(rect.height()) * 0.15);
+                    if !inside || tiny {
+                        let before = vp.camera;
+                        vp.camera.fit((lo, hi));
+                        vp.animate_from(before);
+                    }
+                }
+            }
+            if vp.step_anim() {
+                ctx.request_repaint();
             }
 
             if let Some(rs) = frame.wgpu_render_state() {
@@ -2507,15 +2610,12 @@ impl eframe::App for App {
             }
         }
 
-        // atalhos
-        let (save, undo, redo, del) = ctx.input_mut(|i| {
-            (
-                i.consume_key(egui::Modifiers::COMMAND, egui::Key::S),
-                i.consume_key(egui::Modifiers::COMMAND, egui::Key::Z),
-                i.consume_key(egui::Modifiers::COMMAND, egui::Key::Y),
-                i.key_pressed(egui::Key::Delete),
-            )
-        });
+        // atalhos (mapa configurável em Configurações → Atalhos e navegação)
+        use crate::keymap::KeyAction as K;
+        let km = self.settings.keys.clone();
+        let typing = ctx.egui_wants_keyboard_input();
+        let (save, undo, redo) = (km.pressed(ctx, K::Save), !typing && km.pressed(ctx, K::Undo), !typing && km.pressed(ctx, K::Redo));
+        let del = km.pressed(ctx, K::Delete);
         if save {
             self.save();
         }
@@ -2525,7 +2625,7 @@ impl eframe::App for App {
         if redo {
             self.redo();
         }
-        if !ctx.egui_wants_keyboard_input() && ctx.input(|i| i.key_pressed(egui::Key::Space)) {
+        if !typing && self.sketch.is_none() && km.pressed(ctx, K::ViewMenu) {
             self.view_menu = !self.view_menu;
         }
         if self.session.is_some() && !ctx.egui_wants_keyboard_input() {
@@ -2543,29 +2643,45 @@ impl eframe::App for App {
         if del && self.sketch.is_none() && !ctx.egui_wants_keyboard_input() {
             self.delete_selected();
         }
-        // atalhos de vista (só quando não há campo de texto em edição)
-        if !ctx.egui_wants_keyboard_input() {
-            let keys = ctx.input(|i| {
-                let c = i.modifiers.command;
-                let plain = !c && !i.modifiers.alt;
-                [
-                    (plain && i.key_pressed(egui::Key::F), Act::Fit),
-                    (plain && i.key_pressed(egui::Key::N), Act::Normal),
-                    (plain && i.key_pressed(egui::Key::O), Act::Ortho),
-                    (c && i.key_pressed(egui::Key::Num1), Act::View(-1.5708, 0.0)),
-                    (c && i.key_pressed(egui::Key::Num3), Act::View(0.0, 0.0)),
-                    (c && i.key_pressed(egui::Key::Num5), Act::View(-1.5708, 1.5706)),
-                    (c && i.key_pressed(egui::Key::Num7), Act::View(-0.785, 0.6)),
-                    (plain && i.modifiers.shift && i.key_pressed(egui::Key::H), Act::HiddenEnv),
-                ]
-            });
-            for (pressed, a) in keys {
-                if pressed {
+        // atalhos de vista e de comandos (só quando não há campo de texto em edição)
+        if !typing {
+            let dir = |x: f32, y: f32, z: f32| Some(Vec3::new(x, y, z).normalize());
+            for (k, d) in [
+                (K::ViewFront, dir(0., -1., 0.)),
+                (K::ViewBack, dir(0., 1., 0.)),
+                (K::ViewTop, dir(0., 0., 1.)),
+                (K::ViewBottom, dir(0., 0., -1.)),
+                (K::ViewLeft, dir(-1., 0., 0.)),
+                (K::ViewRight, dir(1., 0., 0.)),
+                (K::ViewIso, dir(1., -1., 1.)),
+            ] {
+                if km.pressed(ctx, k) {
+                    self.view_choice = d;
+                }
+            }
+            for (k, a) in [(K::Fit, Act::Fit), (K::Normal, Act::Normal), (K::Ortho, Act::Ortho), (K::HiddenEnv, Act::HiddenEnv)] {
+                if km.pressed(ctx, k) {
                     self.act(a);
                 }
             }
-            if ctx.input(|i| i.key_pressed(egui::Key::H) && !i.modifiers.shift && !i.modifiers.command) {
+            if km.pressed(ctx, K::Hide) {
                 self.toggle_hide_selected();
+            }
+            if self.sketch.is_none() && self.session.is_none() {
+                for (k, c) in [
+                    (K::Sketch, Cmd::Sketch),
+                    (K::Extrude, Cmd::Extrude),
+                    (K::Cut, Cmd::Cut),
+                    (K::Revolve, Cmd::Revolve),
+                    (K::Hole, Cmd::Hole),
+                    (K::Fillet, Cmd::Fillet),
+                    (K::Chamfer, Cmd::Chamfer),
+                    (K::Plane, Cmd::Geo(crate::geo_ui::GeoKind::PlaneOffset)),
+                ] {
+                    if km.pressed(ctx, k) {
+                        self.command(c);
+                    }
+                }
             }
         }
 
@@ -2678,11 +2794,13 @@ impl eframe::App for App {
             }
         }
         if let (Some(d), Some(vp)) = (self.view_choice.take(), self.viewport.as_mut()) {
+            let before = vp.camera;
             let t = vp.camera.target;
             vp.camera.look_along(d, t);
-            if !self.view_menu {
-                self.fit_pending = true;
+            if let (false, Some(b)) = (self.view_menu, vp.bounds) {
+                vp.camera.fit(b);
             }
+            vp.animate_from(before);
         }
         // alinha a vista ao sketch recém-criado assim que o resultado dele chega
         if let Some(id) = self.align_pending {

@@ -77,10 +77,23 @@ pub enum NavStyle {
     Catia,
     Blender,
     Onshape,
+    FreeCad,
+    Inventor,
+    Rhino,
 }
 
 impl NavStyle {
-    pub const ALL: [NavStyle; 6] = [NavStyle::SolidCadCraft, NavStyle::SolidWorks, NavStyle::Fusion, NavStyle::Catia, NavStyle::Blender, NavStyle::Onshape];
+    pub const ALL: [NavStyle; 9] = [
+        NavStyle::SolidCadCraft,
+        NavStyle::SolidWorks,
+        NavStyle::Fusion,
+        NavStyle::Catia,
+        NavStyle::FreeCad,
+        NavStyle::Blender,
+        NavStyle::Onshape,
+        NavStyle::Inventor,
+        NavStyle::Rhino,
+    ];
     pub fn label(self) -> &'static str {
         match self {
             NavStyle::SolidCadCraft => "SolidCadCraft",
@@ -89,6 +102,9 @@ impl NavStyle {
             NavStyle::Catia => "Estilo CATIA",
             NavStyle::Blender => "Estilo Blender",
             NavStyle::Onshape => "Estilo Onshape",
+            NavStyle::FreeCad => "Estilo FreeCAD (CAD)",
+            NavStyle::Inventor => "Estilo Inventor",
+            NavStyle::Rhino => "Estilo Rhino",
         }
     }
     pub fn help(self) -> &'static str {
@@ -99,6 +115,9 @@ impl NavStyle {
             NavStyle::Catia => "Mover: botão do meio · Girar: meio+direito · Zoom: roda",
             NavStyle::Blender => "Girar: botão do meio · Mover: Shift+meio · Zoom: roda ou Ctrl+meio",
             NavStyle::Onshape => "Girar: botão direito · Mover: Ctrl+direito ou meio · Zoom: roda",
+            NavStyle::FreeCad => "Mover: botão do meio · Girar: meio + esquerdo ou direito · Zoom: roda",
+            NavStyle::Inventor => "Girar: Shift+meio · Mover: botão do meio · Zoom: roda",
+            NavStyle::Rhino => "Girar: botão direito · Mover: Shift+direito · Zoom: roda ou Ctrl+direito",
         }
     }
 }
@@ -179,6 +198,8 @@ pub struct Settings {
     pub snaps: bool,
     pub auto_constraints: bool,
     pub auto_dims: bool,
+    /// atalhos de teclado (predefinição + trocas)
+    pub keys: crate::keymap::Keymap,
 }
 
 impl Default for Settings {
@@ -212,6 +233,7 @@ impl Default for Settings {
             snaps: true,
             auto_constraints: true,
             auto_dims: false,
+            keys: Default::default(),
         }
     }
 }

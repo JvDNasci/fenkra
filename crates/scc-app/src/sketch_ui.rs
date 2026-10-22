@@ -1944,31 +1944,24 @@ pub fn keys(app: &mut App, ctx: &egui::Context) -> bool {
     if ctx.egui_wants_keyboard_input() {
         return false;
     }
+    use crate::keymap::KeyAction as K;
+    let km = app.settings.keys.clone();
     let Some(edit) = app.sketch.as_mut() else { return false };
-    let k = |key| ctx.input(|i| i.key_pressed(key) && !i.modifiers.command);
-    if k(egui::Key::Escape) && !edit.cancel() {
+    if ctx.input(|i| i.key_pressed(egui::Key::Escape) && !i.modifiers.command) && !edit.cancel() {
         return true;
     }
-    for (key, t) in [
-        (egui::Key::L, Tool::Line),
-        (egui::Key::R, Tool::Rect),
-        (egui::Key::C, Tool::Circle),
-        (egui::Key::A, Tool::Arc3),
-        (egui::Key::P, Tool::Point),
-        (egui::Key::D, Tool::Dimension),
-        (egui::Key::S, Tool::Select),
-    ] {
-        if k(key) {
+    for (a, t) in [(K::SkLine, Tool::Line), (K::SkRect, Tool::Rect), (K::SkCircle, Tool::Circle), (K::SkArc, Tool::Arc3), (K::SkPoint, Tool::Point), (K::SkDim, Tool::Dimension), (K::SkSelect, Tool::Select)] {
+        if km.pressed(ctx, a) {
             edit.set_tool(t);
         }
     }
-    if k(egui::Key::X) {
+    if km.pressed(ctx, K::SkConstruction) {
         edit.construction = !edit.construction;
     }
-    if k(egui::Key::G) {
+    if km.pressed(ctx, K::SkGrid) {
         app.settings.grid = !app.settings.grid;
     }
-    if k(egui::Key::Delete) {
+    if km.pressed(ctx, K::Delete) {
         let sel = std::mem::take(&mut app.sketch.as_mut().unwrap().sel);
         let id = app.sketch.as_ref().unwrap().feature;
         let vars = app.vars();

@@ -312,6 +312,8 @@ pub struct Viewport {
     ob: Buf,
     targets: Option<Targets>,
     pub camera: Camera,
+    /// transição suave da câmera (de, para, início)
+    anim: Option<(Camera, Camera, std::time::Instant)>,
     last: Option<(Camera, [u32; 2], u64, ViewStyle)>,
     scene_gen: u64,
     pub bounds: Option<(Vec3, Vec3)>,
@@ -329,6 +331,53 @@ fn lin(c: [u8; 3]) -> [f32; 4] {
 }
 
 impl Viewport {
+    /// A câmera mudou por um comando (vista, ajustar, alinhar): em vez de saltar, anima a partir de `before`.
+    pub fn animate_from(&mut self, before: Camera) {
+        let mut to = self.camera;
+        // menor caminho no giro horizontal
+        let tau = std::f32::consts::TAU;
+        let mut dy = (to.yaw - before.yaw).rem_euclid(tau);
+        if dy > std::f32::consts::PI {
+            dy -= tau;
+        }
+        to.yaw = before.yaw + dy;
+        let moved = (to.target - before.target).length() > 1e-3 * before.dist.max(1.)
+            || dy.abs() > 1e-3
+            || (to.pitch - before.pitch).abs() > 1e-3
+            || (to.dist / before.dist.max(1e-6) - 1.).abs() > 1e-3;
+        if !moved {
+            return;
+        }
+        let from = Camera { ortho: to.ortho, ..before };
+        self.anim = Some((from, to, std::time::Instant::now()));
+        self.camera = from;
+    }
+
+    /// Avança a animação; devolve true enquanto ela estiver em andamento.
+    pub fn step_anim(&mut self) -> bool {
+        let Some((a, b, t0)) = self.anim else { return false };
+        let t = (t0.elapsed().as_secs_f32() / 0.45).min(1.);
+        // desacelera no fim (ease-out cúbico)
+        let e = 1. - (1. - t).powi(3);
+        self.camera = Camera {
+            target: a.target.lerp(b.target, e),
+            yaw: a.yaw + (b.yaw - a.yaw) * e,
+            pitch: a.pitch + (b.pitch - a.pitch) * e,
+            dist: a.dist * (b.dist / a.dist.max(1e-6)).powf(e),
+            ortho: b.ortho,
+        };
+        if t >= 1. {
+            self.camera = b;
+            self.anim = None;
+        }
+        true
+    }
+
+    /// O usuário mexeu na câmera: a animação para onde está.
+    pub fn stop_anim(&mut self) {
+        self.anim = None;
+    }
+
     pub fn new(rs: &egui_wgpu::RenderState) -> Self {
         let dev = &rs.device;
         let module = dev.create_shader_module(wgpu::ShaderModuleDescriptor { label: Some("scc"), source: wgpu::ShaderSource::Wgsl(SHADER.into()) });
@@ -405,6 +454,7 @@ impl Viewport {
             ob: None,
             targets: None,
             camera: Camera::default(),
+            anim: None,
             last: None,
             scene_gen: 0,
             bounds: None,
