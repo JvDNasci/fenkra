@@ -10,7 +10,7 @@ use eframe::egui;
 
 fn main() -> eframe::Result {
     let opts = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([1360., 780.]).with_maximized(true).with_min_inner_size([900., 600.]).with_title("SolidCadCraft"),
+        viewport: egui::ViewportBuilder::default().with_inner_size([1360., 780.]).with_maximized(true).with_min_inner_size([900., 600.]).with_title(concat!("SolidCadCraft ", env!("CARGO_PKG_VERSION"))),
         renderer: eframe::Renderer::Wgpu,
         ..Default::default()
     };

@@ -2937,7 +2937,7 @@ dependencies = [
 
 [[package]]
 name = "scc-app"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "bytemuck",
  "eframe",
@@ -2951,7 +2951,7 @@ dependencies = [
 
 [[package]]
 name = "scc-core"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -2960,7 +2960,7 @@ dependencies = [
 
 [[package]]
 name = "scc-kernel"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "cxx",
  "cxx-build",
@@ -2969,7 +2969,7 @@ dependencies = [
 
 [[package]]
 name = "scc-project"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "blake3",
  "scc-core",
@@ -2980,7 +2980,7 @@ dependencies = [
 
 [[package]]
 name = "scc-solidos"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "scc-core",
  "scc-kernel",
