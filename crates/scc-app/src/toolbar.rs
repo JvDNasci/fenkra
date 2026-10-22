@@ -3,6 +3,7 @@
 //! abre as outras. Grupos podem ficar no topo, na lateral, flutuar ou ser ocultados (clique direito).
 
 use crate::app::Cmd;
+use crate::geo_ui::{self, GeoKind};
 use crate::icons::tool_button;
 use crate::render::DisplayMode;
 use crate::settings::{Dock, Group, Settings};
@@ -92,10 +93,15 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("chanfro_dist", "Chanfro total", "Chanfro em todas as arestas", "Chanfra todas as arestas do corpo.", Cmd(C::ChamferAll)),
             ]),
         ],
-        Group::Referencias => vec![Family("plano", vec![
-            it("plano_deslocado", "Plano", "Plano deslocado", "Paralelo ao plano selecionado, a uma distância (aceita expressão).", Cmd(C::Plane)),
-            it("plano_angulo", "Plano ângulo", "Plano por ângulo", "Passa por um eixo e gira a partir do plano selecionado (ex.: 30°, 20 mm acima).", Cmd(C::PlaneAngle)),
-        ])],
+        Group::Referencias => {
+            let fam = |ks: &[GeoKind]| -> Vec<Item> {
+                ks.iter().map(|k| {
+                    let (i, n, b, a) = k.info();
+                    it(i, n, b, a, Cmd(C::Geo(*k)))
+                }).collect()
+            };
+            vec![Family("plano", fam(&geo_ui::PLANES)), Family("ponto", fam(&geo_ui::POINTS)), Family("linha", fam(&geo_ui::LINES)), Family("curva", fam(&geo_ui::CURVES))]
+        }
         Group::Organizacao => vec![
             One(it("parametro", "Parâmetro", "Novo parâmetro", "Parâmetro global da peça (nome = expressão), usável em qualquer cota ou comando.", Cmd(C::Param))),
             One(it("pasta", "Pasta", "Nova pasta", "Organiza comandos na árvore; não muda a ordem de execução.", Cmd(C::Folder))),

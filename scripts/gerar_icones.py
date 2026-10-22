@@ -319,6 +319,53 @@ I["abrir_projeto"] = f'<path d="M6 12 A3 3 0 0 1 9 9 H18 L22 13 H39 A3 3 0 0 1 4
 I["nova_peca"] = box((24, 8), 16) + f'<circle cx="38" cy="36" r="8" fill="{ACTION}"/><path d="M38 32 V40 M34 36 H42" stroke="#ffffff" stroke-width="2.6"/>'
 I["exemplo"] = box((24, 8), 16) + f'<path d="M36 28 L38.5 33 L44 33.5 L40 37 L41 42.5 L36 39.8 L31 42.5 L32 37 L28 33.5 L33.5 33 Z" fill="#ffd34d" stroke="{INK}" stroke-width="1.2"/>'
 
+# ---------------- geometria de referência (planos, pontos, linhas e curvas)
+PL = f'<polygon points="4,32 24,22 44,32 24,42" fill="{LIGHT}" {S}/>'
+DOT = lambda x, y, r=3.4, c=ACTION: f'<circle cx="{x}" cy="{y}" r="{r}" fill="{c}" stroke="#ffffff" stroke-width="1"/>'
+LN = lambda x1, y1, x2, y2, c=ACTION, w=2.6: f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{c}" stroke-width="{w}" stroke-linecap="round"/>'
+CV = lambda d, c=SKETCH, w=2.8: f'<path d="{d}" stroke="{c}" stroke-width="{w}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
+I["plano_paralelo_ponto"] = f'<polygon points="4,36 24,27 44,36 24,45" fill="{REF_L}" {S}/>' + \
+    f'<polygon points="4,17 24,8 44,17 24,26" fill="{ACTION_L}" {S}/>' + DOT(24, 17, 4)
+I["plano_2linhas"] = PL + LN(10, 33, 30, 24) + LN(18, 37, 38, 28)
+I["plano_ponto_linha"] = PL + LN(10, 33, 32, 23) + DOT(28, 35)
+I["plano_curva"] = PL + CV("M9 33 C 16 24, 24 40, 38 30", ACTION)
+I["plano_normal_curva"] = CV("M4 38 C 16 34, 28 18, 44 12") + \
+    f'<polygon points="18,10 32,4 32,34 18,40" fill="{ACTION_L}" opacity="0.9" {S}/>' + DOT(25, 24, 3)
+I["plano_tangente"] = f'<path d="M8 44 A16 16 0 0 1 40 44 Z" fill="{MID}" {S}/>' + \
+    f'<polygon points="6,26 24,18 42,26 24,34" fill="{ACTION_L}" opacity="0.92" {S}/>' + DOT(24, 28, 3)
+I["plano_equacao"] = PL + f'<text x="24" y="17" font-family="Segoe UI, Arial" font-size="13" font-weight="bold" text-anchor="middle" fill="{ACTION}">Ax=D</text>'
+I["plano_medio"] = PL + DOT(12, 26, 3) + DOT(34, 24, 3) + DOT(20, 40, 3) + DOT(38, 36, 3)
+I["ponto_coord"] = LN(10, 38, 40, 38, "#d94040", 2) + LN(10, 38, 10, 6, "#2f9e44", 2) + LN(10, 38, 30, 24, INK, 2) + \
+    f'<path d="M10 20 H30 V38" stroke="{INK}" stroke-width="1.2" stroke-dasharray="3 2" fill="none"/>' + DOT(30, 20, 4.5)
+I["ponto_curva"] = CV("M4 36 C 14 10, 30 44, 44 14") + DOT(24, 27, 4.5)
+I["ponto_plano"] = PL + DOT(24, 32, 4.5)
+I["ponto_superficie"] = f'<path d="M4 34 C 14 22, 30 22, 44 30 L44 40 C 30 34, 14 34, 4 44 Z" fill="{LIGHT}" {S}/>' + DOT(24, 30, 4.5)
+I["ponto_centro"] = f'<circle cx="24" cy="24" r="16" {G}/>' + LN(18, 24, 30, 24, INK, 1.4) + LN(24, 18, 24, 30, INK, 1.4) + DOT(24, 24, 4)
+I["ponto_tangente"] = CV("M6 40 A22 22 0 0 1 42 40") + LN(6, 18, 42, 18, INK, 1.8) + DOT(24, 18.5, 4)
+I["ponto_entre"] = f'<line x1="6" y1="38" x2="42" y2="10" {DASH}/>' + DOT(6, 38, 3.4, INK) + DOT(42, 10, 3.4, INK) + DOT(24, 24, 5)
+I["linha_pontos"] = LN(8, 38, 40, 10) + DOT(8, 38, 4, INK) + DOT(40, 10, 4, INK)
+I["linha_direcao"] = DOT(10, 36, 4, INK) + arrow(10, 36, 42, 10, ACTION, 2.6)
+I["linha_angulo"] = CV("M4 40 C 16 36, 30 30, 44 20") + LN(22, 34, 34, 6) + \
+    f'<path d="M32 30 A10 10 0 0 0 26 25" stroke="{INK}" stroke-width="1.8" fill="none"/>'
+I["linha_tangente"] = f'<circle cx="22" cy="28" r="13" {G}/>' + LN(4, 15, 44, 15) + DOT(22, 15, 3)
+I["linha_normal"] = f'<path d="M4 36 C 14 26, 34 26, 44 36 L44 42 C 34 34, 14 34, 4 42 Z" fill="{LIGHT}" {S}/>' + arrow(24, 30, 24, 4, ACTION, 2.6)
+I["polilinha3d"] = f'<polyline points="6,40 16,14 28,32 42,8" stroke="{ACTION}" stroke-width="2.6" fill="none" stroke-linejoin="round"/>' + \
+    "".join(DOT(x, y, 3, INK) for x, y in [(6, 40), (16, 14), (28, 32), (42, 8)])
+I["circulo3d"] = f'<ellipse cx="24" cy="26" rx="19" ry="10" stroke="{ACTION}" stroke-width="2.8" fill="{REF_L}"/>' + DOT(24, 26, 3, INK)
+I["circulo3p"] = f'<circle cx="24" cy="24" r="16" stroke="{ACTION}" stroke-width="2.6" fill="none"/>' + \
+    "".join(DOT(x, y, 3.4, INK) for x, y in [(8, 24), (35.3, 12.7), (32, 37.9)])
+I["spline"] = CV("M4 34 C 10 6, 22 6, 24 24 S 38 42, 44 14", ACTION) + "".join(DOT(x, y, 2.8, INK) for x, y in [(4, 34), (24, 24), (44, 14)])
+I["helice"] = CV("M10 42 C 10 36, 38 38, 38 33 C 38 28, 10 30, 10 25 C 10 20, 38 22, 38 17 C 38 12, 10 14, 10 9 C 10 6, 30 5, 36 6", ACTION, 2.6) + \
+    f'<line x1="24" y1="2" x2="24" y2="46" stroke="{INK}" stroke-width="1.2" stroke-dasharray="3 2"/>'
+I["espiral"] = CV("M24 24 C 24 20, 30 20, 30 25 C 30 31, 20 32, 18 25 C 15 16, 31 12, 35 22 C 40 34, 22 42, 13 34 C 4 26, 10 8, 26 7", ACTION, 2.4)
+I["conica"] = f'<ellipse cx="18" cy="24" rx="13" ry="8" stroke="{ACTION}" stroke-width="2.4" fill="none"/>' + CV("M30 6 Q 52 24, 30 42", SKETCH, 2.4)
+I["conexao"] = LN(4, 36, 16, 36, SKETCH, 3) + LN(32, 12, 44, 12, SKETCH, 3) + CV("M16 36 C 26 36, 22 12, 32 12", ACTION, 2.6) + \
+    DOT(16, 36, 3, INK) + DOT(32, 12, 3, INK)
+I["canto"] = f'<path d="M8 6 V24" {G}/><path d="M24 40 H42" {G}/>' + CV("M8 24 A16 16 0 0 0 24 40", ACTION, 3) + \
+    f'<path d="M8 24 V40 H24" {DASH}/>'
+I["spine"] = "".join(f'<polygon points="{x-5},{y-9} {x+5},{y-13} {x+5},{y+7} {x-5},{y+11}" fill="{ACTION_L}" {S}/>' for x, y in [(8, 34), (24, 22), (40, 14)]) + \
+    CV("M4 36 C 14 34, 18 24, 24 22 S 36 14, 46 13", ACTION, 2.6)
+
 for name, body in I.items():
     with open(os.path.join(OUT, f"{name}.svg"), "w", encoding="utf8", newline="\n") as f:
         f.write(svg(body))

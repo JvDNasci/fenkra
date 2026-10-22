@@ -11,6 +11,7 @@ mod scene;
 mod picking;
 mod viewcube;
 mod sketch_ui;
+mod geo_ui;
 
 use eframe::egui;
 

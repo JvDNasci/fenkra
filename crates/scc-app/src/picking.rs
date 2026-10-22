@@ -13,6 +13,8 @@ pub enum Pick {
     Edge { body: usize, edge: usize, mid: [f32; 3] },
     Vertex { body: usize, pos: [f32; 3] },
     Plane(PlaneRef),
+    /// ponto, linha ou curva de referência
+    Geo(Id),
 }
 
 impl Pick {
@@ -22,6 +24,7 @@ impl Pick {
             Pick::Edge { edge, .. } => format!("Aresta #{edge}"),
             Pick::Vertex { pos, .. } => format!("Vértice ({:.1}, {:.1}, {:.1})", pos[0], pos[1], pos[2]),
             Pick::Plane(p) => crate::scene::plane_ref_name(doc, p),
+            Pick::Geo(id) => doc.name_of(*id),
         }
     }
 }
@@ -125,6 +128,33 @@ pub fn pick(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, pos: 
             return Some(p);
         }
     }
+    // pontos e curvas de referência
+    if f.planes {
+        let mut best: Option<(f32, Pick)> = None;
+        for p in &r.points {
+            let w = Vec3::from(p.p.map(|v| v as f32));
+            let Some(s) = cam.project(rect, w) else { continue };
+            let dd = (s - pos).length();
+            if dd < 8. && depth(w) <= depth_limit && best.is_none_or(|(bd, _)| dd < bd) {
+                best = Some((dd, Pick::Geo(p.id)));
+            }
+        }
+        if best.is_none() {
+            for c in &r.curves {
+                for w in c.pts.windows(2) {
+                    let (a, b) = (Vec3::from(w[0].map(|v| v as f32)), Vec3::from(w[1].map(|v| v as f32)));
+                    let (Some(sa), Some(sb)) = (cam.project(rect, a), cam.project(rect, b)) else { continue };
+                    let (dd, t) = seg_dist(pos, sa, sb);
+                    if dd < 6. && depth(a.lerp(b, t)) <= depth_limit && best.is_none_or(|(bd, _)| dd < bd) {
+                        best = Some((dd, Pick::Geo(c.id)));
+                    }
+                }
+            }
+        }
+        if let Some((_, p)) = best {
+            return Some(p);
+        }
+    }
     if f.edges {
         let mut best: Option<(f32, Pick)> = None;
         for (bi, b) in r.bodies.iter().enumerate() {
@@ -196,6 +226,24 @@ pub fn pick(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, pos: 
     None
 }
 
+/// Polilinha de uma aresta do corpo (na ordem dos segmentos da malha).
+pub fn edge_polyline(r: &RecomputeResult, body: usize, edge: usize) -> Vec<[f64; 3]> {
+    let Some(b) = r.bodies.get(body) else { return vec![] };
+    let m = &b.mesh;
+    let Some(&s0) = m.edge_ranges.get(edge) else { return vec![] };
+    let s1 = m.edge_ranges.get(edge + 1).map(|x| *x as usize).unwrap_or(m.edges.len() / 6);
+    let mut out: Vec<[f64; 3]> = vec![];
+    for sgm in m.edges.chunks_exact(6).take(s1).skip(s0 as usize) {
+        let a = [sgm[0] as f64, sgm[1] as f64, sgm[2] as f64];
+        let c = [sgm[3] as f64, sgm[4] as f64, sgm[5] as f64];
+        if out.is_empty() {
+            out.push(a);
+        }
+        out.push(c);
+    }
+    out
+}
+
 /// Realce das seleções (cheio) e da pré-seleção (mais claro) por cima da viewport.
 pub fn draw(painter: &egui::Painter, r: &RecomputeResult, cam: &Camera, rect: Rect, p: &Pick, strong: bool) {
     let col = if strong { Color32::from_rgb(255, 190, 40) } else { Color32::from_rgba_unmultiplied(120, 220, 255, 200) };
@@ -233,6 +281,17 @@ pub fn draw(painter: &egui::Painter, r: &RecomputeResult, cam: &Camera, rect: Re
         Pick::Vertex { pos, .. } => {
             if let Some(s) = cam.project(rect, v3(&pos)) {
                 painter.circle_filled(s, if strong { 5. } else { 4. }, col);
+            }
+        }
+        Pick::Geo(id) => {
+            if let Some(pt) = r.points.iter().find(|p| p.id == id) {
+                if let Some(s) = cam.project(rect, Vec3::from(pt.p.map(|v| v as f32))) {
+                    painter.circle_stroke(s, if strong { 7. } else { 6. }, Stroke::new(2.5, col));
+                }
+            }
+            if let Some(c) = r.curves.iter().find(|c| c.id == id) {
+                let pts: Vec<Pos2> = c.pts.iter().filter_map(|p| cam.project(rect, Vec3::from(p.map(|v| v as f32)))).collect();
+                painter.add(egui::Shape::line(pts, Stroke::new(if strong { 3.5 } else { 2.5 }, col)));
             }
         }
         Pick::Plane(pr) => {

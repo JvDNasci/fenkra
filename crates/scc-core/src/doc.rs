@@ -55,6 +55,146 @@ impl Default for PlaneRef {
 pub enum AxisRef {
     Origin(OriginAxis),
     SketchLine { sketch: Id, entity: Id },
+    /// linha/curva de referência (direção do início ao fim)
+    Ref(Id),
+    /// eixo fixo tirado de uma aresta clicada (fixo nesta versão)
+    Fixed { origin: [f64; 3], dir: [f64; 3] },
+}
+
+impl AxisRef {
+    fn walk(&mut self, ids: &mut dyn FnMut(&mut Id)) {
+        match self {
+            AxisRef::SketchLine { sketch, .. } => ids(sketch),
+            AxisRef::Ref(x) => ids(x),
+            AxisRef::Origin(_) | AxisRef::Fixed { .. } => {}
+        }
+    }
+}
+
+impl PlaneRef {
+    fn walk(&mut self, ids: &mut dyn FnMut(&mut Id)) {
+        if let PlaneRef::Datum(x) = self {
+            ids(x)
+        }
+    }
+}
+
+/// Ponto usado como entrada de um elemento de geometria.
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
+pub enum PointRef {
+    Origin,
+    /// ponto de referência (pasta de geometria)
+    Ref(Id),
+    /// vértice ou ponto clicado no modelo (fixo nesta versão)
+    Fixed([f64; 3]),
+}
+
+impl Default for PointRef {
+    fn default() -> Self {
+        PointRef::Origin
+    }
+}
+
+impl PointRef {
+    fn walk(&mut self, ids: &mut dyn FnMut(&mut Id)) {
+        if let PointRef::Ref(x) = self {
+            ids(x)
+        }
+    }
+}
+
+/// Curva usada como entrada.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub enum CurveRef {
+    Axis(OriginAxis),
+    /// linha ou curva de referência
+    Ref(Id),
+    /// linha de um sketch
+    SketchLine { sketch: Id, entity: Id },
+    /// aresta clicada no modelo, como polilinha (fixa nesta versão)
+    Edge(Vec<[f64; 3]>),
+}
+
+impl Default for CurveRef {
+    fn default() -> Self {
+        CurveRef::Axis(OriginAxis::X)
+    }
+}
+
+impl CurveRef {
+    fn walk(&mut self, ids: &mut dyn FnMut(&mut Id)) {
+        match self {
+            CurveRef::Ref(x) => ids(x),
+            CurveRef::SketchLine { sketch, .. } => ids(sketch),
+            CurveRef::Axis(_) | CurveRef::Edge(_) => {}
+        }
+    }
+}
+
+/// Superfície usada como entrada: plano ou face clicada (ponto e normal, fixa nesta versão).
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
+pub enum SurfRef {
+    Plane(PlaneRef),
+    Face { point: [f64; 3], normal: [f64; 3], owner: Option<Id> },
+}
+
+impl Default for SurfRef {
+    fn default() -> Self {
+        SurfRef::Plane(PlaneRef::default())
+    }
+}
+
+impl SurfRef {
+    fn walk(&mut self, ids: &mut dyn FnMut(&mut Id)) {
+        if let SurfRef::Plane(p) = self {
+            p.walk(ids)
+        }
+    }
+}
+
+/// Posição sobre uma curva: distância a partir do início ou proporção do comprimento (0..1).
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub enum OnCurve {
+    Distance(String),
+    Ratio(String),
+}
+
+impl Default for OnCurve {
+    fn default() -> Self {
+        OnCurve::Ratio("0.5".into())
+    }
+}
+
+impl OnCurve {
+    fn expr_mut(&mut self) -> &mut String {
+        match self {
+            OnCurve::Distance(e) | OnCurve::Ratio(e) => e,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum ConicKind {
+    #[default]
+    Elipse,
+    Parabola,
+    Hiperbole,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum Continuity {
+    G0,
+    #[default]
+    G1,
+    G2,
+}
+
+/// Classe do elemento de geometria de referência.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum RefClass {
+    Plane,
+    Point,
+    Curve,
 }
 
 /// Elemento da pasta Referências. O nome é a variável referenciável (RF-LNK-031);
@@ -110,20 +250,257 @@ pub enum RefKind {
     AnglePlane { base: PlaneRef, axis: AxisRef, angle: String },
     /// Plano de uma face plana clicada na viewport (origem, direção X e normal).
     FacePlane { origin: [f64; 3], x: [f64; 3], normal: [f64; 3], owner: Option<Id> },
+    /// Paralelo a um plano, passando por um ponto.
+    PlaneParallelPoint { base: PlaneRef, point: PointRef },
+    /// Por três pontos não colineares.
+    PlaneThreePoints { a: PointRef, b: PointRef, c: PointRef },
+    /// Por duas linhas coplanares (ou paralelas).
+    PlaneTwoLines { a: CurveRef, b: CurveRef },
+    /// Por um ponto e uma linha.
+    PlanePointLine { point: PointRef, line: CurveRef },
+    /// Plano que contém uma curva planar.
+    PlaneCurve { curve: CurveRef },
+    /// Normal a uma curva num ponto dela (distância ou proporção).
+    PlaneNormalCurve { curve: CurveRef, at: OnCurve, reverse: bool },
+    /// Tangente a uma superfície no ponto (projetado na superfície).
+    PlaneTangentSurface { surface: SurfRef, point: PointRef },
+    /// Ax + By + Cz = D
+    PlaneEquation { a: String, b: String, c: String, d: String },
+    /// Plano médio (ajuste) por três ou mais pontos.
+    PlaneMeanPoints { points: Vec<PointRef> },
+
+    // ---------------- pontos
+    /// Coordenadas X, Y, Z (no sistema da Origem ou de um plano: u, v, normal).
+    PointCoords { x: String, y: String, z: String, frame: Option<PlaneRef> },
+    /// Sobre uma curva: distância/proporção a partir do início (ou do fim).
+    PointOnCurve { curve: CurveRef, at: OnCurve, reverse: bool },
+    /// Sobre um plano, nas coordenadas (u, v) do plano.
+    PointOnPlane { plane: PlaneRef, u: String, v: String },
+    /// Sobre uma superfície: deslocado (u, v) no plano tangente a partir do ponto da superfície.
+    PointOnSurface { surface: SurfRef, u: String, v: String },
+    /// Centro de círculo ou arco.
+    PointCenter { curve: CurveRef },
+    /// Ponto de uma curva planar onde a tangente é paralela a uma direção (extremo 0 ou 1).
+    PointTangent { curve: CurveRef, dir: AxisRef, which: usize },
+    /// Entre dois pontos, por proporção (0.5 = ponto médio).
+    PointBetween { a: PointRef, b: PointRef, ratio: String },
+
+    // ---------------- curvas
+    /// Linha ponto a ponto, com prolongamento opcional nas pontas.
+    LinePoints { a: PointRef, b: PointRef, start: String, end: String },
+    /// Linha por ponto e direção (do `start` ao `end` ao longo da direção).
+    LineDir { point: PointRef, dir: AxisRef, start: String, end: String },
+    /// Linha em ângulo com uma curva (0° = tangente, 90° = normal), no plano de apoio.
+    LineAngle { curve: CurveRef, point: PointRef, support: PlaneRef, angle: String, start: String, end: String },
+    /// Linha normal a uma superfície no ponto.
+    LineNormalSurface { surface: SurfRef, point: PointRef, start: String, end: String },
+    /// Polilinha pelos pontos.
+    Polyline { points: Vec<PointRef>, closed: bool },
+    /// Círculo/arco por centro e raio num plano (ângulos de início e fim em graus).
+    Circle { center: PointRef, plane: PlaneRef, radius: String, start: String, end: String },
+    /// Círculo (ou arco) por três pontos.
+    Circle3 { a: PointRef, b: PointRef, c: PointRef, full: bool },
+    /// Spline interpolada pelos pontos.
+    Spline { points: Vec<PointRef>, closed: bool },
+    /// Hélice cilíndrica ou cônica.
+    Helix { origin: PointRef, axis: AxisRef, radius: String, pitch: String, height: String, taper: String, left: bool },
+    /// Espiral plana do raio inicial ao final.
+    Spiral { center: PointRef, plane: PlaneRef, r0: String, r1: String, turns: String },
+    /// Cônica (elipse, parábola, hipérbole) no plano.
+    Conic { center: PointRef, plane: PlaneRef, kind: ConicKind, a: String, b: String, extent: String },
+    /// Curva de conexão entre as pontas de duas curvas, com continuidade G0/G1/G2.
+    Connect { a: CurveRef, a_end: bool, b: CurveRef, b_end: bool, cont: Continuity, tension: String },
+    /// Canto (concordância) entre duas linhas.
+    Corner { a: CurveRef, b: CurveRef, radius: String },
+    /// Spine: curva guia normal a uma sequência de planos.
+    Spine { planes: Vec<PlaneRef> },
 }
 
 impl RefKind {
     pub fn base(&self) -> Option<&PlaneRef> {
         match self {
-            RefKind::OffsetPlane { base, .. } | RefKind::AnglePlane { base, .. } => Some(base),
-            RefKind::FacePlane { .. } => None,
+            RefKind::OffsetPlane { base, .. } | RefKind::AnglePlane { base, .. } | RefKind::PlaneParallelPoint { base, .. } => Some(base),
+            _ => None,
         }
     }
     pub fn base_mut(&mut self) -> Option<&mut PlaneRef> {
         match self {
-            RefKind::OffsetPlane { base, .. } | RefKind::AnglePlane { base, .. } => Some(base),
-            RefKind::FacePlane { .. } => None,
+            RefKind::OffsetPlane { base, .. } | RefKind::AnglePlane { base, .. } | RefKind::PlaneParallelPoint { base, .. } => Some(base),
+            _ => None,
         }
+    }
+
+    pub fn class(&self) -> RefClass {
+        use RefKind::*;
+        match self {
+            OffsetPlane { .. } | AnglePlane { .. } | FacePlane { .. } | PlaneParallelPoint { .. } | PlaneThreePoints { .. } | PlaneTwoLines { .. }
+            | PlanePointLine { .. } | PlaneCurve { .. } | PlaneNormalCurve { .. } | PlaneTangentSurface { .. } | PlaneEquation { .. }
+            | PlaneMeanPoints { .. } => RefClass::Plane,
+            PointCoords { .. } | PointOnCurve { .. } | PointOnPlane { .. } | PointOnSurface { .. } | PointCenter { .. } | PointTangent { .. }
+            | PointBetween { .. } => RefClass::Point,
+            _ => RefClass::Curve,
+        }
+    }
+
+    /// Percorre todos os ids referenciados e todas as expressões.
+    pub fn walk(&mut self, ids: &mut dyn FnMut(&mut Id), exprs: &mut dyn FnMut(&mut String)) {
+        use RefKind::*;
+        match self {
+            OffsetPlane { base, offset } => {
+                base.walk(ids);
+                exprs(offset)
+            }
+            AnglePlane { base, axis, angle } => {
+                base.walk(ids);
+                axis.walk(ids);
+                exprs(angle)
+            }
+            FacePlane { .. } => {}
+            PlaneParallelPoint { base, point } => {
+                base.walk(ids);
+                point.walk(ids)
+            }
+            PlaneThreePoints { a, b, c } => {
+                for p in [a, b, c] {
+                    p.walk(ids)
+                }
+            }
+            PlaneTwoLines { a, b } => {
+                a.walk(ids);
+                b.walk(ids)
+            }
+            PlanePointLine { point, line } => {
+                point.walk(ids);
+                line.walk(ids)
+            }
+            PlaneCurve { curve } | PointCenter { curve } => curve.walk(ids),
+            PlaneNormalCurve { curve, at, .. } | PointOnCurve { curve, at, .. } => {
+                curve.walk(ids);
+                exprs(at.expr_mut())
+            }
+            PlaneTangentSurface { surface, point } => {
+                surface.walk(ids);
+                point.walk(ids)
+            }
+            PlaneEquation { a, b, c, d } => {
+                for e in [a, b, c, d] {
+                    exprs(e)
+                }
+            }
+            PlaneMeanPoints { points } | Polyline { points, .. } | Spline { points, .. } => {
+                for p in points {
+                    p.walk(ids)
+                }
+            }
+            PointCoords { x, y, z, frame } => {
+                if let Some(f) = frame {
+                    f.walk(ids)
+                }
+                for e in [x, y, z] {
+                    exprs(e)
+                }
+            }
+            PointOnPlane { plane, u, v } => {
+                plane.walk(ids);
+                exprs(u);
+                exprs(v)
+            }
+            PointOnSurface { surface, u, v } => {
+                surface.walk(ids);
+                exprs(u);
+                exprs(v)
+            }
+            PointTangent { curve, dir, .. } => {
+                curve.walk(ids);
+                dir.walk(ids)
+            }
+            PointBetween { a, b, ratio } => {
+                a.walk(ids);
+                b.walk(ids);
+                exprs(ratio)
+            }
+            LinePoints { a, b, start, end } => {
+                a.walk(ids);
+                b.walk(ids);
+                exprs(start);
+                exprs(end)
+            }
+            LineDir { point, dir, start, end } => {
+                point.walk(ids);
+                dir.walk(ids);
+                exprs(start);
+                exprs(end)
+            }
+            LineAngle { curve, point, support, angle, start, end } => {
+                curve.walk(ids);
+                point.walk(ids);
+                support.walk(ids);
+                for e in [angle, start, end] {
+                    exprs(e)
+                }
+            }
+            LineNormalSurface { surface, point, start, end } => {
+                surface.walk(ids);
+                point.walk(ids);
+                exprs(start);
+                exprs(end)
+            }
+            Circle { center, plane, radius, start, end } => {
+                center.walk(ids);
+                plane.walk(ids);
+                for e in [radius, start, end] {
+                    exprs(e)
+                }
+            }
+            Circle3 { a, b, c, .. } => {
+                for p in [a, b, c] {
+                    p.walk(ids)
+                }
+            }
+            Helix { origin, axis, radius, pitch, height, taper, .. } => {
+                origin.walk(ids);
+                axis.walk(ids);
+                for e in [radius, pitch, height, taper] {
+                    exprs(e)
+                }
+            }
+            Spiral { center, plane, r0, r1, turns } => {
+                center.walk(ids);
+                plane.walk(ids);
+                for e in [r0, r1, turns] {
+                    exprs(e)
+                }
+            }
+            Conic { center, plane, a, b, extent, .. } => {
+                center.walk(ids);
+                plane.walk(ids);
+                for e in [a, b, extent] {
+                    exprs(e)
+                }
+            }
+            Connect { a, b, tension, .. } => {
+                a.walk(ids);
+                b.walk(ids);
+                exprs(tension)
+            }
+            Corner { a, b, radius } => {
+                a.walk(ids);
+                b.walk(ids);
+                exprs(radius)
+            }
+            Spine { planes } => {
+                for p in planes {
+                    p.walk(ids)
+                }
+            }
+        }
+    }
+
+    /// Ids de que este elemento depende (planos, pontos, curvas, sketches).
+    pub fn deps(&self) -> Vec<Id> {
+        let mut out = vec![];
+        self.clone().walk(&mut |x| out.push(*x), &mut |_| {});
+        out
     }
     /// Sketch usado como eixo (se houver).
     pub fn axis_sketch(&self) -> Option<Id> {
@@ -661,6 +1038,23 @@ impl Document {
         id
     }
 
+    /// Cria um elemento de geometria de referência (plano, ponto ou curva) na pasta de geometria padrão.
+    pub fn add_geometry(&mut self, kind: RefKind) -> Id {
+        let id = self.alloc();
+        let base = match kind.class() {
+            RefClass::Plane => "Plano",
+            RefClass::Point => "Ponto",
+            RefClass::Curve => match kind {
+                RefKind::LinePoints { .. } | RefKind::LineDir { .. } | RefKind::LineAngle { .. } | RefKind::LineNormalSurface { .. } => "Linha",
+                _ => "Curva",
+            },
+        };
+        let name = self.unique_name(base);
+        self.references.push(RefElement { id, name, kind, visible: true, folder: None });
+        self.file_last_reference();
+        id
+    }
+
     pub fn reference(&self, id: Id) -> Option<&RefElement> {
         self.references.iter().find(|r| r.id == id)
     }
@@ -698,11 +1092,7 @@ impl Document {
             f(&mut p.expr)
         }
         for r in &mut self.references {
-            match &mut r.kind {
-                RefKind::OffsetPlane { offset, .. } => f(offset),
-                RefKind::AnglePlane { angle, .. } => f(angle),
-                RefKind::FacePlane { .. } => {}
-            }
+            r.kind.walk(&mut |_| {}, &mut |e| f(e));
         }
         for feat in &mut self.features {
             match &mut feat.kind {
@@ -847,11 +1237,12 @@ impl Document {
             }
             FeatureKind::Revolve(r) => {
                 let mut v = vec![r.sketch];
-                if let AxisRef::SketchLine { sketch, .. } = r.axis {
-                    if sketch != r.sketch {
-                        v.push(sketch)
+                let mut ax = r.axis;
+                ax.walk(&mut |x| {
+                    if *x != r.sketch {
+                        v.push(*x)
                     }
-                }
+                });
                 v
             }
             FeatureKind::Hole(h) => vec![h.sketch],
@@ -868,7 +1259,7 @@ impl Document {
         let mut frontier = vec![id];
         while let Some(cur) = frontier.pop() {
             for r in &self.references {
-                let hit = r.kind.base() == Some(&PlaneRef::Datum(cur)) || r.kind.axis_sketch() == Some(cur);
+                let hit = r.kind.deps().contains(&cur);
                 if hit && !out.contains(&r.id) {
                     out.push(r.id);
                     frontier.push(r.id);
@@ -924,12 +1315,7 @@ impl Document {
             }
         };
         for r in &mut self.references {
-            if let Some(b) = r.kind.base_mut() {
-                swap_plane(b, &mut n);
-            }
-            if let RefKind::AnglePlane { axis: AxisRef::SketchLine { sketch, .. }, .. } = &mut r.kind {
-                swap(sketch, &mut n)
-            }
+            r.kind.walk(&mut |x| swap(x, &mut n), &mut |_| {});
         }
         for f in &mut self.features {
             match &mut f.kind {
@@ -942,9 +1328,7 @@ impl Document {
                 }
                 FeatureKind::Revolve(r) => {
                     swap(&mut r.sketch, &mut n);
-                    if let AxisRef::SketchLine { sketch, .. } = &mut r.axis {
-                        swap(sketch, &mut n)
-                    }
+                    r.axis.walk(&mut |x| swap(x, &mut n));
                 }
                 FeatureKind::Hole(h) => swap(&mut h.sketch, &mut n),
                 FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => {

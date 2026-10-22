@@ -3,6 +3,7 @@
 //! Regras (RF-NUC-008, RF-NUC-024): um comando com erro **não** é apagado nem invalida o resto;
 //! o corpo continua do estado anterior e o comando fica marcado com a mensagem do erro.
 
+pub mod geo3d;
 pub mod hardware;
 pub mod profile;
 
@@ -10,6 +11,7 @@ use profile::{ev, eval_sketch, to3d, EvalSketch, Vars};
 use scc_core::sketch::{Curve, Kind};
 use scc_core::*;
 use scc_kernel::{Bool, Frame, HoleShape, KernelError, Mesh, MassProps, Shape};
+use geo3d::{Curve3, V3};
 use std::collections::HashMap;
 use std::time::Instant;
 
@@ -50,13 +52,6 @@ fn sub(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
 fn unit(v: [f64; 3]) -> [f64; 3] {
     let l = dot(v, v).sqrt().max(1e-12);
     v.map(|x| x / l)
-}
-/// Gira `v` em torno do eixo unitário `k` (Rodrigues).
-fn rotate(v: [f64; 3], k: [f64; 3], a: f64) -> [f64; 3] {
-    let (c, s) = (a.cos(), a.sin());
-    let kxv = scc_kernel::cross(k, v);
-    let kv = dot(k, v);
-    [0, 1, 2].map(|i| v[i] * c + kxv[i] * s + k[i] * kv * (1. - c))
 }
 /// Diagonal aproximada dos perfis (para dimensionar ferramentas).
 fn loops_size(loops: &[scc_kernel::Loop2]) -> f64 {
@@ -120,10 +115,34 @@ pub struct PlaneViz {
     pub frame: Frame,
 }
 
+/// Ponto de referência exibível.
+pub struct PointViz {
+    pub id: Id,
+    pub name: String,
+    pub p: [f64; 3],
+}
+
+/// Linha/curva de referência exibível (polilinha).
+pub struct CurveViz {
+    pub id: Id,
+    pub name: String,
+    pub pts: Vec<[f64; 3]>,
+}
+
+/// Valor de um elemento de geometria de referência.
+#[derive(Clone, Debug)]
+pub enum Geo {
+    Plane(Frame),
+    Point(V3),
+    Curve(Curve3),
+}
+
 pub struct RecomputeResult {
     pub bodies: Vec<BodyResult>,
     pub sketches: Vec<SketchViz>,
     pub planes: Vec<PlaneViz>,
+    pub points: Vec<PointViz>,
+    pub curves: Vec<CurveViz>,
     pub status: HashMap<Id, Status>,
     pub params: HashMap<String, f64>,
     pub param_error: Option<String>,
@@ -160,34 +179,19 @@ impl Ctx<'_> {
     fn plane(&self, p: &PlaneRef, depth: u32) -> Result<Frame, String> {
         match p {
             PlaneRef::Origin(o) => Ok(origin_frame(*o)),
-            PlaneRef::Datum(id) => {
-                if depth > 32 {
-                    return Err("referências de plano em ciclo".into());
-                }
-                let r = self.doc.reference(*id).ok_or_else(|| format!("referência perdida (#{}) — reedite ou substitua", id.0))?;
-                match &r.kind {
-                    RefKind::OffsetPlane { base, offset } => {
-                        let b = self.plane(base, depth + 1)?;
-                        Ok(b.offset(ev(offset, &self.vars, &format!("{} · deslocamento", r.name))?))
-                    }
-                    RefKind::FacePlane { origin, x, normal, .. } => Ok(Frame { origin: *origin, x: *x, normal: *normal }),
-                    RefKind::AnglePlane { base, axis, angle } => {
-                        let b = self.plane(base, depth + 1)?;
-                        let (o, d) = self.axis(axis)?;
-                        let a = ev(angle, &self.vars, &format!("{} · ângulo", r.name))?.to_radians();
-                        let rot = |v: [f64; 3]| rotate(v, d, a);
-                        // o eixo é levado para dentro do plano base (giro em torno da linha no plano base)
-                        let h = dot(sub(b.origin, o), b.normal);
-                        let o = [0, 1, 2].map(|i| o[i] + b.normal[i] * h);
-                        Ok(Frame { origin: o, x: rot(b.x), normal: rot(b.normal) })
-                    }
-                }
-            }
+            PlaneRef::Datum(id) => match self.geo(*id, depth + 1)? {
+                Geo::Plane(f) => Ok(f),
+                _ => Err(format!("'{}' não é um plano", self.doc.name_of(*id))),
+            },
         }
     }
 
     /// Eixo (ponto, direção unitária).
     fn axis(&self, a: &AxisRef) -> Result<([f64; 3], [f64; 3]), String> {
+        self.axis_d(a, 0)
+    }
+
+    fn axis_d(&self, a: &AxisRef, depth: u32) -> Result<([f64; 3], [f64; 3]), String> {
         match *a {
             AxisRef::Origin(ax) => Ok(([0.; 3], origin_axis(ax))),
             AxisRef::SketchLine { sketch, entity } => {
@@ -196,7 +200,276 @@ impl Ctx<'_> {
                 let (pa, pb) = (af.point(a[0], a[1]), af.point(b[0], b[1]));
                 Ok((pa, unit([pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]])))
             }
+            AxisRef::Ref(id) => {
+                let c = self.curve(&CurveRef::Ref(id), depth + 1)?;
+                let d = if c.is_straight() { geo3d::sub(c.end(), c.start()) } else { c.at_dist(0.).1 };
+                Ok((c.start(), geo3d::unit(d).ok_or("eixo de comprimento zero")?))
+            }
+            AxisRef::Fixed { origin, dir } => Ok((origin, geo3d::unit(dir).ok_or("eixo de comprimento zero")?)),
         }
+    }
+
+    fn point(&self, p: &PointRef, depth: u32) -> Result<V3, String> {
+        match *p {
+            PointRef::Origin => Ok([0.; 3]),
+            PointRef::Fixed(q) => Ok(q),
+            PointRef::Ref(id) => match self.geo(id, depth + 1)? {
+                Geo::Point(q) => Ok(q),
+                _ => Err(format!("'{}' não é um ponto", self.doc.name_of(id))),
+            },
+        }
+    }
+
+    fn points(&self, ps: &[PointRef], depth: u32) -> Result<Vec<V3>, String> {
+        ps.iter().map(|p| self.point(p, depth)).collect()
+    }
+
+    fn curve(&self, c: &CurveRef, depth: u32) -> Result<Curve3, String> {
+        match c {
+            CurveRef::Axis(a) => {
+                let d = origin_axis(*a);
+                Curve3::line(geo3d::mul(d, -500.), geo3d::mul(d, 500.))
+            }
+            CurveRef::Edge(pts) => {
+                let closed = pts.len() > 2 && geo3d::dist(pts[0], *pts.last().unwrap()) < 1e-6;
+                Curve3::poly(pts.clone(), closed)
+            }
+            CurveRef::SketchLine { sketch, entity } => {
+                let (af, ask) = self.sketch(*sketch)?;
+                let (a, b) = ask.lines.get(entity).ok_or("a linha do sketch não existe mais — reedite")?;
+                Curve3::line(af.point(a[0], a[1]), af.point(b[0], b[1]))
+            }
+            CurveRef::Ref(id) => match self.geo(*id, depth + 1)? {
+                Geo::Curve(c) => Ok(c),
+                _ => Err(format!("'{}' não é uma linha ou curva", self.doc.name_of(*id))),
+            },
+        }
+    }
+
+    /// Ponto da superfície mais próximo de `p` (projeção no plano tangente) e a normal.
+    fn surf_at(&self, sf: &SurfRef, p: V3, depth: u32) -> Result<(V3, V3), String> {
+        let (o, n) = match sf {
+            SurfRef::Plane(pr) => {
+                let f = self.plane(pr, depth)?;
+                (f.origin, f.normal)
+            }
+            SurfRef::Face { point, normal, .. } => (*point, geo3d::unit(*normal).ok_or("normal da face nula")?),
+        };
+        Ok((geo3d::sub(p, geo3d::mul(n, geo3d::dot(geo3d::sub(p, o), n))), n))
+    }
+
+    fn surf_frame(&self, sf: &SurfRef, depth: u32) -> Result<Frame, String> {
+        match sf {
+            SurfRef::Plane(pr) => self.plane(pr, depth),
+            SurfRef::Face { point, normal, .. } => geo3d::frame_from(*point, *normal, None),
+        }
+    }
+
+    /// Ponto e tangente numa posição da curva.
+    fn on_curve(&self, c: &Curve3, at: &OnCurve, reverse: bool, name: &str) -> Result<(V3, V3), String> {
+        let len = c.length();
+        let mut s = match at {
+            OnCurve::Distance(e) => ev(e, &self.vars, &format!("{name} · distância"))?,
+            OnCurve::Ratio(e) => ev(e, &self.vars, &format!("{name} · proporção"))? * len,
+        };
+        if s < -1e-9 || s > len + 1e-9 {
+            return Err(format!("posição fora da curva (comprimento {:.3})", len));
+        }
+        if reverse {
+            s = len - s;
+        }
+        Ok(c.at_dist(s))
+    }
+
+    /// Avalia um elemento de geometria de referência (plano, ponto ou curva).
+    fn geo(&self, id: Id, depth: u32) -> Result<Geo, String> {
+        use geo3d::*;
+        use RefKind::*;
+        if depth > 48 {
+            return Err("referências em ciclo".into());
+        }
+        let r = self.doc.reference(id).ok_or_else(|| format!("referência perdida (#{}) — reedite ou substitua", id.0))?;
+        let e = |x: &String, what: &str| ev(x, &self.vars, &format!("{} · {what}", r.name));
+        let d = depth + 1;
+        let line_of = |c: &Curve3| -> Result<(V3, V3), String> {
+            if !c.is_straight() {
+                return Err("esperava uma linha reta".into());
+            }
+            Ok((c.start(), geo3d::unit(geo3d::sub(c.end(), c.start())).ok_or("linha de comprimento zero")?))
+        };
+        Ok(match &r.kind {
+            OffsetPlane { base, offset } => Geo::Plane(self.plane(base, d)?.offset(e(offset, "deslocamento")?)),
+            FacePlane { origin, x, normal, .. } => Geo::Plane(Frame { origin: *origin, x: *x, normal: *normal }),
+            AnglePlane { base, axis, angle } => {
+                let b = self.plane(base, d)?;
+                let (o, dd) = self.axis_d(axis, d)?;
+                let a = e(angle, "ângulo")?.to_radians();
+                let rot = |v: [f64; 3]| geo3d::rotate(v, dd, a);
+                // o eixo é levado para dentro do plano base (giro em torno da linha no plano base)
+                let h = geo3d::dot(geo3d::sub(b.origin, o), b.normal);
+                let o = [0, 1, 2].map(|i| o[i] + b.normal[i] * h);
+                Geo::Plane(Frame { origin: o, x: rot(b.x), normal: rot(b.normal) })
+            }
+            PlaneParallelPoint { base, point } => Geo::Plane(Frame { origin: self.point(point, d)?, ..self.plane(base, d)? }),
+            PlaneThreePoints { a, b, c } => {
+                let (pa, pb, pc) = (self.point(a, d)?, self.point(b, d)?, self.point(c, d)?);
+                let n = cross(geo3d::sub(pb, pa), geo3d::sub(pc, pa));
+                if norm(n) < 1e-9 {
+                    return Err("os três pontos estão alinhados ou coincidentes".into());
+                }
+                Geo::Plane(frame_from(pa, n, Some(geo3d::sub(pb, pa)))?)
+            }
+            PlaneTwoLines { a, b } => {
+                let (pa, da) = line_of(&self.curve(a, d)?)?;
+                let (pb, db) = line_of(&self.curve(b, d)?)?;
+                let mut n = cross(da, db);
+                if norm(n) < 1e-9 {
+                    n = cross(da, geo3d::sub(pb, pa));
+                    if norm(n) < 1e-9 {
+                        return Err("as linhas são a mesma reta".into());
+                    }
+                }
+                let nu = geo3d::unit(n).unwrap();
+                if geo3d::dot(geo3d::sub(pb, pa), nu).abs() > 1e-6 * (1. + dist(pa, pb)) {
+                    return Err("as linhas não são coplanares".into());
+                }
+                Geo::Plane(frame_from(pa, nu, Some(da))?)
+            }
+            PlanePointLine { point, line } => {
+                let p = self.point(point, d)?;
+                let (o, dd) = line_of(&self.curve(line, d)?)?;
+                let n = cross(dd, geo3d::sub(p, o));
+                if norm(n) < 1e-9 {
+                    return Err("o ponto está sobre a linha".into());
+                }
+                Geo::Plane(frame_from(o, n, Some(dd))?)
+            }
+            PlaneCurve { curve } => Geo::Plane(self.curve(curve, d)?.plane()?),
+            PlaneNormalCurve { curve, at, reverse } => {
+                let c = self.curve(curve, d)?;
+                let (p, t) = self.on_curve(&c, at, *reverse, &r.name)?;
+                Geo::Plane(frame_from(p, t, None)?)
+            }
+            PlaneTangentSurface { surface, point } => {
+                let (p, n) = self.surf_at(surface, self.point(point, d)?, d)?;
+                Geo::Plane(frame_from(p, n, None)?)
+            }
+            PlaneEquation { a, b, c, d: dd } => {
+                let n = [e(a, "A")?, e(b, "B")?, e(c, "C")?];
+                let l2 = geo3d::dot(n, n);
+                if l2 < 1e-18 {
+                    return Err("A, B e C não podem ser todos zero".into());
+                }
+                Geo::Plane(frame_from(mul(n, e(dd, "D")? / l2), n, None)?)
+            }
+            PlaneMeanPoints { points } => Geo::Plane(fit_plane(&self.points(points, d)?)?.0),
+
+            PointCoords { x, y, z, frame } => {
+                let (x, y, z) = (e(x, "X")?, e(y, "Y")?, e(z, "Z")?);
+                Geo::Point(match frame {
+                    Some(p) => {
+                        let f = self.plane(p, d)?;
+                        add(f.point(x, y), mul(f.normal, z))
+                    }
+                    None => [x, y, z],
+                })
+            }
+            PointOnCurve { curve, at, reverse } => Geo::Point(self.on_curve(&self.curve(curve, d)?, at, *reverse, &r.name)?.0),
+            PointOnPlane { plane, u, v } => Geo::Point(self.plane(plane, d)?.point(e(u, "u")?, e(v, "v")?)),
+            PointOnSurface { surface, u, v } => Geo::Point(self.surf_frame(surface, d)?.point(e(u, "u")?, e(v, "v")?)),
+            PointCenter { curve } => Geo::Point(fit_circle(&self.curve(curve, d)?)?.0),
+            PointTangent { curve, dir, which } => {
+                let (_, dv) = self.axis_d(dir, d)?;
+                Geo::Point(tangent_points(&self.curve(curve, d)?, dv)?[(*which).min(1)])
+            }
+            PointBetween { a, b, ratio } => Geo::Point(lerp(self.point(a, d)?, self.point(b, d)?, e(ratio, "proporção")?)),
+
+            LinePoints { a, b, start, end } => {
+                let (pa, pb) = (self.point(a, d)?, self.point(b, d)?);
+                let dd = geo3d::unit(geo3d::sub(pb, pa)).ok_or("os dois pontos coincidem")?;
+                Geo::Curve(Curve3::line(geo3d::sub(pa, mul(dd, e(start, "prolongar início")?)), add(pb, mul(dd, e(end, "prolongar fim")?)))?)
+            }
+            LineDir { point, dir, start, end } => {
+                let p = self.point(point, d)?;
+                let (_, dv) = self.axis_d(dir, d)?;
+                Geo::Curve(Curve3::line(add(p, mul(dv, e(start, "início")?)), add(p, mul(dv, e(end, "fim")?)))?)
+            }
+            LineAngle { curve, point, support, angle, start, end } => {
+                let c = self.curve(curve, d)?;
+                let (s, q) = c.nearest(self.point(point, d)?);
+                let (_, t) = c.at_dist(s);
+                let n = self.plane(support, d)?.normal;
+                let tp = geo3d::unit(geo3d::sub(t, mul(n, geo3d::dot(t, n)))).ok_or("a curva é perpendicular ao plano de apoio nesse ponto")?;
+                let dv = geo3d::rotate(tp, n, e(angle, "ângulo")?.to_radians());
+                Geo::Curve(Curve3::line(add(q, mul(dv, e(start, "início")?)), add(q, mul(dv, e(end, "fim")?)))?)
+            }
+            LineNormalSurface { surface, point, start, end } => {
+                let (q, n) = self.surf_at(surface, self.point(point, d)?, d)?;
+                Geo::Curve(Curve3::line(add(q, mul(n, e(start, "início")?)), add(q, mul(n, e(end, "fim")?)))?)
+            }
+            Polyline { points, closed } => Geo::Curve(Curve3::poly(self.points(points, d)?, *closed)?),
+            Circle { center, plane, radius, start, end } => {
+                let c = self.point(center, d)?;
+                let f = Frame { origin: c, ..self.plane(plane, d)? };
+                Geo::Curve(circle_curve(c, &f, e(radius, "raio")?, e(start, "ângulo inicial")?.to_radians(), e(end, "ângulo final")?.to_radians())?)
+            }
+            Circle3 { a, b, c, full } => Geo::Curve(circle3_curve(self.point(a, d)?, self.point(b, d)?, self.point(c, d)?, *full)?),
+            Spline { points, closed } => Geo::Curve(spline(&self.points(points, d)?, *closed)?),
+            Helix { origin, axis, radius, pitch, height, taper, left } => {
+                let (_, ax) = self.axis_d(axis, d)?;
+                Geo::Curve(helix(self.point(origin, d)?, ax, e(radius, "raio")?, e(pitch, "passo")?, e(height, "altura")?, e(taper, "conicidade")?, *left)?)
+            }
+            Spiral { center, plane, r0, r1, turns } => {
+                let c = self.point(center, d)?;
+                let f = Frame { origin: c, ..self.plane(plane, d)? };
+                Geo::Curve(spiral(c, &f, e(r0, "raio inicial")?, e(r1, "raio final")?, e(turns, "voltas")?)?)
+            }
+            Conic { center, plane, kind, a, b, extent } => {
+                let c = self.point(center, d)?;
+                let f = Frame { origin: c, ..self.plane(plane, d)? };
+                Geo::Curve(conic(c, &f, *kind, e(a, "a")?, e(b, "b")?, e(extent, "extensão")?)?)
+            }
+            Connect { a, a_end, b, b_end, cont, tension } => {
+                let (ca, cb) = (self.curve(a, d)?, self.curve(b, d)?);
+                let pa = if *a_end { ca.end() } else { ca.start() };
+                let pb = if *b_end { cb.end() } else { cb.start() };
+                let l = dist(pa, pb) * e(tension, "tensão")?;
+                if dist(pa, pb) < 1e-9 {
+                    return Err("as pontas escolhidas já se tocam".into());
+                }
+                let (ta, tb) = (ca.end_tangent(*a_end), cb.end_tangent(*b_end));
+                let pts = match cont {
+                    Continuity::G0 => vec![pa, pb],
+                    Continuity::G1 => hermite(pa, mul(ta, l), [0.; 3], pb, mul(tb, -l), [0.; 3], false),
+                    Continuity::G2 => hermite(pa, mul(ta, l), mul(ca.end_curvature(*a_end), l * l), pb, mul(tb, -l), mul(cb.end_curvature(*b_end), l * l), true),
+                };
+                Geo::Curve(Curve3::poly(pts, false)?)
+            }
+            Corner { a, b, radius } => Geo::Curve(corner(&self.curve(a, d)?, &self.curve(b, d)?, e(radius, "raio")?)?),
+            Spine { planes } => {
+                let fs: Vec<Frame> = planes.iter().map(|p| self.plane(p, d)).collect::<Result<_, _>>()?;
+                if fs.len() < 2 {
+                    return Err("a spine precisa de pelo menos dois planos".into());
+                }
+                let mut pts: Vec<V3> = vec![];
+                for w in fs.windows(2) {
+                    let (p0, p1) = (w[0].origin, w[1].origin);
+                    let chord = geo3d::sub(p1, p0);
+                    let l = norm(chord);
+                    if l < 1e-9 {
+                        return Err("dois planos seguidos com a mesma origem".into());
+                    }
+                    // normais orientadas no sentido do percurso
+                    let orient = |n: V3| if geo3d::dot(n, chord) < 0. { mul(n, -1.) } else { n };
+                    let seg = hermite(p0, mul(orient(w[0].normal), l), [0.; 3], p1, mul(orient(w[1].normal), l), [0.; 3], false);
+                    if !pts.is_empty() {
+                        pts.pop();
+                    }
+                    pts.extend(seg);
+                }
+                Geo::Curve(Curve3::poly(pts, false)?)
+            }
+        })
     }
 
     fn sketch(&self, id: Id) -> Result<&(Frame, EvalSketch), String> {
@@ -310,15 +583,7 @@ impl Ctx<'_> {
                 if sk.loops.is_empty() {
                     return Err("o sketch não tem perfis fechados".into());
                 }
-                let (origin, dir) = match r.axis {
-                    AxisRef::Origin(a) => ([0.; 3], origin_axis(a)),
-                    AxisRef::SketchLine { sketch, entity } => {
-                        let (af, ask) = self.sketch(sketch)?;
-                        let (a, b) = ask.lines.get(&entity).ok_or("linha do eixo não existe mais — reedite o eixo")?;
-                        let (pa, pb) = (af.point(a[0], a[1]), af.point(b[0], b[1]));
-                        (pa, [pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]])
-                    }
-                };
+                let (origin, dir) = self.axis(&r.axis)?;
                 let face = Shape::face(frame, &sk.loops).map_err(k)?;
                 let ang = ev(&r.angle, &self.vars, "ângulo")?;
                 let start = if r.symmetric { -ang / 2. } else { 0. };
@@ -434,9 +699,23 @@ pub fn recompute(doc: &Document) -> RecomputeResult {
             planes.push(PlaneViz { id: None, name: n.into(), frame: origin_frame(p) });
         }
     }
-    for r in doc.references.iter().filter(|r| r.visible) {
-        if let Ok(fr) = cx.plane(&PlaneRef::Datum(r.id), 0) {
-            planes.push(PlaneViz { id: Some(r.id), name: r.name.clone(), frame: fr });
+    let (mut points, mut curves) = (vec![], vec![]);
+    for r in &doc.references {
+        match cx.geo(r.id, 0) {
+            Ok(g) => {
+                cx.status.insert(r.id, Status::Ok);
+                if !r.visible {
+                    continue;
+                }
+                match g {
+                    Geo::Plane(fr) => planes.push(PlaneViz { id: Some(r.id), name: r.name.clone(), frame: fr }),
+                    Geo::Point(p) => points.push(PointViz { id: r.id, name: r.name.clone(), p }),
+                    Geo::Curve(c) => curves.push(CurveViz { id: r.id, name: r.name.clone(), pts: c.pts }),
+                }
+            }
+            Err(e) => {
+                cx.status.insert(r.id, Status::Error(e));
+            }
         }
     }
 
@@ -502,6 +781,8 @@ pub fn recompute(doc: &Document) -> RecomputeResult {
         bodies,
         sketches,
         planes,
+        points,
+        curves,
         status: cx.status,
         params: cx.vars,
         param_error,
@@ -615,6 +896,39 @@ pub fn example_document() -> Document {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn geometria_de_referencia_planos_pontos_curvas() {
+        let mut d = Document::new("geo");
+        let x = |v: f64| v.to_string();
+        let p1 = d.add_geometry(RefKind::PointCoords { x: x(10.), y: x(0.), z: x(0.), frame: None });
+        let p2 = d.add_geometry(RefKind::PointCoords { x: x(0.), y: x(10.), z: x(0.), frame: None });
+        let p3 = d.add_geometry(RefKind::PointCoords { x: x(0.), y: x(0.), z: x(10.), frame: None });
+        let pl = d.add_geometry(RefKind::PlaneThreePoints { a: PointRef::Ref(p1), b: PointRef::Ref(p2), c: PointRef::Ref(p3) });
+        let ln = d.add_geometry(RefKind::LinePoints { a: PointRef::Ref(p1), b: PointRef::Ref(p2), start: "0".into(), end: "0".into() });
+        let mid = d.add_geometry(RefKind::PointOnCurve { curve: CurveRef::Ref(ln), at: OnCurve::Ratio("0.5".into()), reverse: false });
+        let nc = d.add_geometry(RefKind::PlaneNormalCurve { curve: CurveRef::Ref(ln), at: OnCurve::Ratio("0.5".into()), reverse: false });
+        let ci = d.add_geometry(RefKind::Circle3 { a: PointRef::Ref(p1), b: PointRef::Ref(p2), c: PointRef::Ref(p3), full: true });
+        let ce = d.add_geometry(RefKind::PointCenter { curve: CurveRef::Ref(ci) });
+        let eq = d.add_geometry(RefKind::PlaneEquation { a: "0".into(), b: "0".into(), c: "2".into(), d: "10".into() });
+        let hx = d.add_geometry(RefKind::Helix { origin: PointRef::Origin, axis: AxisRef::Origin(OriginAxis::Z), radius: "5".into(), pitch: "2".into(), height: "10".into(), taper: "0".into(), left: false });
+        let ruim = d.add_geometry(RefKind::PlaneThreePoints { a: PointRef::Ref(p1), b: PointRef::Ref(p1), c: PointRef::Ref(p2) });
+        let r = recompute(&d);
+        for id in [p1, pl, ln, mid, nc, ci, ce, eq, hx] {
+            assert_eq!(r.status[&id], Status::Ok, "{}", d.name_of(id));
+        }
+        assert!(matches!(r.status[&ruim], Status::Error(_)));
+        let pt = |id: Id| r.points.iter().find(|p| p.id == id).unwrap().p;
+        assert!(geo3d::dist(pt(mid), [5., 5., 0.]) < 1e-9);
+        let c = 10. / 3.;
+        assert!(geo3d::dist(pt(ce), [c, c, c]) < 1e-6);
+        let fr = |id: Id| r.planes.iter().find(|p| p.id == Some(id)).unwrap().frame;
+        assert!((fr(eq).origin[2] - 5.).abs() < 1e-9);
+        let n = fr(pl).normal;
+        assert!((n[0] - n[1]).abs() < 1e-9 && (n[1] - n[2]).abs() < 1e-9);
+        // apagar o ponto leva junto o que depende dele (dependentes)
+        assert!(d.dependents(p1).contains(&ce));
+    }
 
     #[test]
     fn exemplo_recalcula_sem_erros() {

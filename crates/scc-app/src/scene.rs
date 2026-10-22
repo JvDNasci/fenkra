@@ -194,6 +194,38 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
         }
     }
 
+    // pontos, linhas e curvas de referência
+    let geo_col = [0.95, 0.7, 0.3, 1.0];
+    for c in &r.curves {
+        let selected = matches!(o.sel, Sel::Ref(a) if *a == c.id);
+        let vis = doc.reference(c.id).is_some_and(|x| x.visible);
+        if !selected && (!o.filter.planos_ref || !shows(!vis, env)) {
+            continue;
+        }
+        let dst = if selected { &mut s.overlay } else { &mut s.lines };
+        for w in c.pts.windows(2) {
+            let col = if selected { HILITE } else { geo_col };
+            dst.push(lv(w[0].map(|v| v as f32), col));
+            dst.push(lv(w[1].map(|v| v as f32), col));
+        }
+    }
+    if o.filter.pontos {
+        for p in &r.points {
+            let selected = matches!(o.sel, Sel::Ref(a) if *a == p.id);
+            let vis = doc.reference(p.id).is_some_and(|x| x.visible);
+            if !selected && !shows(!vis, env) {
+                continue;
+            }
+            let c = Vec3::from(p.p.map(|v| v as f32));
+            let d = size * 0.03;
+            for ax in [Vec3::X, Vec3::Y, Vec3::Z] {
+                let col = if selected { HILITE } else { geo_col };
+                s.overlay.push(lv((c - ax * d).into(), col));
+                s.overlay.push(lv((c + ax * d).into(), col));
+            }
+        }
+    }
+
     // eixos da Origem
     if o.filter.eixos && shows(!doc.origin_visible, env) {
         for (ax, col) in [(Vec3::X, [1., 0.3, 0.3, 1.]), (Vec3::Y, [0.3, 0.9, 0.3, 1.]), (Vec3::Z, [0.35, 0.55, 1., 1.])] {

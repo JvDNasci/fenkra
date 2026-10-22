@@ -12,7 +12,7 @@ use std::collections::HashMap;
 type Vars = HashMap<String, f64>;
 
 /// Campo de expressão: mostra o valor avaliado ou o erro.
-fn expr(ui: &mut egui::Ui, label: &str, s: &mut String, vars: &Vars, unit: &str) {
+pub(crate) fn expr(ui: &mut egui::Ui, label: &str, s: &mut String, vars: &Vars, unit: &str) {
     ui.horizontal(|ui| {
         ui.add_sized([96., 18.], egui::Label::new(label).truncate());
         let r = scc_core::expr::eval_str(s, vars);
@@ -37,17 +37,19 @@ fn expr(ui: &mut egui::Ui, label: &str, s: &mut String, vars: &Vars, unit: &str)
     });
 }
 
-fn section(ui: &mut egui::Ui, title: &str) {
+pub(crate) fn section(ui: &mut egui::Ui, title: &str) {
     ui.add_space(6.);
     ui.label(RichText::new(title).strong());
 }
 
-fn plane_combo(ui: &mut egui::Ui, id: &str, doc: &Document, p: &mut PlaneRef, exclude: Option<Id>) {
-    egui::ComboBox::from_id_salt(id).selected_text(plane_ref_name(doc, p)).width(200.).show_ui(ui, |ui| {
+pub(crate) fn plane_combo(ui: &mut egui::Ui, id: &str, doc: &Document, p: &mut PlaneRef, exclude: Option<Id>) {
+    // sem o próprio elemento e sem quem depende dele (evita ciclos)
+    let deps = exclude.map(|x| doc.dependents(x)).unwrap_or_default();
+    egui::ComboBox::from_id_salt(id).selected_text(plane_ref_name(doc, p)).width(150.).show_ui(ui, |ui| {
         for o in [OriginPlane::XY, OriginPlane::XZ, OriginPlane::YZ] {
             ui.selectable_value(p, PlaneRef::Origin(o), format!("Origem · {}", plane_name(o)));
         }
-        for r in doc.references.iter().filter(|r| Some(r.id) != exclude) {
+        for r in doc.references.iter().filter(|r| Some(r.id) != exclude && r.kind.class() == RefClass::Plane && !deps.contains(&r.id)) {
             ui.selectable_value(p, PlaneRef::Datum(r.id), &r.name);
         }
     });
@@ -154,31 +156,6 @@ fn target_combo(ui: &mut egui::Ui, doc: &Document, t: &mut Id) {
     });
 }
 
-fn axis_name(doc: &Document, a: &AxisRef) -> String {
-    match a {
-        AxisRef::Origin(OriginAxis::X) => "Origem · eixo X".to_string(),
-        AxisRef::Origin(OriginAxis::Y) => "Origem · eixo Y".to_string(),
-        AxisRef::Origin(OriginAxis::Z) => "Origem · eixo Z".to_string(),
-        AxisRef::SketchLine { sketch, entity } => format!("{} · linha #{}", doc.name_of(*sketch), entity.0),
-    }
-}
-
-fn axis_combo(ui: &mut egui::Ui, id: &str, doc: &Document, before: usize, axis: &mut AxisRef) {
-    egui::ComboBox::from_id_salt(id).selected_text(axis_name(doc, axis)).width(200.).show_ui(ui, |ui| {
-        for a in [OriginAxis::X, OriginAxis::Y, OriginAxis::Z] {
-            ui.selectable_value(axis, AxisRef::Origin(a), axis_name(doc, &AxisRef::Origin(a)));
-        }
-        for f in &doc.features[..before.min(doc.features.len())] {
-            if let FeatureKind::Sketch(s) = &f.kind {
-                for e in s.data.curves.iter().filter(|e| matches!(e.geom, scc_core::sketch::Curve::Line { .. })) {
-                    let a = AxisRef::SketchLine { sketch: f.id, entity: e.id };
-                    ui.selectable_value(axis, a, axis_name(doc, &a));
-                }
-            }
-        }
-    });
-}
-
 /// Lista "onde é usado" (RF-LNK-022).
 fn used_by(ui: &mut egui::Ui, doc: &Document, id: Id, sel: &mut Option<Sel>) {
     let deps = doc.dependents(id);
@@ -207,6 +184,14 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     let bodies: Vec<(Id, f64, f64)> = app.result.as_ref().map(|r| r.bodies.iter().map(|b| (b.collector, b.mass.volume, b.mass.area)).collect()).unwrap_or_default();
     let picked = app.picked_edges();
     let session = app.session.as_ref().map(|s| (s.id, s.is_new));
+    let seed = app.seed(false);
+    let ref_err = match sel {
+        Sel::Ref(id) => match app.status_of(id) {
+            Some(Status::Error(e)) => Some(e.clone()),
+            _ => None,
+        },
+        _ => None,
+    };
     let mut sess_act: Option<u8> = None; // 0 = concluir, 1 = cancelar, 2 = abrir
     let doc = &mut app.open.doc;
 
@@ -302,7 +287,8 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 ui.label("Referência não existe mais.");
                 return;
             };
-            ui.heading("Plano de referência");
+            crate::geo_ui::panel(ui, &doc_ro, r, &vars, &seed, ref_err.as_deref());
+            section(ui, "Nome e exibição");
             ui.horizontal(|ui| {
                 ui.add_sized([96., 18.], egui::Label::new("Nome (variável)"));
                 let mut n = r.name.clone();
@@ -311,43 +297,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 }
             });
             ui.label(RichText::new("O nome é a variável referenciável; os comandos apontam para o elemento, então renomear não quebra nada.").weak().small());
-            section(ui, "Tipo");
-            let is_angle = matches!(r.kind, RefKind::AnglePlane { .. });
-            let opts = [
-                ("plano_deslocado", "Deslocado", "Paralelo ao plano base, a uma distância", !is_angle),
-                ("plano_angulo", "Por ângulo", "Gira em torno de um eixo a partir do plano base", is_angle),
-            ];
-            let base0 = r.kind.base().copied().unwrap_or_default();
-            match icon_choice(ui, &opts) {
-                Some(0) if is_angle || r.kind.base().is_none() => r.kind = RefKind::OffsetPlane { base: base0, offset: "20".into() },
-                Some(1) if !is_angle => r.kind = RefKind::AnglePlane { base: base0, axis: AxisRef::Origin(OriginAxis::X), angle: "30".into() },
-                _ => {}
-            }
-            section(ui, "Definição");
-            if let Some(b) = r.kind.base_mut() {
-                ui.horizontal(|ui| {
-                    ui.add_sized([96., 18.], egui::Label::new("Plano base"));
-                    plane_combo(ui, "base", &doc_ro, b, Some(id));
-                });
-            }
-            match &mut r.kind {
-                RefKind::FacePlane { owner, .. } => {
-                    let o = owner.map(|o| doc_ro.name_of(o)).unwrap_or_default();
-                    ui.label(RichText::new(format!("Plano da face clicada em {o} (fixo nesta versão)")).weak());
-                }
-                RefKind::OffsetPlane { offset, .. } => expr(ui, "Deslocamento", offset, &vars, "mm"),
-                RefKind::AnglePlane { axis, angle, .. } => {
-                    ui.horizontal(|ui| {
-                        ui.add_sized([96., 18.], egui::Label::new("Eixo"));
-                        axis_combo(ui, "eixo_plano", &doc_ro, doc_ro.features.len(), axis);
-                    });
-                    expr(ui, "Ângulo", angle, &vars, "°");
-                    ui.label(RichText::new("O eixo é levado para dentro do plano base antes do giro.").weak().small());
-                }
-            }
             ui.checkbox(&mut r.visible, "visível");
             ui.add_space(4.);
-            ui.label(RichText::new("Trocar o plano base redireciona a variável: todos os comandos que usam este plano se atualizam.").weak().small());
+            ui.label(RichText::new("Trocar uma entrada redireciona a variável: tudo que usa este elemento se atualiza.").weak().small());
             used_by(ui, &doc_ro, id, &mut new_sel);
             ui.add_space(8.);
             if ui.button("🗑 Apagar…").clicked() {
@@ -727,6 +679,8 @@ fn feature_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, id: Id, kind: &mut 
                 AxisRef::Origin(OriginAxis::Y) => "Origem · eixo Y".to_string(),
                 AxisRef::Origin(OriginAxis::Z) => "Origem · eixo Z".to_string(),
                 AxisRef::SketchLine { sketch, entity } => format!("{} · linha #{}", doc.name_of(*sketch), entity.0),
+                AxisRef::Ref(id) => doc.name_of(*id),
+                AxisRef::Fixed { .. } => "Aresta (direção fixa)".to_string(),
             };
             egui::ComboBox::from_id_salt("eixo").selected_text(axis_name(&r.axis)).width(200.).show_ui(ui, |ui| {
                 for a in [OriginAxis::X, OriginAxis::Y, OriginAxis::Z] {
@@ -739,6 +693,9 @@ fn feature_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, id: Id, kind: &mut 
                             ui.selectable_value(&mut r.axis, a, axis_name(&a));
                         }
                     }
+                }
+                for g in doc.references.iter().filter(|g| g.kind.class() == RefClass::Curve) {
+                    ui.selectable_value(&mut r.axis, AxisRef::Ref(g.id), &g.name);
                 }
             });
             expr(ui, "Ângulo", &mut r.angle, vars, "°");

@@ -473,10 +473,49 @@ impl App {
             .collect()
     }
 
+    /// Entradas para geometria de referência a partir da seleção (viewport e, se `with_sel`, árvore).
+    pub fn seed(&self, with_sel: bool) -> crate::geo_ui::Seed {
+        use crate::picking::Pick;
+        let mut s = crate::geo_ui::Seed::default();
+        let d = self.doc();
+        let add_ref = |s: &mut crate::geo_ui::Seed, id: Id| match d.reference(id).map(|r| r.kind.class()) {
+            Some(RefClass::Plane) => s.planes.push(PlaneRef::Datum(id)),
+            Some(RefClass::Point) => s.points.push(PointRef::Ref(id)),
+            Some(RefClass::Curve) => s.curves.push(CurveRef::Ref(id)),
+            None => {}
+        };
+        if with_sel {
+            match self.sel {
+                Sel::Origin(o) => s.planes.push(PlaneRef::Origin(o)),
+                Sel::Ref(id) => add_ref(&mut s, id),
+                _ => {}
+            }
+        }
+        for p in &self.picks {
+            match *p {
+                Pick::Vertex { pos, .. } => s.points.push(PointRef::Fixed(pos.map(|v| v as f64))),
+                Pick::Edge { body, edge, .. } => {
+                    if let Some(r) = &self.result {
+                        let pts = crate::picking::edge_polyline(r, body, edge);
+                        if pts.len() >= 2 {
+                            s.curves.push(CurveRef::Edge(pts));
+                        }
+                    }
+                }
+                Pick::Face { point, normal, owner, .. } => {
+                    s.surface = Some(SurfRef::Face { point: point.map(|v| v as f64), normal: normal.map(|v| v as f64), owner: Some(owner) })
+                }
+                Pick::Plane(pr) => s.planes.push(pr),
+                Pick::Geo(id) => add_ref(&mut s, id),
+            }
+        }
+        s
+    }
+
     fn selected_plane(&self) -> PlaneRef {
         match self.sel {
             Sel::Origin(o) => PlaneRef::Origin(o),
-            Sel::Ref(id) => PlaneRef::Datum(id),
+            Sel::Ref(id) if self.doc().reference(id).is_some_and(|r| r.kind.class() == RefClass::Plane) => PlaneRef::Datum(id),
             _ => PlaneRef::Origin(OriginPlane::XY),
         }
     }
@@ -503,10 +542,21 @@ impl App {
         let snapshot = self.open.doc.clone();
         let sel_now = self.sel;
         let s = |v: &str| v.to_string();
-        let uses_plane = matches!(c, Cmd::Sketch | Cmd::Plane | Cmd::PlaneAngle | Cmd::Hole | Cmd::HoleCounterbore | Cmd::HoleCountersink | Cmd::HoleTapped);
+        let uses_plane = matches!(c, Cmd::Sketch | Cmd::Hole | Cmd::HoleCounterbore | Cmd::HoleCountersink | Cmd::HoleTapped);
         let plane = if uses_plane { self.plane_for_new() } else { self.selected_plane() };
         let sketch = self.selected_sketch(false);
         let edges = self.picked_edges();
+        let seed = match c {
+            Cmd::Geo(k) => {
+                let mut s = self.seed(true);
+                // face clicada para um tipo que usa plano: vira um plano da face
+                if k.uses_plane() && s.planes.is_empty() && s.surface.is_some() {
+                    s.planes.push(self.plane_for_new());
+                }
+                s
+            }
+            _ => Default::default(),
+        };
         let up_to = self.open.doc.references.last().map(|r| PlaneRef::Datum(r.id)).unwrap_or(PlaneRef::Origin(OriginPlane::XY));
         let d = &mut self.open.doc;
         let new_sel = match c {
@@ -599,8 +649,7 @@ impl App {
                 let d = &mut self.open.doc;
                 Sel::Feature(d.add_feature(if matches!(c, Cmd::Fillet | Cmd::FilletAll) { FeatureKind::Fillet(op) } else { FeatureKind::Chamfer(op) }))
             }
-            Cmd::PlaneAngle => Sel::Ref(d.add_angle_plane(plane, AxisRef::Origin(OriginAxis::X), "30")),
-            Cmd::Plane => Sel::Ref(d.add_offset_plane(plane, "20")),
+            Cmd::Geo(k) => Sel::Ref(d.add_geometry(k.make(&seed))),
             Cmd::Param => {
                 let n = (1..).map(|i| format!("P{i}")).find(|n| !d.params.iter().any(|p| &p.name == n)).unwrap();
                 let _ = d.add_param(&n, "10", Unit::Comprimento);
@@ -1352,9 +1401,12 @@ impl App {
                     }
                     for r in &refs {
                         let users = doc.dependents(r.id).len();
-                        let icon = match r.kind {
-                            RefKind::AnglePlane { .. } => "◩",
-                            RefKind::FacePlane { .. } => "▣",
+                        let icon = match (&r.kind, r.kind.class()) {
+                            (RefKind::AnglePlane { .. }, _) => "◩",
+                            (RefKind::FacePlane { .. }, _) => "▣",
+                            (_, RefClass::Point) => "•",
+                            (RefKind::LinePoints { .. } | RefKind::LineDir { .. } | RefKind::LineAngle { .. } | RefKind::LineNormalSurface { .. }, _) => "╱",
+                            (_, RefClass::Curve) => "∿",
                             _ => "▱",
                         };
                         let txt = format!("{icon} {}{}", r.name, if users > 0 { format!("  ·{users}") } else { String::new() });
@@ -1377,7 +1429,7 @@ impl App {
                                 actions.push(TreeAction::EditSketch(r.id));
                                 ui.close();
                             }
-                            if ui.button("Novo sketch neste plano").clicked() {
+                            if r.kind.class() == RefClass::Plane && ui.button("Novo sketch neste plano").clicked() {
                                 actions.push(TreeAction::SketchOn(PlaneRef::Datum(r.id)));
                                 ui.close();
                             }
@@ -1996,6 +2048,21 @@ impl App {
                 }
             }
 
+            // rótulos de pontos e curvas de referência
+            if let (Some(r), true) = (&self.result, self.settings.filter.rotulos) {
+                for p in &r.points {
+                    if let Some(pos) = vp.project(rect, Vec3::from(p.p.map(|v| v as f32))) {
+                        ui.painter().text(pos + egui::vec2(6., -4.), egui::Align2::LEFT_BOTTOM, &p.name, egui::FontId::proportional(11.), ink);
+                    }
+                }
+                for c in &r.curves {
+                    let m = c.pts[c.pts.len() / 2];
+                    if let Some(pos) = vp.project(rect, Vec3::from(m.map(|v| v as f32))) {
+                        ui.painter().text(pos + egui::vec2(6., -4.), egui::Align2::LEFT_BOTTOM, &c.name, egui::FontId::proportional(11.), ink);
+                    }
+                }
+            }
+
             let cam = vp.camera;
             // estado da vista no canto superior esquerdo
             let info = format!(
@@ -2230,8 +2297,8 @@ pub enum Cmd {
     FilletAll,
     Chamfer,
     ChamferAll,
-    Plane,
-    PlaneAngle,
+    /// plano, ponto, linha ou curva de referência
+    Geo(crate::geo_ui::GeoKind),
     Param,
     Folder,
     Collector,
