@@ -96,7 +96,7 @@ struct LOut { @builtin(position) clip: vec4<f32>, @location(0) col: vec4<f32> };
 @vertex fn vs_line(v: LIn) -> LOut {
     var o: LOut;
     var p = u.view_proj * vec4<f32>(v.pos, 1.0);
-    p.z = p.z - 0.0006 * p.w;   // arestas sempre por cima das faces coincidentes
+    p.z = p.z - 0.00015 * p.w;  // arestas levemente à frente das faces coincidentes
     o.clip = p; o.col = v.col;
     return o;
 }
@@ -356,7 +356,9 @@ impl Viewport {
         let target = [Some(wgpu::ColorTargetState { format: FMT, blend: Some(wgpu::BlendState::ALPHA_BLENDING), write_mask: wgpu::ColorWrites::ALL })];
         let mesh_attrs = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x4];
         let line_attrs = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x4];
-        let pipe = |vs: &str, fs: &str, attrs: &[wgpu::VertexAttribute], stride: usize, topo, cmp, write| {
+        use wgpu::CompareFunction as C;
+        use wgpu::PrimitiveTopology as T;
+        let pipe = |vs: &str, fs: &str, attrs: &[wgpu::VertexAttribute], stride: usize, topo: T, cmp, write| {
             let buffers = [Some(wgpu::VertexBufferLayout { array_stride: stride as u64, step_mode: wgpu::VertexStepMode::Vertex, attributes: attrs })];
             dev.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some(vs),
@@ -374,15 +376,18 @@ impl Viewport {
                     depth_write_enabled: Some(write),
                     depth_compare: Some(cmp),
                     stencil: Default::default(),
-                    bias: Default::default(),
+                    // faces um pouco para trás (polygon offset): arestas aparecem sem atravessar faces
+                    bias: if topo == T::TriangleList {
+                        wgpu::DepthBiasState { constant: 2, slope_scale: 1.0, clamp: 0.0 }
+                    } else {
+                        Default::default()
+                    },
                 }),
                 multisample: wgpu::MultisampleState { count: SAMPLES, ..Default::default() },
                 multiview_mask: None,
                 cache: None,
             })
         };
-        use wgpu::CompareFunction as C;
-        use wgpu::PrimitiveTopology as T;
         let ms = std::mem::size_of::<MeshVertex>();
         let ls = std::mem::size_of::<LineVertex>();
         Viewport {

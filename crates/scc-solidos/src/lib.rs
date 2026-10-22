@@ -41,6 +41,54 @@ pub struct BodyResult {
     pub face_owner: Vec<Id>,
 }
 
+fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+fn sub(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
+    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+}
+fn unit(v: [f64; 3]) -> [f64; 3] {
+    let l = dot(v, v).sqrt().max(1e-12);
+    v.map(|x| x / l)
+}
+/// Gira `v` em torno do eixo unitário `k` (Rodrigues).
+fn rotate(v: [f64; 3], k: [f64; 3], a: f64) -> [f64; 3] {
+    let (c, s) = (a.cos(), a.sin());
+    let kxv = scc_kernel::cross(k, v);
+    let kv = dot(k, v);
+    [0, 1, 2].map(|i| v[i] * c + kxv[i] * s + k[i] * kv * (1. - c))
+}
+/// Diagonal aproximada dos perfis (para dimensionar ferramentas).
+fn loops_size(loops: &[scc_kernel::Loop2]) -> f64 {
+    let (mut lo, mut hi) = ([f64::MAX; 2], [f64::MIN; 2]);
+    let mut add = |p: [f64; 2], r: f64| {
+        for i in 0..2 {
+            lo[i] = lo[i].min(p[i] - r);
+            hi[i] = hi[i].max(p[i] + r);
+        }
+    };
+    for l in loops {
+        for sgm in l {
+            match *sgm {
+                scc_kernel::Seg2::Line(a, b) => {
+                    add(a, 0.);
+                    add(b, 0.)
+                }
+                scc_kernel::Seg2::Arc(a, m, b) => {
+                    add(a, 0.);
+                    add(m, 0.);
+                    add(b, 0.)
+                }
+                scc_kernel::Seg2::Circle(c, r) => add(c, r),
+            }
+        }
+    }
+    if lo[0] > hi[0] {
+        return 1.;
+    }
+    ((hi[0] - lo[0]).powi(2) + (hi[1] - lo[1]).powi(2)).sqrt()
+}
+
 fn tags_for(owners: &[Id]) -> Vec<i32> {
     (0..owners.len() as i32).collect()
 }
@@ -122,7 +170,31 @@ impl Ctx<'_> {
                         let b = self.plane(base, depth + 1)?;
                         Ok(b.offset(ev(offset, &self.vars, &format!("{} · deslocamento", r.name))?))
                     }
+                    RefKind::FacePlane { origin, x, normal, .. } => Ok(Frame { origin: *origin, x: *x, normal: *normal }),
+                    RefKind::AnglePlane { base, axis, angle } => {
+                        let b = self.plane(base, depth + 1)?;
+                        let (o, d) = self.axis(axis)?;
+                        let a = ev(angle, &self.vars, &format!("{} · ângulo", r.name))?.to_radians();
+                        let rot = |v: [f64; 3]| rotate(v, d, a);
+                        // o eixo é levado para dentro do plano base (giro em torno da linha no plano base)
+                        let h = dot(sub(b.origin, o), b.normal);
+                        let o = [0, 1, 2].map(|i| o[i] + b.normal[i] * h);
+                        Ok(Frame { origin: o, x: rot(b.x), normal: rot(b.normal) })
+                    }
                 }
+            }
+        }
+    }
+
+    /// Eixo (ponto, direção unitária).
+    fn axis(&self, a: &AxisRef) -> Result<([f64; 3], [f64; 3]), String> {
+        match *a {
+            AxisRef::Origin(ax) => Ok(([0.; 3], origin_axis(ax))),
+            AxisRef::SketchLine { sketch, entity } => {
+                let (af, ask) = self.sketch(sketch)?;
+                let (a, b) = ask.lines.get(&entity).ok_or("linha do eixo não existe mais — reedite o eixo")?;
+                let (pa, pb) = (af.point(a[0], a[1]), af.point(b[0], b[1]));
+                Ok((pa, unit([pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]])))
             }
         }
     }
@@ -160,6 +232,7 @@ impl Ctx<'_> {
             }
             Extent::TwoSides(a, b) => (ev(a, &self.vars, "distância 1")?, ev(b, &self.vars, "distância 2")?),
             Extent::ThroughAll => (self.through(target)?, 0.),
+            Extent::UpTo(_) => return Err("'até plano' só vale para extrusão e recorte".into()),
         })
     }
 
@@ -212,8 +285,23 @@ impl Ctx<'_> {
                 let into = (e.op == BoolOp::Cut) != e.reverse;
                 let n = frame.normal;
                 let dir = if into { n.map(|x| -x) } else { n };
-                let (front, back) = self.extent(&e.extent, f.target)?;
-                let tool = face.extrude(dir, front, back).map_err(k)?;
+                let tool = if let Extent::UpTo(p) = &e.extent {
+                    let target = self.plane(p, 0)?;
+                    let n = target.normal;
+                    let den = dot(dir, n);
+                    if den.abs() < 1e-9 {
+                        return Err("o plano de término é paralelo à direção da extrusão".into());
+                    }
+                    let t = dot(sub(target.origin, frame.origin), n) / den;
+                    if t <= 1e-9 {
+                        return Err("o plano de término está do outro lado — use 'inverter sentido'".into());
+                    }
+                    let size = loops_size(&sk.loops);
+                    face.extrude_until(dir, t * 4. + size * 10. + 100., target.origin, n).map_err(k)?
+                } else {
+                    let (front, back) = self.extent(&e.extent, f.target)?;
+                    face.extrude(dir, front, back).map_err(k)?
+                };
                 self.apply(f.target, tool, e.op, f.id)?;
                 Ok(None)
             }
@@ -270,13 +358,22 @@ impl Ctx<'_> {
                 let v = ev(&o.value, &self.vars, "valor")?;
                 let (b, owners) = self.body_owned(f.target).ok_or("não há corpo para aplicar")?;
                 let tags = tags_for(owners);
-                let r = if matches!(f.kind, FeatureKind::Fillet(_)) { b.fillet_tagged(v, &tags) } else { b.chamfer_tagged(v, &tags) };
+                let chamfer = matches!(f.kind, FeatureKind::Chamfer(_));
+                let r = match &o.edges {
+                    EdgeSel::Edges(mids) if !mids.is_empty() => {
+                        let tol = b.bbox().map(|(a, c)| (0..3).map(|i| (c[i] - a[i]).powi(2)).sum::<f64>().sqrt() * 0.05).unwrap_or(1.).max(1.);
+                        b.edges_tagged(v, mids, tol, chamfer, &tags)
+                    }
+                    _ if chamfer => b.chamfer_tagged(v, &tags),
+                    _ => b.fillet_tagged(v, &tags),
+                };
                 let (s, out) = r.map_err(k)?;
                 let own = remap(owners, &out, f.id);
                 self.bodies.insert(f.target, (s, own));
-                Ok(match o.edges {
-                    EdgeSel::AllOfBody => None,
+                Ok(match &o.edges {
                     EdgeSel::CreatedBy(_) => Some("seleção por comando ainda não implementada: aplicado a todas as arestas".into()),
+                    EdgeSel::Edges(m) if m.is_empty() => Some("nenhuma aresta escolhida: aplicado a todas".into()),
+                    _ => None,
                 })
             }
         }
@@ -514,6 +611,32 @@ mod tests {
             let id = d.features.iter().find(|f| f.name == name).unwrap().id;
             assert!(owners.contains(&id), "{name} sem faces");
         }
+    }
+
+    #[test]
+    fn extrusao_ate_plano_inclinado_e_filete_em_aresta() {
+        if !scc_kernel::AVAILABLE {
+            return;
+        }
+        let mut d = example_document();
+        // plano a 30° em torno do eixo X, deslocado 20 mm acima, e extrusão do sketch base até ele
+        let base = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "20");
+        let inclinado = d.add_angle_plane(PlaneRef::Datum(base), AxisRef::Origin(OriginAxis::X), "30");
+        let sk = d.features[0].id;
+        if let Some(FeatureKind::Extrude(e)) = d.feature_mut(d.features[1].id).map(|f| &mut f.kind) {
+            assert_eq!(e.sketch, sk);
+            e.extent = Extent::UpTo(PlaneRef::Datum(inclinado));
+        }
+        let r = recompute(&d);
+        let placa = &d.features[1];
+        assert_eq!(r.status[&placa.id], Status::Ok, "{:?}", r.status[&placa.id]);
+        // filete só em uma aresta escolhida (aresta inferior frontal: y = -36, z = 0)
+        let fil = d.features.iter().find(|f| matches!(f.kind, FeatureKind::Fillet(_))).unwrap().id;
+        if let Some(FeatureKind::Fillet(o)) = d.feature_mut(fil).map(|f| &mut f.kind) {
+            o.edges = EdgeSel::Edges(vec![[0., -36., 0.]]);
+        }
+        let r = recompute(&d);
+        assert_eq!(r.status[&fil], Status::Ok, "{:?}", r.status[&fil]);
     }
 
     #[test]

@@ -38,6 +38,12 @@ pub mod bridge {
         edges: Vec<f32>,
         /// início (em `indices`) dos triângulos de cada face, na ordem das etiquetas
         face_ranges: Vec<u32>,
+        /// início (em segmentos de `edges`) de cada aresta, na ordem do kernel
+        edge_ranges: Vec<u32>,
+        /// ponto médio (xyz) de cada aresta — assinatura para referência persistente
+        edge_mids: Vec<f32>,
+        /// posição (xyz) de cada vértice
+        vertices: Vec<f32>,
     }
 
     unsafe extern "C++" {
@@ -69,6 +75,11 @@ pub mod bridge {
         /// resultado (-1 = face criada pela operação).
         fn boolean_t(a: &Shape, b: &Shape, op: u8, tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
         fn fillet_all_t(s: &Shape, r: f64, tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
+        fn fillet_sel_t(s: &Shape, r: f64, mids: &[f64], tol: f64, tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
+        fn chamfer_sel_t(s: &Shape, d: f64, mids: &[f64], tol: f64, tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
+        /// Extrusão do perfil na direção d até o plano (o, n), com comprimento máximo `len`.
+        fn extrude_until(face: &Shape, dx: f64, dy: f64, dz: f64, len: f64, ox: f64, oy: f64, oz: f64, nx: f64, ny: f64, nz: f64)
+            -> Result<UniquePtr<Shape>>;
         fn chamfer_all_t(s: &Shape, d: f64, tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
 
         fn tessellate(s: &Shape, deflection: f64) -> Result<MeshData>;

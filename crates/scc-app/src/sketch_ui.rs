@@ -27,6 +27,16 @@ pub enum Tool {
     Polygon,
     Point,
     Dimension,
+    DimH,
+    DimV,
+    DimAngle,
+    DimRadius,
+    DimDiameter,
+    Move,
+    Copy,
+    Mirror,
+    Offset,
+    Fillet,
     Constr(CKind),
 }
 
@@ -70,6 +80,16 @@ impl Tool {
             Tool::Slot => ("sk_rasgo", "Rasgo", "Rasgo centro a centro", "Clique nos dois centros e depois na largura. Cria dois arcos tangentes às linhas, com raios iguais."),
             Tool::Polygon => ("sk_poligono", "Polígono", "Polígono regular", "Clique no centro e depois num vértice. Lados iguais inscritos num círculo de construção; o número de lados fica no painel."),
             Tool::Point => ("sk_ponto", "Ponto", "Ponto  (P)", "Ponto isolado: serve de centro de furo ou referência para cotas."),
+            Tool::DimH => ("cota_horizontal", "Horizontal", "Cota horizontal", "Dois pontos ou uma linha: distância na horizontal do sketch."),
+            Tool::DimV => ("cota_vertical", "Vertical", "Cota vertical", "Dois pontos ou uma linha: distância na vertical do sketch."),
+            Tool::DimAngle => ("cota_angulo", "Ângulo", "Cota de ângulo", "Clique em duas linhas."),
+            Tool::DimRadius => ("cota_raio", "Raio", "Cota de raio", "Clique num círculo ou arco."),
+            Tool::DimDiameter => ("cota_diametro", "Diâmetro", "Cota de diâmetro", "Clique num círculo ou arco."),
+            Tool::Move => ("sk_mover", "Mover", "Mover seleção", "Selecione curvas (ou clique nelas com a ferramenta), depois clique no ponto base e no destino. As restrições continuam valendo."),
+            Tool::Copy => ("sk_copiar", "Copiar", "Copiar seleção", "Selecione curvas, clique no ponto base e no destino: cria uma cópia."),
+            Tool::Mirror => ("sk_espelhar", "Espelhar", "Espelhar seleção", "Selecione curvas e clique na linha de simetria: cria a cópia espelhada com restrições de simetria."),
+            Tool::Offset => ("sk_offset", "Offset", "Offset (curva paralela)", "Clique numa linha, círculo ou arco e depois onde a nova curva deve passar. A distância vira cota."),
+            Tool::Fillet => ("sk_filete", "Filete", "Filete de canto", "Clique no canto entre duas linhas: insere um arco tangente e abre a cota do raio."),
             Tool::Dimension => ("sk_cota", "Cota", "Cotagem inteligente  (D)", "Linha → comprimento; círculo → diâmetro; arco → raio; dois pontos → distância (Ctrl: horizontal, Alt: vertical); duas linhas → ângulo; ponto e linha → distância. O valor aceita expressões e parâmetros (ex.: L/2)."),
             Tool::Constr(k) => match k {
                 CKind::Coincident => ("r_coincidente", "Coincidente", "Coincidente", "Dois pontos viram um só; ponto + curva prende o ponto sobre a curva."),
@@ -86,39 +106,13 @@ impl Tool {
             },
         }
     }
-    pub const DRAW: [Tool; 12] = [
-        Tool::Select,
-        Tool::Line,
-        Tool::Rect,
-        Tool::RectCenter,
-        Tool::Circle,
-        Tool::Circle3,
-        Tool::Arc3,
-        Tool::ArcCenter,
-        Tool::Slot,
-        Tool::Polygon,
-        Tool::Point,
-        Tool::Dimension,
-    ];
-    pub const CONSTRAINTS: [Tool; 11] = [
-        Tool::Constr(CKind::Coincident),
-        Tool::Constr(CKind::Horizontal),
-        Tool::Constr(CKind::Vertical),
-        Tool::Constr(CKind::Parallel),
-        Tool::Constr(CKind::Perpendicular),
-        Tool::Constr(CKind::Tangent),
-        Tool::Constr(CKind::Equal),
-        Tool::Constr(CKind::Concentric),
-        Tool::Constr(CKind::Midpoint),
-        Tool::Constr(CKind::Fixed),
-        Tool::Constr(CKind::Symmetric),
-    ];
     fn clicks_needed(self) -> usize {
         match self {
             Tool::Rect | Tool::RectCenter | Tool::Circle => 2,
             Tool::Circle3 | Tool::Arc3 | Tool::ArcCenter | Tool::Slot => 3,
             Tool::Polygon => 2,
             Tool::Point => 1,
+            Tool::Move | Tool::Copy => 2,
             _ => 0,
         }
     }
@@ -158,6 +152,8 @@ pub struct SketchEdit {
     pub polygon_sides: usize,
     pub prev_ortho: bool,
     hits: Vec<(Rect, Ent)>,
+    /// mostra a checagem de contornos
+    pub check: bool,
 }
 
 impl SketchEdit {
@@ -176,6 +172,7 @@ impl SketchEdit {
             polygon_sides: 6,
             prev_ortho,
             hits: vec![],
+            check: false,
         }
     }
     pub fn set_tool(&mut self, t: Tool) {
@@ -183,7 +180,7 @@ impl SketchEdit {
         self.clicks.clear();
         self.chain_last = None;
         self.chain_first = None;
-        if !matches!(t, Tool::Constr(_) | Tool::Select) {
+        if !matches!(t, Tool::Constr(_) | Tool::Select | Tool::Move | Tool::Copy | Tool::Mirror) {
             self.sel.clear();
         }
     }
@@ -413,6 +410,45 @@ fn dimension_for(sk: &SketchData, sel: &[Ent], mods: (bool, bool)) -> Option<Kin
     }
 }
 
+/// Cota para as ferramentas específicas (horizontal, vertical, ângulo, raio, diâmetro).
+fn dimension_for_tool(sk: &SketchData, sel: &[Ent], tool: Tool, mods: (bool, bool)) -> Option<Kind> {
+    let e = String::new();
+    let line_pts = |c: Id| match sk.curve(c).map(|c| &c.geom) {
+        Some(Curve::Line { a, b }) => Some((*a, *b)),
+        _ => None,
+    };
+    match tool {
+        Tool::Dimension => dimension_for(sk, sel, mods),
+        Tool::DimH | Tool::DimV => {
+            let (a, b) = match sel {
+                [Ent::Pt(a), Ent::Pt(b)] => (*a, *b),
+                [Ent::Cv(c)] => line_pts(*c)?,
+                _ => return None,
+            };
+            Some(if tool == Tool::DimH { Kind::DistanceX(a, b, e) } else { Kind::DistanceY(a, b, e) })
+        }
+        Tool::DimAngle => match sel {
+            [Ent::Cv(a), Ent::Cv(b)] if is_line(sk, *a) && is_line(sk, *b) => Some(Kind::Angle(*a, *b, e)),
+            _ => None,
+        },
+        Tool::DimRadius | Tool::DimDiameter => match sel {
+            [Ent::Cv(c)] if is_round(sk, *c) => Some(if tool == Tool::DimRadius { Kind::Radius(*c, e) } else { Kind::Diameter(*c, e) }),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Seleção ainda incompleta para a ferramenta de cota?
+fn dimension_waits(sk: &SketchData, sel: &[Ent], tool: Tool) -> bool {
+    match tool {
+        Tool::Dimension => dimension_needs_more(sk, sel),
+        Tool::DimH | Tool::DimV => matches!(sel, [Ent::Pt(_)]),
+        Tool::DimAngle => matches!(sel, [Ent::Cv(c)] if is_line(sk, *c)),
+        _ => false,
+    }
+}
+
 fn dimension_needs_more(sk: &SketchData, sel: &[Ent]) -> bool {
     matches!(sel, [Ent::Pt(_)]) || matches!(sel, [Ent::Cv(c)] if matches!(sk.curve(*c).map(|c| &c.geom), Some(Curve::Point { .. })))
 }
@@ -621,10 +657,14 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             let n = stack.entry(key).or_default();
             let pos = s + egui::vec2(10. + *n as f32 * 15., 10.);
             *n += 1;
-            let r = Rect::from_center_size(pos, egui::vec2(14., 14.));
-            let bg = if bad { BAD } else if sel { SEL } else { Color32::from_rgba_unmultiplied(240, 170, 40, 220) };
-            painter.rect_filled(r, 3., bg);
-            painter.text(pos, egui::Align2::CENTER_CENTER, glyph(&c.kind), egui::FontId::proportional(10.), Color32::BLACK);
+            let r = Rect::from_center_size(pos, egui::vec2(13., 13.));
+            // símbolo discreto; destaca quando o elemento ou a restrição está selecionado
+            let related = refs.iter().any(|x| edit.sel.contains(&Ent::Cv(*x)) || edit.sel.contains(&Ent::Pt(*x)));
+            let col = if bad { BAD } else if sel || related { SEL } else if dark { Color32::from_white_alpha(120) } else { Color32::from_black_alpha(120) };
+            if sel || related || bad {
+                painter.circle_stroke(pos, 7., Stroke::new(1., col));
+            }
+            painter.text(pos, egui::Align2::CENTER_CENTER, glyph(&c.kind), egui::FontId::proportional(10.), col);
             edit.hits.push((r, Ent::Cs(c.id)));
             continue;
         }
@@ -750,6 +790,38 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         painter.rect_filled(r, 3., if dark { Color32::from_black_alpha(170) } else { Color32::from_white_alpha(220) });
         painter.galley(r.min + egui::vec2(4., 2.), galley, col);
         edit.hits.push((r, Ent::Cs(c.id)));
+    }
+
+    // ---------- checagem de contornos
+    if edit.check {
+        let mut degree: HashMap<Id, usize> = HashMap::new();
+        for c in sk.curves.iter().filter(|c| !c.construction) {
+            let ends = match c.geom {
+                Curve::Line { a, b } => vec![a, b],
+                Curve::Arc { s, e, .. } => vec![s, e],
+                _ => vec![],
+            };
+            for p in ends {
+                *degree.entry(p).or_default() += 1;
+            }
+        }
+        let open: Vec<Id> = degree.iter().filter(|(_, d)| **d == 1).map(|(p, _)| *p).collect();
+        for p in &open {
+            painter.circle_stroke(v.to_screen(sk.pos(*p)), 9., Stroke::new(2.2, BAD));
+        }
+        let mut overlaps = 0;
+        for (i, a) in sk.points.iter().enumerate() {
+            for b in &sk.points[i + 1..] {
+                if (a.x - b.x).abs() < 1e-6 && (a.y - b.y).abs() < 1e-6 {
+                    overlaps += 1;
+                    painter.circle_stroke(v.to_screen([a.x, a.y]), 12., Stroke::new(1.6, Color32::from_rgb(255, 160, 40)));
+                }
+            }
+        }
+        let (loops, _) = sk.loops();
+        let msg = format!("Contornos: {} fechado(s) · {} ponta(s) aberta(s) · {} ponto(s) sobreposto(s)", loops.len(), open.len(), overlaps);
+        let col = if open.is_empty() && overlaps == 0 { Color32::from_rgb(120, 210, 130) } else { Color32::from_rgb(255, 170, 60) };
+        painter.text(rect.left_top() + egui::vec2(10., 62.), egui::Align2::LEFT_TOP, msg, egui::FontId::proportional(12.), col);
     }
 
     // ---------- entrada do mouse
@@ -1164,7 +1236,247 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             }
         }
 
-        Tool::Dimension | Tool::Constr(_) => {
+        Tool::Move | Tool::Copy | Tool::Mirror | Tool::Offset | Tool::Fillet => {
+            let picked = if primary_click { hover.and_then(|p| pick(p, &sk, &edit.hits)) } else { None };
+            let sel_curves: Vec<Id> = edit.sel.iter().filter_map(|e| if let Ent::Cv(c) = e { Some(*c) } else { None }).collect();
+            match tool {
+                Tool::Move | Tool::Copy => {
+                    if sel_curves.is_empty() {
+                        if let Some(Ent::Cv(c)) = picked {
+                            edit.sel.push(Ent::Cv(c));
+                        }
+                    } else if primary_click {
+                        if let Some(sn) = cur_snap {
+                            edit.clicks.push(sn);
+                        }
+                    }
+                    let cl = edit.clicks.clone();
+                    if let (1, Some(sn)) = (cl.len(), cur_snap) {
+                        // prévia deslocada
+                        let d = [sn.uv[0] - cl[0].uv[0], sn.uv[1] - cl[0].uv[1]];
+                        for c in &sel_curves {
+                            if let Some(Curve::Line { a, b }) = sk.curve(*c).map(|x| x.geom.clone()) {
+                                let (pa, pb) = (sk.pos(a), sk.pos(b));
+                                painter.line_segment([v.to_screen([pa[0] + d[0], pa[1] + d[1]]), v.to_screen([pb[0] + d[0], pb[1] + d[1]])], Stroke::new(1.5, FREE.gamma_multiply(0.6)));
+                            }
+                        }
+                    }
+                    if cl.len() >= 2 {
+                        edit.clicks.clear();
+                        let d = [cl[1].uv[0] - cl[0].uv[0], cl[1].uv[1] - cl[0].uv[1]];
+                        let pts: Vec<Id> = {
+                            let mut v: Vec<Id> = sel_curves.iter().filter_map(|c| sk.curve(*c)).flat_map(|c| SketchData::curve_points(&c.geom)).collect();
+                            v.sort();
+                            v.dedup();
+                            v
+                        };
+                        if tool == Tool::Move {
+                            for p in &pts {
+                                if let Some(pp) = sk.point_mut(*p) {
+                                    if !pp.fixed {
+                                        pp.x += d[0];
+                                        pp.y += d[1];
+                                    }
+                                }
+                            }
+                            edit.report = sk.solve(&vars, &pts);
+                        } else {
+                            let map: HashMap<Id, Id> = pts.iter().map(|p| {
+                                let q = sk.pos(*p);
+                                (*p, sk.add_point(&mut al, q[0] + d[0], q[1] + d[1]))
+                            }).collect();
+                            for c in &sel_curves {
+                                if let Some(cv) = sk.curve(*c).cloned() {
+                                    let m = |x: Id| map[&x];
+                                    let g = match cv.geom {
+                                        Curve::Line { a, b } => Curve::Line { a: m(a), b: m(b) },
+                                        Curve::Circle { c, r } => Curve::Circle { c: m(c), r },
+                                        Curve::Arc { c, s, e } => Curve::Arc { c: m(c), s: m(s), e: m(e) },
+                                        Curve::Point { p } => Curve::Point { p: m(p) },
+                                    };
+                                    sk.add_curve(&mut al, g, cv.construction);
+                                }
+                            }
+                            edit.report = sk.solve(&vars, &[]);
+                        }
+                    }
+                }
+                Tool::Mirror => {
+                    if let Some(Ent::Cv(c)) = picked {
+                        if !sel_curves.is_empty() && is_line(&sk, c) && !sel_curves.contains(&c) {
+                            if let Some(Curve::Line { a: la, b: lb }) = sk.curve(c).map(|x| x.geom.clone()) {
+                                let (pa, pb) = (sk.pos(la), sk.pos(lb));
+                                let dd = [pb[0] - pa[0], pb[1] - pa[1]];
+                                let l2 = dd[0] * dd[0] + dd[1] * dd[1];
+                                let refl = |q: [f64; 2]| {
+                                    let t = ((q[0] - pa[0]) * dd[0] + (q[1] - pa[1]) * dd[1]) / l2.max(1e-12);
+                                    let f = [pa[0] + dd[0] * t, pa[1] + dd[1] * t];
+                                    [2. * f[0] - q[0], 2. * f[1] - q[1]]
+                                };
+                                let mut pts: Vec<Id> = sel_curves.iter().filter_map(|x| sk.curve(*x)).flat_map(|x| SketchData::curve_points(&x.geom)).collect();
+                                pts.sort();
+                                pts.dedup();
+                                let map: HashMap<Id, Id> = pts.iter().map(|p| {
+                                    let q = refl(sk.pos(*p));
+                                    (*p, sk.add_point(&mut al, q[0], q[1]))
+                                }).collect();
+                                for x in &sel_curves {
+                                    if let Some(cv) = sk.curve(*x).cloned() {
+                                        let m = |x: Id| map[&x];
+                                        let g = match cv.geom {
+                                            Curve::Line { a, b } => Curve::Line { a: m(a), b: m(b) },
+                                            Curve::Circle { c, r } => Curve::Circle { c: m(c), r },
+                                            // espelhar inverte o sentido do arco
+                                            Curve::Arc { c, s, e } => Curve::Arc { c: m(c), s: m(e), e: m(s) },
+                                            Curve::Point { p } => Curve::Point { p: m(p) },
+                                        };
+                                        sk.add_curve(&mut al, g, cv.construction);
+                                    }
+                                }
+                                for (p, q) in &map {
+                                    sk.add_constraint(&mut al, Kind::Symmetric(*p, *q, c));
+                                }
+                                edit.sel.clear();
+                                edit.report = sk.solve(&vars, &[]);
+                            }
+                        } else if let Some(e) = picked {
+                            if !edit.sel.contains(&e) {
+                                edit.sel.push(e);
+                            }
+                        }
+                    }
+                }
+                Tool::Offset => {
+                    if edit.sel.is_empty() {
+                        if let Some(Ent::Cv(c)) = picked {
+                            edit.sel = vec![Ent::Cv(c)];
+                        }
+                    } else if let (true, Some(uv), [Ent::Cv(c)]) = (primary_click, cursor_uv, edit.sel.clone().as_slice()) {
+                        let c = *c;
+                        match sk.curve(c).map(|x| x.geom.clone()) {
+                            Some(Curve::Line { a, b }) => {
+                                let (pa, pb) = (sk.pos(a), sk.pos(b));
+                                let dd = [pb[0] - pa[0], pb[1] - pa[1]];
+                                let len = (dd[0] * dd[0] + dd[1] * dd[1]).sqrt().max(1e-12);
+                                let n = [-dd[1] / len, dd[0] / len];
+                                let dist = (uv[0] - pa[0]) * n[0] + (uv[1] - pa[1]) * n[1];
+                                let na = sk.add_point(&mut al, pa[0] + n[0] * dist, pa[1] + n[1] * dist);
+                                let nb = sk.add_point(&mut al, pb[0] + n[0] * dist, pb[1] + n[1] * dist);
+                                let l2 = sk.add_curve(&mut al, Curve::Line { a: na, b: nb }, edit.construction);
+                                sk.add_constraint(&mut al, Kind::Parallel(c, l2));
+                                let id = sk.add_constraint(&mut al, Kind::PointLineDistance(na, c, fmt(dist.abs())));
+                                edit.dim_edit = Some((id, fmt(dist.abs()), true));
+                            }
+                            Some(Curve::Circle { c: ctr, .. }) => {
+                                let r2 = d2(uv, sk.pos(ctr)).max(1e-3);
+                                let cv = sk.add_curve(&mut al, Curve::Circle { c: ctr, r: r2 }, edit.construction);
+                                let id = sk.add_constraint(&mut al, Kind::Diameter(cv, fmt(2. * r2)));
+                                edit.dim_edit = Some((id, fmt(2. * r2), true));
+                            }
+                            Some(Curve::Arc { c: ctr, s: ps, e: pe }) => {
+                                let pc = sk.pos(ctr);
+                                let r2 = d2(uv, pc).max(1e-3);
+                                let at = |q: [f64; 2]| {
+                                    let r = d2(q, pc).max(1e-12);
+                                    [pc[0] + (q[0] - pc[0]) * r2 / r, pc[1] + (q[1] - pc[1]) * r2 / r]
+                                };
+                                let (qs, qe) = (at(sk.pos(ps)), at(sk.pos(pe)));
+                                let ns = sk.add_point(&mut al, qs[0], qs[1]);
+                                let ne = sk.add_point(&mut al, qe[0], qe[1]);
+                                let cv = sk.add_curve(&mut al, Curve::Arc { c: ctr, s: ns, e: ne }, edit.construction);
+                                let id = sk.add_constraint(&mut al, Kind::Radius(cv, fmt(r2)));
+                                edit.dim_edit = Some((id, fmt(r2), true));
+                            }
+                            _ => {}
+                        }
+                        edit.sel.clear();
+                        edit.report = sk.solve(&vars, &[]);
+                    }
+                }
+                Tool::Fillet => {
+                    if let Some(Ent::Pt(p)) = picked {
+                        let lines: Vec<(Id, Id)> = sk.curves.iter().filter_map(|c| match c.geom {
+                            Curve::Line { a, b } if a == p => Some((c.id, b)),
+                            Curve::Line { a, b } if b == p => Some((c.id, a)),
+                            _ => None,
+                        }).collect();
+                        if lines.len() != 2 {
+                            toast = Some(("clique num canto onde duas linhas se encontram".into(), true));
+                        } else {
+                            let pc = sk.pos(p);
+                            let (q1, q2) = (sk.pos(lines[0].1), sk.pos(lines[1].1));
+                            let unit = |q: [f64; 2]| {
+                                let l = d2(q, pc).max(1e-12);
+                                ([(q[0] - pc[0]) / l, (q[1] - pc[1]) / l], l)
+                            };
+                            let ((u1, l1), (u2, l2)) = (unit(q1), unit(q2));
+                            let cosang = (u1[0] * u2[0] + u1[1] * u2[1]).clamp(-1., 1.);
+                            let th = cosang.acos();
+                            if th < 1e-3 || (std::f64::consts::PI - th) < 1e-3 {
+                                toast = Some(("as linhas são colineares".into(), true));
+                            } else {
+                                let t = 0.3 * l1.min(l2);
+                                let r = t * (th / 2.).tan();
+                                let bis = {
+                                    let b = [u1[0] + u2[0], u1[1] + u2[1]];
+                                    let l = (b[0] * b[0] + b[1] * b[1]).sqrt().max(1e-12);
+                                    [b[0] / l, b[1] / l]
+                                };
+                                let dc = t / (th / 2.).cos();
+                                let ctr = [pc[0] + bis[0] * dc, pc[1] + bis[1] * dc];
+                                let t1 = sk.add_point(&mut al, pc[0] + u1[0] * t, pc[1] + u1[1] * t);
+                                let t2 = sk.add_point(&mut al, pc[0] + u2[0] * t, pc[1] + u2[1] * t);
+                                let cc = sk.add_point(&mut al, ctr[0], ctr[1]);
+                                // as linhas passam a terminar nos pontos de tangência
+                                for (lid, tp) in [(lines[0].0, t1), (lines[1].0, t2)] {
+                                    if let Some(scc_core::sketch::SkCurve { geom: Curve::Line { a, b }, .. }) = sk.curves.iter_mut().find(|c| c.id == lid) {
+                                        if *a == p {
+                                            *a = tp
+                                        } else {
+                                            *b = tp
+                                        }
+                                    }
+                                }
+                                let (s1, s2) = (sk.pos(t1), sk.pos(t2));
+                                let ccw = (s1[0] - ctr[0]) * (s2[1] - ctr[1]) - (s1[1] - ctr[1]) * (s2[0] - ctr[0]) > 0.;
+                                let arc = sk.add_curve(&mut al, if ccw { Curve::Arc { c: cc, s: t1, e: t2 } } else { Curve::Arc { c: cc, s: t2, e: t1 } }, false);
+                                sk.add_constraint(&mut al, Kind::Tangent(lines[0].0, arc));
+                                sk.add_constraint(&mut al, Kind::Tangent(lines[1].0, arc));
+                                let id = sk.add_constraint(&mut al, Kind::Radius(arc, fmt(r)));
+                                edit.dim_edit = Some((id, fmt(r), true));
+                                // o canto antigo some se ninguém mais o usa
+                                if !sk.curves.iter().any(|c| SketchData::curve_points(&c.geom).contains(&p)) {
+                                    sk.points.retain(|x| x.id != p || x.fixed);
+                                    sk.prune_constraints();
+                                }
+                                edit.report = sk.solve(&vars, &[]);
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+            if secondary_click {
+                edit.clicks.clear();
+                edit.sel.clear();
+            }
+            if let Some(h) = hover {
+                let hint = match (tool, sel_curves.is_empty(), edit.clicks.len()) {
+                    (Tool::Move | Tool::Copy, true, _) => "clique nas curvas a mover",
+                    (Tool::Move | Tool::Copy, false, 0) => "ponto base",
+                    (Tool::Move | Tool::Copy, false, _) => "destino",
+                    (Tool::Mirror, true, _) => "selecione as curvas a espelhar",
+                    (Tool::Mirror, false, _) => "clique na linha de simetria",
+                    (Tool::Offset, _, _) if edit.sel.is_empty() => "clique na curva",
+                    (Tool::Offset, _, _) => "clique onde a paralela deve passar",
+                    (Tool::Fillet, _, _) => "clique no canto entre duas linhas",
+                    _ => "",
+                };
+                painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, hint, egui::FontId::proportional(11.), FREE);
+            }
+        }
+
+        Tool::Dimension | Tool::DimH | Tool::DimV | Tool::DimAngle | Tool::DimRadius | Tool::DimDiameter | Tool::Constr(_) => {
             if primary_click {
                 if let Some(e) = hover.and_then(|p| pick(p, &sk, &edit.hits)) {
                     if !matches!(e, Ent::Cs(_)) {
@@ -1182,9 +1494,9 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                     }
                 }
                 match tool {
-                    Tool::Dimension => {
-                        if !dimension_needs_more(&sk, &edit.sel) {
-                            if let Some(mut k) = dimension_for(&sk, &edit.sel, (ctrl, alt)) {
+                    Tool::Dimension | Tool::DimH | Tool::DimV | Tool::DimAngle | Tool::DimRadius | Tool::DimDiameter => {
+                        if !dimension_waits(&sk, &edit.sel, tool) {
+                            if let Some(mut k) = dimension_for_tool(&sk, &edit.sel, tool, (ctrl, alt)) {
                                 let m = sk.measure(&k).unwrap_or(0.);
                                 *k.value_mut().unwrap() = fmt(m);
                                 let id = sk.add_constraint(&mut al, k);
@@ -1314,7 +1626,7 @@ pub fn keys(app: &mut App, ctx: &egui::Context) -> bool {
     false
 }
 
-/// Painel lateral do sketch em edição.
+/// Painel lateral do sketch em edição: limpo, mostra só o necessário para o passo atual.
 pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     let vars = app.vars();
     let Some(edit) = app.sketch.as_mut() else { return };
@@ -1327,65 +1639,115 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     } else if st.dof == 0 {
         ("Totalmente restrito".to_string(), Color32::from_rgb(120, 210, 130))
     } else {
-        (format!("Sub-restrito · {} GDL", st.dof), FREE)
+        (format!("Sub-restrito · {} grau(s) de liberdade", st.dof), FREE)
     };
     ui.label(RichText::new(txt).color(col).strong());
-    ui.add_space(4.);
-    ui.horizontal(|ui| {
-        ui.checkbox(&mut edit.construction, "geometria de construção (X)");
-    });
-    if edit.tool == Tool::Polygon {
-        ui.add(egui::Slider::new(&mut edit.polygon_sides, 3..=24).text("lados do polígono"));
+    let tool = edit.tool;
+    ui.label(RichText::new(tool.info().3).weak().small());
+    if tool == Tool::Polygon {
+        ui.add(egui::Slider::new(&mut edit.polygon_sides, 3..=24).text("lados"));
     }
+    ui.add_space(4.);
     let mut finish = false;
-    if ui.button("✔ Concluir sketch").clicked() {
+    if ui.add(egui::Button::new(RichText::new("✔ Concluir sketch").strong()).min_size(egui::vec2(180., 30.))).clicked() {
         finish = true;
     }
+    ui.separator();
     let sel = edit.sel.clone();
     let mut del: Option<Id> = None;
     let mut new_sel: Option<Vec<Ent>> = None;
     let failing = edit.report.failing.clone();
     if let Some(FeatureKind::Sketch(s)) = app.open.doc.feature_mut(id).map(|f| &mut f.kind) {
-        // seleção: coordenadas de pontos
+        let d = &mut s.data;
+        if sel.is_empty() {
+            ui.label(RichText::new("Clique num elemento para ver suas restrições e cotas.").weak());
+        }
+        // elementos selecionados e as restrições ligadas a eles
+        let sel_ids: Vec<Id> = sel.iter().map(|e| match e {
+            Ent::Pt(x) | Ent::Cv(x) | Ent::Cs(x) => *x,
+        }).collect();
         for e in &sel {
-            if let Ent::Pt(p) = e {
-                if let Some(pt) = s.data.point_mut(*p) {
-                    ui.horizontal(|ui| {
-                        ui.label(format!("Ponto #{}", p.0));
-                        ui.add(egui::DragValue::new(&mut pt.x).speed(0.5).prefix("x "));
-                        ui.add(egui::DragValue::new(&mut pt.y).speed(0.5).prefix("y "));
-                        ui.checkbox(&mut pt.fixed, "fixo");
-                    });
+            match e {
+                Ent::Pt(p) => {
+                    if let Some(pt) = d.point_mut(*p) {
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new("Ponto").strong());
+                            ui.add(egui::DragValue::new(&mut pt.x).speed(0.5).prefix("x "));
+                            ui.add(egui::DragValue::new(&mut pt.y).speed(0.5).prefix("y "));
+                            ui.checkbox(&mut pt.fixed, "fixo");
+                        });
+                    }
                 }
+                Ent::Cv(c) => {
+                    if let Some(cv) = d.curves.iter_mut().find(|x| x.id == *c) {
+                        let kind = match cv.geom {
+                            Curve::Line { .. } => "Linha",
+                            Curve::Circle { .. } => "Círculo",
+                            Curve::Arc { .. } => "Arco",
+                            Curve::Point { .. } => "Ponto",
+                        };
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new(kind).strong());
+                            ui.checkbox(&mut cv.construction, "construção");
+                        });
+                    }
+                }
+                Ent::Cs(_) => {}
             }
         }
-        ui.separator();
-        ui.label(RichText::new(format!("Restrições ({})", s.data.constraints.len())).strong());
-        for c in &mut s.data.constraints {
+        let related: Vec<usize> = (0..d.constraints.len())
+            .filter(|i| {
+                let c = &d.constraints[*i];
+                sel_ids.contains(&c.id) || c.kind.refs().iter().any(|r| sel_ids.contains(r))
+            })
+            .collect();
+        if !related.is_empty() {
+            ui.add_space(4.);
+            ui.label(RichText::new(format!("Restrições deste elemento ({})", related.len())).weak());
+        }
+        for i in related {
+            let c = &mut d.constraints[i];
             let bad = failing.contains(&c.id);
-            let selected = sel.contains(&Ent::Cs(c.id));
             ui.horizontal(|ui| {
-                let label = if bad { RichText::new(c.kind.label()).color(BAD) } else { RichText::new(c.kind.label()) };
-                if ui.selectable_label(selected, label).clicked() {
-                    new_sel = Some(vec![Ent::Cs(c.id)]);
-                }
+                let g = glyph(&c.kind);
+                let label = format!("{} {}", if g.is_empty() { "↔" } else { g }, c.kind.label());
+                ui.label(if bad { RichText::new(label).color(BAD) } else { RichText::new(label) });
                 if let Some(v) = c.kind.value_mut() {
                     let ok = scc_core::expr::eval_str(v, &vars).is_ok();
-                    let mut te = egui::TextEdit::singleline(v).desired_width(90.);
+                    let mut te = egui::TextEdit::singleline(v).desired_width(80.);
                     if !ok {
                         te = te.text_color(BAD);
                     }
                     ui.add(te);
                 }
-                if ui.small_button("✖").clicked() {
+                if ui.small_button("✖").on_hover_text("remover restrição").clicked() {
                     del = Some(c.id);
                 }
             });
         }
-        if let Some(d) = del {
-            s.data.constraints.retain(|c| c.id != d);
+        // avançado: tudo, recolhido
+        ui.add_space(8.);
+        egui::CollapsingHeader::new(format!("Avançado · todas as restrições ({})", d.constraints.len())).default_open(false).show(ui, |ui| {
+            for c in &mut d.constraints {
+                let bad = failing.contains(&c.id);
+                ui.horizontal(|ui| {
+                    let label = if bad { RichText::new(c.kind.label()).color(BAD) } else { RichText::new(c.kind.label()) };
+                    if ui.selectable_label(sel.contains(&Ent::Cs(c.id)), label).clicked() {
+                        new_sel = Some(vec![Ent::Cs(c.id)]);
+                    }
+                    if let Some(v) = c.kind.value_mut() {
+                        ui.add(egui::TextEdit::singleline(v).desired_width(80.));
+                    }
+                    if ui.small_button("✖").clicked() {
+                        del = Some(c.id);
+                    }
+                });
+            }
+        });
+        if let Some(x) = del {
+            d.constraints.retain(|c| c.id != x);
         }
-        let rep = s.data.solve(&vars, &[]);
+        let rep = d.solve(&vars, &[]);
         edit_report_set(app, rep);
     }
     if let Some(ns) = new_sel {

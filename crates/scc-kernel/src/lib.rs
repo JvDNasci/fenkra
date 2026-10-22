@@ -67,6 +67,12 @@ pub struct Mesh {
     pub edges: Vec<f32>,
     /// início (em `indices`) dos triângulos de cada face
     pub face_ranges: Vec<u32>,
+    /// início (em segmentos de `edges`) de cada aresta
+    pub edge_ranges: Vec<u32>,
+    /// ponto médio (xyz) de cada aresta
+    pub edge_mids: Vec<f32>,
+    /// posição (xyz) de cada vértice
+    pub vertices: Vec<f32>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -179,6 +185,21 @@ mod imp {
             let s = b::boolean_t(&self.0, &other.0, op as u8, tags, &mut out).map_err(err)?;
             Ok((Shape(s), out))
         }
+        /// Filete (`chamfer = false`) ou chanfro nas arestas mais próximas dos pontos médios dados.
+        pub fn edges_tagged(&self, v: f64, mids: &[[f64; 3]], tol: f64, chamfer: bool, tags: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            let flat: Vec<f64> = mids.iter().flatten().copied().collect();
+            let mut out = vec![];
+            let s = if chamfer { b::chamfer_sel_t(&self.0, v, &flat, tol, tags, &mut out) } else { b::fillet_sel_t(&self.0, v, &flat, tol, tags, &mut out) }
+                .map_err(err)?;
+            Ok((Shape(s), out))
+        }
+        /// Extrusão até o plano (origem, normal).
+        pub fn extrude_until(&self, dir: [f64; 3], len: f64, origin: [f64; 3], normal: [f64; 3]) -> KResult<Shape> {
+            let [dx, dy, dz] = dir;
+            let [ox, oy, oz] = origin;
+            let [nx, ny, nz] = normal;
+            b::extrude_until(&self.0, dx, dy, dz, len, ox, oy, oz, nx, ny, nz).map(Shape).map_err(err)
+        }
         pub fn fillet_tagged(&self, r: f64, tags: &[i32]) -> KResult<(Shape, Vec<i32>)> {
             let mut out = vec![];
             let s = b::fillet_all_t(&self.0, r, tags, &mut out).map_err(err)?;
@@ -192,7 +213,16 @@ mod imp {
 
         pub fn mesh(&self, deflection: f64) -> KResult<Mesh> {
             let m = b::tessellate(&self.0, deflection).map_err(err)?;
-            Ok(Mesh { positions: m.positions, normals: m.normals, indices: m.indices, edges: m.edges, face_ranges: m.face_ranges })
+            Ok(Mesh {
+                positions: m.positions,
+                normals: m.normals,
+                indices: m.indices,
+                edges: m.edges,
+                face_ranges: m.face_ranges,
+                edge_ranges: m.edge_ranges,
+                edge_mids: m.edge_mids,
+                vertices: m.vertices,
+            })
         }
         pub fn bbox(&self) -> Option<([f64; 3], [f64; 3])> {
             let v = b::bounding_box(&self.0);
@@ -270,6 +300,12 @@ mod imp {
             Shape
         }
         pub fn boolean_tagged(&self, _: &Shape, _: Bool, _: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            no()
+        }
+        pub fn edges_tagged(&self, _: f64, _: &[[f64; 3]], _: f64, _: bool, _: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            no()
+        }
+        pub fn extrude_until(&self, _: [f64; 3], _: f64, _: [f64; 3], _: [f64; 3]) -> KResult<Shape> {
             no()
         }
         pub fn fillet_tagged(&self, _: f64, _: &[i32]) -> KResult<(Shape, Vec<i32>)> {
@@ -354,6 +390,24 @@ mod tests {
         assert_eq!(furada.mesh(0.1).unwrap().face_ranges.len(), out.len());
         let (_, fo) = furada.fillet_tagged(0.5, &out).unwrap();
         assert!(fo.contains(&7) && fo.contains(&-1));
+    }
+
+    #[test]
+    fn extrusao_ate_plano_inclinado_e_filete_em_aresta() {
+        let f = Shape::face(&XY, &[rect(20., 20.)]).unwrap();
+        // plano a 45° passando por z = 20 no centro
+        let n = [0., -std::f64::consts::FRAC_1_SQRT_2, std::f64::consts::FRAC_1_SQRT_2];
+        let s = f.extrude_until([0., 0., 1.], 200., [0., 0., 20.], n).unwrap();
+        let v = s.mass().volume;
+        assert!((v - 20. * 20. * 20.).abs() < 1e-3, "{v}");
+        let caixa = f.extrude([0., 0., 1.], 10., 0.).unwrap();
+        let m = caixa.mesh(0.1).unwrap();
+        assert_eq!(m.edge_mids.len() / 3, m.edge_ranges.len());
+        assert_eq!(m.vertices.len() / 3, 8);
+        let tags = vec![1; caixa.face_count() as usize];
+        let aresta = [10., 0., 10.]; // aresta superior em x = 10
+        let (r, _) = caixa.edges_tagged(2., &[aresta], 0.5, false, &tags).unwrap();
+        assert!(r.face_count() == 7);
     }
 
     #[test]

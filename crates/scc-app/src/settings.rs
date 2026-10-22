@@ -12,44 +12,93 @@ pub enum Theme {
     Claro,
 }
 
-/// Grupos de comandos (cada um pode ficar no topo, na lateral, flutuando ou oculto).
+/// Grupos de comandos (blocos da barra). Cada um pode ficar no topo, na lateral, flutuando ou oculto.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub enum Group {
     Sketch,
-    SketchDesenho,
-    SketchRestricoes,
-    Basicos,
+    Solidos,
     Acabamento,
     Referencias,
     Organizacao,
+    Selecao,
     Vista,
+    // modo sketch
+    SkCriacao,
+    SkTransformar,
+    SkCotagem,
+    SkRestricoes,
+    SkFerramentas,
 }
 
 impl Group {
-    pub const ALL: [Group; 8] = [
+    pub const ALL: [Group; 12] = [
         Group::Sketch,
-        Group::SketchDesenho,
-        Group::SketchRestricoes,
-        Group::Basicos,
+        Group::Solidos,
         Group::Acabamento,
         Group::Referencias,
         Group::Organizacao,
+        Group::Selecao,
         Group::Vista,
+        Group::SkCriacao,
+        Group::SkTransformar,
+        Group::SkCotagem,
+        Group::SkRestricoes,
+        Group::SkFerramentas,
     ];
     /// Grupos que só aparecem com um sketch em edição.
     pub fn sketch_only(self) -> bool {
-        matches!(self, Group::SketchDesenho | Group::SketchRestricoes)
+        matches!(self, Group::SkCriacao | Group::SkTransformar | Group::SkCotagem | Group::SkRestricoes | Group::SkFerramentas)
     }
     pub fn label(self) -> &'static str {
         match self {
             Group::Sketch => "Sketch",
-            Group::SketchDesenho => "Desenho do sketch",
-            Group::SketchRestricoes => "Restrições",
-            Group::Basicos => "Básicos",
+            Group::Solidos => "Sólidos",
             Group::Acabamento => "Acabamento",
             Group::Referencias => "Referências",
             Group::Organizacao => "Organização",
+            Group::Selecao => "Seleção",
             Group::Vista => "Vista",
+            Group::SkCriacao => "Criação",
+            Group::SkTransformar => "Transformar",
+            Group::SkCotagem => "Cotagem",
+            Group::SkRestricoes => "Restrições",
+            Group::SkFerramentas => "Ferramentas do sketch",
+        }
+    }
+}
+
+/// Estilo de navegação da câmera (botões do mouse).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum NavStyle {
+    #[default]
+    SolidCadCraft,
+    SolidWorks,
+    Fusion,
+    Catia,
+    Blender,
+    Onshape,
+}
+
+impl NavStyle {
+    pub const ALL: [NavStyle; 6] = [NavStyle::SolidCadCraft, NavStyle::SolidWorks, NavStyle::Fusion, NavStyle::Catia, NavStyle::Blender, NavStyle::Onshape];
+    pub fn label(self) -> &'static str {
+        match self {
+            NavStyle::SolidCadCraft => "SolidCadCraft",
+            NavStyle::SolidWorks => "Estilo SolidWorks",
+            NavStyle::Fusion => "Estilo Fusion",
+            NavStyle::Catia => "Estilo CATIA",
+            NavStyle::Blender => "Estilo Blender",
+            NavStyle::Onshape => "Estilo Onshape",
+        }
+    }
+    pub fn help(self) -> &'static str {
+        match self {
+            NavStyle::SolidCadCraft => "Girar: botão esquerdo ou do meio · Mover: direito ou Shift+arrastar · Zoom: roda",
+            NavStyle::SolidWorks => "Girar: botão do meio · Mover: Ctrl+meio · Zoom: roda (invertida)",
+            NavStyle::Fusion => "Girar: Shift+meio · Mover: botão do meio · Zoom: roda",
+            NavStyle::Catia => "Mover: botão do meio · Girar: meio+direito · Zoom: roda",
+            NavStyle::Blender => "Girar: botão do meio · Mover: Shift+meio · Zoom: roda ou Ctrl+meio",
+            NavStyle::Onshape => "Girar: botão direito · Mover: Ctrl+direito ou meio · Zoom: roda",
         }
     }
 }
@@ -107,6 +156,17 @@ pub struct Settings {
     pub ortho: bool,
     pub filter: Filter,
     pub docks: Vec<(Group, Dock)>,
+    /// variação escolhida em cada família de comandos (chave → índice)
+    pub families: Vec<(String, usize)>,
+    pub nav: NavStyle,
+    pub invert_zoom: bool,
+    /// filtro de seleção na viewport
+    pub sel_faces: bool,
+    pub sel_edges: bool,
+    pub sel_vertices: bool,
+    /// projetos abertos recentemente (pastas)
+    pub recent: Vec<String>,
+    pub show_start: bool,
     pub icon_size: f32,
     pub show_labels: bool,
     // cotagem (usado pelo sketch e pelo desenho)
@@ -134,6 +194,14 @@ impl Default for Settings {
             ortho: false,
             filter: Filter::default(),
             docks: Group::ALL.iter().map(|g| (*g, Dock::Topo)).collect(),
+            families: vec![],
+            nav: NavStyle::SolidCadCraft,
+            invert_zoom: false,
+            sel_faces: true,
+            sel_edges: true,
+            sel_vertices: true,
+            recent: vec![],
+            show_start: true,
             icon_size: 30.,
             show_labels: true,
             dim_standard: "ABNT NBR 10126".into(),
@@ -175,6 +243,21 @@ impl Settings {
             let _ = std::fs::create_dir_all(p.parent().unwrap());
             let _ = std::fs::write(p, serde_json::to_string_pretty(self).unwrap_or_default());
         }
+    }
+
+    pub fn family(&self, key: &str) -> usize {
+        self.families.iter().find(|(k, _)| k == key).map(|(_, i)| *i).unwrap_or(0)
+    }
+    pub fn set_family(&mut self, key: &str, i: usize) {
+        match self.families.iter_mut().find(|(k, _)| k == key) {
+            Some(e) => e.1 = i,
+            None => self.families.push((key.to_string(), i)),
+        }
+    }
+    pub fn add_recent(&mut self, path: &str) {
+        self.recent.retain(|p| p != path);
+        self.recent.insert(0, path.to_string());
+        self.recent.truncate(8);
     }
 
     pub fn dock(&self, g: Group) -> Dock {

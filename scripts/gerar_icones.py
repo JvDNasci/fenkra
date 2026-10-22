@@ -4,22 +4,30 @@ import os, sys
 OUT = sys.argv[1]
 os.makedirs(OUT, exist_ok=True)
 
-INK = "#1b2a41"      # contorno
-LIGHT = "#cfe0f3"    # face clara
-MID = "#93b4d9"      # face média
-DARK = "#5b84b5"     # face escura
-SKETCH = "#0ea5e9"   # sketch
-ACTION = "#f59e0b"   # ação
-ACTION_L = "#fde68a"
-CUT = "#ef4444"
-REF = "#34d399"
-REF_L = "#d1fae5"
+# Estilo (referência do usuário): degradê ciano → azul, contorno azul forte, setas azul-escuro.
+INK = "#1d6fd1"        # contorno
+LIGHT = "url(#gl)"     # face clara (degradê)
+MID = "url(#gm)"       # face média
+DARK = "url(#gd)"      # face escura
+SKETCH = "#1d6fd1"     # geometria de sketch
+ACTION = "#0d4aa6"     # setas / destaque
+ACTION_L = "#e3f6ff"
+CUT = "#0d4aa6"
+REF = "url(#gl)"
+REF_L = "#e3f6ff"
+DASH = f'stroke="{INK}" stroke-width="2" stroke-dasharray="4 3" fill="none" stroke-linejoin="round"'
 
-S = f'stroke="{INK}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"'
+S = f'stroke="{INK}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"'
+
+DEFS = ('<defs>'
+        '<linearGradient id="gl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#bff1ff"/><stop offset="1" stop-color="#5cc8fb"/></linearGradient>'
+        '<linearGradient id="gm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#86dcff"/><stop offset="1" stop-color="#2fa5f2"/></linearGradient>'
+        '<linearGradient id="gd" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4fb9f8"/><stop offset="1" stop-color="#1f86de"/></linearGradient>'
+        '</defs>')
 
 
 def svg(body):
-    return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">{body}</svg>\n'
+    return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">{DEFS}{body}</svg>\n'
 
 
 def box(top, h, cols=(LIGHT, MID, DARK), w=18, hh=9):
@@ -225,6 +233,91 @@ I["idioma"] = (f'<circle cx="24" cy="24" r="18" fill="{LIGHT}" {S}/>'
 I["personalizar"] = (f'<rect x="5" y="8" width="38" height="12" rx="3" fill="{LIGHT}" {S}/>'
                      f'<rect x="5" y="28" width="24" height="12" rx="3" fill="{MID}" {S}/>'
                      f'<path d="M36 26 V42 M28 34 H44" stroke="{ACTION}" stroke-width="3.2" stroke-linecap="round"/>')
+
+# ---------------------------------------------------------------- opções e variações dos comandos
+def sq(x, y, w, h, fill=MID, dash=False):
+    return f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="1.5" ' + (DASH + '/>' if dash else f'fill="{fill}" {S}/>')
+
+
+# término da extrusão (vista lateral: perfil embaixo, material para cima)
+BASE = f'<line x1="6" y1="40" x2="42" y2="40" stroke="{INK}" stroke-width="2.6"/>'
+I["ext_cego"] = BASE + sq(14, 18, 20, 22) + arrow(24, 16, 24, 5)
+I["ext_simetrico"] = f'<line x1="4" y1="26" x2="44" y2="26" {DASH}/>' + sq(14, 12, 20, 28) + arrow(38, 26, 38, 8) + arrow(38, 26, 38, 44)
+I["ext_dois_sentidos"] = f'<line x1="4" y1="30" x2="44" y2="30" {DASH}/>' + sq(14, 10, 20, 20) + sq(14, 30, 20, 10, LIGHT)
+I["ext_passante"] = sq(6, 10, 36, 30, LIGHT) + sq(18, 6, 12, 38, MID) + arrow(24, 4, 24, 46, ACTION, 2.4)
+I["ext_ate_plano"] = BASE + f'<path d="M14 40 V16 L34 8 V40 Z" fill="{MID}" {S}/>' + \
+    f'<line x1="6" y1="19" x2="42" y2="5" stroke="{ACTION}" stroke-width="2.6" stroke-dasharray="5 3"/>'
+I["ext_ate_face"] = BASE + sq(14, 20, 20, 20) + f'<path d="M4 8 H44 V16 H4 Z" fill="{LIGHT}" {S}/>' + arrow(24, 30, 24, 17)
+# operação
+I["op_adicionar"] = sq(6, 16, 22, 22, LIGHT) + sq(18, 8, 22, 22) + f'<path d="M36 34 V46 M30 40 H42" stroke="{ACTION}" stroke-width="3" stroke-linecap="round"/>'
+I["op_remover"] = sq(6, 10, 30, 30) + sq(22, 4, 20, 20, dash=True) + f'<path d="M34 40 H46" stroke="{ACTION}" stroke-width="3" stroke-linecap="round"/>'
+I["op_intersecao"] = sq(6, 6, 24, 24, dash=True) + sq(18, 18, 24, 24, dash=True) + sq(18, 18, 12, 12)
+# furos (corte lateral)
+PLATE = f'<path d="M4 12 H18 V42 H4 Z M30 12 H44 V42 H30 Z" fill="{MID}" {S}/>'
+I["furo_simples"] = PLATE
+I["furo_rebaixado"] = f'<path d="M4 12 H12 V22 H18 V42 H4 Z M36 12 H44 V42 H30 V22 H36 Z" fill="{MID}" {S}/>'
+I["furo_escareado"] = f'<path d="M4 12 H10 L18 22 V42 H4 Z M38 12 H44 V42 H30 V22 Z" fill="{MID}" {S}/>'
+I["furo_roscado"] = PLATE + "".join(f'<path d="M18 {y} l4 3 M30 {y} l-4 3" stroke="{ACTION}" stroke-width="1.6"/>' for y in range(15, 40, 5))
+I["furo_passante"] = PLATE + arrow(24, 4, 24, 46, ACTION, 2.4)
+I["furo_cego"] = f'<path d="M4 12 H18 V32 L24 37 L30 32 V12 H44 V42 H4 Z" fill="{MID}" {S}/>'
+# arestas para filete/chanfro
+CUBE = box((24, 6), 18)
+I["arestas_selecionar"] = CUBE + f'<line x1="24" y1="24" x2="42" y2="15" stroke="{ACTION}" stroke-width="4" stroke-linecap="round"/>' + \
+    f'<path d="M34 30 L34 45 L38 41 L42 47 L44 45 L40 39 L45 38 Z" fill="#ffffff" {S}/>'
+I["arestas_todas"] = CUBE.replace(f'stroke="{INK}" stroke-width="2"', f'stroke="{ACTION}" stroke-width="3.2"')
+I["arestas_comando"] = CUBE + f'<ellipse cx="24" cy="15" rx="7" ry="3.5" fill="none" stroke="{ACTION}" stroke-width="3"/>'
+I["chanfro_dist"] = f'<path d="M7 42 V21 L20 8 H42 V42 Z" fill="{MID}" {S}/><path d="M3 21 H7 M20 3 V8" stroke="{ACTION}" stroke-width="2.2"/>'
+I["chanfro_dist_dist"] = f'<path d="M7 42 V26 L28 8 H42 V42 Z" fill="{MID}" {S}/><path d="M3 26 V42 M28 3 H42" stroke="{ACTION}" stroke-width="2.2"/>'
+I["chanfro_dist_angulo"] = f'<path d="M7 42 V21 L20 8 H42 V42 Z" fill="{MID}" {S}/><path d="M20 8 A10 10 0 0 0 12 16" stroke="{ACTION}" stroke-width="2.2" fill="none"/>'
+# planos
+I["plano_deslocado"] = I["plano"]
+I["plano_angulo"] = f'<polygon points="4,38 24,30 44,38 24,46" fill="{LIGHT}" {S}/>' + \
+    f'<polygon points="8,16 30,4 40,28 18,40" fill="{MID}" {S}/>' + f'<path d="M30 42 A12 12 0 0 0 36 30" stroke="{ACTION}" stroke-width="2.4" fill="none"/>'
+I["plano_3pontos"] = f'<polygon points="4,30 24,20 44,30 24,40" fill="{LIGHT}" {S}/>' + "".join(
+    f'<circle cx="{x}" cy="{y}" r="3.4" fill="{ACTION}"/>' for x, y in [(12, 30), (34, 26), (24, 36)])
+# transformações do sketch
+GEO = f'<path d="M10 34 L18 18 L28 30 Z" {G}/>'
+I["sk_mover"] = GEO + arrow(26, 22, 42, 10)
+I["sk_copiar"] = f'<path d="M6 40 L14 24 L24 36 Z" {DASH}/>' + f'<path d="M22 26 L30 10 L40 22 Z" {G}/>'
+I["sk_girar"] = GEO + f'<path d="M36 34 A14 14 0 1 0 26 40" stroke="{ACTION}" stroke-width="2.6" fill="none"/>' + \
+    f'<polygon points="22,40 30,36 29,44" fill="{ACTION}"/>'
+I["sk_espelhar"] = f'<line x1="24" y1="4" x2="24" y2="44" stroke="{INK}" stroke-width="1.6" stroke-dasharray="4 2.5"/>' + \
+    f'<path d="M20 36 L8 30 L16 14 Z" {G}/><path d="M28 36 L40 30 L32 14 Z" {DASH}/>'
+I["sk_offset"] = f'<rect x="12" y="12" width="24" height="24" rx="2" {G}/>' + f'<rect x="5" y="5" width="38" height="38" rx="6" {DASH}/>'
+I["sk_filete"] = f'<path d="M8 8 V26 A14 14 0 0 0 22 40 H40" {G}/>' + f'<path d="M8 26 V40 H22" {DASH}/>'
+I["sk_aparar"] = f'<line x1="6" y1="24" x2="30" y2="24" {G}/><line x1="24" y1="6" x2="24" y2="42" {G}/>' + \
+    f'<line x1="30" y1="24" x2="42" y2="24" {DASH}/>' + \
+    f'<path d="M34 12 L40 18 M40 12 L34 18" stroke="{ACTION}" stroke-width="2.4" stroke-linecap="round"/>'
+I["sk_converter"] = f'<line x1="6" y1="40" x2="22" y2="24" {G}/><line x1="26" y1="20" x2="42" y2="6" {DASH}/>' + arrow(14, 16, 32, 34, ACTION, 2.2)
+I["sk_checar"] = f'<path d="M8 34 L8 12 L30 12" {G}/><path d="M30 12 L40 22" {DASH}/>' + \
+    f'<circle cx="38" cy="36" r="8" fill="{LIGHT}" {S}/><path d="M34 36 L37 39 L42 33" stroke="{ACTION}" stroke-width="2.4" fill="none"/>' + \
+    f'<circle cx="8" cy="34" r="4" fill="none" stroke="{ACTION}" stroke-width="2.4"/>'
+# variações de cota
+AR = lambda pts: f'<polygon points="{pts}" fill="{ACTION}"/>'
+I["cota_horizontal"] = f'<path d="M8 40 V18 M40 40 V18" stroke="{INK}" stroke-width="1.6"/>' + \
+    f'<line x1="10" y1="22" x2="38" y2="22" stroke="{ACTION}" stroke-width="2.2"/>' + AR("9,22 15,19 15,25") + AR("39,22 33,19 33,25") + \
+    f'<line x1="8" y1="40" x2="40" y2="40" {G}/>'
+I["cota_vertical"] = f'<path d="M40 8 H18 M40 40 H18" stroke="{INK}" stroke-width="1.6"/>' + \
+    f'<line x1="22" y1="10" x2="22" y2="38" stroke="{ACTION}" stroke-width="2.2"/>' + AR("22,9 19,15 25,15") + AR("22,39 19,33 25,33") + \
+    f'<line x1="40" y1="8" x2="40" y2="40" {G}/>'
+I["cota_angulo"] = f'<path d="M6 40 H42 M6 40 L36 12" {G}/><path d="M26 40 A20 20 0 0 0 21 26" stroke="{ACTION}" stroke-width="2.2" fill="none"/>'
+I["cota_raio"] = f'<path d="M8 40 A32 32 0 0 1 40 8" {G}/>' + arrow(8, 40, 28, 20, ACTION, 2.2) + f'<circle cx="8" cy="40" r="2.5" fill="{INK}"/>'
+I["cota_diametro"] = f'<circle cx="24" cy="24" r="16" {G}/>' + arrow(24, 24, 35, 13, ACTION, 2.2) + arrow(24, 24, 13, 35, ACTION, 2.2)
+# seleção e filtro de seleção
+I["sel_face"] = box((24, 6), 18, (ACTION, MID, DARK))
+I["sel_aresta"] = CUBE + f'<line x1="24" y1="24" x2="24" y2="42" stroke="{ACTION}" stroke-width="4.5" stroke-linecap="round"/>'
+I["sel_vertice"] = CUBE + f'<circle cx="24" cy="24" r="5" fill="{ACTION}" stroke="#ffffff" stroke-width="1.5"/>'
+I["sel_corpo"] = box((24, 6), 18, (ACTION, ACTION, ACTION))
+I["sel_filtro"] = I["filtro"] + f'<circle cx="38" cy="36" r="7" fill="#ffffff" {S}/><path d="M35 36 H41 M38 33 V39" stroke="{ACTION}" stroke-width="2"/>'
+I["navegacao"] = f'<circle cx="24" cy="24" r="18" fill="{LIGHT}" {S}/>' + \
+    f'<path d="M24 10 L28 24 L24 38 L20 24 Z" fill="{ACTION}"/><circle cx="24" cy="24" r="3" fill="#ffffff"/>'
+# tela inicial
+I["novo_projeto"] = f'<path d="M6 12 A3 3 0 0 1 9 9 H18 L22 13 H39 A3 3 0 0 1 42 16 V37 A3 3 0 0 1 39 40 H9 A3 3 0 0 1 6 37 Z" fill="{MID}" {S}/>' + \
+    f'<path d="M24 20 V34 M17 27 H31" stroke="#ffffff" stroke-width="3.4" stroke-linecap="round"/>'
+I["abrir_projeto"] = f'<path d="M6 12 A3 3 0 0 1 9 9 H18 L22 13 H39 A3 3 0 0 1 42 16 V20 H14 L6 38 Z" fill="{DARK}" {S}/>' + \
+    f'<path d="M14 20 H46 L38 40 H6 Z" fill="{LIGHT}" {S}/>'
+I["nova_peca"] = box((24, 8), 16) + f'<circle cx="38" cy="36" r="8" fill="{ACTION}"/><path d="M38 32 V40 M34 36 H42" stroke="#ffffff" stroke-width="2.6"/>'
+I["exemplo"] = box((24, 8), 16) + f'<path d="M36 28 L38.5 33 L44 33.5 L40 37 L41 42.5 L36 39.8 L31 42.5 L32 37 L28 33.5 L33.5 33 Z" fill="#ffd34d" stroke="{INK}" stroke-width="1.2"/>'
 
 for name, body in I.items():
     with open(os.path.join(OUT, f"{name}.svg"), "w", encoding="utf8", newline="\n") as f:

@@ -62,51 +62,66 @@ fn sketch_combo(ui: &mut egui::Ui, id: &str, doc: &Document, before: usize, s: &
     });
 }
 
-fn op_combo(ui: &mut egui::Ui, id: &str, op: &mut BoolOp) {
-    ui.horizontal(|ui| {
-        ui.add_sized([96., 18.], egui::Label::new("Operação"));
-        egui::ComboBox::from_id_salt(id)
-            .selected_text(match op {
-                BoolOp::Add => "Adicionar",
-                BoolOp::Cut => "Remover",
-                BoolOp::Intersect => "Interseção",
-            })
-            .show_ui(ui, |ui| {
-                ui.selectable_value(op, BoolOp::Add, "Adicionar");
-                ui.selectable_value(op, BoolOp::Cut, "Remover");
-                ui.selectable_value(op, BoolOp::Intersect, "Interseção");
-            });
+/// Linha de opções com ícone + nome (uma variação = um ícone). Devolve o índice clicado.
+pub fn icon_choice(ui: &mut egui::Ui, opts: &[(&str, &str, &str, bool)]) -> Option<usize> {
+    let mut hit = None;
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 2.;
+        for (i, (icon, name, tip, sel)) in opts.iter().enumerate() {
+            if crate::icons::tool_button(ui, icon, name, 26., true, *sel, tip, "").clicked() {
+                hit = Some(i);
+            }
+        }
     });
+    hit
 }
 
-fn extent_ui(ui: &mut egui::Ui, id: &str, e: &mut Extent, vars: &Vars, allow: &[&str]) {
+fn op_combo(ui: &mut egui::Ui, _id: &str, op: &mut BoolOp) {
+    ui.label(RichText::new("Operação").weak());
+    let o = *op;
+    let opts = [
+        ("op_adicionar", "Adicionar", "Une ao corpo", o == BoolOp::Add),
+        ("op_remover", "Remover", "Subtrai do corpo", o == BoolOp::Cut),
+        ("op_intersecao", "Interseção", "Mantém só a parte comum", o == BoolOp::Intersect),
+    ];
+    if let Some(i) = icon_choice(ui, &opts) {
+        *op = [BoolOp::Add, BoolOp::Cut, BoolOp::Intersect][i];
+    }
+}
+
+fn extent_ui(ui: &mut egui::Ui, _id: &str, e: &mut Extent, vars: &Vars, allow: &[&str], doc: &Document) {
     let cur = match e {
         Extent::Blind(_) => "Cego",
-        Extent::Symmetric(_) => "Simétrico",
+        Extent::Symmetric(_) => "Plano médio",
         Extent::TwoSides(..) => "Dois sentidos",
         Extent::ThroughAll => "Passante",
+        Extent::UpTo(_) => "Até plano",
     };
-    let keep = |e: &Extent| match e {
+    let keep = match e {
         Extent::Blind(d) | Extent::Symmetric(d) | Extent::TwoSides(d, _) => d.clone(),
-        Extent::ThroughAll => "20".into(),
+        _ => "20".into(),
     };
-    ui.horizontal(|ui| {
-        ui.add_sized([96., 18.], egui::Label::new("Término"));
-        egui::ComboBox::from_id_salt(id).selected_text(cur).show_ui(ui, |ui| {
-            let d = keep(e);
-            for opt in allow {
-                let v = match *opt {
-                    "Cego" => Extent::Blind(d.clone()),
-                    "Simétrico" => Extent::Symmetric(d.clone()),
-                    "Dois sentidos" => Extent::TwoSides(d.clone(), d.clone()),
-                    _ => Extent::ThroughAll,
-                };
-                if ui.selectable_label(cur == *opt, *opt).clicked() && cur != *opt {
-                    *e = v;
-                }
-            }
-        });
-    });
+    ui.label(RichText::new("Término").weak());
+    let info = |n: &str| match n {
+        "Cego" => ("ext_cego", "Distância fixa a partir do plano do sketch"),
+        "Plano médio" => ("ext_simetrico", "Metade para cada lado do plano do sketch"),
+        "Dois sentidos" => ("ext_dois_sentidos", "Distâncias diferentes para cada lado"),
+        "Passante" => ("ext_passante", "Atravessa todo o corpo"),
+        _ => ("ext_ate_plano", "Termina exatamente num plano (inclusive inclinado)"),
+    };
+    let opts: Vec<(&str, &str, &str, bool)> = allow.iter().map(|n| (info(n).0, *n, info(n).1, cur == *n)).collect();
+    if let Some(i) = icon_choice(ui, &opts) {
+        let n = allow[i];
+        if n != cur {
+            *e = match n {
+                "Cego" => Extent::Blind(keep.clone()),
+                "Plano médio" => Extent::Symmetric(keep.clone()),
+                "Dois sentidos" => Extent::TwoSides(keep.clone(), keep.clone()),
+                "Passante" => Extent::ThroughAll,
+                _ => Extent::UpTo(doc.references.first().map(|r| PlaneRef::Datum(r.id)).unwrap_or(PlaneRef::Origin(OriginPlane::XY))),
+            };
+        }
+    }
     match e {
         Extent::Blind(d) => expr(ui, "Distância", d, vars, "mm"),
         Extent::Symmetric(d) => expr(ui, "Total", d, vars, "mm"),
@@ -115,7 +130,14 @@ fn extent_ui(ui: &mut egui::Ui, id: &str, e: &mut Extent, vars: &Vars, allow: &[
             expr(ui, "Sentido 2", b, vars, "mm");
         }
         Extent::ThroughAll => {
-            ui.label(RichText::new("atravessa todo o corpo de destino").weak());
+            ui.label(RichText::new("atravessa todo o corpo de destino").weak().small());
+        }
+        Extent::UpTo(p) => {
+            ui.horizontal(|ui| {
+                ui.add_sized([96., 18.], egui::Label::new("Até o plano"));
+                plane_combo(ui, "ate_plano", doc, p, None);
+            });
+            ui.label(RichText::new("Crie planos inclinados em Referências › Plano por ângulo.").weak().small());
         }
     }
 }
@@ -129,6 +151,31 @@ fn target_combo(ui: &mut egui::Ui, doc: &Document, t: &mut Id) {
                 ui.selectable_value(t, c.id, &c.name);
             }
         });
+    });
+}
+
+fn axis_name(doc: &Document, a: &AxisRef) -> String {
+    match a {
+        AxisRef::Origin(OriginAxis::X) => "Origem · eixo X".to_string(),
+        AxisRef::Origin(OriginAxis::Y) => "Origem · eixo Y".to_string(),
+        AxisRef::Origin(OriginAxis::Z) => "Origem · eixo Z".to_string(),
+        AxisRef::SketchLine { sketch, entity } => format!("{} · linha #{}", doc.name_of(*sketch), entity.0),
+    }
+}
+
+fn axis_combo(ui: &mut egui::Ui, id: &str, doc: &Document, before: usize, axis: &mut AxisRef) {
+    egui::ComboBox::from_id_salt(id).selected_text(axis_name(doc, axis)).width(200.).show_ui(ui, |ui| {
+        for a in [OriginAxis::X, OriginAxis::Y, OriginAxis::Z] {
+            ui.selectable_value(axis, AxisRef::Origin(a), axis_name(doc, &AxisRef::Origin(a)));
+        }
+        for f in &doc.features[..before.min(doc.features.len())] {
+            if let FeatureKind::Sketch(s) = &f.kind {
+                for e in s.data.curves.iter().filter(|e| matches!(e.geom, scc_core::sketch::Curve::Line { .. })) {
+                    let a = AxisRef::SketchLine { sketch: f.id, entity: e.id };
+                    ui.selectable_value(axis, a, axis_name(doc, &a));
+                }
+            }
+        }
     });
 }
 
@@ -158,6 +205,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     let doc_ro = app.open.doc.clone();
     let frozen = app.open.frozen.clone();
     let bodies: Vec<(Id, f64, f64)> = app.result.as_ref().map(|r| r.bodies.iter().map(|b| (b.collector, b.mass.volume, b.mass.area)).collect()).unwrap_or_default();
+    let picked = app.picked_edges();
     let doc = &mut app.open.doc;
 
     if let Some(rev) = &frozen {
@@ -263,13 +311,40 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 }
             });
             ui.label(RichText::new("O nome é a variável referenciável; os comandos apontam para o elemento, então renomear não quebra nada.").weak().small());
-            let RefKind::OffsetPlane { base, offset } = &mut r.kind;
+            section(ui, "Tipo");
+            let is_angle = matches!(r.kind, RefKind::AnglePlane { .. });
+            let opts = [
+                ("plano_deslocado", "Deslocado", "Paralelo ao plano base, a uma distância", !is_angle),
+                ("plano_angulo", "Por ângulo", "Gira em torno de um eixo a partir do plano base", is_angle),
+            ];
+            let base0 = r.kind.base().copied().unwrap_or_default();
+            match icon_choice(ui, &opts) {
+                Some(0) if is_angle || r.kind.base().is_none() => r.kind = RefKind::OffsetPlane { base: base0, offset: "20".into() },
+                Some(1) if !is_angle => r.kind = RefKind::AnglePlane { base: base0, axis: AxisRef::Origin(OriginAxis::X), angle: "30".into() },
+                _ => {}
+            }
             section(ui, "Definição");
-            ui.horizontal(|ui| {
-                ui.add_sized([96., 18.], egui::Label::new("Plano base"));
-                plane_combo(ui, "base", &doc_ro, base, Some(id));
-            });
-            expr(ui, "Deslocamento", offset, &vars, "mm");
+            if let Some(b) = r.kind.base_mut() {
+                ui.horizontal(|ui| {
+                    ui.add_sized([96., 18.], egui::Label::new("Plano base"));
+                    plane_combo(ui, "base", &doc_ro, b, Some(id));
+                });
+            }
+            match &mut r.kind {
+                RefKind::FacePlane { owner, .. } => {
+                    let o = owner.map(|o| doc_ro.name_of(o)).unwrap_or_default();
+                    ui.label(RichText::new(format!("Plano da face clicada em {o} (fixo nesta versão)")).weak());
+                }
+                RefKind::OffsetPlane { offset, .. } => expr(ui, "Deslocamento", offset, &vars, "mm"),
+                RefKind::AnglePlane { axis, angle, .. } => {
+                    ui.horizontal(|ui| {
+                        ui.add_sized([96., 18.], egui::Label::new("Eixo"));
+                        axis_combo(ui, "eixo_plano", &doc_ro, doc_ro.features.len(), axis);
+                    });
+                    expr(ui, "Ângulo", angle, &vars, "°");
+                    ui.label(RichText::new("O eixo é levado para dentro do plano base antes do giro.").weak().small());
+                }
+            }
             ui.checkbox(&mut r.visible, "visível");
             ui.add_space(4.);
             ui.label(RichText::new("Trocar o plano base redireciona a variável: todos os comandos que usam este plano se atualizam.").weak().small());
@@ -370,7 +445,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             }
             let mut target = doc.features[idx].target;
             let mut kind = doc.features[idx].kind.clone();
-            feature_ui(ui, &doc_ro, idx, id, &mut kind, &mut target, &vars, doc);
+            feature_ui(ui, &doc_ro, idx, id, &mut kind, &mut target, &vars, doc, &picked);
             let f = &mut doc.features[idx];
             if f.kind != kind {
                 f.kind = kind;
@@ -557,7 +632,7 @@ fn params_table(ui: &mut egui::Ui, doc: &mut Document, vars: &Vars, _sink: &mut 
 }
 
 #[allow(clippy::too_many_arguments)]
-fn feature_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, id: Id, kind: &mut FeatureKind, target: &mut Id, vars: &Vars, live: &mut Document) {
+fn feature_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, id: Id, kind: &mut FeatureKind, target: &mut Id, vars: &Vars, live: &mut Document, picked: &[[f64; 3]]) {
     match kind {
         FeatureKind::Sketch(s) => {
             section(ui, "Plano do sketch");
@@ -587,7 +662,7 @@ fn feature_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, id: Id, kind: &mut 
             sketch_combo(ui, "sk_ex", doc, idx, &mut e.sketch);
             op_combo(ui, "op_ex", &mut e.op);
             section(ui, "Extensão");
-            extent_ui(ui, "ext_ex", &mut e.extent, vars, &["Cego", "Simétrico", "Dois sentidos", "Passante"]);
+            extent_ui(ui, "ext_ex", &mut e.extent, vars, &["Cego", "Plano médio", "Dois sentidos", "Passante", "Até plano"], doc);
             ui.checkbox(&mut e.reverse, "inverter sentido");
             if e.op == BoolOp::Cut {
                 ui.label(RichText::new("O recorte entra no material (contra a normal do plano). Use 'inverter' se necessário.").weak().small());
@@ -629,7 +704,32 @@ fn feature_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, id: Id, kind: &mut 
         FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => {
             let lbl = if matches!(kind_tag(id, doc), Some(true)) { "Raio" } else { "Distância" };
             expr(ui, lbl, &mut o.value, vars, "mm");
-            ui.label(RichText::new("Aplica a todas as arestas do coletor de destino. Seleção de arestas individuais virá com a seleção na viewport.").weak().small());
+            ui.label(RichText::new("Arestas").weak());
+            let all = matches!(o.edges, EdgeSel::AllOfBody | EdgeSel::CreatedBy(_));
+            let opts = [
+                ("arestas_selecionar", "Selecionadas", "Só as arestas escolhidas na viewport", !all),
+                ("arestas_todas", "Todas", "Coleta todas as arestas do corpo", all),
+            ];
+            match icon_choice(ui, &opts) {
+                Some(0) if all => o.edges = EdgeSel::Edges(picked.to_vec()),
+                Some(1) => o.edges = EdgeSel::AllOfBody,
+                _ => {}
+            }
+            if let EdgeSel::Edges(m) = &mut o.edges {
+                ui.label(format!("{} aresta(s) escolhida(s)", m.len()));
+                ui.horizontal(|ui| {
+                    if ui.add_enabled(!picked.is_empty(), egui::Button::new(format!("Usar seleção atual ({})", picked.len()))).clicked() {
+                        *m = picked.to_vec();
+                    }
+                    if !picked.is_empty() && ui.button("Somar à lista").clicked() {
+                        m.extend_from_slice(picked);
+                    }
+                    if !m.is_empty() && ui.button("Limpar").clicked() {
+                        m.clear();
+                    }
+                });
+                ui.label(RichText::new("Clique nas arestas na viewport (Shift soma) e use 'Usar seleção atual'.").weak().small());
+            }
             target_combo(ui, doc, target);
         }
     }
@@ -738,7 +838,7 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
             expr(ui, "Ângulo", angle, vars, "°");
         }
     }
-    extent_ui(ui, "ext_furo", &mut h.depth, vars, &["Cego", "Passante"]);
+    extent_ui(ui, "ext_furo", &mut h.depth, vars, &["Cego", "Passante"], doc);
 
     section(ui, "Rosca paramétrica");
     let mut has = h.thread.is_some();

@@ -24,6 +24,7 @@
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRepPrimAPI_MakeCone.hxx>
 #include <BRepPrimAPI_MakeCylinder.hxx>
+#include <BRepPrimAPI_MakeHalfSpace.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
 #include <BRepPrimAPI_MakeRevol.hxx>
 #include <BRepTools_History.hxx>
@@ -45,6 +46,7 @@
 #include <TopExp.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopTools_IndexedMapOfShape.hxx>
+#include <TopTools_IndexedDataMapOfShapeListOfShape.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
 #include <gp_Ax2.hxx>
@@ -334,6 +336,68 @@ std::unique_ptr<Shape> boolean_t(const Shape& a, const Shape& b, uint8_t op, rus
     });
 }
 
+// Filete/chanfro só nas arestas cujo ponto médio é o mais próximo de cada referência (xyz).
+template <class Mk>
+std::unique_ptr<Shape> edge_op_sel(const char* what, const Shape& s, double v, rust::Slice<const double> mids, double tol,
+                                   rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out) {
+    return guard(what, [&] {
+        Mk mk(s.s);
+        TopTools_IndexedMapOfShape edges;
+        TopExp::MapShapes(s.s, TopAbs_EDGE, edges);
+        int added = 0;
+        for (size_t k = 0; k + 2 < mids.size(); k += 3) {
+            gp_Pnt ref(mids[k], mids[k + 1], mids[k + 2]);
+            int best = 0;
+            double bd = 1e300;
+            for (int i = 1; i <= edges.Extent(); ++i) {
+                const TopoDS_Edge& e = TopoDS::Edge(edges(i));
+                if (BRep_Tool::Degenerated(e)) continue;
+                BRepAdaptor_Curve c(e);
+                double d = c.Value((c.FirstParameter() + c.LastParameter()) / 2).Distance(ref);
+                if (d < bd) {
+                    bd = d;
+                    best = i;
+                }
+            }
+            if (best > 0 && bd <= tol) {
+                mk.Add(v, TopoDS::Edge(edges(best)));
+                added++;
+            }
+        }
+        if (added == 0) throw std::runtime_error("nenhuma das arestas escolhidas existe mais — reedite a seleção de arestas");
+        mk.Build();
+        if (!mk.IsDone()) throw std::runtime_error("valor grande demais para as arestas escolhidas");
+        fill(out, carry(s.s, to_vec(tags), mk.Shape(), [&](const TopoDS_Shape& f) -> const TopTools_ListOfShape& { return mk.Modified(f); }, -1));
+        return wrap(mk.Shape());
+    });
+}
+
+std::unique_ptr<Shape> fillet_sel_t(const Shape& s, double r, rust::Slice<const double> mids, double tol, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out) {
+    return edge_op_sel<BRepFilletAPI_MakeFillet>("filete", s, r, mids, tol, tags, out);
+}
+
+std::unique_ptr<Shape> chamfer_sel_t(const Shape& s, double d, rust::Slice<const double> mids, double tol, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out) {
+    return edge_op_sel<BRepFilletAPI_MakeChamfer>("chanfro", s, d, mids, tol, tags, out);
+}
+
+// Extrusão até um plano: prisma longo cortado pelo semi-espaço do lado do perfil.
+std::unique_ptr<Shape> extrude_until(const Shape& face, double dx, double dy, double dz, double len,
+                                     double ox, double oy, double oz, double nx, double ny, double nz) {
+    return guard("extrusão até plano", [&] {
+        gp_Vec d(dx, dy, dz);
+        d.Normalize();
+        TopoDS_Shape prism = BRepPrimAPI_MakePrism(face.s, len * d).Shape();
+        GProp_GProps g;
+        BRepGProp::SurfaceProperties(face.s, g);
+        gp_Pnt ref = g.CentreOfMass();
+        TopoDS_Face pf = BRepBuilderAPI_MakeFace(gp_Pln(gp_Pnt(ox, oy, oz), gp_Dir(nx, ny, nz))).Face();
+        TopoDS_Solid hs = BRepPrimAPI_MakeHalfSpace(pf, ref).Solid();
+        BRepAlgoAPI_Common c(prism, hs);
+        if (c.HasErrors() || c.Shape().IsNull()) throw std::runtime_error("não foi possível limitar a extrusão no plano");
+        return wrap(unify(c.Shape()));
+    });
+}
+
 std::unique_ptr<Shape> fillet_all_t(const Shape& s, double r, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out) {
     return edge_op_t<BRepFilletAPI_MakeFillet>("filete", s, r, tags, out);
 }
@@ -390,15 +454,38 @@ MeshData tessellate(const Shape& s, double deflection) {
 
         TopTools_IndexedMapOfShape edges;
         TopExp::MapShapes(s.s, TopAbs_EDGE, edges);
+        // arestas de costura (seam) de cilindros/cones: existem na topologia mas não são arestas visuais
+        TopTools_IndexedDataMapOfShapeListOfShape edge_faces;
+        TopExp::MapShapesAndAncestors(s.s, TopAbs_EDGE, TopAbs_FACE, edge_faces);
+        auto is_seam = [&](const TopoDS_Edge& e) {
+            const int k = edge_faces.FindIndex(e);
+            if (k == 0) return false;
+            for (const TopoDS_Shape& f : edge_faces(k)) {
+                if (BRep_Tool::IsClosed(e, TopoDS::Face(f))) return true;
+            }
+            return false;
+        };
         for (int i = 1; i <= edges.Extent(); ++i) {
             const TopoDS_Edge& e = TopoDS::Edge(edges(i));
-            if (BRep_Tool::Degenerated(e)) continue;
+            m.edge_ranges.push_back(static_cast<uint32_t>(m.edges.size() / 6));
+            if (BRep_Tool::Degenerated(e) || is_seam(e)) {
+                for (int k = 0; k < 3; ++k) m.edge_mids.push_back(0.f);
+                continue;
+            }
             BRepAdaptor_Curve c(e);
+            gp_Pnt mp = c.Value((c.FirstParameter() + c.LastParameter()) / 2);
+            for (double v : {mp.X(), mp.Y(), mp.Z()}) m.edge_mids.push_back(float(v));
             GCPnts_TangentialDeflection d(c, 0.2, deflection);
             for (int k = 1; k < d.NbPoints(); ++k) {
                 gp_Pnt p = d.Value(k), q = d.Value(k + 1);
                 for (double v : {p.X(), p.Y(), p.Z(), q.X(), q.Y(), q.Z()}) m.edges.push_back(float(v));
             }
+        }
+        TopTools_IndexedMapOfShape verts;
+        TopExp::MapShapes(s.s, TopAbs_VERTEX, verts);
+        for (int i = 1; i <= verts.Extent(); ++i) {
+            gp_Pnt p = BRep_Tool::Pnt(TopoDS::Vertex(verts(i)));
+            for (double v : {p.X(), p.Y(), p.Z()}) m.vertices.push_back(float(v));
         }
         return m;
     });

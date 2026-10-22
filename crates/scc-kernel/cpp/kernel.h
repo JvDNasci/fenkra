@@ -31,6 +31,10 @@ std::unique_ptr<Shape> chamfer_all(const Shape& s, double dist);
 std::unique_ptr<Shape> compound(const Shape& a, const Shape& b);
 std::unique_ptr<Shape> boolean_t(const Shape& a, const Shape& b, uint8_t op, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
 std::unique_ptr<Shape> fillet_all_t(const Shape& s, double r, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
+std::unique_ptr<Shape> fillet_sel_t(const Shape& s, double r, rust::Slice<const double> mids, double tol, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
+std::unique_ptr<Shape> chamfer_sel_t(const Shape& s, double d, rust::Slice<const double> mids, double tol, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
+std::unique_ptr<Shape> extrude_until(const Shape& face, double dx, double dy, double dz, double len,
+                                     double ox, double oy, double oz, double nx, double ny, double nz);
 std::unique_ptr<Shape> chamfer_all_t(const Shape& s, double d, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
 
 MeshData tessellate(const Shape& s, double deflection);

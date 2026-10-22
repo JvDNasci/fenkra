@@ -111,6 +111,11 @@ pub struct App {
     /// sketch em edição interativa
     pub sketch: Option<crate::sketch_ui::SketchEdit>,
     begin_sketch_pending: Option<Id>,
+    /// seleção na viewport (faces, arestas, vértices, planos)
+    pub picks: Vec<crate::picking::Pick>,
+    hover_pick: Option<crate::picking::Pick>,
+    /// já passou da tela inicial
+    started: bool,
 }
 
 pub const MATERIALS: [(&str, f64); 8] = [
@@ -159,10 +164,15 @@ impl App {
             align_pending: None,
             sketch: None,
             begin_sketch_pending: None,
+            picks: vec![],
+            hover_pick: None,
+            started: false,
         };
+        app.started = !app.settings.show_start;
         // desenvolvimento: SCC_ABRIR_SKETCH=<nome> abre esse sketch em edição ao iniciar
         if let Ok(name) = std::env::var("SCC_ABRIR_SKETCH") {
             app.begin_sketch_pending = app.open.doc.features.iter().find(|f| f.name == name).map(|f| f.id);
+            app.started = true;
         }
         app.request_recompute();
         app
@@ -265,8 +275,10 @@ impl App {
         let name = dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or("Projeto".into());
         match Project::create(&dir, &name) {
             Ok(p) => {
+                self.settings.add_recent(&dir.to_string_lossy());
                 self.project = Some(p);
                 self.left = LeftTab::Projeto;
+                self.started = true;
                 self.toast(format!("Projeto '{name}' criado"), false);
             }
             Err(e) => self.toast(e.to_string(), true),
@@ -275,12 +287,98 @@ impl App {
 
     fn open_project(&mut self) {
         let Some(dir) = rfd::FileDialog::new().set_title("Pasta do projeto").pick_folder() else { return };
-        match Project::open(&dir) {
+        self.open_project_at(&dir);
+    }
+
+    fn open_project_at(&mut self, dir: &std::path::Path) {
+        match Project::open(dir) {
             Ok(p) => {
+                self.settings.add_recent(&dir.to_string_lossy());
                 self.project = Some(p);
                 self.left = LeftTab::Projeto;
+                self.started = true;
             }
             Err(e) => self.toast(format!("Não é um projeto SolidCadCraft: {e}"), true),
+        }
+    }
+
+    /// Tela inicial: escolher projeto/peça antes de cair no modelo.
+    fn start_screen(&mut self, root: &mut egui::Ui) {
+        let mut action: Option<u8> = None;
+        let mut recent_open: Option<String> = None;
+        egui::CentralPanel::default().show(root, |ui| {
+            ui.vertical_centered(|ui| {
+                ui.add_space(40.);
+                ui.add(egui::Image::new(egui::include_image!("../../../assets/app/fenix-256.png")).fit_to_exact_size(egui::vec2(128., 128.)));
+                ui.label(RichText::new("SolidCadCraft").size(30.).strong());
+                ui.label(RichText::new(concat!("CAD paramétrico open source · ", env!("CARGO_PKG_VERSION"))).weak());
+                ui.add_space(24.);
+            });
+            let w = 720.0f32.min(ui.available_width());
+            ui.horizontal(|ui| {
+                ui.add_space(((ui.available_width() - w) / 2.).max(0.));
+                ui.vertical(|ui| {
+                    ui.set_width(w);
+                    ui.label(RichText::new("Começar").strong());
+                    ui.horizontal_wrapped(|ui| {
+                        let big = |ui: &mut egui::Ui, icon: &str, name: &str, brief: &str| crate::icons::tool_button(ui, icon, name, 54., true, false, brief, "");
+                        if big(ui, "novo_projeto", "Novo projeto", "Cria uma pasta de projeto com versões e revisões").clicked() {
+                            action = Some(0);
+                        }
+                        if big(ui, "abrir_projeto", "Abrir projeto", "Abre uma pasta de projeto existente").clicked() {
+                            action = Some(1);
+                        }
+                        if big(ui, "nova_peca", "Nova peça", "Peça avulsa, fora de projeto").clicked() {
+                            action = Some(2);
+                        }
+                        if big(ui, "abrir_projeto", "Abrir peça", "Abre um arquivo .sccpart").clicked() {
+                            action = Some(3);
+                        }
+                        if big(ui, "exemplo", "Exemplo", "Placa paramétrica de exemplo").clicked() {
+                            action = Some(4);
+                        }
+                    });
+                    ui.add_space(16.);
+                    ui.label(RichText::new("Projetos recentes").strong());
+                    if self.settings.recent.is_empty() {
+                        ui.label(RichText::new("nenhum ainda").weak());
+                    }
+                    for r in &self.settings.recent {
+                        let name = std::path::Path::new(r).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or(r.clone());
+                        let resp = ui.horizontal(|ui| {
+                            ui.add(egui::Image::new(crate::icons::get("pasta")).fit_to_exact_size(egui::vec2(20., 20.)));
+                            let l = ui.link(RichText::new(name).strong());
+                            ui.label(RichText::new(r).weak().small());
+                            l
+                        });
+                        if resp.inner.clicked() {
+                            recent_open = Some(r.clone());
+                        }
+                    }
+                    ui.add_space(16.);
+                    ui.checkbox(&mut self.settings.show_start, "mostrar esta tela ao iniciar");
+                });
+            });
+        });
+        if let Some(r) = recent_open {
+            self.open_project_at(std::path::Path::new(&r));
+        }
+        match action {
+            Some(0) => self.new_project(),
+            Some(1) => self.open_project(),
+            Some(2) => {
+                self.load_doc(Document::new("Peça"), None, None);
+                self.started = true;
+            }
+            Some(3) => {
+                self.open_file();
+                self.started = true;
+            }
+            Some(4) => {
+                self.load_doc(scc_solidos::example_document(), None, None);
+                self.started = true;
+            }
+            _ => {}
         }
     }
 
@@ -318,6 +416,33 @@ impl App {
     }
 
     /// Plano a usar para um novo sketch/plano: o selecionado, ou XY.
+    /// Plano para um novo sketch/plano: o plano ou a face clicada na viewport, senão o da árvore.
+    fn plane_for_new(&mut self) -> PlaneRef {
+        use crate::picking::Pick;
+        match self.picks.first().copied() {
+            Some(Pick::Plane(p)) => p,
+            Some(Pick::Face { point, normal, owner, .. }) => {
+                let n = normal.map(|v| v as f64);
+                let helper = if n[2].abs() < 0.9 { [0., 0., 1.] } else { [1., 0., 0.] };
+                // x = helper × n (no plano da face)
+                let x = scc_kernel::cross(helper, n);
+                let l = (x[0] * x[0] + x[1] * x[1] + x[2] * x[2]).sqrt().max(1e-12);
+                let x = x.map(|v| v / l);
+                let id = self.open.doc.add_face_plane(point.map(|v| v as f64), x, n, Some(owner));
+                PlaneRef::Datum(id)
+            }
+            _ => self.selected_plane(),
+        }
+    }
+
+    /// Pontos médios das arestas selecionadas na viewport.
+    pub fn picked_edges(&self) -> Vec<[f64; 3]> {
+        self.picks
+            .iter()
+            .filter_map(|p| if let crate::picking::Pick::Edge { mid, .. } = p { Some(mid.map(|v| v as f64)) } else { None })
+            .collect()
+    }
+
     fn selected_plane(&self) -> PlaneRef {
         match self.sel {
             Sel::Origin(o) => PlaneRef::Origin(o),
@@ -345,8 +470,11 @@ impl App {
 
     fn command(&mut self, c: Cmd) {
         let s = |v: &str| v.to_string();
-        let plane = self.selected_plane();
+        let uses_plane = matches!(c, Cmd::Sketch | Cmd::Plane | Cmd::PlaneAngle | Cmd::Hole | Cmd::HoleCounterbore | Cmd::HoleCountersink | Cmd::HoleTapped);
+        let plane = if uses_plane { self.plane_for_new() } else { self.selected_plane() };
         let sketch = self.selected_sketch(false);
+        let edges = self.picked_edges();
+        let up_to = self.open.doc.references.last().map(|r| PlaneRef::Datum(r.id)).unwrap_or(PlaneRef::Origin(OriginPlane::XY));
         let d = &mut self.open.doc;
         let new_sel = match c {
             Cmd::Sketch => {
@@ -354,18 +482,20 @@ impl App {
                 self.begin_sketch_pending = Some(id);
                 Sel::Feature(id)
             }
-            Cmd::Extrude | Cmd::Cut => {
+            Cmd::Extrude | Cmd::ExtrudeMid | Cmd::ExtrudeUpTo | Cmd::Cut | Cmd::CutBlind | Cmd::CutUpTo => {
                 let Some(sk) = sketch else {
                     self.toast("Crie ou selecione um sketch primeiro", true);
                     return;
                 };
-                let cut = c == Cmd::Cut;
-                Sel::Feature(d.add_feature(FeatureKind::Extrude(Extrude {
-                    sketch: sk,
-                    op: if cut { BoolOp::Cut } else { BoolOp::Add },
-                    extent: if cut { Extent::ThroughAll } else { Extent::Blind(s("20")) },
-                    reverse: false,
-                })))
+                let cut = matches!(c, Cmd::Cut | Cmd::CutBlind | Cmd::CutUpTo);
+                let extent = match c {
+                    Cmd::Extrude => Extent::Blind(s("20")),
+                    Cmd::ExtrudeMid => Extent::Symmetric(s("20")),
+                    Cmd::CutBlind => Extent::Blind(s("5")),
+                    Cmd::ExtrudeUpTo | Cmd::CutUpTo => Extent::UpTo(up_to),
+                    _ => Extent::ThroughAll,
+                };
+                Sel::Feature(d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: if cut { BoolOp::Cut } else { BoolOp::Add }, extent, reverse: false })))
             }
             Cmd::Revolve => {
                 let Some(sk) = sketch else {
@@ -380,7 +510,7 @@ impl App {
                     op: BoolOp::Add,
                 })))
             }
-            Cmd::Hole => {
+            Cmd::Hole | Cmd::HoleCounterbore | Cmd::HoleCountersink | Cmd::HoleTapped => {
                 let sk = match self.selected_sketch(true) {
                     Some(sk) => sk,
                     None => {
@@ -398,17 +528,37 @@ impl App {
                 };
                 let d = &mut self.open.doc;
                 let m = scc_solidos::hardware::metric("M6").unwrap();
+                let (kind, diameter, thread, std) = match c {
+                    Cmd::HoleCounterbore => (
+                        HoleKind::Rebaixado { diameter: m.cbore_diameter.to_string(), depth: m.cbore_depth.to_string() },
+                        m.clearance[1],
+                        None,
+                        "M6 passagem normal",
+                    ),
+                    Cmd::HoleCountersink => (HoleKind::Escareado { diameter: m.csink_diameter.to_string(), angle: s("90") }, m.clearance[1], None, "M6 passagem normal"),
+                    Cmd::HoleTapped => (HoleKind::Simples, m.tap_drill, Some(format!("M6x{}", m.pitch)), "M6 roscado"),
+                    _ => (HoleKind::Simples, m.clearance[1], None, "M6 passagem normal"),
+                };
                 Sel::Feature(d.add_feature(FeatureKind::Hole(Hole {
                     sketch: sk,
-                    kind: HoleKind::Simples,
-                    diameter: m.clearance[1].to_string(),
+                    kind,
+                    diameter: diameter.to_string(),
                     depth: Extent::ThroughAll,
-                    thread: None,
-                    standard: Some(s("M6 passagem normal")),
+                    thread,
+                    standard: Some(s(std)),
                 })))
             }
-            Cmd::Fillet => Sel::Feature(d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::AllOfBody }))),
-            Cmd::Chamfer => Sel::Feature(d.add_feature(FeatureKind::Chamfer(EdgeOp { value: s("1"), edges: EdgeSel::AllOfBody }))),
+            Cmd::Fillet | Cmd::FilletAll | Cmd::Chamfer | Cmd::ChamferAll => {
+                let all = matches!(c, Cmd::FilletAll | Cmd::ChamferAll);
+                let sel = if all { EdgeSel::AllOfBody } else { EdgeSel::Edges(edges.clone()) };
+                if !all && edges.is_empty() {
+                    self.toast("Nenhuma aresta selecionada: selecione arestas na viewport e clique em 'Usar seleção' no painel", false);
+                }
+                let op = EdgeOp { value: s("1"), edges: sel };
+                let d = &mut self.open.doc;
+                Sel::Feature(d.add_feature(if matches!(c, Cmd::Fillet | Cmd::FilletAll) { FeatureKind::Fillet(op) } else { FeatureKind::Chamfer(op) }))
+            }
+            Cmd::PlaneAngle => Sel::Ref(d.add_angle_plane(plane, AxisRef::Origin(OriginAxis::X), "30")),
             Cmd::Plane => Sel::Ref(d.add_offset_plane(plane, "20")),
             Cmd::Param => {
                 let n = (1..).map(|i| format!("P{i}")).find(|n| !d.params.iter().any(|p| &p.name == n)).unwrap();
@@ -426,6 +576,7 @@ impl App {
                 Sel::Collector(id)
             }
         };
+        self.picks.clear();
         if let Sel::Feature(id) = new_sel {
             let d = &mut self.open.doc;
             let (consumed, is_sketch) = match d.feature(id).map(|f| &f.kind) {
@@ -486,6 +637,23 @@ impl App {
             Act::SkAutoConstraints => self.settings.auto_constraints = !self.settings.auto_constraints,
             Act::SkAutoDims => self.settings.auto_dims = !self.settings.auto_dims,
             Act::SkFinish => self.finish_sketch(),
+            Act::ClearPicks => self.picks.clear(),
+            Act::SkCheck => {
+                if let Some(e) = self.sketch.as_mut() {
+                    e.check = !e.check
+                }
+            }
+            Act::SkToggleConstruction => {
+                let Some(e) = self.sketch.as_ref() else { return };
+                let (id, sel) = (e.feature, e.sel.clone());
+                if let Some(FeatureKind::Sketch(sk)) = self.open.doc.feature_mut(id).map(|f| &mut f.kind) {
+                    for c in &mut sk.data.curves {
+                        if sel.contains(&crate::sketch_ui::Ent::Cv(c.id)) {
+                            c.construction = !c.construction;
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -524,6 +692,7 @@ impl App {
             hidden_env: self.hidden_env,
             sketch_tool: self.sketch.as_ref().map(|e| e.tool),
             construction: self.sketch.as_ref().is_some_and(|e| e.construction),
+            check: self.sketch.as_ref().is_some_and(|e| e.check),
         }
     }
 
@@ -763,6 +932,21 @@ impl App {
                             s.gradient = t != b;
                         }
                     }
+                });
+            });
+            egui::CollapsingHeader::new("Navegação e seleção").default_open(true).show(ui, |ui| {
+                egui::ComboBox::from_id_salt("nav").selected_text(s.nav.label()).show_ui(ui, |ui| {
+                    for n in crate::settings::NavStyle::ALL {
+                        ui.selectable_value(&mut s.nav, n, n.label());
+                    }
+                });
+                ui.label(RichText::new(s.nav.help()).weak().small());
+                ui.checkbox(&mut s.invert_zoom, "inverter o sentido do zoom");
+                ui.horizontal(|ui| {
+                    ui.label("Selecionar:");
+                    ui.checkbox(&mut s.sel_faces, "faces");
+                    ui.checkbox(&mut s.sel_edges, "arestas");
+                    ui.checkbox(&mut s.sel_vertices, "vértices");
                 });
             });
             egui::CollapsingHeader::new("Exibição").default_open(true).show(ui, |ui| {
@@ -1309,7 +1493,7 @@ impl App {
                     ui.label(RichText::new(format!("Parâmetros: {e}")).small().color(Color32::from_rgb(255, 120, 100)));
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(RichText::new("Botão esq./meio: girar · direito ou Shift: mover · roda: zoom · duplo clique: ajustar").small().weak());
+                    ui.label(RichText::new(format!("{} · duplo clique: ajustar", self.settings.nav.help())).small().weak());
                 });
             });
         });
@@ -1326,19 +1510,39 @@ impl App {
             };
 
             // navegação
-            let (shift, scroll, ppp) = ctx.input(|i| (i.modifiers.shift, i.smooth_scroll_delta.y, i.pixels_per_point));
+            let (shift, ctrl, scroll, ppp, right_down) =
+                ctx.input(|i| (i.modifiers.shift, i.modifiers.command, i.smooth_scroll_delta.y, i.pixels_per_point, i.pointer.secondary_down()));
             let delta = resp.drag_delta();
-            let pan = resp.dragged_by(egui::PointerButton::Secondary) || (shift && resp.dragged());
+            let (left, mid, right) = (
+                resp.dragged_by(egui::PointerButton::Primary),
+                resp.dragged_by(egui::PointerButton::Middle),
+                resp.dragged_by(egui::PointerButton::Secondary),
+            );
+            let sketching = self.sketch.is_some();
+            use crate::settings::NavStyle as N;
+            // (girar, mover, zoom arrastando) conforme o estilo de navegação escolhido
+            let (orbit, pan, zoom_drag) = match self.settings.nav {
+                N::SolidCadCraft => ((left && !shift && !sketching) || mid, right || (shift && left), false),
+                N::SolidWorks => (mid && !ctrl, mid && ctrl, false),
+                N::Fusion => (mid && shift, mid && !shift, false),
+                N::Catia => (mid && right_down, mid && !right_down, false),
+                N::Blender => (mid && !shift && !ctrl, mid && shift, mid && ctrl),
+                N::Onshape => (right && !ctrl, (right && ctrl) || mid, false),
+            };
             if pan {
                 let (r, u) = vp.camera.basis();
                 let k = vp.camera.dist * 0.0012;
                 vp.camera.target += (-r * delta.x + u * delta.y) * k;
-            } else if (resp.dragged_by(egui::PointerButton::Primary) && self.sketch.is_none()) || resp.dragged_by(egui::PointerButton::Middle) {
+            } else if zoom_drag {
+                vp.camera.dist = (vp.camera.dist * (delta.y * 0.01).exp()).clamp(0.5, 1e6);
+            } else if orbit {
                 vp.camera.yaw -= delta.x * 0.008;
                 vp.camera.pitch = (vp.camera.pitch + delta.y * 0.008).clamp(-1.5706, 1.5706);
             }
             if resp.hovered() && scroll != 0. {
-                vp.camera.dist = (vp.camera.dist * (-scroll * 0.0015).exp()).clamp(0.5, 1e6);
+                let inv = self.settings.invert_zoom != (self.settings.nav == N::SolidWorks);
+                let sc = if inv { scroll } else { -scroll };
+                vp.camera.dist = (vp.camera.dist * (sc * 0.0015).exp()).clamp(0.5, 1e6);
             }
             if (resp.double_clicked() && self.sketch.is_none()) || self.fit_pending {
                 if let Some(b) = vp.bounds {
@@ -1407,6 +1611,58 @@ impl App {
             }
             if self.sketch.is_some() {
                 crate::sketch_ui::overlay(self, ui, rect, &resp, cam);
+            } else if let Some(r) = &self.result {
+                let filt = crate::picking::Filter {
+                    faces: self.settings.sel_faces,
+                    edges: self.settings.sel_edges,
+                    vertices: self.settings.sel_vertices,
+                    planes: true,
+                };
+                let dragging = resp.dragged();
+                self.hover_pick = match (resp.hover_pos(), dragging) {
+                    (Some(h), false) => crate::picking::pick(r, &self.open.doc, &cam, rect, h, &filt),
+                    _ => None,
+                };
+                if resp.clicked_by(egui::PointerButton::Primary) {
+                    let add = ctx.input(|i| i.modifiers.shift || i.modifiers.command);
+                    match self.hover_pick {
+                        Some(p) => {
+                            if let Some(i) = self.picks.iter().position(|x| *x == p) {
+                                self.picks.remove(i);
+                            } else {
+                                if !add {
+                                    self.picks.clear();
+                                }
+                                self.picks.push(p);
+                            }
+                            // face clicada: o comando dono fica selecionado na árvore
+                            if let crate::picking::Pick::Face { owner, .. } = p {
+                                if !add {
+                                    self.sel = Sel::Feature(owner);
+                                }
+                            }
+                        }
+                        None => {
+                            if !add {
+                                self.picks.clear();
+                            }
+                        }
+                    }
+                }
+                let painter = ui.painter_at(rect);
+                for p in &self.picks {
+                    crate::picking::draw(&painter, r, &cam, rect, p, true);
+                }
+                if let Some(h) = self.hover_pick {
+                    if !self.picks.contains(&h) {
+                        crate::picking::draw(&painter, r, &cam, rect, &h, false);
+                    }
+                }
+                if !self.picks.is_empty() {
+                    let n = self.picks.len();
+                    let txt = if n == 1 { self.picks[0].label(&self.open.doc) } else { format!("{n} itens selecionados") };
+                    ui.painter().text(rect.left_bottom() + egui::vec2(10., -10.), egui::Align2::LEFT_BOTTOM, format!("Seleção: {txt}  ·  Esc limpa"), egui::FontId::proportional(12.), Color32::from_rgb(255, 190, 40));
+                }
             }
         });
     }
@@ -1529,12 +1785,22 @@ impl App {
 pub enum Cmd {
     Sketch,
     Extrude,
+    ExtrudeMid,
+    ExtrudeUpTo,
     Cut,
+    CutBlind,
+    CutUpTo,
     Revolve,
     Hole,
+    HoleCounterbore,
+    HoleCountersink,
+    HoleTapped,
     Fillet,
+    FilletAll,
     Chamfer,
+    ChamferAll,
     Plane,
+    PlaneAngle,
     Param,
     Folder,
     Collector,
@@ -1676,6 +1942,9 @@ impl eframe::App for App {
         if redo {
             self.redo();
         }
+        if self.sketch.is_none() && !self.picks.is_empty() && !ctx.egui_wants_keyboard_input() && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            self.picks.clear();
+        }
         if self.sketch.is_some() && crate::sketch_ui::keys(self, ctx) {
             self.finish_sketch();
         }
@@ -1706,6 +1975,15 @@ impl eframe::App for App {
             if ctx.input(|i| i.key_pressed(egui::Key::H) && !i.modifiers.shift && !i.modifiers.command) {
                 self.toggle_hide_selected();
             }
+        }
+
+        if !self.started {
+            let show_before = self.settings.show_start;
+            self.start_screen(root);
+            if self.settings.show_start != show_before || self.started {
+                self.settings.save();
+            }
+            return;
         }
 
         let before = self.open.doc.clone();

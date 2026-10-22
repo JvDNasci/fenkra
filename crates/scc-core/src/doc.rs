@@ -71,6 +71,32 @@ pub struct RefElement {
 pub enum RefKind {
     /// Plano paralelo a outro plano, deslocado por uma expressão.
     OffsetPlane { base: PlaneRef, offset: String },
+    /// Plano que passa por um eixo, girado de um ângulo a partir do plano base.
+    AnglePlane { base: PlaneRef, axis: AxisRef, angle: String },
+    /// Plano de uma face plana clicada na viewport (origem, direção X e normal).
+    FacePlane { origin: [f64; 3], x: [f64; 3], normal: [f64; 3], owner: Option<Id> },
+}
+
+impl RefKind {
+    pub fn base(&self) -> Option<&PlaneRef> {
+        match self {
+            RefKind::OffsetPlane { base, .. } | RefKind::AnglePlane { base, .. } => Some(base),
+            RefKind::FacePlane { .. } => None,
+        }
+    }
+    pub fn base_mut(&mut self) -> Option<&mut PlaneRef> {
+        match self {
+            RefKind::OffsetPlane { base, .. } | RefKind::AnglePlane { base, .. } => Some(base),
+            RefKind::FacePlane { .. } => None,
+        }
+    }
+    /// Sketch usado como eixo (se houver).
+    pub fn axis_sketch(&self) -> Option<Id> {
+        match self {
+            RefKind::AnglePlane { axis: AxisRef::SketchLine { sketch, .. }, .. } => Some(*sketch),
+            _ => None,
+        }
+    }
 }
 
 // ---------------------------------------------------------------- Parâmetros e propriedades
@@ -306,9 +332,12 @@ pub enum BoolOp {
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum Extent {
     Blind(String),
+    /// Plano médio: metade para cada lado do plano do sketch.
     Symmetric(String),
     TwoSides(String, String),
     ThroughAll,
+    /// Até um plano (da Origem ou de referência, inclusive inclinado): termina exatamente nele.
+    UpTo(PlaneRef),
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -354,6 +383,9 @@ pub enum EdgeSel {
     AllOfBody,
     /// Arestas geradas por um comando (referência persistente simplificada).
     CreatedBy(Id),
+    /// Arestas escolhidas na viewport, guardadas por assinatura geométrica (ponto médio xyz);
+    /// a cada recompute, cada uma é resolvida para a aresta mais próxima (ADR 0004).
+    Edges(Vec<[f64; 3]>),
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -496,6 +528,22 @@ impl Document {
         id
     }
 
+    /// Plano de uma face plana (criado ao clicar numa face para fazer um sketch).
+    pub fn add_face_plane(&mut self, origin: [f64; 3], x: [f64; 3], normal: [f64; 3], owner: Option<Id>) -> Id {
+        let id = self.alloc();
+        let name = self.unique_name("PlanoFace");
+        self.references.push(RefElement { id, name, kind: RefKind::FacePlane { origin, x, normal, owner }, visible: true });
+        id
+    }
+
+    /// Plano que passa por um eixo, girado `angle` graus a partir de `base`.
+    pub fn add_angle_plane(&mut self, base: PlaneRef, axis: AxisRef, angle: &str) -> Id {
+        let id = self.alloc();
+        let name = self.unique_name("Plano");
+        self.references.push(RefElement { id, name, kind: RefKind::AnglePlane { base, axis, angle: angle.into() }, visible: true });
+        id
+    }
+
     pub fn reference(&self, id: Id) -> Option<&RefElement> {
         self.references.iter().find(|r| r.id == id)
     }
@@ -535,6 +583,8 @@ impl Document {
         for r in &mut self.references {
             match &mut r.kind {
                 RefKind::OffsetPlane { offset, .. } => f(offset),
+                RefKind::AnglePlane { angle, .. } => f(angle),
+                RefKind::FacePlane { .. } => {}
             }
         }
         for feat in &mut self.features {
@@ -640,7 +690,13 @@ impl Document {
         };
         match kind {
             FeatureKind::Sketch(s) => plane(&s.plane).into_iter().collect(),
-            FeatureKind::Extrude(e) => vec![e.sketch],
+            FeatureKind::Extrude(e) => {
+                let mut v = vec![e.sketch];
+                if let Extent::UpTo(PlaneRef::Datum(id)) = e.extent {
+                    v.push(id)
+                }
+                v
+            }
             FeatureKind::Revolve(r) => {
                 let mut v = vec![r.sketch];
                 if let AxisRef::SketchLine { sketch, .. } = r.axis {
@@ -651,9 +707,9 @@ impl Document {
                 v
             }
             FeatureKind::Hole(h) => vec![h.sketch],
-            FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => match o.edges {
-                EdgeSel::CreatedBy(id) => vec![id],
-                EdgeSel::AllOfBody => vec![],
+            FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => match &o.edges {
+                EdgeSel::CreatedBy(id) => vec![*id],
+                EdgeSel::AllOfBody | EdgeSel::Edges(_) => vec![],
             },
         }
     }
@@ -664,8 +720,8 @@ impl Document {
         let mut frontier = vec![id];
         while let Some(cur) = frontier.pop() {
             for r in &self.references {
-                let RefKind::OffsetPlane { base, .. } = &r.kind;
-                if *base == PlaneRef::Datum(cur) && !out.contains(&r.id) {
+                let hit = r.kind.base() == Some(&PlaneRef::Datum(cur)) || r.kind.axis_sketch() == Some(cur);
+                if hit && !out.contains(&r.id) {
                     out.push(r.id);
                     frontier.push(r.id);
                 }
@@ -720,13 +776,22 @@ impl Document {
             }
         };
         for r in &mut self.references {
-            let RefKind::OffsetPlane { base, .. } = &mut r.kind;
-            swap_plane(base, &mut n);
+            if let Some(b) = r.kind.base_mut() {
+                swap_plane(b, &mut n);
+            }
+            if let RefKind::AnglePlane { axis: AxisRef::SketchLine { sketch, .. }, .. } = &mut r.kind {
+                swap(sketch, &mut n)
+            }
         }
         for f in &mut self.features {
             match &mut f.kind {
                 FeatureKind::Sketch(s) => swap_plane(&mut s.plane, &mut n),
-                FeatureKind::Extrude(e) => swap(&mut e.sketch, &mut n),
+                FeatureKind::Extrude(e) => {
+                    swap(&mut e.sketch, &mut n);
+                    if let Extent::UpTo(p) = &mut e.extent {
+                        swap_plane(p, &mut n)
+                    }
+                }
                 FeatureKind::Revolve(r) => {
                     swap(&mut r.sketch, &mut n);
                     if let AxisRef::SketchLine { sketch, .. } = &mut r.axis {
@@ -795,7 +860,7 @@ fn extent_exprs(e: &mut Extent, f: &mut impl FnMut(&mut String)) {
             f(a);
             f(b)
         }
-        Extent::ThroughAll => {}
+        Extent::ThroughAll | Extent::UpTo(_) => {}
     }
 }
 
