@@ -90,6 +90,8 @@ pub struct App {
     pub sel: Sel,
     pub result: Option<RecomputeResult>,
     pub delete_dialog: Option<DeleteDialog>,
+    /// início da tela de carregamento
+    splash_t0: Option<f64>,
     /// comando a abrir como ambiente (duplo clique na face)
     open_pending: Option<Id>,
     release_dialog: Option<(u64, String)>,
@@ -163,6 +165,7 @@ impl App {
             result: None,
             delete_dialog: None,
             open_pending: None,
+            splash_t0: None,
             release_dialog: None,
             worker: Worker::spawn(cc.egui_ctx.clone()),
             gen_sent: 0,
@@ -336,10 +339,43 @@ impl App {
     }
 
     /// Tela inicial: escolher projeto/peça antes de cair no modelo.
+    /// Tela de carregamento: fênix, nome e barra de progresso até o kernel e o primeiro cálculo ficarem prontos.
+    fn splash(&mut self, root: &mut egui::Ui) -> bool {
+        let now = root.ctx().input(|i| i.time);
+        let t0 = *self.splash_t0.get_or_insert(now);
+        let el = (now - t0) as f32;
+        let ready = self.gen_done >= 1 || self.gen_done == self.gen_sent;
+        let min_time = 1.3;
+        let p = if ready { (el / min_time).min(1.) } else { (el / min_time).min(0.85) };
+        if ready && el >= min_time {
+            return false;
+        }
+        egui::CentralPanel::default().frame(egui::Frame::NONE).show(root, |ui| {
+            let rect = ui.max_rect();
+            paint_backdrop(ui.painter(), rect, true);
+            let c = rect.center();
+            let img = egui::Image::new(egui::include_image!("../../../assets/app/fenix-256.png")).corner_radius(28.);
+            img.paint_at(ui, Rect::from_center_size(c - egui::vec2(0., 70.), egui::vec2(170., 170.)));
+            ui.painter().text(c + egui::vec2(0., 40.), egui::Align2::CENTER_CENTER, "SolidCadCraft", egui::FontId::proportional(32.), Color32::WHITE);
+            ui.painter().text(c + egui::vec2(0., 70.), egui::Align2::CENTER_CENTER, concat!("CAD paramétrico open source · ", env!("CARGO_PKG_VERSION")), egui::FontId::proportional(13.), Color32::from_white_alpha(150));
+            let bar = Rect::from_center_size(c + egui::vec2(0., 110.), egui::vec2(320., 6.));
+            ui.painter().rect_filled(bar, 3., Color32::from_white_alpha(30));
+            let mut fill = bar;
+            fill.set_width(bar.width() * p);
+            ui.painter().rect_filled(fill, 3., Color32::from_rgb(90, 170, 255));
+            let stage = if p < 0.3 { "Iniciando o kernel OpenCASCADE…" } else if p < 0.6 { "Carregando ferramentas e ícones…" } else if p < 0.95 { "Calculando a peça…" } else { "Pronto" };
+            ui.painter().text(bar.center_bottom() + egui::vec2(0., 16.), egui::Align2::CENTER_CENTER, stage, egui::FontId::proportional(12.), Color32::from_white_alpha(140));
+        });
+        root.ctx().request_repaint();
+        true
+    }
+
     fn start_screen(&mut self, root: &mut egui::Ui) {
         let mut action: Option<u8> = None;
         let mut recent_open: Option<String> = None;
-        egui::CentralPanel::default().show(root, |ui| {
+        let dark = !self.light_background();
+        egui::CentralPanel::default().frame(egui::Frame::NONE.inner_margin(12.)).show(root, |ui| {
+            paint_backdrop(ui.painter(), ui.max_rect().expand(12.), dark);
             ui.vertical_centered(|ui| {
                 ui.add_space(40.);
                 ui.add(egui::Image::new(egui::include_image!("../../../assets/app/fenix-256.png")).fit_to_exact_size(egui::vec2(128., 128.)));
@@ -2533,6 +2569,9 @@ impl eframe::App for App {
             }
         }
 
+        if self.splash(root) {
+            return;
+        }
         if !self.started {
             let show_before = self.settings.show_start;
             self.start_screen(root);
@@ -2655,5 +2694,40 @@ impl eframe::App for App {
                 self.sel = prev;
             }
         }
+    }
+}
+
+/// Fundo com profundidade (degradê, brilho e grade sutil) para a tela inicial e o carregamento.
+fn paint_backdrop(p: &egui::Painter, rect: Rect, dark: bool) {
+    let (top, bot) = if dark { (Color32::from_rgb(16, 30, 58), Color32::from_rgb(8, 11, 20)) } else { (Color32::from_rgb(232, 241, 252), Color32::from_rgb(196, 214, 238)) };
+    let mut m = egui::Mesh::default();
+    m.colored_vertex(rect.left_top(), top);
+    m.colored_vertex(rect.right_top(), top);
+    m.colored_vertex(rect.right_bottom(), bot);
+    m.colored_vertex(rect.left_bottom(), bot);
+    m.add_triangle(0, 1, 2);
+    m.add_triangle(0, 2, 3);
+    p.add(egui::Shape::mesh(m));
+    // brilho azul atrás do logo
+    let glow = rect.center_top() + egui::vec2(0., rect.height() * 0.3);
+    // muitos círculos bem transparentes = brilho suave, sem anéis visíveis
+    for k in 0..24 {
+        let r = 460. - k as f32 * 17.;
+        p.circle_filled(glow, r, Color32::from_rgba_unmultiplied(60, 140, 255, if dark { 2 } else { 3 }));
+    }
+    // grade em perspectiva leve na parte de baixo (chão de CAD)
+    let line = if dark { Color32::from_rgba_unmultiplied(120, 170, 255, 18) } else { Color32::from_rgba_unmultiplied(30, 80, 160, 22) };
+    let horizon = rect.top() + rect.height() * 0.62;
+    let vp = egui::pos2(rect.center().x, horizon - rect.height() * 0.25);
+    for i in -14..=14 {
+        let x = rect.center().x + i as f32 * rect.width() / 14.;
+        let b = egui::pos2(x, rect.bottom());
+        let t = (horizon - vp.y) / (b.y - vp.y);
+        p.line_segment([vp + (b - vp) * t, b], egui::Stroke::new(1., line));
+    }
+    for k in 0..10 {
+        let f = (k as f32 / 10.).powf(1.8);
+        let y = horizon + (rect.bottom() - horizon) * f;
+        p.line_segment([egui::pos2(rect.left(), y), egui::pos2(rect.right(), y)], egui::Stroke::new(1., line));
     }
 }

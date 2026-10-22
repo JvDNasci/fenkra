@@ -132,6 +132,9 @@ pub fn thread(name: &str) -> Option<&'static ThreadSpec> {
         // "M6x1.0" → "M6x1"
         let norm = n.trim_end_matches('0').trim_end_matches('.');
         THREADS.iter().find(|t| t.name.eq_ignore_ascii_case(norm))
+    }).or_else(|| {
+        // só o tamanho ("M6", "1/4-20" sem passo): primeira da tabela com esse prefixo (série grossa)
+        THREADS.iter().find(|t| t.name.to_ascii_lowercase().starts_with(&format!("{}x", n.to_ascii_lowercase())))
     })
 }
 

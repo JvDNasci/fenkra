@@ -626,14 +626,32 @@ impl Ctx<'_> {
                 let (lo, hi) = self.body(f.target).and_then(|b| b.bbox()).ok_or("corpo sem dimensões")?;
                 for p in &pts {
                     let o = frame.point(p[0], p[1]);
-                    // extensão do material a partir do ponto, ao longo do furo
-                    let mut ext: f64 = 0.;
+                    // extensão do material a partir do ponto, nos dois sentidos do eixo do furo:
+                    // a rosca vai para o lado onde está a peça (o sketch pode estar na outra face)
+                    let (mut fwd, mut back): (f64, f64) = (0., 0.);
                     for c in 0..8 {
                         let q = [if c & 1 == 0 { lo[0] } else { hi[0] }, if c & 2 == 0 { lo[1] } else { hi[1] }, if c & 4 == 0 { lo[2] } else { hi[2] }];
-                        ext = ext.max(dot(sub(q, o), dir));
+                        let t = dot(sub(q, o), dir);
+                        fwd = fwd.max(t);
+                        back = back.max(-t);
                     }
-                    let len = depth.min(ext).max(spec.pitch);
-                    let tool = Shape::thread_tool(o, dir, spec.major, spec.pitch, len, spec.angle).map_err(k)?;
+                    let (tdir, ext) = if fwd >= back { (dir, fwd) } else { (dir.map(|x| -x), back) };
+                    // a rosca começa abaixo do rebaixo/escareado (começar no vazio faz a booleana falhar)
+                    let s0 = if fwd >= back {
+                        match shape {
+                            HoleShape::Counterbore { depth, .. } => depth,
+                            HoleShape::Countersink { diameter, angle } => ((diameter - d) / 2.).max(0.) / (angle.to_radians() / 2.).tan().max(1e-6),
+                            HoleShape::Simple => 0.,
+                        }
+                    } else {
+                        0.
+                    };
+                    let len = depth.min(ext) - s0;
+                    if len < spec.pitch {
+                        continue;
+                    }
+                    let o = [0, 1, 2].map(|i| o[i] + tdir[i] * s0);
+                    let tool = Shape::thread_tool(o, tdir, spec.major, spec.pitch, len, spec.angle).map_err(k)?;
                     self.apply(f.target, tool, BoolOp::Cut, f.id)?;
                 }
                 Ok(None)
@@ -896,6 +914,27 @@ pub fn example_document() -> Document {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rosca_modelada_remove_material() {
+        if !scc_kernel::AVAILABLE {
+            return;
+        }
+        let mut d = example_document();
+        let id = d.features.iter().find(|f| matches!(f.kind, FeatureKind::Hole(_))).unwrap().id;
+        if let Some(FeatureKind::Hole(h)) = d.feature_mut(id).map(|f| &mut f.kind) {
+            h.thread = Some("M6".into());
+            h.diameter = "5".into();
+            h.thread_modeled = false;
+        }
+        let v0 = recompute(&d).bodies[0].mass.volume;
+        if let Some(FeatureKind::Hole(h)) = d.feature_mut(id).map(|f| &mut f.kind) {
+            h.thread_modeled = true;
+        }
+        let r = recompute(&d);
+        assert_eq!(r.status[&id], Status::Ok);
+        assert!(r.bodies[0].mass.volume < v0 - 1., "a rosca não tirou material");
+    }
 
     #[test]
     fn geometria_de_referencia_planos_pontos_curvas() {

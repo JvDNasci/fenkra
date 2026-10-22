@@ -9,6 +9,9 @@
 #include <vector>
 
 #include <BRepAdaptor_Curve.hxx>
+#include <type_traits>
+#include <vector>
+#include <BRepAdaptor_Surface.hxx>
 #include <BRepAlgoAPI_Common.hxx>
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
@@ -311,14 +314,56 @@ void fill(rust::Vec<int32_t>& out, const std::vector<int>& v) {
 template <class Mk>
 std::unique_ptr<Shape> edge_op_t(const char* what, const Shape& s, double v, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out) {
     return guard(what, [&] {
-        Mk mk(s.s);
         TopTools_IndexedMapOfShape edges;
         TopExp::MapShapes(s.s, TopAbs_EDGE, edges);
-        for (int i = 1; i <= edges.Extent(); ++i) mk.Add(v, TopoDS::Edge(edges(i)));
-        mk.Build();
-        if (!mk.IsDone()) throw std::runtime_error("valor grande demais para a geometria");
-        fill(out, carry(s.s, to_vec(tags), mk.Shape(), [&](const TopoDS_Shape& f) -> const TopTools_ListOfShape& { return mk.Modified(f); }, -1));
-        return wrap(mk.Shape());
+        TopTools_IndexedDataMapOfShapeListOfShape e2f;
+        TopExp::MapShapesAndAncestors(s.s, TopAbs_EDGE, TopAbs_FACE, e2f);
+        // "todas": só arestas simples (reta, círculo, elipse) entre superfícies analíticas;
+        // hélices e faces livres (ex.: rosca modelada) ficam de fora
+        auto simple = [&](const TopoDS_Edge& e) {
+            if (BRep_Tool::Degenerated(e)) return false;
+            const GeomAbs_CurveType t = BRepAdaptor_Curve(e).GetType();
+            if (t != GeomAbs_Line && t != GeomAbs_Circle && t != GeomAbs_Ellipse) return false;
+            if (!e2f.Contains(e)) return false;
+            for (const TopoDS_Shape& f : e2f.FindFromKey(e)) {
+                const GeomAbs_SurfaceType st = BRepAdaptor_Surface(TopoDS::Face(f)).GetType();
+                if (st != GeomAbs_Plane && st != GeomAbs_Cylinder && st != GeomAbs_Cone && st != GeomAbs_Sphere && st != GeomAbs_Torus) return false;
+            }
+            return true;
+        };
+        std::vector<int> cand;
+        for (int i = 1; i <= edges.Extent(); ++i)
+            if (simple(TopoDS::Edge(edges(i)))) cand.push_back(i);
+        if (cand.empty()) throw std::runtime_error("nenhuma aresta adequada");
+        TopTools_IndexedMapOfShape skip;
+        for (int pass = 0; pass < 6; ++pass) {
+            Mk mk(s.s);
+            int added = 0;
+            for (int i : cand) {
+                if (skip.Contains(edges(i))) continue;
+                mk.Add(v, TopoDS::Edge(edges(i)));
+                ++added;
+            }
+            if (added == 0) break;
+            mk.Build();
+            if (mk.IsDone()) {
+                fill(out, carry(s.s, to_vec(tags), mk.Shape(), [&](const TopoDS_Shape& f) -> const TopTools_ListOfShape& { return mk.Modified(f); }, -1));
+                return wrap(mk.Shape());
+            }
+            bool more = false;
+            if constexpr (std::is_same_v<Mk, BRepFilletAPI_MakeFillet>) {
+                // contornos que falham saem e o resto é refeito do zero
+                for (int c = 1; c <= mk.NbFaultyContours(); ++c) {
+                    const int ic = mk.FaultyContour(c);
+                    for (int k = 1; k <= mk.NbEdges(ic); ++k) {
+                        skip.Add(mk.Edge(ic, k));
+                        more = true;
+                    }
+                }
+            }
+            if (!more) break;
+        }
+        throw std::runtime_error("valor grande demais para a geometria");
     });
 }
 
