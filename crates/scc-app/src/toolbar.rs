@@ -182,6 +182,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(tool(Tool::Mirror)),
             One(tool(Tool::Offset)),
             One(tool(Tool::Fillet)),
+            Family("sk_aparar", vec![tool(Tool::Trim), tool(Tool::Extend)]),
             One(it("sk_converter", "Construção", "Converter seleção ↔ construção", "Transforma as curvas selecionadas em geometria de construção (tracejada) ou de volta em geometria normal.", SkToggleConstruction)),
         ],
         Group::SkCotagem => vec![Family("sk_cota", vec![

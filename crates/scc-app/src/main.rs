@@ -15,6 +15,7 @@ mod geo_ui;
 mod keymap;
 mod feat_ui;
 mod handles;
+mod measure;
 
 use eframe::egui;
 

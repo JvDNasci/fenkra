@@ -70,6 +70,24 @@ fn handle_for(app: &App, id: Id) -> Option<Linear> {
                 };
                 Some(Linear { base: o, dir: n, k: 1., expr: h, label: "Altura" })
             }
+            FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => {
+                let base = match (&o.edges, &o.mode) {
+                    (_, EdgeMode::FaceFace(a, _)) => *a,
+                    (EdgeSel::Edges(m), _) if !m.is_empty() => m[0],
+                    _ => return None,
+                };
+                let b = r.bodies.iter().find(|b| b.collector == f.target)?;
+                let c = mesh_center(&b.mesh);
+                let base = v3(base);
+                let dir = (base - c).try_normalize()?;
+                Some(Linear { base, dir, k: 1., expr: o.value.clone(), label: if matches!(f.kind, FeatureKind::Fillet(_)) { "Raio" } else { "Distância" } })
+            }
+            FeatureKind::Shell(sh) => {
+                let p = v3(*sh.faces.first()?);
+                let b = r.bodies.iter().find(|b| b.collector == f.target)?;
+                let dir = (mesh_center(&b.mesh) - p).try_normalize()?;
+                Some(Linear { base: p, dir: if sh.outward { -dir } else { dir }, k: 1., expr: sh.thickness.clone(), label: "Espessura" })
+            }
             FeatureKind::Stiffener(s) => {
                 let (c, n) = sketch_center(r, s.sketch)?;
                 Some(Linear { base: c, dir: if s.reverse { n } else { -n }, k: 1., expr: s.depth.clone(), label: "Profundidade" })
@@ -105,6 +123,9 @@ fn write_value(app: &mut App, id: Id, value: String) {
                 _ => {}
             },
             FeatureKind::Stiffener(s) => s.depth = value,
+            FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => o.value = value,
+            FeatureKind::Shell(sh) => sh.thickness = value,
+            FeatureKind::Revolve(r) => r.angle = value,
             _ => {}
         }
         return;
@@ -114,9 +135,90 @@ fn write_value(app: &mut App, id: Id, value: String) {
     }
 }
 
+fn mesh_center(m: &scc_kernel::Mesh) -> Vec3 {
+    let n = (m.positions.len() / 3).max(1) as f32;
+    m.positions.chunks_exact(3).fold(Vec3::ZERO, |a, p| a + Vec3::new(p[0], p[1], p[2])) / n
+}
+
+/// Eixo da revolução no mundo (origem, direção).
+fn revolve_axis(app: &App, a: &AxisRef) -> Option<(Vec3, Vec3)> {
+    let r = app.result.as_ref()?;
+    match a {
+        AxisRef::Origin(x) => Some((Vec3::ZERO, v3(scc_solidos::origin_axis(*x)))),
+        AxisRef::Fixed { origin, dir } => Some((v3(*origin), v3(*dir).try_normalize()?)),
+        AxisRef::Ref(id) => {
+            let c = r.curves.iter().find(|c| c.id == *id)?;
+            let (p, q) = (v3(c.pts[0]), v3(*c.pts.last()?));
+            Some((p, (q - p).try_normalize()?))
+        }
+        AxisRef::SketchLine { sketch, entity } => {
+            let fr = r.sketches.iter().find(|s| s.feature == *sketch)?.frame;
+            let FeatureKind::Sketch(sk) = &app.open.doc.feature(*sketch)?.kind else { return None };
+            let scc_core::sketch::Curve::Line { a, b } = sk.data.curve(*entity)?.geom else { return None };
+            let (pa, pb) = (sk.data.pos(a), sk.data.pos(b));
+            let (p, q) = (v3(fr.point(pa[0], pa[1])), v3(fr.point(pb[0], pb[1])));
+            Some((p, (q - p).try_normalize()?))
+        }
+    }
+}
+
+/// Alça de ângulo da revolução: arco em volta do eixo; arrastar a ponta muda o ângulo (passo 1°, Shift 5°).
+fn revolve_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id) {
+    let Some(FeatureKind::Revolve(rv)) = app.open.doc.feature(id).map(|f| f.kind.clone()) else { return };
+    let Some(r) = app.result.as_ref() else { return };
+    let Some(sk) = r.sketches.iter().find(|s| s.feature == rv.sketch) else { return };
+    let Some((o, d)) = revolve_axis(app, &rv.axis) else { return };
+    let c = if sk.lines.is_empty() { v3(sk.frame.origin) } else { sk.lines.iter().fold(Vec3::ZERO, |a, p| a + Vec3::from(*p)) / sk.lines.len() as f32 };
+    let foot = o + d * (c - o).dot(d);
+    let r0 = c - foot;
+    if r0.length() < 1e-4 {
+        return;
+    }
+    let vars = app.vars();
+    let Ok(ang) = scc_core::expr::eval_str(&rv.angle, &vars) else { return };
+    let numeric = rv.angle.trim().parse::<f64>().is_ok();
+    let start = if rv.symmetric { -ang / 2. } else { 0. };
+    let at = |a: f64| foot + glam::Quat::from_axis_angle(d, a.to_radians() as f32) * r0;
+    let pts: Vec<egui::Pos2> = (0..=48).filter_map(|i| cam.project(rect, at(start + ang * i as f64 / 48.))).collect();
+    let Some(tip) = cam.project(rect, at(start + ang)) else { return };
+    let painter = ui.painter_at(rect);
+    let hid = egui::Id::unique(("alca_rev", id.0));
+    let hr = ui.interact(Rect::from_center_size(tip, egui::vec2(22., 22.)), hid, if numeric { egui::Sense::drag() } else { egui::Sense::hover() });
+    let col = if hr.hovered() || hr.dragged() { Color32::from_rgb(255, 190, 40) } else { Color32::from_rgb(90, 200, 255) };
+    painter.add(egui::Shape::line(pts, Stroke::new(2.5, col)));
+    painter.circle_stroke(tip, 9., Stroke::new(1.5, col));
+    painter.circle_filled(tip, 4., col);
+    if hr.dragged() {
+        if let Some(m) = ui.input(|i| i.pointer.interact_pos()) {
+            // ângulo cujo ponto projetado fica mais perto do mouse
+            let mut best = (f32::MAX, ang);
+            for k in 1..=360 {
+                if let Some(p) = cam.project(rect, at(start + k as f64)) {
+                    let dd = (p - m).length();
+                    if dd < best.0 {
+                        best = (dd, k as f64);
+                    }
+                }
+            }
+            let step = if ui.input(|i| i.modifiers.shift) { 5. } else { 1. };
+            let v = ((best.1 / step).round() * step).clamp(1., 360.);
+            write_value(app, id, fmt(v));
+        }
+    }
+    let txt = if numeric { format!("{}°", fmt(ang)) } else { format!("🔒 {} = {}°", rv.angle.trim(), fmt(ang)) };
+    let galley = painter.layout_no_wrap(txt, egui::FontId::proportional(13.), Color32::WHITE);
+    let lr = Rect::from_min_size(tip + egui::vec2(14., -10.), galley.size() + egui::vec2(10., 6.));
+    painter.rect_filled(lr, 4., Color32::from_rgba_unmultiplied(20, 60, 110, 220));
+    painter.galley(lr.min + egui::vec2(5., 3.), galley, Color32::WHITE);
+}
+
 /// Desenha e trata a alça do comando aberto. Chamado pela viewport fora do modo sketch.
 pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: Camera) {
     let Some(id) = app.session.as_ref().map(|s| s.id) else { return };
+    if matches!(app.open.doc.feature(id).map(|f| &f.kind), Some(FeatureKind::Revolve(_))) {
+        revolve_handle(app, ui, rect, &cam, id);
+        return;
+    }
     let Some(h) = handle_for(app, id) else { return };
     let vars = app.vars();
     let Ok(val) = scc_core::expr::eval_str(&h.expr, &vars) else { return };

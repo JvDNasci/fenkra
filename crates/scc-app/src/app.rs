@@ -3207,7 +3207,8 @@ impl eframe::App for App {
                 if self.sketch.is_some() {
                     crate::sketch_ui::panel(self, ui)
                 } else {
-                    editor::show(self, ui)
+                    editor::show(self, ui);
+                    crate::measure::panel(self, ui);
                 }
             });
         });
