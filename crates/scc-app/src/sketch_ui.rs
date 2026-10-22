@@ -90,7 +90,7 @@ impl Tool {
             Tool::Mirror => ("sk_espelhar", "Espelhar", "Espelhar seleção", "Selecione curvas e clique na linha de simetria: cria a cópia espelhada com restrições de simetria."),
             Tool::Offset => ("sk_offset", "Offset", "Offset (curva paralela)", "Clique numa linha, círculo ou arco e depois onde a nova curva deve passar. A distância vira cota."),
             Tool::Fillet => ("sk_filete", "Filete", "Filete de canto", "Clique no canto entre duas linhas: insere um arco tangente e abre a cota do raio."),
-            Tool::Dimension => ("sk_cota", "Cota", "Cotagem inteligente  (D)", "Linha → comprimento; círculo → diâmetro; arco → raio; dois pontos → distância (Ctrl: horizontal, Alt: vertical); duas linhas → ângulo; ponto e linha → distância. O valor aceita expressões e parâmetros (ex.: L/2)."),
+            Tool::Dimension => ("sk_cota", "Cota", "Cotagem inteligente  (D)", "Clique num elemento: a cota fica em prévia seguindo o mouse (acima/abaixo = horizontal, ao lado = vertical, na diagonal = alinhada) e o próximo clique no vazio a posiciona. Clique num segundo elemento para cotar entre os dois (distância, ângulo, centro a centro). Botão direito: todas as cotas e restrições possíveis. O valor aceita expressões e parâmetros (ex.: L/2)."),
             Tool::Constr(k) => match k {
                 CKind::Coincident => ("r_coincidente", "Coincidente", "Coincidente", "Dois pontos viram um só; ponto + curva prende o ponto sobre a curva."),
                 CKind::Horizontal => ("r_horizontal", "Horizontal", "Horizontal", "Linha horizontal, ou dois pontos na mesma altura."),
@@ -154,6 +154,31 @@ pub struct SketchEdit {
     hits: Vec<(Rect, Ent)>,
     /// mostra a checagem de contornos
     pub check: bool,
+    /// cota em prévia: segue o mouse até o clique que a posiciona
+    pending: Option<Pending>,
+    /// menu rápido do botão direito
+    menu: Option<QuickMenu>,
+    /// arrastando o texto de uma cota
+    drag_label: Option<Id>,
+}
+
+/// Cota ainda não criada: elementos clicados e, se escolhido no menu, o tipo fixo.
+struct Pending {
+    sel: Vec<Ent>,
+    forced: Option<Kind>,
+}
+
+struct QuickMenu {
+    pos: Pos2,
+    sel: Vec<Ent>,
+}
+
+enum MenuAct {
+    Dim(Kind),
+    Constr(CKind),
+    Construction,
+    Delete,
+    Tool(Tool),
 }
 
 impl SketchEdit {
@@ -173,6 +198,9 @@ impl SketchEdit {
             prev_ortho,
             hits: vec![],
             check: false,
+            pending: None,
+            menu: None,
+            drag_label: None,
         }
     }
     pub fn set_tool(&mut self, t: Tool) {
@@ -180,12 +208,21 @@ impl SketchEdit {
         self.clicks.clear();
         self.chain_last = None;
         self.chain_first = None;
+        self.pending = None;
+        self.menu = None;
         if !matches!(t, Tool::Constr(_) | Tool::Select | Tool::Move | Tool::Copy | Tool::Mirror) {
             self.sel.clear();
         }
     }
     /// Cancela a operação em andamento; devolve false se não havia nada a cancelar.
     pub fn cancel(&mut self) -> bool {
+        if self.menu.take().is_some() {
+            return true;
+        }
+        if self.pending.take().is_some() {
+            self.sel.clear();
+            return true;
+        }
         if !self.clicks.is_empty() || self.chain_last.is_some() || self.dim_edit.is_some() {
             self.clicks.clear();
             self.chain_last = None;
@@ -389,68 +426,333 @@ pub fn apply_constraint(sk: &mut SketchData, al: &mut impl FnMut() -> Id, k: CKi
     Ok(())
 }
 
-/// Cota inteligente a partir da seleção. `mods`: (ctrl, alt).
-fn dimension_for(sk: &SketchData, sel: &[Ent], mods: (bool, bool)) -> Option<Kind> {
-    let e = String::new();
-    match sel {
-        [Ent::Cv(c)] => match sk.curve(*c)?.geom {
-            Curve::Line { .. } => Some(Kind::Length(*c, e)),
-            Curve::Circle { .. } => Some(Kind::Diameter(*c, e)),
-            Curve::Arc { .. } => Some(Kind::Radius(*c, e)),
-            Curve::Point { .. } => None,
-        },
-        [Ent::Pt(a), Ent::Pt(b)] => Some(match mods {
-            (true, _) => Kind::DistanceX(*a, *b, e),
-            (_, true) => Kind::DistanceY(*a, *b, e),
-            _ => Kind::Distance(*a, *b, e),
-        }),
-        [Ent::Cv(a), Ent::Cv(b)] if is_line(sk, *a) && is_line(sk, *b) => Some(Kind::Angle(*a, *b, e)),
-        [Ent::Pt(p), Ent::Cv(l)] | [Ent::Cv(l), Ent::Pt(p)] if is_line(sk, *l) => Some(Kind::PointLineDistance(*p, *l, e)),
-        _ => None,
-    }
-}
-
-/// Cota para as ferramentas específicas (horizontal, vertical, ângulo, raio, diâmetro).
-fn dimension_for_tool(sk: &SketchData, sel: &[Ent], tool: Tool, mods: (bool, bool)) -> Option<Kind> {
-    let e = String::new();
-    let line_pts = |c: Id| match sk.curve(c).map(|c| &c.geom) {
+fn line_ends(sk: &SketchData, l: Id) -> Option<(Id, Id)> {
+    match sk.curve(l).map(|c| &c.geom) {
         Some(Curve::Line { a, b }) => Some((*a, *b)),
         _ => None,
-    };
-    match tool {
-        Tool::Dimension => dimension_for(sk, sel, mods),
-        Tool::DimH | Tool::DimV => {
-            let (a, b) = match sel {
-                [Ent::Pt(a), Ent::Pt(b)] => (*a, *b),
-                [Ent::Cv(c)] => line_pts(*c)?,
-                _ => return None,
-            };
-            Some(if tool == Tool::DimH { Kind::DistanceX(a, b, e) } else { Kind::DistanceY(a, b, e) })
-        }
-        Tool::DimAngle => match sel {
-            [Ent::Cv(a), Ent::Cv(b)] if is_line(sk, *a) && is_line(sk, *b) => Some(Kind::Angle(*a, *b, e)),
-            _ => None,
-        },
-        Tool::DimRadius | Tool::DimDiameter => match sel {
-            [Ent::Cv(c)] if is_round(sk, *c) => Some(if tool == Tool::DimRadius { Kind::Radius(*c, e) } else { Kind::Diameter(*c, e) }),
-            _ => None,
-        },
+    }
+}
+
+/// Centro e raio de círculo/arco.
+fn center_of(sk: &SketchData, c: Id) -> Option<(Id, f64)> {
+    match sk.curve(c).map(|c| &c.geom) {
+        Some(Curve::Circle { c, r }) => Some((*c, *r)),
+        Some(Curve::Arc { c, s, .. }) => Some((*c, d2(sk.pos(*s), sk.pos(*c)))),
         _ => None,
     }
 }
 
-/// Seleção ainda incompleta para a ferramenta de cota?
-fn dimension_waits(sk: &SketchData, sel: &[Ent], tool: Tool) -> bool {
+fn foot(sk: &SketchData, p: Id, l: Id) -> Option<[f64; 2]> {
+    let (a, b) = line_ends(sk, l)?;
+    let (pa, pb, pp) = (sk.pos(a), sk.pos(b), sk.pos(p));
+    let d = [pb[0] - pa[0], pb[1] - pa[1]];
+    let t = ((pp[0] - pa[0]) * d[0] + (pp[1] - pa[1]) * d[1]) / (d[0] * d[0] + d[1] * d[1]).max(1e-12);
+    Some([pa[0] + d[0] * t, pa[1] + d[1] * t])
+}
+
+/// Vértice do ângulo entre duas linhas (extremo comum ou interseção) e o extremo mais distante de cada uma.
+fn angle_vertex(sk: &SketchData, l1: Id, l2: Id) -> Option<([f64; 2], [f64; 2], [f64; 2])> {
+    let (a, b) = line_ends(sk, l1)?;
+    let (c, d) = line_ends(sk, l2)?;
+    let (pa, pb, pc, pd) = (sk.pos(a), sk.pos(b), sk.pos(c), sk.pos(d));
+    let r = [pb[0] - pa[0], pb[1] - pa[1]];
+    let q = [pd[0] - pc[0], pd[1] - pc[1]];
+    let den = r[0] * q[1] - r[1] * q[0];
+    let vtx = if let Some(sh) = [a, b].into_iter().find(|p| *p == c || *p == d) {
+        sk.pos(sh)
+    } else if den.abs() > 1e-9 {
+        let t = ((pc[0] - pa[0]) * q[1] - (pc[1] - pa[1]) * q[0]) / den;
+        [pa[0] + r[0] * t, pa[1] + r[1] * t]
+    } else {
+        [(pa[0] + pc[0]) / 2., (pa[1] + pc[1]) / 2.]
+    };
+    let far = |x: [f64; 2], y: [f64; 2]| if d2(x, vtx) > d2(y, vtx) { x } else { y };
+    Some((vtx, far(pa, pb), far(pc, pd)))
+}
+
+/// Cotas possíveis para a seleção: (ícone, nome, cota). A primeira é a sugestão.
+fn dim_options(sk: &SketchData, sel: &[Ent]) -> Vec<(&'static str, &'static str, Kind)> {
+    let e = String::new;
+    let mut o = vec![];
+    match sel {
+        [Ent::Cv(c)] => match sk.curve(*c).map(|x| x.geom.clone()) {
+            Some(Curve::Line { a, b }) => {
+                o.push(("sk_cota", "Comprimento", Kind::Length(*c, e())));
+                o.push(("cota_horizontal", "Horizontal", Kind::DistanceX(a, b, e())));
+                o.push(("cota_vertical", "Vertical", Kind::DistanceY(a, b, e())));
+            }
+            Some(Curve::Circle { .. }) => {
+                o.push(("cota_diametro", "Diâmetro", Kind::Diameter(*c, e())));
+                o.push(("cota_raio", "Raio", Kind::Radius(*c, e())));
+            }
+            Some(Curve::Arc { .. }) => {
+                o.push(("cota_raio", "Raio", Kind::Radius(*c, e())));
+                o.push(("cota_diametro", "Diâmetro", Kind::Diameter(*c, e())));
+            }
+            _ => {}
+        },
+        [Ent::Pt(a), Ent::Pt(b)] => {
+            o.push(("sk_cota", "Distância", Kind::Distance(*a, *b, e())));
+            o.push(("cota_horizontal", "Horizontal", Kind::DistanceX(*a, *b, e())));
+            o.push(("cota_vertical", "Vertical", Kind::DistanceY(*a, *b, e())));
+        }
+        [Ent::Cv(x), Ent::Cv(y)] => match (is_line(sk, *x), is_line(sk, *y)) {
+            (true, true) => {
+                let ((a, b), (c, d)) = (line_ends(sk, *x).unwrap(), line_ends(sk, *y).unwrap());
+                let (pa, pb, pc, pd) = (sk.pos(a), sk.pos(b), sk.pos(c), sk.pos(d));
+                let (r, q) = ([pb[0] - pa[0], pb[1] - pa[1]], [pd[0] - pc[0], pd[1] - pc[1]]);
+                let sin = (r[0] * q[1] - r[1] * q[0]).abs() / (r[0].hypot(r[1]) * q[0].hypot(q[1])).max(1e-12);
+                let ang = ("cota_angulo", "Ângulo", Kind::Angle(*x, *y, e()));
+                let dist = ("sk_cota", "Distância entre linhas", Kind::PointLineDistance(c, *x, e()));
+                if sin < 0.02 {
+                    o.push(dist);
+                    o.push(ang);
+                } else {
+                    o.push(ang);
+                    o.push(dist);
+                }
+            }
+            (true, false) | (false, true) => {
+                let (l, r) = if is_line(sk, *x) { (*x, *y) } else { (*y, *x) };
+                if let Some((ctr, _)) = center_of(sk, r) {
+                    o.push(("sk_cota", "Centro à linha", Kind::PointLineDistance(ctr, l, e())));
+                }
+            }
+            (false, false) => {
+                if let (Some((c1, _)), Some((c2, _))) = (center_of(sk, *x), center_of(sk, *y)) {
+                    o.push(("sk_cota", "Centro a centro", Kind::Distance(c1, c2, e())));
+                    o.push(("cota_horizontal", "Horizontal", Kind::DistanceX(c1, c2, e())));
+                    o.push(("cota_vertical", "Vertical", Kind::DistanceY(c1, c2, e())));
+                }
+            }
+        },
+        [Ent::Pt(p), Ent::Cv(c)] | [Ent::Cv(c), Ent::Pt(p)] => {
+            if is_line(sk, *c) {
+                o.push(("sk_cota", "Distância à linha", Kind::PointLineDistance(*p, *c, e())));
+            } else if let Some((ctr, _)) = center_of(sk, *c) {
+                o.push(("sk_cota", "Distância ao centro", Kind::Distance(*p, ctr, e())));
+                o.push(("cota_horizontal", "Horizontal", Kind::DistanceX(*p, ctr, e())));
+                o.push(("cota_vertical", "Vertical", Kind::DistanceY(*p, ctr, e())));
+            }
+        }
+        _ => {}
+    }
+    o
+}
+
+/// As ferramentas de cota específicas só aceitam o seu tipo.
+fn tool_accepts(tool: Tool, k: &Kind) -> bool {
     match tool {
-        Tool::Dimension => dimension_needs_more(sk, sel),
-        Tool::DimH | Tool::DimV => matches!(sel, [Ent::Pt(_)]),
-        Tool::DimAngle => matches!(sel, [Ent::Cv(c)] if is_line(sk, *c)),
-        _ => false,
+        Tool::DimH => matches!(k, Kind::DistanceX(..)),
+        Tool::DimV => matches!(k, Kind::DistanceY(..)),
+        Tool::DimAngle => matches!(k, Kind::Angle(..)),
+        Tool::DimRadius => matches!(k, Kind::Radius(..)),
+        Tool::DimDiameter => matches!(k, Kind::Diameter(..)),
+        _ => true,
     }
 }
 
-fn dimension_needs_more(sk: &SketchData, sel: &[Ent]) -> bool {
-    matches!(sel, [Ent::Pt(_)]) || matches!(sel, [Ent::Cv(c)] if matches!(sk.curve(*c).map(|c| &c.geom), Some(Curve::Point { .. })))
+/// Escolhe a cota pela posição do mouse: acima/abaixo dos pontos → horizontal, ao lado → vertical,
+/// na diagonal ou entre eles → a sugestão (alinhada). `mods` (Ctrl, Alt) forçam horizontal/vertical.
+fn choose_dim(sk: &SketchData, opts: &[(&str, &str, Kind)], cur: Option<[f64; 2]>, mods: (bool, bool)) -> Option<Kind> {
+    let first = opts.first()?.2.clone();
+    let x = opts.iter().find(|o| matches!(o.2, Kind::DistanceX(..))).map(|o| o.2.clone());
+    let y = opts.iter().find(|o| matches!(o.2, Kind::DistanceY(..))).map(|o| o.2.clone());
+    match mods {
+        (true, _) if x.is_some() => return x,
+        (_, true) if y.is_some() => return y,
+        _ => {}
+    }
+    if let (Some(Kind::DistanceX(a, b, s)), Some(yk), Some(c)) = (&x, &y, cur) {
+        let (pa, pb) = (sk.pos(*a), sk.pos(*b));
+        let in_x = c[0] > pa[0].min(pb[0]) && c[0] < pa[0].max(pb[0]);
+        let in_y = c[1] > pa[1].min(pb[1]) && c[1] < pa[1].max(pb[1]);
+        if in_x && !in_y {
+            return Some(Kind::DistanceX(*a, *b, s.clone()));
+        }
+        if in_y && !in_x {
+            return Some(yk.clone());
+        }
+    }
+    Some(first)
+}
+
+/// Âncora da cota no plano: meio dos pontos medidos, centro do círculo ou vértice do ângulo.
+fn dim_anchor(sk: &SketchData, k: &Kind) -> Option<[f64; 2]> {
+    let mid = |a: [f64; 2], b: [f64; 2]| [(a[0] + b[0]) / 2., (a[1] + b[1]) / 2.];
+    match k {
+        Kind::Length(l, _) => line_ends(sk, *l).map(|(a, b)| mid(sk.pos(a), sk.pos(b))),
+        Kind::Distance(a, b, _) | Kind::DistanceX(a, b, _) | Kind::DistanceY(a, b, _) => Some(mid(sk.pos(*a), sk.pos(*b))),
+        Kind::PointLineDistance(p, l, _) => Some(mid(sk.pos(*p), foot(sk, *p, *l)?)),
+        Kind::Radius(c, _) | Kind::Diameter(c, _) => center_of(sk, *c).map(|(c, _)| sk.pos(c)),
+        Kind::Angle(a, b, _) => angle_vertex(sk, *a, *b).map(|v| v.0),
+        _ => None,
+    }
+}
+
+/// Texto da cota: valor medido, com a expressão quando não for número puro.
+fn dim_text(sk: &SketchData, k: &Kind) -> String {
+    let val = sk.measure(k).unwrap_or(0.);
+    let expr = k.clone().value_mut().cloned().unwrap_or_default();
+    let base = match k {
+        Kind::Radius(..) => format!("R{}", fmt(val)),
+        Kind::Diameter(..) => format!("Ø{}", fmt(val)),
+        Kind::Angle(..) => format!("{}°", fmt(val)),
+        _ => fmt(val),
+    };
+    let e = expr.trim();
+    if e.is_empty() || e.parse::<f64>().is_ok() {
+        base
+    } else {
+        format!("{e} = {base}")
+    }
+}
+
+/// Desenha uma cota (linhas, setas e texto). `label`: posição do texto relativa à âncora.
+/// Devolve o retângulo do texto (para clique e arraste).
+fn draw_dim(painter: &egui::Painter, v: &View, sk: &SketchData, k: &Kind, label: Option<[f64; 2]>, col: Color32, dark: bool) -> Option<Rect> {
+    let anchor = dim_anchor(sk, k)?;
+    let lpos = label.map(|o| v.to_screen([anchor[0] + o[0], anchor[1] + o[1]]));
+    let st = Stroke::new(1., col);
+    let arrow = |a: Pos2, b: Pos2| {
+        let d = (b - a).normalized();
+        let n = egui::vec2(-d.y, d.x);
+        painter.add(egui::Shape::convex_polygon(vec![b, b - d * 8. + n * 3., b - d * 8. - n * 3.], col, Stroke::NONE));
+    };
+    let linear = |a: [f64; 2], b: [f64; 2], dir: Option<egui::Vec2>| -> Pos2 {
+        let (sa, sb) = (v.to_screen(a), v.to_screen(b));
+        let n = match dir {
+            Some(d) => egui::vec2(-d.y, d.x),
+            None => {
+                let d = (sb - sa).normalized();
+                egui::vec2(-d.y, d.x)
+            }
+        };
+        // linha de cota paralela à direção medida
+        let base = match (dir, lpos) {
+            (Some(_), None) if (sb - Pos2::ZERO).dot(n) > (sa - Pos2::ZERO).dot(n) => sb,
+            _ => sa,
+        };
+        let pa = sa + n * (base - sa).dot(n);
+        let pb = sb + n * (base - sb).dot(n);
+        let off = lpos.map(|l| (l - pa).dot(n)).unwrap_or(26.);
+        let (qa, qb) = (pa + n * off, pb + n * off);
+        let ext = n * 4. * off.signum();
+        painter.line_segment([sa, qa + ext], Stroke::new(0.8, col));
+        painter.line_segment([sb, qb + ext], Stroke::new(0.8, col));
+        painter.line_segment([qa, qb], st);
+        arrow(qb, qa);
+        arrow(qa, qb);
+        match lpos {
+            Some(l) => {
+                let len = (qb - qa).length().max(1e-3);
+                let u = (qb - qa) / len;
+                let t = (l - qa).dot(u);
+                let p = qa + u * t;
+                // texto fora das linhas de chamada: prolonga a linha de cota até ele
+                if t < 0. {
+                    painter.line_segment([qa, p], st);
+                } else if t > len {
+                    painter.line_segment([qb, p], st);
+                }
+                p
+            }
+            None => qa + (qb - qa) / 2. + n * 2.,
+        }
+    };
+    let ux = (v.to_screen([1., 0.]) - v.to_screen([0., 0.])).normalized();
+    let uy = (v.to_screen([0., 1.]) - v.to_screen([0., 0.])).normalized();
+    let tpos = match k {
+        Kind::Length(l, _) => {
+            let (a, b) = line_ends(sk, *l)?;
+            linear(sk.pos(a), sk.pos(b), None)
+        }
+        Kind::Distance(a, b, _) => linear(sk.pos(*a), sk.pos(*b), None),
+        Kind::DistanceX(a, b, _) => linear(sk.pos(*a), sk.pos(*b), Some(ux)),
+        Kind::DistanceY(a, b, _) => linear(sk.pos(*a), sk.pos(*b), Some(uy)),
+        Kind::PointLineDistance(p, l, _) => linear(sk.pos(*p), foot(sk, *p, *l)?, None),
+        Kind::Radius(cv, _) | Kind::Diameter(cv, _) => {
+            let (cid, r) = center_of(sk, *cv)?;
+            let ctr = sk.pos(cid);
+            let dir = label.filter(|o| o[0].hypot(o[1]) > 1e-9).map(|o| {
+                let l = o[0].hypot(o[1]);
+                [o[0] / l, o[1] / l]
+            });
+            let dir = dir.unwrap_or([0.7071, 0.7071]);
+            let (sc, se) = (v.to_screen(ctr), v.to_screen([ctr[0] + r * dir[0], ctr[1] + r * dir[1]]));
+            let d = (se - sc).normalized();
+            let out = match lpos {
+                Some(l) if (l - sc).length() > (se - sc).length() + 10. => l - d * 4.,
+                Some(_) => se + d * 12.,
+                None => se + d * 30.,
+            };
+            if matches!(k, Kind::Diameter(..)) {
+                let opp = v.to_screen([ctr[0] - r * dir[0], ctr[1] - r * dir[1]]);
+                painter.line_segment([opp, out], st);
+                arrow(sc, opp);
+            } else {
+                painter.line_segment([sc, out], st);
+            }
+            arrow(sc, se);
+            lpos.unwrap_or(out + d * 4.)
+        }
+        Kind::Angle(l1, l2, _) => {
+            let (vtx, e1, e2) = angle_vertex(sk, *l1, *l2)?;
+            let sv = v.to_screen(vtx);
+            let (a1, a2) = ((v.to_screen(e1) - sv).angle(), (v.to_screen(e2) - sv).angle());
+            let mut da = a2 - a1;
+            while da > std::f32::consts::PI {
+                da -= std::f32::consts::TAU;
+            }
+            while da < -std::f32::consts::PI {
+                da += std::f32::consts::TAU;
+            }
+            let ar = lpos.map(|l| (l - sv).length()).unwrap_or(34.).max(14.);
+            let pts: Vec<Pos2> = (0..=24).map(|i| sv + egui::Vec2::angled(a1 + da * i as f32 / 24.) * ar).collect();
+            painter.add(egui::Shape::line(pts, st));
+            lpos.unwrap_or(sv + egui::Vec2::angled(a1 + da / 2.) * 46.)
+        }
+        _ => return None,
+    };
+    let galley = painter.layout_no_wrap(dim_text(sk, k), egui::FontId::proportional(12.), col);
+    let r = Rect::from_center_size(tpos, galley.size() + egui::vec2(8., 4.));
+    painter.rect_filled(r, 3., if dark { Color32::from_black_alpha(170) } else { Color32::from_white_alpha(220) });
+    painter.galley(r.min + egui::vec2(4., 2.), galley, col);
+    Some(r)
+}
+
+const ALL_CK: [CKind; 11] = [
+    CKind::Coincident,
+    CKind::Horizontal,
+    CKind::Vertical,
+    CKind::Parallel,
+    CKind::Perpendicular,
+    CKind::Tangent,
+    CKind::Equal,
+    CKind::Concentric,
+    CKind::Midpoint,
+    CKind::Symmetric,
+    CKind::Fixed,
+];
+
+/// Restrições que se aplicam à seleção (testadas numa cópia do sketch).
+fn applicable(sk: &SketchData, sel: &[Ent]) -> Vec<CKind> {
+    if sel.iter().all(|e| matches!(e, Ent::Cs(_))) {
+        return vec![];
+    }
+    ALL_CK
+        .iter()
+        .copied()
+        .filter(|k| {
+            let mut c = sk.clone();
+            let mut n = 0u64;
+            let mut al = || {
+                n += 1;
+                Id(u64::MAX - n)
+            };
+            apply_constraint(&mut c, &mut al, *k, sel).is_ok()
+        })
+        .collect()
 }
 
 /// Remove a seleção do sketch.
@@ -670,126 +972,9 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         }
         // ---- cotas
         let col = if bad { BAD } else if sel { SEL } else if dark { Color32::from_rgb(255, 215, 120) } else { Color32::from_rgb(150, 70, 0) };
-        let val = sk.measure(&c.kind).unwrap_or(0.);
-        let mut e = c.kind.clone();
-        let expr = e.value_mut().cloned().unwrap_or_default();
-        let num = expr.trim().parse::<f64>().is_ok();
-        let txt = {
-            let base = match &c.kind {
-                Kind::Radius(..) => format!("R{}", fmt(val)),
-                Kind::Diameter(..) => format!("Ø{}", fmt(val)),
-                Kind::Angle(..) => format!("{}°", fmt(val)),
-                _ => fmt(val),
-            };
-            if num { base } else { format!("{expr} = {base}") }
-        };
-        let st = Stroke::new(1., col);
-        let arrow = |a: Pos2, b: Pos2| {
-            let d = (b - a).normalized();
-            let n = egui::vec2(-d.y, d.x);
-            let tip = b;
-            painter.add(egui::Shape::convex_polygon(vec![tip, tip - d * 8. + n * 3., tip - d * 8. - n * 3.], col, Stroke::NONE));
-        };
-        let linear = |a: [f64; 2], b: [f64; 2], dir: Option<[f32; 2]>| -> Pos2 {
-            let (sa, sb) = (v.to_screen(a), v.to_screen(b));
-            let (pa, pb, n) = match dir {
-                // horizontal/vertical na tela do plano
-                Some(d) => {
-                    let d = egui::vec2(d[0], d[1]);
-                    let n = egui::vec2(-d.y, d.x);
-                    let base = if (sa - Pos2::ZERO).dot(n) > (sb - Pos2::ZERO).dot(n) { sa } else { sb };
-                    let pa = sa + n * (base - sa).dot(n);
-                    let pb = sb + n * (base - sb).dot(n);
-                    (pa, pb, n)
-                }
-                None => {
-                    let d = (sb - sa).normalized();
-                    (sa, sb, egui::vec2(-d.y, d.x))
-                }
-            };
-            let off = n * 26.;
-            let (qa, qb) = (pa + off, pb + off);
-            painter.line_segment([sa, qa + n * 4.], Stroke::new(0.8, col));
-            painter.line_segment([sb, qb + n * 4.], Stroke::new(0.8, col));
-            painter.line_segment([qa, qb], st);
-            arrow(qb, qa);
-            arrow(qa, qb);
-            qa + (qb - qa) / 2. + n * 2.
-        };
-        let ux = v.to_screen([1., 0.]) - v.to_screen([0., 0.]);
-        let uy = v.to_screen([0., 1.]) - v.to_screen([0., 0.]);
-        let tpos = match &c.kind {
-            Kind::Length(l, _) => match sk.curve(*l).map(|c| &c.geom) {
-                Some(Curve::Line { a, b }) => linear(sk.pos(*a), sk.pos(*b), None),
-                _ => continue,
-            },
-            Kind::Distance(a, b, _) => linear(sk.pos(*a), sk.pos(*b), None),
-            Kind::DistanceX(a, b, _) => {
-                let d = ux.normalized();
-                linear(sk.pos(*a), sk.pos(*b), Some([d.x, d.y]))
-            }
-            Kind::DistanceY(a, b, _) => {
-                let d = uy.normalized();
-                linear(sk.pos(*a), sk.pos(*b), Some([d.x, d.y]))
-            }
-            Kind::PointLineDistance(p, l, _) => match sk.curve(*l).map(|c| &c.geom) {
-                Some(Curve::Line { a, b }) => {
-                    let (pa, pb, pp) = (sk.pos(*a), sk.pos(*b), sk.pos(*p));
-                    let d = [pb[0] - pa[0], pb[1] - pa[1]];
-                    let t = ((pp[0] - pa[0]) * d[0] + (pp[1] - pa[1]) * d[1]) / (d[0] * d[0] + d[1] * d[1]).max(1e-12);
-                    linear(pp, [pa[0] + d[0] * t, pa[1] + d[1] * t], None)
-                }
-                _ => continue,
-            },
-            Kind::Radius(cv, _) | Kind::Diameter(cv, _) => {
-                let (ctr, r) = match sk.curve(*cv).map(|c| &c.geom) {
-                    Some(Curve::Circle { c, r }) => (sk.pos(*c), *r),
-                    Some(Curve::Arc { c, s, .. }) => (sk.pos(*c), d2(sk.pos(*s), sk.pos(*c))),
-                    _ => continue,
-                };
-                let edge = [ctr[0] + r * 0.7071, ctr[1] + r * 0.7071];
-                let (sc, se) = (v.to_screen(ctr), v.to_screen(edge));
-                let d = (se - sc).normalized();
-                let out = se + d * 30.;
-                if matches!(c.kind, Kind::Diameter(..)) {
-                    let opp = v.to_screen([ctr[0] - r * 0.7071, ctr[1] - r * 0.7071]);
-                    painter.line_segment([opp, out], st);
-                    arrow(sc, opp);
-                } else {
-                    painter.line_segment([sc, out], st);
-                }
-                arrow(sc, se);
-                out + d * 4.
-            }
-            Kind::Angle(l1, l2, _) => match (sk.curve(*l1).map(|c| c.geom.clone()), sk.curve(*l2).map(|c| c.geom.clone())) {
-                (Some(Curve::Line { a, b }), Some(Curve::Line { a: c2, b: d })) => {
-                    // vértice: extremo compartilhado ou ponto médio entre as linhas
-                    let shared = [a, b].into_iter().find(|p| *p == c2 || *p == d);
-                    let vtx = shared.map(|p| sk.pos(p)).unwrap_or(mid(sk.pos(a), sk.pos(c2)));
-                    let sv = v.to_screen(vtx);
-                    let other = |x: Id, y: Id| if Some(x) == shared { y } else { x };
-                    let (p1, p2) = (v.to_screen(sk.pos(other(a, b))), v.to_screen(sk.pos(other(c2, d))));
-                    let (a1, a2) = ((p1 - sv).angle(), (p2 - sv).angle());
-                    let mut da = a2 - a1;
-                    while da > std::f32::consts::PI {
-                        da -= std::f32::consts::TAU;
-                    }
-                    while da < -std::f32::consts::PI {
-                        da += std::f32::consts::TAU;
-                    }
-                    let pts: Vec<Pos2> = (0..=20).map(|i| sv + egui::Vec2::angled(a1 + da * i as f32 / 20.) * 34.).collect();
-                    painter.add(egui::Shape::line(pts, st));
-                    sv + egui::Vec2::angled(a1 + da / 2.) * 46.
-                }
-                _ => continue,
-            },
-            _ => continue,
-        };
-        let galley = painter.layout_no_wrap(txt, font.clone(), col);
-        let r = Rect::from_center_size(tpos, galley.size() + egui::vec2(8., 4.));
-        painter.rect_filled(r, 3., if dark { Color32::from_black_alpha(170) } else { Color32::from_white_alpha(220) });
-        painter.galley(r.min + egui::vec2(4., 2.), galley, col);
-        edit.hits.push((r, Ent::Cs(c.id)));
+        if let Some(r) = draw_dim(&painter, &v, &sk, &c.kind, c.label, col, dark) {
+            edit.hits.push((r, Ent::Cs(c.id)));
+        }
     }
 
     // ---------- checagem de contornos
@@ -913,8 +1098,19 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         }
     }
 
-    let primary_click = resp.clicked_by(egui::PointerButton::Primary);
+    let mut primary_click = resp.clicked_by(egui::PointerButton::Primary);
     let secondary_click = resp.clicked_by(egui::PointerButton::Secondary);
+    // clique fora do menu rápido só o fecha
+    if primary_click && edit.menu.take().is_some() {
+        primary_click = false;
+    }
+    let norm = |e: Ent, sk: &SketchData| match e {
+        Ent::Cv(c) => match sk.curve(c).map(|c| &c.geom) {
+            Some(Curve::Point { p }) => Ent::Pt(*p),
+            _ => e,
+        },
+        _ => e,
+    };
     let double = resp.double_clicked();
 
     match tool {
@@ -925,6 +1121,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                 let start = v.to_uv(origin).unwrap_or([0., 0.]);
                 match pick(origin, &sk, &edit.hits) {
                     Some(Ent::Pt(p)) if !sk.point(p).is_some_and(|x| x.fixed) => edit.drag = Some(Drag { pts: vec![(p, sk.pos(p))], start, circle: None }),
+                    Some(Ent::Cs(c)) if sk.constraints.iter().any(|x| x.id == c && x.kind.is_dimension()) => edit.drag_label = Some(c),
                     Some(Ent::Cv(c)) => match sk.curve(c).map(|c| c.geom.clone()) {
                         Some(Curve::Line { a, b }) => edit.drag = Some(Drag { pts: vec![(a, sk.pos(a)), (b, sk.pos(b))], start, circle: None }),
                         Some(Curve::Circle { .. }) => edit.drag = Some(Drag { pts: vec![], start, circle: Some(c) }),
@@ -965,8 +1162,27 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                 }
                 edit.report = sk.solve(&vars, &pins);
             }
-            if resp.drag_stopped() && edit.drag.take().is_some() {
-                edit.report = sk.solve(&vars, &[]);
+            if let (Some(cid), true, Some(uv)) = (edit.drag_label, resp.dragged_by(egui::PointerButton::Primary), cursor_uv) {
+                let anchor = sk.constraints.iter().find(|x| x.id == cid).and_then(|x| dim_anchor(&sk, &x.kind));
+                if let (Some(a), Some(c)) = (anchor, sk.constraints.iter_mut().find(|x| x.id == cid)) {
+                    c.label = Some([uv[0] - a[0], uv[1] - a[1]]);
+                }
+            }
+            if resp.drag_stopped() {
+                edit.drag_label = None;
+                if edit.drag.take().is_some() {
+                    edit.report = sk.solve(&vars, &[]);
+                }
+            }
+            if secondary_click {
+                if let Some(e) = hover.and_then(|p| pick(p, &sk, &edit.hits)).map(|e| norm(e, &sk)) {
+                    if !edit.sel.contains(&e) {
+                        edit.sel = vec![e];
+                    }
+                }
+                if let Some(h) = hover {
+                    edit.menu = Some(QuickMenu { pos: h, sel: edit.sel.clone() });
+                }
             }
             if primary_click {
                 match hover.and_then(|p| pick(p, &sk, &edit.hits)) {
@@ -1476,54 +1692,193 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             }
         }
 
-        Tool::Dimension | Tool::DimH | Tool::DimV | Tool::DimAngle | Tool::DimRadius | Tool::DimDiameter | Tool::Constr(_) => {
+        Tool::Dimension | Tool::DimH | Tool::DimV | Tool::DimAngle | Tool::DimRadius | Tool::DimDiameter => {
+            let picked = hover.and_then(|p| pick(p, &sk, &edit.hits)).filter(|e| !matches!(e, Ent::Cs(_))).map(|e| norm(e, &sk));
+            let cur_sel = edit.pending.as_ref().map(|p| p.sel.clone()).unwrap_or_default();
+            let opts_of = |sk: &SketchData, s: &[Ent]| dim_options(sk, s).into_iter().filter(|o| tool_accepts(tool, &o.2)).collect::<Vec<_>>();
+            // seleção que ainda espera outro elemento (um ponto; uma linha para o ângulo)
+            let waits = |sk: &SketchData, s: &[Ent]| matches!(s, [Ent::Pt(_)]) || (matches!(s, [Ent::Cv(c)] if is_line(sk, *c)) && opts_of(sk, s).is_empty());
+            let opts = opts_of(&sk, &cur_sel);
+            let chosen = edit.pending.as_ref().and_then(|p| p.forced.clone()).or_else(|| choose_dim(&sk, &opts, cursor_uv, (ctrl, alt)));
+            // prévia seguindo o mouse
+            if let (Some(k), Some(uv)) = (&chosen, cursor_uv) {
+                if let Some(a) = dim_anchor(&sk, k) {
+                    draw_dim(&painter, &v, &sk, k, Some([uv[0] - a[0], uv[1] - a[1]]), FREE, dark);
+                }
+            }
             if primary_click {
-                if let Some(e) = hover.and_then(|p| pick(p, &sk, &edit.hits)) {
-                    if !matches!(e, Ent::Cs(_)) {
-                        // ponto isolado (curva Point) vale como ponto
-                        let e = match e {
-                            Ent::Cv(c) => match sk.curve(c).map(|c| &c.geom) {
-                                Some(Curve::Point { p }) => Ent::Pt(*p),
-                                _ => e,
-                            },
-                            _ => e,
-                        };
-                        if !edit.sel.contains(&e) {
-                            edit.sel.push(e);
+                match picked {
+                    Some(e) if !cur_sel.contains(&e) => {
+                        let mut ns = cur_sel.clone();
+                        ns.push(e);
+                        if opts_of(&sk, &ns).is_empty() && !waits(&sk, &ns) {
+                            ns = vec![e];
+                        }
+                        if !opts_of(&sk, &ns).is_empty() || waits(&sk, &ns) {
+                            edit.sel = ns.clone();
+                            edit.pending = Some(Pending { sel: ns, forced: None });
+                        } else {
+                            edit.pending = None;
+                            edit.sel.clear();
+                            toast = Some(("esse elemento não tem cota com esta ferramenta".into(), true));
+                        }
+                    }
+                    Some(_) => {}
+                    None => {
+                        if let (Some(mut k), Some(uv)) = (chosen.clone(), cursor_uv) {
+                            let m = sk.measure(&k).unwrap_or(0.);
+                            if let Some(val) = k.value_mut() {
+                                *val = fmt(m);
+                            }
+                            let anchor = dim_anchor(&sk, &k);
+                            let id = sk.add_constraint(&mut al, k);
+                            if let (Some(a), Some(c)) = (anchor, sk.constraints.iter_mut().find(|c| c.id == id)) {
+                                c.label = Some([uv[0] - a[0], uv[1] - a[1]]);
+                            }
+                            edit.dim_edit = Some((id, fmt(m), true));
+                            edit.report = sk.solve(&vars, &[]);
+                        }
+                        edit.pending = None;
+                        edit.sel.clear();
+                    }
+                }
+            }
+            if secondary_click {
+                let mut target = cur_sel.clone();
+                if let Some(e) = picked {
+                    if !target.contains(&e) {
+                        target.push(e);
+                        if opts_of(&sk, &target).is_empty() && applicable(&sk, &target).is_empty() {
+                            target = vec![e];
                         }
                     }
                 }
-                match tool {
-                    Tool::Dimension | Tool::DimH | Tool::DimV | Tool::DimAngle | Tool::DimRadius | Tool::DimDiameter => {
-                        if !dimension_waits(&sk, &edit.sel, tool) {
-                            if let Some(mut k) = dimension_for_tool(&sk, &edit.sel, tool, (ctrl, alt)) {
-                                let m = sk.measure(&k).unwrap_or(0.);
-                                *k.value_mut().unwrap() = fmt(m);
-                                let id = sk.add_constraint(&mut al, k);
-                                edit.dim_edit = Some((id, fmt(m), true));
-                                edit.report = sk.solve(&vars, &[]);
-                            }
-                            edit.sel.clear();
-                        }
+                if let Some(h) = hover {
+                    edit.sel = target.clone();
+                    edit.menu = Some(QuickMenu { pos: h, sel: target });
+                }
+            }
+            if let Some(h) = hover {
+                let hint = if chosen.is_some() {
+                    "clique no vazio para posicionar · outro elemento: cota entre os dois · botão direito: opções"
+                } else if !cur_sel.is_empty() {
+                    "clique no 2º elemento"
+                } else {
+                    "clique numa linha, círculo, arco ou ponto"
+                };
+                painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, hint, egui::FontId::proportional(11.), FREE);
+            }
+        }
+
+        Tool::Constr(k) => {
+            if primary_click {
+                if let Some(e) = hover.and_then(|p| pick(p, &sk, &edit.hits)).filter(|e| !matches!(e, Ent::Cs(_))).map(|e| norm(e, &sk)) {
+                    if !edit.sel.contains(&e) {
+                        edit.sel.push(e);
                     }
-                    Tool::Constr(k) => {
-                        if edit.sel.len() >= k.needs() || (k == CKind::Fixed && !edit.sel.is_empty()) {
-                            match apply_constraint(&mut sk, &mut al, k, &edit.sel) {
-                                Ok(()) => edit.report = sk.solve(&vars, &[]),
-                                Err(m) => toast = Some((m.to_string(), true)),
-                            }
-                            edit.sel.clear();
-                        }
+                }
+                if edit.sel.len() >= k.needs() || (k == CKind::Fixed && !edit.sel.is_empty()) {
+                    match apply_constraint(&mut sk, &mut al, k, &edit.sel) {
+                        Ok(()) => edit.report = sk.solve(&vars, &[]),
+                        Err(m) => toast = Some((m.to_string(), true)),
                     }
-                    _ => {}
+                    edit.sel.clear();
                 }
             }
             if secondary_click {
                 edit.sel.clear();
             }
-            if let (Some(h), Tool::Dimension) = (hover, tool) {
-                painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, "linha, círculo, 2 pontos (Ctrl: horiz., Alt: vert.) ou 2 linhas", egui::FontId::proportional(11.), FREE);
+        }
+    }
+
+    // ---------- menu rápido (botão direito): cotas e restrições possíveis para a seleção
+    let mut menu_act: Option<(MenuAct, Vec<Ent>)> = None;
+    if let Some(m) = &edit.menu {
+        let dims = dim_options(&sk, &m.sel);
+        let cons = applicable(&sk, &m.sel);
+        let has_cv = m.sel.iter().any(|e| matches!(e, Ent::Cv(_)));
+        let msel = m.sel.clone();
+        egui::Area::new(egui::Id::unique("sk_menu_rapido")).fixed_pos(m.pos + egui::vec2(4., 4.)).order(egui::Order::Foreground).show(ui.ctx(), |ui| {
+            egui::Frame::menu(ui.style()).show(ui, |ui| {
+                ui.set_min_width(180.);
+                let item = |ui: &mut egui::Ui, icon: &str, name: &str| {
+                    ui.add(egui::Button::image_and_text(egui::Image::new(crate::icons::get(icon)).fit_to_exact_size(egui::vec2(18., 18.)), name).frame(false)).clicked()
+                };
+                let mut act = None;
+                if msel.is_empty() {
+                    ui.label(RichText::new("Ferramentas").weak().small());
+                    for t in [Tool::Select, Tool::Line, Tool::Rect, Tool::Circle, Tool::Arc3, Tool::Point, Tool::Dimension] {
+                        let (i, n, ..) = t.info();
+                        if item(ui, i, n) {
+                            act = Some(MenuAct::Tool(t));
+                        }
+                    }
+                }
+                if !dims.is_empty() {
+                    ui.label(RichText::new("Cotas").weak().small());
+                    for (i, n, k) in &dims {
+                        if item(ui, i, n) {
+                            act = Some(MenuAct::Dim(k.clone()));
+                        }
+                    }
+                }
+                if !cons.is_empty() {
+                    ui.separator();
+                    ui.label(RichText::new("Restrições").weak().small());
+                    for k in &cons {
+                        let (i, n, ..) = Tool::Constr(*k).info();
+                        if item(ui, i, n) {
+                            act = Some(MenuAct::Constr(*k));
+                        }
+                    }
+                }
+                if !msel.is_empty() {
+                    ui.separator();
+                    if has_cv && item(ui, "sk_construcao", "Construção ⇄ normal") {
+                        act = Some(MenuAct::Construction);
+                    }
+                    if ui.add(egui::Button::new("✖  Excluir").frame(false)).clicked() {
+                        act = Some(MenuAct::Delete);
+                    }
+                }
+                if let Some(a) = act {
+                    menu_act = Some((a, msel.clone()));
+                }
+            });
+        });
+    }
+    if let Some((act, msel)) = menu_act {
+        edit.menu = None;
+        match act {
+            MenuAct::Dim(k) => {
+                // a cota escolhida segue o mouse até o clique que a posiciona
+                if !matches!(edit.tool, Tool::Dimension | Tool::DimH | Tool::DimV | Tool::DimAngle | Tool::DimRadius | Tool::DimDiameter) {
+                    edit.tool = Tool::Dimension;
+                }
+                edit.tool = if tool_accepts(edit.tool, &k) { edit.tool } else { Tool::Dimension };
+                edit.sel = msel.clone();
+                edit.pending = Some(Pending { sel: msel, forced: Some(k) });
             }
+            MenuAct::Constr(k) => {
+                match apply_constraint(&mut sk, &mut al, k, &msel) {
+                    Ok(()) => edit.report = sk.solve(&vars, &[]),
+                    Err(m) => toast = Some((m.to_string(), true)),
+                }
+                edit.pending = None;
+                edit.sel.clear();
+            }
+            MenuAct::Construction => {
+                for c in sk.curves.iter_mut().filter(|c| msel.contains(&Ent::Cv(c.id))) {
+                    c.construction = !c.construction;
+                }
+            }
+            MenuAct::Delete => {
+                delete_selection(&mut sk, &msel);
+                edit.pending = None;
+                edit.sel.clear();
+                edit.report = sk.solve(&vars, &[]);
+            }
+            MenuAct::Tool(t) => edit.set_tool(t),
         }
     }
 
@@ -1776,4 +2131,58 @@ pub fn begin(app: &mut App, id: Id) {
     }
     app.sketch = Some(e);
     app.sel = Sel::Feature(id);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn line_sketch(a: [f64; 2], b: [f64; 2]) -> (SketchData, Id) {
+        let mut sk = SketchData::default();
+        let mut n = 0u64;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        let pa = sk.add_point(&mut al, a[0], a[1]);
+        let pb = sk.add_point(&mut al, b[0], b[1]);
+        let l = sk.add_curve(&mut al, Curve::Line { a: pa, b: pb }, false);
+        (sk, l)
+    }
+
+    #[test]
+    fn cota_segue_a_posicao_do_mouse() {
+        let (sk, l) = line_sketch([0., 0.], [40., 30.]);
+        let opts = dim_options(&sk, &[Ent::Cv(l)]);
+        assert_eq!(opts.len(), 3);
+        // acima da linha, dentro do vão em x → horizontal
+        assert!(matches!(choose_dim(&sk, &opts, Some([20., 60.]), (false, false)), Some(Kind::DistanceX(..))));
+        // ao lado, dentro do vão em y → vertical
+        assert!(matches!(choose_dim(&sk, &opts, Some([70., 15.]), (false, false)), Some(Kind::DistanceY(..))));
+        // na diagonal → alinhada (comprimento)
+        assert!(matches!(choose_dim(&sk, &opts, Some([10., 25.]), (false, false)), Some(Kind::Length(..))));
+        // Ctrl força horizontal
+        assert!(matches!(choose_dim(&sk, &opts, Some([10., 25.]), (true, false)), Some(Kind::DistanceX(..))));
+    }
+
+    #[test]
+    fn duas_linhas_dao_angulo_e_menu_tem_restricoes() {
+        let (mut sk, l1) = line_sketch([0., 0.], [40., 0.]);
+        let mut n = 100u64;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        let p = sk.add_point(&mut al, 0., 10.);
+        let q = sk.add_point(&mut al, 30., 40.);
+        let l2 = sk.add_curve(&mut al, Curve::Line { a: p, b: q }, false);
+        let opts = dim_options(&sk, &[Ent::Cv(l1), Ent::Cv(l2)]);
+        assert!(matches!(opts[0].2, Kind::Angle(..)));
+        let cons = applicable(&sk, &[Ent::Cv(l1), Ent::Cv(l2)]);
+        assert!(cons.contains(&CKind::Parallel) && cons.contains(&CKind::Perpendicular) && cons.contains(&CKind::Equal));
+        assert!(!cons.contains(&CKind::Concentric));
+        // o texto da cota fica onde foi posicionado
+        let k = Kind::Angle(l1, l2, String::new());
+        assert!(dim_anchor(&sk, &k).is_some());
+    }
 }

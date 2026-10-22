@@ -38,3 +38,6 @@ target/
 
 # Pacotes gerados
 dist/
+
+# Ferramentas avulsas
+tools/*/target/

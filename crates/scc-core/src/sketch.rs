@@ -136,6 +136,9 @@ impl Kind {
 pub struct Constraint {
     pub id: Id,
     pub kind: Kind,
+    /// posição do texto da cota em relação à âncora (meio, centro ou vértice), no plano do sketch
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<[f64; 2]>,
 }
 
 /// Estado do sketch após resolver.
@@ -232,7 +235,7 @@ impl SketchData {
     }
     pub fn add_constraint(&mut self, alloc: &mut impl FnMut() -> Id, kind: Kind) -> Id {
         let id = alloc();
-        self.constraints.push(Constraint { id, kind });
+        self.constraints.push(Constraint { id, kind, label: None });
         id
     }
 

@@ -52,7 +52,18 @@ Versionamento flexível enquanto o projeto for local (sem distribuição).
 - [ ] Automação de desenhos (scripts e macros)
 - [ ] Pontos, linhas e curvas 3D nas pastas de geometria
 - [ ] Referências externas reais (publicações entre peças)
-- [ ] Ícone do app a partir da arte do usuário (aguardando assets/app/fenix-ref.png)
+- [x] Ícone do app vetorizado a partir da arte do usuário (`tools/vetorizar` → `assets/app/fenix.svg`, refinável no VectorCraft)
+
+## alpha.5a — Sketch smart e seletor de vistas
+
+- [x] **Cotagem smart**: clicar no elemento não cria a cota na hora; a cota fica em prévia seguindo o mouse e o segundo clique confirma tipo (horizontal / vertical / alinhada pela posição do mouse) e posição
+- [x] Dois elementos clicados → cota entre os dois (distância, ângulo entre linhas, centro-centro)
+- [x] Botão direito durante a cotagem → menu com as cotas possíveis (inclusive ângulo) e restrições aplicáveis
+- [x] Posição do texto da cota salva no sketch (arrastável com Selecionar)
+- [x] Botão direito em elemento(s) selecionado(s) → **menu rápido de restrições** aplicáveis; remover o grupo separado de Restrições da barra
+- [x] Botão direito no vazio mostra as ferramentas de esboço; grupos flutuantes empilhados sem se sobrepor
+- [x] **Seletor de vistas (Espaço)** como caixa central transparente: cubo 3D translúcido grande (faces, arestas e cantos clicáveis; arrastar gira), vistas padrão + dimétrica/trimétrica, orto/perspectiva, ajustar, normal, girar 90° e câmeras salvas
+- [ ] Testar cotagem smart e menu rápido com o mouse (verificado por testes e capturas)
 
 ## alpha.5 — Referências do modelo
 

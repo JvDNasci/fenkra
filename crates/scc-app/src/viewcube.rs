@@ -40,9 +40,14 @@ fn cam_up(cam: &Camera) -> Vec3 {
     }
 }
 
-/// Desenha o cubo dentro de `area` e devolve a direção escolhida (se houve clique).
-pub fn cube(ui: &mut egui::Ui, area: Rect, cam: &Camera, id: &str) -> Option<Vec3> {
-    let resp = ui.interact(area, egui::Id::unique(("viewcube", id)), egui::Sense::click());
+/// Vistas extras do seletor grande: (direção, nome).
+pub const EXTRA: [([f32; 3], &str); 2] = [([0.68, -0.68, 0.28], "Dimétrica"), ([0.55, -0.76, 0.34], "Trimétrica")];
+
+/// Desenha o cubo dentro de `area`. Devolve a direção escolhida (clique numa face, aresta ou canto)
+/// e o arraste sobre o cubo (para girar a câmera). `glass`: cubo transparente do seletor grande,
+/// com as faces de trás à mostra e as arestas clicáveis.
+pub fn cube(ui: &mut egui::Ui, area: Rect, cam: &Camera, id: &str, glass: bool) -> (Option<Vec3>, egui::Vec2) {
+    let resp = ui.interact(area, egui::Id::unique(("viewcube", id)), egui::Sense::click_and_drag());
     let painter = ui.painter_at(area);
     let c = area.center();
     let s = area.width().min(area.height()) * 0.30;
@@ -50,49 +55,72 @@ pub fn cube(ui: &mut egui::Ui, area: Rect, cam: &Camera, id: &str) -> Option<Vec
         let r = rot(cam, v);
         c + egui::vec2(r.x, -r.y) * s
     };
-    let hover = resp.hover_pos();
+    let hover = if resp.dragged() { None } else { resp.hover_pos() };
+    let clicked = resp.clicked();
     let mut chosen = None;
     let dark = ui.visuals().dark_mode;
+    let hot = Color32::from_rgb(255, 190, 60);
+    let blue = Color32::from_rgb(40, 110, 210);
     // faces de trás para frente
     let mut faces: Vec<(f32, [f32; 3], &str)> = FACES.iter().map(|(n, l)| (rot(cam, Vec3::from(*n)).z, *n, *l)).collect();
     faces.sort_by(|a, b| a.0.total_cmp(&b.0));
     for (z, n, label) in faces {
-        if z <= 0.02 {
+        let front = z > 0.02;
+        if !front && !glass {
             continue;
         }
         let n = Vec3::from(n);
         let (u, w) = if n.z.abs() > 0.5 { (Vec3::X, Vec3::Y) } else if n.x.abs() > 0.5 { (Vec3::Y, Vec3::Z) } else { (Vec3::X, Vec3::Z) };
         let corners: Vec<Pos2> = [(-1., -1.), (1., -1.), (1., 1.), (-1., 1.)].iter().map(|(a, b)| to2(n + u * *a + w * *b)).collect();
-        let shape_rect = Rect::from_points(&corners);
-        let inside = hover.is_some_and(|h| shape_rect.contains(h) && point_in_quad(h, &corners));
+        let inside = front && hover.is_some_and(|h| Rect::from_points(&corners).contains(h) && point_in_quad(h, &corners));
         let base = if dark { Color32::from_rgb(62, 92, 140) } else { Color32::from_rgb(196, 222, 250) };
-        let fill = if inside { Color32::from_rgb(255, 190, 60) } else { base.gamma_multiply(0.55 + 0.45 * z.clamp(0., 1.)) };
-        painter.add(egui::Shape::convex_polygon(corners.clone(), fill, Stroke::new(1.2, Color32::from_rgb(40, 110, 210))));
-        let center = to2(n);
-        let fs = (s * 0.32).clamp(8., 16.);
-        painter.text(center, egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(fs), if dark { Color32::WHITE } else { Color32::from_rgb(20, 40, 80) });
-        if inside && resp.clicked() {
+        let fill = if inside {
+            if glass { hot.gamma_multiply(0.75) } else { hot }
+        } else if glass {
+            base.gamma_multiply(if front { 0.30 + 0.25 * z.clamp(0., 1.) } else { 0.12 })
+        } else {
+            base.gamma_multiply(0.55 + 0.45 * z.clamp(0., 1.))
+        };
+        let edge = if front { Stroke::new(1.2, blue) } else { Stroke::new(0.8, blue.gamma_multiply(0.45)) };
+        painter.add(egui::Shape::convex_polygon(corners.clone(), fill, edge));
+        if front {
+            let fs = (s * 0.32).clamp(8., 20.);
+            painter.text(to2(n), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(fs), if dark { Color32::WHITE } else { Color32::from_rgb(20, 40, 80) });
+        }
+        if inside && clicked {
             chosen = Some(n);
         }
     }
-    // cantos: vistas isométricas
+    // cantos (isométricas) e, no seletor grande, arestas
+    let mut handles: Vec<Vec3> = vec![];
     for x in [-1f32, 1.] {
         for y in [-1f32, 1.] {
             for z in [-1f32, 1.] {
-                let d = Vec3::new(x, y, z);
-                if rot(cam, d).z <= 0.3 {
-                    continue;
-                }
-                let p = to2(d);
-                let near = hover.is_some_and(|h| (h - p).length() < 7.);
-                painter.circle_filled(p, if near { 6. } else { 3.5 }, if near { Color32::from_rgb(255, 190, 60) } else { Color32::from_rgb(40, 110, 210) });
-                if near && resp.clicked() {
-                    chosen = Some(d.normalize());
-                }
+                handles.push(Vec3::new(x, y, z));
             }
         }
     }
-    chosen
+    if glass {
+        for a in [-1f32, 1.] {
+            for b in [-1f32, 1.] {
+                handles.extend([Vec3::new(a, b, 0.), Vec3::new(a, 0., b), Vec3::new(0., a, b)]);
+            }
+        }
+    }
+    for d in handles {
+        if rot(cam, d).z <= 0.3 {
+            continue;
+        }
+        let p = to2(d);
+        let r0 = if glass { 5. } else { 3.5 };
+        let near = hover.is_some_and(|h| (h - p).length() < r0 + 4.);
+        painter.circle_filled(p, if near { r0 + 2.5 } else { r0 }, if near { hot } else { blue });
+        if near && clicked {
+            chosen = Some(d.normalize());
+        }
+    }
+    let drag = if resp.dragged_by(egui::PointerButton::Primary) { resp.drag_delta() } else { egui::Vec2::ZERO };
+    (chosen, drag)
 }
 
 fn point_in_quad(p: Pos2, q: &[Pos2]) -> bool {

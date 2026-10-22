@@ -290,6 +290,8 @@ pub fn groups_at(s: &Settings, d: Dock, sketching: bool) -> Vec<Group> {
         .iter()
         .copied()
         .filter(|g| s.dock(*g) == d)
+        // restrições ficam no menu rápido do botão direito (smart)
+        .filter(|g| *g != Group::SkRestricoes)
         .filter(|g| if sketching { g.sketch_only() || *g == Group::Vista } else { !g.sketch_only() })
         .collect()
 }

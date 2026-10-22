@@ -199,6 +199,11 @@ impl App {
                 app.started = true;
             }
         }
+        // desenvolvimento: SCC_VISTAS=1 abre o seletor de vistas ao iniciar
+        if std::env::var("SCC_VISTAS").is_ok() {
+            app.view_menu = true;
+            app.started = true;
+        }
         app.request_recompute();
         app
     }
@@ -959,7 +964,8 @@ impl App {
         for (i, g) in toolbar::groups_at(&self.settings, Dock::Flutuante, sketching).into_iter().enumerate() {
             egui::Window::new(g.label())
                 .id(egui::Id::unique(("flutuante", g.label())))
-                .default_pos(egui::pos2(320. + 40. * i as f32, 140. + 40. * i as f32))
+                // empilhados na borda esquerda da viewport, sem cobrir uns aos outros
+                .default_pos(egui::pos2(290., 140. + 120. * i as f32))
                 .resizable(false)
                 .collapsible(true)
                 .show(&ctx, |ui| {
@@ -971,7 +977,8 @@ impl App {
         }
     }
 
-    /// Seletor de vistas (Espaço): cubo grande, vistas padrão e vistas salvas como câmeras.
+    /// Seletor de vistas (Espaço): caixa central transparente com o cubo 3D translúcido,
+    /// vistas padrão, opções de câmera e câmeras salvas.
     fn view_menu_window(&mut self, ctx: &egui::Context) {
         if !self.view_menu {
             return;
@@ -981,56 +988,110 @@ impl App {
         let mut apply: Option<scc_core::NamedView> = None;
         let mut remove: Option<usize> = None;
         let mut save = false;
-        egui::Window::new("Vistas")
-            .collapsible(false)
-            .resizable(false)
-            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0., 0.))
-            .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    let (r, _) = ui.allocate_exact_size(egui::vec2(240., 240.), egui::Sense::hover());
-                    if let Some(d) = crate::viewcube::cube(ui, r, &cam, "grande") {
-                        self.view_choice = Some(d);
-                    }
-                    ui.vertical(|ui| {
-                        ui.label(RichText::new("Vistas padrão").strong());
-                        for (d, n) in crate::viewcube::STANDARD {
-                            if ui.button(n).clicked() {
-                                self.view_choice = Some(Vec3::from(d).normalize());
-                            }
-                        }
-                    });
-                    ui.separator();
-                    ui.vertical(|ui| {
-                        ui.label(RichText::new("Vistas salvas (câmeras)").strong());
-                        if self.open.doc.views.is_empty() {
-                            ui.label(RichText::new("nenhuma ainda").weak());
-                        }
-                        for (i, v) in self.open.doc.views.iter().enumerate() {
-                            ui.horizontal(|ui| {
-                                if ui.button(format!("📷 {}", v.name)).clicked() {
-                                    apply = Some(v.clone());
-                                }
-                                if ui.small_button("✖").clicked() {
-                                    remove = Some(i);
-                                }
-                            });
-                        }
-                        ui.add_space(6.);
-                        ui.horizontal(|ui| {
-                            ui.add(egui::TextEdit::singleline(&mut self.new_view_name).hint_text("nome da vista").desired_width(120.));
-                            if ui.button("💾 Salvar vista atual").clicked() {
-                                save = true;
+        let mut drag = egui::Vec2::ZERO;
+        let mut turn = 0f32;
+        let mut act: Option<Act> = None;
+        let dark = ctx.global_style().visuals.dark_mode;
+        let fill = if dark { Color32::from_rgba_unmultiplied(20, 24, 32, 165) } else { Color32::from_rgba_unmultiplied(246, 249, 253, 170) };
+        egui::Area::new(egui::Id::unique("seletor_vistas")).anchor(egui::Align2::CENTER_CENTER, egui::vec2(0., 0.)).order(egui::Order::Foreground).show(ctx, |ui| {
+            egui::Frame::new()
+                .fill(fill)
+                .corner_radius(14.)
+                .inner_margin(egui::Margin::same(14))
+                .stroke(egui::Stroke::new(1., Color32::from_rgba_unmultiplied(80, 140, 230, 140)))
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new("Vistas").strong().size(16.));
+                        ui.label(RichText::new("arraste o cubo para girar · clique numa face, aresta ou canto · Espaço fecha").weak().small());
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.small_button("✖").clicked() {
+                                close = true;
                             }
                         });
-                        ui.label(RichText::new("As vistas salvas ficam na peça e servirão para as vistas 2D e o detalhamento 3D.").weak().small());
+                    });
+                    ui.horizontal(|ui| {
+                        let (r, _) = ui.allocate_exact_size(egui::vec2(300., 300.), egui::Sense::hover());
+                        let (d, dr) = crate::viewcube::cube(ui, r, &cam, "seletor", true);
+                        if d.is_some() {
+                            self.view_choice = d;
+                        }
+                        drag = dr;
+                        ui.separator();
+                        ui.vertical(|ui| {
+                            ui.set_width(270.);
+                            ui.label(RichText::new("Vistas padrão").strong());
+                            egui::Grid::new("vistas_padrao").num_columns(3).spacing([4., 4.]).show(ui, |ui| {
+                                for (i, (d, n)) in crate::viewcube::STANDARD.iter().chain(crate::viewcube::EXTRA.iter()).enumerate() {
+                                    let icon = match *n {
+                                        "Frente" | "Trás" => "vista_frente",
+                                        "Topo" | "Base" => "vista_topo",
+                                        "Esquerda" | "Direita" => "vista_direita",
+                                        _ => "vista_iso",
+                                    };
+                                    let b = egui::Button::image_and_text(egui::Image::new(crate::icons::get(icon)).fit_to_exact_size(egui::vec2(18., 18.)), *n).min_size(egui::vec2(84., 26.));
+                                    if ui.add(b).clicked() {
+                                        self.view_choice = Some(Vec3::from(*d).normalize());
+                                    }
+                                    if i % 3 == 2 {
+                                        ui.end_row();
+                                    }
+                                }
+                            });
+                            ui.add_space(8.);
+                            ui.label(RichText::new("Câmera").strong());
+                            ui.horizontal_wrapped(|ui| {
+                                if ui.selectable_label(cam.ortho, "Ortogonal").clicked() && !cam.ortho {
+                                    act = Some(Act::Ortho);
+                                }
+                                if ui.selectable_label(!cam.ortho, "Perspectiva").clicked() && cam.ortho {
+                                    act = Some(Act::Ortho);
+                                }
+                                if ui.button("⛶ Ajustar (F)").clicked() {
+                                    act = Some(Act::Fit);
+                                }
+                                if ui.button("⊥ Normal à seleção (N)").clicked() {
+                                    act = Some(Act::Normal);
+                                }
+                                if ui.button("⟲ 90°").on_hover_text("girar 90° em torno da vertical").clicked() {
+                                    turn = std::f32::consts::FRAC_PI_2;
+                                }
+                                if ui.button("90° ⟳").on_hover_text("girar 90° em torno da vertical").clicked() {
+                                    turn = -std::f32::consts::FRAC_PI_2;
+                                }
+                            });
+                            ui.add_space(8.);
+                            ui.label(RichText::new("Câmeras salvas").strong());
+                            if self.open.doc.views.is_empty() {
+                                ui.label(RichText::new("nenhuma ainda").weak());
+                            }
+                            for (i, v) in self.open.doc.views.iter().enumerate() {
+                                ui.horizontal(|ui| {
+                                    if ui.button(format!("📷 {}", v.name)).clicked() {
+                                        apply = Some(v.clone());
+                                    }
+                                    if ui.small_button("✖").clicked() {
+                                        remove = Some(i);
+                                    }
+                                });
+                            }
+                            ui.horizontal(|ui| {
+                                ui.add(egui::TextEdit::singleline(&mut self.new_view_name).hint_text("nome da vista").desired_width(130.));
+                                if ui.button("💾 Salvar atual").clicked() {
+                                    save = true;
+                                }
+                            });
+                            ui.label(RichText::new("As câmeras ficam na peça e servirão para as vistas 2D e o detalhamento 3D.").weak().small());
+                        });
                     });
                 });
-                ui.horizontal(|ui| {
-                    if ui.button("Fechar (Espaço)").clicked() {
-                        close = true;
-                    }
-                });
-            });
+        });
+        if let Some(vp) = self.viewport.as_mut() {
+            vp.camera.yaw -= drag.x * 0.008 + turn;
+            vp.camera.pitch = (vp.camera.pitch + drag.y * 0.008).clamp(-1.5706, 1.5706);
+        }
+        if let Some(a) = act {
+            self.act(a);
+        }
         if save {
             let n = if self.new_view_name.trim().is_empty() { format!("Vista {}", self.open.doc.views.len() + 1) } else { self.new_view_name.trim().to_string() };
             self.open.doc.views.push(scc_core::NamedView {
@@ -1971,8 +2032,13 @@ impl App {
             }
             // cubo de vistas no canto superior direito
             let cube_area = Rect::from_min_size(egui::pos2(rect.right() - 120., rect.top() + 8.), egui::vec2(112., 112.));
-            if let Some(dir) = crate::viewcube::cube(ui, cube_area, &cam, "canto") {
-                self.view_choice = Some(dir);
+            let (dir, drag) = crate::viewcube::cube(ui, cube_area, &cam, "canto", false);
+            if dir.is_some() {
+                self.view_choice = dir;
+            }
+            if let Some(vp) = self.viewport.as_mut() {
+                vp.camera.yaw -= drag.x * 0.008;
+                vp.camera.pitch = (vp.camera.pitch + drag.y * 0.008).clamp(-1.5706, 1.5706);
             }
             if self.sketch.is_some() {
                 crate::sketch_ui::overlay(self, ui, rect, &resp, cam);
