@@ -65,6 +65,25 @@ Versionamento flexível enquanto o projeto for local (sem distribuição).
 - [x] **Seletor de vistas (Espaço)** como caixa central transparente: cubo 3D translúcido grande (faces, arestas e cantos clicáveis; arrastar gira), vistas padrão + dimétrica/trimétrica, orto/perspectiva, ajustar, normal, girar 90° e câmeras salvas
 - [ ] Testar cotagem smart e menu rápido com o mouse (verificado por testes e capturas)
 
+## alpha.5b — Geometria de referência e correções de fluxo
+
+- [x] Planos: deslocado, paralelo por ponto, ângulo/normal, 3 pontos, 2 linhas, ponto+linha, curva planar, normal à curva, tangente à superfície, equação, médio
+- [x] Pontos: coordenadas (Origem ou plano), na curva (distância/proporção, início/meio/fim), no plano, na superfície, centro, tangente, entre
+- [x] Linhas e curvas: ponto-ponto, ponto-direção, ângulo/normal/tangente à curva, normal à superfície, polilinha, círculo/arco, círculo 3P, spline, hélice, espiral, cônica, conexão G0/G1/G2, canto, spine
+- [x] Entradas aceitam a seleção da viewport (vértices, arestas, faces, planos, pontos e curvas); erros aparecem no elemento
+- [x] Filete/chanfro: pré-selecionar arestas **ou** abrir o comando vazio e clicar nas arestas (clicar de novo tira)
+- [x] Clique na peça só marca o que foi clicado; duplo clique na face abre o comando que a criou
+- [x] Apagar corpo (coletor) com seus comandos; sempre resta um coletor
+- [ ] Superfícies como geometria de referência (extrair face, offset, preencher)
+
+## Próximos pedidos (prioridade)
+
+- [ ] **Pastas de geometria como gerenciador**: copiar/colar/mover (arrastar), subpastas, qualquer geometria (sketches, pontos, curvas, planos, superfícies), sem depender dos comandos
+- [ ] **Fast 3D**: seta 3D arrastável e cota 3D editável na viewport ao criar extrusão/recorte (e depois revolução, filete, plano deslocado)
+- [ ] Formas: Pad/Pocket (já: extrusão/recorte), Shaft/Groove (revolução que remove), Rib e Slot (varredura por spine), Multi-seções (loft) e remoção por multi-seções, Stiffener, Thin solids
+- [ ] Acabamento: filete face-face, tritangente e variável; draft; shell; thickness; thread/tap em eixos
+- [ ] Padrões e transformações: retangular, circular, por pontos, espelhar, escala
+
 ## alpha.5 — Referências do modelo
 
 - [ ] Seleção de faces, arestas e vértices na viewport (com realce)

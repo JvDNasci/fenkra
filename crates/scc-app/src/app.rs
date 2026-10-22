@@ -90,6 +90,8 @@ pub struct App {
     pub sel: Sel,
     pub result: Option<RecomputeResult>,
     pub delete_dialog: Option<DeleteDialog>,
+    /// comando a abrir como ambiente (duplo clique na face)
+    open_pending: Option<Id>,
     release_dialog: Option<(u64, String)>,
     worker: Worker,
     gen_sent: u64,
@@ -160,6 +162,7 @@ impl App {
             sel: Sel::None,
             result: None,
             delete_dialog: None,
+            open_pending: None,
             release_dialog: None,
             worker: Worker::spawn(cc.egui_ctx.clone()),
             gen_sent: 0,
@@ -643,7 +646,7 @@ impl App {
                 let all = matches!(c, Cmd::FilletAll | Cmd::ChamferAll);
                 let sel = if all { EdgeSel::AllOfBody } else { EdgeSel::Edges(edges.clone()) };
                 if !all && edges.is_empty() {
-                    self.toast("Nenhuma aresta selecionada: selecione arestas na viewport e clique em 'Usar seleção' no painel", false);
+                    self.toast("Clique nas arestas na viewport para pô-las no comando (clique de novo tira)", false);
                 }
                 let op = EdgeOp { value: s("1"), edges: sel };
                 let d = &mut self.open.doc;
@@ -862,7 +865,7 @@ impl App {
 
     fn delete_selected(&mut self) {
         match self.sel {
-            Sel::Feature(id) | Sel::Ref(id) => self.ask_delete(id),
+            Sel::Feature(id) | Sel::Ref(id) | Sel::Collector(id) => self.ask_delete(id),
             Sel::Folder(id) => {
                 self.open.doc.remove_folder(id);
                 self.sel = Sel::None;
@@ -1505,6 +1508,11 @@ impl App {
                             ui.close();
                         }
                         appearance_menu(ui, Some(Appearance { color: c.color, finish: c.finish }), AppTarget::Collector(c.id), &mut actions);
+                        ui.separator();
+                        if ui.button("🗑 Apagar corpo…").clicked() {
+                            actions.push(TreeAction::Delete(c.id));
+                            ui.close();
+                        }
                     });
                 })
                 .body(|ui| {
@@ -2121,10 +2129,34 @@ impl App {
                     (Some(h), false) => crate::picking::pick(r, &self.open.doc, &cam, rect, h, &filt),
                     _ => None,
                 };
-                if resp.clicked_by(egui::PointerButton::Primary) {
+                // filete/chanfro aberto com arestas escolhidas: clicar numa aresta põe/tira do comando
+                let edge_cmd = self.session.as_ref().map(|x| x.id).filter(|id| {
+                    matches!(self.open.doc.feature(*id).map(|f| &f.kind), Some(FeatureKind::Fillet(o) | FeatureKind::Chamfer(o)) if matches!(o.edges, EdgeSel::Edges(_)))
+                });
+                if resp.double_clicked_by(egui::PointerButton::Primary) {
+                    // duplo clique numa face abre o comando que a criou
+                    if let Some(crate::picking::Pick::Face { owner, .. }) = self.hover_pick {
+                        if self.open.doc.feature(owner).is_some() && edge_cmd.is_none() {
+                            self.open_pending = Some(owner);
+                        }
+                    }
+                } else if resp.clicked_by(egui::PointerButton::Primary) {
                     let add = ctx.input(|i| i.modifiers.shift || i.modifiers.command);
-                    match self.hover_pick {
-                        Some(p) => {
+                    match (edge_cmd, self.hover_pick) {
+                        (Some(fid), Some(crate::picking::Pick::Edge { mid, .. })) => {
+                            let m = mid.map(|v| v as f64);
+                            if let Some(FeatureKind::Fillet(o) | FeatureKind::Chamfer(o)) = self.open.doc.feature_mut(fid).map(|f| &mut f.kind) {
+                                if let EdgeSel::Edges(list) = &mut o.edges {
+                                    let near = |q: &[f64; 3]| (0..3).map(|k| (q[k] - m[k]).powi(2)).sum::<f64>().sqrt() < 0.01;
+                                    if let Some(k) = list.iter().position(near) {
+                                        list.remove(k);
+                                    } else {
+                                        list.push(m);
+                                    }
+                                }
+                            }
+                        }
+                        (_, Some(p)) => {
                             if let Some(i) = self.picks.iter().position(|x| *x == p) {
                                 self.picks.remove(i);
                             } else {
@@ -2133,18 +2165,26 @@ impl App {
                                 }
                                 self.picks.push(p);
                             }
-                            // face clicada: o comando dono fica selecionado na árvore
-                            if let crate::picking::Pick::Face { owner, .. } = p {
-                                if !add {
-                                    self.sel = Sel::Feature(owner);
-                                }
-                            }
                         }
-                        None => {
+                        (_, None) => {
                             if !add {
                                 self.picks.clear();
                             }
                         }
+                    }
+                }
+                // arestas escolhidas do filete/chanfro em edição
+                if let Some(Some(FeatureKind::Fillet(o) | FeatureKind::Chamfer(o))) = edge_cmd.map(|id| self.open.doc.feature(id).map(|f| &f.kind)) {
+                    if let EdgeSel::Edges(list) = &o.edges {
+                        for q in list {
+                            if let Some(sp) = cam.project(rect, Vec3::new(q[0] as f32, q[1] as f32, q[2] as f32)) {
+                                ui.painter().circle_filled(sp, 5., Color32::from_rgb(255, 190, 40));
+                                ui.painter().circle_stroke(sp, 7., egui::Stroke::new(1.5, Color32::WHITE));
+                            }
+                        }
+                        let n = list.len();
+                        ui.painter().text(rect.center_top() + egui::vec2(0., 30.), egui::Align2::CENTER_TOP,
+                            format!("Clique nas arestas para pôr/tirar do comando · {n} escolhida(s) · Enter conclui"), egui::FontId::proportional(13.), Color32::from_rgb(255, 190, 40));
                     }
                 }
                 let painter = ui.painter_at(rect);
@@ -2555,6 +2595,9 @@ impl eframe::App for App {
                 self.open.modified = true;
                 self.request_recompute();
             }
+        }
+        if let Some(id) = self.open_pending.take() {
+            self.start_session(id, false, None);
         }
         if let Some(id) = self.begin_sketch_pending.take() {
             self.begin_sketch(id);

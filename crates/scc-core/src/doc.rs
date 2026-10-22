@@ -1266,7 +1266,8 @@ impl Document {
                 }
             }
             for f in &self.features {
-                if Self::refs_of(&f.kind).contains(&cur) && !out.contains(&f.id) {
+                // comandos de um coletor dependem dele (apagar o corpo leva os comandos)
+                if (Self::refs_of(&f.kind).contains(&cur) || f.target == cur) && !out.contains(&f.id) {
                     out.push(f.id);
                     frontier.push(f.id);
                 }
@@ -1355,6 +1356,23 @@ impl Document {
             .count();
         self.features.retain(|f| !kill.contains(&f.id));
         self.references.retain(|r| !kill.contains(&r.id));
+        // coletores de corpos: sempre fica pelo menos um; comandos órfãos vão para o primeiro
+        if self.collectors.iter().any(|c| kill.contains(&c.id)) {
+            self.collectors.retain(|c| !kill.contains(&c.id));
+            if self.collectors.is_empty() {
+                let n = self.unique_name("Corpo");
+                self.add_collector(&n);
+            }
+            let first = self.collectors[0].id;
+            if kill.contains(&self.active_collector) {
+                self.active_collector = first;
+            }
+            for f in &mut self.features {
+                if kill.contains(&f.target) {
+                    f.target = first;
+                }
+            }
+        }
         self.rollback = self.rollback.saturating_sub(before_rb).min(self.features.len());
     }
 
@@ -1426,6 +1444,19 @@ pub fn rename_ident(src: &str, old: &str, new: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn apagar_corpo_leva_os_comandos_e_mantem_um_coletor() {
+        let mut d = Document::new("t");
+        let c0 = d.active_collector;
+        let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::default(), data: Default::default() }));
+        assert!(d.dependents(c0).contains(&sk));
+        d.delete(c0, true);
+        assert!(d.feature(sk).is_none());
+        assert_eq!(d.collectors.len(), 1);
+        assert_ne!(d.active_collector, c0);
+        assert_eq!(d.active_collector, d.collectors[0].id);
+    }
 
     fn s(v: &str) -> String {
         v.into()
