@@ -194,6 +194,30 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
         }
     }
 
+    // superfícies de referência: translúcidas, com contorno
+    if o.filter.planos_ref {
+        for sf in &r.surfaces {
+            let selected = matches!(o.sel, Sel::Ref(a) if *a == sf.id);
+            let vis = doc.reference(sf.id).is_some_and(|x| x.visible);
+            if !selected && !shows(!vis, env) {
+                continue;
+            }
+            let m = &sf.mesh;
+            let c = if selected { [1.0, 0.8, 0.25, 1.0] } else { [0.95, 0.62, 0.3, 1.0] };
+            for t in m.indices.chunks_exact(3) {
+                for &i in t {
+                    let k = i as usize * 3;
+                    let p = [m.positions[k], m.positions[k + 1], m.positions[k + 2]];
+                    grow(&mut bounds, Vec3::from(p));
+                    s.fill.push(MeshVertex { pos: p, nrm: [m.normals[k], m.normals[k + 1], m.normals[k + 2]], col: c, mat: [0.8, 0.0, if selected { 0.55 } else { 0.4 }, 0.] });
+                }
+            }
+            for p in m.edges.chunks_exact(3) {
+                s.lines.push(lv([p[0], p[1], p[2]], if selected { HILITE } else { [0.95, 0.62, 0.3, 1.0] }));
+            }
+        }
+    }
+
     // pontos, linhas e curvas de referência
     let geo_col = [0.95, 0.7, 0.3, 1.0];
     for c in &r.curves {

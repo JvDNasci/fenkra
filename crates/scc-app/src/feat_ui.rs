@@ -21,6 +21,7 @@ pub fn is_shape(k: &FeatureKind) -> bool {
 /// Comandos em que clicar numa face na viewport (com o comando aberto) acrescenta a face.
 pub fn wants_faces(k: &FeatureKind) -> bool {
     matches!(k, FeatureKind::Shell(_) | FeatureKind::Draft(_) | FeatureKind::Thickness(_) | FeatureKind::Thread(_))
+        || matches!(k, FeatureKind::Fillet(o) if matches!(o.mode, EdgeMode::FaceFace(..) | EdgeMode::FullRound { .. }))
 }
 
 /// Acrescenta (ou, na rosca, troca) a face clicada no comando.
@@ -30,7 +31,39 @@ pub fn add_face(k: &mut FeatureKind, p: [f64; 3]) {
         FeatureKind::Draft(d) => d.faces.push(p),
         FeatureKind::Thickness(t) => t.faces.push(p),
         FeatureKind::Thread(t) => t.face = p,
+        // face-face: as duas últimas faces clicadas; completo: meio, lado 1, lado 2 (na ordem do clique)
+        FeatureKind::Fillet(o) => match &mut o.mode {
+            EdgeMode::FaceFace(a, b) => {
+                *a = *b;
+                *b = p;
+            }
+            EdgeMode::FullRound { mid, a, b } => {
+                *mid = *a;
+                *a = *b;
+                *b = p;
+            }
+            _ => {}
+        },
         _ => {}
+    }
+}
+
+/// Alterna a face (para listas de faces): se já está escolhida (mesma face do corpo), tira.
+pub fn toggle_face(k: &mut FeatureKind, p: [f64; 3], same: impl Fn([f64; 3], [f64; 3]) -> bool) {
+    let list = match k {
+        FeatureKind::Shell(s) => Some(&mut s.faces),
+        FeatureKind::Draft(d) => Some(&mut d.faces),
+        FeatureKind::Thickness(t) => Some(&mut t.faces),
+        _ => None,
+    };
+    match list {
+        Some(l) => match l.iter().position(|q| same(*q, p)) {
+            Some(i) => {
+                l.remove(i);
+            }
+            None => l.push(p),
+        },
+        None => add_face(k, p),
     }
 }
 
@@ -41,6 +74,11 @@ pub fn face_marks(k: &FeatureKind) -> Vec<[f64; 3]> {
         FeatureKind::Draft(d) => d.faces.clone(),
         FeatureKind::Thickness(t) => t.faces.clone(),
         FeatureKind::Thread(t) => vec![t.face],
+        FeatureKind::Fillet(o) => match o.mode {
+            EdgeMode::FaceFace(a, b) => vec![a, b],
+            EdgeMode::FullRound { mid, a, b } => vec![mid, a, b],
+            _ => vec![],
+        },
         _ => vec![],
     }
 }
@@ -277,7 +315,10 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         FeatureKind::Stiffener(st) => {
             sketch_pick(ui, "st_sk", "Linhas", doc, idx, &mut st.sketch);
             expr(ui, "Espessura", &mut st.thickness, vars, "mm");
-            expr(ui, "Profundidade", &mut st.depth, vars, "mm");
+            ui.checkbox(&mut st.to_body, "até encontrar o corpo");
+            if !st.to_body {
+                expr(ui, "Profundidade", &mut st.depth, vars, "mm");
+            }
             ui.checkbox(&mut st.reverse, "para o lado da normal do plano");
             ui.label(RichText::new("Cada linha do sketch vira uma parede com a espessura, extrudada a partir do plano.").weak().small());
         }
@@ -310,6 +351,28 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 }
             }
             ui.label(RichText::new("Clique na face do eixo (rosca externa) ou do furo (interna). O diâmetro da face deve ser o da rosca.").weak().small());
+        }
+        FeatureKind::Combine(c) => {
+            section(ui, "Operação");
+            let opts = [
+                ("op_adicionar", "Unir", "Junta os dois corpos", c.op == BoolOp::Add),
+                ("op_remover", "Subtrair", "Tira o corpo ferramenta deste", c.op == BoolOp::Cut),
+                ("op_intersecao", "Interseção", "Fica só o volume comum", c.op == BoolOp::Intersect),
+            ];
+            if let Some(i) = icon_choice(ui, &opts) {
+                c.op = [BoolOp::Add, BoolOp::Cut, BoolOp::Intersect][i];
+            }
+            ui.horizontal(|ui| {
+                ui.add_sized([96., 18.], egui::Label::new("Corpo ferramenta"));
+                let name = doc.collectors.iter().find(|x| x.id == c.tool).map(|x| x.name.clone()).unwrap_or_else(|| "⚠ perdido".into());
+                egui::ComboBox::from_id_salt("cb_tool").selected_text(name).width(170.).show_ui(ui, |ui| {
+                    for col in &doc.collectors {
+                        ui.selectable_value(&mut c.tool, col.id, &col.name);
+                    }
+                });
+            });
+            ui.checkbox(&mut c.keep_tool, "manter o corpo ferramenta visível");
+            ui.label(RichText::new("O resultado fica no coletor deste comando; o corpo ferramenta é o estado do outro coletor neste ponto da linha do tempo.").weak().small());
         }
         _ => return false,
     }
@@ -358,14 +421,20 @@ pub fn revolve_extras(ui: &mut egui::Ui, r: &mut Revolve, vars: &Vars) {
 }
 
 /// Variações de filete (constante/variável) e chanfro (distância, duas distâncias, distância+ângulo).
-pub fn edge_mode_ui(ui: &mut egui::Ui, o: &mut EdgeOp, vars: &Vars, fillet: bool) {
+pub fn edge_mode_ui(ui: &mut egui::Ui, o: &mut EdgeOp, vars: &Vars, fillet: bool, picked_faces: &[[f64; 3]]) {
     let cur = match o.mode {
         EdgeMode::Constant => 0,
         EdgeMode::Variable(_) | EdgeMode::TwoDist(_) => 1,
-        EdgeMode::DistAngle(_) => 2,
+        EdgeMode::DistAngle(_) | EdgeMode::FaceFace(..) => 2,
+        EdgeMode::FullRound { .. } => 3,
     };
     let opts: Vec<(&str, &str, &str, bool)> = if fillet {
-        vec![("filete", "Constante", "Mesmo raio ao longo da aresta", cur == 0), ("filete_variavel", "Variável", "Raio muda do início ao fim da aresta", cur == 1)]
+        vec![
+            ("filete", "Constante", "Mesmo raio ao longo da aresta", cur == 0),
+            ("filete_variavel", "Variável", "Raio muda do início ao fim da aresta", cur == 1),
+            ("filete_face_face", "Face-face", "Entre duas faces (arredonda a aresta comum)", cur == 2),
+            ("filete_completo", "Completo", "Tritangente: consome a face do meio entre duas laterais", cur == 3),
+        ]
     } else {
         vec![
             ("chanfro_dist", "Distância", "Mesma distância nas duas faces", cur == 0),
@@ -374,20 +443,32 @@ pub fn edge_mode_ui(ui: &mut egui::Ui, o: &mut EdgeOp, vars: &Vars, fillet: bool
         ]
     };
     if let Some(i) = icon_choice(ui, &opts) {
+        let f = |k: usize| picked_faces.get(k).copied().unwrap_or([0.; 3]);
         o.mode = match (fillet, i) {
             (_, 0) => EdgeMode::Constant,
-            (true, _) => EdgeMode::Variable("3".into()),
+            (true, 1) => EdgeMode::Variable("3".into()),
+            (true, 2) => EdgeMode::FaceFace(f(0), f(1)),
+            (true, _) => EdgeMode::FullRound { mid: f(0), a: f(1), b: f(2) },
             (false, 1) => EdgeMode::TwoDist("2".into()),
             _ => EdgeMode::DistAngle("45".into()),
         };
+        if matches!(o.mode, EdgeMode::FaceFace(..) | EdgeMode::FullRound { .. }) {
+            o.edges = EdgeSel::AllOfBody;
+        }
     }
     match &mut o.mode {
         EdgeMode::Constant => {}
         EdgeMode::Variable(v) => expr(ui, "Raio final", v, vars, "mm"),
         EdgeMode::TwoDist(v) => expr(ui, "Distância 2", v, vars, "mm"),
         EdgeMode::DistAngle(v) => expr(ui, "Ângulo", v, vars, "°"),
+        EdgeMode::FaceFace(..) => {
+            ui.label(RichText::new("Clique nas duas faces na viewport (com o comando aberto).").weak().small());
+        }
+        EdgeMode::FullRound { .. } => {
+            ui.label(RichText::new("Clique na face do meio e depois nas duas laterais. O raio sai da largura (o valor abaixo é ignorado).").weak().small());
+        }
     }
-    if o.mode != EdgeMode::Constant && !matches!(o.edges, EdgeSel::Edges(_)) {
+    if matches!(o.mode, EdgeMode::Variable(_) | EdgeMode::TwoDist(_) | EdgeMode::DistAngle(_)) && !matches!(o.edges, EdgeSel::Edges(_)) {
         ui.label(RichText::new("esta variação usa as arestas escolhidas (não 'Todas')").color(Color32::from_rgb(255, 170, 60)).small());
     }
 }

@@ -154,6 +154,22 @@ pub fn pick(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, pos: 
         if let Some((_, p)) = best {
             return Some(p);
         }
+        // superfícies de referência (raio contra os triângulos)
+        let mut hit: Option<(f32, Id)> = None;
+        for sf in &r.surfaces {
+            let m = &sf.mesh;
+            for t in m.indices.chunks_exact(3) {
+                let p = |i: u32| v3(&m.positions[i as usize * 3..i as usize * 3 + 3]);
+                if let Some(dist) = ray_tri(o, d, p(t[0]), p(t[1]), p(t[2])) {
+                    if dist <= depth_limit && hit.is_none_or(|(bd, _)| dist < bd) {
+                        hit = Some((dist, sf.id));
+                    }
+                }
+            }
+        }
+        if let Some((_, id)) = hit {
+            return Some(Pick::Geo(id));
+        }
     }
     if f.edges {
         let mut best: Option<(f32, Pick)> = None;
@@ -224,6 +240,61 @@ pub fn pick(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, pos: 
         return best.map(|b| b.1);
     }
     None
+}
+
+/// Ponto mais próximo de `p` no triângulo abc (Ericson).
+fn closest_on_tri(p: Vec3, a: Vec3, b: Vec3, c: Vec3) -> Vec3 {
+    let (ab, ac, ap) = (b - a, c - a, p - a);
+    let (d1, d2) = (ab.dot(ap), ac.dot(ap));
+    if d1 <= 0. && d2 <= 0. {
+        return a;
+    }
+    let bp = p - b;
+    let (d3, d4) = (ab.dot(bp), ac.dot(bp));
+    if d3 >= 0. && d4 <= d3 {
+        return b;
+    }
+    let vc = d1 * d4 - d3 * d2;
+    if vc <= 0. && d1 >= 0. && d3 <= 0. {
+        return a + ab * (d1 / (d1 - d3));
+    }
+    let cp = p - c;
+    let (d5, d6) = (ab.dot(cp), ac.dot(cp));
+    if d6 >= 0. && d5 <= d6 {
+        return c;
+    }
+    let vb = d5 * d2 - d1 * d6;
+    if vb <= 0. && d2 >= 0. && d6 <= 0. {
+        return a + ac * (d2 / (d2 - d6));
+    }
+    let va = d3 * d6 - d5 * d4;
+    if va <= 0. && (d4 - d3) >= 0. && (d5 - d6) >= 0. {
+        return b + (c - b) * ((d4 - d3) / ((d4 - d3) + (d5 - d6)));
+    }
+    let den = 1. / (va + vb + vc);
+    a + ab * (vb * den) + ac * (vc * den)
+}
+
+/// Face (índice na malha do corpo) que contém o ponto.
+pub fn face_at(r: &RecomputeResult, body: usize, p: [f64; 3]) -> Option<usize> {
+    let b = r.bodies.get(body)?;
+    let m = &b.mesh;
+    let q = Vec3::new(p[0] as f32, p[1] as f32, p[2] as f32);
+    let mut best: Option<(f32, usize)> = None;
+    for (ti, t) in m.indices.chunks_exact(3).enumerate() {
+        let v = |i: u32| v3(&m.positions[i as usize * 3..i as usize * 3 + 3]);
+        let d = (closest_on_tri(q, v(t[0]), v(t[1]), v(t[2])) - q).length();
+        if best.is_none_or(|(bd, _)| d < bd) {
+            best = Some((d, ti));
+        }
+    }
+    let (_, ti) = best?;
+    Some(m.face_ranges.partition_point(|&x| x as usize <= ti * 3).saturating_sub(1))
+}
+
+/// Os dois pontos estão na mesma face do corpo?
+pub fn same_face(r: &RecomputeResult, body: usize, a: [f64; 3], b: [f64; 3]) -> bool {
+    matches!((face_at(r, body, a), face_at(r, body, b)), (Some(x), Some(y)) if x == y)
 }
 
 /// Polilinha de uma aresta do corpo (na ordem dos segmentos da malha).

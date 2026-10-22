@@ -51,14 +51,35 @@ pub enum GeoKind {
     Connect,
     Corner,
     Spine,
+    PlanePointNormal,
+    PlaneMid,
+    PtCurvePlane,
+    PtCurveCurve,
+    PtProject,
+    PtProjectCurve,
+    PtOffset,
+    LinePlanes,
+    LineBisector,
+    LineAxis,
+    CurveProject,
+    SplineControl,
+    CurveCopy,
+    SurfExtract,
+    SurfOffset,
+    SurfFill,
+    SurfExtrude,
+    SurfRevolve,
 }
 
 use GeoKind::*;
 
-pub const PLANES: [GeoKind; 11] = [PlaneOffset, PlaneParallelPoint, PlaneAngle, Plane3P, Plane2L, PlanePL, PlaneCurve, PlaneNormalCurve, PlaneTangent, PlaneEquation, PlaneMean];
-pub const POINTS: [GeoKind; 7] = [PtCoords, PtOnCurve, PtOnPlane, PtOnSurface, PtCenter, PtTangent, PtBetween];
-pub const LINES: [GeoKind; 6] = [LinePts, LineDir, LineAngle, LineTangent, LineNormal, Polyline];
-pub const CURVES: [GeoKind; 9] = [Circle, Circle3, Spline, Helix, Spiral, Conic, Connect, Corner, Spine];
+pub const PLANES: [GeoKind; 13] = [
+    PlaneOffset, PlaneParallelPoint, PlaneAngle, Plane3P, Plane2L, PlanePL, PlanePointNormal, PlaneMid, PlaneCurve, PlaneNormalCurve, PlaneTangent, PlaneEquation, PlaneMean,
+];
+pub const POINTS: [GeoKind; 12] = [PtCoords, PtOnCurve, PtOnPlane, PtOnSurface, PtCenter, PtTangent, PtBetween, PtCurvePlane, PtCurveCurve, PtProject, PtProjectCurve, PtOffset];
+pub const LINES: [GeoKind; 9] = [LinePts, LineDir, LineAngle, LineTangent, LineNormal, LinePlanes, LineBisector, LineAxis, Polyline];
+pub const CURVES: [GeoKind; 12] = [Circle, Circle3, Spline, SplineControl, Helix, Spiral, Conic, Connect, Corner, Spine, CurveProject, CurveCopy];
+pub const SURFACES: [GeoKind; 5] = [SurfExtract, SurfOffset, SurfFill, SurfExtrude, SurfRevolve];
 
 impl GeoKind {
     /// (ícone, nome curto, descrição breve, descrição avançada)
@@ -97,6 +118,24 @@ impl GeoKind {
             Connect => ("conexao", "Conexão", "Curva de conexão", "Liga as pontas de duas curvas com continuidade G0, G1 (tangente) ou G2 (curvatura)."),
             Corner => ("canto", "Canto", "Canto (concordância)", "Arco tangente entre duas linhas, com raio."),
             Spine => ("spine", "Spine", "Spine (curva guia)", "Curva normal a uma sequência de planos, para varreduras e multi-seções."),
+            PlanePointNormal => ("plano_ponto_normal", "Ponto + normal", "Plano por ponto, normal a uma linha", "Passa pelo ponto e fica perpendicular à linha, aresta ou eixo."),
+            PlaneMid => ("plano_meio", "Plano médio", "Plano médio entre dois planos", "No meio de dois planos ou faces planas (paralelos ou não: bissetor)."),
+            PtCurvePlane => ("ponto_intersecao", "Curva × plano", "Interseção de curva com plano", "Onde a curva atravessa o plano (escolha a solução quando houver várias)."),
+            PtCurveCurve => ("ponto_intersecao_curvas", "Curva × curva", "Interseção de duas curvas", "Onde as curvas se cruzam (ou o ponto médio da menor distância entre elas)."),
+            PtProject => ("ponto_projetado", "Projeção", "Ponto projetado em superfície", "Projeção do ponto numa face, superfície ou plano."),
+            PtProjectCurve => ("ponto_proj_curva", "Na curva (proj.)", "Ponto projetado numa curva", "Ponto da curva mais próximo do ponto escolhido."),
+            PtOffset => ("ponto_deslocado", "Deslocado", "Ponto deslocado", "A partir de outro ponto, ao longo de uma direção, por uma distância."),
+            LinePlanes => ("linha_planos", "Planos × plano", "Interseção de dois planos", "Linha comum aos dois planos."),
+            LineBisector => ("linha_bissetriz", "Bissetriz", "Bissetriz de duas linhas", "Divide ao meio o ângulo entre duas linhas."),
+            LineAxis => ("linha_eixo", "Eixo de face", "Eixo de face cilíndrica/cônica", "Clique numa face cilíndrica ou cônica: a linha é o eixo dela."),
+            CurveProject => ("curva_projetada", "Projetada", "Curva projetada num plano", "Cópia achatada da curva sobre o plano."),
+            SplineControl => ("spline_controle", "Spline controle", "Spline por polígono de controle", "Os pontos puxam a curva (B-spline) sem que ela passe por eles."),
+            CurveCopy => ("curva_extraida", "Extraída", "Curva extraída de aresta", "Cópia de uma aresta do modelo como curva de referência."),
+            SurfExtract => ("sup_extraida", "Extraída", "Superfície extraída de face", "Cópia de uma face do modelo como superfície de referência."),
+            SurfOffset => ("sup_deslocada", "Deslocada", "Superfície deslocada", "Paralela a uma superfície ou face, a uma distância."),
+            SurfFill => ("sup_preenchida", "Preenchimento", "Preencher contorno", "Superfície que fecha um contorno de curvas."),
+            SurfExtrude => ("sup_extrudada", "Extrudada", "Superfície extrudada", "Curva puxada ao longo de uma direção."),
+            SurfRevolve => ("sup_revolucao", "Revolução", "Superfície de revolução", "Curva girada em torno de um eixo."),
         }
     }
 
@@ -108,6 +147,8 @@ impl GeoKind {
             &POINTS
         } else if LINES.contains(&self) {
             &LINES
+        } else if SURFACES.contains(&self) {
+            &SURFACES
         } else {
             &CURVES
         }
@@ -115,7 +156,7 @@ impl GeoKind {
 
     /// Usa um plano como entrada (o plano/face selecionado vira o plano base).
     pub fn uses_plane(self) -> bool {
-        matches!(self, PlaneOffset | PlaneParallelPoint | PlaneAngle | PtOnPlane | LineAngle | LineTangent | Circle | Spiral | Conic | Spine)
+        matches!(self, PlaneOffset | PlaneParallelPoint | PlaneAngle | PtOnPlane | LineAngle | LineTangent | Circle | Spiral | Conic | Spine | PtCurvePlane | CurveProject | PlaneMid)
     }
 
     pub fn of(k: &RefKind) -> Option<GeoKind> {
@@ -155,6 +196,25 @@ impl GeoKind {
             R::Connect { .. } => Connect,
             R::Corner { .. } => Corner,
             R::Spine { .. } => Spine,
+            R::PlanePointNormal { .. } => PlanePointNormal,
+            R::PlaneMid { .. } => PlaneMid,
+            R::PointCurvePlane { .. } => PtCurvePlane,
+            R::PointCurveCurve { .. } => PtCurveCurve,
+            R::PointProject { .. } => PtProject,
+            R::PointProjectCurve { .. } => PtProjectCurve,
+            R::PointOffset { .. } => PtOffset,
+            R::LinePlanes { .. } => LinePlanes,
+            R::LineBisector { .. } => LineBisector,
+            R::LineAxis { .. } => LineAxis,
+            R::CurveProject { .. } => CurveProject,
+            R::SplineControl { .. } => SplineControl,
+            R::CurveCopy { .. } => CurveCopy,
+            R::SurfExtract { .. } => SurfExtract,
+            R::SurfOffset { .. } => SurfOffset,
+            R::SurfFill { .. } => SurfFill,
+            R::SurfExtrude { .. } => SurfExtrude,
+            R::SurfRevolve { .. } => SurfRevolve,
+            R::Linked { .. } => return None,
         })
     }
 
@@ -209,7 +269,36 @@ impl GeoKind {
             Connect => R::Connect { a: c(0), a_end: true, b: c(1), b_end: false, cont: Continuity::G1, tension: t("1") },
             Corner => R::Corner { a: c(0), b: c(1), radius: t("5") },
             Spine => R::Spine { planes: if s.planes.len() >= 2 { s.planes.clone() } else { vec![pl, PlaneRef::Origin(OriginPlane::YZ)] } },
+            PlanePointNormal => R::PlanePointNormal { point: p(0), line: c(0) },
+            PlaneMid => R::PlaneMid { a: pl, b: s.planes.get(1).copied().unwrap_or(PlaneRef::Origin(OriginPlane::XY)) },
+            PtCurvePlane => R::PointCurvePlane { curve: c(0), plane: pl, which: 0 },
+            PtCurveCurve => R::PointCurveCurve { a: c(0), b: c(1) },
+            PtProject => R::PointProject { point: p(0), surface: sf },
+            PtProjectCurve => R::PointProjectCurve { point: p(0), curve: c(0) },
+            PtOffset => R::PointOffset { point: p(0), dir: ax(OriginAxis::Z), dist: t("10") },
+            LinePlanes => R::LinePlanes { a: pl, b: s.planes.get(1).copied().unwrap_or(PlaneRef::Origin(OriginPlane::XZ)), length: t("100") },
+            LineBisector => R::LineBisector { a: c(0), b: c(1), length: t("50") },
+            LineAxis => R::LineAxis { face: face_pt(s) },
+            CurveProject => R::CurveProject { curve: c(0), plane: pl },
+            SplineControl => R::SplineControl { points: pts(4), closed: false },
+            CurveCopy => R::CurveCopy { curve: c(0) },
+            SurfExtract => R::SurfExtract { face: face_pt(s), owner: match s.surface {
+                Some(SurfRef::Face { owner, .. }) => owner,
+                _ => None,
+            } },
+            SurfOffset => R::SurfOffset { surface: sf, dist: t("2") },
+            SurfFill => R::SurfFill { curves: if s.curves.is_empty() { vec![c(0)] } else { s.curves.clone() } },
+            SurfExtrude => R::SurfExtrude { curve: c(0), dir: AxisRef::Origin(OriginAxis::Z), length: t("30") },
+            SurfRevolve => R::SurfRevolve { curve: c(0), axis: AxisRef::Origin(OriginAxis::Z), angle: t("360") },
         }
+    }
+}
+
+/// Ponto clicado numa face (para eixo de face e superfície extraída).
+fn face_pt(s: &Seed) -> [f64; 3] {
+    match s.surface {
+        Some(SurfRef::Face { point, .. }) => point,
+        _ => [0.; 3],
     }
 }
 
@@ -267,7 +356,30 @@ pub fn inputs_of(k: &RefKind) -> Seed {
         }
         R::Helix { origin, .. } => s.points.push(*origin),
         R::Spine { planes } => s.planes.extend(planes.iter().copied()),
-        R::FacePlane { .. } | R::PlaneEquation { .. } => {}
+        R::PlanePointNormal { point, line } => {
+            s.points.push(*point);
+            s.curves.push(line.clone())
+        }
+        R::PlaneMid { a, b } | R::LinePlanes { a, b, .. } => s.planes.extend([*a, *b]),
+        R::PointCurvePlane { curve, plane, .. } | R::CurveProject { curve, plane } => {
+            s.curves.push(curve.clone());
+            s.planes.push(*plane)
+        }
+        R::PointCurveCurve { a, b } | R::LineBisector { a, b, .. } => s.curves.extend([a.clone(), b.clone()]),
+        R::PointProject { point, surface } => {
+            s.points.push(*point);
+            s.surface = Some(*surface)
+        }
+        R::PointProjectCurve { point, curve } => {
+            s.points.push(*point);
+            s.curves.push(curve.clone())
+        }
+        R::PointOffset { point, .. } => s.points.push(*point),
+        R::SplineControl { points, .. } => s.points.extend(points.iter().copied()),
+        R::CurveCopy { curve } | R::SurfExtrude { curve, .. } | R::SurfRevolve { curve, .. } => s.curves.push(curve.clone()),
+        R::SurfFill { curves } => s.curves.extend(curves.iter().cloned()),
+        R::SurfOffset { surface, .. } => s.surface = Some(*surface),
+        _ => {}
     }
     s
 }
@@ -295,6 +407,7 @@ fn surf_name(doc: &Document, s: &SurfRef) -> String {
     match s {
         SurfRef::Plane(p) => plane_ref_name(doc, p),
         SurfRef::Face { owner, .. } => format!("Face de {}", owner.map(|o| doc.name_of(o)).unwrap_or_default()),
+        SurfRef::Ref(id) => doc.name_of(*id),
     }
 }
 
@@ -405,10 +518,12 @@ fn plane_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id
 
 fn surf_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, s: &mut SurfRef, seed: &Seed) {
     row(ui, label, |ui| {
+        let none = PlaneRef::Datum(Id(u64::MAX));
         let mut pl = match s {
             SurfRef::Plane(p) => *p,
-            SurfRef::Face { .. } => PlaneRef::Datum(Id(u64::MAX)),
+            _ => none,
         };
+        let mut sref: Option<Id> = None;
         egui::ComboBox::from_id_salt(salt).selected_text(surf_name(doc, s)).width(150.).show_ui(ui, |ui| {
             for o in [OriginPlane::XY, OriginPlane::XZ, OriginPlane::YZ] {
                 ui.selectable_value(&mut pl, PlaneRef::Origin(o), plane_ref_name(doc, &PlaneRef::Origin(o)));
@@ -416,8 +531,15 @@ fn surf_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id,
             for (id, n) in candidates(doc, RefClass::Plane, me) {
                 ui.selectable_value(&mut pl, PlaneRef::Datum(id), n);
             }
+            for (id, n) in candidates(doc, RefClass::Surface, me) {
+                if ui.selectable_label(*s == SurfRef::Ref(id), format!("◫ {n}")).clicked() {
+                    sref = Some(id);
+                }
+            }
         });
-        if pl != PlaneRef::Datum(Id(u64::MAX)) {
+        if let Some(id) = sref {
+            *s = SurfRef::Ref(id);
+        } else if pl != none && *s != SurfRef::Plane(pl) {
             *s = SurfRef::Plane(pl);
         }
         if pick_button(ui, seed.surface.is_some() || !seed.planes.is_empty(), "uma face ou plano") {
@@ -487,6 +609,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
     let class = r.kind.class();
     let cur = GeoKind::of(&r.kind);
     ui.heading(match class {
+        RefClass::Surface => "Superfície de referência",
         RefClass::Plane => "Plano de referência",
         RefClass::Point => "Ponto de referência",
         RefClass::Curve => "Linha / curva de referência",
@@ -748,6 +871,133 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                     planes.extend(seed.planes.iter().copied());
                 }
             });
+        }
+        R::PlanePointNormal { point, line } => {
+            point_slot(ui, "g_p", "Ponto", doc, me, point, seed);
+            curve_slot(ui, "g_l", "Normal a", doc, me, line, seed);
+        }
+        R::PlaneMid { a, b } => {
+            plane_slot(ui, "g_a", "Plano 1", doc, me, a, seed);
+            plane_slot(ui, "g_b", "Plano 2", doc, me, b, seed);
+        }
+        R::PointCurvePlane { curve, plane, which } => {
+            curve_slot(ui, "g_c", "Curva", doc, me, curve, seed);
+            plane_slot(ui, "g_pl", "Plano", doc, me, plane, seed);
+            row(ui, "Solução", |ui| {
+                ui.add(egui::DragValue::new(which).range(0..=20));
+            });
+        }
+        R::PointCurveCurve { a, b } => {
+            curve_slot(ui, "g_a", "Curva 1", doc, me, a, seed);
+            curve_slot(ui, "g_b", "Curva 2", doc, me, b, seed);
+        }
+        R::PointProject { point, surface } => {
+            point_slot(ui, "g_p", "Ponto", doc, me, point, seed);
+            surf_slot(ui, "g_s", "Em", doc, me, surface, seed);
+        }
+        R::PointProjectCurve { point, curve } => {
+            point_slot(ui, "g_p", "Ponto", doc, me, point, seed);
+            curve_slot(ui, "g_c", "Curva", doc, me, curve, seed);
+        }
+        R::PointOffset { point, dir, dist } => {
+            point_slot(ui, "g_p", "A partir de", doc, me, point, seed);
+            axis_slot(ui, "g_d", "Direção", doc, me, dir, seed);
+            expr(ui, "Distância", dist, vars, "mm");
+        }
+        R::LinePlanes { a, b, length } => {
+            plane_slot(ui, "g_a", "Plano 1", doc, me, a, seed);
+            plane_slot(ui, "g_b", "Plano 2", doc, me, b, seed);
+            expr(ui, "Comprimento", length, vars, "mm");
+        }
+        R::LineBisector { a, b, length } => {
+            curve_slot(ui, "g_a", "Linha 1", doc, me, a, seed);
+            curve_slot(ui, "g_b", "Linha 2", doc, me, b, seed);
+            expr(ui, "Comprimento", length, vars, "mm");
+        }
+        R::LineAxis { face } | R::SurfExtract { face, .. } => {
+            ui.label(RichText::new(format!("Face em ({}, {}, {})", fmt(face[0]), fmt(face[1]), fmt(face[2]))).small());
+            if let Some(SurfRef::Face { point, .. }) = seed.surface {
+                if ui.button("⊙ Usar a face selecionada").clicked() {
+                    *face = point;
+                }
+            }
+            ui.label(RichText::new("Clique numa face na viewport e use o botão acima.").weak().small());
+        }
+        R::CurveProject { curve, plane } => {
+            curve_slot(ui, "g_c", "Curva", doc, me, curve, seed);
+            plane_slot(ui, "g_pl", "No plano", doc, me, plane, seed);
+        }
+        R::SplineControl { points, closed } => {
+            points_list(ui, "g_pts", doc, me, points, seed, 3);
+            ui.checkbox(closed, "fechada");
+        }
+        R::CurveCopy { curve } => curve_slot(ui, "g_c", "Aresta/curva", doc, me, curve, seed),
+        R::SurfOffset { surface, dist } => {
+            surf_slot(ui, "g_s", "Superfície", doc, me, surface, seed);
+            expr(ui, "Distância", dist, vars, "mm");
+        }
+        R::SurfFill { curves } => {
+            let mut del = None;
+            for (i, c) in curves.iter_mut().enumerate() {
+                ui.horizontal(|ui| {
+                    ui.vertical(|ui| curve_slot(ui, &format!("g_fc{i}"), &format!("Curva {}", i + 1), doc, me, c, seed));
+                    if ui.small_button("✖").clicked() {
+                        del = Some(i);
+                    }
+                });
+            }
+            if let Some(i) = del {
+                if curves.len() > 1 {
+                    curves.remove(i);
+                }
+            }
+            ui.horizontal(|ui| {
+                if ui.button("+ curva").clicked() {
+                    curves.push(CurveRef::Axis(OriginAxis::X));
+                }
+                if ui.add_enabled(!seed.curves.is_empty(), egui::Button::new(format!("+ seleção ({})", seed.curves.len()))).clicked() {
+                    curves.extend(seed.curves.iter().cloned());
+                }
+            });
+            ui.label(RichText::new("As curvas precisam fechar um contorno.").weak().small());
+        }
+        R::SurfExtrude { curve, dir, length } => {
+            curve_slot(ui, "g_c", "Curva", doc, me, curve, seed);
+            axis_slot(ui, "g_d", "Direção", doc, me, dir, seed);
+            expr(ui, "Comprimento", length, vars, "mm");
+        }
+        R::SurfRevolve { curve, axis, angle } => {
+            curve_slot(ui, "g_c", "Curva", doc, me, curve, seed);
+            axis_slot(ui, "g_ax", "Eixo", doc, me, axis, seed);
+            expr(ui, "Ângulo", angle, vars, "°");
+        }
+        R::Linked { ext, .. } => {
+            let ext = *ext;
+            match doc.external.iter().find(|e| e.id == ext) {
+                Some(e) => {
+                    ui.label(format!("Vem de {} · publicação '{}'", e.source, e.publication));
+                    ui.label(RichText::new(format!("arquivo: {}", e.path)).weak().small());
+                    let st = match e.state {
+                        LinkState::Ativo => ("● ativo", Color32::from_rgb(120, 210, 130)),
+                        LinkState::Congelado => ("❄ congelado", Color32::from_rgb(140, 190, 255)),
+                        LinkState::Quebrado => ("⚠ quebrado: a origem não publica mais", Color32::from_rgb(255, 150, 120)),
+                    };
+                    ui.label(RichText::new(st.0).color(st.1));
+                    ui.horizontal(|ui| {
+                        if ui.button("⟳ Atualizar links").clicked() {
+                            ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique("scc_link_acao"), (ext, 0u8)));
+                        }
+                        let lbl = if e.state == LinkState::Congelado { "Descongelar" } else { "❄ Congelar" };
+                        if ui.button(lbl).clicked() {
+                            ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique("scc_link_acao"), (ext, 1u8)));
+                        }
+                    });
+                    ui.label(RichText::new("Congelado: não atualiza com a origem. A geometria fica copiada aqui.").weak().small());
+                }
+                None => {
+                    ui.label("link perdido");
+                }
+            }
         }
     }
     ui.add_space(4.);

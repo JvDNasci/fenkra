@@ -98,6 +98,7 @@ fn extent_ui(ui: &mut egui::Ui, _id: &str, e: &mut Extent, vars: &Vars, allow: &
         Extent::TwoSides(..) => "Dois sentidos",
         Extent::ThroughAll => "Passante",
         Extent::UpTo(_) => "Até plano",
+        Extent::UpToNext => "Até o próximo",
     };
     let keep = match e {
         Extent::Blind(d) | Extent::Symmetric(d) | Extent::TwoSides(d, _) => d.clone(),
@@ -109,6 +110,7 @@ fn extent_ui(ui: &mut egui::Ui, _id: &str, e: &mut Extent, vars: &Vars, allow: &
         "Plano médio" => ("ext_simetrico", "Metade para cada lado do plano do sketch"),
         "Dois sentidos" => ("ext_dois_sentidos", "Distâncias diferentes para cada lado"),
         "Passante" => ("ext_passante", "Atravessa todo o corpo"),
+        "Até o próximo" => ("ext_ate_face", "Para na primeira parede do corpo na direção da extrusão"),
         _ => ("ext_ate_plano", "Termina exatamente num plano (inclusive inclinado)"),
     };
     let opts: Vec<(&str, &str, &str, bool)> = allow.iter().map(|n| (info(n).0, *n, info(n).1, cur == *n)).collect();
@@ -120,6 +122,7 @@ fn extent_ui(ui: &mut egui::Ui, _id: &str, e: &mut Extent, vars: &Vars, allow: &
                 "Plano médio" => Extent::Symmetric(keep.clone()),
                 "Dois sentidos" => Extent::TwoSides(keep.clone(), keep.clone()),
                 "Passante" => Extent::ThroughAll,
+                "Até o próximo" => Extent::UpToNext,
                 _ => Extent::UpTo(doc.references.first().map(|r| PlaneRef::Datum(r.id)).unwrap_or(PlaneRef::Origin(OriginPlane::XY))),
             };
         }
@@ -133,6 +136,9 @@ fn extent_ui(ui: &mut egui::Ui, _id: &str, e: &mut Extent, vars: &Vars, allow: &
         }
         Extent::ThroughAll => {
             ui.label(RichText::new("atravessa todo o corpo de destino").weak().small());
+        }
+        Extent::UpToNext => {
+            ui.label(RichText::new("cresce até encontrar o corpo (só para extrusão que acrescenta)").weak().small());
         }
         Extent::UpTo(p) => {
             ui.horizontal(|ui| {
@@ -299,6 +305,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             });
             ui.label(RichText::new("O nome é a variável referenciável; os comandos apontam para o elemento, então renomear não quebra nada.").weak().small());
             ui.checkbox(&mut r.visible, "visível");
+            if r.kind.class() != RefClass::Surface && !matches!(r.kind, RefKind::Linked { .. }) {
+                ui.checkbox(&mut r.published, "📤 publicar (outras peças podem usar por link)");
+            }
             ui.add_space(4.);
             ui.label(RichText::new("Trocar uma entrada redireciona a variável: tudo que usa este elemento se atualiza.").weak().small());
             used_by(ui, &doc_ro, id, &mut new_sel);
@@ -569,11 +578,12 @@ fn params_table(ui: &mut egui::Ui, doc: &mut Document, vars: &Vars, _sink: &mut 
     ui.add_space(4.);
     let mut rename: Option<(Id, String)> = None;
     let mut remove = None;
-    egui::Grid::new("params").striped(true).num_columns(5).show(ui, |ui| {
+    egui::Grid::new("params").striped(true).num_columns(6).show(ui, |ui| {
         ui.label(RichText::new("Nome").strong());
         ui.label(RichText::new("Expressão").strong());
         ui.label(RichText::new("Unid.").strong());
         ui.label(RichText::new("Valor").strong());
+        ui.label(RichText::new("📤").strong()).on_hover_text("publicado: outras peças podem usar por link");
         ui.label("");
         ui.end_row();
         for p in &mut doc.params {
@@ -596,6 +606,7 @@ fn params_table(ui: &mut egui::Ui, doc: &mut Document, vars: &Vars, _sink: &mut 
                 Some(v) => ui.label(fmt(*v)),
                 None => ui.label(RichText::new("⚠").color(Color32::from_rgb(255, 120, 100))),
             };
+            ui.checkbox(&mut p.published, "");
             if ui.small_button("✖").clicked() {
                 remove = Some(p.id);
             }
@@ -678,7 +689,7 @@ fn feature_ui(
             sketch_combo(ui, "sk_ex", doc, idx, &mut e.sketch);
             op_combo(ui, "op_ex", &mut e.op);
             section(ui, "Extensão");
-            extent_ui(ui, "ext_ex", &mut e.extent, vars, &["Cego", "Plano médio", "Dois sentidos", "Passante", "Até plano"], doc);
+            extent_ui(ui, "ext_ex", &mut e.extent, vars, &["Cego", "Plano médio", "Dois sentidos", "Passante", "Até plano", "Até o próximo"], doc);
             ui.checkbox(&mut e.reverse, "inverter sentido");
             crate::feat_ui::extrude_extras(ui, e, vars);
             if e.op == BoolOp::Cut {
@@ -727,7 +738,11 @@ fn feature_ui(
         FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => {
             let fillet = matches!(kind_tag(id, doc), Some(true));
             let lbl = if fillet { "Raio" } else { "Distância" };
-            crate::feat_ui::edge_mode_ui(ui, o, vars, fillet);
+            crate::feat_ui::edge_mode_ui(ui, o, vars, fillet, picked_faces);
+            if matches!(o.mode, EdgeMode::FaceFace(..) | EdgeMode::FullRound { .. }) {
+                target_combo(ui, doc, target);
+                return;
+            }
             expr(ui, lbl, &mut o.value, vars, "mm");
             ui.label(RichText::new("Arestas").weak());
             let all = matches!(o.edges, EdgeSel::AllOfBody | EdgeSel::CreatedBy(_));

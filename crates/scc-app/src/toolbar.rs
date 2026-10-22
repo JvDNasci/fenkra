@@ -4,7 +4,7 @@
 
 use crate::app::Cmd;
 use crate::geo_ui::{self, GeoKind};
-use scc_core::PrimKind;
+use scc_core::{BoolOp, PrimKind};
 use crate::icons::tool_button;
 use crate::render::DisplayMode;
 use crate::settings::{Dock, Group, Settings};
@@ -97,6 +97,11 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("prim_cunha", "Cunha", "Cunha", "Caixa com o topo mais estreito.", Cmd(C::Prim(PrimKind::Cunha))),
                 it("prim_prisma", "Prisma", "Prisma poligonal", "Polígono regular extrudado (lados, raio, altura).", Cmd(C::Prim(PrimKind::Prisma))),
             ]),
+            Family("booleana", vec![
+                it("bool_unir", "Unir corpos", "Unir dois corpos", "Junta ao corpo ativo o corpo de outro coletor.", Cmd(C::Combine(BoolOp::Add))),
+                it("bool_subtrair", "Subtrair corpo", "Subtrair um corpo", "Tira do corpo ativo o corpo de outro coletor.", Cmd(C::Combine(BoolOp::Cut))),
+                it("bool_intersecao", "Interseção", "Interseção de corpos", "Fica só o volume comum aos dois corpos.", Cmd(C::Combine(BoolOp::Intersect))),
+            ]),
             One(it("reforco", "Reforço", "Reforço / nervura de parede (Stiffener)", "Cada linha do sketch vira uma parede fina com espessura e profundidade.", Cmd(C::Stiffener))),
             Family("furo", vec![
                 it("furo_simples", "Furo", "Furo de passagem", "Furo nos pontos de um sketch, com diâmetro de passagem para o parafuso escolhido.", Cmd(C::Hole)),
@@ -109,6 +114,8 @@ pub fn entries(g: Group) -> Vec<Entry> {
             Family("filete", vec![
                 it("arestas_selecionar", "Filete", "Filete nas arestas selecionadas", "Arredonda as arestas selecionadas — antes, ou clicando nelas com o comando aberto.", Cmd(C::Fillet)),
                 it("filete_variavel", "Filete variável", "Filete com raio variável", "O raio muda do início ao fim de cada aresta escolhida.", Cmd(C::FilletVar)),
+                it("filete_face_face", "Face-face", "Filete entre duas faces", "Clique em duas faces: arredonda a aresta entre elas.", Cmd(C::FilletFaceFace)),
+                it("filete_completo", "Completo", "Filete completo (tritangente)", "Clique na face do meio e nas duas laterais: vira meia-cana.", Cmd(C::FilletFull)),
                 it("arestas_todas", "Filete total", "Filete em todas as arestas", "Arredonda todas as arestas do corpo.", Cmd(C::FilletAll)),
             ]),
             Family("chanfro", vec![
@@ -138,7 +145,13 @@ pub fn entries(g: Group) -> Vec<Entry> {
                     it(i, n, b, a, Cmd(C::Geo(*k)))
                 }).collect()
             };
-            vec![Family("plano", fam(&geo_ui::PLANES)), Family("ponto", fam(&geo_ui::POINTS)), Family("linha", fam(&geo_ui::LINES)), Family("curva", fam(&geo_ui::CURVES))]
+            vec![
+                Family("plano", fam(&geo_ui::PLANES)),
+                Family("ponto", fam(&geo_ui::POINTS)),
+                Family("linha", fam(&geo_ui::LINES)),
+                Family("curva", fam(&geo_ui::CURVES)),
+                Family("superficie", fam(&geo_ui::SURFACES)),
+            ]
         }
         Group::Organizacao => vec![
             One(it("parametro", "Parâmetro", "Novo parâmetro", "Parâmetro global da peça (nome = expressão), usável em qualquer cota ou comando.", Cmd(C::Param))),

@@ -90,6 +90,9 @@ pub struct App {
     pub sel: Sel,
     pub result: Option<RecomputeResult>,
     pub delete_dialog: Option<DeleteDialog>,
+    /// janela de importação de publicações e peça escolhida (nome, caminho, publicações)
+    link_open: bool,
+    link_src: Option<(String, String, Vec<(String, LinkedGeo)>)>,
     /// área de transferência da árvore de geometria: (item, recortado?)
     clip: Option<(Id, bool)>,
     /// reenquadrar a vista (suave) ao abrir um comando
@@ -172,6 +175,8 @@ impl App {
             splash_t0: None,
             reframe_pending: false,
             clip: None,
+            link_open: false,
+            link_src: None,
             release_dialog: None,
             worker: Worker::spawn(cc.egui_ctx.clone()),
             gen_sent: 0,
@@ -540,6 +545,7 @@ impl App {
             Some(RefClass::Plane) => s.planes.push(PlaneRef::Datum(id)),
             Some(RefClass::Point) => s.points.push(PointRef::Ref(id)),
             Some(RefClass::Curve) => s.curves.push(CurveRef::Ref(id)),
+            Some(RefClass::Surface) => s.surface = Some(SurfRef::Ref(id)),
             None => {}
         };
         if with_sel {
@@ -712,7 +718,7 @@ impl App {
                     self.toast("Desenhe as linhas do reforço num sketch primeiro", true);
                     return;
                 };
-                Sel::Feature(d.add_feature(FeatureKind::Stiffener(Stiffener { sketch: sk, thickness: s("3"), depth: s("20"), reverse: false })))
+                Sel::Feature(d.add_feature(FeatureKind::Stiffener(Stiffener { sketch: sk, thickness: s("3"), depth: s("20"), reverse: false, to_body: false })))
             }
             Cmd::Shell => Sel::Feature(d.add_feature(FeatureKind::Shell(Shell { faces: faces.clone(), thickness: s("2"), outward: false }))),
             Cmd::Draft => Sel::Feature(d.add_feature(FeatureKind::Draft(Draft { faces: faces.clone(), neutral: plane, angle: s("3"), reverse: false }))),
@@ -735,6 +741,19 @@ impl App {
                 }))
             }
             Cmd::Scale => Sel::Feature(d.add_feature(FeatureKind::Scale(Scale { center: PointRef::Origin, factor: s("2") }))),
+            Cmd::Combine(op) => {
+                let active = d.active_collector;
+                let Some(tool) = d.collectors.iter().find(|c| c.id != active).map(|c| c.id) else {
+                    self.toast("Crie outro coletor de corpos com o corpo ferramenta primeiro", true);
+                    return;
+                };
+                Sel::Feature(d.add_feature(FeatureKind::Combine(Combine { tool, op, keep_tool: false })))
+            }
+            Cmd::FilletFaceFace | Cmd::FilletFull => {
+                let f = |k: usize| faces.get(k).copied().unwrap_or([0.; 3]);
+                let mode = if c == Cmd::FilletFull { EdgeMode::FullRound { mid: f(0), a: f(1), b: f(2) } } else { EdgeMode::FaceFace(f(0), f(1)) };
+                Sel::Feature(d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("2"), edges: EdgeSel::AllOfBody, mode })))
+            }
             Cmd::Hole | Cmd::HoleCounterbore | Cmd::HoleCountersink | Cmd::HoleTapped => {
                 let sk = match self.selected_sketch(true) {
                     Some(sk) => sk,
@@ -993,6 +1012,113 @@ impl App {
                 v.animate_from(before);
             }
             _ => self.toast("Selecione um sketch ou plano para alinhar a vista", true),
+        }
+    }
+
+    /// Lê a peça de origem de um link (relativo à pasta do projeto ou absoluto).
+    fn load_link_source(&self, path: &str) -> Result<Document, String> {
+        let p = std::path::Path::new(path);
+        let full = match (&self.project, p.is_relative()) {
+            (Some(pr), true) => pr.root.join(p),
+            _ => p.to_path_buf(),
+        };
+        let s = std::fs::read_to_string(&full).map_err(|e| format!("{}: {e}", full.display()))?;
+        Document::from_json(&s).map_err(|e| e.to_string())
+    }
+
+    /// Relê as peças de origem e atualiza a cópia de cada link ativo.
+    pub fn refresh_links(&mut self) {
+        let exts: Vec<(Id, String, String)> = self.open.doc.external.iter().map(|e| (e.id, e.path.clone(), e.publication.clone())).collect();
+        let mut cache: std::collections::HashMap<String, Option<Vec<(String, LinkedGeo)>>> = Default::default();
+        let (mut ok, mut broken) = (0, 0);
+        for (id, path, publ) in exts {
+            let pubs = cache.entry(path.clone()).or_insert_with(|| self.load_link_source(&path).ok().map(|d| scc_solidos::publications(&d)));
+            let geo = pubs.as_ref().and_then(|v| v.iter().find(|(n, _)| *n == publ).map(|(_, g)| g.clone()));
+            if geo.is_some() {
+                ok += 1;
+            } else {
+                broken += 1;
+            }
+            self.open.doc.refresh_link(id, geo);
+        }
+        self.toast(format!("Links: {ok} atualizado(s), {broken} quebrado(s)"), broken > 0);
+    }
+
+    /// Janela "Importar publicação": escolhe a peça de origem (do projeto ou arquivo) e as publicações.
+    fn link_window(&mut self, ctx: &egui::Context) {
+        if !self.link_open {
+            return;
+        }
+        let mut open = true;
+        let mut choose: Option<(String, String)> = None;
+        let mut import: Option<(String, String, LinkedGeo)> = None;
+        let parts: Vec<(String, String)> = self
+            .project
+            .as_ref()
+            .map(|p| p.index.documents.iter().filter(|d| Some(d.id) != self.open.entry).map(|d| (format!("{} · {}", d.pn, d.name), d.file.clone())).collect())
+            .unwrap_or_default();
+        egui::Window::new("🔗 Importar publicação").open(&mut open).default_width(420.).show(ctx, |ui| {
+            ui.label(RichText::new("Escolha a peça de origem; aparecem os planos, pontos, curvas e parâmetros que ela publica (📤).").weak().small());
+            if !parts.is_empty() {
+                ui.label(RichText::new("Peças do projeto").strong());
+                for (n, f) in &parts {
+                    if ui.selectable_label(self.link_src.as_ref().is_some_and(|(_, p, _)| p == f), n).clicked() {
+                        choose = Some((n.clone(), f.clone()));
+                    }
+                }
+            }
+            if ui.button("📂 Escolher arquivo .sccpart…").clicked() {
+                if let Some(p) = rfd::FileDialog::new().add_filter("Peça SolidCadCraft", &["sccpart"]).pick_file() {
+                    let n = p.file_stem().map(|x| x.to_string_lossy().to_string()).unwrap_or_default();
+                    choose = Some((n, p.to_string_lossy().to_string()));
+                }
+            }
+            ui.separator();
+            match &self.link_src {
+                None => {
+                    ui.label(RichText::new("nenhuma peça escolhida").weak());
+                }
+                Some((name, path, pubs)) => {
+                    ui.label(RichText::new(format!("Publicações de {name}")).strong());
+                    if pubs.is_empty() {
+                        ui.label(RichText::new("essa peça não publica nada — na peça de origem, marque 📤 publicar no elemento ou parâmetro").weak().small());
+                    }
+                    for (n, g) in pubs {
+                        let kind: String = match g {
+                            LinkedGeo::Plane { .. } => "▱ plano".into(),
+                            LinkedGeo::Point(_) => "• ponto".into(),
+                            LinkedGeo::Curve(_) => "∿ curva".into(),
+                            LinkedGeo::Value(v) => format!("ƒ = {}", fmt(*v)),
+                        };
+                        ui.horizontal(|ui| {
+                            ui.label(format!("{n}  ({kind})"));
+                            if ui.small_button("Importar").clicked() {
+                                import = Some((name.clone(), path.clone(), g.clone()));
+                                import.as_mut().unwrap().0 = format!("{}|{}", name, n);
+                            }
+                        });
+                    }
+                }
+            }
+        });
+        if let Some((n, path)) = choose {
+            match self.load_link_source(&path) {
+                Ok(d) => {
+                    let short = d.name.clone();
+                    let _ = n;
+                    self.link_src = Some((short, path, scc_solidos::publications(&d)));
+                }
+                Err(e) => self.toast(format!("Não foi possível ler a peça: {e}"), true),
+            }
+        }
+        if let Some((key, path, g)) = import {
+            let (src, publ) = key.split_once('|').unwrap_or((&key, ""));
+            let id = self.open.doc.add_link(src, &path, publ, g);
+            self.toast(format!("Link criado: {}", self.open.doc.name_of(id)), false);
+        }
+        if !open {
+            self.link_open = false;
+            self.link_src = None;
         }
     }
 
@@ -1585,12 +1711,26 @@ impl App {
             }
             for e in &doc.external {
                 let st = match e.state {
-                    LinkState::Ativo => "ativo",
-                    LinkState::Congelado => "congelado",
-                    LinkState::Quebrado => "⚠ quebrado",
+                    LinkState::Ativo => "●",
+                    LinkState::Congelado => "❄",
+                    LinkState::Quebrado => "⚠",
                 };
-                ui.label(format!("🔗 {} — {} · {}", e.name, e.source, st));
+                let txt = format!("🔗 {st} {} ← {}.{}", e.target.map(|t| doc.name_of(t)).unwrap_or_default(), e.source, e.publication);
+                let r = ui.selectable_label(e.target.is_some_and(|t| self.sel == Sel::Ref(t)), txt);
+                if r.clicked() {
+                    if let Some(t) = e.target {
+                        new_sel = Some(if doc.reference(t).is_some() { Sel::Ref(t) } else { Sel::Params });
+                    }
+                }
             }
+            ui.horizontal(|ui| {
+                if ui.small_button("➕ Importar publicação…").clicked() {
+                    actions.push(TreeAction::ImportLink);
+                }
+                if !doc.external.is_empty() && ui.small_button("⟳ Atualizar").clicked() {
+                    actions.push(TreeAction::RefreshLinks);
+                }
+            });
         });
 
         // ---------- parâmetros
@@ -1732,7 +1872,11 @@ impl App {
     /// Pasta de geometria (recursiva): subpastas, elementos de referência e sketches livres.
     /// Itens podem ser arrastados para outra pasta; o menu do botão direito copia, recorta, cola e cria.
     fn geo_folder(&self, ui: &mut egui::Ui, doc: &Document, fo: &Folder, first_geo: Option<Id>, new_sel: &mut Option<Sel>, actions: &mut Vec<TreeAction>) {
-        let refs: Vec<&RefElement> = doc.references.iter().filter(|r| r.folder == Some(fo.id) || (r.folder.is_none() && Some(fo.id) == first_geo)).collect();
+        let refs: Vec<&RefElement> = doc
+            .references
+            .iter()
+            .filter(|r| !matches!(r.kind, RefKind::Linked { .. }) && (r.folder == Some(fo.id) || (r.folder.is_none() && Some(fo.id) == first_geo)))
+            .collect();
         let sketches: Vec<(usize, &Feature)> = doc.features.iter().enumerate().filter(|(_, f)| f.folder == Some(fo.id) && doc.is_free(f)).collect();
         let subs: Vec<&Folder> = doc.folders.iter().filter(|f| f.parent == Some(fo.id) && f.kind == FolderKind::Geometria).collect();
         let id = ui.make_persistent_id(("geo", fo.id.0));
@@ -1822,6 +1966,7 @@ impl App {
             (RefKind::AnglePlane { .. }, _) => "◩",
             (RefKind::FacePlane { .. }, _) => "▣",
             (_, RefClass::Point) => "•",
+            (_, RefClass::Surface) => "◫",
             (RefKind::LinePoints { .. } | RefKind::LineDir { .. } | RefKind::LineAngle { .. } | RefKind::LineNormalSurface { .. }, _) => "╱",
             (_, RefClass::Curve) => "∿",
             _ => "▱",
@@ -2085,6 +2230,8 @@ impl App {
                     self.toast("Não dá para mover para lá (pasta dentro dela mesma, ou item de linha do tempo)", true);
                 }
             }
+            TreeAction::ImportLink => self.link_open = true,
+            TreeAction::RefreshLinks => self.refresh_links(),
             TreeAction::Copy(id) => self.clip = Some((id, false)),
             TreeAction::Cut(id) => self.clip = Some((id, true)),
             TreeAction::Paste(fo) => self.paste_into(fo),
@@ -2483,9 +2630,11 @@ impl App {
                 });
                 // casca/saída/espessura/rosca abertos: clicar numa face a acrescenta ao comando
                 let face_cmd = self.session.as_ref().map(|x| x.id).filter(|id| self.open.doc.feature(*id).is_some_and(|f| crate::feat_ui::wants_faces(&f.kind)));
-                if let (Some(fid), true, Some(crate::picking::Pick::Face { point, .. })) = (face_cmd, resp.clicked_by(egui::PointerButton::Primary), self.hover_pick) {
+                if let (Some(fid), true, Some(crate::picking::Pick::Face { point, body, .. })) = (face_cmd, resp.clicked_by(egui::PointerButton::Primary), self.hover_pick) {
+                    // a mesma face do corpo (pela malha atual) é tirada em vez de repetida
+                    let same = |a: [f64; 3], b: [f64; 3]| crate::picking::same_face(r, body, a, b);
                     if let Some(f) = self.open.doc.feature_mut(fid) {
-                        crate::feat_ui::add_face(&mut f.kind, point.map(|v| v as f64));
+                        crate::feat_ui::toggle_face(&mut f.kind, point.map(|v| v as f64), same);
                     }
                 } else if resp.double_clicked_by(egui::PointerButton::Primary) {
                     // duplo clique numa face abre o comando que a criou
@@ -2728,6 +2877,9 @@ pub enum Cmd {
     PatternPoints,
     Mirror,
     Scale,
+    Combine(BoolOp),
+    FilletFaceFace,
+    FilletFull,
     Param,
     Folder,
     Collector,
@@ -2804,6 +2956,8 @@ enum TreeAction {
     Cut(Id),
     Paste(Id),
     Duplicate(Id),
+    ImportLink,
+    RefreshLinks,
 }
 
 /// Item da árvore de geometria sendo arrastado.
@@ -3084,6 +3238,19 @@ impl eframe::App for App {
                 self.request_recompute();
             }
         }
+        let link_key = egui::Id::unique("scc_link_acao");
+        if let Some((ext, act)) = ctx.data(|m| m.get_temp::<(Id, u8)>(link_key)) {
+            ctx.data_mut(|m| m.remove::<(Id, u8)>(link_key));
+            match act {
+                0 => self.refresh_links(),
+                _ => {
+                    if let Some(e) = self.open.doc.external.iter_mut().find(|e| e.id == ext) {
+                        e.state = if e.state == LinkState::Congelado { LinkState::Ativo } else { LinkState::Congelado };
+                    }
+                }
+            }
+        }
+        self.link_window(ctx);
         if let Some(id) = self.open_pending.take() {
             self.start_session(id, false, None);
         }
