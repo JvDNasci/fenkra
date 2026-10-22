@@ -39,6 +39,22 @@ std::unique_ptr<Shape> extrude_until(const Shape& face, double dx, double dy, do
                                      double ox, double oy, double oz, double nx, double ny, double nz);
 std::unique_ptr<Shape> chamfer_all_t(const Shape& s, double d, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
 
+std::unique_ptr<Shape> transform_shape(const Shape& s, uint8_t kind, rust::Slice<const double> p);
+std::unique_ptr<Shape> transform_t(const Shape& s, uint8_t kind, rust::Slice<const double> p, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
+std::unique_ptr<Shape> sweep_tool(const Shape& face, rust::Slice<const double> spine, uint8_t mode);
+std::unique_ptr<Shape> loft_tool(const Shape& sections, bool ruled, bool closed);
+std::unique_ptr<Shape> primitive(uint8_t kind, const Frame& fr, rust::Slice<const double> p);
+std::unique_ptr<Shape> shell_t(const Shape& s, rust::Slice<const double> pts, double thickness, bool outward, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
+std::unique_ptr<Shape> draft_t(const Shape& s, rust::Slice<const double> pts, double dx, double dy, double dz, double angle_deg,
+                               double ox, double oy, double oz, double nx, double ny, double nz, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
+std::unique_ptr<Shape> faces_offset_tool(const Shape& s, rust::Slice<const double> pts, double value);
+std::unique_ptr<Shape> extrude_taper(const Shape& face, double dx, double dy, double dz, double len, double angle_deg);
+std::unique_ptr<Shape> thin_profile(const Shape& face, double t);
+std::unique_ptr<Shape> thick_segments(rust::Slice<const double> segs, double nx, double ny, double nz, double t);
+std::unique_ptr<Shape> edges_mode_t(const Shape& s, uint8_t mode, double v1, double v2, rust::Slice<const double> mids, double tol, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
+rust::Vec<double> cylinder_at(const Shape& s, double px, double py, double pz);
+std::unique_ptr<Shape> thread_tool_ext(double ox, double oy, double oz, double dx, double dy, double dz, double major_d, double pitch, double length, double angle_deg);
+
 MeshData tessellate(const Shape& s, double deflection);
 rust::Vec<double> bounding_box(const Shape& s);
 rust::Vec<double> mass_props(const Shape& s);

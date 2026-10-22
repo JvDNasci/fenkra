@@ -33,6 +33,40 @@ pub fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
     [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
 }
 
+/// Transformação rígida ou escala de um sólido.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Xform {
+    Translate([f64; 3]),
+    /// origem, direção do eixo, graus
+    Rotate([f64; 3], [f64; 3], f64),
+    /// ponto e normal do plano de simetria
+    Mirror([f64; 3], [f64; 3]),
+    /// centro e fator
+    Scale([f64; 3], f64),
+}
+
+impl Xform {
+    fn params(&self) -> (u8, Vec<f64>) {
+        match *self {
+            Xform::Translate(d) => (0, d.to_vec()),
+            Xform::Rotate(o, d, a) => (1, vec![o[0], o[1], o[2], d[0], d[1], d[2], a]),
+            Xform::Mirror(o, n) => (2, vec![o[0], o[1], o[2], n[0], n[1], n[2]]),
+            Xform::Scale(o, k) => (3, vec![o[0], o[1], o[2], k]),
+        }
+    }
+}
+
+/// Face cilíndrica: eixo, raio, extensão ao longo do eixo e se é interna (furo).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Cylinder {
+    pub origin: [f64; 3],
+    pub dir: [f64; 3],
+    pub radius: f64,
+    pub h0: f64,
+    pub h1: f64,
+    pub internal: bool,
+}
+
 /// Segmento de perfil 2D (coordenadas do plano do sketch).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Seg2 {
@@ -217,6 +251,72 @@ mod imp {
             Ok((Shape(s), out))
         }
 
+        /// Transformação: translação, rotação, espelho ou escala (ver `Xform`).
+        pub fn transformed(&self, x: Xform) -> KResult<Shape> {
+            let (k, p) = x.params();
+            b::transform_shape(&self.0, k, &p).map(Shape).map_err(err)
+        }
+        pub fn transformed_tagged(&self, x: Xform, tags: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            let (k, p) = x.params();
+            let mut out = vec![];
+            let s = b::transform_t(&self.0, k, &p, tags, &mut out).map_err(err)?;
+            Ok((Shape(s), out))
+        }
+        pub fn sweep(&self, spine: &[[f64; 3]], mode: u8) -> KResult<Shape> {
+            let flat: Vec<f64> = spine.iter().flatten().copied().collect();
+            b::sweep_tool(&self.0, &flat, mode).map(Shape).map_err(err)
+        }
+        /// Multi-seções pelas faces deste composto, na ordem.
+        pub fn loft(&self, ruled: bool, closed: bool) -> KResult<Shape> {
+            b::loft_tool(&self.0, ruled, closed).map(Shape).map_err(err)
+        }
+        pub fn primitive(kind: u8, f: &Frame, p: &[f64]) -> KResult<Shape> {
+            b::primitive(kind, &frame(f), p).map(Shape).map_err(err)
+        }
+        pub fn shell_tagged(&self, faces: &[[f64; 3]], t: f64, outward: bool, tags: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            let flat: Vec<f64> = faces.iter().flatten().copied().collect();
+            let mut out = vec![];
+            let s = b::shell_t(&self.0, &flat, t, outward, tags, &mut out).map_err(err)?;
+            Ok((Shape(s), out))
+        }
+        pub fn draft_tagged(&self, faces: &[[f64; 3]], pull: [f64; 3], angle: f64, neutral: &Frame, tags: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            let flat: Vec<f64> = faces.iter().flatten().copied().collect();
+            let (o, n) = (neutral.origin, neutral.normal);
+            let mut out = vec![];
+            let s = b::draft_t(&self.0, &flat, pull[0], pull[1], pull[2], angle, o[0], o[1], o[2], n[0], n[1], n[2], tags, &mut out).map_err(err)?;
+            Ok((Shape(s), out))
+        }
+        pub fn faces_offset_tool(&self, faces: &[[f64; 3]], value: f64) -> KResult<Shape> {
+            let flat: Vec<f64> = faces.iter().flatten().copied().collect();
+            b::faces_offset_tool(&self.0, &flat, value).map(Shape).map_err(err)
+        }
+        pub fn extrude_taper(&self, dir: [f64; 3], len: f64, angle_deg: f64) -> KResult<Shape> {
+            b::extrude_taper(&self.0, dir[0], dir[1], dir[2], len, angle_deg).map(Shape).map_err(err)
+        }
+        pub fn thin(&self, t: f64) -> KResult<Shape> {
+            b::thin_profile(&self.0, t).map(Shape).map_err(err)
+        }
+        pub fn thick_segments(segs: &[([f64; 3], [f64; 3])], normal: [f64; 3], t: f64) -> KResult<Shape> {
+            let flat: Vec<f64> = segs.iter().flat_map(|(a, c)| a.iter().chain(c.iter()).copied().collect::<Vec<_>>()).collect();
+            b::thick_segments(&flat, normal[0], normal[1], normal[2], t).map(Shape).map_err(err)
+        }
+        /// modo 0 filete variável, 1 chanfro 2 distâncias, 2 chanfro distância + ângulo
+        pub fn edges_mode_tagged(&self, mode: u8, v1: f64, v2: f64, mids: &[[f64; 3]], tol: f64, tags: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            let flat: Vec<f64> = mids.iter().flatten().copied().collect();
+            let mut out = vec![];
+            let s = b::edges_mode_t(&self.0, mode, v1, v2, &flat, tol, tags, &mut out).map_err(err)?;
+            Ok((Shape(s), out))
+        }
+        pub fn cylinder_at(&self, p: [f64; 3]) -> KResult<Cylinder> {
+            let v = b::cylinder_at(&self.0, p[0], p[1], p[2]).map_err(err)?;
+            Ok(Cylinder { origin: [v[0], v[1], v[2]], dir: [v[3], v[4], v[5]], radius: v[6], h0: v[7], h1: v[8], internal: v[9] > 0.5 })
+        }
+        pub fn thread_tool_ext(origin: [f64; 3], dir: [f64; 3], major_d: f64, pitch: f64, length: f64, angle_deg: f64) -> KResult<Shape> {
+            let [ox, oy, oz] = origin;
+            let [dx, dy, dz] = dir;
+            b::thread_tool_ext(ox, oy, oz, dx, dy, dz, major_d, pitch, length, angle_deg).map(Shape).map_err(err)
+        }
+
         pub fn mesh(&self, deflection: f64) -> KResult<Mesh> {
             let m = b::tessellate(&self.0, deflection).map_err(err)?;
             Ok(Mesh {
@@ -321,6 +421,48 @@ mod imp {
             no()
         }
         pub fn chamfer_tagged(&self, _: f64, _: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            no()
+        }
+        pub fn transformed(&self, _: Xform) -> KResult<Shape> {
+            no()
+        }
+        pub fn transformed_tagged(&self, _: Xform, _: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            no()
+        }
+        pub fn sweep(&self, _: &[[f64; 3]], _: u8) -> KResult<Shape> {
+            no()
+        }
+        pub fn loft(&self, _: bool, _: bool) -> KResult<Shape> {
+            no()
+        }
+        pub fn primitive(_: u8, _: &Frame, _: &[f64]) -> KResult<Shape> {
+            no()
+        }
+        pub fn shell_tagged(&self, _: &[[f64; 3]], _: f64, _: bool, _: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            no()
+        }
+        pub fn draft_tagged(&self, _: &[[f64; 3]], _: [f64; 3], _: f64, _: &Frame, _: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            no()
+        }
+        pub fn faces_offset_tool(&self, _: &[[f64; 3]], _: f64) -> KResult<Shape> {
+            no()
+        }
+        pub fn extrude_taper(&self, _: [f64; 3], _: f64, _: f64) -> KResult<Shape> {
+            no()
+        }
+        pub fn thin(&self, _: f64) -> KResult<Shape> {
+            no()
+        }
+        pub fn thick_segments(_: &[([f64; 3], [f64; 3])], _: [f64; 3], _: f64) -> KResult<Shape> {
+            no()
+        }
+        pub fn edges_mode_tagged(&self, _: u8, _: f64, _: f64, _: &[[f64; 3]], _: f64, _: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            no()
+        }
+        pub fn cylinder_at(&self, _: [f64; 3]) -> KResult<Cylinder> {
+            no()
+        }
+        pub fn thread_tool_ext(_: [f64; 3], _: [f64; 3], _: f64, _: f64, _: f64, _: f64) -> KResult<Shape> {
             no()
         }
         pub fn mesh(&self, _: f64) -> KResult<Mesh> {

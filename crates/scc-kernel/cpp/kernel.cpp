@@ -9,6 +9,25 @@
 #include <vector>
 
 #include <BRepAdaptor_Curve.hxx>
+#include <BRepExtrema_DistShapeShape.hxx>
+#include <BRepBuilderAPI_MakeVertex.hxx>
+#include <BRepBuilderAPI_MakePolygon.hxx>
+#include <BRepOffsetAPI_MakePipe.hxx>
+#include <BRepOffsetAPI_ThruSections.hxx>
+#include <BRepOffsetAPI_MakeThickSolid.hxx>
+#include <BRepOffsetAPI_DraftAngle.hxx>
+#include <BRepOffsetAPI_MakeOffset.hxx>
+#include <BRepPrimAPI_MakeBox.hxx>
+#include <BRepPrimAPI_MakeSphere.hxx>
+#include <BRepPrimAPI_MakeTorus.hxx>
+#include <BRepPrimAPI_MakeWedge.hxx>
+#include <BRepTools.hxx>
+#include <GeomAPI_PointsToBSpline.hxx>
+#include <Geom_BSplineCurve.hxx>
+#include <GeomFill_Trihedron.hxx>
+#include <TColgp_Array1OfPnt.hxx>
+#include <TopoDS_Vertex.hxx>
+#include <gp_Cylinder.hxx>
 #include <type_traits>
 #include <vector>
 #include <BRepAdaptor_Surface.hxx>
@@ -641,3 +660,5 @@ std::unique_ptr<Shape> import_step(rust::Str path) {
 rust::String occt_version() { return rust::String(OCC_VERSION_COMPLETE); }
 
 }  // namespace scc
+
+#include "features.inc"

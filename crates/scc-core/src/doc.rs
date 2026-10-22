@@ -714,31 +714,365 @@ pub enum FeatureKind {
     Hole(Hole),
     Fillet(EdgeOp),
     Chamfer(EdgeOp),
+    /// Nervura (adiciona) ou rasgo (remove): perfil varrido ao longo de uma curva guia.
+    Sweep(Sweep),
+    /// Multi-seções (loft) que adiciona ou remove.
+    Loft(Loft),
+    /// Sólido primitivo (caixa, cilindro, esfera, cone, toro, cunha, prisma).
+    Primitive(Primitive),
+    Shell(Shell),
+    Draft(Draft),
+    Thickness(Thickness),
+    Pattern(Pattern),
+    Mirror(Mirror),
+    Scale(Scale),
+    /// Reforço: parede fina a partir das linhas de um sketch.
+    Stiffener(Stiffener),
+    /// Rosca numa face cilíndrica (eixo ou furo).
+    Thread(Thread),
 }
 
 impl FeatureKind {
     pub fn type_name(&self) -> &'static str {
+        use FeatureKind::*;
         match self {
-            FeatureKind::Sketch(_) => "Sketch",
-            FeatureKind::Extrude(e) if e.op == BoolOp::Cut => "Recorte",
-            FeatureKind::Extrude(_) => "Extrusão",
-            FeatureKind::Revolve(_) => "Revolução",
-            FeatureKind::Hole(_) => "Furo",
-            FeatureKind::Fillet(_) => "Filete",
-            FeatureKind::Chamfer(_) => "Chanfro",
+            Sketch(_) => "Sketch",
+            Extrude(e) if e.op == BoolOp::Cut => "Recorte",
+            Extrude(_) => "Extrusão",
+            Revolve(r) if r.op == BoolOp::Cut => "Ranhura",
+            Revolve(_) => "Revolução",
+            Hole(_) => "Furo",
+            Fillet(_) => "Filete",
+            Chamfer(_) => "Chanfro",
+            Sweep(w) if w.op == BoolOp::Cut => "Rasgo",
+            Sweep(_) => "Nervura",
+            Loft(l) if l.op == BoolOp::Cut => "MultiSeçõesRemovida",
+            Loft(_) => "MultiSeções",
+            Primitive(p) => p.kind.label(),
+            Shell(_) => "Casca",
+            Draft(_) => "Saída",
+            Thickness(_) => "Espessura",
+            Pattern(p) => match p.kind {
+                PatternKind::Linear { .. } => "PadrãoLinear",
+                PatternKind::Circular { .. } => "PadrãoCircular",
+                PatternKind::Points { .. } => "PadrãoPontos",
+            },
+            Mirror(_) => "Espelho",
+            Scale(_) => "Escala",
+            Stiffener(_) => "Reforço",
+            Thread(_) => "Rosca",
         }
     }
     pub fn icon(&self) -> &'static str {
+        use FeatureKind::*;
         match self {
-            FeatureKind::Sketch(_) => "✏",
-            FeatureKind::Extrude(e) if e.op == BoolOp::Cut => "⬇",
-            FeatureKind::Extrude(_) => "⬆",
-            FeatureKind::Revolve(_) => "⟳",
-            FeatureKind::Hole(_) => "◎",
-            FeatureKind::Fillet(_) => "◜",
-            FeatureKind::Chamfer(_) => "◸",
+            Sketch(_) => "✏",
+            Extrude(e) if e.op == BoolOp::Cut => "⬇",
+            Extrude(_) => "⬆",
+            Revolve(_) => "⟳",
+            Hole(_) => "◎",
+            Fillet(_) => "◜",
+            Chamfer(_) => "◸",
+            Sweep(_) => "〰",
+            Loft(_) => "⧖",
+            Primitive(_) => "▣",
+            Shell(_) => "▢",
+            Draft(_) => "⏢",
+            Thickness(_) => "▤",
+            Pattern(_) => "⁂",
+            Mirror(_) => "⇋",
+            Scale(_) => "⤢",
+            Stiffener(_) => "┃",
+            Thread(_) => "⌇",
         }
     }
+
+    /// Percorre os ids referenciados e as expressões do comando.
+    pub fn walk(&mut self, ids: &mut dyn FnMut(&mut Id), exprs: &mut dyn FnMut(&mut String)) {
+        use FeatureKind::*;
+        match self {
+            Sketch(s) => {
+                s.plane.walk(ids);
+                for v in s.data.exprs_mut() {
+                    exprs(v)
+                }
+            }
+            Extrude(e) => {
+                ids(&mut e.sketch);
+                extent_walk(&mut e.extent, ids, exprs);
+                exprs(&mut e.taper);
+                if let Some(t) = &mut e.thin {
+                    exprs(t)
+                }
+            }
+            Revolve(r) => {
+                ids(&mut r.sketch);
+                r.axis.walk(ids);
+                exprs(&mut r.angle);
+                if let Some(t) = &mut r.thin {
+                    exprs(t)
+                }
+            }
+            Hole(h) => {
+                ids(&mut h.sketch);
+                exprs(&mut h.diameter);
+                extent_walk(&mut h.depth, ids, exprs);
+                match &mut h.kind {
+                    HoleKind::Simples => {}
+                    HoleKind::Rebaixado { diameter, depth } => {
+                        exprs(diameter);
+                        exprs(depth)
+                    }
+                    HoleKind::Escareado { diameter, angle } => {
+                        exprs(diameter);
+                        exprs(angle)
+                    }
+                }
+            }
+            Fillet(o) | Chamfer(o) => {
+                exprs(&mut o.value);
+                if let EdgeSel::CreatedBy(x) = &mut o.edges {
+                    ids(x)
+                }
+                match &mut o.mode {
+                    EdgeMode::Constant => {}
+                    EdgeMode::Variable(v) | EdgeMode::TwoDist(v) | EdgeMode::DistAngle(v) => exprs(v),
+                }
+            }
+            Sweep(w) => {
+                ids(&mut w.sketch);
+                w.spine.walk(ids);
+                if let Some(t) = &mut w.thin {
+                    exprs(t)
+                }
+            }
+            Loft(l) => {
+                for x in &mut l.sections {
+                    ids(x)
+                }
+            }
+            Primitive(p) => {
+                p.plane.walk(ids);
+                for e in [&mut p.a, &mut p.b, &mut p.c, &mut p.d] {
+                    exprs(e)
+                }
+            }
+            Shell(sh) => exprs(&mut sh.thickness),
+            Draft(d) => {
+                d.neutral.walk(ids);
+                exprs(&mut d.angle)
+            }
+            Thickness(t) => exprs(&mut t.value),
+            Pattern(p) => {
+                for x in &mut p.sources {
+                    ids(x)
+                }
+                match &mut p.kind {
+                    PatternKind::Linear { dir, count, spacing, dir2, count2, spacing2 } => {
+                        dir.walk(ids);
+                        if let Some(d) = dir2 {
+                            d.walk(ids)
+                        }
+                        for e in [count, spacing, count2, spacing2] {
+                            exprs(e)
+                        }
+                    }
+                    PatternKind::Circular { axis, count, angle } => {
+                        axis.walk(ids);
+                        exprs(count);
+                        exprs(angle)
+                    }
+                    PatternKind::Points { points, base } => {
+                        base.walk(ids);
+                        for q in points {
+                            q.walk(ids)
+                        }
+                    }
+                }
+            }
+            Mirror(m) => {
+                m.plane.walk(ids);
+                for x in &mut m.sources {
+                    ids(x)
+                }
+            }
+            Scale(sc) => {
+                sc.center.walk(ids);
+                exprs(&mut sc.factor)
+            }
+            Stiffener(st) => {
+                ids(&mut st.sketch);
+                exprs(&mut st.thickness);
+                exprs(&mut st.depth)
+            }
+            Thread(t) => exprs(&mut t.length),
+        }
+    }
+}
+
+fn extent_walk(e: &mut Extent, ids: &mut dyn FnMut(&mut Id), exprs: &mut dyn FnMut(&mut String)) {
+    match e {
+        Extent::Blind(d) | Extent::Symmetric(d) => exprs(d),
+        Extent::TwoSides(a, b) => {
+            exprs(a);
+            exprs(b)
+        }
+        Extent::ThroughAll => {}
+        Extent::UpTo(p) => p.walk(ids),
+    }
+}
+
+/// Como o perfil é orientado ao longo da curva guia.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum SweepMode {
+    /// Frenet corrigido: acompanha a curva sem torcer (padrão)
+    #[default]
+    Corrigido,
+    /// orientação fixa (o perfil não gira)
+    Fixo,
+    /// Frenet puro (segue a curvatura, pode torcer)
+    Frenet,
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct Sweep {
+    pub sketch: Id,
+    pub spine: CurveRef,
+    pub mode: SweepMode,
+    pub op: BoolOp,
+    #[serde(default)]
+    pub thin: Option<String>,
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct Loft {
+    pub sections: Vec<Id>,
+    pub ruled: bool,
+    pub closed: bool,
+    pub op: BoolOp,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub enum PrimKind {
+    Caixa,
+    Cilindro,
+    Esfera,
+    Cone,
+    Toro,
+    Cunha,
+    Prisma,
+}
+
+impl PrimKind {
+    pub const ALL: [PrimKind; 7] = [PrimKind::Caixa, PrimKind::Cilindro, PrimKind::Esfera, PrimKind::Cone, PrimKind::Toro, PrimKind::Cunha, PrimKind::Prisma];
+    pub fn label(self) -> &'static str {
+        match self {
+            PrimKind::Caixa => "Caixa",
+            PrimKind::Cilindro => "Cilindro",
+            PrimKind::Esfera => "Esfera",
+            PrimKind::Cone => "Cone",
+            PrimKind::Toro => "Toro",
+            PrimKind::Cunha => "Cunha",
+            PrimKind::Prisma => "Prisma",
+        }
+    }
+    /// Nomes das medidas a, b, c, d ("" = não usada).
+    pub fn params(self) -> [&'static str; 4] {
+        match self {
+            PrimKind::Caixa => ["Largura", "Profundidade", "Altura", ""],
+            PrimKind::Cilindro => ["Raio", "Altura", "", ""],
+            PrimKind::Esfera => ["Raio", "", "", ""],
+            PrimKind::Cone => ["Raio da base", "Raio do topo", "Altura", ""],
+            PrimKind::Toro => ["Raio maior", "Raio menor", "", ""],
+            PrimKind::Cunha => ["X", "Y", "Z", "X do topo"],
+            PrimKind::Prisma => ["Lados", "Raio", "Altura", ""],
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct Primitive {
+    pub kind: PrimKind,
+    pub plane: PlaneRef,
+    pub a: String,
+    pub b: String,
+    pub c: String,
+    pub d: String,
+    pub op: BoolOp,
+}
+
+/// Casca: esvazia o sólido abrindo as faces escolhidas (pontos clicados).
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct Shell {
+    pub faces: Vec<[f64; 3]>,
+    pub thickness: String,
+    pub outward: bool,
+}
+
+/// Ângulo de saída nas faces escolhidas, a partir de um plano neutro (puxa pela normal dele).
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct Draft {
+    pub faces: Vec<[f64; 3]>,
+    pub neutral: PlaneRef,
+    pub angle: String,
+    pub reverse: bool,
+}
+
+/// Espessura: acrescenta (positivo) ou tira (negativo) material das faces escolhidas.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct Thickness {
+    pub faces: Vec<[f64; 3]>,
+    pub value: String,
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub enum PatternKind {
+    /// Uma ou duas direções: quantidade e espaçamento.
+    Linear { dir: AxisRef, count: String, spacing: String, dir2: Option<AxisRef>, count2: String, spacing2: String },
+    /// Em volta de um eixo: quantidade e ângulo total (360 = volta completa, distribuída por igual).
+    Circular { axis: AxisRef, count: String, angle: String },
+    /// Cópias nos pontos escolhidos (deslocadas do ponto base).
+    Points { points: Vec<PointRef>, base: PointRef },
+}
+
+/// Padrão: repete os comandos escolhidos (ou o corpo inteiro, se a lista estiver vazia).
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct Pattern {
+    pub kind: PatternKind,
+    pub sources: Vec<Id>,
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct Mirror {
+    pub plane: PlaneRef,
+    pub sources: Vec<Id>,
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct Scale {
+    pub center: PointRef,
+    pub factor: String,
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct Stiffener {
+    pub sketch: Id,
+    pub thickness: String,
+    pub depth: String,
+    /// para o outro lado do plano do sketch
+    pub reverse: bool,
+}
+
+/// Rosca numa face cilíndrica: externa num eixo, interna num furo.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct Thread {
+    /// ponto clicado na face cilíndrica
+    pub face: [f64; 3],
+    /// designação da tabela de roscas (ex.: "M8x1.25")
+    pub spec: String,
+    pub length: String,
+    /// sulco helicoidal real (booleana) em vez de cosmética
+    pub modeled: bool,
 }
 
 /// Sketch: plano + geometria livre com restrições (ver [`crate::sketch`]).
@@ -773,6 +1107,16 @@ pub struct Extrude {
     pub op: BoolOp,
     pub extent: Extent,
     pub reverse: bool,
+    /// ângulo de saída (graus; 0 = reto)
+    #[serde(default = "zero")]
+    pub taper: String,
+    /// parede fina com esta espessura
+    #[serde(default)]
+    pub thin: Option<String>,
+}
+
+fn zero() -> String {
+    "0".into()
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -782,6 +1126,8 @@ pub struct Revolve {
     pub angle: String,
     pub symmetric: bool,
     pub op: BoolOp,
+    #[serde(default)]
+    pub thin: Option<String>,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -822,6 +1168,22 @@ pub enum EdgeSel {
 pub struct EdgeOp {
     pub value: String,
     pub edges: EdgeSel,
+    #[serde(default)]
+    pub mode: EdgeMode,
+}
+
+/// Variações de filete/chanfro.
+#[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
+pub enum EdgeMode {
+    /// raio ou distância constante
+    #[default]
+    Constant,
+    /// filete variável: raio no início = valor, no fim = este
+    Variable(String),
+    /// chanfro com duas distâncias (a segunda)
+    TwoDist(String),
+    /// chanfro por distância e ângulo (graus)
+    DistAngle(String),
 }
 
 // ---------------------------------------------------------------- Documento
@@ -1095,31 +1457,7 @@ impl Document {
             r.kind.walk(&mut |_| {}, &mut |e| f(e));
         }
         for feat in &mut self.features {
-            match &mut feat.kind {
-                FeatureKind::Sketch(s) => {
-                    for v in s.data.exprs_mut() {
-                        f(v)
-                    }
-                }
-                FeatureKind::Extrude(e) => extent_exprs(&mut e.extent, &mut f),
-                FeatureKind::Revolve(r) => f(&mut r.angle),
-                FeatureKind::Hole(h) => {
-                    f(&mut h.diameter);
-                    extent_exprs(&mut h.depth, &mut f);
-                    match &mut h.kind {
-                        HoleKind::Simples => {}
-                        HoleKind::Rebaixado { diameter, depth } => {
-                            f(diameter);
-                            f(depth)
-                        }
-                        HoleKind::Escareado { diameter, angle } => {
-                            f(diameter);
-                            f(angle)
-                        }
-                    }
-                }
-                FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => f(&mut o.value),
-            }
+            feat.kind.walk(&mut |_| {}, &mut |e| f(e));
         }
     }
 
@@ -1222,35 +1560,13 @@ impl Document {
 
     /// Ids que um comando referencia diretamente.
     pub fn refs_of(kind: &FeatureKind) -> Vec<Id> {
-        let plane = |p: &PlaneRef| match p {
-            PlaneRef::Datum(id) => Some(*id),
-            _ => None,
-        };
-        match kind {
-            FeatureKind::Sketch(s) => plane(&s.plane).into_iter().collect(),
-            FeatureKind::Extrude(e) => {
-                let mut v = vec![e.sketch];
-                if let Extent::UpTo(PlaneRef::Datum(id)) = e.extent {
-                    v.push(id)
-                }
-                v
+        let mut v = vec![];
+        kind.clone().walk(&mut |x| {
+            if !v.contains(x) {
+                v.push(*x)
             }
-            FeatureKind::Revolve(r) => {
-                let mut v = vec![r.sketch];
-                let mut ax = r.axis;
-                ax.walk(&mut |x| {
-                    if *x != r.sketch {
-                        v.push(*x)
-                    }
-                });
-                v
-            }
-            FeatureKind::Hole(h) => vec![h.sketch],
-            FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => match &o.edges {
-                EdgeSel::CreatedBy(id) => vec![*id],
-                EdgeSel::AllOfBody | EdgeSel::Edges(_) => vec![],
-            },
-        }
+        }, &mut |_| {});
+        v
     }
 
     /// Todos os objetos que dependem (direta ou indiretamente) de `id`.
@@ -1310,34 +1626,11 @@ impl Document {
                 *n += 1
             }
         };
-        let swap_plane = |p: &mut PlaneRef, n: &mut usize| {
-            if let PlaneRef::Datum(x) = p {
-                swap(x, n)
-            }
-        };
         for r in &mut self.references {
             r.kind.walk(&mut |x| swap(x, &mut n), &mut |_| {});
         }
         for f in &mut self.features {
-            match &mut f.kind {
-                FeatureKind::Sketch(s) => swap_plane(&mut s.plane, &mut n),
-                FeatureKind::Extrude(e) => {
-                    swap(&mut e.sketch, &mut n);
-                    if let Extent::UpTo(p) = &mut e.extent {
-                        swap_plane(p, &mut n)
-                    }
-                }
-                FeatureKind::Revolve(r) => {
-                    swap(&mut r.sketch, &mut n);
-                    r.axis.walk(&mut |x| swap(x, &mut n));
-                }
-                FeatureKind::Hole(h) => swap(&mut h.sketch, &mut n),
-                FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => {
-                    if let EdgeSel::CreatedBy(x) = &mut o.edges {
-                        swap(x, &mut n)
-                    }
-                }
-            }
+            f.kind.walk(&mut |x| swap(x, &mut n), &mut |_| {});
         }
         Ok(n)
     }
@@ -1403,16 +1696,6 @@ impl Document {
     }
 }
 
-fn extent_exprs(e: &mut Extent, f: &mut impl FnMut(&mut String)) {
-    match e {
-        Extent::Blind(d) | Extent::Symmetric(d) => f(d),
-        Extent::TwoSides(a, b) => {
-            f(a);
-            f(b)
-        }
-        Extent::ThroughAll | Extent::UpTo(_) => {}
-    }
-}
 
 fn validate_name(n: &str) -> Result<(), DocError> {
     let ok = n.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')

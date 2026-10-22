@@ -10,7 +10,7 @@ pub mod profile;
 use profile::{ev, eval_sketch, to3d, EvalSketch, Vars};
 use scc_core::sketch::{Curve, Kind};
 use scc_core::*;
-use scc_kernel::{Bool, Frame, HoleShape, KernelError, Mesh, MassProps, Shape};
+use scc_kernel::{Bool, Frame, HoleShape, KernelError, Mesh, MassProps, Shape, Xform};
 use geo3d::{Curve3, V3};
 use std::collections::HashMap;
 use std::time::Instant;
@@ -173,6 +173,8 @@ struct Ctx<'a> {
     sketches: HashMap<Id, (Frame, EvalSketch)>,
     /// sólido gerado por cada comando (base para filete/chanfro por comando)
     status: HashMap<Id, Status>,
+    /// ferramenta e operação de cada comando de forma (para padrões e espelho)
+    tools: HashMap<Id, (Shape, BoolOp)>,
 }
 
 impl Ctx<'_> {
@@ -517,6 +519,12 @@ impl Ctx<'_> {
     /// Aplica a ferramenta ao corpo do coletor; faces novas passam a pertencer ao comando `fid`.
     fn apply(&mut self, target: Id, tool: Shape, op: BoolOp, fid: Id) -> Result<(), String> {
         let k = |e: KernelError| e.0;
+        // guarda a ferramenta (furos com rosca somam várias)
+        let kept = match self.tools.remove(&fid) {
+            Some((t, o)) if o == op => t.compound(&tool),
+            _ => tool.clone(),
+        };
+        self.tools.insert(fid, (kept, op));
         let next = match (self.body_owned(target), op) {
             (None, BoolOp::Add) => {
                 let n = tool.face_count() as usize;
@@ -538,6 +546,30 @@ impl Ctx<'_> {
         Ok(())
     }
 
+    /// Repete as ferramentas dos comandos `sources` (ou o corpo inteiro) pelas transformações.
+    fn replicate(&mut self, f: &Feature, sources: &[Id], xs: &[Xform]) -> Result<(), String> {
+        let k = |e: KernelError| e.0;
+        if sources.is_empty() {
+            let b = self.body(f.target).ok_or("não há corpo para repetir")?.clone();
+            let mut acc = Shape::empty();
+            for x in xs {
+                let c = b.transformed(*x).map_err(k)?;
+                acc = if acc.is_null() { c } else { acc.compound(&c) };
+            }
+            return self.apply(f.target, acc, BoolOp::Add, f.id);
+        }
+        for src in sources {
+            let (tool, op) = self.tools.get(src).cloned().ok_or_else(|| format!("'{}' não gera forma para repetir (ou vem depois)", self.doc.name_of(*src)))?;
+            let mut acc = Shape::empty();
+            for x in xs {
+                let c = tool.transformed(*x).map_err(k)?;
+                acc = if acc.is_null() { c } else { acc.compound(&c) };
+            }
+            self.apply(f.target, acc, op, f.id)?;
+        }
+        Ok(())
+    }
+
     fn run(&mut self, f: &Feature) -> Result<Option<String>, String> {
         let k = |e: KernelError| e.0;
         match &f.kind {
@@ -553,7 +585,11 @@ impl Ctx<'_> {
                 if sk.loops.is_empty() {
                     return Err("o sketch não tem perfis fechados".into());
                 }
-                let face = Shape::face(frame, &sk.loops).map_err(k)?;
+                let mut face = Shape::face(frame, &sk.loops).map_err(k)?;
+                if let Some(t) = &e.thin {
+                    face = face.thin(ev(t, &self.vars, "espessura da parede")?).map_err(k)?;
+                }
+                let taper = ev(&e.taper, &self.vars, "ângulo de saída")?;
                 // recorte entra no material (contra a normal); "inverter" troca o sentido
                 let into = (e.op == BoolOp::Cut) != e.reverse;
                 let n = frame.normal;
@@ -571,6 +607,11 @@ impl Ctx<'_> {
                     }
                     let size = loops_size(&sk.loops);
                     face.extrude_until(dir, t * 4. + size * 10. + 100., target.origin, n).map_err(k)?
+                } else if taper.abs() > 1e-9 {
+                    let Extent::Blind(d) = &e.extent else {
+                        return Err("o ângulo de saída vale só com término 'cego'".into());
+                    };
+                    face.extrude_taper(dir, ev(d, &self.vars, "distância")?, taper).map_err(k)?
                 } else {
                     let (front, back) = self.extent(&e.extent, f.target)?;
                     face.extrude(dir, front, back).map_err(k)?
@@ -584,7 +625,10 @@ impl Ctx<'_> {
                     return Err("o sketch não tem perfis fechados".into());
                 }
                 let (origin, dir) = self.axis(&r.axis)?;
-                let face = Shape::face(frame, &sk.loops).map_err(k)?;
+                let mut face = Shape::face(frame, &sk.loops).map_err(k)?;
+                if let Some(t) = &r.thin {
+                    face = face.thin(ev(t, &self.vars, "espessura da parede")?).map_err(k)?;
+                }
                 let ang = ev(&r.angle, &self.vars, "ângulo")?;
                 let start = if r.symmetric { -ang / 2. } else { 0. };
                 let tool = face.revolve(origin, dir, ang, start).map_err(k)?;
@@ -656,11 +700,198 @@ impl Ctx<'_> {
                 }
                 Ok(None)
             }
+            FeatureKind::Sweep(w) => {
+                let (frame, sk) = self.sketch(w.sketch)?;
+                if sk.loops.is_empty() {
+                    return Err("o sketch do perfil não tem contorno fechado".into());
+                }
+                let mut face = Shape::face(frame, &sk.loops).map_err(k)?;
+                if let Some(t) = &w.thin {
+                    face = face.thin(ev(t, &self.vars, "espessura da parede")?).map_err(k)?;
+                }
+                let spine = self.curve(&w.spine, 0)?;
+                let mode = match w.mode {
+                    SweepMode::Corrigido => 0,
+                    SweepMode::Fixo => 1,
+                    SweepMode::Frenet => 2,
+                };
+                let tool = face.sweep(&spine.pts, mode).map_err(k)?;
+                self.apply(f.target, tool, w.op, f.id)?;
+                Ok(None)
+            }
+            FeatureKind::Loft(l) => {
+                let mut comp = Shape::empty();
+                for id in &l.sections {
+                    let (frame, sk) = self.sketch(*id)?;
+                    if sk.loops.is_empty() {
+                        return Err(format!("o sketch '{}' não tem contorno fechado", self.doc.name_of(*id)));
+                    }
+                    let face = Shape::face(frame, &sk.loops[..1]).map_err(k)?;
+                    comp = if comp.is_null() { face } else { comp.compound(&face) };
+                }
+                let tool = comp.loft(l.ruled, l.closed).map_err(k)?;
+                self.apply(f.target, tool, l.op, f.id)?;
+                Ok(None)
+            }
+            FeatureKind::Primitive(pr) => {
+                let fr = self.plane(&pr.plane, 0)?;
+                let names = pr.kind.params();
+                let mut vals = vec![];
+                for (e, n) in [&pr.a, &pr.b, &pr.c, &pr.d].into_iter().zip(names) {
+                    vals.push(if n.is_empty() { 0. } else { ev(e, &self.vars, n)? });
+                }
+                let kind = PrimKind::ALL.iter().position(|x| *x == pr.kind).unwrap_or(0) as u8;
+                let tool = Shape::primitive(kind, &fr, &vals).map_err(k)?;
+                self.apply(f.target, tool, pr.op, f.id)?;
+                Ok(None)
+            }
+            FeatureKind::Shell(sh) => {
+                let t = ev(&sh.thickness, &self.vars, "espessura")?;
+                let (b, owners) = self.body_owned(f.target).ok_or("não há corpo para esvaziar")?;
+                let (s, out) = b.shell_tagged(&sh.faces, t, sh.outward, &tags_for(owners)).map_err(k)?;
+                let own = remap(owners, &out, f.id);
+                self.bodies.insert(f.target, (s, own));
+                Ok(None)
+            }
+            FeatureKind::Draft(d) => {
+                let a = ev(&d.angle, &self.vars, "ângulo")?;
+                let neutral = self.plane(&d.neutral, 0)?;
+                let pull = if d.reverse { neutral.normal.map(|x| -x) } else { neutral.normal };
+                let (b, owners) = self.body_owned(f.target).ok_or("não há corpo para aplicar")?;
+                let (s, out) = b.draft_tagged(&d.faces, pull, a, &neutral, &tags_for(owners)).map_err(k)?;
+                let own = remap(owners, &out, f.id);
+                self.bodies.insert(f.target, (s, own));
+                Ok(None)
+            }
+            FeatureKind::Thickness(t) => {
+                let v = ev(&t.value, &self.vars, "espessura")?;
+                if v.abs() < 1e-9 {
+                    return Ok(Some("espessura zero: nada a fazer".into()));
+                }
+                let b = self.body(f.target).ok_or("não há corpo para aplicar")?;
+                let tool = b.faces_offset_tool(&t.faces, v).map_err(k)?;
+                self.apply(f.target, tool, if v > 0. { BoolOp::Add } else { BoolOp::Cut }, f.id)?;
+                Ok(None)
+            }
+            FeatureKind::Pattern(pt) => {
+                let mut xs: Vec<Xform> = vec![];
+                match &pt.kind {
+                    PatternKind::Linear { dir, count, spacing, dir2, count2, spacing2 } => {
+                        let n1 = ev(count, &self.vars, "quantidade")?.round().max(1.) as usize;
+                        let d1 = ev(spacing, &self.vars, "espaçamento")?;
+                        let (_, u1) = self.axis(dir)?;
+                        let (n2, d2, u2) = match dir2 {
+                            Some(a) => (ev(count2, &self.vars, "quantidade 2")?.round().max(1.) as usize, ev(spacing2, &self.vars, "espaçamento 2")?, self.axis(a)?.1),
+                            None => (1, 0., [0.; 3]),
+                        };
+                        for i in 0..n1 {
+                            for j in 0..n2 {
+                                if i + j == 0 {
+                                    continue;
+                                }
+                                xs.push(Xform::Translate([0, 1, 2].map(|c| u1[c] * d1 * i as f64 + u2[c] * d2 * j as f64)));
+                            }
+                        }
+                    }
+                    PatternKind::Circular { axis, count, angle } => {
+                        let n = ev(count, &self.vars, "quantidade")?.round().max(1.) as usize;
+                        let total = ev(angle, &self.vars, "ângulo")?;
+                        let (o, d) = self.axis(axis)?;
+                        // volta completa: divide por n; arco: divide por n-1 (primeira e última nas pontas)
+                        let step = if (total.abs() - 360.).abs() < 1e-6 { total / n as f64 } else { total / (n.max(2) - 1) as f64 };
+                        for i in 1..n {
+                            xs.push(Xform::Rotate(o, d, step * i as f64));
+                        }
+                    }
+                    PatternKind::Points { points, base } => {
+                        let b0 = self.point(base, 0)?;
+                        for q in points {
+                            let p = self.point(q, 0)?;
+                            xs.push(Xform::Translate([p[0] - b0[0], p[1] - b0[1], p[2] - b0[2]]));
+                        }
+                    }
+                }
+                if xs.is_empty() {
+                    return Ok(Some("padrão com uma só instância".into()));
+                }
+                self.replicate(f, &pt.sources, &xs)?;
+                Ok(None)
+            }
+            FeatureKind::Mirror(m) => {
+                let pl = self.plane(&m.plane, 0)?;
+                self.replicate(f, &m.sources, &[Xform::Mirror(pl.origin, pl.normal)])?;
+                Ok(None)
+            }
+            FeatureKind::Scale(sc) => {
+                let c = self.point(&sc.center, 0)?;
+                let kf = ev(&sc.factor, &self.vars, "fator")?;
+                let (b, owners) = self.body_owned(f.target).ok_or("não há corpo para escalar")?;
+                let (s, out) = b.transformed_tagged(Xform::Scale(c, kf), &tags_for(owners)).map_err(k)?;
+                let own = remap(owners, &out, f.id);
+                self.bodies.insert(f.target, (s, own));
+                Ok(None)
+            }
+            FeatureKind::Stiffener(st) => {
+                let (frame, sk) = self.sketch(st.sketch)?;
+                let frame = *frame;
+                let segs: Vec<([f64; 3], [f64; 3])> = sk.lines.values().map(|(a, b)| (frame.point(a[0], a[1]), frame.point(b[0], b[1]))).collect();
+                if segs.is_empty() {
+                    return Err("o sketch do reforço precisa de linhas".into());
+                }
+                let t = ev(&st.thickness, &self.vars, "espessura")?;
+                let depth = ev(&st.depth, &self.vars, "profundidade")?;
+                let face = Shape::thick_segments(&segs, frame.normal, t).map_err(k)?;
+                // entra no material como um furo (contra a normal); "inverter" troca o lado
+                let dir = if st.reverse { frame.normal } else { frame.normal.map(|x| -x) };
+                let tool = face.extrude(dir, depth, 0.).map_err(k)?;
+                self.apply(f.target, tool, BoolOp::Add, f.id)?;
+                Ok(None)
+            }
+            FeatureKind::Thread(t) => {
+                let spec = hardware::thread(&t.spec).ok_or_else(|| format!("rosca '{}' não encontrada na tabela de normas", t.spec))?;
+                let b = self.body(f.target).ok_or("não há corpo para roscar")?;
+                let cyl = b.cylinder_at(t.face).map_err(k)?;
+                let len = ev(&t.length, &self.vars, "comprimento")?.min(cyl.h1 - cyl.h0);
+                let d = 2. * cyl.radius;
+                let nominal = if cyl.internal { spec.tap_drill } else { spec.major };
+                let note = ((d - nominal).abs() > 0.3 * spec.pitch).then(|| format!("Ø da face {d:.2} ≠ {nominal:.2} da rosca {}", spec.name));
+                if !t.modeled {
+                    return Ok(Some(note.unwrap_or_else(|| format!("rosca cosmética {}", spec.name))));
+                }
+                if len < spec.pitch {
+                    return Err("comprimento menor que um passo".into());
+                }
+                let o = [0, 1, 2].map(|i| cyl.origin[i] + cyl.dir[i] * cyl.h0);
+                let tool = if cyl.internal {
+                    Shape::thread_tool(o, cyl.dir, spec.major, spec.pitch, len, spec.angle)
+                } else {
+                    Shape::thread_tool_ext(o, cyl.dir, spec.major, spec.pitch, len, spec.angle)
+                }
+                .map_err(k)?;
+                self.apply(f.target, tool, BoolOp::Cut, f.id)?;
+                Ok(note)
+            }
             FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => {
                 let v = ev(&o.value, &self.vars, "valor")?;
                 let (b, owners) = self.body_owned(f.target).ok_or("não há corpo para aplicar")?;
                 let tags = tags_for(owners);
                 let chamfer = matches!(f.kind, FeatureKind::Chamfer(_));
+                if o.mode != EdgeMode::Constant {
+                    let EdgeSel::Edges(mids) = &o.edges else {
+                        return Err("esta variação precisa das arestas escolhidas na viewport".into());
+                    };
+                    let tol = b.bbox().map(|(a, c)| (0..3).map(|i| (c[i] - a[i]).powi(2)).sum::<f64>().sqrt() * 0.05).unwrap_or(1.).max(1.);
+                    let (mode, v2) = match &o.mode {
+                        EdgeMode::Variable(x) => (0, ev(x, &self.vars, "raio final")?),
+                        EdgeMode::TwoDist(x) => (1, ev(x, &self.vars, "segunda distância")?),
+                        EdgeMode::DistAngle(x) => (2, ev(x, &self.vars, "ângulo")?),
+                        EdgeMode::Constant => unreachable!(),
+                    };
+                    let (s, out) = b.edges_mode_tagged(mode, v, v2, mids, tol, &tags).map_err(k)?;
+                    let own = remap(owners, &out, f.id);
+                    self.bodies.insert(f.target, (s, own));
+                    return Ok(None);
+                }
                 let r = match &o.edges {
                     EdgeSel::Edges(mids) if !mids.is_empty() => {
                         let tol = b.bbox().map(|(a, c)| (0..3).map(|i| (c[i] - a[i]).powi(2)).sum::<f64>().sqrt() * 0.05).unwrap_or(1.).max(1.);
@@ -689,7 +920,7 @@ pub fn recompute(doc: &Document) -> RecomputeResult {
         Ok(v) => (v, None),
         Err(e) => (HashMap::new(), Some(e.to_string())),
     };
-    let mut cx = Ctx { doc, vars, bodies: HashMap::new(), sketches: HashMap::new(), status: HashMap::new() };
+    let mut cx = Ctx { doc, vars, bodies: HashMap::new(), sketches: HashMap::new(), status: HashMap::new(), tools: HashMap::new() };
 
     // 1º: sketches livres (pastas de geometria, sem linha do tempo); 2º: comandos dos coletores em ordem
     let order: Vec<usize> = (0..doc.features.len())
@@ -812,7 +1043,7 @@ pub fn recompute(doc: &Document) -> RecomputeResult {
 /// Exporta o corpo de um coletor (ou de todos) após recalcular.
 pub fn export(doc: &Document, collector: Option<Id>, path: &str) -> Result<(), String> {
     let vars = doc.eval_params().map_err(|e| e.to_string())?;
-    let mut cx = Ctx { doc, vars, bodies: HashMap::new(), sketches: HashMap::new(), status: HashMap::new() };
+    let mut cx = Ctx { doc, vars, bodies: HashMap::new(), sketches: HashMap::new(), status: HashMap::new(), tools: HashMap::new() };
     for f in doc.active_features().map(|(_, f)| f) {
         let _ = cx.run(f);
     }
@@ -872,7 +1103,7 @@ pub fn example_document() -> Document {
     }
     let base = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data: sk }));
     d.feature_mut(base).unwrap().name = s("Sketch base");
-    let ex = d.add_feature(FeatureKind::Extrude(Extrude { sketch: base, op: BoolOp::Add, extent: Extent::Blind(s("esp")), reverse: false }));
+    let ex = d.add_feature(FeatureKind::Extrude(Extrude { sketch: base, op: BoolOp::Add, extent: Extent::Blind(s("esp")), reverse: false, taper: s("0"), thin: None }));
     d.feature_mut(ex).unwrap().name = s("Placa");
 
     let topo = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "esp");
@@ -906,7 +1137,7 @@ pub fn example_document() -> Document {
     }));
     d.feature_mut(furo).unwrap().name = s("Furos M6");
     let fol = d.add_folder("Acabamentos");
-    let fil = d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::AllOfBody }));
+    let fil = d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::AllOfBody, mode: EdgeMode::Constant }));
     d.feature_mut(fil).unwrap().folder = Some(fol);
     d
 }
@@ -914,6 +1145,164 @@ pub fn example_document() -> Document {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn sk_rect(d: &mut Document, plane: PlaneRef, a: [f64; 2], b: [f64; 2]) -> Id {
+        let mut data = SketchData::default();
+        let mut n = 1_000_000u64 + d.features.len() as u64 * 1000;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        data.add_rect(&mut al, a, b, false);
+        d.add_feature(FeatureKind::Sketch(Sketch { plane, data }))
+    }
+
+    fn sk_lines(d: &mut Document, plane: PlaneRef, segs: &[([f64; 2], [f64; 2])]) -> Id {
+        let mut data = SketchData::default();
+        let mut n = 2_000_000u64 + d.features.len() as u64 * 1000;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        for (a, b) in segs {
+            let pa = data.add_point(&mut al, a[0], a[1]);
+            let pb = data.add_point(&mut al, b[0], b[1]);
+            data.add_curve(&mut al, scc_core::sketch::Curve::Line { a: pa, b: pb }, false);
+        }
+        d.add_feature(FeatureKind::Sketch(Sketch { plane, data }))
+    }
+
+    fn ext(sketch: Id, op: BoolOp, d: &str) -> FeatureKind {
+        FeatureKind::Extrude(Extrude { sketch, op, extent: Extent::Blind(d.into()), reverse: false, taper: "0".into(), thin: None })
+    }
+
+    /// Caixa 40 × 30 × 20 centrada na origem (base em z = 0).
+    fn caixa() -> Document {
+        let mut d = Document::new("t");
+        let s = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [-20., -15.], [20., 15.]);
+        d.add_feature(ext(s, BoolOp::Add, "20"));
+        d
+    }
+
+    fn vol(d: &Document) -> f64 {
+        let r = recompute(d);
+        for f in &d.features {
+            // sketch de linhas abertas (reforço) avisa que não há perfil fechado
+            let sketch_warn = matches!(f.kind, FeatureKind::Sketch(_)) && matches!(r.status[&f.id], Status::Warning(_));
+            assert!(r.status[&f.id] == Status::Ok || sketch_warn, "{}: {:?}", f.name, r.status[&f.id]);
+        }
+        r.bodies.iter().map(|b| b.mass.volume).sum()
+    }
+
+    #[test]
+    fn features_de_forma_acabamento_e_padroes() {
+        if !scc_kernel::AVAILABLE {
+            return;
+        }
+        let near = |a: f64, b: f64, tol: f64| (a - b).abs() <= tol * b.abs().max(1.);
+        let v0 = vol(&caixa());
+        assert!(near(v0, 24000., 1e-6));
+
+        // casca abrindo o topo
+        let mut d = caixa();
+        d.add_feature(FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false }));
+        let v = vol(&d);
+        assert!(v < v0 * 0.5 && v > 0., "casca {v}");
+
+        // ângulo de saída numa face lateral
+        let mut d = caixa();
+        d.add_feature(FeatureKind::Draft(Draft { faces: vec![[20., 0., 10.]], neutral: PlaneRef::Origin(OriginPlane::XY), angle: "5".into(), reverse: false }));
+        assert!(!near(vol(&d), v0, 1e-6), "saída sem efeito");
+
+        // espessura +5 no topo
+        let mut d = caixa();
+        d.add_feature(FeatureKind::Thickness(Thickness { faces: vec![[0., 0., 20.]], value: "5".into() }));
+        assert!(near(vol(&d), v0 + 6000., 1e-6));
+
+        // padrão linear de um bolso 4×4×5: 3 cópias ao longo de X
+        let mut d = caixa();
+        let top = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "20");
+        let sp = sk_rect(&mut d, PlaneRef::Datum(top), [-16., -2.], [-12., 2.]);
+        let pocket = d.add_feature(ext(sp, BoolOp::Cut, "5"));
+        let v1 = vol(&d);
+        assert!(near(v1, v0 - 80., 1e-6));
+        d.add_feature(FeatureKind::Pattern(Pattern {
+            kind: PatternKind::Linear { dir: AxisRef::Origin(OriginAxis::X), count: "3".into(), spacing: "8".into(), dir2: None, count2: "1".into(), spacing2: "0".into() },
+            sources: vec![pocket],
+        }));
+        assert!(near(vol(&d), v0 - 240., 1e-6));
+        // espelho do bolso pelo YZ e padrão circular de 4 em volta de Z
+        let mut e = d.clone();
+        e.add_feature(FeatureKind::Mirror(Mirror { plane: PlaneRef::Origin(OriginPlane::YZ), sources: vec![pocket] }));
+        assert!(near(vol(&e), v0 - 320., 1e-6));
+        let mut e = d.clone();
+        e.features.pop();
+        e.add_feature(FeatureKind::Pattern(Pattern { kind: PatternKind::Circular { axis: AxisRef::Origin(OriginAxis::Z), count: "2".into(), angle: "360".into() }, sources: vec![pocket] }));
+        assert!(near(vol(&e), v0 - 160., 1e-6));
+
+        // primitiva: cilindro r5 h10 sobre o topo
+        let mut d = caixa();
+        let top = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "20");
+        d.add_feature(FeatureKind::Primitive(Primitive { kind: PrimKind::Cilindro, plane: PlaneRef::Datum(top), a: "5".into(), b: "10".into(), c: "0".into(), d: "0".into(), op: BoolOp::Add }));
+        assert!(near(vol(&d), v0 + std::f64::consts::PI * 250., 1e-3));
+        // rosca externa modelada no cilindro (M10)
+        let mut e = d.clone();
+        e.add_feature(FeatureKind::Thread(Thread { face: [5., 0., 25.], spec: "M10x1.5".into(), length: "8".into(), modeled: true }));
+        let vt = vol(&e);
+        assert!(vt < vol(&d) - 1., "rosca externa {vt}");
+
+        // escala ×2
+        let mut d = caixa();
+        d.add_feature(FeatureKind::Scale(Scale { center: PointRef::Origin, factor: "2".into() }));
+        assert!(near(vol(&d), v0 * 8., 1e-6));
+
+        // extrusão com ângulo e parede fina
+        let mut d = Document::new("t");
+        let s = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [-10., -10.], [10., 10.]);
+        let id = d.add_feature(ext(s, BoolOp::Add, "10"));
+        if let Some(FeatureKind::Extrude(x)) = d.feature_mut(id).map(|f| &mut f.kind) {
+            x.taper = "5".into();
+        }
+        let v = vol(&d);
+        assert!(v < 4000. && v > 3000., "cônica {v}");
+        if let Some(FeatureKind::Extrude(x)) = d.feature_mut(id).map(|f| &mut f.kind) {
+            x.taper = "0".into();
+            x.thin = Some("2".into());
+        }
+        let v = vol(&d);
+        assert!(near(v, 80. * 2. * 10., 0.02), "parede fina {v}");
+
+        // multi-seções: quadrado 20 em z=0 até quadrado 10 em z=20
+        let mut d = Document::new("t");
+        let a = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [-10., -10.], [10., 10.]);
+        let pl = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "20");
+        let b = sk_rect(&mut d, PlaneRef::Datum(pl), [-5., -5.], [5., 5.]);
+        d.add_feature(FeatureKind::Loft(Loft { sections: vec![a, b], ruled: true, closed: false, op: BoolOp::Add }));
+        // tronco de pirâmide: h/3 (A1 + A2 + sqrt(A1 A2))
+        assert!(near(vol(&d), 20. / 3. * (400. + 100. + 200.), 1e-3));
+
+        // nervura: perfil 4×4 no YZ varrido 50 mm ao longo de X
+        let mut d = Document::new("t");
+        let s = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::YZ), [-2., -2.], [2., 2.]);
+        let ln = d.add_geometry(RefKind::LinePoints { a: PointRef::Origin, b: PointRef::Fixed([50., 0., 0.]), start: "0".into(), end: "0".into() });
+        d.add_feature(FeatureKind::Sweep(Sweep { sketch: s, spine: CurveRef::Ref(ln), mode: SweepMode::Corrigido, op: BoolOp::Add, thin: None }));
+        assert!(near(vol(&d), 16. * 50., 1e-3));
+
+        // reforço: linha de 20 mm, espessura 2, profundidade 10 (não precisa de corpo)
+        let mut d = Document::new("t");
+        let s = sk_lines(&mut d, PlaneRef::Origin(OriginPlane::XY), &[([-10., 0.], [10., 0.])]);
+        d.add_feature(FeatureKind::Stiffener(Stiffener { sketch: s, thickness: "2".into(), depth: "10".into(), reverse: true }));
+        let v = vol(&d);
+        assert!(near(v, (20. * 2. + std::f64::consts::PI) * 10., 1e-3), "reforço {v}");
+
+        // filete variável e chanfro por distância e ângulo numa aresta do topo
+        for mode in [EdgeMode::Variable("4".into()), EdgeMode::TwoDist("3".into()), EdgeMode::DistAngle("30".into())] {
+            let mut d = caixa();
+            let op = EdgeOp { value: "2".into(), edges: EdgeSel::Edges(vec![[0., 15., 20.]]), mode: mode.clone() };
+            d.add_feature(if matches!(mode, EdgeMode::Variable(_)) { FeatureKind::Fillet(op) } else { FeatureKind::Chamfer(op) });
+            assert!(vol(&d) < v0, "{mode:?}");
+        }
+    }
 
     #[test]
     fn rosca_modelada_remove_material() {
