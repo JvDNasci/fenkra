@@ -1,0 +1,10 @@
+[package]
+name = "scc-solidos"
+description = "Módulo Modelagem Sólida: recompute dos comandos sobre o kernel"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+scc-core = { path = "../scc-core" }
+scc-kernel = { path = "../scc-kernel" }

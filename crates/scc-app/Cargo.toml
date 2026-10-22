@@ -1,0 +1,20 @@
+[package]
+name = "scc-app"
+description = "Aplicativo SolidCadCraft"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "solidcadcraft"
+path = "src/main.rs"
+
+[dependencies]
+scc-core = { path = "../scc-core" }
+scc-kernel = { path = "../scc-kernel" }
+scc-solidos = { path = "../scc-solidos" }
+scc-project = { path = "../scc-project" }
+eframe = { version = "0.37", features = ["wgpu"] }
+glam.workspace = true
+bytemuck.workspace = true
+rfd = "0.17"

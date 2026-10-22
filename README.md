@@ -4,12 +4,31 @@ CAD 3D paramétrico open source, leve e modular: modelagem sólida com sketches 
 projeto relacional com geometria mestre, montagens e mecanismos, desenho técnico sincronizado,
 chapas metálicas, estruturas soldadas e gestão de projeto.
 
-> **Status:** fase de requisitos e especificação. Ainda não há código.
+> **Status:** protótipo v0.1 do módulo Modelagem Sólida (Rust + OpenCASCADE). Ver [protótipo](docs/prototipo.md).
+
+## Rodar
+
+```bash
+cargo run -p scc-app --release
+```
+
+Pré-requisitos (Rust, MSVC e OpenCASCADE via vcpkg) em [docs/prototipo.md](docs/prototipo.md).
+
+## Código
+
+| Crate | Papel |
+|---|---|
+| [scc-core](crates/scc-core) | Documento, árvore, linha de tempo, parâmetros, referências, edição não destrutiva |
+| [scc-kernel](crates/scc-kernel) | Fachada C++ do OpenCASCADE ligada ao Rust via `cxx` |
+| [scc-solidos](crates/scc-solidos) | Módulo Modelagem Sólida (recompute dos comandos) |
+| [scc-project](crates/scc-project) | Gestão de projeto: versões, revisões congeladas, PN |
+| [scc-app](crates/scc-app) | Interface egui + viewport wgpu |
 
 ## Documentação
 
 | Documento | Conteúdo |
 |---|---|
+| [Protótipo](docs/prototipo.md) | Como compilar, o que já funciona e limitações |
 | [Visão](docs/00-visao.md) | O que o projeto é, módulos, diferenciais e não-objetivos |
 | [Requisitos](docs/requisitos/README.md) | Requisitos funcionais e não-funcionais com IDs |
 | [Roadmap](docs/roadmap.md) | Fases e escopo de cada uma |
