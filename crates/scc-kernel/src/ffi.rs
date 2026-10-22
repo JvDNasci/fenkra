@@ -77,6 +77,9 @@ pub mod bridge {
         fn fillet_all_t(s: &Shape, r: f64, tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
         fn fillet_sel_t(s: &Shape, r: f64, mids: &[f64], tol: f64, tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
         fn chamfer_sel_t(s: &Shape, d: f64, mids: &[f64], tol: f64, tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
+        /// Ferramenta de rosca modelada (sulco helicoidal em V) a partir de `o`, ao longo de `d`.
+        fn thread_tool(ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64, major_d: f64, pitch: f64, length: f64, angle_deg: f64)
+            -> Result<UniquePtr<Shape>>;
         /// Extrusão do perfil na direção d até o plano (o, n), com comprimento máximo `len`.
         fn extrude_until(face: &Shape, dx: f64, dy: f64, dz: f64, len: f64, ox: f64, oy: f64, oz: f64, nx: f64, ny: f64, nz: f64)
             -> Result<UniquePtr<Shape>>;

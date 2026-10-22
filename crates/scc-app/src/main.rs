@@ -9,6 +9,7 @@ mod editor;
 mod render;
 mod scene;
 mod picking;
+mod viewcube;
 mod sketch_ui;
 
 use eframe::egui;

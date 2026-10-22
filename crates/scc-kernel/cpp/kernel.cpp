@@ -25,6 +25,12 @@
 #include <BRepPrimAPI_MakeCone.hxx>
 #include <BRepPrimAPI_MakeCylinder.hxx>
 #include <BRepPrimAPI_MakeHalfSpace.hxx>
+#include <BRepOffsetAPI_MakePipeShell.hxx>
+#include <BRepLib.hxx>
+#include <Geom_CylindricalSurface.hxx>
+#include <Geom2d_Line.hxx>
+#include <gp_Ax3.hxx>
+#include <gp_Lin2d.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
 #include <BRepPrimAPI_MakeRevol.hxx>
 #include <BRepTools_History.hxx>
@@ -378,6 +384,48 @@ std::unique_ptr<Shape> fillet_sel_t(const Shape& s, double r, rust::Slice<const 
 
 std::unique_ptr<Shape> chamfer_sel_t(const Shape& s, double d, rust::Slice<const double> mids, double tol, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out) {
     return edge_op_sel<BRepFilletAPI_MakeChamfer>("chanfro", s, d, mids, tol, tags, out);
+}
+
+// Ferramenta de rosca modelada: perfil em V varrido ao longo de uma hélice.
+// Interna (furo roscado): o sulco vai do diâmetro menor (furo) até o maior, removendo material.
+std::unique_ptr<Shape> thread_tool(double ox, double oy, double oz, double dx, double dy, double dz,
+                                   double major_d, double pitch, double length, double angle_deg) {
+    return guard("rosca", [&] {
+        if (pitch <= 0 || length <= 0 || major_d <= 0) throw std::runtime_error("rosca: passo, comprimento e diâmetro devem ser positivos");
+        const double depth = 0.6134 * pitch;              // profundidade da rosca (ISO)
+        const double r_maj = major_d / 2;
+        const double r_min = r_maj - depth;
+        const double half = std::tan(angle_deg / 2 * M_PI / 180.0) * (depth + 0.1 * pitch);
+        gp_Dir axis(dx, dy, dz);
+        gp_Pnt o(ox, oy, oz);
+        gp_Ax3 ax(o, axis);
+        Handle(Geom_CylindricalSurface) cyl = new Geom_CylindricalSurface(ax, r_min);
+        // hélice: linha no espaço (u = ângulo, v = altura) do cilindro
+        const double turns = length / pitch;
+        gp_Lin2d l2(gp_Pnt2d(0, 0), gp_Dir2d(2 * M_PI, pitch));
+        Handle(Geom2d_Line) line = new Geom2d_Line(l2);
+        const double span = turns * std::sqrt(4 * M_PI * M_PI + pitch * pitch);
+        TopoDS_Edge helix = BRepBuilderAPI_MakeEdge(line, cyl, 0.0, span).Edge();
+        BRepLib::BuildCurves3d(helix);
+        TopoDS_Wire spine = BRepBuilderAPI_MakeWire(helix).Wire();
+        // perfil em V no plano que contém o eixo, no início da hélice
+        gp_Dir xd = ax.XDirection();
+        auto P = [&](double r, double h) {
+            return gp_Pnt(o.X() + xd.X() * r + axis.X() * h, o.Y() + xd.Y() * r + axis.Y() * h, o.Z() + xd.Z() * r + axis.Z() * h);
+        };
+        const double r_in = r_min - 0.1 * pitch;          // começa um pouco dentro do furo
+        BRepBuilderAPI_MakeWire pw;
+        pw.Add(BRepBuilderAPI_MakeEdge(P(r_in, -half), P(r_maj, 0)).Edge());
+        pw.Add(BRepBuilderAPI_MakeEdge(P(r_maj, 0), P(r_in, half)).Edge());
+        pw.Add(BRepBuilderAPI_MakeEdge(P(r_in, half), P(r_in, -half)).Edge());
+        BRepOffsetAPI_MakePipeShell sweep(spine);
+        sweep.SetMode(axis);                               // binormal fixa: o perfil fica no plano do eixo
+        sweep.Add(pw.Wire());
+        sweep.Build();
+        if (!sweep.IsDone()) throw std::runtime_error("não foi possível gerar a hélice da rosca");
+        sweep.MakeSolid();
+        return wrap(sweep.Shape());
+    });
 }
 
 // Extrusão até um plano: prisma longo cortado pelo semi-espaço do lado do perfil.

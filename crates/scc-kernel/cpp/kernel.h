@@ -33,6 +33,8 @@ std::unique_ptr<Shape> boolean_t(const Shape& a, const Shape& b, uint8_t op, rus
 std::unique_ptr<Shape> fillet_all_t(const Shape& s, double r, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
 std::unique_ptr<Shape> fillet_sel_t(const Shape& s, double r, rust::Slice<const double> mids, double tol, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
 std::unique_ptr<Shape> chamfer_sel_t(const Shape& s, double d, rust::Slice<const double> mids, double tol, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
+std::unique_ptr<Shape> thread_tool(double ox, double oy, double oz, double dx, double dy, double dz,
+                                   double major_d, double pitch, double length, double angle_deg);
 std::unique_ptr<Shape> extrude_until(const Shape& face, double dx, double dy, double dz, double len,
                                      double ox, double oy, double oz, double nx, double ny, double nz);
 std::unique_ptr<Shape> chamfer_all_t(const Shape& s, double d, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);

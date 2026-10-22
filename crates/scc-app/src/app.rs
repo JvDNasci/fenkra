@@ -9,7 +9,7 @@ use crate::render::Viewport;
 use crate::scene;
 use crate::settings::{Dock, Settings, Theme, BACKGROUNDS};
 use crate::toolbar::{self, Act};
-use eframe::egui::{self, Color32, RichText};
+use eframe::egui::{self, Color32, Rect, RichText};
 use glam::Vec3;
 use scc_core::*;
 use scc_project::{DocState, Project};
@@ -118,6 +118,11 @@ pub struct App {
     started: bool,
     /// comando aberto em edição (ambiente com Concluir/Cancelar)
     pub session: Option<Session>,
+    /// seletor de vistas (tecla Espaço)
+    view_menu: bool,
+    new_view_name: String,
+    /// direção escolhida no cubo, aplicada à câmera no fim do quadro
+    view_choice: Option<Vec3>,
 }
 
 /// Edição de um comando como "ambiente": só termina com Concluir (mantém) ou Cancelar (desfaz).
@@ -177,12 +182,22 @@ impl App {
             hover_pick: None,
             started: false,
             session: None,
+            view_menu: false,
+            new_view_name: String::new(),
+            view_choice: None,
         };
         app.started = !app.settings.show_start;
         // desenvolvimento: SCC_ABRIR_SKETCH=<nome> abre esse sketch em edição ao iniciar
         if let Ok(name) = std::env::var("SCC_ABRIR_SKETCH") {
             app.begin_sketch_pending = app.open.doc.features.iter().find(|f| f.name == name).map(|f| f.id);
             app.started = true;
+        }
+        // desenvolvimento: SCC_EDITAR=<nome> abre esse comando como ambiente ao iniciar
+        if let Ok(name) = std::env::var("SCC_EDITAR") {
+            if let Some(id) = app.open.doc.features.iter().find(|f| f.name == name).map(|f| f.id) {
+                app.start_session(id, false, None);
+                app.started = true;
+            }
         }
         app.request_recompute();
         app
@@ -565,6 +580,7 @@ impl App {
                     diameter: diameter.to_string(),
                     depth: Extent::ThroughAll,
                     thread,
+                    thread_modeled: false,
                     standard: Some(s(std)),
                 })))
             }
@@ -955,6 +971,100 @@ impl App {
         }
     }
 
+    /// Seletor de vistas (Espaço): cubo grande, vistas padrão e vistas salvas como câmeras.
+    fn view_menu_window(&mut self, ctx: &egui::Context) {
+        if !self.view_menu {
+            return;
+        }
+        let Some(cam) = self.viewport.as_ref().map(|v| v.camera) else { return };
+        let mut close = false;
+        let mut apply: Option<scc_core::NamedView> = None;
+        let mut remove: Option<usize> = None;
+        let mut save = false;
+        egui::Window::new("Vistas")
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0., 0.))
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    let (r, _) = ui.allocate_exact_size(egui::vec2(240., 240.), egui::Sense::hover());
+                    if let Some(d) = crate::viewcube::cube(ui, r, &cam, "grande") {
+                        self.view_choice = Some(d);
+                    }
+                    ui.vertical(|ui| {
+                        ui.label(RichText::new("Vistas padrão").strong());
+                        for (d, n) in crate::viewcube::STANDARD {
+                            if ui.button(n).clicked() {
+                                self.view_choice = Some(Vec3::from(d).normalize());
+                            }
+                        }
+                    });
+                    ui.separator();
+                    ui.vertical(|ui| {
+                        ui.label(RichText::new("Vistas salvas (câmeras)").strong());
+                        if self.open.doc.views.is_empty() {
+                            ui.label(RichText::new("nenhuma ainda").weak());
+                        }
+                        for (i, v) in self.open.doc.views.iter().enumerate() {
+                            ui.horizontal(|ui| {
+                                if ui.button(format!("📷 {}", v.name)).clicked() {
+                                    apply = Some(v.clone());
+                                }
+                                if ui.small_button("✖").clicked() {
+                                    remove = Some(i);
+                                }
+                            });
+                        }
+                        ui.add_space(6.);
+                        ui.horizontal(|ui| {
+                            ui.add(egui::TextEdit::singleline(&mut self.new_view_name).hint_text("nome da vista").desired_width(120.));
+                            if ui.button("💾 Salvar vista atual").clicked() {
+                                save = true;
+                            }
+                        });
+                        ui.label(RichText::new("As vistas salvas ficam na peça e servirão para as vistas 2D e o detalhamento 3D.").weak().small());
+                    });
+                });
+                ui.horizontal(|ui| {
+                    if ui.button("Fechar (Espaço)").clicked() {
+                        close = true;
+                    }
+                });
+            });
+        if save {
+            let n = if self.new_view_name.trim().is_empty() { format!("Vista {}", self.open.doc.views.len() + 1) } else { self.new_view_name.trim().to_string() };
+            self.open.doc.views.push(scc_core::NamedView {
+                name: n,
+                target: cam.target.to_array().map(|v| v as f64),
+                yaw: cam.yaw as f64,
+                pitch: cam.pitch as f64,
+                dist: cam.dist as f64,
+                ortho: cam.ortho,
+            });
+            self.new_view_name.clear();
+        }
+        if let Some(i) = remove {
+            self.open.doc.views.remove(i);
+        }
+        if let Some(v) = apply {
+            self.apply_view(&v);
+            close = true;
+        }
+        if close {
+            self.view_menu = false;
+        }
+    }
+
+    pub fn apply_view(&mut self, v: &scc_core::NamedView) {
+        if let Some(vp) = self.viewport.as_mut() {
+            vp.camera.target = Vec3::from(v.target.map(|x| x as f32));
+            vp.camera.yaw = v.yaw as f32;
+            vp.camera.pitch = v.pitch as f32;
+            vp.camera.dist = v.dist as f32;
+            vp.camera.ortho = v.ortho;
+        }
+    }
+
     fn settings_window(&mut self, ctx: &egui::Context) {
         if !self.settings_open {
             return;
@@ -1135,6 +1245,17 @@ impl App {
                 new_sel = Some(Sel::Params);
             }
         });
+
+        // ---------- vistas salvas (câmeras)
+        if !doc.views.is_empty() {
+            egui::CollapsingHeader::new(format!("📷 Vistas ({})", doc.views.len())).default_open(false).show(ui, |ui| {
+                for (i, v) in doc.views.iter().enumerate() {
+                    if ui.selectable_label(false, format!("📷 {}", v.name)).on_hover_text("aplicar esta vista").clicked() {
+                        actions.push(TreeAction::ApplyView(i));
+                    }
+                }
+            });
+        }
 
         // ---------- pastas de geometria (sem linha do tempo)
         let geo_folders: Vec<&Folder> = doc.folders.iter().filter(|f| f.kind == FolderKind::Geometria).collect();
@@ -1489,6 +1610,11 @@ impl App {
                 };
             }
             TreeAction::EditSketch(id) => self.start_session(id, false, None),
+            TreeAction::ApplyView(i) => {
+                if let Some(v) = d.views.get(i).cloned() {
+                    self.apply_view(&v);
+                }
+            }
             TreeAction::NewGeometryFolder => {
                 let n = format!("Geometria {}", d.folders.iter().filter(|f| f.kind == FolderKind::Geometria).count() + 1);
                 self.sel = Sel::Folder(d.add_geometry_folder(&n));
@@ -1843,6 +1969,11 @@ impl App {
                     .collect();
                 ui.painter().text(rect.right_bottom() - egui::vec2(10., 8.), egui::Align2::RIGHT_BOTTOM, mass.join("\n"), egui::FontId::proportional(11.), ink);
             }
+            // cubo de vistas no canto superior direito
+            let cube_area = Rect::from_min_size(egui::pos2(rect.right() - 120., rect.top() + 8.), egui::vec2(112., 112.));
+            if let Some(dir) = crate::viewcube::cube(ui, cube_area, &cam, "canto") {
+                self.view_choice = Some(dir);
+            }
             if self.sketch.is_some() {
                 crate::sketch_ui::overlay(self, ui, rect, &resp, cam);
             } else if let Some(r) = &self.result {
@@ -2081,6 +2212,7 @@ fn eye(ui: &mut egui::Ui, hidden: bool) -> bool {
 }
 
 enum TreeAction {
+    ApplyView(usize),
     NewGeometryFolder,
     NewCommandFolder,
     NewCollector,
@@ -2184,6 +2316,9 @@ impl eframe::App for App {
         if redo {
             self.redo();
         }
+        if !ctx.egui_wants_keyboard_input() && ctx.input(|i| i.key_pressed(egui::Key::Space)) {
+            self.view_menu = !self.view_menu;
+        }
         if self.session.is_some() && !ctx.egui_wants_keyboard_input() {
             if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
                 self.conclude_session();
@@ -2263,6 +2398,7 @@ impl eframe::App for App {
         });
         self.side_toolbars(root);
         self.settings_window(ctx);
+        self.view_menu_window(ctx);
         self.dialogs(ctx);
         self.viewport(root, frame);
         self.toasts(ctx);
@@ -2324,6 +2460,13 @@ impl eframe::App for App {
                 vp.set_scene(rs, &s);
                 self.scene_dirty = false;
                 ctx.request_repaint();
+            }
+        }
+        if let (Some(d), Some(vp)) = (self.view_choice.take(), self.viewport.as_mut()) {
+            let t = vp.camera.target;
+            vp.camera.look_along(d, t);
+            if !self.view_menu {
+                self.fit_pending = true;
             }
         }
         // alinha a vista ao sketch recém-criado assim que o resultado dele chega

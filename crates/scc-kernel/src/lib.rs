@@ -193,6 +193,12 @@ mod imp {
                 .map_err(err)?;
             Ok((Shape(s), out))
         }
+        /// Ferramenta de rosca modelada (subtrair do corpo).
+        pub fn thread_tool(origin: [f64; 3], dir: [f64; 3], major_d: f64, pitch: f64, length: f64, angle_deg: f64) -> KResult<Shape> {
+            let [ox, oy, oz] = origin;
+            let [dx, dy, dz] = dir;
+            b::thread_tool(ox, oy, oz, dx, dy, dz, major_d, pitch, length, angle_deg).map(Shape).map_err(err)
+        }
         /// Extrusão até o plano (origem, normal).
         pub fn extrude_until(&self, dir: [f64; 3], len: f64, origin: [f64; 3], normal: [f64; 3]) -> KResult<Shape> {
             let [dx, dy, dz] = dir;
@@ -308,6 +314,9 @@ mod imp {
         pub fn extrude_until(&self, _: [f64; 3], _: f64, _: [f64; 3], _: [f64; 3]) -> KResult<Shape> {
             no()
         }
+        pub fn thread_tool(_: [f64; 3], _: [f64; 3], _: f64, _: f64, _: f64, _: f64) -> KResult<Shape> {
+            no()
+        }
         pub fn fillet_tagged(&self, _: f64, _: &[i32]) -> KResult<(Shape, Vec<i32>)> {
             no()
         }
@@ -408,6 +417,17 @@ mod tests {
         let aresta = [10., 0., 10.]; // aresta superior em x = 10
         let (r, _) = caixa.edges_tagged(2., &[aresta], 0.5, false, &tags).unwrap();
         assert!(r.face_count() == 7);
+    }
+
+    #[test]
+    fn rosca_modelada_remove_material() {
+        let bloco = Shape::face(&XY, &[rect(20., 20.)]).unwrap().extrude([0., 0., 1.], 10., 0.).unwrap();
+        let furo = Shape::hole_tool([0., 0., 10.], [0., 0., -1.], 5.0, 10., HoleShape::Simple).unwrap();
+        let furado = bloco.boolean(&furo, Bool::Cut).unwrap();
+        let rosca = Shape::thread_tool([0., 0., 10.], [0., 0., -1.], 6.0, 1.0, 10., 60.).unwrap();
+        let roscado = furado.boolean(&rosca, Bool::Cut).unwrap();
+        let (v0, v1) = (furado.mass().volume, roscado.mass().volume);
+        assert!(v1 < v0 && v1 > v0 * 0.95, "{v0} -> {v1}");
     }
 
     #[test]

@@ -70,6 +70,17 @@ pub struct RefElement {
     pub folder: Option<Id>,
 }
 
+/// Vista salva (câmera) — base para vistas 2D e detalhamento 3D.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct NamedView {
+    pub name: String,
+    pub target: [f64; 3],
+    pub yaw: f64,
+    pub pitch: f64,
+    pub dist: f64,
+    pub ortho: bool,
+}
+
 /// Estado de um link com outra peça (ADR 0006).
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
 pub enum LinkState {
@@ -412,6 +423,9 @@ pub struct Hole {
     pub depth: Extent,
     /// Rosca paramétrica cosmética (ex.: "M8x1.25"). `None` = sem rosca.
     pub thread: Option<String>,
+    /// rosca modelada (sulco helicoidal real, por booleana) em vez de cosmética
+    #[serde(default)]
+    pub thread_modeled: bool,
     /// Especificação usada pelo furo inteligente (ex.: "M8 normal"), só informativa.
     pub standard: Option<String>,
 }
@@ -453,6 +467,9 @@ pub struct Document {
     /// referências externas (geometria de outras peças por link)
     #[serde(default)]
     pub external: Vec<ExternalRef>,
+    /// vistas salvas (câmeras)
+    #[serde(default)]
+    pub views: Vec<NamedView>,
     /// Ordem do vetor = ordem da linha de tempo.
     pub features: Vec<Feature>,
     /// Quantidade de comandos ativos (marcador de rollback, RF-ARV-051).
@@ -494,6 +511,7 @@ impl Document {
             active_collector: Id(0),
             folders: vec![],
             external: vec![],
+            views: vec![],
             features: vec![],
             rollback: 0,
         };

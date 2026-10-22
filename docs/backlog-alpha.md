@@ -31,17 +31,28 @@ Versionamento flexível enquanto o projeto for local (sem distribuição).
 - [ ] Filete e aparar/estender no sketch
 - [ ] Testar o desenho por mouse com o usuário (só verificado por testes e capturas)
 
-## alpha.4 — Inicialização, ícones de opções, seleção e navegação (pedidos de 22/10)
+## alpha.4 — Organização, seleção, ambientes de comando ✔ (base)
 
-- [ ] **Tela inicial** antes de abrir um modelo: novo/abrir projeto, recentes, exemplo → gerenciador de projetos
-- [ ] **Ícones em todas as opções** dos comandos (tipos de término, tipos de furo, operação...): uma variação de criação = um ícone, sem botões de texto com "+"
-- [ ] Refazer os ícones no **estilo da referência** (azul em degradê, contorno azul-escuro, tracejado antes/depois, setas)
-- [ ] **Estilos de navegação** da câmera (SolidWorks, Fusion, CATIA, Blender, personalizado)
-- [ ] **Seleção de faces, arestas e vértices** na viewport + **filtro de seleção** em menu
+- [x] Tela inicial (novo/abrir projeto, nova peça, exemplo, recentes) → gerenciador de projetos
+- [x] Ícones no estilo da referência e ícone em cada opção/variação (término, operação, furo, arestas, planos, cotas)
+- [x] Barra em blocos com nome do grupo; famílias com setinha ▾; grupos destacáveis/encaixáveis
+- [x] Dica breve + descrição avançada após 5 s
+- [x] Estilos de navegação (SolidCadCraft, SolidWorks, Fusion, CATIA, Blender, Onshape)
+- [x] Seleção de faces, arestas, vértices e planos na viewport + filtro de seleção; sketch no plano/face clicado
+- [x] Sketch com menus: Criação, Transformar (mover, copiar, espelhar, offset, filete), Cotagem (6 tipos), Restrições, Ferramentas (checar contornos, construção, grade, snaps, auto)
+- [x] Painel do sketch limpo: restrições do elemento clicado; símbolos discretos no desenho
+- [x] Extrusão/recorte até plano (inclusive inclinado), plano médio; plano por ângulo; filete/chanfro em arestas escolhidas ou todas
+- [x] Todo comando abre como ambiente (Concluir/Cancelar); editar por duplo clique ou botão direito
+- [x] Hierarquia: linha do tempo por coletor; pastas de geometria livre; referências externas separadas
+- [x] Cubo de vistas + seletor (Espaço) + vistas salvas como câmeras
+- [x] Furo por norma (ISO grossa/fina, UNC, UNF, BSP, NPT, trapezoidal) com rosca cosmética ou **modelada** (booleana)
+- [x] Correção: arestas de costura e profundidade das arestas
 - [ ] Português / inglês
-- [ ] Personalização de comandos nos grupos (escolher, reordenar, criar grupos); menus destacáveis
-- [ ] Automação de desenhos (scripts e gravação de macros)
-- [ ] Ícone do app vetorizado a partir da arte do usuário (aguardando o arquivo em `assets/app/fenix-ref.png`)
+- [ ] Personalização de comandos nos grupos (escolher, reordenar, criar grupos)
+- [ ] Automação de desenhos (scripts e macros)
+- [ ] Pontos, linhas e curvas 3D nas pastas de geometria
+- [ ] Referências externas reais (publicações entre peças)
+- [ ] Ícone do app a partir da arte do usuário (aguardando assets/app/fenix-ref.png)
 
 ## alpha.5 — Referências do modelo
 

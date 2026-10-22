@@ -347,12 +347,31 @@ impl Ctx<'_> {
                 };
                 let dir = frame.normal.map(|x| -x);
                 let mut tool = Shape::empty();
-                for p in pts {
+                for p in &pts {
                     let t = Shape::hole_tool(frame.point(p[0], p[1]), dir, d, depth, shape).map_err(k)?;
                     tool = if tool.is_null() { t } else { tool.compound(&t) };
                 }
                 self.apply(f.target, tool, BoolOp::Cut, f.id)?;
-                Ok(h.thread.as_ref().map(|t| format!("rosca cosmética {t}")))
+                let Some(t) = &h.thread else { return Ok(None) };
+                if !h.thread_modeled {
+                    return Ok(Some(format!("rosca cosmética {t}")));
+                }
+                // rosca modelada: sulco helicoidal subtraído em cada furo, até a espessura do material
+                let spec = hardware::thread(t).ok_or_else(|| format!("rosca '{t}' não encontrada na tabela de normas"))?;
+                let (lo, hi) = self.body(f.target).and_then(|b| b.bbox()).ok_or("corpo sem dimensões")?;
+                for p in &pts {
+                    let o = frame.point(p[0], p[1]);
+                    // extensão do material a partir do ponto, ao longo do furo
+                    let mut ext: f64 = 0.;
+                    for c in 0..8 {
+                        let q = [if c & 1 == 0 { lo[0] } else { hi[0] }, if c & 2 == 0 { lo[1] } else { hi[1] }, if c & 4 == 0 { lo[2] } else { hi[2] }];
+                        ext = ext.max(dot(sub(q, o), dir));
+                    }
+                    let len = depth.min(ext).max(spec.pitch);
+                    let tool = Shape::thread_tool(o, dir, spec.major, spec.pitch, len, spec.angle).map_err(k)?;
+                    self.apply(f.target, tool, BoolOp::Cut, f.id)?;
+                }
+                Ok(None)
             }
             FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => {
                 let v = ev(&o.value, &self.vars, "valor")?;
@@ -583,6 +602,7 @@ pub fn example_document() -> Document {
         diameter: m6.clearance[1].to_string(),
         depth: Extent::ThroughAll,
         thread: None,
+        thread_modeled: false,
         standard: Some(s("M6 passagem normal")),
     }));
     d.feature_mut(furo).unwrap().name = s("Furos M6");
