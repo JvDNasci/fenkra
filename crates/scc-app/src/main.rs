@@ -14,6 +14,7 @@ mod sketch_ui;
 mod geo_ui;
 mod keymap;
 mod feat_ui;
+mod handles;
 
 use eframe::egui;
 

@@ -2568,6 +2568,10 @@ impl App {
                     ui.painter().text(rect.left_bottom() + egui::vec2(10., -10.), egui::Align2::LEFT_BOTTOM, format!("Seleção: {txt}  ·  Esc limpa"), egui::FontId::proportional(12.), Color32::from_rgb(255, 190, 40));
                 }
             }
+            // seta e cota 3D do comando aberto (fast 3D)
+            if self.sketch.is_none() {
+                crate::handles::overlay(self, ui, rect, cam);
+            }
         });
     }
 

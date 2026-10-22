@@ -92,11 +92,12 @@ Versionamento flexível enquanto o projeto for local (sem distribuição).
 
 ## Próximos pedidos (prioridade)
 
-- [ ] **Pastas de geometria como gerenciador**: copiar/colar/mover (arrastar), subpastas, qualquer geometria (sketches, pontos, curvas, planos, superfícies), sem depender dos comandos
-- [ ] **Fast 3D**: seta 3D arrastável e cota 3D editável na viewport ao criar extrusão/recorte (e depois revolução, filete, plano deslocado)
-- [ ] Formas: Pad/Pocket (já: extrusão/recorte), Shaft/Groove (revolução que remove), Rib e Slot (varredura por spine), Multi-seções (loft) e remoção por multi-seções, Stiffener, Thin solids
-- [ ] Acabamento: filete face-face, tritangente e variável; draft; shell; thickness; thread/tap em eixos
-- [ ] Padrões e transformações: retangular, circular, por pontos, espelhar, escala
+- [x] **Pastas de geometria como gerenciador**: subpastas, mover (menu ou arrastar), copiar/recortar/colar/duplicar (Ctrl+C/X/V/D), criar qualquer geometria dentro da pasta — superfícies quando existirem
+- [x] **Fast 3D**: seta arrastável e cota editável na viewport para extrusão/recorte, plano deslocado, altura das primitivas e reforço (valor ligado a parâmetro fica travado)
+- [ ] Fast 3D para ângulo da revolução, raio do filete e espessura da casca
+- [x] Formas: Pad/Pocket (já: extrusão/recorte), Shaft/Groove (revolução que remove), Rib e Slot (varredura por spine), Multi-seções (loft) e remoção por multi-seções, Stiffener, Thin solids (ver alpha.6)
+- [x] Acabamento: filete face-face, tritangente e variável; draft; shell; thickness; thread/tap em eixos (ver alpha.6)
+- [x] Padrões e transformações: retangular, circular, por pontos, espelhar, escala (ver alpha.6)
 
 ## alpha.5 — Referências do modelo
 
