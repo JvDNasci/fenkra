@@ -90,6 +90,8 @@ pub struct App {
     pub sel: Sel,
     pub result: Option<RecomputeResult>,
     pub delete_dialog: Option<DeleteDialog>,
+    /// área de transferência da árvore de geometria: (item, recortado?)
+    clip: Option<(Id, bool)>,
     /// reenquadrar a vista (suave) ao abrir um comando
     reframe_pending: bool,
     /// início da tela de carregamento
@@ -169,6 +171,7 @@ impl App {
             open_pending: None,
             splash_t0: None,
             reframe_pending: false,
+            clip: None,
             release_dialog: None,
             worker: Worker::spawn(cc.egui_ctx.clone()),
             gen_sent: 0,
@@ -993,6 +996,49 @@ impl App {
         }
     }
 
+    /// Pasta de geometria de um item (ou a própria pasta-mãe, para pastas).
+    fn folder_of(&self, id: Id) -> Option<Id> {
+        let d = self.doc();
+        if let Some(r) = d.reference(id) {
+            return r.folder.or_else(|| d.folders.iter().find(|f| f.kind == FolderKind::Geometria).map(|f| f.id));
+        }
+        if let Some(f) = d.folder(id) {
+            return f.parent.or(Some(id)).filter(|_| f.kind == FolderKind::Geometria);
+        }
+        d.feature(id).and_then(|f| f.folder)
+    }
+
+    fn sel_for(&self, id: Id) -> Sel {
+        let d = self.doc();
+        if d.reference(id).is_some() {
+            Sel::Ref(id)
+        } else if d.folder(id).is_some() {
+            Sel::Folder(id)
+        } else {
+            Sel::Feature(id)
+        }
+    }
+
+    /// Cola o item da área de transferência na pasta (recortar move; copiar duplica).
+    fn paste_into(&mut self, fo: Id) {
+        let Some((id, cut)) = self.clip else {
+            self.toast("Nada copiado", false);
+            return;
+        };
+        let d = &mut self.open.doc;
+        if cut {
+            if d.move_to_folder(id, fo).is_err() {
+                self.toast("Não dá para mover para lá", true);
+                return;
+            }
+            self.clip = None;
+        } else if let Some(n) = d.duplicate_into(id, fo) {
+            self.sel = self.sel_for(n);
+        } else {
+            self.toast("Não dá para colar aqui", true);
+        }
+    }
+
     pub fn ask_delete(&mut self, id: Id) {
         let deps = self.doc().dependents(id);
         if deps.is_empty() {
@@ -1572,90 +1618,10 @@ impl App {
             });
         }
 
-        // ---------- pastas de geometria (sem linha do tempo)
-        let geo_folders: Vec<&Folder> = doc.folders.iter().filter(|f| f.kind == FolderKind::Geometria).collect();
-        let first_geo = geo_folders.first().map(|f| f.id);
-        for fo in &geo_folders {
-            let refs: Vec<&RefElement> = doc.references.iter().filter(|r| r.folder == Some(fo.id) || (r.folder.is_none() && Some(fo.id) == first_geo)).collect();
-            let sketches: Vec<(usize, &Feature)> = doc.features.iter().enumerate().filter(|(_, f)| f.folder == Some(fo.id) && doc.is_free(f)).collect();
-            let id = ui.make_persistent_id(("geo", fo.id.0));
-            egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true)
-                .show_header(ui, |ui| {
-                    let r = pick(ui, Sel::Folder(fo.id), RichText::new(format!("📁 {}  ({})", fo.name, refs.len() + sketches.len())).strong());
-                    if r.clicked() {
-                        new_sel = Some(Sel::Folder(fo.id));
-                    }
-                    r.context_menu(|ui| {
-                        if ui.button("✏ Novo sketch aqui").clicked() {
-                            actions.push(TreeAction::NewSketchIn(fo.id));
-                            ui.close();
-                        }
-                        if ui.button("▱ Novo plano aqui").clicked() {
-                            actions.push(TreeAction::NewPlaneIn(fo.id));
-                            ui.close();
-                        }
-                        if ui.button("Remover pasta (mantém o conteúdo)").clicked() {
-                            actions.push(TreeAction::RemoveFolder(fo.id));
-                            ui.close();
-                        }
-                    });
-                })
-                .body(|ui| {
-                    if refs.is_empty() && sketches.is_empty() {
-                        ui.label(RichText::new("vazia — clique direito para criar planos e sketches livres").weak().italics().small());
-                    }
-                    for r in &refs {
-                        let users = doc.dependents(r.id).len();
-                        let icon = match (&r.kind, r.kind.class()) {
-                            (RefKind::AnglePlane { .. }, _) => "◩",
-                            (RefKind::FacePlane { .. }, _) => "▣",
-                            (_, RefClass::Point) => "•",
-                            (RefKind::LinePoints { .. } | RefKind::LineDir { .. } | RefKind::LineAngle { .. } | RefKind::LineNormalSurface { .. }, _) => "╱",
-                            (_, RefClass::Curve) => "∿",
-                            _ => "▱",
-                        };
-                        let txt = format!("{icon} {}{}", r.name, if users > 0 { format!("  ·{users}") } else { String::new() });
-                        let resp = ui
-                            .horizontal(|ui| {
-                                if eye(ui, !r.visible) {
-                                    actions.push(TreeAction::RefVisible(r.id, !r.visible));
-                                }
-                                pick(ui, Sel::Ref(r.id), if r.visible { RichText::new(txt) } else { RichText::new(txt).weak() })
-                            })
-                            .inner;
-                        if resp.clicked() {
-                            new_sel = Some(Sel::Ref(r.id));
-                        }
-                        if resp.double_clicked() {
-                            actions.push(TreeAction::EditSketch(r.id));
-                        }
-                        resp.context_menu(|ui| {
-                            if ui.button("✏ Editar").clicked() {
-                                actions.push(TreeAction::EditSketch(r.id));
-                                ui.close();
-                            }
-                            if r.kind.class() == RefClass::Plane && ui.button("Novo sketch neste plano").clicked() {
-                                actions.push(TreeAction::SketchOn(PlaneRef::Datum(r.id)));
-                                ui.close();
-                            }
-                            ui.menu_button("Mover para pasta", |ui| {
-                                for g in &geo_folders {
-                                    if ui.button(&g.name).clicked() {
-                                        actions.push(TreeAction::RefToFolder(r.id, g.id));
-                                        ui.close();
-                                    }
-                                }
-                            });
-                            if ui.button("Apagar…").clicked() {
-                                actions.push(TreeAction::Delete(r.id));
-                                ui.close();
-                            }
-                        });
-                    }
-                    for (i, f) in &sketches {
-                        self.feature_row(ui, &doc, *i, f, &mut new_sel, &mut actions);
-                    }
-                });
+        // ---------- pastas de geometria (sem linha do tempo), com subpastas
+        let first_geo = doc.folders.iter().find(|f| f.kind == FolderKind::Geometria).map(|f| f.id);
+        for fo in doc.folders.iter().filter(|f| f.kind == FolderKind::Geometria && f.parent.is_none_or(|p| doc.folder(p).is_none())) {
+            self.geo_folder(ui, &doc, fo, first_geo, &mut new_sel, &mut actions);
         }
         // planos antigos sem pasta, quando ainda não existe pasta de geometria
         if first_geo.is_none() && !doc.references.is_empty() {
@@ -1763,6 +1729,142 @@ impl App {
         }
     }
 
+    /// Pasta de geometria (recursiva): subpastas, elementos de referência e sketches livres.
+    /// Itens podem ser arrastados para outra pasta; o menu do botão direito copia, recorta, cola e cria.
+    fn geo_folder(&self, ui: &mut egui::Ui, doc: &Document, fo: &Folder, first_geo: Option<Id>, new_sel: &mut Option<Sel>, actions: &mut Vec<TreeAction>) {
+        let refs: Vec<&RefElement> = doc.references.iter().filter(|r| r.folder == Some(fo.id) || (r.folder.is_none() && Some(fo.id) == first_geo)).collect();
+        let sketches: Vec<(usize, &Feature)> = doc.features.iter().enumerate().filter(|(_, f)| f.folder == Some(fo.id) && doc.is_free(f)).collect();
+        let subs: Vec<&Folder> = doc.folders.iter().filter(|f| f.parent == Some(fo.id) && f.kind == FolderKind::Geometria).collect();
+        let id = ui.make_persistent_id(("geo", fo.id.0));
+        let has_clip = self.clip.is_some();
+        egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true)
+            .show_header(ui, |ui| {
+                let n = refs.len() + sketches.len() + subs.len();
+                let r = ui.selectable_label(self.sel == Sel::Folder(fo.id), RichText::new(format!("📁 {}  ({n})", fo.name)).strong());
+                drag_item(ui, &r, fo.id);
+                // soltar um item arrastado aqui move para esta pasta
+                if let Some(p) = r.dnd_release_payload::<DragItem>() {
+                    actions.push(TreeAction::MoveTo(p.0, fo.id));
+                }
+                if r.dnd_hover_payload::<DragItem>().is_some() {
+                    ui.painter().rect_stroke(r.rect.expand(2.), 3., egui::Stroke::new(1.5, Color32::from_rgb(90, 170, 255)), egui::StrokeKind::Outside);
+                }
+                if r.clicked() {
+                    *new_sel = Some(Sel::Folder(fo.id));
+                }
+                r.context_menu(|ui| {
+                    ui.menu_button("➕ Criar aqui", |ui| {
+                        if ui.button("✏ Sketch").clicked() {
+                            actions.push(TreeAction::NewSketchIn(fo.id));
+                            ui.close();
+                        }
+                        for (lbl, k) in [
+                            ("▱ Plano", crate::geo_ui::GeoKind::PlaneOffset),
+                            ("• Ponto", crate::geo_ui::GeoKind::PtCoords),
+                            ("╱ Linha", crate::geo_ui::GeoKind::LinePts),
+                            ("◯ Círculo", crate::geo_ui::GeoKind::Circle),
+                            ("∿ Spline", crate::geo_ui::GeoKind::Spline),
+                            ("⌇ Hélice", crate::geo_ui::GeoKind::Helix),
+                        ] {
+                            if ui.button(lbl).clicked() {
+                                actions.push(TreeAction::NewGeoIn(fo.id, k));
+                                ui.close();
+                            }
+                        }
+                    });
+                    if ui.button("📁 Nova subpasta").clicked() {
+                        actions.push(TreeAction::NewSubfolder(fo.id));
+                        ui.close();
+                    }
+                    ui.separator();
+                    if ui.add_enabled(has_clip, egui::Button::new("📋 Colar aqui  (Ctrl+V)")).clicked() {
+                        actions.push(TreeAction::Paste(fo.id));
+                        ui.close();
+                    }
+                    if ui.button("Copiar pasta").clicked() {
+                        actions.push(TreeAction::Copy(fo.id));
+                        ui.close();
+                    }
+                    if ui.button("Recortar pasta").clicked() {
+                        actions.push(TreeAction::Cut(fo.id));
+                        ui.close();
+                    }
+                    if ui.button("Duplicar pasta").clicked() {
+                        actions.push(TreeAction::Duplicate(fo.id));
+                        ui.close();
+                    }
+                    ui.separator();
+                    if ui.button("Remover pasta (o conteúdo sobe um nível)").clicked() {
+                        actions.push(TreeAction::RemoveFolder(fo.id));
+                        ui.close();
+                    }
+                });
+            })
+            .body(|ui| {
+                if refs.is_empty() && sketches.is_empty() && subs.is_empty() {
+                    ui.label(RichText::new("vazia — clique direito para criar, ou arraste itens para cá").weak().italics().small());
+                }
+                for s in &subs {
+                    self.geo_folder(ui, doc, s, first_geo, new_sel, actions);
+                }
+                for r in &refs {
+                    self.ref_row(ui, doc, r, new_sel, actions);
+                }
+                for (i, f) in &sketches {
+                    self.feature_row(ui, doc, *i, f, new_sel, actions);
+                }
+            });
+    }
+
+    fn ref_row(&self, ui: &mut egui::Ui, doc: &Document, r: &RefElement, new_sel: &mut Option<Sel>, actions: &mut Vec<TreeAction>) {
+        let users = doc.dependents(r.id).len();
+        let icon = match (&r.kind, r.kind.class()) {
+            (RefKind::AnglePlane { .. }, _) => "◩",
+            (RefKind::FacePlane { .. }, _) => "▣",
+            (_, RefClass::Point) => "•",
+            (RefKind::LinePoints { .. } | RefKind::LineDir { .. } | RefKind::LineAngle { .. } | RefKind::LineNormalSurface { .. }, _) => "╱",
+            (_, RefClass::Curve) => "∿",
+            _ => "▱",
+        };
+        let err = matches!(self.status_of(r.id), Some(Status::Error(_)));
+        let txt = format!("{icon} {}{}{}", r.name, if users > 0 { format!("  ·{users}") } else { String::new() }, if err { " ✖" } else { "" });
+        let resp = ui
+            .horizontal(|ui| {
+                if eye(ui, !r.visible) {
+                    actions.push(TreeAction::RefVisible(r.id, !r.visible));
+                }
+                let t = if err { RichText::new(txt).color(Color32::from_rgb(255, 110, 100)) } else if r.visible { RichText::new(txt) } else { RichText::new(txt).weak() };
+                ui.selectable_label(self.sel == Sel::Ref(r.id), t)
+            })
+            .inner;
+        drag_item(ui, &resp, r.id);
+        if resp.clicked() {
+            *new_sel = Some(Sel::Ref(r.id));
+        }
+        if resp.double_clicked() {
+            actions.push(TreeAction::EditSketch(r.id));
+        }
+        let resp = match self.status_of(r.id).and_then(|s| s.message()) {
+            Some(m) => resp.on_hover_text(m),
+            None => resp,
+        };
+        resp.context_menu(|ui| {
+            if ui.button("✏ Editar").clicked() {
+                actions.push(TreeAction::EditSketch(r.id));
+                ui.close();
+            }
+            if r.kind.class() == RefClass::Plane && ui.button("Novo sketch neste plano").clicked() {
+                actions.push(TreeAction::SketchOn(PlaneRef::Datum(r.id)));
+                ui.close();
+            }
+            clip_menu(ui, r.id, doc, actions);
+            if ui.button("Apagar…").clicked() {
+                actions.push(TreeAction::Delete(r.id));
+                ui.close();
+            }
+        });
+    }
+
     fn feature_row(&self, ui: &mut egui::Ui, doc: &Document, i: usize, f: &Feature, new_sel: &mut Option<Sel>, actions: &mut Vec<TreeAction>) {
         let st = self.status_of(f.id);
         let (badge, color) = match st {
@@ -1793,6 +1895,10 @@ impl App {
         if resp.double_clicked() {
             actions.push(TreeAction::EditSketch(f.id));
         }
+        let free = doc.is_free(f);
+        if free {
+            drag_item(ui, &resp, f.id);
+        }
         let resp = match st.and_then(|s| s.message()) {
             Some(m) => resp.on_hover_text(m),
             None => resp,
@@ -1801,6 +1907,10 @@ impl App {
             *new_sel = Some(Sel::Feature(f.id));
         }
         resp.context_menu(|ui| {
+            if free {
+                clip_menu(ui, f.id, doc, actions);
+                ui.separator();
+            }
             if ui.button(if f.suppressed { "Reativar" } else { "Suprimir" }).clicked() {
                 actions.push(TreeAction::Suppress(f.id));
                 ui.close();
@@ -1956,25 +2066,34 @@ impl App {
                 let id = d.add_free_sketch(PlaneRef::Origin(OriginPlane::XY), fo);
                 self.begin_sketch(id);
             }
-            TreeAction::NewPlaneIn(fo) => {
-                let id = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "20");
-                if let Some(r) = d.references.iter_mut().find(|r| r.id == id) {
-                    r.folder = Some(fo);
-                }
-                self.start_session(id, true, None);
-            }
             TreeAction::RemoveFolder(fo) => {
                 d.remove_folder(fo);
-                for r in &mut d.references {
-                    if r.folder == Some(fo) {
-                        r.folder = None;
-                    }
-                }
                 self.sel = Sel::None;
             }
-            TreeAction::RefToFolder(r, fo) => {
-                if let Some(x) = d.references.iter_mut().find(|x| x.id == r) {
-                    x.folder = Some(fo);
+            TreeAction::NewSubfolder(parent) => {
+                let n = d.unique_name("Pasta");
+                let id = d.add_subfolder(&n, parent);
+                self.sel = Sel::Folder(id);
+            }
+            TreeAction::NewGeoIn(fo, k) => {
+                let id = d.add_geometry(k.make(&Default::default()));
+                let _ = d.move_to_folder(id, fo);
+                self.start_session(id, true, None);
+            }
+            TreeAction::MoveTo(item, fo) => {
+                if d.move_to_folder(item, fo).is_err() {
+                    self.toast("Não dá para mover para lá (pasta dentro dela mesma, ou item de linha do tempo)", true);
+                }
+            }
+            TreeAction::Copy(id) => self.clip = Some((id, false)),
+            TreeAction::Cut(id) => self.clip = Some((id, true)),
+            TreeAction::Paste(fo) => self.paste_into(fo),
+            TreeAction::Duplicate(id) => {
+                let to = self.folder_of(id);
+                if let Some(to) = to {
+                    if let Some(n) = self.open.doc.duplicate_into(id, to) {
+                        self.sel = self.sel_for(n);
+                    }
                 }
             }
             TreeAction::ToCollector(f, c) => {
@@ -2656,9 +2775,7 @@ enum TreeAction {
     NewCommandFolder,
     NewCollector,
     NewSketchIn(Id),
-    NewPlaneIn(Id),
     RemoveFolder(Id),
-    RefToFolder(Id, Id),
     ToCollector(Id, Id),
     CollectorMarker(Id, Option<usize>),
     Hide(Id, bool),
@@ -2676,6 +2793,56 @@ enum TreeAction {
     Delete(Id),
     SketchOn(PlaneRef),
     Select(Id, Cmd),
+    NewSubfolder(Id),
+    NewGeoIn(Id, crate::geo_ui::GeoKind),
+    MoveTo(Id, Id),
+    Copy(Id),
+    Cut(Id),
+    Paste(Id),
+    Duplicate(Id),
+}
+
+/// Item da árvore de geometria sendo arrastado.
+#[derive(Clone, Copy)]
+struct DragItem(Id);
+
+/// Torna a linha da árvore arrastável (sem atrapalhar o clique).
+fn drag_item(ui: &mut egui::Ui, resp: &egui::Response, id: Id) {
+    let d = ui.interact(resp.rect, ui.scope_id().with(("arrastar", id.0)), egui::Sense::drag());
+    d.dnd_set_drag_payload(DragItem(id));
+    if d.dragged() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+    }
+}
+
+/// Copiar / recortar / duplicar / mover para pasta.
+fn clip_menu(ui: &mut egui::Ui, id: Id, doc: &Document, actions: &mut Vec<TreeAction>) {
+    if ui.button("Copiar  (Ctrl+C)").clicked() {
+        actions.push(TreeAction::Copy(id));
+        ui.close();
+    }
+    if ui.button("Recortar  (Ctrl+X)").clicked() {
+        actions.push(TreeAction::Cut(id));
+        ui.close();
+    }
+    if ui.button("Duplicar  (Ctrl+D)").clicked() {
+        actions.push(TreeAction::Duplicate(id));
+        ui.close();
+    }
+    ui.menu_button("Mover para pasta", |ui| {
+        fn level(ui: &mut egui::Ui, doc: &Document, parent: Option<Id>, depth: usize, id: Id, actions: &mut Vec<TreeAction>) {
+            for g in doc.folders.iter().filter(|f| f.kind == FolderKind::Geometria && f.parent == parent) {
+                if g.id != id && ui.button(format!("{}📁 {}", "   ".repeat(depth), g.name)).clicked() {
+                    actions.push(TreeAction::MoveTo(id, g.id));
+                    ui.close();
+                }
+                if g.id != id {
+                    level(ui, doc, Some(g.id), depth + 1, id, actions);
+                }
+            }
+        }
+        level(ui, doc, None, 0, id, actions);
+    });
 }
 
 enum DelAction {
@@ -2793,6 +2960,41 @@ impl eframe::App for App {
             }
             if km.pressed(ctx, K::Hide) {
                 self.toggle_hide_selected();
+            }
+            if self.sketch.is_none() {
+                let item = match self.sel {
+                    Sel::Ref(id) | Sel::Folder(id) | Sel::Feature(id) => Some(id),
+                    _ => None,
+                };
+                let geo = item.filter(|id| self.folder_of(*id).is_some_and(|f| self.doc().folder(f).is_some_and(|x| x.kind == FolderKind::Geometria)));
+                if let Some(id) = geo {
+                    if km.pressed(ctx, K::ClipCopy) {
+                        self.clip = Some((id, false));
+                        self.toast("Copiado — Ctrl+V cola na pasta selecionada", false);
+                    }
+                    if km.pressed(ctx, K::ClipCut) {
+                        self.clip = Some((id, true));
+                        self.toast("Recortado — Ctrl+V move para a pasta selecionada", false);
+                    }
+                    if km.pressed(ctx, K::ClipDup) {
+                        if let Some(to) = self.folder_of(id) {
+                            if let Some(n) = self.open.doc.duplicate_into(id, to) {
+                                self.sel = self.sel_for(n);
+                            }
+                        }
+                    }
+                }
+                if km.pressed(ctx, K::ClipPaste) {
+                    let to = match self.sel {
+                        Sel::Folder(f) if self.doc().folder(f).is_some_and(|x| x.kind == FolderKind::Geometria) => Some(f),
+                        Sel::Ref(id) | Sel::Feature(id) => self.folder_of(id),
+                        _ => None,
+                    };
+                    match to {
+                        Some(f) => self.paste_into(f),
+                        None => self.toast("Selecione uma pasta de geometria para colar", true),
+                    }
+                }
             }
             if self.sketch.is_none() && self.session.is_none() {
                 for (k, c) in [

@@ -675,6 +675,9 @@ pub struct Folder {
     /// geometria livre (planos, pontos, curvas, sketches — sem linha do tempo) ou comandos de um coletor
     #[serde(default)]
     pub kind: FolderKind,
+    /// pasta-mãe (subpastas de geometria)
+    #[serde(default)]
+    pub parent: Option<Id>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
@@ -1306,7 +1309,7 @@ impl Document {
     /// Pasta de geometria livre (sem linha do tempo).
     pub fn add_geometry_folder(&mut self, name: &str) -> Id {
         let id = self.alloc();
-        self.folders.push(Folder { id, name: name.into(), kind: FolderKind::Geometria });
+        self.folders.push(Folder { id, name: name.into(), kind: FolderKind::Geometria, parent: None });
         id
     }
 
@@ -1348,18 +1351,133 @@ impl Document {
 
     pub fn add_folder(&mut self, name: &str) -> Id {
         let id = self.alloc();
-        self.folders.push(Folder { id, name: name.into(), kind: FolderKind::Comandos });
+        self.folders.push(Folder { id, name: name.into(), kind: FolderKind::Comandos, parent: None });
         id
     }
 
     /// Remove a pasta; os comandos dentro dela voltam para a raiz (não são apagados).
     pub fn remove_folder(&mut self, id: Id) {
+        let Some(fo) = self.folder(id).cloned() else { return };
+        if fo.kind == FolderKind::Geometria {
+            // o conteúdo sobe para a pasta-mãe (ou outra pasta de geometria): sketches livres continuam livres
+            let to = fo.parent.or_else(|| self.folders.iter().find(|f| f.kind == FolderKind::Geometria && f.id != id).map(|f| f.id));
+            self.folders.retain(|f| f.id != id);
+            let to = to.unwrap_or_else(|| self.add_geometry_folder("Geometria"));
+            for f in &mut self.features {
+                if f.folder == Some(id) {
+                    f.folder = Some(to);
+                }
+            }
+            for r in &mut self.references {
+                if r.folder == Some(id) {
+                    r.folder = Some(to);
+                }
+            }
+            for f in &mut self.folders {
+                if f.parent == Some(id) {
+                    f.parent = Some(to);
+                }
+            }
+            return;
+        }
         self.folders.retain(|f| f.id != id);
         for f in &mut self.features {
             if f.folder == Some(id) {
                 f.folder = None;
             }
         }
+    }
+
+    /// Subpasta de geometria.
+    pub fn add_subfolder(&mut self, name: &str, parent: Id) -> Id {
+        let id = self.add_geometry_folder(name);
+        if let Some(f) = self.folders.iter_mut().find(|f| f.id == id) {
+            f.parent = Some(parent);
+        }
+        id
+    }
+
+    /// `a` está dentro de `b` (ou é `b`)?
+    pub fn folder_within(&self, a: Id, b: Id) -> bool {
+        let mut cur = Some(a);
+        let mut guard = 0;
+        while let Some(c) = cur {
+            if c == b {
+                return true;
+            }
+            cur = self.folder(c).and_then(|f| f.parent);
+            guard += 1;
+            if guard > 64 {
+                break;
+            }
+        }
+        false
+    }
+
+    /// Move um item da árvore de geometria (elemento, sketch livre ou pasta) para a pasta `to`.
+    pub fn move_to_folder(&mut self, item: Id, to: Id) -> Result<(), DocError> {
+        if self.folder(to).is_none_or(|f| f.kind != FolderKind::Geometria) {
+            return Err(DocError::Incompatible);
+        }
+        if let Some(r) = self.references.iter_mut().find(|r| r.id == item) {
+            r.folder = Some(to);
+            return Ok(());
+        }
+        if self.folder(item).is_some() {
+            if self.folder_within(to, item) {
+                return Err(DocError::Incompatible);
+            }
+            if let Some(f) = self.folders.iter_mut().find(|f| f.id == item) {
+                f.parent = Some(to);
+            }
+            return Ok(());
+        }
+        let free = self.feature(item).is_some_and(|f| matches!(f.kind, FeatureKind::Sketch(_)));
+        match self.features.iter_mut().find(|f| f.id == item) {
+            Some(f) if free => {
+                f.folder = Some(to);
+                Ok(())
+            }
+            _ => Err(DocError::Incompatible),
+        }
+    }
+
+    /// Nome livre derivado de `name` (tira o número do fim e numera de novo).
+    fn copy_name(&self, name: &str) -> String {
+        let base = name.trim_end_matches(|c: char| c.is_ascii_digit());
+        self.unique_name(if base.is_empty() { "Copia" } else { base })
+    }
+
+    /// Duplica um item da geometria na pasta `to`; pastas são copiadas com o conteúdo.
+    /// As entradas da cópia continuam apontando para os mesmos elementos de origem.
+    pub fn duplicate_into(&mut self, item: Id, to: Id) -> Option<Id> {
+        if let Some(r) = self.reference(item).cloned() {
+            let id = self.alloc();
+            let name = self.copy_name(&r.name);
+            self.references.push(RefElement { id, name, folder: Some(to), ..r });
+            return Some(id);
+        }
+        if let Some(fo) = self.folder(item).cloned() {
+            if self.folder_within(to, item) {
+                return None;
+            }
+            let nf = self.add_subfolder(&format!("{} (cópia)", fo.name), to);
+            let refs: Vec<Id> = self.references.iter().filter(|r| r.folder == Some(item)).map(|r| r.id).collect();
+            let sks: Vec<Id> = self.features.iter().filter(|f| f.folder == Some(item) && self.is_free(f)).map(|f| f.id).collect();
+            let subs: Vec<Id> = self.folders.iter().filter(|f| f.parent == Some(item)).map(|f| f.id).collect();
+            for x in refs.into_iter().chain(sks).chain(subs) {
+                self.duplicate_into(x, nf);
+            }
+            return Some(nf);
+        }
+        let f = self.feature(item).cloned().filter(|f| matches!(f.kind, FeatureKind::Sketch(_)))?;
+        let id = self.alloc();
+        let name = self.copy_name(&f.name);
+        self.features.push(Feature { id, name, folder: Some(to), ..f });
+        if self.rollback == self.features.len() - 1 {
+            self.rollback += 1;
+        }
+        Some(id)
     }
 
     // ------------------------------------------------ referências
@@ -1729,6 +1847,27 @@ mod tests {
     use super::*;
 
     #[test]
+    fn pastas_de_geometria_subpastas_mover_copiar() {
+        let mut d = Document::new("t");
+        let a = d.add_geometry_folder("A");
+        let b = d.add_subfolder("B", a);
+        let p = d.add_geometry(RefKind::PointCoords { x: "1".into(), y: "0".into(), z: "0".into(), frame: None });
+        d.move_to_folder(p, b).unwrap();
+        assert_eq!(d.reference(p).unwrap().folder, Some(b));
+        // pasta não pode ir para dentro dela mesma
+        assert!(d.move_to_folder(a, b).is_err());
+        let sk = d.add_free_sketch(PlaneRef::default(), b);
+        let c = d.duplicate_into(b, a).unwrap();
+        assert_eq!(d.folder(c).unwrap().parent, Some(a));
+        assert_eq!(d.references.iter().filter(|r| r.folder == Some(c)).count(), 1);
+        assert_eq!(d.features.iter().filter(|f| f.folder == Some(c) && d.is_free(f)).count(), 1);
+        // apagar a subpasta sobe o conteúdo e o sketch continua livre
+        d.remove_folder(b);
+        assert_eq!(d.reference(p).unwrap().folder, Some(a));
+        assert!(d.is_free(d.feature(sk).unwrap()));
+    }
+
+    #[test]
     fn apagar_corpo_leva_os_comandos_e_mantem_um_coletor() {
         let mut d = Document::new("t");
         let c0 = d.active_collector;
@@ -1796,9 +1935,9 @@ mod tests {
             sketch: sk1,
             op: BoolOp::Add,
             extent: Extent::Blind(s("10")),
-            reverse: false,
+            reverse: false, taper: s("0"), thin: None
         }));
-        let fil = d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::CreatedBy(ex) }));
+        let fil = d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::CreatedBy(ex), mode: EdgeMode::Constant }));
         assert_eq!(d.dependents(sk1), vec![ex, fil]);
 
         // substituir referência mantém o comando e muda a entrada
@@ -1822,7 +1961,7 @@ mod tests {
             sketch: sk,
             op: BoolOp::Add,
             extent: Extent::Blind(s("10")),
-            reverse: false,
+            reverse: false, taper: s("0"), thin: None
         }));
         assert!(d.move_feature(ex, 0).is_err());
         assert_eq!(d.features[1].id, ex);

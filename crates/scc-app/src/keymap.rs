@@ -27,6 +27,10 @@ pub enum KeyAction {
     Redo,
     Delete,
     Save,
+    ClipCopy,
+    ClipCut,
+    ClipPaste,
+    ClipDup,
     // modelagem
     Sketch,
     Extrude,
@@ -51,8 +55,9 @@ pub enum KeyAction {
 use KeyAction::*;
 
 impl KeyAction {
-    pub const ALL: [KeyAction; 34] = [
-        Fit, ViewMenu, Normal, Ortho, ViewFront, ViewBack, ViewTop, ViewBottom, ViewLeft, ViewRight, ViewIso, Hide, HiddenEnv, Undo, Redo, Delete, Save, Sketch,
+    pub const ALL: [KeyAction; 38] = [
+        Fit, ViewMenu, Normal, Ortho, ViewFront, ViewBack, ViewTop, ViewBottom, ViewLeft, ViewRight, ViewIso, Hide, HiddenEnv, Undo, Redo, Delete, Save, ClipCopy, ClipCut,
+        ClipPaste, ClipDup, Sketch,
         Extrude, Cut, Revolve, Hole, Fillet, Chamfer, Plane, SkSelect, SkLine, SkRect, SkCircle, SkArc, SkPoint, SkDim, SkConstruction, SkGrid,
     ];
 
@@ -75,6 +80,10 @@ impl KeyAction {
             Redo => "Refazer",
             Delete => "Apagar",
             Save => "Salvar",
+            ClipCopy => "Copiar (árvore)",
+            ClipCut => "Recortar (árvore)",
+            ClipPaste => "Colar (árvore)",
+            ClipDup => "Duplicar (árvore)",
             Sketch => "Novo sketch",
             Extrude => "Extrusão",
             Cut => "Recorte",
@@ -98,7 +107,7 @@ impl KeyAction {
     pub fn group(self) -> &'static str {
         match self {
             Fit | ViewMenu | Normal | Ortho | ViewFront | ViewBack | ViewTop | ViewBottom | ViewLeft | ViewRight | ViewIso | Hide | HiddenEnv => "Vista",
-            Undo | Redo | Delete | Save => "Edição",
+            Undo | Redo | Delete | Save | ClipCopy | ClipCut | ClipPaste | ClipDup => "Edição",
             Sketch | Extrude | Cut | Revolve | Hole | Fillet | Chamfer | Plane => "Modelagem",
             _ => "Sketch",
         }
@@ -200,7 +209,17 @@ impl Preset {
     /// Atalhos da predefinição (o que não aparece fica sem atalho).
     pub fn defaults(self) -> Vec<(KeyAction, &'static str)> {
         // comuns a quase todos
-        let mut v = vec![(Undo, "Ctrl+Z"), (Redo, "Ctrl+Y"), (Delete, "Delete"), (Save, "Ctrl+S"), (ViewMenu, "Space")];
+        let mut v = vec![
+            (Undo, "Ctrl+Z"),
+            (Redo, "Ctrl+Y"),
+            (Delete, "Delete"),
+            (Save, "Ctrl+S"),
+            (ViewMenu, "Space"),
+            (ClipCopy, "Ctrl+C"),
+            (ClipCut, "Ctrl+X"),
+            (ClipPaste, "Ctrl+V"),
+            (ClipDup, "Ctrl+D"),
+        ];
         let sk = [(SkSelect, "S"), (SkLine, "L"), (SkRect, "R"), (SkCircle, "C"), (SkArc, "A"), (SkPoint, "P"), (SkDim, "D"), (SkConstruction, "X"), (SkGrid, "G")];
         match self {
             Preset::SolidCadCraft => {
