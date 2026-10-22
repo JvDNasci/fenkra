@@ -9,6 +9,12 @@
 #include <vector>
 
 #include <BRepAdaptor_Curve.hxx>
+#include <BRepBuilderAPI_Copy.hxx>
+#include <BRepOffsetAPI_MakeOffsetShape.hxx>
+#include <BRepOffsetAPI_MakeFilling.hxx>
+#include <BRepGProp_Face.hxx>
+#include <GeomAPI_ProjectPointOnSurf.hxx>
+#include <Geom_Surface.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
 #include <BRepBuilderAPI_MakeVertex.hxx>
 #include <BRepBuilderAPI_MakePolygon.hxx>
@@ -662,3 +668,4 @@ rust::String occt_version() { return rust::String(OCC_VERSION_COMPLETE); }
 }  // namespace scc
 
 #include "features.inc"
+#include "surfaces.inc"

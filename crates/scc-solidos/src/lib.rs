@@ -130,11 +130,19 @@ pub struct CurveViz {
 }
 
 /// Valor de um elemento de geometria de referência.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum Geo {
     Plane(Frame),
     Point(V3),
     Curve(Curve3),
+    Surface(Shape),
+}
+
+/// Superfície de referência exibível (malha).
+pub struct SurfaceViz {
+    pub id: Id,
+    pub name: String,
+    pub mesh: Mesh,
 }
 
 pub struct RecomputeResult {
@@ -143,6 +151,7 @@ pub struct RecomputeResult {
     pub planes: Vec<PlaneViz>,
     pub points: Vec<PointViz>,
     pub curves: Vec<CurveViz>,
+    pub surfaces: Vec<SurfaceViz>,
     pub status: HashMap<Id, Status>,
     pub params: HashMap<String, f64>,
     pub param_error: Option<String>,
@@ -175,6 +184,58 @@ struct Ctx<'a> {
     status: HashMap<Id, Status>,
     /// ferramenta e operação de cada comando de forma (para padrões e espelho)
     tools: HashMap<Id, (Shape, BoolOp)>,
+}
+
+/// Pontos mais próximos entre os segmentos ab e cd.
+fn seg_closest(a: V3, b: V3, c: V3, d: V3) -> (V3, V3) {
+    use geo3d::*;
+    let (u, v, w) = (sub(b, a), sub(d, c), sub(a, c));
+    let (aa, bb, cc, dd, ee) = (dot(u, u), dot(u, v), dot(v, v), dot(u, w), dot(v, w));
+    let den = aa * cc - bb * bb;
+    let mut s = if den > 1e-12 { ((bb * ee - cc * dd) / den).clamp(0., 1.) } else { 0. };
+    let mut t = if cc > 1e-12 { ((bb * s + ee) / cc).clamp(0., 1.) } else { 0. };
+    if aa > 1e-12 {
+        s = ((bb * t - dd) / aa).clamp(0., 1.);
+    }
+    if cc > 1e-12 {
+        t = ((bb * s + ee) / cc).clamp(0., 1.);
+    }
+    (add(a, mul(u, s)), add(c, mul(v, t)))
+}
+
+/// B-spline cúbica uniforme pelo polígono de controle (aberta: presa nas pontas).
+fn bspline(ctrl: &[V3], closed: bool) -> Result<Curve3, String> {
+    use geo3d::*;
+    if ctrl.len() < 3 {
+        return Err("o polígono de controle precisa de pelo menos 3 pontos".into());
+    }
+    let mut p: Vec<V3> = ctrl.to_vec();
+    if closed {
+        p.extend_from_slice(&ctrl[..3]);
+    } else {
+        p.insert(0, ctrl[0]);
+        p.insert(0, ctrl[0]);
+        p.push(*ctrl.last().unwrap());
+        p.push(*ctrl.last().unwrap());
+    }
+    let mut out = vec![];
+    for i in 0..p.len() - 3 {
+        for k in 0..24 {
+            let t = k as f64 / 24.;
+            let (t2, t3) = (t * t, t * t * t);
+            let b0 = (1. - t).powi(3) / 6.;
+            let b1 = (3. * t3 - 6. * t2 + 4.) / 6.;
+            let b2 = (-3. * t3 + 3. * t2 + 3. * t + 1.) / 6.;
+            let b3 = t3 / 6.;
+            out.push(add(add(mul(p[i], b0), mul(p[i + 1], b1)), add(mul(p[i + 2], b2), mul(p[i + 3], b3))));
+        }
+    }
+    if closed {
+        out.push(out[0]);
+    } else {
+        out.push(*ctrl.last().unwrap());
+    }
+    Curve3::poly(out, closed)
 }
 
 impl Ctx<'_> {
@@ -256,14 +317,48 @@ impl Ctx<'_> {
                 (f.origin, f.normal)
             }
             SurfRef::Face { point, normal, .. } => (*point, geo3d::unit(*normal).ok_or("normal da face nula")?),
+            SurfRef::Ref(id) => return self.surface(*id, depth)?.surface_near(p).map_err(|e| e.0),
         };
         Ok((geo3d::sub(p, geo3d::mul(n, geo3d::dot(geo3d::sub(p, o), n))), n))
+    }
+
+    fn surface(&self, id: Id, depth: u32) -> Result<Shape, String> {
+        match self.geo(id, depth + 1)? {
+            Geo::Surface(s) => Ok(s),
+            _ => Err(format!("'{}' não é uma superfície", self.doc.name_of(id))),
+        }
+    }
+
+    /// Forma da superfície de entrada (face do corpo, superfície de referência).
+    fn surface_shape(&self, sf: &SurfRef, depth: u32) -> Result<Shape, String> {
+        match sf {
+            SurfRef::Ref(id) => self.surface(*id, depth),
+            SurfRef::Face { point, .. } => self.face_of_bodies(*point),
+            SurfRef::Plane(_) => Err("use 'Plano deslocado' para deslocar um plano".into()),
+        }
+    }
+
+    /// Cópia da face de algum corpo que passa pelo ponto.
+    fn face_of_bodies(&self, p: V3) -> Result<Shape, String> {
+        for (b, _) in self.bodies.values() {
+            if let Ok((q, _)) = b.surface_near(p) {
+                if geo3d::dist(q, p) < 1e-3 {
+                    return b.face_copy(p).map_err(|e| e.0);
+                }
+            }
+        }
+        Err("a face não existe mais no modelo — reedite".into())
     }
 
     fn surf_frame(&self, sf: &SurfRef, depth: u32) -> Result<Frame, String> {
         match sf {
             SurfRef::Plane(pr) => self.plane(pr, depth),
             SurfRef::Face { point, normal, .. } => geo3d::frame_from(*point, *normal, None),
+            SurfRef::Ref(id) => {
+                let sh = self.surface(*id, depth)?;
+                let (q, n) = sh.surface_near(sh.mass().center).map_err(|e| e.0)?;
+                geo3d::frame_from(q, n, None)
+            }
         }
     }
 
@@ -448,6 +543,141 @@ impl Ctx<'_> {
                 Geo::Curve(Curve3::poly(pts, false)?)
             }
             Corner { a, b, radius } => Geo::Curve(corner(&self.curve(a, d)?, &self.curve(b, d)?, e(radius, "raio")?)?),
+            PointCurvePlane { curve, plane, which } => {
+                let c = self.curve(curve, d)?;
+                let f = self.plane(plane, d)?;
+                let h = |q: V3| geo3d::dot(geo3d::sub(q, f.origin), f.normal);
+                let mut hits = vec![];
+                for w in c.pts.windows(2) {
+                    let (ha, hb) = (h(w[0]), h(w[1]));
+                    if ha.abs() < 1e-12 {
+                        hits.push(w[0]);
+                    } else if ha * hb < 0. {
+                        hits.push(lerp(w[0], w[1], ha / (ha - hb)));
+                    }
+                }
+                if h(c.end()).abs() < 1e-12 {
+                    hits.push(c.end());
+                }
+                if hits.is_empty() {
+                    return Err("a curva não cruza o plano".into());
+                }
+                Geo::Point(hits[(*which).min(hits.len() - 1)])
+            }
+            PointCurveCurve { a, b } => {
+                let (ca, cb) = (self.curve(a, d)?, self.curve(b, d)?);
+                let mut best = (f64::MAX, [0.; 3]);
+                for wa in ca.pts.windows(2) {
+                    for wb in cb.pts.windows(2) {
+                        let (p, q) = seg_closest(wa[0], wa[1], wb[0], wb[1]);
+                        let dd = dist(p, q);
+                        if dd < best.0 {
+                            best = (dd, lerp(p, q, 0.5));
+                        }
+                    }
+                }
+                Geo::Point(best.1)
+            }
+            PointProject { point, surface } => Geo::Point(self.surf_at(surface, self.point(point, d)?, d)?.0),
+            PointProjectCurve { point, curve } => Geo::Point(self.curve(curve, d)?.nearest(self.point(point, d)?).1),
+            PointOffset { point, dir, dist: dd } => {
+                let (_, v) = self.axis_d(dir, d)?;
+                Geo::Point(add(self.point(point, d)?, mul(v, e(dd, "distância")?)))
+            }
+            LinePlanes { a, b, length } => {
+                let (fa, fb) = (self.plane(a, d)?, self.plane(b, d)?);
+                let u = cross(fa.normal, fb.normal);
+                let uu = dot(u, u);
+                if uu < 1e-12 {
+                    return Err("os planos são paralelos".into());
+                }
+                let (da, db) = (dot(fa.normal, fa.origin), dot(fb.normal, fb.origin));
+                let p0 = mul(add(mul(cross(fb.normal, u), da), mul(cross(u, fa.normal), db)), 1. / uu);
+                let dir = geo3d::unit(u).unwrap();
+                // centra perto das origens dos planos
+                let m = lerp(fa.origin, fb.origin, 0.5);
+                let c = add(p0, mul(dir, dot(sub(m, p0), dir)));
+                let l = e(length, "comprimento")? / 2.;
+                Geo::Curve(Curve3::line(sub(c, mul(dir, l)), add(c, mul(dir, l)))?)
+            }
+            LineBisector { a, b, length } => {
+                let (ca, cb) = (self.curve(a, d)?, self.curve(b, d)?);
+                let (pa, da) = line_of(&ca)?;
+                let (pb, db) = line_of(&cb)?;
+                let (p, q) = seg_closest(sub(pa, mul(da, 1e4)), add(pa, mul(da, 1e4)), sub(pb, mul(db, 1e4)), add(pb, mul(db, 1e4)));
+                let v = lerp(p, q, 0.5);
+                let side = |c: &Curve3, dd: V3| {
+                    let far = if dist(c.start(), v) > dist(c.end(), v) { c.start() } else { c.end() };
+                    if dot(sub(far, v), dd) >= 0. { dd } else { mul(dd, -1.) }
+                };
+                let bis = geo3d::unit(add(side(&ca, da), side(&cb, db))).ok_or("as linhas são opostas")?;
+                Geo::Curve(Curve3::line(v, add(v, mul(bis, e(length, "comprimento")?)))?)
+            }
+            LineAxis { face } => {
+                for (b, _) in self.bodies.values() {
+                    if let Ok(cy) = b.cylinder_at(*face) {
+                        let o = add(cy.origin, mul(cy.dir, cy.h0));
+                        let t = add(cy.origin, mul(cy.dir, cy.h1.max(cy.h0 + 1.)));
+                        return Ok(Geo::Curve(Curve3::line(o, t)?));
+                    }
+                    if let Ok(fp) = b.face_props(*face) {
+                        if fp.kind == 2 {
+                            return Ok(Geo::Curve(Curve3::line(fp.origin, add(fp.origin, mul(fp.dir, 2. * fp.radius.max(5.))))?));
+                        }
+                    }
+                }
+                return Err("a face escolhida não é cilíndrica nem cônica".into());
+            }
+            PlanePointNormal { point, line } => {
+                let c = self.curve(line, d)?;
+                let p = self.point(point, d)?;
+                let (s0, _) = c.nearest(p);
+                let (_, t) = c.at_dist(s0);
+                Geo::Plane(frame_from(p, t, None)?)
+            }
+            PlaneMid { a, b } => {
+                let (fa, fb) = (self.plane(a, d)?, self.plane(b, d)?);
+                let nb = if dot(fa.normal, fb.normal) < 0. { mul(fb.normal, -1.) } else { fb.normal };
+                let n = geo3d::unit(add(fa.normal, nb)).ok_or("planos opostos")?;
+                let proj = sub(fa.origin, mul(nb, dot(sub(fa.origin, fb.origin), nb)));
+                Geo::Plane(frame_from(lerp(fa.origin, proj, 0.5), n, Some(fa.x))?)
+            }
+            CurveProject { curve, plane } => {
+                let c = self.curve(curve, d)?;
+                let f = self.plane(plane, d)?;
+                let pts = c.pts.iter().map(|q| sub(*q, mul(f.normal, dot(sub(*q, f.origin), f.normal)))).collect();
+                Geo::Curve(Curve3::poly(pts, c.closed)?)
+            }
+            SplineControl { points, closed } => Geo::Curve(bspline(&self.points(points, d)?, *closed)?),
+            CurveCopy { curve } => Geo::Curve(self.curve(curve, d)?),
+            SurfExtract { face, .. } => Geo::Surface(self.face_of_bodies(*face)?),
+            SurfOffset { surface, dist: dd } => {
+                let sh = self.surface_shape(surface, d)?;
+                Geo::Surface(sh.offset_surface(e(dd, "distância")?).map_err(|x| x.0)?)
+            }
+            SurfFill { curves } => {
+                let cs: Vec<Vec<V3>> = curves.iter().map(|c| self.curve(c, d).map(|c| c.pts)).collect::<Result<_, _>>()?;
+                Geo::Surface(Shape::fill_surface(&cs).map_err(|x| x.0)?)
+            }
+            SurfExtrude { curve, dir, length } => {
+                let c = self.curve(curve, d)?;
+                let (_, v) = self.axis_d(dir, d)?;
+                Geo::Surface(Shape::extrude_curve(&c.pts, v, e(length, "comprimento")?).map_err(|x| x.0)?)
+            }
+            SurfRevolve { curve, axis, angle } => {
+                let c = self.curve(curve, d)?;
+                let (o, v) = self.axis_d(axis, d)?;
+                Geo::Surface(Shape::revolve_curve(&c.pts, o, v, e(angle, "ângulo")?).map_err(|x| x.0)?)
+            }
+            Linked { ext, .. } => {
+                let x = self.doc.external.iter().find(|x| x.id == *ext).ok_or("link perdido")?;
+                match x.snapshot.as_ref().ok_or("link sem cópia — atualize os links")? {
+                    LinkedGeo::Plane { origin, x, normal } => Geo::Plane(Frame { origin: *origin, x: *x, normal: *normal }),
+                    LinkedGeo::Point(p) => Geo::Point(*p),
+                    LinkedGeo::Curve(pts) => Geo::Curve(Curve3::poly(pts.clone(), false)?),
+                    LinkedGeo::Value(_) => return Err("publicação de valor vira parâmetro, não geometria".into()),
+                }
+            }
             Spine { planes } => {
                 let fs: Vec<Frame> = planes.iter().map(|p| self.plane(p, d)).collect::<Result<_, _>>()?;
                 if fs.len() < 2 {
@@ -508,6 +738,7 @@ impl Ctx<'_> {
             Extent::TwoSides(a, b) => (ev(a, &self.vars, "distância 1")?, ev(b, &self.vars, "distância 2")?),
             Extent::ThroughAll => (self.through(target)?, 0.),
             Extent::UpTo(_) => return Err("'até plano' só vale para extrusão e recorte".into()),
+            Extent::UpToNext => return Err("'até o próximo' só vale para extrusão".into()),
         })
     }
 
@@ -607,6 +838,12 @@ impl Ctx<'_> {
                     }
                     let size = loops_size(&sk.loops);
                     face.extrude_until(dir, t * 4. + size * 10. + 100., target.origin, n).map_err(k)?
+                } else if e.extent == Extent::UpToNext {
+                    if e.op != BoolOp::Add {
+                        return Err("'até o próximo' é para extrusão que acrescenta material".into());
+                    }
+                    let body = self.body(f.target).ok_or("'até o próximo' precisa de um corpo no coletor")?;
+                    face.extrude_to_next(dir, self.through(f.target)?, body).map_err(k)?
                 } else if taper.abs() > 1e-9 {
                     let Extent::Blind(d) = &e.extent else {
                         return Err("o ângulo de saída vale só com término 'cego'".into());
@@ -843,7 +1080,12 @@ impl Ctx<'_> {
                 let face = Shape::thick_segments(&segs, frame.normal, t).map_err(k)?;
                 // entra no material como um furo (contra a normal); "inverter" troca o lado
                 let dir = if st.reverse { frame.normal } else { frame.normal.map(|x| -x) };
-                let tool = face.extrude(dir, depth, 0.).map_err(k)?;
+                let tool = if st.to_body {
+                    let body = self.body(f.target).ok_or("'até o corpo' precisa de um corpo no coletor")?;
+                    face.extrude_to_next(dir, self.through(f.target)?, body).map_err(k)?
+                } else {
+                    face.extrude(dir, depth, 0.).map_err(k)?
+                };
                 self.apply(f.target, tool, BoolOp::Add, f.id)?;
                 Ok(None)
             }
@@ -871,11 +1113,42 @@ impl Ctx<'_> {
                 self.apply(f.target, tool, BoolOp::Cut, f.id)?;
                 Ok(note)
             }
+            FeatureKind::Combine(c) => {
+                if c.tool == f.target {
+                    return Err("o corpo ferramenta precisa ser de outro coletor".into());
+                }
+                let tool = self.body(c.tool).cloned().ok_or_else(|| format!("o coletor '{}' não tem corpo (ou vem depois)", self.doc.name_of(c.tool)))?;
+                self.apply(f.target, tool, c.op, f.id)?;
+                if !c.keep_tool {
+                    self.bodies.remove(&c.tool);
+                }
+                Ok(None)
+            }
             FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => {
                 let v = ev(&o.value, &self.vars, "valor")?;
                 let (b, owners) = self.body_owned(f.target).ok_or("não há corpo para aplicar")?;
                 let tags = tags_for(owners);
                 let chamfer = matches!(f.kind, FeatureKind::Chamfer(_));
+                match &o.mode {
+                    EdgeMode::FaceFace(a, c) => {
+                        let (s, out) = b.face_face_fillet_tagged(*a, *c, v, &tags).map_err(k)?;
+                        let own = remap(owners, &out, f.id);
+                        self.bodies.insert(f.target, (s, own));
+                        return Ok(None);
+                    }
+                    EdgeMode::FullRound { mid, a, b: c } => {
+                        let (fa, fc) = (b.face_props(*a).map_err(k)?, b.face_props(*c).map_err(k)?);
+                        if fa.kind != 0 || fc.kind != 0 {
+                            return Err("o filete completo precisa de duas faces laterais planas".into());
+                        }
+                        let width = geo3d::dot(geo3d::sub(fa.origin, fc.origin), fa.dir).abs();
+                        let (s, out) = b.full_round_tagged(*mid, width, &tags).map_err(k)?;
+                        let own = remap(owners, &out, f.id);
+                        self.bodies.insert(f.target, (s, own));
+                        return Ok(None);
+                    }
+                    _ => {}
+                }
                 if o.mode != EdgeMode::Constant {
                     let EdgeSel::Edges(mids) = &o.edges else {
                         return Err("esta variação precisa das arestas escolhidas na viewport".into());
@@ -885,7 +1158,7 @@ impl Ctx<'_> {
                         EdgeMode::Variable(x) => (0, ev(x, &self.vars, "raio final")?),
                         EdgeMode::TwoDist(x) => (1, ev(x, &self.vars, "segunda distância")?),
                         EdgeMode::DistAngle(x) => (2, ev(x, &self.vars, "ângulo")?),
-                        EdgeMode::Constant => unreachable!(),
+                        _ => unreachable!(),
                     };
                     let (s, out) = b.edges_mode_tagged(mode, v, v2, mids, tol, &tags).map_err(k)?;
                     let own = remap(owners, &out, f.id);
@@ -948,7 +1221,7 @@ pub fn recompute(doc: &Document) -> RecomputeResult {
             planes.push(PlaneViz { id: None, name: n.into(), frame: origin_frame(p) });
         }
     }
-    let (mut points, mut curves) = (vec![], vec![]);
+    let (mut points, mut curves, mut surfaces) = (vec![], vec![], vec![]);
     for r in &doc.references {
         match cx.geo(r.id, 0) {
             Ok(g) => {
@@ -960,6 +1233,11 @@ pub fn recompute(doc: &Document) -> RecomputeResult {
                     Geo::Plane(fr) => planes.push(PlaneViz { id: Some(r.id), name: r.name.clone(), frame: fr }),
                     Geo::Point(p) => points.push(PointViz { id: r.id, name: r.name.clone(), p }),
                     Geo::Curve(c) => curves.push(CurveViz { id: r.id, name: r.name.clone(), pts: c.pts }),
+                    Geo::Surface(sh) => {
+                        if let Ok(mesh) = sh.mesh(0.05) {
+                            surfaces.push(SurfaceViz { id: r.id, name: r.name.clone(), mesh });
+                        }
+                    }
                 }
             }
             Err(e) => {
@@ -1032,12 +1310,35 @@ pub fn recompute(doc: &Document) -> RecomputeResult {
         planes,
         points,
         curves,
+        surfaces,
         status: cx.status,
         params: cx.vars,
         param_error,
         elapsed_ms: t0.elapsed().as_secs_f64() * 1000.,
         kernel: scc_kernel::version(),
     }
+}
+
+/// Publicações da peça (elementos e parâmetros marcados como publicados), já calculadas,
+/// para outras peças copiarem por link.
+pub fn publications(doc: &Document) -> Vec<(String, LinkedGeo)> {
+    let r = recompute(doc);
+    let mut out = vec![];
+    for e in doc.references.iter().filter(|e| e.published) {
+        if let Some(pl) = r.planes.iter().find(|p| p.id == Some(e.id)) {
+            out.push((e.name.clone(), LinkedGeo::Plane { origin: pl.frame.origin, x: pl.frame.x, normal: pl.frame.normal }));
+        } else if let Some(pt) = r.points.iter().find(|p| p.id == e.id) {
+            out.push((e.name.clone(), LinkedGeo::Point(pt.p)));
+        } else if let Some(c) = r.curves.iter().find(|c| c.id == e.id) {
+            out.push((e.name.clone(), LinkedGeo::Curve(c.pts.clone())));
+        }
+    }
+    for p in doc.params.iter().filter(|p| p.published) {
+        if let Some(v) = r.params.get(&p.name) {
+            out.push((p.name.clone(), LinkedGeo::Value(*v)));
+        }
+    }
+    out
 }
 
 /// Exporta o corpo de um coletor (ou de todos) após recalcular.
@@ -1145,6 +1446,87 @@ pub fn example_document() -> Document {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn modos_extras_superficies_links_e_booleanas() {
+        let mut d = Document::new("t");
+        let s_ = |x: &str| x.to_string();
+        // linha de interseção XY ∩ XZ = eixo X
+        let li = d.add_geometry(RefKind::LinePlanes { a: PlaneRef::Origin(OriginPlane::XY), b: PlaneRef::Origin(OriginPlane::XZ), length: s_("40") });
+        let p10 = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "10");
+        let pm = d.add_geometry(RefKind::PlaneMid { a: PlaneRef::Origin(OriginPlane::XY), b: PlaneRef::Datum(p10) });
+        let sp = d.add_geometry(RefKind::SplineControl { points: vec![PointRef::Origin, PointRef::Fixed([10., 10., 0.]), PointRef::Fixed([20., 0., 5.])], closed: false });
+        let ci = d.add_geometry(RefKind::PointCurvePlane { curve: CurveRef::Ref(sp), plane: PlaneRef::Origin(OriginPlane::YZ), which: 0 });
+        let off = d.add_geometry(RefKind::PointOffset { point: PointRef::Origin, dir: AxisRef::Origin(OriginAxis::Z), dist: s_("7") });
+        let bis = d.add_geometry(RefKind::LineBisector { a: CurveRef::Axis(OriginAxis::X), b: CurveRef::Axis(OriginAxis::Y), length: s_("10") });
+        let r = recompute(&d);
+        for id in [li, pm, sp, ci, off, bis] {
+            assert_eq!(r.status[&id], Status::Ok, "{}: {:?}", d.name_of(id), r.status[&id]);
+        }
+        let c = r.curves.iter().find(|c| c.id == li).unwrap();
+        assert!(c.pts.iter().all(|p| p[1].abs() < 1e-9 && p[2].abs() < 1e-9));
+        assert!((r.planes.iter().find(|p| p.id == Some(pm)).unwrap().frame.origin[2] - 5.).abs() < 1e-9);
+        assert!(geo3d::dist(r.points.iter().find(|p| p.id == off).unwrap().p, [0., 0., 7.]) < 1e-9);
+        let b = r.curves.iter().find(|c| c.id == bis).unwrap();
+        let e = b.pts.last().unwrap();
+        assert!((e[0].abs() - e[1].abs()).abs() < 1e-6);
+
+        if !scc_kernel::AVAILABLE {
+            return;
+        }
+        // superfícies: extrusão de curva, preenchimento, deslocamento
+        let se = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(sp), dir: AxisRef::Origin(OriginAxis::Z), length: s_("10") });
+        let so = d.add_geometry(RefKind::SurfOffset { surface: SurfRef::Ref(se), dist: s_("2") });
+        let sq = d.add_geometry(RefKind::Polyline { points: vec![PointRef::Origin, PointRef::Fixed([10., 0., 0.]), PointRef::Fixed([10., 10., 3.]), PointRef::Fixed([0., 10., 0.])], closed: true });
+        let sf = d.add_geometry(RefKind::SurfFill { curves: vec![CurveRef::Ref(sq)] });
+        let pp = d.add_geometry(RefKind::PointProject { point: PointRef::Fixed([5., 5., 20.]), surface: SurfRef::Ref(sf) });
+        let r = recompute(&d);
+        for id in [se, so, sq, sf, pp] {
+            assert_eq!(r.status[&id], Status::Ok, "{}: {:?}", d.name_of(id), r.status[&id]);
+        }
+        assert_eq!(r.surfaces.len(), 3);
+        assert!(r.points.iter().find(|p| p.id == pp).unwrap().p[2] < 5.);
+
+        // links: publica um plano e um parâmetro e importa noutra peça
+        let mut src = example_document();
+        let pl = src.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "33");
+        src.references.iter_mut().find(|r| r.id == pl).unwrap().published = true;
+        src.params[0].published = true;
+        let pubs = publications(&src);
+        assert_eq!(pubs.len(), 2);
+        let mut dst = Document::new("dst");
+        for (n, g) in pubs {
+            dst.add_link("Placa", "placa.sccpart", &n, g);
+        }
+        let r = recompute(&dst);
+        assert!(dst.references.iter().all(|x| r.status[&x.id] == Status::Ok));
+        assert!(r.planes.iter().any(|p| (p.frame.origin[2] - 33.).abs() < 1e-9));
+        assert_eq!(dst.params.len(), 1);
+
+        // booleana entre corpos e até o próximo
+        let mut d = caixa();
+        let c2 = d.add_collector("Ferramenta");
+        d.active_collector = c2;
+        d.add_feature(FeatureKind::Primitive(Primitive { kind: PrimKind::Cilindro, plane: PlaneRef::Origin(OriginPlane::XY), a: s_("5"), b: s_("40"), c: s_("0"), d: s_("0"), op: BoolOp::Add }));
+        let c1 = d.collectors[0].id;
+        d.active_collector = c1;
+        d.add_feature(FeatureKind::Combine(Combine { tool: c2, op: BoolOp::Cut, keep_tool: false }));
+        let r = recompute(&d);
+        assert_eq!(r.bodies.len(), 1);
+        assert!((r.bodies[0].mass.volume - (24000. - std::f64::consts::PI * 25. * 20.)).abs() < 1.);
+
+        // filete completo: nervura 4 mm de largura vira meia-cana
+        let mut d = Document::new("t");
+        let s1 = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [-2., -20.], [2., 20.]);
+        d.add_feature(ext(s1, BoolOp::Add, "10"));
+        d.add_feature(FeatureKind::Fillet(EdgeOp {
+            value: s_("1"),
+            edges: EdgeSel::AllOfBody,
+            mode: EdgeMode::FullRound { mid: [0., 0., 10.], a: [2., 0., 5.], b: [-2., 0., 5.] },
+        }));
+        let v = vol(&d);
+        assert!(v < 4. * 40. * 10. && v > 4. * 40. * 8., "filete completo {v}");
+    }
 
     fn sk_rect(d: &mut Document, plane: PlaneRef, a: [f64; 2], b: [f64; 2]) -> Id {
         let mut data = SketchData::default();
@@ -1291,7 +1673,7 @@ mod tests {
         // reforço: linha de 20 mm, espessura 2, profundidade 10 (não precisa de corpo)
         let mut d = Document::new("t");
         let s = sk_lines(&mut d, PlaneRef::Origin(OriginPlane::XY), &[([-10., 0.], [10., 0.])]);
-        d.add_feature(FeatureKind::Stiffener(Stiffener { sketch: s, thickness: "2".into(), depth: "10".into(), reverse: true }));
+        d.add_feature(FeatureKind::Stiffener(Stiffener { sketch: s, thickness: "2".into(), depth: "10".into(), reverse: true, to_body: false }));
         let v = vol(&d);
         assert!(near(v, (20. * 2. + std::f64::consts::PI) * 10., 1e-3), "reforço {v}");
 

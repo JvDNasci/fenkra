@@ -112,6 +112,23 @@ pub mod bridge {
         fn cylinder_at(s: &Shape, px: f64, py: f64, pz: f64) -> Result<Vec<f64>>;
         fn thread_tool_ext(ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64, major_d: f64, pitch: f64, length: f64, angle_deg: f64)
             -> Result<UniquePtr<Shape>>;
+        /// Cópia da face mais próxima do ponto.
+        fn face_copy(s: &Shape, px: f64, py: f64, pz: f64) -> Result<UniquePtr<Shape>>;
+        fn offset_surface(s: &Shape, d: f64) -> Result<UniquePtr<Shape>>;
+        /// Superfície que preenche o contorno das curvas (polilinhas; `ends` = fim de cada uma, em pontos).
+        fn fill_surface(flat: &[f64], ends: &[u32]) -> Result<UniquePtr<Shape>>;
+        fn extrude_curve(pts: &[f64], dx: f64, dy: f64, dz: f64, len: f64) -> Result<UniquePtr<Shape>>;
+        fn revolve_curve(pts: &[f64], ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64, angle_deg: f64) -> Result<UniquePtr<Shape>>;
+        /// [qx, qy, qz, nx, ny, nz]: ponto mais próximo na forma e normal da face
+        fn surface_near(s: &Shape, px: f64, py: f64, pz: f64) -> Result<Vec<f64>>;
+        /// [área, tipo, nx, ny, nz, ox, oy, oz, raio]
+        fn face_props(s: &Shape, px: f64, py: f64, pz: f64) -> Result<Vec<f64>>;
+        fn extrude_to_next(face: &Shape, dx: f64, dy: f64, dz: f64, len: f64, body: &Shape) -> Result<UniquePtr<Shape>>;
+        fn same_face(s: &Shape, ax: f64, ay: f64, az: f64, bx: f64, by: f64, bz: f64) -> Result<bool>;
+        fn full_round_t(s: &Shape, mx: f64, my: f64, mz: f64, width: f64, tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
+        fn face_face_fillet_t(
+            s: &Shape, ax: f64, ay: f64, az: f64, bx: f64, by: f64, bz: f64, r: f64, tags: &[i32], out: &mut Vec<i32>,
+        ) -> Result<UniquePtr<Shape>>;
 
         fn tessellate(s: &Shape, deflection: f64) -> Result<MeshData>;
         /// [xmin, ymin, zmin, xmax, ymax, zmax]

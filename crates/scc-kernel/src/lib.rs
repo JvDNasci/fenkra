@@ -56,6 +56,17 @@ impl Xform {
     }
 }
 
+/// Medidas de uma face: área, tipo (0 plano, 1 cilindro, 2 cone, 3 esfera, 4 toro, 5 livre),
+/// direção (normal do plano / eixo), ponto de referência e raio.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FaceProps {
+    pub area: f64,
+    pub kind: u8,
+    pub dir: [f64; 3],
+    pub origin: [f64; 3],
+    pub radius: f64,
+}
+
 /// Face cilíndrica: eixo, raio, extensão ao longo do eixo e se é interna (furo).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Cylinder {
@@ -317,6 +328,55 @@ mod imp {
             b::thread_tool_ext(ox, oy, oz, dx, dy, dz, major_d, pitch, length, angle_deg).map(Shape).map_err(err)
         }
 
+        pub fn face_copy(&self, p: [f64; 3]) -> KResult<Shape> {
+            b::face_copy(&self.0, p[0], p[1], p[2]).map(Shape).map_err(err)
+        }
+        pub fn offset_surface(&self, d: f64) -> KResult<Shape> {
+            b::offset_surface(&self.0, d).map(Shape).map_err(err)
+        }
+        pub fn fill_surface(curves: &[Vec<[f64; 3]>]) -> KResult<Shape> {
+            let mut flat = vec![];
+            let mut ends = vec![];
+            for c in curves {
+                flat.extend(c.iter().flatten().copied());
+                ends.push((flat.len() / 3) as u32);
+            }
+            b::fill_surface(&flat, &ends).map(Shape).map_err(err)
+        }
+        pub fn extrude_curve(pts: &[[f64; 3]], dir: [f64; 3], len: f64) -> KResult<Shape> {
+            let flat: Vec<f64> = pts.iter().flatten().copied().collect();
+            b::extrude_curve(&flat, dir[0], dir[1], dir[2], len).map(Shape).map_err(err)
+        }
+        pub fn revolve_curve(pts: &[[f64; 3]], origin: [f64; 3], dir: [f64; 3], angle_deg: f64) -> KResult<Shape> {
+            let flat: Vec<f64> = pts.iter().flatten().copied().collect();
+            b::revolve_curve(&flat, origin[0], origin[1], origin[2], dir[0], dir[1], dir[2], angle_deg).map(Shape).map_err(err)
+        }
+        /// Ponto mais próximo na forma e a normal da face nesse ponto.
+        pub fn surface_near(&self, p: [f64; 3]) -> KResult<([f64; 3], [f64; 3])> {
+            let v = b::surface_near(&self.0, p[0], p[1], p[2]).map_err(err)?;
+            Ok(([v[0], v[1], v[2]], [v[3], v[4], v[5]]))
+        }
+        pub fn face_props(&self, p: [f64; 3]) -> KResult<FaceProps> {
+            let v = b::face_props(&self.0, p[0], p[1], p[2]).map_err(err)?;
+            Ok(FaceProps { area: v[0], kind: v[1] as u8, dir: [v[2], v[3], v[4]], origin: [v[5], v[6], v[7]], radius: v[8] })
+        }
+        pub fn extrude_to_next(&self, dir: [f64; 3], len: f64, body: &Shape) -> KResult<Shape> {
+            b::extrude_to_next(&self.0, dir[0], dir[1], dir[2], len, &body.0).map(Shape).map_err(err)
+        }
+        pub fn same_face(&self, a: [f64; 3], c: [f64; 3]) -> bool {
+            b::same_face(&self.0, a[0], a[1], a[2], c[0], c[1], c[2]).unwrap_or(false)
+        }
+        pub fn full_round_tagged(&self, mid: [f64; 3], width: f64, tags: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            let mut out = vec![];
+            let s = b::full_round_t(&self.0, mid[0], mid[1], mid[2], width, tags, &mut out).map_err(err)?;
+            Ok((Shape(s), out))
+        }
+        pub fn face_face_fillet_tagged(&self, a: [f64; 3], c: [f64; 3], r: f64, tags: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            let mut out = vec![];
+            let s = b::face_face_fillet_t(&self.0, a[0], a[1], a[2], c[0], c[1], c[2], r, tags, &mut out).map_err(err)?;
+            Ok((Shape(s), out))
+        }
+
         pub fn mesh(&self, deflection: f64) -> KResult<Mesh> {
             let m = b::tessellate(&self.0, deflection).map_err(err)?;
             Ok(Mesh {
@@ -463,6 +523,39 @@ mod imp {
             no()
         }
         pub fn thread_tool_ext(_: [f64; 3], _: [f64; 3], _: f64, _: f64, _: f64, _: f64) -> KResult<Shape> {
+            no()
+        }
+        pub fn face_copy(&self, _: [f64; 3]) -> KResult<Shape> {
+            no()
+        }
+        pub fn offset_surface(&self, _: f64) -> KResult<Shape> {
+            no()
+        }
+        pub fn fill_surface(_: &[Vec<[f64; 3]>]) -> KResult<Shape> {
+            no()
+        }
+        pub fn extrude_curve(_: &[[f64; 3]], _: [f64; 3], _: f64) -> KResult<Shape> {
+            no()
+        }
+        pub fn revolve_curve(_: &[[f64; 3]], _: [f64; 3], _: [f64; 3], _: f64) -> KResult<Shape> {
+            no()
+        }
+        pub fn surface_near(&self, _: [f64; 3]) -> KResult<([f64; 3], [f64; 3])> {
+            no()
+        }
+        pub fn face_props(&self, _: [f64; 3]) -> KResult<FaceProps> {
+            no()
+        }
+        pub fn extrude_to_next(&self, _: [f64; 3], _: f64, _: &Shape) -> KResult<Shape> {
+            no()
+        }
+        pub fn same_face(&self, _: [f64; 3], _: [f64; 3]) -> bool {
+            false
+        }
+        pub fn full_round_tagged(&self, _: [f64; 3], _: f64, _: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            no()
+        }
+        pub fn face_face_fillet_tagged(&self, _: [f64; 3], _: [f64; 3], _: f64, _: &[i32]) -> KResult<(Shape, Vec<i32>)> {
             no()
         }
         pub fn mesh(&self, _: f64) -> KResult<Mesh> {

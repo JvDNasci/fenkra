@@ -55,6 +55,18 @@ std::unique_ptr<Shape> edges_mode_t(const Shape& s, uint8_t mode, double v1, dou
 rust::Vec<double> cylinder_at(const Shape& s, double px, double py, double pz);
 std::unique_ptr<Shape> thread_tool_ext(double ox, double oy, double oz, double dx, double dy, double dz, double major_d, double pitch, double length, double angle_deg);
 
+std::unique_ptr<Shape> face_copy(const Shape& s, double px, double py, double pz);
+std::unique_ptr<Shape> offset_surface(const Shape& s, double d);
+std::unique_ptr<Shape> fill_surface(rust::Slice<const double> flat, rust::Slice<const uint32_t> ends);
+std::unique_ptr<Shape> extrude_curve(rust::Slice<const double> pts, double dx, double dy, double dz, double len);
+std::unique_ptr<Shape> revolve_curve(rust::Slice<const double> pts, double ox, double oy, double oz, double dx, double dy, double dz, double angle_deg);
+rust::Vec<double> surface_near(const Shape& s, double px, double py, double pz);
+rust::Vec<double> face_props(const Shape& s, double px, double py, double pz);
+std::unique_ptr<Shape> extrude_to_next(const Shape& face, double dx, double dy, double dz, double len, const Shape& body);
+bool same_face(const Shape& s, double ax, double ay, double az, double bx, double by, double bz);
+std::unique_ptr<Shape> full_round_t(const Shape& s, double mx, double my, double mz, double width, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
+std::unique_ptr<Shape> face_face_fillet_t(const Shape& s, double ax, double ay, double az, double bx, double by, double bz, double r, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
+
 MeshData tessellate(const Shape& s, double deflection);
 rust::Vec<double> bounding_box(const Shape& s);
 rust::Vec<double> mass_props(const Shape& s);

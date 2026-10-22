@@ -136,6 +136,8 @@ impl CurveRef {
 pub enum SurfRef {
     Plane(PlaneRef),
     Face { point: [f64; 3], normal: [f64; 3], owner: Option<Id> },
+    /// superfície de referência (pasta de geometria)
+    Ref(Id),
 }
 
 impl Default for SurfRef {
@@ -146,10 +148,22 @@ impl Default for SurfRef {
 
 impl SurfRef {
     fn walk(&mut self, ids: &mut dyn FnMut(&mut Id)) {
-        if let SurfRef::Plane(p) = self {
-            p.walk(ids)
+        match self {
+            SurfRef::Plane(p) => p.walk(ids),
+            SurfRef::Ref(x) => ids(x),
+            SurfRef::Face { .. } => {}
         }
     }
+}
+
+/// Cópia da geometria publicada por outra peça (guardada aqui; "atualizar links" relê a origem).
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub enum LinkedGeo {
+    Plane { origin: [f64; 3], x: [f64; 3], normal: [f64; 3] },
+    Point([f64; 3]),
+    Curve(Vec<[f64; 3]>),
+    /// parâmetro publicado (valor)
+    Value(f64),
 }
 
 /// Posição sobre uma curva: distância a partir do início ou proporção do comprimento (0..1).
@@ -190,11 +204,12 @@ pub enum Continuity {
 }
 
 /// Classe do elemento de geometria de referência.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum RefClass {
     Plane,
     Point,
     Curve,
+    Surface,
 }
 
 /// Elemento da pasta Referências. O nome é a variável referenciável (RF-LNK-031);
@@ -208,6 +223,9 @@ pub struct RefElement {
     /// pasta de geometria onde o elemento fica (sem linha do tempo)
     #[serde(default)]
     pub folder: Option<Id>,
+    /// publicado para outras peças usarem por link (o nome é a publicação)
+    #[serde(default)]
+    pub published: bool,
 }
 
 /// Vista salva (câmera) — base para vistas 2D e detalhamento 3D.
@@ -240,6 +258,15 @@ pub struct ExternalRef {
     pub source: String,
     pub publication: String,
     pub state: LinkState,
+    /// arquivo da peça de origem (relativo à pasta do projeto, ou absoluto)
+    #[serde(default)]
+    pub path: String,
+    /// geometria/valor copiado na última atualização
+    #[serde(default)]
+    pub snapshot: Option<LinkedGeo>,
+    /// elemento ou parâmetro desta peça que recebe a cópia
+    #[serde(default)]
+    pub target: Option<Id>,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -314,6 +341,49 @@ pub enum RefKind {
     Corner { a: CurveRef, b: CurveRef, radius: String },
     /// Spine: curva guia normal a uma sequência de planos.
     Spine { planes: Vec<PlaneRef> },
+
+    // ---------------- modos adicionais
+    /// Interseção de uma curva com um plano (solução 0, 1, …).
+    PointCurvePlane { curve: CurveRef, plane: PlaneRef, which: usize },
+    /// Interseção (ou ponto de menor distância) entre duas curvas.
+    PointCurveCurve { a: CurveRef, b: CurveRef },
+    /// Projeção de um ponto numa superfície ou plano.
+    PointProject { point: PointRef, surface: SurfRef },
+    /// Projeção de um ponto numa curva (ponto mais próximo).
+    PointProjectCurve { point: PointRef, curve: CurveRef },
+    /// Ponto deslocado de outro ao longo de uma direção.
+    PointOffset { point: PointRef, dir: AxisRef, dist: String },
+    /// Linha de interseção de dois planos.
+    LinePlanes { a: PlaneRef, b: PlaneRef, length: String },
+    /// Bissetriz de duas linhas.
+    LineBisector { a: CurveRef, b: CurveRef, length: String },
+    /// Eixo de uma face cilíndrica ou cônica (ponto clicado na face).
+    LineAxis { face: [f64; 3] },
+    /// Plano por um ponto, normal a uma linha.
+    PlanePointNormal { point: PointRef, line: CurveRef },
+    /// Plano médio entre dois planos.
+    PlaneMid { a: PlaneRef, b: PlaneRef },
+    /// Curva projetada num plano.
+    CurveProject { curve: CurveRef, plane: PlaneRef },
+    /// Spline pelo polígono de controle (B-spline uniforme).
+    SplineControl { points: Vec<PointRef>, closed: bool },
+    /// Cópia de uma curva (aresta extraída do modelo).
+    CurveCopy { curve: CurveRef },
+
+    // ---------------- superfícies
+    /// Face extraída do corpo (ponto clicado).
+    SurfExtract { face: [f64; 3], owner: Option<Id> },
+    /// Superfície deslocada.
+    SurfOffset { surface: SurfRef, dist: String },
+    /// Preenchimento de um contorno de curvas.
+    SurfFill { curves: Vec<CurveRef> },
+    /// Curva extrudada ao longo de uma direção.
+    SurfExtrude { curve: CurveRef, dir: AxisRef, length: String },
+    /// Curva girada em torno de um eixo.
+    SurfRevolve { curve: CurveRef, axis: AxisRef, angle: String },
+
+    /// Geometria vinda de outra peça por link (ver `Document.external`).
+    Linked { ext: Id, class: RefClass },
 }
 
 impl RefKind {
@@ -336,8 +406,12 @@ impl RefKind {
             OffsetPlane { .. } | AnglePlane { .. } | FacePlane { .. } | PlaneParallelPoint { .. } | PlaneThreePoints { .. } | PlaneTwoLines { .. }
             | PlanePointLine { .. } | PlaneCurve { .. } | PlaneNormalCurve { .. } | PlaneTangentSurface { .. } | PlaneEquation { .. }
             | PlaneMeanPoints { .. } => RefClass::Plane,
+            PlanePointNormal { .. } | PlaneMid { .. } => RefClass::Plane,
             PointCoords { .. } | PointOnCurve { .. } | PointOnPlane { .. } | PointOnSurface { .. } | PointCenter { .. } | PointTangent { .. }
-            | PointBetween { .. } => RefClass::Point,
+            | PointBetween { .. } | PointCurvePlane { .. } | PointCurveCurve { .. } | PointProject { .. } | PointProjectCurve { .. }
+            | PointOffset { .. } => RefClass::Point,
+            SurfExtract { .. } | SurfOffset { .. } | SurfFill { .. } | SurfExtrude { .. } | SurfRevolve { .. } => RefClass::Surface,
+            Linked { class, .. } => *class,
             _ => RefClass::Curve,
         }
     }
@@ -493,6 +567,71 @@ impl RefKind {
                     p.walk(ids)
                 }
             }
+            PointCurvePlane { curve, plane, .. } | CurveProject { curve, plane } => {
+                curve.walk(ids);
+                plane.walk(ids)
+            }
+            PointCurveCurve { a, b } => {
+                a.walk(ids);
+                b.walk(ids)
+            }
+            PointProject { point, surface } => {
+                point.walk(ids);
+                surface.walk(ids)
+            }
+            PointProjectCurve { point, curve } => {
+                point.walk(ids);
+                curve.walk(ids)
+            }
+            PointOffset { point, dir, dist } => {
+                point.walk(ids);
+                dir.walk(ids);
+                exprs(dist)
+            }
+            LinePlanes { a, b, length } => {
+                a.walk(ids);
+                b.walk(ids);
+                exprs(length)
+            }
+            LineBisector { a, b, length } => {
+                a.walk(ids);
+                b.walk(ids);
+                exprs(length)
+            }
+            LineAxis { .. } | SurfExtract { .. } | Linked { .. } => {}
+            PlanePointNormal { point, line } => {
+                point.walk(ids);
+                line.walk(ids)
+            }
+            PlaneMid { a, b } => {
+                a.walk(ids);
+                b.walk(ids)
+            }
+            SplineControl { points, .. } => {
+                for q in points {
+                    q.walk(ids)
+                }
+            }
+            CurveCopy { curve } => curve.walk(ids),
+            SurfOffset { surface, dist } => {
+                surface.walk(ids);
+                exprs(dist)
+            }
+            SurfFill { curves } => {
+                for c in curves {
+                    c.walk(ids)
+                }
+            }
+            SurfExtrude { curve, dir, length } => {
+                curve.walk(ids);
+                dir.walk(ids);
+                exprs(length)
+            }
+            SurfRevolve { curve, axis, angle } => {
+                curve.walk(ids);
+                axis.walk(ids);
+                exprs(angle)
+            }
         }
     }
 
@@ -537,6 +676,9 @@ pub struct Parameter {
     pub expr: String,
     pub unit: Unit,
     pub comment: String,
+    /// publicado para outras peças usarem por link
+    #[serde(default)]
+    pub published: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -733,6 +875,8 @@ pub enum FeatureKind {
     Stiffener(Stiffener),
     /// Rosca numa face cilíndrica (eixo ou furo).
     Thread(Thread),
+    /// Booleana entre coletores: o corpo de `tool` une, subtrai ou intersecta o deste coletor.
+    Combine(Combine),
 }
 
 impl FeatureKind {
@@ -764,6 +908,11 @@ impl FeatureKind {
             Scale(_) => "Escala",
             Stiffener(_) => "Reforço",
             Thread(_) => "Rosca",
+            Combine(c) => match c.op {
+                BoolOp::Add => "Unir",
+                BoolOp::Cut => "Subtrair",
+                BoolOp::Intersect => "Intersecao",
+            },
         }
     }
     pub fn icon(&self) -> &'static str {
@@ -787,6 +936,7 @@ impl FeatureKind {
             Scale(_) => "⤢",
             Stiffener(_) => "┃",
             Thread(_) => "⌇",
+            Combine(_) => "⊕",
         }
     }
 
@@ -838,7 +988,7 @@ impl FeatureKind {
                     ids(x)
                 }
                 match &mut o.mode {
-                    EdgeMode::Constant => {}
+                    EdgeMode::Constant | EdgeMode::FaceFace(..) | EdgeMode::FullRound { .. } => {}
                     EdgeMode::Variable(v) | EdgeMode::TwoDist(v) | EdgeMode::DistAngle(v) => exprs(v),
                 }
             }
@@ -909,6 +1059,7 @@ impl FeatureKind {
                 exprs(&mut st.depth)
             }
             Thread(t) => exprs(&mut t.length),
+            Combine(c) => ids(&mut c.tool),
         }
     }
 }
@@ -920,7 +1071,7 @@ fn extent_walk(e: &mut Extent, ids: &mut dyn FnMut(&mut Id), exprs: &mut dyn FnM
             exprs(a);
             exprs(b)
         }
-        Extent::ThroughAll => {}
+        Extent::ThroughAll | Extent::UpToNext => {}
         Extent::UpTo(p) => p.walk(ids),
     }
 }
@@ -1064,6 +1215,19 @@ pub struct Stiffener {
     pub depth: String,
     /// para o outro lado do plano do sketch
     pub reverse: bool,
+    /// vai até encontrar o corpo (ignora a profundidade)
+    #[serde(default)]
+    pub to_body: bool,
+}
+
+/// Booleana entre coletores de corpos.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct Combine {
+    /// coletor cujo corpo é a ferramenta
+    pub tool: Id,
+    pub op: BoolOp,
+    /// mantém o corpo ferramenta visível depois da operação
+    pub keep_tool: bool,
 }
 
 /// Rosca numa face cilíndrica: externa num eixo, interna num furo.
@@ -1102,6 +1266,8 @@ pub enum Extent {
     ThroughAll,
     /// Até um plano (da Origem ou de referência, inclusive inclinado): termina exatamente nele.
     UpTo(PlaneRef),
+    /// Até a próxima parede do corpo na direção da extrusão.
+    UpToNext,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -1187,6 +1353,10 @@ pub enum EdgeMode {
     TwoDist(String),
     /// chanfro por distância e ângulo (graus)
     DistAngle(String),
+    /// filete entre duas faces (pontos clicados): arredonda a aresta comum
+    FaceFace([f64; 3], [f64; 3]),
+    /// filete tritangente/completo: consome a face do meio entre duas faces laterais
+    FullRound { mid: [f64; 3], a: [f64; 3], b: [f64; 3] },
 }
 
 // ---------------------------------------------------------------- Documento
@@ -1495,7 +1665,7 @@ impl Document {
     pub fn add_offset_plane(&mut self, base: PlaneRef, offset: &str) -> Id {
         let id = self.alloc();
         let name = self.unique_name("Plano");
-        self.references.push(RefElement { id, name, kind: RefKind::OffsetPlane { base, offset: offset.into() }, visible: true, folder: None });
+        self.references.push(RefElement { id, name, kind: RefKind::OffsetPlane { base, offset: offset.into() }, visible: true, folder: None, published: false });
         self.file_last_reference();
         id
     }
@@ -1504,7 +1674,7 @@ impl Document {
     pub fn add_face_plane(&mut self, origin: [f64; 3], x: [f64; 3], normal: [f64; 3], owner: Option<Id>) -> Id {
         let id = self.alloc();
         let name = self.unique_name("PlanoFace");
-        self.references.push(RefElement { id, name, kind: RefKind::FacePlane { origin, x, normal, owner }, visible: true, folder: None });
+        self.references.push(RefElement { id, name, kind: RefKind::FacePlane { origin, x, normal, owner }, visible: true, folder: None, published: false });
         self.file_last_reference();
         id
     }
@@ -1513,7 +1683,7 @@ impl Document {
     pub fn add_angle_plane(&mut self, base: PlaneRef, axis: AxisRef, angle: &str) -> Id {
         let id = self.alloc();
         let name = self.unique_name("Plano");
-        self.references.push(RefElement { id, name, kind: RefKind::AnglePlane { base, axis, angle: angle.into() }, visible: true, folder: None });
+        self.references.push(RefElement { id, name, kind: RefKind::AnglePlane { base, axis, angle: angle.into() }, visible: true, folder: None, published: false });
         self.file_last_reference();
         id
     }
@@ -1522,17 +1692,83 @@ impl Document {
     pub fn add_geometry(&mut self, kind: RefKind) -> Id {
         let id = self.alloc();
         let base = match kind.class() {
+            RefClass::Surface => "Superficie",
             RefClass::Plane => "Plano",
             RefClass::Point => "Ponto",
             RefClass::Curve => match kind {
-                RefKind::LinePoints { .. } | RefKind::LineDir { .. } | RefKind::LineAngle { .. } | RefKind::LineNormalSurface { .. } => "Linha",
+                RefKind::LinePoints { .. }
+                | RefKind::LineDir { .. }
+                | RefKind::LineAngle { .. }
+                | RefKind::LineNormalSurface { .. }
+                | RefKind::LinePlanes { .. }
+                | RefKind::LineBisector { .. }
+                | RefKind::LineAxis { .. } => "Linha",
                 _ => "Curva",
             },
         };
         let name = self.unique_name(base);
-        self.references.push(RefElement { id, name, kind, visible: true, folder: None });
+        self.references.push(RefElement { id, name, kind, visible: true, folder: None, published: false });
         self.file_last_reference();
         id
+    }
+
+    /// Importa uma publicação de outra peça: cria o link e o elemento (ou parâmetro) que recebe a cópia.
+    pub fn add_link(&mut self, source: &str, path: &str, publication: &str, geo: LinkedGeo) -> Id {
+        let clean = |t: &str| t.chars().map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' }).collect::<String>();
+        let base = format!("{}_{}", clean(source), clean(publication));
+        let ext = self.alloc();
+        let target = match &geo {
+            LinkedGeo::Value(v) => {
+                let name = self.unique_name(&base);
+                let id = self.alloc();
+                self.params.push(Parameter { id, name, expr: format!("{v}"), unit: Unit::Comprimento, comment: format!("link: {source}.{publication}"), published: false });
+                id
+            }
+            g => {
+                let class = match g {
+                    LinkedGeo::Plane { .. } => RefClass::Plane,
+                    LinkedGeo::Point(_) => RefClass::Point,
+                    _ => RefClass::Curve,
+                };
+                let id = self.alloc();
+                let name = if self.name_taken(&base) { self.unique_name(&base) } else { base.clone() };
+                self.references.push(RefElement { id, name, kind: RefKind::Linked { ext, class }, visible: true, folder: None, published: false });
+                id
+            }
+        };
+        self.external.push(ExternalRef {
+            id: ext,
+            name: base,
+            source: source.into(),
+            publication: publication.into(),
+            state: LinkState::Ativo,
+            path: path.into(),
+            snapshot: Some(geo),
+            target: Some(target),
+        });
+        target
+    }
+
+    /// Atualiza a cópia de um link (None = a publicação sumiu: link quebrado, a cópia antiga fica).
+    pub fn refresh_link(&mut self, ext: Id, geo: Option<LinkedGeo>) {
+        let Some(e) = self.external.iter_mut().find(|e| e.id == ext) else { return };
+        if e.state == LinkState::Congelado {
+            return;
+        }
+        let Some(g) = geo else {
+            e.state = LinkState::Quebrado;
+            return;
+        };
+        e.state = LinkState::Ativo;
+        let target = e.target;
+        if let (LinkedGeo::Value(v), Some(t)) = (&g, target) {
+            if let Some(p) = self.params.iter_mut().find(|p| p.id == t) {
+                p.expr = format!("{v}");
+            }
+        }
+        if let Some(e) = self.external.iter_mut().find(|e| e.id == ext) {
+            e.snapshot = Some(g);
+        }
     }
 
     pub fn reference(&self, id: Id) -> Option<&RefElement> {
@@ -1547,7 +1783,7 @@ impl Document {
             return Err(DocError::DuplicateName(name.into()));
         }
         let id = self.alloc();
-        self.params.push(Parameter { id, name: name.into(), expr: expr.into(), unit, comment: String::new() });
+        self.params.push(Parameter { id, name: name.into(), expr: expr.into(), unit, comment: String::new(), published: false });
         Ok(id)
     }
 
