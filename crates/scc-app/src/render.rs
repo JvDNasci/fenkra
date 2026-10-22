@@ -195,6 +195,8 @@ pub struct Scene {
     pub lines: Vec<LineVertex>,
     /// linhas sempre visíveis (seleção, eixos, pontos)
     pub overlay: Vec<LineVertex>,
+    /// sombra translúcida dos perfis fechados de sketch (triângulos sem índice)
+    pub fill: Vec<MeshVertex>,
     pub bounds: Option<(Vec3, Vec3)>,
 }
 
@@ -253,12 +255,33 @@ impl Camera {
         self.yaw = yaw;
         self.pitch = pitch;
     }
+    /// Projeta um ponto do mundo para a tela.
+    pub fn project(&self, rect: egui::Rect, p: Vec3) -> Option<egui::Pos2> {
+        let c = self.view_proj(rect.width() / rect.height()) * p.extend(1.0);
+        if c.w <= 0. {
+            return None;
+        }
+        let n = c.truncate() / c.w;
+        Some(egui::pos2(rect.left() + (n.x + 1.) / 2. * rect.width(), rect.top() + (1. - n.y) / 2. * rect.height()))
+    }
+    /// Raio (origem, direção) que passa pelo ponto da tela.
+    pub fn ray(&self, rect: egui::Rect, pos: egui::Pos2) -> (Vec3, Vec3) {
+        let inv = self.view_proj(rect.width() / rect.height()).inverse();
+        let nx = (pos.x - rect.left()) / rect.width() * 2. - 1.;
+        let ny = 1. - (pos.y - rect.top()) / rect.height() * 2.;
+        let a = inv.project_point3(Vec3::new(nx, ny, 0.));
+        let b = inv.project_point3(Vec3::new(nx, ny, 1.));
+        (a, (b - a).normalize_or_zero())
+    }
     /// Olha de frente para um plano (olho do lado da normal).
     pub fn look_along(&mut self, normal: Vec3, center: Vec3) {
         let n = normal.normalize();
         self.pitch = n.z.clamp(-1., 1.).asin().clamp(-1.5706, 1.5706);
         if n.x.abs() + n.y.abs() > 1e-4 {
             self.yaw = n.y.atan2(n.x);
+        } else {
+            // plano horizontal: X para a direita, Y para cima na tela
+            self.yaw = -std::f32::consts::FRAC_PI_2 * n.z.signum();
         }
         self.target = center;
     }
@@ -285,6 +308,7 @@ pub struct Viewport {
     vb: Option<(wgpu::Buffer, wgpu::Buffer, u32)>,
     eb: Buf,
     lb: Buf,
+    fb: Option<(wgpu::Buffer, u32)>,
     ob: Buf,
     targets: Option<Targets>,
     pub camera: Camera,
@@ -372,6 +396,7 @@ impl Viewport {
             vb: None,
             eb: None,
             lb: None,
+            fb: None,
             ob: None,
             targets: None,
             camera: Camera::default(),
@@ -393,6 +418,7 @@ impl Viewport {
             )
         });
         self.eb = lines(&s.edges);
+        self.fb = (!s.fill.is_empty()).then(|| (mk(bytemuck::cast_slice(&s.fill), wgpu::BufferUsages::VERTEX), s.fill.len() as u32));
         self.lb = lines(&s.lines);
         self.ob = lines(&s.overlay);
         self.bounds = s.bounds;
@@ -491,6 +517,11 @@ impl Viewport {
                 pass.set_vertex_buffer(0, vb.slice(..));
                 pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
                 pass.draw_indexed(0..*n, 0, 0..1);
+            }
+            if let (false, Some((fb, n))) = (m == DisplayMode::LinhasOcultas, &self.fb) {
+                pass.set_pipeline(&self.xray_pipe);
+                pass.set_vertex_buffer(0, fb.slice(..));
+                pass.draw(0..*n, 0..1);
             }
             let mut lines = |b: &Buf, p: &wgpu::RenderPipeline| {
                 if let Some((buf, n)) = b {

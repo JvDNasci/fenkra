@@ -16,6 +16,8 @@ const CONSTR: [f32; 4] = [0.85, 0.6, 0.3, 0.8];
 const HILITE: [f32; 4] = [1.0, 0.85, 0.2, 1.0];
 
 pub struct SceneOpts<'a> {
+    /// sketch em edição: suas linhas são desenhadas pelo editor, não pela cena
+    pub editing: Option<Id>,
     pub sel: &'a Sel,
     pub filter: &'a Filter,
     pub hidden_env: bool,
@@ -111,8 +113,18 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
     if o.filter.sketches {
         for sk in &r.sketches {
             let hidden = feat_hidden.contains(&sk.feature);
-            let h = hi_features.contains(&sk.feature);
-            if !h && !shows(hidden, env) {
+            let editing = o.editing == Some(sk.feature);
+            let h = hi_features.contains(&sk.feature) && !editing;
+            if !editing && !h && !shows(hidden, env) {
+                continue;
+            }
+            // sombra dos perfis fechados
+            let n = Vec3::from(sk.frame.normal.map(|v| v as f32));
+            let fc = if editing { [0.3, 0.65, 1.0, 1.0] } else { [0.35, 0.7, 1.0, 1.0] };
+            for p in &sk.fill {
+                s.fill.push(MeshVertex { pos: *p, nrm: n.into(), col: fc, mat: [1.0, 0.0, if editing { 0.22 } else { 0.14 }, 0.] });
+            }
+            if editing {
                 continue;
             }
             let dst = if h { &mut s.overlay } else { &mut s.lines };

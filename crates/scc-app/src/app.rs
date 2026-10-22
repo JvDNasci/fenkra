@@ -108,6 +108,9 @@ pub struct App {
     pub hidden_env: bool,
     /// sketch cuja vista deve ser alinhada quando o resultado chegar
     align_pending: Option<Id>,
+    /// sketch em edição interativa
+    pub sketch: Option<crate::sketch_ui::SketchEdit>,
+    begin_sketch_pending: Option<Id>,
 }
 
 pub const MATERIALS: [(&str, f64); 8] = [
@@ -154,7 +157,13 @@ impl App {
             settings_open: false,
             hidden_env: false,
             align_pending: None,
+            sketch: None,
+            begin_sketch_pending: None,
         };
+        // desenvolvimento: SCC_ABRIR_SKETCH=<nome> abre esse sketch em edição ao iniciar
+        if let Ok(name) = std::env::var("SCC_ABRIR_SKETCH") {
+            app.begin_sketch_pending = app.open.doc.features.iter().find(|f| f.name == name).map(|f| f.id);
+        }
         app.request_recompute();
         app
     }
@@ -321,7 +330,7 @@ impl App {
     fn selected_sketch(&self, need_points: bool) -> Option<Id> {
         let d = self.doc();
         let ok = |f: &Feature| match &f.kind {
-            FeatureKind::Sketch(s) => !need_points || s.entities.iter().any(|e| matches!(e.geom, SketchGeom::Point { .. })),
+            FeatureKind::Sketch(s) => !need_points || !s.data.hole_points().is_empty(),
             _ => false,
         };
         if let Sel::Feature(id) = self.sel {
@@ -341,8 +350,9 @@ impl App {
         let d = &mut self.open.doc;
         let new_sel = match c {
             Cmd::Sketch => {
-                let e = SketchEntity { id: d.alloc(), construction: false, geom: SketchGeom::Rect { cx: s("0"), cy: s("0"), w: s("50"), h: s("30") } };
-                Sel::Feature(d.add_feature(FeatureKind::Sketch(Sketch { plane, entities: vec![e] })))
+                let id = d.add_feature(FeatureKind::Sketch(Sketch { plane, data: Default::default() }));
+                self.begin_sketch_pending = Some(id);
+                Sel::Feature(id)
             }
             Cmd::Extrude | Cmd::Cut => {
                 let Some(sk) = sketch else {
@@ -375,8 +385,13 @@ impl App {
                     Some(sk) => sk,
                     None => {
                         let d = &mut self.open.doc;
-                        let e = SketchEntity { id: d.alloc(), construction: false, geom: SketchGeom::Point { x: s("0"), y: s("0") } };
-                        let id = d.add_feature(FeatureKind::Sketch(Sketch { plane, entities: vec![e] }));
+                        let mut data = SketchData::default();
+                        {
+                            let mut al = || d.alloc();
+                            let p = data.add_point(&mut al, 0., 0.);
+                            data.add_curve(&mut al, scc_core::sketch::Curve::Point { p }, false);
+                        }
+                        let id = d.add_feature(FeatureKind::Sketch(Sketch { plane, data }));
                         d.feature_mut(id).unwrap().name = d.unique_name("Centros");
                         id
                     }
@@ -456,6 +471,59 @@ impl App {
             }
             Act::Settings => self.settings_open = !self.settings_open,
             Act::Dock(g, d) => self.settings.set_dock(g, d),
+            Act::SkTool(t) => {
+                if let Some(e) = self.sketch.as_mut() {
+                    e.set_tool(t)
+                }
+            }
+            Act::SkConstruction => {
+                if let Some(e) = self.sketch.as_mut() {
+                    e.construction = !e.construction
+                }
+            }
+            Act::SkGrid => self.settings.grid = !self.settings.grid,
+            Act::SkSnap => self.settings.snaps = !self.settings.snaps,
+            Act::SkAutoConstraints => self.settings.auto_constraints = !self.settings.auto_constraints,
+            Act::SkAutoDims => self.settings.auto_dims = !self.settings.auto_dims,
+            Act::SkFinish => self.finish_sketch(),
+        }
+    }
+
+    /// Fundo claro? (para escolher cores legíveis)
+    pub fn light_background(&self) -> bool {
+        let lum = |c: [u8; 3]| 0.3 * c[0] as f32 + 0.59 * c[1] as f32 + 0.11 * c[2] as f32;
+        lum(self.settings.bg_bottom) > 140.
+    }
+
+    /// Entra na edição interativa de um sketch: alinha a vista ao plano e liga a projeção ortogonal.
+    pub fn begin_sketch(&mut self, id: Id) {
+        if self.sketch.as_ref().is_some_and(|e| e.feature == id) {
+            return;
+        }
+        self.finish_sketch();
+        crate::sketch_ui::begin(self, id);
+        if let Some(v) = self.viewport.as_mut() {
+            v.camera.ortho = true;
+        }
+        self.align_pending = Some(id);
+        self.scene_dirty = true;
+    }
+
+    /// Sai da edição do sketch e restaura a projeção.
+    pub fn finish_sketch(&mut self) {
+        if let Some(e) = self.sketch.take() {
+            if let Some(v) = self.viewport.as_mut() {
+                v.camera.ortho = e.prev_ortho;
+            }
+            self.scene_dirty = true;
+        }
+    }
+
+    fn tool_state(&self) -> toolbar::ToolState {
+        toolbar::ToolState {
+            hidden_env: self.hidden_env,
+            sketch_tool: self.sketch.as_ref().map(|e| e.tool),
+            construction: self.sketch.as_ref().is_some_and(|e| e.construction),
         }
     }
 
@@ -603,7 +671,9 @@ impl App {
             });
         });
 
-        let top = toolbar::groups_at(&self.settings, Dock::Topo);
+        let sketching = self.sketch.is_some();
+        let ts = self.tool_state();
+        let top = toolbar::groups_at(&self.settings, Dock::Topo, sketching);
         if !top.is_empty() {
             let mut acts = vec![];
             egui::Panel::top("comandos").show(root, |ui| {
@@ -613,7 +683,7 @@ impl App {
                             if i > 0 {
                                 ui.separator();
                             }
-                            acts.extend(toolbar::show_group(ui, *g, &mut self.settings, self.hidden_env, false));
+                            acts.extend(toolbar::show_group(ui, *g, &mut self.settings, &ts, false));
                         }
                     });
                 });
@@ -627,7 +697,9 @@ impl App {
     /// Grupos fixos na lateral e grupos flutuantes.
     fn side_toolbars(&mut self, root: &mut egui::Ui) {
         let mut acts = vec![];
-        let side = toolbar::groups_at(&self.settings, Dock::Lateral);
+        let sketching = self.sketch.is_some();
+        let ts = self.tool_state();
+        let side = toolbar::groups_at(&self.settings, Dock::Lateral, sketching);
         if !side.is_empty() {
             egui::Panel::left("barra_lateral").resizable(false).show(root, |ui| {
                 egui::ScrollArea::vertical().id_salt("barra_lat").show(ui, |ui| {
@@ -635,20 +707,20 @@ impl App {
                         if i > 0 {
                             ui.separator();
                         }
-                        acts.extend(toolbar::show_group(ui, *g, &mut self.settings, self.hidden_env, true));
+                        acts.extend(toolbar::show_group(ui, *g, &mut self.settings, &ts, true));
                     }
                 });
             });
         }
         let ctx = root.ctx().clone();
-        for (i, g) in toolbar::groups_at(&self.settings, Dock::Flutuante).into_iter().enumerate() {
+        for (i, g) in toolbar::groups_at(&self.settings, Dock::Flutuante, sketching).into_iter().enumerate() {
             egui::Window::new(g.label())
                 .id(egui::Id::unique(("flutuante", g.label())))
                 .default_pos(egui::pos2(320. + 40. * i as f32, 140. + 40. * i as f32))
                 .resizable(false)
                 .collapsible(true)
                 .show(&ctx, |ui| {
-                    acts.extend(toolbar::show_group(ui, g, &mut self.settings, self.hidden_env, false));
+                    acts.extend(toolbar::show_group(ui, g, &mut self.settings, &ts, false));
                 });
         }
         for a in acts {
@@ -918,7 +990,7 @@ impl App {
             })
             .inner;
         if resp.double_clicked() && matches!(f.kind, FeatureKind::Sketch(_)) {
-            actions.push(TreeAction::Align(f.id));
+            actions.push(TreeAction::EditSketch(f.id));
         }
         let resp = match st.and_then(|s| s.message()) {
             Some(m) => resp.on_hover_text(m),
@@ -934,6 +1006,10 @@ impl App {
             }
             if ui.button(if f.hidden { "Mostrar   H" } else { "Ocultar   H" }).clicked() {
                 actions.push(TreeAction::Hide(f.id, !f.hidden));
+                ui.close();
+            }
+            if matches!(f.kind, FeatureKind::Sketch(_)) && ui.button("✏ Editar sketch   (duplo clique)").clicked() {
+                actions.push(TreeAction::EditSketch(f.id));
                 ui.close();
             }
             if matches!(f.kind, FeatureKind::Sketch(_)) && ui.button("Alinhar vista ao sketch   N").clicked() {
@@ -1049,6 +1125,7 @@ impl App {
                     AppTarget::Collector(id) => Sel::Collector(id),
                 };
             }
+            TreeAction::EditSketch(id) => self.begin_sketch(id),
             TreeAction::Align(id) => {
                 self.sel = Sel::Feature(id);
                 self.align_to_selection();
@@ -1256,14 +1333,14 @@ impl App {
                 let (r, u) = vp.camera.basis();
                 let k = vp.camera.dist * 0.0012;
                 vp.camera.target += (-r * delta.x + u * delta.y) * k;
-            } else if resp.dragged_by(egui::PointerButton::Primary) || resp.dragged_by(egui::PointerButton::Middle) {
+            } else if (resp.dragged_by(egui::PointerButton::Primary) && self.sketch.is_none()) || resp.dragged_by(egui::PointerButton::Middle) {
                 vp.camera.yaw -= delta.x * 0.008;
                 vp.camera.pitch = (vp.camera.pitch + delta.y * 0.008).clamp(-1.5706, 1.5706);
             }
             if resp.hovered() && scroll != 0. {
                 vp.camera.dist = (vp.camera.dist * (-scroll * 0.0015).exp()).clamp(0.5, 1e6);
             }
-            if resp.double_clicked() || self.fit_pending {
+            if (resp.double_clicked() && self.sketch.is_none()) || self.fit_pending {
                 if let Some(b) = vp.bounds {
                     vp.camera.fit(b);
                     self.fit_pending = false;
@@ -1294,6 +1371,7 @@ impl App {
                 }
             }
 
+            let cam = vp.camera;
             // estado da vista no canto superior esquerdo
             let info = format!(
                 "{}{} · {}",
@@ -1326,6 +1404,9 @@ impl App {
                     })
                     .collect();
                 ui.painter().text(rect.right_bottom() - egui::vec2(10., 8.), egui::Align2::RIGHT_BOTTOM, mass.join("\n"), egui::FontId::proportional(11.), ink);
+            }
+            if self.sketch.is_some() {
+                crate::sketch_ui::overlay(self, ui, rect, &resp, cam);
             }
         });
     }
@@ -1505,6 +1586,7 @@ enum TreeAction {
     SetAppearance(AppTarget, Option<Appearance>),
     Customize(AppTarget),
     Align(Id),
+    EditSketch(Id),
     OriginVisible(bool),
     CollectorVisible(Id, bool),
     Activate(Id),
@@ -1594,7 +1676,10 @@ impl eframe::App for App {
         if redo {
             self.redo();
         }
-        if del && !ctx.egui_wants_keyboard_input() {
+        if self.sketch.is_some() && crate::sketch_ui::keys(self, ctx) {
+            self.finish_sketch();
+        }
+        if del && self.sketch.is_none() && !ctx.egui_wants_keyboard_input() {
             self.delete_selected();
         }
         // atalhos de vista (só quando não há campo de texto em edição)
@@ -1642,7 +1727,13 @@ impl eframe::App for App {
             });
         });
         egui::Panel::right("editor").default_size(330.).resizable(true).show(root, |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| editor::show(self, ui));
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                if self.sketch.is_some() {
+                    crate::sketch_ui::panel(self, ui)
+                } else {
+                    editor::show(self, ui)
+                }
+            });
         });
         self.side_toolbars(root);
         self.settings_window(ctx);
@@ -1670,6 +1761,9 @@ impl eframe::App for App {
                 self.request_recompute();
             }
         }
+        if let Some(id) = self.begin_sketch_pending.take() {
+            self.begin_sketch(id);
+        }
         if self.sel != sel_before || self.hidden_env != hidden_env_before {
             self.scene_dirty = true;
         }
@@ -1688,6 +1782,7 @@ impl eframe::App for App {
             if let (Some(vp), Some(r), Some(rs)) = (self.viewport.as_mut(), &self.result, frame.wgpu_render_state()) {
                 let lum = |c: [u8; 3]| 0.3 * c[0] as f32 + 0.59 * c[1] as f32 + 0.11 * c[2] as f32;
                 let opts = scene::SceneOpts {
+                    editing: self.sketch.as_ref().map(|e| e.feature),
                     sel: &self.sel,
                     filter: &self.settings.filter,
                     hidden_env: self.hidden_env,

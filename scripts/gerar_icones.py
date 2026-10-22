@@ -163,6 +163,69 @@ I["ortho"] = (
     f'<path d="M24 20 L42 14 V34 L24 40 Z" fill="{MID}" {S}/>'
     f'<path d="M30 18 L36 16 M30 36 L36 34" stroke="{ACTION}" stroke-width="2" stroke-linecap="round"/>')
 
+# ---------------------------------------------------------------- ferramentas do sketch (2D)
+G = f'stroke="{SKETCH}" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"'
+PT = lambda x, y, c=INK: f'<rect x="{x - 3}" y="{y - 3}" width="6" height="6" rx="1" fill="{c}"/>'
+GRID = "".join(f'<path d="M{v} 6 V42 M6 {v} H42" stroke="#94a3b8" stroke-width="0.8" opacity="0.6"/>' for v in (12, 24, 36))
+
+I["sk_selecionar"] = f'<path d="M12 6 L12 38 L20 30 L26 43 L31 41 L25 28 L36 28 Z" fill="{LIGHT}" {S}/>'
+I["sk_linha"] = f'<line x1="8" y1="38" x2="40" y2="10" {G}/>' + PT(8, 38) + PT(40, 10)
+I["sk_polilinha"] = f'<polyline points="6,38 18,14 30,32 42,10" {G}/>' + PT(6, 38) + PT(18, 14) + PT(30, 32) + PT(42, 10)
+I["sk_retangulo"] = f'<rect x="8" y="12" width="32" height="24" {G}/>' + PT(8, 36) + PT(40, 12)
+I["sk_retangulo_centro"] = f'<rect x="8" y="12" width="32" height="24" {G}/>' + PT(24, 24, ACTION) + PT(40, 12) + \
+    f'<line x1="24" y1="24" x2="40" y2="12" stroke="{INK}" stroke-width="1.2" stroke-dasharray="2.5 2"/>'
+I["sk_circulo"] = f'<circle cx="24" cy="24" r="16" {G}/>' + PT(24, 24, ACTION) + \
+    f'<line x1="24" y1="24" x2="40" y2="24" stroke="{INK}" stroke-width="1.2" stroke-dasharray="2.5 2"/>'
+I["sk_circulo3"] = f'<circle cx="24" cy="24" r="16" {G}/>' + PT(8, 24) + PT(24, 8) + PT(36, 35)
+I["sk_arco3"] = f'<path d="M8 36 A18 18 0 0 1 40 36" {G}/>' + PT(8, 36) + PT(24, 18) + PT(40, 36)
+I["sk_arco_centro"] = f'<path d="M40 30 A16 16 0 0 0 12 14" {G}/>' + PT(24, 30, ACTION) + PT(40, 30) + PT(12, 14) + \
+    f'<path d="M24 30 L40 30 M24 30 L12 14" stroke="{INK}" stroke-width="1.2" stroke-dasharray="2.5 2"/>'
+I["sk_rasgo"] = f'<path d="M14 16 H34 A8 8 0 0 1 34 32 H14 A8 8 0 0 1 14 16 Z" {G}/>' + PT(14, 24, ACTION) + PT(34, 24, ACTION)
+I["sk_poligono"] = f'<polygon points="24,6 40,15 40,33 24,42 8,33 8,15" {G}/>' + \
+    f'<circle cx="24" cy="24" r="18" stroke="{ACTION}" stroke-width="1.2" stroke-dasharray="3 2" fill="none"/>'
+I["sk_ponto"] = f'<path d="M24 8 V40 M8 24 H40" stroke="{SKETCH}" stroke-width="1.5" opacity="0.6"/>' + PT(24, 24, ACTION) + \
+    f'<rect x="19" y="19" width="10" height="10" rx="2" fill="none" stroke="{INK}" stroke-width="1.5"/>'
+I["sk_cota"] = (f'<path d="M8 34 V16 M40 34 V16" stroke="{INK}" stroke-width="1.5"/>'
+                f'<line x1="10" y1="22" x2="38" y2="22" stroke="{ACTION}" stroke-width="2.4"/>'
+                f'<polygon points="9,22 15,19 15,25" fill="{ACTION}"/><polygon points="39,22 33,19 33,25" fill="{ACTION}"/>'
+                f'<rect x="14" y="27" width="20" height="10" rx="3" fill="{LIGHT}" {S}/>')
+I["sk_construcao"] = f'<line x1="6" y1="40" x2="42" y2="8" stroke="{ACTION}" stroke-width="3" stroke-dasharray="5 3.5" stroke-linecap="round"/>' + PT(6, 40) + PT(42, 8)
+I["sk_grade"] = GRID + f'<rect x="6" y="6" width="36" height="36" rx="3" fill="none" stroke="{INK}" stroke-width="1.6"/>'
+I["sk_snap"] = GRID + f'<circle cx="24" cy="24" r="9" fill="none" stroke="{ACTION}" stroke-width="2.4"/>' + PT(24, 24, CUT)
+I["sk_auto_restricao"] = (f'<line x1="6" y1="32" x2="42" y2="32" {G}/>'
+                          f'<rect x="16" y="8" width="16" height="16" rx="4" fill="{ACTION}" {S}/>'
+                          f'<path d="M20 12 V20 M28 12 V20 M20 16 H28" stroke="{INK}" stroke-width="2"/>')
+I["sk_auto_cota"] = I["sk_cota"] + f'<circle cx="38" cy="10" r="6" fill="{REF}" {S}/>'
+I["sk_concluir"] = f'<circle cx="24" cy="24" r="18" fill="{REF}" {S}/><path d="M15 24 L22 31 L34 17" stroke="#ffffff" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
+
+
+def badge(sym):
+    return f'<rect x="4" y="4" width="18" height="18" rx="4" fill="{ACTION}" {S}/>' + sym
+
+
+I["r_coincidente"] = f'<line x1="8" y1="40" x2="26" y2="22" {G}/><line x1="26" y1="22" x2="42" y2="38" {G}/>' + \
+    f'<circle cx="26" cy="22" r="5" fill="{ACTION}" {S}/>'
+I["r_horizontal"] = f'<line x1="6" y1="32" x2="42" y2="32" {G}/>' + badge(f'<path d="M9 9 V17 M17 9 V17 M9 13 H17" stroke="{INK}" stroke-width="1.8"/>')
+I["r_vertical"] = f'<line x1="32" y1="6" x2="32" y2="42" {G}/>' + badge(f'<path d="M8 9 L13 17 L18 9" stroke="{INK}" stroke-width="1.8" fill="none"/>')
+I["r_paralela"] = f'<line x1="10" y1="40" x2="30" y2="10" {G}/><line x1="22" y1="42" x2="42" y2="12" {G}/>'
+I["r_perpendicular"] = f'<path d="M8 40 H40 M14 40 V8" {G}/><path d="M14 32 H22 V40" stroke="{ACTION}" stroke-width="2" fill="none"/>'
+I["r_tangente"] = f'<circle cx="22" cy="26" r="13" {G}/><line x1="4" y1="13" x2="44" y2="13" stroke="{ACTION}" stroke-width="3" stroke-linecap="round"/>' + PT(22, 13)
+I["r_igual"] = f'<line x1="6" y1="14" x2="30" y2="14" {G}/><line x1="18" y1="36" x2="42" y2="36" {G}/>' + \
+    f'<path d="M18 22 H30 M18 27 H30" stroke="{ACTION}" stroke-width="2.6"/>'
+I["r_concentrica"] = f'<circle cx="24" cy="24" r="17" {G}/><circle cx="24" cy="24" r="9" {G}/>' + PT(24, 24, ACTION)
+I["r_ponto_medio"] = f'<line x1="6" y1="36" x2="42" y2="12" {G}/>' + f'<circle cx="24" cy="24" r="5" fill="{ACTION}" {S}/>' + PT(6, 36) + PT(42, 12)
+I["r_fixa"] = (f'<path d="M24 6 V30 M14 22 A10 10 0 0 0 34 22" stroke="{INK}" stroke-width="2.6" fill="none" stroke-linecap="round"/>'
+               f'<path d="M14 22 L10 26 M34 22 L38 26" stroke="{INK}" stroke-width="2.6" stroke-linecap="round"/>'
+               f'<circle cx="24" cy="8" r="3" fill="{ACTION}" {S}/><path d="M6 40 H42" stroke="{SKETCH}" stroke-width="3"/>')
+I["r_simetrica"] = f'<line x1="24" y1="4" x2="24" y2="44" stroke="{INK}" stroke-width="1.5" stroke-dasharray="4 2.5"/>' + PT(10, 24, SKETCH) + PT(38, 24, SKETCH) + \
+    f'<path d="M14 24 H20 M28 24 H34" stroke="{ACTION}" stroke-width="2"/>'
+I["idioma"] = (f'<circle cx="24" cy="24" r="18" fill="{LIGHT}" {S}/>'
+               f'<ellipse cx="24" cy="24" rx="8" ry="18" fill="none" stroke="{INK}" stroke-width="1.4"/>'
+               f'<path d="M6 24 H42 M9 15 H39 M9 33 H39" stroke="{INK}" stroke-width="1.2" fill="none"/>')
+I["personalizar"] = (f'<rect x="5" y="8" width="38" height="12" rx="3" fill="{LIGHT}" {S}/>'
+                     f'<rect x="5" y="28" width="24" height="12" rx="3" fill="{MID}" {S}/>'
+                     f'<path d="M36 26 V42 M28 34 H44" stroke="{ACTION}" stroke-width="3.2" stroke-linecap="round"/>')
+
 for name, body in I.items():
     with open(os.path.join(OUT, f"{name}.svg"), "w", encoding="utf8", newline="\n") as f:
         f.write(svg(body))

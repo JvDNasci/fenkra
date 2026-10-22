@@ -11,6 +11,7 @@
 //! ```
 
 use crate::expr::{self, ExprError};
+use crate::sketch::SketchData;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -41,6 +42,12 @@ pub enum OriginAxis {
 pub enum PlaneRef {
     Origin(OriginPlane),
     Datum(Id),
+}
+
+impl Default for PlaneRef {
+    fn default() -> Self {
+        PlaneRef::Origin(OriginPlane::XY)
+    }
 }
 
 /// Referência a um eixo: eixo da Origem ou linha de um sketch.
@@ -281,71 +288,12 @@ impl FeatureKind {
     }
 }
 
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+/// Sketch: plano + geometria livre com restrições (ver [`crate::sketch`]).
+#[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
 pub struct Sketch {
     pub plane: PlaneRef,
-    pub entities: Vec<SketchEntity>,
-}
-
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
-pub struct SketchEntity {
-    pub id: Id,
-    pub construction: bool,
-    pub geom: SketchGeom,
-}
-
-/// Geometria do sketch. Todas as cotas são expressões (RF-ESB-005).
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
-pub enum SketchGeom {
-    Line { x1: String, y1: String, x2: String, y2: String },
-    Rect { cx: String, cy: String, w: String, h: String },
-    Circle { cx: String, cy: String, r: String },
-    Polygon { cx: String, cy: String, r: String, sides: String },
-    Slot { cx: String, cy: String, length: String, width: String, angle: String },
-    Point { x: String, y: String },
-}
-
-impl SketchGeom {
-    pub fn label(&self) -> &'static str {
-        match self {
-            SketchGeom::Line { .. } => "Linha",
-            SketchGeom::Rect { .. } => "Retângulo",
-            SketchGeom::Circle { .. } => "Círculo",
-            SketchGeom::Polygon { .. } => "Polígono",
-            SketchGeom::Slot { .. } => "Rasgo",
-            SketchGeom::Point { .. } => "Ponto",
-        }
-    }
-    /// Campos editáveis: (rótulo, expressão).
-    pub fn fields_mut(&mut self) -> Vec<(&'static str, &mut String)> {
-        match self {
-            SketchGeom::Line { x1, y1, x2, y2 } => vec![("x1", x1), ("y1", y1), ("x2", x2), ("y2", y2)],
-            SketchGeom::Rect { cx, cy, w, h } => vec![("centro x", cx), ("centro y", cy), ("largura", w), ("altura", h)],
-            SketchGeom::Circle { cx, cy, r } => vec![("centro x", cx), ("centro y", cy), ("raio", r)],
-            SketchGeom::Polygon { cx, cy, r, sides } => {
-                vec![("centro x", cx), ("centro y", cy), ("raio", r), ("lados", sides)]
-            }
-            SketchGeom::Slot { cx, cy, length, width, angle } => vec![
-                ("centro x", cx),
-                ("centro y", cy),
-                ("comprimento", length),
-                ("largura", width),
-                ("ângulo", angle),
-            ],
-            SketchGeom::Point { x, y } => vec![("x", x), ("y", y)],
-        }
-    }
-    /// Mesmos campos de [`Self::fields_mut`], na mesma ordem, somente leitura.
-    pub fn fields(&self) -> Vec<&String> {
-        match self {
-            SketchGeom::Line { x1, y1, x2, y2 } => vec![x1, y1, x2, y2],
-            SketchGeom::Rect { cx, cy, w, h } => vec![cx, cy, w, h],
-            SketchGeom::Circle { cx, cy, r } => vec![cx, cy, r],
-            SketchGeom::Polygon { cx, cy, r, sides } => vec![cx, cy, r, sides],
-            SketchGeom::Slot { cx, cy, length, width, angle } => vec![cx, cy, length, width, angle],
-            SketchGeom::Point { x, y } => vec![x, y],
-        }
-    }
+    #[serde(flatten)]
+    pub data: SketchData,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -479,6 +427,15 @@ impl Document {
         d
     }
 
+    /// Próximo id que será alocado (sem alocar).
+    pub fn peek_id(&self) -> u64 {
+        self.next_id
+    }
+    /// Reserva `n` ids a partir de [`Self::peek_id`] (usado por editores que alocam fora do documento).
+    pub fn reserve_ids(&mut self, n: u64) {
+        self.next_id += n;
+    }
+
     pub fn alloc(&mut self) -> Id {
         let id = Id(self.next_id);
         self.next_id += 1;
@@ -583,10 +540,8 @@ impl Document {
         for feat in &mut self.features {
             match &mut feat.kind {
                 FeatureKind::Sketch(s) => {
-                    for e in &mut s.entities {
-                        for (_, v) in e.geom.fields_mut() {
-                            f(v)
-                        }
+                    for v in s.data.exprs_mut() {
+                        f(v)
                     }
                 }
                 FeatureKind::Extrude(e) => extent_exprs(&mut e.extent, &mut f),
@@ -880,10 +835,7 @@ mod tests {
     }
 
     fn sketch_rect(d: &mut Document) -> Id {
-        d.add_feature(FeatureKind::Sketch(Sketch {
-            plane: PlaneRef::Origin(OriginPlane::XY),
-            entities: vec![],
-        }))
+        d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data: Default::default() }))
     }
 
     #[test]

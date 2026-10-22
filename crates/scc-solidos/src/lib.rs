@@ -7,6 +7,7 @@ pub mod hardware;
 pub mod profile;
 
 use profile::{ev, eval_sketch, to3d, EvalSketch, Vars};
+use scc_core::sketch::{Curve, Kind};
 use scc_core::*;
 use scc_kernel::{Bool, Frame, HoleShape, KernelError, Mesh, MassProps, Shape};
 use std::collections::HashMap;
@@ -57,6 +58,11 @@ pub struct SketchViz {
     pub lines: Vec<[f32; 3]>,
     pub construction: Vec<[f32; 3]>,
     pub points: Vec<[f32; 3]>,
+    /// triângulos da sombra dos perfis fechados (lista sem índices)
+    pub fill: Vec<[f32; 3]>,
+    /// graus de liberdade restantes e se o solver convergiu
+    pub dof: usize,
+    pub converged: bool,
 }
 
 /// Plano exibível (Origem ou Referências).
@@ -191,7 +197,7 @@ impl Ctx<'_> {
         match &f.kind {
             FeatureKind::Sketch(s) => {
                 let frame = self.plane(&s.plane, 0)?;
-                let es = eval_sketch(&s.entities, &self.vars)?;
+                let es = eval_sketch(&s.data, &self.vars)?;
                 let warn = (!es.warnings.is_empty()).then(|| es.warnings.join("; "));
                 self.sketches.insert(f.id, (frame, es));
                 Ok(warn)
@@ -315,7 +321,27 @@ pub fn recompute(doc: &Document) -> RecomputeResult {
     // sketches para exibição
     let mut sketches = vec![];
     for (id, (fr, es)) in &cx.sketches {
-        let mut v = SketchViz { feature: *id, frame: *fr, lines: vec![], construction: vec![], points: vec![] };
+        let mut v = SketchViz {
+            feature: *id,
+            frame: *fr,
+            lines: vec![],
+            construction: vec![],
+            points: vec![],
+            fill: vec![],
+            dof: es.report.dof,
+            converged: es.report.converged,
+        };
+        // sombra: a face real (com furos internos) tesselada pelo kernel
+        if !es.loops.is_empty() {
+            if let Ok(m) = Shape::face(fr, &es.loops).and_then(|f| f.mesh(0.2)) {
+                for t in m.indices.chunks_exact(3) {
+                    for &i in t {
+                        let k = i as usize * 3;
+                        v.fill.push([m.positions[k], m.positions[k + 1], m.positions[k + 2]]);
+                    }
+                }
+            }
+        }
         for (cons, pts) in &es.viz {
             let dst = if *cons { &mut v.construction } else { &mut v.lines };
             for w in pts.windows(2) {
@@ -386,6 +412,14 @@ pub fn export(doc: &Document, collector: Option<Id>, path: &str) -> Result<(), S
     r.map_err(|e| e.0)
 }
 
+/// Ponto fixo de construção na origem do sketch (referência para cotas).
+pub fn origin_point(sk: &mut SketchData, al: &mut impl FnMut() -> Id) -> Id {
+    let o = sk.add_point(al, 0., 0.);
+    sk.point_mut(o).unwrap().fixed = true;
+    sk.add_curve(al, Curve::Point { p: o }, true);
+    o
+}
+
 /// Exemplo usado pelo comando "Nova peça de exemplo" e pelos testes:
 /// placa parametrizada com rasgo, furos rebaixados M6 e filete.
 pub fn example_document() -> Document {
@@ -398,21 +432,43 @@ pub fn example_document() -> Document {
     d.add_param("esp", "10", Unit::Comprimento).unwrap();
     d.add_param("margem", "12", Unit::Comprimento).unwrap();
 
-    let ent = |d: &mut Document, geom| SketchEntity { id: d.alloc(), construction: false, geom };
-    let r = ent(&mut d, SketchGeom::Rect { cx: s("0"), cy: s("0"), w: s("L"), h: s("W") });
-    let slot = ent(&mut d, SketchGeom::Slot { cx: s("0"), cy: s("0"), length: s("L/3"), width: s("12"), angle: s("0") });
-    let base = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), entities: vec![r, slot] }));
+    // sketch base: retângulo L × W centrado na origem + rasgo central, tudo por restrições
+    let mut sk = SketchData::default();
+    {
+        let mut al = || d.alloc();
+        let o = origin_point(&mut sk, &mut al);
+        let (p, l) = sk.add_rect(&mut al, [-60., -36.], [60., 36.], false);
+        let diag = sk.add_curve(&mut al, Curve::Line { a: p[0], b: p[2] }, true);
+        sk.add_constraint(&mut al, Kind::Midpoint(o, diag));
+        sk.add_constraint(&mut al, Kind::Length(l[0], s("L")));
+        sk.add_constraint(&mut al, Kind::Length(l[1], s("W")));
+        let (c1, c2, arc) = sk.add_slot(&mut al, [-20., 0.], [20., 0.], 6.);
+        let axis = sk.curves.last().unwrap().id;
+        sk.add_constraint(&mut al, Kind::Midpoint(o, axis));
+        sk.add_constraint(&mut al, Kind::HorizontalPts(c1, c2));
+        sk.add_constraint(&mut al, Kind::Distance(c1, c2, s("L/3")));
+        sk.add_constraint(&mut al, Kind::Radius(arc, s("6")));
+    }
+    let base = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data: sk }));
     d.feature_mut(base).unwrap().name = s("Sketch base");
     let ex = d.add_feature(FeatureKind::Extrude(Extrude { sketch: base, op: BoolOp::Add, extent: Extent::Blind(s("esp")), reverse: false }));
     d.feature_mut(ex).unwrap().name = s("Placa");
 
     let topo = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "esp");
     d.references.last_mut().unwrap().name = s("PlanoTopo");
-    let mut pts = vec![];
-    for (x, y) in [("-L/2+margem", "-W/2+margem"), ("L/2-margem", "-W/2+margem"), ("L/2-margem", "W/2-margem"), ("-L/2+margem", "W/2-margem")] {
-        pts.push(ent(&mut d, SketchGeom::Point { x: s(x), y: s(y) }));
+    // centros dos furos: quatro pontos cotados a partir da origem
+    let mut sk = SketchData::default();
+    {
+        let mut al = || d.alloc();
+        let o = origin_point(&mut sk, &mut al);
+        for (sx, sy) in [(-1., -1.), (1., -1.), (1., 1.), (-1., 1.)] {
+            let p = sk.add_point(&mut al, sx * 48., sy * 24.);
+            sk.add_curve(&mut al, Curve::Point { p }, false);
+            sk.add_constraint(&mut al, Kind::DistanceX(o, p, s("L/2-margem")));
+            sk.add_constraint(&mut al, Kind::DistanceY(o, p, s("W/2-margem")));
+        }
     }
-    let skf = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Datum(topo), entities: pts }));
+    let skf = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Datum(topo), data: sk }));
     d.feature_mut(skf).unwrap().name = s("Centros dos furos");
     // sketches consumidos por comandos ficam ocultos, como nos CADs usuais
     d.feature_mut(base).unwrap().hidden = true;

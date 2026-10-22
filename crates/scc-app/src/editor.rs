@@ -391,6 +391,14 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     if let Some(s) = new_sel {
         app.sel = s;
     }
+    if let Some(id) = ui.ctx().data_mut(|m| {
+        let k = egui::Id::unique("scc_editar_sketch");
+        let v = m.get_temp::<Id>(k);
+        m.remove::<Id>(k);
+        v
+    }) {
+        app.begin_sketch(id);
+    }
     if let Some(id) = delete {
         app.ask_delete(id);
     }
@@ -554,49 +562,24 @@ fn feature_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, id: Id, kind: &mut 
         FeatureKind::Sketch(s) => {
             section(ui, "Plano do sketch");
             plane_combo(ui, "plano_sk", doc, &mut s.plane, None);
-            section(ui, &format!("Entidades ({})", s.entities.len()));
-            let mut remove = None;
-            for (i, e) in s.entities.iter_mut().enumerate() {
-                egui::CollapsingHeader::new(format!("{} #{}", e.geom.label(), e.id.0)).id_salt(("ent", e.id.0)).default_open(s_len_small(i)).show(ui, |ui| {
-                    for (label, f) in e.geom.fields_mut() {
-                        let unit = if label == "lados" { "" } else if label == "ângulo" { "°" } else { "mm" };
-                        expr(ui, label, f, vars, unit);
+            let d = &mut s.data;
+            ui.label(format!("{} curvas · {} pontos · {} restrições", d.curves.len(), d.points.len(), d.constraints.len()));
+            if ui.add(egui::Button::new(RichText::new("✏ Editar sketch").strong()).min_size(egui::vec2(160., 28.))).clicked() {
+                ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique("scc_editar_sketch"), id));
+            }
+            ui.label(RichText::new("Duplo clique no sketch na árvore também abre a edição.").weak().small());
+            let dims: Vec<usize> = (0..d.constraints.len()).filter(|i| d.constraints[*i].kind.is_dimension()).collect();
+            if !dims.is_empty() {
+                section(ui, &format!("Cotas ({})", dims.len()));
+                for i in dims {
+                    let c = &mut d.constraints[i];
+                    let label = c.kind.label();
+                    if let Some(v) = c.kind.value_mut() {
+                        expr(ui, label, v, vars, "");
                     }
-                    ui.horizontal(|ui| {
-                        ui.checkbox(&mut e.construction, "construção");
-                        if ui.small_button("remover").clicked() {
-                            remove = Some(i);
-                        }
-                    });
-                });
+                }
             }
-            if let Some(i) = remove {
-                s.entities.remove(i);
-            }
-            ui.add_space(4.);
-            ui.horizontal_wrapped(|ui| {
-                let st = |v: &str| v.to_string();
-                let mut add = |g: SketchGeom| s.entities.push(SketchEntity { id: live.alloc(), construction: false, geom: g });
-                if ui.button("+ Retângulo").clicked() {
-                    add(SketchGeom::Rect { cx: st("0"), cy: st("0"), w: st("40"), h: st("20") });
-                }
-                if ui.button("+ Círculo").clicked() {
-                    add(SketchGeom::Circle { cx: st("0"), cy: st("0"), r: st("10") });
-                }
-                if ui.button("+ Polígono").clicked() {
-                    add(SketchGeom::Polygon { cx: st("0"), cy: st("0"), r: st("15"), sides: st("6") });
-                }
-                if ui.button("+ Rasgo").clicked() {
-                    add(SketchGeom::Slot { cx: st("0"), cy: st("0"), length: st("30"), width: st("8"), angle: st("0") });
-                }
-                if ui.button("+ Linha").clicked() {
-                    add(SketchGeom::Line { x1: st("0"), y1: st("0"), x2: st("20"), y2: st("0") });
-                }
-                if ui.button("+ Ponto").clicked() {
-                    add(SketchGeom::Point { x: st("0"), y: st("0") });
-                }
-            });
-            ui.label(RichText::new("Linhas encadeadas formam perfis fechados. Linhas de construção servem de eixo para revolução; pontos servem de centro para furos.").weak().small());
+            let _ = live;
         }
 
         FeatureKind::Extrude(e) => {
@@ -629,7 +612,7 @@ fn feature_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, id: Id, kind: &mut 
                 }
                 for f in &doc.features[..idx] {
                     if let FeatureKind::Sketch(s) = &f.kind {
-                        for e in s.entities.iter().filter(|e| matches!(e.geom, SketchGeom::Line { .. })) {
+                        for e in s.data.curves.iter().filter(|e| matches!(e.geom, scc_core::sketch::Curve::Line { .. })) {
                             let a = AxisRef::SketchLine { sketch: f.id, entity: e.id };
                             ui.selectable_value(&mut r.axis, a, axis_name(&a));
                         }
@@ -652,9 +635,6 @@ fn feature_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, id: Id, kind: &mut 
     }
 }
 
-fn s_len_small(i: usize) -> bool {
-    i < 4
-}
 
 /// true = filete, false = chanfro
 fn kind_tag(id: Id, doc: &Document) -> Option<bool> {

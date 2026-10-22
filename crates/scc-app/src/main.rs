@@ -8,6 +8,7 @@ mod toolbar;
 mod editor;
 mod render;
 mod scene;
+mod sketch_ui;
 
 use eframe::egui;
 

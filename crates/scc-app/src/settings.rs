@@ -16,6 +16,8 @@ pub enum Theme {
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub enum Group {
     Sketch,
+    SketchDesenho,
+    SketchRestricoes,
     Basicos,
     Acabamento,
     Referencias,
@@ -24,10 +26,25 @@ pub enum Group {
 }
 
 impl Group {
-    pub const ALL: [Group; 6] = [Group::Sketch, Group::Basicos, Group::Acabamento, Group::Referencias, Group::Organizacao, Group::Vista];
+    pub const ALL: [Group; 8] = [
+        Group::Sketch,
+        Group::SketchDesenho,
+        Group::SketchRestricoes,
+        Group::Basicos,
+        Group::Acabamento,
+        Group::Referencias,
+        Group::Organizacao,
+        Group::Vista,
+    ];
+    /// Grupos que só aparecem com um sketch em edição.
+    pub fn sketch_only(self) -> bool {
+        matches!(self, Group::SketchDesenho | Group::SketchRestricoes)
+    }
     pub fn label(self) -> &'static str {
         match self {
             Group::Sketch => "Sketch",
+            Group::SketchDesenho => "Desenho do sketch",
+            Group::SketchRestricoes => "Restrições",
             Group::Basicos => "Básicos",
             Group::Acabamento => "Acabamento",
             Group::Referencias => "Referências",

@@ -17,19 +17,33 @@ Versionamento flexível enquanto o projeto for local (sem distribuição).
 - [ ] Texturas de imagem (adiado)
 - [x] Atalhos de câmera: recentralizar, ajustar, vistas padrão, alinhar ao plano
 
-## alpha.3 — Sketch interativo
+## alpha.3 — Sketch interativo ✔ (base)
 
-- [ ] Abrir o sketch **alinha a vista ao plano**; barra de ferramentas própria do sketch (editável)
-- [ ] Ferramentas sem parâmetros obrigatórios: ponto, linha, **polilinha**, retângulo (2 cantos / centro), círculo (centro / 3 pontos), arco (3 pontos / centro / tangente), rasgo, polígono, filete de sketch
-- [ ] **Solver de restrições** (geometria livre que vai sendo restringida)
-- [ ] **Ferramenta de cotagem** com restrições integradas (distância, horizontal/vertical, raio, diâmetro, ângulo); valor aceita expressão e parâmetros globais
-- [ ] Restrições: coincidente, horizontal, vertical, paralela, perpendicular, tangente, igual, concêntrica, ponto médio, simétrica, fixa
-- [ ] **Snaps** e **restrições automáticas** ligáveis; **cotas automáticas** opcionais
-- [ ] Grade liga/desliga, passo configurável
-- [ ] **Sombra** (preenchimento) nos perfis fechados
-- [ ] Estado do sketch: sub-restrito / totalmente restrito / conflito
+- [x] Abrir o sketch **alinha a vista ao plano** (ortogonal); barra própria do sketch (desenho + restrições), destacável
+- [x] Ferramentas sem parâmetros obrigatórios: linha/**polilinha**, retângulo (2 cantos / centro), círculo (centro / 3 pontos), arco (3 pontos / centro), rasgo, polígono, ponto
+- [x] **Solver de restrições** próprio (Levenberg–Marquardt) com graus de liberdade e conflitos
+- [x] **Cotagem inteligente** com restrições integradas (comprimento, distância, horizontal/vertical, raio, diâmetro, ângulo, ponto-linha); valor aceita expressão
+- [x] Restrições: coincidente, horizontal, vertical, paralela, perpendicular, tangente, igual, concêntrica, ponto médio, fixa, simétrica
+- [x] **Snaps** (pontos, origem, grade), **restrições automáticas** (H/V, coincidência), **cotas automáticas** opcionais
+- [x] Grade adaptativa ao zoom; **sombra** nos perfis fechados (face real do kernel)
+- [x] Cores de estado: livre (azul), totalmente restrito (branco/preto), conflito (vermelho)
+- [x] Dica breve no ícone e **descrição avançada após 5 s**
+- [ ] Filete e aparar/estender no sketch
+- [ ] Testar o desenho por mouse com o usuário (só verificado por testes e capturas)
 
-## alpha.4 — Seleção na viewport e referências do modelo
+## alpha.4 — Inicialização, ícones de opções, seleção e navegação (pedidos de 22/10)
+
+- [ ] **Tela inicial** antes de abrir um modelo: novo/abrir projeto, recentes, exemplo → gerenciador de projetos
+- [ ] **Ícones em todas as opções** dos comandos (tipos de término, tipos de furo, operação...): uma variação de criação = um ícone, sem botões de texto com "+"
+- [ ] Refazer os ícones no **estilo da referência** (azul em degradê, contorno azul-escuro, tracejado antes/depois, setas)
+- [ ] **Estilos de navegação** da câmera (SolidWorks, Fusion, CATIA, Blender, personalizado)
+- [ ] **Seleção de faces, arestas e vértices** na viewport + **filtro de seleção** em menu
+- [ ] Português / inglês
+- [ ] Personalização de comandos nos grupos (escolher, reordenar, criar grupos); menus destacáveis
+- [ ] Automação de desenhos (scripts e gravação de macros)
+- [ ] Ícone do app vetorizado a partir da arte do usuário (aguardando o arquivo em `assets/app/fenix-ref.png`)
+
+## alpha.5 — Referências do modelo
 
 - [ ] Seleção de faces, arestas e vértices na viewport (com realce)
 - [ ] Sketch em **face plana** (e em superfície via plano tangente)
@@ -38,7 +52,7 @@ Versionamento flexível enquanto o projeto for local (sem distribuição).
 - [ ] Booleanas entre coletores (unir, subtrair, interseção)
 - [ ] Medição
 
-## alpha.5 — Geometria 3D de referência e referências externas
+## alpha.6 — Geometria 3D de referência e referências externas
 
 - [ ] Ponto 3D, linha 3D, círculo 3D, curva 3D (spline) e conectores entre linhas 3D
 - [ ] Planos por todos os modos de [modos-de-criacao.md](specs/modos-de-criacao.md)

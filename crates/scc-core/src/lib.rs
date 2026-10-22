@@ -9,5 +9,7 @@
 
 pub mod doc;
 pub mod expr;
+pub mod sketch;
 
 pub use doc::*;
+pub use sketch::SketchData;
