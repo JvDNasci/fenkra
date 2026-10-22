@@ -76,6 +76,20 @@ Versionamento flexível enquanto o projeto for local (sem distribuição).
 - [x] Apagar corpo (coletor) com seus comandos; sempre resta um coletor
 - [ ] Superfícies como geometria de referência (extrair face, offset, preencher)
 
+## alpha.6 — Features por família, atalhos, câmera e carregamento
+
+- [x] Rosca modelada aparece no 3D (sentido do material e início abaixo do rebaixo); filete "todas" ignora arestas de rosca
+- [x] Tela de carregamento com logo e barra; tela inicial com fundo em degradê, brilho e grade; logo PNG voltou a aparecer dentro do app
+- [x] Atalhos configuráveis com predefinições SolidWorks, CATIA, FreeCAD, Fusion 360, Blender, Onshape e Inventor (teclado + mouse); navegação FreeCAD, Inventor e Rhino
+- [x] Câmera animada (vistas, ajustar, normal, câmeras salvas, alinhar sketch) e reenquadramento suave ao abrir comandos
+- [x] **Sólidos**: extrusão com ângulo de saída e parede fina; revolução fina; Ranhura (groove); Nervura e Rasgo por varredura (orientação acompanha/fixa/Frenet); Multi-seções e Multi-seções removida (regrada/fechada); primitivas (caixa, cilindro, esfera, cone, toro, cunha, prisma); Reforço
+- [x] **Acabamento**: filete variável; chanfro por 2 distâncias e por distância + ângulo; Casca; Ângulo de saída; Espessura de faces; Rosca externa/interna em face cilíndrica
+- [x] **Padrões e transformações**: padrão linear (1 ou 2 direções), circular, por pontos; espelho; escala — de comandos escolhidos ou do corpo inteiro
+- [x] Barra de comandos quebra em linhas quando não cabe
+- [ ] Filete face-face e tritangente (o OCCT não tem operação direta; estudar via superfícies)
+- [ ] Reforço "até o corpo" (hoje usa profundidade)
+- [ ] Rosca: clicar de novo numa face para tirar; marcar faces por identidade além do ponto
+
 ## Próximos pedidos (prioridade)
 
 - [ ] **Pastas de geometria como gerenciador**: copiar/colar/mover (arrastar), subpastas, qualquer geometria (sketches, pontos, curvas, planos, superfícies), sem depender dos comandos

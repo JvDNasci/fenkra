@@ -183,6 +183,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     let frozen = app.open.frozen.clone();
     let bodies: Vec<(Id, f64, f64)> = app.result.as_ref().map(|r| r.bodies.iter().map(|b| (b.collector, b.mass.volume, b.mass.area)).collect()).unwrap_or_default();
     let picked = app.picked_edges();
+    let picked_faces = app.picked_faces();
     let session = app.session.as_ref().map(|s| (s.id, s.is_new));
     let seed = app.seed(false);
     let ref_err = match sel {
@@ -438,7 +439,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             }
             let mut target = doc.features[idx].target;
             let mut kind = doc.features[idx].kind.clone();
-            feature_ui(ui, &doc_ro, idx, id, &mut kind, &mut target, &vars, doc, &picked);
+            feature_ui(ui, &doc_ro, idx, id, &mut kind, &mut target, &vars, doc, &picked, &picked_faces, &seed);
             let f = &mut doc.features[idx];
             if f.kind != kind {
                 f.kind = kind;
@@ -631,7 +632,23 @@ fn params_table(ui: &mut egui::Ui, doc: &mut Document, vars: &Vars, _sink: &mut 
 }
 
 #[allow(clippy::too_many_arguments)]
-fn feature_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, id: Id, kind: &mut FeatureKind, target: &mut Id, vars: &Vars, live: &mut Document, picked: &[[f64; 3]]) {
+fn feature_ui(
+    ui: &mut egui::Ui,
+    doc: &Document,
+    idx: usize,
+    id: Id,
+    kind: &mut FeatureKind,
+    target: &mut Id,
+    vars: &Vars,
+    live: &mut Document,
+    picked: &[[f64; 3]],
+    picked_faces: &[[f64; 3]],
+    seed: &crate::geo_ui::Seed,
+) {
+    if crate::feat_ui::panel(ui, doc, idx, id, kind, vars, picked_faces, seed) {
+        target_combo(ui, doc, target);
+        return;
+    }
     match kind {
         FeatureKind::Sketch(s) => {
             section(ui, "Plano do sketch");
@@ -663,6 +680,7 @@ fn feature_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, id: Id, kind: &mut 
             section(ui, "Extensão");
             extent_ui(ui, "ext_ex", &mut e.extent, vars, &["Cego", "Plano médio", "Dois sentidos", "Passante", "Até plano"], doc);
             ui.checkbox(&mut e.reverse, "inverter sentido");
+            crate::feat_ui::extrude_extras(ui, e, vars);
             if e.op == BoolOp::Cut {
                 ui.label(RichText::new("O recorte entra no material (contra a normal do plano). Use 'inverter' se necessário.").weak().small());
             }
@@ -700,13 +718,16 @@ fn feature_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, id: Id, kind: &mut 
             });
             expr(ui, "Ângulo", &mut r.angle, vars, "°");
             ui.checkbox(&mut r.symmetric, "simétrico ao plano do sketch");
+            crate::feat_ui::revolve_extras(ui, r, vars);
             target_combo(ui, doc, target);
         }
 
         FeatureKind::Hole(h) => hole_ui(ui, doc, idx, h, vars, target),
 
         FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => {
-            let lbl = if matches!(kind_tag(id, doc), Some(true)) { "Raio" } else { "Distância" };
+            let fillet = matches!(kind_tag(id, doc), Some(true));
+            let lbl = if fillet { "Raio" } else { "Distância" };
+            crate::feat_ui::edge_mode_ui(ui, o, vars, fillet);
             expr(ui, lbl, &mut o.value, vars, "mm");
             ui.label(RichText::new("Arestas").weak());
             let all = matches!(o.edges, EdgeSel::AllOfBody | EdgeSel::CreatedBy(_));
@@ -736,6 +757,8 @@ fn feature_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, id: Id, kind: &mut 
             }
             target_combo(ui, doc, target);
         }
+        // demais comandos: painel em feat_ui
+        _ => {}
     }
 }
 

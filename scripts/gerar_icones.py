@@ -366,6 +366,62 @@ I["canto"] = f'<path d="M8 6 V24" {G}/><path d="M24 40 H42" {G}/>' + CV("M8 24 A
 I["spine"] = "".join(f'<polygon points="{x-5},{y-9} {x+5},{y-13} {x+5},{y+7} {x-5},{y+11}" fill="{ACTION_L}" {S}/>' for x, y in [(8, 34), (24, 22), (40, 14)]) + \
     CV("M4 36 C 14 34, 18 24, 24 22 S 36 14, 46 13", ACTION, 2.6)
 
+# ---------------- features de forma, acabamento e padrões
+I["ranhura"] = (
+    f'<path d="M10 14 V34 A14 5 0 0 0 38 34 V14" fill="{MID}" {S}/>'
+    f'<ellipse cx="24" cy="14" rx="14" ry="5" fill="{LIGHT}" {S}/>'
+    f'<path d="M10 22 A14 5 0 0 0 38 22 L38 27 A14 5 0 0 1 10 27 Z" fill="{INK}" opacity="0.85"/>'
+    f'<line x1="24" y1="3" x2="24" y2="46" stroke="{INK}" stroke-width="1.4" stroke-dasharray="4 2.5"/>')
+I["nervura"] = (
+    f'<path d="M6 40 C 14 40, 20 30, 26 22 S 38 8, 44 8" stroke="{SKETCH}" stroke-width="1.8" stroke-dasharray="3 2" fill="none"/>'
+    f'<path d="M4 36 L10 36 C 16 34, 22 26, 28 18 S 38 6, 46 4 L46 10 C 40 12, 34 20, 30 26 S 18 40, 10 42 L4 42 Z" fill="{MID}" {S}/>')
+I["rasgo_varrido"] = box((24, 8), 16) + \
+    f'<path d="M10 22 C 18 26, 26 18, 38 22" stroke="{INK}" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.85"/>'
+I["multisecoes"] = (
+    f'<polygon points="6,38 24,30 42,38 24,46" fill="{LIGHT}" {S}/>'
+    f'<path d="M6 38 L14 14 M42 38 L34 14 M24 46 L24 22" stroke="{INK}" stroke-width="1.4"/>'
+    f'<ellipse cx="24" cy="14" rx="10" ry="5" fill="{MID}" {S}/>')
+I["multisecoes_remover"] = box((24, 8), 16) + \
+    f'<polygon points="16,18 24,14 32,18 24,22" fill="{INK}" opacity="0.85"/><ellipse cx="24" cy="30" rx="4" ry="2" fill="{INK}" opacity="0.7"/>'
+I["prim_caixa"] = box((24, 6), 18)
+I["prim_cilindro"] = (f'<path d="M10 12 V36 A14 6 0 0 0 38 36 V12" fill="{MID}" {S}/>'
+                      f'<ellipse cx="24" cy="12" rx="14" ry="6" fill="{LIGHT}" {S}/>')
+I["prim_esfera"] = (f'<circle cx="24" cy="24" r="18" fill="{MID}" {S}/>'
+                    f'<ellipse cx="24" cy="24" rx="18" ry="6" fill="none" stroke="{INK}" stroke-width="1.4"/>'
+                    f'<ellipse cx="18" cy="16" rx="5" ry="3" fill="#ffffff" opacity="0.6"/>')
+I["prim_cone"] = (f'<path d="M24 4 L8 38 A16 6 0 0 0 40 38 Z" fill="{MID}" {S}/>'
+                  f'<ellipse cx="24" cy="38" rx="16" ry="6" fill="{DARK}" {S}/>')
+I["prim_toro"] = (f'<ellipse cx="24" cy="26" rx="20" ry="12" fill="{MID}" {S}/>'
+                  f'<ellipse cx="24" cy="24" rx="8" ry="4" fill="#ffffff" {S}/>')
+I["prim_cunha"] = (f'<polygon points="6,38 24,46 42,38 24,30" fill="{LIGHT}" {S}/>'
+                   f'<polygon points="6,38 24,46 24,30 6,22" fill="{MID}" {S}/>'
+                   f'<polygon points="24,46 42,38 24,30" fill="{DARK}" {S}/>')
+I["prim_prisma"] = (f'<polygon points="12,14 24,8 36,14 36,34 24,40 12,34" fill="{MID}" {S}/>'
+                    f'<polygon points="12,14 24,8 36,14 24,20" fill="{LIGHT}" {S}/>'
+                    f'<line x1="24" y1="20" x2="24" y2="40" stroke="{INK}" stroke-width="1.6"/>')
+I["reforco"] = (f'<path d="M4 38 H44 M4 38 V10" stroke="{INK}" stroke-width="3" fill="none"/>'
+                f'<polygon points="4,38 4,14 28,38" fill="{ACTION}" {S}/>')
+I["filete_variavel"] = (f'<path d="M8 8 V22 C 8 34, 18 40, 40 40" stroke="{SKETCH}" stroke-width="3" fill="none" stroke-linecap="round"/>'
+                        f'<path d="M8 22 V40 H40" stroke="{INK}" stroke-width="1.6" stroke-dasharray="4 2.5" fill="none"/>'
+                        f'<circle cx="8" cy="22" r="3" fill="{ACTION}"/><circle cx="40" cy="40" r="5" fill="{ACTION}"/>')
+I["casca"] = box((24, 8), 16) + f'<polygon points="12,16 24,10 36,16 24,22" fill="{INK}" opacity="0.85"/>' + \
+    f'<polygon points="12,16 24,22 24,34 12,28" fill="{DARK}" opacity="0.45"/>'
+I["saida"] = (f'<polygon points="4,40 44,40 36,10 12,10" fill="{MID}" {S}/>'
+              f'<line x1="12" y1="10" x2="12" y2="40" stroke="{INK}" stroke-width="1.4" stroke-dasharray="3 2"/>'
+              f'<path d="M12 30 A10 10 0 0 0 9 31" stroke="{ACTION}" stroke-width="2.2" fill="none"/>') + arrow(24, 30, 24, 4, ACTION, 2.4)
+I["espessura"] = box((24, 14), 12) + f'<polygon points="6,23 24,14 42,23 24,32" fill="none" stroke="{ACTION}" stroke-width="2" stroke-dasharray="3 2"/>' + \
+    arrow(24, 20, 24, 2, ACTION, 2.4)
+I["rosca"] = (f'<rect x="14" y="6" width="20" height="36" rx="2" fill="{MID}" {S}/>' +
+              "".join(f'<path d="M14 {y} L34 {y + 4}" stroke="{INK}" stroke-width="2"/>' for y in range(10, 38, 5)))
+I["padrao_linear"] = "".join(box((x, y), 7, w=7, hh=3.5) for x, y in [(10, 26), (24, 19), (38, 12)])
+I["padrao_circular"] = f'<circle cx="24" cy="24" r="15" fill="none" stroke="{INK}" stroke-width="1.4" stroke-dasharray="3 2"/>' + \
+    "".join(f'<circle cx="{24 + 15 * c:.1f}" cy="{24 + 15 * s:.1f}" r="5" fill="{MID}" {S}/>' for c, s in [(1, 0), (0, 1), (-1, 0), (0, -1), (0.707, 0.707), (-0.707, -0.707)])
+I["padrao_pontos"] = "".join(f'<rect x="{x - 5}" y="{y - 5}" width="10" height="10" rx="2" fill="{MID}" {S}/>' for x, y in [(10, 12), (34, 16), (18, 36), (40, 38)])
+I["espelho"] = (f'<line x1="24" y1="4" x2="24" y2="44" stroke="{INK}" stroke-width="1.6" stroke-dasharray="4 2.5"/>'
+                f'<polygon points="20,36 6,30 14,12 20,14" fill="{MID}" {S}/><polygon points="28,36 42,30 34,12 28,14" fill="{LIGHT}" {S}/>')
+I["escala"] = (f'<rect x="6" y="22" width="18" height="18" rx="2" fill="{MID}" {S}/>'
+               f'<rect x="6" y="8" width="34" height="32" rx="3" fill="none" stroke="{INK}" stroke-width="1.6" stroke-dasharray="4 2.5"/>') + arrow(22, 26, 38, 10, ACTION, 2.4)
+
 for name, body in I.items():
     with open(os.path.join(OUT, f"{name}.svg"), "w", encoding="utf8", newline="\n") as f:
         f.write(svg(body))

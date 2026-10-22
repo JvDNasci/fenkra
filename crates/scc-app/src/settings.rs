@@ -22,6 +22,7 @@ pub enum Group {
     Organizacao,
     Selecao,
     Vista,
+    Padroes,
     // modo sketch
     SkCriacao,
     SkTransformar,
@@ -31,10 +32,11 @@ pub enum Group {
 }
 
 impl Group {
-    pub const ALL: [Group; 12] = [
+    pub const ALL: [Group; 13] = [
         Group::Sketch,
         Group::Solidos,
         Group::Acabamento,
+        Group::Padroes,
         Group::Referencias,
         Group::Organizacao,
         Group::Selecao,
@@ -58,6 +60,7 @@ impl Group {
             Group::Organizacao => "Organização",
             Group::Selecao => "Seleção",
             Group::Vista => "Vista",
+            Group::Padroes => "Padrões e transformações",
             Group::SkCriacao => "Criação",
             Group::SkTransformar => "Transformar",
             Group::SkCotagem => "Cotagem",

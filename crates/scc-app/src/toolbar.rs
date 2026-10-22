@@ -4,6 +4,7 @@
 
 use crate::app::Cmd;
 use crate::geo_ui::{self, GeoKind};
+use scc_core::PrimKind;
 use crate::icons::tool_button;
 use crate::render::DisplayMode;
 use crate::settings::{Dock, Group, Settings};
@@ -75,7 +76,28 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("ext_cego", "Recorte cego", "Recorte com profundidade", "Remove material até uma profundidade.", Cmd(C::CutBlind)),
                 it("ext_ate_plano", "Recorte até plano", "Recorte até um plano", "Remove material até um plano (inclusive inclinado).", Cmd(C::CutUpTo)),
             ]),
-            One(it("revolucao", "Revolução", "Girar o perfil em torno de um eixo", "Gira o perfil fechado em torno de um eixo da Origem ou de uma linha do sketch.", Cmd(C::Revolve))),
+            Family("revolucao", vec![
+                it("revolucao", "Revolução", "Girar o perfil em torno de um eixo (Shaft)", "Gira o perfil fechado em torno de um eixo da Origem, de uma linha do sketch ou de uma linha de referência.", Cmd(C::Revolve)),
+                it("ranhura", "Ranhura", "Remover girando o perfil (Groove)", "Remove material girando o perfil em torno do eixo.", Cmd(C::Groove)),
+            ]),
+            Family("varredura", vec![
+                it("nervura", "Nervura", "Varrer o perfil ao longo de uma curva (Rib)", "O perfil do sketch percorre uma curva guia (linha, spline, hélice, aresta) acrescentando material.", Cmd(C::Rib)),
+                it("rasgo_varrido", "Rasgo", "Remover varrendo ao longo de uma curva (Slot)", "O perfil percorre a curva guia removendo material.", Cmd(C::Slot)),
+            ]),
+            Family("multisecoes", vec![
+                it("multisecoes", "Multi-seções", "Sólido por vários perfis (loft)", "Transição suave entre dois ou mais perfis em planos diferentes.", Cmd(C::Loft)),
+                it("multisecoes_remover", "Multi-seções -", "Remover por vários perfis", "Remove material com a transição entre os perfis.", Cmd(C::LoftCut)),
+            ]),
+            Family("primitivas", vec![
+                it("prim_caixa", "Caixa", "Caixa", "Caixa centrada no plano escolhido; altura ao longo da normal.", Cmd(C::Prim(PrimKind::Caixa))),
+                it("prim_cilindro", "Cilindro", "Cilindro", "Raio e altura, sobre o plano escolhido.", Cmd(C::Prim(PrimKind::Cilindro))),
+                it("prim_esfera", "Esfera", "Esfera", "Raio, centro na origem do plano.", Cmd(C::Prim(PrimKind::Esfera))),
+                it("prim_cone", "Cone", "Cone / tronco", "Raios da base e do topo e altura.", Cmd(C::Prim(PrimKind::Cone))),
+                it("prim_toro", "Toro", "Toro", "Raio maior e menor.", Cmd(C::Prim(PrimKind::Toro))),
+                it("prim_cunha", "Cunha", "Cunha", "Caixa com o topo mais estreito.", Cmd(C::Prim(PrimKind::Cunha))),
+                it("prim_prisma", "Prisma", "Prisma poligonal", "Polígono regular extrudado (lados, raio, altura).", Cmd(C::Prim(PrimKind::Prisma))),
+            ]),
+            One(it("reforco", "Reforço", "Reforço / nervura de parede (Stiffener)", "Cada linha do sketch vira uma parede fina com espessura e profundidade.", Cmd(C::Stiffener))),
             Family("furo", vec![
                 it("furo_simples", "Furo", "Furo de passagem", "Furo nos pontos de um sketch, com diâmetro de passagem para o parafuso escolhido.", Cmd(C::Hole)),
                 it("furo_rebaixado", "Rebaixado", "Furo rebaixado", "Passagem + rebaixo para a cabeça do parafuso Allen.", Cmd(C::HoleCounterbore)),
@@ -85,13 +107,29 @@ pub fn entries(g: Group) -> Vec<Entry> {
         ],
         Group::Acabamento => vec![
             Family("filete", vec![
-                it("arestas_selecionar", "Filete", "Filete nas arestas selecionadas", "Arredonda só as arestas selecionadas na viewport (selecione antes ou depois, no painel).", Cmd(C::Fillet)),
+                it("arestas_selecionar", "Filete", "Filete nas arestas selecionadas", "Arredonda as arestas selecionadas — antes, ou clicando nelas com o comando aberto.", Cmd(C::Fillet)),
+                it("filete_variavel", "Filete variável", "Filete com raio variável", "O raio muda do início ao fim de cada aresta escolhida.", Cmd(C::FilletVar)),
                 it("arestas_todas", "Filete total", "Filete em todas as arestas", "Arredonda todas as arestas do corpo.", Cmd(C::FilletAll)),
             ]),
             Family("chanfro", vec![
-                it("chanfro", "Chanfro", "Chanfro nas arestas selecionadas", "Chanfra só as arestas selecionadas na viewport.", Cmd(C::Chamfer)),
+                it("chanfro", "Chanfro", "Chanfro nas arestas selecionadas", "Chanfra as arestas selecionadas com a mesma distância.", Cmd(C::Chamfer)),
+                it("chanfro_dist_dist", "2 distâncias", "Chanfro por duas distâncias", "Uma distância em cada face da aresta.", Cmd(C::ChamferTwoDist)),
+                it("chanfro_dist_angulo", "Dist. + ângulo", "Chanfro por distância e ângulo", "Distância numa face e ângulo em relação a ela.", Cmd(C::ChamferDistAngle)),
                 it("chanfro_dist", "Chanfro total", "Chanfro em todas as arestas", "Chanfra todas as arestas do corpo.", Cmd(C::ChamferAll)),
             ]),
+            One(it("casca", "Casca", "Esvaziar o sólido (Shell)", "Abre as faces escolhidas e deixa paredes com espessura uniforme.", Cmd(C::Shell))),
+            One(it("saida", "Saída", "Ângulo de saída (Draft)", "Inclina as faces escolhidas a partir de um plano neutro, para desmoldar.", Cmd(C::Draft))),
+            One(it("espessura", "Espessura", "Engrossar ou afinar faces (Thickness)", "Acrescenta ou remove material nas faces planas escolhidas.", Cmd(C::Thickness))),
+            One(it("rosca", "Rosca", "Rosca em eixo ou furo (Thread/Tap)", "Rosca cosmética ou modelada numa face cilíndrica, por norma.", Cmd(C::Thread))),
+        ],
+        Group::Padroes => vec![
+            Family("padrao", vec![
+                it("padrao_linear", "Padrão linear", "Padrão retangular", "Repete os comandos escolhidos (ou o corpo) em uma ou duas direções.", Cmd(C::PatternLinear)),
+                it("padrao_circular", "Padrão circular", "Padrão circular", "Repete em volta de um eixo.", Cmd(C::PatternCircular)),
+                it("padrao_pontos", "Por pontos", "Padrão por pontos (user pattern)", "Repete nos pontos escolhidos.", Cmd(C::PatternPoints)),
+            ]),
+            One(it("espelho", "Espelho", "Espelhar (Mirror)", "Espelha os comandos escolhidos (ou o corpo) por um plano.", Cmd(C::Mirror))),
+            One(it("escala", "Escala", "Escalar a peça (Scale)", "Multiplica as medidas do corpo a partir de um centro.", Cmd(C::Scale))),
         ],
         Group::Referencias => {
             let fam = |ks: &[GeoKind]| -> Vec<Item> {

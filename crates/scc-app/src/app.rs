@@ -512,6 +512,14 @@ impl App {
         }
     }
 
+    /// Pontos clicados nas faces selecionadas na viewport.
+    pub fn picked_faces(&self) -> Vec<[f64; 3]> {
+        self.picks
+            .iter()
+            .filter_map(|p| if let crate::picking::Pick::Face { point, .. } = p { Some(point.map(|v| v as f64)) } else { None })
+            .collect()
+    }
+
     /// Pontos médios das arestas selecionadas na viewport.
     pub fn picked_edges(&self) -> Vec<[f64; 3]> {
         self.picks
@@ -589,11 +597,13 @@ impl App {
         let snapshot = self.open.doc.clone();
         let sel_now = self.sel;
         let s = |v: &str| v.to_string();
-        let uses_plane = matches!(c, Cmd::Sketch | Cmd::Hole | Cmd::HoleCounterbore | Cmd::HoleCountersink | Cmd::HoleTapped);
+        let uses_plane = matches!(c, Cmd::Sketch | Cmd::Hole | Cmd::HoleCounterbore | Cmd::HoleCountersink | Cmd::HoleTapped | Cmd::Prim(_));
         let plane = if uses_plane { self.plane_for_new() } else { self.selected_plane() };
         let sketch = self.selected_sketch(false);
         let edges = self.picked_edges();
+        let faces = self.picked_faces();
         let seed = match c {
+            Cmd::Rib | Cmd::Slot | Cmd::PatternLinear | Cmd::PatternCircular | Cmd::PatternPoints => self.seed(true),
             Cmd::Geo(k) => {
                 let mut s = self.seed(true);
                 // face clicada para um tipo que usa plano: vira um plano da face
@@ -632,9 +642,9 @@ impl App {
                     Cmd::ExtrudeUpTo | Cmd::CutUpTo => Extent::UpTo(up_to),
                     _ => Extent::ThroughAll,
                 };
-                Sel::Feature(d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: if cut { BoolOp::Cut } else { BoolOp::Add }, extent, reverse: false })))
+                Sel::Feature(d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: if cut { BoolOp::Cut } else { BoolOp::Add }, extent, reverse: false, taper: s("0"), thin: None })))
             }
-            Cmd::Revolve => {
+            Cmd::Revolve | Cmd::Groove => {
                 let Some(sk) = sketch else {
                     self.toast("Crie ou selecione um sketch primeiro", true);
                     return;
@@ -644,9 +654,84 @@ impl App {
                     axis: AxisRef::Origin(OriginAxis::Y),
                     angle: s("360"),
                     symmetric: false,
-                    op: BoolOp::Add,
+                    op: if c == Cmd::Groove { BoolOp::Cut } else { BoolOp::Add },
+                    thin: None,
                 })))
             }
+            Cmd::Rib | Cmd::Slot => {
+                let Some(sk) = sketch else {
+                    self.toast("Crie o sketch do perfil primeiro (e uma curva guia em Referências → Curva)", true);
+                    return;
+                };
+                let spine = seed
+                    .curves
+                    .first()
+                    .cloned()
+                    .or_else(|| d.references.iter().rev().find(|r| r.kind.class() == RefClass::Curve).map(|r| CurveRef::Ref(r.id)))
+                    .unwrap_or(CurveRef::Axis(OriginAxis::X));
+                Sel::Feature(d.add_feature(FeatureKind::Sweep(Sweep {
+                    sketch: sk,
+                    spine,
+                    mode: SweepMode::Corrigido,
+                    op: if c == Cmd::Slot { BoolOp::Cut } else { BoolOp::Add },
+                    thin: None,
+                })))
+            }
+            Cmd::Loft | Cmd::LoftCut => {
+                // os dois últimos sketches antes do marcador (o selecionado entra por último)
+                let mut secs: Vec<Id> = d.features[..d.rollback.min(d.features.len())].iter().filter(|f| matches!(f.kind, FeatureKind::Sketch(_))).map(|f| f.id).collect();
+                if let Some(sk) = sketch {
+                    secs.retain(|x| *x != sk);
+                    secs.push(sk);
+                }
+                let n = secs.len();
+                let sections = secs[n.saturating_sub(2)..].to_vec();
+                if sections.len() < 2 {
+                    self.toast("Multi-seções precisa de pelo menos dois sketches (em planos diferentes)", true);
+                    return;
+                }
+                Sel::Feature(d.add_feature(FeatureKind::Loft(Loft { sections, ruled: false, closed: false, op: if c == Cmd::LoftCut { BoolOp::Cut } else { BoolOp::Add } })))
+            }
+            Cmd::Prim(kind) => {
+                let v: [&str; 4] = match kind {
+                    PrimKind::Caixa => ["40", "30", "20", "0"],
+                    PrimKind::Cilindro => ["10", "30", "0", "0"],
+                    PrimKind::Esfera => ["15", "0", "0", "0"],
+                    PrimKind::Cone => ["15", "5", "30", "0"],
+                    PrimKind::Toro => ["20", "5", "0", "0"],
+                    PrimKind::Cunha => ["40", "30", "20", "10"],
+                    PrimKind::Prisma => ["6", "15", "20", "0"],
+                };
+                Sel::Feature(d.add_feature(FeatureKind::Primitive(Primitive { kind, plane, a: s(v[0]), b: s(v[1]), c: s(v[2]), d: s(v[3]), op: BoolOp::Add })))
+            }
+            Cmd::Stiffener => {
+                let Some(sk) = sketch else {
+                    self.toast("Desenhe as linhas do reforço num sketch primeiro", true);
+                    return;
+                };
+                Sel::Feature(d.add_feature(FeatureKind::Stiffener(Stiffener { sketch: sk, thickness: s("3"), depth: s("20"), reverse: false })))
+            }
+            Cmd::Shell => Sel::Feature(d.add_feature(FeatureKind::Shell(Shell { faces: faces.clone(), thickness: s("2"), outward: false }))),
+            Cmd::Draft => Sel::Feature(d.add_feature(FeatureKind::Draft(Draft { faces: faces.clone(), neutral: plane, angle: s("3"), reverse: false }))),
+            Cmd::Thickness => Sel::Feature(d.add_feature(FeatureKind::Thickness(Thickness { faces: faces.clone(), value: s("2") }))),
+            Cmd::Thread => Sel::Feature(d.add_feature(FeatureKind::Thread(Thread { face: faces.last().copied().unwrap_or([0.; 3]), spec: s("M10x1.5"), length: s("15"), modeled: false }))),
+            Cmd::PatternLinear | Cmd::PatternCircular | Cmd::PatternPoints | Cmd::Mirror => {
+                let sources: Vec<Id> = match sel_now {
+                    Sel::Feature(id) if d.feature(id).is_some_and(|f| crate::feat_ui::is_shape(&f.kind)) => vec![id],
+                    _ => vec![],
+                };
+                let kind = match c {
+                    Cmd::PatternLinear => Some(0),
+                    Cmd::PatternCircular => Some(1),
+                    Cmd::PatternPoints => Some(2),
+                    _ => None,
+                };
+                Sel::Feature(d.add_feature(match kind {
+                    Some(i) => FeatureKind::Pattern(Pattern { kind: crate::feat_ui::default_pattern(i, &seed), sources }),
+                    None => FeatureKind::Mirror(Mirror { plane: if plane == PlaneRef::Origin(OriginPlane::XY) { PlaneRef::Origin(OriginPlane::YZ) } else { plane }, sources }),
+                }))
+            }
+            Cmd::Scale => Sel::Feature(d.add_feature(FeatureKind::Scale(Scale { center: PointRef::Origin, factor: s("2") }))),
             Cmd::Hole | Cmd::HoleCounterbore | Cmd::HoleCountersink | Cmd::HoleTapped => {
                 let sk = match self.selected_sketch(true) {
                     Some(sk) => sk,
@@ -686,15 +771,21 @@ impl App {
                     standard: Some(s(std)),
                 })))
             }
-            Cmd::Fillet | Cmd::FilletAll | Cmd::Chamfer | Cmd::ChamferAll => {
+            Cmd::Fillet | Cmd::FilletAll | Cmd::Chamfer | Cmd::ChamferAll | Cmd::FilletVar | Cmd::ChamferTwoDist | Cmd::ChamferDistAngle => {
                 let all = matches!(c, Cmd::FilletAll | Cmd::ChamferAll);
+                let mode = match c {
+                    Cmd::FilletVar => EdgeMode::Variable(s("3")),
+                    Cmd::ChamferTwoDist => EdgeMode::TwoDist(s("2")),
+                    Cmd::ChamferDistAngle => EdgeMode::DistAngle(s("45")),
+                    _ => EdgeMode::Constant,
+                };
                 let sel = if all { EdgeSel::AllOfBody } else { EdgeSel::Edges(edges.clone()) };
                 if !all && edges.is_empty() {
                     self.toast("Clique nas arestas na viewport para pô-las no comando (clique de novo tira)", false);
                 }
-                let op = EdgeOp { value: s("1"), edges: sel };
+                let op = EdgeOp { value: s("1"), edges: sel, mode };
                 let d = &mut self.open.doc;
-                Sel::Feature(d.add_feature(if matches!(c, Cmd::Fillet | Cmd::FilletAll) { FeatureKind::Fillet(op) } else { FeatureKind::Chamfer(op) }))
+                Sel::Feature(d.add_feature(if matches!(c, Cmd::Fillet | Cmd::FilletAll | Cmd::FilletVar) { FeatureKind::Fillet(op) } else { FeatureKind::Chamfer(op) }))
             }
             Cmd::Geo(k) => Sel::Ref(d.add_geometry(k.make(&seed))),
             Cmd::Param => {
@@ -1026,15 +1117,14 @@ impl App {
         if !top.is_empty() {
             let mut acts = vec![];
             egui::Panel::top("comandos").show(root, |ui| {
-                egui::ScrollArea::horizontal().id_salt("barra_topo").show(ui, |ui| {
-                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
-                        for (i, g) in top.iter().enumerate() {
-                            if i > 0 {
-                                ui.separator();
-                            }
-                            acts.extend(toolbar::show_group(ui, *g, &mut self.settings, &ts, false));
+                // os blocos quebram para a linha de baixo quando não cabem na largura
+                ui.horizontal_wrapped(|ui| {
+                    for (i, g) in top.iter().enumerate() {
+                        if i > 0 {
+                            ui.separator();
                         }
-                    });
+                        acts.extend(toolbar::show_group(ui, *g, &mut self.settings, &ts, false));
+                    }
                 });
             });
             for a in acts {
@@ -2272,7 +2362,13 @@ impl App {
                 let edge_cmd = self.session.as_ref().map(|x| x.id).filter(|id| {
                     matches!(self.open.doc.feature(*id).map(|f| &f.kind), Some(FeatureKind::Fillet(o) | FeatureKind::Chamfer(o)) if matches!(o.edges, EdgeSel::Edges(_)))
                 });
-                if resp.double_clicked_by(egui::PointerButton::Primary) {
+                // casca/saída/espessura/rosca abertos: clicar numa face a acrescenta ao comando
+                let face_cmd = self.session.as_ref().map(|x| x.id).filter(|id| self.open.doc.feature(*id).is_some_and(|f| crate::feat_ui::wants_faces(&f.kind)));
+                if let (Some(fid), true, Some(crate::picking::Pick::Face { point, .. })) = (face_cmd, resp.clicked_by(egui::PointerButton::Primary), self.hover_pick) {
+                    if let Some(f) = self.open.doc.feature_mut(fid) {
+                        crate::feat_ui::add_face(&mut f.kind, point.map(|v| v as f64));
+                    }
+                } else if resp.double_clicked_by(egui::PointerButton::Primary) {
                     // duplo clique numa face abre o comando que a criou
                     if let Some(crate::picking::Pick::Face { owner, .. }) = self.hover_pick {
                         if self.open.doc.feature(owner).is_some() && edge_cmd.is_none() {
@@ -2311,6 +2407,18 @@ impl App {
                             }
                         }
                     }
+                }
+                // faces escolhidas do comando em edição
+                if let Some(Some(k)) = face_cmd.map(|id| self.open.doc.feature(id).map(|f| f.kind.clone())) {
+                    let marks = crate::feat_ui::face_marks(&k);
+                    for q in &marks {
+                        if let Some(sp) = cam.project(rect, Vec3::new(q[0] as f32, q[1] as f32, q[2] as f32)) {
+                            ui.painter().circle_filled(sp, 5., Color32::from_rgb(90, 200, 255));
+                            ui.painter().circle_stroke(sp, 7., egui::Stroke::new(1.5, Color32::WHITE));
+                        }
+                    }
+                    ui.painter().text(rect.center_top() + egui::vec2(0., 30.), egui::Align2::CENTER_TOP,
+                        format!("Clique nas faces para acrescentá-las · {} escolhida(s) · Enter conclui", marks.len()), egui::FontId::proportional(13.), Color32::from_rgb(90, 200, 255));
                 }
                 // arestas escolhidas do filete/chanfro em edição
                 if let Some(Some(FeatureKind::Fillet(o) | FeatureKind::Chamfer(o))) = edge_cmd.map(|id| self.open.doc.feature(id).map(|f| &f.kind)) {
@@ -2478,6 +2586,25 @@ pub enum Cmd {
     ChamferAll,
     /// plano, ponto, linha ou curva de referência
     Geo(crate::geo_ui::GeoKind),
+    Groove,
+    Rib,
+    Slot,
+    Loft,
+    LoftCut,
+    Prim(PrimKind),
+    Stiffener,
+    FilletVar,
+    ChamferTwoDist,
+    ChamferDistAngle,
+    Shell,
+    Draft,
+    Thickness,
+    Thread,
+    PatternLinear,
+    PatternCircular,
+    PatternPoints,
+    Mirror,
+    Scale,
     Param,
     Folder,
     Collector,

@@ -324,7 +324,7 @@ fn pick_button(ui: &mut egui::Ui, enabled: bool, what: &str) -> bool {
         .clicked()
 }
 
-fn point_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, p: &mut PointRef, seed: &Seed) {
+pub(crate) fn point_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, p: &mut PointRef, seed: &Seed) {
     row(ui, label, |ui| {
         egui::ComboBox::from_id_salt(salt).selected_text(point_name(doc, p)).width(150.).show_ui(ui, |ui| {
             ui.selectable_value(p, PointRef::Origin, "Origem");
@@ -349,7 +349,7 @@ fn point_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id
     }
 }
 
-fn curve_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, c: &mut CurveRef, seed: &Seed) {
+pub(crate) fn curve_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, c: &mut CurveRef, seed: &Seed) {
     row(ui, label, |ui| {
         egui::ComboBox::from_id_salt(salt).selected_text(curve_name(doc, c)).width(150.).show_ui(ui, |ui| {
             for a in [OriginAxis::X, OriginAxis::Y, OriginAxis::Z] {
@@ -365,7 +365,7 @@ fn curve_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id
     });
 }
 
-fn axis_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, a: &mut AxisRef, seed: &Seed) {
+pub(crate) fn axis_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, a: &mut AxisRef, seed: &Seed) {
     let name = match a {
         AxisRef::Origin(x) => format!("Origem · eixo {x:?}"),
         AxisRef::SketchLine { sketch, entity } => format!("{} · linha #{}", doc.name_of(*sketch), entity.0),
@@ -426,7 +426,7 @@ fn surf_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id,
     });
 }
 
-fn points_list(ui: &mut egui::Ui, salt: &str, doc: &Document, me: Id, pts: &mut Vec<PointRef>, seed: &Seed, min: usize) {
+pub(crate) fn points_list(ui: &mut egui::Ui, salt: &str, doc: &Document, me: Id, pts: &mut Vec<PointRef>, seed: &Seed, min: usize) {
     let mut del = None;
     for (i, p) in pts.iter_mut().enumerate() {
         ui.horizontal(|ui| {
