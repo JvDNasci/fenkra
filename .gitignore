@@ -1,0 +1,34 @@
+# Build
+build/
+out/
+cmake-build-*/
+vcpkg_installed/
+CMakeUserPresets.json
+
+# C++ artefatos
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+*.exe
+*.pdb
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Editores / SO
+.vs/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# VS Code: manter só configurações compartilhadas
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
