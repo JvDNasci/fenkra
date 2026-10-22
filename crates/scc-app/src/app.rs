@@ -116,6 +116,15 @@ pub struct App {
     hover_pick: Option<crate::picking::Pick>,
     /// já passou da tela inicial
     started: bool,
+    /// comando aberto em edição (ambiente com Concluir/Cancelar)
+    pub session: Option<Session>,
+}
+
+/// Edição de um comando como "ambiente": só termina com Concluir (mantém) ou Cancelar (desfaz).
+pub struct Session {
+    pub id: Id,
+    pub snapshot: Document,
+    pub is_new: bool,
 }
 
 pub const MATERIALS: [(&str, f64); 8] = [
@@ -167,6 +176,7 @@ impl App {
             picks: vec![],
             hover_pick: None,
             started: false,
+            session: None,
         };
         app.started = !app.settings.show_start;
         // desenvolvimento: SCC_ABRIR_SKETCH=<nome> abre esse sketch em edição ao iniciar
@@ -469,6 +479,9 @@ impl App {
     }
 
     fn command(&mut self, c: Cmd) {
+        self.conclude_session();
+        let snapshot = self.open.doc.clone();
+        let sel_now = self.sel;
         let s = |v: &str| v.to_string();
         let uses_plane = matches!(c, Cmd::Sketch | Cmd::Plane | Cmd::PlaneAngle | Cmd::Hole | Cmd::HoleCounterbore | Cmd::HoleCountersink | Cmd::HoleTapped);
         let plane = if uses_plane { self.plane_for_new() } else { self.selected_plane() };
@@ -478,7 +491,14 @@ impl App {
         let d = &mut self.open.doc;
         let new_sel = match c {
             Cmd::Sketch => {
-                let id = d.add_feature(FeatureKind::Sketch(Sketch { plane, data: Default::default() }));
+                let geo = match sel_now {
+                    Sel::Folder(fo) if d.folder(fo).is_some_and(|x| x.kind == FolderKind::Geometria) => Some(fo),
+                    _ => None,
+                };
+                let id = match geo {
+                    Some(fo) => d.add_free_sketch(plane, fo),
+                    None => d.add_feature(FeatureKind::Sketch(Sketch { plane, data: Default::default() })),
+                };
                 self.begin_sketch_pending = Some(id);
                 Sel::Feature(id)
             }
@@ -566,8 +586,8 @@ impl App {
                 Sel::Params
             }
             Cmd::Folder => {
-                let n = format!("Pasta {}", d.folders.len() + 1);
-                Sel::Folder(d.add_folder(&n))
+                let n = format!("Geometria {}", d.folders.iter().filter(|f| f.kind == FolderKind::Geometria).count() + 1);
+                Sel::Folder(d.add_geometry_folder(&n))
             }
             Cmd::Collector => {
                 let n = format!("Corpo {}", d.collectors.len() + 1);
@@ -577,6 +597,11 @@ impl App {
             }
         };
         self.picks.clear();
+        match new_sel {
+            Sel::Feature(id) if !scene::is_sketch_feature(&self.open.doc, id) => self.start_session(id, true, Some(snapshot)),
+            Sel::Ref(id) => self.start_session(id, true, Some(snapshot)),
+            _ => {}
+        }
         if let Sel::Feature(id) = new_sel {
             let d = &mut self.open.doc;
             let (consumed, is_sketch) = match d.feature(id).map(|f| &f.kind) {
@@ -594,7 +619,9 @@ impl App {
                 self.align_pending = Some(id);
             }
         }
-        self.sel = new_sel;
+        if self.session.is_none() {
+            self.sel = new_sel;
+        }
     }
 
     /// Executa uma ação da barra de ferramentas.
@@ -654,6 +681,37 @@ impl App {
                     }
                 }
             }
+        }
+    }
+
+    /// Abre um comando (ou plano) para edição como ambiente.
+    pub fn start_session(&mut self, id: Id, is_new: bool, snapshot: Option<Document>) {
+        if self.session.as_ref().is_some_and(|s| s.id == id) {
+            return;
+        }
+        self.conclude_session();
+        if scene::is_sketch_feature(&self.open.doc, id) {
+            self.begin_sketch(id);
+            return;
+        }
+        let snapshot = snapshot.unwrap_or_else(|| self.open.doc.clone());
+        self.session = Some(Session { id, snapshot, is_new });
+        self.sel = if self.open.doc.reference(id).is_some() { Sel::Ref(id) } else { Sel::Feature(id) };
+    }
+
+    /// Concluir: mantém as alterações.
+    pub fn conclude_session(&mut self) {
+        self.session = None;
+    }
+
+    /// Cancelar: volta ao estado de antes de abrir o comando (um comando novo some).
+    pub fn cancel_session(&mut self) {
+        if let Some(s) = self.session.take() {
+            self.open.doc = s.snapshot;
+            if s.is_new {
+                self.sel = Sel::None;
+            }
+            self.request_recompute();
         }
     }
 
@@ -1008,22 +1066,39 @@ impl App {
 
         let pick = |ui: &mut egui::Ui, s: Sel, text: RichText| -> egui::Response { ui.selectable_label(sel == s, text) };
 
+        // ---------- peça
         let r = pick(ui, Sel::Part, RichText::new(format!("🧊 {}", doc.name)).strong());
         if r.clicked() {
             new_sel = Some(Sel::Part);
         }
         r.context_menu(|ui| {
             appearance_menu(ui, doc.appearance, AppTarget::Part, &mut actions);
+            if ui.button("📁 Nova pasta de geometria").clicked() {
+                actions.push(TreeAction::NewGeometryFolder);
+                ui.close();
+            }
+            if ui.button("▣ Novo coletor de corpos").clicked() {
+                actions.push(TreeAction::NewCollector);
+                ui.close();
+            }
         });
         if !doc.props.pn.is_empty() {
             ui.label(RichText::new(format!("   PN {} · {}", doc.props.pn, doc.props.part_type.label())).weak().small());
         }
 
-        egui::CollapsingHeader::new("📍 Origem").default_open(true).show(ui, |ui| {
+        // ---------- Origem (fixa)
+        egui::CollapsingHeader::new("📍 Origem").default_open(false).show(ui, |ui| {
             for o in [OriginPlane::XY, OriginPlane::XZ, OriginPlane::YZ] {
-                if pick(ui, Sel::Origin(o), RichText::new(format!("▱ Plano {}", scene::plane_name(o)))).clicked() {
+                let r = pick(ui, Sel::Origin(o), RichText::new(format!("▱ Plano {}", scene::plane_name(o))));
+                if r.clicked() {
                     new_sel = Some(Sel::Origin(o));
                 }
+                r.context_menu(|ui| {
+                    if ui.button("✏ Novo sketch neste plano").clicked() {
+                        actions.push(TreeAction::SketchOn(PlaneRef::Origin(o)));
+                        ui.close();
+                    }
+                });
             }
             ui.label(RichText::new("↗ Eixos X, Y, Z · ponto de origem").weak());
             let mut v = doc.origin_visible;
@@ -1032,38 +1107,23 @@ impl App {
             }
         });
 
-        egui::CollapsingHeader::new(format!("📐 Referências ({})", doc.references.len())).default_open(true).show(ui, |ui| {
-            if doc.references.is_empty() {
-                ui.label(RichText::new("vazio — use ▱ Plano").weak().italics());
+        // ---------- referências externas (sempre separadas)
+        egui::CollapsingHeader::new(format!("🔗 Referências externas ({})", doc.external.len())).default_open(false).show(ui, |ui| {
+            if doc.external.is_empty() {
+                ui.label(RichText::new("Geometria importada de outras peças por link (planos, curvas, pontos e parâmetros publicados). Fica sempre separada da geometria própria.").weak().small());
             }
-            for r in &doc.references {
-                let users = doc.dependents(r.id).len();
-                let txt = format!("▱ {}{}", r.name, if users > 0 { format!("  ·{users}") } else { String::new() });
-                let resp = ui
-                    .horizontal(|ui| {
-                        if eye(ui, !r.visible) {
-                            actions.push(TreeAction::RefVisible(r.id, !r.visible));
-                        }
-                        pick(ui, Sel::Ref(r.id), if r.visible { RichText::new(txt) } else { RichText::new(txt).weak() })
-                    })
-                    .inner;
-                if resp.clicked() {
-                    new_sel = Some(Sel::Ref(r.id));
-                }
-                resp.context_menu(|ui| {
-                    if ui.button("Novo sketch neste plano").clicked() {
-                        actions.push(TreeAction::SketchOn(PlaneRef::Datum(r.id)));
-                        ui.close();
-                    }
-                    if ui.button("Apagar…").clicked() {
-                        actions.push(TreeAction::Delete(r.id));
-                        ui.close();
-                    }
-                });
+            for e in &doc.external {
+                let st = match e.state {
+                    LinkState::Ativo => "ativo",
+                    LinkState::Congelado => "congelado",
+                    LinkState::Quebrado => "⚠ quebrado",
+                };
+                ui.label(format!("🔗 {} — {} · {}", e.name, e.source, st));
             }
         });
 
-        egui::CollapsingHeader::new(format!("ƒ Parâmetros ({})", doc.params.len())).default_open(true).show(ui, |ui| {
+        // ---------- parâmetros
+        egui::CollapsingHeader::new(format!("ƒ Parâmetros ({})", doc.params.len())).default_open(false).show(ui, |ui| {
             let vars = self.vars();
             for p in &doc.params {
                 let v = vars.get(&p.name).map(|v| format!("{} {}", fmt(*v), p.unit.symbol())).unwrap_or("⚠".into());
@@ -1076,9 +1136,112 @@ impl App {
             }
         });
 
-        egui::CollapsingHeader::new("▣ Coletores de corpos").default_open(true).show(ui, |ui| {
-            for c in &doc.collectors {
-                ui.horizontal(|ui| {
+        // ---------- pastas de geometria (sem linha do tempo)
+        let geo_folders: Vec<&Folder> = doc.folders.iter().filter(|f| f.kind == FolderKind::Geometria).collect();
+        let first_geo = geo_folders.first().map(|f| f.id);
+        for fo in &geo_folders {
+            let refs: Vec<&RefElement> = doc.references.iter().filter(|r| r.folder == Some(fo.id) || (r.folder.is_none() && Some(fo.id) == first_geo)).collect();
+            let sketches: Vec<(usize, &Feature)> = doc.features.iter().enumerate().filter(|(_, f)| f.folder == Some(fo.id) && doc.is_free(f)).collect();
+            let id = ui.make_persistent_id(("geo", fo.id.0));
+            egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true)
+                .show_header(ui, |ui| {
+                    let r = pick(ui, Sel::Folder(fo.id), RichText::new(format!("📁 {}  ({})", fo.name, refs.len() + sketches.len())).strong());
+                    if r.clicked() {
+                        new_sel = Some(Sel::Folder(fo.id));
+                    }
+                    r.context_menu(|ui| {
+                        if ui.button("✏ Novo sketch aqui").clicked() {
+                            actions.push(TreeAction::NewSketchIn(fo.id));
+                            ui.close();
+                        }
+                        if ui.button("▱ Novo plano aqui").clicked() {
+                            actions.push(TreeAction::NewPlaneIn(fo.id));
+                            ui.close();
+                        }
+                        if ui.button("Remover pasta (mantém o conteúdo)").clicked() {
+                            actions.push(TreeAction::RemoveFolder(fo.id));
+                            ui.close();
+                        }
+                    });
+                })
+                .body(|ui| {
+                    if refs.is_empty() && sketches.is_empty() {
+                        ui.label(RichText::new("vazia — clique direito para criar planos e sketches livres").weak().italics().small());
+                    }
+                    for r in &refs {
+                        let users = doc.dependents(r.id).len();
+                        let icon = match r.kind {
+                            RefKind::AnglePlane { .. } => "◩",
+                            RefKind::FacePlane { .. } => "▣",
+                            _ => "▱",
+                        };
+                        let txt = format!("{icon} {}{}", r.name, if users > 0 { format!("  ·{users}") } else { String::new() });
+                        let resp = ui
+                            .horizontal(|ui| {
+                                if eye(ui, !r.visible) {
+                                    actions.push(TreeAction::RefVisible(r.id, !r.visible));
+                                }
+                                pick(ui, Sel::Ref(r.id), if r.visible { RichText::new(txt) } else { RichText::new(txt).weak() })
+                            })
+                            .inner;
+                        if resp.clicked() {
+                            new_sel = Some(Sel::Ref(r.id));
+                        }
+                        if resp.double_clicked() {
+                            actions.push(TreeAction::EditSketch(r.id));
+                        }
+                        resp.context_menu(|ui| {
+                            if ui.button("✏ Editar").clicked() {
+                                actions.push(TreeAction::EditSketch(r.id));
+                                ui.close();
+                            }
+                            if ui.button("Novo sketch neste plano").clicked() {
+                                actions.push(TreeAction::SketchOn(PlaneRef::Datum(r.id)));
+                                ui.close();
+                            }
+                            ui.menu_button("Mover para pasta", |ui| {
+                                for g in &geo_folders {
+                                    if ui.button(&g.name).clicked() {
+                                        actions.push(TreeAction::RefToFolder(r.id, g.id));
+                                        ui.close();
+                                    }
+                                }
+                            });
+                            if ui.button("Apagar…").clicked() {
+                                actions.push(TreeAction::Delete(r.id));
+                                ui.close();
+                            }
+                        });
+                    }
+                    for (i, f) in &sketches {
+                        self.feature_row(ui, &doc, *i, f, &mut new_sel, &mut actions);
+                    }
+                });
+        }
+        // planos antigos sem pasta, quando ainda não existe pasta de geometria
+        if first_geo.is_none() && !doc.references.is_empty() {
+            egui::CollapsingHeader::new("📁 Geometria").default_open(true).show(ui, |ui| {
+                for r in &doc.references {
+                    if pick(ui, Sel::Ref(r.id), RichText::new(format!("▱ {}", r.name))).clicked() {
+                        new_sel = Some(Sel::Ref(r.id));
+                    }
+                }
+            });
+        }
+        if ui.small_button("➕ Pasta de geometria").on_hover_text("Planos, pontos, curvas e sketches livres, organizados como você quiser (sem linha do tempo)").clicked() {
+            actions.push(TreeAction::NewGeometryFolder);
+        }
+
+        ui.separator();
+
+        // ---------- coletores de corpos, cada um com a sua linha do tempo
+        for c in &doc.collectors {
+            let feats: Vec<(usize, &Feature)> = doc.features.iter().enumerate().filter(|(_, f)| f.target == c.id && !doc.is_free(f)).collect();
+            let n = feats.len();
+            let marker_at = c.marker.unwrap_or(n).min(n);
+            let id = ui.make_persistent_id(("col", c.id.0));
+            egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true)
+                .show_header(ui, |ui| {
                     let mut v = c.visible;
                     if ui.checkbox(&mut v, "").on_hover_text("visível").changed() {
                         actions.push(TreeAction::CollectorVisible(c.id, v));
@@ -1099,40 +1262,50 @@ impl App {
                             actions.push(TreeAction::Activate(c.id));
                             ui.close();
                         }
+                        if ui.button("🗀 Nova pasta de comandos").clicked() {
+                            actions.push(TreeAction::NewCommandFolder);
+                            ui.close();
+                        }
+                        if ui.button("Marcador no fim").clicked() {
+                            actions.push(TreeAction::CollectorMarker(c.id, None));
+                            ui.close();
+                        }
                         appearance_menu(ui, Some(Appearance { color: c.color, finish: c.finish }), AppTarget::Collector(c.id), &mut actions);
                     });
-                });
-            }
-        });
-
-        ui.separator();
-        ui.label(RichText::new("Comandos").weak());
-        let mut drawn_folders = vec![];
-        for (i, f) in doc.features.iter().enumerate() {
-            if i == doc.rollback {
-                marker(ui, i, doc.features.len(), &mut actions);
-            }
-            match f.folder {
-                Some(fid) if drawn_folders.contains(&fid) => continue,
-                Some(fid) => {
-                    drawn_folders.push(fid);
-                    let name = doc.folders.iter().find(|x| x.id == fid).map(|x| x.name.clone()).unwrap_or("?".into());
-                    let h = egui::CollapsingHeader::new(format!("🗀 {name}")).id_salt(("pasta", fid.0)).default_open(true).show(ui, |ui| {
-                        for (j, g) in doc.features.iter().enumerate().filter(|(_, g)| g.folder == Some(fid)) {
-                            self.feature_row(ui, &doc, j, g, &mut new_sel, &mut actions);
-                        }
-                    });
-                    if h.header_response.clicked() {
-                        new_sel = Some(Sel::Folder(fid));
+                })
+                .body(|ui| {
+                    if feats.is_empty() {
+                        ui.label(RichText::new("sem comandos — crie um sketch e uma extrusão").weak().italics().small());
                     }
-                }
-                None => self.feature_row(ui, &doc, i, f, &mut new_sel, &mut actions),
-            }
+                    let mut drawn_folders = vec![];
+                    for (k, (i, f)) in feats.iter().enumerate() {
+                        if k == marker_at {
+                            marker(ui, c.id, k, n, &mut actions);
+                        }
+                        match f.folder.filter(|fo| doc.folder(*fo).is_some_and(|x| x.kind == FolderKind::Comandos)) {
+                            Some(fid) if drawn_folders.contains(&fid) => continue,
+                            Some(fid) => {
+                                drawn_folders.push(fid);
+                                let name = doc.folder(fid).map(|x| x.name.clone()).unwrap_or_default();
+                                let h = egui::CollapsingHeader::new(format!("🗀 {name}")).id_salt(("pasta", fid.0)).default_open(true).show(ui, |ui| {
+                                    for (j, g) in feats.iter().filter(|(_, g)| g.folder == Some(fid)) {
+                                        self.feature_row(ui, &doc, *j, g, &mut new_sel, &mut actions);
+                                    }
+                                });
+                                if h.header_response.clicked() {
+                                    new_sel = Some(Sel::Folder(fid));
+                                }
+                            }
+                            None => self.feature_row(ui, &doc, *i, f, &mut new_sel, &mut actions),
+                        }
+                    }
+                    if marker_at >= n && n > 0 {
+                        marker(ui, c.id, n, n, &mut actions);
+                    }
+                });
         }
-        if doc.rollback >= doc.features.len() {
-            marker(ui, doc.features.len(), doc.features.len(), &mut actions);
-        }
-        for fo in doc.folders.iter().filter(|fo| !drawn_folders.contains(&fo.id)) {
+        // pastas de comandos vazias
+        for fo in doc.folders.iter().filter(|fo| fo.kind == FolderKind::Comandos && !doc.features.iter().any(|f| f.folder == Some(fo.id))) {
             if pick(ui, Sel::Folder(fo.id), RichText::new(format!("🗀 {} (vazia)", fo.name)).weak()).clicked() {
                 new_sel = Some(Sel::Folder(fo.id));
             }
@@ -1173,7 +1346,7 @@ impl App {
                 ui.selectable_label(self.sel == Sel::Feature(f.id), text)
             })
             .inner;
-        if resp.double_clicked() && matches!(f.kind, FeatureKind::Sketch(_)) {
+        if resp.double_clicked() {
             actions.push(TreeAction::EditSketch(f.id));
         }
         let resp = match st.and_then(|s| s.message()) {
@@ -1192,7 +1365,7 @@ impl App {
                 actions.push(TreeAction::Hide(f.id, !f.hidden));
                 ui.close();
             }
-            if matches!(f.kind, FeatureKind::Sketch(_)) && ui.button("✏ Editar sketch   (duplo clique)").clicked() {
+            if ui.button("✏ Editar   (duplo clique)").clicked() {
                 actions.push(TreeAction::EditSketch(f.id));
                 ui.close();
             }
@@ -1201,17 +1374,24 @@ impl App {
                 ui.close();
             }
             appearance_menu(ui, f.appearance, AppTarget::Feature(f.id), actions);
-            if ui.button("Marcador até aqui").clicked() {
-                actions.push(TreeAction::Rollback(i + 1));
+            if !doc.is_free(f) && ui.button("Marcador até aqui").clicked() {
+                let k = doc.features[..=i].iter().filter(|g| g.target == f.target && !doc.is_free(g)).count();
+                actions.push(TreeAction::CollectorMarker(f.target, Some(k)));
                 ui.close();
             }
-            ui.menu_button("Mover para pasta", |ui| {
-                if ui.button("(raiz)").clicked() {
-                    actions.push(TreeAction::ToFolder(f.id, None));
-                    ui.close();
+            ui.menu_button("Mover para…", |ui| {
+                ui.label(RichText::new("Coletor (linha do tempo)").weak().small());
+                for c in &doc.collectors {
+                    if ui.button(format!("▣ {}", c.name)).clicked() {
+                        actions.push(TreeAction::ToCollector(f.id, c.id));
+                        ui.close();
+                    }
                 }
-                for fo in &doc.folders {
-                    if ui.button(&fo.name).clicked() {
+                let geo = matches!(f.kind, FeatureKind::Sketch(_));
+                ui.label(RichText::new(if geo { "Pasta (geometria livre / comandos)" } else { "Pasta de comandos" }).weak().small());
+                for fo in doc.folders.iter().filter(|fo| geo || fo.kind == FolderKind::Comandos) {
+                    let icon = if fo.kind == FolderKind::Geometria { "📁" } else { "🗀" };
+                    if ui.button(format!("{icon} {}", fo.name)).clicked() {
                         actions.push(TreeAction::ToFolder(f.id, Some(fo.id)));
                         ui.close();
                     }
@@ -1255,7 +1435,6 @@ impl App {
                     f.suppressed = !f.suppressed
                 }
             }
-            TreeAction::Rollback(n) => d.rollback = n.min(d.features.len()),
             TreeAction::ToFolder(id, fo) => {
                 if let Some(f) = d.feature_mut(id) {
                     f.folder = fo
@@ -1309,7 +1488,62 @@ impl App {
                     AppTarget::Collector(id) => Sel::Collector(id),
                 };
             }
-            TreeAction::EditSketch(id) => self.begin_sketch(id),
+            TreeAction::EditSketch(id) => self.start_session(id, false, None),
+            TreeAction::NewGeometryFolder => {
+                let n = format!("Geometria {}", d.folders.iter().filter(|f| f.kind == FolderKind::Geometria).count() + 1);
+                self.sel = Sel::Folder(d.add_geometry_folder(&n));
+            }
+            TreeAction::NewCommandFolder => {
+                let n = format!("Pasta {}", d.folders.len() + 1);
+                self.sel = Sel::Folder(d.add_folder(&n));
+            }
+            TreeAction::NewCollector => {
+                let n = format!("Corpo {}", d.collectors.len() + 1);
+                let id = d.add_collector(&n);
+                d.active_collector = id;
+                self.sel = Sel::Collector(id);
+            }
+            TreeAction::NewSketchIn(fo) => {
+                let id = d.add_free_sketch(PlaneRef::Origin(OriginPlane::XY), fo);
+                self.begin_sketch(id);
+            }
+            TreeAction::NewPlaneIn(fo) => {
+                let id = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "20");
+                if let Some(r) = d.references.iter_mut().find(|r| r.id == id) {
+                    r.folder = Some(fo);
+                }
+                self.start_session(id, true, None);
+            }
+            TreeAction::RemoveFolder(fo) => {
+                d.remove_folder(fo);
+                for r in &mut d.references {
+                    if r.folder == Some(fo) {
+                        r.folder = None;
+                    }
+                }
+                self.sel = Sel::None;
+            }
+            TreeAction::RefToFolder(r, fo) => {
+                if let Some(x) = d.references.iter_mut().find(|x| x.id == r) {
+                    x.folder = Some(fo);
+                }
+            }
+            TreeAction::ToCollector(f, c) => {
+                if let Some(x) = d.feature_mut(f) {
+                    x.target = c;
+                    // sai de uma pasta de geometria ao entrar na linha do tempo
+                    if x.folder.and_then(|fo| d.folder(fo)).is_some_and(|fo| fo.kind == FolderKind::Geometria) {
+                        if let Some(x) = d.feature_mut(f) {
+                            x.folder = None;
+                        }
+                    }
+                }
+            }
+            TreeAction::CollectorMarker(c, m) => {
+                if let Some(x) = d.collectors.iter_mut().find(|x| x.id == c) {
+                    x.marker = m;
+                }
+            }
             TreeAction::Align(id) => {
                 self.sel = Sel::Feature(id);
                 self.align_to_selection();
@@ -1847,6 +2081,15 @@ fn eye(ui: &mut egui::Ui, hidden: bool) -> bool {
 }
 
 enum TreeAction {
+    NewGeometryFolder,
+    NewCommandFolder,
+    NewCollector,
+    NewSketchIn(Id),
+    NewPlaneIn(Id),
+    RemoveFolder(Id),
+    RefToFolder(Id, Id),
+    ToCollector(Id, Id),
+    CollectorMarker(Id, Option<usize>),
     Hide(Id, bool),
     RefVisible(Id, bool),
     SetAppearance(AppTarget, Option<Appearance>),
@@ -1857,7 +2100,6 @@ enum TreeAction {
     CollectorVisible(Id, bool),
     Activate(Id),
     Suppress(Id),
-    Rollback(usize),
     ToFolder(Id, Option<Id>),
     Move(Id, usize),
     Delete(Id),
@@ -1871,20 +2113,20 @@ enum DelAction {
     Only(Id),
 }
 
-/// Marcador de rollback na árvore: os comandos abaixo dele ficam desativados.
-fn marker(ui: &mut egui::Ui, at: usize, n: usize, actions: &mut Vec<TreeAction>) {
+/// Marcador da linha do tempo de um coletor: os comandos abaixo dele ficam desativados.
+fn marker(ui: &mut egui::Ui, collector: Id, at: usize, n: usize, actions: &mut Vec<TreeAction>) {
     ui.horizontal(|ui| {
         let blue = Color32::from_rgb(90, 160, 255);
         ui.label(RichText::new("━━ marcador ━━").small().color(blue))
-            .on_hover_text("Comandos abaixo do marcador ficam desativados; novos comandos entram aqui");
+            .on_hover_text("Comandos abaixo do marcador ficam desativados; novos comandos deste coletor entram aqui");
         if at > 0 && ui.small_button("▲").on_hover_text("subir o marcador").clicked() {
-            actions.push(TreeAction::Rollback(at - 1));
+            actions.push(TreeAction::CollectorMarker(collector, Some(at - 1)));
         }
         if at < n && ui.small_button("▼").on_hover_text("descer o marcador").clicked() {
-            actions.push(TreeAction::Rollback(at + 1));
+            actions.push(TreeAction::CollectorMarker(collector, if at + 1 >= n { None } else { Some(at + 1) }));
         }
         if at < n && ui.small_button("⏬").on_hover_text("marcador no fim").clicked() {
-            actions.push(TreeAction::Rollback(n));
+            actions.push(TreeAction::CollectorMarker(collector, None));
         }
     });
 }
@@ -1942,7 +2184,13 @@ impl eframe::App for App {
         if redo {
             self.redo();
         }
-        if self.sketch.is_none() && !self.picks.is_empty() && !ctx.egui_wants_keyboard_input() && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+        if self.session.is_some() && !ctx.egui_wants_keyboard_input() {
+            if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+                self.conclude_session();
+            } else if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                self.cancel_session();
+            }
+        } else if self.sketch.is_none() && !self.picks.is_empty() && !ctx.egui_wants_keyboard_input() && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.picks.clear();
         }
         if self.sketch.is_some() && crate::sketch_ui::keys(self, ctx) {
@@ -2041,6 +2289,12 @@ impl eframe::App for App {
         }
         if let Some(id) = self.begin_sketch_pending.take() {
             self.begin_sketch(id);
+        }
+        if let Some(s) = &self.session {
+            let still = matches!(self.sel, Sel::Feature(x) | Sel::Ref(x) if x == s.id);
+            if !still && self.sel != sel_before {
+                self.conclude_session();
+            }
         }
         if self.sel != sel_before || self.hidden_env != hidden_env_before {
             self.scene_dirty = true;

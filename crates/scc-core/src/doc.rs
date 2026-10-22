@@ -65,6 +65,30 @@ pub struct RefElement {
     pub name: String,
     pub kind: RefKind,
     pub visible: bool,
+    /// pasta de geometria onde o elemento fica (sem linha do tempo)
+    #[serde(default)]
+    pub folder: Option<Id>,
+}
+
+/// Estado de um link com outra peça (ADR 0006).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum LinkState {
+    #[default]
+    Ativo,
+    Congelado,
+    Quebrado,
+}
+
+/// Geometria importada de outra peça por link (sempre separada da geometria própria).
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct ExternalRef {
+    pub id: Id,
+    /// nome da variável referenciável (ex.: "Mestre.PlanoBase")
+    pub name: String,
+    /// documento de origem (PN ou nome) e publicação
+    pub source: String,
+    pub publication: String,
+    pub state: LinkState,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -251,12 +275,27 @@ pub struct BodyCollector {
     pub visible: bool,
     #[serde(default)]
     pub finish: Finish,
+    /// marcador da linha do tempo deste coletor: quantos comandos dele estão ativos (None = todos)
+    #[serde(default)]
+    pub marker: Option<usize>,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct Folder {
     pub id: Id,
     pub name: String,
+    /// geometria livre (planos, pontos, curvas, sketches — sem linha do tempo) ou comandos de um coletor
+    #[serde(default)]
+    pub kind: FolderKind,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum FolderKind {
+    /// pasta de organização de comandos dentro de um coletor
+    #[default]
+    Comandos,
+    /// pasta de geometria livre criada pelo projetista (sem linha do tempo)
+    Geometria,
 }
 
 // ---------------------------------------------------------------- Comandos
@@ -411,6 +450,9 @@ pub struct Document {
     pub collectors: Vec<BodyCollector>,
     pub active_collector: Id,
     pub folders: Vec<Folder>,
+    /// referências externas (geometria de outras peças por link)
+    #[serde(default)]
+    pub external: Vec<ExternalRef>,
     /// Ordem do vetor = ordem da linha de tempo.
     pub features: Vec<Feature>,
     /// Quantidade de comandos ativos (marcador de rollback, RF-ARV-051).
@@ -451,6 +493,7 @@ impl Document {
             collectors: vec![],
             active_collector: Id(0),
             folders: vec![],
+            external: vec![],
             features: vec![],
             rollback: 0,
         };
@@ -499,13 +542,56 @@ impl Document {
     pub fn add_collector(&mut self, name: &str) -> Id {
         let id = self.alloc();
         let color = PALETTE[self.collectors.len() % PALETTE.len()];
-        self.collectors.push(BodyCollector { id, name: name.into(), color, visible: true, finish: Finish::default() });
+        self.collectors.push(BodyCollector { id, name: name.into(), color, visible: true, finish: Finish::default(), marker: None });
         id
+    }
+
+    /// Pasta de geometria livre (sem linha do tempo).
+    pub fn add_geometry_folder(&mut self, name: &str) -> Id {
+        let id = self.alloc();
+        self.folders.push(Folder { id, name: name.into(), kind: FolderKind::Geometria });
+        id
+    }
+
+    /// Pasta de geometria padrão (cria "Geometria" se ainda não existir).
+    pub fn default_geometry_folder(&mut self) -> Id {
+        match self.folders.iter().find(|f| f.kind == FolderKind::Geometria) {
+            Some(f) => f.id,
+            None => self.add_geometry_folder("Geometria"),
+        }
+    }
+
+    pub fn folder(&self, id: Id) -> Option<&Folder> {
+        self.folders.iter().find(|f| f.id == id)
+    }
+
+    /// Sketch livre: fica numa pasta de geometria, fora das linhas do tempo dos coletores.
+    pub fn is_free(&self, f: &Feature) -> bool {
+        matches!(f.kind, FeatureKind::Sketch(_)) && f.folder.and_then(|fo| self.folder(fo)).is_some_and(|fo| fo.kind == FolderKind::Geometria)
+    }
+
+    /// O comando está ativo? (não suprimido e antes do marcador do seu coletor e do marcador geral)
+    pub fn is_active(&self, idx: usize) -> bool {
+        let Some(f) = self.features.get(idx) else { return false };
+        if f.suppressed {
+            return false;
+        }
+        if self.is_free(f) {
+            return true;
+        }
+        if idx >= self.rollback {
+            return false;
+        }
+        let marker = self.collectors.iter().find(|c| c.id == f.target).and_then(|c| c.marker);
+        match marker {
+            None => true,
+            Some(m) => self.features[..idx].iter().filter(|g| g.target == f.target && !self.is_free(g)).count() < m,
+        }
     }
 
     pub fn add_folder(&mut self, name: &str) -> Id {
         let id = self.alloc();
-        self.folders.push(Folder { id, name: name.into() });
+        self.folders.push(Folder { id, name: name.into(), kind: FolderKind::Comandos });
         id
     }
 
@@ -521,10 +607,21 @@ impl Document {
 
     // ------------------------------------------------ referências
 
+    /// Coloca o último elemento de referência criado na pasta de geometria padrão.
+    fn file_last_reference(&mut self) {
+        let fo = self.default_geometry_folder();
+        if let Some(r) = self.references.last_mut() {
+            if r.folder.is_none() {
+                r.folder = Some(fo);
+            }
+        }
+    }
+
     pub fn add_offset_plane(&mut self, base: PlaneRef, offset: &str) -> Id {
         let id = self.alloc();
         let name = self.unique_name("Plano");
-        self.references.push(RefElement { id, name, kind: RefKind::OffsetPlane { base, offset: offset.into() }, visible: true });
+        self.references.push(RefElement { id, name, kind: RefKind::OffsetPlane { base, offset: offset.into() }, visible: true, folder: None });
+        self.file_last_reference();
         id
     }
 
@@ -532,7 +629,8 @@ impl Document {
     pub fn add_face_plane(&mut self, origin: [f64; 3], x: [f64; 3], normal: [f64; 3], owner: Option<Id>) -> Id {
         let id = self.alloc();
         let name = self.unique_name("PlanoFace");
-        self.references.push(RefElement { id, name, kind: RefKind::FacePlane { origin, x, normal, owner }, visible: true });
+        self.references.push(RefElement { id, name, kind: RefKind::FacePlane { origin, x, normal, owner }, visible: true, folder: None });
+        self.file_last_reference();
         id
     }
 
@@ -540,7 +638,8 @@ impl Document {
     pub fn add_angle_plane(&mut self, base: PlaneRef, axis: AxisRef, angle: &str) -> Id {
         let id = self.alloc();
         let name = self.unique_name("Plano");
-        self.references.push(RefElement { id, name, kind: RefKind::AnglePlane { base, axis, angle: angle.into() }, visible: true });
+        self.references.push(RefElement { id, name, kind: RefKind::AnglePlane { base, axis, angle: angle.into() }, visible: true, folder: None });
+        self.file_last_reference();
         id
     }
 
@@ -662,13 +761,44 @@ impl Document {
     // ------------------------------------------------ comandos
 
     /// Insere um comando na posição do marcador de rollback (RF-ARV-051).
+    /// Insere um comando na linha do tempo do coletor ativo, na posição do marcador dele.
     pub fn add_feature(&mut self, kind: FeatureKind) -> Id {
         let id = self.alloc();
         let name = self.unique_name(kind.type_name());
         let target = self.active_collector;
-        let at = self.rollback.min(self.features.len());
+        let len = self.features.len();
+        let marker = self.collectors.iter().find(|c| c.id == target).and_then(|c| c.marker);
+        let at = match marker {
+            Some(m) => {
+                let idxs: Vec<usize> = (0..len).filter(|i| self.features[*i].target == target && !self.is_free(&self.features[*i])).collect();
+                if m < idxs.len() { idxs[m] } else { self.rollback.min(len) }
+            }
+            None => self.rollback.min(len),
+        };
         self.features.insert(at, Feature { id, name, kind, suppressed: false, folder: None, target, hidden: false, appearance: None });
-        self.rollback = at + 1;
+        if at < self.rollback {
+            self.rollback += 1;
+        } else {
+            self.rollback = at + 1;
+        }
+        if let Some(c) = self.collectors.iter_mut().find(|c| c.id == target) {
+            if let Some(m) = c.marker.as_mut() {
+                *m += 1;
+            }
+        }
+        id
+    }
+
+    /// Sketch livre numa pasta de geometria (fora das linhas do tempo).
+    pub fn add_free_sketch(&mut self, plane: PlaneRef, folder: Id) -> Id {
+        let id = self.alloc();
+        let name = self.unique_name("Sketch");
+        let target = self.active_collector;
+        let kind = FeatureKind::Sketch(Sketch { plane, data: Default::default() });
+        self.features.push(Feature { id, name, kind, suppressed: false, folder: Some(folder), target, hidden: false, appearance: None });
+        if self.rollback == self.features.len() - 1 {
+            self.rollback += 1;
+        }
         id
     }
 
@@ -849,7 +979,7 @@ impl Document {
 
     /// Comandos ativos (antes do marcador e não suprimidos).
     pub fn active_features(&self) -> impl Iterator<Item = (usize, &Feature)> {
-        self.features.iter().enumerate().take(self.rollback).filter(|(_, f)| !f.suppressed)
+        self.features.iter().enumerate().filter(|(i, _)| self.is_active(*i))
     }
 }
 
@@ -983,6 +1113,25 @@ mod tests {
         let sk2 = sketch_rect(&mut d);
         d.move_feature(sk2, 0).unwrap();
         assert_eq!(d.features[0].id, sk2);
+    }
+
+    #[test]
+    fn marcador_por_coletor_e_sketch_livre() {
+        let mut d = Document::new("p");
+        let a = sketch_rect(&mut d);
+        let b = sketch_rect(&mut d);
+        let c2 = d.add_collector("Corpo 2");
+        d.feature_mut(b).unwrap().target = c2;
+        // marcador do coletor principal em 0: só o sketch de Corpo 2 fica ativo
+        d.collectors[0].marker = Some(0);
+        assert!(!d.is_active(0) && d.is_active(1));
+        // sketch numa pasta de geometria é livre (fora da linha do tempo)
+        let g = d.add_geometry_folder("Geometria");
+        d.feature_mut(a).unwrap().folder = Some(g);
+        assert!(d.is_active(0));
+        // planos novos vão para a pasta de geometria
+        let pl = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "5");
+        assert_eq!(d.reference(pl).unwrap().folder, Some(g));
     }
 
     #[test]

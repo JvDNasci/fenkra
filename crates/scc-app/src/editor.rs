@@ -206,6 +206,8 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     let frozen = app.open.frozen.clone();
     let bodies: Vec<(Id, f64, f64)> = app.result.as_ref().map(|r| r.bodies.iter().map(|b| (b.collector, b.mass.volume, b.mass.area)).collect()).unwrap_or_default();
     let picked = app.picked_edges();
+    let session = app.session.as_ref().map(|s| (s.id, s.is_new));
+    let mut sess_act: Option<u8> = None; // 0 = concluir, 1 = cancelar, 2 = abrir
     let doc = &mut app.open.doc;
 
     if let Some(rev) = &frozen {
@@ -402,11 +404,52 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             }
         }
 
+        Sel::Feature(id) if session.map(|s| s.0) != Some(id) && !matches!(doc.feature(id).map(|f| &f.kind), Some(FeatureKind::Sketch(_))) => {
+            // resumo limpo: o comando só abre para edição com duplo clique / Editar
+            let Some(f) = doc.feature_mut(id) else { return };
+            ui.heading(format!("{} {}", f.kind.icon(), f.name));
+            ui.label(RichText::new(f.kind.type_name()).weak());
+            match &status {
+                Some(Status::Error(m)) => {
+                    ui.label(RichText::new(format!("✖ {m}")).color(Color32::from_rgb(255, 120, 100)));
+                }
+                Some(Status::Warning(m)) => {
+                    ui.label(RichText::new(format!("⚠ {m}")).color(Color32::from_rgb(240, 200, 90)));
+                }
+                _ => {}
+            }
+            ui.add_space(6.);
+            ui.horizontal(|ui| {
+                if ui.add(egui::Button::new(RichText::new("✏ Editar").strong()).min_size(egui::vec2(110., 28.))).clicked() {
+                    sess_act = Some(2);
+                }
+                let mut vis = !f.hidden;
+                if ui.checkbox(&mut vis, "visível").changed() {
+                    f.hidden = !vis;
+                }
+                ui.checkbox(&mut f.suppressed, "suprimido");
+            });
+            ui.label(RichText::new("Duplo clique na árvore também abre a edição.").weak().small());
+            used_by(ui, &doc_ro, id, &mut new_sel);
+        }
+
         Sel::Feature(id) => {
             let Some(idx) = doc.feature_index(id) else {
                 ui.label("Comando não existe mais.");
                 return;
             };
+            if session.map(|s| s.0) == Some(id) {
+                egui::Frame::NONE.fill(ui.visuals().faint_bg_color).inner_margin(6.).corner_radius(6.).show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        if ui.add(egui::Button::new(RichText::new("✔ Concluir").strong()).min_size(egui::vec2(110., 28.))).on_hover_text("Enter").clicked() {
+                            sess_act = Some(0);
+                        }
+                        if ui.add(egui::Button::new("✖ Cancelar").min_size(egui::vec2(100., 28.))).on_hover_text("Esc").clicked() {
+                            sess_act = Some(1);
+                        }
+                    });
+                });
+            }
             let names: Vec<String> = doc.params.iter().map(|p| p.name.clone()).chain(doc.references.iter().map(|r| r.name.clone())).collect();
             {
                 let f = &mut doc.features[idx];
@@ -465,6 +508,12 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
 
     if let Some(s) = new_sel {
         app.sel = s;
+    }
+    match (sess_act, sel) {
+        (Some(0), _) => app.conclude_session(),
+        (Some(1), _) => app.cancel_session(),
+        (Some(2), Sel::Feature(id) | Sel::Ref(id)) => app.start_session(id, false, None),
+        _ => {}
     }
     if let Some(id) = ui.ctx().data_mut(|m| {
         let k = egui::Id::unique("scc_editar_sketch");

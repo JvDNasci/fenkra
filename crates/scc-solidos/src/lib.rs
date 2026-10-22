@@ -389,8 +389,14 @@ pub fn recompute(doc: &Document) -> RecomputeResult {
     };
     let mut cx = Ctx { doc, vars, bodies: HashMap::new(), sketches: HashMap::new(), status: HashMap::new() };
 
-    for (i, f) in doc.features.iter().enumerate() {
-        if i >= doc.rollback || f.suppressed {
+    // 1º: sketches livres (pastas de geometria, sem linha do tempo); 2º: comandos dos coletores em ordem
+    let order: Vec<usize> = (0..doc.features.len())
+        .filter(|i| doc.is_free(&doc.features[*i]))
+        .chain((0..doc.features.len()).filter(|i| !doc.is_free(&doc.features[*i])))
+        .collect();
+    for i in order {
+        let f = &doc.features[i];
+        if !doc.is_active(i) {
             cx.status.insert(f.id, Status::Inactive);
             continue;
         }

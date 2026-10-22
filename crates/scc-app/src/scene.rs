@@ -206,6 +206,11 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
     s
 }
 
+/// O comando é um sketch?
+pub fn is_sketch_feature(doc: &Document, id: Id) -> bool {
+    doc.feature(id).is_some_and(|f| matches!(f.kind, scc_core::FeatureKind::Sketch(_)))
+}
+
 pub fn plane_name(o: OriginPlane) -> &'static str {
     match o {
         OriginPlane::XY => "XY",
