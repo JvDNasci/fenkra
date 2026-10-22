@@ -13,7 +13,8 @@ use eframe::egui;
 
 fn main() -> eframe::Result {
     let opts = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([1360., 780.]).with_maximized(true).with_min_inner_size([900., 600.]).with_title(concat!("SolidCadCraft ", env!("CARGO_PKG_VERSION"))),
+        viewport: egui::ViewportBuilder::default().with_inner_size([1360., 780.]).with_maximized(true).with_min_inner_size([900., 600.]).with_title(concat!("SolidCadCraft ", env!("CARGO_PKG_VERSION")))
+            .with_icon(eframe::icon_data::from_png_bytes(include_bytes!("../../../assets/app/fenix-256.png")).unwrap_or_default()),
         renderer: eframe::Renderer::Wgpu,
         ..Default::default()
     };

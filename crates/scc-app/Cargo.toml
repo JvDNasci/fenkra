@@ -4,6 +4,7 @@ description = "Aplicativo SolidCadCraft"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+build = "build.rs"
 
 [[bin]]
 name = "solidcadcraft"
@@ -21,3 +22,6 @@ rfd = "0.17"
 egui_extras = { version = "0.37", features = ["svg"] }
 serde.workspace = true
 serde_json.workspace = true
+
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"

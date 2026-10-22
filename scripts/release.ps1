@@ -1,4 +1,4 @@
-# Gera o pacote de release do SolidCadCraft para Windows x64.
+﻿# Gera o pacote de release do SolidCadCraft para Windows x64.
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\release.ps1
 #
@@ -61,10 +61,11 @@ New-Item -ItemType Directory -Force $out | Out-Null
 Copy-Item $exe $out
 foreach ($p in $needed.Values) { Copy-Item $p $out }
 
-# documentos que acompanham o pacote
-Copy-Item (Join-Path $root "CHANGELOG.md") $out
-Copy-Item (Join-Path $root "packaging\LEIA-ME.txt") $out
-Copy-Item (Join-Path $root "packaging\TERCEIROS.txt") $out
+# documentos opcionais que acompanham o pacote
+foreach ($doc in @("CHANGELOG.md", "packaging\LEIA-ME.txt", "packaging\TERCEIROS.txt")) {
+    $p = Join-Path $root $doc
+    if (Test-Path $p) { Copy-Item $p $out }
+}
 
 $zip = Join-Path $dist "$name.zip"
 if (Test-Path $zip) { Remove-Item -Force $zip }
