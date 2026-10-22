@@ -1,40 +1,50 @@
-# Roadmap
+# Roadmap — SolidCadCraft
 
-> As fases são sequenciais em prioridade, não em calendário. Estimativas grosseiras para uma pessoa em tempo parcial.
+> As fases são ordem de prioridade, não calendário. Estratégia: **fundação sólida primeiro**, depois
+> **uma versão funcional de cada módulo** com menu minimalista e features completas em opções.
 
 ## Fase 0 — Especificação (agora)
-- Visão, requisitos, ADRs principais
-- Fichas das features do MVP
-- Levantamento do que reaproveitar de projetos abertos
+- Visão, requisitos, ADRs
+- Fichas das features da fase 1
+- Esquema da biblioteca pública e primeiros dados (roscas, materiais)
 
-## Fase 1 — Fundação + Esboço + Sólidos básicos (MVP parte 1)
-- Core: documento, árvore de features, recompute incremental em background, desfazer/refazer
-- Naming topológico persistente
-- Viewport com seleção, navegação e renderização própria
-- Esboço 2D com solver de restrições
-- Extrusão, revolução, furo, filete, chanfro
-- Timeline com rollback
-- STEP / STL import e export
+## Fase 1 — Fundação + Modelagem Sólida
+A fundação é usada por todos os módulos e não pode ser refeita depois.
+- Núcleo: documento, **árvore (Origem, Referências, Parâmetros, pastas, coletores de corpos) e linha de tempo de comandos**, recompute incremental em background, desfazer
+- Naming topológico persistente ([ADR 0004](adr/0004-naming-topologico.md))
+- **Parâmetros, expressões e propriedades** (PN, descrição, material, tipo, personalizadas)
+- **Geometria mestre, publicações e links** com gerenciador ([ADR 0006](adr/0006-links-e-projeto-relacional.md))
+- Projeto em pasta com versões automáticas ([ADR 0009](adr/0009-projeto-e-revisoes.md))
+- Biblioteca: roscas, materiais ([ADR 0008](adr/0008-biblioteca-publica.md))
+- Interface minimalista, viewport própria
+- Sketch 2D com solver
+- **Modelagem Sólida**: extrusão, revolução, recorte, draft, nervura por caminho, furo, furo inteligente, rosca paramétrica, filete, chanfro
+- STEP / IGES / STL / 3MF
 
-## Fase 2 — Desenho técnico + Malha → sólido (MVP parte 2)
-- Folhas, vistas, cortes, cotas associativas, exportação PDF/DXF
-- Malha → sólido níveis 1 e 2
-- Casca, padrões, espelhar, booleanas entre corpos
-- API Python
+## Fase 2 — Uma versão de cada módulo (MVP)
+- **Desenho Técnico**: vistas como blocos ligados/travados, cortes, seções, cotas, geometria 2D, BOM, PDF/DXF
+- **Montagem e Mecanismos**: restrições, juntas, fixo/GDL, drives, rosca entre peças, modos visualizar/contexto/editar
+- **Superfícies**: curvas 3D, loft, fill, aparar/costurar, zebra e desvio
+- **Chapas**: flange base, flange de aresta, dobra, alívios, planificação
+- **Estruturas Soldadas**: membros, biblioteca de perfis com peso, uniões, lista de corte
+- **Gestão de Projeto**: estrutura de produto, revisões congeladas, gestão de links, pacote
+- Biblioteca: perfis estruturais, fixadores, chapas
+- Sketch 3D, padrões, casca, booleanas, API Python
 
-**Fim do MVP:** peça mecânica completa, do esboço ao desenho cotado em PDF.
+**Fim do MVP:** os critérios de sucesso da [visão](00-visao.md#10-critérios-de-sucesso-do-mvp).
 
-## Fase 3 — Estruturas soldadas + Montagens
-- Esboço 3D, membros estruturais, biblioteca de perfis, cantos, lista de corte
-- Montagens com juntas
-- BOM e balões
-- Sweep, loft
+## Fase 3 — Aprofundar os módulos
+- Chapas: flange contínua sobre superfícies, bainha, estampos, converter sólido em chapa
+- Soldas: gussets, tampas, cordões e simbologia
+- Montagem: acoplamentos (engrenagem, cremalheira), colisão dinâmica, explodida, fixadores automáticos
+- Desenho: GD&T, blocos 2D, restrições 2D
+- Superfícies: blend, mapas de curvatura
+- Gestão: comparação visual de revisões, bloqueio em pasta compartilhada
 
-## Fase 4 — Refinamento
-- Malha → sólido nível 3 (primitivas)
-- Simbologia de solda, GD&T
-- Biblioteca de elementos normalizados, vista explodida
+## Fase 4 — Ecossistema
+- Biblioteca: elementos de máquina, edição comunitária pela interface
+- Malha → sólido nível 3, otimização de barras, DWG (avaliar)
 
-## Fase 5 — BIM (módulo separado)
-- Objetos arquitetônicos paramétricos, IFC (via IfcOpenShell)
-- Representação 2D simbólica (NBR 6492) reaproveitando o motor de desenho
+## Fase 5 — Avançado
+- Superfícies por pontos de controle (estilo subdivisão) integradas ao B-rep
+- Outros módulos sob demanda (CAM, simulação, BIM — hoje são não-objetivos)

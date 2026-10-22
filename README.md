@@ -1,7 +1,8 @@
-# projeto-cad (nome provisório)
+# SolidCadCraft
 
-CAD 3D paramétrico open source, leve, com desenho técnico 2D de nível profissional,
-estruturas soldadas e conversão simples de malha para sólido. BIM em fase posterior.
+CAD 3D paramétrico open source, leve e modular: modelagem sólida com sketches paramétricos,
+projeto relacional com geometria mestre, montagens e mecanismos, desenho técnico sincronizado,
+chapas metálicas, estruturas soldadas e gestão de projeto.
 
 > **Status:** fase de requisitos e especificação. Ainda não há código.
 
@@ -9,7 +10,7 @@ estruturas soldadas e conversão simples de malha para sólido. BIM em fase post
 
 | Documento | Conteúdo |
 |---|---|
-| [Visão](docs/00-visao.md) | O que o projeto é, para quem, diferenciais e não-objetivos |
+| [Visão](docs/00-visao.md) | O que o projeto é, módulos, diferenciais e não-objetivos |
 | [Requisitos](docs/requisitos/README.md) | Requisitos funcionais e não-funcionais com IDs |
 | [Roadmap](docs/roadmap.md) | Fases e escopo de cada uma |
 | [Reuso open source](docs/reuso-opensource.md) | O que dá pra aproveitar de outros projetos e as licenças |
