@@ -16,6 +16,7 @@ mod keymap;
 mod feat_ui;
 mod handles;
 mod measure;
+mod i18n;
 
 use eframe::egui;
 

@@ -7,6 +7,7 @@ use eframe::egui::{self, RichText};
 use glam::Vec3;
 use scc_core::*;
 use scc_solidos::geo3d::{self, Curve3};
+use crate::i18n::tr;
 
 struct Row {
     label: String,
@@ -148,16 +149,16 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     let (rs, ex) = rows(app);
     ui.add_space(8.);
     ui.separator();
-    ui.label(RichText::new("📏 Medição da seleção").strong());
+    ui.label(RichText::new(tr("📏 Medição da seleção")).strong());
     if rs.is_empty() {
-        ui.label(RichText::new("Selecione 1 ou 2 itens: vértice, aresta, face (Shift soma).").weak().small());
+        ui.label(RichText::new(tr("Selecione 1 ou 2 itens: vértice, aresta, face (Shift soma).")).weak().small());
     }
     let mut act: Option<Act> = None;
     egui::Grid::new("medidas").num_columns(3).striped(true).show(ui, |ui| {
         for r in &rs {
             ui.label(&r.label);
             ui.label(RichText::new(format!("{} {}", fmt(r.value), r.unit)).strong());
-            if ui.small_button("→ ƒ").on_hover_text("criar parâmetro global com este valor").clicked() {
+            if ui.small_button(tr("→ ƒ")).on_hover_text(tr("criar parâmetro global com este valor")).clicked() {
                 let unit = if r.unit == "°" { Unit::Angulo } else if r.unit == "mm" { Unit::Comprimento } else { Unit::Numero };
                 act = Some(Act::Param(r.label.clone(), r.value, unit));
             }

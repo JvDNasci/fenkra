@@ -6,6 +6,7 @@ use crate::scene::plane_ref_name;
 use eframe::egui::{self, Color32, RichText};
 use scc_core::*;
 use std::collections::HashMap;
+use crate::i18n::tr;
 
 /// Entradas tiradas da seleção atual (viewport + árvore).
 #[derive(Clone, Default, Debug)]
@@ -424,6 +425,7 @@ fn candidates(doc: &Document, class: RefClass, me: Id) -> Vec<(Id, String)> {
 // ---------------------------------------------------------------- entradas
 
 fn row(ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::Ui)) {
+    let label = tr(label);
     ui.horizontal(|ui| {
         ui.add_sized([96., 18.], egui::Label::new(label).truncate());
         add(ui);
@@ -431,7 +433,7 @@ fn row(ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::Ui)) {
 }
 
 fn pick_button(ui: &mut egui::Ui, enabled: bool, what: &str) -> bool {
-    ui.add_enabled(enabled, egui::Button::new("⊙").small())
+    ui.add_enabled(enabled, egui::Button::new(tr("⊙")).small())
         .on_hover_text(format!("usar {what} selecionado(a) na viewport"))
         .on_disabled_hover_text(format!("selecione {what} na viewport (Shift soma) para usar aqui"))
         .clicked()
@@ -440,11 +442,11 @@ fn pick_button(ui: &mut egui::Ui, enabled: bool, what: &str) -> bool {
 pub(crate) fn point_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, p: &mut PointRef, seed: &Seed) {
     row(ui, label, |ui| {
         egui::ComboBox::from_id_salt(salt).selected_text(point_name(doc, p)).width(150.).show_ui(ui, |ui| {
-            ui.selectable_value(p, PointRef::Origin, "Origem");
+            ui.selectable_value(p, PointRef::Origin, tr("Origem"));
             for (id, n) in candidates(doc, RefClass::Point, me) {
                 ui.selectable_value(p, PointRef::Ref(id), n);
             }
-            if !matches!(p, PointRef::Fixed(_)) && ui.selectable_label(false, "Coordenadas fixas…").clicked() {
+            if !matches!(p, PointRef::Fixed(_)) && ui.selectable_label(false, tr("Coordenadas fixas…")).clicked() {
                 *p = PointRef::Fixed([0.; 3]);
             }
         });
@@ -553,7 +555,7 @@ pub(crate) fn points_list(ui: &mut egui::Ui, salt: &str, doc: &Document, me: Id,
     for (i, p) in pts.iter_mut().enumerate() {
         ui.horizontal(|ui| {
             ui.vertical(|ui| point_slot(ui, &format!("{salt}{i}"), &format!("Ponto {}", i + 1), doc, me, p, seed));
-            if ui.small_button("✖").on_hover_text("remover ponto").clicked() {
+            if ui.small_button(tr("✖")).on_hover_text(tr("remover ponto")).clicked() {
                 del = Some(i);
             }
         });
@@ -564,10 +566,10 @@ pub(crate) fn points_list(ui: &mut egui::Ui, salt: &str, doc: &Document, me: Id,
         }
     }
     ui.horizontal(|ui| {
-        if ui.button("+ ponto").clicked() {
+        if ui.button(tr("+ ponto")).clicked() {
             pts.push(PointRef::Fixed([0.; 3]));
         }
-        if ui.add_enabled(!seed.points.is_empty(), egui::Button::new(format!("+ seleção ({})", seed.points.len()))).on_hover_text("acrescenta os vértices/pontos selecionados na ordem do clique").clicked() {
+        if ui.add_enabled(!seed.points.is_empty(), egui::Button::new(format!("+ seleção ({})", seed.points.len()))).on_hover_text(tr("acrescenta os vértices/pontos selecionados na ordem do clique")).clicked() {
             pts.extend(seed.points.iter().copied());
         }
     });
@@ -576,10 +578,10 @@ pub(crate) fn points_list(ui: &mut egui::Ui, salt: &str, doc: &Document, me: Id,
 fn on_curve(ui: &mut egui::Ui, at: &mut OnCurve, reverse: &mut bool, vars: &HashMap<String, f64>) {
     row(ui, "Posição", |ui| {
         let is_ratio = matches!(at, OnCurve::Ratio(_));
-        if ui.selectable_label(is_ratio, "proporção").clicked() && !is_ratio {
+        if ui.selectable_label(is_ratio, tr("proporção")).clicked() && !is_ratio {
             *at = OnCurve::Ratio("0.5".into());
         }
-        if ui.selectable_label(!is_ratio, "distância").clicked() && is_ratio {
+        if ui.selectable_label(!is_ratio, tr("distância")).clicked() && is_ratio {
             *at = OnCurve::Distance("10".into());
         }
     });
@@ -599,7 +601,7 @@ fn on_curve(ui: &mut egui::Ui, at: &mut OnCurve, reverse: &mut bool, vars: &Hash
     }
     ui.horizontal(|ui| {
         ui.add_space(100.);
-        ui.checkbox(reverse, "medir a partir do fim");
+        ui.checkbox(reverse, tr("medir a partir do fim"));
     });
 }
 
@@ -656,7 +658,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             expr(ui, "Ângulo", angle, vars, "°");
             ui.horizontal(|ui| {
                 ui.add_space(100.);
-                if ui.small_button("Normal (90°)").clicked() {
+                if ui.small_button(tr("Normal (90°)")).clicked() {
                     *angle = "90".into();
                 }
             });
@@ -692,14 +694,14 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             expr(ui, "B", b, vars, "");
             expr(ui, "C", c, vars, "");
             expr(ui, "D", d, vars, "mm");
-            ui.label(RichText::new("Ax + By + Cz = D (normal = A, B, C)").weak().small());
+            ui.label(RichText::new(tr("Ax + By + Cz = D (normal = A, B, C)")).weak().small());
         }
         R::PlaneMeanPoints { points } => points_list(ui, "g_pts", doc, me, points, seed, 3),
         R::PointCoords { x, y, z, frame } => {
             let mut local = frame.is_some();
             row(ui, "Sistema", |ui| {
-                ui.radio_value(&mut local, false, "Origem");
-                ui.radio_value(&mut local, true, "Plano");
+                ui.radio_value(&mut local, false, tr("Origem"));
+                ui.radio_value(&mut local, true, tr("Plano"));
             });
             if local != frame.is_some() {
                 *frame = if local { Some(seed.planes.first().copied().unwrap_or_default()) } else { None };
@@ -731,8 +733,8 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             curve_slot(ui, "g_c", "Curva planar", doc, me, curve, seed);
             axis_slot(ui, "g_d", "Direção", doc, me, dir, seed);
             row(ui, "Solução", |ui| {
-                ui.radio_value(which, 0, "1");
-                ui.radio_value(which, 1, "2");
+                ui.radio_value(which, 0, tr("1"));
+                ui.radio_value(which, 1, tr("2"));
             });
         }
         R::PointBetween { a, b, ratio } => {
@@ -759,10 +761,10 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             expr(ui, "Ângulo", angle, vars, "°");
             ui.horizontal(|ui| {
                 ui.add_space(100.);
-                if ui.small_button("Tangente (0°)").clicked() {
+                if ui.small_button(tr("Tangente (0°)")).clicked() {
                     *angle = "0".into();
                 }
-                if ui.small_button("Normal (90°)").clicked() {
+                if ui.small_button(tr("Normal (90°)")).clicked() {
                     *angle = "90".into();
                 }
             });
@@ -777,7 +779,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         }
         R::Polyline { points, closed } | R::Spline { points, closed } => {
             points_list(ui, "g_pts", doc, me, points, seed, 2);
-            ui.checkbox(closed, "fechada");
+            ui.checkbox(closed, tr("fechada"));
         }
         R::Circle { center, plane, radius, start, end } => {
             point_slot(ui, "g_c", "Centro", doc, me, center, seed);
@@ -790,7 +792,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             point_slot(ui, "g_a", "Ponto 1", doc, me, a, seed);
             point_slot(ui, "g_b", "Ponto 2", doc, me, b, seed);
             point_slot(ui, "g_c", "Ponto 3", doc, me, c, seed);
-            ui.checkbox(full, "círculo completo (senão, arco do 1º ao 3º)");
+            ui.checkbox(full, tr("círculo completo (senão, arco do 1º ao 3º)"));
         }
         R::Helix { origin, axis, radius, pitch, height, taper, left } => {
             point_slot(ui, "g_o", "Origem", doc, me, origin, seed);
@@ -799,7 +801,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             expr(ui, "Passo", pitch, vars, "mm");
             expr(ui, "Altura", height, vars, "mm");
             expr(ui, "Conicidade", taper, vars, "°");
-            ui.checkbox(left, "sentido anti-horário (à esquerda)");
+            ui.checkbox(left, tr("sentido anti-horário (à esquerda)"));
         }
         R::Spiral { center, plane, r0, r1, turns } => {
             point_slot(ui, "g_c", "Centro", doc, me, center, seed);
@@ -810,9 +812,9 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         }
         R::Conic { center, plane, kind, a, b, extent } => {
             row(ui, "Cônica", |ui| {
-                ui.radio_value(kind, ConicKind::Elipse, "Elipse");
-                ui.radio_value(kind, ConicKind::Parabola, "Parábola");
-                ui.radio_value(kind, ConicKind::Hiperbole, "Hipérbole");
+                ui.radio_value(kind, ConicKind::Elipse, tr("Elipse"));
+                ui.radio_value(kind, ConicKind::Parabola, tr("Parábola"));
+                ui.radio_value(kind, ConicKind::Hiperbole, tr("Hipérbole"));
             });
             point_slot(ui, "g_c", "Centro", doc, me, center, seed);
             plane_slot(ui, "g_pl", "Plano", doc, me, plane, seed);
@@ -828,18 +830,18 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         R::Connect { a, a_end, b, b_end, cont, tension } => {
             curve_slot(ui, "g_a", "Curva 1", doc, me, a, seed);
             row(ui, "Ponta", |ui| {
-                ui.radio_value(a_end, false, "início");
-                ui.radio_value(a_end, true, "fim");
+                ui.radio_value(a_end, false, tr("início"));
+                ui.radio_value(a_end, true, tr("fim"));
             });
             curve_slot(ui, "g_b", "Curva 2", doc, me, b, seed);
             row(ui, "Ponta", |ui| {
-                ui.radio_value(b_end, false, "início");
-                ui.radio_value(b_end, true, "fim");
+                ui.radio_value(b_end, false, tr("início"));
+                ui.radio_value(b_end, true, tr("fim"));
             });
             row(ui, "Continuidade", |ui| {
-                ui.radio_value(cont, Continuity::G0, "G0 ponto");
-                ui.radio_value(cont, Continuity::G1, "G1 tangente");
-                ui.radio_value(cont, Continuity::G2, "G2 curvatura");
+                ui.radio_value(cont, Continuity::G0, tr("G0 ponto"));
+                ui.radio_value(cont, Continuity::G1, tr("G1 tangente"));
+                ui.radio_value(cont, Continuity::G2, tr("G2 curvatura"));
             });
             expr(ui, "Tensão", tension, vars, "");
         }
@@ -853,7 +855,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             for (i, p) in planes.iter_mut().enumerate() {
                 ui.horizontal(|ui| {
                     ui.vertical(|ui| plane_slot(ui, &format!("g_sp{i}"), &format!("Plano {}", i + 1), doc, me, p, seed));
-                    if ui.small_button("✖").clicked() {
+                    if ui.small_button(tr("✖")).clicked() {
                         del = Some(i);
                     }
                 });
@@ -864,7 +866,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                 }
             }
             ui.horizontal(|ui| {
-                if ui.button("+ plano").clicked() {
+                if ui.button(tr("+ plano")).clicked() {
                     planes.push(PlaneRef::default());
                 }
                 if ui.add_enabled(!seed.planes.is_empty(), egui::Button::new(format!("+ seleção ({})", seed.planes.len()))).clicked() {
@@ -917,11 +919,11 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         R::LineAxis { face } | R::SurfExtract { face, .. } => {
             ui.label(RichText::new(format!("Face em ({}, {}, {})", fmt(face[0]), fmt(face[1]), fmt(face[2]))).small());
             if let Some(SurfRef::Face { point, .. }) = seed.surface {
-                if ui.button("⊙ Usar a face selecionada").clicked() {
+                if ui.button(tr("⊙ Usar a face selecionada")).clicked() {
                     *face = point;
                 }
             }
-            ui.label(RichText::new("Clique numa face na viewport e use o botão acima.").weak().small());
+            ui.label(RichText::new(tr("Clique numa face na viewport e use o botão acima.")).weak().small());
         }
         R::CurveProject { curve, plane } => {
             curve_slot(ui, "g_c", "Curva", doc, me, curve, seed);
@@ -929,7 +931,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         }
         R::SplineControl { points, closed } => {
             points_list(ui, "g_pts", doc, me, points, seed, 3);
-            ui.checkbox(closed, "fechada");
+            ui.checkbox(closed, tr("fechada"));
         }
         R::CurveCopy { curve } => curve_slot(ui, "g_c", "Aresta/curva", doc, me, curve, seed),
         R::SurfOffset { surface, dist } => {
@@ -941,7 +943,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             for (i, c) in curves.iter_mut().enumerate() {
                 ui.horizontal(|ui| {
                     ui.vertical(|ui| curve_slot(ui, &format!("g_fc{i}"), &format!("Curva {}", i + 1), doc, me, c, seed));
-                    if ui.small_button("✖").clicked() {
+                    if ui.small_button(tr("✖")).clicked() {
                         del = Some(i);
                     }
                 });
@@ -952,14 +954,14 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                 }
             }
             ui.horizontal(|ui| {
-                if ui.button("+ curva").clicked() {
+                if ui.button(tr("+ curva")).clicked() {
                     curves.push(CurveRef::Axis(OriginAxis::X));
                 }
                 if ui.add_enabled(!seed.curves.is_empty(), egui::Button::new(format!("+ seleção ({})", seed.curves.len()))).clicked() {
                     curves.extend(seed.curves.iter().cloned());
                 }
             });
-            ui.label(RichText::new("As curvas precisam fechar um contorno.").weak().small());
+            ui.label(RichText::new(tr("As curvas precisam fechar um contorno.")).weak().small());
         }
         R::SurfExtrude { curve, dir, length } => {
             curve_slot(ui, "g_c", "Curva", doc, me, curve, seed);
@@ -984,7 +986,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                     };
                     ui.label(RichText::new(st.0).color(st.1));
                     ui.horizontal(|ui| {
-                        if ui.button("⟳ Atualizar links").clicked() {
+                        if ui.button(tr("⟳ Atualizar links")).clicked() {
                             ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique("scc_link_acao"), (ext, 0u8)));
                         }
                         let lbl = if e.state == LinkState::Congelado { "Descongelar" } else { "❄ Congelar" };
@@ -992,14 +994,14 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                             ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique("scc_link_acao"), (ext, 1u8)));
                         }
                     });
-                    ui.label(RichText::new("Congelado: não atualiza com a origem. A geometria fica copiada aqui.").weak().small());
+                    ui.label(RichText::new(tr("Congelado: não atualiza com a origem. A geometria fica copiada aqui.")).weak().small());
                 }
                 None => {
-                    ui.label("link perdido");
+                    ui.label(tr("link perdido"));
                 }
             }
         }
     }
     ui.add_space(4.);
-    ui.label(RichText::new("⊙ usa o que está selecionado na viewport (Shift soma vértices, arestas, faces, planos, pontos e curvas).").weak().small());
+    ui.label(RichText::new(tr("⊙ usa o que está selecionado na viewport (Shift soma vértices, arestas, faces, planos, pontos e curvas).")).weak().small());
 }

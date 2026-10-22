@@ -8,11 +8,13 @@ use scc_core::*;
 use scc_solidos::hardware;
 use scc_solidos::Status;
 use std::collections::HashMap;
+use crate::i18n::tr;
 
 type Vars = HashMap<String, f64>;
 
 /// Campo de expressão: mostra o valor avaliado ou o erro.
 pub(crate) fn expr(ui: &mut egui::Ui, label: &str, s: &mut String, vars: &Vars, unit: &str) {
+    let label = tr(label);
     ui.horizontal(|ui| {
         ui.add_sized([96., 18.], egui::Label::new(label).truncate());
         let r = scc_core::expr::eval_str(s, vars);
@@ -31,13 +33,14 @@ pub(crate) fn expr(ui: &mut egui::Ui, label: &str, s: &mut String, vars: &Vars, 
             }
             Err(e) => {
                 resp.on_hover_text(e.to_string());
-                ui.label(RichText::new("⚠").color(Color32::from_rgb(255, 120, 100)));
+                ui.label(RichText::new(tr("⚠")).color(Color32::from_rgb(255, 120, 100)));
             }
         }
     });
 }
 
 pub(crate) fn section(ui: &mut egui::Ui, title: &str) {
+    let title = tr(title);
     ui.add_space(6.);
     ui.label(RichText::new(title).strong());
 }
@@ -79,7 +82,7 @@ pub fn icon_choice(ui: &mut egui::Ui, opts: &[(&str, &str, &str, bool)]) -> Opti
 }
 
 fn op_combo(ui: &mut egui::Ui, _id: &str, op: &mut BoolOp) {
-    ui.label(RichText::new("Operação").weak());
+    ui.label(RichText::new(tr("Operação")).weak());
     let o = *op;
     let opts = [
         ("op_adicionar", "Adicionar", "Une ao corpo", o == BoolOp::Add),
@@ -104,7 +107,7 @@ fn extent_ui(ui: &mut egui::Ui, _id: &str, e: &mut Extent, vars: &Vars, allow: &
         Extent::Blind(d) | Extent::Symmetric(d) | Extent::TwoSides(d, _) => d.clone(),
         _ => "20".into(),
     };
-    ui.label(RichText::new("Término").weak());
+    ui.label(RichText::new(tr("Término")).weak());
     let info = |n: &str| match n {
         "Cego" => ("ext_cego", "Distância fixa a partir do plano do sketch"),
         "Plano médio" => ("ext_simetrico", "Metade para cada lado do plano do sketch"),
@@ -135,24 +138,24 @@ fn extent_ui(ui: &mut egui::Ui, _id: &str, e: &mut Extent, vars: &Vars, allow: &
             expr(ui, "Sentido 2", b, vars, "mm");
         }
         Extent::ThroughAll => {
-            ui.label(RichText::new("atravessa todo o corpo de destino").weak().small());
+            ui.label(RichText::new(tr("atravessa todo o corpo de destino")).weak().small());
         }
         Extent::UpToNext => {
-            ui.label(RichText::new("cresce até encontrar o corpo (só para extrusão que acrescenta)").weak().small());
+            ui.label(RichText::new(tr("cresce até encontrar o corpo (só para extrusão que acrescenta)")).weak().small());
         }
         Extent::UpTo(p) => {
             ui.horizontal(|ui| {
-                ui.add_sized([96., 18.], egui::Label::new("Até o plano"));
+                ui.add_sized([96., 18.], egui::Label::new(tr("Até o plano")));
                 plane_combo(ui, "ate_plano", doc, p, None);
             });
-            ui.label(RichText::new("Crie planos inclinados em Referências › Plano por ângulo.").weak().small());
+            ui.label(RichText::new(tr("Crie planos inclinados em Referências › Plano por ângulo.")).weak().small());
         }
     }
 }
 
 fn target_combo(ui: &mut egui::Ui, doc: &Document, t: &mut Id) {
     ui.horizontal(|ui| {
-        ui.add_sized([96., 18.], egui::Label::new("Coletor"));
+        ui.add_sized([96., 18.], egui::Label::new(tr("Coletor")));
         let name = doc.collectors.iter().find(|c| c.id == *t).map(|c| c.name.clone()).unwrap_or("?".into());
         egui::ComboBox::from_id_salt("alvo").selected_text(name).show_ui(ui, |ui| {
             for c in &doc.collectors {
@@ -210,31 +213,31 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
 
     match sel {
         Sel::None => {
-            ui.heading("Modelagem Sólida");
-            ui.label(RichText::new("Escolha um comando na barra ou clique num plano/face na viewport.").weak());
+            ui.heading(tr("Modelagem Sólida"));
+            ui.label(RichText::new(tr("Escolha um comando na barra ou clique num plano/face na viewport.")).weak());
             ui.add_space(6.);
-            ui.label(RichText::new("Atalhos").strong());
-            ui.label(RichText::new("Espaço: vistas · F: ajustar · N: alinhar ao plano · H: ocultar · Esc: limpar seleção").weak().small());
+            ui.label(RichText::new(tr("Atalhos")).strong());
+            ui.label(RichText::new(tr("Espaço: vistas · F: ajustar · N: alinhar ao plano · H: ocultar · Esc: limpar seleção")).weak().small());
         }
 
         Sel::Part => {
-            ui.heading("Peça");
+            ui.heading(tr("Peça"));
             ui.horizontal(|ui| {
-                ui.add_sized([96., 18.], egui::Label::new("Nome"));
+                ui.add_sized([96., 18.], egui::Label::new(tr("Nome")));
                 ui.text_edit_singleline(&mut doc.name);
             });
             section(ui, "Propriedades");
             let p = &mut doc.props;
             ui.horizontal(|ui| {
-                ui.add_sized([96., 18.], egui::Label::new("PN"));
+                ui.add_sized([96., 18.], egui::Label::new(tr("PN")));
                 ui.text_edit_singleline(&mut p.pn);
             });
             ui.horizontal(|ui| {
-                ui.add_sized([96., 18.], egui::Label::new("Descrição"));
+                ui.add_sized([96., 18.], egui::Label::new(tr("Descrição")));
                 ui.text_edit_singleline(&mut p.description);
             });
             ui.horizontal(|ui| {
-                ui.add_sized([96., 18.], egui::Label::new("Material"));
+                ui.add_sized([96., 18.], egui::Label::new(tr("Material")));
                 egui::ComboBox::from_id_salt("mat").selected_text(p.material.clone()).show_ui(ui, |ui| {
                     for (m, _) in MATERIALS {
                         ui.selectable_value(&mut p.material, m.to_string(), m);
@@ -242,7 +245,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 });
             });
             ui.horizontal(|ui| {
-                ui.add_sized([96., 18.], egui::Label::new("Tipo"));
+                ui.add_sized([96., 18.], egui::Label::new(tr("Tipo")));
                 egui::ComboBox::from_id_salt("tipo").selected_text(p.part_type.label()).show_ui(ui, |ui| {
                     for t in PartType::ALL {
                         ui.selectable_value(&mut p.part_type, t, t.label());
@@ -255,7 +258,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 ui.horizontal(|ui| {
                     ui.add(egui::TextEdit::singleline(k).desired_width(96.));
                     ui.add(egui::TextEdit::singleline(v).desired_width(140.));
-                    if ui.small_button("✖").clicked() {
+                    if ui.small_button(tr("✖")).clicked() {
                         remove = Some(i);
                     }
                 });
@@ -263,7 +266,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             if let Some(i) = remove {
                 p.custom.remove(i);
             }
-            if ui.button("➕ Propriedade").clicked() {
+            if ui.button(tr("➕ Propriedade")).clicked() {
                 p.custom.push((format!("Campo{}", p.custom.len() + 1), String::new()));
             }
             section(ui, "Propriedades de massa");
@@ -273,46 +276,46 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 ui.label(format!("{name}: {:.1} cm³ · {:.1} cm² · {:.3} kg", vol / 1000., area / 100., vol * dens / 1e6));
             }
             if bodies.is_empty() {
-                ui.label(RichText::new("sem corpos").weak());
+                ui.label(RichText::new(tr("sem corpos")).weak());
             }
             section(ui, "Aparência da peça");
-            ui.label(RichText::new("Sobrepõe a cor dos coletores; comandos com aparência própria têm prioridade.").weak().small());
+            ui.label(RichText::new(tr("Sobrepõe a cor dos coletores; comandos com aparência própria têm prioridade.")).weak().small());
             appearance_opt(ui, "ap_peca", &mut doc.appearance);
         }
 
         Sel::Origin(o) => {
             ui.heading(format!("Plano {} da Origem", plane_name(o)));
-            ui.label(RichText::new("Os elementos da Origem são fixos: não podem ser apagados nem movidos.").weak());
+            ui.label(RichText::new(tr("Os elementos da Origem são fixos: não podem ser apagados nem movidos.")).weak());
             ui.add_space(6.);
-            ui.label("Use os botões ✏ Sketch ou ▱ Plano para criar a partir deste plano.");
+            ui.label(tr("Use os botões ✏ Sketch ou ▱ Plano para criar a partir deste plano."));
             used_by_origin(ui, &doc_ro, o, &mut new_sel);
         }
 
         Sel::Ref(id) => {
             let names: Vec<String> = doc.params.iter().map(|p| p.name.clone()).chain(doc.features.iter().map(|f| f.name.clone())).collect();
             let Some(r) = doc.references.iter_mut().find(|r| r.id == id) else {
-                ui.label("Referência não existe mais.");
+                ui.label(tr("Referência não existe mais."));
                 return;
             };
             crate::geo_ui::panel(ui, &doc_ro, r, &vars, &seed, ref_err.as_deref());
             section(ui, "Nome e exibição");
             ui.horizontal(|ui| {
-                ui.add_sized([96., 18.], egui::Label::new("Nome (variável)"));
+                ui.add_sized([96., 18.], egui::Label::new(tr("Nome (variável)")));
                 let mut n = r.name.clone();
                 if ui.text_edit_singleline(&mut n).changed() && !n.is_empty() && !names.contains(&n) {
                     r.name = n;
                 }
             });
-            ui.label(RichText::new("O nome é a variável referenciável; os comandos apontam para o elemento, então renomear não quebra nada.").weak().small());
-            ui.checkbox(&mut r.visible, "visível");
+            ui.label(RichText::new(tr("O nome é a variável referenciável; os comandos apontam para o elemento, então renomear não quebra nada.")).weak().small());
+            ui.checkbox(&mut r.visible, tr("visível"));
             if r.kind.class() != RefClass::Surface && !matches!(r.kind, RefKind::Linked { .. }) {
-                ui.checkbox(&mut r.published, "📤 publicar (outras peças podem usar por link)");
+                ui.checkbox(&mut r.published, tr("📤 publicar (outras peças podem usar por link)"));
             }
             ui.add_space(4.);
-            ui.label(RichText::new("Trocar uma entrada redireciona a variável: tudo que usa este elemento se atualiza.").weak().small());
+            ui.label(RichText::new(tr("Trocar uma entrada redireciona a variável: tudo que usa este elemento se atualiza.")).weak().small());
             used_by(ui, &doc_ro, id, &mut new_sel);
             ui.add_space(8.);
-            if ui.button("🗑 Apagar…").clicked() {
+            if ui.button(tr("🗑 Apagar…")).clicked() {
                 delete = Some(id);
             }
         }
@@ -323,19 +326,19 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             let active = doc.active_collector == id;
             let users: Vec<String> = doc.features.iter().filter(|f| f.target == id && !matches!(f.kind, FeatureKind::Sketch(_))).map(|f| f.name.clone()).collect();
             let Some(c) = doc.collectors.iter_mut().find(|c| c.id == id) else { return };
-            ui.heading("Coletor de corpos");
+            ui.heading(tr("Coletor de corpos"));
             ui.horizontal(|ui| {
-                ui.add_sized([96., 18.], egui::Label::new("Nome"));
+                ui.add_sized([96., 18.], egui::Label::new(tr("Nome")));
                 ui.text_edit_singleline(&mut c.name);
             });
             let mut a = Appearance { color: c.color, finish: c.finish };
             appearance_fields(ui, "ap_col", &mut a);
             c.color = a.color;
             c.finish = a.finish;
-            ui.checkbox(&mut c.visible, "visível");
+            ui.checkbox(&mut c.visible, tr("visível"));
             if active {
-                ui.label(RichText::new("✔ coletor ativo: novos comandos atuam nele").color(Color32::from_rgb(140, 210, 140)));
-            } else if ui.button("Tornar ativo").clicked() {
+                ui.label(RichText::new(tr("✔ coletor ativo: novos comandos atuam nele")).color(Color32::from_rgb(140, 210, 140)));
+            } else if ui.button(tr("Tornar ativo")).clicked() {
                 doc.active_collector = id;
             }
             section(ui, &format!("Comandos neste coletor ({})", users.len()));
@@ -346,19 +349,19 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
 
         Sel::Folder(id) => {
             let Some(f) = doc.folders.iter_mut().find(|f| f.id == id) else { return };
-            ui.heading("Pasta");
+            ui.heading(tr("Pasta"));
             ui.horizontal(|ui| {
-                ui.add_sized([96., 18.], egui::Label::new("Nome"));
+                ui.add_sized([96., 18.], egui::Label::new(tr("Nome")));
                 ui.text_edit_singleline(&mut f.name);
             });
-            ui.label(RichText::new("Pastas só organizam a árvore: não mudam a ordem de execução.").weak());
+            ui.label(RichText::new(tr("Pastas só organizam a árvore: não mudam a ordem de execução.")).weak());
             let items: Vec<String> = doc.features.iter().filter(|g| g.folder == Some(id)).map(|g| g.name.clone()).collect();
             section(ui, &format!("Conteúdo ({})", items.len()));
             for i in items {
                 ui.label(format!("• {i}"));
             }
             ui.add_space(8.);
-            if ui.button("Remover pasta (mantém os comandos)").clicked() {
+            if ui.button(tr("Remover pasta (mantém os comandos)")).clicked() {
                 doc.remove_folder(id);
                 new_sel = Some(Sel::None);
             }
@@ -380,31 +383,31 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             }
             ui.add_space(6.);
             ui.horizontal(|ui| {
-                if ui.add(egui::Button::new(RichText::new("✏ Editar").strong()).min_size(egui::vec2(110., 28.))).clicked() {
+                if ui.add(egui::Button::new(RichText::new(tr("✏ Editar")).strong()).min_size(egui::vec2(110., 28.))).clicked() {
                     sess_act = Some(2);
                 }
                 let mut vis = !f.hidden;
-                if ui.checkbox(&mut vis, "visível").changed() {
+                if ui.checkbox(&mut vis, tr("visível")).changed() {
                     f.hidden = !vis;
                 }
-                ui.checkbox(&mut f.suppressed, "suprimido");
+                ui.checkbox(&mut f.suppressed, tr("suprimido"));
             });
-            ui.label(RichText::new("Duplo clique na árvore também abre a edição.").weak().small());
+            ui.label(RichText::new(tr("Duplo clique na árvore também abre a edição.")).weak().small());
             used_by(ui, &doc_ro, id, &mut new_sel);
         }
 
         Sel::Feature(id) => {
             let Some(idx) = doc.feature_index(id) else {
-                ui.label("Comando não existe mais.");
+                ui.label(tr("Comando não existe mais."));
                 return;
             };
             if session.map(|s| s.0) == Some(id) {
                 egui::Frame::NONE.fill(ui.visuals().faint_bg_color).inner_margin(6.).corner_radius(6.).show(ui, |ui| {
                     ui.horizontal(|ui| {
-                        if ui.add(egui::Button::new(RichText::new("✔ Concluir").strong()).min_size(egui::vec2(110., 28.))).on_hover_text("Enter").clicked() {
+                        if ui.add(egui::Button::new(RichText::new(tr("✔ Concluir")).strong()).min_size(egui::vec2(110., 28.))).on_hover_text(tr("Enter")).clicked() {
                             sess_act = Some(0);
                         }
-                        if ui.add(egui::Button::new("✖ Cancelar").min_size(egui::vec2(100., 28.))).on_hover_text("Esc").clicked() {
+                        if ui.add(egui::Button::new(tr("✖ Cancelar")).min_size(egui::vec2(100., 28.))).on_hover_text(tr("Esc")).clicked() {
                             sess_act = Some(1);
                         }
                     });
@@ -415,7 +418,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 let f = &mut doc.features[idx];
                 ui.heading(format!("{} {}", f.kind.icon(), f.kind.type_name()));
                 ui.horizontal(|ui| {
-                    ui.add_sized([96., 18.], egui::Label::new("Nome"));
+                    ui.add_sized([96., 18.], egui::Label::new(tr("Nome")));
                     let mut n = f.name.clone();
                     if ui.text_edit_singleline(&mut n).changed() && !n.is_empty() && !names.contains(&n) {
                         f.name = n;
@@ -429,19 +432,19 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                         ui.label(RichText::new(format!("⚠ {m}")).color(Color32::from_rgb(240, 200, 90)));
                     }
                     Some(Status::Inactive) => {
-                        ui.label(RichText::new("inativo (suprimido ou depois do marcador)").weak());
+                        ui.label(RichText::new(tr("inativo (suprimido ou depois do marcador)")).weak());
                     }
                     _ => {}
                 }
                 ui.horizontal(|ui| {
-                    ui.checkbox(&mut f.suppressed, "suprimido");
+                    ui.checkbox(&mut f.suppressed, tr("suprimido"));
                     let mut vis = !f.hidden;
-                    if ui.checkbox(&mut vis, "visível").changed() {
+                    if ui.checkbox(&mut vis, tr("visível")).changed() {
                         f.hidden = !vis;
                     }
                 });
                 if !matches!(f.kind, FeatureKind::Sketch(_)) {
-                    egui::CollapsingHeader::new("🎨 Aparência das faces deste comando").id_salt("ap_cmd").show(ui, |ui| {
+                    egui::CollapsingHeader::new(tr("🎨 Aparência das faces deste comando")).id_salt("ap_cmd").show(ui, |ui| {
                         appearance_opt(ui, "ap_feat", &mut f.appearance);
                     });
                 }
@@ -460,7 +463,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 replace_all(ui, doc, id);
             }
             ui.add_space(10.);
-            if ui.button("🗑 Apagar…").clicked() {
+            if ui.button(tr("🗑 Apagar…")).clicked() {
                 delete = Some(id);
             }
         }
@@ -491,7 +494,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
 /// Cor + acabamento + predefinições.
 fn appearance_fields(ui: &mut egui::Ui, id: &str, a: &mut Appearance) {
     ui.horizontal(|ui| {
-        ui.add_sized([96., 18.], egui::Label::new("Cor"));
+        ui.add_sized([96., 18.], egui::Label::new(tr("Cor")));
         ui.color_edit_button_srgb(&mut a.color);
         egui::ComboBox::from_id_salt((id, "acab")).selected_text(a.finish.label()).show_ui(ui, |ui| {
             for f in Finish::ALL {
@@ -502,7 +505,7 @@ fn appearance_fields(ui: &mut egui::Ui, id: &str, a: &mut Appearance) {
     ui.horizontal_wrapped(|ui| {
         for (name, p) in APPEARANCE_PRESETS {
             let c = Color32::from_rgb(p.color[0], p.color[1], p.color[2]);
-            if ui.add(egui::Button::new(RichText::new("■").color(c)).small()).on_hover_text(name).clicked() {
+            if ui.add(egui::Button::new(RichText::new(tr("■")).color(c)).small()).on_hover_text(name).clicked() {
                 *a = p;
             }
         }
@@ -514,12 +517,12 @@ fn appearance_opt(ui: &mut egui::Ui, id: &str, a: &mut Option<Appearance>) {
     match a {
         Some(ap) => {
             appearance_fields(ui, id, ap);
-            if ui.small_button("remover aparência").clicked() {
+            if ui.small_button(tr("remover aparência")).clicked() {
                 *a = None;
             }
         }
         None => {
-            if ui.button("🎨 Definir aparência").clicked() {
+            if ui.button(tr("🎨 Definir aparência")).clicked() {
                 *a = Some(APPEARANCE_PRESETS[0].1);
             }
         }
@@ -561,7 +564,7 @@ fn replace_all(ui: &mut egui::Ui, doc: &mut Document, id: Id) {
         return;
     }
     ui.horizontal(|ui| {
-        ui.label("Substituir em todos os usuários por");
+        ui.label(tr("Substituir em todos os usuários por"));
         egui::ComboBox::from_id_salt("subst_all").selected_text("…").show_ui(ui, |ui| {
             for (o, n) in others {
                 if ui.selectable_label(false, n).clicked() {
@@ -573,18 +576,18 @@ fn replace_all(ui: &mut egui::Ui, doc: &mut Document, id: Id) {
 }
 
 fn params_table(ui: &mut egui::Ui, doc: &mut Document, vars: &Vars, _sink: &mut Vec<String>) {
-    ui.heading("Parâmetros");
-    ui.label(RichText::new("Expressões: + − × ÷ ^, sin cos tan sqrt abs min max round if(cond; a; b), pi. Ângulos em graus.").weak().small());
+    ui.heading(tr("Parâmetros"));
+    ui.label(RichText::new(tr("Expressões: + − × ÷ ^, sin cos tan sqrt abs min max round if(cond; a; b), pi. Ângulos em graus.")).weak().small());
     ui.add_space(4.);
     let mut rename: Option<(Id, String)> = None;
     let mut remove = None;
     egui::Grid::new("params").striped(true).num_columns(6).show(ui, |ui| {
-        ui.label(RichText::new("Nome").strong());
-        ui.label(RichText::new("Expressão").strong());
-        ui.label(RichText::new("Unid.").strong());
-        ui.label(RichText::new("Valor").strong());
-        ui.label(RichText::new("📤").strong()).on_hover_text("publicado: outras peças podem usar por link");
-        ui.label("");
+        ui.label(RichText::new(tr("Nome")).strong());
+        ui.label(RichText::new(tr("Expressão")).strong());
+        ui.label(RichText::new(tr("Unid.")).strong());
+        ui.label(RichText::new(tr("Valor")).strong());
+        ui.label(RichText::new(tr("📤")).strong()).on_hover_text(tr("publicado: outras peças podem usar por link"));
+        ui.label(tr(""));
         ui.end_row();
         for p in &mut doc.params {
             let mut n = p.name.clone();
@@ -598,16 +601,16 @@ fn params_table(ui: &mut egui::Ui, doc: &mut Document, vars: &Vars, _sink: &mut 
                 Unit::Angulo => "°",
                 Unit::Numero => "—",
             }).show_ui(ui, |ui| {
-                ui.selectable_value(&mut p.unit, Unit::Comprimento, "mm");
-                ui.selectable_value(&mut p.unit, Unit::Angulo, "°");
-                ui.selectable_value(&mut p.unit, Unit::Numero, "—");
+                ui.selectable_value(&mut p.unit, Unit::Comprimento, tr("mm"));
+                ui.selectable_value(&mut p.unit, Unit::Angulo, tr("°"));
+                ui.selectable_value(&mut p.unit, Unit::Numero, tr("—"));
             });
             match vars.get(&p.name) {
                 Some(v) => ui.label(fmt(*v)),
-                None => ui.label(RichText::new("⚠").color(Color32::from_rgb(255, 120, 100))),
+                None => ui.label(RichText::new(tr("⚠")).color(Color32::from_rgb(255, 120, 100))),
             };
-            ui.checkbox(&mut p.published, "");
-            if ui.small_button("✖").clicked() {
+            ui.checkbox(&mut p.published, tr(""));
+            if ui.small_button(tr("✖")).clicked() {
                 remove = Some(p.id);
             }
             ui.end_row();
@@ -636,7 +639,7 @@ fn params_table(ui: &mut egui::Ui, doc: &mut Document, vars: &Vars, _sink: &mut 
         ui.label(RichText::new(format!("'{n}' está em uso em expressões e não pode ser removido.")).color(Color32::from_rgb(240, 200, 90)));
     }
     ui.add_space(6.);
-    if ui.button("➕ Parâmetro").clicked() {
+    if ui.button(tr("➕ Parâmetro")).clicked() {
         let n = (1..).map(|i| format!("P{i}")).find(|n| !doc.params.iter().any(|p| &p.name == n)).unwrap();
         let _ = doc.add_param(&n, "10", Unit::Comprimento);
     }
@@ -666,10 +669,10 @@ fn feature_ui(
             plane_combo(ui, "plano_sk", doc, &mut s.plane, None);
             let d = &mut s.data;
             ui.label(format!("{} curvas · {} pontos · {} restrições", d.curves.len(), d.points.len(), d.constraints.len()));
-            if ui.add(egui::Button::new(RichText::new("✏ Editar sketch").strong()).min_size(egui::vec2(160., 28.))).clicked() {
+            if ui.add(egui::Button::new(RichText::new(tr("✏ Editar sketch")).strong()).min_size(egui::vec2(160., 28.))).clicked() {
                 ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique("scc_editar_sketch"), id));
             }
-            ui.label(RichText::new("Duplo clique no sketch na árvore também abre a edição.").weak().small());
+            ui.label(RichText::new(tr("Duplo clique no sketch na árvore também abre a edição.")).weak().small());
             let dims: Vec<usize> = (0..d.constraints.len()).filter(|i| d.constraints[*i].kind.is_dimension()).collect();
             if !dims.is_empty() {
                 section(ui, &format!("Cotas ({})", dims.len()));
@@ -690,10 +693,10 @@ fn feature_ui(
             op_combo(ui, "op_ex", &mut e.op);
             section(ui, "Extensão");
             extent_ui(ui, "ext_ex", &mut e.extent, vars, &["Cego", "Plano médio", "Dois sentidos", "Passante", "Até plano", "Até o próximo"], doc);
-            ui.checkbox(&mut e.reverse, "inverter sentido");
+            ui.checkbox(&mut e.reverse, tr("inverter sentido"));
             crate::feat_ui::extrude_extras(ui, e, vars);
             if e.op == BoolOp::Cut {
-                ui.label(RichText::new("O recorte entra no material (contra a normal do plano). Use 'inverter' se necessário.").weak().small());
+                ui.label(RichText::new(tr("O recorte entra no material (contra a normal do plano). Use 'inverter' se necessário.")).weak().small());
             }
             target_combo(ui, doc, target);
         }
@@ -728,7 +731,7 @@ fn feature_ui(
                 }
             });
             expr(ui, "Ângulo", &mut r.angle, vars, "°");
-            ui.checkbox(&mut r.symmetric, "simétrico ao plano do sketch");
+            ui.checkbox(&mut r.symmetric, tr("simétrico ao plano do sketch"));
             crate::feat_ui::revolve_extras(ui, r, vars);
             target_combo(ui, doc, target);
         }
@@ -744,7 +747,7 @@ fn feature_ui(
                 return;
             }
             expr(ui, lbl, &mut o.value, vars, "mm");
-            ui.label(RichText::new("Arestas").weak());
+            ui.label(RichText::new(tr("Arestas")).weak());
             let all = matches!(o.edges, EdgeSel::AllOfBody | EdgeSel::CreatedBy(_));
             let opts = [
                 ("arestas_selecionar", "Selecionadas", "Só as arestas escolhidas na viewport", !all),
@@ -761,14 +764,14 @@ fn feature_ui(
                     if ui.add_enabled(!picked.is_empty(), egui::Button::new(format!("Usar seleção atual ({})", picked.len()))).clicked() {
                         *m = picked.to_vec();
                     }
-                    if !picked.is_empty() && ui.button("Somar à lista").clicked() {
+                    if !picked.is_empty() && ui.button(tr("Somar à lista")).clicked() {
                         m.extend_from_slice(picked);
                     }
-                    if !m.is_empty() && ui.button("Limpar").clicked() {
+                    if !m.is_empty() && ui.button(tr("Limpar")).clicked() {
                         m.clear();
                     }
                 });
-                ui.label(RichText::new("Clique nas arestas na viewport (Shift soma) e use 'Usar seleção atual'.").weak().small());
+                ui.label(RichText::new(tr("Clique nas arestas na viewport (Shift soma) e use 'Usar seleção atual'.")).weak().small());
             }
             target_combo(ui, doc, target);
         }
@@ -787,7 +790,7 @@ fn kind_tag(id: Id, doc: &Document) -> Option<bool> {
 fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &Vars, target: &mut Id) {
     section(ui, "Centros");
     sketch_combo(ui, "sk_furo", doc, idx, &mut h.sketch);
-    ui.label(RichText::new("Os pontos do sketch são os centros; o furo entra contra a normal do plano.").weak().small());
+    ui.label(RichText::new(tr("Os pontos do sketch são os centros; o furo entra contra a normal do plano.")).weak().small());
 
     // estado atual: "norma|designação|folga" (formato antigo "M6 passagem normal" também é lido)
     let st = h.standard.clone().unwrap_or_default();
@@ -820,7 +823,7 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
 
     section(ui, "Rosca / fixador");
     ui.horizontal(|ui| {
-        ui.add_sized([60., 18.], egui::Label::new("Norma"));
+        ui.add_sized([60., 18.], egui::Label::new(tr("Norma")));
         egui::ComboBox::from_id_salt("norma_rosca").selected_text(norma.clone()).width(190.).show_ui(ui, |ui| {
             for s in hardware::STANDARDS {
                 if ui.selectable_label(norma == s, s).clicked() && norma != s {
@@ -831,7 +834,7 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
         });
     });
     ui.horizontal(|ui| {
-        ui.add_sized([60., 18.], egui::Label::new("Tamanho"));
+        ui.add_sized([60., 18.], egui::Label::new(tr("Tamanho")));
         egui::ComboBox::from_id_salt("tam_rosca").selected_text(size.clone()).width(190.).show_ui(ui, |ui| {
             for t in hardware::threads_of(&norma) {
                 ui.selectable_value(&mut size, t.name.to_string(), t.name);
@@ -840,7 +843,7 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
     });
     if new_kind != 3 {
         ui.horizontal(|ui| {
-            ui.add_sized([60., 18.], egui::Label::new("Folga"));
+            ui.add_sized([60., 18.], egui::Label::new(tr("Folga")));
             for f in ["fino", "normal", "folgado"] {
                 ui.radio_value(&mut folga, f.to_string(), f);
             }
@@ -885,7 +888,7 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
         }
     }
 
-    egui::CollapsingHeader::new("Ajuste fino das dimensões").default_open(false).show(ui, |ui| {
+    egui::CollapsingHeader::new(tr("Ajuste fino das dimensões")).default_open(false).show(ui, |ui| {
         expr(ui, "Diâmetro", &mut h.diameter, vars, "mm");
         match &mut h.kind {
             HoleKind::Simples => {}
@@ -900,7 +903,7 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
         }
         if let Some(t) = &mut h.thread {
             ui.horizontal(|ui| {
-                ui.add_sized([96., 18.], egui::Label::new("Designação"));
+                ui.add_sized([96., 18.], egui::Label::new(tr("Designação")));
                 ui.text_edit_singleline(t);
             });
         }

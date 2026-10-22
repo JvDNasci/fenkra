@@ -53,6 +53,7 @@ pub enum KeyAction {
 }
 
 use KeyAction::*;
+use crate::i18n::tr;
 
 impl KeyAction {
     pub const ALL: [KeyAction; 38] = [
@@ -63,44 +64,44 @@ impl KeyAction {
 
     pub fn label(self) -> &'static str {
         match self {
-            Fit => "Ajustar à tela",
-            ViewMenu => "Seletor de vistas",
-            Normal => "Normal à seleção",
-            Ortho => "Ortogonal / perspectiva",
-            ViewFront => "Vista frontal",
-            ViewBack => "Vista traseira",
-            ViewTop => "Vista superior",
-            ViewBottom => "Vista inferior",
-            ViewLeft => "Vista esquerda",
-            ViewRight => "Vista direita",
-            ViewIso => "Vista isométrica",
-            Hide => "Ocultar/mostrar seleção",
-            HiddenEnv => "Ambiente de ocultos",
-            Undo => "Desfazer",
-            Redo => "Refazer",
-            Delete => "Apagar",
-            Save => "Salvar",
-            ClipCopy => "Copiar (árvore)",
-            ClipCut => "Recortar (árvore)",
-            ClipPaste => "Colar (árvore)",
-            ClipDup => "Duplicar (árvore)",
-            Sketch => "Novo sketch",
-            Extrude => "Extrusão",
-            Cut => "Recorte",
-            Revolve => "Revolução",
-            Hole => "Furo",
-            Fillet => "Filete",
-            Chamfer => "Chanfro",
-            Plane => "Plano",
-            SkSelect => "Sketch · selecionar",
-            SkLine => "Sketch · linha",
-            SkRect => "Sketch · retângulo",
-            SkCircle => "Sketch · círculo",
-            SkArc => "Sketch · arco",
-            SkPoint => "Sketch · ponto",
-            SkDim => "Sketch · cota",
-            SkConstruction => "Sketch · construção",
-            SkGrid => "Sketch · grade",
+            Fit => tr("Ajustar à tela"),
+            ViewMenu => tr("Seletor de vistas"),
+            Normal => tr("Normal à seleção"),
+            Ortho => tr("Ortogonal / perspectiva"),
+            ViewFront => tr("Vista frontal"),
+            ViewBack => tr("Vista traseira"),
+            ViewTop => tr("Vista superior"),
+            ViewBottom => tr("Vista inferior"),
+            ViewLeft => tr("Vista esquerda"),
+            ViewRight => tr("Vista direita"),
+            ViewIso => tr("Vista isométrica"),
+            Hide => tr("Ocultar/mostrar seleção"),
+            HiddenEnv => tr("Ambiente de ocultos"),
+            Undo => tr("Desfazer"),
+            Redo => tr("Refazer"),
+            Delete => tr("Apagar"),
+            Save => tr("Salvar"),
+            ClipCopy => tr("Copiar (árvore)"),
+            ClipCut => tr("Recortar (árvore)"),
+            ClipPaste => tr("Colar (árvore)"),
+            ClipDup => tr("Duplicar (árvore)"),
+            Sketch => tr("Novo sketch"),
+            Extrude => tr("Extrusão"),
+            Cut => tr("Recorte"),
+            Revolve => tr("Revolução"),
+            Hole => tr("Furo"),
+            Fillet => tr("Filete"),
+            Chamfer => tr("Chanfro"),
+            Plane => tr("Plano"),
+            SkSelect => tr("Sketch · selecionar"),
+            SkLine => tr("Sketch · linha"),
+            SkRect => tr("Sketch · retângulo"),
+            SkCircle => tr("Sketch · círculo"),
+            SkArc => tr("Sketch · arco"),
+            SkPoint => tr("Sketch · ponto"),
+            SkDim => tr("Sketch · cota"),
+            SkConstruction => tr("Sketch · construção"),
+            SkGrid => tr("Sketch · grade"),
         }
     }
 
@@ -181,14 +182,14 @@ impl Preset {
 
     pub fn label(self) -> &'static str {
         match self {
-            Preset::SolidCadCraft => "SolidCadCraft",
-            Preset::SolidWorks => "SolidWorks",
-            Preset::Catia => "CATIA V5",
-            Preset::FreeCad => "FreeCAD",
-            Preset::Fusion => "Fusion 360",
-            Preset::Blender => "Blender",
-            Preset::Onshape => "Onshape",
-            Preset::Inventor => "Inventor",
+            Preset::SolidCadCraft => tr("SolidCadCraft"),
+            Preset::SolidWorks => tr("SolidWorks"),
+            Preset::Catia => tr("CATIA V5"),
+            Preset::FreeCad => tr("FreeCAD"),
+            Preset::Fusion => tr("Fusion 360"),
+            Preset::Blender => tr("Blender"),
+            Preset::Onshape => tr("Onshape"),
+            Preset::Inventor => tr("Inventor"),
         }
     }
 

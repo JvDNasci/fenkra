@@ -16,6 +16,7 @@ use scc_project::{DocState, Project};
 use scc_solidos::{RecomputeResult, Status};
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, Sender};
+use crate::i18n::tr;
 
 /// Seleção na árvore / linha de tempo.
 #[derive(Clone, Copy, PartialEq, Debug, Default)]
@@ -216,6 +217,10 @@ impl App {
                 app.started = true;
             }
         }
+        // desenvolvimento: SCC_EN=1 mostra a interface em inglês (sem gravar a configuração)
+        if std::env::var("SCC_EN").is_ok() {
+            app.settings.english = true;
+        }
         // desenvolvimento: SCC_AJUSTES=1 abre as configurações ao iniciar
         if std::env::var("SCC_AJUSTES").is_ok() {
             app.settings_open = true;
@@ -395,7 +400,7 @@ impl App {
             ui.vertical_centered(|ui| {
                 ui.add_space(40.);
                 ui.add(egui::Image::new(egui::include_image!("../../../assets/app/fenix-256.png")).fit_to_exact_size(egui::vec2(128., 128.)));
-                ui.label(RichText::new("SolidCadCraft").size(30.).strong());
+                ui.label(RichText::new(tr("SolidCadCraft")).size(30.).strong());
                 ui.label(RichText::new(concat!("CAD paramétrico open source · ", env!("CARGO_PKG_VERSION"))).weak());
                 ui.add_space(24.);
             });
@@ -404,7 +409,7 @@ impl App {
                 ui.add_space(((ui.available_width() - w) / 2.).max(0.));
                 ui.vertical(|ui| {
                     ui.set_width(w);
-                    ui.label(RichText::new("Começar").strong());
+                    ui.label(RichText::new(tr("Começar")).strong());
                     ui.horizontal_wrapped(|ui| {
                         let big = |ui: &mut egui::Ui, icon: &str, name: &str, brief: &str| crate::icons::tool_button(ui, icon, name, 54., true, false, brief, "");
                         if big(ui, "novo_projeto", "Novo projeto", "Cria uma pasta de projeto com versões e revisões").clicked() {
@@ -424,9 +429,9 @@ impl App {
                         }
                     });
                     ui.add_space(16.);
-                    ui.label(RichText::new("Projetos recentes").strong());
+                    ui.label(RichText::new(tr("Projetos recentes")).strong());
                     if self.settings.recent.is_empty() {
-                        ui.label(RichText::new("nenhum ainda").weak());
+                        ui.label(RichText::new(tr("nenhum ainda")).weak());
                     }
                     for r in &self.settings.recent {
                         let name = std::path::Path::new(r).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or(r.clone());
@@ -441,7 +446,7 @@ impl App {
                         }
                     }
                     ui.add_space(16.);
-                    ui.checkbox(&mut self.settings.show_start, "mostrar esta tela ao iniciar");
+                    ui.checkbox(&mut self.settings.show_start, tr("mostrar esta tela ao iniciar"));
                 });
             });
         });
@@ -1057,17 +1062,17 @@ impl App {
             .as_ref()
             .map(|p| p.index.documents.iter().filter(|d| Some(d.id) != self.open.entry).map(|d| (format!("{} · {}", d.pn, d.name), d.file.clone())).collect())
             .unwrap_or_default();
-        egui::Window::new("🔗 Importar publicação").open(&mut open).default_width(420.).show(ctx, |ui| {
-            ui.label(RichText::new("Escolha a peça de origem; aparecem os planos, pontos, curvas e parâmetros que ela publica (📤).").weak().small());
+        egui::Window::new(tr("🔗 Importar publicação")).open(&mut open).default_width(420.).show(ctx, |ui| {
+            ui.label(RichText::new(tr("Escolha a peça de origem; aparecem os planos, pontos, curvas e parâmetros que ela publica (📤).")).weak().small());
             if !parts.is_empty() {
-                ui.label(RichText::new("Peças do projeto").strong());
+                ui.label(RichText::new(tr("Peças do projeto")).strong());
                 for (n, f) in &parts {
                     if ui.selectable_label(self.link_src.as_ref().is_some_and(|(_, p, _)| p == f), n).clicked() {
                         choose = Some((n.clone(), f.clone()));
                     }
                 }
             }
-            if ui.button("📂 Escolher arquivo .sccpart…").clicked() {
+            if ui.button(tr("📂 Escolher arquivo .sccpart…")).clicked() {
                 if let Some(p) = rfd::FileDialog::new().add_filter("Peça SolidCadCraft", &["sccpart"]).pick_file() {
                     let n = p.file_stem().map(|x| x.to_string_lossy().to_string()).unwrap_or_default();
                     choose = Some((n, p.to_string_lossy().to_string()));
@@ -1076,12 +1081,12 @@ impl App {
             ui.separator();
             match &self.link_src {
                 None => {
-                    ui.label(RichText::new("nenhuma peça escolhida").weak());
+                    ui.label(RichText::new(tr("nenhuma peça escolhida")).weak());
                 }
                 Some((name, path, pubs)) => {
                     ui.label(RichText::new(format!("Publicações de {name}")).strong());
                     if pubs.is_empty() {
-                        ui.label(RichText::new("essa peça não publica nada — na peça de origem, marque 📤 publicar no elemento ou parâmetro").weak().small());
+                        ui.label(RichText::new(tr("essa peça não publica nada — na peça de origem, marque 📤 publicar no elemento ou parâmetro")).weak().small());
                     }
                     for (n, g) in pubs {
                         let kind: String = match g {
@@ -1092,7 +1097,7 @@ impl App {
                         };
                         ui.horizontal(|ui| {
                             ui.label(format!("{n}  ({kind})"));
-                            if ui.small_button("Importar").clicked() {
+                            if ui.small_button(tr("Importar")).clicked() {
                                 import = Some((name.clone(), path.clone(), g.clone()));
                                 import.as_mut().unwrap().0 = format!("{}|{}", name, n);
                             }
@@ -1191,54 +1196,54 @@ impl App {
     fn top(&mut self, root: &mut egui::Ui) {
         egui::Panel::top("menu").show(root, |ui| {
             ui.horizontal(|ui| {
-                ui.label(RichText::new("◆ SolidCadCraft").strong().color(Color32::from_rgb(120, 180, 255)));
+                ui.label(RichText::new(tr("◆ SolidCadCraft")).strong().color(Color32::from_rgb(120, 180, 255)));
                 ui.separator();
-                ui.menu_button("Arquivo", |ui| {
-                    if ui.button("Nova peça").clicked() {
+                ui.menu_button(tr("Arquivo"), |ui| {
+                    if ui.button(tr("Nova peça")).clicked() {
                         self.load_doc(Document::new("Peça"), None, None);
                         ui.close();
                     }
-                    if ui.button("Nova peça de exemplo").clicked() {
+                    if ui.button(tr("Nova peça de exemplo")).clicked() {
                         self.load_doc(scc_solidos::example_document(), None, None);
                         ui.close();
                     }
-                    if ui.button("Abrir peça…").clicked() {
+                    if ui.button(tr("Abrir peça…")).clicked() {
                         self.open_file();
                         ui.close();
                     }
-                    if ui.button("Salvar   Ctrl+S").clicked() {
+                    if ui.button(tr("Salvar   Ctrl+S")).clicked() {
                         self.save();
                         ui.close();
                     }
                     ui.separator();
-                    if ui.button("Exportar STEP…").clicked() {
+                    if ui.button(tr("Exportar STEP…")).clicked() {
                         self.export("step");
                         ui.close();
                     }
-                    if ui.button("Exportar STL…").clicked() {
+                    if ui.button(tr("Exportar STL…")).clicked() {
                         self.export("stl");
                         ui.close();
                     }
                     ui.separator();
-                    if ui.button("Novo projeto…").clicked() {
+                    if ui.button(tr("Novo projeto…")).clicked() {
                         self.new_project();
                         ui.close();
                     }
-                    if ui.button("Abrir projeto…").clicked() {
+                    if ui.button(tr("Abrir projeto…")).clicked() {
                         self.open_project();
                         ui.close();
                     }
                 });
-                ui.menu_button("Exibir", |ui| {
-                    ui.menu_button("Estilo de exibição", |ui| {
+                ui.menu_button(tr("Exibir"), |ui| {
+                    ui.menu_button(tr("Estilo de exibição"), |ui| {
                         for m in crate::render::DisplayMode::ALL {
                             ui.radio_value(&mut self.settings.display, m, m.label());
                         }
                     });
-                    if ui.checkbox(&mut self.hidden_env, "Ambiente de ocultos   Shift+H").changed() {
+                    if ui.checkbox(&mut self.hidden_env, tr("Ambiente de ocultos   Shift+H")).changed() {
                         self.scene_dirty = true;
                     }
-                    ui.menu_button("Barras de ferramentas", |ui| {
+                    ui.menu_button(tr("Barras de ferramentas"), |ui| {
                         for g in crate::settings::Group::ALL {
                             ui.menu_button(g.label(), |ui| {
                                 for d in Dock::ALL {
@@ -1251,26 +1256,26 @@ impl App {
                         }
                     });
                     ui.separator();
-                    if ui.button("Configurações…").clicked() {
+                    if ui.button(tr("Configurações…")).clicked() {
                         self.settings_open = true;
                         ui.close();
                     }
                 });
-                ui.menu_button("Editar", |ui| {
-                    if ui.add_enabled(!self.undo.is_empty(), egui::Button::new("Desfazer   Ctrl+Z")).clicked() {
+                ui.menu_button(tr("Editar"), |ui| {
+                    if ui.add_enabled(!self.undo.is_empty(), egui::Button::new(tr("Desfazer   Ctrl+Z"))).clicked() {
                         self.undo();
                         ui.close();
                     }
-                    if ui.add_enabled(!self.redo.is_empty(), egui::Button::new("Refazer   Ctrl+Y")).clicked() {
+                    if ui.add_enabled(!self.redo.is_empty(), egui::Button::new(tr("Refazer   Ctrl+Y"))).clicked() {
                         self.redo();
                         ui.close();
                     }
                 });
                 ui.separator();
                 // abas de módulo (RF-UI-006)
-                let _ = ui.selectable_label(true, "Modelagem Sólida");
-                for m in ["Superfícies", "Montagem", "Desenho", "Chapas", "Soldas"] {
-                    ui.add_enabled(false, egui::Button::new(m).frame(false)).on_disabled_hover_text("Módulo em breve");
+                let _ = ui.selectable_label(true, tr("Modelagem Sólida"));
+                for m in ["Superfícies", "Montagem", "Desenho", "Chapas", "Soldas"].map(tr) {
+                    ui.add_enabled(false, egui::Button::new(m).frame(false)).on_disabled_hover_text(tr("Módulo em breve"));
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let title = match (&self.open.frozen, self.open.modified) {
@@ -1364,10 +1369,10 @@ impl App {
                 .stroke(egui::Stroke::new(1., Color32::from_rgba_unmultiplied(80, 140, 230, 140)))
                 .show(ui, |ui| {
                     ui.horizontal(|ui| {
-                        ui.label(RichText::new("Vistas").strong().size(16.));
-                        ui.label(RichText::new("arraste o cubo para girar · clique numa face, aresta ou canto · Espaço fecha").weak().small());
+                        ui.label(RichText::new(tr("Vistas")).strong().size(16.));
+                        ui.label(RichText::new(tr("arraste o cubo para girar · clique numa face, aresta ou canto · Espaço fecha")).weak().small());
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.small_button("✖").clicked() {
+                            if ui.small_button(tr("✖")).clicked() {
                                 close = true;
                             }
                         });
@@ -1382,7 +1387,7 @@ impl App {
                         ui.separator();
                         ui.vertical(|ui| {
                             ui.set_width(270.);
-                            ui.label(RichText::new("Vistas padrão").strong());
+                            ui.label(RichText::new(tr("Vistas padrão")).strong());
                             egui::Grid::new("vistas_padrao").num_columns(3).spacing([4., 4.]).show(ui, |ui| {
                                 for (i, (d, n)) in crate::viewcube::STANDARD.iter().chain(crate::viewcube::EXTRA.iter()).enumerate() {
                                     let icon = match *n {
@@ -1401,49 +1406,49 @@ impl App {
                                 }
                             });
                             ui.add_space(8.);
-                            ui.label(RichText::new("Câmera").strong());
+                            ui.label(RichText::new(tr("Câmera")).strong());
                             ui.horizontal_wrapped(|ui| {
-                                if ui.selectable_label(cam.ortho, "Ortogonal").clicked() && !cam.ortho {
+                                if ui.selectable_label(cam.ortho, tr("Ortogonal")).clicked() && !cam.ortho {
                                     act = Some(Act::Ortho);
                                 }
-                                if ui.selectable_label(!cam.ortho, "Perspectiva").clicked() && cam.ortho {
+                                if ui.selectable_label(!cam.ortho, tr("Perspectiva")).clicked() && cam.ortho {
                                     act = Some(Act::Ortho);
                                 }
-                                if ui.button("⛶ Ajustar (F)").clicked() {
+                                if ui.button(tr("⛶ Ajustar (F)")).clicked() {
                                     act = Some(Act::Fit);
                                 }
-                                if ui.button("⊥ Normal à seleção (N)").clicked() {
+                                if ui.button(tr("⊥ Normal à seleção (N)")).clicked() {
                                     act = Some(Act::Normal);
                                 }
-                                if ui.button("⟲ 90°").on_hover_text("girar 90° em torno da vertical").clicked() {
+                                if ui.button(tr("⟲ 90°")).on_hover_text(tr("girar 90° em torno da vertical")).clicked() {
                                     turn = std::f32::consts::FRAC_PI_2;
                                 }
-                                if ui.button("90° ⟳").on_hover_text("girar 90° em torno da vertical").clicked() {
+                                if ui.button(tr("90° ⟳")).on_hover_text(tr("girar 90° em torno da vertical")).clicked() {
                                     turn = -std::f32::consts::FRAC_PI_2;
                                 }
                             });
                             ui.add_space(8.);
-                            ui.label(RichText::new("Câmeras salvas").strong());
+                            ui.label(RichText::new(tr("Câmeras salvas")).strong());
                             if self.open.doc.views.is_empty() {
-                                ui.label(RichText::new("nenhuma ainda").weak());
+                                ui.label(RichText::new(tr("nenhuma ainda")).weak());
                             }
                             for (i, v) in self.open.doc.views.iter().enumerate() {
                                 ui.horizontal(|ui| {
                                     if ui.button(format!("📷 {}", v.name)).clicked() {
                                         apply = Some(v.clone());
                                     }
-                                    if ui.small_button("✖").clicked() {
+                                    if ui.small_button(tr("✖")).clicked() {
                                         remove = Some(i);
                                     }
                                 });
                             }
                             ui.horizontal(|ui| {
-                                ui.add(egui::TextEdit::singleline(&mut self.new_view_name).hint_text("nome da vista").desired_width(130.));
-                                if ui.button("💾 Salvar atual").clicked() {
+                                ui.add(egui::TextEdit::singleline(&mut self.new_view_name).hint_text(tr("nome da vista")).desired_width(130.));
+                                if ui.button(tr("💾 Salvar atual")).clicked() {
                                     save = true;
                                 }
                             });
-                            ui.label(RichText::new("As câmeras ficam na peça e servirão para as vistas 2D e o detalhamento 3D.").weak().small());
+                            ui.label(RichText::new(tr("As câmeras ficam na peça e servirão para as vistas 2D e o detalhamento 3D.")).weak().small());
                         });
                     });
                 });
@@ -1497,24 +1502,29 @@ impl App {
         }
         let mut open = true;
         let s = &mut self.settings;
-        egui::Window::new("Configurações").open(&mut open).default_width(380.).resizable(true).show(ctx, |ui| {
-            egui::CollapsingHeader::new("Interface").default_open(true).show(ui, |ui| {
+        egui::Window::new(tr("Configurações")).open(&mut open).default_width(380.).resizable(true).show(ctx, |ui| {
+            egui::CollapsingHeader::new(tr("Interface")).default_open(true).show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label("Tema");
-                    ui.radio_value(&mut s.theme, Theme::Escuro, "Escuro");
-                    ui.radio_value(&mut s.theme, Theme::Claro, "Claro");
+                    ui.label(tr("Tema"));
+                    ui.radio_value(&mut s.theme, Theme::Escuro, tr("Escuro"));
+                    ui.radio_value(&mut s.theme, Theme::Claro, tr("Claro"));
+                });
+                ui.horizontal(|ui| {
+                    ui.label(tr("Idioma"));
+                    ui.radio_value(&mut s.english, false, "Português");
+                    ui.radio_value(&mut s.english, true, "English");
                 });
                 ui.add(egui::Slider::new(&mut s.ui_scale, 0.75..=1.75).text("escala (fontes e controles)"));
                 ui.add(egui::Slider::new(&mut s.icon_size, 20.0..=48.0).text("tamanho dos ícones"));
-                ui.checkbox(&mut s.show_labels, "mostrar o nome embaixo dos ícones");
+                ui.checkbox(&mut s.show_labels, tr("mostrar o nome embaixo dos ícones"));
             });
-            egui::CollapsingHeader::new("Fundo da viewport").default_open(true).show(ui, |ui| {
-                ui.checkbox(&mut s.gradient, "degradê de duas cores");
+            egui::CollapsingHeader::new(tr("Fundo da viewport")).default_open(true).show(ui, |ui| {
+                ui.checkbox(&mut s.gradient, tr("degradê de duas cores"));
                 ui.horizontal(|ui| {
                     ui.label(if s.gradient { "Topo" } else { "Cor" });
                     if s.gradient {
                         ui.color_edit_button_srgb(&mut s.bg_top);
-                        ui.label("Base");
+                        ui.label(tr("Base"));
                     }
                     ui.color_edit_button_srgb(&mut s.bg_bottom);
                 });
@@ -1528,10 +1538,10 @@ impl App {
                     }
                 });
             });
-            egui::CollapsingHeader::new("Atalhos e navegação").default_open(true).show(ui, |ui| {
+            egui::CollapsingHeader::new(tr("Atalhos e navegação")).default_open(true).show(ui, |ui| {
                 use crate::keymap::{Binding, KeyAction, Preset};
                 ui.horizontal(|ui| {
-                    ui.label("Adaptar ao meu CAD:");
+                    ui.label(tr("Adaptar ao meu CAD:"));
                     let cur = s.keys.preset;
                     egui::ComboBox::from_id_salt("preset").selected_text(cur.label()).show_ui(ui, |ui| {
                         for p in Preset::ALL {
@@ -1543,7 +1553,7 @@ impl App {
                         }
                     });
                 });
-                ui.label(RichText::new("Troca o teclado e o mouse juntos, com base nos atalhos de fábrica de cada software. Clique num atalho para gravar outro (Esc cancela, Delete remove).").weak().small());
+                ui.label(RichText::new(tr("Troca o teclado e o mouse juntos, com base nos atalhos de fábrica de cada software. Clique num atalho para gravar outro (Esc cancela, Delete remove).")).weak().small());
                 let capturing: Option<KeyAction> = ui.ctx().data(|d| d.get_temp(egui::Id::unique("captura_atalho")));
                 egui::ScrollArea::vertical().max_height(260.).id_salt("atalhos").show(ui, |ui| {
                     egui::Grid::new("grade_atalhos").num_columns(3).striped(true).show(ui, |ui| {
@@ -1561,7 +1571,7 @@ impl App {
                             }
                             let conf = s.keys.conflicts(a);
                             if conf.is_empty() {
-                                ui.label("");
+                                ui.label(tr(""));
                             } else {
                                 ui.label(RichText::new(format!("⚠ igual a {}", conf[0].label())).color(Color32::from_rgb(255, 170, 60)).small());
                             }
@@ -1585,33 +1595,33 @@ impl App {
                         ui.ctx().data_mut(|d| d.remove::<KeyAction>(egui::Id::unique("captura_atalho")));
                     }
                 }
-                if ui.small_button("Restaurar atalhos da predefinição").clicked() {
+                if ui.small_button(tr("Restaurar atalhos da predefinição")).clicked() {
                     s.keys.custom.clear();
                 }
             });
-            egui::CollapsingHeader::new("Navegação e seleção").default_open(true).show(ui, |ui| {
+            egui::CollapsingHeader::new(tr("Navegação e seleção")).default_open(true).show(ui, |ui| {
                 egui::ComboBox::from_id_salt("nav").selected_text(s.nav.label()).show_ui(ui, |ui| {
                     for n in crate::settings::NavStyle::ALL {
                         ui.selectable_value(&mut s.nav, n, n.label());
                     }
                 });
                 ui.label(RichText::new(s.nav.help()).weak().small());
-                ui.checkbox(&mut s.invert_zoom, "inverter o sentido do zoom");
+                ui.checkbox(&mut s.invert_zoom, tr("inverter o sentido do zoom"));
                 ui.horizontal(|ui| {
-                    ui.label("Selecionar:");
-                    ui.checkbox(&mut s.sel_faces, "faces");
-                    ui.checkbox(&mut s.sel_edges, "arestas");
-                    ui.checkbox(&mut s.sel_vertices, "vértices");
+                    ui.label(tr("Selecionar:"));
+                    ui.checkbox(&mut s.sel_faces, tr("faces"));
+                    ui.checkbox(&mut s.sel_edges, tr("arestas"));
+                    ui.checkbox(&mut s.sel_vertices, tr("vértices"));
                 });
             });
-            egui::CollapsingHeader::new("Exibição").default_open(true).show(ui, |ui| {
+            egui::CollapsingHeader::new(tr("Exibição")).default_open(true).show(ui, |ui| {
                 for m in crate::render::DisplayMode::ALL {
                     ui.radio_value(&mut s.display, m, m.label());
                 }
-                ui.checkbox(&mut s.edges_in_render, "arestas no semi-renderizado");
-                ui.checkbox(&mut s.ortho, "projeção ortogonal");
+                ui.checkbox(&mut s.edges_in_render, tr("arestas no semi-renderizado"));
+                ui.checkbox(&mut s.ortho, tr("projeção ortogonal"));
             });
-            egui::CollapsingHeader::new("Barras de ferramentas").show(ui, |ui| {
+            egui::CollapsingHeader::new(tr("Barras de ferramentas")).show(ui, |ui| {
                 for g in crate::settings::Group::ALL {
                     ui.horizontal(|ui| {
                         ui.add_sized([110., 18.], egui::Label::new(g.label()));
@@ -1624,11 +1634,11 @@ impl App {
                         s.set_dock(g, d);
                     });
                 }
-                ui.label(RichText::new("Dica: clique direito em um grupo para mudar onde ele fica.").weak().small());
+                ui.label(RichText::new(tr("Dica: clique direito em um grupo para mudar onde ele fica.")).weak().small());
             });
-            egui::CollapsingHeader::new("Cotagem").show(ui, |ui| {
+            egui::CollapsingHeader::new(tr("Cotagem")).show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label("Norma");
+                    ui.label(tr("Norma"));
                     egui::ComboBox::from_id_salt("norma").selected_text(s.dim_standard.clone()).show_ui(ui, |ui| {
                         for n in ["ABNT NBR 10126", "ISO 129-1", "ASME Y14.5"] {
                             ui.selectable_value(&mut s.dim_standard, n.to_string(), n);
@@ -1637,18 +1647,18 @@ impl App {
                 });
                 ui.add(egui::Slider::new(&mut s.dim_decimals, 0..=4).text("casas decimais"));
                 ui.add(egui::Slider::new(&mut s.dim_text_height, 1.8..=7.0).text("altura do texto (mm)"));
-                ui.label(RichText::new("Usado pela ferramenta de cotagem do sketch e pelo desenho técnico.").weak().small());
+                ui.label(RichText::new(tr("Usado pela ferramenta de cotagem do sketch e pelo desenho técnico.")).weak().small());
             });
-            egui::CollapsingHeader::new("Sketch").show(ui, |ui| {
-                ui.checkbox(&mut s.grid, "grade");
+            egui::CollapsingHeader::new(tr("Sketch")).show(ui, |ui| {
+                ui.checkbox(&mut s.grid, tr("grade"));
                 ui.add(egui::Slider::new(&mut s.grid_step, 1.0..=50.0).text("passo da grade (mm)"));
-                ui.checkbox(&mut s.snaps, "snaps");
-                ui.checkbox(&mut s.auto_constraints, "restrições automáticas");
-                ui.checkbox(&mut s.auto_dims, "cotas automáticas");
-                ui.label(RichText::new("Aplicado pelo editor de sketch interativo (próxima alpha).").weak().small());
+                ui.checkbox(&mut s.snaps, tr("snaps"));
+                ui.checkbox(&mut s.auto_constraints, tr("restrições automáticas"));
+                ui.checkbox(&mut s.auto_dims, tr("cotas automáticas"));
+                ui.label(RichText::new(tr("Aplicado pelo editor de sketch interativo (próxima alpha).")).weak().small());
             });
             ui.separator();
-            if ui.button("Restaurar padrões").clicked() {
+            if ui.button(tr("Restaurar padrões")).clicked() {
                 *s = Settings::default();
             }
         });
@@ -1670,11 +1680,11 @@ impl App {
         }
         r.context_menu(|ui| {
             appearance_menu(ui, doc.appearance, AppTarget::Part, &mut actions);
-            if ui.button("📁 Nova pasta de geometria").clicked() {
+            if ui.button(tr("📁 Nova pasta de geometria")).clicked() {
                 actions.push(TreeAction::NewGeometryFolder);
                 ui.close();
             }
-            if ui.button("▣ Novo coletor de corpos").clicked() {
+            if ui.button(tr("▣ Novo coletor de corpos")).clicked() {
                 actions.push(TreeAction::NewCollector);
                 ui.close();
             }
@@ -1684,30 +1694,30 @@ impl App {
         }
 
         // ---------- Origem (fixa)
-        egui::CollapsingHeader::new("📍 Origem").default_open(false).show(ui, |ui| {
+        egui::CollapsingHeader::new(tr("📍 Origem")).default_open(false).show(ui, |ui| {
             for o in [OriginPlane::XY, OriginPlane::XZ, OriginPlane::YZ] {
                 let r = pick(ui, Sel::Origin(o), RichText::new(format!("▱ Plano {}", scene::plane_name(o))));
                 if r.clicked() {
                     new_sel = Some(Sel::Origin(o));
                 }
                 r.context_menu(|ui| {
-                    if ui.button("✏ Novo sketch neste plano").clicked() {
+                    if ui.button(tr("✏ Novo sketch neste plano")).clicked() {
                         actions.push(TreeAction::SketchOn(PlaneRef::Origin(o)));
                         ui.close();
                     }
                 });
             }
-            ui.label(RichText::new("↗ Eixos X, Y, Z · ponto de origem").weak());
+            ui.label(RichText::new(tr("↗ Eixos X, Y, Z · ponto de origem")).weak());
             let mut v = doc.origin_visible;
-            if ui.checkbox(&mut v, "mostrar origem").changed() {
+            if ui.checkbox(&mut v, tr("mostrar origem")).changed() {
                 actions.push(TreeAction::OriginVisible(v));
             }
         });
 
         // ---------- referências externas (sempre separadas)
-        egui::CollapsingHeader::new(format!("🔗 Referências externas ({})", doc.external.len())).default_open(false).show(ui, |ui| {
+        egui::CollapsingHeader::new(format!("🔗 {} ({})", tr("Referências externas"), doc.external.len())).default_open(false).show(ui, |ui| {
             if doc.external.is_empty() {
-                ui.label(RichText::new("Geometria importada de outras peças por link (planos, curvas, pontos e parâmetros publicados). Fica sempre separada da geometria própria.").weak().small());
+                ui.label(RichText::new(tr("Geometria importada de outras peças por link (planos, curvas, pontos e parâmetros publicados). Fica sempre separada da geometria própria.")).weak().small());
             }
             for e in &doc.external {
                 let st = match e.state {
@@ -1724,17 +1734,17 @@ impl App {
                 }
             }
             ui.horizontal(|ui| {
-                if ui.small_button("➕ Importar publicação…").clicked() {
+                if ui.small_button(tr("➕ Importar publicação…")).clicked() {
                     actions.push(TreeAction::ImportLink);
                 }
-                if !doc.external.is_empty() && ui.small_button("⟳ Atualizar").clicked() {
+                if !doc.external.is_empty() && ui.small_button(tr("⟳ Atualizar")).clicked() {
                     actions.push(TreeAction::RefreshLinks);
                 }
             });
         });
 
         // ---------- parâmetros
-        egui::CollapsingHeader::new(format!("ƒ Parâmetros ({})", doc.params.len())).default_open(false).show(ui, |ui| {
+        egui::CollapsingHeader::new(format!("ƒ {} ({})", tr("Parâmetros"), doc.params.len())).default_open(false).show(ui, |ui| {
             let vars = self.vars();
             for p in &doc.params {
                 let v = vars.get(&p.name).map(|v| format!("{} {}", fmt(*v), p.unit.symbol())).unwrap_or("⚠".into());
@@ -1742,7 +1752,7 @@ impl App {
                     new_sel = Some(Sel::Params);
                 }
             }
-            if doc.params.is_empty() && pick(ui, Sel::Params, RichText::new("vazio — clique para editar").weak().italics()).clicked() {
+            if doc.params.is_empty() && pick(ui, Sel::Params, RichText::new(tr("vazio — clique para editar")).weak().italics()).clicked() {
                 new_sel = Some(Sel::Params);
             }
         });
@@ -1751,7 +1761,7 @@ impl App {
         if !doc.views.is_empty() {
             egui::CollapsingHeader::new(format!("📷 Vistas ({})", doc.views.len())).default_open(false).show(ui, |ui| {
                 for (i, v) in doc.views.iter().enumerate() {
-                    if ui.selectable_label(false, format!("📷 {}", v.name)).on_hover_text("aplicar esta vista").clicked() {
+                    if ui.selectable_label(false, format!("📷 {}", v.name)).on_hover_text(tr("aplicar esta vista")).clicked() {
                         actions.push(TreeAction::ApplyView(i));
                     }
                 }
@@ -1765,7 +1775,7 @@ impl App {
         }
         // planos antigos sem pasta, quando ainda não existe pasta de geometria
         if first_geo.is_none() && !doc.references.is_empty() {
-            egui::CollapsingHeader::new("📁 Geometria").default_open(true).show(ui, |ui| {
+            egui::CollapsingHeader::new(tr("📁 Geometria")).default_open(true).show(ui, |ui| {
                 for r in &doc.references {
                     if pick(ui, Sel::Ref(r.id), RichText::new(format!("▱ {}", r.name))).clicked() {
                         new_sel = Some(Sel::Ref(r.id));
@@ -1773,7 +1783,7 @@ impl App {
                 }
             });
         }
-        if ui.small_button("➕ Pasta de geometria").on_hover_text("Planos, pontos, curvas e sketches livres, organizados como você quiser (sem linha do tempo)").clicked() {
+        if ui.small_button(tr("➕ Pasta de geometria")).on_hover_text(tr("Planos, pontos, curvas e sketches livres, organizados como você quiser (sem linha do tempo)")).clicked() {
             actions.push(TreeAction::NewGeometryFolder);
         }
 
@@ -1788,13 +1798,13 @@ impl App {
             egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true)
                 .show_header(ui, |ui| {
                     let mut v = c.visible;
-                    if ui.checkbox(&mut v, "").on_hover_text("visível").changed() {
+                    if ui.checkbox(&mut v, tr("")).on_hover_text(tr("visível")).changed() {
                         actions.push(TreeAction::CollectorVisible(c.id, v));
                     }
                     let (rect, _) = ui.allocate_exact_size(egui::vec2(10., 10.), egui::Sense::hover());
                     ui.painter().rect_filled(rect, 2., Color32::from_rgb(c.color[0], c.color[1], c.color[2]));
                     let active = doc.active_collector == c.id;
-                    let txt = if active { RichText::new(format!("{} (ativo)", c.name)).strong() } else { RichText::new(&c.name) };
+                    let txt = if active { RichText::new(format!("{} {}", c.name, tr("(ativo)"))).strong() } else { RichText::new(&c.name) };
                     let resp = pick(ui, Sel::Collector(c.id), txt);
                     if resp.clicked() {
                         new_sel = Some(Sel::Collector(c.id));
@@ -1803,21 +1813,21 @@ impl App {
                         actions.push(TreeAction::Activate(c.id));
                     }
                     resp.context_menu(|ui| {
-                        if ui.button("Tornar ativo").clicked() {
+                        if ui.button(tr("Tornar ativo")).clicked() {
                             actions.push(TreeAction::Activate(c.id));
                             ui.close();
                         }
-                        if ui.button("🗀 Nova pasta de comandos").clicked() {
+                        if ui.button(tr("🗀 Nova pasta de comandos")).clicked() {
                             actions.push(TreeAction::NewCommandFolder);
                             ui.close();
                         }
-                        if ui.button("Marcador no fim").clicked() {
+                        if ui.button(tr("Marcador no fim")).clicked() {
                             actions.push(TreeAction::CollectorMarker(c.id, None));
                             ui.close();
                         }
                         appearance_menu(ui, Some(Appearance { color: c.color, finish: c.finish }), AppTarget::Collector(c.id), &mut actions);
                         ui.separator();
-                        if ui.button("🗑 Apagar corpo…").clicked() {
+                        if ui.button(tr("🗑 Apagar corpo…")).clicked() {
                             actions.push(TreeAction::Delete(c.id));
                             ui.close();
                         }
@@ -1825,7 +1835,7 @@ impl App {
                 })
                 .body(|ui| {
                     if feats.is_empty() {
-                        ui.label(RichText::new("sem comandos — crie um sketch e uma extrusão").weak().italics().small());
+                        ui.label(RichText::new(tr("sem comandos — crie um sketch e uma extrusão")).weak().italics().small());
                     }
                     let mut drawn_folders = vec![];
                     for (k, (i, f)) in feats.iter().enumerate() {
@@ -1897,8 +1907,8 @@ impl App {
                     *new_sel = Some(Sel::Folder(fo.id));
                 }
                 r.context_menu(|ui| {
-                    ui.menu_button("➕ Criar aqui", |ui| {
-                        if ui.button("✏ Sketch").clicked() {
+                    ui.menu_button(tr("➕ Criar aqui"), |ui| {
+                        if ui.button(tr("✏ Sketch")).clicked() {
                             actions.push(TreeAction::NewSketchIn(fo.id));
                             ui.close();
                         }
@@ -1916,29 +1926,29 @@ impl App {
                             }
                         }
                     });
-                    if ui.button("📁 Nova subpasta").clicked() {
+                    if ui.button(tr("📁 Nova subpasta")).clicked() {
                         actions.push(TreeAction::NewSubfolder(fo.id));
                         ui.close();
                     }
                     ui.separator();
-                    if ui.add_enabled(has_clip, egui::Button::new("📋 Colar aqui  (Ctrl+V)")).clicked() {
+                    if ui.add_enabled(has_clip, egui::Button::new(tr("📋 Colar aqui  (Ctrl+V)"))).clicked() {
                         actions.push(TreeAction::Paste(fo.id));
                         ui.close();
                     }
-                    if ui.button("Copiar pasta").clicked() {
+                    if ui.button(tr("Copiar pasta")).clicked() {
                         actions.push(TreeAction::Copy(fo.id));
                         ui.close();
                     }
-                    if ui.button("Recortar pasta").clicked() {
+                    if ui.button(tr("Recortar pasta")).clicked() {
                         actions.push(TreeAction::Cut(fo.id));
                         ui.close();
                     }
-                    if ui.button("Duplicar pasta").clicked() {
+                    if ui.button(tr("Duplicar pasta")).clicked() {
                         actions.push(TreeAction::Duplicate(fo.id));
                         ui.close();
                     }
                     ui.separator();
-                    if ui.button("Remover pasta (o conteúdo sobe um nível)").clicked() {
+                    if ui.button(tr("Remover pasta (o conteúdo sobe um nível)")).clicked() {
                         actions.push(TreeAction::RemoveFolder(fo.id));
                         ui.close();
                     }
@@ -1946,7 +1956,7 @@ impl App {
             })
             .body(|ui| {
                 if refs.is_empty() && sketches.is_empty() && subs.is_empty() {
-                    ui.label(RichText::new("vazia — clique direito para criar, ou arraste itens para cá").weak().italics().small());
+                    ui.label(RichText::new(tr("vazia — clique direito para criar, ou arraste itens para cá")).weak().italics().small());
                 }
                 for s in &subs {
                     self.geo_folder(ui, doc, s, first_geo, new_sel, actions);
@@ -1994,16 +2004,16 @@ impl App {
             None => resp,
         };
         resp.context_menu(|ui| {
-            if ui.button("✏ Editar").clicked() {
+            if ui.button(tr("✏ Editar")).clicked() {
                 actions.push(TreeAction::EditSketch(r.id));
                 ui.close();
             }
-            if r.kind.class() == RefClass::Plane && ui.button("Novo sketch neste plano").clicked() {
+            if r.kind.class() == RefClass::Plane && ui.button(tr("Novo sketch neste plano")).clicked() {
                 actions.push(TreeAction::SketchOn(PlaneRef::Datum(r.id)));
                 ui.close();
             }
             clip_menu(ui, r.id, doc, actions);
-            if ui.button("Apagar…").clicked() {
+            if ui.button(tr("Apagar…")).clicked() {
                 actions.push(TreeAction::Delete(r.id));
                 ui.close();
             }
@@ -2064,22 +2074,22 @@ impl App {
                 actions.push(TreeAction::Hide(f.id, !f.hidden));
                 ui.close();
             }
-            if ui.button("✏ Editar   (duplo clique)").clicked() {
+            if ui.button(tr("✏ Editar   (duplo clique)")).clicked() {
                 actions.push(TreeAction::EditSketch(f.id));
                 ui.close();
             }
-            if matches!(f.kind, FeatureKind::Sketch(_)) && ui.button("Alinhar vista ao sketch   N").clicked() {
+            if matches!(f.kind, FeatureKind::Sketch(_)) && ui.button(tr("Alinhar vista ao sketch   N")).clicked() {
                 actions.push(TreeAction::Align(f.id));
                 ui.close();
             }
             appearance_menu(ui, f.appearance, AppTarget::Feature(f.id), actions);
-            if !doc.is_free(f) && ui.button("Marcador até aqui").clicked() {
+            if !doc.is_free(f) && ui.button(tr("Marcador até aqui")).clicked() {
                 let k = doc.features[..=i].iter().filter(|g| g.target == f.target && !doc.is_free(g)).count();
                 actions.push(TreeAction::CollectorMarker(f.target, Some(k)));
                 ui.close();
             }
-            ui.menu_button("Mover para…", |ui| {
-                ui.label(RichText::new("Coletor (linha do tempo)").weak().small());
+            ui.menu_button(tr("Mover para…"), |ui| {
+                ui.label(RichText::new(tr("Coletor (linha do tempo)")).weak().small());
                 for c in &doc.collectors {
                     if ui.button(format!("▣ {}", c.name)).clicked() {
                         actions.push(TreeAction::ToCollector(f.id, c.id));
@@ -2097,22 +2107,22 @@ impl App {
                 }
             });
             ui.horizontal(|ui| {
-                if ui.button("◀ antes").clicked() && i > 0 {
+                if ui.button(tr("◀ antes")).clicked() && i > 0 {
                     actions.push(TreeAction::Move(f.id, i - 1));
                 }
-                if ui.button("depois ▶").clicked() {
+                if ui.button(tr("depois ▶")).clicked() {
                     actions.push(TreeAction::Move(f.id, i + 1));
                 }
             });
             if let FeatureKind::Sketch(s) = &f.kind {
-                if ui.button("Extrudar este sketch").clicked() {
+                if ui.button(tr("Extrudar este sketch")).clicked() {
                     actions.push(TreeAction::Select(f.id, Cmd::Extrude));
                     ui.close();
                 }
                 let _ = s;
             }
             ui.separator();
-            if ui.button("Apagar…").clicked() {
+            if ui.button(tr("Apagar…")).clicked() {
                 actions.push(TreeAction::Delete(f.id));
                 ui.close();
             }
@@ -2293,13 +2303,13 @@ impl App {
     fn project_panel(&mut self, ui: &mut egui::Ui) {
         let Some(p) = &self.project else {
             ui.add_space(8.);
-            ui.label("Nenhum projeto aberto.");
-            ui.label(RichText::new("Um projeto é uma pasta com as peças, o histórico de versões e as revisões liberadas.").weak());
+            ui.label(tr("Nenhum projeto aberto."));
+            ui.label(RichText::new(tr("Um projeto é uma pasta com as peças, o histórico de versões e as revisões liberadas.")).weak());
             ui.add_space(8.);
-            if ui.button("📁 Novo projeto…").clicked() {
+            if ui.button(tr("📁 Novo projeto…")).clicked() {
                 self.new_project();
             }
-            if ui.button("📂 Abrir projeto…").clicked() {
+            if ui.button(tr("📂 Abrir projeto…")).clicked() {
                 self.open_project();
             }
             return;
@@ -2311,10 +2321,10 @@ impl App {
         let mut open = None;
         let mut select = None;
         egui::Grid::new("docs").striped(true).num_columns(4).show(ui, |ui| {
-            ui.label(RichText::new("PN").strong());
-            ui.label(RichText::new("Nome").strong());
-            ui.label(RichText::new("Estado").strong());
-            ui.label(RichText::new("Rev").strong());
+            ui.label(RichText::new(tr("PN")).strong());
+            ui.label(RichText::new(tr("Nome")).strong());
+            ui.label(RichText::new(tr("Estado")).strong());
+            ui.label(RichText::new(tr("Rev")).strong());
             ui.end_row();
             for d in &p.index.documents {
                 let current = self.open.entry == Some(d.id);
@@ -2337,7 +2347,7 @@ impl App {
             }
         });
         if p.index.documents.is_empty() {
-            ui.label(RichText::new("Sem documentos. Adicione a peça aberta ou crie uma nova.").weak());
+            ui.label(RichText::new(tr("Sem documentos. Adicione a peça aberta ou crie uma nova.")).weak());
         }
         if let Some(id) = select {
             self.project_sel = Some(id);
@@ -2348,7 +2358,7 @@ impl App {
 
         ui.add_space(6.);
         ui.horizontal_wrapped(|ui| {
-            if ui.button("➕ Nova peça").clicked() {
+            if ui.button(tr("➕ Nova peça")).clicked() {
                 let p = self.project.as_mut().unwrap();
                 match p.add_document(Document::new("Peça")) {
                     Ok(id) => {
@@ -2358,7 +2368,7 @@ impl App {
                     Err(e) => self.toast(e.to_string(), true),
                 }
             }
-            if self.open.entry.is_none() && ui.button("⤵ Adicionar peça aberta").clicked() {
+            if self.open.entry.is_none() && ui.button(tr("⤵ Adicionar peça aberta")).clicked() {
                 let p = self.project.as_mut().unwrap();
                 match p.add_document(self.open.doc.clone()) {
                     Ok(id) => {
@@ -2370,10 +2380,10 @@ impl App {
                     Err(e) => self.toast(e.to_string(), true),
                 }
             }
-            if ui.button("💾 Salvar versão").clicked() {
+            if ui.button(tr("💾 Salvar versão")).clicked() {
                 self.save();
             }
-            if ui.button("📄 Estrutura CSV").clicked() {
+            if ui.button(tr("📄 Estrutura CSV")).clicked() {
                 if let Some(path) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name("estrutura.csv").save_file() {
                     if let Err(e) = self.project.as_ref().unwrap().export_csv(&path) {
                         self.toast(e.to_string(), true);
@@ -2390,18 +2400,18 @@ impl App {
             ui.label(&e.description);
         }
         ui.horizontal_wrapped(|ui| {
-            if ui.button("Abrir").clicked() {
+            if ui.button(tr("Abrir")).clicked() {
                 self.open_entry(sel, None);
             }
-            if ui.add_enabled(e.dirty_since_release(), egui::Button::new("🔒 Liberar revisão…")).clicked() {
+            if ui.add_enabled(e.dirty_since_release(), egui::Button::new(tr("🔒 Liberar revisão…"))).clicked() {
                 self.release_dialog = Some((sel, String::new()));
             }
-            if ui.button("Duplicar").clicked() {
+            if ui.button(tr("Duplicar")).clicked() {
                 if let Err(err) = self.project.as_mut().unwrap().duplicate(sel) {
                     self.toast(err.to_string(), true);
                 }
             }
-            if e.state != DocState::Obsoleto && ui.button("Tornar obsoleto").clicked() {
+            if e.state != DocState::Obsoleto && ui.button(tr("Tornar obsoleto")).clicked() {
                 let _ = self.project.as_mut().unwrap().set_state(sel, DocState::Obsoleto);
             }
         });
@@ -2410,7 +2420,7 @@ impl App {
                 ui.horizontal(|ui| {
                     ui.label(RichText::new(format!("Rev {}", r.label)).strong());
                     ui.label(RichText::new(&r.comment).weak());
-                    if ui.small_button("abrir 🔒").on_hover_text("Abrir congelada (somente leitura)").clicked() {
+                    if ui.small_button(tr("abrir 🔒")).on_hover_text(tr("Abrir congelada (somente leitura)")).clicked() {
                         self.open_entry(sel, Some((r.hash.clone(), r.label.clone())));
                     }
                 });
@@ -2421,7 +2431,7 @@ impl App {
                 ui.horizontal(|ui| {
                     ui.label(format!("v{}", i + 1));
                     ui.label(RichText::new(format!("{} · {}", v.note, &v.hash[..8])).weak());
-                    if ui.small_button("abrir").clicked() {
+                    if ui.small_button(tr("abrir")).clicked() {
                         self.open_entry(sel, Some((v.hash.clone(), format!("v{}", i + 1))));
                     }
                 });
@@ -2748,27 +2758,27 @@ impl App {
                 };
                 if !cands.is_empty() {
                     ui.horizontal(|ui| {
-                        ui.label("Substituir por:");
+                        ui.label(tr("Substituir por:"));
                         let cur = dd.replacement.map(|id| doc.name_of(id)).unwrap_or("escolha…".into());
                         egui::ComboBox::from_id_salt("subst").selected_text(cur).show_ui(ui, |ui| {
                             for (id, n) in &cands {
                                 ui.selectable_value(&mut dd.replacement, Some(*id), n);
                             }
                         });
-                        if ui.add_enabled(dd.replacement.is_some(), egui::Button::new("Substituir e apagar")).clicked() {
+                        if ui.add_enabled(dd.replacement.is_some(), egui::Button::new(tr("Substituir e apagar"))).clicked() {
                             action = Some(DelAction::Replace(dd.target, dd.replacement.unwrap()));
                         }
                     });
                 }
                 ui.add_space(6.);
                 ui.horizontal(|ui| {
-                    if ui.button("Apagar junto com dependentes").clicked() {
+                    if ui.button(tr("Apagar junto com dependentes")).clicked() {
                         action = Some(DelAction::All(dd.target));
                     }
-                    if ui.button("Apagar só este").on_hover_text("Os dependentes ficam com aviso de referência perdida e podem ser reapontados").clicked() {
+                    if ui.button(tr("Apagar só este")).on_hover_text(tr("Os dependentes ficam com aviso de referência perdida e podem ser reapontados")).clicked() {
                         action = Some(DelAction::Only(dd.target));
                     }
-                    if ui.button("Cancelar").clicked() {
+                    if ui.button(tr("Cancelar")).clicked() {
                         close = true;
                     }
                 });
@@ -2794,12 +2804,12 @@ impl App {
         if let Some((id, comment)) = &mut self.release_dialog {
             let (id, mut done, mut cancel) = (*id, false, false);
             egui::Modal::new(egui::Id::unique("liberar")).show(ctx, |ui| {
-                ui.heading("Liberar revisão");
-                ui.label("A versão salva mais recente será congelada (somente leitura).");
-                ui.add(egui::TextEdit::multiline(comment).hint_text("Comentário da revisão").desired_rows(3));
+                ui.heading(tr("Liberar revisão"));
+                ui.label(tr("A versão salva mais recente será congelada (somente leitura)."));
+                ui.add(egui::TextEdit::multiline(comment).hint_text(tr("Comentário da revisão")).desired_rows(3));
                 ui.horizontal(|ui| {
-                    done = ui.button("🔒 Liberar").clicked();
-                    cancel = ui.button("Cancelar").clicked();
+                    done = ui.button(tr("🔒 Liberar")).clicked();
+                    cancel = ui.button(tr("Cancelar")).clicked();
                 });
             });
             if done {
@@ -2894,7 +2904,7 @@ pub enum AppTarget {
 
 /// Submenu "Aparência" com predefinições, personalizar e remover.
 fn appearance_menu(ui: &mut egui::Ui, current: Option<Appearance>, t: AppTarget, actions: &mut Vec<TreeAction>) {
-    ui.menu_button("🎨 Aparência", |ui| {
+    ui.menu_button(tr("🎨 Aparência"), |ui| {
         for (name, a) in APPEARANCE_PRESETS {
             let resp = ui.horizontal(|ui| {
                 let (r, _) = ui.allocate_exact_size(egui::vec2(12., 12.), egui::Sense::hover());
@@ -2907,11 +2917,11 @@ fn appearance_menu(ui: &mut egui::Ui, current: Option<Appearance>, t: AppTarget,
             }
         }
         ui.separator();
-        if ui.button("Personalizar cor e acabamento…").clicked() {
+        if ui.button(tr("Personalizar cor e acabamento…")).clicked() {
             actions.push(TreeAction::Customize(t));
             ui.close();
         }
-        if !matches!(t, AppTarget::Collector(_)) && current.is_some() && ui.button("Remover aparência").clicked() {
+        if !matches!(t, AppTarget::Collector(_)) && current.is_some() && ui.button(tr("Remover aparência")).clicked() {
             actions.push(TreeAction::SetAppearance(t, None));
             ui.close();
         }
@@ -2975,19 +2985,19 @@ fn drag_item(ui: &mut egui::Ui, resp: &egui::Response, id: Id) {
 
 /// Copiar / recortar / duplicar / mover para pasta.
 fn clip_menu(ui: &mut egui::Ui, id: Id, doc: &Document, actions: &mut Vec<TreeAction>) {
-    if ui.button("Copiar  (Ctrl+C)").clicked() {
+    if ui.button(tr("Copiar  (Ctrl+C)")).clicked() {
         actions.push(TreeAction::Copy(id));
         ui.close();
     }
-    if ui.button("Recortar  (Ctrl+X)").clicked() {
+    if ui.button(tr("Recortar  (Ctrl+X)")).clicked() {
         actions.push(TreeAction::Cut(id));
         ui.close();
     }
-    if ui.button("Duplicar  (Ctrl+D)").clicked() {
+    if ui.button(tr("Duplicar  (Ctrl+D)")).clicked() {
         actions.push(TreeAction::Duplicate(id));
         ui.close();
     }
-    ui.menu_button("Mover para pasta", |ui| {
+    ui.menu_button(tr("Mover para pasta"), |ui| {
         fn level(ui: &mut egui::Ui, doc: &Document, parent: Option<Id>, depth: usize, id: Id, actions: &mut Vec<TreeAction>) {
             for g in doc.folders.iter().filter(|f| f.kind == FolderKind::Geometria && f.parent == parent) {
                 if g.id != id && ui.button(format!("{}📁 {}", "   ".repeat(depth), g.name)).clicked() {
@@ -3013,15 +3023,15 @@ enum DelAction {
 fn marker(ui: &mut egui::Ui, collector: Id, at: usize, n: usize, actions: &mut Vec<TreeAction>) {
     ui.horizontal(|ui| {
         let blue = Color32::from_rgb(90, 160, 255);
-        ui.label(RichText::new("━━ marcador ━━").small().color(blue))
-            .on_hover_text("Comandos abaixo do marcador ficam desativados; novos comandos deste coletor entram aqui");
-        if at > 0 && ui.small_button("▲").on_hover_text("subir o marcador").clicked() {
+        ui.label(RichText::new(tr("━━ marcador ━━")).small().color(blue))
+            .on_hover_text(tr("Comandos abaixo do marcador ficam desativados; novos comandos deste coletor entram aqui"));
+        if at > 0 && ui.small_button(tr("▲")).on_hover_text(tr("subir o marcador")).clicked() {
             actions.push(TreeAction::CollectorMarker(collector, Some(at - 1)));
         }
-        if at < n && ui.small_button("▼").on_hover_text("descer o marcador").clicked() {
+        if at < n && ui.small_button(tr("▼")).on_hover_text(tr("descer o marcador")).clicked() {
             actions.push(TreeAction::CollectorMarker(collector, if at + 1 >= n { None } else { Some(at + 1) }));
         }
-        if at < n && ui.small_button("⏬").on_hover_text("marcador no fim").clicked() {
+        if at < n && ui.small_button(tr("⏬")).on_hover_text(tr("marcador no fim")).clicked() {
             actions.push(TreeAction::CollectorMarker(collector, None));
         }
     });
@@ -3053,6 +3063,7 @@ fn setup_fonts(ctx: &egui::Context) {
 impl eframe::App for App {
     fn ui(&mut self, root: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = &root.ctx().clone();
+        crate::i18n::set_english(self.settings.english);
         // resultados do recompute
         while let Ok((g, r)) = self.worker.rx.try_recv() {
             if g >= self.gen_done {
@@ -3193,8 +3204,8 @@ impl eframe::App for App {
         self.timeline(root);
         egui::Panel::left("arvore").default_size(270.).resizable(true).show(root, |ui| {
             ui.horizontal(|ui| {
-                ui.selectable_value(&mut self.left, LeftTab::Peca, "Peça");
-                ui.selectable_value(&mut self.left, LeftTab::Projeto, "Projeto");
+                ui.selectable_value(&mut self.left, LeftTab::Peca, tr("Peça"));
+                ui.selectable_value(&mut self.left, LeftTab::Projeto, tr("Projeto"));
             });
             ui.separator();
             egui::ScrollArea::vertical().show(ui, |ui| match self.left {

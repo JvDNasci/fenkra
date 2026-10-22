@@ -4,6 +4,7 @@ use crate::render::{DisplayMode, ViewStyle};
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use crate::i18n::tr;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
 pub enum Theme {
@@ -53,19 +54,19 @@ impl Group {
     }
     pub fn label(self) -> &'static str {
         match self {
-            Group::Sketch => "Sketch",
-            Group::Solidos => "Sólidos",
-            Group::Acabamento => "Acabamento",
-            Group::Referencias => "Referências",
-            Group::Organizacao => "Organização",
-            Group::Selecao => "Seleção",
-            Group::Vista => "Vista",
-            Group::Padroes => "Padrões e transformações",
-            Group::SkCriacao => "Criação",
-            Group::SkTransformar => "Transformar",
-            Group::SkCotagem => "Cotagem",
-            Group::SkRestricoes => "Restrições",
-            Group::SkFerramentas => "Ferramentas do sketch",
+            Group::Sketch => tr("Sketch"),
+            Group::Solidos => tr("Sólidos"),
+            Group::Acabamento => tr("Acabamento"),
+            Group::Referencias => tr("Referências"),
+            Group::Organizacao => tr("Organização"),
+            Group::Selecao => tr("Seleção"),
+            Group::Vista => tr("Vista"),
+            Group::Padroes => tr("Padrões e transformações"),
+            Group::SkCriacao => tr("Criação"),
+            Group::SkTransformar => tr("Transformar"),
+            Group::SkCotagem => tr("Cotagem"),
+            Group::SkRestricoes => tr("Restrições"),
+            Group::SkFerramentas => tr("Ferramentas do sketch"),
         }
     }
 }
@@ -99,28 +100,28 @@ impl NavStyle {
     ];
     pub fn label(self) -> &'static str {
         match self {
-            NavStyle::SolidCadCraft => "SolidCadCraft",
-            NavStyle::SolidWorks => "Estilo SolidWorks",
-            NavStyle::Fusion => "Estilo Fusion",
-            NavStyle::Catia => "Estilo CATIA",
-            NavStyle::Blender => "Estilo Blender",
-            NavStyle::Onshape => "Estilo Onshape",
-            NavStyle::FreeCad => "Estilo FreeCAD (CAD)",
-            NavStyle::Inventor => "Estilo Inventor",
-            NavStyle::Rhino => "Estilo Rhino",
+            NavStyle::SolidCadCraft => tr("SolidCadCraft"),
+            NavStyle::SolidWorks => tr("Estilo SolidWorks"),
+            NavStyle::Fusion => tr("Estilo Fusion"),
+            NavStyle::Catia => tr("Estilo CATIA"),
+            NavStyle::Blender => tr("Estilo Blender"),
+            NavStyle::Onshape => tr("Estilo Onshape"),
+            NavStyle::FreeCad => tr("Estilo FreeCAD (CAD)"),
+            NavStyle::Inventor => tr("Estilo Inventor"),
+            NavStyle::Rhino => tr("Estilo Rhino"),
         }
     }
     pub fn help(self) -> &'static str {
         match self {
-            NavStyle::SolidCadCraft => "Girar: botão esquerdo ou do meio · Mover: direito ou Shift+arrastar · Zoom: roda",
-            NavStyle::SolidWorks => "Girar: botão do meio · Mover: Ctrl+meio · Zoom: roda (invertida)",
-            NavStyle::Fusion => "Girar: Shift+meio · Mover: botão do meio · Zoom: roda",
-            NavStyle::Catia => "Mover: botão do meio · Girar: meio+direito · Zoom: roda",
-            NavStyle::Blender => "Girar: botão do meio · Mover: Shift+meio · Zoom: roda ou Ctrl+meio",
-            NavStyle::Onshape => "Girar: botão direito · Mover: Ctrl+direito ou meio · Zoom: roda",
-            NavStyle::FreeCad => "Mover: botão do meio · Girar: meio + esquerdo ou direito · Zoom: roda",
-            NavStyle::Inventor => "Girar: Shift+meio · Mover: botão do meio · Zoom: roda",
-            NavStyle::Rhino => "Girar: botão direito · Mover: Shift+direito · Zoom: roda ou Ctrl+direito",
+            NavStyle::SolidCadCraft => tr("Girar: botão esquerdo ou do meio · Mover: direito ou Shift+arrastar · Zoom: roda"),
+            NavStyle::SolidWorks => tr("Girar: botão do meio · Mover: Ctrl+meio · Zoom: roda (invertida)"),
+            NavStyle::Fusion => tr("Girar: Shift+meio · Mover: botão do meio · Zoom: roda"),
+            NavStyle::Catia => tr("Mover: botão do meio · Girar: meio+direito · Zoom: roda"),
+            NavStyle::Blender => tr("Girar: botão do meio · Mover: Shift+meio · Zoom: roda ou Ctrl+meio"),
+            NavStyle::Onshape => tr("Girar: botão direito · Mover: Ctrl+direito ou meio · Zoom: roda"),
+            NavStyle::FreeCad => tr("Mover: botão do meio · Girar: meio + esquerdo ou direito · Zoom: roda"),
+            NavStyle::Inventor => tr("Girar: Shift+meio · Mover: botão do meio · Zoom: roda"),
+            NavStyle::Rhino => tr("Girar: botão direito · Mover: Shift+direito · Zoom: roda ou Ctrl+direito"),
         }
     }
 }
@@ -137,10 +138,10 @@ impl Dock {
     pub const ALL: [Dock; 4] = [Dock::Topo, Dock::Lateral, Dock::Flutuante, Dock::Oculta];
     pub fn label(self) -> &'static str {
         match self {
-            Dock::Topo => "Fixa no topo",
-            Dock::Lateral => "Fixa na lateral",
-            Dock::Flutuante => "Flutuante",
-            Dock::Oculta => "Oculta",
+            Dock::Topo => tr("Fixa no topo"),
+            Dock::Lateral => tr("Fixa na lateral"),
+            Dock::Flutuante => tr("Flutuante"),
+            Dock::Oculta => tr("Oculta"),
         }
     }
 }
@@ -203,6 +204,8 @@ pub struct Settings {
     pub auto_dims: bool,
     /// atalhos de teclado (predefinição + trocas)
     pub keys: crate::keymap::Keymap,
+    /// interface em inglês
+    pub english: bool,
 }
 
 impl Default for Settings {
@@ -237,6 +240,7 @@ impl Default for Settings {
             auto_constraints: true,
             auto_dims: false,
             keys: Default::default(),
+            english: false,
         }
     }
 }

@@ -10,6 +10,7 @@ use crate::render::DisplayMode;
 use crate::settings::{Dock, Group, Settings};
 use crate::sketch_ui::{CKind, Tool};
 use eframe::egui::{self, RichText};
+use crate::i18n::tr;
 
 /// Ação pedida por um botão de ferramenta.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -259,8 +260,8 @@ pub fn show_group(ui: &mut egui::Ui, g: Group, s: &mut Settings, st: &ToolState,
                         acts.push(i.act);
                     }
                     // setinha: abre as variações da família
-                    let arrow = ui.add(egui::Button::new(RichText::new("▾").size(11.)).frame(false).min_size(egui::vec2(10., size)));
-                    let arrow = arrow.on_hover_text("variações");
+                    let arrow = ui.add(egui::Button::new(RichText::new(tr("▾")).size(11.)).frame(false).min_size(egui::vec2(10., size)));
+                    let arrow = arrow.on_hover_text(tr("variações"));
                     egui::Popup::menu(&arrow).show(|ui| {
                         for (k, v) in items.iter().enumerate() {
                             let r = ui.horizontal(|ui| {
@@ -284,19 +285,19 @@ pub fn show_group(ui: &mut egui::Ui, g: Group, s: &mut Settings, st: &ToolState,
                     ui.radio_value(&mut s.display, m, m.label());
                 }
                 ui.separator();
-                ui.checkbox(&mut s.edges_in_render, "arestas no semi-renderizado");
+                ui.checkbox(&mut s.edges_in_render, tr("arestas no semi-renderizado"));
             });
             let r = tool_button(ui, "filtro", "Exibir", size, labels, false, "Filtro de exibição", "Escolha quais tipos de elemento aparecem na viewport.");
             egui::Popup::menu(&r).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
                 let f = &mut s.filter;
-                ui.label(RichText::new("Mostrar na viewport").strong());
-                ui.checkbox(&mut f.corpos, "Corpos");
-                ui.checkbox(&mut f.sketches, "Sketches");
-                ui.checkbox(&mut f.pontos, "Pontos de sketch");
-                ui.checkbox(&mut f.planos_origem, "Planos da Origem");
-                ui.checkbox(&mut f.planos_ref, "Planos de referência");
-                ui.checkbox(&mut f.eixos, "Eixos da Origem");
-                ui.checkbox(&mut f.rotulos, "Rótulos dos planos");
+                ui.label(RichText::new(tr("Mostrar na viewport")).strong());
+                ui.checkbox(&mut f.corpos, tr("Corpos"));
+                ui.checkbox(&mut f.sketches, tr("Sketches"));
+                ui.checkbox(&mut f.pontos, tr("Pontos de sketch"));
+                ui.checkbox(&mut f.planos_origem, tr("Planos da Origem"));
+                ui.checkbox(&mut f.planos_ref, tr("Planos de referência"));
+                ui.checkbox(&mut f.eixos, tr("Eixos da Origem"));
+                ui.checkbox(&mut f.rotulos, tr("Rótulos dos planos"));
             });
             if tool_button(ui, "ocultos", "Ocultos", size, labels, st.hidden_env, "Ambiente de ocultos  (Shift+H)", "Mostra só os itens ocultos, para reexibir o que precisar.").clicked() {
                 acts.push(Act::HiddenEnv);

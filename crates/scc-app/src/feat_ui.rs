@@ -7,6 +7,7 @@ use crate::geo_ui::{self, Seed};
 use eframe::egui::{self, Color32, RichText};
 use scc_core::*;
 use std::collections::HashMap;
+use crate::i18n::tr;
 
 type Vars = HashMap<String, f64>;
 
@@ -89,7 +90,7 @@ fn faces_ui(ui: &mut egui::Ui, faces: &mut Vec<[f64; 3]>, picked: &[[f64; 3]]) {
     for (i, f) in faces.iter().enumerate() {
         ui.horizontal(|ui| {
             ui.label(RichText::new(format!("Face {} · ({:.1}, {:.1}, {:.1})", i + 1, f[0], f[1], f[2])).small());
-            if ui.small_button("✖").clicked() {
+            if ui.small_button(tr("✖")).clicked() {
                 del = Some(i);
             }
         });
@@ -101,11 +102,11 @@ fn faces_ui(ui: &mut egui::Ui, faces: &mut Vec<[f64; 3]>, picked: &[[f64; 3]]) {
         if ui.add_enabled(!picked.is_empty(), egui::Button::new(format!("+ seleção ({})", picked.len()))).clicked() {
             faces.extend_from_slice(picked);
         }
-        if !faces.is_empty() && ui.button("Limpar").clicked() {
+        if !faces.is_empty() && ui.button(tr("Limpar")).clicked() {
             faces.clear();
         }
     });
-    ui.label(RichText::new("Com o comando aberto, clique nas faces na viewport para acrescentá-las.").weak().small());
+    ui.label(RichText::new(tr("Com o comando aberto, clique nas faces na viewport para acrescentá-las.")).weak().small());
 }
 
 fn op_choice(ui: &mut egui::Ui, op: &mut BoolOp, add: (&str, &str), cut: (&str, &str)) {
@@ -117,7 +118,7 @@ fn op_choice(ui: &mut egui::Ui, op: &mut BoolOp, add: (&str, &str), cut: (&str, 
 
 fn thin_ui(ui: &mut egui::Ui, thin: &mut Option<String>, vars: &Vars) {
     let mut on = thin.is_some();
-    if ui.checkbox(&mut on, "parede fina (thin)").changed() {
+    if ui.checkbox(&mut on, tr("parede fina (thin)")).changed() {
         *thin = on.then(|| "2".into());
     }
     if let Some(t) = thin {
@@ -166,13 +167,13 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             sketch_pick(ui, "sw_sk", "Perfil", doc, idx, &mut w.sketch);
             geo_ui::curve_slot(ui, "sw_spine", "Curva guia", doc, me, &mut w.spine, seed);
             ui.horizontal(|ui| {
-                ui.add_sized([96., 18.], egui::Label::new("Orientação"));
-                ui.radio_value(&mut w.mode, SweepMode::Corrigido, "acompanha");
-                ui.radio_value(&mut w.mode, SweepMode::Fixo, "fixa");
-                ui.radio_value(&mut w.mode, SweepMode::Frenet, "Frenet");
+                ui.add_sized([96., 18.], egui::Label::new(tr("Orientação")));
+                ui.radio_value(&mut w.mode, SweepMode::Corrigido, tr("acompanha"));
+                ui.radio_value(&mut w.mode, SweepMode::Fixo, tr("fixa"));
+                ui.radio_value(&mut w.mode, SweepMode::Frenet, tr("Frenet"));
             });
             thin_ui(ui, &mut w.thin, vars);
-            ui.label(RichText::new("O perfil deve estar no início da curva guia, de preferência num plano normal a ela (Plano → Normal à curva).").weak().small());
+            ui.label(RichText::new(tr("O perfil deve estar no início da curva guia, de preferência num plano normal a ela (Plano → Normal à curva).")).weak().small());
         }
         FeatureKind::Loft(l) => {
             section(ui, "Tipo");
@@ -183,13 +184,13 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             for (i, s) in l.sections.iter_mut().enumerate() {
                 ui.horizontal(|ui| {
                     sketch_pick(ui, &format!("lf{i}"), &format!("Perfil {}", i + 1), doc, idx, s);
-                    if ui.small_button("▲").clicked() {
+                    if ui.small_button(tr("▲")).clicked() {
                         mv = Some((i, -1));
                     }
-                    if ui.small_button("▼").clicked() {
+                    if ui.small_button(tr("▼")).clicked() {
                         mv = Some((i, 1));
                     }
-                    if ui.small_button("✖").clicked() {
+                    if ui.small_button(tr("✖")).clicked() {
                         del = Some(i);
                     }
                 });
@@ -205,13 +206,13 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                     l.sections.remove(i);
                 }
             }
-            if ui.button("+ perfil").clicked() {
+            if ui.button(tr("+ perfil")).clicked() {
                 if let Some(f) = doc.features[..idx].iter().rev().find(|f| matches!(f.kind, FeatureKind::Sketch(_)) && !l.sections.contains(&f.id)) {
                     l.sections.push(f.id);
                 }
             }
-            ui.checkbox(&mut l.ruled, "faces retas entre perfis (regrada)");
-            ui.checkbox(&mut l.closed, "fechada (volta ao primeiro perfil)");
+            ui.checkbox(&mut l.ruled, tr("faces retas entre perfis (regrada)"));
+            ui.checkbox(&mut l.closed, tr("fechada (volta ao primeiro perfil)"));
         }
         FeatureKind::Primitive(p) => {
             section(ui, "Forma");
@@ -222,7 +223,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             op_choice(ui, &mut p.op, ("op_adicionar", "Adicionar"), ("op_remover", "Remover"));
             section(ui, "Posição");
             ui.horizontal(|ui| {
-                ui.add_sized([96., 18.], egui::Label::new("Plano"));
+                ui.add_sized([96., 18.], egui::Label::new(tr("Plano")));
                 plane_combo(ui, "pr_pl", doc, &mut p.plane, None);
             });
             section(ui, "Medidas");
@@ -235,23 +236,23 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         }
         FeatureKind::Shell(s) => {
             expr(ui, "Espessura", &mut s.thickness, vars, "mm");
-            ui.checkbox(&mut s.outward, "parede para fora (mantém o volume interno)");
+            ui.checkbox(&mut s.outward, tr("parede para fora (mantém o volume interno)"));
             faces_ui(ui, &mut s.faces, picked_faces);
-            ui.label(RichText::new("As faces escolhidas ficam abertas; o resto vira parede com a espessura.").weak().small());
+            ui.label(RichText::new(tr("As faces escolhidas ficam abertas; o resto vira parede com a espessura.")).weak().small());
         }
         FeatureKind::Draft(d) => {
             expr(ui, "Ângulo", &mut d.angle, vars, "°");
             ui.horizontal(|ui| {
-                ui.add_sized([96., 18.], egui::Label::new("Plano neutro"));
+                ui.add_sized([96., 18.], egui::Label::new(tr("Plano neutro")));
                 plane_combo(ui, "dr_pl", doc, &mut d.neutral, None);
             });
-            ui.checkbox(&mut d.reverse, "inverter a direção de extração");
+            ui.checkbox(&mut d.reverse, tr("inverter a direção de extração"));
             faces_ui(ui, &mut d.faces, picked_faces);
-            ui.label(RichText::new("Inclina as faces a partir do plano neutro; a extração segue a normal dele.").weak().small());
+            ui.label(RichText::new(tr("Inclina as faces a partir do plano neutro; a extração segue a normal dele.")).weak().small());
         }
         FeatureKind::Thickness(t) => {
             expr(ui, "Espessura", &mut t.value, vars, "mm");
-            ui.label(RichText::new("Positivo acrescenta material, negativo remove.").weak().small());
+            ui.label(RichText::new(tr("Positivo acrescenta material, negativo remove.")).weak().small());
             faces_ui(ui, &mut t.faces, picked_faces);
         }
         FeatureKind::Pattern(p) => {
@@ -278,7 +279,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                     expr(ui, "Quantidade", count, vars, "");
                     expr(ui, "Espaçamento", spacing, vars, "mm");
                     let mut two = dir2.is_some();
-                    if ui.checkbox(&mut two, "segunda direção").changed() {
+                    if ui.checkbox(&mut two, tr("segunda direção")).changed() {
                         *dir2 = two.then_some(AxisRef::Origin(OriginAxis::Y));
                     }
                     if let Some(d2) = dir2 {
@@ -291,7 +292,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                     geo_ui::axis_slot(ui, "pt_ax", "Eixo", doc, me, axis, seed);
                     expr(ui, "Quantidade", count, vars, "");
                     expr(ui, "Ângulo total", angle, vars, "°");
-                    ui.label(RichText::new("360° distribui por igual; menos que isso põe a primeira e a última nas pontas do arco.").weak().small());
+                    ui.label(RichText::new(tr("360° distribui por igual; menos que isso põe a primeira e a última nas pontas do arco.")).weak().small());
                 }
                 PatternKind::Points { points, base } => {
                     geo_ui::point_slot(ui, "pt_base", "Ponto base", doc, me, base, seed);
@@ -302,7 +303,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         }
         FeatureKind::Mirror(m) => {
             ui.horizontal(|ui| {
-                ui.add_sized([96., 18.], egui::Label::new("Plano de simetria"));
+                ui.add_sized([96., 18.], egui::Label::new(tr("Plano de simetria")));
                 plane_combo(ui, "mi_pl", doc, &mut m.plane, None);
             });
             sources_ui(ui, doc, idx, &mut m.sources);
@@ -310,22 +311,22 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         FeatureKind::Scale(s) => {
             expr(ui, "Fator", &mut s.factor, vars, "×");
             geo_ui::point_slot(ui, "sc_c", "Centro", doc, me, &mut s.center, seed);
-            ui.label(RichText::new("Escala o corpo inteiro a partir do centro (1 = sem mudança).").weak().small());
+            ui.label(RichText::new(tr("Escala o corpo inteiro a partir do centro (1 = sem mudança).")).weak().small());
         }
         FeatureKind::Stiffener(st) => {
             sketch_pick(ui, "st_sk", "Linhas", doc, idx, &mut st.sketch);
             expr(ui, "Espessura", &mut st.thickness, vars, "mm");
-            ui.checkbox(&mut st.to_body, "até encontrar o corpo");
+            ui.checkbox(&mut st.to_body, tr("até encontrar o corpo"));
             if !st.to_body {
                 expr(ui, "Profundidade", &mut st.depth, vars, "mm");
             }
-            ui.checkbox(&mut st.reverse, "para o lado da normal do plano");
-            ui.label(RichText::new("Cada linha do sketch vira uma parede com a espessura, extrudada a partir do plano.").weak().small());
+            ui.checkbox(&mut st.reverse, tr("para o lado da normal do plano"));
+            ui.label(RichText::new(tr("Cada linha do sketch vira uma parede com a espessura, extrudada a partir do plano.")).weak().small());
         }
         FeatureKind::Thread(t) => {
             section(ui, "Rosca");
             ui.horizontal(|ui| {
-                ui.add_sized([96., 18.], egui::Label::new("Norma e tamanho"));
+                ui.add_sized([96., 18.], egui::Label::new(tr("Norma e tamanho")));
                 egui::ComboBox::from_id_salt("th_spec").selected_text(&t.spec).width(170.).show_ui(ui, |ui| {
                     for std in scc_solidos::hardware::STANDARDS {
                         ui.label(RichText::new(std).weak().small());
@@ -346,11 +347,11 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             section(ui, "Face cilíndrica");
             ui.label(RichText::new(format!("({:.1}, {:.1}, {:.1})", t.face[0], t.face[1], t.face[2])).small());
             if let Some(p) = picked_faces.last() {
-                if ui.button("Usar a face selecionada").clicked() {
+                if ui.button(tr("Usar a face selecionada")).clicked() {
                     t.face = *p;
                 }
             }
-            ui.label(RichText::new("Clique na face do eixo (rosca externa) ou do furo (interna). O diâmetro da face deve ser o da rosca.").weak().small());
+            ui.label(RichText::new(tr("Clique na face do eixo (rosca externa) ou do furo (interna). O diâmetro da face deve ser o da rosca.")).weak().small());
         }
         FeatureKind::Combine(c) => {
             section(ui, "Operação");
@@ -363,7 +364,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 c.op = [BoolOp::Add, BoolOp::Cut, BoolOp::Intersect][i];
             }
             ui.horizontal(|ui| {
-                ui.add_sized([96., 18.], egui::Label::new("Corpo ferramenta"));
+                ui.add_sized([96., 18.], egui::Label::new(tr("Corpo ferramenta")));
                 let name = doc.collectors.iter().find(|x| x.id == c.tool).map(|x| x.name.clone()).unwrap_or_else(|| "⚠ perdido".into());
                 egui::ComboBox::from_id_salt("cb_tool").selected_text(name).width(170.).show_ui(ui, |ui| {
                     for col in &doc.collectors {
@@ -371,8 +372,8 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                     }
                 });
             });
-            ui.checkbox(&mut c.keep_tool, "manter o corpo ferramenta visível");
-            ui.label(RichText::new("O resultado fica no coletor deste comando; o corpo ferramenta é o estado do outro coletor neste ponto da linha do tempo.").weak().small());
+            ui.checkbox(&mut c.keep_tool, tr("manter o corpo ferramenta visível"));
+            ui.label(RichText::new(tr("O resultado fica no coletor deste comando; o corpo ferramenta é o estado do outro coletor neste ponto da linha do tempo.")).weak().small());
         }
         _ => return false,
     }
@@ -403,10 +404,10 @@ pub fn default_pattern(i: usize, seed: &Seed) -> PatternKind {
 
 /// Opções extras da extrusão: ângulo de saída e parede fina.
 pub fn extrude_extras(ui: &mut egui::Ui, e: &mut Extrude, vars: &Vars) {
-    egui::CollapsingHeader::new("Ângulo de saída e parede fina").default_open(e.thin.is_some() || e.taper.trim() != "0").show(ui, |ui| {
+    egui::CollapsingHeader::new(tr("Ângulo de saída e parede fina")).default_open(e.thin.is_some() || e.taper.trim() != "0").show(ui, |ui| {
         expr(ui, "Ângulo de saída", &mut e.taper, vars, "°");
         if e.taper.trim() != "0" && !matches!(e.extent, Extent::Blind(_)) {
-            ui.label(RichText::new("o ângulo vale só com término 'cego'").color(Color32::from_rgb(255, 170, 60)).small());
+            ui.label(RichText::new(tr("o ângulo vale só com término 'cego'")).color(Color32::from_rgb(255, 170, 60)).small());
         }
         thin_ui(ui, &mut e.thin, vars);
     });
@@ -462,13 +463,13 @@ pub fn edge_mode_ui(ui: &mut egui::Ui, o: &mut EdgeOp, vars: &Vars, fillet: bool
         EdgeMode::TwoDist(v) => expr(ui, "Distância 2", v, vars, "mm"),
         EdgeMode::DistAngle(v) => expr(ui, "Ângulo", v, vars, "°"),
         EdgeMode::FaceFace(..) => {
-            ui.label(RichText::new("Clique nas duas faces na viewport (com o comando aberto).").weak().small());
+            ui.label(RichText::new(tr("Clique nas duas faces na viewport (com o comando aberto).")).weak().small());
         }
         EdgeMode::FullRound { .. } => {
-            ui.label(RichText::new("Clique na face do meio e depois nas duas laterais. O raio sai da largura (o valor abaixo é ignorado).").weak().small());
+            ui.label(RichText::new(tr("Clique na face do meio e depois nas duas laterais. O raio sai da largura (o valor abaixo é ignorado).")).weak().small());
         }
     }
     if matches!(o.mode, EdgeMode::Variable(_) | EdgeMode::TwoDist(_) | EdgeMode::DistAngle(_)) && !matches!(o.edges, EdgeSel::Edges(_)) {
-        ui.label(RichText::new("esta variação usa as arestas escolhidas (não 'Todas')").color(Color32::from_rgb(255, 170, 60)).small());
+        ui.label(RichText::new(tr("esta variação usa as arestas escolhidas (não 'Todas')")).color(Color32::from_rgb(255, 170, 60)).small());
     }
 }

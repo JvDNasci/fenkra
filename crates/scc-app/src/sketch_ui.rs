@@ -12,6 +12,7 @@ use scc_core::sketch::{Curve, Kind, SolveReport};
 use scc_core::{FeatureKind, Id, PlaneRef, SketchData};
 use scc_kernel::Frame;
 use std::collections::HashMap;
+use crate::i18n::tr;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Tool {
@@ -885,11 +886,11 @@ fn project_ui(app: &mut App, ui: &mut egui::Ui) {
     let mut chosen: Option<Vec<[f64; 3]>> = None;
     let key = egui::Id::unique("proj_constr");
     let mut constr = ui.ctx().data(|m| m.get_temp::<bool>(key)).unwrap_or(true);
-    egui::CollapsingHeader::new("📐 Projetar referência no sketch").default_open(false).show(ui, |ui| {
+    egui::CollapsingHeader::new(tr("📐 Projetar referência no sketch")).default_open(false).show(ui, |ui| {
         if items.is_empty() {
-            ui.label(RichText::new("Crie pontos ou curvas em Referências (ou importe por link) para projetá-los aqui.").weak().small());
+            ui.label(RichText::new(tr("Crie pontos ou curvas em Referências (ou importe por link) para projetá-los aqui.")).weak().small());
         }
-        ui.checkbox(&mut constr, "como construção");
+        ui.checkbox(&mut constr, tr("como construção"));
         for (_, n, pts) in &items {
             if ui.button(n).clicked() {
                 chosen = Some(pts.clone());
@@ -2032,7 +2033,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                 };
                 let mut act = None;
                 if msel.is_empty() {
-                    ui.label(RichText::new("Ferramentas").weak().small());
+                    ui.label(RichText::new(tr("Ferramentas")).weak().small());
                     for t in [Tool::Select, Tool::Line, Tool::Rect, Tool::Circle, Tool::Arc3, Tool::Point, Tool::Dimension] {
                         let (i, n, ..) = t.info();
                         if item(ui, i, n) {
@@ -2041,7 +2042,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                     }
                 }
                 if !dims.is_empty() {
-                    ui.label(RichText::new("Cotas").weak().small());
+                    ui.label(RichText::new(tr("Cotas")).weak().small());
                     for (i, n, k) in &dims {
                         if item(ui, i, n) {
                             act = Some(MenuAct::Dim(k.clone()));
@@ -2050,7 +2051,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                 }
                 if !cons.is_empty() {
                     ui.separator();
-                    ui.label(RichText::new("Restrições").weak().small());
+                    ui.label(RichText::new(tr("Restrições")).weak().small());
                     for k in &cons {
                         let (i, n, ..) = Tool::Constr(*k).info();
                         if item(ui, i, n) {
@@ -2063,7 +2064,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                     if has_cv && item(ui, "sk_construcao", "Construção ⇄ normal") {
                         act = Some(MenuAct::Construction);
                     }
-                    if ui.add(egui::Button::new("✖  Excluir").frame(false)).clicked() {
+                    if ui.add(egui::Button::new(tr("✖  Excluir")).frame(false)).clicked() {
                         act = Some(MenuAct::Delete);
                     }
                 }
@@ -2114,12 +2115,12 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         let pos = edit.hits.iter().find(|(_, e)| *e == Ent::Cs(*cid)).map(|(r, _)| r.center_bottom()).or(hover).unwrap_or(rect.center());
         egui::Area::new(egui::Id::unique("cota_edit")).fixed_pos(pos + egui::vec2(-60., 4.)).order(egui::Order::Foreground).show(ui.ctx(), |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
-                ui.label(RichText::new("Valor (aceita expressão)").small());
+                ui.label(RichText::new(tr("Valor (aceita expressão)")).small());
                 let r = ui.add(egui::TextEdit::singleline(text).desired_width(120.));
                 r.request_focus();
                 let ok = scc_core::expr::eval_str(text, &vars).is_ok();
                 if !ok {
-                    ui.label(RichText::new("expressão inválida").small().color(BAD));
+                    ui.label(RichText::new(tr("expressão inválida")).small().color(BAD));
                 }
                 let (enter, esc) = ui.input(|i| (i.key_pressed(egui::Key::Enter), i.key_pressed(egui::Key::Escape)));
                 if enter && ok {
@@ -2223,7 +2224,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     }
     ui.add_space(4.);
     let mut finish = false;
-    if ui.add(egui::Button::new(RichText::new("✔ Concluir sketch").strong()).min_size(egui::vec2(180., 30.))).clicked() {
+    if ui.add(egui::Button::new(RichText::new(tr("✔ Concluir sketch")).strong()).min_size(egui::vec2(180., 30.))).clicked() {
         finish = true;
     }
     project_ui(app, ui);
@@ -2236,7 +2237,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     if let Some(FeatureKind::Sketch(s)) = app.open.doc.feature_mut(id).map(|f| &mut f.kind) {
         let d = &mut s.data;
         if sel.is_empty() {
-            ui.label(RichText::new("Clique num elemento para ver suas restrições e cotas.").weak());
+            ui.label(RichText::new(tr("Clique num elemento para ver suas restrições e cotas.")).weak());
         }
         // elementos selecionados e as restrições ligadas a eles
         let sel_ids: Vec<Id> = sel.iter().map(|e| match e {
@@ -2247,10 +2248,10 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                 Ent::Pt(p) => {
                     if let Some(pt) = d.point_mut(*p) {
                         ui.horizontal(|ui| {
-                            ui.label(RichText::new("Ponto").strong());
+                            ui.label(RichText::new(tr("Ponto")).strong());
                             ui.add(egui::DragValue::new(&mut pt.x).speed(0.5).prefix("x "));
                             ui.add(egui::DragValue::new(&mut pt.y).speed(0.5).prefix("y "));
-                            ui.checkbox(&mut pt.fixed, "fixo");
+                            ui.checkbox(&mut pt.fixed, tr("fixo"));
                         });
                     }
                 }
@@ -2264,7 +2265,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                         };
                         ui.horizontal(|ui| {
                             ui.label(RichText::new(kind).strong());
-                            ui.checkbox(&mut cv.construction, "construção");
+                            ui.checkbox(&mut cv.construction, tr("construção"));
                         });
                     }
                 }
@@ -2296,7 +2297,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     }
                     ui.add(te);
                 }
-                if ui.small_button("✖").on_hover_text("remover restrição").clicked() {
+                if ui.small_button(tr("✖")).on_hover_text(tr("remover restrição")).clicked() {
                     del = Some(c.id);
                 }
             });
@@ -2314,7 +2315,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     if let Some(v) = c.kind.value_mut() {
                         ui.add(egui::TextEdit::singleline(v).desired_width(80.));
                     }
-                    if ui.small_button("✖").clicked() {
+                    if ui.small_button(tr("✖")).clicked() {
                         del = Some(c.id);
                     }
                 });

@@ -8,6 +8,7 @@ use crate::render::Camera;
 use eframe::egui::{self, Color32, Rect, RichText, Stroke};
 use glam::Vec3;
 use scc_core::*;
+use crate::i18n::tr;
 
 /// Alça linear: valor = distância ao longo de `dir` a partir de `base` (vezes `k`).
 struct Linear {
@@ -288,7 +289,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: Camera) {
                 r.request_focus();
                 let ok = scc_core::expr::eval_str(&text, &vars).is_ok();
                 if !ok {
-                    ui.label(RichText::new("expressão inválida").small().color(Color32::from_rgb(255, 120, 100)));
+                    ui.label(RichText::new(tr("expressão inválida")).small().color(Color32::from_rgb(255, 120, 100)));
                 }
                 let (enter, esc) = ui.input(|i| (i.key_pressed(egui::Key::Enter), i.key_pressed(egui::Key::Escape)));
                 if enter && ok {

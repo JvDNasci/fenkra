@@ -1,6 +1,7 @@
 //! Ícones SVG (assets/icons, gerados por scripts/gerar_icones.py e editáveis no VectorCraft/Inkscape).
 
 use eframe::egui::{self, ImageSource};
+use crate::i18n::tr;
 
 // Lista gerada a partir de assets/icons (scripts/gerar_icones.py).
 pub fn get(name: &str) -> ImageSource<'static> {
@@ -170,6 +171,7 @@ pub fn get(name: &str) -> ImageSource<'static> {
 /// Dica: descrição breve na hora; mantendo o mouse 5 s, aparece a descrição avançada.
 #[allow(clippy::too_many_arguments)]
 pub fn tool_button(ui: &mut egui::Ui, icon: &str, label: &str, size: f32, show_label: bool, selected: bool, brief: &str, advanced: &str) -> egui::Response {
+    let (label, brief, advanced) = (tr(label), tr(brief), tr(advanced));
     let font = egui::FontId::proportional(11.5);
     let galley = show_label.then(|| ui.painter().layout_no_wrap(label.to_owned(), font, ui.visuals().text_color()));
     let text_w = galley.as_ref().map(|g| g.size().x).unwrap_or(0.);
@@ -221,7 +223,7 @@ pub fn hover_help(ui: &egui::Ui, resp: egui::Response, title: &str, brief: &str,
             ui.separator();
             ui.label(egui::RichText::new(advanced).small());
         } else if !advanced.is_empty() {
-            ui.label(egui::RichText::new("(mantenha o mouse para mais detalhes)").small().weak());
+            ui.label(egui::RichText::new(tr("(mantenha o mouse para mais detalhes)")).small().weak());
         }
     })
 }

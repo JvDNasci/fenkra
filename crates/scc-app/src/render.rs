@@ -6,6 +6,7 @@ use eframe::egui_wgpu::{self, wgpu};
 use glam::{Mat4, Vec3};
 use serde::{Deserialize, Serialize};
 use wgpu::util::DeviceExt;
+use crate::i18n::tr;
 
 const SHADER: &str = r#"
 struct U {
@@ -126,12 +127,12 @@ impl DisplayMode {
     ];
     pub fn label(self) -> &'static str {
         match self {
-            DisplayMode::SombreadoArestas => "Sombreado com arestas",
-            DisplayMode::Sombreado => "Sombreado (sem arestas)",
-            DisplayMode::LinhasOcultas => "Linhas ocultas removidas",
-            DisplayMode::Arame => "Arame",
-            DisplayMode::RaioX => "Raio-X",
-            DisplayMode::SemiRenderizado => "Semi-renderizado",
+            DisplayMode::SombreadoArestas => tr("Sombreado com arestas"),
+            DisplayMode::Sombreado => tr("Sombreado (sem arestas)"),
+            DisplayMode::LinhasOcultas => tr("Linhas ocultas removidas"),
+            DisplayMode::Arame => tr("Arame"),
+            DisplayMode::RaioX => tr("Raio-X"),
+            DisplayMode::SemiRenderizado => tr("Semi-renderizado"),
         }
     }
     fn code(self) -> f32 {
