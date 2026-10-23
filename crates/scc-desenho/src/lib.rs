@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 pub type V2 = [f64; 2];
 pub type V3 = [f64; 3];
 
-/// Formato da folha (ISO 216).
+/// Formato da folha (ISO 216 e ANSI Y14.1).
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum Format {
     A4,
@@ -24,10 +24,15 @@ pub enum Format {
     A2,
     A1,
     A0,
+    AnsiA,
+    AnsiB,
+    AnsiC,
+    AnsiD,
+    AnsiE,
 }
 
 impl Format {
-    pub const ALL: [Format; 5] = [Format::A4, Format::A3, Format::A2, Format::A1, Format::A0];
+    pub const ALL: [Format; 10] = [Format::A4, Format::A3, Format::A2, Format::A1, Format::A0, Format::AnsiA, Format::AnsiB, Format::AnsiC, Format::AnsiD, Format::AnsiE];
     /// (largura, altura) em paisagem, mm.
     pub fn size(self) -> V2 {
         match self {
@@ -36,6 +41,11 @@ impl Format {
             Format::A2 => [594., 420.],
             Format::A1 => [841., 594.],
             Format::A0 => [1189., 841.],
+            Format::AnsiA => [279.4, 215.9],
+            Format::AnsiB => [431.8, 279.4],
+            Format::AnsiC => [558.8, 431.8],
+            Format::AnsiD => [863.6, 558.8],
+            Format::AnsiE => [1117.6, 863.6],
         }
     }
     pub fn label(self) -> &'static str {
@@ -45,8 +55,96 @@ impl Format {
             Format::A2 => "A2",
             Format::A1 => "A1",
             Format::A0 => "A0",
+            Format::AnsiA => "ANSI A (Carta)",
+            Format::AnsiB => "ANSI B",
+            Format::AnsiC => "ANSI C",
+            Format::AnsiD => "ANSI D",
+            Format::AnsiE => "ANSI E",
         }
     }
+}
+
+/// Modelo da legenda (carimbo).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum TitleStyle {
+    /// ISO 7200: 180 mm, campos de identificação e responsabilidade
+    #[default]
+    Iso7200,
+    /// ABNT NBR 10068/10582: 175 mm, desenhista/verificado/aprovado, unidade e símbolo do diedro
+    Abnt,
+    /// ANSI Y14.1: bloco de título com SIZE/DWG NO/REV e quadro de tolerâncias gerais
+    Ansi,
+    /// compacta (A4 e croquis)
+    Simples,
+}
+
+impl TitleStyle {
+    pub const ALL: [TitleStyle; 4] = [TitleStyle::Iso7200, TitleStyle::Abnt, TitleStyle::Ansi, TitleStyle::Simples];
+    pub fn label(self) -> &'static str {
+        match self {
+            TitleStyle::Iso7200 => "ISO 7200",
+            TitleStyle::Abnt => "ABNT NBR 10068",
+            TitleStyle::Ansi => "ANSI Y14.1",
+            TitleStyle::Simples => "Simples",
+        }
+    }
+}
+
+/// Modelos de folha prontos: formato, orientação e legenda.
+pub const TEMPLATES: [(&str, Format, bool, TitleStyle); 9] = [
+    ("A4 retrato — ABNT", Format::A4, true, TitleStyle::Abnt),
+    ("A4 paisagem — simples", Format::A4, false, TitleStyle::Simples),
+    ("A3 paisagem — ABNT", Format::A3, false, TitleStyle::Abnt),
+    ("A3 paisagem — ISO 7200", Format::A3, false, TitleStyle::Iso7200),
+    ("A2 paisagem — ISO 7200", Format::A2, false, TitleStyle::Iso7200),
+    ("A1 paisagem — ABNT", Format::A1, false, TitleStyle::Abnt),
+    ("A0 paisagem — ISO 7200", Format::A0, false, TitleStyle::Iso7200),
+    ("ANSI A retrato — ANSI", Format::AnsiA, true, TitleStyle::Ansi),
+    ("ANSI B paisagem — ANSI", Format::AnsiB, false, TitleStyle::Ansi),
+];
+
+/// Campos automáticos aceitos nos textos da legenda e das notas.
+pub const FIELDS: [(&str, &str); 14] = [
+    ("{codigo}", "código (PN) da peça/montagem"),
+    ("{descricao}", "descrição (ou nome)"),
+    ("{material}", "material"),
+    ("{massa}", "massa (kg, pelo material)"),
+    ("{volume}", "volume (cm³)"),
+    ("{escala}", "escala da primeira vista"),
+    ("{folha}", "número da folha"),
+    ("{folhas}", "total de folhas"),
+    ("{formato}", "formato da folha"),
+    ("{data}", "data de hoje"),
+    ("{autor}", "usuário do computador"),
+    ("{arquivo}", "nome do arquivo de origem"),
+    ("{revisao}", "revisão da legenda"),
+    ("{titulo}", "título do desenho"),
+];
+
+/// Troca os campos `{chave}` pelos valores.
+pub fn resolve(text: &str, fields: &std::collections::HashMap<String, String>) -> String {
+    let mut out = text.to_string();
+    if out.contains('{') {
+        for (k, v) in fields {
+            out = out.replace(&format!("{{{k}}}"), v);
+        }
+    }
+    out
+}
+
+/// Data de hoje (dd/mm/aaaa).
+pub fn today() -> String {
+    let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0) as i64;
+    let z = secs / 86400 + 719468;
+    let era = z.div_euclid(146097);
+    let doe = z - era * 146097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + if m <= 2 { 1 } else { 0 };
+    format!("{d:02}/{m:02}/{y}")
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -57,6 +155,9 @@ pub struct Sheet {
     /// retrato (A4 em pé)
     #[serde(default)]
     pub portrait: bool,
+    /// zoneamento da margem (números e letras, ISO 5457)
+    #[serde(default = "yes")]
+    pub zones: bool,
 }
 
 impl Sheet {
@@ -264,19 +365,37 @@ pub struct TitleBlock {
     pub revision: String,
     #[serde(default)]
     pub notes: String,
+    #[serde(default)]
+    pub style: TitleStyle,
+    #[serde(default)]
+    pub checked_by: String,
+    #[serde(default)]
+    pub approved_by: String,
+    /// massa específica para {massa} (g/cm³)
+    #[serde(default = "steel")]
+    pub density: f64,
+}
+
+fn steel() -> f64 {
+    7.85
 }
 
 impl Default for TitleBlock {
     fn default() -> Self {
+        // campos automáticos: vêm das propriedades da peça/montagem da primeira vista
         TitleBlock {
             company: "SolidCadCraft".into(),
-            title: "Desenho".into(),
-            pn: String::new(),
-            material: String::new(),
-            drawn_by: String::new(),
-            date: String::new(),
+            title: "{descricao}".into(),
+            pn: "{codigo}".into(),
+            material: "{material}".into(),
+            drawn_by: "{autor}".into(),
+            date: "{data}".into(),
             revision: "A".into(),
             notes: String::new(),
+            style: TitleStyle::Iso7200,
+            checked_by: String::new(),
+            approved_by: String::new(),
+            density: 7.85,
         }
     }
 }
@@ -318,7 +437,7 @@ impl Drawing {
             dims: vec![],
             notes: vec![],
             tables: vec![],
-            title: TitleBlock { title: name.into(), ..Default::default() },
+            title: TitleBlock::default(),
             text_height: 3.5,
             decimals: 1,
         };
@@ -335,7 +454,7 @@ impl Drawing {
     pub fn add_sheet(&mut self, format: Format) -> Id {
         let id = self.alloc();
         let n = self.sheets.len() + 1;
-        self.sheets.push(Sheet { id, name: format!("Folha {n}"), format, portrait: false });
+        self.sheets.push(Sheet { id, name: format!("Folha {n}"), format, portrait: false, zones: true });
         id
     }
 

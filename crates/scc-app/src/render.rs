@@ -141,6 +141,48 @@ struct LOut { @builtin(position) clip: vec4<f32>, @location(0) col: vec4<f32> };
     return o;
 }
 @fragment fn fs_line(i: LOut) -> @location(0) vec4<f32> { return i.col; }
+
+// ---------- linhas grossas e com tipo de linha (cada segmento = 2 triângulos expandidos na tela)
+// p: x = lado (-1/+1), y = ponta (0 = a, 1 = b), z = espessura (px), w = tipo (0 contínua, 1 tracejada,
+// 2 traço-ponto, 3 pontilhada); q: x = comprimento acumulado até a, y = comprimento do segmento
+struct WIn { @location(0) a: vec3<f32>, @location(1) b: vec3<f32>, @location(2) col: vec4<f32>, @location(3) p: vec4<f32>, @location(4) q: vec2<f32> };
+struct WOut { @builtin(position) clip: vec4<f32>, @location(0) col: vec4<f32>, @location(1) dist: f32, @location(2) @interpolate(flat) dash: f32 };
+@vertex fn vs_wide(v: WIn) -> WOut {
+    var o: WOut;
+    let ca = u.view_proj * vec4<f32>(v.a, 1.0);
+    let cb = u.view_proj * vec4<f32>(v.b, 1.0);
+    let size = max(u.params.yz, vec2<f32>(1.0, 1.0));
+    let sa = ca.xy / max(ca.w, 1e-6) * size * 0.5;
+    let sb = cb.xy / max(cb.w, 1e-6) * size * 0.5;
+    var d = sb - sa;
+    let len_px = length(d);
+    if (len_px < 1e-6) { d = vec2<f32>(1.0, 0.0); } else { d = d / len_px; }
+    let n = vec2<f32>(-d.y, d.x);
+    var c = select(ca, cb, v.p.y > 0.5);
+    let off = n * v.p.x * v.p.z * 0.5 / (size * 0.5);
+    c = vec4<f32>(c.xy + off * c.w, c.z - 0.0003 * c.w, c.w);
+    o.clip = c;
+    o.col = v.col;
+    // distância em px ao longo da polilinha (para o tracejado)
+    let px_per_unit = len_px / max(v.q.y, 1e-6);
+    o.dist = (v.q.x + v.p.y * v.q.y) * px_per_unit;
+    o.dash = v.p.w;
+    return o;
+}
+@fragment fn fs_wide(i: WOut) -> @location(0) vec4<f32> {
+    if (i.dash > 0.5) {
+        var period = 13.0; var on = 8.0;
+        if (i.dash > 2.5) { period = 6.0; on = 2.0; }
+        let t = i.dist - floor(i.dist / select(period, 22.0, i.dash > 1.5 && i.dash < 2.5)) * select(period, 22.0, i.dash > 1.5 && i.dash < 2.5);
+        if (i.dash > 1.5 && i.dash < 2.5) {
+            // traço-ponto: 12 traço, 4 vazio, 2 ponto, 4 vazio
+            if ((t > 12.0 && t < 16.0) || t > 18.0) { discard; }
+        } else if (t > on) {
+            discard;
+        }
+    }
+    return i.col;
+}
 "#;
 
 /// Estilo de exibição (RF-UI-015).
@@ -223,6 +265,30 @@ pub struct LineVertex {
     pub col: [f32; 4],
 }
 
+/// Vértice das linhas grossas (6 por segmento).
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct WideVertex {
+    pub a: [f32; 3],
+    pub b: [f32; 3],
+    pub col: [f32; 4],
+    pub p: [f32; 4],
+    pub q: [f32; 2],
+}
+
+/// Acrescenta uma polilinha grossa (espessura em px; tipo 0 contínua, 1 tracejada, 2 traço-ponto, 3 pontilhada).
+pub fn push_wide(out: &mut Vec<WideVertex>, pts: &[[f32; 3]], col: [f32; 4], width: f32, dash: u8) {
+    let mut acc = 0f32;
+    for w in pts.windows(2) {
+        let (a, b) = (w[0], w[1]);
+        let len = ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2) + (b[2] - a[2]).powi(2)).sqrt();
+        for (side, end) in [(-1., 0.), (1., 0.), (1., 1.), (-1., 0.), (1., 1.), (-1., 1.)] {
+            out.push(WideVertex { a, b, col, p: [side, end, width, dash as f32], q: [acc, len] });
+        }
+        acc += len;
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 struct Uniforms {
@@ -250,6 +316,8 @@ pub struct Scene {
     pub lines: Vec<LineVertex>,
     /// linhas sempre visíveis (seleção, eixos, pontos)
     pub overlay: Vec<LineVertex>,
+    /// linhas grossas / com tipo de linha (curvas de referência), com profundidade
+    pub wide: Vec<WideVertex>,
     /// sombra translúcida dos perfis fechados de sketch (triângulos sem índice)
     pub fill: Vec<MeshVertex>,
     pub bounds: Option<(Vec3, Vec3)>,
@@ -358,6 +426,8 @@ pub struct Viewport {
     xray_pipe: wgpu::RenderPipeline,
     line_pipe: wgpu::RenderPipeline,
     overlay_pipe: wgpu::RenderPipeline,
+    wide_pipe: wgpu::RenderPipeline,
+    wb: Buf,
     ubuf: wgpu::Buffer,
     bind: wgpu::BindGroup,
     vb: Option<(wgpu::Buffer, wgpu::Buffer, u32)>,
@@ -502,6 +572,7 @@ impl Viewport {
         let target = [Some(wgpu::ColorTargetState { format: FMT, blend: Some(wgpu::BlendState::ALPHA_BLENDING), write_mask: wgpu::ColorWrites::ALL })];
         let mesh_attrs = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x4];
         let line_attrs = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x4];
+        let wide_attrs = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x4, 4 => Float32x2];
         use wgpu::CompareFunction as C;
         use wgpu::PrimitiveTopology as T;
         let pipe = |vs: &str, fs: &str, attrs: &[wgpu::VertexAttribute], stride: usize, topo: T, cmp, write| {
@@ -516,14 +587,14 @@ impl Viewport {
                     compilation_options: Default::default(),
                 },
                 fragment: Some(wgpu::FragmentState { module: &module, entry_point: Some(fs), targets: &target, compilation_options: Default::default() }),
-                primitive: wgpu::PrimitiveState { topology: topo, ..Default::default() },
+                primitive: wgpu::PrimitiveState { topology: if topo == T::LineStrip { T::TriangleList } else { topo }, ..Default::default() },
                 depth_stencil: Some(wgpu::DepthStencilState {
                     format: DEPTH,
                     depth_write_enabled: Some(write),
                     depth_compare: Some(cmp),
                     stencil: Default::default(),
                     // faces um pouco para trás (polygon offset): arestas aparecem sem atravessar faces
-                    bias: if topo == T::TriangleList {
+                    bias: if topo == T::TriangleList && stride != std::mem::size_of::<WideVertex>() {
                         wgpu::DepthBiasState { constant: 2, slope_scale: 1.0, clamp: 0.0 }
                     } else {
                         Default::default()
@@ -542,6 +613,8 @@ impl Viewport {
             xray_pipe: pipe("vs_mesh", "fs_mesh", &mesh_attrs, ms, T::TriangleList, C::Less, false),
             line_pipe: pipe("vs_line", "fs_line", &line_attrs, ls, T::LineList, C::LessEqual, false),
             overlay_pipe: pipe("vs_line", "fs_line", &line_attrs, ls, T::LineList, C::Always, false),
+            wide_pipe: pipe("vs_wide", "fs_wide", &wide_attrs, std::mem::size_of::<WideVertex>(), T::LineStrip, C::LessEqual, false),
+            wb: None,
             ubuf,
             bind,
             textures,
@@ -587,6 +660,7 @@ impl Viewport {
         self.fb = (!s.fill.is_empty()).then(|| (mk(bytemuck::cast_slice(&s.fill), wgpu::BufferUsages::VERTEX), s.fill.len() as u32));
         self.lb = lines(&s.lines);
         self.ob = lines(&s.overlay);
+        self.wb = (!s.wide.is_empty()).then(|| (mk(bytemuck::cast_slice(&s.wide), wgpu::BufferUsages::VERTEX), s.wide.len() as u32));
         self.bounds = s.bounds;
         self.scene_gen += 1;
     }
@@ -641,7 +715,7 @@ impl Viewport {
         let u = Uniforms {
             view_proj: vp.to_cols_array_2d(),
             eye: [e.x, e.y, e.z, 1.],
-            params: [style.mode.code(), 0., 0., 0.],
+            params: [style.mode.code(), size[0] as f32, size[1] as f32, 0.],
             bg_top: lin(style.bg_top),
             bg_bottom: bottom,
             paper: [0.96, 0.96, 0.95, 1.],
@@ -701,6 +775,7 @@ impl Viewport {
                 lines(&self.eb, if edges_always { &self.overlay_pipe } else { &self.line_pipe });
             }
             lines(&self.lb, &self.line_pipe);
+            lines(&self.wb, &self.wide_pipe);
             lines(&self.ob, &self.overlay_pipe);
         }
         rs.queue.submit([enc.finish()]);

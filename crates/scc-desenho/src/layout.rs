@@ -196,7 +196,8 @@ pub fn dim_text(d: &Drawing, dm: &Dim, val: f64) -> String {
 pub fn sheet(d: &Drawing, sheet: Id, m: &mut Models) -> Vec<Item> {
     let mut o = Out { items: vec![], owner: None };
     let Some(sh) = d.sheet(sheet) else { return vec![] };
-    frame(&mut o, d, sh);
+    let fields = sheet_fields(d, sh, m);
+    frame(&mut o, d, sh, &fields);
     let th = d.text_height;
     let views: Vec<&View> = d.views.iter().filter(|v| v.sheet == sheet).collect();
     for v in &views {
@@ -275,7 +276,10 @@ pub fn sheet(d: &Drawing, sheet: Id, m: &mut Models) -> Vec<Item> {
     // notas e símbolos
     for n in d.notes.iter().filter(|n| n.sheet == sheet) {
         o.owner = Some(n.id);
-        note(&mut o, n);
+        // notas também aceitam campos automáticos ({codigo}, {material}…)
+        let mut n2 = n.clone();
+        n2.text = crate::resolve(&n.text, &fields);
+        note(&mut o, &n2);
     }
     // tabelas
     for t in d.tables.iter().filter(|t| t.sheet == sheet) {
@@ -286,7 +290,43 @@ pub fn sheet(d: &Drawing, sheet: Id, m: &mut Models) -> Vec<Item> {
     o.items
 }
 
-fn frame(o: &mut Out, d: &Drawing, sh: &Sheet) {
+/// Valores dos campos automáticos da folha (propriedades da origem da primeira vista).
+pub fn sheet_fields(d: &Drawing, sh: &Sheet, m: &mut Models) -> std::collections::HashMap<String, String> {
+    let mut f = std::collections::HashMap::new();
+    let first = d.views.iter().find(|v| v.sheet == sh.id).or(d.views.first());
+    let idx = d.sheets.iter().position(|s| s.id == sh.id).unwrap_or(0) + 1;
+    let (pn, desc, mat) = first.and_then(|v| m.props(&v.source)).unwrap_or_default();
+    let vol = first.and_then(|v| m.load(&v.source).shape.as_ref().map(|s| s.mass().volume)).unwrap_or(0.);
+    f.insert("codigo".into(), pn);
+    f.insert("descricao".into(), if desc.is_empty() { d.name.clone() } else { desc });
+    f.insert("material".into(), mat);
+    f.insert("volume".into(), if vol > 0. { d.num(vol / 1000.) } else { String::new() });
+    f.insert("massa".into(), if vol > 0. { format!("{} kg", d.num(vol / 1000. * d.title.density / 1000.)) } else { String::new() });
+    f.insert("escala".into(), first.map(|v| scale_text(v.scale)).unwrap_or_else(|| "1:1".into()));
+    f.insert("folha".into(), idx.to_string());
+    f.insert("folhas".into(), d.sheets.len().to_string());
+    f.insert("formato".into(), sh.format.label().to_string());
+    f.insert("data".into(), crate::today());
+    f.insert("autor".into(), std::env::var("USERNAME").or_else(|_| std::env::var("USER")).unwrap_or_default());
+    f.insert("arquivo".into(), first.map(|v| v.source.path.rsplit(['/', '\\']).next().unwrap_or("").to_string()).unwrap_or_default());
+    f.insert("revisao".into(), d.title.revision.clone());
+    f.insert("titulo".into(), d.name.clone());
+    f
+}
+
+/// Célula da legenda: posição (mm a partir do canto inferior esquerdo da legenda), tamanho,
+/// rótulo e valor (texto com campos automáticos).
+struct Cell<'a> {
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    label: &'a str,
+    value: String,
+    size: f64,
+}
+
+fn frame(o: &mut Out, d: &Drawing, sh: &Sheet, fields: &std::collections::HashMap<String, String>) {
     let [w, h] = sh.size();
     o.rect([0., 0.], [w, h], Style::Thin);
     // margem de arquivamento à esquerda (ISO 5457)
@@ -296,41 +336,150 @@ fn frame(o: &mut Out, d: &Drawing, sh: &Sheet) {
     for (a, b) in [([w / 2., 0.], [w / 2., r]), ([w / 2., h - r], [w / 2., h]), ([0., h / 2.], [l, h / 2.]), ([w - r, h / 2.], [w, h / 2.])] {
         o.seg(a, b, Style::Thick);
     }
-    // legenda 180 × 36 no canto inferior direito
-    let tw = 180.;
-    let x0 = w - r - tw;
-    let y0 = r;
-    let rowh = 9.;
-    o.rect([x0, y0], [w - r, y0 + 4. * rowh], Style::Thick);
-    for i in 1..4 {
-        o.seg([x0, y0 + i as f64 * rowh], [w - r, y0 + i as f64 * rowh], Style::Thin);
-    }
-    let cols = [x0 + 60., x0 + 120., x0 + 150.];
-    for c in cols {
-        o.seg([c, y0], [c, y0 + 3. * rowh], Style::Thin);
+    // zoneamento: números na horizontal, letras na vertical (de cima para baixo), ~50 mm cada
+    if sh.zones {
+        let (iw, ih) = (w - l - r, h - 2. * r);
+        let nx = ((iw / 50.).round() as usize).max(2);
+        let ny = ((ih / 50.).round() as usize).max(2);
+        for i in 0..=nx {
+            let x = l + iw * i as f64 / nx as f64;
+            if i > 0 && i < nx {
+                o.seg([x, r - 4.], [x, r], Style::Thin);
+                o.seg([x, h - r], [x, h - r + 4.], Style::Thin);
+            }
+            if i < nx {
+                let xc = l + iw * (i as f64 + 0.5) / nx as f64;
+                o.text([xc, r - 3.6], (i + 1).to_string(), 2.5, 0., Align::Center);
+                o.text([xc, h - r + 1.2], (i + 1).to_string(), 2.5, 0., Align::Center);
+            }
+        }
+        let letters = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+        for j in 0..=ny {
+            let y = r + ih * j as f64 / ny as f64;
+            if j > 0 && j < ny {
+                o.seg([l - 4., y], [l, y], Style::Thin);
+                o.seg([w - r, y], [w - r + 4., y], Style::Thin);
+            }
+            if j < ny {
+                let yc = h - r - ih * (j as f64 + 0.5) / ny as f64 - 1.2;
+                let c = letters.chars().nth(j % letters.len()).unwrap().to_string();
+                o.text([l - 2., yc], c.clone(), 2.5, 0., Align::Center);
+                o.text([w - r + 2.4, yc], c, 2.5, 0., Align::Center);
+            }
+        }
+        // linha de corte das zonas a 4 mm da moldura
+        o.rect([l - 4., r - 4.], [w - r + 4., h - r + 4.], Style::Thin);
     }
     let t = &d.title;
-    let idx = d.sheets.iter().position(|s| s.id == sh.id).unwrap_or(0) + 1;
-    let main_scale = d.views.iter().find(|v| v.sheet == sh.id).map(|v| scale_text(v.scale)).unwrap_or_else(|| "1:1".into());
-    let cell = |o: &mut Out, x: f64, row: usize, label: &str, value: &str| {
-        let y = y0 + row as f64 * rowh;
-        o.text([x + 1.2, y + rowh - 2.6], label.to_string(), 1.8, 0., Align::Left);
-        o.text([x + 1.2, y + 1.8], value.to_string(), 3.2, 0., Align::Left);
+    let v = |s: &str| crate::resolve(s, fields);
+    let get = |k: &str| fields.get(k).cloned().unwrap_or_default();
+    let c = |x: f64, y: f64, w: f64, h: f64, label: &'static str, value: String| Cell { x, y, w, h, label, value, size: 3.0 };
+    let (bw, cells, diedro): (f64, Vec<Cell>, Option<(f64, f64, f64)>) = match t.style {
+        TitleStyle::Iso7200 => (
+            180.,
+            vec![
+                Cell { size: 4.2, ..c(0., 27., 70., 9., "", v(&t.company)) },
+                Cell { size: 4.2, ..c(70., 27., 110., 9., "TÍTULO", v(&t.title)) },
+                c(0., 18., 60., 9., "CÓDIGO", v(&t.pn)),
+                c(60., 18., 60., 9., "MATERIAL", v(&t.material)),
+                c(120., 18., 30., 9., "ESCALA", get("escala")),
+                c(150., 18., 30., 9., "FORMATO", get("formato")),
+                c(0., 9., 60., 9., "DESENHO", v(&t.drawn_by)),
+                c(60., 9., 30., 9., "VERIFICADO", v(&t.checked_by)),
+                c(90., 9., 30., 9., "DATA", v(&t.date)),
+                c(120., 9., 30., 9., "REVISÃO", v(&t.revision)),
+                c(150., 9., 30., 9., "FOLHA", format!("{}/{}", get("folha"), get("folhas"))),
+                c(0., 0., 130., 9., "OBSERVAÇÕES", v(&t.notes)),
+                c(130., 0., 50., 9., "MASSA", get("massa")),
+            ],
+            None,
+        ),
+        TitleStyle::Abnt => (
+            175.,
+            vec![
+                Cell { size: 4.2, ..c(0., 36., 70., 14., "", v(&t.company)) },
+                Cell { size: 4.0, ..c(70., 36., 105., 14., "TÍTULO", v(&t.title)) },
+                c(0., 27., 70., 9., "DESENHO Nº", v(&t.pn)),
+                c(70., 27., 65., 9., "MATERIAL", v(&t.material)),
+                c(135., 27., 20., 9., "ESCALA", get("escala")),
+                c(155., 27., 20., 9., "UNIDADE", "mm".into()),
+                c(0., 18., 45., 9., "DESENHISTA", v(&t.drawn_by)),
+                c(45., 18., 45., 9., "VERIFICADO", v(&t.checked_by)),
+                c(90., 18., 45., 9., "APROVADO", v(&t.approved_by)),
+                c(135., 18., 40., 9., "DATA", v(&t.date)),
+                c(0., 9., 25., 9., "REVISÃO", v(&t.revision)),
+                c(25., 9., 25., 9., "FOLHA", format!("{}/{}", get("folha"), get("folhas"))),
+                c(50., 9., 25., 9., "FORMATO", get("formato")),
+                c(75., 9., 40., 9., "MASSA", get("massa")),
+                c(0., 0., 115., 9., "OBSERVAÇÕES", v(&t.notes)),
+                c(115., 0., 60., 18., "PROJEÇÃO", String::new()),
+            ],
+            Some((115., 0., 60.)),
+        ),
+        TitleStyle::Ansi => (
+            178.,
+            vec![
+                Cell { size: 4.2, ..c(0., 26., 100., 14., "", v(&t.company)) },
+                Cell { size: 4.0, ..c(100., 26., 78., 14., "TITLE", v(&t.title)) },
+                c(0., 17., 20., 9., "SIZE", get("formato").replace("ANSI ", "").chars().take(1).collect()),
+                c(20., 17., 30., 9., "CAGE CODE", String::new()),
+                c(50., 17., 98., 9., "DWG NO", v(&t.pn)),
+                c(148., 17., 30., 9., "REV", v(&t.revision)),
+                c(0., 8., 40., 9., "SCALE", get("escala")),
+                c(40., 8., 50., 9., "WEIGHT", get("massa")),
+                c(90., 8., 88., 9., "SHEET", format!("{} OF {}", get("folha"), get("folhas"))),
+                c(0., 0., 60., 8., "DRAWN", v(&t.drawn_by)),
+                c(60., 0., 60., 8., "CHECKED", v(&t.checked_by)),
+                c(120., 0., 58., 8., "DATE", v(&t.date)),
+            ],
+            None,
+        ),
+        TitleStyle::Simples => (
+            150.,
+            vec![
+                Cell { size: 3.6, ..c(0., 9., 150., 9., "TÍTULO", v(&t.title)) },
+                c(0., 0., 60., 9., "CÓDIGO", v(&t.pn)),
+                c(60., 0., 30., 9., "ESCALA", get("escala")),
+                c(90., 0., 30., 9., "DATA", v(&t.date)),
+                c(120., 0., 30., 9., "FOLHA", format!("{}/{}", get("folha"), get("folhas"))),
+            ],
+            None,
+        ),
     };
-    // linha de cima: empresa e título
-    o.text([x0 + 2., y0 + 3. * rowh + 2.6], t.company.clone(), 4.2, 0., Align::Left);
-    o.text([w - r - 2., y0 + 3. * rowh + 2.6], t.title.clone(), 4.2, 0., Align::Right);
-    cell(o, x0, 2, "CÓDIGO", &t.pn);
-    cell(o, cols[0], 2, "MATERIAL", &t.material);
-    cell(o, cols[1], 2, "ESCALA", &main_scale);
-    cell(o, cols[2], 2, "FORMATO", sh.format.label());
-    cell(o, x0, 1, "DESENHO", &t.drawn_by);
-    cell(o, cols[0], 1, "DATA", &t.date);
-    cell(o, cols[1], 1, "REVISÃO", &t.revision);
-    cell(o, cols[2], 1, "FOLHA", &format!("{idx}/{}", d.sheets.len()));
-    cell(o, x0, 0, "OBSERVAÇÕES", &t.notes);
-    o.text([w - r - 2., y0 + 1.8], "1º diedro", 2.5, 0., Align::Right);
-    let _ = cols;
+    let x0 = w - r - bw;
+    let y0 = r;
+    let top = cells.iter().map(|k| k.y + k.h).fold(0., f64::max);
+    o.rect([x0, y0], [w - r, y0 + top], Style::Thick);
+    for k in &cells {
+        o.rect([x0 + k.x, y0 + k.y], [x0 + k.x + k.w, y0 + k.y + k.h], Style::Thin);
+        if !k.label.is_empty() {
+            o.text([x0 + k.x + 1.2, y0 + k.y + k.h - 2.4], k.label.to_string(), 1.8, 0., Align::Left);
+        }
+        // texto que não cabe diminui
+        let mut s = k.size;
+        while s > 1.6 && text_width(&k.value, s) > k.w - 2.4 {
+            s -= 0.2;
+        }
+        let ty = if k.label.is_empty() { y0 + k.y + (k.h - s) / 2. } else { y0 + k.y + 1.6 };
+        o.text([x0 + k.x + 1.2, ty], k.value.clone(), s, 0., Align::Left);
+    }
+    // quadro de tolerâncias gerais (ANSI): à esquerda da legenda
+    if t.style == TitleStyle::Ansi {
+        let (bx, bh) = (x0 - 70., top);
+        o.rect([bx, y0], [x0, y0 + bh], Style::Thick);
+        for (i, line) in ["UNLESS OTHERWISE SPECIFIED:", "DIMENSIONS ARE IN MILLIMETERS", "TOLERANCES: X.X ±0.1  X.XX ±0.05", "ANGLES ±0.5°", "FIRST ANGLE PROJECTION"].iter().enumerate() {
+            o.text([bx + 1.5, y0 + bh - 5. - i as f64 * 5.5], line.to_string(), 2.0, 0., Align::Left);
+        }
+    }
+    // símbolo do 1º diedro: tronco de cone de frente e de lado
+    let (sx, sy, sw) = diedro.map(|(x, y, ww)| (x0 + x, y0 + y, ww)).unwrap_or((w - r - 30., y0 + top + 2., 28.));
+    let cx = sx + sw * 0.32;
+    let cy = sy + 8.;
+    o.line(vec![[cx - 7., cy - 3.], [cx + 3., cy - 5.], [cx + 3., cy + 5.], [cx - 7., cy + 3.], [cx - 7., cy - 3.]], Style::Visible);
+    let ex = sx + sw * 0.72;
+    o.line(crate::source::circle([ex, cy], 5.), Style::Visible);
+    o.line(crate::source::circle([ex, cy], 3.), Style::Visible);
+    o.text([sx + sw / 2., sy + 1.2], "1º diedro".to_string(), 2.2, 0., Align::Center);
 }
 
 /// Segmentos de hachura a 45° dentro dos contornos (regra par/ímpar).

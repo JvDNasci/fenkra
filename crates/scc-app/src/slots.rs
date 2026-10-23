@@ -46,7 +46,7 @@ pub fn label(id: Id) -> Option<String> {
         x if x == UNSET_SKETCH => "um sketch (na árvore)",
         _ => return None,
     };
-    Some(format!("⊙ {} {what}", crate::i18n::tr("selecione")))
+    Some(format!("⊙ {} {}", crate::i18n::tr("selecione"), crate::i18n::tr(what)))
 }
 
 fn walk_count(v: &Value, n: &mut usize) {

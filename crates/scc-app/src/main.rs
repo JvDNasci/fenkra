@@ -20,6 +20,7 @@ mod asm_ui;
 mod st_ui;
 mod pmi_ui;
 mod slots;
+mod sketch_ext;
 mod dwg_ui;
 mod measure;
 mod i18n;

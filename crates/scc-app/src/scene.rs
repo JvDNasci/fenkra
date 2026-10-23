@@ -6,6 +6,7 @@
 use crate::app::Sel;
 use crate::render::{LineVertex, MeshVertex, Scene};
 use crate::settings::Filter;
+use eframe::egui;
 use glam::Vec3;
 use scc_core::{Appearance, Document, Id, OriginPlane, PlaneRef};
 use scc_solidos::RecomputeResult;
@@ -24,6 +25,11 @@ pub struct SceneOpts<'a> {
     pub dark_edges: bool,
     /// item realçado: o que está sob o mouse na árvore, ou o comando aberto
     pub hilite: Option<Id>,
+    /// estilo padrão das curvas de referência (px e tipo de linha)
+    pub line_w: f32,
+    pub line_dash: u8,
+    /// símbolo dos pontos: 0 = cruz 3D na cena; outros são desenhados na tela pela viewport
+    pub point_style: u8,
 }
 
 fn lv(p: [f32; 3], col: [f32; 4]) -> LineVertex {
@@ -153,6 +159,9 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
                 continue;
             }
             let d = size * 0.025;
+            if o.point_style != 0 {
+                continue;
+            }
             for p in &sk.points {
                 let c = Vec3::from(*p);
                 for ax in [Vec3::X, Vec3::Y, Vec3::Z] {
@@ -236,14 +245,27 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
         if !selected && (!o.filter.planos_ref || !shows(!vis, env)) {
             continue;
         }
-        let dst = if selected { &mut s.overlay } else { &mut s.lines };
-        for w in c.pts.windows(2) {
-            let col = if selected { HILITE } else { geo_col };
-            dst.push(lv(w[0].map(|v| v as f32), col));
-            dst.push(lv(w[1].map(|v| v as f32), col));
+        // espessura e tipo de linha: o do elemento, senão o padrão das configurações
+        let st = doc.line_style(c.id);
+        let (w, dash) = st.map(|x| (x.width, x.dash)).unwrap_or((o.line_w, o.line_dash));
+        let col = match (selected, doc.reference(c.id).and_then(|x| x.appearance)) {
+            (true, _) => HILITE,
+            (false, Some(a)) => {
+                let k = rgb(a.color);
+                [k[0], k[1], k[2], 1.0]
+            }
+            _ => geo_col,
+        };
+        let pts: Vec<[f32; 3]> = c.pts.iter().map(|p| p.map(|v| v as f32)).collect();
+        crate::render::push_wide(&mut s.wide, &pts, col, if selected { w + 1.5 } else { w }, dash);
+        if selected {
+            for w2 in c.pts.windows(2) {
+                s.overlay.push(lv(w2[0].map(|v| v as f32), HILITE));
+                s.overlay.push(lv(w2[1].map(|v| v as f32), HILITE));
+            }
         }
     }
-    if o.filter.pontos {
+    if o.filter.pontos && o.point_style == 0 {
         for p in &r.points {
             let selected = hi(p.id);
             let vis = doc.reference(p.id).is_some_and(|x| x.visible);
@@ -289,5 +311,78 @@ pub fn plane_ref_name(doc: &Document, p: &PlaneRef) -> String {
     match p {
         PlaneRef::Origin(o) => format!("Origem · {}", plane_name(*o)),
         PlaneRef::Datum(id) => doc.reference(*id).map(|r| r.name.clone()).or_else(|| crate::slots::label(*id)).unwrap_or_else(|| format!("⚠ perdida #{}", id.0)),
+    }
+}
+
+/// Símbolos dos pontos (referência e centros de sketch) em tamanho fixo na tela, no estilo
+/// escolhido (asterisco, X, círculo, quadrado, ponto) — o estilo 0 (cruz 3D) fica na cena.
+#[allow(clippy::too_many_arguments)]
+pub fn draw_points(painter: &egui::Painter, doc: &Document, r: &RecomputeResult, cam: &crate::render::Camera, rect: egui::Rect, style: u8, size: f32, filter: &Filter, hidden_env: bool, editing: Option<Id>, hilite: Option<Id>, sel: &Sel) {
+    if style == 0 || !filter.pontos {
+        return;
+    }
+    let geo = egui::Color32::from_rgb(242, 178, 76);
+    let sk_col = egui::Color32::from_rgb(90, 170, 255);
+    let hl = egui::Color32::from_rgb(255, 205, 60);
+    let draw = |p: [f32; 3], col: egui::Color32, st: u8, sz: f32| {
+        let Some(c) = cam.project(rect, Vec3::from(p)) else { return };
+        if !rect.contains(c) {
+            return;
+        }
+        let h = sz / 2.;
+        let stroke = egui::Stroke::new(1.6, col);
+        match st {
+            1 => {
+                for k in 0..3 {
+                    let a = k as f32 * std::f32::consts::PI / 3. + std::f32::consts::FRAC_PI_2;
+                    let d = egui::vec2(a.cos(), -a.sin()) * h;
+                    painter.line_segment([c - d, c + d], stroke);
+                }
+            }
+            2 => {
+                painter.line_segment([c + egui::vec2(-h, -h), c + egui::vec2(h, h)], stroke);
+                painter.line_segment([c + egui::vec2(-h, h), c + egui::vec2(h, -h)], stroke);
+            }
+            3 => {
+                painter.circle_stroke(c, h, stroke);
+                painter.circle_filled(c, 1.2, col);
+            }
+            4 => {
+                painter.rect_stroke(egui::Rect::from_center_size(c, egui::vec2(sz, sz)), 0., stroke, egui::StrokeKind::Middle);
+            }
+            _ => {
+                painter.circle_filled(c, h * 0.5, col);
+            }
+        }
+    };
+    for p in &r.points {
+        let rf = doc.reference(p.id);
+        let vis = rf.is_some_and(|x| x.visible);
+        let selected = hilite == Some(p.id) || matches!(sel, Sel::Ref(x) if *x == p.id);
+        if !selected && !shows(!vis, hidden_env) {
+            continue;
+        }
+        let st = doc.line_style(p.id);
+        let col = match (selected, rf.and_then(|x| x.appearance)) {
+            (true, _) => hl,
+            (false, Some(a)) => egui::Color32::from_rgb(a.color[0], a.color[1], a.color[2]),
+            _ => geo,
+        };
+        draw(p.p.map(|v| v as f32), col, st.map(|x| x.point).filter(|x| *x != 0).unwrap_or(style), st.map(|x| x.size).unwrap_or(size));
+    }
+    if filter.sketches {
+        for sk in &r.sketches {
+            if Some(sk.feature) == editing {
+                continue;
+            }
+            let hidden = doc.feature(sk.feature).is_some_and(|f| f.hidden);
+            if !shows(hidden, hidden_env) {
+                continue;
+            }
+            let col = if hilite == Some(sk.feature) { hl } else { sk_col };
+            for p in &sk.points {
+                draw(*p, col, style, size);
+            }
+        }
     }
 }

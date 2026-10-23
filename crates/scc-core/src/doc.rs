@@ -282,6 +282,31 @@ pub struct RefElement {
     pub appearance: Option<Appearance>,
 }
 
+/// Estilo de exibição de linhas, curvas e pontos (como os tipos de linha do AutoCAD).
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
+pub struct LineStyle {
+    /// espessura em pixels
+    pub width: f32,
+    /// 0 contínua, 1 tracejada, 2 traço-ponto, 3 pontilhada
+    pub dash: u8,
+    /// símbolo do ponto: 0 cruz 3D, 1 asterisco, 2 X, 3 círculo, 4 quadrado, 5 ponto
+    pub point: u8,
+    /// tamanho do símbolo (px)
+    pub size: f32,
+}
+
+impl Document {
+    pub fn line_style(&self, id: Id) -> Option<LineStyle> {
+        self.line_styles.iter().find(|(x, _)| *x == id).map(|(_, s)| *s)
+    }
+    pub fn set_line_style(&mut self, id: Id, st: Option<LineStyle>) {
+        self.line_styles.retain(|(x, _)| *x != id);
+        if let Some(st) = st {
+            self.line_styles.push((id, st));
+        }
+    }
+}
+
 /// Vista salva (câmera) — base para vistas 2D e detalhamento 3D.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct NamedView {
@@ -2102,6 +2127,9 @@ pub struct Document {
     /// anotações 3D (PMI) desta peça
     #[serde(default)]
     pub pmi: Vec<crate::pmi::Pmi>,
+    /// estilo próprio de linha/ponto de elementos de geometria (espessura, tipo de linha, símbolo)
+    #[serde(default)]
+    pub line_styles: Vec<(Id, LineStyle)>,
     /// Ordem do vetor = ordem da linha de tempo.
     pub features: Vec<Feature>,
     /// Quantidade de comandos ativos (marcador de rollback, RF-ARV-051).
@@ -2147,6 +2175,7 @@ impl Document {
             textures: vec![],
             sheet: None,
             pmi: vec![],
+            line_styles: vec![],
             features: vec![],
             rollback: 0,
         };

@@ -475,6 +475,11 @@ impl App {
             let id = d.alloc();
             d.notes.push(Note { id, sheet: sh, kind: NoteKind::Text, pos: [25., 25.], leader: None, text: "Quebrar cantos vivos 0,5x45°
 Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
+            match std::env::var("SCC_DEMO_DWG").as_deref() {
+                Ok("abnt") => d.title.style = TitleStyle::Abnt,
+                Ok("ansi") => d.title.style = TitleStyle::Ansi,
+                _ => {}
+            }
             let f = dir.join("placa.sccdwg");
             let _ = std::fs::write(&f, d.to_json());
             app.dwg = Some(crate::dwg_ui::DwgState::new(d, Some(f)));
@@ -2462,9 +2467,24 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                         }
                     }
                     AppTarget::Ref(id) => {
+                        let class = d.reference(id).map(|r| r.kind.class());
                         if let Some(r) = d.references.iter_mut().find(|r| r.id == id) {
                             ui.checkbox(&mut r.visible, tr("visível"));
                             editor::appearance_opt(ui, "pg_ref", &mut r.appearance, &tex);
+                        }
+                        // espessura, tipo de linha e símbolo próprios (pontos, linhas e curvas)
+                        if matches!(class, Some(RefClass::Curve | RefClass::Point)) {
+                            ui.separator();
+                            let cur = d.line_style(id);
+                            let mut own = cur.is_some();
+                            ui.checkbox(&mut own, tr("estilo próprio de linha/ponto"));
+                            if own {
+                                let mut st = cur.unwrap_or(scc_core::LineStyle { width: 2., dash: 0, point: 1, size: 8. });
+                                line_style_ui(ui, &mut st, class == Some(RefClass::Curve), class == Some(RefClass::Point));
+                                d.set_line_style(id, Some(st));
+                            } else if cur.is_some() {
+                                d.set_line_style(id, None);
+                            }
                         }
                     }
                 }
@@ -4123,6 +4143,23 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
             }
 
             let cam = vp.camera;
+            // símbolos dos pontos em tamanho fixo na tela (estilo das configurações / do elemento)
+            if let Some(r) = &self.result {
+                scene::draw_points(
+                    &ui.painter_at(rect),
+                    &self.open.doc,
+                    r,
+                    &cam,
+                    rect,
+                    self.settings.point_style,
+                    self.settings.point_size,
+                    &self.settings.filter,
+                    self.hidden_env,
+                    self.sketch.as_ref().map(|e| e.feature),
+                    self.hover_item,
+                    &self.sel,
+                );
+            }
             // estado da vista no canto superior esquerdo
             let info = format!(
                 "{}{} · {}",
@@ -5158,6 +5195,9 @@ impl eframe::App for App {
                     hidden_env: self.hidden_env,
                     dark_edges: !matches!(self.settings.display, crate::render::DisplayMode::Arame) || lum(self.settings.bg_bottom) > 140.,
                     hilite: self.hover_item.or(self.session.as_ref().map(|s| s.id)),
+                    line_w: self.settings.ref_line_width,
+                    line_dash: self.settings.ref_line_dash,
+                    point_style: self.settings.point_style,
                 };
                 let s = scene::build(scene_doc, r, &opts);
                 vp.set_scene(rs, &s);
@@ -5247,6 +5287,34 @@ fn paint_backdrop(p: &egui::Painter, rect: Rect, dark: bool) {
 }
 
 /// Conteúdo de cada página da janela de configurações.
+/// Estilo de linha/ponto (como os tipos de linha do AutoCAD).
+pub fn line_style_ui(ui: &mut egui::Ui, st: &mut scc_core::LineStyle, lines: bool, points: bool) {
+    if lines {
+        ui.horizontal(|ui| {
+            ui.label(tr("Espessura"));
+            ui.add(egui::Slider::new(&mut st.width, 0.5..=8.0).suffix(" px"));
+        });
+        ui.horizontal(|ui| {
+            ui.label(tr("Tipo de linha"));
+            for (i, n) in ["━━━ contínua", "─ ─ tracejada", "─ · ─ traço-ponto", "··· pontilhada"].iter().enumerate() {
+                ui.selectable_value(&mut st.dash, i as u8, tr(n));
+            }
+        });
+    }
+    if points {
+        ui.horizontal_wrapped(|ui| {
+            ui.label(tr("Símbolo do ponto"));
+            for (i, n) in ["✛ cruz 3D", "✳ asterisco", "✕ X", "○ círculo", "□ quadrado", "• ponto"].iter().enumerate() {
+                ui.selectable_value(&mut st.point, i as u8, tr(n));
+            }
+        });
+        ui.horizontal(|ui| {
+            ui.label(tr("Tamanho do símbolo"));
+            ui.add(egui::Slider::new(&mut st.size, 3.0..=24.0).suffix(" px"));
+        });
+    }
+}
+
 fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
     match page {
         0 => {
@@ -5283,6 +5351,20 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
                         }
                     }
                 });
+                ui.separator();
+                ui.label(RichText::new(tr("Pontos, linhas e curvas de referência")).strong());
+                let mut st = scc_core::LineStyle { width: s.ref_line_width, dash: s.ref_line_dash, point: s.point_style, size: s.point_size };
+                line_style_ui(ui, &mut st, true, true);
+                (s.ref_line_width, s.ref_line_dash, s.point_style, s.point_size) = (st.width, st.dash, st.point, st.size);
+                ui.horizontal(|ui| {
+                    ui.label(tr("Centro de furo no sketch"));
+                    for (i, n) in ["✳ asterisco", "✛ cruz", "⊕ círculo com cruz"].iter().enumerate() {
+                        ui.selectable_value(&mut s.hole_mark, i as u8, tr(n));
+                    }
+                });
+                ui.label(RichText::new(tr("Cada elemento pode ter estilo próprio: botão direito → Exibição → Propriedades gráficas.")).weak().small());
+                ui.separator();
+                ui.checkbox(&mut s.sketch_in_geometry, tr("sketch novo num plano vai para a pasta de geometria (numa face do corpo fica na linha do tempo)"));
             }
         2 => {
                 use crate::keymap::{Binding, KeyAction, Preset};

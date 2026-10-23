@@ -751,6 +751,10 @@ I["des_tab_furos"] = GRID_T + f'<circle cx="38" cy="38" r="8" fill="{LIGHT}" {S}
 I["des_tab_dobras"] = GRID_T + f'<path d="M28 46 V36 A6 6 0 0 1 34 30 H46" fill="none" stroke="{ACTION}" stroke-width="3"/>'
 I["des_tab_corte"] = GRID_T + f'<path d="M30 30 H46 V33 H40 V43 H46 V46 H30 V43 H36 V33 H30 Z" fill="{MID}" stroke="{ACTION}" stroke-width="1.4"/>'
 
+# ---------------- sketch: geometria externa
+I["sk_projetar"] = box((30, 6), 12) + f'<path d="M30 28 L30 40" stroke="{ACTION}" stroke-width="1.6" stroke-dasharray="3 2"/>' +     f'<path d="M4 40 H44" stroke="{SKETCH}" stroke-width="2"/><path d="M18 40 H42" stroke="{ACTION}" stroke-width="3.4" stroke-linecap="round"/>' + AR("30,42 26,35 34,35")
+I["sk_intersecao"] = f'<path d="M6 14 L30 6 L44 18 L20 26 Z" fill="{LIGHT}" {S}/>' + f'<path d="M4 34 H44" stroke="{SKETCH}" stroke-width="2"/>' +     f'<path d="M14 22 C 20 30, 30 32, 38 26" stroke="{ACTION}" stroke-width="1.4" stroke-dasharray="3 2" fill="none"/>' + f'<path d="M12 34 H38" stroke="{ACTION}" stroke-width="3.4" stroke-linecap="round"/>'
+
 for name, body in I.items():
     with open(os.path.join(OUT, f"{name}.svg"), "w", encoding="utf8", newline="\n") as f:
         f.write(svg(body))

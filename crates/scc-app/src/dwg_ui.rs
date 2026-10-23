@@ -1111,7 +1111,26 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                 }
             });
             ui.checkbox(&mut sh.portrait, tr("Retrato"));
+            ui.checkbox(&mut sh.zones, tr("Zoneamento"));
         });
+    }
+    // modelos prontos: formato + orientação + legenda
+    let mut tpl = None;
+    egui::ComboBox::from_id_salt("modelo_folha").selected_text(tr("📄 Modelo de folha…")).show_ui(ui, |ui| {
+        for (i, (n, ..)) in TEMPLATES.iter().enumerate() {
+            if ui.selectable_label(false, tr(n)).clicked() {
+                tpl = Some(i);
+            }
+        }
+    });
+    if let Some(i) = tpl {
+        let (_, f, portrait, style) = TEMPLATES[i];
+        if let Some(sh) = st.d.sheets.iter_mut().find(|s| s.id == st.sheet) {
+            sh.format = f;
+            sh.portrait = portrait;
+        }
+        st.d.title.style = style;
+        st.origin = None;
     }
     ui.horizontal(|ui| {
         ui.label(tr("Texto das cotas (mm)"));
@@ -1148,6 +1167,11 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     ui.separator();
     ui.label(RichText::new(tr("Legenda")).strong());
     let t = &mut st.d.title;
+    egui::ComboBox::from_label(tr("Modelo da legenda")).selected_text(t.style.label()).show_ui(ui, |ui| {
+        for s in TitleStyle::ALL {
+            ui.selectable_value(&mut t.style, s, s.label());
+        }
+    });
     egui::Grid::new("legenda").num_columns(2).show(ui, |ui| {
         for (l, v) in [
             ("Empresa", &mut t.company),
@@ -1155,6 +1179,8 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             ("Código", &mut t.pn),
             ("Material", &mut t.material),
             ("Desenhado por", &mut t.drawn_by),
+            ("Verificado", &mut t.checked_by),
+            ("Aprovado", &mut t.approved_by),
             ("Data", &mut t.date),
             ("Revisão", &mut t.revision),
             ("Observações", &mut t.notes),
@@ -1163,20 +1189,23 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             ui.text_edit_singleline(v);
             ui.end_row();
         }
+        ui.label(tr("Massa específica"));
+        ui.add(egui::DragValue::new(&mut t.density).range(0.1..=25.).speed(0.01).suffix(" g/cm³"));
+        ui.end_row();
     });
-    if let Some(src) = st.source.clone() {
-        if ui.button(tr("Preencher pela peça/montagem")).on_hover_text(tr("código, descrição e material das propriedades do arquivo de origem")).clicked() {
-            if let Some((pn, desc, mat)) = st.models.props(&src) {
-                st.d.title.pn = pn;
-                st.d.title.title = desc;
-                if !mat.is_empty() {
-                    st.d.title.material = mat;
-                }
-            }
+    egui::CollapsingHeader::new(tr("Campos automáticos")).default_open(false).show(ui, |ui| {
+        ui.label(RichText::new(tr("Use nos campos da legenda e nas notas; o valor vem da peça/montagem da primeira vista da folha e se atualiza sozinho.")).weak().small());
+        for (k, d) in FIELDS {
+            ui.horizontal(|ui| {
+                ui.monospace(k);
+                ui.label(RichText::new(tr(d)).weak().small());
+            });
         }
-    }
-    if ui.button(tr("Hoje")).on_hover_text(tr("preenche a data")).clicked() {
-        st.d.title.date = today();
+    });
+    if ui.button(tr("Usar campos automáticos")).on_hover_text(tr("título, código, material, autor e data passam a vir da origem")).clicked() {
+        let keep = (t.company.clone(), t.revision.clone(), t.notes.clone(), t.style, t.density);
+        *t = TitleBlock::default();
+        (t.company, t.revision, t.notes, t.style, t.density) = keep;
     }
     ui.separator();
     ui.label(RichText::new(tr("Vistas associativas: quando a peça ou a montagem é salva, o desenho se atualiza sozinho (F5 força). As cotas ficam presas às posições projetadas: se a geometria mudar muito, confira as cotas.")).weak().small());
@@ -1208,6 +1237,7 @@ fn scale_combo(ui: &mut egui::Ui, s: &mut f64, salt: (&str, u64)) {
     });
 }
 
+#[allow(dead_code)]
 fn today() -> String {
     // dias desde 1970 → data civil (sem dependência de calendário)
     let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0) as i64;

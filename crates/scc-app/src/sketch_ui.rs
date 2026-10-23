@@ -8,7 +8,7 @@ use crate::app::{fmt, App, Sel};
 use crate::render::Camera;
 use eframe::egui::{self, Color32, Pos2, Rect, RichText, Stroke};
 use glam::Vec3;
-use scc_core::sketch::{Curve, Kind, SolveReport};
+use scc_core::sketch::{Curve, Kind, LinkSrc, SolveReport};
 use scc_core::{FeatureKind, Id, PlaneRef, SketchData};
 use scc_kernel::Frame;
 use std::collections::HashMap;
@@ -40,6 +40,10 @@ pub enum Tool {
     Fillet,
     Trim,
     Extend,
+    /// converter/projetar arestas, vértices e curvas do 3D no plano (associativo)
+    Convert,
+    /// interseção de faces/superfícies/arestas com o plano do sketch (associativo)
+    Intersect,
     Constr(CKind),
 }
 
@@ -95,6 +99,8 @@ impl Tool {
             Tool::Fillet => ("sk_filete", "Filete", "Filete de canto", "Clique no canto entre duas linhas: insere um arco tangente e abre a cota do raio."),
             Tool::Trim => ("sk_aparar", "Aparar", "Aparar linha", "Clique no trecho da linha a remover: ela é cortada nas interseções com as outras curvas (sem interseção, a linha some)."),
             Tool::Extend => ("sk_estender", "Estender", "Estender linha", "Clique perto da ponta de uma linha: ela cresce até a próxima curva na mesma direção."),
+            Tool::Convert => ("sk_projetar", "Converter", "Converter / projetar 3D", "Clique em arestas, vértices, linhas ou curvas do modelo: viram geometria fixa do sketch, projetada no plano e ligada à origem — se o 3D mudar, o sketch acompanha."),
+            Tool::Intersect => ("sk_intersecao", "Interseção", "Interseção com o plano", "Clique numa face do corpo, superfície ou aresta: a curva (ou ponto) onde ela corta o plano do sketch entra como geometria fixa e associativa."),
             Tool::Dimension => ("sk_cota", "Cota", "Cotagem inteligente  (D)", "Clique num elemento: a cota fica em prévia seguindo o mouse (acima/abaixo = horizontal, ao lado = vertical, na diagonal = alinhada) e o próximo clique no vazio a posiciona. Clique num segundo elemento para cotar entre os dois (distância, ângulo, centro a centro). Botão direito: todas as cotas e restrições possíveis. O valor aceita expressões e parâmetros (ex.: L/2)."),
             Tool::Constr(k) => match k {
                 CKind::Coincident => ("r_coincidente", "Coincidente", "Coincidente", "Dois pontos viram um só; ponto + curva prende o ponto sobre a curva."),
@@ -873,71 +879,75 @@ fn set_line(sk: &mut SketchData, line: Id, a: Id, b: Id) {
     sk.prune_constraints();
 }
 
-/// Projeta pontos e curvas de referência (inclusive links de outras peças) no plano do sketch,
-/// como geometria fixa — base para cotas e restrições.
+/// Traz referências (pontos, curvas, superfícies — inclusive links de outras peças) e curvas de
+/// outros sketches para este sketch, associativas: a geometria acompanha a origem.
 fn project_ui(app: &mut App, ui: &mut egui::Ui) {
     let (Some(f), Some(r)) = (frame(app), app.result.as_ref()) else { return };
-    let items: Vec<(Id, String, Vec<[f64; 3]>)> = r
+    let Some(me) = app.sketch.as_ref().map(|e| e.feature) else { return };
+    let refs: Vec<(Id, String, bool)> = r
         .points
         .iter()
-        .map(|p| (p.id, format!("• {}", p.name), vec![p.p]))
-        .chain(r.curves.iter().map(|c| (c.id, format!("∿ {}", c.name), c.pts.clone())))
+        .map(|p| (p.id, format!("• {}", p.name), false))
+        .chain(r.curves.iter().map(|c| (c.id, format!("∿ {}", c.name), false)))
+        .chain(r.surfaces.iter().map(|s| (s.id, format!("◫ {} (interseção)", s.name), true)))
         .collect();
-    let mut chosen: Option<Vec<[f64; 3]>> = None;
+    let others: Vec<(Id, String)> = app
+        .open
+        .doc
+        .features
+        .iter()
+        .filter(|g| g.id != me && matches!(g.kind, FeatureKind::Sketch(_)))
+        .map(|g| (g.id, g.name.clone()))
+        .collect();
+    let mut chosen: Option<(LinkSrc, Vec<[f64; 3]>, bool)> = None;
+    let mut chosen_sketch: Option<Id> = None;
     let key = egui::Id::unique("proj_constr");
     let mut constr = ui.ctx().data(|m| m.get_temp::<bool>(key)).unwrap_or(true);
-    egui::CollapsingHeader::new(tr("📐 Projetar referência no sketch")).default_open(false).show(ui, |ui| {
-        if items.is_empty() {
-            ui.label(RichText::new(tr("Crie pontos ou curvas em Referências (ou importe por link) para projetá-los aqui.")).weak().small());
-        }
+    egui::CollapsingHeader::new(tr("📐 Projetar no sketch (associativo)")).default_open(false).show(ui, |ui| {
+        ui.label(RichText::new(tr("Também pelas ferramentas Converter e Interseção, clicando no 3D.")).weak().small());
         ui.checkbox(&mut constr, tr("como construção"));
-        for (_, n, pts) in &items {
+        if !refs.is_empty() {
+            ui.label(RichText::new(tr("Referências")).strong());
+        }
+        for (id, n, inter) in &refs {
             if ui.button(n).clicked() {
-                chosen = Some(pts.clone());
+                if let Some((src, pts)) = crate::sketch_ext::world(r, &crate::picking::Pick::Geo(*id), *inter, &f) {
+                    chosen = Some((src, pts, *inter));
+                }
             }
+        }
+        if !others.is_empty() {
+            ui.label(RichText::new(tr("Outros sketches (todas as curvas)")).strong());
+        }
+        for (id, n) in &others {
+            if ui.button(format!("✏ {n}")).clicked() {
+                chosen_sketch = Some(*id);
+            }
+        }
+        if refs.is_empty() && others.is_empty() {
+            ui.label(RichText::new(tr("Crie pontos, curvas ou outros sketches para projetá-los aqui.")).weak().small());
         }
     });
     ui.ctx().data_mut(|m| m.insert_temp(key, constr));
-    let Some(pts) = chosen else { return };
-    let y = f.y();
-    let uv = |p: [f64; 3]| {
-        let d = [p[0] - f.origin[0], p[1] - f.origin[1], p[2] - f.origin[2]];
-        [d[0] * f.x[0] + d[1] * f.x[1] + d[2] * f.x[2], d[0] * y[0] + d[1] * y[1] + d[2] * y[2]]
-    };
-    // no máximo ~48 segmentos por curva
-    let step = (pts.len() / 48).max(1);
-    let mut sel: Vec<[f64; 3]> = pts.iter().step_by(step).copied().collect();
-    if let (Some(l), Some(s)) = (pts.last(), sel.last()) {
-        if l != s {
-            sel.push(*l);
+    let mut items: Vec<(LinkSrc, Vec<[f64; 3]>, bool)> = chosen.into_iter().collect();
+    if let Some(s) = chosen_sketch {
+        for (cid, pts) in crate::sketch_ext::sketch_curves(&app.open.doc, r, s) {
+            items.push((LinkSrc::SketchCurve { sketch: s, curve: cid }, pts, false));
         }
     }
-    let Some(edit) = app.sketch.as_ref() else { return };
-    let id = edit.feature;
+    if items.is_empty() {
+        return;
+    }
     let base = app.open.doc.peek_id();
     let mut n = 0u64;
     let mut al = || {
         n += 1;
         Id(base + n - 1)
     };
-    if let Some(FeatureKind::Sketch(s)) = app.open.doc.feature_mut(id).map(|f| &mut f.kind) {
-        let d = &mut s.data;
-        let ids: Vec<Id> = sel
-            .iter()
-            .map(|p| {
-                let q = uv(*p);
-                let pid = d.add_point(&mut al, q[0], q[1]);
-                if let Some(pt) = d.point_mut(pid) {
-                    pt.fixed = true;
-                }
-                pid
-            })
-            .collect();
-        if ids.len() == 1 {
-            d.add_curve(&mut al, Curve::Point { p: ids[0] }, constr);
-        }
-        for w in ids.windows(2) {
-            d.add_curve(&mut al, Curve::Line { a: w[0], b: w[1] }, constr);
+    if let Some(FeatureKind::Sketch(s)) = app.open.doc.feature_mut(me).map(|g| &mut g.kind) {
+        for (src, pts, inter) in items {
+            let uv = crate::sketch_ext::to_uv(&f, &pts);
+            s.data.add_link(&mut al, src, inter, &uv, constr);
         }
     }
     app.open.doc.reserve_ids(n);
@@ -968,6 +978,16 @@ fn extend_line(sk: &mut SketchData, al: &mut impl FnMut() -> Id, line: Id, click
 
 /// Remove a seleção do sketch.
 pub fn delete_selection(sk: &mut SketchData, sel: &[Ent]) {
+    delete_selection_raw(sk, sel);
+    // geometria externa cujos pontos sumiram deixa de ser atualizada
+    let ids: std::collections::HashSet<Id> = sk.points.iter().map(|p| p.id).collect();
+    sk.links.retain(|l| match &l.shape {
+        scc_core::sketch::LinkShape::Poly { points, .. } => points.iter().all(|p| ids.contains(p)),
+        scc_core::sketch::LinkShape::Circle { center, .. } => ids.contains(center),
+    });
+}
+
+fn delete_selection_raw(sk: &mut SketchData, sel: &[Ent]) {
     for e in sel {
         match *e {
             Ent::Cs(c) => sk.constraints.retain(|x| x.id != c),
@@ -1128,8 +1148,31 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             col = SEL;
         }
         let is_hole = sk.curves.iter().any(|c| matches!(c.geom, Curve::Point { p: q } if q == p.id) && !c.construction);
-        let r = if is_hole { 4.5 } else { 3.0 };
-        painter.rect_filled(Rect::from_center_size(s, egui::vec2(r * 2., r * 2.)), 1., col);
+        if is_hole {
+            // centro de furo: marca escolhida nas configurações (asterisco, cruz, círculo com cruz)
+            let h = 6.;
+            let st = Stroke::new(1.8, col);
+            match settings.hole_mark {
+                1 => {
+                    painter.line_segment([s - egui::vec2(h, 0.), s + egui::vec2(h, 0.)], st);
+                    painter.line_segment([s - egui::vec2(0., h), s + egui::vec2(0., h)], st);
+                }
+                2 => {
+                    painter.circle_stroke(s, h * 0.8, st);
+                    painter.line_segment([s - egui::vec2(h * 1.3, 0.), s + egui::vec2(h * 1.3, 0.)], st);
+                    painter.line_segment([s - egui::vec2(0., h * 1.3), s + egui::vec2(0., h * 1.3)], st);
+                }
+                _ => {
+                    for k in 0..3 {
+                        let a = k as f32 * std::f32::consts::PI / 3. + std::f32::consts::FRAC_PI_2;
+                        let d = egui::vec2(a.cos(), -a.sin()) * h;
+                        painter.line_segment([s - d, s + d], st);
+                    }
+                }
+            }
+        } else {
+            painter.rect_filled(Rect::from_center_size(s, egui::vec2(6., 6.)), 1., col);
+        }
         if p.fixed {
             painter.circle_stroke(s, 6., Stroke::new(1.2, col));
         }
@@ -1664,6 +1707,27 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             }
         }
 
+        Tool::Convert | Tool::Intersect => {
+            let intersect = tool == Tool::Intersect;
+            if let (Some(r), Some(h)) = (app.result.as_ref(), resp.hover_pos()) {
+                let filt = crate::picking::Filter { faces: intersect, edges: true, vertices: !intersect, planes: false };
+                if let Some(p) = crate::picking::pick(r, &app.open.doc, &v.cam, rect, h, &filt) {
+                    crate::picking::draw(&painter, r, &v.cam, rect, &p, false);
+                    painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, p.label(&app.open.doc), egui::FontId::proportional(11.), FREE);
+                    if primary_click {
+                        match crate::sketch_ext::world(r, &p, intersect, &v.f) {
+                            Some((src, pts)) => {
+                                let uv = crate::sketch_ext::to_uv(&v.f, &pts);
+                                if sk.add_link(&mut al, src, intersect, &uv, edit.construction).is_some() {
+                                    edit.report = sk.solve(&vars, &[]);
+                                }
+                            }
+                            None => toast = Some((tr(if intersect { "Isso não corta o plano do sketch" } else { "Nada para converter aqui" }).to_string(), true)),
+                        }
+                    }
+                }
+            }
+        }
         Tool::Trim | Tool::Extend => {
             if primary_click {
                 if let (Some(Ent::Cv(c)), Some(uv)) = (hover.and_then(|p| pick(p, &sk, &edit.hits)), cursor_uv) {
@@ -2354,7 +2418,28 @@ pub fn begin(app: &mut App, id: Id) {
     let prev = app.settings.ortho;
     let mut e = SketchEdit::new(id, prev);
     let vars = app.vars();
+    let (lp, lr) = app
+        .result
+        .as_ref()
+        .and_then(|r| r.sketches.iter().find(|v| v.feature == id))
+        .map(|v| (v.link_pts.clone(), v.link_r.clone()))
+        .unwrap_or_default();
     if let Some(FeatureKind::Sketch(s)) = app.open.doc.feature_mut(id).map(|f| &mut f.kind) {
+        // a geometria externa vem na posição atual do 3D
+        for (p, q) in lp {
+            if let Some(pt) = s.data.point_mut(p) {
+                if (pt.x - q[0]).abs() > 1e-9 || (pt.y - q[1]).abs() > 1e-9 {
+                    (pt.x, pt.y) = (q[0], q[1]);
+                }
+            }
+        }
+        for (c, rr) in lr {
+            if let Some(Curve::Circle { r, .. }) = s.data.curves.iter_mut().find(|x| x.id == c).map(|x| &mut x.geom) {
+                if (*r - rr).abs() > 1e-9 {
+                    *r = rr;
+                }
+            }
+        }
         e.report = s.data.clone().solve(&vars, &[]);
     }
     app.sketch = Some(e);
