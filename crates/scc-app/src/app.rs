@@ -174,6 +174,10 @@ pub struct App {
     pub asm: Option<crate::asm_ui::AsmState>,
     /// janela de parâmetros de chapa
     sheet_open: bool,
+    /// janelas do estrutural: biblioteca de perfis e lista de corte
+    pub st_lib_open: bool,
+    pub st_cut_open: bool,
+    pub st_lib_sel: usize,
 }
 
 /// Edição de um comando como "ambiente": só termina com Concluir (mantém) ou Cancelar (desfaz).
@@ -260,6 +264,9 @@ impl App {
             relink_ext: None,
             asm: None,
             sheet_open: false,
+            st_lib_open: false,
+            st_cut_open: false,
+            st_lib_sel: 0,
         };
         app.started = !app.settings.show_start;
         // desenvolvimento: SCC_ABRIR_SKETCH=<nome> abre esse sketch em edição ao iniciar
@@ -359,6 +366,47 @@ impl App {
             d.hide_consumed(d.features[1].id);
             app.load_doc(d, None, None);
             app.settings.bench = crate::settings::Bench::Chapa;
+            app.started = true;
+        }
+        // desenvolvimento: SCC_DEMO_EST=1 abre um quadro de mesa estrutural de exemplo
+        if std::env::var("SCC_DEMO_EST").is_ok() {
+            let s = |x: &str| x.to_string();
+            let mut d = Document::new("Quadro de mesa");
+            let top = [[0., 0., 700.], [800., 0., 700.], [800., 500., 700.], [0., 500., 700.]];
+            let mut paths = vec![];
+            for i in 0..4 {
+                let l = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(top[i]), b: PointRef::Fixed(top[(i + 1) % 4]), start: s("0"), end: s("0") });
+                paths.push(CurveRef::Ref(l));
+            }
+            let mut legs = vec![];
+            for p in top {
+                let l = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([p[0], p[1], 0.]), b: PointRef::Fixed([p[0], p[1], 680.]), start: s("0"), end: s("0") });
+                legs.push(CurveRef::Ref(l));
+            }
+            let mk = |paths: Vec<CurveRef>, corner, anchor| StructMember {
+                paths,
+                family: s("Tubo quadrado"),
+                designation: s("40x3"),
+                kind: SectionKind::TuboQuadrado,
+                dims: vec![s("40"), s("3")],
+                anchor,
+                angle: s("0"),
+                off_x: s("0"),
+                off_y: s("0"),
+                ext1: s("0"),
+                ext2: s("0"),
+                corner,
+                gap: s("0"),
+            };
+            d.add_feature(FeatureKind::StructMember(mk(paths, CornerMode::MeiaEsquadria, 0)));
+            d.add_feature(FeatureKind::StructMember(mk(legs, CornerMode::Nenhum, 0)));
+            d.add_feature(FeatureKind::StructPlate(StructPlate { at: [0., 0., 0.], thickness: s("8"), margin: s("15") }));
+            for r in &mut d.references {
+                r.visible = false;
+            }
+            app.load_doc(d, None, None);
+            app.settings.bench = crate::settings::Bench::Estrutural;
+            app.st_cut_open = true;
             app.started = true;
         }
         // desenvolvimento: SCC_VISTAS=1 abre o seletor de vistas ao iniciar
@@ -812,6 +860,7 @@ impl App {
         let faces = self.picked_faces();
         let seed = match c {
             Cmd::Rib | Cmd::Slot | Cmd::PatternLinear | Cmd::PatternCircular | Cmd::PatternPoints => self.seed(true),
+            Cmd::StMember | Cmd::StPlate | Cmd::StGusset => self.seed(true),
             Cmd::SplitBody | Cmd::ThickSurface | Cmd::CloseSurface | Cmd::SewSurface | Cmd::BoundaryFill => self.seed(true),
             Cmd::Geo(k) => {
                 let mut s = self.seed(true);
@@ -913,6 +962,54 @@ impl App {
                     PrimKind::Prisma => ["6", "15", "20", "0"],
                 };
                 Sel::Feature(d.add_feature(FeatureKind::Primitive(Primitive { kind, plane, a: s(v[0]), b: s(v[1]), c: s(v[2]), d: s(v[3]), op: BoolOp::Add })))
+            }
+            Cmd::StLibrary => {
+                self.st_lib_open = true;
+                return;
+            }
+            Cmd::StCutList => {
+                self.st_cut_open = true;
+                return;
+            }
+            Cmd::StMember => {
+                let paths: Vec<CurveRef> = seed.curves.clone();
+                let fam = crate::st_ui::families(&self.settings).into_iter().next().unwrap();
+                let (des, dims) = fam.sizes[3.min(fam.sizes.len() - 1)].clone();
+                let rule = self.settings.user_profiles.iter().find(|u| u.name == fam.name).map(|u| (u.anchor, u.angle)).unwrap_or((0, 0.));
+                if paths.is_empty() {
+                    self.toast("Selecione as linhas do esqueleto (arestas, linhas ou curvas de referência) e depois Membro", true);
+                }
+                let d = &mut self.open.doc;
+                Sel::Feature(d.add_feature(FeatureKind::StructMember(StructMember {
+                    paths,
+                    family: fam.name.clone(),
+                    designation: des,
+                    kind: fam.kind,
+                    dims: dims.iter().map(|v| fmt(*v)).collect(),
+                    anchor: rule.0,
+                    angle: fmt(rule.1),
+                    off_x: s("0"),
+                    off_y: s("0"),
+                    ext1: s("0"),
+                    ext2: s("0"),
+                    corner: CornerMode::MeiaEsquadria,
+                    gap: s("0"),
+                })))
+            }
+            Cmd::StPlate | Cmd::StGusset => {
+                let at = seed.points.iter().find_map(|p| match p {
+                    PointRef::Fixed(q) => Some(*q),
+                    _ => None,
+                });
+                let Some(at) = at else {
+                    self.toast("Selecione o vértice da ponta (placa) ou do encontro dos membros (reforço)", true);
+                    return;
+                };
+                Sel::Feature(d.add_feature(if c == Cmd::StPlate {
+                    FeatureKind::StructPlate(StructPlate { at, thickness: s("8"), margin: s("10") })
+                } else {
+                    FeatureKind::StructGusset(StructGusset { at, leg: s("80"), thickness: s("6"), chamfer: s("10") })
+                }))
             }
             Cmd::SmParams => {
                 if d.sheet.is_none() {
@@ -1867,7 +1964,7 @@ impl App {
                 // abas de módulo (RF-UI-006)
                 use crate::settings::Bench;
                 ui.add_space(10.);
-                for (b, n, icon) in [(Bench::Solidos, "Modelagem Sólida", "▣"), (Bench::Superficies, "Superfícies", "◫"), (Bench::Montagem, "Montagem", "⚙"), (Bench::Chapa, "Chapa metálica", "▭")] {
+                for (b, n, icon) in [(Bench::Solidos, "Modelagem Sólida", "▣"), (Bench::Superficies, "Superfícies", "◫"), (Bench::Montagem, "Montagem", "⚙"), (Bench::Chapa, "Chapa metálica", "▭"), (Bench::Estrutural, "Estrutural", "⌶")] {
                     if bench_tab(ui, self.settings.bench == b, &format!("{icon}  {}", tr(n)), true).on_hover_text(tr("As bancadas compartilham o mesmo modelo: sólidos e superfícies se conversam.")).clicked() {
                         self.settings.bench = b;
                     }
@@ -1878,7 +1975,7 @@ impl App {
                         crate::asm_ui::back_to_assembly(self);
                     }
                 }
-                for m in ["Desenho", "Estrutural"].map(tr) {
+                for m in ["Desenho"].map(tr) {
                     bench_tab(ui, false, m, false).on_hover_text(tr("Módulo em breve"));
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -3921,6 +4018,12 @@ pub enum Cmd {
     SmStamp,
     SmFlangedHole,
     SmUnfold,
+    // ---- estrutural
+    StMember,
+    StPlate,
+    StGusset,
+    StLibrary,
+    StCutList,
     /// mover o corpo: 0 translação, 1 rotação, 2 simetria, 3 afinidade
     MoveBody(u8),
     /// extrusão com ângulo de saída e filetes num clique
@@ -4365,6 +4468,7 @@ impl eframe::App for App {
         self.wizard_window(ctx);
         crate::asm_ui::sim_window(self, ctx);
         self.sheet_window(ctx);
+        crate::st_ui::windows(self, ctx);
         self.side_toolbars(root);
         self.settings_window(ctx);
         self.view_menu_window(ctx);

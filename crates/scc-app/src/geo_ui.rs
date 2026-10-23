@@ -707,7 +707,7 @@ pub(crate) fn surf_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docume
 }
 
 /// Lista de curvas (seções), com mínimo de itens.
-fn curves_list(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, cs: &mut Vec<CurveRef>, seed: &Seed, min: usize) {
+pub(crate) fn curves_list(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, cs: &mut Vec<CurveRef>, seed: &Seed, min: usize) {
     let mut del = None;
     for (i, c) in cs.iter_mut().enumerate() {
         ui.horizontal(|ui| {

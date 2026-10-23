@@ -390,6 +390,33 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             ui.checkbox(&mut c.keep_tool, tr("manter o corpo ferramenta visível"));
             ui.label(RichText::new(tr("O resultado fica no coletor deste comando; o corpo ferramenta é o estado do outro coletor neste ponto da linha do tempo.")).weak().small());
         }
+        FeatureKind::StructMember(m) => {
+            crate::st_ui::member_panel(ui, doc, me, m, vars, seed);
+        }
+        FeatureKind::StructPlate(p) => {
+            section(ui, "Placa de extremidade");
+            ui.label(RichText::new(format!("ponta perto de ({:.1}, {:.1}, {:.1})", p.at[0], p.at[1], p.at[2])).small());
+            if let Some(q) = seed.points.iter().find_map(|x| if let PointRef::Fixed(q) = x { Some(*q) } else { None }) {
+                if ui.button(tr("⊙ Usar o vértice selecionado")).clicked() {
+                    p.at = q;
+                }
+            }
+            expr(ui, "Espessura", &mut p.thickness, vars, "mm");
+            expr(ui, "Sobra", &mut p.margin, vars, "mm");
+        }
+        FeatureKind::StructGusset(g) => {
+            section(ui, "Reforço");
+            ui.label(RichText::new(format!("encontro perto de ({:.1}, {:.1}, {:.1})", g.at[0], g.at[1], g.at[2])).small());
+            if let Some(q) = seed.points.iter().find_map(|x| if let PointRef::Fixed(q) = x { Some(*q) } else { None }) {
+                if ui.button(tr("⊙ Usar o vértice selecionado")).clicked() {
+                    g.at = q;
+                }
+            }
+            expr(ui, "Aba", &mut g.leg, vars, "mm");
+            expr(ui, "Espessura", &mut g.thickness, vars, "mm");
+            expr(ui, "Chanfro de alívio", &mut g.chamfer, vars, "mm");
+            ui.label(RichText::new(tr("Chanfro 0 = triangular; maior que 0 corta o canto (passagem do cordão de solda).")).weak().small());
+        }
         FeatureKind::SmWall(w) => {
             section(ui, "Parede base");
             sketch_pick(ui, "smw_sk", "Perfil", doc, idx, &mut w.sketch);

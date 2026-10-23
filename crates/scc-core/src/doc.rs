@@ -1116,6 +1116,81 @@ pub enum FeatureKind {
     SmStamp(SmStamp),
     /// Chapa: furo flangeado (colar dobrado) nos pontos de um sketch.
     SmFlangedHole(SmFlangedHole),
+    /// Estrutural: membros (perfis) ao longo de linhas/curvas do esqueleto.
+    StructMember(StructMember),
+    /// Estrutural: placa de extremidade na ponta de um membro.
+    StructPlate(StructPlate),
+    /// Estrutural: reforço (cantoneira/gusset) entre dois membros.
+    StructGusset(StructGusset),
+}
+
+/// Tipo de seção de perfil estrutural.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub enum SectionKind {
+    TuboQuadrado,
+    TuboRetangular,
+    TuboRedondo,
+    PerfilI,
+    PerfilU,
+    Cantoneira,
+    BarraChata,
+    BarraRedonda,
+    BarraQuadrada,
+    PerfilT,
+}
+
+/// Tratamento dos cantos onde dois membros se encontram.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum CornerMode {
+    Nenhum,
+    #[default]
+    MeiaEsquadria,
+    /// o membro posterior para na face do anterior
+    Aparar,
+    /// recorte de encaixe: a ponta acompanha o contorno do outro membro
+    Encaixe,
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct StructMember {
+    /// linhas guia (cada uma vira um membro)
+    pub paths: Vec<CurveRef>,
+    pub family: String,
+    pub designation: String,
+    pub kind: SectionKind,
+    /// cotas da seção (aceitam expressões)
+    pub dims: Vec<String>,
+    /// ponto de ancoragem da seção na linha guia (0 centro, 1–8 caixa, 9 centróide)
+    pub anchor: u8,
+    /// rotação da seção em torno da linha guia (graus)
+    pub angle: String,
+    pub off_x: String,
+    pub off_y: String,
+    /// prolongamento no início e no fim
+    pub ext1: String,
+    pub ext2: String,
+    pub corner: CornerMode,
+    /// folga de solda nos cantos
+    pub gap: String,
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct StructPlate {
+    /// ponto perto da ponta do membro
+    pub at: [f64; 3],
+    pub thickness: String,
+    /// sobra além da seção, em cada lado
+    pub margin: String,
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct StructGusset {
+    /// ponto perto do encontro dos dois membros
+    pub at: [f64; 3],
+    pub leg: String,
+    pub thickness: String,
+    /// chanfro de alívio no canto (0 = triangular)
+    pub chamfer: String,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -1313,6 +1388,9 @@ impl FeatureKind {
             SmJoggle(_) => "Joggle",
             SmStamp(_) => "Estampo",
             SmFlangedHole(_) => "FuroFlangeado",
+            StructMember(_) => "Membro",
+            StructPlate(_) => "Placa",
+            StructGusset(_) => "Reforço",
             MoveBody(m) => match m.xf {
                 BodyXf::Translate { .. } => "Translação",
                 BodyXf::Rotate { .. } => "Rotação",
@@ -1356,6 +1434,9 @@ impl FeatureKind {
             SmJoggle(_) => "⌇",
             SmStamp(_) => "◡",
             SmFlangedHole(_) => "◉",
+            StructMember(_) => "⌶",
+            StructPlate(_) => "▬",
+            StructGusset(_) => "◺",
         }
     }
 
@@ -1546,6 +1627,23 @@ impl FeatureKind {
                 ids(&mut h.sketch);
                 exprs(&mut h.diameter);
                 exprs(&mut h.height)
+            }
+            StructMember(m) => {
+                for p in &mut m.paths {
+                    p.walk(ids)
+                }
+                for e in m.dims.iter_mut().chain([&mut m.angle, &mut m.off_x, &mut m.off_y, &mut m.ext1, &mut m.ext2, &mut m.gap]) {
+                    exprs(e)
+                }
+            }
+            StructPlate(p) => {
+                exprs(&mut p.thickness);
+                exprs(&mut p.margin)
+            }
+            StructGusset(g) => {
+                exprs(&mut g.leg);
+                exprs(&mut g.thickness);
+                exprs(&mut g.chamfer)
             }
             SmHem(h) => {
                 exprs(&mut h.length);

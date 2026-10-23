@@ -655,6 +655,23 @@ I["sm_furo_flangeado"] = f'<path d="M4 16 H16 V36 H20 V22 H4 Z M44 16 H32 V36 H2
 I["sm_desdobrar"] = f'<path d="M4 24 H20 Q26 24 26 18 V6 H30 V18 Q30 28 20 28 H4 Z" fill="{MID}" {S}/>' + \
     f'<path d="M4 40 H44 V44 H4 Z" fill="{LIGHT}" {S}/>' + arrow(34, 14, 40, 34, ACTION, 2.2)
 
+# ---------------- estrutural
+TUBE = lambda x, y, s=12: f'<rect x="{x}" y="{y}" width="{s}" height="{s}" fill="{MID}" {S}/><rect x="{x + 3}" y="{y + 3}" width="{s - 6}" height="{s - 6}" fill="#ffffff" stroke="{INK}" stroke-width="1"/>'
+I["st_membro"] = f'<path d="M6 40 L30 16 L40 26 L16 50" fill="none"/>' + f'<polygon points="4,36 28,12 36,20 12,44" fill="{MID}" {S}/>' + \
+    f'<polygon points="28,12 36,4 44,12 36,20" fill="{LIGHT}" {S}/><polygon points="31,12 36,7 41,12 36,17" fill="#ffffff" stroke="{INK}" stroke-width="1"/>' + \
+    f'<line x1="2" y1="46" x2="46" y2="2" stroke="{ACTION}" stroke-width="1.6" stroke-dasharray="4 3"/>'
+I["st_placa"] = f'<rect x="16" y="4" width="16" height="32" fill="{MID}" {S}/><rect x="6" y="36" width="36" height="8" fill="{ACTION}" {S}/>'
+I["st_reforco"] = f'<rect x="4" y="4" width="10" height="40" fill="{MID}" {S}/><rect x="4" y="34" width="40" height="10" fill="{MID}" {S}/>' + \
+    f'<polygon points="14,12 14,34 36,34" fill="{ACTION}" opacity="0.9"/><line x1="14" y1="30" x2="18" y2="34" stroke="#ffffff" stroke-width="2"/>'
+I["st_biblioteca"] = TUBE(4, 6) + f'<path d="M26 6 H40 V10 H35 V24 H40 V28 H26 V24 H31 V10 H26 Z" fill="{MID}" {S}/>' + \
+    f'<path d="M4 30 H16 V44 H12 V34 H4 Z" fill="{MID}" {S}/><circle cx="34" cy="38" r="7" fill="{MID}" {S}/><circle cx="34" cy="38" r="3.5" fill="#ffffff" stroke="{INK}" stroke-width="1"/>'
+I["st_corte"] = f'<rect x="6" y="6" width="30" height="36" rx="2" fill="#ffffff" {S}/>' + "".join(f'<line x1="11" y1="{y}" x2="31" y2="{y}" stroke="{INK}" stroke-width="1.6"/>' for y in (14, 21, 28, 35)) + \
+    f'<path d="M30 30 L44 44 M44 30 L30 44" stroke="{ACTION}" stroke-width="2.6"/>'
+I["st_canto_meia"] = f'<path d="M4 44 V4 H16 V32 Z" fill="{MID}" {S}/><path d="M16 32 L44 32 V44 H4 Z" fill="{LIGHT}" {S}/>' + f'<line x1="4" y1="44" x2="16" y2="32" stroke="{ACTION}" stroke-width="2.6"/>'
+I["st_canto_aparar"] = f'<path d="M4 4 H16 V44 H4 Z" fill="{MID}" {S}/><path d="M16 32 H44 V44 H16 Z" fill="{LIGHT}" {S}/>' + f'<line x1="16" y1="32" x2="16" y2="44" stroke="{ACTION}" stroke-width="2.6"/>'
+I["st_canto_encaixe"] = f'<circle cx="12" cy="24" r="9" fill="{MID}" {S}/><path d="M21 18 H44 V30 H21 A9 9 0 0 0 21 18 Z" fill="{LIGHT}" {S}/>' + f'<path d="M21 18 A9 9 0 0 1 21 30" stroke="{ACTION}" stroke-width="2.6" fill="none"/>'
+I["st_canto_nenhum"] = f'<path d="M4 4 H16 V44 H4 Z" fill="{MID}" {S}/><path d="M4 32 H44 V44 H4 Z" fill="{LIGHT}" opacity="0.8" {S}/>'
+
 for name, body in I.items():
     with open(os.path.join(OUT, f"{name}.svg"), "w", encoding="utf8", newline="\n") as f:
         f.write(svg(body))

@@ -39,6 +39,8 @@ pub enum Group {
     Cinematica,
     /// chapa metálica
     Chapa,
+    /// membros estruturais
+    Estrutural,
     // modo sketch
     SkCriacao,
     SkTransformar,
@@ -48,8 +50,9 @@ pub enum Group {
 }
 
 impl Group {
-    pub const ALL: [Group; 22] = [
+    pub const ALL: [Group; 23] = [
         Group::Chapa,
+        Group::Estrutural,
         Group::Montagem,
         Group::Restricoes,
         Group::Cinematica,
@@ -78,7 +81,10 @@ impl Group {
         if b == Bench::Chapa {
             return matches!(self, Group::Sketch | Group::Chapa | Group::Referencias | Group::Organizacao | Group::Vista | Group::Selecao | Group::Analise);
         }
-        if self == Group::Chapa {
+        if b == Bench::Estrutural {
+            return matches!(self, Group::Sketch | Group::Estrutural | Group::Referencias | Group::Organizacao | Group::Vista | Group::Selecao | Group::Analise);
+        }
+        if matches!(self, Group::Chapa | Group::Estrutural) {
             return false;
         }
         if b == Bench::Montagem {
@@ -116,6 +122,7 @@ impl Group {
             Group::Restricoes => tr("Restrições e movimento"),
             Group::Cinematica => tr("Cinemática"),
             Group::Chapa => tr("Chapa metálica"),
+            Group::Estrutural => tr("Estrutural"),
             Group::SkCriacao => tr("Criação"),
             Group::SkTransformar => tr("Transformar"),
             Group::SkCotagem => tr("Cotagem"),
@@ -133,6 +140,20 @@ pub enum Bench {
     Superficies,
     Montagem,
     Chapa,
+    Estrutural,
+}
+
+/// Família de perfis cadastrada: tipo de seção, tamanhos e a regra de criação (ancoragem e rotação
+/// padrão quando o membro nasce do arame 3D).
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct UserFamily {
+    pub name: String,
+    pub kind: scc_core::SectionKind,
+    pub sizes: Vec<(String, Vec<f64>)>,
+    #[serde(default)]
+    pub anchor: u8,
+    #[serde(default)]
+    pub angle: f64,
 }
 
 /// Estilo de navegação da câmera (botões do mouse).
@@ -275,6 +296,9 @@ pub struct Settings {
     pub english: bool,
     /// personalização dos grupos de comandos
     pub custom: Customization,
+    /// famílias de perfis cadastradas pelo usuário (biblioteca estrutural)
+    #[serde(default)]
+    pub user_profiles: Vec<UserFamily>,
     /// bancada ativa (Modelagem Sólida ou Superfícies)
     #[serde(default)]
     pub bench: Bench,
@@ -341,6 +365,7 @@ impl Default for Settings {
             keys: Default::default(),
             english: false,
             custom: Default::default(),
+            user_profiles: vec![],
             macro_src: String::new(),
             bench: Default::default(),
             auto_update: true,
