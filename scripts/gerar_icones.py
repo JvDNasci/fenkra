@@ -422,6 +422,51 @@ I["espelho"] = (f'<line x1="24" y1="4" x2="24" y2="44" stroke="{INK}" stroke-wid
 I["escala"] = (f'<rect x="6" y="22" width="18" height="18" rx="2" fill="{MID}" {S}/>'
                f'<rect x="6" y="8" width="34" height="32" rx="3" fill="none" stroke="{INK}" stroke-width="1.6" stroke-dasharray="4 2.5"/>') + arrow(22, 26, 38, 10, ACTION, 2.4)
 
+# ---------------- alpha.5: modos de geometria, superfícies, booleanas, filetes, sketch, macro
+SURF = lambda d: f'<path d="{d}" fill="{LIGHT}" {S}/>'
+I["bool_unir"] = f'<circle cx="18" cy="24" r="12" fill="{MID}" {S}/><circle cx="30" cy="24" r="12" fill="{MID}" {S}/>' + \
+    f'<path d="M24 13.6 A12 12 0 0 1 24 34.4 A12 12 0 0 1 24 13.6 Z" fill="{MID}"/>'
+I["bool_subtrair"] = f'<circle cx="18" cy="24" r="12" fill="{MID}" {S}/><circle cx="30" cy="24" r="12" fill="#ffffff" stroke="{INK}" stroke-width="2" stroke-dasharray="3 2"/>'
+I["bool_intersecao"] = f'<circle cx="18" cy="24" r="12" fill="none" {S}/><circle cx="30" cy="24" r="12" fill="none" {S}/>' + \
+    f'<path d="M24 13.6 A12 12 0 0 1 24 34.4 A12 12 0 0 1 24 13.6 Z" fill="{ACTION}"/>'
+I["filete_face_face"] = f'<path d="M6 8 V30 A12 12 0 0 0 18 42 H42" stroke="{SKETCH}" stroke-width="3" fill="none"/>' + \
+    f'<rect x="2" y="6" width="6" height="22" fill="{ACTION}" opacity="0.6"/><rect x="20" y="40" width="22" height="6" fill="{ACTION}" opacity="0.6"/>'
+I["filete_completo"] = f'<path d="M6 44 V20 A18 18 0 0 1 42 20 V44" fill="{MID}" {S}/>' + \
+    f'<path d="M6 20 H42" stroke="{INK}" stroke-width="1.4" stroke-dasharray="3 2"/>'
+I["sk_estender"] = f'<line x1="6" y1="24" x2="24" y2="24" {G}/><line x1="24" y1="24" x2="38" y2="24" {DASH}/>' + \
+    f'<line x1="40" y1="8" x2="40" y2="40" {G}/>' + arrow(26, 32, 38, 32, ACTION, 2.2)
+I["macro"] = f'<rect x="5" y="7" width="38" height="34" rx="5" fill="{LIGHT}" {S}/>' + \
+    f'<path d="M12 18 L18 24 L12 30" stroke="{ACTION}" stroke-width="3" fill="none" stroke-linecap="round"/>' + \
+    f'<line x1="22" y1="30" x2="34" y2="30" stroke="{ACTION}" stroke-width="3" stroke-linecap="round"/>' + \
+    f'<path d="M34 6 L28 18 H34 L30 26" stroke="#ffd34d" stroke-width="2.4" fill="none"/>'
+I["plano_ponto_normal"] = PL + LN(24, 32, 24, 4) + DOT(24, 32, 4)
+I["plano_meio"] = f'<polygon points="4,40 24,32 44,40 24,48" fill="{REF_L}" {S}/>' + \
+    f'<polygon points="4,24 24,16 44,24 24,32" fill="{ACTION_L}" {S}/>' + \
+    f'<polygon points="4,8 24,0 44,8 24,16" fill="{REF_L}" {S}/>'
+I["ponto_intersecao"] = PL + CV("M8 8 C 14 20, 30 22, 40 44", ACTION) + DOT(24, 30, 4.2)
+I["ponto_intersecao_curvas"] = CV("M4 40 C 16 4, 32 4, 44 40") + CV("M4 10 L44 30", ACTION) + DOT(16, 16, 4) + DOT(37, 26.5, 4)
+I["ponto_projetado"] = f'<path d="M4 36 C 14 28, 34 28, 44 36 L44 42 C 34 36, 14 36, 4 42 Z" fill="{LIGHT}" {S}/>' + \
+    DOT(24, 8, 3.4, INK) + f'<line x1="24" y1="11" x2="24" y2="28" {DASH}/>' + DOT(24, 31, 4)
+I["ponto_proj_curva"] = CV("M4 38 C 16 24, 32 24, 44 38") + DOT(24, 8, 3.4, INK) + f'<line x1="24" y1="11" x2="24" y2="26" {DASH}/>' + DOT(24, 28.5, 4)
+I["ponto_deslocado"] = DOT(10, 36, 3.4, INK) + arrow(12, 34, 34, 14, INK, 1.8) + DOT(38, 10, 4.5)
+I["linha_planos"] = f'<polygon points="4,30 24,22 44,30 24,38" fill="{LIGHT}" {S}/>' + \
+    f'<polygon points="20,6 30,2 30,34 20,38" fill="{ACTION_L}" opacity="0.9" {S}/>' + LN(10, 30, 40, 29, ACTION, 3)
+I["linha_bissetriz"] = f'<path d="M6 40 H42 M6 40 L36 8" {G}/>' + LN(6, 40, 42, 24, ACTION, 2.6)
+I["linha_eixo"] = f'<path d="M12 12 V36 A12 5 0 0 0 36 36 V12" fill="{MID}" {S}/><ellipse cx="24" cy="12" rx="12" ry="5" fill="{LIGHT}" {S}/>' + \
+    LN(24, 2, 24, 46, ACTION, 2.4)
+I["curva_projetada"] = CV("M6 14 C 16 2, 30 26, 42 10", SKETCH, 2.4) + PL + CV("M8 34 C 16 28, 30 40, 40 32", ACTION, 2.6)
+I["spline_controle"] = f'<polyline points="4,38 14,8 34,8 44,38" stroke="{INK}" stroke-width="1.4" stroke-dasharray="3 2" fill="none"/>' + \
+    CV("M4 38 C 14 8, 34 8, 44 38", ACTION, 2.8) + "".join(DOT(x, y, 3, INK) for x, y in [(4, 38), (14, 8), (34, 8), (44, 38)])
+I["curva_extraida"] = box((24, 14), 14) + LN(6, 23, 24, 32, ACTION, 4)
+I["sup_extraida"] = box((24, 14), 14) + f'<polygon points="6,23 24,14 42,23 24,32" fill="{ACTION}" opacity="0.85"/>'
+I["sup_deslocada"] = SURF("M4 34 C 14 24, 34 24, 44 34 L44 38 C 34 30, 14 30, 4 38 Z") + \
+    f'<path d="M4 20 C 14 10, 34 10, 44 20" stroke="{ACTION}" stroke-width="2.6" fill="none" stroke-dasharray="4 2"/>' + arrow(24, 26, 24, 14, ACTION, 2)
+I["sup_preenchida"] = f'<path d="M6 30 C 10 12, 30 6, 42 16 C 44 30, 30 42, 10 40 Z" fill="{LIGHT}" stroke="{ACTION}" stroke-width="2.8"/>'
+I["sup_extrudada"] = f'<path d="M6 36 C 14 28, 22 40, 30 32 L30 12 C 22 20, 14 8, 6 16 Z" fill="{LIGHT}" {S}/>' + \
+    CV("M6 36 C 14 28, 22 40, 30 32", ACTION) + arrow(34, 34, 42, 14, INK, 1.8)
+I["sup_revolucao"] = f'<path d="M14 8 C 6 16, 6 32, 14 40 L34 40 C 42 32, 42 16, 34 8 Z" fill="{LIGHT}" {S}/>' + \
+    f'<line x1="24" y1="2" x2="24" y2="46" stroke="{INK}" stroke-width="1.4" stroke-dasharray="4 2.5"/>' + CV("M34 8 C 42 16, 42 32, 34 40", ACTION)
+
 for name, body in I.items():
     with open(os.path.join(OUT, f"{name}.svg"), "w", encoding="utf8", newline="\n") as f:
         f.write(svg(body))

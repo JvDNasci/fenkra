@@ -1448,6 +1448,21 @@ mod tests {
     use super::*;
 
     #[test]
+    fn macro_de_exemplo_recalcula() {
+        let mut d = Document::new("m");
+        scc_core::macros::run(&mut d, scc_core::macros::EXAMPLE).unwrap();
+        let r = recompute(&d);
+        for f in &d.features {
+            assert_eq!(r.status[&f.id], Status::Ok, "{}: {:?}", f.name, r.status[&f.id]);
+        }
+        if scc_kernel::AVAILABLE {
+            // placa 120 × 70 × 8 menos 4 furos Ø8 (com filete de 1 mm em tudo)
+            let v = r.bodies[0].mass.volume;
+            assert!(v < 120. * 70. * 8. && v > 120. * 70. * 8. - 4. * std::f64::consts::PI * 16. * 8. - 2000., "{v}");
+        }
+    }
+
+    #[test]
     fn modos_extras_superficies_links_e_booleanas() {
         let mut d = Document::new("t");
         let s_ = |x: &str| x.to_string();

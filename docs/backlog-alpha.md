@@ -14,7 +14,7 @@ Versionamento flexível enquanto o projeto for local (sem distribuição).
 - [x] **Estilos de exibição**: sombreado com arestas, sombreado, sem arestas, linhas ocultas, arame, raio-X, semi-renderizado
 - [x] **Ocultar/mostrar** por item, **ambiente de ocultos** (alternar entre visíveis e ocultos) e **filtro de exibição** (planos, sketches, pontos, eixos, corpos, referências)
 - [x] Aparência da peça, do coletor e de **cada comando** (cor + acabamento: fosco, acetinado, brilhante, metal escovado/polido, borracha, vidro) para pré-render rápido
-- [ ] Texturas de imagem (adiado)
+- [x] Texturas de imagem (biblioteca na peça, mapeamento triplanar) — alpha.5
 - [x] Atalhos de câmera: recentralizar, ajustar, vistas padrão, alinhar ao plano
 
 ## alpha.3 — Sketch interativo ✔ (base)
@@ -28,8 +28,8 @@ Versionamento flexível enquanto o projeto for local (sem distribuição).
 - [x] Grade adaptativa ao zoom; **sombra** nos perfis fechados (face real do kernel)
 - [x] Cores de estado: livre (azul), totalmente restrito (branco/preto), conflito (vermelho)
 - [x] Dica breve no ícone e **descrição avançada após 5 s**
-- [ ] Filete e aparar/estender no sketch
-- [ ] Testar o desenho por mouse com o usuário (só verificado por testes e capturas)
+- [x] Filete, aparar e estender no sketch; projetar referências no plano do sketch — alpha.5
+- [ ] Testar o desenho por mouse com o usuário (só verificado por testes e capturas) — **depende de você**
 
 ## alpha.4 — Organização, seleção, ambientes de comando ✔ (base)
 
@@ -47,11 +47,11 @@ Versionamento flexível enquanto o projeto for local (sem distribuição).
 - [x] Cubo de vistas + seletor (Espaço) + vistas salvas como câmeras
 - [x] Furo por norma (ISO grossa/fina, UNC, UNF, BSP, NPT, trapezoidal) com rosca cosmética ou **modelada** (booleana)
 - [x] Correção: arestas de costura e profundidade das arestas
-- [ ] Português / inglês
-- [ ] Personalização de comandos nos grupos (escolher, reordenar, criar grupos)
-- [ ] Automação de desenhos (scripts e macros)
-- [ ] Pontos, linhas e curvas 3D nas pastas de geometria
-- [ ] Referências externas reais (publicações entre peças)
+- [x] Português / inglês
+- [x] Personalização de comandos nos grupos (escolher, reordenar, criar grupos)
+- [x] Automação de desenhos (scripts e macros)
+- [x] Pontos, linhas e curvas 3D nas pastas de geometria
+- [x] Referências externas reais (publicações entre peças)
 - [x] Ícone do app vetorizado a partir da arte do usuário (`tools/vetorizar` → `assets/app/fenix.svg`, refinável no VectorCraft)
 
 ## alpha.5a — Sketch smart e seletor de vistas
@@ -63,7 +63,7 @@ Versionamento flexível enquanto o projeto for local (sem distribuição).
 - [x] Botão direito em elemento(s) selecionado(s) → **menu rápido de restrições** aplicáveis; remover o grupo separado de Restrições da barra
 - [x] Botão direito no vazio mostra as ferramentas de esboço; grupos flutuantes empilhados sem se sobrepor
 - [x] **Seletor de vistas (Espaço)** como caixa central transparente: cubo 3D translúcido grande (faces, arestas e cantos clicáveis; arrastar gira), vistas padrão + dimétrica/trimétrica, orto/perspectiva, ajustar, normal, girar 90° e câmeras salvas
-- [ ] Testar cotagem smart e menu rápido com o mouse (verificado por testes e capturas)
+- [ ] Testar cotagem smart e menu rápido com o mouse (verificado por testes e capturas) — **depende de você**
 
 ## alpha.5b — Geometria de referência e correções de fluxo
 
@@ -74,7 +74,7 @@ Versionamento flexível enquanto o projeto for local (sem distribuição).
 - [x] Filete/chanfro: pré-selecionar arestas **ou** abrir o comando vazio e clicar nas arestas (clicar de novo tira)
 - [x] Clique na peça só marca o que foi clicado; duplo clique na face abre o comando que a criou
 - [x] Apagar corpo (coletor) com seus comandos; sempre resta um coletor
-- [ ] Superfícies como geometria de referência (extrair face, offset, preencher)
+- [x] Superfícies como geometria de referência (extrair face, offset, preencher)
 
 ## alpha.6 — Features por família, atalhos, câmera e carregamento
 
@@ -86,35 +86,47 @@ Versionamento flexível enquanto o projeto for local (sem distribuição).
 - [x] **Acabamento**: filete variável; chanfro por 2 distâncias e por distância + ângulo; Casca; Ângulo de saída; Espessura de faces; Rosca externa/interna em face cilíndrica
 - [x] **Padrões e transformações**: padrão linear (1 ou 2 direções), circular, por pontos; espelho; escala — de comandos escolhidos ou do corpo inteiro
 - [x] Barra de comandos quebra em linhas quando não cabe
-- [ ] Filete face-face e tritangente (o OCCT não tem operação direta; estudar via superfícies)
-- [ ] Reforço "até o corpo" (hoje usa profundidade)
-- [ ] Rosca: clicar de novo numa face para tirar; marcar faces por identidade além do ponto
+- [x] Filete face-face e tritangente (o OCCT não tem operação direta; estudar via superfícies)
+- [x] Reforço "até o corpo" (hoje usa profundidade)
+- [x] Rosca: clicar de novo numa face para tirar; marcar faces por identidade além do ponto
 
 ## Próximos pedidos (prioridade)
 
 - [x] **Pastas de geometria como gerenciador**: subpastas, mover (menu ou arrastar), copiar/recortar/colar/duplicar (Ctrl+C/X/V/D), criar qualquer geometria dentro da pasta — superfícies quando existirem
 - [x] **Fast 3D**: seta arrastável e cota editável na viewport para extrusão/recorte, plano deslocado, altura das primitivas e reforço (valor ligado a parâmetro fica travado)
-- [ ] Fast 3D para ângulo da revolução, raio do filete e espessura da casca
+- [x] Fast 3D para ângulo da revolução, raio do filete e espessura da casca
 - [x] Formas: Pad/Pocket (já: extrusão/recorte), Shaft/Groove (revolução que remove), Rib e Slot (varredura por spine), Multi-seções (loft) e remoção por multi-seções, Stiffener, Thin solids (ver alpha.6)
 - [x] Acabamento: filete face-face, tritangente e variável; draft; shell; thickness; thread/tap em eixos (ver alpha.6)
 - [x] Padrões e transformações: retangular, circular, por pontos, espelhar, escala (ver alpha.6)
 
 ## alpha.5 — Referências do modelo
 
-- [ ] Seleção de faces, arestas e vértices na viewport (com realce)
-- [ ] Sketch em **face plana** (e em superfície via plano tangente)
-- [ ] Filete/chanfro em arestas selecionadas
-- [ ] **Extrair geometria** (vértice, aresta, face, elemento de sketch) como referência ou como **parâmetro global**
-- [ ] Booleanas entre coletores (unir, subtrair, interseção)
-- [ ] Medição
+- [x] Seleção de faces, arestas e vértices na viewport (com realce)
+- [x] Sketch em **face plana** (e em superfície via plano tangente)
+- [x] Filete/chanfro em arestas selecionadas
+- [x] **Extrair geometria** (vértice, aresta, face, elemento de sketch) como referência ou como **parâmetro global**
+- [x] Booleanas entre coletores (unir, subtrair, interseção)
+- [x] Medição
 
 ## alpha.6 — Geometria 3D de referência e referências externas
 
-- [ ] Ponto 3D, linha 3D, círculo 3D, curva 3D (spline) e conectores entre linhas 3D
-- [ ] Planos por todos os modos de [modos-de-criacao.md](specs/modos-de-criacao.md)
-- [ ] **Publicações** com nome único e uso em outras peças (ADR 0006)
-- [ ] No sketch: usar parâmetro global ou referência externa publicada; criar referências internas de elementos da própria peça
+- [x] Ponto 3D, linha 3D, círculo 3D, curva 3D (spline) e conectores entre linhas 3D
+- [x] Planos por todos os modos de [modos-de-criacao.md](specs/modos-de-criacao.md)
+- [x] **Publicações** com nome único e uso em outras peças (ADR 0006)
+- [x] No sketch: usar parâmetro global ou referência externa publicada; criar referências internas de elementos da própria peça
+
+## 0.1.0-alpha.5 — release ✔
+
+Fecha todos os itens acima. Destaques que ainda não constavam:
+
+- [x] Modos extras de geometria: interseção curva×plano e curva×curva, projeção em superfície/curva, ponto deslocado, interseção de planos, bissetriz, eixo de face, plano por ponto+normal, plano médio, curva projetada, spline por polígono de controle, curva extraída
+- [x] Superfícies de referência: extraída, deslocada, preenchimento, extrudada, revolução (translúcidas, selecionáveis, usáveis como entrada)
+- [x] Publicações (📤) de elementos e parâmetros, importação por link (ativo/congelado/quebrado, atualizar), projeção no sketch
+- [x] Booleanas entre corpos; extrusão "até o próximo"; reforço "até o corpo"; filete face-face e completo (tritangente)
+- [x] Medição (distâncias, ângulos, comprimento, raio, área) com "→ parâmetro" e extração de ponto/curva/superfície
+- [x] Português/inglês; personalização dos grupos; macros; texturas
+- [ ] Aguardando teste do usuário com o mouse: cotagem smart, menu rápido, arrastar na árvore, setas 3D
 
 ## Sempre
 
-- [ ] Releases locais com `scripts/release.ps1` quando fizer sentido
+- [x] Releases locais com `scripts/release.ps1` quando fizer sentido
