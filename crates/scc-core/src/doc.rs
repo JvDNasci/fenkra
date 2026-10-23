@@ -2039,6 +2039,9 @@ pub struct Document {
     /// parâmetros de chapa metálica (espessura, raio, fator K, estado planificado)
     #[serde(default)]
     pub sheet: Option<SheetParams>,
+    /// anotações 3D (PMI) desta peça
+    #[serde(default)]
+    pub pmi: Vec<crate::pmi::Pmi>,
     /// Ordem do vetor = ordem da linha de tempo.
     pub features: Vec<Feature>,
     /// Quantidade de comandos ativos (marcador de rollback, RF-ARV-051).
@@ -2083,6 +2086,7 @@ impl Document {
             views: vec![],
             textures: vec![],
             sheet: None,
+            pmi: vec![],
             features: vec![],
             rollback: 0,
         };

@@ -30,6 +30,8 @@ pub enum Sel {
     Collector(Id),
     Folder(Id),
     Feature(Id),
+    /// anotação 3D (PMI) da peça
+    Pmi(Id),
 }
 
 /// Documento aberto.
@@ -174,6 +176,8 @@ pub struct App {
     pub asm: Option<crate::asm_ui::AsmState>,
     /// janela de parâmetros de chapa
     sheet_open: bool,
+    /// anotação 3D esperando seleções
+    pub pmi_pending: Option<u8>,
     /// janelas do estrutural: biblioteca de perfis e lista de corte
     pub st_lib_open: bool,
     pub st_cut_open: bool,
@@ -264,6 +268,7 @@ impl App {
             relink_ext: None,
             asm: None,
             sheet_open: false,
+            pmi_pending: None,
             st_lib_open: false,
             st_cut_open: false,
             st_lib_sel: 0,
@@ -409,6 +414,21 @@ impl App {
             app.st_cut_open = true;
             app.started = true;
         }
+        // desenvolvimento: SCC_DEMO_PMI=1 anota a placa de exemplo (cota, nota, tolerância, rugosidade)
+        if std::env::var("SCC_DEMO_PMI").is_ok() {
+            use scc_core::pmi::*;
+            let s = |x: &str| x.to_string();
+            let d = &mut app.open.doc;
+            let mk = |d: &mut Document, kind, a: Vec<[f64; 3]>, off, text: &str| {
+                let id = d.alloc();
+                d.pmi.push(Pmi { id, name: format!("PMI {}", id.0), kind, anchors: a, offset: off, text: text.into(), tol_plus: s(""), tol_minus: s(""), visible: true });
+            };
+            mk(d, PmiKind::Linear, vec![[-60., -35., 8.], [60., -35., 8.]], [0., -25., 0.], "");
+            mk(d, PmiKind::Note, vec![[0., 0., 8.]], [40., 30., 30.], "Rebarbar arestas vivas");
+            mk(d, PmiKind::Gdt { ch: GdtChar::Planeza, tol: s("0,05"), datums: s("") }, vec![[-40., 20., 8.]], [-30., 30., 30.], "");
+            mk(d, PmiKind::Roughness { ra: s("1,6"), process: s("fresado") }, vec![[30., 20., 8.]], [20., 25., 25.], "");
+            app.started = true;
+        }
         // desenvolvimento: SCC_VISTAS=1 abre o seletor de vistas ao iniciar
         if std::env::var("SCC_VISTAS").is_ok() {
             app.view_menu = true;
@@ -442,6 +462,15 @@ impl App {
     }
 
     /// Câmera atual (para estados de exibição e animações).
+    /// Id novo para uma anotação (não colide com os ids do documento nem da montagem).
+    pub fn next_pmi_id(&mut self) -> u64 {
+        if self.in_asm() {
+            self.asm.as_mut().unwrap().asm.alloc().0
+        } else {
+            self.open.doc.alloc().0
+        }
+    }
+
     pub fn camera_get(&self) -> Option<scc_montagem::display::Cam> {
         self.viewport.as_ref().map(|v| {
             let c = v.camera;
@@ -864,6 +893,10 @@ impl App {
     }
 
     fn command(&mut self, c: Cmd) {
+        if let Cmd::Pmi(i) = c {
+            crate::pmi_ui::command(self, i);
+            return;
+        }
         if crate::asm_ui::command(self, c) {
             return;
         }
@@ -981,6 +1014,7 @@ impl App {
                 };
                 Sel::Feature(d.add_feature(FeatureKind::Primitive(Primitive { kind, plane, a: s(v[0]), b: s(v[1]), c: s(v[2]), d: s(v[3]), op: BoolOp::Add })))
             }
+            Cmd::Pmi(_) => return,
             Cmd::StLibrary => {
                 self.st_lib_open = true;
                 return;
@@ -2592,6 +2626,9 @@ impl App {
             });
         });
 
+        // ---------- PMI (detalhamento 3D)
+        crate::pmi_ui::tree_section(self, ui);
+
         // ---------- parâmetros
         egui::CollapsingHeader::new(format!("ƒ {} ({})", tr("Parâmetros"), doc.params.len())).default_open(false).show(ui, |ui| {
             let vars = self.vars();
@@ -3838,6 +3875,9 @@ impl App {
                     ui.painter().text(rect.left_bottom() + egui::vec2(10., -10.), egui::Align2::LEFT_BOTTOM, format!("Seleção: {txt}  ·  Esc limpa"), egui::FontId::proportional(12.), Color32::from_rgb(255, 190, 40));
                 }
             }
+            if self.sketch.is_none() {
+                crate::pmi_ui::overlay(self, ui, rect, &cam);
+            }
             // seta e cota 3D do comando aberto (fast 3D)
             if self.sketch.is_none() {
                 if self.settings.bench == crate::settings::Bench::Montagem && self.asm.is_some() {
@@ -4043,6 +4083,8 @@ pub enum Cmd {
     StGusset,
     StLibrary,
     StCutList,
+    /// anotação 3D: 0 linear … 8 tolerância geométrica
+    Pmi(u8),
     /// mover o corpo: 0 translação, 1 rotação, 2 simetria, 3 afinidade
     MoveBody(u8),
     /// extrusão com ângulo de saída e filetes num clique
@@ -4506,11 +4548,13 @@ impl eframe::App for App {
             std::mem::swap(&mut self.result, &mut st.view);
             std::mem::swap(&mut self.open.doc, &mut st.view_doc);
             crate::asm_ui::after_viewport(self);
+            crate::pmi_ui::after_viewport(self);
             if self.asm.as_ref().is_some_and(|s| s.dirty) {
                 self.scene_dirty = true;
             }
         } else {
             self.viewport(root, frame);
+            crate::pmi_ui::after_viewport(self);
         }
         self.toasts(ctx);
 

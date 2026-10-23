@@ -18,6 +18,7 @@ mod handles;
 mod gizmo;
 mod asm_ui;
 mod st_ui;
+mod pmi_ui;
 mod measure;
 mod i18n;
 

@@ -675,6 +675,26 @@ I["st_canto_nenhum"] = f'<path d="M4 4 H16 V44 H4 Z" fill="{MID}" {S}/><path d="
 I["composer"] = f'<rect x="4" y="8" width="40" height="30" rx="3" fill="{LIGHT}" {S}/>' + BLK(10, 20, 10) + f'<rect x="26" y="12" width="10" height="10" rx="1.5" fill="{MID}" stroke="{ACTION}" stroke-width="1.6" stroke-dasharray="3 2"/>' + \
     arrow(21, 22, 26, 18, ACTION, 1.6) + f'<line x1="6" y1="43" x2="42" y2="43" stroke="{INK}" stroke-width="2"/>' + "".join(f'<polygon points="{x},40 {x + 3},43 {x},46 {x - 3},43" fill="#ffb020"/>' for x in (10, 24, 38))
 
+# ---------------- PMI
+PC = "#e8701a"
+I["pmi_linear"] = box((24, 22), 14) + f'<path d="M6 10 H42" stroke="{PC}" stroke-width="2"/>' + AR("6,10 12,7 12,13").replace(ACTION, PC) + AR("42,10 36,7 36,13").replace(ACTION, PC) + \
+    f'<path d="M6 6 V20 M42 6 V20" stroke="{PC}" stroke-width="1.4"/>'
+I["pmi_raio"] = f'<circle cx="20" cy="28" r="14" fill="{LIGHT}" {S}/>' + f'<path d="M20 28 L34 18 L44 18" stroke="{PC}" stroke-width="2.2" fill="none"/><circle cx="20" cy="28" r="2.4" fill="{PC}"/>' + \
+    f'<text x="36" y="14" font-size="10" font-family="sans-serif" fill="{PC}">R</text>'
+I["pmi_diametro"] = f'<circle cx="20" cy="28" r="14" fill="{LIGHT}" {S}/>' + f'<path d="M10 38 L30 18 L44 18" stroke="{PC}" stroke-width="2.2" fill="none"/>' + \
+    f'<circle cx="38" cy="10" r="5" fill="none" stroke="{PC}" stroke-width="1.6"/><line x1="33" y1="15" x2="43" y2="5" stroke="{PC}" stroke-width="1.6"/>'
+I["pmi_angulo"] = f'<path d="M6 42 H44 M6 42 L36 10" stroke="{INK}" stroke-width="2.6"/>' + f'<path d="M30 42 A24 24 0 0 0 22 25" stroke="{PC}" stroke-width="2.4" fill="none"/>'
+I["pmi_nota"] = box((16, 30), 12) + f'<path d="M16 26 L30 12" stroke="{PC}" stroke-width="2"/><rect x="28" y="4" width="16" height="12" rx="2" fill="#fff4e8" stroke="{PC}" stroke-width="1.6"/>' + \
+    f'<path d="M31 8 H41 M31 12 H38" stroke="{PC}" stroke-width="1.4"/>'
+I["pmi_rugosidade"] = f'<path d="M6 26 L14 40 L30 8 H44" stroke="{PC}" stroke-width="2.6" fill="none" stroke-linejoin="round"/>' + f'<line x1="4" y1="44" x2="44" y2="44" stroke="{INK}" stroke-width="2"/>'
+I["pmi_solda"] = f'<path d="M4 30 H22 V44 H4 Z" fill="{MID}" {S}/><path d="M22 30 H44 V44 H22 Z" fill="{LIGHT}" {S}/>' + \
+    f'<path d="M22 30 L12 6 H40" stroke="{PC}" stroke-width="2" fill="none"/><polygon points="26,6 32,6 32,0" fill="{PC}"/>'
+I["pmi_referencia"] = f'<rect x="14" y="4" width="20" height="16" fill="#fff4e8" stroke="{PC}" stroke-width="2"/><text x="19" y="17" font-size="13" font-family="sans-serif" font-weight="bold" fill="{PC}">A</text>' + \
+    f'<line x1="24" y1="20" x2="24" y2="32" stroke="{PC}" stroke-width="2"/><polygon points="16,40 32,40 24,31" fill="{PC}"/><line x1="4" y1="42" x2="44" y2="42" stroke="{INK}" stroke-width="2.4"/>'
+I["pmi_tolerancia"] = f'<rect x="3" y="14" width="42" height="18" fill="#fff4e8" stroke="{PC}" stroke-width="2"/>' + \
+    f'<line x1="17" y1="14" x2="17" y2="32" stroke="{PC}" stroke-width="1.6"/><line x1="35" y1="14" x2="35" y2="32" stroke="{PC}" stroke-width="1.6"/>' + \
+    f'<path d="M6 27 L9 20 H15 L12 27 Z" fill="none" stroke="{PC}" stroke-width="1.4"/><path d="M20 23 H32" stroke="{PC}" stroke-width="1.6"/><text x="37" y="28" font-size="11" font-family="sans-serif" fill="{PC}">A</text>'
+
 for name, body in I.items():
     with open(os.path.join(OUT, f"{name}.svg"), "w", encoding="utf8", newline="\n") as f:
         f.write(svg(body))

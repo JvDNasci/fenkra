@@ -795,6 +795,8 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
     if st.asm.nodes.is_empty() {
         ui.label(RichText::new(tr("vazia — 🧩 Inserir peça ou ✚ Peça nova no contexto")).weak().italics().small());
     }
+    crate::pmi_ui::tree_section(app, ui);
+    let st = app.asm.as_mut().unwrap();
     // restrições
     ui.add_space(6.);
     egui::CollapsingHeader::new(format!("🔗 {} ({})", tr("Restrições e juntas"), st.asm.mates.len() + st.asm.rigid.len() + st.asm.joints.len() + st.asm.couplings.len() + st.asm.patterns.len())).default_open(true).show(ui, |ui| {
@@ -1013,6 +1015,13 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         ui.add_space(6.);
     }
     let sel = st.sel;
+    if let Some(s) = sel {
+        if st.asm.pmi.iter().any(|p| p.id == s) {
+            crate::pmi_ui::panel(app, ui, s);
+            return;
+        }
+    }
+    let st = app.asm.as_mut().unwrap();
     let before = st.asm.clone();
     let mut resolve = false;
     match sel.and_then(|s| st.asm.nodes.iter().position(|n| n.id == s)) {

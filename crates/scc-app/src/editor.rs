@@ -372,6 +372,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         }
 
         Sel::Params => params_table(ui, doc, &vars, &mut app_toast_sink()),
+        Sel::Pmi(id) => {
+            crate::pmi_ui::panel(app, ui, id);
+        }
 
         Sel::Collector(id) => {
             let active = doc.active_collector == id;

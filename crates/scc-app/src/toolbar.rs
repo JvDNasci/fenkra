@@ -260,6 +260,23 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("sm_desdobrar", "Dobrar/Desdobrar", "Dobrar / desdobrar", "Alterna a peça entre dobrada e planificada (comprimento desenvolvido pelo fator K).", Cmd(C::SmUnfold))),
             One(it("recorte", "Recorte", "Recorte na chapa", "Recorte passante a partir do sketch (compatível com a planificação).", Cmd(C::Cut))),
         ],
+        Group::Pmi => vec![
+            Family("pmi_cota", vec![
+                it("pmi_linear", "Cota", "Cota linear 3D", "Escolha dois vértices/arestas: a distância fica anotada no modelo e se atualiza com ele.", Cmd(C::Pmi(0))),
+                it("pmi_raio", "Raio", "Cota de raio 3D", "Escolha uma aresta circular.", Cmd(C::Pmi(1))),
+                it("pmi_diametro", "Diâmetro", "Cota de diâmetro 3D", "Escolha uma aresta circular.", Cmd(C::Pmi(2))),
+                it("pmi_angulo", "Ângulo", "Cota angular 3D", "Escolha o vértice e dois pontos.", Cmd(C::Pmi(3))),
+            ]),
+            Family("pmi_anotacao", vec![
+                it("pmi_nota", "Nota", "Nota com chamada", "Texto livre preso a um ponto do modelo.", Cmd(C::Pmi(4))),
+                it("pmi_rugosidade", "Rugosidade", "Símbolo de rugosidade", "Ra e processo de fabricação na face escolhida.", Cmd(C::Pmi(5))),
+                it("pmi_solda", "Solda", "Símbolo de solda", "Tipo, medida e todo o contorno, na aresta/junta escolhida.", Cmd(C::Pmi(6))),
+            ]),
+            Family("pmi_gdt", vec![
+                it("pmi_referencia", "Referência", "Referência (datum)", "Letra de referência na face escolhida.", Cmd(C::Pmi(7))),
+                it("pmi_tolerancia", "Tolerância", "Tolerância geométrica", "Quadro ISO 1101: característica, tolerância e referências.", Cmd(C::Pmi(8))),
+            ]),
+        ],
         Group::Estrutural => vec![
             One(it("st_membro", "Membro", "Membro estrutural", "Perfil ao longo das linhas selecionadas (arame 3D): família, medida, ancoragem, rotação, deslocamentos e cantos.", Cmd(C::StMember))),
             Family("st_ligacao", vec![

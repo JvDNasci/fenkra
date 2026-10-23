@@ -41,6 +41,8 @@ pub enum Group {
     Chapa,
     /// membros estruturais
     Estrutural,
+    /// detalhamento 3D (PMI)
+    Pmi,
     // modo sketch
     SkCriacao,
     SkTransformar,
@@ -50,9 +52,10 @@ pub enum Group {
 }
 
 impl Group {
-    pub const ALL: [Group; 23] = [
+    pub const ALL: [Group; 24] = [
         Group::Chapa,
         Group::Estrutural,
+        Group::Pmi,
         Group::Montagem,
         Group::Restricoes,
         Group::Cinematica,
@@ -79,16 +82,16 @@ impl Group {
     /// Seleção e Vista são comuns às duas).
     pub fn in_bench(self, b: Bench) -> bool {
         if b == Bench::Chapa {
-            return matches!(self, Group::Sketch | Group::Chapa | Group::Referencias | Group::Organizacao | Group::Vista | Group::Selecao | Group::Analise);
+            return matches!(self, Group::Sketch | Group::Chapa | Group::Referencias | Group::Organizacao | Group::Pmi | Group::Vista | Group::Selecao | Group::Analise);
         }
         if b == Bench::Estrutural {
-            return matches!(self, Group::Sketch | Group::Estrutural | Group::Referencias | Group::Organizacao | Group::Vista | Group::Selecao | Group::Analise);
+            return matches!(self, Group::Sketch | Group::Estrutural | Group::Referencias | Group::Organizacao | Group::Pmi | Group::Vista | Group::Selecao | Group::Analise);
         }
         if matches!(self, Group::Chapa | Group::Estrutural) {
             return false;
         }
         if b == Bench::Montagem {
-            return matches!(self, Group::Montagem | Group::Restricoes | Group::Cinematica | Group::Vista | Group::Selecao | Group::Analise);
+            return matches!(self, Group::Montagem | Group::Restricoes | Group::Cinematica | Group::Pmi | Group::Vista | Group::Selecao | Group::Analise);
         }
         match self {
             Group::Montagem | Group::Restricoes | Group::Cinematica => false,
@@ -123,6 +126,7 @@ impl Group {
             Group::Cinematica => tr("Cinemática"),
             Group::Chapa => tr("Chapa metálica"),
             Group::Estrutural => tr("Estrutural"),
+            Group::Pmi => tr("Detalhamento 3D (PMI)"),
             Group::SkCriacao => tr("Criação"),
             Group::SkTransformar => tr("Transformar"),
             Group::SkCotagem => tr("Cotagem"),
