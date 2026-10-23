@@ -154,6 +154,10 @@ pub struct App {
     pub sketch_wait_plane: bool,
     /// árvore aberta ao lado do painel do comando
     pub tree_peek: bool,
+    /// elemento sob o mouse no clique direito da viewport (menu de contexto do 3D)
+    ctx_pick: Option<crate::picking::Pick>,
+    /// ações escolhidas no menu de contexto do 3D (aplicadas depois da viewport)
+    ctx_actions: Vec<TreeAction>,
     /// comandos desatualizados (calculado a cada quadro para a árvore)
     stale_set: std::cell::RefCell<(bool, std::collections::HashSet<Id>)>,
     /// seletor de vistas (tecla Espaço)
@@ -282,6 +286,8 @@ impl App {
             pmi_pending: None,
             sketch_wait_plane: false,
             tree_peek: false,
+            ctx_pick: None,
+            ctx_actions: vec![],
             stale_set: Default::default(),
             dwg: None,
             st_lib_open: false,
@@ -494,6 +500,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
         // desenvolvimento: SCC_ABRIR=<nome> abre esse comando para edição ao iniciar
         if let Ok(n) = std::env::var("SCC_ABRIR") {
             app.open_pending = app.open.doc.features.iter().find(|f| f.name == n).map(|f| f.id);
+            if let Some(p) = app.open.doc.pmi.iter().find(|p| p.name == n) {
+                app.sel = Sel::Pmi(p.id);
+            }
         }
         app.request_recompute();
         app
@@ -2020,6 +2029,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
 
     fn delete_selected(&mut self) {
         match self.sel {
+            Sel::Pmi(id) => {
+                crate::pmi_ui::list_mut(self).retain(|p| p.id != id);
+                self.sel = Sel::None;
+            }
             Sel::Feature(id) | Sel::Ref(id) | Sel::Collector(id) => self.ask_delete(id),
             Sel::Folder(id) => {
                 self.open.doc.remove_folder(id);
@@ -3637,6 +3650,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 }
             }
             TreeAction::OpenPublications => self.pub_open = true,
+            TreeAction::WithPicks(p, c) => {
+                self.picks = p;
+                self.sel = Sel::None;
+                self.command(c);
+            }
+            TreeAction::Act(x) => self.act(x),
+            TreeAction::SelectSel(s) => self.sel = s,
+
             TreeAction::FolderShown(fo, on) => {
                 let inside: Vec<Id> = d.folders.iter().filter(|f| d.folder_within(f.id, fo)).map(|f| f.id).collect();
                 for r in d.references.iter_mut().filter(|r| r.folder.is_some_and(|x| x == fo || inside.contains(&x))) {
@@ -3647,6 +3668,182 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 }
             }
         }
+    }
+
+    /// Menu do botão direito na viewport: opções do elemento clicado (face/aresta/vértice do corpo,
+    /// referência, plano) ou, no vazio, da vista.
+    fn viewport_menu(&self, ui: &mut egui::Ui, r: &RecomputeResult, target: Option<crate::picking::Pick>, acts: &mut Vec<TreeAction>) {
+        use crate::picking::Pick;
+        let doc = &self.open.doc;
+        let item = |ui: &mut egui::Ui, txt: &str, a: TreeAction, acts: &mut Vec<TreeAction>| {
+            if ui.button(tr(txt)).clicked() {
+                acts.push(a);
+                ui.close();
+            }
+        };
+        match target {
+            Some(p @ (Pick::Face { .. } | Pick::Edge { .. } | Pick::Vertex { .. })) => {
+                let body = match p {
+                    Pick::Face { body, .. } | Pick::Edge { body, .. } | Pick::Vertex { body, .. } => body,
+                    _ => 0,
+                };
+                let col = r.bodies.get(body).map(|b| b.collector);
+                let owner = match p {
+                    Pick::Face { owner, .. } => Some(owner),
+                    _ => None,
+                }
+                .filter(|o| doc.feature(*o).is_some());
+                ui.label(RichText::new(p.label(doc)).strong());
+                if let Some(o) = owner {
+                    ui.label(RichText::new(format!("{} {}", tr("criada por"), doc.name_of(o))).weak().small());
+                    item(ui, "✏ Editar o comando que criou", TreeAction::EditSketch(o), acts);
+                    item(ui, "Selecionar na árvore", TreeAction::SelectSel(Sel::Feature(o)), acts);
+                }
+                ui.separator();
+                if matches!(p, Pick::Face { .. }) {
+                    item(ui, "✏ Novo sketch nesta face", TreeAction::WithPicks(vec![p], Cmd::Sketch), acts);
+                    item(ui, "▱ Plano nesta face", TreeAction::WithPicks(vec![p], Cmd::Geo(crate::geo_ui::GeoKind::PlaneOffset)), acts);
+                    item(ui, "◫ Extrair face", TreeAction::WithPicks(vec![p], Cmd::Extract), acts);
+                    item(ui, "▣ Casca a partir desta face", TreeAction::WithPicks(vec![p], Cmd::Shell), acts);
+                    item(ui, "⦿ Furo nesta face", TreeAction::WithPicks(vec![p], Cmd::Hole), acts);
+                }
+                if matches!(p, Pick::Edge { .. }) {
+                    item(ui, "◜ Filete nesta aresta", TreeAction::WithPicks(vec![p], Cmd::Fillet), acts);
+                    item(ui, "◺ Chanfro nesta aresta", TreeAction::WithPicks(vec![p], Cmd::Chamfer), acts);
+                    item(ui, "∿ Extrair aresta (curva)", TreeAction::WithPicks(vec![p], Cmd::Extract), acts);
+                }
+                if matches!(p, Pick::Vertex { .. }) {
+                    item(ui, "• Extrair vértice (ponto)", TreeAction::WithPicks(vec![p], Cmd::Extract), acts);
+                    item(ui, "⦿ Furo neste vértice", TreeAction::WithPicks(vec![p], Cmd::Hole), acts);
+                }
+                if let Some(c) = col {
+                    ui.separator();
+                    let vis = doc.collectors.iter().find(|x| x.id == c).is_some_and(|x| x.visible);
+                    item(ui, if vis { "👁 Ocultar o corpo" } else { "👁 Mostrar o corpo" }, TreeAction::CollectorVisible(c, !vis), acts);
+                    item(ui, "🎨 Propriedades gráficas do corpo…", TreeAction::Props(AppTarget::Collector(c)), acts);
+                    if let Some(o) = owner {
+                        item(ui, "🎨 Cor das faces deste comando…", TreeAction::Props(AppTarget::Feature(o)), acts);
+                    }
+                }
+                if let Some(o) = owner {
+                    ui.separator();
+                    item(ui, "🗑 Apagar o comando…", TreeAction::Delete(o), acts);
+                }
+            }
+            Some(Pick::Geo(id) | Pick::Plane(PlaneRef::Datum(id))) if doc.reference(id).is_some() => {
+                let rf = doc.reference(id).unwrap();
+                ui.label(RichText::new(&rf.name).strong());
+                item(ui, "✏ Editar", TreeAction::EditSketch(id), acts);
+                item(ui, "Selecionar na árvore", TreeAction::SelectSel(Sel::Ref(id)), acts);
+                if rf.kind.class() == RefClass::Plane {
+                    item(ui, "✏ Novo sketch neste plano", TreeAction::SketchOn(PlaneRef::Datum(id)), acts);
+                }
+                ui.separator();
+                item(ui, if rf.visible { "👁 Ocultar" } else { "👁 Mostrar" }, TreeAction::RefVisible(id, !rf.visible), acts);
+                item(ui, "🎨 Propriedades gráficas…", TreeAction::Props(AppTarget::Ref(id)), acts);
+                item(ui, if rf.published { "Despublicar" } else { "📤 Publicar para outras peças" }, TreeAction::Publish(id, !rf.published), acts);
+                ui.separator();
+                item(ui, "🗑 Apagar", TreeAction::Delete(id), acts);
+            }
+            Some(Pick::Plane(PlaneRef::Origin(o))) => {
+                ui.label(RichText::new(format!("Plano {}", crate::scene::plane_name(o))).strong());
+                item(ui, "✏ Novo sketch neste plano", TreeAction::SketchOn(PlaneRef::Origin(o)), acts);
+                item(ui, "▱ Plano deslocado deste", TreeAction::WithPicks(vec![Pick::Plane(PlaneRef::Origin(o))], Cmd::Geo(crate::geo_ui::GeoKind::PlaneOffset)), acts);
+            }
+            _ => {
+                ui.label(RichText::new(tr("Vista")).strong());
+                item(ui, "⤢ Ajustar tudo   F", TreeAction::Act(Act::Fit), acts);
+                item(ui, "⟂ Normal à seleção   N", TreeAction::Act(Act::Normal), acts);
+                item(ui, if self.settings.ortho { "Perspectiva" } else { "Ortogonal" }, TreeAction::Act(Act::Ortho), acts);
+                item(ui, if self.hidden_env { "Sair do ambiente de ocultos" } else { "Ambiente de ocultos" }, TreeAction::Act(Act::HiddenEnv), acts);
+                ui.separator();
+                item(ui, "✏ Novo sketch…", TreeAction::Run(Cmd::Sketch), acts);
+                item(ui, "📁 Nova pasta de geometria", TreeAction::NewGeometryFolder, acts);
+                if !self.picks.is_empty() {
+                    item(ui, "Limpar seleção   Esc", TreeAction::Act(Act::ClearPicks), acts);
+                }
+            }
+        }
+    }
+
+    /// Barra Concluir/Cancelar para o que está aberto fora dos comandos (anotação 3D, parâmetros,
+    /// montagem, desenho, espera do plano do sketch). Os comandos e o sketch têm a barra deles.
+    fn conclude_bar(&mut self, ui: &mut egui::Ui) {
+        use crate::settings::Bench;
+        let big = |ui: &mut egui::Ui, t: &str| ui.add(egui::Button::new(RichText::new(tr(t)).strong()).min_size(egui::vec2(110., 28.)));
+        let enter = ui.input(|i| i.key_pressed(egui::Key::Enter)) && !ui.ctx().egui_wants_keyboard_input();
+        match self.settings.bench {
+            Bench::Desenho => {
+                let Some(st) = self.dwg.as_mut() else { return };
+                if st.sel.is_none() && st.tool.is_none() {
+                    return;
+                }
+                ui.horizontal(|ui| {
+                    if big(ui, "✔ Concluir").on_hover_text("Enter").clicked() || enter {
+                        st.conclude();
+                    }
+                    if let Some(id) = st.sel.filter(|_| st.tool.is_none()) {
+                        if big(ui, "🗑 Apagar").clicked() {
+                            st.d.delete(id);
+                            st.conclude();
+                        }
+                    } else if big(ui, "✖ Cancelar").clicked() {
+                        st.conclude();
+                    }
+                });
+            }
+            Bench::Montagem => {
+                let Some(st) = self.asm.as_mut() else { return };
+                if st.sel.is_none() && st.pending.is_none() && st.pending_joint.is_none() {
+                    return;
+                }
+                ui.horizontal(|ui| {
+                    if big(ui, "✔ Concluir").on_hover_text("Enter").clicked() || enter {
+                        st.sel = None;
+                        st.pending = None;
+                        st.pending_joint = None;
+                    }
+                    if (st.pending.is_some() || st.pending_joint.is_some()) && big(ui, "✖ Cancelar").clicked() {
+                        st.pending = None;
+                        st.pending_joint = None;
+                    }
+                });
+            }
+            _ => {
+                if self.session.is_some() || self.sketch.is_some() {
+                    return;
+                }
+                if self.sketch_wait_plane || self.pmi_pending.is_some() {
+                    ui.label(RichText::new(tr(if self.sketch_wait_plane { "Escolha o plano ou a face do sketch…" } else { "Escolha os elementos da anotação no 3D…" })).color(Color32::from_rgb(255, 190, 80)));
+                    if big(ui, "✖ Cancelar").clicked() {
+                        self.sketch_wait_plane = false;
+                        self.pmi_pending = None;
+                    }
+                    ui.separator();
+                    return;
+                }
+                match self.sel {
+                    Sel::Pmi(id) => {
+                        ui.horizontal(|ui| {
+                            if big(ui, "✔ Concluir").on_hover_text("Enter").clicked() || enter {
+                                self.sel = Sel::None;
+                            }
+                            if big(ui, "🗑 Apagar").on_hover_text("Del").clicked() {
+                                crate::pmi_ui::list_mut(self).retain(|p| p.id != id);
+                                self.sel = Sel::None;
+                            }
+                        });
+                    }
+                    Sel::Params => {
+                        if big(ui, "✔ Concluir").on_hover_text("Enter").clicked() || enter {
+                            self.sel = Sel::None;
+                        }
+                    }
+                    _ => return,
+                }
+            }
+        }
+        ui.separator();
     }
 
     /// Preenche os campos vazios do comando/elemento em edição com a seleção da viewport (`tree`
@@ -4287,6 +4484,17 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                         }
                     }
                 }
+                // botão direito (sem arrastar) no 3D: menu do elemento sob o mouse
+                if resp.secondary_clicked() {
+                    self.ctx_pick = self.hover_pick;
+                }
+                // (na montagem a cena é a composição das peças: o menu do 3D é o da montagem)
+                if !self.in_asm() {
+                    let mut acts: Vec<TreeAction> = vec![];
+                    let target = self.ctx_pick;
+                    resp.context_menu(|ui| self.viewport_menu(ui, r, target, &mut acts));
+                    self.ctx_actions.extend(acts);
+                }
                 // faces escolhidas do comando em edição
                 if let Some(Some(k)) = face_cmd.map(|id| self.open.doc.feature(id).map(|f| f.kind.clone())) {
                     let marks = crate::feat_ui::face_marks(&k);
@@ -4650,6 +4858,12 @@ enum TreeAction {
     ParamPublish(Id, bool),
     CollectorPublish(Id, bool),
     OpenPublications,
+    /// usa estes elementos do 3D como seleção e executa o comando
+    WithPicks(Vec<crate::picking::Pick>, Cmd),
+    /// ação da barra (vistas, ajustar…)
+    Act(Act),
+    /// seleciona na árvore
+    SelectSel(Sel),
 }
 
 /// Item da árvore de geometria sendo arrastado.
@@ -4983,7 +5197,7 @@ impl eframe::App for App {
         // quando for preciso escolher algo nela; escolhendo no 3D, ela nem precisa aparecer)
         // sem comando aberto, o painel de edição some e a árvore fica sozinha à esquerda
         let part_bench = !matches!(self.settings.bench, crate::settings::Bench::Desenho | crate::settings::Bench::Montagem);
-        let active = self.session.is_some() || self.sketch.is_some() || matches!(self.sel, Sel::Params | Sel::Pmi(_));
+        let active = self.session.is_some() || self.sketch.is_some() || self.sketch_wait_plane || self.pmi_pending.is_some() || matches!(self.sel, Sel::Params | Sel::Pmi(_));
         let overlay = active && self.settings.editor_left && part_bench;
         let hide_editor = !active && self.settings.editor_left && part_bench;
         let tree_panel = |app: &mut App, root: &mut egui::Ui| egui::Panel::left("arvore").default_size(270.).resizable(true).show(root, |ui| {
@@ -5014,6 +5228,7 @@ impl eframe::App for App {
                     }
                 });
             });
+            app.conclude_bar(ui);
             egui::ScrollArea::vertical().show(ui, |ui| {
                 if app.settings.bench == crate::settings::Bench::Desenho {
                     crate::dwg_ui::panel(app, ui)
@@ -5148,6 +5363,9 @@ impl eframe::App for App {
         }
         self.link_window(ctx);
         self.pub_window(ctx);
+        for x in std::mem::take(&mut self.ctx_actions) {
+            self.tree_action(x);
+        }
         self.customize_window(ctx);
         self.macro_window(ctx);
         if let Some(id) = self.open_pending.take() {

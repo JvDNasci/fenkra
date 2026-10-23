@@ -154,6 +154,7 @@ fn label(p: &egui::Painter, at: Pos2, txt: &str, sel: bool) -> Rect {
 
 /// Desenha as anotações sobre a viewport (o clique num rótulo seleciona a anotação).
 pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
+    let mut action: Option<(Id, u8)> = None;
     let Some(r) = app.result.as_ref() else { return };
     let sel = if app.in_asm() { app.asm.as_ref().and_then(|s| s.sel) } else if let Sel::Pmi(i) = app.sel { Some(i) } else { None };
     let painter = ui.painter_at(rect);
@@ -212,10 +213,44 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
             }
         };
         let resp = ui.interact(rect_lbl, egui::Id::unique(("pmi_rotulo", pm.id.0)), egui::Sense::click());
-        if resp.clicked() {
+        if resp.clicked() || resp.secondary_clicked() {
             clicked = Some(pm.id);
         }
+        // botão direito no rótulo: opções da anotação
+        resp.context_menu(|ui| {
+            ui.label(RichText::new(&pm.name).strong());
+            if ui.button(tr("✏ Editar")).clicked() {
+                action = Some((pm.id, 2));
+                ui.close();
+            }
+            if ui.button(tr("Ocultar")).clicked() {
+                action = Some((pm.id, 1));
+                ui.close();
+            }
+            ui.separator();
+            if ui.button(tr("🗑 Apagar   Del")).clicked() {
+                action = Some((pm.id, 0));
+                ui.close();
+            }
+        });
         resp.on_hover_text(&pm.name);
+    }
+    if let Some((id, k)) = action {
+        match k {
+            0 => {
+                list_mut(app).retain(|p| p.id != id);
+                clicked = None;
+                if app.sel == Sel::Pmi(id) {
+                    app.sel = Sel::None;
+                }
+            }
+            1 => {
+                if let Some(p) = list_mut(app).iter_mut().find(|p| p.id == id) {
+                    p.visible = false;
+                }
+            }
+            _ => clicked = Some(id),
+        }
     }
     if let Some(id) = clicked {
         if app.in_asm() {

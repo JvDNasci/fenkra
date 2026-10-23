@@ -76,6 +76,14 @@ pub struct DwgState {
 }
 
 impl DwgState {
+    /// Concluir: fecha a ferramenta em andamento e solta a seleção.
+    pub fn conclude(&mut self) {
+        self.tool = None;
+        self.clicks.clear();
+        self.tool_view = None;
+        self.sel = None;
+    }
+
     pub fn new(d: Drawing, path: Option<PathBuf>) -> Self {
         let dir = path.as_ref().and_then(|p| p.parent()).map(|p| p.to_path_buf());
         let sheet = d.sheets[0].id;
