@@ -70,6 +70,28 @@ pub enum GeoKind {
     SurfFill,
     SurfExtrude,
     SurfRevolve,
+    // bancada de superfícies
+    SurfSphere,
+    SurfCylinder,
+    SurfSweep,
+    SurfTube,
+    SurfLoft,
+    SurfBlend,
+    OpJoin,
+    OpHeal,
+    OpSplit,
+    OpTrim,
+    OpBoundary,
+    OpMulti,
+    OpPart,
+    OpUntrim,
+    OpExtrapolate,
+    XfTranslate,
+    XfRotate,
+    XfMirror,
+    XfScale,
+    CurveIntersect,
+    CurveProjSurf,
 }
 
 use GeoKind::*;
@@ -79,8 +101,13 @@ pub const PLANES: [GeoKind; 13] = [
 ];
 pub const POINTS: [GeoKind; 12] = [PtCoords, PtOnCurve, PtOnPlane, PtOnSurface, PtCenter, PtTangent, PtBetween, PtCurvePlane, PtCurveCurve, PtProject, PtProjectCurve, PtOffset];
 pub const LINES: [GeoKind; 9] = [LinePts, LineDir, LineAngle, LineTangent, LineNormal, LinePlanes, LineBisector, LineAxis, Polyline];
-pub const CURVES: [GeoKind; 12] = [Circle, Circle3, Spline, SplineControl, Helix, Spiral, Conic, Connect, Corner, Spine, CurveProject, CurveCopy];
-pub const SURFACES: [GeoKind; 5] = [SurfExtract, SurfOffset, SurfFill, SurfExtrude, SurfRevolve];
+pub const CURVES: [GeoKind; 15] =
+    [Circle, Circle3, Spline, SplineControl, Helix, Spiral, Conic, Connect, Corner, Spine, CurveProject, CurveIntersect, CurveProjSurf, OpBoundary, CurveCopy];
+pub const SURFACES: [GeoKind; 11] = [SurfExtrude, SurfRevolve, SurfSphere, SurfCylinder, SurfOffset, SurfSweep, SurfTube, SurfLoft, SurfBlend, SurfFill, SurfExtract];
+/// Operações sobre superfícies (resultado é superfície).
+pub const OPERATIONS: [GeoKind; 8] = [OpJoin, OpHeal, OpSplit, OpTrim, OpMulti, OpPart, OpUntrim, OpExtrapolate];
+/// Transformações de qualquer elemento (ponto, curva, plano, superfície).
+pub const TRANSFORMS: [GeoKind; 4] = [XfTranslate, XfRotate, XfMirror, XfScale];
 
 impl GeoKind {
     /// (ícone, nome curto, descrição breve, descrição avançada)
@@ -137,6 +164,27 @@ impl GeoKind {
             SurfFill => ("sup_preenchida", "Preenchimento", "Preencher contorno", "Superfície que fecha um contorno de curvas."),
             SurfExtrude => ("sup_extrudada", "Extrudada", "Superfície extrudada", "Curva puxada ao longo de uma direção."),
             SurfRevolve => ("sup_revolucao", "Revolução", "Superfície de revolução", "Curva girada em torno de um eixo."),
+            SurfSphere => ("sup_esfera", "Esfera", "Superfície esférica", "Esfera pelo centro e raio (só a superfície, sem volume)."),
+            SurfCylinder => ("sup_cilindro", "Cilindro", "Superfície cilíndrica", "Face lateral de um cilindro: ponto, direção, raio e comprimento para cada lado."),
+            SurfSweep => ("sup_varredura", "Varredura", "Varredura de perfil explícito", "O perfil (curva) percorre a guia, com Frenet corrigido, orientação fixa ou Frenet."),
+            SurfTube => ("sup_tubo", "Tubo", "Varredura circular (tubo)", "Círculo de raio dado, normal à guia, percorrendo-a."),
+            SurfLoft => ("sup_multisecoes", "Multi-seções", "Superfície por seções (loft)", "Transição suave entre duas ou mais curvas; com guia, as seções seguem a guia."),
+            SurfBlend => ("sup_concordancia", "Concordância", "Concordância entre bordas (blend)", "Liga duas bordas com continuidade G0 (reta), G1 (tangente) ou G2 (curvatura) às superfícies de apoio."),
+            OpJoin => ("op_juntar", "Juntar", "Juntar superfícies (join)", "Costura superfícies que se tocam numa só: bordas comuns viram uma."),
+            OpHeal => ("op_curar", "Curar", "Curar superfície (heal)", "Fecha frestas até a tolerância e une faces do mesmo suporte."),
+            OpSplit => ("op_dividir", "Dividir", "Dividir superfície (split)", "Corta a superfície por outra superfície ou plano e mantém um lado."),
+            OpTrim => ("op_aparar", "Aparar", "Aparar duas superfícies (trim)", "Corta uma pela outra e junta os lados escolhidos de cada uma."),
+            OpBoundary => ("op_contorno", "Contorno", "Contorno da superfície (boundary)", "Curva da borda livre da superfície (escolha qual quando houver várias)."),
+            OpMulti => ("op_multi_extrair", "Multi-extração", "Extrair várias faces", "Copia várias faces do modelo como uma superfície só."),
+            OpPart => ("op_desmontar", "Desmontar", "Desmontar (uma face)", "Separa uma face de uma superfície composta, pelo número."),
+            OpUntrim => ("op_desaparar", "Desaparar", "Desaparar (untrim)", "Devolve a face aos limites naturais do suporte, sem os recortes."),
+            OpExtrapolate => ("op_extrapolar", "Extrapolar", "Extrapolar borda", "Prolonga a superfície pela borda mais próxima do ponto, mantendo a tangência."),
+            XfTranslate => ("xf_mover", "Mover", "Translação", "Move ponto, curva, plano ou superfície ao longo de uma direção."),
+            XfRotate => ("xf_girar", "Girar", "Rotação", "Gira o elemento em torno de um eixo."),
+            XfMirror => ("xf_simetria", "Simetria", "Simetria", "Espelha o elemento por um plano."),
+            XfScale => ("xf_escala", "Escala", "Escala", "Aumenta ou reduz o elemento a partir de um ponto."),
+            CurveIntersect => ("curva_intersecao", "Interseção", "Curva de interseção", "Onde duas superfícies (ou uma superfície e um plano) se cruzam."),
+            CurveProjSurf => ("curva_proj_sup", "Proj. na superfície", "Curva projetada na superfície", "Cada ponto da curva vai para o ponto mais próximo da superfície (projeção normal)."),
         }
     }
 
@@ -150,6 +198,10 @@ impl GeoKind {
             &LINES
         } else if SURFACES.contains(&self) {
             &SURFACES
+        } else if OPERATIONS.contains(&self) {
+            &OPERATIONS
+        } else if TRANSFORMS.contains(&self) {
+            &TRANSFORMS
         } else {
             &CURVES
         }
@@ -215,6 +267,29 @@ impl GeoKind {
             R::SurfFill { .. } => SurfFill,
             R::SurfExtrude { .. } => SurfExtrude,
             R::SurfRevolve { .. } => SurfRevolve,
+            R::SurfSphere { .. } => SurfSphere,
+            R::SurfCylinder { .. } => SurfCylinder,
+            R::SurfSweep { profile: SweepProfile::Circle(_), .. } => SurfTube,
+            R::SurfSweep { .. } => SurfSweep,
+            R::SurfLoft { .. } => SurfLoft,
+            R::SurfBlend { .. } => SurfBlend,
+            R::SurfJoin { .. } => OpJoin,
+            R::SurfHeal { .. } => OpHeal,
+            R::SurfSplit { .. } => OpSplit,
+            R::SurfTrim { .. } => OpTrim,
+            R::CurveBoundary { .. } => OpBoundary,
+            R::SurfMulti { .. } => OpMulti,
+            R::SurfPart { .. } => OpPart,
+            R::SurfUntrim { .. } => OpUntrim,
+            R::SurfExtrapolate { .. } => OpExtrapolate,
+            R::GeoTransform { xf, .. } => match xf {
+                GeoXform::Translate { .. } => XfTranslate,
+                GeoXform::Rotate { .. } => XfRotate,
+                GeoXform::Mirror { .. } => XfMirror,
+                GeoXform::Scale { .. } => XfScale,
+            },
+            R::CurveIntersect { .. } => CurveIntersect,
+            R::CurveProjectSurf { .. } => CurveProjSurf,
             R::Linked { .. } => return None,
         })
     }
@@ -291,8 +366,52 @@ impl GeoKind {
             SurfFill => R::SurfFill { curves: if s.curves.is_empty() { vec![c(0)] } else { s.curves.clone() } },
             SurfExtrude => R::SurfExtrude { curve: c(0), dir: AxisRef::Origin(OriginAxis::Z), length: t("30") },
             SurfRevolve => R::SurfRevolve { curve: c(0), axis: AxisRef::Origin(OriginAxis::Z), angle: t("360") },
+            SurfSphere => R::SurfSphere { center: p(0), radius: t("20") },
+            SurfCylinder => R::SurfCylinder { point: p(0), dir: ax(OriginAxis::Z), radius: t("10"), start: t("0"), end: t("40") },
+            SurfSweep => R::SurfSweep { profile: SweepProfile::Curve(c(0)), spine: c(1), mode: SweepMode::Corrigido },
+            SurfTube => R::SurfSweep { profile: SweepProfile::Circle(t("5")), spine: c(0), mode: SweepMode::Corrigido },
+            SurfLoft => R::SurfLoft { sections: if s.curves.len() >= 2 { s.curves.clone() } else { vec![c(0), c(1)] }, guide: None, ruled: false, closed: false },
+            SurfBlend => R::SurfBlend { a: c(0), sa: None, b: c(1), sb: None, cont: Continuity::G1, tension: t("1") },
+            OpJoin => R::SurfJoin { items: vec![sf], tol: t("0.01") },
+            OpHeal => R::SurfHeal { surface: sf, tol: t("0.1") },
+            OpSplit => R::SurfSplit { surface: sf, tool: SurfRef::Plane(pl), flip: false },
+            OpTrim => R::SurfTrim { a: sf, b: SurfRef::Plane(pl), flip_a: false, flip_b: false },
+            OpBoundary => R::CurveBoundary { surface: sf, which: 0 },
+            OpMulti => R::SurfMulti { faces: vec![face_pt(s)] },
+            OpPart => R::SurfPart { surface: sf, index: 0 },
+            OpUntrim => R::SurfUntrim { surface: sf },
+            OpExtrapolate => R::SurfExtrapolate { surface: sf, near: p(0), length: t("10") },
+            XfTranslate | XfRotate | XfMirror | XfScale => {
+                let (source, class) = source_of(s);
+                let xf = match self {
+                    XfTranslate => GeoXform::Translate { dir: AxisRef::Origin(OriginAxis::X), dist: t("20") },
+                    XfRotate => GeoXform::Rotate { axis: AxisRef::Origin(OriginAxis::Z), angle: t("45") },
+                    XfMirror => GeoXform::Mirror { plane: PlaneRef::Origin(OriginPlane::YZ) },
+                    _ => GeoXform::Scale { center: PointRef::Origin, factor: t("2") },
+                };
+                R::GeoTransform { source, class, xf }
+            }
+            CurveIntersect => R::CurveIntersect { a: sf, b: SurfRef::Plane(pl), which: 0 },
+            CurveProjSurf => R::CurveProjectSurf { curve: c(0), surface: sf },
         }
     }
+}
+
+/// Elemento selecionado a transformar (superfície, curva, ponto ou plano de referência).
+fn source_of(s: &Seed) -> (Id, RefClass) {
+    if let Some(SurfRef::Ref(id)) = s.surface {
+        return (id, RefClass::Surface);
+    }
+    if let Some(CurveRef::Ref(id)) = s.curves.first() {
+        return (*id, RefClass::Curve);
+    }
+    if let Some(PointRef::Ref(id)) = s.points.first() {
+        return (*id, RefClass::Point);
+    }
+    if let Some(PlaneRef::Datum(id)) = s.planes.first() {
+        return (*id, RefClass::Plane);
+    }
+    (Id(u64::MAX), RefClass::Surface)
 }
 
 /// Ponto clicado numa face (para eixo de face e superfície extraída).
@@ -380,6 +499,39 @@ pub fn inputs_of(k: &RefKind) -> Seed {
         R::CurveCopy { curve } | R::SurfExtrude { curve, .. } | R::SurfRevolve { curve, .. } => s.curves.push(curve.clone()),
         R::SurfFill { curves } => s.curves.extend(curves.iter().cloned()),
         R::SurfOffset { surface, .. } => s.surface = Some(*surface),
+        R::SurfSphere { center, .. } => s.points.push(*center),
+        R::SurfCylinder { point, .. } => s.points.push(*point),
+        R::SurfSweep { profile, spine, .. } => {
+            if let SweepProfile::Curve(c) = profile {
+                s.curves.push(c.clone());
+            }
+            s.curves.push(spine.clone())
+        }
+        R::SurfLoft { sections, .. } => s.curves.extend(sections.iter().cloned()),
+        R::SurfBlend { a, b, .. } => s.curves.extend([a.clone(), b.clone()]),
+        R::SurfJoin { items, .. } => s.surface = items.first().copied(),
+        R::SurfHeal { surface, .. } | R::SurfPart { surface, .. } | R::SurfUntrim { surface } | R::CurveBoundary { surface, .. } => s.surface = Some(*surface),
+        R::SurfSplit { surface, tool, .. } => {
+            s.surface = Some(*surface);
+            if let SurfRef::Plane(p) = tool {
+                s.planes.push(*p)
+            }
+        }
+        R::SurfTrim { a, .. } | R::CurveIntersect { a, .. } => s.surface = Some(*a),
+        R::SurfExtrapolate { surface, near, .. } => {
+            s.surface = Some(*surface);
+            s.points.push(*near)
+        }
+        R::CurveProjectSurf { curve, surface } => {
+            s.curves.push(curve.clone());
+            s.surface = Some(*surface)
+        }
+        R::GeoTransform { source, class, .. } => match class {
+            RefClass::Surface => s.surface = Some(SurfRef::Ref(*source)),
+            RefClass::Curve => s.curves.insert(0, CurveRef::Ref(*source)),
+            RefClass::Point => s.points.insert(0, PointRef::Ref(*source)),
+            RefClass::Plane => s.planes.insert(0, PlaneRef::Datum(*source)),
+        },
         _ => {}
     }
     s
@@ -548,6 +700,64 @@ pub(crate) fn surf_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docume
             *s = seed.surface.unwrap_or_else(|| SurfRef::Plane(*seed.planes.last().unwrap()));
         }
     });
+}
+
+/// Lista de curvas (seções), com mínimo de itens.
+fn curves_list(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, cs: &mut Vec<CurveRef>, seed: &Seed, min: usize) {
+    let mut del = None;
+    for (i, c) in cs.iter_mut().enumerate() {
+        ui.horizontal(|ui| {
+            ui.vertical(|ui| curve_slot(ui, &format!("{salt}{i}"), &format!("{label} {}", i + 1), doc, me, c, seed));
+            if ui.small_button(tr("✖")).clicked() {
+                del = Some(i);
+            }
+        });
+    }
+    if let Some(i) = del {
+        if cs.len() > min {
+            cs.remove(i);
+        }
+    }
+    ui.horizontal(|ui| {
+        if ui.button(tr("+ curva")).clicked() {
+            cs.push(seed.curves.last().cloned().unwrap_or(CurveRef::Axis(OriginAxis::X)));
+        }
+        if ui.add_enabled(!seed.curves.is_empty(), egui::Button::new(format!("+ seleção ({})", seed.curves.len()))).clicked() {
+            cs.extend(seed.curves.iter().cloned());
+        }
+    });
+}
+
+/// Lista de superfícies (juntar, preencher fronteiras).
+pub(crate) fn surfs_list(ui: &mut egui::Ui, salt: &str, doc: &Document, me: Id, items: &mut Vec<SurfRef>, seed: &Seed) {
+    let mut del = None;
+    for (i, s) in items.iter_mut().enumerate() {
+        ui.horizontal(|ui| {
+            ui.vertical(|ui| surf_slot(ui, &format!("{salt}{i}"), &format!("Elemento {}", i + 1), doc, me, s, seed));
+            if ui.small_button(tr("✖")).clicked() {
+                del = Some(i);
+            }
+        });
+    }
+    if let Some(i) = del {
+        if items.len() > 1 {
+            items.remove(i);
+        }
+    }
+    if ui.button(tr("+ elemento")).clicked() {
+        items.push(seed.surface.unwrap_or(SurfRef::Plane(PlaneRef::Origin(OriginPlane::XY))));
+    }
+}
+
+/// Superfície opcional (apoio da concordância).
+fn opt_surf(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, s: &mut Option<SurfRef>, seed: &Seed) {
+    let mut on = s.is_some();
+    if ui.checkbox(&mut on, format!("{} {}", tr(label), tr("(tangência)"))).changed() {
+        *s = on.then(|| seed.surface.unwrap_or(SurfRef::Plane(PlaneRef::Origin(OriginPlane::XY))));
+    }
+    if let Some(x) = s {
+        surf_slot(ui, salt, label, doc, me, x, seed);
+    }
 }
 
 pub(crate) fn points_list(ui: &mut egui::Ui, salt: &str, doc: &Document, me: Id, pts: &mut Vec<PointRef>, seed: &Seed, min: usize) {
@@ -972,6 +1182,162 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             curve_slot(ui, "g_c", "Curva", doc, me, curve, seed);
             axis_slot(ui, "g_ax", "Eixo", doc, me, axis, seed);
             expr(ui, "Ângulo", angle, vars, "°");
+        }
+        R::SurfSphere { center, radius } => {
+            point_slot(ui, "g_p", "Centro", doc, me, center, seed);
+            expr(ui, "Raio", radius, vars, "mm");
+        }
+        R::SurfCylinder { point, dir, radius, start, end } => {
+            point_slot(ui, "g_p", "Ponto do eixo", doc, me, point, seed);
+            axis_slot(ui, "g_d", "Direção", doc, me, dir, seed);
+            expr(ui, "Raio", radius, vars, "mm");
+            expr(ui, "Comprimento 1", end, vars, "mm");
+            expr(ui, "Comprimento 2", start, vars, "mm");
+            ui.label(RichText::new(tr("Comprimento 1 no sentido da direção; 2 no sentido oposto.")).weak().small());
+        }
+        R::SurfSweep { profile, spine, mode } => {
+            match profile {
+                SweepProfile::Curve(c) => curve_slot(ui, "g_pf", "Perfil", doc, me, c, seed),
+                SweepProfile::Circle(r) => expr(ui, "Raio do tubo", r, vars, "mm"),
+            }
+            curve_slot(ui, "g_sp", "Guia", doc, me, spine, seed);
+            let opts = [
+                ("sweep_corrigido", "Corrigido", "Frenet corrigido: acompanha a guia sem torcer", *mode == SweepMode::Corrigido),
+                ("sweep_fixo", "Fixo", "O perfil mantém a orientação", *mode == SweepMode::Fixo),
+                ("sweep_frenet", "Frenet", "Segue a curvatura (pode torcer)", *mode == SweepMode::Frenet),
+            ];
+            if let Some(i) = crate::editor::icon_choice(ui, &opts) {
+                *mode = [SweepMode::Corrigido, SweepMode::Fixo, SweepMode::Frenet][i];
+            }
+        }
+        R::SurfLoft { sections, guide, ruled, closed } => {
+            curves_list(ui, "g_sec", "Seção", doc, me, sections, seed, 2);
+            let mut has = guide.is_some();
+            if ui.checkbox(&mut has, tr("com curva guia")).changed() {
+                *guide = has.then(|| seed.curves.last().cloned().unwrap_or(CurveRef::Axis(OriginAxis::Z)));
+            }
+            if let Some(g) = guide {
+                curve_slot(ui, "g_gd", "Guia", doc, me, g, seed);
+                ui.label(RichText::new(tr("As seções devem cruzar a guia, na ordem.")).weak().small());
+            } else {
+                ui.checkbox(ruled, tr("regrada (faces retas entre seções)"));
+                ui.checkbox(closed, tr("fechar (volta à primeira seção)"));
+            }
+        }
+        R::SurfBlend { a, sa, b, sb, cont, tension } => {
+            curve_slot(ui, "g_a", "Borda 1", doc, me, a, seed);
+            opt_surf(ui, "g_sa", "Apoio 1", doc, me, sa, seed);
+            curve_slot(ui, "g_b", "Borda 2", doc, me, b, seed);
+            opt_surf(ui, "g_sb", "Apoio 2", doc, me, sb, seed);
+            let opts = [
+                ("cont_g0", "G0", "Posição: liga em linha reta", *cont == Continuity::G0),
+                ("cont_g1", "G1", "Tangente às superfícies de apoio", *cont == Continuity::G1),
+                ("cont_g2", "G2", "Curvatura contínua (aprox.: curvatura nula na borda)", *cont == Continuity::G2),
+            ];
+            if let Some(i) = crate::editor::icon_choice(ui, &opts) {
+                *cont = [Continuity::G0, Continuity::G1, Continuity::G2][i];
+            }
+            if *cont != Continuity::G0 {
+                expr(ui, "Tensão", tension, vars, "");
+            }
+            ui.label(RichText::new(tr("Bordas: use 'Contorno' ou 'Curva extraída' de uma aresta; apoio = a superfície daquela borda.")).weak().small());
+        }
+        R::SurfJoin { items, tol } => {
+            surfs_list(ui, "g_j", doc, me, items, seed);
+            expr(ui, "Tolerância", tol, vars, "mm");
+        }
+        R::SurfHeal { surface, tol } => {
+            surf_slot(ui, "g_s", "Superfície", doc, me, surface, seed);
+            expr(ui, "Tolerância", tol, vars, "mm");
+            ui.label(RichText::new(tr("Frestas menores que a tolerância são fechadas.")).weak().small());
+        }
+        R::SurfSplit { surface, tool, flip } => {
+            surf_slot(ui, "g_s", "Superfície", doc, me, surface, seed);
+            surf_slot(ui, "g_t", "Cortar com", doc, me, tool, seed);
+            ui.checkbox(flip, tr("manter o outro lado"));
+        }
+        R::SurfTrim { a, b, flip_a, flip_b } => {
+            surf_slot(ui, "g_a", "Superfície 1", doc, me, a, seed);
+            ui.checkbox(flip_a, tr("outro lado da 1"));
+            surf_slot(ui, "g_b", "Superfície 2", doc, me, b, seed);
+            ui.checkbox(flip_b, tr("outro lado da 2"));
+        }
+        R::CurveBoundary { surface, which } | R::SurfPart { surface, index: which } => {
+            surf_slot(ui, "g_s", "Superfície", doc, me, surface, seed);
+            ui.horizontal(|ui| {
+                ui.add_sized([96., 18.], egui::Label::new(tr("Número")));
+                ui.add(egui::DragValue::new(which).range(0..=999));
+            });
+            ui.label(RichText::new(tr("Quando há várias bordas/faces, escolha qual pelo número (0, 1, 2…).")).weak().small());
+        }
+        R::SurfMulti { faces } => {
+            let mut del = None;
+            for (i, f) in faces.iter().enumerate() {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(format!("Face {} em ({}, {}, {})", i + 1, fmt(f[0]), fmt(f[1]), fmt(f[2]))).small());
+                    if ui.small_button(tr("✖")).clicked() {
+                        del = Some(i);
+                    }
+                });
+            }
+            if let Some(i) = del {
+                if faces.len() > 1 {
+                    faces.remove(i);
+                }
+            }
+            if let Some(SurfRef::Face { point, .. }) = seed.surface {
+                if ui.button(tr("+ face selecionada")).clicked() && !faces.contains(&point) {
+                    faces.push(point);
+                }
+            }
+            ui.label(RichText::new(tr("Clique numa face na viewport e use '+ face selecionada'.")).weak().small());
+        }
+        R::SurfUntrim { surface } => surf_slot(ui, "g_s", "Superfície", doc, me, surface, seed),
+        R::SurfExtrapolate { surface, near, length } => {
+            surf_slot(ui, "g_s", "Superfície", doc, me, surface, seed);
+            point_slot(ui, "g_p", "Perto da borda", doc, me, near, seed);
+            expr(ui, "Comprimento", length, vars, "mm");
+        }
+        R::GeoTransform { source, class, xf } => {
+            row(ui, "Elemento", |ui| {
+                let deps = doc.dependents(me);
+                egui::ComboBox::from_id_salt("g_src").selected_text(doc.name_of(*source)).width(160.).show_ui(ui, |ui| {
+                    for r in doc.references.iter().filter(|r| r.id != me && !deps.contains(&r.id)) {
+                        if ui.selectable_label(*source == r.id, &r.name).clicked() {
+                            *source = r.id;
+                            *class = r.kind.class();
+                        }
+                    }
+                });
+            });
+            match xf {
+                GeoXform::Translate { dir, dist } => {
+                    axis_slot(ui, "g_d", "Direção", doc, me, dir, seed);
+                    expr(ui, "Distância", dist, vars, "mm");
+                }
+                GeoXform::Rotate { axis, angle } => {
+                    axis_slot(ui, "g_ax", "Eixo", doc, me, axis, seed);
+                    expr(ui, "Ângulo", angle, vars, "°");
+                }
+                GeoXform::Mirror { plane } => plane_slot(ui, "g_pl", "Plano de simetria", doc, me, plane, seed),
+                GeoXform::Scale { center, factor } => {
+                    point_slot(ui, "g_c", "Centro", doc, me, center, seed);
+                    expr(ui, "Fator", factor, vars, "");
+                }
+            }
+            ui.label(RichText::new(tr("Arraste as setas, arcos e quadrados do manipulador na viewport.")).weak().small());
+        }
+        R::CurveIntersect { a, b, which } => {
+            surf_slot(ui, "g_a", "Elemento 1", doc, me, a, seed);
+            surf_slot(ui, "g_b", "Elemento 2", doc, me, b, seed);
+            ui.horizontal(|ui| {
+                ui.add_sized([96., 18.], egui::Label::new(tr("Solução")));
+                ui.add(egui::DragValue::new(which).range(0..=99));
+            });
+        }
+        R::CurveProjectSurf { curve, surface } => {
+            curve_slot(ui, "g_c", "Curva", doc, me, curve, seed);
+            surf_slot(ui, "g_s", "Na superfície", doc, me, surface, seed);
         }
         R::Linked { ext, .. } => {
             let ext = *ext;

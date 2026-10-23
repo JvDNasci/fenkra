@@ -467,6 +467,111 @@ I["sup_extrudada"] = f'<path d="M6 36 C 14 28, 22 40, 30 32 L30 12 C 22 20, 14 8
 I["sup_revolucao"] = f'<path d="M14 8 C 6 16, 6 32, 14 40 L34 40 C 42 32, 42 16, 34 8 Z" fill="{LIGHT}" {S}/>' + \
     f'<line x1="24" y1="2" x2="24" y2="46" stroke="{INK}" stroke-width="1.4" stroke-dasharray="4 2.5"/>' + CV("M34 8 C 42 16, 42 32, 34 40", ACTION)
 
+# ---------------- alpha.6: bancada de superfícies, operações, transformações, volume e análise
+PATCH = lambda d, fill=LIGHT: f'<path d="{d}" fill="{fill}" {S}/>'
+HL = lambda d, w=3: f'<path d="{d}" stroke="{ACTION}" stroke-width="{w}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
+WAVE = "M4 30 C 12 22, 20 22, 26 28 C 32 34, 38 32, 44 26"
+SHAPE = lambda dx=0, dy=0, fill=LIGHT: f'<path transform="translate({dx} {dy})" d="M6 30 C 6 22, 14 16, 22 18 C 26 19, 26 26, 20 30 Z" fill="{fill}" {S}/>'
+
+# término até superfície: prisma que sobe e para numa superfície ondulada
+I["ext_ate_superficie"] = PATCH("M2 14 C 12 6, 22 8, 28 12 C 34 16, 40 14, 46 8 L46 14 C 40 20, 34 22, 28 18 C 22 14, 12 12, 2 20 Z") + \
+    f'<path d="M14 42 V15 M34 42 V17" stroke="{INK}" stroke-width="2"/>' + f'<rect x="14" y="30" width="20" height="12" fill="{MID}" {S}/>' + arrow(24, 30, 24, 17, ACTION, 2.6)
+
+# superfícies primitivas
+I["sup_esfera"] = f'<circle cx="24" cy="24" r="19" fill="{LIGHT}" {S}/>' + \
+    f'<ellipse cx="24" cy="24" rx="19" ry="6" fill="none" stroke="{INK}" stroke-width="1.4" stroke-dasharray="3 2.5"/>' + \
+    f'<path d="M15 12 C 18 9, 22 8, 25 8" stroke="#ffffff" stroke-width="2.4" fill="none" stroke-linecap="round" opacity="0.9"/>'
+I["sup_cilindro"] = f'<path d="M10 10 V38 A14 5 0 0 0 38 38 V10" fill="{MID}" {S}/>' + \
+    f'<ellipse cx="24" cy="10" rx="14" ry="5" fill="#ffffff" {S}/>' + f'<ellipse cx="24" cy="10" rx="9" ry="2.6" fill="none" stroke="{INK}" stroke-width="1" opacity="0.4"/>'
+I["sup_varredura"] = f'<path d="M6 34 C 16 34, 22 14, 40 12 L40 22 C 26 24, 20 42, 6 42 Z" fill="{LIGHT}" {S}/>' + \
+    f'<path d="M6 34 V42" stroke="{ACTION}" stroke-width="3.2" stroke-linecap="round"/>' + \
+    f'<path d="M6 38 C 18 38, 22 18, 40 17" stroke="{INK}" stroke-width="1.4" stroke-dasharray="3 2" fill="none"/>'
+I["sup_tubo"] = f'<path d="M6 30 C 16 30, 20 10, 36 10 L36 20 C 26 20, 22 40, 6 40 Z" fill="{MID}" {S}/>' + \
+    f'<ellipse cx="36" cy="15" rx="3.2" ry="5" fill="{LIGHT}" {S}/>' + \
+    f'<ellipse cx="6" cy="35" rx="3.2" ry="5" fill="#ffffff" stroke="{ACTION}" stroke-width="2.4"/>'
+I["sup_multisecoes"] = f'<path d="M6 34 C 6 20, 18 8, 30 8 C 40 8, 44 14, 44 18 L34 40 C 30 40, 6 42, 6 34 Z" fill="{LIGHT}" stroke="none"/>' + \
+    f'<ellipse cx="14" cy="34" rx="8" ry="6" fill="none" stroke="{ACTION}" stroke-width="2.6"/>' + \
+    f'<ellipse cx="36" cy="14" rx="7" ry="5" fill="none" stroke="{ACTION}" stroke-width="2.6"/>' + \
+    f'<path d="M6 34 C 10 22, 24 12, 29 14 M22 34 C 28 28, 38 24, 43 14" stroke="{INK}" stroke-width="1.6" fill="none"/>'
+I["sup_concordancia"] = PATCH("M2 34 L16 34 L16 42 L2 42 Z", MID) + PATCH("M32 8 L46 8 L46 16 L32 16 Z", MID) + \
+    f'<path d="M16 34 C 26 34, 22 16, 32 16 L32 8 C 18 8, 26 26, 16 26 Z" fill="{ACTION_L}" {S}/>' + HL("M16 30 C 25 30, 22 12, 32 12", 2.6)
+
+# operações
+I["op_juntar"] = PATCH("M4 16 L22 12 L24 36 L6 38 Z") + PATCH("M24 12 L44 14 L42 38 L24 36 Z", MID) + HL("M23 12 L24 36", 3.4) + \
+    f'<circle cx="23.5" cy="24" r="4" fill="#ffffff" stroke="{ACTION}" stroke-width="2"/>'
+I["op_curar"] = PATCH("M4 14 L21 12 L22 38 L6 38 Z") + PATCH("M27 12 L44 14 L42 38 L26 38 Z", MID) + \
+    f'<path d="M18 24 H30" stroke="{ACTION}" stroke-width="5" stroke-linecap="round"/>' + \
+    f'<path d="M20 21 V27 M24 21 V27 M28 21 V27" stroke="#ffffff" stroke-width="1.2"/>'
+I["op_dividir"] = PATCH("M4 20 C 12 12, 20 12, 24 18 L24 40 C 18 34, 10 34, 4 42 Z", ACTION_L) + \
+    PATCH("M24 18 C 30 26, 38 26, 44 18 L44 38 C 38 46, 30 44, 24 40 Z") + \
+    f'<path d="M24 4 V46" stroke="{ACTION}" stroke-width="2.4" stroke-dasharray="4 3"/>'
+I["op_aparar"] = PATCH("M4 26 L24 26 L24 44 L4 44 Z") + PATCH("M24 6 L42 6 L42 26 L24 26 Z", MID) + \
+    f'<path d="M24 26 L44 26 M24 26 V46" stroke="{INK}" stroke-width="1.4" stroke-dasharray="3 2.5" opacity="0.7"/>' + HL("M4 26 H24 V6", 3)
+I["op_contorno"] = f'<path d="M6 30 C 6 14, 20 6, 32 8 C 44 10, 44 28, 38 36 C 30 44, 10 44, 6 30 Z" fill="{LIGHT}" stroke="{ACTION}" stroke-width="3.4"/>'
+I["op_multi_extrair"] = box((24, 14), 14) + f'<polygon points="6,23 24,14 42,23 24,32" fill="{ACTION}" opacity="0.85"/>' + \
+    f'<polygon points="24,32 42,23 42,41 24,50" fill="{ACTION}" opacity="0.6" transform="translate(0 -6)"/>'
+I["op_desmontar"] = PATCH("M4 8 L18 6 L18 20 L4 22 Z") + PATCH("M28 6 L44 8 L44 22 L28 20 Z", MID) + PATCH("M14 28 L34 28 L34 44 L14 44 Z") + \
+    arrow(20, 22, 14, 18, ACTION, 1.8) + arrow(28, 22, 34, 18, ACTION, 1.8)
+I["op_desaparar"] = f'<rect x="4" y="6" width="40" height="36" rx="2" fill="none" stroke="{ACTION}" stroke-width="2" stroke-dasharray="4 3"/>' + \
+    PATCH("M8 12 H30 L38 22 V36 H8 Z") + f'<circle cx="20" cy="24" r="5" fill="#ffffff" {S}/>'
+I["op_extrapolar"] = PATCH("M4 14 C 12 10, 20 10, 26 14 L26 38 C 20 34, 12 34, 4 38 Z") + \
+    f'<path d="M26 14 C 32 18, 38 18, 44 14 L44 38 C 38 42, 32 42, 26 38" fill="{ACTION_L}" stroke="{ACTION}" stroke-width="2" stroke-dasharray="4 3"/>' + \
+    arrow(26, 26, 42, 26, ACTION, 2.4)
+
+# transformações (de pontos, curvas, planos e superfícies)
+I["xf_mover"] = SHAPE(0, 4, MID) + SHAPE(18, -10) + arrow(16, 30, 34, 14, ACTION, 2.6)
+I["xf_girar"] = SHAPE(2, 6, MID) + f'<path d="M30 40 A16 16 0 0 0 38 14" stroke="{ACTION}" stroke-width="2.6" fill="none"/>' + \
+    AR("38,8 42,17 33,15") + DOT(24, 24, 3, INK)
+I["xf_simetria"] = SHAPE(-2, 0) + f'<path transform="translate(48 0) scale(-1 1)" d="M6 30 C 6 22, 14 16, 22 18 C 26 19, 26 26, 20 30 Z" fill="{MID}" stroke="{ACTION}" stroke-width="2"/>' + \
+    f'<line x1="24" y1="4" x2="24" y2="44" stroke="{INK}" stroke-width="1.6" stroke-dasharray="4 3"/>'
+I["xf_escala"] = f'<rect x="4" y="28" width="14" height="14" fill="{MID}" {S}/>' + \
+    f'<rect x="4" y="8" width="34" height="34" fill="none" stroke="{ACTION}" stroke-width="2" stroke-dasharray="4 3"/>' + arrow(16, 30, 36, 10, ACTION, 2.6)
+
+# curvas de wireframe
+I["curva_intersecao"] = PATCH("M2 30 L24 22 L46 30 L24 38 Z") + \
+    f'<path d="M14 6 C 20 16, 28 16, 34 6 L34 30 C 28 40, 20 40, 14 30 Z" fill="{MID}" opacity="0.85" {S}/>' + HL("M14 30 C 20 36, 28 36, 34 30", 3.4)
+I["curva_proj_sup"] = SURF("M4 34 C 14 26, 34 26, 44 34 L44 42 C 34 34, 14 34, 4 42 Z") + CV("M6 10 C 16 2, 30 18, 42 8", SKETCH, 2.4) + \
+    "".join(f'<line x1="{x}" y1="{y}" x2="{x}" y2="{y2}" {DASH}/>' for x, y, y2 in [(10, 8, 31), (24, 10, 29), (38, 9, 31)]) + \
+    CV("M6 34 C 16 29, 30 31, 42 34", ACTION, 3)
+
+# volume (superfície ↔ sólido)
+I["hib_dividir"] = f'<path d="M6 22 C 14 16, 22 16, 26 20 C 32 26, 38 24, 42 18 V40 H6 Z" fill="{MID}" {S}/>' + \
+    f'<path d="M6 22 C 14 16, 22 16, 26 20 C 32 26, 38 24, 42 18 V8 H6 Z" fill="#ffffff" stroke="{INK}" stroke-width="1.4" stroke-dasharray="3 2.5" opacity="0.8"/>' + \
+    HL("M2 24 C 12 14, 22 16, 26 20 C 32 26, 40 24, 46 16", 3)
+I["hib_engrossar"] = f'<path d="M4 26 C 14 18, 32 18, 44 26 L44 36 C 32 28, 14 28, 4 36 Z" fill="{MID}" {S}/>' + \
+    HL("M4 26 C 14 18, 32 18, 44 26", 3) + arrow(24, 12, 24, 22, ACTION, 2) + arrow(24, 40, 24, 30, ACTION, 2)
+I["hib_fechar"] = f'<path d="M10 12 V36 A14 5 0 0 0 38 36 V12" fill="{MID}" {S}/>' + \
+    f'<ellipse cx="24" cy="12" rx="14" ry="5" fill="{ACTION}" opacity="0.9" {S}/>' + \
+    f'<path d="M10 36 A14 5 0 0 0 38 36" stroke="{ACTION}" stroke-width="3" fill="none"/>'
+I["hib_costurar"] = box((24, 22), 14) + f'<path d="M6 31 C 10 14, 38 14, 42 31" fill="{ACTION_L}" stroke="{ACTION}" stroke-width="2.6"/>' + \
+    "".join(f'<line x1="{x}" y1="{y - 3}" x2="{x}" y2="{y + 3}" stroke="{ACTION}" stroke-width="1.6"/>' for x, y in [(10, 28), (16, 23), (24, 20), (32, 23), (38, 28)])
+I["hib_preencher"] = f'<path d="M4 14 H44 M4 36 H44 M12 4 V44 M36 4 V44" stroke="{INK}" stroke-width="1.6" stroke-dasharray="4 2.5"/>' + \
+    f'<rect x="12" y="14" width="24" height="22" fill="{ACTION}" opacity="0.85"/>' + f'<rect x="12" y="14" width="24" height="22" fill="none" {S}/>'
+I["hib_malha"] = f'<path d="M4 38 L12 14 L22 30 Z M12 14 L26 10 L22 30 Z M22 30 L26 10 L30 34 Z" fill="{LIGHT}" stroke="{INK}" stroke-width="1.4" stroke-linejoin="round"/>' + \
+    arrow(30, 22, 36, 22, ACTION, 2) + f'<path d="M38 36 V18 C 38 12, 46 12, 46 18 V36 Z" fill="{MID}" {S}/>'
+
+# análise
+I["an_zebra"] = f'<clipPath id="cz"><circle cx="24" cy="24" r="19"/></clipPath>' + f'<circle cx="24" cy="24" r="19" fill="#ffffff"/>' + \
+    '<g clip-path="url(#cz)">' + "".join(f'<path d="M0 {y} C 16 {y - 8}, 32 {y - 8}, 48 {y}" stroke="#1b2430" stroke-width="4.2" fill="none"/>' for y in (10, 20, 30, 40, 50)) + '</g>' + \
+    f'<circle cx="24" cy="24" r="19" fill="none" {S}/>'
+I["an_curvatura"] = '<defs><radialGradient id="ck" cx="0.38" cy="0.35" r="0.75"><stop offset="0" stop-color="#ef3b2c"/><stop offset="0.3" stop-color="#fdd835"/>' + \
+    '<stop offset="0.55" stop-color="#43c25a"/><stop offset="0.8" stop-color="#22c5e8"/><stop offset="1" stop-color="#2a4ff0"/></radialGradient></defs>' + \
+    f'<circle cx="24" cy="24" r="19" fill="url(#ck)" {S}/>'
+I["an_sombreado"] = box((24, 8), 18)
+
+# opções de painel
+I["op_unir"] = f'<circle cx="18" cy="24" r="12" fill="{MID}" {S}/><circle cx="30" cy="24" r="12" fill="{MID}" {S}/>' + \
+    f'<path d="M24 13.6 A12 12 0 0 1 24 34.4 A12 12 0 0 1 24 13.6 Z" fill="{MID}"/>'
+_PROF = lambda x, y, a: f'<rect x="{x - 4}" y="{y - 4}" width="8" height="8" fill="{ACTION}" opacity="0.85" transform="rotate({a} {x} {y})"/>'
+I["sweep_corrigido"] = CV("M4 40 C 14 40, 20 10, 44 10") + _PROF(6, 40, 0) + _PROF(20, 26, -55) + _PROF(40, 11, -10)
+I["sweep_fixo"] = CV("M4 40 C 14 40, 20 10, 44 10") + _PROF(6, 40, 0) + _PROF(20, 26, 0) + _PROF(40, 11, 0)
+I["sweep_frenet"] = CV("M4 40 C 14 40, 20 10, 44 10") + _PROF(6, 40, 20) + _PROF(20, 26, -80) + _PROF(40, 11, 45)
+I["cont_g0"] = CV("M4 40 L24 14", INK, 3) + CV("M24 14 L44 36", ACTION, 3) + DOT(24, 14, 3.4, INK)
+I["cont_g1"] = CV("M4 40 C 10 26, 16 14, 24 14", INK, 3) + CV("M24 14 C 34 14, 40 24, 44 40", ACTION, 3) + \
+    f'<line x1="12" y1="14" x2="36" y2="14" stroke="{INK}" stroke-width="1.2" stroke-dasharray="3 2"/>' + DOT(24, 14, 3.4, INK)
+I["cont_g2"] = CV("M4 40 C 10 26, 16 14, 24 14", INK, 3) + CV("M24 14 C 32 14, 38 26, 44 40", ACTION, 3) + \
+    "".join(f'<line x1="{x}" y1="{y}" x2="{x}" y2="{y - h}" stroke="{ACTION}" stroke-width="1" opacity="0.7"/>' for x, y, h in [(14, 22, 5), (19, 17, 6), (24, 14, 6), (29, 15, 6), (34, 19, 5)]) + DOT(24, 14, 3.4, INK)
+
 for name, body in I.items():
     with open(os.path.join(OUT, f"{name}.svg"), "w", encoding="utf8", newline="\n") as f:
         f.write(svg(body))

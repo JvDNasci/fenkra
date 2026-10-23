@@ -24,6 +24,13 @@ pub enum Group {
     Selecao,
     Vista,
     Padroes,
+    // bancada de superfícies
+    Superficies,
+    Operacoes,
+    /// comandos híbridos superfície ↔ sólido (nas duas bancadas)
+    Hibrido,
+    /// análise de superfície (zebra, curvatura) — nas duas bancadas
+    Analise,
     // modo sketch
     SkCriacao,
     SkTransformar,
@@ -33,12 +40,16 @@ pub enum Group {
 }
 
 impl Group {
-    pub const ALL: [Group; 13] = [
+    pub const ALL: [Group; 17] = [
         Group::Sketch,
         Group::Solidos,
         Group::Acabamento,
         Group::Padroes,
+        Group::Superficies,
+        Group::Operacoes,
+        Group::Hibrido,
         Group::Referencias,
+        Group::Analise,
         Group::Organizacao,
         Group::Selecao,
         Group::Vista,
@@ -48,6 +59,15 @@ impl Group {
         Group::SkRestricoes,
         Group::SkFerramentas,
     ];
+    /// Em que bancada o grupo aparece (Sketch, Referências/wireframe, Volume, Análise, Organização,
+    /// Seleção e Vista são comuns às duas).
+    pub fn in_bench(self, b: Bench) -> bool {
+        match self {
+            Group::Solidos | Group::Acabamento | Group::Padroes => b == Bench::Solidos,
+            Group::Superficies | Group::Operacoes => b == Bench::Superficies,
+            _ => true,
+        }
+    }
     /// Grupos que só aparecem com um sketch em edição.
     pub fn sketch_only(self) -> bool {
         matches!(self, Group::SkCriacao | Group::SkTransformar | Group::SkCotagem | Group::SkRestricoes | Group::SkFerramentas)
@@ -62,6 +82,10 @@ impl Group {
             Group::Selecao => tr("Seleção"),
             Group::Vista => tr("Vista"),
             Group::Padroes => tr("Padrões e transformações"),
+            Group::Superficies => tr("Superfícies"),
+            Group::Operacoes => tr("Operações"),
+            Group::Hibrido => tr("Volume (superfície ↔ sólido)"),
+            Group::Analise => tr("Análise"),
             Group::SkCriacao => tr("Criação"),
             Group::SkTransformar => tr("Transformar"),
             Group::SkCotagem => tr("Cotagem"),
@@ -69,6 +93,14 @@ impl Group {
             Group::SkFerramentas => tr("Ferramentas do sketch"),
         }
     }
+}
+
+/// Bancada (módulo) ativa: muda os grupos de comandos; o modelo é o mesmo.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum Bench {
+    #[default]
+    Solidos,
+    Superficies,
 }
 
 /// Estilo de navegação da câmera (botões do mouse).
@@ -208,6 +240,9 @@ pub struct Settings {
     pub english: bool,
     /// personalização dos grupos de comandos
     pub custom: Customization,
+    /// bancada ativa (Modelagem Sólida ou Superfícies)
+    #[serde(default)]
+    pub bench: Bench,
     /// última macro escrita na janela de automação
     pub macro_src: String,
 }
@@ -268,6 +303,7 @@ impl Default for Settings {
             english: false,
             custom: Default::default(),
             macro_src: String::new(),
+            bench: Default::default(),
         }
     }
 }

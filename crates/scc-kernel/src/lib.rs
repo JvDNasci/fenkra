@@ -370,6 +370,87 @@ mod imp {
         pub fn plane_face(o: [f64; 3], n: [f64; 3], half: f64) -> KResult<Shape> {
             b::plane_face(o[0], o[1], o[2], n[0], n[1], n[2], half).map(Shape).map_err(err)
         }
+        // ---------------- bancada de superfícies
+        pub fn sphere_surface(c: [f64; 3], r: f64) -> KResult<Shape> {
+            b::sphere_surface(c[0], c[1], c[2], r).map(Shape).map_err(err)
+        }
+        /// Face cilíndrica (sem tampas) do eixo `o`+`d`, entre as alturas h0 e h1.
+        pub fn cylinder_surface(o: [f64; 3], d: [f64; 3], r: f64, h0: f64, h1: f64) -> KResult<Shape> {
+            b::cylinder_surface(o[0], o[1], o[2], d[0], d[1], d[2], r, h0, h1).map(Shape).map_err(err)
+        }
+        /// mode: 0 Frenet corrigido, 1 fixo, 2 Frenet
+        pub fn sweep_surface(profile: &[[f64; 3]], spine: &[[f64; 3]], mode: u8) -> KResult<Shape> {
+            let p: Vec<f64> = profile.iter().flatten().copied().collect();
+            let s: Vec<f64> = spine.iter().flatten().copied().collect();
+            b::sweep_surface(&p, &s, mode).map(Shape).map_err(err)
+        }
+        pub fn loft_surface(sections: &[Vec<[f64; 3]>], ruled: bool, closed: bool, guide: Option<&[[f64; 3]]>) -> KResult<Shape> {
+            let (mut flat, mut ends) = (vec![], vec![]);
+            for c in sections {
+                flat.extend(c.iter().flatten().copied());
+                ends.push((flat.len() / 3) as u32);
+            }
+            let g: Vec<f64> = guide.unwrap_or(&[]).iter().flatten().copied().collect();
+            b::loft_surface(&flat, &ends, ruled, closed, &g).map(Shape).map_err(err)
+        }
+        pub fn sewn(&self, tol: f64) -> KResult<Shape> {
+            b::sew_shapes(&self.0, tol).map(Shape).map_err(err)
+        }
+        pub fn healed(&self, tol: f64) -> KResult<Shape> {
+            b::heal_shape(&self.0, tol).map(Shape).map_err(err)
+        }
+        /// Divide pela ferramenta e fica com o lado da normal (`keep_pos`) ou o oposto.
+        pub fn split_side(&self, tool: &Shape, keep_pos: bool, extend: bool) -> KResult<Shape> {
+            b::split_side(&self.0, &tool.0, keep_pos, extend).map(Shape).map_err(err)
+        }
+        pub fn nth_face(&self, i: u32) -> KResult<Shape> {
+            b::nth_face(&self.0, i).map(Shape).map_err(err)
+        }
+        pub fn untrimmed(&self) -> KResult<Shape> {
+            b::untrim_face(&self.0).map(Shape).map_err(err)
+        }
+        pub fn extrapolated(&self, near: [f64; 3], len: f64) -> KResult<Shape> {
+            b::extrapolate_face(&self.0, near[0], near[1], near[2], len).map(Shape).map_err(err)
+        }
+        fn split_pts(flat: Vec<f64>, ends: Vec<u32>) -> Vec<Vec<[f64; 3]>> {
+            let mut out = vec![];
+            let mut s = 0usize;
+            for e in ends {
+                out.push((s..e as usize).map(|i| [flat[3 * i], flat[3 * i + 1], flat[3 * i + 2]]).collect());
+                s = e as usize;
+            }
+            out
+        }
+        /// Bordas livres como polilinhas.
+        pub fn boundary(&self) -> KResult<Vec<Vec<[f64; 3]>>> {
+            let mut ends = vec![];
+            let flat = b::boundary_pts(&self.0, &mut ends).map_err(err)?;
+            Ok(Self::split_pts(flat, ends))
+        }
+        /// Curvas de interseção com outra forma.
+        pub fn section(&self, other: &Shape) -> KResult<Vec<Vec<[f64; 3]>>> {
+            let mut ends = vec![];
+            let flat = b::section_pts(&self.0, &other.0, &mut ends).map_err(err)?;
+            Ok(Self::split_pts(flat, ends))
+        }
+        pub fn thicken(&self, t1: f64, t2: f64) -> KResult<Shape> {
+            b::thicken(&self.0, t1, t2).map(Shape).map_err(err)
+        }
+        pub fn closed_solid(&self, tol: f64) -> KResult<Shape> {
+            b::close_surface(&self.0, tol).map(Shape).map_err(err)
+        }
+        /// Volumes fechados formados pelas formas (compound), sem os que contêm pontos de `exclude`.
+        pub fn volume_cells(&self, exclude: &[[f64; 3]]) -> KResult<Shape> {
+            let e: Vec<f64> = exclude.iter().flatten().copied().collect();
+            b::volume_cells(&self.0, &e).map(Shape).map_err(err)
+        }
+        pub fn from_mesh(tris: &[f64], solid: bool) -> KResult<Shape> {
+            b::mesh_shape(tris, solid).map(Shape).map_err(err)
+        }
+        pub fn is_solid(&self) -> bool {
+            b::is_solid(&self.0)
+        }
+
         pub fn same_face(&self, a: [f64; 3], c: [f64; 3]) -> bool {
             b::same_face(&self.0, a[0], a[1], a[2], c[0], c[1], c[2]).unwrap_or(false)
         }
@@ -559,6 +640,58 @@ mod imp {
         pub fn plane_face(_: [f64; 3], _: [f64; 3], _: f64) -> KResult<Shape> {
             no()
         }
+        pub fn sphere_surface(_: [f64; 3], _: f64) -> KResult<Shape> {
+            no()
+        }
+        pub fn cylinder_surface(_: [f64; 3], _: [f64; 3], _: f64, _: f64, _: f64) -> KResult<Shape> {
+            no()
+        }
+        pub fn sweep_surface(_: &[[f64; 3]], _: &[[f64; 3]], _: u8) -> KResult<Shape> {
+            no()
+        }
+        pub fn loft_surface(_: &[Vec<[f64; 3]>], _: bool, _: bool, _: Option<&[[f64; 3]]>) -> KResult<Shape> {
+            no()
+        }
+        pub fn sewn(&self, _: f64) -> KResult<Shape> {
+            no()
+        }
+        pub fn healed(&self, _: f64) -> KResult<Shape> {
+            no()
+        }
+        pub fn split_side(&self, _: &Shape, _: bool, _: bool) -> KResult<Shape> {
+            no()
+        }
+        pub fn nth_face(&self, _: u32) -> KResult<Shape> {
+            no()
+        }
+        pub fn untrimmed(&self) -> KResult<Shape> {
+            no()
+        }
+        pub fn extrapolated(&self, _: [f64; 3], _: f64) -> KResult<Shape> {
+            no()
+        }
+        pub fn boundary(&self) -> KResult<Vec<Vec<[f64; 3]>>> {
+            no()
+        }
+        pub fn section(&self, _: &Shape) -> KResult<Vec<Vec<[f64; 3]>>> {
+            no()
+        }
+        pub fn thicken(&self, _: f64, _: f64) -> KResult<Shape> {
+            no()
+        }
+        pub fn closed_solid(&self, _: f64) -> KResult<Shape> {
+            no()
+        }
+        pub fn volume_cells(&self, _: &[[f64; 3]]) -> KResult<Shape> {
+            no()
+        }
+        pub fn from_mesh(_: &[f64], _: bool) -> KResult<Shape> {
+            no()
+        }
+        pub fn is_solid(&self) -> bool {
+            false
+        }
+
         pub fn extrude_to_next(&self, _: [f64; 3], _: f64, _: &Shape) -> KResult<Shape> {
             no()
         }

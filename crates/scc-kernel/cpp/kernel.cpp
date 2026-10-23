@@ -10,6 +10,21 @@
 
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepAlgoAPI_Splitter.hxx>
+#include <BRepAlgoAPI_Section.hxx>
+#include <BRepBuilderAPI_MakeSolid.hxx>
+#include <BRepBuilderAPI_Sewing.hxx>
+#include <BRepClass3d_SolidClassifier.hxx>
+#include <BRepTools_WireExplorer.hxx>
+#include <BOPAlgo_MakerVolume.hxx>
+#include <GeomConvert.hxx>
+#include <GeomLib.hxx>
+#include <Geom_BSplineSurface.hxx>
+#include <Geom_BoundedSurface.hxx>
+#include <ShapeAnalysis_FreeBounds.hxx>
+#include <ShapeFix_Shape.hxx>
+#include <ShapeFix_Solid.hxx>
+#include <TopTools_HSequenceOfShape.hxx>
+#include <TopoDS_Iterator.hxx>
 #include <Geom_RectangularTrimmedSurface.hxx>
 #include <Precision.hxx>
 #include <gp_Pln.hxx>
@@ -673,3 +688,4 @@ rust::String occt_version() { return rust::String(OCC_VERSION_COMPLETE); }
 
 #include "features.inc"
 #include "surfaces.inc"
+#include "hybrid.inc"

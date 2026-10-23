@@ -37,6 +37,8 @@ pub enum Act {
     SkAutoConstraints,
     SkAutoDims,
     SkFinish,
+    /// modo de exibição (análise: zebra, curvatura)
+    Display(DisplayMode),
 }
 
 /// Botão: ícone, nome, descrição breve, descrição avançada, ação.
@@ -204,6 +206,48 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 Family("superficie", fam(&geo_ui::SURFACES)),
             ]
         }
+        Group::Superficies => {
+            let g = |k: GeoKind| {
+                let (i, n, b, a) = k.info();
+                it(i, n, b, a, Cmd(C::Geo(k)))
+            };
+            vec![
+                Family("sup_basica", vec![g(GeoKind::SurfExtrude), g(GeoKind::SurfRevolve), g(GeoKind::SurfSphere), g(GeoKind::SurfCylinder)]),
+                One(g(GeoKind::SurfOffset)),
+                Family("sup_varrer", vec![g(GeoKind::SurfSweep), g(GeoKind::SurfTube)]),
+                Family("sup_multi", vec![g(GeoKind::SurfLoft), g(GeoKind::SurfBlend)]),
+                One(g(GeoKind::SurfFill)),
+            ]
+        }
+        Group::Operacoes => {
+            let g = |k: GeoKind| {
+                let (i, n, b, a) = k.info();
+                it(i, n, b, a, Cmd(C::Geo(k)))
+            };
+            vec![
+                Family("op_juntar", vec![g(GeoKind::OpJoin), g(GeoKind::OpHeal)]),
+                Family("op_dividir", vec![g(GeoKind::OpSplit), g(GeoKind::OpTrim)]),
+                Family("op_extrair", vec![g(GeoKind::SurfExtract), g(GeoKind::OpMulti), g(GeoKind::OpBoundary)]),
+                Family("op_desmontar", vec![g(GeoKind::OpUntrim), g(GeoKind::OpPart)]),
+                One(g(GeoKind::OpExtrapolate)),
+                Family("xf", vec![g(GeoKind::XfTranslate), g(GeoKind::XfRotate), g(GeoKind::XfMirror), g(GeoKind::XfScale)]),
+            ]
+        }
+        Group::Hibrido => vec![
+            One(it("hib_dividir", "Dividir corpo", "Dividir o sólido por superfície (Split)", "Corta o corpo com uma superfície, face ou plano e mantém um lado.", Cmd(C::SplitBody))),
+            Family("hib_engrossar", vec![
+                it("hib_engrossar", "Engrossar", "Engrossar superfície (Thick Surface / Thicken)", "Transforma a superfície em sólido com espessura para um ou dois lados.", Cmd(C::ThickSurface)),
+                it("hib_fechar", "Fechar", "Fechar superfície (Close Surface / Stitch)", "Costura as superfícies e tampa as bordas para formar um sólido.", Cmd(C::CloseSurface)),
+            ]),
+            One(it("hib_costurar", "Costurar", "Costurar superfície no corpo (Sew Surface)", "Acrescenta o volume entre a superfície e o corpo, ou remove o lado escolhido.", Cmd(C::SewSurface))),
+            One(it("hib_preencher", "Preencher", "Preencher fronteiras (Boundary Fill)", "Sólido dos volumes fechados por superfícies, faces e planos; escolha as células que ficam de fora.", Cmd(C::BoundaryFill))),
+            One(it("hib_malha", "Malha", "Importar malha STL/OBJ como B-rep", "Converte triângulos em faces costuradas; se fechar, vira sólido.", Cmd(C::MeshImport))),
+        ],
+        Group::Analise => vec![
+            One(it("an_zebra", "Zebra", "Listras zebra (reflexo)", "Faixas de reflexo: onde elas quebram há só posição (G0); dobram = tangência (G1); contínuas = curvatura (G2).", Display(DisplayMode::Zebra))),
+            One(it("an_curvatura", "Curvatura", "Mapa de curvatura", "Azul = plano, verde/amarelo = curvatura média, vermelho = raio pequeno.", Display(DisplayMode::Curvatura))),
+            One(it("an_sombreado", "Normal", "Voltar ao sombreado com arestas", "Sai da análise.", Display(DisplayMode::SombreadoArestas))),
+        ],
         Group::Organizacao => vec![
             One(it("parametro", "Parâmetro", "Novo parâmetro", "Parâmetro global da peça (nome = expressão), usável em qualquer cota ou comando.", Cmd(C::Param))),
             One(it("pasta", "Pasta", "Nova pasta", "Organiza comandos na árvore; não muda a ordem de execução.", Cmd(C::Folder))),
@@ -285,6 +329,7 @@ fn is_selected(a: Act, s: &Settings, st: &ToolState) -> bool {
         Act::SkAutoConstraints => s.auto_constraints,
         Act::SkAutoDims => s.auto_dims,
         Act::HiddenEnv => st.hidden_env,
+        Act::Display(m) => s.display == m,
         _ => false,
     }
 }
@@ -414,6 +459,6 @@ pub fn groups_at(s: &Settings, d: Dock, sketching: bool) -> Vec<Group> {
         .filter(|g| s.dock(*g) == d)
         // restrições ficam no menu rápido do botão direito (smart)
         .filter(|g| *g != Group::SkRestricoes)
-        .filter(|g| if sketching { g.sketch_only() || *g == Group::Vista } else { !g.sketch_only() })
+        .filter(|g| if sketching { g.sketch_only() || *g == Group::Vista } else { !g.sketch_only() && g.in_bench(s.bench) })
         .collect()
 }

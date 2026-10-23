@@ -216,6 +216,9 @@ fn revolve_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id
 /// Desenha e trata a alça do comando aberto. Chamado pela viewport fora do modo sketch.
 pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: Camera) {
     let Some(id) = app.session.as_ref().map(|s| s.id) else { return };
+    if crate::gizmo::overlay(app, ui, rect, &cam, id) {
+        return;
+    }
     if matches!(app.open.doc.feature(id).map(|f| &f.kind), Some(FeatureKind::Revolve(_))) {
         revolve_handle(app, ui, rect, &cam, id);
         return;

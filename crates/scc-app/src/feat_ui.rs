@@ -386,9 +386,93 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             ui.checkbox(&mut c.keep_tool, tr("manter o corpo ferramenta visível"));
             ui.label(RichText::new(tr("O resultado fica no coletor deste comando; o corpo ferramenta é o estado do outro coletor neste ponto da linha do tempo.")).weak().small());
         }
+        FeatureKind::SplitBody(sp) => {
+            section(ui, "Dividir o corpo");
+            geo_ui::surf_slot(ui, "hb_s", "Superfície", doc, me, &mut sp.surface, seed);
+            ui.checkbox(&mut sp.flip, tr("manter o outro lado"));
+            ui.label(RichText::new(tr("Face do corpo é estendida para cortar a peça inteira; superfícies de referência cortam como estão.")).weak().small());
+        }
+        FeatureKind::ThickSurface(t) => {
+            section(ui, "Engrossar superfície");
+            geo_ui::surf_slot(ui, "hb_s", "Superfície", doc, me, &mut t.surface, seed);
+            expr(ui, "Espessura 1", &mut t.t1, vars, "mm");
+            expr(ui, "Espessura 2", &mut t.t2, vars, "mm");
+            ui.label(RichText::new(tr("1 = lado da normal; 2 = lado oposto (0 = só um lado).")).weak().small());
+            hyb_op(ui, &mut t.op);
+        }
+        FeatureKind::CloseSurface(c) => {
+            section(ui, "Fechar superfície");
+            geo_ui::surf_slot(ui, "hb_s", "Superfície", doc, me, &mut c.surface, seed);
+            expr(ui, "Tolerância", &mut c.tol, vars, "mm");
+            ui.label(RichText::new(tr("Costura (Stitch) as faces e tampa as bordas fechadas; o casco vira sólido.")).weak().small());
+            hyb_op(ui, &mut c.op);
+        }
+        FeatureKind::SewSurface(sw) => {
+            section(ui, "Costurar no corpo");
+            geo_ui::surf_slot(ui, "hb_s", "Superfície", doc, me, &mut sw.surface, seed);
+            let opts = [
+                ("op_unir", "Acrescentar", "O volume entre a superfície e o corpo entra no corpo", !sw.remove),
+                ("op_remover", "Remover", "Corta o corpo pela superfície e tira o lado escolhido", sw.remove),
+            ];
+            if let Some(i) = icon_choice(ui, &opts) {
+                sw.remove = i == 1;
+            }
+            if sw.remove {
+                ui.checkbox(&mut sw.flip, tr("tirar o outro lado"));
+            }
+        }
+        FeatureKind::BoundaryFill(bf) => {
+            section(ui, "Preencher fronteiras");
+            geo_ui::surfs_list(ui, "hb_bf", doc, me, &mut bf.tools, seed);
+            section(ui, &format!("Células excluídas ({})", bf.exclude.len()));
+            let mut del = None;
+            for (i, p) in bf.exclude.iter().enumerate() {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(format!("ponto ({:.1}, {:.1}, {:.1})", p[0], p[1], p[2])).small());
+                    if ui.small_button(tr("✖")).clicked() {
+                        del = Some(i);
+                    }
+                });
+            }
+            if let Some(i) = del {
+                bf.exclude.remove(i);
+            }
+            let pick = seed.points.iter().find_map(|p| match p {
+                PointRef::Fixed(q) => Some(*q),
+                _ => None,
+            });
+            if ui.add_enabled(pick.is_some(), egui::Button::new(tr("+ excluir célula no ponto selecionado"))).clicked() {
+                bf.exclude.push(pick.unwrap());
+            }
+            ui.label(RichText::new(tr("Todas as células fechadas entram; para tirar uma, selecione um vértice/ponto dentro dela.")).weak().small());
+            hyb_op(ui, &mut bf.op);
+        }
+        FeatureKind::MeshImport(m) => {
+            section(ui, "Malha → B-rep");
+            ui.label(RichText::new(&m.path).small());
+            if ui.button(tr("📂 Trocar arquivo…")).clicked() {
+                if let Some(p) = rfd::FileDialog::new().add_filter("Malha", &["stl", "obj"]).pick_file() {
+                    m.path = p.to_string_lossy().into();
+                }
+            }
+            ui.checkbox(&mut m.solid, tr("fechar em sólido quando a malha for fechada"));
+            ui.label(RichText::new(tr("Cada triângulo vira uma face plana; malhas grandes ficam pesadas (máx. 200 mil triângulos).")).weak().small());
+        }
         _ => return false,
     }
     true
+}
+
+/// Operação do sólido gerado pela superfície.
+fn hyb_op(ui: &mut egui::Ui, op: &mut BoolOp) {
+    let opts = [
+        ("op_unir", "Acrescentar", "Une ao corpo (ou cria o corpo)", *op == BoolOp::Add),
+        ("op_remover", "Remover", "Tira do corpo", *op == BoolOp::Cut),
+        ("op_intersecao", "Interseção", "Fica só a parte comum", *op == BoolOp::Intersect),
+    ];
+    if let Some(i) = icon_choice(ui, &opts) {
+        *op = [BoolOp::Add, BoolOp::Cut, BoolOp::Intersect][i];
+    }
 }
 
 fn prim_icon(k: PrimKind) -> &'static str {

@@ -203,6 +203,44 @@ pub enum Continuity {
     G2,
 }
 
+/// Perfil da varredura de superfície.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub enum SweepProfile {
+    /// curva desenhada (explícito)
+    Curve(CurveRef),
+    /// círculo de raio dado, normal à guia (tubo)
+    Circle(String),
+}
+
+/// Transformação de um elemento de geometria.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub enum GeoXform {
+    Translate { dir: AxisRef, dist: String },
+    Rotate { axis: AxisRef, angle: String },
+    Mirror { plane: PlaneRef },
+    Scale { center: PointRef, factor: String },
+}
+
+impl GeoXform {
+    fn walk(&mut self, ids: &mut dyn FnMut(&mut Id), exprs: &mut dyn FnMut(&mut String)) {
+        match self {
+            GeoXform::Translate { dir, dist } => {
+                dir.walk(ids);
+                exprs(dist)
+            }
+            GeoXform::Rotate { axis, angle } => {
+                axis.walk(ids);
+                exprs(angle)
+            }
+            GeoXform::Mirror { plane } => plane.walk(ids),
+            GeoXform::Scale { center, factor } => {
+                center.walk(ids);
+                exprs(factor)
+            }
+        }
+    }
+}
+
 /// Classe do elemento de geometria de referência.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum RefClass {
@@ -382,6 +420,42 @@ pub enum RefKind {
     /// Curva girada em torno de um eixo.
     SurfRevolve { curve: CurveRef, axis: AxisRef, angle: String },
 
+    // ---------------- bancada de superfícies
+    /// Esfera pelo centro e raio.
+    SurfSphere { center: PointRef, radius: String },
+    /// Cilindro (só a face lateral) por ponto e direção; comprimento para cada lado.
+    SurfCylinder { point: PointRef, dir: AxisRef, radius: String, start: String, end: String },
+    /// Varredura: perfil explícito ou circular ao longo da guia.
+    SurfSweep { profile: SweepProfile, spine: CurveRef, mode: SweepMode },
+    /// Multi-seções por curvas, com guia opcional.
+    SurfLoft { sections: Vec<CurveRef>, guide: Option<CurveRef>, ruled: bool, closed: bool },
+    /// Concordância entre duas bordas, com continuidade G0/G1/G2 às superfícies de apoio.
+    SurfBlend { a: CurveRef, sa: Option<SurfRef>, b: CurveRef, sb: Option<SurfRef>, cont: Continuity, tension: String },
+    /// Juntar superfícies (costura) numa só.
+    SurfJoin { items: Vec<SurfRef>, tol: String },
+    /// Curar: fecha frestas até a tolerância e une faces do mesmo suporte.
+    SurfHeal { surface: SurfRef, tol: String },
+    /// Dividir uma superfície por outra (ou plano) e ficar com um lado.
+    SurfSplit { surface: SurfRef, tool: SurfRef, flip: bool },
+    /// Aparar duas superfícies uma pela outra e juntar os lados escolhidos.
+    SurfTrim { a: SurfRef, b: SurfRef, flip_a: bool, flip_b: bool },
+    /// Extrair várias faces de uma vez (multi-extração).
+    SurfMulti { faces: Vec<[f64; 3]> },
+    /// Uma face de uma superfície composta (desmontar).
+    SurfPart { surface: SurfRef, index: usize },
+    /// Desaparar: devolve a face aos limites naturais do suporte.
+    SurfUntrim { surface: SurfRef },
+    /// Extrapolar: prolongar a borda mais próxima do ponto.
+    SurfExtrapolate { surface: SurfRef, near: PointRef, length: String },
+    /// Translação, rotação, simetria ou escala de qualquer elemento (ponto, curva, plano, superfície).
+    GeoTransform { source: Id, class: RefClass, xf: GeoXform },
+    /// Curva de interseção entre duas superfícies (ou planos).
+    CurveIntersect { a: SurfRef, b: SurfRef, which: usize },
+    /// Curva projetada (na normal) sobre uma superfície.
+    CurveProjectSurf { curve: CurveRef, surface: SurfRef },
+    /// Contorno (borda livre) de uma superfície.
+    CurveBoundary { surface: SurfRef, which: usize },
+
     /// Geometria vinda de outra peça por link (ver `Document.external`).
     Linked { ext: Id, class: RefClass },
 }
@@ -411,6 +485,9 @@ impl RefKind {
             | PointBetween { .. } | PointCurvePlane { .. } | PointCurveCurve { .. } | PointProject { .. } | PointProjectCurve { .. }
             | PointOffset { .. } => RefClass::Point,
             SurfExtract { .. } | SurfOffset { .. } | SurfFill { .. } | SurfExtrude { .. } | SurfRevolve { .. } => RefClass::Surface,
+            SurfSphere { .. } | SurfCylinder { .. } | SurfSweep { .. } | SurfLoft { .. } | SurfBlend { .. } | SurfJoin { .. } | SurfHeal { .. }
+            | SurfSplit { .. } | SurfTrim { .. } | SurfMulti { .. } | SurfPart { .. } | SurfUntrim { .. } | SurfExtrapolate { .. } => RefClass::Surface,
+            GeoTransform { class, .. } => *class,
             Linked { class, .. } => *class,
             _ => RefClass::Curve,
         }
@@ -631,6 +708,73 @@ impl RefKind {
                 curve.walk(ids);
                 axis.walk(ids);
                 exprs(angle)
+            }
+            SurfSphere { center, radius } => {
+                center.walk(ids);
+                exprs(radius)
+            }
+            SurfCylinder { point, dir, radius, start, end } => {
+                point.walk(ids);
+                dir.walk(ids);
+                exprs(radius);
+                exprs(start);
+                exprs(end)
+            }
+            SurfSweep { profile, spine, .. } => {
+                match profile {
+                    SweepProfile::Curve(c) => c.walk(ids),
+                    SweepProfile::Circle(r) => exprs(r),
+                }
+                spine.walk(ids)
+            }
+            SurfLoft { sections, guide, .. } => {
+                for c in sections {
+                    c.walk(ids)
+                }
+                if let Some(g) = guide {
+                    g.walk(ids)
+                }
+            }
+            SurfBlend { a, sa, b, sb, tension, .. } => {
+                a.walk(ids);
+                b.walk(ids);
+                for s in [sa, sb].into_iter().flatten() {
+                    s.walk(ids)
+                }
+                exprs(tension)
+            }
+            SurfJoin { items, tol } => {
+                for s in items {
+                    s.walk(ids)
+                }
+                exprs(tol)
+            }
+            SurfHeal { surface, tol } => {
+                surface.walk(ids);
+                exprs(tol)
+            }
+            SurfSplit { surface, tool, .. } => {
+                surface.walk(ids);
+                tool.walk(ids)
+            }
+            SurfTrim { a, b, .. } | CurveIntersect { a, b, .. } => {
+                a.walk(ids);
+                b.walk(ids)
+            }
+            SurfMulti { .. } => {}
+            SurfPart { surface, .. } | SurfUntrim { surface } | CurveBoundary { surface, .. } => surface.walk(ids),
+            SurfExtrapolate { surface, near, length } => {
+                surface.walk(ids);
+                near.walk(ids);
+                exprs(length)
+            }
+            GeoTransform { source, xf, .. } => {
+                ids(source);
+                xf.walk(ids, exprs)
+            }
+            CurveProjectSurf { curve, surface } => {
+                curve.walk(ids);
+                surface.walk(ids)
             }
         }
     }
@@ -892,6 +1036,67 @@ pub enum FeatureKind {
     Thread(Thread),
     /// Booleana entre coletores: o corpo de `tool` une, subtrai ou intersecta o deste coletor.
     Combine(Combine),
+    /// Dividir o corpo por uma superfície ou plano e ficar com um lado (Split).
+    SplitBody(SplitBody),
+    /// Engrossar superfície em sólido (Thick Surface / Thicken).
+    ThickSurface(ThickSurface),
+    /// Fechar superfície em sólido (Close Surface / Stitch).
+    CloseSurface(CloseSurface),
+    /// Costurar superfície no corpo (Sew Surface).
+    SewSurface(SewSurface),
+    /// Preencher fronteiras: volumes fechados por superfícies e planos (Boundary Fill).
+    BoundaryFill(BoundaryFill),
+    /// Malha STL/OBJ convertida em B-rep.
+    MeshImport(MeshImport),
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct SplitBody {
+    pub surface: SurfRef,
+    /// fica com o lado oposto à normal
+    pub flip: bool,
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct ThickSurface {
+    pub surface: SurfRef,
+    /// espessura para o lado da normal
+    pub t1: String,
+    /// espessura para o outro lado
+    pub t2: String,
+    pub op: BoolOp,
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct CloseSurface {
+    pub surface: SurfRef,
+    /// tolerância de costura (Stitch)
+    pub tol: String,
+    pub op: BoolOp,
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct SewSurface {
+    pub surface: SurfRef,
+    /// remove o material do lado escolhido em vez de acrescentar o volume entre a superfície e o corpo
+    pub remove: bool,
+    pub flip: bool,
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct BoundaryFill {
+    pub tools: Vec<SurfRef>,
+    /// células que não entram (um ponto dentro de cada)
+    pub exclude: Vec<[f64; 3]>,
+    pub op: BoolOp,
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct MeshImport {
+    /// arquivo .stl ou .obj (relativo à pasta do projeto ou absoluto)
+    pub path: String,
+    /// tenta fechar em sólido (senão fica superfície/casca)
+    pub solid: bool,
 }
 
 impl FeatureKind {
@@ -928,6 +1133,12 @@ impl FeatureKind {
                 BoolOp::Cut => "Subtrair",
                 BoolOp::Intersect => "Intersecao",
             },
+            SplitBody(_) => "Dividir",
+            ThickSurface(_) => "Engrossar",
+            CloseSurface(_) => "Fechar",
+            SewSurface(_) => "Costurar",
+            BoundaryFill(_) => "PreencherFronteiras",
+            MeshImport(_) => "Malha",
         }
     }
     pub fn icon(&self) -> &'static str {
@@ -952,6 +1163,12 @@ impl FeatureKind {
             Stiffener(_) => "┃",
             Thread(_) => "⌇",
             Combine(_) => "⊕",
+            SplitBody(_) => "⫽",
+            ThickSurface(_) => "▥",
+            CloseSurface(_) => "⬢",
+            SewSurface(_) => "⧉",
+            BoundaryFill(_) => "▦",
+            MeshImport(_) => "△",
         }
     }
 
@@ -1080,6 +1297,23 @@ impl FeatureKind {
                 }
             }
             Combine(c) => ids(&mut c.tool),
+            SplitBody(s) => s.surface.walk(ids),
+            ThickSurface(t) => {
+                t.surface.walk(ids);
+                exprs(&mut t.t1);
+                exprs(&mut t.t2)
+            }
+            CloseSurface(c) => {
+                c.surface.walk(ids);
+                exprs(&mut c.tol)
+            }
+            SewSurface(s) => s.surface.walk(ids),
+            BoundaryFill(b) => {
+                for t in &mut b.tools {
+                    t.walk(ids)
+                }
+            }
+            MeshImport(_) => {}
         }
     }
 }

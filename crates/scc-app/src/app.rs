@@ -246,6 +246,29 @@ impl App {
             app.settings_open = true;
             app.started = true;
         }
+        // desenvolvimento: SCC_BANCADA=sup abre na bancada de Superfícies; SCC_EXIBIR=zebra|curvatura
+        // muda o modo de exibição; SCC_DEMO_SUP=1 acrescenta superfícies de exemplo
+        if std::env::var("SCC_BANCADA").is_ok_and(|v| v.starts_with("sup")) {
+            app.settings.bench = crate::settings::Bench::Superficies;
+            app.started = true;
+        }
+        match std::env::var("SCC_EXIBIR").as_deref() {
+            Ok("zebra") => app.settings.display = crate::render::DisplayMode::Zebra,
+            Ok("curvatura") => app.settings.display = crate::render::DisplayMode::Curvatura,
+            _ => {}
+        }
+        if std::env::var("SCC_DEMO_SUP").is_ok() {
+            let d = &mut app.open.doc;
+            let s = |x: &str| x.to_string();
+            d.add_geometry(RefKind::SurfSphere { center: PointRef::Fixed([0., 0., 40.]), radius: s("15") });
+            let la = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([40., 0., 0.]), b: PointRef::Fixed([40., 40., 0.]), start: s("0"), end: s("0") });
+            let lb = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([70., 0., 20.]), b: PointRef::Fixed([70., 40., 20.]), start: s("0"), end: s("0") });
+            let fa = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(la), dir: AxisRef::Origin(OriginAxis::X), length: s("-20") });
+            let fb = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(lb), dir: AxisRef::Origin(OriginAxis::X), length: s("20") });
+            d.add_geometry(RefKind::SurfBlend { a: CurveRef::Ref(la), sa: Some(SurfRef::Ref(fa)), b: CurveRef::Ref(lb), sb: Some(SurfRef::Ref(fb)), cont: Continuity::G2, tension: s("1") });
+            d.add_geometry(RefKind::SurfCylinder { point: PointRef::Fixed([-40., 0., 0.]), dir: AxisRef::Origin(OriginAxis::Z), radius: s("12"), start: s("0"), end: s("50") });
+            app.started = true;
+        }
         // desenvolvimento: SCC_VISTAS=1 abre o seletor de vistas ao iniciar
         if std::env::var("SCC_VISTAS").is_ok() {
             app.view_menu = true;
@@ -638,6 +661,7 @@ impl App {
         let faces = self.picked_faces();
         let seed = match c {
             Cmd::Rib | Cmd::Slot | Cmd::PatternLinear | Cmd::PatternCircular | Cmd::PatternPoints => self.seed(true),
+            Cmd::SplitBody | Cmd::ThickSurface | Cmd::CloseSurface | Cmd::SewSurface | Cmd::BoundaryFill => self.seed(true),
             Cmd::Geo(k) => {
                 let mut s = self.seed(true);
                 // face clicada para um tipo que usa plano: vira um plano da face
@@ -766,6 +790,26 @@ impl App {
                 }))
             }
             Cmd::Scale => Sel::Feature(d.add_feature(FeatureKind::Scale(Scale { center: PointRef::Origin, factor: s("2") }))),
+            Cmd::SplitBody | Cmd::ThickSurface | Cmd::CloseSurface | Cmd::SewSurface | Cmd::BoundaryFill => {
+                // superfície da seleção (ou a última superfície de referência; senão, o plano)
+                let last = d.references.iter().rev().find(|r| r.kind.class() == RefClass::Surface).map(|r| SurfRef::Ref(r.id));
+                let surface = seed.surface.or(last).unwrap_or(SurfRef::Plane(plane));
+                Sel::Feature(d.add_feature(match c {
+                    Cmd::SplitBody => FeatureKind::SplitBody(SplitBody { surface, flip: false }),
+                    Cmd::ThickSurface => FeatureKind::ThickSurface(ThickSurface { surface, t1: s("2"), t2: s("0"), op: BoolOp::Add }),
+                    Cmd::CloseSurface => FeatureKind::CloseSurface(CloseSurface { surface, tol: s("0.01"), op: BoolOp::Add }),
+                    Cmd::SewSurface => FeatureKind::SewSurface(SewSurface { surface, remove: false, flip: false }),
+                    _ => {
+                        let mut tools = vec![surface];
+                        tools.extend(seed.planes.iter().map(|p| SurfRef::Plane(*p)));
+                        FeatureKind::BoundaryFill(BoundaryFill { tools, exclude: vec![], op: BoolOp::Add })
+                    }
+                }))
+            }
+            Cmd::MeshImport => {
+                let Some(p) = rfd::FileDialog::new().add_filter("Malha", &["stl", "obj"]).pick_file() else { return };
+                Sel::Feature(d.add_feature(FeatureKind::MeshImport(MeshImport { path: p.to_string_lossy().into(), solid: true })))
+            }
             Cmd::Combine(op) => {
                 let active = d.active_collector;
                 let Some(tool) = d.collectors.iter().find(|c| c.id != active).map(|c| c.id) else {
@@ -899,6 +943,10 @@ impl App {
                 if let Some(v) = self.viewport.as_mut() {
                     v.camera.ortho = self.settings.ortho
                 }
+            }
+            Act::Display(m) => {
+                self.settings.display = m;
+                self.toast(m.label(), false);
             }
             Act::HiddenEnv => {
                 self.hidden_env = !self.hidden_env;
@@ -1519,8 +1567,13 @@ impl App {
                 });
                 ui.separator();
                 // abas de módulo (RF-UI-006)
-                let _ = ui.selectable_label(true, tr("Modelagem Sólida"));
-                for m in ["Superfícies", "Montagem", "Desenho", "Chapas", "Soldas"].map(tr) {
+                use crate::settings::Bench;
+                for (b, n) in [(Bench::Solidos, "Modelagem Sólida"), (Bench::Superficies, "Superfícies")] {
+                    if ui.selectable_label(self.settings.bench == b, tr(n)).on_hover_text(tr("As bancadas compartilham o mesmo modelo: sólidos e superfícies se conversam.")).clicked() {
+                        self.settings.bench = b;
+                    }
+                }
+                for m in ["Montagem", "Desenho", "Chapas", "Soldas"].map(tr) {
                     ui.add_enabled(false, egui::Button::new(m).frame(false)).on_disabled_hover_text(tr("Módulo em breve"));
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -3142,6 +3195,12 @@ pub enum Cmd {
     Combine(BoolOp),
     FilletFaceFace,
     FilletFull,
+    SplitBody,
+    ThickSurface,
+    CloseSurface,
+    SewSurface,
+    BoundaryFill,
+    MeshImport,
     Param,
     Folder,
     Collector,

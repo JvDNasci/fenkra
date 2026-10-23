@@ -126,6 +126,23 @@ pub mod bridge {
         fn extrude_to_next(face: &Shape, dx: f64, dy: f64, dz: f64, len: f64, body: &Shape) -> Result<UniquePtr<Shape>>;
         fn clip_until(tool: &Shape, cutter: &Shape, px: f64, py: f64, pz: f64, extend: bool) -> Result<UniquePtr<Shape>>;
         fn plane_face(ox: f64, oy: f64, oz: f64, nx: f64, ny: f64, nz: f64, half: f64) -> Result<UniquePtr<Shape>>;
+        fn sphere_surface(cx: f64, cy: f64, cz: f64, r: f64) -> Result<UniquePtr<Shape>>;
+        fn cylinder_surface(ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64, r: f64, h0: f64, h1: f64) -> Result<UniquePtr<Shape>>;
+        fn sweep_surface(profile: &[f64], spine: &[f64], mode: u8) -> Result<UniquePtr<Shape>>;
+        fn loft_surface(flat: &[f64], ends: &[u32], ruled: bool, closed: bool, guide: &[f64]) -> Result<UniquePtr<Shape>>;
+        fn sew_shapes(s: &Shape, tol: f64) -> Result<UniquePtr<Shape>>;
+        fn heal_shape(s: &Shape, tol: f64) -> Result<UniquePtr<Shape>>;
+        fn split_side(s: &Shape, tool: &Shape, keep_pos: bool, extend: bool) -> Result<UniquePtr<Shape>>;
+        fn nth_face(s: &Shape, i: u32) -> Result<UniquePtr<Shape>>;
+        fn untrim_face(s: &Shape) -> Result<UniquePtr<Shape>>;
+        fn extrapolate_face(s: &Shape, px: f64, py: f64, pz: f64, len: f64) -> Result<UniquePtr<Shape>>;
+        fn boundary_pts(s: &Shape, ends: &mut Vec<u32>) -> Result<Vec<f64>>;
+        fn section_pts(a: &Shape, b: &Shape, ends: &mut Vec<u32>) -> Result<Vec<f64>>;
+        fn thicken(s: &Shape, t1: f64, t2: f64) -> Result<UniquePtr<Shape>>;
+        fn close_surface(s: &Shape, tol: f64) -> Result<UniquePtr<Shape>>;
+        fn volume_cells(s: &Shape, exclude: &[f64]) -> Result<UniquePtr<Shape>>;
+        fn mesh_shape(tris: &[f64], solid: bool) -> Result<UniquePtr<Shape>>;
+        fn is_solid(s: &Shape) -> bool;
         fn same_face(s: &Shape, ax: f64, ay: f64, az: f64, bx: f64, by: f64, bz: f64) -> Result<bool>;
         fn full_round_t(s: &Shape, mx: f64, my: f64, mz: f64, width: f64, tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
         fn face_face_fillet_t(

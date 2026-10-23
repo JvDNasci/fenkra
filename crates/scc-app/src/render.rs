@@ -74,6 +74,30 @@ struct MOut {
     var alpha = i.mat.z * i.col.a;
 
     var c: vec3<f32>;
+    // derivadas fora de desvios dependentes do pixel (exigência de uniformidade do WGSL)
+    let nraw = normalize(i.n);
+    let dn = length(fwidth(nraw));
+    let dp = max(length(fwidth(i.wp)), 1e-6);
+    if (mode > 6.5) {
+        // curvatura ≈ variação da normal / variação da posição na tela (1/mm)
+        let k = dn / dp;
+        let t = clamp(log2(1.0 + k * 50.0) / 6.0, 0.0, 1.0);
+        let ramp = array<vec3<f32>, 5>(vec3<f32>(0.15, 0.30, 0.95), vec3<f32>(0.10, 0.80, 0.95), vec3<f32>(0.20, 0.85, 0.30), vec3<f32>(0.98, 0.85, 0.15), vec3<f32>(0.95, 0.20, 0.15));
+        let x = t * 4.0;
+        let j = min(i32(floor(x)), 3);
+        let col = mix(ramp[j], ramp[j + 1], x - f32(j));
+        let d = abs(dot(n, v));
+        return vec4<f32>(col * (0.55 + 0.45 * d), 1.0);
+    }
+    if (mode > 5.5) {
+        // zebra: faixas do reflexo de um ambiente de listras horizontais
+        let r = reflect(-v, n);
+        let s = r.z * 9.0;
+        let w = max(fwidth(s), 1e-4);
+        let band = smoothstep(0.5 - w, 0.5 + w, abs(fract(s) - 0.5) * 2.0);
+        let d = abs(dot(n, v));
+        return vec4<f32>(vec3<f32>(band * 0.92 + 0.04) * (0.75 + 0.25 * d), 1.0);
+    }
     if (mode > 4.5) {
         // semi-renderizado: céu/chão + luz principal + reflexo de ambiente + Fresnel
         let sky = vec3<f32>(0.80, 0.85, 0.95);
@@ -129,16 +153,22 @@ pub enum DisplayMode {
     Arame,
     RaioX,
     SemiRenderizado,
+    /// análise: listras de reflexo
+    Zebra,
+    /// análise: mapa de curvatura
+    Curvatura,
 }
 
 impl DisplayMode {
-    pub const ALL: [DisplayMode; 6] = [
+    pub const ALL: [DisplayMode; 8] = [
         DisplayMode::SombreadoArestas,
         DisplayMode::Sombreado,
         DisplayMode::LinhasOcultas,
         DisplayMode::Arame,
         DisplayMode::RaioX,
         DisplayMode::SemiRenderizado,
+        DisplayMode::Zebra,
+        DisplayMode::Curvatura,
     ];
     pub fn label(self) -> &'static str {
         match self {
@@ -148,6 +178,8 @@ impl DisplayMode {
             DisplayMode::Arame => tr("Arame"),
             DisplayMode::RaioX => tr("Raio-X"),
             DisplayMode::SemiRenderizado => tr("Semi-renderizado"),
+            DisplayMode::Zebra => tr("Análise: zebra"),
+            DisplayMode::Curvatura => tr("Análise: curvatura"),
         }
     }
     fn code(self) -> f32 {
@@ -158,6 +190,8 @@ impl DisplayMode {
             DisplayMode::Arame => 3.,
             DisplayMode::RaioX => 4.,
             DisplayMode::SemiRenderizado => 5.,
+            DisplayMode::Zebra => 6.,
+            DisplayMode::Curvatura => 7.,
         }
     }
 }

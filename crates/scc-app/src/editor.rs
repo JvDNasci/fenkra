@@ -227,8 +227,13 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
 
     match sel {
         Sel::None => {
-            ui.heading(tr("Modelagem Sólida"));
-            ui.label(RichText::new(tr("Escolha um comando na barra ou clique num plano/face na viewport.")).weak());
+            if app.settings.bench == crate::settings::Bench::Superficies {
+                ui.heading(tr("Superfícies"));
+                ui.label(RichText::new(tr("Wireframe (Referências) → superfícies → operações → Volume para virar sólido. As superfícies ficam na pasta de geometria e servem de entrada para os comandos de sólido.")).weak());
+            } else {
+                ui.heading(tr("Modelagem Sólida"));
+                ui.label(RichText::new(tr("Escolha um comando na barra ou clique num plano/face na viewport.")).weak());
+            }
             ui.add_space(6.);
             ui.label(RichText::new(tr("Atalhos")).strong());
             ui.label(RichText::new(tr("Espaço: vistas · F: ajustar · N: alinhar ao plano · H: ocultar · Esc: limpar seleção")).weak().small());

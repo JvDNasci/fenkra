@@ -569,3 +569,35 @@ mod tests {
         assert!((h.end()[2] - 10.).abs() < 1e-9 && (dist(h.end(), [0., 0., 10.]) - 5.).abs() < 1e-6);
     }
 }
+
+/// Aplica a transformação a um ponto.
+pub fn xform_point(x: &scc_kernel::Xform, p: V3) -> V3 {
+    use scc_kernel::Xform as X;
+    match *x {
+        X::Translate(d) => add(p, d),
+        X::Rotate(o, k, a) => add(o, rotate(sub(p, o), unit(k).unwrap_or([0., 0., 1.]), a.to_radians())),
+        X::Mirror(o, n) => {
+            let n = unit(n).unwrap_or([0., 0., 1.]);
+            sub(p, mul(n, 2. * dot(sub(p, o), n)))
+        }
+        X::Scale(o, k) => add(o, mul(sub(p, o), k)),
+    }
+}
+
+/// Aplica a transformação a uma direção (sem translação nem escala).
+pub fn xform_dir(x: &scc_kernel::Xform, v: V3) -> V3 {
+    use scc_kernel::Xform as X;
+    match *x {
+        X::Translate(_) | X::Scale(..) => v,
+        X::Rotate(_, k, a) => rotate(v, unit(k).unwrap_or([0., 0., 1.]), a.to_radians()),
+        X::Mirror(_, n) => {
+            let n = unit(n).unwrap_or([0., 0., 1.]);
+            sub(v, mul(n, 2. * dot(v, n)))
+        }
+    }
+}
+
+/// Reamostra a curva em `n` pontos igualmente espaçados pelo comprimento.
+pub fn resample(c: &Curve3, n: usize) -> Vec<V3> {
+    (0..n).map(|i| c.at_ratio(i as f64 / (n - 1).max(1) as f64).0).collect()
+}

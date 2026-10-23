@@ -4,6 +4,7 @@
 //! o corpo continua do estado anterior e o comando fica marcado com a mensagem do erro.
 
 pub mod geo3d;
+pub mod mesh_io;
 pub mod hardware;
 pub mod profile;
 
@@ -374,6 +375,99 @@ impl Ctx<'_> {
         }
     }
 
+    /// Tamanho que cobre o modelo inteiro (para planos usados como superfície de corte).
+    fn model_size(&self) -> f64 {
+        let mut m = 500.;
+        for (b, _) in self.bodies.values() {
+            if let Some((a, c)) = b.bbox() {
+                m = f64::max(m, geo3d::dist(a, c) * 2. + 100.);
+            }
+        }
+        m
+    }
+
+    /// Superfície de entrada como forma: plano vira face plana grande; face/superfície como estão.
+    fn cut_shape(&self, sf: &SurfRef, depth: u32) -> Result<Shape, String> {
+        match sf {
+            SurfRef::Plane(p) => {
+                let fr = self.plane(p, depth)?;
+                Shape::plane_face(fr.origin, fr.normal, self.model_size()).map_err(|e| e.0)
+            }
+            _ => self.surface_shape(sf, depth),
+        }
+    }
+
+    /// Transformação de geometria em coordenadas do kernel.
+    fn xform(&self, x: &GeoXform, d: u32, e: &dyn Fn(&String, &str) -> Result<f64, String>) -> Result<Xform, String> {
+        Ok(match x {
+            GeoXform::Translate { dir, dist } => {
+                let (_, v) = self.axis_d(dir, d)?;
+                Xform::Translate(geo3d::mul(geo3d::unit(v).ok_or("direção nula")?, e(dist, "distância")?))
+            }
+            GeoXform::Rotate { axis, angle } => {
+                let (o, v) = self.axis_d(axis, d)?;
+                Xform::Rotate(o, v, e(angle, "ângulo")?)
+            }
+            GeoXform::Mirror { plane } => {
+                let f = self.plane(plane, d)?;
+                Xform::Mirror(f.origin, f.normal)
+            }
+            GeoXform::Scale { center, factor } => Xform::Scale(self.point(center, d)?, e(factor, "fator")?),
+        })
+    }
+
+    /// Concordância entre duas bordas: seções de Hermite (G1 cúbica, G2 quíntica com curvatura
+    /// nula nas pontas) que saem tangentes às superfícies de apoio; G0 liga em linha reta.
+    fn blend(&self, a: &CurveRef, sa: Option<&SurfRef>, b: &CurveRef, sb: Option<&SurfRef>, cont: Continuity, tension: f64, d: u32) -> Result<Shape, String> {
+        use geo3d::*;
+        const N: usize = 24;
+        let (ca, cb) = (self.curve(a, d)?, self.curve(b, d)?);
+        let pa = resample(&ca, N);
+        let mut pb = resample(&cb, N);
+        // mesmo sentido nas duas bordas
+        if dist(pa[0], pb[0]) + dist(pa[N - 1], pb[N - 1]) > dist(pa[0], pb[N - 1]) + dist(pa[N - 1], pb[0]) {
+            pb.reverse();
+        }
+        let sha = match sa {
+            Some(s) => Some(self.cut_shape(s, d)?),
+            None => None,
+        };
+        let shb = match sb {
+            Some(s) => Some(self.cut_shape(s, d)?),
+            None => None,
+        };
+        let tan = |v: &[V3], i: usize| unit(sub(v[(i + 1).min(N - 1)], v[i.saturating_sub(1)])).unwrap_or([1., 0., 0.]);
+        // direção que sai da borda, no plano tangente da superfície, apontando para o outro lado
+        let out = |sh: &Option<Shape>, v: &[V3], i: usize, toward: V3| -> Result<Option<V3>, String> {
+            let Some(sh) = sh else { return Ok(None) };
+            let (_, n) = sh.surface_near(v[i]).map_err(|x| x.0)?;
+            let mut w = unit(cross(n, tan(v, i))).ok_or("borda tangente à normal")?;
+            if dot(w, sub(toward, v[i])) < 0. {
+                w = mul(w, -1.);
+            }
+            Ok(Some(w))
+        };
+        let mut sections = vec![];
+        for i in 0..N {
+            let chord = dist(pa[i], pb[i]);
+            if chord < 1e-6 {
+                return Err("as bordas se tocam — a concordância precisa de afastamento".into());
+            }
+            let k = chord * tension;
+            let sec = if cont == Continuity::G0 {
+                vec![pa[i], pb[i]]
+            } else {
+                let da = out(&sha, &pa, i, pb[i])?.unwrap_or_else(|| unit(sub(pb[i], pa[i])).unwrap());
+                let db = out(&shb, &pb, i, pa[i])?.unwrap_or_else(|| unit(sub(pa[i], pb[i])).unwrap());
+                let pts = hermite(pa[i], mul(da, k), [0.; 3], pb[i], mul(db, -k), [0.; 3], cont == Continuity::G2);
+                pts.into_iter().step_by(4).chain(std::iter::once(pb[i])).collect::<Vec<_>>()
+            };
+            sections.push(sec);
+        }
+        // as seções vão de uma borda à outra; o loft liga uma seção à seguinte
+        Shape::loft_surface(&sections, cont == Continuity::G0, false, None).map_err(|x| x.0)
+    }
+
     /// Cópia da face de algum corpo que passa pelo ponto.
     fn face_of_bodies(&self, p: V3) -> Result<Shape, String> {
         for (b, _) in self.bodies.values() {
@@ -713,6 +807,119 @@ impl Ctx<'_> {
                 let c = self.curve(curve, d)?;
                 let (o, v) = self.axis_d(axis, d)?;
                 Geo::Surface(Shape::revolve_curve(&c.pts, o, v, e(angle, "ângulo")?).map_err(|x| x.0)?)
+            }
+            SurfSphere { center, radius } => Geo::Surface(Shape::sphere_surface(self.point(center, d)?, e(radius, "raio")?).map_err(|x| x.0)?),
+            SurfCylinder { point, dir, radius, start, end } => {
+                let o = self.point(point, d)?;
+                let (_, v) = self.axis_d(dir, d)?;
+                let v = unit(v).ok_or("direção nula")?;
+                Geo::Surface(Shape::cylinder_surface(o, v, e(radius, "raio")?, -e(start, "comprimento 1")?, e(end, "comprimento 2")?).map_err(|x| x.0)?)
+            }
+            SurfSweep { profile, spine, mode } => {
+                let sp = self.curve(spine, d)?;
+                let prof = match profile {
+                    SweepProfile::Curve(c) => self.curve(c, d)?.pts,
+                    SweepProfile::Circle(r) => {
+                        // círculo normal à guia no início dela (tubo)
+                        let fr = frame_from(sp.start(), sp.end_tangent(false), None)?;
+                        let r = e(r, "raio")?;
+                        let mut v: Vec<V3> = (0..48).map(|i| {
+                            let a = i as f64 / 48. * std::f64::consts::TAU;
+                            fr.point(r * a.cos(), r * a.sin())
+                        }).collect();
+                        v.push(v[0]);
+                        v
+                    }
+                };
+                let m = match mode {
+                    SweepMode::Corrigido => 0,
+                    SweepMode::Fixo => 1,
+                    SweepMode::Frenet => 2,
+                };
+                Geo::Surface(Shape::sweep_surface(&prof, &sp.pts, m).map_err(|x| x.0)?)
+            }
+            SurfLoft { sections, guide, ruled, closed } => {
+                let cs: Vec<Vec<V3>> = sections.iter().map(|c| self.curve(c, d).map(|c| c.pts)).collect::<Result<_, _>>()?;
+                let g = match guide {
+                    Some(g) => Some(self.curve(g, d)?.pts),
+                    None => None,
+                };
+                Geo::Surface(Shape::loft_surface(&cs, *ruled, *closed, g.as_deref()).map_err(|x| x.0)?)
+            }
+            SurfBlend { a, sa, b, sb, cont, tension } => Geo::Surface(self.blend(a, sa.as_ref(), b, sb.as_ref(), *cont, e(tension, "tensão")?, d)?),
+            SurfJoin { items, tol } => {
+                let mut acc = Shape::empty();
+                for it in items {
+                    let x = self.cut_shape(it, d)?;
+                    acc = if acc.is_null() { x } else { acc.compound(&x) };
+                }
+                if acc.is_null() {
+                    return Err("escolha as superfícies a juntar".into());
+                }
+                Geo::Surface(acc.sewn(e(tol, "tolerância")?).map_err(|x| x.0)?)
+            }
+            SurfHeal { surface, tol } => Geo::Surface(self.cut_shape(surface, d)?.healed(e(tol, "tolerância")?).map_err(|x| x.0)?),
+            SurfSplit { surface, tool, flip } => {
+                let sh = self.cut_shape(surface, d)?;
+                Geo::Surface(sh.split_side(&self.cut_shape(tool, d)?, !*flip, false).map_err(|x| x.0)?)
+            }
+            SurfTrim { a, b, flip_a, flip_b } => {
+                let (sa, sb) = (self.cut_shape(a, d)?, self.cut_shape(b, d)?);
+                let pa = sa.split_side(&sb, !*flip_a, false).map_err(|x| x.0)?;
+                let pb = sb.split_side(&sa, !*flip_b, false).map_err(|x| x.0)?;
+                Geo::Surface(pa.compound(&pb).sewn(1e-3).map_err(|x| x.0)?)
+            }
+            SurfMulti { faces } => {
+                let mut acc = Shape::empty();
+                for p in faces {
+                    let x = self.face_of_bodies(*p)?;
+                    acc = if acc.is_null() { x } else { acc.compound(&x) };
+                }
+                if acc.is_null() {
+                    return Err("escolha as faces a extrair".into());
+                }
+                Geo::Surface(acc)
+            }
+            SurfPart { surface, index } => Geo::Surface(self.cut_shape(surface, d)?.nth_face(*index as u32).map_err(|x| x.0)?),
+            SurfUntrim { surface } => Geo::Surface(self.cut_shape(surface, d)?.untrimmed().map_err(|x| x.0)?),
+            SurfExtrapolate { surface, near, length } => {
+                let sh = self.cut_shape(surface, d)?;
+                Geo::Surface(sh.extrapolated(self.point(near, d)?, e(length, "comprimento")?).map_err(|x| x.0)?)
+            }
+            GeoTransform { source, xf, .. } => {
+                let x = self.xform(xf, d, &|s: &String, w: &str| e(s, w))?;
+                match self.geo(*source, d)? {
+                    Geo::Point(p) => Geo::Point(xform_point(&x, p)),
+                    Geo::Plane(f) => Geo::Plane(Frame { origin: xform_point(&x, f.origin), x: xform_dir(&x, f.x), normal: xform_dir(&x, f.normal) }),
+                    Geo::Curve(c) => Geo::Curve(Curve3::poly(c.pts.iter().map(|p| xform_point(&x, *p)).collect(), c.closed)?),
+                    Geo::Surface(sh) => Geo::Surface(sh.transformed(x).map_err(|x| x.0)?),
+                }
+            }
+            CurveIntersect { a, b, which } => {
+                let cs = self.cut_shape(a, d)?.section(&self.cut_shape(b, d)?).map_err(|x| x.0)?;
+                let c = cs.get(*which).or(cs.last()).ok_or("os elementos não se cruzam")?.clone();
+                let closed = c.len() > 2 && dist(c[0], c[c.len() - 1]) < 1e-4;
+                Geo::Curve(Curve3::poly(c, closed)?)
+            }
+            CurveProjectSurf { curve, surface } => {
+                let c = self.curve(curve, d)?;
+                let pts: Vec<V3> = match surface {
+                    SurfRef::Plane(p) => {
+                        let f = self.plane(p, d)?;
+                        c.pts.iter().map(|q| sub(*q, mul(f.normal, dot(sub(*q, f.origin), f.normal)))).collect()
+                    }
+                    _ => {
+                        let sh = self.surface_shape(surface, d)?;
+                        c.pts.iter().map(|q| sh.surface_near(*q).map(|(p, _)| p)).collect::<Result<_, _>>().map_err(|x| x.0)?
+                    }
+                };
+                Geo::Curve(Curve3::poly(pts, c.closed)?)
+            }
+            CurveBoundary { surface, which } => {
+                let cs = self.cut_shape(surface, d)?.boundary().map_err(|x| x.0)?;
+                let c = cs.get(*which).or(cs.last()).ok_or("sem bordas")?.clone();
+                let closed = c.len() > 2 && dist(c[0], c[c.len() - 1]) < 1e-4;
+                Geo::Curve(Curve3::poly(c, closed)?)
             }
             Linked { ext, .. } => {
                 let x = self.doc.external.iter().find(|x| x.id == *ext).ok_or("link perdido")?;
@@ -1227,6 +1434,70 @@ impl Ctx<'_> {
                 }
                 Ok(None)
             }
+            FeatureKind::SplitBody(sp) => {
+                let b = self.body(f.target).ok_or("não há corpo para dividir")?.clone();
+                let tool = self.cut_shape(&sp.surface, 0)?;
+                let r = b.split_side(&tool, !sp.flip, matches!(sp.surface, SurfRef::Face { .. })).map_err(k)?;
+                let n = r.face_count() as usize;
+                self.bodies.insert(f.target, (r, vec![f.id; n]));
+                Ok(None)
+            }
+            FeatureKind::ThickSurface(t) => {
+                let sh = self.cut_shape(&t.surface, 0)?;
+                let tool = sh.thicken(ev(&t.t1, &self.vars, "espessura 1")?, ev(&t.t2, &self.vars, "espessura 2")?).map_err(k)?;
+                self.apply(f.target, tool, t.op, f.id)?;
+                Ok(None)
+            }
+            FeatureKind::CloseSurface(c) => {
+                let sh = self.cut_shape(&c.surface, 0)?;
+                let tool = sh.closed_solid(ev(&c.tol, &self.vars, "tolerância")?).map_err(k)?;
+                self.apply(f.target, tool, c.op, f.id)?;
+                Ok(None)
+            }
+            FeatureKind::SewSurface(sw) => {
+                let b = self.body(f.target).ok_or("não há corpo para costurar")?.clone();
+                let sh = self.cut_shape(&sw.surface, 0)?;
+                if sw.remove {
+                    let r = b.split_side(&sh, !sw.flip, false).map_err(k)?;
+                    let n = r.face_count() as usize;
+                    self.bodies.insert(f.target, (r, vec![f.id; n]));
+                } else {
+                    // volumes fechados entre a superfície e o corpo
+                    let cells = b.compound(&sh).volume_cells(&[]).map_err(k)?;
+                    self.apply(f.target, cells, BoolOp::Add, f.id)?;
+                }
+                Ok(None)
+            }
+            FeatureKind::BoundaryFill(bf) => {
+                let mut acc = Shape::empty();
+                for t in &bf.tools {
+                    let x = self.cut_shape(t, 0)?;
+                    acc = if acc.is_null() { x } else { acc.compound(&x) };
+                }
+                if acc.is_null() {
+                    return Err("escolha superfícies, faces ou planos que fechem volumes".into());
+                }
+                let cells = acc.volume_cells(&bf.exclude).map_err(k)?;
+                self.apply(f.target, cells, bf.op, f.id)?;
+                Ok(None)
+            }
+            FeatureKind::MeshImport(m) => {
+                let tris = mesh_io::read(&m.path)?;
+                let sh = Shape::from_mesh(&tris, m.solid).map_err(k)?;
+                let n = tris.len() / 9;
+                if sh.is_solid() {
+                    self.apply(f.target, sh, BoolOp::Add, f.id)?;
+                    Ok(Some(format!("{n} triângulos → sólido")))
+                } else {
+                    let r = match self.body(f.target) {
+                        Some(b) => b.compound(&sh),
+                        None => sh,
+                    };
+                    let nf = r.face_count() as usize;
+                    self.bodies.insert(f.target, (r, vec![f.id; nf]));
+                    Ok(Some(format!("{n} triângulos → superfície aberta (a malha não fecha um volume)")))
+                }
+            }
             FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => {
                 let v = ev(&o.value, &self.vars, "valor")?;
                 let (b, owners) = self.body_owned(f.target).ok_or("não há corpo para aplicar")?;
@@ -1638,6 +1909,119 @@ pub fn example_document() -> Document {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn mesh_area(m: &Mesh) -> f64 {
+        let p = |i: u32| {
+            let k = i as usize * 3;
+            [m.positions[k] as f64, m.positions[k + 1] as f64, m.positions[k + 2] as f64]
+        };
+        m.indices
+            .chunks_exact(3)
+            .map(|t| {
+                let (a, b, c) = (p(t[0]), p(t[1]), p(t[2]));
+                geo3d::norm(geo3d::cross(geo3d::sub(b, a), geo3d::sub(c, a))) / 2.
+            })
+            .sum()
+    }
+
+    #[test]
+    fn bancada_de_superficies() {
+        if !scc_kernel::AVAILABLE {
+            return;
+        }
+        use std::f64::consts::PI;
+        let near = |a: f64, b: f64, tol: f64| (a - b).abs() <= tol * b.abs().max(1.);
+        let xy = || SurfRef::Plane(PlaneRef::Origin(OriginPlane::XY));
+        let s = |x: &str| x.to_string();
+        let mut d = Document::new("s");
+        let sph = d.add_geometry(RefKind::SurfSphere { center: PointRef::Origin, radius: s("10") });
+        let half = d.add_geometry(RefKind::SurfSplit { surface: SurfRef::Ref(sph), tool: xy(), flip: false });
+        let circ = d.add_geometry(RefKind::CurveIntersect { a: SurfRef::Ref(sph), b: xy(), which: 0 });
+        let cyl = d.add_geometry(RefKind::SurfCylinder { point: PointRef::Origin, dir: AxisRef::Origin(OriginAxis::Z), radius: s("10"), start: s("0"), end: s("20") });
+        let bnd = d.add_geometry(RefKind::CurveBoundary { surface: SurfRef::Ref(cyl), which: 0 });
+        let moved = d.add_geometry(RefKind::GeoTransform {
+            source: sph,
+            class: RefClass::Surface,
+            xf: GeoXform::Translate { dir: AxisRef::Origin(OriginAxis::X), dist: s("50") },
+        });
+        let p1 = d.add_geometry(RefKind::PointCoords { x: s("1"), y: s("0"), z: s("0"), frame: None });
+        let pmov = d.add_geometry(RefKind::GeoTransform {
+            source: p1,
+            class: RefClass::Point,
+            xf: GeoXform::Rotate { axis: AxisRef::Origin(OriginAxis::Z), angle: s("90") },
+        });
+        // duas bordas paralelas: tubo por varredura, multi-seções e concordância G1 entre duas faixas planas
+        let la = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([0., 0., 0.]), b: PointRef::Fixed([0., 30., 0.]), start: s("0"), end: s("0") });
+        let lb = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([20., 0., 10.]), b: PointRef::Fixed([20., 30., 10.]), start: s("0"), end: s("0") });
+        let tube = d.add_geometry(RefKind::SurfSweep { profile: SweepProfile::Circle(s("2")), spine: CurveRef::Ref(la), mode: SweepMode::Corrigido });
+        let loft = d.add_geometry(RefKind::SurfLoft { sections: vec![CurveRef::Ref(la), CurveRef::Ref(lb)], guide: None, ruled: false, closed: false });
+        let fa = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(la), dir: AxisRef::Origin(OriginAxis::X), length: s("-10") });
+        let fb = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(lb), dir: AxisRef::Origin(OriginAxis::X), length: s("10") });
+        let blend = d.add_geometry(RefKind::SurfBlend {
+            a: CurveRef::Ref(la),
+            sa: Some(SurfRef::Ref(fa)),
+            b: CurveRef::Ref(lb),
+            sb: Some(SurfRef::Ref(fb)),
+            cont: Continuity::G1,
+            tension: s("1"),
+        });
+        let join = d.add_geometry(RefKind::SurfJoin { items: vec![SurfRef::Ref(fa), SurfRef::Ref(blend), SurfRef::Ref(fb)], tol: s("0.01") });
+        let bounds = d.add_geometry(RefKind::CurveBoundary { surface: SurfRef::Ref(join), which: 0 });
+        let r = recompute(&d);
+        for id in [sph, half, circ, cyl, bnd, moved, pmov, tube, loft, fa, fb, blend, join, bounds] {
+            assert_eq!(r.status[&id], Status::Ok, "{}: {:?}", d.name_of(id), r.status[&id]);
+        }
+        let area = |id: Id| mesh_area(&r.surfaces.iter().find(|s| s.id == id).unwrap().mesh);
+        assert!(near(area(half), 2. * PI * 100., 0.02), "meia esfera {}", area(half));
+        let len = |id: Id| r.curves.iter().find(|c| c.id == id).unwrap().pts.windows(2).map(|w| geo3d::dist(w[0], w[1])).sum::<f64>();
+        assert!(near(len(circ), 2. * PI * 10., 0.02), "círculo {}", len(circ));
+        assert!(near(len(bnd), 2. * PI * 10., 0.02), "borda {}", len(bnd));
+        assert!(near(area(tube), 2. * PI * 2. * 30., 0.03), "tubo {}", area(tube));
+        let p = r.points.iter().find(|p| p.id == pmov).unwrap().p;
+        assert!(geo3d::dist(p, [0., 1., 0.]) < 1e-9, "{p:?}");
+        let c = r.surfaces.iter().find(|s| s.id == moved).unwrap().mesh.positions.chunks(3).map(|v| v[0] as f64).sum::<f64>()
+            / (r.surfaces.iter().find(|s| s.id == moved).unwrap().mesh.positions.len() / 3) as f64;
+        assert!((c - 50.).abs() < 1., "esfera movida {c}");
+        assert!(area(blend) > 22.36 * 30., "concordância G1 é mais longa que a reta {}", area(blend));
+
+        // híbridos: engrossar, fechar, preencher fronteiras, dividir corpo
+        let mut h = d.clone();
+        h.add_feature(FeatureKind::ThickSurface(ThickSurface { surface: SurfRef::Ref(cyl), t1: s("2"), t2: s("0"), op: BoolOp::Add }));
+        let v = vol(&h);
+        assert!(near(v, PI * (144. - 100.) * 20., 0.02) || near(v, PI * (100. - 64.) * 20., 0.02), "engrossar {v}");
+        let mut h = d.clone();
+        h.add_feature(FeatureKind::CloseSurface(CloseSurface { surface: SurfRef::Ref(cyl), tol: s("0.01"), op: BoolOp::Add }));
+        assert!(near(vol(&h), PI * 100. * 20., 0.01), "fechar {}", vol(&h));
+        let mut h = d.clone();
+        h.add_feature(FeatureKind::BoundaryFill(BoundaryFill { tools: vec![SurfRef::Ref(sph), xy()], exclude: vec![[0., 0., -5.]], op: BoolOp::Add }));
+        assert!(near(vol(&h), 2. / 3. * PI * 1000., 0.02), "preencher {}", vol(&h));
+        let mut h = caixa();
+        let meio = h.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "5");
+        h.add_feature(FeatureKind::SplitBody(SplitBody { surface: SurfRef::Plane(PlaneRef::Datum(meio)), flip: false }));
+        assert!(near(vol(&h), 24000. * 0.75, 1e-6), "dividir {}", vol(&h));
+
+        // malha STL (cubo de 10) → sólido
+        let dir = std::env::temp_dir().join("scc_mesh_test.stl");
+        let mut t = String::from("solid c\n");
+        let v = |i: usize| [(i & 1) as f64 * 10., ((i >> 1) & 1) as f64 * 10., ((i >> 2) & 1) as f64 * 10.];
+        for f in [[0, 2, 3, 1], [4, 5, 7, 6], [0, 1, 5, 4], [2, 6, 7, 3], [0, 4, 6, 2], [1, 3, 7, 5]] {
+            for tri in [[f[0], f[1], f[2]], [f[0], f[2], f[3]]] {
+                t += "facet normal 0 0 0\nouter loop\n";
+                for k in tri {
+                    let p = v(k);
+                    t += &format!("vertex {} {} {}\n", p[0], p[1], p[2]);
+                }
+                t += "endloop\nendfacet\n";
+            }
+        }
+        t += "endsolid c\n";
+        std::fs::write(&dir, t).unwrap();
+        let mut m = Document::new("m");
+        m.add_feature(FeatureKind::MeshImport(MeshImport { path: dir.to_string_lossy().into(), solid: true }));
+        let r = recompute(&m);
+        assert!(matches!(r.status[&m.features[0].id], Status::Warning(_)), "{:?}", r.status[&m.features[0].id]);
+        assert!(near(r.bodies[0].mass.volume, 1000., 1e-6), "malha {}", r.bodies[0].mass.volume);
+    }
 
     #[test]
     fn terminos_unificados() {
