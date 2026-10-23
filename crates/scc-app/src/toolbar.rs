@@ -245,6 +245,23 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("rest_atualizar", "Atualizar", "Resolver restrições", "Recalcula as posições de todos os componentes.", Cmd(C::AsmSolve))),
             One(it("rest_interferencia", "Interferências", "Verificar interferências", "Procura volumes em comum entre os componentes (colisões).", Cmd(C::AsmInterf))),
         ],
+        Group::Cinematica => {
+            let j = |icon, name, brief, adv, k: u8| it(icon, name, brief, adv, Cmd(C::AsmJoint(k)));
+            vec![
+                Family("junta", vec![
+                    j("junta_revolucao", "Revolução", "Junta de revolução", "Gira em torno de um eixo (escolha os dois eixos/faces cilíndricas). Recebe comando de ângulo.", 0),
+                    j("junta_prismatica", "Prismática", "Junta prismática", "Desliza ao longo de um trilho (eixos/arestas retas). Recebe comando de curso.", 1),
+                    j("junta_cilindrica", "Cilíndrica", "Junta cilíndrica", "Gira e desliza no mesmo eixo.", 2),
+                    j("junta_parafuso", "Parafuso", "Junta de parafuso", "Rotação e avanço ligados pelo passo.", 3),
+                    j("junta_esferica", "Esférica", "Junta esférica", "Três rotações livres no ponto (escolha dois vértices/pontos).", 4),
+                    j("junta_planar", "Planar", "Junta planar", "Duas translações e uma rotação sobre o plano (duas faces planas).", 5),
+                    j("junta_rigida", "Rígida", "Junta rígida", "Sem graus de liberdade entre as duas peças.", 6),
+                    j("junta_ponto_curva", "Ponto em curva", "Junta ponto em curva", "O vértice da segunda peça segue a aresta (trajetória) da primeira.", 7),
+                ]),
+                One(it("mec_auto", "Do conjunto", "Mecanismo a partir das restrições", "Converte as restrições de cada par de peças em juntas equivalentes (eixo + face = revolução…).", Cmd(C::AsmAutoJoints))),
+                One(it("mec_simular", "Simular", "Simulação cinemática", "Comandos por cursor ou por leis no tempo (t), quadros, velocidade e aceleração; análise de graus de liberdade.", Cmd(C::AsmSimulate))),
+            ]
+        }
         Group::Wireframe => {
             let g = |k: GeoKind| {
                 let (i, n, b, a) = k.info();

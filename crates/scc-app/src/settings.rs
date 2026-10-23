@@ -36,6 +36,7 @@ pub enum Group {
     // montagem
     Montagem,
     Restricoes,
+    Cinematica,
     // modo sketch
     SkCriacao,
     SkTransformar,
@@ -45,9 +46,10 @@ pub enum Group {
 }
 
 impl Group {
-    pub const ALL: [Group; 20] = [
+    pub const ALL: [Group; 21] = [
         Group::Montagem,
         Group::Restricoes,
+        Group::Cinematica,
         Group::Sketch,
         Group::Solidos,
         Group::Acabamento,
@@ -71,10 +73,10 @@ impl Group {
     /// Seleção e Vista são comuns às duas).
     pub fn in_bench(self, b: Bench) -> bool {
         if b == Bench::Montagem {
-            return matches!(self, Group::Montagem | Group::Restricoes | Group::Vista | Group::Selecao | Group::Analise);
+            return matches!(self, Group::Montagem | Group::Restricoes | Group::Cinematica | Group::Vista | Group::Selecao | Group::Analise);
         }
         match self {
-            Group::Montagem | Group::Restricoes => false,
+            Group::Montagem | Group::Restricoes | Group::Cinematica => false,
             Group::Solidos | Group::Acabamento | Group::Padroes => b == Bench::Solidos,
             Group::Superficies | Group::Operacoes | Group::Wireframe => b == Bench::Superficies,
             // na bancada de superfícies o Wireframe mostra as referências abertas, sem famílias
@@ -103,6 +105,7 @@ impl Group {
             Group::Analise => tr("Análise"),
             Group::Montagem => tr("Montagem"),
             Group::Restricoes => tr("Restrições e movimento"),
+            Group::Cinematica => tr("Cinemática"),
             Group::SkCriacao => tr("Criação"),
             Group::SkTransformar => tr("Transformar"),
             Group::SkCotagem => tr("Cotagem"),

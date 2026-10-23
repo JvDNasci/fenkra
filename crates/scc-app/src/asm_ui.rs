@@ -10,6 +10,7 @@ use crate::picking::Pick;
 use eframe::egui::{self, Color32, RichText};
 use scc_core::{Document, Id};
 use scc_montagem::load::{full_path, geom_at, PartCache};
+use scc_montagem::kin::{self, CouplingKind, JFrame, JRef, JointKind};
 use scc_montagem::solve::SolveReport;
 use scc_montagem::*;
 use scc_solidos::RecomputeResult;
@@ -72,6 +73,19 @@ pub struct AsmState {
     /// posição antes do arrasto do manipulador
     drag_start: Option<Placement>,
     snapshot: Option<Assembly>,
+    /// junta esperando as duas seleções
+    pub pending_joint: Option<u8>,
+    // ---- simulação
+    pub sim_open: bool,
+    pub sim_frames: Vec<kin::Frame>,
+    pub sim_t: f64,
+    pub sim_t1: f64,
+    pub sim_steps: usize,
+    pub sim_play: bool,
+    /// componente cuja velocidade/aceleração é mostrada
+    pub sim_track: Option<Id>,
+    /// posições antes de tocar a simulação (voltam ao fechar)
+    sim_rest: Option<Vec<(Id, Placement)>>,
 }
 
 impl AsmState {
@@ -99,6 +113,15 @@ impl AsmState {
             renaming: None,
             drag_start: None,
             snapshot: None,
+            pending_joint: None,
+            sim_open: false,
+            sim_frames: vec![],
+            sim_t: 0.,
+            sim_t1: 2.,
+            sim_steps: 60,
+            sim_play: false,
+            sim_track: None,
+            sim_rest: None,
         }
     }
 
@@ -247,6 +270,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                 return matches!(
                     c,
                     Cmd::AsmInsert | Cmd::AsmNewPart | Cmd::AsmGroup | Cmd::AsmReplace | Cmd::AsmMate(_) | Cmd::AsmFix | Cmd::AsmRigid | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmSubAsm | Cmd::AsmPattern
+                        | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate
                 );
             };
             match c {
@@ -366,6 +390,27 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                     st.sel = Some(id);
                     st.dirty = true;
                 }
+                Cmd::AsmJoint(k) => {
+                    if app.picks.len() >= 2 {
+                        let picks = app.picks.clone();
+                        app.picks.clear();
+                        create_joint(app, k, picks[0], picks[1]);
+                    } else {
+                        let st = app.asm.as_mut().unwrap();
+                        st.pending_joint = Some(k);
+                        st.pending = None;
+                        app.toast(tr("Escolha os elementos das duas peças (eixo/face cilíndrica, face plana, vértice ou aresta)"), false);
+                    }
+                }
+                Cmd::AsmAutoJoints => {
+                    st.push_undo();
+                    let made = st.asm.joints_from_mates();
+                    st.solve();
+                    app.toast(format!("{} junta(s) criadas a partir das restrições", made.len()), made.is_empty());
+                }
+                Cmd::AsmSimulate => {
+                    st.sim_open = true;
+                }
                 Cmd::AsmInterf => {
                     let dir = st.dir();
                     st.interf = scc_montagem::view::interferences(&st.asm, dir.as_deref(), &mut st.cache, 0.01);
@@ -410,8 +455,82 @@ fn create_mate(app: &mut App, m: MateCmd, a: Pick, b: Pick) {
     }
 }
 
+/// Cria a junta entre duas seleções (o sistema de B começa alinhado ao de A: ângulo e curso 0).
+fn create_joint(app: &mut App, k: u8, a: Pick, b: Pick) {
+    let Some(st) = app.asm.as_mut() else { return };
+    let kind = match k {
+        0 => JointKind::Revolute,
+        1 => JointKind::Prismatic,
+        2 => JointKind::Cylindrical,
+        3 => JointKind::Screw { pitch: "2".into() },
+        4 => JointKind::Spherical,
+        5 => JointKind::Planar,
+        6 => JointKind::Rigid,
+        _ => JointKind::PointCurve { curve: vec![] },
+    };
+    // ponto em curva: a aresta (trajetória) é da peça A, o vértice da peça B
+    let curve = if let (JointKind::PointCurve { .. }, Pick::Edge { body, edge, .. }) = (&kind, a) {
+        let comp = st.comp_of_body(body);
+        let pl = comp.and_then(|c| st.asm.node(c)).map(|n| n.placement).unwrap_or_default();
+        st.view.as_ref().map(|r| crate::picking::edge_polyline(r, body, edge).into_iter().map(|q| pl.to_local(q)).collect::<Vec<_>>())
+    } else {
+        None
+    };
+    let (ra, rb) = match (st.mate_ref(a), st.mate_ref(b)) {
+        (Ok(x), Ok(y)) => (x, y),
+        (Err(e), _) | (_, Err(e)) => {
+            app.toast(e, true);
+            return;
+        }
+    };
+    if ra.comp == rb.comp {
+        app.toast(tr("Os dois elementos são da mesma peça"), true);
+        return;
+    }
+    let frame = |g: &Geom| match *g {
+        Geom::Axis { p, d } => JFrame::from_axis(p, d),
+        Geom::Plane { p, n } => JFrame::from_axis(p, n),
+        Geom::Point(p) => JFrame::from_axis(p, [0., 0., 1.]),
+    };
+    let (pa, pb) = (st.asm.node(ra.comp).unwrap().placement, st.asm.node(rb.comp).unwrap().placement);
+    let fa = frame(&ra.geom);
+    let mut fb = frame(&rb.geom);
+    // x de B = x de A projetado no plano de B (zero comum do ângulo)
+    let xa = pb.dir_to_local(pa.dir(fa.x));
+    let k2 = dot(xa, fb.z);
+    let px = [xa[0] - fb.z[0] * k2, xa[1] - fb.z[1] * k2, xa[2] - fb.z[2] * k2];
+    if norm(px) > 1e-6 {
+        fb.x = unit(px);
+    }
+    let kind = match (kind, curve) {
+        (JointKind::PointCurve { .. }, Some(c)) => JointKind::PointCurve { curve: c },
+        (JointKind::PointCurve { .. }, None) => {
+            app.toast(tr("Ponto em curva: escolha primeiro a aresta (trajetória) e depois o vértice"), true);
+            return;
+        }
+        (k, _) => k,
+    };
+    st.push_undo();
+    let id = st.asm.add_joint(kind, JRef { comp: ra.comp, frame: fa }, JRef { comp: rb.comp, frame: fb });
+    st.solve();
+    st.sel = Some(id);
+    let (sem, com) = kin::analyze(&st.asm);
+    let msg = format!("{} criada · mecanismo com {sem} GDL ({com} com os comandos)", st.asm.name_of(id));
+    app.toast(msg, false);
+}
+
 /// Seleções feitas na viewport com uma restrição pendente: cria quando houver duas.
 pub fn after_viewport(app: &mut App) {
+    let pj = app.asm.as_ref().and_then(|s| s.pending_joint);
+    if let (Some(k), true) = (pj, app.picks.len() >= 2) {
+        let picks = app.picks.clone();
+        app.picks.clear();
+        if let Some(st) = app.asm.as_mut() {
+            st.pending_joint = None;
+        }
+        create_joint(app, k, picks[0], picks[1]);
+        return;
+    }
     let pending = app.asm.as_ref().and_then(|s| s.pending);
     if let Some(m) = pending {
         if app.picks.len() >= 2 {
@@ -658,7 +777,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
     }
     // restrições
     ui.add_space(6.);
-    egui::CollapsingHeader::new(format!("🔗 {} ({})", tr("Restrições"), st.asm.mates.len() + st.asm.rigid.len())).default_open(true).show(ui, |ui| {
+    egui::CollapsingHeader::new(format!("🔗 {} ({})", tr("Restrições e juntas"), st.asm.mates.len() + st.asm.rigid.len() + st.asm.joints.len() + st.asm.couplings.len() + st.asm.patterns.len())).default_open(true).show(ui, |ui| {
         for m in &st.asm.mates {
             let failed = st.report.failed.contains(&m.id);
             let txt = format!("{} {}  ({} ↔ {}){}", m.kind.icon(), m.name, st.asm.name_of(m.a.comp), st.asm.name_of(m.b.comp), if failed { " ✖" } else { "" });
@@ -683,6 +802,46 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                 }
                 if ui.button(tr("🗑 Apagar   Del")).clicked() {
                     act = Some((m.id, 0));
+                    ui.close();
+                }
+            });
+        }
+        for j in &st.asm.joints {
+            let failed = st.report.failed.contains(&j.id);
+            let drive = match (&j.drive_angle, &j.drive_len) {
+                (Some(e), _) => format!("  ⟳ {e}°"),
+                (_, Some(e)) => format!("  ↕ {e} mm"),
+                _ => String::new(),
+            };
+            let mut t = RichText::new(format!("⚙ {}  ({} ↔ {}){drive}{}", j.name, st.asm.name_of(j.a.comp), st.asm.name_of(j.b.comp), if failed { " ✖" } else { "" })).small();
+            if failed {
+                t = t.color(Color32::from_rgb(255, 120, 100));
+            }
+            if j.suppressed {
+                t = t.strikethrough().weak();
+            }
+            let r = ui.selectable_label(st.sel == Some(j.id), t);
+            if r.clicked() {
+                new_sel = Some(j.id);
+            }
+            if r.hovered() {
+                hover = Some(j.b.comp);
+            }
+            r.context_menu(|ui| {
+                if ui.button(tr("🗑 Apagar   Del")).clicked() {
+                    act = Some((j.id, 0));
+                    ui.close();
+                }
+            });
+        }
+        for c in &st.asm.couplings {
+            let r = ui.selectable_label(st.sel == Some(c.id), RichText::new(format!("⚭ {}  ({} → {}, {})", c.name, st.asm.name_of(c.a), st.asm.name_of(c.b), c.ratio)).small());
+            if r.clicked() {
+                new_sel = Some(c.id);
+            }
+            r.context_menu(|ui| {
+                if ui.button(tr("🗑 Apagar   Del")).clicked() {
+                    act = Some((c.id, 0));
                     ui.close();
                 }
             });
@@ -898,7 +1057,76 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         None => {
             let mi = sel.and_then(|s| st.asm.mates.iter().position(|m| m.id == s));
             let pi = sel.and_then(|s| st.asm.patterns.iter().position(|p| p.id == s));
-            if let Some(i) = pi {
+            let ji = sel.and_then(|s| st.asm.joints.iter().position(|j| j.id == s));
+            let ci = sel.and_then(|s| st.asm.couplings.iter().position(|c| c.id == s));
+            if let Some(i) = ji {
+                let others: Vec<(Id, String)> = st.asm.joints.iter().filter(|o| o.id != st.asm.joints[i].id).map(|o| (o.id, o.name.clone())).collect();
+                let (na, nb) = (st.asm.name_of(st.asm.joints[i].a.comp), st.asm.name_of(st.asm.joints[i].b.comp));
+                let pl: std::collections::HashMap<Id, Placement> = st.asm.nodes.iter().map(|n| (n.id, n.placement)).collect();
+                let now = kin::measure(&st.asm.joints[i], &pl);
+                let j = &mut st.asm.joints[i];
+                ui.heading(format!("⚙ {}", j.name));
+                ui.label(RichText::new(format!("{} · {na} ↔ {nb}", tr(j.kind.label()))).weak());
+                if let Some((ang, len)) = now {
+                    ui.label(RichText::new(format!("agora: {}° · {} mm", fmt(ang), fmt(len))).small());
+                }
+                if let JointKind::Screw { pitch } = &mut j.kind {
+                    crate::editor::expr(ui, "Passo (mm/volta)", pitch, &Default::default(), "mm");
+                }
+                let (can_a, can_l) = j.kind.drives();
+                crate::editor::section(ui, "Comando");
+                if can_a {
+                    let mut on = j.drive_angle.is_some();
+                    if ui.checkbox(&mut on, tr("comando de ângulo (graus; aceita lei em t)")).changed() {
+                        j.drive_angle = on.then(|| "0".to_string());
+                    }
+                    if let Some(e) = &mut j.drive_angle {
+                        ui.text_edit_singleline(e);
+                        let mut v: f64 = e.trim().parse().unwrap_or(0.);
+                        if ui.add(egui::Slider::new(&mut v, -180.0..=180.0).text("°")).changed() {
+                            *e = fmt(v);
+                        }
+                    }
+                }
+                if can_l {
+                    let mut on = j.drive_len.is_some();
+                    if ui.checkbox(&mut on, tr("comando de curso (mm; aceita lei em t)")).changed() {
+                        j.drive_len = on.then(|| "0".to_string());
+                    }
+                    if let Some(e) = &mut j.drive_len {
+                        ui.text_edit_singleline(e);
+                        let mut v: f64 = e.trim().parse().unwrap_or(0.);
+                        if ui.add(egui::Slider::new(&mut v, -200.0..=200.0).text("mm")).changed() {
+                            *e = fmt(v);
+                        }
+                    }
+                }
+                ui.checkbox(&mut j.suppressed, tr("suprimida"));
+                let jid = j.id;
+                if !others.is_empty() {
+                    crate::editor::section(ui, "Acoplar a outra junta");
+                    for (oid, on) in &others {
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new(on).small());
+                            for (k, l) in [(CouplingKind::Gear, "engrenagem"), (CouplingKind::RackPinion, "pinhão-cremalheira"), (CouplingKind::Cable, "cabo")] {
+                                if ui.small_button(tr(l)).clicked() {
+                                    ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique("asm_acoplar"), (jid, *oid, k as u8)));
+                                }
+                            }
+                        });
+                    }
+                }
+            } else if let Some(i) = ci {
+                let c = &mut st.asm.couplings[i];
+                ui.heading(format!("⚭ {}", c.name));
+                let hint = match c.kind {
+                    CouplingKind::Gear => "razão = ângulo da 2ª ÷ ângulo da 1ª (externas: −z1/z2)",
+                    CouplingKind::RackPinion => "razão = mm de curso por volta do pinhão (π × diâmetro primitivo)",
+                    CouplingKind::Cable => "razão = curso da 2ª ÷ curso da 1ª",
+                };
+                crate::editor::expr(ui, "Razão", &mut c.ratio, &Default::default(), "");
+                ui.label(RichText::new(tr(hint)).weak().small());
+            } else if let Some(i) = pi {
                 let src = st.asm.name_of(st.asm.patterns[i].source);
                 let p = &mut st.asm.patterns[i];
                 ui.heading(format!("⁂ {}", p.name));
@@ -1015,6 +1243,21 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             ui.label(RichText::new(format!("✖ {} × {} — {} mm³", st.asm.name_of(*a), st.asm.name_of(*b), fmt(*v))).color(Color32::from_rgb(255, 130, 110)));
         }
     }
+    if let Some((ja, jb, k)) = ui.ctx().data(|m| m.get_temp::<(Id, Id, u8)>(egui::Id::unique("asm_acoplar"))) {
+        ui.ctx().data_mut(|m| m.remove::<(Id, Id, u8)>(egui::Id::unique("asm_acoplar")));
+        let kind = match k {
+            0 => CouplingKind::Gear,
+            1 => CouplingKind::RackPinion,
+            _ => CouplingKind::Cable,
+        };
+        let ratio = match kind {
+            CouplingKind::Gear => "-1",
+            CouplingKind::RackPinion => "31.4159",
+            CouplingKind::Cable => "1",
+        };
+        let id = st.asm.add_coupling(kind, ja, jb, ratio);
+        st.sel = Some(id);
+    }
     if st.asm != before {
         if st.asm.patterns != before.patterns {
             st.asm.update_patterns();
@@ -1092,5 +1335,168 @@ pub fn gizmo(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::re
             }
             st.dirty = true;
         }
+    }
+}
+
+// ============================================================== simulação
+
+/// Janela de simulação: leis no tempo, quadros, reprodução, análise de GDL e gráfico de
+/// velocidade/aceleração do componente acompanhado.
+pub fn sim_window(app: &mut App, ctx: &egui::Context) {
+    let Some(st) = app.asm.as_mut() else { return };
+    if !st.sim_open {
+        return;
+    }
+    let mut open = true;
+    let (sem, com) = kin::analyze(&st.asm);
+    let mut compute = false;
+    let mut restore = false;
+    egui::Window::new(tr("▶ Simulação cinemática"))
+        .id(egui::Id::unique("janela_simulacao"))
+        .open(&mut open)
+        .default_width(460.)
+        .resizable(true)
+        .show(ctx, |ui| {
+            let ok = com == 0;
+            ui.label(RichText::new(format!("Mecanismo: {sem} GDL sem comandos · {com} com os comandos")).strong());
+            ui.label(
+                RichText::new(if ok {
+                    tr("✔ cada grau de liberdade tem comando: pode simular")
+                } else if com > 0 {
+                    tr("⚠ faltam comandos: o que sobra fica parado na posição atual")
+                } else {
+                    tr("")
+                })
+                .color(if ok { Color32::from_rgb(120, 210, 130) } else { Color32::from_rgb(240, 200, 90) }),
+            );
+            crate::editor::section(ui, "Comandos (leis no tempo t, em segundos)");
+            for j in st.asm.joints.iter_mut().filter(|j| !j.suppressed) {
+                let (ca, cl) = j.kind.drives();
+                if !(ca || cl) {
+                    continue;
+                }
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(&j.name).small());
+                    if ca {
+                        let mut on = j.drive_angle.is_some();
+                        if ui.checkbox(&mut on, "°").changed() {
+                            j.drive_angle = on.then(|| "90*t".to_string());
+                        }
+                        if let Some(e) = &mut j.drive_angle {
+                            ui.add(egui::TextEdit::singleline(e).desired_width(110.));
+                        }
+                    }
+                    if cl {
+                        let mut on = j.drive_len.is_some();
+                        if ui.checkbox(&mut on, "mm").changed() {
+                            j.drive_len = on.then(|| "10*t".to_string());
+                        }
+                        if let Some(e) = &mut j.drive_len {
+                            ui.add(egui::TextEdit::singleline(e).desired_width(110.));
+                        }
+                    }
+                });
+            }
+            ui.horizontal(|ui| {
+                ui.label(tr("Duração"));
+                ui.add(egui::DragValue::new(&mut st.sim_t1).range(0.01..=600.0).suffix(" s").speed(0.1));
+                ui.label(tr("Quadros"));
+                ui.add(egui::DragValue::new(&mut st.sim_steps).range(2..=2000));
+                if ui.button(tr("⏺ Calcular quadros")).clicked() {
+                    compute = true;
+                }
+            });
+            if !st.sim_frames.is_empty() {
+                let fails = st.sim_frames.iter().filter(|f| !f.ok).count();
+                ui.label(RichText::new(format!("{} quadros{}", st.sim_frames.len(), if fails > 0 { format!(" · {fails} sem solução (trava ou fim de curso)") } else { String::new() })).small());
+                ui.horizontal(|ui| {
+                    if ui.button(if st.sim_play { "⏸" } else { "▶" }).clicked() {
+                        st.sim_play = !st.sim_play;
+                    }
+                    if ui.button("⏮").clicked() {
+                        st.sim_t = 0.;
+                    }
+                    let t1 = st.sim_t1;
+                    ui.add(egui::Slider::new(&mut st.sim_t, 0.0..=t1).text("t (s)"));
+                    if ui.button(tr("Repor")).on_hover_text(tr("volta às posições de antes da simulação")).clicked() {
+                        restore = true;
+                    }
+                });
+                // gráfico de velocidade e aceleração do componente acompanhado
+                let comps: Vec<(Id, String)> = st.asm.nodes.iter().filter(|n| !matches!(n.kind, NodeKind::Group)).map(|n| (n.id, n.name.clone())).collect();
+                egui::ComboBox::from_id_salt("sim_track").selected_text(st.sim_track.map(|c| st.asm.name_of(c)).unwrap_or_else(|| tr("acompanhar componente…").into())).show_ui(ui, |ui| {
+                    for (id, n) in &comps {
+                        ui.selectable_value(&mut st.sim_track, Some(*id), n);
+                    }
+                });
+                if let Some(c) = st.sim_track {
+                    let k = kin::kinematics_of(&st.sim_frames, c, [0.; 3]);
+                    let vmax = k.iter().map(|x| x.2).fold(1e-9, f64::max);
+                    let amax = k.iter().map(|x| x.3).fold(1e-9, f64::max);
+                    let (r, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 120.), egui::Sense::hover());
+                    let p = ui.painter_at(r);
+                    p.rect_filled(r, 4., ui.visuals().extreme_bg_color);
+                    let to = |t: f64, v: f64, m: f64| egui::pos2(r.left() + (t / st.sim_t1.max(1e-9)) as f32 * r.width(), r.bottom() - 6. - (v / m) as f32 * (r.height() - 12.));
+                    p.add(egui::Shape::line(k.iter().map(|x| to(x.0, x.2, vmax)).collect(), egui::Stroke::new(2., Color32::from_rgb(90, 180, 255))));
+                    p.add(egui::Shape::line(k.iter().map(|x| to(x.0, x.3, amax)).collect(), egui::Stroke::new(1.5, Color32::from_rgb(255, 160, 80))));
+                    let xt = r.left() + (st.sim_t / st.sim_t1.max(1e-9)) as f32 * r.width();
+                    p.line_segment([egui::pos2(xt, r.top()), egui::pos2(xt, r.bottom())], egui::Stroke::new(1., Color32::GRAY));
+                    let now = k.iter().min_by(|a, b| (a.0 - st.sim_t).abs().total_cmp(&(b.0 - st.sim_t).abs()));
+                    if let Some(n) = now {
+                        ui.label(RichText::new(format!("v = {} mm/s (azul, máx {}) · a = {} mm/s² (laranja, máx {})", fmt(n.2), fmt(vmax), fmt(n.3), fmt(amax))).small());
+                    }
+                }
+            } else {
+                ui.label(RichText::new(tr("Defina os comandos e calcule os quadros; depois toque ou arraste o tempo.")).weak().small());
+            }
+        });
+    if compute {
+        if st.sim_rest.is_none() {
+            st.sim_rest = Some(st.asm.nodes.iter().map(|n| (n.id, n.placement)).collect());
+        }
+        let (t1, n) = (st.sim_t1, st.sim_steps);
+        st.sim_frames = kin::simulate(&mut st.asm, 0., t1, n);
+        st.sim_t = 0.;
+        st.sim_play = true;
+    }
+    // reprodução: põe as posições do quadro do tempo atual
+    if !st.sim_frames.is_empty() {
+        if st.sim_play {
+            st.sim_t += ctx.input(|i| i.stable_dt) as f64;
+            if st.sim_t > st.sim_t1 {
+                st.sim_t = 0.;
+            }
+            ctx.request_repaint();
+        }
+        let f = st.sim_frames.iter().min_by(|a, b| (a.t - st.sim_t).abs().total_cmp(&(b.t - st.sim_t).abs())).cloned();
+        if let Some(f) = f {
+            let mut changed = false;
+            for n in &mut st.asm.nodes {
+                if let Some(p) = f.placements.get(&n.id) {
+                    if n.placement != *p {
+                        n.placement = *p;
+                        changed = true;
+                    }
+                }
+            }
+            if changed {
+                st.dirty = true;
+            }
+        }
+    }
+    if restore || !open {
+        if let Some(rest) = st.sim_rest.take() {
+            for (id, p) in rest {
+                if let Some(n) = st.asm.node_mut(id) {
+                    n.placement = p;
+                }
+            }
+            st.dirty = true;
+        }
+        st.sim_frames.clear();
+        st.sim_play = false;
+    }
+    if !open {
+        st.sim_open = false;
     }
 }

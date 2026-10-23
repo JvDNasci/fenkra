@@ -6,6 +6,7 @@
 //!   uma fixação conjunta faz várias peças se moverem como um corpo só).
 //! - [`load`]: carrega e calcula as peças referenciadas (com cache por arquivo).
 
+pub mod kin;
 pub mod load;
 pub mod view;
 pub mod solve;
@@ -268,11 +269,16 @@ pub struct Assembly {
     pub params: Vec<AsmParam>,
     #[serde(default)]
     pub patterns: Vec<CompPattern>,
+    /// juntas da cinemática e acoplamentos entre elas
+    #[serde(default)]
+    pub joints: Vec<kin::Joint>,
+    #[serde(default)]
+    pub couplings: Vec<kin::Coupling>,
 }
 
 impl Assembly {
     pub fn new(name: &str) -> Self {
-        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![] }
+        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![] }
     }
 
     pub fn alloc(&mut self) -> Id {
@@ -302,11 +308,25 @@ impl Assembly {
             .map(|n| n.name.clone())
             .or_else(|| self.mates.iter().find(|m| m.id == id).map(|m| m.name.clone()))
             .or_else(|| self.rigid.iter().find(|r| r.id == id).map(|r| r.name.clone()))
+            .or_else(|| self.joints.iter().find(|r| r.id == id).map(|r| r.name.clone()))
+            .or_else(|| self.couplings.iter().find(|r| r.id == id).map(|r| r.name.clone()))
+            .or_else(|| self.patterns.iter().find(|r| r.id == id).map(|r| r.name.clone()))
             .unwrap_or_else(|| format!("#{}", id.0))
     }
 
+    pub(crate) fn unique_pub(&self, base: &str) -> String {
+        self.unique(base)
+    }
+
     fn unique(&self, base: &str) -> String {
-        let taken = |n: &str| self.nodes.iter().any(|x| x.name == n) || self.mates.iter().any(|x| x.name == n) || self.rigid.iter().any(|x| x.name == n);
+        let taken = |n: &str| {
+            self.nodes.iter().any(|x| x.name == n)
+                || self.mates.iter().any(|x| x.name == n)
+                || self.rigid.iter().any(|x| x.name == n)
+                || self.patterns.iter().any(|x| x.name == n)
+                || self.joints.iter().any(|x| x.name == n)
+                || self.couplings.iter().any(|x| x.name == n)
+        };
         if !taken(base) {
             return base.to_string();
         }
@@ -418,6 +438,9 @@ impl Assembly {
         }
         self.nodes.retain(|n| n.id != id);
         self.mates.retain(|m| m.id != id && m.a.comp != id && m.b.comp != id);
+        self.joints.retain(|j| j.id != id && j.a.comp != id && j.b.comp != id);
+        let alive: Vec<Id> = self.joints.iter().map(|j| j.id).collect();
+        self.couplings.retain(|c| c.id != id && alive.contains(&c.a) && alive.contains(&c.b));
         self.rigid.retain(|r| r.id != id);
         // apagar a repetição apaga as cópias; apagar o original apaga a repetição
         let gone: Vec<Id> = self.patterns.iter().filter(|p| p.id == id || p.source == id).flat_map(|p| p.instances.clone()).collect();

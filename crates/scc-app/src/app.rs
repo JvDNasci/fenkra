@@ -318,9 +318,20 @@ impl App {
             let g = a.add_group("Placas", None);
             a.add_component("Placa base", NodeKind::Part { path: "placa.sccpart".into() }, Placement::default(), Some(g));
             a.add_component("Placa de cima", NodeKind::Part { path: "placa.sccpart".into() }, Placement { origin: [140., 20., 30.], ..Default::default() }, Some(g));
+            if std::env::var("SCC_DEMO_ASM").is_ok_and(|v| v == "mec") {
+                // mecanismo: a placa de cima gira em torno do furo (48, 24) da base
+                use scc_montagem::kin::{JFrame, JRef, JointKind};
+                let ids: Vec<scc_core::Id> = a.nodes.iter().filter(|n| !matches!(n.kind, NodeKind::Group)).map(|n| n.id).collect();
+                a.node_mut(ids[1]).unwrap().placement.origin = [0., 0., 12.];
+                let fr = JFrame::from_axis([48., 24., 0.], [0., 0., 1.]);
+                let j = a.add_joint(JointKind::Revolute, JRef { comp: ids[0], frame: fr }, JRef { comp: ids[1], frame: fr });
+                a.joints.iter_mut().find(|x| x.id == j).unwrap().drive_angle = Some("90*t".into());
+            }
             let f = dir.join("conjunto.sccasm");
             let _ = std::fs::write(&f, a.to_json());
-            app.asm = Some(crate::asm_ui::AsmState::new(a, Some(f)));
+            let mut stt = crate::asm_ui::AsmState::new(a, Some(f));
+            stt.sim_open = stt.asm.joints.len() > 0;
+            app.asm = Some(stt);
             app.settings.bench = crate::settings::Bench::Montagem;
             app.started = true;
         }
@@ -1045,7 +1056,7 @@ impl App {
             Cmd::Geo(k) => Sel::Ref(d.add_geometry(k.make(&seed))),
             // comandos de montagem são tratados em asm_ui::command
             Cmd::AsmNew | Cmd::AsmOpen | Cmd::AsmSave | Cmd::AsmInsert | Cmd::AsmSubAsm | Cmd::AsmNewPart | Cmd::AsmGroup | Cmd::AsmReplace | Cmd::AsmMate(_) | Cmd::AsmFix | Cmd::AsmRigid
-            | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmPattern => return,
+            | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmPattern | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate => return,
             Cmd::Param => {
                 let n = (1..).map(|i| format!("P{i}")).find(|n| !d.params.iter().any(|p| &p.name == n)).unwrap();
                 let _ = d.add_param(&n, "10", Unit::Comprimento);
@@ -3743,6 +3754,10 @@ pub enum Cmd {
     AsmNumber,
     AsmInterf,
     AsmPattern,
+    /// junta: 0 revolução … 7 ponto em curva
+    AsmJoint(u8),
+    AsmAutoJoints,
+    AsmSimulate,
     /// mover o corpo: 0 translação, 1 rotação, 2 simetria, 3 afinidade
     MoveBody(u8),
     /// extrusão com ângulo de saída e filetes num clique
@@ -4185,6 +4200,7 @@ impl eframe::App for App {
         }
         self.props_window(ctx);
         self.wizard_window(ctx);
+        crate::asm_ui::sim_window(self, ctx);
         self.side_toolbars(root);
         self.settings_window(ctx);
         self.view_menu_window(ctx);

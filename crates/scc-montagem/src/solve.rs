@@ -191,7 +191,7 @@ fn place(b: &Bodies, a: &Assembly, x: &[f64]) -> HashMap<Id, Placement> {
     out
 }
 
-fn all_residuals(a: &Assembly, pl: &HashMap<Id, Placement>, vars: &HashMap<String, f64>, per: &mut Vec<(Id, usize, usize)>) -> Vec<f64> {
+fn all_residuals(a: &Assembly, pl: &HashMap<Id, Placement>, vars: &HashMap<String, f64>, drives: bool, per: &mut Vec<(Id, usize, usize)>) -> Vec<f64> {
     let mut r = vec![];
     per.clear();
     for m in a.mates.iter().filter(|m| !m.suppressed) {
@@ -200,17 +200,25 @@ fn all_residuals(a: &Assembly, pl: &HashMap<Id, Placement>, vars: &HashMap<Strin
         residuals(&m.kind, world(&m.a.geom, pa), world(&m.b.geom, pb), vars, &mut r);
         per.push((m.id, s, r.len()));
     }
+    crate::kin::residuals(a, pl, vars, drives, &mut r, per);
     r
 }
 
 /// Resolve as restrições e grava as novas posições nos componentes livres.
 pub fn solve(a: &mut Assembly) -> SolveReport {
+    solve_with(a, &HashMap::new())
+}
+
+/// Resolve com variáveis extras (ex.: `t` da simulação).
+pub fn solve_with(a: &mut Assembly, extra: &HashMap<String, f64>) -> SolveReport {
     let b = bodies(a);
     let n = 6 * b.rel.len();
-    let vars = a.vars();
+    let mut vars = a.vars();
+    vars.extend(extra.iter().map(|(k, v)| (k.clone(), *v)));
+    vars.entry("t".into()).or_insert(0.);
     let mut x = vec![0.; n];
     let mut per = vec![];
-    let res = |x: &[f64], per: &mut Vec<(Id, usize, usize)>| all_residuals(a, &place(&b, a, x), &vars, per);
+    let res = |x: &[f64], per: &mut Vec<(Id, usize, usize)>| all_residuals(a, &place(&b, a, x), &vars, true, per);
     let mut r = res(&x, &mut per);
     let cost = |r: &[f64]| r.iter().map(|v| v * v).sum::<f64>();
     let mut c = cost(&r);
@@ -273,7 +281,7 @@ pub fn solve(a: &mut Assembly) -> SolveReport {
     // restrições que ficaram de fora (conflito)
     let pl = place(&b, a, &x);
     let mut failed = vec![];
-    let r2 = all_residuals(a, &pl, &vars, &mut per);
+    let r2 = all_residuals(a, &pl, &vars, true, &mut per);
     for (id, s, e) in &per {
         if r2[*s..*e].iter().any(|v| v.abs() > 1e-6) {
             failed.push(*id);
@@ -290,16 +298,22 @@ pub fn solve(a: &mut Assembly) -> SolveReport {
     SolveReport { residual: c.sqrt(), iterations: it, dof: n.saturating_sub(rank), failed: failed.clone(), converged: failed.is_empty() }
 }
 
-/// Graus de liberdade restantes sem mexer em nada (para a análise do mecanismo).
+/// Graus de liberdade restantes sem mexer em nada.
 pub fn dof(a: &Assembly) -> usize {
+    dof_with(a, true)
+}
+
+/// Graus de liberdade com ou sem os comandos das juntas (análise do mecanismo).
+pub fn dof_with(a: &Assembly, drives: bool) -> usize {
     let b = bodies(a);
     let n = 6 * b.rel.len();
     if n == 0 {
         return 0;
     }
-    let vars = a.vars();
+    let mut vars = a.vars();
+    vars.entry("t".into()).or_insert(0.);
     let mut per = vec![];
-    let res = |x: &[f64], per: &mut Vec<(Id, usize, usize)>| all_residuals(a, &place(&b, a, x), &vars, per);
+    let res = |x: &[f64], per: &mut Vec<(Id, usize, usize)>| all_residuals(a, &place(&b, a, x), &vars, drives, per);
     let x = vec![0.; n];
     let r = res(&x, &mut per);
     if r.is_empty() {

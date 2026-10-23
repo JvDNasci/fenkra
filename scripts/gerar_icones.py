@@ -624,6 +624,23 @@ I["salvar"] = f'<path d="M6 6 H36 L42 12 V42 H6 Z" fill="{MID}" {S}/><rect x="12
 I["asm_repeticao"] = BLK(4, 30, 10) + "".join(f'<rect x="{x}" y="{y}" width="10" height="10" rx="1.5" fill="{LIGHT}" stroke="{ACTION}" stroke-width="1.6" stroke-dasharray="3 2"/>' for x, y in [(18, 22), (32, 14)]) + \
     f'<circle cx="9" cy="24" r="3" fill="{ACTION}"/><circle cx="23" cy="16" r="3" fill="{ACTION}" opacity="0.7"/><circle cx="37" cy="8" r="3" fill="{ACTION}" opacity="0.5"/>'
 
+# ---------------- cinemática
+ROD = lambda x1, y1, x2, y2, fill=MID: f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{INK}" stroke-width="9" stroke-linecap="round"/><line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="#cfe6ff" stroke-width="5.5" stroke-linecap="round"/>'
+PIN = lambda x, y: f'<circle cx="{x}" cy="{y}" r="4.5" fill="{ACTION}" stroke="#ffffff" stroke-width="1.4"/>'
+I["junta_revolucao"] = ROD(10, 38, 38, 12) + PIN(10, 38) + f'<path d="M22 44 A14 14 0 0 0 4 26" stroke="{ACTION}" stroke-width="2.2" fill="none"/>' + AR("2,30 6,22 9,30")
+I["junta_prismatica"] = f'<rect x="4" y="20" width="40" height="8" fill="{LIGHT}" {S}/><rect x="16" y="14" width="14" height="20" rx="2" fill="{MID}" {S}/>' + arrow(32, 40, 44, 40, ACTION, 2.2) + arrow(14, 40, 4, 40, ACTION, 2.2)
+I["junta_cilindrica"] = f'<rect x="4" y="20" width="40" height="8" rx="4" fill="{LIGHT}" {S}/><rect x="16" y="13" width="14" height="22" rx="3" fill="{MID}" {S}/>' + \
+    f'<path d="M34 10 A10 6 0 0 1 34 38" stroke="{ACTION}" stroke-width="2" fill="none"/>' + arrow(18, 42, 30, 42, ACTION, 2)
+I["junta_parafuso"] = f'<rect x="20" y="4" width="8" height="40" fill="{LIGHT}" {S}/>' + "".join(f'<path d="M18 {y} L30 {y + 4}" stroke="{INK}" stroke-width="1.6"/>' for y in range(8, 40, 6)) + \
+    f'<rect x="12" y="20" width="24" height="10" fill="{MID}" {S}/>' + arrow(40, 34, 40, 18, ACTION, 2)
+I["junta_esferica"] = f'<circle cx="24" cy="26" r="10" fill="{MID}" {S}/><path d="M10 20 A16 16 0 0 1 38 20" stroke="{INK}" stroke-width="5" fill="none"/>' + ROD(24, 26, 36, 6) + PIN(24, 26)
+I["junta_planar"] = f'<polygon points="4,32 24,22 44,32 24,42" fill="{LIGHT}" {S}/><rect x="17" y="20" width="14" height="10" fill="{MID}" {S}/>' + arrow(32, 25, 42, 20, ACTION, 2) + arrow(18, 25, 8, 20, ACTION, 2)
+I["junta_rigida"] = BLK(4, 20, 18) + BLK(26, 20, 18, LIGHT) + f'<path d="M20 29 H28" stroke="{ACTION}" stroke-width="4"/><circle cx="24" cy="29" r="3" fill="#ffffff" stroke="{ACTION}" stroke-width="1.6"/>'
+I["junta_ponto_curva"] = CV("M4 38 C 14 8, 30 8, 44 30", INK, 2.6) + f'<circle cx="28" cy="13" r="5" fill="{ACTION}" stroke="#ffffff" stroke-width="1.4"/>' + arrow(32, 15, 40, 22, ACTION, 1.8)
+I["mec_auto"] = ROD(8, 36, 26, 18) + ROD(26, 18, 40, 34) + PIN(8, 36) + PIN(26, 18) + PIN(40, 34) + f'<path d="M30 4 L26 12 H32 L28 20" stroke="#ffd34d" stroke-width="2.4" fill="none"/>'
+I["mec_simular"] = f'<rect x="4" y="8" width="40" height="28" rx="4" fill="{LIGHT}" {S}/>' + ROD(12, 28, 26, 16) + PIN(12, 28) + \
+    f'<polygon points="32,16 32,30 42,23" fill="{ACTION}"/>' + f'<line x1="6" y1="42" x2="42" y2="42" stroke="{INK}" stroke-width="2"/><circle cx="18" cy="42" r="3" fill="{ACTION}"/>'
+
 for name, body in I.items():
     with open(os.path.join(OUT, f"{name}.svg"), "w", encoding="utf8", newline="\n") as f:
         f.write(svg(body))
