@@ -127,6 +127,24 @@ Fecha todos os itens acima. Destaques que ainda não constavam:
 - [x] Português/inglês; personalização dos grupos; macros; texturas
 - [ ] Aguardando teste do usuário com o mouse: cotagem smart, menu rápido, arrastar na árvore, setas 3D
 
+## 0.1.0-alpha.6 — Bancada de Superfícies, términos unificados e recálculo incremental
+
+- [x] Recálculo incremental: só refaz a partir do primeiro comando que mudou; malhas e sombras de sketch em cache; referências memorizadas por cálculo
+- [x] Términos unificados (cego, passante, até o próximo, até plano, **até a superfície/face**) em extrusão, recorte, furo e rosca (rosca: comprimento, face inteira, até plano/superfície)
+- [x] Abas de bancada: Modelagem Sólida e Superfícies sobre o mesmo modelo
+  - comuns: Sketch, Referências (wireframe), Volume (superfície ↔ sólido), Análise, Organização, Seleção, Vista
+  - só Sólidos: Sólidos, Acabamento, Padrões · só Superfícies: Superfícies, Operações
+- [x] Wireframe: curva de interseção entre superfícies/planos, curva projetada na superfície, contorno (borda livre)
+- [x] Superfícies: esfera, cilindro, varredura explícita e circular (tubo) com orientação, multi-seções (guia opcional, regrada, fechada), concordância G0/G1/G2 entre bordas com superfícies de apoio
+- [x] Operações: juntar, curar, dividir, aparar, multi-extração, desmontar (uma face), desaparar, extrapolar; transformações (mover, girar, simetria, escala) de pontos, curvas, planos e superfícies
+- [x] Volume: dividir corpo por superfície, engrossar (Thick Surface/Thicken), fechar (Close Surface/Stitch), costurar no corpo (Sew), preencher fronteiras (Boundary Fill, com células excluídas), malha STL/OBJ → B-rep
+- [x] Análise: zebra e mapa de curvatura no shader
+- [x] Manipulador 3D: setas por eixo, quadrados planares, arco de rotação e alça de escala (ponto por coordenadas e transformações)
+- [x] 38 ícones novos no estilo da modelagem sólida; traduções
+- [ ] Varredura cônica/adaptativa e várias guias; G2 exato na concordância (hoje: curvatura nula na borda)
+- [ ] Formas T-Spline (subdivisão) — ainda não há kernel para isso
+- [ ] Aguardando teste do usuário com o mouse: manipulador, bancadas, análise
+
 ## Sempre
 
 - [x] Releases locais com `scripts/release.ps1` quando fizer sentido
