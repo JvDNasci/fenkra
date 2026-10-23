@@ -491,6 +491,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
             app.view_menu = true;
             app.started = true;
         }
+        // desenvolvimento: SCC_ABRIR=<nome> abre esse comando para edição ao iniciar
+        if let Ok(n) = std::env::var("SCC_ABRIR") {
+            app.open_pending = app.open.doc.features.iter().find(|f| f.name == n).map(|f| f.id);
+        }
         app.request_recompute();
         app
     }
@@ -4977,9 +4981,11 @@ impl eframe::App for App {
         self.hover_now.set(None);
         // comando aberto: o painel de edição fica no lugar da árvore (a seta ⯈ abre a árvore ao lado
         // quando for preciso escolher algo nela; escolhendo no 3D, ela nem precisa aparecer)
-        let overlay = (self.session.is_some() || self.sketch.is_some())
-            && self.settings.editor_left
-            && !matches!(self.settings.bench, crate::settings::Bench::Desenho | crate::settings::Bench::Montagem);
+        // sem comando aberto, o painel de edição some e a árvore fica sozinha à esquerda
+        let part_bench = !matches!(self.settings.bench, crate::settings::Bench::Desenho | crate::settings::Bench::Montagem);
+        let active = self.session.is_some() || self.sketch.is_some() || matches!(self.sel, Sel::Params | Sel::Pmi(_));
+        let overlay = active && self.settings.editor_left && part_bench;
+        let hide_editor = !active && self.settings.editor_left && part_bench;
         let tree_panel = |app: &mut App, root: &mut egui::Ui| egui::Panel::left("arvore").default_size(270.).resizable(true).show(root, |ui| {
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut app.left, LeftTab::Peca, tr("Peça"));
@@ -5001,12 +5007,7 @@ impl eframe::App for App {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(tr("Edição")).weak().small());
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if overlay {
-                        let (txt, tip) = if app.tree_peek { ("⯇ 🌳", "fechar a árvore") } else { ("🌳 ⯈", "abrir a árvore ao lado para escolher itens nela") };
-                        if ui.button(txt).on_hover_text(tr(tip)).clicked() {
-                            app.tree_peek = !app.tree_peek;
-                        }
-                    }
+
                     let (txt, tip) = if app.settings.editor_left { ("⇥", "levar o painel de edição para a direita") } else { ("⇤", "trazer o painel de edição para a esquerda") };
                     if ui.small_button(txt).on_hover_text(tr(tip)).clicked() {
                         app.settings.editor_left = !app.settings.editor_left;
@@ -5027,9 +5028,25 @@ impl eframe::App for App {
             });
         };
         if self.settings.editor_left {
-            egui::Panel::left("editor_esq").default_size(320.).resizable(true).show(root, |ui| editor_panel(self, ui));
-            if overlay && self.tree_peek {
-                tree_panel(self, root);
+            if !hide_editor {
+                egui::Panel::left("editor_esq").default_size(320.).resizable(true).show(root, |ui| editor_panel(self, ui));
+            }
+            if overlay {
+                // seta na lateral do painel: abre/fecha a árvore à direita dele
+                egui::Panel::left("seta_arvore").exact_size(26.).resizable(false).show(root, |ui| {
+                    let r = ui.max_rect();
+                    let (txt, tip) = if self.tree_peek { ("⯇
+🌳", "fechar a árvore") } else { ("⯈
+🌳", "abrir a árvore ao lado para escolher itens nela") };
+                    let b = egui::Rect::from_center_size(r.center(), egui::vec2(22., 96.));
+                    let btn = egui::Button::new(RichText::new(txt).size(15.).color(Color32::WHITE)).fill(Color32::from_rgb(40, 96, 170));
+                    if ui.put(b, btn).on_hover_text(tr(tip)).clicked() {
+                        self.tree_peek = !self.tree_peek;
+                    }
+                });
+                if self.tree_peek {
+                    tree_panel(self, root);
+                }
             }
         } else {
             egui::Panel::right("editor").default_size(330.).resizable(true).show(root, |ui| editor_panel(self, ui));
