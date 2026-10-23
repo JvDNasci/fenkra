@@ -96,7 +96,7 @@ fn create(app: &mut App, kind: PmiKind, a: Vec<[f64; 3]>) {
         PmiKind::Linear | PmiKind::Angle => [0., 0., 12.],
         _ => [15., 0., 15.],
     };
-    list_mut(app).push(Pmi { id, name, kind, anchors: a, offset: off, text: String::new(), tol_plus: String::new(), tol_minus: String::new(), visible: true });
+    list_mut(app).push(Pmi { id, name, kind, anchors: a, offset: off, text: String::new(), tol_plus: String::new(), tol_minus: String::new(), visible: true, plane: None });
     app.picks.clear();
     app.pmi_pending = None;
     if app.in_asm() {
@@ -143,6 +143,27 @@ fn arrow(p: &egui::Painter, tip: Pos2, from: Pos2) {
     p.add(egui::Shape::convex_polygon(vec![tip, tip - d * 9. + n * 3.5, tip - d * 9. - n * 3.5], COL, Stroke::NONE));
 }
 
+/// Rótulo deitado num plano: girado conforme a direção x do plano na tela e com altura de texto
+/// em mm do modelo (acompanha o zoom). Devolve o retângulo (sem giro) para clique/arraste.
+fn label_on_plane(p: &egui::Painter, cam: &Camera, rect: Rect, world: Vec3, x: Vec3, txt: &str, sel: bool) -> Option<Rect> {
+    let at = cam.project(rect, world)?;
+    let ax = cam.project(rect, world + x * 10.)?;
+    let d = ax - at;
+    let px_per_mm = d.length() / 10.;
+    let size = (5. * px_per_mm).clamp(6., 60.);
+    let angle = d.y.atan2(d.x);
+    let g = p.layout_no_wrap(txt.to_string(), egui::FontId::proportional(size), Color32::WHITE);
+    let (w, h) = (g.size().x + 10., g.size().y + 6.);
+    // caixa girada: quatro cantos em volta do centro
+    let (c, s) = (angle.cos(), angle.sin());
+    let rot = |v: egui::Vec2| egui::vec2(v.x * c - v.y * s, v.x * s + v.y * c);
+    let corners: Vec<Pos2> = [(-w / 2., -h / 2.), (w / 2., -h / 2.), (w / 2., h / 2.), (-w / 2., h / 2.)].iter().map(|(a, b)| at + rot(egui::vec2(*a, *b))).collect();
+    p.add(egui::Shape::convex_polygon(corners.clone(), Color32::from_rgba_unmultiplied(60, 30, 10, 225), Stroke::new(if sel { 2. } else { 1. }, if sel { Color32::from_rgb(255, 220, 120) } else { COL })));
+    let tl = at + rot(egui::vec2(-w / 2. + 5., -h / 2. + 3.));
+    p.add(egui::epaint::TextShape::new(tl, g, Color32::WHITE).with_angle(angle));
+    Some(Rect::from_center_size(at, egui::vec2(w.max(h), w.max(h)) * 0.8))
+}
+
 fn label(p: &egui::Painter, at: Pos2, txt: &str, sel: bool) -> Rect {
     let g = p.layout_no_wrap(txt.to_string(), egui::FontId::proportional(13.), Color32::WHITE);
     let r = Rect::from_center_size(at, g.size() + egui::vec2(10., 6.));
@@ -155,6 +176,7 @@ fn label(p: &egui::Painter, at: Pos2, txt: &str, sel: bool) -> Rect {
 /// Desenha as anotações sobre a viewport (o clique num rótulo seleciona a anotação).
 pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     let mut action: Option<(Id, u8)> = None;
+    let mut drag: Option<(Id, [f64; 3])> = None;
     let Some(r) = app.result.as_ref() else { return };
     let sel = if app.in_asm() { app.asm.as_ref().and_then(|s| s.sel) } else if let Sel::Pmi(i) = app.sel { Some(i) } else { None };
     let painter = ui.painter_at(rect);
@@ -209,10 +231,31 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                     let m = egui::vec2(-n.y, n.x);
                     painter.add(egui::Shape::convex_polygon(vec![s0, s0 + n * 10. + m * 6., s0 + n * 10. - m * 6.], COL, Stroke::NONE));
                 }
-                label(&painter, st, &txt, is_sel)
+                match pm.plane {
+                    Some((_, x)) => label_on_plane(&painter, cam, rect, v3(first) + off, v3(x).normalize_or_zero(), &txt, is_sel).unwrap_or_else(|| label(&painter, st, &txt, is_sel)),
+                    None => label(&painter, st, &txt, is_sel),
+                }
             }
         };
-        let resp = ui.interact(rect_lbl, egui::Id::unique(("pmi_rotulo", pm.id.0)), egui::Sense::click());
+        let resp = ui.interact(rect_lbl, egui::Id::unique(("pmi_rotulo", pm.id.0)), egui::Sense::click_and_drag());
+        // arrastar o rótulo: move o texto no plano da anotação (ou de frente para a tela)
+        if resp.dragged() {
+            if let Some(m) = resp.interact_pointer_pos() {
+                let base = v3(first) + off;
+                let n = match pm.plane {
+                    Some((n, _)) => v3(n).normalize_or_zero(),
+                    None => -cam.ray(rect, rect.center()).1,
+                };
+                let (o, dir) = cam.ray(rect, m);
+                let den = dir.dot(n);
+                if den.abs() > 1e-6 {
+                    let t = (base - o).dot(n) / den;
+                    let hit = o + dir * t;
+                    let new_off = hit - v3(first);
+                    drag = Some((pm.id, [new_off.x as f64, new_off.y as f64, new_off.z as f64]));
+                }
+            }
+        }
         if resp.clicked() || resp.secondary_clicked() {
             clicked = Some(pm.id);
         }
@@ -227,6 +270,10 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                 action = Some((pm.id, 1));
                 ui.close();
             }
+            if ui.button(tr(if pm.plane.is_some() { "🖵 De frente para a tela" } else { "▱ Deitar no plano da vista atual" })).clicked() {
+                action = Some((pm.id, 3));
+                ui.close();
+            }
             ui.separator();
             if ui.button(tr("🗑 Apagar   Del")).clicked() {
                 action = Some((pm.id, 0));
@@ -234,6 +281,12 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
             }
         });
         resp.on_hover_text(&pm.name);
+    }
+    if let Some((id, off)) = drag {
+        if let Some(p) = list_mut(app).iter_mut().find(|p| p.id == id) {
+            p.offset = off;
+        }
+        clicked = Some(id);
     }
     if let Some((id, k)) = action {
         match k {
@@ -247,6 +300,20 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
             1 => {
                 if let Some(p) = list_mut(app).iter_mut().find(|p| p.id == id) {
                     p.visible = false;
+                }
+            }
+            3 => {
+                // alterna: de frente ↔ deitado no plano da tela atual (fica fixo nele ao girar)
+                let (o, d) = cam.ray(rect, rect.center());
+                let (_, dx) = cam.ray(rect, rect.center() + egui::vec2(10., 0.));
+                let n = -d;
+                let x = (dx - d).normalize_or_zero();
+                let _ = o;
+                if let Some(p) = list_mut(app).iter_mut().find(|p| p.id == id) {
+                    p.plane = match p.plane {
+                        Some(_) => None,
+                        None => Some(([n.x as f64, n.y as f64, n.z as f64], [x.x as f64, x.y as f64, x.z as f64])),
+                    };
                 }
             }
             _ => clicked = Some(id),
@@ -296,7 +363,36 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui) {
             });
         }
     });
+    // capturas (só na peça): vista + anotações visíveis
+    let mut cap_act: Option<(usize, u8)> = None;
+    if !app.in_asm() {
+        let caps: Vec<String> = app.open.doc.pmi_captures.iter().map(|c| c.name.clone()).collect();
+        if !caps.is_empty() {
+            ui.indent("capturas_pmi", |ui| {
+                for (i, n) in caps.iter().enumerate() {
+                    let r = ui.selectable_label(false, format!("📷 {n}")).on_hover_text(tr("aplicar: câmera e anotações desta captura"));
+                    if r.clicked() {
+                        cap_act = Some((i, 0));
+                    }
+                    r.context_menu(|ui| {
+                        if ui.button(tr("📷 Atualizar com a vista atual")).clicked() {
+                            cap_act = Some((i, 1));
+                            ui.close();
+                        }
+                        if ui.button(tr("🗑 Apagar captura")).clicked() {
+                            cap_act = Some((i, 2));
+                            ui.close();
+                        }
+                    });
+                }
+            });
+        }
+    }
     h.header_response.context_menu(|ui| {
+        if !app.in_asm() && ui.button(tr("📷 Capturar vista (câmera + anotações visíveis)")).clicked() {
+            cap_act = Some((usize::MAX, 1));
+            ui.close();
+        }
         ui.label(RichText::new(tr("Nova anotação 3D")).strong());
         for (i, n) in [(0u8, "↔ Cota linear"), (1, "R Raio"), (2, "Ø Diâmetro"), (3, "∠ Ângulo"), (4, "✎ Nota"), (5, "√ Rugosidade"), (6, "⌒ Solda"), (7, "▭ Referência (datum)"), (8, "⊞ Tolerância geométrica")] {
             if ui.button(tr(n)).clicked() {
@@ -324,6 +420,37 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui) {
     if let Some(i) = create {
         command(app, i);
     }
+    if let Some((i, k)) = cap_act {
+        let view = app.camera_get().map(|c| scc_core::NamedView { name: String::new(), target: c.target, yaw: c.yaw, pitch: c.pitch, dist: c.dist, ortho: c.ortho });
+        let shown: Vec<Id> = app.open.doc.pmi.iter().filter(|p| p.visible).map(|p| p.id).collect();
+        match k {
+            0 => {
+                if let Some(c) = app.open.doc.pmi_captures.get(i).cloned() {
+                    for p in &mut app.open.doc.pmi {
+                        p.visible = c.shown.contains(&p.id);
+                    }
+                    app.apply_view(&c.view);
+                }
+            }
+            1 => {
+                if let Some(v) = view {
+                    if i == usize::MAX {
+                        let id = Id(app.next_pmi_id());
+                        let n = app.open.doc.pmi_captures.len() + 1;
+                        app.open.doc.pmi_captures.push(scc_core::pmi::PmiCapture { id, name: format!("{} {n}", tr("Captura")), view: v, shown });
+                    } else if let Some(c) = app.open.doc.pmi_captures.get_mut(i) {
+                        c.view = v;
+                        c.shown = shown;
+                    }
+                }
+            }
+            _ => {
+                if i < app.open.doc.pmi_captures.len() {
+                    app.open.doc.pmi_captures.remove(i);
+                }
+            }
+        }
+    }
     if let Some((id, k)) = action {
         let l = list_mut(app);
         match k {
@@ -346,6 +473,22 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui, id: Id) -> bool {
         Pick::Face { point, .. } => Some(point.map(|v| v as f64)),
         _ => None,
     }).collect();
+    // plano da face/plano clicado (para deitar o texto nele)
+    let seed_plane: Option<([f64; 3], [f64; 3])> = app.picks.iter().find_map(|p| match *p {
+        Pick::Face { normal, .. } => {
+            let n = Vec3::new(normal[0], normal[1], normal[2]).normalize_or_zero();
+            let helper = if n.z.abs() < 0.9 { Vec3::Z } else { Vec3::X };
+            let x = helper.cross(n).normalize_or_zero();
+            Some(([n.x as f64, n.y as f64, n.z as f64], [x.x as f64, x.y as f64, x.z as f64]))
+        }
+        Pick::Plane(pr) => app.result.as_ref().and_then(|r| {
+            r.planes.iter().find(|v| match pr {
+                scc_core::PlaneRef::Datum(id) => v.id == Some(id),
+                scc_core::PlaneRef::Origin(o) => v.id.is_none() && v.name == crate::scene::plane_name(o),
+            })
+        }).map(|v| (v.frame.normal, v.frame.x)),
+        _ => None,
+    });
     let l = list_mut(app);
     let Some(p) = l.iter_mut().find(|p| p.id == id) else { return false };
     ui.heading(format!("📐 {}", p.name));
@@ -422,6 +565,34 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui, id: Id) -> bool {
             ui.add(egui::DragValue::new(&mut p.offset[k]).speed(0.5));
         }
     });
+    crate::editor::section(ui, "Orientação do texto");
+    let mut on_plane = p.plane.is_some();
+    ui.horizontal(|ui| {
+        if ui.radio(!on_plane, tr("de frente para a tela")).clicked() {
+            on_plane = false;
+        }
+        if ui.radio(on_plane, tr("deitado num plano")).clicked() {
+            on_plane = true;
+        }
+    });
+    if !on_plane {
+        p.plane = None;
+    } else {
+        if p.plane.is_none() {
+            p.plane = Some(([0., 0., 1.], [1., 0., 0.]));
+        }
+        ui.horizontal(|ui| {
+            for (n, pl) in [("XY", ([0., 0., 1.], [1., 0., 0.])), ("XZ", ([0., -1., 0.], [1., 0., 0.])), ("YZ", ([1., 0., 0.], [0., 1., 0.]))] {
+                if ui.selectable_label(p.plane == Some(pl), n).clicked() {
+                    p.plane = Some(pl);
+                }
+            }
+            if ui.add_enabled(seed_plane.is_some(), egui::Button::new(tr("⊙ Plano/face selecionado"))).on_disabled_hover_text(tr("clique numa face ou plano na viewport")).clicked() {
+                p.plane = seed_plane;
+            }
+        });
+    }
+    ui.label(RichText::new(tr("Arraste o rótulo na viewport para mudar a posição.")).weak().small());
     ui.checkbox(&mut p.visible, tr("visível"));
     if seed_pts.len() >= p.kind.anchors() && ui.button(tr("⊙ Reancorar na seleção atual")).clicked() {
         p.anchors = seed_pts[..p.kind.anchors()].to_vec();

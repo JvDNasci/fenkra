@@ -343,6 +343,8 @@ pub struct Settings {
     pub ref_line_dash: u8,
     /// marca dos centros de furo no sketch: 0 asterisco, 1 cruz, 2 círculo com cruz
     pub hole_mark: u8,
+    /// seções da árvore ocultadas pelo usuário (chaves de `TREE_SECTIONS`)
+    pub tree_hidden: Vec<String>,
     /// última macro escrita na janela de automação
     pub macro_src: String,
 }
@@ -413,6 +415,7 @@ impl Default for Settings {
             ref_line_width: 1.5,
             ref_line_dash: 0,
             hole_mark: 0,
+            tree_hidden: vec![],
         }
     }
 }

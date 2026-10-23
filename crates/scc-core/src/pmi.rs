@@ -174,6 +174,19 @@ pub struct Pmi {
     pub tol_minus: String,
     #[serde(default = "yes")]
     pub visible: bool,
+    /// texto deitado num plano (normal, direção x); `None` = sempre de frente para a tela
+    #[serde(default)]
+    pub plane: Option<([f64; 3], [f64; 3])>,
+}
+
+/// Captura: uma vista (câmera) com as anotações que aparecem nela.
+#[derive(Clone, PartialEq, Debug, serde::Serialize, serde::Deserialize)]
+pub struct PmiCapture {
+    pub id: Id,
+    pub name: String,
+    pub view: crate::doc::NamedView,
+    /// anotações visíveis nesta captura
+    pub shown: Vec<Id>,
 }
 
 fn yes() -> bool {
@@ -234,7 +247,7 @@ mod tests {
 
     #[test]
     fn medidas_e_textos() {
-        let mut p = Pmi { id: Id(1), name: "c".into(), kind: PmiKind::Linear, anchors: vec![], offset: [0.; 3], text: String::new(), tol_plus: "0,1".into(), tol_minus: "0,1".into(), visible: true };
+        let mut p = Pmi { id: Id(1), name: "c".into(), kind: PmiKind::Linear, anchors: vec![], offset: [0.; 3], text: String::new(), tol_plus: "0,1".into(), tol_minus: "0,1".into(), visible: true, plane: None };
         let v = p.measure(&[[0., 0., 0.], [30., 40., 0.]]);
         assert_eq!(v, Some(50.));
         assert_eq!(p.display(v), "50 ±0,1");

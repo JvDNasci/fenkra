@@ -114,12 +114,19 @@ fn library(app: &mut App, ctx: &egui::Context) {
     let mut open = true;
     let s = &mut app.settings;
     let sel = &mut app.st_lib_sel;
+    let fechar = egui::Id::unique(("concluir_janela", "st1"));
+    if ctx.data_mut(|m| m.remove_temp::<bool>(fechar)).unwrap_or(false) {
+        open = false;
+    }
     egui::Window::new(tr("⌶ Biblioteca de perfis"))
         .id(egui::Id::unique("janela_perfis"))
         .open(&mut open)
         .default_size([620., 420.])
         .resizable(true)
         .show(ctx, |ui| {
+            if crate::app::done_bar(ui) {
+                ui.ctx().data_mut(|m| m.insert_temp(fechar, true));
+            }
             ui.label(RichText::new(tr("Famílias cadastradas por você (salvas nas configurações). As de fábrica servem de modelo: copie e ajuste.")).weak().small());
             ui.horizontal_top(|ui| {
                 ui.vertical(|ui| {
@@ -213,11 +220,18 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
     let rows = scc_solidos::cut_list(app.doc());
     let mut open = true;
     let mut export = false;
+    let fechar = egui::Id::unique(("concluir_janela", "st2"));
+    if ctx.data_mut(|m| m.remove_temp::<bool>(fechar)).unwrap_or(false) {
+        open = false;
+    }
     egui::Window::new(tr("📋 Lista de corte"))
         .id(egui::Id::unique("janela_lista_corte"))
         .open(&mut open)
         .default_width(420.)
         .show(ctx, |ui| {
+            if crate::app::done_bar(ui) {
+                ui.ctx().data_mut(|m| m.insert_temp(fechar, true));
+            }
             if rows.is_empty() {
                 ui.label(RichText::new(tr("Nenhum membro estrutural na peça.")).weak());
                 return;

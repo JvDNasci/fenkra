@@ -1458,12 +1458,19 @@ pub fn sim_window(app: &mut App, ctx: &egui::Context) {
     let (sem, com) = kin::analyze(&st.asm);
     let mut compute = false;
     let mut restore = false;
+    let fechar = egui::Id::unique(("concluir_janela", "asm_ui.rs5"));
+    if ctx.data_mut(|m| m.remove_temp::<bool>(fechar)).unwrap_or(false) {
+        open = false;
+    }
     egui::Window::new(tr("▶ Simulação cinemática"))
         .id(egui::Id::unique("janela_simulacao"))
         .open(&mut open)
         .default_width(460.)
         .resizable(true)
         .show(ctx, |ui| {
+            if crate::app::done_bar(ui) {
+                ui.ctx().data_mut(|m| m.insert_temp(fechar, true));
+            }
             let ok = com == 0;
             ui.label(RichText::new(format!("Mecanismo: {sem} GDL sem comandos · {com} com os comandos")).strong());
             ui.label(
@@ -1635,12 +1642,19 @@ pub fn composer_window(app: &mut App, ctx: &egui::Context) {
     let mut open = true;
     let mut set_cam: Option<scc_montagem::display::Cam> = None;
     let before = st.live.clone();
+    let fechar = egui::Id::unique(("concluir_janela", "asm_ui.rs6"));
+    if ctx.data_mut(|m| m.remove_temp::<bool>(fechar)).unwrap_or(false) {
+        open = false;
+    }
     egui::Window::new(tr("🎬 Exibição e animação"))
         .id(egui::Id::unique("janela_composer"))
         .open(&mut open)
         .default_width(470.)
         .resizable(true)
         .show(ctx, |ui| {
+            if crate::app::done_bar(ui) {
+                ui.ctx().data_mut(|m| m.insert_temp(fechar, true));
+            }
             crate::editor::section(ui, "Estados de exibição");
             ui.label(RichText::new(tr("Guardam o que aparece, cores, explosão e câmera. O detalhamento usa estes estados como coletores de exibição.")).weak().small());
             let mut apply = None;

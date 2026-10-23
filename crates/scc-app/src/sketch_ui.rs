@@ -2294,8 +2294,20 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     }
     ui.add_space(4.);
     let mut finish = false;
-    if ui.add(egui::Button::new(RichText::new(tr("✔ Concluir sketch")).strong()).min_size(egui::vec2(180., 30.))).clicked() {
-        finish = true;
+    let mut remove = false;
+    ui.horizontal(|ui| {
+        if ui.add(egui::Button::new(RichText::new(tr("✔ Concluir sketch")).strong()).min_size(egui::vec2(150., 30.))).clicked() {
+            finish = true;
+        }
+        if ui.add(egui::Button::new(tr("🗑 Excluir")).min_size(egui::vec2(80., 30.))).on_hover_text(tr("apaga o sketch (pergunta se outros comandos usam)")).clicked() {
+            remove = true;
+        }
+    });
+    if remove {
+        let id = edit.feature;
+        app.finish_sketch();
+        app.ask_delete(id);
+        return;
     }
     project_ui(app, ui);
     let Some(edit) = app.sketch.as_mut() else { return };

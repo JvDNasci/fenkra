@@ -2127,6 +2127,9 @@ pub struct Document {
     /// anotações 3D (PMI) desta peça
     #[serde(default)]
     pub pmi: Vec<crate::pmi::Pmi>,
+    /// capturas de vista do PMI (câmera + anotações visíveis)
+    #[serde(default)]
+    pub pmi_captures: Vec<crate::pmi::PmiCapture>,
     /// estilo próprio de linha/ponto de elementos de geometria (espessura, tipo de linha, símbolo)
     #[serde(default)]
     pub line_styles: Vec<(Id, LineStyle)>,
@@ -2175,6 +2178,7 @@ impl Document {
             textures: vec![],
             sheet: None,
             pmi: vec![],
+            pmi_captures: vec![],
             line_styles: vec![],
             features: vec![],
             rollback: 0,

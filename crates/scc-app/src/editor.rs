@@ -352,6 +352,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 ui.label(tr("Referência não existe mais."));
                 return;
             };
+            command_bar(ui, session.map(|s| s.0) == Some(id), &mut sess_act);
             crate::geo_ui::panel(ui, &doc_ro, r, &vars, &seed, ref_err.as_deref());
             section(ui, "Nome e exibição");
             ui.horizontal(|ui| {
@@ -461,16 +462,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 return;
             };
             if session.map(|s| s.0) == Some(id) {
-                egui::Frame::NONE.fill(ui.visuals().faint_bg_color).inner_margin(6.).corner_radius(6.).show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        if ui.add(egui::Button::new(RichText::new(tr("✔ Concluir")).strong()).min_size(egui::vec2(110., 28.))).on_hover_text(tr("Enter")).clicked() {
-                            sess_act = Some(0);
-                        }
-                        if ui.add(egui::Button::new(tr("✖ Cancelar")).min_size(egui::vec2(100., 28.))).on_hover_text(tr("Esc")).clicked() {
-                            sess_act = Some(1);
-                        }
-                    });
-                });
+                command_bar(ui, true, &mut sess_act);
             }
             let names: Vec<String> = doc.params.iter().map(|p| p.name.clone()).chain(doc.references.iter().map(|r| r.name.clone())).collect();
             {
@@ -533,8 +525,18 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         app.sel = s;
     }
     match (sess_act, sel) {
-        (Some(0), _) => app.conclude_session(),
+        (Some(0), _) if app.session.is_some() => app.conclude_session(),
+        (Some(0), _) => app.sel = Sel::None,
         (Some(1), _) => app.cancel_session(),
+        // excluir: comando novo some (como cancelar); existente pede confirmação dos dependentes
+        (Some(3), Sel::Feature(id) | Sel::Ref(id)) => {
+            if app.session.as_ref().is_some_and(|s| s.is_new && s.id == id) {
+                app.cancel_session();
+            } else {
+                app.session = None;
+                app.ask_delete(id);
+            }
+        }
         (Some(2), Sel::Feature(id) | Sel::Ref(id)) => app.start_session(id, false, None),
         _ => {}
     }
@@ -549,6 +551,23 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     if let Some(id) = delete {
         app.ask_delete(id);
     }
+}
+
+/// Barra do comando aberto: Concluir (Enter), Cancelar (Esc, só em edição) e Excluir.
+fn command_bar(ui: &mut egui::Ui, editing: bool, act: &mut Option<u8>) {
+    egui::Frame::NONE.fill(ui.visuals().faint_bg_color).inner_margin(6.).corner_radius(6.).show(ui, |ui| {
+        ui.horizontal(|ui| {
+            if ui.add(egui::Button::new(RichText::new(tr("✔ Concluir")).strong()).min_size(egui::vec2(100., 28.))).on_hover_text(tr("Enter")).clicked() {
+                *act = Some(0);
+            }
+            if editing && ui.add(egui::Button::new(tr("✖ Cancelar")).min_size(egui::vec2(90., 28.))).on_hover_text(tr("Esc")).clicked() {
+                *act = Some(1);
+            }
+            if ui.add(egui::Button::new(tr("🗑 Excluir")).min_size(egui::vec2(80., 28.))).on_hover_text(tr("Del")).clicked() {
+                *act = Some(3);
+            }
+        });
+    });
 }
 
 /// Cor + acabamento + predefinições.

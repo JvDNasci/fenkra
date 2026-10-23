@@ -446,10 +446,14 @@ impl App {
             let d = &mut app.open.doc;
             let mk = |d: &mut Document, kind, a: Vec<[f64; 3]>, off, text: &str| {
                 let id = d.alloc();
-                d.pmi.push(Pmi { id, name: format!("PMI {}", id.0), kind, anchors: a, offset: off, text: text.into(), tol_plus: s(""), tol_minus: s(""), visible: true });
+                d.pmi.push(Pmi { id, name: format!("PMI {}", id.0), kind, anchors: a, offset: off, text: text.into(), tol_plus: s(""), tol_minus: s(""), visible: true, plane: None });
             };
             mk(d, PmiKind::Linear, vec![[-60., -35., 8.], [60., -35., 8.]], [0., -25., 0.], "");
             mk(d, PmiKind::Note, vec![[0., 0., 8.]], [40., 30., 30.], "Rebarbar arestas vivas");
+            if let Some(p) = d.pmi.last_mut() {
+                // nota deitada no plano do topo (exemplo de texto fixo num plano)
+                p.plane = Some(([0., 0., 1.], [1., 0., 0.]));
+            }
             mk(d, PmiKind::Gdt { ch: GdtChar::Planeza, tol: s("0,05"), datums: s("") }, vec![[-40., 20., 8.]], [-30., 30., 30.], "");
             mk(d, PmiKind::Roughness { ra: s("1,6"), process: s("fresado") }, vec![[30., 20., 8.]], [20., 25., 25.], "");
             app.started = true;
@@ -1888,7 +1892,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
             .unwrap_or_default();
         let relink = self.relink_ext;
         let title = if relink.is_some() { tr("🔗 Assistente de relink") } else { tr("🔗 Importar publicação") };
+        let fechar = egui::Id::unique(("concluir_janela", "app.rs2"));
+        if ctx.data_mut(|m| m.remove_temp::<bool>(fechar)).unwrap_or(false) {
+            open = false;
+        }
         egui::Window::new(title).id(egui::Id::unique("janela_links")).open(&mut open).default_width(420.).show(ctx, |ui| {
+            if crate::app::done_bar(ui) {
+                ui.ctx().data_mut(|m| m.insert_temp(fechar, true));
+            }
             if let Some(e) = relink.and_then(|x| self.open.doc.external.iter().find(|e| e.id == x)) {
                 ui.label(RichText::new(format!("Religando {} — hoje: {}.{} ({})", self.open.doc.name_of(e.target.unwrap_or(e.id)), e.source, e.publication, e.path)).strong());
                 ui.label(RichText::new(tr("Escolha a peça e a publicação nova (mesmo tipo de geometria). Os comandos que usam o elemento continuam ligados a ele.")).weak().small());
@@ -2458,12 +2469,19 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
             AppTarget::Collector(id) | AppTarget::Feature(id) | AppTarget::Ref(id) => d.name_of(id),
         };
         let mut open = true;
+        let fechar = egui::Id::unique(("concluir_janela", "app.rs4"));
+        if ctx.data_mut(|m| m.remove_temp::<bool>(fechar)).unwrap_or(false) {
+            open = false;
+        }
         egui::Window::new(format!("🎨 {} — {name}", tr("Propriedades gráficas")))
             .id(egui::Id::unique("janela_props"))
             .open(&mut open)
             .default_width(300.)
             .resizable(true)
             .show(ctx, |ui| {
+            if crate::app::done_bar(ui) {
+                ui.ctx().data_mut(|m| m.insert_temp(fechar, true));
+            }
                 match t {
                     AppTarget::Part => {
                         ui.label(RichText::new(tr("Aparência da peça inteira (vale sobre os corpos)")).weak().small());
@@ -2521,12 +2539,19 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
         let table = scc_solidos::bend_table(&self.open.doc);
         let d = &mut self.open.doc;
         let sp = d.sheet.get_or_insert_with(SheetParams::default);
+        let fechar = egui::Id::unique(("concluir_janela", "app.rs1"));
+        if ctx.data_mut(|m| m.remove_temp::<bool>(fechar)).unwrap_or(false) {
+            open = false;
+        }
         egui::Window::new(tr("▭ Chapa metálica"))
             .id(egui::Id::unique("janela_chapa"))
             .open(&mut open)
             .default_width(380.)
             .resizable(true)
             .show(ctx, |ui| {
+            if crate::app::done_bar(ui) {
+                ui.ctx().data_mut(|m| m.insert_temp(fechar, true));
+            }
                 editor::expr(ui, "Espessura", &mut sp.thickness, &vars, "mm");
                 editor::expr(ui, "Raio de dobra", &mut sp.radius, &vars, "mm");
                 editor::expr(ui, "Fator K", &mut sp.k, &vars, "");
@@ -2687,6 +2712,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
         let mut actions: Vec<TreeAction> = vec![];
 
         let pick = |ui: &mut egui::Ui, s: Sel, text: RichText| -> egui::Response { ui.selectable_label(sel == s, text) };
+        // seções que o usuário ocultou (botão direito na peça → Seções da árvore)
+        let hidden_secs = self.settings.tree_hidden.clone();
+        let hide = |k: &str| hidden_secs.iter().any(|x| x == k);
 
         // ---------- peça
         let r = pick(ui, Sel::Part, RichText::new(format!("🧊 {}", doc.name)).strong());
@@ -2707,11 +2735,20 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 actions.push(TreeAction::NewCollector);
                 ui.close();
             }
+            ui.menu_button(tr("👁 Seções da árvore"), |ui| {
+                for (k, n) in TREE_SECTIONS {
+                    let mut on = !hidden_secs.iter().any(|x| x == k);
+                    if ui.checkbox(&mut on, tr(n)).changed() {
+                        actions.push(TreeAction::ToggleSection(k.to_string()));
+                    }
+                }
+            });
         });
         if !doc.props.pn.is_empty() {
             ui.label(RichText::new(format!("   PN {} · {}", doc.props.pn, doc.props.part_type.label())).weak().small());
         }
 
+        if !hide("origem") {
         // ---------- Origem (fixa)
         egui::CollapsingHeader::new(tr("📍 Origem")).default_open(false).show(ui, |ui| {
             for o in [OriginPlane::XY, OriginPlane::XZ, OriginPlane::YZ] {
@@ -2732,7 +2769,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 actions.push(TreeAction::OriginVisible(v));
             }
         });
+        }
 
+        if !hide("externas") {
         // ---------- referências externas (sempre separadas)
         let h = egui::CollapsingHeader::new(format!("🔗 {} ({})", tr("Referências externas"), doc.external.len())).default_open(false).show(ui, |ui| {
             if doc.external.is_empty() {
@@ -2784,7 +2823,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 ui.close();
             }
         });
+        }
 
+        if !hide("publicacoes") {
         // ---------- publicações desta peça (o que outras peças podem importar)
         let n_pub = doc.references.iter().filter(|r| r.published).count() + doc.params.iter().filter(|p| p.published).count() + doc.collectors.iter().filter(|c| c.published).count();
         let h = egui::CollapsingHeader::new(format!("📤 {} ({n_pub})", tr("Publicações"))).id_salt("arvore_pub").default_open(false).show(ui, |ui| {
@@ -2838,10 +2879,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 ui.close();
             }
         });
+        }
 
+        if !hide("pmi") {
         // ---------- PMI (detalhamento 3D)
         crate::pmi_ui::tree_section(self, ui);
+        }
 
+        if !hide("parametros") {
         // ---------- parâmetros
         let h = egui::CollapsingHeader::new(format!("ƒ {} ({})", tr("Parâmetros"), doc.params.len())).default_open(false).show(ui, |ui| {
             let vars = self.vars();
@@ -2883,7 +2928,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 ui.close();
             }
         });
+        }
 
+        if !hide("vistas") {
         // ---------- vistas salvas (câmeras)
         if !doc.views.is_empty() {
             egui::CollapsingHeader::new(format!("📷 Vistas ({})", doc.views.len())).default_open(false).show(ui, |ui| {
@@ -2894,7 +2941,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 }
             });
         }
+        }
 
+        if !hide("geometria") {
         // ---------- pastas de geometria (sem linha do tempo), com subpastas
         let first_geo = doc.folders.iter().find(|f| f.kind == FolderKind::Geometria).map(|f| f.id);
         for fo in doc.folders.iter().filter(|f| f.kind == FolderKind::Geometria && f.parent.is_none_or(|p| doc.folder(p).is_none())) {
@@ -2916,6 +2965,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
         }
         if ui.small_button(tr("➕ Pasta de geometria")).on_hover_text(tr("Planos, pontos, curvas e sketches livres, organizados como você quiser (sem linha do tempo)")).clicked() {
             actions.push(TreeAction::NewGeometryFolder);
+        }
         }
 
         ui.separator();
@@ -3656,6 +3706,13 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 self.command(c);
             }
             TreeAction::Act(x) => self.act(x),
+            TreeAction::ToggleSection(k) => {
+                if let Some(i) = self.settings.tree_hidden.iter().position(|x| *x == k) {
+                    self.settings.tree_hidden.remove(i);
+                } else {
+                    self.settings.tree_hidden.push(k);
+                }
+            }
             TreeAction::SelectSel(s) => self.sel = s,
 
             TreeAction::FolderShown(fo, on) => {
@@ -3775,7 +3832,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
         match self.settings.bench {
             Bench::Desenho => {
                 let Some(st) = self.dwg.as_mut() else { return };
-                if st.sel.is_none() && st.tool.is_none() {
+                if !st.active() {
                     return;
                 }
                 ui.horizontal(|ui| {
@@ -3807,7 +3864,15 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                         st.pending = None;
                         st.pending_joint = None;
                     }
+                    if let Some(id) = st.sel.filter(|_| st.pending.is_none() && st.pending_joint.is_none()) {
+                        if big(ui, "🗑 Excluir").on_hover_text("Del").clicked() {
+                            ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique("asm_excluir"), id.0));
+                        }
+                    }
                 });
+                if let Some(id) = ui.ctx().data_mut(|m| m.remove_temp::<u64>(egui::Id::unique("asm_excluir"))).map(Id) {
+                    crate::asm_ui::node_action(self, id, 0);
+                }
             }
             _ => {
                 if self.session.is_some() || self.sketch.is_some() {
@@ -3917,7 +3982,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
         }
         let mut open = true;
         let d = &mut self.open.doc;
+        let fechar = egui::Id::unique(("concluir_janela", "app.rs3"));
+        if ctx.data_mut(|m| m.remove_temp::<bool>(fechar)).unwrap_or(false) {
+            open = false;
+        }
         egui::Window::new(tr("📤 Publicações desta peça")).open(&mut open).default_width(420.).resizable(true).show(ctx, |ui| {
+            if crate::app::done_bar(ui) {
+                ui.ctx().data_mut(|m| m.insert_temp(fechar, true));
+            }
             ui.label(RichText::new(tr("Marque o que outras peças podem usar. Na outra peça: Referências externas → Importar publicação. O nome do elemento é o nome da publicação.")).weak().small());
             let mut filter: String = ctx.data(|m| m.get_temp(egui::Id::unique("pub_filtro"))).unwrap_or_default();
             ui.horizontal(|ui| {
@@ -4317,28 +4389,50 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
 
             // rótulos dos planos
             if let (Some(r), true) = (&self.result, self.settings.filter.rotulos) {
+                // só os planos visíveis agora (o resultado traz também os ocultos)
+                let d = &self.open.doc;
+                let flt = &self.settings.filter;
+                let env = self.hidden_env;
+                let shown = |hidden: bool| hidden == env;
                 for p in &r.planes {
+                    let (vis, name) = match p.id {
+                        Some(id) => match d.reference(id) {
+                            Some(rf) => (flt.planos_ref && shown(!rf.visible), rf.name.clone()),
+                            None => (false, String::new()),
+                        },
+                        None => (flt.planos_origem && d.origin_visible && !env, p.name.clone()),
+                    };
+                    if !vis {
+                        continue;
+                    }
                     let f = &p.frame;
                     let at = Vec3::from(f.origin.map(|v| v as f32));
                     let size = vp.bounds.map(|(a, b)| (b - a).max_element().max(20.) * 0.6).unwrap_or(60.);
                     let corner = at + (Vec3::from(f.x.map(|v| v as f32)) + Vec3::from(f.y().map(|v| v as f32))) * size * 0.45;
                     if let Some(pos) = vp.project(rect, corner) {
-                        ui.painter().text(pos, egui::Align2::LEFT_BOTTOM, &p.name, egui::FontId::proportional(11.), ink);
+                        ui.painter().text(pos, egui::Align2::LEFT_BOTTOM, &name, egui::FontId::proportional(11.), ink);
                     }
                 }
             }
 
             // rótulos de pontos e curvas de referência
             if let (Some(r), true) = (&self.result, self.settings.filter.rotulos) {
+                let d = &self.open.doc;
+                let vis = |id: Id| d.reference(id).filter(|rf| rf.visible != self.hidden_env).map(|rf| rf.name.clone());
                 for p in &r.points {
+                    let Some(name) = vis(p.id).filter(|_| self.settings.filter.pontos) else { continue };
                     if let Some(pos) = vp.project(rect, Vec3::from(p.p.map(|v| v as f32))) {
-                        ui.painter().text(pos + egui::vec2(6., -4.), egui::Align2::LEFT_BOTTOM, &p.name, egui::FontId::proportional(11.), ink);
+                        ui.painter().text(pos + egui::vec2(6., -4.), egui::Align2::LEFT_BOTTOM, &name, egui::FontId::proportional(11.), ink);
                     }
                 }
                 for c in &r.curves {
+                    let Some(name) = vis(c.id).filter(|_| self.settings.filter.planos_ref) else { continue };
+                    if c.pts.is_empty() {
+                        continue;
+                    }
                     let m = c.pts[c.pts.len() / 2];
                     if let Some(pos) = vp.project(rect, Vec3::from(m.map(|v| v as f32))) {
-                        ui.painter().text(pos + egui::vec2(6., -4.), egui::Align2::LEFT_BOTTOM, &c.name, egui::FontId::proportional(11.), ink);
+                        ui.painter().text(pos + egui::vec2(6., -4.), egui::Align2::LEFT_BOTTOM, &name, egui::FontId::proportional(11.), ink);
                     }
                 }
             }
@@ -4858,6 +4952,8 @@ enum TreeAction {
     ParamPublish(Id, bool),
     CollectorPublish(Id, bool),
     OpenPublications,
+    /// mostra/oculta uma seção da árvore (Origem, Parâmetros…)
+    ToggleSection(String),
     /// usa estes elementos do 3D como seleção e executa o comando
     WithPicks(Vec<crate::picking::Pick>, Cmd),
     /// ação da barra (vistas, ajustar…)
@@ -4869,6 +4965,24 @@ enum TreeAction {
 /// Item da árvore de geometria sendo arrastado.
 #[derive(Clone, Copy)]
 struct DragItem(Id);
+
+/// Botão "Concluir" no topo das janelas de comando: devolve true quando clicado.
+pub fn done_bar(ui: &mut egui::Ui) -> bool {
+    let r = ui.add(egui::Button::new(RichText::new(tr("✔ Concluir")).strong()).min_size(egui::vec2(100., 26.))).clicked();
+    ui.separator();
+    r
+}
+
+/// Seções da árvore da peça que podem ser ocultadas: (chave, nome).
+pub const TREE_SECTIONS: [(&str, &str); 7] = [
+    ("origem", "📍 Origem"),
+    ("externas", "🔗 Referências externas"),
+    ("publicacoes", "📤 Publicações"),
+    ("pmi", "📐 PMI"),
+    ("parametros", "ƒ Parâmetros"),
+    ("vistas", "📷 Vistas salvas"),
+    ("geometria", "📁 Pastas de geometria"),
+];
 
 /// Primeiro comando cuja geometria difere entre `d` e `rd` (0 = algo global mudou: parâmetros,
 /// referências, links, chapa, marcadores); `None` = mesma geometria.
@@ -5196,8 +5310,13 @@ impl eframe::App for App {
         // comando aberto: o painel de edição fica no lugar da árvore (a seta ⯈ abre a árvore ao lado
         // quando for preciso escolher algo nela; escolhendo no 3D, ela nem precisa aparecer)
         // sem comando aberto, o painel de edição some e a árvore fica sozinha à esquerda
-        let part_bench = !matches!(self.settings.bench, crate::settings::Bench::Desenho | crate::settings::Bench::Montagem);
-        let active = self.session.is_some() || self.sketch.is_some() || self.sketch_wait_plane || self.pmi_pending.is_some() || matches!(self.sel, Sel::Params | Sel::Pmi(_));
+        // (montagem continua com árvore e painel lado a lado)
+        let part_bench = self.settings.bench != crate::settings::Bench::Montagem;
+        let active = if self.settings.bench == crate::settings::Bench::Desenho {
+            self.dwg.as_ref().is_some_and(|s| s.active())
+        } else {
+            self.session.is_some() || self.sketch.is_some() || self.sketch_wait_plane || self.pmi_pending.is_some() || matches!(self.sel, Sel::Params | Sel::Pmi(_))
+        };
         let overlay = active && self.settings.editor_left && part_bench;
         let hide_editor = !active && self.settings.editor_left && part_bench;
         let tree_panel = |app: &mut App, root: &mut egui::Ui| egui::Panel::left("arvore").default_size(270.).resizable(true).show(root, |ui| {
@@ -5566,6 +5685,20 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
                 ui.add(egui::Slider::new(&mut s.ui_scale, 0.75..=1.75).text("escala (fontes e controles)"));
                 ui.add(egui::Slider::new(&mut s.icon_size, 20.0..=48.0).text("tamanho dos ícones"));
                 ui.checkbox(&mut s.show_labels, tr("mostrar o nome embaixo dos ícones"));
+                ui.separator();
+                ui.label(RichText::new(tr("Seções da árvore")).strong());
+                ui.horizontal_wrapped(|ui| {
+                    for (k, n) in TREE_SECTIONS {
+                        let mut on = !s.tree_hidden.iter().any(|x| x == k);
+                        if ui.checkbox(&mut on, tr(n)).changed() {
+                            if on {
+                                s.tree_hidden.retain(|x| x != k);
+                            } else {
+                                s.tree_hidden.push(k.to_string());
+                            }
+                        }
+                    }
+                });
             }
         1 => {
                 ui.checkbox(&mut s.gradient, tr("degradê de duas cores"));

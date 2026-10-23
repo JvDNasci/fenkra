@@ -73,6 +73,8 @@ pub struct DwgState {
     last_check: f64,
     dragging: bool,
     pub renaming: Option<Id>,
+    /// painel com as propriedades do desenho (folha, origem, legenda) aberto
+    pub props_open: bool,
 }
 
 impl DwgState {
@@ -82,6 +84,12 @@ impl DwgState {
         self.clicks.clear();
         self.tool_view = None;
         self.sel = None;
+        self.props_open = false;
+    }
+
+    /// Algo aberto no painel (ferramenta, item selecionado ou propriedades)?
+    pub fn active(&self) -> bool {
+        self.tool.is_some() || self.sel.is_some() || self.props_open
     }
 
     pub fn new(d: Drawing, path: Option<PathBuf>) -> Self {
@@ -111,6 +119,7 @@ impl DwgState {
             last_check: 0.,
             dragging: false,
             renaming: None,
+            props_open: false,
         }
     }
 
@@ -231,6 +240,7 @@ pub fn command(app: &mut App, i: u8) {
                 return;
             }
             if needs_source && st.source.is_none() {
+                st.props_open = true;
                 app.toast(tr("Escolha a origem (peça ou montagem salva) no painel do desenho"), true);
                 return;
             }
@@ -813,7 +823,11 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
     ensure(app);
     let st = app.dwg.as_mut().unwrap();
     ui.horizontal(|ui| {
-        ui.label(RichText::new(format!("📐 {}{}", st.d.name, if st.modified { " •" } else { "" })).strong());
+        // clicar no nome abre as propriedades do desenho (folha, origem, legenda)
+        if ui.selectable_label(st.props_open, RichText::new(format!("📐 {}{}", st.d.name, if st.modified { " •" } else { "" })).strong()).on_hover_text(tr("propriedades do desenho: folha, origem das vistas e legenda")).clicked() {
+            st.props_open = true;
+            st.sel = None;
+        }
     });
     if let Some(p) = &st.path {
         ui.label(RichText::new(p.display().to_string()).weak().small());
@@ -924,6 +938,8 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
             st.sheet = sid;
             st.origin = None;
             st.invalidate();
+            st.props_open = true;
+            st.sel = None;
         }
         r.header_response.context_menu(|ui| {
             if st.d.sheets.len() > 1 && ui.button(tr("Apagar folha")).clicked() {
