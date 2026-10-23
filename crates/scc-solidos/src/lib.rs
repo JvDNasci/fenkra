@@ -1760,6 +1760,9 @@ impl Ctx<'_> {
                 self.apply(f.target, tool, pr.op, f.id)?;
                 Ok(None)
             }
+            FeatureKind::Shell(sh) if sh.faces.is_empty() => Ok(Some("escolha na viewport as faces a remover — até lá a casca não é aplicada".into())),
+            FeatureKind::Draft(d) if d.faces.is_empty() => Ok(Some("escolha na viewport as faces que recebem a saída — até lá nada é aplicado".into())),
+            FeatureKind::Thickness(t) if t.faces.is_empty() => Ok(Some("escolha na viewport as faces a engrossar — até lá nada é aplicado".into())),
             FeatureKind::Shell(sh) => {
                 let t = ev(&sh.thickness, &self.vars, "espessura")?;
                 let (b, owners) = self.body_owned(f.target).ok_or("não há corpo para esvaziar")?;
@@ -2358,6 +2361,10 @@ impl Ctx<'_> {
                     Ok(Some(format!("{n} triângulos → superfície aberta (a malha não fecha um volume)")))
                 }
             }
+            // arestas escolhidas, mas nenhuma ainda: não aplica nada (todas = só pela opção "Todas")
+            FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) if matches!(&o.edges, EdgeSel::Edges(m) if m.is_empty()) && matches!(o.mode, EdgeMode::Constant | EdgeMode::Variable(_) | EdgeMode::TwoDist(_) | EdgeMode::DistAngle(_)) => {
+                Ok(Some("clique nas arestas na viewport (ou escolha 'Todas') — até lá nada é aplicado".into()))
+            }
             FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => {
                 let v = ev(&o.value, &self.vars, "valor")?;
                 let (b, owners) = self.body_owned(f.target).ok_or("não há corpo para aplicar")?;
@@ -2412,7 +2419,6 @@ impl Ctx<'_> {
                 self.bodies.insert(f.target, (s, own));
                 Ok(match &o.edges {
                     EdgeSel::CreatedBy(_) => Some("seleção por comando ainda não implementada: aplicado a todas as arestas".into()),
-                    EdgeSel::Edges(m) if m.is_empty() => Some("nenhuma aresta escolhida: aplicado a todas".into()),
                     _ => None,
                 })
             }

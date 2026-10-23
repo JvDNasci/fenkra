@@ -201,6 +201,10 @@ pub fn feature_incomplete(k: &FeatureKind) -> bool {
             FeatureKind::SmJoggle(b) => b.a == b.b,
             FeatureKind::Loft(l) => l.sections.len() < 2,
             FeatureKind::StructMember(m) => m.paths.is_empty(),
+            FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => matches!(&o.edges, EdgeSel::Edges(m) if m.is_empty()),
+            FeatureKind::Shell(x) => x.faces.is_empty(),
+            FeatureKind::Draft(x) => x.faces.is_empty(),
+            FeatureKind::Thickness(x) => x.faces.is_empty(),
             _ => false,
         }
 }
