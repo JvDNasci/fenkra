@@ -486,7 +486,57 @@ fn create_joint(app: &mut App, k: u8, a: Pick, b: Pick) {
         4 => JointKind::Spherical,
         5 => JointKind::Planar,
         6 => JointKind::Rigid,
-        _ => JointKind::PointCurve { curve: vec![] },
+        7 => JointKind::PointCurve { curve: vec![] },
+        _ => JointKind::Cam { profile: vec![], radius: "0".into() },
+    };
+    // came: perfil = contorno da seção da peça pelo plano da aresta escolhida (vários arcos
+    // viram um perfil só); seguidor = vértice (ponta) ou aresta circular (rolete)
+    let cam = if let (JointKind::Cam { .. }, Pick::Edge { body, edge, mid }) = (&kind, a) {
+        let comp = st.comp_of_body(body);
+        let node = comp.and_then(|c| st.asm.node(c)).cloned();
+        let poly: Vec<[f64; 3]> = st.view.as_ref().map(|r| crate::picking::edge_polyline(r, body, edge)).unwrap_or_default();
+        match (node, poly.len() >= 3) {
+            (Some(n), true) => {
+                let pl = n.placement;
+                let loc: Vec<[f64; 3]> = poly.iter().map(|q| pl.to_local(*q)).collect();
+                // normal do plano da aresta (Newell; aresta reta: cai no eixo z da peça)
+                let mut nn = [0.; 3];
+                for i in 0..loc.len() {
+                    let (p, q) = (loc[i], loc[(i + 1) % loc.len()]);
+                    nn[0] += (p[1] - q[1]) * (p[2] + q[2]);
+                    nn[1] += (p[2] - q[2]) * (p[0] + q[0]);
+                    nn[2] += (p[0] - q[0]) * (p[1] + q[1]);
+                }
+                let nn = if norm(nn) > 1e-9 { unit(nn) } else { [0., 0., 1.] };
+                let m = pl.to_local(mid.map(|v| v as f64));
+                let dir = st.file.as_ref().and_then(|f| f.parent()).map(|p| p.to_path_buf());
+                let shape = match &n.kind {
+                    NodeKind::Part { path } => st.cache.get(&scc_montagem::load::full_path(dir.as_deref(), path), true).ok().and_then(|p| p.shape.clone()),
+                    _ => None,
+                };
+                let lp = shape.and_then(|s| s.section_loops(m, nn, 1e4).ok()).and_then(|loops| {
+                    loops.into_iter().min_by(|x, y| {
+                        let dmin = |l: &Vec<[f64; 3]>| l.iter().map(|p| norm(sub(*p, m))).fold(f64::MAX, f64::min);
+                        dmin(x).total_cmp(&dmin(y))
+                    })
+                });
+                Some(lp.unwrap_or(loc))
+            }
+            _ => None,
+        }
+    } else {
+        None
+    };
+    let roller = match (&kind, b) {
+        (JointKind::Cam { .. }, Pick::Edge { body, edge, .. }) => st
+            .view
+            .as_ref()
+            .map(|r| crate::picking::edge_polyline(r, body, edge))
+            .and_then(|pts| scc_solidos::geo3d::Curve3::poly(pts, false).ok())
+            .filter(|c| !c.is_straight())
+            .and_then(|c| scc_solidos::geo3d::fit_circle(&c).ok())
+            .map(|(_, _, r)| r),
+        _ => None,
     };
     // ponto em curva: a aresta (trajetória) é da peça A, o vértice da peça B
     let curve = if let (JointKind::PointCurve { .. }, Pick::Edge { body, edge, .. }) = (&kind, a) {
@@ -528,6 +578,13 @@ fn create_joint(app: &mut App, k: u8, a: Pick, b: Pick) {
             app.toast(tr("Ponto em curva: escolha primeiro a aresta (trajetória) e depois o vértice"), true);
             return;
         }
+        (JointKind::Cam { .. }, _) => match cam {
+            Some(p) => JointKind::Cam { profile: p, radius: roller.map(|r| format!("{r:.3}")).unwrap_or_else(|| "0".into()) },
+            None => {
+                app.toast(tr("Came: escolha primeiro uma aresta do perfil do came e depois o seguidor (vértice ou aresta circular do rolete)"), true);
+                return;
+            }
+        },
         (k, _) => k,
     };
     st.push_undo();
@@ -1101,6 +1158,10 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                 }
                 if let JointKind::Screw { pitch } = &mut j.kind {
                     crate::editor::expr(ui, "Passo (mm/volta)", pitch, &Default::default(), "mm");
+                }
+                if let JointKind::Cam { profile, radius } = &mut j.kind {
+                    crate::editor::expr(ui, "Raio do rolete", radius, &Default::default(), "mm");
+                    ui.label(RichText::new(format!("{} {}", profile.len(), tr("pontos no perfil do came"))).weak().small());
                 }
                 let (can_a, can_l) = j.kind.drives();
                 crate::editor::section(ui, "Comando");

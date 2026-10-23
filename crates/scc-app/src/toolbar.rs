@@ -252,10 +252,14 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("sm_aba", "Aba", "Aba de aresta", "Dobra a partir da aresta selecionada: comprimento, ângulo, raio, recuos laterais e alívio de canto.", Cmd(C::SmFlange)),
                 it("sm_bainha", "Bainha", "Bainha", "Dobra de 180° na borda: esmagada (folga 0) ou aberta/circular.", Cmd(C::SmHem)),
             ]),
-            One(it("sm_joggle", "Joggle", "Joggle (desvio em Z)", "Desloca a chapa além de uma linha por uma rampa, para sobrepor sem saliência.", Cmd(C::SmJoggle))),
+            Family("sm_linha", vec![
+                it("sm_dobra_linha", "Dobra por linha", "Dobra por linha", "Escolha dois vértices na face: a chapa dobra nessa linha (linha de centro), com raio e fator K da chapa.", Cmd(C::SmBend)),
+                it("sm_joggle", "Joggle", "Joggle (desvio em Z)", "Desloca a chapa além de uma linha por uma rampa, para sobrepor sem saliência.", Cmd(C::SmJoggle)),
+            ]),
             Family("sm_estampo", vec![
                 it("sm_estampo", "Estampo", "Estampo (rebaixo/reforço)", "Rebaixa a chapa com o perfil fechado do sketch, mantendo a espessura.", Cmd(C::SmStamp)),
                 it("sm_furo_flangeado", "Furo flangeado", "Furo flangeado", "Furo com colar dobrado nos pontos do sketch (rigidez).", Cmd(C::SmFlangedHole)),
+                it("sm_veneziana", "Veneziana", "Veneziana (lanceta)", "Escolha dois vértices na face: corte nessa linha e a chapa atrás levantada em rampa (ventilação).", Cmd(C::SmLouver)),
             ]),
             One(it("sm_desdobrar", "Dobrar/Desdobrar", "Dobrar / desdobrar", "Alterna a peça entre dobrada e planificada (comprimento desenvolvido pelo fator K).", Cmd(C::SmUnfold))),
             One(it("recorte", "Recorte", "Recorte na chapa", "Recorte passante a partir do sketch (compatível com a planificação).", Cmd(C::Cut))),
@@ -279,6 +283,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("des_corte", "Corte", "Vista em corte", "Selecione a vista, trace a linha de corte (2 cliques) e posicione: face cortada hachurada.", Cmd(C::Dwg(13)))),
             One(it("des_detalhe", "Detalhe", "Vista de detalhe", "Selecione a vista, clique o centro e o raio, e posicione a ampliação (2× a escala).", Cmd(C::Dwg(14)))),
             One(it("des_planificada", "Planificada", "Vista planificada", "Chapa desdobrada vista de cima (peça de chapa como origem).", Cmd(C::Dwg(15)))),
+            One(it("des_esquema", "Esquema", "Esquema cinemático", "Montagem com juntas como origem: símbolos das juntas, barras entre elas e terra nas peças fixas (direção do painel).", Cmd(C::Dwg(17)))),
         ],
         Group::DesCotas => vec![
             Family("des_cota", vec![
@@ -344,6 +349,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
                     j("junta_planar", "Planar", "Junta planar", "Duas translações e uma rotação sobre o plano (duas faces planas).", 5),
                     j("junta_rigida", "Rígida", "Junta rígida", "Sem graus de liberdade entre as duas peças.", 6),
                     j("junta_ponto_curva", "Ponto em curva", "Junta ponto em curva", "O vértice da segunda peça segue a aresta (trajetória) da primeira.", 7),
+                    j("junta_came", "Came", "Junta de came", "Aresta do perfil do came e depois o seguidor (vértice ou aresta circular do rolete): o seguidor fica encostado no perfil.", 8),
                 ]),
                 One(it("mec_auto", "Do conjunto", "Mecanismo a partir das restrições", "Converte as restrições de cada par de peças em juntas equivalentes (eixo + face = revolução…).", Cmd(C::AsmAutoJoints))),
                 One(it("composer", "Exibição", "Estados de exibição, explosão e animação", "Salve o que aparece (cores, ocultos, explosão, câmera), exploda a montagem e anime por quadros-chave — os estados alimentam o detalhamento.", Cmd(C::AsmComposer))),

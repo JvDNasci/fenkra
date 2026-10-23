@@ -650,6 +650,13 @@ I["sm_parede"] = f'<path d="M4 30 L24 20 L44 30 L24 40 Z" fill="{LIGHT}" {S}/><p
 I["sm_aba"] = f'<path d="M4 38 H28 Q36 38 36 30 V6 H42 V30 Q42 44 28 44 H4 Z" fill="{MID}" {S}/>' + f'<path d="M28 38 Q36 38 36 30" stroke="{ACTION}" stroke-width="3" fill="none"/>'
 I["sm_bainha"] = f'<path d="M4 34 H32 A7 7 0 0 0 32 20 H16 V26 H32 A1 1 0 0 1 32 28 H4 Z" fill="{MID}" {S}/>' + f'<path d="M32 34 A7 7 0 0 0 32 20" stroke="{ACTION}" stroke-width="3" fill="none"/>'
 I["sm_joggle"] = f'<path d="M4 18 H18 L26 30 H44 V36 H24 L16 24 H4 Z" fill="{MID}" {S}/>' + arrow(34, 12, 34, 26, ACTION, 2)
+I["sm_dobra_linha"] = f'<path d="M4 40 H24 Q30 40 32 34 L40 8 L45 10 L37 36 Q34 46 24 46 H4 Z" fill="{MID}" {S}/>' + \
+    f'<path d="M4 30 H44" stroke="{ACTION}" stroke-width="1.8" stroke-dasharray="6 2 2 2"/>' + arrow(18, 28, 30, 18, ACTION, 2)
+I["sm_veneziana"] = f'<path d="M2 32 H14 V36 H2 Z M34 32 H46 V36 H34 Z" fill="{MID}" {S}/>' + \
+    f'<path d="M14 36 L34 36 L34 32 L14 20 L14 24 L30 33 Z" fill="{LIGHT}" {S}/>' + f'<path d="M14 20 V36" stroke="{ACTION}" stroke-width="2.4"/>' + \
+    f'<path d="M4 14 C 8 10, 10 18, 14 14" stroke="{ACTION}" stroke-width="1.6" fill="none"/>'
+I["junta_came"] = f'<path d="M24 8 C 36 8, 40 20, 38 28 C 36 38, 28 42, 20 40 C 10 38, 8 28, 10 20 C 12 12, 16 8, 24 8 Z" fill="{LIGHT}" {S}/>' +     f'<circle cx="22" cy="28" r="3" fill="{INK}"/><rect x="20" y="0" width="8" height="4" fill="{MID}"/>' + f'<circle cx="24" cy="4" r="4" fill="{MID}" stroke="{ACTION}" stroke-width="2"/>' +     f'<path d="M40 30 A 18 18 0 0 1 30 44" stroke="{ACTION}" stroke-width="2" fill="none"/>' + AR("28,46 34,46 32,40")
+I["des_esquema"] = f'<path d="M4 40 H22 M7 40 L4 45 M12 40 L9 45 M17 40 L14 45 M22 40 L19 45" stroke="{INK}" stroke-width="1.8"/>' +     f'<path d="M13 34 L30 14 L42 30" stroke="{INK}" stroke-width="3" fill="none" stroke-linejoin="round"/>' +     "".join(f'<circle cx="{x}" cy="{y}" r="4" fill="#ffffff" stroke="{ACTION}" stroke-width="2.2"/>' for x, y in [(13, 34), (30, 14)]) +     f'<rect x="36" y="26" width="10" height="8" fill="#ffffff" stroke="{ACTION}" stroke-width="2.2"/>'
 I["sm_estampo"] = f'<path d="M4 18 H14 L18 30 H30 L34 18 H44 V24 H38 L34 36 H14 L10 24 H4 Z" fill="{MID}" {S}/>' + f'<path d="M18 30 H30" stroke="{ACTION}" stroke-width="3"/>'
 I["sm_furo_flangeado"] = f'<path d="M4 16 H16 V36 H20 V22 H4 Z M44 16 H32 V36 H28 V22 H44 Z" fill="{MID}" {S}/>' + f'<line x1="24" y1="6" x2="24" y2="44" stroke="{ACTION}" stroke-width="1.6" stroke-dasharray="4 3"/>'
 I["sm_desdobrar"] = f'<path d="M4 24 H20 Q26 24 26 18 V6 H30 V18 Q30 28 20 28 H4 Z" fill="{MID}" {S}/>' + \

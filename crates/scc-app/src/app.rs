@@ -371,6 +371,10 @@ impl App {
             d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false }));
             d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 30., 2.], length: s("25"), angle: s("90"), radius: None, off1: s("8"), off2: s("8"), flip: false, relief: Some(s("3")) }));
             d.add_feature(FeatureKind::SmHem(SmHem { edge: [0., 30., 2.], length: s("8"), gap: s("0"), flip: false }));
+            if std::env::var("SCC_DEMO_CHAPA").is_ok_and(|v| v == "linha") {
+                d.add_feature(FeatureKind::SmLouver(SmLouver { a: [60., 15., 2.], b: [60., 45., 2.], width: s("12"), height: s("5"), flip: false, down: false }));
+                d.add_feature(FeatureKind::SmBend(SmBend { a: [20., 0., 2.], b: [20., 60., 2.], angle: s("45"), radius: None, flip: false, down: false }));
+            }
             d.hide_consumed(d.features[1].id);
             app.load_doc(d, None, None);
             app.settings.bench = crate::settings::Bench::Chapa;
@@ -1134,7 +1138,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                     _ => FeatureKind::SmFlangedHole(SmFlangedHole { sketch: sk, diameter: s("8"), height: s("4"), flip: false }),
                 }))
             }
-            Cmd::SmFlange | Cmd::SmHem | Cmd::SmJoggle => {
+            Cmd::SmFlange | Cmd::SmHem | Cmd::SmJoggle | Cmd::SmBend | Cmd::SmLouver => {
                 if d.sheet.is_none() {
                     d.sheet = Some(SheetParams::default());
                 }
@@ -1160,6 +1164,22 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                         relief: None,
                     }),
                     Cmd::SmHem => FeatureKind::SmHem(SmHem { edge: edge.unwrap_or([0.; 3]), length: s("8"), gap: s("0"), flip: false }),
+                    Cmd::SmBend => FeatureKind::SmBend(SmBend {
+                        a: verts.first().copied().unwrap_or([0.; 3]),
+                        b: verts.get(1).copied().unwrap_or([0., 10., 0.]),
+                        angle: s("90"),
+                        radius: None,
+                        flip: false,
+                        down: false,
+                    }),
+                    Cmd::SmLouver => FeatureKind::SmLouver(SmLouver {
+                        a: verts.first().copied().unwrap_or([0.; 3]),
+                        b: verts.get(1).copied().unwrap_or([0., 10., 0.]),
+                        width: s("12"),
+                        height: s("5"),
+                        flip: false,
+                        down: false,
+                    }),
                     _ => FeatureKind::SmJoggle(SmJoggle {
                         a: verts.first().copied().unwrap_or([0.; 3]),
                         b: verts.get(1).copied().unwrap_or([0., 10., 0.]),
@@ -4112,6 +4132,8 @@ pub enum Cmd {
     SmFlange,
     SmHem,
     SmJoggle,
+    SmBend,
+    SmLouver,
     SmStamp,
     SmFlangedHole,
     SmUnfold,

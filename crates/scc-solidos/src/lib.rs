@@ -1761,6 +1761,94 @@ impl Ctx<'_> {
                 self.bodies.insert(f.target, (r, vec![f.id; nf]));
                 Ok(None)
             }
+            FeatureKind::SmBend(bd) => {
+                let sp = self.sheet()?;
+                if sp.flat {
+                    // planificada: a dobra não se aplica (a chapa continua plana)
+                    return Ok(Some("planificada: dobra desfeita".into()));
+                }
+                let ang = ev(&bd.angle, &self.vars, "ângulo")?;
+                let r = match &bd.radius {
+                    Some(x) => ev(x, &self.vars, "raio")?,
+                    None => sp.r,
+                };
+                if !(0.1..=179.9).contains(&ang) {
+                    return Err("ângulo da dobra entre 0,1° e 179,9°".into());
+                }
+                let b = self.body(f.target).ok_or("a dobra precisa de uma chapa")?.clone();
+                let mid = geo3d::lerp(bd.a, bd.b, 0.5);
+                // normal para fora da face clicada: o material fica do lado oposto
+                let (_, n) = b.surface_near(mid).map_err(k)?;
+                let e = geo3d::unit(geo3d::sub(bd.b, bd.a)).ok_or("os dois pontos da linha coincidem")?;
+                let mut side = geo3d::unit(scc_kernel::cross(n, e)).ok_or("linha normal à chapa")?;
+                if bd.flip {
+                    side = geo3d::mul(side, -1.);
+                }
+                let (lo, hi) = b.bbox().ok_or("corpo sem dimensões")?;
+                let big = geo3d::dist(lo, hi) * 2. + 10.;
+                // comprimento desenvolvido da dobra, centrado na linha
+                let ba = ang.to_radians() * (r + sp.k * sp.t);
+                let half_space = |d: f64| {
+                    let p = geo3d::add(bd.a, geo3d::mul(side, d));
+                    let y = scc_kernel::cross(side, e);
+                    let o = geo3d::sub(geo3d::sub(p, geo3d::mul(e, big)), geo3d::mul(y, big));
+                    Shape::box_tool(o, e, side, [2. * big, 2. * big, big])
+                };
+                let fixed = b.boolean(&half_space(-ba / 2.).map_err(k)?, scc_kernel::Bool::Cut).map_err(k)?;
+                let moving = b.boolean(&half_space(ba / 2.).map_err(k)?, scc_kernel::Bool::Common).map_err(k)?;
+                let p0 = geo3d::sub(bd.a, geo3d::mul(side, ba / 2.));
+                let section = b.boolean(&Shape::plane_face(p0, side, big).map_err(k)?, scc_kernel::Bool::Common).map_err(k)?;
+                if section.is_null() || moving.is_null() {
+                    return Err("a linha da dobra não atravessa a chapa".into());
+                }
+                // eixo: raio interno acima da face clicada (para cima) ou abaixo da outra face
+                let (axis_p, axis_d) = if bd.down {
+                    (geo3d::sub(p0, geo3d::mul(n, sp.t + r)), scc_kernel::cross(n, side))
+                } else {
+                    (geo3d::add(p0, geo3d::mul(n, r)), scc_kernel::cross(side, n))
+                };
+                let bend = section.revolve(axis_p, axis_d, ang, 0.).map_err(k)?;
+                let moved = moving
+                    .transformed(Xform::Translate(geo3d::mul(side, -ba)))
+                    .map_err(k)?
+                    .transformed(Xform::Rotate(axis_p, axis_d, ang))
+                    .map_err(k)?;
+                let out = fixed.boolean(&bend, scc_kernel::Bool::Fuse).map_err(k)?.boolean(&moved, scc_kernel::Bool::Fuse).map_err(k)?;
+                let nf = out.face_count() as usize;
+                self.bodies.insert(f.target, (out, vec![f.id; nf]));
+                Ok(None)
+            }
+            FeatureKind::SmLouver(lv) => {
+                let sp = self.sheet()?;
+                if sp.flat {
+                    return Ok(Some("planificada: veneziana mostrada só pelo corte".into()));
+                }
+                let w = ev(&lv.width, &self.vars, "largura")?;
+                let h = ev(&lv.height, &self.vars, "altura")?;
+                if h <= sp.t {
+                    return Err("a altura da veneziana precisa ser maior que a espessura".into());
+                }
+                let b = self.body(f.target).ok_or("a veneziana precisa de uma chapa")?.clone();
+                let mid = geo3d::lerp(lv.a, lv.b, 0.5);
+                let (_, n0) = b.surface_near(mid).map_err(k)?;
+                let e = geo3d::sub(lv.b, lv.a);
+                let len = geo3d::norm(e);
+                let e = geo3d::unit(e).ok_or("os dois pontos da linha coincidem")?;
+                let mut side = geo3d::unit(scc_kernel::cross(n0, e)).ok_or("linha normal à chapa")?;
+                if lv.flip {
+                    side = geo3d::mul(side, -1.);
+                }
+                // levantar para fora da face clicada (ou para o outro lado: a origem vai para a outra face)
+                let (o, n) = if lv.down { (geo3d::sub(lv.a, geo3d::mul(n0, sp.t)), geo3d::mul(n0, -1.)) } else { (lv.a, n0) };
+                let at = |s: f64, z: f64| geo3d::add(geo3d::add(o, geo3d::mul(side, s)), geo3d::mul(n, z));
+                // retira a chapa sob a rampa e põe a rampa (paralelogramo: o volume se conserva)
+                let cut = Shape::poly_prism(&[at(0., 0.01), at(w, 0.01), at(w, -sp.t - 0.01), at(0., -sp.t - 0.01)], geo3d::mul(e, len)).map_err(k)?;
+                let hood = Shape::poly_prism(&[at(0., h), at(w, 0.), at(w, -sp.t), at(0., h - sp.t)], geo3d::mul(e, len)).map_err(k)?;
+                let out = b.boolean(&cut, scc_kernel::Bool::Cut).map_err(k)?.boolean(&hood, scc_kernel::Bool::Fuse).map_err(k)?;
+                let nf = out.face_count() as usize;
+                self.bodies.insert(f.target, (out, vec![f.id; nf]));
+                Ok(None)
+            }
             FeatureKind::SmStamp(st) => {
                 let sp = self.sheet()?;
                 let (frame, sk) = self.sketch(st.sketch)?;
@@ -2548,6 +2636,7 @@ pub fn bend_table(doc: &Document) -> Vec<BendRow> {
         let (ang, r) = match &f.kind {
             FeatureKind::SmFlange(fl) => (num(&fl.angle), fl.radius.as_ref().map(num).unwrap_or(r0)),
             FeatureKind::SmHem(h) => (180., (num(&h.gap) / 2.).max(0.01)),
+            FeatureKind::SmBend(b) => (num(&b.angle), b.radius.as_ref().map(num).unwrap_or(r0)),
             _ => continue,
         };
         let a = ang.to_radians();
@@ -2815,6 +2904,20 @@ mod tests {
         assert!(near(r.bodies[0].mass.volume, 10000., 1e-3), "joggle {}", r.bodies[0].mass.volume);
         let zmin = r.bodies[0].mesh.positions.chunks_exact(3).map(|p| p[2]).fold(f32::MAX, f32::min);
         assert!((zmin + 3.).abs() < 0.01, "desvio {zmin}");
+        // dobra por linha a 90°: volume conservado (comprimento desenvolvido) e a ponta sobe
+        let mut d = base();
+        d.add_feature(FeatureKind::SmBend(SmBend { a: [60., 0., 2.], b: [60., 50., 2.], angle: s("90"), radius: None, flip: false, down: false }));
+        let r = check(&d);
+        assert!(near(r.bodies[0].mass.volume, 10000., 2e-3), "dobra por linha {}", r.bodies[0].mass.volume);
+        let zmax = r.bodies[0].mesh.positions.chunks_exact(3).map(|p| p[2]).fold(f32::MIN, f32::max);
+        assert!(zmax > 30., "a aba subiu {zmax}");
+        // veneziana: volume conservado e abertura de 5 mm
+        let mut d = base();
+        d.add_feature(FeatureKind::SmLouver(SmLouver { a: [30., 10., 2.], b: [30., 40., 2.], width: s("12"), height: s("5"), flip: false, down: false }));
+        let r = check(&d);
+        assert!(near(r.bodies[0].mass.volume, 10000., 1e-3), "veneziana {}", r.bodies[0].mass.volume);
+        let zmax = r.bodies[0].mesh.positions.chunks_exact(3).map(|p| p[2]).fold(f32::MIN, f32::max);
+        assert!((zmax - 7.).abs() < 0.01, "altura da veneziana {zmax}");
         // estampo 20×20 com 3 mm de profundidade
         let mut d = base();
         let top = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "2");

@@ -26,6 +26,7 @@ pub mod c {
     pub const DETAIL: u8 = 14;
     pub const FLAT: u8 = 15;
     pub const ISO: u8 = 16;
+    pub const SCHEMA: u8 = 17;
     pub const DIM_H: u8 = 20;
     pub const DIM_V: u8 = 21;
     pub const DIM_A: u8 = 22;
@@ -150,7 +151,7 @@ fn current_source(app: &App) -> Option<Source> {
 
 fn hint(tool: u8, n: usize) -> &'static str {
     match (tool, n) {
-        (c::SET | c::VIEW | c::ISO | c::FLAT, _) => "Clique na folha para posicionar a vista",
+        (c::SET | c::VIEW | c::ISO | c::FLAT | c::SCHEMA, _) => "Clique na folha para posicionar a vista",
         (c::PROJ, _) => "Clique ao lado da vista selecionada: abaixo = superior, à direita = lateral esquerda (1º diedro)",
         (c::SECTION, 0) => "Clique o primeiro ponto da linha de corte na vista",
         (c::SECTION, 1) => "Clique o segundo ponto da linha de corte",
@@ -216,7 +217,7 @@ pub fn command(app: &mut App, i: u8) {
             let st = app.dwg.as_mut().unwrap();
             let needs_parent = matches!(i, c::PROJ | c::SECTION | c::DETAIL);
             let needs_view = (c::DIM_H..=c::DIM_ANG).contains(&i);
-            let needs_source = matches!(i, c::SET | c::VIEW | c::ISO | c::FLAT | c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT);
+            let needs_source = matches!(i, c::SET | c::VIEW | c::ISO | c::FLAT | c::SCHEMA | c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT);
             if needs_parent && !st.sel.is_some_and(|s| st.d.view(s).is_some_and(|v| !matches!(v.kind, ViewKind::Detail { .. }))) {
                 app.toast(tr("Selecione antes a vista de origem (clique nela na folha)"), true);
                 return;
@@ -646,7 +647,7 @@ fn click(app: &mut App, m: V2, snap: &SnapFn, view_at: &ViewAt) {
         st.sel = Some(id);
     };
     match tool {
-        c::SET | c::VIEW | c::ISO | c::FLAT => {
+        c::SET | c::VIEW | c::ISO | c::FLAT | c::SCHEMA => {
             let src = st.source.clone().unwrap();
             let sc = st.new_scale;
             let id = match tool {
@@ -660,6 +661,7 @@ fn click(app: &mut App, m: V2, snap: &SnapFn, view_at: &ViewAt) {
                 }
                 c::ISO => st.d.add_view(sheet, src, ViewKind::Standard(Dir::Iso), m, sc),
                 c::FLAT => st.d.add_view(sheet, src, ViewKind::Flat, m, sc),
+                c::SCHEMA => st.d.add_view(sheet, src, ViewKind::Schematic(st.new_dir), m, sc),
                 _ => st.d.add_view(sheet, src, ViewKind::Standard(st.new_dir), m, sc),
             };
             done(st, id);
@@ -870,6 +872,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                     ViewKind::Section { .. } => "✂",
                     ViewKind::Detail { .. } => "🔍",
                     ViewKind::Flat => "▭",
+                    ViewKind::Schematic(_) => "⚙",
                     _ => "▣",
                 };
                 let n_dims = st.d.dims.iter().filter(|d| d.view == id).count();
@@ -943,7 +946,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             ui.checkbox(&mut v.tangent_edges, tr("Arestas tangentes"));
             ui.checkbox(&mut v.label, tr("Mostrar rótulo e escala"));
             match &mut v.kind {
-                ViewKind::Standard(d) => {
+                ViewKind::Standard(d) | ViewKind::Schematic(d) => {
                     egui::ComboBox::from_label(tr("Direção")).selected_text(tr(d.label())).show_ui(ui, |ui| {
                         for x in Dir::ALL {
                             ui.selectable_value(d, x, tr(x.label()));

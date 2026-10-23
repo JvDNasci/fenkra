@@ -23,7 +23,8 @@ impl JFrame {
         let h = if z[2].abs() < 0.9 { [0., 0., 1.] } else { [1., 0., 0.] };
         JFrame { o, z, x: unit(cross(h, z)) }
     }
-    fn world(&self, p: &Placement) -> (V3, V3, V3) {
+    /// Origem, eixo z e eixo x no mundo.
+    pub fn world(&self, p: &Placement) -> (V3, V3, V3) {
         (p.point(self.o), unit(p.dir(self.z)), unit(p.dir(self.x)))
     }
 }
@@ -52,6 +53,10 @@ pub enum JointKind {
     Rigid,
     /// o ponto (origem de B) segue a curva (polilinha no sistema de A)
     PointCurve { curve: Vec<V3> },
+    /// came: o seguidor (origem de B, com rolete de raio `radius`) fica encostado no perfil
+    /// (polilinha fechada no sistema de A) — com uma prismática no seguidor e uma revolução no
+    /// came, vira o mecanismo came-seguidor
+    Cam { profile: Vec<V3>, radius: String },
 }
 
 impl JointKind {
@@ -65,6 +70,7 @@ impl JointKind {
             JointKind::Planar => "Planar",
             JointKind::Rigid => "Rígida",
             JointKind::PointCurve { .. } => "Ponto em curva",
+            JointKind::Cam { .. } => "Came",
         }
     }
     /// Pode receber comando de ângulo / de curso.
@@ -273,6 +279,19 @@ pub fn residuals(a: &Assembly, pl: &HashMap<Id, Placement>, vars: &HashMap<Strin
                 }
                 r.extend(pa.dir(sub(q, best.1)));
             }
+            JointKind::Cam { profile, radius } => {
+                // contato: distância do centro do rolete ao perfil fechado = raio do rolete
+                let q = pa.to_local(ob);
+                let n = profile.len();
+                let mut best = f64::MAX;
+                for i in 0..n {
+                    let (p0, p1) = (profile[i], profile[(i + 1) % n]);
+                    let e = sub(p1, p0);
+                    let t = (dot(sub(q, p0), e) / dot(e, e).max(1e-18)).clamp(0., 1.);
+                    best = best.min(norm(sub(q, [p0[0] + e[0] * t, p0[1] + e[1] * t, p0[2] + e[2] * t])));
+                }
+                r.push(best - num(radius));
+            }
         }
         if drives {
             if let Some(e) = &j.drive_angle {
@@ -415,6 +434,33 @@ mod tests {
         let pl: HashMap<Id, Placement> = g.nodes.iter().map(|n| (n.id, n.placement)).collect();
         let (a2, _) = measure(g.joints.iter().find(|x| x.id == j2).unwrap(), &pl).unwrap();
         assert!((a2 + 30.).abs() < 1e-4, "{a2}");
+    }
+
+    #[test]
+    fn came_e_seguidor() {
+        // came circular excêntrico (R20, centro a 5 mm do eixo) girando; seguidor desliza em y
+        let mut a = Assembly::new("came");
+        let base = a.add_component("Base", NodeKind::Part { path: "b".into() }, Placement::default(), None);
+        a.node_mut(base).unwrap().fixed = true;
+        let came = a.add_component("Came", NodeKind::Part { path: "c".into() }, Placement::default(), None);
+        let y0 = (400f64 - 25.).sqrt();
+        let seg = a.add_component("Seguidor", NodeKind::Part { path: "s".into() }, Placement { origin: [0., y0, 0.], ..Default::default() }, None);
+        let fz = JFrame::from_axis([0.; 3], [0., 0., 1.]);
+        let jr = a.add_joint(JointKind::Revolute, JRef { comp: base, frame: fz }, JRef { comp: came, frame: fz });
+        let fy = JFrame::from_axis([0.; 3], [0., 1., 0.]);
+        a.add_joint(JointKind::Prismatic, JRef { comp: base, frame: fy }, JRef { comp: seg, frame: fy });
+        let profile: Vec<V3> = (0..360).map(|i| {
+            let t = (i as f64).to_radians();
+            [5. + 20. * t.cos(), 20. * t.sin(), 0.]
+        })
+        .collect();
+        a.add_joint(JointKind::Cam { profile, radius: "0".into() }, JRef { comp: came, frame: fz }, JRef { comp: seg, frame: fz });
+        assert_eq!(analyze(&a).0, 1, "came-seguidor: 1 GDL (o giro do came)");
+        a.joints.iter_mut().find(|x| x.id == jr).unwrap().drive_angle = Some("90".into());
+        let rep = solve_with(&mut a, &HashMap::new());
+        assert!(rep.converged, "{rep:?}");
+        let y = a.node(seg).unwrap().placement.origin[1];
+        assert!((y - 25.).abs() < 0.05, "seguidor no topo do came: {y}");
     }
 
     #[test]

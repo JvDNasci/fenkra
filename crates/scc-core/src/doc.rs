@@ -1112,6 +1112,10 @@ pub enum FeatureKind {
     SmHem(SmHem),
     /// Chapa: joggle (desvio em Z) a partir de uma linha na face.
     SmJoggle(SmJoggle),
+    /// dobra por linha (chapa já plana dobrada numa linha da face)
+    SmBend(SmBend),
+    /// veneziana (lanceta levantada)
+    SmLouver(SmLouver),
     /// Chapa: estampo (rebaixo/reforço) com o perfil de um sketch na face.
     SmStamp(SmStamp),
     /// Chapa: furo flangeado (colar dobrado) nos pontos de um sketch.
@@ -1203,6 +1207,37 @@ pub struct SmJoggle {
     pub run: String,
     /// lado da linha que desce (o outro fica)
     pub flip: bool,
+}
+
+/// Dobra por linha: a chapa é dobrada ao longo da linha a–b da face (linha de centro da dobra).
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct SmBend {
+    pub a: [f64; 3],
+    pub b: [f64; 3],
+    pub angle: String,
+    /// raio interno próprio (senão o da chapa)
+    #[serde(default)]
+    pub radius: Option<String>,
+    /// lado da linha que se move (o outro fica)
+    pub flip: bool,
+    /// dobrar para baixo (para dentro do material) em vez de para cima
+    #[serde(default)]
+    pub down: bool,
+}
+
+/// Veneziana: corte na linha a–b e a chapa atrás dela levantada em rampa (ventilação).
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct SmLouver {
+    pub a: [f64; 3],
+    pub b: [f64; 3],
+    /// largura da rampa (perpendicular à linha) e altura da abertura
+    pub width: String,
+    pub height: String,
+    /// lado da linha onde fica a rampa
+    pub flip: bool,
+    /// levantar para o outro lado da chapa
+    #[serde(default)]
+    pub down: bool,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -1386,6 +1421,8 @@ impl FeatureKind {
             SmFlange(_) => "Aba",
             SmHem(_) => "Bainha",
             SmJoggle(_) => "Joggle",
+            SmBend(_) => "Dobra por linha",
+            SmLouver(_) => "Veneziana",
             SmStamp(_) => "Estampo",
             SmFlangedHole(_) => "FuroFlangeado",
             StructMember(_) => "Membro",
@@ -1432,6 +1469,8 @@ impl FeatureKind {
             SmFlange(_) => "⌐",
             SmHem(_) => "⊃",
             SmJoggle(_) => "⌇",
+            SmBend(_) => "⌐",
+            SmLouver(_) => "≋",
             SmStamp(_) => "◡",
             SmFlangedHole(_) => "◉",
             StructMember(_) => "⌶",
@@ -1618,6 +1657,16 @@ impl FeatureKind {
             SmJoggle(j) => {
                 exprs(&mut j.depth);
                 exprs(&mut j.run)
+            }
+            SmBend(b) => {
+                exprs(&mut b.angle);
+                if let Some(r) = &mut b.radius {
+                    exprs(r)
+                }
+            }
+            SmLouver(l) => {
+                exprs(&mut l.width);
+                exprs(&mut l.height)
             }
             SmStamp(s) => {
                 ids(&mut s.sketch);

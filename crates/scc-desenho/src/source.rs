@@ -248,6 +248,17 @@ impl Models {
             out.bounds();
             return out;
         }
+        if let ViewKind::Schematic(d) = &v.kind {
+            // o esquema só precisa das juntas e posições (as peças podem nem estar no disco)
+            out.error = None;
+            match &l.model {
+                Model::Asm(a) => schematic(a, Axes::of(*d), &mut out),
+                Model::Part(_) => out.error = Some("esquema cinemático: a origem precisa ser uma montagem com juntas".into()),
+            }
+            out.bounds();
+            out.center = [(out.lo[0] + out.hi[0]) / 2., (out.lo[1] + out.hi[1]) / 2.];
+            return out;
+        }
         let shape = match (&v.kind, &l.model) {
             (ViewKind::Flat, Model::Part(doc)) => {
                 let mut flat = (**doc).clone();
@@ -291,7 +302,7 @@ impl Models {
                 let n = cross(pa.toward, u);
                 Axes::new(n, u)
             }
-            ViewKind::Detail { .. } => unreachable!(),
+            ViewKind::Detail { .. } | ViewKind::Schematic(_) => unreachable!(),
         };
         out.axes = Some(axes);
         out.center = axes.project(c3);
@@ -414,6 +425,99 @@ impl Models {
         match &self.load(src).model {
             Model::Part(d) => Some((d.props.pn.clone(), if d.props.description.is_empty() { d.name.clone() } else { d.props.description.clone() }, d.props.material.clone())),
             Model::Asm(a) => Some((a.props.pn.clone(), if a.props.description.is_empty() { a.name.clone() } else { a.props.description.clone() }, String::new())),
+        }
+    }
+}
+
+/// Esquema cinemático: símbolo de cada junta, barras ligando as juntas de cada peça e terra nas
+/// peças fixas (tamanho dos símbolos proporcional ao mecanismo).
+fn schematic(a: &Assembly, ax: Axes, out: &mut Proj) {
+    use scc_montagem::kin::JointKind as J;
+    let joints: Vec<_> = a.joints.iter().filter(|j| !j.suppressed).collect();
+    if joints.is_empty() {
+        out.error = Some("a montagem não tem juntas (Cinemática › juntas ou Mecanismo a partir das restrições)".into());
+        return;
+    }
+    out.axes = Some(ax);
+    let place = |c: Id| a.node(c).map(|n| n.placement).unwrap_or_default();
+    // posição e eixo (na vista) de cada junta, pelo lado A
+    let info: Vec<(V2, V2, &J, Id, Id)> = joints
+        .iter()
+        .map(|j| {
+            let (o, z, _) = j.a.frame.world(&place(j.a.comp));
+            (ax.project(o), [dot(z, ax.x), dot(z, ax.y)], &j.kind, j.a.comp, j.b.comp)
+        })
+        .collect();
+    let (mut lo, mut hi) = ([f64::MAX; 2], [f64::MIN; 2]);
+    for (p, ..) in &info {
+        for k in 0..2 {
+            lo[k] = lo[k].min(p[k]);
+            hi[k] = hi[k].max(p[k]);
+        }
+    }
+    let s = ((hi[0] - lo[0]).max(hi[1] - lo[1]) * 0.05).max(3.);
+    let rect = |c: V2, u: V2, a: f64, b: f64| -> Vec<V2> {
+        let n = [-u[1], u[0]];
+        let q = |i: f64, j: f64| [c[0] + u[0] * a * i + n[0] * b * j, c[1] + u[1] * a * i + n[1] * b * j];
+        vec![q(-1., -1.), q(1., -1.), q(1., 1.), q(-1., 1.), q(-1., -1.)]
+    };
+    for (p, z, kind, ca, _) in &info {
+        let zl = (z[0] * z[0] + z[1] * z[1]).sqrt();
+        let u = if zl > 1e-6 { [z[0] / zl, z[1] / zl] } else { [1., 0.] };
+        let edge_on = zl > 0.3;
+        match kind {
+            J::Revolute | J::Cylindrical | J::Screw { .. } if !edge_on => out.lines.push((circle(*p, s * 0.5), 0)),
+            J::Revolute | J::Cylindrical | J::Screw { .. } => {
+                // mancal visto de lado: retângulo atravessado pelo eixo
+                out.lines.push((rect(*p, u, s * 0.6, s * 0.35), 0));
+                out.lines.push((vec![[p[0] - u[0] * s, p[1] - u[1] * s], [p[0] + u[0] * s, p[1] + u[1] * s]], 0));
+            }
+            J::Prismatic => {
+                out.lines.push((rect(*p, u, s * 0.8, s * 0.4), 0));
+                out.lines.push((vec![[p[0] - u[0] * s * 1.6, p[1] - u[1] * s * 1.6], [p[0] + u[0] * s * 1.6, p[1] + u[1] * s * 1.6]], 0));
+            }
+            J::Spherical => {
+                out.lines.push((circle(*p, s * 0.55), 0));
+                out.lines.push((circle(*p, s * 0.25), 0));
+            }
+            J::Cam { profile, .. } => {
+                // o próprio perfil do came, posicionado
+                let pl = place(*ca);
+                let mut pts: Vec<V2> = profile.iter().map(|q| ax.project(pl.point(*q))).collect();
+                if let Some(f) = pts.first().copied() {
+                    pts.push(f);
+                }
+                out.lines.push((pts, 0));
+            }
+            _ => out.lines.push((rect(*p, [1., 0.], s * 0.4, s * 0.4), 0)),
+        }
+    }
+    // barras: juntas de cada peça ligadas em sequência
+    let mut comps: Vec<Id> = vec![];
+    for (_, _, _, ca, cb) in &info {
+        for c in [ca, cb] {
+            if !comps.contains(c) {
+                comps.push(*c);
+            }
+        }
+    }
+    for c in comps {
+        let pts: Vec<V2> = info.iter().filter(|i| i.3 == c || i.4 == c).map(|i| i.0).collect();
+        let fixed = a.node(c).is_some_and(|n| n.fixed);
+        if pts.len() >= 2 && !fixed {
+            out.lines.push((pts.clone(), 0));
+        }
+        if fixed {
+            // terra: base com hachuras sob cada junta da peça fixa
+            for p in pts {
+                let y = p[1] - s * 0.9;
+                out.lines.push((vec![[p[0], p[1] - s * 0.5], [p[0], y]], 0));
+                out.lines.push((vec![[p[0] - s, y], [p[0] + s, y]], 0));
+                for i in 0..5 {
+                    let x = p[0] - s + i as f64 * s * 0.5;
+                    out.lines.push((vec![[x, y], [x - s * 0.35, y - s * 0.4]], 0));
+                }
+            }
         }
     }
 }

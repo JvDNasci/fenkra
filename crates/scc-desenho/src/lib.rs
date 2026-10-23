@@ -127,6 +127,9 @@ pub enum ViewKind {
     Detail { parent: Id, center: V2, radius: f64, label: String },
     /// chapa planificada vista de cima
     Flat,
+    /// esquema cinemático da montagem: juntas (símbolos), barras entre as juntas de cada peça e
+    /// terra nas peças fixas
+    Schematic(Dir),
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -351,6 +354,7 @@ impl Drawing {
             ViewKind::Section { label, .. } => format!("Corte {label}-{label}"),
             ViewKind::Detail { label, .. } => format!("Detalhe {label}"),
             ViewKind::Flat => "Planificada".into(),
+            ViewKind::Schematic(_) => "Esquema cinemático".into(),
         };
         self.views.push(View { id, sheet, name, source, kind, pos, scale, hidden_lines: false, tangent_edges: true, label: true });
         id
@@ -444,6 +448,25 @@ mod tests {
         assert_eq!(ids.len(), 4);
         let d2 = Drawing::from_json(&d.to_json()).unwrap();
         assert_eq!(d, d2);
+        // esquema cinemático de uma manivela (revolução na base fixa)
+        use scc_montagem::kin::{JFrame, JRef, JointKind};
+        use scc_montagem::{Assembly, NodeKind, Placement};
+        let dir = std::env::temp_dir().join("scc_desenho_esquema");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut a = Assembly::new("Manivela");
+        let b = a.add_component("Base", NodeKind::Part { path: "b.sccpart".into() }, Placement::default(), None);
+        a.node_mut(b).unwrap().fixed = true;
+        let c = a.add_component("Braço", NodeKind::Part { path: "c.sccpart".into() }, Placement::default(), None);
+        let f = JFrame::from_axis([0.; 3], [0., -1., 0.]);
+        a.add_joint(JointKind::Revolute, JRef { comp: b, frame: f }, JRef { comp: c, frame: f });
+        std::fs::write(dir.join("m.sccasm"), a.to_json()).unwrap();
+        let mut e = Drawing::new("Esquema", Format::A4);
+        let sh = e.sheets[0].id;
+        let v = e.add_view(sh, Source { path: "m.sccasm".into(), display_state: String::new() }, ViewKind::Schematic(Dir::Frente), [100., 100.], 1.);
+        let mut m = source::Models::new(Some(dir));
+        let p = m.proj(&e, v);
+        assert!(p.error.is_none(), "{:?}", p.error);
+        assert!(p.lines.len() >= 3, "símbolo da junta + terra: {}", p.lines.len());
         // apagar a frente leva as projetadas junto
         d.delete(ids[0]);
         assert_eq!(d.views.len(), 1);

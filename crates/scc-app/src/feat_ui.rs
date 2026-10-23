@@ -470,6 +470,45 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             expr(ui, "Rampa", &mut j.run, vars, "mm");
             ui.checkbox(&mut j.flip, tr("desviar o outro lado da linha"));
         }
+        FeatureKind::SmBend(b) => {
+            section(ui, "Dobra por linha");
+            let pts: Vec<[f64; 3]> = seed.points.iter().filter_map(|p| match p {
+                PointRef::Fixed(q) => Some(*q),
+                _ => None,
+            }).collect();
+            ui.label(RichText::new(format!("linha de ({:.1}, {:.1}, {:.1}) a ({:.1}, {:.1}, {:.1})", b.a[0], b.a[1], b.a[2], b.b[0], b.b[1], b.b[2])).small());
+            if ui.add_enabled(pts.len() >= 2, egui::Button::new(tr("⊙ Usar os dois vértices selecionados"))).clicked() {
+                b.a = pts[0];
+                b.b = pts[1];
+            }
+            expr(ui, "Ângulo", &mut b.angle, vars, "°");
+            let mut own = b.radius.is_some();
+            if ui.checkbox(&mut own, tr("raio próprio (senão o da chapa)")).changed() {
+                b.radius = own.then(|| "2".to_string());
+            }
+            if let Some(r) = &mut b.radius {
+                expr(ui, "Raio interno", r, vars, "mm");
+            }
+            ui.checkbox(&mut b.flip, tr("mover o outro lado da linha"));
+            ui.checkbox(&mut b.down, tr("dobrar para o outro lado"));
+            ui.label(RichText::new(tr("A linha é o centro da dobra; o comprimento desenvolvido vem do fator K. Na planificada a dobra é desfeita.")).weak().small());
+        }
+        FeatureKind::SmLouver(l) => {
+            section(ui, "Veneziana");
+            let pts: Vec<[f64; 3]> = seed.points.iter().filter_map(|p| match p {
+                PointRef::Fixed(q) => Some(*q),
+                _ => None,
+            }).collect();
+            ui.label(RichText::new(format!("abertura de ({:.1}, {:.1}, {:.1}) a ({:.1}, {:.1}, {:.1})", l.a[0], l.a[1], l.a[2], l.b[0], l.b[1], l.b[2])).small());
+            if ui.add_enabled(pts.len() >= 2, egui::Button::new(tr("⊙ Usar os dois vértices selecionados"))).clicked() {
+                l.a = pts[0];
+                l.b = pts[1];
+            }
+            expr(ui, "Largura da rampa", &mut l.width, vars, "mm");
+            expr(ui, "Altura da abertura", &mut l.height, vars, "mm");
+            ui.checkbox(&mut l.flip, tr("rampa do outro lado da linha"));
+            ui.checkbox(&mut l.down, tr("levantar para o outro lado da chapa"));
+        }
         FeatureKind::SmStamp(s) => {
             section(ui, "Estampo");
             sketch_pick(ui, "sms_sk", "Perfil", doc, idx, &mut s.sketch);
