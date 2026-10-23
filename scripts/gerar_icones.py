@@ -572,6 +572,21 @@ I["cont_g1"] = CV("M4 40 C 10 26, 16 14, 24 14", INK, 3) + CV("M24 14 C 34 14, 4
 I["cont_g2"] = CV("M4 40 C 10 26, 16 14, 24 14", INK, 3) + CV("M24 14 C 32 14, 38 26, 44 40", ACTION, 3) + \
     "".join(f'<line x1="{x}" y1="{y}" x2="{x}" y2="{y - h}" stroke="{ACTION}" stroke-width="1" opacity="0.7"/>' for x, y, h in [(14, 22, 5), (19, 17, 6), (24, 14, 6), (29, 15, 6), (34, 19, 5)]) + DOT(24, 14, 3.4, INK)
 
+# ---------------- alpha.7: até o último, saída + filetes, afinidade, contrafurado, paralela, extrair
+I["ext_ate_ultimo"] = box((24, 26), 16) + f'<path d="M24 6 V20" stroke="{ACTION}" stroke-width="3"/>' + AR("18,18 30,18 24,26") + \
+    f'<line x1="6" y1="44" x2="42" y2="44" stroke="{ACTION}" stroke-width="3" stroke-dasharray="5 3"/>'
+I["ext_saida_filete"] = f'<path d="M10 42 L15 14 Q16 10 20 10 L28 10 Q32 10 33 14 L38 42 Z" fill="{MID}" {S}/>' + \
+    f'<path d="M15 14 Q16 10 20 10 M28 10 Q32 10 33 14" stroke="{ACTION}" stroke-width="3.2" fill="none"/>' + \
+    f'<line x1="6" y1="42" x2="42" y2="42" stroke="{INK}" stroke-width="2"/>'
+I["xf_afinidade"] = f'<rect x="6" y="22" width="14" height="14" fill="{MID}" {S}/>' + \
+    f'<rect x="6" y="10" width="34" height="26" fill="none" stroke="{ACTION}" stroke-width="2" stroke-dasharray="4 3"/>' + \
+    arrow(20, 30, 40, 30, ACTION, 2.2) + arrow(13, 22, 13, 8, ACTION, 2.2)
+I["furo_contrafurado"] = f'<path d="M4 10 H44 V44 H4 Z" fill="{MID}" {S}/>' + \
+    f'<path d="M14 10 V18 L20 24 V44 H28 V24 L34 18 V10 Z" fill="#ffffff" {S}/>'
+I["curva_paralela"] = CV("M4 34 C 14 18, 30 18, 44 30", INK, 2.6) + CV("M4 24 C 14 8, 30 8, 44 20", ACTION, 3) + \
+    "".join(f'<line x1="{x}" y1="{y}" x2="{x}" y2="{y - 9}" stroke="{INK}" stroke-width="1.2" stroke-dasharray="2 2"/>' for x, y in [(12, 27), (24, 22), (36, 25)])
+I["extrair"] = box((22, 16), 14) + f'<polygon points="4,25 22,16 40,25 22,34" fill="{ACTION}" opacity="0.85"/>' + arrow(30, 20, 42, 8, ACTION, 2.4)
+
 for name, body in I.items():
     with open(os.path.join(OUT, f"{name}.svg"), "w", encoding="utf8", newline="\n") as f:
         f.write(svg(body))
