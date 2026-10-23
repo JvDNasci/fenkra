@@ -91,6 +91,12 @@ pub struct App {
     pub sel: Sel,
     pub result: Option<RecomputeResult>,
     pub delete_dialog: Option<DeleteDialog>,
+    /// janela de automação (macros) e o registro da última execução
+    macro_open: bool,
+    macro_log: Vec<String>,
+    /// janela "Personalizar comandos" e o grupo escolhido nela
+    customize_open: bool,
+    customize_sel: usize,
     /// janela de importação de publicações e peça escolhida (nome, caminho, publicações)
     link_open: bool,
     link_src: Option<(String, String, Vec<(String, LinkedGeo)>)>,
@@ -177,6 +183,10 @@ impl App {
             reframe_pending: false,
             clip: None,
             link_open: false,
+            customize_open: false,
+            macro_open: false,
+            macro_log: vec![],
+            customize_sel: 0,
             link_src: None,
             release_dialog: None,
             worker: Worker::spawn(cc.egui_ctx.clone()),
@@ -864,6 +874,8 @@ impl App {
         match a {
             Act::Cmd(c) => self.command(c),
             Act::Fit => self.fit_pending = true,
+            Act::Customize => self.customize_open = true,
+            Act::Macros => self.macro_open = true,
             Act::View(y, p) => {
                 if let Some(v) = self.viewport.as_mut() {
                     let before = v.camera;
@@ -1017,6 +1029,222 @@ impl App {
                 v.animate_from(before);
             }
             _ => self.toast("Selecione um sketch ou plano para alinhar a vista", true),
+        }
+    }
+
+    /// Janela de automação: escreve e executa macros (ver `scc_core::macros`).
+    fn macro_window(&mut self, ctx: &egui::Context) {
+        if !self.macro_open {
+            return;
+        }
+        let mut open = true;
+        let mut run = false;
+        egui::Window::new(tr("⚡ Automação (macros)")).open(&mut open).default_width(560.).default_height(520.).show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                if ui.button(RichText::new(tr("▶ Executar")).strong()).clicked() {
+                    run = true;
+                }
+                if ui.button(tr("Exemplo")).clicked() {
+                    self.settings.macro_src = scc_core::macros::EXAMPLE.to_string();
+                }
+                if ui.button(tr("📂 Abrir…")).clicked() {
+                    if let Some(p) = rfd::FileDialog::new().add_filter("Macro", &["sccmacro", "txt"]).pick_file() {
+                        match std::fs::read_to_string(&p) {
+                            Ok(s) => self.settings.macro_src = s,
+                            Err(e) => self.macro_log = vec![format!("⚠ {e}")],
+                        }
+                    }
+                }
+                if ui.button(tr("💾 Salvar…")).clicked() {
+                    if let Some(p) = rfd::FileDialog::new().add_filter("Macro", &["sccmacro"]).set_file_name("macro.sccmacro").save_file() {
+                        if let Err(e) = std::fs::write(&p, &self.settings.macro_src) {
+                            self.macro_log = vec![format!("⚠ {e}")];
+                        }
+                    }
+                }
+            });
+            egui::CollapsingHeader::new(tr("Comandos da macro")).default_open(false).show(ui, |ui| {
+                ui.label(
+                    RichText::new(
+                        "param NOME = expr · plano NOME deslocado BASE DIST · sketch NOME em PLANO … fim\n\
+                         retangulo x1 y1 x2 y2 · circulo cx cy r · linha x1 y1 x2 y2 · ponto x y\n\
+                         extrusao NOME SKETCH DIST · recorte NOME SKETCH DIST|passante · furo NOME SKETCH Ø PROF|passante\n\
+                         filete todas R · chanfro todas D · padrao linear|circular NOME COMANDO EIXO N ESP|ÂNGULO\n\
+                         espelho NOME COMANDO PLANO · para i de A a B … fim · # comentário\n\
+                         Números aceitam expressões com parâmetros e variáveis de laço: (L/2), (i*20). Também em inglês: plane, rect, circle, extrude, cut, hole, for, end…",
+                    )
+                    .monospace()
+                    .small(),
+                );
+            });
+            egui::ScrollArea::vertical().max_height(320.).id_salt("macro_src").show(ui, |ui| {
+                ui.add(egui::TextEdit::multiline(&mut self.settings.macro_src).code_editor().desired_rows(16).desired_width(f32::INFINITY));
+            });
+            ui.separator();
+            for l in &self.macro_log {
+                let c = if l.starts_with('⚠') { Color32::from_rgb(255, 140, 120) } else { ui.visuals().text_color() };
+                ui.label(RichText::new(l).color(c).small());
+            }
+        });
+        if run {
+            let src = self.settings.macro_src.clone();
+            match scc_core::macros::run(&mut self.open.doc, &src) {
+                Ok(log) => {
+                    self.macro_log = log;
+                    self.macro_log.push(format!("✔ {}", tr("macro executada")));
+                }
+                Err(e) => self.macro_log = vec![format!("⚠ {e}")],
+            }
+        }
+        if !open {
+            self.macro_open = false;
+            self.settings.save();
+        }
+    }
+
+    /// Janela de personalização: esconder e reordenar comandos dos grupos e montar grupos próprios.
+    fn customize_window(&mut self, ctx: &egui::Context) {
+        use crate::settings::{CustomGroup, Group};
+        use crate::toolbar::{all_entries, entries, entry_key, entry_title};
+        if !self.customize_open {
+            return;
+        }
+        let mut open = true;
+        let groups: Vec<Group> = Group::ALL.iter().copied().filter(|g| *g != Group::SkRestricoes).collect();
+        let n_std = groups.len();
+        let c = &mut self.settings.custom;
+        let sel = &mut self.customize_sel;
+        egui::Window::new(tr("Personalizar comandos")).open(&mut open).default_width(520.).show(ctx, |ui| {
+            ui.columns(2, |cols| {
+                let ui = &mut cols[0];
+                ui.label(RichText::new(tr("Grupos")).strong());
+                for (i, g) in groups.iter().enumerate() {
+                    ui.selectable_value(sel, i, g.label());
+                }
+                ui.separator();
+                ui.label(RichText::new(tr("Meus grupos")).strong());
+                for (i, cg) in c.groups.iter().enumerate() {
+                    ui.selectable_value(sel, n_std + i, format!("★ {}", cg.name));
+                }
+                if ui.button(tr("+ Novo grupo")).clicked() {
+                    c.groups.push(CustomGroup { name: format!("{} {}", tr("Meu grupo"), c.groups.len() + 1), items: vec![], sketch: false });
+                    *sel = n_std + c.groups.len() - 1;
+                }
+                ui.add_space(8.);
+                if ui.button(tr("Restaurar padrões")).clicked() {
+                    *c = Default::default();
+                    *sel = 0;
+                }
+                let ui = &mut cols[1];
+                if *sel < n_std {
+                    let g = groups[*sel];
+                    ui.label(RichText::new(g.label()).strong());
+                    ui.label(RichText::new(tr("Marque o que aparece na barra; ▲▼ muda a ordem.")).weak().small());
+                    // ordem atual (inclui as ocultas)
+                    let mut keys: Vec<String> = entries(g).iter().map(entry_key).collect();
+                    if let Some((_, order)) = c.order.iter().find(|(x, _)| *x == g) {
+                        keys.sort_by_key(|k| order.iter().position(|o| o == k).unwrap_or(usize::MAX));
+                    }
+                    let all = entries(g);
+                    let mut mv: Option<(usize, isize)> = None;
+                    for (i, k) in keys.iter().enumerate() {
+                        let Some(e) = all.iter().find(|e| entry_key(e) == *k) else { continue };
+                        let (icon, brief) = entry_title(e);
+                        ui.horizontal(|ui| {
+                            let mut on = !c.hidden.contains(k);
+                            if ui.checkbox(&mut on, "").changed() {
+                                if on {
+                                    c.hidden.retain(|x| x != k);
+                                } else {
+                                    c.hidden.push(k.clone());
+                                }
+                            }
+                            ui.add(egui::Image::new(crate::icons::get(icon)).fit_to_exact_size(egui::vec2(20., 20.)));
+                            ui.label(tr(brief));
+                            if ui.small_button("▲").clicked() {
+                                mv = Some((i, -1));
+                            }
+                            if ui.small_button("▼").clicked() {
+                                mv = Some((i, 1));
+                            }
+                        });
+                    }
+                    if let Some((i, d)) = mv {
+                        let j = i as isize + d;
+                        if j >= 0 && (j as usize) < keys.len() {
+                            keys.swap(i, j as usize);
+                            c.order.retain(|(x, _)| *x != g);
+                            c.order.push((g, keys));
+                        }
+                    }
+                } else if let Some(idx) = Some(*sel - n_std).filter(|i| *i < c.groups.len()) {
+                    let all = all_entries();
+                    let mut remove_group = false;
+                    {
+                        let cg = &mut c.groups[idx];
+                        ui.horizontal(|ui| {
+                            ui.label(tr("Nome"));
+                            ui.text_edit_singleline(&mut cg.name);
+                        });
+                        ui.checkbox(&mut cg.sketch, tr("aparece no modo sketch"));
+                        let mut mv: Option<(usize, isize)> = None;
+                        let mut del = None;
+                        for (i, k) in cg.items.iter().enumerate() {
+                            let Some(e) = all.iter().find(|e| entry_key(e) == *k) else { continue };
+                            let (icon, brief) = entry_title(e);
+                            ui.horizontal(|ui| {
+                                ui.add(egui::Image::new(crate::icons::get(icon)).fit_to_exact_size(egui::vec2(20., 20.)));
+                                ui.label(tr(brief));
+                                if ui.small_button("▲").clicked() {
+                                    mv = Some((i, -1));
+                                }
+                                if ui.small_button("▼").clicked() {
+                                    mv = Some((i, 1));
+                                }
+                                if ui.small_button("✖").clicked() {
+                                    del = Some(i);
+                                }
+                            });
+                        }
+                        if let Some((i, d)) = mv {
+                            let j = i as isize + d;
+                            if j >= 0 && (j as usize) < cg.items.len() {
+                                cg.items.swap(i, j as usize);
+                            }
+                        }
+                        if let Some(i) = del {
+                            cg.items.remove(i);
+                        }
+                        egui::ComboBox::from_id_salt("add_cmd").selected_text(tr("+ Adicionar comando")).width(260.).show_ui(ui, |ui| {
+                            for e in &all {
+                                let (icon, brief) = entry_title(e);
+                                let k = entry_key(e);
+                                if cg.items.contains(&k) {
+                                    continue;
+                                }
+                                let r = ui.horizontal(|ui| {
+                                    ui.add(egui::Image::new(crate::icons::get(icon)).fit_to_exact_size(egui::vec2(18., 18.)));
+                                    ui.selectable_label(false, tr(brief))
+                                });
+                                if r.inner.clicked() {
+                                    cg.items.push(k);
+                                }
+                            }
+                        });
+                        if ui.button(tr("🗑 Apagar grupo")).clicked() {
+                            remove_group = true;
+                        }
+                    }
+                    if remove_group {
+                        c.groups.remove(idx);
+                        *sel = 0;
+                    }
+                }
+            });
+        });
+        if !open {
+            self.customize_open = false;
+            self.settings.save();
         }
     }
 
@@ -1255,6 +1483,14 @@ impl App {
                             });
                         }
                     });
+                    if ui.button(tr("⚙ Personalizar comandos…")).clicked() {
+                        self.customize_open = true;
+                        ui.close();
+                    }
+                    if ui.button(tr("⚡ Automação (macros)…")).clicked() {
+                        self.macro_open = true;
+                        ui.close();
+                    }
                     ui.separator();
                     if ui.button(tr("Configurações…")).clicked() {
                         self.settings_open = true;
@@ -1301,6 +1537,12 @@ impl App {
                             ui.separator();
                         }
                         acts.extend(toolbar::show_group(ui, *g, &mut self.settings, &ts, false));
+                    }
+                    // grupos montados pelo usuário
+                    let mine: Vec<crate::settings::CustomGroup> = self.settings.custom.groups.iter().filter(|c| c.sketch == sketching && !c.items.is_empty()).cloned().collect();
+                    for cg in &mine {
+                        ui.separator();
+                        acts.extend(toolbar::show_custom(ui, cg, &mut self.settings, &ts, false));
                     }
                 });
             });
@@ -3263,6 +3505,8 @@ impl eframe::App for App {
             }
         }
         self.link_window(ctx);
+        self.customize_window(ctx);
+        self.macro_window(ctx);
         if let Some(id) = self.open_pending.take() {
             self.start_session(id, false, None);
         }

@@ -1456,7 +1456,7 @@ impl Document {
 
     // ------------------------------------------------ nomes
 
-    fn name_taken(&self, name: &str) -> bool {
+    pub fn name_taken(&self, name: &str) -> bool {
         self.params.iter().any(|p| p.name == name)
             || self.references.iter().any(|r| r.name == name)
             || self.features.iter().any(|f| f.name == name)

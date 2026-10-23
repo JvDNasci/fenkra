@@ -206,6 +206,31 @@ pub struct Settings {
     pub keys: crate::keymap::Keymap,
     /// interface em inglês
     pub english: bool,
+    /// personalização dos grupos de comandos
+    pub custom: Customization,
+    /// última macro escrita na janela de automação
+    pub macro_src: String,
+}
+
+/// Comandos ocultos, ordem própria em cada grupo e grupos criados pelo usuário.
+#[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Customization {
+    /// chaves das entradas escondidas
+    pub hidden: Vec<String>,
+    /// ordem das entradas por grupo (chaves)
+    pub order: Vec<(Group, Vec<String>)>,
+    pub groups: Vec<CustomGroup>,
+}
+
+/// Grupo de comandos montado pelo usuário (fica na barra de cima).
+#[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CustomGroup {
+    pub name: String,
+    pub items: Vec<String>,
+    /// aparece no modo sketch (senão, na modelagem)
+    pub sketch: bool,
 }
 
 impl Default for Settings {
@@ -241,6 +266,8 @@ impl Default for Settings {
             auto_dims: false,
             keys: Default::default(),
             english: false,
+            custom: Default::default(),
+            macro_src: String::new(),
         }
     }
 }

@@ -15,6 +15,10 @@ use crate::i18n::tr;
 /// Ação pedida por um botão de ferramenta.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Act {
+    /// abre a janela de personalização dos grupos
+    Customize,
+    /// abre a janela de automação (macros)
+    Macros,
     Cmd(Cmd),
     Fit,
     View(f32, f32),
@@ -45,10 +49,56 @@ pub struct Item {
     pub act: Act,
 }
 
+#[derive(Clone)]
 pub enum Entry {
     One(Item),
     /// família: chave (para lembrar a variação) + variações
     Family(&'static str, Vec<Item>),
+}
+
+/// Chave estável de uma entrada da barra (para ocultar, ordenar e montar grupos).
+pub fn entry_key(e: &Entry) -> String {
+    match e {
+        Entry::One(i) => format!("{}|{}", i.icon, i.name),
+        Entry::Family(k, _) => format!("fam:{k}"),
+    }
+}
+
+/// Ícone e descrição de uma entrada (para listas).
+pub fn entry_title(e: &Entry) -> (&'static str, &'static str) {
+    match e {
+        Entry::One(i) => (i.icon, i.brief),
+        Entry::Family(_, v) => (v[0].icon, v[0].brief),
+    }
+}
+
+/// Entradas do grupo com a personalização aplicada (ocultas fora, ordem do usuário).
+pub fn custom_entries(g: Group, s: &Settings) -> Vec<Entry> {
+    let mut list: Vec<Entry> = entries(g).into_iter().filter(|e| !s.custom.hidden.contains(&entry_key(e))).collect();
+    if let Some((_, order)) = s.custom.order.iter().find(|(x, _)| *x == g) {
+        list.sort_by_key(|e| order.iter().position(|k| *k == entry_key(e)).unwrap_or(usize::MAX));
+    }
+    list
+}
+
+/// Todas as entradas de todos os grupos (sem repetir).
+pub fn all_entries() -> Vec<Entry> {
+    let mut out: Vec<Entry> = vec![];
+    for g in Group::ALL {
+        for e in entries(g) {
+            if !out.iter().any(|x| entry_key(x) == entry_key(&e)) {
+                out.push(e);
+            }
+        }
+    }
+    out
+}
+
+/// Grupo do usuário na barra.
+pub fn show_custom(ui: &mut egui::Ui, cg: &crate::settings::CustomGroup, s: &mut Settings, st: &ToolState, vertical: bool) -> Vec<Act> {
+    let all = all_entries();
+    let list: Vec<Entry> = cg.items.iter().filter_map(|k| all.iter().find(|e| entry_key(e) == *k).cloned()).collect();
+    show_block(ui, None, cg.name.clone(), list, s, st, vertical)
 }
 
 const fn it(icon: &'static str, name: &'static str, brief: &'static str, advanced: &'static str, act: Act) -> Item {
@@ -157,6 +207,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
         Group::Organizacao => vec![
             One(it("parametro", "Parâmetro", "Novo parâmetro", "Parâmetro global da peça (nome = expressão), usável em qualquer cota ou comando.", Cmd(C::Param))),
             One(it("pasta", "Pasta", "Nova pasta", "Organiza comandos na árvore; não muda a ordem de execução.", Cmd(C::Folder))),
+            One(it("macro", "Macro", "Automação por macro", "Escreva e execute macros que criam a peça (parâmetros, sketches, extrusões, furos, padrões, laços).", Macros)),
             One(it("coletor", "Coletor", "Novo coletor de corpos", "Grupo de corpos independente; vira o ativo para os próximos comandos.", Cmd(C::Collector))),
         ],
         Group::Selecao => vec![One(it("sel_filtro", "Limpar", "Limpar seleção  (Esc)", "Desmarca faces, arestas e vértices selecionados na viewport.", ClearPicks))],
@@ -240,11 +291,16 @@ fn is_selected(a: Act, s: &Settings, st: &ToolState) -> bool {
 
 /// Mostra um grupo; devolve as ações clicadas.
 pub fn show_group(ui: &mut egui::Ui, g: Group, s: &mut Settings, st: &ToolState, vertical: bool) -> Vec<Act> {
+    let list = custom_entries(g, s);
+    show_block(ui, Some(g), g.label().to_string(), list, s, st, vertical)
+}
+
+fn show_block(ui: &mut egui::Ui, g: Option<Group>, title: String, list: Vec<Entry>, s: &mut Settings, st: &ToolState, vertical: bool) -> Vec<Act> {
     let mut acts = vec![];
     let size = s.icon_size;
     let labels = s.show_labels && !vertical;
     let mut body = |ui: &mut egui::Ui| {
-        for e in entries(g) {
+        for e in list.clone() {
             match e {
                 Entry::One(i) => {
                     if tool_button(ui, i.icon, i.name, size, labels, is_selected(i.act, s, st), i.brief, i.advanced).clicked() {
@@ -266,7 +322,7 @@ pub fn show_group(ui: &mut egui::Ui, g: Group, s: &mut Settings, st: &ToolState,
                         for (k, v) in items.iter().enumerate() {
                             let r = ui.horizontal(|ui| {
                                 ui.add(egui::Image::new(crate::icons::get(v.icon)).fit_to_exact_size(egui::vec2(22., 22.)));
-                                ui.selectable_label(k == cur, RichText::new(v.brief))
+                                ui.selectable_label(k == cur, RichText::new(tr(v.brief)))
                             });
                             if r.inner.clicked() {
                                 s.set_family(key, k);
@@ -278,7 +334,7 @@ pub fn show_group(ui: &mut egui::Ui, g: Group, s: &mut Settings, st: &ToolState,
                 }
             }
         }
-        if g == Group::Vista {
+        if g == Some(Group::Vista) {
             let r = tool_button(ui, "estilo", "Estilo", size, labels, false, "Estilo de exibição", "Sombreado com/sem arestas, linhas ocultas, arame, raio-X ou semi-renderizado.");
             egui::Popup::menu(&r).show(|ui| {
                 for m in DisplayMode::ALL {
@@ -306,7 +362,7 @@ pub fn show_group(ui: &mut egui::Ui, g: Group, s: &mut Settings, st: &ToolState,
                 acts.push(Act::Settings);
             }
         }
-        if g == Group::Selecao {
+        if g == Some(Group::Selecao) {
             for (icon, name, flag) in [("sel_face", "Faces", 0), ("sel_aresta", "Arestas", 1), ("sel_vertice", "Vértices", 2)] {
                 let on = [s.sel_faces, s.sel_edges, s.sel_vertices][flag];
                 if tool_button(ui, icon, name, size, labels, on, &format!("Selecionar {}", name.to_lowercase()), "Filtro de seleção: liga/desliga este tipo de elemento ao clicar na viewport.").clicked() {
@@ -327,17 +383,24 @@ pub fn show_group(ui: &mut egui::Ui, g: Group, s: &mut Settings, st: &ToolState,
             let row = ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| body(ui)).response;
             // nome do grupo centralizado sob os botões, com a largura do próprio bloco
             let (r, _) = ui.allocate_exact_size(egui::vec2(row.rect.width(), 14.), egui::Sense::hover());
-            ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, g.label(), egui::FontId::proportional(10.5), ui.visuals().weak_text_color());
+            ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, &title, egui::FontId::proportional(10.5), ui.visuals().weak_text_color());
         })
         .response
     };
     inner.context_menu(|ui| {
-        ui.label(RichText::new(g.label()).strong());
-        for d in Dock::ALL {
-            if ui.radio(s.dock(g) == d, d.label()).clicked() {
-                acts.push(Act::Dock(g, d));
-                ui.close();
+        ui.label(RichText::new(&title).strong());
+        if let Some(g) = g {
+            for d in Dock::ALL {
+                if ui.radio(s.dock(g) == d, d.label()).clicked() {
+                    acts.push(Act::Dock(g, d));
+                    ui.close();
+                }
             }
+            ui.separator();
+        }
+        if ui.button(tr("⚙ Personalizar comandos…")).clicked() {
+            acts.push(Act::Customize);
+            ui.close();
         }
     });
     acts

@@ -9,6 +9,7 @@
 
 pub mod doc;
 pub mod expr;
+pub mod macros;
 pub mod sketch;
 
 pub use doc::*;
