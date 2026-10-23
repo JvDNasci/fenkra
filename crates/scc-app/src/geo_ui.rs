@@ -518,7 +518,7 @@ fn plane_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id
     });
 }
 
-fn surf_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, s: &mut SurfRef, seed: &Seed) {
+pub(crate) fn surf_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, s: &mut SurfRef, seed: &Seed) {
     row(ui, label, |ui| {
         let none = PlaneRef::Datum(Id(u64::MAX));
         let mut pl = match s {

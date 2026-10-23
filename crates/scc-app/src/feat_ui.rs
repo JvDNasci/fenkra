@@ -336,7 +336,18 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                     }
                 });
             });
-            expr(ui, "Comprimento", &mut t.length, vars, "mm");
+            let mut end = t.end.clone().unwrap_or(Extent::Blind(t.length.clone()));
+            crate::editor::extent_ui(ui, "th_end", &mut end, vars, &["Cego", "Passante", "Até plano", "Até a superfície"], doc, seed);
+            if matches!(end, Extent::ThroughAll) {
+                ui.label(RichText::new(tr("rosca em toda a face cilíndrica")).weak().small());
+            }
+            match end {
+                Extent::Blind(l) => {
+                    t.length = l;
+                    t.end = None;
+                }
+                other => t.end = Some(other),
+            }
             let opts = [
                 ("furo_simples", "Cosmética", "Só a indicação (desenho e BOM)", !t.modeled),
                 ("furo_roscado", "Modelada", "Sulco helicoidal real (mais pesado)", t.modeled),

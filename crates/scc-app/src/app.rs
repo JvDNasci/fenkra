@@ -68,11 +68,13 @@ impl Worker {
         std::thread::Builder::new()
             .name("recompute".into())
             .spawn(move || {
+                // cache entre cálculos: só refaz a partir do primeiro comando que mudou
+                let mut cache = scc_solidos::Cache::default();
                 while let Ok(mut job) = jobs.recv() {
                     while let Ok(newer) = jobs.try_recv() {
                         job = newer;
                     }
-                    let r = scc_solidos::recompute(&job.1);
+                    let r = scc_solidos::recompute_cached(&job.1, &mut cache);
                     if out.send((job.0, r)).is_err() {
                         break;
                     }
@@ -746,7 +748,7 @@ impl App {
             Cmd::Shell => Sel::Feature(d.add_feature(FeatureKind::Shell(Shell { faces: faces.clone(), thickness: s("2"), outward: false }))),
             Cmd::Draft => Sel::Feature(d.add_feature(FeatureKind::Draft(Draft { faces: faces.clone(), neutral: plane, angle: s("3"), reverse: false }))),
             Cmd::Thickness => Sel::Feature(d.add_feature(FeatureKind::Thickness(Thickness { faces: faces.clone(), value: s("2") }))),
-            Cmd::Thread => Sel::Feature(d.add_feature(FeatureKind::Thread(Thread { face: faces.last().copied().unwrap_or([0.; 3]), spec: s("M10x1.5"), length: s("15"), modeled: false }))),
+            Cmd::Thread => Sel::Feature(d.add_feature(FeatureKind::Thread(Thread { face: faces.last().copied().unwrap_or([0.; 3]), spec: s("M10x1.5"), length: s("15"), modeled: false, end: None }))),
             Cmd::PatternLinear | Cmd::PatternCircular | Cmd::PatternPoints | Cmd::Mirror => {
                 let sources: Vec<Id> = match sel_now {
                     Sel::Feature(id) if d.feature(id).is_some_and(|f| crate::feat_ui::is_shape(&f.kind)) => vec![id],

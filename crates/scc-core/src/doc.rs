@@ -1073,7 +1073,12 @@ impl FeatureKind {
                 exprs(&mut st.thickness);
                 exprs(&mut st.depth)
             }
-            Thread(t) => exprs(&mut t.length),
+            Thread(t) => {
+                exprs(&mut t.length);
+                if let Some(e) = &mut t.end {
+                    extent_walk(e, ids, exprs);
+                }
+            }
             Combine(c) => ids(&mut c.tool),
         }
     }
@@ -1088,6 +1093,7 @@ fn extent_walk(e: &mut Extent, ids: &mut dyn FnMut(&mut Id), exprs: &mut dyn FnM
         }
         Extent::ThroughAll | Extent::UpToNext => {}
         Extent::UpTo(p) => p.walk(ids),
+        Extent::UpToSurface(s) => s.walk(ids),
     }
 }
 
@@ -1255,6 +1261,9 @@ pub struct Thread {
     pub length: String,
     /// sulco helicoidal real (booleana) em vez de cosmética
     pub modeled: bool,
+    /// término: `None` = comprimento; passante = face inteira; até plano/superfície
+    #[serde(default)]
+    pub end: Option<Extent>,
 }
 
 /// Sketch: plano + geometria livre com restrições (ver [`crate::sketch`]).
@@ -1283,6 +1292,8 @@ pub enum Extent {
     UpTo(PlaneRef),
     /// Até a próxima parede do corpo na direção da extrusão.
     UpToNext,
+    /// Até uma superfície ou face (estendida para cortar a ferramenta inteira).
+    UpToSurface(SurfRef),
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]

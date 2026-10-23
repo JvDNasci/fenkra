@@ -363,6 +363,13 @@ mod imp {
         pub fn extrude_to_next(&self, dir: [f64; 3], len: f64, body: &Shape) -> KResult<Shape> {
             b::extrude_to_next(&self.0, dir[0], dir[1], dir[2], len, &body.0).map(Shape).map_err(err)
         }
+        /// Divide a ferramenta pela superfície e fica com o pedaço que passa por `start`.
+        pub fn clip_until(&self, cutter: &Shape, start: [f64; 3], extend: bool) -> KResult<Shape> {
+            b::clip_until(&self.0, &cutter.0, start[0], start[1], start[2], extend).map(Shape).map_err(err)
+        }
+        pub fn plane_face(o: [f64; 3], n: [f64; 3], half: f64) -> KResult<Shape> {
+            b::plane_face(o[0], o[1], o[2], n[0], n[1], n[2], half).map(Shape).map_err(err)
+        }
         pub fn same_face(&self, a: [f64; 3], c: [f64; 3]) -> bool {
             b::same_face(&self.0, a[0], a[1], a[2], c[0], c[1], c[2]).unwrap_or(false)
         }
@@ -544,6 +551,12 @@ mod imp {
             no()
         }
         pub fn face_props(&self, _: [f64; 3]) -> KResult<FaceProps> {
+            no()
+        }
+        pub fn clip_until(&self, _: &Shape, _: [f64; 3], _: bool) -> KResult<Shape> {
+            no()
+        }
+        pub fn plane_face(_: [f64; 3], _: [f64; 3], _: f64) -> KResult<Shape> {
             no()
         }
         pub fn extrude_to_next(&self, _: [f64; 3], _: f64, _: &Shape) -> KResult<Shape> {

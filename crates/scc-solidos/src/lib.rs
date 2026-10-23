@@ -12,7 +12,10 @@ use scc_core::sketch::{Curve, Kind};
 use scc_core::*;
 use scc_kernel::{Bool, Frame, HoleShape, KernelError, Mesh, MassProps, Shape, Xform};
 use geo3d::{Curve3, V3};
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 use std::time::Instant;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -179,11 +182,44 @@ struct Ctx<'a> {
     doc: &'a Document,
     vars: Vars,
     bodies: HashMap<Id, (Shape, Vec<Id>)>,
-    sketches: HashMap<Id, (Frame, EvalSketch)>,
+    sketches: HashMap<Id, (Frame, Arc<EvalSketch>)>,
     /// sólido gerado por cada comando (base para filete/chanfro por comando)
     status: HashMap<Id, Status>,
     /// ferramenta e operação de cada comando de forma (para padrões e espelho)
     tools: HashMap<Id, (Shape, BoolOp)>,
+    /// geometria de referência já avaliada neste cálculo (cadeias de referências não recalculam)
+    memo: RefCell<HashMap<Id, Geo>>,
+    /// assinatura do último passo que mudou o corpo de cada coletor (cache de malha)
+    body_sig: HashMap<Id, u64>,
+}
+
+/// Estado depois de um passo da linha do tempo (as formas são referências: copiar é barato).
+#[derive(Clone)]
+struct Snap {
+    bodies: HashMap<Id, (Shape, Vec<Id>)>,
+    sketches: HashMap<Id, (Frame, Arc<EvalSketch>)>,
+    status: HashMap<Id, Status>,
+    tools: HashMap<Id, (Shape, BoolOp)>,
+    body_sig: HashMap<Id, u64>,
+}
+
+/// Cache entre cálculos: só refaz a partir do primeiro comando que mudou (e reaproveita malhas).
+#[derive(Default)]
+pub struct Cache {
+    steps: Vec<(u64, Snap)>,
+    meshes: HashMap<(Id, u64), (Mesh, MassProps, u32)>,
+    fills: HashMap<(Id, u64), Vec<[f32; 3]>>,
+    /// quantos comandos foram reaproveitados no último cálculo (diagnóstico)
+    pub reused: usize,
+}
+
+fn hash_of(parts: &[&str], prev: u64) -> u64 {
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    prev.hash(&mut h);
+    for p in parts {
+        p.hash(&mut h);
+    }
+    h.finish()
 }
 
 /// Pontos mais próximos entre os segmentos ab e cd.
@@ -378,8 +414,17 @@ impl Ctx<'_> {
         Ok(c.at_dist(s))
     }
 
-    /// Avalia um elemento de geometria de referência (plano, ponto ou curva).
+    /// Avalia um elemento de geometria de referência (plano, ponto, curva ou superfície), com memória.
     fn geo(&self, id: Id, depth: u32) -> Result<Geo, String> {
+        if let Some(g) = self.memo.borrow().get(&id) {
+            return Ok(g.clone());
+        }
+        let g = self.geo_eval(id, depth)?;
+        self.memo.borrow_mut().insert(id, g.clone());
+        Ok(g)
+    }
+
+    fn geo_eval(&self, id: Id, depth: u32) -> Result<Geo, String> {
         use geo3d::*;
         use RefKind::*;
         if depth > 48 {
@@ -704,7 +749,7 @@ impl Ctx<'_> {
         })
     }
 
-    fn sketch(&self, id: Id) -> Result<&(Frame, EvalSketch), String> {
+    fn sketch(&self, id: Id) -> Result<&(Frame, Arc<EvalSketch>), String> {
         self.sketches.get(&id).ok_or_else(|| {
             match self.doc.feature(id) {
                 Some(f) => format!("o sketch '{}' está inativo ou com erro", f.name),
@@ -738,8 +783,37 @@ impl Ctx<'_> {
             Extent::TwoSides(a, b) => (ev(a, &self.vars, "distância 1")?, ev(b, &self.vars, "distância 2")?),
             Extent::ThroughAll => (self.through(target)?, 0.),
             Extent::UpTo(_) => return Err("'até plano' só vale para extrusão e recorte".into()),
-            Extent::UpToNext => return Err("'até o próximo' só vale para extrusão".into()),
+            Extent::UpToNext => return Err("'até o próximo' não vale para este comando".into()),
+            Extent::UpToSurface(_) => return Err("'até a superfície' não vale para este comando".into()),
         })
+    }
+
+    /// Superfície de término (até plano / superfície / próximo) como forma de corte e se ela deve ser
+    /// estendida; `None` = término por distância. Mesmo critério para extrusão, recorte, furo e rosca.
+    fn end_cutter(&self, e: &Extent, target: Id) -> Result<Option<(Shape, bool)>, String> {
+        let k = |e: KernelError| e.0;
+        let size = self.through(target).unwrap_or(0.).max(1e4);
+        Ok(match e {
+            Extent::UpTo(p) | Extent::UpToSurface(SurfRef::Plane(p)) => {
+                let fr = self.plane(p, 0)?;
+                Some((Shape::plane_face(fr.origin, fr.normal, size).map_err(k)?, false))
+            }
+            Extent::UpToSurface(sf) => Some((self.surface_shape(sf, 0)?, true)),
+            Extent::UpToNext => Some((self.body(target).ok_or("'até o próximo' precisa de um corpo no coletor")?.clone(), false)),
+            _ => None,
+        })
+    }
+
+    /// Comprimento de ferramenta que certamente passa da superfície de corte.
+    fn reach(&self, cut: &Shape, from: V3, target: Id) -> f64 {
+        let mut len = self.through(target).unwrap_or(0.);
+        if let Some((a, b)) = cut.bbox() {
+            for c in 0..8 {
+                let q = [if c & 1 == 0 { a[0] } else { b[0] }, if c & 2 == 0 { a[1] } else { b[1] }, if c & 4 == 0 { a[2] } else { b[2] }];
+                len = len.max(geo3d::dist(q, from) * 1.5 + 10.);
+            }
+        }
+        len.min(1e5)
     }
 
     /// Corpo + dono (comando) de cada face, na ordem das faces do kernel.
@@ -808,7 +882,7 @@ impl Ctx<'_> {
                 let frame = self.plane(&s.plane, 0)?;
                 let es = eval_sketch(&s.data, &self.vars)?;
                 let warn = (!es.warnings.is_empty()).then(|| es.warnings.join("; "));
-                self.sketches.insert(f.id, (frame, es));
+                self.sketches.insert(f.id, (frame, Arc::new(es)));
                 Ok(warn)
             }
             FeatureKind::Extrude(e) => {
@@ -838,12 +912,14 @@ impl Ctx<'_> {
                     }
                     let size = loops_size(&sk.loops);
                     face.extrude_until(dir, t * 4. + size * 10. + 100., target.origin, n).map_err(k)?
-                } else if e.extent == Extent::UpToNext {
-                    if e.op != BoolOp::Add {
-                        return Err("'até o próximo' é para extrusão que acrescenta material".into());
-                    }
+                } else if e.extent == Extent::UpToNext && e.op == BoolOp::Add {
                     let body = self.body(f.target).ok_or("'até o próximo' precisa de um corpo no coletor")?;
                     face.extrude_to_next(dir, self.through(f.target)?, body).map_err(k)?
+                } else if let Some((cut, ext)) = self.end_cutter(&e.extent, f.target)? {
+                    // até a superfície/face (ou recorte até o próximo): ferramenta longa dividida pela superfície
+                    let start = face.surface_near(frame.origin).map_err(k)?.0;
+                    let len = self.reach(&cut, frame.origin, f.target) + loops_size(&sk.loops);
+                    face.extrude(dir, len, 0.).map_err(k)?.clip_until(&cut, start, ext).map_err(k)?
                 } else if taper.abs() > 1e-9 {
                     let Extent::Blind(d) = &e.extent else {
                         return Err("o ângulo de saída vale só com término 'cego'".into());
@@ -879,7 +955,11 @@ impl Ctx<'_> {
                 }
                 let (frame, pts) = (*frame, sk.points.clone());
                 let d = ev(&h.diameter, &self.vars, "diâmetro")?;
-                let (depth, _) = self.extent(&h.depth, f.target)?;
+                let cut = self.end_cutter(&h.depth, f.target)?;
+                let depth = match &cut {
+                    Some((c, _)) => self.reach(c, frame.origin, f.target),
+                    None => self.extent(&h.depth, f.target)?.0,
+                };
                 let shape = match &h.kind {
                     HoleKind::Simples => HoleShape::Simple,
                     HoleKind::Rebaixado { diameter, depth } => HoleShape::Counterbore {
@@ -894,7 +974,11 @@ impl Ctx<'_> {
                 let dir = frame.normal.map(|x| -x);
                 let mut tool = Shape::empty();
                 for p in &pts {
-                    let t = Shape::hole_tool(frame.point(p[0], p[1]), dir, d, depth, shape).map_err(k)?;
+                    let o = frame.point(p[0], p[1]);
+                    let mut t = Shape::hole_tool(o, dir, d, depth, shape).map_err(k)?;
+                    if let Some((c, ext)) = &cut {
+                        t = t.clip_until(c, o, *ext).map_err(k)?;
+                    }
                     tool = if tool.is_null() { t } else { tool.compound(&t) };
                 }
                 self.apply(f.target, tool, BoolOp::Cut, f.id)?;
@@ -932,7 +1016,11 @@ impl Ctx<'_> {
                         continue;
                     }
                     let o = [0, 1, 2].map(|i| o[i] + tdir[i] * s0);
-                    let tool = Shape::thread_tool(o, tdir, spec.major, spec.pitch, len, spec.angle).map_err(k)?;
+                    let mut tool = Shape::thread_tool(o, tdir, spec.major, spec.pitch, len, spec.angle).map_err(k)?;
+                    if let Some((c, ext)) = &cut {
+                        // a rosca para na mesma superfície do furo
+                        tool = tool.clip_until(c, o, *ext).map_err(k)?;
+                    }
                     self.apply(f.target, tool, BoolOp::Cut, f.id)?;
                 }
                 Ok(None)
@@ -1093,7 +1181,14 @@ impl Ctx<'_> {
                 let spec = hardware::thread(&t.spec).ok_or_else(|| format!("rosca '{}' não encontrada na tabela de normas", t.spec))?;
                 let b = self.body(f.target).ok_or("não há corpo para roscar")?;
                 let cyl = b.cylinder_at(t.face).map_err(k)?;
-                let len = ev(&t.length, &self.vars, "comprimento")?.min(cyl.h1 - cyl.h0);
+                let full = cyl.h1 - cyl.h0;
+                let len = match &t.end {
+                    None => ev(&t.length, &self.vars, "comprimento")?.min(full),
+                    Some(Extent::Blind(x)) => ev(x, &self.vars, "comprimento")?.min(full),
+                    Some(Extent::UpToNext) => return Err("a rosca termina por comprimento, na face inteira ou até plano/superfície".into()),
+                    // face inteira, com folga de 1/4 de passo (encostar na face vizinha faz a booleana falhar)
+                    Some(_) => full - spec.pitch * 0.25,
+                };
                 let d = 2. * cyl.radius;
                 let nominal = if cyl.internal { spec.tap_drill } else { spec.major };
                 let note = ((d - nominal).abs() > 0.3 * spec.pitch).then(|| format!("Ø da face {d:.2} ≠ {nominal:.2} da rosca {}", spec.name));
@@ -1110,6 +1205,14 @@ impl Ctx<'_> {
                     Shape::thread_tool_ext(o, cyl.dir, spec.major, spec.pitch, len, spec.angle)
                 }
                 .map_err(k)?;
+                let cut = match &t.end {
+                    Some(e) => self.end_cutter(e, f.target)?,
+                    None => None,
+                };
+                let tool = match cut {
+                    Some((c, ext)) => tool.clip_until(&c, o, ext).map_err(k)?,
+                    None => tool,
+                };
                 self.apply(f.target, tool, BoolOp::Cut, f.id)?;
                 Ok(note)
             }
@@ -1188,30 +1291,93 @@ impl Ctx<'_> {
 
 /// Recalcula o documento inteiro. Roda fora da thread da interface (RNF-001).
 pub fn recompute(doc: &Document) -> RecomputeResult {
+    recompute_cached(doc, &mut Cache::default())
+}
+
+/// Recalcula reaproveitando o cache: os comandos antes da primeira mudança não são refeitos.
+pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
     let t0 = Instant::now();
     let (vars, param_error) = match doc.eval_params() {
         Ok(v) => (v, None),
         Err(e) => (HashMap::new(), Some(e.to_string())),
     };
-    let mut cx = Ctx { doc, vars, bodies: HashMap::new(), sketches: HashMap::new(), status: HashMap::new(), tools: HashMap::new() };
+    let mut cx = Ctx {
+        doc,
+        vars,
+        bodies: HashMap::new(),
+        sketches: HashMap::new(),
+        status: HashMap::new(),
+        tools: HashMap::new(),
+        memo: RefCell::new(HashMap::new()),
+        body_sig: HashMap::new(),
+    };
 
     // 1º: sketches livres (pastas de geometria, sem linha do tempo); 2º: comandos dos coletores em ordem
     let order: Vec<usize> = (0..doc.features.len())
         .filter(|i| doc.is_free(&doc.features[*i]))
         .chain((0..doc.features.len()).filter(|i| !doc.is_free(&doc.features[*i])))
         .collect();
-    for i in order {
+    // assinatura global: parâmetros, referências, links e coletores (mudou → refaz tudo)
+    let global = hash_of(
+        &[
+            &serde_json::to_string(&doc.params).unwrap_or_default(),
+            &serde_json::to_string(&doc.references).unwrap_or_default(),
+            &serde_json::to_string(&doc.external).unwrap_or_default(),
+            &serde_json::to_string(&doc.collectors.iter().map(|c| c.id).collect::<Vec<_>>()).unwrap_or_default(),
+            &format!("{:?}", { let mut v: Vec<_> = cx.vars.iter().map(|(k, v)| (k.clone(), v.to_bits())).collect(); v.sort(); v }),
+        ],
+        0,
+    );
+    let mut h = global;
+    let mut hit: Option<usize> = None; // último passo reaproveitado (ainda não restaurado)
+    let mut fresh = false;
+    cache.reused = 0;
+    for (k, i) in order.into_iter().enumerate() {
         let f = &doc.features[i];
-        if !doc.is_active(i) {
-            cx.status.insert(f.id, Status::Inactive);
+        let active = doc.is_active(i);
+        h = hash_of(&[&serde_json::to_string(f).unwrap_or_default(), if active { "1" } else { "0" }], h);
+        if !fresh && cache.steps.get(k).is_some_and(|(sig, _)| *sig == h) {
+            hit = Some(k);
+            cache.reused += 1;
             continue;
         }
-        let st = match cx.run(f) {
-            Ok(None) => Status::Ok,
-            Ok(Some(w)) => Status::Warning(w),
-            Err(e) => Status::Error(e),
-        };
-        cx.status.insert(f.id, st);
+        if !fresh {
+            fresh = true;
+            if let Some(k0) = hit.take() {
+                let sn = cache.steps[k0].1.clone();
+                (cx.bodies, cx.sketches, cx.status, cx.tools, cx.body_sig) = (sn.bodies, sn.sketches, sn.status, sn.tools, sn.body_sig);
+                cx.memo.borrow_mut().clear();
+            }
+            cache.steps.truncate(k);
+        }
+        if !active {
+            cx.status.insert(f.id, Status::Inactive);
+        } else {
+            let st = match cx.run(f) {
+                Ok(None) => Status::Ok,
+                Ok(Some(w)) => Status::Warning(w),
+                Err(e) => Status::Error(e),
+            };
+            cx.status.insert(f.id, st);
+            cx.body_sig.insert(f.target, h);
+            cx.memo.borrow_mut().clear();
+            if let FeatureKind::Combine(c) = &f.kind {
+                cx.body_sig.insert(c.tool, h);
+            }
+        }
+        cache.steps.push((
+            h,
+            Snap { bodies: cx.bodies.clone(), sketches: cx.sketches.clone(), status: cx.status.clone(), tools: cx.tools.clone(), body_sig: cx.body_sig.clone() },
+        ));
+    }
+    if let (false, Some(k0)) = (fresh, hit) {
+        // nada mudou na linha do tempo: tudo vem do cache
+        let sn = cache.steps[k0].1.clone();
+        (cx.bodies, cx.sketches, cx.status, cx.tools, cx.body_sig) = (sn.bodies, sn.sketches, sn.status, sn.tools, sn.body_sig);
+        cache.steps.truncate(k0 + 1);
+        cx.memo.borrow_mut().clear();
+    } else if !fresh {
+        cache.steps.clear();
     }
 
     // planos: Origem + Referências
@@ -1234,7 +1400,8 @@ pub fn recompute(doc: &Document) -> RecomputeResult {
                     Geo::Point(p) => points.push(PointViz { id: r.id, name: r.name.clone(), p }),
                     Geo::Curve(c) => curves.push(CurveViz { id: r.id, name: r.name.clone(), pts: c.pts }),
                     Geo::Surface(sh) => {
-                        if let Ok(mesh) = sh.mesh(0.05) {
+                        let defl = sh.bbox().map(|(a, b)| ((0..3).map(|i| (b[i] - a[i]).powi(2)).sum::<f64>().sqrt() * 0.002).clamp(0.01, 1.0)).unwrap_or(0.05);
+                        if let Ok(mesh) = sh.mesh(defl) {
                             surfaces.push(SurfaceViz { id: r.id, name: r.name.clone(), mesh });
                         }
                     }
@@ -1259,15 +1426,19 @@ pub fn recompute(doc: &Document) -> RecomputeResult {
             dof: es.report.dof,
             converged: es.report.converged,
         };
-        // sombra: a face real (com furos internos) tesselada pelo kernel
+        // sombra: a face real (com furos internos) tesselada pelo kernel (com cache)
         if !es.loops.is_empty() {
-            if let Ok(m) = Shape::face(fr, &es.loops).and_then(|f| f.mesh(0.2)) {
+            let key = (*id, hash_of(&[&format!("{:?}{:?}", es.loops, (fr.origin, fr.x, fr.normal))], 0));
+            if let Some(f) = cache.fills.get(&key) {
+                v.fill = f.clone();
+            } else if let Ok(m) = Shape::face(fr, &es.loops).and_then(|f| f.mesh(0.2)) {
                 for t in m.indices.chunks_exact(3) {
                     for &i in t {
                         let k = i as usize * 3;
                         v.fill.push([m.positions[k], m.positions[k + 1], m.positions[k + 2]]);
                     }
                 }
+                cache.fills.insert(key, v.fill.clone());
             }
         }
         for (cons, pts) in &es.viz {
@@ -1285,16 +1456,28 @@ pub fn recompute(doc: &Document) -> RecomputeResult {
     let mut bodies = vec![];
     for c in &doc.collectors {
         let Some((s, owners)) = cx.body_owned(c.id) else { continue };
-        let defl = s
-            .bbox()
-            .map(|(a, b)| ((0..3).map(|i| (b[i] - a[i]).powi(2)).sum::<f64>().sqrt() * 0.0015).clamp(0.005, 1.0))
-            .unwrap_or(0.1);
-        match s.mesh(defl) {
-            Ok(mesh) => bodies.push(BodyResult {
+        let key = (c.id, cx.body_sig.get(&c.id).copied().unwrap_or(0));
+        let cached = cache.meshes.get(&key).cloned();
+        let r = match cached {
+            Some(x) => Ok(x),
+            None => {
+                let defl = s
+                    .bbox()
+                    .map(|(a, b)| ((0..3).map(|i| (b[i] - a[i]).powi(2)).sum::<f64>().sqrt() * 0.0015).clamp(0.005, 1.0))
+                    .unwrap_or(0.1);
+                s.mesh(defl).map(|m| {
+                    let x = (m, s.mass(), s.face_count());
+                    cache.meshes.insert(key, x.clone());
+                    x
+                })
+            }
+        };
+        match r {
+            Ok((mesh, mass, faces)) => bodies.push(BodyResult {
                 collector: c.id,
                 color: c.color,
-                mass: s.mass(),
-                faces: s.face_count(),
+                mass,
+                faces,
                 face_owner: owners.clone(),
                 mesh,
             }),
@@ -1344,7 +1527,16 @@ pub fn publications(doc: &Document) -> Vec<(String, LinkedGeo)> {
 /// Exporta o corpo de um coletor (ou de todos) após recalcular.
 pub fn export(doc: &Document, collector: Option<Id>, path: &str) -> Result<(), String> {
     let vars = doc.eval_params().map_err(|e| e.to_string())?;
-    let mut cx = Ctx { doc, vars, bodies: HashMap::new(), sketches: HashMap::new(), status: HashMap::new(), tools: HashMap::new() };
+    let mut cx = Ctx {
+        doc,
+        vars,
+        bodies: HashMap::new(),
+        sketches: HashMap::new(),
+        status: HashMap::new(),
+        tools: HashMap::new(),
+        memo: RefCell::new(HashMap::new()),
+        body_sig: HashMap::new(),
+    };
     for f in doc.active_features().map(|(_, f)| f) {
         let _ = cx.run(f);
     }
@@ -1446,6 +1638,100 @@ pub fn example_document() -> Document {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn terminos_unificados() {
+        if !scc_kernel::AVAILABLE {
+            return;
+        }
+        let near = |a: f64, b: f64, tol: f64| (a - b).abs() <= tol * b.abs().max(1.);
+        let v0 = vol(&caixa());
+        // extrusão de cima para baixo até a face do topo: pino de 10 × 10 × 20
+        let mut d = caixa();
+        let alto = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "40");
+        let s = sk_rect(&mut d, PlaneRef::Datum(alto), [-5., -5.], [5., 5.]);
+        d.add_feature(FeatureKind::Extrude(Extrude {
+            sketch: s,
+            op: BoolOp::Add,
+            extent: Extent::UpToSurface(SurfRef::Face { point: [0., 0., 20.], normal: [0., 0., 1.], owner: None }),
+            reverse: true,
+            taper: "0".into(),
+            thin: None,
+        }));
+        assert!(near(vol(&d), v0 + 2000., 1e-6), "até a face {}", vol(&d));
+
+        // recorte do topo até um plano (z = 12) como superfície
+        let mut d = caixa();
+        let topo = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "20");
+        let fundo = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "12");
+        let s = sk_rect(&mut d, PlaneRef::Datum(topo), [-5., -5.], [5., 5.]);
+        d.add_feature(FeatureKind::Extrude(Extrude {
+            sketch: s,
+            op: BoolOp::Cut,
+            extent: Extent::UpToSurface(SurfRef::Plane(PlaneRef::Datum(fundo))),
+            reverse: false,
+            taper: "0".into(),
+            thin: None,
+        }));
+        assert!(near(vol(&d), v0 - 800., 1e-6), "recorte até plano {}", vol(&d));
+
+        // furo Ø6 do topo até o plano z = 12
+        let mut d = caixa();
+        let topo = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "20");
+        let fundo = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "12");
+        let mut data = SketchData::default();
+        let mut n = 5_000_000u64;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        let p0 = data.add_point(&mut al, 0., 0.);
+        data.add_curve(&mut al, scc_core::sketch::Curve::Point { p: p0 }, false);
+        let sp = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Datum(topo), data }));
+        let furo = Hole { sketch: sp, kind: HoleKind::Simples, diameter: "6".into(), depth: Extent::UpTo(PlaneRef::Datum(fundo)), thread: None, thread_modeled: false, standard: None };
+        let mut e = d.clone();
+        e.add_feature(FeatureKind::Hole(furo.clone()));
+        assert!(near(vol(&e), v0 - std::f64::consts::PI * 9. * 8., 1e-3), "furo até plano {}", vol(&e));
+        // o mesmo furo "até o próximo" atravessa a parede inteira (20)
+        let mut e = d.clone();
+        e.add_feature(FeatureKind::Hole(Hole { depth: Extent::UpToNext, ..furo }));
+        assert!(near(vol(&e), v0 - std::f64::consts::PI * 9. * 20., 1e-3), "furo até o próximo {}", vol(&e));
+
+        // rosca: comprimento 4 < face inteira
+        let mut d = caixa();
+        let top = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "20");
+        d.add_feature(FeatureKind::Primitive(Primitive { kind: PrimKind::Cilindro, plane: PlaneRef::Datum(top), a: "5".into(), b: "10".into(), c: "0".into(), d: "0".into(), op: BoolOp::Add }));
+        let th = |end: Option<Extent>| Thread { face: [5., 0., 25.], spec: "M10x1.5".into(), length: "4".into(), modeled: true, end };
+        let mut a = d.clone();
+        a.add_feature(FeatureKind::Thread(th(None)));
+        let mut b = d.clone();
+        b.add_feature(FeatureKind::Thread(th(Some(Extent::ThroughAll))));
+        let (va, vb) = (vol(&a), vol(&b));
+        assert!(vb < va - 1., "rosca completa {vb} vs 4 mm {va}");
+    }
+
+    #[test]
+    fn cache_reaproveita_linha_do_tempo() {
+        let mut d = Document::new("c");
+        scc_core::macros::run(&mut d, scc_core::macros::EXAMPLE).unwrap();
+        let mut cache = Cache::default();
+        let a = recompute_cached(&d, &mut cache);
+        assert_eq!(cache.reused, 0);
+        let b = recompute_cached(&d, &mut cache);
+        assert_eq!(cache.reused, d.features.len());
+        assert_eq!(a.status, b.status);
+        if scc_kernel::AVAILABLE {
+            assert!((a.bodies[0].mass.volume - b.bodies[0].mass.volume).abs() < 1e-6);
+        }
+        // mudar o último comando refaz só ele
+        let n = d.features.len();
+        d.features[n - 1].name.push('x');
+        let c = recompute_cached(&d, &mut cache);
+        assert_eq!(cache.reused, n - 1);
+        if scc_kernel::AVAILABLE {
+            assert!((a.bodies[0].mass.volume - c.bodies[0].mass.volume).abs() < 1e-6);
+        }
+    }
 
     #[test]
     fn macro_de_exemplo_recalcula() {
@@ -1644,7 +1930,7 @@ mod tests {
         assert!(near(vol(&d), v0 + std::f64::consts::PI * 250., 1e-3));
         // rosca externa modelada no cilindro (M10)
         let mut e = d.clone();
-        e.add_feature(FeatureKind::Thread(Thread { face: [5., 0., 25.], spec: "M10x1.5".into(), length: "8".into(), modeled: true }));
+        e.add_feature(FeatureKind::Thread(Thread { face: [5., 0., 25.], spec: "M10x1.5".into(), length: "8".into(), modeled: true, end: None }));
         let vt = vol(&e);
         assert!(vt < vol(&d) - 1., "rosca externa {vt}");
 

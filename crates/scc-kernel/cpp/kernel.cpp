@@ -9,6 +9,10 @@
 #include <vector>
 
 #include <BRepAdaptor_Curve.hxx>
+#include <BRepAlgoAPI_Splitter.hxx>
+#include <Geom_RectangularTrimmedSurface.hxx>
+#include <Precision.hxx>
+#include <gp_Pln.hxx>
 #include <BRepBuilderAPI_Copy.hxx>
 #include <BRepOffsetAPI_MakeOffsetShape.hxx>
 #include <BRepOffsetAPI_MakeFilling.hxx>

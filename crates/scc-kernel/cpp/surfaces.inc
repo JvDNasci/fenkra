@@ -167,6 +167,68 @@ std::unique_ptr<Shape> extrude_to_next(const Shape& face, double dx, double dy, 
     });
 }
 
+// Superfície "estendida": cada face vira a superfície-suporte com limites naturais (as infinitas,
+// como plano e cilindro, ficam limitadas a ±L), para cortar a ferramenta inteira.
+static TopoDS_Shape extended_faces(const TopoDS_Shape& s, double L) {
+    TopoDS_Compound c;
+    BRep_Builder bb;
+    bb.MakeCompound(c);
+    for (TopExp_Explorer e(s, TopAbs_FACE); e.More(); e.Next()) {
+        Handle(Geom_Surface) g = BRep_Tool::Surface(TopoDS::Face(e.Current()));
+        if (auto t = Handle(Geom_RectangularTrimmedSurface)::DownCast(g)) g = t->BasisSurface();
+        double u1, u2, v1, v2;
+        g->Bounds(u1, u2, v1, v2);
+        u1 = std::max(u1, -L), u2 = std::min(u2, L), v1 = std::max(v1, -L), v2 = std::min(v2, L);
+        BRepBuilderAPI_MakeFace mf(g, u1, u2, v1, v2, Precision::Confusion());
+        if (mf.IsDone()) bb.Add(c, mf.Face());
+    }
+    return c;
+}
+
+// Término "até a superfície / até o próximo / até plano" genérico: a ferramenta longa é dividida pela
+// superfície (estendida se `extend`) e fica só o pedaço que passa pelo ponto inicial (perfil, boca do
+// furo). Vale para extrusão, recorte, furo e rosca.
+std::unique_ptr<Shape> clip_until(const Shape& tool, const Shape& cutter, double px, double py, double pz, bool extend) {
+    return guard("até a superfície", [&] {
+        Bnd_Box bx;
+        BRepBndLib::Add(tool.s, bx);
+        BRepBndLib::Add(cutter.s, bx);
+        double L = std::sqrt(bx.SquareExtent()) * 2 + 10;
+        TopoDS_Shape cut = extend ? extended_faces(cutter.s, L) : cutter.s;
+        BRepAlgoAPI_Splitter sp;
+        TopTools_ListOfShape args, tools;
+        args.Append(tool.s);
+        tools.Append(cut);
+        sp.SetArguments(args);
+        sp.SetTools(tools);
+        sp.Build();
+        if (!sp.IsDone()) throw std::runtime_error("não foi possível dividir pela superfície");
+        TopoDS_Vertex v = BRepBuilderAPI_MakeVertex(gp_Pnt(px, py, pz));
+        std::vector<std::pair<double, TopoDS_Shape>> parts;
+        for (TopExp_Explorer e(sp.Shape(), TopAbs_SOLID); e.More(); e.Next()) {
+            BRepExtrema_DistShapeShape d(e.Current(), v);
+            parts.push_back({d.IsDone() ? d.Value() : 1e30, e.Current()});
+        }
+        if (parts.size() < 2) throw std::runtime_error("a superfície não atravessa a ferramenta nessa direção (inverta ou escolha outra)");
+        TopoDS_Compound c;
+        BRep_Builder bb;
+        bb.MakeCompound(c);
+        double best = 1e30;
+        for (auto& p : parts) best = std::min(best, p.first);
+        for (auto& p : parts)
+            if (p.first < best + 1e-4) bb.Add(c, p.second);
+        return wrap(c);
+    });
+}
+
+// Face plana quadrada (lado 2·half) centrada em o com normal n (plano como superfície de corte).
+std::unique_ptr<Shape> plane_face(double ox, double oy, double oz, double nx, double ny, double nz, double half) {
+    return guard("plano", [&] {
+        gp_Pln pl(gp_Pnt(ox, oy, oz), gp_Dir(nx, ny, nz));
+        return wrap(BRepBuilderAPI_MakeFace(pl, -half, half, -half, half).Face());
+    });
+}
+
 // Face mais próxima tem que ter um ponto a no máximo `tol` (usado para alternar seleção de faces).
 bool same_face(const Shape& s, double ax, double ay, double az, double bx, double by, double bz) {
     return guard("faces", [&] { return face_near(s.s, gp_Pnt(ax, ay, az)).IsSame(face_near(s.s, gp_Pnt(bx, by, bz))); });

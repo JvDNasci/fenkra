@@ -63,6 +63,8 @@ std::unique_ptr<Shape> revolve_curve(rust::Slice<const double> pts, double ox, d
 rust::Vec<double> surface_near(const Shape& s, double px, double py, double pz);
 rust::Vec<double> face_props(const Shape& s, double px, double py, double pz);
 std::unique_ptr<Shape> extrude_to_next(const Shape& face, double dx, double dy, double dz, double len, const Shape& body);
+std::unique_ptr<Shape> clip_until(const Shape& tool, const Shape& cutter, double px, double py, double pz, bool extend);
+std::unique_ptr<Shape> plane_face(double ox, double oy, double oz, double nx, double ny, double nz, double half);
 bool same_face(const Shape& s, double ax, double ay, double az, double bx, double by, double bz);
 std::unique_ptr<Shape> full_round_t(const Shape& s, double mx, double my, double mz, double width, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
 std::unique_ptr<Shape> face_face_fillet_t(const Shape& s, double ax, double ay, double az, double bx, double by, double bz, double r, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);

@@ -94,7 +94,7 @@ fn op_combo(ui: &mut egui::Ui, _id: &str, op: &mut BoolOp) {
     }
 }
 
-fn extent_ui(ui: &mut egui::Ui, _id: &str, e: &mut Extent, vars: &Vars, allow: &[&str], doc: &Document) {
+pub(crate) fn extent_ui(ui: &mut egui::Ui, _id: &str, e: &mut Extent, vars: &Vars, allow: &[&str], doc: &Document, seed: &crate::geo_ui::Seed) {
     let cur = match e {
         Extent::Blind(_) => "Cego",
         Extent::Symmetric(_) => "Plano médio",
@@ -102,6 +102,7 @@ fn extent_ui(ui: &mut egui::Ui, _id: &str, e: &mut Extent, vars: &Vars, allow: &
         Extent::ThroughAll => "Passante",
         Extent::UpTo(_) => "Até plano",
         Extent::UpToNext => "Até o próximo",
+        Extent::UpToSurface(_) => "Até a superfície",
     };
     let keep = match e {
         Extent::Blind(d) | Extent::Symmetric(d) | Extent::TwoSides(d, _) => d.clone(),
@@ -113,7 +114,8 @@ fn extent_ui(ui: &mut egui::Ui, _id: &str, e: &mut Extent, vars: &Vars, allow: &
         "Plano médio" => ("ext_simetrico", "Metade para cada lado do plano do sketch"),
         "Dois sentidos" => ("ext_dois_sentidos", "Distâncias diferentes para cada lado"),
         "Passante" => ("ext_passante", "Atravessa todo o corpo"),
-        "Até o próximo" => ("ext_ate_face", "Para na primeira parede do corpo na direção da extrusão"),
+        "Até o próximo" => ("ext_ate_face", "Para na primeira parede do corpo nessa direção"),
+        "Até a superfície" => ("ext_ate_superficie", "Termina numa superfície ou face (estendida se for menor que o perfil)"),
         _ => ("ext_ate_plano", "Termina exatamente num plano (inclusive inclinado)"),
     };
     let opts: Vec<(&str, &str, &str, bool)> = allow.iter().map(|n| (info(n).0, *n, info(n).1, cur == *n)).collect();
@@ -126,6 +128,13 @@ fn extent_ui(ui: &mut egui::Ui, _id: &str, e: &mut Extent, vars: &Vars, allow: &
                 "Dois sentidos" => Extent::TwoSides(keep.clone(), keep.clone()),
                 "Passante" => Extent::ThroughAll,
                 "Até o próximo" => Extent::UpToNext,
+                "Até a superfície" => Extent::UpToSurface(seed.surface.unwrap_or_else(|| {
+                    doc.references
+                        .iter()
+                        .find(|r| r.kind.class() == RefClass::Surface)
+                        .map(|r| SurfRef::Ref(r.id))
+                        .unwrap_or(SurfRef::Plane(PlaneRef::Origin(OriginPlane::XY)))
+                })),
                 _ => Extent::UpTo(doc.references.first().map(|r| PlaneRef::Datum(r.id)).unwrap_or(PlaneRef::Origin(OriginPlane::XY))),
             };
         }
@@ -141,7 +150,11 @@ fn extent_ui(ui: &mut egui::Ui, _id: &str, e: &mut Extent, vars: &Vars, allow: &
             ui.label(RichText::new(tr("atravessa todo o corpo de destino")).weak().small());
         }
         Extent::UpToNext => {
-            ui.label(RichText::new(tr("cresce até encontrar o corpo (só para extrusão que acrescenta)")).weak().small());
+            ui.label(RichText::new(tr("para na primeira parede do corpo encontrada")).weak().small());
+        }
+        Extent::UpToSurface(s) => {
+            crate::geo_ui::surf_slot(ui, "ate_sup", "Até a superfície", doc, Id(u64::MAX), s, seed);
+            ui.label(RichText::new(tr("Selecione uma face na peça ou uma superfície da pasta de geometria e clique em ⊙.")).weak().small());
         }
         Extent::UpTo(p) => {
             ui.horizontal(|ui| {
@@ -729,7 +742,7 @@ fn feature_ui(
             sketch_combo(ui, "sk_ex", doc, idx, &mut e.sketch);
             op_combo(ui, "op_ex", &mut e.op);
             section(ui, "Extensão");
-            extent_ui(ui, "ext_ex", &mut e.extent, vars, &["Cego", "Plano médio", "Dois sentidos", "Passante", "Até plano", "Até o próximo"], doc);
+            extent_ui(ui, "ext_ex", &mut e.extent, vars, &["Cego", "Plano médio", "Dois sentidos", "Passante", "Até o próximo", "Até plano", "Até a superfície"], doc, seed);
             ui.checkbox(&mut e.reverse, tr("inverter sentido"));
             crate::feat_ui::extrude_extras(ui, e, vars);
             if e.op == BoolOp::Cut {
@@ -773,7 +786,7 @@ fn feature_ui(
             target_combo(ui, doc, target);
         }
 
-        FeatureKind::Hole(h) => hole_ui(ui, doc, idx, h, vars, target),
+        FeatureKind::Hole(h) => hole_ui(ui, doc, idx, h, vars, target, seed),
 
         FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => {
             let fillet = matches!(kind_tag(id, doc), Some(true));
@@ -824,7 +837,7 @@ fn kind_tag(id: Id, doc: &Document) -> Option<bool> {
 }
 
 /// Furo inteligente (RF-SOL-007/008): escolher norma e uso preenche os diâmetros.
-fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &Vars, target: &mut Id) {
+fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &Vars, target: &mut Id, seed: &crate::geo_ui::Seed) {
     section(ui, "Centros");
     sketch_combo(ui, "sk_furo", doc, idx, &mut h.sketch);
     ui.label(RichText::new(tr("Os pontos do sketch são os centros; o furo entra contra a normal do plano.")).weak().small());
@@ -912,7 +925,7 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
         h.standard = Some(format!("{norma}|{size}|{folga}"));
     }
 
-    extent_ui(ui, "ext_furo", &mut h.depth, vars, &["Cego", "Passante"], doc);
+    extent_ui(ui, "ext_furo", &mut h.depth, vars, &["Cego", "Passante", "Até o próximo", "Até plano", "Até a superfície"], doc, seed);
 
     if h.thread.is_some() {
         section(ui, "Representação da rosca");

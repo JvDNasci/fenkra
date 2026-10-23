@@ -8,3 +8,4 @@ license.workspace = true
 [dependencies]
 scc-core = { path = "../scc-core" }
 scc-kernel = { path = "../scc-kernel" }
+serde_json.workspace = true
