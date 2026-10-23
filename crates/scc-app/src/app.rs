@@ -172,6 +172,8 @@ pub struct App {
     relink_ext: Option<Id>,
     /// montagem aberta (bancada Montagem)
     pub asm: Option<crate::asm_ui::AsmState>,
+    /// janela de parâmetros de chapa
+    sheet_open: bool,
 }
 
 /// Edição de um comando como "ambiente": só termina com Concluir (mantém) ou Cancelar (desfaz).
@@ -257,6 +259,7 @@ impl App {
             errors_prev: 0,
             relink_ext: None,
             asm: None,
+            sheet_open: false,
         };
         app.started = !app.settings.show_start;
         // desenvolvimento: SCC_ABRIR_SKETCH=<nome> abre esse sketch em edição ao iniciar
@@ -333,6 +336,29 @@ impl App {
             stt.sim_open = stt.asm.joints.len() > 0;
             app.asm = Some(stt);
             app.settings.bench = crate::settings::Bench::Montagem;
+            app.started = true;
+        }
+        // desenvolvimento: SCC_DEMO_CHAPA=1 abre uma peça de chapa de exemplo na bancada Chapa
+        if std::env::var("SCC_DEMO_CHAPA").is_ok() {
+            let s = |x: &str| x.to_string();
+            let mut d = Document::new("Suporte de chapa");
+            d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), flat: std::env::var("SCC_DEMO_CHAPA").is_ok_and(|v| v == "plana") });
+            let mut data = SketchData::default();
+            {
+                let mut n = 9_000_000u64;
+                let mut al = || {
+                    n += 1;
+                    Id(n)
+                };
+                data.add_rect(&mut al, [0., 0.], [100., 60.], false);
+            }
+            let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
+            d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false }));
+            d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 30., 2.], length: s("25"), angle: s("90"), radius: None, off1: s("8"), off2: s("8"), flip: false, relief: Some(s("3")) }));
+            d.add_feature(FeatureKind::SmHem(SmHem { edge: [0., 30., 2.], length: s("8"), gap: s("0"), flip: false }));
+            d.hide_consumed(d.features[1].id);
+            app.load_doc(d, None, None);
+            app.settings.bench = crate::settings::Bench::Chapa;
             app.started = true;
         }
         // desenvolvimento: SCC_VISTAS=1 abre o seletor de vistas ao iniciar
@@ -887,6 +913,72 @@ impl App {
                     PrimKind::Prisma => ["6", "15", "20", "0"],
                 };
                 Sel::Feature(d.add_feature(FeatureKind::Primitive(Primitive { kind, plane, a: s(v[0]), b: s(v[1]), c: s(v[2]), d: s(v[3]), op: BoolOp::Add })))
+            }
+            Cmd::SmParams => {
+                if d.sheet.is_none() {
+                    d.sheet = Some(SheetParams::default());
+                }
+                self.sheet_open = true;
+                return;
+            }
+            Cmd::SmUnfold => {
+                let sp = d.sheet.get_or_insert_with(SheetParams::default);
+                sp.flat = !sp.flat;
+                let msg = if sp.flat { "Planificada (desdobrada) — o mesmo comando dobra de novo" } else { "Dobrada" };
+                self.toast(msg, false);
+                return;
+            }
+            Cmd::SmWall | Cmd::SmStamp | Cmd::SmFlangedHole => {
+                if d.sheet.is_none() {
+                    d.sheet = Some(SheetParams::default());
+                }
+                let Some(sk) = sketch else {
+                    self.toast(match c {
+                        Cmd::SmFlangedHole => "Selecione um sketch com os pontos (centros) primeiro",
+                        _ => "Selecione um sketch com perfil fechado primeiro",
+                    }, true);
+                    return;
+                };
+                Sel::Feature(d.add_feature(match c {
+                    Cmd::SmWall => FeatureKind::SmWall(SmWall { sketch: sk, reverse: false }),
+                    Cmd::SmStamp => FeatureKind::SmStamp(SmStamp { sketch: sk, depth: s("3"), flip: false }),
+                    _ => FeatureKind::SmFlangedHole(SmFlangedHole { sketch: sk, diameter: s("8"), height: s("4"), flip: false }),
+                }))
+            }
+            Cmd::SmFlange | Cmd::SmHem | Cmd::SmJoggle => {
+                if d.sheet.is_none() {
+                    d.sheet = Some(SheetParams::default());
+                }
+                use crate::picking::Pick;
+                let edge = self.picks.iter().find_map(|p| match p {
+                    Pick::Edge { mid, .. } => Some(mid.map(|v| v as f64)),
+                    _ => None,
+                });
+                let verts: Vec<[f64; 3]> = self.picks.iter().filter_map(|p| match p {
+                    Pick::Vertex { pos, .. } => Some(pos.map(|v| v as f64)),
+                    _ => None,
+                }).collect();
+                let d = &mut self.open.doc;
+                Sel::Feature(d.add_feature(match c {
+                    Cmd::SmFlange => FeatureKind::SmFlange(SmFlange {
+                        edge: edge.unwrap_or([0.; 3]),
+                        length: s("20"),
+                        angle: s("90"),
+                        radius: None,
+                        off1: s("0"),
+                        off2: s("0"),
+                        flip: false,
+                        relief: None,
+                    }),
+                    Cmd::SmHem => FeatureKind::SmHem(SmHem { edge: edge.unwrap_or([0.; 3]), length: s("8"), gap: s("0"), flip: false }),
+                    _ => FeatureKind::SmJoggle(SmJoggle {
+                        a: verts.first().copied().unwrap_or([0.; 3]),
+                        b: verts.get(1).copied().unwrap_or([0., 10., 0.]),
+                        depth: s("3"),
+                        run: s("6"),
+                        flip: false,
+                    }),
+                }))
             }
             Cmd::Stiffener => {
                 let Some(sk) = sketch else {
@@ -1775,7 +1867,7 @@ impl App {
                 // abas de módulo (RF-UI-006)
                 use crate::settings::Bench;
                 ui.add_space(10.);
-                for (b, n, icon) in [(Bench::Solidos, "Modelagem Sólida", "▣"), (Bench::Superficies, "Superfícies", "◫"), (Bench::Montagem, "Montagem", "⚙")] {
+                for (b, n, icon) in [(Bench::Solidos, "Modelagem Sólida", "▣"), (Bench::Superficies, "Superfícies", "◫"), (Bench::Montagem, "Montagem", "⚙"), (Bench::Chapa, "Chapa metálica", "▭")] {
                     if bench_tab(ui, self.settings.bench == b, &format!("{icon}  {}", tr(n)), true).on_hover_text(tr("As bancadas compartilham o mesmo modelo: sólidos e superfícies se conversam.")).clicked() {
                         self.settings.bench = b;
                     }
@@ -1786,7 +1878,7 @@ impl App {
                         crate::asm_ui::back_to_assembly(self);
                     }
                 }
-                for m in ["Desenho", "Chapas", "Soldas"].map(tr) {
+                for m in ["Desenho", "Estrutural"].map(tr) {
                     bench_tab(ui, false, m, false).on_hover_text(tr("Módulo em breve"));
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -2124,6 +2216,54 @@ impl App {
             });
         if !open {
             self.props_target = None;
+        }
+    }
+
+    /// Parâmetros de chapa (espessura, raio, fator K), estado dobrado/planificado e tabela de dobras.
+    fn sheet_window(&mut self, ctx: &egui::Context) {
+        if !self.sheet_open {
+            return;
+        }
+        let vars = self.vars();
+        let mut open = true;
+        let table = scc_solidos::bend_table(&self.open.doc);
+        let d = &mut self.open.doc;
+        let sp = d.sheet.get_or_insert_with(SheetParams::default);
+        egui::Window::new(tr("▭ Chapa metálica"))
+            .id(egui::Id::unique("janela_chapa"))
+            .open(&mut open)
+            .default_width(380.)
+            .resizable(true)
+            .show(ctx, |ui| {
+                editor::expr(ui, "Espessura", &mut sp.thickness, &vars, "mm");
+                editor::expr(ui, "Raio de dobra", &mut sp.radius, &vars, "mm");
+                editor::expr(ui, "Fator K", &mut sp.k, &vars, "");
+                ui.label(RichText::new(tr("Fator K: posição da linha neutra (0 = face interna, 0,5 = meio). Comprimento desenvolvido de cada dobra = ângulo × (R + K·t).")).weak().small());
+                ui.horizontal(|ui| {
+                    ui.radio_value(&mut sp.flat, false, tr("dobrada"));
+                    ui.radio_value(&mut sp.flat, true, tr("planificada"));
+                });
+                editor::section(ui, "Tabela de dobras");
+                if table.is_empty() {
+                    ui.label(RichText::new(tr("nenhuma dobra ainda")).weak());
+                }
+                egui::Grid::new("tab_dobras").striped(true).num_columns(5).show(ui, |ui| {
+                    for h in ["Dobra", "Ângulo", "Raio", "Desenvolvido", "Dedução"] {
+                        ui.label(RichText::new(tr(h)).strong().small());
+                    }
+                    ui.end_row();
+                    for r in &table {
+                        ui.label(RichText::new(&r.name).small());
+                        ui.label(RichText::new(format!("{}°", fmt(r.angle))).small());
+                        ui.label(RichText::new(fmt(r.radius)).small());
+                        ui.label(RichText::new(fmt(r.allowance)).small());
+                        ui.label(RichText::new(fmt(r.deduction)).small());
+                        ui.end_row();
+                    }
+                });
+            });
+        if !open {
+            self.sheet_open = false;
         }
     }
 
@@ -3488,6 +3628,20 @@ impl App {
                     if let Some(f) = self.open.doc.feature_mut(fid) {
                         crate::feat_ui::toggle_face(&mut f.kind, point.map(|v| v as f64), same);
                     }
+                } else if let (Some(Some(sid)), true, Some(crate::picking::Pick::Edge { mid, .. })) = (
+                    self.session.as_ref().map(|x| x.id).map(|id| self.open.doc.feature(id).filter(|f| matches!(f.kind, FeatureKind::SmFlange(_) | FeatureKind::SmHem(_))).map(|f| f.id)),
+                    resp.clicked_by(egui::PointerButton::Primary),
+                    self.hover_pick,
+                ) {
+                    // aba/bainha aberta: clicar numa aresta troca a aresta da dobra
+                    let m = mid.map(|v| v as f64);
+                    if let Some(f) = self.open.doc.feature_mut(sid) {
+                        match &mut f.kind {
+                            FeatureKind::SmFlange(fl) => fl.edge = m,
+                            FeatureKind::SmHem(h) => h.edge = m,
+                            _ => {}
+                        }
+                    }
                 } else if resp.double_clicked_by(egui::PointerButton::Primary) {
                     // duplo clique numa face abre o comando que a criou
                     if let Some(crate::picking::Pick::Face { owner, .. }) = self.hover_pick {
@@ -3758,6 +3912,15 @@ pub enum Cmd {
     AsmJoint(u8),
     AsmAutoJoints,
     AsmSimulate,
+    // ---- chapa metálica
+    SmParams,
+    SmWall,
+    SmFlange,
+    SmHem,
+    SmJoggle,
+    SmStamp,
+    SmFlangedHole,
+    SmUnfold,
     /// mover o corpo: 0 translação, 1 rotação, 2 simetria, 3 afinidade
     MoveBody(u8),
     /// extrusão com ângulo de saída e filetes num clique
@@ -4201,6 +4364,7 @@ impl eframe::App for App {
         self.props_window(ctx);
         self.wizard_window(ctx);
         crate::asm_ui::sim_window(self, ctx);
+        self.sheet_window(ctx);
         self.side_toolbars(root);
         self.settings_window(ctx);
         self.view_menu_window(ctx);

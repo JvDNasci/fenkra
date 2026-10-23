@@ -233,7 +233,10 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
 
     match sel {
         Sel::None => {
-            if app.settings.bench == crate::settings::Bench::Superficies {
+            if app.settings.bench == crate::settings::Bench::Chapa {
+                ui.heading(tr("Chapa metálica"));
+                ui.label(RichText::new(tr("▭ Parâmetros (espessura, raio, fator K) → sketch → Parede base → abas, bainhas, joggles, estampos e furos flangeados nas arestas e faces. Dobrar/Desdobrar alterna com o planificado.")).weak());
+            } else if app.settings.bench == crate::settings::Bench::Superficies {
                 ui.heading(tr("Superfícies"));
                 ui.label(RichText::new(tr("Wireframe (Referências) → superfícies → operações → Volume para virar sólido. As superfícies ficam na pasta de geometria e servem de entrada para os comandos de sólido.")).weak());
             } else {

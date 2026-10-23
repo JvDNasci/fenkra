@@ -37,6 +37,8 @@ pub enum Group {
     Montagem,
     Restricoes,
     Cinematica,
+    /// chapa metálica
+    Chapa,
     // modo sketch
     SkCriacao,
     SkTransformar,
@@ -46,7 +48,8 @@ pub enum Group {
 }
 
 impl Group {
-    pub const ALL: [Group; 21] = [
+    pub const ALL: [Group; 22] = [
+        Group::Chapa,
         Group::Montagem,
         Group::Restricoes,
         Group::Cinematica,
@@ -72,6 +75,12 @@ impl Group {
     /// Em que bancada o grupo aparece (Sketch, Referências/wireframe, Volume, Análise, Organização,
     /// Seleção e Vista são comuns às duas).
     pub fn in_bench(self, b: Bench) -> bool {
+        if b == Bench::Chapa {
+            return matches!(self, Group::Sketch | Group::Chapa | Group::Referencias | Group::Organizacao | Group::Vista | Group::Selecao | Group::Analise);
+        }
+        if self == Group::Chapa {
+            return false;
+        }
         if b == Bench::Montagem {
             return matches!(self, Group::Montagem | Group::Restricoes | Group::Cinematica | Group::Vista | Group::Selecao | Group::Analise);
         }
@@ -106,6 +115,7 @@ impl Group {
             Group::Montagem => tr("Montagem"),
             Group::Restricoes => tr("Restrições e movimento"),
             Group::Cinematica => tr("Cinemática"),
+            Group::Chapa => tr("Chapa metálica"),
             Group::SkCriacao => tr("Criação"),
             Group::SkTransformar => tr("Transformar"),
             Group::SkCotagem => tr("Cotagem"),
@@ -122,6 +132,7 @@ pub enum Bench {
     Solidos,
     Superficies,
     Montagem,
+    Chapa,
 }
 
 /// Estilo de navegação da câmera (botões do mouse).

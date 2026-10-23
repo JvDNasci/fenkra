@@ -33,6 +33,31 @@ pub fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
     [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
 }
 
+/// Parâmetros de uma aba de chapa.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SheetFlange {
+    pub t: f64,
+    pub r: f64,
+    pub angle: f64,
+    pub length: f64,
+    pub off1: f64,
+    pub off2: f64,
+    pub flip: bool,
+    pub flat: bool,
+    pub k: f64,
+}
+
+/// Medidas da aresta da aba.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SheetEdgeInfo {
+    pub length: f64,
+    pub thickness: f64,
+    pub normal: [f64; 3],
+    pub out: [f64; 3],
+    /// pontas da dobra (depois dos recuos), na face de referência
+    pub ends: [[f64; 3]; 2],
+}
+
 /// Transformação rígida ou escala de um sólido.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Xform {
@@ -488,6 +513,32 @@ mod imp {
         pub fn to_brep(&self) -> KResult<String> {
             b::to_brep(&self.0).map_err(err)
         }
+        /// Aba de chapa na aresta perto de `p` (ou a tira planificada, se `flat`).
+        pub fn sm_flange(&self, p: [f64; 3], f: SheetFlange) -> KResult<(Shape, SheetEdgeInfo)> {
+            let mut info = vec![];
+            let s = b::sm_flange(&self.0, p[0], p[1], p[2], f.t, f.r, f.angle, f.length, f.off1, f.off2, f.flip, f.flat, f.k, &mut info).map_err(err)?;
+            let i = SheetEdgeInfo {
+                length: info[0],
+                thickness: info[1],
+                normal: [info[2], info[3], info[4]],
+                out: [info[5], info[6], info[7]],
+                ends: [[info[8], info[9], info[10]], [info[11], info[12], info[13]]],
+            };
+            Ok((Shape(s), i))
+        }
+        /// Perfil plano deslocado para fora (d > 0) ou para dentro.
+        pub fn offset_face(&self, d: f64) -> KResult<Shape> {
+            b::offset_face(&self.0, d).map(Shape).map_err(err)
+        }
+        /// Caixa: canto `o`, eixo `x` (lx), normal `z` (lz), y = z × x (ly).
+        pub fn box_tool(o: [f64; 3], x: [f64; 3], z: [f64; 3], l: [f64; 3]) -> KResult<Shape> {
+            b::box_tool(o[0], o[1], o[2], x[0], x[1], x[2], z[0], z[1], z[2], l[0], l[1], l[2]).map(Shape).map_err(err)
+        }
+        /// Prisma de um polígono plano ao longo de `v`.
+        pub fn poly_prism(pts: &[[f64; 3]], v: [f64; 3]) -> KResult<Shape> {
+            let f: Vec<f64> = pts.iter().flatten().copied().collect();
+            b::poly_prism(&f, v[0], v[1], v[2]).map(Shape).map_err(err)
+        }
         pub fn from_brep(text: &str) -> KResult<Shape> {
             b::from_brep(text).map(Shape).map_err(err)
         }
@@ -742,6 +793,18 @@ mod imp {
             false
         }
         pub fn to_brep(&self) -> KResult<String> {
+            no()
+        }
+        pub fn sm_flange(&self, _: [f64; 3], _: SheetFlange) -> KResult<(Shape, SheetEdgeInfo)> {
+            no()
+        }
+        pub fn offset_face(&self, _: f64) -> KResult<Shape> {
+            no()
+        }
+        pub fn box_tool(_: [f64; 3], _: [f64; 3], _: [f64; 3], _: [f64; 3]) -> KResult<Shape> {
+            no()
+        }
+        pub fn poly_prism(_: &[[f64; 3]], _: [f64; 3]) -> KResult<Shape> {
             no()
         }
         pub fn from_brep(_: &str) -> KResult<Shape> {

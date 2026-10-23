@@ -85,6 +85,11 @@ bool is_solid(const Shape& s);
 std::unique_ptr<Shape> affinity(const Shape& s, double ox, double oy, double oz, double xx, double xy, double xz, double nx, double ny, double nz,
                                 double fx, double fy, double fz);
 rust::String to_brep(const Shape& s);
+std::unique_ptr<Shape> offset_face(const Shape& face, double d);
+std::unique_ptr<Shape> box_tool(double ox, double oy, double oz, double xx, double xy, double xz, double zx, double zy, double zz, double lx, double ly, double lz);
+std::unique_ptr<Shape> poly_prism(rust::Slice<const double> pts, double dx, double dy, double dz);
+std::unique_ptr<Shape> sm_flange(const Shape& body, double px, double py, double pz, double t, double r, double angle_deg, double length,
+                                 double off1, double off2, bool flip, bool flat, double k, rust::Vec<double>& info);
 std::unique_ptr<Shape> from_brep(rust::Str text);
 std::unique_ptr<Shape> hole_tool_ext(double ox, double oy, double oz, double dx, double dy, double dz, double diameter, double depth,
                                      uint8_t kind, double d2, double p2, double a3, double tip, double taper);

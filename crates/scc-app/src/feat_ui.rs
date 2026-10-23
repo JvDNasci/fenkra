@@ -390,6 +390,73 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             ui.checkbox(&mut c.keep_tool, tr("manter o corpo ferramenta visível"));
             ui.label(RichText::new(tr("O resultado fica no coletor deste comando; o corpo ferramenta é o estado do outro coletor neste ponto da linha do tempo.")).weak().small());
         }
+        FeatureKind::SmWall(w) => {
+            section(ui, "Parede base");
+            sketch_pick(ui, "smw_sk", "Perfil", doc, idx, &mut w.sketch);
+            ui.checkbox(&mut w.reverse, tr("espessura para o outro lado"));
+            ui.label(RichText::new(tr("A espessura vem dos parâmetros da chapa (▭ Parâmetros).")).weak().small());
+        }
+        FeatureKind::SmFlange(fl) => {
+            section(ui, "Aba de aresta");
+            edge_line(ui, &fl.edge);
+            expr(ui, "Comprimento reto", &mut fl.length, vars, "mm");
+            expr(ui, "Ângulo", &mut fl.angle, vars, "°");
+            let mut own = fl.radius.is_some();
+            if ui.checkbox(&mut own, tr("raio próprio (senão o da chapa)")).changed() {
+                fl.radius = own.then(|| "2".to_string());
+            }
+            if let Some(r) = &mut fl.radius {
+                expr(ui, "Raio interno", r, vars, "mm");
+            }
+            section(ui, "Limites laterais");
+            expr(ui, "Recuo início", &mut fl.off1, vars, "mm");
+            expr(ui, "Recuo fim", &mut fl.off2, vars, "mm");
+            let mut rel = fl.relief.is_some();
+            if ui.checkbox(&mut rel, tr("alívio de canto nas pontas recuadas")).changed() {
+                fl.relief = rel.then(|| "2".to_string());
+            }
+            if let Some(w) = &mut fl.relief {
+                expr(ui, "Largura do alívio", w, vars, "mm");
+            }
+            ui.checkbox(&mut fl.flip, tr("dobrar para o outro lado"));
+        }
+        FeatureKind::SmHem(h) => {
+            section(ui, "Bainha");
+            edge_line(ui, &h.edge);
+            expr(ui, "Comprimento", &mut h.length, vars, "mm");
+            expr(ui, "Folga interna", &mut h.gap, vars, "mm");
+            ui.label(RichText::new(tr("Folga 0 = bainha esmagada; maior que 0 = aberta/circular.")).weak().small());
+            ui.checkbox(&mut h.flip, tr("dobrar para o outro lado"));
+        }
+        FeatureKind::SmJoggle(j) => {
+            section(ui, "Joggle");
+            let pts: Vec<[f64; 3]> = seed.points.iter().filter_map(|p| match p {
+                PointRef::Fixed(q) => Some(*q),
+                _ => None,
+            }).collect();
+            ui.label(RichText::new(format!("linha de ({:.1}, {:.1}, {:.1}) a ({:.1}, {:.1}, {:.1})", j.a[0], j.a[1], j.a[2], j.b[0], j.b[1], j.b[2])).small());
+            if ui.add_enabled(pts.len() >= 2, egui::Button::new(tr("⊙ Usar os dois vértices selecionados"))).clicked() {
+                j.a = pts[0];
+                j.b = pts[1];
+            }
+            expr(ui, "Desvio", &mut j.depth, vars, "mm");
+            expr(ui, "Rampa", &mut j.run, vars, "mm");
+            ui.checkbox(&mut j.flip, tr("desviar o outro lado da linha"));
+        }
+        FeatureKind::SmStamp(s) => {
+            section(ui, "Estampo");
+            sketch_pick(ui, "sms_sk", "Perfil", doc, idx, &mut s.sketch);
+            expr(ui, "Profundidade", &mut s.depth, vars, "mm");
+            ui.checkbox(&mut s.flip, tr("estampar para o outro lado"));
+            ui.label(RichText::new(tr("Desenhe o perfil num sketch no plano da face da chapa.")).weak().small());
+        }
+        FeatureKind::SmFlangedHole(h) => {
+            section(ui, "Furo flangeado");
+            sketch_pick(ui, "smf_sk", "Centros", doc, idx, &mut h.sketch);
+            expr(ui, "Diâmetro", &mut h.diameter, vars, "mm");
+            expr(ui, "Altura do colar", &mut h.height, vars, "mm");
+            ui.checkbox(&mut h.flip, tr("colar para o outro lado"));
+        }
         FeatureKind::MoveBody(m) => {
             section(ui, "Mover o corpo");
             let cur = match m.xf {
@@ -631,4 +698,10 @@ pub fn default_move(i: usize) -> BodyXf {
         2 => BodyXf::Symmetry { plane: PlaneRef::Origin(OriginPlane::YZ) },
         _ => BodyXf::Affinity { plane: PlaneRef::Origin(OriginPlane::XY), fx: s("1"), fy: s("1"), fz: s("2") },
     }
+}
+
+/// Linha informativa da aresta escolhida (aba/bainha).
+fn edge_line(ui: &mut egui::Ui, e: &[f64; 3]) {
+    let txt = if *e == [0.; 3] { tr("⚠ clique numa aresta reta da chapa na viewport").to_string() } else { format!("aresta em ({:.1}, {:.1}, {:.1}) — clique outra aresta para trocar", e[0], e[1], e[2]) };
+    ui.label(RichText::new(txt).small());
 }

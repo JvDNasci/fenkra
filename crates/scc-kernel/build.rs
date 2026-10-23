@@ -12,6 +12,7 @@ fn main() {
     println!("cargo:rerun-if-changed=cpp/features.inc");
     println!("cargo:rerun-if-changed=cpp/surfaces.inc");
     println!("cargo:rerun-if-changed=cpp/hybrid.inc");
+    println!("cargo:rerun-if-changed=cpp/sheet.inc");
     println!("cargo:rerun-if-changed=src/ffi.rs");
 
     let root = std::env::var("OCCT_ROOT")

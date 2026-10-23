@@ -695,3 +695,4 @@ rust::String occt_version() { return rust::String(OCC_VERSION_COMPLETE); }
 #include "features.inc"
 #include "surfaces.inc"
 #include "hybrid.inc"
+#include "sheet.inc"

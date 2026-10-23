@@ -245,6 +245,21 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("rest_atualizar", "Atualizar", "Resolver restrições", "Recalcula as posições de todos os componentes.", Cmd(C::AsmSolve))),
             One(it("rest_interferencia", "Interferências", "Verificar interferências", "Procura volumes em comum entre os componentes (colisões).", Cmd(C::AsmInterf))),
         ],
+        Group::Chapa => vec![
+            One(it("sm_parametros", "Parâmetros", "Parâmetros da chapa", "Espessura, raio de dobra e fator K da peça; tabela de dobras.", Cmd(C::SmParams))),
+            One(it("sm_parede", "Parede base", "Parede base", "Primeira parede a partir de um perfil fechado do sketch selecionado (lê a espessura global).", Cmd(C::SmWall))),
+            Family("sm_aba", vec![
+                it("sm_aba", "Aba", "Aba de aresta", "Dobra a partir da aresta selecionada: comprimento, ângulo, raio, recuos laterais e alívio de canto.", Cmd(C::SmFlange)),
+                it("sm_bainha", "Bainha", "Bainha", "Dobra de 180° na borda: esmagada (folga 0) ou aberta/circular.", Cmd(C::SmHem)),
+            ]),
+            One(it("sm_joggle", "Joggle", "Joggle (desvio em Z)", "Desloca a chapa além de uma linha por uma rampa, para sobrepor sem saliência.", Cmd(C::SmJoggle))),
+            Family("sm_estampo", vec![
+                it("sm_estampo", "Estampo", "Estampo (rebaixo/reforço)", "Rebaixa a chapa com o perfil fechado do sketch, mantendo a espessura.", Cmd(C::SmStamp)),
+                it("sm_furo_flangeado", "Furo flangeado", "Furo flangeado", "Furo com colar dobrado nos pontos do sketch (rigidez).", Cmd(C::SmFlangedHole)),
+            ]),
+            One(it("sm_desdobrar", "Dobrar/Desdobrar", "Dobrar / desdobrar", "Alterna a peça entre dobrada e planificada (comprimento desenvolvido pelo fator K).", Cmd(C::SmUnfold))),
+            One(it("recorte", "Recorte", "Recorte na chapa", "Recorte passante a partir do sketch (compatível com a planificação).", Cmd(C::Cut))),
+        ],
         Group::Cinematica => {
             let j = |icon, name, brief, adv, k: u8| it(icon, name, brief, adv, Cmd(C::AsmJoint(k)));
             vec![

@@ -1104,6 +1104,103 @@ pub enum FeatureKind {
     MeshImport(MeshImport),
     /// Mover o corpo inteiro: translação, rotação, simetria ou afinidade.
     MoveBody(MoveBody),
+    /// Chapa: parede base a partir de um perfil fechado (espessura global).
+    SmWall(SmWall),
+    /// Chapa: aba de aresta (dobra + parede reta).
+    SmFlange(SmFlange),
+    /// Chapa: bainha (dobra de 180° na borda).
+    SmHem(SmHem),
+    /// Chapa: joggle (desvio em Z) a partir de uma linha na face.
+    SmJoggle(SmJoggle),
+    /// Chapa: estampo (rebaixo/reforço) com o perfil de um sketch na face.
+    SmStamp(SmStamp),
+    /// Chapa: furo flangeado (colar dobrado) nos pontos de um sketch.
+    SmFlangedHole(SmFlangedHole),
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct SmJoggle {
+    /// dois pontos na face da chapa: a linha do joggle
+    pub a: [f64; 3],
+    pub b: [f64; 3],
+    /// desvio (normal à chapa) e comprimento da rampa
+    pub depth: String,
+    pub run: String,
+    /// lado da linha que desce (o outro fica)
+    pub flip: bool,
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct SmStamp {
+    /// perfil fechado num sketch no plano da face da chapa
+    pub sketch: Id,
+    pub depth: String,
+    /// estampar para o outro lado
+    pub flip: bool,
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct SmFlangedHole {
+    /// pontos do sketch = centros
+    pub sketch: Id,
+    pub diameter: String,
+    /// altura do colar
+    pub height: String,
+    pub flip: bool,
+}
+
+/// Parâmetros globais de chapa metálica da peça.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct SheetParams {
+    pub thickness: String,
+    /// raio interno de dobra padrão
+    pub radius: String,
+    /// fator K (posição da linha neutra: 0 = face interna, 0,5 = meio)
+    pub k: String,
+    /// peça mostrada planificada (desdobrada)
+    #[serde(default)]
+    pub flat: bool,
+}
+
+impl Default for SheetParams {
+    fn default() -> Self {
+        SheetParams { thickness: "2".into(), radius: "2".into(), k: "0.44".into(), flat: false }
+    }
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct SmWall {
+    pub sketch: Id,
+    /// espessura para o outro lado do plano do sketch
+    pub reverse: bool,
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct SmFlange {
+    /// ponto clicado na aresta reta da chapa
+    pub edge: [f64; 3],
+    /// comprimento reto depois da dobra
+    pub length: String,
+    pub angle: String,
+    /// raio interno (`None` = o da peça)
+    pub radius: Option<String>,
+    /// recuo lateral a partir de cada ponta da aresta
+    pub off1: String,
+    pub off2: String,
+    /// dobrar para o outro lado
+    pub flip: bool,
+    /// alívio de canto nas pontas recuadas (largura); `None` = sem alívio
+    #[serde(default)]
+    pub relief: Option<String>,
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct SmHem {
+    pub edge: [f64; 3],
+    pub length: String,
+    /// folga interna (0 = esmagada; > 0 = aberta/circular)
+    pub gap: String,
+    pub flip: bool,
 }
 
 /// Transformação do corpo (o original deixa de existir na posição antiga).
@@ -1210,6 +1307,12 @@ impl FeatureKind {
             SewSurface(_) => "Costurar",
             BoundaryFill(_) => "PreencherFronteiras",
             MeshImport(_) => "Malha",
+            SmWall(_) => "ParedeBase",
+            SmFlange(_) => "Aba",
+            SmHem(_) => "Bainha",
+            SmJoggle(_) => "Joggle",
+            SmStamp(_) => "Estampo",
+            SmFlangedHole(_) => "FuroFlangeado",
             MoveBody(m) => match m.xf {
                 BodyXf::Translate { .. } => "Translação",
                 BodyXf::Rotate { .. } => "Rotação",
@@ -1247,6 +1350,12 @@ impl FeatureKind {
             BoundaryFill(_) => "▦",
             MeshImport(_) => "△",
             MoveBody(_) => "✥",
+            SmWall(_) => "▭",
+            SmFlange(_) => "⌐",
+            SmHem(_) => "⊃",
+            SmJoggle(_) => "⌇",
+            SmStamp(_) => "◡",
+            SmFlangedHole(_) => "◉",
         }
     }
 
@@ -1413,6 +1522,35 @@ impl FeatureKind {
                 }
             }
             MeshImport(_) => {}
+            SmWall(w) => ids(&mut w.sketch),
+            SmFlange(f) => {
+                for e in [&mut f.length, &mut f.angle, &mut f.off1, &mut f.off2] {
+                    exprs(e)
+                }
+                if let Some(r) = &mut f.radius {
+                    exprs(r)
+                }
+                if let Some(r) = &mut f.relief {
+                    exprs(r)
+                }
+            }
+            SmJoggle(j) => {
+                exprs(&mut j.depth);
+                exprs(&mut j.run)
+            }
+            SmStamp(s) => {
+                ids(&mut s.sketch);
+                exprs(&mut s.depth)
+            }
+            SmFlangedHole(h) => {
+                ids(&mut h.sketch);
+                exprs(&mut h.diameter);
+                exprs(&mut h.height)
+            }
+            SmHem(h) => {
+                exprs(&mut h.length);
+                exprs(&mut h.gap)
+            }
             MoveBody(m) => match &mut m.xf {
                 BodyXf::Translate { dir, dist } => {
                     dir.walk(ids);
@@ -1800,6 +1938,9 @@ pub struct Document {
     /// imagens de textura usadas nas aparências (até 8)
     #[serde(default)]
     pub textures: Vec<TextureRef>,
+    /// parâmetros de chapa metálica (espessura, raio, fator K, estado planificado)
+    #[serde(default)]
+    pub sheet: Option<SheetParams>,
     /// Ordem do vetor = ordem da linha de tempo.
     pub features: Vec<Feature>,
     /// Quantidade de comandos ativos (marcador de rollback, RF-ARV-051).
@@ -1843,6 +1984,7 @@ impl Document {
             external: vec![],
             views: vec![],
             textures: vec![],
+            sheet: None,
             features: vec![],
             rollback: 0,
         };
@@ -2382,6 +2524,9 @@ impl Document {
         use FeatureKind::*;
         match &f.kind {
             Extrude(e) => vec![e.sketch],
+            SmWall(w) => vec![w.sketch],
+            SmStamp(s) => vec![s.sketch],
+            SmFlangedHole(h) => vec![h.sketch],
             Revolve(r) => vec![r.sketch],
             Sweep(w) => vec![w.sketch],
             Loft(l) => l.sections.clone(),

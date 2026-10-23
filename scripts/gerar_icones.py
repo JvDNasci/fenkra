@@ -641,6 +641,20 @@ I["mec_auto"] = ROD(8, 36, 26, 18) + ROD(26, 18, 40, 34) + PIN(8, 36) + PIN(26, 
 I["mec_simular"] = f'<rect x="4" y="8" width="40" height="28" rx="4" fill="{LIGHT}" {S}/>' + ROD(12, 28, 26, 16) + PIN(12, 28) + \
     f'<polygon points="32,16 32,30 42,23" fill="{ACTION}"/>' + f'<line x1="6" y1="42" x2="42" y2="42" stroke="{INK}" stroke-width="2"/><circle cx="18" cy="42" r="3" fill="{ACTION}"/>'
 
+# ---------------- chapa metálica
+SHEET = lambda pts: f'<path d="{pts}" fill="{LIGHT}" {S}/>'
+I["sm_parametros"] = f'<path d="M4 34 L24 26 L44 34 L24 42 Z" fill="{LIGHT}" {S}/><path d="M4 34 V38 L24 46 V42 M24 46 L44 38 V34" fill="{MID}" {S}/>' + \
+    f'<path d="M34 6 L36 10 L40 10.5 L37 13.5 L38 18 L34 15.8 L30 18 L31 13.5 L28 10.5 L32 10 Z" fill="{ACTION}"/>' + arrow(10, 28, 10, 20, ACTION, 1.6)
+I["sm_parede"] = f'<path d="M4 30 L24 20 L44 30 L24 40 Z" fill="{LIGHT}" {S}/><path d="M4 30 V35 L24 45 V40 M24 45 L44 35 V30" fill="{MID}" {S}/>' + \
+    f'<path d="M10 30 L24 23 L38 30 L24 37 Z" fill="none" stroke="{ACTION}" stroke-width="2" stroke-dasharray="3 2"/>'
+I["sm_aba"] = f'<path d="M4 38 H28 Q36 38 36 30 V6 H42 V30 Q42 44 28 44 H4 Z" fill="{MID}" {S}/>' + f'<path d="M28 38 Q36 38 36 30" stroke="{ACTION}" stroke-width="3" fill="none"/>'
+I["sm_bainha"] = f'<path d="M4 34 H32 A7 7 0 0 0 32 20 H16 V26 H32 A1 1 0 0 1 32 28 H4 Z" fill="{MID}" {S}/>' + f'<path d="M32 34 A7 7 0 0 0 32 20" stroke="{ACTION}" stroke-width="3" fill="none"/>'
+I["sm_joggle"] = f'<path d="M4 18 H18 L26 30 H44 V36 H24 L16 24 H4 Z" fill="{MID}" {S}/>' + arrow(34, 12, 34, 26, ACTION, 2)
+I["sm_estampo"] = f'<path d="M4 18 H14 L18 30 H30 L34 18 H44 V24 H38 L34 36 H14 L10 24 H4 Z" fill="{MID}" {S}/>' + f'<path d="M18 30 H30" stroke="{ACTION}" stroke-width="3"/>'
+I["sm_furo_flangeado"] = f'<path d="M4 16 H16 V36 H20 V22 H4 Z M44 16 H32 V36 H28 V22 H44 Z" fill="{MID}" {S}/>' + f'<line x1="24" y1="6" x2="24" y2="44" stroke="{ACTION}" stroke-width="1.6" stroke-dasharray="4 3"/>'
+I["sm_desdobrar"] = f'<path d="M4 24 H20 Q26 24 26 18 V6 H30 V18 Q30 28 20 28 H4 Z" fill="{MID}" {S}/>' + \
+    f'<path d="M4 40 H44 V44 H4 Z" fill="{LIGHT}" {S}/>' + arrow(34, 14, 40, 34, ACTION, 2.2)
+
 for name, body in I.items():
     with open(os.path.join(OUT, f"{name}.svg"), "w", encoding="utf8", newline="\n") as f:
         f.write(svg(body))

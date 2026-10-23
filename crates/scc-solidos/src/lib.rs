@@ -192,6 +192,8 @@ struct Ctx<'a> {
     memo: RefCell<HashMap<Id, Geo>>,
     /// assinatura do último passo que mudou o corpo de cada coletor (cache de malha)
     body_sig: HashMap<Id, u64>,
+    /// medidas da última aba de chapa (para os alívios)
+    last_sheet: Option<scc_kernel::SheetEdgeInfo>,
 }
 
 /// Estado depois de um passo da linha do tempo (as formas são referências: copiar é barato).
@@ -1060,6 +1062,38 @@ impl Ctx<'_> {
         })
     }
 
+    /// Parâmetros de chapa avaliados.
+    fn sheet(&self) -> Result<SheetValues, String> {
+        let s = self.doc.sheet.as_ref().ok_or("defina a chapa (espessura, raio, fator K) em Chapa › Parâmetros")?;
+        Ok(SheetValues {
+            t: ev(&s.thickness, &self.vars, "espessura da chapa")?,
+            r: ev(&s.radius, &self.vars, "raio de dobra")?,
+            k: ev(&s.k, &self.vars, "fator K")?,
+            flat: s.flat,
+        })
+    }
+
+    /// Aba/bainha: no estado planificado, a aresta clicada precisa existir na chapa plana — senão
+    /// avisa que o planificado não é exato (aba sobre aba) em vez de inventar a geometria.
+    fn sheet_tool(&mut self, f: &Feature, edge: V3, p: scc_kernel::SheetFlange) -> Result<Option<String>, String> {
+        let k = |e: KernelError| e.0;
+        let b = self.body(f.target).ok_or("a aba precisa de uma parede de chapa antes")?.clone();
+        if p.flat {
+            let (q, _) = b.surface_near(edge).map_err(k)?;
+            if geo3d::dist(q, edge) > 1e-3 {
+                return Ok(Some("⚠ planificado não exato: esta aba nasce de outra aba dobrada — desdobre na ordem ou planifique por partes".into()));
+            }
+        }
+        let (tool, info) = b.sm_flange(edge, p).map_err(k)?;
+        self.last_sheet = Some(info);
+        if (info.thickness - p.t).abs() > 1e-3 && !p.flat {
+            // a face lateral não tem a espessura da chapa: a aresta não é de parede de chapa
+            let _ = info;
+        }
+        self.apply(f.target, tool, BoolOp::Add, f.id)?;
+        Ok(None)
+    }
+
     /// "Até o último": distância de `o` até o ponto do corpo mais distante na direção `dir`.
     fn last_dist(&self, target: Id, o: V3, dir: V3) -> Result<f64, String> {
         let b = self.body(target).ok_or("'até o último' precisa de um corpo no coletor")?;
@@ -1499,6 +1533,176 @@ impl Ctx<'_> {
                 self.replicate(f, &m.sources, &[Xform::Mirror(pl.origin, pl.normal)])?;
                 Ok(None)
             }
+            FeatureKind::SmWall(w) => {
+                let sp = self.sheet()?;
+                let (frame, sk) = self.sketch(w.sketch)?;
+                if sk.loops.is_empty() {
+                    return Err("a parede base precisa de um perfil fechado".into());
+                }
+                let face = Shape::face(frame, &sk.loops).map_err(k)?;
+                let dir = if w.reverse { frame.normal.map(|x| -x) } else { frame.normal };
+                let tool = face.extrude(dir, sp.t, 0.).map_err(k)?;
+                self.apply(f.target, tool, BoolOp::Add, f.id)?;
+                Ok(None)
+            }
+            FeatureKind::SmFlange(fl) => {
+                let sp = self.sheet()?;
+                let r = match &fl.radius {
+                    Some(e) => ev(e, &self.vars, "raio")?,
+                    None => sp.r,
+                };
+                let p = scc_kernel::SheetFlange {
+                    t: sp.t,
+                    r,
+                    angle: ev(&fl.angle, &self.vars, "ângulo")?,
+                    length: ev(&fl.length, &self.vars, "comprimento")?,
+                    off1: ev(&fl.off1, &self.vars, "recuo 1")?,
+                    off2: ev(&fl.off2, &self.vars, "recuo 2")?,
+                    flip: fl.flip,
+                    flat: sp.flat,
+                    k: sp.k,
+                };
+                let relief = match &fl.relief {
+                    Some(w) => Some(ev(w, &self.vars, "largura do alívio")?),
+                    None => None,
+                };
+                let out = self.sheet_tool(f, fl.edge, p)?;
+                if let (Some(w), Some(info)) = (relief, self.last_sheet) {
+                    // alívio de canto: corte retangular atrás da dobra em cada ponta recuada
+                    let depth = p.r + p.t;
+                    let e = geo3d::unit(geo3d::sub(info.ends[1], info.ends[0])).ok_or("aresta nula")?;
+                    let mut cut = Shape::empty();
+                    for (end, x, off) in [(info.ends[0], geo3d::mul(e, -1.), p.off1), (info.ends[1], e, p.off2)] {
+                        if off <= 1e-9 {
+                            continue;
+                        }
+                        let z = geo3d::mul(info.normal, -1.);
+                        let y = scc_kernel::cross(z, x);
+                        let o = if geo3d::dot(y, info.out) > 0. { geo3d::sub(end, geo3d::mul(info.out, depth)) } else { end };
+                        let bx = Shape::box_tool(o, x, z, [w.min(off), depth, p.t]).map_err(k)?;
+                        cut = if cut.is_null() { bx } else { cut.compound(&bx) };
+                    }
+                    if !cut.is_null() {
+                        self.apply(f.target, cut, BoolOp::Cut, f.id)?;
+                    }
+                }
+                Ok(out)
+            }
+            FeatureKind::SmJoggle(j) => {
+                let sp = self.sheet()?;
+                let depth = ev(&j.depth, &self.vars, "desvio")?;
+                let run = ev(&j.run, &self.vars, "rampa")?;
+                let b = self.body(f.target).ok_or("o joggle precisa de uma parede de chapa")?.clone();
+                // normal da face no meio da linha (as pontas podem cair numa aresta da chapa)
+                let (_, n) = b.surface_near(geo3d::lerp(j.a, j.b, 0.5)).map_err(k)?;
+                let e = geo3d::unit(geo3d::sub(j.b, j.a)).ok_or("os dois pontos da linha coincidem")?;
+                let mut side = geo3d::unit(scc_kernel::cross(n, e)).ok_or("linha normal à chapa")?;
+                if j.flip {
+                    side = geo3d::mul(side, -1.);
+                }
+                let (lo, hi) = b.bbox().ok_or("corpo sem dimensões")?;
+                let big = geo3d::dist(lo, hi) * 2. + 10.;
+                // parte da chapa além da linha (lado `side`)
+                let start = geo3d::sub(j.a, geo3d::mul(e, big));
+                let z = geo3d::mul(n, -1.);
+                let y0 = scc_kernel::cross(z, e);
+                let corner = |from: f64| {
+                    // caixa ao longo de e (2·big), de `from` a `big` no lado, atravessando ±big na normal
+                    let o = geo3d::add(geo3d::add(start, geo3d::mul(side, from)), geo3d::mul(n, big));
+                    if geo3d::dot(y0, side) > 0. {
+                        Shape::box_tool(o, e, z, [2. * big, big, 2. * big])
+                    } else {
+                        Shape::box_tool(geo3d::add(o, geo3d::mul(side, big)), e, z, [2. * big, big, 2. * big])
+                    }
+                };
+                let beyond = corner(0.).map_err(k)?;
+                let far = corner(run).map_err(k)?;
+                let part = b.boolean(&beyond, scc_kernel::Bool::Common).map_err(k)?;
+                let far_part = part.boolean(&far, scc_kernel::Bool::Common).map_err(k)?;
+                let moved = far_part.transformed(Xform::Translate(geo3d::mul(n, -depth))).map_err(k)?;
+                // rampa: paralelogramo (seção) na linha, só na largura da chapa ao longo da linha
+                let (plo, phi) = part.bbox().ok_or("a linha do joggle não corta a chapa")?;
+                let (mut e0, mut e1) = (f64::MAX, f64::MIN);
+                for c in 0..8 {
+                    let q = [if c & 1 == 0 { plo[0] } else { phi[0] }, if c & 2 == 0 { plo[1] } else { phi[1] }, if c & 4 == 0 { plo[2] } else { phi[2] }];
+                    let t = geo3d::dot(geo3d::sub(q, j.a), e);
+                    e0 = e0.min(t);
+                    e1 = e1.max(t);
+                }
+                let top = geo3d::add(j.a, geo3d::mul(e, e0));
+                let pts = [
+                    top,
+                    geo3d::sub(top, geo3d::mul(n, sp.t)),
+                    geo3d::add(geo3d::sub(top, geo3d::mul(n, sp.t + depth)), geo3d::mul(side, run)),
+                    geo3d::add(geo3d::sub(top, geo3d::mul(n, depth)), geo3d::mul(side, run)),
+                ];
+                let ramp = Shape::poly_prism(&pts, geo3d::mul(e, e1 - e0)).map_err(k)?;
+                let n_own = b.face_count() as usize;
+                let rest = b.boolean(&beyond, scc_kernel::Bool::Cut).map_err(k)?;
+                let r = rest.boolean(&moved, scc_kernel::Bool::Fuse).map_err(k)?.boolean(&ramp, scc_kernel::Bool::Fuse).map_err(k)?;
+                let nf = r.face_count() as usize;
+                let _ = n_own;
+                self.bodies.insert(f.target, (r, vec![f.id; nf]));
+                Ok(None)
+            }
+            FeatureKind::SmStamp(st) => {
+                let sp = self.sheet()?;
+                let (frame, sk) = self.sketch(st.sketch)?;
+                if sk.loops.is_empty() {
+                    return Err("o estampo precisa de um perfil fechado".into());
+                }
+                let frame = *frame;
+                let face = Shape::face(&frame, &sk.loops).map_err(k)?;
+                let p = if st.flip { frame.normal } else { frame.normal.map(|x| -x) };
+                let depth = ev(&st.depth, &self.vars, "profundidade")?;
+                // copo: perfil deslocado da espessura até o fundo, menos a cavidade
+                let outer = face.offset_face(sp.t).map_err(k)?.extrude(p, depth + sp.t, 0.).map_err(k)?;
+                let inner = face.extrude(p, depth, 0.).map_err(k)?;
+                self.apply(f.target, outer, BoolOp::Add, f.id)?;
+                self.apply(f.target, inner, BoolOp::Cut, f.id)?;
+                Ok(None)
+            }
+            FeatureKind::SmFlangedHole(h) => {
+                let sp = self.sheet()?;
+                let (frame, sk) = self.sketch(h.sketch)?;
+                if sk.points.is_empty() {
+                    return Err("o sketch precisa de pontos (centros dos furos)".into());
+                }
+                let (frame, pts) = (*frame, sk.points.clone());
+                let p = if h.flip { frame.normal } else { frame.normal.map(|x| -x) };
+                let dia = ev(&h.diameter, &self.vars, "diâmetro")?;
+                let ht = ev(&h.height, &self.vars, "altura do colar")?;
+                let (mut ring, mut cut) = (Shape::empty(), Shape::empty());
+                for q in &pts {
+                    let o = frame.point(q[0], q[1]);
+                    let o2 = geo3d::add(o, geo3d::mul(p, sp.t));
+                    let outer = Shape::hole_tool(o2, p, dia + 2. * sp.t, ht, HoleShape::Simple).map_err(k)?;
+                    let inner = Shape::hole_tool(o2, p, dia, ht + 1., HoleShape::Simple).map_err(k)?;
+                    let rg = outer.boolean(&inner, scc_kernel::Bool::Cut).map_err(k)?;
+                    let c = Shape::hole_tool(o, p, dia, sp.t + ht + 1., HoleShape::Simple).map_err(k)?;
+                    ring = if ring.is_null() { rg } else { ring.compound(&rg) };
+                    cut = if cut.is_null() { c } else { cut.compound(&c) };
+                }
+                self.apply(f.target, ring, BoolOp::Add, f.id)?;
+                self.apply(f.target, cut, BoolOp::Cut, f.id)?;
+                Ok(None)
+            }
+            FeatureKind::SmHem(h) => {
+                let sp = self.sheet()?;
+                let gap = ev(&h.gap, &self.vars, "folga")?;
+                let p = scc_kernel::SheetFlange {
+                    t: sp.t,
+                    r: (gap / 2.).max(0.01),
+                    angle: 180.,
+                    length: ev(&h.length, &self.vars, "comprimento")?,
+                    off1: 0.,
+                    off2: 0.,
+                    flip: h.flip,
+                    flat: sp.flat,
+                    k: sp.k,
+                };
+                self.sheet_tool(f, h.edge, p)
+            }
             FeatureKind::MoveBody(m) => {
                 let (b, owners) = self.body_owned(f.target).ok_or("não há corpo para mover")?;
                 let rigid = match &m.xf {
@@ -1760,6 +1964,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         tools: HashMap::new(),
         memo: RefCell::new(HashMap::new()),
         body_sig: HashMap::new(),
+        last_sheet: None,
     };
 
     // 1º: sketches livres (pastas de geometria, sem linha do tempo); 2º: comandos dos coletores em ordem
@@ -1773,6 +1978,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
             &serde_json::to_string(&doc.params).unwrap_or_default(),
             &serde_json::to_string(&doc.references).unwrap_or_default(),
             &serde_json::to_string(&doc.external).unwrap_or_default(),
+            &serde_json::to_string(&doc.sheet).unwrap_or_default(),
             &serde_json::to_string(&doc.collectors.iter().map(|c| c.id).collect::<Vec<_>>()).unwrap_or_default(),
             &format!("{:?}", { let mut v: Vec<_> = cx.vars.iter().map(|(k, v)| (k.clone(), v.to_bits())).collect(); v.sort(); v }),
         ],
@@ -1991,6 +2197,7 @@ fn surface_brep(doc: &Document, id: Id) -> Option<String> {
         tools: HashMap::new(),
         memo: RefCell::new(HashMap::new()),
         body_sig: HashMap::new(),
+        last_sheet: None,
     };
     for f in doc.active_features().map(|(_, f)| f) {
         let _ = cx.run(f);
@@ -1999,6 +2206,49 @@ fn surface_brep(doc: &Document, id: Id) -> Option<String> {
         Geo::Surface(s) => s.to_brep().ok(),
         _ => None,
     }
+}
+
+/// Parâmetros de chapa já avaliados.
+#[derive(Clone, Copy, Debug)]
+struct SheetValues {
+    t: f64,
+    r: f64,
+    k: f64,
+    flat: bool,
+}
+
+/// Linha da tabela de dobras.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BendRow {
+    pub feature: Id,
+    pub name: String,
+    pub angle: f64,
+    pub radius: f64,
+    /// comprimento da dobra na linha neutra (bend allowance)
+    pub allowance: f64,
+    /// dedução de dobra (2 × recuo externo − allowance), para quem cota por fora
+    pub deduction: f64,
+}
+
+/// Tabela de dobras da peça de chapa (ângulo, raio, comprimento desenvolvido e dedução).
+pub fn bend_table(doc: &Document) -> Vec<BendRow> {
+    let Some(s) = &doc.sheet else { return vec![] };
+    let Ok(vars) = doc.eval_params() else { return vec![] };
+    let num = |e: &String| ev(e, &vars, "").unwrap_or(0.);
+    let (t, r0, kf) = (num(&s.thickness), num(&s.radius), num(&s.k));
+    let mut out = vec![];
+    for f in doc.active_features().map(|(_, f)| f) {
+        let (ang, r) = match &f.kind {
+            FeatureKind::SmFlange(fl) => (num(&fl.angle), fl.radius.as_ref().map(num).unwrap_or(r0)),
+            FeatureKind::SmHem(h) => (180., (num(&h.gap) / 2.).max(0.01)),
+            _ => continue,
+        };
+        let a = ang.to_radians();
+        let ba = a * (r + kf * t);
+        let ossb = if ang < 179.9 { (a / 2.).tan() * (r + t) } else { r + t };
+        out.push(BendRow { feature: f.id, name: f.name.clone(), angle: ang, radius: r, allowance: ba, deduction: 2. * ossb - ba });
+    }
+    out
 }
 
 /// Geometria guardada de um link (ou cópia isolada).
@@ -2024,6 +2274,7 @@ pub fn export(doc: &Document, collector: Option<Id>, path: &str) -> Result<(), S
         tools: HashMap::new(),
         memo: RefCell::new(HashMap::new()),
         body_sig: HashMap::new(),
+        last_sheet: None,
     };
     for f in doc.active_features().map(|(_, f)| f) {
         let _ = cx.run(f);
@@ -2058,6 +2309,7 @@ pub fn final_shape(doc: &Document) -> Option<Shape> {
         tools: HashMap::new(),
         memo: RefCell::new(HashMap::new()),
         body_sig: HashMap::new(),
+        last_sheet: None,
     };
     for f in doc.active_features().map(|(_, f)| f) {
         let _ = cx.run(f);
@@ -2153,6 +2405,110 @@ pub fn example_document() -> Document {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn chapa_joggle_estampo_furo_flangeado_alivio() {
+        if !scc_kernel::AVAILABLE {
+            return;
+        }
+        use std::f64::consts::PI;
+        let near = |a: f64, b: f64, tol: f64| (a - b).abs() <= tol * b.abs().max(1.);
+        let s = |x: &str| x.to_string();
+        let base = || {
+            let mut d = Document::new("chapa");
+            d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), flat: false });
+            let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [100., 50.]);
+            d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false }));
+            d
+        };
+        let check = |d: &Document| {
+            let r = recompute(d);
+            for f in &d.features {
+                assert_eq!(r.status[&f.id], Status::Ok, "{}: {:?}", f.name, r.status[&f.id]);
+            }
+            r
+        };
+        // joggle: o volume se conserva e a parte além da linha desce 3 mm
+        let mut d = base();
+        d.add_feature(FeatureKind::SmJoggle(SmJoggle { a: [60., 0., 2.], b: [60., 50., 2.], depth: s("3"), run: s("5"), flip: true }));
+        let r = check(&d);
+        assert!(near(r.bodies[0].mass.volume, 10000., 1e-3), "joggle {}", r.bodies[0].mass.volume);
+        let zmin = r.bodies[0].mesh.positions.chunks_exact(3).map(|p| p[2]).fold(f32::MAX, f32::min);
+        assert!((zmin + 3.).abs() < 0.01, "desvio {zmin}");
+        // estampo 20×20 com 3 mm de profundidade
+        let mut d = base();
+        let top = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "2");
+        let sq = sk_rect(&mut d, PlaneRef::Datum(top), [40., 15.], [60., 35.]);
+        d.add_feature(FeatureKind::SmStamp(SmStamp { sketch: sq, depth: s("3"), flip: false }));
+        let r = check(&d);
+        let outer = 400. + 80. * 2. + PI * 4.;
+        assert!(near(r.bodies[0].mass.volume, 10000. + outer * 3. - 400. * 3., 1e-3), "estampo {}", r.bodies[0].mass.volume);
+        // furo flangeado Ø10 com colar de 6 mm
+        let mut d = base();
+        let top = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "2");
+        let mut data = SketchData::default();
+        let mut n = 7_000_000u64;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        let p0 = data.add_point(&mut al, 50., 25.);
+        data.add_curve(&mut al, scc_core::sketch::Curve::Point { p: p0 }, false);
+        let sp = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Datum(top), data }));
+        d.add_feature(FeatureKind::SmFlangedHole(SmFlangedHole { sketch: sp, diameter: s("10"), height: s("6"), flip: false }));
+        let r = check(&d);
+        assert!(near(r.bodies[0].mass.volume, 10000. + PI * 24. * 6. - PI * 25. * 2., 1e-3), "furo flangeado {}", r.bodies[0].mass.volume);
+        // aba recuada 10 mm de cada lado com alívio de 3 mm
+        let mut d = base();
+        d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 25., 2.], length: s("20"), angle: s("90"), radius: None, off1: s("10"), off2: s("10"), flip: false, relief: None }));
+        let v_sem = check(&d).bodies[0].mass.volume;
+        if let FeatureKind::SmFlange(fl) = &mut d.features.last_mut().unwrap().kind {
+            fl.relief = Some(s("3"));
+        }
+        let v_com = check(&d).bodies[0].mass.volume;
+        assert!(near(v_sem - v_com, 2. * 3. * 4. * 2., 1e-3), "alívio {}", v_sem - v_com);
+    }
+
+    #[test]
+    fn chapa_parede_aba_bainha_e_planificado() {
+        if !scc_kernel::AVAILABLE {
+            return;
+        }
+        use std::f64::consts::PI;
+        let near = |a: f64, b: f64, tol: f64| (a - b).abs() <= tol * b.abs().max(1.);
+        let s = |x: &str| x.to_string();
+        let mut d = Document::new("chapa");
+        d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), flat: false });
+        let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [100., 50.]);
+        d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false }));
+        d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 25., 2.], length: s("20"), angle: s("90"), radius: None, off1: s("0"), off2: s("0"), flip: false, relief: None }));
+        let r = recompute(&d);
+        for f in &d.features {
+            assert!(matches!(r.status[&f.id], Status::Ok | Status::Warning(_)), "{}: {:?}", f.name, r.status[&f.id]);
+        }
+        let v = r.bodies[0].mass.volume;
+        let bend = PI / 4. * (16. - 4.) * 50.;
+        assert!(near(v, 10000. + bend + 2000., 1e-3), "dobrada {v}");
+        // a aba sobe: topo em z = 2 + R + 20
+        let zmax = r.bodies[0].mesh.positions.chunks_exact(3).map(|p| p[2]).fold(f32::MIN, f32::max);
+        assert!((zmax - 24.).abs() < 0.05, "altura {zmax}");
+        // planificado: tira com o comprimento desenvolvido
+        d.sheet.as_mut().unwrap().flat = true;
+        let r = recompute(&d);
+        let ba = PI / 2. * (2. + 0.44 * 2.);
+        let vf = r.bodies[0].mass.volume;
+        assert!(near(vf, 10000. + (ba + 20.) * 2. * 50., 1e-3), "plana {vf}");
+        let tab = bend_table(&d);
+        assert_eq!(tab.len(), 1);
+        assert!((tab[0].allowance - ba).abs() < 1e-9);
+        // bainha esmagada na aresta oposta (x = 0), dobrando para baixo
+        d.sheet.as_mut().unwrap().flat = false;
+        d.add_feature(FeatureKind::SmHem(SmHem { edge: [0., 25., 2.], length: s("8"), gap: s("0"), flip: true }));
+        let r = recompute(&d);
+        let st = &r.status[&d.features.last().unwrap().id];
+        assert_eq!(*st, Status::Ok, "{st:?}");
+        assert!(r.bodies[0].mass.volume > v + 8. * 2. * 50. * 0.9, "bainha {}", r.bodies[0].mass.volume);
+    }
 
     #[test]
     fn publicar_superficie_link_e_isolar() {
