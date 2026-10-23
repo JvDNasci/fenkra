@@ -35,6 +35,7 @@ pub fn get(name: &str) -> ImageSource<'static> {
         "circulo3d" => egui::include_image!("../../../assets/icons/circulo3d.svg"),
         "circulo3p" => egui::include_image!("../../../assets/icons/circulo3p.svg"),
         "coletor" => egui::include_image!("../../../assets/icons/coletor.svg"),
+        "composer" => egui::include_image!("../../../assets/icons/composer.svg"),
         "conexao" => egui::include_image!("../../../assets/icons/conexao.svg"),
         "config" => egui::include_image!("../../../assets/icons/config.svg"),
         "conica" => egui::include_image!("../../../assets/icons/conica.svg"),

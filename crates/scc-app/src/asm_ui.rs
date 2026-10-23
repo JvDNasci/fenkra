@@ -86,6 +86,16 @@ pub struct AsmState {
     pub sim_track: Option<Id>,
     /// posições antes de tocar a simulação (voltam ao fechar)
     sim_rest: Option<Vec<(Id, Placement)>>,
+    // ---- exibição (composer)
+    /// estado de exibição em uso (visibilidade, cores, explosão)
+    pub live: scc_montagem::display::DisplayState,
+    pub explode_factor: f64,
+    /// o manipulador mexe na explosão (não na posição real)
+    pub explode_mode: bool,
+    pub composer_open: bool,
+    pub anim_sel: usize,
+    pub anim_t: f64,
+    pub anim_play: bool,
 }
 
 impl AsmState {
@@ -122,6 +132,13 @@ impl AsmState {
             sim_play: false,
             sim_track: None,
             sim_rest: None,
+            live: Default::default(),
+            explode_factor: 0.,
+            explode_mode: false,
+            composer_open: false,
+            anim_sel: 0,
+            anim_t: 0.,
+            anim_play: false,
         }
     }
 
@@ -146,7 +163,7 @@ impl AsmState {
         }
         let dir = self.dir();
         self.errors.clear();
-        let mut shown = self.asm.clone();
+        let mut shown = self.asm.with_state(&self.live);
         if self.isolate {
             if let Some(s) = self.sel {
                 for n in &mut shown.nodes {
@@ -270,7 +287,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                 return matches!(
                     c,
                     Cmd::AsmInsert | Cmd::AsmNewPart | Cmd::AsmGroup | Cmd::AsmReplace | Cmd::AsmMate(_) | Cmd::AsmFix | Cmd::AsmRigid | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmSubAsm | Cmd::AsmPattern
-                        | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate
+                        | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmComposer
                 );
             };
             match c {
@@ -410,6 +427,9 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                 }
                 Cmd::AsmSimulate => {
                     st.sim_open = true;
+                }
+                Cmd::AsmComposer => {
+                    st.composer_open = true;
                 }
                 Cmd::AsmInterf => {
                     let dir = st.dir();
@@ -1287,6 +1307,23 @@ pub fn gizmo(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::re
         return;
     }
     let p = n.placement;
+    if st.explode_mode {
+        let off = st.live.offset(id);
+        let c = st
+            .view
+            .as_ref()
+            .and_then(|r| r.bodies.iter().find(|b| b.collector == id))
+            .map(|b| {
+                let k = (b.mesh.positions.len() / 3).max(1) as f32;
+                b.mesh.positions.chunks_exact(3).fold(glam::Vec3::ZERO, |a, q| a + glam::Vec3::new(q[0], q[1], q[2])) / k
+            })
+            .unwrap_or(glam::Vec3::ZERO);
+        if let Some(v) = crate::gizmo::translate_gizmo(ui, rect, cam, id.0 ^ 0x5eed, c, [glam::Vec3::X, glam::Vec3::Y, glam::Vec3::Z], off, [false; 3]) {
+            st.live.set_offset(id, v);
+            st.dirty = true;
+        }
+        return;
+    }
     // centro do componente na tela: centro da malha posicionada
     let c = st
         .view
@@ -1498,5 +1535,184 @@ pub fn sim_window(app: &mut App, ctx: &egui::Context) {
     }
     if !open {
         st.sim_open = false;
+    }
+}
+
+// ============================================================== composer
+
+/// Centro de cada componente sem explosão (para a explosão automática).
+fn centers(st: &AsmState) -> std::collections::HashMap<Id, [f64; 3]> {
+    let mut out = std::collections::HashMap::new();
+    if let Some(r) = &st.view {
+        for b in &r.bodies {
+            let k = (b.mesh.positions.len() / 3).max(1) as f64;
+            let c = b.mesh.positions.chunks_exact(3).fold([0f64; 3], |a, q| [a[0] + q[0] as f64, a[1] + q[1] as f64, a[2] + q[2] as f64]);
+            let o = st.live.offset(b.collector);
+            out.insert(b.collector, [c[0] / k - o[0], c[1] / k - o[1], c[2] / k - o[2]]);
+        }
+    }
+    out
+}
+
+/// Janela do composer: estados de exibição, explosão e animação por quadros-chave.
+pub fn composer_window(app: &mut App, ctx: &egui::Context) {
+    let cam_now = app.camera_get();
+    let Some(st) = app.asm.as_mut() else { return };
+    if !st.composer_open {
+        return;
+    }
+    use scc_montagem::display::{auto_explode, Animation, Key};
+    let mut open = true;
+    let mut set_cam: Option<scc_montagem::display::Cam> = None;
+    let before = st.live.clone();
+    egui::Window::new(tr("🎬 Exibição e animação"))
+        .id(egui::Id::unique("janela_composer"))
+        .open(&mut open)
+        .default_width(470.)
+        .resizable(true)
+        .show(ctx, |ui| {
+            crate::editor::section(ui, "Estados de exibição");
+            ui.label(RichText::new(tr("Guardam o que aparece, cores, explosão e câmera. O detalhamento usa estes estados como coletores de exibição.")).weak().small());
+            let mut apply = None;
+            let mut del = None;
+            for (i, s) in st.asm.display_states.iter_mut().enumerate() {
+                ui.horizontal(|ui| {
+                    ui.add(egui::TextEdit::singleline(&mut s.name).desired_width(150.));
+                    if ui.small_button(tr("▶ aplicar")).clicked() {
+                        apply = Some(i);
+                    }
+                    if ui.small_button("✖").clicked() {
+                        del = Some(i);
+                    }
+                });
+            }
+            if let Some(i) = apply {
+                st.live = st.asm.display_states[i].clone();
+                // o estado salvo guarda quem fica oculto: aplica na árvore também
+                for n in &mut st.asm.nodes {
+                    n.visible = !st.live.hidden.contains(&n.id);
+                }
+                set_cam = st.live.camera;
+                st.dirty = true;
+            }
+            if let Some(i) = del {
+                st.asm.display_states.remove(i);
+            }
+            if ui.button(tr("💾 Salvar estado atual")).clicked() {
+                let mut s = st.asm.snapshot_state(&format!("Estado {}", st.asm.display_states.len() + 1));
+                s.offsets = st.live.offsets.clone();
+                s.camera = cam_now;
+                st.asm.display_states.push(s);
+                st.modified = true;
+            }
+            crate::editor::section(ui, "Vista explodida");
+            if ui.add(egui::Slider::new(&mut st.explode_factor, 0.0..=3.0).text(tr("afastamento"))).changed() {
+                let c = centers(st);
+                st.live.offsets = auto_explode(&st.asm, &c, st.explode_factor);
+                st.dirty = true;
+            }
+            ui.checkbox(&mut st.explode_mode, tr("ajustar à mão (o manipulador mexe só na explosão)"));
+            if ui.button(tr("Juntar tudo (sem explosão)")).clicked() {
+                st.live.offsets.clear();
+                st.explode_factor = 0.;
+                st.dirty = true;
+            }
+            crate::editor::section(ui, "Animação");
+            if st.asm.animations.is_empty() {
+                if ui.button(tr("+ Nova animação")).clicked() {
+                    st.asm.animations.push(Animation { name: "Animação 1".into(), keys: vec![] });
+                }
+                return;
+            }
+            st.anim_sel = st.anim_sel.min(st.asm.animations.len() - 1);
+            ui.horizontal(|ui| {
+                let names: Vec<String> = st.asm.animations.iter().map(|a| a.name.clone()).collect();
+                egui::ComboBox::from_id_salt("anim_sel").selected_text(&names[st.anim_sel]).show_ui(ui, |ui| {
+                    for (i, n) in names.iter().enumerate() {
+                        ui.selectable_value(&mut st.anim_sel, i, n);
+                    }
+                });
+                if ui.small_button(tr("+ nova")).clicked() {
+                    let n = st.asm.animations.len() + 1;
+                    st.asm.animations.push(Animation { name: format!("Animação {n}"), keys: vec![] });
+                    st.anim_sel = n - 1;
+                }
+            });
+            let a = &mut st.asm.animations[st.anim_sel];
+            ui.horizontal(|ui| {
+                ui.label(tr("Nome"));
+                ui.text_edit_singleline(&mut a.name);
+            });
+            let dur = a.duration().max(0.1);
+            ui.horizontal(|ui| {
+                if ui.button(if st.anim_play { "⏸" } else { "▶" }).clicked() {
+                    st.anim_play = !st.anim_play;
+                }
+                if ui.button("⏮").clicked() {
+                    st.anim_t = 0.;
+                }
+                ui.add(egui::Slider::new(&mut st.anim_t, 0.0..=dur).text("t (s)"));
+            });
+            // linha do tempo com os quadros-chave
+            let (r, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 26.), egui::Sense::hover());
+            let p = ui.painter_at(r);
+            p.rect_filled(r, 4., ui.visuals().extreme_bg_color);
+            for k in &a.keys {
+                let x = r.left() + (k.t / dur) as f32 * r.width();
+                p.add(egui::Shape::convex_polygon(vec![egui::pos2(x, r.top() + 4.), egui::pos2(x + 6., r.center().y), egui::pos2(x, r.bottom() - 4.), egui::pos2(x - 6., r.center().y)], Color32::from_rgb(255, 190, 40), egui::Stroke::NONE));
+            }
+            let xt = r.left() + (st.anim_t / dur) as f32 * r.width();
+            p.line_segment([egui::pos2(xt, r.top()), egui::pos2(xt, r.bottom())], egui::Stroke::new(2., Color32::from_rgb(90, 180, 255)));
+            let mut kdel = None;
+            for (i, k) in a.keys.iter_mut().enumerate() {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(format!("◆ {}", k.state.name)).small());
+                    ui.add(egui::DragValue::new(&mut k.t).range(0.0..=600.0).speed(0.05).suffix(" s"));
+                    if ui.small_button("✖").clicked() {
+                        kdel = Some(i);
+                    }
+                });
+            }
+            if let Some(i) = kdel {
+                a.keys.remove(i);
+            }
+            if ui.button(tr("◆ Quadro-chave aqui (estado atual + câmera)")).clicked() {
+                let mut s = st.asm.snapshot_state(&format!("quadro {}", st.asm.animations[st.anim_sel].keys.len() + 1));
+                s.offsets = st.live.offsets.clone();
+                s.camera = cam_now;
+                let t = if st.asm.animations[st.anim_sel].keys.is_empty() { 0. } else { st.anim_t.max(st.asm.animations[st.anim_sel].duration() + 1.) };
+                st.asm.animations[st.anim_sel].keys.push(Key { t, state: s });
+                st.modified = true;
+            }
+            ui.label(RichText::new(tr("Monte a cena (oculte peças, exploda, gire a câmera) e grave um quadro; repita em outro tempo. A animação interpola a explosão e a câmera.")).weak().small());
+        });
+    // reprodução
+    if st.anim_play {
+        if let Some(a) = st.asm.animations.get(st.anim_sel) {
+            st.anim_t += ctx.input(|i| i.stable_dt) as f64;
+            let d = a.duration();
+            if st.anim_t > d {
+                st.anim_t = 0.;
+            }
+            if let Some(s) = a.at(st.anim_t) {
+                for n in &mut st.asm.nodes {
+                    n.visible = !s.hidden.contains(&n.id);
+                }
+                set_cam = s.camera;
+                st.live = s;
+                st.dirty = true;
+            }
+            ctx.request_repaint();
+        }
+    }
+    if st.live != before {
+        st.dirty = true;
+    }
+    if !open {
+        st.composer_open = false;
+        st.anim_play = false;
+    }
+    if let Some(c) = set_cam {
+        app.camera_set(c);
     }
 }

@@ -6,6 +6,7 @@
 //!   uma fixação conjunta faz várias peças se moverem como um corpo só).
 //! - [`load`]: carrega e calcula as peças referenciadas (com cache por arquivo).
 
+pub mod display;
 pub mod kin;
 pub mod load;
 pub mod view;
@@ -274,11 +275,16 @@ pub struct Assembly {
     pub joints: Vec<kin::Joint>,
     #[serde(default)]
     pub couplings: Vec<kin::Coupling>,
+    /// estados de exibição salvos e animações (composer)
+    #[serde(default)]
+    pub display_states: Vec<display::DisplayState>,
+    #[serde(default)]
+    pub animations: Vec<display::Animation>,
 }
 
 impl Assembly {
     pub fn new(name: &str) -> Self {
-        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![] }
+        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![] }
     }
 
     pub fn alloc(&mut self) -> Id {

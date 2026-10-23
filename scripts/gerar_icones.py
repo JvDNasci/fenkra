@@ -672,6 +672,9 @@ I["st_canto_aparar"] = f'<path d="M4 4 H16 V44 H4 Z" fill="{MID}" {S}/><path d="
 I["st_canto_encaixe"] = f'<circle cx="12" cy="24" r="9" fill="{MID}" {S}/><path d="M21 18 H44 V30 H21 A9 9 0 0 0 21 18 Z" fill="{LIGHT}" {S}/>' + f'<path d="M21 18 A9 9 0 0 1 21 30" stroke="{ACTION}" stroke-width="2.6" fill="none"/>'
 I["st_canto_nenhum"] = f'<path d="M4 4 H16 V44 H4 Z" fill="{MID}" {S}/><path d="M4 32 H44 V44 H4 Z" fill="{LIGHT}" opacity="0.8" {S}/>'
 
+I["composer"] = f'<rect x="4" y="8" width="40" height="30" rx="3" fill="{LIGHT}" {S}/>' + BLK(10, 20, 10) + f'<rect x="26" y="12" width="10" height="10" rx="1.5" fill="{MID}" stroke="{ACTION}" stroke-width="1.6" stroke-dasharray="3 2"/>' + \
+    arrow(21, 22, 26, 18, ACTION, 1.6) + f'<line x1="6" y1="43" x2="42" y2="43" stroke="{INK}" stroke-width="2"/>' + "".join(f'<polygon points="{x},40 {x + 3},43 {x},46 {x - 3},43" fill="#ffb020"/>' for x in (10, 24, 38))
+
 for name, body in I.items():
     with open(os.path.join(OUT, f"{name}.svg"), "w", encoding="utf8", newline="\n") as f:
         f.write(svg(body))

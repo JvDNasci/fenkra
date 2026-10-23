@@ -441,6 +441,24 @@ impl App {
         self.save();
     }
 
+    /// Câmera atual (para estados de exibição e animações).
+    pub fn camera_get(&self) -> Option<scc_montagem::display::Cam> {
+        self.viewport.as_ref().map(|v| {
+            let c = v.camera;
+            scc_montagem::display::Cam { target: c.target.to_array().map(|x| x as f64), yaw: c.yaw as f64, pitch: c.pitch as f64, dist: c.dist as f64, ortho: c.ortho }
+        })
+    }
+
+    pub fn camera_set(&mut self, c: scc_montagem::display::Cam) {
+        if let Some(v) = self.viewport.as_mut() {
+            v.camera.target = Vec3::from(c.target.map(|x| x as f32));
+            v.camera.yaw = c.yaw as f32;
+            v.camera.pitch = c.pitch as f32;
+            v.camera.dist = c.dist as f32;
+            v.camera.ortho = c.ortho;
+        }
+    }
+
     pub fn take_open_pending(&mut self) -> Option<Id> {
         self.open_pending.take()
     }
@@ -1245,7 +1263,7 @@ impl App {
             Cmd::Geo(k) => Sel::Ref(d.add_geometry(k.make(&seed))),
             // comandos de montagem são tratados em asm_ui::command
             Cmd::AsmNew | Cmd::AsmOpen | Cmd::AsmSave | Cmd::AsmInsert | Cmd::AsmSubAsm | Cmd::AsmNewPart | Cmd::AsmGroup | Cmd::AsmReplace | Cmd::AsmMate(_) | Cmd::AsmFix | Cmd::AsmRigid
-            | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmPattern | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate => return,
+            | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmPattern | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmComposer => return,
             Cmd::Param => {
                 let n = (1..).map(|i| format!("P{i}")).find(|n| !d.params.iter().any(|p| &p.name == n)).unwrap();
                 let _ = d.add_param(&n, "10", Unit::Comprimento);
@@ -4009,6 +4027,7 @@ pub enum Cmd {
     AsmJoint(u8),
     AsmAutoJoints,
     AsmSimulate,
+    AsmComposer,
     // ---- chapa metálica
     SmParams,
     SmWall,
@@ -4467,6 +4486,7 @@ impl eframe::App for App {
         self.props_window(ctx);
         self.wizard_window(ctx);
         crate::asm_ui::sim_window(self, ctx);
+        crate::asm_ui::composer_window(self, ctx);
         self.sheet_window(ctx);
         crate::st_ui::windows(self, ctx);
         self.side_toolbars(root);

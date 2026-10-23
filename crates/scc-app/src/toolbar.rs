@@ -283,6 +283,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
                     j("junta_ponto_curva", "Ponto em curva", "Junta ponto em curva", "O vértice da segunda peça segue a aresta (trajetória) da primeira.", 7),
                 ]),
                 One(it("mec_auto", "Do conjunto", "Mecanismo a partir das restrições", "Converte as restrições de cada par de peças em juntas equivalentes (eixo + face = revolução…).", Cmd(C::AsmAutoJoints))),
+                One(it("composer", "Exibição", "Estados de exibição, explosão e animação", "Salve o que aparece (cores, ocultos, explosão, câmera), exploda a montagem e anime por quadros-chave — os estados alimentam o detalhamento.", Cmd(C::AsmComposer))),
                 One(it("mec_simular", "Simular", "Simulação cinemática", "Comandos por cursor ou por leis no tempo (t), quadros, velocidade e aceleração; análise de graus de liberdade.", Cmd(C::AsmSimulate))),
             ]
         }
