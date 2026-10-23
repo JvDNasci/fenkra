@@ -43,6 +43,12 @@ pub enum Group {
     Estrutural,
     /// detalhamento 3D (PMI)
     Pmi,
+    // detalhamento 2D
+    DesArquivo,
+    DesVistas,
+    DesCotas,
+    DesAnotacoes,
+    DesTabelas,
     // modo sketch
     SkCriacao,
     SkTransformar,
@@ -52,7 +58,12 @@ pub enum Group {
 }
 
 impl Group {
-    pub const ALL: [Group; 24] = [
+    pub const ALL: [Group; 29] = [
+        Group::DesArquivo,
+        Group::DesVistas,
+        Group::DesCotas,
+        Group::DesAnotacoes,
+        Group::DesTabelas,
         Group::Chapa,
         Group::Estrutural,
         Group::Pmi,
@@ -81,6 +92,10 @@ impl Group {
     /// Em que bancada o grupo aparece (Sketch, Referências/wireframe, Volume, Análise, Organização,
     /// Seleção e Vista são comuns às duas).
     pub fn in_bench(self, b: Bench) -> bool {
+        let des = matches!(self, Group::DesArquivo | Group::DesVistas | Group::DesCotas | Group::DesAnotacoes | Group::DesTabelas);
+        if b == Bench::Desenho || des {
+            return b == Bench::Desenho && des;
+        }
         if b == Bench::Chapa {
             return matches!(self, Group::Sketch | Group::Chapa | Group::Referencias | Group::Organizacao | Group::Pmi | Group::Vista | Group::Selecao | Group::Analise);
         }
@@ -127,6 +142,11 @@ impl Group {
             Group::Chapa => tr("Chapa metálica"),
             Group::Estrutural => tr("Estrutural"),
             Group::Pmi => tr("Detalhamento 3D (PMI)"),
+            Group::DesArquivo => tr("Desenho"),
+            Group::DesVistas => tr("Vistas"),
+            Group::DesCotas => tr("Cotas"),
+            Group::DesAnotacoes => tr("Anotações e símbolos"),
+            Group::DesTabelas => tr("Tabelas"),
             Group::SkCriacao => tr("Criação"),
             Group::SkTransformar => tr("Transformar"),
             Group::SkCotagem => tr("Cotagem"),
@@ -145,6 +165,8 @@ pub enum Bench {
     Montagem,
     Chapa,
     Estrutural,
+    /// detalhamento 2D (módulo separado: arquivo .sccdwg)
+    Desenho,
 }
 
 /// Família de perfis cadastrada: tipo de seção, tamanhos e a regra de criação (ancoragem e rotação

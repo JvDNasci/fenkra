@@ -147,6 +147,10 @@ pub mod bridge {
             s: &Shape, ox: f64, oy: f64, oz: f64, xx: f64, xy: f64, xz: f64, nx: f64, ny: f64, nz: f64, fx: f64, fy: f64, fz: f64,
         ) -> Result<UniquePtr<Shape>>;
         fn to_brep(s: &Shape) -> Result<String>;
+        fn hlr_project(
+            s: &Shape, dx: f64, dy: f64, dz: f64, xx: f64, xy: f64, xz: f64, hidden: bool, ends: &mut Vec<u32>, kinds: &mut Vec<u8>,
+        ) -> Result<Vec<f64>>;
+        fn section_loops(s: &Shape, ox: f64, oy: f64, oz: f64, nx: f64, ny: f64, nz: f64, half: f64, ends: &mut Vec<u32>) -> Result<Vec<f64>>;
         fn offset_face(face: &Shape, d: f64) -> Result<UniquePtr<Shape>>;
         fn box_tool(
             ox: f64, oy: f64, oz: f64, xx: f64, xy: f64, xz: f64, zx: f64, zy: f64, zz: f64, lx: f64, ly: f64, lz: f64,

@@ -14,6 +14,9 @@
 #include <IntCurvesFace_ShapeIntersector.hxx>
 #include <gp_Lin.hxx>
 #include <sstream>
+#include <HLRBRep_Algo.hxx>
+#include <HLRBRep_HLRToShape.hxx>
+#include <HLRAlgo_Projector.hxx>
 #include <BRepBuilderAPI_GTransform.hxx>
 #include <gp_GTrsf.hxx>
 #include <gp_Mat.hxx>
@@ -696,3 +699,4 @@ rust::String occt_version() { return rust::String(OCC_VERSION_COMPLETE); }
 #include "surfaces.inc"
 #include "hybrid.inc"
 #include "sheet.inc"
+#include "drawing.inc"

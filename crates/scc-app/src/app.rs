@@ -178,6 +178,8 @@ pub struct App {
     sheet_open: bool,
     /// anotação 3D esperando seleções
     pub pmi_pending: Option<u8>,
+    /// desenho 2D aberto (bancada Desenho)
+    pub dwg: Option<crate::dwg_ui::DwgState>,
     /// janelas do estrutural: biblioteca de perfis e lista de corte
     pub st_lib_open: bool,
     pub st_cut_open: bool,
@@ -269,6 +271,7 @@ impl App {
             asm: None,
             sheet_open: false,
             pmi_pending: None,
+            dwg: None,
             st_lib_open: false,
             st_cut_open: false,
             st_lib_sel: 0,
@@ -427,6 +430,39 @@ impl App {
             mk(d, PmiKind::Note, vec![[0., 0., 8.]], [40., 30., 30.], "Rebarbar arestas vivas");
             mk(d, PmiKind::Gdt { ch: GdtChar::Planeza, tol: s("0,05"), datums: s("") }, vec![[-40., 20., 8.]], [-30., 30., 30.], "");
             mk(d, PmiKind::Roughness { ra: s("1,6"), process: s("fresado") }, vec![[30., 20., 8.]], [20., 25., 25.], "");
+            app.started = true;
+        }
+        // desenvolvimento: SCC_DEMO_DWG=1 abre um desenho da placa de exemplo (3 vistas, corte, detalhe, cotas, tabela)
+        if std::env::var("SCC_DEMO_DWG").is_ok() {
+            use scc_desenho::*;
+            let dir = std::env::temp_dir().join("scc_demo_desenho");
+            let _ = std::fs::create_dir_all(&dir);
+            let _ = std::fs::write(dir.join("placa.sccpart"), scc_solidos::example_document().to_json());
+            let src = Source { path: "placa.sccpart".into(), display_state: String::new() };
+            let mut d = Drawing::new("Placa de exemplo", Format::A3);
+            let sh = d.sheets[0].id;
+            let ids = d.add_standard_set(sh, src.clone(), [95., 235.], 1., 100.);
+            let mut m = scc_desenho::source::Models::new(Some(dir.clone()));
+            let f = m.proj(&d, ids[0]);
+            let t = m.proj(&d, ids[1]);
+            let ym = (t.lo[1] + t.hi[1]) / 2.;
+            d.add_view(sh, src.clone(), ViewKind::Section { parent: ids[1], a: [t.lo[0] - 6., ym], b: [t.hi[0] + 6., ym], label: "A".into() }, [95., 60.], 1.);
+            d.add_view(sh, src.clone(), ViewKind::Detail { parent: ids[0], center: [f.hi[0] - 8., f.hi[1] - 2.], radius: 12., label: "B".into() }, [200., 125.], 2.);
+            if let Some(ax) = f.axes {
+                let id = d.alloc();
+                d.dims.push(Dim { id, view: ids[0], kind: DimKind::Horizontal, anchors: vec![ax.unproject([f.lo[0], f.hi[1]]), ax.unproject([f.hi[0], f.hi[1]])], offset: 8., text: String::new(), tol: String::new() });
+                let id = d.alloc();
+                d.dims.push(Dim { id, view: ids[0], kind: DimKind::Vertical, anchors: vec![ax.unproject([f.lo[0], f.lo[1]]), ax.unproject([f.lo[0], f.hi[1]])], offset: 8., text: String::new(), tol: "±0,1".into() });
+            }
+            let id = d.alloc();
+            d.tables.push(Table { id, sheet: sh, kind: TableKind::Holes, source: src.clone(), pos: [270., 150.] });
+            let id = d.alloc();
+            d.notes.push(Note { id, sheet: sh, kind: NoteKind::Text, pos: [25., 25.], leader: None, text: "Quebrar cantos vivos 0,5x45°
+Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
+            let f = dir.join("placa.sccdwg");
+            let _ = std::fs::write(&f, d.to_json());
+            app.dwg = Some(crate::dwg_ui::DwgState::new(d, Some(f)));
+            app.settings.bench = crate::settings::Bench::Desenho;
             app.started = true;
         }
         // desenvolvimento: SCC_VISTAS=1 abre o seletor de vistas ao iniciar
@@ -897,6 +933,10 @@ impl App {
             crate::pmi_ui::command(self, i);
             return;
         }
+        if let Cmd::Dwg(i) = c {
+            crate::dwg_ui::command(self, i);
+            return;
+        }
         if crate::asm_ui::command(self, c) {
             return;
         }
@@ -1014,7 +1054,7 @@ impl App {
                 };
                 Sel::Feature(d.add_feature(FeatureKind::Primitive(Primitive { kind, plane, a: s(v[0]), b: s(v[1]), c: s(v[2]), d: s(v[3]), op: BoolOp::Add })))
             }
-            Cmd::Pmi(_) => return,
+            Cmd::Pmi(_) | Cmd::Dwg(_) => return,
             Cmd::StLibrary => {
                 self.st_lib_open = true;
                 return;
@@ -2016,7 +2056,7 @@ impl App {
                 // abas de módulo (RF-UI-006)
                 use crate::settings::Bench;
                 ui.add_space(10.);
-                for (b, n, icon) in [(Bench::Solidos, "Modelagem Sólida", "▣"), (Bench::Superficies, "Superfícies", "◫"), (Bench::Montagem, "Montagem", "⚙"), (Bench::Chapa, "Chapa metálica", "▭"), (Bench::Estrutural, "Estrutural", "⌶")] {
+                for (b, n, icon) in [(Bench::Solidos, "Modelagem Sólida", "▣"), (Bench::Superficies, "Superfícies", "◫"), (Bench::Montagem, "Montagem", "⚙"), (Bench::Chapa, "Chapa metálica", "▭"), (Bench::Estrutural, "Estrutural", "⌶"), (Bench::Desenho, "Desenho", "📐")] {
                     if bench_tab(ui, self.settings.bench == b, &format!("{icon}  {}", tr(n)), true).on_hover_text(tr("As bancadas compartilham o mesmo modelo: sólidos e superfícies se conversam.")).clicked() {
                         self.settings.bench = b;
                     }
@@ -2027,11 +2067,9 @@ impl App {
                         crate::asm_ui::back_to_assembly(self);
                     }
                 }
-                for m in ["Desenho"].map(tr) {
-                    bench_tab(ui, false, m, false).on_hover_text(tr("Módulo em breve"));
-                }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let asm_title = self.asm.as_ref().filter(|_| self.settings.bench == Bench::Montagem).map(|s| format!("⚙ {}{}", s.asm.name, if s.modified { " •" } else { "" }));
+                    let asm_title = asm_title.or_else(|| self.dwg.as_ref().filter(|_| self.settings.bench == Bench::Desenho).map(|s| format!("📐 {}{}", s.d.name, if s.modified { " •" } else { "" })));
                     let title = match (&self.open.frozen, self.open.modified) {
                         _ if asm_title.is_some() => asm_title.clone().unwrap(),
                         (Some(r), _) => format!("{} — revisão {r} (congelada)", self.open.doc.name),
@@ -4085,6 +4123,8 @@ pub enum Cmd {
     StCutList,
     /// anotação 3D: 0 linear … 8 tolerância geométrica
     Pmi(u8),
+    /// detalhamento 2D (ver `dwg_ui::c`)
+    Dwg(u8),
     /// mover o corpo: 0 translação, 1 rotação, 2 simetria, 3 afinidade
     MoveBody(u8),
     /// extrusão com ângulo de saída e filetes num clique
@@ -4310,7 +4350,10 @@ impl eframe::App for App {
         let (save, undo, redo) = (km.pressed(ctx, K::Save), !typing && km.pressed(ctx, K::Undo), !typing && km.pressed(ctx, K::Redo));
         let del = km.pressed(ctx, K::Delete);
         let asm_mode = self.in_asm();
-        if asm_mode {
+        let dwg_mode = self.settings.bench == crate::settings::Bench::Desenho;
+        if dwg_mode {
+            crate::dwg_ui::keys(self, ctx, save, undo, redo, del);
+        } else if asm_mode {
             if save {
                 crate::asm_ui::save(self);
             }
@@ -4367,11 +4410,11 @@ impl eframe::App for App {
         if self.sketch.is_some() && crate::sketch_ui::keys(self, ctx) {
             self.finish_sketch();
         }
-        if del && self.sketch.is_none() && !asm_mode && !ctx.egui_wants_keyboard_input() {
+        if del && self.sketch.is_none() && !asm_mode && !dwg_mode && !ctx.egui_wants_keyboard_input() {
             self.delete_selected();
         }
         // atalhos de vista e de comandos (só quando não há campo de texto em edição)
-        if !typing {
+        if !typing && !dwg_mode {
             let dir = |x: f32, y: f32, z: f32| Some(Vec3::new(x, y, z).normalize());
             for (k, d) in [
                 (K::ViewFront, dir(0., -1., 0.)),
@@ -4484,6 +4527,7 @@ impl eframe::App for App {
             });
             ui.separator();
             egui::ScrollArea::vertical().show(ui, |ui| match self.left {
+                LeftTab::Peca if self.settings.bench == crate::settings::Bench::Desenho => crate::dwg_ui::tree(self, ui),
                 LeftTab::Peca if self.settings.bench == crate::settings::Bench::Montagem => crate::asm_ui::tree(self, ui),
                 LeftTab::Peca => self.tree(ui),
                 LeftTab::Projeto => self.project_panel(ui),
@@ -4501,7 +4545,9 @@ impl eframe::App for App {
                 });
             });
             egui::ScrollArea::vertical().show(ui, |ui| {
-                if app.settings.bench == crate::settings::Bench::Montagem {
+                if app.settings.bench == crate::settings::Bench::Desenho {
+                    crate::dwg_ui::panel(app, ui)
+                } else if app.settings.bench == crate::settings::Bench::Montagem {
                     crate::asm_ui::panel(app, ui)
                 } else if app.sketch.is_some() {
                     crate::sketch_ui::panel(app, ui)
@@ -4535,7 +4581,9 @@ impl eframe::App for App {
         self.settings_window(ctx);
         self.view_menu_window(ctx);
         self.dialogs(ctx);
-        if self.in_asm() {
+        if self.settings.bench == crate::settings::Bench::Desenho {
+            crate::dwg_ui::canvas(self, root);
+        } else if self.in_asm() {
             let st = self.asm.as_mut().unwrap();
             if st.refresh() {
                 self.scene_dirty = true;

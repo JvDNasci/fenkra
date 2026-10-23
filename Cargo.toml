@@ -6,6 +6,7 @@ members = [
     "crates/scc-solidos",
     "crates/scc-project",
     "crates/scc-montagem",
+    "crates/scc-desenho",
     "crates/scc-app",
 ]
 

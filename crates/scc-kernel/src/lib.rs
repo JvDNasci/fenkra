@@ -513,6 +513,30 @@ mod imp {
         pub fn to_brep(&self) -> KResult<String> {
             b::to_brep(&self.0).map_err(err)
         }
+        /// Projeção com linhas ocultas: (polilinha 2D, tipo) — 0 visível, 1 tangente, 2 contorno, 3 oculta.
+        pub fn hlr(&self, toward_viewer: [f64; 3], x: [f64; 3], hidden: bool) -> KResult<Vec<(Vec<[f64; 2]>, u8)>> {
+            let (mut ends, mut kinds) = (vec![], vec![]);
+            let f = b::hlr_project(&self.0, toward_viewer[0], toward_viewer[1], toward_viewer[2], x[0], x[1], x[2], hidden, &mut ends, &mut kinds).map_err(err)?;
+            let mut out = vec![];
+            let mut s = 0usize;
+            for (e, k) in ends.iter().zip(kinds) {
+                out.push(((s..*e as usize).map(|i| [f[2 * i], f[2 * i + 1]]).collect(), k));
+                s = *e as usize;
+            }
+            Ok(out)
+        }
+        /// Contornos da seção pelo plano (o, n) — polilinhas 3D fechadas.
+        pub fn section_loops(&self, o: [f64; 3], n: [f64; 3], half: f64) -> KResult<Vec<Vec<[f64; 3]>>> {
+            let mut ends = vec![];
+            let f = b::section_loops(&self.0, o[0], o[1], o[2], n[0], n[1], n[2], half, &mut ends).map_err(err)?;
+            let mut out = vec![];
+            let mut s = 0usize;
+            for e in ends {
+                out.push((s..e as usize).map(|i| [f[3 * i], f[3 * i + 1], f[3 * i + 2]]).collect());
+                s = e as usize;
+            }
+            Ok(out)
+        }
         /// Aba de chapa na aresta perto de `p` (ou a tira planificada, se `flat`).
         pub fn sm_flange(&self, p: [f64; 3], f: SheetFlange) -> KResult<(Shape, SheetEdgeInfo)> {
             let mut info = vec![];
@@ -793,6 +817,12 @@ mod imp {
             false
         }
         pub fn to_brep(&self) -> KResult<String> {
+            no()
+        }
+        pub fn hlr(&self, _: [f64; 3], _: [f64; 3], _: bool) -> KResult<Vec<(Vec<[f64; 2]>, u8)>> {
+            no()
+        }
+        pub fn section_loops(&self, _: [f64; 3], _: [f64; 3], _: f64) -> KResult<Vec<Vec<[f64; 3]>>> {
             no()
         }
         pub fn sm_flange(&self, _: [f64; 3], _: SheetFlange) -> KResult<(Shape, SheetEdgeInfo)> {

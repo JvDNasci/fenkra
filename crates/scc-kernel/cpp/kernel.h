@@ -85,6 +85,9 @@ bool is_solid(const Shape& s);
 std::unique_ptr<Shape> affinity(const Shape& s, double ox, double oy, double oz, double xx, double xy, double xz, double nx, double ny, double nz,
                                 double fx, double fy, double fz);
 rust::String to_brep(const Shape& s);
+rust::Vec<double> hlr_project(const Shape& s, double dx, double dy, double dz, double xx, double xy, double xz, bool hidden,
+                              rust::Vec<uint32_t>& ends, rust::Vec<uint8_t>& kinds);
+rust::Vec<double> section_loops(const Shape& s, double ox, double oy, double oz, double nx, double ny, double nz, double half, rust::Vec<uint32_t>& ends);
 std::unique_ptr<Shape> offset_face(const Shape& face, double d);
 std::unique_ptr<Shape> box_tool(double ox, double oy, double oz, double xx, double xy, double xz, double zx, double zy, double zz, double lx, double ly, double lz);
 std::unique_ptr<Shape> poly_prism(rust::Slice<const double> pts, double dx, double dy, double dz);

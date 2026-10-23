@@ -3185,6 +3185,7 @@ dependencies = [
  "image",
  "rfd",
  "scc-core",
+ "scc-desenho",
  "scc-kernel",
  "scc-montagem",
  "scc-project",
@@ -3201,6 +3202,18 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "scc-desenho"
+version = "0.1.0-alpha.7"
+dependencies = [
+ "scc-core",
+ "scc-kernel",
+ "scc-montagem",
+ "scc-solidos",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

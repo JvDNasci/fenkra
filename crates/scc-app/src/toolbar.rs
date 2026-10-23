@@ -260,6 +260,52 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("sm_desdobrar", "Dobrar/Desdobrar", "Dobrar / desdobrar", "Alterna a peça entre dobrada e planificada (comprimento desenvolvido pelo fator K).", Cmd(C::SmUnfold))),
             One(it("recorte", "Recorte", "Recorte na chapa", "Recorte passante a partir do sketch (compatível com a planificação).", Cmd(C::Cut))),
         ],
+        Group::DesArquivo => vec![
+            One(it("des_novo", "Novo", "Novo desenho", "Folha A3 vazia; a origem das vistas é a peça ou montagem aberta (salva).", Cmd(C::Dwg(0)))),
+            One(it("des_abrir", "Abrir", "Abrir desenho (.sccdwg)", "Abre um desenho salvo; as vistas se recalculam pelos arquivos de origem.", Cmd(C::Dwg(1)))),
+            One(it("des_salvar", "Salvar", "Salvar desenho   Ctrl+S", "Grava o .sccdwg (caminhos das peças relativos à pasta do desenho).", Cmd(C::Dwg(2)))),
+            Family("des_exportar", vec![
+                it("des_pdf", "PDF", "Exportar PDF", "Todas as folhas, vetorial, uma página por folha no tamanho real.", Cmd(C::Dwg(3))),
+                it("des_svg", "SVG", "Exportar SVG", "A folha atual em SVG (mm).", Cmd(C::Dwg(4))),
+                it("des_dxf", "DXF", "Exportar DXF", "A folha atual em DXF R12, camadas por tipo de linha (visível, fina, oculta, centro).", Cmd(C::Dwg(5))),
+            ]),
+            One(it("des_folha", "Folha", "Nova folha", "Acrescenta uma folha no mesmo formato da atual.", Cmd(C::Dwg(50)))),
+        ],
+        Group::DesVistas => vec![
+            One(it("des_tres_vistas", "3 vistas", "Frente, superior, lateral e isométrica", "Conjunto padrão em 1º diedro (ABNT/ISO E): clique onde fica a frente.", Cmd(C::Dwg(10)))),
+            One(it("des_vista", "Vista", "Vista única", "Vista na direção escolhida no painel (frente, trás, superior, inferior, laterais).", Cmd(C::Dwg(11)))),
+            One(it("des_projetada", "Projetada", "Vista projetada", "Selecione uma vista e clique ao lado: fica alinhada a ela.", Cmd(C::Dwg(12)))),
+            One(it("des_iso", "Isométrica", "Vista isométrica", "Vista em perspectiva isométrica.", Cmd(C::Dwg(16)))),
+            One(it("des_corte", "Corte", "Vista em corte", "Selecione a vista, trace a linha de corte (2 cliques) e posicione: face cortada hachurada.", Cmd(C::Dwg(13)))),
+            One(it("des_detalhe", "Detalhe", "Vista de detalhe", "Selecione a vista, clique o centro e o raio, e posicione a ampliação (2× a escala).", Cmd(C::Dwg(14)))),
+            One(it("des_planificada", "Planificada", "Vista planificada", "Chapa desdobrada vista de cima (peça de chapa como origem).", Cmd(C::Dwg(15)))),
+        ],
+        Group::DesCotas => vec![
+            Family("des_cota", vec![
+                it("des_cota_h", "Horizontal", "Cota horizontal", "Dois vértices (snap nas arestas projetadas).", Cmd(C::Dwg(20))),
+                it("des_cota_v", "Vertical", "Cota vertical", "Dois vértices (snap nas arestas projetadas).", Cmd(C::Dwg(21))),
+                it("des_cota_al", "Alinhada", "Cota alinhada", "Distância real entre dois vértices na vista.", Cmd(C::Dwg(22))),
+            ]),
+            One(it("des_cota_r", "Raio", "Cota de raio", "Clique num arco da vista.", Cmd(C::Dwg(23)))),
+            One(it("des_cota_d", "Diâmetro", "Cota de diâmetro", "Clique num círculo da vista.", Cmd(C::Dwg(24)))),
+            One(it("des_cota_ang", "Ângulo", "Cota angular", "Vértice e um ponto de cada lado.", Cmd(C::Dwg(25)))),
+        ],
+        Group::DesAnotacoes => vec![
+            One(it("des_nota", "Nota", "Nota de texto", "Texto livre (várias linhas); chamada opcional no painel.", Cmd(C::Dwg(30)))),
+            Family("des_balao", vec![
+                it("des_balao", "Balão", "Balão de item", "Ponta na peça e posição do balão: número do item da lista de materiais.", Cmd(C::Dwg(31))),
+                it("des_baloes_auto", "Balões auto", "Balões automáticos", "Um balão por peça da montagem, na ordem da lista de materiais.", Cmd(C::Dwg(35))),
+            ]),
+            One(it("des_rugosidade", "Rugosidade", "Símbolo de rugosidade", "√ com o valor (ex.: Ra 1,6) e chamada para a superfície.", Cmd(C::Dwg(32)))),
+            One(it("des_solda", "Solda", "Símbolo de solda", "Linha de referência com o filete e a medida (ex.: a4).", Cmd(C::Dwg(33)))),
+            One(it("des_centro", "Centro", "Marca de centro", "Cruz com linhas de centro traço-ponto.", Cmd(C::Dwg(34)))),
+        ],
+        Group::DesTabelas => vec![
+            One(it("des_bom", "Materiais", "Lista de materiais (BOM)", "Itens da montagem com código, descrição, material e quantidade.", Cmd(C::Dwg(40)))),
+            One(it("des_tab_furos", "Furos", "Tabela de furos", "Cada furo da peça com posição, diâmetro, profundidade e rosca.", Cmd(C::Dwg(41)))),
+            One(it("des_tab_dobras", "Dobras", "Tabela de dobras", "Ângulo, raio, comprimento desenvolvido e dedução de cada dobra.", Cmd(C::Dwg(42)))),
+            One(it("des_tab_corte", "Corte", "Lista de corte", "Perfis estruturais com comprimento e quantidade.", Cmd(C::Dwg(43)))),
+        ],
         Group::Pmi => vec![
             Family("pmi_cota", vec![
                 it("pmi_linear", "Cota", "Cota linear 3D", "Escolha dois vértices/arestas: a distância fica anotada no modelo e se atualiza com ele.", Cmd(C::Pmi(0))),

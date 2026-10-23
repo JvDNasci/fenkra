@@ -695,6 +695,55 @@ I["pmi_tolerancia"] = f'<rect x="3" y="14" width="42" height="18" fill="#fff4e8"
     f'<line x1="17" y1="14" x2="17" y2="32" stroke="{PC}" stroke-width="1.6"/><line x1="35" y1="14" x2="35" y2="32" stroke="{PC}" stroke-width="1.6"/>' + \
     f'<path d="M6 27 L9 20 H15 L12 27 Z" fill="none" stroke="{PC}" stroke-width="1.4"/><path d="M20 23 H32" stroke="{PC}" stroke-width="1.6"/><text x="37" y="28" font-size="11" font-family="sans-serif" fill="{PC}">A</text>'
 
+# ---------------- Desenho 2D
+SHEET = f'<path d="M8 4 H32 L40 12 V44 H8 Z" fill="#ffffff" {S}/><path d="M32 4 V12 H40" fill="none" {S}/>'
+TH = lambda x, y, t, c=ACTION, s=10: f'<text x="{x}" y="{y}" font-size="{s}" font-family="sans-serif" font-weight="bold" fill="{c}">{t}</text>'
+PLUS = f'<circle cx="37" cy="37" r="9" fill="{ACTION}"/><path d="M37 32 V42 M32 37 H42" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round"/>'
+THIN = lambda d, c=INK, w=1.4: f'<path d="{d}" stroke="{c}" stroke-width="{w}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
+I["des_novo"] = SHEET + THIN("M13 36 H28 M13 31 H24") + PLUS
+I["des_abrir"] = SHEET + f'<path d="M2 22 H14 L18 26 H34 V44 H2 Z" fill="{MID}" {S}/>' + f'<path d="M6 30 H40 L34 44 H2 Z" fill="{LIGHT}" {S}/>'
+I["des_salvar"] = SHEET + f'<rect x="24" y="24" width="20" height="20" rx="2" fill="{ACTION}"/><rect x="28" y="24" width="12" height="7" fill="#ffffff"/><rect x="28" y="35" width="12" height="9" fill="{ACTION_L}"/>'
+I["des_pdf"] = SHEET + f'<rect x="4" y="24" width="32" height="15" rx="2" fill="#d03a2f"/>' + TH(7, 35.5, "PDF", "#ffffff", 11)
+I["des_svg"] = SHEET + f'<rect x="4" y="24" width="32" height="15" rx="2" fill="#2f9e44"/>' + TH(7, 35.5, "SVG", "#ffffff", 11)
+I["des_dxf"] = SHEET + f'<rect x="4" y="24" width="32" height="15" rx="2" fill="{ACTION}"/>' + TH(7, 35.5, "DXF", "#ffffff", 11)
+I["des_folha"] = f'<path d="M14 2 H36 L42 8 V36 H14 Z" fill="{ACTION_L}" {S}/>' + f'<path d="M6 10 H28 L34 16 V44 H6 Z" fill="#ffffff" {S}/>' + PLUS
+I["des_tres_vistas"] = f'<rect x="4" y="4" width="18" height="12" fill="{LIGHT}" {S}/><rect x="4" y="22" width="18" height="18" fill="{LIGHT}" {S}/><rect x="28" y="4" width="10" height="12" fill="{LIGHT}" {S}/>' + \
+    THIN("M13 16 V22 M22 10 H28", ACTION, 1.2) + box((38, 26), 10, w=8, hh=4)
+I["des_vista"] = f'<rect x="12" y="10" width="30" height="24" fill="{LIGHT}" {S}/>' + arrow(2, 22, 11, 22) + THIN("M18 16 H36 M18 28 H30", INK, 1.2)
+I["des_projetada"] = f'<rect x="6" y="4" width="22" height="14" fill="{LIGHT}" {S}/>' + f'<rect x="6" y="28" width="22" height="16" fill="{ACTION_L}" stroke="{ACTION}" stroke-width="2" stroke-dasharray="4 2"/>' + \
+    f'<path d="M6 18 V28 M28 18 V28" stroke="{ACTION}" stroke-width="1.2" stroke-dasharray="2 2"/>' + arrow(38, 8, 38, 36)
+I["des_iso"] = box((24, 6), 16)
+I["des_corte"] = f'<rect x="6" y="10" width="36" height="22" fill="#ffffff" {S}/>' + \
+    "".join(f'<line x1="{x}" y1="32" x2="{x + 10}" y2="10" stroke="{INK}" stroke-width="1.2"/>' for x in (2, 9, 16, 23, 30) ) + \
+    f'<rect x="6" y="10" width="36" height="22" fill="none" {S}/>' + f'<path d="M2 40 H46" stroke="{ACTION}" stroke-width="2" stroke-dasharray="7 2 2 2"/>' + AR("4,36 8,44 0,44") + AR("44,36 48,44 40,44")
+I["des_detalhe"] = f'<rect x="2" y="20" width="22" height="18" fill="{LIGHT}" {S}/><circle cx="20" cy="22" r="8" fill="none" stroke="{ACTION}" stroke-width="1.8"/>' + \
+    f'<circle cx="34" cy="14" r="11" fill="#ffffff" stroke="{ACTION}" stroke-width="2.4"/><path d="M26 18 H38 V26" stroke="{INK}" stroke-width="2.4" fill="none"/>' + THIN("M27 17 L28 15", ACTION, 1)
+I["des_planificada"] = f'<path d="M4 16 H14 V4 H34 V16 H44 V32 H34 V44 H14 V32 H4 Z" fill="{LIGHT}" {S}/>' + \
+    f'<path d="M14 16 V32 M34 16 V32 M14 16 H34 M14 32 H34" stroke="{ACTION}" stroke-width="1.6" stroke-dasharray="3 2"/>'
+# cotas
+DIMC = ACTION
+I["des_cota_h"] = f'<rect x="8" y="24" width="32" height="18" fill="{LIGHT}" {S}/>' + THIN("M8 6 V22 M40 6 V22", INK, 1.2) + LN(10, 12, 38, 12, DIMC, 1.8) + AR("8,12 14,9 14,15") + AR("40,12 34,9 34,15")
+I["des_cota_v"] = f'<rect x="20" y="6" width="22" height="36" fill="{LIGHT}" {S}/>' + THIN("M4 6 H18 M4 42 H18", INK, 1.2) + LN(10, 8, 10, 40, DIMC, 1.8) + AR("10,6 7,12 13,12") + AR("10,42 7,36 13,36")
+I["des_cota_al"] = f'<path d="M8 40 L36 12" stroke="{INK}" stroke-width="3" stroke-linecap="round"/>' + LN(4, 26, 22, 8, DIMC, 1.8) + AR("2,28 5,21 9,25") + AR("24,6 17,9 21,13") + THIN("M8 40 L3 35 M36 12 L23 3", INK, 1)
+I["des_cota_r"] = f'<path d="M8 42 V22 A16 16 0 0 1 24 6 H42" fill="none" stroke="{INK}" stroke-width="3"/><circle cx="24" cy="22" r="2" fill="{INK}"/>' + LN(24, 22, 14, 12, DIMC, 1.8) + AR("12,10 19,12 14,17") + TH(26, 40, "R", DIMC, 14)
+I["des_cota_d"] = f'<circle cx="22" cy="26" r="15" fill="{LIGHT}" {S}/>' + LN(12, 36, 32, 16, DIMC, 1.8) + AR("10,38 12,31 17,36") + AR("34,14 27,16 32,21") + \
+    f'<circle cx="40" cy="9" r="5" fill="none" stroke="{DIMC}" stroke-width="1.8"/><line x1="35" y1="14" x2="45" y2="4" stroke="{DIMC}" stroke-width="1.8"/>'
+I["des_cota_ang"] = f'<path d="M6 42 H44 M6 42 L34 8" stroke="{INK}" stroke-width="3" stroke-linecap="round"/>' + f'<path d="M34 42 A28 28 0 0 0 24 20" stroke="{DIMC}" stroke-width="1.8" fill="none"/>' + AR("34,44 31,37 37,37") + AR("23,18 30,20 26,25")
+# anotações
+I["des_nota"] = f'<rect x="4" y="6" width="30" height="24" rx="2" fill="#ffffff" {S}/>' + THIN("M9 13 H29 M9 19 H25 M9 25 H27", INK, 1.6) + LN(34, 26, 44, 40, ACTION, 1.8) + AR("45,42 39,38 43,35")
+I["des_balao"] = f'<circle cx="18" cy="18" r="13" fill="#ffffff" stroke="{ACTION}" stroke-width="2.4"/>' + TH(13.5, 23.5, "1", ACTION, 15) + LN(27, 27, 40, 40, ACTION, 1.8) + f'<circle cx="41" cy="41" r="3" fill="{ACTION}"/>'
+I["des_baloes_auto"] = "".join(f'<circle cx="{x}" cy="{y}" r="8" fill="#ffffff" stroke="{ACTION}" stroke-width="2"/>' + TH(x - 3, y + 4, n, ACTION, 11) for x, y, n in [(10, 10, "1"), (24, 24, "2"), (38, 38, "3")])
+I["des_rugosidade"] = f'<path d="M4 22 L12 36 L26 6 H44" stroke="{ACTION}" stroke-width="2.8" fill="none" stroke-linejoin="round"/>' + THIN("M4 22 H18", ACTION, 2.4) + f'<line x1="2" y1="42" x2="46" y2="42" stroke="{INK}" stroke-width="2.4"/>' + THIN("M30 13 H42", INK, 1.4)
+I["des_solda"] = LN(6, 12, 42, 12, INK, 2.2) + f'<polygon points="16,12 16,22 26,12" fill="{ACTION}"/>' + LN(6, 12, 18, 36, INK, 1.8) + AR("20,40 14,35 20,33") + THIN("M30 18 H40", INK, 1.4) + \
+    f'<path d="M4 40 H26 V44 H4 Z" fill="{MID}"/>'
+I["des_centro"] = f'<circle cx="24" cy="24" r="13" fill="{LIGHT}" {S}/>' + f'<path d="M2 24 H46 M24 2 V46" stroke="{ACTION}" stroke-width="1.8" stroke-dasharray="8 2 2 2"/>' + THIN("M20 24 H28 M24 20 V28", ACTION, 2.4)
+# tabelas
+GRID_T = f'<rect x="4" y="6" width="40" height="34" fill="#ffffff" {S}/><rect x="4" y="6" width="40" height="8" fill="{ACTION_L}" {S}/>' + THIN("M4 22 H44 M4 30 H44 M16 6 V40 M32 6 V40", INK, 1.2)
+I["des_bom"] = GRID_T + TH(6, 13, "#", ACTION, 7) + f'<circle cx="10" cy="26" r="3" fill="none" stroke="{ACTION}" stroke-width="1.4"/>' + f'<circle cx="10" cy="35" r="3" fill="none" stroke="{ACTION}" stroke-width="1.4"/>'
+I["des_tab_furos"] = GRID_T + f'<circle cx="38" cy="38" r="8" fill="{LIGHT}" {S}/><circle cx="38" cy="38" r="3.5" fill="#ffffff" stroke="{ACTION}" stroke-width="1.8"/>'
+I["des_tab_dobras"] = GRID_T + f'<path d="M28 46 V36 A6 6 0 0 1 34 30 H46" fill="none" stroke="{ACTION}" stroke-width="3"/>'
+I["des_tab_corte"] = GRID_T + f'<path d="M30 30 H46 V33 H40 V43 H46 V46 H30 V43 H36 V33 H30 Z" fill="{MID}" stroke="{ACTION}" stroke-width="1.4"/>'
+
 for name, body in I.items():
     with open(os.path.join(OUT, f"{name}.svg"), "w", encoding="utf8", newline="\n") as f:
         f.write(svg(body))

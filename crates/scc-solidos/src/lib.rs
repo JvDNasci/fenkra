@@ -1472,6 +1472,11 @@ impl Ctx<'_> {
                         (None, x) => self.extent(x, f.target)?.0,
                     };
                     depths.push(depth);
+                    HOLE_LOG.with(|l| {
+                        if let Some(v) = l.borrow_mut().as_mut() {
+                            v.push(HoleRow { feature: f.id, pos: *o, dir: *dir, diameter: d, depth, through: matches!(h.depth, Extent::ThroughAll | Extent::UpToLast), thread: h.thread.clone().unwrap_or_default() });
+                        }
+                    });
                     let mut t = Shape::hole_tool_ext(*o, *dir, d, depth, shape, tip, taper).map_err(k)?;
                     if let Some((c, ext)) = &cut {
                         t = t.clip_until(c, *o, *ext).map_err(k)?;
@@ -2489,6 +2494,34 @@ struct SheetValues {
     r: f64,
     k: f64,
     flat: bool,
+}
+
+thread_local! {
+    /// coleta dos furos durante `hole_table` (fora dela fica `None`)
+    static HOLE_LOG: RefCell<Option<Vec<HoleRow>>> = const { RefCell::new(None) };
+}
+
+/// Linha da tabela de furos: centro da boca, direção, diâmetro, profundidade e rosca.
+#[derive(Clone, Debug, PartialEq)]
+pub struct HoleRow {
+    pub feature: Id,
+    pub pos: V3,
+    pub dir: V3,
+    pub diameter: f64,
+    pub depth: f64,
+    /// passante (atravessa tudo / até a última face)
+    pub through: bool,
+    pub thread: String,
+}
+
+/// Todos os furos da peça (um por centro), na ordem da árvore.
+pub fn hole_table(doc: &Document) -> Vec<HoleRow> {
+    if !doc.active_features().any(|(_, f)| matches!(f.kind, FeatureKind::Hole(_))) {
+        return vec![];
+    }
+    HOLE_LOG.with(|l| *l.borrow_mut() = Some(vec![]));
+    let _ = final_shape(doc);
+    HOLE_LOG.with(|l| l.borrow_mut().take()).unwrap_or_default()
 }
 
 /// Linha da tabela de dobras.
