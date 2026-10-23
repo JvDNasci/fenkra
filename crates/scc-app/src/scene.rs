@@ -288,6 +288,6 @@ pub fn plane_name(o: OriginPlane) -> &'static str {
 pub fn plane_ref_name(doc: &Document, p: &PlaneRef) -> String {
     match p {
         PlaneRef::Origin(o) => format!("Origem · {}", plane_name(*o)),
-        PlaneRef::Datum(id) => doc.reference(*id).map(|r| r.name.clone()).unwrap_or_else(|| format!("⚠ perdida #{}", id.0)),
+        PlaneRef::Datum(id) => doc.reference(*id).map(|r| r.name.clone()).or_else(|| crate::slots::label(*id)).unwrap_or_else(|| format!("⚠ perdida #{}", id.0)),
     }
 }

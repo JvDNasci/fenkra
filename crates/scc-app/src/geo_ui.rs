@@ -300,16 +300,16 @@ impl GeoKind {
     /// Cria o elemento com as entradas da seleção (o que faltar recebe um valor padrão editável).
     pub fn make(self, s: &Seed) -> RefKind {
         use RefKind as R;
-        const DEF_PTS: [PointRef; 4] = [PointRef::Origin, PointRef::Fixed([20., 0., 0.]), PointRef::Fixed([0., 20., 0.]), PointRef::Fixed([0., 0., 20.])];
-        let p = |i: usize| s.points.get(i).copied().unwrap_or(DEF_PTS[i.min(3)]);
-        let c = |i: usize| s.curves.get(i).cloned().unwrap_or(CurveRef::Axis(if i == 0 { OriginAxis::X } else { OriginAxis::Y }));
-        let pl = s.planes.first().copied().unwrap_or_default();
-        let sf = s.surface.unwrap_or(SurfRef::Plane(pl));
-        let ax = |def: OriginAxis| s.curves.first().map(axis_of).unwrap_or(AxisRef::Origin(def));
+        // o que não veio da pré-seleção fica "a escolher" e é preenchido pelo próximo clique
+        let p = |i: usize| s.points.get(i).copied().unwrap_or_else(crate::slots::point);
+        let c = |i: usize| s.curves.get(i).cloned().unwrap_or_else(crate::slots::curve);
+        let pl = s.planes.first().copied().unwrap_or_else(crate::slots::plane);
+        let sf = s.surface.or_else(|| s.planes.first().map(|p| SurfRef::Plane(*p))).unwrap_or_else(crate::slots::surf);
+        let ax = |_def: OriginAxis| s.curves.first().map(axis_of).unwrap_or_else(crate::slots::axis);
         let pts = |min: usize| -> Vec<PointRef> {
             let mut v = s.points.clone();
             while v.len() < min {
-                v.push(DEF_PTS[v.len().min(3)]);
+                v.push(crate::slots::point());
             }
             v
         };
@@ -320,7 +320,7 @@ impl GeoKind {
             PlaneAngle => R::AnglePlane { base: pl, axis: ax(OriginAxis::X), angle: t("30") },
             Plane3P => R::PlaneThreePoints { a: p(0), b: p(1), c: p(2) },
             Plane2L => R::PlaneTwoLines { a: c(0), b: c(1) },
-            PlanePL => R::PlanePointLine { point: s.points.first().copied().unwrap_or(DEF_PTS[2]), line: c(0) },
+            PlanePL => R::PlanePointLine { point: p(0), line: c(0) },
             PlaneCurve => R::PlaneCurve { curve: c(0) },
             PlaneNormalCurve => R::PlaneNormalCurve { curve: c(0), at: OnCurve::Ratio(t("0.5")), reverse: false },
             PlaneTangent => R::PlaneTangentSurface { surface: sf, point: p(0) },
@@ -347,15 +347,15 @@ impl GeoKind {
             Conic => R::Conic { center: p(0), plane: pl, kind: ConicKind::Elipse, a: t("30"), b: t("15"), extent: t("40") },
             Connect => R::Connect { a: c(0), a_end: true, b: c(1), b_end: false, cont: Continuity::G1, tension: t("1") },
             Corner => R::Corner { a: c(0), b: c(1), radius: t("5") },
-            Spine => R::Spine { planes: if s.planes.len() >= 2 { s.planes.clone() } else { vec![pl, PlaneRef::Origin(OriginPlane::YZ)] } },
+            Spine => R::Spine { planes: if s.planes.len() >= 2 { s.planes.clone() } else { vec![pl, crate::slots::plane()] } },
             PlanePointNormal => R::PlanePointNormal { point: p(0), line: c(0) },
-            PlaneMid => R::PlaneMid { a: pl, b: s.planes.get(1).copied().unwrap_or(PlaneRef::Origin(OriginPlane::XY)) },
+            PlaneMid => R::PlaneMid { a: pl, b: s.planes.get(1).copied().unwrap_or_else(crate::slots::plane) },
             PtCurvePlane => R::PointCurvePlane { curve: c(0), plane: pl, which: 0 },
             PtCurveCurve => R::PointCurveCurve { a: c(0), b: c(1) },
             PtProject => R::PointProject { point: p(0), surface: sf },
             PtProjectCurve => R::PointProjectCurve { point: p(0), curve: c(0) },
             PtOffset => R::PointOffset { point: p(0), dir: ax(OriginAxis::Z), dist: t("10") },
-            LinePlanes => R::LinePlanes { a: pl, b: s.planes.get(1).copied().unwrap_or(PlaneRef::Origin(OriginPlane::XZ)), length: t("100") },
+            LinePlanes => R::LinePlanes { a: pl, b: s.planes.get(1).copied().unwrap_or_else(crate::slots::plane), length: t("100") },
             LineBisector => R::LineBisector { a: c(0), b: c(1), length: t("50") },
             LineAxis => R::LineAxis { face: face_pt(s) },
             CurveProject => R::CurveProject { curve: c(0), plane: pl },
@@ -377,8 +377,8 @@ impl GeoKind {
             SurfBlend => R::SurfBlend { a: c(0), sa: None, b: c(1), sb: None, cont: Continuity::G1, tension: t("1") },
             OpJoin => R::SurfJoin { items: vec![sf], tol: t("0.01") },
             OpHeal => R::SurfHeal { surface: sf, tol: t("0.1") },
-            OpSplit => R::SurfSplit { surface: sf, tool: SurfRef::Plane(pl), flip: false },
-            OpTrim => R::SurfTrim { a: sf, b: SurfRef::Plane(pl), flip_a: false, flip_b: false },
+            OpSplit => R::SurfSplit { surface: sf, tool: crate::slots::surf(), flip: false },
+            OpTrim => R::SurfTrim { a: sf, b: crate::slots::surf(), flip_a: false, flip_b: false },
             OpBoundary => R::CurveBoundary { surface: sf, which: 0 },
             OpMulti => R::SurfMulti { faces: vec![face_pt(s)] },
             OpPart => R::SurfPart { surface: sf, index: 0 },
@@ -394,7 +394,7 @@ impl GeoKind {
                 };
                 R::GeoTransform { source, class, xf }
             }
-            CurveIntersect => R::CurveIntersect { a: sf, b: SurfRef::Plane(pl), which: 0 },
+            CurveIntersect => R::CurveIntersect { a: sf, b: crate::slots::surf(), which: 0 },
             CurveProjSurf => R::CurveProjectSurf { curve: c(0), surface: sf, dir: None },
             CurveParallel => R::CurveParallel { curve: c(0), support: sf, d1: t("5"), d2: t("5"), flip: false },
         }
@@ -546,7 +546,7 @@ pub fn inputs_of(k: &RefKind) -> Seed {
 pub fn point_name(doc: &Document, p: &PointRef) -> String {
     match p {
         PointRef::Origin => "Origem".into(),
-        PointRef::Ref(id) => doc.reference(*id).map(|r| r.name.clone()).unwrap_or_else(|| format!("⚠ perdido #{}", id.0)),
+        PointRef::Ref(id) => doc.reference(*id).map(|r| r.name.clone()).or_else(|| crate::slots::label(*id)).unwrap_or_else(|| format!("⚠ perdido #{}", id.0)),
         PointRef::Fixed(q) => format!("({}, {}, {})", fmt(q[0]), fmt(q[1]), fmt(q[2])),
     }
 }
@@ -554,7 +554,7 @@ pub fn point_name(doc: &Document, p: &PointRef) -> String {
 pub fn curve_name(doc: &Document, c: &CurveRef) -> String {
     match c {
         CurveRef::Axis(a) => format!("Origem · eixo {a:?}"),
-        CurveRef::Ref(id) => doc.reference(*id).map(|r| r.name.clone()).unwrap_or_else(|| format!("⚠ perdida #{}", id.0)),
+        CurveRef::Ref(id) => doc.reference(*id).map(|r| r.name.clone()).or_else(|| crate::slots::label(*id)).unwrap_or_else(|| format!("⚠ perdida #{}", id.0)),
         CurveRef::SketchLine { sketch, entity } => format!("{} · linha #{}", doc.name_of(*sketch), entity.0),
         CurveRef::Edge(p) => format!("Aresta ({} pontos)", p.len()),
     }
@@ -564,7 +564,7 @@ fn surf_name(doc: &Document, s: &SurfRef) -> String {
     match s {
         SurfRef::Plane(p) => plane_ref_name(doc, p),
         SurfRef::Face { owner, .. } => format!("Face de {}", owner.map(|o| doc.name_of(o)).unwrap_or_default()),
-        SurfRef::Ref(id) => doc.name_of(*id),
+        SurfRef::Ref(id) => crate::slots::label(*id).unwrap_or_else(|| doc.name_of(*id)),
     }
 }
 
@@ -640,7 +640,7 @@ pub(crate) fn axis_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docume
     let name = match a {
         AxisRef::Origin(x) => format!("Origem · eixo {x:?}"),
         AxisRef::SketchLine { sketch, entity } => format!("{} · linha #{}", doc.name_of(*sketch), entity.0),
-        AxisRef::Ref(id) => doc.name_of(*id),
+        AxisRef::Ref(id) => crate::slots::label(*id).unwrap_or_else(|| doc.name_of(*id)),
         AxisRef::Fixed { .. } => "Aresta (direção fixa)".into(),
     };
     row(ui, label, |ui| {

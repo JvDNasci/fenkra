@@ -112,7 +112,7 @@ pub fn compose(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, errors: 
             Ok((m, color, vol)) => {
                 let color = n.color.unwrap_or(color);
                 let label = if n.number > 0 { format!("{} · {}", n.number, n.name) } else { n.name.clone() };
-                doc.collectors.push(BodyCollector { id: n.id, name: label, color, visible, finish: Finish::default(), texture: None, marker: None });
+                doc.collectors.push(BodyCollector { id: n.id, name: label, color, visible, finish: Finish::default(), texture: None, marker: None, published: false });
                 let nf = m.face_ranges.len();
                 bodies.push(BodyResult {
                     collector: n.id,

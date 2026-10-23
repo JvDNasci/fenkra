@@ -182,6 +182,167 @@ pub struct SketchData {
     pub points: Vec<SkPoint>,
     pub curves: Vec<SkCurve>,
     pub constraints: Vec<Constraint>,
+    /// geometria externa trazida para o sketch (converter, projetar, interseção): pontos fixos
+    /// que o cálculo reposiciona a cada vez — muda o 3D, muda o sketch
+    #[serde(default)]
+    pub links: Vec<SkLink>,
+}
+
+/// Origem de uma geometria externa do sketch.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub enum LinkSrc {
+    /// ponto, linha/curva ou superfície de referência (inclusive importada por link)
+    Ref(Id),
+    /// curva de outro sketch
+    SketchCurve { sketch: Id, curve: Id },
+    /// aresta de um corpo (reencontrada pelo ponto médio)
+    Edge { mid: [f64; 3] },
+    /// vértice de um corpo
+    Vertex { pos: [f64; 3] },
+    /// face de um corpo (para a interseção com o plano do sketch)
+    Face { point: [f64; 3] },
+}
+
+/// Como a geometria externa vira geometria do sketch.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub enum LinkShape {
+    /// polilinha de pontos fixos (na ordem)
+    Poly { points: Vec<Id>, closed: bool },
+    /// círculo: centro fixo e raio da curva acompanhando
+    Circle { center: Id, curve: Id },
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct SkLink {
+    pub id: Id,
+    pub source: LinkSrc,
+    /// interseção com o plano do sketch (senão: projeção ortogonal no plano)
+    pub intersect: bool,
+    pub shape: LinkShape,
+}
+
+/// Reamostra uma polilinha em `n` pontos igualmente espaçados pelo comprimento.
+pub fn resample(pts: &[[f64; 2]], n: usize) -> Vec<[f64; 2]> {
+    if pts.is_empty() || n == 0 {
+        return vec![];
+    }
+    if n == 1 || pts.len() == 1 {
+        return vec![pts[0]; n];
+    }
+    let mut acc = vec![0.];
+    for w in pts.windows(2) {
+        let l = ((w[1][0] - w[0][0]).powi(2) + (w[1][1] - w[0][1]).powi(2)).sqrt();
+        acc.push(acc.last().unwrap() + l);
+    }
+    let total = *acc.last().unwrap();
+    (0..n)
+        .map(|i| {
+            let t = total * i as f64 / (n - 1) as f64;
+            let k = acc.partition_point(|a| *a < t).clamp(1, pts.len() - 1);
+            let (a0, a1) = (acc[k - 1], acc[k]);
+            let u = if a1 > a0 { (t - a0) / (a1 - a0) } else { 0. };
+            [pts[k - 1][0] + (pts[k][0] - pts[k - 1][0]) * u, pts[k - 1][1] + (pts[k][1] - pts[k - 1][1]) * u]
+        })
+        .collect()
+}
+
+/// Círculo que passa pelos pontos (centro, raio), se a polilinha fechada for um círculo.
+pub fn fit_circle2(pts: &[[f64; 2]]) -> Option<([f64; 2], f64)> {
+    let n = pts.len();
+    if n < 8 {
+        return None;
+    }
+    let closed = ((pts[0][0] - pts[n - 1][0]).powi(2) + (pts[0][1] - pts[n - 1][1]).powi(2)).sqrt() < 1e-4 * (1. + pts[0][0].abs());
+    if !closed {
+        return None;
+    }
+    let (a, b, c) = (pts[0], pts[n / 3], pts[2 * n / 3]);
+    let d = 2. * (a[0] * (b[1] - c[1]) + b[0] * (c[1] - a[1]) + c[0] * (a[1] - b[1]));
+    if d.abs() < 1e-12 {
+        return None;
+    }
+    let sq = |p: [f64; 2]| p[0] * p[0] + p[1] * p[1];
+    let ux = (sq(a) * (b[1] - c[1]) + sq(b) * (c[1] - a[1]) + sq(c) * (a[1] - b[1])) / d;
+    let uy = (sq(a) * (c[0] - b[0]) + sq(b) * (a[0] - c[0]) + sq(c) * (b[0] - a[0])) / d;
+    let r = ((a[0] - ux).powi(2) + (a[1] - uy).powi(2)).sqrt();
+    let ok = pts.iter().all(|p| (((p[0] - ux).powi(2) + (p[1] - uy).powi(2)).sqrt() - r).abs() < r * 0.01 + 1e-4);
+    ok.then_some(([ux, uy], r))
+}
+
+impl SketchData {
+    /// Põe a geometria externa no sketch: círculo (se a polilinha fechada for um) ou polilinha de
+    /// pontos fixos ligados por linhas. `al` cria ids.
+    pub fn add_link(&mut self, al: &mut impl FnMut() -> Id, source: LinkSrc, intersect: bool, uv: &[[f64; 2]], construction: bool) -> Option<Id> {
+        if uv.is_empty() {
+            return None;
+        }
+        let shape = if let Some((c, r)) = fit_circle2(uv) {
+            let center = self.add_point(al, c[0], c[1]);
+            if let Some(p) = self.point_mut(center) {
+                p.fixed = true;
+            }
+            let curve = self.add_curve(al, Curve::Circle { c: center, r }, construction);
+            LinkShape::Circle { center, curve }
+        } else {
+            let closed = uv.len() > 2 && ((uv[0][0] - uv[uv.len() - 1][0]).powi(2) + (uv[0][1] - uv[uv.len() - 1][1]).powi(2)).sqrt() < 1e-4;
+            let open: Vec<[f64; 2]> = if closed { uv[..uv.len() - 1].to_vec() } else { uv.to_vec() };
+            let ids: Vec<Id> = open
+                .iter()
+                .map(|q| {
+                    let id = self.add_point(al, q[0], q[1]);
+                    if let Some(p) = self.point_mut(id) {
+                        p.fixed = true;
+                    }
+                    id
+                })
+                .collect();
+            if ids.len() == 1 {
+                self.add_curve(al, Curve::Point { p: ids[0] }, construction);
+            }
+            for w in ids.windows(2) {
+                self.add_curve(al, Curve::Line { a: w[0], b: w[1] }, construction);
+            }
+            if closed && ids.len() > 2 {
+                self.add_curve(al, Curve::Line { a: ids[ids.len() - 1], b: ids[0] }, construction);
+            }
+            LinkShape::Poly { points: ids, closed }
+        };
+        let id = al();
+        self.links.push(SkLink { id, source, intersect, shape });
+        Some(id)
+    }
+
+    /// Reposiciona a geometria externa com a polilinha nova (no plano do sketch).
+    pub fn update_link(&mut self, link: Id, uv: &[[f64; 2]]) {
+        let Some(l) = self.links.iter().find(|l| l.id == link).cloned() else { return };
+        match l.shape {
+            LinkShape::Circle { center, curve } => {
+                let (c, r) = fit_circle2(uv).unwrap_or_else(|| {
+                    let n = uv.len().max(1) as f64;
+                    let c = [uv.iter().map(|p| p[0]).sum::<f64>() / n, uv.iter().map(|p| p[1]).sum::<f64>() / n];
+                    let r = uv.iter().map(|p| ((p[0] - c[0]).powi(2) + (p[1] - c[1]).powi(2)).sqrt()).sum::<f64>() / n;
+                    (c, r)
+                });
+                if let Some(p) = self.point_mut(center) {
+                    (p.x, p.y) = (c[0], c[1]);
+                }
+                if let Some(cv) = self.curves.iter_mut().find(|x| x.id == curve) {
+                    if let Curve::Circle { r: rr, .. } = &mut cv.geom {
+                        *rr = r;
+                    }
+                }
+            }
+            LinkShape::Poly { points, closed } => {
+                let n = points.len() + usize::from(closed);
+                let q = resample(uv, n);
+                for (id, p) in points.iter().zip(q) {
+                    if let Some(pt) = self.point_mut(*id) {
+                        (pt.x, pt.y) = (p[0], p[1]);
+                    }
+                }
+            }
+        }
+    }
 }
 
 type Vars = HashMap<String, f64>;

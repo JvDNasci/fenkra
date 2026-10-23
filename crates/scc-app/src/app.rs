@@ -101,6 +101,8 @@ pub struct App {
     pub sel: Sel,
     pub result: Option<RecomputeResult>,
     pub delete_dialog: Option<DeleteDialog>,
+    /// janela de publicações (o que outras peças podem importar)
+    pub pub_open: bool,
     /// texturas carregadas na GPU (arquivo, escala)
     tex_key: Vec<(String, f64)>,
     /// janela de automação (macros) e o registro da última execução
@@ -148,6 +150,12 @@ pub struct App {
     started: bool,
     /// comando aberto em edição (ambiente com Concluir/Cancelar)
     pub session: Option<Session>,
+    /// novo sketch esperando o clique no plano/face
+    pub sketch_wait_plane: bool,
+    /// árvore aberta ao lado do painel do comando
+    pub tree_peek: bool,
+    /// comandos desatualizados (calculado a cada quadro para a árvore)
+    stale_set: std::cell::RefCell<(bool, std::collections::HashSet<Id>)>,
     /// seletor de vistas (tecla Espaço)
     view_menu: bool,
     new_view_name: String,
@@ -221,6 +229,7 @@ impl App {
             sel: Sel::None,
             result: None,
             delete_dialog: None,
+            pub_open: false,
             open_pending: None,
             splash_t0: None,
             reframe_pending: false,
@@ -271,6 +280,9 @@ impl App {
             asm: None,
             sheet_open: false,
             pmi_pending: None,
+            sketch_wait_plane: false,
+            tree_peek: false,
+            stale_set: Default::default(),
             dwg: None,
             st_lib_open: false,
             st_cut_open: false,
@@ -549,23 +561,81 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
         let _ = self.worker.tx.send((self.gen_sent, self.open.doc.clone(), fresh));
     }
 
-    /// Índice do primeiro comando desatualizado (o documento mudou depois do último cálculo).
+    /// Índice do primeiro comando desatualizado (a geometria mudou depois do último cálculo).
+    /// Mudanças só de exibição (nome, ocultar, cor, pasta de organização) não desatualizam nada.
     pub fn stale_from(&self) -> Option<usize> {
         let Some(rd) = &self.result_doc else { return Some(0) };
+        geo_stale_from(&self.open.doc, rd)
+    }
+
+    /// Comandos desatualizados: os que mudaram e os que dependem deles (mesmo corpo depois deles,
+    /// ou que leem o que eles produzem). `true` = mudou algo global (tudo desatualizado).
+    fn compute_stale(&self) -> (bool, std::collections::HashSet<Id>) {
+        let mut set = std::collections::HashSet::new();
+        let Some(rd) = &self.result_doc else { return (true, set) };
         let d = &self.open.doc;
-        if d == rd {
-            return None;
+        if geo_stale_from(d, rd).is_none() {
+            return (false, set);
         }
-        if d.params != rd.params || d.references != rd.references || d.external != rd.external {
-            return Some(0);
+        if geo_global_changed(d, rd) {
+            return (true, set);
         }
-        (0..d.features.len()).find(|i| rd.features.get(*i) != Some(&d.features[*i])).or(Some(d.features.len()))
+        // parâmetros mudados (pelo nome) e referências mudadas: marcam só quem os usa
+        let mut names: Vec<String> = d.params.iter().filter(|p| rd.params.iter().find(|q| q.name == p.name).is_none_or(|q| q.expr != p.expr || q.unit != p.unit)).map(|p| p.name.clone()).collect();
+        names.extend(rd.params.iter().filter(|q| !d.params.iter().any(|p| p.name == q.name)).map(|q| q.name.clone()));
+        let cites = |js: &str| names.iter().any(|n| js.match_indices(n.as_str()).any(|(i, _)| {
+            let w = |c: char| c.is_alphanumeric() || c == '_';
+            !js[..i].chars().next_back().is_some_and(w) && !js[i + n.len()..].chars().next().is_some_and(w)
+        }));
+        for _ in 0..3 {
+            for r in &d.references {
+                let js = serde_json::to_string(&r.kind).unwrap_or_default();
+                let mut ids = vec![];
+                r.kind.clone().walk(&mut |x| ids.push(*x), &mut |_| {});
+                if rd.references.iter().find(|q| q.id == r.id).is_none_or(|q| q.kind != r.kind) || cites(&js) || ids.iter().any(|x| set.contains(x)) {
+                    set.insert(r.id);
+                }
+            }
+        }
+        let same = |a: &Feature, b: &Feature| a.kind == b.kind && a.suppressed == b.suppressed && a.target == b.target && a.folder == b.folder;
+        for f in &d.features {
+            if cites(&serde_json::to_string(&f.kind).unwrap_or_default()) {
+                set.insert(f.id);
+            }
+            if rd.features.iter().find(|g| g.id == f.id).is_none_or(|g| !same(g, f)) {
+                set.insert(f.id);
+            }
+        }
+        for _ in 0..2 {
+            let mut dirty_bodies: Vec<Id> = vec![];
+            for f in &d.features {
+                let mut ids = vec![];
+                f.kind.clone().walk(&mut |x| ids.push(*x), &mut |_| {});
+                let sketch = matches!(f.kind, FeatureKind::Sketch(_));
+                if set.contains(&f.id) || ids.iter().any(|x| set.contains(x)) || (!sketch && dirty_bodies.contains(&f.target)) {
+                    set.insert(f.id);
+                    if !sketch {
+                        dirty_bodies.push(f.target);
+                    }
+                }
+            }
+        }
+        (false, set)
+    }
+
+    /// A geometria mudou desde o último pedido de cálculo?
+    fn needs_recompute(&self) -> bool {
+        match &self.sent_doc {
+            Some(sd) => geo_stale_from(&self.open.doc, sd).is_some(),
+            None => true,
+        }
     }
 
     /// Mostra que o comando `i` ainda não foi atualizado: desatualizado (mudou e não recalculou)
     /// ou ainda não alcançado pela varredura visual depois do cálculo.
     fn row_pending(&self, i: usize, now: f64) -> (bool, bool) {
-        let stale = self.stale_from().is_some_and(|k| i >= k);
+        let (all, set) = &*self.stale_set.borrow();
+        let stale = *all || self.open.doc.features.get(i).is_some_and(|f| set.contains(&f.id));
         let swept = (now - self.sweep_t0) / 0.035 < i as f64 + 1.;
         (stale, swept && !stale)
     }
@@ -929,7 +999,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 }
             }
         }
-        d.features[..d.rollback.min(d.features.len())].iter().rev().find(|f| ok(f)).map(|f| f.id)
+        // só a pré-seleção: sem escolher sozinho o último sketch (o campo fica para preencher)
+        None
     }
 
     fn command(&mut self, c: Cmd) {
@@ -967,12 +1038,28 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
             }
             _ => Default::default(),
         };
-        let up_to = self.open.doc.references.last().map(|r| PlaneRef::Datum(r.id)).unwrap_or(PlaneRef::Origin(OriginPlane::XY));
+        // plano pré-selecionado (árvore ou viewport) — sem ele, os campos de plano ficam a escolher
+        let pre_plane = matches!(self.sel, Sel::Origin(_))
+            || matches!(self.sel, Sel::Ref(id) if self.doc().reference(id).is_some_and(|r| r.kind.class() == RefClass::Plane))
+            || self.picks.iter().any(|p| matches!(p, crate::picking::Pick::Plane(_) | crate::picking::Pick::Face { .. }));
+        let opt_plane = if pre_plane { plane } else { crate::slots::plane() };
+        let up_to = opt_plane;
+        let sk_or_unset = sketch.unwrap_or(crate::slots::UNSET_SKETCH);
+        if c == Cmd::Sketch && !pre_plane {
+            // sketch precisa de um plano: espera o clique num plano/face (ou na árvore)
+            self.sketch_wait_plane = true;
+            self.toast("Escolha o plano ou a face do sketch (na viewport ou na árvore) — Esc cancela", false);
+            return;
+        }
         let d = &mut self.open.doc;
         let new_sel = match c {
             Cmd::Sketch => {
+                let on_face = matches!(plane, PlaneRef::Datum(id) if d.reference(id).is_some_and(|r| matches!(r.kind, RefKind::FacePlane { .. })));
                 let geo = match sel_now {
                     Sel::Folder(fo) if d.folder(fo).is_some_and(|x| x.kind == FolderKind::Geometria) => Some(fo),
+                    _ if self.settings.sketch_in_geometry && !on_face => Some(
+                        d.folders.iter().find(|f| f.kind == FolderKind::Geometria).map(|f| f.id).unwrap_or_else(|| d.add_geometry_folder("Geometria")),
+                    ),
                     _ => None,
                 };
                 let id = match geo {
@@ -983,10 +1070,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 Sel::Feature(id)
             }
             Cmd::Extrude | Cmd::ExtrudeMid | Cmd::ExtrudeUpTo | Cmd::Cut | Cmd::CutBlind | Cmd::CutUpTo => {
-                let Some(sk) = sketch else {
-                    self.toast("Crie ou selecione um sketch primeiro", true);
-                    return;
-                };
+                let sk = sk_or_unset;
                 let cut = matches!(c, Cmd::Cut | Cmd::CutBlind | Cmd::CutUpTo);
                 let extent = match c {
                     Cmd::Extrude => Extent::Blind(s("20")),
@@ -998,13 +1082,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 Sel::Feature(d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: if cut { BoolOp::Cut } else { BoolOp::Add }, extent, reverse: false, taper: s("0"), thin: None, dir: None })))
             }
             Cmd::Revolve | Cmd::Groove => {
-                let Some(sk) = sketch else {
-                    self.toast("Crie ou selecione um sketch primeiro", true);
-                    return;
-                };
+                let sk = sk_or_unset;
+                let axis = self.seed(true).curves.first().map(crate::geo_ui::axis_of).unwrap_or_else(crate::slots::axis);
+                let d = &mut self.open.doc;
                 Sel::Feature(d.add_feature(FeatureKind::Revolve(Revolve {
                     sketch: sk,
-                    axis: AxisRef::Origin(OriginAxis::Y),
+                    axis,
                     angle: s("360"),
                     symmetric: false,
                     op: if c == Cmd::Groove { BoolOp::Cut } else { BoolOp::Add },
@@ -1013,16 +1096,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 })))
             }
             Cmd::Rib | Cmd::Slot => {
-                let Some(sk) = sketch else {
-                    self.toast("Crie o sketch do perfil primeiro (e uma curva guia em Referências → Curva)", true);
-                    return;
-                };
-                let spine = seed
-                    .curves
-                    .first()
-                    .cloned()
-                    .or_else(|| d.references.iter().rev().find(|r| r.kind.class() == RefClass::Curve).map(|r| CurveRef::Ref(r.id)))
-                    .unwrap_or(CurveRef::Axis(OriginAxis::X));
+                let sk = sk_or_unset;
+                let spine = seed.curves.first().cloned().unwrap_or_else(crate::slots::curve);
                 Sel::Feature(d.add_feature(FeatureKind::Sweep(Sweep {
                     sketch: sk,
                     spine,
@@ -1032,18 +1107,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 })))
             }
             Cmd::Loft | Cmd::LoftCut => {
-                // os dois últimos sketches antes do marcador (o selecionado entra por último)
-                let mut secs: Vec<Id> = d.features[..d.rollback.min(d.features.len())].iter().filter(|f| matches!(f.kind, FeatureKind::Sketch(_))).map(|f| f.id).collect();
-                if let Some(sk) = sketch {
-                    secs.retain(|x| *x != sk);
-                    secs.push(sk);
-                }
-                let n = secs.len();
-                let sections = secs[n.saturating_sub(2)..].to_vec();
-                if sections.len() < 2 {
-                    self.toast("Multi-seções precisa de pelo menos dois sketches (em planos diferentes)", true);
-                    return;
-                }
+                // só o sketch pré-selecionado; os outros entram clicando na árvore
+                let sections: Vec<Id> = sketch.into_iter().collect();
                 Sel::Feature(d.add_feature(FeatureKind::Loft(Loft { sections, ruled: false, closed: false, op: if c == Cmd::LoftCut { BoolOp::Cut } else { BoolOp::Add } })))
             }
             Cmd::Prim(kind) => {
@@ -1125,13 +1190,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 if d.sheet.is_none() {
                     d.sheet = Some(SheetParams::default());
                 }
-                let Some(sk) = sketch else {
-                    self.toast(match c {
-                        Cmd::SmFlangedHole => "Selecione um sketch com os pontos (centros) primeiro",
-                        _ => "Selecione um sketch com perfil fechado primeiro",
-                    }, true);
-                    return;
-                };
+                let sk = sk_or_unset;
                 Sel::Feature(d.add_feature(match c {
                     Cmd::SmWall => FeatureKind::SmWall(SmWall { sketch: sk, reverse: false }),
                     Cmd::SmStamp => FeatureKind::SmStamp(SmStamp { sketch: sk, depth: s("3"), flip: false }),
@@ -1190,14 +1249,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 }))
             }
             Cmd::Stiffener => {
-                let Some(sk) = sketch else {
-                    self.toast("Desenhe as linhas do reforço num sketch primeiro", true);
-                    return;
-                };
+                let sk = sk_or_unset;
                 Sel::Feature(d.add_feature(FeatureKind::Stiffener(Stiffener { sketch: sk, thickness: s("3"), depth: s("20"), reverse: false, to_body: false })))
             }
             Cmd::Shell => Sel::Feature(d.add_feature(FeatureKind::Shell(Shell { faces: faces.clone(), thickness: s("2"), outward: false }))),
-            Cmd::Draft => Sel::Feature(d.add_feature(FeatureKind::Draft(Draft { faces: faces.clone(), neutral: plane, angle: s("3"), reverse: false }))),
+            Cmd::Draft => Sel::Feature(d.add_feature(FeatureKind::Draft(Draft { faces: faces.clone(), neutral: opt_plane, angle: s("3"), reverse: false }))),
             Cmd::Thickness => Sel::Feature(d.add_feature(FeatureKind::Thickness(Thickness { faces: faces.clone(), value: s("2") }))),
             Cmd::Thread => Sel::Feature(d.add_feature(FeatureKind::Thread(Thread { face: faces.last().copied().unwrap_or([0.; 3]), spec: s("M10x1.5"), length: s("15"), modeled: false, end: None }))),
             Cmd::PatternLinear | Cmd::PatternCircular | Cmd::PatternPoints | Cmd::Mirror => {
@@ -1213,25 +1269,21 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 };
                 Sel::Feature(d.add_feature(match kind {
                     Some(i) => FeatureKind::Pattern(Pattern { kind: crate::feat_ui::default_pattern(i, &seed), sources }),
-                    None => FeatureKind::Mirror(Mirror { plane: if plane == PlaneRef::Origin(OriginPlane::XY) { PlaneRef::Origin(OriginPlane::YZ) } else { plane }, sources }),
+                    None => FeatureKind::Mirror(Mirror { plane: opt_plane, sources }),
                 }))
             }
             Cmd::Scale => Sel::Feature(d.add_feature(FeatureKind::Scale(Scale { center: PointRef::Origin, factor: s("2") }))),
             Cmd::MoveBody(i) => Sel::Feature(d.add_feature(FeatureKind::MoveBody(MoveBody { xf: crate::feat_ui::default_move(i as usize) }))),
             Cmd::ExtrudeDraftFillet => {
                 // atalho de manufatura: extrusão com saída + filete nas arestas criadas por ela
-                let Some(sk) = sketch else {
-                    self.toast("Selecione um sketch com perfil fechado primeiro", true);
-                    return;
-                };
+                let sk = sk_or_unset;
                 let ex = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("20")), reverse: false, taper: s("3"), thin: None, dir: None }));
                 d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::CreatedBy(ex), mode: EdgeMode::Constant }));
                 Sel::Feature(ex)
             }
             Cmd::SplitBody | Cmd::ThickSurface | Cmd::CloseSurface | Cmd::SewSurface | Cmd::BoundaryFill => {
                 // superfície da seleção (ou a última superfície de referência; senão, o plano)
-                let last = d.references.iter().rev().find(|r| r.kind.class() == RefClass::Surface).map(|r| SurfRef::Ref(r.id));
-                let surface = seed.surface.or(last).unwrap_or(SurfRef::Plane(plane));
+                let surface = seed.surface.or_else(|| seed.planes.first().map(|p| SurfRef::Plane(*p))).unwrap_or_else(crate::slots::surf);
                 Sel::Feature(d.add_feature(match c {
                     Cmd::SplitBody => FeatureKind::SplitBody(SplitBody { surface, flip: false }),
                     Cmd::ThickSurface => FeatureKind::ThickSurface(ThickSurface { surface, t1: s("2"), t2: s("0"), op: BoolOp::Add }),
@@ -1297,22 +1349,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
             }
             Cmd::Hole | Cmd::HoleCounterbore | Cmd::HoleCountersink | Cmd::HoleTapped => {
                 // vértices / pontos selecionados: um furo em cada, normal à superfície (sem sketch)
+                // centros: sketch com pontos pré-selecionado, ou vértices/pontos clicados; senão a escolher
                 let pts3: Vec<PointRef> = self.seed(true).points;
                 let sk = match self.selected_sketch(true) {
                     Some(sk) => sk,
                     None if !pts3.is_empty() => Id(0),
-                    None => {
-                        let d = &mut self.open.doc;
-                        let mut data = SketchData::default();
-                        {
-                            let mut al = || d.alloc();
-                            let p = data.add_point(&mut al, 0., 0.);
-                            data.add_curve(&mut al, scc_core::sketch::Curve::Point { p }, false);
-                        }
-                        let id = d.add_feature(FeatureKind::Sketch(Sketch { plane, data }));
-                        d.feature_mut(id).unwrap().name = d.unique_name("Centros");
-                        id
-                    }
+                    None => crate::slots::UNSET_SKETCH,
                 };
                 let d = &mut self.open.doc;
                 let m = scc_solidos::hardware::metric("M6").unwrap();
@@ -1473,6 +1515,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
         }
         let snapshot = snapshot.unwrap_or_else(|| self.open.doc.clone());
         self.session = Some(Session { id, snapshot, is_new });
+        self.tree_peek = false;
         self.reframe_pending = true;
         self.sel = if self.open.doc.reference(id).is_some() { Sel::Ref(id) } else { Sel::Feature(id) };
     }
@@ -1481,6 +1524,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
     pub fn conclude_session(&mut self) {
         if let Some(s) = self.session.take() {
             self.open.doc.hide_consumed(s.id);
+            // concluir sempre atualiza (também no modo manual)
+            if self.needs_recompute() {
+                self.request_recompute();
+            }
+            self.scene_dirty = true;
         }
     }
 
@@ -2595,6 +2643,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
     }
 
     fn tree(&mut self, ui: &mut egui::Ui) {
+        *self.stale_set.borrow_mut() = self.compute_stale();
         let doc = self.open.doc.clone();
         let sel = self.sel;
         let mut new_sel = None;
@@ -2648,7 +2697,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
         });
 
         // ---------- referências externas (sempre separadas)
-        egui::CollapsingHeader::new(format!("🔗 {} ({})", tr("Referências externas"), doc.external.len())).default_open(false).show(ui, |ui| {
+        let h = egui::CollapsingHeader::new(format!("🔗 {} ({})", tr("Referências externas"), doc.external.len())).default_open(false).show(ui, |ui| {
             if doc.external.is_empty() {
                 ui.label(RichText::new(tr("Geometria importada de outras peças por link (planos, curvas, pontos e parâmetros publicados). Fica sempre separada da geometria própria.")).weak().small());
             }
@@ -2683,21 +2732,118 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 }
             });
         });
+        h.header_response.context_menu(|ui| {
+            if ui.button(tr("➕ Importar publicação de outra peça…")).clicked() {
+                actions.push(TreeAction::ImportLink);
+                ui.close();
+            }
+            if ui.add_enabled(!doc.external.is_empty(), egui::Button::new(tr("⟳ Atualizar todos os links"))).clicked() {
+                actions.push(TreeAction::RefreshLinks);
+                ui.close();
+            }
+            ui.separator();
+            if ui.button(tr("📤 Publicações desta peça…")).clicked() {
+                actions.push(TreeAction::OpenPublications);
+                ui.close();
+            }
+        });
+
+        // ---------- publicações desta peça (o que outras peças podem importar)
+        let n_pub = doc.references.iter().filter(|r| r.published).count() + doc.params.iter().filter(|p| p.published).count() + doc.collectors.iter().filter(|c| c.published).count();
+        let h = egui::CollapsingHeader::new(format!("📤 {} ({n_pub})", tr("Publicações"))).id_salt("arvore_pub").default_open(false).show(ui, |ui| {
+            if n_pub == 0 {
+                ui.label(RichText::new(tr("Nada publicado. Clique direito → Nova publicação para escolher planos, pontos, curvas, superfícies, corpos e parâmetros que outras peças podem usar por link.")).weak().small());
+            }
+            for r in doc.references.iter().filter(|r| r.published) {
+                let resp = ui.selectable_label(self.sel == Sel::Ref(r.id), format!("📤 {}", r.name));
+                if resp.clicked() {
+                    new_sel = Some(Sel::Ref(r.id));
+                }
+                resp.context_menu(|ui| {
+                    if ui.button(tr("✎ Renomear (o nome é a publicação)")).clicked() {
+                        actions.push(TreeAction::StartRename(r.id));
+                        ui.close();
+                    }
+                    if ui.button(tr("Despublicar")).clicked() {
+                        actions.push(TreeAction::Publish(r.id, false));
+                        ui.close();
+                    }
+                });
+            }
+            for c in doc.collectors.iter().filter(|c| c.published) {
+                let resp = ui.selectable_label(self.sel == Sel::Collector(c.id), format!("📤 ▣ {}", c.name));
+                if resp.clicked() {
+                    new_sel = Some(Sel::Collector(c.id));
+                }
+                resp.context_menu(|ui| {
+                    if ui.button(tr("Despublicar")).clicked() {
+                        actions.push(TreeAction::CollectorPublish(c.id, false));
+                        ui.close();
+                    }
+                });
+            }
+            for p in doc.params.iter().filter(|p| p.published) {
+                let resp = ui.selectable_label(false, format!("📤 ƒ {}", p.name));
+                if resp.clicked() {
+                    new_sel = Some(Sel::Params);
+                }
+                resp.context_menu(|ui| {
+                    if ui.button(tr("Despublicar")).clicked() {
+                        actions.push(TreeAction::ParamPublish(p.id, false));
+                        ui.close();
+                    }
+                });
+            }
+        });
+        h.header_response.context_menu(|ui| {
+            if ui.button(tr("➕ Nova publicação…")).clicked() {
+                actions.push(TreeAction::OpenPublications);
+                ui.close();
+            }
+        });
 
         // ---------- PMI (detalhamento 3D)
         crate::pmi_ui::tree_section(self, ui);
 
         // ---------- parâmetros
-        egui::CollapsingHeader::new(format!("ƒ {} ({})", tr("Parâmetros"), doc.params.len())).default_open(false).show(ui, |ui| {
+        let h = egui::CollapsingHeader::new(format!("ƒ {} ({})", tr("Parâmetros"), doc.params.len())).default_open(false).show(ui, |ui| {
             let vars = self.vars();
             for p in &doc.params {
                 let v = vars.get(&p.name).map(|v| format!("{} {}", fmt(*v), p.unit.symbol())).unwrap_or("⚠".into());
-                if pick(ui, Sel::Params, RichText::new(format!("{} = {v}", p.name))).clicked() {
+                let r = pick(ui, Sel::Params, RichText::new(format!("{}{} = {v}", if p.published { "📤 " } else { "" }, p.name)));
+                if r.clicked() {
                     new_sel = Some(Sel::Params);
                 }
+                r.context_menu(|ui| {
+                    ui.label(RichText::new(&p.name).strong());
+                    if ui.button(tr("✏ Editar na tabela")).clicked() {
+                        new_sel = Some(Sel::Params);
+                        ui.close();
+                    }
+                    let lbl = if p.published { tr("Despublicar") } else { tr("📤 Publicar para outras peças") };
+                    if ui.button(lbl).clicked() {
+                        actions.push(TreeAction::ParamPublish(p.id, !p.published));
+                        ui.close();
+                    }
+                    ui.separator();
+                    if ui.button(tr("🗑 Apagar parâmetro")).clicked() {
+                        actions.push(TreeAction::ParamDelete(p.id));
+                        ui.close();
+                    }
+                });
             }
             if doc.params.is_empty() && pick(ui, Sel::Params, RichText::new(tr("vazio — clique para editar")).weak().italics()).clicked() {
                 new_sel = Some(Sel::Params);
+            }
+        });
+        h.header_response.context_menu(|ui| {
+            if ui.button(tr("➕ Novo parâmetro")).clicked() {
+                actions.push(TreeAction::Run(Cmd::Param));
+                ui.close();
+            }
+            if ui.button(tr("✏ Editar tabela de parâmetros")).clicked() {
+                new_sel = Some(Sel::Params);
+                ui.close();
             }
         });
 
@@ -2719,11 +2865,15 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
         }
         // planos antigos sem pasta, quando ainda não existe pasta de geometria
         if first_geo.is_none() && !doc.references.is_empty() {
-            egui::CollapsingHeader::new(tr("📁 Geometria")).default_open(true).show(ui, |ui| {
+            let h = egui::CollapsingHeader::new(tr("📁 Geometria")).default_open(true).show(ui, |ui| {
                 for r in &doc.references {
-                    if pick(ui, Sel::Ref(r.id), RichText::new(format!("▱ {}", r.name))).clicked() {
-                        new_sel = Some(Sel::Ref(r.id));
-                    }
+                    self.ref_row(ui, &doc, r, &mut new_sel, &mut actions);
+                }
+            });
+            h.header_response.context_menu(|ui| {
+                if ui.button(tr("📁 Nova pasta de geometria")).clicked() {
+                    actions.push(TreeAction::NewGeometryFolder);
+                    ui.close();
                 }
             });
         }
@@ -2785,6 +2935,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                             ui.close();
                         }
                         appearance_menu(ui, Some(Appearance { color: c.color, finish: c.finish, texture: c.texture }), AppTarget::Collector(c.id), &mut actions);
+                        let lbl = if c.published { tr("Despublicar corpo") } else { tr("📤 Publicar corpo para outras peças") };
+                        if ui.button(lbl).clicked() {
+                            actions.push(TreeAction::CollectorPublish(c.id, !c.published));
+                            ui.close();
+                        }
                         ui.separator();
                         if ui.button(tr("🗑 Apagar corpo…")).clicked() {
                             actions.push(TreeAction::Delete(c.id));
@@ -2814,6 +2969,18 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                                 if h.header_response.clicked() {
                                     new_sel = Some(Sel::Folder(fid));
                                 }
+                                h.header_response.context_menu(|ui| {
+                                    ui.label(RichText::new(&name).strong());
+                                    if ui.button(tr("✎ Renomear   F2")).clicked() {
+                                        actions.push(TreeAction::StartRename(fid));
+                                        ui.close();
+                                    }
+                                    ui.separator();
+                                    if ui.button(tr("Remover pasta (os comandos ficam)")).clicked() {
+                                        actions.push(TreeAction::RemoveFolder(fid));
+                                        ui.close();
+                                    }
+                                });
                             }
                             None => self.feature_row(ui, &doc, *i, f, &mut new_sel, &mut actions),
                         }
@@ -2825,9 +2992,20 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
         }
         // pastas de comandos vazias
         for fo in doc.folders.iter().filter(|fo| fo.kind == FolderKind::Comandos && !doc.features.iter().any(|f| f.folder == Some(fo.id))) {
-            if pick(ui, Sel::Folder(fo.id), RichText::new(format!("🗀 {} (vazia)", fo.name)).weak()).clicked() {
+            let r = pick(ui, Sel::Folder(fo.id), RichText::new(format!("🗀 {} (vazia)", fo.name)).weak());
+            if r.clicked() {
                 new_sel = Some(Sel::Folder(fo.id));
             }
+            r.context_menu(|ui| {
+                if ui.button(tr("✎ Renomear   F2")).clicked() {
+                    actions.push(TreeAction::StartRename(fo.id));
+                    ui.close();
+                }
+                if ui.button(tr("🗑 Apagar pasta")).clicked() {
+                    actions.push(TreeAction::RemoveFolder(fo.id));
+                    ui.close();
+                }
+            });
         }
 
         if let Some(s) = new_sel {
@@ -2858,10 +3036,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                     actions.push(TreeAction::FolderShown(fo.id, all_hidden));
                 }
                 let r = self.row_label(ui, fo.id, &fo.name, self.sel == Sel::Folder(fo.id), RichText::new(format!("📁 {}  ({n})", fo.name)).strong(), actions);
+                let r = drag_item(ui, r, fo.id, self.renaming != Some(fo.id));
                 if r.double_clicked() {
                     actions.push(TreeAction::StartRename(fo.id));
                 }
-                drag_item(ui, &r, fo.id);
                 // soltar um item arrastado aqui move para esta pasta
                 if let Some(p) = r.dnd_release_payload::<DragItem>() {
                     actions.push(TreeAction::MoveTo(p.0, fo.id));
@@ -2927,6 +3105,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                         actions.push(TreeAction::RemoveFolder(fo.id));
                         ui.close();
                     }
+                    if ui.button(tr("🗑 Apagar pasta e todo o conteúdo")).clicked() {
+                        actions.push(TreeAction::DeleteFolderAll(fo.id));
+                        ui.close();
+                    }
                 });
             })
             .body(|ui| {
@@ -2986,7 +3168,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
             _ => "▱",
         };
         let err = matches!(self.status_of(r.id), Some(Status::Error(_)));
-        let stale = self.stale_from() == Some(0);
+        let stale = {
+            let (all, set) = &*self.stale_set.borrow();
+            *all || set.contains(&r.id)
+        };
         let txt = format!(
             "{icon} {}{}{}{}",
             r.name,
@@ -3013,7 +3198,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 self.row_label(ui, r.id, &r.name, self.sel == Sel::Ref(r.id), t, actions)
             })
             .inner;
-        drag_item(ui, &resp, r.id);
+        let resp = drag_item(ui, resp, r.id, self.renaming != Some(r.id));
         if resp.clicked() {
             *new_sel = Some(Sel::Ref(r.id));
         }
@@ -3114,9 +3299,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
             actions.push(TreeAction::EditSketch(f.id));
         }
         let free = doc.is_free(f);
-        if free {
-            drag_item(ui, &resp, f.id);
-        }
+        let resp = drag_item(ui, resp, f.id, free && self.renaming != Some(f.id));
         let resp = match st.and_then(|s| s.message()) {
             Some(m) => resp.on_hover_text(m),
             None => resp,
@@ -3391,6 +3574,45 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                     r.published = on;
                 }
             }
+            TreeAction::DeleteFolderAll(fo) => {
+                let inside: Vec<Id> = d.folders.iter().filter(|f| f.id == fo || d.folder_within(f.id, fo)).map(|f| f.id).collect();
+                let items: Vec<Id> = d
+                    .references
+                    .iter()
+                    .filter(|r| r.folder.is_some_and(|x| inside.contains(&x)))
+                    .map(|r| r.id)
+                    .chain(d.features.iter().filter(|f| f.folder.is_some_and(|x| inside.contains(&x)) && d.is_free(f)).map(|f| f.id))
+                    .collect();
+                for id in items.into_iter().rev() {
+                    d.delete(id, false);
+                }
+                for f in inside.into_iter().rev() {
+                    d.remove_folder(f);
+                }
+                self.sel = Sel::None;
+            }
+            TreeAction::Run(c) => self.command(c),
+            TreeAction::ParamDelete(id) => {
+                let n = d.params.iter().find(|p| p.id == id).map(|p| p.name.clone()).unwrap_or_default();
+                let in_feats = serde_json::to_string(&d.features).unwrap_or_default();
+                let used = d.params.iter().any(|p| p.id != id && p.expr.contains(&n)) || in_feats.contains(&n);
+                if used {
+                    self.toast(format!("'{n}' é usado em outras expressões — troque-as antes de apagar"), true);
+                } else {
+                    d.params.retain(|p| p.id != id);
+                }
+            }
+            TreeAction::ParamPublish(id, on) => {
+                if let Some(p) = d.params.iter_mut().find(|p| p.id == id) {
+                    p.published = on;
+                }
+            }
+            TreeAction::CollectorPublish(id, on) => {
+                if let Some(c) = d.collectors.iter_mut().find(|c| c.id == id) {
+                    c.published = on;
+                }
+            }
+            TreeAction::OpenPublications => self.pub_open = true,
             TreeAction::FolderShown(fo, on) => {
                 let inside: Vec<Id> = d.folders.iter().filter(|f| d.folder_within(f.id, fo)).map(|f| f.id).collect();
                 for r in d.references.iter_mut().filter(|r| r.folder.is_some_and(|x| x == fo || inside.contains(&x))) {
@@ -3401,6 +3623,138 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 }
             }
         }
+    }
+
+    /// Preenche os campos vazios do comando/elemento em edição com a seleção da viewport (`tree`
+    /// = None) ou com o item clicado na árvore. Devolve se algo foi preenchido.
+    fn fill_from_selection(&mut self, id: Id, tree: Option<Sel>) -> bool {
+        use crate::picking::Pick;
+        use crate::slots::*;
+        let incomplete = match (self.open.doc.feature(id), self.open.doc.reference(id)) {
+            (Some(f), _) => feature_incomplete(&f.kind),
+            (_, Some(r)) => count_unset(&r.kind) > 0,
+            _ => false,
+        };
+        if !incomplete {
+            return false;
+        }
+        let mut seed = crate::geo_ui::Seed::default();
+        let (mut sketch, mut shape) = (None, None);
+        match tree {
+            None => {
+                seed = self.seed(false);
+                // face clicada onde se espera um plano: vira plano da face
+                let wants_plane = serde_json::to_string(&self.open.doc.feature(id).map(|f| f.kind.clone())).unwrap_or_default().contains(&UNSET_PLANE.0.to_string())
+                    || serde_json::to_string(&self.open.doc.reference(id).map(|r| r.kind.clone())).unwrap_or_default().contains(&UNSET_PLANE.0.to_string());
+                if wants_plane && seed.planes.is_empty() && self.picks.iter().any(|p| matches!(p, Pick::Face { .. })) {
+                    let pl = self.plane_for_new();
+                    seed.planes.push(pl);
+                }
+            }
+            Some(Sel::Origin(o)) => seed.planes.push(PlaneRef::Origin(o)),
+            Some(Sel::Ref(r)) if r != id => match self.doc().reference(r).map(|x| x.kind.class()) {
+                Some(RefClass::Plane) => seed.planes.push(PlaneRef::Datum(r)),
+                Some(RefClass::Point) => seed.points.push(PointRef::Ref(r)),
+                Some(RefClass::Curve) => seed.curves.push(CurveRef::Ref(r)),
+                Some(RefClass::Surface) => seed.surface = Some(SurfRef::Ref(r)),
+                None => {}
+            },
+            Some(Sel::Feature(f)) if f != id => match self.doc().feature(f).map(|x| &x.kind) {
+                Some(FeatureKind::Sketch(_)) => sketch = Some(f),
+                Some(k) if crate::feat_ui::is_shape(k) => shape = Some(f),
+                _ => {}
+            },
+            _ => return false,
+        }
+        let edge_mid = self.picks.iter().find_map(|p| if let Pick::Edge { mid, .. } = p { Some(mid.map(|v| v as f64)) } else { None });
+        let face_pt = self.picks.iter().find_map(|p| if let Pick::Face { point, .. } = p { Some(point.map(|v| v as f64)) } else { None });
+        let verts: Vec<[f64; 3]> = self.picks.iter().filter_map(|p| if let Pick::Vertex { pos, .. } = p { Some(pos.map(|v| v as f64)) } else { None }).collect();
+        let mut c = Cands::from_seed(&seed, sketch);
+        let tree_pick = tree.is_some();
+        let d = &mut self.open.doc;
+        let filled = if let Some(f) = d.feature_mut(id) {
+            let a = fill(&mut f.kind, &mut c);
+            let b = fill_special(&mut f.kind, &seed, if tree_pick { None } else { edge_mid }, if tree_pick { None } else { face_pt }, &verts, sketch, shape);
+            a || b
+        } else if let Some(r) = d.references.iter_mut().find(|r| r.id == id) {
+            fill(&mut r.kind, &mut c)
+        } else {
+            false
+        };
+        if filled {
+            d.hide_consumed(id);
+            self.scene_dirty = true;
+        }
+        filled
+    }
+
+    /// Publicações: marca planos, pontos, curvas, superfícies, corpos e parâmetros que outras peças
+    /// podem importar por link (o nome do elemento é o nome da publicação).
+    fn pub_window(&mut self, ctx: &egui::Context) {
+        if !self.pub_open {
+            return;
+        }
+        let mut open = true;
+        let d = &mut self.open.doc;
+        egui::Window::new(tr("📤 Publicações desta peça")).open(&mut open).default_width(420.).resizable(true).show(ctx, |ui| {
+            ui.label(RichText::new(tr("Marque o que outras peças podem usar. Na outra peça: Referências externas → Importar publicação. O nome do elemento é o nome da publicação.")).weak().small());
+            let mut filter: String = ctx.data(|m| m.get_temp(egui::Id::unique("pub_filtro"))).unwrap_or_default();
+            ui.horizontal(|ui| {
+                ui.label("🔍");
+                ui.text_edit_singleline(&mut filter);
+            });
+            ctx.data_mut(|m| m.insert_temp(egui::Id::unique("pub_filtro"), filter.clone()));
+            let ok = |n: &str| filter.is_empty() || n.to_lowercase().contains(&filter.to_lowercase());
+            egui::ScrollArea::vertical().max_height(420.).show(ui, |ui| {
+                for (class, title) in [(RefClass::Plane, "Planos"), (RefClass::Point, "Pontos"), (RefClass::Curve, "Linhas e curvas"), (RefClass::Surface, "Superfícies")] {
+                    let items: Vec<usize> = (0..d.references.len()).filter(|i| d.references[*i].kind.class() == class && ok(&d.references[*i].name)).collect();
+                    if items.is_empty() {
+                        continue;
+                    }
+                    ui.label(RichText::new(tr(title)).strong());
+                    for i in items {
+                        let r = &mut d.references[i];
+                        ui.horizontal(|ui| {
+                            ui.checkbox(&mut r.published, "");
+                            ui.add(egui::TextEdit::singleline(&mut r.name).desired_width(240.));
+                        });
+                    }
+                }
+                if !d.collectors.is_empty() {
+                    ui.label(RichText::new(tr("Corpos (forma exata)")).strong());
+                    for c in d.collectors.iter_mut().filter(|c| ok(&c.name)) {
+                        ui.horizontal(|ui| {
+                            ui.checkbox(&mut c.published, "");
+                            ui.add(egui::TextEdit::singleline(&mut c.name).desired_width(240.));
+                        });
+                    }
+                }
+                if !d.params.is_empty() {
+                    ui.label(RichText::new(tr("Parâmetros (valor)")).strong());
+                    for p in d.params.iter_mut().filter(|p| ok(&p.name)) {
+                        ui.horizontal(|ui| {
+                            ui.checkbox(&mut p.published, "");
+                            ui.label(&p.name);
+                        });
+                    }
+                }
+            });
+            ui.separator();
+            ui.horizontal(|ui| {
+                if ui.button(tr("Publicar todos os visíveis")).clicked() {
+                    for r in d.references.iter_mut().filter(|r| r.visible) {
+                        r.published = true;
+                    }
+                }
+                if ui.button(tr("Despublicar tudo")).clicked() {
+                    d.references.iter_mut().for_each(|r| r.published = false);
+                    d.collectors.iter_mut().for_each(|c| c.published = false);
+                    d.params.iter_mut().for_each(|p| p.published = false);
+                }
+            });
+            ui.label(RichText::new(tr("Para valer nas outras peças, salve esta peça.")).weak().small());
+        });
+        self.pub_open = open;
     }
 
     /// Alterna ocultar/mostrar o item selecionado (tecla H).
@@ -4247,19 +4601,52 @@ enum TreeAction {
     Publish(Id, bool),
     /// mostra/oculta todo o conteúdo de uma pasta de geometria
     FolderShown(Id, bool),
+    /// apaga a pasta e tudo o que está nela (subpastas inclusive)
+    DeleteFolderAll(Id),
+    /// executa um comando da barra
+    Run(Cmd),
+    ParamDelete(Id),
+    ParamPublish(Id, bool),
+    CollectorPublish(Id, bool),
+    OpenPublications,
 }
 
 /// Item da árvore de geometria sendo arrastado.
 #[derive(Clone, Copy)]
 struct DragItem(Id);
 
-/// Torna a linha da árvore arrastável (sem atrapalhar o clique).
-fn drag_item(ui: &mut egui::Ui, resp: &egui::Response, id: Id) {
-    let d = ui.interact(resp.rect, ui.scope_id().with(("arrastar", id.0)), egui::Sense::drag());
-    d.dnd_set_drag_payload(DragItem(id));
-    if d.dragged() {
+/// Primeiro comando cuja geometria difere entre `d` e `rd` (0 = algo global mudou: parâmetros,
+/// referências, links, chapa, marcadores); `None` = mesma geometria.
+fn geo_stale_from(d: &Document, rd: &Document) -> Option<usize> {
+    let refs_eq = d.references.len() == rd.references.len() && d.references.iter().zip(&rd.references).all(|(a, b)| a.id == b.id && a.kind == b.kind);
+    let params_eq = d.params.len() == rd.params.len() && d.params.iter().zip(&rd.params).all(|(a, b)| a.name == b.name && a.expr == b.expr && a.unit == b.unit);
+    if geo_global_changed(d, rd) || !refs_eq || !params_eq {
+        return Some(0);
+    }
+    let same = |a: &Feature, b: &Feature| a.id == b.id && a.kind == b.kind && a.suppressed == b.suppressed && a.target == b.target && a.folder == b.folder;
+    (0..d.features.len())
+        .find(|i| rd.features.get(*i).is_none_or(|g| !same(g, &d.features[*i])))
+        .or_else(|| (rd.features.len() != d.features.len()).then_some(d.features.len()))
+}
+
+/// Mudou algo que vale para o modelo inteiro (parâmetros, referências, links, chapa, marcadores)?
+fn geo_global_changed(d: &Document, rd: &Document) -> bool {
+    let cols_eq = d.collectors.len() == rd.collectors.len() && d.collectors.iter().zip(&rd.collectors).all(|(a, b)| a.id == b.id && a.marker == b.marker);
+    !cols_eq || d.external != rd.external || d.sheet != rd.sheet || d.rollback != rd.rollback
+}
+
+/// Torna o próprio rótulo arrastável (clique, duplo clique e botão direito continuam nele — uma
+/// área de arraste por cima engolia o menu de contexto).
+fn drag_item(ui: &mut egui::Ui, resp: egui::Response, id: Id, enabled: bool) -> egui::Response {
+    if !enabled {
+        return resp;
+    }
+    let r = resp.interact(egui::Sense::click_and_drag());
+    r.dnd_set_drag_payload(DragItem(id));
+    if r.dragged() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
     }
+    r
 }
 
 /// Copiar / recortar / duplicar / mover para pasta.
@@ -4347,7 +4734,8 @@ impl eframe::App for App {
         while let Ok((g, r)) = self.worker.rx.try_recv() {
             if g >= self.gen_done {
                 self.gen_done = g;
-                let errs = r.status.values().filter(|s| matches!(s, Status::Error(_))).count();
+                let editing = self.session.as_ref().map(|s| s.id);
+                let errs = r.status.iter().filter(|(id, s)| Some(**id) != editing && matches!(s, Status::Error(_))).count();
                 if errs > self.errors_prev && self.started {
                     // algo quebrou (referência apagada, entrada inválida): abre o assistente
                     self.wizard_open = true;
@@ -4433,7 +4821,15 @@ impl eframe::App for App {
             self.finish_sketch();
         }
         if del && self.sketch.is_none() && !asm_mode && !dwg_mode && !ctx.egui_wants_keyboard_input() {
+            // (fora da janela de comparação do quadro: registra o desfazer aqui)
+            let before_del = self.open.doc.clone();
             self.delete_selected();
+            if self.open.doc != before_del {
+                self.undo.push(before_del);
+                self.redo.clear();
+                self.open.modified = true;
+                self.scene_dirty = true;
+            }
         }
         // atalhos de vista e de comandos (só quando não há campo de texto em edição)
         if !typing && !dwg_mode {
@@ -4542,24 +4938,38 @@ impl eframe::App for App {
         self.top(root);
         self.timeline(root);
         self.hover_now.set(None);
-        egui::Panel::left("arvore").default_size(270.).resizable(true).show(root, |ui| {
+        // comando aberto: o painel de edição fica no lugar da árvore (a seta ⯈ abre a árvore ao lado
+        // quando for preciso escolher algo nela; escolhendo no 3D, ela nem precisa aparecer)
+        let overlay = (self.session.is_some() || self.sketch.is_some())
+            && self.settings.editor_left
+            && !matches!(self.settings.bench, crate::settings::Bench::Desenho | crate::settings::Bench::Montagem);
+        let tree_panel = |app: &mut App, root: &mut egui::Ui| egui::Panel::left("arvore").default_size(270.).resizable(true).show(root, |ui| {
             ui.horizontal(|ui| {
-                ui.selectable_value(&mut self.left, LeftTab::Peca, tr("Peça"));
-                ui.selectable_value(&mut self.left, LeftTab::Projeto, tr("Projeto"));
+                ui.selectable_value(&mut app.left, LeftTab::Peca, tr("Peça"));
+                ui.selectable_value(&mut app.left, LeftTab::Projeto, tr("Projeto"));
             });
             ui.separator();
-            egui::ScrollArea::vertical().show(ui, |ui| match self.left {
-                LeftTab::Peca if self.settings.bench == crate::settings::Bench::Desenho => crate::dwg_ui::tree(self, ui),
-                LeftTab::Peca if self.settings.bench == crate::settings::Bench::Montagem => crate::asm_ui::tree(self, ui),
-                LeftTab::Peca => self.tree(ui),
-                LeftTab::Projeto => self.project_panel(ui),
+            egui::ScrollArea::vertical().show(ui, |ui| match app.left {
+                LeftTab::Peca if app.settings.bench == crate::settings::Bench::Desenho => crate::dwg_ui::tree(app, ui),
+                LeftTab::Peca if app.settings.bench == crate::settings::Bench::Montagem => crate::asm_ui::tree(app, ui),
+                LeftTab::Peca => app.tree(ui),
+                LeftTab::Projeto => app.project_panel(ui),
             });
         });
+        if !overlay {
+            tree_panel(self, root);
+        }
         // painel de edição: junto da árvore (padrão) ou à direita
         let editor_panel = |app: &mut App, ui: &mut egui::Ui| {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(tr("Edição")).weak().small());
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if overlay {
+                        let (txt, tip) = if app.tree_peek { ("⯇ 🌳", "fechar a árvore") } else { ("🌳 ⯈", "abrir a árvore ao lado para escolher itens nela") };
+                        if ui.button(txt).on_hover_text(tr(tip)).clicked() {
+                            app.tree_peek = !app.tree_peek;
+                        }
+                    }
                     let (txt, tip) = if app.settings.editor_left { ("⇥", "levar o painel de edição para a direita") } else { ("⇤", "trazer o painel de edição para a esquerda") };
                     if ui.small_button(txt).on_hover_text(tr(tip)).clicked() {
                         app.settings.editor_left = !app.settings.editor_left;
@@ -4581,6 +4991,9 @@ impl eframe::App for App {
         };
         if self.settings.editor_left {
             egui::Panel::left("editor_esq").default_size(320.).resizable(true).show(root, |ui| editor_panel(self, ui));
+            if overlay && self.tree_peek {
+                tree_panel(self, root);
+            }
         } else {
             egui::Panel::right("editor").default_size(330.).resizable(true).show(root, |ui| editor_panel(self, ui));
         }
@@ -4645,10 +5058,13 @@ impl eframe::App for App {
                 self.last_edit = now;
                 self.redo.clear();
                 self.open.modified = true;
-                if self.settings.auto_update {
-                    self.request_recompute();
-                }
+                self.scene_dirty = true;
             }
+        }
+        // atualização automática: compara com o último documento enviado (pega também mudanças
+        // feitas fora deste trecho, como Del, desfazer, assistentes e janelas)
+        if self.settings.auto_update && self.open.frozen.is_none() && self.needs_recompute() {
+            self.request_recompute();
         }
         let link_key = egui::Id::unique("scc_link_acao");
         if let Some((ext, act)) = ctx.data(|m| m.get_temp::<(Id, u8)>(link_key)) {
@@ -4677,6 +5093,7 @@ impl eframe::App for App {
             }
         }
         self.link_window(ctx);
+        self.pub_window(ctx);
         self.customize_window(ctx);
         self.macro_window(ctx);
         if let Some(id) = self.open_pending.take() {
@@ -4685,10 +5102,31 @@ impl eframe::App for App {
         if let Some(id) = self.begin_sketch_pending.take() {
             self.begin_sketch(id);
         }
-        if let Some(s) = &self.session {
-            let still = matches!(self.sel, Sel::Feature(x) | Sel::Ref(x) if x == s.id);
+        // sketch esperando o plano: escolhido na árvore ou clicado na viewport
+        if self.sketch_wait_plane {
+            let tree_plane = self.sel != sel_before
+                && (matches!(self.sel, Sel::Origin(_)) || matches!(self.sel, Sel::Ref(id) if self.doc().reference(id).is_some_and(|r| r.kind.class() == RefClass::Plane)));
+            let pick_plane = self.picks.iter().any(|p| matches!(p, crate::picking::Pick::Plane(_) | crate::picking::Pick::Face { .. }));
+            if tree_plane || pick_plane {
+                self.sketch_wait_plane = false;
+                self.command(Cmd::Sketch);
+            } else if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                self.sketch_wait_plane = false;
+            }
+        }
+        if let Some(sid) = self.session.as_ref().map(|s| s.id) {
+            // campos vazios do comando em edição: a seleção (viewport ou árvore) preenche
+            if !self.picks.is_empty() && self.fill_from_selection(sid, None) {
+                self.picks.clear();
+            }
+            let still = matches!(self.sel, Sel::Feature(x) | Sel::Ref(x) if x == sid);
             if !still && self.sel != sel_before {
-                self.conclude_session();
+                let tree_sel = self.sel;
+                if self.fill_from_selection(sid, Some(tree_sel)) {
+                    self.sel = if self.open.doc.reference(sid).is_some() { Sel::Ref(sid) } else { Sel::Feature(sid) };
+                } else {
+                    self.conclude_session();
+                }
             }
         }
         if self.sel != sel_before || self.hidden_env != hidden_env_before {

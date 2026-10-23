@@ -1410,7 +1410,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                         if double {
                             if let Ent::Cs(c) = e {
                                 if let Some(k) = sk.constraints.iter_mut().find(|x| x.id == c).and_then(|x| x.kind.value_mut()) {
-                                    edit.dim_edit = Some((c, k.clone(), false));
+                                    edit.dim_edit = Some((c, String::new(), false));
+                                    let _ = k;
                                 }
                             }
                         }
@@ -1808,13 +1809,13 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                                 let l2 = sk.add_curve(&mut al, Curve::Line { a: na, b: nb }, edit.construction);
                                 sk.add_constraint(&mut al, Kind::Parallel(c, l2));
                                 let id = sk.add_constraint(&mut al, Kind::PointLineDistance(na, c, fmt(dist.abs())));
-                                edit.dim_edit = Some((id, fmt(dist.abs()), true));
+                                edit.dim_edit = Some((id, String::new(), true));
                             }
                             Some(Curve::Circle { c: ctr, .. }) => {
                                 let r2 = d2(uv, sk.pos(ctr)).max(1e-3);
                                 let cv = sk.add_curve(&mut al, Curve::Circle { c: ctr, r: r2 }, edit.construction);
                                 let id = sk.add_constraint(&mut al, Kind::Diameter(cv, fmt(2. * r2)));
-                                edit.dim_edit = Some((id, fmt(2. * r2), true));
+                                edit.dim_edit = Some((id, String::new(), true));
                             }
                             Some(Curve::Arc { c: ctr, s: ps, e: pe }) => {
                                 let pc = sk.pos(ctr);
@@ -1828,7 +1829,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                                 let ne = sk.add_point(&mut al, qe[0], qe[1]);
                                 let cv = sk.add_curve(&mut al, Curve::Arc { c: ctr, s: ns, e: ne }, edit.construction);
                                 let id = sk.add_constraint(&mut al, Kind::Radius(cv, fmt(r2)));
-                                edit.dim_edit = Some((id, fmt(r2), true));
+                                edit.dim_edit = Some((id, String::new(), true));
                             }
                             _ => {}
                         }
@@ -1886,7 +1887,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                                 sk.add_constraint(&mut al, Kind::Tangent(lines[0].0, arc));
                                 sk.add_constraint(&mut al, Kind::Tangent(lines[1].0, arc));
                                 let id = sk.add_constraint(&mut al, Kind::Radius(arc, fmt(r)));
-                                edit.dim_edit = Some((id, fmt(r), true));
+                                edit.dim_edit = Some((id, String::new(), true));
                                 // o canto antigo some se ninguém mais o usa
                                 if !sk.curves.iter().any(|c| SketchData::curve_points(&c.geom).contains(&p)) {
                                     sk.points.retain(|x| x.id != p || x.fixed);
@@ -1962,7 +1963,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                             if let (Some(a), Some(c)) = (anchor, sk.constraints.iter_mut().find(|c| c.id == id)) {
                                 c.label = Some([uv[0] - a[0], uv[1] - a[1]]);
                             }
-                            edit.dim_edit = Some((id, fmt(m), true));
+                            edit.dim_edit = Some((id, String::new(), true));
                             edit.report = sk.solve(&vars, &[]);
                         }
                         edit.pending = None;
@@ -2115,17 +2116,22 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         let pos = edit.hits.iter().find(|(_, e)| *e == Ent::Cs(*cid)).map(|(r, _)| r.center_bottom()).or(hover).unwrap_or(rect.center());
         egui::Area::new(egui::Id::unique("cota_edit")).fixed_pos(pos + egui::vec2(-60., 4.)).order(egui::Order::Foreground).show(ui.ctx(), |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
-                ui.label(RichText::new(tr("Valor (aceita expressão)")).small());
-                let r = ui.add(egui::TextEdit::singleline(text).desired_width(120.));
+                // o campo abre vazio (digitar já substitui); o valor atual aparece de fundo
+                let current = sk.constraints.iter_mut().find(|x| x.id == *cid).and_then(|x| x.kind.value_mut()).map(|v| v.clone()).unwrap_or_default();
+                ui.label(RichText::new(format!("{}  ({}: {current})", tr("Novo valor (aceita expressão)"), tr("atual"))).small());
+                let r = ui.add(egui::TextEdit::singleline(text).hint_text(current.clone()).desired_width(120.));
                 r.request_focus();
-                let ok = scc_core::expr::eval_str(text, &vars).is_ok();
+                let ok = text.trim().is_empty() || scc_core::expr::eval_str(text, &vars).is_ok();
                 if !ok {
                     ui.label(RichText::new(tr("expressão inválida")).small().color(BAD));
                 }
                 let (enter, esc) = ui.input(|i| (i.key_pressed(egui::Key::Enter), i.key_pressed(egui::Key::Escape)));
                 if enter && ok {
-                    if let Some(v) = sk.constraints.iter_mut().find(|x| x.id == *cid).and_then(|x| x.kind.value_mut()) {
-                        *v = text.trim().to_string();
+                    // Enter com o campo vazio mantém o valor atual
+                    if !text.trim().is_empty() {
+                        if let Some(v) = sk.constraints.iter_mut().find(|x| x.id == *cid).and_then(|x| x.kind.value_mut()) {
+                            *v = text.trim().to_string();
+                        }
                     }
                     close_dim = true;
                 }

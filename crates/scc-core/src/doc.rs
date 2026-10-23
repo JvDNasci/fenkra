@@ -1021,6 +1021,9 @@ pub struct BodyCollector {
     /// marcador da linha do tempo deste coletor: quantos comandos dele estão ativos (None = todos)
     #[serde(default)]
     pub marker: Option<usize>,
+    /// corpo publicado para outras peças (importado como forma B-rep)
+    #[serde(default)]
+    pub published: bool,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -1487,6 +1490,14 @@ impl FeatureKind {
                 s.plane.walk(ids);
                 for v in s.data.exprs_mut() {
                     exprs(v)
+                }
+                // geometria externa: referências e sketches de origem
+                for l in &mut s.data.links {
+                    match &mut l.source {
+                        crate::sketch::LinkSrc::Ref(x) => ids(x),
+                        crate::sketch::LinkSrc::SketchCurve { sketch, .. } => ids(sketch),
+                        _ => {}
+                    }
                 }
             }
             Extrude(e) => {
@@ -2184,7 +2195,7 @@ impl Document {
     pub fn add_collector(&mut self, name: &str) -> Id {
         let id = self.alloc();
         let color = PALETTE[self.collectors.len() % PALETTE.len()];
-        self.collectors.push(BodyCollector { id, name: name.into(), color, visible: true, finish: Finish::default(), texture: None, marker: None });
+        self.collectors.push(BodyCollector { id, name: name.into(), color, visible: true, finish: Finish::default(), texture: None, marker: None, published: false });
         id
     }
 

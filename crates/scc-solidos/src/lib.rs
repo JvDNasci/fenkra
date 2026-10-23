@@ -111,6 +111,9 @@ pub struct SketchViz {
     /// graus de liberdade restantes e se o solver convergiu
     pub dof: usize,
     pub converged: bool,
+    /// posições atuais da geometria externa (o editor do sketch copia para o documento)
+    pub link_pts: Vec<(Id, [f64; 2])>,
+    pub link_r: Vec<(Id, f64)>,
 }
 
 /// Plano exibível (Origem ou Referências).
@@ -197,24 +200,95 @@ struct Ctx<'a> {
     last_sheet: Option<scc_kernel::SheetEdgeInfo>,
 }
 
-/// Estado depois de um passo da linha do tempo (as formas são referências: copiar é barato).
+/// Resultado guardado de um comando: o que ele produziu, válido enquanto as entradas que ele lê
+/// (corpo de destino, sketches, outros comandos, corpos citados, referências) não mudarem.
 #[derive(Clone)]
-struct Snap {
-    bodies: HashMap<Id, (Shape, Vec<Id>)>,
-    sketches: HashMap<Id, (Frame, Arc<EvalSketch>)>,
-    status: HashMap<Id, Status>,
-    tools: HashMap<Id, (Shape, BoolOp)>,
-    body_sig: HashMap<Id, u64>,
+struct FeatEntry {
+    sig: u64,
+    status: Status,
+    /// corpos que o comando pode ter mudado (destino e corpos citados): estado depois dele
+    bodies: Vec<(Id, Option<(Shape, Vec<Id>)>)>,
+    sketch: Option<(Frame, Arc<EvalSketch>)>,
+    tool: Option<(Shape, BoolOp)>,
+    last_sheet: Option<scc_kernel::SheetEdgeInfo>,
 }
 
-/// Cache entre cálculos: só refaz a partir do primeiro comando que mudou (e reaproveita malhas).
+/// Cache entre cálculos, por dependência: editar um comando refaz só ele e quem lê o que ele
+/// produziu; o resto (outros corpos, outros ramos) vem pronto. Também guarda malhas.
 #[derive(Default)]
 pub struct Cache {
-    steps: Vec<(u64, Snap)>,
+    feats: HashMap<Id, FeatEntry>,
     meshes: HashMap<(Id, u64), (Mesh, MassProps, u32)>,
     fills: HashMap<(Id, u64), Vec<[f32; 3]>>,
+    /// geometria de referência já avaliada: (assinatura, resultado) — só refaz o que mudou
+    refs: HashMap<Id, (u64, Result<RefViz, String>)>,
     /// quantos comandos foram reaproveitados no último cálculo (diagnóstico)
     pub reused: usize,
+}
+
+/// Valor exibível de uma referência (guardado no cache).
+#[derive(Clone)]
+enum RefViz {
+    Plane(Frame),
+    Point([f64; 3]),
+    Curve(Vec<[f64; 3]>),
+    Surface(Mesh),
+}
+
+/// Assinatura só da geometria de um comando: nome, visibilidade e aparência não mudam o sólido.
+fn feature_sig(f: &Feature) -> String {
+    let mut g = f.clone();
+    g.name.clear();
+    g.hidden = false;
+    g.appearance = None;
+    serde_json::to_string(&g).unwrap_or_default()
+}
+
+/// A referência (ou alguma entrada dela) lê faces/corpos? Então muda quando a linha do tempo muda.
+fn ref_reads_bodies(doc: &Document, id: Id, depth: u32) -> bool {
+    let Some(r) = doc.reference(id) else { return false };
+    if depth > 24 {
+        return true;
+    }
+    let js = serde_json::to_string(&r.kind).unwrap_or_default();
+    if ["\"Face\"", "SurfExtract", "SurfMulti", "LineAxis", "\"Plane\""].iter().any(|k| js.contains(k)) {
+        return true;
+    }
+    let mut ids = vec![];
+    r.kind.clone().walk(&mut |x| ids.push(*x), &mut |_| {});
+    ids.into_iter().any(|x| x != id && ref_reads_bodies(doc, x, depth + 1))
+}
+
+/// O texto cita o nome (palavra inteira)?
+fn cites(text: &str, name: &str) -> bool {
+    let word = |c: char| c.is_alphanumeric() || c == '_';
+    text.match_indices(name).any(|(i, _)| {
+        let before = text[..i].chars().next_back();
+        let after = text[i + name.len()..].chars().next();
+        !before.is_some_and(word) && !after.is_some_and(word)
+    })
+}
+
+/// Valores dos parâmetros citados no texto (só eles entram na assinatura de quem os usa).
+fn vars_sig(text: &str, vars: &Vars) -> String {
+    let mut v: Vec<(&String, u64)> = vars.iter().filter(|(k, _)| cites(text, k)).map(|(k, v)| (k, v.to_bits())).collect();
+    v.sort();
+    format!("{v:?}")
+}
+
+/// Assinatura de uma referência: a definição dela, das entradas dela e dos parâmetros que usam.
+fn ref_sig(doc: &Document, id: Id, vars: &Vars, depth: u32) -> String {
+    let Some(r) = doc.reference(id) else { return format!("?{}", id.0) };
+    let js = serde_json::to_string(&r.kind).unwrap_or_default();
+    let mut out = format!("{}{}{}", id.0, js, vars_sig(&js, vars));
+    if depth < 24 {
+        let mut ids = vec![];
+        r.kind.clone().walk(&mut |x| ids.push(*x), &mut |_| {});
+        for x in ids.into_iter().filter(|x| *x != id) {
+            out.push_str(&ref_sig(doc, x, vars, depth + 1));
+        }
+    }
+    out
 }
 
 fn hash_of(parts: &[&str], prev: u64) -> u64 {
@@ -1032,6 +1106,87 @@ impl Ctx<'_> {
         })
     }
 
+    /// Polilinha 3D da geometria externa de um sketch, no estado atual do modelo.
+    fn link_world(&self, l: &scc_core::sketch::SkLink, frame: &Frame) -> Result<Vec<V3>, String> {
+        use scc_core::sketch::LinkSrc;
+        let k = |e: KernelError| e.0;
+        // corte da forma pelo plano do sketch: o contorno mais longo
+        let cut = |sh: &Shape| -> Result<Vec<V3>, String> {
+            let face = Shape::plane_face(frame.origin, frame.normal, self.model_size()).map_err(k)?;
+            let loops = sh.section(&face).map_err(k)?;
+            let len = |l: &Vec<V3>| l.windows(2).map(|w| geo3d::dist(w[0], w[1])).sum::<f64>();
+            Ok(loops.into_iter().max_by(|a, b| len(a).total_cmp(&len(b))).unwrap_or_default())
+        };
+        // pontos onde a polilinha atravessa o plano
+        let crossings = |pts: &[V3]| -> Vec<V3> {
+            let sd = |p: V3| geo3d::dot(geo3d::sub(p, frame.origin), frame.normal);
+            pts.windows(2)
+                .filter_map(|w| {
+                    let (a, b) = (sd(w[0]), sd(w[1]));
+                    ((a <= 0. && b > 0.) || (a > 0. && b <= 0.)).then(|| geo3d::lerp(w[0], w[1], a / (a - b)))
+                })
+                .collect()
+        };
+        match &l.source {
+            LinkSrc::Ref(id) => match self.geo(*id, 0)? {
+                Geo::Point(p) => Ok(vec![p]),
+                Geo::Curve(c) if l.intersect => Ok(crossings(&c.pts)),
+                Geo::Curve(c) => Ok(c.pts),
+                Geo::Surface(sh) => cut(&sh),
+                Geo::Plane(_) => Err("plano não se projeta num sketch".into()),
+            },
+            LinkSrc::SketchCurve { sketch, curve } => {
+                let (fr, es) = self.sketch(*sketch)?;
+                let pts = es.curves.get(curve).ok_or("a curva do outro sketch não existe mais")?;
+                let p3: Vec<V3> = pts.iter().map(|q| fr.point(q[0], q[1])).collect();
+                Ok(if l.intersect { crossings(&p3) } else { p3 })
+            }
+            LinkSrc::Edge { mid } | LinkSrc::Vertex { pos: mid } => {
+                let vertex = matches!(l.source, LinkSrc::Vertex { .. });
+                let mut best: Option<(f64, Vec<V3>)> = None;
+                for (b, _) in self.bodies.values() {
+                    let Some((lo, hi)) = b.bbox() else { continue };
+                    let defl = (geo3d::dist(lo, hi) * 0.0015).clamp(0.005, 1.0);
+                    let Ok(m) = b.mesh(defl) else { continue };
+                    if vertex {
+                        for v in m.vertices.chunks_exact(3) {
+                            let p = [v[0] as f64, v[1] as f64, v[2] as f64];
+                            let d = geo3d::dist(p, *mid);
+                            if best.as_ref().is_none_or(|x| d < x.0) {
+                                best = Some((d, vec![p]));
+                            }
+                        }
+                        continue;
+                    }
+                    let ne = m.edge_mids.len() / 3;
+                    for e in 0..ne {
+                        let q = [m.edge_mids[3 * e] as f64, m.edge_mids[3 * e + 1] as f64, m.edge_mids[3 * e + 2] as f64];
+                        let d = geo3d::dist(q, *mid);
+                        if best.as_ref().is_none_or(|x| d < x.0) {
+                            let s0 = m.edge_ranges[e] as usize;
+                            let s1 = m.edge_ranges.get(e + 1).map(|x| *x as usize).unwrap_or(m.edges.len() / 6);
+                            let mut pl: Vec<V3> = vec![];
+                            for sg in m.edges.chunks_exact(6).take(s1).skip(s0) {
+                                if pl.is_empty() {
+                                    pl.push([sg[0] as f64, sg[1] as f64, sg[2] as f64]);
+                                }
+                                pl.push([sg[3] as f64, sg[4] as f64, sg[5] as f64]);
+                            }
+                            best = Some((d, pl));
+                        }
+                    }
+                }
+                let (d, pl) = best.ok_or("nenhum corpo com arestas")?;
+                // a aresta pode ter mudado um pouco; longe demais = perdida
+                if d > 5. {
+                    return Err(format!("{} não encontrada (a {d:.1} mm do lugar)", if vertex { "vértice" } else { "aresta" }));
+                }
+                Ok(if l.intersect { crossings(&pl) } else { pl })
+            }
+            LinkSrc::Face { point } => cut(&self.face_of_bodies(*point)?),
+        }
+    }
+
     fn body(&self, target: Id) -> Option<&Shape> {
         self.body_owned(target).map(|(s, _)| s)
     }
@@ -1313,7 +1468,44 @@ impl Ctx<'_> {
         match &f.kind {
             FeatureKind::Sketch(s) => {
                 let frame = self.plane(&s.plane, 0)?;
-                let es = eval_sketch(&s.data, &self.vars)?;
+                // geometria externa (converter/projetar/interseção): reposiciona antes de resolver
+                let mut link_warn = vec![];
+                let data = if s.data.links.is_empty() {
+                    std::borrow::Cow::Borrowed(&s.data)
+                } else {
+                    let mut d = s.data.clone();
+                    for l in &s.data.links {
+                        match self.link_world(l, &frame) {
+                            Ok(p3) if !p3.is_empty() => {
+                                let y = frame.y();
+                                let uv: Vec<[f64; 2]> = p3
+                                    .iter()
+                                    .map(|p| {
+                                        let v = geo3d::sub(*p, frame.origin);
+                                        [geo3d::dot(v, frame.x), geo3d::dot(v, y)]
+                                    })
+                                    .collect();
+                                d.update_link(l.id, &uv);
+                            }
+                            Ok(_) => link_warn.push("geometria externa sem interseção com o plano".to_string()),
+                            Err(e) => link_warn.push(format!("geometria externa: {e}")),
+                        }
+                    }
+                    std::borrow::Cow::Owned(d)
+                };
+                let mut es = eval_sketch(&data, &self.vars)?;
+                es.warnings.extend(link_warn);
+                for l in &data.links {
+                    match &l.shape {
+                        scc_core::sketch::LinkShape::Poly { points, .. } => es.link_pts.extend(points.iter().map(|p| (*p, data.pos(*p)))),
+                        scc_core::sketch::LinkShape::Circle { center, curve } => {
+                            es.link_pts.push((*center, data.pos(*center)));
+                            if let Some(scc_core::sketch::Curve::Circle { r, .. }) = data.curve(*curve).map(|c| &c.geom) {
+                                es.link_r.push((*curve, *r));
+                            }
+                        }
+                    }
+                }
                 let warn = (!es.warnings.is_empty()).then(|| es.warnings.join("; "));
                 self.sketches.insert(f.id, (frame, Arc::new(es)));
                 Ok(warn)
@@ -2257,95 +2449,162 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         .filter(|i| doc.is_free(&doc.features[*i]))
         .chain((0..doc.features.len()).filter(|i| !doc.is_free(&doc.features[*i])))
         .collect();
-    // assinatura global: parâmetros, referências, links e coletores (mudou → refaz tudo)
+    // assinatura global: só o que vale para todos (links de outras peças, chapa, coletores).
+    // Parâmetros e referências entram na assinatura de quem os usa — mudar um parâmetro refaz
+    // só os comandos que citam esse parâmetro (e quem depende deles).
+    let sheet_vars = serde_json::to_string(&doc.sheet).unwrap_or_default();
     let global = hash_of(
         &[
-            &serde_json::to_string(&doc.params).unwrap_or_default(),
-            &serde_json::to_string(&doc.references).unwrap_or_default(),
             &serde_json::to_string(&doc.external).unwrap_or_default(),
-            &serde_json::to_string(&doc.sheet).unwrap_or_default(),
+            &sheet_vars,
+            &vars_sig(&sheet_vars, &cx.vars),
             &serde_json::to_string(&doc.collectors.iter().map(|c| c.id).collect::<Vec<_>>()).unwrap_or_default(),
-            &format!("{:?}", { let mut v: Vec<_> = cx.vars.iter().map(|(k, v)| (k.clone(), v.to_bits())).collect(); v.sort(); v }),
         ],
         0,
     );
-    let mut h = global;
-    let mut hit: Option<usize> = None; // último passo reaproveitado (ainda não restaurado)
-    let mut fresh = false;
+    // assinatura de todos os corpos (para quem lê faces de qualquer corpo)
+    let all_bodies = |bs: &HashMap<Id, u64>| {
+        let mut v: Vec<(u64, u64)> = bs.iter().map(|(k, v)| (k.0, *v)).collect();
+        v.sort();
+        format!("{v:?}")
+    };
+    let mut feat_out: HashMap<Id, u64> = HashMap::new();
+    let mut seen: std::collections::HashSet<Id> = Default::default();
     cache.reused = 0;
-    for (k, i) in order.into_iter().enumerate() {
+    for i in order {
         let f = &doc.features[i];
-        let active = doc.is_active(i);
-        h = hash_of(&[&serde_json::to_string(f).unwrap_or_default(), if active { "1" } else { "0" }], h);
-        if !fresh && cache.steps.get(k).is_some_and(|(sig, _)| *sig == h) {
-            hit = Some(k);
-            cache.reused += 1;
+        seen.insert(f.id);
+        if !doc.is_active(i) {
+            cx.status.insert(f.id, Status::Inactive);
             continue;
         }
-        if !fresh {
-            fresh = true;
-            if let Some(k0) = hit.take() {
-                let sn = cache.steps[k0].1.clone();
-                (cx.bodies, cx.sketches, cx.status, cx.tools, cx.body_sig) = (sn.bodies, sn.sketches, sn.status, sn.tools, sn.body_sig);
-                cx.memo.borrow_mut().clear();
-            }
-            cache.steps.truncate(k);
-        }
-        if !active {
-            cx.status.insert(f.id, Status::Inactive);
-        } else {
-            let st = match cx.run(f) {
-                Ok(None) => Status::Ok,
-                Ok(Some(w)) => Status::Warning(w),
-                Err(e) => Status::Error(e),
-            };
-            cx.status.insert(f.id, st);
-            cx.body_sig.insert(f.target, h);
-            cx.memo.borrow_mut().clear();
-            if let FeatureKind::Combine(c) = &f.kind {
-                cx.body_sig.insert(c.tool, h);
+        // entradas: o próprio comando, o corpo de destino, os comandos/corpos/referências citados
+        let js = feature_sig(f);
+        let mut ids = vec![];
+        f.kind.clone().walk(&mut |x| ids.push(*x), &mut |_| {});
+        let mut parts: Vec<String> = vec![js.clone(), vars_sig(&js, &cx.vars), format!("t{}", cx.body_sig.get(&f.target).copied().unwrap_or(0)), format!("{:?}", cx.last_sheet)];
+        if let FeatureKind::Sketch(sk) = &f.kind {
+            if let PlaneRef::Datum(pid) = sk.plane {
+                parts.push(ref_sig(doc, pid, &cx.vars, 0));
             }
         }
-        cache.steps.push((
-            h,
-            Snap { bodies: cx.bodies.clone(), sketches: cx.sketches.clone(), status: cx.status.clone(), tools: cx.tools.clone(), body_sig: cx.body_sig.clone() },
-        ));
-    }
-    if let (false, Some(k0)) = (fresh, hit) {
-        // nada mudou na linha do tempo: tudo vem do cache
-        let sn = cache.steps[k0].1.clone();
-        (cx.bodies, cx.sketches, cx.status, cx.tools, cx.body_sig) = (sn.bodies, sn.sketches, sn.status, sn.tools, sn.body_sig);
-        cache.steps.truncate(k0 + 1);
+        let mut touched = vec![f.target];
+        let mut all = ["\"Face\"", "\"Vertex\""].iter().any(|k| js.contains(k)) && !matches!(f.kind, FeatureKind::Sketch(_));
+        if let FeatureKind::Sketch(sk) = &f.kind {
+            // sketch: lê corpos se o plano ou a geometria externa vierem de faces/arestas
+            let ext = serde_json::to_string(&sk.data.links).unwrap_or_default();
+            all |= ext.contains("\"Edge\"") || ext.contains("\"Vertex\"") || ext.contains("\"Face\"");
+            if let PlaneRef::Datum(pid) = sk.plane {
+                all |= ref_reads_bodies(doc, pid, 0);
+            }
+        }
+        for x in ids {
+            if let Some(sg) = feat_out.get(&x) {
+                parts.push(format!("f{}:{sg}", x.0));
+            } else if doc.collectors.iter().any(|c| c.id == x) {
+                if !touched.contains(&x) {
+                    touched.push(x);
+                }
+                parts.push(format!("b{}:{}", x.0, cx.body_sig.get(&x).copied().unwrap_or(0)));
+            } else if doc.reference(x).is_some() {
+                parts.push(ref_sig(doc, x, &cx.vars, 0));
+                all |= ref_reads_bodies(doc, x, 0);
+            }
+        }
+        if all {
+            parts.push(all_bodies(&cx.body_sig));
+        }
+        let sig = hash_of(&parts.iter().map(|x| x.as_str()).collect::<Vec<_>>(), global);
+        match cache.feats.get(&f.id).filter(|e| e.sig == sig).cloned() {
+            Some(e) => {
+                // nada que ele lê mudou: reaproveita o que ele produziu
+                cache.reused += 1;
+                cx.status.insert(f.id, e.status);
+                for (b, v) in e.bodies {
+                    match v {
+                        Some(v) => cx.bodies.insert(b, v),
+                        None => cx.bodies.remove(&b),
+                    };
+                }
+                if let Some(sk) = e.sketch {
+                    cx.sketches.insert(f.id, sk);
+                }
+                match e.tool {
+                    Some(t) => cx.tools.insert(f.id, t),
+                    None => cx.tools.remove(&f.id),
+                };
+                cx.last_sheet = e.last_sheet;
+            }
+            None => {
+                let st = match cx.run(f) {
+                    Ok(None) => Status::Ok,
+                    Ok(Some(w)) => Status::Warning(w),
+                    Err(e) => Status::Error(e),
+                };
+                cx.status.insert(f.id, st.clone());
+                cache.feats.insert(
+                    f.id,
+                    FeatEntry {
+                        sig,
+                        status: st,
+                        bodies: touched.iter().map(|b| (*b, cx.bodies.get(b).cloned())).collect(),
+                        sketch: cx.sketches.get(&f.id).cloned(),
+                        tool: cx.tools.get(&f.id).cloned(),
+                        last_sheet: cx.last_sheet,
+                    },
+                );
+            }
+        }
         cx.memo.borrow_mut().clear();
-    } else if !fresh {
-        cache.steps.clear();
-    }
-
-    // planos: Origem + Referências
-    let mut planes = vec![];
-    if doc.origin_visible {
-        for (p, n) in [(OriginPlane::XY, "XY"), (OriginPlane::XZ, "XZ"), (OriginPlane::YZ, "YZ")] {
-            planes.push(PlaneViz { id: None, name: n.into(), frame: origin_frame(p) });
+        feat_out.insert(f.id, sig);
+        // o sketch não muda corpo nenhum: quem usa o sketch já lê a assinatura dele
+        if !matches!(f.kind, FeatureKind::Sketch(_)) {
+            for b in &touched {
+                cx.body_sig.insert(*b, sig);
+            }
         }
     }
+    cache.feats.retain(|id, _| seen.contains(id));
+    let h = hash_of(&[&all_bodies(&cx.body_sig)], global);
+
+    // planos: Origem + Referências. Todas entram no resultado (ocultas também: a cena filtra pela
+    // visibilidade atual, então mostrar/ocultar não exige recálculo). Só reavalia a referência cuja
+    // geometria mudou — ou, se ela lê faces de corpos, quando a linha do tempo mudou.
+    let mut planes = vec![];
+    for (p, n) in [(OriginPlane::XY, "XY"), (OriginPlane::XZ, "XZ"), (OriginPlane::YZ, "YZ")] {
+        planes.push(PlaneViz { id: None, name: n.into(), frame: origin_frame(p) });
+    }
+    let tail = h;
     let (mut points, mut curves, mut surfaces) = (vec![], vec![], vec![]);
+    cache.refs.retain(|id, _| doc.reference(*id).is_some());
     for r in &doc.references {
-        match cx.geo(r.id, 0) {
+        let key = hash_of(&[&ref_sig(doc, r.id, &cx.vars, 0)], if ref_reads_bodies(doc, r.id, 0) { tail } else { global });
+        let v = match cache.refs.get(&r.id).filter(|(k, _)| *k == key) {
+            Some((_, v)) => v.clone(),
+            None => {
+                let v = cx.geo(r.id, 0).and_then(|g| {
+                    Ok(match g {
+                        Geo::Plane(fr) => RefViz::Plane(fr),
+                        Geo::Point(p) => RefViz::Point(p),
+                        Geo::Curve(c) => RefViz::Curve(c.pts),
+                        Geo::Surface(sh) => {
+                            let defl = sh.bbox().map(|(a, b)| ((0..3).map(|i| (b[i] - a[i]).powi(2)).sum::<f64>().sqrt() * 0.002).clamp(0.01, 1.0)).unwrap_or(0.05);
+                            RefViz::Surface(sh.mesh(defl).map_err(|e| e.0)?)
+                        }
+                    })
+                });
+                cache.refs.insert(r.id, (key, v.clone()));
+                v
+            }
+        };
+        match v {
             Ok(g) => {
                 cx.status.insert(r.id, Status::Ok);
-                if !r.visible {
-                    continue;
-                }
                 match g {
-                    Geo::Plane(fr) => planes.push(PlaneViz { id: Some(r.id), name: r.name.clone(), frame: fr }),
-                    Geo::Point(p) => points.push(PointViz { id: r.id, name: r.name.clone(), p }),
-                    Geo::Curve(c) => curves.push(CurveViz { id: r.id, name: r.name.clone(), pts: c.pts }),
-                    Geo::Surface(sh) => {
-                        let defl = sh.bbox().map(|(a, b)| ((0..3).map(|i| (b[i] - a[i]).powi(2)).sum::<f64>().sqrt() * 0.002).clamp(0.01, 1.0)).unwrap_or(0.05);
-                        if let Ok(mesh) = sh.mesh(defl) {
-                            surfaces.push(SurfaceViz { id: r.id, name: r.name.clone(), mesh });
-                        }
-                    }
+                    RefViz::Plane(fr) => planes.push(PlaneViz { id: Some(r.id), name: r.name.clone(), frame: fr }),
+                    RefViz::Point(p) => points.push(PointViz { id: r.id, name: r.name.clone(), p }),
+                    RefViz::Curve(pts) => curves.push(CurveViz { id: r.id, name: r.name.clone(), pts }),
+                    RefViz::Surface(mesh) => surfaces.push(SurfaceViz { id: r.id, name: r.name.clone(), mesh }),
                 }
             }
             Err(e) => {
@@ -2366,6 +2625,8 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
             fill: vec![],
             dof: es.report.dof,
             converged: es.report.converged,
+            link_pts: es.link_pts.clone(),
+            link_r: es.link_r.clone(),
         };
         // sombra: a face real (com furos internos) tesselada pelo kernel (com cache)
         if !es.loops.is_empty() {
@@ -2465,6 +2726,30 @@ pub fn publications(doc: &Document) -> Vec<(String, LinkedGeo)> {
     for p in doc.params.iter().filter(|p| p.published) {
         if let Some(v) = r.params.get(&p.name) {
             out.push((p.name.clone(), LinkedGeo::Value(*v)));
+        }
+    }
+    // corpos publicados: a forma exata (B-rep) — quem importa usa como superfície/corpo de referência
+    if doc.collectors.iter().any(|c| c.published) {
+        if let Ok(vars) = doc.eval_params() {
+            let mut cx = Ctx {
+                doc,
+                vars,
+                bodies: HashMap::new(),
+                sketches: HashMap::new(),
+                status: HashMap::new(),
+                tools: HashMap::new(),
+                memo: RefCell::new(HashMap::new()),
+                body_sig: HashMap::new(),
+                last_sheet: None,
+            };
+            for f in doc.active_features().map(|(_, f)| f) {
+                let _ = cx.run(f);
+            }
+            for c in doc.collectors.iter().filter(|c| c.published) {
+                if let Some(b) = cx.body(c.id).and_then(|b| b.to_brep().ok()) {
+                    out.push((c.name.clone(), LinkedGeo::Surface(b)));
+                }
+            }
         }
     }
     out
@@ -2873,6 +3158,38 @@ mod tests {
         d.add_feature(FeatureKind::StructGusset(StructGusset { at: [0., 0., 500.], leg: s("60"), thickness: s("6"), chamfer: s("0") }));
         let v2 = vol(&d);
         assert!(near(v2 - v1, 0.5 * 60. * 60. * 6., 1e-3), "reforço {}", v2 - v1);
+    }
+
+    #[test]
+    fn sketch_com_geometria_externa_associativa() {
+        if !scc_kernel::AVAILABLE {
+            return;
+        }
+        use scc_core::sketch::LinkSrc;
+        let s = |x: &str| x.to_string();
+        let mut d = Document::new("assoc");
+        let lado = d.add_param("L", "40", Unit::Comprimento).unwrap();
+        let _ = lado;
+        // linha de referência de (0,0,0) a (L,0,0)
+        let la = d.add_geometry(RefKind::LinePoints { a: PointRef::Origin, b: PointRef::Fixed([40., 0., 0.]), start: s("0"), end: s("0") });
+        let mut data = SketchData::default();
+        let mut n = 5_000_000u64;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        let link = data.add_link(&mut al, LinkSrc::Ref(la), false, &[[0., 0.], [40., 0.]], true).unwrap();
+        let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
+        // a referência muda: o ponto final no sketch acompanha
+        if let Some(r) = d.references.iter_mut().find(|r| r.id == la) {
+            r.kind = RefKind::LinePoints { a: PointRef::Origin, b: PointRef::Fixed([70., 0., 0.]), start: s("0"), end: s("0") };
+        }
+        let r = recompute(&d);
+        assert!(matches!(r.status[&sk], Status::Ok | Status::Warning(_)), "{:?}", r.status[&sk]);
+        let v = r.sketches.iter().find(|v| v.feature == sk).unwrap();
+        let xmax = v.construction.iter().map(|p| p[0]).fold(f32::MIN, f32::max);
+        assert!((xmax - 70.).abs() < 1e-3, "a linha projetada foi para 70: {xmax}");
+        let _ = link;
     }
 
     #[test]
@@ -3332,13 +3649,44 @@ mod tests {
         if scc_kernel::AVAILABLE {
             assert!((a.bodies[0].mass.volume - b.bodies[0].mass.volume).abs() < 1e-6);
         }
-        // mudar o último comando refaz só ele
+        // renomear não recalcula nada
         let n = d.features.len();
         d.features[n - 1].name.push('x');
         let c = recompute_cached(&d, &mut cache);
-        assert_eq!(cache.reused, n - 1);
+        assert_eq!(cache.reused, n);
         if scc_kernel::AVAILABLE {
             assert!((a.bodies[0].mass.volume - c.bodies[0].mass.volume).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn cache_por_dependencia_refaz_so_o_ramo_editado() {
+        let s = |x: &str| x.to_string();
+        let mut d = Document::new("dois corpos");
+        let a_col = d.active_collector;
+        let ska = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [20., 20.]);
+        let exa = d.add_feature(FeatureKind::Extrude(Extrude { sketch: ska, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None }));
+        let b_col = d.add_collector("B");
+        d.active_collector = b_col;
+        let skb = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [50., 0.], [70., 20.]);
+        d.add_param("HB", "5", Unit::Comprimento).unwrap();
+        d.add_feature(FeatureKind::Extrude(Extrude { sketch: skb, op: BoolOp::Add, extent: Extent::Blind(s("HB")), reverse: false, taper: s("0"), thin: None, dir: None }));
+        let _ = a_col;
+        let mut cache = Cache::default();
+        recompute_cached(&d, &mut cache);
+        // editar a extrusão do corpo A: o sketch A, o sketch B e a extrusão B vêm do cache
+        if let Some(FeatureKind::Extrude(e)) = d.feature_mut(exa).map(|f| &mut f.kind) {
+            e.extent = Extent::Blind(s("15"));
+        }
+        let r = recompute_cached(&d, &mut cache);
+        assert_eq!(cache.reused, 3, "só a extrusão editada recalcula");
+        // mudar o parâmetro HB refaz só quem o usa (a extrusão B)
+        d.params.iter_mut().find(|p| p.name == "HB").unwrap().expr = s("8");
+        recompute_cached(&d, &mut cache);
+        assert_eq!(cache.reused, 3, "parâmetro: só a extrusão B recalcula");
+        if scc_kernel::AVAILABLE {
+            let va = r.bodies.iter().find(|b| b.collector != b_col).unwrap().mass.volume;
+            assert!((va - 20. * 20. * 15.).abs() < 1e-3, "{va}");
         }
     }
 

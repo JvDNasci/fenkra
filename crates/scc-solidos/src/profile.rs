@@ -22,6 +22,11 @@ pub struct EvalSketch {
     pub lines: HashMap<Id, ([f64; 2], [f64; 2])>,
     /// polilinhas para exibir: (é construção, pontos)
     pub viz: Vec<(bool, Vec<[f64; 2]>)>,
+    /// cada curva amostrada, pelo id (outro sketch pode projetá-la)
+    pub curves: HashMap<Id, Vec<[f64; 2]>>,
+    /// posições atuais da geometria externa (pontos e raios), para o editor sincronizar
+    pub link_pts: Vec<(Id, [f64; 2])>,
+    pub link_r: Vec<(Id, f64)>,
     pub warnings: Vec<String>,
     pub report: SolveReport,
 }
@@ -61,8 +66,12 @@ pub fn eval_sketch(data: &SketchData, vars: &Vars) -> Result<EvalSketch, String>
                 let (pc, ps, pe) = (sk.pos(ctr), sk.pos(s), sk.pos(e));
                 sample(&[Seg2::Arc(ps, SketchData::arc_mid(pc, ps, pe), pe)])
             }
-            Curve::Point { .. } => continue,
+            Curve::Point { p } => {
+                out.curves.insert(c.id, vec![sk.pos(p)]);
+                continue;
+            }
         };
+        out.curves.insert(c.id, pts.clone());
         out.viz.push((c.construction, pts));
     }
     out.report = report;

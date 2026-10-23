@@ -147,10 +147,13 @@ fn sources_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, sources: &mut Vec<I
 fn sketch_pick(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, before: usize, s: &mut Id) {
     ui.horizontal(|ui| {
         ui.add_sized([96., 18.], egui::Label::new(label));
-        let name = doc.feature(*s).map(|f| f.name.clone()).unwrap_or_else(|| format!("⚠ perdido #{}", s.0));
-        egui::ComboBox::from_id_salt(salt).selected_text(name).width(170.).show_ui(ui, |ui| {
-            for f in doc.features[..before.min(doc.features.len())].iter().filter(|f| matches!(f.kind, FeatureKind::Sketch(_))) {
-                ui.selectable_value(s, f.id, &f.name);
+        let name = doc.feature(*s).map(|f| f.name.clone()).or_else(|| crate::slots::label(*s)).unwrap_or_else(|| format!("⚠ perdido #{}", s.0));
+        let text = if crate::slots::is_unset(*s) { RichText::new(name).color(Color32::from_rgb(255, 170, 60)) } else { RichText::new(name) };
+        egui::ComboBox::from_id_salt(salt).selected_text(text).width(170.).show_ui(ui, |ui| {
+            for (i, f) in doc.features.iter().enumerate().filter(|(_, f)| matches!(f.kind, FeatureKind::Sketch(_))) {
+                if i < before || doc.is_free(f) {
+                    ui.selectable_value(s, f.id, &f.name);
+                }
             }
         });
     });

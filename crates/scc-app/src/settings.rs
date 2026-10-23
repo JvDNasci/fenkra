@@ -332,6 +332,17 @@ pub struct Settings {
     pub auto_update: bool,
     /// painel de edição à esquerda (junto da árvore) em vez da direita
     pub editor_left: bool,
+    /// sketch novo num plano (não numa face do corpo) vai para a pasta de geometria
+    pub sketch_in_geometry: bool,
+    /// símbolo dos pontos de referência: 0 cruz 3D, 1 asterisco, 2 X, 3 círculo, 4 quadrado
+    pub point_style: u8,
+    /// tamanho do símbolo do ponto (px)
+    pub point_size: f32,
+    /// espessura (px) e tipo (0 contínua, 1 tracejada, 2 traço-ponto, 3 pontilhada) das linhas e curvas de referência
+    pub ref_line_width: f32,
+    pub ref_line_dash: u8,
+    /// marca dos centros de furo no sketch: 0 asterisco, 1 cruz, 2 círculo com cruz
+    pub hole_mark: u8,
     /// última macro escrita na janela de automação
     pub macro_src: String,
 }
@@ -396,6 +407,12 @@ impl Default for Settings {
             bench: Default::default(),
             auto_update: true,
             editor_left: true,
+            sketch_in_geometry: true,
+            point_style: 1,
+            point_size: 7.,
+            ref_line_width: 1.5,
+            ref_line_dash: 0,
+            hole_mark: 0,
         }
     }
 }

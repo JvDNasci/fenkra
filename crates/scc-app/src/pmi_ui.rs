@@ -232,7 +232,8 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui) {
     let mut select = None;
     let mut action: Option<(Id, u8)> = None;
     let sel = if app.in_asm() { app.asm.as_ref().and_then(|s| s.sel) } else if let Sel::Pmi(i) = app.sel { Some(i) } else { None };
-    egui::CollapsingHeader::new(format!("📐 {} ({n})", tr("PMI — detalhamento 3D"))).id_salt("arvore_pmi").default_open(n > 0).show(ui, |ui| {
+    let mut create: Option<u8> = None;
+    let h = egui::CollapsingHeader::new(format!("📐 {} ({n})", tr("PMI — detalhamento 3D"))).id_salt("arvore_pmi").default_open(n > 0).show(ui, |ui| {
         if n == 0 {
             ui.label(RichText::new(tr("Cotas, notas, rugosidade, solda e tolerâncias no modelo 3D (grupo Detalhamento 3D).")).weak().small());
         }
@@ -243,15 +244,39 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui) {
                 select = Some(p.id);
             }
             r.context_menu(|ui| {
+                ui.label(RichText::new(&p.name).strong());
+                if ui.button(tr("✏ Editar")).clicked() {
+                    select = Some(p.id);
+                    ui.close();
+                }
                 if ui.button(if p.visible { tr("Ocultar") } else { tr("Mostrar") }).clicked() {
                     action = Some((p.id, 1));
                     ui.close();
                 }
+                ui.separator();
                 if ui.button(tr("🗑 Apagar")).clicked() {
                     action = Some((p.id, 0));
                     ui.close();
                 }
             });
+        }
+    });
+    h.header_response.context_menu(|ui| {
+        ui.label(RichText::new(tr("Nova anotação 3D")).strong());
+        for (i, n) in [(0u8, "↔ Cota linear"), (1, "R Raio"), (2, "Ø Diâmetro"), (3, "∠ Ângulo"), (4, "✎ Nota"), (5, "√ Rugosidade"), (6, "⌒ Solda"), (7, "▭ Referência (datum)"), (8, "⊞ Tolerância geométrica")] {
+            if ui.button(tr(n)).clicked() {
+                create = Some(i);
+                ui.close();
+            }
+        }
+        ui.separator();
+        if ui.button(tr("👁 Mostrar todas")).clicked() {
+            action = Some((Id(0), 2));
+            ui.close();
+        }
+        if ui.button(tr("Ocultar todas")).clicked() {
+            action = Some((Id(0), 3));
+            ui.close();
         }
     });
     if let Some(id) = select {
@@ -261,10 +286,14 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui) {
             app.sel = Sel::Pmi(id);
         }
     }
+    if let Some(i) = create {
+        command(app, i);
+    }
     if let Some((id, k)) = action {
         let l = list_mut(app);
         match k {
             0 => l.retain(|p| p.id != id),
+            2 | 3 => l.iter_mut().for_each(|p| p.visible = k == 2),
             _ => {
                 if let Some(p) = l.iter_mut().find(|p| p.id == id) {
                     p.visible = !p.visible;
