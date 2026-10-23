@@ -119,7 +119,7 @@ fn screen_axis(cam: &Camera, rect: Rect, o: Vec3, dir: Vec3) -> Option<(Pos2, Ve
 
 /// Gizmo completo de translação: 3 setas e 3 quadrados planares. `vals` = x, y, z editáveis.
 /// Devolve os novos valores quando arrastado.
-fn translate_gizmo(ui: &mut egui::Ui, rect: Rect, cam: &Camera, salt: u64, o: Vec3, axes: [Vec3; 3], vals: [f64; 3], locked: [bool; 3]) -> Option<[f64; 3]> {
+pub(crate) fn translate_gizmo(ui: &mut egui::Ui, rect: Rect, cam: &Camera, salt: u64, o: Vec3, axes: [Vec3; 3], vals: [f64; 3], locked: [bool; 3]) -> Option<[f64; 3]> {
     let painter = ui.painter_at(rect);
     let sa: Vec<(Pos2, Vec2, f32)> = axes.iter().map(|d| screen_axis(cam, rect, o, *d)).collect::<Option<_>>()?;
     let c0 = sa[0].0;

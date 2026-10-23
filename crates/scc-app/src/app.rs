@@ -170,6 +170,8 @@ pub struct App {
     errors_prev: usize,
     /// link sendo religado pelo assistente (a janela de importação vira "religar")
     relink_ext: Option<Id>,
+    /// montagem aberta (bancada Montagem)
+    pub asm: Option<crate::asm_ui::AsmState>,
 }
 
 /// Edição de um comando como "ambiente": só termina com Concluir (mantém) ou Cancelar (desfaz).
@@ -254,6 +256,7 @@ impl App {
             wizard_open: false,
             errors_prev: 0,
             relink_ext: None,
+            asm: None,
         };
         app.started = !app.settings.show_start;
         // desenvolvimento: SCC_ABRIR_SKETCH=<nome> abre esse sketch em edição ao iniciar
@@ -305,6 +308,22 @@ impl App {
             d.add_geometry(RefKind::SurfCylinder { point: PointRef::Fixed([-40., 0., 0.]), dir: AxisRef::Origin(OriginAxis::Z), radius: s("12"), start: s("0"), end: s("50") });
             app.started = true;
         }
+        // desenvolvimento: SCC_DEMO_ASM=1 monta duas placas de exemplo (contato face a face) e abre a Montagem
+        if std::env::var("SCC_DEMO_ASM").is_ok() {
+            let dir = std::env::temp_dir().join("scc_demo_montagem");
+            let _ = std::fs::create_dir_all(&dir);
+            let _ = std::fs::write(dir.join("placa.sccpart"), scc_solidos::example_document().to_json());
+            let mut a = scc_montagem::Assembly::new("Conjunto de exemplo");
+            use scc_montagem::{NodeKind, Placement};
+            let g = a.add_group("Placas", None);
+            a.add_component("Placa base", NodeKind::Part { path: "placa.sccpart".into() }, Placement::default(), Some(g));
+            a.add_component("Placa de cima", NodeKind::Part { path: "placa.sccpart".into() }, Placement { origin: [140., 20., 30.], ..Default::default() }, Some(g));
+            let f = dir.join("conjunto.sccasm");
+            let _ = std::fs::write(&f, a.to_json());
+            app.asm = Some(crate::asm_ui::AsmState::new(a, Some(f)));
+            app.settings.bench = crate::settings::Bench::Montagem;
+            app.started = true;
+        }
         // desenvolvimento: SCC_VISTAS=1 abre o seletor de vistas ao iniciar
         if std::env::var("SCC_VISTAS").is_ok() {
             app.view_menu = true;
@@ -316,6 +335,35 @@ impl App {
 
     pub fn doc(&self) -> &Document {
         &self.open.doc
+    }
+
+    /// Bancada de montagem ativa (com montagem aberta)?
+    pub fn in_asm(&self) -> bool {
+        self.settings.bench == crate::settings::Bench::Montagem && self.asm.is_some()
+    }
+
+    pub fn fit_now(&mut self) {
+        self.fit_pending = true;
+        self.scene_dirty = true;
+    }
+
+    pub fn load_doc_pub(&mut self, d: Document, file: Option<PathBuf>) {
+        self.load_doc(d, None, None);
+        self.open.file = file;
+    }
+
+    pub fn save_pub(&mut self) {
+        self.save();
+    }
+
+    pub fn take_open_pending(&mut self) -> Option<Id> {
+        self.open_pending.take()
+    }
+
+    pub fn set_tree_hover(&self, id: Option<Id>) {
+        if id.is_some() {
+            self.hover_now.set(id);
+        }
     }
 
     pub fn request_recompute(&mut self) {
@@ -713,6 +761,9 @@ impl App {
     }
 
     fn command(&mut self, c: Cmd) {
+        if crate::asm_ui::command(self, c) {
+            return;
+        }
         self.conclude_session();
         let snapshot = self.open.doc.clone();
         let sel_now = self.sel;
@@ -992,6 +1043,9 @@ impl App {
                 Sel::Feature(d.add_feature(if matches!(c, Cmd::Fillet | Cmd::FilletAll | Cmd::FilletVar) { FeatureKind::Fillet(op) } else { FeatureKind::Chamfer(op) }))
             }
             Cmd::Geo(k) => Sel::Ref(d.add_geometry(k.make(&seed))),
+            // comandos de montagem são tratados em asm_ui::command
+            Cmd::AsmNew | Cmd::AsmOpen | Cmd::AsmSave | Cmd::AsmInsert | Cmd::AsmSubAsm | Cmd::AsmNewPart | Cmd::AsmGroup | Cmd::AsmReplace | Cmd::AsmMate(_) | Cmd::AsmFix | Cmd::AsmRigid
+            | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmPattern => return,
             Cmd::Param => {
                 let n = (1..).map(|i| format!("P{i}")).find(|n| !d.params.iter().any(|p| &p.name == n)).unwrap();
                 let _ = d.add_param(&n, "10", Unit::Comprimento);
@@ -1710,16 +1764,24 @@ impl App {
                 // abas de módulo (RF-UI-006)
                 use crate::settings::Bench;
                 ui.add_space(10.);
-                for (b, n, icon) in [(Bench::Solidos, "Modelagem Sólida", "▣"), (Bench::Superficies, "Superfícies", "◫")] {
+                for (b, n, icon) in [(Bench::Solidos, "Modelagem Sólida", "▣"), (Bench::Superficies, "Superfícies", "◫"), (Bench::Montagem, "Montagem", "⚙")] {
                     if bench_tab(ui, self.settings.bench == b, &format!("{icon}  {}", tr(n)), true).on_hover_text(tr("As bancadas compartilham o mesmo modelo: sólidos e superfícies se conversam.")).clicked() {
                         self.settings.bench = b;
                     }
                 }
-                for m in ["Montagem", "Desenho", "Chapas", "Soldas"].map(tr) {
+                if self.asm.as_ref().is_some_and(|s| s.editing_part.is_some()) && self.settings.bench != Bench::Montagem {
+                    ui.add_space(8.);
+                    if ui.button(RichText::new(tr("↩ Voltar à montagem")).strong().color(Color32::from_rgb(120, 190, 255))).on_hover_text(tr("salva a peça e volta para a montagem")).clicked() {
+                        crate::asm_ui::back_to_assembly(self);
+                    }
+                }
+                for m in ["Desenho", "Chapas", "Soldas"].map(tr) {
                     bench_tab(ui, false, m, false).on_hover_text(tr("Módulo em breve"));
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let asm_title = self.asm.as_ref().filter(|_| self.settings.bench == Bench::Montagem).map(|s| format!("⚙ {}{}", s.asm.name, if s.modified { " •" } else { "" }));
                     let title = match (&self.open.frozen, self.open.modified) {
+                        _ if asm_title.is_some() => asm_title.clone().unwrap(),
                         (Some(r), _) => format!("{} — revisão {r} (congelada)", self.open.doc.name),
                         (None, true) => format!("{} •", self.open.doc.name),
                         (None, false) => self.open.doc.name.clone(),
@@ -3204,6 +3266,12 @@ impl App {
                         c.marker = m;
                     }
                 }
+                if let (true, Some(st)) = (self.settings.bench == crate::settings::Bench::Montagem, self.asm.as_ref()) {
+                    let r = &st.report;
+                    let col = if r.failed.is_empty() { ui.visuals().text_color() } else { Color32::from_rgb(255, 120, 100) };
+                    ui.separator();
+                    ui.label(RichText::new(format!("⚙ {} GDL livres · {} restrição(ões) com erro", r.dof, r.failed.len())).small().color(col));
+                }
                 let errs = self.errors_prev;
                 if errs > 0 && ui.small_button(RichText::new(format!("✖ {errs} com erro — reparar")).color(Color32::from_rgb(255, 120, 100))).clicked() {
                     self.wizard_open = true;
@@ -3492,7 +3560,11 @@ impl App {
             }
             // seta e cota 3D do comando aberto (fast 3D)
             if self.sketch.is_none() {
-                crate::handles::overlay(self, ui, rect, cam);
+                if self.settings.bench == crate::settings::Bench::Montagem && self.asm.is_some() {
+                    crate::asm_ui::gizmo(self, ui, rect, &cam);
+                } else {
+                    crate::handles::overlay(self, ui, rect, cam);
+                }
             }
         });
     }
@@ -3655,6 +3727,22 @@ pub enum Cmd {
     FilletFull,
     /// extrair a seleção da viewport como geometria de referência
     Extract,
+    // ---- montagem
+    AsmNew,
+    AsmOpen,
+    AsmSave,
+    AsmInsert,
+    AsmSubAsm,
+    AsmNewPart,
+    AsmGroup,
+    AsmReplace,
+    AsmMate(crate::asm_ui::MateCmd),
+    AsmFix,
+    AsmRigid,
+    AsmSolve,
+    AsmNumber,
+    AsmInterf,
+    AsmPattern,
     /// mover o corpo: 0 translação, 1 rotação, 2 simetria, 3 afinidade
     MoveBody(u8),
     /// extrusão com ângulo de saída e filetes num clique
@@ -3705,6 +3793,10 @@ fn appearance_menu(ui: &mut egui::Ui, current: Option<Appearance>, t: AppTarget,
 }
 
 /// Ícone de olho clicável; devolve true se clicado.
+pub fn eye_button(ui: &mut egui::Ui, hidden: bool) -> bool {
+    eye(ui, hidden)
+}
+
 fn eye(ui: &mut egui::Ui, hidden: bool) -> bool {
     let img = egui::Image::new(crate::icons::get(if hidden { "ocultar" } else { "mostrar" })).fit_to_exact_size(egui::vec2(15., 15.));
     let img = if hidden { img.tint(Color32::from_white_alpha(120)) } else { img };
@@ -3875,14 +3967,48 @@ impl eframe::App for App {
         let typing = ctx.egui_wants_keyboard_input();
         let (save, undo, redo) = (km.pressed(ctx, K::Save), !typing && km.pressed(ctx, K::Undo), !typing && km.pressed(ctx, K::Redo));
         let del = km.pressed(ctx, K::Delete);
-        if save {
-            self.save();
-        }
-        if undo {
-            self.undo();
-        }
-        if redo {
-            self.redo();
+        let asm_mode = self.in_asm();
+        if asm_mode {
+            if save {
+                crate::asm_ui::save(self);
+            }
+            if let Some(st) = self.asm.as_mut() {
+                if undo {
+                    if let Some(prev) = st.undo.pop() {
+                        st.redo.push(std::mem::replace(&mut st.asm, prev));
+                        st.dirty = true;
+                    }
+                }
+                if redo {
+                    if let Some(next) = st.redo.pop() {
+                        st.undo.push(std::mem::replace(&mut st.asm, next));
+                        st.dirty = true;
+                    }
+                }
+                if !typing && ctx.input(|i| i.key_pressed(egui::Key::F2)) {
+                    st.renaming = st.sel;
+                }
+            }
+            if del && !ctx.egui_wants_keyboard_input() {
+                if let Some(id) = self.asm.as_ref().and_then(|s| s.sel) {
+                    crate::asm_ui::node_action(self, id, 0);
+                }
+            }
+            if !typing && km.pressed(ctx, K::Hide) {
+                if let Some(id) = self.asm.as_ref().and_then(|s| s.sel) {
+                    crate::asm_ui::node_action(self, id, 1);
+                }
+            }
+        } else {
+            if save {
+                self.save();
+            }
+            if undo {
+                self.undo();
+            }
+            if redo {
+                self.redo();
+            }
         }
         if !typing && self.sketch.is_none() && km.pressed(ctx, K::ViewMenu) {
             self.view_menu = !self.view_menu;
@@ -3899,7 +4025,7 @@ impl eframe::App for App {
         if self.sketch.is_some() && crate::sketch_ui::keys(self, ctx) {
             self.finish_sketch();
         }
-        if del && self.sketch.is_none() && !ctx.egui_wants_keyboard_input() {
+        if del && self.sketch.is_none() && !asm_mode && !ctx.egui_wants_keyboard_input() {
             self.delete_selected();
         }
         // atalhos de vista e de comandos (só quando não há campo de texto em edição)
@@ -4016,6 +4142,7 @@ impl eframe::App for App {
             });
             ui.separator();
             egui::ScrollArea::vertical().show(ui, |ui| match self.left {
+                LeftTab::Peca if self.settings.bench == crate::settings::Bench::Montagem => crate::asm_ui::tree(self, ui),
                 LeftTab::Peca => self.tree(ui),
                 LeftTab::Projeto => self.project_panel(ui),
             });
@@ -4032,7 +4159,9 @@ impl eframe::App for App {
                 });
             });
             egui::ScrollArea::vertical().show(ui, |ui| {
-                if app.sketch.is_some() {
+                if app.settings.bench == crate::settings::Bench::Montagem {
+                    crate::asm_ui::panel(app, ui)
+                } else if app.sketch.is_some() {
                     crate::sketch_ui::panel(app, ui)
                 } else {
                     editor::show(app, ui);
@@ -4060,7 +4189,25 @@ impl eframe::App for App {
         self.settings_window(ctx);
         self.view_menu_window(ctx);
         self.dialogs(ctx);
-        self.viewport(root, frame);
+        if self.in_asm() {
+            let st = self.asm.as_mut().unwrap();
+            if st.refresh() {
+                self.scene_dirty = true;
+            }
+            let st = self.asm.as_mut().unwrap();
+            std::mem::swap(&mut self.result, &mut st.view);
+            std::mem::swap(&mut self.open.doc, &mut st.view_doc);
+            self.viewport(root, frame);
+            let st = self.asm.as_mut().unwrap();
+            std::mem::swap(&mut self.result, &mut st.view);
+            std::mem::swap(&mut self.open.doc, &mut st.view_doc);
+            crate::asm_ui::after_viewport(self);
+            if self.asm.as_ref().is_some_and(|s| s.dirty) {
+                self.scene_dirty = true;
+            }
+        } else {
+            self.viewport(root, frame);
+        }
         self.toasts(ctx);
 
         // edição não destrutiva + desfazer + bloqueio de revisão congelada
@@ -4141,7 +4288,12 @@ impl eframe::App for App {
         }
 
         if self.scene_dirty {
-            if let (Some(vp), Some(r), Some(rs)) = (self.viewport.as_mut(), &self.result, frame.wgpu_render_state()) {
+            let asm_view = if self.in_asm() { self.asm.as_ref().and_then(|s| s.view.as_ref().map(|v| (&s.view_doc, v))) } else { None };
+            let (scene_doc, scene_res) = match asm_view {
+                Some((d, v)) => (d, Some(v)),
+                None => (&self.open.doc, self.result.as_ref()),
+            };
+            if let (Some(vp), Some(r), Some(rs)) = (self.viewport.as_mut(), scene_res, frame.wgpu_render_state()) {
                 let lum = |c: [u8; 3]| 0.3 * c[0] as f32 + 0.59 * c[1] as f32 + 0.11 * c[2] as f32;
                 let opts = scene::SceneOpts {
                     editing: self.sketch.as_ref().map(|e| e.feature),
@@ -4151,7 +4303,7 @@ impl eframe::App for App {
                     dark_edges: !matches!(self.settings.display, crate::render::DisplayMode::Arame) || lum(self.settings.bg_bottom) > 140.,
                     hilite: self.hover_item.or(self.session.as_ref().map(|s| s.id)),
                 };
-                let s = scene::build(&self.open.doc, r, &opts);
+                let s = scene::build(scene_doc, r, &opts);
                 vp.set_scene(rs, &s);
                 self.scene_dirty = false;
                 ctx.request_repaint();

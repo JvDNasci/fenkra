@@ -587,6 +587,43 @@ I["curva_paralela"] = CV("M4 34 C 14 18, 30 18, 44 30", INK, 2.6) + CV("M4 24 C 
     "".join(f'<line x1="{x}" y1="{y}" x2="{x}" y2="{y - 9}" stroke="{INK}" stroke-width="1.2" stroke-dasharray="2 2"/>' for x, y in [(12, 27), (24, 22), (36, 25)])
 I["extrair"] = box((22, 16), 14) + f'<polygon points="4,25 22,16 40,25 22,34" fill="{ACTION}" opacity="0.85"/>' + arrow(30, 20, 42, 8, ACTION, 2.4)
 
+# ---------------- montagem: componentes e restrições
+BLK = lambda x, y, s=12, fill=MID: f'<rect x="{x}" y="{y}" width="{s}" height="{s}" rx="1.5" fill="{fill}" {S}/>'
+I["asm_nova"] = BLK(6, 24, 14) + BLK(22, 10, 14, LIGHT) + f'<path d="M34 30 V42 M28 36 H40" stroke="{ACTION}" stroke-width="3" stroke-linecap="round"/>'
+I["asm_inserir"] = BLK(4, 26, 16) + BLK(26, 6, 16, LIGHT) + arrow(30, 28, 22, 36, ACTION, 2.4)
+I["asm_subconjunto"] = f'<rect x="4" y="6" width="40" height="36" rx="4" fill="none" stroke="{INK}" stroke-width="1.6" stroke-dasharray="4 3"/>' + BLK(10, 22, 12) + BLK(24, 14, 12, LIGHT) + BLK(24, 28, 10)
+I["asm_peca_nova"] = BLK(6, 20, 18) + f'<path d="M28 8 L42 8 L42 22 L28 22 Z" fill="#ffffff" stroke="{ACTION}" stroke-width="2" stroke-dasharray="3 2"/>' + \
+    f'<path d="M35 11 V19 M31 15 H39" stroke="{ACTION}" stroke-width="2.4" stroke-linecap="round"/>'
+I["asm_grupo"] = f'<path d="M4 14 H18 L22 18 H44 V40 H4 Z" fill="{LIGHT}" {S}/>' + BLK(12, 24, 9, MID) + BLK(26, 24, 9, MID)
+I["asm_substituir"] = BLK(4, 24, 14) + BLK(30, 10, 14, LIGHT) + f'<path d="M20 22 C 24 12, 28 12, 30 14" stroke="{ACTION}" stroke-width="2.4" fill="none"/>' + AR("31,9 34,17 26,16") + \
+    f'<path d="M28 34 C 24 42, 20 42, 18 40" stroke="{ACTION}" stroke-width="2.4" fill="none"/>' + AR("16,45 13,37 21,38")
+I["asm_numerar"] = BLK(4, 6, 12) + BLK(4, 20, 12) + BLK(4, 34, 10) + "".join(f'<circle cx="30" cy="{y}" r="6" fill="{ACTION}"/>' for y in (12, 26, 39)) + \
+    "".join(f'<line x1="17" y1="{y}" x2="24" y2="{y}" stroke="{INK}" stroke-width="1.4"/>' for y in (12, 26, 39))
+I["rest_auto"] = BLK(4, 24, 16) + BLK(28, 8, 16, LIGHT) + f'<path d="M22 6 L18 18 H26 L20 30" stroke="#ffd34d" stroke-width="3" fill="none" stroke-linejoin="round"/>'
+I["rest_coincidencia"] = f'<circle cx="24" cy="24" r="16" fill="{LIGHT}" {S}/><circle cx="24" cy="24" r="8" fill="{MID}" {S}/>' + \
+    f'<line x1="24" y1="2" x2="24" y2="46" stroke="{ACTION}" stroke-width="2.4" stroke-dasharray="5 3"/>'
+I["rest_contato"] = f'<rect x="6" y="26" width="36" height="14" fill="{MID}" {S}/><rect x="10" y="10" width="28" height="14" fill="{LIGHT}" {S}/>' + \
+    f'<line x1="4" y1="25" x2="44" y2="25" stroke="{ACTION}" stroke-width="3"/>'
+I["rest_distancia"] = f'<rect x="4" y="30" width="40" height="10" fill="{MID}" {S}/><rect x="4" y="8" width="40" height="10" fill="{LIGHT}" {S}/>' + \
+    arrow(24, 22, 24, 19, ACTION, 2) + arrow(24, 26, 24, 29, ACTION, 2) + f'<line x1="24" y1="20" x2="24" y2="28" stroke="{ACTION}" stroke-width="2"/>'
+I["rest_angulo"] = f'<path d="M6 40 H42" stroke="{INK}" stroke-width="3"/><path d="M6 40 L34 10" stroke="{INK}" stroke-width="3"/>' + \
+    f'<path d="M22 40 A16 16 0 0 0 17 28" stroke="{ACTION}" stroke-width="2.6" fill="none"/>'
+I["rest_paralelo"] = f'<path d="M8 36 L30 10 M18 40 L40 14" stroke="{ACTION}" stroke-width="3.4" stroke-linecap="round"/>'
+I["rest_perpendicular"] = f'<path d="M8 40 H40 M24 40 V8" stroke="{ACTION}" stroke-width="3.4" stroke-linecap="round"/><rect x="24" y="32" width="8" height="8" fill="none" stroke="{INK}" stroke-width="1.6"/>'
+I["rest_fixar"] = BLK(8, 24, 22) + f'<path d="M30 6 L40 16 L34 18 L26 26 L22 22 L30 14 Z" fill="{ACTION}"/><line x1="24" y1="24" x2="16" y2="32" stroke="{ACTION}" stroke-width="2.4"/>'
+I["rest_conjunta"] = BLK(4, 22, 16) + BLK(28, 22, 16) + f'<rect x="16" y="8" width="16" height="12" rx="2" fill="{ACTION}"/>' + \
+    f'<path d="M19 8 V5 A5 5 0 0 1 29 5 V8" stroke="{ACTION}" stroke-width="2.4" fill="none"/>' + f'<line x1="20" y1="30" x2="28" y2="30" stroke="{ACTION}" stroke-width="3"/>'
+I["rest_alinhar"] = BLK(4, 28, 14) + f'<rect x="28" y="6" width="14" height="14" rx="1.5" fill="none" stroke="{INK}" stroke-width="1.6" stroke-dasharray="3 2"/>' + \
+    BLK(18, 28, 14, LIGHT) + arrow(34, 22, 26, 28, ACTION, 2.4)
+I["rest_atualizar"] = f'<path d="M38 18 A15 15 0 1 0 39 30" stroke="{ACTION}" stroke-width="3.4" fill="none" stroke-linecap="round"/>' + AR("44,10 42,22 32,16") + BLK(18, 18, 12)
+I["rest_interferencia"] = BLK(6, 16, 20) + f'<rect x="20" y="10" width="20" height="20" rx="1.5" fill="{LIGHT}" opacity="0.85" {S}/>' + \
+    f'<rect x="20" y="16" width="6" height="14" fill="#e5484d" opacity="0.9"/>'
+
+I["salvar"] = f'<path d="M6 6 H36 L42 12 V42 H6 Z" fill="{MID}" {S}/><rect x="12" y="6" width="20" height="12" fill="#ffffff" {S}/><rect x="12" y="26" width="24" height="16" fill="{LIGHT}" {S}/><rect x="25" y="9" width="4" height="7" fill="{ACTION}"/>'
+
+I["asm_repeticao"] = BLK(4, 30, 10) + "".join(f'<rect x="{x}" y="{y}" width="10" height="10" rx="1.5" fill="{LIGHT}" stroke="{ACTION}" stroke-width="1.6" stroke-dasharray="3 2"/>' for x, y in [(18, 22), (32, 14)]) + \
+    f'<circle cx="9" cy="24" r="3" fill="{ACTION}"/><circle cx="23" cy="16" r="3" fill="{ACTION}" opacity="0.7"/><circle cx="37" cy="8" r="3" fill="{ACTION}" opacity="0.5"/>'
+
 for name, body in I.items():
     with open(os.path.join(OUT, f"{name}.svg"), "w", encoding="utf8", newline="\n") as f:
         f.write(svg(body))

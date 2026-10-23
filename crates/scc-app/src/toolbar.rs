@@ -213,6 +213,38 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 Family("superficie", fam(&geo_ui::SURFACES)),
             ]
         }
+        Group::Montagem => vec![
+            Family("asm_arquivo", vec![
+                it("asm_nova", "Nova", "Nova montagem", "Começa uma montagem vazia (arquivo .sccasm).", Cmd(C::AsmNew)),
+                it("abrir_projeto", "Abrir", "Abrir montagem", "Abre um arquivo .sccasm.", Cmd(C::AsmOpen)),
+                it("salvar", "Salvar", "Salvar montagem  (Ctrl+S)", "Grava a montagem; as peças ficam nos arquivos delas.", Cmd(C::AsmSave)),
+            ]),
+            Family("asm_inserir", vec![
+                it("asm_inserir", "Inserir peça", "Inserir peça existente", "Escolha um ou mais arquivos .sccpart; o primeiro componente entra fixo.", Cmd(C::AsmInsert)),
+                it("asm_subconjunto", "Subconjunto", "Inserir subconjunto", "Insere outra montagem (.sccasm) como um componente.", Cmd(C::AsmSubAsm)),
+                it("asm_peca_nova", "Peça nova", "Peça nova no contexto", "Cria o arquivo da peça ao lado da montagem e abre para modelar.", Cmd(C::AsmNewPart)),
+            ]),
+            One(it("asm_grupo", "Grupo", "Grupo de organização", "Elemento vazio só para organizar a árvore (não muda a geometria).", Cmd(C::AsmGroup))),
+            One(it("asm_substituir", "Substituir", "Substituir componente", "Troca a peça mantendo a posição e as restrições (as faces são reencontradas pelo ponto clicado).", Cmd(C::AsmReplace))),
+            One(it("asm_repeticao", "Repetição", "Repetição inteligente de componente", "Copia o componente selecionado em padrão linear ou circular (ex.: parafusos); as cópias acompanham o original e mudam com a quantidade.", Cmd(C::AsmPattern))),
+            One(it("asm_numerar", "Numerar", "Numeração automática", "Renumera os componentes em sequência, na ordem da árvore.", Cmd(C::AsmNumber))),
+        ],
+        Group::Restricoes => vec![
+            One(it("rest_auto", "Automática", "Restrição automática", "Escolha dois elementos: o tipo mais lógico é aplicado (faces de frente = contato; eixos = coincidência…).", Cmd(C::AsmMate(crate::asm_ui::MateCmd::Auto)))),
+            Family("rest_tipo", vec![
+                it("rest_coincidencia", "Coincidência", "Coincidência", "Alinha eixos, junta pontos ou deixa faces coplanares (direta ou invertida).", Cmd(C::AsmMate(crate::asm_ui::MateCmd::Coincident))),
+                it("rest_contato", "Contato", "Contato", "Faces encostadas, de frente uma para a outra, sem folga.", Cmd(C::AsmMate(crate::asm_ui::MateCmd::Contact))),
+                it("rest_distancia", "Distância", "Distância", "Separação entre faces, eixos ou pontos (positiva, negativa ou nula; aceita fórmula).", Cmd(C::AsmMate(crate::asm_ui::MateCmd::Distance))),
+                it("rest_angulo", "Ângulo", "Ângulo", "Inclinação entre faces ou linhas.", Cmd(C::AsmMate(crate::asm_ui::MateCmd::Angle))),
+                it("rest_paralelo", "Paralelo", "Paralelismo", "Faces ou eixos paralelos (rígido).", Cmd(C::AsmMate(crate::asm_ui::MateCmd::Parallel))),
+                it("rest_perpendicular", "Perpendicular", "Perpendicularidade", "Faces ou eixos a 90° (rígido).", Cmd(C::AsmMate(crate::asm_ui::MateCmd::Perpendicular))),
+            ]),
+            One(it("rest_fixar", "Fixar", "Fixar componente", "Tira todos os graus de liberdade: vira a referência global.", Cmd(C::AsmFix))),
+            One(it("rest_conjunta", "Fixação conjunta", "Fixação conjunta", "As peças selecionadas passam a se mover como um corpo rígido.", Cmd(C::AsmRigid))),
+            One(it("rest_alinhar", "Alinhar", "Alinhamento instantâneo", "Posiciona pelos dois elementos escolhidos sem guardar restrição (sem histórico).", Cmd(C::AsmMate(crate::asm_ui::MateCmd::AlignOnce)))),
+            One(it("rest_atualizar", "Atualizar", "Resolver restrições", "Recalcula as posições de todos os componentes.", Cmd(C::AsmSolve))),
+            One(it("rest_interferencia", "Interferências", "Verificar interferências", "Procura volumes em comum entre os componentes (colisões).", Cmd(C::AsmInterf))),
+        ],
         Group::Wireframe => {
             let g = |k: GeoKind| {
                 let (i, n, b, a) = k.info();

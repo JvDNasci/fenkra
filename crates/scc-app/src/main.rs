@@ -16,6 +16,7 @@ mod keymap;
 mod feat_ui;
 mod handles;
 mod gizmo;
+mod asm_ui;
 mod measure;
 mod i18n;
 

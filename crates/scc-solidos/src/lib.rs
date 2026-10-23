@@ -2045,6 +2045,32 @@ pub fn export(doc: &Document, collector: Option<Id>, path: &str) -> Result<(), S
     r.map_err(|e| e.0)
 }
 
+/// Forma final da peça (todos os corpos visíveis juntos) — usada pela montagem para achar faces
+/// e eixos das restrições.
+pub fn final_shape(doc: &Document) -> Option<Shape> {
+    let vars = doc.eval_params().ok()?;
+    let mut cx = Ctx {
+        doc,
+        vars,
+        bodies: HashMap::new(),
+        sketches: HashMap::new(),
+        status: HashMap::new(),
+        tools: HashMap::new(),
+        memo: RefCell::new(HashMap::new()),
+        body_sig: HashMap::new(),
+    };
+    for f in doc.active_features().map(|(_, f)| f) {
+        let _ = cx.run(f);
+    }
+    let mut all = Shape::empty();
+    for c in doc.collectors.iter().filter(|c| c.visible) {
+        if let Some(b) = cx.body(c.id) {
+            all = if all.is_null() { b.clone() } else { all.compound(b) };
+        }
+    }
+    (!all.is_null()).then_some(all)
+}
+
 /// Ponto fixo de construção na origem do sketch (referência para cotas).
 pub fn origin_point(sk: &mut SketchData, al: &mut impl FnMut() -> Id) -> Id {
     let o = sk.add_point(al, 0., 0.);

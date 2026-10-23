@@ -15,6 +15,7 @@ scc-core = { path = "../scc-core" }
 scc-kernel = { path = "../scc-kernel" }
 scc-solidos = { path = "../scc-solidos" }
 scc-project = { path = "../scc-project" }
+scc-montagem = { path = "../scc-montagem" }
 eframe = { version = "0.37", features = ["wgpu", "persistence"] }
 glam.workspace = true
 bytemuck.workspace = true

@@ -33,6 +33,9 @@ pub enum Group {
     Hibrido,
     /// análise de superfície (zebra, curvatura) — nas duas bancadas
     Analise,
+    // montagem
+    Montagem,
+    Restricoes,
     // modo sketch
     SkCriacao,
     SkTransformar,
@@ -42,7 +45,9 @@ pub enum Group {
 }
 
 impl Group {
-    pub const ALL: [Group; 18] = [
+    pub const ALL: [Group; 20] = [
+        Group::Montagem,
+        Group::Restricoes,
         Group::Sketch,
         Group::Solidos,
         Group::Acabamento,
@@ -65,7 +70,11 @@ impl Group {
     /// Em que bancada o grupo aparece (Sketch, Referências/wireframe, Volume, Análise, Organização,
     /// Seleção e Vista são comuns às duas).
     pub fn in_bench(self, b: Bench) -> bool {
+        if b == Bench::Montagem {
+            return matches!(self, Group::Montagem | Group::Restricoes | Group::Vista | Group::Selecao | Group::Analise);
+        }
         match self {
+            Group::Montagem | Group::Restricoes => false,
             Group::Solidos | Group::Acabamento | Group::Padroes => b == Bench::Solidos,
             Group::Superficies | Group::Operacoes | Group::Wireframe => b == Bench::Superficies,
             // na bancada de superfícies o Wireframe mostra as referências abertas, sem famílias
@@ -92,6 +101,8 @@ impl Group {
             Group::Operacoes => tr("Operações"),
             Group::Hibrido => tr("Volume (superfície ↔ sólido)"),
             Group::Analise => tr("Análise"),
+            Group::Montagem => tr("Montagem"),
+            Group::Restricoes => tr("Restrições e movimento"),
             Group::SkCriacao => tr("Criação"),
             Group::SkTransformar => tr("Transformar"),
             Group::SkCotagem => tr("Cotagem"),
@@ -107,6 +118,7 @@ pub enum Bench {
     #[default]
     Solidos,
     Superficies,
+    Montagem,
 }
 
 /// Estilo de navegação da câmera (botões do mouse).
