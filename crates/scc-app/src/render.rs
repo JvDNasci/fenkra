@@ -16,8 +16,22 @@ struct U {
     bg_top: vec4<f32>,
     bg_bottom: vec4<f32>,  // w = 1 → degradê
     paper: vec4<f32>,      // cor das faces no estilo "linhas ocultas"
+    tex_scale: array<vec4<f32>, 2>,  // tamanho (mm) de uma repetição de cada textura
 };
 @group(0) @binding(0) var<uniform> u: U;
+@group(0) @binding(1) var tex: texture_2d_array<f32>;
+@group(0) @binding(2) var samp: sampler;
+
+// textura triplanar: projeta a imagem nos três planos e mistura pela normal
+fn triplanar(layer: i32, p: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
+    let s = max(u.tex_scale[layer / 4][layer % 4], 0.001);
+    var w = pow(abs(n), vec3<f32>(4.0));
+    w = w / (w.x + w.y + w.z);
+    let a = textureSampleLevel(tex, samp, p.yz / s, layer, 0.0).rgb;
+    let b = textureSampleLevel(tex, samp, p.xz / s, layer, 0.0).rgb;
+    let c = textureSampleLevel(tex, samp, p.xy / s, layer, 0.0).rgb;
+    return a * w.x + b * w.y + c * w.z;
+}
 
 // ---------- fundo
 struct BOut { @builtin(position) clip: vec4<f32>, @location(0) y: f32 };
@@ -53,7 +67,8 @@ struct MOut {
     if (dot(n, v) < 0.0) { n = -n; }
     if (mode > 1.5 && mode < 2.5) { return vec4<f32>(u.paper.rgb, 1.0); }
 
-    let base = i.col.rgb;
+    var base = i.col.rgb;
+    if (i.mat.w > 0.5) { base = base * triplanar(i32(i.mat.w + 0.5) - 1, i.wp, normalize(i.n)); }
     let rough = i.mat.x;
     let metal = i.mat.y;
     var alpha = i.mat.z * i.col.a;
@@ -183,7 +198,12 @@ struct Uniforms {
     bg_top: [f32; 4],
     bg_bottom: [f32; 4],
     paper: [f32; 4],
+    tex_scale: [[f32; 4]; 2],
 }
+
+/// Camadas do array de texturas (cada imagem é reduzida para TEX × TEX).
+pub const TEX_LAYERS: u32 = 8;
+const TEX: u32 = 512;
 
 /// Cena pronta para a GPU.
 #[derive(Default)]
@@ -313,6 +333,8 @@ pub struct Viewport {
     ob: Buf,
     targets: Option<Targets>,
     pub camera: Camera,
+    textures: wgpu::Texture,
+    tex_scale: [[f32; 4]; 2],
     /// transição suave da câmera (de, para, início)
     anim: Option<(Camera, Camera, std::time::Instant)>,
     last: Option<(Camera, [u32; 2], u64, ViewStyle)>,
@@ -390,17 +412,57 @@ impl Viewport {
         });
         let bgl = dev.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
-                count: None,
-            }],
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                    ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2Array,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry { binding: 2, visibility: wgpu::ShaderStages::FRAGMENT, ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering), count: None },
+            ],
+        });
+        // texturas: array de camadas brancas até o usuário escolher imagens
+        let textures = dev.create_texture(&wgpu::TextureDescriptor {
+            label: Some("texturas"),
+            size: wgpu::Extent3d { width: TEX, height: TEX, depth_or_array_layers: TEX_LAYERS },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let white = vec![255u8; (TEX * TEX * 4) as usize];
+        for l in 0..TEX_LAYERS {
+            write_layer(&rs.queue, &textures, l, &white);
+        }
+        let tex_view = textures.create_view(&wgpu::TextureViewDescriptor { dimension: Some(wgpu::TextureViewDimension::D2Array), ..Default::default() });
+        let sampler = dev.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::Repeat,
+            address_mode_v: wgpu::AddressMode::Repeat,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
         });
         let bind = dev.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: &bgl,
-            entries: &[wgpu::BindGroupEntry { binding: 0, resource: ubuf.as_entire_binding() }],
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: ubuf.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&tex_view) },
+                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&sampler) },
+            ],
         });
         let layout = dev.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: None, bind_group_layouts: &[Some(&bgl)], ..Default::default() });
         let target = [Some(wgpu::ColorTargetState { format: FMT, blend: Some(wgpu::BlendState::ALPHA_BLENDING), write_mask: wgpu::ColorWrites::ALL })];
@@ -448,6 +510,8 @@ impl Viewport {
             overlay_pipe: pipe("vs_line", "fs_line", &line_attrs, ls, T::LineList, C::Always, false),
             ubuf,
             bind,
+            textures,
+            tex_scale: [[100.; 4]; 2],
             vb: None,
             eb: None,
             lb: None,
@@ -460,6 +524,18 @@ impl Viewport {
             scene_gen: 0,
             bounds: None,
         }
+    }
+
+    /// Carrega as imagens de textura (RGBA já em TEX × TEX) e o tamanho de repetição de cada uma.
+    pub fn set_textures(&mut self, rs: &egui_wgpu::RenderState, imgs: &[(Vec<u8>, f32)]) {
+        let white = vec![255u8; (TEX * TEX * 4) as usize];
+        for l in 0..TEX_LAYERS {
+            let (data, scale) = imgs.get(l as usize).map(|(d, s)| (d.as_slice(), *s)).unwrap_or((&white, 100.));
+            let data = if data.len() == (TEX * TEX * 4) as usize { data } else { &white };
+            write_layer(&rs.queue, &self.textures, l, data);
+            self.tex_scale[l as usize / 4][l as usize % 4] = scale;
+        }
+        self.last = None;
     }
 
     pub fn set_scene(&mut self, rs: &egui_wgpu::RenderState, s: &Scene) {
@@ -535,6 +611,7 @@ impl Viewport {
             bg_top: lin(style.bg_top),
             bg_bottom: bottom,
             paper: [0.96, 0.96, 0.95, 1.],
+            tex_scale: self.tex_scale,
         };
         rs.queue.write_buffer(&self.ubuf, 0, bytemuck::bytes_of(&u));
 
@@ -607,4 +684,19 @@ impl Viewport {
         let n = c.truncate() / c.w;
         Some(egui::pos2(rect.left() + (n.x + 1.) / 2. * rect.width(), rect.top() + (1. - n.y) / 2. * rect.height()))
     }
+}
+
+fn write_layer(q: &wgpu::Queue, t: &wgpu::Texture, layer: u32, rgba: &[u8]) {
+    q.write_texture(
+        wgpu::TexelCopyTextureInfo { texture: t, mip_level: 0, origin: wgpu::Origin3d { x: 0, y: 0, z: layer }, aspect: wgpu::TextureAspect::All },
+        rgba,
+        wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(TEX * 4), rows_per_image: Some(TEX) },
+        wgpu::Extent3d { width: TEX, height: TEX, depth_or_array_layers: 1 },
+    );
+}
+
+/// Lê uma imagem e reduz para o tamanho das camadas de textura (RGBA).
+pub fn load_texture(path: &std::path::Path) -> Result<Vec<u8>, String> {
+    let img = image::open(path).map_err(|e| e.to_string())?.to_rgba8();
+    Ok(image::imageops::resize(&img, TEX, TEX, image::imageops::FilterType::Triangle).into_raw())
 }

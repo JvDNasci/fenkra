@@ -91,6 +91,8 @@ pub struct App {
     pub sel: Sel,
     pub result: Option<RecomputeResult>,
     pub delete_dialog: Option<DeleteDialog>,
+    /// texturas carregadas na GPU (arquivo, escala)
+    tex_key: Vec<(String, f64)>,
     /// janela de automação (macros) e o registro da última execução
     macro_open: bool,
     macro_log: Vec<String>,
@@ -185,6 +187,7 @@ impl App {
             link_open: false,
             customize_open: false,
             macro_open: false,
+            tex_key: vec![],
             macro_log: vec![],
             customize_sel: 0,
             link_src: None,
@@ -226,6 +229,11 @@ impl App {
                 app.start_session(id, false, None);
                 app.started = true;
             }
+        }
+        // desenvolvimento: SCC_TEXTURA=<imagem> aplica a imagem como textura na peça
+        if let Ok(p) = std::env::var("SCC_TEXTURA") {
+            app.open.doc.textures.push(TextureRef { name: "teste".into(), path: p, scale: 40. });
+            app.open.doc.appearance = Some(Appearance { color: [255, 255, 255], finish: Finish::Acetinado, texture: Some(0) });
         }
         // desenvolvimento: SCC_EN=1 mostra a interface em inglês (sem gravar a configuração)
         if std::env::var("SCC_EN").is_ok() {
@@ -2067,7 +2075,7 @@ impl App {
                             actions.push(TreeAction::CollectorMarker(c.id, None));
                             ui.close();
                         }
-                        appearance_menu(ui, Some(Appearance { color: c.color, finish: c.finish }), AppTarget::Collector(c.id), &mut actions);
+                        appearance_menu(ui, Some(Appearance { color: c.color, finish: c.finish, texture: c.texture }), AppTarget::Collector(c.id), &mut actions);
                         ui.separator();
                         if ui.button(tr("🗑 Apagar corpo…")).clicked() {
                             actions.push(TreeAction::Delete(c.id));
@@ -3547,6 +3555,30 @@ impl eframe::App for App {
                 vp.set_scene(rs, &s);
                 self.scene_dirty = false;
                 ctx.request_repaint();
+            }
+        }
+        // texturas: recarrega as imagens quando a lista (arquivo, escala) muda
+        let key: Vec<(String, f64)> = self.open.doc.textures.iter().map(|t| (t.path.clone(), t.scale)).collect();
+        if key != self.tex_key {
+            if let (Some(vp), Some(rs)) = (self.viewport.as_mut(), frame.wgpu_render_state()) {
+                let root = self.project.as_ref().map(|p| p.root.clone());
+                let imgs: Vec<(Vec<u8>, f32)> = self
+                    .open
+                    .doc
+                    .textures
+                    .iter()
+                    .map(|t| {
+                        let p = std::path::Path::new(&t.path);
+                        let full = match (&root, p.is_relative()) {
+                            (Some(r), true) => r.join(p),
+                            _ => p.to_path_buf(),
+                        };
+                        (crate::render::load_texture(&full).unwrap_or_default(), t.scale as f32)
+                    })
+                    .collect();
+                vp.set_textures(rs, &imgs);
+                self.tex_key = key;
+                self.scene_dirty = true;
             }
         }
         if let (Some(d), Some(vp)) = (self.view_choice.take(), self.viewport.as_mut()) {

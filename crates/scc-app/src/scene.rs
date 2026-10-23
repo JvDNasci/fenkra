@@ -66,7 +66,7 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
         for b in &r.bodies {
             let Some(col) = doc.collectors.iter().find(|c| c.id == b.collector) else { continue };
             let body_sel = matches!(o.sel, Sel::Collector(c) if *c == b.collector);
-            let base = doc.appearance.unwrap_or(Appearance { color: col.color, finish: col.finish });
+            let base = doc.appearance.unwrap_or(Appearance { color: col.color, finish: col.finish, texture: col.texture });
             let m = &b.mesh;
             let nfaces = m.face_ranges.len();
             for fi in 0..nfaces {
@@ -94,7 +94,7 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
                             pos: p,
                             nrm: [m.normals[k], m.normals[k + 1], m.normals[k + 2]],
                             col: [c[0], c[1], c[2], 1.0],
-                            mat: [rough, metal, alpha, 0.],
+                            mat: [rough, metal, alpha, app.texture.filter(|t| (*t as u32) < crate::render::TEX_LAYERS).map(|t| t as f32 + 1.).unwrap_or(0.)],
                         });
                         (s.mesh.len() - 1) as u32
                     });

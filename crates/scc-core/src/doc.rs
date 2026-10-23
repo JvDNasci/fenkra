@@ -782,17 +782,30 @@ impl Finish {
 pub struct Appearance {
     pub color: [u8; 3],
     pub finish: Finish,
+    /// textura de imagem (índice em `Document.textures`), multiplicada pela cor
+    #[serde(default)]
+    pub texture: Option<u8>,
+}
+
+/// Imagem usada como textura (mapeamento triplanar: não precisa de coordenadas UV).
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct TextureRef {
+    pub name: String,
+    /// arquivo PNG/JPG (absoluto ou relativo à pasta do projeto)
+    pub path: String,
+    /// tamanho de uma repetição da imagem, em mm
+    pub scale: f64,
 }
 
 pub const APPEARANCE_PRESETS: [(&str, Appearance); 8] = [
-    ("Aço", Appearance { color: [168, 172, 178], finish: Finish::MetalEscovado }),
-    ("Alumínio", Appearance { color: [205, 208, 212], finish: Finish::MetalEscovado }),
-    ("Inox polido", Appearance { color: [215, 218, 222], finish: Finish::MetalPolido }),
-    ("Latão", Appearance { color: [201, 168, 92], finish: Finish::MetalPolido }),
-    ("ABS preto", Appearance { color: [38, 40, 44], finish: Finish::Acetinado }),
-    ("Plástico vermelho", Appearance { color: [200, 40, 40], finish: Finish::Brilhante }),
-    ("Borracha", Appearance { color: [30, 30, 32], finish: Finish::Borracha }),
-    ("Vidro", Appearance { color: [170, 210, 230], finish: Finish::Vidro }),
+    ("Aço", Appearance { color: [168, 172, 178], finish: Finish::MetalEscovado, texture: None }),
+    ("Alumínio", Appearance { color: [205, 208, 212], finish: Finish::MetalEscovado, texture: None }),
+    ("Inox polido", Appearance { color: [215, 218, 222], finish: Finish::MetalPolido, texture: None }),
+    ("Latão", Appearance { color: [201, 168, 92], finish: Finish::MetalPolido, texture: None }),
+    ("ABS preto", Appearance { color: [38, 40, 44], finish: Finish::Acetinado, texture: None }),
+    ("Plástico vermelho", Appearance { color: [200, 40, 40], finish: Finish::Brilhante, texture: None }),
+    ("Borracha", Appearance { color: [30, 30, 32], finish: Finish::Borracha, texture: None }),
+    ("Vidro", Appearance { color: [170, 210, 230], finish: Finish::Vidro, texture: None }),
 ];
 
 // ---------------------------------------------------------------- Coletores e pastas
@@ -805,6 +818,8 @@ pub struct BodyCollector {
     pub visible: bool,
     #[serde(default)]
     pub finish: Finish,
+    #[serde(default)]
+    pub texture: Option<u8>,
     /// marcador da linha do tempo deste coletor: quantos comandos dele estão ativos (None = todos)
     #[serde(default)]
     pub marker: Option<usize>,
@@ -1382,6 +1397,9 @@ pub struct Document {
     /// vistas salvas (câmeras)
     #[serde(default)]
     pub views: Vec<NamedView>,
+    /// imagens de textura usadas nas aparências (até 8)
+    #[serde(default)]
+    pub textures: Vec<TextureRef>,
     /// Ordem do vetor = ordem da linha de tempo.
     pub features: Vec<Feature>,
     /// Quantidade de comandos ativos (marcador de rollback, RF-ARV-051).
@@ -1424,6 +1442,7 @@ impl Document {
             folders: vec![],
             external: vec![],
             views: vec![],
+            textures: vec![],
             features: vec![],
             rollback: 0,
         };
@@ -1472,7 +1491,7 @@ impl Document {
     pub fn add_collector(&mut self, name: &str) -> Id {
         let id = self.alloc();
         let color = PALETTE[self.collectors.len() % PALETTE.len()];
-        self.collectors.push(BodyCollector { id, name: name.into(), color, visible: true, finish: Finish::default(), marker: None });
+        self.collectors.push(BodyCollector { id, name: name.into(), color, visible: true, finish: Finish::default(), texture: None, marker: None });
         id
     }
 

@@ -203,6 +203,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         _ => None,
     };
     let mut sess_act: Option<u8> = None; // 0 = concluir, 1 = cancelar, 2 = abrir
+    let tex_names: Vec<String> = app.open.doc.textures.iter().map(|t| t.name.clone()).collect();
     let doc = &mut app.open.doc;
 
     if let Some(rev) = &frozen {
@@ -280,7 +281,30 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             }
             section(ui, "Aparência da peça");
             ui.label(RichText::new(tr("Sobrepõe a cor dos coletores; comandos com aparência própria têm prioridade.")).weak().small());
-            appearance_opt(ui, "ap_peca", &mut doc.appearance);
+            let tex: Vec<String> = doc.textures.iter().map(|t| t.name.clone()).collect();
+            appearance_opt(ui, "ap_peca", &mut doc.appearance, &tex);
+            section(ui, "Texturas da peça");
+            let mut del = None;
+            for (i, t) in doc.textures.iter_mut().enumerate() {
+                ui.horizontal(|ui| {
+                    ui.label(&t.name);
+                    ui.add(egui::DragValue::new(&mut t.scale).range(0.1..=10000.).speed(1.).suffix(" mm"))
+                        .on_hover_text(tr("tamanho de uma repetição da imagem"));
+                    if ui.small_button("✖").clicked() {
+                        del = Some(i);
+                    }
+                });
+            }
+            if let Some(i) = del {
+                doc.textures.remove(i);
+            }
+            if doc.textures.len() < 8 && ui.button(tr("🖼 Adicionar imagem…")).clicked() {
+                if let Some(p) = rfd::FileDialog::new().add_filter("Imagem", &["png", "jpg", "jpeg"]).pick_file() {
+                    let name = p.file_stem().map(|x| x.to_string_lossy().to_string()).unwrap_or_default();
+                    doc.textures.push(TextureRef { name, path: p.to_string_lossy().to_string(), scale: 50. });
+                }
+            }
+            ui.label(RichText::new(tr("Projetada nos três planos (triplanar) e multiplicada pela cor: use branco para a imagem pura.")).weak().small());
         }
 
         Sel::Origin(o) => {
@@ -331,10 +355,11 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 ui.add_sized([96., 18.], egui::Label::new(tr("Nome")));
                 ui.text_edit_singleline(&mut c.name);
             });
-            let mut a = Appearance { color: c.color, finish: c.finish };
-            appearance_fields(ui, "ap_col", &mut a);
+            let mut a = Appearance { color: c.color, finish: c.finish, texture: c.texture };
+            appearance_fields(ui, "ap_col", &mut a, &tex_names);
             c.color = a.color;
             c.finish = a.finish;
+            c.texture = a.texture;
             ui.checkbox(&mut c.visible, tr("visível"));
             if active {
                 ui.label(RichText::new(tr("✔ coletor ativo: novos comandos atuam nele")).color(Color32::from_rgb(140, 210, 140)));
@@ -445,7 +470,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 });
                 if !matches!(f.kind, FeatureKind::Sketch(_)) {
                     egui::CollapsingHeader::new(tr("🎨 Aparência das faces deste comando")).id_salt("ap_cmd").show(ui, |ui| {
-                        appearance_opt(ui, "ap_feat", &mut f.appearance);
+                        appearance_opt(ui, "ap_feat", &mut f.appearance, &tex_names);
                     });
                 }
             }
@@ -492,7 +517,19 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
 }
 
 /// Cor + acabamento + predefinições.
-fn appearance_fields(ui: &mut egui::Ui, id: &str, a: &mut Appearance) {
+fn appearance_fields(ui: &mut egui::Ui, id: &str, a: &mut Appearance, tex: &[String]) {
+    if !tex.is_empty() {
+        ui.horizontal(|ui| {
+            ui.add_sized([96., 18.], egui::Label::new(tr("Textura")));
+            let cur = a.texture.and_then(|t| tex.get(t as usize)).cloned().unwrap_or_else(|| tr("sem textura").to_string());
+            egui::ComboBox::from_id_salt((id, "tex")).selected_text(cur).show_ui(ui, |ui| {
+                ui.selectable_value(&mut a.texture, None, tr("sem textura"));
+                for (i, n) in tex.iter().enumerate() {
+                    ui.selectable_value(&mut a.texture, Some(i as u8), n);
+                }
+            });
+        });
+    }
     ui.horizontal(|ui| {
         ui.add_sized([96., 18.], egui::Label::new(tr("Cor")));
         ui.color_edit_button_srgb(&mut a.color);
@@ -513,10 +550,10 @@ fn appearance_fields(ui: &mut egui::Ui, id: &str, a: &mut Appearance) {
 }
 
 /// Aparência opcional (com botão para aplicar/remover).
-fn appearance_opt(ui: &mut egui::Ui, id: &str, a: &mut Option<Appearance>) {
+fn appearance_opt(ui: &mut egui::Ui, id: &str, a: &mut Option<Appearance>, tex: &[String]) {
     match a {
         Some(ap) => {
-            appearance_fields(ui, id, ap);
+            appearance_fields(ui, id, ap, tex);
             if ui.small_button(tr("remover aparência")).clicked() {
                 *a = None;
             }
