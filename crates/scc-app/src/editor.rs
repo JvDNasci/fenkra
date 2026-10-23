@@ -100,6 +100,7 @@ pub(crate) fn extent_ui(ui: &mut egui::Ui, _id: &str, e: &mut Extent, vars: &Var
         Extent::Symmetric(_) => "Plano médio",
         Extent::TwoSides(..) => "Dois sentidos",
         Extent::ThroughAll => "Passante",
+        Extent::UpToLast => "Até o último",
         Extent::UpTo(_) => "Até plano",
         Extent::UpToNext => "Até o próximo",
         Extent::UpToSurface(_) => "Até a superfície",
@@ -114,6 +115,7 @@ pub(crate) fn extent_ui(ui: &mut egui::Ui, _id: &str, e: &mut Extent, vars: &Var
         "Plano médio" => ("ext_simetrico", "Metade para cada lado do plano do sketch"),
         "Dois sentidos" => ("ext_dois_sentidos", "Distâncias diferentes para cada lado"),
         "Passante" => ("ext_passante", "Atravessa todo o corpo"),
+        "Até o último" => ("ext_ate_ultimo", "Vai até a última parede do corpo nessa direção"),
         "Até o próximo" => ("ext_ate_face", "Para na primeira parede do corpo nessa direção"),
         "Até a superfície" => ("ext_ate_superficie", "Termina numa superfície ou face (estendida se for menor que o perfil)"),
         _ => ("ext_ate_plano", "Termina exatamente num plano (inclusive inclinado)"),
@@ -128,6 +130,7 @@ pub(crate) fn extent_ui(ui: &mut egui::Ui, _id: &str, e: &mut Extent, vars: &Var
                 "Dois sentidos" => Extent::TwoSides(keep.clone(), keep.clone()),
                 "Passante" => Extent::ThroughAll,
                 "Até o próximo" => Extent::UpToNext,
+                "Até o último" => Extent::UpToLast,
                 "Até a superfície" => Extent::UpToSurface(seed.surface.unwrap_or_else(|| {
                     doc.references
                         .iter()
@@ -148,6 +151,9 @@ pub(crate) fn extent_ui(ui: &mut egui::Ui, _id: &str, e: &mut Extent, vars: &Var
         }
         Extent::ThroughAll => {
             ui.label(RichText::new(tr("atravessa todo o corpo de destino")).weak().small());
+        }
+        Extent::UpToLast => {
+            ui.label(RichText::new(tr("vai até a parede mais distante do corpo nessa direção")).weak().small());
         }
         Extent::UpToNext => {
             ui.label(RichText::new(tr("para na primeira parede do corpo encontrada")).weak().small());
@@ -481,16 +487,17 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 }
                 ui.horizontal(|ui| {
                     ui.checkbox(&mut f.suppressed, tr("suprimido"));
-                    let mut vis = !f.hidden;
-                    if ui.checkbox(&mut vis, tr("visível")).changed() {
-                        f.hidden = !vis;
+                    // só sketches têm olho próprio; sólidos aparecem pelo corpo (última feature)
+                    if matches!(f.kind, FeatureKind::Sketch(_)) {
+                        let mut vis = !f.hidden;
+                        if ui.checkbox(&mut vis, tr("visível")).changed() {
+                            f.hidden = !vis;
+                        }
+                    } else if ui.button(tr("🎨 Propriedades gráficas…")).clicked() {
+                        ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique("scc_props"), f.id));
                     }
                 });
-                if !matches!(f.kind, FeatureKind::Sketch(_)) {
-                    egui::CollapsingHeader::new(tr("🎨 Aparência das faces deste comando")).id_salt("ap_cmd").show(ui, |ui| {
-                        appearance_opt(ui, "ap_feat", &mut f.appearance, &tex_names);
-                    });
-                }
+                let _ = &tex_names;
             }
             let mut target = doc.features[idx].target;
             let mut kind = doc.features[idx].kind.clone();
@@ -535,7 +542,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
 }
 
 /// Cor + acabamento + predefinições.
-fn appearance_fields(ui: &mut egui::Ui, id: &str, a: &mut Appearance, tex: &[String]) {
+pub(crate) fn appearance_fields(ui: &mut egui::Ui, id: &str, a: &mut Appearance, tex: &[String]) {
     if !tex.is_empty() {
         ui.horizontal(|ui| {
             ui.add_sized([96., 18.], egui::Label::new(tr("Textura")));
@@ -568,7 +575,7 @@ fn appearance_fields(ui: &mut egui::Ui, id: &str, a: &mut Appearance, tex: &[Str
 }
 
 /// Aparência opcional (com botão para aplicar/remover).
-fn appearance_opt(ui: &mut egui::Ui, id: &str, a: &mut Option<Appearance>, tex: &[String]) {
+pub(crate) fn appearance_opt(ui: &mut egui::Ui, id: &str, a: &mut Option<Appearance>, tex: &[String]) {
     match a {
         Some(ap) => {
             appearance_fields(ui, id, ap, tex);
@@ -747,8 +754,15 @@ fn feature_ui(
             sketch_combo(ui, "sk_ex", doc, idx, &mut e.sketch);
             op_combo(ui, "op_ex", &mut e.op);
             section(ui, "Extensão");
-            extent_ui(ui, "ext_ex", &mut e.extent, vars, &["Cego", "Plano médio", "Dois sentidos", "Passante", "Até o próximo", "Até plano", "Até a superfície"], doc, seed);
+            extent_ui(ui, "ext_ex", &mut e.extent, vars, &["Cego", "Plano médio", "Dois sentidos", "Passante", "Até o próximo", "Até o último", "Até plano", "Até a superfície"], doc, seed);
             ui.checkbox(&mut e.reverse, tr("inverter sentido"));
+            let mut custom = e.dir.is_some();
+            if ui.checkbox(&mut custom, tr("direção por linha, aresta ou eixo")).changed() {
+                e.dir = custom.then(|| seed.curves.first().map(crate::geo_ui::axis_of).unwrap_or(AxisRef::Origin(OriginAxis::Z)));
+            }
+            if let Some(a) = &mut e.dir {
+                crate::geo_ui::axis_slot(ui, "ex_dir", "Direção", doc, Id(u64::MAX), a, seed);
+            }
             crate::feat_ui::extrude_extras(ui, e, vars);
             if e.op == BoolOp::Cut {
                 ui.label(RichText::new(tr("O recorte entra no material (contra a normal do plano). Use 'inverter' se necessário.")).weak().small());
@@ -844,8 +858,35 @@ fn kind_tag(id: Id, doc: &Document) -> Option<bool> {
 /// Furo inteligente (RF-SOL-007/008): escolher norma e uso preenche os diâmetros.
 fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &Vars, target: &mut Id, seed: &crate::geo_ui::Seed) {
     section(ui, "Centros");
-    sketch_combo(ui, "sk_furo", doc, idx, &mut h.sketch);
-    ui.label(RichText::new(tr("Os pontos do sketch são os centros; o furo entra contra a normal do plano.")).weak().small());
+    let by_pts = !h.points.is_empty();
+    let opts = [
+        ("sketch", "Sketch", "Os pontos de um sketch são os centros", !by_pts),
+        ("ponto_superficie", "Pontos 3D", "Pontos sobre a peça (vários furos de uma vez), normais à superfície", by_pts),
+    ];
+    match icon_choice(ui, &opts) {
+        Some(0) => h.points.clear(),
+        Some(1) if !by_pts => h.points = if seed.points.is_empty() { vec![PointRef::Origin] } else { seed.points.clone() },
+        _ => {}
+    }
+    if h.points.is_empty() {
+        sketch_combo(ui, "sk_furo", doc, idx, &mut h.sketch);
+        ui.label(RichText::new(tr("Os pontos do sketch são os centros; o furo entra contra a normal do plano.")).weak().small());
+    } else {
+        crate::geo_ui::points_list(ui, "furo_pts", doc, Id(u64::MAX), &mut h.points, seed, 1);
+        ui.label(RichText::new(tr("Selecione vértices ou pontos de referência e use '+ seleção': cada ponto vira um furo.")).weak().small());
+    }
+    section(ui, "Direção");
+    let mut custom = h.dir.is_some();
+    if ui.checkbox(&mut custom, tr("por uma linha, aresta ou eixo (vetor)")).changed() {
+        h.dir = custom.then(|| seed.curves.first().map(crate::geo_ui::axis_of).unwrap_or(AxisRef::Origin(OriginAxis::Z)));
+    }
+    if let Some(a) = &mut h.dir {
+        crate::geo_ui::axis_slot(ui, "furo_dir", "Vetor", doc, Id(u64::MAX), a, seed);
+    } else {
+        let txt = if h.points.is_empty() { "normal ao plano do sketch" } else { "normal à superfície em cada ponto" };
+        ui.label(RichText::new(tr(txt)).weak().small());
+    }
+    ui.checkbox(&mut h.reverse, tr("inverter sentido"));
 
     // estado atual: "norma|designação|folga" (formato antigo "M6 passagem normal" também é lido)
     let st = h.standard.clone().unwrap_or_default();
@@ -863,6 +904,7 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
         (_, true) => 3,
         (HoleKind::Rebaixado { .. }, _) => 1,
         (HoleKind::Escareado { .. }, _) => 2,
+        (HoleKind::Contrafurado { .. }, _) => 4,
         _ => 0,
     };
     let before = (norma.clone(), size.clone(), folga.clone(), kind_idx);
@@ -873,6 +915,7 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
         ("furo_rebaixado", "Rebaixado", "Passagem + rebaixo para cabeça de parafuso Allen", kind_idx == 1),
         ("furo_escareado", "Escareado", "Passagem + escareado para cabeça chata", kind_idx == 2),
         ("furo_roscado", "Roscado", "Broca de rosca + rosca (cosmética ou modelada)", kind_idx == 3),
+        ("furo_contrafurado", "Contrafurado", "Rebaixo com fundo cônico (counterdrilled)", kind_idx == 4),
     ];
     let new_kind = icon_choice(ui, &opts).unwrap_or(kind_idx);
 
@@ -924,13 +967,17 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
                     HoleKind::Rebaixado { diameter: d.to_string(), depth: p.to_string() }
                 }
                 2 => HoleKind::Escareado { diameter: metric.map(|m| m.csink_diameter).unwrap_or(t.major * 2.).to_string(), angle: "90".into() },
+                4 => {
+                    let (d, p) = metric.map(|m| (m.cbore_diameter, m.cbore_depth)).unwrap_or((t.major * 1.8, t.major));
+                    HoleKind::Contrafurado { diameter: d.to_string(), depth: p.to_string(), angle: "90".into() }
+                }
                 _ => HoleKind::Simples,
             };
         }
         h.standard = Some(format!("{norma}|{size}|{folga}"));
     }
 
-    extent_ui(ui, "ext_furo", &mut h.depth, vars, &["Cego", "Passante", "Até o próximo", "Até plano", "Até a superfície"], doc, seed);
+    extent_ui(ui, "ext_furo", &mut h.depth, vars, &["Cego", "Passante", "Até o próximo", "Até o último", "Até plano", "Até a superfície"], doc, seed);
 
     if h.thread.is_some() {
         section(ui, "Representação da rosca");
@@ -941,7 +988,19 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
         if let Some(i) = icon_choice(ui, &opts) {
             h.thread_modeled = i == 1;
         }
+        ui.checkbox(&mut h.left_hand, tr("rosca à esquerda"));
     }
+
+    section(ui, "Fundo e corpo");
+    let mut v = h.tip.is_some();
+    if ui.checkbox(&mut v, tr("fundo em V (ponta da broca)")).changed() {
+        h.tip = v.then(|| "118".to_string());
+    }
+    if let Some(t) = &mut h.tip {
+        expr(ui, "Ângulo da ponta", t, vars, "°");
+    }
+    expr(ui, "Conicidade", &mut h.taper, vars, "°");
+    ui.label(RichText::new(tr("Conicidade ≠ 0 faz um furo cônico (meio-ângulo); 0 = cilíndrico.")).weak().small());
 
     egui::CollapsingHeader::new(tr("Ajuste fino das dimensões")).default_open(false).show(ui, |ui| {
         expr(ui, "Diâmetro", &mut h.diameter, vars, "mm");
@@ -954,6 +1013,11 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
             HoleKind::Escareado { diameter, angle } => {
                 expr(ui, "Ø escareado", diameter, vars, "mm");
                 expr(ui, "Ângulo", angle, vars, "°");
+            }
+            HoleKind::Contrafurado { diameter, depth, angle } => {
+                expr(ui, "Ø contrafuro", diameter, vars, "mm");
+                expr(ui, "Prof. contrafuro", depth, vars, "mm");
+                expr(ui, "Ângulo do fundo", angle, vars, "°");
             }
         }
         if let Some(t) = &mut h.thread {

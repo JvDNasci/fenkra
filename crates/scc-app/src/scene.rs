@@ -22,6 +22,8 @@ pub struct SceneOpts<'a> {
     pub filter: &'a Filter,
     pub hidden_env: bool,
     pub dark_edges: bool,
+    /// item realçado: o que está sob o mouse na árvore, ou o comando aberto
+    pub hilite: Option<Id>,
 }
 
 fn lv(p: [f32; 3], col: [f32; 4]) -> LineVertex {
@@ -49,23 +51,26 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
     let mut bounds = None;
     let env = o.hidden_env;
 
-    // itens destacados pela seleção
+    // realce dinâmico: só o item sob o mouse (ou o comando em edição); a seleção sozinha não brilha
+    let _ = o.sel;
     let mut hi_features: HashSet<Id> = HashSet::new();
-    if let Sel::Feature(id) = o.sel {
-        hi_features.insert(*id);
-        if let Some(f) = doc.feature(*id) {
+    if let Some(id) = o.hilite {
+        if let Some(f) = doc.feature(id) {
+            hi_features.insert(id);
             hi_features.extend(Document::refs_of(&f.kind));
         }
     }
+    let hi = |id: Id| o.hilite == Some(id);
 
     let feat_app: HashMap<Id, Appearance> = doc.features.iter().filter_map(|f| f.appearance.map(|a| (f.id, a))).collect();
-    let feat_hidden: HashSet<Id> = doc.features.iter().filter(|f| f.hidden).map(|f| f.id).collect();
+    // só sketches se ocultam um a um; sólidos aparecem pelo corpo (a última feature junta tudo)
+    let feat_hidden: HashSet<Id> = doc.features.iter().filter(|f| f.hidden && matches!(f.kind, scc_core::FeatureKind::Sketch(_))).map(|f| f.id).collect();
     let edge_col = if o.dark_edges { [0.06, 0.07, 0.09, 1.0] } else { [0.85, 0.88, 0.92, 1.0] };
 
     if o.filter.corpos {
         for b in &r.bodies {
             let Some(col) = doc.collectors.iter().find(|c| c.id == b.collector) else { continue };
-            let body_sel = matches!(o.sel, Sel::Collector(c) if *c == b.collector);
+            let body_sel = hi(b.collector);
             let base = doc.appearance.unwrap_or(Appearance { color: col.color, finish: col.finish, texture: col.texture });
             let m = &b.mesh;
             let nfaces = m.face_ranges.len();
@@ -165,7 +170,7 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
             None => (doc.origin_visible, o.filter.planos_origem),
         };
         let selected = match (o.sel, p.id) {
-            (Sel::Ref(a), Some(b)) => *a == b,
+            (_, Some(b)) => hi(b),
             (Sel::Origin(op), None) => p.name == plane_name(*op),
             _ => false,
         };
@@ -194,26 +199,31 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
         }
     }
 
-    // superfícies de referência: translúcidas, com contorno
+    // superfícies: objetos opacos (como os corpos), com cor própria e contorno
     if o.filter.planos_ref {
         for sf in &r.surfaces {
-            let selected = matches!(o.sel, Sel::Ref(a) if *a == sf.id);
-            let vis = doc.reference(sf.id).is_some_and(|x| x.visible);
+            let selected = hi(sf.id);
+            let rf = doc.reference(sf.id);
+            let vis = rf.is_some_and(|x| x.visible);
             if !selected && !shows(!vis, env) {
                 continue;
             }
-            let m = &sf.mesh;
-            let c = if selected { [1.0, 0.8, 0.25, 1.0] } else { [0.95, 0.62, 0.3, 1.0] };
-            for t in m.indices.chunks_exact(3) {
-                for &i in t {
-                    let k = i as usize * 3;
-                    let p = [m.positions[k], m.positions[k + 1], m.positions[k + 2]];
-                    grow(&mut bounds, Vec3::from(p));
-                    s.fill.push(MeshVertex { pos: p, nrm: [m.normals[k], m.normals[k + 1], m.normals[k + 2]], col: c, mat: [0.8, 0.0, if selected { 0.55 } else { 0.4 }, 0.] });
-                }
+            let app = rf.and_then(|x| x.appearance).unwrap_or(Appearance { color: [222, 170, 110], finish: scc_core::Finish::Acetinado, texture: None });
+            let (rough, metal, alpha) = app.finish.params();
+            let mut c = rgb(app.color);
+            if selected {
+                c = [c[0] * 0.55 + 0.45, c[1] * 0.55 + 0.38, c[2] * 0.55 + 0.08];
             }
+            let m = &sf.mesh;
+            let base = s.mesh.len() as u32;
+            for k in (0..m.positions.len()).step_by(3) {
+                let p = [m.positions[k], m.positions[k + 1], m.positions[k + 2]];
+                grow(&mut bounds, Vec3::from(p));
+                s.mesh.push(MeshVertex { pos: p, nrm: [m.normals[k], m.normals[k + 1], m.normals[k + 2]], col: [c[0], c[1], c[2], 1.0], mat: [rough, metal, alpha, 0.] });
+            }
+            s.indices.extend(m.indices.iter().map(|i| base + i));
             for p in m.edges.chunks_exact(3) {
-                s.lines.push(lv([p[0], p[1], p[2]], if selected { HILITE } else { [0.95, 0.62, 0.3, 1.0] }));
+                s.edges.push(lv([p[0], p[1], p[2]], if selected { HILITE } else { edge_col }));
             }
         }
     }
@@ -221,7 +231,7 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
     // pontos, linhas e curvas de referência
     let geo_col = [0.95, 0.7, 0.3, 1.0];
     for c in &r.curves {
-        let selected = matches!(o.sel, Sel::Ref(a) if *a == c.id);
+        let selected = hi(c.id);
         let vis = doc.reference(c.id).is_some_and(|x| x.visible);
         if !selected && (!o.filter.planos_ref || !shows(!vis, env)) {
             continue;
@@ -235,7 +245,7 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
     }
     if o.filter.pontos {
         for p in &r.points {
-            let selected = matches!(o.sel, Sel::Ref(a) if *a == p.id);
+            let selected = hi(p.id);
             let vis = doc.reference(p.id).is_some_and(|x| x.visible);
             if !selected && !shows(!vis, env) {
                 continue;

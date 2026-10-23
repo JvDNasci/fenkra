@@ -798,10 +798,14 @@ impl Ctx<'_> {
                 let cs: Vec<Vec<V3>> = curves.iter().map(|c| self.curve(c, d).map(|c| c.pts)).collect::<Result<_, _>>()?;
                 Geo::Surface(Shape::fill_surface(&cs).map_err(|x| x.0)?)
             }
-            SurfExtrude { curve, dir, length } => {
+            SurfExtrude { curve, dir, length, length2 } => {
                 let c = self.curve(curve, d)?;
                 let (_, v) = self.axis_d(dir, d)?;
-                Geo::Surface(Shape::extrude_curve(&c.pts, v, e(length, "comprimento")?).map_err(|x| x.0)?)
+                let v = unit(v).ok_or("direção nula")?;
+                let (l1, l2) = (e(length, "comprimento")?, e(length2, "comprimento 2")?);
+                // limite 2: a curva recua para o outro lado antes de extrudar
+                let pts: Vec<V3> = c.pts.iter().map(|p| sub(*p, mul(v, l2))).collect();
+                Geo::Surface(Shape::extrude_curve(&pts, v, l1 + l2).map_err(|x| x.0)?)
             }
             SurfRevolve { curve, axis, angle } => {
                 let c = self.curve(curve, d)?;
@@ -882,9 +886,9 @@ impl Ctx<'_> {
             }
             SurfPart { surface, index } => Geo::Surface(self.cut_shape(surface, d)?.nth_face(*index as u32).map_err(|x| x.0)?),
             SurfUntrim { surface } => Geo::Surface(self.cut_shape(surface, d)?.untrimmed().map_err(|x| x.0)?),
-            SurfExtrapolate { surface, near, length } => {
+            SurfExtrapolate { surface, near, length, curvature } => {
                 let sh = self.cut_shape(surface, d)?;
-                Geo::Surface(sh.extrapolated(self.point(near, d)?, e(length, "comprimento")?).map_err(|x| x.0)?)
+                Geo::Surface(sh.extrapolated(self.point(near, d)?, e(length, "comprimento")?, *curvature).map_err(|x| x.0)?)
             }
             GeoTransform { source, xf, .. } => {
                 let x = self.xform(xf, d, &|s: &String, w: &str| e(s, w))?;
@@ -901,18 +905,79 @@ impl Ctx<'_> {
                 let closed = c.len() > 2 && dist(c[0], c[c.len() - 1]) < 1e-4;
                 Geo::Curve(Curve3::poly(c, closed)?)
             }
-            CurveProjectSurf { curve, surface } => {
+            CurveProjectSurf { curve, surface, dir } => {
                 let c = self.curve(curve, d)?;
-                let pts: Vec<V3> = match surface {
-                    SurfRef::Plane(p) => {
+                let along = match dir {
+                    Some(a) => Some(unit(self.axis_d(a, d)?.1).ok_or("direção nula")?),
+                    None => None,
+                };
+                let pts: Vec<V3> = match (surface, along) {
+                    (SurfRef::Plane(p), None) => {
                         let f = self.plane(p, d)?;
                         c.pts.iter().map(|q| sub(*q, mul(f.normal, dot(sub(*q, f.origin), f.normal)))).collect()
                     }
-                    _ => {
+                    (SurfRef::Plane(p), Some(v)) => {
+                        let f = self.plane(p, d)?;
+                        let den = dot(v, f.normal);
+                        if den.abs() < 1e-9 {
+                            return Err("a direção é paralela ao plano".into());
+                        }
+                        c.pts.iter().map(|q| add(*q, mul(v, dot(sub(f.origin, *q), f.normal) / den))).collect()
+                    }
+                    (_, None) => {
                         let sh = self.surface_shape(surface, d)?;
                         c.pts.iter().map(|q| sh.surface_near(*q).map(|(p, _)| p)).collect::<Result<_, _>>().map_err(|x| x.0)?
                     }
+                    (_, Some(v)) => {
+                        // cada ponto segue a direção até encontrar a superfície (os que não encontram ficam de fora)
+                        let sh = self.surface_shape(surface, d)?;
+                        let mut out = vec![];
+                        for q in &c.pts {
+                            if let Some((p, _)) = sh.ray_hit(*q, v).map_err(|x| x.0)? {
+                                out.push(p);
+                            }
+                        }
+                        if out.len() < 2 {
+                            return Err("a curva não atinge a superfície nessa direção".into());
+                        }
+                        out
+                    }
                 };
+                Geo::Curve(Curve3::poly(pts, c.closed)?)
+            }
+            CurveParallel { curve, support, d1, d2, flip } => {
+                let c = self.curve(curve, d)?;
+                let (a, b) = (e(d1, "distância inicial")?, e(d2, "distância final")?);
+                let sh = match support {
+                    SurfRef::Plane(_) => None,
+                    _ => Some(self.surface_shape(support, d)?),
+                };
+                let total = c.length().max(1e-9);
+                let n = c.pts.len();
+                let mut s_acc = 0.;
+                let mut pts = vec![];
+                for i in 0..n {
+                    if i > 0 {
+                        s_acc += dist(c.pts[i - 1], c.pts[i]);
+                    }
+                    let q = c.pts[i];
+                    let t = unit(sub(c.pts[(i + 1).min(n - 1)], c.pts[i.saturating_sub(1)])).ok_or("curva degenerada")?;
+                    let nrm = match (&sh, support) {
+                        (Some(sh), _) => sh.surface_near(q).map_err(|x| x.0)?.1,
+                        (None, SurfRef::Plane(p)) => self.plane(p, d)?.normal,
+                        _ => unreachable!(),
+                    };
+                    let mut side = unit(cross(nrm, t)).ok_or("a curva é normal ao apoio")?;
+                    if *flip {
+                        side = mul(side, -1.);
+                    }
+                    let dd = a + (b - a) * s_acc / total;
+                    let mut p = add(q, mul(side, dd));
+                    if let Some(sh) = &sh {
+                        p = sh.surface_near(p).map_err(|x| x.0)?.0;
+                    }
+                    pts.push(p);
+                }
                 Geo::Curve(Curve3::poly(pts, c.closed)?)
             }
             CurveBoundary { surface, which } => {
@@ -923,13 +988,12 @@ impl Ctx<'_> {
             }
             Linked { ext, .. } => {
                 let x = self.doc.external.iter().find(|x| x.id == *ext).ok_or("link perdido")?;
-                match x.snapshot.as_ref().ok_or("link sem cópia — atualize os links")? {
-                    LinkedGeo::Plane { origin, x, normal } => Geo::Plane(Frame { origin: *origin, x: *x, normal: *normal }),
-                    LinkedGeo::Point(p) => Geo::Point(*p),
-                    LinkedGeo::Curve(pts) => Geo::Curve(Curve3::poly(pts.clone(), false)?),
-                    LinkedGeo::Value(_) => return Err("publicação de valor vira parâmetro, não geometria".into()),
+                if x.state == LinkState::Desativado {
+                    return Err("link desativado provisoriamente — reative pelo botão direito".into());
                 }
+                linked_geo(x.snapshot.as_ref().ok_or("link sem cópia — atualize os links")?)?
             }
+            Isolated { geo } => linked_geo(geo)?,
             Spine { planes } => {
                 let fs: Vec<Frame> = planes.iter().map(|p| self.plane(p, d)).collect::<Result<_, _>>()?;
                 if fs.len() < 2 {
@@ -992,7 +1056,24 @@ impl Ctx<'_> {
             Extent::UpTo(_) => return Err("'até plano' só vale para extrusão e recorte".into()),
             Extent::UpToNext => return Err("'até o próximo' não vale para este comando".into()),
             Extent::UpToSurface(_) => return Err("'até a superfície' não vale para este comando".into()),
+            Extent::UpToLast => return Err("'até o último' não vale para este comando".into()),
         })
+    }
+
+    /// "Até o último": distância de `o` até o ponto do corpo mais distante na direção `dir`.
+    fn last_dist(&self, target: Id, o: V3, dir: V3) -> Result<f64, String> {
+        let b = self.body(target).ok_or("'até o último' precisa de um corpo no coletor")?;
+        let (lo, hi) = b.bbox().ok_or("corpo sem dimensões")?;
+        let mut t = f64::MIN;
+        for c in 0..8 {
+            let q = [if c & 1 == 0 { lo[0] } else { hi[0] }, if c & 2 == 0 { lo[1] } else { hi[1] }, if c & 4 == 0 { lo[2] } else { hi[2] }];
+            t = t.max(dot(sub(q, o), dir));
+        }
+        if t <= 1e-6 {
+            return Err("o corpo está todo do outro lado — inverta o sentido".into());
+        }
+        // a caixa envolvente pode passar um pouco do corpo: divide e fica com o trecho até a última parede
+        Ok(t)
     }
 
     /// Superfície de término (até plano / superfície / próximo) como forma de corte e se ela deve ser
@@ -1104,7 +1185,14 @@ impl Ctx<'_> {
                 let taper = ev(&e.taper, &self.vars, "ângulo de saída")?;
                 // recorte entra no material (contra a normal); "inverter" troca o sentido
                 let into = (e.op == BoolOp::Cut) != e.reverse;
-                let n = frame.normal;
+                let n = match &e.dir {
+                    // direção escolhida (linha/aresta/eixo): o recorte entra no sentido dela
+                    Some(a) => {
+                        let v = geo3d::unit(self.axis(a)?.1).ok_or("direção da extrusão nula")?;
+                        if e.op == BoolOp::Cut { v.map(|x| -x) } else { v }
+                    }
+                    None => frame.normal,
+                };
                 let dir = if into { n.map(|x| -x) } else { n };
                 let tool = if let Extent::UpTo(p) = &e.extent {
                     let target = self.plane(p, 0)?;
@@ -1119,6 +1207,9 @@ impl Ctx<'_> {
                     }
                     let size = loops_size(&sk.loops);
                     face.extrude_until(dir, t * 4. + size * 10. + 100., target.origin, n).map_err(k)?
+                } else if e.extent == Extent::UpToLast {
+                    let len = self.last_dist(f.target, frame.origin, dir)?;
+                    face.extrude(dir, len, 0.).map_err(k)?
                 } else if e.extent == Extent::UpToNext && e.op == BoolOp::Add {
                     let body = self.body(f.target).ok_or("'até o próximo' precisa de um corpo no coletor")?;
                     face.extrude_to_next(dir, self.through(f.target)?, body).map_err(k)?
@@ -1150,23 +1241,61 @@ impl Ctx<'_> {
                     face = face.thin(ev(t, &self.vars, "espessura da parede")?).map_err(k)?;
                 }
                 let ang = ev(&r.angle, &self.vars, "ângulo")?;
-                let start = if r.symmetric { -ang / 2. } else { 0. };
+                // dois ângulos: o segundo vai para o outro lado do plano do sketch
+                let (ang, start) = match &r.angle2 {
+                    Some(a2) => {
+                        let a2 = ev(a2, &self.vars, "ângulo 2")?;
+                        if ang + a2 > 360. + 1e-9 {
+                            return Err("os dois ângulos somam mais de 360°".into());
+                        }
+                        (ang + a2, -a2)
+                    }
+                    None if r.symmetric => (ang, -ang / 2.),
+                    None => (ang, 0.),
+                };
                 let tool = face.revolve(origin, dir, ang, start).map_err(k)?;
                 self.apply(f.target, tool, r.op, f.id)?;
                 Ok(None)
             }
             FeatureKind::Hole(h) => {
-                let (frame, sk) = self.sketch(h.sketch)?;
-                if sk.points.is_empty() {
-                    return Err("o sketch do furo precisa de pelo menos um ponto (centro)".into());
-                }
-                let (frame, pts) = (*frame, sk.points.clone());
                 let d = ev(&h.diameter, &self.vars, "diâmetro")?;
-                let cut = self.end_cutter(&h.depth, f.target)?;
-                let depth = match &cut {
-                    Some((c, _)) => self.reach(c, frame.origin, f.target),
-                    None => self.extent(&h.depth, f.target)?.0,
+                // direção escolhida (linha, aresta, eixo) ou automática
+                let custom = match &h.dir {
+                    Some(a) => Some(geo3d::unit(self.axis_d(a, 0)?.1).ok_or("direção do furo nula")?),
+                    None => None,
                 };
+                // cada furo: boca e direção entrando no material
+                let mut seats: Vec<(V3, V3)> = vec![];
+                if h.points.is_empty() {
+                    let (frame, sk) = self.sketch(h.sketch)?;
+                    if sk.points.is_empty() {
+                        return Err("o sketch do furo precisa de pelo menos um ponto (centro) — ou escolha pontos 3D".into());
+                    }
+                    let n = frame.normal.map(|x| -x);
+                    for p in &sk.points {
+                        seats.push((frame.point(p[0], p[1]), custom.unwrap_or(n)));
+                    }
+                } else {
+                    let body = self.body(f.target).cloned();
+                    for p in &h.points {
+                        let o = self.point(p, 0)?;
+                        let dir = match custom {
+                            Some(v) => v,
+                            None => {
+                                // normal à superfície do corpo no ponto, para dentro do material
+                                let b = body.as_ref().ok_or("furo por pontos 3D precisa de um corpo para achar a normal")?;
+                                let (_, n) = b.surface_near(o).map_err(k)?;
+                                n.map(|x| -x)
+                            }
+                        };
+                        seats.push((o, dir));
+                    }
+                }
+                if h.reverse {
+                    for s in &mut seats {
+                        s.1 = s.1.map(|x| -x);
+                    }
+                }
                 let shape = match &h.kind {
                     HoleKind::Simples => HoleShape::Simple,
                     HoleKind::Rebaixado { diameter, depth } => HoleShape::Counterbore {
@@ -1177,27 +1306,43 @@ impl Ctx<'_> {
                         diameter: ev(diameter, &self.vars, "diâmetro do escareado")?,
                         angle: ev(angle, &self.vars, "ângulo do escareado")?,
                     },
+                    HoleKind::Contrafurado { diameter, depth, angle } => HoleShape::Counterdrill {
+                        diameter: ev(diameter, &self.vars, "diâmetro do contrafuro")?,
+                        depth: ev(depth, &self.vars, "profundidade do contrafuro")?,
+                        angle: ev(angle, &self.vars, "ângulo do contrafuro")?,
+                    },
                 };
-                let dir = frame.normal.map(|x| -x);
+                let tip = match &h.tip {
+                    Some(t) => ev(t, &self.vars, "ângulo da ponta")?,
+                    None => 0.,
+                };
+                let taper = ev(&h.taper, &self.vars, "conicidade")?;
+                let cut = self.end_cutter(&h.depth, f.target)?;
                 let mut tool = Shape::empty();
-                for p in &pts {
-                    let o = frame.point(p[0], p[1]);
-                    let mut t = Shape::hole_tool(o, dir, d, depth, shape).map_err(k)?;
+                let mut depths = vec![];
+                for (o, dir) in &seats {
+                    let depth = match (&cut, &h.depth) {
+                        (Some((c, _)), _) => self.reach(c, *o, f.target),
+                        (None, Extent::UpToLast) => self.last_dist(f.target, *o, *dir)?,
+                        (None, x) => self.extent(x, f.target)?.0,
+                    };
+                    depths.push(depth);
+                    let mut t = Shape::hole_tool_ext(*o, *dir, d, depth, shape, tip, taper).map_err(k)?;
                     if let Some((c, ext)) = &cut {
-                        t = t.clip_until(c, o, *ext).map_err(k)?;
+                        t = t.clip_until(c, *o, *ext).map_err(k)?;
                     }
                     tool = if tool.is_null() { t } else { tool.compound(&t) };
                 }
                 self.apply(f.target, tool, BoolOp::Cut, f.id)?;
                 let Some(t) = &h.thread else { return Ok(None) };
                 if !h.thread_modeled {
-                    return Ok(Some(format!("rosca cosmética {t}")));
+                    return Ok(Some(format!("rosca cosmética {t}{}", if h.left_hand { " (esquerda)" } else { "" })));
                 }
                 // rosca modelada: sulco helicoidal subtraído em cada furo, até a espessura do material
                 let spec = hardware::thread(t).ok_or_else(|| format!("rosca '{t}' não encontrada na tabela de normas"))?;
                 let (lo, hi) = self.body(f.target).and_then(|b| b.bbox()).ok_or("corpo sem dimensões")?;
-                for p in &pts {
-                    let o = frame.point(p[0], p[1]);
+                for ((o, dir), depth) in seats.iter().zip(depths) {
+                    let (o, dir) = (*o, *dir);
                     // extensão do material a partir do ponto, nos dois sentidos do eixo do furo:
                     // a rosca vai para o lado onde está a peça (o sketch pode estar na outra face)
                     let (mut fwd, mut back): (f64, f64) = (0., 0.);
@@ -1209,21 +1354,17 @@ impl Ctx<'_> {
                     }
                     let (tdir, ext) = if fwd >= back { (dir, fwd) } else { (dir.map(|x| -x), back) };
                     // a rosca começa abaixo do rebaixo/escareado (começar no vazio faz a booleana falhar)
-                    let s0 = if fwd >= back {
-                        match shape {
-                            HoleShape::Counterbore { depth, .. } => depth,
-                            HoleShape::Countersink { diameter, angle } => ((diameter - d) / 2.).max(0.) / (angle.to_radians() / 2.).tan().max(1e-6),
-                            HoleShape::Simple => 0.,
-                        }
-                    } else {
-                        0.
-                    };
+                    let s0 = if fwd >= back { shape.head_depth(d) } else { 0. };
                     let len = depth.min(ext) - s0;
                     if len < spec.pitch {
                         continue;
                     }
                     let o = [0, 1, 2].map(|i| o[i] + tdir[i] * s0);
                     let mut tool = Shape::thread_tool(o, tdir, spec.major, spec.pitch, len, spec.angle).map_err(k)?;
+                    if h.left_hand {
+                        // espelhar por um plano que contém o eixo troca o sentido da hélice
+                        tool = tool.transformed(Xform::Mirror(o, geo3d::any_perp(tdir))).map_err(k)?;
+                    }
                     if let Some((c, ext)) = &cut {
                         // a rosca para na mesma superfície do furo
                         tool = tool.clip_until(c, o, *ext).map_err(k)?;
@@ -1308,9 +1449,13 @@ impl Ctx<'_> {
             FeatureKind::Pattern(pt) => {
                 let mut xs: Vec<Xform> = vec![];
                 match &pt.kind {
-                    PatternKind::Linear { dir, count, spacing, dir2, count2, spacing2 } => {
+                    PatternKind::Linear { dir, count, spacing, dir2, count2, spacing2, total } => {
                         let n1 = ev(count, &self.vars, "quantidade")?.round().max(1.) as usize;
-                        let d1 = ev(spacing, &self.vars, "espaçamento")?;
+                        let mut d1 = ev(spacing, &self.vars, "espaçamento")?;
+                        if *total && n1 > 1 {
+                            // instâncias e comprimento total
+                            d1 /= (n1 - 1) as f64;
+                        }
                         let (_, u1) = self.axis(dir)?;
                         let (n2, d2, u2) = match dir2 {
                             Some(a) => (ev(count2, &self.vars, "quantidade 2")?.round().max(1.) as usize, ev(spacing2, &self.vars, "espaçamento 2")?, self.axis(a)?.1),
@@ -1352,6 +1497,40 @@ impl Ctx<'_> {
             FeatureKind::Mirror(m) => {
                 let pl = self.plane(&m.plane, 0)?;
                 self.replicate(f, &m.sources, &[Xform::Mirror(pl.origin, pl.normal)])?;
+                Ok(None)
+            }
+            FeatureKind::MoveBody(m) => {
+                let (b, owners) = self.body_owned(f.target).ok_or("não há corpo para mover")?;
+                let rigid = match &m.xf {
+                    BodyXf::Translate { dir, dist } => {
+                        let v = geo3d::unit(self.axis(dir)?.1).ok_or("direção nula")?;
+                        Some(Xform::Translate(geo3d::mul(v, ev(dist, &self.vars, "distância")?)))
+                    }
+                    BodyXf::Rotate { axis, angle } => {
+                        let (o, v) = self.axis(axis)?;
+                        Some(Xform::Rotate(o, v, ev(angle, &self.vars, "ângulo")?))
+                    }
+                    BodyXf::Symmetry { plane } => {
+                        let fr = self.plane(plane, 0)?;
+                        Some(Xform::Mirror(fr.origin, fr.normal))
+                    }
+                    BodyXf::Affinity { .. } => None,
+                };
+                match (rigid, &m.xf) {
+                    (Some(x), _) => {
+                        let (s, out) = b.transformed_tagged(x, &tags_for(owners)).map_err(k)?;
+                        let own = remap(owners, &out, f.id);
+                        self.bodies.insert(f.target, (s, own));
+                    }
+                    (None, BodyXf::Affinity { plane, fx, fy, fz }) => {
+                        let fr = self.plane(plane, 0)?;
+                        let kf = [ev(fx, &self.vars, "fator X")?, ev(fy, &self.vars, "fator Y")?, ev(fz, &self.vars, "fator Z")?];
+                        let s = b.affinity(fr, kf).map_err(k)?;
+                        let n = s.face_count() as usize;
+                        self.bodies.insert(f.target, (s, vec![f.id; n]));
+                    }
+                    _ => unreachable!(),
+                }
                 Ok(None)
             }
             FeatureKind::Scale(sc) => {
@@ -1785,6 +1964,11 @@ pub fn publications(doc: &Document) -> Vec<(String, LinkedGeo)> {
             out.push((e.name.clone(), LinkedGeo::Point(pt.p)));
         } else if let Some(c) = r.curves.iter().find(|c| c.id == e.id) {
             out.push((e.name.clone(), LinkedGeo::Curve(c.pts.clone())));
+        } else if e.kind.class() == RefClass::Surface {
+            // superfícies: a forma exata vai como texto B-rep
+            if let Some(b) = surface_brep(doc, e.id) {
+                out.push((e.name.clone(), LinkedGeo::Surface(b)));
+            }
         }
     }
     for p in doc.params.iter().filter(|p| p.published) {
@@ -1793,6 +1977,39 @@ pub fn publications(doc: &Document) -> Vec<(String, LinkedGeo)> {
         }
     }
     out
+}
+
+/// Superfície de referência avaliada no fim da linha do tempo, em texto B-rep.
+fn surface_brep(doc: &Document, id: Id) -> Option<String> {
+    let vars = doc.eval_params().ok()?;
+    let mut cx = Ctx {
+        doc,
+        vars,
+        bodies: HashMap::new(),
+        sketches: HashMap::new(),
+        status: HashMap::new(),
+        tools: HashMap::new(),
+        memo: RefCell::new(HashMap::new()),
+        body_sig: HashMap::new(),
+    };
+    for f in doc.active_features().map(|(_, f)| f) {
+        let _ = cx.run(f);
+    }
+    match cx.geo(id, 0).ok()? {
+        Geo::Surface(s) => s.to_brep().ok(),
+        _ => None,
+    }
+}
+
+/// Geometria guardada de um link (ou cópia isolada).
+fn linked_geo(g: &LinkedGeo) -> Result<Geo, String> {
+    Ok(match g {
+        LinkedGeo::Plane { origin, x, normal } => Geo::Plane(Frame { origin: *origin, x: *x, normal: *normal }),
+        LinkedGeo::Point(p) => Geo::Point(*p),
+        LinkedGeo::Curve(pts) => Geo::Curve(Curve3::poly(pts.clone(), false)?),
+        LinkedGeo::Surface(b) => Geo::Surface(Shape::from_brep(b).map_err(|e| e.0)?),
+        LinkedGeo::Value(_) => return Err("publicação de valor vira parâmetro, não geometria".into()),
+    })
 }
 
 /// Exporta o corpo de um coletor (ou de todos) após recalcular.
@@ -1867,7 +2084,7 @@ pub fn example_document() -> Document {
     }
     let base = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data: sk }));
     d.feature_mut(base).unwrap().name = s("Sketch base");
-    let ex = d.add_feature(FeatureKind::Extrude(Extrude { sketch: base, op: BoolOp::Add, extent: Extent::Blind(s("esp")), reverse: false, taper: s("0"), thin: None }));
+    let ex = d.add_feature(FeatureKind::Extrude(Extrude { sketch: base, op: BoolOp::Add, extent: Extent::Blind(s("esp")), reverse: false, taper: s("0"), thin: None, dir: None }));
     d.feature_mut(ex).unwrap().name = s("Placa");
 
     let topo = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "esp");
@@ -1898,6 +2115,7 @@ pub fn example_document() -> Document {
         thread: None,
         thread_modeled: false,
         standard: Some(s("M6 passagem normal")),
+        points: vec![], dir: None, reverse: false, tip: None, taper: "0".into(), left_hand: false,
     }));
     d.feature_mut(furo).unwrap().name = s("Furos M6");
     let fol = d.add_folder("Acabamentos");
@@ -1909,6 +2127,148 @@ pub fn example_document() -> Document {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn publicar_superficie_link_e_isolar() {
+        if !scc_kernel::AVAILABLE {
+            return;
+        }
+        let mut src = Document::new("Mestre");
+        let sph = src.add_geometry(RefKind::SurfSphere { center: PointRef::Origin, radius: "10".into() });
+        src.references.iter_mut().find(|r| r.id == sph).unwrap().published = true;
+        let pubs = publications(&src);
+        let (n, g) = pubs.iter().find(|(_, g)| matches!(g, LinkedGeo::Surface(_))).expect("superfície publicada");
+        let mut d = Document::new("Filha");
+        let id = d.add_link("Mestre", "mestre.sccpart", n, g.clone());
+        let r = recompute(&d);
+        assert_eq!(r.status[&id], Status::Ok, "{:?}", r.status[&id]);
+        // desativado: inativo até reativar
+        let ext = d.external[0].id;
+        d.external[0].state = LinkState::Desativado;
+        assert!(matches!(recompute(&d).status[&id], Status::Error(_)));
+        d.external[0].state = LinkState::Ativo;
+        d.isolate_link(ext);
+        assert!(d.external.is_empty());
+        let r = recompute(&d);
+        assert_eq!(r.status[&id], Status::Ok, "isolada: {:?}", r.status[&id]);
+        assert!(r.surfaces.iter().any(|s| s.id == id));
+    }
+
+    #[test]
+    fn entradas_consumidas_e_renomear() {
+        let mut d = Document::new("c");
+        let s = |x: &str| x.to_string();
+        let a = d.add_geometry(RefKind::SurfSphere { center: PointRef::Origin, radius: s("10") });
+        let b = d.add_geometry(RefKind::SurfSphere { center: PointRef::Fixed([15., 0., 0.]), radius: s("10") });
+        let j = d.add_geometry(RefKind::SurfJoin { items: vec![SurfRef::Ref(a), SurfRef::Ref(b)], tol: s("0.01") });
+        d.hide_consumed(j);
+        assert!(!d.reference(a).unwrap().visible && !d.reference(b).unwrap().visible);
+        d.delete(j, false);
+        assert!(d.reference(a).unwrap().visible && d.reference(b).unwrap().visible, "apagar a operação reexibe as entradas");
+        d.rename_item(a, "Bola").unwrap();
+        assert_eq!(d.name_of(a), "Bola");
+        assert!(d.rename_item(b, "Bola").is_err(), "nome repetido");
+    }
+
+    #[test]
+    fn furos_e_terminos_novos() {
+        if !scc_kernel::AVAILABLE {
+            return;
+        }
+        use std::f64::consts::PI;
+        let near = |a: f64, b: f64, tol: f64| (a - b).abs() <= tol * b.abs().max(1.);
+        let s = |x: &str| x.to_string();
+        let v0 = vol(&caixa());
+        let furo = |pts: Vec<PointRef>, kind: HoleKind, tip: Option<String>, depth: Extent| Hole {
+            sketch: Id(0),
+            kind,
+            diameter: s("6"),
+            depth,
+            thread: None,
+            thread_modeled: false,
+            standard: None,
+            points: pts,
+            dir: None,
+            reverse: false,
+            tip,
+            taper: s("0"),
+            left_hand: false,
+        };
+        // dois furos Ø6 × 5 por pontos 3D no topo (normal à superfície, para baixo)
+        let topo = vec![PointRef::Fixed([-10., 0., 20.]), PointRef::Fixed([10., 0., 20.])];
+        let mut d = caixa();
+        d.add_feature(FeatureKind::Hole(furo(topo.clone(), HoleKind::Simples, None, Extent::Blind(s("5")))));
+        let vf = vol(&d);
+        assert!(near(vf, v0 - 2. * PI * 9. * 5., 1e-3), "furos 3D {vf}");
+        // fundo em V tira mais que o fundo plano
+        let mut d = caixa();
+        d.add_feature(FeatureKind::Hole(furo(topo.clone(), HoleKind::Simples, Some(s("118")), Extent::Blind(s("5")))));
+        assert!(vol(&d) < vf - 1., "fundo em V");
+        // furo numa face lateral (x = 20): a normal da face manda o furo para -X
+        let mut d = caixa();
+        d.add_feature(FeatureKind::Hole(furo(vec![PointRef::Fixed([20., 0., 10.])], HoleKind::Simples, None, Extent::Blind(s("5")))));
+        assert!(near(vol(&d), v0 - PI * 9. * 5., 1e-3), "furo lateral {}", vol(&d));
+        // contrafurado passante
+        let mut d = caixa();
+        d.add_feature(FeatureKind::Hole(furo(vec![topo[0]], HoleKind::Contrafurado { diameter: s("10"), depth: s("3"), angle: s("90") }, None, Extent::ThroughAll)));
+        let vc = vol(&d);
+        assert!(vc < v0 - PI * 9. * 20. - PI * 16. * 3. + 1., "contrafurado {vc}");
+
+        // extrusão até o último: do plano z = 30 para baixo até a base (z = 0)
+        let mut d = caixa();
+        let alto = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "30");
+        let sk = sk_rect(&mut d, PlaneRef::Datum(alto), [-5., -5.], [5., 5.]);
+        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::UpToLast, reverse: true, taper: s("0"), thin: None, dir: None }));
+        assert!(near(vol(&d), v0 + 100. * 10., 1e-6), "até o último {}", vol(&d));
+
+        // extrusão inclinada por uma direção: o volume do prisma oblíquo é área × altura
+        let mut d = Document::new("e");
+        let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [10., 10.]);
+        let l = d.add_geometry(RefKind::LinePoints { a: PointRef::Origin, b: PointRef::Fixed([10., 0., 10.]), start: s("0"), end: s("0") });
+        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: Some(AxisRef::Ref(l)) }));
+        assert!(near(vol(&d), 100. * 10. / 2f64.sqrt(), 1e-6), "oblíqua {}", vol(&d));
+
+        // padrão linear por comprimento total: 3 bolsos em 20 mm = espaçamento 10
+        let mut d = caixa();
+        let top = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "20");
+        let sp = sk_rect(&mut d, PlaneRef::Datum(top), [-16., -2.], [-12., 2.]);
+        let pocket = d.add_feature(ext(sp, BoolOp::Cut, "5"));
+        d.add_feature(FeatureKind::Pattern(Pattern {
+            kind: PatternKind::Linear { dir: AxisRef::Origin(OriginAxis::X), count: s("3"), spacing: s("20"), dir2: None, count2: s("1"), spacing2: s("0"), total: true },
+            sources: vec![pocket],
+        }));
+        assert!(near(vol(&d), v0 - 240., 1e-6), "padrão por total {}", vol(&d));
+
+        // mover o corpo: translação mantém o volume; afinidade multiplica por fx·fy·fz
+        let mut d = caixa();
+        d.add_feature(FeatureKind::MoveBody(MoveBody { xf: BodyXf::Translate { dir: AxisRef::Origin(OriginAxis::X), dist: s("50") } }));
+        let r = recompute(&d);
+        assert!(near(r.bodies[0].mass.volume, v0, 1e-6) && (r.bodies[0].mass.center[0] - 50.).abs() < 1e-6, "translação");
+        let mut d = caixa();
+        d.add_feature(FeatureKind::MoveBody(MoveBody { xf: BodyXf::Affinity { plane: PlaneRef::Origin(OriginPlane::XY), fx: s("2"), fy: s("1"), fz: s("0.5") } }));
+        assert!(near(vol(&d), v0, 1e-3), "afinidade 2·1·0,5 {}", vol(&d));
+    }
+
+    #[test]
+    fn curva_paralela_e_projecao_por_direcao() {
+        if !scc_kernel::AVAILABLE {
+            return;
+        }
+        let s = |x: &str| x.to_string();
+        let mut d = Document::new("w");
+        let l = d.add_geometry(RefKind::LinePoints { a: PointRef::Origin, b: PointRef::Fixed([30., 0., 0.]), start: s("0"), end: s("0") });
+        let p = d.add_geometry(RefKind::CurveParallel { curve: CurveRef::Ref(l), support: SurfRef::Plane(PlaneRef::Origin(OriginPlane::XY)), d1: s("5"), d2: s("5"), flip: false });
+        let alto = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "10");
+        let pr = d.add_geometry(RefKind::CurveProjectSurf { curve: CurveRef::Ref(l), surface: SurfRef::Plane(PlaneRef::Datum(alto)), dir: Some(AxisRef::Fixed { origin: [0.; 3], dir: [0., 1., 1.] }) });
+        let r = recompute(&d);
+        for id in [p, pr] {
+            assert_eq!(r.status[&id], Status::Ok, "{:?}", r.status[&id]);
+        }
+        let c = r.curves.iter().find(|c| c.id == p).unwrap();
+        assert!(c.pts.iter().all(|q| (q[1].abs() - 5.).abs() < 1e-9), "paralela a 5 mm");
+        let c = r.curves.iter().find(|c| c.id == pr).unwrap();
+        assert!(c.pts.iter().all(|q| (q[2] - 10.).abs() < 1e-9 && (q[1] - 10.).abs() < 1e-9), "projeção oblíqua");
+    }
 
     fn mesh_area(m: &Mesh) -> f64 {
         let p = |i: u32| {
@@ -1955,8 +2315,8 @@ mod tests {
         let lb = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([20., 0., 10.]), b: PointRef::Fixed([20., 30., 10.]), start: s("0"), end: s("0") });
         let tube = d.add_geometry(RefKind::SurfSweep { profile: SweepProfile::Circle(s("2")), spine: CurveRef::Ref(la), mode: SweepMode::Corrigido });
         let loft = d.add_geometry(RefKind::SurfLoft { sections: vec![CurveRef::Ref(la), CurveRef::Ref(lb)], guide: None, ruled: false, closed: false });
-        let fa = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(la), dir: AxisRef::Origin(OriginAxis::X), length: s("-10") });
-        let fb = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(lb), dir: AxisRef::Origin(OriginAxis::X), length: s("10") });
+        let fa = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(la), dir: AxisRef::Origin(OriginAxis::X), length: s("-10"), length2: "0".into() });
+        let fb = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(lb), dir: AxisRef::Origin(OriginAxis::X), length: s("10"), length2: "0".into() });
         let blend = d.add_geometry(RefKind::SurfBlend {
             a: CurveRef::Ref(la),
             sa: Some(SurfRef::Ref(fa)),
@@ -2040,7 +2400,7 @@ mod tests {
             extent: Extent::UpToSurface(SurfRef::Face { point: [0., 0., 20.], normal: [0., 0., 1.], owner: None }),
             reverse: true,
             taper: "0".into(),
-            thin: None,
+            thin: None, dir: None,
         }));
         assert!(near(vol(&d), v0 + 2000., 1e-6), "até a face {}", vol(&d));
 
@@ -2055,7 +2415,7 @@ mod tests {
             extent: Extent::UpToSurface(SurfRef::Plane(PlaneRef::Datum(fundo))),
             reverse: false,
             taper: "0".into(),
-            thin: None,
+            thin: None, dir: None,
         }));
         assert!(near(vol(&d), v0 - 800., 1e-6), "recorte até plano {}", vol(&d));
 
@@ -2072,7 +2432,7 @@ mod tests {
         let p0 = data.add_point(&mut al, 0., 0.);
         data.add_curve(&mut al, scc_core::sketch::Curve::Point { p: p0 }, false);
         let sp = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Datum(topo), data }));
-        let furo = Hole { sketch: sp, kind: HoleKind::Simples, diameter: "6".into(), depth: Extent::UpTo(PlaneRef::Datum(fundo)), thread: None, thread_modeled: false, standard: None };
+        let furo = Hole { sketch: sp, kind: HoleKind::Simples, diameter: "6".into(), depth: Extent::UpTo(PlaneRef::Datum(fundo)), thread: None, thread_modeled: false, standard: None, points: vec![], dir: None, reverse: false, tip: None, taper: "0".into(), left_hand: false };
         let mut e = d.clone();
         e.add_feature(FeatureKind::Hole(furo.clone()));
         assert!(near(vol(&e), v0 - std::f64::consts::PI * 9. * 8., 1e-3), "furo até plano {}", vol(&e));
@@ -2160,7 +2520,7 @@ mod tests {
             return;
         }
         // superfícies: extrusão de curva, preenchimento, deslocamento
-        let se = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(sp), dir: AxisRef::Origin(OriginAxis::Z), length: s_("10") });
+        let se = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(sp), dir: AxisRef::Origin(OriginAxis::Z), length: s_("10"), length2: "0".into() });
         let so = d.add_geometry(RefKind::SurfOffset { surface: SurfRef::Ref(se), dist: s_("2") });
         let sq = d.add_geometry(RefKind::Polyline { points: vec![PointRef::Origin, PointRef::Fixed([10., 0., 0.]), PointRef::Fixed([10., 10., 3.]), PointRef::Fixed([0., 10., 0.])], closed: true });
         let sf = d.add_geometry(RefKind::SurfFill { curves: vec![CurveRef::Ref(sq)] });
@@ -2240,7 +2600,7 @@ mod tests {
     }
 
     fn ext(sketch: Id, op: BoolOp, d: &str) -> FeatureKind {
-        FeatureKind::Extrude(Extrude { sketch, op, extent: Extent::Blind(d.into()), reverse: false, taper: "0".into(), thin: None })
+        FeatureKind::Extrude(Extrude { sketch, op, extent: Extent::Blind(d.into()), reverse: false, taper: "0".into(), thin: None, dir: None })
     }
 
     /// Caixa 40 × 30 × 20 centrada na origem (base em z = 0).
@@ -2294,7 +2654,7 @@ mod tests {
         let v1 = vol(&d);
         assert!(near(v1, v0 - 80., 1e-6));
         d.add_feature(FeatureKind::Pattern(Pattern {
-            kind: PatternKind::Linear { dir: AxisRef::Origin(OriginAxis::X), count: "3".into(), spacing: "8".into(), dir2: None, count2: "1".into(), spacing2: "0".into() },
+            kind: PatternKind::Linear { dir: AxisRef::Origin(OriginAxis::X), count: "3".into(), spacing: "8".into(), dir2: None, count2: "1".into(), spacing2: "0".into(), total: false },
             sources: vec![pocket],
         }));
         assert!(near(vol(&d), v0 - 240., 1e-6));

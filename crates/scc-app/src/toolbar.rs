@@ -123,6 +123,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("extrusao", "Extrusão", "Extrusão cega", "Empurra o perfil fechado do sketch ao longo da normal do plano por uma distância.", Cmd(C::Extrude)),
                 it("ext_simetrico", "Plano médio", "Extrusão simétrica (plano médio)", "Metade da distância para cada lado do plano do sketch.", Cmd(C::ExtrudeMid)),
                 it("ext_ate_plano", "Até plano", "Extrusão até um plano", "Termina exatamente num plano — da Origem ou de referência, inclusive inclinado.", Cmd(C::ExtrudeUpTo)),
+                it("ext_saida_filete", "Saída + filetes", "Extrusão com saída e filetes (drafted filleted pad)", "Extruda com ângulo de saída e já arredonda as arestas criadas — ajuste os dois comandos depois.", Cmd(C::ExtrudeDraftFillet)),
             ]),
             Family("recorte", vec![
                 it("recorte", "Recorte", "Recorte passante", "Remove material atravessando todo o corpo, a partir do perfil do sketch.", Cmd(C::Cut)),
@@ -190,6 +191,12 @@ pub fn entries(g: Group) -> Vec<Entry> {
             ]),
             One(it("espelho", "Espelho", "Espelhar (Mirror)", "Espelha os comandos escolhidos (ou o corpo) por um plano.", Cmd(C::Mirror))),
             One(it("escala", "Escala", "Escalar a peça (Scale)", "Multiplica as medidas do corpo a partir de um centro.", Cmd(C::Scale))),
+            Family("mover_corpo", vec![
+                it("xf_mover", "Translação", "Mover o corpo (Translation)", "Move o corpo inteiro ao longo de uma direção.", Cmd(C::MoveBody(0))),
+                it("xf_girar", "Rotação", "Girar o corpo (Rotation)", "Gira o corpo inteiro em torno de um eixo.", Cmd(C::MoveBody(1))),
+                it("xf_simetria", "Simetria", "Simetria do corpo (Symmetry)", "Leva o corpo para o lado espelhado (sem cópia; para copiar use Espelho).", Cmd(C::MoveBody(2))),
+                it("xf_afinidade", "Afinidade", "Afinidade (Affinity)", "Escala independente em X, Y e Z.", Cmd(C::MoveBody(3))),
+            ]),
         ],
         Group::Referencias => {
             let fam = |ks: &[GeoKind]| -> Vec<Item> {
@@ -204,6 +211,26 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 Family("linha", fam(&geo_ui::LINES)),
                 Family("curva", fam(&geo_ui::CURVES)),
                 Family("superficie", fam(&geo_ui::SURFACES)),
+            ]
+        }
+        Group::Wireframe => {
+            let g = |k: GeoKind| {
+                let (i, n, b, a) = k.info();
+                it(i, n, b, a, Cmd(C::Geo(k)))
+            };
+            let fam = |ks: &[GeoKind]| -> Vec<Item> { ks.iter().map(|k| g(*k)).collect() };
+            vec![
+                Family("wf_ponto", fam(&[GeoKind::PtCoords, GeoKind::PtOnCurve, GeoKind::PtOnSurface, GeoKind::PtOnPlane, GeoKind::PtCenter, GeoKind::PtBetween, GeoKind::PtProject, GeoKind::PtCurvePlane, GeoKind::PtCurveCurve, GeoKind::PtOffset, GeoKind::PtTangent, GeoKind::PtProjectCurve])),
+                Family("wf_linha", fam(&[GeoKind::LinePts, GeoKind::LineDir, GeoKind::LineNormal, GeoKind::LineAngle, GeoKind::LineTangent, GeoKind::LinePlanes, GeoKind::LineBisector, GeoKind::LineAxis])),
+                One(g(GeoKind::Polyline)),
+                Family("wf_plano", fam(&geo_ui::PLANES)),
+                Family("wf_circulo", fam(&[GeoKind::Circle, GeoKind::Circle3, GeoKind::Conic])),
+                Family("wf_spline", fam(&[GeoKind::Spline, GeoKind::SplineControl, GeoKind::Connect, GeoKind::Corner])),
+                Family("wf_helice", fam(&[GeoKind::Helix, GeoKind::Spiral, GeoKind::Spine])),
+                Family("wf_projecao", fam(&[GeoKind::CurveProjSurf, GeoKind::CurveProject, GeoKind::PtProject])),
+                One(g(GeoKind::CurveIntersect)),
+                One(g(GeoKind::CurveParallel)),
+                One(it("extrair", "Extrair", "Extrair a seleção (faces, arestas, vértices)", "Cada face, aresta ou vértice selecionado na viewport vira superfície, curva ou ponto de referência (várias faces = uma multi-extração).", Cmd(C::Extract))),
             ]
         }
         Group::Superficies => {
@@ -227,7 +254,12 @@ pub fn entries(g: Group) -> Vec<Entry> {
             vec![
                 Family("op_juntar", vec![g(GeoKind::OpJoin), g(GeoKind::OpHeal)]),
                 Family("op_dividir", vec![g(GeoKind::OpSplit), g(GeoKind::OpTrim)]),
-                Family("op_extrair", vec![g(GeoKind::SurfExtract), g(GeoKind::OpMulti), g(GeoKind::OpBoundary)]),
+                Family("op_extrair", vec![
+                    it("extrair", "Extrair", "Extrair a seleção (faces, arestas, vértices)", "Cada face, aresta ou vértice selecionado vira superfície, curva ou ponto de referência (várias faces = multi-extração).", Cmd(C::Extract)),
+                    g(GeoKind::SurfExtract),
+                    g(GeoKind::OpMulti),
+                    g(GeoKind::OpBoundary),
+                ]),
                 Family("op_desmontar", vec![g(GeoKind::OpUntrim), g(GeoKind::OpPart)]),
                 One(g(GeoKind::OpExtrapolate)),
                 Family("xf", vec![g(GeoKind::XfTranslate), g(GeoKind::XfRotate), g(GeoKind::XfMirror), g(GeoKind::XfScale)]),
@@ -420,6 +452,7 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, title: String, list: Vec<Entr
             }
         }
     };
+    let mut undock = None;
     let inner = if vertical {
         ui.vertical_centered(|ui| body(ui)).response
     } else {
@@ -427,11 +460,24 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, title: String, list: Vec<Entr
         ui.vertical(|ui| {
             let row = ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| body(ui)).response;
             // nome do grupo centralizado sob os botões, com a largura do próprio bloco
-            let (r, _) = ui.allocate_exact_size(egui::vec2(row.rect.width(), 14.), egui::Sense::hover());
+            let (r, resp) = ui.allocate_exact_size(egui::vec2(row.rect.width(), 14.), egui::Sense::drag());
             ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, &title, egui::FontId::proportional(10.5), ui.visuals().weak_text_color());
+            // arrastar o nome do grupo solta o bloco (vira flutuante; encaixa de novo ao soltar perto de uma borda)
+            if let Some(g) = g {
+                let resp = resp.on_hover_text(tr("arraste para soltar o grupo; solte perto do topo ou das laterais para encaixar"));
+                if resp.hovered() {
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+                }
+                if resp.drag_started() {
+                    undock = Some(g);
+                }
+            }
         })
         .response
     };
+    if let Some(g) = undock {
+        acts.push(Act::Dock(g, Dock::Flutuante));
+    }
     inner.context_menu(|ui| {
         ui.label(RichText::new(&title).strong());
         if let Some(g) = g {

@@ -56,14 +56,15 @@ enum LeftTab {
 }
 
 struct Worker {
-    tx: Sender<(u64, Document)>,
+    /// (geração, documento, reconstruir do zero)
+    tx: Sender<(u64, Document, bool)>,
     rx: Receiver<(u64, RecomputeResult)>,
 }
 
 impl Worker {
     /// Recompute fora da thread da interface (RNF-001); só o pedido mais recente é processado.
     fn spawn(ctx: egui::Context) -> Self {
-        let (tx, jobs) = channel::<(u64, Document)>();
+        let (tx, jobs) = channel::<(u64, Document, bool)>();
         let (out, rx) = channel();
         std::thread::Builder::new()
             .name("recompute".into())
@@ -71,8 +72,13 @@ impl Worker {
                 // cache entre cálculos: só refaz a partir do primeiro comando que mudou
                 let mut cache = scc_solidos::Cache::default();
                 while let Ok(mut job) = jobs.recv() {
+                    let mut fresh = job.2;
                     while let Ok(newer) = jobs.try_recv() {
+                        fresh |= newer.2;
                         job = newer;
+                    }
+                    if fresh {
+                        cache = scc_solidos::Cache::default();
                     }
                     let r = scc_solidos::recompute_cached(&job.1, &mut cache);
                     if out.send((job.0, r)).is_err() {
@@ -145,6 +151,25 @@ pub struct App {
     new_view_name: String,
     /// direção escolhida no cubo, aplicada à câmera no fim do quadro
     view_choice: Option<Vec3>,
+    /// item sob o mouse na árvore (realce dinâmico na viewport)
+    hover_item: Option<Id>,
+    hover_now: std::cell::Cell<Option<Id>>,
+    /// item sendo renomeado na própria árvore (F2)
+    renaming: Option<Id>,
+    /// janela de propriedades gráficas aberta para este alvo
+    props_target: Option<AppTarget>,
+    /// página da janela de configurações
+    settings_page: usize,
+    /// documento do último pedido de cálculo e do último resultado (para marcar o que está desatualizado)
+    sent_doc: Option<Document>,
+    result_doc: Option<Document>,
+    /// início da varredura visual da árvore após um cálculo (comando a comando)
+    sweep_t0: f64,
+    /// assistente de referências quebradas
+    wizard_open: bool,
+    errors_prev: usize,
+    /// link sendo religado pelo assistente (a janela de importação vira "religar")
+    relink_ext: Option<Id>,
 }
 
 /// Edição de um comando como "ambiente": só termina com Concluir (mantém) ou Cancelar (desfaz).
@@ -218,6 +243,17 @@ impl App {
             view_menu: false,
             new_view_name: String::new(),
             view_choice: None,
+            hover_item: None,
+            hover_now: std::cell::Cell::new(None),
+            renaming: None,
+            props_target: None,
+            settings_page: 0,
+            sent_doc: None,
+            result_doc: None,
+            sweep_t0: -10.,
+            wizard_open: false,
+            errors_prev: 0,
+            relink_ext: None,
         };
         app.started = !app.settings.show_start;
         // desenvolvimento: SCC_ABRIR_SKETCH=<nome> abre esse sketch em edição ao iniciar
@@ -263,8 +299,8 @@ impl App {
             d.add_geometry(RefKind::SurfSphere { center: PointRef::Fixed([0., 0., 40.]), radius: s("15") });
             let la = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([40., 0., 0.]), b: PointRef::Fixed([40., 40., 0.]), start: s("0"), end: s("0") });
             let lb = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([70., 0., 20.]), b: PointRef::Fixed([70., 40., 20.]), start: s("0"), end: s("0") });
-            let fa = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(la), dir: AxisRef::Origin(OriginAxis::X), length: s("-20") });
-            let fb = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(lb), dir: AxisRef::Origin(OriginAxis::X), length: s("20") });
+            let fa = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(la), dir: AxisRef::Origin(OriginAxis::X), length: s("-20"), length2: "0".into() });
+            let fb = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(lb), dir: AxisRef::Origin(OriginAxis::X), length: s("20"), length2: "0".into() });
             d.add_geometry(RefKind::SurfBlend { a: CurveRef::Ref(la), sa: Some(SurfRef::Ref(fa)), b: CurveRef::Ref(lb), sb: Some(SurfRef::Ref(fb)), cont: Continuity::G2, tension: s("1") });
             d.add_geometry(RefKind::SurfCylinder { point: PointRef::Fixed([-40., 0., 0.]), dir: AxisRef::Origin(OriginAxis::Z), radius: s("12"), start: s("0"), end: s("50") });
             app.started = true;
@@ -283,8 +319,35 @@ impl App {
     }
 
     pub fn request_recompute(&mut self) {
+        self.send_recompute(false);
+    }
+
+    /// Pede o cálculo; `fresh` descarta o cache (reconstruir tudo do zero).
+    fn send_recompute(&mut self, fresh: bool) {
         self.gen_sent += 1;
-        let _ = self.worker.tx.send((self.gen_sent, self.open.doc.clone()));
+        self.sent_doc = Some(self.open.doc.clone());
+        let _ = self.worker.tx.send((self.gen_sent, self.open.doc.clone(), fresh));
+    }
+
+    /// Índice do primeiro comando desatualizado (o documento mudou depois do último cálculo).
+    pub fn stale_from(&self) -> Option<usize> {
+        let Some(rd) = &self.result_doc else { return Some(0) };
+        let d = &self.open.doc;
+        if d == rd {
+            return None;
+        }
+        if d.params != rd.params || d.references != rd.references || d.external != rd.external {
+            return Some(0);
+        }
+        (0..d.features.len()).find(|i| rd.features.get(*i) != Some(&d.features[*i])).or(Some(d.features.len()))
+    }
+
+    /// Mostra que o comando `i` ainda não foi atualizado: desatualizado (mudou e não recalculou)
+    /// ou ainda não alcançado pela varredura visual depois do cálculo.
+    fn row_pending(&self, i: usize, now: f64) -> (bool, bool) {
+        let stale = self.stale_from().is_some_and(|k| i >= k);
+        let swept = (now - self.sweep_t0) / 0.035 < i as f64 + 1.;
+        (stale, swept && !stale)
     }
 
     pub fn toast(&mut self, msg: impl Into<String>, error: bool) {
@@ -700,7 +763,7 @@ impl App {
                     Cmd::ExtrudeUpTo | Cmd::CutUpTo => Extent::UpTo(up_to),
                     _ => Extent::ThroughAll,
                 };
-                Sel::Feature(d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: if cut { BoolOp::Cut } else { BoolOp::Add }, extent, reverse: false, taper: s("0"), thin: None })))
+                Sel::Feature(d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: if cut { BoolOp::Cut } else { BoolOp::Add }, extent, reverse: false, taper: s("0"), thin: None, dir: None })))
             }
             Cmd::Revolve | Cmd::Groove => {
                 let Some(sk) = sketch else {
@@ -714,6 +777,7 @@ impl App {
                     symmetric: false,
                     op: if c == Cmd::Groove { BoolOp::Cut } else { BoolOp::Add },
                     thin: None,
+                    angle2: None,
                 })))
             }
             Cmd::Rib | Cmd::Slot => {
@@ -790,6 +854,17 @@ impl App {
                 }))
             }
             Cmd::Scale => Sel::Feature(d.add_feature(FeatureKind::Scale(Scale { center: PointRef::Origin, factor: s("2") }))),
+            Cmd::MoveBody(i) => Sel::Feature(d.add_feature(FeatureKind::MoveBody(MoveBody { xf: crate::feat_ui::default_move(i as usize) }))),
+            Cmd::ExtrudeDraftFillet => {
+                // atalho de manufatura: extrusão com saída + filete nas arestas criadas por ela
+                let Some(sk) = sketch else {
+                    self.toast("Selecione um sketch com perfil fechado primeiro", true);
+                    return;
+                };
+                let ex = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("20")), reverse: false, taper: s("3"), thin: None, dir: None }));
+                d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::CreatedBy(ex), mode: EdgeMode::Constant }));
+                Sel::Feature(ex)
+            }
             Cmd::SplitBody | Cmd::ThickSurface | Cmd::CloseSurface | Cmd::SewSurface | Cmd::BoundaryFill => {
                 // superfície da seleção (ou a última superfície de referência; senão, o plano)
                 let last = d.references.iter().rev().find(|r| r.kind.class() == RefClass::Surface).map(|r| SurfRef::Ref(r.id));
@@ -805,6 +880,40 @@ impl App {
                         FeatureKind::BoundaryFill(BoundaryFill { tools, exclude: vec![], op: BoolOp::Add })
                     }
                 }))
+            }
+            Cmd::Extract => {
+                use crate::picking::Pick;
+                let (mut faces, mut made) = (vec![], vec![]);
+                for p in self.picks.clone() {
+                    match p {
+                        Pick::Face { point, .. } => faces.push(point.map(|v| v as f64)),
+                        Pick::Edge { body, edge, .. } => {
+                            if let Some(r) = &self.result {
+                                let pts = crate::picking::edge_polyline(r, body, edge);
+                                if pts.len() >= 2 {
+                                    made.push(self.open.doc.add_geometry(RefKind::CurveCopy { curve: CurveRef::Edge(pts) }));
+                                }
+                            }
+                        }
+                        Pick::Vertex { pos, .. } => {
+                            let q = pos.map(|v| crate::app::fmt(v as f64));
+                            made.push(self.open.doc.add_geometry(RefKind::PointCoords { x: q[0].clone(), y: q[1].clone(), z: q[2].clone(), frame: None }));
+                        }
+                        _ => {}
+                    }
+                }
+                let d = &mut self.open.doc;
+                match faces.len() {
+                    0 => {}
+                    1 => made.push(d.add_geometry(RefKind::SurfExtract { face: faces[0], owner: None })),
+                    _ => made.push(d.add_geometry(RefKind::SurfMulti { faces })),
+                }
+                if made.is_empty() {
+                    self.toast("Selecione faces, arestas ou vértices na viewport e use Extrair", true);
+                    return;
+                }
+                self.toast(format!("{} elemento(s) extraído(s) para a pasta de geometria", made.len()), false);
+                Sel::Ref(*made.last().unwrap())
             }
             Cmd::MeshImport => {
                 let Some(p) = rfd::FileDialog::new().add_filter("Malha", &["stl", "obj"]).pick_file() else { return };
@@ -824,8 +933,11 @@ impl App {
                 Sel::Feature(d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("2"), edges: EdgeSel::AllOfBody, mode })))
             }
             Cmd::Hole | Cmd::HoleCounterbore | Cmd::HoleCountersink | Cmd::HoleTapped => {
+                // vértices / pontos selecionados: um furo em cada, normal à superfície (sem sketch)
+                let pts3: Vec<PointRef> = self.seed(true).points;
                 let sk = match self.selected_sketch(true) {
                     Some(sk) => sk,
+                    None if !pts3.is_empty() => Id(0),
                     None => {
                         let d = &mut self.open.doc;
                         let mut data = SketchData::default();
@@ -860,6 +972,7 @@ impl App {
                     thread,
                     thread_modeled: false,
                     standard: Some(s(std)),
+                    points: if sk == Id(0) { pts3 } else { vec![] }, dir: None, reverse: false, tip: None, taper: "0".into(), left_hand: false,
                 })))
             }
             Cmd::Fillet | Cmd::FilletAll | Cmd::Chamfer | Cmd::ChamferAll | Cmd::FilletVar | Cmd::ChamferTwoDist | Cmd::ChamferDistAngle => {
@@ -901,20 +1014,11 @@ impl App {
             Sel::Ref(id) => self.start_session(id, true, Some(snapshot)),
             _ => {}
         }
-        if let Sel::Feature(id) = new_sel {
-            let d = &mut self.open.doc;
-            let (consumed, is_sketch) = match d.feature(id).map(|f| &f.kind) {
-                Some(FeatureKind::Extrude(e)) => (Some(e.sketch), false),
-                Some(FeatureKind::Revolve(r)) => (Some(r.sketch), false),
-                Some(FeatureKind::Hole(h)) => (Some(h.sketch), false),
-                Some(FeatureKind::Sketch(_)) => (None, true),
-                _ => (None, false),
-            };
-            // sketch consumido por um comando fica oculto (pode ser reexibido pelo olho na árvore)
-            if let Some(f) = consumed.and_then(|s| d.feature_mut(s)) {
-                f.hidden = true;
-            }
-            if is_sketch {
+        if let Sel::Feature(id) | Sel::Ref(id) = new_sel {
+            // entradas consumidas (sketch do comando, superfícies juntadas/divididas…) ficam ocultas;
+            // voltam a aparecer se a operação for apagada
+            self.open.doc.hide_consumed(id);
+            if scene::is_sketch_feature(&self.open.doc, id) {
                 self.align_pending = Some(id);
             }
         }
@@ -1009,7 +1113,9 @@ impl App {
 
     /// Concluir: mantém as alterações.
     pub fn conclude_session(&mut self) {
-        self.session = None;
+        if let Some(s) = self.session.take() {
+            self.open.doc.hide_consumed(s.id);
+        }
     }
 
     /// Cancelar: volta ao estado de antes de abrir o comando (um comando novo some).
@@ -1348,8 +1454,15 @@ impl App {
             .as_ref()
             .map(|p| p.index.documents.iter().filter(|d| Some(d.id) != self.open.entry).map(|d| (format!("{} · {}", d.pn, d.name), d.file.clone())).collect())
             .unwrap_or_default();
-        egui::Window::new(tr("🔗 Importar publicação")).open(&mut open).default_width(420.).show(ctx, |ui| {
-            ui.label(RichText::new(tr("Escolha a peça de origem; aparecem os planos, pontos, curvas e parâmetros que ela publica (📤).")).weak().small());
+        let relink = self.relink_ext;
+        let title = if relink.is_some() { tr("🔗 Assistente de relink") } else { tr("🔗 Importar publicação") };
+        egui::Window::new(title).id(egui::Id::unique("janela_links")).open(&mut open).default_width(420.).show(ctx, |ui| {
+            if let Some(e) = relink.and_then(|x| self.open.doc.external.iter().find(|e| e.id == x)) {
+                ui.label(RichText::new(format!("Religando {} — hoje: {}.{} ({})", self.open.doc.name_of(e.target.unwrap_or(e.id)), e.source, e.publication, e.path)).strong());
+                ui.label(RichText::new(tr("Escolha a peça e a publicação nova (mesmo tipo de geometria). Os comandos que usam o elemento continuam ligados a ele.")).weak().small());
+                ui.separator();
+            }
+            ui.label(RichText::new(tr("Escolha a peça de origem; aparecem os planos, pontos, curvas, superfícies e parâmetros que ela publica (📤).")).weak().small());
             if !parts.is_empty() {
                 ui.label(RichText::new(tr("Peças do projeto")).strong());
                 for (n, f) in &parts {
@@ -1380,10 +1493,11 @@ impl App {
                             LinkedGeo::Point(_) => "• ponto".into(),
                             LinkedGeo::Curve(_) => "∿ curva".into(),
                             LinkedGeo::Value(v) => format!("ƒ = {}", fmt(*v)),
+                            LinkedGeo::Surface(_) => "◫ superfície".into(),
                         };
                         ui.horizontal(|ui| {
                             ui.label(format!("{n}  ({kind})"));
-                            if ui.small_button(tr("Importar")).clicked() {
+                            if ui.small_button(if relink.is_some() { tr("Religar a este") } else { tr("Importar") }).clicked() {
                                 import = Some((name.clone(), path.clone(), g.clone()));
                                 import.as_mut().unwrap().0 = format!("{}|{}", name, n);
                             }
@@ -1404,12 +1518,27 @@ impl App {
         }
         if let Some((key, path, g)) = import {
             let (src, publ) = key.split_once('|').unwrap_or((&key, ""));
-            let id = self.open.doc.add_link(src, &path, publ, g);
-            self.toast(format!("Link criado: {}", self.open.doc.name_of(id)), false);
+            match relink {
+                Some(ext) => {
+                    let ok = self.open.doc.external.iter().find(|e| e.id == ext).and_then(|e| e.snapshot.as_ref()).is_none_or(|s| std::mem::discriminant(s) == std::mem::discriminant(&g));
+                    if ok {
+                        self.open.doc.relink(ext, src, &path, publ, g);
+                        self.toast("Link religado", false);
+                        open = false;
+                    } else {
+                        self.toast("Tipo diferente: escolha uma publicação do mesmo tipo (plano, ponto, curva, superfície ou valor)", true);
+                    }
+                }
+                None => {
+                    let id = self.open.doc.add_link(src, &path, publ, g);
+                    self.toast(format!("Link criado: {}", self.open.doc.name_of(id)), false);
+                }
+            }
         }
         if !open {
             self.link_open = false;
             self.link_src = None;
+            self.relink_ext = None;
         }
     }
 
@@ -1480,7 +1609,19 @@ impl App {
     // ------------------------------------------------------------ painéis
 
     fn top(&mut self, root: &mut egui::Ui) {
-        egui::Panel::top("menu").show(root, |ui| {
+        let dark = root.ctx().global_style().visuals.dark_mode;
+        egui::Panel::top("menu").frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(8, 4))).show(root, |ui| {
+            // faixa do topo em degradê suave
+            let r = ui.max_rect().expand2(egui::vec2(8., 4.));
+            let (a, b) = if dark { (Color32::from_rgb(30, 40, 58), Color32::from_rgb(20, 24, 32)) } else { (Color32::from_rgb(236, 242, 250), Color32::from_rgb(214, 224, 238)) };
+            let mut m = egui::Mesh::default();
+            m.colored_vertex(r.left_top(), a);
+            m.colored_vertex(r.right_top(), a);
+            m.colored_vertex(r.right_bottom(), b);
+            m.colored_vertex(r.left_bottom(), b);
+            m.add_triangle(0, 1, 2);
+            m.add_triangle(0, 2, 3);
+            ui.painter().add(egui::Shape::mesh(m));
             ui.horizontal(|ui| {
                 ui.label(RichText::new(tr("◆ SolidCadCraft")).strong().color(Color32::from_rgb(120, 180, 255)));
                 ui.separator();
@@ -1568,13 +1709,14 @@ impl App {
                 ui.separator();
                 // abas de módulo (RF-UI-006)
                 use crate::settings::Bench;
-                for (b, n) in [(Bench::Solidos, "Modelagem Sólida"), (Bench::Superficies, "Superfícies")] {
-                    if ui.selectable_label(self.settings.bench == b, tr(n)).on_hover_text(tr("As bancadas compartilham o mesmo modelo: sólidos e superfícies se conversam.")).clicked() {
+                ui.add_space(10.);
+                for (b, n, icon) in [(Bench::Solidos, "Modelagem Sólida", "▣"), (Bench::Superficies, "Superfícies", "◫")] {
+                    if bench_tab(ui, self.settings.bench == b, &format!("{icon}  {}", tr(n)), true).on_hover_text(tr("As bancadas compartilham o mesmo modelo: sólidos e superfícies se conversam.")).clicked() {
                         self.settings.bench = b;
                     }
                 }
                 for m in ["Montagem", "Desenho", "Chapas", "Soldas"].map(tr) {
-                    ui.add_enabled(false, egui::Button::new(m).frame(false)).on_disabled_hover_text(tr("Módulo em breve"));
+                    bench_tab(ui, false, m, false).on_hover_text(tr("Módulo em breve"));
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let title = match (&self.open.frozen, self.open.modified) {
@@ -1592,22 +1734,34 @@ impl App {
         let top = toolbar::groups_at(&self.settings, Dock::Topo, sketching);
         if !top.is_empty() {
             let mut acts = vec![];
-            egui::Panel::top("comandos").show(root, |ui| {
-                // os blocos quebram para a linha de baixo quando não cabem na largura
-                ui.horizontal_wrapped(|ui| {
-                    for (i, g) in top.iter().enumerate() {
-                        if i > 0 {
-                            ui.separator();
-                        }
-                        acts.extend(toolbar::show_group(ui, *g, &mut self.settings, &ts, false));
-                    }
-                    // grupos montados pelo usuário
-                    let mine: Vec<crate::settings::CustomGroup> = self.settings.custom.groups.iter().filter(|c| c.sketch == sketching && !c.items.is_empty()).cloned().collect();
-                    for cg in &mine {
-                        ui.separator();
-                        acts.extend(toolbar::show_custom(ui, cg, &mut self.settings, &ts, false));
-                    }
-                });
+            let fill = if dark { Color32::from_rgb(24, 27, 34) } else { Color32::from_rgb(244, 247, 251) };
+            egui::Panel::top("comandos").frame(egui::Frame::new().fill(fill).inner_margin(egui::Margin { left: 8, right: 8, top: 4, bottom: 2 })).show(root, |ui| {
+                // uma linha só, com barra de rolagem horizontal fixa embaixo (não quebra linha)
+                egui::ScrollArea::horizontal()
+                    .id_salt("rolagem_comandos")
+                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            let gap = |ui: &mut egui::Ui| {
+                                ui.add_space(8.);
+                                ui.separator();
+                                ui.add_space(8.);
+                            };
+                            for (i, g) in top.iter().enumerate() {
+                                if i > 0 {
+                                    gap(ui);
+                                }
+                                acts.extend(toolbar::show_group(ui, *g, &mut self.settings, &ts, false));
+                            }
+                            // grupos montados pelo usuário
+                            let mine: Vec<crate::settings::CustomGroup> = self.settings.custom.groups.iter().filter(|c| c.sketch == sketching && !c.items.is_empty()).cloned().collect();
+                            for cg in &mine {
+                                gap(ui);
+                                acts.extend(toolbar::show_custom(ui, cg, &mut self.settings, &ts, false));
+                            }
+                        });
+                        ui.add_space(4.);
+                    });
             });
             for a in acts {
                 self.act(a);
@@ -1633,9 +1787,24 @@ impl App {
                 });
             });
         }
+        let right = toolbar::groups_at(&self.settings, Dock::Direita, sketching);
+        if !right.is_empty() {
+            egui::Panel::right("barra_direita").resizable(false).show(root, |ui| {
+                egui::ScrollArea::vertical().id_salt("barra_dir").show(ui, |ui| {
+                    for (i, g) in right.iter().enumerate() {
+                        if i > 0 {
+                            ui.separator();
+                        }
+                        acts.extend(toolbar::show_group(ui, *g, &mut self.settings, &ts, true));
+                    }
+                });
+            });
+        }
         let ctx = root.ctx().clone();
+        let area = ctx.content_rect();
+        let dragging = ctx.input(|i| i.pointer.primary_down());
         for (i, g) in toolbar::groups_at(&self.settings, Dock::Flutuante, sketching).into_iter().enumerate() {
-            egui::Window::new(g.label())
+            let w = egui::Window::new(g.label())
                 .id(egui::Id::unique(("flutuante", g.label())))
                 // empilhados na borda esquerda da viewport, sem cobrir uns aos outros
                 .default_pos(egui::pos2(290., 140. + 120. * i as f32))
@@ -1644,6 +1813,41 @@ impl App {
                 .show(&ctx, |ui| {
                     acts.extend(toolbar::show_group(ui, g, &mut self.settings, &ts, false));
                 });
+            // encaixe por proximidade: soltar perto do topo ou de uma lateral fixa o grupo ali
+            if let Some(w) = w {
+                let r = w.response.rect;
+                let snap = 36.;
+                let to = if r.top() < area.top() + 60. + snap {
+                    Some(Dock::Topo)
+                } else if r.left() < area.left() + snap {
+                    Some(Dock::Lateral)
+                } else if r.right() > area.right() - snap {
+                    Some(Dock::Direita)
+                } else {
+                    None
+                };
+                if let Some(d) = to {
+                    if dragging && w.response.dragged() {
+                        // guia visual enquanto arrasta
+                        let p = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("guia_encaixe")));
+                        let guide = match d {
+                            Dock::Topo => Rect::from_min_size(area.left_top() + egui::vec2(0., 56.), egui::vec2(area.width(), 6.)),
+                            Dock::Lateral => Rect::from_min_size(area.left_top(), egui::vec2(6., area.height())),
+                            _ => Rect::from_min_size(area.right_top() - egui::vec2(6., 0.), egui::vec2(6., area.height())),
+                        };
+                        p.rect_filled(guide, 2., Color32::from_rgba_unmultiplied(90, 170, 255, 180));
+                    }
+                    // só encaixa ao terminar de arrastar a janela (clique em botão não conta)
+                    let key = egui::Id::unique(("arrastando_grupo", g.label()));
+                    if w.response.dragged() {
+                        ctx.data_mut(|m| m.insert_temp(key, true));
+                    }
+                    if ctx.input(|i| i.pointer.any_released()) && ctx.data(|m| m.get_temp::<bool>(key)).unwrap_or(false) {
+                        ctx.data_mut(|m| m.remove::<bool>(key));
+                        acts.push(Act::Dock(g, d));
+                    }
+                }
+            }
         }
         for a in acts {
             self.act(a);
@@ -1801,172 +2005,172 @@ impl App {
         }
     }
 
+    /// Janela de propriedades gráficas do objeto (cor, acabamento, textura, visibilidade), separada
+    /// do comando: aberta pelo botão direito na árvore. Posição e tamanho ficam salvos.
+    fn props_window(&mut self, ctx: &egui::Context) {
+        let Some(t) = self.props_target else { return };
+        let tex: Vec<String> = self.open.doc.textures.iter().map(|x| x.name.clone()).collect();
+        let d = &mut self.open.doc;
+        let name = match t {
+            AppTarget::Part => d.name.clone(),
+            AppTarget::Collector(id) | AppTarget::Feature(id) | AppTarget::Ref(id) => d.name_of(id),
+        };
+        let mut open = true;
+        egui::Window::new(format!("🎨 {} — {name}", tr("Propriedades gráficas")))
+            .id(egui::Id::unique("janela_props"))
+            .open(&mut open)
+            .default_width(300.)
+            .resizable(true)
+            .show(ctx, |ui| {
+                match t {
+                    AppTarget::Part => {
+                        ui.label(RichText::new(tr("Aparência da peça inteira (vale sobre os corpos)")).weak().small());
+                        editor::appearance_opt(ui, "pg_peca", &mut d.appearance, &tex);
+                    }
+                    AppTarget::Collector(id) => {
+                        if let Some(c) = d.collectors.iter_mut().find(|c| c.id == id) {
+                            ui.checkbox(&mut c.visible, tr("visível"));
+                            let mut a = Appearance { color: c.color, finish: c.finish, texture: c.texture };
+                            editor::appearance_fields(ui, "pg_col", &mut a, &tex);
+                            (c.color, c.finish, c.texture) = (a.color, a.finish, a.texture);
+                        }
+                    }
+                    AppTarget::Feature(id) => {
+                        ui.label(RichText::new(tr("Cor das faces criadas por este comando (o corpo continua sendo um só).")).weak().small());
+                        if let Some(f) = d.feature_mut(id) {
+                            editor::appearance_opt(ui, "pg_feat", &mut f.appearance, &tex);
+                        }
+                    }
+                    AppTarget::Ref(id) => {
+                        if let Some(r) = d.references.iter_mut().find(|r| r.id == id) {
+                            ui.checkbox(&mut r.visible, tr("visível"));
+                            editor::appearance_opt(ui, "pg_ref", &mut r.appearance, &tex);
+                        }
+                    }
+                }
+            });
+        if !open {
+            self.props_target = None;
+        }
+    }
+
+    /// Assistente de referências quebradas: lista o que falhou e oferece reeditar, suprimir ou apagar.
+    fn wizard_window(&mut self, ctx: &egui::Context) {
+        if !self.wizard_open {
+            return;
+        }
+        let Some(r) = &self.result else { return };
+        let doc = &self.open.doc;
+        let mut errs: Vec<(Id, String, String, bool)> = vec![];
+        for f in &doc.features {
+            if let Some(Status::Error(m)) = r.status.get(&f.id) {
+                errs.push((f.id, f.name.clone(), m.clone(), true));
+            }
+        }
+        for x in &doc.references {
+            if let Some(Status::Error(m)) = r.status.get(&x.id) {
+                errs.push((x.id, x.name.clone(), m.clone(), false));
+            }
+        }
+        let mut open = true;
+        let mut act: Option<(Id, u8)> = None;
+        egui::Window::new(tr("🩹 Assistente de reparo"))
+            .id(egui::Id::unique("assistente_reparo"))
+            .open(&mut open)
+            .default_width(460.)
+            .resizable(true)
+            .show(ctx, |ui| {
+                if errs.is_empty() {
+                    ui.label(RichText::new(tr("✔ Nada quebrado: todos os comandos e elementos foram calculados.")).color(Color32::from_rgb(120, 210, 130)));
+                    return;
+                }
+                ui.label(RichText::new(tr("Estes itens não puderam ser calculados (referência apagada, face que mudou, entrada inválida). Escolha refazer a referência ou apagar.")).weak());
+                ui.add_space(6.);
+                egui::ScrollArea::vertical().max_height(380.).show(ui, |ui| {
+                    for (id, name, msg, is_feat) in &errs {
+                        egui::Frame::group(ui.style()).show(ui, |ui| {
+                            ui.set_width(ui.available_width());
+                            ui.label(RichText::new(format!("✖ {name}")).strong().color(Color32::from_rgb(255, 130, 110)));
+                            ui.label(RichText::new(msg).small());
+                            ui.horizontal(|ui| {
+                                if ui.button(tr("✏ Refazer referência")).on_hover_text(tr("abre o comando para escolher a nova entrada")).clicked() {
+                                    act = Some((*id, 0));
+                                }
+                                if *is_feat && ui.button(tr("⏸ Suprimir")).clicked() {
+                                    act = Some((*id, 1));
+                                }
+                                if ui.button(tr("🗑 Apagar")).clicked() {
+                                    act = Some((*id, 2));
+                                }
+                            });
+                        });
+                    }
+                });
+            });
+        match act {
+            Some((id, 0)) => self.start_session(id, false, None),
+            Some((id, 1)) => {
+                if let Some(f) = self.open.doc.feature_mut(id) {
+                    f.suppressed = true;
+                }
+            }
+            Some((id, _)) => self.ask_delete(id),
+            None => {}
+        }
+        if !open {
+            self.wizard_open = false;
+        }
+    }
+
+    /// Configurações em páginas (lista com ícones à esquerda, conteúdo com rolagem à direita).
     fn settings_window(&mut self, ctx: &egui::Context) {
         if !self.settings_open {
             return;
         }
+        const PAGES: [(&str, &str); 9] = [
+            ("🖥", "Interface"),
+            ("🎨", "Fundo da viewport"),
+            ("⌨", "Atalhos"),
+            ("🖱", "Navegação e seleção"),
+            ("👁", "Exibição"),
+            ("🧰", "Barras e painéis"),
+            ("⟳", "Recálculo"),
+            ("📐", "Cotagem"),
+            ("✏", "Sketch"),
+        ];
         let mut open = true;
+        let page = &mut self.settings_page;
         let s = &mut self.settings;
-        egui::Window::new(tr("Configurações")).open(&mut open).default_width(380.).resizable(true).show(ctx, |ui| {
-            egui::CollapsingHeader::new(tr("Interface")).default_open(true).show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label(tr("Tema"));
-                    ui.radio_value(&mut s.theme, Theme::Escuro, tr("Escuro"));
-                    ui.radio_value(&mut s.theme, Theme::Claro, tr("Claro"));
-                });
-                ui.horizontal(|ui| {
-                    ui.label(tr("Idioma"));
-                    ui.radio_value(&mut s.english, false, "Português");
-                    ui.radio_value(&mut s.english, true, "English");
-                });
-                ui.add(egui::Slider::new(&mut s.ui_scale, 0.75..=1.75).text("escala (fontes e controles)"));
-                ui.add(egui::Slider::new(&mut s.icon_size, 20.0..=48.0).text("tamanho dos ícones"));
-                ui.checkbox(&mut s.show_labels, tr("mostrar o nome embaixo dos ícones"));
-            });
-            egui::CollapsingHeader::new(tr("Fundo da viewport")).default_open(true).show(ui, |ui| {
-                ui.checkbox(&mut s.gradient, tr("degradê de duas cores"));
-                ui.horizontal(|ui| {
-                    ui.label(if s.gradient { "Topo" } else { "Cor" });
-                    if s.gradient {
-                        ui.color_edit_button_srgb(&mut s.bg_top);
-                        ui.label(tr("Base"));
-                    }
-                    ui.color_edit_button_srgb(&mut s.bg_bottom);
-                });
-                ui.horizontal_wrapped(|ui| {
-                    for (n, t, b) in BACKGROUNDS {
-                        if ui.small_button(n).clicked() {
-                            s.bg_top = t;
-                            s.bg_bottom = b;
-                            s.gradient = t != b;
-                        }
-                    }
-                });
-            });
-            egui::CollapsingHeader::new(tr("Atalhos e navegação")).default_open(true).show(ui, |ui| {
-                use crate::keymap::{Binding, KeyAction, Preset};
-                ui.horizontal(|ui| {
-                    ui.label(tr("Adaptar ao meu CAD:"));
-                    let cur = s.keys.preset;
-                    egui::ComboBox::from_id_salt("preset").selected_text(cur.label()).show_ui(ui, |ui| {
-                        for p in Preset::ALL {
-                            if ui.selectable_label(cur == p, p.label()).clicked() {
-                                s.keys.preset = p;
-                                s.keys.custom.clear();
-                                s.nav = p.nav();
+        egui::Window::new(tr("⚙ Configurações"))
+            .id(egui::Id::unique("janela_config"))
+            .open(&mut open)
+            .default_size([760., 520.])
+            .min_size([560., 360.])
+            .resizable(true)
+            .show(ctx, |ui| {
+                ui.horizontal_top(|ui| {
+                    // lista de páginas
+                    ui.vertical(|ui| {
+                        ui.set_width(190.);
+                        for (k, (icon, name)) in PAGES.iter().enumerate() {
+                            let b = egui::Button::selectable(*page == k, RichText::new(format!("{icon}  {}", tr(name))).size(14.)).min_size(egui::vec2(186., 30.));
+                            if ui.add(b).clicked() {
+                                *page = k;
                             }
                         }
-                    });
-                });
-                ui.label(RichText::new(tr("Troca o teclado e o mouse juntos, com base nos atalhos de fábrica de cada software. Clique num atalho para gravar outro (Esc cancela, Delete remove).")).weak().small());
-                let capturing: Option<KeyAction> = ui.ctx().data(|d| d.get_temp(egui::Id::unique("captura_atalho")));
-                egui::ScrollArea::vertical().max_height(260.).id_salt("atalhos").show(ui, |ui| {
-                    egui::Grid::new("grade_atalhos").num_columns(3).striped(true).show(ui, |ui| {
-                        let mut group = "";
-                        for a in KeyAction::ALL {
-                            if a.group() != group {
-                                group = a.group();
-                                ui.label(RichText::new(group).strong());
-                                ui.end_row();
-                            }
-                            ui.label(a.label());
-                            let txt = if capturing == Some(a) { "pressione…".to_string() } else { s.keys.binding(a).map(|b| b.text()).unwrap_or_else(|| "—".into()) };
-                            if ui.add(egui::Button::new(txt).min_size(egui::vec2(110., 0.))).clicked() {
-                                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::unique("captura_atalho"), a));
-                            }
-                            let conf = s.keys.conflicts(a);
-                            if conf.is_empty() {
-                                ui.label(tr(""));
-                            } else {
-                                ui.label(RichText::new(format!("⚠ igual a {}", conf[0].label())).color(Color32::from_rgb(255, 170, 60)).small());
-                            }
-                            ui.end_row();
+                        ui.add_space(12.);
+                        if ui.button(tr("Restaurar padrões")).clicked() {
+                            *s = Settings::default();
                         }
                     });
-                });
-                if let Some(a) = capturing {
-                    let got = ui.ctx().input(|i| {
-                        i.events.iter().find_map(|e| match e {
-                            egui::Event::Key { key, pressed: true, modifiers, .. } => Some((*key, *modifiers)),
-                            _ => None,
-                        })
-                    });
-                    if let Some((key, m)) = got {
-                        match key {
-                            egui::Key::Escape => {}
-                            egui::Key::Delete | egui::Key::Backspace if !m.any() => s.keys.set(a, None),
-                            _ => s.keys.set(a, Some(Binding { key: key.name().to_string(), ctrl: m.command, shift: m.shift, alt: m.alt })),
-                        }
-                        ui.ctx().data_mut(|d| d.remove::<KeyAction>(egui::Id::unique("captura_atalho")));
-                    }
-                }
-                if ui.small_button(tr("Restaurar atalhos da predefinição")).clicked() {
-                    s.keys.custom.clear();
-                }
-            });
-            egui::CollapsingHeader::new(tr("Navegação e seleção")).default_open(true).show(ui, |ui| {
-                egui::ComboBox::from_id_salt("nav").selected_text(s.nav.label()).show_ui(ui, |ui| {
-                    for n in crate::settings::NavStyle::ALL {
-                        ui.selectable_value(&mut s.nav, n, n.label());
-                    }
-                });
-                ui.label(RichText::new(s.nav.help()).weak().small());
-                ui.checkbox(&mut s.invert_zoom, tr("inverter o sentido do zoom"));
-                ui.horizontal(|ui| {
-                    ui.label(tr("Selecionar:"));
-                    ui.checkbox(&mut s.sel_faces, tr("faces"));
-                    ui.checkbox(&mut s.sel_edges, tr("arestas"));
-                    ui.checkbox(&mut s.sel_vertices, tr("vértices"));
-                });
-            });
-            egui::CollapsingHeader::new(tr("Exibição")).default_open(true).show(ui, |ui| {
-                for m in crate::render::DisplayMode::ALL {
-                    ui.radio_value(&mut s.display, m, m.label());
-                }
-                ui.checkbox(&mut s.edges_in_render, tr("arestas no semi-renderizado"));
-                ui.checkbox(&mut s.ortho, tr("projeção ortogonal"));
-            });
-            egui::CollapsingHeader::new(tr("Barras de ferramentas")).show(ui, |ui| {
-                for g in crate::settings::Group::ALL {
-                    ui.horizontal(|ui| {
-                        ui.add_sized([110., 18.], egui::Label::new(g.label()));
-                        let mut d = s.dock(g);
-                        egui::ComboBox::from_id_salt(("dock", g.label())).selected_text(d.label()).show_ui(ui, |ui| {
-                            for o in Dock::ALL {
-                                ui.selectable_value(&mut d, o, o.label());
-                            }
-                        });
-                        s.set_dock(g, d);
-                    });
-                }
-                ui.label(RichText::new(tr("Dica: clique direito em um grupo para mudar onde ele fica.")).weak().small());
-            });
-            egui::CollapsingHeader::new(tr("Cotagem")).show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label(tr("Norma"));
-                    egui::ComboBox::from_id_salt("norma").selected_text(s.dim_standard.clone()).show_ui(ui, |ui| {
-                        for n in ["ABNT NBR 10126", "ISO 129-1", "ASME Y14.5"] {
-                            ui.selectable_value(&mut s.dim_standard, n.to_string(), n);
-                        }
+                    ui.separator();
+                    ui.vertical(|ui| {
+                        ui.heading(format!("{}  {}", PAGES[*page].0, tr(PAGES[*page].1)));
+                        ui.separator();
+                        egui::ScrollArea::vertical().id_salt("pagina_config").auto_shrink([false, false]).show(ui, |ui| settings_page(ui, *page, s));
                     });
                 });
-                ui.add(egui::Slider::new(&mut s.dim_decimals, 0..=4).text("casas decimais"));
-                ui.add(egui::Slider::new(&mut s.dim_text_height, 1.8..=7.0).text("altura do texto (mm)"));
-                ui.label(RichText::new(tr("Usado pela ferramenta de cotagem do sketch e pelo desenho técnico.")).weak().small());
             });
-            egui::CollapsingHeader::new(tr("Sketch")).show(ui, |ui| {
-                ui.checkbox(&mut s.grid, tr("grade"));
-                ui.add(egui::Slider::new(&mut s.grid_step, 1.0..=50.0).text("passo da grade (mm)"));
-                ui.checkbox(&mut s.snaps, tr("snaps"));
-                ui.checkbox(&mut s.auto_constraints, tr("restrições automáticas"));
-                ui.checkbox(&mut s.auto_dims, tr("cotas automáticas"));
-                ui.label(RichText::new(tr("Aplicado pelo editor de sketch interativo (próxima alpha).")).weak().small());
-            });
-            ui.separator();
-            if ui.button(tr("Restaurar padrões")).clicked() {
-                *s = Settings::default();
-            }
-        });
         self.settings_open = open;
     }
 
@@ -1984,6 +2188,10 @@ impl App {
             new_sel = Some(Sel::Part);
         }
         r.context_menu(|ui| {
+            if ui.button(tr("🎨 Propriedades gráficas…")).clicked() {
+                actions.push(TreeAction::Props(AppTarget::Part));
+                ui.close();
+            }
             appearance_menu(ui, doc.appearance, AppTarget::Part, &mut actions);
             if ui.button(tr("📁 Nova pasta de geometria")).clicked() {
                 actions.push(TreeAction::NewGeometryFolder);
@@ -2029,14 +2237,22 @@ impl App {
                     LinkState::Ativo => "●",
                     LinkState::Congelado => "❄",
                     LinkState::Quebrado => "⚠",
+                    LinkState::Desativado => "⏸",
                 };
                 let txt = format!("🔗 {st} {} ← {}.{}", e.target.map(|t| doc.name_of(t)).unwrap_or_default(), e.source, e.publication);
-                let r = ui.selectable_label(e.target.is_some_and(|t| self.sel == Sel::Ref(t)), txt);
+                let r = ui.selectable_label(e.target.is_some_and(|t| self.sel == Sel::Ref(t)), txt).on_hover_text(format!("caminho: {}", e.path));
                 if r.clicked() {
                     if let Some(t) = e.target {
                         new_sel = Some(if doc.reference(t).is_some() { Sel::Ref(t) } else { Sel::Params });
                     }
                 }
+                let (ext, state, path) = (e.id, e.state, e.path.clone());
+                r.context_menu(|ui| {
+                    ui.label(RichText::new(crate::geo_ui::link_state_label(state).0).weak());
+                    ui.label(RichText::new(format!("📂 {path}")).weak().small());
+                    ui.separator();
+                    crate::geo_ui::link_actions(ui, ext, state);
+                });
             }
             ui.horizontal(|ui| {
                 if ui.small_button(tr("➕ Importar publicação…")).clicked() {
@@ -2110,7 +2326,7 @@ impl App {
                     ui.painter().rect_filled(rect, 2., Color32::from_rgb(c.color[0], c.color[1], c.color[2]));
                     let active = doc.active_collector == c.id;
                     let txt = if active { RichText::new(format!("{} {}", c.name, tr("(ativo)"))).strong() } else { RichText::new(&c.name) };
-                    let resp = pick(ui, Sel::Collector(c.id), txt);
+                    let resp = self.row_label(ui, c.id, &c.name, sel == Sel::Collector(c.id), txt, &mut actions);
                     if resp.clicked() {
                         new_sel = Some(Sel::Collector(c.id));
                     }
@@ -2118,6 +2334,21 @@ impl App {
                         actions.push(TreeAction::Activate(c.id));
                     }
                     resp.context_menu(|ui| {
+                        ui.label(RichText::new(&c.name).strong());
+                        if ui.button(tr("✎ Renomear   F2")).clicked() {
+                            actions.push(TreeAction::StartRename(c.id));
+                            ui.close();
+                        }
+                        ui.menu_button(tr("👁 Exibição"), |ui| {
+                            if ui.button(if c.visible { tr("Ocultar corpo   H") } else { tr("Mostrar corpo   H") }).clicked() {
+                                actions.push(TreeAction::CollectorVisible(c.id, !c.visible));
+                                ui.close();
+                            }
+                            if ui.button(tr("🎨 Propriedades gráficas…")).clicked() {
+                                actions.push(TreeAction::Props(AppTarget::Collector(c.id)));
+                                ui.close();
+                            }
+                        });
                         if ui.button(tr("Tornar ativo")).clicked() {
                             actions.push(TreeAction::Activate(c.id));
                             ui.close();
@@ -2199,7 +2430,14 @@ impl App {
         egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true)
             .show_header(ui, |ui| {
                 let n = refs.len() + sketches.len() + subs.len();
-                let r = ui.selectable_label(self.sel == Sel::Folder(fo.id), RichText::new(format!("📁 {}  ({n})", fo.name)).strong());
+                let all_hidden = n > 0 && refs.iter().all(|r| !r.visible) && sketches.iter().all(|(_, f)| f.hidden);
+                if eye(ui, all_hidden) {
+                    actions.push(TreeAction::FolderShown(fo.id, all_hidden));
+                }
+                let r = self.row_label(ui, fo.id, &fo.name, self.sel == Sel::Folder(fo.id), RichText::new(format!("📁 {}  ({n})", fo.name)).strong(), actions);
+                if r.double_clicked() {
+                    actions.push(TreeAction::StartRename(fo.id));
+                }
                 drag_item(ui, &r, fo.id);
                 // soltar um item arrastado aqui move para esta pasta
                 if let Some(p) = r.dnd_release_payload::<DragItem>() {
@@ -2212,6 +2450,15 @@ impl App {
                     *new_sel = Some(Sel::Folder(fo.id));
                 }
                 r.context_menu(|ui| {
+                    ui.label(RichText::new(&fo.name).strong());
+                    if ui.button(tr("✎ Renomear   F2")).clicked() {
+                        actions.push(TreeAction::StartRename(fo.id));
+                        ui.close();
+                    }
+                    if ui.button(if all_hidden { tr("👁 Mostrar o conteúdo") } else { tr("👁 Ocultar o conteúdo") }).clicked() {
+                        actions.push(TreeAction::FolderShown(fo.id, all_hidden));
+                        ui.close();
+                    }
                     ui.menu_button(tr("➕ Criar aqui"), |ui| {
                         if ui.button(tr("✏ Sketch")).clicked() {
                             actions.push(TreeAction::NewSketchIn(fo.id));
@@ -2275,9 +2522,38 @@ impl App {
             });
     }
 
+    /// Rótulo da linha da árvore, ou o campo de renomear (F2) quando este item está sendo renomeado.
+    fn row_label(&self, ui: &mut egui::Ui, id: Id, name: &str, selected: bool, text: RichText, actions: &mut Vec<TreeAction>) -> egui::Response {
+        if self.renaming == Some(id) {
+            let key = egui::Id::unique(("renomear", id.0));
+            let mut buf: String = ui.ctx().data(|m| m.get_temp(key)).unwrap_or_else(|| name.to_string());
+            let r = ui.add(egui::TextEdit::singleline(&mut buf).desired_width(150.));
+            if !r.has_focus() && !r.lost_focus() {
+                r.request_focus();
+            }
+            let (enter, esc) = ui.input(|i| (i.key_pressed(egui::Key::Enter), i.key_pressed(egui::Key::Escape)));
+            if enter || (r.lost_focus() && !esc) {
+                actions.push(TreeAction::Rename(id, buf.clone()));
+                ui.ctx().data_mut(|m| m.remove::<String>(key));
+            } else if esc {
+                actions.push(TreeAction::RenameCancel);
+                ui.ctx().data_mut(|m| m.remove::<String>(key));
+            } else {
+                ui.ctx().data_mut(|m| m.insert_temp(key, buf));
+            }
+            return r;
+        }
+        let r = ui.selectable_label(selected, text);
+        if r.hovered() {
+            self.hover_now.set(Some(id));
+        }
+        r
+    }
+
     fn ref_row(&self, ui: &mut egui::Ui, doc: &Document, r: &RefElement, new_sel: &mut Option<Sel>, actions: &mut Vec<TreeAction>) {
         let users = doc.dependents(r.id).len();
-        let icon = match (&r.kind, r.kind.class()) {
+        let class = r.kind.class();
+        let icon = match (&r.kind, class) {
             (RefKind::AnglePlane { .. }, _) => "◩",
             (RefKind::FacePlane { .. }, _) => "▣",
             (_, RefClass::Point) => "•",
@@ -2287,14 +2563,31 @@ impl App {
             _ => "▱",
         };
         let err = matches!(self.status_of(r.id), Some(Status::Error(_)));
-        let txt = format!("{icon} {}{}{}", r.name, if users > 0 { format!("  ·{users}") } else { String::new() }, if err { " ✖" } else { "" });
+        let stale = self.stale_from() == Some(0);
+        let txt = format!(
+            "{icon} {}{}{}{}",
+            r.name,
+            if r.published { " 📤" } else { "" },
+            if users > 0 { format!("  ·{users}") } else { String::new() },
+            if err { " ✖" } else if stale { " ⟳" } else { "" }
+        );
         let resp = ui
             .horizontal(|ui| {
                 if eye(ui, !r.visible) {
                     actions.push(TreeAction::RefVisible(r.id, !r.visible));
                 }
-                let t = if err { RichText::new(txt).color(Color32::from_rgb(255, 110, 100)) } else if r.visible { RichText::new(txt) } else { RichText::new(txt).weak() };
-                ui.selectable_label(self.sel == Sel::Ref(r.id), t)
+                if let Some(a) = r.appearance {
+                    let (rr, _) = ui.allocate_exact_size(egui::vec2(8., 8.), egui::Sense::hover());
+                    ui.painter().circle_filled(rr.center(), 4., Color32::from_rgb(a.color[0], a.color[1], a.color[2]));
+                }
+                let t = if err || stale {
+                    RichText::new(txt).color(Color32::from_rgb(255, 110, 100))
+                } else if r.visible {
+                    RichText::new(txt)
+                } else {
+                    RichText::new(txt).weak()
+                };
+                self.row_label(ui, r.id, &r.name, self.sel == Sel::Ref(r.id), t, actions)
             })
             .inner;
         drag_item(ui, &resp, r.id);
@@ -2309,16 +2602,40 @@ impl App {
             None => resp,
         };
         resp.context_menu(|ui| {
-            if ui.button(tr("✏ Editar")).clicked() {
+            ui.label(RichText::new(&r.name).strong());
+            if ui.button(tr("✏ Editar   (duplo clique)")).clicked() {
                 actions.push(TreeAction::EditSketch(r.id));
                 ui.close();
             }
-            if r.kind.class() == RefClass::Plane && ui.button(tr("Novo sketch neste plano")).clicked() {
+            if ui.button(tr("✎ Renomear   F2")).clicked() {
+                actions.push(TreeAction::StartRename(r.id));
+                ui.close();
+            }
+            ui.menu_button(tr("👁 Exibição"), |ui| {
+                if ui.button(if r.visible { tr("Ocultar   H") } else { tr("Mostrar   H") }).clicked() {
+                    actions.push(TreeAction::RefVisible(r.id, !r.visible));
+                    ui.close();
+                }
+                if ui.button(tr("🎨 Propriedades gráficas…")).clicked() {
+                    actions.push(TreeAction::Props(AppTarget::Ref(r.id)));
+                    ui.close();
+                }
+            });
+            ui.menu_button(tr("🔗 Publicação"), |ui| {
+                let lbl = if r.published { tr("Despublicar") } else { tr("📤 Publicar para outras peças") };
+                if ui.button(lbl).clicked() {
+                    actions.push(TreeAction::Publish(r.id, !r.published));
+                    ui.close();
+                }
+                ui.label(RichText::new(tr("Publicado: outras peças importam este elemento por link (Referências externas).")).weak().small());
+            });
+            if class == RefClass::Plane && ui.button(tr("✏ Novo sketch neste plano")).clicked() {
                 actions.push(TreeAction::SketchOn(PlaneRef::Datum(r.id)));
                 ui.close();
             }
-            clip_menu(ui, r.id, doc, actions);
-            if ui.button(tr("Apagar…")).clicked() {
+            ui.menu_button(tr("📁 Organizar"), |ui| clip_menu(ui, r.id, doc, actions));
+            ui.separator();
+            if ui.button(tr("🗑 Apagar   Del")).clicked() {
                 actions.push(TreeAction::Delete(r.id));
                 ui.close();
             }
@@ -2327,29 +2644,47 @@ impl App {
 
     fn feature_row(&self, ui: &mut egui::Ui, doc: &Document, i: usize, f: &Feature, new_sel: &mut Option<Sel>, actions: &mut Vec<TreeAction>) {
         let st = self.status_of(f.id);
+        let now = ui.input(|x| x.time);
+        let (stale, sweeping) = self.row_pending(i, now);
         let (badge, color) = match st {
+            _ if stale => (" ⟳", Color32::from_rgb(255, 110, 100)),
             Some(Status::Error(_)) => (" ✖", Color32::from_rgb(255, 110, 100)),
+            _ if sweeping => (" …", Color32::from_rgb(255, 150, 120)),
             Some(Status::Warning(_)) => (" ⚠", Color32::from_rgb(240, 200, 90)),
             Some(Status::Inactive) => ("", Color32::GRAY),
             _ => ("", ui.visuals().text_color()),
         };
+        let is_sketch = matches!(f.kind, FeatureKind::Sketch(_));
         let mut text = RichText::new(format!("{} {}{badge}", f.kind.icon(), f.name)).color(color);
         if f.suppressed {
             text = text.strikethrough();
         }
-        if f.hidden {
+        if is_sketch && f.hidden {
             text = text.italics();
         }
+        // entradas do comando (sketch, pontos, curvas, superfícies) como subitens
+        let inputs: Vec<Id> = if is_sketch { vec![] } else { Document::refs_of(&f.kind).into_iter().filter(|x| doc.reference(*x).is_some() || doc.feature(*x).is_some_and(|g| matches!(g.kind, FeatureKind::Sketch(_)))).collect() };
+        let open_key = ui.make_persistent_id(("entradas", f.id.0));
+        let mut open: bool = ui.ctx().data(|m| m.get_temp(open_key)).unwrap_or(false);
         let resp = ui
             .horizontal(|ui| {
-                if eye(ui, f.hidden) {
+                if !inputs.is_empty() {
+                    if ui.add(egui::Button::new(RichText::new(if open { "⏷" } else { "⏵" }).size(10.)).frame(false)).on_hover_text(tr("entradas do comando")).clicked() {
+                        open = !open;
+                        ui.ctx().data_mut(|m| m.insert_temp(open_key, open));
+                    }
+                } else {
+                    ui.add_space(12.);
+                }
+                // só sketches têm olho: os sólidos aparecem pelo corpo (a última feature junta tudo)
+                if is_sketch && eye(ui, f.hidden) {
                     actions.push(TreeAction::Hide(f.id, !f.hidden));
                 }
                 if let Some(a) = f.appearance {
                     let (r, _) = ui.allocate_exact_size(egui::vec2(8., 8.), egui::Sense::hover());
                     ui.painter().circle_filled(r.center(), 4., Color32::from_rgb(a.color[0], a.color[1], a.color[2]));
                 }
-                ui.selectable_label(self.sel == Sel::Feature(f.id), text)
+                self.row_label(ui, f.id, &f.name, self.sel == Sel::Feature(f.id), text, actions)
             })
             .inner;
         if resp.double_clicked() {
@@ -2367,33 +2702,62 @@ impl App {
             *new_sel = Some(Sel::Feature(f.id));
         }
         resp.context_menu(|ui| {
-            if free {
-                clip_menu(ui, f.id, doc, actions);
-                ui.separator();
-            }
-            if ui.button(if f.suppressed { "Reativar" } else { "Suprimir" }).clicked() {
-                actions.push(TreeAction::Suppress(f.id));
-                ui.close();
-            }
-            if ui.button(if f.hidden { "Mostrar   H" } else { "Ocultar   H" }).clicked() {
-                actions.push(TreeAction::Hide(f.id, !f.hidden));
-                ui.close();
-            }
+            ui.label(RichText::new(&f.name).strong());
             if ui.button(tr("✏ Editar   (duplo clique)")).clicked() {
                 actions.push(TreeAction::EditSketch(f.id));
                 ui.close();
             }
-            if matches!(f.kind, FeatureKind::Sketch(_)) && ui.button(tr("Alinhar vista ao sketch   N")).clicked() {
-                actions.push(TreeAction::Align(f.id));
+            if ui.button(tr("✎ Renomear   F2")).clicked() {
+                actions.push(TreeAction::StartRename(f.id));
                 ui.close();
             }
-            appearance_menu(ui, f.appearance, AppTarget::Feature(f.id), actions);
-            if !doc.is_free(f) && ui.button(tr("Marcador até aqui")).clicked() {
-                let k = doc.features[..=i].iter().filter(|g| g.target == f.target && !doc.is_free(g)).count();
-                actions.push(TreeAction::CollectorMarker(f.target, Some(k)));
-                ui.close();
-            }
-            ui.menu_button(tr("Mover para…"), |ui| {
+            ui.menu_button(tr("👁 Exibição"), |ui| {
+                if is_sketch {
+                    if ui.button(if f.hidden { tr("Mostrar   H") } else { tr("Ocultar   H") }).clicked() {
+                        actions.push(TreeAction::Hide(f.id, !f.hidden));
+                        ui.close();
+                    }
+                    if ui.button(tr("Alinhar vista ao sketch   N")).clicked() {
+                        actions.push(TreeAction::Align(f.id));
+                        ui.close();
+                    }
+                } else {
+                    let vis = doc.collectors.iter().find(|c| c.id == f.target).is_some_and(|c| c.visible);
+                    if ui.button(if vis { tr("Ocultar o corpo   H") } else { tr("Mostrar o corpo   H") }).clicked() {
+                        actions.push(TreeAction::CollectorVisible(f.target, !vis));
+                        ui.close();
+                    }
+                    if ui.button(tr("🎨 Propriedades gráficas…")).clicked() {
+                        actions.push(TreeAction::Props(AppTarget::Feature(f.id)));
+                        ui.close();
+                    }
+                    appearance_menu(ui, f.appearance, AppTarget::Feature(f.id), actions);
+                }
+            });
+            ui.menu_button(tr("⚙ Linha do tempo"), |ui| {
+                if ui.button(if f.suppressed { tr("Reativar") } else { tr("Suprimir") }).clicked() {
+                    actions.push(TreeAction::Suppress(f.id));
+                    ui.close();
+                }
+                if !free && ui.button(tr("Marcador até aqui")).clicked() {
+                    let k = doc.features[..=i].iter().filter(|g| g.target == f.target && !doc.is_free(g)).count();
+                    actions.push(TreeAction::CollectorMarker(f.target, Some(k)));
+                    ui.close();
+                }
+                ui.horizontal(|ui| {
+                    if ui.button(tr("◀ antes")).clicked() && i > 0 {
+                        actions.push(TreeAction::Move(f.id, i - 1));
+                    }
+                    if ui.button(tr("depois ▶")).clicked() {
+                        actions.push(TreeAction::Move(f.id, i + 1));
+                    }
+                });
+            });
+            ui.menu_button(tr("📁 Organizar"), |ui| {
+                if free {
+                    clip_menu(ui, f.id, doc, actions);
+                    ui.separator();
+                }
                 ui.label(RichText::new(tr("Coletor (linha do tempo)")).weak().small());
                 for c in &doc.collectors {
                     if ui.button(format!("▣ {}", c.name)).clicked() {
@@ -2401,9 +2765,8 @@ impl App {
                         ui.close();
                     }
                 }
-                let geo = matches!(f.kind, FeatureKind::Sketch(_));
-                ui.label(RichText::new(if geo { "Pasta (geometria livre / comandos)" } else { "Pasta de comandos" }).weak().small());
-                for fo in doc.folders.iter().filter(|fo| geo || fo.kind == FolderKind::Comandos) {
+                ui.label(RichText::new(if is_sketch { tr("Pasta (geometria livre / comandos)") } else { tr("Pasta de comandos") }).weak().small());
+                for fo in doc.folders.iter().filter(|fo| is_sketch || fo.kind == FolderKind::Comandos) {
                     let icon = if fo.kind == FolderKind::Geometria { "📁" } else { "🗀" };
                     if ui.button(format!("{icon} {}", fo.name)).clicked() {
                         actions.push(TreeAction::ToFolder(f.id, Some(fo.id)));
@@ -2411,27 +2774,33 @@ impl App {
                     }
                 }
             });
-            ui.horizontal(|ui| {
-                if ui.button(tr("◀ antes")).clicked() && i > 0 {
-                    actions.push(TreeAction::Move(f.id, i - 1));
-                }
-                if ui.button(tr("depois ▶")).clicked() {
-                    actions.push(TreeAction::Move(f.id, i + 1));
-                }
-            });
-            if let FeatureKind::Sketch(s) = &f.kind {
-                if ui.button(tr("Extrudar este sketch")).clicked() {
-                    actions.push(TreeAction::Select(f.id, Cmd::Extrude));
-                    ui.close();
-                }
-                let _ = s;
+            if is_sketch && ui.button(tr("⬆ Extrudar este sketch")).clicked() {
+                actions.push(TreeAction::Select(f.id, Cmd::Extrude));
+                ui.close();
             }
             ui.separator();
-            if ui.button(tr("Apagar…")).clicked() {
+            if ui.button(tr("🗑 Apagar   Del")).clicked() {
                 actions.push(TreeAction::Delete(f.id));
                 ui.close();
             }
         });
+        if open {
+            ui.indent(("entradas_ind", f.id.0), |ui| {
+                for x in &inputs {
+                    let name = doc.name_of(*x);
+                    let r = ui.selectable_label(false, RichText::new(format!("↳ {name}")).small().weak());
+                    if r.hovered() {
+                        self.hover_now.set(Some(*x));
+                    }
+                    if r.clicked() {
+                        *new_sel = Some(if doc.reference(*x).is_some() { Sel::Ref(*x) } else { Sel::Feature(*x) });
+                    }
+                    if r.double_clicked() {
+                        actions.push(TreeAction::EditSketch(*x));
+                    }
+                }
+            });
+        }
     }
 
     fn tree_action(&mut self, a: TreeAction) {
@@ -2483,6 +2852,11 @@ impl App {
             }
             TreeAction::SetAppearance(t, a) => match t {
                 AppTarget::Part => d.appearance = a,
+                AppTarget::Ref(id) => {
+                    if let Some(r) = d.references.iter_mut().find(|r| r.id == id) {
+                        r.appearance = a
+                    }
+                }
                 AppTarget::Feature(id) => {
                     if let Some(f) = d.feature_mut(id) {
                         f.appearance = a
@@ -2500,7 +2874,9 @@ impl App {
                     AppTarget::Part => Sel::Part,
                     AppTarget::Feature(id) => Sel::Feature(id),
                     AppTarget::Collector(id) => Sel::Collector(id),
+                    AppTarget::Ref(id) => Sel::Ref(id),
                 };
+                self.props_target = Some(t);
             }
             TreeAction::EditSketch(id) => self.start_session(id, false, None),
             TreeAction::ApplyView(i) => {
@@ -2578,6 +2954,29 @@ impl App {
                 self.sel = Sel::Feature(id);
                 self.align_to_selection();
             }
+            TreeAction::StartRename(id) => self.renaming = Some(id),
+            TreeAction::RenameCancel => self.renaming = None,
+            TreeAction::Rename(id, n) => {
+                self.renaming = None;
+                if let Err(e) = d.rename_item(id, &n) {
+                    self.toast(e.to_string(), true);
+                }
+            }
+            TreeAction::Props(t) => self.props_target = Some(t),
+            TreeAction::Publish(id, on) => {
+                if let Some(r) = d.references.iter_mut().find(|r| r.id == id) {
+                    r.published = on;
+                }
+            }
+            TreeAction::FolderShown(fo, on) => {
+                let inside: Vec<Id> = d.folders.iter().filter(|f| d.folder_within(f.id, fo)).map(|f| f.id).collect();
+                for r in d.references.iter_mut().filter(|r| r.folder.is_some_and(|x| x == fo || inside.contains(&x))) {
+                    r.visible = on;
+                }
+                for f in d.features.iter_mut().filter(|f| f.folder.is_some_and(|x| x == fo || inside.contains(&x))) {
+                    f.hidden = !on;
+                }
+            }
         }
     }
 
@@ -2586,8 +2985,19 @@ impl App {
         let d = &mut self.open.doc;
         match self.sel {
             Sel::Feature(id) => {
-                if let Some(f) = d.feature_mut(id) {
-                    f.hidden = !f.hidden
+                let target = d.feature(id).filter(|f| !matches!(f.kind, FeatureKind::Sketch(_))).map(|f| f.target);
+                match target {
+                    // sólidos não se ocultam um a um: oculta o corpo inteiro
+                    Some(c) => {
+                        if let Some(c) = d.collectors.iter_mut().find(|x| x.id == c) {
+                            c.visible = !c.visible
+                        }
+                    }
+                    None => {
+                        if let Some(f) = d.feature_mut(id) {
+                            f.hidden = !f.hidden
+                        }
+                    }
                 }
             }
             Sel::Ref(id) => {
@@ -2749,7 +3159,55 @@ impl App {
             ui.horizontal(|ui| {
                 let (k, ms) = self.result.as_ref().map(|r| (r.kernel.clone(), r.elapsed_ms)).unwrap_or_default();
                 let busy = self.gen_done < self.gen_sent;
-                ui.label(RichText::new(if busy { "⏳ recalculando…".to_string() } else { format!("✔ recalculado em {ms:.0} ms") }).small());
+                let now = ui.input(|i| i.time);
+                let n = self.open.doc.features.len();
+                let swept = (((now - self.sweep_t0) / 0.035) as usize).min(n);
+                let stale = self.stale_from().is_some() && !busy;
+                let (txt, col) = if busy {
+                    ("⏳ recalculando…".to_string(), Color32::from_rgb(240, 200, 90))
+                } else if stale {
+                    (tr("⟳ desatualizado — F5 atualiza").to_string(), Color32::from_rgb(255, 120, 100))
+                } else if swept < n {
+                    (format!("▶ atualizando {swept}/{n}"), Color32::from_rgb(140, 200, 255))
+                } else {
+                    (format!("✔ recalculado em {ms:.0} ms"), ui.visuals().text_color())
+                };
+                ui.label(RichText::new(txt).small().color(col));
+                ui.separator();
+                ui.checkbox(&mut self.settings.auto_update, RichText::new(tr("auto")).small()).on_hover_text(tr("atualizar automaticamente a cada mudança"));
+                if ui.small_button(tr("⟳ Atualizar")).on_hover_text(tr("recalcula o que mudou (F5)")).clicked() {
+                    self.send_recompute(false);
+                }
+                if ui.small_button(tr("⟲ Reconstruir")).on_hover_text(tr("reconstrói tudo do zero, sem cache (Ctrl+F5)")).clicked() {
+                    self.send_recompute(true);
+                }
+                // passo a passo: move o marcador do corpo ativo comando a comando
+                let act = self.open.doc.active_collector;
+                let total = self.open.doc.features.iter().filter(|f| f.target == act && !self.open.doc.is_free(f)).count();
+                let cur = self.open.doc.collectors.iter().find(|c| c.id == act).and_then(|c| c.marker).unwrap_or(total).min(total);
+                let mut set: Option<Option<usize>> = None;
+                if ui.small_button("⏮").on_hover_text(tr("voltar ao início (reconstruir passo a passo)")).clicked() {
+                    set = Some(Some(0));
+                }
+                if ui.small_button("◀").on_hover_text(tr("um comando para trás")).clicked() {
+                    set = Some(Some(cur.saturating_sub(1)));
+                }
+                ui.label(RichText::new(format!("{cur}/{total}")).small().weak());
+                if ui.small_button("▶").on_hover_text(tr("reconstruir o próximo comando")).clicked() {
+                    set = Some(if cur + 1 >= total { None } else { Some(cur + 1) });
+                }
+                if ui.small_button("⏭").on_hover_text(tr("até o fim")).clicked() {
+                    set = Some(None);
+                }
+                if let Some(m) = set {
+                    if let Some(c) = self.open.doc.collectors.iter_mut().find(|c| c.id == act) {
+                        c.marker = m;
+                    }
+                }
+                let errs = self.errors_prev;
+                if errs > 0 && ui.small_button(RichText::new(format!("✖ {errs} com erro — reparar")).color(Color32::from_rgb(255, 120, 100))).clicked() {
+                    self.wizard_open = true;
+                }
                 ui.separator();
                 ui.label(RichText::new(k).small().weak());
                 if let Some(e) = self.result.as_ref().and_then(|r| r.param_error.clone()) {
@@ -3195,6 +3653,12 @@ pub enum Cmd {
     Combine(BoolOp),
     FilletFaceFace,
     FilletFull,
+    /// extrair a seleção da viewport como geometria de referência
+    Extract,
+    /// mover o corpo: 0 translação, 1 rotação, 2 simetria, 3 afinidade
+    MoveBody(u8),
+    /// extrusão com ângulo de saída e filetes num clique
+    ExtrudeDraftFillet,
     SplitBody,
     ThickSurface,
     CloseSurface,
@@ -3206,11 +3670,12 @@ pub enum Cmd {
     Collector,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum AppTarget {
     Part,
     Collector(Id),
     Feature(Id),
+    Ref(Id),
 }
 
 /// Submenu "Aparência" com predefinições, personalizar e remover.
@@ -3279,6 +3744,13 @@ enum TreeAction {
     Duplicate(Id),
     ImportLink,
     RefreshLinks,
+    StartRename(Id),
+    Rename(Id, String),
+    RenameCancel,
+    Props(AppTarget),
+    Publish(Id, bool),
+    /// mostra/oculta todo o conteúdo de uma pasta de geometria
+    FolderShown(Id, bool),
 }
 
 /// Item da árvore de geometria sendo arrastado.
@@ -3379,9 +3851,22 @@ impl eframe::App for App {
         while let Ok((g, r)) = self.worker.rx.try_recv() {
             if g >= self.gen_done {
                 self.gen_done = g;
+                let errs = r.status.values().filter(|s| matches!(s, Status::Error(_))).count();
+                if errs > self.errors_prev && self.started {
+                    // algo quebrou (referência apagada, entrada inválida): abre o assistente
+                    self.wizard_open = true;
+                }
+                self.errors_prev = errs;
                 self.result = Some(r);
+                if g == self.gen_sent {
+                    self.result_doc = self.sent_doc.clone();
+                }
+                self.sweep_t0 = ctx.input(|i| i.time);
                 self.scene_dirty = true;
             }
+        }
+        if ctx.input(|i| i.time) - self.sweep_t0 < 0.035 * (self.open.doc.features.len() as f64 + 1.) {
+            ctx.request_repaint();
         }
 
         // atalhos (mapa configurável em Configurações → Atalhos e navegação)
@@ -3440,6 +3925,16 @@ impl eframe::App for App {
             }
             if km.pressed(ctx, K::Hide) {
                 self.toggle_hide_selected();
+            }
+            // F2 renomeia na árvore; F5 atualiza (no modo manual); Ctrl+F5 reconstrói tudo
+            if ctx.input(|i| i.key_pressed(egui::Key::F2)) {
+                if let Sel::Feature(id) | Sel::Ref(id) | Sel::Folder(id) | Sel::Collector(id) = self.sel {
+                    self.renaming = Some(id);
+                }
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::F5)) {
+                let fresh = ctx.input(|i| i.modifiers.command);
+                self.send_recompute(fresh);
             }
             if self.sketch.is_none() {
                 let item = match self.sel {
@@ -3513,6 +4008,7 @@ impl eframe::App for App {
 
         self.top(root);
         self.timeline(root);
+        self.hover_now.set(None);
         egui::Panel::left("arvore").default_size(270.).resizable(true).show(root, |ui| {
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.left, LeftTab::Peca, tr("Peça"));
@@ -3524,16 +4020,42 @@ impl eframe::App for App {
                 LeftTab::Projeto => self.project_panel(ui),
             });
         });
-        egui::Panel::right("editor").default_size(330.).resizable(true).show(root, |ui| {
+        // painel de edição: junto da árvore (padrão) ou à direita
+        let editor_panel = |app: &mut App, ui: &mut egui::Ui| {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(tr("Edição")).weak().small());
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let (txt, tip) = if app.settings.editor_left { ("⇥", "levar o painel de edição para a direita") } else { ("⇤", "trazer o painel de edição para a esquerda") };
+                    if ui.small_button(txt).on_hover_text(tr(tip)).clicked() {
+                        app.settings.editor_left = !app.settings.editor_left;
+                    }
+                });
+            });
             egui::ScrollArea::vertical().show(ui, |ui| {
-                if self.sketch.is_some() {
-                    crate::sketch_ui::panel(self, ui)
+                if app.sketch.is_some() {
+                    crate::sketch_ui::panel(app, ui)
                 } else {
-                    editor::show(self, ui);
-                    crate::measure::panel(self, ui);
+                    editor::show(app, ui);
+                    crate::measure::panel(app, ui);
                 }
             });
-        });
+        };
+        if self.settings.editor_left {
+            egui::Panel::left("editor_esq").default_size(320.).resizable(true).show(root, |ui| editor_panel(self, ui));
+        } else {
+            egui::Panel::right("editor").default_size(330.).resizable(true).show(root, |ui| editor_panel(self, ui));
+        }
+        // realce dinâmico do item sob o mouse
+        if self.hover_now.get() != self.hover_item {
+            self.hover_item = self.hover_now.get();
+            self.scene_dirty = true;
+        }
+        if let Some(id) = ctx.data(|m| m.get_temp::<Id>(egui::Id::unique("scc_props"))) {
+            ctx.data_mut(|m| m.remove::<Id>(egui::Id::unique("scc_props")));
+            self.props_target = Some(if self.open.doc.reference(id).is_some() { AppTarget::Ref(id) } else { AppTarget::Feature(id) });
+        }
+        self.props_window(ctx);
+        self.wizard_window(ctx);
         self.side_toolbars(root);
         self.settings_window(ctx);
         self.view_menu_window(ctx);
@@ -3558,7 +4080,9 @@ impl eframe::App for App {
                 self.last_edit = now;
                 self.redo.clear();
                 self.open.modified = true;
-                self.request_recompute();
+                if self.settings.auto_update {
+                    self.request_recompute();
+                }
             }
         }
         let link_key = egui::Id::unique("scc_link_acao");
@@ -3566,10 +4090,24 @@ impl eframe::App for App {
             ctx.data_mut(|m| m.remove::<(Id, u8)>(link_key));
             match act {
                 0 => self.refresh_links(),
-                _ => {
-                    if let Some(e) = self.open.doc.external.iter_mut().find(|e| e.id == ext) {
-                        e.state = if e.state == LinkState::Congelado { LinkState::Ativo } else { LinkState::Congelado };
+                1 | 2 => {
+                    let other = if act == 1 { LinkState::Congelado } else { LinkState::Desativado };
+                    if act == 2 {
+                        // desativar de propósito não deve abrir o assistente de reparo
+                        self.errors_prev = usize::MAX;
                     }
+                    if let Some(e) = self.open.doc.external.iter_mut().find(|e| e.id == ext) {
+                        e.state = if e.state == other { LinkState::Ativo } else { other };
+                    }
+                }
+                3 => {
+                    self.open.doc.isolate_link(ext);
+                    self.toast("Link isolado: a geometria ficou fixa nesta peça", false);
+                }
+                _ => {
+                    // assistente de relink: a janela de importação passa a religar este link
+                    self.relink_ext = Some(ext);
+                    self.link_open = true;
                 }
             }
         }
@@ -3611,6 +4149,7 @@ impl eframe::App for App {
                     filter: &self.settings.filter,
                     hidden_env: self.hidden_env,
                     dark_edges: !matches!(self.settings.display, crate::render::DisplayMode::Arame) || lum(self.settings.bg_bottom) > 140.,
+                    hilite: self.hover_item.or(self.session.as_ref().map(|s| s.id)),
                 };
                 let s = scene::build(&self.open.doc, r, &opts);
                 vp.set_scene(rs, &s);
@@ -3697,4 +4236,197 @@ fn paint_backdrop(p: &egui::Painter, rect: Rect, dark: bool) {
         let y = horizon + (rect.bottom() - horizon) * f;
         p.line_segment([egui::pos2(rect.left(), y), egui::pos2(rect.right(), y)], egui::Stroke::new(1., line));
     }
+}
+
+/// Conteúdo de cada página da janela de configurações.
+fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
+    match page {
+        0 => {
+                ui.horizontal(|ui| {
+                    ui.label(tr("Tema"));
+                    ui.radio_value(&mut s.theme, Theme::Escuro, tr("Escuro"));
+                    ui.radio_value(&mut s.theme, Theme::Claro, tr("Claro"));
+                });
+                ui.horizontal(|ui| {
+                    ui.label(tr("Idioma"));
+                    ui.radio_value(&mut s.english, false, "Português");
+                    ui.radio_value(&mut s.english, true, "English");
+                });
+                ui.add(egui::Slider::new(&mut s.ui_scale, 0.75..=1.75).text("escala (fontes e controles)"));
+                ui.add(egui::Slider::new(&mut s.icon_size, 20.0..=48.0).text("tamanho dos ícones"));
+                ui.checkbox(&mut s.show_labels, tr("mostrar o nome embaixo dos ícones"));
+            }
+        1 => {
+                ui.checkbox(&mut s.gradient, tr("degradê de duas cores"));
+                ui.horizontal(|ui| {
+                    ui.label(if s.gradient { "Topo" } else { "Cor" });
+                    if s.gradient {
+                        ui.color_edit_button_srgb(&mut s.bg_top);
+                        ui.label(tr("Base"));
+                    }
+                    ui.color_edit_button_srgb(&mut s.bg_bottom);
+                });
+                ui.horizontal_wrapped(|ui| {
+                    for (n, t, b) in BACKGROUNDS {
+                        if ui.small_button(n).clicked() {
+                            s.bg_top = t;
+                            s.bg_bottom = b;
+                            s.gradient = t != b;
+                        }
+                    }
+                });
+            }
+        2 => {
+                use crate::keymap::{Binding, KeyAction, Preset};
+                ui.horizontal(|ui| {
+                    ui.label(tr("Adaptar ao meu CAD:"));
+                    let cur = s.keys.preset;
+                    egui::ComboBox::from_id_salt("preset").selected_text(cur.label()).show_ui(ui, |ui| {
+                        for p in Preset::ALL {
+                            if ui.selectable_label(cur == p, p.label()).clicked() {
+                                s.keys.preset = p;
+                                s.keys.custom.clear();
+                                s.nav = p.nav();
+                            }
+                        }
+                    });
+                });
+                ui.label(RichText::new(tr("Troca o teclado e o mouse juntos, com base nos atalhos de fábrica de cada software. Clique num atalho para gravar outro (Esc cancela, Delete remove).")).weak().small());
+                let capturing: Option<KeyAction> = ui.ctx().data(|d| d.get_temp(egui::Id::unique("captura_atalho")));
+                egui::ScrollArea::vertical().max_height(260.).id_salt("atalhos").show(ui, |ui| {
+                    egui::Grid::new("grade_atalhos").num_columns(3).striped(true).show(ui, |ui| {
+                        let mut group = "";
+                        for a in KeyAction::ALL {
+                            if a.group() != group {
+                                group = a.group();
+                                ui.label(RichText::new(group).strong());
+                                ui.end_row();
+                            }
+                            ui.label(a.label());
+                            let txt = if capturing == Some(a) { "pressione…".to_string() } else { s.keys.binding(a).map(|b| b.text()).unwrap_or_else(|| "—".into()) };
+                            if ui.add(egui::Button::new(txt).min_size(egui::vec2(110., 0.))).clicked() {
+                                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::unique("captura_atalho"), a));
+                            }
+                            let conf = s.keys.conflicts(a);
+                            if conf.is_empty() {
+                                ui.label(tr(""));
+                            } else {
+                                ui.label(RichText::new(format!("⚠ igual a {}", conf[0].label())).color(Color32::from_rgb(255, 170, 60)).small());
+                            }
+                            ui.end_row();
+                        }
+                    });
+                });
+                if let Some(a) = capturing {
+                    let got = ui.ctx().input(|i| {
+                        i.events.iter().find_map(|e| match e {
+                            egui::Event::Key { key, pressed: true, modifiers, .. } => Some((*key, *modifiers)),
+                            _ => None,
+                        })
+                    });
+                    if let Some((key, m)) = got {
+                        match key {
+                            egui::Key::Escape => {}
+                            egui::Key::Delete | egui::Key::Backspace if !m.any() => s.keys.set(a, None),
+                            _ => s.keys.set(a, Some(Binding { key: key.name().to_string(), ctrl: m.command, shift: m.shift, alt: m.alt })),
+                        }
+                        ui.ctx().data_mut(|d| d.remove::<KeyAction>(egui::Id::unique("captura_atalho")));
+                    }
+                }
+                if ui.small_button(tr("Restaurar atalhos da predefinição")).clicked() {
+                    s.keys.custom.clear();
+                }
+            }
+        3 => {
+                egui::ComboBox::from_id_salt("nav").selected_text(s.nav.label()).show_ui(ui, |ui| {
+                    for n in crate::settings::NavStyle::ALL {
+                        ui.selectable_value(&mut s.nav, n, n.label());
+                    }
+                });
+                ui.label(RichText::new(s.nav.help()).weak().small());
+                ui.checkbox(&mut s.invert_zoom, tr("inverter o sentido do zoom"));
+                ui.horizontal(|ui| {
+                    ui.label(tr("Selecionar:"));
+                    ui.checkbox(&mut s.sel_faces, tr("faces"));
+                    ui.checkbox(&mut s.sel_edges, tr("arestas"));
+                    ui.checkbox(&mut s.sel_vertices, tr("vértices"));
+                });
+            }
+        4 => {
+                for m in crate::render::DisplayMode::ALL {
+                    ui.radio_value(&mut s.display, m, m.label());
+                }
+                ui.checkbox(&mut s.edges_in_render, tr("arestas no semi-renderizado"));
+                ui.checkbox(&mut s.ortho, tr("projeção ortogonal"));
+            }
+        5 => {
+                for g in crate::settings::Group::ALL {
+                    ui.horizontal(|ui| {
+                        ui.add_sized([110., 18.], egui::Label::new(g.label()));
+                        let mut d = s.dock(g);
+                        egui::ComboBox::from_id_salt(("dock", g.label())).selected_text(d.label()).show_ui(ui, |ui| {
+                            for o in Dock::ALL {
+                                ui.selectable_value(&mut d, o, o.label());
+                            }
+                        });
+                        s.set_dock(g, d);
+                    });
+                }
+                ui.label(RichText::new(tr("Dica: clique direito em um grupo para mudar onde ele fica.")).weak().small());
+            
+            ui.add_space(8.);
+            ui.label(RichText::new(tr("Painéis")).strong());
+            ui.checkbox(&mut s.editor_left, tr("painel de edição à esquerda, junto da árvore"));
+            ui.label(RichText::new(tr("Grupos flutuantes encaixam sozinhos quando soltos perto do topo ou das laterais; arraste o nome de um grupo encaixado para soltá-lo. Posições de janelas e painéis ficam salvas.")).weak().small());
+        }
+        6 => {
+            ui.checkbox(&mut s.auto_update, tr("atualizar automaticamente a cada mudança"));
+            ui.label(RichText::new(tr("Desligado: o que mudou fica em vermelho (⟳) na árvore até você atualizar (botão ⟳ ou F5). Ctrl+F5 reconstrói tudo do zero. Os botões ⏮ ◀ ▶ ⏭ da barra de status reconstroem passo a passo, comando a comando.")).weak().small());
+        }
+        7 => {
+                ui.horizontal(|ui| {
+                    ui.label(tr("Norma"));
+                    egui::ComboBox::from_id_salt("norma").selected_text(s.dim_standard.clone()).show_ui(ui, |ui| {
+                        for n in ["ABNT NBR 10126", "ISO 129-1", "ASME Y14.5"] {
+                            ui.selectable_value(&mut s.dim_standard, n.to_string(), n);
+                        }
+                    });
+                });
+                ui.add(egui::Slider::new(&mut s.dim_decimals, 0..=4).text("casas decimais"));
+                ui.add(egui::Slider::new(&mut s.dim_text_height, 1.8..=7.0).text("altura do texto (mm)"));
+                ui.label(RichText::new(tr("Usado pela ferramenta de cotagem do sketch e pelo desenho técnico.")).weak().small());
+            }
+        _ => {
+                ui.checkbox(&mut s.grid, tr("grade"));
+                ui.add(egui::Slider::new(&mut s.grid_step, 1.0..=50.0).text("passo da grade (mm)"));
+                ui.checkbox(&mut s.snaps, tr("snaps"));
+                ui.checkbox(&mut s.auto_constraints, tr("restrições automáticas"));
+                ui.checkbox(&mut s.auto_dims, tr("cotas automáticas"));
+                ui.label(RichText::new(tr("Aplicado pelo editor de sketch interativo (próxima alpha).")).weak().small());
+            }
+    }
+}
+
+/// Aba de bancada no topo: destacada (fundo e sublinhado) quando ativa; apagada quando indisponível.
+fn bench_tab(ui: &mut egui::Ui, active: bool, text: &str, enabled: bool) -> egui::Response {
+    let font = egui::FontId::proportional(13.5);
+    let col = if !enabled {
+        ui.visuals().weak_text_color().gamma_multiply(0.7)
+    } else if active {
+        ui.visuals().strong_text_color()
+    } else {
+        ui.visuals().text_color()
+    };
+    let g = ui.painter().layout_no_wrap(text.to_string(), font, col);
+    let size = g.size() + egui::vec2(22., 10.);
+    let (r, resp) = ui.allocate_exact_size(size, if enabled { egui::Sense::click() } else { egui::Sense::hover() });
+    let p = ui.painter();
+    if active {
+        p.rect_filled(r, egui::CornerRadius { nw: 6, ne: 6, sw: 0, se: 0 }, Color32::from_rgba_unmultiplied(70, 140, 240, 50));
+        p.rect_filled(Rect::from_min_max(egui::pos2(r.left() + 4., r.bottom() - 3.), egui::pos2(r.right() - 4., r.bottom())), 1.5, Color32::from_rgb(80, 160, 255));
+    } else if resp.hovered() && enabled {
+        p.rect_filled(r, 6., Color32::from_rgba_unmultiplied(120, 150, 200, 30));
+    }
+    p.galley(r.center() - g.size() / 2., g, col);
+    resp
 }

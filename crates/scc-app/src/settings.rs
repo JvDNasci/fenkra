@@ -25,6 +25,8 @@ pub enum Group {
     Vista,
     Padroes,
     // bancada de superfícies
+    /// criação de pontos, linhas, planos e curvas à mão (bancada de superfícies)
+    Wireframe,
     Superficies,
     Operacoes,
     /// comandos híbridos superfície ↔ sólido (nas duas bancadas)
@@ -40,11 +42,12 @@ pub enum Group {
 }
 
 impl Group {
-    pub const ALL: [Group; 17] = [
+    pub const ALL: [Group; 18] = [
         Group::Sketch,
         Group::Solidos,
         Group::Acabamento,
         Group::Padroes,
+        Group::Wireframe,
         Group::Superficies,
         Group::Operacoes,
         Group::Hibrido,
@@ -64,7 +67,9 @@ impl Group {
     pub fn in_bench(self, b: Bench) -> bool {
         match self {
             Group::Solidos | Group::Acabamento | Group::Padroes => b == Bench::Solidos,
-            Group::Superficies | Group::Operacoes => b == Bench::Superficies,
+            Group::Superficies | Group::Operacoes | Group::Wireframe => b == Bench::Superficies,
+            // na bancada de superfícies o Wireframe mostra as referências abertas, sem famílias
+            Group::Referencias => b == Bench::Solidos,
             _ => true,
         }
     }
@@ -83,6 +88,7 @@ impl Group {
             Group::Vista => tr("Vista"),
             Group::Padroes => tr("Padrões e transformações"),
             Group::Superficies => tr("Superfícies"),
+            Group::Wireframe => tr("Wireframe (pontos, linhas, planos, curvas)"),
             Group::Operacoes => tr("Operações"),
             Group::Hibrido => tr("Volume (superfície ↔ sólido)"),
             Group::Analise => tr("Análise"),
@@ -164,14 +170,17 @@ pub enum Dock {
     Lateral,
     Flutuante,
     Oculta,
+    /// fixa na lateral direita
+    Direita,
 }
 
 impl Dock {
-    pub const ALL: [Dock; 4] = [Dock::Topo, Dock::Lateral, Dock::Flutuante, Dock::Oculta];
+    pub const ALL: [Dock; 5] = [Dock::Topo, Dock::Lateral, Dock::Direita, Dock::Flutuante, Dock::Oculta];
     pub fn label(self) -> &'static str {
         match self {
             Dock::Topo => tr("Fixa no topo"),
-            Dock::Lateral => tr("Fixa na lateral"),
+            Dock::Lateral => tr("Fixa na lateral esquerda"),
+            Dock::Direita => tr("Fixa na lateral direita"),
             Dock::Flutuante => tr("Flutuante"),
             Dock::Oculta => tr("Oculta"),
         }
@@ -243,6 +252,10 @@ pub struct Settings {
     /// bancada ativa (Modelagem Sólida ou Superfícies)
     #[serde(default)]
     pub bench: Bench,
+    /// recálculo automático a cada mudança (desligado: só com "Atualizar")
+    pub auto_update: bool,
+    /// painel de edição à esquerda (junto da árvore) em vez da direita
+    pub editor_left: bool,
     /// última macro escrita na janela de automação
     pub macro_src: String,
 }
@@ -304,6 +317,8 @@ impl Default for Settings {
             custom: Default::default(),
             macro_src: String::new(),
             bench: Default::default(),
+            auto_update: true,
+            editor_left: true,
         }
     }
 }

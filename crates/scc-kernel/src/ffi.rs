@@ -135,7 +135,7 @@ pub mod bridge {
         fn split_side(s: &Shape, tool: &Shape, keep_pos: bool, extend: bool) -> Result<UniquePtr<Shape>>;
         fn nth_face(s: &Shape, i: u32) -> Result<UniquePtr<Shape>>;
         fn untrim_face(s: &Shape) -> Result<UniquePtr<Shape>>;
-        fn extrapolate_face(s: &Shape, px: f64, py: f64, pz: f64, len: f64) -> Result<UniquePtr<Shape>>;
+        fn extrapolate_face(s: &Shape, px: f64, py: f64, pz: f64, len: f64, cont: i32) -> Result<UniquePtr<Shape>>;
         fn boundary_pts(s: &Shape, ends: &mut Vec<u32>) -> Result<Vec<f64>>;
         fn section_pts(a: &Shape, b: &Shape, ends: &mut Vec<u32>) -> Result<Vec<f64>>;
         fn thicken(s: &Shape, t1: f64, t2: f64) -> Result<UniquePtr<Shape>>;
@@ -143,6 +143,16 @@ pub mod bridge {
         fn volume_cells(s: &Shape, exclude: &[f64]) -> Result<UniquePtr<Shape>>;
         fn mesh_shape(tris: &[f64], solid: bool) -> Result<UniquePtr<Shape>>;
         fn is_solid(s: &Shape) -> bool;
+        fn affinity(
+            s: &Shape, ox: f64, oy: f64, oz: f64, xx: f64, xy: f64, xz: f64, nx: f64, ny: f64, nz: f64, fx: f64, fy: f64, fz: f64,
+        ) -> Result<UniquePtr<Shape>>;
+        fn to_brep(s: &Shape) -> Result<String>;
+        fn from_brep(text: &str) -> Result<UniquePtr<Shape>>;
+        fn hole_tool_ext(
+            ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64, diameter: f64, depth: f64,
+            kind: u8, d2: f64, p2: f64, a3: f64, tip: f64, taper: f64,
+        ) -> Result<UniquePtr<Shape>>;
+        fn ray_hit(s: &Shape, px: f64, py: f64, pz: f64, dx: f64, dy: f64, dz: f64) -> Result<Vec<f64>>;
         fn same_face(s: &Shape, ax: f64, ay: f64, az: f64, bx: f64, by: f64, bz: f64) -> Result<bool>;
         fn full_round_t(s: &Shape, mx: f64, my: f64, mz: f64, width: f64, tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
         fn face_face_fillet_t(

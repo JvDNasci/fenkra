@@ -74,7 +74,7 @@ std::unique_ptr<Shape> heal_shape(const Shape& s, double tol);
 std::unique_ptr<Shape> split_side(const Shape& s, const Shape& tool, bool keep_pos, bool extend);
 std::unique_ptr<Shape> nth_face(const Shape& s, uint32_t i);
 std::unique_ptr<Shape> untrim_face(const Shape& s);
-std::unique_ptr<Shape> extrapolate_face(const Shape& s, double px, double py, double pz, double len);
+std::unique_ptr<Shape> extrapolate_face(const Shape& s, double px, double py, double pz, double len, int32_t cont);
 rust::Vec<double> boundary_pts(const Shape& s, rust::Vec<uint32_t>& ends);
 rust::Vec<double> section_pts(const Shape& a, const Shape& b, rust::Vec<uint32_t>& ends);
 std::unique_ptr<Shape> thicken(const Shape& s, double t1, double t2);
@@ -82,6 +82,13 @@ std::unique_ptr<Shape> close_surface(const Shape& s, double tol);
 std::unique_ptr<Shape> volume_cells(const Shape& s, rust::Slice<const double> exclude);
 std::unique_ptr<Shape> mesh_shape(rust::Slice<const double> tris, bool solid);
 bool is_solid(const Shape& s);
+std::unique_ptr<Shape> affinity(const Shape& s, double ox, double oy, double oz, double xx, double xy, double xz, double nx, double ny, double nz,
+                                double fx, double fy, double fz);
+rust::String to_brep(const Shape& s);
+std::unique_ptr<Shape> from_brep(rust::Str text);
+std::unique_ptr<Shape> hole_tool_ext(double ox, double oy, double oz, double dx, double dy, double dz, double diameter, double depth,
+                                     uint8_t kind, double d2, double p2, double a3, double tip, double taper);
+rust::Vec<double> ray_hit(const Shape& s, double px, double py, double pz, double dx, double dy, double dz);
 bool same_face(const Shape& s, double ax, double ay, double az, double bx, double by, double bz);
 std::unique_ptr<Shape> full_round_t(const Shape& s, double mx, double my, double mz, double width, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
 std::unique_ptr<Shape> face_face_fillet_t(const Shape& s, double ax, double ay, double az, double bx, double by, double bz, double r, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);

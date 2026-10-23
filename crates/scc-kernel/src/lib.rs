@@ -102,6 +102,20 @@ pub enum HoleShape {
     Simple,
     Counterbore { diameter: f64, depth: f64 },
     Countersink { diameter: f64, angle: f64 },
+    /// rebaixo com fundo cônico (ângulo da broca do rebaixo)
+    Counterdrill { diameter: f64, depth: f64, angle: f64 },
+}
+
+impl HoleShape {
+    /// Profundidade da cabeça (rebaixo/escareado) a partir da boca do furo.
+    pub fn head_depth(&self, hole_d: f64) -> f64 {
+        match *self {
+            HoleShape::Simple => 0.,
+            HoleShape::Counterbore { depth, .. } => depth,
+            HoleShape::Counterdrill { diameter, depth, angle } => depth + ((diameter - hole_d) / 2.).max(0.) / (angle.to_radians() / 2.).tan().max(1e-6),
+            HoleShape::Countersink { diameter, angle } => ((diameter - hole_d) / 2.).max(0.) / (angle.to_radians() / 2.).tan().max(1e-6),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -208,10 +222,26 @@ mod imp {
                 HoleShape::Simple => (0, 0., 0.),
                 HoleShape::Counterbore { diameter, depth } => (1, diameter, depth),
                 HoleShape::Countersink { diameter, angle } => (2, diameter, angle),
+                HoleShape::Counterdrill { .. } => return Self::hole_tool_ext(origin, dir, diameter, depth, shape, 0., 0.),
             };
             let [ox, oy, oz] = origin;
             let [dx, dy, dz] = dir;
             b::hole_tool(ox, oy, oz, dx, dy, dz, diameter, depth, k, d2, p2).map(Shape).map_err(err)
+        }
+        /// Furo com fundo em V (`tip` = ângulo da ponta; 0 = plano) e corpo cônico (`taper`, meio-ângulo).
+        pub fn hole_tool_ext(origin: [f64; 3], dir: [f64; 3], diameter: f64, depth: f64, shape: HoleShape, tip: f64, taper: f64) -> KResult<Shape> {
+            let (k, d2, p2, a3) = match shape {
+                HoleShape::Simple => (0, 0., 0., 0.),
+                HoleShape::Counterbore { diameter, depth } => (1, diameter, depth, 0.),
+                HoleShape::Countersink { diameter, angle } => (2, diameter, angle, 0.),
+                HoleShape::Counterdrill { diameter, depth, angle } => (3, diameter, depth, angle),
+            };
+            b::hole_tool_ext(origin[0], origin[1], origin[2], dir[0], dir[1], dir[2], diameter, depth, k, d2, p2, a3, tip, taper).map(Shape).map_err(err)
+        }
+        /// Primeiro ponto onde a reta (p, d) cruza a forma: (ponto, parâmetro t).
+        pub fn ray_hit(&self, p: [f64; 3], d: [f64; 3]) -> KResult<Option<([f64; 3], f64)>> {
+            let v = b::ray_hit(&self.0, p[0], p[1], p[2], d[0], d[1], d[2]).map_err(err)?;
+            Ok((v.len() == 4).then(|| ([v[0], v[1], v[2]], v[3])))
         }
 
         pub fn fillet_all(&self, r: f64) -> KResult<Shape> {
@@ -409,8 +439,13 @@ mod imp {
         pub fn untrimmed(&self) -> KResult<Shape> {
             b::untrim_face(&self.0).map(Shape).map_err(err)
         }
-        pub fn extrapolated(&self, near: [f64; 3], len: f64) -> KResult<Shape> {
-            b::extrapolate_face(&self.0, near[0], near[1], near[2], len).map(Shape).map_err(err)
+        /// `curvature`: prolonga mantendo a curvatura (mesma superfície); senão, tangente (linear).
+        pub fn extrapolated(&self, near: [f64; 3], len: f64, curvature: bool) -> KResult<Shape> {
+            b::extrapolate_face(&self.0, near[0], near[1], near[2], len, if curvature { 2 } else { 1 }).map(Shape).map_err(err)
+        }
+        /// Escala independente nos eixos do sistema `f` (afinidade).
+        pub fn affinity(&self, f: Frame, k: [f64; 3]) -> KResult<Shape> {
+            b::affinity(&self.0, f.origin[0], f.origin[1], f.origin[2], f.x[0], f.x[1], f.x[2], f.normal[0], f.normal[1], f.normal[2], k[0], k[1], k[2]).map(Shape).map_err(err)
         }
         fn split_pts(flat: Vec<f64>, ends: Vec<u32>) -> Vec<Vec<[f64; 3]>> {
             let mut out = vec![];
@@ -449,6 +484,12 @@ mod imp {
         }
         pub fn is_solid(&self) -> bool {
             b::is_solid(&self.0)
+        }
+        pub fn to_brep(&self) -> KResult<String> {
+            b::to_brep(&self.0).map_err(err)
+        }
+        pub fn from_brep(text: &str) -> KResult<Shape> {
+            b::from_brep(text).map(Shape).map_err(err)
         }
 
         pub fn same_face(&self, a: [f64; 3], c: [f64; 3]) -> bool {
@@ -539,6 +580,12 @@ mod imp {
             no()
         }
         pub fn boolean(&self, _: &Shape, _: Bool) -> KResult<Shape> {
+            no()
+        }
+        pub fn hole_tool_ext(_: [f64; 3], _: [f64; 3], _: f64, _: f64, _: HoleShape, _: f64, _: f64) -> KResult<Shape> {
+            no()
+        }
+        pub fn ray_hit(&self, _: [f64; 3], _: [f64; 3]) -> KResult<Option<([f64; 3], f64)>> {
             no()
         }
         pub fn hole_tool(_: [f64; 3], _: [f64; 3], _: f64, _: f64, _: HoleShape) -> KResult<Shape> {
@@ -667,7 +714,10 @@ mod imp {
         pub fn untrimmed(&self) -> KResult<Shape> {
             no()
         }
-        pub fn extrapolated(&self, _: [f64; 3], _: f64) -> KResult<Shape> {
+        pub fn extrapolated(&self, _: [f64; 3], _: f64, _: bool) -> KResult<Shape> {
+            no()
+        }
+        pub fn affinity(&self, _: Frame, _: [f64; 3]) -> KResult<Shape> {
             no()
         }
         pub fn boundary(&self) -> KResult<Vec<Vec<[f64; 3]>>> {
@@ -690,6 +740,12 @@ mod imp {
         }
         pub fn is_solid(&self) -> bool {
             false
+        }
+        pub fn to_brep(&self) -> KResult<String> {
+            no()
+        }
+        pub fn from_brep(_: &str) -> KResult<Shape> {
+            no()
         }
 
         pub fn extrude_to_next(&self, _: [f64; 3], _: f64, _: &Shape) -> KResult<Shape> {

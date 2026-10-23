@@ -164,6 +164,19 @@ pub enum LinkedGeo {
     Curve(Vec<[f64; 3]>),
     /// parâmetro publicado (valor)
     Value(f64),
+    /// superfície (texto B-rep)
+    Surface(String),
+}
+
+impl LinkedGeo {
+    pub fn class(&self) -> RefClass {
+        match self {
+            LinkedGeo::Plane { .. } => RefClass::Plane,
+            LinkedGeo::Point(_) => RefClass::Point,
+            LinkedGeo::Surface(_) => RefClass::Surface,
+            _ => RefClass::Curve,
+        }
+    }
 }
 
 /// Posição sobre uma curva: distância a partir do início ou proporção do comprimento (0..1).
@@ -264,6 +277,9 @@ pub struct RefElement {
     /// publicado para outras peças usarem por link (o nome é a publicação)
     #[serde(default)]
     pub published: bool,
+    /// propriedades gráficas próprias (cor, acabamento)
+    #[serde(default)]
+    pub appearance: Option<Appearance>,
 }
 
 /// Vista salva (câmera) — base para vistas 2D e detalhamento 3D.
@@ -284,6 +300,8 @@ pub enum LinkState {
     Ativo,
     Congelado,
     Quebrado,
+    /// desligado provisoriamente: o elemento fica inativo (como suprimido) até reativar
+    Desativado,
 }
 
 /// Geometria importada de outra peça por link (sempre separada da geometria própria).
@@ -416,7 +434,14 @@ pub enum RefKind {
     /// Preenchimento de um contorno de curvas.
     SurfFill { curves: Vec<CurveRef> },
     /// Curva extrudada ao longo de uma direção.
-    SurfExtrude { curve: CurveRef, dir: AxisRef, length: String },
+    SurfExtrude {
+        curve: CurveRef,
+        dir: AxisRef,
+        length: String,
+        /// limite 2: comprimento para o outro lado
+        #[serde(default = "zero")]
+        length2: String,
+    },
     /// Curva girada em torno de um eixo.
     SurfRevolve { curve: CurveRef, axis: AxisRef, angle: String },
 
@@ -446,18 +471,36 @@ pub enum RefKind {
     /// Desaparar: devolve a face aos limites naturais do suporte.
     SurfUntrim { surface: SurfRef },
     /// Extrapolar: prolongar a borda mais próxima do ponto.
-    SurfExtrapolate { surface: SurfRef, near: PointRef, length: String },
+    SurfExtrapolate {
+        surface: SurfRef,
+        near: PointRef,
+        length: String,
+        /// mantém a curvatura (mesma superfície) em vez de prolongar tangente
+        #[serde(default)]
+        curvature: bool,
+    },
     /// Translação, rotação, simetria ou escala de qualquer elemento (ponto, curva, plano, superfície).
     GeoTransform { source: Id, class: RefClass, xf: GeoXform },
     /// Curva de interseção entre duas superfícies (ou planos).
     CurveIntersect { a: SurfRef, b: SurfRef, which: usize },
     /// Curva projetada (na normal) sobre uma superfície.
-    CurveProjectSurf { curve: CurveRef, surface: SurfRef },
+    CurveProjectSurf {
+        curve: CurveRef,
+        surface: SurfRef,
+        /// projeção ao longo de uma direção; `None` = normal à superfície
+        #[serde(default)]
+        dir: Option<AxisRef>,
+    },
+    /// Curva paralela sobre um plano/superfície de apoio, com distância constante ou variando
+    /// linearmente do início (d1) ao fim (d2).
+    CurveParallel { curve: CurveRef, support: SurfRef, d1: String, d2: String, flip: bool },
     /// Contorno (borda livre) de uma superfície.
     CurveBoundary { surface: SurfRef, which: usize },
 
     /// Geometria vinda de outra peça por link (ver `Document.external`).
     Linked { ext: Id, class: RefClass },
+    /// Cópia isolada (link quebrado de propósito): a geometria fica fixa nesta peça.
+    Isolated { geo: LinkedGeo },
 }
 
 impl RefKind {
@@ -489,6 +532,7 @@ impl RefKind {
             | SurfSplit { .. } | SurfTrim { .. } | SurfMulti { .. } | SurfPart { .. } | SurfUntrim { .. } | SurfExtrapolate { .. } => RefClass::Surface,
             GeoTransform { class, .. } => *class,
             Linked { class, .. } => *class,
+            Isolated { geo } => geo.class(),
             _ => RefClass::Curve,
         }
     }
@@ -675,7 +719,7 @@ impl RefKind {
                 b.walk(ids);
                 exprs(length)
             }
-            LineAxis { .. } | SurfExtract { .. } | Linked { .. } => {}
+            LineAxis { .. } | SurfExtract { .. } | Linked { .. } | Isolated { .. } => {}
             PlanePointNormal { point, line } => {
                 point.walk(ids);
                 line.walk(ids)
@@ -699,10 +743,11 @@ impl RefKind {
                     c.walk(ids)
                 }
             }
-            SurfExtrude { curve, dir, length } => {
+            SurfExtrude { curve, dir, length, length2 } => {
                 curve.walk(ids);
                 dir.walk(ids);
-                exprs(length)
+                exprs(length);
+                exprs(length2)
             }
             SurfRevolve { curve, axis, angle } => {
                 curve.walk(ids);
@@ -763,7 +808,7 @@ impl RefKind {
             }
             SurfMulti { .. } => {}
             SurfPart { surface, .. } | SurfUntrim { surface } | CurveBoundary { surface, .. } => surface.walk(ids),
-            SurfExtrapolate { surface, near, length } => {
+            SurfExtrapolate { surface, near, length, .. } => {
                 surface.walk(ids);
                 near.walk(ids);
                 exprs(length)
@@ -772,9 +817,18 @@ impl RefKind {
                 ids(source);
                 xf.walk(ids, exprs)
             }
-            CurveProjectSurf { curve, surface } => {
+            CurveProjectSurf { curve, surface, dir } => {
                 curve.walk(ids);
-                surface.walk(ids)
+                surface.walk(ids);
+                if let Some(a) = dir {
+                    a.walk(ids)
+                }
+            }
+            CurveParallel { curve, support, d1, d2, .. } => {
+                curve.walk(ids);
+                support.walk(ids);
+                exprs(d1);
+                exprs(d2)
             }
         }
     }
@@ -1048,6 +1102,23 @@ pub enum FeatureKind {
     BoundaryFill(BoundaryFill),
     /// Malha STL/OBJ convertida em B-rep.
     MeshImport(MeshImport),
+    /// Mover o corpo inteiro: translação, rotação, simetria ou afinidade.
+    MoveBody(MoveBody),
+}
+
+/// Transformação do corpo (o original deixa de existir na posição antiga).
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub enum BodyXf {
+    Translate { dir: AxisRef, dist: String },
+    Rotate { axis: AxisRef, angle: String },
+    Symmetry { plane: PlaneRef },
+    /// escala independente em X, Y, Z do sistema do plano (x do plano, y, normal)
+    Affinity { plane: PlaneRef, fx: String, fy: String, fz: String },
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct MoveBody {
+    pub xf: BodyXf,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -1139,6 +1210,12 @@ impl FeatureKind {
             SewSurface(_) => "Costurar",
             BoundaryFill(_) => "PreencherFronteiras",
             MeshImport(_) => "Malha",
+            MoveBody(m) => match m.xf {
+                BodyXf::Translate { .. } => "Translação",
+                BodyXf::Rotate { .. } => "Rotação",
+                BodyXf::Symmetry { .. } => "Simetria",
+                BodyXf::Affinity { .. } => "Afinidade",
+            },
         }
     }
     pub fn icon(&self) -> &'static str {
@@ -1169,6 +1246,7 @@ impl FeatureKind {
             SewSurface(_) => "⧉",
             BoundaryFill(_) => "▦",
             MeshImport(_) => "△",
+            MoveBody(_) => "✥",
         }
     }
 
@@ -1184,6 +1262,9 @@ impl FeatureKind {
             }
             Extrude(e) => {
                 ids(&mut e.sketch);
+                if let Some(a) = &mut e.dir {
+                    a.walk(ids)
+                }
                 extent_walk(&mut e.extent, ids, exprs);
                 exprs(&mut e.taper);
                 if let Some(t) = &mut e.thin {
@@ -1194,6 +1275,9 @@ impl FeatureKind {
                 ids(&mut r.sketch);
                 r.axis.walk(ids);
                 exprs(&mut r.angle);
+                if let Some(a) = &mut r.angle2 {
+                    exprs(a)
+                }
                 if let Some(t) = &mut r.thin {
                     exprs(t)
                 }
@@ -1212,7 +1296,22 @@ impl FeatureKind {
                         exprs(diameter);
                         exprs(angle)
                     }
+                    HoleKind::Contrafurado { diameter, depth, angle } => {
+                        exprs(diameter);
+                        exprs(depth);
+                        exprs(angle)
+                    }
                 }
+                for p in &mut h.points {
+                    p.walk(ids)
+                }
+                if let Some(a) = &mut h.dir {
+                    a.walk(ids)
+                }
+                if let Some(t) = &mut h.tip {
+                    exprs(t)
+                }
+                exprs(&mut h.taper);
             }
             Fillet(o) | Chamfer(o) => {
                 exprs(&mut o.value);
@@ -1253,7 +1352,7 @@ impl FeatureKind {
                     ids(x)
                 }
                 match &mut p.kind {
-                    PatternKind::Linear { dir, count, spacing, dir2, count2, spacing2 } => {
+                    PatternKind::Linear { dir, count, spacing, dir2, count2, spacing2, .. } => {
                         dir.walk(ids);
                         if let Some(d) = dir2 {
                             d.walk(ids)
@@ -1314,6 +1413,23 @@ impl FeatureKind {
                 }
             }
             MeshImport(_) => {}
+            MoveBody(m) => match &mut m.xf {
+                BodyXf::Translate { dir, dist } => {
+                    dir.walk(ids);
+                    exprs(dist)
+                }
+                BodyXf::Rotate { axis, angle } => {
+                    axis.walk(ids);
+                    exprs(angle)
+                }
+                BodyXf::Symmetry { plane } => plane.walk(ids),
+                BodyXf::Affinity { plane, fx, fy, fz } => {
+                    plane.walk(ids);
+                    exprs(fx);
+                    exprs(fy);
+                    exprs(fz)
+                }
+            },
         }
     }
 }
@@ -1325,7 +1441,7 @@ fn extent_walk(e: &mut Extent, ids: &mut dyn FnMut(&mut Id), exprs: &mut dyn FnM
             exprs(a);
             exprs(b)
         }
-        Extent::ThroughAll | Extent::UpToNext => {}
+        Extent::ThroughAll | Extent::UpToNext | Extent::UpToLast => {}
         Extent::UpTo(p) => p.walk(ids),
         Extent::UpToSurface(s) => s.walk(ids),
     }
@@ -1437,7 +1553,17 @@ pub struct Thickness {
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum PatternKind {
     /// Uma ou duas direções: quantidade e espaçamento.
-    Linear { dir: AxisRef, count: String, spacing: String, dir2: Option<AxisRef>, count2: String, spacing2: String },
+    Linear {
+        dir: AxisRef,
+        count: String,
+        spacing: String,
+        dir2: Option<AxisRef>,
+        count2: String,
+        spacing2: String,
+        /// o espaçamento é o comprimento total (instâncias e comprimento total)
+        #[serde(default)]
+        total: bool,
+    },
     /// Em volta de um eixo: quantidade e ângulo total (360 = volta completa, distribuída por igual).
     Circular { axis: AxisRef, count: String, angle: String },
     /// Cópias nos pontos escolhidos (deslocadas do ponto base).
@@ -1526,6 +1652,8 @@ pub enum Extent {
     UpTo(PlaneRef),
     /// Até a próxima parede do corpo na direção da extrusão.
     UpToNext,
+    /// Até a última parede do corpo (o ponto mais distante dele nessa direção).
+    UpToLast,
     /// Até uma superfície ou face (estendida para cortar a ferramenta inteira).
     UpToSurface(SurfRef),
 }
@@ -1542,6 +1670,9 @@ pub struct Extrude {
     /// parede fina com esta espessura
     #[serde(default)]
     pub thin: Option<String>,
+    /// direção da extrusão (linha, aresta, eixo); `None` = normal ao plano do sketch
+    #[serde(default)]
+    pub dir: Option<AxisRef>,
 }
 
 fn zero() -> String {
@@ -1557,6 +1688,9 @@ pub struct Revolve {
     pub op: BoolOp,
     #[serde(default)]
     pub thin: Option<String>,
+    /// segundo ângulo (para o outro lado do plano do sketch)
+    #[serde(default)]
+    pub angle2: Option<String>,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -1564,6 +1698,8 @@ pub enum HoleKind {
     Simples,
     Rebaixado { diameter: String, depth: String },
     Escareado { diameter: String, angle: String },
+    /// rebaixo com fundo cônico (counterdrilled)
+    Contrafurado { diameter: String, depth: String, angle: String },
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -1580,6 +1716,25 @@ pub struct Hole {
     pub thread_modeled: bool,
     /// Especificação usada pelo furo inteligente (ex.: "M8 normal"), só informativa.
     pub standard: Option<String>,
+    /// Centros por pontos 3D (vários furos de uma vez); vazio = pontos do sketch.
+    #[serde(default)]
+    pub points: Vec<PointRef>,
+    /// Direção do furo (linha/aresta/eixo); sem direção: normal à superfície no ponto
+    /// (pontos 3D) ou normal ao plano do sketch.
+    #[serde(default)]
+    pub dir: Option<AxisRef>,
+    /// Inverter o sentido do furo.
+    #[serde(default)]
+    pub reverse: bool,
+    /// Fundo em V: ângulo da ponta da broca (ex.: 118); `None` = fundo plano.
+    #[serde(default)]
+    pub tip: Option<String>,
+    /// Furo cônico: meio-ângulo de conicidade (graus); "0" = cilíndrico.
+    #[serde(default = "zero")]
+    pub taper: String,
+    /// Rosca à esquerda.
+    #[serde(default)]
+    pub left_hand: bool,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -1929,7 +2084,7 @@ impl Document {
     pub fn add_offset_plane(&mut self, base: PlaneRef, offset: &str) -> Id {
         let id = self.alloc();
         let name = self.unique_name("Plano");
-        self.references.push(RefElement { id, name, kind: RefKind::OffsetPlane { base, offset: offset.into() }, visible: true, folder: None, published: false });
+        self.references.push(RefElement { id, name, kind: RefKind::OffsetPlane { base, offset: offset.into() }, visible: true, folder: None, published: false, appearance: None });
         self.file_last_reference();
         id
     }
@@ -1938,7 +2093,7 @@ impl Document {
     pub fn add_face_plane(&mut self, origin: [f64; 3], x: [f64; 3], normal: [f64; 3], owner: Option<Id>) -> Id {
         let id = self.alloc();
         let name = self.unique_name("PlanoFace");
-        self.references.push(RefElement { id, name, kind: RefKind::FacePlane { origin, x, normal, owner }, visible: true, folder: None, published: false });
+        self.references.push(RefElement { id, name, kind: RefKind::FacePlane { origin, x, normal, owner }, visible: true, folder: None, published: false, appearance: None });
         self.file_last_reference();
         id
     }
@@ -1947,7 +2102,7 @@ impl Document {
     pub fn add_angle_plane(&mut self, base: PlaneRef, axis: AxisRef, angle: &str) -> Id {
         let id = self.alloc();
         let name = self.unique_name("Plano");
-        self.references.push(RefElement { id, name, kind: RefKind::AnglePlane { base, axis, angle: angle.into() }, visible: true, folder: None, published: false });
+        self.references.push(RefElement { id, name, kind: RefKind::AnglePlane { base, axis, angle: angle.into() }, visible: true, folder: None, published: false, appearance: None });
         self.file_last_reference();
         id
     }
@@ -1971,7 +2126,7 @@ impl Document {
             },
         };
         let name = self.unique_name(base);
-        self.references.push(RefElement { id, name, kind, visible: true, folder: None, published: false });
+        self.references.push(RefElement { id, name, kind, visible: true, folder: None, published: false, appearance: None });
         self.file_last_reference();
         id
     }
@@ -1989,14 +2144,10 @@ impl Document {
                 id
             }
             g => {
-                let class = match g {
-                    LinkedGeo::Plane { .. } => RefClass::Plane,
-                    LinkedGeo::Point(_) => RefClass::Point,
-                    _ => RefClass::Curve,
-                };
+                let class = g.class();
                 let id = self.alloc();
                 let name = if self.name_taken(&base) { self.unique_name(&base) } else { base.clone() };
-                self.references.push(RefElement { id, name, kind: RefKind::Linked { ext, class }, visible: true, folder: None, published: false });
+                self.references.push(RefElement { id, name, kind: RefKind::Linked { ext, class }, visible: true, folder: None, published: false, appearance: None });
                 id
             }
         };
@@ -2016,7 +2167,7 @@ impl Document {
     /// Atualiza a cópia de um link (None = a publicação sumiu: link quebrado, a cópia antiga fica).
     pub fn refresh_link(&mut self, ext: Id, geo: Option<LinkedGeo>) {
         let Some(e) = self.external.iter_mut().find(|e| e.id == ext) else { return };
-        if e.state == LinkState::Congelado {
+        if matches!(e.state, LinkState::Congelado | LinkState::Desativado) {
             return;
         }
         let Some(g) = geo else {
@@ -2033,6 +2184,28 @@ impl Document {
         if let Some(e) = self.external.iter_mut().find(|e| e.id == ext) {
             e.snapshot = Some(g);
         }
+    }
+
+    /// Isola o link: a cópia atual vira geometria fixa desta peça e o link deixa de existir.
+    pub fn isolate_link(&mut self, ext: Id) {
+        let Some(e) = self.external.iter().find(|e| e.id == ext).cloned() else { return };
+        if let (Some(t), Some(g)) = (e.target, e.snapshot.clone()) {
+            if let Some(r) = self.references.iter_mut().find(|r| r.id == t) {
+                r.kind = RefKind::Isolated { geo: g };
+            }
+        }
+        self.external.retain(|x| x.id != ext);
+    }
+
+    /// Religa o link a outra peça/publicação (assistente de relink).
+    pub fn relink(&mut self, ext: Id, source: &str, path: &str, publication: &str, geo: LinkedGeo) {
+        if let Some(e) = self.external.iter_mut().find(|e| e.id == ext) {
+            e.source = source.into();
+            e.path = path.into();
+            e.publication = publication.into();
+            e.state = LinkState::Ativo;
+        }
+        self.refresh_link(ext, Some(geo));
     }
 
     pub fn reference(&self, id: Id) -> Option<&RefElement> {
@@ -2187,6 +2360,89 @@ impl Document {
         v
     }
 
+    /// Entradas que a operação "consome": ficam ocultas enquanto ela existe (superfícies juntadas,
+    /// divididas, engrossadas…; sketches usados pelos comandos de forma) e voltam a aparecer
+    /// quando a operação é apagada.
+    pub fn consumed(&self, id: Id) -> Vec<Id> {
+        let sref = |s: &SurfRef| match s {
+            SurfRef::Ref(x) => Some(*x),
+            _ => None,
+        };
+        if let Some(r) = self.reference(id) {
+            use RefKind::*;
+            return match &r.kind {
+                SurfJoin { items, .. } => items.iter().filter_map(sref).collect(),
+                SurfHeal { surface, .. } | SurfSplit { surface, .. } | SurfUntrim { surface } | SurfExtrapolate { surface, .. } => sref(surface).into_iter().collect(),
+                SurfTrim { a, b, .. } => [sref(a), sref(b)].into_iter().flatten().collect(),
+                GeoTransform { source, .. } => vec![*source],
+                _ => vec![],
+            };
+        }
+        let Some(f) = self.feature(id) else { return vec![] };
+        use FeatureKind::*;
+        match &f.kind {
+            Extrude(e) => vec![e.sketch],
+            Revolve(r) => vec![r.sketch],
+            Sweep(w) => vec![w.sketch],
+            Loft(l) => l.sections.clone(),
+            Stiffener(s) => vec![s.sketch],
+            Hole(h) => vec![h.sketch],
+            SplitBody(s) => sref(&s.surface).into_iter().collect(),
+            ThickSurface(t) => sref(&t.surface).into_iter().collect(),
+            CloseSurface(c) => sref(&c.surface).into_iter().collect(),
+            SewSurface(s) => sref(&s.surface).into_iter().collect(),
+            BoundaryFill(b) => b.tools.iter().filter_map(sref).collect(),
+            _ => vec![],
+        }
+    }
+
+    fn set_shown(&mut self, id: Id, shown: bool) {
+        if let Some(r) = self.references.iter_mut().find(|r| r.id == id) {
+            r.visible = shown;
+        } else if let Some(f) = self.features.iter_mut().find(|f| f.id == id) {
+            if matches!(f.kind, FeatureKind::Sketch(_)) {
+                f.hidden = !shown;
+            }
+        }
+    }
+
+    /// Oculta as entradas consumidas pela operação (chamado ao criá-la ou concluí-la).
+    pub fn hide_consumed(&mut self, id: Id) {
+        for x in self.consumed(id) {
+            self.set_shown(x, false);
+        }
+    }
+
+    /// Renomeia comando, elemento, pasta ou coletor (nomes de comandos e elementos são únicos).
+    pub fn rename_item(&mut self, id: Id, name: &str) -> Result<(), DocError> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err(DocError::InvalidName(name.into()));
+        }
+        if let Some(f) = self.folders.iter_mut().find(|f| f.id == id) {
+            f.name = name.into();
+            return Ok(());
+        }
+        if let Some(c) = self.collectors.iter_mut().find(|c| c.id == id) {
+            c.name = name.into();
+            return Ok(());
+        }
+        if self.name_of(id) == name {
+            return Ok(());
+        }
+        if self.name_taken(name) {
+            return Err(DocError::DuplicateName(name.into()));
+        }
+        if let Some(f) = self.features.iter_mut().find(|f| f.id == id) {
+            f.name = name.into();
+        } else if let Some(r) = self.references.iter_mut().find(|r| r.id == id) {
+            r.name = name.into();
+        } else {
+            return Err(DocError::NotFound);
+        }
+        Ok(())
+    }
+
     /// Todos os objetos que dependem (direta ou indiretamente) de `id`.
     pub fn dependents(&self, id: Id) -> Vec<Id> {
         let mut out: Vec<Id> = vec![];
@@ -2265,8 +2521,17 @@ impl Document {
             .iter()
             .filter(|f| kill.contains(&f.id))
             .count();
+        // entradas que as operações apagadas consumiam voltam a aparecer (se ninguém mais as consome)
+        let freed: Vec<Id> = kill.iter().flat_map(|k| self.consumed(*k)).filter(|x| !kill.contains(x)).collect();
         self.features.retain(|f| !kill.contains(&f.id));
         self.references.retain(|r| !kill.contains(&r.id));
+        let ids: Vec<Id> = self.features.iter().map(|f| f.id).chain(self.references.iter().map(|r| r.id)).collect();
+        let still: HashSet<Id> = ids.iter().flat_map(|i| self.consumed(*i)).collect();
+        for x in freed {
+            if !still.contains(&x) {
+                self.set_shown(x, true);
+            }
+        }
         // coletores de corpos: sempre fica pelo menos um; comandos órfãos vão para o primeiro
         if self.collectors.iter().any(|c| kill.contains(&c.id)) {
             self.collectors.retain(|c| !kill.contains(&c.id));
@@ -2435,7 +2700,7 @@ mod tests {
             sketch: sk1,
             op: BoolOp::Add,
             extent: Extent::Blind(s("10")),
-            reverse: false, taper: s("0"), thin: None
+            reverse: false, taper: s("0"), thin: None, dir: None
         }));
         let fil = d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::CreatedBy(ex), mode: EdgeMode::Constant }));
         assert_eq!(d.dependents(sk1), vec![ex, fil]);
@@ -2461,7 +2726,7 @@ mod tests {
             sketch: sk,
             op: BoolOp::Add,
             extent: Extent::Blind(s("10")),
-            reverse: false, taper: s("0"), thin: None
+            reverse: false, taper: s("0"), thin: None, dir: None
         }));
         assert!(d.move_feature(ex, 0).is_err());
         assert_eq!(d.features[1].id, ex);

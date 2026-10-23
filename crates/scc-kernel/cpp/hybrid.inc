@@ -218,7 +218,7 @@ std::unique_ptr<Shape> untrim_face(const Shape& s) {
 }
 
 // Extrapolar: prolonga a face pelo lado (borda u/v) mais próximo do ponto, com continuidade de tangência.
-std::unique_ptr<Shape> extrapolate_face(const Shape& s, double px, double py, double pz, double len) {
+std::unique_ptr<Shape> extrapolate_face(const Shape& s, double px, double py, double pz, double len, int32_t cont) {
     return guard("extrapolar", [&] {
         if (len <= 0) throw std::runtime_error("o comprimento precisa ser positivo");
         gp_Pnt p(px, py, pz);
@@ -238,7 +238,7 @@ std::unique_ptr<Shape> extrapolate_face(const Shape& s, double px, double py, do
             if (d < bd) bd = d, best = i;
         }
         Handle(Geom_BoundedSurface) ext = bs;
-        GeomLib::ExtendSurfByLength(ext, len, 1, sides[best].inU, sides[best].after);
+        GeomLib::ExtendSurfByLength(ext, len, std::clamp(cont, 1, 2), sides[best].inU, sides[best].after);
         BRepBuilderAPI_MakeFace mf(Handle(Geom_Surface)::DownCast(ext), Precision::Confusion());
         if (!mf.IsDone()) throw std::runtime_error("não foi possível extrapolar");
         return wrap(mf.Face());
@@ -401,5 +401,109 @@ std::unique_ptr<Shape> mesh_shape(rust::Slice<const double> tris, bool solid) {
 }
 
 bool is_solid(const Shape& s) { return TopExp_Explorer(s.s, TopAbs_SOLID).More(); }
+
+// Afinidade: escala independente em X, Y, Z do sistema local (origem o, eixo x, normal n).
+std::unique_ptr<Shape> affinity(const Shape& s, double ox, double oy, double oz, double xx, double xy, double xz, double nx, double ny, double nz,
+                                double fx, double fy, double fz) {
+    return guard("afinidade", [&] {
+        if (std::abs(fx * fy * fz) < 1e-12) throw std::runtime_error("os fatores não podem ser zero");
+        gp_Ax3 ax(gp_Pnt(ox, oy, oz), gp_Dir(nx, ny, nz), gp_Dir(xx, xy, xz));
+        gp_Trsf to_local;
+        to_local.SetTransformation(ax);  // global → local
+        gp_GTrsf scale;
+        scale.SetVectorialPart(gp_Mat(fx, 0, 0, 0, fy, 0, 0, 0, fz));
+        gp_GTrsf g(to_local.Inverted());
+        g.Multiply(scale);
+        g.Multiply(gp_GTrsf(to_local));
+        BRepBuilderAPI_GTransform mk(s.s, g, Standard_True);
+        if (!mk.IsDone()) throw std::runtime_error("não foi possível aplicar a afinidade");
+        return wrap(mk.Shape());
+    });
+}
+
+// Forma em texto B-rep (para guardar a cópia de uma superfície publicada na peça que a importa).
+rust::String to_brep(const Shape& s) {
+    return guard("B-rep", [&] {
+        std::ostringstream o;
+        BRepTools::Write(s.s, o);
+        return rust::String(o.str());
+    });
+}
+
+std::unique_ptr<Shape> from_brep(rust::Str text) {
+    return guard("B-rep", [&] {
+        std::istringstream i(std::string(text.data(), text.size()));
+        TopoDS_Shape s;
+        BRep_Builder b;
+        BRepTools::Read(s, i, b);
+        if (s.IsNull()) throw std::runtime_error("cópia B-rep inválida");
+        return wrap(s);
+    });
+}
+
+// Furo completo: corpo cilíndrico (ou cônico, `taper` = meio-ângulo em graus), fundo plano ou em V
+// (`tip` = ângulo da ponta da broca; 0 = plano) e cabeça: 0 simples, 1 rebaixo (d2, p2),
+// 2 escareado (d2, ângulo p2), 3 contrafurado: rebaixo (d2, p2) com fundo cônico de ângulo a3.
+std::unique_ptr<Shape> hole_tool_ext(double ox, double oy, double oz, double dx, double dy, double dz, double diameter, double depth,
+                                     uint8_t kind, double d2, double p2, double a3, double tip, double taper) {
+    return guard("furo", [&] {
+        if (diameter <= 0 || depth <= 0) throw std::runtime_error("diâmetro e profundidade devem ser positivos");
+        gp_Dir d(dx, dy, dz);
+        const double lead = 0.05;
+        gp_Pnt top(ox, oy, oz);
+        gp_Pnt o(ox - d.X() * lead, oy - d.Y() * lead, oz - d.Z() * lead);
+        gp_Ax2 ax(o, d);
+        double r = diameter / 2;
+        // corpo
+        double r_bot = r;
+        TopoDS_Shape tool;
+        if (std::abs(taper) > 1e-9) {
+            r_bot = r - (depth + lead) * std::tan(taper * M_PI / 180.0);
+            if (r_bot <= 0.01) throw std::runtime_error("conicidade grande demais para a profundidade");
+            tool = BRepPrimAPI_MakeCone(ax, r, r_bot, depth + lead).Shape();
+        } else {
+            tool = BRepPrimAPI_MakeCylinder(ax, r, depth + lead).Shape();
+        }
+        // fundo em V (ponta da broca)
+        if (tip > 1e-6 && tip < 179.9) {
+            double h = r_bot / std::tan(tip / 2 * M_PI / 180.0);
+            gp_Pnt b(top.X() + d.X() * depth, top.Y() + d.Y() * depth, top.Z() + d.Z() * depth);
+            tool = BRepAlgoAPI_Fuse(tool, BRepPrimAPI_MakeCone(gp_Ax2(b, d), r_bot, 1e-4, h).Shape()).Shape();
+        }
+        // cabeça
+        if ((kind == 1 || kind == 3) && d2 > diameter && p2 > 0) {
+            tool = BRepAlgoAPI_Fuse(tool, BRepPrimAPI_MakeCylinder(ax, d2 / 2, p2 + lead).Shape()).Shape();
+            if (kind == 3 && a3 > 1e-6 && a3 < 179.9) {
+                double h = (d2 - diameter) / 2 / std::tan(a3 / 2 * M_PI / 180.0);
+                gp_Pnt b(top.X() + d.X() * p2, top.Y() + d.Y() * p2, top.Z() + d.Z() * p2);
+                tool = BRepAlgoAPI_Fuse(tool, BRepPrimAPI_MakeCone(gp_Ax2(b, d), d2 / 2, r, h).Shape()).Shape();
+            }
+        } else if (kind == 2 && d2 > diameter && p2 > 0 && p2 < 180) {
+            double h = (d2 - diameter) / 2 / std::tan(p2 / 2 * M_PI / 180.0);
+            TopoDS_Shape cone = BRepPrimAPI_MakeCone(gp_Ax2(top, d), d2 / 2, r, h).Shape();
+            TopoDS_Shape cap = BRepPrimAPI_MakeCylinder(ax, d2 / 2, lead).Shape();
+            tool = BRepAlgoAPI_Fuse(BRepAlgoAPI_Fuse(tool, cone).Shape(), cap).Shape();
+        }
+        return wrap(tool);
+    });
+}
+
+// Primeiro ponto onde a reta (p, d) entra na forma (t > 0): [x, y, z, t] ou vazio.
+rust::Vec<double> ray_hit(const Shape& s, double px, double py, double pz, double dx, double dy, double dz) {
+    return guard("projeção", [&] {
+        IntCurvesFace_ShapeIntersector it;
+        it.Load(s.s, 1e-6);
+        it.Perform(gp_Lin(gp_Pnt(px, py, pz), gp_Dir(dx, dy, dz)), -1e9, 1e9);
+        rust::Vec<double> out;
+        if (!it.IsDone() || it.NbPnt() == 0) return out;
+        int best = 0;
+        double bt = 1e300;
+        for (int i = 1; i <= it.NbPnt(); ++i)
+            if (std::abs(it.WParameter(i)) < bt) bt = std::abs(it.WParameter(i)), best = i;
+        gp_Pnt q = it.Pnt(best);
+        for (double x : {q.X(), q.Y(), q.Z(), it.WParameter(best)}) out.push_back(x);
+        return out;
+    });
+}
 
 }  // namespace scc

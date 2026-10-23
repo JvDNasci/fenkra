@@ -92,6 +92,7 @@ pub enum GeoKind {
     XfScale,
     CurveIntersect,
     CurveProjSurf,
+    CurveParallel,
 }
 
 use GeoKind::*;
@@ -101,8 +102,8 @@ pub const PLANES: [GeoKind; 13] = [
 ];
 pub const POINTS: [GeoKind; 12] = [PtCoords, PtOnCurve, PtOnPlane, PtOnSurface, PtCenter, PtTangent, PtBetween, PtCurvePlane, PtCurveCurve, PtProject, PtProjectCurve, PtOffset];
 pub const LINES: [GeoKind; 9] = [LinePts, LineDir, LineAngle, LineTangent, LineNormal, LinePlanes, LineBisector, LineAxis, Polyline];
-pub const CURVES: [GeoKind; 15] =
-    [Circle, Circle3, Spline, SplineControl, Helix, Spiral, Conic, Connect, Corner, Spine, CurveProject, CurveIntersect, CurveProjSurf, OpBoundary, CurveCopy];
+pub const CURVES: [GeoKind; 16] =
+    [Circle, Circle3, Spline, SplineControl, Helix, Spiral, Conic, Connect, Corner, Spine, CurveProject, CurveIntersect, CurveProjSurf, CurveParallel, OpBoundary, CurveCopy];
 pub const SURFACES: [GeoKind; 11] = [SurfExtrude, SurfRevolve, SurfSphere, SurfCylinder, SurfOffset, SurfSweep, SurfTube, SurfLoft, SurfBlend, SurfFill, SurfExtract];
 /// Operações sobre superfícies (resultado é superfície).
 pub const OPERATIONS: [GeoKind; 8] = [OpJoin, OpHeal, OpSplit, OpTrim, OpMulti, OpPart, OpUntrim, OpExtrapolate];
@@ -184,7 +185,8 @@ impl GeoKind {
             XfMirror => ("xf_simetria", "Simetria", "Simetria", "Espelha o elemento por um plano."),
             XfScale => ("xf_escala", "Escala", "Escala", "Aumenta ou reduz o elemento a partir de um ponto."),
             CurveIntersect => ("curva_intersecao", "Interseção", "Curva de interseção", "Onde duas superfícies (ou uma superfície e um plano) se cruzam."),
-            CurveProjSurf => ("curva_proj_sup", "Proj. na superfície", "Curva projetada na superfície", "Cada ponto da curva vai para o ponto mais próximo da superfície (projeção normal)."),
+            CurveProjSurf => ("curva_proj_sup", "Projeção", "Curva projetada na superfície", "Normal (cada ponto vai para o ponto mais próximo) ou ao longo de uma direção."),
+            CurveParallel => ("curva_paralela", "Paralela", "Curva paralela (offset)", "Desloca a curva sobre um plano ou superfície de apoio, com distância constante ou variando do início ao fim."),
         }
     }
 
@@ -290,7 +292,8 @@ impl GeoKind {
             },
             R::CurveIntersect { .. } => CurveIntersect,
             R::CurveProjectSurf { .. } => CurveProjSurf,
-            R::Linked { .. } => return None,
+            R::CurveParallel { .. } => CurveParallel,
+            R::Linked { .. } | R::Isolated { .. } => return None,
         })
     }
 
@@ -364,7 +367,7 @@ impl GeoKind {
             } },
             SurfOffset => R::SurfOffset { surface: sf, dist: t("2") },
             SurfFill => R::SurfFill { curves: if s.curves.is_empty() { vec![c(0)] } else { s.curves.clone() } },
-            SurfExtrude => R::SurfExtrude { curve: c(0), dir: AxisRef::Origin(OriginAxis::Z), length: t("30") },
+            SurfExtrude => R::SurfExtrude { curve: c(0), dir: AxisRef::Origin(OriginAxis::Z), length: t("30"), length2: t("0") },
             SurfRevolve => R::SurfRevolve { curve: c(0), axis: AxisRef::Origin(OriginAxis::Z), angle: t("360") },
             SurfSphere => R::SurfSphere { center: p(0), radius: t("20") },
             SurfCylinder => R::SurfCylinder { point: p(0), dir: ax(OriginAxis::Z), radius: t("10"), start: t("0"), end: t("40") },
@@ -380,7 +383,7 @@ impl GeoKind {
             OpMulti => R::SurfMulti { faces: vec![face_pt(s)] },
             OpPart => R::SurfPart { surface: sf, index: 0 },
             OpUntrim => R::SurfUntrim { surface: sf },
-            OpExtrapolate => R::SurfExtrapolate { surface: sf, near: p(0), length: t("10") },
+            OpExtrapolate => R::SurfExtrapolate { surface: sf, near: p(0), length: t("10"), curvature: false },
             XfTranslate | XfRotate | XfMirror | XfScale => {
                 let (source, class) = source_of(s);
                 let xf = match self {
@@ -392,7 +395,8 @@ impl GeoKind {
                 R::GeoTransform { source, class, xf }
             }
             CurveIntersect => R::CurveIntersect { a: sf, b: SurfRef::Plane(pl), which: 0 },
-            CurveProjSurf => R::CurveProjectSurf { curve: c(0), surface: sf },
+            CurveProjSurf => R::CurveProjectSurf { curve: c(0), surface: sf, dir: None },
+            CurveParallel => R::CurveParallel { curve: c(0), support: sf, d1: t("5"), d2: t("5"), flip: false },
         }
     }
 }
@@ -522,7 +526,7 @@ pub fn inputs_of(k: &RefKind) -> Seed {
             s.surface = Some(*surface);
             s.points.push(*near)
         }
-        R::CurveProjectSurf { curve, surface } => {
+        R::CurveProjectSurf { curve, surface, .. } | R::CurveParallel { curve, support: surface, .. } => {
             s.curves.push(curve.clone());
             s.surface = Some(*surface)
         }
@@ -1173,10 +1177,12 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             });
             ui.label(RichText::new(tr("As curvas precisam fechar um contorno.")).weak().small());
         }
-        R::SurfExtrude { curve, dir, length } => {
+        R::SurfExtrude { curve, dir, length, length2 } => {
             curve_slot(ui, "g_c", "Curva", doc, me, curve, seed);
             axis_slot(ui, "g_d", "Direção", doc, me, dir, seed);
-            expr(ui, "Comprimento", length, vars, "mm");
+            expr(ui, "Limite 1", length, vars, "mm");
+            expr(ui, "Limite 2", length2, vars, "mm");
+            ui.label(RichText::new(tr("Limite 1 no sentido da direção; limite 2 para o outro lado.")).weak().small());
         }
         R::SurfRevolve { curve, axis, angle } => {
             curve_slot(ui, "g_c", "Curva", doc, me, curve, seed);
@@ -1293,10 +1299,14 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             ui.label(RichText::new(tr("Clique numa face na viewport e use '+ face selecionada'.")).weak().small());
         }
         R::SurfUntrim { surface } => surf_slot(ui, "g_s", "Superfície", doc, me, surface, seed),
-        R::SurfExtrapolate { surface, near, length } => {
+        R::SurfExtrapolate { surface, near, length, curvature } => {
             surf_slot(ui, "g_s", "Superfície", doc, me, surface, seed);
             point_slot(ui, "g_p", "Perto da borda", doc, me, near, seed);
             expr(ui, "Comprimento", length, vars, "mm");
+            ui.horizontal(|ui| {
+                ui.radio_value(curvature, false, tr("linear (tangente)"));
+                ui.radio_value(curvature, true, tr("mesma superfície (curvatura)"));
+            });
         }
         R::GeoTransform { source, class, xf } => {
             row(ui, "Elemento", |ui| {
@@ -1335,39 +1345,93 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                 ui.add(egui::DragValue::new(which).range(0..=99));
             });
         }
-        R::CurveProjectSurf { curve, surface } => {
+        R::CurveProjectSurf { curve, surface, dir } => {
             curve_slot(ui, "g_c", "Curva", doc, me, curve, seed);
             surf_slot(ui, "g_s", "Na superfície", doc, me, surface, seed);
+            let opts = [
+                ("linha_normal", "Normal", "Cada ponto vai para o ponto mais próximo da superfície", dir.is_none()),
+                ("linha_direcao", "Direção", "Projeção ao longo de um vetor", dir.is_some()),
+            ];
+            match crate::editor::icon_choice(ui, &opts) {
+                Some(0) => *dir = None,
+                Some(1) if dir.is_none() => *dir = Some(AxisRef::Origin(OriginAxis::Z)),
+                _ => {}
+            }
+            if let Some(a) = dir {
+                axis_slot(ui, "g_dir", "Direção", doc, me, a, seed);
+            }
+        }
+        R::CurveParallel { curve, support, d1, d2, flip } => {
+            curve_slot(ui, "g_c", "Curva", doc, me, curve, seed);
+            surf_slot(ui, "g_s", "Apoio", doc, me, support, seed);
+            expr(ui, "Distância inicial", d1, vars, "mm");
+            expr(ui, "Distância final", d2, vars, "mm");
+            ui.checkbox(flip, tr("para o outro lado"));
+            ui.label(RichText::new(tr("Distâncias iguais = paralela constante; diferentes = lei linear do início ao fim.")).weak().small());
         }
         R::Linked { ext, .. } => {
             let ext = *ext;
             match doc.external.iter().find(|e| e.id == ext) {
                 Some(e) => {
                     ui.label(format!("Vem de {} · publicação '{}'", e.source, e.publication));
-                    ui.label(RichText::new(format!("arquivo: {}", e.path)).weak().small());
-                    let st = match e.state {
-                        LinkState::Ativo => ("● ativo", Color32::from_rgb(120, 210, 130)),
-                        LinkState::Congelado => ("❄ congelado", Color32::from_rgb(140, 190, 255)),
-                        LinkState::Quebrado => ("⚠ quebrado: a origem não publica mais", Color32::from_rgb(255, 150, 120)),
-                    };
+                    ui.label(RichText::new(format!("caminho: {}", e.path)).weak().small());
+                    let st = link_state_label(e.state);
                     ui.label(RichText::new(st.0).color(st.1));
-                    ui.horizontal(|ui| {
-                        if ui.button(tr("⟳ Atualizar links")).clicked() {
-                            ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique("scc_link_acao"), (ext, 0u8)));
-                        }
-                        let lbl = if e.state == LinkState::Congelado { "Descongelar" } else { "❄ Congelar" };
-                        if ui.button(lbl).clicked() {
-                            ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique("scc_link_acao"), (ext, 1u8)));
-                        }
-                    });
-                    ui.label(RichText::new(tr("Congelado: não atualiza com a origem. A geometria fica copiada aqui.")).weak().small());
+                    ui.horizontal_wrapped(|ui| link_actions(ui, ext, e.state));
+                    ui.label(RichText::new(tr("Congelado: não atualiza com a origem. Desativado: o elemento fica inativo até reativar. Isolar: vira geometria fixa desta peça.")).weak().small());
                 }
                 None => {
                     ui.label(tr("link perdido"));
                 }
             }
         }
+        R::Isolated { geo } => {
+            ui.label(RichText::new(tr("Cópia isolada de uma publicação (o link foi quebrado): a geometria fica fixa nesta peça.")).weak());
+            let k = match geo {
+                LinkedGeo::Plane { .. } => "plano",
+                LinkedGeo::Point(_) => "ponto",
+                LinkedGeo::Curve(_) => "curva",
+                LinkedGeo::Surface(_) => "superfície",
+                LinkedGeo::Value(_) => "valor",
+            };
+            ui.label(format!("tipo: {k}"));
+        }
     }
     ui.add_space(4.);
     ui.label(RichText::new(tr("⊙ usa o que está selecionado na viewport (Shift soma vértices, arestas, faces, planos, pontos e curvas).")).weak().small());
+}
+
+/// Botões de ação de um link (atualizar, congelar, desativar, isolar, religar): mandam (ext, ação)
+/// para o app por memória temporária.
+pub fn link_actions(ui: &mut egui::Ui, ext: Id, state: LinkState) {
+    let send = |ui: &mut egui::Ui, a: u8| ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique("scc_link_acao"), (ext, a)));
+    if ui.button(tr("⟳ Atualizar links")).clicked() {
+        send(ui, 0);
+        ui.close();
+    }
+    if ui.button(if state == LinkState::Congelado { tr("Descongelar") } else { tr("❄ Congelar (não atualiza)") }).clicked() {
+        send(ui, 1);
+        ui.close();
+    }
+    if ui.button(if state == LinkState::Desativado { tr("▶ Reativar link") } else { tr("⏸ Desativar provisoriamente") }).clicked() {
+        send(ui, 2);
+        ui.close();
+    }
+    if ui.button(tr("✂ Isolar (quebrar o link, manter a cópia)")).clicked() {
+        send(ui, 3);
+        ui.close();
+    }
+    if ui.button(tr("🔗 Religar… (assistente)")).clicked() {
+        send(ui, 4);
+        ui.close();
+    }
+}
+
+pub fn link_state_label(s: LinkState) -> (&'static str, Color32) {
+    match s {
+        LinkState::Ativo => ("● ativo", Color32::from_rgb(120, 210, 130)),
+        LinkState::Congelado => ("❄ congelado", Color32::from_rgb(140, 190, 255)),
+        LinkState::Quebrado => ("⚠ quebrado: a origem não publica mais", Color32::from_rgb(255, 150, 120)),
+        LinkState::Desativado => ("⏸ desativado provisoriamente", Color32::GRAY),
+    }
 }

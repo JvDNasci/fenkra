@@ -274,10 +274,14 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             }
             section(ui, "Definição");
             match &mut p.kind {
-                PatternKind::Linear { dir, count, spacing, dir2, count2, spacing2 } => {
+                PatternKind::Linear { dir, count, spacing, dir2, count2, spacing2, total } => {
                     geo_ui::axis_slot(ui, "pt_d1", "Direção 1", doc, me, dir, seed);
                     expr(ui, "Quantidade", count, vars, "");
-                    expr(ui, "Espaçamento", spacing, vars, "mm");
+                    ui.horizontal(|ui| {
+                        ui.radio_value(total, false, tr("espaçamento"));
+                        ui.radio_value(total, true, tr("comprimento total"));
+                    });
+                    expr(ui, if *total { "Comprimento total" } else { "Espaçamento" }, spacing, vars, "mm");
                     let mut two = dir2.is_some();
                     if ui.checkbox(&mut two, tr("segunda direção")).changed() {
                         *dir2 = two.then_some(AxisRef::Origin(OriginAxis::Y));
@@ -386,6 +390,47 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             ui.checkbox(&mut c.keep_tool, tr("manter o corpo ferramenta visível"));
             ui.label(RichText::new(tr("O resultado fica no coletor deste comando; o corpo ferramenta é o estado do outro coletor neste ponto da linha do tempo.")).weak().small());
         }
+        FeatureKind::MoveBody(m) => {
+            section(ui, "Mover o corpo");
+            let cur = match m.xf {
+                BodyXf::Translate { .. } => 0,
+                BodyXf::Rotate { .. } => 1,
+                BodyXf::Symmetry { .. } => 2,
+                BodyXf::Affinity { .. } => 3,
+            };
+            let opts = [
+                ("xf_mover", "Translação", "Move o corpo ao longo de uma direção", cur == 0),
+                ("xf_girar", "Rotação", "Gira o corpo em torno de um eixo", cur == 1),
+                ("xf_simetria", "Simetria", "Espelha o corpo (o original deixa a posição antiga)", cur == 2),
+                ("xf_afinidade", "Afinidade", "Escala diferente em X, Y e Z", cur == 3),
+            ];
+            if let Some(i) = icon_choice(ui, &opts) {
+                if i != cur {
+                    m.xf = default_move(i);
+                }
+            }
+            match &mut m.xf {
+                BodyXf::Translate { dir, dist } => {
+                    geo_ui::axis_slot(ui, "mv_d", "Direção", doc, me, dir, seed);
+                    expr(ui, "Distância", dist, vars, "mm");
+                }
+                BodyXf::Rotate { axis, angle } => {
+                    geo_ui::axis_slot(ui, "mv_a", "Eixo", doc, me, axis, seed);
+                    expr(ui, "Ângulo", angle, vars, "°");
+                }
+                BodyXf::Symmetry { plane } => {
+                    plane_combo(ui, "mv_pl", doc, plane, None);
+                    ui.label(RichText::new(tr("Para manter o original e criar a cópia, use Espelho.")).weak().small());
+                }
+                BodyXf::Affinity { plane, fx, fy, fz } => {
+                    plane_combo(ui, "mv_af", doc, plane, None);
+                    expr(ui, "Fator X", fx, vars, "×");
+                    expr(ui, "Fator Y", fy, vars, "×");
+                    expr(ui, "Fator Z (normal)", fz, vars, "×");
+                    ui.label(RichText::new(tr("Eixos do plano escolhido: X do plano, Y e a normal. As faces viram superfícies livres.")).weak().small());
+                }
+            }
+        }
         FeatureKind::SplitBody(sp) => {
             section(ui, "Dividir o corpo");
             geo_ui::surf_slot(ui, "hb_s", "Superfície", doc, me, &mut sp.surface, seed);
@@ -491,7 +536,7 @@ pub fn default_pattern(i: usize, seed: &Seed) -> PatternKind {
     let axis = seed.curves.first().map(geo_ui::axis_of);
     let s = |x: &str| x.to_string();
     match i {
-        0 => PatternKind::Linear { dir: axis.unwrap_or(AxisRef::Origin(OriginAxis::X)), count: s("3"), spacing: s("20"), dir2: None, count2: s("2"), spacing2: s("20") },
+        0 => PatternKind::Linear { dir: axis.unwrap_or(AxisRef::Origin(OriginAxis::X)), count: s("3"), spacing: s("20"), dir2: None, count2: s("2"), spacing2: s("20"), total: false },
         1 => PatternKind::Circular { axis: axis.unwrap_or(AxisRef::Origin(OriginAxis::Z)), count: s("6"), angle: s("360") },
         _ => PatternKind::Points { points: seed.points.clone(), base: PointRef::Origin },
     }
@@ -512,6 +557,14 @@ pub fn revolve_extras(ui: &mut egui::Ui, r: &mut Revolve, vars: &Vars) {
     let opts = [("revolucao", "Revolução", "acrescenta material", r.op != BoolOp::Cut), ("ranhura", "Ranhura", "remove material", r.op == BoolOp::Cut)];
     if let Some(i) = icon_choice(ui, &opts) {
         r.op = if i == 0 { BoolOp::Add } else { BoolOp::Cut };
+    }
+    let mut two = r.angle2.is_some();
+    if ui.checkbox(&mut two, tr("segundo ângulo (para o outro lado)")).changed() {
+        r.angle2 = two.then(|| "0".to_string());
+    }
+    if let Some(a2) = &mut r.angle2 {
+        expr(ui, "Ângulo 2", a2, vars, "°");
+        ui.label(RichText::new(tr("Primeiro e segundo ângulo somam no máximo 360°.")).weak().small());
     }
     thin_ui(ui, &mut r.thin, vars);
 }
@@ -566,5 +619,16 @@ pub fn edge_mode_ui(ui: &mut egui::Ui, o: &mut EdgeOp, vars: &Vars, fillet: bool
     }
     if matches!(o.mode, EdgeMode::Variable(_) | EdgeMode::TwoDist(_) | EdgeMode::DistAngle(_)) && !matches!(o.edges, EdgeSel::Edges(_)) {
         ui.label(RichText::new(tr("esta variação usa as arestas escolhidas (não 'Todas')")).color(Color32::from_rgb(255, 170, 60)).small());
+    }
+}
+
+/// Transformação padrão do corpo (0 translação, 1 rotação, 2 simetria, 3 afinidade).
+pub fn default_move(i: usize) -> BodyXf {
+    let s = |x: &str| x.to_string();
+    match i {
+        0 => BodyXf::Translate { dir: AxisRef::Origin(OriginAxis::X), dist: s("20") },
+        1 => BodyXf::Rotate { axis: AxisRef::Origin(OriginAxis::Z), angle: s("90") },
+        2 => BodyXf::Symmetry { plane: PlaneRef::Origin(OriginPlane::YZ) },
+        _ => BodyXf::Affinity { plane: PlaneRef::Origin(OriginPlane::XY), fx: s("1"), fy: s("1"), fz: s("2") },
     }
 }
