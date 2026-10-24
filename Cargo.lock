@@ -3176,7 +3176,7 @@ dependencies = [
 
 [[package]]
 name = "scc-app"
-version = "0.1.0-alpha.14"
+version = "0.1.0-alpha.15"
 dependencies = [
  "bytemuck",
  "eframe",
@@ -3197,7 +3197,7 @@ dependencies = [
 
 [[package]]
 name = "scc-core"
-version = "0.1.0-alpha.14"
+version = "0.1.0-alpha.15"
 dependencies = [
  "serde",
  "serde_json",
@@ -3206,7 +3206,7 @@ dependencies = [
 
 [[package]]
 name = "scc-desenho"
-version = "0.1.0-alpha.14"
+version = "0.1.0-alpha.15"
 dependencies = [
  "scc-core",
  "scc-kernel",
@@ -3218,7 +3218,7 @@ dependencies = [
 
 [[package]]
 name = "scc-kernel"
-version = "0.1.0-alpha.14"
+version = "0.1.0-alpha.15"
 dependencies = [
  "cxx",
  "cxx-build",
@@ -3227,7 +3227,7 @@ dependencies = [
 
 [[package]]
 name = "scc-montagem"
-version = "0.1.0-alpha.14"
+version = "0.1.0-alpha.15"
 dependencies = [
  "scc-core",
  "scc-kernel",
@@ -3238,7 +3238,7 @@ dependencies = [
 
 [[package]]
 name = "scc-project"
-version = "0.1.0-alpha.14"
+version = "0.1.0-alpha.15"
 dependencies = [
  "blake3",
  "scc-core",
@@ -3249,7 +3249,7 @@ dependencies = [
 
 [[package]]
 name = "scc-solidos"
-version = "0.1.0-alpha.14"
+version = "0.1.0-alpha.15"
 dependencies = [
  "scc-core",
  "scc-kernel",
