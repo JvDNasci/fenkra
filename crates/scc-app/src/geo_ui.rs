@@ -614,7 +614,7 @@ pub(crate) fn point_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docum
         ui.horizontal(|ui| {
             ui.add_space(100.);
             for (i, n) in ["x ", "y ", "z "].iter().enumerate() {
-                ui.add(egui::DragValue::new(&mut q[i]).speed(0.5).prefix(*n));
+                { let __r = ui.add(egui::DragValue::new(&mut q[i]).speed(0.5).prefix(*n)); crate::ui_ext::wheel(ui, &__r, &mut q[i]); __r };
             }
         });
     }

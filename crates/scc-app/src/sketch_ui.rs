@@ -1710,7 +1710,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         Tool::Convert | Tool::Intersect => {
             let intersect = tool == Tool::Intersect;
             if let (Some(r), Some(h)) = (app.result.as_ref(), resp.hover_pos()) {
-                let filt = crate::picking::Filter { faces: intersect, edges: true, vertices: !intersect, planes: false };
+                let filt = crate::picking::Filter { faces: intersect, edges: true, vertices: !intersect, planes: true, hidden_env: false };
                 if let Some(p) = crate::picking::pick(r, &app.open.doc, &v.cam, rect, h, &filt) {
                     crate::picking::draw(&painter, r, &v.cam, rect, &p, false);
                     painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, p.label(&app.open.doc), egui::FontId::proportional(11.), FREE);
@@ -2331,8 +2331,8 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     if let Some(pt) = d.point_mut(*p) {
                         ui.horizontal(|ui| {
                             ui.label(RichText::new(tr("Ponto")).strong());
-                            ui.add(egui::DragValue::new(&mut pt.x).speed(0.5).prefix("x "));
-                            ui.add(egui::DragValue::new(&mut pt.y).speed(0.5).prefix("y "));
+                            { let __r = ui.add(egui::DragValue::new(&mut pt.x).speed(0.5).prefix("x ")); crate::ui_ext::wheel(ui, &__r, &mut pt.x); __r };
+                            { let __r = ui.add(egui::DragValue::new(&mut pt.y).speed(0.5).prefix("y ")); crate::ui_ext::wheel(ui, &__r, &mut pt.y); __r };
                             ui.checkbox(&mut pt.fixed, tr("fixo"));
                         });
                     }

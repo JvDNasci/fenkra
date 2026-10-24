@@ -168,9 +168,9 @@ fn library(app: &mut App, ctx: &egui::Context) {
                     });
                     ui.horizontal(|ui| {
                         ui.label(tr("Regra: ancoragem"));
-                        ui.add(egui::DragValue::new(&mut f.anchor).range(0..=9));
+                        { let __r = ui.add(egui::DragValue::new(&mut f.anchor).range(0..=9)); crate::ui_ext::wheel(ui, &__r, &mut f.anchor); __r };
                         ui.label(tr("rotação"));
-                        ui.add(egui::DragValue::new(&mut f.angle).suffix("°"));
+                        { let __r = ui.add(egui::DragValue::new(&mut f.angle).suffix("°")); crate::ui_ext::wheel(ui, &__r, &mut f.angle); __r };
                     });
                     ui.label(RichText::new(tr("Ancoragem: 0 centro, 1–8 cantos/meios da caixa, 9 centróide — aplicada quando o membro nasce do arame 3D.")).weak().small());
                     let names = structural::dim_names(f.kind);

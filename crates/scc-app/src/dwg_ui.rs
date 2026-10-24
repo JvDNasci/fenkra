@@ -1038,7 +1038,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             });
             ui.horizontal(|ui| {
                 ui.label(tr("Afastamento (mm)"));
-                ui.add(egui::DragValue::new(&mut dm.offset).speed(0.2));
+                { let __r = ui.add(egui::DragValue::new(&mut dm.offset).speed(0.2)); crate::ui_ext::wheel(ui, &__r, &mut dm.offset); __r };
             });
             ui.label(RichText::new(tr("Arraste a cota na folha para afastá-la.")).weak().small());
             if ui.button(tr("🗑 Apagar cota")).clicked() {
@@ -1067,7 +1067,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             ui.text_edit_multiline(&mut n.text);
             ui.horizontal(|ui| {
                 ui.label(tr("Altura do texto"));
-                ui.add(egui::DragValue::new(&mut n.size).range(1.0..=20.).speed(0.1));
+                { let __r = ui.add(egui::DragValue::new(&mut n.size).range(1.0..=20.).speed(0.1)); crate::ui_ext::wheel(ui, &__r, &mut n.size); __r };
             });
             let mut lead = n.leader.is_some();
             if ui.checkbox(&mut lead, tr("Chamada (seta)")).changed() {
@@ -1076,8 +1076,8 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             if let Some(l) = n.leader.as_mut() {
                 ui.horizontal(|ui| {
                     ui.label(tr("Ponta (x, y)"));
-                    ui.add(egui::DragValue::new(&mut l[0]).speed(0.5));
-                    ui.add(egui::DragValue::new(&mut l[1]).speed(0.5));
+                    { let __r = ui.add(egui::DragValue::new(&mut l[0]).speed(0.5)); crate::ui_ext::wheel(ui, &__r, &mut l[0]); __r };
+                    { let __r = ui.add(egui::DragValue::new(&mut l[1]).speed(0.5)); crate::ui_ext::wheel(ui, &__r, &mut l[1]); __r };
                 });
             }
             if ui.button(tr("🗑 Apagar")).clicked() {
@@ -1158,11 +1158,11 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     }
     ui.horizontal(|ui| {
         ui.label(tr("Texto das cotas (mm)"));
-        ui.add(egui::DragValue::new(&mut st.d.text_height).range(1.5..=10.).speed(0.1));
+        { let __r = ui.add(egui::DragValue::new(&mut st.d.text_height).range(1.5..=10.).speed(0.1)); crate::ui_ext::wheel(ui, &__r, &mut st.d.text_height); __r };
     });
     ui.horizontal(|ui| {
         ui.label(tr("Casas decimais"));
-        ui.add(egui::DragValue::new(&mut st.d.decimals).range(0..=4));
+        { let __r = ui.add(egui::DragValue::new(&mut st.d.decimals).range(0..=4)); crate::ui_ext::wheel(ui, &__r, &mut st.d.decimals); __r };
     });
     ui.separator();
     ui.label(RichText::new(tr("Origem das novas vistas e tabelas")).strong());
@@ -1214,7 +1214,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             ui.end_row();
         }
         ui.label(tr("Massa específica"));
-        ui.add(egui::DragValue::new(&mut t.density).range(0.1..=25.).speed(0.01).suffix(" g/cm³"));
+        { let __r = ui.add(egui::DragValue::new(&mut t.density).range(0.1..=25.).speed(0.01).suffix(" g/cm³")); crate::ui_ext::wheel(ui, &__r, &mut t.density); __r };
         ui.end_row();
     });
     egui::CollapsingHeader::new(tr("Campos automáticos")).default_open(false).show(ui, |ui| {

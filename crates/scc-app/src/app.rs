@@ -154,6 +154,8 @@ pub struct App {
     pub sketch_wait_plane: bool,
     /// árvore aberta ao lado do painel do comando
     pub tree_peek: bool,
+    /// início da seleção em caixa (Ctrl + arrastar) na viewport
+    box_start: Option<egui::Pos2>,
     /// elemento sob o mouse no clique direito da viewport (menu de contexto do 3D)
     ctx_pick: Option<crate::picking::Pick>,
     /// ações escolhidas no menu de contexto do 3D (aplicadas depois da viewport)
@@ -168,6 +170,11 @@ pub struct App {
     /// item sob o mouse na árvore (realce dinâmico na viewport)
     hover_item: Option<Id>,
     hover_now: std::cell::Cell<Option<Id>>,
+    /// multisseleção na árvore (Ctrl soma/tira, Shift faixa) e a ordem das linhas desenhadas
+    pub multi: std::cell::RefCell<Vec<Id>>,
+    tree_order: std::cell::RefCell<Vec<Id>>,
+    multi_anchor: std::cell::Cell<Option<Id>>,
+    last_order: std::cell::RefCell<Vec<Id>>,
     /// item sendo renomeado na própria árvore (F2)
     renaming: Option<Id>,
     /// janela de propriedades gráficas aberta para este alvo
@@ -272,6 +279,10 @@ impl App {
             view_choice: None,
             hover_item: None,
             hover_now: std::cell::Cell::new(None),
+            multi: Default::default(),
+            tree_order: Default::default(),
+            multi_anchor: std::cell::Cell::new(None),
+            last_order: Default::default(),
             renaming: None,
             props_target: None,
             settings_page: 0,
@@ -286,6 +297,7 @@ impl App {
             pmi_pending: None,
             sketch_wait_plane: false,
             tree_peek: false,
+            box_start: None,
             ctx_pick: None,
             ctx_actions: vec![],
             stale_set: Default::default(),
@@ -989,6 +1001,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                         }
                     }
                 }
+                Pick::Face { body, .. } if body >= crate::picking::SURF_BASE => {
+                    if let Some(id) = self.result.as_ref().and_then(|r| crate::picking::surface_of(r, body)) {
+                        s.surface = Some(SurfRef::Ref(id));
+                    }
+                }
                 Pick::Face { point, normal, owner, .. } => {
                     s.surface = Some(SurfRef::Face { point: point.map(|v| v as f64), normal: normal.map(|v| v as f64), owner: Some(owner) })
                 }
@@ -1462,6 +1479,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
         match a {
             Act::Cmd(c) => self.command(c),
             Act::Fit => self.fit_pending = true,
+            Act::SelMode(m) => {
+                self.settings.box_mode = m;
+                let msg = ["Clique; Ctrl + arrastar faz caixa", "Arrastar faz caixa janela (inteiro dentro)", "Arrastar faz caixa cruzada (toca)", "Arrastar faz caixa: direita = janela, esquerda = cruzada"][m.min(3) as usize];
+                self.toast(msg, false);
+            }
             Act::Customize => self.customize_open = true,
             Act::Macros => self.macro_open = true,
             Act::View(y, p) => {
@@ -2039,6 +2061,20 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
     }
 
     fn delete_selected(&mut self) {
+        let many: Vec<Id> = self.multi.borrow().clone();
+        if many.len() > 1 {
+            for id in many.iter().rev() {
+                if self.open.doc.folder(*id).is_some() {
+                    self.open.doc.remove_folder(*id);
+                } else {
+                    self.open.doc.delete(*id, false);
+                }
+            }
+            self.multi.borrow_mut().clear();
+            self.sel = Sel::None;
+            self.toast(format!("{} itens apagados (Ctrl+Z desfaz)", many.len()), false);
+            return;
+        }
         match self.sel {
             Sel::Pmi(id) => {
                 crate::pmi_ui::list_mut(self).retain(|p| p.id != id);
@@ -2189,7 +2225,16 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
             let mut acts = vec![];
             let fill = if dark { Color32::from_rgb(24, 27, 34) } else { Color32::from_rgb(244, 247, 251) };
             egui::Panel::top("comandos").frame(egui::Frame::new().fill(fill).inner_margin(egui::Margin { left: 8, right: 8, top: 4, bottom: 2 })).show(root, |ui| {
-                // uma linha só, com barra de rolagem horizontal fixa embaixo (não quebra linha)
+                // uma linha só, com barra de rolagem horizontal fixa embaixo (não quebra linha);
+                // a roda do mouse (vertical) rola a barra para os lados
+                if ui.rect_contains_pointer(ui.max_rect()) {
+                    ui.ctx().input_mut(|i| {
+                        if i.smooth_scroll_delta.x == 0. {
+                            i.smooth_scroll_delta.x = i.smooth_scroll_delta.y;
+                            i.smooth_scroll_delta.y = 0.;
+                        }
+                    });
+                }
                 egui::ScrollArea::horizontal()
                     .id_salt("rolagem_comandos")
                     .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
@@ -2706,6 +2751,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
 
     fn tree(&mut self, ui: &mut egui::Ui) {
         *self.stale_set.borrow_mut() = self.compute_stale();
+        // ordem das linhas do quadro anterior (para o Shift+clique)
+        let prev = std::mem::take(&mut *self.tree_order.borrow_mut());
+        if !prev.is_empty() {
+            *self.last_order.borrow_mut() = prev;
+        }
         let doc = self.open.doc.clone();
         let sel = self.sel;
         let mut new_sel = None;
@@ -3235,9 +3285,40 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
             }
             return r;
         }
-        let r = ui.selectable_label(selected, text);
+        self.tree_order.borrow_mut().push(id);
+        let in_multi = self.multi.borrow().contains(&id) && self.multi.borrow().len() > 1;
+        let r = ui.selectable_label(selected || in_multi, text);
         if r.hovered() {
             self.hover_now.set(Some(id));
+        }
+        if r.clicked() {
+            // Ctrl soma/tira, Shift seleciona a faixa desde o último clicado, sem tecla = só este
+            let (ctrl, shift) = ui.input(|i| (i.modifiers.command, i.modifiers.shift));
+            let mut m = self.multi.borrow_mut();
+            if ctrl {
+                if let Some(k) = m.iter().position(|x| *x == id) {
+                    m.remove(k);
+                } else {
+                    m.push(id);
+                }
+                self.multi_anchor.set(Some(id));
+            } else if shift {
+                let order = self.tree_order.borrow();
+                // a ordem desta passada ainda está sendo montada: usa a do quadro anterior junto
+                let last = self.last_order.borrow();
+                let all: Vec<Id> = if last.contains(&id) { last.clone() } else { order.clone() };
+                let a = self.multi_anchor.get().and_then(|x| all.iter().position(|y| *y == x));
+                let b = all.iter().position(|y| *y == id);
+                if let (Some(a), Some(b)) = (a, b) {
+                    let (lo, hi) = (a.min(b), a.max(b));
+                    *m = all[lo..=hi].to_vec();
+                } else {
+                    *m = vec![id];
+                }
+            } else {
+                *m = vec![id];
+                self.multi_anchor.set(Some(id));
+            }
         }
         r
     }
@@ -3706,6 +3787,16 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 self.command(c);
             }
             TreeAction::Act(x) => self.act(x),
+            TreeAction::OrbitCenter(p) => {
+                if let Some(vp) = self.viewport.as_mut() {
+                    let before = vp.camera;
+                    let eye = vp.camera.eye();
+                    vp.camera.target = Vec3::from(p);
+                    vp.camera.dist = (eye - vp.camera.target).length().max(1.);
+                    vp.animate_from(before);
+                }
+                self.toast("Órbita centrada no ponto escolhido", false);
+            }
             TreeAction::ToggleSection(k) => {
                 if let Some(i) = self.settings.tree_hidden.iter().position(|x| *x == k) {
                     self.settings.tree_hidden.remove(i);
@@ -3738,6 +3829,35 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 ui.close();
             }
         };
+        // ponto 3D do clique (para o centro de órbita)
+        let at: Option<[f32; 3]> = match target {
+            Some(Pick::Face { point, .. }) => Some(point),
+            Some(Pick::Vertex { pos, .. }) => Some(pos),
+            Some(Pick::Edge { mid, .. }) => Some(mid),
+            Some(Pick::Geo(id)) => r.points.iter().find(|p| p.id == id).map(|p| p.p.map(|v| v as f32)),
+            _ => None,
+        };
+        // subelemento de superfície: menu da superfície (mais as opções de face/aresta)
+        if let Some(sid) = match target {
+            Some(Pick::Face { body, .. } | Pick::Edge { body, .. } | Pick::Vertex { body, .. }) => crate::picking::surface_of(r, body),
+            _ => None,
+        } {
+            if let Some(p) = target {
+                ui.label(RichText::new(p.label(doc)).weak().small());
+                if matches!(p, Pick::Face { .. }) {
+                    item(ui, "✏ Novo sketch nesta face", TreeAction::WithPicks(vec![p], Cmd::Sketch), acts);
+                }
+                item(ui, "◫ Extrair", TreeAction::WithPicks(vec![p], Cmd::Extract), acts);
+                if let Some(q) = at {
+                    item(ui, "⊙ Centro de órbita aqui", TreeAction::OrbitCenter(q), acts);
+                }
+                ui.separator();
+            }
+            return self.viewport_menu(ui, r, Some(Pick::Geo(sid)), acts);
+        }
+        if let Some(q) = at {
+            item(ui, "⊙ Centro de órbita aqui", TreeAction::OrbitCenter(q), acts);
+        }
         match target {
             Some(p @ (Pick::Face { .. } | Pick::Edge { .. } | Pick::Vertex { .. })) => {
                 let body = match p {
@@ -4052,6 +4172,20 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
 
     /// Alterna ocultar/mostrar o item selecionado (tecla H).
     fn toggle_hide_selected(&mut self) {
+        let many: Vec<Id> = self.multi.borrow().clone();
+        if many.len() > 1 {
+            let d = &mut self.open.doc;
+            for id in many {
+                if let Some(r) = d.references.iter_mut().find(|r| r.id == id) {
+                    r.visible = !r.visible;
+                } else if let Some(c) = d.collectors.iter_mut().find(|c| c.id == id) {
+                    c.visible = !c.visible;
+                } else if let Some(f) = d.feature_mut(id) {
+                    f.hidden = !f.hidden;
+                }
+            }
+            return;
+        }
         let d = &mut self.open.doc;
         match self.sel {
             Sel::Feature(id) => {
@@ -4320,6 +4454,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
             let sketching = self.sketch.is_some();
             use crate::settings::NavStyle as N;
             // (girar, mover, zoom arrastando) conforme o estilo de navegação escolhido
+            // Ctrl + arrastar com o esquerdo = seleção em caixa (fora do sketch)
+            if resp.drag_started_by(egui::PointerButton::Primary) && (ctrl || self.settings.box_mode > 0) && !sketching {
+                self.box_start = ctx.input(|i| i.pointer.press_origin());
+            }
+            let boxing = self.box_start.is_some();
+            let left = left && !boxing;
             let (orbit, pan, zoom_drag) = match self.settings.nav {
                 N::SolidCadCraft => ((left && !shift && !sketching) || mid, right || (shift && left), false),
                 N::SolidWorks => (mid && !ctrl, mid && ctrl, false),
@@ -4438,6 +4578,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
             }
 
             let cam = vp.camera;
+            // comando em edição: entradas realçadas com o papel de cada uma
+            if let (Some(r), Some(sid)) = (&self.result, self.session.as_ref().map(|x| x.id)) {
+                crate::roles::draw(&ui.painter_at(rect), &self.open.doc, r, &cam, rect, sid);
+            }
             // símbolos dos pontos em tamanho fixo na tela (estilo das configurações / do elemento)
             if let Some(r) = &self.result {
                 scene::draw_points(
@@ -4506,6 +4650,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                     edges: self.settings.sel_edges,
                     vertices: self.settings.sel_vertices,
                     planes: true,
+                    hidden_env: self.hidden_env,
                 };
                 let dragging = resp.dragged();
                 self.hover_pick = match (resp.hover_pos(), dragging) {
@@ -4540,9 +4685,15 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                     }
                 } else if resp.double_clicked_by(egui::PointerButton::Primary) {
                     // duplo clique numa face abre o comando que a criou
-                    if let Some(crate::picking::Pick::Face { owner, .. }) = self.hover_pick {
-                        if self.open.doc.feature(owner).is_some() && edge_cmd.is_none() {
-                            self.open_pending = Some(owner);
+                    let target = match self.hover_pick {
+                        Some(crate::picking::Pick::Face { owner, .. }) => Some(owner),
+                        Some(crate::picking::Pick::Geo(id) | crate::picking::Pick::Plane(PlaneRef::Datum(id))) => Some(id),
+                        Some(crate::picking::Pick::Edge { body, .. } | crate::picking::Pick::Vertex { body, .. }) => crate::picking::surface_of(r, body),
+                        _ => None,
+                    };
+                    if let Some(id) = target.filter(|id| self.open.doc.feature(*id).is_some() || self.open.doc.reference(*id).is_some()) {
+                        if edge_cmd.is_none() {
+                            self.open_pending = Some(id);
                         }
                     }
                 } else if resp.clicked_by(egui::PointerButton::Primary) {
@@ -4576,6 +4727,41 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                                 self.picks.clear();
                             }
                         }
+                    }
+                }
+                // seleção em caixa: janela (da esquerda p/ a direita) ou cruzada (da direita p/ a esquerda)
+                if let (Some(a0), Some(now)) = (self.box_start, ctx.input(|i| i.pointer.latest_pos())) {
+                    let b = Rect::from_two_pos(a0, now);
+                    let crossing = match self.settings.box_mode {
+                        1 => false,
+                        2 => true,
+                        _ => now.x < a0.x,
+                    };
+                    let (fill, stroke) = if crossing {
+                        (Color32::from_rgba_unmultiplied(80, 200, 120, 40), egui::Stroke::new(1.2, Color32::from_rgb(80, 200, 120)))
+                    } else {
+                        (Color32::from_rgba_unmultiplied(80, 150, 255, 40), egui::Stroke::new(1.2, Color32::from_rgb(80, 150, 255)))
+                    };
+                    ui.painter().rect_filled(b, 0., fill);
+                    if crossing {
+                        let pts = [b.left_top(), b.right_top(), b.right_bottom(), b.left_bottom(), b.left_top()];
+                        for w in pts.windows(2) {
+                            ui.painter().extend(egui::Shape::dashed_line(&[w[0], w[1]], stroke, 6., 4.));
+                        }
+                    } else {
+                        ui.painter().rect_stroke(b, 0., stroke, egui::StrokeKind::Middle);
+                    }
+                    ui.painter().text(now + egui::vec2(10., 10.), egui::Align2::LEFT_TOP, if crossing { "cruzada (toca)" } else { "janela (inteiro dentro)" }, egui::FontId::proportional(11.), stroke.color);
+                    if !ctx.input(|i| i.pointer.primary_down()) {
+                        let mut got = crate::picking::box_select(r, &self.open.doc, &cam, rect, b, crossing, &filt);
+                        if !ctx.input(|i| i.modifiers.shift) {
+                            self.picks.clear();
+                        }
+                        got.retain(|p| !self.picks.contains(p));
+                        let n = got.len();
+                        self.picks.extend(got);
+                        self.box_start = None;
+                        self.toasts.push((format!("{n} elemento(s) na seleção"), 0., false));
                     }
                 }
                 // botão direito (sem arrastar) no 3D: menu do elemento sob o mouse
@@ -4958,6 +5144,8 @@ enum TreeAction {
     WithPicks(Vec<crate::picking::Pick>, Cmd),
     /// ação da barra (vistas, ajustar…)
     Act(Act),
+    /// a câmera passa a orbitar em volta deste ponto
+    OrbitCenter([f32; 3]),
     /// seleciona na árvore
     SelectSel(Sel),
 }

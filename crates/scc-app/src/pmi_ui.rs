@@ -562,7 +562,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui, id: Id) -> bool {
     ui.horizontal(|ui| {
         for (k, l) in ["X", "Y", "Z"].iter().enumerate() {
             ui.label(*l);
-            ui.add(egui::DragValue::new(&mut p.offset[k]).speed(0.5));
+            { let __r = ui.add(egui::DragValue::new(&mut p.offset[k]).speed(0.5)); crate::ui_ext::wheel(ui, &__r, &mut p.offset[k]); __r };
         }
     });
     crate::editor::section(ui, "Orientação do texto");

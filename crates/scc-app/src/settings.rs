@@ -345,6 +345,8 @@ pub struct Settings {
     pub hole_mark: u8,
     /// seções da árvore ocultadas pelo usuário (chaves de `TREE_SECTIONS`)
     pub tree_hidden: Vec<String>,
+    /// seleção em caixa: 0 com Ctrl + arrastar, 1 janela, 2 cruzada, 3 pela direção (arrastar sem Ctrl)
+    pub box_mode: u8,
     /// última macro escrita na janela de automação
     pub macro_src: String,
 }
@@ -416,6 +418,7 @@ impl Default for Settings {
             ref_line_dash: 0,
             hole_mark: 0,
             tree_hidden: vec![],
+            box_mode: 0,
         }
     }
 }
@@ -443,6 +446,10 @@ impl Settings {
     }
 
     pub fn save(&self) {
+        // execuções de demonstração/teste (variáveis SCC_DEMO_*, SCC_ABRIR) não mexem nas preferências
+        if std::env::vars().any(|(k, _)| k.starts_with("SCC_DEMO") || k == "SCC_ABRIR" || k == "SCC_BANCADA") {
+            return;
+        }
         if let Some(p) = Self::path() {
             let _ = std::fs::create_dir_all(p.parent().unwrap());
             let _ = std::fs::write(p, serde_json::to_string_pretty(self).unwrap_or_default());

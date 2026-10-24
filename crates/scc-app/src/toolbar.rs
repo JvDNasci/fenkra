@@ -15,6 +15,8 @@ use crate::i18n::tr;
 /// Ação pedida por um botão de ferramenta.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Act {
+    /// modo da seleção em caixa (0 Ctrl+arrastar, 1 janela, 2 cruzada, 3 pela direção)
+    SelMode(u8),
     /// abre a janela de personalização dos grupos
     Customize,
     /// abre a janela de automação (macros)
@@ -429,7 +431,15 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("macro", "Macro", "Automação por macro", "Escreva e execute macros que criam a peça (parâmetros, sketches, extrusões, furos, padrões, laços).", Macros)),
             One(it("coletor", "Coletor", "Novo coletor de corpos", "Grupo de corpos independente; vira o ativo para os próximos comandos.", Cmd(C::Collector))),
         ],
-        Group::Selecao => vec![One(it("sel_filtro", "Limpar", "Limpar seleção  (Esc)", "Desmarca faces, arestas e vértices selecionados na viewport.", ClearPicks))],
+        Group::Selecao => vec![
+            One(it("sel_filtro", "Limpar", "Limpar seleção  (Esc)", "Desmarca faces, arestas e vértices selecionados na viewport.", ClearPicks)),
+            Family("sel_caixa", vec![
+                it("sel_clique", "Clique", "Seleção por clique (Ctrl + arrastar = caixa)", "Clique seleciona; Shift/Ctrl somam. Ctrl + arrastar faz caixa: da esquerda para a direita só o que está inteiro dentro, da direita para a esquerda o que toca.", SelMode(0)),
+                it("sel_caixa_janela", "Janela", "Caixa janela (inteiro dentro)", "Arrastar com o esquerdo faz a caixa: entra só o que está inteiramente dentro. Shift soma à seleção.", SelMode(1)),
+                it("sel_caixa_cruzada", "Cruzada", "Caixa cruzada (parcialmente dentro)", "Arrastar com o esquerdo faz a caixa: entra tudo o que toca a caixa. Shift soma à seleção.", SelMode(2)),
+                it("sel_caixa_auto", "Automática", "Caixa pela direção", "Arrastar com o esquerdo faz a caixa: para a direita = janela, para a esquerda = cruzada (como no AutoCAD).", SelMode(3)),
+            ]),
+        ],
         Group::Vista => vec![
             One(it("ajustar", "Ajustar", "Ajustar à tela  (F)", "Enquadra todo o modelo.", Fit)),
             Family("vistas", vec![

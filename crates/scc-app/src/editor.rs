@@ -24,6 +24,8 @@ pub(crate) fn expr(ui: &mut egui::Ui, label: &str, s: &mut String, vars: &Vars, 
             te = te.text_color(Color32::from_rgb(255, 120, 100));
         }
         let resp = ui.add(te);
+        // roda do mouse sobre o campo soma/subtrai (Shift ×10, Ctrl ×0,1)
+        crate::ui_ext::wheel_text(ui, &resp, s);
         match r {
             Ok(v) if s.trim().parse::<f64>().is_err() => {
                 ui.label(RichText::new(format!("= {} {unit}", fmt(v))).weak());
@@ -319,7 +321,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             for (i, t) in doc.textures.iter_mut().enumerate() {
                 ui.horizontal(|ui| {
                     ui.label(&t.name);
-                    ui.add(egui::DragValue::new(&mut t.scale).range(0.1..=10000.).speed(1.).suffix(" mm"))
+                    { let __r = ui.add(egui::DragValue::new(&mut t.scale).range(0.1..=10000.).speed(1.).suffix(" mm")); crate::ui_ext::wheel(ui, &__r, &mut t.scale); __r }
                         .on_hover_text(tr("tamanho de uma repetição da imagem"));
                     if ui.small_button("✖").clicked() {
                         del = Some(i);

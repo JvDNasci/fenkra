@@ -282,13 +282,17 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
         }
         Cmd::AsmSave => save(app),
         _ => {
+            let is_asm = matches!(
+                c,
+                Cmd::AsmInsert | Cmd::AsmNewPart | Cmd::AsmGroup | Cmd::AsmReplace | Cmd::AsmMate(_) | Cmd::AsmFix | Cmd::AsmRigid | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmSubAsm | Cmd::AsmPattern
+                    | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmComposer
+            );
             let Some(st) = app.asm.as_mut() else {
-                app.toast(tr("Crie ou abra uma montagem primeiro"), true);
-                return matches!(
-                    c,
-                    Cmd::AsmInsert | Cmd::AsmNewPart | Cmd::AsmGroup | Cmd::AsmReplace | Cmd::AsmMate(_) | Cmd::AsmFix | Cmd::AsmRigid | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmSubAsm | Cmd::AsmPattern
-                        | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmComposer
-                );
+                // só os comandos de montagem avisam; os da peça seguem normalmente
+                if is_asm {
+                    app.toast(tr("Crie ou abra uma montagem primeiro"), true);
+                }
+                return is_asm;
             };
             match c {
                 Cmd::AsmInsert | Cmd::AsmSubAsm => {
@@ -1098,7 +1102,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             if !matches!(n.kind, NodeKind::Group) {
                 ui.horizontal(|ui| {
                     ui.label(tr("Número"));
-                    ui.add(egui::DragValue::new(&mut n.number).range(0..=9999));
+                    { let __r = ui.add(egui::DragValue::new(&mut n.number).range(0..=9999)); crate::ui_ext::wheel(ui, &__r, &mut n.number); __r };
                 });
                 ui.checkbox(&mut n.fixed, tr("📌 fixo (referência, sem graus de liberdade)"));
                 ui.horizontal(|ui| {
@@ -1118,7 +1122,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                 ui.horizontal(|ui| {
                     for (k, l) in ["X", "Y", "Z"].iter().enumerate() {
                         ui.label(*l);
-                        ui.add(egui::DragValue::new(&mut n.placement.origin[k]).speed(0.5).max_decimals(3));
+                        { let __r = ui.add(egui::DragValue::new(&mut n.placement.origin[k]).speed(0.5).max_decimals(3)); crate::ui_ext::wheel(ui, &__r, &mut n.placement.origin[k]); __r };
                     }
                 });
                 ui.horizontal(|ui| {
@@ -1513,9 +1517,9 @@ pub fn sim_window(app: &mut App, ctx: &egui::Context) {
             }
             ui.horizontal(|ui| {
                 ui.label(tr("Duração"));
-                ui.add(egui::DragValue::new(&mut st.sim_t1).range(0.01..=600.0).suffix(" s").speed(0.1));
+                { let __r = ui.add(egui::DragValue::new(&mut st.sim_t1).range(0.01..=600.0).suffix(" s").speed(0.1)); crate::ui_ext::wheel(ui, &__r, &mut st.sim_t1); __r };
                 ui.label(tr("Quadros"));
-                ui.add(egui::DragValue::new(&mut st.sim_steps).range(2..=2000));
+                { let __r = ui.add(egui::DragValue::new(&mut st.sim_steps).range(2..=2000)); crate::ui_ext::wheel(ui, &__r, &mut st.sim_steps); __r };
                 if ui.button(tr("⏺ Calcular quadros")).clicked() {
                     compute = true;
                 }
@@ -1751,7 +1755,7 @@ pub fn composer_window(app: &mut App, ctx: &egui::Context) {
             for (i, k) in a.keys.iter_mut().enumerate() {
                 ui.horizontal(|ui| {
                     ui.label(RichText::new(format!("◆ {}", k.state.name)).small());
-                    ui.add(egui::DragValue::new(&mut k.t).range(0.0..=600.0).speed(0.05).suffix(" s"));
+                    { let __r = ui.add(egui::DragValue::new(&mut k.t).range(0.0..=600.0).speed(0.05).suffix(" s")); crate::ui_ext::wheel(ui, &__r, &mut k.t); __r };
                     if ui.small_button("✖").clicked() {
                         kdel = Some(i);
                     }

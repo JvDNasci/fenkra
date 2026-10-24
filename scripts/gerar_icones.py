@@ -755,6 +755,11 @@ I["des_tab_corte"] = GRID_T + f'<path d="M30 30 H46 V33 H40 V43 H46 V46 H30 V43 
 I["sk_projetar"] = box((30, 6), 12) + f'<path d="M30 28 L30 40" stroke="{ACTION}" stroke-width="1.6" stroke-dasharray="3 2"/>' +     f'<path d="M4 40 H44" stroke="{SKETCH}" stroke-width="2"/><path d="M18 40 H42" stroke="{ACTION}" stroke-width="3.4" stroke-linecap="round"/>' + AR("30,42 26,35 34,35")
 I["sk_intersecao"] = f'<path d="M6 14 L30 6 L44 18 L20 26 Z" fill="{LIGHT}" {S}/>' + f'<path d="M4 34 H44" stroke="{SKETCH}" stroke-width="2"/>' +     f'<path d="M14 22 C 20 30, 30 32, 38 26" stroke="{ACTION}" stroke-width="1.4" stroke-dasharray="3 2" fill="none"/>' + f'<path d="M12 34 H38" stroke="{ACTION}" stroke-width="3.4" stroke-linecap="round"/>'
 
+# ---------------- seleção em caixa
+I["sel_clique"] = f'<path d="M14 6 L14 38 L22 30 L28 44 L33 42 L27 28 L38 28 Z" fill="{LIGHT}" {S}/>'
+I["sel_caixa_janela"] = f'<rect x="6" y="8" width="36" height="30" fill="{ACTION_L}" stroke="{ACTION}" stroke-width="2.2"/>' + box((24, 16), 9, w=10, hh=5)
+I["sel_caixa_cruzada"] = f'<rect x="6" y="8" width="36" height="30" fill="#e6f7ea" stroke="#2f9e44" stroke-width="2.2" stroke-dasharray="5 3"/>' + box((38, 22), 10, w=10, hh=5)
+I["sel_caixa_auto"] = f'<rect x="4" y="10" width="40" height="26" fill="none" stroke="{ACTION}" stroke-width="2"/>' + arrow(10, 44, 38, 44, ACTION, 2) + arrow(38, 4, 10, 4, "#2f9e44", 2)
 for name, body in I.items():
     with open(os.path.join(OUT, f"{name}.svg"), "w", encoding="utf8", newline="\n") as f:
         f.write(svg(body))

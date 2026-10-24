@@ -21,6 +21,7 @@ impl Pick {
     pub fn label(&self, doc: &Document) -> String {
         match self {
             Pick::Face { owner, .. } => format!("Face de {}", doc.name_of(*owner)),
+            Pick::Edge { body, .. } if *body >= SURF_BASE => "Aresta de superfície".into(),
             Pick::Edge { edge, .. } => format!("Aresta #{edge}"),
             Pick::Vertex { pos, .. } => format!("Vértice ({:.1}, {:.1}, {:.1})", pos[0], pos[1], pos[2]),
             Pick::Plane(p) => crate::scene::plane_ref_name(doc, p),
@@ -34,6 +35,30 @@ pub struct Filter {
     pub edges: bool,
     pub vertices: bool,
     pub planes: bool,
+    /// ambiente de ocultos: só o que está oculto é selecionável
+    pub hidden_env: bool,
+}
+
+/// Índice de "corpo" das superfícies de referência nas seleções (faces/arestas/vértices de
+/// superfície usam `body = SURF_BASE + índice em r.surfaces`).
+pub const SURF_BASE: usize = 1 << 20;
+
+/// Malha do corpo ou da superfície de referência indicada.
+pub fn mesh_of(r: &RecomputeResult, body: usize) -> Option<&scc_kernel::Mesh> {
+    if body >= SURF_BASE {
+        r.surfaces.get(body - SURF_BASE).map(|s| &s.mesh)
+    } else {
+        r.bodies.get(body).map(|b| &b.mesh)
+    }
+}
+
+/// Superfície de referência de uma seleção (se for de superfície).
+pub fn surface_of(r: &RecomputeResult, body: usize) -> Option<Id> {
+    if body >= SURF_BASE {
+        r.surfaces.get(body - SURF_BASE).map(|s| s.id)
+    } else {
+        None
+    }
 }
 
 fn v3(p: &[f32]) -> Vec3 {
@@ -86,22 +111,41 @@ pub fn plane_size(r: &RecomputeResult) -> f32 {
     }
 }
 
+/// Malhas selecionáveis agora: corpos e superfícies de referência visíveis (no ambiente de
+/// ocultos, as ocultas), com o código de "corpo" e a superfície dona (se for de superfície).
+fn pickable<'a>(r: &'a RecomputeResult, doc: &Document, f: &Filter) -> Vec<(usize, &'a scc_kernel::Mesh, Option<Id>)> {
+    let mut out = vec![];
+    for (bi, b) in r.bodies.iter().enumerate() {
+        let vis = doc.collectors.iter().find(|c| c.id == b.collector).is_none_or(|c| c.visible);
+        if vis != f.hidden_env {
+            out.push((bi, &b.mesh, None));
+        }
+    }
+    if f.planes {
+        for (si, sf) in r.surfaces.iter().enumerate() {
+            let vis = doc.reference(sf.id).is_some_and(|x| x.visible);
+            if vis != f.hidden_env {
+                out.push((SURF_BASE + si, &sf.mesh, Some(sf.id)));
+            }
+        }
+    }
+    out
+}
+
 pub fn pick(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, pos: Pos2, f: &Filter) -> Option<Pick> {
     let (o, d) = cam.ray(rect, pos);
-    let visible = |ci: usize| doc.collectors.iter().find(|c| c.id == r.bodies[ci].collector).is_none_or(|c| c.visible);
+    let meshes = pickable(r, doc, f);
+    // referência visível agora? (o resultado traz também as ocultas)
+    let ref_ok = |id: Id| doc.reference(id).is_some_and(|x| x.visible != f.hidden_env);
 
     // faces (também dão a profundidade para esconder o que está atrás)
     let mut best_face: Option<(f32, usize, usize)> = None;
-    for (bi, b) in r.bodies.iter().enumerate() {
-        if !visible(bi) {
-            continue;
-        }
-        let m = &b.mesh;
+    for (k, (_, m, _)) in meshes.iter().enumerate() {
         for (ti, t) in m.indices.chunks_exact(3).enumerate() {
             let p = |i: u32| v3(&m.positions[i as usize * 3..i as usize * 3 + 3]);
             if let Some(dist) = ray_tri(o, d, p(t[0]), p(t[1]), p(t[2])) {
                 if best_face.is_none_or(|(bd, _, _)| dist < bd) {
-                    best_face = Some((dist, bi, ti));
+                    best_face = Some((dist, k, ti));
                 }
             }
         }
@@ -111,16 +155,13 @@ pub fn pick(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, pos: 
 
     if f.vertices {
         let mut best: Option<(f32, Pick)> = None;
-        for (bi, b) in r.bodies.iter().enumerate() {
-            if !visible(bi) {
-                continue;
-            }
-            for p in b.mesh.vertices.chunks_exact(3) {
+        for (code, m, _) in &meshes {
+            for p in m.vertices.chunks_exact(3) {
                 let w = v3(p);
                 let Some(s) = cam.project(rect, w) else { continue };
                 let dd = (s - pos).length();
                 if dd < 8. && depth(w) <= depth_limit && best.is_none_or(|(bd, _)| dd < bd) {
-                    best = Some((dd, Pick::Vertex { body: bi, pos: [p[0], p[1], p[2]] }));
+                    best = Some((dd, Pick::Vertex { body: *code, pos: [p[0], p[1], p[2]] }));
                 }
             }
         }
@@ -128,10 +169,10 @@ pub fn pick(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, pos: 
             return Some(p);
         }
     }
-    // pontos e curvas de referência
+    // pontos e curvas de referência (só os visíveis)
     if f.planes {
         let mut best: Option<(f32, Pick)> = None;
-        for p in &r.points {
+        for p in r.points.iter().filter(|p| ref_ok(p.id)) {
             let w = Vec3::from(p.p.map(|v| v as f32));
             let Some(s) = cam.project(rect, w) else { continue };
             let dd = (s - pos).length();
@@ -140,7 +181,7 @@ pub fn pick(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, pos: 
             }
         }
         if best.is_none() {
-            for c in &r.curves {
+            for c in r.curves.iter().filter(|c| ref_ok(c.id)) {
                 for w in c.pts.windows(2) {
                     let (a, b) = (Vec3::from(w[0].map(|v| v as f32)), Vec3::from(w[1].map(|v| v as f32)));
                     let (Some(sa), Some(sb)) = (cam.project(rect, a), cam.project(rect, b)) else { continue };
@@ -154,30 +195,10 @@ pub fn pick(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, pos: 
         if let Some((_, p)) = best {
             return Some(p);
         }
-        // superfícies de referência (raio contra os triângulos)
-        let mut hit: Option<(f32, Id)> = None;
-        for sf in &r.surfaces {
-            let m = &sf.mesh;
-            for t in m.indices.chunks_exact(3) {
-                let p = |i: u32| v3(&m.positions[i as usize * 3..i as usize * 3 + 3]);
-                if let Some(dist) = ray_tri(o, d, p(t[0]), p(t[1]), p(t[2])) {
-                    if dist <= depth_limit && hit.is_none_or(|(bd, _)| dist < bd) {
-                        hit = Some((dist, sf.id));
-                    }
-                }
-            }
-        }
-        if let Some((_, id)) = hit {
-            return Some(Pick::Geo(id));
-        }
     }
     if f.edges {
         let mut best: Option<(f32, Pick)> = None;
-        for (bi, b) in r.bodies.iter().enumerate() {
-            if !visible(bi) {
-                continue;
-            }
-            let m = &b.mesh;
+        for (code, m, _) in &meshes {
             for (si, sgm) in m.edges.chunks_exact(6).enumerate() {
                 let (a, c) = (v3(&sgm[0..3]), v3(&sgm[3..6]));
                 let (Some(sa), Some(sc)) = (cam.project(rect, a), cam.project(rect, c)) else { continue };
@@ -185,7 +206,7 @@ pub fn pick(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, pos: 
                 if dd < 6. && depth(a.lerp(c, t)) <= depth_limit && best.is_none_or(|(bd, _)| dd < bd) {
                     let e = m.edge_ranges.partition_point(|&x| x as usize <= si).saturating_sub(1);
                     let mid = m.edge_mids.get(e * 3..e * 3 + 3).map(|x| [x[0], x[1], x[2]]).unwrap_or([0.; 3]);
-                    best = Some((dd, Pick::Edge { body: bi, edge: e, mid }));
+                    best = Some((dd, Pick::Edge { body: *code, edge: e, mid }));
                 }
             }
         }
@@ -193,24 +214,35 @@ pub fn pick(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, pos: 
             return Some(p);
         }
     }
-    if f.faces {
-        if let Some((t, bi, ti)) = best_face {
-            let b = &r.bodies[bi];
-            let face = b.mesh.face_ranges.partition_point(|&x| x as usize <= ti * 3).saturating_sub(1);
-            let owner = b.face_owner.get(face).copied().unwrap_or(Id(0));
-            let idx = &b.mesh.indices[ti * 3..ti * 3 + 3];
-            let p = |i: u32| v3(&b.mesh.positions[i as usize * 3..i as usize * 3 + 3]);
+    if let Some((t, k, ti)) = best_face {
+        let (code, m, surf) = meshes[k];
+        // face de corpo (filtro de faces) ou de superfície (selecionável junto com as referências)
+        if (surf.is_none() && f.faces) || surf.is_some() {
+            let face = m.face_ranges.partition_point(|&x| x as usize <= ti * 3).saturating_sub(1);
+            let owner = match surf {
+                Some(id) => id,
+                None => r.bodies[code].face_owner.get(face).copied().unwrap_or(Id(0)),
+            };
+            let idx = &m.indices[ti * 3..ti * 3 + 3];
+            let p = |i: u32| v3(&m.positions[i as usize * 3..i as usize * 3 + 3]);
             let n = (p(idx[1]) - p(idx[0])).cross(p(idx[2]) - p(idx[0])).normalize_or_zero();
             let n = if n.dot(d) > 0. { -n } else { n };
             let hit = o + d * t;
-            return Some(Pick::Face { body: bi, face, owner, point: hit.into(), normal: n.into() });
+            return Some(Pick::Face { body: code, face, owner, point: hit.into(), normal: n.into() });
         }
     }
     if f.planes {
-        // planos: clique dentro do quadrado desenhado
+        // planos visíveis: clique dentro do quadrado desenhado
         let size = plane_size(r);
         let mut best: Option<(f32, Pick)> = None;
         for pl in &r.planes {
+            let vis = match pl.id {
+                Some(id) => ref_ok(id),
+                None => doc.origin_visible && !f.hidden_env,
+            };
+            if !vis {
+                continue;
+            }
             let fr = &pl.frame;
             let n = Vec3::from(fr.normal.map(|x| x as f32));
             let po = Vec3::from(fr.origin.map(|x| x as f32));
@@ -240,6 +272,87 @@ pub fn pick(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, pos: 
         return best.map(|b| b.1);
     }
     None
+}
+
+/// Seleção em caixa: janela (`crossing = false`, só o que está inteiro dentro) ou cruzada
+/// (o que toca a caixa). Respeita o filtro de seleção e a visibilidade.
+pub fn box_select(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, b: Rect, crossing: bool, f: &Filter) -> Vec<Pick> {
+    let meshes = pickable(r, doc, f);
+    let ref_ok = |id: Id| doc.reference(id).is_some_and(|x| x.visible != f.hidden_env);
+    let inside = |w: Vec3| cam.project(rect, w).is_some_and(|s| b.contains(s));
+    // todos dentro (janela) ou algum dentro (cruzada)
+    let take = |pts: &mut dyn Iterator<Item = Vec3>| {
+        let mut any = false;
+        let mut all = true;
+        let mut n = 0;
+        for w in pts {
+            n += 1;
+            if inside(w) {
+                any = true;
+            } else {
+                all = false;
+            }
+        }
+        n > 0 && if crossing { any } else { all }
+    };
+    let mut out = vec![];
+    for (code, m, surf) in &meshes {
+        if f.vertices {
+            for p in m.vertices.chunks_exact(3) {
+                if inside(v3(p)) {
+                    out.push(Pick::Vertex { body: *code, pos: [p[0], p[1], p[2]] });
+                }
+            }
+        }
+        if f.edges {
+            let ne = m.edge_ranges.len();
+            for e in 0..ne {
+                let s0 = m.edge_ranges[e] as usize;
+                let s1 = m.edge_ranges.get(e + 1).map(|x| *x as usize).unwrap_or(m.edges.len() / 6);
+                let mut it = m.edges.chunks_exact(6).take(s1).skip(s0).flat_map(|sg| [v3(&sg[0..3]), v3(&sg[3..6])]);
+                if take(&mut it) {
+                    let mid = m.edge_mids.get(e * 3..e * 3 + 3).map(|x| [x[0], x[1], x[2]]).unwrap_or([0.; 3]);
+                    out.push(Pick::Edge { body: *code, edge: e, mid });
+                }
+            }
+        }
+        if f.faces || surf.is_some() {
+            let nf = m.face_ranges.len();
+            for fi in 0..nf {
+                let i0 = m.face_ranges[fi] as usize;
+                let i1 = m.face_ranges.get(fi + 1).map(|x| *x as usize).unwrap_or(m.indices.len());
+                if i1 <= i0 + 2 {
+                    continue;
+                }
+                let tris = &m.indices[i0..i1];
+                let mut it = tris.iter().map(|i| v3(&m.positions[*i as usize * 3..*i as usize * 3 + 3]));
+                if take(&mut it) {
+                    let pa = |i: u32| v3(&m.positions[i as usize * 3..i as usize * 3 + 3]);
+                    let (a, b2, c) = (pa(tris[0]), pa(tris[1]), pa(tris[2]));
+                    let n = (b2 - a).cross(c - a).normalize_or_zero();
+                    let owner = match surf {
+                        Some(id) => *id,
+                        None => r.bodies[*code].face_owner.get(fi).copied().unwrap_or(Id(0)),
+                    };
+                    out.push(Pick::Face { body: *code, face: fi, owner, point: ((a + b2 + c) / 3.).into(), normal: n.into() });
+                }
+            }
+        }
+    }
+    if f.planes {
+        for pt in r.points.iter().filter(|p| ref_ok(p.id)) {
+            if inside(Vec3::from(pt.p.map(|v| v as f32))) {
+                out.push(Pick::Geo(pt.id));
+            }
+        }
+        for c in r.curves.iter().filter(|c| ref_ok(c.id)) {
+            let mut it = c.pts.iter().map(|q| Vec3::from(q.map(|v| v as f32)));
+            if take(&mut it) {
+                out.push(Pick::Geo(c.id));
+            }
+        }
+    }
+    out
 }
 
 /// Ponto mais próximo de `p` no triângulo abc (Ericson).
@@ -277,8 +390,7 @@ fn closest_on_tri(p: Vec3, a: Vec3, b: Vec3, c: Vec3) -> Vec3 {
 
 /// Face (índice na malha do corpo) que contém o ponto.
 pub fn face_at(r: &RecomputeResult, body: usize, p: [f64; 3]) -> Option<usize> {
-    let b = r.bodies.get(body)?;
-    let m = &b.mesh;
+    let m = mesh_of(r, body)?;
     let q = Vec3::new(p[0] as f32, p[1] as f32, p[2] as f32);
     let mut best: Option<(f32, usize)> = None;
     for (ti, t) in m.indices.chunks_exact(3).enumerate() {
@@ -299,8 +411,7 @@ pub fn same_face(r: &RecomputeResult, body: usize, a: [f64; 3], b: [f64; 3]) -> 
 
 /// Polilinha de uma aresta do corpo (na ordem dos segmentos da malha).
 pub fn edge_polyline(r: &RecomputeResult, body: usize, edge: usize) -> Vec<[f64; 3]> {
-    let Some(b) = r.bodies.get(body) else { return vec![] };
-    let m = &b.mesh;
+    let Some(m) = mesh_of(r, body) else { return vec![] };
     let Some(&s0) = m.edge_ranges.get(edge) else { return vec![] };
     let s1 = m.edge_ranges.get(edge + 1).map(|x| *x as usize).unwrap_or(m.edges.len() / 6);
     let mut out: Vec<[f64; 3]> = vec![];
@@ -321,8 +432,7 @@ pub fn draw(painter: &egui::Painter, r: &RecomputeResult, cam: &Camera, rect: Re
     let fillc = if strong { Color32::from_rgba_unmultiplied(255, 190, 40, 90) } else { Color32::from_rgba_unmultiplied(120, 220, 255, 60) };
     match *p {
         Pick::Face { body, face, .. } => {
-            let Some(b) = r.bodies.get(body) else { return };
-            let m = &b.mesh;
+            let Some(m) = mesh_of(r, body) else { return };
             let Some(&start) = m.face_ranges.get(face) else { return };
             let end = m.face_ranges.get(face + 1).map(|x| *x as usize).unwrap_or(m.indices.len());
             let mut mesh = egui::Mesh::default();
@@ -339,8 +449,7 @@ pub fn draw(painter: &egui::Painter, r: &RecomputeResult, cam: &Camera, rect: Re
             painter.add(egui::Shape::mesh(mesh));
         }
         Pick::Edge { body, edge, .. } => {
-            let Some(b) = r.bodies.get(body) else { return };
-            let m = &b.mesh;
+            let Some(m) = mesh_of(r, body) else { return };
             let Some(&s0) = m.edge_ranges.get(edge) else { return };
             let s1 = m.edge_ranges.get(edge + 1).map(|x| *x as usize).unwrap_or(m.edges.len() / 6);
             for sgm in m.edges.chunks_exact(6).take(s1).skip(s0 as usize) {
