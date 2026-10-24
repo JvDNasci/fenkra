@@ -227,6 +227,8 @@ pub enum Continuity {
     #[default]
     G1,
     G2,
+    /// variação da curvatura contínua (só em curvas; nas superfícies vale como G2)
+    G3,
 }
 
 /// Perfil da varredura de superfície.
@@ -463,6 +465,8 @@ pub enum RefKind {
     SplineControl { points: Vec<PointRef>, closed: bool },
     /// Cópia de uma curva (aresta extraída do modelo).
     CurveCopy { curve: CurveRef },
+    /// Junta curvas que se tocam nas pontas numa curva só (contorno fechado vira perfil de sólido).
+    CurveJoin { curves: Vec<CurveRef> },
 
     // ---------------- superfícies
     /// Face extraída do corpo (ponto clicado).
@@ -776,7 +780,7 @@ impl RefKind {
                 surface.walk(ids);
                 exprs(dist)
             }
-            SurfFill { curves } => {
+            SurfFill { curves } | CurveJoin { curves } => {
                 for c in curves {
                     c.walk(ids)
                 }

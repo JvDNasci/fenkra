@@ -287,6 +287,8 @@ I["sk_offset"] = f'<rect x="12" y="12" width="24" height="24" rx="2" {G}/>' + f'
 I["sk_filete"] = f'<path d="M8 8 V26 A14 14 0 0 0 22 40 H40" {G}/>' + f'<path d="M8 26 V40 H22" {DASH}/>'
 I["sk_chanfro"] = f'<path d="M8 8 V28 L20 40 H40" {G}/>' + f'<path d="M8 28 V40 H20" {DASH}/>' + f'<circle cx="8" cy="28" r="3" fill="{ACTION}"/><circle cx="20" cy="40" r="3" fill="{ACTION}"/>'
 I["sk_spline"] = f'<path d="M6 36 C14 6 24 6 26 24 S36 42 42 12" {G}/>' + ''.join(f'<circle cx="{x}" cy="{y}" r="3" fill="{ACTION}"/>' for x, y in [(6, 36), (17, 13), (26, 24), (36, 33), (42, 12)])
+I["curva_juntar"] = f'<path d="M6 38 L18 14" {G}/><path d="M24 12 C32 8 40 16 42 24" {G}/><path d="M42 30 L30 40" {G}/>' + ''.join(f'<circle cx="{x}" cy="{y}" r="3.2" fill="{ACTION}"/>' for x, y in [(21, 13), (42, 27)])
+I["wf_repetir"] = f'<path d="M4 38 C14 6 34 6 44 30" {G}/>' + ''.join(f'<circle cx="{x}" cy="{y}" r="3.4" fill="{ACTION}"/>' for x, y in [(8, 28), (16, 16), (25, 12), (34, 15), (41, 23)])
 I["sk_aparar"] = f'<line x1="6" y1="24" x2="30" y2="24" {G}/><line x1="24" y1="6" x2="24" y2="42" {G}/>' + \
     f'<line x1="30" y1="24" x2="42" y2="24" {DASH}/>' + \
     f'<path d="M34 12 L40 18 M40 12 L34 18" stroke="{ACTION}" stroke-width="2.4" stroke-linecap="round"/>'

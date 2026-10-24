@@ -160,6 +160,19 @@ impl Curve3 {
         let d2 = mul(sub(p2, p1), 1. / h2);
         mul(sub(d2, d1), 2. / (h1 + h2))
     }
+    /// Terceira derivada (d³p/ds³) aproximada na ponta, no sentido para fora da curva.
+    pub fn end_jerk(&self, at_end: bool) -> V3 {
+        let n = self.pts.len();
+        if n < 4 || self.circle.is_none() && self.is_straight() {
+            return [0.; 3];
+        }
+        let p: [V3; 4] = if at_end { [self.pts[n - 4], self.pts[n - 3], self.pts[n - 2], self.pts[n - 1]] } else { [self.pts[3], self.pts[2], self.pts[1], self.pts[0]] };
+        let h = (dist(p[0], p[1]) + dist(p[1], p[2]) + dist(p[2], p[3])) / 3.;
+        if h < 1e-12 {
+            return [0.; 3];
+        }
+        [0, 1, 2].map(|k| (p[3][k] - 3. * p[2][k] + 3. * p[1][k] - p[0][k]) / (h * h * h))
+    }
     /// Plano que contém a curva (ajuste), se ela for planar.
     pub fn plane(&self) -> Result<Frame, String> {
         if let Some((c, n, _)) = self.circle {
@@ -386,6 +399,51 @@ pub fn hermite(p0: V3, d0: V3, a0: V3, p1: V3, d1: V3, a1: V3, quintic: bool) ->
         .collect()
 }
 
+/// Hermite de grau 7: posição, 1ª, 2ª e 3ª derivadas nas duas pontas (continuidade G3).
+pub fn hermite7(p0: V3, d0: V3, a0: V3, j0: V3, p1: V3, d1: V3, a1: V3, j1: V3) -> Vec<V3> {
+    // c0..c3 saem da ponta inicial; c4..c7 resolvem as quatro condições da ponta final
+    let m = [[1., 1., 1., 1.], [4., 5., 6., 7.], [12., 20., 30., 42.], [24., 60., 120., 210.]];
+    let mut coef = [[0.; 8]; 3];
+    for k in 0..3 {
+        let c = [p0[k], d0[k], a0[k] / 2., j0[k] / 6.];
+        let rhs = [
+            p1[k] - (c[0] + c[1] + c[2] + c[3]),
+            d1[k] - (c[1] + 2. * c[2] + 3. * c[3]),
+            a1[k] - (2. * c[2] + 6. * c[3]),
+            j1[k] - 6. * c[3],
+        ];
+        let x = solve4(m, rhs);
+        coef[k] = [c[0], c[1], c[2], c[3], x[0], x[1], x[2], x[3]];
+    }
+    let n = 64;
+    (0..=n)
+        .map(|i| {
+            let t = i as f64 / n as f64;
+            [0, 1, 2].map(|k| coef[k].iter().rev().fold(0., |acc, c| acc * t + c))
+        })
+        .collect()
+}
+
+fn solve4(mut a: [[f64; 4]; 4], mut b: [f64; 4]) -> [f64; 4] {
+    for i in 0..4 {
+        let p = (i..4).max_by(|x, y| a[*x][i].abs().total_cmp(&a[*y][i].abs())).unwrap();
+        a.swap(i, p);
+        b.swap(i, p);
+        for r in i + 1..4 {
+            let f = a[r][i] / a[i][i];
+            for c in i..4 {
+                a[r][c] -= f * a[i][c];
+            }
+            b[r] -= f * b[i];
+        }
+    }
+    let mut x = [0.; 4];
+    for i in (0..4).rev() {
+        x[i] = (b[i] - (i + 1..4).map(|c| a[i][c] * x[c]).sum::<f64>()) / a[i][i];
+    }
+    x
+}
+
 /// Hélice: origem e eixo, raio inicial, passo, altura, conicidade (graus), sentido.
 pub fn helix(origin: V3, axis: V3, r: f64, pitch: f64, height: f64, taper_deg: f64, left: bool) -> Result<Curve3, String> {
     if r <= 0. || pitch <= 0. || height <= 0. {
@@ -464,11 +522,11 @@ pub fn conic(ctr: V3, f: &Frame, kind: scc_core::ConicKind, a: f64, b: f64, exte
 
 /// Concordância entre duas linhas (só o arco): (curva, ponto de tangência em a, em b).
 pub fn corner(a: &Curve3, b: &Curve3, r: f64) -> Result<Curve3, String> {
-    if !a.is_straight() || !b.is_straight() {
-        return Err("o canto nesta versão é entre duas linhas retas".into());
-    }
     if r <= 0. {
         return Err("raio precisa ser positivo".into());
+    }
+    if !a.is_straight() || !b.is_straight() {
+        return corner_curves(a, b, r);
     }
     let (pa, da) = (a.start(), unit(sub(a.end(), a.start())).unwrap());
     let (pb, db) = (b.start(), unit(sub(b.end(), b.start())).unwrap());
@@ -512,6 +570,114 @@ pub fn corner(a: &Curve3, b: &Curve3, r: f64) -> Result<Curve3, String> {
     let mut c = Curve3::poly(pts, false)?;
     c.circle = Some((ctr, mul(n, sgn), r));
     Ok(c)
+}
+
+/// Canto entre duas curvas coplanares quaisquer (linha, spline, arco): o centro está onde as
+/// curvas deslocadas de `r` se cruzam; fica a solução mais perto do encontro das curvas.
+fn corner_curves(a: &Curve3, b: &Curve3, r: f64) -> Result<Curve3, String> {
+    let mut all = a.pts.clone();
+    all.extend(b.pts.iter().copied());
+    let (f, dev) = fit_plane(&all).map_err(|_| "as curvas estão alinhadas numa reta: não há canto".to_string())?;
+    let size = a.length() + b.length();
+    if dev > 1e-4 * size + 1e-6 {
+        return Err("as curvas não são coplanares".into());
+    }
+    let y = f.y();
+    let uv = |p: V3| {
+        let d = sub(p, f.origin);
+        [dot(d, f.x), dot(d, y)]
+    };
+    let to3 = |q: [f64; 2]| add(f.origin, add(mul(f.x, q[0]), mul(y, q[1])));
+    let pa: Vec<[f64; 2]> = a.pts.iter().map(|p| uv(*p)).collect();
+    let pb: Vec<[f64; 2]> = b.pts.iter().map(|p| uv(*p)).collect();
+    // segmentos deslocados de um lado (s = ±1)
+    let offs = |p: &[[f64; 2]], s: f64| -> Vec<([f64; 2], [f64; 2])> {
+        p.windows(2)
+            .filter_map(|w| {
+                let d = [w[1][0] - w[0][0], w[1][1] - w[0][1]];
+                let l = (d[0] * d[0] + d[1] * d[1]).sqrt();
+                (l > 1e-12).then(|| {
+                    let n = [-d[1] / l * s * r, d[0] / l * s * r];
+                    ([w[0][0] + n[0], w[0][1] + n[1]], [w[1][0] + n[0], w[1][1] + n[1]])
+                })
+            })
+            .collect()
+    };
+    let seg_x = |p: ([f64; 2], [f64; 2]), q: ([f64; 2], [f64; 2])| -> Option<[f64; 2]> {
+        let (r1, r2) = ([p.1[0] - p.0[0], p.1[1] - p.0[1]], [q.1[0] - q.0[0], q.1[1] - q.0[1]]);
+        let den = r1[0] * r2[1] - r1[1] * r2[0];
+        if den.abs() < 1e-14 {
+            return None;
+        }
+        let w = [q.0[0] - p.0[0], q.0[1] - p.0[1]];
+        let t = (w[0] * r2[1] - w[1] * r2[0]) / den;
+        let u = (w[0] * r1[1] - w[1] * r1[0]) / den;
+        (-1e-9..=1. + 1e-9).contains(&t).then_some(())?;
+        (-1e-9..=1. + 1e-9).contains(&u).then(|| [p.0[0] + r1[0] * t, p.0[1] + r1[1] * t])
+    };
+    let foot = |p: &[[f64; 2]], c: [f64; 2]| -> ([f64; 2], f64) {
+        let mut best = (p[0], f64::MAX);
+        for w in p.windows(2) {
+            let d = [w[1][0] - w[0][0], w[1][1] - w[0][1]];
+            let l2 = (d[0] * d[0] + d[1] * d[1]).max(1e-24);
+            let t = (((c[0] - w[0][0]) * d[0] + (c[1] - w[0][1]) * d[1]) / l2).clamp(0., 1.);
+            let q = [w[0][0] + d[0] * t, w[0][1] + d[1] * t];
+            let dd = ((q[0] - c[0]).powi(2) + (q[1] - c[1]).powi(2)).sqrt();
+            if dd < best.1 {
+                best = (q, dd);
+            }
+        }
+        best
+    };
+    // encontro das curvas (ou o par de pontos mais próximo)
+    let meet = {
+        let mut best = (pa[0], f64::MAX);
+        for q in &pb {
+            let (fq, d) = foot(&pa, *q);
+            if d < best.1 {
+                best = (fq, d);
+            }
+        }
+        for q in &pa {
+            let (fq, d) = foot(&pb, *q);
+            if d < best.1 {
+                best = (fq, d);
+            }
+        }
+        best.0
+    };
+    let mut cand: Option<([f64; 2], f64)> = None;
+    for sa in [1., -1.] {
+        for sb in [1., -1.] {
+            let (oa, ob) = (offs(&pa, sa), offs(&pb, sb));
+            for p in &oa {
+                for q in &ob {
+                    if let Some(c) = seg_x(*p, *q) {
+                        // o centro precisa ficar a r das duas curvas (não só dos deslocamentos)
+                        let (da, db) = (foot(&pa, c).1, foot(&pb, c).1);
+                        if (da - r).abs() > 1e-3 * r + 1e-6 || (db - r).abs() > 1e-3 * r + 1e-6 {
+                            continue;
+                        }
+                        let dm = ((c[0] - meet[0]).powi(2) + (c[1] - meet[1]).powi(2)).sqrt();
+                        if cand.is_none_or(|(_, b)| dm < b) {
+                            cand = Some((c, dm));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let (c2, _) = cand.ok_or("não cabe um canto com esse raio entre as curvas")?;
+    let (ta, tb) = (foot(&pa, c2).0, foot(&pb, c2).0);
+    let ctr = to3(c2);
+    let x = unit(sub(to3(ta), ctr)).ok_or("canto degenerado")?;
+    let e = unit(sub(to3(tb), ctr)).ok_or("canto degenerado")?;
+    let sweep = dot(x, e).clamp(-1., 1.).acos();
+    let sgn = if dot(cross(x, e), f.normal) >= 0. { 1. } else { -1. };
+    let yy = mul(cross(f.normal, x), sgn);
+    let mut out = Curve3::poly(arc_pts(ctr, x, yy, r, 0., sweep), false)?;
+    out.circle = Some((ctr, mul(f.normal, sgn), r));
+    Ok(out)
 }
 
 /// Pontos onde a tangente da curva planar é paralela a `dir`: extremos da projeção na perpendicular.

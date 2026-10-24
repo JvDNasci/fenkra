@@ -38,12 +38,12 @@ pub fn is_unset(id: Id) -> bool {
 /// Texto do campo vazio (pede a referência certa).
 pub fn label(id: Id) -> Option<String> {
     let what = match id {
-        x if x == UNSET_POINT => "um vértice ou ponto",
+        x if x == UNSET_POINT => "um vértice, ponto, aresta circular (centro) ou face",
         x if x == UNSET_CURVE => "uma aresta ou curva",
-        x if x == UNSET_PLANE => "um plano ou face plana",
+        x if x == UNSET_PLANE => "um plano, face plana, sketch ou curva plana",
         x if x == UNSET_SURF => "uma face ou superfície",
-        x if x == UNSET_AXIS => "uma aresta, linha ou eixo",
-        x if x == UNSET_SKETCH => "um sketch (na árvore)",
+        x if x == UNSET_AXIS => "uma aresta, linha, eixo, face plana (normal) ou cilíndrica (eixo)",
+        x if x == UNSET_SKETCH => "um sketch ou curva fechada do wireframe",
         _ => return None,
     };
     Some(format!("⊙ {} {}", crate::i18n::tr("selecione"), crate::i18n::tr(what)))
@@ -79,6 +79,12 @@ pub struct Cands {
     pub planes: VecDeque<PlaneRef>,
     pub surfs: VecDeque<SurfRef>,
     pub sketches: VecDeque<Id>,
+    /// alternativas tiradas da geometria (quando falta o tipo exato): pontos (centro de círculo,
+    /// ponto clicado na face), eixos (normal de face plana, eixo de cilindro, eixo de círculo),
+    /// planos (o plano de um sketch)
+    pub alt_points: VecDeque<PointRef>,
+    pub alt_axes: VecDeque<AxisRef>,
+    pub alt_planes: VecDeque<PlaneRef>,
 }
 
 impl Cands {
@@ -91,19 +97,45 @@ impl Cands {
             planes: s.planes.iter().copied().collect(),
             surfs,
             sketches: sketch.into_iter().collect(),
+            ..Default::default()
         }
     }
 }
 
 fn walk_fill(v: &mut Value, c: &mut Cands, changed: &mut bool) {
     let rep: Option<Value> = match v {
-        Value::Number(x) if x.as_u64() == Some(UNSET_SKETCH.0) => c.sketches.pop_front().map(|s| Value::from(s.0)),
+        // perfil: sketch; ou a curva do wireframe; ou o sketch da curva clicada
+        Value::Number(x) if x.as_u64() == Some(UNSET_SKETCH.0) => c
+            .sketches
+            .pop_front()
+            .or_else(|| {
+                let i = c.curves.iter().position(|k| matches!(k, CurveRef::Ref(_) | CurveRef::SketchCurve { .. } | CurveRef::SketchLine { .. }))?;
+                match c.curves.remove(i)? {
+                    CurveRef::Ref(id) => Some(id),
+                    CurveRef::SketchCurve { sketch, .. } | CurveRef::SketchLine { sketch, .. } => Some(sketch),
+                    _ => None,
+                }
+            })
+            .or_else(|| {
+                let i = c.points.iter().position(|k| matches!(k, PointRef::SketchPoint { .. }))?;
+                match c.points.remove(i)? {
+                    PointRef::SketchPoint { sketch, .. } => Some(sketch),
+                    _ => None,
+                }
+            })
+            .map(|s| Value::from(s.0)),
         Value::Object(m) if m.len() == 1 => match m.values().next().and_then(|x| x.as_u64()) {
-            Some(u) if u == UNSET_POINT.0 => c.points.pop_front().and_then(|p| serde_json::to_value(p).ok()),
+            Some(u) if u == UNSET_POINT.0 => c.points.pop_front().or_else(|| c.alt_points.pop_front()).and_then(|p| serde_json::to_value(p).ok()),
             Some(u) if u == UNSET_CURVE.0 => c.curves.pop_front().and_then(|p| serde_json::to_value(p).ok()),
-            Some(u) if u == UNSET_PLANE.0 => c.planes.pop_front().and_then(|p| serde_json::to_value(p).ok()),
+            Some(u) if u == UNSET_PLANE.0 => c.planes.pop_front().or_else(|| c.alt_planes.pop_front()).and_then(|p| serde_json::to_value(p).ok()),
             Some(u) if u == UNSET_SURF.0 => c.surfs.pop_front().and_then(|p| serde_json::to_value(p).ok()),
-            Some(u) if u == UNSET_AXIS.0 => c.curves.pop_front().and_then(|p| serde_json::to_value(axis_of(&p)).ok()),
+            // eixo: aresta/linha (círculo = seu eixo); senão a normal da face plana ou o eixo do cilindro
+            Some(u) if u == UNSET_AXIS.0 => c
+                .curves
+                .pop_front()
+                .map(|p| circle_axis(&p).unwrap_or_else(|| axis_of(&p)))
+                .or_else(|| c.alt_axes.pop_front())
+                .and_then(|p| serde_json::to_value(p).ok()),
             _ => None,
         },
         _ => None,
@@ -118,6 +150,13 @@ fn walk_fill(v: &mut Value, c: &mut Cands, changed: &mut bool) {
         Value::Array(a) => a.iter_mut().for_each(|x| walk_fill(x, c, changed)),
         _ => {}
     }
+}
+
+/// Aresta fechada (círculo) usada como eixo: o eixo do círculo (centro e normal), não a corda.
+fn circle_axis(c: &CurveRef) -> Option<AxisRef> {
+    let CurveRef::Edge(p) = c else { return None };
+    let (ctr, n, _) = crate::geom_fit::circle(p)?;
+    Some(AxisRef::Fixed { origin: ctr, dir: n })
 }
 
 /// Preenche os campos vazios com os candidatos. Devolve se mudou algo.

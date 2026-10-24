@@ -24,10 +24,10 @@ Status: [ ] a fazer · [~] parcial · [x] feito
 - [x] B2 Converter pega elementos de outro sketch no 3D
 - [x] B3 Spline e chanfro (bevel) no sketch
 - [x] B4 Polilinhas/splines/linhas com subelementos selecionáveis (pontos, segmentos)
-- [ ] B5 Wireframe: spline e conector de curvas G0–G3 no menu
-- [ ] B6 Canto entre linha e spline
-- [ ] B7 Repetição de pontos em linha/curva
-- [ ] B8 Extrair unificado (simples = vários elementos; múltiplo = um só), propagação ponto/tangente/curvatura, publicável
+- [x] B5 Wireframe: spline e conector de curvas G0–G3 no menu
+- [x] B6 Canto entre linha e spline
+- [x] B7 Repetição de pontos em linha/curva
+- [x] B8 Extrair unificado (simples = vários elementos; múltiplo = um só), propagação ponto/tangente/curvatura, publicável
 
 ## C. Superfícies
 - [ ] C1 Conectar superfícies (blend superfície–superfície)
@@ -85,3 +85,8 @@ Status: [ ] a fazer · [~] parcial · [x] feito
 
 ## I. Listas de peças
 - [ ] I1 Lista de peças/cortes por nível, dinâmica, mantendo posições pelas revisões; usada no desenho
+
+## J. Sólidos com wireframe e lógica geométrica (pedido de 24/10/2026)
+- [x] J1 Recursos sólidos (extrusão, recorte, revolução, varredura, loft, nervura…) aceitam elementos do wireframe além de sketches: curvas, linhas, polilinhas, splines, extrações, curvas de outros sketches, arestas
+- [x] J2 Se faltar direção/plano/eixo (ex.: curva 3D sem plano), o comando pede a referência em vez de falhar
+- [x] J3 Tirar as regras de "só faces" / "só pontos": cada campo aceita o que geometricamente faz sentido (aresta reta = eixo/direção, face plana = plano/direção normal, curva = perfil/guia, vértice/ponto = ponto, cilindro = eixo)

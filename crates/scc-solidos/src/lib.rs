@@ -144,6 +144,64 @@ pub struct CurveViz {
     pub verts: Vec<[f64; 3]>,
 }
 
+/// Encadeia curvas pelas pontas (na ordem que se encaixarem; inverte as que vierem ao contrário).
+pub fn join_curves(mut cs: Vec<Curve3>) -> Result<Curve3, String> {
+    if cs.is_empty() {
+        return Err("escolha as curvas a juntar".into());
+    }
+    let size = cs.iter().map(|c| c.length()).sum::<f64>().max(1.);
+    let tol = (1e-4 * size).max(1e-3);
+    let first = cs.remove(0);
+    let mut pts = first.pts.clone();
+    if first.closed && cs.is_empty() {
+        return Ok(first);
+    }
+    while !cs.is_empty() {
+        let (s, e) = (pts[0], *pts.last().unwrap());
+        let near = |a: V3, b: V3| geo3d::dist(a, b) <= tol;
+        let Some((i, how)) = cs.iter().enumerate().find_map(|(i, c)| {
+            let (cs0, ce) = (c.start(), c.end());
+            if near(e, cs0) {
+                Some((i, 0))
+            } else if near(e, ce) {
+                Some((i, 1))
+            } else if near(s, ce) {
+                Some((i, 2))
+            } else if near(s, cs0) {
+                Some((i, 3))
+            } else {
+                None
+            }
+        }) else {
+            return Err(format!("{} curva(s) não tocam as outras nas pontas (tolerância {:.3} mm)", cs.len(), tol));
+        };
+        let mut q = cs.remove(i).pts;
+        match how {
+            0 => pts.extend(q.into_iter().skip(1)),
+            1 => {
+                q.reverse();
+                pts.extend(q.into_iter().skip(1))
+            }
+            2 => {
+                q.pop();
+                q.extend(pts);
+                pts = q;
+            }
+            _ => {
+                q.reverse();
+                q.pop();
+                q.extend(pts);
+                pts = q;
+            }
+        }
+    }
+    let closed = pts.len() > 3 && geo3d::dist(pts[0], *pts.last().unwrap()) <= tol;
+    if closed {
+        pts.pop();
+    }
+    Curve3::poly(pts, closed)
+}
+
 /// Valor de um elemento de geometria de referência.
 #[derive(Clone)]
 pub enum Geo {
@@ -379,7 +437,7 @@ impl Ctx<'_> {
         match *a {
             AxisRef::Origin(ax) => Ok(([0.; 3], origin_axis(ax))),
             AxisRef::SketchLine { sketch, entity } => {
-                let (af, ask) = self.sketch(sketch)?;
+                let (af, ask) = &self.sketch(sketch)?;
                 let (a, b) = ask.lines.get(&entity).ok_or("linha do eixo não existe mais — reedite o eixo")?;
                 let (pa, pb) = (af.point(a[0], a[1]), af.point(b[0], b[1]));
                 Ok((pa, unit([pb[0] - pa[0], pb[1] - pa[1], pb[2] - pa[2]])))
@@ -402,7 +460,7 @@ impl Ctx<'_> {
                 _ => Err(format!("'{}' não é um ponto", self.doc.name_of(id))),
             },
             PointRef::SketchPoint { sketch, point } => {
-                let (fr, es) = self.sketch(sketch)?;
+                let (fr, es) = &self.sketch(sketch)?;
                 let q = es.pts.get(&point).ok_or("o ponto do sketch não existe mais — reedite")?;
                 Ok(fr.point(q[0], q[1]))
             }
@@ -442,7 +500,7 @@ impl Ctx<'_> {
                 Curve3::poly(pts.clone(), closed)
             }
             CurveRef::SketchLine { sketch, entity } => {
-                let (af, ask) = self.sketch(*sketch)?;
+                let (af, ask) = &self.sketch(*sketch)?;
                 let (a, b) = ask.lines.get(entity).ok_or("a linha do sketch não existe mais — reedite")?;
                 Curve3::line(af.point(a[0], a[1]), af.point(b[0], b[1]))
             }
@@ -451,7 +509,7 @@ impl Ctx<'_> {
                 _ => Err(format!("'{}' não é uma linha ou curva", self.doc.name_of(*id))),
             },
             CurveRef::SketchCurve { sketch, curve } => {
-                let (fr, es) = self.sketch(*sketch)?;
+                let (fr, es) = &self.sketch(*sketch)?;
                 let pts = es.curves.get(curve).ok_or("a curva do sketch não existe mais — reedite")?;
                 let p3: Vec<V3> = pts.iter().map(|q| fr.point(q[0], q[1])).collect();
                 if p3.len() == 2 {
@@ -582,7 +640,7 @@ impl Ctx<'_> {
             } else {
                 let da = out(&sha, &pa, i, pb[i])?.unwrap_or_else(|| unit(sub(pb[i], pa[i])).unwrap());
                 let db = out(&shb, &pb, i, pa[i])?.unwrap_or_else(|| unit(sub(pa[i], pb[i])).unwrap());
-                let pts = hermite(pa[i], mul(da, k), [0.; 3], pb[i], mul(db, -k), [0.; 3], cont == Continuity::G2);
+                let pts = hermite(pa[i], mul(da, k), [0.; 3], pb[i], mul(db, -k), [0.; 3], matches!(cont, Continuity::G2 | Continuity::G3));
                 pts.into_iter().step_by(4).chain(std::iter::once(pb[i])).collect::<Vec<_>>()
             };
             sections.push(sec);
@@ -801,6 +859,17 @@ impl Ctx<'_> {
                     Continuity::G0 => vec![pa, pb],
                     Continuity::G1 => hermite(pa, mul(ta, l), [0.; 3], pb, mul(tb, -l), [0.; 3], false),
                     Continuity::G2 => hermite(pa, mul(ta, l), mul(ca.end_curvature(*a_end), l * l), pb, mul(tb, -l), mul(cb.end_curvature(*b_end), l * l), true),
+                    // a 3ª derivada troca de sinal na chegada (a curva 2 é percorrida para dentro)
+                    Continuity::G3 => geo3d::hermite7(
+                        pa,
+                        mul(ta, l),
+                        mul(ca.end_curvature(*a_end), l * l),
+                        mul(ca.end_jerk(*a_end), l * l * l),
+                        pb,
+                        mul(tb, -l),
+                        mul(cb.end_curvature(*b_end), l * l),
+                        mul(cb.end_jerk(*b_end), -l * l * l),
+                    ),
                 };
                 Geo::Curve(Curve3::poly(pts, false)?)
             }
@@ -912,6 +981,10 @@ impl Ctx<'_> {
             }
             SplineControl { points, closed } => Geo::Curve(bspline(&self.points(points, d)?, *closed)?),
             CurveCopy { curve } => Geo::Curve(self.curve(curve, d)?),
+            CurveJoin { curves } => {
+                let cs: Vec<Curve3> = curves.iter().map(|c| self.curve(c, d)).collect::<Result<_, _>>()?;
+                Geo::Curve(join_curves(cs)?)
+            }
             SurfExtract { face, .. } => Geo::Surface(self.face_of_bodies(*face)?),
             SurfOffset { surface, dist: dd } => {
                 let sh = self.surface_shape(surface, d)?;
@@ -1143,13 +1216,68 @@ impl Ctx<'_> {
         })
     }
 
-    fn sketch(&self, id: Id) -> Result<&(Frame, Arc<EvalSketch>), String> {
-        self.sketches.get(&id).ok_or_else(|| {
-            match self.doc.feature(id) {
-                Some(f) => format!("o sketch '{}' está inativo ou com erro", f.name),
-                None => format!("referência perdida: sketch #{} não existe — reedite ou substitua a referência", id.0),
-            }
+    /// Perfil de um comando: sketch, ou curva fechada e plana do wireframe (o plano sai da curva).
+    fn sketch(&self, id: Id) -> Result<(Frame, Arc<EvalSketch>), String> {
+        if let Some(s) = self.sketches.get(&id) {
+            return Ok(s.clone());
+        }
+        if self.doc.feature(id).is_none() && (self.doc.reference(id).is_some() || self.doc.external.iter().any(|e| e.id == id)) {
+            return self.wire_profile(id);
+        }
+        Err(match self.doc.feature(id) {
+            Some(f) => format!("o sketch '{}' está inativo ou com erro", f.name),
+            None => format!("referência perdida: sketch #{} não existe — reedite ou substitua a referência", id.0),
         })
+    }
+
+    /// Curva do wireframe como perfil: precisa ser fechada e plana; círculo vira círculo exato e
+    /// curvas suaves (spline, cônica…) viram spline, cantos ficam retos.
+    fn wire_profile(&self, id: Id) -> Result<(Frame, Arc<EvalSketch>), String> {
+        use scc_kernel::Seg2;
+        let name = self.doc.name_of(id);
+        let c = match self.geo(id, 1)? {
+            Geo::Curve(c) => c,
+            _ => return Err(format!("'{name}' não é um sketch nem uma curva: escolha um sketch ou uma curva fechada do wireframe")),
+        };
+        let fr = c.plane().map_err(|e| format!("'{name}' não serve de perfil: {e} — escolha um sketch ou uma curva plana"))?;
+        let uv = |p: V3| {
+            let d = geo3d::sub(p, fr.origin);
+            [geo3d::dot(d, fr.x), geo3d::dot(d, fr.y())]
+        };
+        let mut pts: Vec<V3> = c.pts.clone();
+        let closed = c.closed || (pts.len() > 2 && geo3d::dist(pts[0], *pts.last().unwrap()) < 1e-6);
+        if !closed {
+            return Err(format!("'{name}' é aberta: o perfil de um sólido precisa de contorno fechado (feche a curva ou junte as curvas com 'Juntar')"));
+        }
+        if pts.len() > 2 && geo3d::dist(pts[0], *pts.last().unwrap()) < 1e-6 {
+            pts.pop();
+        }
+        pts.dedup_by(|a, b| geo3d::dist(*a, *b) < 1e-9);
+        let lp: Vec<Seg2> = if let Some((ctr, _, r)) = c.circle.filter(|_| c.closed) {
+            vec![Seg2::Circle(uv(ctr), r)]
+        } else {
+            let p: Vec<[f64; 2]> = pts.iter().map(|q| uv(*q)).collect();
+            let n = p.len();
+            if n < 3 {
+                return Err(format!("'{name}' tem pontos de menos para um perfil"));
+            }
+            // curva suave (sem cantos vivos e bem amostrada): uma spline só, fechada no início
+            let turn = |i: usize| {
+                let (a, b, cc) = (p[(i + n - 1) % n], p[i], p[(i + 1) % n]);
+                let (u, v) = ([b[0] - a[0], b[1] - a[1]], [cc[0] - b[0], cc[1] - b[1]]);
+                let cr = u[0] * v[1] - u[1] * v[0];
+                cr.atan2(u[0] * v[0] + u[1] * v[1]).abs()
+            };
+            if n >= 12 && (0..n).all(|i| turn(i) < 0.35) {
+                let mut s = p.clone();
+                s.push(p[0]);
+                vec![Seg2::Spline(s)]
+            } else {
+                (0..n).map(|i| Seg2::Line(p[i], p[(i + 1) % n])).collect()
+            }
+        };
+        let es = EvalSketch { loops: vec![lp], ..Default::default() };
+        Ok((fr, Arc::new(es)))
     }
 
     /// Polilinha 3D da geometria externa de um sketch, no estado atual do modelo.
@@ -1182,7 +1310,7 @@ impl Ctx<'_> {
                 Geo::Plane(_) => Err("plano não se projeta num sketch".into()),
             },
             LinkSrc::SketchCurve { sketch, curve } => {
-                let (fr, es) = self.sketch(*sketch)?;
+                let (fr, es) = &self.sketch(*sketch)?;
                 let pts = es.curves.get(curve).ok_or("a curva do outro sketch não existe mais")?;
                 let p3: Vec<V3> = pts.iter().map(|q| fr.point(q[0], q[1])).collect();
                 Ok(if l.intersect { crossings(&p3) } else { p3 })
@@ -1557,7 +1685,7 @@ impl Ctx<'_> {
                 Ok(warn)
             }
             FeatureKind::Extrude(e) => {
-                let (frame, sk) = self.sketch(e.sketch)?;
+                let (frame, sk) = &self.sketch(e.sketch)?;
                 if sk.loops.is_empty() {
                     return Err("o sketch não tem perfis fechados".into());
                 }
@@ -1614,7 +1742,7 @@ impl Ctx<'_> {
                 Ok(None)
             }
             FeatureKind::Revolve(r) => {
-                let (frame, sk) = self.sketch(r.sketch)?;
+                let (frame, sk) = &self.sketch(r.sketch)?;
                 if sk.loops.is_empty() {
                     return Err("o sketch não tem perfis fechados".into());
                 }
@@ -1650,7 +1778,7 @@ impl Ctx<'_> {
                 // cada furo: boca e direção entrando no material
                 let mut seats: Vec<(V3, V3)> = vec![];
                 if h.points.is_empty() {
-                    let (frame, sk) = self.sketch(h.sketch)?;
+                    let (frame, sk) = &self.sketch(h.sketch)?;
                     if sk.points.is_empty() {
                         return Err("o sketch do furo precisa de pelo menos um ponto (centro) — ou escolha pontos 3D".into());
                     }
@@ -1762,7 +1890,7 @@ impl Ctx<'_> {
                 Ok(None)
             }
             FeatureKind::Sweep(w) => {
-                let (frame, sk) = self.sketch(w.sketch)?;
+                let (frame, sk) = &self.sketch(w.sketch)?;
                 if sk.loops.is_empty() {
                     return Err("o sketch do perfil não tem contorno fechado".into());
                 }
@@ -1783,7 +1911,7 @@ impl Ctx<'_> {
             FeatureKind::Loft(l) => {
                 let mut comp = Shape::empty();
                 for id in &l.sections {
-                    let (frame, sk) = self.sketch(*id)?;
+                    let (frame, sk) = &self.sketch(*id)?;
                     if sk.loops.is_empty() {
                         return Err(format!("o sketch '{}' não tem contorno fechado", self.doc.name_of(*id)));
                     }
@@ -1892,7 +2020,7 @@ impl Ctx<'_> {
             }
             FeatureKind::SmWall(w) => {
                 let sp = self.sheet()?;
-                let (frame, sk) = self.sketch(w.sketch)?;
+                let (frame, sk) = &self.sketch(w.sketch)?;
                 if sk.loops.is_empty() {
                     return Err("a parede base precisa de um perfil fechado".into());
                 }
@@ -2092,7 +2220,7 @@ impl Ctx<'_> {
             }
             FeatureKind::SmStamp(st) => {
                 let sp = self.sheet()?;
-                let (frame, sk) = self.sketch(st.sketch)?;
+                let (frame, sk) = &self.sketch(st.sketch)?;
                 if sk.loops.is_empty() {
                     return Err("o estampo precisa de um perfil fechado".into());
                 }
@@ -2109,7 +2237,7 @@ impl Ctx<'_> {
             }
             FeatureKind::SmFlangedHole(h) => {
                 let sp = self.sheet()?;
-                let (frame, sk) = self.sketch(h.sketch)?;
+                let (frame, sk) = &self.sketch(h.sketch)?;
                 if sk.points.is_empty() {
                     return Err("o sketch precisa de pontos (centros dos furos)".into());
                 }
@@ -2273,7 +2401,7 @@ impl Ctx<'_> {
                 Ok(None)
             }
             FeatureKind::Stiffener(st) => {
-                let (frame, sk) = self.sketch(st.sketch)?;
+                let (frame, sk) = &self.sketch(st.sketch)?;
                 let frame = *frame;
                 let segs: Vec<([f64; 3], [f64; 3])> = sk.lines.values().map(|(a, b)| (frame.point(a[0], a[1]), frame.point(b[0], b[1]))).collect();
                 if segs.is_empty() {
@@ -3250,6 +3378,79 @@ mod tests {
         let xmax = v.construction.iter().map(|p| p[0]).fold(f32::MIN, f32::max);
         assert!((xmax - 70.).abs() < 1e-3, "a linha projetada foi para 70: {xmax}");
         let _ = link;
+    }
+
+    #[test]
+    fn conector_g3_e_canto_entre_linha_e_spline() {
+        use geo3d::*;
+        // G3: posição e derivadas nas pontas
+        let (p0, d0, a0, j0) = ([0., 0., 0.], [10., 0., 0.], [0., 4., 0.], [0., 0., 2.]);
+        let (p1, d1, a1, j1) = ([20., 5., 0.], [0., 10., 0.], [-3., 0., 0.], [1., 0., 0.]);
+        let h = hermite7(p0, d0, a0, j0, p1, d1, a1, j1);
+        assert!(dist(h[0], p0) < 1e-9 && dist(*h.last().unwrap(), p1) < 1e-9);
+        let dt = 1. / 64.;
+        let v0 = mul(sub(h[1], h[0]), 1. / dt);
+        assert!(dist(v0, d0) < 0.5, "derivada inicial {v0:?}");
+        // canto entre uma linha e uma spline que se encontram
+        let ln = Curve3::line([0., 0., 0.], [20., 0., 0.]).unwrap();
+        let sp = spline(&[[20., 0., 0.], [24., 8., 0.], [26., 20., 0.]], false).unwrap();
+        let c = corner(&ln, &sp, 3.).unwrap();
+        let (ctr, _, r) = c.circle.unwrap();
+        assert!((r - 3.).abs() < 1e-9);
+        // tangente às duas: centro a r da linha e a r da spline
+        assert!((ctr[1].abs() - 3.).abs() < 1e-2, "centro {ctr:?}");
+        let (_, q) = sp.nearest(ctr);
+        assert!((dist(q, ctr) - 3.).abs() < 0.05, "distância à spline {}", dist(q, ctr));
+        assert!(ctr[0] < 20., "canto do lado de dentro {ctr:?}");
+    }
+
+    #[test]
+    fn solidos_com_perfil_do_wireframe() {
+        if !scc_kernel::AVAILABLE {
+            return;
+        }
+        let s = |x: &str| x.to_string();
+        let ext = |d: &mut Document, prof: Id, h: &str| {
+            d.add_feature(FeatureKind::Extrude(Extrude { sketch: prof, op: BoolOp::Add, extent: Extent::Blind(s(h)), reverse: false, taper: s("0"), thin: None, dir: None }))
+        };
+        let vol = |d: &Document, f: Id| {
+            let r = recompute(d);
+            assert!(matches!(r.status[&f], Status::Ok | Status::Warning(_)), "{:?}", r.status[&f]);
+            r.bodies.iter().map(|b| b.mass.volume).sum::<f64>()
+        };
+        let fx = |x: f64, y: f64, z: f64| PointRef::Fixed([x, y, z]);
+        // polilinha fechada 30 x 20 num plano inclinado (plano sai da curva)
+        let mut d = Document::new("wf1");
+        let pl = d.add_geometry(RefKind::Polyline { points: vec![fx(0., 0., 0.), fx(30., 0., 0.), fx(30., 20., 20.), fx(0., 20., 20.)], closed: true });
+        let e = ext(&mut d, pl, "10");
+        let v = vol(&d, e);
+        let area = 30. * (20f64 * 20. + 20. * 20.).sqrt();
+        assert!((v - area * 10.).abs() < 1e-3 * area * 10., "polilinha: {v}");
+        // círculo r = 5 → cilindro exato
+        let mut d = Document::new("wf2");
+        let c = d.add_geometry(RefKind::Circle { center: PointRef::Origin, plane: PlaneRef::Origin(OriginPlane::XY), radius: s("5"), start: s("0"), end: s("360") });
+        let e = ext(&mut d, c, "4");
+        let v = vol(&d, e);
+        assert!((v - std::f64::consts::PI * 25. * 4.).abs() < 0.05, "círculo: {v}");
+        // quatro linhas soltas (uma ao contrário) juntadas num contorno
+        let mut d = Document::new("wf3");
+        let ln = |d: &mut Document, a: [f64; 3], b: [f64; 3]| d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: s("0"), end: s("0") });
+        let l1 = ln(&mut d, [0., 0., 0.], [10., 0., 0.]);
+        let l2 = ln(&mut d, [10., 0., 0.], [10., 10., 0.]);
+        let l3 = ln(&mut d, [0., 10., 0.], [10., 10., 0.]);
+        let l4 = ln(&mut d, [0., 10., 0.], [0., 0., 0.]);
+        let j = d.add_geometry(RefKind::CurveJoin { curves: [l1, l3, l2, l4].map(CurveRef::Ref).to_vec() });
+        let e = ext(&mut d, j, "5");
+        let v = vol(&d, e);
+        assert!((v - 500.).abs() < 1e-3, "juntar: {v}");
+        // curva aberta: erro que explica o que falta
+        let mut d = Document::new("wf4");
+        let a = ln(&mut d, [0., 0., 0.], [10., 0., 0.]);
+        let b = ln(&mut d, [10., 0., 0.], [10., 10., 0.]);
+        let j = d.add_geometry(RefKind::CurveJoin { curves: vec![CurveRef::Ref(a), CurveRef::Ref(b)] });
+        let e = ext(&mut d, j, "5");
+        let r = recompute(&d);
+        assert!(matches!(&r.status[&e], Status::Error(m) if m.contains("aberta")), "{:?}", r.status[&e]);
     }
 
     #[test]

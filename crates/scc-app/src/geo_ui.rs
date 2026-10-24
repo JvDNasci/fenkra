@@ -65,6 +65,7 @@ pub enum GeoKind {
     CurveProject,
     SplineControl,
     CurveCopy,
+    CurveJoin,
     SurfExtract,
     SurfOffset,
     SurfFill,
@@ -102,8 +103,8 @@ pub const PLANES: [GeoKind; 13] = [
 ];
 pub const POINTS: [GeoKind; 12] = [PtCoords, PtOnCurve, PtOnPlane, PtOnSurface, PtCenter, PtTangent, PtBetween, PtCurvePlane, PtCurveCurve, PtProject, PtProjectCurve, PtOffset];
 pub const LINES: [GeoKind; 9] = [LinePts, LineDir, LineAngle, LineTangent, LineNormal, LinePlanes, LineBisector, LineAxis, Polyline];
-pub const CURVES: [GeoKind; 16] =
-    [Circle, Circle3, Spline, SplineControl, Helix, Spiral, Conic, Connect, Corner, Spine, CurveProject, CurveIntersect, CurveProjSurf, CurveParallel, OpBoundary, CurveCopy];
+pub const CURVES: [GeoKind; 17] =
+    [Circle, Circle3, Spline, SplineControl, Helix, Spiral, Conic, Connect, Corner, Spine, CurveProject, CurveIntersect, CurveProjSurf, CurveParallel, OpBoundary, CurveCopy, CurveJoin];
 pub const SURFACES: [GeoKind; 11] = [SurfExtrude, SurfRevolve, SurfSphere, SurfCylinder, SurfOffset, SurfSweep, SurfTube, SurfLoft, SurfBlend, SurfFill, SurfExtract];
 /// Operações sobre superfícies (resultado é superfície).
 pub const OPERATIONS: [GeoKind; 8] = [OpJoin, OpHeal, OpSplit, OpTrim, OpMulti, OpPart, OpUntrim, OpExtrapolate];
@@ -145,7 +146,7 @@ impl GeoKind {
             Spiral => ("espiral", "Espiral", "Espiral plana", "Do raio inicial ao final em N voltas, no plano."),
             Conic => ("conica", "Cônica", "Elipse, parábola ou hipérbole", "Cônica no plano, pelo centro e parâmetros a e b."),
             Connect => ("conexao", "Conexão", "Curva de conexão", "Liga as pontas de duas curvas com continuidade G0, G1 (tangente) ou G2 (curvatura)."),
-            Corner => ("canto", "Canto", "Canto (concordância)", "Arco tangente entre duas linhas, com raio."),
+            Corner => ("canto", "Canto", "Canto (concordância)", "Arco tangente entre duas curvas coplanares (linhas, splines, arcos), com raio. Fica a solução mais perto do encontro das curvas."),
             Spine => ("spine", "Spine", "Spine (curva guia)", "Curva normal a uma sequência de planos, para varreduras e multi-seções."),
             PlanePointNormal => ("plano_ponto_normal", "Ponto + normal", "Plano por ponto, normal a uma linha", "Passa pelo ponto e fica perpendicular à linha, aresta ou eixo."),
             PlaneMid => ("plano_meio", "Plano médio", "Plano médio entre dois planos", "No meio de dois planos ou faces planas (paralelos ou não: bissetor)."),
@@ -159,6 +160,7 @@ impl GeoKind {
             LineAxis => ("linha_eixo", "Eixo de face", "Eixo de face cilíndrica/cônica", "Clique numa face cilíndrica ou cônica: a linha é o eixo dela."),
             CurveProject => ("curva_projetada", "Projetada", "Curva projetada num plano", "Cópia achatada da curva sobre o plano."),
             SplineControl => ("spline_controle", "Spline controle", "Spline por polígono de controle", "Os pontos puxam a curva (B-spline) sem que ela passe por eles."),
+            CurveJoin => ("curva_juntar", "Juntar curvas", "Juntar curvas (join)", "Une curvas, linhas e arestas que se tocam nas pontas numa curva só. Um contorno fechado e plano serve de perfil para extrusão, revolução, varredura e multi-seções."),
             CurveCopy => ("curva_extraida", "Extraída", "Curva extraída de aresta", "Cópia de uma aresta do modelo como curva de referência."),
             SurfExtract => ("sup_extraida", "Extraída", "Superfície extraída de face", "Cópia de uma face do modelo como superfície de referência."),
             SurfOffset => ("sup_deslocada", "Deslocada", "Superfície deslocada", "Paralela a uma superfície ou face, a uma distância."),
@@ -264,6 +266,7 @@ impl GeoKind {
             R::CurveProject { .. } => CurveProject,
             R::SplineControl { .. } => SplineControl,
             R::CurveCopy { .. } => CurveCopy,
+            R::CurveJoin { .. } => CurveJoin,
             R::SurfExtract { .. } => SurfExtract,
             R::SurfOffset { .. } => SurfOffset,
             R::SurfFill { .. } => SurfFill,
@@ -361,6 +364,7 @@ impl GeoKind {
             CurveProject => R::CurveProject { curve: c(0), plane: pl },
             SplineControl => R::SplineControl { points: pts(4), closed: false },
             CurveCopy => R::CurveCopy { curve: c(0) },
+            CurveJoin => R::CurveJoin { curves: if s.curves.len() >= 2 { s.curves.clone() } else { vec![c(0), c(1)] } },
             SurfExtract => R::SurfExtract { face: face_pt(s), owner: match s.surface {
                 Some(SurfRef::Face { owner, .. }) => owner,
                 _ => None,
@@ -502,7 +506,7 @@ pub fn inputs_of(k: &RefKind) -> Seed {
         R::PointOffset { point, .. } => s.points.push(*point),
         R::SplineControl { points, .. } => s.points.extend(points.iter().copied()),
         R::CurveCopy { curve } | R::SurfExtrude { curve, .. } | R::SurfRevolve { curve, .. } => s.curves.push(curve.clone()),
-        R::SurfFill { curves } => s.curves.extend(curves.iter().cloned()),
+        R::SurfFill { curves } | R::CurveJoin { curves } => s.curves.extend(curves.iter().cloned()),
         R::SurfOffset { surface, .. } => s.surface = Some(*surface),
         R::SurfSphere { center, .. } => s.points.push(*center),
         R::SurfCylinder { point, .. } => s.points.push(*point),
@@ -1065,6 +1069,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                 ui.radio_value(cont, Continuity::G0, tr("G0 ponto"));
                 ui.radio_value(cont, Continuity::G1, tr("G1 tangente"));
                 ui.radio_value(cont, Continuity::G2, tr("G2 curvatura"));
+                ui.radio_value(cont, Continuity::G3, tr("G3 variação da curvatura"));
             });
             expr(ui, "Tensão", tension, vars, "");
         }
@@ -1157,6 +1162,10 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             ui.checkbox(closed, tr("fechada"));
         }
         R::CurveCopy { curve } => curve_slot(ui, "g_c", "Aresta/curva", doc, me, curve, seed),
+        R::CurveJoin { curves } => {
+            curves_list(ui, "g_cj", "Curva", doc, me, curves, seed, 1);
+            ui.label(RichText::new(tr("As curvas precisam se tocar nas pontas; a ordem não importa.")).weak().small());
+        }
         R::SurfOffset { surface, dist } => {
             surf_slot(ui, "g_s", "Superfície", doc, me, surface, seed);
             expr(ui, "Distância", dist, vars, "mm");

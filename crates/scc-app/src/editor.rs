@@ -61,16 +61,41 @@ pub(crate) fn plane_combo(ui: &mut egui::Ui, id: &str, doc: &Document, p: &mut P
 }
 
 fn sketch_combo(ui: &mut egui::Ui, id: &str, doc: &Document, before: usize, s: &mut Id) {
-    let name = doc.feature(*s).map(|f| f.name.clone()).or_else(|| crate::slots::label(*s)).unwrap_or_else(|| format!("⚠ perdido #{}", s.0));
-    let text = if crate::slots::is_unset(*s) { RichText::new(name).color(Color32::from_rgb(255, 170, 60)) } else { RichText::new(name) };
-    egui::ComboBox::from_id_salt(id).selected_text(text).width(200.).show_ui(ui, |ui| {
-        // sketches antes do comando e os livres (pastas de geometria), que valem em qualquer ponto
-        for (i, f) in doc.features.iter().enumerate().filter(|(_, f)| matches!(f.kind, FeatureKind::Sketch(_))) {
-            if i < before || doc.is_free(f) {
-                ui.selectable_value(s, f.id, &f.name);
-            }
+    let text = profile_text(doc, *s);
+    egui::ComboBox::from_id_salt(id).selected_text(text).width(200.).show_ui(ui, |ui| profile_options(ui, doc, before, s));
+}
+
+/// Nome do perfil escolhido (sketch ou curva do wireframe), em laranja quando falta escolher.
+pub fn profile_text(doc: &Document, s: Id) -> RichText {
+    let name = doc
+        .feature(s)
+        .map(|f| f.name.clone())
+        .or_else(|| doc.reference(s).map(|r| format!("〰 {}", r.name)))
+        .or_else(|| crate::slots::label(s))
+        .unwrap_or_else(|| format!("⚠ perdido #{}", s.0));
+    if crate::slots::is_unset(s) {
+        RichText::new(name).color(Color32::from_rgb(255, 170, 60))
+    } else {
+        RichText::new(name)
+    }
+}
+
+/// Opções de perfil: sketches antes do comando e os livres (pastas de geometria), mais as curvas
+/// do wireframe (fechadas e planas viram perfil; o plano sai da própria curva).
+pub fn profile_options(ui: &mut egui::Ui, doc: &Document, before: usize, s: &mut Id) {
+    for (i, f) in doc.features.iter().enumerate().filter(|(_, f)| matches!(f.kind, FeatureKind::Sketch(_))) {
+        if i < before || doc.is_free(f) {
+            ui.selectable_value(s, f.id, &f.name);
         }
-    });
+    }
+    let curves: Vec<_> = doc.references.iter().filter(|r| r.kind.class() == RefClass::Curve).collect();
+    if !curves.is_empty() {
+        ui.separator();
+        ui.label(RichText::new(tr("Curvas do wireframe")).weak().small());
+        for r in curves {
+            ui.selectable_value(s, r.id, format!("〰 {}", r.name));
+        }
+    }
 }
 
 /// Linha de opções com ícone + nome (uma variação = um ícone). Devolve o índice clicado.

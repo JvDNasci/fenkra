@@ -103,6 +103,12 @@ pub struct App {
     pub delete_dialog: Option<DeleteDialog>,
     /// janela de publicações (o que outras peças podem importar)
     pub pub_open: bool,
+    /// repetição de pontos (e planos normais) ao longo de uma curva, em edição
+    pub repeat: Option<Repeat>,
+    /// janela de extração (simples/múltipla, propagação); `None` = fechada
+    pub extract: Option<ExtractOpts>,
+    /// últimas opções de extração usadas
+    extract_last: ExtractOpts,
     /// texturas carregadas na GPU (arquivo, escala)
     tex_key: Vec<(String, f64)>,
     /// janela de automação (macros) e o registro da última execução
@@ -241,6 +247,9 @@ impl App {
             result: None,
             delete_dialog: None,
             pub_open: false,
+            repeat: None,
+            extract: None,
+            extract_last: ExtractOpts::default(),
             open_pending: None,
             splash_t0: None,
             reframe_pending: false,
@@ -1041,6 +1050,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 }
             }
         }
+        // curva do wireframe pré-selecionada também serve de perfil
+        if let Sel::Ref(id) = self.sel {
+            if !need_points && d.reference(id).is_some_and(|r| r.kind.class() == RefClass::Curve) {
+                return Some(id);
+            }
+        }
         // só a pré-seleção: sem escolher sozinho o último sketch (o campo fica para preencher)
         None
     }
@@ -1338,39 +1353,17 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                     }
                 }))
             }
-            Cmd::Extract => {
-                use crate::picking::Pick;
-                let (mut faces, mut made) = (vec![], vec![]);
-                for p in self.picks.clone() {
-                    match p {
-                        Pick::Face { point, .. } => faces.push(point.map(|v| v as f64)),
-                        Pick::Edge { body, edge, .. } => {
-                            if let Some(r) = &self.result {
-                                let pts = crate::picking::edge_polyline(r, body, edge);
-                                if pts.len() >= 2 {
-                                    made.push(self.open.doc.add_geometry(RefKind::CurveCopy { curve: CurveRef::Edge(pts) }));
-                                }
-                            }
-                        }
-                        Pick::Vertex { pos, .. } => {
-                            let q = pos.map(|v| crate::app::fmt(v as f64));
-                            made.push(self.open.doc.add_geometry(RefKind::PointCoords { x: q[0].clone(), y: q[1].clone(), z: q[2].clone(), frame: None }));
-                        }
-                        _ => {}
-                    }
-                }
-                let d = &mut self.open.doc;
-                match faces.len() {
-                    0 => {}
-                    1 => made.push(d.add_geometry(RefKind::SurfExtract { face: faces[0], owner: None })),
-                    _ => made.push(d.add_geometry(RefKind::SurfMulti { faces })),
-                }
-                if made.is_empty() {
-                    self.toast("Selecione faces, arestas ou vértices na viewport e use Extrair", true);
+            Cmd::PointRepeat => {
+                let Some(curve) = self.seed(true).curves.first().cloned() else {
+                    self.toast("Selecione uma curva (aresta, linha, curva do wireframe ou do sketch) e use Repetir pontos", true);
                     return;
-                }
-                self.toast(format!("{} elemento(s) extraído(s) para a pasta de geometria", made.len()), false);
-                Sel::Ref(*made.last().unwrap())
+                };
+                self.repeat = Some(Repeat { curve, count: "5".into(), spacing: "10".into(), by_spacing: false, ends: true, planes: false });
+                return;
+            }
+            Cmd::Extract => {
+                self.extract = Some(self.extract_last);
+                return;
             }
             Cmd::MeshImport => {
                 let Some(p) = rfd::FileDialog::new().add_filter("Malha", &["stl", "obj"]).pick_file() else { return };
@@ -4149,6 +4142,34 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 if wants_plane && seed.planes.is_empty() && self.picks.iter().any(|p| matches!(p, Pick::Face { .. })) {
                     let pl = self.plane_for_new();
                     seed.planes.push(pl);
+                } else if wants_plane && seed.planes.is_empty() {
+                    // curva plana (aresta, curva do wireframe) onde se espera um plano: o plano da curva,
+                    // se nenhum campo de curva/eixo/perfil estiver esperando por ela
+                    let js = serde_json::to_string(&self.open.doc.feature(id).map(|f| f.kind.clone())).unwrap_or_default()
+                        + &serde_json::to_string(&self.open.doc.reference(id).map(|r| r.kind.clone())).unwrap_or_default();
+                    let wants_curve = [UNSET_CURVE, UNSET_AXIS, UNSET_SKETCH].iter().any(|u| js.contains(&u.0.to_string()));
+                    let straight = |p: &[[f64; 3]]| {
+                        let (a, b) = (p[0], *p.last().unwrap());
+                        let ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+                        let l = (ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2]).sqrt();
+                        l > 1e-9
+                            && p.iter().all(|q| {
+                                let c = scc_kernel::cross(ab, [q[0] - a[0], q[1] - a[1], q[2] - a[2]]);
+                                (c[0] * c[0] + c[1] * c[1] + c[2] * c[2]).sqrt() / l < 1e-4 * l + 1e-6
+                            })
+                    };
+                    let usable = |c: &CurveRef| match c {
+                        CurveRef::Edge(p) => p.len() >= 3 && !straight(p),
+                        CurveRef::Ref(_) | CurveRef::SketchCurve { .. } => true,
+                        _ => false,
+                    };
+                    if !wants_curve {
+                        if let Some(i) = seed.curves.iter().position(usable) {
+                            let c = seed.curves.remove(i);
+                            let pid = self.open.doc.add_geometry(RefKind::PlaneCurve { curve: c });
+                            seed.planes.push(PlaneRef::Datum(pid));
+                        }
+                    }
                 }
             }
             Some(Sel::Origin(o)) => seed.planes.push(PlaneRef::Origin(o)),
@@ -4170,6 +4191,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
         let face_pt = self.picks.iter().find_map(|p| if let Pick::Face { point, .. } = p { Some(point.map(|v| v as f64)) } else { None });
         let verts: Vec<[f64; 3]> = self.picks.iter().filter_map(|p| if let Pick::Vertex { pos, .. } = p { Some(pos.map(|v| v as f64)) } else { None }).collect();
         let mut c = Cands::from_seed(&seed, sketch);
+        self.geo_alternatives(&mut c, sketch, tree.is_some());
         let tree_pick = tree.is_some();
         let d = &mut self.open.doc;
         let filled = if let Some(f) = d.feature_mut(id) {
@@ -4186,6 +4208,261 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
             self.scene_dirty = true;
         }
         filled
+    }
+
+    /// Alternativas geométricas para os campos que não acharam o tipo exato na seleção: aresta
+    /// circular → centro e eixo; face plana → normal; cilindro/cone → eixo; face → ponto clicado;
+    /// sketch (ou curva de sketch) → o plano dele.
+    fn geo_alternatives(&self, c: &mut crate::slots::Cands, sketch: Option<Id>, tree: bool) {
+        use crate::geom_fit::{self, FaceKind};
+        use crate::picking::Pick;
+        let plane_of = |id: Id| match self.doc().feature(id).map(|f| &f.kind) {
+            Some(FeatureKind::Sketch(s)) => Some(s.plane),
+            _ => None,
+        };
+        if let Some(p) = sketch.and_then(plane_of) {
+            c.alt_planes.push_back(p);
+        }
+        if tree {
+            return;
+        }
+        let Some(r) = &self.result else { return };
+        for p in &self.picks {
+            match *p {
+                Pick::Edge { body, edge, .. } => {
+                    let pts = crate::picking::edge_polyline(r, body, edge);
+                    if let Some((ctr, n, _)) = geom_fit::circle(&pts) {
+                        c.alt_points.push_back(PointRef::Fixed(ctr));
+                        c.alt_axes.push_back(AxisRef::Fixed { origin: ctr, dir: n });
+                    }
+                }
+                Pick::Face { body, face, point, .. } => {
+                    let pt = point.map(|v| v as f64);
+                    if let Some(m) = crate::picking::mesh_of(r, body) {
+                        let s1 = m.face_ranges.get(face + 1).map(|x| *x as usize).unwrap_or(m.indices.len()).min(m.indices.len());
+                        let s0 = (m.face_ranges.get(face).copied().unwrap_or(0) as usize).min(s1);
+                        match geom_fit::face(&m.positions, &m.normals, &m.indices[s0..s1]) {
+                            FaceKind::Plane(n) => c.alt_axes.push_back(AxisRef::Fixed { origin: pt, dir: n }),
+                            FaceKind::Axis(o, d) => c.alt_axes.push_back(AxisRef::Fixed { origin: o, dir: d }),
+                            FaceKind::Other => {}
+                        }
+                    }
+                    c.alt_points.push_back(PointRef::Fixed(pt));
+                }
+                Pick::SkCurve { sketch, .. } | Pick::SkPoint { sketch, .. } => {
+                    if let Some(p) = plane_of(sketch) {
+                        c.alt_planes.push_back(p);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Janela de extração: simples = um elemento por item clicado (com o que a propagação juntar);
+    /// múltipla = tudo num elemento só. Propagação por ponto, tangente ou curvatura.
+    fn extract_window(&mut self, ctx: &egui::Context) {
+        use crate::extract::Prop;
+        let Some(mut o) = self.extract else { return };
+        let (mut open, mut done) = (true, false);
+        let n = self.picks.len();
+        egui::Window::new(tr("◫ Extrair")).open(&mut open).default_width(340.).resizable(false).show(ctx, |ui| {
+            done = crate::app::done_bar(ui);
+            ui.label(RichText::new(format!("{} {}", n, tr("item(ns) selecionado(s) — clique faces, arestas ou vértices no 3D (Shift soma)"))).weak().small());
+            ui.horizontal(|ui| {
+                ui.radio_value(&mut o.multi, false, tr("simples"))
+                    .on_hover_text(tr("Cada item clicado vira um elemento (com o que a propagação juntar a ele)."));
+                ui.radio_value(&mut o.multi, true, tr("múltipla"))
+                    .on_hover_text(tr("Tudo o que foi clicado vira um elemento só (arestas juntadas numa curva; faces numa superfície)."));
+            });
+            ui.horizontal(|ui| {
+                ui.label(tr("Propagação"));
+                for (p, t) in [(Prop::Nenhuma, "nenhuma"), (Prop::Ponto, "ponto"), (Prop::Tangente, "tangente"), (Prop::Curvatura, "curvatura")] {
+                    ui.radio_value(&mut o.prop, p, tr(t));
+                }
+            });
+            ui.label(RichText::new(tr("Ponto: tudo o que está ligado. Tangente: continua enquanto não houver canto vivo. Curvatura: também para onde a curvatura muda (nas faces vale como tangente).")).weak().small());
+            ui.checkbox(&mut o.publish, tr("publicar o resultado (outras peças podem usar)"));
+        });
+        self.extract_last = o;
+        if !open {
+            self.extract = None;
+            return;
+        }
+        self.extract = Some(o);
+        if done {
+            self.extract = None;
+            self.run_extract(o);
+        }
+    }
+
+    fn run_extract(&mut self, o: ExtractOpts) {
+        use crate::extract::{edge_pts, edge_set, face_point, face_set};
+        use crate::picking::Pick;
+        // o resultado sai emprestado durante a coleta e volta logo depois
+        let Some(r) = self.result.take() else { return };
+        let (mut edges, mut faces, mut made): (Vec<Vec<Vec<[f64; 3]>>>, Vec<Vec<[f64; 3]>>, Vec<Id>) = (vec![], vec![], vec![]);
+        let mut seen_e: Vec<(usize, usize)> = vec![];
+        let mut seen_f: Vec<(usize, usize)> = vec![];
+        for p in self.picks.clone() {
+            match p {
+                Pick::Face { body, face, .. } => {
+                    let Some(m) = crate::picking::mesh_of(&r, body) else { continue };
+                    let set: Vec<[f64; 3]> = face_set(m, face, o.prop)
+                        .into_iter()
+                        .filter(|f| {
+                            let new = !seen_f.contains(&(body, *f));
+                            if new {
+                                seen_f.push((body, *f));
+                            }
+                            new
+                        })
+                        .filter_map(|f| face_point(m, f))
+                        .collect();
+                    if !set.is_empty() {
+                        faces.push(set);
+                    }
+                }
+                Pick::Edge { body, edge, .. } => {
+                    let Some(m) = crate::picking::mesh_of(&r, body) else { continue };
+                    let set: Vec<Vec<[f64; 3]>> = edge_set(m, edge, o.prop)
+                        .into_iter()
+                        .filter(|e| {
+                            let new = !seen_e.contains(&(body, *e));
+                            if new {
+                                seen_e.push((body, *e));
+                            }
+                            new
+                        })
+                        .map(|e| edge_pts(m, e))
+                        .filter(|p| p.len() >= 2)
+                        .collect();
+                    if !set.is_empty() {
+                        edges.push(set);
+                    }
+                }
+                Pick::Vertex { pos, .. } => {
+                    let q = pos.map(|v| crate::app::fmt(v as f64));
+                    made.push(self.open.doc.add_geometry(RefKind::PointCoords { x: q[0].clone(), y: q[1].clone(), z: q[2].clone(), frame: None }));
+                }
+                // curva de sketch: cópia associativa
+                Pick::SkCurve { sketch, curve, .. } => made.push(self.open.doc.add_geometry(RefKind::CurveCopy { curve: CurveRef::SketchCurve { sketch, curve } })),
+                _ => {}
+            }
+        }
+        self.result = Some(r);
+        if o.multi {
+            let all_e: Vec<Vec<[f64; 3]>> = edges.drain(..).flatten().collect();
+            if !all_e.is_empty() {
+                edges.push(all_e);
+            }
+            let all_f: Vec<[f64; 3]> = faces.drain(..).flatten().collect();
+            if !all_f.is_empty() {
+                faces.push(all_f);
+            }
+        }
+        let d = &mut self.open.doc;
+        for set in edges {
+            made.push(if set.len() == 1 {
+                d.add_geometry(RefKind::CurveCopy { curve: CurveRef::Edge(set.into_iter().next().unwrap()) })
+            } else {
+                d.add_geometry(RefKind::CurveJoin { curves: set.into_iter().map(CurveRef::Edge).collect() })
+            });
+        }
+        for set in faces {
+            made.push(if set.len() == 1 { d.add_geometry(RefKind::SurfExtract { face: set[0], owner: None }) } else { d.add_geometry(RefKind::SurfMulti { faces: set }) });
+        }
+        if made.is_empty() {
+            self.toast("Selecione faces, arestas ou vértices na viewport e conclua a extração", true);
+            return;
+        }
+        if o.publish {
+            for r in d.references.iter_mut().filter(|r| made.contains(&r.id)) {
+                r.published = true;
+            }
+        }
+        self.toast(format!("{} elemento(s) extraído(s) para a pasta de geometria", made.len()), false);
+        self.sel = Sel::Ref(*made.last().unwrap());
+        self.picks.clear();
+        self.scene_dirty = true;
+    }
+
+    /// Repetição de pontos ao longo de uma curva: cada ponto é um "ponto na curva" associativo
+    /// (razão ou distância), numa pasta própria; opcionalmente um plano normal à curva em cada um.
+    fn repeat_window(&mut self, ctx: &egui::Context) {
+        if self.repeat.is_none() {
+            return;
+        }
+        let vars = self.vars();
+        let Some(rp) = self.repeat.as_mut() else { return };
+        let (mut open, mut done) = (true, false);
+        egui::Window::new(tr("⋯ Repetir pontos na curva")).open(&mut open).default_width(340.).resizable(false).show(ctx, |ui| {
+            done = crate::app::done_bar(ui);
+            ui.label(RichText::new(tr("Pontos associativos: se a curva mudar, eles acompanham.")).weak().small());
+            ui.horizontal(|ui| {
+                ui.radio_value(&mut rp.by_spacing, false, tr("por quantidade"));
+                ui.radio_value(&mut rp.by_spacing, true, tr("por espaçamento"));
+            });
+            ui.horizontal(|ui| {
+                ui.label(tr("Quantidade"));
+                let r = ui.add(egui::TextEdit::singleline(&mut rp.count).desired_width(70.));
+                crate::ui_ext::wheel_text(ui, &r, &mut rp.count);
+            });
+            if rp.by_spacing {
+                ui.horizontal(|ui| {
+                    ui.label(tr("Espaçamento"));
+                    let r = ui.add(egui::TextEdit::singleline(&mut rp.spacing).desired_width(70.));
+                    crate::ui_ext::wheel_text(ui, &r, &mut rp.spacing);
+                    ui.label("mm");
+                });
+            } else {
+                ui.checkbox(&mut rp.ends, tr("incluir as pontas da curva"));
+            }
+            ui.checkbox(&mut rp.planes, tr("criar também um plano normal à curva em cada ponto"));
+        });
+        if !open {
+            self.repeat = None;
+            return;
+        }
+        if !done {
+            return;
+        }
+        let rp = self.repeat.take().unwrap();
+        let n = scc_core::expr::eval_str(&rp.count, &vars).map(|v| v.round() as i64).unwrap_or(0);
+        if !(1..=500).contains(&n) {
+            self.toast("Quantidade entre 1 e 500", true);
+            self.repeat = Some(rp);
+            return;
+        }
+        let n = n as usize;
+        let d = &mut self.open.doc;
+        let folder = d.add_geometry_folder(&format!("Repetição ({n})"));
+        let mut last = None;
+        for i in 0..n {
+            let at = if rp.by_spacing {
+                OnCurve::Distance(format!("({})*{i}", rp.spacing))
+            } else if rp.ends {
+                OnCurve::Ratio(if n == 1 { "0.5".into() } else { format!("{i}/{}", n - 1) })
+            } else {
+                OnCurve::Ratio(format!("{}/{}", i + 1, n + 1))
+            };
+            let p = d.add_geometry(RefKind::PointOnCurve { curve: rp.curve.clone(), at: at.clone(), reverse: false });
+            if let Some(r) = d.references.iter_mut().find(|r| r.id == p) {
+                r.folder = Some(folder);
+            }
+            if rp.planes {
+                let pl = d.add_geometry(RefKind::PlaneNormalCurve { curve: rp.curve.clone(), at, reverse: false });
+                if let Some(r) = d.references.iter_mut().find(|r| r.id == pl) {
+                    r.folder = Some(folder);
+                }
+            }
+            last = Some(p);
+        }
+        if let Some(p) = last {
+            self.sel = Sel::Ref(p);
+        }
+        self.scene_dirty = true;
+        self.toast(format!("{n} ponto(s) criados na pasta de geometria"), false);
     }
 
     /// Publicações: marca planos, pontos, curvas, superfícies, corpos e parâmetros que outras peças
@@ -5085,6 +5362,8 @@ pub enum Cmd {
     FilletFull,
     /// extrair a seleção da viewport como geometria de referência
     Extract,
+    /// repetir pontos (e planos normais) ao longo de uma curva
+    PointRepeat,
     // ---- montagem
     AsmNew,
     AsmOpen,
@@ -5276,6 +5555,24 @@ enum TreeAction {
 struct DragItem(Id);
 
 /// Botão "Concluir" no topo das janelas de comando: devolve true quando clicado.
+/// Opções da extração.
+#[derive(Clone, Copy, Default)]
+pub struct ExtractOpts {
+    pub multi: bool,
+    pub prop: crate::extract::Prop,
+    pub publish: bool,
+}
+
+/// Repetição de pontos ao longo de uma curva (janela em edição).
+pub struct Repeat {
+    pub curve: CurveRef,
+    pub count: String,
+    pub spacing: String,
+    pub by_spacing: bool,
+    pub ends: bool,
+    pub planes: bool,
+}
+
 pub fn done_bar(ui: &mut egui::Ui) -> bool {
     let r = ui.add(egui::Button::new(RichText::new(tr("✔ Concluir")).strong()).min_size(egui::vec2(100., 26.))).clicked();
     ui.separator();
@@ -5803,6 +6100,8 @@ impl eframe::App for App {
         }
         self.link_window(ctx);
         self.pub_window(ctx);
+        self.repeat_window(ctx);
+        self.extract_window(ctx);
         for x in std::mem::take(&mut self.ctx_actions) {
             self.tree_action(x);
         }

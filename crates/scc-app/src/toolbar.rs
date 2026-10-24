@@ -367,7 +367,9 @@ pub fn entries(g: Group) -> Vec<Entry> {
             vec![
                 Family("wf_ponto", fam(&[GeoKind::PtCoords, GeoKind::PtOnCurve, GeoKind::PtOnSurface, GeoKind::PtOnPlane, GeoKind::PtCenter, GeoKind::PtBetween, GeoKind::PtProject, GeoKind::PtCurvePlane, GeoKind::PtCurveCurve, GeoKind::PtOffset, GeoKind::PtTangent, GeoKind::PtProjectCurve])),
                 Family("wf_linha", fam(&[GeoKind::LinePts, GeoKind::LineDir, GeoKind::LineNormal, GeoKind::LineAngle, GeoKind::LineTangent, GeoKind::LinePlanes, GeoKind::LineBisector, GeoKind::LineAxis])),
+                One(it("wf_repetir", "Repetir pontos", "Repetir pontos na curva", "Selecione uma curva e crie N pontos associativos ao longo dela (por quantidade ou espaçamento), com planos normais opcionais em cada ponto.", Cmd(C::PointRepeat))),
                 One(g(GeoKind::Polyline)),
+                One(g(GeoKind::CurveJoin)),
                 Family("wf_plano", fam(&geo_ui::PLANES)),
                 Family("wf_circulo", fam(&[GeoKind::Circle, GeoKind::Circle3, GeoKind::Conic])),
                 Family("wf_spline", fam(&[GeoKind::Spline, GeoKind::SplineControl, GeoKind::Connect, GeoKind::Corner])),
@@ -375,7 +377,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 Family("wf_projecao", fam(&[GeoKind::CurveProjSurf, GeoKind::CurveProject, GeoKind::PtProject])),
                 One(g(GeoKind::CurveIntersect)),
                 One(g(GeoKind::CurveParallel)),
-                One(it("extrair", "Extrair", "Extrair a seleção (faces, arestas, vértices)", "Cada face, aresta ou vértice selecionado na viewport vira superfície, curva ou ponto de referência (várias faces = uma multi-extração).", Cmd(C::Extract))),
+                One(it("extrair", "Extrair", "Extrair a seleção (faces, arestas, vértices)", "Faces, arestas e vértices viram superfície, curva ou ponto de referência. Simples = um elemento por item; múltipla = um só. Propagação por ponto, tangente ou curvatura; o resultado pode ser publicado.", Cmd(C::Extract))),
             ]
         }
         Group::Superficies => {
@@ -400,7 +402,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 Family("op_juntar", vec![g(GeoKind::OpJoin), g(GeoKind::OpHeal)]),
                 Family("op_dividir", vec![g(GeoKind::OpSplit), g(GeoKind::OpTrim)]),
                 Family("op_extrair", vec![
-                    it("extrair", "Extrair", "Extrair a seleção (faces, arestas, vértices)", "Cada face, aresta ou vértice selecionado vira superfície, curva ou ponto de referência (várias faces = multi-extração).", Cmd(C::Extract)),
+                    it("extrair", "Extrair", "Extrair a seleção (faces, arestas, vértices)", "Faces, arestas e vértices viram superfície, curva ou ponto de referência. Simples = um elemento por item; múltipla = um só. Propagação por ponto, tangente ou curvatura; o resultado pode ser publicado.", Cmd(C::Extract)),
                     g(GeoKind::SurfExtract),
                     g(GeoKind::OpMulti),
                     g(GeoKind::OpBoundary),

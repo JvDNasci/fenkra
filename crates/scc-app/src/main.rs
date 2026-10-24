@@ -20,6 +20,8 @@ mod asm_ui;
 mod st_ui;
 mod pmi_ui;
 mod slots;
+mod geom_fit;
+mod extract;
 mod palette;
 mod roles;
 mod ui_ext;
