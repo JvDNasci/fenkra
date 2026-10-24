@@ -505,6 +505,11 @@ I["sup_multisecoes"] = f'<path d="M6 34 C 6 20, 18 8, 30 8 C 40 8, 44 14, 44 18 
 I["sup_concordancia"] = PATCH("M2 34 L16 34 L16 42 L2 42 Z", MID) + PATCH("M32 8 L46 8 L46 16 L32 16 Z", MID) + \
     f'<path d="M16 34 C 26 34, 22 16, 32 16 L32 8 C 18 8, 26 26, 16 26 Z" fill="{ACTION_L}" {S}/>' + HL("M16 30 C 25 30, 22 12, 32 12", 2.6)
 
+I["sup_conectar"] = PATCH("M2 30 L14 26 L16 40 L4 44 Z", MID) + PATCH("M32 6 L46 4 L44 18 L30 20 Z", MID) +     f'<path d="M14 26 C 24 22, 22 12, 31 12 L30 20 C 24 20, 26 32, 16 40 Z" fill="{ACTION_L}" {S}/>' + HL("M15 32 C 24 28, 23 16, 31 15", 2.4)
+I["sup_varredura_av"] = f'<path d="M6 34 C 16 34, 22 14, 40 12 L40 22 C 26 24, 20 42, 6 42 Z" fill="{LIGHT}" {S}/>' +     f'<path d="M6 34 C 16 34, 22 14, 40 12" stroke="{ACTION}" stroke-width="2.6" fill="none"/>' + f'<path d="M6 42 C 20 42, 26 24, 40 22" stroke="{ACTION}" stroke-width="2.6" fill="none"/>' +     f'<path d="M24 22 Q 30 26 28 32" stroke="{INK}" stroke-width="1.6" fill="none"/>'
+I["sup_filete"] = PATCH("M4 40 L30 40 L30 30 L4 30 Z", MID) + PATCH("M38 4 L44 4 L44 22 L38 22 Z", MID) +     f'<path d="M30 30 A8 8 0 0 0 38 22" stroke="{ACTION}" stroke-width="3.2" fill="none"/>'
+I["sup_filete_aresta"] = PATCH("M4 40 L26 40 L26 30 L4 30 Z", MID) + PATCH("M34 4 L44 4 L44 22 L34 22 Z", MID) +     f'<path d="M26 30 A8 8 0 0 0 34 22" fill="{ACTION_L}" stroke="{ACTION}" stroke-width="2.4"/>' + f'<path d="M26 30 L34 22" {DASH}/>'
+
 # operações
 I["op_juntar"] = PATCH("M4 16 L22 12 L24 36 L6 38 Z") + PATCH("M24 12 L44 14 L42 38 L24 36 Z", MID) + HL("M23 12 L24 36", 3.4) + \
     f'<circle cx="23.5" cy="24" r="4" fill="#ffffff" stroke="{ACTION}" stroke-width="2"/>'

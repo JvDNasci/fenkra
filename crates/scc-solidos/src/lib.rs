@@ -144,6 +144,78 @@ pub struct CurveViz {
     pub verts: Vec<[f64; 3]>,
 }
 
+/// Borda de `sh` que "olha" para `other`: a borda livre é dividida nos cantos vivos e fica o
+/// trecho com a menor distância média até a outra superfície.
+fn facing_edge(sh: &Shape, other: &Shape) -> Result<Vec<V3>, String> {
+    use geo3d::*;
+    let loops = sh.boundary().map_err(|x| x.0)?;
+    let mut best: Option<(f64, Vec<V3>)> = None;
+    for mut lp in loops {
+        if lp.len() > 2 && dist(lp[0], *lp.last().unwrap()) < 1e-6 {
+            lp.pop();
+        }
+        let n = lp.len();
+        if n < 2 {
+            continue;
+        }
+        let corner = |i: usize| {
+            let (a, b, c) = (lp[(i + n - 1) % n], lp[i], lp[(i + 1) % n]);
+            match (unit(sub(b, a)), unit(sub(c, b))) {
+                (Some(u), Some(v)) => dot(u, v) < 0.87,
+                _ => false,
+            }
+        };
+        let cs: Vec<usize> = (0..n).filter(|i| corner(*i)).collect();
+        let runs: Vec<Vec<V3>> = if cs.is_empty() {
+            vec![lp.clone()]
+        } else {
+            (0..cs.len())
+                .map(|k| {
+                    let (s0, s1) = (cs[k], cs[(k + 1) % cs.len()]);
+                    let mut v = vec![];
+                    let mut i = s0;
+                    loop {
+                        v.push(lp[i]);
+                        if i == s1 && v.len() > 1 {
+                            break;
+                        }
+                        i = (i + 1) % n;
+                        if v.len() > n + 1 {
+                            break;
+                        }
+                    }
+                    v
+                })
+                .collect()
+        };
+        for r in runs {
+            if r.len() < 2 {
+                continue;
+            }
+            let mut acc = 0.;
+            for p in &r {
+                acc += dist(*p, other.surface_near(*p).map_err(|x| x.0)?.0);
+            }
+            let m = acc / r.len() as f64;
+            if best.as_ref().is_none_or(|b| m < b.0) {
+                best = Some((m, r));
+            }
+        }
+    }
+    best.map(|b| b.1).ok_or_else(|| "a superfície não tem borda livre para conectar".into())
+}
+
+/// Filete (raio constante ou variável) nas arestas de uma superfície, pelos pontos médios.
+fn edge_fillet(sh: &Shape, mids: &[[f64; 3]], r: f64, r2: Option<f64>) -> Result<Shape, String> {
+    let tags: Vec<i32> = (0..sh.face_count() as i32).collect();
+    let tol = sh.bbox().map(|(a, c)| geo3d::dist(a, c) * 0.05).unwrap_or(1.).max(1.);
+    let res = match r2 {
+        Some(r2) => sh.edges_mode_tagged(0, r, r2, mids, tol, &tags),
+        None => sh.edges_tagged(r, mids, tol, false, &tags),
+    };
+    res.map(|x| x.0).map_err(|e| format!("filete da superfície: {} (raio grande demais ou arestas que não ligam duas faces)", e.0))
+}
+
 /// Encadeia curvas pelas pontas (na ordem que se encaixarem; inverte as que vierem ao contrário).
 pub fn join_curves(mut cs: Vec<Curve3>) -> Result<Curve3, String> {
     if cs.is_empty() {
@@ -986,9 +1058,49 @@ impl Ctx<'_> {
                 Geo::Curve(join_curves(cs)?)
             }
             SurfExtract { face, .. } => Geo::Surface(self.face_of_bodies(*face)?),
-            SurfOffset { surface, dist: dd } => {
+            SurfOffset { surface, dist: dd, both, join } => {
                 let sh = self.surface_shape(surface, d)?;
-                Geo::Surface(sh.offset_surface(e(dd, "distância")?).map_err(|x| x.0)?)
+                let j = match join {
+                    OffsetJoin::Automatico => 0,
+                    OffsetJoin::Arredondado => 1,
+                    OffsetJoin::Plano => 2,
+                };
+                let v = e(dd, "distância")?;
+                let one = sh.offset_surface_join(v, j).map_err(|x| x.0)?;
+                if *both {
+                    Geo::Surface(one.compound(&sh.offset_surface_join(-v, j).map_err(|x| x.0)?))
+                } else {
+                    Geo::Surface(one)
+                }
+            }
+            SurfConnect { a, b, cont, tension } => {
+                let (sa, sb) = (self.cut_shape(a, d)?, self.cut_shape(b, d)?);
+                let ea = facing_edge(&sa, &sb)?;
+                let eb = facing_edge(&sb, &sa)?;
+                Geo::Surface(self.blend(&CurveRef::Edge(ea), Some(a), &CurveRef::Edge(eb), Some(b), *cont, e(tension, "tensão")?, d)?)
+            }
+            SurfSweepX { kind, spine, solution, smooth, sections } => {
+                let n = e(sections, "seções")?.round().clamp(4., 200.) as usize;
+                Geo::Surface(self.sweep_x(kind, spine.as_ref(), *solution, *smooth, n, d, &|s: &String, w: &str| e(s, w))?)
+            }
+            SurfFillet { a, b, flip_a, flip_b, radius, radius2 } => {
+                let (sa, sb) = (self.cut_shape(a, d)?, self.cut_shape(b, d)?);
+                let cut = sa.section(&sb).map_err(|x| x.0)?;
+                let line = cut.into_iter().max_by_key(|c| c.len()).ok_or("as superfícies não se cruzam: o filete precisa da junta entre elas")?;
+                // ponto do meio da junta (pelo comprimento)
+                let mid = Curve3::poly(line.clone(), false).map(|c| c.at_ratio(0.5).0).unwrap_or(line[line.len() / 2]);
+                // cada uma é aparada pela outra prolongada (as larguras não precisam bater)
+                let pa = sa.split_side(&sb, !*flip_a, true).map_err(|x| x.0)?;
+                let pb = sb.split_side(&sa, !*flip_b, true).map_err(|x| x.0)?;
+                let joined = pa.compound(&pb).sewn(1e-3).map_err(|x| x.0)?;
+                Geo::Surface(edge_fillet(&joined, &[mid], e(radius, "raio")?, radius2.as_ref().map(|r| e(r, "raio final")).transpose()?)?)
+            }
+            SurfEdgeFillet { surface, edges, radius, radius2 } => {
+                if edges.is_empty() {
+                    return Err("clique nas arestas da superfície (entre faces juntadas) e use 'Usar seleção'".into());
+                }
+                let sh = self.cut_shape(surface, d)?;
+                Geo::Surface(edge_fillet(&sh, edges, e(radius, "raio")?, radius2.as_ref().map(|r| e(r, "raio final")).transpose()?)?)
             }
             SurfFill { curves } => {
                 let cs: Vec<Vec<V3>> = curves.iter().map(|c| self.curve(c, d).map(|c| c.pts)).collect::<Result<_, _>>()?;
@@ -1059,9 +1171,32 @@ impl Ctx<'_> {
                 Geo::Surface(acc.sewn(e(tol, "tolerância")?).map_err(|x| x.0)?)
             }
             SurfHeal { surface, tol } => Geo::Surface(self.cut_shape(surface, d)?.healed(e(tol, "tolerância")?).map_err(|x| x.0)?),
-            SurfSplit { surface, tool, flip } => {
-                let sh = self.cut_shape(surface, d)?;
-                Geo::Surface(sh.split_side(&self.cut_shape(tool, d)?, !*flip, false).map_err(|x| x.0)?)
+            SurfSplit { surface, tool, flip, more, curve } => {
+                let mut sh = self.cut_shape(surface, d)?;
+                let mut cut_any = false;
+                if let Some(c) = curve {
+                    // a curva sobre a superfície vira uma faixa na normal (corta dos dois lados)
+                    let c = self.curve(c, d)?;
+                    let mid = c.pts[c.pts.len() / 2];
+                    let (_, n) = sh.surface_near(mid).map_err(|x| x.0)?;
+                    let l = self.model_size();
+                    let pts: Vec<V3> = c.pts.iter().map(|p| sub(*p, mul(n, l))).collect();
+                    let cutter = Shape::extrude_curve(&pts, n, 2. * l).map_err(|x| x.0)?;
+                    sh = sh.split_side(&cutter, !*flip, false).map_err(|x| x.0)?;
+                    cut_any = true;
+                }
+                for t in std::iter::once(tool).chain(more.iter()) {
+                    match self.cut_shape(t, d).and_then(|x| sh.split_side(&x, !*flip, false).map_err(|x| x.0)) {
+                        Ok(x) => {
+                            sh = x;
+                            cut_any = true;
+                        }
+                        // com a curva (ou outro corte) já feito, um plano que não cruza só é ignorado
+                        Err(_) if cut_any => {}
+                        Err(e) => return Err(e),
+                    }
+                }
+                Geo::Surface(sh)
             }
             SurfTrim { a, b, flip_a, flip_b } => {
                 let (sa, sb) = (self.cut_shape(a, d)?, self.cut_shape(b, d)?);
@@ -1082,9 +1217,13 @@ impl Ctx<'_> {
             }
             SurfPart { surface, index } => Geo::Surface(self.cut_shape(surface, d)?.nth_face(*index as u32).map_err(|x| x.0)?),
             SurfUntrim { surface } => Geo::Surface(self.cut_shape(surface, d)?.untrimmed().map_err(|x| x.0)?),
-            SurfExtrapolate { surface, near, length, curvature } => {
-                let sh = self.cut_shape(surface, d)?;
-                Geo::Surface(sh.extrapolated(self.point(near, d)?, e(length, "comprimento")?, *curvature).map_err(|x| x.0)?)
+            SurfExtrapolate { surface, near, length, curvature, more } => {
+                let mut sh = self.cut_shape(surface, d)?;
+                let len = e(length, "comprimento")?;
+                for p in std::iter::once(near).chain(more.iter()) {
+                    sh = sh.extrapolated(self.point(p, d)?, len, *curvature).map_err(|x| x.0)?;
+                }
+                Geo::Surface(sh)
             }
             GeoTransform { source, xf, .. } => {
                 let x = self.xform(xf, d, &|s: &String, w: &str| e(s, w))?;
@@ -1141,8 +1280,16 @@ impl Ctx<'_> {
                 };
                 Geo::Curve(Curve3::poly(pts, c.closed)?)
             }
-            CurveParallel { curve, support, d1, d2, flip } => {
-                let c = self.curve(curve, d)?;
+            CurveParallel { curve, support, d1, d2, flip, more, both, d_other } => {
+                let c = if more.is_empty() {
+                    self.curve(curve, d)?
+                } else {
+                    let mut cs = vec![self.curve(curve, d)?];
+                    for m in more {
+                        cs.push(self.curve(m, d)?);
+                    }
+                    join_curves(cs)?
+                };
                 let (a, b) = (e(d1, "distância inicial")?, e(d2, "distância final")?);
                 let sh = match support {
                     SurfRef::Plane(_) => None,
@@ -1150,31 +1297,51 @@ impl Ctx<'_> {
                 };
                 let total = c.length().max(1e-9);
                 let n = c.pts.len();
-                let mut s_acc = 0.;
-                let mut pts = vec![];
-                for i in 0..n {
-                    if i > 0 {
-                        s_acc += dist(c.pts[i - 1], c.pts[i]);
+                // um lado: `sgn` = +1 lado escolhido, −1 o outro; `k` escala as distâncias
+                let side_pts = |sgn: f64, da: f64, db: f64| -> Result<Vec<V3>, String> {
+                    let mut s_acc = 0.;
+                    let mut pts = vec![];
+                    for i in 0..n {
+                        if i > 0 {
+                            s_acc += dist(c.pts[i - 1], c.pts[i]);
+                        }
+                        let q = c.pts[i];
+                        let t = unit(sub(c.pts[(i + 1).min(n - 1)], c.pts[i.saturating_sub(1)])).ok_or("curva degenerada")?;
+                        let nrm = match (&sh, support) {
+                            (Some(sh), _) => sh.surface_near(q).map_err(|x| x.0)?.1,
+                            (None, SurfRef::Plane(p)) => self.plane(p, d)?.normal,
+                            _ => unreachable!(),
+                        };
+                        let mut side = unit(cross(nrm, t)).ok_or("a curva é normal ao apoio")?;
+                        if *flip {
+                            side = mul(side, -1.);
+                        }
+                        let dd = da + (db - da) * s_acc / total;
+                        let mut p = add(q, mul(side, sgn * dd));
+                        if let Some(sh) = &sh {
+                            p = sh.surface_near(p).map_err(|x| x.0)?.0;
+                        }
+                        pts.push(p);
                     }
-                    let q = c.pts[i];
-                    let t = unit(sub(c.pts[(i + 1).min(n - 1)], c.pts[i.saturating_sub(1)])).ok_or("curva degenerada")?;
-                    let nrm = match (&sh, support) {
-                        (Some(sh), _) => sh.surface_near(q).map_err(|x| x.0)?.1,
-                        (None, SurfRef::Plane(p)) => self.plane(p, d)?.normal,
-                        _ => unreachable!(),
+                    Ok(pts)
+                };
+                let one = side_pts(1., a, b)?;
+                if *both {
+                    if c.closed {
+                        return Err("curva fechada: os dois lados dão duas curvas — use uma de cada lado".into());
+                    }
+                    let (oa, ob) = if d_other.trim().is_empty() { (a, b) } else {
+                        let v = e(d_other, "distância do outro lado")?;
+                        (v, v)
                     };
-                    let mut side = unit(cross(nrm, t)).ok_or("a curva é normal ao apoio")?;
-                    if *flip {
-                        side = mul(side, -1.);
-                    }
-                    let dd = a + (b - a) * s_acc / total;
-                    let mut p = add(q, mul(side, dd));
-                    if let Some(sh) = &sh {
-                        p = sh.surface_near(p).map_err(|x| x.0)?.0;
-                    }
-                    pts.push(p);
+                    let mut other = side_pts(-1., oa, ob)?;
+                    other.reverse();
+                    let mut pts = one;
+                    pts.extend(other);
+                    Geo::Curve(Curve3::poly(pts, true)?)
+                } else {
+                    Geo::Curve(Curve3::poly(one, c.closed)?)
                 }
-                Geo::Curve(Curve3::poly(pts, c.closed)?)
             }
             CurveBoundary { surface, which } => {
                 let cs = self.cut_shape(surface, d)?.boundary().map_err(|x| x.0)?;
@@ -1536,6 +1703,182 @@ impl Ctx<'_> {
         }
         let (r2, out2) = r1.boolean_tagged(&add, Bool::Fuse, &tags_for(&own1)).map_err(k)?;
         Ok((r2, remap(&own1, &out2, fid)))
+    }
+
+    /// Varredura avançada: seções calculadas em planos normais à spine e unidas por multi-seções.
+    #[allow(clippy::too_many_arguments)]
+    fn sweep_x(&self, kind: &SweepKind, spine: Option<&CurveRef>, solution: usize, smooth: bool, n: usize, d: u32, e: &dyn Fn(&String, &str) -> Result<f64, String>) -> Result<Shape, String> {
+        use geo3d::*;
+        let gs: Vec<Curve3> = match kind {
+            SweepKind::Explicit { guide1, guide2, .. } => std::iter::once(guide1).chain(guide2.as_ref()).map(|c| self.curve(c, d)).collect::<Result<_, _>>()?,
+            k => k.guides().into_iter().map(|c| self.curve(c, d)).collect::<Result<_, _>>()?,
+        };
+        let mut sp = match spine {
+            Some(s) => self.curve(s, d)?,
+            None => gs[0].clone(),
+        };
+        if smooth {
+            let pts = resample(&sp, 10);
+            sp = spline(&pts, false)?;
+        }
+        let o: Vec<V3> = resample(&sp, n);
+        let n = o.len();
+        if n < 2 {
+            return Err("a spine é curta demais".into());
+        }
+        let tan = |i: usize| unit(sub(o[(i + 1).min(n - 1)], o[i.saturating_sub(1)])).unwrap_or([0., 0., 1.]);
+        // ponto da guia no plano da seção (o cruzamento mais perto da spine)
+        let on_plane = |c: &Curve3, p: V3, t: V3| -> V3 {
+            let mut best: Option<(f64, V3)> = None;
+            for w in c.pts.windows(2) {
+                let (a, b) = (dot(sub(w[0], p), t), dot(sub(w[1], p), t));
+                if (a <= 0. && b >= 0.) || (a >= 0. && b <= 0.) {
+                    let q = if (a - b).abs() < 1e-15 { w[0] } else { lerp(w[0], w[1], a / (a - b)) };
+                    let dd = dist(q, p);
+                    if best.is_none_or(|x| dd < x.0) {
+                        best = Some((dd, q));
+                    }
+                }
+            }
+            best.map(|x| x.1).unwrap_or_else(|| c.nearest(p).1)
+        };
+        // referencial que minimiza a rotação (dupla reflexão)
+        let t0 = tan(0);
+        let g0 = on_plane(&gs[0], o[0], t0);
+        let mut r = unit(sub(sub(g0, o[0]), mul(t0, dot(sub(g0, o[0]), t0)))).unwrap_or_else(|| any_perp(t0));
+        let mut frames = vec![(o[0], r, cross(t0, r), t0)];
+        for i in 1..n {
+            let (ti_1, ri_1) = (frames[i - 1].3, frames[i - 1].1);
+            let v1 = sub(o[i], o[i - 1]);
+            let c1 = dot(v1, v1).max(1e-30);
+            let rl = sub(ri_1, mul(v1, 2. / c1 * dot(v1, ri_1)));
+            let tl = sub(ti_1, mul(v1, 2. / c1 * dot(v1, ti_1)));
+            let ti = tan(i);
+            let v2 = sub(ti, tl);
+            let c2 = dot(v2, v2);
+            r = if c2 < 1e-30 { rl } else { sub(rl, mul(v2, 2. / c2 * dot(v2, rl))) };
+            r = unit(r).unwrap_or(rl);
+            frames.push((o[i], r, cross(ti, r), ti));
+        }
+        let g = |k: usize, i: usize| on_plane(&gs[k], o[i], frames[i].3);
+        let arc_n = 24;
+        let mut sections: Vec<Vec<V3>> = vec![];
+        for i in 0..n {
+            let (oi, xi, yi, ti) = frames[i];
+            let sec: Vec<V3> = match kind {
+                SweepKind::Explicit { profile, guide2, .. } => {
+                    let prof = self.curve(profile, d)?;
+                    let (o0, x0, y0, z0) = frames[0];
+                    let loc = |p: V3| {
+                        let q = sub(p, o0);
+                        (dot(q, x0), dot(q, y0), dot(q, z0))
+                    };
+                    let loc_i = |p: V3| {
+                        let q = sub(p, oi);
+                        (dot(q, xi), dot(q, yi))
+                    };
+                    // semelhança no plano da seção que leva as guias do início às de agora
+                    let (z1, w1) = (loc(g(0, 0)), loc_i(g(0, i)));
+                    let (a, b) = match guide2 {
+                        Some(_) => {
+                            let (z2, w2) = (loc(g(1, 0)), loc_i(g(1, i)));
+                            let dz = (z2.0 - z1.0, z2.1 - z1.1);
+                            let dw = (w2.0 - w1.0, w2.1 - w1.1);
+                            let den = dz.0 * dz.0 + dz.1 * dz.1;
+                            if den < 1e-18 {
+                                return Err("as duas guias se tocam no início da varredura".into());
+                            }
+                            let a = ((dw.0 * dz.0 + dw.1 * dz.1) / den, (dw.1 * dz.0 - dw.0 * dz.1) / den);
+                            let b = (w1.0 - (a.0 * z1.0 - a.1 * z1.1), w1.1 - (a.0 * z1.1 + a.1 * z1.0));
+                            (a, b)
+                        }
+                        None => {
+                            let m = z1.0 * z1.0 + z1.1 * z1.1;
+                            if m < 1e-12 {
+                                ((1., 0.), (w1.0 - z1.0, w1.1 - z1.1))
+                            } else {
+                                let a = ((w1.0 * z1.0 + w1.1 * z1.1) / m, (w1.1 * z1.0 - w1.0 * z1.1) / m);
+                                (a, (0., 0.))
+                            }
+                        }
+                    };
+                    resample(&prof, arc_n.max(prof.pts.len().min(64)))
+                        .into_iter()
+                        .map(|p| {
+                            let (u, v, w) = loc(p);
+                            let (u2, v2) = (a.0 * u - a.1 * v + b.0, a.0 * v + a.1 * u + b.1);
+                            add(add(add(oi, mul(xi, u2)), mul(yi, v2)), mul(ti, w))
+                        })
+                        .collect()
+                }
+                SweepKind::Linear { .. } => vec![g(0, i), g(1, i)],
+                SweepKind::LinearDir { length, angle, .. } => {
+                    let (l, a) = (e(length, "comprimento")?, e(angle, "ângulo")?.to_radians());
+                    let p = g(0, i);
+                    let dir = add(mul(xi, a.cos()), mul(yi, a.sin()));
+                    vec![p, add(p, mul(dir, l))]
+                }
+                SweepKind::Circle3 { .. } => {
+                    let c = circle3_curve(g(0, i), g(1, i), g(2, i), solution % 2 == 1)?;
+                    resample(&c, arc_n)
+                }
+                SweepKind::CircleRadius { radius, .. } => {
+                    let rr = e(radius, "raio")?;
+                    let (p, q) = (g(0, i), g(1, i));
+                    let m = lerp(p, q, 0.5);
+                    let h = dist(p, q) / 2.;
+                    if rr < h - 1e-9 {
+                        return Err(format!("raio {rr} menor que a metade da distância entre as guias ({h:.3}) numa seção"));
+                    }
+                    let s = (rr * rr - h * h).max(0.).sqrt();
+                    let perp = unit(cross(ti, sub(q, p))).ok_or("as guias se tocam numa seção")?;
+                    let side = if solution % 2 == 0 { 1. } else { -1. };
+                    let ctr = add(m, mul(perp, s * side));
+                    let (u, v) = (unit(sub(p, ctr)).unwrap(), unit(sub(q, ctr)).unwrap());
+                    let w = unit(cross(cross(u, v), u)).unwrap_or(perp);
+                    let mut ang = dot(u, v).clamp(-1., 1.).acos();
+                    if solution >= 2 {
+                        ang -= std::f64::consts::TAU;
+                    }
+                    (0..arc_n).map(|k| {
+                        let t = ang * k as f64 / (arc_n - 1) as f64;
+                        add(ctr, add(mul(u, rr * t.cos()), mul(w, rr * t.sin())))
+                    })
+                    .collect()
+                }
+                SweepKind::CircleCenter { radius, .. } => {
+                    let rr = e(radius, "raio")?;
+                    let c = g(0, i);
+                    let mut v: Vec<V3> = (0..arc_n).map(|k| {
+                        let t = std::f64::consts::TAU * k as f64 / arc_n as f64;
+                        add(c, add(mul(xi, rr * t.cos()), mul(yi, rr * t.sin())))
+                    })
+                    .collect();
+                    v.push(v[0]);
+                    v
+                }
+                SweepKind::Conic { height, rho, .. } => {
+                    let (hh, rho) = (e(height, "altura do ápice")?, e(rho, "ρ")?);
+                    if !(0.01..=0.99).contains(&rho) {
+                        return Err("ρ precisa estar entre 0 e 1 (0,5 = parábola)".into());
+                    }
+                    let (p0, p2) = (g(0, i), g(1, i));
+                    let perp = unit(cross(ti, sub(p2, p0))).ok_or("as guias se tocam numa seção")?;
+                    let side = if solution % 2 == 0 { 1. } else { -1. };
+                    let p1 = add(lerp(p0, p2, 0.5), mul(perp, hh * side));
+                    let wgt = rho / (1. - rho);
+                    (0..arc_n).map(|k| {
+                        let t = k as f64 / (arc_n - 1) as f64;
+                        let (b0, b1, b2) = ((1. - t) * (1. - t), 2. * t * (1. - t) * wgt, t * t);
+                        let den = b0 + b1 + b2;
+                        [0, 1, 2].map(|j| (b0 * p0[j] + b1 * p1[j] + b2 * p2[j]) / den)
+                    })
+                    .collect()
+                }
+            };
+            sections.push(sec);
+        }
+        Shape::loft_surface(&sections, false, false, None).map_err(|x| format!("varredura: {}", x.0))
     }
 
     /// Membro (de comandos estruturais anteriores) com a ponta mais perto de `at`.
@@ -3576,6 +3919,65 @@ mod tests {
     }
 
     #[test]
+    fn superficies_varredura_avancada_offset_filete_conectar_dividir() {
+        if !scc_kernel::AVAILABLE {
+            return;
+        }
+        let s = |x: &str| x.to_string();
+        let area = |r: &RecomputeResult, id: Id| -> f64 {
+            assert!(matches!(r.status[&id], Status::Ok | Status::Warning(_)), "{:?}", r.status[&id]);
+            let m = &r.surfaces.iter().find(|v| v.id == id).expect("superfície").mesh;
+            let p = |i: u32| [m.positions[i as usize * 3] as f64, m.positions[i as usize * 3 + 1] as f64, m.positions[i as usize * 3 + 2] as f64];
+            m.indices.chunks_exact(3).map(|t| geo3d::norm(scc_kernel::cross(geo3d::sub(p(t[1]), p(t[0])), geo3d::sub(p(t[2]), p(t[0])))) / 2.).sum()
+        };
+        let line = |d: &mut Document, a: [f64; 3], b: [f64; 3]| CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: s("0"), end: s("0") }));
+        let mut d = Document::new("sup");
+        let g1 = line(&mut d, [0., 0., 0.], [0., 0., 100.]);
+        let g2 = line(&mut d, [20., 0., 0.], [20., 0., 100.]);
+        let g3 = line(&mut d, [30., 0., 0.], [50., 0., 100.]);
+        let sw = |kind: SweepKind, sol: usize| RefKind::SurfSweepX { kind, spine: None, solution: sol, smooth: false, sections: s("12") };
+        let lin = d.add_geometry(sw(SweepKind::Linear { guide1: g1.clone(), guide2: g2.clone() }, 0));
+        let half = d.add_geometry(sw(SweepKind::CircleRadius { guide1: g1.clone(), guide2: g2.clone(), radius: s("10") }, 0));
+        let conic = d.add_geometry(sw(SweepKind::Conic { guide1: g1.clone(), guide2: g2.clone(), height: s("8"), rho: s("0.5") }, 1));
+        // perfil explícito entre g1 e g3 (que se afasta): a seção acompanha e estica
+        let prof = line(&mut d, [0., 0., 0.], [30., 0., 0.]);
+        let expl = d.add_geometry(sw(SweepKind::Explicit { profile: prof, guide1: g1.clone(), guide2: Some(g3) }, 0));
+        let r = recompute(&d);
+        let near = |a: f64, b: f64, tol: f64| (a - b).abs() <= tol * b;
+        assert!(near(area(&r, lin), 2000., 0.01), "linear {}", area(&r, lin));
+        assert!(near(area(&r, half), std::f64::consts::PI * 10. * 100., 0.02), "meio cilindro {}", area(&r, half));
+        assert!(area(&r, conic) > 2000., "cônica {}", area(&r, conic));
+        assert!(near(area(&r, expl), 4000., 0.02), "explícito com 2 guias (trapézio 30→50) {}", area(&r, expl));
+        // deslocada dos dois lados = duas cópias; filete entre duas superfícies que se cruzam
+        let c_base = line(&mut d, [0., -50., 0.], [100., -50., 0.]);
+
+        let base = d.add_geometry(RefKind::SurfExtrude { curve: c_base, dir: AxisRef::Origin(OriginAxis::Y), length: s("60"), length2: s("0") });
+        let c_wall = line(&mut d, [50., -60., -20.], [50., 20., -20.]);
+
+        let wall = d.add_geometry(RefKind::SurfExtrude { curve: c_wall, dir: AxisRef::Origin(OriginAxis::Z), length: s("50"), length2: s("0") });
+        let off = d.add_geometry(RefKind::SurfOffset { surface: SurfRef::Ref(base), dist: s("5"), both: true, join: OffsetJoin::Automatico });
+        let fil = d.add_geometry(RefKind::SurfFillet { a: SurfRef::Ref(base), b: SurfRef::Ref(wall), flip_a: false, flip_b: false, radius: s("5"), radius2: None });
+        // conectar duas faixas coplanares separadas (bordas que se olham ficam ligadas)
+        let c_s1 = line(&mut d, [0., 200., 0.], [40., 200., 0.]);
+
+        let s1 = d.add_geometry(RefKind::SurfExtrude { curve: c_s1, dir: AxisRef::Origin(OriginAxis::Y), length: s("20"), length2: s("0") });
+        let c_s2 = line(&mut d, [0., 250., 0.], [40., 250., 0.]);
+
+        let s2 = d.add_geometry(RefKind::SurfExtrude { curve: c_s2, dir: AxisRef::Origin(OriginAxis::Y), length: s("20"), length2: s("0") });
+        let con = d.add_geometry(RefKind::SurfConnect { a: SurfRef::Ref(s1), b: SurfRef::Ref(s2), cont: Continuity::G0, tension: s("1") });
+        // dividir pela curva que corta a faixa ao meio
+        let cutc = line(&mut d, [20., 190., 0.], [20., 230., 0.]);
+        let spl = d.add_geometry(RefKind::SurfSplit { surface: SurfRef::Ref(s1), tool: SurfRef::Plane(PlaneRef::Origin(OriginPlane::YZ)), flip: true, more: vec![], curve: Some(cutc) });
+        let r = recompute(&d);
+        assert!(near(area(&r, off), 2. * 6000., 0.02), "offset dos dois lados {}", area(&r, off));
+        let af = area(&r, fil);
+        assert!(af > 1000. && af < 6000. + 4000., "filete entre superfícies {af}");
+        assert!(near(area(&r, con), 40. * 30., 0.05), "conexão entre as bordas que se olham {}", area(&r, con));
+        let asp = area(&r, spl);
+        assert!(asp > 300. && asp < 700., "dividida pela curva: metade de 800 = {asp}");
+    }
+
+    #[test]
     fn furo_projeta_centros_na_superficie() {
         if !scc_kernel::AVAILABLE {
             return;
@@ -4058,7 +4460,7 @@ mod tests {
         let s = |x: &str| x.to_string();
         let mut d = Document::new("w");
         let l = d.add_geometry(RefKind::LinePoints { a: PointRef::Origin, b: PointRef::Fixed([30., 0., 0.]), start: s("0"), end: s("0") });
-        let p = d.add_geometry(RefKind::CurveParallel { curve: CurveRef::Ref(l), support: SurfRef::Plane(PlaneRef::Origin(OriginPlane::XY)), d1: s("5"), d2: s("5"), flip: false });
+        let p = d.add_geometry(RefKind::CurveParallel { curve: CurveRef::Ref(l), support: SurfRef::Plane(PlaneRef::Origin(OriginPlane::XY)), d1: s("5"), d2: s("5"), flip: false, more: vec![], both: false, d_other: String::new() });
         let alto = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "10");
         let pr = d.add_geometry(RefKind::CurveProjectSurf { curve: CurveRef::Ref(l), surface: SurfRef::Plane(PlaneRef::Datum(alto)), dir: Some(AxisRef::Fixed { origin: [0.; 3], dir: [0., 1., 1.] }) });
         let r = recompute(&d);
@@ -4096,7 +4498,7 @@ mod tests {
         let s = |x: &str| x.to_string();
         let mut d = Document::new("s");
         let sph = d.add_geometry(RefKind::SurfSphere { center: PointRef::Origin, radius: s("10") });
-        let half = d.add_geometry(RefKind::SurfSplit { surface: SurfRef::Ref(sph), tool: xy(), flip: false });
+        let half = d.add_geometry(RefKind::SurfSplit { surface: SurfRef::Ref(sph), tool: xy(), flip: false, more: vec![], curve: None });
         let circ = d.add_geometry(RefKind::CurveIntersect { a: SurfRef::Ref(sph), b: xy(), which: 0 });
         let cyl = d.add_geometry(RefKind::SurfCylinder { point: PointRef::Origin, dir: AxisRef::Origin(OriginAxis::Z), radius: s("10"), start: s("0"), end: s("20") });
         let bnd = d.add_geometry(RefKind::CurveBoundary { surface: SurfRef::Ref(cyl), which: 0 });
@@ -4353,7 +4755,7 @@ mod tests {
         }
         // superfícies: extrusão de curva, preenchimento, deslocamento
         let se = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(sp), dir: AxisRef::Origin(OriginAxis::Z), length: s_("10"), length2: "0".into() });
-        let so = d.add_geometry(RefKind::SurfOffset { surface: SurfRef::Ref(se), dist: s_("2") });
+        let so = d.add_geometry(RefKind::SurfOffset { surface: SurfRef::Ref(se), dist: s_("2"), both: false, join: OffsetJoin::Automatico });
         let sq = d.add_geometry(RefKind::Polyline { points: vec![PointRef::Origin, PointRef::Fixed([10., 0., 0.]), PointRef::Fixed([10., 10., 3.]), PointRef::Fixed([0., 10., 0.])], closed: true });
         let sf = d.add_geometry(RefKind::SurfFill { curves: vec![CurveRef::Ref(sq)] });
         let pp = d.add_geometry(RefKind::PointProject { point: PointRef::Fixed([5., 5., 20.]), surface: SurfRef::Ref(sf) });

@@ -57,6 +57,7 @@ std::unique_ptr<Shape> thread_tool_ext(double ox, double oy, double oz, double d
 
 std::unique_ptr<Shape> face_copy(const Shape& s, double px, double py, double pz);
 std::unique_ptr<Shape> offset_surface(const Shape& s, double d);
+std::unique_ptr<Shape> offset_surface_j(const Shape& s, double d, uint8_t join);
 std::unique_ptr<Shape> fill_surface(rust::Slice<const double> flat, rust::Slice<const uint32_t> ends);
 std::unique_ptr<Shape> extrude_curve(rust::Slice<const double> pts, double dx, double dy, double dz, double len);
 std::unique_ptr<Shape> revolve_curve(rust::Slice<const double> pts, double ox, double oy, double oz, double dx, double dy, double dz, double angle_deg);

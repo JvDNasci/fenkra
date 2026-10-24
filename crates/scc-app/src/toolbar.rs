@@ -407,8 +407,9 @@ pub fn entries(g: Group) -> Vec<Entry> {
             vec![
                 Family("sup_basica", vec![g(GeoKind::SurfExtrude), g(GeoKind::SurfRevolve), g(GeoKind::SurfSphere), g(GeoKind::SurfCylinder)]),
                 One(g(GeoKind::SurfOffset)),
-                Family("sup_varrer", vec![g(GeoKind::SurfSweep), g(GeoKind::SurfTube)]),
-                Family("sup_multi", vec![g(GeoKind::SurfLoft), g(GeoKind::SurfBlend)]),
+                Family("sup_varrer", vec![g(GeoKind::SurfSweep), g(GeoKind::SurfSweepX), g(GeoKind::SurfTube)]),
+                Family("sup_multi", vec![g(GeoKind::SurfLoft), g(GeoKind::SurfBlend), g(GeoKind::SurfConnect)]),
+                Family("sup_filete", vec![g(GeoKind::SurfFilletSS), g(GeoKind::SurfEdgeFillet)]),
                 One(g(GeoKind::SurfFill)),
             ]
         }

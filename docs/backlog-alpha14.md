@@ -30,14 +30,14 @@ Status: [ ] a fazer · [~] parcial · [x] feito
 - [x] B8 Extrair unificado (simples = vários elementos; múltiplo = um só), propagação ponto/tangente/curvatura, publicável
 
 ## C. Superfícies
-- [ ] C1 Conectar superfícies (blend superfície–superfície)
-- [ ] C2 Varredura: perfil explícito (1/2 guias, spine), linear, circular e cônica implícitas, suavização, soluções
-- [ ] C3 Superfície nova consome (oculta) as entradas
-- [ ] C4 Filetes de superfície (entre superfícies, aresta, variável)
-- [ ] C5 Offset: dois lados, ligação dos elementos (arredondado/suave/plano/automático)
-- [ ] C6 Extrapolar vários elementos (arestas) de uma vez
-- [ ] C7 Curva paralela: offset por lado, conjunto de elementos
-- [ ] C8 Dividir com planos, superfícies e wireframe
+- [x] C1 Conectar superfícies (blend superfície–superfície)
+- [x] C2 Varredura: perfil explícito (1/2 guias, spine), linear, circular e cônica implícitas, suavização, soluções
+- [x] C3 Superfície nova consome (oculta) as entradas
+- [x] C4 Filetes de superfície (entre superfícies, aresta, variável)
+- [x] C5 Offset: dois lados, ligação dos elementos (arredondado/suave/plano/automático)
+- [x] C6 Extrapolar vários elementos (arestas) de uma vez
+- [x] C7 Curva paralela: offset por lado, conjunto de elementos
+- [x] C8 Dividir com planos, superfícies e wireframe
 
 ## D. Chapa metálica
 - [ ] D1 Parâmetros: material, método de compensação, tabelas (raio mínimo, K, joggle) — tabela de materiais pesquisada

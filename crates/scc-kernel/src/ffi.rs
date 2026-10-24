@@ -115,6 +115,7 @@ pub mod bridge {
         /// Cópia da face mais próxima do ponto.
         fn face_copy(s: &Shape, px: f64, py: f64, pz: f64) -> Result<UniquePtr<Shape>>;
         fn offset_surface(s: &Shape, d: f64) -> Result<UniquePtr<Shape>>;
+        fn offset_surface_j(s: &Shape, d: f64, join: u8) -> Result<UniquePtr<Shape>>;
         /// Superfície que preenche o contorno das curvas (polilinhas; `ends` = fim de cada uma, em pontos).
         fn fill_surface(flat: &[f64], ends: &[u32]) -> Result<UniquePtr<Shape>>;
         fn extrude_curve(pts: &[f64], dx: f64, dy: f64, dz: f64, len: f64) -> Result<UniquePtr<Shape>>;

@@ -145,7 +145,7 @@ fn handle_for(app: &App, id: Id) -> Option<Linear> {
             let base = point_of(r, center)?;
             Some(Linear { base, dir: Vec3::X, k: 1., expr: radius.clone(), label: "Raio" })
         }
-        RefKind::SurfOffset { surface, dist } => {
+        RefKind::SurfOffset { surface, dist, .. } => {
             let me = r.surfaces.iter().find(|s| s.id == id).map(|s| mesh_center(&s.mesh))?;
             let src = match surface {
                 SurfRef::Ref(s) => r.surfaces.iter().find(|x| x.id == *s).map(|x| mesh_center(&x.mesh))?,

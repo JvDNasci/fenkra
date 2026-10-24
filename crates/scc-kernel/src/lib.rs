@@ -397,6 +397,10 @@ mod imp {
         pub fn offset_surface(&self, d: f64) -> KResult<Shape> {
             b::offset_surface(&self.0, d).map(Shape).map_err(err)
         }
+        /// Deslocada com a ligação escolhida (0 automático, 1 arredondado, 2 cantos vivos).
+        pub fn offset_surface_join(&self, d: f64, join: u8) -> KResult<Shape> {
+            b::offset_surface_j(&self.0, d, join).map(Shape).map_err(err)
+        }
         pub fn fill_surface(curves: &[Vec<[f64; 3]>]) -> KResult<Shape> {
             let mut flat = vec![];
             let mut ends = vec![];
@@ -747,6 +751,9 @@ mod imp {
             no()
         }
         pub fn offset_surface(&self, _: f64) -> KResult<Shape> {
+            no()
+        }
+        pub fn offset_surface_join(&self, _: f64, _: u8) -> KResult<Shape> {
             no()
         }
         pub fn fill_surface(_: &[Vec<[f64; 3]>]) -> KResult<Shape> {

@@ -35,6 +35,22 @@ std::unique_ptr<Shape> offset_surface(const Shape& s, double d) {
     });
 }
 
+// join: 0 automático (arco; se falhar, interseção), 1 arco, 2 interseção (cantos vivos)
+std::unique_ptr<Shape> offset_surface_j(const Shape& s, double d, uint8_t join) {
+    return guard("superfície deslocada", [&] {
+        auto run = [&](GeomAbs_JoinType j) -> TopoDS_Shape {
+            BRepOffsetAPI_MakeOffsetShape mk;
+            mk.PerformByJoin(s.s, d, 1e-4, BRepOffset_Skin, j == GeomAbs_Intersection, Standard_False, j);
+            if (!mk.IsDone()) return TopoDS_Shape();
+            return mk.Shape();
+        };
+        TopoDS_Shape r = run(join == 2 ? GeomAbs_Intersection : GeomAbs_Arc);
+        if (r.IsNull() && join == 0) r = run(GeomAbs_Intersection);
+        if (r.IsNull()) throw std::runtime_error("não foi possível deslocar a superfície com essa ligação");
+        return wrap(r);
+    });
+}
+
 std::unique_ptr<Shape> fill_surface(rust::Slice<const double> flat, rust::Slice<const uint32_t> ends) {
     return guard("preenchimento", [&] {
         BRepOffsetAPI_MakeFilling mk;

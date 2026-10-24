@@ -240,6 +240,88 @@ pub enum SweepProfile {
     Circle(String),
 }
 
+/// Ligação dos elementos de uma superfície deslocada.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum OffsetJoin {
+    /// tenta arredondado; se falhar, interseção
+    #[default]
+    Automatico,
+    Arredondado,
+    /// prolonga até se cruzarem (cantos vivos)
+    Plano,
+}
+
+/// Tipos da varredura avançada.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub enum SweepKind {
+    /// perfil desenhado acompanhando a guia 1 (e a guia 2, que define giro e escala)
+    Explicit { profile: CurveRef, guide1: CurveRef, guide2: Option<CurveRef> },
+    /// reta entre duas guias
+    Linear { guide1: CurveRef, guide2: CurveRef },
+    /// reta saindo da guia, com comprimento e ângulo no plano da seção
+    LinearDir { guide1: CurveRef, length: String, angle: String },
+    /// arco pelas três guias
+    Circle3 { guide1: CurveRef, guide2: CurveRef, guide3: CurveRef },
+    /// arco de raio dado pelas duas guias (duas soluções de centro, arco curto ou longo)
+    CircleRadius { guide1: CurveRef, guide2: CurveRef, radius: String },
+    /// círculo de raio dado em volta da curva de centro (tubo)
+    CircleCenter { center: CurveRef, radius: String },
+    /// cônica entre duas guias: altura do ápice e ρ (0 < ρ < 1; 0,5 = parábola)
+    Conic { guide1: CurveRef, guide2: CurveRef, height: String, rho: String },
+}
+
+impl SweepKind {
+    pub fn guides(&self) -> Vec<&CurveRef> {
+        match self {
+            SweepKind::Explicit { profile, guide1, guide2 } => [Some(profile), Some(guide1), guide2.as_ref()].into_iter().flatten().collect(),
+            SweepKind::Linear { guide1, guide2 } | SweepKind::CircleRadius { guide1, guide2, .. } | SweepKind::Conic { guide1, guide2, .. } => vec![guide1, guide2],
+            SweepKind::LinearDir { guide1, .. } => vec![guide1],
+            SweepKind::Circle3 { guide1, guide2, guide3 } => vec![guide1, guide2, guide3],
+            SweepKind::CircleCenter { center, .. } => vec![center],
+        }
+    }
+    fn walk(&mut self, ids: &mut dyn FnMut(&mut Id), exprs: &mut dyn FnMut(&mut String)) {
+        match self {
+            SweepKind::Explicit { profile, guide1, guide2 } => {
+                profile.walk(ids);
+                guide1.walk(ids);
+                if let Some(g) = guide2 {
+                    g.walk(ids)
+                }
+            }
+            SweepKind::Linear { guide1, guide2 } => {
+                guide1.walk(ids);
+                guide2.walk(ids);
+            }
+            SweepKind::LinearDir { guide1, length, angle } => {
+                guide1.walk(ids);
+                exprs(length);
+                exprs(angle);
+            }
+            SweepKind::Circle3 { guide1, guide2, guide3 } => {
+                guide1.walk(ids);
+                guide2.walk(ids);
+                guide3.walk(ids);
+            }
+            SweepKind::CircleRadius { guide1, guide2, radius } => {
+                guide1.walk(ids);
+                guide2.walk(ids);
+                exprs(radius);
+            }
+            SweepKind::CircleCenter { center, radius } => {
+                center.walk(ids);
+                exprs(radius);
+            }
+            SweepKind::Conic { guide1, guide2, height, rho } => {
+                guide1.walk(ids);
+                guide2.walk(ids);
+                exprs(height);
+                exprs(rho);
+            }
+        }
+    }
+}
+
 /// Transformação de um elemento de geometria.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum GeoXform {
@@ -472,7 +554,16 @@ pub enum RefKind {
     /// Face extraída do corpo (ponto clicado).
     SurfExtract { face: [f64; 3], owner: Option<Id> },
     /// Superfície deslocada.
-    SurfOffset { surface: SurfRef, dist: String },
+    SurfOffset {
+        surface: SurfRef,
+        dist: String,
+        /// dos dois lados (uma de cada lado, juntas)
+        #[serde(default)]
+        both: bool,
+        /// ligação entre os elementos deslocados
+        #[serde(default)]
+        join: OffsetJoin,
+    },
     /// Preenchimento de um contorno de curvas.
     SurfFill { curves: Vec<CurveRef> },
     /// Curva extrudada ao longo de uma direção.
@@ -503,7 +594,17 @@ pub enum RefKind {
     /// Curar: fecha frestas até a tolerância e une faces do mesmo suporte.
     SurfHeal { surface: SurfRef, tol: String },
     /// Dividir uma superfície por outra (ou plano) e ficar com um lado.
-    SurfSplit { surface: SurfRef, tool: SurfRef, flip: bool },
+    SurfSplit {
+        surface: SurfRef,
+        tool: SurfRef,
+        flip: bool,
+        /// mais elementos de corte (planos, superfícies), aplicados em seguida
+        #[serde(default)]
+        more: Vec<SurfRef>,
+        /// corte por uma curva (wireframe) sobre a superfície
+        #[serde(default)]
+        curve: Option<CurveRef>,
+    },
     /// Aparar duas superfícies uma pela outra e juntar os lados escolhidos.
     SurfTrim { a: SurfRef, b: SurfRef, flip_a: bool, flip_b: bool },
     /// Extrair várias faces de uma vez (multi-extração).
@@ -520,7 +621,31 @@ pub enum RefKind {
         /// mantém a curvatura (mesma superfície) em vez de prolongar tangente
         #[serde(default)]
         curvature: bool,
+        /// mais bordas para prolongar de uma vez (ponto perto de cada uma)
+        #[serde(default)]
+        more: Vec<PointRef>,
     },
+    /// Conectar duas superfícies pelas bordas que se olham (concordância automática).
+    SurfConnect { a: SurfRef, b: SurfRef, cont: Continuity, tension: String },
+    /// Varredura avançada: perfil explícito com 1/2 guias, linear, circular ou cônica.
+    SurfSweepX {
+        kind: SweepKind,
+        /// spine (direção dos planos das seções); `None` = a primeira guia
+        #[serde(default)]
+        spine: Option<CurveRef>,
+        /// solução escolhida quando há mais de uma (0, 1, 2…)
+        #[serde(default)]
+        solution: usize,
+        /// suaviza a spine antes de varrer
+        #[serde(default)]
+        smooth: bool,
+        /// número de seções
+        sections: String,
+    },
+    /// Filete entre duas superfícies: apara uma pela outra (lados escolhidos) e arredonda a junta.
+    SurfFillet { a: SurfRef, b: SurfRef, flip_a: bool, flip_b: bool, radius: String, #[serde(default)] radius2: Option<String> },
+    /// Filete nas arestas de uma superfície (pontos médios das arestas escolhidas).
+    SurfEdgeFillet { surface: SurfRef, edges: Vec<[f64; 3]>, radius: String, #[serde(default)] radius2: Option<String> },
     /// Translação, rotação, simetria ou escala de qualquer elemento (ponto, curva, plano, superfície).
     GeoTransform { source: Id, class: RefClass, xf: GeoXform },
     /// Curva de interseção entre duas superfícies (ou planos).
@@ -535,7 +660,22 @@ pub enum RefKind {
     },
     /// Curva paralela sobre um plano/superfície de apoio, com distância constante ou variando
     /// linearmente do início (d1) ao fim (d2).
-    CurveParallel { curve: CurveRef, support: SurfRef, d1: String, d2: String, flip: bool },
+    CurveParallel {
+        curve: CurveRef,
+        support: SurfRef,
+        d1: String,
+        d2: String,
+        flip: bool,
+        /// mais curvas: o conjunto é juntado pelas pontas e deslocado junto
+        #[serde(default)]
+        more: Vec<CurveRef>,
+        /// dos dois lados: contorno fechado em volta da curva
+        #[serde(default)]
+        both: bool,
+        /// distância do outro lado (vazio = a mesma)
+        #[serde(default)]
+        d_other: String,
+    },
     /// Contorno (borda livre) de uma superfície.
     CurveBoundary { surface: SurfRef, which: usize },
 
@@ -572,6 +712,7 @@ impl RefKind {
             SurfExtract { .. } | SurfOffset { .. } | SurfFill { .. } | SurfExtrude { .. } | SurfRevolve { .. } => RefClass::Surface,
             SurfSphere { .. } | SurfCylinder { .. } | SurfSweep { .. } | SurfLoft { .. } | SurfBlend { .. } | SurfJoin { .. } | SurfHeal { .. }
             | SurfSplit { .. } | SurfTrim { .. } | SurfMulti { .. } | SurfPart { .. } | SurfUntrim { .. } | SurfExtrapolate { .. } => RefClass::Surface,
+            SurfConnect { .. } | SurfSweepX { .. } | SurfFillet { .. } | SurfEdgeFillet { .. } => RefClass::Surface,
             GeoTransform { class, .. } => *class,
             Linked { class, .. } => *class,
             Isolated { geo } => geo.class(),
@@ -776,9 +917,36 @@ impl RefKind {
                 }
             }
             CurveCopy { curve } => curve.walk(ids),
-            SurfOffset { surface, dist } => {
+            SurfOffset { surface, dist, .. } => {
                 surface.walk(ids);
                 exprs(dist)
+            }
+            SurfConnect { a, b, tension, .. } => {
+                a.walk(ids);
+                b.walk(ids);
+                exprs(tension)
+            }
+            SurfSweepX { kind, spine, sections, .. } => {
+                kind.walk(ids, exprs);
+                if let Some(s) = spine {
+                    s.walk(ids)
+                }
+                exprs(sections)
+            }
+            SurfFillet { a, b, radius, radius2, .. } => {
+                a.walk(ids);
+                b.walk(ids);
+                exprs(radius);
+                if let Some(r) = radius2 {
+                    exprs(r)
+                }
+            }
+            SurfEdgeFillet { surface, radius, radius2, .. } => {
+                surface.walk(ids);
+                exprs(radius);
+                if let Some(r) = radius2 {
+                    exprs(r)
+                }
             }
             SurfFill { curves } | CurveJoin { curves } => {
                 for c in curves {
@@ -840,9 +1008,15 @@ impl RefKind {
                 surface.walk(ids);
                 exprs(tol)
             }
-            SurfSplit { surface, tool, .. } => {
+            SurfSplit { surface, tool, more, curve, .. } => {
                 surface.walk(ids);
-                tool.walk(ids)
+                tool.walk(ids);
+                for m in more {
+                    m.walk(ids)
+                }
+                if let Some(c) = curve {
+                    c.walk(ids)
+                }
             }
             SurfTrim { a, b, .. } | CurveIntersect { a, b, .. } => {
                 a.walk(ids);
@@ -850,9 +1024,12 @@ impl RefKind {
             }
             SurfMulti { .. } => {}
             SurfPart { surface, .. } | SurfUntrim { surface } | CurveBoundary { surface, .. } => surface.walk(ids),
-            SurfExtrapolate { surface, near, length, .. } => {
+            SurfExtrapolate { surface, near, length, more, .. } => {
                 surface.walk(ids);
                 near.walk(ids);
+                for m in more {
+                    m.walk(ids)
+                }
                 exprs(length)
             }
             GeoTransform { source, xf, .. } => {
@@ -866,8 +1043,11 @@ impl RefKind {
                     a.walk(ids)
                 }
             }
-            CurveParallel { curve, support, d1, d2, .. } => {
+            CurveParallel { curve, support, d1, d2, more, .. } => {
                 curve.walk(ids);
+                for m in more {
+                    m.walk(ids)
+                }
                 support.walk(ids);
                 exprs(d1);
                 exprs(d2)
@@ -2824,8 +3004,27 @@ impl Document {
         };
         if let Some(r) = self.reference(id) {
             use RefKind::*;
+            let cref = |c: &CurveRef| match c {
+                CurveRef::Ref(x) => Some(*x),
+                _ => None,
+            };
             return match &r.kind {
                 SurfJoin { items, .. } => items.iter().filter_map(sref).collect(),
+                SurfOffset { surface, .. } => sref(surface).into_iter().collect(),
+                SurfFill { curves } => curves.iter().filter_map(cref).collect(),
+                SurfExtrude { curve, .. } | SurfRevolve { curve, .. } => cref(curve).into_iter().collect(),
+                SurfSweep { profile, spine, .. } => {
+                    let mut v: Vec<Id> = cref(spine).into_iter().collect();
+                    if let SweepProfile::Curve(c) = profile {
+                        v.extend(cref(c));
+                    }
+                    v
+                }
+                SurfSweepX { kind, spine, .. } => kind.guides().into_iter().chain(spine.as_ref()).filter_map(cref).collect(),
+                SurfLoft { sections, guide, .. } => sections.iter().chain(guide.as_ref()).filter_map(cref).collect(),
+                SurfBlend { a, b, .. } => [cref(a), cref(b)].into_iter().flatten().collect(),
+                SurfConnect { a, b, .. } | SurfFillet { a, b, .. } => [sref(a), sref(b)].into_iter().flatten().collect(),
+                SurfEdgeFillet { surface, .. } => sref(surface).into_iter().collect(),
                 SurfHeal { surface, .. } | SurfSplit { surface, .. } | SurfUntrim { surface } | SurfExtrapolate { surface, .. } => sref(surface).into_iter().collect(),
                 SurfTrim { a, b, .. } => [sref(a), sref(b)].into_iter().flatten().collect(),
                 GeoTransform { source, .. } => vec![*source],
