@@ -324,11 +324,15 @@ pub fn entries(g: Group) -> Vec<Entry> {
             Family("pmi_anotacao", vec![
                 it("pmi_nota", "Nota", "Nota com chamada", "Texto livre preso a um ponto do modelo.", Cmd(C::Pmi(4))),
                 it("pmi_rugosidade", "Rugosidade", "Símbolo de rugosidade", "Ra e processo de fabricação na face escolhida.", Cmd(C::Pmi(5))),
-                it("pmi_solda", "Solda", "Símbolo de solda", "Tipo, medida e todo o contorno, na aresta/junta escolhida.", Cmd(C::Pmi(6))),
+                it("pmi_solda", "Solda", "Símbolo de solda ISO 2553", "Símbolo completo na junta escolhida: lado da seta/outro lado/dois lados, medida, comprimento, acabamento, todo o contorno, solda de campo e processo na cauda.", Cmd(C::Pmi(6))),
             ]),
             Family("pmi_gdt", vec![
                 it("pmi_referencia", "Referência", "Referência (datum)", "Letra de referência na face escolhida.", Cmd(C::Pmi(7))),
-                it("pmi_tolerancia", "Tolerância", "Tolerância geométrica", "Quadro ISO 1101: característica, tolerância e referências.", Cmd(C::Pmi(8))),
+                it("pmi_tolerancia", "Tolerância", "Tolerância geométrica", "Quadro ISO 1101: característica, tolerância (zona Ø, modificadores Ⓜ Ⓛ Ⓟ…), referências e quadro composto.", Cmd(C::Pmi(8))),
+            ]),
+            Family("pmi_legenda", vec![
+                it("pmi_legenda", "Legenda 3D", "Legenda (carimbo) 3D", "Quadro com os dados da peça preenchidos sozinhos: nome, código, descrição, material, massa, data… (modelo editável).", Cmd(C::Pmi(9))),
+                it("pmi_baloes", "Balões", "Balões automáticos (montagem)", "Um balão 3D por componente com o número fixo da lista de peças; refaz os balões anteriores.", Cmd(C::Pmi(10))),
             ]),
         ],
         Group::Estrutural => {

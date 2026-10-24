@@ -336,7 +336,7 @@ fn auto_balloons(app: &mut App) {
         let right = tip[0] > (lo[0] + hi[0]) / 2.;
         let pos = [if right { hi[0] + 12. } else { lo[0] - 12. }, (tip[1] + 6. * (k % 3) as f64).clamp(lo[1], hi[1] + 10.)];
         let id = st.d.alloc();
-        st.d.notes.push(Note { id, sheet: st.sheet, kind: NoteKind::Balloon, pos, leader: Some(tip), text: item, size: st.d.text_height });
+        st.d.notes.push(Note { id, sheet: st.sheet, kind: NoteKind::Balloon, pos, leader: Some(tip), text: item, size: st.d.text_height, weld: None });
         k += 1;
     }
     if k == 0 {
@@ -786,7 +786,7 @@ fn click(app: &mut App, m: V2, snap: &SnapFn, view_at: &ViewAt) {
         c::NOTE | c::CENTER => {
             let id = st.d.alloc();
             let (kind, text) = if tool == c::NOTE { (NoteKind::Text, tr("Nota").to_string()) } else { (NoteKind::CenterMark, "5".to_string()) };
-            st.d.notes.push(Note { id, sheet, kind, pos: m, leader: None, text, size: th });
+            st.d.notes.push(Note { id, sheet, kind, pos: m, leader: None, text, size: th, weld: None });
             done(st, id);
         }
         c::BALLOON | c::ROUGH | c::WELD => {
@@ -801,7 +801,7 @@ fn click(app: &mut App, m: V2, snap: &SnapFn, view_at: &ViewAt) {
                 _ => (NoteKind::Weld, "a4".to_string()),
             };
             let id = st.d.alloc();
-            st.d.notes.push(Note { id, sheet, kind, pos: st.clicks[1], leader: Some(st.clicks[0]), text, size: th });
+            st.d.notes.push(Note { id, sheet, kind, pos: st.clicks[1], leader: Some(st.clicks[0]), text, size: th, weld: None });
             done(st, id);
         }
         c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT => {
@@ -1068,6 +1068,12 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                 NoteKind::CenterMark => "Raio da marca (mm)",
             }));
             ui.text_edit_multiline(&mut n.text);
+            if n.kind == NoteKind::Weld {
+                let w = n.weld.get_or_insert(scc_desenho::DwgWeld { kind: scc_core::pmi::WeldKind::Filete, all_around: false, extra: Default::default() });
+                let mut size = n.text.clone();
+                crate::pmi_ui::weld_ui(ui, "dwg_solda", &mut w.kind, &mut size, &mut w.all_around, &mut w.extra);
+                n.text = size;
+            }
             ui.horizontal(|ui| {
                 ui.label(tr("Altura do texto"));
                 { let __r = ui.add(egui::DragValue::new(&mut n.size).range(1.0..=20.).speed(0.1)); crate::ui_ext::wheel(ui, &__r, &mut n.size); __r };

@@ -317,6 +317,18 @@ pub struct Note {
     pub text: String,
     #[serde(default = "size35")]
     pub size: f64,
+    /// símbolo de solda completo (ISO 2553); `None` = filete com a medida do texto
+    #[serde(default)]
+    pub weld: Option<DwgWeld>,
+}
+
+/// Símbolo de solda de uma nota (o texto da nota é a medida da seção).
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct DwgWeld {
+    pub kind: scc_core::pmi::WeldKind,
+    pub all_around: bool,
+    #[serde(default)]
+    pub extra: scc_core::pmi::WeldExtra,
 }
 
 fn size35() -> f64 {
@@ -652,7 +664,7 @@ mod tests {
         let (val, _) = layout::dim_value(&d.dims[0], &v, &front).unwrap();
         assert!((val - (hi[0] - lo[0])).abs() < 1e-6);
         let nid = d.alloc();
-        d.notes.push(Note { id: nid, sheet: s, kind: NoteKind::Balloon, pos: [250., 260.], leader: Some([200., 220.]), text: "1".into(), size: 3.5 });
+        d.notes.push(Note { id: nid, sheet: s, kind: NoteKind::Balloon, pos: [250., 260.], leader: Some([200., 220.]), text: "1".into(), size: 3.5, weld: None });
         let tid = d.alloc();
         d.tables.push(Table { id: tid, sheet: s, kind: TableKind::Holes, source: src.clone(), pos: [25., 120.], level: Default::default() });
         let tid2 = d.alloc();

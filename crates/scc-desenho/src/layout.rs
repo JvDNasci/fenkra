@@ -666,13 +666,22 @@ fn note(o: &mut Out, n: &Note) {
             }
         }
         NoteKind::Weld => {
-            // linha de referência com o triângulo do filete por baixo e a medida ao lado
+            // símbolo ISO 2553 (sistema A): linha de referência a partir da junção `pos`
+            use scc_core::pmi::{weld_symbol, WeldExtra, WeldKind, WeldPrim};
             let p = n.pos;
-            let len = text_width(&n.text, s) + s * 4.;
-            o.seg(p, [p[0] + len, p[1]], Style::Thin);
-            let x = p[0] + s * 1.2;
-            o.line(vec![[x, p[1]], [x, p[1] - s * 1.4], [x + s * 1.4, p[1]]], Style::Thin);
-            o.text([x + s * 1.8, p[1] - s * 1.2], n.text.clone(), s, 0., Align::Left);
+            let prims = match &n.weld {
+                Some(w) => weld_symbol(w.kind, &n.text, w.all_around, &w.extra, s),
+                None => weld_symbol(WeldKind::Filete, &n.text, false, &WeldExtra::default(), s),
+            };
+            let m = |q: [f64; 2]| [p[0] + q[0], p[1] + q[1]];
+            for pr in prims {
+                match pr {
+                    WeldPrim::Line(v) => o.line(v.into_iter().map(m).collect(), Style::Thin),
+                    WeldPrim::Dashed(v) => o.line(v.into_iter().map(m).collect(), Style::Hidden),
+                    WeldPrim::Fill(v) => o.items.push(Item { owner: o.owner, prim: Prim::Fill { pts: v.into_iter().map(m).collect() } }),
+                    WeldPrim::Text(q, t, al) => o.text(m(q), t, s, 0., if al < 0 { Align::Right } else if al == 0 { Align::Center } else { Align::Left }),
+                }
+            }
             if let Some(t) = n.leader {
                 o.seg(p, t, Style::Thin);
                 o.arrow(t, v2sub(t, p), s * 0.9);

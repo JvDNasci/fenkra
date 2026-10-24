@@ -287,11 +287,14 @@ pub struct Assembly {
     /// números de item fixos da lista de peças (por arquivo do componente)
     #[serde(default)]
     pub items: Vec<bom::ItemNo>,
+    /// capturas de vista das anotações deste nível
+    #[serde(default)]
+    pub pmi_captures: Vec<scc_core::pmi::PmiCapture>,
 }
 
 impl Assembly {
     pub fn new(name: &str) -> Self {
-        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], pmi: vec![], items: vec![] }
+        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], pmi: vec![], items: vec![], pmi_captures: vec![] }
     }
 
     pub fn alloc(&mut self) -> Id {

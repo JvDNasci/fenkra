@@ -133,7 +133,7 @@ pub struct App {
     gen_sent: u64,
     gen_done: u64,
     viewport: Option<Viewport>,
-    scene_dirty: bool,
+    pub scene_dirty: bool,
     fit_pending: bool,
     undo: Vec<Document>,
     redo: Vec<Document>,
@@ -468,7 +468,7 @@ impl App {
             let d = &mut app.open.doc;
             let mk = |d: &mut Document, kind, a: Vec<[f64; 3]>, off, text: &str| {
                 let id = d.alloc();
-                d.pmi.push(Pmi { id, name: format!("PMI {}", id.0), kind, anchors: a, offset: off, text: text.into(), tol_plus: s(""), tol_minus: s(""), visible: true, plane: None });
+                d.pmi.push(Pmi { id, name: format!("PMI {}", id.0), kind, anchors: a, offset: off, text: text.into(), tol_plus: s(""), tol_minus: s(""), visible: true, plane: None, style: Default::default(), folder: String::new() });
             };
             mk(d, PmiKind::Linear, vec![[-60., -35., 8.], [60., -35., 8.]], [0., -25., 0.], "");
             mk(d, PmiKind::Note, vec![[0., 0., 8.]], [40., 30., 30.], "Rebarbar arestas vivas");
@@ -476,8 +476,12 @@ impl App {
                 // nota deitada no plano do topo (exemplo de texto fixo num plano)
                 p.plane = Some(([0., 0., 1.], [1., 0., 0.]));
             }
-            mk(d, PmiKind::Gdt { ch: GdtChar::Planeza, tol: s("0,05"), datums: s("") }, vec![[-40., 20., 8.]], [-30., 30., 30.], "");
+            mk(d, PmiKind::Gdt { ch: GdtChar::Planeza, tol: s("0,05"), datums: s(""), extra: Default::default() }, vec![[-40., 20., 8.]], [-30., 30., 30.], "");
             mk(d, PmiKind::Roughness { ra: s("1,6"), process: s("fresado") }, vec![[30., 20., 8.]], [20., 25., 25.], "");
+            let we = WeldExtra { other: None, other_side: false, length: s("4×30 (60)"), field: true, contour: WeldContour::Plano, process: s("135") };
+            mk(d, PmiKind::Weld { kind: WeldKind::Filete, size: s("a5"), all_around: true, extra: we }, vec![[60., 35., 0.]], [30., 30., 25.], "");
+            mk(d, PmiKind::Gdt { ch: GdtChar::Posicao, tol: s("0,1"), datums: s("A B C"), extra: GdtExtra { zone_dia: true, modifier: s("Ⓜ"), second: Some((s("0,05"), s("A"))) } }, vec![[-50., -25., 8.]], [-40., -30., 25.], "");
+            mk(d, PmiKind::TitleBlock { template: TITLE_TEMPLATE.into() }, vec![[60., 35., 8.]], [50., -60., 0.], "");
             app.started = true;
         }
         // desenvolvimento: SCC_DEMO_DWG=1 abre um desenho da placa de exemplo (3 vistas, corte, detalhe, cotas, tabela)
@@ -506,7 +510,7 @@ impl App {
             d.tables.push(Table { id, sheet: sh, kind: TableKind::Holes, source: src.clone(), pos: [270., 150.], level: Default::default() });
             let id = d.alloc();
             d.notes.push(Note { id, sheet: sh, kind: NoteKind::Text, pos: [25., 25.], leader: None, text: "Quebrar cantos vivos 0,5x45°
-Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
+Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None });
             match std::env::var("SCC_DEMO_DWG").as_deref() {
                 Ok("abnt") => d.title.style = TitleStyle::Abnt,
                 Ok("ansi") => d.title.style = TitleStyle::Ansi,

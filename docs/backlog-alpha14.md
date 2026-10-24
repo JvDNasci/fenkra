@@ -77,11 +77,11 @@ Status: [ ] a fazer · [~] parcial · [x] feito
 - [ ] G10 Publicações automáticas entre peças, filtro de referências externas, instâncias, sem referência circular; modo restrição × relacional
 
 ## H. PMI / FTI
-- [ ] H1 Notas e GD&T mais personalizáveis
-- [ ] H2 Legenda (bloco de título) no 3D com campos da peça; balões automáticos no 3D
-- [ ] H3 Capturas completas: câmera, zoom, anotações, visibilidade de corpos/recursos/peças (também na montagem), separadas das anotações; pastas de anotações
-- [ ] H4 Selecionar a anotação realça o elemento referenciado
-- [ ] H5 Símbolos de solda conforme ISO 2553 (2D e 3D)
+- [x] H1 Notas e GD&T mais personalizáveis
+- [x] H2 Legenda (bloco de título) no 3D com campos da peça; balões automáticos no 3D
+- [x] H3 Capturas completas: câmera, zoom, anotações, visibilidade de corpos/recursos/peças (também na montagem), separadas das anotações; pastas de anotações
+- [x] H4 Selecionar a anotação realça o elemento referenciado
+- [x] H5 Símbolos de solda conforme ISO 2553 (2D e 3D)
 
 ## I. Listas de peças
 - [x] I1 Lista de peças/cortes por nível, dinâmica, mantendo posições pelas revisões; usada no desenho

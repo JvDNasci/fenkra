@@ -22,9 +22,10 @@ pub fn kind_of(i: u8) -> PmiKind {
         3 => PmiKind::Angle,
         4 => PmiKind::Note,
         5 => PmiKind::Roughness { ra: "1,6".into(), process: String::new() },
-        6 => PmiKind::Weld { kind: WeldKind::Filete, size: "a4".into(), all_around: false },
+        6 => PmiKind::Weld { kind: WeldKind::Filete, size: "a4".into(), all_around: false, extra: Default::default() },
         7 => PmiKind::Datum { letter: "A".into() },
-        _ => PmiKind::Gdt { ch: GdtChar::Planeza, tol: "0,05".into(), datums: String::new() },
+        9 => PmiKind::TitleBlock { template: TITLE_TEMPLATE.into() },
+        _ => PmiKind::Gdt { ch: GdtChar::Planeza, tol: "0,05".into(), datums: String::new(), extra: Default::default() },
     }
 }
 
@@ -73,7 +74,32 @@ fn anchors(app: &App, kind: &PmiKind, picks: &[Pick]) -> Option<Vec<[f64; 3]>> {
 
 /// Cria a anotação com as seleções atuais; sem seleções suficientes, espera por elas.
 pub fn command(app: &mut App, i: u8) {
+    if i == 10 {
+        auto_balloons(app);
+        return;
+    }
     let kind = kind_of(i);
+    // legenda 3D: não precisa de seleção (fica no canto do modelo)
+    if let PmiKind::TitleBlock { .. } = kind {
+        let corner = app
+            .result
+            .as_ref()
+            .and_then(|r| {
+                let mut hi: Option<[f64; 3]> = None;
+                for b in &r.bodies {
+                    for v in b.mesh.positions.chunks_exact(3) {
+                        let h = hi.get_or_insert([v[0] as f64, v[1] as f64, v[2] as f64]);
+                        for k in 0..3 {
+                            h[k] = h[k].max(v[k] as f64);
+                        }
+                    }
+                }
+                hi
+            })
+            .unwrap_or([0.; 3]);
+        create(app, kind, vec![corner]);
+        return;
+    }
     let picks = app.picks.clone();
     match anchors(app, &kind, &picks) {
         Some(a) => create(app, kind, a),
@@ -94,9 +120,10 @@ fn create(app: &mut App, kind: PmiKind, a: Vec<[f64; 3]>) {
     let name = format!("{} {n}", tr(kind.label()));
     let off = match kind {
         PmiKind::Linear | PmiKind::Angle => [0., 0., 12.],
+        PmiKind::TitleBlock { .. } => [20., 0., 20.],
         _ => [15., 0., 15.],
     };
-    list_mut(app).push(Pmi { id, name, kind, anchors: a, offset: off, text: String::new(), tol_plus: String::new(), tol_minus: String::new(), visible: true, plane: None });
+    list_mut(app).push(Pmi { id, name, kind, anchors: a, offset: off, text: String::new(), tol_plus: String::new(), tol_minus: String::new(), visible: true, plane: None, style: Default::default(), folder: String::new() });
     app.picks.clear();
     app.pmi_pending = None;
     if app.in_asm() {
@@ -106,6 +133,74 @@ fn create(app: &mut App, kind: PmiKind, a: Vec<[f64; 3]>) {
     } else {
         app.sel = Sel::Pmi(id);
     }
+}
+
+/// Balões 3D automáticos na montagem: um por componente (número de item fixo da lista de peças),
+/// presos no alto de cada componente e afastados para fora do conjunto. Refaz os anteriores.
+fn auto_balloons(app: &mut App) {
+    if !app.in_asm() {
+        app.toast(tr("Balões automáticos: abra uma montagem na bancada Montagem"), true);
+        return;
+    }
+    let st = app.asm.as_mut().unwrap();
+    let dir = st.dir();
+    let rows = scc_montagem::bom::bom(&st.asm, dir.as_deref(), scc_montagem::bom::BomLevel::Topo);
+    let nodes: Vec<(Id, String)> = st
+        .asm
+        .nodes
+        .iter()
+        .filter(|n| n.visible)
+        .filter_map(|n| match &n.kind {
+            scc_montagem::NodeKind::Part { path } | scc_montagem::NodeKind::SubAssembly { path } => Some((n.id, path.clone())),
+            _ => None,
+        })
+        .collect();
+    let mut seen: Vec<String> = vec![];
+    let mut found: Vec<([f64; 3], String, f64)> = vec![];
+    for (id, path) in nodes {
+        if seen.contains(&path) {
+            continue;
+        }
+        seen.push(path.clone());
+        let Some(sh) = scc_montagem::view::placed_shape(&st.asm, id, dir.as_deref(), &mut st.cache) else { continue };
+        let Some((l, h)) = sh.bbox() else { continue };
+        let fp = scc_montagem::load::full_path(dir.as_deref(), &path);
+        let item = rows.iter().find(|r| r.path == fp).map(|r| r.item.clone()).unwrap_or_else(|| seen.len().to_string());
+        let size = ((h[0] - l[0]).powi(2) + (h[1] - l[1]).powi(2)).sqrt();
+        found.push(([(l[0] + h[0]) / 2., (l[1] + h[1]) / 2., h[2]], item, size));
+    }
+    if found.is_empty() {
+        app.toast(tr("A montagem não tem componentes visíveis"), true);
+        return;
+    }
+    let n = found.len() as f64;
+    let gc = [0, 1, 2].map(|k| found.iter().map(|f| f.0[k]).sum::<f64>() / n);
+    st.asm.pmi.retain(|p| !matches!(p.kind, PmiKind::Balloon { .. }));
+    st.modified = true;
+    let count = found.len();
+    for (c, item, size) in found {
+        let d = [c[0] - gc[0], c[1] - gc[1]];
+        let l = (d[0] * d[0] + d[1] * d[1]).sqrt();
+        let u = if l > 1e-6 { [d[0] / l, d[1] / l] } else { [1., 0.] };
+        let k = size * 0.35 + 25.;
+        let id = Id(app.next_pmi_id());
+        let pm = Pmi {
+            id,
+            name: format!("{} {item}", tr("Balão")),
+            kind: PmiKind::Balloon { item },
+            anchors: vec![c],
+            offset: [u[0] * k, u[1] * k, 20.],
+            text: String::new(),
+            tol_plus: String::new(),
+            tol_minus: String::new(),
+            visible: true,
+            plane: None,
+            style: Default::default(),
+            folder: tr("Balões").to_string(),
+        };
+        app.asm.as_mut().unwrap().asm.pmi.push(pm);
+    }
+    app.toast(format!("{count} {}", tr("balão(ões) criados com os números da lista de peças")), false);
 }
 
 /// Seleções feitas com uma anotação pendente.
@@ -137,20 +232,138 @@ fn v3(p: [f64; 3]) -> Vec3 {
     Vec3::new(p[0] as f32, p[1] as f32, p[2] as f32)
 }
 
-fn arrow(p: &egui::Painter, tip: Pos2, from: Pos2) {
+fn arrow(p: &egui::Painter, tip: Pos2, from: Pos2, col: Color32) {
     let d = (tip - from).normalized();
     let n = egui::vec2(-d.y, d.x);
-    p.add(egui::Shape::convex_polygon(vec![tip, tip - d * 9. + n * 3.5, tip - d * 9. - n * 3.5], COL, Stroke::NONE));
+    p.add(egui::Shape::convex_polygon(vec![tip, tip - d * 9. + n * 3.5, tip - d * 9. - n * 3.5], col, Stroke::NONE));
+}
+
+const HL: Color32 = Color32::from_rgb(255, 220, 120);
+
+/// Cor da anotação (a própria ou a padrão).
+fn col_of(st: &PmiStyle) -> Color32 {
+    st.color.map(|c| Color32::from_rgb(c[0], c[1], c[2])).unwrap_or(COL)
+}
+
+/// Símbolo de solda ISO 2553 na tela: a junção da seta fica em `at`; `h` = altura do texto (px).
+#[allow(clippy::too_many_arguments)]
+fn weld_draw(p: &egui::Painter, at: Pos2, kind: WeldKind, size: &str, all: bool, x: &WeldExtra, h: f32, col: Color32, sel: bool) -> Rect {
+    let m = |q: [f64; 2]| at + egui::vec2(q[0] as f32, -q[1] as f32);
+    let st = Stroke::new(if sel { 2.2 } else { 1.6 }, if sel { HL } else { col });
+    let mut r = Rect::from_center_size(at, egui::vec2(6., 6.));
+    // monta tudo antes para pôr um fundo escuro por baixo (legível sobre qualquer cor)
+    let mut shapes: Vec<egui::Shape> = vec![];
+    for pr in weld_symbol(kind, size, all, x, h as f64) {
+        match pr {
+            WeldPrim::Line(v) | WeldPrim::Dashed(v) if v.len() < 2 => {}
+            WeldPrim::Line(v) => {
+                let pts: Vec<Pos2> = v.iter().map(|q| m(*q)).collect();
+                pts.iter().for_each(|q| r.extend_with(*q));
+                shapes.push(egui::Shape::line(pts, st));
+            }
+            WeldPrim::Dashed(v) => {
+                let pts: Vec<Pos2> = v.iter().map(|q| m(*q)).collect();
+                pts.iter().for_each(|q| r.extend_with(*q));
+                shapes.extend(egui::Shape::dashed_line(&pts, st, 5., 3.));
+            }
+            WeldPrim::Fill(v) => {
+                let pts: Vec<Pos2> = v.iter().map(|q| m(*q)).collect();
+                pts.iter().for_each(|q| r.extend_with(*q));
+                shapes.push(egui::Shape::convex_polygon(pts, st.color, Stroke::NONE));
+            }
+            WeldPrim::Text(q, t, al) => {
+                let g = p.layout_no_wrap(t, egui::FontId::proportional(h), st.color);
+                let pos = m(q);
+                let x0 = match al {
+                    -1 => pos.x - g.size().x,
+                    0 => pos.x - g.size().x / 2.,
+                    _ => pos.x,
+                };
+                let tl = egui::pos2(x0, pos.y - g.size().y * 0.8);
+                r = r.union(Rect::from_min_size(tl, g.size()));
+                shapes.push(egui::Shape::galley(tl, g, st.color));
+            }
+        }
+    }
+    let r = r.expand(4.);
+    p.rect_filled(r, 3., Color32::from_rgba_unmultiplied(40, 22, 8, 200));
+    p.extend(shapes);
+    r
+}
+
+/// Campos da legenda 3D ({nome}, {codigo}, {descricao}, {material}, {massa}, {volume}, {data},
+/// {autor}, mais as propriedades personalizadas pelo nome).
+fn title_fields(app: &App) -> std::collections::HashMap<String, String> {
+    let mut f = std::collections::HashMap::new();
+    let mut put = |k: &str, v: String| {
+        f.insert(k.to_string(), v);
+    };
+    put("data", scc_desenho::today());
+    put("autor", std::env::var("USERNAME").or_else(|_| std::env::var("USER")).unwrap_or_default());
+    let (name, props) = match app.asm.as_ref().filter(|_| app.in_asm()) {
+        Some(st) => (st.asm.name.clone(), st.asm.props.clone()),
+        None => (app.open.doc.name.clone(), app.open.doc.props.clone()),
+    };
+    put("nome", name.clone());
+    put("codigo", props.pn.clone());
+    put("descricao", if props.description.is_empty() { name } else { props.description.clone() });
+    if app.in_asm() {
+        put("material", "—".into());
+        put("massa", "—".into());
+        put("volume", "—".into());
+    } else {
+        let vol: f64 = app.result.as_ref().map(|r| r.bodies.iter().map(|b| b.mass.volume).sum()).unwrap_or(0.);
+        let dens = crate::app::MATERIALS.iter().find(|(m, _)| *m == props.material).map(|(_, d)| *d).unwrap_or(7.85);
+        put("material", props.material.clone());
+        put("massa", format!("{:.3} kg", vol * dens * 1e-6).replace('.', ","));
+        put("volume", format!("{:.1} cm³", vol / 1000.).replace('.', ","));
+    }
+    for (k, v) in &props.custom {
+        put(&k.to_lowercase(), v.clone());
+    }
+    f
+}
+
+/// Realça o que a anotação marca: vértice (anel), aresta ou face sob cada âncora.
+fn highlight(p: &egui::Painter, r: &RecomputeResult, cam: &Camera, rect: Rect, pts: &[[f64; 3]]) {
+    let d = |v: &[f32], q: &[f64; 3]| ((v[0] as f64 - q[0]).powi(2) + (v[1] as f64 - q[1]).powi(2) + (v[2] as f64 - q[2]).powi(2)).sqrt();
+    for q in pts {
+        let mut done = false;
+        for (bi, b) in r.bodies.iter().enumerate() {
+            let m = &b.mesh;
+            if m.vertices.chunks_exact(3).any(|v| d(v, q) < 1e-3) {
+                if let Some(s) = cam.project(rect, v3(*q)) {
+                    p.circle_stroke(s, 8., Stroke::new(2.5, HL));
+                }
+                done = true;
+                break;
+            }
+            if let Some(e) = m.edge_mids.chunks_exact(3).position(|v| d(v, q) < 1e-3) {
+                crate::picking::draw(p, r, cam, rect, &Pick::Edge { body: bi, edge: e, mid: q.map(|x| x as f32) }, true);
+                done = true;
+                break;
+            }
+        }
+        if !done {
+            for bi in 0..r.bodies.len() {
+                if let Some(f) = crate::picking::face_at(r, bi, *q) {
+                    crate::picking::draw(p, r, cam, rect, &Pick::Face { body: bi, face: f, owner: Id(0), point: q.map(|x| x as f32), normal: [0., 0., 1.] }, true);
+                    break;
+                }
+            }
+        }
+    }
 }
 
 /// Rótulo deitado num plano: girado conforme a direção x do plano na tela e com altura de texto
 /// em mm do modelo (acompanha o zoom). Devolve o retângulo (sem giro) para clique/arraste.
-fn label_on_plane(p: &egui::Painter, cam: &Camera, rect: Rect, world: Vec3, x: Vec3, txt: &str, sel: bool) -> Option<Rect> {
+fn label_on_plane(p: &egui::Painter, cam: &Camera, rect: Rect, world: Vec3, x: Vec3, txt: &str, sel: bool, st: &PmiStyle) -> Option<Rect> {
     let at = cam.project(rect, world)?;
     let ax = cam.project(rect, world + x * 10.)?;
     let d = ax - at;
     let px_per_mm = d.length() / 10.;
-    let size = (5. * px_per_mm).clamp(6., 60.);
+    let mm = if st.size > 0. { st.size } else { 5. };
+    let size = (mm * px_per_mm).clamp(6., 80.);
     let angle = d.y.atan2(d.x);
     let g = p.layout_no_wrap(txt.to_string(), egui::FontId::proportional(size), Color32::WHITE);
     let (w, h) = (g.size().x + 10., g.size().y + 6.);
@@ -158,18 +371,28 @@ fn label_on_plane(p: &egui::Painter, cam: &Camera, rect: Rect, world: Vec3, x: V
     let (c, s) = (angle.cos(), angle.sin());
     let rot = |v: egui::Vec2| egui::vec2(v.x * c - v.y * s, v.x * s + v.y * c);
     let corners: Vec<Pos2> = [(-w / 2., -h / 2.), (w / 2., -h / 2.), (w / 2., h / 2.), (-w / 2., h / 2.)].iter().map(|(a, b)| at + rot(egui::vec2(*a, *b))).collect();
-    p.add(egui::Shape::convex_polygon(corners.clone(), Color32::from_rgba_unmultiplied(60, 30, 10, 225), Stroke::new(if sel { 2. } else { 1. }, if sel { Color32::from_rgb(255, 220, 120) } else { COL })));
+    if st.frame != PmiFrame::Nenhuma || sel {
+        p.add(egui::Shape::convex_polygon(corners.clone(), if st.frame == PmiFrame::Nenhuma { Color32::TRANSPARENT } else { Color32::from_rgba_unmultiplied(60, 30, 10, 225) }, Stroke::new(if sel { 2. } else { 1. }, if sel { HL } else { col_of(st) })));
+    }
     let tl = at + rot(egui::vec2(-w / 2. + 5., -h / 2. + 3.));
     p.add(egui::epaint::TextShape::new(tl, g, Color32::WHITE).with_angle(angle));
     Some(Rect::from_center_size(at, egui::vec2(w.max(h), w.max(h)) * 0.8))
 }
 
-fn label(p: &egui::Painter, at: Pos2, txt: &str, sel: bool) -> Rect {
-    let g = p.layout_no_wrap(txt.to_string(), egui::FontId::proportional(13.), Color32::WHITE);
+fn label(p: &egui::Painter, at: Pos2, txt: &str, sel: bool, st: &PmiStyle) -> Rect {
+    let size = if st.size > 0. { st.size } else { 13. };
+    let col = col_of(st);
+    let bare = st.frame == PmiFrame::Nenhuma;
+    let g = p.layout_no_wrap(txt.to_string(), egui::FontId::proportional(size), if bare { col } else { Color32::WHITE });
     let r = Rect::from_center_size(at, g.size() + egui::vec2(10., 6.));
-    p.rect_filled(r, 3., Color32::from_rgba_unmultiplied(60, 30, 10, 225));
-    p.rect_stroke(r, 3., Stroke::new(if sel { 2. } else { 1. }, if sel { Color32::from_rgb(255, 220, 120) } else { COL }), egui::StrokeKind::Inside);
-    p.galley(r.min + egui::vec2(5., 3.), g, Color32::WHITE);
+    let round = if st.frame == PmiFrame::Arredondada { r.height().min(r.width()) / 2. } else { 3. };
+    if !bare {
+        p.rect_filled(r, round, Color32::from_rgba_unmultiplied(60, 30, 10, 225));
+    }
+    if !bare || sel {
+        p.rect_stroke(r, round, Stroke::new(if sel { 2. } else { 1. }, if sel { HL } else { col }), egui::StrokeKind::Inside);
+    }
+    p.galley(r.min + egui::vec2(5., 3.), g, if bare { col } else { Color32::WHITE });
     r
 }
 
@@ -181,33 +404,42 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     let sel = if app.in_asm() { app.asm.as_ref().and_then(|s| s.sel) } else if let Sel::Pmi(i) = app.sel { Some(i) } else { None };
     let painter = ui.painter_at(rect);
     let mut clicked = None;
+    let fields = title_fields(app);
     for pm in list(app).iter().filter(|p| p.visible) {
         let a: Vec<[f64; 3]> = pm.anchors.iter().map(|p| snap(r, *p)).collect();
         let Some(first) = a.first().copied() else { continue };
         let val = pm.measure(&a);
-        let txt = pm.display(val);
+        let txt = match &pm.kind {
+            PmiKind::TitleBlock { template } => scc_desenho::resolve(template, &fields),
+            _ => format!("{}{}{}", pm.style.prefix, pm.display(val), pm.style.suffix),
+        };
         let is_sel = sel == Some(pm.id);
-        let stroke = Stroke::new(if is_sel { 2. } else { 1.3 }, COL);
+        let col = col_of(&pm.style);
+        let stroke = Stroke::new(if is_sel { 2. } else { 1.3 }, col);
         let off = v3(pm.offset);
+        // a geometria que a anotação marca fica realçada enquanto ela está selecionada
+        if is_sel && !matches!(pm.kind, PmiKind::TitleBlock { .. }) {
+            highlight(&painter, r, cam, rect, &a);
+        }
         let rect_lbl = match pm.kind {
             PmiKind::Linear if a.len() >= 2 => {
                 // linhas de chamada e linha de cota afastadas pelo deslocamento
                 let (p0, p1) = (v3(a[0]), v3(a[1]));
                 let (q0, q1) = (p0 + off, p1 + off);
                 let (Some(s0), Some(s1), Some(t0), Some(t1)) = (cam.project(rect, p0), cam.project(rect, p1), cam.project(rect, q0), cam.project(rect, q1)) else { continue };
-                painter.line_segment([s0, t0], Stroke::new(1., COL));
-                painter.line_segment([s1, t1], Stroke::new(1., COL));
+                painter.line_segment([s0, t0], Stroke::new(1., col));
+                painter.line_segment([s1, t1], Stroke::new(1., col));
                 painter.line_segment([t0, t1], stroke);
                 if (t1 - t0).length() > 4. {
-                    arrow(&painter, t0, t1);
-                    arrow(&painter, t1, t0);
+                    arrow(&painter, t0, t1, col);
+                    arrow(&painter, t1, t0, col);
                 }
-                label(&painter, t0 + (t1 - t0) * 0.5 + egui::vec2(0., -12.), &txt, is_sel)
+                label(&painter, t0 + (t1 - t0) * 0.5 + egui::vec2(0., -12.), &txt, is_sel, &pm.style)
             }
             PmiKind::Angle if a.len() >= 3 => {
                 let (Some(sv), Some(s1), Some(s2)) = (cam.project(rect, v3(a[0])), cam.project(rect, v3(a[1])), cam.project(rect, v3(a[2]))) else { continue };
-                painter.line_segment([sv, s1], Stroke::new(1., COL));
-                painter.line_segment([sv, s2], Stroke::new(1., COL));
+                painter.line_segment([sv, s1], Stroke::new(1., col));
+                painter.line_segment([sv, s2], Stroke::new(1., col));
                 let (d1, d2) = ((s1 - sv).normalized(), (s2 - sv).normalized());
                 let rad = 30.;
                 let pts: Vec<Pos2> = (0..=16).map(|k| {
@@ -215,25 +447,52 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                     sv + (d1 * (1. - t) + d2 * t).normalized() * rad
                 }).collect();
                 painter.add(egui::Shape::line(pts, stroke));
-                label(&painter, sv + (d1 + d2).normalized() * (rad + 22.), &txt, is_sel)
+                label(&painter, sv + (d1 + d2).normalized() * (rad + 22.), &txt, is_sel, &pm.style)
+            }
+            PmiKind::Weld { kind, ref size, all_around, ref extra } => {
+                // seta até a junta; linha de referência e símbolo ISO 2553 no rótulo
+                let (Some(s0), Some(st)) = (cam.project(rect, v3(first)), cam.project(rect, v3(first) + off)) else { continue };
+                painter.line_segment([st, s0], stroke);
+                arrow(&painter, s0, st, col);
+                let h = if pm.style.size > 0. { pm.style.size } else { 14. };
+                weld_draw(&painter, st, kind, size, all_around, extra, h, col, is_sel)
+            }
+            PmiKind::Balloon { ref item } => {
+                let (Some(s0), Some(st)) = (cam.project(rect, v3(first)), cam.project(rect, v3(first) + off)) else { continue };
+                let rad = if pm.style.size > 0. { pm.style.size } else { 13. } * 0.95 + 4. * item.chars().count().saturating_sub(1) as f32;
+                let dir = (s0 - st).normalized();
+                painter.line_segment([st + dir * rad, s0], stroke);
+                painter.circle_filled(s0, 3., col);
+                painter.circle_filled(st, rad, Color32::from_rgba_unmultiplied(60, 30, 10, 225));
+                painter.circle_stroke(st, rad, Stroke::new(if is_sel { 2.2 } else { 1.4 }, if is_sel { HL } else { col }));
+                painter.text(st, egui::Align2::CENTER_CENTER, item, egui::FontId::proportional(if pm.style.size > 0. { pm.style.size } else { 13. }), Color32::WHITE);
+                Rect::from_center_size(st, egui::vec2(rad * 2., rad * 2.))
+            }
+            PmiKind::TitleBlock { .. } => {
+                // legenda: só o quadro, sem chamada
+                let Some(st) = cam.project(rect, v3(first) + off) else { continue };
+                match pm.plane {
+                    Some((_, x)) => label_on_plane(&painter, cam, rect, v3(first) + off, v3(x).normalize_or_zero(), &txt, is_sel, &pm.style).unwrap_or_else(|| label(&painter, st, &txt, is_sel, &pm.style)),
+                    None => label(&painter, st, &txt, is_sel, &pm.style),
+                }
             }
             _ => {
                 // chamada: da âncora até o rótulo
                 let (Some(s0), Some(st)) = (cam.project(rect, v3(first)), cam.project(rect, v3(first) + off)) else { continue };
                 painter.line_segment([s0, st], stroke);
-                painter.circle_filled(s0, 3., COL);
+                painter.circle_filled(s0, 3., col);
                 if let (PmiKind::Radius | PmiKind::Diameter, Some(s1)) = (&pm.kind, a.get(1).and_then(|q| cam.project(rect, v3(*q)))) {
                     painter.line_segment([s0, s1], stroke);
-                    arrow(&painter, s1, s0);
+                    arrow(&painter, s1, s0, col);
                 }
                 if let PmiKind::Datum { .. } = pm.kind {
                     let n = (st - s0).normalized();
                     let m = egui::vec2(-n.y, n.x);
-                    painter.add(egui::Shape::convex_polygon(vec![s0, s0 + n * 10. + m * 6., s0 + n * 10. - m * 6.], COL, Stroke::NONE));
+                    painter.add(egui::Shape::convex_polygon(vec![s0, s0 + n * 10. + m * 6., s0 + n * 10. - m * 6.], col, Stroke::NONE));
                 }
                 match pm.plane {
-                    Some((_, x)) => label_on_plane(&painter, cam, rect, v3(first) + off, v3(x).normalize_or_zero(), &txt, is_sel).unwrap_or_else(|| label(&painter, st, &txt, is_sel)),
-                    None => label(&painter, st, &txt, is_sel),
+                    Some((_, x)) => label_on_plane(&painter, cam, rect, v3(first) + off, v3(x).normalize_or_zero(), &txt, is_sel, &pm.style).unwrap_or_else(|| label(&painter, st, &txt, is_sel, &pm.style)),
+                    None => label(&painter, st, &txt, is_sel, &pm.style),
                 }
             }
         };
@@ -328,77 +587,134 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     }
 }
 
-/// Seção "PMI" na árvore (peça ou montagem).
+/// Capturas do nível atual (peça ou montagem).
+fn captures(app: &App) -> &Vec<PmiCapture> {
+    match app.asm.as_ref().filter(|_| app.in_asm()) {
+        Some(st) => &st.asm.pmi_captures,
+        None => &app.open.doc.pmi_captures,
+    }
+}
+
+fn captures_mut(app: &mut App) -> &mut Vec<PmiCapture> {
+    if app.in_asm() {
+        &mut app.asm.as_mut().unwrap().asm.pmi_captures
+    } else {
+        &mut app.open.doc.pmi_captures
+    }
+}
+
+/// O que está oculto no modelo agora: comandos, coletores e referências (peça) ou componentes.
+fn hidden_now(app: &App) -> Vec<Id> {
+    match app.asm.as_ref().filter(|_| app.in_asm()) {
+        Some(st) => st.asm.nodes.iter().filter(|n| !n.visible).map(|n| n.id).collect(),
+        None => {
+            let d = &app.open.doc;
+            let mut v: Vec<Id> = d.features.iter().filter(|f| f.hidden).map(|f| f.id).collect();
+            v.extend(d.collectors.iter().filter(|c| !c.visible).map(|c| c.id));
+            v.extend(d.references.iter().filter(|r| !r.visible).map(|r| r.id));
+            v
+        }
+    }
+}
+
+/// Uma linha de anotação na árvore (com o menu de pastas).
+#[allow(clippy::too_many_arguments)]
+fn item_row(ui: &mut egui::Ui, p: &Pmi, sel: Option<Id>, folders: &[String], select: &mut Option<Id>, action: &mut Option<(Id, u8)>, move_to: &mut Option<(Id, String)>) {
+    let txt = format!("{} {}", if p.visible { "📐" } else { "·" }, p.name);
+    let r = ui.selectable_label(sel == Some(p.id), if p.visible { RichText::new(txt) } else { RichText::new(txt).weak() });
+    if r.clicked() {
+        *select = Some(p.id);
+    }
+    r.context_menu(|ui| {
+        ui.label(RichText::new(&p.name).strong());
+        if ui.button(tr("✏ Editar")).clicked() {
+            *select = Some(p.id);
+            ui.close();
+        }
+        if ui.button(if p.visible { tr("Ocultar") } else { tr("Mostrar") }).clicked() {
+            *action = Some((p.id, 1));
+            ui.close();
+        }
+        ui.menu_button(tr("📁 Mover para pasta"), |ui| {
+            if ui.button(tr("(raiz)")).clicked() {
+                *move_to = Some((p.id, String::new()));
+                ui.close();
+            }
+            for f in folders {
+                if ui.button(f).clicked() {
+                    *move_to = Some((p.id, f.clone()));
+                    ui.close();
+                }
+            }
+            if ui.button(tr("＋ Nova pasta")).clicked() {
+                let mut n = folders.len() + 1;
+                while folders.contains(&format!("{} {n}", tr("Pasta"))) {
+                    n += 1;
+                }
+                *move_to = Some((p.id, format!("{} {n}", tr("Pasta"))));
+                ui.close();
+            }
+        });
+        ui.separator();
+        if ui.button(tr("🗑 Apagar")).clicked() {
+            *action = Some((p.id, 0));
+            ui.close();
+        }
+    });
+}
+
+/// Seção "PMI" na árvore (peça ou montagem): anotações (com pastas) e, à parte, as capturas.
 pub fn tree_section(app: &mut App, ui: &mut egui::Ui) {
     let n = list(app).len();
     let mut select = None;
     let mut action: Option<(Id, u8)> = None;
+    let mut move_to: Option<(Id, String)> = None;
+    let mut folder_act: Option<(String, u8)> = None;
     let sel = if app.in_asm() { app.asm.as_ref().and_then(|s| s.sel) } else if let Sel::Pmi(i) = app.sel { Some(i) } else { None };
     let mut create: Option<u8> = None;
+    let mut folders: Vec<String> = list(app).iter().map(|p| p.folder.clone()).filter(|f| !f.is_empty()).collect();
+    folders.sort();
+    folders.dedup();
     let h = egui::CollapsingHeader::new(format!("📐 {} ({n})", tr("PMI — detalhamento 3D"))).id_salt("arvore_pmi").default_open(n > 0).show(ui, |ui| {
         if n == 0 {
             ui.label(RichText::new(tr("Cotas, notas, rugosidade, solda e tolerâncias no modelo 3D (grupo Detalhamento 3D).")).weak().small());
         }
-        for p in list(app) {
-            let txt = format!("{} {}", if p.visible { "📐" } else { "·" }, p.name);
-            let r = ui.selectable_label(sel == Some(p.id), if p.visible { RichText::new(txt) } else { RichText::new(txt).weak() });
-            if r.clicked() {
-                select = Some(p.id);
-            }
-            r.context_menu(|ui| {
-                ui.label(RichText::new(&p.name).strong());
-                if ui.button(tr("✏ Editar")).clicked() {
-                    select = Some(p.id);
+        for f in &folders {
+            let r = egui::CollapsingHeader::new(format!("📁 {f}")).id_salt(("pmi_pasta", f.as_str())).default_open(true).show(ui, |ui| {
+                for p in list(app).iter().filter(|p| p.folder == *f) {
+                    item_row(ui, p, sel, &folders, &mut select, &mut action, &mut move_to);
+                }
+            });
+            r.header_response.context_menu(|ui| {
+                if ui.button(tr("👁 Mostrar a pasta")).clicked() {
+                    folder_act = Some((f.clone(), 2));
                     ui.close();
                 }
-                if ui.button(if p.visible { tr("Ocultar") } else { tr("Mostrar") }).clicked() {
-                    action = Some((p.id, 1));
+                if ui.button(tr("Ocultar a pasta")).clicked() {
+                    folder_act = Some((f.clone(), 3));
                     ui.close();
                 }
-                ui.separator();
-                if ui.button(tr("🗑 Apagar")).clicked() {
-                    action = Some((p.id, 0));
+                if ui.button(tr("Desfazer a pasta (anotações vão para a raiz)")).clicked() {
+                    folder_act = Some((f.clone(), 0));
                     ui.close();
                 }
             });
+        }
+        for p in list(app).iter().filter(|p| p.folder.is_empty()) {
+            item_row(ui, p, sel, &folders, &mut select, &mut action, &mut move_to);
         }
     });
-    // capturas (só na peça): vista + anotações visíveis
-    let mut cap_act: Option<(usize, u8)> = None;
-    if !app.in_asm() {
-        let caps: Vec<String> = app.open.doc.pmi_captures.iter().map(|c| c.name.clone()).collect();
-        if !caps.is_empty() {
-            ui.indent("capturas_pmi", |ui| {
-                for (i, n) in caps.iter().enumerate() {
-                    let r = ui.selectable_label(false, format!("📷 {n}")).on_hover_text(tr("aplicar: câmera e anotações desta captura"));
-                    if r.clicked() {
-                        cap_act = Some((i, 0));
-                    }
-                    r.context_menu(|ui| {
-                        if ui.button(tr("📷 Atualizar com a vista atual")).clicked() {
-                            cap_act = Some((i, 1));
-                            ui.close();
-                        }
-                        if ui.button(tr("🗑 Apagar captura")).clicked() {
-                            cap_act = Some((i, 2));
-                            ui.close();
-                        }
-                    });
-                }
-            });
-        }
-    }
     h.header_response.context_menu(|ui| {
-        if !app.in_asm() && ui.button(tr("📷 Capturar vista (câmera + anotações visíveis)")).clicked() {
-            cap_act = Some((usize::MAX, 1));
-            ui.close();
-        }
         ui.label(RichText::new(tr("Nova anotação 3D")).strong());
-        for (i, n) in [(0u8, "↔ Cota linear"), (1, "R Raio"), (2, "Ø Diâmetro"), (3, "∠ Ângulo"), (4, "✎ Nota"), (5, "√ Rugosidade"), (6, "⌒ Solda"), (7, "▭ Referência (datum)"), (8, "⊞ Tolerância geométrica")] {
+        for (i, n) in [(0u8, "↔ Cota linear"), (1, "R Raio"), (2, "Ø Diâmetro"), (3, "∠ Ângulo"), (4, "✎ Nota"), (5, "√ Rugosidade"), (6, "⌒ Solda"), (7, "▭ Referência (datum)"), (8, "⊞ Tolerância geométrica"), (9, "▤ Legenda 3D")] {
             if ui.button(tr(n)).clicked() {
                 create = Some(i);
                 ui.close();
             }
+        }
+        if app.in_asm() && ui.button(tr("① Balões automáticos")).clicked() {
+            create = Some(10);
+            ui.close();
         }
         ui.separator();
         if ui.button(tr("👁 Mostrar todas")).clicked() {
@@ -407,6 +723,44 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui) {
         }
         if ui.button(tr("Ocultar todas")).clicked() {
             action = Some((Id(0), 3));
+            ui.close();
+        }
+    });
+    // capturas: vista (câmera e zoom) + anotações visíveis (+ visibilidade do modelo, se pedida)
+    let mut cap_act: Option<(usize, u8)> = None;
+    let caps: Vec<(String, bool)> = captures(app).iter().map(|c| (c.name.clone(), c.with_model)).collect();
+    let hc = egui::CollapsingHeader::new(format!("📷 {} ({})", tr("Capturas"), caps.len())).id_salt("arvore_capturas").default_open(!caps.is_empty()).show(ui, |ui| {
+        if caps.is_empty() {
+            ui.label(RichText::new(tr("Botão direito aqui: capturar a vista atual com as anotações visíveis (e, se quiser, o que está oculto no modelo).")).weak().small());
+        }
+        for (i, (n, wm)) in caps.iter().enumerate() {
+            let r = ui.selectable_label(false, format!("📷 {n}{}", if *wm { " ◐" } else { "" })).on_hover_text(if *wm { tr("aplicar: câmera, anotações e visibilidade do modelo") } else { tr("aplicar: câmera e anotações desta captura") });
+            if r.clicked() {
+                cap_act = Some((i, 0));
+            }
+            r.context_menu(|ui| {
+                if ui.button(tr("📷 Atualizar com a vista atual")).clicked() {
+                    cap_act = Some((i, 1));
+                    ui.close();
+                }
+                if ui.button(if *wm { tr("Não guardar a visibilidade do modelo") } else { tr("Guardar também a visibilidade do modelo") }).clicked() {
+                    cap_act = Some((i, 4));
+                    ui.close();
+                }
+                if ui.button(tr("🗑 Apagar captura")).clicked() {
+                    cap_act = Some((i, 2));
+                    ui.close();
+                }
+            });
+        }
+    });
+    hc.header_response.context_menu(|ui| {
+        if ui.button(tr("📷 Capturar: câmera + anotações")).clicked() {
+            cap_act = Some((usize::MAX, 1));
+            ui.close();
+        }
+        if ui.button(tr("📷 Capturar: câmera + anotações + visibilidade do modelo")).clicked() {
+            cap_act = Some((usize::MAX, 3));
             ui.close();
         }
     });
@@ -422,32 +776,77 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui) {
     }
     if let Some((i, k)) = cap_act {
         let view = app.camera_get().map(|c| scc_core::NamedView { name: String::new(), target: c.target, yaw: c.yaw, pitch: c.pitch, dist: c.dist, ortho: c.ortho });
-        let shown: Vec<Id> = app.open.doc.pmi.iter().filter(|p| p.visible).map(|p| p.id).collect();
+        let shown: Vec<Id> = list(app).iter().filter(|p| p.visible).map(|p| p.id).collect();
+        let hidden = hidden_now(app);
         match k {
             0 => {
-                if let Some(c) = app.open.doc.pmi_captures.get(i).cloned() {
-                    for p in &mut app.open.doc.pmi {
+                if let Some(c) = captures(app).get(i).cloned() {
+                    for p in list_mut(app) {
                         p.visible = c.shown.contains(&p.id);
+                    }
+                    if c.with_model {
+                        if app.in_asm() {
+                            let st = app.asm.as_mut().unwrap();
+                            for n in &mut st.asm.nodes {
+                                n.visible = !c.hidden.contains(&n.id);
+                            }
+                            st.modified = true;
+                        } else {
+                            let d = &mut app.open.doc;
+                            for f in &mut d.features {
+                                f.hidden = c.hidden.contains(&f.id);
+                            }
+                            for col in &mut d.collectors {
+                                col.visible = !c.hidden.contains(&col.id);
+                            }
+                            for r in &mut d.references {
+                                r.visible = !c.hidden.contains(&r.id);
+                            }
+                        }
+                        app.scene_dirty = true;
                     }
                     app.apply_view(&c.view);
                 }
             }
-            1 => {
+            1 | 3 => {
                 if let Some(v) = view {
                     if i == usize::MAX {
                         let id = Id(app.next_pmi_id());
-                        let n = app.open.doc.pmi_captures.len() + 1;
-                        app.open.doc.pmi_captures.push(scc_core::pmi::PmiCapture { id, name: format!("{} {n}", tr("Captura")), view: v, shown });
-                    } else if let Some(c) = app.open.doc.pmi_captures.get_mut(i) {
+                        let n = captures(app).len() + 1;
+                        captures_mut(app).push(PmiCapture { id, name: format!("{} {n}", tr("Captura")), view: v, shown, hidden, with_model: k == 3 });
+                    } else if let Some(c) = captures_mut(app).get_mut(i) {
                         c.view = v;
                         c.shown = shown;
+                        c.hidden = hidden;
                     }
                 }
             }
-            _ => {
-                if i < app.open.doc.pmi_captures.len() {
-                    app.open.doc.pmi_captures.remove(i);
+            4 => {
+                if let Some(c) = captures_mut(app).get_mut(i) {
+                    c.with_model = !c.with_model;
+                    c.hidden = hidden;
                 }
+            }
+            _ => {
+                if i < captures(app).len() {
+                    captures_mut(app).remove(i);
+                }
+            }
+        }
+        if app.in_asm() {
+            app.asm.as_mut().unwrap().modified = true;
+        }
+    }
+    if let Some((id, f)) = move_to {
+        if let Some(p) = list_mut(app).iter_mut().find(|p| p.id == id) {
+            p.folder = f;
+        }
+    }
+    if let Some((f, k)) = folder_act {
+        for p in list_mut(app).iter_mut().filter(|p| p.folder == f) {
+            match k {
+                0 => p.folder.clear(),
+                _ => p.visible = k == 2,
             }
         }
     }
@@ -463,6 +862,53 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui) {
             }
         }
     }
+}
+
+/// Campos do símbolo de solda ISO 2553 (usado no PMI e no desenho).
+pub fn weld_ui(ui: &mut egui::Ui, salt: &str, kind: &mut WeldKind, size: &mut String, all_around: &mut bool, extra: &mut WeldExtra) {
+    let pick = |ui: &mut egui::Ui, id: &str, k: &mut WeldKind| {
+        egui::ComboBox::from_id_salt((salt, id)).selected_text(format!("{} {}", k.symbol(), tr(k.label()))).width(180.).show_ui(ui, |ui| {
+            for w in WeldKind::ALL {
+                ui.selectable_value(k, w, format!("{} {}", w.symbol(), tr(w.label())));
+            }
+        });
+    };
+    ui.horizontal(|ui| {
+        ui.label(tr("Lado da seta"));
+        pick(ui, "seta", kind);
+    });
+    let mut both = extra.other.is_some();
+    ui.horizontal(|ui| {
+        if ui.checkbox(&mut both, tr("dos dois lados")).changed() {
+            extra.other = both.then_some(*kind);
+        }
+        if let Some(o) = &mut extra.other {
+            pick(ui, "outro", o);
+        } else {
+            ui.checkbox(&mut extra.other_side, tr("só do outro lado (na linha tracejada)"));
+        }
+    });
+    ui.horizontal(|ui| {
+        ui.label(tr("Medida"));
+        ui.add(egui::TextEdit::singleline(size).desired_width(60.).hint_text("a5"));
+        ui.label(tr("Comprimento"));
+        ui.add(egui::TextEdit::singleline(&mut extra.length).desired_width(90.).hint_text("3×50 (100)"));
+    });
+    ui.horizontal(|ui| {
+        ui.label(tr("Acabamento"));
+        for (c, n) in [(WeldContour::Nenhum, "nenhum"), (WeldContour::Plano, "plano"), (WeldContour::Convexo, "convexo"), (WeldContour::Concavo, "côncavo")] {
+            ui.radio_value(&mut extra.contour, c, tr(n));
+        }
+    });
+    ui.horizontal(|ui| {
+        ui.checkbox(all_around, tr("todo o contorno"));
+        ui.checkbox(&mut extra.field, tr("solda de campo"));
+    });
+    ui.horizontal(|ui| {
+        ui.label(tr("Cauda (processo)"));
+        ui.add(egui::TextEdit::singleline(&mut extra.process).desired_width(120.).hint_text("135 / ISO 5817-C"));
+    });
+    ui.label(RichText::new(tr("ISO 2553, sistema A: símbolo na linha cheia = lado da seta; na tracejada = outro lado. Medida da seção à esquerda (a = garganta, z = perna), comprimento à direita, processo ISO 4063 na cauda.")).weak().small());
 }
 
 /// Painel de edição da anotação selecionada. Devolve `true` se havia uma anotação.
@@ -512,25 +958,35 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui, id: Id) -> bool {
                 ui.text_edit_singleline(process);
             });
         }
-        PmiKind::Weld { kind, size, all_around } => {
-            egui::ComboBox::from_id_salt("pmi_solda").selected_text(tr(kind.label())).show_ui(ui, |ui| {
-                for k in WeldKind::ALL {
-                    ui.selectable_value(kind, k, format!("{} {}", k.symbol(), tr(k.label())));
-                }
-            });
-            ui.horizontal(|ui| {
-                ui.label(tr("Medida"));
-                ui.text_edit_singleline(size);
-            });
-            ui.checkbox(all_around, tr("solda em todo o contorno"));
-        }
+        PmiKind::Weld { kind, size, all_around, extra } => weld_ui(ui, "pmi", kind, size, all_around, extra),
         PmiKind::Datum { letter } => {
             ui.horizontal(|ui| {
                 ui.label(tr("Letra"));
                 ui.text_edit_singleline(letter);
             });
         }
-        PmiKind::Gdt { ch, tol, datums } => {
+        PmiKind::TitleBlock { template } => {
+            ui.label(tr("Modelo (os campos entre chaves são preenchidos com os dados da peça)"));
+            ui.add(egui::TextEdit::multiline(template).desired_rows(4).desired_width(f32::INFINITY));
+            ui.horizontal_wrapped(|ui| {
+                for f in ["{nome}", "{codigo}", "{descricao}", "{material}", "{massa}", "{volume}", "{data}", "{autor}"] {
+                    if ui.small_button(f).on_hover_text(tr("inserir o campo")).clicked() {
+                        template.push_str(f);
+                    }
+                }
+            });
+            if ui.small_button(tr("↺ Modelo padrão")).clicked() {
+                *template = TITLE_TEMPLATE.into();
+            }
+            ui.label(RichText::new(tr("Propriedades personalizadas da peça também valem, pelo nome em minúsculas: {revisao}, {cliente}…")).weak().small());
+        }
+        PmiKind::Balloon { item } => {
+            ui.horizontal(|ui| {
+                ui.label(tr("Item"));
+                ui.add(egui::TextEdit::singleline(item).desired_width(60.));
+            });
+        }
+        PmiKind::Gdt { ch, tol, datums, extra } => {
             egui::ComboBox::from_id_salt("pmi_gdt").selected_text(format!("{} {}", ch.symbol(), tr(ch.label()))).show_ui(ui, |ui| {
                 for c in GdtChar::ALL {
                     ui.selectable_value(ch, c, format!("{} {}", c.symbol(), tr(c.label())));
@@ -544,6 +1000,31 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui, id: Id) -> bool {
                 ui.label(tr("Referências"));
                 ui.text_edit_singleline(datums);
             });
+            ui.label(RichText::new(tr("Referências separadas por espaço (ex.: A B C); cada uma vira uma casa do quadro.")).weak().small());
+            ui.checkbox(&mut extra.zone_dia, tr("zona cilíndrica (Ø antes do valor)"));
+            ui.horizontal(|ui| {
+                ui.label(tr("Modificador"));
+                for m in ["", "Ⓜ", "Ⓛ", "Ⓟ", "Ⓕ", "Ⓢ", "Ⓣ", "Ⓤ"] {
+                    let lbl = if m.is_empty() { tr("nenhum").to_string() } else { m.to_string() };
+                    if ui.selectable_label(extra.modifier == m, lbl).clicked() {
+                        extra.modifier = m.to_string();
+                    }
+                }
+            })
+            .response
+            .on_hover_text(tr("Ⓜ máximo material, Ⓛ mínimo material, Ⓟ zona projetada, Ⓕ estado livre, Ⓢ independente, Ⓣ plano tangente, Ⓤ zona desigual"));
+            let mut comp = extra.second.is_some();
+            if ui.checkbox(&mut comp, tr("quadro composto (segunda linha)")).changed() {
+                extra.second = comp.then(|| (String::new(), String::new()));
+            }
+            if let Some((t2, d2)) = &mut extra.second {
+                ui.horizontal(|ui| {
+                    ui.label(tr("Tolerância 2"));
+                    ui.add(egui::TextEdit::singleline(t2).desired_width(70.));
+                    ui.label(tr("Referências 2"));
+                    ui.add(egui::TextEdit::singleline(d2).desired_width(70.));
+                });
+            }
         }
         _ => {
             ui.horizontal(|ui| {
@@ -558,6 +1039,37 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui, id: Id) -> bool {
             });
         }
     }
+    crate::editor::section(ui, "Aparência");
+    ui.horizontal(|ui| {
+        ui.label(tr("Altura"));
+        let r = ui.add(egui::DragValue::new(&mut p.style.size).range(0.0..=80.).speed(0.2).custom_formatter(|v, _| if v <= 0. { "padrão".into() } else { format!("{v:.1}") }));
+        crate::ui_ext::wheel(ui, &r, &mut p.style.size);
+        let mut own = p.style.color.is_some();
+        if ui.checkbox(&mut own, tr("cor própria")).changed() {
+            p.style.color = own.then_some([255, 150, 60]);
+        }
+        if let Some(c) = &mut p.style.color {
+            ui.color_edit_button_srgb(c);
+        }
+    });
+    ui.horizontal(|ui| {
+        ui.label(tr("Moldura"));
+        for (f, n) in [(PmiFrame::Caixa, "caixa"), (PmiFrame::Arredondada, "arredondada"), (PmiFrame::Nenhuma, "nenhuma")] {
+            ui.radio_value(&mut p.style.frame, f, tr(n));
+        }
+    });
+    if !matches!(p.kind, PmiKind::TitleBlock { .. } | PmiKind::Weld { .. } | PmiKind::Balloon { .. }) {
+        ui.horizontal(|ui| {
+            ui.label(tr("Prefixo"));
+            ui.add(egui::TextEdit::singleline(&mut p.style.prefix).desired_width(60.).hint_text("4×"));
+            ui.label(tr("Sufixo"));
+            ui.add(egui::TextEdit::singleline(&mut p.style.suffix).desired_width(60.).hint_text(tr("típ.")));
+        });
+    }
+    ui.horizontal(|ui| {
+        ui.label(tr("Pasta"));
+        ui.add(egui::TextEdit::singleline(&mut p.folder).desired_width(140.).hint_text(tr("(raiz)")));
+    });
     crate::editor::section(ui, "Posição do texto");
     ui.horizontal(|ui| {
         for (k, l) in ["X", "Y", "Z"].iter().enumerate() {
