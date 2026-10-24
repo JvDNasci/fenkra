@@ -603,6 +603,67 @@ pub(crate) fn appearance_fields(ui: &mut egui::Ui, id: &str, a: &mut Appearance,
             }
         }
     });
+    color_table(ui, id, &mut a.color);
+    ui.horizontal(|ui| {
+        if ui.small_button(tr("📋 Copiar aparência")).clicked() {
+            *crate::palette::CLIP.lock().unwrap() = Some(*a);
+        }
+        let clip = *crate::palette::CLIP.lock().unwrap();
+        if ui.add_enabled(clip.is_some(), egui::Button::new(tr("📋 Colar aparência")).small()).clicked() {
+            if let Some(c) = clip {
+                *a = c;
+            }
+        }
+    });
+}
+
+/// Tabela de cores: padrões RAL com nome e as cores salvas pelo usuário (com nome).
+pub(crate) fn color_table(ui: &mut egui::Ui, id: &str, color: &mut [u8; 3]) {
+    let name_of = |c: [u8; 3]| {
+        crate::palette::RAL.iter().find(|(_, x)| *x == c).map(|(n, _)| n.to_string())
+            .or_else(|| crate::palette::USER.lock().unwrap().iter().find(|(_, x)| *x == c).map(|(n, _)| n.clone()))
+    };
+    ui.horizontal(|ui| {
+        ui.add_sized([96., 18.], egui::Label::new(tr("Tabela")));
+        egui::ComboBox::from_id_salt((id, "tabela_cores")).selected_text(name_of(*color).unwrap_or_else(|| tr("— escolher —").to_string())).width(170.).show_ui(ui, |ui| {
+            let swatch = |ui: &mut egui::Ui, n: &str, c: [u8; 3], cur: &mut [u8; 3]| {
+                ui.horizontal(|ui| {
+                    let (r, _) = ui.allocate_exact_size(egui::vec2(14., 14.), egui::Sense::hover());
+                    ui.painter().rect_filled(r, 2., Color32::from_rgb(c[0], c[1], c[2]));
+                    if ui.selectable_label(*cur == c, n).clicked() {
+                        *cur = c;
+                    }
+                });
+            };
+            let user = crate::palette::USER.lock().unwrap().clone();
+            if !user.is_empty() {
+                ui.label(RichText::new(tr("Minhas cores")).strong());
+                for (n, c) in &user {
+                    swatch(ui, n, *c, color);
+                }
+                ui.separator();
+            }
+            ui.label(RichText::new(tr("RAL clássico")).strong());
+            for (n, c) in crate::palette::RAL {
+                swatch(ui, n, c, color);
+            }
+        });
+    });
+    // salvar a cor atual com um nome (fica nas preferências)
+    let key = egui::Id::unique(("nome_cor", id));
+    let mut name: String = ui.ctx().data(|m| m.get_temp(key)).unwrap_or_default();
+    ui.horizontal(|ui| {
+        ui.add_space(100.);
+        ui.add(egui::TextEdit::singleline(&mut name).hint_text(tr("nome da cor")).desired_width(110.));
+        if ui.add_enabled(!name.trim().is_empty(), egui::Button::new(tr("＋ Salvar cor")).small()).clicked() {
+            let mut u = crate::palette::USER.lock().unwrap();
+            u.retain(|(n, _)| n != name.trim());
+            u.push((name.trim().to_string(), *color));
+            *crate::palette::DIRTY.lock().unwrap() = true;
+            name.clear();
+        }
+    });
+    ui.ctx().data_mut(|m| m.insert_temp(key, name));
 }
 
 /// Aparência opcional (com botão para aplicar/remover).

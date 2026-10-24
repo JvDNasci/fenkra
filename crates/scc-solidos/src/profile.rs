@@ -24,6 +24,10 @@ pub struct EvalSketch {
     pub viz: Vec<(bool, Vec<[f64; 2]>)>,
     /// cada curva amostrada, pelo id (outro sketch pode projetá-la)
     pub curves: HashMap<Id, Vec<[f64; 2]>>,
+    /// curvas de construção (ids)
+    pub cons: Vec<Id>,
+    /// todos os pontos resolvidos (para referências a pontos do sketch)
+    pub pts: HashMap<Id, [f64; 2]>,
     /// posições atuais da geometria externa (pontos e raios), para o editor sincronizar
     pub link_pts: Vec<(Id, [f64; 2])>,
     pub link_r: Vec<(Id, f64)>,
@@ -55,6 +59,7 @@ pub fn eval_sketch(data: &SketchData, vars: &Vars) -> Result<EvalSketch, String>
         out.warnings.push(format!("{open} curva(s) não formam perfil fechado"));
     }
     out.points = sk.hole_points();
+    out.pts = sk.points.iter().map(|p| (p.id, [p.x, p.y])).collect();
     for c in &sk.curves {
         let pts = match c.geom {
             Curve::Line { a, b } => {
@@ -72,6 +77,9 @@ pub fn eval_sketch(data: &SketchData, vars: &Vars) -> Result<EvalSketch, String>
             }
         };
         out.curves.insert(c.id, pts.clone());
+        if c.construction {
+            out.cons.push(c.id);
+        }
         out.viz.push((c.construction, pts));
     }
     out.report = report;

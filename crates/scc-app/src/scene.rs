@@ -138,13 +138,34 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
             if editing {
                 continue;
             }
-            let dst = if h { &mut s.overlay } else { &mut s.lines };
-            for p in &sk.lines {
-                dst.push(lv(*p, if h { HILITE } else { SKETCH }));
-                grow(&mut bounds, Vec3::from(*p));
-            }
-            for p in &sk.construction {
-                dst.push(lv(*p, CONSTR));
+            // curvas com estilo próprio (espessura/tipo de linha) vão pelo traço grosso
+            let styled: Vec<&(Id, bool, Vec<[f32; 3]>)> = sk.ents.iter().filter(|(cid, ..)| doc.line_style(*cid).is_some()).collect();
+            if styled.is_empty() {
+                let dst = if h { &mut s.overlay } else { &mut s.lines };
+                for p in &sk.lines {
+                    dst.push(lv(*p, if h { HILITE } else { SKETCH }));
+                    grow(&mut bounds, Vec3::from(*p));
+                }
+                for p in &sk.construction {
+                    dst.push(lv(*p, CONSTR));
+                }
+            } else {
+                for (cid, cons, pts) in &sk.ents {
+                    for p in pts {
+                        grow(&mut bounds, Vec3::from(*p));
+                    }
+                    let col = if h { HILITE } else if *cons { CONSTR } else { SKETCH };
+                    match doc.line_style(*cid) {
+                        Some(st) => crate::render::push_wide(&mut s.wide, pts, col, st.width, st.dash),
+                        None => {
+                            let dst = if h { &mut s.overlay } else { &mut s.lines };
+                            for w in pts.windows(2) {
+                                dst.push(lv(w[0], col));
+                                dst.push(lv(w[1], col));
+                            }
+                        }
+                    }
+                }
             }
         }
     }

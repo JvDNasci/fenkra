@@ -1105,7 +1105,9 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         if selected(Ent::Cv(c.id), edit) {
             col = SEL;
         }
-        let w = if c.construction { 1.2 } else { 2.0 };
+        // estilo próprio da curva (espessura e tipo de linha), se houver
+        let own = app.open.doc.line_style(c.id);
+        let w = own.map(|x| x.width).unwrap_or(if c.construction { 1.2 } else { 2.0 });
         let pts: Vec<Pos2> = match c.geom {
             Curve::Line { a, b } => vec![v.to_screen(sk.pos(a)), v.to_screen(sk.pos(b))],
             Curve::Circle { c: ctr, r } => {
@@ -1132,7 +1134,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             }
             Curve::Point { .. } => vec![],
         };
-        if c.construction {
+        if c.construction || own.is_some_and(|x| x.dash > 0) {
             for w2 in pts.windows(2) {
                 let shapes = egui::Shape::dashed_line(&[w2[0], w2[1]], Stroke::new(w, col), 6., 4.);
                 painter.extend(shapes);
@@ -1710,7 +1712,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         Tool::Convert | Tool::Intersect => {
             let intersect = tool == Tool::Intersect;
             if let (Some(r), Some(h)) = (app.result.as_ref(), resp.hover_pos()) {
-                let filt = crate::picking::Filter { faces: intersect, edges: true, vertices: !intersect, planes: true, hidden_env: false };
+                let filt = crate::picking::Filter { faces: intersect, edges: true, vertices: !intersect, planes: true, hidden_env: false, exclude_sketch: Some(edit.feature) };
                 if let Some(p) = crate::picking::pick(r, &app.open.doc, &v.cam, rect, h, &filt) {
                     crate::picking::draw(&painter, r, &v.cam, rect, &p, false);
                     painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, p.label(&app.open.doc), egui::FontId::proportional(11.), FREE);
@@ -2313,6 +2315,14 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     let Some(edit) = app.sketch.as_mut() else { return };
     ui.separator();
     let sel = edit.sel.clone();
+    // uma curva selecionada: estilo próprio (espessura, tipo de linha) dela
+    if let [Ent::Cv(c)] = sel.as_slice() {
+        let c = *c;
+        if ui.button(tr("🎨 Estilo da curva (espessura, tipo de linha)…")).clicked() {
+            app.props_target = Some(crate::app::AppTarget::Elem(c));
+        }
+    }
+    let Some(edit) = app.sketch.as_mut() else { return };
     let mut del: Option<Id> = None;
     let mut new_sel: Option<Vec<Ent>> = None;
     let failing = edit.report.failing.clone();

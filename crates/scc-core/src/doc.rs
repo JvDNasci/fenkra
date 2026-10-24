@@ -87,6 +87,11 @@ pub enum PointRef {
     Ref(Id),
     /// vértice ou ponto clicado no modelo (fixo nesta versão)
     Fixed([f64; 3]),
+    /// ponto de um sketch (associativo)
+    SketchPoint { sketch: Id, point: Id },
+    /// vértice de uma linha/polilinha/spline de referência (0 = início; nas polilinhas e
+    /// splines, o índice do ponto de definição; nas demais, 1 = fim e 2 = meio)
+    CurveVertex { curve: Id, index: usize },
 }
 
 impl Default for PointRef {
@@ -97,8 +102,11 @@ impl Default for PointRef {
 
 impl PointRef {
     fn walk(&mut self, ids: &mut dyn FnMut(&mut Id)) {
-        if let PointRef::Ref(x) = self {
-            ids(x)
+        match self {
+            PointRef::Ref(x) => ids(x),
+            PointRef::SketchPoint { sketch, .. } => ids(sketch),
+            PointRef::CurveVertex { curve, .. } => ids(curve),
+            PointRef::Origin | PointRef::Fixed(_) => {}
         }
     }
 }
@@ -113,6 +121,10 @@ pub enum CurveRef {
     SketchLine { sketch: Id, entity: Id },
     /// aresta clicada no modelo, como polilinha (fixa nesta versão)
     Edge(Vec<[f64; 3]>),
+    /// qualquer curva de um sketch (linha, arco, círculo), associativa
+    SketchCurve { sketch: Id, curve: Id },
+    /// um trecho (segmento i → i+1) de uma polilinha de referência
+    Segment { curve: Id, index: usize },
 }
 
 impl Default for CurveRef {
@@ -125,7 +137,8 @@ impl CurveRef {
     fn walk(&mut self, ids: &mut dyn FnMut(&mut Id)) {
         match self {
             CurveRef::Ref(x) => ids(x),
-            CurveRef::SketchLine { sketch, .. } => ids(sketch),
+            CurveRef::SketchLine { sketch, .. } | CurveRef::SketchCurve { sketch, .. } => ids(sketch),
+            CurveRef::Segment { curve, .. } => ids(curve),
             CurveRef::Axis(_) | CurveRef::Edge(_) => {}
         }
     }

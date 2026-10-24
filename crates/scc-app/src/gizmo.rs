@@ -55,11 +55,7 @@ fn axis_of(app: &App, a: &AxisRef) -> Option<(Vec3, Vec3)> {
 }
 
 fn point_of(app: &App, p: &PointRef) -> Option<Vec3> {
-    match p {
-        PointRef::Origin => Some(Vec3::ZERO),
-        PointRef::Fixed(q) => Some(v3(*q)),
-        PointRef::Ref(id) => app.result.as_ref()?.points.iter().find(|x| x.id == *id).map(|x| v3(x.p)),
-    }
+    crate::picking::point_pos(app.result.as_ref()?, p).map(v3)
 }
 
 /// Estado do arrasto guardado entre quadros: posição inicial do mouse e valores iniciais.

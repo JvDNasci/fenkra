@@ -103,9 +103,21 @@ pub fn world(r: &RecomputeResult, p: &Pick, intersect: bool, f: &Frame) -> Optio
                 Some((src, pts))
             }
         }
-        Pick::Vertex { pos, .. } => {
+        Pick::Vertex { pos, .. } | Pick::SkPoint { pos, .. } | Pick::CurveVtx { pos, .. } => {
             let q = pos.map(|v| v as f64);
             Some((LinkSrc::Vertex { pos: q }, vec![q]))
+        }
+        // curva de outro sketch: projeção (ou interseção) associativa
+        Pick::SkCurve { sketch, curve, .. } => {
+            let s = r.sketches.iter().find(|s| s.feature == sketch)?;
+            let (_, _, pts) = s.ents.iter().find(|(i, ..)| *i == curve)?;
+            let p3: Vec<V3> = pts.iter().map(|q| q.map(|v| v as f64)).collect();
+            let src = LinkSrc::SketchCurve { sketch, curve };
+            if intersect {
+                crossing(f, &p3).map(|q| (src, vec![q]))
+            } else {
+                Some((src, p3))
+            }
         }
         Pick::Face { body, face, point, .. } if intersect => {
             let m = &r.bodies.get(body)?.mesh;

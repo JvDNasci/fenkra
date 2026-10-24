@@ -15,6 +15,12 @@ pub enum Pick {
     Plane(PlaneRef),
     /// ponto, linha ou curva de referência
     Geo(Id),
+    /// curva de um sketch (subelemento)
+    SkCurve { sketch: Id, curve: Id, at: [f32; 3] },
+    /// ponto de um sketch (subelemento)
+    SkPoint { sketch: Id, point: Id, pos: [f32; 3] },
+    /// vértice de uma linha/polilinha/spline de referência
+    CurveVtx { curve: Id, index: usize, pos: [f32; 3] },
 }
 
 impl Pick {
@@ -26,6 +32,9 @@ impl Pick {
             Pick::Vertex { pos, .. } => format!("Vértice ({:.1}, {:.1}, {:.1})", pos[0], pos[1], pos[2]),
             Pick::Plane(p) => crate::scene::plane_ref_name(doc, p),
             Pick::Geo(id) => doc.name_of(*id),
+            Pick::SkCurve { sketch, curve, .. } => format!("{} · curva #{}", doc.name_of(*sketch), curve.0),
+            Pick::SkPoint { sketch, point, .. } => format!("{} · ponto #{}", doc.name_of(*sketch), point.0),
+            Pick::CurveVtx { curve, index, .. } => format!("{} · vértice {}", doc.name_of(*curve), index + 1),
         }
     }
 }
@@ -37,6 +46,8 @@ pub struct Filter {
     pub planes: bool,
     /// ambiente de ocultos: só o que está oculto é selecionável
     pub hidden_env: bool,
+    /// sketch em edição (as curvas dele não entram como subelementos)
+    pub exclude_sketch: Option<Id>,
 }
 
 /// Índice de "corpo" das superfícies de referência nas seleções (faces/arestas/vértices de
@@ -49,6 +60,45 @@ pub fn mesh_of(r: &RecomputeResult, body: usize) -> Option<&scc_kernel::Mesh> {
         r.surfaces.get(body - SURF_BASE).map(|s| &s.mesh)
     } else {
         r.bodies.get(body).map(|b| &b.mesh)
+    }
+}
+
+/// Posição atual de um ponto de entrada (no resultado do último cálculo).
+pub fn point_pos(r: &RecomputeResult, p: &scc_core::PointRef) -> Option<[f64; 3]> {
+    use scc_core::PointRef as P;
+    match *p {
+        P::Origin => Some([0.; 3]),
+        P::Fixed(q) => Some(q),
+        P::Ref(id) => r.points.iter().find(|x| x.id == id).map(|x| x.p),
+        P::SketchPoint { sketch, point } => {
+            let s = r.sketches.iter().find(|s| s.feature == sketch)?;
+            s.pt_ids.iter().find(|(i, _)| *i == point).map(|(_, q)| q.map(|v| v as f64))
+        }
+        P::CurveVertex { curve, index } => {
+            let c = r.curves.iter().find(|c| c.id == curve)?;
+            c.verts.get(index).copied().or_else(|| c.pts.get(c.pts.len() / 2).copied())
+        }
+    }
+}
+
+/// Polilinha atual de uma curva de entrada.
+pub fn curve_pts(r: &RecomputeResult, c: &scc_core::CurveRef) -> Option<Vec<[f64; 3]>> {
+    use scc_core::CurveRef as C;
+    match c {
+        C::Axis(a) => {
+            let d = scc_solidos::origin_axis(*a);
+            Some(vec![d.map(|x| -100. * x), d.map(|x| 100. * x)])
+        }
+        C::Ref(id) => r.curves.iter().find(|x| x.id == *id).map(|x| x.pts.clone()),
+        C::Edge(p) => Some(p.clone()),
+        C::SketchLine { sketch, entity } | C::SketchCurve { sketch, curve: entity } => {
+            let s = r.sketches.iter().find(|s| s.feature == *sketch)?;
+            s.ents.iter().find(|(i, ..)| i == entity).map(|(_, _, p)| p.iter().map(|q| q.map(|v| v as f64)).collect())
+        }
+        C::Segment { curve, index } => {
+            let c = r.curves.iter().find(|x| x.id == *curve)?;
+            Some(vec![*c.verts.get(*index)?, *c.verts.get(*index + 1)?])
+        }
     }
 }
 
@@ -169,6 +219,34 @@ pub fn pick(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, pos: 
             return Some(p);
         }
     }
+    // sketches visíveis (exceto o em edição) — seus pontos e curvas são subelementos
+    let sk_ok = |id: Id| Some(id) != f.exclude_sketch && doc.feature(id).is_some_and(|x| x.hidden == f.hidden_env);
+    if f.planes {
+        let mut best: Option<(f32, Pick)> = None;
+        for c in r.curves.iter().filter(|c| ref_ok(c.id)) {
+            for (i, q) in c.verts.iter().enumerate() {
+                let w = Vec3::from(q.map(|v| v as f32));
+                let Some(s) = cam.project(rect, w) else { continue };
+                let dd = (s - pos).length();
+                if dd < 7. && depth(w) <= depth_limit && best.is_none_or(|(bd, _)| dd < bd) {
+                    best = Some((dd, Pick::CurveVtx { curve: c.id, index: i, pos: w.into() }));
+                }
+            }
+        }
+        for sk in r.sketches.iter().filter(|s| sk_ok(s.feature)) {
+            for (pid, q) in &sk.pt_ids {
+                let w = Vec3::from(*q);
+                let Some(s) = cam.project(rect, w) else { continue };
+                let dd = (s - pos).length();
+                if dd < 7. && depth(w) <= depth_limit && best.is_none_or(|(bd, _)| dd < bd) {
+                    best = Some((dd, Pick::SkPoint { sketch: sk.feature, point: *pid, pos: *q }));
+                }
+            }
+        }
+        if let Some((_, p)) = best {
+            return Some(p);
+        }
+    }
     // pontos e curvas de referência (só os visíveis)
     if f.planes {
         let mut best: Option<(f32, Pick)> = None;
@@ -188,6 +266,20 @@ pub fn pick(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, pos: 
                     let (dd, t) = seg_dist(pos, sa, sb);
                     if dd < 6. && depth(a.lerp(b, t)) <= depth_limit && best.is_none_or(|(bd, _)| dd < bd) {
                         best = Some((dd, Pick::Geo(c.id)));
+                    }
+                }
+            }
+        }
+        if best.is_none() {
+            for sk in r.sketches.iter().filter(|s| sk_ok(s.feature)) {
+                for (cid, _, pts) in &sk.ents {
+                    for w in pts.windows(2) {
+                        let (a, b) = (Vec3::from(w[0]), Vec3::from(w[1]));
+                        let (Some(sa), Some(sb)) = (cam.project(rect, a), cam.project(rect, b)) else { continue };
+                        let (dd, t) = seg_dist(pos, sa, sb);
+                        if dd < 6. && depth(a.lerp(b, t)) <= depth_limit && best.is_none_or(|(bd, _)| dd < bd) {
+                            best = Some((dd, Pick::SkCurve { sketch: sk.feature, curve: *cid, at: a.lerp(b, t).into() }));
+                        }
                     }
                 }
             }
@@ -472,6 +564,20 @@ pub fn draw(painter: &egui::Painter, r: &RecomputeResult, cam: &Camera, rect: Re
             if let Some(c) = r.curves.iter().find(|c| c.id == id) {
                 let pts: Vec<Pos2> = c.pts.iter().filter_map(|p| cam.project(rect, Vec3::from(p.map(|v| v as f32)))).collect();
                 painter.add(egui::Shape::line(pts, Stroke::new(if strong { 3.5 } else { 2.5 }, col)));
+            }
+        }
+        Pick::SkCurve { sketch, curve, .. } => {
+            if let Some(sk) = r.sketches.iter().find(|s| s.feature == sketch) {
+                if let Some((_, _, pts)) = sk.ents.iter().find(|(i, ..)| *i == curve) {
+                    let pts: Vec<Pos2> = pts.iter().filter_map(|p| cam.project(rect, Vec3::from(*p))).collect();
+                    painter.add(egui::Shape::line(pts, Stroke::new(if strong { 3.5 } else { 2.5 }, col)));
+                }
+            }
+        }
+        Pick::SkPoint { pos, .. } | Pick::CurveVtx { pos, .. } => {
+            if let Some(s) = cam.project(rect, v3(&pos)) {
+                painter.circle_stroke(s, if strong { 6. } else { 5. }, Stroke::new(2.5, col));
+                painter.circle_filled(s, 2.5, col);
             }
         }
         Pick::Plane(pr) => {

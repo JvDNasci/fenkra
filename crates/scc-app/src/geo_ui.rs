@@ -431,7 +431,8 @@ pub fn axis_of(c: &CurveRef) -> AxisRef {
     match c {
         CurveRef::Axis(a) => AxisRef::Origin(*a),
         CurveRef::Ref(id) => AxisRef::Ref(*id),
-        CurveRef::SketchLine { sketch, entity } => AxisRef::SketchLine { sketch: *sketch, entity: *entity },
+        CurveRef::SketchLine { sketch, entity } | CurveRef::SketchCurve { sketch, curve: entity } => AxisRef::SketchLine { sketch: *sketch, entity: *entity },
+        CurveRef::Segment { curve, .. } => AxisRef::Ref(*curve),
         CurveRef::Edge(p) => {
             let (a, b) = (p[0], *p.last().unwrap_or(&p[0]));
             AxisRef::Fixed { origin: a, dir: [b[0] - a[0], b[1] - a[1], b[2] - a[2]] }
@@ -548,6 +549,12 @@ pub fn point_name(doc: &Document, p: &PointRef) -> String {
         PointRef::Origin => "Origem".into(),
         PointRef::Ref(id) => doc.reference(*id).map(|r| r.name.clone()).or_else(|| crate::slots::label(*id)).unwrap_or_else(|| format!("⚠ perdido #{}", id.0)),
         PointRef::Fixed(q) => format!("({}, {}, {})", fmt(q[0]), fmt(q[1]), fmt(q[2])),
+        PointRef::SketchPoint { sketch, point } => format!("{} · ponto #{}", doc.name_of(*sketch), point.0),
+        PointRef::CurveVertex { curve, index } => format!("{} · {}", doc.name_of(*curve), match index {
+            0 => "início".to_string(),
+            1 if !matches!(doc.reference(*curve).map(|r| &r.kind), Some(RefKind::Polyline { .. } | RefKind::Spline { .. } | RefKind::SplineControl { .. })) => "fim".to_string(),
+            i => format!("vértice {}", i + 1),
+        }),
     }
 }
 
@@ -557,6 +564,8 @@ pub fn curve_name(doc: &Document, c: &CurveRef) -> String {
         CurveRef::Ref(id) => doc.reference(*id).map(|r| r.name.clone()).or_else(|| crate::slots::label(*id)).unwrap_or_else(|| format!("⚠ perdida #{}", id.0)),
         CurveRef::SketchLine { sketch, entity } => format!("{} · linha #{}", doc.name_of(*sketch), entity.0),
         CurveRef::Edge(p) => format!("Aresta ({} pontos)", p.len()),
+        CurveRef::SketchCurve { sketch, curve } => format!("{} · curva #{}", doc.name_of(*sketch), curve.0),
+        CurveRef::Segment { curve, index } => format!("{} · trecho {}", doc.name_of(*curve), index + 1),
     }
 }
 

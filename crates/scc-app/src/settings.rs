@@ -347,6 +347,10 @@ pub struct Settings {
     pub tree_hidden: Vec<String>,
     /// seleção em caixa: 0 com Ctrl + arrastar, 1 janela, 2 cruzada, 3 pela direção (arrastar sem Ctrl)
     pub box_mode: u8,
+    /// cores salvas pelo usuário (nome, cor)
+    pub user_colors: Vec<(String, [u8; 3])>,
+    /// tema dos menus: 0 padrão, 1 grafite (preto/cinza), 2 carmim (preto/vermelho), 3 azul
+    pub menu_theme: u8,
     /// última macro escrita na janela de automação
     pub macro_src: String,
 }
@@ -419,6 +423,8 @@ impl Default for Settings {
             hole_mark: 0,
             tree_hidden: vec![],
             box_mode: 0,
+            user_colors: vec![],
+            menu_theme: 1,
         }
     }
 }

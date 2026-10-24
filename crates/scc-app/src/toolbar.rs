@@ -521,6 +521,23 @@ fn is_selected(a: Act, s: &Settings, st: &ToolState) -> bool {
 }
 
 /// Mostra um grupo; devolve as ações clicadas.
+/// Índice do bloco desenhado nesta passada (alterna as cores do tema); zerado a cada quadro.
+pub static BLOCK_IDX: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Cores do tema dos menus: (fundo par, fundo ímpar, destaque do nome do grupo).
+pub fn theme_colors(theme: u8, dark: bool) -> Option<(egui::Color32, egui::Color32, egui::Color32)> {
+    use egui::Color32 as C;
+    Some(match (theme, dark) {
+        (1, true) => (C::from_rgb(28, 30, 34), C::from_rgb(44, 47, 54), C::from_rgb(170, 176, 188)),
+        (1, false) => (C::from_rgb(226, 229, 234), C::from_rgb(240, 242, 246), C::from_rgb(70, 76, 88)),
+        (2, true) => (C::from_rgb(26, 22, 24), C::from_rgb(52, 22, 28), C::from_rgb(228, 76, 76)),
+        (2, false) => (C::from_rgb(244, 234, 234), C::from_rgb(232, 210, 212), C::from_rgb(170, 30, 36)),
+        (3, true) => (C::from_rgb(20, 28, 42), C::from_rgb(30, 44, 68), C::from_rgb(100, 170, 255)),
+        (3, false) => (C::from_rgb(226, 236, 250), C::from_rgb(240, 245, 252), C::from_rgb(30, 90, 190)),
+        _ => return None,
+    })
+}
+
 pub fn show_group(ui: &mut egui::Ui, g: Group, s: &mut Settings, st: &ToolState, vertical: bool) -> Vec<Act> {
     let list = custom_entries(g, s);
     show_block(ui, Some(g), g.label().to_string(), list, s, st, vertical)
@@ -530,6 +547,7 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, title: String, list: Vec<Entr
     let mut acts = vec![];
     let size = s.icon_size;
     let labels = s.show_labels && !vertical;
+    let menu_theme = s.menu_theme;
     let mut body = |ui: &mut egui::Ui| {
         for e in list.clone() {
             match e {
@@ -607,15 +625,29 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, title: String, list: Vec<Entr
         }
     };
     let mut undock = None;
+    // tema: blocos com fundos alternados e o nome do grupo numa faixa de destaque
+    let dark = ui.visuals().dark_mode;
+    let theme = theme_colors(menu_theme, dark);
+    let k = BLOCK_IDX.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let frame = match theme {
+        Some((a, b, _)) => egui::Frame::new().fill(if k % 2 == 0 { a } else { b }).corner_radius(6.).inner_margin(egui::Margin::symmetric(5, 3)),
+        None => egui::Frame::new(),
+    };
+    let accent = theme.map(|t| t.2);
     let inner = if vertical {
-        ui.vertical_centered(|ui| body(ui)).response
+        frame.show(ui, |ui| ui.vertical_centered(|ui| body(ui)).response).inner
     } else {
         // bloco: botões em cima, nome do grupo embaixo
-        ui.vertical(|ui| {
+        frame.show(ui, |ui| ui.vertical(|ui| {
             let row = ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| body(ui)).response;
             // nome do grupo centralizado sob os botões, com a largura do próprio bloco
             let (r, resp) = ui.allocate_exact_size(egui::vec2(row.rect.width(), 14.), egui::Sense::drag());
-            ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, &title, egui::FontId::proportional(10.5), ui.visuals().weak_text_color());
+            if let Some(c) = accent {
+                ui.painter().rect_filled(r.shrink2(egui::vec2(2., 1.)), 3., c.gamma_multiply(0.22));
+                ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, &title, egui::FontId::proportional(10.5), c);
+            } else {
+                ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, &title, egui::FontId::proportional(10.5), ui.visuals().weak_text_color());
+            }
             // arrastar o nome do grupo solta o bloco (vira flutuante; encaixa de novo ao soltar perto de uma borda)
             if let Some(g) = g {
                 let resp = resp.on_hover_text(tr("arraste para soltar o grupo; solte perto do topo ou das laterais para encaixar"));
@@ -627,7 +659,8 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, title: String, list: Vec<Entr
                 }
             }
         })
-        .response
+        .response)
+        .inner
     };
     if let Some(g) = undock {
         acts.push(Act::Dock(g, Dock::Flutuante));

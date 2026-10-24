@@ -178,7 +178,7 @@ pub struct App {
     /// item sendo renomeado na própria árvore (F2)
     renaming: Option<Id>,
     /// janela de propriedades gráficas aberta para este alvo
-    props_target: Option<AppTarget>,
+    pub props_target: Option<AppTarget>,
     /// página da janela de configurações
     settings_page: usize,
     /// documento do último pedido de cálculo e do último resultado (para marcar o que está desatualizado)
@@ -1011,6 +1011,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 }
                 Pick::Plane(pr) => s.planes.push(pr),
                 Pick::Geo(id) => add_ref(&mut s, id),
+                Pick::SkCurve { sketch, curve, .. } => s.curves.push(CurveRef::SketchCurve { sketch, curve }),
+                Pick::SkPoint { sketch, point, .. } => s.points.push(PointRef::SketchPoint { sketch, point }),
+                Pick::CurveVtx { curve, index, .. } => s.points.push(PointRef::CurveVertex { curve, index }),
             }
         }
         s
@@ -2213,6 +2216,18 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                         (None, true) => format!("{} •", self.open.doc.name),
                         (None, false) => self.open.doc.name.clone(),
                     };
+                    // tema dos menus (faixas de cor por grupo)
+                    let themes = ["Padrão", "Grafite", "Carmim", "Azul"];
+                    let cur = self.settings.menu_theme.min(3) as usize;
+                    ui.menu_button(RichText::new(format!("🎨 {}", tr(themes[cur]))).small(), |ui| {
+                        ui.label(RichText::new(tr("Tema dos menus")).strong());
+                        for (i, n) in themes.iter().enumerate() {
+                            if ui.radio(cur == i, tr(n)).clicked() {
+                                self.settings.menu_theme = i as u8;
+                                ui.close();
+                            }
+                        }
+                    });
                     ui.label(RichText::new(title).weak());
                 });
             });
@@ -2309,12 +2324,32 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 .resizable(false)
                 .collapsible(true)
                 .show(&ctx, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(tr("📌 fixar em:")).small().weak());
+                        for (d, n) in [(Dock::Topo, "topo"), (Dock::Lateral, "lateral"), (Dock::Direita, "direita")] {
+                            if ui.small_button(tr(n)).clicked() {
+                                acts.push(Act::Dock(g, d));
+                            }
+                        }
+                    });
                     acts.extend(toolbar::show_group(ui, g, &mut self.settings, &ts, false));
                 });
             // encaixe por proximidade: soltar perto do topo ou de uma lateral fixa o grupo ali
             if let Some(w) = w {
                 let r = w.response.rect;
                 let snap = 36.;
+                if w.response.dragged() {
+                    let p = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("docas_possiveis")));
+                    for (zone, name) in [
+                        (Rect::from_min_size(area.left_top() + egui::vec2(0., 50.), egui::vec2(area.width(), 70.)), "⬆ topo"),
+                        (Rect::from_min_size(area.left_top() + egui::vec2(0., 130.), egui::vec2(60., area.height() - 160.)), "⬅ lateral"),
+                        (Rect::from_min_size(area.right_top() + egui::vec2(-60., 130.), egui::vec2(60., area.height() - 160.)), "➡ direita"),
+                    ] {
+                        p.rect_filled(zone, 6., Color32::from_rgba_unmultiplied(90, 170, 255, 28));
+                        p.rect_stroke(zone, 6., egui::Stroke::new(1.5, Color32::from_rgba_unmultiplied(90, 170, 255, 120)), egui::StrokeKind::Inside);
+                        p.text(zone.center(), egui::Align2::CENTER_CENTER, tr(name), egui::FontId::proportional(13.), Color32::from_rgba_unmultiplied(160, 205, 255, 220));
+                    }
+                }
                 let to = if r.top() < area.top() + 60. + snap {
                     Some(Dock::Topo)
                 } else if r.left() < area.left() + snap {
@@ -2512,6 +2547,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
         let name = match t {
             AppTarget::Part => d.name.clone(),
             AppTarget::Collector(id) | AppTarget::Feature(id) | AppTarget::Ref(id) => d.name_of(id),
+            AppTarget::Elem(id) => format!("{} #{}", tr("elemento"), id.0),
         };
         let mut open = true;
         let fechar = egui::Id::unique(("concluir_janela", "app.rs4"));
@@ -2528,6 +2564,19 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 ui.ctx().data_mut(|m| m.insert_temp(fechar, true));
             }
                 match t {
+                    AppTarget::Elem(id) => {
+                        // curva/ponto de sketch: espessura, tipo de linha e símbolo próprios
+                        let cur = d.line_style(id);
+                        let mut own = cur.is_some();
+                        ui.checkbox(&mut own, tr("estilo próprio de linha/ponto"));
+                        if own {
+                            let mut st = cur.unwrap_or(scc_core::LineStyle { width: 2.5, dash: 0, point: 1, size: 8. });
+                            line_style_ui(ui, &mut st, true, true);
+                            d.set_line_style(id, Some(st));
+                        } else if cur.is_some() {
+                            d.set_line_style(id, None);
+                        }
+                    }
                     AppTarget::Part => {
                         ui.label(RichText::new(tr("Aparência da peça inteira (vale sobre os corpos)")).weak().small());
                         editor::appearance_opt(ui, "pg_peca", &mut d.appearance, &tex);
@@ -3392,6 +3441,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                     actions.push(TreeAction::RefVisible(r.id, !r.visible));
                     ui.close();
                 }
+                appearance_menu(ui, r.appearance, AppTarget::Ref(r.id), actions);
                 if ui.button(tr("🎨 Propriedades gráficas…")).clicked() {
                     actions.push(TreeAction::Props(AppTarget::Ref(r.id)));
                     ui.close();
@@ -3624,8 +3674,30 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                     r.visible = v
                 }
             }
+            TreeAction::SetAppearance(t, a) if {
+                let id = match t {
+                    AppTarget::Ref(x) | AppTarget::Feature(x) | AppTarget::Collector(x) => Some(x),
+                    AppTarget::Part | AppTarget::Elem(_) => None,
+                };
+                let m = self.multi.borrow();
+                m.len() > 1 && id.is_some_and(|x| m.contains(&x))
+            } => {
+                // vários selecionados na árvore: a mesma aparência em todos
+                let many: Vec<Id> = self.multi.borrow().clone();
+                for x in many {
+                    if let Some(r) = d.references.iter_mut().find(|r| r.id == x) {
+                        r.appearance = a;
+                    } else if let (Some(c), Some(a)) = (d.collectors.iter_mut().find(|c| c.id == x), a) {
+                        c.color = a.color;
+                        c.finish = a.finish;
+                    } else if let Some(f) = d.feature_mut(x) {
+                        f.appearance = a;
+                    }
+                }
+            }
             TreeAction::SetAppearance(t, a) => match t {
                 AppTarget::Part => d.appearance = a,
+                AppTarget::Elem(_) => {}
                 AppTarget::Ref(id) => {
                     if let Some(r) = d.references.iter_mut().find(|r| r.id == id) {
                         r.appearance = a
@@ -3645,7 +3717,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
             },
             TreeAction::Customize(t) => {
                 self.sel = match t {
-                    AppTarget::Part => Sel::Part,
+                    AppTarget::Part | AppTarget::Elem(_) => Sel::Part,
                     AppTarget::Feature(id) => Sel::Feature(id),
                     AppTarget::Collector(id) => Sel::Collector(id),
                     AppTarget::Ref(id) => Sel::Ref(id),
@@ -3921,6 +3993,28 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 item(ui, if rf.published { "Despublicar" } else { "📤 Publicar para outras peças" }, TreeAction::Publish(id, !rf.published), acts);
                 ui.separator();
                 item(ui, "🗑 Apagar", TreeAction::Delete(id), acts);
+            }
+            Some(Pick::SkCurve { sketch, curve, .. }) => {
+                ui.label(RichText::new(format!("{} · {}", doc.name_of(sketch), tr("curva"))).strong());
+                item(ui, "✏ Editar o sketch", TreeAction::EditSketch(sketch), acts);
+                item(ui, "🎨 Estilo desta curva (espessura, tipo de linha)…", TreeAction::Props(AppTarget::Elem(curve)), acts);
+                if let Some(p) = target {
+                    item(ui, "∿ Superfície extrudada desta curva", TreeAction::WithPicks(vec![p], Cmd::Geo(crate::geo_ui::GeoKind::SurfExtrude)), acts);
+                    item(ui, "▱ Plano normal a esta curva", TreeAction::WithPicks(vec![p], Cmd::Geo(crate::geo_ui::GeoKind::PlaneNormalCurve)), acts);
+                    item(ui, "• Ponto nesta curva", TreeAction::WithPicks(vec![p], Cmd::Geo(crate::geo_ui::GeoKind::PtOnCurve)), acts);
+                }
+            }
+            Some(p @ (Pick::SkPoint { .. } | Pick::CurveVtx { .. })) => {
+                ui.label(RichText::new(p.label(doc)).strong());
+                let owner = match p {
+                    Pick::SkPoint { sketch, .. } => sketch,
+                    Pick::CurveVtx { curve, .. } => curve,
+                    _ => Id(0),
+                };
+                item(ui, "✏ Editar o dono", TreeAction::EditSketch(owner), acts);
+                item(ui, "╱ Linha a partir deste ponto", TreeAction::WithPicks(vec![p], Cmd::Geo(crate::geo_ui::GeoKind::LineDir)), acts);
+                item(ui, "▱ Plano normal por este ponto", TreeAction::WithPicks(vec![p], Cmd::Geo(crate::geo_ui::GeoKind::PlanePointNormal)), acts);
+                item(ui, "⦿ Furo neste ponto", TreeAction::WithPicks(vec![p], Cmd::Hole), acts);
             }
             Some(Pick::Plane(PlaneRef::Origin(o))) => {
                 ui.label(RichText::new(format!("Plano {}", crate::scene::plane_name(o))).strong());
@@ -4651,6 +4745,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                     vertices: self.settings.sel_vertices,
                     planes: true,
                     hidden_env: self.hidden_env,
+                    exclude_sketch: None,
                 };
                 let dragging = resp.dragged();
                 self.hover_pick = match (resp.hover_pos(), dragging) {
@@ -4689,6 +4784,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                         Some(crate::picking::Pick::Face { owner, .. }) => Some(owner),
                         Some(crate::picking::Pick::Geo(id) | crate::picking::Pick::Plane(PlaneRef::Datum(id))) => Some(id),
                         Some(crate::picking::Pick::Edge { body, .. } | crate::picking::Pick::Vertex { body, .. }) => crate::picking::surface_of(r, body),
+                        Some(crate::picking::Pick::SkCurve { sketch, .. } | crate::picking::Pick::SkPoint { sketch, .. }) => Some(sketch),
+                        Some(crate::picking::Pick::CurveVtx { curve, .. }) => Some(curve),
                         _ => None,
                     };
                     if let Some(id) = target.filter(|id| self.open.doc.feature(*id).is_some() || self.open.doc.reference(*id).is_some()) {
@@ -5051,6 +5148,8 @@ pub enum AppTarget {
     Collector(Id),
     Feature(Id),
     Ref(Id),
+    /// subelemento (curva/ponto de sketch): só o estilo de linha/ponto
+    Elem(Id),
 }
 
 /// Submenu "Aparência" com predefinições, personalizar e remover.
@@ -5068,6 +5167,28 @@ fn appearance_menu(ui: &mut egui::Ui, current: Option<Appearance>, t: AppTarget,
             }
         }
         ui.separator();
+        // cores salvas pelo usuário e copiar/colar
+        let user = crate::palette::USER.lock().unwrap().clone();
+        if !user.is_empty() {
+            ui.menu_button(tr("Minhas cores"), |ui| {
+                for (n, c) in user {
+                    if ui.button(RichText::new(format!("■ {n}")).color(Color32::from_rgb(c[0], c[1], c[2]))).clicked() {
+                        let base = current.unwrap_or(APPEARANCE_PRESETS[0].1);
+                        actions.push(TreeAction::SetAppearance(t, Some(Appearance { color: c, ..base })));
+                        ui.close();
+                    }
+                }
+            });
+        }
+        if ui.add_enabled(current.is_some(), egui::Button::new(tr("📋 Copiar aparência"))).clicked() {
+            *crate::palette::CLIP.lock().unwrap() = current;
+            ui.close();
+        }
+        let clip = *crate::palette::CLIP.lock().unwrap();
+        if ui.add_enabled(clip.is_some(), egui::Button::new(tr("📋 Colar aparência (vale para todos os selecionados)"))).clicked() {
+            actions.push(TreeAction::SetAppearance(t, clip));
+            ui.close();
+        }
         if ui.button(tr("Personalizar cor e acabamento…")).clicked() {
             actions.push(TreeAction::Customize(t));
             ui.close();
@@ -5287,6 +5408,18 @@ impl eframe::App for App {
     fn ui(&mut self, root: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = &root.ctx().clone();
         crate::i18n::set_english(self.settings.english);
+        crate::toolbar::BLOCK_IDX.store(0, std::sync::atomic::Ordering::Relaxed);
+        // cores salvas: preferências ↔ paleta usada pelos painéis
+        {
+            let mut dirty = crate::palette::DIRTY.lock().unwrap();
+            let mut user = crate::palette::USER.lock().unwrap();
+            if *dirty {
+                self.settings.user_colors = user.clone();
+                *dirty = false;
+            } else if *user != self.settings.user_colors {
+                *user = self.settings.user_colors.clone();
+            }
+        }
         // resultados do recompute
         while let Ok((g, r)) = self.worker.rx.try_recv() {
             if g >= self.gen_done {
@@ -5551,7 +5684,7 @@ impl eframe::App for App {
         };
         if self.settings.editor_left {
             if !hide_editor {
-                egui::Panel::left("editor_esq").default_size(320.).resizable(true).show(root, |ui| editor_panel(self, ui));
+                egui::Panel::left("editor_esq").default_size(300.).size_range(220.0..=440.0).resizable(true).show(root, |ui| editor_panel(self, ui));
             }
             if overlay {
                 // seta na lateral do painel: abre/fecha a árvore à direita dele
@@ -5571,7 +5704,7 @@ impl eframe::App for App {
                 }
             }
         } else {
-            egui::Panel::right("editor").default_size(330.).resizable(true).show(root, |ui| editor_panel(self, ui));
+            egui::Panel::right("editor").default_size(300.).size_range(220.0..=440.0).resizable(true).show(root, |ui| editor_panel(self, ui));
         }
         // realce dinâmico do item sob o mouse
         if self.hover_now.get() != self.hover_item {

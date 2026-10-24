@@ -114,6 +114,10 @@ pub struct SketchViz {
     /// posições atuais da geometria externa (o editor do sketch copia para o documento)
     pub link_pts: Vec<(Id, [f64; 2])>,
     pub link_r: Vec<(Id, f64)>,
+    /// cada curva do sketch no mundo (id, construção, polilinha) — subelementos selecionáveis
+    pub ents: Vec<(Id, bool, Vec<[f32; 3]>)>,
+    /// cada ponto do sketch no mundo (id, posição)
+    pub pt_ids: Vec<(Id, [f32; 3])>,
 }
 
 /// Plano exibível (Origem ou Referências).
@@ -135,6 +139,8 @@ pub struct CurveViz {
     pub id: Id,
     pub name: String,
     pub pts: Vec<[f64; 3]>,
+    /// vértices de definição (pontas da linha, pontos da polilinha/spline) — selecionáveis
+    pub verts: Vec<[f64; 3]>,
 }
 
 /// Valor de um elemento de geometria de referência.
@@ -394,6 +400,29 @@ impl Ctx<'_> {
                 Geo::Point(q) => Ok(q),
                 _ => Err(format!("'{}' não é um ponto", self.doc.name_of(id))),
             },
+            PointRef::SketchPoint { sketch, point } => {
+                let (fr, es) = self.sketch(sketch)?;
+                let q = es.pts.get(&point).ok_or("o ponto do sketch não existe mais — reedite")?;
+                Ok(fr.point(q[0], q[1]))
+            }
+            PointRef::CurveVertex { curve, index } => {
+                if depth > 32 {
+                    return Err("referência circular".into());
+                }
+                // polilinhas/splines: o ponto de definição; demais: início, fim ou meio da curva
+                if let Some(r) = self.doc.reference(curve) {
+                    if let RefKind::Polyline { points, .. } | RefKind::Spline { points, .. } | RefKind::SplineControl { points, .. } = &r.kind {
+                        let p = points.get(index).ok_or("o vértice da curva não existe mais")?;
+                        return self.point(p, depth + 1);
+                    }
+                }
+                let c = self.curve(&CurveRef::Ref(curve), depth + 1)?;
+                Ok(match index {
+                    0 => c.start(),
+                    1 => c.end(),
+                    _ => c.pts.get(c.pts.len() / 2).copied().unwrap_or(c.start()),
+                })
+            }
         }
     }
 
@@ -420,6 +449,22 @@ impl Ctx<'_> {
                 Geo::Curve(c) => Ok(c),
                 _ => Err(format!("'{}' não é uma linha ou curva", self.doc.name_of(*id))),
             },
+            CurveRef::SketchCurve { sketch, curve } => {
+                let (fr, es) = self.sketch(*sketch)?;
+                let pts = es.curves.get(curve).ok_or("a curva do sketch não existe mais — reedite")?;
+                let p3: Vec<V3> = pts.iter().map(|q| fr.point(q[0], q[1])).collect();
+                if p3.len() == 2 {
+                    return Curve3::line(p3[0], p3[1]);
+                }
+                let closed = p3.len() > 2 && geo3d::dist(p3[0], *p3.last().unwrap()) < 1e-6;
+                let p3 = if closed { p3[..p3.len() - 1].to_vec() } else { p3 };
+                Curve3::poly(p3, closed)
+            }
+            CurveRef::Segment { curve, index } => {
+                let a = self.point(&PointRef::CurveVertex { curve: *curve, index: *index }, depth + 1)?;
+                let b = self.point(&PointRef::CurveVertex { curve: *curve, index: *index + 1 }, depth + 1)?;
+                Curve3::line(a, b)
+            }
         }
     }
 
@@ -2609,7 +2654,13 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                 match g {
                     RefViz::Plane(fr) => planes.push(PlaneViz { id: Some(r.id), name: r.name.clone(), frame: fr }),
                     RefViz::Point(p) => points.push(PointViz { id: r.id, name: r.name.clone(), p }),
-                    RefViz::Curve(pts) => curves.push(CurveViz { id: r.id, name: r.name.clone(), pts }),
+                    RefViz::Curve(pts) => {
+                        let verts = match &r.kind {
+                            RefKind::Polyline { points, .. } | RefKind::Spline { points, .. } | RefKind::SplineControl { points, .. } => cx.points(points, 0).unwrap_or_default(),
+                            _ => pts.first().copied().into_iter().chain(pts.last().copied()).collect(),
+                        };
+                        curves.push(CurveViz { id: r.id, name: r.name.clone(), pts, verts })
+                    }
                     RefViz::Surface(mesh) => surfaces.push(SurfaceViz { id: r.id, name: r.name.clone(), mesh }),
                 }
             }
@@ -2633,6 +2684,8 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
             converged: es.report.converged,
             link_pts: es.link_pts.clone(),
             link_r: es.link_r.clone(),
+            ents: es.curves.iter().map(|(cid, pts)| (*cid, es.cons.contains(cid), pts.iter().map(|q| to3d(fr, *q)).collect())).collect(),
+            pt_ids: es.pts.iter().map(|(pid, q)| (*pid, to3d(fr, *q))).collect(),
         };
         // sombra: a face real (com furos internos) tesselada pelo kernel (com cache)
         if !es.loops.is_empty() {

@@ -93,6 +93,31 @@ fn handle_for(app: &App, id: Id) -> Option<Linear> {
                 let (c, n) = sketch_center(r, s.sketch)?;
                 Some(Linear { base: c, dir: if s.reverse { n } else { -n }, k: 1., expr: s.depth.clone(), label: "Profundidade" })
             }
+            // chapa metálica: aba/bainha pelo centro das faces que ela criou; estampo e furo flangeado pelo sketch
+            FeatureKind::SmFlange(fl) => {
+                let base = v3(fl.edge);
+                let c = owned_center(r, f.target, f.id)?;
+                Some(Linear { base, dir: (c - base).try_normalize()?, k: 1., expr: fl.length.clone(), label: "Comprimento da aba" })
+            }
+            FeatureKind::SmHem(hm) => {
+                let base = v3(hm.edge);
+                let c = owned_center(r, f.target, f.id)?;
+                Some(Linear { base, dir: (c - base).try_normalize()?, k: 1., expr: hm.length.clone(), label: "Comprimento da bainha" })
+            }
+            FeatureKind::SmStamp(st) => {
+                let (c, n) = sketch_center(r, st.sketch)?;
+                Some(Linear { base: c, dir: if st.flip { n } else { -n }, k: 1., expr: st.depth.clone(), label: "Profundidade" })
+            }
+            FeatureKind::SmFlangedHole(fh) => {
+                let (c, n) = sketch_center(r, fh.sketch)?;
+                Some(Linear { base: c, dir: if fh.flip { n } else { -n }, k: 1., expr: fh.height.clone(), label: "Altura do colar" })
+            }
+            FeatureKind::SmLouver(lv) => {
+                let base = (v3(lv.a) + v3(lv.b)) * 0.5;
+                let c = owned_center(r, f.target, f.id)?;
+                let n = (c - base).try_normalize()?;
+                Some(Linear { base, dir: n, k: 1., expr: lv.height.clone(), label: "Altura da veneziana" })
+            }
             _ => None,
         };
     }
@@ -105,8 +130,75 @@ fn handle_for(app: &App, id: Id) -> Option<Linear> {
             let b = me - n * (me - o).dot(n);
             Some(Linear { base: b, dir: n, k: 1., expr: offset.clone(), label: "Deslocamento" })
         }
+        // superfícies: extrusão (comprimento), cilindro (altura), esfera (raio), offset (distância)
+        RefKind::SurfExtrude { curve, dir, length, .. } => {
+            let base = curve_mid(r, curve)?;
+            let (_, d) = revolve_axis(app, dir)?;
+            Some(Linear { base, dir: d, k: 1., expr: length.clone(), label: "Comprimento" })
+        }
+        RefKind::SurfCylinder { point, dir, end, .. } => {
+            let base = point_of(r, point)?;
+            let (_, d) = revolve_axis(app, dir)?;
+            Some(Linear { base, dir: d, k: 1., expr: end.clone(), label: "Altura" })
+        }
+        RefKind::SurfSphere { center, radius } => {
+            let base = point_of(r, center)?;
+            Some(Linear { base, dir: Vec3::X, k: 1., expr: radius.clone(), label: "Raio" })
+        }
+        RefKind::SurfOffset { surface, dist } => {
+            let me = r.surfaces.iter().find(|s| s.id == id).map(|s| mesh_center(&s.mesh))?;
+            let src = match surface {
+                SurfRef::Ref(s) => r.surfaces.iter().find(|x| x.id == *s).map(|x| mesh_center(&x.mesh))?,
+                SurfRef::Face { point, .. } => v3(*point),
+                SurfRef::Plane(p) => plane_of(r, p)?.0,
+            };
+            let d = (me - src).try_normalize()?;
+            Some(Linear { base: src, dir: d, k: 1., expr: dist.clone(), label: "Distância" })
+        }
+        RefKind::LineDir { point, dir, end, .. } => {
+            let base = point_of(r, point)?;
+            let (_, d) = revolve_axis(app, dir)?;
+            Some(Linear { base, dir: d, k: 1., expr: end.clone(), label: "Comprimento" })
+        }
+        RefKind::PointOffset { point, dir, dist } => {
+            let base = point_of(r, point)?;
+            let (_, d) = revolve_axis(app, dir)?;
+            Some(Linear { base, dir: d, k: 1., expr: dist.clone(), label: "Distância" })
+        }
         _ => None,
     }
+}
+
+/// Posição de um ponto de entrada no resultado atual.
+fn point_of(r: &scc_solidos::RecomputeResult, p: &PointRef) -> Option<Vec3> {
+    crate::picking::point_pos(r, p).map(v3)
+}
+
+/// Ponto do meio de uma curva de entrada.
+fn curve_mid(r: &scc_solidos::RecomputeResult, c: &CurveRef) -> Option<Vec3> {
+    let p = crate::picking::curve_pts(r, c)?;
+    p.get(p.len() / 2).map(|q| v3(*q))
+}
+
+/// Centro das faces que o comando criou no corpo (direção das abas/bainhas).
+fn owned_center(r: &scc_solidos::RecomputeResult, target: Id, me: Id) -> Option<Vec3> {
+    let b = r.bodies.iter().find(|b| b.collector == target)?;
+    let m = &b.mesh;
+    let mut acc = Vec3::ZERO;
+    let mut n = 0;
+    for (fi, owner) in b.face_owner.iter().enumerate() {
+        if *owner != me {
+            continue;
+        }
+        let i0 = *m.face_ranges.get(fi)? as usize;
+        let i1 = m.face_ranges.get(fi + 1).map(|x| *x as usize).unwrap_or(m.indices.len());
+        for i in &m.indices[i0..i1] {
+            let k = *i as usize * 3;
+            acc += Vec3::new(m.positions[k], m.positions[k + 1], m.positions[k + 2]);
+            n += 1;
+        }
+    }
+    (n > 0).then(|| acc / n as f32)
 }
 
 /// Grava o novo valor na expressão da alça.
@@ -127,12 +219,26 @@ fn write_value(app: &mut App, id: Id, value: String) {
             FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => o.value = value,
             FeatureKind::Shell(sh) => sh.thickness = value,
             FeatureKind::Revolve(r) => r.angle = value,
+            FeatureKind::SmFlange(x) => x.length = value,
+            FeatureKind::SmHem(x) => x.length = value,
+            FeatureKind::SmStamp(x) => x.depth = value,
+            FeatureKind::SmFlangedHole(x) => x.height = value,
+            FeatureKind::SmLouver(x) => x.height = value,
             _ => {}
         }
         return;
     }
-    if let Some(RefElement { kind: RefKind::OffsetPlane { offset, .. }, .. }) = doc.references.iter_mut().find(|r| r.id == id) {
-        *offset = value;
+    if let Some(rf) = doc.references.iter_mut().find(|r| r.id == id) {
+        match &mut rf.kind {
+            RefKind::OffsetPlane { offset, .. } => *offset = value,
+            RefKind::SurfExtrude { length, .. } => *length = value,
+            RefKind::SurfCylinder { end, .. } => *end = value,
+            RefKind::SurfSphere { radius, .. } => *radius = value,
+            RefKind::SurfOffset { dist, .. } => *dist = value,
+            RefKind::LineDir { end, .. } => *end = value,
+            RefKind::PointOffset { dist, .. } => *dist = value,
+            _ => {}
+        }
     }
 }
 
