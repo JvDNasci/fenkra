@@ -214,6 +214,8 @@ pub fn get(name: &str) -> ImageSource<'static> {
         "prim_esfera" => egui::include_image!("../../../assets/icons/prim_esfera.svg"),
         "prim_prisma" => egui::include_image!("../../../assets/icons/prim_prisma.svg"),
         "prim_toro" => egui::include_image!("../../../assets/icons/prim_toro.svg"),
+        "prop_minima" => egui::include_image!("../../../assets/icons/prop_minima.svg"),
+        "prop_tangente" => egui::include_image!("../../../assets/icons/prop_tangente.svg"),
         "r_coincidente" => egui::include_image!("../../../assets/icons/r_coincidente.svg"),
         "r_concentrica" => egui::include_image!("../../../assets/icons/r_concentrica.svg"),
         "r_fixa" => egui::include_image!("../../../assets/icons/r_fixa.svg"),

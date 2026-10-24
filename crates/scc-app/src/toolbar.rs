@@ -330,15 +330,29 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("pmi_tolerancia", "Tolerância", "Tolerância geométrica", "Quadro ISO 1101: característica, tolerância e referências.", Cmd(C::Pmi(8))),
             ]),
         ],
-        Group::Estrutural => vec![
+        Group::Estrutural => {
+            let g = |k: GeoKind| {
+                let (i, n, b, a) = k.info();
+                it(i, n, b, a, Cmd(C::Geo(k)))
+            };
+            let fam = |ks: &[GeoKind]| -> Vec<Item> { ks.iter().map(|k| g(*k)).collect() };
+            vec![
+            // esqueleto: arame 3D direto daqui
+            Family("wf_ponto", fam(&[GeoKind::PtCoords, GeoKind::PtOnCurve, GeoKind::PtBetween, GeoKind::PtOffset, GeoKind::PtCenter, GeoKind::PtProject])),
+            Family("wf_linha", fam(&[GeoKind::LinePts, GeoKind::LineDir, GeoKind::LineNormal, GeoKind::LineAngle, GeoKind::LinePlanes])),
+            One(g(GeoKind::Polyline)),
+            Family("wf_plano", fam(&geo_ui::PLANES)),
+            Family("wf_spline", fam(&[GeoKind::Spline, GeoKind::Connect, GeoKind::Corner, GeoKind::CurveJoin])),
+            One(it("wf_repetir", "Repetir pontos", "Repetir pontos na curva", "Selecione uma curva e crie N pontos associativos ao longo dela (por quantidade ou espaçamento), com planos normais opcionais em cada ponto.", Cmd(C::PointRepeat))),
             One(it("st_membro", "Membro", "Membro estrutural", "Perfil ao longo das linhas selecionadas (arame 3D): família, medida, ancoragem, rotação, deslocamentos e cantos.", Cmd(C::StMember))),
             Family("st_ligacao", vec![
                 it("st_placa", "Placa", "Placa de extremidade", "Fecha a ponta do membro mais perto do vértice selecionado (base de fixação).", Cmd(C::StPlate)),
                 it("st_reforco", "Reforço", "Reforço (gusset)", "Chapa triangular ou com chanfro de alívio no encontro de dois membros.", Cmd(C::StGusset)),
             ]),
             One(it("st_biblioteca", "Biblioteca", "Biblioteca de perfis", "Cadastre famílias de perfis padronizados (tamanhos, ancoragem e rotação padrão).", Cmd(C::StLibrary))),
-            One(it("st_corte", "Lista de corte", "Lista de corte", "Comprimento e quantidade de cada barra, por perfil.", Cmd(C::StCutList))),
-        ],
+            One(it("st_corte", "Lista de corte", "Lista de corte", "Comprimento, quantidade e barras de matéria-prima (emendas) de cada perfil.", Cmd(C::StCutList))),
+            ]
+        }
         Group::Cinematica => {
             let j = |icon, name, brief, adv, k: u8| it(icon, name, brief, adv, Cmd(C::AsmJoint(k)));
             vec![

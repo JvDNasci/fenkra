@@ -17,10 +17,11 @@ fn step(ui: &egui::Ui) -> f64 {
     })
 }
 
-/// Roda do mouse sobre o campo: devolve os "dentes" girados (+ para cima) e consome a rolagem
-/// (o painel não rola junto).
+/// Roda do mouse sobre o campo em edição (clicado): devolve os "dentes" girados (+ para cima) e
+/// consome a rolagem (o painel não rola junto). Sem o foco, a roda rola o painel normalmente —
+/// passar o mouse por cima ao rolar não muda valores.
 fn notches(ui: &egui::Ui, resp: &egui::Response) -> f64 {
-    if !resp.hovered() {
+    if !resp.hovered() || !resp.has_focus() {
         return 0.;
     }
     // sobre o campo, a roda não rola o painel

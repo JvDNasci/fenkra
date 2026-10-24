@@ -960,6 +960,10 @@ pub struct Properties {
     pub material: String,
     pub part_type: PartType,
     pub custom: Vec<(String, String)>,
+    /// comprimento máximo da matéria-prima das barras (mm; vazio = sem limite): acima dele a
+    /// barra precisa de emenda
+    #[serde(default)]
+    pub stock_length: String,
 }
 
 impl Default for Properties {
@@ -970,6 +974,7 @@ impl Default for Properties {
             material: "Aço 1020".into(),
             part_type: PartType::Fabricada,
             custom: vec![],
+            stock_length: String::new(),
         }
     }
 }
@@ -1221,6 +1226,23 @@ pub struct StructMember {
     pub corner: CornerMode,
     /// folga de solda nos cantos
     pub gap: String,
+    /// cantos com regra própria (o padrão é `corner`/`gap`); ficam no comando posterior do par
+    #[serde(default)]
+    pub joints: Vec<StructJoint>,
+}
+
+/// Regra de um canto entre a linha `mine` deste membro e a linha `other_path` de outro membro
+/// (ou deste mesmo, quando `other` é o próprio comando).
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct StructJoint {
+    pub mine: usize,
+    pub other: Id,
+    pub other_path: usize,
+    pub mode: CornerMode,
+    /// a linha `mine` é o membro 1 (continua; o membro 2 para nele)
+    pub first: bool,
+    /// folga própria (vazio = a do membro)
+    pub gap: Option<String>,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -2092,6 +2114,19 @@ pub struct EdgeOp {
     pub edges: EdgeSel,
     #[serde(default)]
     pub mode: EdgeMode,
+    /// propagação ao longo das arestas tangentes às escolhidas
+    #[serde(default)]
+    pub prop: EdgeProp,
+}
+
+/// Até onde o filete/chanfro continua a partir das arestas escolhidas.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum EdgeProp {
+    /// segue toda a cadeia de arestas tangentes
+    #[default]
+    Tangente,
+    /// só as arestas escolhidas: nas pontas o filete termina reto, no plano normal à aresta
+    Minima,
 }
 
 /// Variações de filete/chanfro.
@@ -2653,6 +2688,71 @@ impl Document {
 
     /// Insere um comando na posição do marcador de rollback (RF-ARV-051).
     /// Insere um comando na linha do tempo do coletor ativo, na posição do marcador dele.
+    /// Membro estrutural com várias linhas vira um comando por linha (logo depois do original),
+    /// mantendo as regras de canto (que passam a ligar os comandos novos). Devolve os comandos.
+    pub fn split_struct_member(&mut self, id: Id) -> Vec<Id> {
+        let Some(idx) = self.features.iter().position(|f| f.id == id) else { return vec![] };
+        let FeatureKind::StructMember(m) = &self.features[idx].kind else { return vec![id] };
+        if m.paths.len() < 2 {
+            return vec![id];
+        }
+        let base = self.features[idx].clone();
+        let FeatureKind::StructMember(m) = base.kind.clone() else { unreachable!() };
+        let n = m.paths.len();
+        let mut ids = vec![id];
+        for _ in 1..n {
+            ids.push(self.alloc());
+        }
+        // regras de canto: as internas ligam os comandos novos; as externas seguem a linha
+        let mut per: Vec<Vec<StructJoint>> = vec![vec![]; n];
+        for j in &m.joints {
+            if j.other == id {
+                let (a, b) = (j.mine, j.other_path);
+                if a >= n || b >= n {
+                    continue;
+                }
+                let (late, early, first) = if a > b { (a, b, j.first) } else { (b, a, !j.first) };
+                per[late].push(StructJoint { mine: 0, other: ids[early], other_path: 0, mode: j.mode, first, gap: j.gap.clone() });
+            } else if j.mine < n {
+                per[j.mine].push(StructJoint { mine: 0, ..j.clone() });
+            }
+        }
+        for (i, p) in m.paths.iter().enumerate() {
+            let mut k = m.clone();
+            k.paths = vec![p.clone()];
+            k.joints = std::mem::take(&mut per[i]);
+            let name = format!("{} ({})", base.name, i + 1);
+            if i == 0 {
+                self.features[idx].kind = FeatureKind::StructMember(k);
+                self.features[idx].name = name;
+            } else {
+                let f = Feature { id: ids[i], name, kind: FeatureKind::StructMember(k), ..base.clone() };
+                self.features.insert(idx + i, f);
+                if idx + i <= self.rollback {
+                    self.rollback += 1;
+                }
+                let pos = self.features[..idx].iter().filter(|g| g.target == base.target && !self.is_free(g)).count();
+                if let Some(c) = self.collectors.iter_mut().find(|c| c.id == base.target) {
+                    if let Some(mk) = c.marker.as_mut() {
+                        if pos < *mk {
+                            *mk += 1;
+                        }
+                    }
+                }
+            }
+        }
+        // regras guardadas em outros membros que apontavam para uma linha deste
+        for f in self.features.iter_mut().filter(|f| !ids.contains(&f.id)) {
+            if let FeatureKind::StructMember(o) = &mut f.kind {
+                for j in o.joints.iter_mut().filter(|j| j.other == id && j.other_path < n) {
+                    j.other = ids[j.other_path];
+                    j.other_path = 0;
+                }
+            }
+        }
+        ids
+    }
+
     pub fn add_feature(&mut self, kind: FeatureKind) -> Id {
         let id = self.alloc();
         let name = self.unique_name(kind.type_name());
@@ -3059,7 +3159,7 @@ mod tests {
             extent: Extent::Blind(s("10")),
             reverse: false, taper: s("0"), thin: None, dir: None
         }));
-        let fil = d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::CreatedBy(ex), mode: EdgeMode::Constant }));
+        let fil = d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::CreatedBy(ex), mode: EdgeMode::Constant, prop: Default::default() }));
         assert_eq!(d.dependents(sk1), vec![ex, fil]);
 
         // substituir referência mantém o comando e muda a entrada

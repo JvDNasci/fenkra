@@ -321,13 +321,6 @@ impl App {
             app.begin_sketch_pending = app.open.doc.features.iter().find(|f| f.name == name).map(|f| f.id);
             app.started = true;
         }
-        // desenvolvimento: SCC_EDITAR=<nome> abre esse comando como ambiente ao iniciar
-        if let Ok(name) = std::env::var("SCC_EDITAR") {
-            if let Some(id) = app.open.doc.features.iter().find(|f| f.name == name).map(|f| f.id) {
-                app.start_session(id, false, None);
-                app.started = true;
-            }
-        }
         // desenvolvimento: SCC_TEXTURA=<imagem> aplica a imagem como textura na peça
         if let Ok(p) = std::env::var("SCC_TEXTURA") {
             app.open.doc.textures.push(TextureRef { name: "teste".into(), path: p, scale: 40. });
@@ -448,6 +441,7 @@ impl App {
                 ext2: s("0"),
                 corner,
                 gap: s("0"),
+                joints: vec![],
             };
             d.add_feature(FeatureKind::StructMember(mk(paths, CornerMode::MeiaEsquadria, 0)));
             d.add_feature(FeatureKind::StructMember(mk(legs, CornerMode::Nenhum, 0)));
@@ -459,6 +453,13 @@ impl App {
             app.settings.bench = crate::settings::Bench::Estrutural;
             app.st_cut_open = true;
             app.started = true;
+        }
+        // desenvolvimento: SCC_EDITAR=<nome> abre esse comando como ambiente ao iniciar (depois das peças de demonstração)
+        if let Ok(name) = std::env::var("SCC_EDITAR") {
+            if let Some(id) = app.open.doc.features.iter().find(|f| f.name == name).map(|f| f.id) {
+                app.start_session(id, false, None);
+                app.started = true;
+            }
         }
         // desenvolvimento: SCC_DEMO_PMI=1 anota a placa de exemplo (cota, nota, tolerância, rugosidade)
         if std::env::var("SCC_DEMO_PMI").is_ok() {
@@ -646,6 +647,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 set.insert(f.id);
             }
             if rd.features.iter().find(|g| g.id == f.id).is_none_or(|g| !same(g, f)) {
+                set.insert(f.id);
+            }
+        }
+        // cantos estruturais: um membro mudado mexe nos que encostam nele (marca todos)
+        if d.features.iter().any(|f| set.contains(&f.id) && matches!(f.kind, FeatureKind::StructMember(_))) || d.props.stock_length != rd.props.stock_length {
+            for f in d.features.iter().filter(|f| matches!(f.kind, FeatureKind::StructMember(_))) {
                 set.insert(f.id);
             }
         }
@@ -1212,6 +1219,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                     ext2: s("0"),
                     corner: CornerMode::MeiaEsquadria,
                     gap: s("0"),
+                    joints: vec![],
                 })))
             }
             Cmd::StPlate | Cmd::StGusset => {
@@ -1335,7 +1343,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 // atalho de manufatura: extrusão com saída + filete nas arestas criadas por ela
                 let sk = sk_or_unset;
                 let ex = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("20")), reverse: false, taper: s("3"), thin: None, dir: None }));
-                d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::CreatedBy(ex), mode: EdgeMode::Constant }));
+                d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::CreatedBy(ex), mode: EdgeMode::Constant, prop: Default::default() }));
                 Sel::Feature(ex)
             }
             Cmd::SplitBody | Cmd::ThickSurface | Cmd::CloseSurface | Cmd::SewSurface | Cmd::BoundaryFill => {
@@ -1380,7 +1388,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
             Cmd::FilletFaceFace | Cmd::FilletFull => {
                 let f = |k: usize| faces.get(k).copied().unwrap_or([0.; 3]);
                 let mode = if c == Cmd::FilletFull { EdgeMode::FullRound { mid: f(0), a: f(1), b: f(2) } } else { EdgeMode::FaceFace(f(0), f(1)) };
-                Sel::Feature(d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("2"), edges: EdgeSel::AllOfBody, mode })))
+                Sel::Feature(d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("2"), edges: EdgeSel::AllOfBody, mode, prop: Default::default() })))
             }
             Cmd::Hole | Cmd::HoleCounterbore | Cmd::HoleCountersink | Cmd::HoleTapped => {
                 // vértices / pontos selecionados: um furo em cada, normal à superfície (sem sketch)
@@ -1427,7 +1435,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
                 if !all && edges.is_empty() {
                     self.toast("Clique nas arestas na viewport para pô-las no comando (clique de novo tira)", false);
                 }
-                let op = EdgeOp { value: s("1"), edges: sel, mode };
+                let op = EdgeOp { value: s("1"), edges: sel, mode, prop: Default::default() };
                 let d = &mut self.open.doc;
                 Sel::Feature(d.add_feature(if matches!(c, Cmd::Fillet | Cmd::FilletAll | Cmd::FilletVar) { FeatureKind::Fillet(op) } else { FeatureKind::Chamfer(op) }))
             }
@@ -1564,6 +1572,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
     pub fn conclude_session(&mut self) {
         if let Some(s) = self.session.take() {
             self.open.doc.hide_consumed(s.id);
+            // membro com várias linhas: um comando por linha (cantos preservados entre eles)
+            let parts = self.open.doc.split_struct_member(s.id);
+            if parts.len() > 1 {
+                self.toast(format!("{} membros separados (um por linha)", parts.len()), false);
+            }
             // concluir sempre atualiza (também no modo manual)
             if self.needs_recompute() {
                 self.request_recompute();

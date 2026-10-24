@@ -311,6 +311,15 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     }
                 });
             });
+            section(ui, "Projeto estrutural");
+            ui.horizontal(|ui| {
+                ui.add_sized([96., 18.], egui::Label::new(tr("Barra máx.")));
+                let r = ui.add(egui::TextEdit::singleline(&mut p.stock_length).desired_width(80.).hint_text(tr("sem limite")));
+                crate::ui_ext::wheel_text(ui, &r, &mut p.stock_length);
+                ui.label("mm");
+            })
+            .response
+            .on_hover_text(tr("Comprimento da matéria-prima (ex.: 6000). Membros maiores avisam que precisam de emenda, também na lista de corte."));
             section(ui, "Propriedades personalizadas");
             let mut remove = None;
             for (i, (k, v)) in p.custom.iter_mut().enumerate() {
@@ -958,6 +967,16 @@ fn feature_ui(
                     }
                 });
                 ui.label(RichText::new(tr("Clique nas arestas na viewport (Shift soma) e use 'Usar seleção atual'.")).weak().small());
+                ui.label(RichText::new(tr("Propagação")).weak());
+                let opts = [
+                    ("prop_tangente", "Tangente", "Segue todas as arestas tangentes às escolhidas", o.prop == EdgeProp::Tangente),
+                    ("prop_minima", "Mínima", "Só as arestas escolhidas: nas pontas o filete termina reto (plano normal à aresta)", o.prop == EdgeProp::Minima),
+                ];
+                match icon_choice(ui, &opts) {
+                    Some(0) => o.prop = EdgeProp::Tangente,
+                    Some(1) => o.prop = EdgeProp::Minima,
+                    _ => {}
+                }
             }
             target_combo(ui, doc, target);
         }
@@ -990,7 +1009,30 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
         ui.label(RichText::new(tr("Os pontos do sketch são os centros; o furo entra contra a normal do plano.")).weak().small());
     } else {
         crate::geo_ui::points_list(ui, "furo_pts", doc, Id(u64::MAX), &mut h.points, seed, 1);
-        ui.label(RichText::new(tr("Selecione vértices ou pontos de referência e use '+ seleção': cada ponto vira um furo.")).weak().small());
+        ui.horizontal(|ui| {
+            ui.menu_button(tr("+ pontos de um sketch"), |ui| {
+                for f in doc.features.iter() {
+                    let FeatureKind::Sketch(sk) = &f.kind else { continue };
+                    let pts: Vec<Id> = sk.data.curves.iter().filter(|c| !c.construction).filter_map(|c| if let scc_core::sketch::Curve::Point { p } = c.geom { Some(p) } else { None }).collect();
+                    if !pts.is_empty() && ui.button(format!("{} ({})", f.name, pts.len())).clicked() {
+                        h.points.retain(|p| !matches!(p, PointRef::Origin));
+                        h.points.extend(pts.into_iter().map(|point| PointRef::SketchPoint { sketch: f.id, point }));
+                        ui.close();
+                    }
+                }
+            });
+            ui.menu_button(tr("+ pontos de uma pasta"), |ui| {
+                for fo in doc.folders.iter().filter(|f| f.kind == FolderKind::Geometria) {
+                    let pts: Vec<Id> = doc.references.iter().filter(|r| r.folder == Some(fo.id) && r.kind.class() == RefClass::Point).map(|r| r.id).collect();
+                    if !pts.is_empty() && ui.button(format!("{} ({})", fo.name, pts.len())).clicked() {
+                        h.points.retain(|p| !matches!(p, PointRef::Origin));
+                        h.points.extend(pts.into_iter().map(PointRef::Ref));
+                        ui.close();
+                    }
+                }
+            });
+        });
+        ui.label(RichText::new(tr("Cada ponto vira um furo. Pontos fora da peça são projetados na superfície (na direção do furo, ou na normal da face mais perto); se não encontrarem a peça, o comando avisa.")).weak().small());
     }
     section(ui, "Direção");
     let mut custom = h.dir.is_some();
@@ -1017,24 +1059,48 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
         ("ISO métrica grossa".to_string(), name.to_string(), f.to_string())
     };
     let tapped = h.thread.is_some();
-    let kind_idx = match (&h.kind, tapped) {
-        (_, true) => 3,
-        (HoleKind::Rebaixado { .. }, _) => 1,
-        (HoleKind::Escareado { .. }, _) => 2,
-        (HoleKind::Contrafurado { .. }, _) => 4,
+    let head_idx = match &h.kind {
+        HoleKind::Rebaixado { .. } => 1,
+        HoleKind::Escareado { .. } => 2,
+        HoleKind::Contrafurado { .. } => 4,
         _ => 0,
     };
-    let before = (norma.clone(), size.clone(), folga.clone(), kind_idx);
+    let before = (norma.clone(), size.clone(), folga.clone(), head_idx, tapped);
 
-    section(ui, "Tipo");
+    section(ui, "Boca");
     let opts = [
-        ("furo_simples", "Simples", "Furo de passagem simples", kind_idx == 0),
-        ("furo_rebaixado", "Rebaixado", "Passagem + rebaixo para cabeça de parafuso Allen", kind_idx == 1),
-        ("furo_escareado", "Escareado", "Passagem + escareado para cabeça chata", kind_idx == 2),
-        ("furo_roscado", "Roscado", "Broca de rosca + rosca (cosmética ou modelada)", kind_idx == 3),
-        ("furo_contrafurado", "Contrafurado", "Rebaixo com fundo cônico (counterdrilled)", kind_idx == 4),
+        ("furo_simples", "Simples", "Sem rebaixo", head_idx == 0),
+        ("furo_rebaixado", "Rebaixado", "Rebaixo para cabeça cilíndrica (Allen)", head_idx == 1),
+        ("furo_escareado", "Escareado", "Escareado para cabeça chata", head_idx == 2),
+        ("furo_contrafurado", "Contrafurado", "Rebaixo com fundo cônico (counterdrilled)", head_idx == 4),
     ];
-    let new_kind = icon_choice(ui, &opts).unwrap_or(kind_idx);
+    let new_head = match icon_choice(ui, &opts) {
+        Some(3) => 4,
+        Some(i) => i,
+        None => head_idx,
+    };
+    section(ui, "Rosca");
+    let opts = [
+        ("furo_simples", "Passagem", "Sem rosca: diâmetro de passagem pela folga", !tapped),
+        ("furo_roscado", "Cosmética", "Broca de rosca + indicação da rosca (leve; vale no desenho e na BOM)", tapped && !h.thread_modeled),
+        ("furo_roscado", "Modelada", "Broca de rosca + sulco helicoidal real (mais pesado)", tapped && h.thread_modeled),
+    ];
+    let mut new_tapped = tapped;
+    match icon_choice(ui, &opts) {
+        Some(0) => new_tapped = false,
+        Some(1) => {
+            new_tapped = true;
+            h.thread_modeled = false;
+        }
+        Some(2) => {
+            new_tapped = true;
+            h.thread_modeled = true;
+        }
+        _ => {}
+    }
+    if new_tapped {
+        ui.checkbox(&mut h.left_hand, tr("rosca à esquerda"));
+    }
 
     section(ui, "Rosca / fixador");
     ui.horizontal(|ui| {
@@ -1056,7 +1122,7 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
             }
         });
     });
-    if new_kind != 3 {
+    if !new_tapped {
         ui.horizontal(|ui| {
             ui.add_sized([60., 18.], egui::Label::new(tr("Folga")));
             for f in ["fino", "normal", "folgado"] {
@@ -1066,7 +1132,7 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
     }
 
     // aplica a escolha (só quando algo mudou, para não sobrescrever ajustes finos)
-    if (norma.clone(), size.clone(), folga.clone(), new_kind) != before {
+    if (norma.clone(), size.clone(), folga.clone(), new_head, new_tapped) != before {
         let spec = hardware::thread(&size).copied();
         let metric = spec.and_then(|t| hardware::METRIC.iter().find(|m| (t.major - m.name[1..].parse::<f64>().unwrap_or(0.)).abs() < 1e-6));
         let fi = match folga.as_str() {
@@ -1076,9 +1142,9 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
         };
         if let Some(t) = spec {
             let clearance = metric.map(|m| m.clearance[fi]).unwrap_or(t.major * [1.05, 1.1, 1.2][fi]);
-            h.diameter = format!("{}", if new_kind == 3 { t.tap_drill } else { (clearance * 100.).round() / 100. });
-            h.thread = (new_kind == 3).then(|| t.name.to_string());
-            h.kind = match new_kind {
+            h.diameter = format!("{}", if new_tapped { t.tap_drill } else { (clearance * 100.).round() / 100. });
+            h.thread = new_tapped.then(|| t.name.to_string());
+            h.kind = match new_head {
                 1 => {
                     let (d, p) = metric.map(|m| (m.cbore_diameter, m.cbore_depth)).unwrap_or((t.major * 1.8, t.major));
                     HoleKind::Rebaixado { diameter: d.to_string(), depth: p.to_string() }
@@ -1096,17 +1162,6 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
 
     extent_ui(ui, "ext_furo", &mut h.depth, vars, &["Cego", "Passante", "Até o próximo", "Até o último", "Até plano", "Até a superfície"], doc, seed);
 
-    if h.thread.is_some() {
-        section(ui, "Representação da rosca");
-        let opts = [
-            ("furo_simples", "Cosmética", "Leve: só a indicação da rosca (desenho e BOM)", !h.thread_modeled),
-            ("furo_roscado", "Modelada", "Sulco helicoidal real recortado por booleana (mais pesado)", h.thread_modeled),
-        ];
-        if let Some(i) = icon_choice(ui, &opts) {
-            h.thread_modeled = i == 1;
-        }
-        ui.checkbox(&mut h.left_hand, tr("rosca à esquerda"));
-    }
 
     section(ui, "Fundo e corpo");
     let mut v = h.tip.is_some();

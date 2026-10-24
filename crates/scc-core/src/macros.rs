@@ -135,7 +135,7 @@ fn exec(doc: &mut Document, lines: &[(usize, Vec<String>)], loops: &mut HashMap<
             "filete" | "fillet" | "chanfro" | "chamfer" => {
                 need(3)?;
                 num(&t[2])?;
-                let op = EdgeOp { value: t[2].clone(), edges: EdgeSel::AllOfBody, mode: EdgeMode::Constant };
+                let op = EdgeOp { value: t[2].clone(), edges: EdgeSel::AllOfBody, mode: EdgeMode::Constant, prop: Default::default() };
                 let fillet = kw(&head, &["filete", "fillet"]);
                 doc.add_feature(if fillet { FeatureKind::Fillet(op) } else { FeatureKind::Chamfer(op) });
                 log.push(format!("{} {}", if fillet { "◜" } else { "◸" }, t[2]));

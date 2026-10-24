@@ -54,15 +54,15 @@ Status: [ ] a fazer · [~] parcial · [x] feito
 - [ ] D12 Setas 3D na chapa; furo flangeado com seleção como furo e tabela cadastrável
 
 ## E. Estrutural
-- [ ] E1 Menu de operações de canto por par de membros (membro 1 / membro 2)
-- [ ] E2 Membro com várias linhas gera elementos separados ao concluir
-- [ ] E3 Menu de wireframe no estrutural
-- [ ] E4 Propriedades do projeto: comprimento máximo da matéria-prima → alerta de emenda (também na lista de corte)
+- [x] E1 Menu de operações de canto por par de membros (membro 1 / membro 2)
+- [x] E2 Membro com várias linhas gera elementos separados ao concluir
+- [x] E3 Menu de wireframe no estrutural
+- [x] E4 Propriedades do projeto: comprimento máximo da matéria-prima → alerta de emenda (também na lista de corte)
 
 ## F. Furos e filetes
-- [ ] F1 Interface do furo sem redundância; rosca cosmética/modelada com rebaixo/escareado
-- [ ] F2 Furo múltiplo esperto: pega pontos de sketch/extração múltipla, projeta na superfície
-- [ ] F3 Filetes/chanfros: propagação tangente / nenhuma / mínima
+- [x] F1 Interface do furo sem redundância; rosca cosmética/modelada com rebaixo/escareado
+- [x] F2 Furo múltiplo esperto: pega pontos de sketch/extração múltipla, projeta na superfície
+- [x] F3 Filetes/chanfros: propagação tangente / nenhuma / mínima
 
 ## G. Montagem
 - [ ] G1 Restrições rápidas: selecionar elementos de duas peças → menu (inclusive botão direito) com as restrições possíveis

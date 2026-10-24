@@ -82,7 +82,7 @@ pub fn member_panel(ui: &mut egui::Ui, doc: &Document, me: Id, m: &mut StructMem
     expr(ui, "Deslocamento Y", &mut m.off_y, vars, "mm");
     expr(ui, "Prolongar início", &mut m.ext1, vars, "mm");
     expr(ui, "Prolongar fim", &mut m.ext2, vars, "mm");
-    section(ui, "Cantos");
+    section(ui, "Cantos (padrão)");
     let opts = [
         ("st_canto_meia", "Meia-esquadria", "Os dois membros cortados na bissetriz", m.corner == CornerMode::MeiaEsquadria),
         ("st_canto_aparar", "Aparar", "O posterior para na face do anterior", m.corner == CornerMode::Aparar),
@@ -93,7 +93,97 @@ pub fn member_panel(ui: &mut egui::Ui, doc: &Document, me: Id, m: &mut StructMem
         m.corner = [CornerMode::MeiaEsquadria, CornerMode::Aparar, CornerMode::Encaixe, CornerMode::Nenhum][i];
     }
     expr(ui, "Folga de solda", &mut m.gap, vars, "mm");
+    joints_ui(ui, doc, me, m);
     ui.label(RichText::new(tr("Tudo é associativo: mexer no esqueleto (pontos, linhas) atualiza as barras.")).weak().small());
+}
+
+/// Cantos encontrados no último cálculo: ((comando, linha), (comando, linha), ponto).
+#[derive(Clone)]
+pub struct JointCache(pub Vec<((Id, usize), (Id, usize), [f64; 3])>);
+
+/// Operações de canto por par: para cada encontro deste membro com outro (ou entre linhas dele),
+/// o tratamento, quem é o membro 1 (continua) e a folga.
+fn joints_ui(ui: &mut egui::Ui, doc: &Document, me: Id, m: &mut StructMember) {
+    let all = ui.ctx().data(|d| d.get_temp::<JointCache>(egui::Id::unique("st_joints"))).map(|c| c.0).unwrap_or_default();
+    let mine: Vec<(usize, Id, usize, [f64; 3])> = all
+        .iter()
+        .filter_map(|(a, b, p)| {
+            if a.0 == me {
+                Some((a.1, b.0, b.1, *p))
+            } else if b.0 == me {
+                Some((b.1, a.0, a.1, *p))
+            } else {
+                None
+            }
+        })
+        .collect();
+    if mine.is_empty() {
+        return;
+    }
+    section(ui, &format!("Cantos com outros membros ({})", mine.len()));
+    let pos = |id: Id| doc.features.iter().position(|f| f.id == id).unwrap_or(0);
+    let modes = [(None, "padrão"), (Some(CornerMode::MeiaEsquadria), "Meia-esquadria"), (Some(CornerMode::Aparar), "Aparar"), (Some(CornerMode::Encaixe), "Encaixe"), (Some(CornerMode::Nenhum), "Nenhum")];
+    egui::Grid::new("st_joints_grid").striped(true).num_columns(4).show(ui, |ui| {
+        for (k, (i, other, j, p)) in mine.into_iter().enumerate() {
+            let them = if other == me { format!("{} {}", tr("linha"), j + 1) } else { format!("{} · {} {}", doc.name_of(other), tr("linha"), j + 1) };
+            ui.label(format!("{} {} ↔ {}", tr("linha"), i + 1, them)).on_hover_text(format!("({:.0}, {:.0}, {:.0})", p[0], p[1], p[2]));
+            // regra guardada no outro membro (posterior) manda: só mostra
+            let other_rule = (other != me && pos(other) > pos(me))
+                .then(|| match doc.feature(other).map(|f| &f.kind) {
+                    Some(FeatureKind::StructMember(o)) => o.joints.iter().find(|x| x.mine == j && x.other == me && x.other_path == i).cloned(),
+                    _ => None,
+                })
+                .flatten();
+            if let Some(r) = other_rule {
+                ui.label(RichText::new(format!("{:?} — {} {}", r.mode, tr("definido em"), doc.name_of(other))).weak());
+                ui.label("");
+                ui.label("");
+                ui.end_row();
+                continue;
+            }
+            let at = m.joints.iter().position(|x| (x.mine == i && x.other == other && x.other_path == j) || (other == me && x.mine == j && x.other == me && x.other_path == i));
+            let cur = at.map(|a| m.joints[a].mode);
+            let label = modes.iter().find(|(x, _)| *x == cur).map(|(_, n)| tr(n).to_string()).unwrap_or_default();
+            let mut pick: Option<Option<CornerMode>> = None;
+            egui::ComboBox::from_id_salt(("st_jm", k)).selected_text(label).width(110.).show_ui(ui, |ui| {
+                for (x, n) in modes {
+                    if ui.selectable_label(cur == x, tr(n)).clicked() {
+                        pick = Some(x);
+                    }
+                }
+            });
+            match pick {
+                Some(None) => {
+                    if let Some(a) = at {
+                        m.joints.remove(a);
+                    }
+                }
+                Some(Some(mode)) => match at {
+                    Some(a) => m.joints[a].mode = mode,
+                    // padrão: o anterior é o membro 1
+                    None => m.joints.push(StructJoint { mine: i, other, other_path: j, mode, first: (pos(me), i) < (pos(other), j), gap: None }),
+                },
+                None => {}
+            }
+            let at = m.joints.iter().position(|x| x.mine == i && x.other == other && x.other_path == j);
+            if let Some(a) = at.filter(|a| matches!(m.joints[*a].mode, CornerMode::Aparar | CornerMode::Encaixe)) {
+                let jt = &mut m.joints[a];
+                ui.horizontal(|ui| {
+                    ui.label(tr("membro 1:"));
+                    ui.selectable_value(&mut jt.first, true, tr("este")).on_hover_text(tr("esta linha continua; a outra para nela"));
+                    ui.selectable_value(&mut jt.first, false, tr("o outro"));
+                });
+                let mut g = jt.gap.clone().unwrap_or_default();
+                if ui.add(egui::TextEdit::singleline(&mut g).desired_width(50.).hint_text(tr("folga"))).changed() {
+                    jt.gap = (!g.trim().is_empty()).then_some(g);
+                }
+            } else {
+                ui.label("");
+                ui.label("");
+            }
+            ui.end_row();
+        }
+    });
 }
 
 /// Cópia das famílias guardada na memória da interface (o painel não tem acesso às configurações).
@@ -103,6 +193,11 @@ pub struct FamCache(pub Family);
 pub fn windows(app: &mut App, ctx: &egui::Context) {
     let fams: Vec<FamCache> = families(&app.settings).into_iter().map(FamCache).collect();
     ctx.data_mut(|d| d.insert_temp(egui::Id::unique("st_fams"), fams));
+    // cantos para o painel do membro em edição
+    if app.session.as_ref().is_some_and(|s| matches!(app.doc().feature(s.id).map(|f| &f.kind), Some(FeatureKind::StructMember(_)))) {
+        let j = JointCache(scc_solidos::member_joints(app.doc()));
+        ctx.data_mut(|d| d.insert_temp(egui::Id::unique("st_joints"), j));
+    }
     library(app, ctx);
     cut_list(app, ctx);
 }
@@ -236,8 +331,9 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
                 ui.label(RichText::new(tr("Nenhum membro estrutural na peça.")).weak());
                 return;
             }
-            egui::Grid::new("lista_corte").striped(true).num_columns(3).show(ui, |ui| {
-                for h in ["Perfil", "Comprimento", "Qtd."] {
+            let stock = app.open.doc.props.stock_length.trim().to_string();
+            egui::Grid::new("lista_corte").striped(true).num_columns(4).show(ui, |ui| {
+                for h in ["Perfil", "Comprimento", "Qtd.", "Barras"] {
                     ui.label(RichText::new(tr(h)).strong());
                 }
                 ui.end_row();
@@ -245,9 +341,18 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
                     ui.label(&r.designation);
                     ui.label(format!("{} mm", fmt(r.length)));
                     ui.label(format!("{}", r.count));
+                    if r.bars > 1 {
+                        ui.label(RichText::new(format!("⚠ {} ({})", r.bars * r.count, tr("emenda"))).color(egui::Color32::from_rgb(240, 170, 80)))
+                            .on_hover_text(format!("{} {} mm", tr("cada peça precisa de emenda: matéria-prima de"), stock));
+                    } else {
+                        ui.label(format!("{}", r.count));
+                    }
                     ui.end_row();
                 }
             });
+            if stock.is_empty() {
+                ui.label(RichText::new(tr("Defina o comprimento máximo da barra nas propriedades da peça para ver as emendas.")).weak().small());
+            }
             let total: f64 = rows.iter().map(|r| r.length * r.count as f64).sum();
             ui.label(RichText::new(format!("total de barras: {} mm", fmt(total))).weak());
             if ui.button(tr("💾 Exportar CSV…")).clicked() {
@@ -256,9 +361,9 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
         });
     if export {
         if let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name("lista_de_corte.csv").save_file() {
-            let mut t = String::from("perfil;comprimento_mm;quantidade\n");
+            let mut t = String::from("perfil;comprimento_mm;quantidade;barras_materia_prima\n");
             for r in &rows {
-                t += &format!("{};{};{}\n", r.designation, fmt(r.length), r.count);
+                t += &format!("{};{};{};{}\n", r.designation, fmt(r.length), r.count, r.bars * r.count);
             }
             match std::fs::write(&p, t) {
                 Ok(()) => app.toast(tr("Lista de corte exportada"), false),

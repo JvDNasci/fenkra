@@ -1432,25 +1432,6 @@ impl Ctx<'_> {
             let y = scc_kernel::cross(z, x);
             out.push(MemberGeom { start, end, z, x, y, w, h, shift, ext: (e1, e2), loops: loops.clone(), pts: c.pts.clone(), straight: c.is_straight() });
         }
-        // pontas ligadas a outro membro: sobra para o canto (diagonal da seção)
-        if m.corner != CornerMode::Nenhum {
-            let diag = (w * w + h * h).sqrt() + 1.;
-            for i in 0..out.len() {
-                for j in 0..out.len() {
-                    if i == j {
-                        continue;
-                    }
-                    let close = |a: V3, b: V3| geo3d::dist(a, b) < 1e-4;
-                    let (s, e) = (out[i].start, out[i].end);
-                    if close(s, out[j].start) || close(s, out[j].end) {
-                        out[i].ext.0 = out[i].ext.0.max(diag);
-                    }
-                    if close(e, out[j].start) || close(e, out[j].end) {
-                        out[i].ext.1 = out[i].ext.1.max(diag);
-                    }
-                }
-            }
-        }
         Ok(out)
     }
 
@@ -1467,6 +1448,94 @@ impl Ctx<'_> {
             let face = Shape::face(&fr, &loops).map_err(k)?;
             face.sweep(&g.pts, 0).map_err(k)
         }
+    }
+
+    /// Linhas de todos os membros estruturais ativos: (comando, índice da linha, posição do
+    /// comando na árvore, geometria).
+    fn all_member_lines(&self) -> Vec<(Id, usize, usize, MemberGeom)> {
+        let mut out = vec![];
+        for (k, f) in self.doc.features.iter().enumerate() {
+            if !self.doc.is_active(k) {
+                continue;
+            }
+            let FeatureKind::StructMember(m) = &f.kind else { continue };
+            if let Ok(gs) = self.members(m) {
+                out.extend(gs.into_iter().enumerate().map(|(i, g)| (f.id, i, k, g)));
+            }
+        }
+        out
+    }
+
+    /// Regra do canto entre duas linhas (comando, linha, posição): (tratamento, `a` é o membro 1,
+    /// folga). Manda o comando posterior: a tabela de cantos dele, senão o tratamento padrão
+    /// (o anterior é o membro 1).
+    fn joint_rule(&self, a: (Id, usize, usize), b: (Id, usize, usize)) -> Result<(CornerMode, bool, f64), String> {
+        let (early, late) = if (a.2, a.1) <= (b.2, b.1) { (a, b) } else { (b, a) };
+        let Some(FeatureKind::StructMember(m)) = self.doc.feature(late.0).map(|f| &f.kind) else { return Ok((CornerMode::Nenhum, true, 0.)) };
+        // a regra pode estar no posterior (vale primeiro) ou no anterior
+        let hit = m.joints.iter().find(|j| j.mine == late.1 && j.other == early.0 && j.other_path == early.1).map(|j| (j.mode, j.first, j.gap.clone()));
+        let hit = hit.or_else(|| match self.doc.feature(early.0).map(|f| &f.kind) {
+            Some(FeatureKind::StructMember(e)) => e.joints.iter().find(|j| j.mine == early.1 && j.other == late.0 && j.other_path == late.1).map(|j| (j.mode, !j.first, j.gap.clone())),
+            _ => None,
+        });
+        let (mode, late_first, gap) = match hit {
+            Some((mode, first, gap)) => (mode, first, gap.unwrap_or_else(|| m.gap.clone())),
+            None => (m.corner, false, m.gap.clone()),
+        };
+        let gap = ev(&gap, &self.vars, "folga de solda")?;
+        Ok((mode, if a == late { late_first } else { !late_first }, gap))
+    }
+
+    /// Filete/chanfro "mínimo": o kernel sempre segue a cadeia tangente; aqui o resultado só vale
+    /// dentro de tubos em volta das arestas escolhidas (tampas normais às pontas), e fora dele
+    /// o corpo fica como estava: resultado = (corpo − (tubos − cadeia)) ∪ (tubos ∩ cadeia).
+    #[allow(clippy::too_many_arguments)]
+    fn minimal_edges(&self, b: &Shape, owners: &[Id], s: &Shape, own_s: &[Id], mids: &[[f64; 3]], v: f64, fid: Id) -> Result<(Shape, Vec<Id>), String> {
+        let k = |e: KernelError| e.0;
+        let size = b.bbox().map(|(a, c)| geo3d::dist(a, c)).unwrap_or(100.).max(1.);
+        let m = b.mesh(size * 1e-3).map_err(k)?;
+        let nseg = m.edges.len() / 6;
+        let r = 3. * v + 0.5;
+        let mut tubes = Shape::empty();
+        for q in mids {
+            // aresta da malha com o ponto médio mais perto
+            let best = (0..m.edge_mids.len() / 3)
+                .map(|e| (e, geo3d::dist([m.edge_mids[e * 3] as f64, m.edge_mids[e * 3 + 1] as f64, m.edge_mids[e * 3 + 2] as f64], *q)))
+                .min_by(|a, c| a.1.total_cmp(&c.1));
+            let Some((e, _)) = best else { continue };
+            let s0 = m.edge_ranges[e] as usize;
+            let s1 = m.edge_ranges.get(e + 1).map(|x| *x as usize).unwrap_or(nseg);
+            let mut pts: Vec<V3> = vec![];
+            for g in m.edges.chunks_exact(6).take(s1).skip(s0) {
+                if pts.is_empty() {
+                    pts.push([g[0] as f64, g[1] as f64, g[2] as f64]);
+                }
+                pts.push([g[3] as f64, g[4] as f64, g[5] as f64]);
+            }
+            if pts.len() < 2 {
+                continue;
+            }
+            let z = geo3d::unit(geo3d::sub(pts[1], pts[0])).ok_or("aresta degenerada")?;
+            let fr = Frame { origin: pts[0], x: geo3d::any_perp(z), normal: z };
+            let face = Shape::face(&fr, &[vec![scc_kernel::Seg2::Circle([0., 0.], r)]]).map_err(k)?;
+            let straight = pts.len() == 2;
+            let tube = if straight { face.extrude(z, geo3d::dist(pts[0], pts[1]), 0.).map_err(k)? } else { face.sweep(&pts, 0).map_err(k)? };
+            tubes = if tubes.is_null() { tube } else { tubes.boolean(&tube, Bool::Fuse).map_err(k)? };
+        }
+        if tubes.is_null() {
+            return Ok((s.clone(), own_s.to_vec()));
+        }
+        // tira o material que o filete removeria só dentro dos tubos
+        let remove = tubes.boolean(s, Bool::Cut).map_err(k)?;
+        let (r1, out1) = b.boolean_tagged(&remove, Bool::Cut, &tags_for(owners)).map_err(k)?;
+        let own1 = remap(owners, &out1, fid);
+        // e põe o que ele acrescentaria (cantos côncavos), se houver
+        let add = tubes.boolean(s, Bool::Common).map_err(k)?.boolean(&r1, Bool::Cut).map_err(k)?;
+        if add.is_null() || add.mass().volume < 1e-6 * size * size * size {
+            return Ok((r1, own1));
+        }
+        let (r2, out2) = r1.boolean_tagged(&add, Bool::Fuse, &tags_for(&own1)).map_err(k)?;
+        Ok((r2, remap(&own1, &out2, fid)))
     }
 
     /// Membro (de comandos estruturais anteriores) com a ponta mais perto de `at`.
@@ -1790,21 +1859,37 @@ impl Ctx<'_> {
                     let body = self.body(f.target).cloned();
                     for p in &h.points {
                         let o = self.point(p, 0)?;
-                        let dir = match custom {
-                            Some(v) => v,
+                        match custom {
+                            Some(v) => seats.push((o, v)),
                             None => {
-                                // normal à superfície do corpo no ponto, para dentro do material
-                                let b = body.as_ref().ok_or("furo por pontos 3D precisa de um corpo para achar a normal")?;
-                                let (_, n) = b.surface_near(o).map_err(k)?;
-                                n.map(|x| -x)
+                                // projetado na superfície mais perto, normal a ela, para dentro do material
+                                let b = body.as_ref().ok_or("furo por pontos 3D precisa de um corpo para achar a superfície")?;
+                                let (q, n) = b.surface_near(o).map_err(k)?;
+                                seats.push((q, n.map(|x| -x)));
                             }
-                        };
-                        seats.push((o, dir));
+                        }
                     }
                 }
                 if h.reverse {
                     for s in &mut seats {
                         s.1 = s.1.map(|x| -x);
+                    }
+                }
+                // furo inteligente: o centro fora da peça (sketch acima dela, ponto solto) desce pela
+                // direção do furo até a superfície; dentro do material fica onde está
+                if let Some(b) = self.body(f.target).cloned() {
+                    let size = self.size_hint().max(1.);
+                    for (i, (o, dir)) in seats.iter_mut().enumerate() {
+                        let (q, n) = b.surface_near(*o).map_err(k)?;
+                        let gap = geo3d::dot(geo3d::sub(*o, q), n);
+                        if gap < 1e-6 * size {
+                            continue;
+                        }
+                        match b.ray_hit(*o, *dir).map_err(k)? {
+                            Some((hit, t)) if t > -1e-9 => *o = hit,
+                            Some(_) => return Err(format!("o furo {} aponta para fora da peça — use 'inverter sentido'", i + 1)),
+                            None => return Err(format!("o centro {} não encontra a peça na direção do furo (projete-o sobre a superfície ou mude a direção)", i + 1)),
+                        }
                     }
                 }
                 let shape = match &h.kind {
@@ -2277,44 +2362,88 @@ impl Ctx<'_> {
                 self.sheet_tool(f, h.edge, p)
             }
             FeatureKind::StructMember(m) => {
-                let geo = self.members(m)?;
-                let mut shapes: Vec<Shape> = vec![];
-                for g in &geo {
-                    shapes.push(self.member_shape(g)?);
-                }
-                // cantos: pares de membros que dividem uma ponta
-                let gap = ev(&m.gap, &self.vars, "folga")?;
-                let mid = |g: &MemberGeom| geo3d::lerp(g.start, g.end, 0.5);
+                let mut geo = self.members(m)?;
+                let lines = self.all_member_lines();
+                let my_k = self.doc.features.iter().position(|g| g.id == f.id).unwrap_or(0);
+                // cantos com qualquer outra linha de membro (deste comando ou de outro)
+                let diag = |g: &MemberGeom| (g.w * g.w + g.h * g.h).sqrt() + 1.;
+                let mut joints: Vec<Vec<(V3, V3, V3, MemberGeom, CornerMode, bool, f64)>> = vec![vec![]; geo.len()];
                 for i in 0..geo.len() {
-                    for j in i + 1..geo.len() {
-                        let Some((p, di, dj)) = shared_end(&geo[i], &geo[j]) else { continue };
-                        match m.corner {
+                    let gi = geo[i].clone();
+                    for (oid, oi, ok, og) in &lines {
+                        if *oid == f.id && *oi == i {
+                            continue;
+                        }
+                        let Some((p, di, dj)) = shared_end(&gi, og) else { continue };
+                        let (mode, first, gap) = self.joint_rule((f.id, i, my_k), (*oid, *oi, *ok))?;
+                        if mode == CornerMode::Nenhum {
+                            continue;
+                        }
+                        // sobra na ponta para o tratamento cortar
+                        let e = diag(&gi).max(diag(og));
+                        if geo3d::dist(p, gi.start) < 1e-4 {
+                            geo[i].ext.0 = geo[i].ext.0.max(e);
+                        } else {
+                            geo[i].ext.1 = geo[i].ext.1.max(e);
+                        }
+                        joints[i].push((p, di, dj, og.clone(), mode, first, gap));
+                    }
+                }
+                let mid = |g: &MemberGeom| geo3d::lerp(g.start, g.end, 0.5);
+                let mut shapes: Vec<Shape> = vec![];
+                for (i, g) in geo.iter().enumerate() {
+                    let mut sh = self.member_shape(g)?;
+                    for (p, di, dj, og, mode, first, gap) in &joints[i] {
+                        match mode {
                             CornerMode::Nenhum => {}
                             CornerMode::MeiaEsquadria => {
-                                let n = geo3d::unit(geo3d::sub(di, dj)).ok_or("membros colineares não fazem meia-esquadria")?;
-                                shapes[i] = shapes[i].boolean(&half_space(geo3d::add(p, geo3d::mul(n, gap / 2.)), n, self.size_hint())?, scc_kernel::Bool::Common).map_err(k)?;
-                                let nn = geo3d::mul(n, -1.);
-                                shapes[j] = shapes[j].boolean(&half_space(geo3d::add(p, geo3d::mul(nn, gap / 2.)), nn, self.size_hint())?, scc_kernel::Bool::Common).map_err(k)?;
+                                let n = geo3d::unit(geo3d::sub(*di, *dj)).ok_or("membros colineares não fazem meia-esquadria")?;
+                                sh = sh.boolean(&half_space(geo3d::add(*p, geo3d::mul(n, gap / 2.)), n, self.size_hint())?, scc_kernel::Bool::Common).map_err(k)?;
+                            }
+                            CornerMode::Aparar | CornerMode::Encaixe if *first => {
+                                // o membro 1 vai até a face de fora do membro 2
+                                let hj = og.w.max(og.h) / 2.;
+                                sh = sh.boolean(&half_space(geo3d::sub(*p, geo3d::mul(*di, hj)), *di, self.size_hint())?, scc_kernel::Bool::Common).map_err(k)?;
                             }
                             CornerMode::Aparar | CornerMode::Encaixe => {
-                                // o posterior para no anterior (plano da face ou contorno, com folga)
-                                let primary = if gap > 1e-9 { shapes[i].offset_surface(gap).map_err(k)? } else { shapes[i].clone() };
-                                let extend = m.corner == CornerMode::Aparar;
-                                shapes[j] = shapes[j].clip_until(&primary, mid(&geo[j]), extend).map_err(k)?;
-                                // o anterior vai só até a face de fora do posterior (topo)
-                                let hj = geo[j].w.max(geo[j].h) / 2.;
-                                shapes[i] = shapes[i].boolean(&half_space(geo3d::sub(p, geo3d::mul(di, hj)), di, self.size_hint())?, scc_kernel::Bool::Common).map_err(k)?;
+                                // o membro 2 para no membro 1 (plano da face ou contorno, com folga)
+                                let mut o2 = og.clone();
+                                let hi = g.w.max(g.h) / 2.;
+                                if geo3d::dist(*p, o2.start) < 1e-4 {
+                                    o2.ext.0 = o2.ext.0.max(hi);
+                                } else {
+                                    o2.ext.1 = o2.ext.1.max(hi);
+                                }
+                                let prim = self.member_shape(&o2)?;
+                                let prim = if *gap > 1e-9 { prim.offset_surface(*gap).map_err(k)? } else { prim };
+                                sh = sh.clip_until(&prim, mid(g), *mode == CornerMode::Aparar).map_err(k)?;
                             }
                         }
                     }
+                    shapes.push(sh);
                 }
+                // emenda: barra maior que a matéria-prima
+                let stock = self.doc.props.stock_length.trim();
+                let warn = if stock.is_empty() {
+                    None
+                } else {
+                    let lim = ev(stock, &self.vars, "comprimento máximo da barra")?;
+                    let explicit = (ev(&m.ext1, &self.vars, "")?, ev(&m.ext2, &self.vars, "")?);
+                    let long: Vec<String> = geo
+                        .iter()
+                        .map(|g| member_length(g, explicit))
+                        .filter(|l| *l > lim + 1e-6)
+                        .map(|l| format!("{:.0} mm ({} barras)", l, (l / lim).ceil()))
+                        .collect();
+                    (!long.is_empty() && lim > 0.).then(|| format!("⚠ emenda: barra maior que a matéria-prima de {lim:.0} mm — {}", long.join(", ")))
+                };
                 let mut all = Shape::empty();
                 for sh in shapes {
                     all = if all.is_null() { sh } else { all.compound(&sh) };
                 }
                 self.tools.insert(f.id, (all.clone(), BoolOp::Add));
                 self.add_separate(f, all);
-                Ok(None)
+                Ok(warn)
             }
             FeatureKind::StructPlate(pl) => {
                 let (g, end_at_start) = self.member_end(pl.at, f)?;
@@ -2589,7 +2718,16 @@ impl Ctx<'_> {
                     _ => b.fillet_tagged(v, &tags),
                 };
                 let (s, out) = r.map_err(k)?;
-                let own = remap(owners, &out, f.id);
+                let mut own = remap(owners, &out, f.id);
+                let mut s = s;
+                // mínima: o resultado da cadeia vale só junto das arestas escolhidas
+                if let (EdgeProp::Minima, EdgeSel::Edges(mids)) = (o.prop, &o.edges) {
+                    if !mids.is_empty() {
+                        let (s2, own2) = self.minimal_edges(&b, owners, &s, &own, mids, v, f.id)?;
+                        s = s2;
+                        own = own2;
+                    }
+                }
                 self.bodies.insert(f.target, (s, own));
                 Ok(match &o.edges {
                     EdgeSel::CreatedBy(_) => Some("seleção por comando ainda não implementada: aplicado a todas as arestas".into()),
@@ -2667,6 +2805,22 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
             if let PlaneRef::Datum(pid) = sk.plane {
                 parts.push(ref_sig(doc, pid, &cx.vars, 0));
             }
+        }
+        // membros estruturais: os cantos dependem das linhas dos outros membros
+        if matches!(f.kind, FeatureKind::StructMember(_)) {
+            for g in doc.features.iter().filter(|g| g.id != f.id && matches!(g.kind, FeatureKind::StructMember(_))) {
+                parts.push(feature_sig(g));
+                let mut gi = vec![];
+                g.kind.clone().walk(&mut |x| gi.push(*x), &mut |_| {});
+                for x in gi {
+                    if doc.reference(x).is_some() {
+                        parts.push(ref_sig(doc, x, &cx.vars, 0));
+                    } else if let Some(sg) = feat_out.get(&x) {
+                        parts.push(format!("f{}:{sg}", x.0));
+                    }
+                }
+            }
+            parts.push(doc.props.stock_length.clone());
         }
         let mut touched = vec![f.target];
         let mut all = ["\"Face\"", "\"Vertex\""].iter().any(|k| js.contains(k)) && !matches!(f.kind, FeatureKind::Sketch(_));
@@ -3014,6 +3168,17 @@ pub struct CutRow {
     pub designation: String,
     pub length: f64,
     pub count: usize,
+    /// barras de matéria-prima por peça (> 1 = precisa de emenda)
+    pub bars: usize,
+}
+
+/// Comprimento de corte de uma linha de membro (com os prolongamentos pedidos).
+fn member_length(g: &MemberGeom, explicit: (f64, f64)) -> f64 {
+    if g.straight {
+        geo3d::dist(g.start, g.end) + explicit.0 + explicit.1
+    } else {
+        g.pts.windows(2).map(|w| geo3d::dist(w[0], w[1])).sum()
+    }
 }
 
 /// Lista de corte dos membros estruturais (comprimento de cada barra, agrupado por perfil e medida).
@@ -3035,17 +3200,45 @@ pub fn cut_list(doc: &Document) -> Vec<CutRow> {
         let FeatureKind::StructMember(m) = &f.kind else { continue };
         let Ok(geo) = cx.members(m) else { continue };
         let explicit = (ev(&m.ext1, &cx.vars, "").unwrap_or(0.), ev(&m.ext2, &cx.vars, "").unwrap_or(0.));
+        let stock = ev(doc.props.stock_length.trim(), &cx.vars, "").ok().filter(|v| *v > 0.);
         for g in geo {
-            let len = if g.straight { geo3d::dist(g.start, g.end) + explicit.0 + explicit.1 } else { g.pts.windows(2).map(|w| geo3d::dist(w[0], w[1])).sum() };
+            let len = member_length(&g, explicit);
             let len = (len * 10.).round() / 10.;
             let name = format!("{} {}", m.family, m.designation);
+            let bars = stock.map(|s| (len / s).ceil().max(1.) as usize).unwrap_or(1);
             match rows.iter_mut().find(|r| r.designation == name && (r.length - len).abs() < 0.05) {
                 Some(r) => r.count += 1,
-                None => rows.push(CutRow { feature: f.id, designation: name, length: len, count: 1 }),
+                None => rows.push(CutRow { feature: f.id, designation: name, length: len, count: 1, bars }),
             }
         }
     }
     rows
+}
+
+/// Cantos entre linhas de membros estruturais: ((comando, linha), (comando, linha), ponto).
+pub fn member_joints(doc: &Document) -> Vec<((Id, usize), (Id, usize), [f64; 3])> {
+    let Ok(vars) = doc.eval_params() else { return vec![] };
+    let cx = Ctx {
+        doc,
+        vars,
+        bodies: HashMap::new(),
+        sketches: HashMap::new(),
+        status: HashMap::new(),
+        tools: HashMap::new(),
+        memo: RefCell::new(HashMap::new()),
+        body_sig: HashMap::new(),
+        last_sheet: None,
+    };
+    let lines = cx.all_member_lines();
+    let mut out = vec![];
+    for a in 0..lines.len() {
+        for b in a + 1..lines.len() {
+            if let Some((p, ..)) = shared_end(&lines[a].3, &lines[b].3) {
+                out.push(((lines[a].0, lines[a].1), (lines[b].0, lines[b].1), p));
+            }
+        }
+    }
+    out
 }
 
 /// Parâmetros de chapa já avaliados.
@@ -3266,7 +3459,7 @@ pub fn example_document() -> Document {
     }));
     d.feature_mut(furo).unwrap().name = s("Furos M6");
     let fol = d.add_folder("Acabamentos");
-    let fil = d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::AllOfBody, mode: EdgeMode::Constant }));
+    let fil = d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::AllOfBody, mode: EdgeMode::Constant, prop: Default::default() }));
     d.feature_mut(fil).unwrap().folder = Some(fol);
     d
 }
@@ -3304,6 +3497,7 @@ mod tests {
                 ext2: s("0"),
                 corner,
                 gap: s("0"),
+                joints: vec![],
             }));
             d
         };
@@ -3338,6 +3532,7 @@ mod tests {
             ext2: s("0"),
             corner: CornerMode::MeiaEsquadria,
             gap: s("0"),
+            joints: vec![],
         }));
         let v0 = vol(&d);
         d.add_feature(FeatureKind::StructPlate(StructPlate { at: [0., 0., 0.], thickness: s("8"), margin: s("5") }));
@@ -3378,6 +3573,142 @@ mod tests {
         let xmax = v.construction.iter().map(|p| p[0]).fold(f32::MIN, f32::max);
         assert!((xmax - 70.).abs() < 1e-3, "a linha projetada foi para 70: {xmax}");
         let _ = link;
+    }
+
+    #[test]
+    fn furo_projeta_centros_na_superficie() {
+        if !scc_kernel::AVAILABLE {
+            return;
+        }
+        let s = |x: &str| x.to_string();
+        let base = || {
+            let mut d = Document::new("fp");
+            let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [40., 40.]);
+            d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None }));
+            d
+        };
+        let hole = |pts: Vec<PointRef>| Hole {
+            sketch: Id(0),
+            kind: HoleKind::Rebaixado { diameter: s("10"), depth: s("3") },
+            diameter: s("5"),
+            depth: Extent::Blind(s("6")),
+            thread: Some(s("M6x1")),
+            thread_modeled: false,
+            standard: None,
+            points: pts,
+            dir: None,
+            reverse: false,
+            tip: None,
+            taper: s("0"),
+            left_hand: false,
+        };
+        let vol = |d: &Document| {
+            let r = recompute(d);
+            assert!(r.status.values().all(|x| !matches!(x, Status::Error(_))), "{:?}", r.status);
+            r.bodies.iter().map(|b| b.mass.volume).sum::<f64>()
+        };
+        // ponto na face de cima e o mesmo ponto 30 mm acima: o mesmo furo (rosca + rebaixo juntos)
+        let mut d1 = base();
+        d1.add_feature(FeatureKind::Hole(hole(vec![PointRef::Fixed([20., 20., 10.])])));
+        let mut d2 = base();
+        d2.add_feature(FeatureKind::Hole(hole(vec![PointRef::Fixed([20., 20., 40.])])));
+        let (v1, v2) = (vol(&d1), vol(&d2));
+        assert!(v1 < 16000. - 1., "o furo cortou: {v1}");
+        assert!((v1 - v2).abs() < 1e-3, "projetado: {v1} × {v2}");
+        // com direção que não encontra a peça: erro que explica
+        let mut d3 = base();
+        let mut h = hole(vec![PointRef::Fixed([100., 20., 40.])]);
+        h.dir = Some(AxisRef::Origin(OriginAxis::Z));
+        let id = d3.add_feature(FeatureKind::Hole(h));
+        let r = recompute(&d3);
+        assert!(matches!(&r.status[&id], Status::Error(m) if m.contains("não encontra")), "{:?}", r.status[&id]);
+    }
+
+    #[test]
+    fn filete_minimo_fica_so_na_aresta_escolhida() {
+        if !scc_kernel::AVAILABLE {
+            return;
+        }
+        let s = |x: &str| x.to_string();
+        // caixa 40×20×10 com a aresta vertical de um canto arredondada (R5): a aresta de cima que
+        // encosta nela continua tangente através do arredondado
+        let mk = |prop: EdgeProp| {
+            let mut d = Document::new("fm");
+            let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [40., 20.]);
+            d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None }));
+            d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("5"), edges: EdgeSel::Edges(vec![[40., 20., 5.]]), mode: EdgeMode::Constant, prop: EdgeProp::Tangente }));
+            // filete de 1 na aresta de cima do lado y = 20 (que continua tangente pelo arco do canto)
+            d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::Edges(vec![[17.5, 20., 10.]]), mode: EdgeMode::Constant, prop }));
+            d
+        };
+        let vol = |d: &Document| {
+            let r = recompute(d);
+            assert!(r.status.values().all(|x| !matches!(x, Status::Error(_))), "{:?}", r.status);
+            r.bodies.iter().map(|b| b.mass.volume).sum::<f64>()
+        };
+        let v_t = vol(&mk(EdgeProp::Tangente));
+        let v_m = vol(&mk(EdgeProp::Minima));
+        // a mínima tira menos material (só a aresta escolhida, não a cadeia)
+        assert!(v_m > v_t + 1e-3, "mínima {v_m} × tangente {v_t}");
+        assert!(v_m < 40. * 20. * 10. - 1e-3, "a mínima também filetou: {v_m}");
+    }
+
+    #[test]
+    fn membros_separados_com_cantos_e_emenda() {
+        if !scc_kernel::AVAILABLE {
+            return;
+        }
+        let s = |x: &str| x.to_string();
+        let near = |a: f64, b: f64, tol: f64| (a - b).abs() <= tol * b.abs().max(1.);
+        let mk = |paths: Vec<CurveRef>| StructMember {
+            paths,
+            family: s("Tubo quadrado"),
+            designation: s("40x3"),
+            kind: SectionKind::TuboQuadrado,
+            dims: vec![s("40"), s("3")],
+            anchor: 0,
+            angle: s("0"),
+            off_x: s("0"),
+            off_y: s("0"),
+            ext1: s("0"),
+            ext2: s("0"),
+            corner: CornerMode::MeiaEsquadria,
+            gap: s("0"),
+            joints: vec![],
+        };
+        let vol = |d: &Document| recompute(d).bodies.iter().map(|b| b.mass.volume).sum::<f64>();
+        let lado = |d: &mut Document, a: [f64; 3], b: [f64; 3]| CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: s("0"), end: s("0") }));
+        let mut d = Document::new("l");
+        let l1 = lado(&mut d, [0., 0., 0.], [0., 0., 500.]);
+        let l2 = lado(&mut d, [0., 0., 500.], [300., 0., 500.]);
+        let f = d.add_feature(FeatureKind::StructMember(mk(vec![l1, l2])));
+        let a = 40. * 40. - 34. * 34.;
+        let v_one = vol(&d);
+        assert!(near(v_one, a * 800., 1e-3), "um comando: {v_one}");
+        // separa em dois comandos: o canto continua em meia-esquadria entre eles
+        let ids = d.split_struct_member(f);
+        assert_eq!(ids.len(), 2);
+        let v_two = vol(&d);
+        assert!(near(v_two, v_one, 1e-6), "dois comandos: {v_two}");
+        assert_eq!(member_joints(&d).len(), 1);
+        // regra própria do canto: sem tratamento → barras retas, sem sobra
+        if let Some(FeatureKind::StructMember(m)) = d.feature_mut(ids[1]).map(|f| &mut f.kind) {
+            m.joints.push(StructJoint { mine: 0, other: ids[0], other_path: 0, mode: CornerMode::Nenhum, first: false, gap: None });
+        }
+        let v_none = vol(&d);
+        assert!(near(v_none, a * 800., 1e-3), "sem tratamento: {v_none}");
+        // aparar com o posterior (linha horizontal) como membro 1
+        if let Some(FeatureKind::StructMember(m)) = d.feature_mut(ids[1]).map(|f| &mut f.kind) {
+            m.joints[0] = StructJoint { mine: 0, other: ids[0], other_path: 0, mode: CornerMode::Aparar, first: true, gap: None };
+        }
+        let r = recompute(&d);
+        assert!(r.status.values().all(|x| !matches!(x, Status::Error(_))), "{:?}", r.status);
+        // emenda: matéria-prima de 400 mm → a barra de 500 precisa de duas
+        d.props.stock_length = s("400");
+        let r = recompute(&d);
+        assert!(matches!(&r.status[&ids[0]], Status::Warning(m) if m.contains("emenda")), "{:?}", r.status[&ids[0]]);
+        let cl = cut_list(&d);
+        assert!(cl.iter().any(|r| r.bars == 2) && cl.iter().any(|r| r.bars == 1), "{:?}", cl.iter().map(|r| (r.length, r.bars)).collect::<Vec<_>>());
     }
 
     #[test]
@@ -4069,6 +4400,7 @@ mod tests {
             value: s_("1"),
             edges: EdgeSel::AllOfBody,
             mode: EdgeMode::FullRound { mid: [0., 0., 10.], a: [2., 0., 5.], b: [-2., 0., 5.] },
+            prop: Default::default(),
         }));
         let v = vol(&d);
         assert!(v < 4. * 40. * 10. && v > 4. * 40. * 8., "filete completo {v}");
@@ -4226,7 +4558,7 @@ mod tests {
         // filete variável e chanfro por distância e ângulo numa aresta do topo
         for mode in [EdgeMode::Variable("4".into()), EdgeMode::TwoDist("3".into()), EdgeMode::DistAngle("30".into())] {
             let mut d = caixa();
-            let op = EdgeOp { value: "2".into(), edges: EdgeSel::Edges(vec![[0., 15., 20.]]), mode: mode.clone() };
+            let op = EdgeOp { value: "2".into(), edges: EdgeSel::Edges(vec![[0., 15., 20.]]), mode: mode.clone(), prop: Default::default() };
             d.add_feature(if matches!(mode, EdgeMode::Variable(_)) { FeatureKind::Fillet(op) } else { FeatureKind::Chamfer(op) });
             assert!(vol(&d) < v0, "{mode:?}");
         }
