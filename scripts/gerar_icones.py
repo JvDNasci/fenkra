@@ -285,6 +285,8 @@ I["sk_espelhar"] = f'<line x1="24" y1="4" x2="24" y2="44" stroke="{INK}" stroke-
     f'<path d="M20 36 L8 30 L16 14 Z" {G}/><path d="M28 36 L40 30 L32 14 Z" {DASH}/>'
 I["sk_offset"] = f'<rect x="12" y="12" width="24" height="24" rx="2" {G}/>' + f'<rect x="5" y="5" width="38" height="38" rx="6" {DASH}/>'
 I["sk_filete"] = f'<path d="M8 8 V26 A14 14 0 0 0 22 40 H40" {G}/>' + f'<path d="M8 26 V40 H22" {DASH}/>'
+I["sk_chanfro"] = f'<path d="M8 8 V28 L20 40 H40" {G}/>' + f'<path d="M8 28 V40 H20" {DASH}/>' + f'<circle cx="8" cy="28" r="3" fill="{ACTION}"/><circle cx="20" cy="40" r="3" fill="{ACTION}"/>'
+I["sk_spline"] = f'<path d="M6 36 C14 6 24 6 26 24 S36 42 42 12" {G}/>' + ''.join(f'<circle cx="{x}" cy="{y}" r="3" fill="{ACTION}"/>' for x, y in [(6, 36), (17, 13), (26, 24), (36, 33), (42, 12)])
 I["sk_aparar"] = f'<line x1="6" y1="24" x2="30" y2="24" {G}/><line x1="24" y1="6" x2="24" y2="42" {G}/>' + \
     f'<line x1="30" y1="24" x2="42" y2="24" {DASH}/>' + \
     f'<path d="M34 12 L40 18 M40 12 L34 18" stroke="{ACTION}" stroke-width="2.4" stroke-linecap="round"/>'

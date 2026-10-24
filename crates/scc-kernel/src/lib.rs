@@ -104,12 +104,14 @@ pub struct Cylinder {
 }
 
 /// Segmento de perfil 2D (coordenadas do plano do sketch).
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Seg2 {
     Line([f64; 2], [f64; 2]),
     /// Arco por três pontos: início, meio, fim.
     Arc([f64; 2], [f64; 2], [f64; 2]),
     Circle([f64; 2], f64),
+    /// Spline que passa pelos pontos (B-spline interpolada).
+    Spline(Vec<[f64; 2]>),
 }
 
 /// Laço fechado de segmentos.
@@ -217,11 +219,17 @@ mod imp {
             for l in loops {
                 for s in l {
                     let z = b::Seg { kind: 0, x1: 0., y1: 0., x2: 0., y2: 0., x3: 0., y3: 0. };
-                    segs.push(match *s {
-                        Seg2::Line(a, c) => b::Seg { kind: 0, x1: a[0], y1: a[1], x2: c[0], y2: c[1], ..z },
-                        Seg2::Arc(a, m, c) => b::Seg { kind: 1, x1: a[0], y1: a[1], x2: m[0], y2: m[1], x3: c[0], y3: c[1] },
-                        Seg2::Circle(c, r) => b::Seg { kind: 2, x1: c[0], y1: c[1], x2: r, ..z },
-                    });
+                    match s {
+                        Seg2::Line(a, c) => segs.push(b::Seg { kind: 0, x1: a[0], y1: a[1], x2: c[0], y2: c[1], ..z }),
+                        Seg2::Arc(a, m, c) => segs.push(b::Seg { kind: 1, x1: a[0], y1: a[1], x2: m[0], y2: m[1], x3: c[0], y3: c[1] }),
+                        Seg2::Circle(c, r) => segs.push(b::Seg { kind: 2, x1: c[0], y1: c[1], x2: *r, ..z }),
+                        // spline: um registro por ponto (tipo 3); x2 = 1 marca o último ponto
+                        Seg2::Spline(pts) => {
+                            for (i, p) in pts.iter().enumerate() {
+                                segs.push(b::Seg { kind: 3, x1: p[0], y1: p[1], x2: if i + 1 == pts.len() { 1. } else { 0. }, ..z });
+                            }
+                        }
+                    }
                 }
                 ends.push(segs.len() as u32);
             }

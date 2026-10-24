@@ -57,6 +57,8 @@
 #include <BRepPrimAPI_MakeWedge.hxx>
 #include <BRepTools.hxx>
 #include <GeomAPI_PointsToBSpline.hxx>
+#include <GeomAPI_Interpolate.hxx>
+#include <TColgp_HArray1OfPnt.hxx>
 #include <Geom_BSplineCurve.hxx>
 #include <GeomFill_Trihedron.hxx>
 #include <TColgp_Array1OfPnt.hxx>
@@ -173,9 +175,26 @@ std::unique_ptr<Shape> make_face(const Frame& fr, rust::Slice<const Seg> segs, r
         size_t start = 0;
         for (uint32_t end : loop_ends) {
             BRepBuilderAPI_MakeWire mw;
+            std::vector<gp_Pnt> spl;
             for (size_t i = start; i < end; ++i) {
                 const Seg& g = segs[i];
-                if (g.kind == 0) {
+                if (g.kind == 3) {
+                    // pontos da spline até o marcador de fim: B-spline interpolada por eles
+                    spl.push_back(P(g.x1, g.y1));
+                    if (g.x2 > 0.5) {
+                        if (spl.size() == 2) {
+                            mw.Add(BRepBuilderAPI_MakeEdge(spl[0], spl[1]).Edge());
+                        } else if (spl.size() > 2) {
+                            Handle(TColgp_HArray1OfPnt) arr = new TColgp_HArray1OfPnt(1, static_cast<int>(spl.size()));
+                            for (size_t k = 0; k < spl.size(); ++k) arr->SetValue(static_cast<int>(k) + 1, spl[k]);
+                            GeomAPI_Interpolate it(arr, Standard_False, 1e-7);
+                            it.Perform();
+                            if (!it.IsDone()) throw std::runtime_error("spline do sketch não pôde ser criada");
+                            mw.Add(BRepBuilderAPI_MakeEdge(it.Curve()).Edge());
+                        }
+                        spl.clear();
+                    }
+                } else if (g.kind == 0) {
                     mw.Add(BRepBuilderAPI_MakeEdge(P(g.x1, g.y1), P(g.x2, g.y2)).Edge());
                 } else if (g.kind == 1) {
                     Handle(Geom_TrimmedCurve) arc = GC_MakeArcOfCircle(P(g.x1, g.y1), P(g.x2, g.y2), P(g.x3, g.y3)).Value();

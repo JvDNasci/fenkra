@@ -40,6 +40,7 @@ fn seg(s: Seg) -> Seg2 {
         Seg::Line(a, b) => Seg2::Line(a, b),
         Seg::Arc(a, m, b) => Seg2::Arc(a, m, b),
         Seg::Circle(c, r) => Seg2::Circle(c, r),
+        Seg::Spline(p) => Seg2::Spline(p),
     }
 }
 
@@ -75,6 +76,10 @@ pub fn eval_sketch(data: &SketchData, vars: &Vars) -> Result<EvalSketch, String>
                 out.curves.insert(c.id, vec![sk.pos(p)]);
                 continue;
             }
+            Curve::Spline { ref pts } => {
+                let v: Vec<[f64; 2]> = pts.iter().map(|p| sk.pos(*p)).collect();
+                sample(&[Seg2::Spline(v)])
+            }
         };
         out.curves.insert(c.id, pts.clone());
         if c.construction {
@@ -91,6 +96,11 @@ pub fn sample(l: &[Seg2]) -> Vec<[f64; 2]> {
     let mut pts = vec![];
     for s in l {
         match *s {
+            Seg2::Spline(ref p) => {
+                let v = scc_core::sketch::spline_samples(p, 12);
+                let skip = usize::from(!pts.is_empty());
+                pts.extend(v.into_iter().skip(skip));
+            }
             Seg2::Line(a, b) => {
                 if pts.is_empty() {
                     pts.push(a)

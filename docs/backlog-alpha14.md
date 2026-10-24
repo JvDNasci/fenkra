@@ -3,27 +3,27 @@
 Status: [ ] a fazer · [~] parcial · [x] feito
 
 ## A. Geral: 3D, seleção, árvore, interface
-- [ ] A1 Planos ocultos continuam selecionáveis no 3D (todos os módulos)
-- [ ] A2 Superfícies selecionáveis no 3D, com faces, arestas e vértices
-- [ ] A3 Duplo clique em qualquer elemento no 3D abre a edição
-- [ ] A4 Orbitar com centro definido pelo usuário (clique define o centro)
-- [ ] A5 Roda do mouse sobre campos numéricos aumenta/diminui o valor
-- [ ] A6 Roda do mouse rola a barra de comandos e a árvore
-- [ ] A7 Shift/Ctrl/Alt na árvore (multisseleção)
-- [ ] A8 Menu de seleção: caixa janela/cruzada (dentro, parcialmente), com Ctrl
-- [ ] A9 Recurso em edição: entradas escolhidas brilham e têm rótulo 3D ("Perfil", "Guia"…)
-- [ ] A10 Setas 3D de arraste também em superfícies e chapa metálica
-- [ ] A11 Aparência: tabela de cores com nome, cores do usuário, copiar/colar aparência, aplicar a vários
-- [ ] A12 Tema dos menus com faixas de cor por grupo; doca com realce do encaixe ao arrastar; botão fixar/soltar
-- [ ] A13 Painel lateral do sketch muito largo
-- [ ] A14 Aviso "crie ou abra uma montagem" aparecendo repetido
-- [ ] A15 Aparência de linhas/curvas também nos subelementos do sketch
+- [x] A1 Planos ocultos continuam selecionáveis no 3D (todos os módulos)
+- [x] A2 Superfícies selecionáveis no 3D, com faces, arestas e vértices
+- [x] A3 Duplo clique em qualquer elemento no 3D abre a edição
+- [x] A4 Orbitar com centro definido pelo usuário (clique define o centro)
+- [x] A5 Roda do mouse sobre campos numéricos aumenta/diminui o valor
+- [~] A6 Roda do mouse rola a barra de comandos e a árvore
+- [x] A7 Shift/Ctrl/Alt na árvore (multisseleção)
+- [x] A8 Menu de seleção: caixa janela/cruzada (dentro, parcialmente), com Ctrl
+- [x] A9 Recurso em edição: entradas escolhidas brilham e têm rótulo 3D ("Perfil", "Guia"…)
+- [x] A10 Setas 3D de arraste também em superfícies e chapa metálica
+- [x] A11 Aparência: tabela de cores com nome, cores do usuário, copiar/colar aparência, aplicar a vários
+- [x] A12 Tema dos menus com faixas de cor por grupo; doca com realce do encaixe ao arrastar; botão fixar/soltar
+- [x] A13 Painel lateral do sketch muito largo
+- [x] A14 Aviso "crie ou abra uma montagem" aparecendo repetido
+- [x] A15 Aparência de linhas/curvas também nos subelementos do sketch
 
 ## B. Sketch e wireframe
-- [ ] B1 Curvas e pontos do sketch selecionáveis no 3D (subelementos) e usáveis em superfícies/referências
-- [ ] B2 Converter pega elementos de outro sketch no 3D
-- [ ] B3 Spline e chanfro (bevel) no sketch
-- [ ] B4 Polilinhas/splines/linhas com subelementos selecionáveis (pontos, segmentos)
+- [x] B1 Curvas e pontos do sketch selecionáveis no 3D (subelementos) e usáveis em superfícies/referências
+- [x] B2 Converter pega elementos de outro sketch no 3D
+- [x] B3 Spline e chanfro (bevel) no sketch
+- [x] B4 Polilinhas/splines/linhas com subelementos selecionáveis (pontos, segmentos)
 - [ ] B5 Wireframe: spline e conector de curvas G0–G3 no menu
 - [ ] B6 Canto entre linha e spline
 - [ ] B7 Repetição de pontos em linha/curva

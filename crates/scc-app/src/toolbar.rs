@@ -452,6 +452,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
         ],
         Group::SkCriacao => vec![
             One(tool(Tool::Line)),
+            One(tool(Tool::Spline)),
             Family("sk_ret", vec![tool(Tool::Rect), tool(Tool::RectCenter)]),
             Family("sk_circ", vec![tool(Tool::Circle), tool(Tool::Circle3)]),
             Family("sk_arco", vec![tool(Tool::Arc3), tool(Tool::ArcCenter)]),
@@ -462,7 +463,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             Family("sk_mover", vec![tool(Tool::Move), tool(Tool::Copy)]),
             One(tool(Tool::Mirror)),
             One(tool(Tool::Offset)),
-            One(tool(Tool::Fillet)),
+            Family("sk_filete", vec![tool(Tool::Fillet), tool(Tool::Chamfer)]),
             Family("sk_aparar", vec![tool(Tool::Trim), tool(Tool::Extend)]),
             Family("sk_projetar", vec![tool(Tool::Convert), tool(Tool::Intersect)]),
             One(it("sk_converter", "Construção", "Converter seleção ↔ construção", "Transforma as curvas selecionadas em geometria de construção (tracejada) ou de volta em geometria normal.", SkToggleConstruction)),

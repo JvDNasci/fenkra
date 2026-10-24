@@ -29,6 +29,8 @@ pub enum Curve {
     Arc { c: Id, s: Id, e: Id },
     /// Ponto isolado (centro de furo, referência).
     Point { p: Id },
+    /// Spline que passa pelos pontos, na ordem (B-spline interpolada no perfil).
+    Spline { pts: Vec<Id> },
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -170,11 +172,54 @@ impl SolveReport {
 }
 
 /// Segmento de perfil resolvido (coordenadas do plano).
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Seg {
     Line([f64; 2], [f64; 2]),
     Arc([f64; 2], [f64; 2], [f64; 2]),
     Circle([f64; 2], f64),
+    /// spline pelos pontos (na ordem)
+    Spline(Vec<[f64; 2]>),
+}
+
+/// Amostra uma spline que passa pelos pontos (Catmull-Rom centrípeta), para desenhar.
+pub fn spline_samples(p: &[[f64; 2]], per_seg: usize) -> Vec<[f64; 2]> {
+    let n = p.len();
+    if n < 3 {
+        return p.to_vec();
+    }
+    let get = |i: isize| -> [f64; 2] {
+        if i < 0 {
+            // ponto fantasma refletido nas pontas
+            [2. * p[0][0] - p[1][0], 2. * p[0][1] - p[1][1]]
+        } else if i as usize >= n {
+            [2. * p[n - 1][0] - p[n - 2][0], 2. * p[n - 1][1] - p[n - 2][1]]
+        } else {
+            p[i as usize]
+        }
+    };
+    let mut out = vec![p[0]];
+    for i in 0..n - 1 {
+        let (p0, p1, p2, p3) = (get(i as isize - 1), get(i as isize), get(i as isize + 1), get(i as isize + 2));
+        let tj = |a: [f64; 2], b: [f64; 2], t: f64| t + ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2)).sqrt().sqrt().max(1e-9);
+        let t0 = 0.;
+        let t1 = tj(p0, p1, t0);
+        let t2 = tj(p1, p2, t1);
+        let t3 = tj(p2, p3, t2);
+        for k in 1..=per_seg {
+            let t = t1 + (t2 - t1) * k as f64 / per_seg as f64;
+            let l = |a: [f64; 2], b: [f64; 2], ta: f64, tb: f64| {
+                let w = (t - ta) / (tb - ta);
+                [a[0] + (b[0] - a[0]) * w, a[1] + (b[1] - a[1]) * w]
+            };
+            let a1 = l(p0, p1, t0, t1);
+            let a2 = l(p1, p2, t1, t2);
+            let a3 = l(p2, p3, t2, t3);
+            let b1 = l(a1, a2, t0, t2);
+            let b2 = l(a2, a3, t1, t3);
+            out.push(l(b1, b2, t1, t2));
+        }
+    }
+    out
 }
 
 #[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
@@ -369,6 +414,7 @@ impl SketchData {
             Curve::Line { a, b } => vec![*a, *b],
             Curve::Circle { c, .. } => vec![*c],
             Curve::Arc { c, s, e } => vec![*c, *s, *e],
+            Curve::Spline { pts } => pts.clone(),
             Curve::Point { p } => vec![*p],
         }
     }
@@ -501,6 +547,7 @@ impl SketchData {
                     swap(e)
                 }
                 Curve::Point { p } => swap(p),
+                Curve::Spline { pts } => pts.iter_mut().for_each(swap),
             }
         }
         for k in &mut self.constraints {
@@ -1015,6 +1062,13 @@ impl SketchData {
         // arestas: (extremo1, extremo2, segmento)
         let mut edges: Vec<(Id, Id, Seg)> = vec![];
         for c in self.curves.iter().filter(|c| !c.construction) {
+            if let Curve::Spline { pts } = &c.geom {
+                if pts.len() >= 2 {
+                    let v: Vec<[f64; 2]> = pts.iter().map(|p| self.pos(*p)).collect();
+                    edges.push((find(&mut parent, pts[0]), find(&mut parent, pts[pts.len() - 1]), Seg::Spline(v)));
+                }
+                continue;
+            }
             match c.geom {
                 Curve::Circle { c: ctr, r } => loops.push(vec![Seg::Circle(self.pos(ctr), r)]),
                 Curve::Line { a, b } => edges.push((find(&mut parent, a), find(&mut parent, b), Seg::Line(self.pos(a), self.pos(b)))),
@@ -1022,12 +1076,16 @@ impl SketchData {
                     let (pc, ps, pe) = (self.pos(ctr), self.pos(s), self.pos(e));
                     edges.push((find(&mut parent, s), find(&mut parent, e), Seg::Arc(ps, Self::arc_mid(pc, ps, pe), pe)));
                 }
-                Curve::Point { .. } => {}
+                Curve::Point { .. } | Curve::Spline { .. } => {}
             }
         }
         let rev = |s: Seg| match s {
             Seg::Line(a, b) => Seg::Line(b, a),
             Seg::Arc(a, m, b) => Seg::Arc(b, m, a),
+            Seg::Spline(mut v) => {
+                v.reverse();
+                Seg::Spline(v)
+            }
             c => c,
         };
         let mut open = 0;

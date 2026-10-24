@@ -38,6 +38,10 @@ pub enum Tool {
     Mirror,
     Offset,
     Fillet,
+    /// chanfro (bevel) no canto entre duas linhas
+    Chamfer,
+    /// spline que passa pelos pontos clicados
+    Spline,
     Trim,
     Extend,
     /// converter/projetar arestas, vértices e curvas do 3D no plano (associativo)
@@ -97,6 +101,8 @@ impl Tool {
             Tool::Mirror => ("sk_espelhar", "Espelhar", "Espelhar seleção", "Selecione curvas e clique na linha de simetria: cria a cópia espelhada com restrições de simetria."),
             Tool::Offset => ("sk_offset", "Offset", "Offset (curva paralela)", "Clique numa linha, círculo ou arco e depois onde a nova curva deve passar. A distância vira cota."),
             Tool::Fillet => ("sk_filete", "Filete", "Filete de canto", "Clique no canto entre duas linhas: insere um arco tangente e abre a cota do raio."),
+            Tool::Chamfer => ("sk_chanfro", "Chanfro", "Chanfro de canto", "Clique no canto entre duas linhas: corta o canto com uma linha reta (distâncias iguais) e abre a cota da distância."),
+            Tool::Spline => ("sk_spline", "Spline", "Spline por pontos", "Cada clique adiciona um ponto por onde a curva passa. Enter, duplo clique ou botão direito termina. Os pontos continuam editáveis e podem receber cotas e restrições."),
             Tool::Trim => ("sk_aparar", "Aparar", "Aparar linha", "Clique no trecho da linha a remover: ela é cortada nas interseções com as outras curvas (sem interseção, a linha some)."),
             Tool::Extend => ("sk_estender", "Estender", "Estender linha", "Clique perto da ponta de uma linha: ela cresce até a próxima curva na mesma direção."),
             Tool::Convert => ("sk_projetar", "Converter", "Converter / projetar 3D", "Clique em arestas, vértices, linhas ou curvas do modelo: viram geometria fixa do sketch, projetada no plano e ligada à origem — se o 3D mudar, o sketch acompanha."),
@@ -775,6 +781,7 @@ fn line_hits(sk: &SketchData, line: Id, a: [f64; 2], b: [f64; 2]) -> Vec<f64> {
             continue;
         }
         match c.geom {
+            Curve::Spline { .. } => {}
             Curve::Line { a: p, b: q } => {
                 let (pp, qq) = (sk.pos(p), sk.pos(q));
                 let e = [qq[0] - pp[0], qq[1] - pp[1]];
@@ -1109,6 +1116,10 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         let own = app.open.doc.line_style(c.id);
         let w = own.map(|x| x.width).unwrap_or(if c.construction { 1.2 } else { 2.0 });
         let pts: Vec<Pos2> = match c.geom {
+            Curve::Spline { ref pts } => {
+                let p2: Vec<[f64; 2]> = pts.iter().map(|p| sk.pos(*p)).collect();
+                scc_core::sketch::spline_samples(&p2, 12).into_iter().map(|q| v.to_screen(q)).collect()
+            }
             Curve::Line { a, b } => vec![v.to_screen(sk.pos(a)), v.to_screen(sk.pos(b))],
             Curve::Circle { c: ctr, r } => {
                 let cc = sk.pos(ctr);
@@ -1197,6 +1208,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             }
             Some(Curve::Arc { c, s, e }) => SketchData::arc_mid(sk.pos(*c), sk.pos(*s), sk.pos(*e)),
             Some(Curve::Point { p }) => sk.pos(*p),
+            Some(Curve::Spline { pts }) => pts.get(pts.len() / 2).map(|p| sk.pos(*p)).unwrap_or([0., 0.]),
             None => [0., 0.],
         }
     };
@@ -1291,6 +1303,11 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                 Curve::Circle { c: ctr, r } => ((pos - v.to_screen(sk.pos(ctr))).length() - r as f32 * ppm).abs(),
                 Curve::Arc { c: ctr, s, .. } => ((pos - v.to_screen(sk.pos(ctr))).length() - d2(sk.pos(s), sk.pos(ctr)) as f32 * ppm).abs(),
                 Curve::Point { .. } => f32::MAX,
+                Curve::Spline { ref pts } => {
+                    let p2: Vec<[f64; 2]> = pts.iter().map(|p| sk.pos(*p)).collect();
+                    let s = scc_core::sketch::spline_samples(&p2, 10);
+                    s.windows(2).map(|w| seg_dist(pos, v.to_screen(w[0]), v.to_screen(w[1]))).fold(f32::MAX, f32::min)
+                }
             };
             if d < 7. && best.is_none_or(|(bd, _)| d < bd) {
                 best = Some((d, Ent::Cv(c.id)));
@@ -1515,6 +1532,46 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             if secondary_click || double {
                 edit.chain_last = None;
                 edit.chain_first = None;
+            }
+        }
+
+        Tool::Spline => {
+            if primary_click && !double {
+                if let Some(s) = cur_snap {
+                    edit.clicks.push(s);
+                }
+            }
+            let mut uv: Vec<[f64; 2]> = edit.clicks.iter().map(|c| c.uv).collect();
+            if let Some(s) = cur_snap {
+                uv.push(s.uv);
+            }
+            if uv.len() >= 2 {
+                let pv: Vec<Pos2> = scc_core::sketch::spline_samples(&uv, 12).into_iter().map(|q| v.to_screen(q)).collect();
+                painter.add(egui::Shape::line(pv, Stroke::new(1.5, FREE.gamma_multiply(0.7))));
+            }
+            for c in &edit.clicks {
+                painter.circle_filled(v.to_screen(c.uv), 3., FREE);
+            }
+            let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
+            if secondary_click || double || enter {
+                let cl = std::mem::take(&mut edit.clicks);
+                if cl.len() >= 2 {
+                    let pts: Vec<Id> = cl.into_iter().map(|s| point_for(&mut sk, &mut al, s)).collect();
+                    let mut pts2: Vec<Id> = vec![];
+                    for p in pts {
+                        if pts2.last() != Some(&p) {
+                            pts2.push(p);
+                        }
+                    }
+                    if pts2.len() >= 2 {
+                        sk.add_curve(&mut al, Curve::Spline { pts: pts2 }, edit.construction);
+                        edit.report = sk.solve(&vars, &[]);
+                    }
+                }
+            }
+            if let Some(h) = hover {
+                let hint = if edit.clicks.len() < 2 { "clique nos pontos da spline" } else { "Enter / duplo clique / botão direito termina" };
+                painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, hint, egui::FontId::proportional(11.), FREE);
             }
         }
 
@@ -1746,7 +1803,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             }
         }
 
-        Tool::Move | Tool::Copy | Tool::Mirror | Tool::Offset | Tool::Fillet => {
+        Tool::Move | Tool::Copy | Tool::Mirror | Tool::Offset | Tool::Fillet | Tool::Chamfer => {
             let picked = if primary_click { hover.and_then(|p| pick(p, &sk, &edit.hits)) } else { None };
             let sel_curves: Vec<Id> = edit.sel.iter().filter_map(|e| if let Ent::Cv(c) = e { Some(*c) } else { None }).collect();
             match tool {
@@ -1803,6 +1860,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                                         Curve::Circle { c, r } => Curve::Circle { c: m(c), r },
                                         Curve::Arc { c, s, e } => Curve::Arc { c: m(c), s: m(s), e: m(e) },
                                         Curve::Point { p } => Curve::Point { p: m(p) },
+                                        Curve::Spline { ref pts } => Curve::Spline { pts: pts.iter().map(|x| m(*x)).collect() },
                                     };
                                     sk.add_curve(&mut al, g, cv.construction);
                                 }
@@ -1839,6 +1897,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                                             // espelhar inverte o sentido do arco
                                             Curve::Arc { c, s, e } => Curve::Arc { c: m(c), s: m(e), e: m(s) },
                                             Curve::Point { p } => Curve::Point { p: m(p) },
+                                            Curve::Spline { ref pts } => Curve::Spline { pts: pts.iter().map(|x| m(*x)).collect() },
                                         };
                                         sk.add_curve(&mut al, g, cv.construction);
                                     }
@@ -1901,6 +1960,57 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                         }
                         edit.sel.clear();
                         edit.report = sk.solve(&vars, &[]);
+                    }
+                }
+                Tool::Chamfer => {
+                    if let Some(Ent::Pt(p)) = picked {
+                        let lines: Vec<(Id, Id)> = sk.curves.iter().filter_map(|c| match c.geom {
+                            Curve::Line { a, b } if a == p => Some((c.id, b)),
+                            Curve::Line { a, b } if b == p => Some((c.id, a)),
+                            _ => None,
+                        }).collect();
+                        if lines.len() != 2 {
+                            toast = Some(("clique num canto onde duas linhas se encontram".into(), true));
+                        } else {
+                            let pc = sk.pos(p);
+                            let (q1, q2) = (sk.pos(lines[0].1), sk.pos(lines[1].1));
+                            let (l1, l2) = (d2(q1, pc).max(1e-12), d2(q2, pc).max(1e-12));
+                            let u1 = [(q1[0] - pc[0]) / l1, (q1[1] - pc[1]) / l1];
+                            let u2 = [(q2[0] - pc[0]) / l2, (q2[1] - pc[1]) / l2];
+                            if (u1[0] * u2[1] - u1[1] * u2[0]).abs() < 1e-3 {
+                                toast = Some(("as linhas são colineares".into(), true));
+                            } else {
+                                let t = 0.3 * l1.min(l2);
+                                let t1 = sk.add_point(&mut al, pc[0] + u1[0] * t, pc[1] + u1[1] * t);
+                                let t2 = sk.add_point(&mut al, pc[0] + u2[0] * t, pc[1] + u2[1] * t);
+                                for (lid, tp) in [(lines[0].0, t1), (lines[1].0, t2)] {
+                                    if let Some(scc_core::sketch::SkCurve { geom: Curve::Line { a, b }, .. }) = sk.curves.iter_mut().find(|c| c.id == lid) {
+                                        if *a == p {
+                                            *a = tp
+                                        } else {
+                                            *b = tp
+                                        }
+                                    }
+                                }
+                                sk.add_curve(&mut al, Curve::Line { a: t1, b: t2 }, false);
+                                // distâncias iguais nas duas linhas (chanfro simétrico): o canto vira construção
+                                let cpt = sk.add_point(&mut al, pc[0], pc[1]);
+                                let e1 = sk.add_curve(&mut al, Curve::Line { a: cpt, b: t1 }, true);
+                                let e2 = sk.add_curve(&mut al, Curve::Line { a: cpt, b: t2 }, true);
+                                sk.add_constraint(&mut al, Kind::Parallel(e1, lines[0].0));
+                                sk.add_constraint(&mut al, Kind::Parallel(e2, lines[1].0));
+                                sk.add_constraint(&mut al, Kind::PointOnCurve(t1, lines[0].0));
+                                sk.add_constraint(&mut al, Kind::PointOnCurve(t2, lines[1].0));
+                                sk.add_constraint(&mut al, Kind::Equal(e1, e2));
+                                let id = sk.add_constraint(&mut al, Kind::Length(e1, fmt(t)));
+                                edit.dim_edit = Some((id, String::new(), true));
+                                if !sk.curves.iter().any(|c| c.id != e1 && c.id != e2 && SketchData::curve_points(&c.geom).contains(&p)) {
+                                    sk.points.retain(|x| x.id != p || x.fixed);
+                                    sk.prune_constraints();
+                                }
+                                edit.report = sk.solve(&vars, &[]);
+                            }
+                        }
                     }
                 }
                 Tool::Fillet => {
@@ -1979,7 +2089,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                     (Tool::Mirror, false, _) => "clique na linha de simetria",
                     (Tool::Offset, _, _) if edit.sel.is_empty() => "clique na curva",
                     (Tool::Offset, _, _) => "clique onde a paralela deve passar",
-                    (Tool::Fillet, _, _) => "clique no canto entre duas linhas",
+                    (Tool::Fillet | Tool::Chamfer, _, _) => "clique no canto entre duas linhas",
                     _ => "",
                 };
                 painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, hint, egui::FontId::proportional(11.), FREE);
@@ -2354,6 +2464,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                             Curve::Circle { .. } => "Círculo",
                             Curve::Arc { .. } => "Arco",
                             Curve::Point { .. } => "Ponto",
+                            Curve::Spline { .. } => "Spline",
                         };
                         ui.horizontal(|ui| {
                             ui.label(RichText::new(kind).strong());

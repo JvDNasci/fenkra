@@ -167,10 +167,11 @@ pub fn shifted(loops: &[Loop2], by: [f64; 2]) -> Vec<Loop2> {
         .iter()
         .map(|l| {
             l.iter()
-                .map(|s| match *s {
-                    Seg2::Line(a, b) => Seg2::Line(m(a), m(b)),
-                    Seg2::Arc(a, b, c) => Seg2::Arc(m(a), m(b), m(c)),
-                    Seg2::Circle(c, r) => Seg2::Circle(m(c), r),
+                .map(|s| match s {
+                    Seg2::Line(a, b) => Seg2::Line(m(*a), m(*b)),
+                    Seg2::Arc(a, b, c) => Seg2::Arc(m(*a), m(*b), m(*c)),
+                    Seg2::Circle(c, r) => Seg2::Circle(m(*c), *r),
+                    Seg2::Spline(p) => Seg2::Spline(p.iter().map(|q| m(*q)).collect()),
                 })
                 .collect()
         })

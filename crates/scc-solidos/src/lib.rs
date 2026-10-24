@@ -80,6 +80,7 @@ fn loops_size(loops: &[scc_kernel::Loop2]) -> f64 {
                     add(b, 0.)
                 }
                 scc_kernel::Seg2::Circle(c, r) => add(c, r),
+                scc_kernel::Seg2::Spline(ref p) => p.iter().for_each(|q| add(*q, 0.)),
             }
         }
     }
@@ -3249,6 +3250,33 @@ mod tests {
         let xmax = v.construction.iter().map(|p| p[0]).fold(f32::MIN, f32::max);
         assert!((xmax - 70.).abs() < 1e-3, "a linha projetada foi para 70: {xmax}");
         let _ = link;
+    }
+
+    #[test]
+    fn extrusao_de_perfil_com_spline() {
+        if !scc_kernel::AVAILABLE {
+            return;
+        }
+        use scc_core::sketch::Curve;
+        let s = |x: &str| x.to_string();
+        let mut d = Document::new("spline");
+        let mut data = SketchData::default();
+        let mut n = 6_000_000u64;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        let p: Vec<Id> = [[0., 0.], [40., 0.], [34., 15.], [20., 24.], [0., 20.]].iter().map(|q| data.add_point(&mut al, q[0], q[1])).collect();
+        data.add_curve(&mut al, Curve::Line { a: p[0], b: p[1] }, false);
+        data.add_curve(&mut al, Curve::Spline { pts: vec![p[1], p[2], p[3], p[4]] }, false);
+        data.add_curve(&mut al, Curve::Line { a: p[4], b: p[0] }, false);
+        let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
+        let ex = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None }));
+        let r = recompute(&d);
+        assert!(matches!(r.status[&ex], Status::Ok | Status::Warning(_)), "{:?}", r.status[&ex]);
+        let v = r.bodies.iter().map(|b| b.mass.volume).sum::<f64>();
+        // entre o triângulo (0,0)-(40,0)-(0,20) e a caixa 40x24
+        assert!(v > 4000. && v < 9600., "volume com spline: {v}");
     }
 
     #[test]
