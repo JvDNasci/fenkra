@@ -2019,6 +2019,21 @@ static TABLE: &[(&str, &str)] = &[
     ("linha", "line"),
     ("Barras", "Bars"),
     ("padrão", "default"),
+    ("Grava os números dos itens novos na montagem (também acontece ao salvar).", "Writes the numbers of new items into the assembly (also happens on save)."),
+    ("Lista de peças", "Parts list"),
+    ("Lista de peças por nível", "Parts list by level"),
+    ("Nível", "Level"),
+    ("Os números de item vêm da montagem e ficam fixos entre revisões (salve a montagem para gravar os novos).", "Item numbers come from the assembly and stay fixed across revisions (save the assembly to store new ones)."),
+    ("Primeiro nível, só peças (todos os níveis) ou estruturada. Os números de item ficam fixos entre revisões e são os mesmos dos balões e da tabela do desenho.", "First level, parts only (all levels) or structured. Item numbers stay fixed across revisions and match the drawing balloons and table."),
+    ("Um item mantém o número entre revisões, mesmo que saia e volte; os novos recebem o próximo número livre.", "An item keeps its number across revisions, even if it leaves and comes back; new ones get the next free number."),
+    ("número fixo", "fixed number"),
+    ("número provisório: fica fixo ao salvar a montagem", "provisional number: fixed when the assembly is saved"),
+    ("▦ Lista de peças", "▦ Parts list"),
+    ("📌 Fixar números", "📌 Fix numbers"),
+    ("Primeiro nível", "First level"),
+    ("Só peças (todos os níveis)", "Parts only (all levels)"),
+    ("Estruturada", "Structured"),
+    ("Componente", "Component"),
 ];
 
 #[cfg(test)]

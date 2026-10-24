@@ -291,6 +291,7 @@ I["curva_juntar"] = f'<path d="M6 38 L18 14" {G}/><path d="M24 12 C32 8 40 16 42
 I["wf_repetir"] = f'<path d="M4 38 C14 6 34 6 44 30" {G}/>' + ''.join(f'<circle cx="{x}" cy="{y}" r="3.4" fill="{ACTION}"/>' for x, y in [(8, 28), (16, 16), (25, 12), (34, 15), (41, 23)])
 I["prop_tangente"] = f'<path d="M6 34 H20 A10 10 0 0 0 30 24 V8" {G}/>' + f'<path d="M6 34 H20 A10 10 0 0 0 30 24 V8" stroke="{ACTION}" stroke-width="3.2" fill="none" stroke-dasharray="0"/>' + f'<path d="M30 30 L42 42" {DASH}/>'
 I["prop_minima"] = f'<path d="M6 34 H20 A10 10 0 0 0 30 24 V8" {G}/>' + f'<path d="M8 34 H18" stroke="{ACTION}" stroke-width="3.6" fill="none"/>' + f'<path d="M8 28 V40 M18 28 V40" stroke="{ACTION}" stroke-width="1.8"/>'
+I["asm_lista"] = f'<rect x="7" y="6" width="34" height="36" rx="3" fill="{LIGHT}" {S}/>' + ''.join(f'<circle cx="14" cy="{y}" r="3" fill="none" stroke="{ACTION}" stroke-width="2"/><line x1="21" y1="{y}" x2="36" y2="{y}" stroke="{INK}" stroke-width="2.2"/>' for y in [15, 24, 33])
 I["sk_aparar"] = f'<line x1="6" y1="24" x2="30" y2="24" {G}/><line x1="24" y1="6" x2="24" y2="42" {G}/>' + \
     f'<line x1="30" y1="24" x2="42" y2="24" {DASH}/>' + \
     f'<path d="M34 12 L40 18 M40 12 L34 18" stroke="{ACTION}" stroke-width="2.4" stroke-linecap="round"/>'

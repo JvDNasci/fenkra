@@ -351,6 +351,9 @@ pub struct Table {
     pub source: Source,
     /// canto superior esquerdo (mm)
     pub pos: V2,
+    /// nível da lista de peças/corte de montagem
+    #[serde(default)]
+    pub level: scc_montagem::bom::BomLevel,
 }
 
 /// Legenda (carimbo).
@@ -651,9 +654,9 @@ mod tests {
         let nid = d.alloc();
         d.notes.push(Note { id: nid, sheet: s, kind: NoteKind::Balloon, pos: [250., 260.], leader: Some([200., 220.]), text: "1".into(), size: 3.5 });
         let tid = d.alloc();
-        d.tables.push(Table { id: tid, sheet: s, kind: TableKind::Holes, source: src.clone(), pos: [25., 120.] });
+        d.tables.push(Table { id: tid, sheet: s, kind: TableKind::Holes, source: src.clone(), pos: [25., 120.], level: Default::default() });
         let tid2 = d.alloc();
-        d.tables.push(Table { id: tid2, sheet: s, kind: TableKind::Bom, source: src, pos: [25., 60.] });
+        d.tables.push(Table { id: tid2, sheet: s, kind: TableKind::Bom, source: src, pos: [25., 60.], level: Default::default() });
         let t = m.table(&d.tables[1], &d);
         assert_eq!(t.rows.len(), 1);
         let items = layout::sheet(&d, s, &mut m);

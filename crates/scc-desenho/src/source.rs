@@ -351,42 +351,48 @@ impl Models {
         }
         match (&t.kind, &l.model) {
             (TableKind::Bom, Model::Asm(a)) => {
-                let a = (**a).clone();
-                let mut rows: Vec<(String, u32, Vec<String>)> = vec![];
-                for n in &a.nodes {
-                    let (path, sub) = match &n.kind {
-                        NodeKind::Part { path } => (path, false),
-                        NodeKind::SubAssembly { path } => (path, true),
-                        NodeKind::Group => continue,
-                    };
-                    if let Some(r) = rows.iter_mut().find(|r| r.0 == *path) {
-                        r.1 += 1;
-                        continue;
-                    }
-                    let fp = full_path(dir.as_deref(), path);
-                    let (pn, desc, mat) = if sub {
-                        match std::fs::read_to_string(&fp).ok().and_then(|s| Assembly::from_json(&s).ok()) {
+                let rows = scc_montagem::bom::bom(a, dir.as_deref(), t.level);
+                let mut out = vec![];
+                for r in rows {
+                    let (pn, desc, mat) = if r.sub {
+                        match std::fs::read_to_string(&r.path).ok().and_then(|s| Assembly::from_json(&s).ok()) {
                             Some(x) => (x.props.pn, if x.props.description.is_empty() { x.name } else { x.props.description }, "—".to_string()),
-                            None => (String::new(), n.name.clone(), String::new()),
+                            None => (String::new(), r.name.clone(), String::new()),
                         }
                     } else {
-                        match self.parts.get(&fp, false) {
+                        match self.parts.get(&r.path, false) {
                             Ok(p) => {
                                 let pr = &p.doc.props;
                                 (pr.pn.clone(), if pr.description.is_empty() { p.doc.name.clone() } else { pr.description.clone() }, pr.material.clone())
                             }
-                            Err(_) => (String::new(), n.name.clone(), String::new()),
+                            Err(_) => (String::new(), r.name.clone(), String::new()),
                         }
                     };
-                    rows.push((path.clone(), 1, vec![pn, desc, mat]));
+                    // estruturada: recuo pela profundidade
+                    let desc = format!("{}{}", "  ".repeat(r.depth), desc);
+                    out.push(vec![r.item, pn, desc, mat, r.qty.to_string()]);
+                }
+                TableData { headers: ["Item", "Código", "Descrição", "Material", "Qtd."].map(String::from).to_vec(), rows: out }
+            }
+            // lista de corte da montagem: barras de todas as peças (vezes a quantidade de cada uma)
+            (TableKind::CutList, Model::Asm(a)) => {
+                let mut acc: Vec<(String, f64, usize, usize)> = vec![];
+                for r in scc_montagem::bom::bom(a, dir.as_deref(), scc_montagem::bom::BomLevel::Pecas) {
+                    let Ok(p) = self.parts.get(&r.path, false) else { continue };
+                    for c in scc_solidos::cut_list(&p.doc) {
+                        let n = c.count * r.qty as usize;
+                        match acc.iter_mut().find(|x| x.0 == c.designation && (x.1 - c.length).abs() < 0.05) {
+                            Some(x) => {
+                                x.2 += n;
+                                x.3 += n * c.bars;
+                            }
+                            None => acc.push((c.designation.clone(), c.length, n, n * c.bars)),
+                        }
+                    }
                 }
                 TableData {
-                    headers: ["Item", "Código", "Descrição", "Material", "Qtd."].map(String::from).to_vec(),
-                    rows: rows
-                        .into_iter()
-                        .enumerate()
-                        .map(|(i, (_, q, c))| vec![(i + 1).to_string(), c[0].clone(), c[1].clone(), c[2].clone(), q.to_string()])
-                        .collect(),
+                    headers: ["Item", "Perfil", "Comprimento", "Qtd.", "Barras"].map(String::from).to_vec(),
+                    rows: acc.into_iter().enumerate().map(|(i, (d, l, n, b))| vec![(i + 1).to_string(), d, num(l), n.to_string(), b.to_string()]).collect(),
                 }
             }
             (TableKind::Bom, Model::Part(doc)) => TableData {
@@ -409,11 +415,11 @@ impl Models {
                     .collect(),
             },
             (TableKind::CutList, Model::Part(doc)) => TableData {
-                headers: ["Item", "Perfil", "Comprimento", "Qtd."].map(String::from).to_vec(),
+                headers: ["Item", "Perfil", "Comprimento", "Qtd.", "Barras"].map(String::from).to_vec(),
                 rows: scc_solidos::cut_list(doc)
                     .iter()
                     .enumerate()
-                    .map(|(i, r)| vec![(i + 1).to_string(), r.designation.clone(), num(r.length), r.count.to_string()])
+                    .map(|(i, r)| vec![(i + 1).to_string(), r.designation.clone(), num(r.length), r.count.to_string(), (r.bars * r.count).to_string()])
                     .collect(),
             },
             (k, Model::Asm(_)) => TableData { headers: vec![k.label().into()], rows: vec![vec!["escolha uma peça (esta tabela não vale para montagem)".into()]] },

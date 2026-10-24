@@ -319,12 +319,15 @@ fn auto_balloons(app: &mut App) {
     let mut paths: Vec<String> = vec![];
     let (lo, hi) = layout::view_rect(&v, &p);
     let mut k = 0;
+    let items = scc_montagem::bom::bom(&a, dir.as_deref(), scc_montagem::bom::BomLevel::Topo);
     for n in &a.nodes {
-        let scc_montagem::NodeKind::Part { path } = &n.kind else { continue };
+        let (scc_montagem::NodeKind::Part { path } | scc_montagem::NodeKind::SubAssembly { path }) = &n.kind else { continue };
         if paths.contains(path) || !scc_montagem::view::shown(&a, n.id) {
             continue;
         }
         paths.push(path.clone());
+        let fp = scc_montagem::load::full_path(dir.as_deref(), path);
+        let item = items.iter().find(|r| r.path == fp).map(|r| r.item.clone()).unwrap_or_else(|| paths.len().to_string());
         let Some(sh) = scc_montagem::view::placed_shape(&a, n.id, dir.as_deref(), &mut cache) else { continue };
         let Some((l, h)) = sh.bbox() else { continue };
         let c3 = [0, 1, 2].map(|i| (l[i] + h[i]) / 2.);
@@ -333,7 +336,7 @@ fn auto_balloons(app: &mut App) {
         let right = tip[0] > (lo[0] + hi[0]) / 2.;
         let pos = [if right { hi[0] + 12. } else { lo[0] - 12. }, (tip[1] + 6. * (k % 3) as f64).clamp(lo[1], hi[1] + 10.)];
         let id = st.d.alloc();
-        st.d.notes.push(Note { id, sheet: st.sheet, kind: NoteKind::Balloon, pos, leader: Some(tip), text: paths.len().to_string(), size: st.d.text_height });
+        st.d.notes.push(Note { id, sheet: st.sheet, kind: NoteKind::Balloon, pos, leader: Some(tip), text: item, size: st.d.text_height });
         k += 1;
     }
     if k == 0 {
@@ -810,7 +813,7 @@ fn click(app: &mut App, m: V2, snap: &SnapFn, view_at: &ViewAt) {
             };
             let id = st.d.alloc();
             let source = st.source.clone().unwrap();
-            st.d.tables.push(Table { id, sheet, kind, source, pos: m });
+            st.d.tables.push(Table { id, sheet, kind, source, pos: m, level: Default::default() });
             done(st, id);
         }
         _ => st.tool = None,
@@ -1089,6 +1092,17 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         if let Some(t) = st.d.tables.iter_mut().find(|t| t.id == id) {
             ui.heading(tr(t.kind.label()));
             ui.label(RichText::new(&t.source.path).small());
+            if matches!(t.kind, TableKind::Bom) && t.source.path.to_lowercase().ends_with(".sccasm") {
+                ui.horizontal(|ui| {
+                    ui.label(tr("Nível"));
+                    egui::ComboBox::from_id_salt(("bom_nivel", id.0)).selected_text(tr(t.level.label())).show_ui(ui, |ui| {
+                        for l in scc_montagem::bom::BomLevel::ALL {
+                            ui.selectable_value(&mut t.level, l, tr(l.label()));
+                        }
+                    });
+                });
+                ui.label(RichText::new(tr("Os números de item vêm da montagem e ficam fixos entre revisões (salve a montagem para gravar os novos).")).weak().small());
+            }
             let src = st.source.clone();
             if let Some(s) = src.filter(|s| *s != t.source) {
                 if ui.button(tr("Usar a origem atual do desenho")).clicked() {

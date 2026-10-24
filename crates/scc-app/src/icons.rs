@@ -17,6 +17,7 @@ pub fn get(name: &str) -> ImageSource<'static> {
         "arestas_todas" => egui::include_image!("../../../assets/icons/arestas_todas.svg"),
         "asm_grupo" => egui::include_image!("../../../assets/icons/asm_grupo.svg"),
         "asm_inserir" => egui::include_image!("../../../assets/icons/asm_inserir.svg"),
+        "asm_lista" => egui::include_image!("../../../assets/icons/asm_lista.svg"),
         "asm_nova" => egui::include_image!("../../../assets/icons/asm_nova.svg"),
         "asm_numerar" => egui::include_image!("../../../assets/icons/asm_numerar.svg"),
         "asm_peca_nova" => egui::include_image!("../../../assets/icons/asm_peca_nova.svg"),

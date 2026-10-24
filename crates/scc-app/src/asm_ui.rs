@@ -93,6 +93,8 @@ pub struct AsmState {
     /// o manipulador mexe na explosão (não na posição real)
     pub explode_mode: bool,
     pub composer_open: bool,
+    /// janela da lista de peças (nível escolhido)
+    pub bom_open: Option<scc_montagem::bom::BomLevel>,
     pub anim_sel: usize,
     pub anim_t: f64,
     pub anim_play: bool,
@@ -136,6 +138,7 @@ impl AsmState {
             explode_factor: 0.,
             explode_mode: false,
             composer_open: false,
+            bom_open: None,
             anim_sel: 0,
             anim_t: 0.,
             anim_play: false,
@@ -285,7 +288,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
             let is_asm = matches!(
                 c,
                 Cmd::AsmInsert | Cmd::AsmNewPart | Cmd::AsmGroup | Cmd::AsmReplace | Cmd::AsmMate(_) | Cmd::AsmFix | Cmd::AsmRigid | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmSubAsm | Cmd::AsmPattern
-                    | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmComposer
+                    | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmComposer | Cmd::AsmBom
             );
             let Some(st) = app.asm.as_mut() else {
                 // só os comandos de montagem avisam; os da peça seguem normalmente
@@ -434,6 +437,9 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                 }
                 Cmd::AsmComposer => {
                     st.composer_open = true;
+                }
+                Cmd::AsmBom => {
+                    st.bom_open = Some(st.bom_open.unwrap_or_default());
                 }
                 Cmd::AsmInterf => {
                     let dir = st.dir();
@@ -691,6 +697,8 @@ pub fn save(app: &mut App) {
             }
         }
     }
+    // números de item fixos para os componentes novos
+    st.asm.assign_items(dir.as_deref());
     match std::fs::write(&path, st.asm.to_json()) {
         Ok(()) => {
             st.file = Some(path);
@@ -1633,6 +1641,69 @@ fn centers(st: &AsmState) -> std::collections::HashMap<Id, [f64; 3]> {
         }
     }
     out
+}
+
+/// Lista de peças da montagem no nível escolhido, com os números de item fixos.
+pub fn bom_window(app: &mut App, ctx: &egui::Context) {
+    use scc_montagem::bom::{bom, BomLevel};
+    let Some(st) = app.asm.as_mut() else { return };
+    let Some(mut level) = st.bom_open else { return };
+    let dir = st.dir();
+    let rows = bom(&st.asm, dir.as_deref(), level);
+    let mut open = true;
+    let (mut fix, mut export) = (false, false);
+    egui::Window::new(tr("▦ Lista de peças")).open(&mut open).default_width(460.).show(ctx, |ui| {
+        if crate::app::done_bar(ui) {
+            st.bom_open = None;
+        }
+        ui.horizontal(|ui| {
+            for l in BomLevel::ALL {
+                ui.selectable_value(&mut level, l, tr(l.label()));
+            }
+        });
+        egui::ScrollArea::vertical().max_height(360.).show(ui, |ui| {
+            egui::Grid::new("asm_bom").striped(true).num_columns(3).show(ui, |ui| {
+                for h in ["Item", "Componente", "Qtd."] {
+                    ui.label(RichText::new(tr(h)).strong());
+                }
+                ui.end_row();
+                for r in &rows {
+                    let fixed = st.asm.item_of(&r.key).is_some() || r.depth > 0;
+                    let item = RichText::new(&r.item);
+                    ui.label(if fixed { item } else { item.italics().weak() }).on_hover_text(if fixed { tr("número fixo") } else { tr("número provisório: fica fixo ao salvar a montagem") });
+                    ui.label(format!("{}{}{}", "    ".repeat(r.depth), if r.sub { "▣ " } else { "" }, r.name));
+                    ui.label(r.qty.to_string());
+                    ui.end_row();
+                }
+            });
+        });
+        ui.horizontal(|ui| {
+            fix = ui.button(tr("📌 Fixar números")).on_hover_text(tr("Grava os números dos itens novos na montagem (também acontece ao salvar).")).clicked();
+            export = ui.button(tr("💾 Exportar CSV…")).clicked();
+        });
+        ui.label(RichText::new(tr("Um item mantém o número entre revisões, mesmo que saia e volte; os novos recebem o próximo número livre.")).weak().small());
+    });
+    if let Some(l) = st.bom_open.as_mut() {
+        *l = level;
+    }
+    if !open {
+        st.bom_open = None;
+    }
+    if fix {
+        st.asm.assign_items(dir.as_deref());
+        st.modified = true;
+    }
+    if export {
+        if let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name("lista_de_pecas.csv").save_file() {
+            let mut t = String::from("item;componente;quantidade\n");
+            for r in &rows {
+                t += &format!("{};{};{}\n", r.item, r.name, r.qty);
+            }
+            if let Err(e) = std::fs::write(&p, t) {
+                app.toast(format!("Erro: {e}"), true);
+            }
+        }
+    }
 }
 
 /// Janela do composer: estados de exibição, explosão e animação por quadros-chave.

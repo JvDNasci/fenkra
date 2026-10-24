@@ -503,7 +503,7 @@ impl App {
                 d.dims.push(Dim { id, view: ids[0], kind: DimKind::Vertical, anchors: vec![ax.unproject([f.lo[0], f.lo[1]]), ax.unproject([f.lo[0], f.hi[1]])], offset: 8., text: String::new(), tol: "±0,1".into() });
             }
             let id = d.alloc();
-            d.tables.push(Table { id, sheet: sh, kind: TableKind::Holes, source: src.clone(), pos: [270., 150.] });
+            d.tables.push(Table { id, sheet: sh, kind: TableKind::Holes, source: src.clone(), pos: [270., 150.], level: Default::default() });
             let id = d.alloc();
             d.notes.push(Note { id, sheet: sh, kind: NoteKind::Text, pos: [25., 25.], leader: None, text: "Quebrar cantos vivos 0,5x45°
 Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
@@ -1442,7 +1442,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5 });
             Cmd::Geo(k) => Sel::Ref(d.add_geometry(k.make(&seed))),
             // comandos de montagem são tratados em asm_ui::command
             Cmd::AsmNew | Cmd::AsmOpen | Cmd::AsmSave | Cmd::AsmInsert | Cmd::AsmSubAsm | Cmd::AsmNewPart | Cmd::AsmGroup | Cmd::AsmReplace | Cmd::AsmMate(_) | Cmd::AsmFix | Cmd::AsmRigid
-            | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmPattern | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmComposer => return,
+            | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmPattern | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmComposer | Cmd::AsmBom => return,
             Cmd::Param => {
                 let n = (1..).map(|i| format!("P{i}")).find(|n| !d.params.iter().any(|p| &p.name == n)).unwrap();
                 let _ = d.add_param(&n, "10", Unit::Comprimento);
@@ -5398,6 +5398,8 @@ pub enum Cmd {
     AsmAutoJoints,
     AsmSimulate,
     AsmComposer,
+    /// lista de peças por nível
+    AsmBom,
     // ---- chapa metálica
     SmParams,
     SmWall,
@@ -6029,6 +6031,7 @@ impl eframe::App for App {
         self.wizard_window(ctx);
         crate::asm_ui::sim_window(self, ctx);
         crate::asm_ui::composer_window(self, ctx);
+        crate::asm_ui::bom_window(self, ctx);
         self.sheet_window(ctx);
         crate::st_ui::windows(self, ctx);
         self.side_toolbars(root);

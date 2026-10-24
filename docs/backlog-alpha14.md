@@ -84,7 +84,7 @@ Status: [ ] a fazer · [~] parcial · [x] feito
 - [ ] H5 Símbolos de solda conforme ISO 2553 (2D e 3D)
 
 ## I. Listas de peças
-- [ ] I1 Lista de peças/cortes por nível, dinâmica, mantendo posições pelas revisões; usada no desenho
+- [x] I1 Lista de peças/cortes por nível, dinâmica, mantendo posições pelas revisões; usada no desenho
 
 ## J. Sólidos com wireframe e lógica geométrica (pedido de 24/10/2026)
 - [x] J1 Recursos sólidos (extrusão, recorte, revolução, varredura, loft, nervura…) aceitam elementos do wireframe além de sketches: curvas, linhas, polilinhas, splines, extrações, curvas de outros sketches, arestas
