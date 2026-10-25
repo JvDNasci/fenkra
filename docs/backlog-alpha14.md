@@ -117,14 +117,14 @@ Status: [ ] a fazer Â· [~] parcial Â· [x] feito
 
 ## M. Pedido de 25/10/2026 (3ª rodada): sketch, chapa, montagem, visual
 - [ ] M1 Spline como Bézier: botão direito → mostrar pontos de inflexão, tangenciar em pontos, adicionar e remover pontos
-- [ ] M2 Sketch com spline não é detectado como perfil para criar recursos
-- [ ] M3 Chapa: aba curva unida à aba reta, com raio de dobra e planificação corretos
-- [ ] M4 Chapa: abas vizinhas sem recuo manual (flag "recuo mínimo para aba vizinha", 0,0001)
-- [ ] M5 Separador decimal pelo idioma (vírgula em PT, ponto em EN)
-- [ ] M6 Planificação perdendo um raio
-- [ ] M7 Chapa: raios e chanfros de canto, furos e rasgos circulares
-- [ ] M8 Aba por superfície (estilo Surfacic Flange): base, suporte exato/aproximado/ângulo, raio, EOP, lado do material, planificação
-- [ ] M9 Montagem: anéis de rotação coloridos por eixo e o 3º eixo funcionando
+- [x] M2 Sketch com spline não é detectado como perfil para criar recursos
+- [x] M3 Chapa: aba curva unida à aba reta, com raio de dobra e planificação corretos
+- [x] M4 Chapa: abas vizinhas sem recuo manual (flag "recuo mínimo para aba vizinha", 0,0001)
+- [x] M5 Separador decimal pelo idioma (vírgula em PT, ponto em EN)
+- [x] M6 Planificação perdendo um raio
+- [x] M7 Chapa: raios e chanfros de canto, furos e rasgos circulares
+- [x] M8 Aba por superfície (estilo Surfacic Flange): base, suporte exato/aproximado/ângulo, raio, EOP, lado do material, planificação
+- [x] M9 Montagem: anéis de rotação coloridos por eixo e o 3º eixo funcionando
 - [ ] M10 Ícones dos componentes na árvore da montagem no tema (não emoji)
 - [ ] M11 Estética uniforme: contraste pelo tema (claro/escuro) em todos os comandos e abas
 - [ ] M12 Subárvore da peça na montagem igual à árvore do sólido (expandir corpos/recursos)
@@ -136,4 +136,4 @@ Status: [ ] a fazer Â· [~] parcial Â· [x] feito
 - [ ] M18 Painéis de comandos com muitos itens divididos em abas (menos horizontal)
 - [ ] M19 Ícones e dicas em todos os subparâmetros dos comandos
 - [ ] M20 Mais animações na interface
-- [ ] M21 Renderização mais real: cor inicial e arestas sem atravessar faces (raios visíveis como na referência)
+- [x] M21 Renderização mais real: cor inicial e arestas sem atravessar faces (raios visíveis como na referência)

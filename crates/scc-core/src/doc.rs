@@ -1383,6 +1383,10 @@ pub enum FeatureKind {
     SmCurveFlange(SmCurveFlange),
     /// Chapa: alívio de canto.
     SmCornerRelief(SmCornerRelief),
+    /// Chapa: rasgo circular.
+    SmArcSlot(SmArcSlot),
+    /// Chapa: aba por superfície (suporte).
+    SmSurfFlange(SmSurfFlange),
     /// Estrutural: membros (perfis) ao longo de linhas/curvas do esqueleto.
     StructMember(StructMember),
     /// Estrutural: placa de extremidade na ponta de um membro.
@@ -1609,6 +1613,37 @@ pub struct SmCurveFlange {
     /// raio interno (senão o da chapa)
     #[serde(default)]
     pub radius: Option<String>,
+}
+
+/// Rasgo circular (arco) atravessando a chapa: centro na face, raio do arco, largura,
+/// ângulo inicial e varredura.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct SmArcSlot {
+    pub center: [f64; 3],
+    pub radius: String,
+    pub width: String,
+    pub start: String,
+    pub sweep: String,
+}
+
+/// Aba por superfície (Surfacic Flange): a aba se apoia numa superfície de suporte. A linha de
+/// dobra (OML) é a interseção do suporte com o plano da face base; a base é relimitada pelo
+/// suporte e a aba sobe ao longo dele com o raio de dobra, até o comprimento (EOP).
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct SmSurfFlange {
+    /// superfície (ou plano) de suporte
+    pub support: SurfRef,
+    /// ponto na face base (escolhe o plano da web)
+    pub face: [f64; 3],
+    /// comprimento ao longo do suporte (EOP)
+    pub length: String,
+    /// raio de dobra (senão o da chapa)
+    pub radius: Option<String>,
+    /// inverter o sentido (a aba vai para o outro lado da web)
+    pub flip: bool,
+    /// não relimitar a base pelo suporte
+    #[serde(default)]
+    pub keep_base: bool,
 }
 
 /// Alívio de canto: corte no encontro de abas.
@@ -1864,6 +1899,8 @@ impl FeatureKind {
             SmProfileFlange(_) => "AbaPerfil",
             SmCurveFlange(_) => "AbaCurva",
             SmCornerRelief(_) => "AlívioCanto",
+            SmArcSlot(_) => "RasgoCircular",
+            SmSurfFlange(_) => "AbaSuperfície",
             StructMember(_) => "Membro",
             StructPlate(_) => "Placa",
             StructGusset(_) => "Reforço",
@@ -1916,6 +1953,8 @@ impl FeatureKind {
             SmProfileFlange(_) => "⌐",
             SmCurveFlange(_) => "⌒",
             SmCornerRelief(_) => "◔",
+            SmArcSlot(_) => "◠",
+            SmSurfFlange(_) => "⌓",
             StructMember(_) => "⌶",
             StructPlate(_) => "▬",
             StructGusset(_) => "◺",
@@ -2150,6 +2189,18 @@ impl FeatureKind {
                 }
             }
             SmCornerRelief(p) => exprs(&mut p.size),
+            SmSurfFlange(p) => {
+                exprs(&mut p.length);
+                if let Some(r) = &mut p.radius {
+                    exprs(r)
+                }
+            }
+            SmArcSlot(p) => {
+                exprs(&mut p.radius);
+                exprs(&mut p.width);
+                exprs(&mut p.start);
+                exprs(&mut p.sweep)
+            }
             StructMember(m) => {
                 for p in &mut m.paths {
                     p.walk(ids)

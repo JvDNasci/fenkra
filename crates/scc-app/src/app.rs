@@ -1347,7 +1347,21 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
                     }),
                 }))
             }
-            Cmd::SmCurveFlange | Cmd::SmCornerRelief => {
+            Cmd::SmSurfFlange => {
+                if d.sheet.is_none() {
+                    d.sheet = Some(SheetParams::default());
+                }
+                // suporte: superfície/plano escolhido; face da web: o ponto clicado numa face do corpo
+                let seed = self.seed(true);
+                let face = self.picks.iter().find_map(|p| match p {
+                    crate::picking::Pick::Face { point, .. } => Some(point.map(|v| v as f64)),
+                    _ => None,
+                });
+                let support = seed.surface.unwrap_or_else(|| SurfRef::Plane(seed.planes.last().copied().unwrap_or(PlaneRef::Origin(OriginPlane::YZ))));
+                let d = &mut self.open.doc;
+                Sel::Feature(d.add_feature(FeatureKind::SmSurfFlange(SmSurfFlange { support, face: face.unwrap_or([0.; 3]), length: s("20"), radius: None, flip: false, keep_base: false })))
+            }
+            Cmd::SmCurveFlange | Cmd::SmCornerRelief | Cmd::SmArcSlot => {
                 if d.sheet.is_none() {
                     d.sheet = Some(SheetParams::default());
                 }
@@ -1368,6 +1382,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
                 let d = &mut self.open.doc;
                 Sel::Feature(d.add_feature(match c {
                     Cmd::SmCurveFlange => FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("15"), flip: false, angle: s("90"), radius: None }),
+                    Cmd::SmArcSlot => FeatureKind::SmArcSlot(SmArcSlot { center: at.unwrap_or([0.; 3]), radius: s("20"), width: s("6"), start: s("0"), sweep: s("90") }),
                     _ => FeatureKind::SmCornerRelief(SmCornerRelief { at: at.unwrap_or([0.; 3]), size: s("4"), kind: 0 }),
                 }))
             }
@@ -5726,6 +5741,10 @@ pub enum Cmd {
     SmCurveFlange,
     /// alívio de canto
     SmCornerRelief,
+    /// rasgo circular
+    SmArcSlot,
+    /// aba por superfície (suporte)
+    SmSurfFlange,
     // ---- estrutural
     StMember,
     StPlate,

@@ -280,10 +280,20 @@ pub fn entries(g: Group) -> Vec<Entry> {
             Family("sm_recorte", vec![
                 it("sm_recorte", "Recorte", "Recorte na chapa", "Perfil fechado do sketch, normal à chapa: normal, com folga, com saída (ângulo) ou flangeado (colar).", Cmd(C::SmCut)),
                 it("sm_alivio_canto", "Alívio de canto", "Alívio de canto", "Clique no canto (vértice): redondo, quadrado ou em gota, atravessando a chapa.", Cmd(C::SmCornerRelief)),
+                it("sm_rasgo_circular", "Rasgo circular", "Rasgo circular", "Clique no centro (na face): rasgo em arco com raio, largura, ângulo inicial e varredura.", Cmd(C::SmArcSlot)),
+            ]),
+            Family("furo", vec![
+                it("furo_simples", "Furo", "Furo de passagem", "Furo nos pontos de um sketch na face da chapa (vale dobrado e planificado).", Cmd(C::Hole)),
+                it("furo_roscado", "Roscado", "Furo roscado", "Broca de rosca + rosca cosmética.", Cmd(C::HoleTapped)),
+            ]),
+            Family("filete", vec![
+                it("arestas_selecionar", "Raio", "Raio nos cantos da chapa", "Arredonda as arestas escolhidas (cantos da chapa ou das abas); acompanha dobrado e planificado.", Cmd(C::Fillet)),
+                it("chanfro", "Chanfro", "Chanfro nos cantos da chapa", "Chanfra as arestas escolhidas; acompanha dobrado e planificado.", Cmd(C::Chamfer)),
             ]),
             Family("sm_aba_perfil", vec![
                 it("sm_aba_perfil", "Aba por perfil", "Aba por perfil (aba complexa)", "Cadeia aberta de um sketch (linhas e arcos) com os cantos no raio da chapa, puxada para os dois lados.", Cmd(C::SmProfileFlange)),
-                it("sm_aba_curva", "Aba curva", "Aba em aresta curva", "Clique numa aresta curva da chapa: parede normal à chapa ao longo dela.", Cmd(C::SmCurveFlange)),
+                it("sm_aba_curva", "Aba curva", "Aba em aresta curva", "Clique numa aresta (reta ou curva) da chapa: a aba segue as arestas tangentes com o raio de dobra.", Cmd(C::SmCurveFlange)),
+                it("sm_aba_superficie", "Aba por superfície", "Aba por superfície (suporte)", "Escolha a superfície de suporte e clique na face da web: a web é relimitada pelo suporte e a aba sobe por ele com o raio (OML, EOP).", Cmd(C::SmSurfFlange)),
             ]),
             One(it("sm_desdobrar", "Dobrar/Desdobrar", "Dobrar / desdobrar", "Alterna a peça entre dobrada e planificada (comprimento desenvolvido pelo fator K).", Cmd(C::SmUnfold))),
         ],

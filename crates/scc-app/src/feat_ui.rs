@@ -21,7 +21,7 @@ pub fn is_shape(k: &FeatureKind) -> bool {
 
 /// Comandos em que clicar numa face na viewport (com o comando aberto) acrescenta a face.
 pub fn wants_faces(k: &FeatureKind) -> bool {
-    matches!(k, FeatureKind::Shell(_) | FeatureKind::Draft(_) | FeatureKind::Thickness(_) | FeatureKind::Thread(_) | FeatureKind::SmCornerRelief(_))
+    matches!(k, FeatureKind::Shell(_) | FeatureKind::Draft(_) | FeatureKind::Thickness(_) | FeatureKind::Thread(_) | FeatureKind::SmCornerRelief(_) | FeatureKind::SmArcSlot(_) | FeatureKind::SmSurfFlange(_))
         || matches!(k, FeatureKind::SmFlangedHole(h) if crate::slots::is_unset(h.sketch) || !h.points.is_empty())
         || matches!(k, FeatureKind::Fillet(o) if matches!(o.mode, EdgeMode::FaceFace(..) | EdgeMode::FullRound { .. }))
 }
@@ -35,6 +35,8 @@ pub fn add_face(k: &mut FeatureKind, p: [f64; 3]) {
         FeatureKind::Thread(t) => t.face = p,
         FeatureKind::SmFlangedHole(h) => h.points.push(p),
         FeatureKind::SmCornerRelief(c) => c.at = p,
+        FeatureKind::SmArcSlot(c) => c.center = p,
+        FeatureKind::SmSurfFlange(c) => c.face = p,
         // face-face: as duas últimas faces clicadas; completo: meio, lado 1, lado 2 (na ordem do clique)
         FeatureKind::Fillet(o) => match &mut o.mode {
             EdgeMode::FaceFace(a, b) => {
@@ -734,6 +736,33 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             }
             ui.checkbox(&mut cf.flip, tr("para o outro lado da chapa"));
             ui.label(RichText::new(tr("A aba segue a aresta e as que continuam tangentes (reta e curva juntas), com o raio de dobra; planifica pelo comprimento desenvolvido.")).weak().small());
+        }
+        FeatureKind::SmSurfFlange(sf) => {
+            section(ui, "Base (web)");
+            ui.label(RichText::new(if sf.face == [0.; 3] { tr("⚠ clique na face da web (a parede base)").to_string() } else { format!("{} ({:.1}, {:.1}, {:.1})", tr("face da web em"), sf.face[0], sf.face[1], sf.face[2]) }).small());
+            ui.checkbox(&mut sf.keep_base, tr("não relimitar a web pelo suporte"));
+            let mut own = sf.radius.is_some();
+            if ui.checkbox(&mut own, tr("raio de dobra próprio (senão o da chapa)")).changed() {
+                sf.radius = own.then(|| "2".to_string());
+            }
+            if let Some(r) = &mut sf.radius {
+                expr(ui, "Raio de dobra", r, vars, "mm");
+            }
+            section(ui, "Suporte");
+            crate::geo_ui::surf_slot(ui, "smsf_sup", "Superfície", doc, me, &mut sf.support, seed);
+            ui.label(RichText::new(tr("Exato: a aba se apoia no suporte escolhido. A linha de dobra (OML) é a interseção do suporte com o plano da web. Para ângulo constante a partir de uma aresta, use a Aba curva.")).weak().small());
+            section(ui, "EOP e direção");
+            expr(ui, "Comprimento (EOP)", &mut sf.length, vars, "mm");
+            ui.checkbox(&mut sf.flip, tr("inverter a direção (para o outro lado da web)"));
+        }
+        FeatureKind::SmArcSlot(sl) => {
+            section(ui, "Rasgo circular");
+            ui.label(RichText::new(format!("{} ({:.1}, {:.1}, {:.1}) — {}", tr("centro em"), sl.center[0], sl.center[1], sl.center[2], tr("clique na face para trocar"))).small());
+            expr(ui, "Raio do arco", &mut sl.radius, vars, "mm");
+            expr(ui, "Largura", &mut sl.width, vars, "mm");
+            expr(ui, "Ângulo inicial", &mut sl.start, vars, "°");
+            expr(ui, "Varredura", &mut sl.sweep, vars, "°");
+            ui.label(RichText::new(tr("Rasgo em arco com pontas redondas, atravessando a chapa; vale dobrado e planificado.")).weak().small());
         }
         FeatureKind::SmCornerRelief(cr) => {
             section(ui, "Alívio de canto");
