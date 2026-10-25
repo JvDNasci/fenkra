@@ -114,3 +114,26 @@ Status: [ ] a fazer Â· [~] parcial Â· [x] feito
 - [x] L9 Molduras das anotações: nenhuma, retângulo, círculo, cápsula, triângulo, quadrado, bandeira dir./esq., losango, círculo/retângulo pontilhado, tamanho fixo; espessura, tipo de linha, cor
 - [x] L10 Propriedades das anotações (3D e 2D): cor, negrito, tipo de linha, justificação, ponto de ancoragem, espaçamento de linhas, ângulo, espelhar, girar com a vista, fundo (nenhum / preenchido / preenchido recortando a geometria), deslocamento, tamanho, aplicar escala, exibição (mostrar, chamada), coordenadas X/Y, chamada (seta, espessura, estilo)
 - [x] L11 Campos de seleção múltipla: botão "sacola" com a contagem → lista de elementos (cada clique acrescenta, remover); Ctrl+clique soma/tira da seleção
+
+## M. Pedido de 25/10/2026 (3ª rodada): sketch, chapa, montagem, visual
+- [ ] M1 Spline como Bézier: botão direito → mostrar pontos de inflexão, tangenciar em pontos, adicionar e remover pontos
+- [ ] M2 Sketch com spline não é detectado como perfil para criar recursos
+- [ ] M3 Chapa: aba curva unida à aba reta, com raio de dobra e planificação corretos
+- [ ] M4 Chapa: abas vizinhas sem recuo manual (flag "recuo mínimo para aba vizinha", 0,0001)
+- [ ] M5 Separador decimal pelo idioma (vírgula em PT, ponto em EN)
+- [ ] M6 Planificação perdendo um raio
+- [ ] M7 Chapa: raios e chanfros de canto, furos e rasgos circulares
+- [ ] M8 Aba por superfície (estilo Surfacic Flange): base, suporte exato/aproximado/ângulo, raio, EOP, lado do material, planificação
+- [ ] M9 Montagem: anéis de rotação coloridos por eixo e o 3º eixo funcionando
+- [ ] M10 Ícones dos componentes na árvore da montagem no tema (não emoji)
+- [ ] M11 Estética uniforme: contraste pelo tema (claro/escuro) em todos os comandos e abas
+- [ ] M12 Subárvore da peça na montagem igual à árvore do sólido (expandir corpos/recursos)
+- [ ] M13 Edição na montagem dinâmica como nos outros módulos (um painel só)
+- [ ] M14 Marca (brand) do software a partir do ícone; tela de carregamento e inicial animadas
+- [ ] M15 Temas: 5 temas prontos e temas do usuário (extensões)
+- [ ] M16 Peças de exemplo com prévia na tela inicial
+- [ ] M17 Recentes (peças e montagens) na tela inicial
+- [ ] M18 Painéis de comandos com muitos itens divididos em abas (menos horizontal)
+- [ ] M19 Ícones e dicas em todos os subparâmetros dos comandos
+- [ ] M20 Mais animações na interface
+- [ ] M21 Renderização mais real: cor inicial e arestas sem atravessar faces (raios visíveis como na referência)
