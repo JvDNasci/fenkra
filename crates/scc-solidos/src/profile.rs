@@ -77,10 +77,7 @@ pub fn eval_sketch(data: &SketchData, vars: &Vars) -> Result<EvalSketch, String>
                 out.curves.insert(c.id, vec![sk.pos(p)]);
                 continue;
             }
-            Curve::Spline { ref pts } => {
-                let v: Vec<[f64; 2]> = pts.iter().map(|p| sk.pos(*p)).collect();
-                sample(&[Seg2::Spline(v)])
-            }
+            Curve::Spline { .. } => sample(&[Seg2::Spline(sk.spline_uv(c.id))]),
         };
         out.curves.insert(c.id, pts.clone());
         if c.construction {

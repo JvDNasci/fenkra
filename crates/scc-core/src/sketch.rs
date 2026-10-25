@@ -267,6 +267,82 @@ pub fn spline_samples(p: &[[f64; 2]], per_seg: usize) -> Vec<[f64; 2]> {
     out
 }
 
+/// Tangente própria num ponto de spline (alça tipo Bézier: o ponto ± vetor/3).
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct SplineTan {
+    pub curve: Id,
+    pub point: Id,
+    /// vetor tangente (derivada no ponto, em mm por segmento)
+    pub dir: [f64; 2],
+}
+
+/// Tangentes automáticas (Catmull-Rom) ou as dadas, em cada ponto.
+pub fn spline_tangents(p: &[[f64; 2]], own: &[Option<[f64; 2]>]) -> Vec<[f64; 2]> {
+    let n = p.len();
+    (0..n)
+        .map(|i| {
+            if let Some(Some(t)) = own.get(i) {
+                return *t;
+            }
+            if n < 2 {
+                return [0., 0.];
+            }
+            let (a, b) = if i == 0 {
+                (p[0], p[1])
+            } else if i == n - 1 {
+                (p[n - 2], p[n - 1])
+            } else {
+                (p[i - 1], p[i + 1])
+            };
+            let k = if i == 0 || i == n - 1 { 1. } else { 0.5 };
+            [(b[0] - a[0]) * k, (b[1] - a[1]) * k]
+        })
+        .collect()
+}
+
+/// Curva de Hermite cúbica pelos pontos com as tangentes (amostrada).
+pub fn spline_eval(p: &[[f64; 2]], own: &[Option<[f64; 2]>], per_seg: usize) -> Vec<[f64; 2]> {
+    let n = p.len();
+    if n < 2 {
+        return p.to_vec();
+    }
+    let m = spline_tangents(p, own);
+    let mut out = vec![p[0]];
+    for i in 0..n - 1 {
+        for k in 1..=per_seg {
+            let t = k as f64 / per_seg as f64;
+            let (t2, t3) = (t * t, t * t * t);
+            let h00 = 2. * t3 - 3. * t2 + 1.;
+            let h10 = t3 - 2. * t2 + t;
+            let h01 = -2. * t3 + 3. * t2;
+            let h11 = t3 - t2;
+            out.push([0, 1].map(|j| h00 * p[i][j] + h10 * m[i][j] + h01 * p[i + 1][j] + h11 * m[i + 1][j]));
+        }
+    }
+    out
+}
+
+/// Pontos de inflexão (troca do lado da curvatura) de uma polilinha amostrada.
+pub fn inflections(s: &[[f64; 2]]) -> Vec<[f64; 2]> {
+    let cross = |i: usize| {
+        let (a, b, c) = (s[i - 1], s[i], s[i + 1]);
+        (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0])
+    };
+    let mut out = vec![];
+    let mut last = 0f64;
+    for i in 1..s.len().saturating_sub(1) {
+        let c = cross(i);
+        if c.abs() < 1e-12 {
+            continue;
+        }
+        if last != 0. && c.signum() != last.signum() {
+            out.push(s[i]);
+        }
+        last = c;
+    }
+    out
+}
+
 #[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
 pub struct SketchData {
     pub points: Vec<SkPoint>,
@@ -276,6 +352,79 @@ pub struct SketchData {
     /// que o cálculo reposiciona a cada vez — muda o 3D, muda o sketch
     #[serde(default)]
     pub links: Vec<SkLink>,
+    /// tangentes próprias nos pontos das splines (alças Bézier)
+    #[serde(default)]
+    pub spline_tan: Vec<SplineTan>,
+}
+
+impl SketchData {
+    /// Pontos da spline como o perfil os usa: os próprios pontos (interpolação do kernel) ou,
+    /// com alguma tangente própria, a curva de Hermite bem amostrada.
+    pub fn spline_uv(&self, curve: Id) -> Vec<[f64; 2]> {
+        let Some(Curve::Spline { pts }) = self.curves.iter().find(|c| c.id == curve).map(|c| &c.geom) else { return vec![] };
+        let p: Vec<[f64; 2]> = pts.iter().map(|q| self.pos(*q)).collect();
+        if !self.spline_tan.iter().any(|t| t.curve == curve) {
+            return p;
+        }
+        spline_eval(&p, &self.own_tangents(curve), 16)
+    }
+    /// Tangente própria (ou nenhuma) de cada ponto da spline, na ordem.
+    pub fn own_tangents(&self, curve: Id) -> Vec<Option<[f64; 2]>> {
+        let Some(Curve::Spline { pts }) = self.curves.iter().find(|c| c.id == curve).map(|c| &c.geom) else { return vec![] };
+        pts.iter().map(|q| self.spline_tan.iter().find(|t| t.curve == curve && t.point == *q).map(|t| t.dir)).collect()
+    }
+    /// Define (ou tira, com `None`) a tangente própria num ponto da spline.
+    pub fn set_spline_tangent(&mut self, curve: Id, point: Id, dir: Option<[f64; 2]>) {
+        self.spline_tan.retain(|t| !(t.curve == curve && t.point == point));
+        if let Some(d) = dir {
+            self.spline_tan.push(SplineTan { curve, point, dir: d });
+        }
+    }
+    /// Acrescenta um ponto na spline perto de `at` (no trecho mais próximo).
+    pub fn spline_insert(&mut self, al: &mut impl FnMut() -> Id, curve: Id, at: [f64; 2]) -> Option<Id> {
+        let pts = match self.curves.iter().find(|c| c.id == curve).map(|c| &c.geom) {
+            Some(Curve::Spline { pts }) => pts.clone(),
+            _ => return None,
+        };
+        let p: Vec<[f64; 2]> = pts.iter().map(|q| self.pos(*q)).collect();
+        let s = spline_eval(&p, &self.own_tangents(curve), 20);
+        let mut best = (f64::MAX, 0usize);
+        for (k, q) in s.iter().enumerate() {
+            let d = (q[0] - at[0]).powi(2) + (q[1] - at[1]).powi(2);
+            if d < best.0 {
+                best = (d, k);
+            }
+        }
+        let seg = (best.1.saturating_sub(1) / 20).min(pts.len() - 2);
+        let q = s[best.1];
+        let id = self.add_point(al, q[0], q[1]);
+        if let Some(Curve::Spline { pts }) = self.curves.iter_mut().find(|c| c.id == curve).map(|c| &mut c.geom) {
+            pts.insert(seg + 1, id);
+        }
+        Some(id)
+    }
+    /// Tira um ponto da spline (ficam pelo menos dois).
+    pub fn spline_remove(&mut self, curve: Id, point: Id) -> bool {
+        let mut ok = false;
+        if let Some(Curve::Spline { pts }) = self.curves.iter_mut().find(|c| c.id == curve).map(|c| &mut c.geom) {
+            if pts.len() > 2 {
+                if let Some(i) = pts.iter().position(|q| *q == point) {
+                    pts.remove(i);
+                    ok = true;
+                }
+            }
+        }
+        if ok {
+            self.spline_tan.retain(|t| !(t.curve == curve && t.point == point));
+            // o ponto some se nada mais o usa
+            let used = self.curves.iter().any(|c| Self::curve_points(&c.geom).contains(&point));
+            if !used {
+                self.points.retain(|p| p.id != point);
+                self.constraints.retain(|k| !k.kind.refs().contains(&point));
+            }
+        }
+        ok
+    }
 }
 
 /// Origem de uma geometria externa do sketch.
@@ -1145,7 +1294,7 @@ impl SketchData {
         for c in self.curves.iter().filter(|c| !c.construction) {
             if let Curve::Spline { pts } = &c.geom {
                 if pts.len() >= 2 {
-                    let v: Vec<[f64; 2]> = pts.iter().map(|p| self.pos(*p)).collect();
+                    let v: Vec<[f64; 2]> = self.spline_uv(c.id);
                     edges.push((find(&mut parent, pts[0]), find(&mut parent, pts[pts.len() - 1]), Seg::Spline(v)));
                 }
                 continue;
@@ -1317,6 +1466,30 @@ mod tests {
         let r = s.solve(&Vars::new(), &[p[2]]);
         assert!(r.converged);
         assert!((s.pos(p[1])[0] - 20.).abs() < 1e-6 && (s.pos(p[3])[1] - 9.).abs() < 1e-6);
+    }
+
+    #[test]
+    fn spline_com_tangente_e_pontos() {
+        let mut al = alloc();
+        let mut s = SketchData::default();
+        let a = s.add_point(&mut al, 0., 0.);
+        let b = s.add_point(&mut al, 10., 5.);
+        let c = s.add_point(&mut al, 20., 0.);
+        let sp = s.add_curve(&mut al, Curve::Spline { pts: vec![a, b, c] }, false);
+        assert_eq!(s.spline_uv(sp).len(), 3);
+        // tangente horizontal no meio: a curva passa pelo ponto com derivada (k, 0)
+        s.set_spline_tangent(sp, b, Some([10., 0.]));
+        let u = s.spline_uv(sp);
+        assert!(u.len() > 10 && u.iter().any(|q| (q[0] - 10.).abs() < 1e-9 && (q[1] - 5.).abs() < 1e-9));
+        // em forma de S (tangentes iguais nas pontas): uma inflexão no meio
+        let p = [[0., 0.], [10., 0.]];
+        let ev = spline_eval(&p, &[Some([10., 10.]), Some([10., 10.])], 40);
+        assert_eq!(inflections(&ev).len(), 1);
+        // acrescentar e tirar ponto
+        let np = s.spline_insert(&mut al, sp, [15., 3.]).unwrap();
+        assert!(matches!(&s.curves.iter().find(|x| x.id == sp).unwrap().geom, Curve::Spline { pts } if pts.len() == 4 && pts[2] == np));
+        assert!(s.spline_remove(sp, np));
+        assert!(s.points.iter().all(|p| p.id != np));
     }
 
     #[test]

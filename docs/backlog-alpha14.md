@@ -116,7 +116,7 @@ Status: [ ] a fazer Â· [~] parcial Â· [x] feito
 - [x] L11 Campos de seleção múltipla: botão "sacola" com a contagem → lista de elementos (cada clique acrescenta, remover); Ctrl+clique soma/tira da seleção
 
 ## M. Pedido de 25/10/2026 (3ª rodada): sketch, chapa, montagem, visual
-- [ ] M1 Spline como Bézier: botão direito → mostrar pontos de inflexão, tangenciar em pontos, adicionar e remover pontos
+- [x] M1 Spline como Bézier: botão direito → mostrar pontos de inflexão, tangenciar em pontos, adicionar e remover pontos
 - [x] M2 Sketch com spline não é detectado como perfil para criar recursos
 - [x] M3 Chapa: aba curva unida à aba reta, com raio de dobra e planificação corretos
 - [x] M4 Chapa: abas vizinhas sem recuo manual (flag "recuo mínimo para aba vizinha", 0,0001)

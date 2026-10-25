@@ -153,10 +153,7 @@ pub fn sketch_curves(doc: &Document, r: &RecomputeResult, sketch: Id) -> Vec<(Id
         .iter()
         .filter_map(|c| {
             let pts2: Vec<[f64; 2]> = match c.geom {
-                Curve::Spline { ref pts } => {
-                    let p2: Vec<[f64; 2]> = pts.iter().map(|p| d.pos(*p)).collect();
-                    scc_core::sketch::spline_samples(&p2, 12)
-                }
+                Curve::Spline { .. } => scc_core::sketch::spline_samples(&d.spline_uv(c.id), 12),
                 Curve::Line { a, b } => vec![d.pos(a), d.pos(b)],
                 Curve::Point { p } => vec![d.pos(p)],
                 Curve::Circle { c: ctr, r } => {

@@ -177,6 +177,10 @@ pub struct SketchEdit {
     menu: Option<QuickMenu>,
     /// arrastando o texto de uma cota
     drag_label: Option<Id>,
+    /// mostra os pontos de inflexão das splines
+    pub inflex: bool,
+    /// spline com as alças de tangência (Bézier) à mostra
+    pub handles: Option<Id>,
 }
 
 /// Cota ainda não criada: elementos clicados e, se escolhido no menu, o tipo fixo.
@@ -191,6 +195,12 @@ struct QuickMenu {
 }
 
 enum MenuAct {
+    SplInflex,
+    SplHandles(Id),
+    SplAdd(Id, [f64; 2]),
+    SplAuto(Id),
+    SplTan(Id, Id, u8),
+    SplRemove(Id, Id),
     Dim(Kind),
     Constr(CKind),
     Construction,
@@ -218,6 +228,8 @@ impl SketchEdit {
             pending: None,
             menu: None,
             drag_label: None,
+            inflex: false,
+            handles: None,
         }
     }
     pub fn set_tool(&mut self, t: Tool) {
@@ -1116,10 +1128,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         let own = app.open.doc.line_style(c.id);
         let w = own.map(|x| x.width).unwrap_or(if c.construction { 1.2 } else { 2.0 });
         let pts: Vec<Pos2> = match c.geom {
-            Curve::Spline { ref pts } => {
-                let p2: Vec<[f64; 2]> = pts.iter().map(|p| sk.pos(*p)).collect();
-                scc_core::sketch::spline_samples(&p2, 12).into_iter().map(|q| v.to_screen(q)).collect()
-            }
+            Curve::Spline { .. } => scc_core::sketch::spline_samples(&sk.spline_uv(c.id), 12).into_iter().map(|q| v.to_screen(q)).collect(),
             Curve::Line { a, b } => vec![v.to_screen(sk.pos(a)), v.to_screen(sk.pos(b))],
             Curve::Circle { c: ctr, r } => {
                 let cc = sk.pos(ctr);
@@ -1303,9 +1312,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                 Curve::Circle { c: ctr, r } => ((pos - v.to_screen(sk.pos(ctr))).length() - r as f32 * ppm).abs(),
                 Curve::Arc { c: ctr, s, .. } => ((pos - v.to_screen(sk.pos(ctr))).length() - d2(sk.pos(s), sk.pos(ctr)) as f32 * ppm).abs(),
                 Curve::Point { .. } => f32::MAX,
-                Curve::Spline { ref pts } => {
-                    let p2: Vec<[f64; 2]> = pts.iter().map(|p| sk.pos(*p)).collect();
-                    let s = scc_core::sketch::spline_samples(&p2, 10);
+                Curve::Spline { .. } => {
+                    let s = scc_core::sketch::spline_samples(&sk.spline_uv(c.id), 10);
                     s.windows(2).map(|w| seg_dist(pos, v.to_screen(w[0]), v.to_screen(w[1]))).fold(f32::MAX, f32::min)
                 }
             };
@@ -1371,7 +1379,48 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         }
     }
 
-    let mut primary_click = resp.clicked_by(egui::PointerButton::Primary);
+    // ---------- spline: pontos de inflexão e alças de tangência (Bézier)
+    if edit.inflex {
+        for c in sk.curves.iter().filter(|c| matches!(c.geom, Curve::Spline { .. })) {
+            let s = scc_core::sketch::spline_samples(&sk.spline_uv(c.id), 16);
+            for q in scc_core::sketch::inflections(&s) {
+                let p = v.to_screen(q);
+                let dia = vec![p + egui::vec2(0., -6.), p + egui::vec2(6., 0.), p + egui::vec2(0., 6.), p + egui::vec2(-6., 0.)];
+                painter.add(egui::Shape::convex_polygon(dia, Color32::from_rgb(255, 150, 40), Stroke::new(1., Color32::BLACK)));
+            }
+        }
+    }
+    let mut handle_busy = false;
+    if let Some(cid) = edit.handles {
+        if let Some(Curve::Spline { pts }) = sk.curve(cid).map(|c| c.geom.clone()) {
+            let p: Vec<[f64; 2]> = pts.iter().map(|q| sk.pos(*q)).collect();
+            let own = sk.own_tangents(cid);
+            let m = scc_core::sketch::spline_tangents(&p, &own);
+            for (i, pid) in pts.iter().enumerate() {
+                for side in [1f64, -1.] {
+                    let h = [p[i][0] + side * m[i][0] / 3., p[i][1] + side * m[i][1] / 3.];
+                    let (hs, ps) = (v.to_screen(h), v.to_screen(p[i]));
+                    let own_col = if own.get(i).is_some_and(|x| x.is_some()) { Color32::from_rgb(255, 150, 40) } else { Color32::from_rgb(120, 170, 230) };
+                    painter.line_segment([ps, hs], Stroke::new(1.2, own_col.gamma_multiply(0.8)));
+                    let r = ui.interact(Rect::from_center_size(hs, egui::vec2(14., 14.)), egui::Id::unique(("alca_spline", cid.0, i, side > 0.)), egui::Sense::drag());
+                    let hot = r.hovered() || r.dragged();
+                    painter.rect_filled(Rect::from_center_size(hs, egui::vec2(8., 8.)), 1.5, if hot { SEL } else { own_col });
+                    if r.dragged() {
+                        if let Some(mp) = r.interact_pointer_pos().and_then(|x| v.to_uv(x)) {
+                            let d = [3. * (mp[0] - p[i][0]) * side, 3. * (mp[1] - p[i][1]) * side];
+                            sk.set_spline_tangent(cid, *pid, Some(d));
+                            handle_busy = true;
+                        }
+                    }
+                    if r.hovered() {
+                        painter.text(hs + egui::vec2(10., -10.), egui::Align2::LEFT_BOTTOM, tr("arraste: tangente e intensidade neste ponto"), egui::FontId::proportional(11.), SEL);
+                    }
+                }
+            }
+        }
+    }
+
+    let mut primary_click = resp.clicked_by(egui::PointerButton::Primary) && !handle_busy;
     let secondary_click = resp.clicked_by(egui::PointerButton::Secondary);
     // clique fora do menu rápido só o fecha
     if primary_click && edit.menu.take().is_some() {
@@ -2202,6 +2251,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         let cons = applicable(&sk, &m.sel);
         let has_cv = m.sel.iter().any(|e| matches!(e, Ent::Cv(_)));
         let msel = m.sel.clone();
+        let (inflex_on, handles_on) = (edit.inflex, edit.handles);
+        let menu_uv = v.to_uv(m.pos);
         egui::Area::new(egui::Id::unique("sk_menu_rapido")).fixed_pos(m.pos + egui::vec2(4., 4.)).order(egui::Order::Foreground).show(ui.ctx(), |ui| {
             egui::Frame::menu(ui.style()).show(ui, |ui| {
                 ui.set_min_width(180.);
@@ -2234,6 +2285,45 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                         if item(ui, i, n) {
                             act = Some(MenuAct::Constr(*k));
                         }
+                    }
+                }
+                // spline: inflexões, alças Bézier, pontos e tangentes
+                let spl = msel.iter().find_map(|e| match e {
+                    Ent::Cv(c) if matches!(sk.curve(*c).map(|x| &x.geom), Some(Curve::Spline { .. })) => Some(*c),
+                    _ => None,
+                });
+                let spt = msel.iter().find_map(|e| match e {
+                    Ent::Pt(p) => sk.curves.iter().find(|c| matches!(&c.geom, Curve::Spline { pts } if pts.contains(p))).map(|c| (c.id, *p)),
+                    _ => None,
+                });
+                if spl.is_some() || spt.is_some() {
+                    ui.separator();
+                    ui.label(RichText::new(tr("Spline")).weak().small());
+                    let txt = |on: bool, t: &str| format!("{} {}", if on { "☑" } else { "☐" }, tr(t));
+                    if ui.add(egui::Button::new(txt(inflex_on, "Mostrar pontos de inflexão")).frame(false)).clicked() {
+                        act = Some(MenuAct::SplInflex);
+                    }
+                    let cid = spl.or(spt.map(|x| x.0)).unwrap();
+                    if ui.add(egui::Button::new(txt(handles_on == Some(cid), "Alças de tangência (Bézier)")).frame(false)).clicked() {
+                        act = Some(MenuAct::SplHandles(cid));
+                    }
+                    if let (Some(c), Some(uv)) = (spl, menu_uv) {
+                        if ui.add(egui::Button::new(tr("＋ Adicionar ponto aqui")).frame(false)).clicked() {
+                            act = Some(MenuAct::SplAdd(c, uv));
+                        }
+                    }
+                    if let Some((c, p)) = spt {
+                        for (k, n) in [(1u8, "⟷ Tangente horizontal no ponto"), (2, "↕ Tangente vertical no ponto"), (0, "↺ Tangente automática no ponto")] {
+                            if ui.add(egui::Button::new(tr(n)).frame(false)).clicked() {
+                                act = Some(MenuAct::SplTan(c, p, k));
+                            }
+                        }
+                        if ui.add(egui::Button::new(tr("－ Remover ponto da spline")).frame(false)).clicked() {
+                            act = Some(MenuAct::SplRemove(c, p));
+                        }
+                    }
+                    if ui.add(egui::Button::new(tr("↺ Todas as tangentes automáticas")).frame(false)).clicked() {
+                        act = Some(MenuAct::SplAuto(cid));
                     }
                 }
                 if !msel.is_empty() {
@@ -2283,6 +2373,39 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                 edit.report = sk.solve(&vars, &[]);
             }
             MenuAct::Tool(t) => edit.set_tool(t),
+            MenuAct::SplInflex => edit.inflex = !edit.inflex,
+            MenuAct::SplHandles(c) => edit.handles = if edit.handles == Some(c) { None } else { Some(c) },
+            MenuAct::SplAdd(c, uv) => {
+                sk.spline_insert(&mut al, c, uv);
+                edit.handles = Some(c);
+                edit.report = sk.solve(&vars, &[]);
+            }
+            MenuAct::SplAuto(c) => sk.spline_tan.retain(|t| t.curve != c),
+            MenuAct::SplTan(c, p, k) => {
+                // tamanho da alça: a distância média aos vizinhos
+                let pts = match sk.curve(c).map(|x| x.geom.clone()) {
+                    Some(Curve::Spline { pts }) => pts,
+                    _ => vec![],
+                };
+                let i = pts.iter().position(|q| *q == p).unwrap_or(0);
+                let pp: Vec<[f64; 2]> = pts.iter().map(|q| sk.pos(*q)).collect();
+                let m = scc_core::sketch::spline_tangents(&pp, &sk.own_tangents(c));
+                let len = (m[i][0].powi(2) + m[i][1].powi(2)).sqrt().max(1.);
+                let dir = match k {
+                    1 => Some([if m[i][0] < 0. { -len } else { len }, 0.]),
+                    2 => Some([0., if m[i][1] < 0. { -len } else { len }]),
+                    _ => None,
+                };
+                sk.set_spline_tangent(c, p, dir);
+                edit.handles = Some(c);
+            }
+            MenuAct::SplRemove(c, p) => {
+                if !sk.spline_remove(c, p) {
+                    toast = Some((tr("a spline precisa de pelo menos dois pontos").to_string(), true));
+                }
+                edit.sel.clear();
+                edit.report = sk.solve(&vars, &[]);
+            }
         }
     }
 
