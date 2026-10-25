@@ -6491,9 +6491,12 @@ impl eframe::App for App {
         // quando for preciso escolher algo nela; escolhendo no 3D, ela nem precisa aparecer)
         // sem comando aberto, o painel de edição some e a árvore fica sozinha à esquerda
         // (montagem continua com árvore e painel lado a lado)
-        let part_bench = self.settings.bench != crate::settings::Bench::Montagem;
+        // a montagem segue a mesma filosofia: escolher só seleciona; editar troca a árvore pelo painel
+        let part_bench = true;
         let active = if self.settings.bench == crate::settings::Bench::Desenho {
             self.dwg.as_ref().is_some_and(|s| s.active())
+        } else if self.in_asm() {
+            self.asm.as_ref().is_some_and(|s| s.editing())
         } else {
             self.session.is_some() || self.sketch.is_some() || self.sketch_wait_plane || self.pmi_pending.is_some() || matches!(self.sel, Sel::Params | Sel::Pmi(_))
         };

@@ -131,8 +131,10 @@ pub fn apply(ctx: &egui::Context, def: &ThemeDef) {
     w.noninteractive.weak_bg_fill = c(def.panel);
     w.noninteractive.bg_stroke = Stroke::new(1., mix(def.panel, def.text, 0.12));
     w.noninteractive.fg_stroke = Stroke::new(1., mix(def.panel, def.text, 0.85));
-    w.inactive.bg_fill = mix(def.panel, def.text, 0.08);
-    w.inactive.weak_bg_fill = mix(def.panel, def.text, 0.06);
+    // campos e caixas de marcar sempre visíveis: preenchimento e contorno com contraste
+    w.inactive.bg_fill = mix(def.panel, def.text, if def.dark { 0.16 } else { 0.10 });
+    w.inactive.weak_bg_fill = mix(def.panel, def.text, 0.07);
+    w.inactive.bg_stroke = Stroke::new(1., mix(def.panel, def.text, if def.dark { 0.30 } else { 0.28 }));
     w.inactive.fg_stroke = Stroke::new(1., c(def.text));
     w.hovered.bg_fill = mix(def.panel, def.accent, 0.28);
     w.hovered.weak_bg_fill = mix(def.panel, def.accent, 0.22);

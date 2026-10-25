@@ -115,6 +115,8 @@ pub struct AsmState {
     pub sel: Option<Id>,
     /// restrição esperando as duas seleções
     pub pending: Option<MateCmd>,
+    /// propriedades do componente escolhido (ou da montagem, sem escolha) abertas no painel
+    pub props: bool,
     pub report: SolveReport,
     pub errors: Vec<(Id, String)>,
     pub undo: Vec<Assembly>,
@@ -181,6 +183,7 @@ impl AsmState {
     pub fn new(asm: Assembly, file: Option<PathBuf>) -> Self {
         let report_dof = scc_montagem::solve::dof(&asm);
         AsmState {
+            props: false,
             asm,
             file,
             cache: PartCache::default(),
@@ -908,8 +911,39 @@ pub fn save(app: &mut App) {
 
 /// O que a árvore mostra além dos nós: graus de liberdade, recursos de cada peça, conteúdo dos
 /// subconjuntos e quantas instâncias de cada arquivo.
+/// Resumo da árvore de uma peça (como aparece no Sólidos): corpos com a linha do tempo,
+/// geometria e parâmetros.
+#[derive(Clone, Default)]
+struct PartOutline {
+    /// (coletor, nome, cor, comandos: (id, ícone, nome, suprimido))
+    bodies: Vec<(Id, String, [u8; 3], Vec<(Id, &'static str, String, bool)>)>,
+    /// geometria (ícone, nome)
+    geo: Vec<(&'static str, String)>,
+    params: Vec<String>,
+}
+
+impl PartOutline {
+    fn of(doc: &scc_core::Document) -> Self {
+        let bodies = doc
+            .collectors
+            .iter()
+            .map(|c| {
+                let feats = doc.features.iter().filter(|f| f.target == c.id && !doc.is_free(f)).map(|f| (f.id, f.kind.icon(), f.name.clone(), f.suppressed)).collect();
+                (c.id, c.name.clone(), c.color, feats)
+            })
+            .collect();
+        let mut geo: Vec<(&'static str, String)> = doc.references.iter().filter(|r| !matches!(r.kind, scc_core::RefKind::Linked { .. })).map(|r| ("◇", r.name.clone())).collect();
+        geo.extend(doc.features.iter().filter(|f| doc.is_free(f)).map(|f| (f.kind.icon(), f.name.clone())));
+        let params = doc.params.iter().map(|p| format!("{} = {}", p.name, p.expr)).collect();
+        PartOutline { bodies, geo, params }
+    }
+    fn is_empty(&self) -> bool {
+        self.bodies.iter().all(|b| b.3.is_empty()) && self.geo.is_empty()
+    }
+}
+
 struct TreeInfo {
-    feats: std::collections::HashMap<Id, Vec<(Id, String)>>,
+    feats: std::collections::HashMap<Id, PartOutline>,
     subs: std::collections::HashMap<Id, Vec<(usize, String, bool)>>,
     inst: std::collections::HashMap<String, usize>,
 }
@@ -953,8 +987,18 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
     let mut act: Option<(Id, u8)> = None;
     let mut new_sel = None;
     let mut hover = None;
-    let title = format!("⚙ {}{}", st.asm.name, if st.modified { " •" } else { "" });
-    ui.label(RichText::new(title).strong());
+    let title = format!("{}{}", st.asm.name, if st.modified { " •" } else { "" });
+    let tr_resp = ui
+        .horizontal(|ui| {
+            ui.add(egui::Image::new(crate::icons::get("asm_nova")).fit_to_exact_size(egui::vec2(18., 18.)));
+            ui.selectable_label(st.props && st.sel.is_none(), RichText::new(title).strong())
+        })
+        .inner
+        .on_hover_text(tr("clique: propriedades e parâmetros da montagem"));
+    if tr_resp.clicked() {
+        st.sel = None;
+        st.props = true;
+    }
     if let Some(f) = &st.file {
         ui.label(RichText::new(f.file_name().map(|x| x.to_string_lossy().to_string()).unwrap_or_default()).weak().small());
     }
@@ -992,7 +1036,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                 NodeKind::Part { path } => {
                     *inst.entry(path.clone()).or_insert(0) += 1;
                     if let Ok(p) = st.cache.get(&full_path(dir.as_deref(), path), false) {
-                        feats.insert(n.id, p.doc.features.iter().map(|f| (f.id, f.name.clone())).collect::<Vec<_>>());
+                        feats.insert(n.id, PartOutline::of(&p.doc));
                     }
                 }
                 NodeKind::SubAssembly { path } => {
@@ -1014,9 +1058,9 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
         for n in kids {
             let err = st.errors.iter().find(|(i, _)| *i == n.id).map(|(_, e)| e.clone());
             let icon = match n.kind {
-                NodeKind::Group => "📁",
-                NodeKind::Part { .. } => "🧩",
-                NodeKind::SubAssembly { .. } => "🗂",
+                NodeKind::Group => "asm_grupo",
+                NodeKind::Part { .. } => "nova_peca",
+                NodeKind::SubAssembly { .. } => "asm_subconjunto",
             };
             let num = if n.number > 0 { format!("{} · ", n.number) } else { String::new() };
             let mode = if n.mode == LoadMode::Visualizacao { " 👓" } else { "" };
@@ -1026,16 +1070,18 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                 _ => 1,
             };
             let inst = if copies > 1 { format!("  ×{copies}") } else { String::new() };
-            let txt = format!("{icon} {num}{}{}{mode}{}{inst}", n.name, if n.fixed { " 📌" } else { "" }, if err.is_some() { " ✖" } else { "" });
+            let txt = format!("{num}{}{}{mode}{}{inst}", n.name, if n.fixed { " 📌" } else { "" }, if err.is_some() { " ✖" } else { "" });
             let open_key = egui::Id::unique(("asm_expandir", n.id.0));
-            let has_kids = info.feats.get(&n.id).is_some_and(|v| !v.is_empty()) || info.subs.get(&n.id).is_some_and(|v| !v.is_empty());
+            let has_kids = info.feats.get(&n.id).is_some_and(|v| !v.is_empty()) || info.subs.get(&n.id).is_some_and(|v| !v.is_empty()) || matches!(n.kind, NodeKind::Group);
             let mut open = ui.ctx().data(|m| m.get_temp::<bool>(open_key)).unwrap_or(false);
             let r = ui
                 .horizontal(|ui| {
                     ui.add_space(depth as f32 * 14.);
                     // subárvore da peça / do subconjunto
+                    // grupos começam abertos (o valor guardado é "fechado"); peças começam fechadas
+                    let shown = if matches!(n.kind, NodeKind::Group) { !open } else { open };
                     if has_kids {
-                        if ui.add(egui::Button::new(if open { "▾" } else { "▸" }).frame(false).small()).on_hover_text(tr("recursos da peça / componentes do subconjunto")).clicked() {
+                        if ui.add(egui::Button::new(RichText::new(if shown { "⏷" } else { "⏵" }).size(10.)).frame(false)).on_hover_text(tr("recursos da peça / componentes do subconjunto")).clicked() {
                             open = !open;
                             ui.ctx().data_mut(|m| m.insert_temp(open_key, open));
                         }
@@ -1045,6 +1091,8 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                     if crate::app::eye_button(ui, !n.visible) {
                         *act = Some((n.id, 1));
                     }
+                    let img = egui::Image::new(crate::icons::get(icon)).fit_to_exact_size(egui::vec2(16., 16.));
+                    ui.add(if n.visible { img } else { img.tint(Color32::from_white_alpha(110)) });
                     // totalmente definido × parcial × solto
                     if !matches!(n.kind, NodeKind::Group) && !n.fixed {
                         let (t, c, tip) = match st.comp_dof.get(&n.id).copied() {
@@ -1092,6 +1140,10 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                 ui.label(RichText::new(&n.name).strong());
                 if matches!(n.kind, NodeKind::Part { .. }) && ui.button(tr("✏ Editar a peça (Modelagem Sólida)")).clicked() {
                     *act = Some((n.id, 2));
+                    ui.close();
+                }
+                if ui.button(tr("⚙ Propriedades do componente")).clicked() {
+                    *act = Some((n.id, 12));
                     ui.close();
                 }
                 if ui.button(tr("✎ Renomear   F2")).clicked() {
@@ -1153,25 +1205,86 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                     ui.close();
                 }
             });
-            if open {
-                // recursos da peça (2 cliques: abre a peça no recurso) e conteúdo do subconjunto
-                for (fid, name) in info.feats.get(&n.id).map(|v| v.as_slice()).unwrap_or(&[]) {
-                    ui.horizontal(|ui| {
-                        ui.add_space((depth + 2) as f32 * 14.);
-                        let r = ui.selectable_label(false, RichText::new(format!("▹ {name}")).small()).on_hover_text(tr("2 cliques: abre a peça (objeto de trabalho) neste recurso"));
-                        if r.double_clicked() {
-                            ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique("asm_recurso_editar"), (n.id, *fid)));
+            let group_open = matches!(n.kind, NodeKind::Group) && !open;
+            if open && !matches!(n.kind, NodeKind::Group) {
+                // a peça por dentro, como no Sólidos: corpos (cada um com a linha do tempo), geometria
+                // e parâmetros; 2 cliques num comando abre a peça (objeto de trabalho) nele
+                if let Some(o) = info.feats.get(&n.id) {
+                    let ind = (depth + 1) as f32 * 14. + 6.;
+                    let line = |ui: &mut egui::Ui, extra: f32| {
+                        let (r, _) = ui.allocate_exact_size(egui::vec2(ind + extra, 18.), egui::Sense::hover());
+                        let x = r.left() + (depth as f32) * 14. + 12.;
+                        ui.painter().line_segment([egui::pos2(x, r.top()), egui::pos2(x, r.bottom())], egui::Stroke::new(1., ui.visuals().weak_text_color().gamma_multiply(0.35)));
+                    };
+                    for (cid, cname, color, feats) in &o.bodies {
+                        let key = egui::Id::unique(("asm_corpo", n.id.0, cid.0));
+                        let mut copen = ui.ctx().data(|m| m.get_temp::<bool>(key)).unwrap_or(true);
+                        ui.horizontal(|ui| {
+                            line(ui, 0.);
+                            if ui.add(egui::Button::new(RichText::new(if copen { "⏷" } else { "⏵" }).size(10.)).frame(false)).clicked() {
+                                copen = !copen;
+                                ui.ctx().data_mut(|m| m.insert_temp(key, copen));
+                            }
+                            let (r, _) = ui.allocate_exact_size(egui::vec2(10., 10.), egui::Sense::hover());
+                            ui.painter().rect_filled(r, 2., Color32::from_rgb(color[0], color[1], color[2]));
+                            ui.label(RichText::new(cname).strong());
+                        });
+                        if !copen {
+                            continue;
                         }
-                    });
+                        if feats.is_empty() {
+                            ui.horizontal(|ui| {
+                                line(ui, 26.);
+                                ui.label(RichText::new(tr("sem comandos")).weak().italics().small());
+                            });
+                        }
+                        for (fid, ficon, fname, sup) in feats {
+                            ui.horizontal(|ui| {
+                                line(ui, 26.);
+                                let mut t = RichText::new(format!("{ficon} {fname}"));
+                                if *sup {
+                                    t = t.strikethrough().weak();
+                                }
+                                let r = ui.selectable_label(false, t).on_hover_text(tr("2 cliques: abre a peça (objeto de trabalho) neste recurso"));
+                                if r.double_clicked() {
+                                    ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique("asm_recurso_editar"), (n.id, *fid)));
+                                }
+                            });
+                        }
+                    }
+                    for (title, items, k) in [(tr("📁 Geometria").to_string(), o.geo.iter().map(|(i, s)| format!("{i} {s}")).collect::<Vec<_>>(), "g"), (format!("ƒ {}", tr("Parâmetros")), o.params.clone(), "p")] {
+                        if items.is_empty() {
+                            continue;
+                        }
+                        let key = egui::Id::unique(("asm_sec", n.id.0, k));
+                        let mut sopen = ui.ctx().data(|m| m.get_temp::<bool>(key)).unwrap_or(false);
+                        ui.horizontal(|ui| {
+                            line(ui, 0.);
+                            if ui.add(egui::Button::new(RichText::new(if sopen { "⏷" } else { "⏵" }).size(10.)).frame(false)).clicked() {
+                                sopen = !sopen;
+                                ui.ctx().data_mut(|m| m.insert_temp(key, sopen));
+                            }
+                            ui.label(format!("{title} ({})", items.len()));
+                        });
+                        if sopen {
+                            for s in items {
+                                ui.horizontal(|ui| {
+                                    line(ui, 26.);
+                                    ui.label(RichText::new(s).small());
+                                });
+                            }
+                        }
+                    }
                 }
                 for (d, name, sub) in info.subs.get(&n.id).map(|v| v.as_slice()).unwrap_or(&[]) {
                     ui.horizontal(|ui| {
                         ui.add_space((depth + 2 + d) as f32 * 14.);
-                        ui.label(RichText::new(format!("{} {name}", if *sub { "🗂" } else { "🧩" })).small().weak());
+                        ui.add(egui::Image::new(crate::icons::get(if *sub { "asm_subconjunto" } else { "nova_peca" })).fit_to_exact_size(egui::vec2(14., 14.)));
+                        ui.label(RichText::new(name).small());
                     });
                 }
             }
-            if matches!(n.kind, NodeKind::Group) {
+            if group_open {
                 rows(ui, st, info, Some(n.id), depth + 1, new_sel, act, hover);
             }
         }
@@ -1318,6 +1431,9 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
     });
     // ---- aplica
     if let Some(s) = new_sel {
+        if st.sel != Some(s) {
+            st.props = false;
+        }
         st.sel = Some(s);
         if st.isolate {
             st.dirty = true;
@@ -1361,6 +1477,11 @@ pub fn node_action(app: &mut App, id: Id, k: u8) {
     let Some(st) = app.asm.as_mut() else { return };
     match k {
         2 => return edit_part(app, id),
+        12 => {
+            st.sel = Some(id);
+            st.props = true;
+            return;
+        }
         6 => {
             st.sel = Some(id);
             command(app, Cmd::AsmReplace);
@@ -1538,6 +1659,14 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         let _ = s;
         crate::editor::tabs_begin(ui, ("montagem", kind.clone()));
     } else {
+        if st.props {
+            ui.horizontal(|ui| {
+                if ui.add(egui::Button::new(RichText::new(tr("✔ Concluir")).strong()).min_size(egui::vec2(100., 28.))).on_hover_text(tr("Enter")).clicked() {
+                    bar = Some(0);
+                }
+            });
+            ui.add_space(4.);
+        }
         crate::editor::tabs_begin(ui, "montagem_raiz");
     }
     let before = st.asm.clone();
@@ -1881,6 +2010,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     match (bar, sel) {
         (Some(0), _) => {
             st.sel = None;
+            st.props = false;
             st.edit_snap = None;
         }
         (Some(1), _) => {
@@ -1893,6 +2023,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                 }
             }
             st.sel = None;
+            st.props = false;
             return;
         }
         (Some(2), Some(id)) => {
@@ -1937,6 +2068,12 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
 // ============================================================== manipulador
 
 impl AsmState {
+    /// Há algo em edição (o painel de edição toma o lugar da árvore, como nos outros módulos)?
+    /// Escolher um componente só o seleciona; restrições, juntas e recursos abrem a edição.
+    pub fn editing(&self) -> bool {
+        self.pending.is_some() || self.pending_joint.is_some() || self.props || self.sel.is_some_and(|s| !self.asm.nodes.iter().any(|n| n.id == s))
+    }
+
     /// Componentes das seleções da viewport (sem repetir, na ordem do clique).
     fn comps_of(&self, picks: &[Pick]) -> Vec<Id> {
         let mut out = vec![];
