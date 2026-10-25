@@ -103,6 +103,8 @@ pub struct App {
     pub delete_dialog: Option<DeleteDialog>,
     /// janela de publicações (o que outras peças podem importar)
     pub pub_open: bool,
+    /// janela do estilo geral das anotações 3D
+    pub pmi_style_open: bool,
     /// repetição de pontos (e planos normais) ao longo de uma curva, em edição
     pub repeat: Option<Repeat>,
     /// janela de extração (simples/múltipla, propagação); `None` = fechada
@@ -247,6 +249,7 @@ impl App {
             result: None,
             delete_dialog: None,
             pub_open: false,
+            pmi_style_open: false,
             repeat: None,
             extract: None,
             extract_last: ExtractOpts::default(),
@@ -482,6 +485,12 @@ impl App {
             mk(d, PmiKind::Weld { kind: WeldKind::Filete, size: s("a5"), all_around: true, extra: we }, vec![[60., 35., 0.]], [30., 30., 25.], "");
             mk(d, PmiKind::Gdt { ch: GdtChar::Posicao, tol: s("0,1"), datums: s("A B C"), extra: GdtExtra { zone_dia: true, modifier: s("Ⓜ"), second: Some((s("0,05"), s("A"))) } }, vec![[-50., -25., 8.]], [-40., -30., 25.], "");
             mk(d, PmiKind::TitleBlock { template: TITLE_TEMPLATE.into() }, vec![[60., 35., 8.]], [50., -60., 0.], "");
+            mk(d, PmiKind::Datum { letter: s("A") }, vec![[-20., -35., 4.]], [-10., -25., -10.], "");
+            mk(d, PmiKind::Linear, vec![[-60., -35., 0.], [-60., -35., 8.]], [-15., 0., 0.], "");
+            if let Some(p) = d.pmi.last_mut() {
+                p.tol_plus = s("0,1");
+                p.tol_minus = s("0,05");
+            }
             app.started = true;
         }
         // desenvolvimento: SCC_DEMO_DWG=1 abre um desenho da placa de exemplo (3 vistas, corte, detalhe, cotas, tabela)
@@ -5720,8 +5729,37 @@ pub fn fmt(v: f64) -> String {
     if s == "-0" { "0".into() } else { s.into() }
 }
 
+/// Fontes das anotações 3D (as que existem no Windows), com os símbolos (GD&T) de reserva.
+pub static PMI_FONTS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+
 fn setup_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
+    let mut names = vec![];
+    for (name, file) in [
+        ("Arial", "arial.ttf"),
+        ("Arial negrito", "arialbd.ttf"),
+        ("Arial itálico", "ariali.ttf"),
+        ("Arial Narrow", "ARIALN.TTF"),
+        ("Times New Roman", "times.ttf"),
+        ("Consolas", "consola.ttf"),
+        ("Calibri", "calibri.ttf"),
+        ("Segoe UI", "segoeui.ttf"),
+        ("ISOCPEUR", "isocpeur.ttf"),
+        ("osifont", "osifont.ttf"),
+    ] {
+        if let Ok(bytes) = std::fs::read(format!(r"C:\Windows\Fonts\{file}")) {
+            let key = format!("pmi_{name}");
+            fonts.font_data.insert(key.clone(), std::sync::Arc::new(egui::FontData::from_owned(bytes)));
+            let mut fam = vec![key];
+            if std::path::Path::new(r"C:\Windows\Fonts\seguisym.ttf").exists() {
+                fam.push("segoe_sym".into());
+            }
+            fam.extend(fonts.families.get(&egui::FontFamily::Proportional).cloned().unwrap_or_default());
+            fonts.families.insert(egui::FontFamily::Name(name.into()), fam);
+            names.push(name.to_string());
+        }
+    }
+    let _ = PMI_FONTS.set(names);
     for (name, file) in [("segoe", r"C:\Windows\Fonts\segoeui.ttf"), ("segoe_sym", r"C:\Windows\Fonts\seguisym.ttf")] {
         if let Ok(bytes) = std::fs::read(file) {
             fonts.font_data.insert(name.into(), std::sync::Arc::new(egui::FontData::from_owned(bytes)));
@@ -6137,6 +6175,7 @@ impl eframe::App for App {
         }
         self.link_window(ctx);
         self.pub_window(ctx);
+        crate::pmi_ui::style_window(self, ctx);
         self.repeat_window(ctx);
         self.extract_window(ctx);
         for x in std::mem::take(&mut self.ctx_actions) {

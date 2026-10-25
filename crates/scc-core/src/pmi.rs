@@ -355,21 +355,45 @@ pub struct GdtExtra {
     pub second: Option<(String, String)>,
 }
 
-/// Moldura do rótulo.
+/// Moldura do rótulo (`Padrao` = a do tipo: quadro no GD&T e na legenda, sem moldura nas cotas).
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
 pub enum PmiFrame {
     #[default]
+    Padrao,
     Caixa,
     Arredondada,
     Nenhuma,
 }
 
-/// Aparência de uma anotação.
+/// Ponta das chamadas e linhas de cota.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum PmiArrow {
+    #[default]
+    Padrao,
+    Cheia,
+    Aberta,
+    Ponto,
+    Barra,
+    Nenhuma,
+}
+
+/// Fundo do texto.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum PmiBg {
+    #[default]
+    Padrao,
+    Nenhum,
+    Branco,
+    Escuro,
+}
+
+/// Aparência de uma anotação (tudo "padrão" herda o estilo geral das anotações).
 #[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
 pub struct PmiStyle {
     /// altura do texto (px na tela / mm quando deitado num plano); 0 = padrão
     #[serde(default)]
     pub size: f32,
+    /// cor das linhas (chamadas, cotas, quadros)
     #[serde(default)]
     pub color: Option<[u8; 3]>,
     #[serde(default)]
@@ -378,6 +402,18 @@ pub struct PmiStyle {
     pub prefix: String,
     #[serde(default)]
     pub suffix: String,
+    /// fonte (nome da família; vazio = padrão)
+    #[serde(default)]
+    pub font: String,
+    #[serde(default)]
+    pub text_color: Option<[u8; 3]>,
+    /// espessura das linhas (px); 0 = padrão
+    #[serde(default)]
+    pub line_width: f32,
+    #[serde(default)]
+    pub arrow: PmiArrow,
+    #[serde(default)]
+    pub bg: PmiBg,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -510,6 +546,19 @@ impl Pmi {
             }
             _ => None,
         }
+    }
+
+    /// Texto principal e, quando as tolerâncias são diferentes, as duas empilhadas (+a, −b).
+    pub fn display_parts(&self, value: Option<f64>) -> (String, Option<(String, String)>) {
+        let (p, m) = (self.tol_plus.trim(), self.tol_minus.trim());
+        let dim = matches!(self.kind, PmiKind::Linear | PmiKind::Radius | PmiKind::Diameter | PmiKind::Angle);
+        if dim && !p.is_empty() && !m.is_empty() && p != m {
+            let mut x = self.clone();
+            x.tol_plus.clear();
+            x.tol_minus.clear();
+            return (x.display(value), Some((format!("+{p}"), format!("−{m}"))));
+        }
+        (self.display(value), None)
     }
 
     /// Texto exibido (com prefixo e tolerância).

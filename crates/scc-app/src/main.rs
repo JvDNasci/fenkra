@@ -22,6 +22,7 @@ mod pmi_ui;
 mod slots;
 mod geom_fit;
 mod extract;
+mod pmi_draw;
 mod palette;
 mod roles;
 mod ui_ext;

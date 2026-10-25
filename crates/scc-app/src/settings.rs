@@ -351,6 +351,8 @@ pub struct Settings {
     pub user_colors: Vec<(String, [u8; 3])>,
     /// tema dos menus: 0 padrão, 1 grafite (preto/cinza), 2 carmim (preto/vermelho), 3 azul
     pub menu_theme: u8,
+    /// estilo geral das anotações 3D (o que cada anotação deixa em "padrão")
+    pub pmi_style: scc_core::pmi::PmiStyle,
     /// última macro escrita na janela de automação
     pub macro_src: String,
 }
@@ -425,6 +427,7 @@ impl Default for Settings {
             box_mode: 0,
             user_colors: vec![],
             menu_theme: 1,
+            pmi_style: Default::default(),
         }
     }
 }

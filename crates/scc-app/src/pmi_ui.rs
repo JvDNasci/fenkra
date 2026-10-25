@@ -4,6 +4,7 @@
 use crate::app::{App, Sel};
 use crate::i18n::tr;
 use crate::picking::Pick;
+use crate::pmi_draw::{Pen, HL};
 use crate::render::Camera;
 use eframe::egui::{self, Color32, Pos2, Rect, RichText, Stroke};
 use glam::Vec3;
@@ -11,7 +12,6 @@ use scc_core::pmi::*;
 use scc_core::Id;
 use scc_solidos::RecomputeResult;
 
-const COL: Color32 = Color32::from_rgb(255, 150, 60);
 
 /// Tipos na ordem dos comandos da barra.
 pub fn kind_of(i: u8) -> PmiKind {
@@ -232,26 +232,13 @@ fn v3(p: [f64; 3]) -> Vec3 {
     Vec3::new(p[0] as f32, p[1] as f32, p[2] as f32)
 }
 
-fn arrow(p: &egui::Painter, tip: Pos2, from: Pos2, col: Color32) {
-    let d = (tip - from).normalized();
-    let n = egui::vec2(-d.y, d.x);
-    p.add(egui::Shape::convex_polygon(vec![tip, tip - d * 9. + n * 3.5, tip - d * 9. - n * 3.5], col, Stroke::NONE));
-}
-
-const HL: Color32 = Color32::from_rgb(255, 220, 120);
-
-/// Cor da anotação (a própria ou a padrão).
-fn col_of(st: &PmiStyle) -> Color32 {
-    st.color.map(|c| Color32::from_rgb(c[0], c[1], c[2])).unwrap_or(COL)
-}
-
 /// Símbolo de solda ISO 2553 na tela: a junção da seta fica em `at`; `h` = altura do texto (px).
-#[allow(clippy::too_many_arguments)]
-fn weld_draw(p: &egui::Painter, at: Pos2, kind: WeldKind, size: &str, all: bool, x: &WeldExtra, h: f32, col: Color32, sel: bool) -> Rect {
+fn weld_draw(p: &egui::Painter, at: Pos2, kind: WeldKind, size: &str, all: bool, x: &WeldExtra, pen: &Pen) -> Rect {
+    let h = pen.size * 1.05;
     let m = |q: [f64; 2]| at + egui::vec2(q[0] as f32, -q[1] as f32);
-    let st = Stroke::new(if sel { 2.2 } else { 1.6 }, if sel { HL } else { col });
+    let st = pen.stroke();
+    let tc = if pen.sel { HL } else { pen.text };
     let mut r = Rect::from_center_size(at, egui::vec2(6., 6.));
-    // monta tudo antes para pôr um fundo escuro por baixo (legível sobre qualquer cor)
     let mut shapes: Vec<egui::Shape> = vec![];
     for pr in weld_symbol(kind, size, all, x, h as f64) {
         match pr {
@@ -272,7 +259,7 @@ fn weld_draw(p: &egui::Painter, at: Pos2, kind: WeldKind, size: &str, all: bool,
                 shapes.push(egui::Shape::convex_polygon(pts, st.color, Stroke::NONE));
             }
             WeldPrim::Text(q, t, al) => {
-                let g = p.layout_no_wrap(t, egui::FontId::proportional(h), st.color);
+                let g = p.layout_no_wrap(t, pen.font(1.), tc);
                 let pos = m(q);
                 let x0 = match al {
                     -1 => pos.x - g.size().x,
@@ -281,12 +268,20 @@ fn weld_draw(p: &egui::Painter, at: Pos2, kind: WeldKind, size: &str, all: bool,
                 };
                 let tl = egui::pos2(x0, pos.y - g.size().y * 0.8);
                 r = r.union(Rect::from_min_size(tl, g.size()));
-                shapes.push(egui::Shape::galley(tl, g, st.color));
+                shapes.push(egui::Shape::galley(tl, g, tc));
             }
         }
     }
     let r = r.expand(4.);
-    p.rect_filled(r, 3., Color32::from_rgba_unmultiplied(40, 22, 8, 200));
+    match pen.bg {
+        PmiBg::Branco => {
+            p.rect_filled(r, 2., Color32::from_rgba_unmultiplied(255, 255, 255, 230));
+        }
+        PmiBg::Escuro => {
+            p.rect_filled(r, 2., Color32::from_rgba_unmultiplied(40, 30, 22, 220));
+        }
+        _ => {}
+    }
     p.extend(shapes);
     r
 }
@@ -357,43 +352,32 @@ fn highlight(p: &egui::Painter, r: &RecomputeResult, cam: &Camera, rect: Rect, p
 
 /// Rótulo deitado num plano: girado conforme a direção x do plano na tela e com altura de texto
 /// em mm do modelo (acompanha o zoom). Devolve o retângulo (sem giro) para clique/arraste.
-fn label_on_plane(p: &egui::Painter, cam: &Camera, rect: Rect, world: Vec3, x: Vec3, txt: &str, sel: bool, st: &PmiStyle) -> Option<Rect> {
+fn label_on_plane(p: &egui::Painter, cam: &Camera, rect: Rect, world: Vec3, x: Vec3, txt: &str, pen: &Pen) -> Option<Rect> {
     let at = cam.project(rect, world)?;
     let ax = cam.project(rect, world + x * 10.)?;
     let d = ax - at;
     let px_per_mm = d.length() / 10.;
-    let mm = if st.size > 0. { st.size } else { 5. };
+    // no plano, a altura do texto é em mm do modelo (padrão 5 mm)
+    let mm = if pen.size != 13. { pen.size * 0.4 } else { 5. };
     let size = (mm * px_per_mm).clamp(6., 80.);
     let angle = d.y.atan2(d.x);
-    let g = p.layout_no_wrap(txt.to_string(), egui::FontId::proportional(size), Color32::WHITE);
+    let g = p.layout_no_wrap(txt.to_string(), egui::FontId::new(size, pen.fam.clone()), pen.text);
     let (w, h) = (g.size().x + 10., g.size().y + 6.);
-    // caixa girada: quatro cantos em volta do centro
     let (c, s) = (angle.cos(), angle.sin());
     let rot = |v: egui::Vec2| egui::vec2(v.x * c - v.y * s, v.x * s + v.y * c);
     let corners: Vec<Pos2> = [(-w / 2., -h / 2.), (w / 2., -h / 2.), (w / 2., h / 2.), (-w / 2., h / 2.)].iter().map(|(a, b)| at + rot(egui::vec2(*a, *b))).collect();
-    if st.frame != PmiFrame::Nenhuma || sel {
-        p.add(egui::Shape::convex_polygon(corners.clone(), if st.frame == PmiFrame::Nenhuma { Color32::TRANSPARENT } else { Color32::from_rgba_unmultiplied(60, 30, 10, 225) }, Stroke::new(if sel { 2. } else { 1. }, if sel { HL } else { col_of(st) })));
+    let fill = match pen.bg {
+        PmiBg::Branco => Color32::from_rgba_unmultiplied(255, 255, 255, 220),
+        PmiBg::Escuro => Color32::from_rgba_unmultiplied(40, 30, 22, 220),
+        _ => Color32::TRANSPARENT,
+    };
+    let framed = matches!(pen.frame, PmiFrame::Caixa | PmiFrame::Arredondada);
+    if framed || pen.sel || fill != Color32::TRANSPARENT {
+        p.add(egui::Shape::convex_polygon(corners, fill, if framed || pen.sel { pen.stroke() } else { Stroke::NONE }));
     }
     let tl = at + rot(egui::vec2(-w / 2. + 5., -h / 2. + 3.));
-    p.add(egui::epaint::TextShape::new(tl, g, Color32::WHITE).with_angle(angle));
+    p.add(egui::epaint::TextShape::new(tl, g, pen.text).with_angle(angle));
     Some(Rect::from_center_size(at, egui::vec2(w.max(h), w.max(h)) * 0.8))
-}
-
-fn label(p: &egui::Painter, at: Pos2, txt: &str, sel: bool, st: &PmiStyle) -> Rect {
-    let size = if st.size > 0. { st.size } else { 13. };
-    let col = col_of(st);
-    let bare = st.frame == PmiFrame::Nenhuma;
-    let g = p.layout_no_wrap(txt.to_string(), egui::FontId::proportional(size), if bare { col } else { Color32::WHITE });
-    let r = Rect::from_center_size(at, g.size() + egui::vec2(10., 6.));
-    let round = if st.frame == PmiFrame::Arredondada { r.height().min(r.width()) / 2. } else { 3. };
-    if !bare {
-        p.rect_filled(r, round, Color32::from_rgba_unmultiplied(60, 30, 10, 225));
-    }
-    if !bare || sel {
-        p.rect_stroke(r, round, Stroke::new(if sel { 2. } else { 1. }, if sel { HL } else { col }), egui::StrokeKind::Inside);
-    }
-    p.galley(r.min + egui::vec2(5., 3.), g, if bare { col } else { Color32::WHITE });
-    r
 }
 
 /// Desenha as anotações sobre a viewport (o clique num rótulo seleciona a anotação).
@@ -405,95 +389,149 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     let painter = ui.painter_at(rect);
     let mut clicked = None;
     let fields = title_fields(app);
+    let gstyle = app.settings.pmi_style.clone();
     for pm in list(app).iter().filter(|p| p.visible) {
         let a: Vec<[f64; 3]> = pm.anchors.iter().map(|p| snap(r, *p)).collect();
         let Some(first) = a.first().copied() else { continue };
         let val = pm.measure(&a);
-        let txt = match &pm.kind {
-            PmiKind::TitleBlock { template } => scc_desenho::resolve(template, &fields),
-            _ => format!("{}{}{}", pm.style.prefix, pm.display(val), pm.style.suffix),
-        };
         let is_sel = sel == Some(pm.id);
-        let col = col_of(&pm.style);
-        let stroke = Stroke::new(if is_sel { 2. } else { 1.3 }, col);
+        let pen = Pen::new(&pm.style, &gstyle, is_sel);
+        let (stroke, thin) = (pen.stroke(), pen.thin());
+        let wrap = |t: String| format!("{}{}{}", pm.style.prefix, t, pm.style.suffix);
+        let (main, stack) = pm.display_parts(val);
+        let main = wrap(main);
         let off = v3(pm.offset);
         // a geometria que a anotação marca fica realçada enquanto ela está selecionada
         if is_sel && !matches!(pm.kind, PmiKind::TitleBlock { .. }) {
             highlight(&painter, r, cam, rect, &a);
         }
-        let rect_lbl = match pm.kind {
+        // texto deitado num plano (cotas, notas, legenda) ou de frente para a tela
+        let text_at = |at: Pos2, world: Vec3, txt: &str| -> Rect {
+            match pm.plane {
+                Some((_, x)) => label_on_plane(&painter, cam, rect, world, v3(x).normalize_or_zero(), txt, &pen).unwrap_or_else(|| pen.dim_text(&painter, at, txt, None)),
+                None => pen.dim_text(&painter, at, txt, stack.as_ref()),
+            }
+        };
+        let rect_lbl = match &pm.kind {
             PmiKind::Linear if a.len() >= 2 => {
                 // linhas de chamada e linha de cota afastadas pelo deslocamento
                 let (p0, p1) = (v3(a[0]), v3(a[1]));
                 let (q0, q1) = (p0 + off, p1 + off);
                 let (Some(s0), Some(s1), Some(t0), Some(t1)) = (cam.project(rect, p0), cam.project(rect, p1), cam.project(rect, q0), cam.project(rect, q1)) else { continue };
-                painter.line_segment([s0, t0], Stroke::new(1., col));
-                painter.line_segment([s1, t1], Stroke::new(1., col));
+                // as linhas de chamada passam um pouco da linha de cota
+                let ext = |s: Pos2, t: Pos2| t + (t - s).normalized() * 4.;
+                painter.line_segment([s0 + (t0 - s0).normalized() * 3., ext(s0, t0)], thin);
+                painter.line_segment([s1 + (t1 - s1).normalized() * 3., ext(s1, t1)], thin);
                 painter.line_segment([t0, t1], stroke);
                 if (t1 - t0).length() > 4. {
-                    arrow(&painter, t0, t1, col);
-                    arrow(&painter, t1, t0, col);
+                    pen.arrow(&painter, t0, t1);
+                    pen.arrow(&painter, t1, t0);
                 }
-                label(&painter, t0 + (t1 - t0) * 0.5 + egui::vec2(0., -12.), &txt, is_sel, &pm.style)
+                let mid = t0 + (t1 - t0) * 0.5;
+                let up = egui::vec2((t1 - t0).y, -(t1 - t0).x).normalized();
+                let up = if up.y > 0. { -up } else { up };
+                text_at(mid + up * (pen.size * 0.9), (q0 + q1) * 0.5, &main)
             }
             PmiKind::Angle if a.len() >= 3 => {
                 let (Some(sv), Some(s1), Some(s2)) = (cam.project(rect, v3(a[0])), cam.project(rect, v3(a[1])), cam.project(rect, v3(a[2]))) else { continue };
-                painter.line_segment([sv, s1], Stroke::new(1., col));
-                painter.line_segment([sv, s2], Stroke::new(1., col));
+                painter.line_segment([sv, s1], thin);
+                painter.line_segment([sv, s2], thin);
                 let (d1, d2) = ((s1 - sv).normalized(), (s2 - sv).normalized());
-                let rad = 30.;
-                let pts: Vec<Pos2> = (0..=16).map(|k| {
-                    let t = k as f32 / 16.;
+                let rad = 34.;
+                let pts: Vec<Pos2> = (0..=20).map(|k| {
+                    let t = k as f32 / 20.;
                     sv + (d1 * (1. - t) + d2 * t).normalized() * rad
                 }).collect();
+                pen.arrow(&painter, pts[0], pts[2]);
+                pen.arrow(&painter, pts[20], pts[18]);
                 painter.add(egui::Shape::line(pts, stroke));
-                label(&painter, sv + (d1 + d2).normalized() * (rad + 22.), &txt, is_sel, &pm.style)
+                text_at(sv + (d1 + d2).normalized() * (rad + pen.size * 1.4), v3(a[0]), &main)
             }
-            PmiKind::Weld { kind, ref size, all_around, ref extra } => {
+            PmiKind::Radius | PmiKind::Diameter => {
+                // chamada do texto até a borda (seta na borda), passando pela direção do centro
+                let (Some(sc), Some(st)) = (cam.project(rect, v3(first)), cam.project(rect, v3(first) + off)) else { continue };
+                let se = a.get(1).and_then(|q| cam.project(rect, v3(*q))).unwrap_or(sc);
+                let lr = text_at(st, v3(first) + off, &main);
+                let (att, land) = Pen::attach(lr, se);
+                painter.line_segment([att, land], stroke);
+                painter.line_segment([land, se], stroke);
+                pen.arrow(&painter, se, land);
+                if matches!(pm.kind, PmiKind::Diameter) {
+                    // diâmetro: a linha atravessa o centro até o outro lado
+                    let other = sc + (sc - se);
+                    painter.line_segment([se, other], thin);
+                    pen.arrow(&painter, other, sc);
+                }
+                lr
+            }
+            PmiKind::Weld { kind, size, all_around, extra } => {
                 // seta até a junta; linha de referência e símbolo ISO 2553 no rótulo
                 let (Some(s0), Some(st)) = (cam.project(rect, v3(first)), cam.project(rect, v3(first) + off)) else { continue };
                 painter.line_segment([st, s0], stroke);
-                arrow(&painter, s0, st, col);
-                let h = if pm.style.size > 0. { pm.style.size } else { 14. };
-                weld_draw(&painter, st, kind, size, all_around, extra, h, col, is_sel)
+                pen.arrow(&painter, s0, st);
+                weld_draw(&painter, st, *kind, size, *all_around, extra, &pen)
             }
-            PmiKind::Balloon { ref item } => {
+            PmiKind::Balloon { item } => {
                 let (Some(s0), Some(st)) = (cam.project(rect, v3(first)), cam.project(rect, v3(first) + off)) else { continue };
-                let rad = if pm.style.size > 0. { pm.style.size } else { 13. } * 0.95 + 4. * item.chars().count().saturating_sub(1) as f32;
                 let dir = (s0 - st).normalized();
+                let rad = pen.size + 3.5 * item.chars().count().saturating_sub(1) as f32;
                 painter.line_segment([st + dir * rad, s0], stroke);
-                painter.circle_filled(s0, 3., col);
-                painter.circle_filled(st, rad, Color32::from_rgba_unmultiplied(60, 30, 10, 225));
-                painter.circle_stroke(st, rad, Stroke::new(if is_sel { 2.2 } else { 1.4 }, if is_sel { HL } else { col }));
-                painter.text(st, egui::Align2::CENTER_CENTER, item, egui::FontId::proportional(if pm.style.size > 0. { pm.style.size } else { 13. }), Color32::WHITE);
-                Rect::from_center_size(st, egui::vec2(rad * 2., rad * 2.))
+                painter.circle_filled(s0, pen.size * 0.22, if is_sel { HL } else { pen.line });
+                pen.balloon(&painter, st, item).0
             }
-            PmiKind::TitleBlock { .. } => {
-                // legenda: só o quadro, sem chamada
+            PmiKind::TitleBlock { template } => {
+                // legenda: tabela sem chamada
+                let txt = scc_desenho::resolve(template, &fields);
                 let Some(st) = cam.project(rect, v3(first) + off) else { continue };
                 match pm.plane {
-                    Some((_, x)) => label_on_plane(&painter, cam, rect, v3(first) + off, v3(x).normalize_or_zero(), &txt, is_sel, &pm.style).unwrap_or_else(|| label(&painter, st, &txt, is_sel, &pm.style)),
-                    None => label(&painter, st, &txt, is_sel, &pm.style),
+                    Some((_, x)) => label_on_plane(&painter, cam, rect, v3(first) + off, v3(x).normalize_or_zero(), &txt, &pen).unwrap_or_else(|| pen.table(&painter, st, &txt)),
+                    None => pen.table(&painter, st, &txt),
                 }
             }
-            _ => {
-                // chamada: da âncora até o rótulo
+            PmiKind::Gdt { ch, tol, datums, extra } => {
                 let (Some(s0), Some(st)) = (cam.project(rect, v3(first)), cam.project(rect, v3(first) + off)) else { continue };
-                painter.line_segment([s0, st], stroke);
-                painter.circle_filled(s0, 3., col);
-                if let (PmiKind::Radius | PmiKind::Diameter, Some(s1)) = (&pm.kind, a.get(1).and_then(|q| cam.project(rect, v3(*q)))) {
-                    painter.line_segment([s0, s1], stroke);
-                    arrow(&painter, s1, s0, col);
+                let cell_tol = |t: &str| format!("{}{}{}", if extra.zone_dia { "Ø" } else { "" }, t.trim(), if extra.modifier.trim().is_empty() { String::new() } else { format!(" {}", extra.modifier.trim()) });
+                let row = |t: &str, d: &str| -> Vec<String> {
+                    let mut v = vec![cell_tol(t)];
+                    v.extend(d.split(|c: char| c == '|' || c == ',' || c.is_whitespace()).filter(|x| !x.is_empty()).map(String::from));
+                    v
+                };
+                let mut rows = vec![row(tol, datums)];
+                if let Some((t2, d2)) = &extra.second {
+                    rows.push(row(t2, d2));
                 }
-                if let PmiKind::Datum { .. } = pm.kind {
-                    let n = (st - s0).normalized();
-                    let m = egui::vec2(-n.y, n.x);
-                    painter.add(egui::Shape::convex_polygon(vec![s0, s0 + n * 10. + m * 6., s0 + n * 10. - m * 6.], col, Stroke::NONE));
-                }
-                match pm.plane {
-                    Some((_, x)) => label_on_plane(&painter, cam, rect, v3(first) + off, v3(x).normalize_or_zero(), &txt, is_sel, &pm.style).unwrap_or_else(|| label(&painter, st, &txt, is_sel, &pm.style)),
-                    None => label(&painter, st, &txt, is_sel, &pm.style),
-                }
+                let fr = pen.fcf(&painter, st, ch.symbol(), &rows);
+                let (att, land) = Pen::attach(fr, s0);
+                painter.line_segment([att, land], stroke);
+                painter.line_segment([land, s0], stroke);
+                pen.arrow(&painter, s0, land);
+                fr
+            }
+            PmiKind::Datum { letter } => {
+                let (Some(s0), Some(st)) = (cam.project(rect, v3(first)), cam.project(rect, v3(first) + off)) else { continue };
+                pen.datum(&painter, s0, st, letter)
+            }
+            PmiKind::Roughness { ra, process } => {
+                let (Some(s0), Some(st)) = (cam.project(rect, v3(first)), cam.project(rect, v3(first) + off)) else { continue };
+                let txt = if process.trim().is_empty() { format!("Ra {ra}") } else { format!("{}\nRa {ra}", process.trim()) };
+                let (rr, tip) = pen.roughness(&painter, st, &txt);
+                painter.line_segment([tip, s0], stroke);
+                pen.arrow(&painter, s0, tip);
+                rr
+            }
+            _ => {
+                // nota: chamada com seta até a peça e patamar no texto
+                let (Some(s0), Some(st)) = (cam.project(rect, v3(first)), cam.project(rect, v3(first) + off)) else { continue };
+                let txt = wrap(pm.text.clone());
+                let lr = match pm.plane {
+                    Some((_, x)) => label_on_plane(&painter, cam, rect, v3(first) + off, v3(x).normalize_or_zero(), &txt, &pen).unwrap_or_else(|| pen.text_block(&painter, st, &txt, PmiFrame::Nenhuma, PmiBg::Nenhum)),
+                    None => pen.text_block(&painter, st, &txt, PmiFrame::Nenhuma, PmiBg::Nenhum),
+                };
+                let (att, land) = Pen::attach(lr, s0);
+                painter.line_segment([att, land], stroke);
+                painter.line_segment([land, s0], stroke);
+                pen.arrow(&painter, s0, land);
+                lr
             }
         };
         let resp = ui.interact(rect_lbl, egui::Id::unique(("pmi_rotulo", pm.id.0)), egui::Sense::click_and_drag());
@@ -712,6 +750,10 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui) {
                 ui.close();
             }
         }
+        if ui.button(tr("🎨 Estilo geral das anotações…")).clicked() {
+            app.pmi_style_open = true;
+            ui.close();
+        }
         if app.in_asm() && ui.button(tr("① Balões automáticos")).clicked() {
             create = Some(10);
             ui.close();
@@ -913,6 +955,43 @@ pub fn weld_ui(ui: &mut egui::Ui, salt: &str, kind: &mut WeldKind, size: &mut St
 
 /// Painel de edição da anotação selecionada. Devolve `true` se havia uma anotação.
 pub fn panel(app: &mut App, ui: &mut egui::Ui, id: Id) -> bool {
+    let mut style_req = false;
+    let r = panel_inner(app, ui, id, &mut style_req);
+    if style_req {
+        app.pmi_style_open = true;
+    }
+    r
+}
+
+/// Janela do estilo geral das anotações (vale para todas as que deixam "padrão").
+pub fn style_window(app: &mut App, ctx: &egui::Context) {
+    if !app.pmi_style_open {
+        return;
+    }
+    let mut open = true;
+    let mut done = false;
+    egui::Window::new(tr("🎨 Estilo geral das anotações 3D")).open(&mut open).default_width(380.).show(ctx, |ui| {
+        done = crate::app::done_bar(ui);
+        ui.label(RichText::new(tr("Vale para todas as anotações que deixam o item em 'padrão'. Cada anotação pode trocar o que quiser no próprio painel.")).weak().small());
+        crate::pmi_draw::style_ui(ui, &mut app.settings.pmi_style, false);
+        ui.horizontal(|ui| {
+            if ui.button(tr("Técnico (azul-escuro, sem fundo)")).clicked() {
+                app.settings.pmi_style = PmiStyle { font: "Arial".into(), ..Default::default() };
+            }
+            if ui.button(tr("Alto contraste (fundo branco)")).clicked() {
+                app.settings.pmi_style = PmiStyle { font: "Arial".into(), color: Some([0, 0, 0]), text_color: Some([0, 0, 0]), bg: PmiBg::Branco, ..Default::default() };
+            }
+            if ui.button(tr("Laranja (antigo)")).clicked() {
+                app.settings.pmi_style = PmiStyle { color: Some([255, 150, 60]), text_color: Some([255, 255, 255]), bg: PmiBg::Escuro, frame: PmiFrame::Caixa, ..Default::default() };
+            }
+        });
+    });
+    if !open || done {
+        app.pmi_style_open = false;
+    }
+}
+
+fn panel_inner(app: &mut App, ui: &mut egui::Ui, id: Id, style_req: &mut bool) -> bool {
     let seed_pts: Vec<[f64; 3]> = app.picks.iter().filter_map(|p| match *p {
         Pick::Vertex { pos, .. } => Some(pos.map(|v| v as f64)),
         Pick::Edge { mid, .. } => Some(mid.map(|v| v as f64)),
@@ -1040,24 +1119,10 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui, id: Id) -> bool {
         }
     }
     crate::editor::section(ui, "Aparência");
-    ui.horizontal(|ui| {
-        ui.label(tr("Altura"));
-        let r = ui.add(egui::DragValue::new(&mut p.style.size).range(0.0..=80.).speed(0.2).custom_formatter(|v, _| if v <= 0. { "padrão".into() } else { format!("{v:.1}") }));
-        crate::ui_ext::wheel(ui, &r, &mut p.style.size);
-        let mut own = p.style.color.is_some();
-        if ui.checkbox(&mut own, tr("cor própria")).changed() {
-            p.style.color = own.then_some([255, 150, 60]);
-        }
-        if let Some(c) = &mut p.style.color {
-            ui.color_edit_button_srgb(c);
-        }
-    });
-    ui.horizontal(|ui| {
-        ui.label(tr("Moldura"));
-        for (f, n) in [(PmiFrame::Caixa, "caixa"), (PmiFrame::Arredondada, "arredondada"), (PmiFrame::Nenhuma, "nenhuma")] {
-            ui.radio_value(&mut p.style.frame, f, tr(n));
-        }
-    });
+    crate::pmi_draw::style_ui(ui, &mut p.style, true);
+    if ui.small_button(tr("🎨 Estilo geral das anotações…")).clicked() {
+        *style_req = true;
+    }
     if !matches!(p.kind, PmiKind::TitleBlock { .. } | PmiKind::Weld { .. } | PmiKind::Balloon { .. }) {
         ui.horizontal(|ui| {
             ui.label(tr("Prefixo"));
