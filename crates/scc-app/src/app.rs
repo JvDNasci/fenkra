@@ -490,6 +490,16 @@ impl App {
             }
             mk(d, PmiKind::Gdt { ch: GdtChar::Planeza, tol: s("0,05"), datums: s(""), extra: Default::default() }, vec![[-40., 20., 8.]], [-30., 30., 30.], "");
             mk(d, PmiKind::Roughness { ra: s("1,6"), process: s("fresado") }, vec![[30., 20., 8.]], [20., 25., 25.], "");
+            // molduras e propriedades de texto (exemplos)
+            mk(d, PmiKind::Note, vec![[-60., 35., 8.]], [-30., 40., 35.], "Ver detalhe A
+lado oposto");
+            if let Some(p) = d.pmi.last_mut() {
+                p.style = PmiStyle { frame: PmiFrame::BandeiraDir, frame_dash: 1, bold: true, justify: 1, leader_dash: 2, bg: PmiBg::Recorte, ..Default::default() };
+            }
+            mk(d, PmiKind::Note, vec![[0., -35., 8.]], [0., -40., 30.], "7");
+            if let Some(p) = d.pmi.last_mut() {
+                p.style = PmiStyle { frame: PmiFrame::CirculoRiscado, angle: 15., anchor: 1, frame_color: Some([200, 40, 40]), ..Default::default() };
+            }
             let we = WeldExtra { other: None, other_side: false, length: s("4×30 (60)"), field: true, contour: WeldContour::Plano, process: s("135") };
             mk(d, PmiKind::Weld { kind: WeldKind::Filete, size: s("a5"), all_around: true, extra: we }, vec![[60., 35., 0.]], [30., 30., 25.], "");
             mk(d, PmiKind::Gdt { ch: GdtChar::Posicao, tol: s("0,1"), datums: s("A B C"), extra: GdtExtra { zone_dia: true, modifier: s("Ⓜ"), second: Some((s("0,05"), s("A"))) } }, vec![[-50., -25., 8.]], [-40., -30., 25.], "");

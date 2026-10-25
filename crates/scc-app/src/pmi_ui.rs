@@ -461,7 +461,17 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
         let Some(first) = a.first().copied() else { continue };
         let val = pm.measure(&a);
         let is_sel = editing == Some(pm.id) || focus == Some(pm.id);
-        let pen = Pen::new(&pm.style, &gstyle, is_sel);
+        let mut pen = Pen::new(&pm.style, &gstyle, is_sel);
+        if pen.apply_scale {
+            // tamanho em mm no modelo: texto de `size` pt tem size·0,35 mm de altura
+            let (rt, _) = cam.basis();
+            if let (Some(a0), Some(a1)) = (cam.project(rect, v3(first)), cam.project(rect, v3(first) + rt)) {
+                let k = (a1 - a0).length() * 0.35;
+                if k.is_finite() && k > 0. {
+                    pen = pen.scaled(k.clamp(0.05, 40.), k.sqrt().clamp(0.3, 4.));
+                }
+            }
+        }
         let (stroke, thin) = (pen.stroke(), pen.thin());
         let wrap = |t: String| format!("{}{}{}", pm.style.prefix, t, pm.style.suffix);
         let (main, stack) = pm.display_parts(val);
@@ -601,6 +611,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                 }
             }
         };
+        // rótulo girado na tela: a área de clique envolve o rótulo girado
+        let rect_lbl = if plane.is_none() && !matches!(pm.kind, PmiKind::Datum { .. } | PmiKind::Balloon { .. } | PmiKind::Weld { .. } | PmiKind::Roughness { .. }) { pen.outer(rect_lbl) } else { rect_lbl };
         // anotação realçada/em edição: as âncoras viram alças (arraste e solte numa face, aresta ou vértice)
         if is_sel && !matches!(pm.kind, PmiKind::TitleBlock { .. }) {
             for (k, q) in a.iter().enumerate() {

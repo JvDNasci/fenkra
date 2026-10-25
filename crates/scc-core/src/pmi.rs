@@ -361,8 +361,162 @@ pub enum PmiFrame {
     #[default]
     Padrao,
     Caixa,
+    /// cápsula (pontas redondas)
     Arredondada,
     Nenhuma,
+    Circulo,
+    Quadrado,
+    Triangulo,
+    Losango,
+    BandeiraDir,
+    BandeiraEsq,
+    /// círculo com a linha do meio (riscado)
+    CirculoRiscado,
+    /// retângulo com a linha do meio (riscado)
+    RetanguloRiscado,
+}
+
+impl PmiFrame {
+    pub const ALL: [PmiFrame; 12] = [
+        PmiFrame::Nenhuma,
+        PmiFrame::Caixa,
+        PmiFrame::Arredondada,
+        PmiFrame::Circulo,
+        PmiFrame::Quadrado,
+        PmiFrame::Triangulo,
+        PmiFrame::Losango,
+        PmiFrame::BandeiraDir,
+        PmiFrame::BandeiraEsq,
+        PmiFrame::CirculoRiscado,
+        PmiFrame::RetanguloRiscado,
+        PmiFrame::Padrao,
+    ];
+    pub fn label(self) -> &'static str {
+        match self {
+            PmiFrame::Padrao => "padrão",
+            PmiFrame::Caixa => "retângulo",
+            PmiFrame::Arredondada => "cápsula",
+            PmiFrame::Nenhuma => "nenhuma",
+            PmiFrame::Circulo => "círculo",
+            PmiFrame::Quadrado => "quadrado",
+            PmiFrame::Triangulo => "triângulo",
+            PmiFrame::Losango => "losango",
+            PmiFrame::BandeiraDir => "bandeira (direita)",
+            PmiFrame::BandeiraEsq => "bandeira (esquerda)",
+            PmiFrame::CirculoRiscado => "círculo riscado",
+            PmiFrame::RetanguloRiscado => "retângulo riscado",
+        }
+    }
+    /// Contorno da moldura em volta do retângulo do texto (x0, y0)-(x1, y1), y para baixo:
+    /// cada caminho com "fechado?". Vazio = sem moldura.
+    pub fn paths(self, x0: f64, y0: f64, x1: f64, y1: f64) -> Vec<(Vec<[f64; 2]>, bool)> {
+        let (cx, cy) = ((x0 + x1) / 2., (y0 + y1) / 2.);
+        let (w, h) = (x1 - x0, y1 - y0);
+        let circle = |r: f64| -> Vec<[f64; 2]> { (0..48).map(|i| {
+            let t = i as f64 / 48. * std::f64::consts::TAU;
+            [cx + r * t.cos(), cy + r * t.sin()]
+        }).collect() };
+        let rect = |a: f64, b: f64, c: f64, d: f64| vec![[a, b], [c, b], [c, d], [a, d]];
+        match self {
+            PmiFrame::Padrao | PmiFrame::Nenhuma => vec![],
+            PmiFrame::Caixa => vec![(rect(x0, y0, x1, y1), true)],
+            PmiFrame::Arredondada => {
+                let r = h / 2.;
+                let mut v = vec![];
+                for i in 0..=12 {
+                    let t = -std::f64::consts::FRAC_PI_2 + std::f64::consts::PI * i as f64 / 12.;
+                    v.push([x1 - r + r * t.cos(), cy + r * t.sin()]);
+                }
+                for i in 0..=12 {
+                    let t = std::f64::consts::FRAC_PI_2 + std::f64::consts::PI * i as f64 / 12.;
+                    v.push([x0 + r + r * t.cos(), cy + r * t.sin()]);
+                }
+                vec![(v, true)]
+            }
+            PmiFrame::Circulo => vec![(circle((w * w + h * h).sqrt() / 2.), true)],
+            PmiFrame::CirculoRiscado => {
+                let r = (w * w + h * h).sqrt() / 2.;
+                vec![(circle(r), true), (vec![[cx - r, cy], [cx + r, cy]], false)]
+            }
+            PmiFrame::Quadrado => {
+                let s = w.max(h) / 2.;
+                vec![(rect(cx - s, cy - s, cx + s, cy + s), true)]
+            }
+            PmiFrame::RetanguloRiscado => vec![(rect(x0, y0, x1, y1), true), (vec![[x0, cy], [x1, cy]], false)],
+            PmiFrame::Triangulo => {
+                // o texto cabe na parte de baixo do triângulo
+                let bw = w * 2. + h;
+                let top = y1 - (bw / 2.) * 3f64.sqrt();
+                vec![(vec![[cx, top.min(y0 - h)], [cx + bw / 2., y1], [cx - bw / 2., y1]], true)]
+            }
+            PmiFrame::Losango => vec![(vec![[cx, cy - h], [cx + w, cy], [cx, cy + h], [cx - w, cy]], true)],
+            PmiFrame::BandeiraDir => vec![(vec![[x0, y0], [x1, y0], [x1 + h / 2., cy], [x1, y1], [x0, y1]], true)],
+            PmiFrame::BandeiraEsq => vec![(vec![[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0 - h / 2., cy]], true)],
+        }
+    }
+}
+
+/// Tipo de linha (molduras e chamadas): padrão em múltiplos da espessura.
+pub fn dash_pattern(kind: u8) -> &'static [f64] {
+    match kind {
+        1 => &[6., 4.],
+        2 => &[1.2, 2.6],
+        3 => &[12., 3., 2., 3., 2., 3.],
+        4 => &[12., 3., 2., 3.],
+        _ => &[],
+    }
+}
+
+/// Nome do tipo de linha.
+pub fn dash_label(kind: u8) -> &'static str {
+    match kind {
+        1 => "tracejada",
+        2 => "pontilhada",
+        3 => "fantasma",
+        4 => "traço-ponto",
+        _ => "contínua",
+    }
+}
+
+/// Divide uma polilinha em traços conforme o padrão (unidades já multiplicadas).
+pub fn dashed(pts: &[[f64; 2]], closed: bool, pattern: &[f64]) -> Vec<Vec<[f64; 2]>> {
+    let mut path = pts.to_vec();
+    if closed && !pts.is_empty() {
+        path.push(pts[0]);
+    }
+    if pattern.is_empty() || path.len() < 2 {
+        return vec![path];
+    }
+    let mut out = vec![];
+    let mut cur: Vec<[f64; 2]> = vec![path[0]];
+    let (mut k, mut left, mut on) = (0usize, pattern[0], true);
+    for w in path.windows(2) {
+        let (a, b) = (w[0], w[1]);
+        let len = ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2)).sqrt();
+        let mut t = 0.;
+        while len - t > 1e-9 {
+            let step = left.min(len - t);
+            t += step;
+            left -= step;
+            let p = [a[0] + (b[0] - a[0]) * t / len, a[1] + (b[1] - a[1]) * t / len];
+            if on {
+                cur.push(p);
+            }
+            if left <= 1e-9 {
+                if on && cur.len() > 1 {
+                    out.push(std::mem::take(&mut cur));
+                }
+                on = !on;
+                k = (k + 1) % pattern.len();
+                left = pattern[k];
+                cur = if on { vec![p] } else { vec![] };
+            }
+        }
+    }
+    if on && cur.len() > 1 {
+        out.push(cur);
+    }
+    out
 }
 
 /// Ponta das chamadas e linhas de cota.
@@ -385,10 +539,12 @@ pub enum PmiBg {
     Nenhum,
     Branco,
     Escuro,
+    /// fundo opaco que esconde a geometria atrás do texto
+    Recorte,
 }
 
 /// Aparência de uma anotação (tudo "padrão" herda o estilo geral das anotações).
-#[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct PmiStyle {
     /// altura do texto (px na tela / mm quando deitado num plano); 0 = padrão
     #[serde(default)]
@@ -414,6 +570,87 @@ pub struct PmiStyle {
     pub arrow: PmiArrow,
     #[serde(default)]
     pub bg: PmiBg,
+    // ---- moldura
+    /// espessura da moldura (0 = a das linhas)
+    #[serde(default)]
+    pub frame_width: f32,
+    /// tipo de linha da moldura (0 contínua, 1 tracejada, 2 pontilhada, 3 fantasma, 4 traço-ponto)
+    #[serde(default)]
+    pub frame_dash: u8,
+    #[serde(default)]
+    pub frame_color: Option<[u8; 3]>,
+    /// largura fixa da moldura (0 = acompanha o texto)
+    #[serde(default)]
+    pub frame_fixed: f32,
+    // ---- texto
+    #[serde(default)]
+    pub bold: bool,
+    /// alinhamento das linhas: 0 esquerda, 1 centro, 2 direita
+    #[serde(default)]
+    pub justify: u8,
+    /// ponto da caixa preso ao lugar do rótulo (0..8 = linhas de cima a baixo; 4 = centro)
+    #[serde(default = "centro")]
+    pub anchor: u8,
+    /// espaçamento entre linhas (multiplicador; 0 = normal)
+    #[serde(default)]
+    pub line_spacing: f32,
+    /// rotação do rótulo (graus) e espelho
+    #[serde(default)]
+    pub angle: f32,
+    #[serde(default)]
+    pub mirror: bool,
+    /// deslocamento fino do texto em relação ao ponto (px)
+    #[serde(default)]
+    pub nudge: [f32; 2],
+    /// o tamanho acompanha o zoom (como se estivesse em mm no modelo)
+    #[serde(default)]
+    pub apply_scale: bool,
+    // ---- chamada
+    #[serde(default)]
+    pub hide_leader: bool,
+    #[serde(default)]
+    pub leader_width: f32,
+    #[serde(default)]
+    pub leader_dash: u8,
+    #[serde(default)]
+    pub leader_color: Option<[u8; 3]>,
+}
+
+fn centro() -> u8 {
+    4
+}
+
+impl Default for PmiStyle {
+    fn default() -> Self {
+        PmiStyle {
+            size: 0.,
+            color: None,
+            frame: PmiFrame::Padrao,
+            prefix: String::new(),
+            suffix: String::new(),
+            font: String::new(),
+            text_color: None,
+            line_width: 0.,
+            arrow: PmiArrow::Padrao,
+            bg: PmiBg::Padrao,
+            frame_width: 0.,
+            frame_dash: 0,
+            frame_color: None,
+            frame_fixed: 0.,
+            bold: false,
+            justify: 0,
+            anchor: 4,
+            line_spacing: 0.,
+            angle: 0.,
+            mirror: false,
+            nudge: [0., 0.],
+            apply_scale: false,
+            hide_leader: false,
+            leader_width: 0.,
+            leader_dash: 0,
+            leader_color: None,
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -621,6 +858,26 @@ mod tests {
         assert_eq!(p.display(None), "| ⏥ | 0,05 | A |");
         p.kind = PmiKind::Gdt { ch: GdtChar::Posicao, tol: "0,1".into(), datums: "A B C".into(), extra: GdtExtra { zone_dia: true, modifier: "Ⓜ".into(), second: None } };
         assert_eq!(p.display(None), "| ⌖ | Ø0,1 Ⓜ | A | B | C |");
+    }
+
+    #[test]
+    fn molduras_e_tracejado() {
+        for f in PmiFrame::ALL {
+            let ps = f.paths(0., 0., 20., 8.);
+            if matches!(f, PmiFrame::Nenhuma | PmiFrame::Padrao) {
+                assert!(ps.is_empty());
+                continue;
+            }
+            // toda moldura envolve o texto
+            let all: Vec<[f64; 2]> = ps.iter().flat_map(|p| p.0.clone()).collect();
+            let (mnx, mxx) = all.iter().fold((f64::MAX, f64::MIN), |a, p| (a.0.min(p[0]), a.1.max(p[0])));
+            let (mny, mxy) = all.iter().fold((f64::MAX, f64::MIN), |a, p| (a.0.min(p[1]), a.1.max(p[1])));
+            assert!(mnx <= 1e-9 && mxx >= 20. - 1e-9 && mny <= 1e-9 && mxy >= 8. - 1e-9, "{f:?}");
+        }
+        // 100 de linha tracejada 6/4 = 10 traços de 6
+        let d = dashed(&[[0., 0.], [100., 0.]], false, &[6., 4.]);
+        assert_eq!(d.len(), 10);
+        assert!(d.iter().all(|s| ((s[s.len() - 1][0] - s[0][0]) - 6.).abs() < 1e-9));
     }
 
     #[test]
