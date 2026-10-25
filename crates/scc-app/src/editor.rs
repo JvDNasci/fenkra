@@ -41,10 +41,131 @@ pub(crate) fn expr(ui: &mut egui::Ui, label: &str, s: &mut String, vars: &Vars, 
     });
 }
 
+/// Abas do painel em edição: cada `section` vira uma aba (as abas vêm da lista do quadro
+/// anterior). A aba ativa aparece num cartão; as outras são desenhadas fora de vista (sem pintura
+/// nem clique) e o cursor volta, então o painel não muda de código para ganhar abas.
+struct TabRun {
+    key: egui::Id,
+    ui_id: egui::Id,
+    prev: Vec<String>,
+    titles: Vec<String>,
+    active: usize,
+    tabs: bool,
+    /// seção atual: escondida (y de início, recorte salvo) ou visível (cartão)
+    hidden: Option<(f32, egui::Rect)>,
+    card: Option<(egui::layers::ShapeIdx, f32)>,
+}
+
+thread_local! {
+    static TABS: std::cell::RefCell<Option<TabRun>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Começa o painel com abas (`key` identifica o tipo de comando: a aba escolhida é lembrada).
+pub(crate) fn tabs_begin(ui: &mut egui::Ui, key: impl std::hash::Hash) {
+    let h = {
+        use std::hash::Hasher;
+        let mut st = std::collections::hash_map::DefaultHasher::new();
+        key.hash(&mut st);
+        st.finish()
+    };
+    let key = egui::Id::unique(("abas_painel", h));
+    let prev: Vec<String> = ui.ctx().data(|d| d.get_temp::<Vec<String>>(key)).unwrap_or_default();
+    let active: usize = ui.ctx().data(|d| d.get_temp::<usize>(key.with("ativa"))).unwrap_or(0);
+    TABS.with(|t| *t.borrow_mut() = Some(TabRun { key, ui_id: ui.scope_id(), prev, titles: vec![], active, tabs: false, hidden: None, card: None }));
+}
+
+/// Fecha a seção atual: volta o cursor (escondida) ou pinta o cartão por baixo (visível).
+fn tab_close(ui: &mut egui::Ui, run: &mut TabRun) {
+    if let Some((y0, clip)) = run.hidden.take() {
+        ui.set_clip_rect(clip);
+        let dy = ui.cursor().top() - y0;
+        if dy > 0. {
+            ui.add_space(-dy);
+        }
+    }
+    if let Some((slot, top)) = run.card.take() {
+        let r = egui::Rect::from_min_max(egui::pos2(ui.max_rect().left() - 4., top), egui::pos2(ui.max_rect().right() + 4., ui.cursor().top() + 4.));
+        let fill = if ui.visuals().dark_mode { Color32::from_rgba_unmultiplied(255, 255, 255, 10) } else { Color32::from_rgba_unmultiplied(0, 0, 0, 10) };
+        ui.painter().set(slot, egui::Shape::rect_filled(r, 10., fill));
+        ui.add_space(10.);
+    }
+}
+
+/// Termina o painel com abas (guarda a lista para o próximo quadro).
+pub(crate) fn tabs_end(ui: &mut egui::Ui) {
+    let Some(mut run) = TABS.with(|t| t.borrow_mut().take()) else { return };
+    tab_close(ui, &mut run);
+    ui.ctx().data_mut(|d| d.insert_temp(run.key, run.titles.clone()));
+}
+
+/// Barra de abas (pílulas).
+fn tab_bar(ui: &mut egui::Ui, run: &mut TabRun) {
+    ui.add_space(4.);
+    let accent = ui.visuals().selection.bg_fill;
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing = egui::vec2(4., 4.);
+        for (i, t) in run.prev.iter().enumerate() {
+            let on = i == run.active;
+            let txt = RichText::new(t).size(12.5);
+            let b = egui::Button::new(if on { txt.strong().color(Color32::WHITE) } else { txt }).corner_radius(12.).min_size(egui::vec2(0., 24.));
+            let b = if on { b.fill(accent) } else { b.fill(ui.visuals().faint_bg_color) };
+            if ui.add(b).clicked() {
+                run.active = i;
+                ui.ctx().data_mut(|d| d.insert_temp(run.key.with("ativa"), i));
+            }
+        }
+    });
+    ui.add_space(8.);
+}
+
 pub(crate) fn section(ui: &mut egui::Ui, title: &str) {
     let title = tr(title);
-    ui.add_space(6.);
-    ui.label(RichText::new(title).strong());
+    let handled = TABS.with(|t| {
+        let mut b = t.borrow_mut();
+        let Some(run) = b.as_mut() else { return false };
+        // só no corpo principal do painel (seções dentro de grupos ficam como título simples)
+        if ui.scope_id() != run.ui_id {
+            return false;
+        }
+        tab_close(ui, run);
+        if run.titles.is_empty() {
+            // primeira seção: abas se o quadro anterior tinha 2 ou mais
+            run.tabs = run.prev.len() >= 2;
+            if run.active >= run.prev.len() {
+                run.active = 0;
+            }
+            if run.tabs {
+                tab_bar(ui, run);
+            }
+        }
+        let idx = run.titles.len();
+        run.titles.push(title.to_string());
+        let visible = !run.tabs || idx == run.active;
+        if visible {
+            let top = ui.cursor().top();
+            let slot = ui.painter().add(egui::Shape::Noop);
+            run.card = Some((slot, top));
+            ui.add_space(6.);
+            ui.label(RichText::new(title.to_uppercase()).size(11.).strong().color(ui.visuals().weak_text_color()));
+            ui.add_space(2.);
+        } else {
+            run.hidden = Some((ui.cursor().top(), ui.clip_rect()));
+            ui.set_clip_rect(egui::Rect::NOTHING);
+        }
+        true
+    });
+    if !handled {
+        ui.add_space(6.);
+        ui.label(RichText::new(title).strong());
+    }
+}
+
+/// Selo de estado (como "ATIVO" nos menus do sistema).
+pub(crate) fn status_chip(ui: &mut egui::Ui, txt: &str, col: Color32) {
+    let g = ui.painter().layout_no_wrap(txt.to_string(), egui::FontId::proportional(11.), col);
+    let (r, _) = ui.allocate_exact_size(g.size() + egui::vec2(16., 8.), egui::Sense::hover());
+    ui.painter().rect_filled(r, 7., col.gamma_multiply(0.18));
+    ui.painter().galley(r.min + egui::vec2(8., 4.), g, col);
 }
 
 pub(crate) fn plane_combo(ui: &mut egui::Ui, id: &str, doc: &Document, p: &mut PlaneRef, exclude: Option<Id>) {
@@ -389,6 +510,8 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 return;
             };
             command_bar(ui, session.map(|s| s.0) == Some(id), &mut sess_act);
+            tabs_begin(ui, ("elemento", format!("{:?}", crate::geo_ui::GeoKind::of(&r.kind))));
+            section(ui, "Definição");
             crate::geo_ui::panel(ui, &doc_ro, r, &vars, &seed, ref_err.as_deref());
             section(ui, "Nome e exibição");
             ui.horizontal(|ui| {
@@ -405,11 +528,13 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             }
             ui.add_space(4.);
             ui.label(RichText::new(tr("Trocar uma entrada redireciona a variável: tudo que usa este elemento se atualiza.")).weak().small());
+            section(ui, "Relações");
             used_by(ui, &doc_ro, id, &mut new_sel);
             ui.add_space(8.);
             if ui.button(tr("🗑 Apagar…")).clicked() {
                 delete = Some(id);
             }
+            tabs_end(ui);
         }
 
         Sel::Params => params_table(ui, doc, &vars, &mut app_toast_sink()),
@@ -503,26 +628,42 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             let names: Vec<String> = doc.params.iter().map(|p| p.name.clone()).chain(doc.references.iter().map(|r| r.name.clone())).collect();
             {
                 let f = &mut doc.features[idx];
-                ui.heading(format!("{} {}", f.kind.icon(), f.kind.type_name()));
-                ui.horizontal(|ui| {
-                    ui.add_sized([96., 18.], egui::Label::new(tr("Nome")));
-                    let mut n = f.name.clone();
-                    if ui.text_edit_singleline(&mut n).changed() && !n.is_empty() && !names.contains(&n) {
-                        f.name = n;
+                // cabeçalho: ícone, tipo, nome e selo de estado
+                egui::Frame::NONE.fill(ui.visuals().faint_bg_color).corner_radius(12.).inner_margin(10.).show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        let (r, _) = ui.allocate_exact_size(egui::vec2(38., 38.), egui::Sense::hover());
+                        ui.painter().rect_filled(r, 9., ui.visuals().selection.bg_fill.gamma_multiply(0.35));
+                        ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, f.kind.icon(), egui::FontId::proportional(22.), Color32::WHITE);
+                        ui.vertical(|ui| {
+                            ui.label(RichText::new(tr(f.kind.type_name())).size(17.).strong());
+                            let mut n = f.name.clone();
+                            if ui.add(egui::TextEdit::singleline(&mut n).desired_width(150.)).changed() && !n.is_empty() && !names.contains(&n) {
+                                f.name = n;
+                            }
+                        });
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                            let (t, c) = match &status {
+                                Some(Status::Error(_)) => ("ERRO", Color32::from_rgb(255, 110, 95)),
+                                Some(Status::Warning(_)) => ("AVISO", Color32::from_rgb(240, 195, 80)),
+                                Some(Status::Inactive) => ("INATIVO", Color32::from_gray(150)),
+                                _ => ("OK", Color32::from_rgb(110, 210, 120)),
+                            };
+                            status_chip(ui, tr(t), c);
+                        });
+                    });
+                    match &status {
+                        Some(Status::Error(m)) => {
+                            ui.label(RichText::new(m).color(Color32::from_rgb(255, 120, 100)).small());
+                        }
+                        Some(Status::Warning(m)) => {
+                            ui.label(RichText::new(m).color(Color32::from_rgb(240, 200, 90)).small());
+                        }
+                        Some(Status::Inactive) => {
+                            ui.label(RichText::new(tr("inativo (suprimido ou depois do marcador)")).weak().small());
+                        }
+                        _ => {}
                     }
                 });
-                match &status {
-                    Some(Status::Error(m)) => {
-                        ui.label(RichText::new(format!("✖ {m}")).color(Color32::from_rgb(255, 120, 100)));
-                    }
-                    Some(Status::Warning(m)) => {
-                        ui.label(RichText::new(format!("⚠ {m}")).color(Color32::from_rgb(240, 200, 90)));
-                    }
-                    Some(Status::Inactive) => {
-                        ui.label(RichText::new(tr("inativo (suprimido ou depois do marcador)")).weak());
-                    }
-                    _ => {}
-                }
                 ui.horizontal(|ui| {
                     ui.checkbox(&mut f.suppressed, tr("suprimido"));
                     // só sketches têm olho próprio; sólidos aparecem pelo corpo (última feature)
@@ -539,6 +680,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             }
             let mut target = doc.features[idx].target;
             let mut kind = doc.features[idx].kind.clone();
+            tabs_begin(ui, ("comando", kind.type_name()));
             feature_ui(ui, &doc_ro, idx, id, &mut kind, &mut target, &vars, doc, &picked, &picked_faces, &seed);
             let f = &mut doc.features[idx];
             if f.kind != kind {
@@ -546,14 +688,16 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             }
             f.target = target;
 
+            section(ui, "Relações");
             used_by(ui, &doc_ro, id, &mut new_sel);
             if matches!(doc.features[idx].kind, FeatureKind::Sketch(_)) {
                 replace_all(ui, doc, id);
             }
-            ui.add_space(10.);
+            ui.add_space(6.);
             if ui.button(tr("🗑 Apagar…")).clicked() {
                 delete = Some(id);
             }
+            tabs_end(ui);
         }
     }
 

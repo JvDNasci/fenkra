@@ -2166,6 +2166,10 @@ static TABLE: &[(&str, &str)] = &[
     ("branco", "white"),
     ("escuro", "dark"),
     ("﻿1 clique: realça o que a anotação marca · 2 cliques: edita", "1 click: highlights what the annotation references · 2 clicks: edit"),
+    ("﻿Relações", "Relations"),
+    ("ERRO", "ERROR"),
+    ("AVISO", "WARNING"),
+    ("INATIVO", "INACTIVE"),
 ];
 
 #[cfg(test)]
