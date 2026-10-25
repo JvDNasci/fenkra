@@ -242,6 +242,7 @@ impl App {
         setup_fonts(&cc.egui_ctx);
         egui_extras::install_image_loaders(&cc.egui_ctx);
         let settings = Settings::load();
+        crate::theme::reload_user();
         settings.apply(&cc.egui_ctx);
         let mut viewport = cc.wgpu_render_state.as_ref().map(Viewport::new);
         if let Some(v) = viewport.as_mut() {
@@ -2365,8 +2366,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
                         (None, false) => self.open.doc.name.clone(),
                     };
                     // tema dos menus (faixas de cor por grupo)
-                    let themes = ["Padrão", "Grafite", "Carmim", "Azul"];
-                    let cur = self.settings.menu_theme.min(3) as usize;
+                    let themes = ["Padrão", "Grafite", "Carmim", "Azul", "Do tema"];
+                    let cur = self.settings.menu_theme.min(4) as usize;
                     ui.menu_button(RichText::new(format!("🎨 {}", tr(themes[cur]))).small(), |ui| {
                         ui.label(RichText::new(tr("Tema dos menus")).strong());
                         for (i, n) in themes.iter().enumerate() {
@@ -6537,7 +6538,7 @@ impl eframe::App for App {
             self.scene_dirty = true;
         }
         if self.settings != settings_before {
-            if self.settings.theme != settings_before.theme || self.settings.ui_scale != settings_before.ui_scale {
+            if self.settings.theme != settings_before.theme || self.settings.theme_name != settings_before.theme_name || self.settings.ui_scale != settings_before.ui_scale {
                 self.settings.apply(ctx);
             }
             if let Some(v) = self.viewport.as_mut() {
@@ -6686,10 +6687,37 @@ pub fn line_style_ui(ui: &mut egui::Ui, st: &mut scc_core::LineStyle, lines: boo
 fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
     match page {
         0 => {
+                ui.label(RichText::new(tr("Tema")).strong());
+                ui.horizontal_wrapped(|ui| {
+                    for def in crate::theme::all() {
+                        if crate::theme::swatch(ui, &def, s.theme_name == def.name).on_hover_text(tr("aplicar este tema (cores, barra e fundo da viewport)")).clicked() {
+                            s.theme_name = def.name.clone();
+                            s.theme = if def.dark { Theme::Escuro } else { Theme::Claro };
+                            s.bg_top = def.bg_top;
+                            s.bg_bottom = def.bg_bottom;
+                            s.menu_theme = 4;
+                        }
+                    }
+                });
                 ui.horizontal(|ui| {
-                    ui.label(tr("Tema"));
-                    ui.radio_value(&mut s.theme, Theme::Escuro, tr("Escuro"));
-                    ui.radio_value(&mut s.theme, Theme::Claro, tr("Claro"));
+                    if ui.button(tr("＋ Criar tema a partir deste")).on_hover_text(tr("grava um .json editável na pasta de temas (extensão)")).clicked() {
+                        if let Some(def) = crate::theme::find(&s.theme_name) {
+                            if let Ok(p) = crate::theme::export_template(&def) {
+                                if let Some(d) = p.parent() {
+                                    let _ = std::process::Command::new("explorer").arg(d).spawn();
+                                }
+                            }
+                        }
+                    }
+                    if ui.button(tr("📂 Pasta de temas")).clicked() {
+                        if let Some(d) = crate::theme::user_dir() {
+                            let _ = std::fs::create_dir_all(&d);
+                            let _ = std::process::Command::new("explorer").arg(d).spawn();
+                        }
+                    }
+                    if ui.button(tr("⟳ Recarregar")).on_hover_text(tr("relê os temas da pasta (extensões instaladas)")).clicked() {
+                        crate::theme::reload_user();
+                    }
                 });
                 ui.horizontal(|ui| {
                     ui.label(tr("Idioma"));

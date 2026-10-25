@@ -583,6 +583,9 @@ pub static BLOCK_IDX: std::sync::atomic::AtomicUsize = std::sync::atomic::Atomic
 /// Cores do tema dos menus: (fundo par, fundo ímpar, destaque do nome do grupo).
 pub fn theme_colors(theme: u8, dark: bool) -> Option<(egui::Color32, egui::Color32, egui::Color32)> {
     use egui::Color32 as C;
+    if theme == 4 {
+        return crate::theme::bands();
+    }
     Some(match (theme, dark) {
         (1, true) => (C::from_rgb(28, 30, 34), C::from_rgb(44, 47, 54), C::from_rgb(170, 176, 188)),
         (1, false) => (C::from_rgb(226, 229, 234), C::from_rgb(240, 242, 246), C::from_rgb(70, 76, 88)),

@@ -353,6 +353,8 @@ pub struct Settings {
     pub user_colors: Vec<(String, [u8; 3])>,
     /// tema dos menus: 0 padrão, 1 grafite (preto/cinza), 2 carmim (preto/vermelho), 3 azul
     pub menu_theme: u8,
+    /// tema da interface (pronto ou do usuário)
+    pub theme_name: String,
     /// estilo geral das anotações 3D (o que cada anotação deixa em "padrão")
     pub pmi_style: scc_core::pmi::PmiStyle,
     /// furos flangeados cadastrados pelo usuário (nome, diâmetro, altura do colar)
@@ -431,7 +433,8 @@ impl Default for Settings {
             tree_hidden: vec![],
             box_mode: 0,
             user_colors: vec![],
-            menu_theme: 1,
+            menu_theme: 4,
+            theme_name: "Escuro".into(),
             pmi_style: Default::default(),
             flanged_holes: vec![],
         }
@@ -508,10 +511,11 @@ impl Settings {
     }
 
     pub fn apply(&self, ctx: &egui::Context) {
-        ctx.set_visuals(match self.theme {
-            Theme::Escuro => egui::Visuals::dark(),
-            Theme::Claro => egui::Visuals::light(),
+        let def = crate::theme::find(&self.theme_name).unwrap_or_else(|| {
+            let b = crate::theme::builtin();
+            if self.theme == Theme::Claro { b[1].clone() } else { b[0].clone() }
         });
+        crate::theme::apply(ctx, &def);
         ctx.set_zoom_factor(self.ui_scale.clamp(0.7, 2.0));
     }
 }
