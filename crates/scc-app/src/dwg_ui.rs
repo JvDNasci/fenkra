@@ -231,7 +231,10 @@ pub fn command(app: &mut App, i: u8) {
         c::OPEN => {
             let Some(p) = rfd::FileDialog::new().add_filter(tr("Desenho SolidCadCraft"), &["sccdwg"]).pick_file() else { return };
             match std::fs::read_to_string(&p).map_err(|e| e.to_string()).and_then(|t| Drawing::from_json(&t)) {
-                Ok(d) => app.dwg = Some(DwgState::new(d, Some(p))),
+                Ok(d) => {
+                    app.settings.add_recent_file(&p);
+                    app.dwg = Some(DwgState::new(d, Some(p)));
+                }
                 Err(e) => app.toast(format!("{}: {e}", tr("Não abriu o desenho")), true),
             }
         }
@@ -333,8 +336,9 @@ fn save(app: &mut App, ask: bool) {
     }
     match std::fs::write(&path, st.d.to_json()) {
         Ok(()) => {
-            st.path = Some(path);
+            st.path = Some(path.clone());
             st.modified = false;
+            app.settings.add_recent_file(&path);
             app.toast(tr("Desenho salvo"), false);
         }
         Err(e) => app.toast(e.to_string(), true),

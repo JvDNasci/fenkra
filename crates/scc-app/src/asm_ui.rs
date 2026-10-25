@@ -365,6 +365,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
             let Some(p) = rfd::FileDialog::new().add_filter("Montagem SolidCadCraft", &["sccasm"]).pick_file() else { return true };
             match std::fs::read_to_string(&p).map_err(|e| e.to_string()).and_then(|s| Assembly::from_json(&s)) {
                 Ok(a) => {
+                    app.settings.add_recent_file(&p);
                     app.asm = Some(AsmState::new(a, Some(p)));
                     app.fit_now();
                 }
@@ -894,8 +895,9 @@ pub fn save(app: &mut App) {
     st.asm.assign_items(dir.as_deref());
     match std::fs::write(&path, st.asm.to_json()) {
         Ok(()) => {
-            st.file = Some(path);
+            st.file = Some(path.clone());
             st.modified = false;
+            app.settings.add_recent_file(&path);
             app.toast(tr("Montagem salva"), false);
         }
         Err(e) => app.toast(format!("Erro ao salvar: {e}"), true),

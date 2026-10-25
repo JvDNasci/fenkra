@@ -132,6 +132,11 @@ pub struct App {
     reframe_pending: bool,
     /// início da tela de carregamento
     splash_t0: Option<f64>,
+    /// início da tela inicial (animações de entrada) e giro de cada cartão de exemplo
+    start_t0: Option<f64>,
+    card_spin: std::collections::HashMap<String, f32>,
+    /// prévias 3D da tela inicial (exemplos e peças recentes)
+    previews: crate::examples::PreviewCache,
     /// comando a abrir como ambiente (duplo clique na face)
     open_pending: Option<Id>,
     release_dialog: Option<(u64, String)>,
@@ -264,6 +269,9 @@ impl App {
             extract_last: ExtractOpts::default(),
             open_pending: None,
             splash_t0: None,
+            start_t0: None,
+            card_spin: Default::default(),
+            previews: Default::default(),
             reframe_pending: false,
             clip: None,
             link_open: false,
@@ -329,6 +337,16 @@ impl App {
             st_lib_sel: 0,
         };
         app.started = !app.settings.show_start;
+        // desenvolvimento: SCC_DEMO_EXEMPLO=<n> abre o exemplo n da tela inicial
+        if let Some(e) = std::env::var("SCC_DEMO_EXEMPLO").ok().and_then(|n| n.parse::<usize>().ok()).and_then(|n| crate::examples::all().into_iter().nth(n)) {
+            app.load_doc(e.doc, None, None);
+            app.settings.bench = e.bench;
+            app.started = true;
+        }
+        // desenvolvimento: SCC_DEMO_INICIO=1 mostra a tela inicial
+        if std::env::var("SCC_DEMO_INICIO").is_ok() {
+            app.started = false;
+        }
         // desenvolvimento: SCC_ABRIR_SKETCH=<nome> abre esse sketch em edição ao iniciar
         if let Ok(name) = std::env::var("SCC_ABRIR_SKETCH") {
             app.begin_sketch_pending = app.open.doc.features.iter().find(|f| f.name == name).map(|f| f.id);
@@ -793,6 +811,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
         if let Some(path) = path {
             match std::fs::write(&path, self.open.doc.to_json()) {
                 Ok(()) => {
+                    self.settings.add_recent_file(&path);
                     self.open.file = Some(path);
                     self.open.modified = false;
                     self.toast("Peça salva", false);
@@ -804,10 +823,48 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
 
     fn open_file(&mut self) {
         let Some(path) = rfd::FileDialog::new().add_filter("Peça SolidCadCraft", &["sccpart"]).pick_file() else { return };
+        self.open_path(&path);
+    }
+
+    /// Abre um arquivo pelo tipo: peça, montagem ou desenho (tela inicial e recentes).
+    pub fn open_path(&mut self, path: &std::path::Path) {
+        let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+        if ext == "sccasm" {
+            match std::fs::read_to_string(path).map_err(|e| e.to_string()).and_then(|s| scc_montagem::Assembly::from_json(&s)) {
+                Ok(a) => {
+                    self.asm = Some(crate::asm_ui::AsmState::new(a, Some(path.to_path_buf())));
+                    self.settings.bench = crate::settings::Bench::Montagem;
+                    self.settings.add_recent_file(path);
+                    self.started = true;
+                    self.fit_now();
+                }
+                Err(e) => self.toast(format!("Não foi possível abrir: {e}"), true),
+            }
+            return;
+        }
+        if ext == "sccdwg" {
+            match std::fs::read_to_string(path).map_err(|e| e.to_string()).and_then(|t| scc_desenho::Drawing::from_json(&t)) {
+                Ok(d) => {
+                    self.dwg = Some(crate::dwg_ui::DwgState::new(d, Some(path.to_path_buf())));
+                    self.settings.bench = crate::settings::Bench::Desenho;
+                    self.settings.add_recent_file(path);
+                    self.started = true;
+                }
+                Err(e) => self.toast(format!("Não foi possível abrir: {e}"), true),
+            }
+            return;
+        }
+        let path = path.to_path_buf();
         match std::fs::read_to_string(&path).map_err(|e| e.to_string()).and_then(|s| Document::from_json(&s).map_err(|e| e.to_string())) {
             Ok(d) => {
+                let bench = if d.sheet.is_some() { Some(crate::settings::Bench::Chapa) } else { None };
                 self.load_doc(d, None, None);
+                self.settings.add_recent_file(&path);
                 self.open.file = Some(path);
+                if let Some(b) = bench {
+                    self.settings.bench = b;
+                }
+                self.started = true;
             }
             Err(e) => self.toast(format!("Não foi possível abrir: {e}"), true),
         }
@@ -859,99 +916,206 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
         }
     }
 
-    /// Tela inicial: escolher projeto/peça antes de cair no modelo.
-    /// Tela de carregamento: fênix, nome e barra de progresso até o kernel e o primeiro cálculo ficarem prontos.
+    /// Tela de carregamento: fênix com anéis girando, nome e barra de progresso com brilho correndo.
     fn splash(&mut self, root: &mut egui::Ui) -> bool {
         let now = root.ctx().input(|i| i.time);
         let t0 = *self.splash_t0.get_or_insert(now);
         let el = (now - t0) as f32;
         let ready = self.gen_done >= 1 || self.gen_done == self.gen_sent;
-        let min_time = 1.3;
+        let min_time = 1.6;
         let p = if ready { (el / min_time).min(1.) } else { (el / min_time).min(0.85) };
-        if ready && el >= min_time {
+        if ready && el >= min_time + 0.25 {
             return false;
         }
+        let accent = brand_accent();
+        // some suavemente no fim
+        let fade = if ready { (1. - (el - min_time) / 0.25).clamp(0., 1.) } else { 1. };
         egui::CentralPanel::default().frame(egui::Frame::NONE).show(root, |ui| {
             let rect = ui.max_rect();
-            paint_backdrop(ui.painter(), rect, true);
-            let c = rect.center();
-            let img = egui::Image::new(egui::include_image!("../../../assets/app/fenix-256.png")).corner_radius(28.);
-            img.paint_at(ui, Rect::from_center_size(c - egui::vec2(0., 70.), egui::vec2(170., 170.)));
-            ui.painter().text(c + egui::vec2(0., 40.), egui::Align2::CENTER_CENTER, "SolidCadCraft", egui::FontId::proportional(32.), Color32::WHITE);
-            ui.painter().text(c + egui::vec2(0., 70.), egui::Align2::CENTER_CENTER, concat!("CAD paramétrico open source · ", env!("CARGO_PKG_VERSION")), egui::FontId::proportional(13.), Color32::from_white_alpha(150));
-            let bar = Rect::from_center_size(c + egui::vec2(0., 110.), egui::vec2(320., 6.));
-            ui.painter().rect_filled(bar, 3., Color32::from_white_alpha(30));
+            paint_backdrop(ui.painter(), rect, true, el, accent);
+            let painter = ui.painter().with_clip_rect(rect);
+            let c = rect.center() - egui::vec2(0., 40.);
+            let appear = ease_out((el / 0.6).min(1.));
+            // brilho pulsando atrás da fênix
+            let pulse = 0.5 + 0.5 * (el * 2.2).sin();
+            for k in 0..14 {
+                let r = 150. - k as f32 * 8. + pulse * 10.;
+                painter.circle_filled(c, r, accent.gamma_multiply(0.018 * appear * fade));
+            }
+            // anéis girando em sentidos opostos
+            ring(&painter, c, 118., el * 1.4, 1.6, 2.5, accent.gamma_multiply(0.9 * fade));
+            ring(&painter, c, 132., -el * 0.9 + 1., 0.9, 1.5, Color32::from_white_alpha((90. * fade) as u8));
+            ring(&painter, c, 104., -el * 2.1, 0.5, 1.2, accent.gamma_multiply(0.5 * fade));
+            let sz = 150. * (0.85 + 0.15 * appear);
+            let img = egui::Image::new(egui::include_image!("../../../assets/app/fenix-256.png")).corner_radius(26.).tint(Color32::from_white_alpha((255. * appear * fade) as u8));
+            img.paint_at(ui, Rect::from_center_size(c, egui::vec2(sz, sz)));
+            wordmark(&painter, c + egui::vec2(0., 160.), 34., Color32::from_white_alpha((255. * fade) as u8), accent.gamma_multiply(fade));
+            painter.text(c + egui::vec2(0., 192.), egui::Align2::CENTER_CENTER, tr(BRAND_TAGLINE), egui::FontId::proportional(13.5), Color32::from_white_alpha((160. * fade) as u8));
+            let bar = Rect::from_center_size(c + egui::vec2(0., 226.), egui::vec2(340., 5.));
+            painter.rect_filled(bar, 3., Color32::from_white_alpha((28. * fade) as u8));
             let mut fill = bar;
             fill.set_width(bar.width() * p);
-            ui.painter().rect_filled(fill, 3., Color32::from_rgb(90, 170, 255));
+            painter.rect_filled(fill, 3., accent.gamma_multiply(fade));
+            // brilho correndo sobre a barra
+            let sx = fill.left() + ((el * 0.9).fract()) * (fill.width() + 80.) - 40.;
+            let sh = Rect::from_min_max(egui::pos2(sx.max(fill.left()), fill.top()), egui::pos2((sx + 40.).min(fill.right()), fill.bottom()));
+            if sh.width() > 0. {
+                painter.rect_filled(sh, 3., Color32::from_white_alpha((120. * fade) as u8));
+            }
             let stage = if p < 0.3 { "Iniciando o kernel OpenCASCADE…" } else if p < 0.6 { "Carregando ferramentas e ícones…" } else if p < 0.95 { "Calculando a peça…" } else { "Pronto" };
-            ui.painter().text(bar.center_bottom() + egui::vec2(0., 16.), egui::Align2::CENTER_CENTER, stage, egui::FontId::proportional(12.), Color32::from_white_alpha(140));
+            painter.text(bar.center_bottom() + egui::vec2(0., 16.), egui::Align2::CENTER_CENTER, tr(stage), egui::FontId::proportional(12.), Color32::from_white_alpha((140. * fade) as u8));
+            painter.text(rect.right_bottom() - egui::vec2(16., 14.), egui::Align2::RIGHT_BOTTOM, concat!("v", env!("CARGO_PKG_VERSION")), egui::FontId::monospace(11.), Color32::from_white_alpha((90. * fade) as u8));
         });
         root.ctx().request_repaint();
         true
     }
 
+    /// Tela inicial: marca, começar, recentes (arquivos e projetos) e galeria de exemplos com prévia 3D girando.
     fn start_screen(&mut self, root: &mut egui::Ui) {
         let mut action: Option<u8> = None;
         let mut recent_open: Option<String> = None;
-        let dark = !self.light_background();
+        let mut file_open: Option<String> = None;
+        let mut example: Option<usize> = None;
+        let dark = root.ctx().global_style().visuals.dark_mode;
+        let accent = brand_accent();
+        let (now, dt) = root.ctx().input(|i| (i.time, i.stable_dt.min(0.1)));
+        let t0 = *self.start_t0.get_or_insert(now);
+        let el = (now - t0) as f32;
+        let ex_meta: Vec<(&'static str, &'static str, crate::settings::Bench)> = crate::examples::all().into_iter().map(|e| (e.name, e.desc, e.bench)).collect();
         egui::CentralPanel::default().frame(egui::Frame::NONE.inner_margin(12.)).show(root, |ui| {
-            paint_backdrop(ui.painter(), ui.max_rect().expand(12.), dark);
-            ui.vertical_centered(|ui| {
-                ui.add_space(40.);
-                ui.add(egui::Image::new(egui::include_image!("../../../assets/app/fenix-256.png")).fit_to_exact_size(egui::vec2(128., 128.)));
-                ui.label(RichText::new(tr("SolidCadCraft")).size(30.).strong());
-                ui.label(RichText::new(concat!("CAD paramétrico open source · ", env!("CARGO_PKG_VERSION"))).weak());
-                ui.add_space(24.);
-            });
-            let w = 720.0f32.min(ui.available_width());
-            ui.horizontal(|ui| {
-                ui.add_space(((ui.available_width() - w) / 2.).max(0.));
-                ui.vertical(|ui| {
-                    ui.set_width(w);
-                    ui.label(RichText::new(tr("Começar")).strong());
-                    ui.horizontal_wrapped(|ui| {
-                        let big = |ui: &mut egui::Ui, icon: &str, name: &str, brief: &str| crate::icons::tool_button(ui, icon, name, 54., true, false, brief, "");
-                        if big(ui, "novo_projeto", "Novo projeto", "Cria uma pasta de projeto com versões e revisões").clicked() {
-                            action = Some(0);
-                        }
-                        if big(ui, "abrir_projeto", "Abrir projeto", "Abre uma pasta de projeto existente").clicked() {
-                            action = Some(1);
-                        }
-                        if big(ui, "nova_peca", "Nova peça", "Peça avulsa, fora de projeto").clicked() {
-                            action = Some(2);
-                        }
-                        if big(ui, "abrir_projeto", "Abrir peça", "Abre um arquivo .sccpart").clicked() {
-                            action = Some(3);
-                        }
-                        if big(ui, "exemplo", "Exemplo", "Placa paramétrica de exemplo").clicked() {
-                            action = Some(4);
+            paint_backdrop(ui.painter(), ui.max_rect().expand(12.), dark, el, accent);
+            // tudo entra deslizando de leve
+            let k_in = ease_out((el / 0.7).min(1.));
+            ui.set_opacity(k_in);
+            egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+                ui.add_space(26. + 18. * (1. - k_in));
+                // ---------- marca
+                ui.vertical_centered(|ui| {
+                    let (r, _) = ui.allocate_exact_size(egui::vec2(160., 132.), egui::Sense::hover());
+                    let c = r.center();
+                    let painter = ui.painter();
+                    ring(painter, c, 64., el * 0.8, 1.7, 2., accent.gamma_multiply(0.85));
+                    ring(painter, c, 72., -el * 0.5 + 2., 0.8, 1.2, accent.gamma_multiply(0.35));
+                    let bob = (el * 1.6).sin() * 2.;
+                    egui::Image::new(egui::include_image!("../../../assets/app/fenix-256.png")).corner_radius(20.).paint_at(ui, Rect::from_center_size(c + egui::vec2(0., bob), egui::vec2(104., 104.)));
+                    let (wr, _) = ui.allocate_exact_size(egui::vec2(420., 40.), egui::Sense::hover());
+                    wordmark(ui.painter(), wr.center(), 32., ui.visuals().strong_text_color(), accent);
+                    ui.label(RichText::new(tr(BRAND_TAGLINE)).weak());
+                    ui.label(RichText::new(concat!("CAD paramétrico open source · v", env!("CARGO_PKG_VERSION"))).weak().small());
+                    ui.add_space(18.);
+                });
+                let w = 1080.0f32.min(ui.available_width() - 24.);
+                ui.horizontal(|ui| {
+                    ui.add_space(((ui.available_width() - w) / 2.).max(0.));
+                    ui.vertical(|ui| {
+                        ui.set_width(w);
+                        // ---------- começar
+                        section_title(ui, "Começar", accent);
+                        ui.horizontal_wrapped(|ui| {
+                            let big = |ui: &mut egui::Ui, icon: &str, name: &str, brief: &str| crate::icons::tool_button(ui, icon, name, 54., true, false, brief, "");
+                            if big(ui, "novo_projeto", "Novo projeto", "Cria uma pasta de projeto com versões e revisões").clicked() {
+                                action = Some(0);
+                            }
+                            if big(ui, "abrir_projeto", "Abrir projeto", "Abre uma pasta de projeto existente").clicked() {
+                                action = Some(1);
+                            }
+                            if big(ui, "nova_peca", "Nova peça", "Peça avulsa, fora de projeto").clicked() {
+                                action = Some(2);
+                            }
+                            if big(ui, "abrir_projeto", "Abrir peça", "Abre um arquivo .sccpart").clicked() {
+                                action = Some(3);
+                            }
+                            if big(ui, "asm_nova", "Nova montagem", "Começa uma montagem vazia (arquivo .sccasm).").clicked() {
+                                action = Some(5);
+                            }
+                            if big(ui, "des_novo", "Novo desenho", "Folha de detalhamento 2D (arquivo .sccdwg)").clicked() {
+                                action = Some(6);
+                            }
+                        });
+                        ui.add_space(14.);
+                        let narrow = w < 820.;
+                        let left_w = if narrow { w } else { 330. };
+                        let mut recents = |ui: &mut egui::Ui| {
+                            ui.set_width(left_w);
+                            section_title(ui, "Recentes", accent);
+                            if self.settings.recent_files.is_empty() && self.settings.recent.is_empty() {
+                                ui.label(RichText::new(tr("nenhum ainda — abra um exemplo ao lado")).weak());
+                            }
+                            for f in self.settings.recent_files.clone() {
+                                let path = std::path::Path::new(&f);
+                                if !path.exists() {
+                                    continue;
+                                }
+                                let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+                                let (icon, kind) = match ext.as_str() {
+                                    "sccasm" => ("asm_nova", "Montagem"),
+                                    "sccdwg" => ("des_novo", "Desenho"),
+                                    _ => ("nova_peca", "Peça"),
+                                };
+                                let pv = (ext == "sccpart").then(|| {
+                                    let ff = f.clone();
+                                    self.previews.get(&format!("arq:{f}"), move || std::fs::read_to_string(&ff).ok().and_then(|s| Document::from_json(&s).ok()))
+                                }).flatten();
+                                if recent_row(ui, &f, icon, kind, pv.as_deref(), el, accent).clicked() {
+                                    file_open = Some(f.clone());
+                                }
+                            }
+                            for r in self.settings.recent.clone() {
+                                if recent_row(ui, &r, "pasta", "Projeto", None, el, accent).clicked() {
+                                    recent_open = Some(r.clone());
+                                }
+                            }
+                            ui.add_space(10.);
+                            ui.checkbox(&mut self.settings.show_start, tr("mostrar esta tela ao iniciar"));
+                        };
+                        let mut gallery = |ui: &mut egui::Ui| {
+                            section_title(ui, "Exemplos", accent);
+                            ui.horizontal_wrapped(|ui| {
+                                ui.spacing_mut().item_spacing = egui::vec2(12., 12.);
+                                for (i, (name, desc, bench)) in ex_meta.iter().enumerate() {
+                                    let key = format!("ex:{i}");
+                                    let pv = self.previews.get(&key, move || crate::examples::all().into_iter().nth(i).map(|e| e.doc));
+                                    let spin = self.card_spin.entry(key.clone()).or_insert(i as f32 * 0.9);
+                                    let delay = 0.25 + i as f32 * 0.07;
+                                    let appear = ease_out(((el - delay) / 0.5).clamp(0., 1.));
+                                    let r = example_card(ui, &key, name, desc, *bench, pv.as_deref(), *spin, appear, accent);
+                                    let hot = ui.ctx().animate_bool(egui::Id::unique(("card_hot", &key)), r.hovered());
+                                    *spin += dt * (0.35 + 1.6 * hot);
+                                    if r.clicked() {
+                                        example = Some(i);
+                                    }
+                                }
+                            });
+                        };
+                        if narrow {
+                            gallery(ui);
+                            ui.add_space(14.);
+                            recents(ui);
+                        } else {
+                            ui.horizontal_top(|ui| {
+                                ui.vertical(|ui| recents(ui));
+                                ui.add_space(24.);
+                                ui.vertical(|ui| gallery(ui));
+                            });
                         }
                     });
-                    ui.add_space(16.);
-                    ui.label(RichText::new(tr("Projetos recentes")).strong());
-                    if self.settings.recent.is_empty() {
-                        ui.label(RichText::new(tr("nenhum ainda")).weak());
-                    }
-                    for r in &self.settings.recent {
-                        let name = std::path::Path::new(r).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or(r.clone());
-                        let resp = ui.horizontal(|ui| {
-                            ui.add(egui::Image::new(crate::icons::get("pasta")).fit_to_exact_size(egui::vec2(20., 20.)));
-                            let l = ui.link(RichText::new(name).strong());
-                            ui.label(RichText::new(r).weak().small());
-                            l
-                        });
-                        if resp.inner.clicked() {
-                            recent_open = Some(r.clone());
-                        }
-                    }
-                    ui.add_space(16.);
-                    ui.checkbox(&mut self.settings.show_start, tr("mostrar esta tela ao iniciar"));
                 });
+                ui.add_space(24.);
             });
         });
+        root.ctx().request_repaint();
         if let Some(r) = recent_open {
             self.open_project_at(std::path::Path::new(&r));
+        }
+        if let Some(f) = file_open {
+            self.open_path(std::path::Path::new(&f));
+        }
+        if let Some(i) = example {
+            if let Some(e) = crate::examples::all().into_iter().nth(i) {
+                self.load_doc(e.doc, None, None);
+                self.settings.bench = e.bench;
+                self.started = true;
+            }
         }
         match action {
             Some(0) => self.new_project(),
@@ -964,9 +1128,15 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
                 self.open_file();
                 self.started = true;
             }
-            Some(4) => {
-                self.load_doc(scc_solidos::example_document(), None, None);
+            Some(5) => {
                 self.started = true;
+                self.command(Cmd::AsmNew);
+                self.settings.bench = crate::settings::Bench::Montagem;
+            }
+            Some(6) => {
+                self.started = true;
+                self.settings.bench = crate::settings::Bench::Desenho;
+                self.command(Cmd::Dwg(0));
             }
             _ => {}
         }
@@ -6620,9 +6790,172 @@ impl eframe::App for App {
     }
 }
 
-/// Fundo com profundidade (degradê, brilho e grade sutil) para a tela inicial e o carregamento.
-fn paint_backdrop(p: &egui::Painter, rect: Rect, dark: bool) {
+/// Lema da marca (tela de carregamento e inicial).
+const BRAND_TAGLINE: &str = "Projete · Dobre · Monte · Detalhe";
+
+/// Cor de destaque da marca: a do tema em uso (ou o azul da fênix).
+fn brand_accent() -> Color32 {
+    crate::theme::current().map(|t| Color32::from_rgb(t.accent[0], t.accent[1], t.accent[2])).unwrap_or(Color32::from_rgb(90, 170, 255))
+}
+
+fn ease_out(t: f32) -> f32 {
+    1. - (1. - t).powi(3)
+}
+
+/// Arco girando (anel da marca): `turn` em radianos, `span` = abertura do arco.
+fn ring(p: &egui::Painter, c: egui::Pos2, r: f32, turn: f32, span: f32, w: f32, col: Color32) {
+    for half in [0., std::f32::consts::PI] {
+        let pts: Vec<egui::Pos2> = (0..=40)
+            .map(|i| {
+                let a = turn + half + span * i as f32 / 40.;
+                c + egui::vec2(a.cos(), a.sin()) * r
+            })
+            .collect();
+        p.add(egui::Shape::line(pts, egui::Stroke::new(w, col)));
+        // ponta brilhante
+        let a = turn + half + span;
+        p.circle_filled(c + egui::vec2(a.cos(), a.sin()) * r, w * 1.4, col);
+    }
+}
+
+/// Logotipo em texto: "Solid" na cor do texto e "CadCraft" na cor de destaque.
+fn wordmark(p: &egui::Painter, c: egui::Pos2, size: f32, text: Color32, accent: Color32) {
+    let mut job = egui::text::LayoutJob::default();
+    let f = egui::FontId::proportional(size);
+    job.append("Solid", 0., egui::TextFormat { font_id: f.clone(), color: text, ..Default::default() });
+    job.append("CadCraft", 0., egui::TextFormat { font_id: f, color: accent, ..Default::default() });
+    let g = p.layout_job(job);
+    let pos = c - g.size() / 2.;
+    // sublinhado em degradê sob a marca
+    let y = pos.y + g.size().y + 3.;
+    let mut m = egui::Mesh::default();
+    let (l, r) = (pos.x + g.size().x * 0.18, pos.x + g.size().x * 0.82);
+    let clear = Color32::TRANSPARENT;
+    for (x, col) in [(l, clear), (c.x, accent), (r, clear)] {
+        m.colored_vertex(egui::pos2(x, y), col);
+        m.colored_vertex(egui::pos2(x, y + 2.), col);
+    }
+    m.add_triangle(0, 1, 2);
+    m.add_triangle(1, 2, 3);
+    m.add_triangle(2, 3, 4);
+    m.add_triangle(3, 4, 5);
+    p.galley(pos, g, text);
+    p.add(egui::Shape::mesh(m));
+}
+
+fn section_title(ui: &mut egui::Ui, t: &str, accent: Color32) {
+    ui.horizontal(|ui| {
+        let (r, _) = ui.allocate_exact_size(egui::vec2(4., 16.), egui::Sense::hover());
+        ui.painter().rect_filled(r, 2., accent);
+        ui.label(RichText::new(tr(t)).strong().size(15.));
+    });
+    ui.add_space(4.);
+}
+
+/// Linha de um arquivo/projeto recente (ícone ou prévia girando, nome, tipo e pasta).
+fn recent_row(ui: &mut egui::Ui, path: &str, icon: &str, kind: &str, pv: Option<&crate::examples::Preview>, t: f32, accent: Color32) -> egui::Response {
+    let p = std::path::Path::new(path);
+    let name = p.file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or(path.to_string());
+    let dir = p.parent().map(|d| d.to_string_lossy().to_string()).unwrap_or_default();
+    let w = ui.available_width();
+    let (r, resp) = ui.allocate_exact_size(egui::vec2(w, 46.), egui::Sense::click());
+    let hot = ui.ctx().animate_bool(egui::Id::unique(("recent_hot", path)), resp.hovered());
+    let v = ui.visuals();
+    let bg = v.faint_bg_color.lerp_to_gamma(accent, 0.18 * hot);
+    let painter = ui.painter();
+    painter.rect_filled(r.shrink2(egui::vec2(0., 2.)), 8., bg.gamma_multiply(0.4 + 0.6 * hot));
+    if hot > 0. {
+        painter.rect_filled(Rect::from_min_size(r.min + egui::vec2(0., 8.), egui::vec2(3., r.height() - 16.)), 2., accent.gamma_multiply(hot));
+    }
+    let ir = Rect::from_center_size(egui::pos2(r.left() + 26., r.center().y), egui::vec2(38., 38.));
+    match pv {
+        Some(pv) => crate::examples::paint_preview(painter, ir, pv, t * 0.5 + hot * 1.5),
+        None => {
+            egui::Image::new(crate::icons::get(icon)).paint_at(ui, Rect::from_center_size(ir.center(), egui::vec2(26., 26.)));
+        }
+    }
+    let painter = ui.painter();
+    let tx = r.left() + 54. + 3. * hot;
+    painter.text(egui::pos2(tx, r.top() + 14.), egui::Align2::LEFT_CENTER, &name, egui::FontId::proportional(13.5), v.strong_text_color());
+    let chip = painter.layout_no_wrap(tr(kind).to_string(), egui::FontId::proportional(10.), accent);
+    let cr = Rect::from_min_size(egui::pos2(tx, r.top() + 25.), chip.size() + egui::vec2(10., 4.));
+    painter.rect_filled(cr, 6., accent.gamma_multiply(0.16));
+    painter.galley(cr.min + egui::vec2(5., 2.), chip, accent);
+    let room = (r.right() - cr.right() - 14.).max(10.);
+    let mut d = dir.clone();
+    let max_chars = (room / 6.).max(6.) as usize;
+    if d.chars().count() > max_chars {
+        d = format!("…{}", d.chars().rev().take(max_chars).collect::<Vec<_>>().into_iter().rev().collect::<String>());
+    }
+    painter.text(egui::pos2(cr.right() + 8., cr.center().y), egui::Align2::LEFT_CENTER, d, egui::FontId::proportional(10.5), v.weak_text_color());
+    resp.on_hover_text(path).on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// Cartão de exemplo com prévia 3D girando; sobe e acende ao passar o mouse.
+#[allow(clippy::too_many_arguments)]
+fn example_card(ui: &mut egui::Ui, key: &str, name: &str, desc: &str, bench: crate::settings::Bench, pv: Option<&crate::examples::Preview>, spin: f32, appear: f32, accent: Color32) -> egui::Response {
+    let size = egui::vec2(220., 212.);
+    let (r0, resp) = ui.allocate_exact_size(size, egui::Sense::click());
+    let hot = ui.ctx().animate_bool(egui::Id::unique(("card_hot", key)), resp.hovered());
+    let lift = 5. * hot + 16. * (1. - appear);
+    let r = r0.translate(egui::vec2(0., -lift + 5.));
+    let v = ui.visuals().clone();
+    let painter = ui.painter().with_clip_rect(ui.clip_rect());
+    let op = appear;
+    // sombra
+    for k in 0..6 {
+        let e = 2. + k as f32 * 2.5 * (0.5 + hot);
+        painter.rect_filled(r.translate(egui::vec2(0., 3. + 2. * hot)).expand(e), 12. + e, Color32::from_black_alpha(((if v.dark_mode { 16. } else { 7. }) * op) as u8));
+    }
+    painter.rect_filled(r, 12., v.window_fill.gamma_multiply(op));
+    // área da prévia com degradê
+    let pr = Rect::from_min_size(r.min + egui::vec2(8., 8.), egui::vec2(r.width() - 16., 128.));
+    let (a, b) = if v.dark_mode { (Color32::from_rgb(56, 64, 84), Color32::from_rgb(24, 27, 36)) } else { (Color32::from_rgb(236, 241, 250), Color32::from_rgb(196, 206, 224)) };
+    let mut m = egui::Mesh::default();
+    m.colored_vertex(pr.left_top(), a.gamma_multiply(op));
+    m.colored_vertex(pr.right_top(), a.gamma_multiply(op));
+    m.colored_vertex(pr.right_bottom(), b.gamma_multiply(op));
+    m.colored_vertex(pr.left_bottom(), b.gamma_multiply(op));
+    m.add_triangle(0, 1, 2);
+    m.add_triangle(0, 2, 3);
+    painter.add(egui::Shape::mesh(m));
+    // sombra da peça no "chão"
+    painter.add(egui::Shape::ellipse_filled(pr.center_bottom() - egui::vec2(0., 14.), egui::vec2(60. + 6. * hot, 7.), Color32::from_black_alpha((40. * op) as u8)));
+    match pv {
+        Some(pv) if op > 0.95 => crate::examples::paint_preview(&painter.with_clip_rect(pr), pr.shrink(6.), pv, spin),
+        _ => {
+            // carregando: anel girando
+            let t = ui.input(|i| i.time) as f32;
+            ring(&painter, pr.center(), 18., t * 3., 1.2, 2., accent.gamma_multiply(op));
+        }
+    }
+    use crate::settings::Bench as B;
+    let chip_txt = tr(match bench {
+        B::Chapa => "Chapa metálica",
+        B::Estrutural => "Estrutural",
+        B::Superficies => "Superfícies",
+        B::Montagem => "Montagem",
+        B::Desenho => "Desenho",
+        B::Solidos => "Sólidos",
+    })
+    .to_string();
+    let chip = painter.layout_no_wrap(chip_txt, egui::FontId::proportional(10.), accent);
+    let cr = Rect::from_min_size(pr.left_top() + egui::vec2(6., 6.), chip.size() + egui::vec2(10., 4.));
+    painter.rect_filled(cr, 6., v.window_fill.gamma_multiply(0.85 * op));
+    painter.galley(cr.min + egui::vec2(5., 2.), chip, accent);
+    painter.text(egui::pos2(r.left() + 12., pr.bottom() + 16.), egui::Align2::LEFT_CENTER, tr(name), egui::FontId::proportional(14.), v.strong_text_color().gamma_multiply(op));
+    let g = painter.layout(tr(desc).to_string(), egui::FontId::proportional(11.), v.weak_text_color().gamma_multiply(op), r.width() - 24.);
+    painter.galley(egui::pos2(r.left() + 12., pr.bottom() + 28.), g, v.weak_text_color());
+    let stroke = if hot > 0.01 { egui::Stroke::new(1. + hot, accent.gamma_multiply(0.4 + 0.6 * hot)) } else { egui::Stroke::new(1., v.widgets.noninteractive.bg_stroke.color.gamma_multiply(op)) };
+    painter.rect_stroke(r, 12., stroke, egui::StrokeKind::Inside);
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text(tr("abrir este exemplo"))
+}
+
+/// Fundo com profundidade (degradê, brilho, grade em perspectiva correndo e partículas) para a
+/// tela inicial e o carregamento.
+fn paint_backdrop(p: &egui::Painter, rect: Rect, dark: bool, t: f32, accent: Color32) {
     let (top, bot) = if dark { (Color32::from_rgb(16, 30, 58), Color32::from_rgb(8, 11, 20)) } else { (Color32::from_rgb(232, 241, 252), Color32::from_rgb(196, 214, 238)) };
+    let top = top.lerp_to_gamma(accent, 0.08);
     let mut m = egui::Mesh::default();
     m.colored_vertex(rect.left_top(), top);
     m.colored_vertex(rect.right_top(), top);
@@ -6631,27 +6964,41 @@ fn paint_backdrop(p: &egui::Painter, rect: Rect, dark: bool) {
     m.add_triangle(0, 1, 2);
     m.add_triangle(0, 2, 3);
     p.add(egui::Shape::mesh(m));
-    // brilho azul atrás do logo
-    let glow = rect.center_top() + egui::vec2(0., rect.height() * 0.3);
-    // muitos círculos bem transparentes = brilho suave, sem anéis visíveis
+    // brilho atrás do logo, respirando
+    let glow = rect.center_top() + egui::vec2((t * 0.3).sin() * 30., rect.height() * 0.3);
+    let breathe = 1. + 0.04 * (t * 0.8).sin();
+    let [ar, ag, ab, _] = accent.to_array();
     for k in 0..24 {
-        let r = 460. - k as f32 * 17.;
-        p.circle_filled(glow, r, Color32::from_rgba_unmultiplied(60, 140, 255, if dark { 2 } else { 3 }));
+        let r = (460. - k as f32 * 17.) * breathe;
+        p.circle_filled(glow, r, Color32::from_rgba_unmultiplied(ar, ag, ab, if dark { 2 } else { 3 }));
     }
-    // grade em perspectiva leve na parte de baixo (chão de CAD)
+    // grade em perspectiva na parte de baixo (chão de CAD), andando devagar para a frente
     let line = if dark { Color32::from_rgba_unmultiplied(120, 170, 255, 18) } else { Color32::from_rgba_unmultiplied(30, 80, 160, 22) };
     let horizon = rect.top() + rect.height() * 0.62;
     let vp = egui::pos2(rect.center().x, horizon - rect.height() * 0.25);
     for i in -14..=14 {
         let x = rect.center().x + i as f32 * rect.width() / 14.;
         let b = egui::pos2(x, rect.bottom());
-        let t = (horizon - vp.y) / (b.y - vp.y);
-        p.line_segment([vp + (b - vp) * t, b], egui::Stroke::new(1., line));
+        let tt = (horizon - vp.y) / (b.y - vp.y);
+        p.line_segment([vp + (b - vp) * tt, b], egui::Stroke::new(1., line));
     }
+    let shift = (t * 0.12).fract();
     for k in 0..10 {
-        let f = (k as f32 / 10.).powf(1.8);
+        let f = ((k as f32 + shift) / 10.).powf(1.8);
         let y = horizon + (rect.bottom() - horizon) * f;
         p.line_segment([egui::pos2(rect.left(), y), egui::pos2(rect.right(), y)], egui::Stroke::new(1., line));
+    }
+    // partículas subindo (poeira de luz)
+    for i in 0..36 {
+        let h = (i as f32 * 12.9898).sin() * 43758.547;
+        let fx = h.fract().abs();
+        let speed = 0.015 + 0.03 * ((i * 7 % 11) as f32 / 11.);
+        let fy = 1. - ((t * speed + fx * 3.7).fract());
+        let x = rect.left() + rect.width() * fx + (t * 0.5 + i as f32).sin() * 12.;
+        let y = rect.top() + rect.height() * fy;
+        let a = (fy * (1. - fy) * 4.).clamp(0., 1.);
+        let size = 1. + (i % 3) as f32 * 0.7;
+        p.circle_filled(egui::pos2(x, y), size, Color32::from_rgba_unmultiplied(ar, ag, ab, (a * if dark { 70. } else { 90. }) as u8));
     }
 }
 

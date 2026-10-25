@@ -305,6 +305,8 @@ pub struct Settings {
     pub sel_vertices: bool,
     /// projetos abertos recentemente (pastas)
     pub recent: Vec<String>,
+    /// peças, montagens e desenhos abertos/salvos recentemente (arquivos)
+    pub recent_files: Vec<String>,
     pub show_start: bool,
     pub icon_size: f32,
     pub show_labels: bool,
@@ -405,6 +407,7 @@ impl Default for Settings {
             sel_edges: true,
             sel_vertices: true,
             recent: vec![],
+            recent_files: vec![],
             show_start: true,
             icon_size: 30.,
             show_labels: true,
@@ -487,6 +490,14 @@ impl Settings {
         self.recent.retain(|p| p != path);
         self.recent.insert(0, path.to_string());
         self.recent.truncate(8);
+    }
+
+    pub fn add_recent_file(&mut self, path: &std::path::Path) {
+        let p = path.to_string_lossy().to_string();
+        self.recent_files.retain(|x| *x != p);
+        self.recent_files.insert(0, p);
+        self.recent_files.truncate(12);
+        self.save();
     }
 
     pub fn dock(&self, g: Group) -> Dock {
