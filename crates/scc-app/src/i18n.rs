@@ -2247,6 +2247,15 @@ static TABLE: &[(&str, &str)] = &[
     ("Clique o elemento indicado (ponta da chamada; presa à vista)", "Click the indicated feature (leader tip; tied to the view)"),
     ("Clique na folha para posicionar a vista (direção da câmera do 3D)", "Click the sheet to place the view (3D camera direction)"),
     ("Vista da câmera", "Camera view"),
+    ("Cada clique no 3D acrescenta um elemento; Ctrl+clique soma/tira da seleção.", "Each click in 3D adds an element; Ctrl+click adds/removes from the selection."),
+    ("Lista de elementos", "Elements list"),
+    ("aresta em", "edge at"),
+    ("lista de elementos: aberta, cada clique no 3D acrescenta um elemento", "elements list: while open, each click in 3D adds an element"),
+    ("Curvas", "Curves"),
+    ("Linhas", "Lines"),
+    ("Pontos", "Points"),
+    ("Elementos", "Elements"),
+    ("remover", "remove"),
 ];
 
 #[cfg(test)]

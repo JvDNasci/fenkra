@@ -113,4 +113,4 @@ Status: [ ] a fazer Â· [~] parcial Â· [x] feito
 - [x] L8 Cor e espessura por elemento no 2D
 - [x] L9 Molduras das anotações: nenhuma, retângulo, círculo, cápsula, triângulo, quadrado, bandeira dir./esq., losango, círculo/retângulo pontilhado, tamanho fixo; espessura, tipo de linha, cor
 - [x] L10 Propriedades das anotações (3D e 2D): cor, negrito, tipo de linha, justificação, ponto de ancoragem, espaçamento de linhas, ângulo, espelhar, girar com a vista, fundo (nenhum / preenchido / preenchido recortando a geometria), deslocamento, tamanho, aplicar escala, exibição (mostrar, chamada), coordenadas X/Y, chamada (seta, espessura, estilo)
-- [ ] L11 Campos de seleção múltipla: botão "sacola" com a contagem → lista de elementos (cada clique acrescenta, remover); Ctrl+clique soma/tira da seleção
+- [x] L11 Campos de seleção múltipla: botão "sacola" com a contagem → lista de elementos (cada clique acrescenta, remover); Ctrl+clique soma/tira da seleção

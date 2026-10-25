@@ -5249,12 +5249,25 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
                             }
                         }
                         (_, Some(p)) => {
-                            if let Some(i) = self.picks.iter().position(|x| *x == p) {
-                                self.picks.remove(i);
-                            } else {
-                                if !add {
-                                    self.picks.clear();
+                            // Ctrl+clique soma/tira; Shift soma; clique simples troca a seleção
+                            // (no único escolhido, desmarca)
+                            let ctrl = ctx.input(|i| i.modifiers.command);
+                            let pos = self.picks.iter().position(|x| *x == p);
+                            if ctrl {
+                                match pos {
+                                    Some(i) => {
+                                        self.picks.remove(i);
+                                    }
+                                    None => self.picks.push(p),
                                 }
+                            } else if add {
+                                if pos.is_none() {
+                                    self.picks.push(p);
+                                }
+                            } else if self.picks.len() == 1 && pos.is_some() {
+                                self.picks.clear();
+                            } else {
+                                self.picks.clear();
                                 self.picks.push(p);
                             }
                         }

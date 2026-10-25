@@ -770,51 +770,135 @@ fn radius_ui(ui: &mut egui::Ui, radius: &mut String, radius2: &mut Option<String
     }
 }
 
+/// Campo de seleção múltipla ("sacola"): botão com a contagem; aberto, mostra a lista de
+/// elementos (cada um editável e removível) e cada elemento novo clicado no 3D entra na lista.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn bag<T: Clone + PartialEq + Send + Sync + 'static>(
+    ui: &mut egui::Ui,
+    salt: &str,
+    label: &str,
+    items: &mut Vec<T>,
+    picked: &[T],
+    min: usize,
+    name: impl Fn(&T) -> String,
+    mut edit: impl FnMut(&mut egui::Ui, usize, &mut T),
+    blank: impl Fn() -> T,
+) {
+    let key = egui::Id::unique(("sacola", salt));
+    let active_key = egui::Id::unique("sacola_ativa");
+    let ctx = ui.ctx().clone();
+    let active = ctx.data(|m| m.get_temp::<egui::Id>(active_key)) == Some(key);
+    // aberta: o que for clicado no 3D (e ainda não estava escolhido) entra na lista
+    if active {
+        let prev: Vec<T> = ctx.data(|m| m.get_temp::<Vec<T>>(key)).unwrap_or_default();
+        for x in picked {
+            if !prev.contains(x) && !items.contains(x) {
+                items.push(x.clone());
+            }
+        }
+        ctx.data_mut(|m| m.insert_temp(key, picked.to_vec()));
+    }
+    let row = ui.horizontal(|ui| {
+        ui.label(tr(label));
+        let b = ui
+            .add(egui::Button::new(RichText::new(format!("🛍 {}", items.len())).strong()).selected(active))
+            .on_hover_text(tr("lista de elementos: aberta, cada clique no 3D acrescenta um elemento"));
+        if b.clicked() {
+            if active {
+                ctx.data_mut(|m| m.remove::<egui::Id>(active_key));
+            } else {
+                ctx.data_mut(|m| {
+                    m.insert_temp(active_key, key);
+                    m.insert_temp(key, picked.to_vec());
+                });
+            }
+        }
+        let names: Vec<String> = items.iter().take(3).map(&name).collect();
+        let more = if items.len() > 3 { "…" } else { "" };
+        ui.label(RichText::new(format!("{}{more}", names.join(", "))).weak().small());
+        b.rect
+    });
+    if !active {
+        return;
+    }
+    let (mut open, mut close, mut del) = (true, false, None);
+    egui::Window::new(format!("{} — {}", tr("Lista de elementos"), tr(label)))
+        .id(key.with("janela"))
+        .open(&mut open)
+        // ao lado do painel (sem cobrir os campos)
+        .default_pos(egui::pos2(ui.max_rect().right().max(row.inner.right()) + 16., row.inner.top()))
+        .default_width(340.)
+        .min_width(300.)
+        .resizable(true)
+        .show(&ctx, |ui| {
+            ui.label(RichText::new(tr("Cada clique no 3D acrescenta um elemento; Ctrl+clique soma/tira da seleção.")).weak().small());
+            egui::ScrollArea::vertical().max_height(340.).show(ui, |ui| {
+                for (i, it) in items.iter_mut().enumerate() {
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(format!("{}.", i + 1)).weak());
+                        ui.vertical(|ui| edit(ui, i, it));
+                        if ui.small_button("✖").on_hover_text(tr("remover")).clicked() {
+                            del = Some(i);
+                        }
+                    });
+                }
+            });
+            ui.separator();
+            ui.horizontal(|ui| {
+                if ui.button(tr("+ elemento")).clicked() {
+                    items.push(picked.last().cloned().unwrap_or_else(&blank));
+                }
+                if ui.add_enabled(items.len() > min, egui::Button::new(tr("Limpar"))).clicked() {
+                    items.truncate(min);
+                }
+                if ui.button(tr("✔ Concluir")).clicked() {
+                    close = true;
+                }
+            });
+        });
+    if let Some(i) = del {
+        if items.len() > min {
+            items.remove(i);
+        }
+    }
+    if !open || close {
+        ctx.data_mut(|m| m.remove::<egui::Id>(active_key));
+    }
+}
+
 /// Lista de curvas (seções), com mínimo de itens.
 pub(crate) fn curves_list(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, cs: &mut Vec<CurveRef>, seed: &Seed, min: usize) {
-    let mut del = None;
-    for (i, c) in cs.iter_mut().enumerate() {
-        ui.horizontal(|ui| {
-            ui.vertical(|ui| curve_slot(ui, &format!("{salt}{i}"), &format!("{label} {}", i + 1), doc, me, c, seed));
-            if ui.small_button(tr("✖")).clicked() {
-                del = Some(i);
-            }
-        });
-    }
-    if let Some(i) = del {
-        if cs.len() > min {
-            cs.remove(i);
-        }
-    }
-    ui.horizontal(|ui| {
-        if ui.button(tr("+ curva")).clicked() {
-            cs.push(seed.curves.last().cloned().unwrap_or(CurveRef::Axis(OriginAxis::X)));
-        }
-        if ui.add_enabled(!seed.curves.is_empty(), egui::Button::new(format!("+ seleção ({})", seed.curves.len()))).clicked() {
-            cs.extend(seed.curves.iter().cloned());
-        }
-    });
+    let plural = match label {
+        "Seção" => "Seções".to_string(),
+        l => format!("{l}s"),
+    };
+    bag(
+        ui,
+        salt,
+        &plural,
+        cs,
+        &seed.curves,
+        min,
+        |c| curve_name(doc, c),
+        |ui, i, c| curve_slot(ui, &format!("{salt}{i}"), &format!("{label} {}", i + 1), doc, me, c, seed),
+        || CurveRef::Axis(OriginAxis::X),
+    );
 }
 
 /// Lista de superfícies (juntar, preencher fronteiras).
 pub(crate) fn surfs_list(ui: &mut egui::Ui, salt: &str, doc: &Document, me: Id, items: &mut Vec<SurfRef>, seed: &Seed) {
-    let mut del = None;
-    for (i, s) in items.iter_mut().enumerate() {
-        ui.horizontal(|ui| {
-            ui.vertical(|ui| surf_slot(ui, &format!("{salt}{i}"), &format!("Elemento {}", i + 1), doc, me, s, seed));
-            if ui.small_button(tr("✖")).clicked() {
-                del = Some(i);
-            }
-        });
-    }
-    if let Some(i) = del {
-        if items.len() > 1 {
-            items.remove(i);
-        }
-    }
-    if ui.button(tr("+ elemento")).clicked() {
-        items.push(seed.surface.unwrap_or(SurfRef::Plane(PlaneRef::Origin(OriginPlane::XY))));
-    }
+    let picked: Vec<SurfRef> = seed.surface.iter().cloned().chain(seed.planes.iter().map(|p| SurfRef::Plane(*p))).collect();
+    bag(
+        ui,
+        salt,
+        "Elementos",
+        items,
+        &picked,
+        1,
+        |s| surf_name(doc, s),
+        |ui, i, s| surf_slot(ui, &format!("{salt}{i}"), &format!("Elemento {}", i + 1), doc, me, s, seed),
+        || SurfRef::Plane(PlaneRef::Origin(OriginPlane::XY)),
+    );
 }
 
 /// Superfície opcional (apoio da concordância).
@@ -829,28 +913,17 @@ fn opt_surf(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, 
 }
 
 pub(crate) fn points_list(ui: &mut egui::Ui, salt: &str, doc: &Document, me: Id, pts: &mut Vec<PointRef>, seed: &Seed, min: usize) {
-    let mut del = None;
-    for (i, p) in pts.iter_mut().enumerate() {
-        ui.horizontal(|ui| {
-            ui.vertical(|ui| point_slot(ui, &format!("{salt}{i}"), &format!("Ponto {}", i + 1), doc, me, p, seed));
-            if ui.small_button(tr("✖")).on_hover_text(tr("remover ponto")).clicked() {
-                del = Some(i);
-            }
-        });
-    }
-    if let Some(i) = del {
-        if pts.len() > min {
-            pts.remove(i);
-        }
-    }
-    ui.horizontal(|ui| {
-        if ui.button(tr("+ ponto")).clicked() {
-            pts.push(PointRef::Fixed([0.; 3]));
-        }
-        if ui.add_enabled(!seed.points.is_empty(), egui::Button::new(format!("+ seleção ({})", seed.points.len()))).on_hover_text(tr("acrescenta os vértices/pontos selecionados na ordem do clique")).clicked() {
-            pts.extend(seed.points.iter().copied());
-        }
-    });
+    bag(
+        ui,
+        salt,
+        "Pontos",
+        pts,
+        &seed.points,
+        min,
+        |p| point_name(doc, p),
+        |ui, i, p| point_slot(ui, &format!("{salt}{i}"), &format!("Ponto {}", i + 1), doc, me, p, seed),
+        || PointRef::Fixed([0.; 3]),
+    );
 }
 
 fn on_curve(ui: &mut egui::Ui, at: &mut OnCurve, reverse: &mut bool, vars: &HashMap<String, f64>) {

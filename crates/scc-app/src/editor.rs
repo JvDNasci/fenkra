@@ -1098,7 +1098,20 @@ fn feature_ui(
                 _ => {}
             }
             if let EdgeSel::Edges(m) = &mut o.edges {
-                ui.label(format!("{} aresta(s) escolhida(s)", m.len()));
+                // sacola: a lista das arestas (cada clique na aresta soma/tira)
+                crate::geo_ui::bag(
+                    ui,
+                    &format!("arestas{}", id.0),
+                    "Arestas",
+                    m,
+                    picked,
+                    0,
+                    |p| format!("({:.0}, {:.0}, {:.0})", p[0], p[1], p[2]),
+                    |ui, _, p| {
+                        ui.label(format!("{} ({:.1}, {:.1}, {:.1})", tr("aresta em"), p[0], p[1], p[2]));
+                    },
+                    || [0.; 3],
+                );
                 ui.horizontal(|ui| {
                     if ui.add_enabled(!picked.is_empty(), egui::Button::new(format!("Usar seleção atual ({})", picked.len()))).clicked() {
                         *m = picked.to_vec();
