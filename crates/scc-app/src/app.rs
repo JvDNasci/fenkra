@@ -4177,7 +4177,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None });
             }
             Bench::Montagem => {
                 let Some(st) = self.asm.as_mut() else { return };
-                if st.sel.is_none() && st.pending.is_none() && st.pending_joint.is_none() {
+                // componentes e restrições têm a barra no próprio painel; aqui só comandos esperando
+                // seleção e anotações 3D
+                let pmi_sel = st.sel.is_some_and(|s| st.asm.pmi.iter().any(|p| p.id == s));
+                if st.pending.is_none() && st.pending_joint.is_none() && !pmi_sel {
                     return;
                 }
                 ui.horizontal(|ui| {

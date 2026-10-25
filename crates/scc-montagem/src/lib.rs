@@ -293,6 +293,17 @@ pub struct Assembly {
 }
 
 impl Assembly {
+    /// Existe um componente, restrição, junta, acoplamento, padrão ou fixação com este id?
+    pub fn has_item(&self, id: Id) -> bool {
+        self.nodes.iter().any(|n| n.id == id)
+            || self.mates.iter().any(|m| m.id == id)
+            || self.joints.iter().any(|j| j.id == id)
+            || self.couplings.iter().any(|c| c.id == id)
+            || self.patterns.iter().any(|p| p.id == id)
+            || self.rigid.iter().any(|g| g.id == id)
+            || self.pmi.iter().any(|p| p.id == id)
+    }
+
     pub fn new(name: &str) -> Self {
         Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], pmi: vec![], items: vec![], pmi_captures: vec![] }
     }

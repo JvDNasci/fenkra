@@ -70,6 +70,8 @@ pub struct AsmState {
     /// peça aberta na Modelagem Sólida a partir da montagem (componente, arquivo)
     pub editing_part: Option<(Id, PathBuf)>,
     pub renaming: Option<Id>,
+    /// item em edição e o estado de antes (Cancelar volta para ele; item novo some)
+    pub edit_snap: Option<(Id, Assembly)>,
     /// posição antes do arrasto do manipulador
     drag_start: Option<Placement>,
     snapshot: Option<Assembly>,
@@ -123,6 +125,7 @@ impl AsmState {
             stop_collision: false,
             editing_part: None,
             renaming: None,
+            edit_snap: None,
             drag_start: None,
             snapshot: None,
             pending_joint: None,
@@ -973,6 +976,14 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
             st.dirty = true;
         }
     }
+    // item escolhido: as peças envolvidas ficam realçadas (sem passar o mouse)
+    let st_ro = app.asm.as_ref().unwrap();
+    let hover = hover.or_else(|| {
+        let s = st_ro.sel?;
+        st_ro.asm.mates.iter().find(|m| m.id == s).map(|m| m.b.comp)
+            .or_else(|| st_ro.asm.joints.iter().find(|j| j.id == s).map(|j| j.b.comp))
+            .or_else(|| st_ro.asm.patterns.iter().find(|p| p.id == s).map(|p| p.source))
+    });
     app.set_tree_hover(hover);
     let st = app.asm.as_mut().unwrap();
     if let Some((id, k)) = ui.ctx().data(|m| m.get_temp::<(Id, Id)>(egui::Id::unique("asm_mover"))) {
@@ -1067,6 +1078,38 @@ pub fn node_action(app: &mut App, id: Id, k: u8) {
 
 // ============================================================== painel
 
+/// Ícone, tipo, nome e selo do item escolhido (componente, restrição, junta, padrão…).
+fn item_info(st: &AsmState, sel: Option<Id>) -> Option<(String, String, String, (&'static str, Color32))> {
+    let s = sel?;
+    let ok = ("OK", Color32::from_rgb(110, 210, 120));
+    let bad = ("ERRO", Color32::from_rgb(255, 110, 95));
+    let off = ("SUPRIMIDA", Color32::from_gray(150));
+    if let Some(n) = st.asm.node(s) {
+        let (icon, kind) = match n.kind {
+            NodeKind::Group => ("📁", tr("Grupo")),
+            NodeKind::Part { .. } => ("🧩", tr("Peça")),
+            NodeKind::SubAssembly { .. } => ("🗂", tr("Subconjunto")),
+        };
+        let chip = if st.errors.iter().any(|(i, _)| *i == s) { bad } else if n.fixed { ("FIXO", Color32::from_rgb(120, 170, 255)) } else { ok };
+        return Some((icon.into(), kind.to_string(), n.name.clone(), chip));
+    }
+    if let Some(m) = st.asm.mates.iter().find(|m| m.id == s) {
+        let chip = if m.suppressed { off } else if st.report.failed.contains(&s) { bad } else { ok };
+        return Some((m.kind.icon().to_string(), tr(m.kind.label()).to_string(), m.name.clone(), chip));
+    }
+    if let Some(j) = st.asm.joints.iter().find(|j| j.id == s) {
+        let chip = if j.suppressed { off } else if st.report.failed.contains(&s) { bad } else { ok };
+        return Some(("⚙".into(), tr(j.kind.label()).to_string(), j.name.clone(), chip));
+    }
+    if let Some(c) = st.asm.couplings.iter().find(|c| c.id == s) {
+        return Some(("⚭".into(), tr("Acoplamento").to_string(), c.name.clone(), ok));
+    }
+    if let Some(p) = st.asm.patterns.iter().find(|p| p.id == s) {
+        return Some(("⁂".into(), tr("Padrão de componentes").to_string(), p.name.clone(), ok));
+    }
+    st.asm.rigid.iter().find(|g| g.id == s).map(|g| ("🔒".to_string(), tr("Fixação conjunta").to_string(), g.name.clone(), ok))
+}
+
 pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     let Some(st) = app.asm.as_mut() else {
         ui.heading(tr("Montagem"));
@@ -1091,6 +1134,59 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         }
     }
     let st = app.asm.as_mut().unwrap();
+    // edição do item escolhido: guarda o estado de antes (item recém-criado: o de antes de criar)
+    if st.edit_snap.as_ref().map(|s| s.0) != sel {
+        st.edit_snap = sel.map(|s| {
+            let prev = st.undo.last().filter(|u| !u.has_item(s)).cloned();
+            (s, prev.unwrap_or_else(|| st.asm.clone()))
+        });
+    }
+    let mut bar: Option<u8> = None;
+    if let (Some(s), Some((icon, kind, name, chip))) = (sel, item_info(st, sel)) {
+        // barra do comando, como nos outros módulos
+        egui::Frame::NONE.fill(ui.visuals().faint_bg_color).inner_margin(6.).corner_radius(6.).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                if ui.add(egui::Button::new(RichText::new(tr("✔ Concluir")).strong()).min_size(egui::vec2(100., 28.))).on_hover_text(tr("Enter")).clicked() {
+                    bar = Some(0);
+                }
+                if ui.add(egui::Button::new(tr("✖ Cancelar")).min_size(egui::vec2(90., 28.))).on_hover_text(tr("Esc")).clicked() {
+                    bar = Some(1);
+                }
+                if ui.add(egui::Button::new(tr("🗑 Excluir")).min_size(egui::vec2(80., 28.))).on_hover_text(tr("Del")).clicked() {
+                    bar = Some(2);
+                }
+            });
+        });
+        if !ui.ctx().text_edit_focused() {
+            ui.input(|i| {
+                if i.key_pressed(egui::Key::Enter) {
+                    bar = Some(0);
+                } else if i.key_pressed(egui::Key::Escape) {
+                    bar = Some(1);
+                }
+            });
+        }
+        ui.add_space(4.);
+        egui::Frame::NONE.fill(ui.visuals().faint_bg_color).corner_radius(12.).inner_margin(10.).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                let (r, _) = ui.allocate_exact_size(egui::vec2(38., 38.), egui::Sense::hover());
+                ui.painter().rect_filled(r, 9., ui.visuals().selection.bg_fill.gamma_multiply(0.35));
+                ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, &icon, egui::FontId::proportional(22.), Color32::WHITE);
+                ui.vertical(|ui| {
+                    ui.label(RichText::new(&kind).size(17.).strong());
+                    ui.label(RichText::new(&name).weak());
+                });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                    let (t, c) = chip;
+                    crate::editor::status_chip(ui, tr(t), c);
+                });
+            });
+        });
+        let _ = s;
+        crate::editor::tabs_begin(ui, ("montagem", kind.clone()));
+    } else {
+        crate::editor::tabs_begin(ui, "montagem_raiz");
+    }
     let before = st.asm.clone();
     let mut resolve = false;
     match sel.and_then(|s| st.asm.nodes.iter().position(|n| n.id == s)) {
@@ -1101,7 +1197,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                 NodeKind::Part { path } => format!("🧩 {}", path),
                 NodeKind::SubAssembly { path } => format!("🗂 {}", path),
             };
-            ui.heading(&n.name);
+            crate::editor::section(ui, "Componente");
             ui.label(RichText::new(kind_txt).weak().small());
             ui.horizontal(|ui| {
                 ui.label(tr("Nome"));
@@ -1142,6 +1238,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                         }
                     }
                 });
+                crate::editor::section(ui, "Movimento");
                 ui.checkbox(&mut st.respect, tr("mover respeitando as restrições"));
                 ui.checkbox(&mut st.stop_collision, tr("parar ao encostar (colisão)"));
                 ui.label(RichText::new(tr("Arraste as setas e quadrados na viewport para mover o componente.")).weak().small());
@@ -1163,7 +1260,11 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                 let pl: std::collections::HashMap<Id, Placement> = st.asm.nodes.iter().map(|n| (n.id, n.placement)).collect();
                 let now = kin::measure(&st.asm.joints[i], &pl);
                 let j = &mut st.asm.joints[i];
-                ui.heading(format!("⚙ {}", j.name));
+                crate::editor::section(ui, "Junta");
+                ui.horizontal(|ui| {
+                    ui.label(tr("Nome"));
+                    ui.text_edit_singleline(&mut j.name);
+                });
                 ui.label(RichText::new(format!("{} · {na} ↔ {nb}", tr(j.kind.label()))).weak());
                 if let Some((ang, len)) = now {
                     ui.label(RichText::new(format!("agora: {}° · {} mm", fmt(ang), fmt(len))).small());
@@ -1220,7 +1321,11 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                 }
             } else if let Some(i) = ci {
                 let c = &mut st.asm.couplings[i];
-                ui.heading(format!("⚭ {}", c.name));
+                crate::editor::section(ui, "Acoplamento");
+                ui.horizontal(|ui| {
+                    ui.label(tr("Nome"));
+                    ui.text_edit_singleline(&mut c.name);
+                });
                 let hint = match c.kind {
                     CouplingKind::Gear => "razão = ângulo da 2ª ÷ ângulo da 1ª (externas: −z1/z2)",
                     CouplingKind::RackPinion => "razão = mm de curso por volta do pinhão (π × diâmetro primitivo)",
@@ -1231,7 +1336,11 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             } else if let Some(i) = pi {
                 let src = st.asm.name_of(st.asm.patterns[i].source);
                 let p = &mut st.asm.patterns[i];
-                ui.heading(format!("⁂ {}", p.name));
+                crate::editor::section(ui, "Padrão");
+                ui.horizontal(|ui| {
+                    ui.label(tr("Nome"));
+                    ui.text_edit_singleline(&mut p.name);
+                });
                 ui.label(RichText::new(format!("{} {src}", tr("Original:"))).weak());
                 let circ = matches!(p.kind, PatternKind::Circular { .. });
                 ui.horizontal(|ui| {
@@ -1270,7 +1379,11 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     let failed = st.report.failed.contains(&st.asm.mates[i].id);
                     let (na, nb) = (st.asm.name_of(st.asm.mates[i].a.comp), st.asm.name_of(st.asm.mates[i].b.comp));
                     let m = &mut st.asm.mates[i];
-                    ui.heading(format!("{} {}", m.kind.icon(), m.name));
+                    crate::editor::section(ui, "Restrição");
+                    ui.horizontal(|ui| {
+                        ui.label(tr("Nome"));
+                        ui.text_edit_singleline(&mut m.name);
+                    });
                     ui.label(RichText::new(format!("{na}  ↔  {nb}")).weak());
                     if failed {
                         ui.label(RichText::new(tr("✖ não satisfeita: conflita com outras restrições ou é impossível")).color(Color32::from_rgb(255, 130, 110)));
@@ -1304,10 +1417,11 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                         }
                         _ => {}
                     }
+                    crate::editor::section(ui, "Estado");
                     ui.checkbox(&mut m.suppressed, tr("suprimida"));
                 }
                 None => {
-                    ui.heading(&st.asm.name);
+                    crate::editor::section(ui, "Montagem");
                     ui.horizontal(|ui| {
                         ui.label(tr("Nome"));
                         ui.text_edit_singleline(&mut st.asm.name);
@@ -1344,6 +1458,32 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         for (a, b, v) in &st.interf {
             ui.label(RichText::new(format!("✖ {} × {} — {} mm³", st.asm.name_of(*a), st.asm.name_of(*b), fmt(*v))).color(Color32::from_rgb(255, 130, 110)));
         }
+    }
+    crate::editor::tabs_end(ui);
+    // barra: concluir (fica), cancelar (volta ao de antes), excluir
+    match (bar, sel) {
+        (Some(0), _) => {
+            st.sel = None;
+            st.edit_snap = None;
+        }
+        (Some(1), _) => {
+            if let Some((_, snap)) = st.edit_snap.take() {
+                if st.asm != snap {
+                    st.undo.push(st.asm.clone());
+                    st.asm = snap;
+                    st.solve();
+                    st.dirty = true;
+                }
+            }
+            st.sel = None;
+            return;
+        }
+        (Some(2), Some(id)) => {
+            st.edit_snap = None;
+            node_action(app, id, 0);
+            return;
+        }
+        _ => {}
     }
     if let Some((ja, jb, k)) = ui.ctx().data(|m| m.get_temp::<(Id, Id, u8)>(egui::Id::unique("asm_acoplar"))) {
         ui.ctx().data_mut(|m| m.remove::<(Id, Id, u8)>(egui::Id::unique("asm_acoplar")));
