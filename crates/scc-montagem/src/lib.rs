@@ -183,11 +183,34 @@ pub enum MateKind {
     Angle(String),
     Parallel,
     Perpendicular,
+    /// engrenagem (ou polia, `belt`): giro de B = razão × giro de A, em torno dos eixos escolhidos.
+    /// `refs` = (direção de referência de A local, a mesma no mundo ao criar, idem de B)
+    Gear {
+        ratio: String,
+        #[serde(default)]
+        belt: bool,
+        #[serde(default)]
+        refs: [V3; 4],
+    },
+    /// pinhão (A, eixo) e cremalheira (B, aresta/eixo): avanço de B = mm por volta × voltas de A.
+    /// `refs` = (referência de A local, no mundo ao criar, ponto de B no mundo ao criar, direção de B local)
+    RackPinion {
+        mm_per_rev: String,
+        #[serde(default)]
+        refs: [V3; 4],
+    },
 }
 
 impl MateKind {
+    /// Restrição de movimento (relaciona giros/avanços, não posições).
+    pub fn is_motion(&self) -> bool {
+        matches!(self, MateKind::Gear { .. } | MateKind::RackPinion { .. })
+    }
     pub fn label(&self) -> &'static str {
         match self {
+            MateKind::Gear { belt: false, .. } => "Engrenagem",
+            MateKind::Gear { belt: true, .. } => "Polia (correia)",
+            MateKind::RackPinion { .. } => "Pinhão e cremalheira",
             MateKind::Coincident { .. } => "Coincidência",
             MateKind::Contact => "Contato",
             MateKind::Distance(_) => "Distância",
@@ -198,6 +221,9 @@ impl MateKind {
     }
     pub fn icon(&self) -> &'static str {
         match self {
+            MateKind::Gear { belt: false, .. } => "⚙",
+            MateKind::Gear { belt: true, .. } => "◎",
+            MateKind::RackPinion { .. } => "⛭",
             MateKind::Coincident { .. } => "◎",
             MateKind::Contact => "⫴",
             MateKind::Distance(_) => "↔",
@@ -217,6 +243,41 @@ pub struct Mate {
     pub b: MateRef,
     #[serde(default)]
     pub suppressed: bool,
+}
+
+/// Qualquer direção perpendicular a `d` (unitária).
+pub fn any_perp(d: V3) -> V3 {
+    let a = if d[0].abs() < 0.9 { [1., 0., 0.] } else { [0., 1., 0.] };
+    unit(cross(d, a))
+}
+
+/// Recurso feito na montagem que muda a forma de peças (associativo: segue as posições).
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct AsmFeature {
+    pub id: Id,
+    pub name: String,
+    pub kind: AsmFeatKind,
+    /// componentes afetados
+    pub targets: Vec<Id>,
+    #[serde(default)]
+    pub suppressed: bool,
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub enum AsmFeatKind {
+    /// recorte pela forma de outro componente (furo do pino, ranhura da aba, encaixe)
+    Cut { tool: Id, #[serde(default)] clearance: String },
+    /// furo atravessando as peças: ponto e direção no mundo, diâmetro e profundidade (vazio = passante)
+    Hole { p: V3, d: V3, dia: String, depth: String },
+}
+
+impl AsmFeatKind {
+    pub fn label(&self) -> &'static str {
+        match self {
+            AsmFeatKind::Cut { .. } => "Recorte pela peça",
+            AsmFeatKind::Hole { .. } => "Furo entre peças",
+        }
+    }
 }
 
 /// Fixação conjunta: as peças se comportam como um corpo rígido único.
@@ -290,6 +351,12 @@ pub struct Assembly {
     /// capturas de vista das anotações deste nível
     #[serde(default)]
     pub pmi_captures: Vec<scc_core::pmi::PmiCapture>,
+    /// recursos entre peças (recortes, furos), refeitos com as posições
+    #[serde(default)]
+    pub features: Vec<AsmFeature>,
+    /// projeto relacional (peças novas fixas, posicionadas por links entre peças) × por restrições
+    #[serde(default)]
+    pub relational: bool,
 }
 
 impl Assembly {
@@ -302,10 +369,100 @@ impl Assembly {
             || self.patterns.iter().any(|p| p.id == id)
             || self.rigid.iter().any(|g| g.id == id)
             || self.pmi.iter().any(|p| p.id == id)
+            || self.features.iter().any(|f| f.id == id)
+    }
+
+    /// Prepara as referências de uma restrição de movimento (engrenagem, cremalheira) com as
+    /// posições atuais: o giro/avanço zero é o de agora.
+    pub fn init_motion(&mut self, id: Id) {
+        let Some(i) = self.mates.iter().position(|m| m.id == id) else { return };
+        let (ra, rb) = (self.mates[i].a, self.mates[i].b);
+        let (Some(pa), Some(pb)) = (self.node(ra.comp).map(|n| n.placement), self.node(rb.comp).map(|n| n.placement)) else { return };
+        let axis = |g: &Geom| match *g {
+            Geom::Axis { p, d } => (p, d),
+            Geom::Plane { p, n } => (p, n),
+            Geom::Point(p) => (p, [0., 0., 1.]),
+        };
+        let (_, da) = axis(&ra.geom);
+        let (ob, db) = axis(&rb.geom);
+        let la = any_perp(unit(da));
+        let lb = any_perp(unit(db));
+        match &mut self.mates[i].kind {
+            MateKind::Gear { refs, .. } => *refs = [la, pa.dir(la), lb, pb.dir(lb)],
+            MateKind::RackPinion { refs, .. } => *refs = [la, pa.dir(la), pb.point(ob), unit(db)],
+            _ => {}
+        }
+    }
+
+    /// Recurso entre peças novo.
+    pub fn add_feature(&mut self, kind: AsmFeatKind, targets: Vec<Id>) -> Id {
+        let id = self.alloc();
+        let n = self.features.len() + 1;
+        self.features.push(AsmFeature { id, name: format!("{} {n}", kind.label()), kind, targets, suppressed: false });
+        id
+    }
+
+    /// Tira os componentes `ids` desta montagem para um subconjunto novo (mesmas posições no
+    /// mundo; o nó do subconjunto fica na origem). Leva as restrições, juntas e fixações entre
+    /// eles; as que ligavam a componentes de fora são apagadas (devolve quantas).
+    pub fn extract_subassembly(&mut self, ids: &[Id], name: &str) -> (Assembly, usize) {
+        let mut sub = Assembly::new(name);
+        let inside = |c: Id| ids.contains(&c);
+        let mut map: HashMap<Id, Id> = HashMap::new();
+        for n in self.nodes.iter().filter(|n| inside(n.id) && !matches!(n.kind, NodeKind::Group)) {
+            let nid = sub.add_component(&n.name, n.kind.clone(), n.placement, None);
+            if let Some(x) = sub.node_mut(nid) {
+                x.fixed = n.fixed;
+                x.color = n.color;
+                x.mode = n.mode;
+                x.visible = n.visible;
+            }
+            map.insert(n.id, nid);
+        }
+        let mut dropped = 0;
+        for m in &self.mates {
+            match (map.get(&m.a.comp), map.get(&m.b.comp)) {
+                (Some(a), Some(b)) => {
+                    let id = sub.alloc();
+                    sub.mates.push(Mate { id, name: m.name.clone(), kind: m.kind.clone(), a: MateRef { comp: *a, ..m.a }, b: MateRef { comp: *b, ..m.b }, suppressed: m.suppressed });
+                }
+                (None, None) => {}
+                _ => dropped += 1,
+            }
+        }
+        for j in &self.joints {
+            if let (Some(a), Some(b)) = (map.get(&j.a.comp), map.get(&j.b.comp)) {
+                let mut nj = j.clone();
+                nj.id = sub.alloc();
+                nj.a.comp = *a;
+                nj.b.comp = *b;
+                sub.joints.push(nj);
+            } else if inside(j.a.comp) || inside(j.b.comp) {
+                dropped += 1;
+            }
+        }
+        for g in &self.rigid {
+            let comps: Vec<Id> = g.comps.iter().filter_map(|c| map.get(c).copied()).collect();
+            if comps.len() >= 2 {
+                sub.add_rigid(comps);
+            }
+        }
+        // a montagem perde os componentes e o que os ligava
+        self.mates.retain(|m| !inside(m.a.comp) && !inside(m.b.comp));
+        self.joints.retain(|j| !inside(j.a.comp) && !inside(j.b.comp));
+        let jids: Vec<Id> = self.joints.iter().map(|j| j.id).collect();
+        self.couplings.retain(|c| jids.contains(&c.a) && jids.contains(&c.b));
+        for g in &mut self.rigid {
+            g.comps.retain(|c| !inside(*c));
+        }
+        self.rigid.retain(|g| g.comps.len() >= 2);
+        self.features.retain(|f| !f.targets.iter().any(|t| inside(*t)));
+        self.nodes.retain(|n| !inside(n.id));
+        (sub, dropped)
     }
 
     pub fn new(name: &str) -> Self {
-        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], pmi: vec![], items: vec![], pmi_captures: vec![] }
+        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], relational: false }
     }
 
     pub fn alloc(&mut self) -> Id {
@@ -459,6 +616,10 @@ impl Assembly {
 
     /// Apaga um nó (filhos sobem um nível) ou uma restrição; restrições do componente vão junto.
     pub fn delete(&mut self, id: Id) {
+        self.features.retain(|f| f.id != id && !matches!(f.kind, AsmFeatKind::Cut { tool, .. } if tool == id));
+        for f in &mut self.features {
+            f.targets.retain(|t| *t != id);
+        }
         let parent = self.node(id).and_then(|n| n.parent);
         for n in self.nodes.iter_mut().filter(|n| n.parent == Some(id)) {
             n.parent = parent;

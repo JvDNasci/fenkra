@@ -181,7 +181,25 @@ pub enum LinkedGeo {
     Surface(String),
 }
 
+/// Mudança de sistema (peça de origem → peça que importa): origem e colunas dos eixos.
+pub type LinkXf = [[f64; 3]; 4];
+
 impl LinkedGeo {
+    /// A geometria levada por `xf` (o valor e a superfície B-rep ficam como estão).
+    pub fn transformed(&self, xf: &LinkXf) -> LinkedGeo {
+        let d = |v: [f64; 3]| [0, 1, 2].map(|i| xf[1][i] * v[0] + xf[2][i] * v[1] + xf[3][i] * v[2]);
+        let p = |v: [f64; 3]| {
+            let q = d(v);
+            [0, 1, 2].map(|i| xf[0][i] + q[i])
+        };
+        match self {
+            LinkedGeo::Plane { origin, x, normal } => LinkedGeo::Plane { origin: p(*origin), x: d(*x), normal: d(*normal) },
+            LinkedGeo::Point(q) => LinkedGeo::Point(p(*q)),
+            LinkedGeo::Curve(v) => LinkedGeo::Curve(v.iter().map(|q| p(*q)).collect()),
+            g => g.clone(),
+        }
+    }
+
     pub fn class(&self) -> RefClass {
         match self {
             LinkedGeo::Plane { .. } => RefClass::Plane,
@@ -445,6 +463,9 @@ pub struct ExternalRef {
     /// elemento ou parâmetro desta peça que recebe a cópia
     #[serde(default)]
     pub target: Option<Id>,
+    /// posição da origem em relação a esta peça (link feito na montagem)
+    #[serde(default)]
+    pub xform: Option<LinkXf>,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -2738,7 +2759,18 @@ impl Document {
             path: path.into(),
             snapshot: Some(geo),
             target: Some(target),
+            xform: None,
         });
+        target
+    }
+
+    /// Link feito no contexto da montagem: a geometria da origem vem para o sistema desta peça
+    /// por `xf` (refeito a cada atualização).
+    pub fn add_link_xf(&mut self, source: &str, path: &str, publication: &str, geo: LinkedGeo, xf: LinkXf) -> Id {
+        let target = self.add_link(source, path, publication, geo.transformed(&xf));
+        if let Some(e) = self.external.last_mut() {
+            e.xform = Some(xf);
+        }
         target
     }
 
@@ -2751,6 +2783,10 @@ impl Document {
         let Some(g) = geo else {
             e.state = LinkState::Quebrado;
             return;
+        };
+        let g = match &e.xform {
+            Some(x) => g.transformed(x),
+            None => g,
         };
         e.state = LinkState::Ativo;
         let target = e.target;

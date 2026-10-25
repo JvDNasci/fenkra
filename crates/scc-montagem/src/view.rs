@@ -101,12 +101,27 @@ pub fn compose(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, errors: 
     doc.collectors.clear();
     doc.origin_visible = true;
     let mut bodies = vec![];
+    let changed = featured(a);
     for n in a.nodes.iter().filter(|n| !matches!(n.kind, NodeKind::Group)) {
         let with_shape = n.mode == LoadMode::Editavel;
         let visible = shown(a, n.id);
         // carregamento seletivo: componentes ocultos no modo visualização nem são lidos
         if !visible && n.mode == LoadMode::Visualizacao {
             continue;
+        }
+        let cut = (visible && changed.contains(&n.id)).then(|| placed_shape(a, n.id, dir, cache)).flatten();
+        if let Some(sh) = cut {
+            // já no mundo: a malha da forma recortada não leva a posição de novo
+            let size = sh.bbox().map(|(l, h)| norm(sub(h, l))).unwrap_or(100.);
+            if let Ok(m) = sh.mesh((size * 1e-3).max(0.01)) {
+                let color = n.color.unwrap_or_else(|| comp_mesh(&n.kind, dir, cache, false, 0).map(|x| x.1).unwrap_or([180, 190, 200]));
+                let label = if n.number > 0 { format!("{} · {}", n.number, n.name) } else { n.name.clone() };
+                doc.collectors.push(BodyCollector { id: n.id, name: label, color, visible, finish: Finish::default(), texture: None, marker: None, published: false });
+                let nf = m.face_ranges.len();
+                let vol = sh.mass().volume;
+                bodies.push(BodyResult { collector: n.id, color, mesh: m, mass: scc_kernel::MassProps { volume: vol, area: 0., center: n.placement.origin }, faces: nf as u32, face_owner: vec![n.id; nf] });
+                continue;
+            }
         }
         match comp_mesh(&n.kind, dir, cache, with_shape, 0) {
             Ok((m, color, vol)) => {
@@ -145,8 +160,77 @@ pub fn compose(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, errors: 
     (doc, r)
 }
 
-/// Forma do componente posicionada no mundo (peças no modo editável).
+/// Forma do componente posicionada no mundo, com os recursos entre peças que o atingem.
 pub fn placed_shape(a: &Assembly, id: Id, dir: Option<&Path>, cache: &mut PartCache) -> Option<Shape> {
+    let raw = raw_shape(a, id, dir, cache)?;
+    Some(apply_features(a, id, raw, dir, cache))
+}
+
+/// Componentes que algum recurso entre peças muda.
+pub fn featured(a: &Assembly) -> Vec<Id> {
+    a.features.iter().filter(|f| !f.suppressed).flat_map(|f| f.targets.iter().copied()).collect()
+}
+
+/// Aplica os recursos entre peças (no mundo) à forma do componente `id`.
+fn apply_features(a: &Assembly, id: Id, mut sh: Shape, dir: Option<&Path>, cache: &mut PartCache) -> Shape {
+    let vars = a.vars();
+    let num = |e: &str| scc_core::expr::eval_str(e, &vars).ok();
+    for f in a.features.iter().filter(|f| !f.suppressed && f.targets.contains(&id)) {
+        let tool = match &f.kind {
+            AsmFeatKind::Cut { tool, .. } => {
+                if *tool == id {
+                    continue;
+                }
+                raw_shape(a, *tool, dir, cache)
+            }
+            AsmFeatKind::Hole { p, d, dia, depth } => {
+                let r = num(dia).unwrap_or(5.) / 2.;
+                let big = sh.bbox().map(|(l, h)| norm(sub(h, l)) * 2. + 10.).unwrap_or(1000.);
+                let len = num(depth).filter(|v| *v > 0.).unwrap_or(big);
+                let d = unit(*d);
+                let u = any_perp(d);
+                let w = cross(d, u);
+                // um pouco antes da face, para cortar limpo
+                let o = [0, 1, 2].map(|i| p[i] - d[i] * 0.05);
+                let circle: Vec<V3> = (0..64)
+                    .map(|k| {
+                        let t = k as f64 / 64. * std::f64::consts::TAU;
+                        [0, 1, 2].map(|i| o[i] + (u[i] * t.cos() + w[i] * t.sin()) * r)
+                    })
+                    .collect();
+                Shape::poly_prism(&circle, [d[0] * (len + 0.05), d[1] * (len + 0.05), d[2] * (len + 0.05)]).ok()
+            }
+        };
+        if let Some(t) = tool {
+            if let Ok(x) = sh.boolean(&t, Bool::Cut) {
+                sh = x;
+            }
+        }
+    }
+    sh
+}
+
+/// O componente encosta (volume comum) em algum outro visível?
+pub fn collides(a: &Assembly, id: Id, dir: Option<&Path>, cache: &mut PartCache, tol: f64) -> bool {
+    let Some(me) = placed_shape(a, id, dir, cache) else { return false };
+    let Some((la, ha)) = me.bbox() else { return false };
+    let others: Vec<Id> = a.nodes.iter().filter(|n| n.id != id && matches!(n.kind, NodeKind::Part { .. }) && n.mode == LoadMode::Editavel && shown(a, n.id)).map(|n| n.id).collect();
+    for o in others {
+        let Some(sh) = placed_shape(a, o, dir, cache) else { continue };
+        if let Some((lb, hb)) = sh.bbox() {
+            if (0..3).any(|k| ha[k] < lb[k] || hb[k] < la[k]) {
+                continue;
+            }
+        }
+        if me.boolean(&sh, Bool::Common).is_ok_and(|c| c.mass().volume > tol) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Forma do componente posicionada no mundo (peças no modo editável), sem recursos.
+fn raw_shape(a: &Assembly, id: Id, dir: Option<&Path>, cache: &mut PartCache) -> Option<Shape> {
     let n = a.node(id)?;
     let NodeKind::Part { path } = &n.kind else { return None };
     let sh = cache.get(&full_path(dir, path), true).ok()?.shape.clone()?;
@@ -232,6 +316,23 @@ mod tests {
         assert!(rep.converged, "{rep:?}");
         let z = a.node(p2).unwrap().placement.origin[2];
         assert!((z - (lo[2] - hi[2])).abs() < 1e-6, "placa 2 embaixo da 1: {z}");
+        // furo entre peças atravessando as duas placas (associativo: segue as posições)
+        a.node_mut(p2).unwrap().placement.origin = [0., 0., z];
+        let v0 = placed_shape(&a, p1, Some(&dir), &mut cache).unwrap().mass().volume;
+        let top_w = a.node(p1).unwrap().placement.point(c);
+        a.add_feature(AsmFeatKind::Hole { p: top_w, d: [0., 0., -1.], dia: "6".into(), depth: String::new() }, vec![p1, p2]);
+        let v1 = placed_shape(&a, p1, Some(&dir), &mut cache).unwrap().mass().volume;
+        let v2 = placed_shape(&a, p2, Some(&dir), &mut cache).unwrap().mass().volume;
+        let cyl = std::f64::consts::PI * 9. * (hi[2] - lo[2]);
+        assert!((v0 - v1 - cyl).abs() < cyl * 0.05, "furo na placa 1: {v0} {v1} {cyl}");
+        assert!((v0 - v2 - cyl).abs() < cyl * 0.05, "furo na placa 2: {v2}");
+        let (_, r2) = compose(&a, Some(&dir), &mut cache, &mut errs);
+        assert_eq!(r2.bodies.len(), 2);
+        // subconjunto com a placa 2: a restrição que ligava à placa 1 cai
+        let (sub, dropped) = a.extract_subassembly(&[p2], "Sub");
+        assert_eq!(sub.nodes.len(), 1);
+        assert_eq!(dropped, 1);
+        assert!(a.mates.is_empty() && a.features.iter().all(|f| !f.targets.contains(&p2)));
         let _ = p1;
     }
 }

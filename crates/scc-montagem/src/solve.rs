@@ -191,13 +191,62 @@ fn place(b: &Bodies, a: &Assembly, x: &[f64]) -> HashMap<Id, Placement> {
     out
 }
 
+fn wrap180(a: f64) -> f64 {
+    let mut a = a % 360.;
+    if a > 180. {
+        a -= 360.;
+    }
+    if a <= -180. {
+        a += 360.;
+    }
+    a
+}
+
+/// Giro (graus) de um componente em torno de `axis` (mundo), medido pela direção de referência
+/// local `l` em relação à mesma direção no mundo na criação (`r0`).
+fn turn(l: V3, r0: V3, p: &Placement, axis: V3) -> f64 {
+    let c = p.dir(l);
+    dot(cross(r0, c), axis).atan2(dot(r0, c)).to_degrees()
+}
+
+/// Direção do eixo/normal de uma geometria no mundo.
+fn axis_dir(w: World) -> V3 {
+    match w {
+        World::Axis(_, d) | World::Plane(_, d) => d,
+        World::Point(_) => [0., 0., 1.],
+    }
+}
+
 fn all_residuals(a: &Assembly, pl: &HashMap<Id, Placement>, vars: &HashMap<String, f64>, drives: bool, per: &mut Vec<(Id, usize, usize)>) -> Vec<f64> {
     let mut r = vec![];
     per.clear();
+    let num = |e: &String| expr::eval_str(e, vars).unwrap_or(0.);
     for m in a.mates.iter().filter(|m| !m.suppressed) {
         let (Some(pa), Some(pb)) = (pl.get(&m.a.comp), pl.get(&m.b.comp)) else { continue };
         let s = r.len();
-        residuals(&m.kind, world(&m.a.geom, pa), world(&m.b.geom, pb), vars, &mut r);
+        let (wa, wb) = (world(&m.a.geom, pa), world(&m.b.geom, pb));
+        match &m.kind {
+            // engrenagem/polia: giro de B = razão × giro de A
+            MateKind::Gear { ratio, refs, .. } => {
+                if refs[0] != [0.; 3] {
+                    let ga = turn(refs[0], refs[1], pa, axis_dir(wa));
+                    let gb = turn(refs[2], refs[3], pb, axis_dir(wb));
+                    r.push(wrap180(gb - num(ratio) * ga) / 10.);
+                }
+            }
+            // cremalheira: avanço de B ao longo da direção dela = mm por volta × voltas de A
+            MateKind::RackPinion { mm_per_rev, refs } => {
+                if refs[0] != [0.; 3] {
+                    let ga = turn(refs[0], refs[1], pa, axis_dir(wa));
+                    let o = match m.b.geom {
+                        Geom::Axis { p, .. } | Geom::Plane { p, .. } | Geom::Point(p) => p,
+                    };
+                    let adv = dot(sub(pb.point(o), refs[2]), pb.dir(refs[3]));
+                    r.push(adv - num(mm_per_rev) * ga / 360.);
+                }
+            }
+            k => residuals(k, wa, wb, vars, &mut r),
+        }
         per.push((m.id, s, r.len()));
     }
     crate::kin::residuals(a, pl, vars, drives, &mut r, per);
@@ -209,8 +258,68 @@ pub fn solve(a: &mut Assembly) -> SolveReport {
     solve_with(a, &HashMap::new())
 }
 
+/// Restrições de orientação viradas ao contrário (ex.: depois de "inverter"): o LM parte de um
+/// ponto em que o gradiente da direção é zero e não sai do lugar. Meia volta antes de resolver.
+fn seed_flips(a: &mut Assembly) {
+    let fixed_of = |a: &Assembly, c: Id| {
+        a.node(c).is_none_or(|n| n.fixed) || a.rigid.iter().any(|g| g.comps.contains(&c) && g.comps.iter().any(|x| a.node(*x).is_some_and(|n| n.fixed)))
+    };
+    for i in 0..a.mates.len() {
+        let m = a.mates[i].clone();
+        if m.suppressed {
+            continue;
+        }
+        let s = match (&m.kind, m.a.geom, m.b.geom) {
+            (MateKind::Coincident { flip }, Geom::Plane { .. }, Geom::Plane { .. }) | (MateKind::Coincident { flip }, Geom::Axis { .. }, Geom::Axis { .. }) => {
+                if *flip {
+                    -1.
+                } else {
+                    1.
+                }
+            }
+            (MateKind::Contact, Geom::Plane { .. }, Geom::Plane { .. }) => -1.,
+            _ => continue,
+        };
+        let (Some(pa), Some(pb)) = (a.node(m.a.comp).map(|n| n.placement), a.node(m.b.comp).map(|n| n.placement)) else { continue };
+        let (wa, wb) = (world(&m.a.geom, &pa), world(&m.b.geom, &pb));
+        let (da, db) = (axis_dir(wa), axis_dir(wb));
+        if dot(da, db) * s > -0.2 {
+            continue;
+        }
+        let pt = |w: World| match w {
+            World::Axis(p, _) | World::Plane(p, _) | World::Point(p) => p,
+        };
+        let (comp, d, o) = if !fixed_of(a, m.b.comp) {
+            (m.b.comp, db, pt(wb))
+        } else if !fixed_of(a, m.a.comp) {
+            (m.a.comp, da, pt(wa))
+        } else {
+            continue;
+        };
+        let u = any_perp(d);
+        let w = [u[0] * std::f64::consts::PI, u[1] * std::f64::consts::PI, u[2] * std::f64::consts::PI];
+        let group: Vec<Id> = a.rigid.iter().find(|g| g.comps.contains(&comp)).map(|g| g.comps.clone()).unwrap_or_else(|| vec![comp]);
+        for c in group {
+            if let Some(n) = a.node_mut(c) {
+                n.placement = n.placement.moved([0.; 3], w, o);
+            }
+        }
+    }
+}
+
 /// Resolve com variáveis extras (ex.: `t` da simulação).
 pub fn solve_with(a: &mut Assembly, extra: &HashMap<String, f64>) -> SolveReport {
+    solve_inner(a, extra, None)
+}
+
+/// Resolve puxando o componente `id` para `target` (peso pequeno): é o arraste que respeita as
+/// restrições — o que elas permitem acompanha o mouse, o resto fica.
+pub fn solve_toward(a: &mut Assembly, id: Id, target: Placement, weight: f64) -> SolveReport {
+    solve_inner(a, &HashMap::new(), Some((id, target, weight)))
+}
+
+fn solve_inner(a: &mut Assembly, extra: &HashMap<String, f64>, pull: Option<(Id, Placement, f64)>) -> SolveReport {
+    seed_flips(a);
     let b = bodies(a);
     let n = 6 * b.rel.len();
     let mut vars = a.vars();
@@ -218,7 +327,20 @@ pub fn solve_with(a: &mut Assembly, extra: &HashMap<String, f64>) -> SolveReport
     vars.entry("t".into()).or_insert(0.);
     let mut x = vec![0.; n];
     let mut per = vec![];
-    let res = |x: &[f64], per: &mut Vec<(Id, usize, usize)>| all_residuals(a, &place(&b, a, x), &vars, true, per);
+    let res = |x: &[f64], per: &mut Vec<(Id, usize, usize)>| {
+        let pl = place(&b, a, x);
+        let mut r = all_residuals(a, &pl, &vars, true, per);
+        if let Some((id, t, w)) = pull {
+            if let Some(p) = pl.get(&id) {
+                r.extend((0..3).map(|i| (p.origin[i] - t.origin[i]) * w));
+                for e in [[1., 0., 0.], [0., 1., 0.]] {
+                    let (u, v) = (p.dir(e), t.dir(e));
+                    r.extend((0..3).map(|i| (u[i] - v[i]) * w * 20.));
+                }
+            }
+        }
+        r
+    };
     let mut r = res(&x, &mut per);
     let cost = |r: &[f64]| r.iter().map(|v| v * v).sum::<f64>();
     let mut c = cost(&r);
@@ -282,6 +404,7 @@ pub fn solve_with(a: &mut Assembly, extra: &HashMap<String, f64>) -> SolveReport
     let pl = place(&b, a, &x);
     let mut failed = vec![];
     let r2 = all_residuals(a, &pl, &vars, true, &mut per);
+    let _ = &res;
     for (id, s, e) in &per {
         if r2[*s..*e].iter().any(|v| v.abs() > 1e-6) {
             failed.push(*id);
@@ -296,6 +419,39 @@ pub fn solve_with(a: &mut Assembly, extra: &HashMap<String, f64>) -> SolveReport
     // as repetições acompanham os originais nas posições novas
     a.update_patterns();
     SolveReport { residual: c.sqrt(), iterations: it, dof: n.saturating_sub(rank), failed: failed.clone(), converged: failed.is_empty() }
+}
+
+/// Graus de liberdade de cada componente (os outros parados): 0 = totalmente definido, 6 = solto.
+/// Componentes fixos ficam com 0.
+pub fn dof_per_comp(a: &Assembly) -> HashMap<Id, usize> {
+    let b = bodies(a);
+    let n = 6 * b.rel.len();
+    let mut out: HashMap<Id, usize> = a.nodes.iter().filter(|n| !matches!(n.kind, NodeKind::Group)).map(|n| (n.id, 0)).collect();
+    if n == 0 {
+        return out;
+    }
+    let mut vars = a.vars();
+    vars.entry("t".into()).or_insert(0.);
+    let mut per = vec![];
+    let res = |x: &[f64], per: &mut Vec<(Id, usize, usize)>| all_residuals(a, &place(&b, a, x), &vars, true, per);
+    let x = vec![0.; n];
+    let r = res(&x, &mut per);
+    let j = if r.is_empty() { vec![] } else { jacobian(&res, &x, &r) };
+    let m = r.len();
+    for (k, comps) in b.rel.iter().enumerate() {
+        // só as 6 colunas deste corpo
+        let mut sub = vec![0.; m * 6];
+        for row in 0..m {
+            for c in 0..6 {
+                sub[row * 6 + c] = j[row * n + 6 * k + c];
+            }
+        }
+        let free = 6 - if m == 0 { 0 } else { matrix_rank(&sub, m, 6) };
+        for (c, _) in comps {
+            out.insert(*c, free);
+        }
+    }
+    out
 }
 
 /// Graus de liberdade restantes sem mexer em nada.
@@ -478,6 +634,54 @@ mod tests {
         a.add_mate(MateKind::Distance("5".into()), MateRef { comp: c1, geom: topo(), pick: None }, MateRef { comp: c2, geom: Geom::Plane { p: [5., 5., 0.], n: [0., 0., 1.] }, pick: None });
         let rep = solve(&mut a);
         assert!(!rep.converged && !rep.failed.is_empty(), "{rep:?}");
+    }
+
+    #[test]
+    fn engrenagem_inverter_e_gdl_por_peca() {
+        let mut a = Assembly::new("engrenagens");
+        let base = cubo(&mut a, "Base", [0.; 3]);
+        a.node_mut(base).unwrap().fixed = true;
+        let g1 = cubo(&mut a, "G1", [0.; 3]);
+        let g2 = cubo(&mut a, "G2", [30., 0., 0.]);
+        // cada engrenagem gira no seu eixo z (fixo na base)
+        let ax1 = Geom::Axis { p: [0., 0., 0.], d: [0., 0., 1.] };
+        let ax2 = Geom::Axis { p: [30., 0., 0.], d: [0., 0., 1.] };
+        let own = Geom::Axis { p: [0., 0., 0.], d: [0., 0., 1.] };
+        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: base, geom: ax1, pick: None }, MateRef { comp: g1, geom: own, pick: None });
+        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: base, geom: ax2, pick: None }, MateRef { comp: g2, geom: own, pick: None });
+        let z0 = Geom::Plane { p: [0., 0., 0.], n: [0., 0., 1.] };
+        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: base, geom: z0, pick: None }, MateRef { comp: g1, geom: z0, pick: None });
+        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: base, geom: z0, pick: None }, MateRef { comp: g2, geom: z0, pick: None });
+        assert!(solve(&mut a).converged);
+        let dofs = dof_per_comp(&a);
+        assert_eq!(dofs[&g1], 1, "só gira");
+        assert_eq!(dofs[&base], 0);
+        // engrenagem 1:−2 (G2 gira metade, ao contrário)
+        let gid = a.add_mate(MateKind::Gear { ratio: "-0.5".into(), belt: false, refs: [[0.; 3]; 4] }, MateRef { comp: g1, geom: own, pick: None }, MateRef { comp: g2, geom: own, pick: None });
+        a.init_motion(gid);
+        // gira G1 40° e resolve puxando G1 para lá
+        let p1 = a.node(g1).unwrap().placement;
+        let target = p1.moved([0.; 3], [0., 0., 40f64.to_radians()], [0.; 3]);
+        solve_toward(&mut a, g1, target, 0.05);
+        let ang = |p: &Placement| p.dir([1., 0., 0.])[1].atan2(p.dir([1., 0., 0.])[0]).to_degrees();
+        let (t1, t2) = (ang(&a.node(g1).unwrap().placement), ang(&a.node(g2).unwrap().placement));
+        assert!(t1 > 10., "G1 girou: {t1}");
+        assert!((t2 + 0.5 * t1).abs() < 0.5, "G2 = −G1/2: {t1} {t2}");
+        // inverter a coincidência dos planos: a peça vira de verdade
+        let flip = a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: base, geom: Geom::Plane { p: [0., 0., 0.], n: [1., 0., 0.] }, pick: None }, MateRef { comp: g2, geom: Geom::Plane { p: [0., 0., 0.], n: [1., 0., 0.] }, pick: None });
+        let _ = flip;
+        let mut b = Assembly::new("virar");
+        let f = cubo(&mut b, "F", [0.; 3]);
+        b.node_mut(f).unwrap().fixed = true;
+        let c = cubo(&mut b, "C", [20., 0., 0.]);
+        let m = b.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: f, geom: topo(), pick: None }, MateRef { comp: c, geom: topo(), pick: None });
+        assert!(solve(&mut b).converged);
+        if let MateKind::Coincident { flip } = &mut b.mates.iter_mut().find(|x| x.id == m).unwrap().kind {
+            *flip = true;
+        }
+        let rep = solve(&mut b);
+        assert!(rep.converged, "inverteu: {rep:?}");
+        assert!(b.node(c).unwrap().placement.dir([0., 0., 1.])[2] < -0.99);
     }
 
     #[test]
