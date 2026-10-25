@@ -353,6 +353,8 @@ pub struct Settings {
     pub menu_theme: u8,
     /// estilo geral das anotações 3D (o que cada anotação deixa em "padrão")
     pub pmi_style: scc_core::pmi::PmiStyle,
+    /// furos flangeados cadastrados pelo usuário (nome, diâmetro, altura do colar)
+    pub flanged_holes: Vec<(String, f64, f64)>,
     /// última macro escrita na janela de automação
     pub macro_src: String,
 }
@@ -428,6 +430,7 @@ impl Default for Settings {
             user_colors: vec![],
             menu_theme: 1,
             pmi_style: Default::default(),
+            flanged_holes: vec![],
         }
     }
 }

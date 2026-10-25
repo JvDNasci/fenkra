@@ -277,8 +277,15 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("sm_furo_flangeado", "Furo flangeado", "Furo flangeado", "Furo com colar dobrado nos pontos do sketch (rigidez).", Cmd(C::SmFlangedHole)),
                 it("sm_veneziana", "Veneziana", "Veneziana (lanceta)", "Escolha dois vértices na face: corte nessa linha e a chapa atrás levantada em rampa (ventilação).", Cmd(C::SmLouver)),
             ]),
+            Family("sm_recorte", vec![
+                it("sm_recorte", "Recorte", "Recorte na chapa", "Perfil fechado do sketch, normal à chapa: normal, com folga, com saída (ângulo) ou flangeado (colar).", Cmd(C::SmCut)),
+                it("sm_alivio_canto", "Alívio de canto", "Alívio de canto", "Clique no canto (vértice): redondo, quadrado ou em gota, atravessando a chapa.", Cmd(C::SmCornerRelief)),
+            ]),
+            Family("sm_aba_perfil", vec![
+                it("sm_aba_perfil", "Aba por perfil", "Aba por perfil (aba complexa)", "Cadeia aberta de um sketch (linhas e arcos) com os cantos no raio da chapa, puxada para os dois lados.", Cmd(C::SmProfileFlange)),
+                it("sm_aba_curva", "Aba curva", "Aba em aresta curva", "Clique numa aresta curva da chapa: parede normal à chapa ao longo dela.", Cmd(C::SmCurveFlange)),
+            ]),
             One(it("sm_desdobrar", "Dobrar/Desdobrar", "Dobrar / desdobrar", "Alterna a peça entre dobrada e planificada (comprimento desenvolvido pelo fator K).", Cmd(C::SmUnfold))),
-            One(it("recorte", "Recorte", "Recorte na chapa", "Recorte passante a partir do sketch (compatível com a planificação).", Cmd(C::Cut))),
         ],
         Group::DesArquivo => vec![
             One(it("des_novo", "Novo", "Novo desenho", "Folha A3 vazia; a origem das vistas é a peça ou montagem aberta (salva).", Cmd(C::Dwg(0)))),

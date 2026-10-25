@@ -8,7 +8,7 @@ Status: [ ] a fazer Â· [~] parcial Â· [x] feito
 - [x] A3 Duplo clique em qualquer elemento no 3D abre a ediÃ§Ã£o
 - [x] A4 Orbitar com centro definido pelo usuÃ¡rio (clique define o centro)
 - [x] A5 Roda do mouse sobre campos numÃ©ricos aumenta/diminui o valor
-- [~] A6 Roda do mouse rola a barra de comandos e a Ã¡rvore
+- [x] A6 Roda do mouse rola a barra de comandos e a Ã¡rvore
 - [x] A7 Shift/Ctrl/Alt na Ã¡rvore (multisseleÃ§Ã£o)
 - [x] A8 Menu de seleÃ§Ã£o: caixa janela/cruzada (dentro, parcialmente), com Ctrl
 - [x] A9 Recurso em ediÃ§Ã£o: entradas escolhidas brilham e tÃªm rÃ³tulo 3D ("Perfil", "Guia"â€¦)
@@ -40,18 +40,18 @@ Status: [ ] a fazer Â· [~] parcial Â· [x] feito
 - [x] C8 Dividir com planos, superfÃ­cies e wireframe
 
 ## D. Chapa metÃ¡lica
-- [ ] D1 ParÃ¢metros: material, mÃ©todo de compensaÃ§Ã£o, tabelas (raio mÃ­nimo, K, joggle) â€” tabela de materiais pesquisada
-- [ ] D2 Parede base de sketch com offset/lado do material; parede de superfÃ­cie com setas
-- [ ] D3 Aba complexa (recurso base, plano/superfÃ­cie, compasso 3D, direÃ§Ãµes, limite EOP, sides 1/2, raio por side)
-- [ ] D4 Abas por superfÃ­cie (curvas) e interseÃ§Ã£o entre abas
-- [ ] D5 Joggle: Ã¢ngulo, por superfÃ­cie, compensaÃ§Ã£o
-- [ ] D6 Aba: tipo de alÃ­vio, lado do material; bainha aberta/fechada/gota; aba por sketch
-- [ ] D7 Recortes (normal, com saÃ­da, offset), furo, recorte flangeado
-- [ ] D8 Estampos: nervura (bead), circular, por superfÃ­cie, por curva, reforÃ§o, punÃ§Ã£o e matriz
-- [ ] D9 AlÃ­vios de canto (redondo, quadrado, gota)
-- [ ] D10 PadrÃµes na chapa
-- [ ] D11 Desdobrar mostrando OML/linhas de dobra
-- [ ] D12 Setas 3D na chapa; furo flangeado com seleÃ§Ã£o como furo e tabela cadastrÃ¡vel
+- [x] D1 ParÃ¢metros: material, mÃ©todo de compensaÃ§Ã£o, tabelas (raio mÃ­nimo, K, joggle) â€” tabela de materiais pesquisada
+- [x] D2 Parede base de sketch com offset/lado do material; parede de superfÃ­cie com setas
+- [x] D3 Aba complexa (recurso base, plano/superfÃ­cie, compasso 3D, direÃ§Ãµes, limite EOP, sides 1/2, raio por side)
+- [x] D4 Abas por superfÃ­cie (curvas) e interseÃ§Ã£o entre abas
+- [x] D5 Joggle: Ã¢ngulo, por superfÃ­cie, compensaÃ§Ã£o
+- [x] D6 Aba: tipo de alÃ­vio, lado do material; bainha aberta/fechada/gota; aba por sketch
+- [x] D7 Recortes (normal, com saÃ­da, offset), furo, recorte flangeado
+- [x] D8 Estampos: nervura (bead), circular, por superfÃ­cie, por curva, reforÃ§o, punÃ§Ã£o e matriz
+- [x] D9 AlÃ­vios de canto (redondo, quadrado, gota)
+- [x] D10 PadrÃµes na chapa
+- [x] D11 Desdobrar mostrando OML/linhas de dobra
+- [x] D12 Setas 3D na chapa; furo flangeado com seleÃ§Ã£o como furo e tabela cadastrÃ¡vel
 
 ## E. Estrutural
 - [x] E1 Menu de operaÃ§Ãµes de canto por par de membros (membro 1 / membro 2)

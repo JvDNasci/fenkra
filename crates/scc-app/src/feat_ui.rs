@@ -21,7 +21,8 @@ pub fn is_shape(k: &FeatureKind) -> bool {
 
 /// Comandos em que clicar numa face na viewport (com o comando aberto) acrescenta a face.
 pub fn wants_faces(k: &FeatureKind) -> bool {
-    matches!(k, FeatureKind::Shell(_) | FeatureKind::Draft(_) | FeatureKind::Thickness(_) | FeatureKind::Thread(_))
+    matches!(k, FeatureKind::Shell(_) | FeatureKind::Draft(_) | FeatureKind::Thickness(_) | FeatureKind::Thread(_) | FeatureKind::SmCornerRelief(_))
+        || matches!(k, FeatureKind::SmFlangedHole(h) if crate::slots::is_unset(h.sketch) || !h.points.is_empty())
         || matches!(k, FeatureKind::Fillet(o) if matches!(o.mode, EdgeMode::FaceFace(..) | EdgeMode::FullRound { .. }))
 }
 
@@ -32,6 +33,8 @@ pub fn add_face(k: &mut FeatureKind, p: [f64; 3]) {
         FeatureKind::Draft(d) => d.faces.push(p),
         FeatureKind::Thickness(t) => t.faces.push(p),
         FeatureKind::Thread(t) => t.face = p,
+        FeatureKind::SmFlangedHole(h) => h.points.push(p),
+        FeatureKind::SmCornerRelief(c) => c.at = p,
         // face-face: as duas últimas faces clicadas; completo: meio, lado 1, lado 2 (na ordem do clique)
         FeatureKind::Fillet(o) => match &mut o.mode {
             EdgeMode::FaceFace(a, b) => {
@@ -429,8 +432,27 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         }
         FeatureKind::SmWall(w) => {
             section(ui, "Parede base");
-            sketch_pick(ui, "smw_sk", "Perfil", doc, idx, &mut w.sketch);
+            let mut from_surf = w.surface.is_some();
+            ui.horizontal(|ui| {
+                if ui.selectable_label(!from_surf, tr("de sketch")).clicked() {
+                    from_surf = false;
+                }
+                if ui.selectable_label(from_surf, tr("de superfície")).clicked() {
+                    from_surf = true;
+                }
+            });
+            if from_surf != w.surface.is_some() {
+                w.surface = from_surf.then(|| seed.surface.unwrap_or(SurfRef::Plane(PlaneRef::Origin(OriginPlane::XY))));
+            }
+            match &mut w.surface {
+                Some(sf) => crate::geo_ui::surf_slot(ui, "smw_sup", "Superfície", doc, me, sf, seed),
+                None => {
+                    sketch_pick(ui, "smw_sk", "Perfil", doc, idx, &mut w.sketch);
+                    expr(ui, "Afastamento do plano", &mut w.offset, vars, "mm");
+                }
+            }
             ui.checkbox(&mut w.reverse, tr("espessura para o outro lado"));
+            ui.checkbox(&mut w.mid, tr("espessura dividida pelos dois lados"));
             ui.label(RichText::new(tr("A espessura vem dos parâmetros da chapa (▭ Parâmetros).")).weak().small());
         }
         FeatureKind::SmFlange(fl) => {
@@ -445,24 +467,47 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             if let Some(r) = &mut fl.radius {
                 expr(ui, "Raio interno", r, vars, "mm");
             }
+            ui.horizontal(|ui| {
+                ui.label(tr("Lado do material"));
+                for (k, n) in [(0u8, "dobra por fora"), (1, "material por fora"), (2, "material por dentro")] {
+                    ui.selectable_value(&mut fl.side, k, tr(n));
+                }
+            });
+            ui.checkbox(&mut fl.flip, tr("dobrar para o outro lado"));
             section(ui, "Limites laterais");
             expr(ui, "Recuo início", &mut fl.off1, vars, "mm");
             expr(ui, "Recuo fim", &mut fl.off2, vars, "mm");
+            ui.checkbox(&mut fl.miter, tr("pontas em meia-esquadria (45°) para a aba vizinha"));
             let mut rel = fl.relief.is_some();
             if ui.checkbox(&mut rel, tr("alívio de canto nas pontas recuadas")).changed() {
                 fl.relief = rel.then(|| "2".to_string());
             }
             if let Some(w) = &mut fl.relief {
                 expr(ui, "Largura do alívio", w, vars, "mm");
+                ui.horizontal(|ui| {
+                    ui.label(tr("Tipo"));
+                    for (k, n) in [(0u8, "retangular"), (1, "redondo"), (2, "rasgo")] {
+                        ui.selectable_value(&mut fl.relief_kind, k, tr(n));
+                    }
+                });
             }
-            ui.checkbox(&mut fl.flip, tr("dobrar para o outro lado"));
         }
         FeatureKind::SmHem(h) => {
             section(ui, "Bainha");
             edge_line(ui, &h.edge);
+            ui.horizontal(|ui| {
+                ui.label(tr("Tipo"));
+                for (k, n) in [(0u8, "fechada/aberta"), (1, "gota"), (2, "enrolada")] {
+                    ui.selectable_value(&mut h.kind, k, tr(n));
+                }
+            });
             expr(ui, "Comprimento", &mut h.length, vars, "mm");
             expr(ui, "Folga interna", &mut h.gap, vars, "mm");
-            ui.label(RichText::new(tr("Folga 0 = bainha esmagada; maior que 0 = aberta/circular.")).weak().small());
+            ui.label(RichText::new(tr(match h.kind {
+                1 => "Gota: passa de 180° e fecha a ponta contra a chapa (raio = folga ÷ 2).",
+                2 => "Enrolada: três quartos de volta (raio = folga ÷ 2).",
+                _ => "Folga 0 = bainha esmagada; maior que 0 = aberta/circular.",
+            })).weak().small());
             ui.checkbox(&mut h.flip, tr("dobrar para o outro lado"));
         }
         FeatureKind::SmJoggle(j) => {
@@ -471,13 +516,37 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 PointRef::Fixed(q) => Some(*q),
                 _ => None,
             }).collect();
+            let mut by_plane = j.plane.is_some();
+            ui.horizontal(|ui| {
+                if ui.selectable_label(!by_plane, tr("por dois pontos")).clicked() {
+                    by_plane = false;
+                }
+                if ui.selectable_label(by_plane, tr("por plano")).clicked() {
+                    by_plane = true;
+                }
+            });
+            if by_plane != j.plane.is_some() {
+                j.plane = by_plane.then(|| seed.planes.last().copied().unwrap_or(PlaneRef::Origin(OriginPlane::YZ)));
+            }
             ui.label(RichText::new(format!("linha de ({:.1}, {:.1}, {:.1}) a ({:.1}, {:.1}, {:.1})", j.a[0], j.a[1], j.a[2], j.b[0], j.b[1], j.b[2])).small());
             if ui.add_enabled(pts.len() >= 2, egui::Button::new(tr("⊙ Usar os dois vértices selecionados"))).clicked() {
                 j.a = pts[0];
                 j.b = pts[1];
             }
+            if let Some(p) = &mut j.plane {
+                crate::editor::plane_combo(ui, "jog_plano", doc, p, Some(me));
+                ui.label(RichText::new(tr("A linha é a interseção do plano com a face (o primeiro ponto marca a face).")).weak().small());
+            }
             expr(ui, "Desvio", &mut j.depth, vars, "mm");
-            expr(ui, "Rampa", &mut j.run, vars, "mm");
+            let mut by_angle = j.angle.is_some();
+            if ui.checkbox(&mut by_angle, tr("rampa pelo ângulo")).changed() {
+                j.angle = by_angle.then(|| "45".to_string());
+            }
+            match &mut j.angle {
+                Some(a) => expr(ui, "Ângulo da rampa", a, vars, "°"),
+                None => expr(ui, "Rampa", &mut j.run, vars, "mm"),
+            }
+            ui.checkbox(&mut j.keep_length, tr("compensação: manter o comprimento desenvolvido"));
             ui.checkbox(&mut j.flip, tr("desviar o outro lado da linha"));
         }
         FeatureKind::SmBend(b) => {
@@ -521,17 +590,148 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         }
         FeatureKind::SmStamp(s) => {
             section(ui, "Estampo");
-            sketch_pick(ui, "sms_sk", "Perfil", doc, idx, &mut s.sketch);
-            expr(ui, "Profundidade", &mut s.depth, vars, "mm");
-            ui.checkbox(&mut s.flip, tr("estampar para o outro lado"));
-            ui.label(RichText::new(tr("Desenhe o perfil num sketch no plano da face da chapa.")).weak().small());
+            egui::ComboBox::from_id_salt("sms_tipo").selected_text(tr(scc_core::SM_STAMP_KINDS[s.kind.min(4) as usize])).width(220.).show_ui(ui, |ui| {
+                for (k, n) in scc_core::SM_STAMP_KINDS.iter().enumerate() {
+                    ui.selectable_value(&mut s.kind, k as u8, tr(n));
+                }
+            });
+            if s.kind == 4 {
+                let cur = s.punch.map(|c| doc.name_of(c)).unwrap_or_else(|| tr("(escolha)").to_string());
+                egui::ComboBox::from_id_salt("sms_puncao").selected_text(cur).show_ui(ui, |ui| {
+                    for c in &doc.collectors {
+                        if c.id != me {
+                            ui.selectable_value(&mut s.punch, Some(c.id), &c.name);
+                        }
+                    }
+                });
+                ui.label(RichText::new(tr("O corpo do punção (em outro coletor) encostado na face: a chapa toma a forma dele, com a espessura.")).weak().small());
+            } else {
+                let what = match s.kind {
+                    1 => "Curvas",
+                    0 => "Perfil",
+                    _ => "Pontos",
+                };
+                sketch_pick(ui, "sms_sk", what, doc, idx, &mut s.sketch);
+            }
+            expr(ui, if s.kind == 3 { "Aba do reforço" } else { "Profundidade" }, &mut s.depth, vars, "mm");
+            if matches!(s.kind, 1..=3) {
+                if s.width.trim().is_empty() {
+                    s.width = "0".into();
+                }
+                expr(ui, if s.kind == 2 { "Diâmetro" } else { "Largura" }, &mut s.width, vars, "mm");
+                ui.label(RichText::new(tr("0 = proporcional à espessura")).weak().small());
+            }
+            if s.kind != 3 {
+                ui.checkbox(&mut s.flip, tr("estampar para o outro lado"));
+            }
+            ui.label(RichText::new(tr(match s.kind {
+                1 => "Nervura: seção trapezoidal varrida ao longo das linhas/curvas do sketch na face.",
+                2 => "Circular: tronco de cone em cada ponto do sketch.",
+                3 => "Reforço: nervura triangular no canto interno da dobra mais perto de cada ponto.",
+                4 => "Punção e matriz: a forma do corpo escolhido.",
+                _ => "Desenhe o perfil num sketch no plano da face da chapa.",
+            })).weak().small());
         }
         FeatureKind::SmFlangedHole(h) => {
             section(ui, "Furo flangeado");
-            sketch_pick(ui, "smf_sk", "Centros", doc, idx, &mut h.sketch);
-            expr(ui, "Diâmetro", &mut h.diameter, vars, "mm");
-            expr(ui, "Altura do colar", &mut h.height, vars, "mm");
+            let by_points = crate::slots::is_unset(h.sketch) || !h.points.is_empty();
+            if by_points {
+                ui.label(format!("{} {}", h.points.len(), tr("centro(s) escolhido(s) nas faces — clique mais faces para somar")));
+                if !h.points.is_empty() && ui.small_button(tr("Limpar pontos")).clicked() {
+                    h.points.clear();
+                }
+            } else {
+                sketch_pick(ui, "smf_sk", "Centros", doc, idx, &mut h.sketch);
+            }
+            // tabela de série + linhas cadastradas pelo usuário
+            let user = user_holes();
+            let cur = if h.standard.is_empty() { tr("medidas à mão").to_string() } else { h.standard.clone() };
+            egui::ComboBox::from_id_salt("smf_tab").selected_text(cur).width(160.).show_ui(ui, |ui| {
+                ui.selectable_value(&mut h.standard, String::new(), tr("medidas à mão"));
+                for r in scc_core::FLANGED_HOLES {
+                    ui.selectable_value(&mut h.standard, r.0.to_string(), format!("{} — Ø{} × {}", r.0, crate::app::fmt(r.1), crate::app::fmt(r.2)));
+                }
+                for (n, d, t) in &user {
+                    if ui.selectable_label(false, format!("★ {n} — Ø{} × {}", crate::app::fmt(*d), crate::app::fmt(*t))).clicked() {
+                        h.standard = String::new();
+                        h.diameter = crate::app::fmt(*d);
+                        h.height = crate::app::fmt(*t);
+                    }
+                }
+            });
+            if h.standard.is_empty() {
+                expr(ui, "Diâmetro", &mut h.diameter, vars, "mm");
+                expr(ui, "Altura do colar", &mut h.height, vars, "mm");
+                ui.horizontal(|ui| {
+                    let key = egui::Id::unique("smf_nome_novo");
+                    let mut name: String = ui.ctx().data(|m| m.get_temp(key)).unwrap_or_default();
+                    ui.add(egui::TextEdit::singleline(&mut name).desired_width(90.).hint_text(tr("nome")));
+                    if ui.add_enabled(!name.trim().is_empty(), egui::Button::new(tr("＋ Cadastrar na tabela"))).clicked() {
+                        let d = scc_core::expr::eval_str(&h.diameter, vars).unwrap_or(0.);
+                        let t = scc_core::expr::eval_str(&h.height, vars).unwrap_or(0.);
+                        add_user_hole(name.trim(), d, t);
+                        name.clear();
+                    }
+                    ui.ctx().data_mut(|m| m.insert_temp(key, name));
+                });
+            }
             ui.checkbox(&mut h.flip, tr("colar para o outro lado"));
+        }
+        FeatureKind::SmCut(c) => {
+            section(ui, "Recorte na chapa");
+            sketch_pick(ui, "smc_sk", "Perfil", doc, idx, &mut c.sketch);
+            ui.horizontal(|ui| {
+                for (k, n) in [(0u8, "normal"), (1, "com saída"), (2, "flangeado")] {
+                    ui.selectable_value(&mut c.mode, k, tr(n));
+                }
+            });
+            expr(ui, "Folga (offset)", &mut c.offset, vars, "mm");
+            match c.mode {
+                1 => expr(ui, "Ângulo de saída", &mut c.draft, vars, "°"),
+                2 => expr(ui, "Altura do colar", &mut c.height, vars, "mm"),
+                _ => {}
+            }
+            ui.checkbox(&mut c.flip, tr("cortar para o outro lado"));
+            ui.label(RichText::new(tr("Desenhe o perfil num sketch na face da chapa. Vale no dobrado e no planificado.")).weak().small());
+        }
+        FeatureKind::SmProfileFlange(p) => {
+            section(ui, "Aba por perfil");
+            sketch_pick(ui, "smp_sk", "Perfil (aberto)", doc, idx, &mut p.sketch);
+            expr(ui, "Comprimento lado 1", &mut p.l1, vars, "mm");
+            expr(ui, "Comprimento lado 2", &mut p.l2, vars, "mm");
+            let mut own = p.radius.is_some();
+            if ui.checkbox(&mut own, tr("raio próprio nos cantos (senão o da chapa)")).changed() {
+                p.radius = own.then(|| "2".to_string());
+            }
+            if let Some(r) = &mut p.radius {
+                expr(ui, "Raio interno", r, vars, "mm");
+            }
+            ui.checkbox(&mut p.flip, tr("material do outro lado da cadeia"));
+            ui.label(RichText::new(tr("Desenhe a cadeia aberta (linhas e arcos) num plano que corta a aresta; os cantos ganham o raio de dobra.")).weak().small());
+        }
+        FeatureKind::SmCurveFlange(cf) => {
+            section(ui, "Aba em aresta curva");
+            ui.label(RichText::new(if cf.edge.len() >= 2 { format!("{} {}", cf.edge.len(), tr("pontos na aresta")) } else { tr("⚠ clique numa aresta curva da chapa").to_string() }).small());
+            let picked = seed.curves.iter().find_map(|c| match c {
+                CurveRef::Edge(p) => Some(p.clone()),
+                _ => None,
+            });
+            if ui.add_enabled(picked.is_some(), egui::Button::new(tr("⊙ Usar a aresta selecionada"))).clicked() {
+                cf.edge = picked.unwrap_or_default();
+            }
+            expr(ui, "Comprimento", &mut cf.length, vars, "mm");
+            ui.checkbox(&mut cf.flip, tr("para o outro lado da chapa"));
+            ui.label(RichText::new(tr("Parede normal à chapa ao longo da aresta (canto vivo, sem raio).")).weak().small());
+        }
+        FeatureKind::SmCornerRelief(cr) => {
+            section(ui, "Alívio de canto");
+            ui.label(RichText::new(format!("{} ({:.1}, {:.1}, {:.1}) — {}", tr("canto em"), cr.at[0], cr.at[1], cr.at[2], tr("clique outro vértice/face para trocar"))).small());
+            ui.horizontal(|ui| {
+                for (k, n) in [(0u8, "redondo"), (1, "quadrado"), (2, "gota")] {
+                    ui.selectable_value(&mut cr.kind, k, tr(n));
+                }
+            });
+            expr(ui, "Tamanho", &mut cr.size, vars, "mm");
         }
         FeatureKind::MoveBody(m) => {
             section(ui, "Mover o corpo");
@@ -777,6 +977,67 @@ pub fn default_move(i: usize) -> BodyXf {
 }
 
 /// Linha informativa da aresta escolhida (aba/bainha).
+/// Tabela de furos flangeados do usuário: fica nas configurações; o painel lê e acrescenta aqui
+/// e o app grava de volta (ver `sync_user_holes`).
+static USER_HOLES: std::sync::Mutex<(Vec<(String, f64, f64)>, bool)> = std::sync::Mutex::new((Vec::new(), false));
+
+fn user_holes() -> Vec<(String, f64, f64)> {
+    USER_HOLES.lock().map(|g| g.0.clone()).unwrap_or_default()
+}
+
+fn add_user_hole(name: &str, d: f64, t: f64) {
+    if let Ok(mut g) = USER_HOLES.lock() {
+        g.0.retain(|r| r.0 != name);
+        g.0.push((name.to_string(), d, t));
+        g.1 = true;
+    }
+}
+
+/// Copia a tabela das configurações para o painel e grava o que o painel cadastrou.
+pub fn sync_user_holes(s: &mut crate::settings::Settings) {
+    let Ok(mut g) = USER_HOLES.lock() else { return };
+    if g.1 {
+        s.flanged_holes = g.0.clone();
+        g.1 = false;
+        s.save();
+    } else if g.0 != s.flanged_holes {
+        g.0 = s.flanged_holes.clone();
+    }
+}
+
+/// Planificada: linhas de dobra (centro traço-ponto, limites do arco finos) e o rótulo de cada uma.
+pub fn bend_overlay(app: &crate::app::App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::render::Camera) {
+    if !app.open.doc.sheet.as_ref().is_some_and(|s| s.flat) || app.in_asm() {
+        return;
+    }
+    let Some(r) = app.result.as_ref() else { return };
+    if r.bend_lines.is_empty() {
+        return;
+    }
+    let painter = ui.painter_at(rect);
+    let v = |p: [f64; 3]| glam::Vec3::new(p[0] as f32, p[1] as f32, p[2] as f32);
+    let col = Color32::from_rgb(230, 120, 40);
+    for b in &r.bend_lines {
+        let seg = |q: [[f64; 3]; 2]| match (cam.project(rect, v(q[0])), cam.project(rect, v(q[1]))) {
+            (Some(a), Some(c)) => Some([a, c]),
+            _ => None,
+        };
+        if let Some([a, c]) = seg(b.center) {
+            painter.extend(egui::Shape::dashed_line(&[a, c], egui::Stroke::new(1.6, col), 10., 4.));
+            let m = a + (c - a) * 0.5;
+            let g = painter.layout_no_wrap(b.label(), egui::FontId::proportional(12.), col);
+            let rr = egui::Rect::from_min_size(m + egui::vec2(6., -g.size().y - 6.), g.size() + egui::vec2(8., 4.));
+            painter.rect_filled(rr, 3., Color32::from_rgba_unmultiplied(20, 20, 24, 200));
+            painter.galley(rr.min + egui::vec2(4., 2.), g, col);
+        }
+        for q in [b.start, b.end] {
+            if let Some([a, c]) = seg(q) {
+                painter.line_segment([a, c], egui::Stroke::new(1., col.gamma_multiply(0.6)));
+            }
+        }
+    }
+}
+
 fn edge_line(ui: &mut egui::Ui, e: &[f64; 3]) {
     let txt = if *e == [0.; 3] { tr("⚠ clique numa aresta reta da chapa na viewport").to_string() } else { format!("aresta em ({:.1}, {:.1}, {:.1}) — clique outra aresta para trocar", e[0], e[1], e[2]) };
     ui.label(RichText::new(txt).small());

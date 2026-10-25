@@ -401,7 +401,7 @@ impl App {
         if std::env::var("SCC_DEMO_CHAPA").is_ok() {
             let s = |x: &str| x.to_string();
             let mut d = Document::new("Suporte de chapa");
-            d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), flat: std::env::var("SCC_DEMO_CHAPA").is_ok_and(|v| v == "plana") });
+            d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), material: String::new(), method: 0, allowance: String::new(), flat: std::env::var("SCC_DEMO_CHAPA").is_ok_and(|v| v == "plana") });
             let mut data = SketchData::default();
             {
                 let mut n = 9_000_000u64;
@@ -1304,15 +1304,54 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
                 self.toast(msg, false);
                 return;
             }
-            Cmd::SmWall | Cmd::SmStamp | Cmd::SmFlangedHole => {
+            Cmd::SmWall | Cmd::SmStamp | Cmd::SmFlangedHole | Cmd::SmCut | Cmd::SmProfileFlange => {
                 if d.sheet.is_none() {
                     d.sheet = Some(SheetParams::default());
                 }
                 let sk = sk_or_unset;
+                // furo flangeado sem sketch: os pontos clicados nas faces (como um furo)
+                let face_pts: Vec<[f64; 3]> = self.picks.iter().filter_map(|p| match p {
+                    crate::picking::Pick::Face { point, .. } => Some(point.map(|v| v as f64)),
+                    _ => None,
+                }).collect();
+                let d = &mut self.open.doc;
                 Sel::Feature(d.add_feature(match c {
                     Cmd::SmWall => FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }),
                     Cmd::SmStamp => FeatureKind::SmStamp(SmStamp { sketch: sk, depth: s("3"), flip: false, kind: 0, width: String::new(), punch: None }),
-                    _ => FeatureKind::SmFlangedHole(SmFlangedHole { sketch: sk, diameter: s("8"), height: s("4"), flip: false, points: vec![], standard: String::new() }),
+                    Cmd::SmCut => FeatureKind::SmCut(SmCut { sketch: sk, mode: 0, offset: String::new(), draft: s("5"), height: s("4"), flip: false }),
+                    Cmd::SmProfileFlange => FeatureKind::SmProfileFlange(SmProfileFlange { sketch: sk, l1: s("0"), l2: s("40"), radius: None, flip: false }),
+                    _ => FeatureKind::SmFlangedHole(SmFlangedHole {
+                        sketch: sk,
+                        diameter: s("8"),
+                        height: s("4"),
+                        flip: false,
+                        points: if crate::slots::is_unset(sk) { face_pts } else { vec![] },
+                        standard: String::new(),
+                    }),
+                }))
+            }
+            Cmd::SmCurveFlange | Cmd::SmCornerRelief => {
+                if d.sheet.is_none() {
+                    d.sheet = Some(SheetParams::default());
+                }
+                use crate::picking::Pick;
+                let edge: Vec<[f64; 3]> = self
+                    .picks
+                    .iter()
+                    .find_map(|p| match (p, self.result.as_ref()) {
+                        (Pick::Edge { body, edge, .. }, Some(r)) => Some(crate::picking::edge_polyline(r, *body, *edge)),
+                        _ => None,
+                    })
+                    .unwrap_or_default();
+                let at = self.picks.iter().find_map(|p| match p {
+                    Pick::Vertex { pos, .. } => Some(pos.map(|v| v as f64)),
+                    Pick::Face { point, .. } => Some(point.map(|v| v as f64)),
+                    _ => None,
+                });
+                let d = &mut self.open.doc;
+                Sel::Feature(d.add_feature(match c {
+                    Cmd::SmCurveFlange => FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("15"), flip: false }),
+                    _ => FeatureKind::SmCornerRelief(SmCornerRelief { at: at.unwrap_or([0.; 3]), size: s("4"), kind: 0 }),
                 }))
             }
             Cmd::SmFlange | Cmd::SmHem | Cmd::SmJoggle | Cmd::SmBend | Cmd::SmLouver => {
@@ -1339,6 +1378,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
                         off2: s("0"),
                         flip: false,
                         relief: None,
+                        relief_kind: 0,
+                        side: 0,
+                        miter: false,
                     }),
                     Cmd::SmHem => FeatureKind::SmHem(SmHem { edge: edge.unwrap_or([0.; 3]), length: s("8"), gap: s("0"), flip: false, kind: 0 }),
                     Cmd::SmBend => FeatureKind::SmBend(SmBend {
@@ -1363,6 +1405,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
                         depth: s("3"),
                         run: s("6"),
                         flip: false,
+                        angle: None,
+                        plane: None,
+                        keep_length: false,
                     }),
                 }))
             }
@@ -2761,6 +2806,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
 
     /// Parâmetros de chapa (espessura, raio, fator K), estado dobrado/planificado e tabela de dobras.
     fn sheet_window(&mut self, ctx: &egui::Context) {
+        // tabela de furos flangeados do usuário (fica nas configurações)
+        crate::feat_ui::sync_user_holes(&mut self.settings);
         if !self.sheet_open {
             return;
         }
@@ -2782,10 +2829,54 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
             if crate::app::done_bar(ui) {
                 ui.ctx().data_mut(|m| m.insert_temp(fechar, true));
             }
-                editor::expr(ui, "Espessura", &mut sp.thickness, &vars, "mm");
+                editor::section(ui, "Material");
+                ui.horizontal(|ui| {
+                    egui::ComboBox::from_id_salt("chapa_material").selected_text(if sp.material.is_empty() { tr("(à mão)").to_string() } else { sp.material.clone() }).width(220.).show_ui(ui, |ui| {
+                        ui.selectable_value(&mut sp.material, String::new(), tr("(à mão)"));
+                        for m in scc_core::SHEET_MATERIALS {
+                            ui.selectable_value(&mut sp.material, m.0.to_string(), m.0);
+                        }
+                    });
+                });
+                ui.horizontal(|ui| {
+                    editor::expr(ui, "Espessura", &mut sp.thickness, &vars, "mm");
+                    egui::ComboBox::from_id_salt("chapa_bitola").selected_text(tr("comercial")).width(80.).show_ui(ui, |ui| {
+                        for g in scc_core::SHEET_GAUGES {
+                            if ui.selectable_label(false, format!("{} mm", fmt(g))).clicked() {
+                                sp.thickness = fmt(g);
+                            }
+                        }
+                    });
+                });
+                // tabela: raio mínimo, K e rampa mínima de joggle para o material e a espessura
+                let t_now = scc_core::expr::eval_str(&sp.thickness, &vars).unwrap_or(0.);
+                if let Some((rmin, k, jog)) = scc_core::sheet_suggest(&sp.material, t_now) {
+                    ui.label(RichText::new(format!("{} {} mm · K {} · {} {} mm", tr("tabela: raio mínimo"), fmt(rmin), fmt(k), tr("rampa mínima de joggle"), fmt(jog))).small());
+                    if ui.button(tr("Usar raio e K da tabela")).clicked() {
+                        sp.radius = fmt(rmin.max(0.01));
+                        sp.k = fmt(k);
+                    }
+                }
                 editor::expr(ui, "Raio de dobra", &mut sp.radius, &vars, "mm");
-                editor::expr(ui, "Fator K", &mut sp.k, &vars, "");
-                ui.label(RichText::new(tr("Fator K: posição da linha neutra (0 = face interna, 0,5 = meio). Comprimento desenvolvido de cada dobra = ângulo × (R + K·t).")).weak().small());
+                editor::section(ui, "Compensação de dobra");
+                ui.horizontal(|ui| {
+                    ui.radio_value(&mut sp.method, 0, tr("fator K"));
+                    ui.radio_value(&mut sp.method, 1, tr("dedução (BD)"));
+                    ui.radio_value(&mut sp.method, 2, tr("tolerância (BA)"));
+                });
+                if sp.method == 0 {
+                    editor::expr(ui, "Fator K", &mut sp.k, &vars, "");
+                    ui.label(RichText::new(tr("Fator K: posição da linha neutra (0 = face interna, 0,5 = meio). Comprimento desenvolvido de cada dobra = ângulo × (R + K·t).")).weak().small());
+                } else {
+                    if sp.allowance.trim().is_empty() {
+                        sp.allowance = "0".into();
+                    }
+                    editor::expr(ui, if sp.method == 1 { "Dedução a 90°" } else { "Tolerância a 90°" }, &mut sp.allowance, &vars, "mm");
+                    let r = scc_core::expr::eval_str(&sp.radius, &vars).unwrap_or(0.);
+                    let al = scc_core::expr::eval_str(&sp.allowance, &vars).unwrap_or(0.);
+                    let k = scc_core::sheet_k(sp.method, 0.44, t_now, r, al);
+                    ui.label(RichText::new(format!("{} {}", tr("convertido em fator K equivalente:"), fmt((k * 1000.).round() / 1000.))).small());
+                }
                 ui.horizontal(|ui| {
                     ui.radio_value(&mut sp.flat, false, tr("dobrada"));
                     ui.radio_value(&mut sp.flat, true, tr("planificada"));
@@ -5396,6 +5487,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
             if self.sketch.is_none() {
                 crate::pmi_ui::overlay(self, ui, rect, &cam);
                 crate::asm_ui::context_overlay(self, ui, rect, &cam);
+                crate::feat_ui::bend_overlay(self, ui, rect, &cam);
             }
             // seta e cota 3D do comando aberto (fast 3D)
             if self.sketch.is_none() {
@@ -5608,6 +5700,14 @@ pub enum Cmd {
     SmStamp,
     SmFlangedHole,
     SmUnfold,
+    /// recorte na chapa (normal, com saída, flangeado)
+    SmCut,
+    /// aba por perfil (aba complexa)
+    SmProfileFlange,
+    /// aba numa aresta curva
+    SmCurveFlange,
+    /// alívio de canto
+    SmCornerRelief,
     // ---- estrutural
     StMember,
     StPlate,
