@@ -289,6 +289,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("des_detalhe", "Detalhe", "Vista de detalhe", "Selecione a vista, clique o centro e o raio, e posicione a ampliação (2× a escala).", Cmd(C::Dwg(14)))),
             One(it("des_planificada", "Planificada", "Vista planificada", "Chapa desdobrada vista de cima (peça de chapa como origem).", Cmd(C::Dwg(15)))),
             One(it("des_esquema", "Esquema", "Esquema cinemático", "Montagem com juntas como origem: símbolos das juntas, barras entre elas e terra nas peças fixas (direção do painel).", Cmd(C::Dwg(17)))),
+            One(it("des_vista_camera", "Câmera", "Vista pela câmera do 3D", "Vista na direção em que a peça ou a montagem está no 3D agora (gire no 3D e clique na folha).", Cmd(C::Dwg(18)))),
         ],
         Group::DesCotas => vec![
             Family("des_cota", vec![
@@ -309,6 +310,8 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("des_rugosidade", "Rugosidade", "Símbolo de rugosidade", "√ com o valor (ex.: Ra 1,6) e chamada para a superfície.", Cmd(C::Dwg(32)))),
             One(it("des_solda", "Solda", "Símbolo de solda", "Linha de referência com o filete e a medida (ex.: a4).", Cmd(C::Dwg(33)))),
             One(it("des_centro", "Centro", "Marca de centro", "Cruz com linhas de centro traço-ponto.", Cmd(C::Dwg(34)))),
+            One(it("des_gdt", "GD&T", "Tolerância geométrica", "Quadro de controle (ISO 1101) com chamada presa à aresta da vista: acompanha a peça e a vista.", Cmd(C::Dwg(36)))),
+            One(it("des_datum", "Referência", "Símbolo de referência (datum)", "Triângulo na aresta e a letra no quadro; preso à vista.", Cmd(C::Dwg(37)))),
         ],
         Group::DesTabelas => vec![
             One(it("des_bom", "Materiais", "Lista de materiais (BOM)", "Itens da montagem com código, descrição, material e quantidade.", Cmd(C::Dwg(40)))),

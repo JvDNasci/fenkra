@@ -12,16 +12,17 @@ pub fn svg(items: &[Item], size: V2) -> String {
     let _ = writeln!(s, r#"<rect width="{w}" height="{h}" fill="white"/>"#);
     let fy = |y: f64| h - y;
     for it in items {
+        let col = it.color.map(|c| format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2])).unwrap_or_else(|| "black".into());
         match &it.prim {
             Prim::Line { pts, style } => {
                 let d: Vec<String> = pts.iter().map(|p| format!("{:.3},{:.3}", p[0], fy(p[1]))).collect();
                 let dash = style.dash();
                 let da = if dash.is_empty() { String::new() } else { format!(r#" stroke-dasharray="{}""#, dash.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(" ")) };
-                let _ = writeln!(s, r#"<polyline points="{}" fill="none" stroke="black" stroke-width="{}" stroke-linecap="round" stroke-linejoin="round"{da}/>"#, d.join(" "), style.width());
+                let _ = writeln!(s, r#"<polyline points="{}" fill="none" stroke="{col}" stroke-width="{}" stroke-linecap="round" stroke-linejoin="round"{da}/>"#, d.join(" "), it.width.unwrap_or(style.width()));
             }
             Prim::Fill { pts } => {
                 let d: Vec<String> = pts.iter().map(|p| format!("{:.3},{:.3}", p[0], fy(p[1]))).collect();
-                let _ = writeln!(s, r#"<polygon points="{}" fill="black"/>"#, d.join(" "));
+                let _ = writeln!(s, r#"<polygon points="{}" fill="{col}"/>"#, d.join(" "));
             }
             Prim::Text { pos, text, size, angle, align } => {
                 let anchor = match align {
@@ -32,9 +33,10 @@ pub fn svg(items: &[Item], size: V2) -> String {
                 let t = text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
                 let _ = writeln!(
                     s,
-                    r#"<text x="{:.3}" y="{:.3}" font-family="Arial, Helvetica, sans-serif" font-size="{size}" text-anchor="{anchor}" transform="rotate({:.3} {:.3} {:.3})">{t}</text>"#,
+                    r#"<text x="{:.3}" y="{:.3}" font-family="Arial, Helvetica, sans-serif" font-size="{size}" fill="{col}"{} text-anchor="{anchor}" transform="rotate({:.3} {:.3} {:.3})">{t}</text>"#,
                     pos[0],
                     fy(pos[1]),
+                    if it.bold { r#" font-weight="bold""# } else { "" },
                     -angle,
                     pos[0],
                     fy(pos[1])
@@ -177,19 +179,22 @@ fn pdf_str(t: &str) -> Vec<u8> {
 pub fn pdf(pages: &[(V2, Vec<Item>)]) -> Vec<u8> {
     let k = 72. / 25.4;
     let mut objs: Vec<Vec<u8>> = vec![];
-    // 1 catálogo, 2 páginas, 3 fonte; depois cada página e seu conteúdo
+    // 1 catálogo, 2 páginas, 3 e 4 fontes; depois cada página e seu conteúdo
     objs.push(b"<< /Type /Catalog /Pages 2 0 R >>".to_vec());
     objs.push(vec![]);
     objs.push(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".to_vec());
+    objs.push(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>".to_vec());
     let mut kids = vec![];
     for (size, items) in pages {
         let mut c: Vec<u8> = vec![];
         let _ = write!(Bytes(&mut c), "{k:.6} 0 0 {k:.6} 0 0 cm 1 J 1 j\n");
         for it in items {
+            let [r, g, b] = it.color.unwrap_or([0, 0, 0]).map(|x| x as f64 / 255.);
+            let _ = write!(Bytes(&mut c), "{r:.3} {g:.3} {b:.3} RG {r:.3} {g:.3} {b:.3} rg ");
             match &it.prim {
                 Prim::Line { pts, style } => {
                     let dash = style.dash();
-                    let _ = write!(Bytes(&mut c), "{} w [{}] 0 d ", style.width(), dash.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(" "));
+                    let _ = write!(Bytes(&mut c), "{} w [{}] 0 d ", it.width.unwrap_or(style.width()), dash.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(" "));
                     for (i, p) in pts.iter().enumerate() {
                         let _ = write!(Bytes(&mut c), "{:.3} {:.3} {} ", p[0], p[1], if i == 0 { "m" } else { "l" });
                     }
@@ -214,7 +219,8 @@ pub fn pdf(pages: &[(V2, Vec<Item>)]) -> Vec<u8> {
                     let y = pos[1] + dx * s;
                     // fonte em pt dentro do espaço em mm: tamanho em mm / 0,72 (altura de maiúscula)
                     let fs = size / 0.72;
-                    let _ = write!(Bytes(&mut c), "BT /F1 {fs:.3} Tf {co:.6} {s:.6} {:.6} {co:.6} {x:.3} {y:.3} Tm ", -s);
+                    let f = if it.bold { "F2" } else { "F1" };
+                    let _ = write!(Bytes(&mut c), "BT /{f} {fs:.3} Tf {co:.6} {s:.6} {:.6} {co:.6} {x:.3} {y:.3} Tm ", -s);
                     c.extend(pdf_str(text));
                     c.extend_from_slice(b" Tj ET\n");
                 }
@@ -223,7 +229,7 @@ pub fn pdf(pages: &[(V2, Vec<Item>)]) -> Vec<u8> {
         let content_id = objs.len() + 2;
         let page_id = objs.len() + 1;
         kids.push(page_id);
-        objs.push(format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {:.2} {:.2}] /Resources << /Font << /F1 3 0 R >> >> /Contents {content_id} 0 R >>", size[0] * k, size[1] * k).into_bytes());
+        objs.push(format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {:.2} {:.2}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents {content_id} 0 R >>", size[0] * k, size[1] * k).into_bytes());
         let mut st = format!("<< /Length {} >>\nstream\n", c.len()).into_bytes();
         st.extend(c);
         st.extend_from_slice(b"\nendstream");

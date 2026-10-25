@@ -620,6 +620,43 @@ fn centro() -> u8 {
     4
 }
 
+impl PmiStyle {
+    /// Este estilo por cima de `base`: o que ficou em "padrão" vem de `base` (hierarquia:
+    /// anotação → grupo/vista → geral).
+    pub fn over(&self, base: &PmiStyle) -> PmiStyle {
+        let n = |a: f32, b: f32| if a > 0. { a } else { b };
+        let s = |a: &String, b: &String| if a.is_empty() { b.clone() } else { a.clone() };
+        PmiStyle {
+            size: n(self.size, base.size),
+            color: self.color.or(base.color),
+            frame: if self.frame != PmiFrame::Padrao { self.frame } else { base.frame },
+            prefix: s(&self.prefix, &base.prefix),
+            suffix: s(&self.suffix, &base.suffix),
+            font: s(&self.font, &base.font),
+            text_color: self.text_color.or(base.text_color),
+            line_width: n(self.line_width, base.line_width),
+            arrow: if self.arrow != PmiArrow::Padrao { self.arrow } else { base.arrow },
+            bg: if self.bg != PmiBg::Padrao { self.bg } else { base.bg },
+            frame_width: n(self.frame_width, base.frame_width),
+            frame_dash: if self.frame_dash != 0 { self.frame_dash } else { base.frame_dash },
+            frame_color: self.frame_color.or(base.frame_color),
+            frame_fixed: n(self.frame_fixed, base.frame_fixed),
+            bold: self.bold || base.bold,
+            justify: if self.justify != 0 { self.justify } else { base.justify },
+            anchor: if self.anchor != 4 { self.anchor } else { base.anchor },
+            line_spacing: n(self.line_spacing, base.line_spacing),
+            angle: if self.angle != 0. { self.angle } else { base.angle },
+            mirror: self.mirror || base.mirror,
+            nudge: self.nudge,
+            apply_scale: self.apply_scale || base.apply_scale,
+            hide_leader: self.hide_leader || base.hide_leader,
+            leader_width: n(self.leader_width, base.leader_width),
+            leader_dash: if self.leader_dash != 0 { self.leader_dash } else { base.leader_dash },
+            leader_color: self.leader_color.or(base.leader_color),
+        }
+    }
+}
+
 impl Default for PmiStyle {
     fn default() -> Self {
         PmiStyle {

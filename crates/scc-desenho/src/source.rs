@@ -61,6 +61,8 @@ pub struct Proj {
     pub lines: Vec<(Vec<V2>, u8)>,
     /// contornos cortados (hachura)
     pub hatch: Vec<Vec<V2>>,
+    /// triângulos sombreados (do fundo para a frente) e o tom de cinza
+    pub shade: Vec<([V2; 3], u8)>,
     /// ponto da vista que fica em `View::pos` (centro do modelo — mantém vistas alinhadas)
     pub center: V2,
     pub lo: V2,
@@ -143,15 +145,15 @@ impl Models {
 
     pub fn load(&mut self, src: &Source) -> &Loaded {
         let full = self.full(&src.path);
-        let key = (full.clone(), src.display_state.clone());
+        let key = (full.clone(), format!("{}|{:?}", src.display_state, src.hidden));
         if !self.loaded.contains_key(&key) {
-            let l = self.read(&full, &src.display_state);
+            let l = self.read(&full, &src.display_state, &src.hidden);
             self.loaded.insert(key.clone(), l);
         }
         &self.loaded[&key]
     }
 
-    fn read(&mut self, full: &Path, state: &str) -> Loaded {
+    fn read(&mut self, full: &Path, state: &str, hidden: &[u64]) -> Loaded {
         let mut files = vec![(full.to_path_buf(), stamp(full))];
         let fail = |files, e: String| Loaded { model: Model::Part(Box::new(Document::new("?"))), shape: None, files, error: Some(e) };
         let txt = match std::fs::read_to_string(full) {
@@ -174,10 +176,16 @@ impl Models {
             Err(e) => return fail(files, e),
         };
         let dir = full.parent().map(|p| p.to_path_buf());
-        let shown_asm = match a.display_states.iter().find(|s| s.name == state) {
+        let mut shown_asm = match a.display_states.iter().find(|s| s.name == state) {
             Some(st) => a.with_state(st),
             None => a.clone(),
         };
+        // componentes escondidos só nesta vista
+        for n in &mut shown_asm.nodes {
+            if hidden.contains(&n.id.0) {
+                n.visible = false;
+            }
+        }
         let mut all = Shape::empty();
         for n in &shown_asm.nodes {
             let NodeKind::Part { path } = &n.kind else { continue };
@@ -204,7 +212,7 @@ impl Models {
         };
         let parent_proj = parent.map(|p| self.proj(d, p));
         let mut h = DefaultHasher::new();
-        serde_json::to_string(&(&v.source, &v.kind, v.hidden_lines, v.tangent_edges)).unwrap_or_default().hash(&mut h);
+        serde_json::to_string(&(&v.source, &v.kind, v.hidden_lines, v.tangent_edges, v.render)).unwrap_or_default().hash(&mut h);
         if let Some(pp) = &parent_proj {
             format!("{:?}{:?}", pp.axes, pp.center).hash(&mut h);
             pp.lines.len().hash(&mut h);
@@ -281,6 +289,15 @@ impl Models {
         let big = (0..3).map(|k| hi[k] - lo[k]).fold(0., f64::max) * 2. + 10.;
         let axes = match &v.kind {
             ViewKind::Standard(d) | ViewKind::Projected { dir: d, .. } => Axes::of(*d),
+            ViewKind::Camera { toward, x } => {
+                let (Some(t), Some(x)) = (unit(*toward), unit(*x)) else {
+                    out.error = Some("direção da câmera inválida".into());
+                    return out;
+                };
+                // x perpendicular à direção
+                let x = unit(sub(x, scale3(t, dot(x, t)))).unwrap_or([1., 0., 0.]);
+                Axes::new(t, x)
+            }
             ViewKind::Flat => {
                 // olhando pela menor dimensão (a espessura da chapa)
                 let e = [0, 1, 2].map(|k| hi[k] - lo[k]);
@@ -330,6 +347,32 @@ impl Models {
         } else {
             shape
         };
+        // sombreado: triângulos da malha projetados, do fundo para a frente (pintor)
+        if v.render != Render::Arestas {
+            if let Ok(m) = target.mesh(big * 0.002) {
+                let pt = |i: u32| -> V3 { [0, 1, 2].map(|k| m.positions[i as usize * 3 + k] as f64) };
+                let mut tris: Vec<(f64, [V2; 3], u8)> = vec![];
+                for t in m.indices.chunks_exact(3) {
+                    let (a, b, c) = (pt(t[0]), pt(t[1]), pt(t[2]));
+                    let Some(n) = unit(cross(sub(b, a), sub(c, a))) else { continue };
+                    let f = dot(n, axes.toward);
+                    // faces de costas ficam escondidas pelas da frente; de lado não aparecem
+                    if f < 0.02 {
+                        continue;
+                    }
+                    let q = [axes.project(a), axes.project(b), axes.project(c)];
+                    let area = ((q[1][0] - q[0][0]) * (q[2][1] - q[0][1]) - (q[2][0] - q[0][0]) * (q[1][1] - q[0][1])).abs();
+                    if area < 1e-6 {
+                        continue;
+                    }
+                    let depth = (dot(a, axes.toward) + dot(b, axes.toward) + dot(c, axes.toward)) / 3.;
+                    let g = (150. + 95. * f.clamp(0., 1.)) as u8;
+                    tris.push((depth, q, g));
+                }
+                tris.sort_by(|x, y| x.0.total_cmp(&y.0));
+                out.shade = tris.into_iter().map(|(_, t, g)| (t, g)).collect();
+            }
+        }
         match target.hlr(axes.toward, axes.x, hidden) {
             Ok(lines) => out.lines = lines.into_iter().filter(|(_, k)| tangent || *k != 1).collect(),
             Err(e) => out.error = Some(e.0),

@@ -27,6 +27,7 @@ pub mod c {
     pub const FLAT: u8 = 15;
     pub const ISO: u8 = 16;
     pub const SCHEMA: u8 = 17;
+    pub const VIEW_CAM: u8 = 18;
     pub const DIM_H: u8 = 20;
     pub const DIM_V: u8 = 21;
     pub const DIM_A: u8 = 22;
@@ -39,6 +40,8 @@ pub mod c {
     pub const WELD: u8 = 33;
     pub const CENTER: u8 = 34;
     pub const AUTO_BALLOONS: u8 = 35;
+    pub const GDT: u8 = 36;
+    pub const DATUM: u8 = 37;
     pub const T_BOM: u8 = 40;
     pub const T_HOLES: u8 = 41;
     pub const T_BENDS: u8 = 42;
@@ -75,6 +78,16 @@ pub struct DwgState {
     pub renaming: Option<Id>,
     /// painel com as propriedades do desenho (folha, origem, legenda) aberto
     pub props_open: bool,
+    /// realçado com 1 clique (2 cliques = `sel`, em edição)
+    pub focus: Option<Id>,
+    /// item do menu do botão direito
+    ctx_item: Option<Id>,
+    /// o que o arraste move: 0 o item, 1 o texto da cota, 2 a ponta da chamada
+    drag_kind: u8,
+    /// estilo copiado (colar em outra cota/nota/vista)
+    style_clip: Option<scc_core::pmi::PmiStyle>,
+    /// direção da câmera do 3D para a próxima vista (para o observador, eixo x)
+    cam: Option<(V3, V3)>,
 }
 
 impl DwgState {
@@ -84,7 +97,13 @@ impl DwgState {
         self.clicks.clear();
         self.tool_view = None;
         self.sel = None;
+        self.focus = None;
         self.props_open = false;
+    }
+
+    /// Item em edição ou, se nenhum, o realçado.
+    pub fn cur(&self) -> Option<Id> {
+        self.sel.or(self.focus)
     }
 
     /// Algo aberto no painel (ferramenta, item selecionado ou propriedades)?
@@ -120,6 +139,11 @@ impl DwgState {
             dragging: false,
             renaming: None,
             props_open: false,
+            focus: None,
+            ctx_item: None,
+            drag_kind: 0,
+            style_clip: None,
+            cam: None,
         }
     }
 
@@ -163,12 +187,15 @@ pub fn ensure(app: &mut App) {
 /// Peça ou montagem aberta como origem (precisa estar salva).
 fn current_source(app: &App) -> Option<Source> {
     let f = app.asm.as_ref().and_then(|s| s.file.clone()).filter(|_| app.settings.bench == crate::settings::Bench::Montagem).or_else(|| app.open.file.clone())?;
-    Some(Source { path: f.to_string_lossy().to_string(), display_state: String::new() })
+    Some(Source { path: f.to_string_lossy().to_string(), display_state: String::new(), hidden: vec![] })
 }
 
 fn hint(tool: u8, n: usize) -> &'static str {
     match (tool, n) {
         (c::SET | c::VIEW | c::ISO | c::FLAT | c::SCHEMA, _) => "Clique na folha para posicionar a vista",
+        (c::VIEW_CAM, _) => "Clique na folha para posicionar a vista (direção da câmera do 3D)",
+        (c::GDT | c::DATUM, 0) => "Clique o elemento indicado (ponta da chamada; presa à vista)",
+        (c::GDT | c::DATUM, _) => "Clique onde o símbolo vai ficar",
         (c::PROJ, _) => "Clique ao lado da vista selecionada: abaixo = superior, à direita = lateral esquerda (1º diedro)",
         (c::SECTION, 0) => "Clique o primeiro ponto da linha de corte na vista",
         (c::SECTION, 1) => "Clique o segundo ponto da linha de corte",
@@ -231,11 +258,23 @@ pub fn command(app: &mut App, i: u8) {
         }
         c::AUTO_BALLOONS => auto_balloons(app),
         _ => {
+            // vista pela câmera: direção atual do 3D (peça ou montagem)
+            let cam = app.viewport.as_ref().map(|v| {
+                let c = v.camera;
+                let t = (c.eye() - c.target).normalize_or_zero();
+                let (r, _) = c.basis();
+                ([t.x as f64, t.y as f64, t.z as f64], [r.x as f64, r.y as f64, r.z as f64])
+            });
+            if i == c::VIEW_CAM && cam.is_none() {
+                app.toast(tr("Abra a peça ou a montagem no 3D e escolha a vista com a câmera"), true);
+                return;
+            }
             let st = app.dwg.as_mut().unwrap();
+            st.cam = cam;
             let needs_parent = matches!(i, c::PROJ | c::SECTION | c::DETAIL);
             let needs_view = (c::DIM_H..=c::DIM_ANG).contains(&i);
-            let needs_source = matches!(i, c::SET | c::VIEW | c::ISO | c::FLAT | c::SCHEMA | c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT);
-            if needs_parent && !st.sel.is_some_and(|s| st.d.view(s).is_some_and(|v| !matches!(v.kind, ViewKind::Detail { .. }))) {
+            let needs_source = matches!(i, c::SET | c::VIEW | c::ISO | c::FLAT | c::SCHEMA | c::VIEW_CAM | c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT);
+            if needs_parent && !st.cur().is_some_and(|s| st.d.view(s).is_some_and(|v| !matches!(v.kind, ViewKind::Detail { .. }))) {
                 app.toast(tr("Selecione antes a vista de origem (clique nela na folha)"), true);
                 return;
             }
@@ -247,6 +286,9 @@ pub fn command(app: &mut App, i: u8) {
             if needs_view && st.d.views.iter().all(|v| v.sheet != st.sheet) {
                 app.toast(tr("A folha não tem vistas para cotar"), true);
                 return;
+            }
+            if needs_parent {
+                st.sel = st.cur();
             }
             st.tool = Some(i);
             st.clicks.clear();
@@ -336,7 +378,7 @@ fn auto_balloons(app: &mut App) {
         let right = tip[0] > (lo[0] + hi[0]) / 2.;
         let pos = [if right { hi[0] + 12. } else { lo[0] - 12. }, (tip[1] + 6. * (k % 3) as f64).clamp(lo[1], hi[1] + 10.)];
         let id = st.d.alloc();
-        st.d.notes.push(Note { id, sheet: st.sheet, kind: NoteKind::Balloon, pos, leader: Some(tip), text: item, size: st.d.text_height, weld: None });
+        st.d.notes.push(Note { id, sheet: st.sheet, kind: NoteKind::Balloon, pos, leader: Some(tip), text: item, size: st.d.text_height, weld: None, view: Some(v.id), anchor3: Some(c3), ..Default::default() });
         k += 1;
     }
     if k == 0 {
@@ -371,7 +413,7 @@ pub fn keys(app: &mut App, ctx: &egui::Context, save_k: bool, undo: bool, redo: 
         st.clicks.clear();
     }
     if del && !typing {
-        if let Some(id) = st.sel.take() {
+        if let Some(id) = st.sel.take().or(st.focus.take()) {
             st.d.delete(id);
         }
     }
@@ -465,19 +507,28 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
                 .map(|x| x.0)
         };
         let hot = if st.tool.is_none() { mouse_mm.and_then(|p| pick(st, p)) } else { None };
+        let bold_fam = if crate::pmi_draw::fonts().iter().any(|f| f == "Arial negrito") { egui::FontFamily::Name("Arial negrito".into()) } else { egui::FontFamily::Proportional };
+        let active = st.cur();
+        let is_dim = |id: Option<Id>| id.is_some_and(|i| st.d.dims.iter().any(|d| d.id == i));
+        // alça do texto da cota em edição/realçada (centro do texto, mm) e ponta da chamada
+        let mut text_handle: Option<(Id, V2, f64)> = None;
+        let tip_handle: Option<(Id, V2)> = active.and_then(|a| st.d.notes.iter().find(|n| n.id == a && n.anchor3.is_none()).and_then(|n| n.leader.map(|l| (n.id, l))));
         let items = st.items.as_ref().unwrap();
         for it in items {
-            let col = if it.owner.is_some() && it.owner == st.sel {
+            let mine = it.owner.is_some();
+            let own = it.color.map(|c| Color32::from_rgb(c[0], c[1], c[2])).unwrap_or(Color32::BLACK);
+            let col = if mine && it.owner == st.sel {
                 Color32::from_rgb(20, 110, 230)
-            } else if it.owner.is_some() && it.owner == hot {
+            } else if mine && (it.owner == hot || it.owner == st.focus) {
                 Color32::from_rgb(70, 150, 255)
             } else {
-                Color32::BLACK
+                own
             };
             match &it.prim {
                 Prim::Line { pts, style } => {
                     let pts: Vec<Pos2> = pts.iter().map(|p| to_scr(*p)).collect();
-                    let stroke = Stroke::new(style_px(*style, z), col);
+                    let w = it.width.map(|w| (w as f32 * z).clamp(0.6, 14.)).unwrap_or_else(|| style_px(*style, z));
+                    let stroke = Stroke::new(w, col);
                     let dash = style.dash();
                     if dash.is_empty() {
                         painter.add(egui::Shape::line(pts, stroke));
@@ -487,14 +538,32 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
                     }
                 }
                 Prim::Fill { pts } => {
-                    painter.add(egui::Shape::convex_polygon(pts.iter().map(|p| to_scr(*p)).collect(), col, Stroke::NONE));
+                    // fundos e sombreado (cor própria) não mudam com o realce; pintados como malha
+                    // (sem anti-serrilhado: triângulos finos não viram espinhos)
+                    if it.color.is_some() {
+                        let mut m = egui::Mesh::default();
+                        for p in pts {
+                            m.colored_vertex(to_scr(*p), own);
+                        }
+                        for k in 1..pts.len().saturating_sub(1) {
+                            m.add_triangle(0, k as u32, k as u32 + 1);
+                        }
+                        painter.add(egui::Shape::mesh(m));
+                    } else {
+                        painter.add(egui::Shape::convex_polygon(pts.iter().map(|p| to_scr(*p)).collect(), col, Stroke::NONE));
+                    }
                 }
                 Prim::Text { pos, text, size, angle, align } => {
+                    if mine && it.owner == active && is_dim(it.owner) {
+                        let a = angle.to_radians();
+                        text_handle = Some((it.owner.unwrap(), [pos[0] - a.sin() * size / 2., pos[1] + a.cos() * size / 2.], *size));
+                    }
                     let px = (*size as f32 * z / 0.72).max(1.);
                     if px < 2.5 {
                         continue;
                     }
-                    let g = painter.layout_no_wrap(text.clone(), egui::FontId::proportional(px), col);
+                    let fam = if it.bold { bold_fam.clone() } else { egui::FontFamily::Proportional };
+                    let g = painter.layout_no_wrap(text.clone(), egui::FontId::new(px, fam), col);
                     let fx = match align {
                         Align::Left => 0.,
                         Align::Center => -g.size().x / 2.,
@@ -507,6 +576,16 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
                     let base = to_scr(*pos);
                     painter.add(egui::epaint::TextShape::new(base + rot, g, col).with_angle(th));
                 }
+            }
+        }
+        // alças: texto da cota (arrastar solta o texto) e ponta da chamada
+        let orange = Color32::from_rgb(255, 130, 20);
+        if st.tool.is_none() {
+            if let Some((_, c, _)) = text_handle {
+                painter.rect_stroke(Rect::from_center_size(to_scr(c), Vec2::splat(11.)), 2., Stroke::new(1.8, orange), egui::StrokeKind::Middle);
+            }
+            if let Some((_, t)) = tip_handle {
+                painter.circle_stroke(to_scr(t), 5.5, Stroke::new(1.8, orange));
             }
         }
         // ---------- ferramentas
@@ -562,24 +641,100 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
                     click(app, m, &snap, &view_at);
                 }
             }
-        } else if resp.clicked_by(egui::PointerButton::Primary) {
-            st.sel = mouse_mm.and_then(|p| pick(st, p));
-        } else if resp.drag_started_by(egui::PointerButton::Primary) {
-            st.sel = resp.interact_pointer_pos().map(to_mm).and_then(|p| pick(st, p));
-            st.dragging = true;
-        } else if resp.dragged_by(egui::PointerButton::Primary) {
-            let dv = resp.drag_delta();
-            let dm = [(dv.x / z) as f64, (-dv.y / z) as f64];
-            if let Some(id) = st.sel {
-                move_item(st, id, dm);
+        } else {
+            // 1 clique realça, 2 cliques editam, clicar e arrastar move, botão direito = opções
+            let near = |a: V2, b: V2, r: f64| ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt() < r;
+            if resp.double_clicked() {
+                match mouse_mm.and_then(|p| pick(st, p)) {
+                    Some(id) => {
+                        st.sel = Some(id);
+                        st.focus = Some(id);
+                        st.props_open = false;
+                    }
+                    None => st.origin = None,
+                }
+            } else if resp.clicked_by(egui::PointerButton::Primary) {
+                let p = mouse_mm.and_then(|p| pick(st, p));
+                st.focus = p;
+                if p != st.sel {
+                    st.sel = None;
+                }
+            } else if resp.drag_started_by(egui::PointerButton::Primary) {
+                let origin = ui.ctx().input(|i| i.pointer.press_origin()).map(to_mm).or(mouse_mm);
+                st.drag_kind = 0;
+                if let Some(o) = origin {
+                    let tol = (8. / z) as f64;
+                    if let Some((id, c, s)) = text_handle.filter(|(_, c, s)| near(o, *c, (s * 1.2).max(tol))) {
+                        let _ = (c, s);
+                        st.focus = Some(id);
+                        st.drag_kind = 1;
+                    } else if let Some((id, _)) = tip_handle.filter(|(_, t)| near(o, *t, tol)) {
+                        st.focus = Some(id);
+                        st.drag_kind = 2;
+                    } else {
+                        let id = pick(st, o);
+                        if id != st.sel {
+                            st.sel = None;
+                        }
+                        st.focus = id;
+                    }
+                }
+                st.dragging = true;
+            } else if resp.dragged_by(egui::PointerButton::Primary) && st.dragging {
+                let dv = resp.drag_delta();
+                let dm = [(dv.x / z) as f64, (-dv.y / z) as f64];
+                if let Some(id) = st.focus {
+                    match st.drag_kind {
+                        1 => {
+                            if let Some(d) = st.d.dims.iter_mut().find(|d| d.id == id) {
+                                let t = d.text_pos.get_or_insert([0., 0.]);
+                                *t = [t[0] + dm[0], t[1] + dm[1]];
+                            }
+                        }
+                        2 => {
+                            if let Some(l) = st.d.notes.iter_mut().find(|n| n.id == id).and_then(|n| n.leader.as_mut()) {
+                                *l = [l[0] + dm[0], l[1] + dm[1]];
+                            }
+                        }
+                        _ => move_item(st, id, dm),
+                    }
+                }
+            }
+            if resp.secondary_clicked() {
+                st.ctx_item = mouse_mm.and_then(|p| pick(st, p));
+                if st.ctx_item.is_some() {
+                    st.focus = st.ctx_item;
+                }
             }
         }
         let st = app.dwg.as_mut().unwrap();
         if resp.drag_stopped() {
+            // ponta da chamada solta sobre uma aresta: fica presa à vista (associativa)
+            if st.dragging && st.drag_kind == 2 {
+                if let Some(id) = st.focus {
+                    let tip = st.d.notes.iter().find(|n| n.id == id).and_then(|n| n.leader);
+                    if let Some(t) = tip {
+                        let hit = snap(st, t, None);
+                        let assoc = hit.and_then(|(vid, s, q)| {
+                            let p = st.models.proj(&st.d, vid);
+                            p.axes.map(|ax| (vid, s, ax.unproject(q)))
+                        });
+                        if let Some(n) = st.d.notes.iter_mut().find(|n| n.id == id) {
+                            if let Some((vid, s, a3)) = assoc {
+                                n.view = Some(vid);
+                                n.anchor3 = Some(a3);
+                                n.leader = Some(s);
+                            }
+                        }
+                    }
+                }
+            }
             st.dragging = false;
+            st.drag_kind = 0;
         }
-        if resp.double_clicked() && st.tool.is_none() {
-            st.origin = None;
+        if st.tool.is_none() {
+            let item = st.ctx_item;
+            resp.context_menu(|ui| ctx_menu(ui, st, item));
         }
         // folha e escala no rodapé
         let info = format!("{} — {} {}   ·   {}: {:.0}%", st.d.name, st.d.sheet(st.sheet).map(|s| s.name.clone()).unwrap_or_default(), st.d.sheet(st.sheet).map(|s| s.format.label()).unwrap_or(""), tr("zoom"), z / 3.78 * 100.);
@@ -628,10 +783,20 @@ fn move_item(st: &mut DwgState, id: Id, dm: V2) {
     if let Some(v) = st.d.views.iter_mut().find(|v| v.id == id) {
         v.pos = [v.pos[0] + dm[0], v.pos[1] + dm[1]];
         // a vista mãe leva junto as projetadas (e o alinhamento mantém o resto)
-        let kids: Vec<Id> = st.d.views.iter().filter(|c| matches!(&c.kind, ViewKind::Projected { parent, .. } if *parent == id)).map(|c| c.id).collect();
-        for k in kids {
-            if let Some(c) = st.d.views.iter_mut().find(|c| c.id == k) {
+        let mut kids: Vec<Id> = st.d.views.iter().filter(|c| matches!(&c.kind, ViewKind::Projected { parent, .. } if *parent == id)).map(|c| c.id).collect();
+        for k in &kids {
+            if let Some(c) = st.d.views.iter_mut().find(|c| c.id == *k) {
                 c.pos = [c.pos[0] + dm[0], c.pos[1] + dm[1]];
+            }
+        }
+        // as notas da vista andam junto (a ponta presa ao modelo se acerta sozinha)
+        kids.push(id);
+        for n in st.d.notes.iter_mut().filter(|n| n.view.is_some_and(|v| kids.contains(&v))) {
+            n.pos = [n.pos[0] + dm[0], n.pos[1] + dm[1]];
+            if n.anchor3.is_none() {
+                if let Some(l) = n.leader.as_mut() {
+                    *l = [l[0] + dm[0], l[1] + dm[1]];
+                }
             }
         }
         return;
@@ -668,7 +833,7 @@ fn click(app: &mut App, m: V2, snap: &SnapFn, view_at: &ViewAt) {
         st.sel = Some(id);
     };
     match tool {
-        c::SET | c::VIEW | c::ISO | c::FLAT | c::SCHEMA => {
+        c::SET | c::VIEW | c::ISO | c::FLAT | c::SCHEMA | c::VIEW_CAM => {
             let src = st.source.clone().unwrap();
             let sc = st.new_scale;
             let id = match tool {
@@ -683,12 +848,16 @@ fn click(app: &mut App, m: V2, snap: &SnapFn, view_at: &ViewAt) {
                 c::ISO => st.d.add_view(sheet, src, ViewKind::Standard(Dir::Iso), m, sc),
                 c::FLAT => st.d.add_view(sheet, src, ViewKind::Flat, m, sc),
                 c::SCHEMA => st.d.add_view(sheet, src, ViewKind::Schematic(st.new_dir), m, sc),
+                c::VIEW_CAM => {
+                    let (toward, x) = st.cam.unwrap_or(([0., -1., 0.], [1., 0., 0.]));
+                    st.d.add_view(sheet, src, ViewKind::Camera { toward, x }, m, sc)
+                }
                 _ => st.d.add_view(sheet, src, ViewKind::Standard(st.new_dir), m, sc),
             };
             done(st, id);
         }
         c::PROJ => {
-            let Some(parent) = st.sel.and_then(|s| st.d.view(s).cloned()) else { return };
+            let Some(parent) = st.cur().and_then(|s| st.d.view(s).cloned()) else { return };
             let (dx, dy) = (m[0] - parent.pos[0], m[1] - parent.pos[1]);
             let base = match &parent.kind {
                 ViewKind::Standard(d) | ViewKind::Projected { dir: d, .. } => *d,
@@ -713,7 +882,7 @@ fn click(app: &mut App, m: V2, snap: &SnapFn, view_at: &ViewAt) {
             done(st, id);
         }
         c::SECTION | c::DETAIL => {
-            let Some(parent) = st.sel.and_then(|s| st.d.view(s).cloned()) else { return };
+            let Some(parent) = st.cur().and_then(|s| st.d.view(s).cloned()) else { return };
             st.clicks.push(m);
             if st.clicks.len() < 3 {
                 return;
@@ -751,7 +920,7 @@ fn click(app: &mut App, m: V2, snap: &SnapFn, view_at: &ViewAt) {
                 _ => DimKind::Angle,
             };
             let id = st.d.alloc();
-            st.d.dims.push(Dim { id, view: vid, kind, anchors, offset: if kind == DimKind::Angle { 0. } else { 8. }, text: String::new(), tol: String::new() });
+            st.d.dims.push(Dim { id, view: vid, kind, anchors, offset: if kind == DimKind::Angle { 0. } else { 8. }, text: String::new(), tol: String::new(), ..Default::default() });
             done(st, id);
         }
         c::DIM_R | c::DIM_D => {
@@ -780,28 +949,53 @@ fn click(app: &mut App, m: V2, snap: &SnapFn, view_at: &ViewAt) {
             let p = st.models.proj(&st.d, vid);
             let Some(ax) = p.axes else { return };
             let id = st.d.alloc();
-            st.d.dims.push(Dim { id, view: vid, kind: if tool == c::DIM_R { DimKind::Radius } else { DimKind::Diameter }, anchors: vec![ax.unproject(c), ax.unproject(on)], offset: 6., text: String::new(), tol: String::new() });
+            st.d.dims.push(Dim { id, view: vid, kind: if tool == c::DIM_R { DimKind::Radius } else { DimKind::Diameter }, anchors: vec![ax.unproject(c), ax.unproject(on)], offset: 6., text: String::new(), tol: String::new(), ..Default::default() });
             done(st, id);
         }
         c::NOTE | c::CENTER => {
             let id = st.d.alloc();
             let (kind, text) = if tool == c::NOTE { (NoteKind::Text, tr("Nota").to_string()) } else { (NoteKind::CenterMark, "5".to_string()) };
-            st.d.notes.push(Note { id, sheet, kind, pos: m, leader: None, text, size: th, weld: None });
+            // dentro de uma vista: pertence a ela (anda junto)
+            let view = view_at(st, m);
+            st.d.notes.push(Note { id, sheet, kind, pos: m, leader: None, text, size: th, weld: None, view, ..Default::default() });
             done(st, id);
         }
-        c::BALLOON | c::ROUGH | c::WELD => {
-            let m = snap(st, m, None).map(|x| x.1).filter(|_| st.clicks.is_empty()).unwrap_or(m);
-            st.clicks.push(m);
-            if st.clicks.len() < 2 {
+        c::BALLOON | c::ROUGH | c::WELD | c::GDT | c::DATUM => {
+            // 1º clique: ponta da chamada (snap nas arestas; presa à vista); 2º: posição do símbolo
+            if st.clicks.is_empty() {
+                match snap(st, m, None) {
+                    Some((vid, s, _)) => {
+                        st.tool_view = Some(vid);
+                        st.clicks.push(s);
+                    }
+                    None => {
+                        st.tool_view = view_at(st, m);
+                        st.clicks.push(m);
+                    }
+                }
                 return;
             }
+            st.clicks.push(m);
             let (kind, text) = match tool {
                 c::BALLOON => (NoteKind::Balloon, (st.d.notes.iter().filter(|n| n.kind == NoteKind::Balloon).count() + 1).to_string()),
                 c::ROUGH => (NoteKind::Roughness, "Ra 1,6".to_string()),
+                c::GDT => (NoteKind::Gdt, String::new()),
+                c::DATUM => {
+                    let used: Vec<&str> = st.d.notes.iter().filter(|n| n.kind == NoteKind::Datum).map(|n| n.text.as_str()).collect();
+                    (NoteKind::Datum, ('A'..='Z').map(|c| c.to_string()).find(|l| !used.contains(&l.as_str())).unwrap_or_else(|| "A".into()))
+                }
                 _ => (NoteKind::Weld, "a4".to_string()),
             };
+            let (view, anchor3) = match st.tool_view.and_then(|vid| st.d.view(vid).cloned()) {
+                Some(v) => {
+                    let p = st.models.proj(&st.d, v.id);
+                    (Some(v.id), p.axes.map(|ax| ax.unproject(layout::from_sheet(&v, &p, st.clicks[0]))))
+                }
+                None => (None, None),
+            };
+            let gdt = (kind == NoteKind::Gdt).then(DwgGdt::default);
             let id = st.d.alloc();
-            st.d.notes.push(Note { id, sheet, kind, pos: st.clicks[1], leader: Some(st.clicks[0]), text, size: th, weld: None });
+            st.d.notes.push(Note { id, sheet, kind, pos: st.clicks[1], leader: Some(st.clicks[0]), text, size: th, weld: None, gdt, view, anchor3, ..Default::default() });
             done(st, id);
         }
         c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT => {
@@ -822,6 +1016,244 @@ fn click(app: &mut App, m: V2, snap: &SnapFn, view_at: &ViewAt) {
 
 // ---------- árvore e painel
 
+/// Cor própria (ou padrão) e espessura (mm) de um elemento 2D, para menus e painéis.
+fn color_width(ui: &mut egui::Ui, color: &mut Option<[u8; 3]>, width: &mut f64) {
+    ui.horizontal(|ui| {
+        let mut own = color.is_some();
+        if ui.checkbox(&mut own, tr("Cor")).changed() {
+            *color = own.then_some([200, 30, 30]);
+        }
+        if let Some(c) = color {
+            ui.color_edit_button_srgb(c);
+        }
+        ui.label(tr("Espessura"));
+        let r = ui.add(egui::DragValue::new(width).range(0.0..=3.).speed(0.01).custom_formatter(|v, _| if v <= 0. { tr("padrão").to_string() } else { format!("{v:.2} mm") }));
+        crate::ui_ext::wheel(ui, &r, width);
+    });
+}
+
+/// O mesmo, para o estilo de anotação (espessura em f32).
+fn style_color_width(ui: &mut egui::Ui, st: &mut scc_core::pmi::PmiStyle) {
+    let mut w = st.line_width as f64;
+    color_width(ui, &mut st.color, &mut w);
+    st.line_width = w as f32;
+}
+
+/// Menu do botão direito de um item (na folha e na árvore); `None` = a folha.
+fn ctx_menu(ui: &mut egui::Ui, st: &mut DwgState, id: Option<Id>) {
+    let Some(id) = id else {
+        if ui.button(tr("Ajustar à janela")).clicked() {
+            st.origin = None;
+            ui.close();
+        }
+        if ui.button(tr("Propriedades do desenho")).clicked() {
+            st.props_open = true;
+            st.sel = None;
+            ui.close();
+        }
+        return;
+    };
+    if ui.button(tr("✏ Editar")).clicked() {
+        st.sel = Some(id);
+        st.focus = Some(id);
+        st.props_open = false;
+        ui.close();
+    }
+    let mut tool = None;
+    let mut copy = None;
+    let paste = st.style_clip.clone();
+    if let Some(v) = st.d.views.iter_mut().find(|v| v.id == id) {
+        if ui.button(tr("Renomear   F2")).clicked() {
+            st.renaming = Some(id);
+            ui.close();
+        }
+        ui.separator();
+        ui.checkbox(&mut v.hidden_lines, tr("Linhas ocultas (tracejadas)"));
+        ui.checkbox(&mut v.tangent_edges, tr("Arestas tangentes"));
+        ui.checkbox(&mut v.label, tr("Mostrar rótulo e escala"));
+        ui.menu_button(tr("Estilo de renderização"), |ui| {
+            for r in Render::ALL {
+                if ui.selectable_label(v.render == r, tr(r.label())).clicked() {
+                    v.render = r;
+                    ui.close();
+                }
+            }
+        });
+        color_width(ui, &mut v.color, &mut v.line_width);
+        ui.separator();
+        for (t, cmd) in [("Vista projetada", c::PROJ), ("Vista em corte", c::SECTION), ("Vista de detalhe", c::DETAIL)] {
+            if ui.button(tr(t)).clicked() {
+                tool = Some(cmd);
+                ui.close();
+            }
+        }
+        if ui.button(tr("Copiar estilo das anotações")).clicked() {
+            copy = Some(v.ann.clone());
+            ui.close();
+        }
+        if let Some(s) = &paste {
+            if ui.button(tr("Colar estilo nas anotações")).clicked() {
+                v.ann = s.clone();
+                ui.close();
+            }
+        }
+    } else if let Some(d) = st.d.dims.iter_mut().find(|d| d.id == id) {
+        ui.menu_button(tr("Setas"), |ui| {
+            for (k, n) in DIM_ARROWS.iter().enumerate() {
+                if ui.selectable_label(d.arrows == k as u8, tr(n)).clicked() {
+                    d.arrows = k as u8;
+                    ui.close();
+                }
+            }
+        });
+        ui.menu_button(tr("Ponta"), |ui| {
+            use scc_core::pmi::PmiArrow;
+            for (a, n) in [(PmiArrow::Padrao, "padrão"), (PmiArrow::Cheia, "▶ cheia"), (PmiArrow::Aberta, "▷ aberta"), (PmiArrow::Ponto, "● ponto"), (PmiArrow::Barra, "⁄ barra"), (PmiArrow::Nenhuma, "nenhuma")] {
+                if ui.selectable_label(d.style.arrow == a, tr(n)).clicked() {
+                    d.style.arrow = a;
+                    ui.close();
+                }
+            }
+        });
+        if d.text_pos.is_some() && ui.button(tr("Texto no lugar automático")).clicked() {
+            d.text_pos = None;
+            ui.close();
+        }
+        style_color_width(ui, &mut d.style);
+        if ui.button(tr("Copiar estilo")).clicked() {
+            copy = Some(d.style.clone());
+            ui.close();
+        }
+        if let Some(s) = &paste {
+            if ui.button(tr("Colar estilo")).clicked() {
+                d.style = s.clone();
+                ui.close();
+            }
+        }
+    } else if let Some(n) = st.d.notes.iter_mut().find(|n| n.id == id) {
+        let mut lead = n.leader.is_some();
+        if ui.checkbox(&mut lead, tr("Chamada (seta)")).changed() {
+            n.leader = lead.then(|| [n.pos[0] - 15., n.pos[1] - 10.]);
+            if !lead {
+                n.anchor3 = None;
+            }
+        }
+        if n.anchor3.is_some() && ui.button(tr("Soltar da vista (ponta livre)")).clicked() {
+            n.anchor3 = None;
+            ui.close();
+        }
+        style_color_width(ui, &mut n.style);
+        if ui.button(tr("Copiar estilo")).clicked() {
+            copy = Some(n.style.clone());
+            ui.close();
+        }
+        if let Some(s) = &paste {
+            if ui.button(tr("Colar estilo")).clicked() {
+                n.style = s.clone();
+                ui.close();
+            }
+        }
+    }
+    ui.separator();
+    if ui.button(tr("🗑 Apagar   Del")).clicked() {
+        st.d.delete(id);
+        if st.sel == Some(id) {
+            st.sel = None;
+        }
+        st.focus = None;
+        ui.close();
+    }
+    if let Some(s) = copy {
+        st.style_clip = Some(s);
+    }
+    if let Some(t) = tool {
+        st.sel = Some(id);
+        st.tool = Some(t);
+        st.clicks.clear();
+        st.tool_view = None;
+    }
+}
+
+/// Linha da árvore: 1 clique realça, 2 cliques editam, botão direito = opções.
+fn tree_row(ui: &mut egui::Ui, st: &mut DwgState, sid: Id, id: Id, text: String, depth: usize) {
+    ui.horizontal(|ui| {
+        ui.add_space(depth as f32 * 14.);
+        if st.renaming == Some(id) {
+            if let Some(v) = st.d.views.iter_mut().find(|v| v.id == id) {
+                let r = ui.text_edit_singleline(&mut v.name);
+                r.request_focus();
+                if r.lost_focus() {
+                    st.renaming = None;
+                }
+                return;
+            }
+            st.renaming = None;
+        }
+        let on = st.sel == Some(id) || st.focus == Some(id);
+        let txt = if st.sel == Some(id) { RichText::new(text).strong() } else { RichText::new(text) };
+        let r = ui.selectable_label(on, txt);
+        if r.double_clicked() {
+            st.sel = Some(id);
+            st.focus = Some(id);
+            st.props_open = false;
+            st.sheet = sid;
+        } else if r.clicked() {
+            st.focus = Some(id);
+            if st.sel != Some(id) {
+                st.sel = None;
+            }
+            st.sheet = sid;
+        }
+        r.context_menu(|ui| ctx_menu(ui, st, Some(id)));
+    });
+}
+
+/// A que vista pertence cada nota da folha atual: a presa a ela ou a de caixa menor que contém a
+/// nota (a caixa 2D da vista detecta o que está dentro dela).
+fn note_owners(st: &DwgState, sheet: Id) -> std::collections::HashMap<Id, Id> {
+    let mut out = std::collections::HashMap::new();
+    let views: Vec<&(Id, V2, V2)> = st.boxes.iter().filter(|b| st.d.view(b.0).is_some_and(|v| v.sheet == sheet)).collect();
+    for n in st.d.notes.iter().filter(|n| n.sheet == sheet) {
+        if let Some(v) = n.view.filter(|v| st.d.view(*v).is_some()) {
+            out.insert(n.id, v);
+            continue;
+        }
+        if sheet != st.sheet {
+            continue;
+        }
+        let Some(b) = st.boxes.iter().find(|b| b.0 == n.id) else { continue };
+        let c = [(b.1[0] + b.2[0]) / 2., (b.1[1] + b.2[1]) / 2.];
+        let inside = views
+            .iter()
+            .filter(|v| c[0] >= v.1[0] && c[0] <= v.2[0] && c[1] >= v.1[1] && c[1] <= v.2[1])
+            .min_by(|a, b| ((a.2[0] - a.1[0]) * (a.2[1] - a.1[1])).total_cmp(&((b.2[0] - b.1[0]) * (b.2[1] - b.1[1]))));
+        if let Some(v) = inside {
+            out.insert(n.id, v.0);
+        }
+    }
+    out
+}
+
+/// Texto da nota na árvore (GD&T: símbolo e tolerância).
+fn note_title(n: &Note) -> String {
+    match (&n.kind, &n.gdt) {
+        (NoteKind::Gdt, Some(g)) => format!("{} {} {}", g.ch.symbol(), g.tol, g.datums),
+        _ => n.text.lines().next().unwrap_or("").to_string(),
+    }
+}
+
+fn note_icon(k: &NoteKind) -> &'static str {
+    match k {
+        NoteKind::Text => "✎",
+        NoteKind::Balloon => "①",
+        NoteKind::Roughness => "√",
+        NoteKind::Weld => "⌒",
+        NoteKind::CenterMark => "✛",
+        NoteKind::Gdt => "⌖",
+        NoteKind::Datum => "Ⓐ",
+    }
+}
+
 pub fn tree(app: &mut App, ui: &mut egui::Ui) {
     ensure(app);
     let st = app.dwg.as_mut().unwrap();
@@ -841,41 +1273,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
     for (sid, name, fmt) in sheets {
         let open = sid == st.sheet;
         let r = egui::CollapsingHeader::new(RichText::new(format!("🗋 {name} ({fmt})")).strong()).id_salt(("folha", sid.0)).default_open(open).show(ui, |ui| {
-            let row = |ui: &mut egui::Ui, st: &mut DwgState, id: Id, text: String, depth: usize| {
-                ui.horizontal(|ui| {
-                    ui.add_space(depth as f32 * 14.);
-                    if st.renaming == Some(id) {
-                        if let Some(v) = st.d.views.iter_mut().find(|v| v.id == id) {
-                            let r = ui.text_edit_singleline(&mut v.name);
-                            r.request_focus();
-                            if r.lost_focus() {
-                                st.renaming = None;
-                            }
-                            return;
-                        }
-                        st.renaming = None;
-                    }
-                    let r = ui.selectable_label(st.sel == Some(id), text);
-                    if r.clicked() {
-                        st.sel = Some(id);
-                        st.sheet = sid;
-                    }
-                    r.context_menu(|ui| {
-                        if st.d.view(id).is_some() && ui.button(tr("Renomear   F2")).clicked() {
-                            st.renaming = Some(id);
-                            ui.close();
-                        }
-                        if ui.button(tr("Apagar   Del")).clicked() {
-                            st.d.delete(id);
-                            if st.sel == Some(id) {
-                                st.sel = None;
-                            }
-                            ui.close();
-                        }
-                    });
-                });
-            };
-            // vistas em árvore (filhas abaixo da mãe)
+            // vistas em árvore (filhas abaixo da mãe), cada uma com as cotas e anotações dela
             fn kids(d: &Drawing, sheet: Id, parent: Option<Id>) -> Vec<Id> {
                 d.views
                     .iter()
@@ -890,6 +1288,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                     .map(|v| v.id)
                     .collect()
             }
+            let owners = note_owners(st, sid);
             let mut stack: Vec<(Id, usize)> = kids(&st.d, sid, None).into_iter().rev().map(|i| (i, 0)).collect();
             while let Some((id, depth)) = stack.pop() {
                 let Some(v) = st.d.view(id) else { continue };
@@ -898,43 +1297,28 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                     ViewKind::Detail { .. } => "🔍",
                     ViewKind::Flat => "▭",
                     ViewKind::Schematic(_) => "⚙",
+                    ViewKind::Camera { .. } => "🎥",
                     _ => "▣",
                 };
-                let n_dims = st.d.dims.iter().filter(|d| d.view == id).count();
-                let text = if n_dims > 0 { format!("{icon} {}  ·  {n_dims} {}", v.name, tr("cotas")) } else { format!("{icon} {}", v.name) };
-                row(ui, st, id, text, depth);
+                let text = format!("{icon} {}  ({})", v.name, scale_text(v.scale));
+                tree_row(ui, st, sid, id, text, depth);
+                let mut items: Vec<(Id, String)> = st.d.dims.iter().filter(|d| d.view == id).map(|d| (d.id, format!("↔ {}{}", tr(d.kind.label()), if d.text.is_empty() { String::new() } else { format!(" — {}", d.text) }))).collect();
+                items.extend(st.d.notes.iter().filter(|n| owners.get(&n.id) == Some(&id)).map(|n| (n.id, format!("{} {}", note_icon(&n.kind), note_title(n)))));
+                for (cid, t) in items {
+                    tree_row(ui, st, sid, cid, t, depth + 1);
+                }
                 for k in kids(&st.d, sid, Some(id)).into_iter().rev() {
                     stack.push((k, depth + 1));
                 }
-                if st.sel.is_some_and(|s| st.d.dims.iter().any(|d| d.id == s && d.view == id)) {
-                    let dims: Vec<(Id, String)> = st.d.dims.iter().filter(|d| d.view == id).map(|d| (d.id, format!("↔ {}", tr(d.kind.label())))).collect();
-                    for (did, t) in dims {
-                        row(ui, st, did, t, depth + 1);
-                    }
-                }
             }
-            let notes: Vec<(Id, String)> = st
-                .d
-                .notes
-                .iter()
-                .filter(|n| n.sheet == sid)
-                .map(|n| {
-                    let icon = match n.kind {
-                        NoteKind::Text => "✎",
-                        NoteKind::Balloon => "①",
-                        NoteKind::Roughness => "√",
-                        NoteKind::Weld => "⌒",
-                        NoteKind::CenterMark => "✛",
-                    };
-                    (n.id, format!("{icon} {}", n.text.lines().next().unwrap_or("")))
-                })
-                .collect();
+            // anotações soltas na folha e tabelas
+            let notes: Vec<(Id, String)> = st.d.notes.iter().filter(|n| n.sheet == sid && !owners.contains_key(&n.id)).map(|n| (n.id, format!("{} {}", note_icon(&n.kind), note_title(n)))).collect();
             for (id, t) in notes {
-                row(ui, st, id, t, 0);
+                tree_row(ui, st, sid, id, t, 0);
             }
             let tables: Vec<(Id, String)> = st.d.tables.iter().filter(|t| t.sheet == sid).map(|t| (t.id, format!("▦ {}", tr(t.kind.label())))).collect();
             for (id, t) in tables {
-                row(ui, st, id, t, 0);
+                tree_row(ui, st, sid, id, t, 0);
             }
         });
         if r.header_response.clicked() {
@@ -959,6 +1343,12 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
 pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     ensure(app);
     let cur = current_source(app);
+    let cam_now = app.viewport.as_ref().map(|v| {
+        let c = v.camera;
+        let t = (c.eye() - c.target).normalize_or_zero();
+        let (r, _) = c.basis();
+        ([t.x as f64, t.y as f64, t.z as f64], [r.x as f64, r.y as f64, r.z as f64])
+    });
     let st = app.dwg.as_mut().unwrap();
     let mut changed_src = false;
     if let Some(id) = st.sel {
@@ -972,7 +1362,26 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             ui.checkbox(&mut v.hidden_lines, tr("Linhas ocultas (tracejadas)"));
             ui.checkbox(&mut v.tangent_edges, tr("Arestas tangentes"));
             ui.checkbox(&mut v.label, tr("Mostrar rótulo e escala"));
+            ui.horizontal(|ui| {
+                ui.label(tr("Renderização"));
+                egui::ComboBox::from_id_salt(("render_vista", id.0)).selected_text(tr(v.render.label())).show_ui(ui, |ui| {
+                    for r in Render::ALL {
+                        ui.selectable_value(&mut v.render, r, tr(r.label()));
+                    }
+                });
+            });
+            ui.label(RichText::new(tr("Arestas visíveis")).weak().small());
+            color_width(ui, &mut v.color, &mut v.line_width);
             match &mut v.kind {
+                ViewKind::Camera { toward, x } => {
+                    ui.label(RichText::new(format!("{} ({:.2}, {:.2}, {:.2})", tr("Direção"), toward[0], toward[1], toward[2])).weak().small());
+                    if ui.add_enabled(cam_now.is_some(), egui::Button::new(tr("🎥 Usar a câmera atual do 3D"))).clicked() {
+                        if let Some((t, xx)) = cam_now {
+                            *toward = t;
+                            *x = xx;
+                        }
+                    }
+                }
                 ViewKind::Standard(d) | ViewKind::Schematic(d) => {
                     egui::ComboBox::from_label(tr("Direção")).selected_text(tr(d.label())).show_ui(ui, |ui| {
                         for x in Dir::ALL {
@@ -1008,7 +1417,34 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     changed_src |= ui.text_edit_singleline(&mut v.source.display_state).changed();
                 });
                 ui.label(RichText::new(tr("Nome de um estado salvo no compositor (vazio = como está; ex.: vista explodida).")).weak().small());
+                // componentes visíveis só nesta vista
+                let src = v.source.clone();
+                let comps: Vec<(u64, String)> = match &st.models.load(&src).model {
+                    scc_desenho::source::Model::Asm(a) => a.nodes.iter().filter(|n| !matches!(n.kind, scc_montagem::NodeKind::Group)).map(|n| (n.id.0, n.name.clone())).collect(),
+                    _ => vec![],
+                };
+                egui::CollapsingHeader::new(format!("{} ({}/{})", tr("Componentes visíveis nesta vista"), comps.len() - v.source.hidden.len().min(comps.len()), comps.len())).id_salt(("comps_vista", id.0)).show(ui, |ui| {
+                    for (nid, name) in comps {
+                        let mut on = !v.source.hidden.contains(&nid);
+                        if ui.checkbox(&mut on, name).changed() {
+                            if on {
+                                v.source.hidden.retain(|x| *x != nid);
+                            } else {
+                                v.source.hidden.push(nid);
+                            }
+                            changed_src = true;
+                        }
+                    }
+                    if !v.source.hidden.is_empty() && ui.small_button(tr("Mostrar todos")).clicked() {
+                        v.source.hidden.clear();
+                        changed_src = true;
+                    }
+                });
             }
+            egui::CollapsingHeader::new(tr("Estilo das anotações desta vista")).id_salt(("ann_vista", id.0)).show(ui, |ui| {
+                ui.label(RichText::new(tr("Cotas e notas da vista herdam daqui o que estiver em \"padrão\".")).weak().small());
+                crate::pmi_draw::style_ui(ui, &mut v.ann, false);
+            });
             let p = st.models.proj(&st.d, id);
             if let Some(e) = &p.error {
                 ui.colored_label(Color32::from_rgb(230, 90, 70), e);
@@ -1043,7 +1479,22 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                 ui.label(tr("Afastamento (mm)"));
                 { let __r = ui.add(egui::DragValue::new(&mut dm.offset).speed(0.2)); crate::ui_ext::wheel(ui, &__r, &mut dm.offset); __r };
             });
-            ui.label(RichText::new(tr("Arraste a cota na folha para afastá-la.")).weak().small());
+            ui.horizontal(|ui| {
+                ui.label(tr("Setas"));
+                egui::ComboBox::from_id_salt(("setas_cota", id.0)).selected_text(tr(DIM_ARROWS[dm.arrows.min(5) as usize])).show_ui(ui, |ui| {
+                    for (k, n) in DIM_ARROWS.iter().enumerate() {
+                        ui.selectable_value(&mut dm.arrows, k as u8, tr(n));
+                    }
+                });
+            });
+            if dm.text_pos.is_some() && ui.button(tr("Texto no lugar automático")).clicked() {
+                dm.text_pos = None;
+            }
+            ui.label(RichText::new(tr("Arraste a cota para afastá-la; arraste a alça do texto para soltá-lo da linha de cota.")).weak().small());
+            egui::CollapsingHeader::new(tr("Estilo")).id_salt(("estilo_cota", id.0)).show(ui, |ui| {
+                style_color_width(ui, &mut dm.style);
+                crate::pmi_draw::style_ui(ui, &mut dm.style, true);
+            });
             if ui.button(tr("🗑 Apagar cota")).clicked() {
                 st.d.delete(id);
                 st.sel = None;
@@ -1055,7 +1506,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             egui::ComboBox::from_label(tr("Tipo"))
                 .selected_text(note_label(&n.kind))
                 .show_ui(ui, |ui| {
-                    for k in [NoteKind::Text, NoteKind::Balloon, NoteKind::Roughness, NoteKind::Weld, NoteKind::CenterMark] {
+                    for k in [NoteKind::Text, NoteKind::Balloon, NoteKind::Roughness, NoteKind::Weld, NoteKind::CenterMark, NoteKind::Gdt, NoteKind::Datum] {
                         let l = note_label(&k);
                         ui.selectable_value(&mut n.kind, k, l);
                     }
@@ -1066,8 +1517,15 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                 NoteKind::Roughness => "Rugosidade (ex.: Ra 1,6)",
                 NoteKind::Weld => "Medida da solda (ex.: a4)",
                 NoteKind::CenterMark => "Raio da marca (mm)",
+                NoteKind::Gdt => "Quadro de controle geométrico",
+                NoteKind::Datum => "Letra da referência",
             }));
-            ui.text_edit_multiline(&mut n.text);
+            if n.kind == NoteKind::Gdt {
+                let g = n.gdt.get_or_insert_with(Default::default);
+                crate::pmi_ui::gdt_ui(ui, "dwg_gdt", &mut g.ch, &mut g.tol, &mut g.datums, &mut g.extra);
+            } else {
+                ui.text_edit_multiline(&mut n.text);
+            }
             if n.kind == NoteKind::Weld {
                 let w = n.weld.get_or_insert(scc_desenho::DwgWeld { kind: scc_core::pmi::WeldKind::Filete, all_around: false, extra: Default::default() });
                 let mut size = n.text.clone();
@@ -1089,6 +1547,14 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     { let __r = ui.add(egui::DragValue::new(&mut l[1]).speed(0.5)); crate::ui_ext::wheel(ui, &__r, &mut l[1]); __r };
                 });
             }
+            if let Some(v) = n.view {
+                let vname = st.d.views.iter().find(|x| x.id == v).map(|x| x.name.clone()).unwrap_or_default();
+                ui.label(RichText::new(format!("{} {vname}{}", tr("Pertence à vista"), if n.anchor3.is_some() { tr(" — ponta presa ao modelo (acompanha a peça)") } else { "" })).weak().small());
+            }
+            egui::CollapsingHeader::new(tr("Estilo")).id_salt(("estilo_nota", id.0)).default_open(true).show(ui, |ui| {
+                style_color_width(ui, &mut n.style);
+                crate::pmi_draw::style_ui(ui, &mut n.style, true);
+            });
             if ui.button(tr("🗑 Apagar")).clicked() {
                 st.d.delete(id);
                 st.sel = None;
@@ -1196,7 +1662,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         }
         if ui.button(tr("Escolher arquivo…")).clicked() {
             if let Some(p) = rfd::FileDialog::new().add_filter(tr("Peça ou montagem"), &["sccpart", "sccasm"]).pick_file() {
-                st.source = Some(Source { path: st.rel(&p), display_state: String::new() });
+                st.source = Some(Source { path: st.rel(&p), display_state: String::new(), hidden: vec![] });
             }
         }
     });
@@ -1265,6 +1731,8 @@ fn note_label(k: &NoteKind) -> String {
         NoteKind::Roughness => "Rugosidade",
         NoteKind::Weld => "Solda",
         NoteKind::CenterMark => "Marca de centro",
+        NoteKind::Gdt => "Tolerância geométrica",
+        NoteKind::Datum => "Referência (datum)",
     })
     .to_string()
 }

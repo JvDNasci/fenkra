@@ -104,13 +104,13 @@ Status: [ ] a fazer Â· [~] parcial Â· [x] feito
 
 ## L. Pedido de 25/10/2026: montagem, desenho 2D e anotações
 - [x] L1 Montagem: árvore e painel de edição na filosofia dos sólidos (Concluir/Cancelar/Excluir, abas, 1 clique realça, 2 cliques editam)
-- [ ] L2 Desenho: GD&T dinâmico (quadro em casas) e anotações ancoradas em elementos da vista (associativas)
-- [ ] L3 Desenho: árvore por vistas (vista → anotações dela), caixa 2D da vista detecta o que pertence a ela, botão direito com opções, propriedades hierárquicas
-- [ ] L4 Desenho de montagem: componentes visíveis ou estado de exibição por vista
-- [ ] L5 Cotas soltas: arrastar livremente, alças (texto, linha de cota, setas), várias setas
-- [ ] L6 Estilo de renderização da vista e vista pela câmera atual (montagem)
-- [ ] L7 Elementos 2D: 1 clique e arrastar move, 2 cliques editam, botão direito com opções
-- [ ] L8 Cor e espessura por elemento no 2D
+- [x] L2 Desenho: GD&T dinâmico (quadro em casas) e anotações ancoradas em elementos da vista (associativas)
+- [x] L3 Desenho: árvore por vistas (vista → anotações dela), caixa 2D da vista detecta o que pertence a ela, botão direito com opções, propriedades hierárquicas
+- [x] L4 Desenho de montagem: componentes visíveis ou estado de exibição por vista
+- [x] L5 Cotas soltas: arrastar livremente, alças (texto, linha de cota, setas), várias setas
+- [x] L6 Estilo de renderização da vista e vista pela câmera atual (montagem)
+- [x] L7 Elementos 2D: 1 clique e arrastar move, 2 cliques editam, botão direito com opções
+- [x] L8 Cor e espessura por elemento no 2D
 - [x] L9 Molduras das anotações: nenhuma, retângulo, círculo, cápsula, triângulo, quadrado, bandeira dir./esq., losango, círculo/retângulo pontilhado, tamanho fixo; espessura, tipo de linha, cor
-- [~] L10 Propriedades das anotações (3D e 2D): cor, negrito, tipo de linha, justificação, ponto de ancoragem, espaçamento de linhas, ângulo, espelhar, girar com a vista, fundo (nenhum / preenchido / preenchido recortando a geometria), deslocamento, tamanho, aplicar escala, exibição (mostrar, chamada), coordenadas X/Y, chamada (seta, espessura, estilo)
+- [x] L10 Propriedades das anotações (3D e 2D): cor, negrito, tipo de linha, justificação, ponto de ancoragem, espaçamento de linhas, ângulo, espelhar, girar com a vista, fundo (nenhum / preenchido / preenchido recortando a geometria), deslocamento, tamanho, aplicar escala, exibição (mostrar, chamada), coordenadas X/Y, chamada (seta, espessura, estilo)
 - [ ] L11 Campos de seleção múltipla: botão "sacola" com a contagem → lista de elementos (cada clique acrescenta, remover); Ctrl+clique soma/tira da seleção

@@ -758,6 +758,9 @@ I["des_rugosidade"] = f'<path d="M4 22 L12 36 L26 6 H44" stroke="{ACTION}" strok
 I["des_solda"] = LN(6, 12, 42, 12, INK, 2.2) + f'<polygon points="16,12 16,22 26,12" fill="{ACTION}"/>' + LN(6, 12, 18, 36, INK, 1.8) + AR("20,40 14,35 20,33") + THIN("M30 18 H40", INK, 1.4) + \
     f'<path d="M4 40 H26 V44 H4 Z" fill="{MID}"/>'
 I["des_centro"] = f'<circle cx="24" cy="24" r="13" fill="{LIGHT}" {S}/>' + f'<path d="M2 24 H46 M24 2 V46" stroke="{ACTION}" stroke-width="1.8" stroke-dasharray="8 2 2 2"/>' + THIN("M20 24 H28 M24 20 V28", ACTION, 2.4)
+I["des_gdt"] = f'<rect x="3" y="12" width="42" height="16" fill="#ffffff" {S}/>' + THIN("M15 12 V28 M31 12 V28", INK, 1.6) + f'<circle cx="9" cy="20" r="4" fill="none" stroke="{ACTION}" stroke-width="1.6"/>' + THIN("M3.5 20 H14.5 M9 14.5 V25.5", ACTION, 1.2) + TH(17, 24, "0,1", ACTION, 8) + TH(35, 24, "A", ACTION, 9) + LN(10, 28, 10, 40, ACTION, 1.8) + AR("10,45 6,38 14,38")
+I["des_datum"] = f'<rect x="14" y="4" width="20" height="20" fill="#ffffff" {S}/>' + TH(18.5, 20, "A", ACTION, 15) + LN(24, 24, 24, 34, INK, 2) + f'<polygon points="14,44 34,44 24,34" fill="{ACTION}"/>' + f'<line x1="4" y1="44" x2="44" y2="44" stroke="{INK}" stroke-width="2.4"/>'
+I["des_vista_camera"] = f'<rect x="4" y="14" width="26" height="20" rx="3" fill="{LIGHT}" {S}/><polygon points="30,20 44,13 44,35 30,28" fill="{MID}" {S}/>' + f'<circle cx="17" cy="24" r="5" fill="#ffffff" stroke="{ACTION}" stroke-width="1.8"/>' + THIN("M6 40 H42", ACTION, 1.6)
 # tabelas
 GRID_T = f'<rect x="4" y="6" width="40" height="34" fill="#ffffff" {S}/><rect x="4" y="6" width="40" height="8" fill="{ACTION_L}" {S}/>' + THIN("M4 22 H44 M4 30 H44 M16 6 V40 M32 6 V40", INK, 1.2)
 I["des_bom"] = GRID_T + TH(6, 13, "#", ACTION, 7) + f'<circle cx="10" cy="26" r="3" fill="none" stroke="{ACTION}" stroke-width="1.4"/>' + f'<circle cx="10" cy="35" r="3" fill="none" stroke="{ACTION}" stroke-width="1.4"/>'

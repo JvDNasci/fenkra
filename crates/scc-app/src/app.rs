@@ -526,7 +526,7 @@ lado oposto");
             let dir = std::env::temp_dir().join("scc_demo_desenho");
             let _ = std::fs::create_dir_all(&dir);
             let _ = std::fs::write(dir.join("placa.sccpart"), scc_solidos::example_document().to_json());
-            let src = Source { path: "placa.sccpart".into(), display_state: String::new() };
+            let src = Source { path: "placa.sccpart".into(), display_state: String::new(), hidden: vec![] };
             let mut d = Drawing::new("Placa de exemplo", Format::A3);
             let sh = d.sheets[0].id;
             let ids = d.add_standard_set(sh, src.clone(), [95., 235.], 1., 100.);
@@ -538,15 +538,28 @@ lado oposto");
             d.add_view(sh, src.clone(), ViewKind::Detail { parent: ids[0], center: [f.hi[0] - 8., f.hi[1] - 2.], radius: 12., label: "B".into() }, [200., 125.], 2.);
             if let Some(ax) = f.axes {
                 let id = d.alloc();
-                d.dims.push(Dim { id, view: ids[0], kind: DimKind::Horizontal, anchors: vec![ax.unproject([f.lo[0], f.hi[1]]), ax.unproject([f.hi[0], f.hi[1]])], offset: 8., text: String::new(), tol: String::new() });
+                d.dims.push(Dim { id, view: ids[0], kind: DimKind::Horizontal, anchors: vec![ax.unproject([f.lo[0], f.hi[1]]), ax.unproject([f.hi[0], f.hi[1]])], offset: 8., text: String::new(), tol: String::new(), ..Default::default() });
                 let id = d.alloc();
-                d.dims.push(Dim { id, view: ids[0], kind: DimKind::Vertical, anchors: vec![ax.unproject([f.lo[0], f.lo[1]]), ax.unproject([f.lo[0], f.hi[1]])], offset: 8., text: String::new(), tol: "±0,1".into() });
+                d.dims.push(Dim { id, view: ids[0], kind: DimKind::Vertical, anchors: vec![ax.unproject([f.lo[0], f.lo[1]]), ax.unproject([f.lo[0], f.hi[1]])], offset: 8., text: String::new(), tol: "±0,1".into(), ..Default::default() });
+                // GD&T e referência presos às arestas da frente (associativos)
+                let fv = d.view(ids[0]).cloned().unwrap();
+                let tip = scc_desenho::layout::to_sheet(&fv, &f, [f.hi[0] - 10., f.hi[1]]);
+                let id = d.alloc();
+                let gdt = Some(DwgGdt { ch: scc_core::pmi::GdtChar::Planeza, tol: "0,05".into(), datums: String::new(), extra: Default::default() });
+                d.notes.push(Note { id, sheet: sh, kind: NoteKind::Gdt, pos: [tip[0] + 12., tip[1] + 22.], leader: Some(tip), text: String::new(), size: 3.5, gdt, view: Some(ids[0]), anchor3: Some(ax.unproject([f.hi[0] - 10., f.hi[1]])), ..Default::default() });
+                let tip = scc_desenho::layout::to_sheet(&fv, &f, [(f.lo[0] + f.hi[0]) / 2., f.lo[1]]);
+                let id = d.alloc();
+                d.notes.push(Note { id, sheet: sh, kind: NoteKind::Datum, pos: [tip[0], tip[1] - 14.], leader: Some(tip), text: "A".into(), size: 3.5, view: Some(ids[0]), anchor3: Some(ax.unproject([(f.lo[0] + f.hi[0]) / 2., f.lo[1]])), ..Default::default() });
+            }
+            // isométrica sombreada com arestas
+            if let Some(v) = d.views.iter_mut().find(|v| v.id == ids[3]) {
+                v.render = Render::SombreadoArestas;
             }
             let id = d.alloc();
             d.tables.push(Table { id, sheet: sh, kind: TableKind::Holes, source: src.clone(), pos: [270., 150.], level: Default::default() });
             let id = d.alloc();
             d.notes.push(Note { id, sheet: sh, kind: NoteKind::Text, pos: [25., 25.], leader: None, text: "Quebrar cantos vivos 0,5x45°
-Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None });
+Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::pmi::PmiStyle { anchor: 6, frame: scc_core::pmi::PmiFrame::Caixa, ..Default::default() }, ..Default::default() });
             match std::env::var("SCC_DEMO_DWG").as_deref() {
                 Ok("abnt") => d.title.style = TitleStyle::Abnt,
                 Ok("ansi") => d.title.style = TitleStyle::Ansi,

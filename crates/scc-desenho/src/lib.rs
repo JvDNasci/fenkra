@@ -174,6 +174,9 @@ pub struct Source {
     /// estado de exibição da montagem (coletor de exibição) — vazio = como está
     #[serde(default)]
     pub display_state: String,
+    /// componentes da montagem escondidos nesta vista (ids dos nós)
+    #[serde(default)]
+    pub hidden: Vec<u64>,
 }
 
 /// Direção padrão (1º diedro, como na ABNT/ISO E).
@@ -231,6 +234,31 @@ pub enum ViewKind {
     /// esquema cinemático da montagem: juntas (símbolos), barras entre as juntas de cada peça e
     /// terra nas peças fixas
     Schematic(Dir),
+    /// direção livre (ex.: a câmera do 3D): para o observador e eixo x da folha
+    Camera { toward: V3, x: V3 },
+}
+
+/// Estilo de renderização da vista.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum Render {
+    /// só arestas (com ou sem ocultas)
+    #[default]
+    Arestas,
+    /// faces sombreadas em cinza, sem arestas
+    Sombreado,
+    /// faces sombreadas e arestas visíveis por cima
+    SombreadoArestas,
+}
+
+impl Render {
+    pub const ALL: [Render; 3] = [Render::Arestas, Render::Sombreado, Render::SombreadoArestas];
+    pub fn label(self) -> &'static str {
+        match self {
+            Render::Arestas => "Arestas",
+            Render::Sombreado => "Sombreado",
+            Render::SombreadoArestas => "Sombreado com arestas",
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -250,6 +278,16 @@ pub struct View {
     pub tangent_edges: bool,
     #[serde(default = "yes")]
     pub label: bool,
+    #[serde(default)]
+    pub render: Render,
+    /// cor e espessura (mm) das arestas visíveis — None/0 = padrão
+    #[serde(default)]
+    pub color: Option<[u8; 3]>,
+    #[serde(default)]
+    pub line_width: f64,
+    /// estilo herdado pelas cotas e anotações desta vista
+    #[serde(default)]
+    pub ann: scc_core::pmi::PmiStyle,
 }
 
 fn yes() -> bool {
@@ -293,7 +331,25 @@ pub struct Dim {
     pub text: String,
     #[serde(default)]
     pub tol: String,
+    /// estilo próprio (cor, espessura, ponta das setas, texto…) — padrão herda da vista
+    #[serde(default)]
+    pub style: scc_core::pmi::PmiStyle,
+    /// deslocamento do texto em relação ao lugar automático (mm na folha)
+    #[serde(default)]
+    pub text_pos: Option<V2>,
+    /// setas: 0 automático, 1 por dentro, 2 por fora, 3 só a primeira, 4 só a segunda, 5 nenhuma
+    #[serde(default)]
+    pub arrows: u8,
 }
+
+impl Default for Dim {
+    fn default() -> Self {
+        Dim { id: Id(0), view: Id(0), kind: DimKind::Horizontal, anchors: vec![], offset: 8., text: String::new(), tol: String::new(), style: Default::default(), text_pos: None, arrows: 0 }
+    }
+}
+
+/// Setas da cota.
+pub const DIM_ARROWS: [&str; 6] = ["automático", "por dentro", "por fora", "só a primeira", "só a segunda", "sem setas"];
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum NoteKind {
@@ -304,6 +360,26 @@ pub enum NoteKind {
     Weld,
     /// marca de centro / linha de centro
     CenterMark,
+    /// quadro de controle geométrico (ISO 1101) — dados em `Note::gdt`
+    Gdt,
+    /// símbolo de referência (datum): o texto é a letra
+    Datum,
+}
+
+/// Quadro de controle geométrico de uma nota.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct DwgGdt {
+    pub ch: scc_core::pmi::GdtChar,
+    pub tol: String,
+    pub datums: String,
+    #[serde(default)]
+    pub extra: scc_core::pmi::GdtExtra,
+}
+
+impl Default for DwgGdt {
+    fn default() -> Self {
+        DwgGdt { ch: scc_core::pmi::GdtChar::Planeza, tol: "0,05".into(), datums: String::new(), extra: Default::default() }
+    }
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -320,6 +396,23 @@ pub struct Note {
     /// símbolo de solda completo (ISO 2553); `None` = filete com a medida do texto
     #[serde(default)]
     pub weld: Option<DwgWeld>,
+    #[serde(default)]
+    pub gdt: Option<DwgGdt>,
+    /// estilo (moldura, cor, negrito, justificação, ancoragem, chamada…)
+    #[serde(default)]
+    pub style: scc_core::pmi::PmiStyle,
+    /// vista a que pertence e ponto do modelo onde a chamada encosta (associativo: acompanha
+    /// a peça e a vista)
+    #[serde(default)]
+    pub view: Option<Id>,
+    #[serde(default)]
+    pub anchor3: Option<V3>,
+}
+
+impl Default for Note {
+    fn default() -> Self {
+        Note { id: Id(0), sheet: Id(0), kind: NoteKind::Text, pos: [0., 0.], leader: None, text: String::new(), size: 3.5, weld: None, gdt: None, style: Default::default(), view: None, anchor3: None }
+    }
 }
 
 /// Símbolo de solda de uma nota (o texto da nota é a medida da seção).
@@ -489,8 +582,9 @@ impl Drawing {
             ViewKind::Detail { label, .. } => format!("Detalhe {label}"),
             ViewKind::Flat => "Planificada".into(),
             ViewKind::Schematic(_) => "Esquema cinemático".into(),
+            ViewKind::Camera { .. } => "Vista da câmera".into(),
         };
-        self.views.push(View { id, sheet, name, source, kind, pos, scale, hidden_lines: false, tangent_edges: true, label: true });
+        self.views.push(View { id, sheet, name, source, kind, pos, scale, hidden_lines: false, tangent_edges: true, label: true, render: Render::Arestas, color: None, line_width: 0., ann: Default::default() });
         id
     }
 
@@ -526,7 +620,7 @@ impl Drawing {
         }
         self.views.retain(|v| !kill.contains(&v.id));
         self.dims.retain(|d| !kill.contains(&d.id) && !kill.contains(&d.view));
-        self.notes.retain(|n| n.id != id);
+        self.notes.retain(|n| n.id != id && !n.view.is_some_and(|v| kill.contains(&v)));
         self.tables.retain(|t| t.id != id);
         if self.sheets.len() > 1 && self.sheets.iter().any(|s| s.id == id) {
             self.sheets.retain(|s| s.id != id);
@@ -578,7 +672,7 @@ mod tests {
     fn desenho_ida_e_volta_json() {
         let mut d = Drawing::new("Teste", Format::A3);
         let s = d.sheets[0].id;
-        let ids = d.add_standard_set(s, Source { path: "p.sccpart".into(), display_state: String::new() }, [120., 180.], 1., 90.);
+        let ids = d.add_standard_set(s, Source { path: "p.sccpart".into(), display_state: String::new(), hidden: vec![] }, [120., 180.], 1., 90.);
         assert_eq!(ids.len(), 4);
         let d2 = Drawing::from_json(&d.to_json()).unwrap();
         assert_eq!(d, d2);
@@ -596,7 +690,7 @@ mod tests {
         std::fs::write(dir.join("m.sccasm"), a.to_json()).unwrap();
         let mut e = Drawing::new("Esquema", Format::A4);
         let sh = e.sheets[0].id;
-        let v = e.add_view(sh, Source { path: "m.sccasm".into(), display_state: String::new() }, ViewKind::Schematic(Dir::Frente), [100., 100.], 1.);
+        let v = e.add_view(sh, Source { path: "m.sccasm".into(), display_state: String::new(), hidden: vec![] }, ViewKind::Schematic(Dir::Frente), [100., 100.], 1.);
         let mut m = source::Models::new(Some(dir));
         let p = m.proj(&e, v);
         assert!(p.error.is_none(), "{:?}", p.error);
@@ -632,7 +726,7 @@ mod tests {
         let dir = std::env::temp_dir().join("scc_desenho_teste");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("placa.sccpart"), scc_solidos::example_document().to_json()).unwrap();
-        let src = Source { path: "placa.sccpart".into(), display_state: String::new() };
+        let src = Source { path: "placa.sccpart".into(), display_state: String::new(), hidden: vec![] };
         let mut d = Drawing::new("Placa", Format::A3);
         let s = d.sheets[0].id;
         let ids = d.add_standard_set(s, src.clone(), [130., 190.], 1., 100.);
@@ -659,20 +753,41 @@ mod tests {
         let a1 = ax.unproject([lo[0], lo[1]]);
         let a2 = ax.unproject([hi[0], lo[1]]);
         let id = d.alloc();
-        d.dims.push(Dim { id, view: ids[0], kind: DimKind::Horizontal, anchors: vec![a1, a2], offset: -8., text: String::new(), tol: String::new() });
+        d.dims.push(Dim { id, view: ids[0], kind: DimKind::Horizontal, anchors: vec![a1, a2], offset: -8., text: String::new(), tol: String::new(), ..Default::default() });
         let v = d.view(ids[0]).unwrap().clone();
         let (val, _) = layout::dim_value(&d.dims[0], &v, &front).unwrap();
         assert!((val - (hi[0] - lo[0])).abs() < 1e-6);
         let nid = d.alloc();
-        d.notes.push(Note { id: nid, sheet: s, kind: NoteKind::Balloon, pos: [250., 260.], leader: Some([200., 220.]), text: "1".into(), size: 3.5, weld: None });
+        d.notes.push(Note { id: nid, sheet: s, kind: NoteKind::Balloon, pos: [250., 260.], leader: Some([200., 220.]), text: "1".into(), size: 3.5, weld: None, ..Default::default() });
         let tid = d.alloc();
         d.tables.push(Table { id: tid, sheet: s, kind: TableKind::Holes, source: src.clone(), pos: [25., 120.], level: Default::default() });
         let tid2 = d.alloc();
         d.tables.push(Table { id: tid2, sheet: s, kind: TableKind::Bom, source: src, pos: [25., 60.], level: Default::default() });
         let t = m.table(&d.tables[1], &d);
         assert_eq!(t.rows.len(), 1);
+        // GD&T presa à vista, referência, nota com moldura e cota com texto solto
+        let a3 = ax.unproject([hi[0] - 5., hi[1]]);
+        let gid = d.alloc();
+        d.notes.push(Note { id: gid, sheet: s, kind: NoteKind::Gdt, pos: [200., 280.], leader: None, gdt: Some(DwgGdt::default()), view: Some(ids[0]), anchor3: Some(a3), ..Default::default() });
+        let fid = d.alloc();
+        let style = scc_core::pmi::PmiStyle { frame: scc_core::pmi::PmiFrame::Losango, frame_dash: 1, angle: 30., bold: true, color: Some([200, 0, 0]), ..Default::default() };
+        d.notes.push(Note { id: fid, sheet: s, kind: NoteKind::Text, pos: [60., 40.], text: "NOTA".into(), style, ..Default::default() });
+        d.dims[0].text_pos = Some([0., 12.]);
+        d.dims[0].arrows = 2;
         let items = layout::sheet(&d, s, &mut m);
         assert!(items.len() > 50);
+        // a chamada da GD&T termina na aresta projetada
+        let tip = layout::to_sheet(d.view(ids[0]).unwrap(), &front, ax.project(a3));
+        assert!(items.iter().any(|i| i.owner == Some(gid) && matches!(&i.prim, layout::Prim::Fill { pts } if pts.iter().any(|p| (p[0] - tip[0]).abs() < 1e-6 && (p[1] - tip[1]).abs() < 1e-6))), "ponta da GD&T fora da aresta");
+        // nota: moldura tracejada (vários traços), texto girado em negrito e vermelho
+        let nf: Vec<&layout::Item> = items.iter().filter(|i| i.owner == Some(fid)).collect();
+        assert!(nf.iter().filter(|i| matches!(i.prim, layout::Prim::Line { .. })).count() > 4);
+        assert!(nf.iter().any(|i| i.bold && i.color == Some([200, 0, 0]) && matches!(&i.prim, layout::Prim::Text { angle, .. } if (angle - 30.).abs() < 1e-9)));
+        // vista sombreada tem triângulos cinza
+        let iso = ids[3];
+        d.views.iter_mut().find(|v| v.id == iso).unwrap().render = Render::SombreadoArestas;
+        let items2 = layout::sheet(&d, s, &mut m);
+        assert!(items2.iter().filter(|i| i.owner == Some(iso) && matches!(i.prim, layout::Prim::Fill { .. }) && i.color.is_some()).count() > 10);
         assert!(items.iter().any(|i| matches!(&i.prim, layout::Prim::Text { text, .. } if text.starts_with("CORTE A-A"))));
         let p = dir.join("placa.pdf");
         export::save(&d, s, &mut m, p.to_str().unwrap()).unwrap();

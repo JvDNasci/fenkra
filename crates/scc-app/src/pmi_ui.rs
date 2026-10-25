@@ -1050,6 +1050,49 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui) {
 }
 
 /// Campos do símbolo de solda ISO 2553 (usado no PMI e no desenho).
+/// Campos do quadro de controle geométrico (característica, tolerância, referências, modificador,
+/// quadro composto) — usado no 3D e no desenho.
+pub fn gdt_ui(ui: &mut egui::Ui, salt: &str, ch: &mut GdtChar, tol: &mut String, datums: &mut String, extra: &mut GdtExtra) {
+            egui::ComboBox::from_id_salt(salt).selected_text(format!("{} {}", ch.symbol(), tr(ch.label()))).show_ui(ui, |ui| {
+                for c in GdtChar::ALL {
+                    ui.selectable_value(ch, c, format!("{} {}", c.symbol(), tr(c.label())));
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label(tr("Tolerância"));
+                ui.text_edit_singleline(tol);
+            });
+            ui.horizontal(|ui| {
+                ui.label(tr("Referências"));
+                ui.text_edit_singleline(datums);
+            });
+            ui.label(RichText::new(tr("Referências separadas por espaço (ex.: A B C); cada uma vira uma casa do quadro.")).weak().small());
+            ui.checkbox(&mut extra.zone_dia, tr("zona cilíndrica (Ø antes do valor)"));
+            ui.horizontal(|ui| {
+                ui.label(tr("Modificador"));
+                for m in ["", "Ⓜ", "Ⓛ", "Ⓟ", "Ⓕ", "Ⓢ", "Ⓣ", "Ⓤ"] {
+                    let lbl = if m.is_empty() { tr("nenhum").to_string() } else { m.to_string() };
+                    if ui.selectable_label(extra.modifier == m, lbl).clicked() {
+                        extra.modifier = m.to_string();
+                    }
+                }
+            })
+            .response
+            .on_hover_text(tr("Ⓜ máximo material, Ⓛ mínimo material, Ⓟ zona projetada, Ⓕ estado livre, Ⓢ independente, Ⓣ plano tangente, Ⓤ zona desigual"));
+            let mut comp = extra.second.is_some();
+            if ui.checkbox(&mut comp, tr("quadro composto (segunda linha)")).changed() {
+                extra.second = comp.then(|| (String::new(), String::new()));
+            }
+            if let Some((t2, d2)) = &mut extra.second {
+                ui.horizontal(|ui| {
+                    ui.label(tr("Tolerância 2"));
+                    ui.add(egui::TextEdit::singleline(t2).desired_width(70.));
+                    ui.label(tr("Referências 2"));
+                    ui.add(egui::TextEdit::singleline(d2).desired_width(70.));
+                });
+            }
+}
+
 pub fn weld_ui(ui: &mut egui::Ui, salt: &str, kind: &mut WeldKind, size: &mut String, all_around: &mut bool, extra: &mut WeldExtra) {
     let pick = |ui: &mut egui::Ui, id: &str, k: &mut WeldKind| {
         egui::ComboBox::from_id_salt((salt, id)).selected_text(format!("{} {}", k.symbol(), tr(k.label()))).width(180.).show_ui(ui, |ui| {
@@ -1208,46 +1251,7 @@ fn panel_inner(app: &mut App, ui: &mut egui::Ui, id: Id, style_req: &mut bool) -
                 ui.add(egui::TextEdit::singleline(item).desired_width(60.));
             });
         }
-        PmiKind::Gdt { ch, tol, datums, extra } => {
-            egui::ComboBox::from_id_salt("pmi_gdt").selected_text(format!("{} {}", ch.symbol(), tr(ch.label()))).show_ui(ui, |ui| {
-                for c in GdtChar::ALL {
-                    ui.selectable_value(ch, c, format!("{} {}", c.symbol(), tr(c.label())));
-                }
-            });
-            ui.horizontal(|ui| {
-                ui.label(tr("Tolerância"));
-                ui.text_edit_singleline(tol);
-            });
-            ui.horizontal(|ui| {
-                ui.label(tr("Referências"));
-                ui.text_edit_singleline(datums);
-            });
-            ui.label(RichText::new(tr("Referências separadas por espaço (ex.: A B C); cada uma vira uma casa do quadro.")).weak().small());
-            ui.checkbox(&mut extra.zone_dia, tr("zona cilíndrica (Ø antes do valor)"));
-            ui.horizontal(|ui| {
-                ui.label(tr("Modificador"));
-                for m in ["", "Ⓜ", "Ⓛ", "Ⓟ", "Ⓕ", "Ⓢ", "Ⓣ", "Ⓤ"] {
-                    let lbl = if m.is_empty() { tr("nenhum").to_string() } else { m.to_string() };
-                    if ui.selectable_label(extra.modifier == m, lbl).clicked() {
-                        extra.modifier = m.to_string();
-                    }
-                }
-            })
-            .response
-            .on_hover_text(tr("Ⓜ máximo material, Ⓛ mínimo material, Ⓟ zona projetada, Ⓕ estado livre, Ⓢ independente, Ⓣ plano tangente, Ⓤ zona desigual"));
-            let mut comp = extra.second.is_some();
-            if ui.checkbox(&mut comp, tr("quadro composto (segunda linha)")).changed() {
-                extra.second = comp.then(|| (String::new(), String::new()));
-            }
-            if let Some((t2, d2)) = &mut extra.second {
-                ui.horizontal(|ui| {
-                    ui.label(tr("Tolerância 2"));
-                    ui.add(egui::TextEdit::singleline(t2).desired_width(70.));
-                    ui.label(tr("Referências 2"));
-                    ui.add(egui::TextEdit::singleline(d2).desired_width(70.));
-                });
-            }
-        }
+        PmiKind::Gdt { ch, tol, datums, extra } => gdt_ui(ui, "pmi_gdt", ch, tol, datums, extra),
         _ => {
             ui.horizontal(|ui| {
                 ui.label(tr("Texto (vazio = medido)"));
