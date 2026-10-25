@@ -478,6 +478,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             expr(ui, "Recuo início", &mut fl.off1, vars, "mm");
             expr(ui, "Recuo fim", &mut fl.off2, vars, "mm");
             ui.checkbox(&mut fl.miter, tr("pontas em meia-esquadria (45°) para a aba vizinha"));
+            ui.checkbox(&mut fl.min_gap, tr("recuo mínimo para aba vizinha (0,0001)")).on_hover_text(tr("abas em arestas vizinhas sem recuo: planifica sem sobrepor"));
             let mut rel = fl.relief.is_some();
             if ui.checkbox(&mut rel, tr("alívio de canto nas pontas recuadas")).changed() {
                 fl.relief = rel.then(|| "2".to_string());
@@ -720,8 +721,19 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 cf.edge = picked.unwrap_or_default();
             }
             expr(ui, "Comprimento", &mut cf.length, vars, "mm");
+            if cf.angle.trim().is_empty() {
+                cf.angle = "90".into();
+            }
+            expr(ui, "Ângulo", &mut cf.angle, vars, "°");
+            let mut own = cf.radius.is_some();
+            if ui.checkbox(&mut own, tr("raio próprio (senão o da chapa)")).changed() {
+                cf.radius = own.then(|| "2".to_string());
+            }
+            if let Some(r) = &mut cf.radius {
+                expr(ui, "Raio interno", r, vars, "mm");
+            }
             ui.checkbox(&mut cf.flip, tr("para o outro lado da chapa"));
-            ui.label(RichText::new(tr("Parede normal à chapa ao longo da aresta (canto vivo, sem raio).")).weak().small());
+            ui.label(RichText::new(tr("A aba segue a aresta e as que continuam tangentes (reta e curva juntas), com o raio de dobra; planifica pelo comprimento desenvolvido.")).weak().small());
         }
         FeatureKind::SmCornerRelief(cr) => {
             section(ui, "Alívio de canto");

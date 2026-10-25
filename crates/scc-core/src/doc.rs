@@ -1599,10 +1599,16 @@ pub struct SmProfileFlange {
 /// Aba numa aresta curva (aba por superfície): parede normal à chapa ao longo da aresta.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct SmCurveFlange {
-    /// pontos da aresta escolhida (polilinha)
+    /// pontos da aresta escolhida (polilinha; a cadeia tangente toda, reta e curva)
     pub edge: Vec<[f64; 3]>,
     pub length: String,
     pub flip: bool,
+    /// ângulo da aba (vazio = 90°)
+    #[serde(default)]
+    pub angle: String,
+    /// raio interno (senão o da chapa)
+    #[serde(default)]
+    pub radius: Option<String>,
 }
 
 /// Alívio de canto: corte no encontro de abas.
@@ -1721,6 +1727,13 @@ pub struct SmFlange {
     /// pontas em meia-esquadria (45°) para encontrar a aba vizinha
     #[serde(default)]
     pub miter: bool,
+    /// recuo mínimo (0,0001) nas pontas: abas vizinhas sem recuo planificam certo
+    #[serde(default = "yes_bool")]
+    pub min_gap: bool,
+}
+
+fn yes_bool() -> bool {
+    true
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -2129,7 +2142,13 @@ impl FeatureKind {
                     exprs(r)
                 }
             }
-            SmCurveFlange(p) => exprs(&mut p.length),
+            SmCurveFlange(p) => {
+                exprs(&mut p.length);
+                exprs(&mut p.angle);
+                if let Some(r) = &mut p.radius {
+                    exprs(r)
+                }
+            }
             SmCornerRelief(p) => exprs(&mut p.size),
             StructMember(m) => {
                 for p in &mut m.paths {

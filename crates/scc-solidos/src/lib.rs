@@ -2770,8 +2770,8 @@ impl Ctx<'_> {
                     r,
                     angle: ev(&fl.angle, &self.vars, "ângulo")?,
                     length: ev(&fl.length, &self.vars, "comprimento")?,
-                    off1: ev(&fl.off1, &self.vars, "recuo 1")?,
-                    off2: ev(&fl.off2, &self.vars, "recuo 2")?,
+                    off1: ev(&fl.off1, &self.vars, "recuo 1")?.max(if fl.min_gap { 1e-4 } else { 0. }),
+                    off2: ev(&fl.off2, &self.vars, "recuo 2")?.max(if fl.min_gap { 1e-4 } else { 0. }),
                     flip: fl.flip,
                     flat: sp.flat,
                     k: sp.k,
@@ -3255,50 +3255,106 @@ impl Ctx<'_> {
             }
             FeatureKind::SmCurveFlange(cf) => {
                 let sp = self.sheet()?;
-                if sp.flat {
-                    return Ok(Some("planificada: a aba curva aparece só dobrada".into()));
-                }
                 if cf.edge.len() < 2 {
-                    return Err("escolha uma aresta (curva) da chapa".into());
+                    return Err("escolha uma aresta (reta ou curva) da chapa".into());
                 }
                 let len = ev(&cf.length, &self.vars, "comprimento")?;
-                let b = self.body(f.target).ok_or("a aba precisa de uma chapa")?.clone();
-                let pts = &cf.edge;
-                // normal da chapa: plano da aresta (Newell); aresta reta: a da face perto dela
-                let mut n = [0.; 3];
-                for i in 0..pts.len() {
-                    let (p, q) = (pts[i], pts[(i + 1) % pts.len()]);
-                    n[0] += (p[1] - q[1]) * (p[2] + q[2]);
-                    n[1] += (p[2] - q[2]) * (p[0] + q[0]);
-                    n[2] += (p[0] - q[0]) * (p[1] + q[1]);
+                let ang = if cf.angle.trim().is_empty() { 90. } else { ev(&cf.angle, &self.vars, "ângulo")? };
+                if !(1.0..=179.0).contains(&ang) {
+                    return Err("ângulo da aba entre 1° e 179°".into());
                 }
-                let n = match geo3d::unit(n) {
-                    Some(v) => v,
-                    None => b.surface_near(pts[pts.len() / 2]).map_err(k)?.1,
+                let r = match &cf.radius {
+                    Some(e) => ev(e, &self.vars, "raio")?,
+                    None => sp.r,
                 };
+                let b = self.body(f.target).ok_or("a aba precisa de uma chapa")?.clone();
+                // a aresta foi escolhida dobrada ou planificada: leva ao estado atual
+                let mut pts: Vec<V3> = cf.edge.iter().map(|q| self.map_point(*q, f.flat_space, sp.flat)).collect();
+                pts.dedup_by(|a, b| geo3d::dist(*a, *b) < 1e-6);
+                if pts.len() < 2 {
+                    return Err("aresta curta demais".into());
+                }
+                let mid = pts[pts.len() / 2];
+                // normal da chapa: face perto da aresta, um pouco para dentro da peça
                 let (lo, hi) = b.bbox().ok_or("chapa sem dimensões")?;
                 let ctr = geo3d::lerp(lo, hi, 0.5);
-                // faixa da espessura para dentro da chapa, em volta da aresta
-                let inner: Vec<V3> = (0..pts.len())
-                    .map(|i| {
-                        let tan = geo3d::unit(geo3d::sub(pts[(i + 1).min(pts.len() - 1)], pts[i.saturating_sub(1)])).unwrap_or([1., 0., 0.]);
-                        let mut w = geo3d::unit(scc_kernel::cross(n, tan)).unwrap_or([0., 1., 0.]);
-                        if geo3d::dot(w, geo3d::sub(ctr, pts[i])) < 0. {
-                            w = geo3d::mul(w, -1.);
-                        }
-                        geo3d::add(pts[i], geo3d::mul(w, sp.t))
-                    })
-                    .collect();
-                // lado em que está a espessura (raio de teste a partir da faixa)
-                let probe = geo3d::lerp(pts[pts.len() / 2], inner[pts.len() / 2], 0.5);
+                let inward = geo3d::unit(geo3d::sub(ctr, mid)).unwrap_or([0., 0., -1.]);
+                let (_, n) = b.surface_near(geo3d::add(mid, geo3d::mul(inward, sp.t * 0.25))).map_err(k)?;
+                // para fora (no plano da chapa), com o mesmo sentido ao longo da cadeia
+                let tan = |i: usize| geo3d::unit(geo3d::sub(pts[(i + 1).min(pts.len() - 1)], pts[i.saturating_sub(1)])).unwrap_or([1., 0., 0.]);
+                let im = pts.len() / 2;
+                let w0 = geo3d::unit(scc_kernel::cross(tan(im), n)).ok_or("aresta normal à chapa")?;
+                let s = if geo3d::dot(w0, geo3d::sub(mid, ctr)) >= 0. { 1. } else { -1. };
+                let outs: Vec<V3> = (0..pts.len()).map(|i| geo3d::mul(geo3d::unit(scc_kernel::cross(tan(i), n)).unwrap_or(w0), s)).collect();
+                // de que lado está a espessura (raio de teste a partir de dentro da chapa)
+                let probe = geo3d::sub(mid, geo3d::mul(outs[im], sp.t * 0.5));
                 let up_hit = b.ray_hit(geo3d::add(probe, geo3d::mul(n, -sp.t * 3.)), n).map_err(k)?.map(|(q, _)| geo3d::dot(geo3d::sub(q, probe), n));
-                let mat_up = up_hit.is_some_and(|d| d > -sp.t * 0.5 && d < sp.t * 1.5);
+                let mat_up = up_hit.is_some_and(|dd| dd > -sp.t * 0.5 && dd < sp.t * 1.5);
                 let d = if cf.flip { geo3d::mul(n, -1.) } else { n };
-                // começa na face do lado para onde a aba vai
-                let shift = if (geo3d::dot(d, n) > 0.) == mat_up { geo3d::mul(n, if mat_up { sp.t } else { -sp.t }) } else { [0.; 3] };
-                let mut ring: Vec<V3> = pts.iter().map(|p| geo3d::add(*p, shift)).collect();
-                ring.extend(inner.iter().rev().map(|p| geo3d::add(*p, shift)));
-                let tool = Shape::poly_prism(&ring, geo3d::mul(d, len)).map_err(k)?;
+                // face interna da dobra: a do lado para onde a aba sobe
+                let shift = if (geo3d::dot(d, n) > 0.) == mat_up { geo3d::mul(d, sp.t) } else { [0.; 3] };
+                let inner: Vec<V3> = pts.iter().map(|p| geo3d::add(*p, shift)).collect();
+                let a = ang.to_radians();
+                if sp.flat {
+                    // planificada: faixa desenvolvida (arco pela linha neutra + parede) para fora
+                    let dev = a * (r + sp.k * sp.t) + len;
+                    let fr = Frame { origin: inner[0], x: outs[0], normal: d };
+                    let loc = |p: V3| {
+                        let q = geo3d::sub(p, fr.origin);
+                        let y = scc_kernel::cross(fr.normal, fr.x);
+                        [geo3d::dot(q, fr.x), geo3d::dot(q, y)]
+                    };
+                    // começa 0,05 mm para dentro da chapa (fusão sem faces coincidentes)
+                    let p2: Vec<[f64; 2]> = inner.iter().zip(&outs).map(|(p, o)| loc(geo3d::sub(*p, geo3d::mul(*o, 0.05)))).collect();
+                    let mut q2: Vec<[f64; 2]> = inner.iter().zip(&outs).map(|(p, o)| loc(geo3d::add(*p, geo3d::mul(*o, dev)))).collect();
+                    q2.reverse();
+                    let seg = |v: &[[f64; 2]]| if v.len() >= 3 { scc_kernel::Seg2::Spline(v.to_vec()) } else { scc_kernel::Seg2::Line(v[0], v[v.len() - 1]) };
+                    let lp = vec![seg(&p2), scc_kernel::Seg2::Line(p2[p2.len() - 1], q2[0]), seg(&q2), scc_kernel::Seg2::Line(q2[q2.len() - 1], p2[0])];
+                    let face = Shape::face(&fr, &[lp]).map_err(k)?;
+                    let tool = face.extrude(geo3d::mul(d, -1.), sp.t, 0.).map_err(k)?;
+                    self.apply(f.target, tool, BoolOp::Add, f.id)?;
+                    return Ok(None);
+                }
+                // seção no plano normal à aresta: arco da dobra (raio interno r, externo r+t) e parede
+                // a normal da seção segue o sentido da varredura (senão o sólido sai do avesso);
+                // com a normal trocada, o eixo v da seção vira −d
+                let nsec = scc_kernel::cross(outs[0], d);
+                let sv = if geo3d::dot(nsec, tan(0)) >= 0. { 1. } else { -1. };
+                let fr = Frame { origin: inner[0], x: outs[0], normal: geo3d::mul(nsec, sv) };
+                let arc = |rad: f64, t0: f64, t1: f64| -> Vec<[f64; 2]> {
+                    (0..=8).map(|i| {
+                        let t = t0 + (t1 - t0) * i as f64 / 8.;
+                        [rad * t.cos(), sv * (r + rad * t.sin())]
+                    }).collect()
+                };
+                let h = std::f64::consts::FRAC_PI_2;
+                // ângulo da dobra medido a partir da base: o arco vai de −90° a −90° + a
+                let inner_arc = arc(r, -h, -h + a);
+                let outer_arc = arc(r + sp.t, -h + a, -h);
+                let dir = [(-h + a).cos(), (-h + a).sin()];
+                let up = [-dir[1], sv * dir[0]];
+                let ie = inner_arc[inner_arc.len() - 1];
+                let oe = outer_arc[0];
+                let it = [ie[0] + up[0] * len, ie[1] + up[1] * len];
+                let ot = [oe[0] + up[0] * len, oe[1] + up[1] * len];
+                let arc3 = |v: &[[f64; 2]]| scc_kernel::Seg2::Arc(v[0], v[v.len() / 2], v[v.len() - 1]);
+                // a seção entra 0,05 mm na chapa: a fusão encontra volume comum (sem faces coincidentes)
+                let e0 = 0.05;
+                let ob = outer_arc[outer_arc.len() - 1];
+                let ib = inner_arc[0];
+                let (ob2, ib2) = ([ob[0] - e0, ob[1]], [ib[0] - e0, ib[1]]);
+                let lp = vec![
+                    arc3(&inner_arc),
+                    scc_kernel::Seg2::Line(ie, it),
+                    scc_kernel::Seg2::Line(it, ot),
+                    scc_kernel::Seg2::Line(ot, oe),
+                    arc3(&outer_arc),
+                    scc_kernel::Seg2::Line(ob, ob2),
+                    scc_kernel::Seg2::Line(ob2, ib2),
+                    scc_kernel::Seg2::Line(ib2, ib),
+                ];
+                let face = Shape::face(&fr, &[lp]).map_err(k)?;
+                let tool = face.sweep(&inner, 0).map_err(k)?;
                 self.apply(f.target, tool, BoolOp::Add, f.id)?;
                 Ok(None)
             }
@@ -4730,7 +4786,7 @@ mod tests {
         let mut ids = vec![d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }))];
         // aresta de cima das duas retas (ponto médio com o erro de float da malha)
         for e in [[50.00001, 0., 2.], [0., 50.00001, 2.]] {
-            ids.push(d.add_feature(FeatureKind::SmFlange(SmFlange { edge: e, length: s("30"), angle: s("90"), radius: None, off1: s("5"), off2: s("5"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false })));
+            ids.push(d.add_feature(FeatureKind::SmFlange(SmFlange { edge: e, length: s("30"), angle: s("90"), radius: None, off1: s("5"), off2: s("5"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true })));
         }
         // furo retangular na aba do lado y = 0 (feito no dobrado: a aba sobe em z)
         let cut = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XZ), [40., 15.], [60., 25.]);
@@ -5227,7 +5283,7 @@ mod tests {
         assert!(near(r.bodies[0].mass.volume, 10000. + PI * 24. * 6. - PI * 25. * 2., 1e-3), "furo flangeado {}", r.bodies[0].mass.volume);
         // aba recuada 10 mm de cada lado com alívio de 3 mm
         let mut d = base();
-        d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 25., 2.], length: s("20"), angle: s("90"), radius: None, off1: s("10"), off2: s("10"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false }));
+        d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 25., 2.], length: s("20"), angle: s("90"), radius: None, off1: s("10"), off2: s("10"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true }));
         let v_sem = check(&d).bodies[0].mass.volume;
         if let FeatureKind::SmFlange(fl) = &mut d.features.last_mut().unwrap().kind {
             fl.relief = Some(s("3"));
@@ -5320,7 +5376,7 @@ mod tests {
         d.add_feature(FeatureKind::SmHem(SmHem { edge: [0., 25., 2.], length: s("6"), gap: s("2"), flip: false, kind: 1 }));
         check(&d);
         let mut d = base();
-        d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 25., 2.], length: s("20"), angle: s("90"), radius: None, off1: s("5"), off2: s("5"), flip: false, relief: Some(s("3")), relief_kind: 1, side: 2, miter: true }));
+        d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 25., 2.], length: s("20"), angle: s("90"), radius: None, off1: s("5"), off2: s("5"), flip: false, relief: Some(s("3")), relief_kind: 1, side: 2, miter: true, min_gap: true }));
         check(&d);
         // joggle pelo ângulo (45°) com compensação
         let mut d = base();
@@ -5354,7 +5410,7 @@ mod tests {
         d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), flat: false, ..Default::default() });
         let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [100., 50.]);
         d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
-        d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 25., 2.], length: s("20"), angle: s("90"), radius: None, off1: s("0"), off2: s("0"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false }));
+        d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 25., 2.], length: s("20"), angle: s("90"), radius: None, off1: s("0"), off2: s("0"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true }));
         let r = recompute(&d);
         for f in &d.features {
             assert!(matches!(r.status[&f.id], Status::Ok | Status::Warning(_)), "{}: {:?}", f.name, r.status[&f.id]);
@@ -6187,5 +6243,97 @@ mod tests_spline_perfil {
             assert_eq!(r.status[&e], Status::Ok, "shared={shared}: {:?}", r.status[&e]);
             assert!(r.bodies[0].mass.volume > 15000., "{}", r.bodies[0].mass.volume);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests_abas_vizinhas {
+    use super::*;
+
+    #[test]
+    fn duas_abas_vizinhas_planificam() {
+        if !scc_kernel::AVAILABLE {
+            return;
+        }
+        let s = |x: &str| x.to_string();
+        for off in ["0", "0.0001"] {
+            let mut d = Document::new("caixa");
+            d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), flat: false, ..Default::default() });
+            let mut data = SketchData::default();
+            let mut n = 6_100_000u64;
+            let mut al = || {
+                n += 1;
+                Id(n)
+            };
+            data.add_rect(&mut al, [0., 0.], [50., 50.], false);
+            let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
+            d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
+            let fl = |e: [f64; 3]| FeatureKind::SmFlange(SmFlange { edge: e, length: s("20"), angle: s("90"), radius: None, off1: s(off), off2: s(off), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true });
+            d.add_feature(fl([50., 25., 2.]));
+            d.add_feature(fl([25., 50., 2.]));
+            for flat in [false, true] {
+                d.sheet.as_mut().unwrap().flat = flat;
+                let r = recompute(&d);
+                let bad: Vec<String> = d.features.iter().filter(|f| !matches!(r.status[&f.id], Status::Ok)).map(|f| format!("{}: {:?}", f.name, r.status[&f.id])).collect();
+                assert!(bad.is_empty(), "{bad:?}");
+                let v = r.bodies[0].mass.volume;
+                // planificada com o mesmo volume da dobrada (só o canto sobreposto de 2×2×20 a menos)
+                assert!((v - 9942.).abs() < 60., "off={off} flat={flat} vol={v}");
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests_aba_curva {
+    use super::*;
+
+    #[test]
+    fn aba_curva_com_raio_e_planificada() {
+        if !scc_kernel::AVAILABLE {
+            return;
+        }
+        let s = |x: &str| x.to_string();
+        let mut d = Document::new("curva");
+        d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), flat: false, ..Default::default() });
+        let mut data = SketchData::default();
+        let mut n = 6_200_000u64;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        // quarto de disco R50 com a borda curva
+        let o = data.add_point(&mut al, 0., 0.);
+        let a = data.add_point(&mut al, 50., 0.);
+        let b = data.add_point(&mut al, 0., 50.);
+        data.add_curve(&mut al, scc_core::sketch::Curve::Line { a: o, b: a }, false);
+        data.add_curve(&mut al, scc_core::sketch::Curve::Arc { c: o, s: a, e: b }, false);
+        data.add_curve(&mut al, scc_core::sketch::Curve::Line { a: b, b: o }, false);
+        let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
+        d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
+        let edge: Vec<[f64; 3]> = (0..=24).map(|i| {
+            let t = i as f64 / 24. * std::f64::consts::FRAC_PI_2;
+            [50. * t.cos(), 50. * t.sin(), 2.]
+        }).collect();
+        d.add_feature(FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("10"), flip: false, angle: s("90"), radius: None }));
+        let r = recompute(&d);
+        for f in &d.features {
+            assert_eq!(r.status[&f.id], Status::Ok, "{}: {:?}", f.name, r.status[&f.id]);
+        }
+        let base = std::f64::consts::PI * 2500. / 4. * 2.;
+        let vf = r.bodies[0].mass.volume;
+        assert!(vf > base + 900., "dobrada {vf}");
+        let zmax = r.bodies[0].mesh.positions.chunks_exact(3).map(|p| p[2]).fold(f32::MIN, f32::max);
+        assert!((zmax - 14.).abs() < 0.1, "altura da aba {zmax}");
+        d.sheet.as_mut().unwrap().flat = true;
+        let r = recompute(&d);
+        for f in &d.features {
+            assert_eq!(r.status[&f.id], Status::Ok, "plana {}: {:?}", f.name, r.status[&f.id]);
+        }
+        let zmax = r.bodies[0].mesh.positions.chunks_exact(3).map(|p| p[2]).fold(f32::MIN, f32::max);
+        assert!(zmax < 2.01, "planificada é plana {zmax}");
+        let xmax = r.bodies[0].mesh.positions.chunks_exact(3).map(|p| p[0]).fold(f32::MIN, f32::max);
+        let dev = 50. + std::f64::consts::FRAC_PI_2 * (2. + 0.44 * 2.) + 10.;
+        assert!((xmax as f64 - dev).abs() < 0.5, "desenvolvido {xmax} ≈ {dev}");
     }
 }

@@ -789,7 +789,7 @@ mod tests {
             data.add_rect(&mut al, [0., 0.], [100., 50.], false);
             let sk = cd.add_feature(scc_core::FeatureKind::Sketch(scc_core::Sketch { plane: scc_core::PlaneRef::Origin(scc_core::OriginPlane::XY), data }));
             cd.add_feature(scc_core::FeatureKind::SmWall(scc_core::SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
-            cd.add_feature(scc_core::FeatureKind::SmFlange(scc_core::SmFlange { edge: [100., 25., 2.], length: "20".into(), angle: "90".into(), radius: None, off1: "0".into(), off2: "0".into(), flip: false, relief: None, relief_kind: 0, side: 0, miter: false }));
+            cd.add_feature(scc_core::FeatureKind::SmFlange(scc_core::SmFlange { edge: [100., 25., 2.], length: "20".into(), angle: "90".into(), radius: None, off1: "0".into(), off2: "0".into(), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true }));
             std::fs::write(dir.join("chapa.sccpart"), cd.to_json()).unwrap();
             let fv = d.add_view(s, Source { path: "chapa.sccpart".into(), display_state: String::new(), hidden: vec![] }, ViewKind::Flat, [200., 60.], 1.);
             let pf = m.proj(&d, fv);

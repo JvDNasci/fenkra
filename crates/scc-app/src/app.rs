@@ -413,7 +413,7 @@ impl App {
             }
             let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
             d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
-            d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 30., 2.], length: s("25"), angle: s("90"), radius: None, off1: s("8"), off2: s("8"), flip: false, relief: Some(s("3")), relief_kind: 0, side: 0, miter: false }));
+            d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 30., 2.], length: s("25"), angle: s("90"), radius: None, off1: s("8"), off2: s("8"), flip: false, relief: Some(s("3")), relief_kind: 0, side: 0, miter: false, min_gap: true }));
             d.add_feature(FeatureKind::SmHem(SmHem { edge: [0., 30., 2.], length: s("8"), gap: s("0"), flip: false, kind: 0 }));
             if std::env::var("SCC_DEMO_CHAPA").is_ok_and(|v| v == "linha") {
                 d.add_feature(FeatureKind::SmLouver(SmLouver { a: [60., 15., 2.], b: [60., 45., 2.], width: s("12"), height: s("5"), flip: false, down: false }));
@@ -1356,7 +1356,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
                     .picks
                     .iter()
                     .find_map(|p| match (p, self.result.as_ref()) {
-                        (Pick::Edge { body, edge, .. }, Some(r)) => Some(crate::picking::edge_polyline(r, *body, *edge)),
+                        (Pick::Edge { body, edge, .. }, Some(r)) => Some(if c == Cmd::SmCurveFlange { crate::picking::tangent_chain(r, *body, *edge) } else { crate::picking::edge_polyline(r, *body, *edge) }),
                         _ => None,
                     })
                     .unwrap_or_default();
@@ -1367,7 +1367,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
                 });
                 let d = &mut self.open.doc;
                 Sel::Feature(d.add_feature(match c {
-                    Cmd::SmCurveFlange => FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("15"), flip: false }),
+                    Cmd::SmCurveFlange => FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("15"), flip: false, angle: s("90"), radius: None }),
                     _ => FeatureKind::SmCornerRelief(SmCornerRelief { at: at.unwrap_or([0.; 3]), size: s("4"), kind: 0 }),
                 }))
             }
@@ -1398,6 +1398,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
                         relief_kind: 0,
                         side: 0,
                         miter: false,
+                        min_gap: true,
                     }),
                     Cmd::SmHem => FeatureKind::SmHem(SmHem { edge: edge.unwrap_or([0.; 3]), length: s("8"), gap: s("0"), flip: false, kind: 0 }),
                     Cmd::SmBend => FeatureKind::SmBend(SmBend {

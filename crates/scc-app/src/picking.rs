@@ -501,6 +501,58 @@ pub fn same_face(r: &RecomputeResult, body: usize, a: [f64; 3], b: [f64; 3]) -> 
     matches!((face_at(r, body, a), face_at(r, body, b)), (Some(x), Some(y)) if x == y)
 }
 
+/// Cadeia de arestas tangentes a partir de `edge` (continua enquanto a ponta seguinte sai na
+/// mesma direção): reta e curva concordantes viram uma polilinha só.
+pub fn tangent_chain(r: &RecomputeResult, body: usize, edge: usize) -> Vec<[f64; 3]> {
+    let Some(m) = mesh_of(r, body) else { return vec![] };
+    let ne = m.edge_ranges.len();
+    let poly = |e: usize| edge_polyline(r, body, e);
+    let d = |a: [f64; 3], b: [f64; 3]| ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt();
+    let unit = |a: [f64; 3], b: [f64; 3]| {
+        let l = d(a, b).max(1e-12);
+        [(b[0] - a[0]) / l, (b[1] - a[1]) / l, (b[2] - a[2]) / l]
+    };
+    let mut chain = poly(edge);
+    if chain.len() < 2 {
+        return chain;
+    }
+    let mut used = vec![edge];
+    for _ in 0..2 {
+        loop {
+            let n = chain.len();
+            let (end, prev) = (chain[n - 1], chain[n - 2]);
+            let dir = unit(prev, end);
+            let mut next = None;
+            for e in 0..ne {
+                if used.contains(&e) {
+                    continue;
+                }
+                let mut p = poly(e);
+                if p.len() < 2 {
+                    continue;
+                }
+                if d(p[p.len() - 1], end) < 1e-3 {
+                    p.reverse();
+                }
+                if d(p[0], end) > 1e-3 {
+                    continue;
+                }
+                let t = unit(p[0], p[1]);
+                if dir[0] * t[0] + dir[1] * t[1] + dir[2] * t[2] > 0.97 {
+                    next = Some((e, p));
+                    break;
+                }
+            }
+            let Some((e, p)) = next else { break };
+            used.push(e);
+            chain.extend(p.into_iter().skip(1));
+        }
+        // depois para o outro lado
+        chain.reverse();
+    }
+    chain
+}
+
 /// Polilinha de uma aresta do corpo (na ordem dos segmentos da malha).
 pub fn edge_polyline(r: &RecomputeResult, body: usize, edge: usize) -> Vec<[f64; 3]> {
     let Some(m) = mesh_of(r, body) else { return vec![] };
