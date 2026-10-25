@@ -12,11 +12,102 @@ use crate::i18n::tr;
 
 type Vars = HashMap<String, f64>;
 
+/// Ícone de um parâmetro pelo que ele mede (comprimento, ângulo, raio…), pelo nome.
+pub(crate) fn param_icon(label: &str) -> &'static str {
+    let l = label.to_lowercase();
+    let has = |ks: &[&str]| ks.iter().any(|k| l.contains(k));
+    if has(&["ângulo", "angulo", "angle", "inclina", "giro", "rota"]) {
+        "∠"
+    } else if has(&["diâmetro", "diametro", "diameter", "⌀", "ø"]) {
+        "⌀"
+    } else if has(&["raio", "radius", "arredond", "filete"]) {
+        "◜"
+    } else if has(&["espessura", "thickness", "parede", "chapa"]) {
+        "▭"
+    } else if has(&["profundidade", "depth", "fundo"]) {
+        "↧"
+    } else if has(&["altura", "height", "elevação"]) {
+        "↕"
+    } else if has(&["largura", "width", "boca"]) {
+        "⇿"
+    } else if has(&["folga", "gap", "recuo", "alívio", "alivio", "relief", "clearance"]) {
+        "⇹"
+    } else if has(&["deslocamento", "offset", "distância", "distancia", "afast", "desvio"]) {
+        "⇥"
+    } else if has(&["passo", "pitch", "espaçamento", "espacamento", "intervalo"]) {
+        "⋯"
+    } else if has(&["quantidade", "número", "numero", "count", "instâncias", "cópias", "voltas"]) {
+        "#"
+    } else if has(&["fator", "factor", "razão", "ratio", "escala", "scale"]) || l == "k" {
+        "ƒ"
+    } else if has(&["comprimento", "length", "extensão", "extensao", "tamanho", "lado", "aba", "bainha"]) {
+        "↔"
+    } else if has(&["peso", "massa", "densidade"]) {
+        "⚖"
+    } else if has(&["tempo", "velocidade", "duração"]) {
+        "⏱"
+    } else {
+        "◦"
+    }
+}
+
+/// Ícone de uma seção/aba do painel, pelo título.
+pub(crate) fn section_icon(title: &str) -> &'static str {
+    let l = title.to_lowercase();
+    let has = |ks: &[&str]| ks.iter().any(|k| l.contains(k));
+    if has(&["perfil", "profile", "sketch", "guia"]) {
+        "✏"
+    } else if has(&["rosca", "fixador", "thread"]) {
+        "🔩"
+    } else if has(&["restri", "relaç", "junta", "acopla", "link"]) {
+        "🔗"
+    } else if has(&["material", "textura", "nome e exib", "aparência"]) {
+        "🎨"
+    } else if has(&["massa", "medidas"]) {
+        "⚖"
+    } else if has(&["posição", "mover", "orientação", "direção", "eixo", "eop"]) {
+        "✥"
+    } else if has(&["extensão", "limite", "boca", "fundo"]) {
+        "↔"
+    } else if has(&["padrão", "repetir", "centros"]) {
+        "⁂"
+    } else if has(&["texto"]) {
+        "🅰"
+    } else if has(&["dobra", "parede", "aba", "joggle", "estampo", "veneziana", "flangeado", "chapa", "recorte", "rasgo", "compensação", "cantos", "base (web)", "suporte"]) {
+        "▱"
+    } else if has(&["movimento", "comando", "simula", "explod"]) {
+        "⟳"
+    } else if has(&["operação", "costurar", "dividir", "fechar", "engrossar", "preencher", "malha"]) {
+        "⊕"
+    } else if has(&["estado", "usado por", "interfer"]) {
+        "ⓘ"
+    } else if has(&["tipo", "forma", "definição", "plano"]) {
+        "☰"
+    } else if has(&["componente", "peças", "montagem", "recurso"]) {
+        "🧩"
+    } else if has(&["parâmetro", "propriedades"]) {
+        "ƒ"
+    } else {
+        "•"
+    }
+}
+
+/// Dica das caixas de expressão.
+pub(crate) const EXPR_HINT: &str = "Aceita número (vírgula ou ponto), parâmetro ou expressão: L/2 + 5, 2*pi*r, sqrt(a; b). Roda do mouse soma/subtrai (Shift ×10, Ctrl ×0,1).";
+
 /// Campo de expressão: mostra o valor avaliado ou o erro.
 pub(crate) fn expr(ui: &mut egui::Ui, label: &str, s: &mut String, vars: &Vars, unit: &str) {
     let label = tr(label);
     ui.horizontal(|ui| {
-        ui.add_sized([96., 18.], egui::Label::new(label).truncate());
+        let icon = param_icon(label);
+        let lr = ui.add_sized([118., 18.], egui::Label::new(RichText::new(format!("{icon} {label}"))).truncate().sense(egui::Sense::hover()));
+        lr.on_hover_ui(|ui| {
+            ui.label(RichText::new(format!("{icon} {label}")).strong());
+            if let Ok(v) = scc_core::expr::eval_str(s, vars) {
+                ui.label(format!("= {} {unit}", fmt(v)));
+            }
+            ui.label(RichText::new(tr(EXPR_HINT)).weak().small());
+        });
         let r = scc_core::expr::eval_str(s, vars);
         let bad = r.is_err();
         let mut te = egui::TextEdit::singleline(s).desired_width(110.);
@@ -26,6 +117,7 @@ pub(crate) fn expr(ui: &mut egui::Ui, label: &str, s: &mut String, vars: &Vars, 
         let resp = ui.add(te);
         // roda do mouse sobre o campo soma/subtrai (Shift ×10, Ctrl ×0,1)
         crate::ui_ext::wheel_text(ui, &resp, s);
+        let resp = if bad { resp } else { resp.on_hover_text(tr(EXPR_HINT)) };
         match r {
             Ok(v) if s.trim().replace(',', ".").parse::<f64>().is_err() => {
                 ui.label(RichText::new(format!("= {} {unit}", fmt(v))).weak());
@@ -98,23 +190,53 @@ pub(crate) fn tabs_end(ui: &mut egui::Ui) {
     ui.ctx().data_mut(|d| d.insert_temp(run.key, run.titles.clone()));
 }
 
-/// Barra de abas (pílulas).
+/// Barra de abas: poucas abas numa linha; muitas viram uma grade de botões iguais (2 ou 3 por
+/// linha, conforme a largura), com ícone, para o painel não virar uma fita comprida.
 fn tab_bar(ui: &mut egui::Ui, run: &mut TabRun) {
     ui.add_space(4.);
     let accent = ui.visuals().selection.bg_fill;
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing = egui::vec2(4., 4.);
-        for (i, t) in run.prev.iter().enumerate() {
-            let on = i == run.active;
-            let txt = RichText::new(t).size(12.5);
-            let b = egui::Button::new(if on { txt.strong().color(Color32::WHITE) } else { txt }).corner_radius(12.).min_size(egui::vec2(0., 24.));
-            let b = if on { b.fill(accent) } else { b.fill(ui.visuals().faint_bg_color) };
-            if ui.add(b).clicked() {
-                run.active = i;
-                ui.ctx().data_mut(|d| d.insert_temp(run.key.with("ativa"), i));
+    let n = run.prev.len();
+    let w = ui.available_width();
+    let cols = if n <= 3 { n.max(1) } else if w < 250. { 2 } else { 3 };
+    let gap = 4.;
+    let cell_w = ((w - gap * (cols as f32 - 1.)) / cols as f32).floor();
+    let t = ui.input(|i| i.time) as f32;
+    let rows: Vec<(usize, Vec<String>)> = run.prev.chunks(cols).enumerate().map(|(r, c)| (r * cols, c.to_vec())).collect();
+    for (first, row) in rows {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing = egui::vec2(gap, gap);
+            for (k, title) in row.iter().enumerate() {
+                let i = first + k;
+                let on = i == run.active;
+                let (r, resp) = ui.allocate_exact_size(egui::vec2(cell_w, 26.), egui::Sense::click());
+                let hot = ui.ctx().animate_bool(egui::Id::unique(("aba_hot", run.key, i)), resp.hovered() || on);
+                let v = ui.visuals();
+                let fill = if on { accent } else { v.faint_bg_color.lerp_to_gamma(accent, 0.25 * hot) };
+                ui.painter().rect_filled(r, 8., fill);
+                if !on {
+                    ui.painter().rect_stroke(r, 8., egui::Stroke::new(1., v.widgets.inactive.bg_stroke.color.gamma_multiply(0.7)), egui::StrokeKind::Inside);
+                } else {
+                    // brilho suave correndo na aba ativa
+                    let x = r.left() + ((t * 0.35).fract()) * (r.width() + 40.) - 20.;
+                    let sh = egui::Rect::from_min_max(egui::pos2(x.max(r.left() + 4.), r.top() + 2.), egui::pos2((x + 20.).min(r.right() - 4.), r.bottom() - 2.));
+                    if sh.width() > 0. {
+                        ui.painter().rect_filled(sh, 6., Color32::from_white_alpha(14));
+                    }
+                }
+                let col = if on { Color32::WHITE } else { v.text_color() };
+                let mut job = egui::text::LayoutJob::simple_singleline(format!("{} {}", section_icon(title), title), egui::FontId::proportional(12.), col);
+                job.wrap = egui::text::TextWrapping::truncate_at_width(r.width() - 10.);
+                let g = ui.painter().layout_job(job);
+                ui.painter().galley(r.center() - g.size() / 2., g, col);
+                let resp = resp.on_hover_text(title.as_str());
+                if resp.clicked() {
+                    run.active = i;
+                    ui.ctx().data_mut(|d| d.insert_temp(run.key.with("ativa"), i));
+                }
             }
-        }
-    });
+        });
+    }
+    ui.ctx().request_repaint_after(std::time::Duration::from_millis(50));
     ui.add_space(8.);
 }
 
@@ -146,7 +268,7 @@ pub(crate) fn section(ui: &mut egui::Ui, title: &str) {
             let slot = ui.painter().add(egui::Shape::Noop);
             run.card = Some((slot, top));
             ui.add_space(6.);
-            ui.label(RichText::new(title.to_uppercase()).size(11.).strong().color(ui.visuals().weak_text_color()));
+            ui.label(RichText::new(format!("{}  {}", section_icon(title), title.to_uppercase())).size(11.).strong().color(ui.visuals().weak_text_color()));
             ui.add_space(2.);
         } else {
             run.hidden = Some((ui.cursor().top(), ui.clip_rect()));
@@ -156,7 +278,7 @@ pub(crate) fn section(ui: &mut egui::Ui, title: &str) {
     });
     if !handled {
         ui.add_space(6.);
-        ui.label(RichText::new(title).strong());
+        ui.label(RichText::new(format!("{} {title}", section_icon(title))).strong());
     }
 }
 
@@ -805,7 +927,7 @@ pub(crate) fn color_table(ui: &mut egui::Ui, id: &str, color: &mut [u8; 3]) {
         ui.add_sized([96., 18.], egui::Label::new(tr("Tabela")));
         egui::ComboBox::from_id_salt((id, "tabela_cores")).selected_text(name_of(*color).unwrap_or_else(|| tr("— escolher —").to_string())).width(170.).show_ui(ui, |ui| {
             let swatch = |ui: &mut egui::Ui, n: &str, c: [u8; 3], cur: &mut [u8; 3]| {
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     let (r, _) = ui.allocate_exact_size(egui::vec2(14., 14.), egui::Sense::hover());
                     ui.painter().rect_filled(r, 2., Color32::from_rgb(c[0], c[1], c[2]));
                     if ui.selectable_label(*cur == c, n).clicked() {
@@ -895,7 +1017,7 @@ fn replace_all(ui: &mut egui::Ui, doc: &mut Document, id: Id) {
     if others.is_empty() {
         return;
     }
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.label(tr("Substituir em todos os usuários por"));
         egui::ComboBox::from_id_salt("subst_all").selected_text("…").show_ui(ui, |ui| {
             for (o, n) in others {

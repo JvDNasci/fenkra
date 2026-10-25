@@ -135,7 +135,7 @@ fn thin_ui(ui: &mut egui::Ui, thin: &mut Option<String>, vars: &Vars) {
 fn thin_side_ui(ui: &mut egui::Ui, thin: &mut Option<String>, side: &mut u8, vars: &Vars) {
     thin_ui(ui, thin, vars);
     if thin.is_some() {
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.label(tr("Lado"));
             ui.radio_value(side, 0, tr("um lado"));
             ui.radio_value(side, 1, tr("outro lado"));
@@ -292,7 +292,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 PatternKind::Linear { dir, count, spacing, dir2, count2, spacing2, total } => {
                     geo_ui::axis_slot(ui, "pt_d1", "Direção 1", doc, me, dir, seed);
                     expr(ui, "Quantidade", count, vars, "");
-                    ui.horizontal(|ui| {
+                    ui.horizontal_wrapped(|ui| {
                         ui.radio_value(total, false, tr("espaçamento"));
                         ui.radio_value(total, true, tr("comprimento total"));
                     });
@@ -435,7 +435,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         FeatureKind::SmWall(w) => {
             section(ui, "Parede base");
             let mut from_surf = w.surface.is_some();
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 if ui.selectable_label(!from_surf, tr("de sketch")).clicked() {
                     from_surf = false;
                 }
@@ -469,7 +469,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             if let Some(r) = &mut fl.radius {
                 expr(ui, "Raio interno", r, vars, "mm");
             }
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 ui.label(tr("Lado do material"));
                 for (k, n) in [(0u8, "dobra por fora"), (1, "material por fora"), (2, "material por dentro")] {
                     ui.selectable_value(&mut fl.side, k, tr(n));
@@ -487,7 +487,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             }
             if let Some(w) = &mut fl.relief {
                 expr(ui, "Largura do alívio", w, vars, "mm");
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.label(tr("Tipo"));
                     for (k, n) in [(0u8, "retangular"), (1, "redondo"), (2, "rasgo")] {
                         ui.selectable_value(&mut fl.relief_kind, k, tr(n));
@@ -498,7 +498,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         FeatureKind::SmHem(h) => {
             section(ui, "Bainha");
             edge_line(ui, &h.edge);
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 ui.label(tr("Tipo"));
                 for (k, n) in [(0u8, "fechada/aberta"), (1, "gota"), (2, "enrolada")] {
                     ui.selectable_value(&mut h.kind, k, tr(n));
@@ -520,7 +520,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 _ => None,
             }).collect();
             let mut by_plane = j.plane.is_some();
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 if ui.selectable_label(!by_plane, tr("por dois pontos")).clicked() {
                     by_plane = false;
                 }
@@ -683,7 +683,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         FeatureKind::SmCut(c) => {
             section(ui, "Recorte na chapa");
             sketch_pick(ui, "smc_sk", "Perfil", doc, idx, &mut c.sketch);
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 for (k, n) in [(0u8, "normal"), (1, "com saída"), (2, "flangeado")] {
                     ui.selectable_value(&mut c.mode, k, tr(n));
                 }
@@ -767,7 +767,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         FeatureKind::SmCornerRelief(cr) => {
             section(ui, "Alívio de canto");
             ui.label(RichText::new(format!("{} ({:.1}, {:.1}, {:.1}) — {}", tr("canto em"), cr.at[0], cr.at[1], cr.at[2], tr("clique outro vértice/face para trocar"))).small());
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 for (k, n) in [(0u8, "redondo"), (1, "quadrado"), (2, "gota")] {
                     ui.selectable_value(&mut cr.kind, k, tr(n));
                 }

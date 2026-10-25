@@ -1003,7 +1003,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
         ui.label(RichText::new(f.file_name().map(|x| x.to_string_lossy().to_string()).unwrap_or_default()).weak().small());
     }
     // modo edição × visualização
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         if ui.selectable_label(!st.view_only, tr("✏ Edição")).on_hover_text(tr("mover, restringir e editar")).clicked() {
             st.view_only = false;
         }
@@ -1239,7 +1239,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                             });
                         }
                         for (fid, ficon, fname, sup) in feats {
-                            ui.horizontal(|ui| {
+                            ui.horizontal_wrapped(|ui| {
                                 line(ui, 26.);
                                 let mut t = RichText::new(format!("{ficon} {fname}"));
                                 if *sup {
@@ -1693,7 +1693,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     { let __r = ui.add(egui::DragValue::new(&mut n.number).range(0..=9999)); crate::ui_ext::wheel(ui, &__r, &mut n.number); __r };
                 });
                 ui.checkbox(&mut n.fixed, tr("📌 fixo (referência, sem graus de liberdade)"));
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.radio_value(&mut n.mode, LoadMode::Editavel, tr("editável"));
                     ui.radio_value(&mut n.mode, LoadMode::Visualizacao, tr("só visualização"));
                 });
@@ -2610,7 +2610,7 @@ pub fn bom_window(app: &mut App, ctx: &egui::Context) {
         if crate::app::done_bar(ui) {
             st.bom_open = None;
         }
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             for l in BomLevel::ALL {
                 ui.selectable_value(&mut level, l, tr(l.label()));
             }
@@ -2738,7 +2738,7 @@ pub fn composer_window(app: &mut App, ctx: &egui::Context) {
                 return;
             }
             st.anim_sel = st.anim_sel.min(st.asm.animations.len() - 1);
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 let names: Vec<String> = st.asm.animations.iter().map(|a| a.name.clone()).collect();
                 egui::ComboBox::from_id_salt("anim_sel").selected_text(&names[st.anim_sel]).show_ui(ui, |ui| {
                     for (i, n) in names.iter().enumerate() {
