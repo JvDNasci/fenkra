@@ -488,6 +488,14 @@ impl App {
             mk(d, PmiKind::Weld { kind: WeldKind::Filete, size: s("a5"), all_around: true, extra: we }, vec![[60., 35., 0.]], [30., 30., 25.], "");
             mk(d, PmiKind::Gdt { ch: GdtChar::Posicao, tol: s("0,1"), datums: s("A B C"), extra: GdtExtra { zone_dia: true, modifier: s("Ⓜ"), second: Some((s("0,05"), s("A"))) } }, vec![[-50., -25., 8.]], [-40., -30., 25.], "");
             mk(d, PmiKind::TitleBlock { template: TITLE_TEMPLATE.into() }, vec![[60., 35., 8.]], [50., -60., 0.], "");
+            // legenda deitada no topo e quadro composto na frente (exemplos de anotação fixa no plano)
+            if let Some(p) = d.pmi.last_mut() {
+                p.plane = Some(([0., 0., 1.], [1., 0., 0.]));
+            }
+            if let Some(p) = d.pmi.iter_mut().find(|p| matches!(&p.kind, PmiKind::Gdt { extra, .. } if extra.second.is_some())) {
+                p.plane = Some(([0., -1., 0.], [1., 0., 0.]));
+                p.offset = [-30., 0., 25.];
+            }
             mk(d, PmiKind::Datum { letter: s("A") }, vec![[-20., -35., 4.]], [-10., -25., -10.], "");
             mk(d, PmiKind::Linear, vec![[-60., -35., 0.], [-60., -35., 8.]], [-15., 0., 0.], "");
             if let Some(p) = d.pmi.last_mut() {

@@ -4,6 +4,100 @@
 
 use eframe::egui::{self, Color32, FontFamily, FontId, Painter, Pos2, Rect, Stroke};
 use scc_core::pmi::*;
+use std::cell::RefCell;
+
+/// Tela de desenho da anotação: junta as formas num sistema local e no fim pinta na tela como
+/// estão (de frente) ou deitadas num plano (cada vértice projetado pela câmera).
+pub struct Cv<'a> {
+    p: &'a Painter,
+    shapes: RefCell<Vec<egui::Shape>>,
+}
+
+impl<'a> Cv<'a> {
+    pub fn new(p: &'a Painter) -> Self {
+        Cv { p, shapes: RefCell::new(vec![]) }
+    }
+    pub fn add(&self, s: egui::Shape) -> usize {
+        let mut v = self.shapes.borrow_mut();
+        v.push(s);
+        v.len() - 1
+    }
+    pub fn set(&self, i: usize, s: egui::Shape) {
+        if let Some(x) = self.shapes.borrow_mut().get_mut(i) {
+            *x = s;
+        }
+    }
+    pub fn extend(&self, it: impl IntoIterator<Item = egui::Shape>) {
+        self.shapes.borrow_mut().extend(it);
+    }
+    pub fn layout_no_wrap(&self, t: String, f: FontId, c: Color32) -> std::sync::Arc<egui::Galley> {
+        self.p.layout_no_wrap(t, f, c)
+    }
+    pub fn galley(&self, pos: Pos2, g: std::sync::Arc<egui::Galley>, c: Color32) {
+        self.add(egui::Shape::galley(pos, g, c));
+    }
+    pub fn text(&self, pos: Pos2, a: egui::Align2, t: &str, f: FontId, c: Color32) -> Rect {
+        let g = self.layout_no_wrap(t.to_string(), f, c);
+        let r = a.anchor_size(pos, g.size());
+        self.galley(r.min, g, c);
+        r
+    }
+    pub fn rect_filled(&self, r: Rect, round: f32, c: Color32) {
+        self.add(egui::Shape::rect_filled(r, round, c));
+    }
+    pub fn rect_stroke(&self, r: Rect, round: f32, s: Stroke, k: egui::StrokeKind) {
+        self.add(egui::Shape::rect_stroke(r, round, s, k));
+    }
+    pub fn line_segment(&self, pts: [Pos2; 2], s: Stroke) {
+        self.add(egui::Shape::line_segment(pts, s));
+    }
+    pub fn circle_filled(&self, c: Pos2, r: f32, col: Color32) {
+        self.add(egui::Shape::circle_filled(c, r, col));
+    }
+    pub fn circle_stroke(&self, c: Pos2, r: f32, s: Stroke) {
+        self.add(egui::Shape::circle_stroke(c, r, s));
+    }
+    /// Pinta como está (coordenadas já de tela).
+    pub fn flush(self) {
+        self.p.extend(self.shapes.into_inner());
+    }
+    /// Pinta deitado: `map` leva cada ponto local à tela (None = atrás da câmera). Devolve o
+    /// retângulo ocupado na tela.
+    pub fn flush_mapped(self, map: impl Fn(Pos2) -> Option<Pos2>) -> Option<Rect> {
+        let ctx = self.p.ctx().clone();
+        let ppp = ctx.pixels_per_point();
+        let tex = ctx.fonts(|f| f.font_image_size());
+        let mut tess = egui::epaint::Tessellator::new(ppp, egui::epaint::TessellationOptions::default(), tex, vec![]);
+        let mut bb: Option<Rect> = None;
+        for s in self.shapes.into_inner() {
+            if matches!(s, egui::Shape::Noop) {
+                continue;
+            }
+            let mut m = egui::Mesh::default();
+            tess.tessellate_shape(s, &mut m);
+            if m.vertices.is_empty() {
+                continue;
+            }
+            let mut ok = true;
+            for v in &mut m.vertices {
+                match map(v.pos) {
+                    Some(q) => {
+                        v.pos = q;
+                        bb = Some(bb.map_or(Rect::from_min_max(q, q), |r| r.union(Rect::from_min_max(q, q))));
+                    }
+                    None => {
+                        ok = false;
+                        break;
+                    }
+                }
+            }
+            if ok {
+                self.p.add(egui::Shape::mesh(m));
+            }
+        }
+        bb
+    }
+}
 
 /// Cor de realce da anotação selecionada.
 pub const HL: Color32 = Color32::from_rgb(255, 150, 0);
@@ -74,7 +168,7 @@ impl Pen {
     }
 
     /// Ponta da chamada em `tip`, vindo de `from`.
-    pub fn arrow(&self, p: &Painter, tip: Pos2, from: Pos2) {
+    pub fn arrow(&self, p: &Cv, tip: Pos2, from: Pos2) {
         p.extend(self.arrow_shapes(tip, from));
     }
 
@@ -99,13 +193,28 @@ impl Pen {
     }
 
     /// Lugar reservado na pintura para a chamada ficar por baixo da caixa (desenhada depois).
-    pub fn reserve(p: &Painter) -> egui::layers::ShapeIdx {
+    pub fn reserve(p: &Cv) -> usize {
         p.add(egui::Shape::Noop)
+    }
+
+    /// O mesmo estilo em unidades do plano (0,1 mm): texto e linhas com medidas reais.
+    pub fn on_plane(&self) -> Pen {
+        Pen {
+            fam: self.fam.clone(),
+            size: self.size * 0.35 * 10.,
+            line: self.line,
+            text: self.text,
+            width: self.width * 1.8,
+            arrow: self.arrow,
+            bg: self.bg,
+            frame: self.frame,
+            sel: self.sel,
+        }
     }
 
     /// Chamada da caixa `r` até `anchor`: sai do lado da caixa voltado para o ponto, com um
     /// patamar curto, e fica por baixo da caixa (no lugar reservado). Nunca cruza a caixa.
-    pub fn leader(&self, p: &Painter, slot: egui::layers::ShapeIdx, r: Rect, anchor: Pos2) {
+    pub fn leader(&self, p: &Cv, slot: usize, r: Rect, anchor: Pos2) {
         let c = r.center();
         let d = anchor - c;
         if r.expand(2.).contains(anchor) {
@@ -127,7 +236,7 @@ impl Pen {
     }
 
     /// Bloco de texto (várias linhas) centrado em `at`, com moldura e fundo conforme o tipo.
-    pub fn text_block(&self, p: &Painter, at: Pos2, txt: &str, frame_default: PmiFrame, bg_default: PmiBg) -> Rect {
+    pub fn text_block(&self, p: &Cv, at: Pos2, txt: &str, frame_default: PmiFrame, bg_default: PmiBg) -> Rect {
         let fill = self.fill(bg_default);
         let tc = self.text_col(fill);
         let g = p.layout_no_wrap(txt.to_string(), self.font(1.), tc);
@@ -148,7 +257,7 @@ impl Pen {
     }
 
     /// Texto de cota: valor sem moldura (salvo pedido) e tolerâncias diferentes empilhadas à direita.
-    pub fn dim_text(&self, p: &Painter, at: Pos2, main: &str, stack: Option<&(String, String)>) -> Rect {
+    pub fn dim_text(&self, p: &Cv, at: Pos2, main: &str, stack: Option<&(String, String)>) -> Rect {
         let Some((up, lo)) = stack else { return self.text_block(p, at, main, PmiFrame::Nenhuma, PmiBg::Nenhum) };
         let fill = self.fill(PmiBg::Nenhum);
         let tc = self.text_col(fill);
@@ -176,7 +285,7 @@ impl Pen {
 
     /// Quadro de controle geométrico: a primeira casa (símbolo) ocupa todas as linhas; cada linha
     /// tem as casas de tolerância e de referências. `at` é o centro do quadro.
-    pub fn fcf(&self, p: &Painter, at: Pos2, sym: &str, rows: &[Vec<String>]) -> Rect {
+    pub fn fcf(&self, p: &Cv, at: Pos2, sym: &str, rows: &[Vec<String>]) -> Rect {
         let h = self.size * 1.7;
         let pad = self.size * 0.5;
         let fill = self.fill(PmiBg::Branco);
@@ -219,7 +328,7 @@ impl Pen {
 
     /// Símbolo de referência: triângulo cheio apoiado na peça em `anchor`, haste até o quadrado
     /// com a letra em `at`.
-    pub fn datum(&self, p: &Painter, anchor: Pos2, at: Pos2, letter: &str) -> Rect {
+    pub fn datum(&self, p: &Cv, anchor: Pos2, at: Pos2, letter: &str) -> Rect {
         let side = self.size * 1.75;
         let b = Rect::from_center_size(at, egui::vec2(side, side));
         let n = (at - anchor).normalized();
@@ -242,7 +351,7 @@ impl Pen {
 
     /// Símbolo de rugosidade (√ com barra) com o texto em cima da barra; devolve o retângulo e o
     /// vértice de baixo (onde a chamada encosta).
-    pub fn roughness(&self, p: &Painter, at: Pos2, txt: &str) -> (Rect, Pos2) {
+    pub fn roughness(&self, p: &Cv, at: Pos2, txt: &str) -> (Rect, Pos2) {
         let h = self.size * 1.3;
         let fill = self.fill(PmiBg::Nenhum);
         let tc = self.text_col(fill);
@@ -264,7 +373,7 @@ impl Pen {
     }
 
     /// Legenda: cada linha do texto numa faixa da tabela.
-    pub fn table(&self, p: &Painter, at: Pos2, txt: &str) -> Rect {
+    pub fn table(&self, p: &Cv, at: Pos2, txt: &str) -> Rect {
         let fill = self.fill(PmiBg::Branco);
         let tc = self.text_col(fill);
         let lines: Vec<&str> = txt.lines().collect();
@@ -289,7 +398,7 @@ impl Pen {
     }
 
     /// Balão de item; devolve o retângulo e o raio.
-    pub fn balloon(&self, p: &Painter, at: Pos2, item: &str) -> (Rect, f32) {
+    pub fn balloon(&self, p: &Cv, at: Pos2, item: &str) -> (Rect, f32) {
         let rad = self.size * 1.0 + 3.5 * item.chars().count().saturating_sub(1) as f32;
         let fill = self.fill(PmiBg::Branco);
         if let Some(f) = fill {

@@ -4,7 +4,7 @@
 use crate::app::{App, Sel};
 use crate::i18n::tr;
 use crate::picking::Pick;
-use crate::pmi_draw::{Pen, HL};
+use crate::pmi_draw::{Cv, Pen, HL};
 use crate::render::Camera;
 use eframe::egui::{self, Color32, Pos2, Rect, RichText, Stroke};
 use glam::Vec3;
@@ -233,12 +233,12 @@ fn v3(p: [f64; 3]) -> Vec3 {
 }
 
 /// Símbolo de solda ISO 2553 na tela: a junção da seta fica em `at`; `h` = altura do texto (px).
-fn weld_draw(p: &egui::Painter, at: Pos2, kind: WeldKind, size: &str, all: bool, x: &WeldExtra, pen: &Pen) -> Rect {
+fn weld_draw(p: &Cv, at: Pos2, kind: WeldKind, size: &str, all: bool, x: &WeldExtra, pen: &Pen) -> Rect {
     let h = pen.size * 1.05;
     let m = |q: [f64; 2]| at + egui::vec2(q[0] as f32, -q[1] as f32);
     let st = pen.stroke();
     let tc = if pen.sel { HL } else { pen.text };
-    let mut r = Rect::from_center_size(at, egui::vec2(6., 6.));
+    let mut r = Rect::from_center_size(at, egui::vec2(pen.size * 0.4, pen.size * 0.4));
     let mut shapes: Vec<egui::Shape> = vec![];
     for pr in weld_symbol(kind, size, all, x, h as f64) {
         match pr {
@@ -251,7 +251,7 @@ fn weld_draw(p: &egui::Painter, at: Pos2, kind: WeldKind, size: &str, all: bool,
             WeldPrim::Dashed(v) => {
                 let pts: Vec<Pos2> = v.iter().map(|q| m(*q)).collect();
                 pts.iter().for_each(|q| r.extend_with(*q));
-                shapes.extend(egui::Shape::dashed_line(&pts, st, 5., 3.));
+                shapes.extend(egui::Shape::dashed_line(&pts, st, pen.size * 0.4, pen.size * 0.25));
             }
             WeldPrim::Fill(v) => {
                 let pts: Vec<Pos2> = v.iter().map(|q| m(*q)).collect();
@@ -272,14 +272,10 @@ fn weld_draw(p: &egui::Painter, at: Pos2, kind: WeldKind, size: &str, all: bool,
             }
         }
     }
-    let r = r.expand(4.);
+    let r = r.expand(pen.size * 0.3);
     match pen.bg {
-        PmiBg::Branco => {
-            p.rect_filled(r, 2., Color32::from_rgba_unmultiplied(255, 255, 255, 230));
-        }
-        PmiBg::Escuro => {
-            p.rect_filled(r, 2., Color32::from_rgba_unmultiplied(40, 30, 22, 220));
-        }
+        PmiBg::Branco => p.rect_filled(r, 2., Color32::from_rgba_unmultiplied(255, 255, 255, 230)),
+        PmiBg::Escuro => p.rect_filled(r, 2., Color32::from_rgba_unmultiplied(40, 30, 22, 220)),
         _ => {}
     }
     p.extend(shapes);
@@ -350,34 +346,74 @@ fn highlight(p: &egui::Painter, r: &RecomputeResult, cam: &Camera, rect: Rect, p
     }
 }
 
-/// Rótulo deitado num plano: girado conforme a direção x do plano na tela e com altura de texto
-/// em mm do modelo (acompanha o zoom). Devolve o retângulo (sem giro) para clique/arraste.
-fn label_on_plane(p: &egui::Painter, cam: &Camera, rect: Rect, world: Vec3, x: Vec3, txt: &str, pen: &Pen) -> Option<Rect> {
-    let at = cam.project(rect, world)?;
-    let ax = cam.project(rect, world + x * 10.)?;
-    let d = ax - at;
-    let px_per_mm = d.length() / 10.;
-    // no plano, a altura do texto é em mm do modelo (padrão 5 mm)
-    let mm = if pen.size != 13. { pen.size * 0.4 } else { 5. };
-    let size = (mm * px_per_mm).clamp(6., 80.);
-    let angle = d.y.atan2(d.x);
-    let g = p.layout_no_wrap(txt.to_string(), egui::FontId::new(size, pen.fam.clone()), pen.text);
-    let (w, h) = (g.size().x + 10., g.size().y + 6.);
-    let (c, s) = (angle.cos(), angle.sin());
-    let rot = |v: egui::Vec2| egui::vec2(v.x * c - v.y * s, v.x * s + v.y * c);
-    let corners: Vec<Pos2> = [(-w / 2., -h / 2.), (w / 2., -h / 2.), (w / 2., h / 2.), (-w / 2., h / 2.)].iter().map(|(a, b)| at + rot(egui::vec2(*a, *b))).collect();
-    let fill = match pen.bg {
-        PmiBg::Branco => Color32::from_rgba_unmultiplied(255, 255, 255, 220),
-        PmiBg::Escuro => Color32::from_rgba_unmultiplied(40, 30, 22, 220),
-        _ => Color32::TRANSPARENT,
-    };
-    let framed = matches!(pen.frame, PmiFrame::Caixa | PmiFrame::Arredondada);
-    if framed || pen.sel || fill != Color32::TRANSPARENT {
-        p.add(egui::Shape::convex_polygon(corners, fill, if framed || pen.sel { pen.stroke() } else { Stroke::NONE }));
+/// Desenha o rótulo (e a chamada até `s0`) de uma anotação: `st` é o ponto do rótulo e `s1` a
+/// segunda âncora (borda no raio/diâmetro). Serve para a tela e para o plano (coordenadas locais).
+#[allow(clippy::too_many_arguments)]
+fn draw_kind(cv: &Cv, pen: &Pen, pm: &Pmi, st: Pos2, s0: Pos2, s1: Option<Pos2>, main: &str, stack: Option<&(String, String)>, fields: &std::collections::HashMap<String, String>) -> Rect {
+    let (stroke, thin) = (pen.stroke(), pen.thin());
+    match &pm.kind {
+        PmiKind::Radius | PmiKind::Diameter => {
+            let se = s1.unwrap_or(s0);
+            let slot = Pen::reserve(cv);
+            let lr = pen.dim_text(cv, st, main, stack);
+            pen.leader(cv, slot, lr, se);
+            if matches!(pm.kind, PmiKind::Diameter) {
+                // diâmetro: a linha atravessa o centro até o outro lado
+                let other = s0 + (s0 - se);
+                cv.line_segment([se, other], thin);
+                pen.arrow(cv, other, s0);
+            }
+            lr
+        }
+        PmiKind::Weld { kind, size, all_around, extra } => {
+            // seta até a junta; linha de referência e símbolo ISO 2553 no rótulo
+            cv.line_segment([st, s0], stroke);
+            pen.arrow(cv, s0, st);
+            weld_draw(cv, st, *kind, size, *all_around, extra, pen)
+        }
+        PmiKind::Balloon { item } => {
+            let dir = (s0 - st).normalized();
+            let rad = pen.size + pen.size * 0.27 * item.chars().count().saturating_sub(1) as f32;
+            cv.line_segment([st + dir * rad, s0], stroke);
+            cv.circle_filled(s0, pen.size * 0.22, if pen.sel { HL } else { pen.line });
+            pen.balloon(cv, st, item).0
+        }
+        PmiKind::TitleBlock { template } => pen.table(cv, st, &scc_desenho::resolve(template, fields)),
+        PmiKind::Gdt { ch, tol, datums, extra } => {
+            let cell_tol = |t: &str| format!("{}{}{}", if extra.zone_dia { "Ø" } else { "" }, t.trim(), if extra.modifier.trim().is_empty() { String::new() } else { format!(" {}", extra.modifier.trim()) });
+            let row = |t: &str, d: &str| -> Vec<String> {
+                let mut v = vec![cell_tol(t)];
+                v.extend(d.split(|c: char| c == '|' || c == ',' || c.is_whitespace()).filter(|x| !x.is_empty()).map(String::from));
+                v
+            };
+            let mut rows = vec![row(tol, datums)];
+            if let Some((t2, d2)) = &extra.second {
+                rows.push(row(t2, d2));
+            }
+            let slot = Pen::reserve(cv);
+            let fr = pen.fcf(cv, st, ch.symbol(), &rows);
+            pen.leader(cv, slot, fr, s0);
+            fr
+        }
+        PmiKind::Datum { letter } => pen.datum(cv, s0, st, letter),
+        PmiKind::Roughness { ra, process } => {
+            let txt = if process.trim().is_empty() { format!("Ra {ra}") } else { format!("{}\nRa {ra}", process.trim()) };
+            let slot = Pen::reserve(cv);
+            let (rr, tip) = pen.roughness(cv, st, &txt);
+            // a chamada sai do vértice do símbolo (ele encosta na superfície)
+            cv.set(slot, egui::Shape::line_segment([tip, s0], stroke));
+            pen.arrow(cv, s0, tip);
+            rr
+        }
+        _ => {
+            // nota: chamada com seta até a peça e patamar no texto
+            let txt = format!("{}{}{}", pm.style.prefix, pm.text, pm.style.suffix);
+            let slot = Pen::reserve(cv);
+            let lr = pen.text_block(cv, st, &txt, PmiFrame::Nenhuma, PmiBg::Nenhum);
+            pen.leader(cv, slot, lr, s0);
+            lr
+        }
     }
-    let tl = at + rot(egui::vec2(-w / 2. + 5., -h / 2. + 3.));
-    p.add(egui::epaint::TextShape::new(tl, g, pen.text).with_angle(angle));
-    Some(Rect::from_center_size(at, egui::vec2(w.max(h), w.max(h)) * 0.8))
 }
 
 /// Desenha as anotações sobre a viewport (o clique num rótulo seleciona a anotação).
@@ -407,12 +443,18 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
         if is_sel && !matches!(pm.kind, PmiKind::TitleBlock { .. }) {
             highlight(&painter, r, cam, rect, &a);
         }
-        // texto deitado num plano (cotas, notas, legenda) ou de frente para a tela
-        let text_at = |at: Pos2, world: Vec3, txt: &str| -> Rect {
-            match pm.plane {
-                Some((_, x)) => label_on_plane(&painter, cam, rect, world, v3(x).normalize_or_zero(), txt, &pen).unwrap_or_else(|| pen.dim_text(&painter, at, txt, None)),
-                None => pen.dim_text(&painter, at, txt, stack.as_ref()),
-            }
+        // deitado num plano: referencial (normal, x, y) do plano; tudo é desenhado em 0,1 mm nele
+        let plane = pm.plane.and_then(|(n, x)| {
+            let n = v3(n).normalize_or_zero();
+            let x = (v3(x) - n * v3(x).dot(n)).normalize_or_zero();
+            (n.length() > 0.5 && x.length() > 0.5).then(|| (n, x, n.cross(x)))
+        });
+        // desenha um rótulo deitado com origem em `o` e eixos (x, y); `draw` recebe a tela local
+        let on_plane = |o: Vec3, x: Vec3, y: Vec3, draw: &dyn Fn(&Cv, &Pen) -> Rect| -> Option<Rect> {
+            let cv = Cv::new(&painter);
+            let ppen = pen.on_plane();
+            draw(&cv, &ppen);
+            cv.flush_mapped(|q| cam.project(rect, o + x * (q.x / 10.) - y * (q.y / 10.)))
         };
         let rect_lbl = match &pm.kind {
             PmiKind::Linear if a.len() >= 2 => {
@@ -425,19 +467,49 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                 painter.line_segment([s0 + (t0 - s0).normalized() * 3., ext(s0, t0)], thin);
                 painter.line_segment([s1 + (t1 - s1).normalized() * 3., ext(s1, t1)], thin);
                 painter.line_segment([t0, t1], stroke);
+                let cvs = Cv::new(&painter);
                 if (t1 - t0).length() > 4. {
-                    pen.arrow(&painter, t0, t1);
-                    pen.arrow(&painter, t1, t0);
+                    pen.arrow(&cvs, t0, t1);
+                    pen.arrow(&cvs, t1, t0);
                 }
-                let mid = t0 + (t1 - t0) * 0.5;
-                let up = egui::vec2((t1 - t0).y, -(t1 - t0).x).normalized();
-                let up = if up.y > 0. || (up.y.abs() < 0.2 && up.x < 0.) { -up } else { up };
-                // o texto fica todo do lado de fora da linha de cota (mede antes de pôr)
-                let g = painter.layout_no_wrap(main.clone(), pen.font(1.), pen.text);
-                let extra = if stack.is_some() { pen.size * 2.2 } else { 0. };
-                let (w, h) = (g.size().x + extra + 10., g.size().y + 6.);
-                let gap = up.x.abs() * w / 2. + up.y.abs() * h / 2. + 3.;
-                text_at(mid + up * gap, (q0 + q1) * 0.5, &main)
+                cvs.flush();
+                match plane {
+                    // no plano: texto alinhado com a linha de cota, do lado de fora
+                    Some((n, px, _)) => {
+                        let dirv = q1 - q0;
+                        let mut x = (dirv - n * dirv.dot(n)).normalize_or_zero();
+                        if x.length() < 0.5 {
+                            x = px;
+                        }
+                        // lê da esquerda para a direita na vista atual
+                        if let (Some(a0), Some(a1)) = (cam.project(rect, q0), cam.project(rect, q0 + x)) {
+                            if a1.x < a0.x {
+                                x = -x;
+                            }
+                        }
+                        let mut y = n.cross(x);
+                        if y.dot(off) < 0. {
+                            y = -y;
+                        }
+                        let gap = pen.size * 0.35 * 0.9;
+                        let fb = Rect::from_center_size(t0 + (t1 - t0) * 0.5, egui::vec2(20., 20.));
+                        on_plane((q0 + q1) * 0.5 + y * gap, x, y, &|cv, pp| pp.dim_text(cv, egui::pos2(0., 0.), &main, stack.as_ref())).unwrap_or(fb)
+                    }
+                    None => {
+                        let mid = t0 + (t1 - t0) * 0.5;
+                        let up = egui::vec2((t1 - t0).y, -(t1 - t0).x).normalized();
+                        let up = if up.y > 0. || (up.y.abs() < 0.2 && up.x < 0.) { -up } else { up };
+                        // o texto fica todo do lado de fora da linha de cota (mede antes de pôr)
+                        let g = painter.layout_no_wrap(main.clone(), pen.font(1.), pen.text);
+                        let extra = if stack.is_some() { pen.size * 2.2 } else { 0. };
+                        let (w, h) = (g.size().x + extra + 10., g.size().y + 6.);
+                        let gap = up.x.abs() * w / 2. + up.y.abs() * h / 2. + 3.;
+                        let cv = Cv::new(&painter);
+                        let r = pen.dim_text(&cv, mid + up * gap, &main, stack.as_ref());
+                        cv.flush();
+                        r
+                    }
+                }
             }
             PmiKind::Angle if a.len() >= 3 => {
                 let (Some(sv), Some(s1), Some(s2)) = (cam.project(rect, v3(a[0])), cam.project(rect, v3(a[1])), cam.project(rect, v3(a[2]))) else { continue };
@@ -449,94 +521,56 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                     let t = k as f32 / 20.;
                     sv + (d1 * (1. - t) + d2 * t).normalized() * rad
                 }).collect();
-                pen.arrow(&painter, pts[0], pts[2]);
-                pen.arrow(&painter, pts[20], pts[18]);
+                let cv = Cv::new(&painter);
+                pen.arrow(&cv, pts[0], pts[2]);
+                pen.arrow(&cv, pts[20], pts[18]);
+                cv.flush();
                 painter.add(egui::Shape::line(pts, stroke));
-                text_at(sv + (d1 + d2).normalized() * (rad + pen.size * 1.4), v3(a[0]), &main)
-            }
-            PmiKind::Radius | PmiKind::Diameter => {
-                // chamada do texto até a borda (seta na borda), por baixo do texto
-                let (Some(sc), Some(st)) = (cam.project(rect, v3(first)), cam.project(rect, v3(first) + off)) else { continue };
-                let se = a.get(1).and_then(|q| cam.project(rect, v3(*q))).unwrap_or(sc);
-                let slot = Pen::reserve(&painter);
-                let lr = text_at(st, v3(first) + off, &main);
-                pen.leader(&painter, slot, lr, se);
-                if matches!(pm.kind, PmiKind::Diameter) {
-                    // diâmetro: a linha atravessa o centro até o outro lado
-                    let other = sc + (sc - se);
-                    painter.line_segment([se, other], thin);
-                    pen.arrow(&painter, other, sc);
+                let at = sv + (d1 + d2).normalized() * (rad + pen.size * 1.4);
+                match plane {
+                    Some((_, x, y)) => {
+                        let w3 = v3(a[0]) + ((v3(a[1]) - v3(a[0])).normalize_or_zero() + (v3(a[2]) - v3(a[0])).normalize_or_zero()).normalize_or_zero() * 15.;
+                        on_plane(w3, x, y, &|cv, pp| pp.dim_text(cv, egui::pos2(0., 0.), &main, stack.as_ref())).unwrap_or(Rect::from_center_size(at, egui::vec2(20., 20.)))
+                    }
+                    None => {
+                        let cv = Cv::new(&painter);
+                        let r = pen.dim_text(&cv, at, &main, stack.as_ref());
+                        cv.flush();
+                        r
+                    }
                 }
-                lr
-            }
-            PmiKind::Weld { kind, size, all_around, extra } => {
-                // seta até a junta; linha de referência e símbolo ISO 2553 no rótulo
-                let (Some(s0), Some(st)) = (cam.project(rect, v3(first)), cam.project(rect, v3(first) + off)) else { continue };
-                painter.line_segment([st, s0], stroke);
-                pen.arrow(&painter, s0, st);
-                weld_draw(&painter, st, *kind, size, *all_around, extra, &pen)
-            }
-            PmiKind::Balloon { item } => {
-                let (Some(s0), Some(st)) = (cam.project(rect, v3(first)), cam.project(rect, v3(first) + off)) else { continue };
-                let dir = (s0 - st).normalized();
-                let rad = pen.size + 3.5 * item.chars().count().saturating_sub(1) as f32;
-                painter.line_segment([st + dir * rad, s0], stroke);
-                painter.circle_filled(s0, pen.size * 0.22, if is_sel { HL } else { pen.line });
-                pen.balloon(&painter, st, item).0
-            }
-            PmiKind::TitleBlock { template } => {
-                // legenda: tabela sem chamada
-                let txt = scc_desenho::resolve(template, &fields);
-                let Some(st) = cam.project(rect, v3(first) + off) else { continue };
-                match pm.plane {
-                    Some((_, x)) => label_on_plane(&painter, cam, rect, v3(first) + off, v3(x).normalize_or_zero(), &txt, &pen).unwrap_or_else(|| pen.table(&painter, st, &txt)),
-                    None => pen.table(&painter, st, &txt),
-                }
-            }
-            PmiKind::Gdt { ch, tol, datums, extra } => {
-                let (Some(s0), Some(st)) = (cam.project(rect, v3(first)), cam.project(rect, v3(first) + off)) else { continue };
-                let cell_tol = |t: &str| format!("{}{}{}", if extra.zone_dia { "Ø" } else { "" }, t.trim(), if extra.modifier.trim().is_empty() { String::new() } else { format!(" {}", extra.modifier.trim()) });
-                let row = |t: &str, d: &str| -> Vec<String> {
-                    let mut v = vec![cell_tol(t)];
-                    v.extend(d.split(|c: char| c == '|' || c == ',' || c.is_whitespace()).filter(|x| !x.is_empty()).map(String::from));
-                    v
-                };
-                let mut rows = vec![row(tol, datums)];
-                if let Some((t2, d2)) = &extra.second {
-                    rows.push(row(t2, d2));
-                }
-                let slot = Pen::reserve(&painter);
-                let fr = pen.fcf(&painter, st, ch.symbol(), &rows);
-                pen.leader(&painter, slot, fr, s0);
-                fr
-            }
-            PmiKind::Datum { letter } => {
-                let (Some(s0), Some(st)) = (cam.project(rect, v3(first)), cam.project(rect, v3(first) + off)) else { continue };
-                pen.datum(&painter, s0, st, letter)
-            }
-            PmiKind::Roughness { ra, process } => {
-                let (Some(s0), Some(st)) = (cam.project(rect, v3(first)), cam.project(rect, v3(first) + off)) else { continue };
-                let txt = if process.trim().is_empty() { format!("Ra {ra}") } else { format!("{}\nRa {ra}", process.trim()) };
-                let slot = Pen::reserve(&painter);
-                let (rr, tip) = pen.roughness(&painter, st, &txt);
-                // a chamada sai do vértice do símbolo (ele encosta na superfície)
-                let mut v = vec![egui::Shape::line_segment([tip, s0], stroke)];
-                let _ = &mut v;
-                painter.set(slot, egui::Shape::Vec(v));
-                pen.arrow(&painter, s0, tip);
-                rr
             }
             _ => {
-                // nota: chamada com seta até a peça e patamar no texto
-                let (Some(s0), Some(st)) = (cam.project(rect, v3(first)), cam.project(rect, v3(first) + off)) else { continue };
-                let txt = wrap(pm.text.clone());
-                let slot = Pen::reserve(&painter);
-                let lr = match pm.plane {
-                    Some((_, x)) => label_on_plane(&painter, cam, rect, v3(first) + off, v3(x).normalize_or_zero(), &txt, &pen).unwrap_or_else(|| pen.text_block(&painter, st, &txt, PmiFrame::Nenhuma, PmiBg::Nenhum)),
-                    None => pen.text_block(&painter, st, &txt, PmiFrame::Nenhuma, PmiBg::Nenhum),
-                };
-                pen.leader(&painter, slot, lr, s0);
-                lr
+                let lab = v3(first) + off;
+                let anchor = v3(first);
+                let second = a.get(1).map(|q| v3(*q));
+                match plane {
+                    Some((n, x, y)) => {
+                        // âncoras levadas ao plano do rótulo; fora dele, um traço liga ao ponto real
+                        let flat = |p: Vec3| p - n * (p - lab).dot(n);
+                        let loc = |p: Vec3| {
+                            let d = flat(p) - lab;
+                            egui::pos2(d.dot(x) * 10., -d.dot(y) * 10.)
+                        };
+                        let (s0l, s1l) = (loc(anchor), second.map(loc));
+                        let draw = |cv: &Cv, pp: &Pen| draw_kind(cv, pp, pm, egui::pos2(0., 0.), s0l, s1l, &main, stack.as_ref(), &fields);
+                        let Some(bb) = on_plane(lab, x, y, &draw) else { continue };
+                        if (anchor - flat(anchor)).length() > 0.3 {
+                            if let (Some(a0), Some(a1)) = (cam.project(rect, flat(anchor)), cam.project(rect, anchor)) {
+                                painter.line_segment([a0, a1], thin);
+                            }
+                        }
+                        bb
+                    }
+                    None => {
+                        let (Some(s0), Some(st)) = (cam.project(rect, anchor), cam.project(rect, lab)) else { continue };
+                        let s1 = second.and_then(|q| cam.project(rect, q));
+                        let cv = Cv::new(&painter);
+                        let r = draw_kind(&cv, &pen, pm, st, s0, s1, &main, stack.as_ref(), &fields);
+                        cv.flush();
+                        r
+                    }
+                }
             }
         };
         let resp = ui.interact(rect_lbl, egui::Id::unique(("pmi_rotulo", pm.id.0)), egui::Sense::click_and_drag());
