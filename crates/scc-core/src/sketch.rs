@@ -1113,6 +1113,32 @@ impl SketchData {
                 }
             }
         }
+        // pontas no mesmo lugar (snap sem restrição, spline desenhada até a ponta de uma linha)
+        // também se unem: o perfil fecha pela geometria
+        let ends: Vec<Id> = self
+            .curves
+            .iter()
+            .filter(|c| !c.construction)
+            .flat_map(|c| match &c.geom {
+                Curve::Line { a, b } => vec![*a, *b],
+                Curve::Arc { s, e, .. } => vec![*s, *e],
+                Curve::Spline { pts } if pts.len() >= 2 => vec![pts[0], pts[pts.len() - 1]],
+                _ => vec![],
+            })
+            .collect();
+        let scale = ends.iter().map(|p| self.pos(*p)).fold(0f64, |m, q| m.max(q[0].abs()).max(q[1].abs())).max(1.);
+        let tol = scale * 1e-7 + 1e-9;
+        for i in 0..ends.len() {
+            for j in i + 1..ends.len() {
+                let (a, b) = (self.pos(ends[i]), self.pos(ends[j]));
+                if (a[0] - b[0]).abs() <= tol && (a[1] - b[1]).abs() <= tol {
+                    let (ra, rb) = (find(&mut parent, ends[i]), find(&mut parent, ends[j]));
+                    if ra != rb {
+                        parent.insert(ra, rb);
+                    }
+                }
+            }
+        }
         let mut loops = vec![];
         // arestas: (extremo1, extremo2, segmento)
         let mut edges: Vec<(Id, Id, Seg)> = vec![];
@@ -1305,7 +1331,8 @@ mod tests {
         s.add_curve(&mut al, Curve::Line { a, b }, false);
         s.add_curve(&mut al, Curve::Line { a: b2, b: c }, false);
         s.add_curve(&mut al, Curve::Line { a: c, b: a2 }, false);
-        assert_eq!(s.loops().0.len(), 0);
+        // pontas no mesmo lugar já fecham o perfil (mesmo sem juntar os pontos)
+        assert_eq!(s.loops().0.len(), 1);
         s.merge_points(b2, b);
         s.merge_points(a2, a);
         assert_eq!(s.loops(), (s.loops().0.clone(), 0));

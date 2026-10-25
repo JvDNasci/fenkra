@@ -6143,3 +6143,49 @@ mod tests {
         assert!(v2 > v1 * 1.8);
     }
 }
+
+#[cfg(test)]
+mod tests_spline_perfil {
+    use super::*;
+    use scc_core::sketch::Curve;
+
+    fn doc_with(shared: bool) -> (Document, Id) {
+        let mut d = Document::new("t");
+        let mut data = SketchData::default();
+        let mut n = 5_000_000u64;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        let p0 = data.add_point(&mut al, 0., 0.);
+        let p1 = data.add_point(&mut al, 0., 50.);
+        let p2 = data.add_point(&mut al, 35., 50.);
+        let p3 = data.add_point(&mut al, 48., 20.);
+        let p4 = data.add_point(&mut al, 50., 0.);
+        data.add_curve(&mut al, Curve::Line { a: p4, b: p0 }, false);
+        data.add_curve(&mut al, Curve::Line { a: p0, b: p1 }, false);
+        if shared {
+            data.add_curve(&mut al, Curve::Spline { pts: vec![p1, p2, p3, p4] }, false);
+        } else {
+            let q1 = data.add_point(&mut al, 0., 50.);
+            let q4 = data.add_point(&mut al, 50., 0.);
+            data.add_curve(&mut al, Curve::Spline { pts: vec![q1, p2, p3, q4] }, false);
+        }
+        let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
+        let e = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind("10".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0 }));
+        (d, e)
+    }
+
+    #[test]
+    fn perfil_com_spline_fecha() {
+        if !scc_kernel::AVAILABLE {
+            return;
+        }
+        for shared in [true, false] {
+            let (d, e) = doc_with(shared);
+            let r = recompute(&d);
+            assert_eq!(r.status[&e], Status::Ok, "shared={shared}: {:?}", r.status[&e]);
+            assert!(r.bodies[0].mass.volume > 15000., "{}", r.bodies[0].mass.volume);
+        }
+    }
+}

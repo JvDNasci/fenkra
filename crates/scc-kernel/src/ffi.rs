@@ -42,6 +42,8 @@ pub mod bridge {
         edge_ranges: Vec<u32>,
         /// ponto médio (xyz) de cada aresta — assinatura para referência persistente
         edge_mids: Vec<f32>,
+        /// 1 = aresta suave (tangência entre faces, ex.: fim de um raio); 0 = aresta viva
+        edge_smooth: Vec<u8>,
         /// posição (xyz) de cada vértice
         vertices: Vec<f32>,
     }

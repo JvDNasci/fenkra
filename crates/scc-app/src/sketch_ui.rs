@@ -618,7 +618,7 @@ fn dim_text(sk: &SketchData, k: &Kind) -> String {
         _ => fmt(val),
     };
     let e = expr.trim();
-    if e.is_empty() || e.parse::<f64>().is_ok() {
+    if e.is_empty() || e.replace(',', ".").parse::<f64>().is_ok() {
         base
     } else {
         format!("{e} = {base}")

@@ -283,7 +283,7 @@ fn revolve_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id
     }
     let vars = app.vars();
     let Ok(ang) = scc_core::expr::eval_str(&rv.angle, &vars) else { return };
-    let numeric = rv.angle.trim().parse::<f64>().is_ok();
+    let numeric = rv.angle.trim().replace(',', ".").parse::<f64>().is_ok();
     let start = if rv.symmetric { -ang / 2. } else { 0. };
     let at = |a: f64| foot + glam::Quat::from_axis_angle(d, a.to_radians() as f32) * r0;
     let pts: Vec<egui::Pos2> = (0..=48).filter_map(|i| cam.project(rect, at(start + ang * i as f64 / 48.))).collect();
@@ -332,7 +332,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: Camera) {
     let Some(h) = handle_for(app, id) else { return };
     let vars = app.vars();
     let Ok(val) = scc_core::expr::eval_str(&h.expr, &vars) else { return };
-    let numeric = h.expr.trim().parse::<f64>().is_ok();
+    let numeric = h.expr.trim().replace(',', ".").parse::<f64>().is_ok();
     let len = val as f32 / h.k;
     let tip = h.base + h.dir * len;
     let (Some(sb), Some(st)) = (cam.project(rect, h.base), cam.project(rect, tip)) else { return };

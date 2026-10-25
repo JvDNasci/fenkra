@@ -21,6 +21,7 @@ pub fn transformed(m: &Mesh, p: &Placement) -> Mesh {
         face_ranges: m.face_ranges.clone(),
         edge_ranges: m.edge_ranges.clone(),
         edge_mids: m.edge_mids.chunks_exact(3).flat_map(pt).collect(),
+        edge_smooth: m.edge_smooth.clone(),
         vertices: m.vertices.chunks_exact(3).flat_map(pt).collect(),
     }
 }
@@ -37,6 +38,7 @@ fn append(dst: &mut Mesh, src: &Mesh) {
     dst.edge_ranges.extend(src.edge_ranges.iter().map(|e| e + ebase));
     dst.edges.extend(&src.edges);
     dst.edge_mids.extend(&src.edge_mids);
+    dst.edge_smooth.extend(&src.edge_smooth);
     dst.vertices.extend(&src.vertices);
 }
 

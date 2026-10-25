@@ -637,6 +637,7 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, title: String, list: Vec<Entr
                 }
                 ui.separator();
                 ui.checkbox(&mut s.edges_in_render, tr("arestas no semi-renderizado"));
+                ui.checkbox(&mut s.tangent_edges, tr("arestas de tangência (fim dos raios)"));
             });
             let r = tool_button(ui, "filtro", "Exibir", size, labels, false, "Filtro de exibição", "Escolha quais tipos de elemento aparecem na viewport.");
             egui::Popup::menu(&r).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {

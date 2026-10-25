@@ -27,7 +27,7 @@ pub(crate) fn expr(ui: &mut egui::Ui, label: &str, s: &mut String, vars: &Vars, 
         // roda do mouse sobre o campo soma/subtrai (Shift ×10, Ctrl ×0,1)
         crate::ui_ext::wheel_text(ui, &resp, s);
         match r {
-            Ok(v) if s.trim().parse::<f64>().is_err() => {
+            Ok(v) if s.trim().replace(',', ".").parse::<f64>().is_err() => {
                 ui.label(RichText::new(format!("= {} {unit}", fmt(v))).weak());
             }
             Ok(_) => {

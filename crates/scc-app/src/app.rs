@@ -1116,7 +1116,24 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
                 return Some(id);
             }
         }
-        // só a pré-seleção: sem escolher sozinho o último sketch (o campo fica para preencher)
+        // sketch clicado na viewport (uma curva ou ponto dele)
+        for p in &self.picks {
+            if let crate::picking::Pick::SkCurve { sketch, .. } | crate::picking::Pick::SkPoint { sketch, .. } = p {
+                if d.feature(*sketch).is_some_and(|f| ok(f)) {
+                    return Some(*sketch);
+                }
+            }
+        }
+        // nada escolhido: o sketch recém-concluído (último da linha do tempo) com perfil
+        if matches!(self.sel, Sel::None) || matches!(self.sel, Sel::Feature(id) if d.feature(id).is_some_and(|f| matches!(f.kind, FeatureKind::Sketch(_)))) {
+            if let Some(f) = d.features.last().filter(|f| ok(f)) {
+                if let FeatureKind::Sketch(s) = &f.kind {
+                    if !s.data.curves.iter().all(|c| c.construction) {
+                        return Some(f.id);
+                    }
+                }
+            }
+        }
         None
     }
 
@@ -6004,7 +6021,9 @@ fn marker(ui: &mut egui::Ui, collector: Id, at: usize, n: usize, actions: &mut V
 pub fn fmt(v: f64) -> String {
     let s = format!("{v:.3}");
     let s = s.trim_end_matches('0').trim_end_matches('.');
-    if s == "-0" { "0".into() } else { s.into() }
+    let s = if s == "-0" { "0" } else { s };
+    // separador decimal do idioma (vírgula em português)
+    if crate::i18n::english() { s.into() } else { s.replace('.', ",") }
 }
 
 /// Fontes das anotações 3D (as que existem no Windows), com os símbolos (GD&T) de reserva.
@@ -6522,6 +6541,7 @@ impl eframe::App for App {
                     filter: &self.settings.filter,
                     hidden_env: self.hidden_env,
                     dark_edges: !matches!(self.settings.display, crate::render::DisplayMode::Arame) || lum(self.settings.bg_bottom) > 140.,
+                    tangent_edges: self.settings.tangent_edges || matches!(self.settings.display, crate::render::DisplayMode::Arame),
                     hilite: self.hover_item.or(self.session.as_ref().map(|s| s.id)),
                     line_w: self.settings.ref_line_width,
                     line_dash: self.settings.ref_line_dash,
@@ -6789,6 +6809,7 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
                     ui.radio_value(&mut s.display, m, m.label());
                 }
                 ui.checkbox(&mut s.edges_in_render, tr("arestas no semi-renderizado"));
+                ui.checkbox(&mut s.tangent_edges, tr("arestas de tangência (fim dos raios)"));
                 ui.checkbox(&mut s.ortho, tr("projeção ortogonal"));
             }
         5 => {

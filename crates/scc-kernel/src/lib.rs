@@ -157,6 +157,8 @@ pub struct Mesh {
     pub edge_ranges: Vec<u32>,
     /// ponto médio (xyz) de cada aresta
     pub edge_mids: Vec<f32>,
+    /// 1 por aresta suave (tangente entre as faces vizinhas), 0 por aresta viva
+    pub edge_smooth: Vec<u8>,
     /// posição (xyz) de cada vértice
     pub vertices: Vec<f32>,
 }
@@ -603,6 +605,7 @@ mod imp {
                 face_ranges: m.face_ranges,
                 edge_ranges: m.edge_ranges,
                 edge_mids: m.edge_mids,
+                edge_smooth: m.edge_smooth,
                 vertices: m.vertices,
             })
         }

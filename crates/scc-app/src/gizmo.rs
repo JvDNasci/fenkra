@@ -10,7 +10,7 @@ use eframe::egui::{self, Color32, Pos2, Rect, Stroke, Vec2};
 use glam::Vec3;
 use scc_core::*;
 
-const AXIS_COL: [Color32; 3] = [Color32::from_rgb(235, 80, 80), Color32::from_rgb(90, 200, 90), Color32::from_rgb(80, 140, 255)];
+pub(crate) const AXIS_COL: [Color32; 3] = [Color32::from_rgb(235, 80, 80), Color32::from_rgb(90, 200, 90), Color32::from_rgb(80, 140, 255)];
 const HOT: Color32 = Color32::from_rgb(255, 190, 40);
 /// comprimento das setas na tela (px)
 const ARM: f32 = 70.;
@@ -20,7 +20,7 @@ fn v3(p: [f64; 3]) -> Vec3 {
 }
 
 fn num(e: &str) -> Option<f64> {
-    e.trim().parse::<f64>().ok()
+    e.trim().replace(',', ".").parse::<f64>().ok()
 }
 
 /// Centro do elemento calculado (ponto, curva, plano ou superfície).
@@ -177,6 +177,12 @@ pub(crate) fn translate_gizmo(ui: &mut egui::Ui, rect: Rect, cam: &Camera, salt:
 
 /// Arco de rotação em volta de `axis` passando por `p`; devolve o novo ângulo (graus).
 pub(crate) fn rotate_arc(ui: &mut egui::Ui, rect: Rect, cam: &Camera, salt: u64, origin: Vec3, axis: Vec3, src: Vec3, angle: f64, locked: bool) -> Option<f64> {
+    rotate_arc_col(ui, rect, cam, salt, origin, axis, src, angle, locked, Color32::from_rgb(120, 200, 255))
+}
+
+/// O mesmo arco com a cor do eixo.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn rotate_arc_col(ui: &mut egui::Ui, rect: Rect, cam: &Camera, salt: u64, origin: Vec3, axis: Vec3, src: Vec3, angle: f64, locked: bool, base: Color32) -> Option<f64> {
     let foot = origin + axis * (src - origin).dot(axis);
     let mut r0 = src - foot;
     if r0.length() < 1e-3 {
@@ -191,8 +197,8 @@ pub(crate) fn rotate_arc(ui: &mut egui::Ui, rect: Rect, cam: &Camera, salt: u64,
     let hid = egui::Id::unique(("gizmo_arco", salt));
     let r = ui.interact(Rect::from_center_size(tip, egui::vec2(22., 22.)), hid, if locked { egui::Sense::hover() } else { egui::Sense::drag() });
     let hot = r.hovered() || r.dragged();
-    let col = if locked { Color32::GRAY } else if hot { HOT } else { Color32::from_rgb(120, 200, 255) };
-    painter.add(egui::Shape::line(ring, Stroke::new(1.2, col.gamma_multiply(0.5))));
+    let col = if locked { Color32::GRAY } else if hot { HOT } else { base };
+    painter.add(egui::Shape::line(ring, Stroke::new(if hot { 2.4 } else { 1.6 }, col.gamma_multiply(if hot { 0.9 } else { 0.65 }))));
     let sweep: Vec<Pos2> = (0..=32).filter_map(|i| cam.project(rect, at(angle * i as f64 / 32.))).collect();
     painter.add(egui::Shape::line(sweep, Stroke::new(3., col)));
     painter.circle_filled(tip, 6., col);

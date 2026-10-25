@@ -633,6 +633,39 @@ MeshData tessellate(const Shape& s, double deflection) {
         for (int i = 1; i <= edges.Extent(); ++i) {
             const TopoDS_Edge& e = TopoDS::Edge(edges(i));
             m.edge_ranges.push_back(static_cast<uint32_t>(m.edges.size() / 6));
+            // suave: as duas faces vizinhas se encontram com tangência (G1 ou mais)
+            {
+                uint8_t smooth = 0;
+                const int k = edge_faces.FindIndex(e);
+                if (k != 0 && edge_faces(k).Extent() == 2) {
+                    const TopoDS_Face& f1 = TopoDS::Face(edge_faces(k).First());
+                    const TopoDS_Face& f2 = TopoDS::Face(edge_faces(k).Last());
+                    try {
+                        if (BRep_Tool::HasContinuity(e, f1, f2) && BRep_Tool::Continuity(e, f1, f2) != GeomAbs_C0) smooth = 1;
+                        else {
+                            // sem a informação gravada: compara as normais no meio da aresta
+                            BRepAdaptor_Curve cc(e);
+                            const double tm = (cc.FirstParameter() + cc.LastParameter()) / 2;
+                            gp_Pnt pm = cc.Value(tm);
+                            auto nrm_at = [&](const TopoDS_Face& f) -> gp_Dir {
+                                BRepAdaptor_Surface sf(f);
+                                GeomAPI_ProjectPointOnSurf pr(pm, BRep_Tool::Surface(f));
+                                double u = 0, v = 0;
+                                if (pr.NbPoints() > 0) pr.LowerDistanceParameters(u, v);
+                                gp_Pnt q; gp_Vec du, dv;
+                                sf.D1(u, v, q, du, dv);
+                                gp_Vec n = du.Crossed(dv);
+                                if (n.Magnitude() < 1e-12) return gp_Dir(0, 0, 1);
+                                gp_Dir d(n);
+                                if (f.Orientation() == TopAbs_REVERSED) d.Reverse();
+                                return d;
+                            };
+                            if (nrm_at(f1).Angle(nrm_at(f2)) < 2.0 * M_PI / 180.0) smooth = 1;
+                        }
+                    } catch (...) {}
+                }
+                m.edge_smooth.push_back(smooth);
+            }
             if (BRep_Tool::Degenerated(e) || is_seam(e)) {
                 for (int k = 0; k < 3; ++k) m.edge_mids.push_back(0.f);
                 continue;

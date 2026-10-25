@@ -28,7 +28,7 @@ pub enum Ast {
 }
 
 pub fn parse(src: &str) -> Result<Ast, ExprError> {
-    let mut p = Parser { s: src.as_bytes(), i: 0 };
+    let mut p = Parser { s: src.as_bytes(), i: 0, call: 0, semi: src.contains(';') };
     let ast = p.expr()?;
     p.ws();
     if p.i < p.s.len() {
@@ -113,6 +113,10 @@ pub fn eval_str(src: &str, vars: &HashMap<String, f64>) -> Result<f64, ExprError
 struct Parser<'a> {
     s: &'a [u8],
     i: usize,
+    /// profundidade dentro de chamadas de função (lá a vírgula separa argumentos, salvo se o
+    /// texto usar ';' para isso)
+    call: usize,
+    semi: bool,
 }
 
 impl Parser<'_> {
@@ -187,8 +191,12 @@ impl Parser<'_> {
             }
             Some(c) if c.is_ascii_digit() || c == b'.' => {
                 let st = self.i;
+                // vírgula decimal (português): 2,5 — fora de função, ou com argumentos por ';'
+                let comma_ok = self.call == 0 || self.semi;
                 while self.i < self.s.len()
-                    && (self.s[self.i].is_ascii_digit() || matches!(self.s[self.i], b'.' | b'e' | b'E'))
+                    && (self.s[self.i].is_ascii_digit()
+                        || matches!(self.s[self.i], b'.' | b'e' | b'E')
+                        || (comma_ok && self.s[self.i] == b',' && self.s.get(self.i + 1).is_some_and(|d| d.is_ascii_digit())))
                 {
                     // expoente com sinal: 1e-3
                     if matches!(self.s[self.i], b'e' | b'E') && matches!(self.s.get(self.i + 1), Some(b'-' | b'+')) {
@@ -196,7 +204,7 @@ impl Parser<'_> {
                     }
                     self.i += 1;
                 }
-                let t = std::str::from_utf8(&self.s[st..self.i]).unwrap();
+                let t = std::str::from_utf8(&self.s[st..self.i]).unwrap().replace(',', ".");
                 t.parse().map(Ast::Num).or_else(|_| self.err("número inválido"))
             }
             Some(c) if c.is_ascii_alphabetic() || c == b'_' => {
@@ -207,6 +215,7 @@ impl Parser<'_> {
                 let n = String::from_utf8(self.s[st..self.i].to_vec()).unwrap();
                 if self.peek() == Some(b'(') {
                     self.i += 1;
+                    self.call += 1;
                     let mut args = vec![];
                     if self.peek() != Some(b')') {
                         loop {
@@ -217,6 +226,7 @@ impl Parser<'_> {
                             }
                         }
                     }
+                    self.call -= 1;
                     if self.peek() != Some(b')') {
                         return self.err("esperado ')'");
                     }
@@ -234,6 +244,15 @@ impl Parser<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn virgula_decimal() {
+        let v = HashMap::new();
+        assert_eq!(eval_str("2,5*2", &v).unwrap(), 5.);
+        assert_eq!(eval_str("max(1,2)", &v).unwrap(), 2.);
+        assert_eq!(eval_str("max(1,5; 2)", &v).unwrap(), 2.);
+        assert_eq!(eval_str("max(3,5; 2)", &v).unwrap(), 3.5);
+    }
 
     #[test]
     fn precedencia_e_funcoes() {

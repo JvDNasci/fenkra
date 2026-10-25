@@ -290,6 +290,8 @@ pub struct Settings {
     pub bg_bottom: [u8; 3],
     pub display: DisplayMode,
     pub edges_in_render: bool,
+    /// arestas de tangência visíveis (padrão: escondidas, como numa peça real)
+    pub tangent_edges: bool,
     pub ortho: bool,
     pub filter: Filter,
     pub docks: Vec<(Group, Dock)>,
@@ -390,6 +392,7 @@ impl Default for Settings {
             bg_bottom: [26, 29, 34],
             display: DisplayMode::SombreadoArestas,
             edges_in_render: false,
+            tangent_edges: false,
             ortho: false,
             filter: Filter::default(),
             docks: Group::ALL.iter().map(|g| (*g, Dock::Topo)).collect(),

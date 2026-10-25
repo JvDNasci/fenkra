@@ -1677,7 +1677,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     }
                     if let Some(e) = &mut j.drive_angle {
                         ui.text_edit_singleline(e);
-                        let mut v: f64 = e.trim().parse().unwrap_or(0.);
+                        let mut v: f64 = e.trim().replace(',', ".").parse().unwrap_or(0.);
                         if ui.add(egui::Slider::new(&mut v, -180.0..=180.0).text("°")).changed() {
                             *e = fmt(v);
                         }
@@ -1690,7 +1690,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     }
                     if let Some(e) = &mut j.drive_len {
                         ui.text_edit_singleline(e);
-                        let mut v: f64 = e.trim().parse().unwrap_or(0.);
+                        let mut v: f64 = e.trim().replace(',', ".").parse().unwrap_or(0.);
                         if ui.add(egui::Slider::new(&mut v, -200.0..=200.0).text("mm")).changed() {
                             *e = fmt(v);
                         }
@@ -2219,10 +2219,12 @@ pub fn gizmo(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::re
     };
     let rad = 95. / ppm;
     let axes = [glam::Vec3::X, glam::Vec3::Y, glam::Vec3::Z];
+    // alças em diagonais diferentes (não caem umas sobre as outras nem sobre as setas)
+    let starts = [(glam::Vec3::Y + glam::Vec3::Z).normalize(), (glam::Vec3::Z + glam::Vec3::X).normalize(), (glam::Vec3::X + glam::Vec3::Y).normalize()];
     for (k, ax) in axes.iter().enumerate() {
-        let src = c + ax.any_orthonormal_vector() * rad;
+        let src = c + starts[k] * rad;
         let cur = st.rot_drag.filter(|r| r.0 == k).map(|r| r.1).unwrap_or(0.);
-        if let Some(v) = crate::gizmo::rotate_arc(ui, rect, cam, id.0.wrapping_mul(31).wrapping_add(k as u64 + 7), c, *ax, src, cur, false) {
+        if let Some(v) = crate::gizmo::rotate_arc_col(ui, rect, cam, id.0.wrapping_mul(31).wrapping_add(k as u64 + 7), c, *ax, src, cur, false, crate::gizmo::AXIS_COL[k]) {
             let start = st.drag_start.unwrap_or(p);
             let about = *st.drag_center.get_or_insert([c.x as f64, c.y as f64, c.z as f64]);
             st.rot_drag = Some((k, v));

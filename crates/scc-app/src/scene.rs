@@ -23,6 +23,8 @@ pub struct SceneOpts<'a> {
     pub filter: &'a Filter,
     pub hidden_env: bool,
     pub dark_edges: bool,
+    /// mostrar as arestas de tangência (fim dos raios)
+    pub tangent_edges: bool,
     /// item realçado: o que está sob o mouse na árvore, ou o comando aberto
     pub hilite: Option<Id>,
     /// estilo padrão das curvas de referência (px e tipo de linha)
@@ -113,9 +115,7 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
                 }
             }
             if shows(!col.visible, env) {
-                for p in m.edges.chunks_exact(3) {
-                    s.edges.push(lv([p[0], p[1], p[2]], edge_col));
-                }
+                push_edges(&mut s.edges, m, o.tangent_edges, edge_col);
             }
         }
     }
@@ -252,9 +252,7 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
                 s.mesh.push(MeshVertex { pos: p, nrm: [m.normals[k], m.normals[k + 1], m.normals[k + 2]], col: [c[0], c[1], c[2], 1.0], mat: [rough, metal, alpha, 0.] });
             }
             s.indices.extend(m.indices.iter().map(|i| base + i));
-            for p in m.edges.chunks_exact(3) {
-                s.edges.push(lv([p[0], p[1], p[2]], if selected { HILITE } else { edge_col }));
-            }
+            push_edges(&mut s.edges, m, o.tangent_edges, if selected { HILITE } else { edge_col });
         }
     }
 
@@ -404,6 +402,27 @@ pub fn draw_points(painter: &egui::Painter, doc: &Document, r: &RecomputeResult,
             for p in &sk.points {
                 draw(*p, col, style, size);
             }
+        }
+    }
+}
+
+/// Arestas da malha; as de tangência (suaves) só se pedidas — o raio fica limpo como na peça real.
+fn push_edges(dst: &mut Vec<LineVertex>, m: &scc_kernel::Mesh, tangent: bool, col: [f32; 4]) {
+    let nseg = m.edges.len() / 6;
+    if tangent || m.edge_smooth.len() != m.edge_ranges.len() {
+        for p in m.edges.chunks_exact(3) {
+            dst.push(lv([p[0], p[1], p[2]], col));
+        }
+        return;
+    }
+    for (e, &sm) in m.edge_smooth.iter().enumerate() {
+        if sm != 0 {
+            continue;
+        }
+        let s0 = m.edge_ranges[e] as usize;
+        let s1 = m.edge_ranges.get(e + 1).map(|x| *x as usize).unwrap_or(nseg);
+        for q in m.edges[s0 * 6..s1 * 6].chunks_exact(3) {
+            dst.push(lv([q[0], q[1], q[2]], col));
         }
     }
 }
