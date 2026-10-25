@@ -75,29 +75,55 @@ impl Pen {
 
     /// Ponta da chamada em `tip`, vindo de `from`.
     pub fn arrow(&self, p: &Painter, tip: Pos2, from: Pos2) {
+        p.extend(self.arrow_shapes(tip, from));
+    }
+
+    fn arrow_shapes(&self, tip: Pos2, from: Pos2) -> Vec<egui::Shape> {
         let d = (tip - from).normalized();
         if !d.x.is_finite() || (tip - from).length() < 2. {
-            return;
+            return vec![];
         }
         let n = egui::vec2(-d.y, d.x);
         let (s, w) = (self.size * 0.8, self.size * 0.27);
         let col = if self.sel { HL } else { self.line };
         match self.arrow {
-            PmiArrow::Cheia | PmiArrow::Padrao => {
-                p.add(egui::Shape::convex_polygon(vec![tip, tip - d * s + n * w, tip - d * s - n * w], col, Stroke::NONE));
-            }
-            PmiArrow::Aberta => {
-                p.add(egui::Shape::line(vec![tip - d * s + n * w, tip, tip - d * s - n * w], self.stroke()));
-            }
-            PmiArrow::Ponto => {
-                p.circle_filled(tip, self.size * 0.22, col);
-            }
+            PmiArrow::Cheia | PmiArrow::Padrao => vec![egui::Shape::convex_polygon(vec![tip, tip - d * s + n * w, tip - d * s - n * w], col, Stroke::NONE)],
+            PmiArrow::Aberta => vec![egui::Shape::line(vec![tip - d * s + n * w, tip, tip - d * s - n * w], self.stroke())],
+            PmiArrow::Ponto => vec![egui::Shape::circle_filled(tip, self.size * 0.22, col)],
             PmiArrow::Barra => {
                 let k = (d + n).normalized() * s * 0.45;
-                p.line_segment([tip - k, tip + k], Stroke::new(self.width + 0.6, col));
+                vec![egui::Shape::line_segment([tip - k, tip + k], Stroke::new(self.width + 0.6, col))]
             }
-            PmiArrow::Nenhuma => {}
+            PmiArrow::Nenhuma => vec![],
         }
+    }
+
+    /// Lugar reservado na pintura para a chamada ficar por baixo da caixa (desenhada depois).
+    pub fn reserve(p: &Painter) -> egui::layers::ShapeIdx {
+        p.add(egui::Shape::Noop)
+    }
+
+    /// Chamada da caixa `r` até `anchor`: sai do lado da caixa voltado para o ponto, com um
+    /// patamar curto, e fica por baixo da caixa (no lugar reservado). Nunca cruza a caixa.
+    pub fn leader(&self, p: &Painter, slot: egui::layers::ShapeIdx, r: Rect, anchor: Pos2) {
+        let c = r.center();
+        let d = anchor - c;
+        if r.expand(2.).contains(anchor) {
+            return;
+        }
+        let land = self.size * 0.9;
+        // lado: compara a direção com a proporção da caixa
+        let (att, out) = if d.x.abs() * r.height() >= d.y.abs() * r.width() {
+            if d.x < 0. { (egui::pos2(r.left(), c.y), egui::vec2(-land, 0.)) } else { (egui::pos2(r.right(), c.y), egui::vec2(land, 0.)) }
+        } else if d.y < 0. {
+            (egui::pos2(c.x, r.top()), egui::vec2(0., -land * 0.7))
+        } else {
+            (egui::pos2(c.x, r.bottom()), egui::vec2(0., land * 0.7))
+        };
+        let knee = att + out;
+        let mut v = vec![egui::Shape::line(vec![att, knee, anchor], self.stroke())];
+        v.extend(self.arrow_shapes(anchor, knee));
+        p.set(slot, egui::Shape::Vec(v));
     }
 
     /// Bloco de texto (várias linhas) centrado em `at`, com moldura e fundo conforme o tipo.
@@ -274,17 +300,6 @@ impl Pen {
         (Rect::from_center_size(at, egui::vec2(rad * 2., rad * 2.)), rad)
     }
 
-    /// Ponto do contorno do retângulo por onde a chamada sai (meio do lado esquerdo ou direito,
-    /// com um pequeno patamar).
-    pub fn attach(r: Rect, toward: Pos2) -> (Pos2, Pos2) {
-        if toward.x < r.center().x {
-            let a = egui::pos2(r.left(), r.center().y);
-            (a, a - egui::vec2(10., 0.))
-        } else {
-            let a = egui::pos2(r.right(), r.center().y);
-            (a, a + egui::vec2(10., 0.))
-        }
-    }
 }
 
 /// Editor do estilo (na anotação, "padrão" herda o estilo geral).

@@ -385,8 +385,10 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     let mut action: Option<(Id, u8)> = None;
     let mut drag: Option<(Id, [f64; 3])> = None;
     let Some(r) = app.result.as_ref() else { return };
-    let sel = if app.in_asm() { app.asm.as_ref().and_then(|s| s.sel) } else if let Sel::Pmi(i) = app.sel { Some(i) } else { None };
+    let editing = if app.in_asm() { app.asm.as_ref().and_then(|s| s.sel) } else if let Sel::Pmi(i) = app.sel { Some(i) } else { None };
+    let focus = app.pmi_focus;
     let painter = ui.painter_at(rect);
+    let mut edit_req: Option<Id> = None;
     let mut clicked = None;
     let fields = title_fields(app);
     let gstyle = app.settings.pmi_style.clone();
@@ -394,7 +396,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
         let a: Vec<[f64; 3]> = pm.anchors.iter().map(|p| snap(r, *p)).collect();
         let Some(first) = a.first().copied() else { continue };
         let val = pm.measure(&a);
-        let is_sel = sel == Some(pm.id);
+        let is_sel = editing == Some(pm.id) || focus == Some(pm.id);
         let pen = Pen::new(&pm.style, &gstyle, is_sel);
         let (stroke, thin) = (pen.stroke(), pen.thin());
         let wrap = |t: String| format!("{}{}{}", pm.style.prefix, t, pm.style.suffix);
@@ -429,8 +431,13 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                 }
                 let mid = t0 + (t1 - t0) * 0.5;
                 let up = egui::vec2((t1 - t0).y, -(t1 - t0).x).normalized();
-                let up = if up.y > 0. { -up } else { up };
-                text_at(mid + up * (pen.size * 0.9), (q0 + q1) * 0.5, &main)
+                let up = if up.y > 0. || (up.y.abs() < 0.2 && up.x < 0.) { -up } else { up };
+                // o texto fica todo do lado de fora da linha de cota (mede antes de pôr)
+                let g = painter.layout_no_wrap(main.clone(), pen.font(1.), pen.text);
+                let extra = if stack.is_some() { pen.size * 2.2 } else { 0. };
+                let (w, h) = (g.size().x + extra + 10., g.size().y + 6.);
+                let gap = up.x.abs() * w / 2. + up.y.abs() * h / 2. + 3.;
+                text_at(mid + up * gap, (q0 + q1) * 0.5, &main)
             }
             PmiKind::Angle if a.len() >= 3 => {
                 let (Some(sv), Some(s1), Some(s2)) = (cam.project(rect, v3(a[0])), cam.project(rect, v3(a[1])), cam.project(rect, v3(a[2]))) else { continue };
@@ -448,14 +455,12 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                 text_at(sv + (d1 + d2).normalized() * (rad + pen.size * 1.4), v3(a[0]), &main)
             }
             PmiKind::Radius | PmiKind::Diameter => {
-                // chamada do texto até a borda (seta na borda), passando pela direção do centro
+                // chamada do texto até a borda (seta na borda), por baixo do texto
                 let (Some(sc), Some(st)) = (cam.project(rect, v3(first)), cam.project(rect, v3(first) + off)) else { continue };
                 let se = a.get(1).and_then(|q| cam.project(rect, v3(*q))).unwrap_or(sc);
+                let slot = Pen::reserve(&painter);
                 let lr = text_at(st, v3(first) + off, &main);
-                let (att, land) = Pen::attach(lr, se);
-                painter.line_segment([att, land], stroke);
-                painter.line_segment([land, se], stroke);
-                pen.arrow(&painter, se, land);
+                pen.leader(&painter, slot, lr, se);
                 if matches!(pm.kind, PmiKind::Diameter) {
                     // diâmetro: a linha atravessa o centro até o outro lado
                     let other = sc + (sc - se);
@@ -500,11 +505,9 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                 if let Some((t2, d2)) = &extra.second {
                     rows.push(row(t2, d2));
                 }
+                let slot = Pen::reserve(&painter);
                 let fr = pen.fcf(&painter, st, ch.symbol(), &rows);
-                let (att, land) = Pen::attach(fr, s0);
-                painter.line_segment([att, land], stroke);
-                painter.line_segment([land, s0], stroke);
-                pen.arrow(&painter, s0, land);
+                pen.leader(&painter, slot, fr, s0);
                 fr
             }
             PmiKind::Datum { letter } => {
@@ -514,8 +517,12 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
             PmiKind::Roughness { ra, process } => {
                 let (Some(s0), Some(st)) = (cam.project(rect, v3(first)), cam.project(rect, v3(first) + off)) else { continue };
                 let txt = if process.trim().is_empty() { format!("Ra {ra}") } else { format!("{}\nRa {ra}", process.trim()) };
+                let slot = Pen::reserve(&painter);
                 let (rr, tip) = pen.roughness(&painter, st, &txt);
-                painter.line_segment([tip, s0], stroke);
+                // a chamada sai do vértice do símbolo (ele encosta na superfície)
+                let mut v = vec![egui::Shape::line_segment([tip, s0], stroke)];
+                let _ = &mut v;
+                painter.set(slot, egui::Shape::Vec(v));
                 pen.arrow(&painter, s0, tip);
                 rr
             }
@@ -523,14 +530,12 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                 // nota: chamada com seta até a peça e patamar no texto
                 let (Some(s0), Some(st)) = (cam.project(rect, v3(first)), cam.project(rect, v3(first) + off)) else { continue };
                 let txt = wrap(pm.text.clone());
+                let slot = Pen::reserve(&painter);
                 let lr = match pm.plane {
                     Some((_, x)) => label_on_plane(&painter, cam, rect, v3(first) + off, v3(x).normalize_or_zero(), &txt, &pen).unwrap_or_else(|| pen.text_block(&painter, st, &txt, PmiFrame::Nenhuma, PmiBg::Nenhum)),
                     None => pen.text_block(&painter, st, &txt, PmiFrame::Nenhuma, PmiBg::Nenhum),
                 };
-                let (att, land) = Pen::attach(lr, s0);
-                painter.line_segment([att, land], stroke);
-                painter.line_segment([land, s0], stroke);
-                pen.arrow(&painter, s0, land);
+                pen.leader(&painter, slot, lr, s0);
                 lr
             }
         };
@@ -553,7 +558,10 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                 }
             }
         }
-        if resp.clicked() || resp.secondary_clicked() {
+        // 1 clique: realça a anotação e o que ela marca; 2 cliques: edita
+        if resp.double_clicked() {
+            edit_req = Some(pm.id);
+        } else if resp.clicked() || resp.secondary_clicked() {
             clicked = Some(pm.id);
         }
         // botão direito no rótulo: opções da anotação
@@ -585,6 +593,10 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
         }
         clicked = Some(id);
     }
+    // clique no vazio da vista: tira o realce
+    if clicked.is_none() && edit_req.is_none() && action.is_none() && ui.input(|i| i.pointer.primary_clicked() && i.pointer.interact_pos().is_some_and(|q| rect.contains(q))) {
+        app.pmi_focus = None;
+    }
     if let Some((id, k)) = action {
         match k {
             0 => {
@@ -613,10 +625,14 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                     };
                 }
             }
-            _ => clicked = Some(id),
+            _ => edit_req = Some(id),
         }
     }
     if let Some(id) = clicked {
+        app.pmi_focus = Some(id);
+    }
+    if let Some(id) = edit_req {
+        app.pmi_focus = Some(id);
         if app.in_asm() {
             app.asm.as_mut().unwrap().sel = Some(id);
         } else {
@@ -659,9 +675,11 @@ fn hidden_now(app: &App) -> Vec<Id> {
 #[allow(clippy::too_many_arguments)]
 fn item_row(ui: &mut egui::Ui, p: &Pmi, sel: Option<Id>, folders: &[String], select: &mut Option<Id>, action: &mut Option<(Id, u8)>, move_to: &mut Option<(Id, String)>) {
     let txt = format!("{} {}", if p.visible { "📐" } else { "·" }, p.name);
-    let r = ui.selectable_label(sel == Some(p.id), if p.visible { RichText::new(txt) } else { RichText::new(txt).weak() });
-    if r.clicked() {
+    let r = ui.selectable_label(sel == Some(p.id), if p.visible { RichText::new(txt) } else { RichText::new(txt).weak() }).on_hover_text(crate::i18n::tr("1 clique: realça o que a anotação marca · 2 cliques: edita"));
+    if r.double_clicked() {
         *select = Some(p.id);
+    } else if r.clicked() {
+        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::unique("pmi_foco_arvore"), p.id.0));
     }
     r.context_menu(|ui| {
         ui.label(RichText::new(&p.name).strong());
@@ -709,6 +727,7 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui) {
     let mut move_to: Option<(Id, String)> = None;
     let mut folder_act: Option<(String, u8)> = None;
     let sel = if app.in_asm() { app.asm.as_ref().and_then(|s| s.sel) } else if let Sel::Pmi(i) = app.sel { Some(i) } else { None };
+    let sel = sel.or(app.pmi_focus);
     let mut create: Option<u8> = None;
     let mut folders: Vec<String> = list(app).iter().map(|p| p.folder.clone()).filter(|f| !f.is_empty()).collect();
     folders.sort();
@@ -806,7 +825,11 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui) {
             ui.close();
         }
     });
+    if let Some(f) = ui.ctx().data_mut(|d| d.remove_temp::<u64>(egui::Id::unique("pmi_foco_arvore"))) {
+        app.pmi_focus = Some(Id(f));
+    }
     if let Some(id) = select {
+        app.pmi_focus = Some(id);
         if app.in_asm() {
             app.asm.as_mut().unwrap().sel = Some(id);
         } else {

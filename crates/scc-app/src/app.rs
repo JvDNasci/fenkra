@@ -205,6 +205,8 @@ pub struct App {
     sheet_open: bool,
     /// anotação 3D esperando seleções
     pub pmi_pending: Option<u8>,
+    /// anotação realçada (1 clique): ela e o que ela marca ficam em destaque, sem abrir a edição
+    pub pmi_focus: Option<Id>,
     /// desenho 2D aberto (bancada Desenho)
     pub dwg: Option<crate::dwg_ui::DwgState>,
     /// janelas do estrutural: biblioteca de perfis e lista de corte
@@ -307,6 +309,7 @@ impl App {
             asm: None,
             sheet_open: false,
             pmi_pending: None,
+            pmi_focus: None,
             sketch_wait_plane: false,
             tree_peek: false,
             box_start: None,
@@ -2097,10 +2100,16 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None });
             self.toast(format!("{} itens apagados (Ctrl+Z desfaz)", many.len()), false);
             return;
         }
+        if let (Some(id), false) = (self.pmi_focus, matches!(self.sel, Sel::Pmi(_))) {
+            crate::pmi_ui::list_mut(self).retain(|p| p.id != id);
+            self.pmi_focus = None;
+            return;
+        }
         match self.sel {
             Sel::Pmi(id) => {
                 crate::pmi_ui::list_mut(self).retain(|p| p.id != id);
                 self.sel = Sel::None;
+                self.pmi_focus = None;
             }
             Sel::Feature(id) | Sel::Ref(id) | Sel::Collector(id) => self.ask_delete(id),
             Sel::Folder(id) => {
