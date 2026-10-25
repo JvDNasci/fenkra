@@ -181,6 +181,51 @@ pub enum Seg {
     Spline(Vec<[f64; 2]>),
 }
 
+/// Divide uma polilinha nos cantos vivos (giro > ~26°): cada trecho é uma lista de índices em
+/// `p` (o último de um é o primeiro do seguinte). Fechada sem cantos vira duas metades.
+/// Trechos com 4+ pontos são suaves (viram spline); os outros, retas.
+pub fn smooth_runs(p: &[[f64; 2]], closed: bool) -> Vec<Vec<usize>> {
+    let n = p.len();
+    if n < 2 {
+        return vec![];
+    }
+    let turn = |i: usize| {
+        let (a, b, c) = (p[(i + n - 1) % n], p[i], p[(i + 1) % n]);
+        let (u, v) = ([b[0] - a[0], b[1] - a[1]], [c[0] - b[0], c[1] - b[1]]);
+        let (lu, lv) = ((u[0] * u[0] + u[1] * u[1]).sqrt(), (v[0] * v[0] + v[1] * v[1]).sqrt());
+        if lu < 1e-12 || lv < 1e-12 {
+            return 0.;
+        }
+        ((u[0] * v[0] + u[1] * v[1]) / (lu * lv)).clamp(-1., 1.).acos()
+    };
+    let lim = 0.45;
+    if !closed {
+        let mut br = vec![0];
+        br.extend((1..n - 1).filter(|i| turn(*i) > lim));
+        br.push(n - 1);
+        return br.windows(2).map(|w| (w[0]..=w[1]).collect()).collect();
+    }
+    let mut br: Vec<usize> = (0..n).filter(|i| turn(*i) > lim).collect();
+    if br.is_empty() {
+        br = vec![0, n / 2];
+    }
+    (0..br.len())
+        .map(|k| {
+            let (s, e) = (br[k], br[(k + 1) % br.len()]);
+            let mut v = vec![s];
+            let mut i = s;
+            loop {
+                i = (i + 1) % n;
+                v.push(i);
+                if i == e {
+                    break;
+                }
+            }
+            v
+        })
+        .collect()
+}
+
 /// Amostra uma spline que passa pelos pontos (Catmull-Rom centrípeta), para desenhar.
 pub fn spline_samples(p: &[[f64; 2]], per_seg: usize) -> Vec<[f64; 2]> {
     let n = p.len();
@@ -344,11 +389,15 @@ impl SketchData {
             if ids.len() == 1 {
                 self.add_curve(al, Curve::Point { p: ids[0] }, construction);
             }
-            for w in ids.windows(2) {
-                self.add_curve(al, Curve::Line { a: w[0], b: w[1] }, construction);
-            }
-            if closed && ids.len() > 2 {
-                self.add_curve(al, Curve::Line { a: ids[ids.len() - 1], b: ids[0] }, construction);
+            // trechos suaves (arcos, splines convertidas) viram spline; cantos e retas, linhas
+            for run in smooth_runs(&open, closed && ids.len() > 2) {
+                if run.len() >= 4 {
+                    self.add_curve(al, Curve::Spline { pts: run.iter().map(|i| ids[*i]).collect() }, construction);
+                } else {
+                    for w in run.windows(2) {
+                        self.add_curve(al, Curve::Line { a: ids[w[0]], b: ids[w[1]] }, construction);
+                    }
+                }
             }
             LinkShape::Poly { points: ids, closed }
         };
@@ -1038,6 +1087,12 @@ impl SketchData {
     /// Laços fechados (perfis) formados pelas curvas que não são de construção.
     /// Devolve (laços, quantidade de curvas abertas).
     pub fn loops(&self) -> (Vec<Vec<Seg>>, usize) {
+        let (l, o) = self.chains();
+        (l, o.iter().map(|c| c.len()).sum())
+    }
+
+    /// Perfis fechados e cadeias abertas (de ponta a ponta, na ordem).
+    pub fn chains(&self) -> (Vec<Vec<Seg>>, Vec<Vec<Seg>>) {
         // une pontos ligados por restrição de coincidência
         let mut parent: HashMap<Id, Id> = HashMap::new();
         fn find(p: &mut HashMap<Id, Id>, x: Id) -> Id {
@@ -1088,7 +1143,7 @@ impl SketchData {
             }
             c => c,
         };
-        let mut open = 0;
+        let mut open = vec![];
         while let Some((s, e, seg)) = edges.pop() {
             let mut lp = vec![seg];
             let mut end = e;
@@ -1108,7 +1163,19 @@ impl SketchData {
             if closed {
                 loops.push(lp);
             } else {
-                open += lp.len();
+                // aberta: cresce também pelo começo
+                let mut start = s;
+                while let Some(i) = edges.iter().position(|(a, b, _)| *a == start || *b == start) {
+                    let (a, b, sg) = edges.swap_remove(i);
+                    if b == start {
+                        lp.insert(0, sg);
+                        start = a;
+                    } else {
+                        lp.insert(0, rev(sg));
+                        start = b;
+                    }
+                }
+                open.push(lp);
             }
         }
         (loops, open)

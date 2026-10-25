@@ -1292,6 +1292,10 @@ pub struct Feature {
     /// Aparência das faces geradas por este comando.
     #[serde(default)]
     pub appearance: Option<Appearance>,
+    /// criado com a chapa planificada: as posições dele valem no planificado (e são levadas
+    /// para o dobrado), senão valem no dobrado
+    #[serde(default)]
+    pub flat_space: bool,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -2210,6 +2214,9 @@ pub struct Extrude {
     /// parede fina com esta espessura
     #[serde(default)]
     pub thin: Option<String>,
+    /// lado da parede fina num perfil aberto: 0 um lado, 1 o outro, 2 simétrica
+    #[serde(default)]
+    pub thin_side: u8,
     /// direção da extrusão (linha, aresta, eixo); `None` = normal ao plano do sketch
     #[serde(default)]
     pub dir: Option<AxisRef>,
@@ -2228,6 +2235,8 @@ pub struct Revolve {
     pub op: BoolOp,
     #[serde(default)]
     pub thin: Option<String>,
+    #[serde(default)]
+    pub thin_side: u8,
     /// segundo ângulo (para o outro lado do plano do sketch)
     #[serde(default)]
     pub angle2: Option<String>,
@@ -2946,7 +2955,8 @@ impl Document {
             }
             None => self.rollback.min(len),
         };
-        self.features.insert(at, Feature { id, name, kind, suppressed: false, folder: None, target, hidden: false, appearance: None });
+        let flat_space = self.sheet.as_ref().is_some_and(|s| s.flat);
+        self.features.insert(at, Feature { id, name, kind, suppressed: false, folder: None, target, hidden: false, appearance: None, flat_space });
         if at < self.rollback {
             self.rollback += 1;
         } else {
@@ -2966,7 +2976,7 @@ impl Document {
         let name = self.unique_name("Sketch");
         let target = self.active_collector;
         let kind = FeatureKind::Sketch(Sketch { plane, data: Default::default() });
-        self.features.push(Feature { id, name, kind, suppressed: false, folder: Some(folder), target, hidden: false, appearance: None });
+        self.features.push(Feature { id, name, kind, suppressed: false, folder: Some(folder), target, hidden: false, appearance: None, flat_space: false });
         if self.rollback == self.features.len() - 1 {
             self.rollback += 1;
         }
@@ -3352,7 +3362,7 @@ mod tests {
         let mut d = Document::new("p");
         let sk1 = sketch_rect(&mut d);
         let sk2 = sketch_rect(&mut d);
-        let ex = d.add_feature(FeatureKind::Extrude(Extrude {
+        let ex = d.add_feature(FeatureKind::Extrude(Extrude { thin_side: 0,
             sketch: sk1,
             op: BoolOp::Add,
             extent: Extent::Blind(s("10")),
@@ -3378,7 +3388,7 @@ mod tests {
     fn mover_respeita_dependencias() {
         let mut d = Document::new("p");
         let sk = sketch_rect(&mut d);
-        let ex = d.add_feature(FeatureKind::Extrude(Extrude {
+        let ex = d.add_feature(FeatureKind::Extrude(Extrude { thin_side: 0,
             sketch: sk,
             op: BoolOp::Add,
             extent: Extent::Blind(s("10")),

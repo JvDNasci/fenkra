@@ -111,7 +111,7 @@ fn exec(doc: &mut Document, lines: &[(usize, Vec<String>)], loops: &mut HashMap<
                 let cut = kw(&head, &["recorte", "cut"]);
                 let extent = if kw(&t[3], &["passante", "through"]) { Extent::ThroughAll } else { Extent::Blind(t[3].clone()) };
                 num_or_through(&t[3], &num)?;
-                let id = doc.add_feature(FeatureKind::Extrude(Extrude {
+                let id = doc.add_feature(FeatureKind::Extrude(Extrude { thin_side: 0,
                     sketch: sk,
                     op: if cut { BoolOp::Cut } else { BoolOp::Add },
                     extent,

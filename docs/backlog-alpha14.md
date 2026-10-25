@@ -90,3 +90,14 @@ Status: [ ] a fazer · [~] parcial · [x] feito
 - [x] J1 Recursos sólidos (extrusão, recorte, revolução, varredura, loft, nervura…) aceitam elementos do wireframe além de sketches: curvas, linhas, polilinhas, splines, extrações, curvas de outros sketches, arestas
 - [x] J2 Se faltar direção/plano/eixo (ex.: curva 3D sem plano), o comando pede a referência em vez de falhar
 - [x] J3 Tirar as regras de "só faces" / "só pontos": cada campo aceita o que geometricamente faz sentido (aresta reta = eixo/direção, face plana = plano/direção normal, curva = perfil/guia, vértice/ponto = ponto, cilindro = eixo)
+
+## K. Correções e pedidos de 24/10/2026 (2ª rodada)
+- [x] K1 Chapa: dobrar/desdobrar errado (abas somem no planificado)
+- [x] K2 Spline em extrusão/chapa sai facetada (sombra do contorno mostra os segmentos)
+- [x] K3 Filete na chapa que dobra e planifica junto
+- [x] K4 Recortes e operações valem no planificado e no dobrado (um transmite para o outro)
+- [x] K5 Perfil aberto não é erro: recurso fino (espessura para um lado/dois lados) em extrusão e recorte
+- [x] K6 Estrutural: polilinha bagunça a orientação do membro (cada trecho deve ser um membro)
+- [x] K7 Atalho H (ocultar) não funciona nas pastas
+- [ ] K8 GD&T desenhado como símbolo (quadro com casas, datum com triângulo), não texto
+- [ ] K9 PMI com cara profissional e mais personalização (fonte, cores, setas, linhas)

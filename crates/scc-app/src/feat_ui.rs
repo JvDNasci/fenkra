@@ -126,6 +126,20 @@ fn thin_ui(ui: &mut egui::Ui, thin: &mut Option<String>, vars: &Vars) {
     }
 }
 
+/// Parede fina com o lado (num perfil aberto: um lado, o outro ou simétrica).
+fn thin_side_ui(ui: &mut egui::Ui, thin: &mut Option<String>, side: &mut u8, vars: &Vars) {
+    thin_ui(ui, thin, vars);
+    if thin.is_some() {
+        ui.horizontal(|ui| {
+            ui.label(tr("Lado"));
+            ui.radio_value(side, 0, tr("um lado"));
+            ui.radio_value(side, 1, tr("outro lado"));
+            ui.radio_value(side, 2, tr("simétrica"));
+        });
+        ui.label(RichText::new(tr("Num perfil aberto, a parede fecha o contorno com essa espessura (vale para recorte também). Perfil aberto sem parede fina usa 1 mm.")).weak().small());
+    }
+}
+
 /// Lista de comandos de forma (antes deste) a repetir; vazia = corpo inteiro.
 fn sources_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, sources: &mut Vec<Id>) {
     section(ui, "O que repetir");
@@ -673,12 +687,12 @@ pub fn default_pattern(i: usize, seed: &Seed) -> PatternKind {
 
 /// Opções extras da extrusão: ângulo de saída e parede fina.
 pub fn extrude_extras(ui: &mut egui::Ui, e: &mut Extrude, vars: &Vars) {
-    egui::CollapsingHeader::new(tr("Ângulo de saída e parede fina")).default_open(e.thin.is_some() || e.taper.trim() != "0").show(ui, |ui| {
+    egui::CollapsingHeader::new(tr("Ângulo de saída e parede fina")).default_open(true).show(ui, |ui| {
         expr(ui, "Ângulo de saída", &mut e.taper, vars, "°");
         if e.taper.trim() != "0" && !matches!(e.extent, Extent::Blind(_)) {
             ui.label(RichText::new(tr("o ângulo vale só com término 'cego'")).color(Color32::from_rgb(255, 170, 60)).small());
         }
-        thin_ui(ui, &mut e.thin, vars);
+        thin_side_ui(ui, &mut e.thin, &mut e.thin_side, vars);
     });
 }
 
@@ -695,7 +709,7 @@ pub fn revolve_extras(ui: &mut egui::Ui, r: &mut Revolve, vars: &Vars) {
         expr(ui, "Ângulo 2", a2, vars, "°");
         ui.label(RichText::new(tr("Primeiro e segundo ângulo somam no máximo 360°.")).weak().small());
     }
-    thin_ui(ui, &mut r.thin, vars);
+    thin_side_ui(ui, &mut r.thin, &mut r.thin_side, vars);
 }
 
 /// Variações de filete (constante/variável) e chanfro (distância, duas distâncias, distância+ângulo).

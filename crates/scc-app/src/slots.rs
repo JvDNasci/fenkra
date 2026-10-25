@@ -267,7 +267,7 @@ mod tests {
         let seed = Seed { points: vec![PointRef::Ref(Id(9))], ..Default::default() };
         assert!(!fill(&mut k, &mut Cands::from_seed(&seed, None)));
         // sketch do comando vem da árvore
-        let mut f = FeatureKind::Extrude(Extrude { sketch: UNSET_SKETCH, op: BoolOp::Add, extent: Extent::Blind("10".into()), reverse: false, taper: "0".into(), thin: None, dir: None });
+        let mut f = FeatureKind::Extrude(Extrude { thin_side: 0, sketch: UNSET_SKETCH, op: BoolOp::Add, extent: Extent::Blind("10".into()), reverse: false, taper: "0".into(), thin: None, dir: None });
         assert!(feature_incomplete(&f));
         assert!(fill(&mut f, &mut Cands::from_seed(&Seed::default(), Some(Id(42)))));
         assert!(!feature_incomplete(&f));

@@ -17,6 +17,8 @@ pub fn ev(src: &str, vars: &Vars, field: &str) -> Result<f64, String> {
 #[derive(Default)]
 pub struct EvalSketch {
     pub loops: Vec<Loop2>,
+    /// cadeias abertas (polilinhas amostradas), para parede fina
+    pub open: Vec<Vec<[f64; 2]>>,
     pub points: Vec<[f64; 2]>,
     /// linhas por id da curva (para eixos de revolução)
     pub lines: HashMap<Id, ([f64; 2], [f64; 2])>,
@@ -54,11 +56,10 @@ pub fn eval_sketch(data: &SketchData, vars: &Vars) -> Result<EvalSketch, String>
     if !report.converged {
         out.warnings.push(format!("restrições em conflito ({} não satisfeitas)", report.failing.len()));
     }
-    let (loops, open) = sk.loops();
+    let (loops, open) = sk.chains();
     out.loops = loops.into_iter().map(|l| l.into_iter().map(seg).collect()).collect();
-    if open > 0 {
-        out.warnings.push(format!("{open} curva(s) não formam perfil fechado"));
-    }
+    // cadeias abertas: servem de perfil para parede fina (não é erro)
+    out.open = open.into_iter().map(|c| sample(&c.into_iter().map(seg).collect::<Vec<_>>())).filter(|v| v.len() >= 2).collect();
     out.points = sk.hole_points();
     out.pts = sk.points.iter().map(|p| (p.id, [p.x, p.y])).collect();
     for c in &sk.curves {

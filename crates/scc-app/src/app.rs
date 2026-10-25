@@ -1147,13 +1147,13 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None });
                     Cmd::ExtrudeUpTo | Cmd::CutUpTo => Extent::UpTo(up_to),
                     _ => Extent::ThroughAll,
                 };
-                Sel::Feature(d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: if cut { BoolOp::Cut } else { BoolOp::Add }, extent, reverse: false, taper: s("0"), thin: None, dir: None })))
+                Sel::Feature(d.add_feature(FeatureKind::Extrude(Extrude { thin_side: 0, sketch: sk, op: if cut { BoolOp::Cut } else { BoolOp::Add }, extent, reverse: false, taper: s("0"), thin: None, dir: None })))
             }
             Cmd::Revolve | Cmd::Groove => {
                 let sk = sk_or_unset;
                 let axis = self.seed(true).curves.first().map(crate::geo_ui::axis_of).unwrap_or_else(crate::slots::axis);
                 let d = &mut self.open.doc;
-                Sel::Feature(d.add_feature(FeatureKind::Revolve(Revolve {
+                Sel::Feature(d.add_feature(FeatureKind::Revolve(Revolve { thin_side: 0,
                     sketch: sk,
                     axis,
                     angle: s("360"),
@@ -1346,7 +1346,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None });
             Cmd::ExtrudeDraftFillet => {
                 // atalho de manufatura: extrusão com saída + filete nas arestas criadas por ela
                 let sk = sk_or_unset;
-                let ex = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("20")), reverse: false, taper: s("3"), thin: None, dir: None }));
+                let ex = d.add_feature(FeatureKind::Extrude(Extrude { thin_side: 0, sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("20")), reverse: false, taper: s("3"), thin: None, dir: None }));
                 d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::CreatedBy(ex), mode: EdgeMode::Constant, prop: Default::default() }));
                 Sel::Feature(ex)
             }
@@ -4558,13 +4558,28 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None });
         self.pub_open = open;
     }
 
+    /// Pasta (e subpastas): oculta tudo se algo aparece; senão mostra tudo.
+    fn toggle_folder(d: &mut Document, fo: Id) {
+        let inside: Vec<Id> = d.folders.iter().filter(|f| f.id == fo || d.folder_within(f.id, fo)).map(|f| f.id).collect();
+        let within = |x: Option<Id>| x.is_some_and(|x| inside.contains(&x));
+        let any_shown = d.references.iter().any(|r| within(r.folder) && r.visible) || d.features.iter().any(|f| within(f.folder) && !f.hidden);
+        for r in d.references.iter_mut().filter(|r| within(r.folder)) {
+            r.visible = !any_shown;
+        }
+        for f in d.features.iter_mut().filter(|f| within(f.folder)) {
+            f.hidden = any_shown;
+        }
+    }
+
     /// Alterna ocultar/mostrar o item selecionado (tecla H).
     fn toggle_hide_selected(&mut self) {
         let many: Vec<Id> = self.multi.borrow().clone();
         if many.len() > 1 {
             let d = &mut self.open.doc;
             for id in many {
-                if let Some(r) = d.references.iter_mut().find(|r| r.id == id) {
+                if d.folder(id).is_some() {
+                    Self::toggle_folder(d, id);
+                } else if let Some(r) = d.references.iter_mut().find(|r| r.id == id) {
                     r.visible = !r.visible;
                 } else if let Some(c) = d.collectors.iter_mut().find(|c| c.id == id) {
                     c.visible = !c.visible;
@@ -4603,8 +4618,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None });
                 }
             }
             Sel::Origin(_) => d.origin_visible = !d.origin_visible,
+            Sel::Folder(fo) => Self::toggle_folder(d, fo),
             _ => {}
         }
+        self.scene_dirty = true;
     }
 
     fn project_panel(&mut self, ui: &mut egui::Ui) {
