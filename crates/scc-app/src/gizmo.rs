@@ -176,7 +176,7 @@ pub(crate) fn translate_gizmo(ui: &mut egui::Ui, rect: Rect, cam: &Camera, salt:
 }
 
 /// Arco de rotação em volta de `axis` passando por `p`; devolve o novo ângulo (graus).
-fn rotate_arc(ui: &mut egui::Ui, rect: Rect, cam: &Camera, salt: u64, origin: Vec3, axis: Vec3, src: Vec3, angle: f64, locked: bool) -> Option<f64> {
+pub(crate) fn rotate_arc(ui: &mut egui::Ui, rect: Rect, cam: &Camera, salt: u64, origin: Vec3, axis: Vec3, src: Vec3, angle: f64, locked: bool) -> Option<f64> {
     let foot = origin + axis * (src - origin).dot(axis);
     let mut r0 = src - foot;
     if r0.length() < 1e-3 {

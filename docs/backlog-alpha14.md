@@ -65,16 +65,16 @@ Status: [ ] a fazer Â· [~] parcial Â· [x] feito
 - [x] F3 Filetes/chanfros: propagaÃ§Ã£o tangente / nenhuma / mÃ­nima
 
 ## G. Montagem
-- [ ] G1 RestriÃ§Ãµes rÃ¡pidas: selecionar elementos de duas peÃ§as â†’ menu (inclusive botÃ£o direito) com as restriÃ§Ãµes possÃ­veis
-- [ ] G2 Painel de ediÃ§Ã£o dinÃ¢mico como nos outros mÃ³dulos; restriÃ§Ã£o como recurso (pede o que falta)
-- [ ] G3 Setas 3D com rotaÃ§Ã£o
-- [ ] G4 Parar na colisÃ£o de verdade; arraste travado pelas restriÃ§Ãµes; ediÃ§Ã£o de restriÃ§Ãµes; inverter sem bug
-- [ ] G5 RestriÃ§Ãµes de engrenagem, pinhÃ£o, polia
-- [ ] G6 Salvar montagem como componente e inserir montagens em montagens (vÃ¡rios nÃ­veis)
-- [ ] G7 Ãrvore: totalmente definido Ã— solto; vÃ¡rios nÃ­veis com rolagem
-- [ ] G8 SubÃ¡rvore da peÃ§a dentro da montagem; duplo clique = objeto de trabalho (pai em destaque); modo ediÃ§Ã£o Ã— visualizaÃ§Ã£o
-- [ ] G9 Recursos entre peÃ§as (furo, booleana, chapa, aba/ranhura) com link
-- [ ] G10 PublicaÃ§Ãµes automÃ¡ticas entre peÃ§as, filtro de referÃªncias externas, instÃ¢ncias, sem referÃªncia circular; modo restriÃ§Ã£o Ã— relacional
+- [x] G1 RestriÃ§Ãµes rÃ¡pidas: selecionar elementos de duas peÃ§as â†’ menu (inclusive botÃ£o direito) com as restriÃ§Ãµes possÃ­veis
+- [x] G2 Painel de ediÃ§Ã£o dinÃ¢mico como nos outros mÃ³dulos; restriÃ§Ã£o como recurso (pede o que falta)
+- [x] G3 Setas 3D com rotaÃ§Ã£o
+- [x] G4 Parar na colisÃ£o de verdade; arraste travado pelas restriÃ§Ãµes; ediÃ§Ã£o de restriÃ§Ãµes; inverter sem bug
+- [x] G5 RestriÃ§Ãµes de engrenagem, pinhÃ£o, polia
+- [x] G6 Salvar montagem como componente e inserir montagens em montagens (vÃ¡rios nÃ­veis)
+- [x] G7 Ãrvore: totalmente definido Ã— solto; vÃ¡rios nÃ­veis com rolagem
+- [x] G8 SubÃ¡rvore da peÃ§a dentro da montagem; duplo clique = objeto de trabalho (pai em destaque); modo ediÃ§Ã£o Ã— visualizaÃ§Ã£o
+- [x] G9 Recursos entre peÃ§as (furo, booleana, chapa, aba/ranhura) com link
+- [x] G10 PublicaÃ§Ãµes automÃ¡ticas entre peÃ§as, filtro de referÃªncias externas, instÃ¢ncias, sem referÃªncia circular; modo restriÃ§Ã£o Ã— relacional
 
 ## H. PMI / FTI
 - [x] H1 Notas e GD&T mais personalizÃ¡veis

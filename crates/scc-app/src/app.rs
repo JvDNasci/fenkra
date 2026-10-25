@@ -1495,7 +1495,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
             Cmd::Geo(k) => Sel::Ref(d.add_geometry(k.make(&seed))),
             // comandos de montagem são tratados em asm_ui::command
             Cmd::AsmNew | Cmd::AsmOpen | Cmd::AsmSave | Cmd::AsmInsert | Cmd::AsmSubAsm | Cmd::AsmNewPart | Cmd::AsmGroup | Cmd::AsmReplace | Cmd::AsmMate(_) | Cmd::AsmFix | Cmd::AsmRigid
-            | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmPattern | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmComposer | Cmd::AsmBom => return,
+            | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmPattern | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmComposer | Cmd::AsmBom
+            | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink => return,
             Cmd::Param => {
                 let n = (1..).map(|i| format!("P{i}")).find(|n| !d.params.iter().any(|p| &p.name == n)).unwrap();
                 let _ = d.add_param(&n, "10", Unit::Comprimento);
@@ -3011,14 +3012,33 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
             if doc.external.is_empty() {
                 ui.label(RichText::new(tr("Geometria importada de outras peças por link (planos, curvas, pontos e parâmetros publicados). Fica sempre separada da geometria própria.")).weak().small());
             }
+            // filtro (texto e só os quebrados)
+            let fkey = egui::Id::unique("filtro_externas");
+            let mut filt: (String, bool) = ui.ctx().data(|m| m.get_temp(fkey)).unwrap_or_default();
+            if doc.external.len() > 2 {
+                ui.horizontal(|ui| {
+                    ui.label("🔎");
+                    ui.add(egui::TextEdit::singleline(&mut filt.0).desired_width(110.).hint_text(tr("filtrar")));
+                    ui.checkbox(&mut filt.1, tr("só quebrados"));
+                });
+                ui.ctx().data_mut(|m| m.insert_temp(fkey, filt.clone()));
+            }
+            let needle = filt.0.to_lowercase();
             for e in &doc.external {
+                if !needle.is_empty() && !format!("{} {} {}", e.name, e.source, e.publication).to_lowercase().contains(&needle) {
+                    continue;
+                }
+                if filt.1 && e.state != LinkState::Quebrado {
+                    continue;
+                }
                 let st = match e.state {
                     LinkState::Ativo => "●",
                     LinkState::Congelado => "❄",
                     LinkState::Quebrado => "⚠",
                     LinkState::Desativado => "⏸",
                 };
-                let txt = format!("🔗 {st} {} ← {}.{}", e.target.map(|t| doc.name_of(t)).unwrap_or_default(), e.source, e.publication);
+                let ctx = if e.xform.is_some() { " ⚙" } else { "" };
+                let txt = format!("🔗 {st} {} ← {}.{}{ctx}", e.target.map(|t| doc.name_of(t)).unwrap_or_default(), e.source, e.publication);
                 let r = ui.selectable_label(e.target.is_some_and(|t| self.sel == Sel::Ref(t)), txt).on_hover_text(format!("caminho: {}", e.path));
                 if r.clicked() {
                     if let Some(t) = e.target {
@@ -5323,6 +5343,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
                     let target = self.ctx_pick;
                     resp.context_menu(|ui| self.viewport_menu(ui, r, target, &mut acts));
                     self.ctx_actions.extend(acts);
+                } else {
+                    // montagem: restrições possíveis entre as seleções e ações do componente
+                    let target = self.ctx_pick;
+                    let mut act = None;
+                    resp.context_menu(|ui| act = crate::asm_ui::viewport_menu(self, ui, target));
+                    if let (Some(x), Some(st)) = (act, self.asm.as_mut()) {
+                        st.ctx_act = Some(x);
+                    }
                 }
                 // faces escolhidas do comando em edição
                 if let Some(Some(k)) = face_cmd.map(|id| self.open.doc.feature(id).map(|f| f.kind.clone())) {
@@ -5367,6 +5395,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
             }
             if self.sketch.is_none() {
                 crate::pmi_ui::overlay(self, ui, rect, &cam);
+                crate::asm_ui::context_overlay(self, ui, rect, &cam);
             }
             // seta e cota 3D do comando aberto (fast 3D)
             if self.sketch.is_none() {
@@ -5562,6 +5591,12 @@ pub enum Cmd {
     AsmComposer,
     /// lista de peças por nível
     AsmBom,
+    /// subconjunto novo com os componentes selecionados
+    AsmSubFromSel,
+    /// recurso entre peças: 0 recorte pela peça, 1 furo
+    AsmFeat(u8),
+    /// copiar geometria de outra peça por link (publicação automática)
+    AsmLink,
     // ---- chapa metálica
     SmParams,
     SmWall,

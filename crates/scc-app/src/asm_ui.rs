@@ -28,11 +28,47 @@ pub enum MateCmd {
     Perpendicular,
     /// alinhamento instantâneo: posiciona e não guarda a restrição
     AlignOnce,
+    Gear,
+    Pulley,
+    RackPinion,
 }
 
 impl MateCmd {
+    pub fn label(self) -> &'static str {
+        match self {
+            MateCmd::Auto => "Automática",
+            MateCmd::Coincident => "Coincidência",
+            MateCmd::Contact => "Contato",
+            MateCmd::Distance => "Distância",
+            MateCmd::Angle => "Ângulo",
+            MateCmd::Parallel => "Paralelismo",
+            MateCmd::Perpendicular => "Perpendicularidade",
+            MateCmd::AlignOnce => "Alinhar",
+            MateCmd::Gear => "Engrenagem",
+            MateCmd::Pulley => "Polia (correia)",
+            MateCmd::RackPinion => "Pinhão e cremalheira",
+        }
+    }
+    pub fn icon(self) -> &'static str {
+        match self {
+            MateCmd::Auto => "✨",
+            MateCmd::Coincident => "◎",
+            MateCmd::Contact => "⫴",
+            MateCmd::Distance => "↔",
+            MateCmd::Angle => "∠",
+            MateCmd::Parallel => "∥",
+            MateCmd::Perpendicular => "⟂",
+            MateCmd::AlignOnce => "⇥",
+            MateCmd::Gear => "⚙",
+            MateCmd::Pulley => "◎",
+            MateCmd::RackPinion => "⛭",
+        }
+    }
     fn kind(self) -> Option<MateKind> {
         Some(match self {
+            MateCmd::Gear => MateKind::Gear { ratio: "-1".into(), belt: false, refs: [[0.; 3]; 4] },
+            MateCmd::Pulley => MateKind::Gear { ratio: "1".into(), belt: true, refs: [[0.; 3]; 4] },
+            MateCmd::RackPinion => MateKind::RackPinion { mm_per_rev: "31.4159".into(), refs: [[0.; 3]; 4] },
             MateCmd::Coincident => MateKind::Coincident { flip: false },
             MateCmd::Contact => MateKind::Contact,
             MateCmd::Distance => MateKind::Distance("0".into()),
@@ -41,6 +77,30 @@ impl MateCmd {
             MateCmd::Perpendicular => MateKind::Perpendicular,
             MateCmd::Auto | MateCmd::AlignOnce => return None,
         })
+    }
+}
+
+/// Ação escolhida no menu do botão direito da viewport.
+#[derive(Clone, Copy, Debug)]
+pub enum AsmCtx {
+    Mate(MateCmd),
+    Fix(Id),
+    Hide(Id),
+    Isolate(Id),
+    Edit(Id),
+    Select(Id),
+    Delete(Id),
+    SubFromSel,
+}
+
+/// Restrições que fazem sentido entre as duas geometrias.
+fn quick_options(a: &Geom, b: &Geom) -> Vec<MateCmd> {
+    use MateCmd::*;
+    match (a, b) {
+        (Geom::Plane { .. }, Geom::Plane { .. }) => vec![Contact, Coincident, Distance, Angle, Parallel, Perpendicular, AlignOnce],
+        (Geom::Axis { .. }, Geom::Axis { .. }) => vec![Coincident, Distance, Angle, Parallel, Perpendicular, Gear, Pulley, RackPinion, AlignOnce],
+        (Geom::Axis { .. }, Geom::Plane { .. }) | (Geom::Plane { .. }, Geom::Axis { .. }) => vec![Coincident, Distance, Parallel, Perpendicular, Angle],
+        _ => vec![Coincident, Distance],
     }
 }
 
@@ -100,6 +160,21 @@ pub struct AsmState {
     pub anim_sel: usize,
     pub anim_t: f64,
     pub anim_play: bool,
+    /// modo visualização: só escolhe e mostra (sem manipulador nem restrição rápida)
+    pub view_only: bool,
+    /// graus de liberdade de cada componente (depois da última resolução)
+    pub comp_dof: std::collections::HashMap<Id, usize>,
+    /// anel de rotação em arraste (eixo, ângulo) e o centro do giro
+    rot_drag: Option<(usize, f64)>,
+    drag_center: Option<[f64; 3]>,
+    /// o arraste parou num contato
+    pub contact: bool,
+    /// restrições possíveis para as duas seleções atuais
+    quick: Option<(Vec<Pick>, Vec<MateCmd>)>,
+    /// ação do menu do botão direito da viewport (aplicada no próximo quadro)
+    pub ctx_act: Option<AsmCtx>,
+    /// subconjuntos lidos para a árvore (caminho → linhas)
+    sub_rows: std::collections::HashMap<PathBuf, Vec<(usize, String, bool)>>,
 }
 
 impl AsmState {
@@ -145,6 +220,14 @@ impl AsmState {
             anim_sel: 0,
             anim_t: 0.,
             anim_play: false,
+            view_only: false,
+            comp_dof: Default::default(),
+            rot_drag: None,
+            drag_center: None,
+            contact: false,
+            quick: None,
+            ctx_act: None,
+            sub_rows: Default::default(),
         }
     }
 
@@ -191,6 +274,8 @@ impl AsmState {
         let dir = self.dir();
         scc_montagem::load::refresh_refs(&mut self.asm, &mut self.cache, dir.as_deref());
         self.report = scc_montagem::solve::solve(&mut self.asm);
+        self.comp_dof = scc_montagem::solve::dof_per_comp(&self.asm);
+        self.sub_rows.clear();
         self.dirty = true;
     }
 
@@ -291,7 +376,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
             let is_asm = matches!(
                 c,
                 Cmd::AsmInsert | Cmd::AsmNewPart | Cmd::AsmGroup | Cmd::AsmReplace | Cmd::AsmMate(_) | Cmd::AsmFix | Cmd::AsmRigid | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmSubAsm | Cmd::AsmPattern
-                    | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmComposer | Cmd::AsmBom
+                    | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmComposer | Cmd::AsmBom | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink
             );
             let Some(st) = app.asm.as_mut() else {
                 // só os comandos de montagem avisam; os da peça seguem normalmente
@@ -315,7 +400,11 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                         let kind = if sub { NodeKind::SubAssembly { path } } else { NodeKind::Part { path } };
                         let first = st.asm.nodes.iter().all(|n| matches!(n.kind, NodeKind::Group));
                         let at = if first { [0.; 3] } else { [x + 20., 0., 0.] };
-                        let id = st.asm.add_component(&name, kind, Placement { origin: at, ..Default::default() }, parent);
+                        let id = st.asm.add_component(&name, kind, Placement { origin: if st.asm.relational { [0.; 3] } else { at }, ..Default::default() }, parent);
+                        if st.asm.relational {
+                            // projeto relacional: a peça fica na origem da montagem, a forma vem dos links
+                            st.asm.node_mut(id).unwrap().fixed = true;
+                        }
                         st.sel = Some(id);
                         st.dirty = true;
                         st.refresh();
@@ -338,6 +427,9 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                     st.push_undo();
                     let path = st.rel_path(&f);
                     let id = st.asm.add_component(&name, NodeKind::Part { path }, Placement::default(), None);
+                    if st.asm.relational {
+                        st.asm.node_mut(id).unwrap().fixed = true;
+                    }
                     st.sel = Some(id);
                     st.dirty = true;
                     edit_part(app, id);
@@ -444,6 +536,101 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                 Cmd::AsmBom => {
                     st.bom_open = Some(st.bom_open.unwrap_or_default());
                 }
+                Cmd::AsmSubFromSel => {
+                    // subconjunto novo com os componentes escolhidos (na viewport ou na árvore)
+                    let mut comps = st.comps_of(&app.picks);
+                    if let Some(s) = st.sel.filter(|s| st.asm.node(*s).is_some_and(|n| !matches!(n.kind, NodeKind::Group))) {
+                        if !comps.contains(&s) {
+                            comps.push(s);
+                        }
+                    }
+                    if comps.is_empty() {
+                        app.toast(tr("Selecione os componentes (Ctrl+clique nas peças na viewport ou escolha na árvore)"), true);
+                        return true;
+                    }
+                    let mut dlg = rfd::FileDialog::new().add_filter("Montagem", &["sccasm"]).set_file_name("Subconjunto.sccasm");
+                    if let Some(d) = st.dir() {
+                        dlg = dlg.set_directory(d);
+                    }
+                    let Some(f) = dlg.save_file() else { return true };
+                    let name = f.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "Subconjunto".into());
+                    st.push_undo();
+                    let old_dir = st.dir();
+                    let (mut sub, dropped) = st.asm.extract_subassembly(&comps, &name);
+                    // caminhos das peças passam a ser relativos ao arquivo novo
+                    let new_dir = f.parent().map(|p| p.to_path_buf());
+                    for n in &mut sub.nodes {
+                        if let NodeKind::Part { path } | NodeKind::SubAssembly { path } = &mut n.kind {
+                            let full = full_path(old_dir.as_deref(), path);
+                            *path = match new_dir.as_ref().and_then(|d| full.strip_prefix(d).ok()) {
+                                Some(r) => r.to_string_lossy().replace('\\', "/"),
+                                None => full.to_string_lossy().to_string(),
+                            };
+                        }
+                    }
+                    if let Err(e) = std::fs::write(&f, sub.to_json()) {
+                        app.toast(format!("{}: {e}", tr("Erro ao gravar o subconjunto")), true);
+                        return true;
+                    }
+                    let path = st.rel_path(&f);
+                    let id = st.asm.add_component(&name, NodeKind::SubAssembly { path }, Placement::default(), None);
+                    st.sel = Some(id);
+                    app.picks.clear();
+                    st.solve();
+                    let extra = if dropped > 0 { format!(" · {dropped} {}", tr("restrição(ões) com peças de fora apagada(s)")) } else { String::new() };
+                    app.toast(format!("{} {name}: {} {}{extra}", tr("Subconjunto"), comps.len(), tr("componente(s)")), dropped > 0);
+                }
+                Cmd::AsmFeat(k) => {
+                    let comps = st.comps_of(&app.picks);
+                    let fid = if k == 0 {
+                        let Some(tool) = st.sel.filter(|s| matches!(st.asm.node(*s).map(|n| &n.kind), Some(NodeKind::Part { .. }))) else {
+                            app.toast(tr("Recorte pela peça: escolha na árvore a peça que corta (pino, aba…) e clique nas peças a recortar"), true);
+                            return true;
+                        };
+                        let targets: Vec<Id> = comps.into_iter().filter(|c| *c != tool).collect();
+                        if targets.is_empty() {
+                            app.toast(tr("Clique na viewport nas peças a recortar (Ctrl+clique para várias)"), true);
+                            return true;
+                        }
+                        st.push_undo();
+                        st.asm.add_feature(AsmFeatKind::Cut { tool, clearance: String::new() }, targets)
+                    } else {
+                        let face = app.picks.iter().find_map(|p| match p {
+                            Pick::Face { point, normal, .. } => Some((point.map(|v| v as f64), normal.map(|v| v as f64))),
+                            _ => None,
+                        });
+                        let Some((p, n)) = face else {
+                            app.toast(tr("Furo entre peças: clique na face onde o furo começa (Ctrl+clique nas outras peças que ele atravessa)"), true);
+                            return true;
+                        };
+                        st.push_undo();
+                        st.asm.add_feature(AsmFeatKind::Hole { p, d: [-n[0], -n[1], -n[2]], dia: "6".into(), depth: String::new() }, comps)
+                    };
+                    app.picks.clear();
+                    st.sel = Some(fid);
+                    st.dirty = true;
+                }
+                Cmd::AsmLink => {
+                    let Some(target) = st.sel.filter(|s| matches!(st.asm.node(*s).map(|n| &n.kind), Some(NodeKind::Part { .. }))) else {
+                        app.toast(tr("Copiar geometria: escolha na árvore a peça que recebe e clique numa face plana de outra peça"), true);
+                        return true;
+                    };
+                    let face = app.picks.iter().find_map(|p| match p {
+                        Pick::Face { body, .. } => st.comp_of_body(*body).filter(|c| *c != target).map(|c| (c, *p)),
+                        _ => None,
+                    });
+                    let Some((src, pick)) = face else {
+                        app.toast(tr("Clique numa face plana de outra peça (a origem do link)"), true);
+                        return true;
+                    };
+                    match link_in_context(st, src, target, pick) {
+                        Ok(msg) => {
+                            app.picks.clear();
+                            app.toast(msg, false);
+                        }
+                        Err(e) => app.toast(e, true),
+                    }
+                }
                 Cmd::AsmInterf => {
                     let dir = st.dir();
                     st.interf = scc_montagem::view::interferences(&st.asm, dir.as_deref(), &mut st.cache, 0.01);
@@ -475,6 +662,8 @@ fn create_mate(app: &mut App, m: MateCmd, a: Pick, b: Pick) {
     let kind = m.kind().unwrap_or_else(|| auto_kind(&ra.geom, &rb.geom, &pa, &pb));
     st.push_undo();
     let id = st.asm.add_mate(kind, ra, rb);
+    // engrenagem/cremalheira: o giro de agora é o zero
+    st.asm.init_motion(id);
     st.solve();
     if m == MateCmd::AlignOnce {
         // alinhamento instantâneo: posiciona e não deixa histórico
@@ -611,6 +800,7 @@ fn create_joint(app: &mut App, k: u8, a: Pick, b: Pick) {
 
 /// Seleções feitas na viewport com uma restrição pendente: cria quando houver duas.
 pub fn after_viewport(app: &mut App) {
+    after_view_quick(app);
     let pj = app.asm.as_ref().and_then(|s| s.pending_joint);
     if let (Some(k), true) = (pj, app.picks.len() >= 2) {
         let picks = app.picks.clone();
@@ -714,6 +904,32 @@ pub fn save(app: &mut App) {
 
 // ============================================================== árvore
 
+/// O que a árvore mostra além dos nós: graus de liberdade, recursos de cada peça, conteúdo dos
+/// subconjuntos e quantas instâncias de cada arquivo.
+struct TreeInfo {
+    feats: std::collections::HashMap<Id, Vec<(Id, String)>>,
+    subs: std::collections::HashMap<Id, Vec<(usize, String, bool)>>,
+    inst: std::collections::HashMap<String, usize>,
+}
+
+/// Componentes de um subconjunto (e dos subconjuntos dentro dele), com a profundidade.
+fn sub_listing(full: &std::path::Path, depth: usize) -> Vec<(usize, String, bool)> {
+    let mut out = vec![];
+    if depth > 6 {
+        return out;
+    }
+    let Some(a) = std::fs::read_to_string(full).ok().and_then(|t| Assembly::from_json(&t).ok()) else { return out };
+    let dir = full.parent().map(|p| p.to_path_buf());
+    for n in a.nodes.iter().filter(|n| !matches!(n.kind, NodeKind::Group)) {
+        let sub = matches!(n.kind, NodeKind::SubAssembly { .. });
+        out.push((depth, n.name.clone(), sub));
+        if let NodeKind::SubAssembly { path } = &n.kind {
+            out.extend(sub_listing(&full_path(dir.as_deref(), path), depth + 1));
+        }
+    }
+    out
+}
+
 pub fn tree(app: &mut App, ui: &mut egui::Ui) {
     let Some(st) = app.asm.as_mut() else {
         ui.add_space(8.);
@@ -740,9 +956,58 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
     if let Some(f) = &st.file {
         ui.label(RichText::new(f.file_name().map(|x| x.to_string_lossy().to_string()).unwrap_or_default()).weak().small());
     }
+    // modo edição × visualização
+    ui.horizontal(|ui| {
+        if ui.selectable_label(!st.view_only, tr("✏ Edição")).on_hover_text(tr("mover, restringir e editar")).clicked() {
+            st.view_only = false;
+        }
+        if ui.selectable_label(st.view_only, tr("👁 Visualização")).on_hover_text(tr("só olhar e escolher: sem manipulador nem restrição rápida")).clicked() {
+            st.view_only = true;
+        }
+        if st.asm.relational {
+            ui.label(RichText::new(tr("relacional")).weak().small()).on_hover_text(tr("projeto relacional: peças novas fixas na origem, forma por links entre peças"));
+        }
+    });
+    // resumo: definidos × soltos
+    if st.comp_dof.is_empty() && !st.asm.nodes.is_empty() {
+        st.comp_dof = scc_montagem::solve::dof_per_comp(&st.asm);
+    }
+    {
+        let comps: Vec<&Node> = st.asm.nodes.iter().filter(|n| !matches!(n.kind, NodeKind::Group)).collect();
+        let full = comps.iter().filter(|n| n.fixed || st.comp_dof.get(&n.id) == Some(&0)).count();
+        let free = comps.iter().filter(|n| !n.fixed && st.comp_dof.get(&n.id) == Some(&6)).count();
+        let part = comps.len() - full - free;
+        ui.label(RichText::new(format!("■ {full} {}  ◐ {part} {}  ○ {free} {}", tr("definidos"), tr("parciais"), tr("soltos"))).small().weak());
+    }
+    // recursos das peças, subconjuntos e instâncias (para a árvore)
+    let info = {
+        let dir = st.dir();
+        let mut feats = std::collections::HashMap::new();
+        let mut subs = std::collections::HashMap::new();
+        let mut inst: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        for n in st.asm.nodes.clone() {
+            match &n.kind {
+                NodeKind::Part { path } => {
+                    *inst.entry(path.clone()).or_insert(0) += 1;
+                    if let Ok(p) = st.cache.get(&full_path(dir.as_deref(), path), false) {
+                        feats.insert(n.id, p.doc.features.iter().map(|f| (f.id, f.name.clone())).collect::<Vec<_>>());
+                    }
+                }
+                NodeKind::SubAssembly { path } => {
+                    *inst.entry(path.clone()).or_insert(0) += 1;
+                    let full = full_path(dir.as_deref(), path);
+                    let rows = st.sub_rows.entry(full.clone()).or_insert_with(|| sub_listing(&full, 0)).clone();
+                    subs.insert(n.id, rows);
+                }
+                NodeKind::Group => {}
+            }
+        }
+        TreeInfo { feats, subs, inst }
+    };
     ui.separator();
     // nós, com grupos aninhados (a ordem da árvore só muda a visualização)
-    fn rows(ui: &mut egui::Ui, st: &AsmState, parent: Option<Id>, depth: usize, new_sel: &mut Option<Id>, act: &mut Option<(Id, u8)>, hover: &mut Option<Id>) {
+    #[allow(clippy::too_many_arguments)]
+    fn rows(ui: &mut egui::Ui, st: &AsmState, info: &TreeInfo, parent: Option<Id>, depth: usize, new_sel: &mut Option<Id>, act: &mut Option<(Id, u8)>, hover: &mut Option<Id>) {
         let kids: Vec<&Node> = st.asm.nodes.iter().filter(|n| n.parent == parent || (depth == 0 && n.parent.is_some_and(|p| st.asm.node(p).is_none()))).collect();
         for n in kids {
             let err = st.errors.iter().find(|(i, _)| *i == n.id).map(|(_, e)| e.clone());
@@ -753,12 +1018,40 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
             };
             let num = if n.number > 0 { format!("{} · ", n.number) } else { String::new() };
             let mode = if n.mode == LoadMode::Visualizacao { " 👓" } else { "" };
-            let txt = format!("{icon} {num}{}{}{mode}{}", n.name, if n.fixed { " 📌" } else { "" }, if err.is_some() { " ✖" } else { "" });
+            // instâncias do mesmo arquivo
+            let copies = match &n.kind {
+                NodeKind::Part { path } | NodeKind::SubAssembly { path } => info.inst.get(path).copied().unwrap_or(1),
+                _ => 1,
+            };
+            let inst = if copies > 1 { format!("  ×{copies}") } else { String::new() };
+            let txt = format!("{icon} {num}{}{}{mode}{}{inst}", n.name, if n.fixed { " 📌" } else { "" }, if err.is_some() { " ✖" } else { "" });
+            let open_key = egui::Id::unique(("asm_expandir", n.id.0));
+            let has_kids = info.feats.get(&n.id).is_some_and(|v| !v.is_empty()) || info.subs.get(&n.id).is_some_and(|v| !v.is_empty());
+            let mut open = ui.ctx().data(|m| m.get_temp::<bool>(open_key)).unwrap_or(false);
             let r = ui
                 .horizontal(|ui| {
                     ui.add_space(depth as f32 * 14.);
+                    // subárvore da peça / do subconjunto
+                    if has_kids {
+                        if ui.add(egui::Button::new(if open { "▾" } else { "▸" }).frame(false).small()).on_hover_text(tr("recursos da peça / componentes do subconjunto")).clicked() {
+                            open = !open;
+                            ui.ctx().data_mut(|m| m.insert_temp(open_key, open));
+                        }
+                    } else {
+                        ui.add_space(12.);
+                    }
                     if crate::app::eye_button(ui, !n.visible) {
                         *act = Some((n.id, 1));
+                    }
+                    // totalmente definido × parcial × solto
+                    if !matches!(n.kind, NodeKind::Group) && !n.fixed {
+                        let (t, c, tip) = match st.comp_dof.get(&n.id).copied() {
+                            Some(0) => ("■".to_string(), Color32::from_rgb(110, 210, 120), tr("totalmente definido").to_string()),
+                            Some(6) => ("○".to_string(), Color32::from_gray(150), tr("solto: 6 graus de liberdade").to_string()),
+                            Some(k) => (format!("◐{k}"), Color32::from_rgb(240, 190, 80), format!("{k} {}", tr("grau(s) de liberdade"))),
+                            None => ("·".to_string(), Color32::from_gray(150), String::new()),
+                        };
+                        ui.label(RichText::new(t).color(c).small()).on_hover_text(tip);
                     }
                     if st.renaming == Some(n.id) {
                         let key = egui::Id::unique(("asm_ren", n.id.0));
@@ -858,12 +1151,40 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                     ui.close();
                 }
             });
+            if open {
+                // recursos da peça (2 cliques: abre a peça no recurso) e conteúdo do subconjunto
+                for (fid, name) in info.feats.get(&n.id).map(|v| v.as_slice()).unwrap_or(&[]) {
+                    ui.horizontal(|ui| {
+                        ui.add_space((depth + 2) as f32 * 14.);
+                        let r = ui.selectable_label(false, RichText::new(format!("▹ {name}")).small()).on_hover_text(tr("2 cliques: abre a peça (objeto de trabalho) neste recurso"));
+                        if r.double_clicked() {
+                            ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique("asm_recurso_editar"), (n.id, *fid)));
+                        }
+                    });
+                }
+                for (d, name, sub) in info.subs.get(&n.id).map(|v| v.as_slice()).unwrap_or(&[]) {
+                    ui.horizontal(|ui| {
+                        ui.add_space((depth + 2 + d) as f32 * 14.);
+                        ui.label(RichText::new(format!("{} {name}", if *sub { "🗂" } else { "🧩" })).small().weak());
+                    });
+                }
+            }
             if matches!(n.kind, NodeKind::Group) {
-                rows(ui, st, Some(n.id), depth + 1, new_sel, act, hover);
+                rows(ui, st, info, Some(n.id), depth + 1, new_sel, act, hover);
             }
         }
     }
-    rows(ui, st, None, 0, &mut new_sel, &mut act, &mut hover);
+    rows(ui, st, &info, None, 0, &mut new_sel, &mut act, &mut hover);
+    // 2 cliques num recurso da peça: abre a peça e o recurso
+    if let Some((comp, fid)) = ui.ctx().data(|m| m.get_temp::<(Id, Id)>(egui::Id::unique("asm_recurso_editar"))) {
+        ui.ctx().data_mut(|m| m.remove::<(Id, Id)>(egui::Id::unique("asm_recurso_editar")));
+        edit_part(app, comp);
+        if app.open.doc.feature(fid).is_some() {
+            app.start_session(fid, false, None);
+        }
+        return;
+    }
+    let st = app.asm.as_mut().unwrap();
     if st.asm.nodes.is_empty() {
         ui.label(RichText::new(tr("vazia — 🧩 Inserir peça ou ✚ Peça nova no contexto")).weak().italics().small());
     }
@@ -951,6 +1272,30 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
             r.context_menu(|ui| {
                 if ui.button(tr("🗑 Apagar   Del")).clicked() {
                     act = Some((p.id, 0));
+                    ui.close();
+                }
+            });
+        }
+        for f in &st.asm.features {
+            let names: Vec<String> = f.targets.iter().map(|c| st.asm.name_of(*c)).collect();
+            let mut t = RichText::new(format!("🛠 {}  ({})", f.name, names.join(", "))).small();
+            if f.suppressed {
+                t = t.strikethrough().weak();
+            }
+            let r = ui.selectable_label(st.sel == Some(f.id), t);
+            if r.clicked() {
+                new_sel = Some(f.id);
+            }
+            if r.hovered() {
+                hover = f.targets.first().copied();
+            }
+            r.context_menu(|ui| {
+                if ui.button(if f.suppressed { tr("Reativar") } else { tr("Suprimir") }).clicked() {
+                    act = Some((f.id, 11));
+                    ui.close();
+                }
+                if ui.button(tr("🗑 Apagar   Del")).clicked() {
+                    act = Some((f.id, 0));
                     ui.close();
                 }
             });
@@ -1069,6 +1414,9 @@ pub fn node_action(app: &mut App, id: Id, k: u8) {
             if let Some(m) = st.asm.mates.iter_mut().find(|m| m.id == id) {
                 m.suppressed = !m.suppressed;
             }
+            if let Some(f) = st.asm.features.iter_mut().find(|f| f.id == id) {
+                f.suppressed = !f.suppressed;
+            }
             st.solve();
         }
         _ => {}
@@ -1106,6 +1454,9 @@ fn item_info(st: &AsmState, sel: Option<Id>) -> Option<(String, String, String, 
     }
     if let Some(p) = st.asm.patterns.iter().find(|p| p.id == s) {
         return Some(("⁂".into(), tr("Padrão de componentes").to_string(), p.name.clone(), ok));
+    }
+    if let Some(f) = st.asm.features.iter().find(|f| f.id == s) {
+        return Some(("🛠".into(), tr(f.kind.label()).to_string(), f.name.clone(), if f.suppressed { off } else { ok }));
     }
     st.asm.rigid.iter().find(|g| g.id == s).map(|g| ("🔒".to_string(), tr("Fixação conjunta").to_string(), g.name.clone(), ok))
 }
@@ -1189,6 +1540,8 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     }
     let before = st.asm.clone();
     let mut resolve = false;
+    let mut reinit: Option<Id> = None;
+    let picked_comps = st.comps_of(&app.picks);
     match sel.and_then(|s| st.asm.nodes.iter().position(|n| n.id == s)) {
         Some(i) => {
             let n = &mut st.asm.nodes[i];
@@ -1254,7 +1607,46 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             let pi = sel.and_then(|s| st.asm.patterns.iter().position(|p| p.id == s));
             let ji = sel.and_then(|s| st.asm.joints.iter().position(|j| j.id == s));
             let ci = sel.and_then(|s| st.asm.couplings.iter().position(|c| c.id == s));
-            if let Some(i) = ji {
+            let fi = sel.and_then(|s| st.asm.features.iter().position(|f| f.id == s));
+            if let Some(i) = fi {
+                let names: std::collections::HashMap<Id, String> = st.asm.nodes.iter().map(|n| (n.id, n.name.clone())).collect();
+                let f = &mut st.asm.features[i];
+                crate::editor::section(ui, "Recurso entre peças");
+                ui.horizontal(|ui| {
+                    ui.label(tr("Nome"));
+                    ui.text_edit_singleline(&mut f.name);
+                });
+                match &mut f.kind {
+                    AsmFeatKind::Cut { tool, .. } => {
+                        ui.label(format!("{} {}", tr("Peça que corta:"), names.get(tool).cloned().unwrap_or_default()));
+                        ui.label(RichText::new(tr("A forma dela é subtraída das peças afetadas, na posição atual (move a peça e o recorte acompanha).")).weak().small());
+                    }
+                    AsmFeatKind::Hole { p, dia, depth, .. } => {
+                        crate::editor::expr(ui, "Diâmetro", dia, &Default::default(), "mm");
+                        crate::editor::expr(ui, "Profundidade", depth, &Default::default(), "mm");
+                        ui.label(RichText::new(format!("{} ({:.1}, {:.1}, {:.1}) · {}", tr("início"), p[0], p[1], p[2], tr("profundidade vazia = passante"))).weak().small());
+                    }
+                }
+                crate::editor::section(ui, "Peças afetadas");
+                let mut del = None;
+                for (k, t) in f.targets.iter().enumerate() {
+                    ui.horizontal(|ui| {
+                        ui.label(format!("🧩 {}", names.get(t).cloned().unwrap_or_default()));
+                        if ui.small_button("✖").clicked() {
+                            del = Some(k);
+                        }
+                    });
+                }
+                if let Some(k) = del {
+                    f.targets.remove(k);
+                }
+                let add: Vec<Id> = picked_comps.iter().copied().filter(|c| !f.targets.contains(c) && !matches!(f.kind, AsmFeatKind::Cut { tool, .. } if tool == *c)).collect();
+                if ui.add_enabled(!add.is_empty(), egui::Button::new(format!("{} ({})", tr("+ peças clicadas na viewport"), add.len()))).clicked() {
+                    f.targets.extend(add);
+                }
+                crate::editor::section(ui, "Estado");
+                ui.checkbox(&mut f.suppressed, tr("suprimido"));
+            } else if let Some(i) = ji {
                 let others: Vec<(Id, String)> = st.asm.joints.iter().filter(|o| o.id != st.asm.joints[i].id).map(|o| (o.id, o.name.clone())).collect();
                 let (na, nb) = (st.asm.name_of(st.asm.joints[i].a.comp), st.asm.name_of(st.asm.joints[i].b.comp));
                 let pl: std::collections::HashMap<Id, Placement> = st.asm.nodes.iter().map(|n| (n.id, n.placement)).collect();
@@ -1398,8 +1790,14 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                             MateKind::Angle("90".into()),
                             MateKind::Parallel,
                             MateKind::Perpendicular,
+                            MateKind::Gear { ratio: "-1".into(), belt: false, refs: [[0.; 3]; 4] },
+                            MateKind::Gear { ratio: "1".into(), belt: true, refs: [[0.; 3]; 4] },
+                            MateKind::RackPinion { mm_per_rev: "31.4159".into(), refs: [[0.; 3]; 4] },
                         ] {
                             if ui.selectable_label(k.label() == cur, tr(k.label())).clicked() && k.label() != cur {
+                                if k.is_motion() {
+                                    reinit = Some(m.id);
+                                }
                                 m.kind = k;
                             }
                         }
@@ -1415,7 +1813,19 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                             });
                             ui.label(RichText::new(tr("Aceita fórmulas com os parâmetros da montagem; distância negativa troca o lado.")).weak().small());
                         }
+                        MateKind::Gear { ratio, belt, .. } => {
+                            crate::editor::expr(ui, "Razão", ratio, &Default::default(), "");
+                            let hint = if *belt { "giro da 2ª ÷ giro da 1ª = d1/d2 (mesmo sentido)" } else { "giro da 2ª ÷ giro da 1ª = −z1/z2 (engrenagens externas)" };
+                            ui.label(RichText::new(tr(hint)).weak().small());
+                        }
+                        MateKind::RackPinion { mm_per_rev, .. } => {
+                            crate::editor::expr(ui, "mm por volta", mm_per_rev, &Default::default(), "mm");
+                            ui.label(RichText::new(tr("π × diâmetro primitivo do pinhão")).weak().small());
+                        }
                         _ => {}
+                    }
+                    if m.kind.is_motion() && ui.button(tr("⟲ Posição atual = giro zero")).clicked() {
+                        reinit = Some(m.id);
                     }
                     crate::editor::section(ui, "Estado");
                     ui.checkbox(&mut m.suppressed, tr("suprimida"));
@@ -1428,6 +1838,8 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     });
                     let parts = st.asm.nodes.iter().filter(|n| !matches!(n.kind, NodeKind::Group)).count();
                     ui.label(format!("{parts} componente(s) · {} restrição(ões) · {} GDL livres", st.asm.mates.len(), st.report.dof));
+                    ui.checkbox(&mut st.asm.relational, tr("projeto relacional (peças novas fixas na origem; forma por links entre peças)"));
+                    ui.checkbox(&mut st.view_only, tr("modo visualização (sem mover nem restringir)"));
                     crate::editor::section(ui, "Parâmetros da montagem");
                     let mut del = None;
                     for (k, p) in st.asm.params.iter_mut().enumerate() {
@@ -1451,6 +1863,9 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             }
         }
     }
+    }
+    if let Some(id) = reinit {
+        st.asm.init_motion(id);
     }
     // interferências
     if !st.interf.is_empty() {
@@ -1519,27 +1934,268 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
 
 // ============================================================== manipulador
 
-/// Setas e quadrados no componente selecionado; ao soltar, resolve (se respeitar restrições) e
-/// para no primeiro contato (se a parada por colisão estiver ligada).
+impl AsmState {
+    /// Componentes das seleções da viewport (sem repetir, na ordem do clique).
+    fn comps_of(&self, picks: &[Pick]) -> Vec<Id> {
+        let mut out = vec![];
+        for p in picks {
+            if let Pick::Face { body, .. } | Pick::Edge { body, .. } | Pick::Vertex { body, .. } = p {
+                if let Some(c) = self.comp_of_body(*body) {
+                    if !out.contains(&c) {
+                        out.push(c);
+                    }
+                }
+            }
+        }
+        out
+    }
+}
+
+/// A peça `src` depende (por links, direta ou indiretamente) do arquivo `target`?
+fn depends_on(src: &std::path::Path, target: &std::path::Path, depth: u32) -> bool {
+    if depth > 8 {
+        return false;
+    }
+    let Some(d) = std::fs::read_to_string(src).ok().and_then(|t| Document::from_json(&t).ok()) else { return false };
+    d.external.iter().any(|e| {
+        let p = std::path::Path::new(&e.path);
+        let full = if p.is_absolute() { p.to_path_buf() } else { src.parent().map(|x| x.join(p)).unwrap_or_else(|| p.to_path_buf()) };
+        full == target || depends_on(&full, target, depth + 1)
+    })
+}
+
+/// Copia por link a face plana `pick` da peça `src` para a peça `target` (no contexto da
+/// montagem): a face vira publicação na origem (automática) e a cópia entra na outra peça já no
+/// sistema dela. Recusa referência circular.
+fn link_in_context(st: &mut AsmState, src: Id, target: Id, pick: Pick) -> Result<String, String> {
+    let r = st.mate_ref(pick)?;
+    let Geom::Plane { p, n } = r.geom else { return Err(tr("escolha uma face plana (o link copia o plano)").to_string()) };
+    let dir = st.dir();
+    let (Some(ns), Some(nt)) = (st.asm.node(src).cloned(), st.asm.node(target).cloned()) else { return Err("componente não encontrado".into()) };
+    let (NodeKind::Part { path: ps }, NodeKind::Part { path: pt }) = (&ns.kind, &nt.kind) else { return Err(tr("o link liga duas peças").to_string()) };
+    let (fs, ft) = (full_path(dir.as_deref(), ps), full_path(dir.as_deref(), pt));
+    if fs == ft {
+        return Err(tr("as duas são instâncias do mesmo arquivo").to_string());
+    }
+    if depends_on(&fs, &ft, 0) {
+        return Err(tr("referência circular: a peça de origem já usa geometria desta").to_string());
+    }
+    let read = |f: &std::path::Path| std::fs::read_to_string(f).map_err(|e| format!("{}: {e}", f.display())).and_then(|t| Document::from_json(&t).map_err(|e| e.to_string()));
+    let mut ds = read(&fs)?;
+    let x = any_perp(n);
+    // publicação automática na origem (reaproveita o mesmo plano, se já publicado)
+    let existing = ds
+        .references
+        .iter()
+        .find(|e| e.published && matches!(&e.kind, scc_core::RefKind::FacePlane { origin, normal, .. } if norm(sub(*origin, p)) < 1e-6 && norm(sub(*normal, n)) < 1e-6))
+        .map(|e| e.name.clone());
+    let pub_name = match existing {
+        Some(nm) => nm,
+        None => {
+            let id = ds.add_face_plane(p, x, n, None);
+            let nm = (1..).map(|i| format!("Publicação{i}")).find(|c| !ds.name_taken(c)).unwrap();
+            if let Some(e) = ds.references.iter_mut().find(|e| e.id == id) {
+                e.name = nm.clone();
+                e.published = true;
+            }
+            std::fs::write(&fs, ds.to_json()).map_err(|e| e.to_string())?;
+            nm
+        }
+    };
+    let geo = scc_core::LinkedGeo::Plane { origin: p, x, normal: n };
+    // sistema da origem → mundo → sistema da peça que recebe
+    let rel = nt.placement.inverse().then(&ns.placement);
+    let xf: scc_core::LinkXf = [rel.origin, rel.rot[0], rel.rot[1], rel.rot[2]];
+    let mut dt = read(&ft)?;
+    let tid = dt.add_link_xf(&ns.name, &fs.to_string_lossy(), &pub_name, geo, xf);
+    std::fs::write(&ft, dt.to_json()).map_err(|e| e.to_string())?;
+    st.cache.forget(&fs);
+    st.cache.forget(&ft);
+    st.dirty = true;
+    Ok(format!("{} ← {}.{} ({})", dt.name_of(tid), ns.name, pub_name, tr("publicação criada automaticamente na origem")))
+}
+
+/// Menu do botão direito na viewport da montagem: restrições possíveis entre os dois elementos
+/// escolhidos e as ações do componente sob o mouse.
+pub fn viewport_menu(app: &App, ui: &mut egui::Ui, target: Option<Pick>) -> Option<AsmCtx> {
+    let st = app.asm.as_ref()?;
+    let mut out = None;
+    if let Some((_, opts)) = st.quick.as_ref().filter(|q| app.picks.len() == 2 && q.0 == app.picks && !q.1.is_empty()) {
+        ui.label(RichText::new(tr("Restrição entre os dois elementos")).strong());
+        for o in opts {
+            if ui.button(format!("{} {}", o.icon(), tr(o.label()))).clicked() {
+                out = Some(AsmCtx::Mate(*o));
+                ui.close();
+            }
+        }
+        ui.separator();
+    }
+    // durante a viewport a vista da montagem está em `app.result`
+    let comp = target.and_then(|p| match p {
+        Pick::Face { body, .. } | Pick::Edge { body, .. } | Pick::Vertex { body, .. } => app.result.as_ref().and_then(|r| r.bodies.get(body)).map(|b| b.collector),
+        _ => None,
+    });
+    if let Some(c) = comp {
+        let Some(n) = st.asm.node(c) else { return out };
+        ui.label(RichText::new(&n.name).strong());
+        if matches!(n.kind, NodeKind::Part { .. }) && ui.button(tr("✏ Editar a peça (objeto de trabalho)")).clicked() {
+            out = Some(AsmCtx::Edit(c));
+            ui.close();
+        }
+        if ui.button(tr("☑ Selecionar na árvore")).clicked() {
+            out = Some(AsmCtx::Select(c));
+            ui.close();
+        }
+        if ui.button(if n.fixed { tr("📌 Liberar") } else { tr("📌 Fixar") }).clicked() {
+            out = Some(AsmCtx::Fix(c));
+            ui.close();
+        }
+        if ui.button(tr("Ocultar   H")).clicked() {
+            out = Some(AsmCtx::Hide(c));
+            ui.close();
+        }
+        if ui.button(tr("🔍 Isolar")).clicked() {
+            out = Some(AsmCtx::Isolate(c));
+            ui.close();
+        }
+        ui.separator();
+        if ui.button(tr("🗑 Apagar   Del")).clicked() {
+            out = Some(AsmCtx::Delete(c));
+            ui.close();
+        }
+    }
+    if app.picks.len() >= 2 && ui.button(tr("🗂 Subconjunto dos selecionados")).clicked() {
+        out = Some(AsmCtx::SubFromSel);
+        ui.close();
+    }
+    if comp.is_none() && app.picks.len() < 2 {
+        ui.label(RichText::new(tr("Clique numa peça (ou escolha dois elementos para restringir)")).weak());
+    }
+    out
+}
+
+fn apply_ctx(app: &mut App, act: AsmCtx) {
+    match act {
+        AsmCtx::Mate(m) => {
+            if app.picks.len() >= 2 {
+                let picks = app.picks.clone();
+                app.picks.clear();
+                create_mate(app, m, picks[0], picks[1]);
+            }
+        }
+        AsmCtx::Fix(id) => node_action(app, id, 5),
+        AsmCtx::Hide(id) => node_action(app, id, 1),
+        AsmCtx::Isolate(id) => node_action(app, id, 10),
+        AsmCtx::Edit(id) => edit_part(app, id),
+        AsmCtx::Delete(id) => node_action(app, id, 0),
+        AsmCtx::Select(id) => {
+            if let Some(st) = app.asm.as_mut() {
+                st.sel = Some(id);
+            }
+        }
+        AsmCtx::SubFromSel => {
+            command(app, Cmd::AsmSubFromSel);
+        }
+    }
+}
+
+/// Peça aberta no contexto da montagem: as outras peças aparecem em linhas claras (o conjunto
+/// "pai" em volta do objeto de trabalho), no sistema da peça.
+pub fn context_overlay(app: &App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::render::Camera) {
+    let Some(st) = app.asm.as_ref() else { return };
+    let Some((cid, _)) = &st.editing_part else { return };
+    if app.settings.bench == crate::settings::Bench::Montagem {
+        return;
+    }
+    let (Some(pl), Some(v)) = (st.asm.node(*cid).map(|n| n.placement), st.view.as_ref()) else { return };
+    let painter = ui.painter_at(rect);
+    let col = Color32::from_rgba_unmultiplied(120, 170, 235, 90);
+    let mut n = 0;
+    for b in v.bodies.iter().filter(|b| b.collector != *cid) {
+        for s in b.mesh.edges.chunks_exact(6) {
+            n += 1;
+            if n > 40000 {
+                break;
+            }
+            let a = pl.to_local([s[0] as f64, s[1] as f64, s[2] as f64]);
+            let c = pl.to_local([s[3] as f64, s[4] as f64, s[5] as f64]);
+            let (Some(pa), Some(pc)) = (cam.project(rect, glam::Vec3::new(a[0] as f32, a[1] as f32, a[2] as f32)), cam.project(rect, glam::Vec3::new(c[0] as f32, c[1] as f32, c[2] as f32))) else { continue };
+            painter.line_segment([pa, pc], egui::Stroke::new(1., col));
+        }
+    }
+    painter.text(rect.right_bottom() + egui::vec2(-12., -30.), egui::Align2::RIGHT_BOTTOM, format!("{} — {}", tr("contexto da montagem"), st.asm.name), egui::FontId::proportional(12.), col.gamma_multiply(2.));
+}
+
+/// Manipulador do componente selecionado: setas e quadrados (mover), anéis (girar). Com
+/// "respeitar restrições" o componente segue o mouse só no que as restrições deixam; com a parada
+/// por colisão ele não entra em outra peça. Também mostra a restrição rápida para duas seleções.
+/// Depois da viewport (a vista da montagem já voltou para o estado): ações do menu e opções da
+/// restrição rápida para as duas seleções.
+fn after_view_quick(app: &mut App) {
+    if let Some(act) = app.asm.as_mut().and_then(|s| s.ctx_act.take()) {
+        apply_ctx(app, act);
+    }
+    let Some(st) = app.asm.as_mut() else { return };
+    if app.picks.len() == 2 && st.quick.as_ref().map(|q| &q.0) != Some(&app.picks) {
+        let picks = app.picks.clone();
+        let opts = match (st.mate_ref(picks[0]), st.mate_ref(picks[1])) {
+            (Ok(x), Ok(y)) if x.comp != y.comp => quick_options(&x.geom, &y.geom),
+            _ => vec![],
+        };
+        st.quick = Some((picks, opts));
+    }
+}
+
 pub fn gizmo(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::render::Camera) {
     let Some(st) = app.asm.as_mut() else { return };
+    // restrição rápida: dois elementos de peças diferentes escolhidos (opções calculadas depois
+    // da viewport; o clique vira ação aplicada lá)
+    if !st.view_only && st.pending.is_none() && st.pending_joint.is_none() && app.picks.len() == 2 && st.quick.as_ref().is_some_and(|q| q.0 == app.picks) {
+        let picks = app.picks.clone();
+        let opts = st.quick.as_ref().map(|q| q.1.clone()).unwrap_or_default();
+        if !opts.is_empty() {
+            let mut chosen = None;
+            egui::Area::new(egui::Id::unique("asm_restricao_rapida")).order(egui::Order::Foreground).fixed_pos(rect.center_top() + egui::vec2(-300., 40.)).show(ui.ctx(), |ui| {
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(RichText::new(tr("Restrição rápida:")).strong());
+                        for o in &opts {
+                            if ui.button(format!("{} {}", o.icon(), tr(o.label()))).on_hover_text(tr("cria entre os dois elementos escolhidos")).clicked() {
+                                chosen = Some(*o);
+                            }
+                        }
+                    });
+                });
+            });
+            if let Some(m) = chosen {
+                let _ = picks;
+                st.ctx_act = Some(AsmCtx::Mate(m));
+                return;
+            }
+        }
+    }
+    let Some(st) = app.asm.as_mut() else { return };
+    if st.view_only {
+        return;
+    }
     let Some(id) = st.sel else { return };
     let Some(n) = st.asm.node(id) else { return };
     if matches!(n.kind, NodeKind::Group) || n.fixed {
         return;
     }
     let p = n.placement;
-    if st.explode_mode {
-        let off = st.live.offset(id);
-        let c = st
-            .view
-            .as_ref()
+    let view = app.result.as_ref();
+    let center = |_: &AsmState| {
+        view
             .and_then(|r| r.bodies.iter().find(|b| b.collector == id))
             .map(|b| {
                 let k = (b.mesh.positions.len() / 3).max(1) as f32;
                 b.mesh.positions.chunks_exact(3).fold(glam::Vec3::ZERO, |a, q| a + glam::Vec3::new(q[0], q[1], q[2])) / k
             })
-            .unwrap_or(glam::Vec3::ZERO);
+    };
+    if st.explode_mode {
+        let off = st.live.offset(id);
+        let c = center(st).unwrap_or(glam::Vec3::ZERO);
         if let Some(v) = crate::gizmo::translate_gizmo(ui, rect, cam, id.0 ^ 0x5eed, c, [glam::Vec3::X, glam::Vec3::Y, glam::Vec3::Z], off, [false; 3]) {
             st.live.set_offset(id, v);
             st.dirty = true;
@@ -1547,52 +2203,69 @@ pub fn gizmo(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::re
         return;
     }
     // centro do componente na tela: centro da malha posicionada
-    let c = st
-        .view
-        .as_ref()
-        .and_then(|r| r.bodies.iter().find(|b| b.collector == id))
-        .map(|b| {
-            let k = (b.mesh.positions.len() / 3).max(1) as f32;
-            b.mesh.positions.chunks_exact(3).fold(glam::Vec3::ZERO, |a, q| a + glam::Vec3::new(q[0], q[1], q[2])) / k
-        })
-        .unwrap_or(glam::Vec3::new(p.origin[0] as f32, p.origin[1] as f32, p.origin[2] as f32));
-    let vals = p.origin;
-    let res = crate::gizmo::translate_gizmo(ui, rect, cam, id.0, c, [glam::Vec3::X, glam::Vec3::Y, glam::Vec3::Z], vals, [false; 3]);
+    let c = center(st).unwrap_or(glam::Vec3::new(p.origin[0] as f32, p.origin[1] as f32, p.origin[2] as f32));
+    let mut cand: Option<Placement> = None;
+    if let Some(v) = crate::gizmo::translate_gizmo(ui, rect, cam, id.0, c, [glam::Vec3::X, glam::Vec3::Y, glam::Vec3::Z], p.origin, [false; 3]) {
+        let base = st.drag_start.unwrap_or(p);
+        cand = Some(Placement { origin: v, rot: base.rot });
+    }
+    // anéis de rotação em volta dos eixos do mundo, pelo centro do componente
+    let ppm = {
+        let (r, _) = cam.basis();
+        match (cam.project(rect, c), cam.project(rect, c + r)) {
+            (Some(a), Some(b)) => (b - a).length().max(1e-3),
+            _ => 1.,
+        }
+    };
+    let rad = 95. / ppm;
+    let axes = [glam::Vec3::X, glam::Vec3::Y, glam::Vec3::Z];
+    for (k, ax) in axes.iter().enumerate() {
+        let src = c + ax.any_orthonormal_vector() * rad;
+        let cur = st.rot_drag.filter(|r| r.0 == k).map(|r| r.1).unwrap_or(0.);
+        if let Some(v) = crate::gizmo::rotate_arc(ui, rect, cam, id.0.wrapping_mul(31).wrapping_add(k as u64 + 7), c, *ax, src, cur, false) {
+            let start = st.drag_start.unwrap_or(p);
+            let about = *st.drag_center.get_or_insert([c.x as f64, c.y as f64, c.z as f64]);
+            st.rot_drag = Some((k, v));
+            let w = [0, 1, 2].map(|i| ax[i] as f64 * v.to_radians());
+            cand = Some(start.moved([0.; 3], w, about));
+        }
+    }
     let released = ui.input(|i| i.pointer.any_released());
-    if let Some(v) = res {
+    if let Some(q) = cand {
         if st.drag_start.is_none() {
             st.drag_start = Some(p);
             st.snapshot = Some(st.asm.clone());
         }
-        if let Some(n) = st.asm.node_mut(id) {
-            n.placement.origin = v;
+        // tentativa: com restrições, o componente vai até onde elas deixam
+        let mut trial = st.asm.clone();
+        let constrained = st.respect && (!trial.mates.is_empty() || !trial.joints.is_empty());
+        if constrained {
+            scc_montagem::solve::solve_toward(&mut trial, id, q, 0.05);
+        } else if let Some(n) = trial.node_mut(id) {
+            n.placement = q;
         }
-        st.dirty = true;
+        let dir = st.dir();
+        st.contact = st.stop_collision && scc_montagem::view::collides(&trial, id, dir.as_deref(), &mut st.cache, 0.01);
+        if !st.contact {
+            st.asm = trial;
+            st.dirty = true;
+        }
     } else if released {
-        if let (Some(start), Some(snap)) = (st.drag_start.take(), st.snapshot.take()) {
+        st.rot_drag = None;
+        st.drag_center = None;
+        if let (Some(_), Some(snap)) = (st.drag_start.take(), st.snapshot.take()) {
             st.undo.push(snap);
             st.modified = true;
-            if st.stop_collision {
-                // volta pelo caminho até o último ponto sem contato
-                let end = st.asm.node(id).unwrap().placement;
-                let dir = st.dir();
-                let mut ok = start;
-                for k in 1..=20 {
-                    let t = k as f64 / 20.;
-                    let q = Placement { origin: [0, 1, 2].map(|i| start.origin[i] + (end.origin[i] - start.origin[i]) * t), rot: end.rot };
-                    st.asm.node_mut(id).unwrap().placement = q;
-                    let hit = scc_montagem::view::interferences(&st.asm, dir.as_deref(), &mut st.cache, 0.01).iter().any(|(a, b, _)| *a == id || *b == id);
-                    if hit {
-                        break;
-                    }
-                    ok = q;
-                }
-                st.asm.node_mut(id).unwrap().placement = ok;
-            }
             if st.respect && !st.asm.mates.is_empty() {
                 st.solve();
             }
             st.dirty = true;
+        }
+        st.contact = false;
+    }
+    if st.contact {
+        if let Some(s) = cam.project(rect, c) {
+            ui.painter_at(rect).text(s + egui::vec2(18., 18.), egui::Align2::LEFT_TOP, tr("⛔ contato — o movimento parou na colisão"), egui::FontId::proportional(13.), Color32::from_rgb(255, 120, 90));
         }
     }
 }
