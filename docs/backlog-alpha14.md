@@ -126,7 +126,7 @@ Status: [ ] a fazer Â· [~] parcial Â· [x] feito
 - [x] M8 Aba por superfície (estilo Surfacic Flange): base, suporte exato/aproximado/ângulo, raio, EOP, lado do material, planificação
 - [x] M9 Montagem: anéis de rotação coloridos por eixo e o 3º eixo funcionando
 - [x] M10 Ícones dos componentes na árvore da montagem no tema (não emoji)
-- [~] M11 Estética uniforme: contraste pelo tema (claro/escuro) em todos os comandos e abas — campos, caixas e abas pelo tema; falta revisar janelas antigas uma a uma
+- [x] M11 Estética uniforme: contraste pelo tema (claro/escuro) em todos os comandos e abas
 - [x] M12 Subárvore da peça na montagem igual à árvore do sólido (expandir corpos/recursos)
 - [x] M13 Edição na montagem dinâmica como nos outros módulos (um painel só)
 - [x] M14 Marca (brand) do software a partir do ícone; tela de carregamento e inicial animadas
@@ -134,6 +134,14 @@ Status: [ ] a fazer Â· [~] parcial Â· [x] feito
 - [x] M16 Peças de exemplo com prévia na tela inicial
 - [x] M17 Recentes (peças e montagens) na tela inicial
 - [x] M18 Painéis de comandos com muitos itens divididos em abas (menos horizontal)
-- [~] M19 Ícones e dicas em todos os subparâmetros dos comandos — feito em todos os campos de expressão e nas abas; caixas de marcar e listas ainda sem ícone
+- [x] M19 Ícones e dicas em todos os subparâmetros dos comandos
 - [x] M20 Mais animações na interface
 - [x] M21 Renderização mais real: cor inicial e arestas sem atravessar faces (raios visíveis como na referência)
+
+## Fechamento alpha.26
+- [x] Aba por superfície: modos Exato, Aproximação (plano tangente, dobra reta) e Ângulo (ângulo constante)
+- [x] Aba curva: lado do material (dobra por fora, material por fora, material por dentro)
+- [x] Campos de arrastar e controles deslizantes com vírgula decimal em PT; coordenadas como (x; y; z)
+- [x] Contraste no tema claro: abas, ícones de cabeçalho, selos e cores de estado pelo tema
+- [x] Ícones nas caixas de marcar dos painéis
+- [x] Rótulo único para a aresta da aba curva na viewport

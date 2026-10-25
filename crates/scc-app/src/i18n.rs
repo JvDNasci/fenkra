@@ -2474,6 +2474,17 @@ static TABLE: &[(&str, &str)] = &[
     ("Tubos quadrados com meia-esquadria (estrutural)", "Square tubes with miter joints (structural)"),
     ("Aceita número (vírgula ou ponto), parâmetro ou expressão: L/2 + 5, 2*pi*r, sqrt(a; b). Roda do mouse soma/subtrai (Shift ×10, Ctrl ×0,1).", "Accepts a number, parameter or expression: L/2 + 5, 2*pi*r, sqrt(a; b). Mouse wheel adds/subtracts (Shift ×10, Ctrl ×0.1)."),
     ("Abrir peça", "Open part"),
+    ("a dobra começa na aresta (a aba acrescenta material)", "the bend starts at the edge (the flange adds material)"),
+    ("a face interna da aba fica alinhada à aresta", "the inner face of the flange is aligned with the edge"),
+    ("a face externa da aba fica alinhada à aresta (o tamanho da peça não muda)", "the outer face of the flange is aligned with the edge (the part size does not change)"),
+    ("Exato", "Exact"),
+    ("Aproximação", "Approximation"),
+    ("a aba se apoia no suporte escolhido; a linha de dobra (OML) é a interseção do suporte com o plano da web", "the flange lies on the chosen support; the bend line (OML) is the intersection of the support with the web plane"),
+    ("o suporte é trocado pelo plano tangente no meio da OML: linha de dobra reta, aba plana (bom para suportes curvos)", "the support is replaced by the tangent plane at the middle of the OML: straight bend line, flat flange (good for curved supports)"),
+    ("a OML vem do suporte, mas a aba sobe com um ângulo constante dado a partir da web", "the OML comes from the support, but the flange rises at a given constant angle from the web"),
+    ("Aproximação: suporte trocado pelo plano tangente no meio da OML (dobra reta).", "Approximation: support replaced by the tangent plane at the middle of the OML (straight bend)."),
+    ("Ângulo: linha de dobra no suporte, aba com o ângulo dado a partir da web.", "Angle: bend line on the support, flange at the given angle from the web."),
+    ("Exato: a aba se apoia no suporte escolhido. A linha de dobra (OML) é a interseção do suporte com o plano da web.", "Exact: the flange lies on the chosen support. The bend line (OML) is the intersection of the support with the web plane."),
 ];
 
 #[cfg(test)]

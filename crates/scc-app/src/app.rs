@@ -246,8 +246,15 @@ impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         setup_fonts(&cc.egui_ctx);
         egui_extras::install_image_loaders(&cc.egui_ctx);
-        let settings = Settings::load();
+        let mut settings = Settings::load();
         crate::theme::reload_user();
+        // desenvolvimento: SCC_DEMO_TEMA=<nome> usa esse tema (sem gravar)
+        if let Some(t) = std::env::var("SCC_DEMO_TEMA").ok().and_then(|n| crate::theme::find(&n)) {
+            settings.theme_name = t.name.clone();
+            settings.bg_top = t.bg_top;
+            settings.bg_bottom = t.bg_bottom;
+            settings.menu_theme = 4;
+        }
         settings.apply(&cc.egui_ctx);
         let mut viewport = cc.wgpu_render_state.as_ref().map(Viewport::new);
         if let Some(v) = viewport.as_mut() {
@@ -1530,7 +1537,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
                 });
                 let support = seed.surface.unwrap_or_else(|| SurfRef::Plane(seed.planes.last().copied().unwrap_or(PlaneRef::Origin(OriginPlane::YZ))));
                 let d = &mut self.open.doc;
-                Sel::Feature(d.add_feature(FeatureKind::SmSurfFlange(SmSurfFlange { support, face: face.unwrap_or([0.; 3]), length: s("20"), radius: None, flip: false, keep_base: false })))
+                Sel::Feature(d.add_feature(FeatureKind::SmSurfFlange(SmSurfFlange { support, face: face.unwrap_or([0.; 3]), length: s("20"), radius: None, flip: false, keep_base: false, mode: 0, angle: "90".into() })))
             }
             Cmd::SmCurveFlange | Cmd::SmCornerRelief | Cmd::SmArcSlot => {
                 if d.sheet.is_none() {
@@ -1552,7 +1559,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
                 });
                 let d = &mut self.open.doc;
                 Sel::Feature(d.add_feature(match c {
-                    Cmd::SmCurveFlange => FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("15"), flip: false, angle: s("90"), radius: None }),
+                    Cmd::SmCurveFlange => FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("15"), flip: false, angle: s("90"), radius: None, side: 0 }),
                     Cmd::SmArcSlot => FeatureKind::SmArcSlot(SmArcSlot { center: at.unwrap_or([0.; 3]), radius: s("20"), width: s("6"), start: s("0"), sweep: s("90") }),
                     _ => FeatureKind::SmCornerRelief(SmCornerRelief { at: at.unwrap_or([0.; 3]), size: s("4"), kind: 0 }),
                 }))
@@ -3145,7 +3152,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
                     for (id, name, msg, is_feat) in &errs {
                         egui::Frame::group(ui.style()).show(ui, |ui| {
                             ui.set_width(ui.available_width());
-                            ui.label(RichText::new(format!("✖ {name}")).strong().color(Color32::from_rgb(255, 130, 110)));
+                            ui.label(RichText::new(format!("✖ {name}")).strong().color(crate::theme::st_err()));
                             ui.label(RichText::new(msg).small());
                             ui.horizontal(|ui| {
                                 if ui.button(tr("✏ Refazer referência")).on_hover_text(tr("abre o comando para escolher a nova entrada")).clicked() {
@@ -3856,7 +3863,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
                     ui.painter().circle_filled(rr.center(), 4., Color32::from_rgb(a.color[0], a.color[1], a.color[2]));
                 }
                 let t = if err || stale {
-                    RichText::new(txt).color(Color32::from_rgb(255, 110, 100))
+                    RichText::new(txt).color(crate::theme::st_err())
                 } else if r.visible {
                     RichText::new(txt)
                 } else {
@@ -3923,10 +3930,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
         let now = ui.input(|x| x.time);
         let (stale, sweeping) = self.row_pending(i, now);
         let (badge, color) = match st {
-            _ if stale => (" ⟳", Color32::from_rgb(255, 110, 100)),
-            Some(Status::Error(_)) => (" ✖", Color32::from_rgb(255, 110, 100)),
+            _ if stale => (" ⟳", crate::theme::st_err()),
+            Some(Status::Error(_)) => (" ✖", crate::theme::st_err()),
             _ if sweeping => (" …", Color32::from_rgb(255, 150, 120)),
-            Some(Status::Warning(_)) => (" ⚠", Color32::from_rgb(240, 200, 90)),
+            Some(Status::Warning(_)) => (" ⚠", crate::theme::st_warn()),
             Some(Status::Inactive) => ("", Color32::GRAY),
             _ => ("", ui.visuals().text_color()),
         };
@@ -5216,9 +5223,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
                 let swept = (((now - self.sweep_t0) / 0.035) as usize).min(n);
                 let stale = self.stale_from().is_some() && !busy;
                 let (txt, col) = if busy {
-                    ("⏳ recalculando…".to_string(), Color32::from_rgb(240, 200, 90))
+                    ("⏳ recalculando…".to_string(), crate::theme::st_warn())
                 } else if stale {
-                    (tr("⟳ desatualizado — F5 atualiza").to_string(), Color32::from_rgb(255, 120, 100))
+                    (tr("⟳ desatualizado — F5 atualiza").to_string(), crate::theme::st_err())
                 } else if swept < n {
                     (format!("▶ atualizando {swept}/{n}"), Color32::from_rgb(140, 200, 255))
                 } else {
@@ -5258,19 +5265,19 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
                 }
                 if let (true, Some(st)) = (self.settings.bench == crate::settings::Bench::Montagem, self.asm.as_ref()) {
                     let r = &st.report;
-                    let col = if r.failed.is_empty() { ui.visuals().text_color() } else { Color32::from_rgb(255, 120, 100) };
+                    let col = if r.failed.is_empty() { ui.visuals().text_color() } else { crate::theme::st_err() };
                     ui.separator();
                     ui.label(RichText::new(format!("⚙ {} GDL livres · {} restrição(ões) com erro", r.dof, r.failed.len())).small().color(col));
                 }
                 let errs = self.errors_prev;
-                if errs > 0 && ui.small_button(RichText::new(format!("✖ {errs} com erro — reparar")).color(Color32::from_rgb(255, 120, 100))).clicked() {
+                if errs > 0 && ui.small_button(RichText::new(format!("✖ {errs} com erro — reparar")).color(crate::theme::st_err())).clicked() {
                     self.wizard_open = true;
                 }
                 ui.separator();
                 ui.label(RichText::new(k).small().weak());
                 if let Some(e) = self.result.as_ref().and_then(|r| r.param_error.clone()) {
                     ui.separator();
-                    ui.label(RichText::new(format!("Parâmetros: {e}")).small().color(Color32::from_rgb(255, 120, 100)));
+                    ui.label(RichText::new(format!("Parâmetros: {e}")).small().color(crate::theme::st_err()));
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.label(RichText::new(format!("{} · duplo clique: ajustar", self.settings.nav.help())).small().weak());
@@ -6217,6 +6224,47 @@ pub fn fmt(v: f64) -> String {
     if crate::i18n::english() { s.into() } else { s.replace('.', ",") }
 }
 
+/// Ponto com `dec` casas, no separador do idioma: (1.5, 2, 3) em inglês, (1,5; 2; 3) em português.
+pub fn p3(p: impl P3, dec: usize) -> String {
+    let p = p.xyz();
+    let en = crate::i18n::english();
+    let f = |v: f64| {
+        let s = format!("{v:.dec$}");
+        if en { s } else { s.replace('.', ",") }
+    };
+    format!("({}{sep}{}{sep}{})", f(p[0]), f(p[1]), f(p[2]), sep = if en { ", " } else { "; " })
+}
+
+/// Pontos aceitos por `p3` (por valor ou referência, f64 ou f32).
+pub trait P3 {
+    fn xyz(&self) -> [f64; 3];
+}
+impl P3 for [f64; 3] {
+    fn xyz(&self) -> [f64; 3] {
+        *self
+    }
+}
+impl P3 for [f32; 3] {
+    fn xyz(&self) -> [f64; 3] {
+        self.map(|v| v as f64)
+    }
+}
+impl<T: P3> P3 for &T {
+    fn xyz(&self) -> [f64; 3] {
+        (**self).xyz()
+    }
+}
+impl<T: P3> P3 for &mut T {
+    fn xyz(&self) -> [f64; 3] {
+        (**self).xyz()
+    }
+}
+
+/// Texto com números no separador decimal do idioma.
+pub fn loc(s: String) -> String {
+    if crate::i18n::english() { s } else { s.replace('.', ",") }
+}
+
 /// Fontes das anotações 3D (as que existem no Windows), com os símbolos (GD&T) de reserva.
 pub static PMI_FONTS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
 
@@ -7011,7 +7059,7 @@ pub fn line_style_ui(ui: &mut egui::Ui, st: &mut scc_core::LineStyle, lines: boo
     if lines {
         ui.horizontal(|ui| {
             ui.label(tr("Espessura"));
-            ui.add(egui::Slider::new(&mut st.width, 0.5..=8.0).suffix(" px"));
+            ui.add(crate::ui_ext::slider(&mut st.width, 0.5..=8.0).suffix(" px"));
         });
         ui.horizontal(|ui| {
             ui.label(tr("Tipo de linha"));
@@ -7029,7 +7077,7 @@ pub fn line_style_ui(ui: &mut egui::Ui, st: &mut scc_core::LineStyle, lines: boo
         });
         ui.horizontal(|ui| {
             ui.label(tr("Tamanho do símbolo"));
-            ui.add(egui::Slider::new(&mut st.size, 3.0..=24.0).suffix(" px"));
+            ui.add(crate::ui_ext::slider(&mut st.size, 3.0..=24.0).suffix(" px"));
         });
     }
 }
@@ -7074,8 +7122,8 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
                     ui.radio_value(&mut s.english, false, "Português");
                     ui.radio_value(&mut s.english, true, "English");
                 });
-                ui.add(egui::Slider::new(&mut s.ui_scale, 0.75..=1.75).text("escala (fontes e controles)"));
-                ui.add(egui::Slider::new(&mut s.icon_size, 20.0..=48.0).text("tamanho dos ícones"));
+                ui.add(crate::ui_ext::slider(&mut s.ui_scale, 0.75..=1.75).text("escala (fontes e controles)"));
+                ui.add(crate::ui_ext::slider(&mut s.icon_size, 20.0..=48.0).text("tamanho dos ícones"));
                 ui.checkbox(&mut s.show_labels, tr("mostrar o nome embaixo dos ícones"));
                 ui.separator();
                 ui.label(RichText::new(tr("Seções da árvore")).strong());
@@ -7243,13 +7291,13 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
                         }
                     });
                 });
-                ui.add(egui::Slider::new(&mut s.dim_decimals, 0..=4).text("casas decimais"));
-                ui.add(egui::Slider::new(&mut s.dim_text_height, 1.8..=7.0).text("altura do texto (mm)"));
+                ui.add(crate::ui_ext::slider(&mut s.dim_decimals, 0..=4).text("casas decimais"));
+                ui.add(crate::ui_ext::slider(&mut s.dim_text_height, 1.8..=7.0).text("altura do texto (mm)"));
                 ui.label(RichText::new(tr("Usado pela ferramenta de cotagem do sketch e pelo desenho técnico.")).weak().small());
             }
         _ => {
                 ui.checkbox(&mut s.grid, tr("grade"));
-                ui.add(egui::Slider::new(&mut s.grid_step, 1.0..=50.0).text("passo da grade (mm)"));
+                ui.add(crate::ui_ext::slider(&mut s.grid_step, 1.0..=50.0).text("passo da grade (mm)"));
                 ui.checkbox(&mut s.snaps, tr("snaps"));
                 ui.checkbox(&mut s.auto_constraints, tr("restrições automáticas"));
                 ui.checkbox(&mut s.auto_dims, tr("cotas automáticas"));

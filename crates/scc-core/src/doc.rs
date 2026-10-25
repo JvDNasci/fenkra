@@ -1613,6 +1613,10 @@ pub struct SmCurveFlange {
     /// raio interno (senão o da chapa)
     #[serde(default)]
     pub radius: Option<String>,
+    /// lado do material: 0 dobra por fora (começa na aresta), 1 material por fora (face interna da
+    /// aba alinhada à aresta), 2 material por dentro (face externa alinhada à aresta)
+    #[serde(default)]
+    pub side: u8,
 }
 
 /// Rasgo circular (arco) atravessando a chapa: centro na face, raio do arco, largura,
@@ -1644,6 +1648,13 @@ pub struct SmSurfFlange {
     /// não relimitar a base pelo suporte
     #[serde(default)]
     pub keep_base: bool,
+    /// tipo de apoio: 0 exato (segue o suporte), 1 aproximação (suporte trocado pelo plano tangente
+    /// no meio da OML: linha de dobra reta), 2 ângulo (OML do suporte, ângulo constante dado)
+    #[serde(default)]
+    pub mode: u8,
+    /// ângulo da aba no modo 2 (graus, a partir da web)
+    #[serde(default)]
+    pub angle: String,
 }
 
 /// Alívio de canto: corte no encontro de abas.

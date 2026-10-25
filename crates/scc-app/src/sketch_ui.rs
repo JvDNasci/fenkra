@@ -2525,7 +2525,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     let tool = edit.tool;
     ui.label(RichText::new(tool.info().3).weak().small());
     if tool == Tool::Polygon {
-        ui.add(egui::Slider::new(&mut edit.polygon_sides, 3..=24).text("lados"));
+        ui.add(crate::ui_ext::slider(&mut edit.polygon_sides, 3..=24).text("lados"));
     }
     ui.add_space(4.);
     let mut finish = false;
@@ -2574,8 +2574,8 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     if let Some(pt) = d.point_mut(*p) {
                         ui.horizontal(|ui| {
                             ui.label(RichText::new(tr("Ponto")).strong());
-                            { let __r = ui.add(egui::DragValue::new(&mut pt.x).speed(0.5).prefix("x ")); crate::ui_ext::wheel(ui, &__r, &mut pt.x); __r };
-                            { let __r = ui.add(egui::DragValue::new(&mut pt.y).speed(0.5).prefix("y ")); crate::ui_ext::wheel(ui, &__r, &mut pt.y); __r };
+                            { let __r = ui.add(crate::ui_ext::dv(&mut pt.x).speed(0.5).prefix("x ")); crate::ui_ext::wheel(ui, &__r, &mut pt.x); __r };
+                            { let __r = ui.add(crate::ui_ext::dv(&mut pt.y).speed(0.5).prefix("y ")); crate::ui_ext::wheel(ui, &__r, &mut pt.y); __r };
                             ui.checkbox(&mut pt.fixed, tr("fixo"));
                         });
                     }

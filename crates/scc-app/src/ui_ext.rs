@@ -64,3 +64,23 @@ pub fn wheel<T: egui::emath::Numeric>(ui: &egui::Ui, resp: &egui::Response, v: &
     let x = v.to_f64() + n * st;
     *v = T::from_f64(if T::INTEGRAL { x.round() } else { (x * 1e6).round() / 1e6 });
 }
+
+/// Separador decimal do idioma nos números exibidos (vírgula em português).
+fn dec(s: String) -> String {
+    if crate::i18n::english() { s } else { s.replace('.', ",") }
+}
+
+/// Lê número com vírgula ou ponto.
+fn parse_dec(s: &str) -> Option<f64> {
+    s.trim().replace(',', ".").parse().ok()
+}
+
+/// DragValue com o separador decimal do idioma.
+pub fn dv<Num: egui::emath::Numeric>(v: &mut Num) -> egui::DragValue<'_> {
+    egui::DragValue::new(v).custom_formatter(|n, r| dec(egui::emath::format_with_decimals_in_range(n, r))).custom_parser(parse_dec)
+}
+
+/// Slider com o separador decimal do idioma.
+pub fn slider<Num: egui::emath::Numeric>(v: &mut Num, range: std::ops::RangeInclusive<Num>) -> egui::Slider<'_> {
+    egui::Slider::new(v, range).custom_formatter(|n, r| dec(egui::emath::format_with_decimals_in_range(n, r))).custom_parser(parse_dec)
+}

@@ -656,10 +656,10 @@ pub fn style_ui(ui: &mut egui::Ui, st: &mut PmiStyle, inherit: bool) {
         });
         ui.horizontal(|ui| {
             ui.label(tr("Altura"));
-            let r = ui.add(egui::DragValue::new(&mut st.size).range(0.0..=80.).speed(0.2).custom_formatter(fmt_def(1)));
+            let r = ui.add(crate::ui_ext::dv(&mut st.size).range(0.0..=80.).speed(0.2).custom_formatter(fmt_def(1)));
             crate::ui_ext::wheel(ui, &r, &mut st.size);
             ui.label(tr("Espaçamento"));
-            let r = ui.add(egui::DragValue::new(&mut st.line_spacing).range(0.0..=4.).speed(0.02).custom_formatter(|v, _| if v <= 0. { tr("normal").to_string() } else { format!("{v:.2}×") }));
+            let r = ui.add(crate::ui_ext::dv(&mut st.line_spacing).range(0.0..=4.).speed(0.02).custom_formatter(|v, _| if v <= 0. { tr("normal").to_string() } else { format!("{v:.2}×") }));
             crate::ui_ext::wheel(ui, &r, &mut st.line_spacing);
         });
         ui.horizontal(|ui| {
@@ -681,7 +681,7 @@ pub fn style_ui(ui: &mut egui::Ui, st: &mut PmiStyle, inherit: bool) {
         });
         ui.horizontal(|ui| {
             ui.label(tr("Espessura"));
-            let r = ui.add(egui::DragValue::new(&mut st.frame_width).range(0.0..=6.).speed(0.05).custom_formatter(fmt_def(2)));
+            let r = ui.add(crate::ui_ext::dv(&mut st.frame_width).range(0.0..=6.).speed(0.05).custom_formatter(fmt_def(2)));
             crate::ui_ext::wheel(ui, &r, &mut st.frame_width);
             ui.label(tr("Tipo de linha"));
             dash_combo(ui, "pmi_moldura_traco", &mut st.frame_dash);
@@ -693,7 +693,7 @@ pub fn style_ui(ui: &mut egui::Ui, st: &mut PmiStyle, inherit: bool) {
                 st.frame_fixed = if fixed { 80. } else { 0. };
             }
             if fixed {
-                let r = ui.add(egui::DragValue::new(&mut st.frame_fixed).range(1.0..=2000.).speed(0.5).suffix(" pt"));
+                let r = ui.add(crate::ui_ext::dv(&mut st.frame_fixed).range(1.0..=2000.).speed(0.5).suffix(" pt"));
                 crate::ui_ext::wheel(ui, &r, &mut st.frame_fixed);
             }
         });
@@ -712,12 +712,12 @@ pub fn style_ui(ui: &mut egui::Ui, st: &mut PmiStyle, inherit: bool) {
         });
         ui.horizontal(|ui| {
             ui.label(tr("Deslocamento"));
-            ui.add(egui::DragValue::new(&mut st.nudge[0]).speed(0.5).prefix("X "));
-            ui.add(egui::DragValue::new(&mut st.nudge[1]).speed(0.5).prefix("Y "));
+            ui.add(crate::ui_ext::dv(&mut st.nudge[0]).speed(0.5).prefix("X "));
+            ui.add(crate::ui_ext::dv(&mut st.nudge[1]).speed(0.5).prefix("Y "));
         });
         ui.horizontal(|ui| {
             ui.label(tr("Ângulo"));
-            let r = ui.add(egui::DragValue::new(&mut st.angle).range(-360.0..=360.).speed(1.).suffix("°"));
+            let r = ui.add(crate::ui_ext::dv(&mut st.angle).range(-360.0..=360.).speed(1.).suffix("°"));
             crate::ui_ext::wheel(ui, &r, &mut st.angle);
             for a in [0., 90., 180., 270.] {
                 if ui.small_button(format!("{a}°")).clicked() {
@@ -747,7 +747,7 @@ pub fn style_ui(ui: &mut egui::Ui, st: &mut PmiStyle, inherit: bool) {
         });
         ui.horizontal(|ui| {
             ui.label(tr("Espessura"));
-            let r = ui.add(egui::DragValue::new(&mut st.leader_width).range(0.0..=6.).speed(0.05).custom_formatter(fmt_def(2)));
+            let r = ui.add(crate::ui_ext::dv(&mut st.leader_width).range(0.0..=6.).speed(0.05).custom_formatter(fmt_def(2)));
             crate::ui_ext::wheel(ui, &r, &mut st.leader_width);
             ui.label(tr("Tipo de linha"));
             dash_combo(ui, "pmi_chamada_traco", &mut st.leader_dash);
@@ -758,7 +758,7 @@ pub fn style_ui(ui: &mut egui::Ui, st: &mut PmiStyle, inherit: bool) {
         color_row(ui, "cor das linhas", &mut st.color, [20, 40, 110]);
         ui.horizontal(|ui| {
             ui.label(tr("Espessura"));
-            let r = ui.add(egui::DragValue::new(&mut st.line_width).range(0.0..=6.).speed(0.05).custom_formatter(fmt_def(2)));
+            let r = ui.add(crate::ui_ext::dv(&mut st.line_width).range(0.0..=6.).speed(0.05).custom_formatter(fmt_def(2)));
             crate::ui_ext::wheel(ui, &r, &mut st.line_width);
         });
         ui.checkbox(&mut st.apply_scale, tr("aplicar escala (o texto acompanha o zoom)"));

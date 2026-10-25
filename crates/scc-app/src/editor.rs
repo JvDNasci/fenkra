@@ -92,6 +92,53 @@ pub(crate) fn section_icon(title: &str) -> &'static str {
     }
 }
 
+/// Ícone de uma opção liga/desliga, pelo texto.
+pub(crate) fn check_icon(label: &str) -> &'static str {
+    let l = label.to_lowercase();
+    let has = |ks: &[&str]| ks.iter().any(|k| l.contains(k));
+    if has(&["invert", "outro lado", "reverse", "flip", "sentido"]) {
+        "⇄"
+    } else if has(&["suprim", "desativ"]) {
+        "⊘"
+    } else if has(&["simétric", "simetric", "dois lados", "meio"]) {
+        "⇋"
+    } else if has(&["fix", "travar", "trava"]) {
+        "📌"
+    } else if has(&["mostrar", "exibir", "visível", "visivel", "ocult", "visualiza"]) {
+        "👁"
+    } else if has(&["raio", "arredond"]) {
+        "◜"
+    } else if has(&["alívio", "alivio", "recuo", "folga", "relimit"]) {
+        "⇹"
+    } else if has(&["meia-esquadria", "esquadria", "canto"]) {
+        "◳"
+    } else if has(&["cor", "aparência", "textura"]) {
+        "🎨"
+    } else if has(&["relacional", "link", "associ"]) {
+        "🔗"
+    } else if has(&["fino", "parede", "espessura", "casca"]) {
+        "▭"
+    } else if has(&["automátic", "automatic", "auto"]) {
+        "⟳"
+    } else if has(&["próprio", "proprio", "personaliz"]) {
+        "✎"
+    } else if has(&["planific", "dobr"]) {
+        "▱"
+    } else {
+        "◦"
+    }
+}
+
+/// Caixa de marcar com ícone pelo significado (texto traduzido).
+pub(crate) fn check(ui: &mut egui::Ui, v: &mut bool, label: &str) -> egui::Response {
+    let label = tr(label);
+    // o texto já começa com um símbolo: não repete
+    if label.chars().next().is_some_and(|c| !c.is_alphanumeric() && !c.is_whitespace() && c != '(') {
+        return ui.checkbox(v, label);
+    }
+    ui.checkbox(v, format!("{} {label}", check_icon(label)))
+}
+
 /// Dica das caixas de expressão.
 pub(crate) const EXPR_HINT: &str = "Aceita número (vírgula ou ponto), parâmetro ou expressão: L/2 + 5, 2*pi*r, sqrt(a; b). Roda do mouse soma/subtrai (Shift ×10, Ctrl ×0,1).";
 
@@ -112,7 +159,7 @@ pub(crate) fn expr(ui: &mut egui::Ui, label: &str, s: &mut String, vars: &Vars, 
         let bad = r.is_err();
         let mut te = egui::TextEdit::singleline(s).desired_width(110.);
         if bad {
-            te = te.text_color(Color32::from_rgb(255, 120, 100));
+            te = te.text_color(crate::theme::st_err());
         }
         let resp = ui.add(te);
         // roda do mouse sobre o campo soma/subtrai (Shift ×10, Ctrl ×0,1)
@@ -127,7 +174,7 @@ pub(crate) fn expr(ui: &mut egui::Ui, label: &str, s: &mut String, vars: &Vars, 
             }
             Err(e) => {
                 resp.on_hover_text(e.to_string());
-                ui.label(RichText::new(tr("⚠")).color(Color32::from_rgb(255, 120, 100)));
+                ui.label(RichText::new(tr("⚠")).color(crate::theme::st_err()));
             }
         }
     });
@@ -194,7 +241,7 @@ pub(crate) fn tabs_end(ui: &mut egui::Ui) {
 /// linha, conforme a largura), com ícone, para o painel não virar uma fita comprida.
 fn tab_bar(ui: &mut egui::Ui, run: &mut TabRun) {
     ui.add_space(4.);
-    let accent = ui.visuals().selection.bg_fill;
+    let accent = crate::theme::accent(ui.visuals());
     let n = run.prev.len();
     let w = ui.available_width();
     let cols = if n <= 3 { n.max(1) } else if w < 250. { 2 } else { 3 };
@@ -284,6 +331,7 @@ pub(crate) fn section(ui: &mut egui::Ui, title: &str) {
 
 /// Selo de estado (como "ATIVO" nos menus do sistema).
 pub(crate) fn status_chip(ui: &mut egui::Ui, txt: &str, col: Color32) {
+    let col = crate::theme::readable(col, ui.visuals());
     let g = ui.painter().layout_no_wrap(txt.to_string(), egui::FontId::proportional(11.), col);
     let (r, _) = ui.allocate_exact_size(g.size() + egui::vec2(16., 8.), egui::Sense::hover());
     ui.painter().rect_filled(r, 7., col.gamma_multiply(0.18));
@@ -584,7 +632,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             let dens = MATERIALS.iter().find(|(m, _)| *m == p.material).map(|(_, d)| *d).unwrap_or(7.85);
             for (cid, vol, area) in &bodies {
                 let name = doc.collectors.iter().find(|c| c.id == *cid).map(|c| c.name.clone()).unwrap_or_default();
-                ui.label(format!("{name}: {:.1} cm³ · {:.1} cm² · {:.3} kg", vol / 1000., area / 100., vol * dens / 1e6));
+                ui.label(format!("{name}: {}", crate::app::loc(format!("{:.1} cm³ · {:.1} cm² · {:.3} kg", vol / 1000., area / 100., vol * dens / 1e6))));
             }
             if bodies.is_empty() {
                 ui.label(RichText::new(tr("sem corpos")).weak());
@@ -598,7 +646,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             for (i, t) in doc.textures.iter_mut().enumerate() {
                 ui.horizontal(|ui| {
                     ui.label(&t.name);
-                    { let __r = ui.add(egui::DragValue::new(&mut t.scale).range(0.1..=10000.).speed(1.).suffix(" mm")); crate::ui_ext::wheel(ui, &__r, &mut t.scale); __r }
+                    { let __r = ui.add(crate::ui_ext::dv(&mut t.scale).range(0.1..=10000.).speed(1.).suffix(" mm")); crate::ui_ext::wheel(ui, &__r, &mut t.scale); __r }
                         .on_hover_text(tr("tamanho de uma repetição da imagem"));
                     if ui.small_button("✖").clicked() {
                         del = Some(i);
@@ -644,9 +692,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 }
             });
             ui.label(RichText::new(tr("O nome é a variável referenciável; os comandos apontam para o elemento, então renomear não quebra nada.")).weak().small());
-            ui.checkbox(&mut r.visible, tr("visível"));
+            crate::editor::check(ui, &mut r.visible, "visível");
             if r.kind.class() != RefClass::Surface && !matches!(r.kind, RefKind::Linked { .. }) {
-                ui.checkbox(&mut r.published, tr("📤 publicar (outras peças podem usar por link)"));
+                crate::editor::check(ui, &mut r.published, "📤 publicar (outras peças podem usar por link)");
             }
             ui.add_space(4.);
             ui.label(RichText::new(tr("Trocar uma entrada redireciona a variável: tudo que usa este elemento se atualiza.")).weak().small());
@@ -678,7 +726,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             c.color = a.color;
             c.finish = a.finish;
             c.texture = a.texture;
-            ui.checkbox(&mut c.visible, tr("visível"));
+            crate::editor::check(ui, &mut c.visible, "visível");
             if active {
                 ui.label(RichText::new(tr("✔ coletor ativo: novos comandos atuam nele")).color(Color32::from_rgb(140, 210, 140)));
             } else if ui.button(tr("Tornar ativo")).clicked() {
@@ -717,10 +765,10 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             ui.label(RichText::new(f.kind.type_name()).weak());
             match &status {
                 Some(Status::Error(m)) => {
-                    ui.label(RichText::new(format!("✖ {m}")).color(Color32::from_rgb(255, 120, 100)));
+                    ui.label(RichText::new(format!("✖ {m}")).color(crate::theme::st_err()));
                 }
                 Some(Status::Warning(m)) => {
-                    ui.label(RichText::new(format!("⚠ {m}")).color(Color32::from_rgb(240, 200, 90)));
+                    ui.label(RichText::new(format!("⚠ {m}")).color(crate::theme::st_warn()));
                 }
                 _ => {}
             }
@@ -730,10 +778,10 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     sess_act = Some(2);
                 }
                 let mut vis = !f.hidden;
-                if ui.checkbox(&mut vis, tr("visível")).changed() {
+                if crate::editor::check(ui, &mut vis, "visível").changed() {
                     f.hidden = !vis;
                 }
-                ui.checkbox(&mut f.suppressed, tr("suprimido"));
+                crate::editor::check(ui, &mut f.suppressed, "suprimido");
             });
             ui.label(RichText::new(tr("Duplo clique na árvore também abre a edição.")).weak().small());
             used_by(ui, &doc_ro, id, &mut new_sel);
@@ -754,8 +802,10 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 egui::Frame::NONE.fill(ui.visuals().faint_bg_color).corner_radius(12.).inner_margin(10.).show(ui, |ui| {
                     ui.horizontal(|ui| {
                         let (r, _) = ui.allocate_exact_size(egui::vec2(38., 38.), egui::Sense::hover());
-                        ui.painter().rect_filled(r, 9., ui.visuals().selection.bg_fill.gamma_multiply(0.35));
-                        ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, f.kind.icon(), egui::FontId::proportional(22.), Color32::WHITE);
+                        let acc = crate::theme::accent(ui.visuals());
+                        ui.painter().rect_filled(r, 9., acc.gamma_multiply(0.18));
+                        ui.painter().rect_stroke(r, 9., egui::Stroke::new(1., acc.gamma_multiply(0.5)), egui::StrokeKind::Inside);
+                        ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, f.kind.icon(), egui::FontId::proportional(22.), acc);
                         ui.vertical(|ui| {
                             ui.label(RichText::new(tr(f.kind.type_name())).size(17.).strong());
                             let mut n = f.name.clone();
@@ -768,17 +818,17 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                                 Some(Status::Error(_)) => ("ERRO", Color32::from_rgb(255, 110, 95)),
                                 Some(Status::Warning(_)) => ("AVISO", Color32::from_rgb(240, 195, 80)),
                                 Some(Status::Inactive) => ("INATIVO", Color32::from_gray(150)),
-                                _ => ("OK", Color32::from_rgb(110, 210, 120)),
+                                _ => ("OK", crate::theme::st_ok()),
                             };
                             status_chip(ui, tr(t), c);
                         });
                     });
                     match &status {
                         Some(Status::Error(m)) => {
-                            ui.label(RichText::new(m).color(Color32::from_rgb(255, 120, 100)).small());
+                            ui.label(RichText::new(m).color(crate::theme::st_err()).small());
                         }
                         Some(Status::Warning(m)) => {
-                            ui.label(RichText::new(m).color(Color32::from_rgb(240, 200, 90)).small());
+                            ui.label(RichText::new(m).color(crate::theme::st_warn()).small());
                         }
                         Some(Status::Inactive) => {
                             ui.label(RichText::new(tr("inativo (suprimido ou depois do marcador)")).weak().small());
@@ -787,11 +837,11 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     }
                 });
                 ui.horizontal(|ui| {
-                    ui.checkbox(&mut f.suppressed, tr("suprimido"));
+                    crate::editor::check(ui, &mut f.suppressed, "suprimido");
                     // só sketches têm olho próprio; sólidos aparecem pelo corpo (última feature)
                     if matches!(f.kind, FeatureKind::Sketch(_)) {
                         let mut vis = !f.hidden;
-                        if ui.checkbox(&mut vis, tr("visível")).changed() {
+                        if crate::editor::check(ui, &mut vis, "visível").changed() {
                             f.hidden = !vis;
                         }
                     } else if ui.button(tr("🎨 Propriedades gráficas…")).clicked() {
@@ -1061,7 +1111,7 @@ fn params_table(ui: &mut egui::Ui, doc: &mut Document, vars: &Vars, _sink: &mut 
             });
             match vars.get(&p.name) {
                 Some(v) => ui.label(fmt(*v)),
-                None => ui.label(RichText::new(tr("⚠")).color(Color32::from_rgb(255, 120, 100))),
+                None => ui.label(RichText::new(tr("⚠")).color(crate::theme::st_err())),
             };
             ui.checkbox(&mut p.published, tr(""));
             if ui.small_button(tr("✖")).clicked() {
@@ -1090,7 +1140,7 @@ fn params_table(ui: &mut egui::Ui, doc: &mut Document, vars: &Vars, _sink: &mut 
         }
     }
     if let Some(n) = ui.ctx().data(|d| d.get_temp::<String>(egui::Id::unique("param_used"))) {
-        ui.label(RichText::new(format!("'{n}' está em uso em expressões e não pode ser removido.")).color(Color32::from_rgb(240, 200, 90)));
+        ui.label(RichText::new(format!("'{n}' está em uso em expressões e não pode ser removido.")).color(crate::theme::st_warn()));
     }
     ui.add_space(6.);
     if ui.button(tr("➕ Parâmetro")).clicked() {
@@ -1147,9 +1197,9 @@ fn feature_ui(
             op_combo(ui, "op_ex", &mut e.op);
             section(ui, "Extensão");
             extent_ui(ui, "ext_ex", &mut e.extent, vars, &["Cego", "Plano médio", "Dois sentidos", "Passante", "Até o próximo", "Até o último", "Até plano", "Até a superfície"], doc, seed);
-            ui.checkbox(&mut e.reverse, tr("inverter sentido"));
+            crate::editor::check(ui, &mut e.reverse, "inverter sentido");
             let mut custom = e.dir.is_some();
-            if ui.checkbox(&mut custom, tr("direção por linha, aresta ou eixo")).changed() {
+            if crate::editor::check(ui, &mut custom, "direção por linha, aresta ou eixo").changed() {
                 e.dir = custom.then(|| seed.curves.first().map(crate::geo_ui::axis_of).unwrap_or(AxisRef::Origin(OriginAxis::Z)));
             }
             if let Some(a) = &mut e.dir {
@@ -1192,7 +1242,7 @@ fn feature_ui(
                 }
             });
             expr(ui, "Ângulo", &mut r.angle, vars, "°");
-            ui.checkbox(&mut r.symmetric, tr("simétrico ao plano do sketch"));
+            crate::editor::check(ui, &mut r.symmetric, "simétrico ao plano do sketch");
             crate::feat_ui::revolve_extras(ui, r, vars);
             target_combo(ui, doc, target);
         }
@@ -1228,9 +1278,9 @@ fn feature_ui(
                     m,
                     picked,
                     0,
-                    |p| format!("({:.0}, {:.0}, {:.0})", p[0], p[1], p[2]),
+                    |p| format!("{}", crate::app::p3(p, 0)),
                     |ui, _, p| {
-                        ui.label(format!("{} ({:.1}, {:.1}, {:.1})", tr("aresta em"), p[0], p[1], p[2]));
+                        ui.label(format!("{} {}", tr("aresta em"), crate::app::p3(p, 1)));
                     },
                     || [0.; 3],
                 );
@@ -1315,7 +1365,7 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
     }
     section(ui, "Direção");
     let mut custom = h.dir.is_some();
-    if ui.checkbox(&mut custom, tr("por uma linha, aresta ou eixo (vetor)")).changed() {
+    if crate::editor::check(ui, &mut custom, "por uma linha, aresta ou eixo (vetor)").changed() {
         h.dir = custom.then(|| seed.curves.first().map(crate::geo_ui::axis_of).unwrap_or(AxisRef::Origin(OriginAxis::Z)));
     }
     if let Some(a) = &mut h.dir {
@@ -1324,7 +1374,7 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
         let txt = if h.points.is_empty() { "normal ao plano do sketch" } else { "normal à superfície em cada ponto" };
         ui.label(RichText::new(tr(txt)).weak().small());
     }
-    ui.checkbox(&mut h.reverse, tr("inverter sentido"));
+    crate::editor::check(ui, &mut h.reverse, "inverter sentido");
 
     // estado atual: "norma|designação|folga" (formato antigo "M6 passagem normal" também é lido)
     let st = h.standard.clone().unwrap_or_default();
@@ -1378,7 +1428,7 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
         _ => {}
     }
     if new_tapped {
-        ui.checkbox(&mut h.left_hand, tr("rosca à esquerda"));
+        crate::editor::check(ui, &mut h.left_hand, "rosca à esquerda");
     }
 
     section(ui, "Rosca / fixador");
@@ -1444,7 +1494,7 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
 
     section(ui, "Fundo e corpo");
     let mut v = h.tip.is_some();
-    if ui.checkbox(&mut v, tr("fundo em V (ponta da broca)")).changed() {
+    if crate::editor::check(ui, &mut v, "fundo em V (ponta da broca)").changed() {
         h.tip = v.then(|| "118".to_string());
     }
     if let Some(t) = &mut h.tip {

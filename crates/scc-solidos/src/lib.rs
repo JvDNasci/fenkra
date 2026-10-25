@@ -2170,7 +2170,8 @@ impl Ctx<'_> {
     /// Aba ao longo de uma cadeia de pontos na borda da chapa: seção com o arco de dobra varrida
     /// pela cadeia (dobrado) ou a faixa desenvolvida (planificado). `want` força o lado da aba.
     #[allow(clippy::too_many_arguments)]
-    fn curve_flange(&mut self, f: &Feature, pts: Vec<V3>, ang: f64, r: f64, len: f64, flip: bool, want: Option<V3>) -> Result<Option<String>, String> {
+    #[allow(clippy::too_many_arguments)]
+    fn curve_flange(&mut self, f: &Feature, pts: Vec<V3>, ang: f64, r: f64, len: f64, flip: bool, want: Option<V3>, side: u8) -> Result<Option<String>, String> {
         let k = |e: KernelError| e.0;
         let sp = self.sheet()?;
         if !(1.0..=179.0).contains(&ang) {
@@ -2202,6 +2203,33 @@ impl Ctx<'_> {
         let d = match want {
             Some(w) => if geo3d::dot(w, n) >= 0. { n } else { geo3d::mul(n, -1.) },
             None => if flip { geo3d::mul(n, -1.) } else { n },
+        };
+        // lado do material: a aba recua para dentro da chapa (a faixa entre a aresta e o recuo sai)
+        let half = (ang.to_radians() / 2.).min(80f64.to_radians());
+        let off = match side {
+            1 => r * half.tan(),
+            2 => (r + sp.t) * half.tan(),
+            _ => 0.,
+        };
+        let pts: Vec<V3> = if off > 1e-6 {
+            let back: Vec<V3> = pts.iter().zip(&outs).map(|(p, o)| geo3d::sub(*p, geo3d::mul(*o, off))).collect();
+            let edge: Vec<V3> = pts.iter().zip(&outs).map(|(p, o)| geo3d::add(*p, geo3d::mul(*o, 0.5))).collect();
+            let fr = Frame { origin: pts[0], x: outs[0], normal: n };
+            let y = scc_kernel::cross(n, outs[0]);
+            let loc = |p: V3| {
+                let q = geo3d::sub(p, pts[0]);
+                [geo3d::dot(q, outs[0]), geo3d::dot(q, y)]
+            };
+            let a2: Vec<[f64; 2]> = back.iter().map(|p| loc(*p)).collect();
+            let mut b2: Vec<[f64; 2]> = edge.iter().map(|p| loc(*p)).collect();
+            b2.reverse();
+            let seg = |v: &[[f64; 2]]| if v.len() >= 3 { scc_kernel::Seg2::Spline(v.to_vec()) } else { scc_kernel::Seg2::Line(v[0], v[v.len() - 1]) };
+            let lp = vec![seg(&a2), scc_kernel::Seg2::Line(a2[a2.len() - 1], b2[0]), seg(&b2), scc_kernel::Seg2::Line(b2[b2.len() - 1], a2[0])];
+            let strip = Shape::face(&fr, &[lp]).map_err(k)?.extrude(n, sp.t * 2. + 1., sp.t * 2. + 1.).map_err(k)?;
+            self.apply(f.target, strip, BoolOp::Cut, f.id)?;
+            back
+        } else {
+            pts.clone()
         };
         // face interna da dobra: a do lado para onde a aba sobe
         let shift = if (geo3d::dot(d, n) > 0.) == mat_up { geo3d::mul(d, sp.t) } else { [0.; 3] };
@@ -3382,7 +3410,7 @@ impl Ctx<'_> {
                     None => sp.r,
                 };
                 let pts: Vec<V3> = cf.edge.iter().map(|q| self.map_point(*q, f.flat_space, sp.flat)).collect();
-                self.curve_flange(f, pts, ang, r, len, cf.flip, None)
+                self.curve_flange(f, pts, ang, r, len, cf.flip, None, cf.side)
             }
             FeatureKind::SmSurfFlange(sf) => {
                 let sp = self.sheet()?;
@@ -3399,34 +3427,46 @@ impl Ctx<'_> {
                 let big = geo3d::dist(lo, hi) * 2. + 10.;
                 // OML: suporte ∩ plano da face base, só o trecho perto da web
                 let plane = Shape::plane_face(on, n, big).map_err(k)?;
-                let curves = support.section(&plane).map_err(k)?;
                 let m = sp.t * 2. + r + 1.;
                 let inside = |p: &V3| (0..3).all(|i| p[i] >= lo[i] - m && p[i] <= hi[i] + m);
-                let mut best: Vec<V3> = vec![];
                 let step = (geo3d::dist(lo, hi) / 200.).max(0.05);
-                for cv in curves {
-                    // subdivide (retas vêm só com as pontas) e fica com o trecho perto da web
-                    let mut dense: Vec<V3> = vec![];
-                    for w in cv.windows(2) {
-                        let nseg = ((geo3d::dist(w[0], w[1]) / step).ceil() as usize).clamp(1, 4000);
-                        for i in 0..nseg {
-                            dense.push(geo3d::lerp(w[0], w[1], i as f64 / nseg as f64));
+                // OML: maior trecho da interseção suporte × plano da web perto dela (subdividido)
+                let oml = |sup: &Shape| -> Result<Vec<V3>, String> {
+                    let mut best: Vec<V3> = vec![];
+                    for cv in sup.section(&plane).map_err(k)? {
+                        // subdivide (retas vêm só com as pontas) e fica com o trecho perto da web
+                        let mut dense: Vec<V3> = vec![];
+                        for w in cv.windows(2) {
+                            let nseg = ((geo3d::dist(w[0], w[1]) / step).ceil() as usize).clamp(1, 4000);
+                            for i in 0..nseg {
+                                dense.push(geo3d::lerp(w[0], w[1], i as f64 / nseg as f64));
+                            }
+                        }
+                        if let Some(l) = cv.last() {
+                            dense.push(*l);
+                        }
+                        let part: Vec<V3> = dense.into_iter().filter(inside).collect();
+                        if part.len() > best.len() {
+                            best = part;
                         }
                     }
-                    if let Some(l) = cv.last() {
-                        dense.push(*l);
+                    if best.len() < 2 {
+                        return Err("o suporte não corta o plano da web perto dela".into());
                     }
-                    let part: Vec<V3> = dense.into_iter().filter(inside).collect();
-                    if part.len() > best.len() {
-                        best = part;
-                    }
+                    Ok(best)
+                };
+                let mut support = support;
+                let mut best = oml(&support)?;
+                let mut mid = best[best.len() / 2];
+                let (_, mut ns) = support.surface_near(mid).map_err(k)?;
+                if sf.mode == 1 {
+                    // aproximação: o suporte vira o plano tangente no meio da OML (dobra reta)
+                    support = Shape::plane_face(mid, ns, big).map_err(k)?;
+                    best = oml(&support)?;
+                    mid = best[best.len() / 2];
+                    ns = support.surface_near(mid).map_err(k)?.1;
                 }
-                if best.len() < 2 {
-                    return Err("o suporte não corta o plano da web perto dela".into());
-                }
-                let mid = best[best.len() / 2];
                 let tan = geo3d::unit(geo3d::sub(best[(best.len() / 2 + 1).min(best.len() - 1)], best[(best.len() / 2).saturating_sub(1)])).ok_or("OML nula")?;
-                let (_, ns) = support.surface_near(mid).map_err(k)?;
                 let ctr = geo3d::lerp(lo, hi, 0.5);
                 // relimita a web pelo suporte (fica o lado com o grosso do material)
                 if !sf.keep_base {
@@ -3447,7 +3487,12 @@ impl Ctx<'_> {
                 if geo3d::dot(out, geo3d::sub(mid, ctr)) < 0. {
                     out = geo3d::mul(out, -1.);
                 }
-                let ang = geo3d::dot(u, d).atan2(geo3d::dot(u, out)).to_degrees();
+                let ang = if sf.mode == 2 {
+                    // ângulo constante dado (a OML continua a do suporte)
+                    if sf.angle.trim().is_empty() { 90. } else { ev(&sf.angle, &self.vars, "ângulo")? }
+                } else {
+                    geo3d::dot(u, d).atan2(geo3d::dot(u, out)).to_degrees()
+                };
                 // a OML fica na face e só onde há web (depois de relimitar)
                 let web = self.body(f.target).cloned().unwrap_or(b);
                 let pts: Vec<V3> = best
@@ -3458,7 +3503,7 @@ impl Ctx<'_> {
                 if pts.len() < 2 {
                     return Err("o suporte não encontra a borda da web".into());
                 }
-                self.curve_flange(f, pts, ang, r, len, sf.flip, Some(d))
+                self.curve_flange(f, pts, ang, r, len, sf.flip, Some(d), 0)
             }
             FeatureKind::SmArcSlot(sl) => {
                 let sp = self.sheet()?;
@@ -6459,7 +6504,7 @@ mod tests_aba_curva {
             let t = i as f64 / 24. * std::f64::consts::FRAC_PI_2;
             [50. * t.cos(), 50. * t.sin(), 2.]
         }).collect();
-        d.add_feature(FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("10"), flip: false, angle: s("90"), radius: None }));
+        d.add_feature(FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("10"), flip: false, angle: s("90"), radius: None, side: 0 }));
         let r = recompute(&d);
         for f in &d.features {
             assert_eq!(r.status[&f.id], Status::Ok, "{}: {:?}", f.name, r.status[&f.id]);
@@ -6479,6 +6524,19 @@ mod tests_aba_curva {
         let xmax = r.bodies[0].mesh.positions.chunks_exact(3).map(|p| p[0]).fold(f32::MIN, f32::max);
         let dev = 50. + std::f64::consts::FRAC_PI_2 * (2. + 0.44 * 2.) + 10.;
         assert!((xmax as f64 - dev).abs() < 0.5, "desenvolvido {xmax} ≈ {dev}");
+        // lado do material: a face externa da aba fica em R = 50 + r + t, 50 + t ou 50
+        d.sheet.as_mut().unwrap().flat = false;
+        for (side, want) in [(0u8, 54.), (1, 52.), (2, 50.)] {
+            if let FeatureKind::SmCurveFlange(cf) = &mut d.features.last_mut().unwrap().kind {
+                cf.side = side;
+            }
+            let r = recompute(&d);
+            for f in &d.features {
+                assert_eq!(r.status[&f.id], Status::Ok, "lado {side} {}: {:?}", f.name, r.status[&f.id]);
+            }
+            let xmax = r.bodies[0].mesh.positions.chunks_exact(3).map(|p| p[0]).fold(f32::MIN, f32::max) as f64;
+            assert!((xmax - want).abs() < 0.3, "lado {side}: externo {xmax} ≈ {want}");
+        }
     }
 }
 
@@ -6616,7 +6674,7 @@ mod tests_aba_superficie {
         d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
         // suporte: plano vertical em x = 80
         let pl = d.add_offset_plane(PlaneRef::Origin(OriginPlane::YZ), "80");
-        d.add_feature(FeatureKind::SmSurfFlange(SmSurfFlange { support: SurfRef::Plane(PlaneRef::Datum(pl)), face: [40., 25., 2.], length: s("15"), radius: None, flip: false, keep_base: false }));
+        d.add_feature(FeatureKind::SmSurfFlange(SmSurfFlange { support: SurfRef::Plane(PlaneRef::Datum(pl)), face: [40., 25., 2.], length: s("15"), radius: None, flip: false, keep_base: false, mode: 0, angle: s("90") }));
         let r = recompute(&d);
         for f in &d.features {
             assert_eq!(r.status[&f.id], Status::Ok, "{}: {:?}", f.name, r.status[&f.id]);
@@ -6635,5 +6693,19 @@ mod tests_aba_superficie {
         }
         let zmax = r.bodies[0].mesh.positions.chunks_exact(3).map(|p| p[2]).fold(f32::MIN, f32::max);
         assert!(zmax < 2.01, "planificada {zmax}");
+        // aproximação (suporte plano: igual ao exato) e ângulo constante de 45°
+        d.sheet.as_mut().unwrap().flat = false;
+        for (mode, ang, lo, hi) in [(1u8, "90", 18.8, 19.2), (2, "45", 8., 16.)] {
+            if let FeatureKind::SmSurfFlange(sf) = &mut d.features.last_mut().unwrap().kind {
+                sf.mode = mode;
+                sf.angle = ang.into();
+            }
+            let r = recompute(&d);
+            for f in &d.features {
+                assert_eq!(r.status[&f.id], Status::Ok, "modo {mode} {}: {:?}", f.name, r.status[&f.id]);
+            }
+            let zmax = r.bodies[0].mesh.positions.chunks_exact(3).map(|p| p[2]).fold(f32::MIN, f32::max) as f64;
+            assert!(zmax > lo && zmax < hi, "modo {mode}: altura {zmax}");
+        }
     }
 }

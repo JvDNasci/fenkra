@@ -627,7 +627,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                 if let (true, Some(m)) = (h.dragged(), h.interact_pointer_pos()) {
                     painter.extend(egui::Shape::dashed_line(&[sp, m], Stroke::new(1.5, HL), 5., 3.));
                     let ok = crate::picking::pick(r, &app.open.doc, cam, rect, m, &pick_filter).is_some();
-                    painter.circle_stroke(m, 7., Stroke::new(2., if ok { Color32::from_rgb(110, 210, 120) } else { Color32::from_rgb(230, 90, 80) }));
+                    painter.circle_stroke(m, 7., Stroke::new(2., if ok { crate::theme::st_ok() } else { Color32::from_rgb(230, 90, 80) }));
                 }
                 if h.drag_stopped() {
                     if let Some(m) = h.interact_pointer_pos() {
@@ -1067,7 +1067,7 @@ pub fn gdt_ui(ui: &mut egui::Ui, salt: &str, ch: &mut GdtChar, tol: &mut String,
                 ui.text_edit_singleline(datums);
             });
             ui.label(RichText::new(tr("Referências separadas por espaço (ex.: A B C); cada uma vira uma casa do quadro.")).weak().small());
-            ui.checkbox(&mut extra.zone_dia, tr("zona cilíndrica (Ø antes do valor)"));
+            crate::editor::check(ui, &mut extra.zone_dia, "zona cilíndrica (Ø antes do valor)");
             ui.horizontal(|ui| {
                 ui.label(tr("Modificador"));
                 for m in ["", "Ⓜ", "Ⓛ", "Ⓟ", "Ⓕ", "Ⓢ", "Ⓣ", "Ⓤ"] {
@@ -1080,7 +1080,7 @@ pub fn gdt_ui(ui: &mut egui::Ui, salt: &str, ch: &mut GdtChar, tol: &mut String,
             .response
             .on_hover_text(tr("Ⓜ máximo material, Ⓛ mínimo material, Ⓟ zona projetada, Ⓕ estado livre, Ⓢ independente, Ⓣ plano tangente, Ⓤ zona desigual"));
             let mut comp = extra.second.is_some();
-            if ui.checkbox(&mut comp, tr("quadro composto (segunda linha)")).changed() {
+            if crate::editor::check(ui, &mut comp, "quadro composto (segunda linha)").changed() {
                 extra.second = comp.then(|| (String::new(), String::new()));
             }
             if let Some((t2, d2)) = &mut extra.second {
@@ -1107,13 +1107,13 @@ pub fn weld_ui(ui: &mut egui::Ui, salt: &str, kind: &mut WeldKind, size: &mut St
     });
     let mut both = extra.other.is_some();
     ui.horizontal(|ui| {
-        if ui.checkbox(&mut both, tr("dos dois lados")).changed() {
+        if crate::editor::check(ui, &mut both, "dos dois lados").changed() {
             extra.other = both.then_some(*kind);
         }
         if let Some(o) = &mut extra.other {
             pick(ui, "outro", o);
         } else {
-            ui.checkbox(&mut extra.other_side, tr("só do outro lado (na linha tracejada)"));
+            crate::editor::check(ui, &mut extra.other_side, "só do outro lado (na linha tracejada)");
         }
     });
     ui.horizontal(|ui| {
@@ -1130,7 +1130,7 @@ pub fn weld_ui(ui: &mut egui::Ui, salt: &str, kind: &mut WeldKind, size: &mut St
     });
     ui.horizontal(|ui| {
         ui.checkbox(all_around, tr("todo o contorno"));
-        ui.checkbox(&mut extra.field, tr("solda de campo"));
+        crate::editor::check(ui, &mut extra.field, "solda de campo");
     });
     ui.horizontal(|ui| {
         ui.label(tr("Cauda (processo)"));
@@ -1286,7 +1286,7 @@ fn panel_inner(app: &mut App, ui: &mut egui::Ui, id: Id, style_req: &mut bool) -
     ui.horizontal(|ui| {
         for (k, l) in ["X", "Y", "Z"].iter().enumerate() {
             ui.label(*l);
-            { let __r = ui.add(egui::DragValue::new(&mut p.offset[k]).speed(0.5)); crate::ui_ext::wheel(ui, &__r, &mut p.offset[k]); __r };
+            { let __r = ui.add(crate::ui_ext::dv(&mut p.offset[k]).speed(0.5)); crate::ui_ext::wheel(ui, &__r, &mut p.offset[k]); __r };
         }
     });
     crate::editor::section(ui, "Orientação do texto");
@@ -1317,7 +1317,7 @@ fn panel_inner(app: &mut App, ui: &mut egui::Ui, id: Id, style_req: &mut bool) -
         });
     }
     ui.label(RichText::new(tr("Arraste o rótulo na viewport para mudar a posição.")).weak().small());
-    ui.checkbox(&mut p.visible, tr("visível"));
+    crate::editor::check(ui, &mut p.visible, "visível");
     if seed_pts.len() >= p.kind.anchors() && ui.button(tr("⊙ Reancorar na seleção atual")).clicked() {
         p.anchors = seed_pts[..p.kind.anchors()].to_vec();
     }

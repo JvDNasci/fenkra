@@ -29,7 +29,7 @@ impl Pick {
             Pick::Face { owner, .. } => format!("Face de {}", doc.name_of(*owner)),
             Pick::Edge { body, .. } if *body >= SURF_BASE => "Aresta de superfície".into(),
             Pick::Edge { edge, .. } => format!("Aresta #{edge}"),
-            Pick::Vertex { pos, .. } => format!("Vértice ({:.1}, {:.1}, {:.1})", pos[0], pos[1], pos[2]),
+            Pick::Vertex { pos, .. } => format!("Vértice {}", crate::app::p3(pos, 1)),
             Pick::Plane(p) => crate::scene::plane_ref_name(doc, p),
             Pick::Geo(id) => doc.name_of(*id),
             Pick::SkCurve { sketch, curve, .. } => format!("{} · curva #{}", doc.name_of(*sketch), curve.0),

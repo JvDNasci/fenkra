@@ -1024,14 +1024,14 @@ fn click(app: &mut App, m: V2, snap: &SnapFn, view_at: &ViewAt) {
 fn color_width(ui: &mut egui::Ui, color: &mut Option<[u8; 3]>, width: &mut f64) {
     ui.horizontal(|ui| {
         let mut own = color.is_some();
-        if ui.checkbox(&mut own, tr("Cor")).changed() {
+        if crate::editor::check(ui, &mut own, "Cor").changed() {
             *color = own.then_some([200, 30, 30]);
         }
         if let Some(c) = color {
             ui.color_edit_button_srgb(c);
         }
         ui.label(tr("Espessura"));
-        let r = ui.add(egui::DragValue::new(width).range(0.0..=3.).speed(0.01).custom_formatter(|v, _| if v <= 0. { tr("padrão").to_string() } else { format!("{v:.2} mm") }));
+        let r = ui.add(crate::ui_ext::dv(width).range(0.0..=3.).speed(0.01).custom_formatter(|v, _| if v <= 0. { tr("padrão").to_string() } else { format!("{v:.2} mm") }));
         crate::ui_ext::wheel(ui, &r, width);
     });
 }
@@ -1072,9 +1072,9 @@ fn ctx_menu(ui: &mut egui::Ui, st: &mut DwgState, id: Option<Id>) {
             ui.close();
         }
         ui.separator();
-        ui.checkbox(&mut v.hidden_lines, tr("Linhas ocultas (tracejadas)"));
-        ui.checkbox(&mut v.tangent_edges, tr("Arestas tangentes"));
-        ui.checkbox(&mut v.label, tr("Mostrar rótulo e escala"));
+        crate::editor::check(ui, &mut v.hidden_lines, "Linhas ocultas (tracejadas)");
+        crate::editor::check(ui, &mut v.tangent_edges, "Arestas tangentes");
+        crate::editor::check(ui, &mut v.label, "Mostrar rótulo e escala");
         ui.menu_button(tr("Estilo de renderização"), |ui| {
             for r in Render::ALL {
                 if ui.selectable_label(v.render == r, tr(r.label())).clicked() {
@@ -1136,7 +1136,7 @@ fn ctx_menu(ui: &mut egui::Ui, st: &mut DwgState, id: Option<Id>) {
         }
     } else if let Some(n) = st.d.notes.iter_mut().find(|n| n.id == id) {
         let mut lead = n.leader.is_some();
-        if ui.checkbox(&mut lead, tr("Chamada (seta)")).changed() {
+        if crate::editor::check(ui, &mut lead, "Chamada (seta)").changed() {
             n.leader = lead.then(|| [n.pos[0] - 15., n.pos[1] - 10.]);
             if !lead {
                 n.anchor3 = None;
@@ -1363,9 +1363,9 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                 ui.text_edit_singleline(&mut v.name);
             });
             scale_combo(ui, &mut v.scale, ("escala_vista", id.0));
-            ui.checkbox(&mut v.hidden_lines, tr("Linhas ocultas (tracejadas)"));
-            ui.checkbox(&mut v.tangent_edges, tr("Arestas tangentes"));
-            ui.checkbox(&mut v.label, tr("Mostrar rótulo e escala"));
+            crate::editor::check(ui, &mut v.hidden_lines, "Linhas ocultas (tracejadas)");
+            crate::editor::check(ui, &mut v.tangent_edges, "Arestas tangentes");
+            crate::editor::check(ui, &mut v.label, "Mostrar rótulo e escala");
             ui.horizontal(|ui| {
                 ui.label(tr("Renderização"));
                 egui::ComboBox::from_id_salt(("render_vista", id.0)).selected_text(tr(v.render.label())).show_ui(ui, |ui| {
@@ -1378,7 +1378,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             color_width(ui, &mut v.color, &mut v.line_width);
             match &mut v.kind {
                 ViewKind::Camera { toward, x } => {
-                    ui.label(RichText::new(format!("{} ({:.2}, {:.2}, {:.2})", tr("Direção"), toward[0], toward[1], toward[2])).weak().small());
+                    ui.label(RichText::new(format!("{} {}", tr("Direção"), crate::app::p3(&*toward, 2))).weak().small());
                     if ui.add_enabled(cam_now.is_some(), egui::Button::new(tr("🎥 Usar a câmera atual do 3D"))).clicked() {
                         if let Some((t, xx)) = cam_now {
                             *toward = t;
@@ -1407,7 +1407,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     });
                     ui.horizontal(|ui| {
                         ui.label(tr("Raio (mm do modelo)"));
-                        ui.add(egui::DragValue::new(radius).range(0.5..=1e4).speed(0.2));
+                        ui.add(crate::ui_ext::dv(radius).range(0.5..=1e4).speed(0.2));
                     });
                 }
                 _ => {}
@@ -1481,7 +1481,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             });
             ui.horizontal(|ui| {
                 ui.label(tr("Afastamento (mm)"));
-                { let __r = ui.add(egui::DragValue::new(&mut dm.offset).speed(0.2)); crate::ui_ext::wheel(ui, &__r, &mut dm.offset); __r };
+                { let __r = ui.add(crate::ui_ext::dv(&mut dm.offset).speed(0.2)); crate::ui_ext::wheel(ui, &__r, &mut dm.offset); __r };
             });
             ui.horizontal(|ui| {
                 ui.label(tr("Setas"));
@@ -1538,17 +1538,17 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             }
             ui.horizontal(|ui| {
                 ui.label(tr("Altura do texto"));
-                { let __r = ui.add(egui::DragValue::new(&mut n.size).range(1.0..=20.).speed(0.1)); crate::ui_ext::wheel(ui, &__r, &mut n.size); __r };
+                { let __r = ui.add(crate::ui_ext::dv(&mut n.size).range(1.0..=20.).speed(0.1)); crate::ui_ext::wheel(ui, &__r, &mut n.size); __r };
             });
             let mut lead = n.leader.is_some();
-            if ui.checkbox(&mut lead, tr("Chamada (seta)")).changed() {
+            if crate::editor::check(ui, &mut lead, "Chamada (seta)").changed() {
                 n.leader = lead.then(|| [n.pos[0] - 15., n.pos[1] - 10.]);
             }
             if let Some(l) = n.leader.as_mut() {
                 ui.horizontal(|ui| {
                     ui.label(tr("Ponta (x, y)"));
-                    { let __r = ui.add(egui::DragValue::new(&mut l[0]).speed(0.5)); crate::ui_ext::wheel(ui, &__r, &mut l[0]); __r };
-                    { let __r = ui.add(egui::DragValue::new(&mut l[1]).speed(0.5)); crate::ui_ext::wheel(ui, &__r, &mut l[1]); __r };
+                    { let __r = ui.add(crate::ui_ext::dv(&mut l[0]).speed(0.5)); crate::ui_ext::wheel(ui, &__r, &mut l[0]); __r };
+                    { let __r = ui.add(crate::ui_ext::dv(&mut l[1]).speed(0.5)); crate::ui_ext::wheel(ui, &__r, &mut l[1]); __r };
                 });
             }
             if let Some(v) = n.view {
@@ -1624,8 +1624,8 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     ui.selectable_value(&mut sh.format, f, f.label());
                 }
             });
-            ui.checkbox(&mut sh.portrait, tr("Retrato"));
-            ui.checkbox(&mut sh.zones, tr("Zoneamento"));
+            crate::editor::check(ui, &mut sh.portrait, "Retrato");
+            crate::editor::check(ui, &mut sh.zones, "Zoneamento");
         });
     }
     // modelos prontos: formato + orientação + legenda
@@ -1648,11 +1648,11 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     }
     ui.horizontal(|ui| {
         ui.label(tr("Texto das cotas (mm)"));
-        { let __r = ui.add(egui::DragValue::new(&mut st.d.text_height).range(1.5..=10.).speed(0.1)); crate::ui_ext::wheel(ui, &__r, &mut st.d.text_height); __r };
+        { let __r = ui.add(crate::ui_ext::dv(&mut st.d.text_height).range(1.5..=10.).speed(0.1)); crate::ui_ext::wheel(ui, &__r, &mut st.d.text_height); __r };
     });
     ui.horizontal(|ui| {
         ui.label(tr("Casas decimais"));
-        { let __r = ui.add(egui::DragValue::new(&mut st.d.decimals).range(0..=4)); crate::ui_ext::wheel(ui, &__r, &mut st.d.decimals); __r };
+        { let __r = ui.add(crate::ui_ext::dv(&mut st.d.decimals).range(0..=4)); crate::ui_ext::wheel(ui, &__r, &mut st.d.decimals); __r };
     });
     ui.separator();
     ui.label(RichText::new(tr("Origem das novas vistas e tabelas")).strong());
@@ -1704,7 +1704,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             ui.end_row();
         }
         ui.label(tr("Massa específica"));
-        { let __r = ui.add(egui::DragValue::new(&mut t.density).range(0.1..=25.).speed(0.01).suffix(" g/cm³")); crate::ui_ext::wheel(ui, &__r, &mut t.density); __r };
+        { let __r = ui.add(crate::ui_ext::dv(&mut t.density).range(0.1..=25.).speed(0.01).suffix(" g/cm³")); crate::ui_ext::wheel(ui, &__r, &mut t.density); __r };
         ui.end_row();
     });
     egui::CollapsingHeader::new(tr("Campos automáticos")).default_open(false).show(ui, |ui| {
@@ -1749,7 +1749,7 @@ fn scale_combo(ui: &mut egui::Ui, s: &mut f64, salt: (&str, u64)) {
                 ui.selectable_value(s, v, scale_text(v));
             }
         });
-        ui.add(egui::DragValue::new(s).range(0.001..=100.).speed(0.01));
+        ui.add(crate::ui_ext::dv(s).range(0.001..=100.).speed(0.01));
     });
 }
 

@@ -643,7 +643,7 @@ pub(crate) fn point_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docum
         ui.horizontal(|ui| {
             ui.add_space(100.);
             for (i, n) in ["x ", "y ", "z "].iter().enumerate() {
-                { let __r = ui.add(egui::DragValue::new(&mut q[i]).speed(0.5).prefix(*n)); crate::ui_ext::wheel(ui, &__r, &mut q[i]); __r };
+                { let __r = ui.add(crate::ui_ext::dv(&mut q[i]).speed(0.5).prefix(*n)); crate::ui_ext::wheel(ui, &__r, &mut q[i]); __r };
             }
         });
     }
@@ -762,7 +762,7 @@ fn edge_mids(s: &Seed) -> Vec<[f64; 3]> {
 fn radius_ui(ui: &mut egui::Ui, radius: &mut String, radius2: &mut Option<String>, vars: &HashMap<String, f64>) {
     expr(ui, if radius2.is_some() { "Raio inicial" } else { "Raio" }, radius, vars, "mm");
     let mut var = radius2.is_some();
-    if ui.checkbox(&mut var, tr("raio variável (do início ao fim)")).changed() {
+    if crate::editor::check(ui, &mut var, "raio variável (do início ao fim)").changed() {
         *radius2 = var.then(|| radius.clone());
     }
     if let Some(r2) = radius2 {
@@ -1238,7 +1238,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             curve_slot(ui, "g_c", "Curva", doc, me, curve, seed);
             plane_slot(ui, "g_pl", "Plano", doc, me, plane, seed);
             row(ui, "Solução", |ui| {
-                ui.add(egui::DragValue::new(which).range(0..=20));
+                ui.add(crate::ui_ext::dv(which).range(0..=20));
             });
         }
         R::PointCurveCurve { a, b } => {
@@ -1351,7 +1351,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                     curve_slot(ui, "g_xp", "Perfil", doc, me, profile, seed);
                     curve_slot(ui, "g_x1", "Guia 1", doc, me, guide1, seed);
                     let mut two = guide2.is_some();
-                    if ui.checkbox(&mut two, tr("segunda guia (gira e estica o perfil)")).changed() {
+                    if crate::editor::check(ui, &mut two, "segunda guia (gira e estica o perfil)").changed() {
                         *guide2 = two.then(crate::slots::curve);
                     }
                     if let Some(g2) = guide2 {
@@ -1402,7 +1402,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                 });
             }
             let mut own_spine = spine.is_some();
-            if ui.checkbox(&mut own_spine, tr("spine própria (senão, a primeira guia)")).changed() {
+            if crate::editor::check(ui, &mut own_spine, "spine própria (senão, a primeira guia)").changed() {
                 *spine = own_spine.then(crate::slots::curve);
             }
             if let Some(sp) = spine {
@@ -1504,7 +1504,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         R::SurfLoft { sections, guide, ruled, closed } => {
             curves_list(ui, "g_sec", "Seção", doc, me, sections, seed, 2);
             let mut has = guide.is_some();
-            if ui.checkbox(&mut has, tr("com curva guia")).changed() {
+            if crate::editor::check(ui, &mut has, "com curva guia").changed() {
                 *guide = has.then(|| seed.curves.last().cloned().unwrap_or(CurveRef::Axis(OriginAxis::Z)));
             }
             if let Some(g) = guide {
@@ -1561,7 +1561,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                 more.push(crate::slots::surf());
             }
             let mut by_curve = curve.is_some();
-            if ui.checkbox(&mut by_curve, tr("cortar também por uma curva (wireframe) sobre a superfície")).changed() {
+            if crate::editor::check(ui, &mut by_curve, "cortar também por uma curva (wireframe) sobre a superfície").changed() {
                 *curve = by_curve.then(|| seed.curves.first().cloned().unwrap_or_else(crate::slots::curve));
             }
             if let Some(c) = curve {
@@ -1579,7 +1579,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             surf_slot(ui, "g_s", "Superfície", doc, me, surface, seed);
             ui.horizontal(|ui| {
                 ui.add_sized([96., 18.], egui::Label::new(tr("Número")));
-                ui.add(egui::DragValue::new(which).range(0..=999));
+                ui.add(crate::ui_ext::dv(which).range(0..=999));
             });
             ui.label(RichText::new(tr("Quando há várias bordas/faces, escolha qual pelo número (0, 1, 2…).")).weak().small());
         }
@@ -1653,7 +1653,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             surf_slot(ui, "g_b", "Elemento 2", doc, me, b, seed);
             ui.horizontal(|ui| {
                 ui.add_sized([96., 18.], egui::Label::new(tr("Solução")));
-                ui.add(egui::DragValue::new(which).range(0..=99));
+                ui.add(crate::ui_ext::dv(which).range(0..=99));
             });
         }
         R::CurveProjectSurf { curve, surface, dir } => {

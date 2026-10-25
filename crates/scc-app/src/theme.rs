@@ -154,6 +154,16 @@ pub fn apply(ctx: &egui::Context, def: &ThemeDef) {
     }
 }
 
+/// Cor de destaque cheia do tema (botões ativos, ícones de cabeçalho); sem tema, a da seleção.
+pub fn accent(v: &egui::Visuals) -> Color32 {
+    current().map(|d| c(d.accent)).unwrap_or(v.selection.stroke.color)
+}
+
+/// Cor de status legível no fundo do painel: no claro, escurece (verde/amarelo claros somem).
+pub fn readable(col: Color32, v: &egui::Visuals) -> Color32 {
+    if v.dark_mode { col } else { col.lerp_to_gamma(Color32::BLACK, 0.45) }
+}
+
 /// Faixas da barra (fundo A, fundo B, destaque) do tema em uso.
 pub fn bands() -> Option<(Color32, Color32, Color32)> {
     current().map(|d| (c(d.band_a), c(d.band_b), c(d.accent)))
@@ -191,4 +201,19 @@ pub fn swatch(ui: &mut egui::Ui, def: &ThemeDef, selected: bool) -> egui::Respon
     let stroke = if selected { Stroke::new(2.5, c(def.accent)) } else if hover { Stroke::new(1.5, mix(def.panel, def.accent, 0.6)) } else { Stroke::new(1., mix(def.panel, def.text, 0.2)) };
     p.rect_stroke(r, 8., stroke, egui::StrokeKind::Inside);
     resp
+}
+
+fn dark_now() -> bool {
+    current().is_none_or(|d| d.dark)
+}
+
+/// Cores de estado legíveis no tema em uso (ok, aviso, erro).
+pub fn st_ok() -> Color32 {
+    if dark_now() { Color32::from_rgb(110, 210, 120) } else { Color32::from_rgb(30, 130, 50) }
+}
+pub fn st_warn() -> Color32 {
+    if dark_now() { Color32::from_rgb(240, 200, 90) } else { Color32::from_rgb(170, 110, 0) }
+}
+pub fn st_err() -> Color32 {
+    if dark_now() { Color32::from_rgb(255, 120, 100) } else { Color32::from_rgb(200, 40, 30) }
 }

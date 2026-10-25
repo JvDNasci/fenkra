@@ -126,7 +126,7 @@ fn joints_ui(ui: &mut egui::Ui, doc: &Document, me: Id, m: &mut StructMember) {
     egui::Grid::new("st_joints_grid").striped(true).num_columns(4).show(ui, |ui| {
         for (k, (i, other, j, p)) in mine.into_iter().enumerate() {
             let them = if other == me { format!("{} {}", tr("linha"), j + 1) } else { format!("{} · {} {}", doc.name_of(other), tr("linha"), j + 1) };
-            ui.label(format!("{} {} ↔ {}", tr("linha"), i + 1, them)).on_hover_text(format!("({:.0}, {:.0}, {:.0})", p[0], p[1], p[2]));
+            ui.label(format!("{} {} ↔ {}", tr("linha"), i + 1, them)).on_hover_text(format!("{}", crate::app::p3(p, 0)));
             // regra guardada no outro membro (posterior) manda: só mostra
             let other_rule = (other != me && pos(other) > pos(me))
                 .then(|| match doc.feature(other).map(|f| &f.kind) {
@@ -263,9 +263,9 @@ fn library(app: &mut App, ctx: &egui::Context) {
                     });
                     ui.horizontal(|ui| {
                         ui.label(tr("Regra: ancoragem"));
-                        { let __r = ui.add(egui::DragValue::new(&mut f.anchor).range(0..=9)); crate::ui_ext::wheel(ui, &__r, &mut f.anchor); __r };
+                        { let __r = ui.add(crate::ui_ext::dv(&mut f.anchor).range(0..=9)); crate::ui_ext::wheel(ui, &__r, &mut f.anchor); __r };
                         ui.label(tr("rotação"));
-                        { let __r = ui.add(egui::DragValue::new(&mut f.angle).suffix("°")); crate::ui_ext::wheel(ui, &__r, &mut f.angle); __r };
+                        { let __r = ui.add(crate::ui_ext::dv(&mut f.angle).suffix("°")); crate::ui_ext::wheel(ui, &__r, &mut f.angle); __r };
                     });
                     ui.label(RichText::new(tr("Ancoragem: 0 centro, 1–8 cantos/meios da caixa, 9 centróide — aplicada quando o membro nasce do arame 3D.")).weak().small());
                     let names = structural::dim_names(f.kind);
@@ -281,7 +281,7 @@ fn library(app: &mut App, ctx: &egui::Context) {
                                 d.resize(names.len(), 1.);
                                 ui.add(egui::TextEdit::singleline(n).desired_width(80.));
                                 for v in d.iter_mut() {
-                                    ui.add(egui::DragValue::new(v).speed(0.1).max_decimals(3));
+                                    ui.add(crate::ui_ext::dv(v).speed(0.1).max_decimals(3));
                                 }
                                 if ui.small_button("✖").clicked() {
                                     del = Some(i);

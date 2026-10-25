@@ -105,7 +105,7 @@ fn walk(doc: &Document, r: &RecomputeResult, key: &str, v: &Value, out: &mut Vec
                 return;
             }
             // polilinha de aresta: o ponto do meio
-            if a.len() >= 2 && a.iter().all(|x| num3(x).is_some()) && key == "Edge" {
+            if a.len() >= 2 && a.iter().all(|x| num3(x).is_some()) && matches!(key, "Edge" | "edge") {
                 if let Some(p) = num3(&a[a.len() / 2]) {
                     out.push((p, crate::i18n::tr("Aresta").to_string(), None));
                 }

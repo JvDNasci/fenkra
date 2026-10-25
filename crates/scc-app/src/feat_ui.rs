@@ -94,7 +94,7 @@ fn faces_ui(ui: &mut egui::Ui, faces: &mut Vec<[f64; 3]>, picked: &[[f64; 3]]) {
     let mut del = None;
     for (i, f) in faces.iter().enumerate() {
         ui.horizontal(|ui| {
-            ui.label(RichText::new(format!("Face {} · ({:.1}, {:.1}, {:.1})", i + 1, f[0], f[1], f[2])).small());
+            ui.label(RichText::new(format!("Face {} · {}", i + 1, crate::app::p3(f, 1))).small());
             if ui.small_button(tr("✖")).clicked() {
                 del = Some(i);
             }
@@ -123,7 +123,7 @@ fn op_choice(ui: &mut egui::Ui, op: &mut BoolOp, add: (&str, &str), cut: (&str, 
 
 fn thin_ui(ui: &mut egui::Ui, thin: &mut Option<String>, vars: &Vars) {
     let mut on = thin.is_some();
-    if ui.checkbox(&mut on, tr("parede fina (thin)")).changed() {
+    if crate::editor::check(ui, &mut on, "parede fina (thin)").changed() {
         *thin = on.then(|| "2".into());
     }
     if let Some(t) = thin {
@@ -226,8 +226,8 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                     l.sections.push(f.id);
                 }
             }
-            ui.checkbox(&mut l.ruled, tr("faces retas entre perfis (regrada)"));
-            ui.checkbox(&mut l.closed, tr("fechada (volta ao primeiro perfil)"));
+            crate::editor::check(ui, &mut l.ruled, "faces retas entre perfis (regrada)");
+            crate::editor::check(ui, &mut l.closed, "fechada (volta ao primeiro perfil)");
         }
         FeatureKind::Primitive(p) => {
             section(ui, "Forma");
@@ -251,7 +251,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         }
         FeatureKind::Shell(s) => {
             expr(ui, "Espessura", &mut s.thickness, vars, "mm");
-            ui.checkbox(&mut s.outward, tr("parede para fora (mantém o volume interno)"));
+            crate::editor::check(ui, &mut s.outward, "parede para fora (mantém o volume interno)");
             faces_ui(ui, &mut s.faces, picked_faces);
             ui.label(RichText::new(tr("As faces escolhidas ficam abertas; o resto vira parede com a espessura.")).weak().small());
         }
@@ -261,7 +261,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 ui.add_sized([96., 18.], egui::Label::new(tr("Plano neutro")));
                 plane_combo(ui, "dr_pl", doc, &mut d.neutral, None);
             });
-            ui.checkbox(&mut d.reverse, tr("inverter a direção de extração"));
+            crate::editor::check(ui, &mut d.reverse, "inverter a direção de extração");
             faces_ui(ui, &mut d.faces, picked_faces);
             ui.label(RichText::new(tr("Inclina as faces a partir do plano neutro; a extração segue a normal dele.")).weak().small());
         }
@@ -298,7 +298,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                     });
                     expr(ui, if *total { "Comprimento total" } else { "Espaçamento" }, spacing, vars, "mm");
                     let mut two = dir2.is_some();
-                    if ui.checkbox(&mut two, tr("segunda direção")).changed() {
+                    if crate::editor::check(ui, &mut two, "segunda direção").changed() {
                         *dir2 = two.then_some(AxisRef::Origin(OriginAxis::Y));
                     }
                     if let Some(d2) = dir2 {
@@ -335,11 +335,11 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         FeatureKind::Stiffener(st) => {
             sketch_pick(ui, "st_sk", "Linhas", doc, idx, &mut st.sketch);
             expr(ui, "Espessura", &mut st.thickness, vars, "mm");
-            ui.checkbox(&mut st.to_body, tr("até encontrar o corpo"));
+            crate::editor::check(ui, &mut st.to_body, "até encontrar o corpo");
             if !st.to_body {
                 expr(ui, "Profundidade", &mut st.depth, vars, "mm");
             }
-            ui.checkbox(&mut st.reverse, tr("para o lado da normal do plano"));
+            crate::editor::check(ui, &mut st.reverse, "para o lado da normal do plano");
             ui.label(RichText::new(tr("Cada linha do sketch vira uma parede com a espessura, extrudada a partir do plano.")).weak().small());
         }
         FeatureKind::Thread(t) => {
@@ -375,7 +375,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 t.modeled = i == 1;
             }
             section(ui, "Face cilíndrica");
-            ui.label(RichText::new(format!("({:.1}, {:.1}, {:.1})", t.face[0], t.face[1], t.face[2])).small());
+            ui.label(RichText::new(format!("{}", crate::app::p3(t.face, 1))).small());
             if let Some(p) = picked_faces.last() {
                 if ui.button(tr("Usar a face selecionada")).clicked() {
                     t.face = *p;
@@ -402,7 +402,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                     }
                 });
             });
-            ui.checkbox(&mut c.keep_tool, tr("manter o corpo ferramenta visível"));
+            crate::editor::check(ui, &mut c.keep_tool, "manter o corpo ferramenta visível");
             ui.label(RichText::new(tr("O resultado fica no coletor deste comando; o corpo ferramenta é o estado do outro coletor neste ponto da linha do tempo.")).weak().small());
         }
         FeatureKind::StructMember(m) => {
@@ -410,7 +410,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         }
         FeatureKind::StructPlate(p) => {
             section(ui, "Placa de extremidade");
-            ui.label(RichText::new(format!("ponta perto de ({:.1}, {:.1}, {:.1})", p.at[0], p.at[1], p.at[2])).small());
+            ui.label(RichText::new(format!("ponta perto de {}", crate::app::p3(p.at, 1))).small());
             if let Some(q) = seed.points.iter().find_map(|x| if let PointRef::Fixed(q) = x { Some(*q) } else { None }) {
                 if ui.button(tr("⊙ Usar o vértice selecionado")).clicked() {
                     p.at = q;
@@ -421,7 +421,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         }
         FeatureKind::StructGusset(g) => {
             section(ui, "Reforço");
-            ui.label(RichText::new(format!("encontro perto de ({:.1}, {:.1}, {:.1})", g.at[0], g.at[1], g.at[2])).small());
+            ui.label(RichText::new(format!("encontro perto de {}", crate::app::p3(g.at, 1))).small());
             if let Some(q) = seed.points.iter().find_map(|x| if let PointRef::Fixed(q) = x { Some(*q) } else { None }) {
                 if ui.button(tr("⊙ Usar o vértice selecionado")).clicked() {
                     g.at = q;
@@ -453,8 +453,8 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                     expr(ui, "Afastamento do plano", &mut w.offset, vars, "mm");
                 }
             }
-            ui.checkbox(&mut w.reverse, tr("espessura para o outro lado"));
-            ui.checkbox(&mut w.mid, tr("espessura dividida pelos dois lados"));
+            crate::editor::check(ui, &mut w.reverse, "espessura para o outro lado");
+            crate::editor::check(ui, &mut w.mid, "espessura dividida pelos dois lados");
             ui.label(RichText::new(tr("A espessura vem dos parâmetros da chapa (▭ Parâmetros).")).weak().small());
         }
         FeatureKind::SmFlange(fl) => {
@@ -463,7 +463,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             expr(ui, "Comprimento reto", &mut fl.length, vars, "mm");
             expr(ui, "Ângulo", &mut fl.angle, vars, "°");
             let mut own = fl.radius.is_some();
-            if ui.checkbox(&mut own, tr("raio próprio (senão o da chapa)")).changed() {
+            if crate::editor::check(ui, &mut own, "raio próprio (senão o da chapa)").changed() {
                 fl.radius = own.then(|| "2".to_string());
             }
             if let Some(r) = &mut fl.radius {
@@ -475,14 +475,14 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                     ui.selectable_value(&mut fl.side, k, tr(n));
                 }
             });
-            ui.checkbox(&mut fl.flip, tr("dobrar para o outro lado"));
+            crate::editor::check(ui, &mut fl.flip, "dobrar para o outro lado");
             section(ui, "Limites laterais");
             expr(ui, "Recuo início", &mut fl.off1, vars, "mm");
             expr(ui, "Recuo fim", &mut fl.off2, vars, "mm");
-            ui.checkbox(&mut fl.miter, tr("pontas em meia-esquadria (45°) para a aba vizinha"));
-            ui.checkbox(&mut fl.min_gap, tr("recuo mínimo para aba vizinha (0,0001)")).on_hover_text(tr("abas em arestas vizinhas sem recuo: planifica sem sobrepor"));
+            crate::editor::check(ui, &mut fl.miter, "pontas em meia-esquadria (45°) para a aba vizinha");
+            crate::editor::check(ui, &mut fl.min_gap, "recuo mínimo para aba vizinha (0,0001)").on_hover_text(tr("abas em arestas vizinhas sem recuo: planifica sem sobrepor"));
             let mut rel = fl.relief.is_some();
-            if ui.checkbox(&mut rel, tr("alívio de canto nas pontas recuadas")).changed() {
+            if crate::editor::check(ui, &mut rel, "alívio de canto nas pontas recuadas").changed() {
                 fl.relief = rel.then(|| "2".to_string());
             }
             if let Some(w) = &mut fl.relief {
@@ -511,7 +511,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 2 => "Enrolada: três quartos de volta (raio = folga ÷ 2).",
                 _ => "Folga 0 = bainha esmagada; maior que 0 = aberta/circular.",
             })).weak().small());
-            ui.checkbox(&mut h.flip, tr("dobrar para o outro lado"));
+            crate::editor::check(ui, &mut h.flip, "dobrar para o outro lado");
         }
         FeatureKind::SmJoggle(j) => {
             section(ui, "Joggle");
@@ -531,7 +531,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             if by_plane != j.plane.is_some() {
                 j.plane = by_plane.then(|| seed.planes.last().copied().unwrap_or(PlaneRef::Origin(OriginPlane::YZ)));
             }
-            ui.label(RichText::new(format!("linha de ({:.1}, {:.1}, {:.1}) a ({:.1}, {:.1}, {:.1})", j.a[0], j.a[1], j.a[2], j.b[0], j.b[1], j.b[2])).small());
+            ui.label(RichText::new(format!("linha de {} a {}", crate::app::p3(j.a, 1), crate::app::p3(j.b, 1))).small());
             if ui.add_enabled(pts.len() >= 2, egui::Button::new(tr("⊙ Usar os dois vértices selecionados"))).clicked() {
                 j.a = pts[0];
                 j.b = pts[1];
@@ -542,15 +542,15 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             }
             expr(ui, "Desvio", &mut j.depth, vars, "mm");
             let mut by_angle = j.angle.is_some();
-            if ui.checkbox(&mut by_angle, tr("rampa pelo ângulo")).changed() {
+            if crate::editor::check(ui, &mut by_angle, "rampa pelo ângulo").changed() {
                 j.angle = by_angle.then(|| "45".to_string());
             }
             match &mut j.angle {
                 Some(a) => expr(ui, "Ângulo da rampa", a, vars, "°"),
                 None => expr(ui, "Rampa", &mut j.run, vars, "mm"),
             }
-            ui.checkbox(&mut j.keep_length, tr("compensação: manter o comprimento desenvolvido"));
-            ui.checkbox(&mut j.flip, tr("desviar o outro lado da linha"));
+            crate::editor::check(ui, &mut j.keep_length, "compensação: manter o comprimento desenvolvido");
+            crate::editor::check(ui, &mut j.flip, "desviar o outro lado da linha");
         }
         FeatureKind::SmBend(b) => {
             section(ui, "Dobra por linha");
@@ -558,21 +558,21 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 PointRef::Fixed(q) => Some(*q),
                 _ => None,
             }).collect();
-            ui.label(RichText::new(format!("linha de ({:.1}, {:.1}, {:.1}) a ({:.1}, {:.1}, {:.1})", b.a[0], b.a[1], b.a[2], b.b[0], b.b[1], b.b[2])).small());
+            ui.label(RichText::new(format!("linha de {} a {}", crate::app::p3(b.a, 1), crate::app::p3(b.b, 1))).small());
             if ui.add_enabled(pts.len() >= 2, egui::Button::new(tr("⊙ Usar os dois vértices selecionados"))).clicked() {
                 b.a = pts[0];
                 b.b = pts[1];
             }
             expr(ui, "Ângulo", &mut b.angle, vars, "°");
             let mut own = b.radius.is_some();
-            if ui.checkbox(&mut own, tr("raio próprio (senão o da chapa)")).changed() {
+            if crate::editor::check(ui, &mut own, "raio próprio (senão o da chapa)").changed() {
                 b.radius = own.then(|| "2".to_string());
             }
             if let Some(r) = &mut b.radius {
                 expr(ui, "Raio interno", r, vars, "mm");
             }
-            ui.checkbox(&mut b.flip, tr("mover o outro lado da linha"));
-            ui.checkbox(&mut b.down, tr("dobrar para o outro lado"));
+            crate::editor::check(ui, &mut b.flip, "mover o outro lado da linha");
+            crate::editor::check(ui, &mut b.down, "dobrar para o outro lado");
             ui.label(RichText::new(tr("A linha é o centro da dobra; o comprimento desenvolvido vem do fator K. Na planificada a dobra é desfeita.")).weak().small());
         }
         FeatureKind::SmLouver(l) => {
@@ -581,15 +581,15 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 PointRef::Fixed(q) => Some(*q),
                 _ => None,
             }).collect();
-            ui.label(RichText::new(format!("abertura de ({:.1}, {:.1}, {:.1}) a ({:.1}, {:.1}, {:.1})", l.a[0], l.a[1], l.a[2], l.b[0], l.b[1], l.b[2])).small());
+            ui.label(RichText::new(format!("abertura de {} a {}", crate::app::p3(l.a, 1), crate::app::p3(l.b, 1))).small());
             if ui.add_enabled(pts.len() >= 2, egui::Button::new(tr("⊙ Usar os dois vértices selecionados"))).clicked() {
                 l.a = pts[0];
                 l.b = pts[1];
             }
             expr(ui, "Largura da rampa", &mut l.width, vars, "mm");
             expr(ui, "Altura da abertura", &mut l.height, vars, "mm");
-            ui.checkbox(&mut l.flip, tr("rampa do outro lado da linha"));
-            ui.checkbox(&mut l.down, tr("levantar para o outro lado da chapa"));
+            crate::editor::check(ui, &mut l.flip, "rampa do outro lado da linha");
+            crate::editor::check(ui, &mut l.down, "levantar para o outro lado da chapa");
         }
         FeatureKind::SmStamp(s) => {
             section(ui, "Estampo");
@@ -625,7 +625,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 ui.label(RichText::new(tr("0 = proporcional à espessura")).weak().small());
             }
             if s.kind != 3 {
-                ui.checkbox(&mut s.flip, tr("estampar para o outro lado"));
+                crate::editor::check(ui, &mut s.flip, "estampar para o outro lado");
             }
             ui.label(RichText::new(tr(match s.kind {
                 1 => "Nervura: seção trapezoidal varrida ao longo das linhas/curvas do sketch na face.",
@@ -678,7 +678,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                     ui.ctx().data_mut(|m| m.insert_temp(key, name));
                 });
             }
-            ui.checkbox(&mut h.flip, tr("colar para o outro lado"));
+            crate::editor::check(ui, &mut h.flip, "colar para o outro lado");
         }
         FeatureKind::SmCut(c) => {
             section(ui, "Recorte na chapa");
@@ -694,7 +694,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 2 => expr(ui, "Altura do colar", &mut c.height, vars, "mm"),
                 _ => {}
             }
-            ui.checkbox(&mut c.flip, tr("cortar para o outro lado"));
+            crate::editor::check(ui, &mut c.flip, "cortar para o outro lado");
             ui.label(RichText::new(tr("Desenhe o perfil num sketch na face da chapa. Vale no dobrado e no planificado.")).weak().small());
         }
         FeatureKind::SmProfileFlange(p) => {
@@ -703,13 +703,13 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             expr(ui, "Comprimento lado 1", &mut p.l1, vars, "mm");
             expr(ui, "Comprimento lado 2", &mut p.l2, vars, "mm");
             let mut own = p.radius.is_some();
-            if ui.checkbox(&mut own, tr("raio próprio nos cantos (senão o da chapa)")).changed() {
+            if crate::editor::check(ui, &mut own, "raio próprio nos cantos (senão o da chapa)").changed() {
                 p.radius = own.then(|| "2".to_string());
             }
             if let Some(r) = &mut p.radius {
                 expr(ui, "Raio interno", r, vars, "mm");
             }
-            ui.checkbox(&mut p.flip, tr("material do outro lado da cadeia"));
+            crate::editor::check(ui, &mut p.flip, "material do outro lado da cadeia");
             ui.label(RichText::new(tr("Desenhe a cadeia aberta (linhas e arcos) num plano que corta a aresta; os cantos ganham o raio de dobra.")).weak().small());
         }
         FeatureKind::SmCurveFlange(cf) => {
@@ -728,21 +728,31 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             }
             expr(ui, "Ângulo", &mut cf.angle, vars, "°");
             let mut own = cf.radius.is_some();
-            if ui.checkbox(&mut own, tr("raio próprio (senão o da chapa)")).changed() {
+            if crate::editor::check(ui, &mut own, "raio próprio (senão o da chapa)").changed() {
                 cf.radius = own.then(|| "2".to_string());
             }
             if let Some(r) = &mut cf.radius {
                 expr(ui, "Raio interno", r, vars, "mm");
             }
-            ui.checkbox(&mut cf.flip, tr("para o outro lado da chapa"));
+            crate::editor::check(ui, &mut cf.flip, "para o outro lado da chapa");
+            ui.horizontal_wrapped(|ui| {
+                ui.label(tr("Lado do material"));
+                for (k, n, tip) in [
+                    (0u8, "dobra por fora", "a dobra começa na aresta (a aba acrescenta material)"),
+                    (1, "material por fora", "a face interna da aba fica alinhada à aresta"),
+                    (2, "material por dentro", "a face externa da aba fica alinhada à aresta (o tamanho da peça não muda)"),
+                ] {
+                    ui.selectable_value(&mut cf.side, k, tr(n)).on_hover_text(tr(tip));
+                }
+            });
             ui.label(RichText::new(tr("A aba segue a aresta e as que continuam tangentes (reta e curva juntas), com o raio de dobra; planifica pelo comprimento desenvolvido.")).weak().small());
         }
         FeatureKind::SmSurfFlange(sf) => {
             section(ui, "Base (web)");
-            ui.label(RichText::new(if sf.face == [0.; 3] { tr("⚠ clique na face da web (a parede base)").to_string() } else { format!("{} ({:.1}, {:.1}, {:.1})", tr("face da web em"), sf.face[0], sf.face[1], sf.face[2]) }).small());
-            ui.checkbox(&mut sf.keep_base, tr("não relimitar a web pelo suporte"));
+            ui.label(RichText::new(if sf.face == [0.; 3] { tr("⚠ clique na face da web (a parede base)").to_string() } else { format!("{} {}", tr("face da web em"), crate::app::p3(sf.face, 1)) }).small());
+            crate::editor::check(ui, &mut sf.keep_base, "não relimitar a web pelo suporte");
             let mut own = sf.radius.is_some();
-            if ui.checkbox(&mut own, tr("raio de dobra próprio (senão o da chapa)")).changed() {
+            if crate::editor::check(ui, &mut own, "raio de dobra próprio (senão o da chapa)").changed() {
                 sf.radius = own.then(|| "2".to_string());
             }
             if let Some(r) = &mut sf.radius {
@@ -750,14 +760,35 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             }
             section(ui, "Suporte");
             crate::geo_ui::surf_slot(ui, "smsf_sup", "Superfície", doc, me, &mut sf.support, seed);
-            ui.label(RichText::new(tr("Exato: a aba se apoia no suporte escolhido. A linha de dobra (OML) é a interseção do suporte com o plano da web. Para ângulo constante a partir de uma aresta, use a Aba curva.")).weak().small());
+            ui.horizontal_wrapped(|ui| {
+                ui.label(tr("Tipo"));
+                for (k, n, tip) in [
+                    (0u8, "Exato", "a aba se apoia no suporte escolhido; a linha de dobra (OML) é a interseção do suporte com o plano da web"),
+                    (1, "Aproximação", "o suporte é trocado pelo plano tangente no meio da OML: linha de dobra reta, aba plana (bom para suportes curvos)"),
+                    (2, "Ângulo", "a OML vem do suporte, mas a aba sobe com um ângulo constante dado a partir da web"),
+                ] {
+                    ui.selectable_value(&mut sf.mode, k, tr(n)).on_hover_text(tr(tip));
+                }
+            });
+            if sf.mode == 2 {
+                if sf.angle.trim().is_empty() {
+                    sf.angle = "90".into();
+                }
+                expr(ui, "Ângulo", &mut sf.angle, vars, "°");
+            }
+            let help = match sf.mode {
+                1 => "Aproximação: suporte trocado pelo plano tangente no meio da OML (dobra reta).",
+                2 => "Ângulo: linha de dobra no suporte, aba com o ângulo dado a partir da web.",
+                _ => "Exato: a aba se apoia no suporte escolhido. A linha de dobra (OML) é a interseção do suporte com o plano da web.",
+            };
+            ui.label(RichText::new(tr(help)).weak().small());
             section(ui, "EOP e direção");
             expr(ui, "Comprimento (EOP)", &mut sf.length, vars, "mm");
-            ui.checkbox(&mut sf.flip, tr("inverter a direção (para o outro lado da web)"));
+            crate::editor::check(ui, &mut sf.flip, "inverter a direção (para o outro lado da web)");
         }
         FeatureKind::SmArcSlot(sl) => {
             section(ui, "Rasgo circular");
-            ui.label(RichText::new(format!("{} ({:.1}, {:.1}, {:.1}) — {}", tr("centro em"), sl.center[0], sl.center[1], sl.center[2], tr("clique na face para trocar"))).small());
+            ui.label(RichText::new(format!("{} {} — {}", tr("centro em"), crate::app::p3(sl.center, 1), tr("clique na face para trocar"))).small());
             expr(ui, "Raio do arco", &mut sl.radius, vars, "mm");
             expr(ui, "Largura", &mut sl.width, vars, "mm");
             expr(ui, "Ângulo inicial", &mut sl.start, vars, "°");
@@ -766,7 +797,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         }
         FeatureKind::SmCornerRelief(cr) => {
             section(ui, "Alívio de canto");
-            ui.label(RichText::new(format!("{} ({:.1}, {:.1}, {:.1}) — {}", tr("canto em"), cr.at[0], cr.at[1], cr.at[2], tr("clique outro vértice/face para trocar"))).small());
+            ui.label(RichText::new(format!("{} {} — {}", tr("canto em"), crate::app::p3(cr.at, 1), tr("clique outro vértice/face para trocar"))).small());
             ui.horizontal_wrapped(|ui| {
                 for (k, n) in [(0u8, "redondo"), (1, "quadrado"), (2, "gota")] {
                     ui.selectable_value(&mut cr.kind, k, tr(n));
@@ -818,7 +849,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         FeatureKind::SplitBody(sp) => {
             section(ui, "Dividir o corpo");
             geo_ui::surf_slot(ui, "hb_s", "Superfície", doc, me, &mut sp.surface, seed);
-            ui.checkbox(&mut sp.flip, tr("manter o outro lado"));
+            crate::editor::check(ui, &mut sp.flip, "manter o outro lado");
             ui.label(RichText::new(tr("Face do corpo é estendida para cortar a peça inteira; superfícies de referência cortam como estão.")).weak().small());
         }
         FeatureKind::ThickSurface(t) => {
@@ -847,7 +878,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 sw.remove = i == 1;
             }
             if sw.remove {
-                ui.checkbox(&mut sw.flip, tr("tirar o outro lado"));
+                crate::editor::check(ui, &mut sw.flip, "tirar o outro lado");
             }
         }
         FeatureKind::BoundaryFill(bf) => {
@@ -857,7 +888,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             let mut del = None;
             for (i, p) in bf.exclude.iter().enumerate() {
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new(format!("ponto ({:.1}, {:.1}, {:.1})", p[0], p[1], p[2])).small());
+                    ui.label(RichText::new(format!("ponto {}", crate::app::p3(p, 1))).small());
                     if ui.small_button(tr("✖")).clicked() {
                         del = Some(i);
                     }
@@ -884,7 +915,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                     m.path = p.to_string_lossy().into();
                 }
             }
-            ui.checkbox(&mut m.solid, tr("fechar em sólido quando a malha for fechada"));
+            crate::editor::check(ui, &mut m.solid, "fechar em sólido quando a malha for fechada");
             ui.label(RichText::new(tr("Cada triângulo vira uma face plana; malhas grandes ficam pesadas (máx. 200 mil triângulos).")).weak().small());
         }
         _ => return false,
@@ -943,7 +974,7 @@ pub fn revolve_extras(ui: &mut egui::Ui, r: &mut Revolve, vars: &Vars) {
         r.op = if i == 0 { BoolOp::Add } else { BoolOp::Cut };
     }
     let mut two = r.angle2.is_some();
-    if ui.checkbox(&mut two, tr("segundo ângulo (para o outro lado)")).changed() {
+    if crate::editor::check(ui, &mut two, "segundo ângulo (para o outro lado)").changed() {
         r.angle2 = two.then(|| "0".to_string());
     }
     if let Some(a2) = &mut r.angle2 {
@@ -1080,6 +1111,6 @@ pub fn bend_overlay(app: &crate::app::App, ui: &mut egui::Ui, rect: egui::Rect, 
 }
 
 fn edge_line(ui: &mut egui::Ui, e: &[f64; 3]) {
-    let txt = if *e == [0.; 3] { tr("⚠ clique numa aresta reta da chapa na viewport").to_string() } else { format!("aresta em ({:.1}, {:.1}, {:.1}) — clique outra aresta para trocar", e[0], e[1], e[2]) };
+    let txt = if *e == [0.; 3] { tr("⚠ clique numa aresta reta da chapa na viewport").to_string() } else { format!("aresta em {} — clique outra aresta para trocar", crate::app::p3(e, 1)) };
     ui.label(RichText::new(txt).small());
 }

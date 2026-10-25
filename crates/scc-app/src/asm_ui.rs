@@ -1096,9 +1096,9 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                     // totalmente definido × parcial × solto
                     if !matches!(n.kind, NodeKind::Group) && !n.fixed {
                         let (t, c, tip) = match st.comp_dof.get(&n.id).copied() {
-                            Some(0) => ("■".to_string(), Color32::from_rgb(110, 210, 120), tr("totalmente definido").to_string()),
+                            Some(0) => ("■".to_string(), crate::theme::st_ok(), tr("totalmente definido").to_string()),
                             Some(6) => ("○".to_string(), Color32::from_gray(150), tr("solto: 6 graus de liberdade").to_string()),
-                            Some(k) => (format!("◐{k}"), Color32::from_rgb(240, 190, 80), format!("{k} {}", tr("grau(s) de liberdade"))),
+                            Some(k) => (format!("◐{k}"), crate::theme::st_warn(), format!("{k} {}", tr("grau(s) de liberdade"))),
                             None => ("·".to_string(), Color32::from_gray(150), String::new()),
                         };
                         ui.label(RichText::new(t).color(c).small()).on_hover_text(tip);
@@ -1118,7 +1118,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                         }
                         r
                     } else {
-                        let t = if err.is_some() { RichText::new(txt).color(Color32::from_rgb(255, 120, 100)) } else if n.visible { RichText::new(txt) } else { RichText::new(txt).weak() };
+                        let t = if err.is_some() { RichText::new(txt).color(crate::theme::st_err()) } else if n.visible { RichText::new(txt) } else { RichText::new(txt).weak() };
                         ui.selectable_label(st.sel == Some(n.id), t)
                     }
                 })
@@ -1313,7 +1313,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
             let txt = format!("{} {}  ({} ↔ {}){}", m.kind.icon(), m.name, st.asm.name_of(m.a.comp), st.asm.name_of(m.b.comp), if failed { " ✖" } else { "" });
             let mut t = RichText::new(txt).small();
             if failed {
-                t = t.color(Color32::from_rgb(255, 120, 100));
+                t = t.color(crate::theme::st_err());
             }
             if m.suppressed {
                 t = t.strikethrough().weak();
@@ -1345,7 +1345,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
             };
             let mut t = RichText::new(format!("⚙ {}  ({} ↔ {}){drive}{}", j.name, st.asm.name_of(j.a.comp), st.asm.name_of(j.b.comp), if failed { " ✖" } else { "" })).small();
             if failed {
-                t = t.color(Color32::from_rgb(255, 120, 100));
+                t = t.color(crate::theme::st_err());
             }
             if j.suppressed {
                 t = t.strikethrough().weak();
@@ -1552,7 +1552,7 @@ pub fn node_action(app: &mut App, id: Id, k: u8) {
 /// Ícone, tipo, nome e selo do item escolhido (componente, restrição, junta, padrão…).
 fn item_info(st: &AsmState, sel: Option<Id>) -> Option<(String, String, String, (&'static str, Color32))> {
     let s = sel?;
-    let ok = ("OK", Color32::from_rgb(110, 210, 120));
+    let ok = ("OK", crate::theme::st_ok());
     let bad = ("ERRO", Color32::from_rgb(255, 110, 95));
     let off = ("SUPRIMIDA", Color32::from_gray(150));
     if let Some(n) = st.asm.node(s) {
@@ -1644,8 +1644,10 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         egui::Frame::NONE.fill(ui.visuals().faint_bg_color).corner_radius(12.).inner_margin(10.).show(ui, |ui| {
             ui.horizontal(|ui| {
                 let (r, _) = ui.allocate_exact_size(egui::vec2(38., 38.), egui::Sense::hover());
-                ui.painter().rect_filled(r, 9., ui.visuals().selection.bg_fill.gamma_multiply(0.35));
-                ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, &icon, egui::FontId::proportional(22.), Color32::WHITE);
+                let acc = crate::theme::accent(ui.visuals());
+                ui.painter().rect_filled(r, 9., acc.gamma_multiply(0.18));
+                ui.painter().rect_stroke(r, 9., egui::Stroke::new(1., acc.gamma_multiply(0.5)), egui::StrokeKind::Inside);
+                ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, &icon, egui::FontId::proportional(22.), acc);
                 ui.vertical(|ui| {
                     ui.label(RichText::new(&kind).size(17.).strong());
                     ui.label(RichText::new(&name).weak());
@@ -1690,16 +1692,16 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             if !matches!(n.kind, NodeKind::Group) {
                 ui.horizontal(|ui| {
                     ui.label(tr("Número"));
-                    { let __r = ui.add(egui::DragValue::new(&mut n.number).range(0..=9999)); crate::ui_ext::wheel(ui, &__r, &mut n.number); __r };
+                    { let __r = ui.add(crate::ui_ext::dv(&mut n.number).range(0..=9999)); crate::ui_ext::wheel(ui, &__r, &mut n.number); __r };
                 });
-                ui.checkbox(&mut n.fixed, tr("📌 fixo (referência, sem graus de liberdade)"));
+                crate::editor::check(ui, &mut n.fixed, "📌 fixo (referência, sem graus de liberdade)");
                 ui.horizontal_wrapped(|ui| {
                     ui.radio_value(&mut n.mode, LoadMode::Editavel, tr("editável"));
                     ui.radio_value(&mut n.mode, LoadMode::Visualizacao, tr("só visualização"));
                 });
                 let mut own = n.color.is_some();
                 ui.horizontal(|ui| {
-                    if ui.checkbox(&mut own, tr("cor própria")).changed() {
+                    if crate::editor::check(ui, &mut own, "cor própria").changed() {
                         n.color = own.then_some([210, 160, 90]);
                     }
                     if let Some(c) = &mut n.color {
@@ -1710,7 +1712,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                 ui.horizontal(|ui| {
                     for (k, l) in ["X", "Y", "Z"].iter().enumerate() {
                         ui.label(*l);
-                        { let __r = ui.add(egui::DragValue::new(&mut n.placement.origin[k]).speed(0.5).max_decimals(3)); crate::ui_ext::wheel(ui, &__r, &mut n.placement.origin[k]); __r };
+                        { let __r = ui.add(crate::ui_ext::dv(&mut n.placement.origin[k]).speed(0.5).max_decimals(3)); crate::ui_ext::wheel(ui, &__r, &mut n.placement.origin[k]); __r };
                     }
                 });
                 ui.horizontal(|ui| {
@@ -1723,8 +1725,8 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     }
                 });
                 crate::editor::section(ui, "Movimento");
-                ui.checkbox(&mut st.respect, tr("mover respeitando as restrições"));
-                ui.checkbox(&mut st.stop_collision, tr("parar ao encostar (colisão)"));
+                crate::editor::check(ui, &mut st.respect, "mover respeitando as restrições");
+                crate::editor::check(ui, &mut st.stop_collision, "parar ao encostar (colisão)");
                 ui.label(RichText::new(tr("Arraste as setas e quadrados na viewport para mover o componente.")).weak().small());
                 if matches!(st.asm.nodes[i].kind, NodeKind::Part { .. }) && ui.button(tr("✏ Editar a peça")).clicked() {
                     let id = st.asm.nodes[i].id;
@@ -1755,7 +1757,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     AsmFeatKind::Hole { p, dia, depth, .. } => {
                         crate::editor::expr(ui, "Diâmetro", dia, &Default::default(), "mm");
                         crate::editor::expr(ui, "Profundidade", depth, &Default::default(), "mm");
-                        ui.label(RichText::new(format!("{} ({:.1}, {:.1}, {:.1}) · {}", tr("início"), p[0], p[1], p[2], tr("profundidade vazia = passante"))).weak().small());
+                        ui.label(RichText::new(format!("{} {} · {}", tr("início"), crate::app::p3(p, 1), tr("profundidade vazia = passante"))).weak().small());
                     }
                 }
                 crate::editor::section(ui, "Peças afetadas");
@@ -1776,7 +1778,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     f.targets.extend(add);
                 }
                 crate::editor::section(ui, "Estado");
-                ui.checkbox(&mut f.suppressed, tr("suprimido"));
+                crate::editor::check(ui, &mut f.suppressed, "suprimido");
             } else if let Some(i) = ji {
                 let others: Vec<(Id, String)> = st.asm.joints.iter().filter(|o| o.id != st.asm.joints[i].id).map(|o| (o.id, o.name.clone())).collect();
                 let (na, nb) = (st.asm.name_of(st.asm.joints[i].a.comp), st.asm.name_of(st.asm.joints[i].b.comp));
@@ -1803,31 +1805,31 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                 crate::editor::section(ui, "Comando");
                 if can_a {
                     let mut on = j.drive_angle.is_some();
-                    if ui.checkbox(&mut on, tr("comando de ângulo (graus; aceita lei em t)")).changed() {
+                    if crate::editor::check(ui, &mut on, "comando de ângulo (graus; aceita lei em t)").changed() {
                         j.drive_angle = on.then(|| "0".to_string());
                     }
                     if let Some(e) = &mut j.drive_angle {
                         ui.text_edit_singleline(e);
                         let mut v: f64 = e.trim().replace(',', ".").parse().unwrap_or(0.);
-                        if ui.add(egui::Slider::new(&mut v, -180.0..=180.0).text("°")).changed() {
+                        if ui.add(crate::ui_ext::slider(&mut v, -180.0..=180.0).text("°")).changed() {
                             *e = fmt(v);
                         }
                     }
                 }
                 if can_l {
                     let mut on = j.drive_len.is_some();
-                    if ui.checkbox(&mut on, tr("comando de curso (mm; aceita lei em t)")).changed() {
+                    if crate::editor::check(ui, &mut on, "comando de curso (mm; aceita lei em t)").changed() {
                         j.drive_len = on.then(|| "0".to_string());
                     }
                     if let Some(e) = &mut j.drive_len {
                         ui.text_edit_singleline(e);
                         let mut v: f64 = e.trim().replace(',', ".").parse().unwrap_or(0.);
-                        if ui.add(egui::Slider::new(&mut v, -200.0..=200.0).text("mm")).changed() {
+                        if ui.add(crate::ui_ext::slider(&mut v, -200.0..=200.0).text("mm")).changed() {
                             *e = fmt(v);
                         }
                     }
                 }
-                ui.checkbox(&mut j.suppressed, tr("suprimida"));
+                crate::editor::check(ui, &mut j.suppressed, "suprimida");
                 let jid = j.id;
                 if !others.is_empty() {
                     crate::editor::section(ui, "Acoplar a outra junta");
@@ -1878,7 +1880,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     ui.horizontal(|ui| {
                         ui.label(tr(l));
                         for x in v.iter_mut() {
-                            ui.add(egui::DragValue::new(x).speed(0.1).max_decimals(3));
+                            ui.add(crate::ui_ext::dv(x).speed(0.1).max_decimals(3));
                         }
                     });
                 };
@@ -1909,7 +1911,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     });
                     ui.label(RichText::new(format!("{na}  ↔  {nb}")).weak());
                     if failed {
-                        ui.label(RichText::new(tr("✖ não satisfeita: conflita com outras restrições ou é impossível")).color(Color32::from_rgb(255, 130, 110)));
+                        ui.label(RichText::new(tr("✖ não satisfeita: conflita com outras restrições ou é impossível")).color(crate::theme::st_err()));
                     }
                     // converter o tipo sem apagar o vínculo
                     let cur = m.kind.label();
@@ -1959,7 +1961,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                         reinit = Some(m.id);
                     }
                     crate::editor::section(ui, "Estado");
-                    ui.checkbox(&mut m.suppressed, tr("suprimida"));
+                    crate::editor::check(ui, &mut m.suppressed, "suprimida");
                 }
                 None => {
                     crate::editor::section(ui, "Montagem");
@@ -1969,8 +1971,8 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     });
                     let parts = st.asm.nodes.iter().filter(|n| !matches!(n.kind, NodeKind::Group)).count();
                     ui.label(format!("{parts} componente(s) · {} restrição(ões) · {} GDL livres", st.asm.mates.len(), st.report.dof));
-                    ui.checkbox(&mut st.asm.relational, tr("projeto relacional (peças novas fixas na origem; forma por links entre peças)"));
-                    ui.checkbox(&mut st.view_only, tr("modo visualização (sem mover nem restringir)"));
+                    crate::editor::check(ui, &mut st.asm.relational, "projeto relacional (peças novas fixas na origem; forma por links entre peças)");
+                    crate::editor::check(ui, &mut st.view_only, "modo visualização (sem mover nem restringir)");
                     crate::editor::section(ui, "Parâmetros da montagem");
                     let mut del = None;
                     for (k, p) in st.asm.params.iter_mut().enumerate() {
@@ -2002,7 +2004,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     if !st.interf.is_empty() {
         crate::editor::section(ui, "Interferências");
         for (a, b, v) in &st.interf {
-            ui.label(RichText::new(format!("✖ {} × {} — {} mm³", st.asm.name_of(*a), st.asm.name_of(*b), fmt(*v))).color(Color32::from_rgb(255, 130, 110)));
+            ui.label(RichText::new(format!("✖ {} × {} — {} mm³", st.asm.name_of(*a), st.asm.name_of(*b), fmt(*v))).color(crate::theme::st_err()));
         }
     }
     crate::editor::tabs_end(ui);
@@ -2447,7 +2449,7 @@ pub fn sim_window(app: &mut App, ctx: &egui::Context) {
                 } else {
                     tr("")
                 })
-                .color(if ok { Color32::from_rgb(120, 210, 130) } else { Color32::from_rgb(240, 200, 90) }),
+                .color(if ok { Color32::from_rgb(120, 210, 130) } else { crate::theme::st_warn() }),
             );
             crate::editor::section(ui, "Comandos (leis no tempo t, em segundos)");
             for j in st.asm.joints.iter_mut().filter(|j| !j.suppressed) {
@@ -2479,9 +2481,9 @@ pub fn sim_window(app: &mut App, ctx: &egui::Context) {
             }
             ui.horizontal(|ui| {
                 ui.label(tr("Duração"));
-                { let __r = ui.add(egui::DragValue::new(&mut st.sim_t1).range(0.01..=600.0).suffix(" s").speed(0.1)); crate::ui_ext::wheel(ui, &__r, &mut st.sim_t1); __r };
+                { let __r = ui.add(crate::ui_ext::dv(&mut st.sim_t1).range(0.01..=600.0).suffix(" s").speed(0.1)); crate::ui_ext::wheel(ui, &__r, &mut st.sim_t1); __r };
                 ui.label(tr("Quadros"));
-                { let __r = ui.add(egui::DragValue::new(&mut st.sim_steps).range(2..=2000)); crate::ui_ext::wheel(ui, &__r, &mut st.sim_steps); __r };
+                { let __r = ui.add(crate::ui_ext::dv(&mut st.sim_steps).range(2..=2000)); crate::ui_ext::wheel(ui, &__r, &mut st.sim_steps); __r };
                 if ui.button(tr("⏺ Calcular quadros")).clicked() {
                     compute = true;
                 }
@@ -2497,7 +2499,7 @@ pub fn sim_window(app: &mut App, ctx: &egui::Context) {
                         st.sim_t = 0.;
                     }
                     let t1 = st.sim_t1;
-                    ui.add(egui::Slider::new(&mut st.sim_t, 0.0..=t1).text("t (s)"));
+                    ui.add(crate::ui_ext::slider(&mut st.sim_t, 0.0..=t1).text("t (s)"));
                     if ui.button(tr("Repor")).on_hover_text(tr("volta às posições de antes da simulação")).clicked() {
                         restore = true;
                     }
@@ -2719,12 +2721,12 @@ pub fn composer_window(app: &mut App, ctx: &egui::Context) {
                 st.modified = true;
             }
             crate::editor::section(ui, "Vista explodida");
-            if ui.add(egui::Slider::new(&mut st.explode_factor, 0.0..=3.0).text(tr("afastamento"))).changed() {
+            if ui.add(crate::ui_ext::slider(&mut st.explode_factor, 0.0..=3.0).text(tr("afastamento"))).changed() {
                 let c = centers(st);
                 st.live.offsets = auto_explode(&st.asm, &c, st.explode_factor);
                 st.dirty = true;
             }
-            ui.checkbox(&mut st.explode_mode, tr("ajustar à mão (o manipulador mexe só na explosão)"));
+            crate::editor::check(ui, &mut st.explode_mode, "ajustar à mão (o manipulador mexe só na explosão)");
             if ui.button(tr("Juntar tudo (sem explosão)")).clicked() {
                 st.live.offsets.clear();
                 st.explode_factor = 0.;
@@ -2764,7 +2766,7 @@ pub fn composer_window(app: &mut App, ctx: &egui::Context) {
                 if ui.button("⏮").clicked() {
                     st.anim_t = 0.;
                 }
-                ui.add(egui::Slider::new(&mut st.anim_t, 0.0..=dur).text("t (s)"));
+                ui.add(crate::ui_ext::slider(&mut st.anim_t, 0.0..=dur).text("t (s)"));
             });
             // linha do tempo com os quadros-chave
             let (r, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 26.), egui::Sense::hover());
@@ -2780,7 +2782,7 @@ pub fn composer_window(app: &mut App, ctx: &egui::Context) {
             for (i, k) in a.keys.iter_mut().enumerate() {
                 ui.horizontal(|ui| {
                     ui.label(RichText::new(format!("◆ {}", k.state.name)).small());
-                    { let __r = ui.add(egui::DragValue::new(&mut k.t).range(0.0..=600.0).speed(0.05).suffix(" s")); crate::ui_ext::wheel(ui, &__r, &mut k.t); __r };
+                    { let __r = ui.add(crate::ui_ext::dv(&mut k.t).range(0.0..=600.0).speed(0.05).suffix(" s")); crate::ui_ext::wheel(ui, &__r, &mut k.t); __r };
                     if ui.small_button("✖").clicked() {
                         kdel = Some(i);
                     }
