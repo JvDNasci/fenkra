@@ -14,7 +14,7 @@ pub fn ev(src: &str, vars: &Vars, field: &str) -> Result<f64, String> {
 }
 
 /// Sketch avaliado em coordenadas do plano.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct EvalSketch {
     pub loops: Vec<Loop2>,
     /// cadeias abertas (polilinhas amostradas), para parede fina

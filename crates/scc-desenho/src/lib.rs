@@ -776,6 +776,28 @@ mod tests {
         d.dims[0].arrows = 2;
         let items = layout::sheet(&d, s, &mut m);
         assert!(items.len() > 50);
+        // planificada de chapa com uma aba: linha de dobra (centro) e o rótulo
+        {
+            let mut cd = scc_core::Document::new("chapa");
+            cd.sheet = Some(scc_core::SheetParams::default());
+            let mut data = scc_core::SketchData::default();
+            let mut n = 9_000_000u64;
+            let mut al = || {
+                n += 1;
+                Id(n)
+            };
+            data.add_rect(&mut al, [0., 0.], [100., 50.], false);
+            let sk = cd.add_feature(scc_core::FeatureKind::Sketch(scc_core::Sketch { plane: scc_core::PlaneRef::Origin(scc_core::OriginPlane::XY), data }));
+            cd.add_feature(scc_core::FeatureKind::SmWall(scc_core::SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
+            cd.add_feature(scc_core::FeatureKind::SmFlange(scc_core::SmFlange { edge: [100., 25., 2.], length: "20".into(), angle: "90".into(), radius: None, off1: "0".into(), off2: "0".into(), flip: false, relief: None, relief_kind: 0, side: 0, miter: false }));
+            std::fs::write(dir.join("chapa.sccpart"), cd.to_json()).unwrap();
+            let fv = d.add_view(s, Source { path: "chapa.sccpart".into(), display_state: String::new(), hidden: vec![] }, ViewKind::Flat, [200., 60.], 1.);
+            let pf = m.proj(&d, fv);
+            assert!(pf.error.is_none(), "{:?}", pf.error);
+            assert!(pf.lines.iter().any(|l| l.1 == 5), "linha de dobra na planificada");
+            assert_eq!(pf.labels.len(), 1);
+            assert!(pf.labels[0].1.contains("90°"), "{}", pf.labels[0].1);
+        }
         // a chamada da GD&T termina na aresta projetada
         let tip = layout::to_sheet(d.view(ids[0]).unwrap(), &front, ax.project(a3));
         assert!(items.iter().any(|i| i.owner == Some(gid) && matches!(&i.prim, layout::Prim::Fill { pts } if pts.iter().any(|p| (p[0] - tip[0]).abs() < 1e-6 && (p[1] - tip[1]).abs() < 1e-6))), "ponta da GD&T fora da aresta");

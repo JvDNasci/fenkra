@@ -63,6 +63,8 @@ pub struct Proj {
     pub hatch: Vec<Vec<V2>>,
     /// triângulos sombreados (do fundo para a frente) e o tom de cinza
     pub shade: Vec<([V2; 3], u8)>,
+    /// textos presos à vista (ex.: "↑ 90° R2" nas linhas de dobra da planificada)
+    pub labels: Vec<(V2, String)>,
     /// ponto da vista que fica em `View::pos` (centro do modelo — mantém vistas alinhadas)
     pub center: V2,
     pub lo: V2,
@@ -267,12 +269,15 @@ impl Models {
             out.center = [(out.lo[0] + out.hi[0]) / 2., (out.lo[1] + out.hi[1]) / 2.];
             return out;
         }
+        let mut bends: Vec<scc_solidos::BendLine> = vec![];
         let shape = match (&v.kind, &l.model) {
             (ViewKind::Flat, Model::Part(doc)) => {
                 let mut flat = (**doc).clone();
                 match &mut flat.sheet {
                     Some(s) => {
                         s.flat = true;
+                        // linhas de dobra (linha de centro e limites do arco) para a planificada
+                        bends = scc_solidos::recompute(&flat).bend_lines;
                         scc_solidos::final_shape(&flat)
                     }
                     None => {
@@ -376,6 +381,15 @@ impl Models {
         match target.hlr(axes.toward, axes.x, hidden) {
             Ok(lines) => out.lines = lines.into_iter().filter(|(_, k)| tangent || *k != 1).collect(),
             Err(e) => out.error = Some(e.0),
+        }
+        // planificada: linhas de dobra (5 = centro, 6 = limites do arco) e o rótulo de cada uma
+        for b in &bends {
+            let pr = |q: [V3; 2]| vec![axes.project(q[0]), axes.project(q[1])];
+            out.lines.push((pr(b.center), 5));
+            out.lines.push((pr(b.start), 6));
+            out.lines.push((pr(b.end), 6));
+            let m = [(b.center[0][0] + b.center[1][0]) / 2., (b.center[0][1] + b.center[1][1]) / 2., (b.center[0][2] + b.center[1][2]) / 2.];
+            out.labels.push((axes.project(m), b.label()));
         }
         out.bounds();
         out

@@ -412,9 +412,9 @@ impl App {
                 data.add_rect(&mut al, [0., 0.], [100., 60.], false);
             }
             let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
-            d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false }));
-            d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 30., 2.], length: s("25"), angle: s("90"), radius: None, off1: s("8"), off2: s("8"), flip: false, relief: Some(s("3")) }));
-            d.add_feature(FeatureKind::SmHem(SmHem { edge: [0., 30., 2.], length: s("8"), gap: s("0"), flip: false }));
+            d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
+            d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 30., 2.], length: s("25"), angle: s("90"), radius: None, off1: s("8"), off2: s("8"), flip: false, relief: Some(s("3")), relief_kind: 0, side: 0, miter: false }));
+            d.add_feature(FeatureKind::SmHem(SmHem { edge: [0., 30., 2.], length: s("8"), gap: s("0"), flip: false, kind: 0 }));
             if std::env::var("SCC_DEMO_CHAPA").is_ok_and(|v| v == "linha") {
                 d.add_feature(FeatureKind::SmLouver(SmLouver { a: [60., 15., 2.], b: [60., 45., 2.], width: s("12"), height: s("5"), flip: false, down: false }));
                 d.add_feature(FeatureKind::SmBend(SmBend { a: [20., 0., 2.], b: [20., 60., 2.], angle: s("45"), radius: None, flip: false, down: false }));
@@ -1310,9 +1310,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
                 }
                 let sk = sk_or_unset;
                 Sel::Feature(d.add_feature(match c {
-                    Cmd::SmWall => FeatureKind::SmWall(SmWall { sketch: sk, reverse: false }),
-                    Cmd::SmStamp => FeatureKind::SmStamp(SmStamp { sketch: sk, depth: s("3"), flip: false }),
-                    _ => FeatureKind::SmFlangedHole(SmFlangedHole { sketch: sk, diameter: s("8"), height: s("4"), flip: false }),
+                    Cmd::SmWall => FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }),
+                    Cmd::SmStamp => FeatureKind::SmStamp(SmStamp { sketch: sk, depth: s("3"), flip: false, kind: 0, width: String::new(), punch: None }),
+                    _ => FeatureKind::SmFlangedHole(SmFlangedHole { sketch: sk, diameter: s("8"), height: s("4"), flip: false, points: vec![], standard: String::new() }),
                 }))
             }
             Cmd::SmFlange | Cmd::SmHem | Cmd::SmJoggle | Cmd::SmBend | Cmd::SmLouver => {
@@ -1340,7 +1340,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: scc_core::
                         flip: false,
                         relief: None,
                     }),
-                    Cmd::SmHem => FeatureKind::SmHem(SmHem { edge: edge.unwrap_or([0.; 3]), length: s("8"), gap: s("0"), flip: false }),
+                    Cmd::SmHem => FeatureKind::SmHem(SmHem { edge: edge.unwrap_or([0.; 3]), length: s("8"), gap: s("0"), flip: false, kind: 0 }),
                     Cmd::SmBend => FeatureKind::SmBend(SmBend {
                         a: verts.first().copied().unwrap_or([0.; 3]),
                         b: verts.get(1).copied().unwrap_or([0., 10., 0.]),

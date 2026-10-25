@@ -1375,6 +1375,14 @@ pub enum FeatureKind {
     SmStamp(SmStamp),
     /// Chapa: furo flangeado (colar dobrado) nos pontos de um sketch.
     SmFlangedHole(SmFlangedHole),
+    /// Chapa: recorte normal à chapa (normal, com saída ou flangeado).
+    SmCut(SmCut),
+    /// Chapa: aba por perfil (aba complexa).
+    SmProfileFlange(SmProfileFlange),
+    /// Chapa: aba numa aresta curva.
+    SmCurveFlange(SmCurveFlange),
+    /// Chapa: alívio de canto.
+    SmCornerRelief(SmCornerRelief),
     /// Estrutural: membros (perfis) ao longo de linhas/curvas do esqueleto.
     StructMember(StructMember),
     /// Estrutural: placa de extremidade na ponta de um membro.
@@ -1479,6 +1487,15 @@ pub struct SmJoggle {
     pub run: String,
     /// lado da linha que desce (o outro fica)
     pub flip: bool,
+    /// ângulo da rampa (graus): quando dado, a rampa = desvio ÷ tan(ângulo)
+    #[serde(default)]
+    pub angle: Option<String>,
+    /// linha do joggle pela interseção de um plano com a face (em vez dos dois pontos)
+    #[serde(default)]
+    pub plane: Option<PlaneRef>,
+    /// compensação: a parte deslocada encurta para o comprimento desenvolvido não mudar
+    #[serde(default)]
+    pub keep_length: bool,
 }
 
 /// Dobra por linha: a chapa é dobrada ao longo da linha a–b da face (linha de centro da dobra).
@@ -1519,7 +1536,20 @@ pub struct SmStamp {
     pub depth: String,
     /// estampar para o outro lado
     pub flip: bool,
+    /// 0 perfil fechado, 1 nervura ao longo das curvas, 2 circular nos pontos, 3 reforço de
+    /// dobra nos pontos, 4 punção (corpo)
+    #[serde(default)]
+    pub kind: u8,
+    /// largura da nervura / diâmetro do circular / largura do reforço
+    #[serde(default)]
+    pub width: String,
+    /// coletor com o corpo do punção (tipo 4)
+    #[serde(default)]
+    pub punch: Option<Id>,
 }
+
+/// Tipos de estampo.
+pub const SM_STAMP_KINDS: [&str; 5] = ["perfil fechado", "nervura (pela curva)", "circular (nos pontos)", "reforço de dobra (nos pontos)", "punção (corpo)"];
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct SmFlangedHole {
@@ -1529,7 +1559,81 @@ pub struct SmFlangedHole {
     /// altura do colar
     pub height: String,
     pub flip: bool,
+    /// centros escolhidos na face (como um furo); valem quando não há sketch
+    #[serde(default)]
+    pub points: Vec<[f64; 3]>,
+    /// linha da tabela de furos flangeados (vazio = medidas à mão)
+    #[serde(default)]
+    pub standard: String,
 }
+
+/// Recorte na chapa pelo perfil de um sketch, normal à chapa (dobrado ou planificado).
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct SmCut {
+    pub sketch: Id,
+    /// 0 normal, 1 com saída (ângulo), 2 flangeado (colar dobrado na borda)
+    pub mode: u8,
+    /// folga: o perfil cresce (+) ou encolhe (−)
+    pub offset: String,
+    /// ângulo de saída (modo 1)
+    pub draft: String,
+    /// altura do colar (modo 2)
+    pub height: String,
+    pub flip: bool,
+}
+
+/// Aba por perfil (aba complexa): cadeia aberta de um sketch, com cantos no raio da chapa, puxada
+/// para os dois lados do plano do sketch.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct SmProfileFlange {
+    pub sketch: Id,
+    /// comprimento para cada lado do plano do sketch
+    pub l1: String,
+    pub l2: String,
+    /// raio interno dos cantos (senão o da chapa)
+    pub radius: Option<String>,
+    /// material do outro lado da cadeia
+    pub flip: bool,
+}
+
+/// Aba numa aresta curva (aba por superfície): parede normal à chapa ao longo da aresta.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct SmCurveFlange {
+    /// pontos da aresta escolhida (polilinha)
+    pub edge: Vec<[f64; 3]>,
+    pub length: String,
+    pub flip: bool,
+}
+
+/// Alívio de canto: corte no encontro de abas.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct SmCornerRelief {
+    pub at: [f64; 3],
+    pub size: String,
+    /// 0 redondo, 1 quadrado, 2 gota
+    pub kind: u8,
+}
+
+/// Material da tabela de chapas: raio mínimo (× espessura), fator K e rampa mínima de joggle
+/// (× espessura) — valores usuais de dobra no ar.
+pub const SHEET_MATERIALS: [(&str, f64, f64, f64); 10] = [
+    ("Aço carbono (SAE 1010/1020)", 1.0, 0.42, 3.0),
+    ("Aço galvanizado", 1.0, 0.42, 3.0),
+    ("Aço alta resistência (S355)", 1.5, 0.45, 4.0),
+    ("Aço inox 304", 1.5, 0.45, 4.0),
+    ("Aço inox 430", 1.0, 0.44, 3.0),
+    ("Alumínio 1100-H14", 0.5, 0.40, 2.5),
+    ("Alumínio 5052-H32", 1.0, 0.43, 3.0),
+    ("Alumínio 6061-T6", 2.5, 0.45, 4.0),
+    ("Cobre", 0.5, 0.40, 2.5),
+    ("Latão", 0.8, 0.42, 3.0),
+];
+
+/// Espessuras comerciais (mm).
+pub const SHEET_GAUGES: [f64; 12] = [0.5, 0.75, 0.9, 1.2, 1.5, 2.0, 2.25, 2.65, 3.0, 3.75, 4.75, 6.35];
+
+/// Furos flangeados de série (rosca laminada): nome, diâmetro do furo, altura do colar.
+pub const FLANGED_HOLES: [(&str, f64, f64); 6] = [("M3", 2.6, 1.8), ("M4", 3.5, 2.4), ("M5", 4.4, 3.0), ("M6", 5.2, 3.6), ("M8", 7.0, 4.8), ("M10", 8.8, 6.0)];
 
 /// Parâmetros globais de chapa metálica da peça.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -1542,12 +1646,37 @@ pub struct SheetParams {
     /// peça mostrada planificada (desdobrada)
     #[serde(default)]
     pub flat: bool,
+    /// material da tabela (vazio = valores à mão)
+    #[serde(default)]
+    pub material: String,
+    /// compensação: 0 fator K, 1 dedução de dobra (BD a 90°), 2 tolerância de dobra (BA a 90°)
+    #[serde(default)]
+    pub method: u8,
+    /// valor da dedução/tolerância (mm, para 90°) quando o método não é o fator K
+    #[serde(default)]
+    pub allowance: String,
 }
 
 impl Default for SheetParams {
     fn default() -> Self {
-        SheetParams { thickness: "2".into(), radius: "2".into(), k: "0.44".into(), flat: false }
+        SheetParams { thickness: "2".into(), radius: "2".into(), k: "0.44".into(), flat: false, material: String::new(), method: 0, allowance: String::new() }
     }
+}
+
+/// Fator K equivalente do método de compensação (dedução ou tolerância a 90°).
+pub fn sheet_k(method: u8, k: f64, t: f64, r: f64, allowance: f64) -> f64 {
+    let q = std::f64::consts::FRAC_PI_2;
+    let ba = match method {
+        1 => 2. * (r + t) - allowance,
+        2 => allowance,
+        _ => return k,
+    };
+    ((ba / q - r) / t.max(1e-9)).clamp(0., 1.)
+}
+
+/// Raio e fator K sugeridos pela tabela para o material e a espessura.
+pub fn sheet_suggest(material: &str, t: f64) -> Option<(f64, f64, f64)> {
+    SHEET_MATERIALS.iter().find(|m| m.0 == material).map(|m| ((m.1 * t * 100.).round() / 100., m.2, m.3 * t))
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -1555,6 +1684,15 @@ pub struct SmWall {
     pub sketch: Id,
     /// espessura para o outro lado do plano do sketch
     pub reverse: bool,
+    /// afastamento da parede em relação ao plano do sketch
+    #[serde(default)]
+    pub offset: String,
+    /// espessura dividida pelos dois lados do plano
+    #[serde(default)]
+    pub mid: bool,
+    /// parede a partir de uma superfície (engrossada com a espessura da chapa)
+    #[serde(default)]
+    pub surface: Option<SurfRef>,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -1574,6 +1712,15 @@ pub struct SmFlange {
     /// alívio de canto nas pontas recuadas (largura); `None` = sem alívio
     #[serde(default)]
     pub relief: Option<String>,
+    /// forma do alívio: 0 retangular, 1 redondo (oblongo), 2 rasgo
+    #[serde(default)]
+    pub relief_kind: u8,
+    /// lado do material: 0 dobra para fora (a aba começa na aresta), 1 material por fora, 2 material por dentro
+    #[serde(default)]
+    pub side: u8,
+    /// pontas em meia-esquadria (45°) para encontrar a aba vizinha
+    #[serde(default)]
+    pub miter: bool,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -1583,6 +1730,9 @@ pub struct SmHem {
     /// folga interna (0 = esmagada; > 0 = aberta/circular)
     pub gap: String,
     pub flip: bool,
+    /// 0 fechada/aberta (pela folga), 1 gota (lágrima), 2 enrolada
+    #[serde(default)]
+    pub kind: u8,
 }
 
 /// Transformação do corpo (o original deixa de existir na posição antiga).
@@ -1697,6 +1847,10 @@ impl FeatureKind {
             SmLouver(_) => "Veneziana",
             SmStamp(_) => "Estampo",
             SmFlangedHole(_) => "FuroFlangeado",
+            SmCut(_) => "RecorteChapa",
+            SmProfileFlange(_) => "AbaPerfil",
+            SmCurveFlange(_) => "AbaCurva",
+            SmCornerRelief(_) => "AlívioCanto",
             StructMember(_) => "Membro",
             StructPlate(_) => "Placa",
             StructGusset(_) => "Reforço",
@@ -1745,6 +1899,10 @@ impl FeatureKind {
             SmLouver(_) => "≋",
             SmStamp(_) => "◡",
             SmFlangedHole(_) => "◉",
+            SmCut(_) => "⬇",
+            SmProfileFlange(_) => "⌐",
+            SmCurveFlange(_) => "⌒",
+            SmCornerRelief(_) => "◔",
             StructMember(_) => "⌶",
             StructPlate(_) => "▬",
             StructGusset(_) => "◺",
@@ -1957,6 +2115,22 @@ impl FeatureKind {
                 exprs(&mut h.diameter);
                 exprs(&mut h.height)
             }
+            SmCut(s) => {
+                ids(&mut s.sketch);
+                exprs(&mut s.offset);
+                exprs(&mut s.draft);
+                exprs(&mut s.height)
+            }
+            SmProfileFlange(p) => {
+                ids(&mut p.sketch);
+                exprs(&mut p.l1);
+                exprs(&mut p.l2);
+                if let Some(r) = &mut p.radius {
+                    exprs(r)
+                }
+            }
+            SmCurveFlange(p) => exprs(&mut p.length),
+            SmCornerRelief(p) => exprs(&mut p.size),
             StructMember(m) => {
                 for p in &mut m.paths {
                     p.walk(ids)
@@ -3084,6 +3258,8 @@ impl Document {
             SmWall(w) => vec![w.sketch],
             SmStamp(s) => vec![s.sketch],
             SmFlangedHole(h) => vec![h.sketch],
+            SmCut(s) => vec![s.sketch],
+            SmProfileFlange(p) => vec![p.sketch],
             Revolve(r) => vec![r.sketch],
             Sweep(w) => vec![w.sketch],
             Loft(l) => l.sections.clone(),

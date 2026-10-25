@@ -290,6 +290,29 @@ pub struct SurfaceViz {
     pub mesh: Mesh,
 }
 
+/// Linha de dobra na chapa planificada: começo, centro e fim do arco desenvolvido.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BendLine {
+    pub start: [V3; 2],
+    pub center: [V3; 2],
+    pub end: [V3; 2],
+    /// ângulo (graus), raio interno e sentido (para cima = para o lado da face de referência)
+    pub angle: f64,
+    pub radius: f64,
+    pub up: bool,
+}
+
+impl BendLine {
+    /// Rótulo para a planificação ("↑ 90° R2").
+    pub fn label(&self) -> String {
+        let f = |v: f64| {
+            let s = format!("{v:.1}");
+            s.trim_end_matches('0').trim_end_matches('.').replace('.', ",")
+        };
+        format!("{} {}° R{}", if self.up { "↑" } else { "↓" }, f(self.angle), f(self.radius))
+    }
+}
+
 pub struct RecomputeResult {
     pub bodies: Vec<BodyResult>,
     pub sketches: Vec<SketchViz>,
@@ -302,6 +325,8 @@ pub struct RecomputeResult {
     pub param_error: Option<String>,
     pub elapsed_ms: f64,
     pub kernel: String,
+    /// linhas de dobra da chapa (no planificado)
+    pub bend_lines: Vec<BendLine>,
 }
 
 pub fn origin_frame(p: OriginPlane) -> Frame {
@@ -338,6 +363,10 @@ struct Ctx<'a> {
     /// dobras de chapa já feitas (no espaço dobrado), para levar recortes e filetes entre o
     /// dobrado e o planificado
     sheet_maps: Vec<SheetMap>,
+    /// todas as operações de cada comando, em ordem (o padrão repete soma e corte do estampo)
+    steps: HashMap<Id, Vec<(Shape, BoolOp)>>,
+    /// a próxima aba sai com as pontas em meia-esquadria
+    miter_next: bool,
 }
 
 /// Uma dobra: referencial da aresta (no dobrado) e o giro que leva a aba do dobrado ao plano.
@@ -408,6 +437,7 @@ struct FeatEntry {
     tool: Option<(Shape, BoolOp)>,
     last_sheet: Option<scc_kernel::SheetEdgeInfo>,
     sheet_map: Option<SheetMap>,
+    steps: Vec<(Shape, BoolOp)>,
 }
 
 /// Cache entre cálculos, por dependência: editar um comando refaz só ele e quem lê o que ele
@@ -1997,12 +2027,11 @@ impl Ctx<'_> {
     /// Parâmetros de chapa avaliados.
     fn sheet(&self) -> Result<SheetValues, String> {
         let s = self.doc.sheet.as_ref().ok_or("defina a chapa (espessura, raio, fator K) em Chapa › Parâmetros")?;
-        Ok(SheetValues {
-            t: ev(&s.thickness, &self.vars, "espessura da chapa")?,
-            r: ev(&s.radius, &self.vars, "raio de dobra")?,
-            k: ev(&s.k, &self.vars, "fator K")?,
-            flat: s.flat,
-        })
+        let t = ev(&s.thickness, &self.vars, "espessura da chapa")?;
+        let r = ev(&s.radius, &self.vars, "raio de dobra")?;
+        let k0 = if s.method == 0 { ev(&s.k, &self.vars, "fator K")? } else { 0.44 };
+        let allowance = if s.method == 0 { 0. } else { ev(&s.allowance, &self.vars, "dedução/tolerância de dobra")? };
+        Ok(SheetValues { t, r, k: scc_core::sheet_k(s.method, k0, t, r, allowance), flat: s.flat })
     }
 
     /// Aba/bainha: no estado planificado, a aresta clicada precisa existir na chapa plana — senão
@@ -2012,8 +2041,21 @@ impl Ctx<'_> {
         let b = self.body(f.target).ok_or("a aba precisa de uma parede de chapa antes")?.clone();
         // a aresta foi escolhida num estado (dobrado ou planificado): leva ao estado atual
         let edge = self.map_point(edge, f.flat_space, p.flat);
-        let (tool, info) = b.sm_flange(edge, p).map_err(k)?;
+        let (mut tool, info) = b.sm_flange(edge, p).map_err(k)?;
         self.last_sheet = Some(info);
+        if std::mem::take(&mut self.miter_next) {
+            // pontas a 45° no plano da aba: encontram a aba vizinha em meia-esquadria
+            let e = geo3d::unit(geo3d::sub(info.ends[1], info.ends[0])).ok_or("aresta nula")?;
+            let mid = geo3d::lerp(info.ends[0], info.ends[1], 0.5);
+            let c = tool.mass().center;
+            let v = geo3d::sub(c, mid);
+            let d = geo3d::unit(geo3d::sub(v, geo3d::mul(e, geo3d::dot(v, e)))).ok_or("aba sem direção")?;
+            let big = geo3d::dist(info.ends[0], info.ends[1]) + p.length * 2. + 10.;
+            for (end, s) in [(info.ends[0], -1.), (info.ends[1], 1.)] {
+                let m = geo3d::unit(geo3d::add(geo3d::mul(e, s), d)).ok_or("meia-esquadria")?;
+                tool = tool.boolean(&half_space(end, m, big)?, Bool::Cut).map_err(k)?;
+            }
+        }
         // registra a dobra no espaço dobrado (no planificado, volta pelas dobras anteriores)
         let back = |q: V3| if p.flat { self.map_point(q, true, false) } else { q };
         let (c0, c1) = (back(info.ends[0]), back(info.ends[1]));
@@ -2179,7 +2221,16 @@ impl Ctx<'_> {
         let f = self.doc.feature(fid)?;
         let own = matches!(
             f.kind,
-            FeatureKind::SmWall(_) | FeatureKind::SmFlange(_) | FeatureKind::SmHem(_) | FeatureKind::SmJoggle(_) | FeatureKind::SmLouver(_) | FeatureKind::SmStamp(_) | FeatureKind::SmFlangedHole(_)
+            FeatureKind::SmWall(_)
+                | FeatureKind::SmFlange(_)
+                | FeatureKind::SmHem(_)
+                | FeatureKind::SmJoggle(_)
+                | FeatureKind::SmLouver(_)
+                | FeatureKind::SmStamp(_)
+                | FeatureKind::SmFlangedHole(_)
+                | FeatureKind::SmCornerRelief(_)
+                | FeatureKind::SmProfileFlange(_)
+                | FeatureKind::SmCurveFlange(_)
         );
         (!own && f.flat_space != sh.flat && !self.sheet_maps.is_empty()).then_some((f.flat_space, sh.flat))
     }
@@ -2246,6 +2297,7 @@ impl Ctx<'_> {
             _ => tool.clone(),
         };
         self.tools.insert(fid, (kept, op));
+        self.steps.entry(fid).or_default().push((tool.clone(), op));
         let next = match (self.body_owned(target), op) {
             (None, BoolOp::Add) => {
                 let n = tool.face_count() as usize;
@@ -2280,13 +2332,19 @@ impl Ctx<'_> {
             return self.apply(f.target, acc, BoolOp::Add, f.id);
         }
         for src in sources {
-            let (tool, op) = self.tools.get(src).cloned().ok_or_else(|| format!("'{}' não gera forma para repetir (ou vem depois)", self.doc.name_of(*src)))?;
-            let mut acc = Shape::empty();
-            for x in xs {
-                let c = tool.transformed(*x).map_err(k)?;
-                acc = if acc.is_null() { c } else { acc.compound(&c) };
+            // todas as operações do comando, na ordem (estampo: soma e depois corte)
+            let ops: Vec<(Shape, BoolOp)> = match self.steps.get(src) {
+                Some(v) if v.len() > 1 => v.clone(),
+                _ => vec![self.tools.get(src).cloned().ok_or_else(|| format!("'{}' não gera forma para repetir (ou vem depois)", self.doc.name_of(*src)))?],
+            };
+            for (tool, op) in ops {
+                let mut acc = Shape::empty();
+                for x in xs {
+                    let c = tool.transformed(*x).map_err(k)?;
+                    acc = if acc.is_null() { c } else { acc.compound(&c) };
+                }
+                self.apply(f.target, acc, op, f.id)?;
             }
-            self.apply(f.target, acc, op, f.id)?;
         }
         Ok(())
     }
@@ -2679,13 +2737,25 @@ impl Ctx<'_> {
             }
             FeatureKind::SmWall(w) => {
                 let sp = self.sheet()?;
+                // parede de superfície: a superfície engrossada com a espessura (lado pelas setas)
+                if let Some(sf) = &w.surface {
+                    let sh = self.cut_shape(sf, 0)?;
+                    let (t1, t2) = if w.mid { (sp.t / 2., sp.t / 2.) } else if w.reverse { (0., sp.t) } else { (sp.t, 0.) };
+                    let tool = sh.thicken(t1, t2).map_err(k)?;
+                    self.apply(f.target, tool, BoolOp::Add, f.id)?;
+                    return Ok(None);
+                }
                 let (frame, sk) = &self.sketch(w.sketch)?;
                 if sk.loops.is_empty() {
                     return Err("a parede base precisa de um perfil fechado".into());
                 }
-                let face = Shape::face(frame, &sk.loops).map_err(k)?;
+                let mut face = Shape::face(frame, &sk.loops).map_err(k)?;
                 let dir = if w.reverse { frame.normal.map(|x| -x) } else { frame.normal };
-                let tool = face.extrude(dir, sp.t, 0.).map_err(k)?;
+                let off = if w.offset.trim().is_empty() { 0. } else { ev(&w.offset, &self.vars, "afastamento")? };
+                if off.abs() > 1e-12 {
+                    face = face.transformed(Xform::Translate(geo3d::mul(dir, off))).map_err(k)?;
+                }
+                let tool = if w.mid { face.extrude(dir, sp.t / 2., sp.t / 2.) } else { face.extrude(dir, sp.t, 0.) }.map_err(k)?;
                 self.apply(f.target, tool, BoolOp::Add, f.id)?;
                 Ok(None)
             }
@@ -2710,7 +2780,33 @@ impl Ctx<'_> {
                     Some(w) => Some(ev(w, &self.vars, "largura do alívio")?),
                     None => None,
                 };
-                let out = self.sheet_tool(f, fl.edge, p)?;
+                // lado do material: recua a parede e a aba começa mais para dentro
+                let trim = match fl.side {
+                    1 => p.t,
+                    2 => p.t + p.r,
+                    _ => 0.,
+                };
+                let mut edge = fl.edge;
+                if trim > 1e-9 {
+                    let b = self.body(f.target).ok_or("a aba precisa de uma parede de chapa antes")?.clone();
+                    let e0 = self.map_point(fl.edge, f.flat_space, p.flat);
+                    let (_, info) = b.sm_flange(e0, p).map_err(k)?;
+                    let e = geo3d::unit(geo3d::sub(info.ends[1], info.ends[0])).ok_or("aresta nula")?;
+                    let z = geo3d::mul(info.normal, -1.);
+                    let x = e;
+                    let y = scc_kernel::cross(z, x);
+                    // faixa ao longo da aresta, da borda para dentro (só o trecho da aba)
+                    let len = geo3d::dist(info.ends[0], info.ends[1]);
+                    let start = if geo3d::dot(y, info.out) > 0. { geo3d::sub(info.ends[0], geo3d::mul(info.out, trim)) } else { info.ends[0] };
+                    let strip = Shape::box_tool(geo3d::add(start, geo3d::mul(info.normal, 0.01)), x, z, [len, trim, p.t + 0.02]).map_err(k)?;
+                    self.apply(f.target, strip, BoolOp::Cut, f.id)?;
+                    edge = geo3d::sub(e0, geo3d::mul(info.out, trim));
+                    if p.flat != f.flat_space {
+                        edge = self.map_point(edge, p.flat, f.flat_space);
+                    }
+                }
+                self.miter_next = fl.miter;
+                let out = self.sheet_tool(f, edge, p)?;
                 if let (Some(w), Some(info)) = (relief, self.last_sheet) {
                     // alívio de canto: corte retangular atrás da dobra em cada ponta recuada
                     let depth = p.r + p.t;
@@ -2723,7 +2819,22 @@ impl Ctx<'_> {
                         let z = geo3d::mul(info.normal, -1.);
                         let y = scc_kernel::cross(z, x);
                         let o = if geo3d::dot(y, info.out) > 0. { geo3d::sub(end, geo3d::mul(info.out, depth)) } else { end };
-                        let bx = Shape::box_tool(o, x, z, [w.min(off), depth, p.t]).map_err(k)?;
+                        let wr = w.min(off);
+                        let bx = match fl.relief_kind {
+                            // rasgo: corte fino
+                            2 => Shape::box_tool(o, x, z, [wr.min(0.5), depth, p.t]).map_err(k)?,
+                            // redondo: retângulo com a ponta em meio círculo (oblongo)
+                            1 => {
+                                let inward = if geo3d::dot(y, info.out) > 0. { geo3d::mul(info.out, -1.) } else { info.out };
+                                let far = if geo3d::dot(y, info.out) > 0. { o } else { geo3d::add(o, geo3d::mul(info.out, -depth)) };
+                                let _ = inward;
+                                let rect = Shape::box_tool(o, x, z, [wr, depth, p.t]).map_err(k)?;
+                                let top = geo3d::add(geo3d::add(far, geo3d::mul(x, wr / 2.)), geo3d::mul(info.normal, 0.5));
+                                let cyl = Shape::hole_tool(top, z, wr, p.t + 1., HoleShape::Simple).map_err(k)?;
+                                rect.compound(&cyl)
+                            }
+                            _ => Shape::box_tool(o, x, z, [wr, depth, p.t]).map_err(k)?,
+                        };
                         cut = if cut.is_null() { bx } else { cut.compound(&bx) };
                     }
                     if !cut.is_null() {
@@ -2735,10 +2846,34 @@ impl Ctx<'_> {
             FeatureKind::SmJoggle(j) => {
                 let sp = self.sheet()?;
                 let depth = ev(&j.depth, &self.vars, "desvio")?;
-                let run = ev(&j.run, &self.vars, "rampa")?;
+                let mut run = ev(&j.run, &self.vars, "rampa")?;
+                if let Some(a) = &j.angle {
+                    let a = ev(a, &self.vars, "ângulo da rampa")?;
+                    if !(1.0..=89.0).contains(&a) {
+                        return Err("ângulo da rampa entre 1° e 89°".into());
+                    }
+                    run = depth.abs() / a.to_radians().tan();
+                }
                 let b = self.body(f.target).ok_or("o joggle precisa de uma parede de chapa")?.clone();
                 // normal da face no meio da linha (as pontas podem cair numa aresta da chapa)
                 let (_, n) = b.surface_near(geo3d::lerp(j.a, j.b, 0.5)).map_err(k)?;
+                // linha pela interseção de um plano com a face
+                let (ja, jb) = match &j.plane {
+                    Some(pl) => {
+                        let fr = self.plane(pl, 0)?;
+                        let e = geo3d::unit(scc_kernel::cross(n, fr.normal)).ok_or("o plano é paralelo à chapa")?;
+                        let w = scc_kernel::cross(e, n);
+                        let den = geo3d::dot(w, fr.normal);
+                        if den.abs() < 1e-9 {
+                            return Err("o plano não corta a face".into());
+                        }
+                        let s0 = geo3d::dot(geo3d::sub(fr.origin, j.a), fr.normal) / den;
+                        let a = geo3d::add(j.a, geo3d::mul(w, s0));
+                        (a, geo3d::add(a, geo3d::mul(e, 10.)))
+                    }
+                    None => (j.a, j.b),
+                };
+                let j = &SmJoggle { a: ja, b: jb, ..j.clone() };
                 let e = geo3d::unit(geo3d::sub(j.b, j.a)).ok_or("os dois pontos da linha coincidem")?;
                 let mut side = geo3d::unit(scc_kernel::cross(n, e)).ok_or("linha normal à chapa")?;
                 if j.flip {
@@ -2763,7 +2898,9 @@ impl Ctx<'_> {
                 let far = corner(run).map_err(k)?;
                 let part = b.boolean(&beyond, scc_kernel::Bool::Common).map_err(k)?;
                 let far_part = part.boolean(&far, scc_kernel::Bool::Common).map_err(k)?;
-                let moved = far_part.transformed(Xform::Translate(geo3d::mul(n, -depth))).map_err(k)?;
+                // compensação: a rampa gasta material; a parte deslocada volta o que sobra
+                let extra = if j.keep_length { (run * run + depth * depth).sqrt() - run } else { 0. };
+                let moved = far_part.transformed(Xform::Translate(geo3d::add(geo3d::mul(n, -depth), geo3d::mul(side, -extra)))).map_err(k)?;
                 // rampa: paralelogramo (seção) na linha, só na largura da chapa ao longo da linha
                 let (plo, phi) = part.bbox().ok_or("a linha do joggle não corta a chapa")?;
                 let (mut e0, mut e1) = (f64::MAX, f64::MIN);
@@ -2879,39 +3016,169 @@ impl Ctx<'_> {
             }
             FeatureKind::SmStamp(st) => {
                 let sp = self.sheet()?;
-                let (frame, sk) = &self.sketch(st.sketch)?;
-                if sk.loops.is_empty() {
-                    return Err("o estampo precisa de um perfil fechado".into());
-                }
-                let frame = *frame;
-                let face = Shape::face(&frame, &sk.loops).map_err(k)?;
-                let p = if st.flip { frame.normal } else { frame.normal.map(|x| -x) };
                 let depth = ev(&st.depth, &self.vars, "profundidade")?;
-                // copo: perfil deslocado da espessura até o fundo, menos a cavidade
-                let outer = face.offset_face(sp.t).map_err(k)?.extrude(p, depth + sp.t, 0.).map_err(k)?;
-                let inner = face.extrude(p, depth, 0.).map_err(k)?;
-                self.apply(f.target, outer, BoolOp::Add, f.id)?;
-                self.apply(f.target, inner, BoolOp::Cut, f.id)?;
-                Ok(None)
+                let width = if st.width.trim().is_empty() { 0. } else { ev(&st.width, &self.vars, "largura")? };
+                // punção: o corpo do punção forma a chapa (casca com a espessura, aberta na base)
+                if st.kind == 4 {
+                    let pid = st.punch.ok_or("escolha o coletor com o corpo do punção")?;
+                    let punch = self.body(pid).ok_or("o coletor do punção não tem corpo (ou vem depois)")?.clone();
+                    let b = self.body(f.target).ok_or("o estampo precisa de uma chapa")?.clone();
+                    let (plo, phi) = punch.bbox().ok_or("punção sem dimensões")?;
+                    let pc = geo3d::lerp(plo, phi, 0.5);
+                    let (on, n) = b.surface_near(pc).map_err(k)?;
+                    // base do punção: a face dele encostada na chapa
+                    let base = geo3d::add(on, geo3d::mul(n, 0.01));
+                    let tags = vec![0; punch.face_count() as usize];
+                    let (cup, _) = punch.shell_tagged(&[base], sp.t, false, &tags).map_err(k)?;
+                    let cavity = punch.boolean(&cup, Bool::Cut).map_err(k)?;
+                    let through = cavity.transformed(Xform::Translate(geo3d::mul(n, -sp.t))).map_err(k)?;
+                    self.apply(f.target, through.compound(&cavity), BoolOp::Cut, f.id)?;
+                    self.apply(f.target, cup, BoolOp::Add, f.id)?;
+                    return Ok(None);
+                }
+                let (frame, sk) = &self.sketch(st.sketch)?;
+                let frame = *frame;
+                let p = if st.flip { frame.normal } else { frame.normal.map(|x| -x) };
+                match st.kind {
+                    // nervura ao longo das curvas do sketch: seção trapezoidal varrida
+                    1 => {
+                        let w = if width > 0. { width } else { 4. * sp.t };
+                        let chains: Vec<Vec<V3>> = sk.open.iter().chain(loops_points(&sk.loops).iter()).map(|c| c.iter().map(|q| frame.point(q[0], q[1])).collect()).collect();
+                        if chains.is_empty() {
+                            return Err("a nervura precisa de linhas ou curvas no sketch".into());
+                        }
+                        for spine in chains.iter().filter(|c| c.len() >= 2) {
+                            let tan = geo3d::unit(geo3d::sub(spine[1], spine[0])).ok_or("curva nula")?;
+                            let across = geo3d::unit(scc_kernel::cross(p, tan)).ok_or("curva normal à chapa")?;
+                            let sec = Frame { origin: spine[0], x: across, normal: tan };
+                            // y da seção = normal × x = p
+                            let trap = |wb: f64, wt: f64, h: f64| -> scc_kernel::Loop2 {
+                                let pts = [[-wb / 2., 0.], [wb / 2., 0.], [wt / 2., h], [-wt / 2., h], [-wb / 2., 0.]];
+                                pts.windows(2).map(|q| scc_kernel::Seg2::Line(q[0], q[1])).collect()
+                            };
+                            let ydir = scc_kernel::cross(sec.normal, sec.x);
+                            let s = if geo3d::dot(ydir, p) >= 0. { 1. } else { -1. };
+                            let outer = Shape::face(&sec, &[trap(w + 2. * sp.t, w * 0.4 + 2. * sp.t, s * (depth + sp.t))]).map_err(k)?.sweep(spine, 0).map_err(k)?;
+                            let inner = Shape::face(&sec, &[trap(w, w * 0.4, s * depth)]).map_err(k)?.sweep(spine, 0).map_err(k)?;
+                            self.apply(f.target, outer, BoolOp::Add, f.id)?;
+                            self.apply(f.target, inner, BoolOp::Cut, f.id)?;
+                        }
+                        Ok(None)
+                    }
+                    // circular nos pontos: tronco de cone revolvido
+                    2 => {
+                        if sk.points.is_empty() {
+                            return Err("o estampo circular precisa de pontos no sketch (centros)".into());
+                        }
+                        let d = if width > 0. { width } else { 8. * sp.t };
+                        let r0 = d / 2.;
+                        for q in &sk.points {
+                            let o = frame.point(q[0], q[1]);
+                            let x = geo3d::any_perp(p);
+                            let fr = Frame { origin: o, x, normal: scc_kernel::cross(x, p) };
+                            // no plano (raio, eixo): perfil fechado pelo eixo
+                            let prof = |rb: f64, rt: f64, h: f64| -> scc_kernel::Loop2 {
+                                let pts = [[0., 0.], [rb, 0.], [rt, h], [0., h], [0., 0.]];
+                                pts.windows(2).map(|q| scc_kernel::Seg2::Line(q[0], q[1])).collect()
+                            };
+                            let ydir = scc_kernel::cross(fr.normal, fr.x);
+                            let s = if geo3d::dot(ydir, p) >= 0. { 1. } else { -1. };
+                            let outer = Shape::face(&fr, &[prof(r0 + sp.t, r0 * 0.6 + sp.t, s * (depth + sp.t))]).map_err(k)?.revolve(o, p, 360., 0.).map_err(k)?;
+                            let inner = Shape::face(&fr, &[prof(r0, r0 * 0.6, s * depth)]).map_err(k)?.revolve(o, p, 360., 0.).map_err(k)?;
+                            self.apply(f.target, outer, BoolOp::Add, f.id)?;
+                            self.apply(f.target, inner, BoolOp::Cut, f.id)?;
+                        }
+                        Ok(None)
+                    }
+                    // reforço de dobra: nervura triangular no canto interno da dobra mais próxima
+                    3 => {
+                        if sp.flat {
+                            return Ok(Some("planificada: reforço de dobra aparece só dobrado".into()));
+                        }
+                        if sk.points.is_empty() {
+                            return Err("o reforço precisa de pontos no sketch (sobre a dobra)".into());
+                        }
+                        let w = if width > 0. { width } else { 2. * sp.t };
+                        let leg = depth.max(sp.t * 2.);
+                        for q in &sk.points {
+                            let o = frame.point(q[0], q[1]);
+                            // dobra mais perto do ponto
+                            let m = self
+                                .sheet_maps
+                                .iter()
+                                .min_by(|a, b| {
+                                    let d = |m: &&SheetMap| {
+                                        let (_, se, _) = m.local(o);
+                                        geo3d::dist(o, geo3d::add(m.c0, geo3d::mul(m.ev, se.clamp(0., m.l))))
+                                    };
+                                    d(a).total_cmp(&d(b))
+                                })
+                                .copied()
+                                .ok_or("não há dobra para reforçar")?;
+                            let (_, se, _) = m.local(o);
+                            let c = geo3d::add(m.c0, geo3d::mul(m.ev, se.clamp(0., m.l)));
+                            // canto interno: base (para trás da dobra) e aba (depois do arco)
+                            let a = geo3d::sub(c, geo3d::mul(m.u, leg));
+                            let tip = m.to_folded(geo3d::add(c, geo3d::mul(m.u, m.ba + leg)));
+                            let pts = [geo3d::sub(a, geo3d::mul(m.ev, w / 2.)), geo3d::sub(c, geo3d::mul(m.ev, w / 2.)), geo3d::sub(tip, geo3d::mul(m.ev, w / 2.))];
+                            let rib = Shape::poly_prism(&pts, geo3d::mul(m.ev, w)).map_err(k)?;
+                            self.apply(f.target, rib, BoolOp::Add, f.id)?;
+                        }
+                        Ok(None)
+                    }
+                    _ => {
+                        if sk.loops.is_empty() {
+                            return Err("o estampo precisa de um perfil fechado".into());
+                        }
+                        let face = Shape::face(&frame, &sk.loops).map_err(k)?;
+                        // copo: perfil deslocado da espessura até o fundo, menos a cavidade
+                        let outer = face.offset_face(sp.t).map_err(k)?.extrude(p, depth + sp.t, 0.).map_err(k)?;
+                        let inner = face.extrude(p, depth, 0.).map_err(k)?;
+                        self.apply(f.target, outer, BoolOp::Add, f.id)?;
+                        self.apply(f.target, inner, BoolOp::Cut, f.id)?;
+                        Ok(None)
+                    }
+                }
             }
             FeatureKind::SmFlangedHole(h) => {
                 let sp = self.sheet()?;
-                let (frame, sk) = &self.sketch(h.sketch)?;
-                if sk.points.is_empty() {
-                    return Err("o sketch precisa de pontos (centros dos furos)".into());
+                // tabela de furos flangeados: diâmetro e altura da linha escolhida
+                let row = scc_core::FLANGED_HOLES.iter().find(|r| r.0 == h.standard);
+                let dia = match row {
+                    Some(r) => r.1,
+                    None => ev(&h.diameter, &self.vars, "diâmetro")?,
+                };
+                let ht = match row {
+                    Some(r) => r.2,
+                    None => ev(&h.height, &self.vars, "altura do colar")?,
+                };
+                // centros: pontos do sketch ou pontos escolhidos na face (como um furo)
+                let mut centers: Vec<(V3, V3)> = vec![];
+                if h.points.is_empty() {
+                    let (frame, sk) = &self.sketch(h.sketch)?;
+                    if sk.points.is_empty() {
+                        return Err("o sketch precisa de pontos (centros dos furos)".into());
+                    }
+                    let p = if h.flip { frame.normal } else { frame.normal.map(|x| -x) };
+                    for q in &sk.points {
+                        centers.push((frame.point(q[0], q[1]), p));
+                    }
+                } else {
+                    let b = self.body(f.target).ok_or("o furo flangeado precisa de uma chapa")?.clone();
+                    for q in &h.points {
+                        let q = self.map_point(*q, f.flat_space, sp.flat);
+                        let (on, n) = b.surface_near(q).map_err(k)?;
+                        // o colar sai pelo outro lado da face escolhida (ou pelo mesmo, invertido)
+                        centers.push((on, if h.flip { n } else { geo3d::mul(n, -1.) }));
+                    }
                 }
-                let (frame, pts) = (*frame, sk.points.clone());
-                let p = if h.flip { frame.normal } else { frame.normal.map(|x| -x) };
-                let dia = ev(&h.diameter, &self.vars, "diâmetro")?;
-                let ht = ev(&h.height, &self.vars, "altura do colar")?;
                 let (mut ring, mut cut) = (Shape::empty(), Shape::empty());
-                for q in &pts {
-                    let o = frame.point(q[0], q[1]);
+                for (o, p) in centers {
                     let o2 = geo3d::add(o, geo3d::mul(p, sp.t));
                     let outer = Shape::hole_tool(o2, p, dia + 2. * sp.t, ht, HoleShape::Simple).map_err(k)?;
                     let inner = Shape::hole_tool(o2, p, dia, ht + 1., HoleShape::Simple).map_err(k)?;
                     let rg = outer.boolean(&inner, scc_kernel::Bool::Cut).map_err(k)?;
-                    let c = Shape::hole_tool(o, p, dia, sp.t + ht + 1., HoleShape::Simple).map_err(k)?;
+                    let c = Shape::hole_tool(geo3d::sub(o, geo3d::mul(p, 0.5)), p, dia, sp.t + ht + 1.5, HoleShape::Simple).map_err(k)?;
                     ring = if ring.is_null() { rg } else { ring.compound(&rg) };
                     cut = if cut.is_null() { c } else { cut.compound(&c) };
                 }
@@ -2919,13 +3186,173 @@ impl Ctx<'_> {
                 self.apply(f.target, cut, BoolOp::Cut, f.id)?;
                 Ok(None)
             }
+            FeatureKind::SmCut(c) => {
+                let sp = self.sheet()?;
+                let (frame, sk) = &self.sketch(c.sketch)?;
+                if sk.loops.is_empty() {
+                    return Err("o recorte precisa de um perfil fechado".into());
+                }
+                let frame = *frame;
+                let mut face = Shape::face(&frame, &sk.loops).map_err(k)?;
+                let off = if c.offset.trim().is_empty() { 0. } else { ev(&c.offset, &self.vars, "folga")? };
+                if off.abs() > 1e-9 {
+                    face = face.offset_face(off).map_err(k)?;
+                }
+                // o sketch fica na face da chapa: corta para dentro (ou para o outro lado)
+                let dir = if c.flip { frame.normal } else { frame.normal.map(|x| -x) };
+                let big = sp.t * 4. + 2.;
+                match c.mode {
+                    1 => {
+                        // com saída: paredes inclinadas a partir da face do sketch
+                        let a = ev(&c.draft, &self.vars, "ângulo de saída")?;
+                        let start = face.transformed(Xform::Translate(geo3d::mul(dir, -0.05))).map_err(k)?;
+                        let tool = start.extrude_taper(dir, sp.t + 0.1, a).map_err(k)?;
+                        self.apply(f.target, tool, BoolOp::Cut, f.id)?;
+                    }
+                    2 => {
+                        // flangeado: colar dobrado em volta do recorte, saindo do outro lado
+                        let ht = ev(&c.height, &self.vars, "altura do colar")?;
+                        let exit = face.transformed(Xform::Translate(geo3d::mul(dir, sp.t))).map_err(k)?;
+                        let outer = exit.offset_face(sp.t).map_err(k)?.extrude(dir, ht, 0.).map_err(k)?;
+                        let inner = exit.extrude(dir, ht + 1., 0.).map_err(k)?;
+                        let ring = outer.boolean(&inner, Bool::Cut).map_err(k)?;
+                        self.apply(f.target, ring, BoolOp::Add, f.id)?;
+                        let tool = face.extrude(dir, big, big).map_err(k)?;
+                        self.apply(f.target, tool, BoolOp::Cut, f.id)?;
+                    }
+                    _ => {
+                        let tool = face.extrude(dir, big, big).map_err(k)?;
+                        self.apply(f.target, tool, BoolOp::Cut, f.id)?;
+                    }
+                }
+                Ok(None)
+            }
+            FeatureKind::SmProfileFlange(pf) => {
+                let sp = self.sheet()?;
+                if sp.flat {
+                    return Ok(Some("planificada: a aba por perfil aparece só dobrada".into()));
+                }
+                let (frame, sk) = &self.sketch(pf.sketch)?;
+                let frame = *frame;
+                if sk.open.is_empty() {
+                    return Err("a aba por perfil precisa de uma cadeia aberta (linhas e arcos) no sketch".into());
+                }
+                let r = match &pf.radius {
+                    Some(e) => ev(e, &self.vars, "raio")?,
+                    None => sp.r,
+                };
+                // cantos arredondados no raio de dobra (linha média da chapa)
+                let mut sk2 = (**sk).clone();
+                sk2.loops.clear();
+                sk2.open = sk.open.iter().map(|ch| round_corners(ch, r + sp.t / 2.)).collect();
+                let t = format!("{}", sp.t);
+                let (face, _) = self.profile_face(&frame, &sk2, Some(&t), if pf.flip { 1 } else { 0 })?;
+                let l1 = ev(&pf.l1, &self.vars, "comprimento 1")?;
+                let l2 = if pf.l2.trim().is_empty() { 0. } else { ev(&pf.l2, &self.vars, "comprimento 2")? };
+                let tool = face.extrude(frame.normal, l1, l2).map_err(k)?;
+                self.apply(f.target, tool, BoolOp::Add, f.id)?;
+                Ok(None)
+            }
+            FeatureKind::SmCurveFlange(cf) => {
+                let sp = self.sheet()?;
+                if sp.flat {
+                    return Ok(Some("planificada: a aba curva aparece só dobrada".into()));
+                }
+                if cf.edge.len() < 2 {
+                    return Err("escolha uma aresta (curva) da chapa".into());
+                }
+                let len = ev(&cf.length, &self.vars, "comprimento")?;
+                let b = self.body(f.target).ok_or("a aba precisa de uma chapa")?.clone();
+                let pts = &cf.edge;
+                // normal da chapa: plano da aresta (Newell); aresta reta: a da face perto dela
+                let mut n = [0.; 3];
+                for i in 0..pts.len() {
+                    let (p, q) = (pts[i], pts[(i + 1) % pts.len()]);
+                    n[0] += (p[1] - q[1]) * (p[2] + q[2]);
+                    n[1] += (p[2] - q[2]) * (p[0] + q[0]);
+                    n[2] += (p[0] - q[0]) * (p[1] + q[1]);
+                }
+                let n = match geo3d::unit(n) {
+                    Some(v) => v,
+                    None => b.surface_near(pts[pts.len() / 2]).map_err(k)?.1,
+                };
+                let (lo, hi) = b.bbox().ok_or("chapa sem dimensões")?;
+                let ctr = geo3d::lerp(lo, hi, 0.5);
+                // faixa da espessura para dentro da chapa, em volta da aresta
+                let inner: Vec<V3> = (0..pts.len())
+                    .map(|i| {
+                        let tan = geo3d::unit(geo3d::sub(pts[(i + 1).min(pts.len() - 1)], pts[i.saturating_sub(1)])).unwrap_or([1., 0., 0.]);
+                        let mut w = geo3d::unit(scc_kernel::cross(n, tan)).unwrap_or([0., 1., 0.]);
+                        if geo3d::dot(w, geo3d::sub(ctr, pts[i])) < 0. {
+                            w = geo3d::mul(w, -1.);
+                        }
+                        geo3d::add(pts[i], geo3d::mul(w, sp.t))
+                    })
+                    .collect();
+                // lado em que está a espessura (raio de teste a partir da faixa)
+                let probe = geo3d::lerp(pts[pts.len() / 2], inner[pts.len() / 2], 0.5);
+                let up_hit = b.ray_hit(geo3d::add(probe, geo3d::mul(n, -sp.t * 3.)), n).map_err(k)?.map(|(q, _)| geo3d::dot(geo3d::sub(q, probe), n));
+                let mat_up = up_hit.is_some_and(|d| d > -sp.t * 0.5 && d < sp.t * 1.5);
+                let d = if cf.flip { geo3d::mul(n, -1.) } else { n };
+                // começa na face do lado para onde a aba vai
+                let shift = if (geo3d::dot(d, n) > 0.) == mat_up { geo3d::mul(n, if mat_up { sp.t } else { -sp.t }) } else { [0.; 3] };
+                let mut ring: Vec<V3> = pts.iter().map(|p| geo3d::add(*p, shift)).collect();
+                ring.extend(inner.iter().rev().map(|p| geo3d::add(*p, shift)));
+                let tool = Shape::poly_prism(&ring, geo3d::mul(d, len)).map_err(k)?;
+                self.apply(f.target, tool, BoolOp::Add, f.id)?;
+                Ok(None)
+            }
+            FeatureKind::SmCornerRelief(cr) => {
+                let sp = self.sheet()?;
+                let size = ev(&cr.size, &self.vars, "tamanho")?;
+                let b = self.body(f.target).ok_or("o alívio precisa de uma chapa")?.clone();
+                let at = self.map_point(cr.at, f.flat_space, sp.flat);
+                // o canto fica numa aresta: um ponto um pouco para dentro (rumo ao centro da peça)
+                // cai logo abaixo da face da chapa, que é a mais perto dele
+                let (lo, hi) = b.bbox().ok_or("chapa sem dimensões")?;
+                let inward = geo3d::unit(geo3d::sub(geo3d::lerp(lo, hi, 0.5), at)).unwrap_or([0., 0., -1.]);
+                let (_, n) = b.surface_near(geo3d::add(at, geo3d::mul(inward, sp.t * 0.25))).map_err(k)?;
+                let on = at;
+                let top = geo3d::add(on, geo3d::mul(n, 1.));
+                let z = geo3d::mul(n, -1.);
+                let tool = match cr.kind {
+                    1 => {
+                        let x = geo3d::any_perp(z);
+                        let y = scc_kernel::cross(z, x);
+                        let o = geo3d::sub(geo3d::sub(top, geo3d::mul(x, size / 2.)), geo3d::mul(y, size / 2.));
+                        Shape::box_tool(o, x, z, [size, size, sp.t * 2. + 2.]).map_err(k)?
+                    }
+                    2 => {
+                        // gota: círculo no canto e um rasgo para dentro da chapa
+                        let (lo, hi) = b.bbox().ok_or("chapa sem dimensões")?;
+                        let v = geo3d::sub(geo3d::lerp(lo, hi, 0.5), on);
+                        let v = geo3d::unit(geo3d::sub(v, geo3d::mul(n, geo3d::dot(v, n)))).unwrap_or(geo3d::any_perp(z));
+                        let round = Shape::hole_tool(top, z, size, sp.t * 2. + 2., HoleShape::Simple).map_err(k)?;
+                        let w = scc_kernel::cross(z, v);
+                        let o = geo3d::sub(top, geo3d::mul(w, size * 0.25));
+                        let slot = Shape::box_tool(o, w, z, [size * 0.5, size, sp.t * 2. + 2.]).map_err(k)?;
+                        let slot = if geo3d::dot(scc_kernel::cross(z, w), v) < 0. { slot.transformed(Xform::Mirror(top, v)).map_err(k)? } else { slot };
+                        round.compound(&slot)
+                    }
+                    _ => Shape::hole_tool(top, z, size, sp.t * 2. + 2., HoleShape::Simple).map_err(k)?,
+                };
+                self.apply(f.target, tool, BoolOp::Cut, f.id)?;
+                Ok(None)
+            }
             FeatureKind::SmHem(h) => {
                 let sp = self.sheet()?;
                 let gap = ev(&h.gap, &self.vars, "folga")?;
+                let (angle, r) = match h.kind {
+                    // gota: passa de 180° e fecha a ponta contra a chapa
+                    1 => (200., (gap / 2.).max(sp.t * 0.5)),
+                    // enrolada: três quartos de volta
+                    2 => (270., (gap / 2.).max(sp.t)),
+                    _ => (180., (gap / 2.).max(0.01)),
+                };
                 let p = scc_kernel::SheetFlange {
                     t: sp.t,
-                    r: (gap / 2.).max(0.01),
-                    angle: 180.,
+                    r,
+                    angle,
                     length: ev(&h.length, &self.vars, "comprimento")?,
                     off1: 0.,
                     off2: 0.,
@@ -3345,6 +3772,8 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         body_sig: HashMap::new(),
         last_sheet: None,
         sheet_maps: vec![],
+        steps: HashMap::new(),
+        miter_next: false,
     };
 
     // 1º: sketches livres (pastas de geometria, sem linha do tempo); 2º: comandos dos coletores em ordem
@@ -3456,6 +3885,11 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                 if let Some(m) = e.sheet_map {
                     cx.sheet_maps.push(m);
                 }
+                if e.steps.is_empty() {
+                    cx.steps.remove(&f.id);
+                } else {
+                    cx.steps.insert(f.id, e.steps);
+                }
             }
             None => {
                 let maps_before = cx.sheet_maps.len();
@@ -3475,6 +3909,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                         tool: cx.tools.get(&f.id).cloned(),
                         last_sheet: cx.last_sheet,
                         sheet_map: if cx.sheet_maps.len() > maps_before { cx.sheet_maps.last().copied() } else { None },
+                        steps: cx.steps.get(&f.id).cloned().unwrap_or_default(),
                     },
                 );
             }
@@ -3489,6 +3924,26 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         }
     }
     cache.feats.retain(|id, _| seen.contains(id));
+    // linhas de dobra no planificado: cada dobra leva as linhas pelas dobras anteriores
+    let bend_lines: Vec<BendLine> = (0..cx.sheet_maps.len())
+        .map(|i| {
+            let m = cx.sheet_maps[i];
+            let up_to = |q: V3| {
+                let mut q = q;
+                for mm in cx.sheet_maps[..i].iter().rev() {
+                    if mm.holds(q, false) {
+                        q = mm.to_flat(q);
+                    }
+                }
+                q
+            };
+            let line = |du: f64| {
+                let a = geo3d::add(m.c0, geo3d::mul(m.u, du));
+                [up_to(a), up_to(geo3d::add(a, geo3d::mul(m.ev, m.l)))]
+            };
+            BendLine { start: line(0.), center: line(m.ba / 2.), end: line(m.ba), angle: m.a.to_degrees().abs(), radius: geo3d::dist(m.o, m.c0), up: m.a > 0. }
+        })
+        .collect();
     let h = hash_of(&[&all_bodies(&cx.body_sig)], global);
 
     // planos: Origem + Referências. Todas entram no resultado (ocultas também: a cena filtra pela
@@ -3633,6 +4088,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         param_error,
         elapsed_ms: t0.elapsed().as_secs_f64() * 1000.,
         kernel: scc_kernel::version(),
+        bend_lines,
     }
 }
 
@@ -3674,6 +4130,8 @@ pub fn publications(doc: &Document) -> Vec<(String, LinkedGeo)> {
                 body_sig: HashMap::new(),
                 last_sheet: None,
                 sheet_maps: vec![],
+        steps: HashMap::new(),
+        miter_next: false,
             };
             for f in doc.active_features().map(|(_, f)| f) {
                 let _ = cx.run(f);
@@ -3702,6 +4160,8 @@ fn surface_brep(doc: &Document, id: Id) -> Option<String> {
         body_sig: HashMap::new(),
         last_sheet: None,
         sheet_maps: vec![],
+        steps: HashMap::new(),
+        miter_next: false,
     };
     for f in doc.active_features().map(|(_, f)| f) {
         let _ = cx.run(f);
@@ -3746,6 +4206,75 @@ fn shared_end(a: &MemberGeom, b: &MemberGeom) -> Option<(V3, V3, V3)> {
 }
 
 /// Meio-espaço (caixa grande) do lado de `n` a partir do ponto `p`.
+/// Cadeia aberta com os cantos trocados por arcos de raio `rad` (amostrados).
+fn round_corners(p: &[[f64; 2]], rad: f64) -> Vec<[f64; 2]> {
+    let n = p.len();
+    if n < 3 || rad <= 1e-9 {
+        return p.to_vec();
+    }
+    let unit2 = |v: [f64; 2]| {
+        let l = (v[0] * v[0] + v[1] * v[1]).sqrt();
+        (l > 1e-12).then(|| [v[0] / l, v[1] / l])
+    };
+    let mut out = vec![p[0]];
+    for i in 1..n - 1 {
+        let (a, b, c) = (p[i - 1], p[i], p[i + 1]);
+        let (Some(v1), Some(v2)) = (unit2([b[0] - a[0], b[1] - a[1]]), unit2([c[0] - b[0], c[1] - b[1]])) else {
+            out.push(b);
+            continue;
+        };
+        let cosang = (v1[0] * v2[0] + v1[1] * v2[1]).clamp(-1., 1.);
+        let turn = cosang.acos();
+        if turn < 1e-3 {
+            out.push(b);
+            continue;
+        }
+        let l1 = ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2)).sqrt();
+        let l2 = ((c[0] - b[0]).powi(2) + (c[1] - b[1]).powi(2)).sqrt();
+        let d = (rad * (turn / 2.).tan()).min(0.45 * l1.min(l2));
+        let r = d / (turn / 2.).tan();
+        let s0 = [b[0] - v1[0] * d, b[1] - v1[1] * d];
+        // centro do arco: à esquerda (virando para a esquerda) ou à direita
+        let left = v1[0] * v2[1] - v1[1] * v2[0] > 0.;
+        let nrm = if left { [-v1[1], v1[0]] } else { [v1[1], -v1[0]] };
+        let ctr = [s0[0] + nrm[0] * r, s0[1] + nrm[1] * r];
+        let a0 = (s0[1] - ctr[1]).atan2(s0[0] - ctr[0]);
+        let sgn = if left { 1. } else { -1. };
+        for k in 0..=8 {
+            let t = a0 + sgn * turn * k as f64 / 8.;
+            out.push([ctr[0] + r * t.cos(), ctr[1] + r * t.sin()]);
+        }
+    }
+    out.push(p[n - 1]);
+    out
+}
+
+/// Pontos de cada laço fechado (linhas pelas pontas, arcos e círculos amostrados).
+fn loops_points(loops: &[scc_kernel::Loop2]) -> Vec<Vec<[f64; 2]>> {
+    loops
+        .iter()
+        .map(|lp| {
+            let mut v: Vec<[f64; 2]> = vec![];
+            for s in lp {
+                match s {
+                    scc_kernel::Seg2::Line(a, b) => {
+                        v.push(*a);
+                        v.push(*b);
+                    }
+                    scc_kernel::Seg2::Arc(a, m, b) => v.extend([*a, *m, *b]),
+                    scc_kernel::Seg2::Circle(c, r) => v.extend((0..=32).map(|k| {
+                        let t = k as f64 / 32. * std::f64::consts::TAU;
+                        [c[0] + r * t.cos(), c[1] + r * t.sin()]
+                    })),
+                    scc_kernel::Seg2::Spline(p) => v.extend(p.iter().copied()),
+                }
+            }
+            v.dedup_by(|x, y| (x[0] - y[0]).abs() + (x[1] - y[1]).abs() < 1e-9);
+            v
+        })
+        .collect()
+}
+
 fn half_space(p: V3, n: V3, big: f64) -> Result<Shape, String> {
     let x = geo3d::any_perp(n);
     let y = scc_kernel::cross(n, x);
@@ -3787,6 +4316,8 @@ pub fn cut_list(doc: &Document) -> Vec<CutRow> {
         body_sig: HashMap::new(),
         last_sheet: None,
         sheet_maps: vec![],
+        steps: HashMap::new(),
+        miter_next: false,
     };
     let mut rows: Vec<CutRow> = vec![];
     for f in doc.active_features().map(|(_, f)| f) {
@@ -3822,6 +4353,8 @@ pub fn member_joints(doc: &Document) -> Vec<((Id, usize), (Id, usize), [f64; 3])
         body_sig: HashMap::new(),
         last_sheet: None,
         sheet_maps: vec![],
+        steps: HashMap::new(),
+        miter_next: false,
     };
     let lines = cx.all_member_lines();
     let mut out = vec![];
@@ -3932,6 +4465,8 @@ pub fn export(doc: &Document, collector: Option<Id>, path: &str) -> Result<(), S
         body_sig: HashMap::new(),
         last_sheet: None,
         sheet_maps: vec![],
+        steps: HashMap::new(),
+        miter_next: false,
     };
     for f in doc.active_features().map(|(_, f)| f) {
         let _ = cx.run(f);
@@ -3968,6 +4503,8 @@ pub fn final_shape(doc: &Document) -> Option<Shape> {
         body_sig: HashMap::new(),
         last_sheet: None,
         sheet_maps: vec![],
+        steps: HashMap::new(),
+        miter_next: false,
     };
     for f in doc.active_features().map(|(_, f)| f) {
         let _ = cx.run(f);
@@ -4176,7 +4713,7 @@ mod tests {
     fn quarto_de_disco(flat: bool) -> (Document, Vec<Id>) {
         let s = |x: &str| x.to_string();
         let mut d = Document::new("chapa");
-        d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), flat: false });
+        d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), flat: false, ..Default::default() });
         let mut data = SketchData::default();
         let mut n = 7_000_000u64;
         let mut al = || {
@@ -4190,10 +4727,10 @@ mod tests {
         data.add_curve(&mut al, scc_core::sketch::Curve::Arc { c: o, s: a, e: b }, false);
         data.add_curve(&mut al, scc_core::sketch::Curve::Line { a: b, b: o }, false);
         let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
-        let mut ids = vec![d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false }))];
+        let mut ids = vec![d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }))];
         // aresta de cima das duas retas (ponto médio com o erro de float da malha)
         for e in [[50.00001, 0., 2.], [0., 50.00001, 2.]] {
-            ids.push(d.add_feature(FeatureKind::SmFlange(SmFlange { edge: e, length: s("30"), angle: s("90"), radius: None, off1: s("5"), off2: s("5"), flip: false, relief: None })));
+            ids.push(d.add_feature(FeatureKind::SmFlange(SmFlange { edge: e, length: s("30"), angle: s("90"), radius: None, off1: s("5"), off2: s("5"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false })));
         }
         // furo retangular na aba do lado y = 0 (feito no dobrado: a aba sobe em z)
         let cut = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XZ), [40., 15.], [60., 25.]);
@@ -4632,9 +5169,9 @@ mod tests {
         let s = |x: &str| x.to_string();
         let base = || {
             let mut d = Document::new("chapa");
-            d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), flat: false });
+            d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), flat: false, ..Default::default() });
             let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [100., 50.]);
-            d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false }));
+            d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
             d
         };
         let check = |d: &Document| {
@@ -4646,7 +5183,7 @@ mod tests {
         };
         // joggle: o volume se conserva e a parte além da linha desce 3 mm
         let mut d = base();
-        d.add_feature(FeatureKind::SmJoggle(SmJoggle { a: [60., 0., 2.], b: [60., 50., 2.], depth: s("3"), run: s("5"), flip: true }));
+        d.add_feature(FeatureKind::SmJoggle(SmJoggle { a: [60., 0., 2.], b: [60., 50., 2.], depth: s("3"), run: s("5"), flip: true, angle: None, plane: None, keep_length: false }));
         let r = check(&d);
         assert!(near(r.bodies[0].mass.volume, 10000., 1e-3), "joggle {}", r.bodies[0].mass.volume);
         let zmin = r.bodies[0].mesh.positions.chunks_exact(3).map(|p| p[2]).fold(f32::MAX, f32::min);
@@ -4669,7 +5206,7 @@ mod tests {
         let mut d = base();
         let top = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "2");
         let sq = sk_rect(&mut d, PlaneRef::Datum(top), [40., 15.], [60., 35.]);
-        d.add_feature(FeatureKind::SmStamp(SmStamp { sketch: sq, depth: s("3"), flip: false }));
+        d.add_feature(FeatureKind::SmStamp(SmStamp { sketch: sq, depth: s("3"), flip: false, kind: 0, width: String::new(), punch: None }));
         let r = check(&d);
         let outer = 400. + 80. * 2. + PI * 4.;
         assert!(near(r.bodies[0].mass.volume, 10000. + outer * 3. - 400. * 3., 1e-3), "estampo {}", r.bodies[0].mass.volume);
@@ -4685,18 +5222,124 @@ mod tests {
         let p0 = data.add_point(&mut al, 50., 25.);
         data.add_curve(&mut al, scc_core::sketch::Curve::Point { p: p0 }, false);
         let sp = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Datum(top), data }));
-        d.add_feature(FeatureKind::SmFlangedHole(SmFlangedHole { sketch: sp, diameter: s("10"), height: s("6"), flip: false }));
+        d.add_feature(FeatureKind::SmFlangedHole(SmFlangedHole { sketch: sp, diameter: s("10"), height: s("6"), flip: false, points: vec![], standard: String::new() }));
         let r = check(&d);
         assert!(near(r.bodies[0].mass.volume, 10000. + PI * 24. * 6. - PI * 25. * 2., 1e-3), "furo flangeado {}", r.bodies[0].mass.volume);
         // aba recuada 10 mm de cada lado com alívio de 3 mm
         let mut d = base();
-        d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 25., 2.], length: s("20"), angle: s("90"), radius: None, off1: s("10"), off2: s("10"), flip: false, relief: None }));
+        d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 25., 2.], length: s("20"), angle: s("90"), radius: None, off1: s("10"), off2: s("10"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false }));
         let v_sem = check(&d).bodies[0].mass.volume;
         if let FeatureKind::SmFlange(fl) = &mut d.features.last_mut().unwrap().kind {
             fl.relief = Some(s("3"));
         }
         let v_com = check(&d).bodies[0].mass.volume;
         assert!(near(v_sem - v_com, 2. * 3. * 4. * 2., 1e-3), "alívio {}", v_sem - v_com);
+    }
+
+    #[test]
+    fn chapa_recortes_estampos_alivios_abas_novas() {
+        if !scc_kernel::AVAILABLE {
+            return;
+        }
+        use std::f64::consts::PI;
+        let near = |a: f64, b: f64, tol: f64| (a - b).abs() <= tol * b.abs().max(1.);
+        let s = |x: &str| x.to_string();
+        let base = || {
+            let mut d = Document::new("chapa");
+            d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), flat: false, ..Default::default() });
+            let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [100., 50.]);
+            d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
+            d
+        };
+        let check = |d: &Document| {
+            let r = recompute(d);
+            for f in &d.features {
+                assert_eq!(r.status[&f.id], Status::Ok, "{}: {:?}", f.name, r.status[&f.id]);
+            }
+            r
+        };
+        let vol = |r: &RecomputeResult| r.bodies[0].mass.volume;
+        // compensação: dedução de 4,4 mm a 90° (t = r = 2) → K equivalente
+        let k = scc_core::sheet_k(1, 0.44, 2., 2., 4.4);
+        assert!(near(PI / 2. * (2. + k * 2.), 8. - 4.4, 1e-9), "K da dedução {k}");
+        // recorte normal 20×10: tira 400 mm³
+        let mut d = base();
+        let top = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "2");
+        let sq = sk_rect(&mut d, PlaneRef::Datum(top), [20., 20.], [40., 30.]);
+        let cut = d.add_feature(FeatureKind::SmCut(SmCut { sketch: sq, mode: 0, offset: String::new(), draft: s("0"), height: s("0"), flip: false }));
+        let r = check(&d);
+        assert!(near(vol(&r), 10000. - 400., 1e-3), "recorte {}", vol(&r));
+        // folga de 1 mm: 22×12
+        if let FeatureKind::SmCut(c) = &mut d.feature_mut(cut).unwrap().kind {
+            c.offset = s("1");
+        }
+        let r = check(&d);
+        assert!(vol(&r) < 10000. - 400. - 100., "recorte com folga {}", vol(&r));
+        // recorte flangeado: ganha o colar
+        if let FeatureKind::SmCut(c) = &mut d.feature_mut(cut).unwrap().kind {
+            c.offset = String::new();
+            c.mode = 2;
+            c.height = s("4");
+        }
+        let r = check(&d);
+        assert!(vol(&r) > 10000. - 400. + 100., "colar do recorte {}", vol(&r));
+        // estampo circular Ø16 no ponto e padrão linear de 3 (soma e corte repetidos)
+        let mut d = base();
+        let top = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "2");
+        let mut data = SketchData::default();
+        let mut n = 8_000_000u64;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        let p0 = data.add_point(&mut al, 25., 25.);
+        data.add_curve(&mut al, scc_core::sketch::Curve::Point { p: p0 }, false);
+        let sp = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Datum(top), data }));
+        let st = d.add_feature(FeatureKind::SmStamp(SmStamp { sketch: sp, depth: s("3"), flip: false, kind: 2, width: s("16"), punch: None }));
+        let v1 = vol(&check(&d));
+        assert!(v1 > 10000., "estampo circular {v1}");
+        d.add_feature(FeatureKind::Pattern(Pattern {
+            kind: PatternKind::Linear { dir: AxisRef::Origin(OriginAxis::X), count: s("3"), spacing: s("25"), dir2: None, count2: s("1"), spacing2: s("0"), total: false },
+            sources: vec![st],
+        }));
+        let v3 = vol(&check(&d));
+        assert!(near(v3 - 10000., 3. * (v1 - 10000.), 2e-2), "padrão do estampo {v3} {v1}");
+        // nervura ao longo de uma linha
+        let mut d = base();
+        let top = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "2");
+        let ln = sk_lines(&mut d, PlaneRef::Datum(top), &[([20., 10.], [80., 10.])]);
+        d.add_feature(FeatureKind::SmStamp(SmStamp { sketch: ln, depth: s("2"), flip: false, kind: 1, width: s("6"), punch: None }));
+        assert!(vol(&check(&d)) > 10000., "nervura");
+        // alívio de canto redondo Ø6 no canto (100, 50)
+        let mut d = base();
+        d.add_feature(FeatureKind::SmCornerRelief(SmCornerRelief { at: [100., 50., 2.], size: s("6"), kind: 0 }));
+        let r = check(&d);
+        assert!(near(10000. - vol(&r), PI * 9. / 4. * 2., 2e-2), "alívio de canto {}", 10000. - vol(&r));
+        // bainha em gota e aba com material por dentro, pontas a 45° e alívio redondo
+        let mut d = base();
+        d.add_feature(FeatureKind::SmHem(SmHem { edge: [0., 25., 2.], length: s("6"), gap: s("2"), flip: false, kind: 1 }));
+        check(&d);
+        let mut d = base();
+        d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 25., 2.], length: s("20"), angle: s("90"), radius: None, off1: s("5"), off2: s("5"), flip: false, relief: Some(s("3")), relief_kind: 1, side: 2, miter: true }));
+        check(&d);
+        // joggle pelo ângulo (45°) com compensação
+        let mut d = base();
+        d.add_feature(FeatureKind::SmJoggle(SmJoggle { a: [60., 0., 2.], b: [60., 50., 2.], depth: s("3"), run: s("5"), flip: true, angle: Some(s("45")), plane: None, keep_length: true }));
+        check(&d);
+        // aba por perfil: L aberto no plano XZ na ponta x = 100, puxado 50 mm em y
+        let mut d = base();
+        let pr = sk_lines(&mut d, PlaneRef::Origin(OriginPlane::XZ), &[([100., 2.], [100., 20.]), ([100., 20.], [110., 20.])]);
+        d.add_feature(FeatureKind::SmProfileFlange(SmProfileFlange { sketch: pr, l1: s("0"), l2: s("50"), radius: None, flip: false }));
+        let r = check(&d);
+        assert!(vol(&r) > 10000. + 2. * 20. * 40., "aba por perfil {}", vol(&r));
+        // parede afastada 5 mm e simétrica
+        let mut d = Document::new("chapa");
+        d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), flat: false, ..Default::default() });
+        let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [10., 10.]);
+        d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: s("5"), mid: true, surface: None }));
+        let r = check(&d);
+        let zmin = r.bodies[0].mesh.positions.chunks_exact(3).map(|p| p[2]).fold(f32::MAX, f32::min);
+        assert!((zmin - 4.).abs() < 1e-3, "parede afastada e simétrica {zmin}");
     }
 
     #[test]
@@ -4708,10 +5351,10 @@ mod tests {
         let near = |a: f64, b: f64, tol: f64| (a - b).abs() <= tol * b.abs().max(1.);
         let s = |x: &str| x.to_string();
         let mut d = Document::new("chapa");
-        d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), flat: false });
+        d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), flat: false, ..Default::default() });
         let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [100., 50.]);
-        d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false }));
-        d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 25., 2.], length: s("20"), angle: s("90"), radius: None, off1: s("0"), off2: s("0"), flip: false, relief: None }));
+        d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
+        d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 25., 2.], length: s("20"), angle: s("90"), radius: None, off1: s("0"), off2: s("0"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false }));
         let r = recompute(&d);
         for f in &d.features {
             assert!(matches!(r.status[&f.id], Status::Ok | Status::Warning(_)), "{}: {:?}", f.name, r.status[&f.id]);
@@ -4733,7 +5376,7 @@ mod tests {
         assert!((tab[0].allowance - ba).abs() < 1e-9);
         // bainha esmagada na aresta oposta (x = 0), dobrando para baixo
         d.sheet.as_mut().unwrap().flat = false;
-        d.add_feature(FeatureKind::SmHem(SmHem { edge: [0., 25., 2.], length: s("8"), gap: s("0"), flip: true }));
+        d.add_feature(FeatureKind::SmHem(SmHem { edge: [0., 25., 2.], length: s("8"), gap: s("0"), flip: true, kind: 0 }));
         let r = recompute(&d);
         let st = &r.status[&d.features.last().unwrap().id];
         assert_eq!(*st, Status::Ok, "{st:?}");

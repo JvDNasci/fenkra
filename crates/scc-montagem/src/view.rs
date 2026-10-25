@@ -156,6 +156,7 @@ pub fn compose(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, errors: 
         param_error: None,
         elapsed_ms: 0.,
         kernel: String::new(),
+        bend_lines: vec![],
     };
     (doc, r)
 }

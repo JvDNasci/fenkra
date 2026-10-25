@@ -316,7 +316,8 @@ pub fn sheet(d: &Drawing, sheet: Id, m: &mut Models) -> Vec<Item> {
         for (pl, k) in &p.lines {
             let style = match k {
                 3 => Style::Hidden,
-                4 => Style::Thin,
+                4 | 6 => Style::Thin,
+                5 => Style::Center,
                 _ => Style::Visible,
             };
             // só sombreado: sem arestas (a borda do detalhe fica)
@@ -328,6 +329,10 @@ pub fn sheet(d: &Drawing, sheet: Id, m: &mut Models) -> Vec<Item> {
         }
         o.width = None;
         o.color = None;
+        for (q, t) in &p.labels {
+            let s = to_sheet(v, &p, *q);
+            o.text([s[0] + 1., s[1] + 1.], t.clone(), th * 0.7, 0., Align::Left);
+        }
         // hachura a 45° (espaçamento fixo na folha)
         if !p.hatch.is_empty() {
             let loops: Vec<Vec<V2>> = p.hatch.iter().map(|lp| lp.iter().map(|q| to_sheet(v, &p, *q)).collect()).collect();
