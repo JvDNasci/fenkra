@@ -142,6 +142,7 @@ fn auto_balloons(app: &mut App) {
         app.toast(tr("Balões automáticos: abra uma montagem na bancada Montagem"), true);
         return;
     }
+    let eye = app.viewport.as_ref().map(|v| v.camera.eye());
     let st = app.asm.as_mut().unwrap();
     let dir = st.dir();
     let rows = scc_montagem::bom::bom(&st.asm, dir.as_deref(), scc_montagem::bom::BomLevel::Topo);
@@ -167,7 +168,32 @@ fn auto_balloons(app: &mut App) {
         let fp = scc_montagem::load::full_path(dir.as_deref(), &path);
         let item = rows.iter().find(|r| r.path == fp).map(|r| r.item.clone()).unwrap_or_else(|| seen.len().to_string());
         let size = ((h[0] - l[0]).powi(2) + (h[1] - l[1]).powi(2)).sqrt();
-        found.push(([(l[0] + h[0]) / 2., (l[1] + h[1]) / 2., h[2]], item, size));
+        // âncora numa face visível: o triângulo mais voltado para a câmera (e maior), não o CG
+        let mut anchor = [(l[0] + h[0]) / 2., (l[1] + h[1]) / 2., h[2]];
+        if let (Some(e), Ok(m)) = (eye, sh.mesh(size.max(1.) * 0.01)) {
+            let p = |i: u32| Vec3::new(m.positions[i as usize * 3], m.positions[i as usize * 3 + 1], m.positions[i as usize * 3 + 2]);
+            let mut best = (0f32, None);
+            for t in m.indices.chunks_exact(3) {
+                let (a, b, c) = (p(t[0]), p(t[1]), p(t[2]));
+                let n = (b - a).cross(c - a);
+                let area = n.length() / 2.;
+                if area < 1e-9 {
+                    continue;
+                }
+                let ctr = (a + b + c) / 3.;
+                let facing = (n / (2. * area)).dot((e - ctr).normalize_or_zero());
+                if facing > 0.3 {
+                    let score = area.sqrt() * facing * facing;
+                    if score > best.0 {
+                        best = (score, Some(ctr));
+                    }
+                }
+            }
+            if let (_, Some(c)) = best {
+                anchor = [c.x as f64, c.y as f64, c.z as f64];
+            }
+        }
+        found.push((anchor, item, size));
     }
     if found.is_empty() {
         app.toast(tr("A montagem não tem componentes visíveis"), true);
@@ -425,6 +451,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     let focus = app.pmi_focus;
     let painter = ui.painter_at(rect);
     let mut edit_req: Option<Id> = None;
+    let mut anchor_req: Option<(Id, usize, [f64; 3])> = None;
+    let pick_filter = crate::picking::Filter { faces: true, edges: true, vertices: true, planes: false, hidden_env: false, exclude_sketch: None };
     let mut clicked = None;
     let fields = title_fields(app);
     let gstyle = app.settings.pmi_style.clone();
@@ -573,6 +601,37 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                 }
             }
         };
+        // anotação realçada/em edição: as âncoras viram alças (arraste e solte numa face, aresta ou vértice)
+        if is_sel && !matches!(pm.kind, PmiKind::TitleBlock { .. }) {
+            for (k, q) in a.iter().enumerate() {
+                let Some(sp) = cam.project(rect, v3(*q)) else { continue };
+                let h = ui.interact(Rect::from_center_size(sp, egui::vec2(16., 16.)), egui::Id::unique(("pmi_ancora", pm.id.0, k)), egui::Sense::drag());
+                painter.circle_stroke(sp, 6.5, Stroke::new(2., HL));
+                painter.circle_filled(sp, 2.5, HL);
+                if h.hovered() {
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+                }
+                let h = h.on_hover_text(tr("arraste o ponto de ancoragem para outra face, aresta ou vértice"));
+                if let (true, Some(m)) = (h.dragged(), h.interact_pointer_pos()) {
+                    painter.extend(egui::Shape::dashed_line(&[sp, m], Stroke::new(1.5, HL), 5., 3.));
+                    let ok = crate::picking::pick(r, &app.open.doc, cam, rect, m, &pick_filter).is_some();
+                    painter.circle_stroke(m, 7., Stroke::new(2., if ok { Color32::from_rgb(110, 210, 120) } else { Color32::from_rgb(230, 90, 80) }));
+                }
+                if h.drag_stopped() {
+                    if let Some(m) = h.interact_pointer_pos() {
+                        let hit = crate::picking::pick(r, &app.open.doc, cam, rect, m, &pick_filter).and_then(|p| match p {
+                            Pick::Vertex { pos, .. } => Some(pos.map(|v| v as f64)),
+                            Pick::Edge { mid, .. } => Some(mid.map(|v| v as f64)),
+                            Pick::Face { point, .. } => Some(point.map(|v| v as f64)),
+                            _ => None,
+                        });
+                        if let Some(p) = hit {
+                            anchor_req = Some((pm.id, k, p));
+                        }
+                    }
+                }
+            }
+        }
         let resp = ui.interact(rect_lbl, egui::Id::unique(("pmi_rotulo", pm.id.0)), egui::Sense::click_and_drag());
         // arrastar o rótulo: move o texto no plano da anotação (ou de frente para a tela)
         if resp.dragged() {
@@ -620,6 +679,21 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
             }
         });
         resp.on_hover_text(&pm.name);
+    }
+    if let Some((id, k, p)) = anchor_req {
+        if let Some(pm) = list_mut(app).iter_mut().find(|x| x.id == id) {
+            if k == 0 {
+                // o rótulo fica no mesmo lugar: o deslocamento compensa a âncora nova
+                let old = pm.anchors[0];
+                pm.offset = [0, 1, 2].map(|i| pm.offset[i] + old[i] - p[i]);
+            }
+            if let Some(x) = pm.anchors.get_mut(k) {
+                *x = p;
+            }
+        }
+        if app.in_asm() {
+            app.asm.as_mut().unwrap().modified = true;
+        }
     }
     if let Some((id, off)) = drag {
         if let Some(p) = list_mut(app).iter_mut().find(|p| p.id == id) {

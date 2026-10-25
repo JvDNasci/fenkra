@@ -29,6 +29,8 @@ pub enum Act {
     HiddenEnv,
     Settings,
     Dock(Group, Dock),
+    /// começou a arrastar um grupo encaixado pela alça (retângulo do bloco)
+    DockDrag(Group, egui::Rect),
     ClearPicks,
     SkTool(Tool),
     SkConstruction,
@@ -647,7 +649,7 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, title: String, list: Vec<Entr
             }
         }
     };
-    let mut undock = None;
+    let mut undock: Option<Group> = None;
     // tema: blocos com fundos alternados e o nome do grupo numa faixa de destaque
     let dark = ui.visuals().dark_mode;
     let theme = theme_colors(menu_theme, dark);
@@ -658,7 +660,29 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, title: String, list: Vec<Entr
     };
     let accent = theme.map(|t| t.2);
     let inner = if vertical {
-        frame.show(ui, |ui| ui.vertical_centered(|ui| body(ui)).response).inner
+        frame.show(ui, |ui| ui.vertical_centered(|ui| {
+            // alça: arrastar solta o grupo (fica sob o cursor e encaixa onde soltar)
+            if let Some(g) = g {
+                let (r, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width().max(30.), 10.), egui::Sense::drag());
+                let c = accent.unwrap_or(ui.visuals().weak_text_color());
+                for k in [-1., 0., 1.] {
+                    ui.painter().circle_filled(r.center() + egui::vec2(k * 5., 0.), 1.6, c);
+                }
+                let resp = resp.on_hover_text(format!("{} — {}", title, tr("arraste para soltar o grupo; solte numa borda para encaixar")));
+                if resp.hovered() {
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+                }
+                if resp.drag_started() {
+                    undock = Some(g);
+                }
+            }
+            // barra larga: os botões se distribuem em colunas
+            if ui.available_width() > size * 2.6 {
+                ui.horizontal_wrapped(|ui| body(ui));
+            } else {
+                body(ui);
+            }
+        }).response).inner
     } else {
         // bloco: botões em cima, nome do grupo embaixo
         frame.show(ui, |ui| ui.vertical(|ui| {
@@ -686,7 +710,7 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, title: String, list: Vec<Entr
         .inner
     };
     if let Some(g) = undock {
-        acts.push(Act::Dock(g, Dock::Flutuante));
+        acts.push(Act::DockDrag(g, inner.rect));
     }
     inner.context_menu(|ui| {
         ui.label(RichText::new(&title).strong());

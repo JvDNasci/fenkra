@@ -2170,6 +2170,8 @@ static TABLE: &[(&str, &str)] = &[
     ("ERRO", "ERROR"),
     ("AVISO", "WARNING"),
     ("INATIVO", "INACTIVE"),
+    ("﻿arraste o ponto de ancoragem para outra face, aresta ou vértice", "drag the anchor point onto another face, edge or vertex"),
+    ("arraste para soltar o grupo; solte numa borda para encaixar", "drag to undock the group; drop it on an edge to dock"),
 ];
 
 #[cfg(test)]

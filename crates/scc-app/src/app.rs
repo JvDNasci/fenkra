@@ -105,6 +105,10 @@ pub struct App {
     pub pub_open: bool,
     /// janela do estilo geral das anotações 3D
     pub pmi_style_open: bool,
+    /// grupo da barra sendo arrastado para outra doca (fantasma animado até o encaixe)
+    pub dock_drag: Option<DockDrag>,
+    /// última posição do ponteiro (para começar o arraste de um grupo debaixo do cursor)
+    pub ctx_pointer: Option<egui::Pos2>,
     /// repetição de pontos (e planos normais) ao longo de uma curva, em edição
     pub repeat: Option<Repeat>,
     /// janela de extração (simples/múltipla, propagação); `None` = fechada
@@ -134,7 +138,7 @@ pub struct App {
     worker: Worker,
     gen_sent: u64,
     gen_done: u64,
-    viewport: Option<Viewport>,
+    pub viewport: Option<Viewport>,
     pub scene_dirty: bool,
     fit_pending: bool,
     undo: Vec<Document>,
@@ -252,6 +256,8 @@ impl App {
             delete_dialog: None,
             pub_open: false,
             pmi_style_open: false,
+            dock_drag: None,
+            ctx_pointer: None,
             repeat: None,
             extract: None,
             extract_last: ExtractOpts::default(),
@@ -1540,6 +1546,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None });
             }
             Act::Settings => self.settings_open = !self.settings_open,
             Act::Dock(g, d) => self.settings.set_dock(g, d),
+            Act::DockDrag(g, r) => {
+                let p = self.ctx_pointer.unwrap_or(r.center());
+                self.dock_drag = Some(DockDrag { group: g, grab: p - r.min, size: r.size(), ghost: r });
+            }
             Act::SkTool(t) => {
                 if let Some(e) = self.sketch.as_mut() {
                     e.set_tool(t)
@@ -2325,7 +2335,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None });
         let ts = self.tool_state();
         let side = toolbar::groups_at(&self.settings, Dock::Lateral, sketching);
         if !side.is_empty() {
-            egui::Panel::left("barra_lateral").resizable(false).show(root, |ui| {
+            egui::Panel::left("barra_lateral").resizable(true).default_size(62.).size_range(48.0..=420.).show(root, |ui| {
                 egui::ScrollArea::vertical().id_salt("barra_lat").show(ui, |ui| {
                     for (i, g) in side.iter().enumerate() {
                         if i > 0 {
@@ -2338,7 +2348,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None });
         }
         let right = toolbar::groups_at(&self.settings, Dock::Direita, sketching);
         if !right.is_empty() {
-            egui::Panel::right("barra_direita").resizable(false).show(root, |ui| {
+            egui::Panel::right("barra_direita").resizable(true).default_size(62.).size_range(48.0..=420.).show(root, |ui| {
                 egui::ScrollArea::vertical().id_salt("barra_dir").show(ui, |ui| {
                     for (i, g) in right.iter().enumerate() {
                         if i > 0 {
@@ -2352,14 +2362,74 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None });
         let ctx = root.ctx().clone();
         let area = ctx.content_rect();
         let dragging = ctx.input(|i| i.pointer.primary_down());
+        self.ctx_pointer = ctx.input(|i| i.pointer.interact_pos().or(i.pointer.latest_pos()));
+        // zonas de encaixe: faixa do topo e as duas laterais
+        let zones = [
+            (Dock::Topo, Rect::from_min_size(area.left_top() + egui::vec2(0., 50.), egui::vec2(area.width(), 70.))),
+            (Dock::Lateral, Rect::from_min_size(area.left_top() + egui::vec2(0., 130.), egui::vec2(70., area.height() - 160.))),
+            (Dock::Direita, Rect::from_min_size(area.right_top() + egui::vec2(-70., 130.), egui::vec2(70., area.height() - 160.))),
+        ];
+        // grupo arrastado pela alça: fantasma segue o cursor e desliza até a doca de destino
+        if let Some(mut dd) = self.dock_drag {
+            let p = self.ctx_pointer.unwrap_or(dd.ghost.center());
+            let target = zones.iter().find(|(_, z)| z.contains(p)).copied();
+            let to = match target {
+                Some((d, z)) => {
+                    let w = match d {
+                        Dock::Topo => egui::vec2(dd.size.x.max(dd.size.y), 64.),
+                        _ => egui::vec2(64., dd.size.y.max(dd.size.x).min(z.height())),
+                    };
+                    let c = match d {
+                        Dock::Topo => egui::pos2(p.x.clamp(z.left() + w.x / 2., z.right() - w.x / 2.), z.center().y),
+                        _ => egui::pos2(z.center().x, p.y.clamp(z.top() + w.y / 2., z.bottom() - w.y / 2.)),
+                    };
+                    Rect::from_center_size(c, w)
+                }
+                None => Rect::from_min_size(p - dd.grab, dd.size),
+            };
+            // animação: aproxima uma fração a cada quadro
+            let k = 0.3;
+            dd.ghost = Rect::from_min_max(dd.ghost.min + (to.min - dd.ghost.min) * k, dd.ghost.max + (to.max - dd.ghost.max) * k);
+            let pt = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("fantasma_doca")));
+            for (d, z) in zones {
+                let on = target.is_some_and(|t| t.0 == d);
+                pt.rect_filled(z, 8., Color32::from_rgba_unmultiplied(90, 170, 255, if on { 46 } else { 16 }));
+                pt.rect_stroke(z, 8., egui::Stroke::new(if on { 2. } else { 1. }, Color32::from_rgba_unmultiplied(90, 170, 255, if on { 200 } else { 80 })), egui::StrokeKind::Inside);
+            }
+            pt.rect_filled(dd.ghost, 8., Color32::from_rgba_unmultiplied(60, 120, 220, 110));
+            pt.rect_stroke(dd.ghost, 8., egui::Stroke::new(2., Color32::from_rgb(140, 195, 255)), egui::StrokeKind::Inside);
+            pt.text(dd.ghost.center(), egui::Align2::CENTER_CENTER, dd.group.label(), egui::FontId::proportional(13.), Color32::WHITE);
+            ctx.set_cursor_icon(egui::CursorIcon::Grabbing);
+            ctx.request_repaint();
+            if ctx.input(|i| i.pointer.any_released() || !i.pointer.primary_down()) {
+                match target {
+                    Some((d, _)) => acts.push(Act::Dock(dd.group, d)),
+                    None => {
+                        // flutuante exatamente onde soltou
+                        ctx.data_mut(|m| m.insert_temp(egui::Id::unique(("pos_flutuante", dd.group.label())), p - dd.grab));
+                        acts.push(Act::Dock(dd.group, Dock::Flutuante));
+                    }
+                }
+                self.dock_drag = None;
+            } else {
+                self.dock_drag = Some(dd);
+            }
+        }
         for (i, g) in toolbar::groups_at(&self.settings, Dock::Flutuante, sketching).into_iter().enumerate() {
-            let w = egui::Window::new(g.label())
+            let pos_key = egui::Id::unique(("pos_flutuante", g.label()));
+            let place = ctx.data_mut(|m| m.remove_temp::<egui::Pos2>(pos_key));
+            let w0 = egui::Window::new(g.label())
                 .id(egui::Id::unique(("flutuante", g.label())))
                 // empilhados na borda esquerda da viewport, sem cobrir uns aos outros
                 .default_pos(egui::pos2(290., 140. + 120. * i as f32))
                 .resizable(false)
-                .collapsible(true)
-                .show(&ctx, |ui| {
+                .collapsible(true);
+            // recém-solto: aparece onde o grupo foi largado
+            let w0 = match place {
+                Some(p) => w0.current_pos(p),
+                None => w0,
+            };
+            let w = w0.show(&ctx, |ui| {
                     ui.horizontal(|ui| {
                         ui.label(RichText::new(tr("📌 fixar em:")).small().weak());
                         for (d, n) in [(Dock::Topo, "topo"), (Dock::Lateral, "lateral"), (Dock::Direita, "direita")] {
@@ -2397,14 +2467,20 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None });
                 };
                 if let Some(d) = to {
                     if dragging && w.response.dragged() {
-                        // guia visual enquanto arrasta
-                        let p = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("guia_encaixe")));
-                        let guide = match d {
-                            Dock::Topo => Rect::from_min_size(area.left_top() + egui::vec2(0., 56.), egui::vec2(area.width(), 6.)),
-                            Dock::Lateral => Rect::from_min_size(area.left_top(), egui::vec2(6., area.height())),
-                            _ => Rect::from_min_size(area.right_top() - egui::vec2(6., 0.), egui::vec2(6., area.height())),
+                        // prévia animada: um fantasma desliza da janela até a doca
+                        let z = zones.iter().find(|(x, _)| *x == d).map(|(_, z)| *z).unwrap_or(r);
+                        let goal = match d {
+                            Dock::Topo => Rect::from_center_size(egui::pos2(r.center().x.clamp(z.left() + r.width() / 2., z.right() - r.width() / 2.), z.center().y), egui::vec2(r.width(), 64.)),
+                            _ => Rect::from_center_size(egui::pos2(z.center().x, r.center().y.clamp(z.top() + r.height() / 2., z.bottom() - r.height() / 2.)), egui::vec2(64., r.height().min(z.height()))),
                         };
-                        p.rect_filled(guide, 2., Color32::from_rgba_unmultiplied(90, 170, 255, 180));
+                        let key = egui::Id::unique(("fantasma_janela", g.label()));
+                        let prev = ctx.data(|m| m.get_temp::<Rect>(key)).unwrap_or(r);
+                        let ghost = Rect::from_min_max(prev.min + (goal.min - prev.min) * 0.3, prev.max + (goal.max - prev.max) * 0.3);
+                        ctx.data_mut(|m| m.insert_temp(key, ghost));
+                        let p = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("guia_encaixe")));
+                        p.rect_filled(ghost, 8., Color32::from_rgba_unmultiplied(60, 120, 220, 90));
+                        p.rect_stroke(ghost, 8., egui::Stroke::new(2., Color32::from_rgb(140, 195, 255)), egui::StrokeKind::Inside);
+                        ctx.request_repaint();
                     }
                     // só encaixa ao terminar de arrastar a janela (clique em botão não conta)
                     let key = egui::Id::unique(("arrastando_grupo", g.label()));
@@ -5623,6 +5699,17 @@ pub struct ExtractOpts {
     pub multi: bool,
     pub prop: crate::extract::Prop,
     pub publish: bool,
+}
+
+/// Arraste de um grupo da barra para outra doca.
+#[derive(Clone, Copy)]
+pub struct DockDrag {
+    pub group: crate::settings::Group,
+    /// onde o cursor pegou o bloco
+    pub grab: egui::Vec2,
+    pub size: egui::Vec2,
+    /// retângulo do fantasma (anima até o destino)
+    pub ghost: Rect,
 }
 
 /// Repetição de pontos ao longo de uma curva (janela em edição).
