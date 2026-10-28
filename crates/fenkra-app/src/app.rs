@@ -6869,12 +6869,12 @@ fn ring(p: &egui::Painter, c: egui::Pos2, r: f32, turn: f32, span: f32, w: f32, 
     }
 }
 
-/// Logotipo em texto: "Solid" na cor do texto e "CadCraft" na cor de destaque.
+/// Logotipo em texto: "Fenkra" na cor do texto e "CAD" na cor de destaque.
 fn wordmark(p: &egui::Painter, c: egui::Pos2, size: f32, text: Color32, accent: Color32) {
     let mut job = egui::text::LayoutJob::default();
     let f = egui::FontId::proportional(size);
-    job.append("Solid", 0., egui::TextFormat { font_id: f.clone(), color: text, ..Default::default() });
-    job.append("CadCraft", 0., egui::TextFormat { font_id: f, color: accent, ..Default::default() });
+    job.append("Fenkra", 0., egui::TextFormat { font_id: f.clone(), color: text, ..Default::default() });
+    job.append(" CAD", 0., egui::TextFormat { font_id: f, color: accent, ..Default::default() });
     let g = p.layout_job(job);
     let pos = c - g.size() / 2.;
     // sublinhado em degradê sob a marca
