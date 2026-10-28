@@ -1,7 +1,7 @@
 # Modos de criação de cada elemento
 
 Levantamento dos modos usuais em CADs paramétricos, descritos com nossas palavras, para planejar
-as ferramentas do SolidCadCraft. Coluna **Fase** = quando pretendemos implementar (ver
+as ferramentas do Fenkra. Coluna **Fase** = quando pretendemos implementar (ver
 [backlog](../backlog-alpha.md)).
 
 ## Ponto (2D no sketch e 3D na peça)

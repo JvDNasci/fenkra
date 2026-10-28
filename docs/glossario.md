@@ -1,4 +1,4 @@
-# Glossário — SolidCadCraft
+# Glossário — Fenkra
 
 Termos próprios do projeto. Use estes em vez de nomes comerciais de outros CADs.
 

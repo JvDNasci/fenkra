@@ -1,0 +1,13 @@
+[package]
+name = "fenkra-montagem"
+description = "Módulo Montagem: componentes, restrições e solucionador de posicionamento"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+fenkra-core = { path = "../fenkra-core" }
+fenkra-kernel = { path = "../fenkra-kernel" }
+fenkra-solidos = { path = "../fenkra-solidos" }
+serde.workspace = true
+serde_json.workspace = true

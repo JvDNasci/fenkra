@@ -1,4 +1,4 @@
-# SolidCadCraft — Documento de Visão
+# Fenkra CAD — Documento de Visão
 
 > Rascunho v0.2. Revisar e ajustar.
 
@@ -15,7 +15,7 @@ dependentes de assinatura e nuvem. A principal alternativa aberta, o FreeCAD, é
 
 ## 2. Proposta
 
-O **SolidCadCraft** é um CAD 3D paramétrico aberto, de abordagem **simples a intermediária**,
+O **Fenkra** é um CAD 3D paramétrico aberto, de abordagem **simples a intermediária**,
 com módulos avançados acrescentados depois. Seus pilares:
 
 1. **Sketches paramétricos com parâmetros e cálculos do usuário.** Qualquer cota pode ser uma

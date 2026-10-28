@@ -1,4 +1,6 @@
-# SolidCadCraft
+# Fenkra CAD
+
+> *Projete. Dobre. Monte. Renasça.*
 
 CAD 3D paramétrico open source, leve e modular: modelagem sólida com sketches paramétricos,
 projeto relacional com geometria mestre, montagens e mecanismos, desenho técnico sincronizado,
@@ -9,7 +11,7 @@ chapas metálicas, estruturas soldadas e gestão de projeto.
 ## Rodar
 
 ```bash
-cargo run -p scc-app --release
+cargo run -p fenkra-app --release
 ```
 
 Pré-requisitos (Rust, MSVC e OpenCASCADE via vcpkg) em [docs/prototipo.md](docs/prototipo.md).
@@ -18,11 +20,11 @@ Pré-requisitos (Rust, MSVC e OpenCASCADE via vcpkg) em [docs/prototipo.md](docs
 
 | Crate | Papel |
 |---|---|
-| [scc-core](crates/scc-core) | Documento, árvore, linha de tempo, parâmetros, referências, edição não destrutiva |
-| [scc-kernel](crates/scc-kernel) | Fachada C++ do OpenCASCADE ligada ao Rust via `cxx` |
-| [scc-solidos](crates/scc-solidos) | Módulo Modelagem Sólida (recompute dos comandos) |
-| [scc-project](crates/scc-project) | Gestão de projeto: versões, revisões congeladas, PN |
-| [scc-app](crates/scc-app) | Interface egui + viewport wgpu |
+| [fenkra-core](crates/fenkra-core) | Documento, árvore, linha de tempo, parâmetros, referências, edição não destrutiva |
+| [fenkra-kernel](crates/fenkra-kernel) | Fachada C++ do OpenCASCADE ligada ao Rust via `cxx` |
+| [fenkra-solidos](crates/fenkra-solidos) | Módulo Modelagem Sólida (recompute dos comandos) |
+| [fenkra-project](crates/fenkra-project) | Gestão de projeto: versões, revisões congeladas, PN |
+| [fenkra-app](crates/fenkra-app) | Interface egui + viewport wgpu |
 
 ## Documentação
 

@@ -1,4 +1,4 @@
-# Roadmap — SolidCadCraft
+# Roadmap — Fenkra
 
 > As fases são ordem de prioridade, não calendário. Estratégia: **fundação sólida primeiro**, depois
 > **uma versão funcional de cada módulo** com menu minimalista e features completas em opções.

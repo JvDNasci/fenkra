@@ -1,0 +1,14 @@
+[package]
+name = "fenkra-desenho"
+description = "Detalhamento 2D: folhas, vistas associativas (HLR), cortes, detalhes, cotas, tabelas e exportação PDF/SVG/DXF"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+fenkra-core = { path = "../fenkra-core" }
+fenkra-kernel = { path = "../fenkra-kernel" }
+fenkra-solidos = { path = "../fenkra-solidos" }
+fenkra-montagem = { path = "../fenkra-montagem" }
+serde.workspace = true
+serde_json.workspace = true

@@ -4,7 +4,7 @@
 - **Data:** 2026-10-21
 
 ## Contexto
-O SolidCadCraft tem 7 módulos (sólidos, superfícies, montagem, desenho, chapas, soldas, gestão) e
+O Fenkra tem 7 módulos (sólidos, superfícies, montagem, desenho, chapas, soldas, gestão) e
 recursos transversais (parâmetros, propriedades, links, BOM, biblioteca). Os módulos precisam evoluir
 em ritmos diferentes, e módulos avançados (ex.: superfícies por pontos de controle) entram depois.
 

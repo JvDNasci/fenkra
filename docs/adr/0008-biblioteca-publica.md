@@ -4,7 +4,7 @@
 - **Data:** 2026-10-21
 
 ## Contexto
-Um diferencial do SolidCadCraft é uma biblioteca **pública e editável** de fixadores, roscas, perfis
+Um diferencial do Fenkra é uma biblioteca **pública e editável** de fixadores, roscas, perfis
 estruturais (com peso por metro e propriedades de seção), materiais e tabelas de chapa.
 
 ## Decisão

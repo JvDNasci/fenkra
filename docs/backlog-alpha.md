@@ -37,7 +37,7 @@ Versionamento flexível enquanto o projeto for local (sem distribuição).
 - [x] Ícones no estilo da referência e ícone em cada opção/variação (término, operação, furo, arestas, planos, cotas)
 - [x] Barra em blocos com nome do grupo; famílias com setinha ▾; grupos destacáveis/encaixáveis
 - [x] Dica breve + descrição avançada após 5 s
-- [x] Estilos de navegação (SolidCadCraft, SolidWorks, Fusion, CATIA, Blender, Onshape)
+- [x] Estilos de navegação (Fenkra, SolidWorks, Fusion, CATIA, Blender, Onshape)
 - [x] Seleção de faces, arestas, vértices e planos na viewport + filtro de seleção; sketch no plano/face clicado
 - [x] Sketch com menus: Criação, Transformar (mover, copiar, espelhar, offset, filete), Cotagem (6 tipos), Restrições, Ferramentas (checar contornos, construção, grade, snaps, auto)
 - [x] Painel do sketch limpo: restrições do elemento clicado; símbolos discretos no desenho

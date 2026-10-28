@@ -1,6 +1,6 @@
 # Protótipo v0.1 — Modelagem Sólida
 
-Primeira versão executável do SolidCadCraft: interface, gestão de projeto simples e o módulo
+Primeira versão executável do Fenkra: interface, gestão de projeto simples e o módulo
 Modelagem Sólida sobre o OpenCASCADE 8.0.1.
 
 ## Como compilar e rodar (Windows)
@@ -28,7 +28,7 @@ Outro local: defina a variável `OCCT_ROOT` apontando para a pasta `installed/<t
 Rodar:
 
 ```bash
-cargo run -p scc-app --release
+cargo run -p fenkra-app --release
 ```
 
 Testes:

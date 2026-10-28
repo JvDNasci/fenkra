@@ -5,7 +5,7 @@
 
 ## Contexto
 O projeto relacional (peças que se atualizam a partir de uma geometria mestre ou de outras peças) é
-um pilar do SolidCadCraft. Em muitos CADs, links entre peças apontam para qualquer face ou aresta de
+um pilar do Fenkra. Em muitos CADs, links entre peças apontam para qualquer face ou aresta de
 outro documento, o que os torna frágeis e difíceis de rastrear.
 
 ## Decisão

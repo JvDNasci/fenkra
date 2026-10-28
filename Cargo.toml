@@ -1,13 +1,13 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/scc-core",
-    "crates/scc-kernel",
-    "crates/scc-solidos",
-    "crates/scc-project",
-    "crates/scc-montagem",
-    "crates/scc-desenho",
-    "crates/scc-app",
+    "crates/fenkra-core",
+    "crates/fenkra-kernel",
+    "crates/fenkra-solidos",
+    "crates/fenkra-project",
+    "crates/fenkra-montagem",
+    "crates/fenkra-desenho",
+    "crates/fenkra-app",
 ]
 
 [workspace.package]

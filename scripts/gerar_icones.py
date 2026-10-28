@@ -1,4 +1,4 @@
-"""Gera os ícones SVG do SolidCadCraft (estilo ilustrado, 48x48). Uso: icons.py <pasta_destino>"""
+"""Gera os ícones SVG do Fenkra (estilo ilustrado, 48x48). Uso: icons.py <pasta_destino>"""
 import os, sys
 
 OUT = sys.argv[1]

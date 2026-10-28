@@ -1,8 +1,8 @@
-﻿# Gera o pacote de release do SolidCadCraft para Windows x64.
+﻿# Gera o pacote de release do Fenkra para Windows x64.
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\release.ps1
 #
-# Resultado: dist\SolidCadCraft-<versão>-windows-x64\ e o .zip correspondente.
+# Resultado: dist\Fenkra-<versão>-windows-x64\ e o .zip correspondente.
 # Só as DLLs realmente usadas pelo executável são copiadas (fechamento de dependências via dumpbin).
 
 param(
@@ -15,17 +15,17 @@ Set-Location $root
 
 # versão do workspace
 $version = (Select-String -Path Cargo.toml -Pattern '^version\s*=\s*"(.+)"' | Select-Object -First 1).Matches[0].Groups[1].Value
-$name = "SolidCadCraft-$version-windows-x64"
+$name = "Fenkra-$version-windows-x64"
 $dist = Join-Path $root "dist"
 $out = Join-Path $dist $name
-Write-Host "== SolidCadCraft $version =="
+Write-Host "== Fenkra $version =="
 
 if (-not $SkipBuild) {
     $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
-    cargo build --release -p scc-app
+    cargo build --release -p fenkra-app
     if ($LASTEXITCODE -ne 0) { throw "falha na compilação" }
 }
-$exe = Join-Path $root "target\release\solidcadcraft.exe"
+$exe = Join-Path $root "target\release\fenkra.exe"
 if (-not (Test-Path $exe)) { throw "executável não encontrado: $exe" }
 
 # dumpbin do Visual Studio

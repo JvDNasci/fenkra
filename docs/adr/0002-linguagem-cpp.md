@@ -11,7 +11,7 @@ Um protótipo em Python foi descartado pelo mantenedor: o objetivo é um aplicat
 ## Decisão
 - **Rust** para todo o sistema: núcleo (documento, árvore, parâmetros, links), módulos, gestão de
   projeto, renderização e interface.
-- **C++17** apenas na **fachada fina do OpenCASCADE** (`crates/scc-kernel/cpp`), ligada ao Rust pelo
+- **C++17** apenas na **fachada fina do OpenCASCADE** (`crates/fenkra-kernel/cpp`), ligada ao Rust pelo
   crate **`cxx`**. Nenhuma exceção do OCCT atravessa a ponte; tudo vira `Result`.
 - **Interface: egui (eframe)**, imediata e leve, com **viewport própria em wgpu** (textura offscreen
   com MSAA e profundidade).
@@ -23,17 +23,17 @@ Um protótipo em Python foi descartado pelo mantenedor: o objetivo é um aplicat
 
 | Crate | Linguagem | Papel |
 |---|---|---|
-| `scc-core` | Rust | Documento, árvore, linha de tempo, parâmetros/expressões, referências, edição não destrutiva |
-| `scc-kernel` | Rust + C++ | Fachada segura do OpenCASCADE |
-| `scc-solidos` | Rust | Módulo Modelagem Sólida: recompute dos comandos |
-| `scc-project` | Rust | Gestão de projeto: versões, revisões congeladas, PN |
-| `scc-app` | Rust | Interface egui + viewport wgpu |
+| `fenkra-core` | Rust | Documento, árvore, linha de tempo, parâmetros/expressões, referências, edição não destrutiva |
+| `fenkra-kernel` | Rust + C++ | Fachada segura do OpenCASCADE |
+| `fenkra-solidos` | Rust | Módulo Modelagem Sólida: recompute dos comandos |
+| `fenkra-project` | Rust | Gestão de projeto: versões, revisões congeladas, PN |
+| `fenkra-app` | Rust | Interface egui + viewport wgpu |
 
 ## Alternativas consideradas
 - **C++20 + Qt 6:** acesso direto ao OCCT, mas build mais pesado e mais risco de erros de memória.
 - **Python + PySide6 + OCP:** rápido para prototipar, mas descartado por peso e desempenho.
 - **Qt via cxx-qt / Slint:** visual mais nativo; egui escolhido por leveza e velocidade de iteração.
-  A interface fica isolada em `scc-app`, então trocar de toolkit no futuro não afeta o núcleo.
+  A interface fica isolada em `fenkra-app`, então trocar de toolkit no futuro não afeta o núcleo.
 - **Kernel em Rust puro (Truck, Fornjot):** ainda imaturos em filetes, offset e STEP.
 
 ## Consequências

@@ -8,7 +8,7 @@ painel com parâmetros que aceitam expressões, e um teste automático básico.
 
 ## M1 — Montagem
 
-- [x] Documento de montagem (`.sccasm`) no projeto; árvore com componentes, grupos de organização
+- [x] Documento de montagem (`.fka`) no projeto; árvore com componentes, grupos de organização
       vazios, subconjuntos e peças
 - [x] Inserir peça existente; criar peça nova no contexto; substituir componente mantendo vínculos
 - [x] Reordenar a árvore só muda a visualização; numeração automática (índices sequenciais)

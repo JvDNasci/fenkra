@@ -1,0 +1,30 @@
+[package]
+name = "fenkra-app"
+description = "Aplicativo Fenkra"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+build = "build.rs"
+
+[[bin]]
+name = "fenkra"
+path = "src/main.rs"
+
+[dependencies]
+fenkra-core = { path = "../fenkra-core" }
+fenkra-kernel = { path = "../fenkra-kernel" }
+fenkra-solidos = { path = "../fenkra-solidos" }
+fenkra-project = { path = "../fenkra-project" }
+fenkra-montagem = { path = "../fenkra-montagem" }
+fenkra-desenho = { path = "../fenkra-desenho" }
+eframe = { version = "0.37", features = ["wgpu", "persistence"] }
+glam.workspace = true
+bytemuck.workspace = true
+rfd = "0.17"
+egui_extras = { version = "0.37", features = ["svg", "image"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+serde.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"
