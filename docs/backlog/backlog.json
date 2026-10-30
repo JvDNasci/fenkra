@@ -1,24 +1,24 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 7480,
+ "tokens_total_k": 7640,
  "ondas": {
   "1": {
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.27",
    "tokens_k": 1300,
-   "pct": 17.4
+   "pct": 17.0
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.28",
-   "tokens_k": 1610,
-   "pct": 21.5
+   "tokens_k": 1770,
+   "pct": 23.2
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.29+",
    "tokens_k": 4570,
-   "pct": 61.1
+   "pct": 59.8
   }
  },
  "itens": [
@@ -42,7 +42,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 2.7
+   "pct": 2.6
   },
   {
    "id": "B02",
@@ -118,7 +118,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 1.9
+   "pct": 1.8
   },
   {
    "id": "B06",
@@ -137,7 +137,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 1.5
+   "pct": 1.4
   },
   {
    "id": "B07",
@@ -194,7 +194,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 1.9
+   "pct": 1.8
   },
   {
    "id": "B10",
@@ -250,7 +250,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 1.5
+   "pct": 1.4
   },
   {
    "id": "B13",
@@ -307,7 +307,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 5.3
+   "pct": 5.2
   },
   {
    "id": "B16",
@@ -326,7 +326,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.1
+   "pct": 1.0
   },
   {
    "id": "B17",
@@ -434,7 +434,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 1.1
+   "pct": 1.0
   },
   {
    "id": "B22",
@@ -501,22 +501,42 @@
    "id": "B25",
    "onda": 2,
    "prio": "P1",
-   "titulo": "VPM fase 1 (local)",
-   "oque": "SQLite + cofre em pasta: produto, revisão, documento, estrutura (BOM) e histórico; migração do índice JSON do fenkra-project.",
+   "titulo": "VPM fase 1 (local e em pasta)",
+   "oque": "SQLite + cofre em pasta: produto, revisão, documento, estrutura (BOM) e histórico; migração do índice JSON do fenkra-project; modo pasta compartilhada (LAN/OneDrive) com lock.json e detecção de conflito; VPMReader/Writer/Environment e painel lateral.",
    "origem": [
-    "CTX-PLM"
+    "CTX-PLM",
+    "CTX-PN"
    ],
    "catalogo": [
     "PLM-02",
     "PLM-03",
     "PLM-04",
-    "PLM-05"
+    "PLM-05",
+    "PLM-07"
    ],
-   "tokens_k": 300,
+   "tokens_k": 340,
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 4.0
+   "pct": 4.5
+  },
+  {
+   "id": "B47",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "PNEngine: regras de part-number e ambientes",
+   "oque": "Editor de regras com campos ([NORMA], [CATEGORIA], [MATERIAL], [DIM], [SERIAL:n], [REV]), interpretador que preenche pela peça, contadores por ambiente/categoria, ambientes (Industrial, Aeroespacial, Cliente X) salvos em JSON.",
+   "origem": [
+    "CTX-PN"
+   ],
+   "catalogo": [
+    "PLM-06"
+   ],
+   "tokens_k": 120,
+   "teste": "Auto",
+   "area": "PDM / PLM",
+   "status": "a fazer",
+   "pct": 1.6
   },
   {
    "id": "B26",
@@ -541,7 +561,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 6.7
+   "pct": 6.5
   },
   {
    "id": "B27",
@@ -579,7 +599,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 5.3
+   "pct": 5.2
   },
   {
    "id": "B29",
@@ -601,7 +621,7 @@
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 6.0
+   "pct": 5.9
   },
   {
    "id": "B42",
@@ -640,7 +660,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 2.7
+   "pct": 2.6
   },
   {
    "id": "B44",
@@ -694,7 +714,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 2.7
+   "pct": 2.6
   },
   {
    "id": "B30",
@@ -725,7 +745,7 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 4.0
+   "pct": 3.9
   },
   {
    "id": "B31",
@@ -795,7 +815,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 2.7
+   "pct": 2.6
   },
   {
    "id": "B34",
@@ -931,7 +951,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 2.7
+   "pct": 2.6
   },
   {
    "id": "B41",

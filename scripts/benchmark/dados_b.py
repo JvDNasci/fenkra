@@ -209,6 +209,11 @@ e('PLM-04', PLM, 'Check-in/out e multiusuário', 'Bloqueio para edição e traba
   ('VPM sessions', 'Check Out / Check In', 'Check Out / Check In', '—'), 'nao', '', '', ['plm-g2', 'ctx-plm'], 'CTX-PLM'),
 e('PLM-05', PLM, 'Onde é usado e comparação', 'Onde a peça é usada e o que mudou entre revisões.', 'Consulta → árvore de uso / diferenças.',
   ('Where-used / Compare', 'Where Used / Compare', 'Uses / Where Used', '—'), 'nao', '', '', ['plm-g2', 'ctx-plm'], 'CTX-PLM'),
+e('PLM-06', PLM, 'Regras de part-number e ambientes', 'Gera o PN por regra com campos (norma, categoria, material, dimensão, serial, revisão), por ambiente.',
+  'Ambiente → regra → campos preenchidos pela peça → código único.', ('Numbering rules (ENOVIA)', 'Serial numbers / Data cards (PDM)', 'Numbering schemes (Vault)', 'PN com prefixo fixo'),
+  'parcial', 'fenkra-project: prefixo FK- + contador, bloqueio de duplicado; sem regra com campos nem ambientes.', '', ['plm-g2', 'ctx-pn'], 'CTX-PN'),
+e('PLM-07', PLM, 'Cofre em pasta compartilhada', 'Trabalho em equipe numa pasta de rede ou sincronizada (OneDrive), sem servidor.', 'Pasta → trava por arquivo (lock) → detectar conflito.',
+  ('— (servidor)', '— (servidor PDM)', 'Vault Basic (servidor)', 'Projeto em pasta (sem trava)'), 'parcial', 'Projeto em pasta já existe; falta trava e detecção de conflito (RF-GPR-025).', 'Os três exigem servidor.', ['ctx-pn'], 'CTX-PN'),
 
 # ------------------------------------------------------------------ GERAL
 e('GER-01', GER, 'Ocultar hierárquico', 'Ocultar o pai esconde os filhos sem perder o estado de cada um.', 'Estado próprio + estado herdado.',

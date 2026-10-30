@@ -10,6 +10,8 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 
 - **Estados de ciclo de vida** (Estados) — DocState sem fluxo de aprovação. `CTX-PLM`
 - **Banco de produtos e estrutura (BOM)** (Índice JSON) — Índice JSON com hash blake3; sem banco nem estrutura de produto. `CTX-PLM`
+- **Regras de part-number e ambientes** (PN com prefixo fixo) — fenkra-project: prefixo FK- + contador, bloqueio de duplicado; sem regra com campos nem ambientes. `CTX-PN`
+- **Cofre em pasta compartilhada** (Projeto em pasta (sem trava)) — Projeto em pasta já existe; falta trava e detecção de conflito (RF-GPR-025). `CTX-PN`
 
 ## ❌ Ainda não existe
 

@@ -27,3 +27,5 @@
 | PLM-03 | Banco de produtos e estrutura (BOM) | 🟡 | Índice JSON com hash blake3; sem banco nem estrutura de produto. | CTX-PLM |
 | PLM-04 | Check-in/out e multiusuário | ❌ |  | CTX-PLM |
 | PLM-05 | Onde é usado e comparação | ❌ |  | CTX-PLM |
+| PLM-06 | Regras de part-number e ambientes | 🟡 | fenkra-project: prefixo FK- + contador, bloqueio de duplicado; sem regra com campos nem ambientes. | CTX-PN |
+| PLM-07 | Cofre em pasta compartilhada | 🟡 | Projeto em pasta já existe; falta trava e detecção de conflito (RF-GPR-025). | CTX-PN |

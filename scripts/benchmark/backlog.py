@@ -58,8 +58,10 @@ c('B22', 2, 'P1', 'Montagem: origem, seleção e contexto', 'Origem da montagem;
   ['MON-11', 'MON-13', 'MON-14'], 120, 'Visual', 'Montagem'),
 c('B23', 2, 'P1', 'PMI: realce e chamadas', 'Realce das entidades da anotação, várias setas por anotação e seta que não atravessa o quadro.', ['DR-31', 'DR-47', 'DR-48'], ['PMI-04'], 70, 'Visual', 'PMI 3D'),
 c('B24', 2, 'P2', 'Pastas e setas de referência', '"Selecionados → nova pasta" escolhendo o pai; setas 3D do referencial nos pontos.', ['DR-46', 'DR-49'], ['GER-04', 'SUP-01'], 60, 'Visual', 'Geral'),
-c('B25', 2, 'P1', 'VPM fase 1 (local)', 'SQLite + cofre em pasta: produto, revisão, documento, estrutura (BOM) e histórico; migração do índice JSON do fenkra-project.',
-  ['CTX-PLM'], ['PLM-02', 'PLM-03', 'PLM-04', 'PLM-05'], 300, 'Auto', 'PDM / PLM'),
+c('B25', 2, 'P1', 'VPM fase 1 (local e em pasta)', 'SQLite + cofre em pasta: produto, revisão, documento, estrutura (BOM) e histórico; migração do índice JSON do fenkra-project; modo pasta compartilhada (LAN/OneDrive) com lock.json e detecção de conflito; VPMReader/Writer/Environment e painel lateral.',
+  ['CTX-PLM', 'CTX-PN'], ['PLM-02', 'PLM-03', 'PLM-04', 'PLM-05', 'PLM-07'], 340, 'Auto', 'PDM / PLM'),
+c('B47', 2, 'P1', 'PNEngine: regras de part-number e ambientes', 'Editor de regras com campos ([NORMA], [CATEGORIA], [MATERIAL], [DIM], [SERIAL:n], [REV]), interpretador que preenche pela peça, contadores por ambiente/categoria, ambientes (Industrial, Aeroespacial, Cliente X) salvos em JSON.',
+  ['CTX-PN'], ['PLM-06'], 120, 'Auto', 'PDM / PLM'),
 # ---------------------------------------------------------------- onda 3
 c('B26', 3, 'P1', 'Estrutura Pai → montagem dinâmica', 'Corpos iguais viram uma peça com instâncias; subpeças linkadas; submontagens de solda; balões e lista de corte; desenho por corpo.',
   ['CTX-EST', 'DR-33', 'DR-44', 'DR-45'], ['EST-06', 'EST-07', 'EST-08', 'DES-08', 'DES-11'], 500, 'Auto + Visual', 'Estrutural e soldas'),

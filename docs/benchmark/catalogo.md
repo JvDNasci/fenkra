@@ -1,6 +1,6 @@
 # Catálogo de features
 
-158 features em 12 módulos, com o nome em cada ferramenta, como funcionam em geral e o status no Fenkra (alpha.26): ✅ 69 completas · 🟡 60 parciais · ❌ 29 inexistentes.
+160 features em 12 módulos, com o nome em cada ferramenta, como funcionam em geral e o status no Fenkra (alpha.26): ✅ 69 completas · 🟡 62 parciais · ❌ 29 inexistentes.
 
 > Gerado por `scripts/benchmark/gerar.py` a partir de `scripts/benchmark/dados_*.py`. Não edite à mão.
 > Nomes de outros produtos são marcas dos respectivos donos e aparecem só para comparação; textos próprios,
@@ -18,7 +18,7 @@
 | [PMI 3D](#pmi-3d) | 3 | 1 | 1 | [PMI 3D](pmi-3d.md) |
 | [Navegação](#navegação) | 3 | 2 | 1 | [Navegação](navegacao.md) |
 | [Biblioteca de normas](#biblioteca-de-normas) | 1 | 1 | 7 | [Biblioteca de normas](biblioteca-de-normas.md) |
-| [PDM / PLM](#pdm--plm) | 1 | 2 | 2 | [PDM / PLM](pdm-plm.md) |
+| [PDM / PLM](#pdm--plm) | 1 | 4 | 2 | [PDM / PLM](pdm-plm.md) |
 | [Geral](#geral) | 0 | 7 | 0 | [Geral](geral.md) |
 
 ## Sketch
@@ -1302,6 +1302,8 @@
 | PLM-03 | **Banco de produtos e estrutura (BOM)** | VPM | PDM vault (SQL) | Vault (SQL) | 🟡 Índice JSON | CTX-PLM |
 | PLM-04 | **Check-in/out e multiusuário** | VPM sessions | Check Out / Check In | Check Out / Check In | ❌ — | CTX-PLM |
 | PLM-05 | **Onde é usado e comparação** | Where-used / Compare | Where Used / Compare | Uses / Where Used | ❌ — | CTX-PLM |
+| PLM-06 | **Regras de part-number e ambientes** | Numbering rules (ENOVIA) | Serial numbers / Data cards (PDM) | Numbering schemes (Vault) | 🟡 PN com prefixo fixo | CTX-PN |
+| PLM-07 | **Cofre em pasta compartilhada** | — (servidor) | — (servidor PDM) | Vault Basic (servidor) | 🟡 Projeto em pasta (sem trava) | CTX-PN |
 
 ### PLM-01 — Versões e revisões
 
@@ -1337,6 +1339,21 @@
 - **Como funciona:** Consulta → árvore de uso / diferenças.
 - **Fenkra:** ❌ não existe.
 - **Fontes:** [G2 — Autodesk Vault vs SOLIDWORKS PDM](https://www.g2.com/compare/autodesk-vault-vs-solidworks-pdm) · [Contexto: PLM/VPM](../contextos/plm-vpm.md)
+
+### PLM-06 — Regras de part-number e ambientes
+
+- **O que faz:** Gera o PN por regra com campos (norma, categoria, material, dimensão, serial, revisão), por ambiente.
+- **Como funciona:** Ambiente → regra → campos preenchidos pela peça → código único.
+- **Fenkra:** 🟡 parcial. fenkra-project: prefixo FK- + contador, bloqueio de duplicado; sem regra com campos nem ambientes.
+- **Fontes:** [G2 — Autodesk Vault vs SOLIDWORKS PDM](https://www.g2.com/compare/autodesk-vault-vs-solidworks-pdm) · [Contexto: VPM em pasta e regras de PN](../contextos/plm-pn-engine.md)
+
+### PLM-07 — Cofre em pasta compartilhada
+
+- **O que faz:** Trabalho em equipe numa pasta de rede ou sincronizada (OneDrive), sem servidor.
+- **Como funciona:** Pasta → trava por arquivo (lock) → detectar conflito.
+- **Diferenças:** Os três exigem servidor.
+- **Fenkra:** 🟡 parcial. Projeto em pasta já existe; falta trava e detecção de conflito (RF-GPR-025).
+- **Fontes:** [Contexto: VPM em pasta e regras de PN](../contextos/plm-pn-engine.md)
 
 
 ## Geral

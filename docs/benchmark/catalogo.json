@@ -214,6 +214,10 @@
    "rotulo": "Contexto: PLM/VPM",
    "url": "../contextos/plm-vpm.md"
   },
+  "ctx-pn": {
+   "rotulo": "Contexto: VPM em pasta e regras de PN",
+   "url": "../contextos/plm-pn-engine.md"
+  },
   "ctx-hw": {
    "rotulo": "Contexto: fontes de perfis e hardware",
    "url": "../contextos/hardwares.md"
@@ -3020,6 +3024,43 @@
     "ctx-plm"
    ],
    "backlog": "CTX-PLM"
+  },
+  {
+   "id": "PLM-06",
+   "modulo": "PDM / PLM",
+   "nome": "Regras de part-number e ambientes",
+   "faz": "Gera o PN por regra com campos (norma, categoria, material, dimensão, serial, revisão), por ambiente.",
+   "como": "Ambiente → regra → campos preenchidos pela peça → código único.",
+   "catia": "Numbering rules (ENOVIA)",
+   "sw": "Serial numbers / Data cards (PDM)",
+   "inv": "Numbering schemes (Vault)",
+   "fenkra": "PN com prefixo fixo",
+   "status": "parcial",
+   "nota": "fenkra-project: prefixo FK- + contador, bloqueio de duplicado; sem regra com campos nem ambientes.",
+   "diferencas": "",
+   "fontes": [
+    "plm-g2",
+    "ctx-pn"
+   ],
+   "backlog": "CTX-PN"
+  },
+  {
+   "id": "PLM-07",
+   "modulo": "PDM / PLM",
+   "nome": "Cofre em pasta compartilhada",
+   "faz": "Trabalho em equipe numa pasta de rede ou sincronizada (OneDrive), sem servidor.",
+   "como": "Pasta → trava por arquivo (lock) → detectar conflito.",
+   "catia": "— (servidor)",
+   "sw": "— (servidor PDM)",
+   "inv": "Vault Basic (servidor)",
+   "fenkra": "Projeto em pasta (sem trava)",
+   "status": "parcial",
+   "nota": "Projeto em pasta já existe; falta trava e detecção de conflito (RF-GPR-025).",
+   "diferencas": "Os três exigem servidor.",
+   "fontes": [
+    "ctx-pn"
+   ],
+   "backlog": "CTX-PN"
   },
   {
    "id": "GER-01",

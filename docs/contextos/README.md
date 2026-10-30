@@ -18,6 +18,7 @@ citadas.
 | [fixadores.md](fixadores.md) | Lista de fixadores com normas | `CTX-FXL` |
 | [hardwares.md](hardwares.md) | Fontes de dados para perfis e hardware mecânico (normas e catálogos) | `CTX-HW` |
 | [plm-vpm.md](plm-vpm.md) | VPM/PLM: modelo de dados, API, sincronização, fases | `CTX-PLM` |
+| [plm-pn-engine.md](plm-pn-engine.md) | VPM em pasta (LAN/OneDrive), ambientes e regras de part-number | `CTX-PN` |
 
 O arquivo original do review (`Contextos e deisgn review.pptx`) fica fora do repositório; o texto e as
 imagens foram extraídos para cá (imagens reduzidas para JPEG).
