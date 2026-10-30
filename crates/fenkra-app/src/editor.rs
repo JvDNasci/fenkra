@@ -1251,6 +1251,11 @@ fn feature_ui(
 
         FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => {
             let fillet = matches!(kind_tag(id, doc), Some(true));
+            // pontos antes da edição: as chaves v2 seguem os pontos que continuam na lista
+            let before = match &o.edges {
+                EdgeSel::Edges(m) => m.clone(),
+                _ => vec![],
+            };
             let lbl = if fillet { "Raio" } else { "Distância" };
             crate::feat_ui::edge_mode_ui(ui, o, vars, fillet, picked_faces);
             if matches!(o.mode, EdgeMode::FaceFace(..) | EdgeMode::FullRound { .. }) {
@@ -1306,6 +1311,11 @@ fn feature_ui(
                     Some(1) => o.prop = EdgeProp::Minima,
                     _ => {}
                 }
+            }
+            // ponto novo fica sem chave (o recompute a calcula); "Todas" não usa chaves
+            match &o.edges {
+                EdgeSel::Edges(m) => o.keys = carry_keys(&before, &o.keys, m),
+                _ => o.keys.clear(),
             }
             target_combo(ui, doc, target);
         }

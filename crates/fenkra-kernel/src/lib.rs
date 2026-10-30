@@ -145,6 +145,38 @@ impl HoleShape {
     }
 }
 
+/// Sem face vizinha (em `Mesh::edge_faces` e `Topology::edge_faces`).
+pub const NO_FACE: u32 = u32::MAX;
+
+/// Assinatura geométrica de uma face para as referências v2: tipo (0 plano, 1 cilindro, 2 cone,
+/// 3 esfera, 4 toro, 5 livre), normal externa (plano) ou eixo (cilindro/cone/toro, sentido
+/// normalizado), área e um ponto garantidamente sobre a face.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FaceInfo {
+    pub kind: u8,
+    pub dir: [f64; 3],
+    pub area: f64,
+    pub point: [f64; 3],
+}
+
+/// Topologia de um corpo sem tesselação: mesma ordem de faces e de arestas da malha.
+#[derive(Clone, Debug, Default)]
+pub struct Topology {
+    pub faces: Vec<FaceInfo>,
+    /// ponto médio de cada aresta (zeros nas costuras e arestas degeneradas)
+    pub edge_mids: Vec<[f64; 3]>,
+    /// as duas faces vizinhas de cada aresta (`NO_FACE` = nenhuma)
+    pub edge_faces: Vec<[u32; 2]>,
+}
+
+fn face_infos(flat: &[f64]) -> Vec<FaceInfo> {
+    flat.chunks_exact(8).map(|v| FaceInfo { kind: v[0] as u8, dir: [v[1], v[2], v[3]], area: v[4], point: [v[5], v[6], v[7]] }).collect()
+}
+
+fn pairs(flat: &[u32]) -> Vec<[u32; 2]> {
+    flat.chunks_exact(2).map(|v| [v[0], v[1]]).collect()
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Mesh {
     pub positions: Vec<f32>,
@@ -161,6 +193,10 @@ pub struct Mesh {
     pub edge_smooth: Vec<u8>,
     /// posição (xyz) de cada vértice
     pub vertices: Vec<f32>,
+    /// as duas faces vizinhas de cada aresta (índices na ordem de `face_ranges`; `NO_FACE` = nenhuma)
+    pub edge_faces: Vec<[u32; 2]>,
+    /// assinatura de cada face, na ordem de `face_ranges`
+    pub face_info: Vec<FaceInfo>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -239,13 +275,26 @@ mod imp {
         }
 
         pub fn extrude(&self, dir: [f64; 3], front: f64, back: f64) -> KResult<Shape> {
-            b::extrude(&self.0, dir[0], dir[1], dir[2], front, back).map(Shape).map_err(err)
+            self.extrude_roles(dir, front, back).map(|r| r.0)
+        }
+        /// Extrusão com o papel de cada face do resultado (na ordem de `face_ranges`):
+        /// 0 = tampa inicial, 1 = tampa final, 2+i = lateral gerada pela aresta i do perfil, -1 = desconhecido.
+        pub fn extrude_roles(&self, dir: [f64; 3], front: f64, back: f64) -> KResult<(Shape, Vec<i32>)> {
+            let mut roles = vec![];
+            let s = b::extrude(&self.0, dir[0], dir[1], dir[2], front, back, &mut roles).map_err(err)?;
+            Ok((Shape(s), roles))
         }
 
         pub fn revolve(&self, origin: [f64; 3], dir: [f64; 3], angle_deg: f64, start_deg: f64) -> KResult<Shape> {
+            self.revolve_roles(origin, dir, angle_deg, start_deg).map(|r| r.0)
+        }
+        /// Revolução com o papel de cada face (mesma convenção de `extrude_roles`).
+        pub fn revolve_roles(&self, origin: [f64; 3], dir: [f64; 3], angle_deg: f64, start_deg: f64) -> KResult<(Shape, Vec<i32>)> {
             let [ox, oy, oz] = origin;
             let [dx, dy, dz] = dir;
-            b::revolve(&self.0, ox, oy, oz, dx, dy, dz, angle_deg, start_deg).map(Shape).map_err(err)
+            let mut roles = vec![];
+            let s = b::revolve(&self.0, ox, oy, oz, dx, dy, dz, angle_deg, start_deg, &mut roles).map_err(err)?;
+            Ok((Shape(s), roles))
         }
 
         pub fn boolean(&self, other: &Shape, op: Bool) -> KResult<Shape> {
@@ -291,9 +340,14 @@ mod imp {
 
         /// Booleana que propaga etiquetas de face: devolve (resultado, etiqueta de cada face; -1 = nova).
         pub fn boolean_tagged(&self, other: &Shape, op: Bool, tags: &[i32]) -> KResult<(Shape, Vec<i32>)> {
-            let mut out = vec![];
-            let s = b::boolean_t(&self.0, &other.0, op as u8, tags, &mut out).map_err(err)?;
-            Ok((Shape(s), out))
+            self.boolean_tagged_src(other, op, tags).map(|(s, out, _)| (s, out))
+        }
+        /// Como `boolean_tagged`, mais a face da ferramenta (`other`) de onde vem cada face do
+        /// resultado (-1 = nenhuma): os papéis das faces da ferramenta seguem por aí.
+        pub fn boolean_tagged_src(&self, other: &Shape, op: Bool, tags: &[i32]) -> KResult<(Shape, Vec<i32>, Vec<i32>)> {
+            let (mut out, mut out_b) = (vec![], vec![]);
+            let s = b::boolean_t(&self.0, &other.0, op as u8, tags, &mut out, &mut out_b).map_err(err)?;
+            Ok((Shape(s), out, out_b))
         }
         /// Filete (`chamfer = false`) ou chanfro nas arestas mais próximas dos pontos médios dados.
         pub fn edges_tagged(&self, v: f64, mids: &[[f64; 3]], tol: f64, chamfer: bool, tags: &[i32]) -> KResult<(Shape, Vec<i32>)> {
@@ -607,7 +661,20 @@ mod imp {
                 edge_mids: m.edge_mids,
                 edge_smooth: m.edge_smooth,
                 vertices: m.vertices,
+                edge_faces: pairs(&m.edge_faces),
+                face_info: face_infos(&m.face_info),
             })
+        }
+        /// Índice (na ordem das faces da malha) da face mais próxima do ponto, se estiver a no máximo `limit`.
+        pub fn face_index(&self, p: [f64; 3], limit: f64) -> KResult<Option<usize>> {
+            let i = b::face_index(&self.0, p[0], p[1], p[2], limit).map_err(err)?;
+            Ok((i >= 0).then_some(i as usize))
+        }
+        /// Faces e arestas com assinatura geométrica e vizinhança, sem tesselar.
+        pub fn topology(&self) -> KResult<Topology> {
+            let (mut fi, mut em, mut ef) = (vec![], vec![], vec![]);
+            b::topology(&self.0, &mut fi, &mut em, &mut ef).map_err(err)?;
+            Ok(Topology { faces: face_infos(&fi), edge_mids: em.chunks_exact(3).map(|v| [v[0], v[1], v[2]]).collect(), edge_faces: pairs(&ef) })
         }
         pub fn bbox(&self) -> Option<([f64; 3], [f64; 3])> {
             let v = b::bounding_box(&self.0);
@@ -667,6 +734,21 @@ mod imp {
             no()
         }
         pub fn revolve(&self, _: [f64; 3], _: [f64; 3], _: f64, _: f64) -> KResult<Shape> {
+            no()
+        }
+        pub fn extrude_roles(&self, _: [f64; 3], _: f64, _: f64) -> KResult<(Shape, Vec<i32>)> {
+            no()
+        }
+        pub fn revolve_roles(&self, _: [f64; 3], _: [f64; 3], _: f64, _: f64) -> KResult<(Shape, Vec<i32>)> {
+            no()
+        }
+        pub fn boolean_tagged_src(&self, _: &Shape, _: Bool, _: &[i32]) -> KResult<(Shape, Vec<i32>, Vec<i32>)> {
+            no()
+        }
+        pub fn topology(&self) -> KResult<Topology> {
+            no()
+        }
+        pub fn face_index(&self, _: [f64; 3], _: f64) -> KResult<Option<usize>> {
             no()
         }
         pub fn boolean(&self, _: &Shape, _: Bool) -> KResult<Shape> {
@@ -965,6 +1047,74 @@ mod tests {
         let aresta = [10., 0., 10.]; // aresta superior em x = 10
         let (r, _) = caixa.edges_tagged(2., &[aresta], 0.5, false, &tags).unwrap();
         assert!(r.face_count() == 7);
+    }
+
+    #[test]
+    fn extrusao_devolve_o_papel_de_cada_face() {
+        let caixa = Shape::face(&XY, &[rect(40., 20.)]).unwrap();
+        let (s, roles) = caixa.extrude_roles([0., 0., 1.], 10., 0.).unwrap();
+        assert_eq!(roles.len() as u32, s.face_count());
+        let mut ordenados = roles.clone();
+        ordenados.sort();
+        // 0 = tampa inicial, 1 = tampa final, 2..=5 = uma lateral por aresta do perfil
+        assert_eq!(ordenados, vec![0, 1, 2, 3, 4, 5]);
+        let topo = s.topology().unwrap();
+        assert_eq!(topo.faces.len(), roles.len());
+        let normal_de = |papel: i32| topo.faces[roles.iter().position(|r| *r == papel).unwrap()].dir;
+        assert_eq!(normal_de(1), [0., 0., 1.], "tampa final fica em +z");
+        assert_eq!(normal_de(0), [0., 0., -1.], "tampa inicial fica em -z");
+        // cada aresta entre a tampa final e uma lateral tem exatamente essas duas faces como vizinhas
+        let (i_topo, i_lat) = (roles.iter().position(|r| *r == 1).unwrap() as u32, roles.iter().position(|r| *r == 2).unwrap() as u32);
+        assert!(topo.edge_faces.iter().any(|p| p.contains(&i_topo) && p.contains(&i_lat)));
+        let m = s.mesh(0.1).unwrap();
+        assert_eq!(m.edge_faces.len(), m.edge_ranges.len());
+        assert_eq!(m.face_info.len(), m.face_ranges.len());
+        // a malha e a topologia concordam
+        assert_eq!(m.edge_faces, topo.edge_faces);
+        // com a mudança do perfil, os papéis continuam nos mesmos lados
+        let (s2, r2) = Shape::face(&XY, &[rect(60., 20.)]).unwrap().extrude_roles([0., 0., 1.], 10., 0.).unwrap();
+        let t2 = s2.topology().unwrap();
+        let normal2 = |papel: i32| t2.faces[r2.iter().position(|r| *r == papel).unwrap()].dir;
+        for papel in 0..6 {
+            assert_eq!(normal_de(papel), normal2(papel), "papel {papel}");
+        }
+    }
+
+    #[test]
+    fn revolucao_devolve_papeis_e_booleana_leva_os_da_ferramenta() {
+        let l = rect(10., 20.).into_iter().map(|s| match s {
+            Seg2::Line(a, b) => Seg2::Line([a[0] + 10., a[1]], [b[0] + 10., b[1]]),
+            o => o,
+        });
+        // perfil afastado do eixo (um tubo): quatro arestas, quatro faces de revolução, sem tampas
+        let f = Shape::face(&XY, &[l.collect()]).unwrap();
+        let (r, roles) = f.revolve_roles([0.; 3], [0., 1., 0.], 360., 0.).unwrap();
+        assert_eq!(roles.len() as u32, r.face_count());
+        let mut ordenados = roles.clone();
+        ordenados.sort();
+        assert_eq!(ordenados, vec![2, 3, 4, 5], "uma face por aresta do perfil: {roles:?}");
+        // booleana: as faces da parede do corte vêm da ferramenta e mantêm o papel dela
+        let caixa = Shape::face(&XY, &[rect(40., 40.)]).unwrap().extrude([0., 0., 1.], 10., 0.).unwrap();
+        let (ferr, rf) = Shape::face(&XY, &[rect(10., 10.)]).unwrap().extrude_roles([0., 0., 1.], 5., 0.).unwrap();
+        let tags: Vec<i32> = (0..caixa.face_count() as i32).collect();
+        let (c, out, src) = caixa.boolean_tagged_src(&ferr, Bool::Cut, &tags).unwrap();
+        assert_eq!(out.len(), src.len());
+        let paredes: Vec<i32> = (0..out.len()).filter(|i| out[*i] < 0 && src[*i] >= 0).map(|i| rf[src[i] as usize]).collect();
+        assert_eq!(c.face_count() as usize, out.len());
+        assert!(paredes.len() >= 4, "as laterais da ferramenta viram parede: {paredes:?}");
+    }
+
+    #[test]
+    fn aresta_inexistente_e_erro_nao_descarte_silencioso() {
+        let caixa = Shape::face(&XY, &[rect(20., 20.)]).unwrap().extrude([0., 0., 1.], 10., 0.).unwrap();
+        let tags: Vec<i32> = (0..caixa.face_count() as i32).collect();
+        // uma aresta existe, a outra está longe de qualquer aresta
+        let r = caixa.edges_tagged(1., &[[10., 0., 10.], [3., 3., 3.]], 0.5, false, &tags);
+        let msg = r.err().expect("deveria falhar").0;
+        assert!(msg.contains("não existe"), "{msg}");
+        // face fora do alcance: erro em vez de pegar a mais próxima
+        let r = caixa.shell_tagged(&[[0., 0., 500.]], 1., false, &tags);
+        assert!(r.err().expect("deveria falhar").0.contains("não existe mais"));
     }
 
     #[test]

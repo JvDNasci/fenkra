@@ -1166,6 +1166,46 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
 
     // ------------------------------------------------------------ edição
 
+    /// Grava no documento as chaves v2 que o recompute calculou para referências antigas (só o
+    /// ponto). Não é uma edição do usuário: não marca o documento como modificado nem entra no
+    /// desfazer. Só vale para o comando que ainda é o mesmo que foi calculado (`sent_doc`); o
+    /// documento calculado recebe as chaves também, para o comando não aparecer como desatualizado.
+    fn apply_promoted(&mut self, promoted: &std::collections::HashMap<Id, fenkra_solidos::Promoted>) {
+        use fenkra_solidos::Promoted;
+        fn put(kind: &mut FeatureKind, p: &Promoted) {
+            match (kind, p) {
+                (FeatureKind::Fillet(o) | FeatureKind::Chamfer(o), Promoted::Edges(k)) => {
+                    if matches!(&o.edges, EdgeSel::Edges(m) if m.len() == k.len()) {
+                        o.keys = k.clone();
+                    }
+                }
+                (FeatureKind::Shell(s), Promoted::Faces(k)) if s.faces.len() == k.len() => s.face_keys = k.clone(),
+                (FeatureKind::Draft(d), Promoted::Faces(k)) if d.faces.len() == k.len() => d.face_keys = k.clone(),
+                (FeatureKind::Thickness(t), Promoted::Faces(k)) if t.faces.len() == k.len() => t.face_keys = k.clone(),
+                _ => {}
+            }
+        }
+        for (id, p) in promoted {
+            // o comando do documento aberto tem que ser o mesmo que foi calculado
+            let same = match (self.sent_doc.as_ref().and_then(|d| d.feature(*id)), self.open.doc.feature(*id)) {
+                (Some(a), Some(b)) => a.kind == b.kind,
+                _ => false,
+            };
+            if !same {
+                continue;
+            }
+            if let Some(f) = self.open.doc.feature_mut(*id) {
+                put(&mut f.kind, p);
+            }
+            if let Some(f) = self.sent_doc.as_mut().and_then(|d| d.feature_mut(*id)) {
+                put(&mut f.kind, p);
+            }
+            if let Some(f) = self.result_doc.as_mut().and_then(|d| d.feature_mut(*id)) {
+                put(&mut f.kind, p);
+            }
+        }
+    }
+
     fn undo(&mut self) {
         if let Some(d) = self.undo.pop() {
             self.redo.push(std::mem::replace(&mut self.open.doc, d));
@@ -1215,6 +1255,29 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         self.picks
             .iter()
             .filter_map(|p| if let crate::picking::Pick::Edge { mid, .. } = p { Some(mid.map(|v| v as f64)) } else { None })
+            .collect()
+    }
+
+    /// Chave v2 de cada face selecionada (paralelo a `picked_faces`): o picking sabe o corpo e o
+    /// índice da face, e o resultado sabe o dono e o papel dela. `None` = só o ponto.
+    pub fn picked_face_keys(&self) -> Vec<Option<FaceKey>> {
+        self.picks
+            .iter()
+            .filter_map(|p| match p {
+                crate::picking::Pick::Face { body, face, .. } => Some(self.result.as_ref().and_then(|r| r.bodies.get(*body)).and_then(|b| b.face_key(*face))),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Chave v2 de cada aresta selecionada (paralelo a `picked_edges`): as duas faces vizinhas.
+    pub fn picked_edge_keys(&self) -> Vec<Option<EdgeKey>> {
+        self.picks
+            .iter()
+            .filter_map(|p| match p {
+                crate::picking::Pick::Edge { body, edge, .. } => Some(self.result.as_ref().and_then(|r| r.bodies.get(*body)).and_then(|b| b.edge_key(*edge))),
+                _ => None,
+            })
             .collect()
     }
 
@@ -1336,6 +1399,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let sketch = self.selected_sketch(false);
         let edges = self.picked_edges();
         let faces = self.picked_faces();
+        let edge_keys = self.picked_edge_keys();
+        let face_keys = self.picked_face_keys();
         let seed = match c {
             Cmd::Rib | Cmd::Slot | Cmd::PatternLinear | Cmd::PatternCircular | Cmd::PatternPoints => self.seed(true),
             Cmd::StMember | Cmd::StPlate | Cmd::StGusset => self.seed(true),
@@ -1630,9 +1695,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 let sk = sk_or_unset;
                 Sel::Feature(d.add_feature(FeatureKind::Stiffener(Stiffener { sketch: sk, thickness: s("3"), depth: s("20"), reverse: false, to_body: false })))
             }
-            Cmd::Shell => Sel::Feature(d.add_feature(FeatureKind::Shell(Shell { faces: faces.clone(), thickness: s("2"), outward: false }))),
-            Cmd::Draft => Sel::Feature(d.add_feature(FeatureKind::Draft(Draft { faces: faces.clone(), neutral: opt_plane, angle: s("3"), reverse: false }))),
-            Cmd::Thickness => Sel::Feature(d.add_feature(FeatureKind::Thickness(Thickness { faces: faces.clone(), value: s("2") }))),
+            Cmd::Shell => Sel::Feature(d.add_feature(FeatureKind::Shell(Shell { faces: faces.clone(), thickness: s("2"), outward: false, face_keys: face_keys.clone() }))),
+            Cmd::Draft => Sel::Feature(d.add_feature(FeatureKind::Draft(Draft { faces: faces.clone(), neutral: opt_plane, angle: s("3"), reverse: false, face_keys: face_keys.clone() }))),
+            Cmd::Thickness => Sel::Feature(d.add_feature(FeatureKind::Thickness(Thickness { faces: faces.clone(), value: s("2"), face_keys: face_keys.clone() }))),
             Cmd::Thread => Sel::Feature(d.add_feature(FeatureKind::Thread(Thread { face: faces.last().copied().unwrap_or([0.; 3]), spec: s("M10x1.5"), length: s("15"), modeled: false, end: None }))),
             Cmd::PatternLinear | Cmd::PatternCircular | Cmd::PatternPoints | Cmd::Mirror => {
                 let sources: Vec<Id> = match sel_now {
@@ -1656,7 +1721,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 // atalho de manufatura: extrusão com saída + filete nas arestas criadas por ela
                 let sk = sk_or_unset;
                 let ex = d.add_feature(FeatureKind::Extrude(Extrude { thin_side: 0, sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("20")), reverse: false, taper: s("3"), thin: None, dir: None }));
-                d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::CreatedBy(ex), mode: EdgeMode::Constant, prop: Default::default() }));
+                d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::CreatedBy(ex), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![] }));
                 Sel::Feature(ex)
             }
             Cmd::SplitBody | Cmd::ThickSurface | Cmd::CloseSurface | Cmd::SewSurface | Cmd::BoundaryFill => {
@@ -1701,7 +1766,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             Cmd::FilletFaceFace | Cmd::FilletFull => {
                 let f = |k: usize| faces.get(k).copied().unwrap_or([0.; 3]);
                 let mode = if c == Cmd::FilletFull { EdgeMode::FullRound { mid: f(0), a: f(1), b: f(2) } } else { EdgeMode::FaceFace(f(0), f(1)) };
-                Sel::Feature(d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("2"), edges: EdgeSel::AllOfBody, mode, prop: Default::default() })))
+                Sel::Feature(d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("2"), edges: EdgeSel::AllOfBody, mode, prop: Default::default(), keys: vec![] })))
             }
             Cmd::Hole | Cmd::HoleCounterbore | Cmd::HoleCountersink | Cmd::HoleTapped => {
                 // vértices / pontos selecionados: um furo em cada, normal à superfície (sem sketch)
@@ -1748,7 +1813,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 if !all && edges.is_empty() {
                     self.toast("Clique nas arestas na viewport para pô-las no comando (clique de novo tira)", false);
                 }
-                let op = EdgeOp { value: s("1"), edges: sel, mode, prop: Default::default() };
+                let keys = if all { vec![] } else { edge_keys.clone() };
+                let op = EdgeOp { value: s("1"), edges: sel, mode, prop: Default::default(), keys };
                 let d = &mut self.open.doc;
                 Sel::Feature(d.add_feature(if matches!(c, Cmd::Fillet | Cmd::FilletAll | Cmd::FilletVar) { FeatureKind::Fillet(op) } else { FeatureKind::Chamfer(op) }))
             }
@@ -5523,11 +5589,13 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 });
                 // casca/saída/espessura/rosca abertos: clicar numa face a acrescenta ao comando
                 let face_cmd = self.session.as_ref().map(|x| x.id).filter(|id| self.open.doc.feature(*id).is_some_and(|f| crate::feat_ui::wants_faces(&f.kind)));
-                if let (Some(fid), true, Some(crate::picking::Pick::Face { point, body, .. })) = (face_cmd, resp.clicked_by(egui::PointerButton::Primary), self.hover_pick) {
+                if let (Some(fid), true, Some(crate::picking::Pick::Face { point, body, face, .. })) = (face_cmd, resp.clicked_by(egui::PointerButton::Primary), self.hover_pick) {
                     // a mesma face do corpo (pela malha atual) é tirada em vez de repetida
                     let same = |a: [f64; 3], b: [f64; 3]| crate::picking::same_face(r, body, a, b);
+                    // referência v2: o picking sabe a face; o resultado sabe o dono e o papel dela
+                    let key = r.bodies.get(body).and_then(|b| b.face_key(face));
                     if let Some(f) = self.open.doc.feature_mut(fid) {
-                        crate::feat_ui::toggle_face(&mut f.kind, point.map(|v| v as f64), same);
+                        crate::feat_ui::toggle_face(&mut f.kind, point.map(|v| v as f64), key, same);
                     }
                 } else if let (Some(Some(sid)), true, Some(crate::picking::Pick::Edge { mid, .. })) = (
                     self.session.as_ref().map(|x| x.id).map(|id| self.open.doc.feature(id).filter(|f| matches!(f.kind, FeatureKind::SmFlange(_) | FeatureKind::SmHem(_))).map(|f| f.id)),
@@ -5561,16 +5629,26 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 } else if resp.clicked_by(egui::PointerButton::Primary) {
                     let add = ctx.input(|i| i.modifiers.shift || i.modifiers.command);
                     match (edge_cmd, self.hover_pick) {
-                        (Some(fid), Some(crate::picking::Pick::Edge { mid, .. })) => {
+                        (Some(fid), Some(crate::picking::Pick::Edge { mid, body, edge })) => {
                             let m = mid.map(|v| v as f64);
+                            // referência v2: as duas faces vizinhas da aresta clicada
+                            let key = r.bodies.get(body).and_then(|b| b.edge_key(edge));
                             if let Some(FeatureKind::Fillet(o) | FeatureKind::Chamfer(o)) = self.open.doc.feature_mut(fid).map(|f| &mut f.kind) {
                                 if let EdgeSel::Edges(list) = &mut o.edges {
+                                    let before = list.clone();
                                     let near = |q: &[f64; 3]| (0..3).map(|k| (q[k] - m[k]).powi(2)).sum::<f64>().sqrt() < 0.01;
                                     if let Some(k) = list.iter().position(near) {
                                         list.remove(k);
                                     } else {
                                         list.push(m);
                                     }
+                                    let mut carried = carry_keys(&before, &o.keys, list);
+                                    if list.len() == before.len() + 1 {
+                                        if let Some(last) = carried.last_mut() {
+                                            *last = key;
+                                        }
+                                    }
+                                    o.keys = carried;
                                 }
                             }
                         }
@@ -6335,9 +6413,14 @@ impl eframe::App for App {
             }
         }
         // resultados do recompute
-        while let Ok((g, r)) = self.worker.rx.try_recv() {
+        while let Ok((g, mut r)) = self.worker.rx.try_recv() {
             if g >= self.gen_done {
                 self.gen_done = g;
+                // referências antigas (só o ponto) que resolveram ganham a chave v2 no documento
+                let promoted = std::mem::take(&mut r.promoted);
+                if g == self.gen_sent && !promoted.is_empty() {
+                    self.apply_promoted(&promoted);
+                }
                 let editing = self.session.as_ref().map(|s| s.id);
                 let errs = r.status.iter().filter(|(id, s)| Some(**id) != editing && matches!(s, Status::Error(_))).count();
                 if errs > self.errors_prev && self.started {

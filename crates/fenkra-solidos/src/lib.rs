@@ -10,6 +10,7 @@ pub mod hardware;
 pub mod biblioteca;
 pub mod fixadores;
 pub mod profile;
+pub mod refs;
 
 use profile::{ev, eval_sketch, to3d, EvalSketch, Vars};
 use fenkra_core::sketch::{Curve, Kind};
@@ -48,6 +49,38 @@ pub struct BodyResult {
     pub faces: u32,
     /// Comando que gerou cada face (mesma ordem de `mesh.face_ranges`).
     pub face_owner: Vec<Id>,
+    /// Papel de cada face para o comando que a gerou (paralelo a `face_owner`): 0 tampa inicial,
+    /// 1 tampa final, 2+i lateral gerada pela aresta i do perfil, -1 desconhecido (ADR 0010).
+    pub face_role: Vec<i32>,
+}
+
+impl BodyResult {
+    /// Chave v2 da face `face` (índice na ordem de `mesh.face_ranges`, o mesmo do picking).
+    /// `None` se o papel dela é desconhecido: nesse caso a referência fica só com o ponto.
+    pub fn face_key(&self, face: usize) -> Option<FaceKey> {
+        let info = self.mesh.face_info.get(face)?;
+        let role = *self.face_role.get(face)?;
+        (role >= 0).then(|| FaceKey { owner: self.face_owner[face], role, kind: refs::kind_of(info.kind), normal_or_axis: info.dir, area: info.area })
+    }
+
+    /// Chave v2 da aresta `edge` (índice na ordem de `mesh.edge_ranges`): as duas faces vizinhas.
+    pub fn edge_key(&self, edge: usize) -> Option<EdgeKey> {
+        let [p, q] = *self.mesh.edge_faces.get(edge)?;
+        if p == fenkra_kernel::NO_FACE || q == fenkra_kernel::NO_FACE {
+            return None;
+        }
+        Some(EdgeKey { a: self.face_key(p as usize)?, b: self.face_key(q as usize)? })
+    }
+}
+
+/// Corpo de um coletor: forma, dono de cada face e papel de cada face (as duas listas na ordem
+/// das faces do kernel).
+type Body = (Shape, Vec<Id>, Vec<i32>);
+
+/// Corpo recém-criado por `fid`: todas as faces são dele, sem papel conhecido.
+fn fresh_body(s: Shape, fid: Id) -> Body {
+    let n = s.face_count() as usize;
+    (s, vec![fid; n], vec![-1; n])
 }
 
 fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
@@ -99,6 +132,16 @@ fn tags_for(owners: &[Id]) -> Vec<i32> {
 /// Converte as etiquetas devolvidas pelo kernel em donos; -1 = face nova do comando `fid`.
 fn remap(owners: &[Id], out: &[i32], fid: Id) -> Vec<Id> {
     out.iter().map(|t| if *t >= 0 { owners.get(*t as usize).copied().unwrap_or(fid) } else { fid }).collect()
+}
+
+/// Papéis das faces do resultado: seguem o mesmo índice-origem que `remap`; face nova = -1.
+fn remap_roles(roles: &[i32], out: &[i32]) -> Vec<i32> {
+    out.iter().map(|t| if *t >= 0 { roles.get(*t as usize).copied().unwrap_or(-1) } else { -1 }).collect()
+}
+
+/// Dono e papel das faces do resultado de uma operação que propaga etiquetas.
+fn remap_body(s: Shape, owners: &[Id], roles: &[i32], out: &[i32], fid: Id) -> Body {
+    (s, remap(owners, out, fid), remap_roles(roles, out))
 }
 
 /// Geometria de exibição de um sketch (segmentos 3D).
@@ -315,8 +358,21 @@ impl BendLine {
     }
 }
 
+/// Chaves v2 calculadas no recompute para referências que só tinham o ponto (arquivo antigo).
+/// O app grava no comando do documento; cada lista é paralela à do comando (mantém as chaves que
+/// já existiam e acrescenta as novas).
+#[derive(Clone, Debug, PartialEq)]
+pub enum Promoted {
+    /// `EdgeOp.keys`
+    Edges(Vec<Option<EdgeKey>>),
+    /// `face_keys` de Shell, Draft e Thickness
+    Faces(Vec<Option<FaceKey>>),
+}
+
 pub struct RecomputeResult {
     pub bodies: Vec<BodyResult>,
+    /// comando → chaves v2 promovidas neste cálculo (pontos antigos que resolveram)
+    pub promoted: HashMap<Id, Promoted>,
     pub sketches: Vec<SketchViz>,
     pub planes: Vec<PlaneViz>,
     pub points: Vec<PointViz>,
@@ -350,8 +406,10 @@ pub fn origin_axis(a: OriginAxis) -> [f64; 3] {
 struct Ctx<'a> {
     doc: &'a Document,
     vars: Vars,
-    bodies: HashMap<Id, (Shape, Vec<Id>)>,
+    bodies: HashMap<Id, Body>,
     sketches: HashMap<Id, (Frame, Arc<EvalSketch>)>,
+    /// referências v2 que o comando em execução calculou para pontos sem chave (promoção)
+    promoted: RefCell<Option<Promoted>>,
     /// sólido gerado por cada comando (base para filete/chanfro por comando)
     status: HashMap<Id, Status>,
     /// ferramenta e operação de cada comando de forma (para padrões e espelho)
@@ -434,7 +492,8 @@ struct FeatEntry {
     sig: u64,
     status: Status,
     /// corpos que o comando pode ter mudado (destino e corpos citados): estado depois dele
-    bodies: Vec<(Id, Option<(Shape, Vec<Id>)>)>,
+    bodies: Vec<(Id, Option<Body>)>,
+    promoted: Option<Promoted>,
     sketch: Option<(Frame, Arc<EvalSketch>)>,
     tool: Option<(Shape, BoolOp)>,
     last_sheet: Option<fenkra_kernel::SheetEdgeInfo>,
@@ -723,7 +782,7 @@ impl Ctx<'_> {
     /// Tamanho que cobre o modelo inteiro (para planos usados como superfície de corte).
     fn model_size(&self) -> f64 {
         let mut m = 500.;
-        for (b, _) in self.bodies.values() {
+        for (b, _, _) in self.bodies.values() {
             if let Some((a, c)) = b.bbox() {
                 m = f64::max(m, geo3d::dist(a, c) * 2. + 100.);
             }
@@ -815,7 +874,7 @@ impl Ctx<'_> {
 
     /// Cópia da face de algum corpo que passa pelo ponto.
     fn face_of_bodies(&self, p: V3) -> Result<Shape, String> {
-        for (b, _) in self.bodies.values() {
+        for (b, _, _) in self.bodies.values() {
             if let Ok((q, _)) = b.surface_near(p) {
                 if geo3d::dist(q, p) < 1e-3 {
                     return b.face_copy(p).map_err(|e| e.0);
@@ -1109,7 +1168,7 @@ impl Ctx<'_> {
                 Geo::Curve(Curve3::line(v, add(v, mul(bis, e(length, "comprimento")?)))?)
             }
             LineAxis { face } => {
-                for (b, _) in self.bodies.values() {
+                for (b, _, _) in self.bodies.values() {
                     if let Ok(cy) = b.cylinder_at(*face) {
                         let o = add(cy.origin, mul(cy.dir, cy.h0));
                         let t = add(cy.origin, mul(cy.dir, cy.h1.max(cy.h0 + 1.)));
@@ -1575,7 +1634,7 @@ impl Ctx<'_> {
             LinkSrc::Edge { mid } | LinkSrc::Vertex { pos: mid } => {
                 let vertex = matches!(l.source, LinkSrc::Vertex { .. });
                 let mut best: Option<(f64, Vec<V3>)> = None;
-                for (b, _) in self.bodies.values() {
+                for (b, _, _) in self.bodies.values() {
                     let Some((lo, hi)) = b.bbox() else { continue };
                     let defl = (geo3d::dist(lo, hi) * 0.0015).clamp(0.005, 1.0);
                     let Ok(m) = b.mesh(defl) else { continue };
@@ -1619,7 +1678,7 @@ impl Ctx<'_> {
     }
 
     fn body(&self, target: Id) -> Option<&Shape> {
-        self.body_owned(target).map(|(s, _)| s)
+        self.body_owned(target).map(|(s, _, _)| s)
     }
 
     /// Distância "passante": maior que o corpo inteiro.
@@ -1658,11 +1717,12 @@ impl Ctx<'_> {
     fn add_separate(&mut self, f: &Feature, s: Shape) {
         let n = s.face_count() as usize;
         let next = match self.bodies.remove(&f.target) {
-            Some((b, mut own)) if !b.is_null() => {
+            Some((b, mut own, mut roles)) if !b.is_null() => {
                 own.extend(std::iter::repeat_n(f.id, n));
-                (b.compound(&s), own)
+                roles.extend(std::iter::repeat_n(-1, n));
+                (b.compound(&s), own, roles)
             }
-            _ => (s, vec![f.id; n]),
+            _ => fresh_body(s, f.id),
         };
         self.bodies.insert(f.target, next);
     }
@@ -1765,11 +1825,97 @@ impl Ctx<'_> {
         Ok((mode, if a == late { late_first } else { !late_first }, gap))
     }
 
+    /// Mensagem de referência perdida (ou ambígua) de um comando: nunca se escolhe em silêncio.
+    fn lost(&self, what: &str, f: &Feature, why: refs::Lost, who: String) -> String {
+        match why {
+            refs::Lost::None => format!("referência perdida: {what} '{}' — {who} não existe mais; escolha de novo no comando", f.name),
+            refs::Lost::Ambiguous(n) => format!("referência perdida: {what} '{}' — {who} tem {n} candidatas; escolha de novo no comando", f.name),
+        }
+    }
+
+    /// Pontos das faces escolhidas que vão para o kernel (ADR 0010): a face com chave v2 vira o
+    /// ponto atual dela; a que só tem o ponto segue o ponto, e a chave dela é calculada para o app
+    /// gravar no documento (`RecomputeResult.promoted`). Face perdida ou ambígua = erro.
+    #[allow(clippy::too_many_arguments)]
+    fn resolve_faces(&self, what: &str, f: &Feature, b: &Shape, owners: &[Id], roles: &[i32], pts: &[[f64; 3]], keys: &[Option<FaceKey>]) -> Result<Vec<[f64; 3]>, String> {
+        if pts.is_empty() {
+            return Ok(vec![]);
+        }
+        let k = |e: KernelError| e.0;
+        let topo = b.topology().map_err(k)?;
+        let v = refs::View { topo: &topo, owners, roles };
+        let (mut out, mut all, mut gained) = (Vec::with_capacity(pts.len()), Vec::with_capacity(pts.len()), false);
+        for (i, p) in pts.iter().enumerate() {
+            match keys.get(i).and_then(|x| x.as_ref()) {
+                Some(key) => match refs::find_face(&v, key, Some(*p)) {
+                    Ok(j) => {
+                        out.push(topo.faces[j].point);
+                        all.push(Some(key.clone()));
+                    }
+                    Err(why) => {
+                        let who = format!("a face de '{}' ({})", self.doc.name_of(key.owner), refs::role_name(key.role));
+                        return Err(self.lost(what, f, why, who));
+                    }
+                },
+                None => {
+                    out.push(*p);
+                    let key = b.face_index(*p, 1.0).map_err(k)?.and_then(|j| refs::promote_face(&v, j));
+                    gained |= key.is_some();
+                    all.push(key);
+                }
+            }
+        }
+        if gained {
+            *self.promoted.borrow_mut() = Some(Promoted::Faces(all));
+        }
+        Ok(out)
+    }
+
+    /// Mesmo que `resolve_faces`, para arestas: a chave é o par de faces vizinhas e o ponto
+    /// resolvido é o ponto médio atual da aresta.
+    #[allow(clippy::too_many_arguments)]
+    fn resolve_edges(&self, what: &str, f: &Feature, b: &Shape, owners: &[Id], roles: &[i32], mids: &[[f64; 3]], keys: &[Option<EdgeKey>]) -> Result<Vec<[f64; 3]>, String> {
+        if mids.is_empty() {
+            return Ok(vec![]);
+        }
+        let k = |e: KernelError| e.0;
+        let topo = b.topology().map_err(k)?;
+        let v = refs::View { topo: &topo, owners, roles };
+        // a mesma tolerância com que o kernel casa o ponto com a aresta
+        let tol = b.bbox().map(|(a, c)| geo3d::dist(a, c) * 0.05).unwrap_or(1.).max(1.);
+        let (mut out, mut all, mut gained) = (Vec::with_capacity(mids.len()), Vec::with_capacity(mids.len()), false);
+        for (i, p) in mids.iter().enumerate() {
+            match keys.get(i).and_then(|x| x.as_ref()) {
+                Some(key) => match refs::find_edge(&v, key, Some(*p)) {
+                    Ok(e) => {
+                        out.push(topo.edge_mids[e]);
+                        all.push(Some(key.clone()));
+                    }
+                    Err(why) => {
+                        let face = |fk: &FaceKey| format!("'{}' ({})", self.doc.name_of(fk.owner), refs::role_name(fk.role));
+                        let who = format!("a aresta entre as faces {} e {}", face(&key.a), face(&key.b));
+                        return Err(self.lost(what, f, why, who));
+                    }
+                },
+                None => {
+                    out.push(*p);
+                    let key = refs::edge_near(&v, *p, tol).and_then(|e| refs::promote_edge(&v, e));
+                    gained |= key.is_some();
+                    all.push(key);
+                }
+            }
+        }
+        if gained {
+            *self.promoted.borrow_mut() = Some(Promoted::Edges(all));
+        }
+        Ok(out)
+    }
+
     /// Filete/chanfro "mínimo": o kernel sempre segue a cadeia tangente; aqui o resultado só vale
     /// dentro de tubos em volta das arestas escolhidas (tampas normais às pontas), e fora dele
     /// o corpo fica como estava: resultado = (corpo − (tubos − cadeia)) ∪ (tubos ∩ cadeia).
     #[allow(clippy::too_many_arguments)]
-    fn minimal_edges(&self, b: &Shape, owners: &[Id], s: &Shape, own_s: &[Id], mids: &[[f64; 3]], v: f64, fid: Id) -> Result<(Shape, Vec<Id>), String> {
+    fn minimal_edges(&self, b: &Shape, owners: &[Id], roles: &[i32], s: &Shape, own_s: &[Id], role_s: &[i32], mids: &[[f64; 3]], v: f64, fid: Id) -> Result<(Shape, Vec<Id>, Vec<i32>), String> {
         let k = |e: KernelError| e.0;
         let size = b.bbox().map(|(a, c)| geo3d::dist(a, c)).unwrap_or(100.).max(1.);
         let m = b.mesh(size * 1e-3).map_err(k)?;
@@ -1802,19 +1948,19 @@ impl Ctx<'_> {
             tubes = if tubes.is_null() { tube } else { tubes.boolean(&tube, Bool::Fuse).map_err(k)? };
         }
         if tubes.is_null() {
-            return Ok((s.clone(), own_s.to_vec()));
+            return Ok((s.clone(), own_s.to_vec(), role_s.to_vec()));
         }
         // tira o material que o filete removeria só dentro dos tubos
         let remove = tubes.boolean(s, Bool::Cut).map_err(k)?;
         let (r1, out1) = b.boolean_tagged(&remove, Bool::Cut, &tags_for(owners)).map_err(k)?;
-        let own1 = remap(owners, &out1, fid);
+        let (r1, own1, role1) = remap_body(r1, owners, roles, &out1, fid);
         // e põe o que ele acrescentaria (cantos côncavos), se houver
         let add = tubes.boolean(s, Bool::Common).map_err(k)?.boolean(&r1, Bool::Cut).map_err(k)?;
         if add.is_null() || add.mass().volume < 1e-6 * size * size * size {
-            return Ok((r1, own1));
+            return Ok((r1, own1, role1));
         }
         let (r2, out2) = r1.boolean_tagged(&add, Bool::Fuse, &tags_for(&own1)).map_err(k)?;
-        Ok((r2, remap(&own1, &out2, fid)))
+        Ok(remap_body(r2, &own1, &role1, &out2, fid))
     }
 
     /// Varredura avançada: seções calculadas em planos normais à spine e unidas por multi-seções.
@@ -2427,16 +2573,23 @@ impl Ctx<'_> {
     }
 
     /// Corpo + dono (comando) de cada face, na ordem das faces do kernel.
-    fn body_owned(&self, target: Id) -> Option<&(Shape, Vec<Id>)> {
-        self.bodies.get(&target).filter(|(s, _)| !s.is_null())
+    fn body_owned(&self, target: Id) -> Option<&Body> {
+        self.bodies.get(&target).filter(|(s, _, _)| !s.is_null())
     }
 
     /// Aplica a ferramenta ao corpo do coletor; faces novas passam a pertencer ao comando `fid`.
     fn apply(&mut self, target: Id, tool: Shape, op: BoolOp, fid: Id) -> Result<(), String> {
+        self.apply_roles(target, tool, op, fid, None)
+    }
+
+    /// Como `apply`, com o papel de cada face da ferramenta (extrusão e revolução): as faces que
+    /// a ferramenta deixa no corpo levam esse papel, com o comando `fid` como dono.
+    fn apply_roles(&mut self, target: Id, tool: Shape, op: BoolOp, fid: Id, tool_roles: Option<Vec<i32>>) -> Result<(), String> {
         let k = |e: KernelError| e.0;
-        let tool = match self.sheet_mismatch(fid) {
-            Some((from, to)) => self.map_tool(tool, from, to)?,
-            None => tool,
+        // a ferramenta levada entre o dobrado e o planificado perde a correspondência com os papéis
+        let (tool, tool_roles) = match self.sheet_mismatch(fid) {
+            Some((from, to)) => (self.map_tool(tool, from, to)?, None),
+            None => (tool, tool_roles),
         };
         // guarda a ferramenta (furos com rosca somam várias)
         let kept = match self.tools.remove(&fid) {
@@ -2448,18 +2601,34 @@ impl Ctx<'_> {
         let next = match (self.body_owned(target), op) {
             (None, BoolOp::Add) => {
                 let n = tool.face_count() as usize;
-                (tool, vec![fid; n])
+                let roles = tool_roles.filter(|r| r.len() == n).unwrap_or_else(|| vec![-1; n]);
+                (tool, vec![fid; n], roles)
             }
             (None, _) => return Err("não há corpo no coletor de destino para esta operação".into()),
-            (Some((b, owners)), op) => {
+            (Some((b, owners, roles)), op) => {
                 let kop = match op {
                     BoolOp::Add => Bool::Fuse,
                     BoolOp::Cut => Bool::Cut,
                     BoolOp::Intersect => Bool::Common,
                 };
-                let (s, out) = b.boolean_tagged(&tool, kop, &tags_for(owners)).map_err(k)?;
+                let (s, out, src) = b.boolean_tagged_src(&tool, kop, &tags_for(owners)).map_err(k)?;
                 let own = remap(owners, &out, fid);
-                (s, own)
+                // face do corpo: leva o papel que já tinha; face que veio da ferramenta: o papel dela
+                let tool_roles = tool_roles.unwrap_or_default();
+                let new_roles = out
+                    .iter()
+                    .zip(&src)
+                    .map(|(t, sb)| {
+                        if *t >= 0 {
+                            roles.get(*t as usize).copied().unwrap_or(-1)
+                        } else if *sb >= 0 {
+                            tool_roles.get(*sb as usize).copied().unwrap_or(-1)
+                        } else {
+                            -1
+                        }
+                    })
+                    .collect();
+                (s, own, new_roles)
             }
         };
         self.bodies.insert(target, next);
@@ -2559,6 +2728,8 @@ impl Ctx<'_> {
                 };
                 let dir = if into { n.map(|x| -x) } else { n };
                 let _ = &warn_open;
+                // papel de cada face da ferramenta (só nas extrusões simples; nas demais fica desconhecido)
+                let mut roles = None;
                 let tool = if let Extent::UpTo(p) = &e.extent {
                     let target = self.plane(p, 0)?;
                     let n = target.normal;
@@ -2574,7 +2745,9 @@ impl Ctx<'_> {
                     face.extrude_until(dir, t * 4. + size * 10. + 100., target.origin, n).map_err(k)?
                 } else if e.extent == Extent::UpToLast {
                     let len = self.last_dist(f.target, frame.origin, dir)?;
-                    face.extrude(dir, len, 0.).map_err(k)?
+                    let (t, r) = face.extrude_roles(dir, len, 0.).map_err(k)?;
+                    roles = Some(r);
+                    t
                 } else if e.extent == Extent::UpToNext && e.op == BoolOp::Add {
                     let body = self.body(f.target).ok_or("'até o próximo' precisa de um corpo no coletor")?;
                     face.extrude_to_next(dir, self.through(f.target)?, body).map_err(k)?
@@ -2590,9 +2763,11 @@ impl Ctx<'_> {
                     face.extrude_taper(dir, ev(d, &self.vars, "distância")?, taper).map_err(k)?
                 } else {
                     let (front, back) = self.extent(&e.extent, f.target)?;
-                    face.extrude(dir, front, back).map_err(k)?
+                    let (t, r) = face.extrude_roles(dir, front, back).map_err(k)?;
+                    roles = Some(r);
+                    t
                 };
-                self.apply(f.target, tool, e.op, f.id)?;
+                self.apply_roles(f.target, tool, e.op, f.id, roles)?;
                 Ok(warn_open)
             }
             FeatureKind::Revolve(r) => {
@@ -2612,8 +2787,8 @@ impl Ctx<'_> {
                     None if r.symmetric => (ang, -ang / 2.),
                     None => (ang, 0.),
                 };
-                let tool = face.revolve(origin, dir, ang, start).map_err(k)?;
-                self.apply(f.target, tool, r.op, f.id)?;
+                let (tool, roles) = face.revolve_roles(origin, dir, ang, start).map_err(k)?;
+                self.apply_roles(f.target, tool, r.op, f.id, Some(roles))?;
                 Ok(None)
             }
             FeatureKind::Hole(h) => {
@@ -2803,20 +2978,22 @@ impl Ctx<'_> {
             FeatureKind::Thickness(t) if t.faces.is_empty() => Ok(Some("escolha na viewport as faces a engrossar — até lá nada é aplicado".into())),
             FeatureKind::Shell(sh) => {
                 let t = ev(&sh.thickness, &self.vars, "espessura")?;
-                let (b, owners) = self.body_owned(f.target).ok_or("não há corpo para esvaziar")?;
-                let (s, out) = b.shell_tagged(&sh.faces, t, sh.outward, &tags_for(owners)).map_err(k)?;
-                let own = remap(owners, &out, f.id);
-                self.bodies.insert(f.target, (s, own));
+                let (b, owners, roles) = self.body_owned(f.target).ok_or("não há corpo para esvaziar")?;
+                let pts = self.resolve_faces("casca", f, b, owners, roles, &sh.faces, &sh.face_keys)?;
+                let (s, out) = b.shell_tagged(&pts, t, sh.outward, &tags_for(owners)).map_err(k)?;
+                let body = remap_body(s, owners, roles, &out, f.id);
+                self.bodies.insert(f.target, body);
                 Ok(None)
             }
             FeatureKind::Draft(d) => {
                 let a = ev(&d.angle, &self.vars, "ângulo")?;
                 let neutral = self.plane(&d.neutral, 0)?;
                 let pull = if d.reverse { neutral.normal.map(|x| -x) } else { neutral.normal };
-                let (b, owners) = self.body_owned(f.target).ok_or("não há corpo para aplicar")?;
-                let (s, out) = b.draft_tagged(&d.faces, pull, a, &neutral, &tags_for(owners)).map_err(k)?;
-                let own = remap(owners, &out, f.id);
-                self.bodies.insert(f.target, (s, own));
+                let (b, owners, roles) = self.body_owned(f.target).ok_or("não há corpo para aplicar")?;
+                let pts = self.resolve_faces("ângulo de saída", f, b, owners, roles, &d.faces, &d.face_keys)?;
+                let (s, out) = b.draft_tagged(&pts, pull, a, &neutral, &tags_for(owners)).map_err(k)?;
+                let body = remap_body(s, owners, roles, &out, f.id);
+                self.bodies.insert(f.target, body);
                 Ok(None)
             }
             FeatureKind::Thickness(t) => {
@@ -2824,8 +3001,9 @@ impl Ctx<'_> {
                 if v.abs() < 1e-9 {
                     return Ok(Some("espessura zero: nada a fazer".into()));
                 }
-                let b = self.body(f.target).ok_or("não há corpo para aplicar")?;
-                let tool = b.faces_offset_tool(&t.faces, v).map_err(k)?;
+                let (b, owners, roles) = self.body_owned(f.target).ok_or("não há corpo para aplicar")?;
+                let pts = self.resolve_faces("espessura", f, b, owners, roles, &t.faces, &t.face_keys)?;
+                let tool = b.faces_offset_tool(&pts, v).map_err(k)?;
                 self.apply(f.target, tool, if v > 0. { BoolOp::Add } else { BoolOp::Cut }, f.id)?;
                 Ok(None)
             }
@@ -3068,9 +3246,8 @@ impl Ctx<'_> {
                 let n_own = b.face_count() as usize;
                 let rest = b.boolean(&beyond, fenkra_kernel::Bool::Cut).map_err(k)?;
                 let r = rest.boolean(&moved, fenkra_kernel::Bool::Fuse).map_err(k)?.boolean(&ramp, fenkra_kernel::Bool::Fuse).map_err(k)?;
-                let nf = r.face_count() as usize;
                 let _ = n_own;
-                self.bodies.insert(f.target, (r, vec![f.id; nf]));
+                self.bodies.insert(f.target, fresh_body(r, f.id));
                 Ok(None)
             }
             FeatureKind::SmBend(bd) => {
@@ -3126,8 +3303,7 @@ impl Ctx<'_> {
                     .transformed(Xform::Rotate(axis_p, axis_d, ang))
                     .map_err(k)?;
                 let out = fixed.boolean(&bend, fenkra_kernel::Bool::Fuse).map_err(k)?.boolean(&moved, fenkra_kernel::Bool::Fuse).map_err(k)?;
-                let nf = out.face_count() as usize;
-                self.bodies.insert(f.target, (out, vec![f.id; nf]));
+                self.bodies.insert(f.target, fresh_body(out, f.id));
                 Ok(None)
             }
             FeatureKind::SmLouver(lv) => {
@@ -3157,8 +3333,7 @@ impl Ctx<'_> {
                 let cut = Shape::poly_prism(&[at(0., 0.01), at(w, 0.01), at(w, -sp.t - 0.01), at(0., -sp.t - 0.01)], geo3d::mul(e, len)).map_err(k)?;
                 let hood = Shape::poly_prism(&[at(0., h), at(w, 0.), at(w, -sp.t), at(0., h - sp.t)], geo3d::mul(e, len)).map_err(k)?;
                 let out = b.boolean(&cut, fenkra_kernel::Bool::Cut).map_err(k)?.boolean(&hood, fenkra_kernel::Bool::Fuse).map_err(k)?;
-                let nf = out.face_count() as usize;
-                self.bodies.insert(f.target, (out, vec![f.id; nf]));
+                self.bodies.insert(f.target, fresh_body(out, f.id));
                 Ok(None)
             }
             FeatureKind::SmStamp(st) => {
@@ -3475,8 +3650,7 @@ impl Ctx<'_> {
                     let keep_pos = geo3d::dot(ns, geo3d::sub(ctr, mid)) > 0.;
                     let trimmed = b.split_side(&support, keep_pos, true).map_err(k)?;
                     if !trimmed.is_null() && trimmed.face_count() > 0 {
-                        let nf = trimmed.face_count() as usize;
-                        self.bodies.insert(f.target, (trimmed, vec![f.id; nf]));
+                        self.bodies.insert(f.target, fresh_body(trimmed, f.id));
                     }
                 }
                 // ângulo da aba: direção do suporte (perpendicular à OML) em relação à web
@@ -3740,7 +3914,7 @@ impl Ctx<'_> {
                 Ok(None)
             }
             FeatureKind::MoveBody(m) => {
-                let (b, owners) = self.body_owned(f.target).ok_or("não há corpo para mover")?;
+                let (b, owners, roles) = self.body_owned(f.target).ok_or("não há corpo para mover")?;
                 let rigid = match &m.xf {
                     BodyXf::Translate { dir, dist } => {
                         let v = geo3d::unit(self.axis(dir)?.1).ok_or("direção nula")?;
@@ -3759,15 +3933,14 @@ impl Ctx<'_> {
                 match (rigid, &m.xf) {
                     (Some(x), _) => {
                         let (s, out) = b.transformed_tagged(x, &tags_for(owners)).map_err(k)?;
-                        let own = remap(owners, &out, f.id);
-                        self.bodies.insert(f.target, (s, own));
+                        let body = remap_body(s, owners, roles, &out, f.id);
+                        self.bodies.insert(f.target, body);
                     }
                     (None, BodyXf::Affinity { plane, fx, fy, fz }) => {
                         let fr = self.plane(plane, 0)?;
                         let kf = [ev(fx, &self.vars, "fator X")?, ev(fy, &self.vars, "fator Y")?, ev(fz, &self.vars, "fator Z")?];
                         let s = b.affinity(fr, kf).map_err(k)?;
-                        let n = s.face_count() as usize;
-                        self.bodies.insert(f.target, (s, vec![f.id; n]));
+                        self.bodies.insert(f.target, fresh_body(s, f.id));
                     }
                     _ => unreachable!(),
                 }
@@ -3776,10 +3949,10 @@ impl Ctx<'_> {
             FeatureKind::Scale(sc) => {
                 let c = self.point(&sc.center, 0)?;
                 let kf = ev(&sc.factor, &self.vars, "fator")?;
-                let (b, owners) = self.body_owned(f.target).ok_or("não há corpo para escalar")?;
+                let (b, owners, roles) = self.body_owned(f.target).ok_or("não há corpo para escalar")?;
                 let (s, out) = b.transformed_tagged(Xform::Scale(c, kf), &tags_for(owners)).map_err(k)?;
-                let own = remap(owners, &out, f.id);
-                self.bodies.insert(f.target, (s, own));
+                let body = remap_body(s, owners, roles, &out, f.id);
+                self.bodies.insert(f.target, body);
                 Ok(None)
             }
             FeatureKind::Stiffener(st) => {
@@ -3857,8 +4030,7 @@ impl Ctx<'_> {
                 let b = self.body(f.target).ok_or("não há corpo para dividir")?.clone();
                 let tool = self.cut_shape(&sp.surface, 0)?;
                 let r = b.split_side(&tool, !sp.flip, matches!(sp.surface, SurfRef::Face { .. })).map_err(k)?;
-                let n = r.face_count() as usize;
-                self.bodies.insert(f.target, (r, vec![f.id; n]));
+                self.bodies.insert(f.target, fresh_body(r, f.id));
                 Ok(None)
             }
             FeatureKind::ThickSurface(t) => {
@@ -3878,8 +4050,7 @@ impl Ctx<'_> {
                 let sh = self.cut_shape(&sw.surface, 0)?;
                 if sw.remove {
                     let r = b.split_side(&sh, !sw.flip, false).map_err(k)?;
-                    let n = r.face_count() as usize;
-                    self.bodies.insert(f.target, (r, vec![f.id; n]));
+                    self.bodies.insert(f.target, fresh_body(r, f.id));
                 } else {
                     // volumes fechados entre a superfície e o corpo
                     let cells = b.compound(&sh).volume_cells(&[]).map_err(k)?;
@@ -3912,8 +4083,7 @@ impl Ctx<'_> {
                         Some(b) => b.compound(&sh),
                         None => sh,
                     };
-                    let nf = r.face_count() as usize;
-                    self.bodies.insert(f.target, (r, vec![f.id; nf]));
+                    self.bodies.insert(f.target, fresh_body(r, f.id));
                     Ok(Some(format!("{n} triângulos → superfície aberta (a malha não fecha um volume)")))
                 }
             }
@@ -3934,20 +4104,22 @@ impl Ctx<'_> {
                     (Some((from, to)), EdgeSel::Edges(mids)) => {
                         let mut x = o.clone();
                         x.edges = EdgeSel::Edges(mids.iter().map(|q| self.map_point(*q, from, to)).collect());
+                        // as chaves valem para o corpo como ele está, não para o levado entre dobrado e planificado
+                        x.keys = vec![];
                         mapped = x;
                         &mapped
                     }
                     _ => o,
                 };
                 let v = ev(&o.value, &self.vars, "valor")?;
-                let (b, owners) = self.body_owned(f.target).ok_or("não há corpo para aplicar")?;
+                let (b, owners, roles) = self.body_owned(f.target).ok_or("não há corpo para aplicar")?;
                 let tags = tags_for(owners);
                 let chamfer = matches!(f.kind, FeatureKind::Chamfer(_));
                 match &o.mode {
                     EdgeMode::FaceFace(a, c) => {
                         let (s, out) = b.face_face_fillet_tagged(*a, *c, v, &tags).map_err(k)?;
-                        let own = remap(owners, &out, f.id);
-                        self.bodies.insert(f.target, (s, own));
+                        let body = remap_body(s, owners, roles, &out, f.id);
+                        self.bodies.insert(f.target, body);
                         return Ok(None);
                     }
                     EdgeMode::FullRound { mid, a, b: c } => {
@@ -3957,14 +4129,20 @@ impl Ctx<'_> {
                         }
                         let width = geo3d::dot(geo3d::sub(fa.origin, fc.origin), fa.dir).abs();
                         let (s, out) = b.full_round_tagged(*mid, width, &tags).map_err(k)?;
-                        let own = remap(owners, &out, f.id);
-                        self.bodies.insert(f.target, (s, own));
+                        let body = remap_body(s, owners, roles, &out, f.id);
+                        self.bodies.insert(f.target, body);
                         return Ok(None);
                     }
                     _ => {}
                 }
+                // arestas escolhidas: a que tem chave v2 vira o ponto médio atual da aresta lógica; a que
+                // só tem o ponto segue o ponto (e é promovida). Aresta perdida ou ambígua = erro.
+                let picked = match &o.edges {
+                    EdgeSel::Edges(m) if !m.is_empty() => Some(self.resolve_edges(if chamfer { "chanfro" } else { "filete" }, f, b, owners, roles, m, &o.keys)?),
+                    _ => None,
+                };
                 if o.mode != EdgeMode::Constant {
-                    let EdgeSel::Edges(mids) = &o.edges else {
+                    let Some(mids) = &picked else {
                         return Err("esta variação precisa das arestas escolhidas na viewport".into());
                     };
                     let tol = b.bbox().map(|(a, c)| (0..3).map(|i| (c[i] - a[i]).powi(2)).sum::<f64>().sqrt() * 0.05).unwrap_or(1.).max(1.);
@@ -3975,30 +4153,28 @@ impl Ctx<'_> {
                         _ => unreachable!(),
                     };
                     let (s, out) = b.edges_mode_tagged(mode, v, v2, mids, tol, &tags).map_err(k)?;
-                    let own = remap(owners, &out, f.id);
-                    self.bodies.insert(f.target, (s, own));
+                    let body = remap_body(s, owners, roles, &out, f.id);
+                    self.bodies.insert(f.target, body);
                     return Ok(None);
                 }
-                let r = match &o.edges {
-                    EdgeSel::Edges(mids) if !mids.is_empty() => {
+                let r = match &picked {
+                    Some(mids) => {
                         let tol = b.bbox().map(|(a, c)| (0..3).map(|i| (c[i] - a[i]).powi(2)).sum::<f64>().sqrt() * 0.05).unwrap_or(1.).max(1.);
                         b.edges_tagged(v, mids, tol, chamfer, &tags)
                     }
-                    _ if chamfer => b.chamfer_tagged(v, &tags),
-                    _ => b.fillet_tagged(v, &tags),
+                    None if chamfer => b.chamfer_tagged(v, &tags),
+                    None => b.fillet_tagged(v, &tags),
                 };
                 let (s, out) = r.map_err(k)?;
-                let mut own = remap(owners, &out, f.id);
-                let mut s = s;
+                let (mut s, mut own, mut role) = remap_body(s, owners, roles, &out, f.id);
                 // mínima: o resultado da cadeia vale só junto das arestas escolhidas
-                if let (EdgeProp::Minima, EdgeSel::Edges(mids)) = (o.prop, &o.edges) {
-                    if !mids.is_empty() {
-                        let (s2, own2) = self.minimal_edges(&b, owners, &s, &own, mids, v, f.id)?;
-                        s = s2;
-                        own = own2;
-                    }
+                if let (EdgeProp::Minima, Some(mids)) = (o.prop, &picked) {
+                    let (s2, own2, role2) = self.minimal_edges(b, owners, roles, &s, &own, &role, mids, v, f.id)?;
+                    s = s2;
+                    own = own2;
+                    role = role2;
                 }
-                self.bodies.insert(f.target, (s, own));
+                self.bodies.insert(f.target, (s, own, role));
                 Ok(match &o.edges {
                     EdgeSel::CreatedBy(_) => Some("seleção por comando ainda não implementada: aplicado a todas as arestas".into()),
                     _ => None,
@@ -4033,6 +4209,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         sheet_maps: vec![],
         steps: HashMap::new(),
         miter_next: false,
+        promoted: RefCell::new(None),
     };
 
     // 1º: sketches livres (pastas de geometria, sem linha do tempo); 2º: comandos dos coletores em ordem
@@ -4061,6 +4238,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
     };
     let mut feat_out: HashMap<Id, u64> = HashMap::new();
     let mut seen: std::collections::HashSet<Id> = Default::default();
+    let mut promoted: HashMap<Id, Promoted> = HashMap::new();
     cache.reused = 0;
     for i in order {
         let f = &doc.features[i];
@@ -4127,6 +4305,9 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                 // nada que ele lê mudou: reaproveita o que ele produziu
                 cache.reused += 1;
                 cx.status.insert(f.id, e.status);
+                if let Some(p) = e.promoted {
+                    promoted.insert(f.id, p);
+                }
                 for (b, v) in e.bodies {
                     match v {
                         Some(v) => cx.bodies.insert(b, v),
@@ -4152,17 +4333,24 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
             }
             None => {
                 let maps_before = cx.sheet_maps.len();
+                *cx.promoted.borrow_mut() = None;
                 let st = match cx.run(f) {
                     Ok(None) => Status::Ok,
                     Ok(Some(w)) => Status::Warning(w),
                     Err(e) => Status::Error(e),
                 };
                 cx.status.insert(f.id, st.clone());
+                // chaves v2 calculadas para pontos antigos só valem se o comando deu certo
+                let new_keys = cx.promoted.borrow_mut().take().filter(|_| !matches!(st, Status::Error(_)));
+                if let Some(p) = &new_keys {
+                    promoted.insert(f.id, p.clone());
+                }
                 cache.feats.insert(
                     f.id,
                     FeatEntry {
                         sig,
                         status: st,
+                        promoted: new_keys,
                         bodies: touched.iter().map(|b| (*b, cx.bodies.get(b).cloned())).collect(),
                         sketch: cx.sketches.get(&f.id).cloned(),
                         tool: cx.tools.get(&f.id).cloned(),
@@ -4303,7 +4491,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
     // malhas dos corpos
     let mut bodies = vec![];
     for c in &doc.collectors {
-        let Some((s, owners)) = cx.body_owned(c.id) else { continue };
+        let Some((s, owners, roles)) = cx.body_owned(c.id) else { continue };
         let key = (c.id, cx.body_sig.get(&c.id).copied().unwrap_or(0));
         let cached = cache.meshes.get(&key).cloned();
         let r = match cached {
@@ -4327,6 +4515,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                 mass,
                 faces,
                 face_owner: owners.clone(),
+                face_role: roles.clone(),
                 mesh,
             }),
             Err(e) => {
@@ -4337,6 +4526,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
 
     RecomputeResult {
         bodies,
+        promoted,
         sketches,
         planes,
         points,
@@ -4391,6 +4581,7 @@ pub fn publications(doc: &Document) -> Vec<(String, LinkedGeo)> {
                 sheet_maps: vec![],
         steps: HashMap::new(),
         miter_next: false,
+        promoted: RefCell::new(None),
             };
             for f in doc.active_features().map(|(_, f)| f) {
                 let _ = cx.run(f);
@@ -4421,6 +4612,7 @@ fn surface_brep(doc: &Document, id: Id) -> Option<String> {
         sheet_maps: vec![],
         steps: HashMap::new(),
         miter_next: false,
+        promoted: RefCell::new(None),
     };
     for f in doc.active_features().map(|(_, f)| f) {
         let _ = cx.run(f);
@@ -4769,6 +4961,7 @@ pub fn cut_list(doc: &Document) -> Vec<CutRow> {
         sheet_maps: vec![],
         steps: HashMap::new(),
         miter_next: false,
+        promoted: RefCell::new(None),
     };
     let stock = ev(doc.props.stock_length.trim(), &cx.vars, "").ok().filter(|v| *v > 0.);
     let bars_of = |len: f64| stock.map(|s| (len / s).ceil().max(1.) as usize).unwrap_or(1);
@@ -4828,6 +5021,7 @@ pub fn member_joints(doc: &Document) -> Vec<((Id, usize), (Id, usize), [f64; 3])
         sheet_maps: vec![],
         steps: HashMap::new(),
         miter_next: false,
+        promoted: RefCell::new(None),
     };
     let lines = cx.all_member_lines();
     let mut out = vec![];
@@ -4940,6 +5134,7 @@ pub fn export(doc: &Document, collector: Option<Id>, path: &str) -> Result<(), S
         sheet_maps: vec![],
         steps: HashMap::new(),
         miter_next: false,
+        promoted: RefCell::new(None),
     };
     for f in doc.active_features().map(|(_, f)| f) {
         let _ = cx.run(f);
@@ -4978,6 +5173,7 @@ pub fn final_shape(doc: &Document) -> Option<Shape> {
         sheet_maps: vec![],
         steps: HashMap::new(),
         miter_next: false,
+        promoted: RefCell::new(None),
     };
     for f in doc.active_features().map(|(_, f)| f) {
         let _ = cx.run(f);
@@ -5065,7 +5261,7 @@ pub fn example_document() -> Document {
     }));
     d.feature_mut(furo).unwrap().name = s("Furos M6");
     let fol = d.add_folder("Acabamentos");
-    let fil = d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::AllOfBody, mode: EdgeMode::Constant, prop: Default::default() }));
+    let fil = d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::AllOfBody, mode: EdgeMode::Constant, prop: Default::default(), keys: vec![] }));
     d.feature_mut(fil).unwrap().folder = Some(fol);
     d
 }
@@ -5413,7 +5609,7 @@ mod tests {
         assert!((v3 - v4_fold - 400.).abs() < 1., "o recorte do planificado vai para o dobrado: {v3} − {v4_fold}");
         // filete no canto da aba (aresta da espessura), feito no dobrado: arredonda no planificado também
         let (mut d5, ids5) = quarto_de_disco(false);
-        let fil = d5.add_feature(FeatureKind::Fillet(EdgeOp { value: "5".into(), edges: EdgeSel::Edges(vec![[95., -3., 34.]]), mode: EdgeMode::Constant, prop: EdgeProp::Tangente }));
+        let fil = d5.add_feature(FeatureKind::Fillet(EdgeOp { value: "5".into(), edges: EdgeSel::Edges(vec![[95., -3., 34.]]), mode: EdgeMode::Constant, prop: EdgeProp::Tangente, keys: vec![] }));
         let mut all5 = ids5.clone();
         all5.push(fil);
         let f_fold = vol(&d5, &all5);
@@ -5545,9 +5741,9 @@ mod tests {
             let mut d = Document::new("fm");
             let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [40., 20.]);
             d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0 }));
-            d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("5"), edges: EdgeSel::Edges(vec![[40., 20., 5.]]), mode: EdgeMode::Constant, prop: EdgeProp::Tangente }));
+            d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("5"), edges: EdgeSel::Edges(vec![[40., 20., 5.]]), mode: EdgeMode::Constant, prop: EdgeProp::Tangente, keys: vec![] }));
             // filete de 1 na aresta de cima do lado y = 20 (que continua tangente pelo arco do canto)
-            d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::Edges(vec![[17.5, 20., 10.]]), mode: EdgeMode::Constant, prop }));
+            d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::Edges(vec![[17.5, 20., 10.]]), mode: EdgeMode::Constant, prop, keys: vec![] }));
             d
         };
         let vol = |d: &Document| {
@@ -6422,6 +6618,7 @@ mod tests {
             edges: EdgeSel::AllOfBody,
             mode: EdgeMode::FullRound { mid: [0., 0., 10.], a: [2., 0., 5.], b: [-2., 0., 5.] },
             prop: Default::default(),
+            keys: vec![],
         }));
         let v = vol(&d);
         assert!(v < 4. * 40. * 10. && v > 4. * 40. * 8., "filete completo {v}");
@@ -6486,18 +6683,18 @@ mod tests {
 
         // casca abrindo o topo
         let mut d = caixa();
-        d.add_feature(FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false }));
+        d.add_feature(FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![] }));
         let v = vol(&d);
         assert!(v < v0 * 0.5 && v > 0., "casca {v}");
 
         // ângulo de saída numa face lateral
         let mut d = caixa();
-        d.add_feature(FeatureKind::Draft(Draft { faces: vec![[20., 0., 10.]], neutral: PlaneRef::Origin(OriginPlane::XY), angle: "5".into(), reverse: false }));
+        d.add_feature(FeatureKind::Draft(Draft { faces: vec![[20., 0., 10.]], neutral: PlaneRef::Origin(OriginPlane::XY), angle: "5".into(), reverse: false, face_keys: vec![] }));
         assert!(!near(vol(&d), v0, 1e-6), "saída sem efeito");
 
         // espessura +5 no topo
         let mut d = caixa();
-        d.add_feature(FeatureKind::Thickness(Thickness { faces: vec![[0., 0., 20.]], value: "5".into() }));
+        d.add_feature(FeatureKind::Thickness(Thickness { faces: vec![[0., 0., 20.]], value: "5".into(), face_keys: vec![] }));
         assert!(near(vol(&d), v0 + 6000., 1e-6));
 
         // padrão linear de um bolso 4×4×5: 3 cópias ao longo de X
@@ -6579,7 +6776,7 @@ mod tests {
         // filete variável e chanfro por distância e ângulo numa aresta do topo
         for mode in [EdgeMode::Variable("4".into()), EdgeMode::TwoDist("3".into()), EdgeMode::DistAngle("30".into())] {
             let mut d = caixa();
-            let op = EdgeOp { value: "2".into(), edges: EdgeSel::Edges(vec![[0., 15., 20.]]), mode: mode.clone(), prop: Default::default() };
+            let op = EdgeOp { value: "2".into(), edges: EdgeSel::Edges(vec![[0., 15., 20.]]), mode: mode.clone(), prop: Default::default(), keys: vec![] };
             d.add_feature(if matches!(mode, EdgeMode::Variable(_)) { FeatureKind::Fillet(op) } else { FeatureKind::Chamfer(op) });
             assert!(vol(&d) < v0, "{mode:?}");
         }
@@ -6686,6 +6883,191 @@ mod tests {
         }
         let r = recompute(&d);
         assert_eq!(r.status[&fil], Status::Ok, "{:?}", r.status[&fil]);
+    }
+
+    /// Troca o retângulo de um sketch (a "cota" do perfil muda; o sketch e os comandos continuam os mesmos).
+    fn set_rect(d: &mut Document, sk: Id, a: [f64; 2], b: [f64; 2]) {
+        let mut data = SketchData::default();
+        let mut n = 3_000_000u64;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        data.add_rect(&mut al, a, b, false);
+        if let Some(FeatureKind::Sketch(s)) = d.feature_mut(sk).map(|f| &mut f.kind) {
+            s.data = data;
+        }
+    }
+
+    /// Caixa 40 × 30 × 20 (z de 0 a 20) com um bolso retangular `x × 10` de 5 mm de fundo aberto na
+    /// face de cima. Devolve (documento, extrusão da caixa, sketch do bolso, recorte).
+    fn caixa_com_bolso(meio_x: f64) -> (Document, Id, Id, Id) {
+        let mut d = Document::new("t");
+        let base = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [-20., -15.], [20., 15.]);
+        let caixa = d.add_feature(ext(base, BoolOp::Add, "20"));
+        let topo = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "20");
+        let sk = sk_rect(&mut d, PlaneRef::Datum(topo), [-meio_x, -5.], [meio_x, 5.]);
+        let corte = d.add_feature(ext(sk, BoolOp::Cut, "5"));
+        (d, caixa, sk, corte)
+    }
+
+    /// Índice da aresta da malha cujo ponto médio está mais perto de `p` (o que o picking faz).
+    fn aresta_perto(b: &BodyResult, p: [f64; 3]) -> usize {
+        let d = |e: usize| (0..3).map(|i| (b.mesh.edge_mids[e * 3 + i] as f64 - p[i]).powi(2)).sum::<f64>();
+        (0..b.mesh.edge_mids.len() / 3).min_by(|a, c| d(*a).total_cmp(&d(*c))).unwrap()
+    }
+
+    fn filete(valor: &str, mids: Vec<[f64; 3]>, keys: Vec<Option<EdgeKey>>) -> FeatureKind {
+        FeatureKind::Fillet(EdgeOp { value: valor.into(), edges: EdgeSel::Edges(mids), mode: EdgeMode::Constant, prop: Default::default(), keys })
+    }
+
+    #[test]
+    fn filete_com_chave_acompanha_a_aresta_quando_o_perfil_do_recorte_muda() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let (mut d, _caixa, sk, corte) = caixa_com_bolso(5.);
+        let r0 = recompute(&d);
+        assert_eq!(r0.status[&corte], Status::Ok, "{:?}", r0.status[&corte]);
+        let v_sem = r0.bodies[0].mass.volume;
+        // o que o picking faz: a aresta entre a tampa de cima da caixa e a parede do bolso em x = 5
+        let alvo = [5., 0., 20.];
+        let e = aresta_perto(&r0.bodies[0], alvo);
+        let key = r0.bodies[0].edge_key(e).expect("aresta entre duas faces com papel conhecido");
+        assert_eq!(key.a.kind, 0, "plano");
+        assert_eq!(key.b.kind, 0, "plano");
+        let donos = [key.a.owner, key.b.owner];
+        assert!(donos.contains(&corte), "uma das faces é parede do recorte: {donos:?}");
+        // baseline sem filete com o perfil mudado (a parede vai de x = 5 para x = 10)
+        let mut d_sem = d.clone();
+        set_rect(&mut d_sem, sk, [-10., -5.], [10., 5.]);
+        let v_sem_mudado = recompute(&d_sem).bodies[0].mass.volume;
+
+        let fil = d.add_feature(filete("1", vec![alvo], vec![Some(key)]));
+        let r1 = recompute(&d);
+        assert_eq!(r1.status[&fil], Status::Ok, "{:?}", r1.status[&fil]);
+        let retirado = (1. - std::f64::consts::FRAC_PI_4) * 10.; // r² (1 − π/4) × comprimento da aresta
+        assert!((v_sem - r1.bodies[0].mass.volume - retirado).abs() < 0.2, "{v_sem} -> {}", r1.bodies[0].mass.volume);
+
+        // muda a cota do perfil do recorte: a aresta anda 5 mm; o filete a segue (mesma aresta lógica)
+        set_rect(&mut d, sk, [-10., -5.], [10., 5.]);
+        let r2 = recompute(&d);
+        assert_eq!(r2.status[&fil], Status::Ok, "{:?}", r2.status[&fil]);
+        let v_com = r2.bodies[0].mass.volume;
+        assert!(v_com < v_sem_mudado, "o filete tem que tirar material: {v_sem_mudado} -> {v_com}");
+        assert!((v_sem_mudado - v_com - retirado).abs() < 0.2, "só a aresta lógica foi arredondada: {v_sem_mudado} -> {v_com}");
+
+        // sem a chave (referência antiga por ponto) o mesmo cenário falha com erro claro, não em silêncio
+        let (mut d_antigo, _, sk2, _) = caixa_com_bolso(5.);
+        let fil2 = d_antigo.add_feature(filete("1", vec![alvo], vec![]));
+        assert_eq!(recompute(&d_antigo).status[&fil2], Status::Ok);
+        set_rect(&mut d_antigo, sk2, [-10., -5.], [10., 5.]);
+        let st = recompute(&d_antigo).status[&fil2].clone();
+        assert!(matches!(&st, Status::Error(m) if m.contains("existe mais")), "{st:?}");
+    }
+
+    #[test]
+    fn chave_sem_candidata_e_erro_referencia_perdida() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let (mut d, _, _, corte) = caixa_com_bolso(5.);
+        let r0 = recompute(&d);
+        let e = aresta_perto(&r0.bodies[0], [5., 0., 20.]);
+        let mut key = r0.bodies[0].edge_key(e).unwrap();
+        // dono que não existe mais: nenhuma face candidata
+        key.b.owner = Id(987_654);
+        let fil = d.add_feature(filete("1", vec![[5., 0., 20.]], vec![Some(key.clone())]));
+        let v_sem = r0.bodies[0].mass.volume;
+        let r = recompute(&d);
+        match &r.status[&fil] {
+            Status::Error(m) => assert!(m.starts_with("referência perdida:") && m.contains("filete"), "{m}"),
+            s => panic!("deveria ficar em erro: {s:?}"),
+        }
+        // o comando com erro não apaga nada: o corpo fica como estava
+        assert!((r.bodies[0].mass.volume - v_sem).abs() < 1e-6);
+        // papel que o dono nunca teve
+        key.b.owner = corte;
+        key.b.role = 99;
+        if let Some(FeatureKind::Fillet(o)) = d.feature_mut(fil).map(|f| &mut f.kind) {
+            o.keys = vec![Some(key)];
+        }
+        assert!(matches!(&recompute(&d).status[&fil], Status::Error(m) if m.starts_with("referência perdida:")));
+
+        // o mesmo vale para as faces de casca, ângulo de saída e espessura
+        let (mut d, caixa, _, _) = caixa_com_bolso(5.);
+        let falsa = FaceKey { owner: caixa, role: 77, kind: 0, normal_or_axis: [0., 0., 1.], area: 1. };
+        let sh = d.add_feature(FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![Some(falsa)] }));
+        let r = recompute(&d);
+        assert!(matches!(&r.status[&sh], Status::Error(m) if m.starts_with("referência perdida:") && m.contains("casca")), "{:?}", r.status[&sh]);
+    }
+
+    #[test]
+    fn arquivo_antigo_sem_chaves_continua_igual_e_e_promovido() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let (mut d, _, sk, _) = caixa_com_bolso(5.);
+        let alvo = [5., 0., 20.];
+        let fil = d.add_feature(filete("1", vec![alvo], vec![]));
+        let r = recompute(&d);
+        assert_eq!(r.status[&fil], Status::Ok, "{:?}", r.status[&fil]);
+        let v_antigo = r.bodies[0].mass.volume;
+        // o recompute calcula a chave para o app gravar
+        let Some(Promoted::Edges(chaves)) = r.promoted.get(&fil).cloned() else { panic!("deveria promover: {:?}", r.promoted.keys().collect::<Vec<_>>()) };
+        assert_eq!(chaves.len(), 1);
+        assert!(chaves[0].is_some());
+        // sem mexer no documento, o resultado de cada recompute é o mesmo (e o cache devolve a promoção)
+        let mut cache = Cache::default();
+        let a = recompute_cached(&d, &mut cache);
+        let b = recompute_cached(&d, &mut cache);
+        assert!(cache.reused > 0);
+        assert_eq!(a.promoted.get(&fil), b.promoted.get(&fil));
+        assert!((b.bodies[0].mass.volume - v_antigo).abs() < 1e-9);
+        // gravada a promoção, o resultado é idêntico e o filete passa a acompanhar o perfil
+        if let Some(FeatureKind::Fillet(o)) = d.feature_mut(fil).map(|f| &mut f.kind) {
+            o.keys = chaves;
+        }
+        let r = recompute(&d);
+        assert!((r.bodies[0].mass.volume - v_antigo).abs() < 1e-9);
+        assert!(r.promoted.is_empty(), "nada novo para promover");
+        set_rect(&mut d, sk, [-10., -5.], [10., 5.]);
+        assert_eq!(recompute(&d).status[&fil], Status::Ok);
+    }
+
+    #[test]
+    fn casca_com_chave_de_face_sobrevive_a_mudanca_de_altura() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let mut d = Document::new("t");
+        let base = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [-20., -15.], [20., 15.]);
+        let caixa = d.add_feature(ext(base, BoolOp::Add, "20"));
+        let r0 = recompute(&d);
+        let b = &r0.bodies[0];
+        // tampa final da caixa = face de cima
+        let topo = (0..b.face_role.len()).find(|i| b.face_owner[*i] == caixa && b.face_role[*i] == 1).expect("tampa final");
+        let key = b.face_key(topo).unwrap();
+        assert_eq!(key.normal_or_axis, [0., 0., 1.]);
+        let sh = d.add_feature(FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![Some(key)] }));
+        let r = recompute(&d);
+        assert_eq!(r.status[&sh], Status::Ok, "{:?}", r.status[&sh]);
+        // a caixa fica mais alta: o ponto clicado (z = 20) já não está na face de cima, a chave sim
+        if let Some(FeatureKind::Extrude(e)) = d.feature_mut(caixa).map(|f| &mut f.kind) {
+            e.extent = Extent::Blind("30".into());
+        }
+        let r = recompute(&d);
+        assert_eq!(r.status[&sh], Status::Ok, "{:?}", r.status[&sh]);
+        let esperado = 40. * 30. * 30. - 36. * 26. * 28.; // casca de 2 mm aberta em cima
+        assert!((r.bodies[0].mass.volume - esperado).abs() < 1.0, "{} vs {esperado}", r.bodies[0].mass.volume);
+        // arquivo antigo (só o ponto) segue como antes, e a face sem chave é promovida
+        let mut d = Document::new("t");
+        let base = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [-20., -15.], [20., 15.]);
+        d.add_feature(ext(base, BoolOp::Add, "20"));
+        let sh = d.add_feature(FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![] }));
+        let r = recompute(&d);
+        assert_eq!(r.status[&sh], Status::Ok);
+        assert!(matches!(r.promoted.get(&sh), Some(Promoted::Faces(k)) if k.len() == 1 && k[0].is_some()));
     }
 
     #[test]
@@ -6899,7 +7281,7 @@ mod tests_filete_planificado {
         }
         assert!(best.0 < 0.5, "aresta da ponta {:?}", best);
         let v0 = r.bodies[0].mass.volume;
-        d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("3"), edges: EdgeSel::Edges(vec![best.1]), mode: Default::default(), prop: Default::default() }));
+        d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("3"), edges: EdgeSel::Edges(vec![best.1]), mode: Default::default(), prop: Default::default(), keys: vec![] }));
         let r = recompute(&d);
         let v1 = r.bodies[0].mass.volume;
         assert!(v1 < v0 - 1., "filete dobrado {v0} {v1}");
@@ -6952,7 +7334,7 @@ mod tests_filete_planificado {
         }
         assert!(best.0 < 0.5, "aresta da ponta {:?}", best);
         let v0 = r.bodies[0].mass.volume;
-        d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("3"), edges: EdgeSel::Edges(vec![best.1]), mode: Default::default(), prop: Default::default() }));
+        d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("3"), edges: EdgeSel::Edges(vec![best.1]), mode: Default::default(), prop: Default::default(), keys: vec![] }));
         let r = recompute(&d);
         let v1 = r.bodies[0].mass.volume;
         assert!(v1 < v0 - 1., "filete dobrado {v0} {v1}");

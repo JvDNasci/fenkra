@@ -23,7 +23,7 @@ std::vector<TopoDS_Wire> curves_of(rust::Slice<const double> flat, rust::Slice<c
 }  // namespace
 
 std::unique_ptr<Shape> face_copy(const Shape& s, double px, double py, double pz) {
-    return guard("extrair face", [&] { return wrap(BRepBuilderAPI_Copy(face_near(s.s, gp_Pnt(px, py, pz))).Shape()); });
+    return guard("extrair face", [&] { return wrap(BRepBuilderAPI_Copy(face_near(s.s, gp_Pnt(px, py, pz), kFaceLimit)).Shape()); });
 }
 
 std::unique_ptr<Shape> offset_surface(const Shape& s, double d) {
@@ -254,7 +254,7 @@ bool same_face(const Shape& s, double ax, double ay, double az, double bx, doubl
 // faces laterais, aplicado nas duas arestas que a face do meio divide com elas.
 std::unique_ptr<Shape> full_round_t(const Shape& s, double mx, double my, double mz, double width, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out) {
     return guard("filete completo", [&] {
-        TopoDS_Face mid = face_near(s.s, gp_Pnt(mx, my, mz));
+        TopoDS_Face mid = face_near(s.s, gp_Pnt(mx, my, mz), kFaceLimit);
         BRepFilletAPI_MakeFillet mk(s.s);
         int n = 0;
         for (TopExp_Explorer e(mid, TopAbs_EDGE); e.More(); e.Next()) {
@@ -274,7 +274,7 @@ std::unique_ptr<Shape> full_round_t(const Shape& s, double mx, double my, double
 std::unique_ptr<Shape> face_face_fillet_t(const Shape& s, double ax, double ay, double az, double bx, double by, double bz, double r,
                                           rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out) {
     return guard("filete face-face", [&] {
-        TopoDS_Face fa = face_near(s.s, gp_Pnt(ax, ay, az)), fb = face_near(s.s, gp_Pnt(bx, by, bz));
+        TopoDS_Face fa = face_near(s.s, gp_Pnt(ax, ay, az), kFaceLimit), fb = face_near(s.s, gp_Pnt(bx, by, bz), kFaceLimit);
         TopTools_IndexedMapOfShape ea, eb;
         TopExp::MapShapes(fa, TopAbs_EDGE, ea);
         TopExp::MapShapes(fb, TopAbs_EDGE, eb);

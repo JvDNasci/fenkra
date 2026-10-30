@@ -55,20 +55,32 @@ pub fn add_face(k: &mut FeatureKind, p: [f64; 3]) {
 }
 
 /// Alterna a face (para listas de faces): se já está escolhida (mesma face do corpo), tira.
-pub fn toggle_face(k: &mut FeatureKind, p: [f64; 3], same: impl Fn([f64; 3], [f64; 3]) -> bool) {
+/// `key` é a chave v2 da face clicada (o picking sabe o dono e o papel dela); as chaves das outras
+/// faces da lista acompanham os pontos delas.
+pub fn toggle_face(k: &mut FeatureKind, p: [f64; 3], key: Option<FaceKey>, same: impl Fn([f64; 3], [f64; 3]) -> bool) {
     let list = match k {
-        FeatureKind::Shell(s) => Some(&mut s.faces),
-        FeatureKind::Draft(d) => Some(&mut d.faces),
-        FeatureKind::Thickness(t) => Some(&mut t.faces),
+        FeatureKind::Shell(s) => Some((&mut s.faces, &mut s.face_keys)),
+        FeatureKind::Draft(d) => Some((&mut d.faces, &mut d.face_keys)),
+        FeatureKind::Thickness(t) => Some((&mut t.faces, &mut t.face_keys)),
         _ => None,
     };
     match list {
-        Some(l) => match l.iter().position(|q| same(*q, p)) {
-            Some(i) => {
-                l.remove(i);
+        Some((l, keys)) => {
+            let before = l.clone();
+            match l.iter().position(|q| same(*q, p)) {
+                Some(i) => {
+                    l.remove(i);
+                }
+                None => l.push(p),
             }
-            None => l.push(p),
-        },
+            let mut carried = carry_keys(&before, keys, l);
+            if l.len() == before.len() + 1 {
+                if let Some(last) = carried.last_mut() {
+                    *last = key;
+                }
+            }
+            *keys = carried;
+        }
         None => add_face(k, p),
     }
 }
@@ -252,7 +264,9 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         FeatureKind::Shell(s) => {
             expr(ui, "Espessura", &mut s.thickness, vars, "mm");
             crate::editor::check(ui, &mut s.outward, "parede para fora (mantém o volume interno)");
+            let before = s.faces.clone();
             faces_ui(ui, &mut s.faces, picked_faces);
+            s.face_keys = carry_keys(&before, &s.face_keys, &s.faces);
             ui.label(RichText::new(tr("As faces escolhidas ficam abertas; o resto vira parede com a espessura.")).weak().small());
         }
         FeatureKind::Draft(d) => {
@@ -262,13 +276,17 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 plane_combo(ui, "dr_pl", doc, &mut d.neutral, None);
             });
             crate::editor::check(ui, &mut d.reverse, "inverter a direção de extração");
+            let before = d.faces.clone();
             faces_ui(ui, &mut d.faces, picked_faces);
+            d.face_keys = carry_keys(&before, &d.face_keys, &d.faces);
             ui.label(RichText::new(tr("Inclina as faces a partir do plano neutro; a extração segue a normal dele.")).weak().small());
         }
         FeatureKind::Thickness(t) => {
             expr(ui, "Espessura", &mut t.value, vars, "mm");
             ui.label(RichText::new(tr("Positivo acrescenta material, negativo remove.")).weak().small());
+            let before = t.faces.clone();
             faces_ui(ui, &mut t.faces, picked_faces);
+            t.face_keys = carry_keys(&before, &t.face_keys, &t.faces);
         }
         FeatureKind::Pattern(p) => {
             section(ui, "Tipo");

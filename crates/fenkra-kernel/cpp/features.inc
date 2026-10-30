@@ -7,8 +7,11 @@ namespace {
 
 gp_Pnt P3(rust::Slice<const double> p, size_t i) { return gp_Pnt(p[3 * i], p[3 * i + 1], p[3 * i + 2]); }
 
-// Face do sólido mais próxima do ponto (referência de face por ponto clicado).
-TopoDS_Face face_near(const TopoDS_Shape& s, const gp_Pnt& p) {
+// Face do sólido mais próxima do ponto (referência de face por ponto clicado). Com `limit`, o ponto
+// precisa estar a no máximo essa distância da face: senão a face escolhida não existe mais.
+constexpr double kFaceLimit = 1.0;  // mm
+
+TopoDS_Face face_near(const TopoDS_Shape& s, const gp_Pnt& p, double limit = 1e300) {
     TopoDS_Face best;
     double bd = 1e300;
     TopoDS_Vertex v = BRepBuilderAPI_MakeVertex(p).Vertex();
@@ -20,12 +23,13 @@ TopoDS_Face face_near(const TopoDS_Shape& s, const gp_Pnt& p) {
         }
     }
     if (best.IsNull()) throw std::runtime_error("nenhuma face encontrada");
+    if (bd > limit) throw std::runtime_error("a face escolhida não existe mais");
     return best;
 }
 
 std::vector<TopoDS_Face> faces_near(const TopoDS_Shape& s, rust::Slice<const double> pts) {
     std::vector<TopoDS_Face> v;
-    for (size_t i = 0; i + 2 < pts.size(); i += 3) v.push_back(face_near(s, gp_Pnt(pts[i], pts[i + 1], pts[i + 2])));
+    for (size_t i = 0; i + 2 < pts.size(); i += 3) v.push_back(face_near(s, gp_Pnt(pts[i], pts[i + 1], pts[i + 2]), kFaceLimit));
     if (v.empty()) throw std::runtime_error("escolha pelo menos uma face na viewport");
     return v;
 }
@@ -329,6 +333,7 @@ std::unique_ptr<Shape> edges_mode_t(const Shape& s, uint8_t mode, double v1, dou
         TopTools_IndexedDataMapOfShapeListOfShape e2f;
         TopExp::MapShapesAndAncestors(s.s, TopAbs_EDGE, TopAbs_FACE, e2f);
         std::vector<TopoDS_Edge> chosen;
+        int missing = 0;
         for (size_t k = 0; k + 2 < mids.size(); k += 3) {
             gp_Pnt ref(mids[k], mids[k + 1], mids[k + 2]);
             int best = 0;
@@ -344,7 +349,9 @@ std::unique_ptr<Shape> edges_mode_t(const Shape& s, uint8_t mode, double v1, dou
                 }
             }
             if (best > 0 && bd <= tol) chosen.push_back(TopoDS::Edge(edges(best)));
+            else ++missing;
         }
+        if (missing > 0) throw std::runtime_error(std::to_string(missing) + " das arestas escolhidas não existe(m) mais — reedite a seleção de arestas");
         if (chosen.empty()) throw std::runtime_error("escolha as arestas na viewport");
         if (mode == 0) {
             BRepFilletAPI_MakeFillet mk(s.s);
@@ -367,7 +374,7 @@ std::unique_ptr<Shape> edges_mode_t(const Shape& s, uint8_t mode, double v1, dou
 
 rust::Vec<double> cylinder_at(const Shape& s, double px, double py, double pz) {
     return guard("face cilíndrica", [&] {
-        TopoDS_Face f = face_near(s.s, gp_Pnt(px, py, pz));
+        TopoDS_Face f = face_near(s.s, gp_Pnt(px, py, pz), kFaceLimit);
         BRepAdaptor_Surface su(f);
         if (su.GetType() != GeomAbs_Cylinder) throw std::runtime_error("a face escolhida não é cilíndrica");
         gp_Cylinder c = su.Cylinder();

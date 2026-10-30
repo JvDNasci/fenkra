@@ -39,7 +39,7 @@ Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = 
 
 | ID | P | Item | Origem | Catálogo | Tokens | % | Teste | Estado |
 |---|---|---|---|---|---|---|---|---|
-| B15 | P0 | **Referências v2 (ADR 0010)** — Referências por dono + papel + assinatura, com o ponto como reserva; re-anexar sozinho ou mostrar reparo com candidatos no 3D. | DR-11 | SOL-24, GER-05 | 400 k | 5.2% | Auto | a fazer |
+| B15 | P0 | **Referências v2 (ADR 0010)** — Referências por dono + papel + assinatura, com o ponto como reserva; re-anexar sozinho ou mostrar reparo com candidatos no 3D. | DR-11 | SOL-24, GER-05 | 400 k | 5.2% | Auto | em andamento |
 | B16 | P0 | **Ocultar hierárquico** — O pai oculta os filhos e cada um guarda o próprio estado; ocultar a origem e os menus da árvore no próprio item. | DR-15, DR-30 | GER-01 | 80 k | 1.0% | Auto + Visual | a fazer |
 | B17 | P1 | **Câmera no estilo CATIA** — Duplo clique do meio recentra por raycast; pivô sob o cursor (SW/Rhino); zoom no cursor; turntable (Inventor). | CTX-CAM | NAV-02, NAV-03, NAV-04 | 100 k | 1.3% | Visual | a fazer |
 | B18 | P1 | **Relimitação do sketch** — Quick trim (borracha) em todas as curvas, break, trim-extend, close arc e complement. | DR-50, DR-51, DR-52, DR-53 | SKT-10, SKT-11, SKT-12, SKT-13, SKT-14 | 220 k | 2.9% | Auto | a fazer |

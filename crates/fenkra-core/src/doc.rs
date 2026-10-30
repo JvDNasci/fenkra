@@ -2364,6 +2364,9 @@ pub struct Shell {
     pub faces: Vec<[f64; 3]>,
     pub thickness: String,
     pub outward: bool,
+    /// referência v2 de cada face (paralelo a `faces`; `None` = só o ponto)
+    #[serde(default)]
+    pub face_keys: Vec<Option<FaceKey>>,
 }
 
 /// Ângulo de saída nas faces escolhidas, a partir de um plano neutro (puxa pela normal dele).
@@ -2373,6 +2376,9 @@ pub struct Draft {
     pub neutral: PlaneRef,
     pub angle: String,
     pub reverse: bool,
+    /// referência v2 de cada face (paralelo a `faces`; `None` = só o ponto)
+    #[serde(default)]
+    pub face_keys: Vec<Option<FaceKey>>,
 }
 
 /// Espessura: acrescenta (positivo) ou tira (negativo) material das faces escolhidas.
@@ -2380,6 +2386,9 @@ pub struct Draft {
 pub struct Thickness {
     pub faces: Vec<[f64; 3]>,
     pub value: String,
+    /// referência v2 de cada face (paralelo a `faces`; `None` = só o ponto)
+    #[serde(default)]
+    pub face_keys: Vec<Option<FaceKey>>,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -2574,6 +2583,37 @@ pub struct Hole {
     pub left_hand: bool,
 }
 
+/// Referência v2 a uma face (ADR 0010): dono + papel + assinatura geométrica. O ponto clicado
+/// continua guardado ao lado, como reserva e para arquivos antigos.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct FaceKey {
+    /// comando que gerou a face
+    pub owner: Id,
+    /// o que a face é para o dono: 0 tampa inicial, 1 tampa final, 2+i lateral gerada pela aresta i
+    /// do perfil, -1 desconhecido
+    pub role: i32,
+    /// 0 plano, 1 cilindro, 2 outro
+    pub kind: u8,
+    /// normal externa (plano) ou eixo (cilindro e outras superfícies de revolução)
+    pub normal_or_axis: [f64; 3],
+    pub area: f64,
+}
+
+/// Referência v2 a uma aresta: a aresta entre duas faces.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct EdgeKey {
+    pub a: FaceKey,
+    pub b: FaceKey,
+}
+
+/// Chaves v2 depois de editar a lista de pontos de um comando (acrescentar, tirar, trocar): o ponto
+/// que continua na lista (mesma posição) mantém a chave dele; o ponto novo fica sem chave e o
+/// próximo recompute a calcula (promoção). Assim a chave nunca fica associada ao ponto errado.
+pub fn carry_keys<K: Clone>(old_pts: &[[f64; 3]], old_keys: &[Option<K>], new_pts: &[[f64; 3]]) -> Vec<Option<K>> {
+    let same = |a: &[f64; 3], b: &[f64; 3]| (0..3).all(|i| (a[i] - b[i]).abs() < 1e-6);
+    new_pts.iter().map(|p| old_pts.iter().position(|q| same(q, p)).and_then(|i| old_keys.get(i).cloned().flatten())).collect()
+}
+
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum EdgeSel {
     /// Todas as arestas do coletor de destino.
@@ -2594,6 +2634,9 @@ pub struct EdgeOp {
     /// propagação ao longo das arestas tangentes às escolhidas
     #[serde(default)]
     pub prop: EdgeProp,
+    /// referência v2 de cada aresta de `EdgeSel::Edges` (paralelo a ela; `None` = só o ponto)
+    #[serde(default)]
+    pub keys: Vec<Option<EdgeKey>>,
 }
 
 /// Até onde o filete/chanfro continua a partir das arestas escolhidas.
@@ -3674,7 +3717,7 @@ mod tests {
             extent: Extent::Blind(s("10")),
             reverse: false, taper: s("0"), thin: None, dir: None
         }));
-        let fil = d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::CreatedBy(ex), mode: EdgeMode::Constant, prop: Default::default() }));
+        let fil = d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::CreatedBy(ex), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![] }));
         assert_eq!(d.dependents(sk1), vec![ex, fil]);
 
         // substituir referência mantém o comando e muda a entrada

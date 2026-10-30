@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -114,6 +115,7 @@
 #include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
 #include <gp_Ax2.hxx>
+#include <gp_Pnt2d.hxx>
 #include <gp_Circ.hxx>
 #include <gp_Pln.hxx>
 #include <gp_Trsf.hxx>
@@ -241,7 +243,67 @@ std::unique_ptr<Shape> make_face(const Frame& fr, rust::Slice<const Seg> segs, r
     });
 }
 
-std::unique_ptr<Shape> extrude(const Shape& face, double dx, double dy, double dz, double front, double back) {
+namespace {
+
+// Papel de cada face do sólido gerado a partir de um perfil (na ordem de faces do resultado, a mesma
+// de face_ranges): 0 = tampa inicial, 1 = tampa final, 2+i = lateral gerada pela aresta i do perfil
+// (ordem de TopExp::MapShapes das arestas do perfil), -1 = desconhecido.
+template <class Mk>
+void sweep_roles(Mk& mk, const TopoDS_Shape& profile, rust::Vec<int32_t>& out) {
+    TopTools_IndexedMapOfShape rm, pe;
+    TopExp::MapShapes(mk.Shape(), TopAbs_FACE, rm);
+    TopExp::MapShapes(profile, TopAbs_EDGE, pe);
+    std::vector<int> role(rm.Extent(), -1);
+    auto mark = [&](const TopoDS_Shape& s, int r) {
+        if (s.IsNull()) return;
+        for (TopExp_Explorer e(s, TopAbs_FACE); e.More(); e.Next()) {
+            const int k = rm.FindIndex(e.Current());
+            if (k > 0) role[k - 1] = r;
+        }
+    };
+    mark(mk.FirstShape(), 0);
+    mark(mk.LastShape(), 1);
+    TopTools_IndexedDataMapOfShapeListOfShape e2f;
+    TopExp::MapShapesAndAncestors(mk.Shape(), TopAbs_EDGE, TopAbs_FACE, e2f);
+    std::vector<int> pending;
+    for (int i = 1; i <= pe.Extent(); ++i) {
+        const TopTools_ListOfShape& gen = mk.Generated(pe(i));
+        for (const TopoDS_Shape& g : gen) mark(g, 2 + i - 1);
+        if (gen.IsEmpty()) pending.push_back(i);
+    }
+    // o OCCT não informa a face gerada por algumas arestas (ex.: perpendiculares ao eixo numa
+    // revolução). Nesse caso a lateral é a face ainda sem papel que encosta nos arcos gerados pelas
+    // duas pontas da aresta (ou na única ponta que gerou arco, se a outra está sobre o eixo).
+    auto faces_of_vertex = [&](const TopoDS_Shape& v) {
+        std::vector<int> ids;
+        for (const TopoDS_Shape& g : mk.Generated(v)) {
+            const int k = e2f.FindIndex(g);
+            if (k == 0) continue;
+            for (const TopoDS_Shape& f : e2f(k)) {
+                const int j = rm.FindIndex(f);
+                if (j > 0 && role[j - 1] < 0) ids.push_back(j - 1);
+            }
+        }
+        return ids;
+    };
+    for (int i : pending) {
+        TopoDS_Vertex v1, v2;
+        TopExp::Vertices(TopoDS::Edge(pe(i)), v1, v2);
+        std::vector<int> a = faces_of_vertex(v1), b = faces_of_vertex(v2), c;
+        if (a.empty()) c = b;
+        else if (b.empty()) c = a;
+        else
+            for (int j : a)
+                if (std::find(b.begin(), b.end(), j) != b.end()) c.push_back(j);
+        for (int j : c) role[j] = 2 + i - 1;
+    }
+    out.clear();
+    for (int r : role) out.push_back(r);
+}
+
+}  // namespace
+
+std::unique_ptr<Shape> extrude(const Shape& face, double dx, double dy, double dz, double front, double back, rust::Vec<int32_t>& roles) {
     return guard("extrusão", [&] {
         if (front + back <= 1e-9) throw std::runtime_error("comprimento da extrusão deve ser maior que zero");
         gp_Vec d(dx, dy, dz);
@@ -251,12 +313,13 @@ std::unique_ptr<Shape> extrude(const Shape& face, double dx, double dy, double d
         TopoDS_Shape moved = BRepBuilderAPI_Transform(face.s, t, Standard_True).Shape();
         BRepPrimAPI_MakePrism mk(moved, (front + back) * d);
         if (!mk.IsDone()) throw std::runtime_error("falha na extrusão");
+        sweep_roles(mk, moved, roles);
         return wrap(mk.Shape());
     });
 }
 
 std::unique_ptr<Shape> revolve(const Shape& face, double ox, double oy, double oz, double dx, double dy, double dz,
-                               double angle_deg, double start_deg) {
+                               double angle_deg, double start_deg, rust::Vec<int32_t>& roles) {
     return guard("revolução", [&] {
         gp_Ax1 ax(gp_Pnt(ox, oy, oz), gp_Dir(dx, dy, dz));
         TopoDS_Shape f = face.s;
@@ -267,11 +330,13 @@ std::unique_ptr<Shape> revolve(const Shape& face, double ox, double oy, double o
         }
         if (std::abs(angle_deg) >= 360.0 - 1e-9) {
             BRepPrimAPI_MakeRevol mk(f, ax);
+            sweep_roles(mk, f, roles);
             return wrap(mk.Shape());
         }
         if (std::abs(angle_deg) < 1e-9) throw std::runtime_error("ângulo da revolução deve ser maior que zero");
         BRepPrimAPI_MakeRevol mk(f, ax, angle_deg * M_PI / 180.0);
         if (!mk.IsDone()) throw std::runtime_error("falha na revolução");
+        sweep_roles(mk, f, roles);
         return wrap(mk.Shape());
     });
 }
@@ -441,7 +506,8 @@ std::unique_ptr<Shape> edge_op_t(const char* what, const Shape& s, double v, rus
 
 }  // namespace
 
-std::unique_ptr<Shape> boolean_t(const Shape& a, const Shape& b, uint8_t op, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out) {
+std::unique_ptr<Shape> boolean_t(const Shape& a, const Shape& b, uint8_t op, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out,
+                                 rust::Vec<int32_t>& out_b) {
     return guard("booleana", [&] {
         std::unique_ptr<BRepAlgoAPI_BooleanOperation> m;
         if (op == 0) m.reset(new BRepAlgoAPI_Fuse(a.s, b.s));
@@ -449,12 +515,22 @@ std::unique_ptr<Shape> boolean_t(const Shape& a, const Shape& b, uint8_t op, rus
         else m.reset(new BRepAlgoAPI_Common(a.s, b.s));
         if (m->HasErrors() || m->Shape().IsNull()) throw std::runtime_error("a operação booleana falhou");
         const TopoDS_Shape r = m->Shape();
-        auto t1 = carry(a.s, to_vec(tags), r, [&](const TopoDS_Shape& f) -> const TopTools_ListOfShape& { return m->Modified(f); }, -1);
+        auto modified = [&](const TopoDS_Shape& f) -> const TopTools_ListOfShape& { return m->Modified(f); };
+        auto t1 = carry(a.s, to_vec(tags), r, modified, -1);
+        // de qual face da ferramenta (índice na ordem de faces de `b`) vem cada face do resultado
+        TopTools_IndexedMapOfShape bm;
+        TopExp::MapShapes(b.s, TopAbs_FACE, bm);
+        std::vector<int> bi(bm.Extent());
+        for (int i = 0; i < bm.Extent(); ++i) bi[i] = i;
+        auto tb1 = carry(b.s, bi, r, modified, -1);
         ShapeUpgrade_UnifySameDomain u(r, Standard_True, Standard_True, Standard_False);
         u.Build();
         Handle(BRepTools_History) h = u.History();
-        auto t2 = carry(r, t1, u.Shape(), [&](const TopoDS_Shape& f) -> const TopTools_ListOfShape& { return h->Modified(f); }, -1);
+        auto hist = [&](const TopoDS_Shape& f) -> const TopTools_ListOfShape& { return h->Modified(f); };
+        auto t2 = carry(r, t1, u.Shape(), hist, -1);
+        auto tb2 = carry(r, tb1, u.Shape(), hist, -1);
         fill(out, t2);
+        fill(out_b, tb2);
         return wrap(u.Shape());
     });
 }
@@ -467,7 +543,7 @@ std::unique_ptr<Shape> edge_op_sel(const char* what, const Shape& s, double v, r
         Mk mk(s.s);
         TopTools_IndexedMapOfShape edges;
         TopExp::MapShapes(s.s, TopAbs_EDGE, edges);
-        int added = 0;
+        int added = 0, missing = 0;
         for (size_t k = 0; k + 2 < mids.size(); k += 3) {
             gp_Pnt ref(mids[k], mids[k + 1], mids[k + 2]);
             int best = 0;
@@ -485,9 +561,17 @@ std::unique_ptr<Shape> edge_op_sel(const char* what, const Shape& s, double v, r
             if (best > 0 && bd <= tol) {
                 mk.Add(v, TopoDS::Edge(edges(best)));
                 added++;
+            } else {
+                missing++;
             }
         }
-        if (added == 0) throw std::runtime_error("nenhuma das arestas escolhidas existe mais — reedite a seleção de arestas");
+        // nunca descarta em silêncio: se alguma aresta pedida não existe mais, o comando fica em erro
+        if (missing > 0) {
+            const std::string n = std::to_string(missing);
+            throw std::runtime_error(added == 0 ? "nenhuma das arestas escolhidas existe mais — reedite a seleção de arestas"
+                                                : n + " das arestas escolhidas não existe(m) mais — reedite a seleção de arestas");
+        }
+        if (added == 0) throw std::runtime_error("escolha as arestas na viewport");
         mk.Build();
         if (!mk.IsDone()) throw std::runtime_error("valor grande demais para as arestas escolhidas");
         fill(out, carry(s.s, to_vec(tags), mk.Shape(), [&](const TopoDS_Shape& f) -> const TopTools_ListOfShape& { return mk.Modified(f); }, -1));
@@ -571,6 +655,177 @@ std::unique_ptr<Shape> chamfer_all_t(const Shape& s, double d, rust::Slice<const
     return edge_op_t<BRepFilletAPI_MakeChamfer>("chanfro", s, d, tags, out);
 }
 
+namespace {
+
+constexpr uint32_t kNoFace = std::numeric_limits<uint32_t>::max();
+
+// Assinatura geométrica de uma face (referências v2): [tipo, nx, ny, nz, área, px, py, pz].
+// tipo: 0 plano, 1 cilindro, 2 cone, 3 esfera, 4 toro, 5 livre; n = normal externa (plano) ou eixo
+// (cilindro/cone/toro, com o sinal normalizado); p = ponto SOBRE a face.
+void face_signature(const TopoDS_Face& f, double out[8]) {
+    BRepAdaptor_Surface su(f);
+    double kind = 5;
+    gp_Dir n(0, 0, 1);
+    bool axis = false;
+    switch (su.GetType()) {
+        case GeomAbs_Plane:
+            kind = 0;
+            n = su.Plane().Axis().Direction();
+            if (f.Orientation() == TopAbs_REVERSED) n.Reverse();
+            break;
+        case GeomAbs_Cylinder:
+            kind = 1;
+            n = su.Cylinder().Axis().Direction();
+            axis = true;
+            break;
+        case GeomAbs_Cone:
+            kind = 2;
+            n = su.Cone().Axis().Direction();
+            axis = true;
+            break;
+        case GeomAbs_Sphere:
+            kind = 3;
+            break;
+        case GeomAbs_Torus:
+            kind = 4;
+            n = su.Torus().Axis().Direction();
+            axis = true;
+            break;
+        default:
+            break;
+    }
+    if (axis) {  // eixo não tem sentido: a maior componente fica positiva
+        const double ax = std::abs(n.X()), ay = std::abs(n.Y()), az = std::abs(n.Z());
+        const double big = ax >= ay && ax >= az ? n.X() : (ay >= az ? n.Y() : n.Z());
+        if (big < 0) n.Reverse();
+    }
+    GProp_GProps g;
+    BRepGProp::SurfaceProperties(f, g);
+    const gp_Pnt c = g.CentreOfMass();
+    // ponto garantidamente na face: o centroide projetado na superfície, se cair dentro do contorno;
+    // senão o ponto de uma grade UV mais perto do centroide; senão um vértice
+    gp_Pnt p = c;
+    bool ok = false;
+    try {
+        Handle(Geom_Surface) gs = BRep_Tool::Surface(f);
+        GeomAPI_ProjectPointOnSurf pr(c, gs);
+        if (pr.NbPoints() > 0) {
+            double u = 0, v = 0;
+            pr.LowerDistanceParameters(u, v);
+            if (BRepClass_FaceClassifier(f, gp_Pnt2d(u, v), 1e-6).State() == TopAbs_IN) {
+                p = gs->Value(u, v);
+                ok = true;
+            }
+        }
+        if (!ok) {
+            double u1, u2, v1, v2;
+            BRepTools::UVBounds(f, u1, u2, v1, v2);
+            double bd = 1e300;
+            for (int i = 1; i < 10; ++i)
+                for (int j = 1; j < 10; ++j) {
+                    const double u = u1 + (u2 - u1) * i / 10, v = v1 + (v2 - v1) * j / 10;
+                    if (BRepClass_FaceClassifier(f, gp_Pnt2d(u, v), 1e-6).State() != TopAbs_IN) continue;
+                    const gp_Pnt q = gs->Value(u, v);
+                    if (q.Distance(c) < bd) {
+                        bd = q.Distance(c);
+                        p = q;
+                        ok = true;
+                    }
+                }
+        }
+    } catch (...) {
+    }
+    if (!ok) {
+        TopExp_Explorer vx(f, TopAbs_VERTEX);
+        if (vx.More()) p = BRep_Tool::Pnt(TopoDS::Vertex(vx.Current()));
+    }
+    const double vals[8] = {kind, n.X(), n.Y(), n.Z(), std::abs(g.Mass()), p.X(), p.Y(), p.Z()};
+    for (int i = 0; i < 8; ++i) out[i] = vals[i];
+}
+
+// As (até) duas faces vizinhas da aresta, pelo índice na ordem de faces; sem vizinha = kNoFace.
+// Costura (a mesma face dos dois lados) conta uma vez só.
+void edge_face_pair(const TopTools_IndexedMapOfShape& fmap, const TopTools_IndexedDataMapOfShapeListOfShape& e2f, const TopoDS_Shape& e,
+                    uint32_t out[2]) {
+    out[0] = out[1] = kNoFace;
+    const int k = e2f.FindIndex(e);
+    if (k == 0) return;
+    int n = 0;
+    for (const TopoDS_Shape& f : e2f(k)) {
+        const int fi = fmap.FindIndex(f);
+        if (fi <= 0) continue;
+        const uint32_t id = static_cast<uint32_t>(fi - 1);
+        if (n > 0 && out[0] == id) continue;
+        if (n < 2) out[n++] = id;
+    }
+}
+
+bool edge_is_seam(const TopTools_IndexedDataMapOfShapeListOfShape& e2f, const TopoDS_Edge& e) {
+    if (BRep_Tool::Degenerated(e)) return true;
+    const int k = e2f.FindIndex(e);
+    if (k == 0) return false;
+    for (const TopoDS_Shape& f : e2f(k))
+        if (BRep_Tool::IsClosed(e, TopoDS::Face(f))) return true;
+    return false;
+}
+
+}  // namespace
+
+// Topologia sem malha: assinatura de cada face (8 por face), ponto médio de cada aresta (3 por aresta;
+// zeros em costuras/degeneradas) e as duas faces vizinhas de cada aresta (2 por aresta).
+void topology(const Shape& s, rust::Vec<double>& face_info, rust::Vec<double>& edge_mids, rust::Vec<uint32_t>& edge_faces) {
+    guard("topologia", [&] {
+        face_info.clear();
+        edge_mids.clear();
+        edge_faces.clear();
+        if (s.s.IsNull()) return;
+        TopTools_IndexedMapOfShape fmap, emap;
+        TopExp::MapShapes(s.s, TopAbs_FACE, fmap);
+        TopExp::MapShapes(s.s, TopAbs_EDGE, emap);
+        TopTools_IndexedDataMapOfShapeListOfShape e2f;
+        TopExp::MapShapesAndAncestors(s.s, TopAbs_EDGE, TopAbs_FACE, e2f);
+        for (int i = 1; i <= fmap.Extent(); ++i) {
+            double sig[8];
+            face_signature(TopoDS::Face(fmap(i)), sig);
+            for (double x : sig) face_info.push_back(x);
+        }
+        for (int i = 1; i <= emap.Extent(); ++i) {
+            const TopoDS_Edge& e = TopoDS::Edge(emap(i));
+            uint32_t pr[2];
+            if (edge_is_seam(e2f, e)) {
+                pr[0] = pr[1] = kNoFace;
+                for (int k = 0; k < 3; ++k) edge_mids.push_back(0.0);
+            } else {
+                edge_face_pair(fmap, e2f, e, pr);
+                BRepAdaptor_Curve c(e);
+                const gp_Pnt mp = c.Value((c.FirstParameter() + c.LastParameter()) / 2);
+                for (double v : {mp.X(), mp.Y(), mp.Z()}) edge_mids.push_back(v);
+            }
+            edge_faces.push_back(pr[0]);
+            edge_faces.push_back(pr[1]);
+        }
+    });
+}
+
+// Índice (na ordem de faces da malha) da face mais próxima do ponto; -1 se nenhuma está a menos de `limit`.
+int32_t face_index(const Shape& s, double px, double py, double pz, double limit) {
+    return guard("face", [&] {
+        TopTools_IndexedMapOfShape fmap;
+        TopExp::MapShapes(s.s, TopAbs_FACE, fmap);
+        TopoDS_Vertex v = BRepBuilderAPI_MakeVertex(gp_Pnt(px, py, pz)).Vertex();
+        int best = -1;
+        double bd = 1e300;
+        for (int i = 1; i <= fmap.Extent(); ++i) {
+            BRepExtrema_DistShapeShape d(fmap(i), v);
+            if (d.IsDone() && d.Value() < bd) {
+                bd = d.Value();
+                best = i - 1;
+            }
+        }
+        return bd <= limit ? best : -1;
+    });
+}
+
 MeshData tessellate(const Shape& s, double deflection) {
     return guard("tesselação", [&] {
         MeshData m;
@@ -583,6 +838,11 @@ MeshData tessellate(const Shape& s, double deflection) {
         for (int fi = 1; fi <= fmap.Extent(); ++fi) {
             m.face_ranges.push_back(static_cast<uint32_t>(m.indices.size()));
             const TopoDS_Face& face = TopoDS::Face(fmap(fi));
+            {
+                double sig[8];
+                face_signature(face, sig);
+                for (double x : sig) m.face_info.push_back(x);
+            }
             TopLoc_Location loc;
             Handle(Poly_Triangulation) tri = BRep_Tool::Triangulation(face, loc);
             if (tri.IsNull()) continue;
@@ -666,7 +926,14 @@ MeshData tessellate(const Shape& s, double deflection) {
                 }
                 m.edge_smooth.push_back(smooth);
             }
-            if (BRep_Tool::Degenerated(e) || is_seam(e)) {
+            const bool skip = BRep_Tool::Degenerated(e) || is_seam(e);
+            {
+                uint32_t pr[2] = {kNoFace, kNoFace};
+                if (!skip) edge_face_pair(fmap, edge_faces, e, pr);
+                m.edge_faces.push_back(pr[0]);
+                m.edge_faces.push_back(pr[1]);
+            }
+            if (skip) {
                 for (int k = 0; k < 3; ++k) m.edge_mids.push_back(0.f);
                 continue;
             }

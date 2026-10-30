@@ -23,12 +23,19 @@ pub fn transformed(m: &Mesh, p: &Placement) -> Mesh {
         edge_mids: m.edge_mids.chunks_exact(3).flat_map(pt).collect(),
         edge_smooth: m.edge_smooth.clone(),
         vertices: m.vertices.chunks_exact(3).flat_map(pt).collect(),
+        edge_faces: m.edge_faces.clone(),
+        face_info: m
+            .face_info
+            .iter()
+            .map(|f| fenkra_kernel::FaceInfo { dir: p.dir(f.dir), point: p.point(f.point), ..*f })
+            .collect(),
     }
 }
 
 /// Junta malhas (vários corpos da peça viram um componente só).
 fn append(dst: &mut Mesh, src: &Mesh) {
     let base = (dst.positions.len() / 3) as u32;
+    let fbase = dst.face_ranges.len() as u32;
     let ibase = dst.indices.len() as u32;
     let ebase = (dst.edges.len() / 6) as u32;
     dst.positions.extend(&src.positions);
@@ -40,6 +47,8 @@ fn append(dst: &mut Mesh, src: &Mesh) {
     dst.edge_mids.extend(&src.edge_mids);
     dst.edge_smooth.extend(&src.edge_smooth);
     dst.vertices.extend(&src.vertices);
+    dst.edge_faces.extend(src.edge_faces.iter().map(|p| p.map(|f| if f == fenkra_kernel::NO_FACE { f } else { f + fbase })));
+    dst.face_info.extend(&src.face_info);
 }
 
 /// O nó e todos os seus pais estão visíveis?
@@ -121,7 +130,7 @@ pub fn compose(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, errors: 
                 doc.collectors.push(BodyCollector { id: n.id, name: label, color, visible, finish: Finish::default(), texture: None, marker: None, published: false });
                 let nf = m.face_ranges.len();
                 let vol = sh.mass().volume;
-                bodies.push(BodyResult { collector: n.id, color, mesh: m, mass: fenkra_kernel::MassProps { volume: vol, area: 0., center: n.placement.origin }, faces: nf as u32, face_owner: vec![n.id; nf] });
+                bodies.push(BodyResult { collector: n.id, color, mesh: m, mass: fenkra_kernel::MassProps { volume: vol, area: 0., center: n.placement.origin }, faces: nf as u32, face_owner: vec![n.id; nf], face_role: vec![-1; nf] });
                 continue;
             }
         }
@@ -138,6 +147,7 @@ pub fn compose(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, errors: 
                     mass: fenkra_kernel::MassProps { volume: vol, area: 0., center: n.placement.origin },
                     faces: nf as u32,
                     face_owner: vec![n.id; nf],
+                    face_role: vec![-1; nf],
                 });
             }
             Err(e) => errors.push((n.id, e)),
@@ -148,6 +158,7 @@ pub fn compose(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, errors: 
     }
     let r = RecomputeResult {
         bodies,
+        promoted: Default::default(),
         sketches: vec![],
         planes: vec![],
         points: vec![],

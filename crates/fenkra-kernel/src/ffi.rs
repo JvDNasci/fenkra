@@ -46,6 +46,10 @@ pub mod bridge {
         edge_smooth: Vec<u8>,
         /// posição (xyz) de cada vértice
         vertices: Vec<f32>,
+        /// as duas faces vizinhas de cada aresta (índices na ordem de `face_ranges`; u32::MAX = nenhuma)
+        edge_faces: Vec<u32>,
+        /// assinatura de cada face, 8 valores: tipo, nx, ny, nz, área, px, py, pz
+        face_info: Vec<f64>,
     }
 
     unsafe extern "C++" {
@@ -59,10 +63,12 @@ pub mod bridge {
 
         /// Perfil plano a partir de laços fechados; `loop_ends[i]` = índice final (exclusivo) do laço i.
         fn make_face(frame: &Frame, segs: &[Seg], loop_ends: &[u32]) -> Result<UniquePtr<Shape>>;
-        /// Extrusão do perfil ao longo da normal do frame, de -back até +front.
-        fn extrude(face: &Shape, dx: f64, dy: f64, dz: f64, front: f64, back: f64) -> Result<UniquePtr<Shape>>;
-        fn revolve(face: &Shape, ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64, angle_deg: f64, start_deg: f64)
-            -> Result<UniquePtr<Shape>>;
+        /// Extrusão do perfil ao longo da normal do frame, de -back até +front. `roles` = papel de cada
+        /// face do resultado: 0 tampa inicial, 1 tampa final, 2+i lateral da aresta i do perfil, -1 desconhecido.
+        fn extrude(face: &Shape, dx: f64, dy: f64, dz: f64, front: f64, back: f64, roles: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
+        fn revolve(
+            face: &Shape, ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64, angle_deg: f64, start_deg: f64, roles: &mut Vec<i32>,
+        ) -> Result<UniquePtr<Shape>>;
         /// op: 0 = unir, 1 = subtrair, 2 = interseção
         fn boolean(a: &Shape, b: &Shape, op: u8) -> Result<UniquePtr<Shape>>;
         /// Ferramenta de furo (sólido a subtrair) com eixo (o, d) entrando no material.
@@ -75,7 +81,8 @@ pub mod bridge {
         fn compound(a: &Shape, b: &Shape) -> UniquePtr<Shape>;
         /// Versões com etiquetas: `tags` = dono de cada face de `a`; `out` = dono de cada face do
         /// resultado (-1 = face criada pela operação).
-        fn boolean_t(a: &Shape, b: &Shape, op: u8, tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
+        /// `out_b` = índice da face da ferramenta `b` de onde vem cada face do resultado (-1 = nenhuma).
+        fn boolean_t(a: &Shape, b: &Shape, op: u8, tags: &[i32], out: &mut Vec<i32>, out_b: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
         fn fillet_all_t(s: &Shape, r: f64, tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
         fn fillet_sel_t(s: &Shape, r: f64, mids: &[f64], tol: f64, tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
         fn chamfer_sel_t(s: &Shape, d: f64, mids: &[f64], tol: f64, tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
@@ -175,6 +182,10 @@ pub mod bridge {
             s: &Shape, ax: f64, ay: f64, az: f64, bx: f64, by: f64, bz: f64, r: f64, tags: &[i32], out: &mut Vec<i32>,
         ) -> Result<UniquePtr<Shape>>;
 
+        /// Índice da face mais próxima do ponto (ordem de `face_ranges`); -1 se estiver além de `limit`.
+        fn face_index(s: &Shape, px: f64, py: f64, pz: f64, limit: f64) -> Result<i32>;
+        /// Topologia sem malha: assinatura das faces (8 por face), ponto médio das arestas (3) e faces vizinhas (2).
+        fn topology(s: &Shape, face_info: &mut Vec<f64>, edge_mids: &mut Vec<f64>, edge_faces: &mut Vec<u32>) -> Result<()>;
         fn tessellate(s: &Shape, deflection: f64) -> Result<MeshData>;
         /// [xmin, ymin, zmin, xmax, ymax, zmax]
         fn bounding_box(s: &Shape) -> Vec<f64>;

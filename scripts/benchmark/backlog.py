@@ -43,7 +43,7 @@ c('B13', 1, 'P1', 'Planos de face e plano na curva', 'Plano de face entra em err
 c('B14', 1, 'P1', 'Superfícies: "até elemento" e dois limites', 'Extensões de superfície com até elemento; distâncias inicial e final juntas.', ['DR-24', 'DR-16'], ['SUP-09'], 60, 'Auto', 'Superfícies e wireframe'),
 # ---------------------------------------------------------------- onda 2
 c('B15', 2, 'P0', 'Referências v2 (ADR 0010)', 'Referências por dono + papel + assinatura, com o ponto como reserva; re-anexar sozinho ou mostrar reparo com candidatos no 3D.',
-  ['DR-11'], ['SOL-24', 'GER-05'], 400, 'Auto', 'Sólidos'),
+  ['DR-11'], ['SOL-24', 'GER-05'], 400, 'Auto', 'Sólidos', 'em andamento'),
 c('B16', 2, 'P0', 'Ocultar hierárquico', 'O pai oculta os filhos e cada um guarda o próprio estado; ocultar a origem e os menus da árvore no próprio item.', ['DR-15', 'DR-30'], ['GER-01'], 80, 'Auto + Visual', 'Geral'),
 c('B17', 2, 'P1', 'Câmera no estilo CATIA', 'Duplo clique do meio recentra por raycast; pivô sob o cursor (SW/Rhino); zoom no cursor; turntable (Inventor).',
   ['CTX-CAM'], ['NAV-02', 'NAV-03', 'NAV-04'], 100, 'Visual', 'Navegação'),

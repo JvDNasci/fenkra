@@ -1,6 +1,6 @@
 # ADR 0010: Referências v2 — dono + papel + assinatura, com ponto como reserva
 
-- **Status:** proposta
+- **Status:** aceita — fase 1 implementada em 30/10/2026 (filete, chanfro, casca, draft, espessura)
 - **Data:** 2026-10-29
 - **Revê:** [ADR 0004](0004-naming-topologico.md) (parcialmente implementada)
 
@@ -42,3 +42,10 @@ promovida para v2 no primeiro recompute bem-sucedido.
 - ✅ Erros viram "referência perdida" com reparo guiado, em vez de resultado errado.
 - ⚠️ O kernel precisa devolver papéis por face (tampas e laterais) nas extrusões, revoluções e varreduras.
 - ⚠️ Migração gradual: comando por comando, com teste de regressão "muda o perfil, o filete continua".
+
+## Estado (30/10/2026)
+- **Fase 1 (feita):** papel de face na extrusão e revolução, propagado pelas booleanas; `FaceKey`/`EdgeKey`
+  com o ponto como reserva em filete, chanfro, casca, draft e espessura; "referência perdida" em vez de
+  escolher em silêncio (faces a mais de 1 mm e arestas não achadas viram erro); promoção de arquivos antigos.
+- **Fase 2:** chaves para rosca, filete face-face, arredondamento completo e chapa; papéis para extrusão até
+  plano, varredura, loft, furos e padrões; candidatos no 3D no assistente de reparo; `EdgeSel::CreatedBy`.
