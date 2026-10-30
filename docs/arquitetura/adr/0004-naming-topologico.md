@@ -1,6 +1,6 @@
 # ADR 0004: Referências topológicas persistentes por histórico de geração
 
-- **Status:** proposta
+- **Status:** parcialmente implementada — revista pela [ADR 0010](0010-referencias-v2.md)
 - **Data:** 2026-10-21
 
 ## Contexto

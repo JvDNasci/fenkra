@@ -1,6 +1,6 @@
 # Requisitos — Projeto relacional, geometria mestre e links
 
-Ver [ADR 0006](../adr/0006-links-e-projeto-relacional.md) para a arquitetura.
+Ver [ADR 0006](../arquitetura/adr/0006-links-e-projeto-relacional.md) para a arquitetura.
 
 ## Geometria mestre
 

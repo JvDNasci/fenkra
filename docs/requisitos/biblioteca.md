@@ -1,6 +1,6 @@
 # Requisitos — Biblioteca pública de hardware e perfis
 
-Ver [ADR 0008](../adr/0008-biblioteca-publica.md).
+Ver [ADR 0008](../arquitetura/adr/0008-biblioteca-publica.md).
 
 ## Estrutura
 

@@ -91,7 +91,7 @@ integração com o desenho 2D e biblioteca de hardware.
 | 2D | DXF, SVG | DXF, PDF (vetorial), SVG, PNG |
 | Dados | CSV, XLSX (parâmetros, BOM) | CSV, XLSX (BOM, lista de corte) |
 
-DWG fica como item a avaliar (ver [reuso open source](reuso-opensource.md)).
+DWG fica como item a avaliar (ver [reuso open source](../arquitetura/reuso-opensource.md)).
 
 ## 8. Escopo do MVP
 
@@ -102,8 +102,8 @@ Detalhes no [roadmap](roadmap.md).
 
 ## 9. Licença
 
-Proposta: **LGPL-2.1-or-later** para o código ([ADR 0003](adr/0003-licenca.md)) e licença aberta de
-dados para a biblioteca pública ([ADR 0008](adr/0008-biblioteca-publica.md)).
+Proposta: **LGPL-2.1-or-later** para o código ([ADR 0003](../arquitetura/adr/0003-licenca.md)) e licença aberta de
+dados para a biblioteca pública ([ADR 0008](../arquitetura/adr/0008-biblioteca-publica.md)).
 
 ## 10. Critérios de sucesso do MVP
 

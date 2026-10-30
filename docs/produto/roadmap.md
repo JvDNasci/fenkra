@@ -3,7 +3,19 @@
 > As fases são ordem de prioridade, não calendário. Estratégia: **fundação sólida primeiro**, depois
 > **uma versão funcional de cada módulo** com menu minimalista e features completas em opções.
 
-## Fase 0 — Especificação (agora)
+## Onde estamos (29/10/2026, alpha.26)
+
+| Fase | Estado |
+|---|---|
+| 0 — Especificação | feita (requisitos, ADRs); fichas em `specs/` ficaram para trás |
+| 1 — Fundação + Sólidos | quase toda pronta; falta naming topológico robusto (ADR 0010) e API Python |
+| 2 — MVP dos módulos | todos os módulos têm versão funcional; lacunas no [checklist](../requisitos/checklist.md) |
+| 3 — Aprofundar | em andamento: bainha, estampos, acoplamentos, explodida, GD&T já feitos |
+| 4–5 | não iniciadas |
+
+O próximo trabalho sai do [backlog](../backlog/backlog.md) (design review + [benchmark](../benchmark/)).
+
+## Fase 0 — Especificação (feita)
 - Visão, requisitos, ADRs
 - Fichas das features da fase 1
 - Esquema da biblioteca pública e primeiros dados (roscas, materiais)
@@ -11,11 +23,11 @@
 ## Fase 1 — Fundação + Modelagem Sólida
 A fundação é usada por todos os módulos e não pode ser refeita depois.
 - Núcleo: documento, **árvore (Origem, Referências, Parâmetros, pastas, coletores de corpos) e linha de tempo de comandos**, recompute incremental em background, desfazer
-- Naming topológico persistente ([ADR 0004](adr/0004-naming-topologico.md))
+- Naming topológico persistente ([ADR 0004](../arquitetura/adr/0004-naming-topologico.md))
 - **Parâmetros, expressões e propriedades** (PN, descrição, material, tipo, personalizadas)
-- **Geometria mestre, publicações e links** com gerenciador ([ADR 0006](adr/0006-links-e-projeto-relacional.md))
-- Projeto em pasta com versões automáticas ([ADR 0009](adr/0009-projeto-e-revisoes.md))
-- Biblioteca: roscas, materiais ([ADR 0008](adr/0008-biblioteca-publica.md))
+- **Geometria mestre, publicações e links** com gerenciador ([ADR 0006](../arquitetura/adr/0006-links-e-projeto-relacional.md))
+- Projeto em pasta com versões automáticas ([ADR 0009](../arquitetura/adr/0009-projeto-e-revisoes.md))
+- Biblioteca: roscas, materiais ([ADR 0008](../arquitetura/adr/0008-biblioteca-publica.md))
 - Interface minimalista, viewport própria
 - Sketch 2D com solver
 - **Modelagem Sólida**: extrusão, revolução, recorte, draft, nervura por caminho, furo, furo inteligente, rosca paramétrica, filete, chanfro
@@ -31,7 +43,7 @@ A fundação é usada por todos os módulos e não pode ser refeita depois.
 - Biblioteca: perfis estruturais, fixadores, chapas
 - Sketch 3D, padrões, casca, booleanas, API Python
 
-**Fim do MVP:** os critérios de sucesso da [visão](00-visao.md#10-critérios-de-sucesso-do-mvp).
+**Fim do MVP:** os critérios de sucesso da [visão](visao.md#10-critérios-de-sucesso-do-mvp).
 
 ## Fase 3 — Aprofundar os módulos
 - Chapas: flange contínua sobre superfícies, bainha, estampos, converter sólido em chapa

@@ -2,7 +2,7 @@
 
 - **Requisitos atendidos:** RF-XXX-000, ...
 - **Status:** rascunho | revisada | aprovada
-- **Fontes consultadas:** registrar em [procedencia.md](../procedencia.md)
+- **Fontes consultadas:** registrar em [procedencia.md](../arquitetura/procedencia.md)
 
 ## 1. Objetivo
 O que a feature faz, em uma ou duas frases.

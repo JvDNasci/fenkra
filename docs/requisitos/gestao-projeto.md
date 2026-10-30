@@ -1,6 +1,6 @@
 # Requisitos — Gestão de Projeto
 
-Ver [ADR 0009](../adr/0009-projeto-e-revisoes.md). Escopo: uso individual ou equipe pequena com pasta
+Ver [ADR 0009](../arquitetura/adr/0009-projeto-e-revisoes.md). Escopo: uso individual ou equipe pequena com pasta
 compartilhada, sem servidor.
 
 ## Projeto e estrutura de produto

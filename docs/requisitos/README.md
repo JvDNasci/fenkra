@@ -4,7 +4,7 @@
 
 - **ID**: `RF-<área>-<nº>` para funcionais, `RNF-<nº>` para não-funcionais. IDs nunca são reaproveitados.
 - **Prioridade** (MoSCoW): **M** = obrigatório, **S** = deveria ter, **C** = poderia ter, **W** = não agora.
-- **Fase**: conforme o [roadmap](../roadmap.md).
+- **Fase**: conforme o [roadmap](../produto/roadmap.md).
 - **Status**: `rascunho` → `aprovado` → `especificado` (tem ficha em `specs/`) → `implementado`.
 
 ## Como usar

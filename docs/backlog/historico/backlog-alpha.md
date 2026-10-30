@@ -111,7 +111,7 @@ Versionamento flexível enquanto o projeto for local (sem distribuição).
 ## alpha.6 — Geometria 3D de referência e referências externas
 
 - [x] Ponto 3D, linha 3D, círculo 3D, curva 3D (spline) e conectores entre linhas 3D
-- [x] Planos por todos os modos de [modos-de-criacao.md](specs/modos-de-criacao.md)
+- [x] Planos por todos os modos de [modos-de-criacao.md](../../specs/modos-de-criacao.md)
 - [x] **Publicações** com nome único e uso em outras peças (ADR 0006)
 - [x] No sketch: usar parâmetro global ou referência externa publicada; criar referências internas de elementos da própria peça
 

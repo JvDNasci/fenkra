@@ -1,6 +1,6 @@
 # Requisitos — Desenho Técnico
 
-Ver [ADR 0007](../adr/0007-vistas-como-blocos.md).
+Ver [ADR 0007](../arquitetura/adr/0007-vistas-como-blocos.md).
 
 ## Folhas e normas
 
