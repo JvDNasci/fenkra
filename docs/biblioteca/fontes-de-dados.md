@@ -54,6 +54,39 @@ licença.
 | Festo, Parker, SMC | Cilindros e atuadores pneumáticos | B | Começar pelos cilindros **ISO 15552/6432** (interfaces padronizadas); séries próprias ficam como camada de fabricante |
 | Bosch Rexroth, THK, Hiwin | Guias lineares e fusos | B | Medidas são de cada fabricante (não há norma comum de guia): cada um vira uma família própria, com o nome da série |
 
+## Famílias importadas
+
+Arquivos em [`biblioteca/fixadores/`](../../biblioteca/fixadores/) (formato aberto, um JSON por família, licença dos dados
+CC BY 4.0). Todas são **nível C** (normas pagas: só o nome da norma é referência; as medidas vêm de catálogos públicos
+gratuitos, em duas fontes salvo onde indicado). Carregador: `crates/fenkra-solidos/src/biblioteca.rs`; geometria
+simplificada: `fixadores.rs`. Modelam-se M3, M4, M5, M6, M8, M10, M12, M16 e M20.
+
+| Arquivo | Norma | Tipo | Campos (mm) | Fontes |
+|---|---|---|---|---|
+| `iso4762.json` | ISO 4762 (DIN 912) | Parafuso Allen | P, dk, k, s, b | fasten.it (ISO 4762), tspi.at, opac.net |
+| `iso4017.json` | ISO 4017 | Parafuso sextavado | P, s, k | fasten.it (ISO 4017), wermac.org |
+| `din933.json` | DIN 933 | Parafuso sextavado | P, s, k | fasten.it, wermac.org |
+| `iso4032.json` | ISO 4032 | Porca sextavada | s, m | fasten.it, torqbolt.com, tspi.at |
+| `din934.json` | DIN 934 | Porca sextavada | s, m | fasten.it, torqbolt.com, tspi.at |
+| `iso7089.json` | ISO 7089 (DIN 125 A) | Arruela lisa | d1, d2, h | roymech.org (DIN 125), fasten.it, torqbolt.com |
+
+Legenda: P passo; dk Ø da cabeça; k altura da cabeça; s abertura (entre faces) da chave ou do sextavado interno; b comprimento
+mínimo de rosca (L <= 125); m altura da porca; d1 Ø interno e d2 Ø externo da arruela; h espessura. O canto a canto do
+sextavado (e = s / cos 30°) **não** está nos arquivos: é calculado na geometria. Os parafusos trazem também a série de
+comprimentos L padrão (6 a 120 mm); para cada tamanho valem `2·d <= L <= 10·d`, com mínimo de 6 mm.
+
+**Valores com uma só fonte** (campo `confirmado_por: 1`, com `nota` no arquivo; conferir com uma segunda fonte):
+
+| Família | Tamanho | O que |
+|---|---|---|
+| ISO 4762 | M16, M20 | `b`: uma fonte + regra b = 2d + 12 (as demais medidas da linha foram tratadas como o resto da família) |
+| ISO 4032 | M6 | linha confirmada só por torqbolt.com |
+
+**Pendências de fonte**: três URLs de página não foram dadas no levantamento e foram montadas pelo padrão do site (fasten.it
+ISO 4032 e ISO 7089; torqbolt ISO 7089), e as páginas específicas de DIN 933 e DIN 934 no fasten.it ainda não foram
+identificadas (os arquivos apontam para as páginas ISO equivalentes). Todas estão marcadas no `rotulo` de cada fonte e devem
+ser abertas e conferidas antes de tirar o aviso.
+
 ## Regras para cada família importada
 
 1. Arquivo da família com `norma`, `fonte` (documento, página, revisão), `nivel` (A/B/C) e `licenca`.

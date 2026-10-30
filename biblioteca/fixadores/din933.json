@@ -1,0 +1,25 @@
+{
+  "id": "din933",
+  "nome": "Parafuso de cabeça sextavada, rosca total (DIN)",
+  "norma": "DIN 933",
+  "tipo": "parafuso_sextavado",
+  "nivel": "C",
+  "licenca": "CC BY 4.0 (dados)",
+  "fontes": [
+    { "rotulo": "fasten.it — DIN 933 (conferido na página da ISO 4017, equivalente; URL da página DIN 933 a confirmar)", "url": "https://fasten.it/norms/norm/din_en_iso_4017" },
+    { "rotulo": "wermac.org — parafusos métricos de cabeça sextavada", "url": "https://www.wermac.org/bolts/metricBDC.html" }
+  ],
+  "campos": ["P", "s", "k"],
+  "tamanhos": [
+    { "designacao": "M3", "valores": { "P": 0.5, "s": 5.5, "k": 2 }, "confirmado_por": 2 },
+    { "designacao": "M4", "valores": { "P": 0.7, "s": 7, "k": 2.8 }, "confirmado_por": 2 },
+    { "designacao": "M5", "valores": { "P": 0.8, "s": 8, "k": 3.5 }, "confirmado_por": 2 },
+    { "designacao": "M6", "valores": { "P": 1, "s": 10, "k": 4 }, "confirmado_por": 2 },
+    { "designacao": "M8", "valores": { "P": 1.25, "s": 13, "k": 5.3 }, "confirmado_por": 2 },
+    { "designacao": "M10", "valores": { "P": 1.5, "s": 17, "k": 6.4 }, "confirmado_por": 2, "nota": "DIN 933 usa s = 17 (a ISO 4017 usa 16)" },
+    { "designacao": "M12", "valores": { "P": 1.75, "s": 19, "k": 7.5 }, "confirmado_por": 2, "nota": "DIN 933 usa s = 19 (a ISO 4017 usa 18)" },
+    { "designacao": "M16", "valores": { "P": 2, "s": 24, "k": 10 }, "confirmado_por": 2 },
+    { "designacao": "M20", "valores": { "P": 2.5, "s": 30, "k": 12.5 }, "confirmado_por": 2 }
+  ],
+  "comprimentos": [6, 8, 10, 12, 16, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 80, 90, 100, 110, 120]
+}

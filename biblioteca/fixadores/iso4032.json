@@ -1,0 +1,25 @@
+{
+  "id": "iso4032",
+  "nome": "Porca sextavada, tipo 1",
+  "norma": "ISO 4032",
+  "tipo": "porca",
+  "nivel": "C",
+  "licenca": "CC BY 4.0 (dados)",
+  "fontes": [
+    { "rotulo": "fasten.it — DIN EN ISO 4032 (URL inferida do padrão do site, não verificada)", "url": "https://fasten.it/norms/norm/din_en_iso_4032" },
+    { "rotulo": "torqbolt.com — ISO 4032 hexagon nuts", "url": "https://torqbolt.com/iso-4032-hexagon-nuts-dimensions-standards-specifications" },
+    { "rotulo": "tspi.at — tabelas de parafusos e porcas", "url": "https://www.tspi.at/diy/screwnuts.html" }
+  ],
+  "campos": ["s", "m"],
+  "tamanhos": [
+    { "designacao": "M3", "valores": { "s": 5.5, "m": 2.4 }, "confirmado_por": 2 },
+    { "designacao": "M4", "valores": { "s": 7, "m": 3.2 }, "confirmado_por": 2 },
+    { "designacao": "M5", "valores": { "s": 8, "m": 4.7 }, "confirmado_por": 2 },
+    { "designacao": "M6", "valores": { "s": 10, "m": 5.2 }, "confirmado_por": 1, "nota": "1 fonte (torqbolt.com)" },
+    { "designacao": "M8", "valores": { "s": 13, "m": 6.8 }, "confirmado_por": 2 },
+    { "designacao": "M10", "valores": { "s": 16, "m": 8.4 }, "confirmado_por": 2 },
+    { "designacao": "M12", "valores": { "s": 18, "m": 10.8 }, "confirmado_por": 2 },
+    { "designacao": "M16", "valores": { "s": 24, "m": 14.8 }, "confirmado_por": 2 },
+    { "designacao": "M20", "valores": { "s": 30, "m": 18 }, "confirmado_por": 2 }
+  ]
+}

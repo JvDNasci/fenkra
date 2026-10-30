@@ -7,6 +7,8 @@ pub mod geo3d;
 pub mod mesh_io;
 pub mod structural;
 pub mod hardware;
+pub mod biblioteca;
+pub mod fixadores;
 pub mod profile;
 
 use profile::{ev, eval_sketch, to3d, EvalSketch, Vars};

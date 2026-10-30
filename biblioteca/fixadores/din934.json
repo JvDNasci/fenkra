@@ -1,0 +1,25 @@
+{
+  "id": "din934",
+  "nome": "Porca sextavada (DIN)",
+  "norma": "DIN 934",
+  "tipo": "porca",
+  "nivel": "C",
+  "licenca": "CC BY 4.0 (dados)",
+  "fontes": [
+    { "rotulo": "fasten.it — DIN 934 (URL da página DIN 934 a confirmar; esta é a da ISO 4032, inferida e não verificada)", "url": "https://fasten.it/norms/norm/din_en_iso_4032" },
+    { "rotulo": "torqbolt.com — DIN 934 hexagon nuts", "url": "https://torqbolt.com/din-934-hexagon-nuts-dimensions-standards-specifications" },
+    { "rotulo": "tspi.at — tabelas de parafusos e porcas", "url": "https://www.tspi.at/diy/screwnuts.html" }
+  ],
+  "campos": ["s", "m"],
+  "tamanhos": [
+    { "designacao": "M3", "valores": { "s": 5.5, "m": 2.4 }, "confirmado_por": 2 },
+    { "designacao": "M4", "valores": { "s": 7, "m": 3.2 }, "confirmado_por": 2 },
+    { "designacao": "M5", "valores": { "s": 8, "m": 4 }, "confirmado_por": 2 },
+    { "designacao": "M6", "valores": { "s": 10, "m": 5 }, "confirmado_por": 2 },
+    { "designacao": "M8", "valores": { "s": 13, "m": 6.5 }, "confirmado_por": 2 },
+    { "designacao": "M10", "valores": { "s": 17, "m": 8 }, "confirmado_por": 2, "nota": "DIN 934 usa s = 17 (a ISO 4032 usa 16)" },
+    { "designacao": "M12", "valores": { "s": 19, "m": 10 }, "confirmado_por": 2, "nota": "DIN 934 usa s = 19 (a ISO 4032 usa 18)" },
+    { "designacao": "M16", "valores": { "s": 24, "m": 13 }, "confirmado_por": 2 },
+    { "designacao": "M20", "valores": { "s": 30, "m": 16 }, "confirmado_por": 2 }
+  ]
+}

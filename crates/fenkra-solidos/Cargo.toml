@@ -8,4 +8,5 @@ license.workspace = true
 [dependencies]
 fenkra-core = { path = "../fenkra-core" }
 fenkra-kernel = { path = "../fenkra-kernel" }
+serde.workspace = true
 serde_json.workspace = true

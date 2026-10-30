@@ -1,0 +1,26 @@
+{
+  "id": "iso4762",
+  "nome": "Parafuso de cabeça cilíndrica com sextavado interno (Allen)",
+  "norma": "ISO 4762 (DIN 912)",
+  "tipo": "parafuso_allen",
+  "nivel": "C",
+  "licenca": "CC BY 4.0 (dados)",
+  "fontes": [
+    { "rotulo": "fasten.it — DIN EN ISO 4762", "url": "https://fasten.it/norms/norm/din_en_iso_4762" },
+    { "rotulo": "tspi.at — tabelas de parafusos e porcas", "url": "https://www.tspi.at/diy/screwnuts.html" },
+    { "rotulo": "opac.net — ISO 4762 / DIN 912", "url": "https://www.opac.net/en/producto-521-iso-4762-din-912" }
+  ],
+  "campos": ["P", "dk", "k", "s", "b"],
+  "tamanhos": [
+    { "designacao": "M3", "valores": { "P": 0.5, "dk": 5.5, "k": 3, "s": 2.5, "b": 18 }, "confirmado_por": 2 },
+    { "designacao": "M4", "valores": { "P": 0.7, "dk": 7, "k": 4, "s": 3, "b": 20 }, "confirmado_por": 2 },
+    { "designacao": "M5", "valores": { "P": 0.8, "dk": 8.5, "k": 5, "s": 4, "b": 22 }, "confirmado_por": 2 },
+    { "designacao": "M6", "valores": { "P": 1, "dk": 10, "k": 6, "s": 5, "b": 24 }, "confirmado_por": 2 },
+    { "designacao": "M8", "valores": { "P": 1.25, "dk": 13, "k": 8, "s": 6, "b": 28 }, "confirmado_por": 2 },
+    { "designacao": "M10", "valores": { "P": 1.5, "dk": 16, "k": 10, "s": 8, "b": 32 }, "confirmado_por": 2 },
+    { "designacao": "M12", "valores": { "P": 1.75, "dk": 18, "k": 12, "s": 10, "b": 36 }, "confirmado_por": 2 },
+    { "designacao": "M16", "valores": { "P": 2, "dk": 24, "k": 16, "s": 14, "b": 44 }, "confirmado_por": 1, "nota": "b: 1 fonte + regra b = 2d + 12 (comprimento mínimo de rosca para L <= 125)" },
+    { "designacao": "M20", "valores": { "P": 2.5, "dk": 30, "k": 20, "s": 17, "b": 52 }, "confirmado_por": 1, "nota": "b: 1 fonte + regra b = 2d + 12 (comprimento mínimo de rosca para L <= 125)" }
+  ],
+  "comprimentos": [6, 8, 10, 12, 16, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 80, 90, 100, 110, 120]
+}
