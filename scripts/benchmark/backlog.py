@@ -10,9 +10,10 @@ OUT = os.path.join(ROOT, 'docs', 'backlog')
 CAT = {x['id']: x for x in FA + FB}
 
 ONDAS = {
-    1: ('Onda 1 — bugs do design review', '0.1.0-alpha.27'),
-    2: ('Onda 2 — filosofia base + VPM local', '0.1.0-alpha.28'),
-    3: ('Onda 3 — módulos novos e lacunas do benchmark', '0.1.0-alpha.29+'),
+    0: ('Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)', '0.1.0-alpha.28 a .30'),
+    1: ('Onda 1 — bugs do design review', '0.1.0-alpha.31'),
+    2: ('Onda 2 — filosofia base + VPM local', '0.1.0-alpha.32'),
+    3: ('Onda 3 — módulos novos e lacunas do benchmark', '0.1.0-alpha.33+'),
 }
 
 def c(id, onda, prio, titulo, oque, origem, cat, tokens_k, teste, area, status='a fazer'):
@@ -54,7 +55,7 @@ c('B19', 2, 'P1', 'Seleção por janela e geometria externa no sketch', 'Janela/
 c('B20', 2, 'P1', 'Filosofia dos painéis de comando', 'Ordem suporte → modo → parâmetros → avançado em todos os comandos; caixas quando o menu é curto e abas quando é longo; direção normal a plano/superfície.',
   ['DR-09', 'DR-25', 'DR-26', 'DR-27', 'DR-28', 'DR-29'], ['SUP-23', 'GER-03'], 120, 'Visual', 'Geral'),
 c('B21', 2, 'P1', 'Extract com propagação gravada', 'Propagação recalculada a cada atualização; extract disponível no botão direito de outros comandos.', ['DR-13', 'DR-14'], ['SUP-08'], 80, 'Auto', 'Superfícies e wireframe'),
-c('B22', 2, 'P1', 'Montagem: origem, seleção e contexto', 'Origem da montagem; Ctrl/Alt; ocultar/apagar como nas peças; editar peças vendo as outras.', ['DR-31', 'DR-32'],
+c('B22', 2, 'P1', 'Montagem: origem, seleção e contexto', 'Origem da montagem; Ctrl/Alt; ocultar/apagar como nas peças (edição no contexto foi para o B54).', ['DR-31', 'DR-32'],
   ['MON-11', 'MON-13', 'MON-14'], 120, 'Visual', 'Montagem'),
 c('B23', 2, 'P1', 'PMI: realce e chamadas', 'Realce das entidades da anotação, várias setas por anotação e seta que não atravessa o quadro.', ['DR-31', 'DR-47', 'DR-48'], ['PMI-04'], 70, 'Visual', 'PMI 3D'),
 c('B24', 2, 'P2', 'Pastas e setas de referência', '"Selecionados → nova pasta" escolhendo o pai; setas 3D do referencial nos pontos.', ['DR-46', 'DR-49'], ['GER-04', 'SUP-01'], 60, 'Visual', 'Geral'),
@@ -105,8 +106,27 @@ c('B51', 3, 'P2', 'Fixadores: mais famílias e edição da pilha', 'Pinos, prisi
   ['CTX-FIX', 'CTX-HW'], ['MON-16', 'BIB-02'], 200, 'Auto', 'Biblioteca de normas'),
 c('B52', 3, 'P2', 'Engrenagens e eixos totalmente paramétricos', 'Perfil involuto recalculado ao mudar m/z/α/β no documento; filete de raiz (trocoide); engrenagem cônica e coroa/sem-fim; eixo com ranhuras de anel, roscas e cálculo de resistência; t2 da DIN 6885 em segunda fonte.',
   ['CTX-ENG'], ['BIB-03', 'BIB-04'], 300, 'Auto', 'Biblioteca de normas'),
+# ---------------------------------------------------------------- onda 0 — fundação (pesquisa CATIA/SW/Inventor, ADR 0011)
+c('B53', 0, 'P0', 'Corpus de peças de referência e regressão', '16 peças típicas (suporte usinado, flange, carcaça com casca, eixo, chapa, quadro soldado, garrafa, superfícies, engrenagem, mola, montagens com fixadores e mecanismo, PMI+desenho) com valores esperados; cada uma: recompute sem erro e igual ao cache, volume/área/bbox/nº de faces, malha fechada, mudar cada cota e voltar (referências seguem, nada some calado), salvar/abrir idêntico; script de cobertura feature → teste; captura visual FENKRA_DEMO_CAPTURA comparada por pixels. Toda feature nova entra com peça no corpus.',
+  ['PESQ-TST'], [], 250, 'Auto + Visual', 'Geral'),
+c('B54', 0, 'P0', 'Editar peça no contexto da montagem', 'Duplo clique ativa a peça SEM sair da montagem: resto sombreado e esmaecido, selecionável para referência; um componente ativo por vez; Voltar / Voltar ao pai / Voltar ao topo; descartar ou salvar ao sair; criar componente no contexto (nome e pasta); links contextuais com estado na árvore (-> em contexto, ->? fora, ->* travado, ->x quebrado), Travar/Destravar/Quebrar e lista de links por peça; aviso quando a peça tem várias instâncias.',
+  ['PESQ-CAT', 'PESQ-SW', 'PESQ-INV', 'DR-32'], ['MON-11', 'MON-19'], 450, 'Auto + Visual', 'Montagem'),
+c('B55', 0, 'P0', 'Montagem com sketch, referências e publicações', 'Sketch, ponto, eixo, plano e sistema de eixos no nível da montagem; peça esqueleto (origem comum) e Fazer peça a partir dele; publicação com nome de ponto, vetor/eixo, plano, face e sketch em peças e montagens; seleção em contexto usa só publicados (opção padrão); substituir componente religa por nome e lista o que não casou; substituir a geometria de um nome publicado mantém os links.',
+  ['PESQ-CAT', 'PESQ-INV'], ['MON-17'], 350, 'Auto + Visual', 'Montagem'),
+c('B56', 0, 'P0', 'Salvar unificado e Salvar tudo', 'Um só grupo Salvar / Salvar tudo / Salvar como na barra, igual em peça, montagem e desenho; Salvar tudo abre lista de arquivos modificados com o motivo (editado, novo, dependência) e exige nome/pasta para os novos; peças modificadas marcadas na árvore da montagem; Ctrl+S salva o documento ativo e Ctrl+Shift+S salva tudo; Empacotar (Pack and Go) com verificação de referências.',
+  ['PESQ-SW', 'PESQ-INV', 'AUD-FNK'], ['GER-08'], 150, 'Auto + Visual', 'PDM / PLM'),
+c('B57', 0, 'P0', 'Furo entre peças como nos CADs de referência', 'Furo de montagem pelo eixo (Série de furos): atravessa os componentes que o eixo cruza (escopo editável), tipo por peça (folga na de cima, roscado/cego na de baixo), posição por ponto publicado, sketch da montagem ou cotas, padrão; grava um furo real em cada peça com link -> editável só pela montagem; opção "só na montagem" com participantes; hole_table e Fixadores passam a enxergar esses furos; verificação de que toda peça do escopo recebeu o furo.',
+  ['PESQ-SW', 'PESQ-INV', 'AUD-FNK'], ['MON-12'], 350, 'Auto + Visual', 'Montagem'),
+# ---------------------------------------------------------------- onda 0 — P1
+c('B58', 0, 'P1', 'Conexão parafusada e rebites guiados por pontos', 'Assistente tipo Bolted Connection: planos de início/fim, posição linear, concêntrica, por furo (seguir padrão) e por ponto publicado; cria os furos em todas as peças da pilha; pilhas superior/inferior ordenadas; comprimentos só da série do catálogo; editar depois pelo mesmo assistente; apagar a conexão apaga a pilha. Rebites: MS20470/AN470, MS20426/AN426 e cegos ISO 15983 (dados gratuitos em duas fontes, AC 43.13-1B para furos), inserção em massa por pontos, furos ou padrão, comprimento pela espessura do pacote.',
+  ['PESQ-INV', 'PESQ-REB', 'CTX-HW'], ['MON-18', 'BIB-10'], 400, 'Auto + Visual', 'Biblioteca de normas'),
+c('B59', 0, 'P1', 'Árvore robusta: objeto em trabalho e diagnóstico de atualização', 'Objeto em trabalho visível (onde entra o próximo comando), barra de fim de peça para rollback e inserir no meio; contêineres ordenado (consome) e não ordenado (referencia) com regras de aninhamento; atualização manual/automática com estado desatualizado/falhou por comando; diálogo de diagnóstico com Editar (realça a referência perdida), Substituir, Isolar, Desativar e Reordenar; pais/filhos por comando; planos/eixos/pontos de referência oferecidos antes de faces ao criar sketch.',
+  ['PESQ-CAT', 'PESQ-SW', 'PESQ-INV'], ['GER-11', 'GER-05'], 300, 'Auto + Visual', 'Geral'),
+c('B60', 0, 'P1', 'Ícones que mostram o resultado e tooltips com mini fluxo', 'Revisar todos os ícones para mostrar o resultado do comando (ex.: extrusão = perfil + seta + sólido); tooltip em dois estágios (500 ms: nome, atalho e frase; ~1,2 s ou Shift: mini fluxograma entrada → operação → resultado com ícones internos); linha na barra de status com o próximo passo do comando; registro automático de ícones e teste que falha se um comando não tiver ícone, tooltip ou tradução.',
+  ['PESQ-UX', 'AUD-FNK'], ['GER-10'], 300, 'Auto + Visual', 'Geral'),
+c('B61', 0, 'P1', 'Configurações de gráficos e qualidade de renderização', 'Presets rascunho/normal/alta + controle deslizante (desvio relativo à peça com piso na tolerância e ângulo 30°/20°/12°) e modo de desvio fixo com limites; aplicar às peças da montagem; MSAA desligado/2×/4×/8×; simplificar só durante a navegação (taxa mínima de quadros) e voltar à qualidade total ao parar; referências nunca somem por culling; constante única de tesselação no lugar das 7 espalhadas; cache de malha invalidado ao trocar a qualidade.',
+  ['PESQ-CAT', 'PESQ-SW', 'PESQ-INV', 'PESQ-UX', 'AUD-FNK'], ['GER-09'], 200, 'Auto + Visual', 'Navegação'),
 ]
-
 def main():
     for x in B:
         for k in x['catalogo']:

@@ -13,16 +13,19 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 - **Padrão de componentes** (Padrão) — AsmPattern; repeticao_acompanha_a_quantidade.
 - **Interferência e colisão** (Interferência) — AsmInterf; colisão ao arrastar.
 - **Vista explodida** (Explodida) — Composer; teste explosao_e_animacao.
-- **Recursos de montagem** (Recorte pela peça, furo entre peças) — AsmFeat(0/1).
 - **Lista de materiais (BOM)** (BOM) — AsmBom; numeração de itens.
 
 ## 🟡 Parcial
 
 - **Peça no contexto e links** (Peça no contexto, copiar geometria) — AsmNewPart, AsmLink; peças não 100% editáveis vendo as outras (DR-31). `DR-31`
+- **Recursos de montagem** (Recorte pela peça, furo entre peças) — AsmFeat(0/1) corta só a forma exibida na montagem: não grava furo nas peças, não entra no hole_table nem nos Fixadores; posição só pelo clique, Ø padrão 6. `B57`
 - **Seleção e edição na árvore** (Árvore da montagem) — Ctrl+clique; sem Alt; ocultar/apagar diferentes das peças (DR-32). `DR-32`
 - **Fixadores automáticos** (Fixadores (preencher furos)) — preencher_furos: pilha parafuso/arruela/porca com restrições (B29); pega medida por sondas laterais; sem editar/trocar a pilha depois. `B51`
+- **Publicações e referências na montagem** (Publicação em peça (sem montagem)) — Peça publica ref/parâmetro/corpo; montagem não tem sketch, ponto, eixo, plano nem publicação. `B55`
+- **Editar peça no contexto** (Editar peça (troca de bancada)) — edit_part troca para a bancada Sólidos; outras peças só como arestas; Voltar salva sempre; links sem estado. `B54`
 
 ## ❌ Ainda não existe
 
 - **Restrições avançadas** (—) — Sem largura, simetria ou caminho. `BM-MON-01`
 - **Origem da montagem** (—) — Sem origem na montagem (DR-31). `DR-31`
+- **Conexão parafusada** (—) — Fixadores só preenchem furos já existentes. `B58`

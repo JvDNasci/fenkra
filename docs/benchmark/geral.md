@@ -29,3 +29,7 @@
 | GER-05 | Assistente de reparo | 🟡 | Janela de reparo para comandos com erro; sem candidatos no 3D (ADR 0010). | DR-11 |
 | GER-06 | Renderização de arestas | 🟡 | edge_smooth oculta tangências; linhas estranhas no render e em filetes de superfície (DR-08, DR-10). | DR-08 |
 | GER-07 | API de automação | 🟡 | Macros próprias; sem API Python (RNF-011). | BM-GER-01 |
+| GER-08 | Salvar tudo e arquivos modificados | 🟡 | Três botões Salvar, Ctrl+S muda de efeito; montagem não salva peças; sem Salvar tudo nem Salvar como. | B56 |
+| GER-09 | Qualidade gráfica | ❌ | Desvio fixo espalhado em 7 lugares, ângulo 0,35 rad fixo, MSAA 4× fixo. | B61 |
+| GER-10 | Ícones e tooltips explicativos | 🟡 | Sem imagem, sem fluxo, ícones registrados à mão. | B60 |
+| GER-11 | Diagnóstico de atualização | 🟡 | Só editar; sem isolar, desativar, reordenar, objeto em trabalho ou fim de peça. | B59 |

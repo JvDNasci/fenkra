@@ -20,6 +20,12 @@ Consultadas em 29/10/2026. Nenhum texto foi copiado: tudo foi reescrito com pala
 - `sw-mbd` — [SOLIDWORKS Help — MBD annotations](https://help.solidworks.com/2025/English/SolidWorks/Sldworks/t_mbd_hiding_showing_annot_parts_assemb.htm)
 - `sw-smartfast` — [SOLIDWORKS Help — Smart Fasteners Overview](https://help.solidworks.com/2017/English/SolidWorks/sldworks/c_Smart_Fasteners_Overview.htm)
 - `sw-mmb` — [SOLIDWORKS Help — Middle Mouse Button Functions](https://help.solidworks.com/2021/English/SolidWorks/sldworks/r_Middle_Mouse_Button.htm)
+- `sw-holeseries` — [SOLIDWORKS Help — Creating Holes as Assembly Features](https://help.solidworks.com/2023/English/SolidWorks/Sldworks/t_Creating_Assembly_Feature_Holes.htm)
+- `sw-propagate` — [Javelin — Propagate feature to parts (SOLIDWORKS)](https://www.javelin-tech.com/blog/2016/03/propagate-feature-to-parts-solidworks/)
+- `sw-extref` — [SOLIDWORKS Help — Locking and Breaking External References](https://help.solidworks.com/2025/English/SolidWorks/Sldworks/t_Locking_and_Breaking_External_References.htm)
+- `sw-stacks` — [SOLIDWORKS Help — Smart Fasteners Hardware Stacks](https://help.solidworks.com/2015/English/SOLIDWORKS/sldworks/c_Smart_Fasteners_Hardware_Stacks.htm)
+- `sw-packgo` — [SOLIDWORKS Help — Pack and Go](https://help.solidworks.com/2024/English/SolidWorks/Sldworks/r_pack_go_db.htm)
+- `sw-imgq` — [SOLIDWORKS Help — Image Quality](https://help.solidworks.com/2020/English/SolidWorks/sldworks/HIDD_OPTIONS_IMAGE_QUALITY.htm)
 
 ## Inventor
 
@@ -40,6 +46,11 @@ Consultadas em 29/10/2026. Nenhum texto foi copiado: tudo foi reescrito com pala
 - `inv-da` — [Inventor Help — Design Accelerator](https://help.autodesk.com/cloudhelp/2015/ENU/Inventor-Help/files/GUID-24104648-BE41-49C7-9DD0-1AF2BAFC102E.htm)
 - `inv-orbit` — [Inventor Help — More about Orbit](https://help.autodesk.com/cloudhelp/2014/ENU/Inventor/files/GUID-5E6B1A06-1043-45C4-A3C3-F0959939EB3B.htm)
 - `inv-steering` — [Inventor Help — SteeringWheels Reference](https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-5D371AC3-EBC4-4B8D-9A9B-4B9B2B290D8B.htm)
+- `inv-bolted` — [Inventor Help — Bolted Connection](https://help.autodesk.com/cloudhelp/2025/ENU/Inventor-Help/files/GUID-6E1D4624-B605-4AB1-9DBA-E981495B4933.htm)
+- `inv-inplace` — [Inventor Help — Edit in place](https://help.autodesk.com/cloudhelp/2020/ENU/Inventor-Help/files/GUID-C79C36C9-A6DB-46C5-8864-41F66C750231.htm)
+- `inv-skeleton` — [Inventor Help — Skeletal modeling](https://help.autodesk.com/cloudhelp/2023/ENU/Inventor-Help/files/GUID-0435FE9D-6283-4CE0-813B-BD9B0BE5778C.htm)
+- `inv-asmfeat` — [Inventor Help — Assembly features](https://help.autodesk.com/cloudhelp/2027/ENU/Inventor-Help/files/GUID-553D514F-2F41-419A-8696-063932991E67.htm)
+- `inv-display` — [Inventor Help — Application Options, Display](https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-760D1240-4E53-4509-90A5-40A66CCD96CD.htm)
 
 ## CATIA V5
 
@@ -52,6 +63,11 @@ Consultadas em 29/10/2026. Nenhum texto foi copiado: tudo foi reescrito com pala
 - `catia-str-pycatia` — [pycatia — API de Structure Design (endcuts)](https://pycatia.readthedocs.io/en/latest/api/pycatia/cat_str_functional_interfaces/sfm_endcut.html)
 - `catia-nav-ptc` — [PTC Creo View — modo de navegação compatível com CATIA V5](https://support.ptc.com/help/creo/view/r6.0/en/creo_view/Using_the_Mouse_in_Catia_V5_Mode.html)
 - `niar-courses` — [Wichita State NIAR — ementas de CATIA (Drafting, FT&A, GSD)](https://www.wichita.edu/research/NIAR/Laboratories/cad-cam/course-descriptions.php)
+- `catia-pub` — [EDS Technologies — Publications in CATIA V5](https://edstechnologies.com/blog/making-assemblies-easier-with-publications-in-catia-v5/)
+- `catia-tree` — [CATI — Managing the design tree in CATIA V5](https://www.cati.com/blog/managing-the-design-tree-in-catia-v5-6-and-3dexperience/)
+- `catia-perf` — [EDS Technologies — Performance settings in CATIA V5](https://edstechnologies.com/blog/performance-settings-in-catia-v5/)
+- `catia-save` — [EDS Technologies — Save options in CATIA V5](https://edstechnologies.com/blog/save-options-in-catia-v5/)
+- `catia-asmfeat` — [City University London — CATIA Assembly Features](https://www.staff.city.ac.uk/~ra600/ME2105/Catia%20course/CATIA%20Tutorials/asmug_C2/asmugat0500.htm)
 
 ## PDM/PLM
 

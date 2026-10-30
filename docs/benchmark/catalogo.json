@@ -221,6 +221,86 @@
   "ctx-hw": {
    "rotulo": "Contexto: fontes de perfis e hardware",
    "url": "../contextos/hardwares.md"
+  },
+  "sw-holeseries": {
+   "rotulo": "SOLIDWORKS Help — Creating Holes as Assembly Features",
+   "url": "https://help.solidworks.com/2023/English/SolidWorks/Sldworks/t_Creating_Assembly_Feature_Holes.htm"
+  },
+  "sw-propagate": {
+   "rotulo": "Javelin — Propagate feature to parts (SOLIDWORKS)",
+   "url": "https://www.javelin-tech.com/blog/2016/03/propagate-feature-to-parts-solidworks/"
+  },
+  "sw-extref": {
+   "rotulo": "SOLIDWORKS Help — Locking and Breaking External References",
+   "url": "https://help.solidworks.com/2025/English/SolidWorks/Sldworks/t_Locking_and_Breaking_External_References.htm"
+  },
+  "sw-stacks": {
+   "rotulo": "SOLIDWORKS Help — Smart Fasteners Hardware Stacks",
+   "url": "https://help.solidworks.com/2015/English/SOLIDWORKS/sldworks/c_Smart_Fasteners_Hardware_Stacks.htm"
+  },
+  "sw-packgo": {
+   "rotulo": "SOLIDWORKS Help — Pack and Go",
+   "url": "https://help.solidworks.com/2024/English/SolidWorks/Sldworks/r_pack_go_db.htm"
+  },
+  "sw-imgq": {
+   "rotulo": "SOLIDWORKS Help — Image Quality",
+   "url": "https://help.solidworks.com/2020/English/SolidWorks/sldworks/HIDD_OPTIONS_IMAGE_QUALITY.htm"
+  },
+  "inv-bolted": {
+   "rotulo": "Inventor Help — Bolted Connection",
+   "url": "https://help.autodesk.com/cloudhelp/2025/ENU/Inventor-Help/files/GUID-6E1D4624-B605-4AB1-9DBA-E981495B4933.htm"
+  },
+  "inv-inplace": {
+   "rotulo": "Inventor Help — Edit in place",
+   "url": "https://help.autodesk.com/cloudhelp/2020/ENU/Inventor-Help/files/GUID-C79C36C9-A6DB-46C5-8864-41F66C750231.htm"
+  },
+  "inv-skeleton": {
+   "rotulo": "Inventor Help — Skeletal modeling",
+   "url": "https://help.autodesk.com/cloudhelp/2023/ENU/Inventor-Help/files/GUID-0435FE9D-6283-4CE0-813B-BD9B0BE5778C.htm"
+  },
+  "inv-asmfeat": {
+   "rotulo": "Inventor Help — Assembly features",
+   "url": "https://help.autodesk.com/cloudhelp/2027/ENU/Inventor-Help/files/GUID-553D514F-2F41-419A-8696-063932991E67.htm"
+  },
+  "inv-display": {
+   "rotulo": "Inventor Help — Application Options, Display",
+   "url": "https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-760D1240-4E53-4509-90A5-40A66CCD96CD.htm"
+  },
+  "catia-pub": {
+   "rotulo": "EDS Technologies — Publications in CATIA V5",
+   "url": "https://edstechnologies.com/blog/making-assemblies-easier-with-publications-in-catia-v5/"
+  },
+  "catia-tree": {
+   "rotulo": "CATI — Managing the design tree in CATIA V5",
+   "url": "https://www.cati.com/blog/managing-the-design-tree-in-catia-v5-6-and-3dexperience/"
+  },
+  "catia-perf": {
+   "rotulo": "EDS Technologies — Performance settings in CATIA V5",
+   "url": "https://edstechnologies.com/blog/performance-settings-in-catia-v5/"
+  },
+  "catia-save": {
+   "rotulo": "EDS Technologies — Save options in CATIA V5",
+   "url": "https://edstechnologies.com/blog/save-options-in-catia-v5/"
+  },
+  "catia-asmfeat": {
+   "rotulo": "City University London — CATIA Assembly Features",
+   "url": "https://www.staff.city.ac.uk/~ra600/ME2105/Catia%20course/CATIA%20Tutorials/asmug_C2/asmugat0500.htm"
+  },
+  "occt-mesh": {
+   "rotulo": "OCCT — Mesh user guide (BRepMesh)",
+   "url": "https://dev.opencascade.org/doc/overview/html/occt_user_guides__mesh.html"
+  },
+  "rebite-ms20470": {
+   "rotulo": "Boeing Distribution — MS20470AD4",
+   "url": "https://shop.boeing.com/cpd/bdi_ms20470ad4-20=28"
+  },
+  "rebite-iso15983": {
+   "rotulo": "Würth — rebite cego ISO 15983",
+   "url": "https://eshop.wuerth.de/Blind-rivet-open-with-break-mandrel-and-flat-head-ISO-15983-dome-head-A2-A2-stainless-steel-RIV-ISO15983-A2-A2-45-65-40X100/514614010.sku/en/US/EUR"
+  },
+  "pesq-filosofia": {
+   "rotulo": "Pesquisa: filosofia de modelagem (ADR 0011)",
+   "url": "../arquitetura/adr/0011-filosofia-de-modelagem.md"
   }
  },
  "features": [
@@ -2261,13 +2341,16 @@
    "sw": "Assembly Feature (Hole/Cut)",
    "inv": "Assembly Features",
    "fenkra": "Recorte pela peça, furo entre peças",
-   "status": "ok",
-   "nota": "AsmFeat(0/1).",
-   "diferencas": "",
+   "status": "parcial",
+   "nota": "AsmFeat(0/1) corta só a forma exibida na montagem: não grava furo nas peças, não entra no hole_table nem nos Fixadores; posição só pelo clique, Ø padrão 6.",
+   "diferencas": "SW: Série de furos atravessa as peças do eixo e grava feature em cada peça (->). Inventor: feature fica na montagem com participantes. CATIA: Assembly Features com peças afetadas.",
    "fontes": [
-    "sw-mates"
+    "sw-holeseries",
+    "sw-propagate",
+    "inv-asmfeat",
+    "catia-asmfeat"
    ],
-   "backlog": null
+   "backlog": "B57"
   },
   {
    "id": "MON-13",
@@ -2342,6 +2425,63 @@
     "ctx-fix"
    ],
    "backlog": "B51"
+  },
+  {
+   "id": "MON-17",
+   "modulo": "Montagem",
+   "nome": "Publicações e referências na montagem",
+   "faz": "Pontos, eixos, planos e sketches nomeados na peça e na montagem, usados como referência estável.",
+   "como": "Elemento → publicar com nome → selecionar em contexto só publicados → substituir componente religa por nome.",
+   "catia": "Publication / Skeleton",
+   "sw": "Layout sketch / Mate References",
+   "inv": "Work features / iMates / Skeleton (Make Part)",
+   "fenkra": "Publicação em peça (sem montagem)",
+   "status": "parcial",
+   "nota": "Peça publica ref/parâmetro/corpo; montagem não tem sketch, ponto, eixo, plano nem publicação.",
+   "diferencas": "CATIA religa componentes substituídos pelo nome publicado.",
+   "fontes": [
+    "catia-pub",
+    "inv-skeleton"
+   ],
+   "backlog": "B55"
+  },
+  {
+   "id": "MON-18",
+   "modulo": "Montagem",
+   "nome": "Conexão parafusada",
+   "faz": "Assistente que cria furos em todas as peças da pilha e insere parafuso, arruelas e porca.",
+   "como": "Planos início/fim → posição (linear, concêntrica, por furo, por ponto) → furo/rosca → fixadores do catálogo → comprimento.",
+   "catia": "— (FASTJOINT add-on)",
+   "sw": "Hole Series + Smart Fasteners",
+   "inv": "Bolted Connection",
+   "fenkra": "—",
+   "status": "nao",
+   "nota": "Fixadores só preenchem furos já existentes.",
+   "diferencas": "Inventor edita depois pelo mesmo assistente; SW tem pilhas superior/inferior.",
+   "fontes": [
+    "inv-bolted",
+    "sw-stacks"
+   ],
+   "backlog": "B58"
+  },
+  {
+   "id": "MON-19",
+   "modulo": "Montagem",
+   "nome": "Editar peça no contexto",
+   "faz": "Edita a peça dentro da montagem, vendo e referenciando as outras.",
+   "como": "Duplo clique → peça ativa, resto esmaecido → editar → Voltar.",
+   "catia": "Design in Context (ativar peça)",
+   "sw": "Edit Part (Top-down)",
+   "inv": "Edit in place / Create Component",
+   "fenkra": "Editar peça (troca de bancada)",
+   "status": "parcial",
+   "nota": "edit_part troca para a bancada Sólidos; outras peças só como arestas; Voltar salva sempre; links sem estado.",
+   "diferencas": "SW: estados ->, ->?, ->*, ->x com Lock/Break.",
+   "fontes": [
+    "inv-inplace",
+    "sw-extref"
+   ],
+   "backlog": "B54"
   },
   {
    "id": "DES-01",
@@ -2934,6 +3074,25 @@
    "backlog": "CTX-HW"
   },
   {
+   "id": "BIB-10",
+   "modulo": "Biblioteca de normas",
+   "nome": "Rebites",
+   "faz": "Rebites sólidos e cegos por norma, inseridos em massa.",
+   "como": "Norma → diâmetro → comprimento pela espessura → por pontos/furos/padrão.",
+   "catia": "— (FASTJOINT add-on)",
+   "sw": "Toolbox (limitado)",
+   "inv": "Content Center (família de rebites)",
+   "fenkra": "—",
+   "status": "nao",
+   "nota": "",
+   "diferencas": "Nenhum dos três insere rebite por ponto de forma nativa e simples.",
+   "fontes": [
+    "rebite-ms20470",
+    "rebite-iso15983"
+   ],
+   "backlog": "B58"
+  },
+  {
    "id": "PLM-01",
    "modulo": "PDM / PLM",
    "nome": "Versões e revisões",
@@ -3187,6 +3346,83 @@
     "ctx-plm"
    ],
    "backlog": "BM-GER-01"
+  },
+  {
+   "id": "GER-08",
+   "modulo": "Geral",
+   "nome": "Salvar tudo e arquivos modificados",
+   "faz": "Salvar o documento ativo ou tudo, listando o que mudou.",
+   "como": "Salvar tudo → lista (editado, novo, dependência) → nomes/pastas dos novos.",
+   "catia": "Save Management",
+   "sw": "Save All / Pack and Go",
+   "inv": "Save All (lista de modificados)",
+   "fenkra": "Salvar por bancada",
+   "status": "parcial",
+   "nota": "Três botões Salvar, Ctrl+S muda de efeito; montagem não salva peças; sem Salvar tudo nem Salvar como.",
+   "diferencas": "",
+   "fontes": [
+    "catia-save",
+    "sw-packgo"
+   ],
+   "backlog": "B56"
+  },
+  {
+   "id": "GER-09",
+   "modulo": "Geral",
+   "nome": "Qualidade gráfica",
+   "faz": "Define a qualidade da tesselação e da imagem.",
+   "como": "Preset/slider → desvio e ângulo → aplicar às peças → simplificar ao navegar.",
+   "catia": "Display > Performance (3D accuracy)",
+   "sw": "Image Quality",
+   "inv": "Display (qualidade, taxa mínima)",
+   "fenkra": "—",
+   "status": "nao",
+   "nota": "Desvio fixo espalhado em 7 lugares, ângulo 0,35 rad fixo, MSAA 4× fixo.",
+   "diferencas": "",
+   "fontes": [
+    "catia-perf",
+    "sw-imgq",
+    "inv-display",
+    "occt-mesh"
+   ],
+   "backlog": "B61"
+  },
+  {
+   "id": "GER-10",
+   "modulo": "Geral",
+   "nome": "Ícones e tooltips explicativos",
+   "faz": "Ícone que mostra o resultado e dica que explica o comando.",
+   "como": "Passar o mouse → nome e atalho → mini fluxo entrada → operação → resultado.",
+   "catia": "Ícone + barra de status",
+   "sw": "Tooltip rico",
+   "inv": "Tooltip progressivo",
+   "fenkra": "Tooltip com texto (avançado após 5 s)",
+   "status": "parcial",
+   "nota": "Sem imagem, sem fluxo, ícones registrados à mão.",
+   "diferencas": "",
+   "fontes": [
+    "pesq-filosofia"
+   ],
+   "backlog": "B60"
+  },
+  {
+   "id": "GER-11",
+   "modulo": "Geral",
+   "nome": "Diagnóstico de atualização",
+   "faz": "Mostra por que um comando falhou e oferece saídas.",
+   "como": "Falha → editar, substituir, isolar, desativar, reordenar.",
+   "catia": "Update Diagnosis",
+   "sw": "What's Wrong",
+   "inv": "Design Doctor",
+   "fenkra": "Assistente de reparo",
+   "status": "parcial",
+   "nota": "Só editar; sem isolar, desativar, reordenar, objeto em trabalho ou fim de peça.",
+   "diferencas": "",
+   "fontes": [
+    "catia-tree",
+    "pesq-filosofia"
+   ],
+   "backlog": "B59"
   }
  ]
 }

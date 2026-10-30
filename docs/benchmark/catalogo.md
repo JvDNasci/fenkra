@@ -1,6 +1,6 @@
 # Catálogo de features
 
-160 features em 12 módulos, com o nome em cada ferramenta, como funcionam em geral e o status no Fenkra (alpha.26): ✅ 72 completas · 🟡 66 parciais · ❌ 22 inexistentes.
+168 features em 12 módulos, com o nome em cada ferramenta, como funcionam em geral e o status no Fenkra (alpha.26): ✅ 71 completas · 🟡 72 parciais · ❌ 25 inexistentes.
 
 > Gerado por `scripts/benchmark/gerar.py` a partir de `scripts/benchmark/dados_*.py`. Não edite à mão.
 > Nomes de outros produtos são marcas dos respectivos donos e aparecem só para comparação; textos próprios,
@@ -13,13 +13,13 @@
 | [Superfícies e wireframe](#superfícies-e-wireframe) | 13 | 10 | 0 | [Superfícies e wireframe](superficies-e-wireframe.md) |
 | [Chapa metálica](#chapa-metálica) | 8 | 6 | 3 | [Chapa metálica](chapa-metalica.md) |
 | [Estrutural e soldas](#estrutural-e-soldas) | 4 | 5 | 0 | [Estrutural e soldas](estrutural-e-soldas.md) |
-| [Montagem](#montagem) | 11 | 3 | 2 | [Montagem](montagem.md) |
+| [Montagem](#montagem) | 10 | 6 | 3 | [Montagem](montagem.md) |
 | [Desenho técnico](#desenho-técnico) | 6 | 5 | 1 | [Desenho técnico](desenho-tecnico.md) |
 | [PMI 3D](#pmi-3d) | 3 | 1 | 1 | [PMI 3D](pmi-3d.md) |
 | [Navegação](#navegação) | 3 | 2 | 1 | [Navegação](navegacao.md) |
-| [Biblioteca de normas](#biblioteca-de-normas) | 1 | 4 | 4 | [Biblioteca de normas](biblioteca-de-normas.md) |
+| [Biblioteca de normas](#biblioteca-de-normas) | 1 | 4 | 5 | [Biblioteca de normas](biblioteca-de-normas.md) |
 | [PDM / PLM](#pdm--plm) | 1 | 4 | 2 | [PDM / PLM](pdm-plm.md) |
-| [Geral](#geral) | 0 | 7 | 0 | [Geral](geral.md) |
+| [Geral](#geral) | 0 | 10 | 1 | [Geral](geral.md) |
 
 ## Sketch
 
@@ -889,11 +889,14 @@
 | MON-09 | **Interferência e colisão** | Clash | Interference / Collision Detection | Analyze Interference | ✅ Interferência |  |
 | MON-10 | **Vista explodida** | Explode | Exploded View | Presentation | ✅ Explodida |  |
 | MON-11 | **Peça no contexto e links** | Contextual design / Publications | In-context (external refs) | Adaptive / Derived | 🟡 Peça no contexto, copiar geometria | DR-31 |
-| MON-12 | **Recursos de montagem** | Assembly Features | Assembly Feature (Hole/Cut) | Assembly Features | ✅ Recorte pela peça, furo entre peças |  |
+| MON-12 | **Recursos de montagem** | Assembly Features | Assembly Feature (Hole/Cut) | Assembly Features | 🟡 Recorte pela peça, furo entre peças | B57 |
 | MON-13 | **Origem da montagem** | — (produto sem origem; usa peças) | Origin + reference planes | Origin | ❌ — | DR-31 |
 | MON-14 | **Seleção e edição na árvore** | Product tree | FeatureManager | Model browser | 🟡 Árvore da montagem | DR-32 |
 | MON-15 | **Lista de materiais (BOM)** | Bill of Material | BOM | Bill of Materials | ✅ BOM |  |
 | MON-16 | **Fixadores automáticos** | — (Catalog) | Smart Fasteners | Bolted Connection Generator | 🟡 Fixadores (preencher furos) | B51 |
+| MON-17 | **Publicações e referências na montagem** | Publication / Skeleton | Layout sketch / Mate References | Work features / iMates / Skeleton (Make Part) | 🟡 Publicação em peça (sem montagem) | B55 |
+| MON-18 | **Conexão parafusada** | — (FASTJOINT add-on) | Hole Series + Smart Fasteners | Bolted Connection | ❌ — | B58 |
+| MON-19 | **Editar peça no contexto** | Design in Context (ativar peça) | Edit Part (Top-down) | Edit in place / Create Component | 🟡 Editar peça (troca de bancada) | B54 |
 
 ### MON-01 — Inserir componente e fixar
 
@@ -978,8 +981,9 @@
 
 - **O que faz:** Furo e corte que atravessam várias peças.
 - **Como funciona:** Feature na montagem → peças afetadas.
-- **Fenkra:** ✅ completo. AsmFeat(0/1).
-- **Fontes:** [SOLIDWORKS Help — Types of Mates](https://help.solidworks.com/2021/english/SolidWorks/sldworks/r_Types_of_Mates_SWassy.htm)
+- **Diferenças:** SW: Série de furos atravessa as peças do eixo e grava feature em cada peça (->). Inventor: feature fica na montagem com participantes. CATIA: Assembly Features com peças afetadas.
+- **Fenkra:** 🟡 parcial. AsmFeat(0/1) corta só a forma exibida na montagem: não grava furo nas peças, não entra no hole_table nem nos Fixadores; posição só pelo clique, Ø padrão 6.
+- **Fontes:** [SOLIDWORKS Help — Creating Holes as Assembly Features](https://help.solidworks.com/2023/English/SolidWorks/Sldworks/t_Creating_Assembly_Feature_Holes.htm) · [Javelin — Propagate feature to parts (SOLIDWORKS)](https://www.javelin-tech.com/blog/2016/03/propagate-feature-to-parts-solidworks/) · [Inventor Help — Assembly features](https://help.autodesk.com/cloudhelp/2027/ENU/Inventor-Help/files/GUID-553D514F-2F41-419A-8696-063932991E67.htm) · [City University London — CATIA Assembly Features](https://www.staff.city.ac.uk/~ra600/ME2105/Catia%20course/CATIA%20Tutorials/asmug_C2/asmugat0500.htm)
 
 ### MON-13 — Origem da montagem
 
@@ -1008,6 +1012,30 @@
 - **Como funciona:** Furos reconhecidos → norma/tamanho → pilha → restrições.
 - **Fenkra:** 🟡 parcial. preencher_furos: pilha parafuso/arruela/porca com restrições (B29); pega medida por sondas laterais; sem editar/trocar a pilha depois.
 - **Fontes:** [SOLIDWORKS Help — Smart Fasteners Overview](https://help.solidworks.com/2017/English/SolidWorks/sldworks/c_Smart_Fasteners_Overview.htm) · [Inventor Help — Design Accelerator](https://help.autodesk.com/cloudhelp/2015/ENU/Inventor-Help/files/GUID-24104648-BE41-49C7-9DD0-1AF2BAFC102E.htm) · [Contexto: smart fastener](../contextos/smart-fastener.md)
+
+### MON-17 — Publicações e referências na montagem
+
+- **O que faz:** Pontos, eixos, planos e sketches nomeados na peça e na montagem, usados como referência estável.
+- **Como funciona:** Elemento → publicar com nome → selecionar em contexto só publicados → substituir componente religa por nome.
+- **Diferenças:** CATIA religa componentes substituídos pelo nome publicado.
+- **Fenkra:** 🟡 parcial. Peça publica ref/parâmetro/corpo; montagem não tem sketch, ponto, eixo, plano nem publicação.
+- **Fontes:** [EDS Technologies — Publications in CATIA V5](https://edstechnologies.com/blog/making-assemblies-easier-with-publications-in-catia-v5/) · [Inventor Help — Skeletal modeling](https://help.autodesk.com/cloudhelp/2023/ENU/Inventor-Help/files/GUID-0435FE9D-6283-4CE0-813B-BD9B0BE5778C.htm)
+
+### MON-18 — Conexão parafusada
+
+- **O que faz:** Assistente que cria furos em todas as peças da pilha e insere parafuso, arruelas e porca.
+- **Como funciona:** Planos início/fim → posição (linear, concêntrica, por furo, por ponto) → furo/rosca → fixadores do catálogo → comprimento.
+- **Diferenças:** Inventor edita depois pelo mesmo assistente; SW tem pilhas superior/inferior.
+- **Fenkra:** ❌ não existe. Fixadores só preenchem furos já existentes.
+- **Fontes:** [Inventor Help — Bolted Connection](https://help.autodesk.com/cloudhelp/2025/ENU/Inventor-Help/files/GUID-6E1D4624-B605-4AB1-9DBA-E981495B4933.htm) · [SOLIDWORKS Help — Smart Fasteners Hardware Stacks](https://help.solidworks.com/2015/English/SOLIDWORKS/sldworks/c_Smart_Fasteners_Hardware_Stacks.htm)
+
+### MON-19 — Editar peça no contexto
+
+- **O que faz:** Edita a peça dentro da montagem, vendo e referenciando as outras.
+- **Como funciona:** Duplo clique → peça ativa, resto esmaecido → editar → Voltar.
+- **Diferenças:** SW: estados ->, ->?, ->*, ->x com Lock/Break.
+- **Fenkra:** 🟡 parcial. edit_part troca para a bancada Sólidos; outras peças só como arestas; Voltar salva sempre; links sem estado.
+- **Fontes:** [Inventor Help — Edit in place](https://help.autodesk.com/cloudhelp/2020/ENU/Inventor-Help/files/GUID-C79C36C9-A6DB-46C5-8864-41F66C750231.htm) · [SOLIDWORKS Help — Locking and Breaking External References](https://help.solidworks.com/2025/English/SolidWorks/Sldworks/t_Locking_and_Breaking_External_References.htm)
 
 
 ## Desenho técnico
@@ -1225,6 +1253,7 @@
 | BIB-07 | **Rolamentos** | Catalog | Toolbox Bearings | Content Center Bearings / Bearing Generator | ❌ — | CTX-HW |
 | BIB-08 | **Cilindros pneumáticos** | — (catálogos de fabricante) | — (catálogos de fabricante) | — (catálogos de fabricante) | ❌ — | CTX-HW |
 | BIB-09 | **Guias lineares e fusos** | — (catálogos de fabricante) | — (catálogos de fabricante) | — (catálogos de fabricante) | ❌ — | CTX-HW |
+| BIB-10 | **Rebites** | — (FASTJOINT add-on) | Toolbox (limitado) | Content Center (família de rebites) | ❌ — | B58 |
 
 ### BIB-01 — Tabelas de furos e roscas
 
@@ -1291,6 +1320,14 @@
 - **Como funciona:** Série → tamanho → comprimento do trilho.
 - **Fenkra:** ❌ não existe.
 - **Fontes:** [Contexto: fontes de perfis e hardware](../contextos/hardwares.md)
+
+### BIB-10 — Rebites
+
+- **O que faz:** Rebites sólidos e cegos por norma, inseridos em massa.
+- **Como funciona:** Norma → diâmetro → comprimento pela espessura → por pontos/furos/padrão.
+- **Diferenças:** Nenhum dos três insere rebite por ponto de forma nativa e simples.
+- **Fenkra:** ❌ não existe.
+- **Fontes:** [Boeing Distribution — MS20470AD4](https://shop.boeing.com/cpd/bdi_ms20470ad4-20=28) · [Würth — rebite cego ISO 15983](https://eshop.wuerth.de/Blind-rivet-open-with-break-mandrel-and-flat-head-ISO-15983-dome-head-A2-A2-stainless-steel-RIV-ISO15983-A2-A2-45-65-40X100/514614010.sku/en/US/EUR)
 
 
 ## PDM / PLM
@@ -1367,6 +1404,10 @@
 | GER-05 | **Assistente de reparo** | Update diagnosis / Replace | What's Wrong / Repair | Design Doctor | 🟡 Assistente de reparo | DR-11 |
 | GER-06 | **Renderização de arestas** | Shading with edges | Shaded with edges / tangent edges | Shaded with edges | 🟡 Arestas vivas | DR-08 |
 | GER-07 | **API de automação** | VBA / CAA | VBA / C# API | iLogic / VBA / .NET | 🟡 Macros | BM-GER-01 |
+| GER-08 | **Salvar tudo e arquivos modificados** | Save Management | Save All / Pack and Go | Save All (lista de modificados) | 🟡 Salvar por bancada | B56 |
+| GER-09 | **Qualidade gráfica** | Display > Performance (3D accuracy) | Image Quality | Display (qualidade, taxa mínima) | ❌ — | B61 |
+| GER-10 | **Ícones e tooltips explicativos** | Ícone + barra de status | Tooltip rico | Tooltip progressivo | 🟡 Tooltip com texto (avançado após 5 s) | B60 |
+| GER-11 | **Diagnóstico de atualização** | Update Diagnosis | What's Wrong | Design Doctor | 🟡 Assistente de reparo | B59 |
 
 ### GER-01 — Ocultar hierárquico
 
@@ -1416,3 +1457,31 @@
 - **Como funciona:** Linguagem → objetos do modelo.
 - **Fenkra:** 🟡 parcial. Macros próprias; sem API Python (RNF-011).
 - **Fontes:** [Contexto: PLM/VPM](../contextos/plm-vpm.md)
+
+### GER-08 — Salvar tudo e arquivos modificados
+
+- **O que faz:** Salvar o documento ativo ou tudo, listando o que mudou.
+- **Como funciona:** Salvar tudo → lista (editado, novo, dependência) → nomes/pastas dos novos.
+- **Fenkra:** 🟡 parcial. Três botões Salvar, Ctrl+S muda de efeito; montagem não salva peças; sem Salvar tudo nem Salvar como.
+- **Fontes:** [EDS Technologies — Save options in CATIA V5](https://edstechnologies.com/blog/save-options-in-catia-v5/) · [SOLIDWORKS Help — Pack and Go](https://help.solidworks.com/2024/English/SolidWorks/Sldworks/r_pack_go_db.htm)
+
+### GER-09 — Qualidade gráfica
+
+- **O que faz:** Define a qualidade da tesselação e da imagem.
+- **Como funciona:** Preset/slider → desvio e ângulo → aplicar às peças → simplificar ao navegar.
+- **Fenkra:** ❌ não existe. Desvio fixo espalhado em 7 lugares, ângulo 0,35 rad fixo, MSAA 4× fixo.
+- **Fontes:** [EDS Technologies — Performance settings in CATIA V5](https://edstechnologies.com/blog/performance-settings-in-catia-v5/) · [SOLIDWORKS Help — Image Quality](https://help.solidworks.com/2020/English/SolidWorks/sldworks/HIDD_OPTIONS_IMAGE_QUALITY.htm) · [Inventor Help — Application Options, Display](https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-760D1240-4E53-4509-90A5-40A66CCD96CD.htm) · [OCCT — Mesh user guide (BRepMesh)](https://dev.opencascade.org/doc/overview/html/occt_user_guides__mesh.html)
+
+### GER-10 — Ícones e tooltips explicativos
+
+- **O que faz:** Ícone que mostra o resultado e dica que explica o comando.
+- **Como funciona:** Passar o mouse → nome e atalho → mini fluxo entrada → operação → resultado.
+- **Fenkra:** 🟡 parcial. Sem imagem, sem fluxo, ícones registrados à mão.
+- **Fontes:** [Pesquisa: filosofia de modelagem (ADR 0011)](../arquitetura/adr/0011-filosofia-de-modelagem.md)
+
+### GER-11 — Diagnóstico de atualização
+
+- **O que faz:** Mostra por que um comando falhou e oferece saídas.
+- **Como funciona:** Falha → editar, substituir, isolar, desativar, reordenar.
+- **Fenkra:** 🟡 parcial. Só editar; sem isolar, desativar, reordenar, objeto em trabalho ou fim de peça.
+- **Fontes:** [CATI — Managing the design tree in CATIA V5](https://www.cati.com/blog/managing-the-design-tree-in-catia-v5-6-and-3dexperience/) · [Pesquisa: filosofia de modelagem (ADR 0011)](../arquitetura/adr/0011-filosofia-de-modelagem.md)

@@ -31,3 +31,4 @@
 | BIB-07 | Rolamentos | ❌ |  | CTX-HW |
 | BIB-08 | Cilindros pneumáticos | ❌ |  | CTX-HW |
 | BIB-09 | Guias lineares e fusos | ❌ |  | CTX-HW |
+| BIB-10 | Rebites | ❌ |  | B58 |

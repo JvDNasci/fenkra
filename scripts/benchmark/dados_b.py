@@ -111,7 +111,7 @@ e('MON-11', MON, 'Peça no contexto e links', 'Cria/edita peça dentro da montag
   ('Contextual design / Publications', 'In-context (external refs)', 'Adaptive / Derived', 'Peça no contexto, copiar geometria'),
   'parcial', 'AsmNewPart, AsmLink; peças não 100% editáveis vendo as outras (DR-31).', '', ['dr'], 'DR-31'),
 e('MON-12', MON, 'Recursos de montagem', 'Furo e corte que atravessam várias peças.', 'Feature na montagem → peças afetadas.',
-  ('Assembly Features', 'Assembly Feature (Hole/Cut)', 'Assembly Features', 'Recorte pela peça, furo entre peças'), 'ok', 'AsmFeat(0/1).', '', ['sw-mates']),
+  ('Assembly Features', 'Assembly Feature (Hole/Cut)', 'Assembly Features', 'Recorte pela peça, furo entre peças'), 'parcial', 'AsmFeat(0/1) corta só a forma exibida na montagem: não grava furo nas peças, não entra no hole_table nem nos Fixadores; posição só pelo clique, Ø padrão 6.', 'SW: Série de furos atravessa as peças do eixo e grava feature em cada peça (->). Inventor: feature fica na montagem com participantes. CATIA: Assembly Features com peças afetadas.', ['sw-holeseries', 'sw-propagate', 'inv-asmfeat', 'catia-asmfeat'], 'B57'),
 e('MON-13', MON, 'Origem da montagem', 'Planos/eixos de referência próprios da montagem.', 'Sempre presentes; usados para fixar e restringir.',
   ('— (produto sem origem; usa peças)', 'Origin + reference planes', 'Origin', '—'), 'nao', 'Sem origem na montagem (DR-31).', '', ['dr'], 'DR-31'),
 e('MON-14', MON, 'Seleção e edição na árvore', 'Ctrl/Shift/Alt, ocultar, apagar, isolar seguindo a mesma lógica das peças.',
@@ -121,6 +121,13 @@ e('MON-15', MON, 'Lista de materiais (BOM)', 'Estrutura e lista de peças com qu
   ('Bill of Material', 'BOM', 'Bill of Materials', 'BOM'), 'ok', 'AsmBom; numeração de itens.', '', ['sw-weld-dwg']),
 e('MON-16', MON, 'Fixadores automáticos', 'Insere parafusos/porcas/arruelas nos furos com restrições.', 'Furos reconhecidos → norma/tamanho → pilha → restrições.',
   ('— (Catalog)', 'Smart Fasteners', 'Bolted Connection Generator', 'Fixadores (preencher furos)'), 'parcial', 'preencher_furos: pilha parafuso/arruela/porca com restrições (B29); pega medida por sondas laterais; sem editar/trocar a pilha depois.', '', ['sw-smartfast', 'inv-da', 'ctx-fix'], 'B51'),
+
+e('MON-17', MON, 'Publicações e referências na montagem', 'Pontos, eixos, planos e sketches nomeados na peça e na montagem, usados como referência estável.', 'Elemento → publicar com nome → selecionar em contexto só publicados → substituir componente religa por nome.',
+  ('Publication / Skeleton', 'Layout sketch / Mate References', 'Work features / iMates / Skeleton (Make Part)', 'Publicação em peça (sem montagem)'), 'parcial', 'Peça publica ref/parâmetro/corpo; montagem não tem sketch, ponto, eixo, plano nem publicação.', 'CATIA religa componentes substituídos pelo nome publicado.', ['catia-pub', 'inv-skeleton'], 'B55'),
+e('MON-18', MON, 'Conexão parafusada', 'Assistente que cria furos em todas as peças da pilha e insere parafuso, arruelas e porca.', 'Planos início/fim → posição (linear, concêntrica, por furo, por ponto) → furo/rosca → fixadores do catálogo → comprimento.',
+  ('— (FASTJOINT add-on)', 'Hole Series + Smart Fasteners', 'Bolted Connection', '—'), 'nao', 'Fixadores só preenchem furos já existentes.', 'Inventor edita depois pelo mesmo assistente; SW tem pilhas superior/inferior.', ['inv-bolted', 'sw-stacks'], 'B58'),
+e('MON-19', MON, 'Editar peça no contexto', 'Edita a peça dentro da montagem, vendo e referenciando as outras.', 'Duplo clique → peça ativa, resto esmaecido → editar → Voltar.',
+  ('Design in Context (ativar peça)', 'Edit Part (Top-down)', 'Edit in place / Create Component', 'Editar peça (troca de bancada)'), 'parcial', 'edit_part troca para a bancada Sólidos; outras peças só como arestas; Voltar salva sempre; links sem estado.', 'SW: estados ->, ->?, ->*, ->x com Lock/Break.', ['inv-inplace', 'sw-extref'], 'B54'),
 
 # ------------------------------------------------------------------ DESENHO
 e('DES-01', DES, 'Folhas, formatos e carimbo', 'Várias folhas, formato, norma, carimbo e fundo.', 'Folha → formato/norma → carimbo (fundo separado do trabalho).',
@@ -198,6 +205,9 @@ e('BIB-08', BIB, 'Cilindros pneumáticos', 'Cilindros ISO 15552/6432 com curso e
 e('BIB-09', BIB, 'Guias lineares e fusos', 'Trilhos, patins e fusos de esferas por série de fabricante.', 'Série → tamanho → comprimento do trilho.',
   ('— (catálogos de fabricante)', '— (catálogos de fabricante)', '— (catálogos de fabricante)', '—'), 'nao', '', '', ['ctx-hw'], 'CTX-HW'),
 
+e('BIB-10', BIB, 'Rebites', 'Rebites sólidos e cegos por norma, inseridos em massa.', 'Norma → diâmetro → comprimento pela espessura → por pontos/furos/padrão.',
+  ('— (FASTJOINT add-on)', 'Toolbox (limitado)', 'Content Center (família de rebites)', '—'), 'nao', '', 'Nenhum dos três insere rebite por ponto de forma nativa e simples.', ['rebite-ms20470', 'rebite-iso15983'], 'B58'),
+
 # ------------------------------------------------------------------ PDM / PLM
 e('PLM-01', PLM, 'Versões e revisões', 'Versões automáticas e revisões congeladas (A, B, C).', 'Salvar → versão; liberar → revisão.',
   ('ENOVIA / VPM', 'SOLIDWORKS PDM', 'Vault', 'Projeto em pasta'), 'ok', 'fenkra-project: Version, Revision, next_label.', '', ['plm-g2']),
@@ -230,4 +240,12 @@ e('GER-06', GER, 'Renderização de arestas', 'Arestas vivas visíveis, tangênc
   ('Shading with edges', 'Shaded with edges / tangent edges', 'Shaded with edges', 'Arestas vivas'), 'parcial', 'edge_smooth oculta tangências; linhas estranhas no render e em filetes de superfície (DR-08, DR-10).', '', ['dr'], 'DR-08'),
 e('GER-07', GER, 'API de automação', 'Scripts para criar e alterar modelos.', 'Linguagem → objetos do modelo.',
   ('VBA / CAA', 'VBA / C# API', 'iLogic / VBA / .NET', 'Macros'), 'parcial', 'Macros próprias; sem API Python (RNF-011).', '', ['ctx-plm'], 'BM-GER-01'),
+e('GER-08', GER, 'Salvar tudo e arquivos modificados', 'Salvar o documento ativo ou tudo, listando o que mudou.', 'Salvar tudo → lista (editado, novo, dependência) → nomes/pastas dos novos.',
+  ('Save Management', 'Save All / Pack and Go', 'Save All (lista de modificados)', 'Salvar por bancada'), 'parcial', 'Três botões Salvar, Ctrl+S muda de efeito; montagem não salva peças; sem Salvar tudo nem Salvar como.', '', ['catia-save', 'sw-packgo'], 'B56'),
+e('GER-09', GER, 'Qualidade gráfica', 'Define a qualidade da tesselação e da imagem.', 'Preset/slider → desvio e ângulo → aplicar às peças → simplificar ao navegar.',
+  ('Display > Performance (3D accuracy)', 'Image Quality', 'Display (qualidade, taxa mínima)', '—'), 'nao', 'Desvio fixo espalhado em 7 lugares, ângulo 0,35 rad fixo, MSAA 4× fixo.', '', ['catia-perf', 'sw-imgq', 'inv-display', 'occt-mesh'], 'B61'),
+e('GER-10', GER, 'Ícones e tooltips explicativos', 'Ícone que mostra o resultado e dica que explica o comando.', 'Passar o mouse → nome e atalho → mini fluxo entrada → operação → resultado.',
+  ('Ícone + barra de status', 'Tooltip rico', 'Tooltip progressivo', 'Tooltip com texto (avançado após 5 s)'), 'parcial', 'Sem imagem, sem fluxo, ícones registrados à mão.', '', ['pesq-filosofia'], 'B60'),
+e('GER-11', GER, 'Diagnóstico de atualização', 'Mostra por que um comando falhou e oferece saídas.', 'Falha → editar, substituir, isolar, desativar, reordenar.',
+  ('Update Diagnosis', "What's Wrong", 'Design Doctor', 'Assistente de reparo'), 'parcial', 'Só editar; sem isolar, desativar, reordenar, objeto em trabalho ou fim de peça.', '', ['catia-tree', 'pesq-filosofia'], 'B59'),
 ]

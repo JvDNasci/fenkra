@@ -1,24 +1,30 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 8590,
+ "tokens_total_k": 11340,
  "ondas": {
+  "0": {
+   "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
+   "versao": "0.1.0-alpha.28 a .30",
+   "tokens_k": 2750,
+   "pct": 24.3
+  },
   "1": {
    "titulo": "Onda 1 — bugs do design review",
-   "versao": "0.1.0-alpha.27",
+   "versao": "0.1.0-alpha.31",
    "tokens_k": 1300,
-   "pct": 15.1
+   "pct": 11.5
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
-   "versao": "0.1.0-alpha.28",
+   "versao": "0.1.0-alpha.32",
    "tokens_k": 1850,
-   "pct": 21.5
+   "pct": 16.3
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
-   "versao": "0.1.0-alpha.29+",
+   "versao": "0.1.0-alpha.33+",
    "tokens_k": 5440,
-   "pct": 63.3
+   "pct": 48.0
   }
  },
  "itens": [
@@ -42,7 +48,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 2.3
+   "pct": 1.8
   },
   {
    "id": "B02",
@@ -60,7 +66,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B03",
@@ -79,7 +85,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.6
   },
   {
    "id": "B04",
@@ -98,7 +104,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.8
   },
   {
    "id": "B05",
@@ -118,7 +124,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 1.6
+   "pct": 1.2
   },
   {
    "id": "B06",
@@ -137,7 +143,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 1.3
+   "pct": 1.0
   },
   {
    "id": "B07",
@@ -155,7 +161,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B08",
@@ -175,7 +181,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 1.4
+   "pct": 1.1
   },
   {
    "id": "B09",
@@ -194,7 +200,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 1.6
+   "pct": 1.2
   },
   {
    "id": "B10",
@@ -214,7 +220,7 @@
    "teste": "Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B11",
@@ -232,7 +238,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B12",
@@ -250,7 +256,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 1.3
+   "pct": 1.0
   },
   {
    "id": "B13",
@@ -269,7 +275,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B14",
@@ -288,7 +294,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B15",
@@ -307,7 +313,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "em andamento",
-   "pct": 4.7
+   "pct": 3.5
   },
   {
    "id": "B16",
@@ -326,7 +332,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.7
   },
   {
    "id": "B17",
@@ -346,7 +352,7 @@
    "teste": "Visual",
    "area": "Navegação",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 0.9
   },
   {
    "id": "B18",
@@ -371,7 +377,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 2.6
+   "pct": 1.9
   },
   {
    "id": "B19",
@@ -391,7 +397,7 @@
    "teste": "Visual",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B20",
@@ -415,7 +421,7 @@
    "teste": "Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.4
+   "pct": 1.1
   },
   {
    "id": "B21",
@@ -434,14 +440,14 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.7
   },
   {
    "id": "B22",
    "onda": 2,
    "prio": "P1",
    "titulo": "Montagem: origem, seleção e contexto",
-   "oque": "Origem da montagem; Ctrl/Alt; ocultar/apagar como nas peças; editar peças vendo as outras.",
+   "oque": "Origem da montagem; Ctrl/Alt; ocultar/apagar como nas peças (edição no contexto foi para o B54).",
    "origem": [
     "DR-31",
     "DR-32"
@@ -455,7 +461,7 @@
    "teste": "Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 1.4
+   "pct": 1.1
   },
   {
    "id": "B23",
@@ -475,7 +481,7 @@
    "teste": "Visual",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.6
   },
   {
    "id": "B24",
@@ -495,7 +501,7 @@
    "teste": "Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B25",
@@ -518,7 +524,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 4.0
+   "pct": 3.0
   },
   {
    "id": "B47",
@@ -536,7 +542,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 1.4
+   "pct": 1.1
   },
   {
    "id": "B26",
@@ -561,7 +567,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "feito",
-   "pct": 5.8
+   "pct": 4.4
   },
   {
    "id": "B27",
@@ -580,7 +586,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 2.9
+   "pct": 2.2
   },
   {
    "id": "B28",
@@ -599,7 +605,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "feito",
-   "pct": 4.7
+   "pct": 3.5
   },
   {
    "id": "B29",
@@ -621,7 +627,7 @@
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
    "status": "feito",
-   "pct": 5.2
+   "pct": 4.0
   },
   {
    "id": "B42",
@@ -641,7 +647,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "em andamento",
-   "pct": 1.7
+   "pct": 1.3
   },
   {
    "id": "B43",
@@ -660,7 +666,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 2.3
+   "pct": 1.8
   },
   {
    "id": "B44",
@@ -678,7 +684,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 1.7
+   "pct": 1.3
   },
   {
    "id": "B45",
@@ -696,7 +702,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 1.7
+   "pct": 1.3
   },
   {
    "id": "B46",
@@ -714,7 +720,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 2.3
+   "pct": 1.8
   },
   {
    "id": "B30",
@@ -745,7 +751,7 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 3.5
+   "pct": 2.6
   },
   {
    "id": "B31",
@@ -763,7 +769,7 @@
    "teste": "Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 1.7
+   "pct": 1.3
   },
   {
    "id": "B32",
@@ -793,7 +799,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 2.9
+   "pct": 2.2
   },
   {
    "id": "B33",
@@ -815,7 +821,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 2.3
+   "pct": 1.8
   },
   {
    "id": "B34",
@@ -837,7 +843,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 1.7
+   "pct": 1.3
   },
   {
    "id": "B35",
@@ -859,7 +865,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 2.9
+   "pct": 2.2
   },
   {
    "id": "B36",
@@ -877,7 +883,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 0.9
   },
   {
    "id": "B37",
@@ -899,7 +905,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 1.7
+   "pct": 1.3
   },
   {
    "id": "B38",
@@ -917,7 +923,7 @@
    "teste": "Auto",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 1.4
+   "pct": 1.1
   },
   {
    "id": "B39",
@@ -935,7 +941,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 2.9
+   "pct": 2.2
   },
   {
    "id": "B40",
@@ -951,7 +957,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 2.3
+   "pct": 1.8
   },
   {
    "id": "B41",
@@ -986,7 +992,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.7
   },
   {
    "id": "B49",
@@ -1004,7 +1010,7 @@
    "teste": "Auto + Visual",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 1.4
+   "pct": 1.1
   },
   {
    "id": "B50",
@@ -1024,7 +1030,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 2.9
+   "pct": 2.2
   },
   {
    "id": "B51",
@@ -1044,7 +1050,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 2.3
+   "pct": 1.8
   },
   {
    "id": "B52",
@@ -1063,7 +1069,187 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
+   "pct": 2.6
+  },
+  {
+   "id": "B53",
+   "onda": 0,
+   "prio": "P0",
+   "titulo": "Corpus de peças de referência e regressão",
+   "oque": "16 peças típicas (suporte usinado, flange, carcaça com casca, eixo, chapa, quadro soldado, garrafa, superfícies, engrenagem, mola, montagens com fixadores e mecanismo, PMI+desenho) com valores esperados; cada uma: recompute sem erro e igual ao cache, volume/área/bbox/nº de faces, malha fechada, mudar cada cota e voltar (referências seguem, nada some calado), salvar/abrir idêntico; script de cobertura feature → teste; captura visual FENKRA_DEMO_CAPTURA comparada por pixels. Toda feature nova entra com peça no corpus.",
+   "origem": [
+    "PESQ-TST"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 2.2
+  },
+  {
+   "id": "B54",
+   "onda": 0,
+   "prio": "P0",
+   "titulo": "Editar peça no contexto da montagem",
+   "oque": "Duplo clique ativa a peça SEM sair da montagem: resto sombreado e esmaecido, selecionável para referência; um componente ativo por vez; Voltar / Voltar ao pai / Voltar ao topo; descartar ou salvar ao sair; criar componente no contexto (nome e pasta); links contextuais com estado na árvore (-> em contexto, ->? fora, ->* travado, ->x quebrado), Travar/Destravar/Quebrar e lista de links por peça; aviso quando a peça tem várias instâncias.",
+   "origem": [
+    "PESQ-CAT",
+    "PESQ-SW",
+    "PESQ-INV",
+    "DR-32"
+   ],
+   "catalogo": [
+    "MON-11",
+    "MON-19"
+   ],
+   "tokens_k": 450,
+   "teste": "Auto + Visual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 4.0
+  },
+  {
+   "id": "B55",
+   "onda": 0,
+   "prio": "P0",
+   "titulo": "Montagem com sketch, referências e publicações",
+   "oque": "Sketch, ponto, eixo, plano e sistema de eixos no nível da montagem; peça esqueleto (origem comum) e Fazer peça a partir dele; publicação com nome de ponto, vetor/eixo, plano, face e sketch em peças e montagens; seleção em contexto usa só publicados (opção padrão); substituir componente religa por nome e lista o que não casou; substituir a geometria de um nome publicado mantém os links.",
+   "origem": [
+    "PESQ-CAT",
+    "PESQ-INV"
+   ],
+   "catalogo": [
+    "MON-17"
+   ],
+   "tokens_k": 350,
+   "teste": "Auto + Visual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 3.1
+  },
+  {
+   "id": "B56",
+   "onda": 0,
+   "prio": "P0",
+   "titulo": "Salvar unificado e Salvar tudo",
+   "oque": "Um só grupo Salvar / Salvar tudo / Salvar como na barra, igual em peça, montagem e desenho; Salvar tudo abre lista de arquivos modificados com o motivo (editado, novo, dependência) e exige nome/pasta para os novos; peças modificadas marcadas na árvore da montagem; Ctrl+S salva o documento ativo e Ctrl+Shift+S salva tudo; Empacotar (Pack and Go) com verificação de referências.",
+   "origem": [
+    "PESQ-SW",
+    "PESQ-INV",
+    "AUD-FNK"
+   ],
+   "catalogo": [
+    "GER-08"
+   ],
+   "tokens_k": 150,
+   "teste": "Auto + Visual",
+   "area": "PDM / PLM",
+   "status": "a fazer",
+   "pct": 1.3
+  },
+  {
+   "id": "B57",
+   "onda": 0,
+   "prio": "P0",
+   "titulo": "Furo entre peças como nos CADs de referência",
+   "oque": "Furo de montagem pelo eixo (Série de furos): atravessa os componentes que o eixo cruza (escopo editável), tipo por peça (folga na de cima, roscado/cego na de baixo), posição por ponto publicado, sketch da montagem ou cotas, padrão; grava um furo real em cada peça com link -> editável só pela montagem; opção \"só na montagem\" com participantes; hole_table e Fixadores passam a enxergar esses furos; verificação de que toda peça do escopo recebeu o furo.",
+   "origem": [
+    "PESQ-SW",
+    "PESQ-INV",
+    "AUD-FNK"
+   ],
+   "catalogo": [
+    "MON-12"
+   ],
+   "tokens_k": 350,
+   "teste": "Auto + Visual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 3.1
+  },
+  {
+   "id": "B58",
+   "onda": 0,
+   "prio": "P1",
+   "titulo": "Conexão parafusada e rebites guiados por pontos",
+   "oque": "Assistente tipo Bolted Connection: planos de início/fim, posição linear, concêntrica, por furo (seguir padrão) e por ponto publicado; cria os furos em todas as peças da pilha; pilhas superior/inferior ordenadas; comprimentos só da série do catálogo; editar depois pelo mesmo assistente; apagar a conexão apaga a pilha. Rebites: MS20470/AN470, MS20426/AN426 e cegos ISO 15983 (dados gratuitos em duas fontes, AC 43.13-1B para furos), inserção em massa por pontos, furos ou padrão, comprimento pela espessura do pacote.",
+   "origem": [
+    "PESQ-INV",
+    "PESQ-REB",
+    "CTX-HW"
+   ],
+   "catalogo": [
+    "MON-18",
+    "BIB-10"
+   ],
+   "tokens_k": 400,
+   "teste": "Auto + Visual",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
    "pct": 3.5
+  },
+  {
+   "id": "B59",
+   "onda": 0,
+   "prio": "P1",
+   "titulo": "Árvore robusta: objeto em trabalho e diagnóstico de atualização",
+   "oque": "Objeto em trabalho visível (onde entra o próximo comando), barra de fim de peça para rollback e inserir no meio; contêineres ordenado (consome) e não ordenado (referencia) com regras de aninhamento; atualização manual/automática com estado desatualizado/falhou por comando; diálogo de diagnóstico com Editar (realça a referência perdida), Substituir, Isolar, Desativar e Reordenar; pais/filhos por comando; planos/eixos/pontos de referência oferecidos antes de faces ao criar sketch.",
+   "origem": [
+    "PESQ-CAT",
+    "PESQ-SW",
+    "PESQ-INV"
+   ],
+   "catalogo": [
+    "GER-11",
+    "GER-05"
+   ],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 2.6
+  },
+  {
+   "id": "B60",
+   "onda": 0,
+   "prio": "P1",
+   "titulo": "Ícones que mostram o resultado e tooltips com mini fluxo",
+   "oque": "Revisar todos os ícones para mostrar o resultado do comando (ex.: extrusão = perfil + seta + sólido); tooltip em dois estágios (500 ms: nome, atalho e frase; ~1,2 s ou Shift: mini fluxograma entrada → operação → resultado com ícones internos); linha na barra de status com o próximo passo do comando; registro automático de ícones e teste que falha se um comando não tiver ícone, tooltip ou tradução.",
+   "origem": [
+    "PESQ-UX",
+    "AUD-FNK"
+   ],
+   "catalogo": [
+    "GER-10"
+   ],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 2.6
+  },
+  {
+   "id": "B61",
+   "onda": 0,
+   "prio": "P1",
+   "titulo": "Configurações de gráficos e qualidade de renderização",
+   "oque": "Presets rascunho/normal/alta + controle deslizante (desvio relativo à peça com piso na tolerância e ângulo 30°/20°/12°) e modo de desvio fixo com limites; aplicar às peças da montagem; MSAA desligado/2×/4×/8×; simplificar só durante a navegação (taxa mínima de quadros) e voltar à qualidade total ao parar; referências nunca somem por culling; constante única de tesselação no lugar das 7 espalhadas; cache de malha invalidado ao trocar a qualidade.",
+   "origem": [
+    "PESQ-CAT",
+    "PESQ-SW",
+    "PESQ-INV",
+    "PESQ-UX",
+    "AUD-FNK"
+   ],
+   "catalogo": [
+    "GER-09"
+   ],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Navegação",
+   "status": "a fazer",
+   "pct": 1.8
   }
  ]
 }

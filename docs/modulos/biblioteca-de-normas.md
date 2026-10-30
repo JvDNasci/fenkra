@@ -19,3 +19,4 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 - **Rolamentos** (—) —  `CTX-HW`
 - **Cilindros pneumáticos** (—) —  `CTX-HW`
 - **Guias lineares e fusos** (—) —  `CTX-HW`
+- **Rebites** (—) —  `B58`
