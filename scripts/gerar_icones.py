@@ -688,6 +688,11 @@ I["st_biblioteca"] = TUBE(4, 6) + f'<path d="M26 6 H40 V10 H35 V24 H40 V28 H26 V
     f'<path d="M4 30 H16 V44 H12 V34 H4 Z" fill="{MID}" {S}/><circle cx="34" cy="38" r="7" fill="{MID}" {S}/><circle cx="34" cy="38" r="3.5" fill="#ffffff" stroke="{INK}" stroke-width="1"/>'
 I["st_corte"] = f'<rect x="6" y="6" width="30" height="36" rx="2" fill="#ffffff" {S}/>' + "".join(f'<line x1="11" y1="{y}" x2="31" y2="{y}" stroke="{INK}" stroke-width="1.6"/>' for y in (14, 21, 28, 35)) + \
     f'<path d="M30 30 L44 44 M44 30 L30 44" stroke="{ACTION}" stroke-width="2.6"/>'
+# peças soltas (barras) -> quadro montado
+I["st_montagem"] = f'<rect x="3" y="8" width="14" height="6" rx="1" fill="{MID}" {S}/><rect x="3" y="21" width="14" height="6" rx="1" fill="{MID}" {S}/><rect x="3" y="34" width="14" height="6" rx="1" fill="{LIGHT}" {S}/>' + \
+    arrow(18, 24, 25, 24, ACTION, 2.6) + \
+    f'<rect x="27" y="8" width="18" height="32" rx="1.5" fill="none" stroke="{INK}" stroke-width="2"/><rect x="27" y="8" width="18" height="6" fill="{MID}" {S}/><rect x="27" y="34" width="18" height="6" fill="{MID}" {S}/>' + \
+    f'<rect x="27" y="8" width="5" height="32" fill="{LIGHT}" {S}/><line x1="32" y1="14" x2="45" y2="34" stroke="{ACTION}" stroke-width="2.2"/>'
 I["st_canto_meia"] = f'<path d="M4 44 V4 H16 V32 Z" fill="{MID}" {S}/><path d="M16 32 L44 32 V44 H4 Z" fill="{LIGHT}" {S}/>' + f'<line x1="4" y1="44" x2="16" y2="32" stroke="{ACTION}" stroke-width="2.6"/>'
 I["st_canto_aparar"] = f'<path d="M4 4 H16 V44 H4 Z" fill="{MID}" {S}/><path d="M16 32 H44 V44 H16 Z" fill="{LIGHT}" {S}/>' + f'<line x1="16" y1="32" x2="16" y2="44" stroke="{ACTION}" stroke-width="2.6"/>'
 I["st_canto_encaixe"] = f'<circle cx="12" cy="24" r="9" fill="{MID}" {S}/><path d="M21 18 H44 V30 H21 A9 9 0 0 0 21 18 Z" fill="{LIGHT}" {S}/>' + f'<path d="M21 18 A9 9 0 0 1 21 30" stroke="{ACTION}" stroke-width="2.6" fill="none"/>'

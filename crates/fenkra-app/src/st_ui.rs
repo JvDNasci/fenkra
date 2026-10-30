@@ -202,6 +202,39 @@ pub fn windows(app: &mut App, ctx: &egui::Context) {
     cut_list(app, ctx);
 }
 
+/// Gerar montagem: uma peça por grupo de peças iguais e a montagem, em `<nome>_montagem` ao lado
+/// do arquivo da peça (a pasta existente é reaproveitada: gerar de novo atualiza). Abre o resultado.
+pub fn generate_assembly(app: &mut App) {
+    if app.open.frozen.is_some() {
+        app.toast(tr("Revisão congelada: abra a versão de trabalho para gerar a montagem"), true);
+        return;
+    }
+    // no projeto, o arquivo da peça é o de trabalho dentro da pasta do projeto
+    let pai = match (&app.project, app.open.entry) {
+        (Some(p), Some(id)) => p.entry(id).ok().map(|e| p.root.join(&e.file)),
+        _ => app.open.file.clone(),
+    };
+    let Some(pai) = pai.filter(|p| p.is_file()) else {
+        app.toast(tr("Salve a peça antes de gerar a montagem"), true);
+        return;
+    };
+    if app.open.modified {
+        app.toast(tr("A peça tem alterações não salvas: salve antes de gerar a montagem"), true);
+        return;
+    }
+    let nome: String = app.open.doc.name.chars().map(|c| if c.is_alphanumeric() || c == '-' { c } else { '_' }).collect();
+    let nome = if nome.is_empty() { "estrutura".to_string() } else { nome };
+    let saida = pai.parent().unwrap_or(std::path::Path::new(".")).join(format!("{nome}_montagem"));
+    match fenkra_montagem::estrutura::estrutura_para_montagem(&pai, &saida) {
+        Ok(g) => {
+            let inst: usize = g.grupos.iter().map(|x| x.quantidade).sum();
+            app.toast(format!("{}: {} {}, {} {}", tr("Montagem gerada"), g.grupos.len(), tr("peças"), inst, tr("instâncias")), false);
+            app.open_path(&g.montagem);
+        }
+        Err(e) => app.toast(tr(&e).to_string(), true),
+    }
+}
+
 fn library(app: &mut App, ctx: &egui::Context) {
     if !app.st_lib_open {
         return;

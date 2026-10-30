@@ -1444,6 +1444,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 self.st_cut_open = true;
                 return;
             }
+            Cmd::StAssembly => {
+                crate::st_ui::generate_assembly(self);
+                return;
+            }
             Cmd::StMember => {
                 let paths: Vec<CurveRef> = seed.curves.clone();
                 let fam = crate::st_ui::families(&self.settings).into_iter().next().unwrap();
@@ -5929,6 +5933,7 @@ pub enum Cmd {
     StGusset,
     StLibrary,
     StCutList,
+    StAssembly,
     /// anotação 3D: 0 linear … 8 tolerância geométrica
     Pmi(u8),
     /// detalhamento 2D (ver `dwg_ui::c`)

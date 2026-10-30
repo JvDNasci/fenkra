@@ -345,12 +345,40 @@ fn save(app: &mut App, ask: bool) {
     }
 }
 
+/// Balões da peça estrutural: um por item da lista de corte, no centro do primeiro membro do item
+/// (mesmo número da tabela e da montagem gerada). Devolve false se a vista não tem itens.
+fn struct_balloons(st: &mut DwgState, v: &View) -> bool {
+    let centers = match &st.models.load(&v.source).model {
+        fenkra_desenho::source::Model::Part(doc) => fenkra_solidos::item_centers(doc),
+        _ => vec![],
+    };
+    if centers.is_empty() {
+        return false;
+    }
+    let p = st.models.proj(&st.d, v.id);
+    let Some(ax) = p.axes else { return false };
+    let (lo, hi) = layout::view_rect(v, &p);
+    for (k, (item, c3)) in centers.into_iter().enumerate() {
+        let tip = layout::to_sheet(v, &p, ax.project(c3));
+        // balões em volta da vista, do lado mais próximo
+        let right = tip[0] > (lo[0] + hi[0]) / 2.;
+        let pos = [if right { hi[0] + 12. } else { lo[0] - 12. }, (tip[1] + 6. * (k % 3) as f64).clamp(lo[1], hi[1] + 10.)];
+        let id = st.d.alloc();
+        st.d.notes.push(Note { id, sheet: st.sheet, kind: NoteKind::Balloon, pos, leader: Some(tip), text: item.to_string(), size: st.d.text_height, weld: None, view: Some(v.id), anchor3: Some(c3), ..Default::default() });
+    }
+    true
+}
+
 /// Balões numerados para cada item da lista de materiais, apontando para o centro da peça na
-/// primeira vista da montagem.
+/// primeira vista da montagem (ou, numa peça estrutural, para cada item da lista de corte).
 fn auto_balloons(app: &mut App) {
     let st = app.dwg.as_mut().unwrap();
     let Some(v) = st.d.views.iter().find(|v| v.sheet == st.sheet && v.source.path.to_lowercase().ends_with(".fka")).cloned() else {
-        app.toast(tr("Coloque antes uma vista da montagem na folha"), true);
+        let parts: Vec<View> = st.d.views.iter().filter(|v| v.sheet == st.sheet && v.source.path.to_lowercase().ends_with(".fkp")).cloned().collect();
+        if parts.iter().any(|v| struct_balloons(st, v)) {
+            return;
+        }
+        app.toast(tr("Coloque antes uma vista da montagem ou da peça estrutural na folha"), true);
         return;
     };
     let full = st.models.full(&v.source.path);

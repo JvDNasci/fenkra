@@ -389,6 +389,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             ]),
             One(it("st_biblioteca", "Biblioteca", "Biblioteca de perfis", "Cadastre famílias de perfis padronizados (tamanhos, ancoragem e rotação padrão).", Cmd(C::StLibrary))),
             One(it("st_corte", "Lista de corte", "Lista de corte", "Comprimento, quantidade e barras de matéria-prima (emendas) de cada perfil.", Cmd(C::StCutList))),
+            One(it("st_montagem", "Gerar montagem", "Gerar montagem da estrutura", "Uma peça por grupo de peças iguais e uma montagem com as instâncias posicionadas, na pasta da peça (gerar de novo atualiza).", Cmd(C::StAssembly))),
             ]
         }
         Group::Cinematica => {

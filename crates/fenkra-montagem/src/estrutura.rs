@@ -3,7 +3,7 @@
 //! instância fixa por membro, agrupadas por item.
 
 use crate::*;
-use fenkra_core::{Document, FeatureKind, LinkedBody, LinkedGeo};
+use fenkra_core::{Document, FeatureKind, LinkState, LinkedBody, LinkedGeo};
 use fenkra_solidos::StructItem;
 use std::path::{Path, PathBuf};
 
@@ -55,7 +55,9 @@ pub fn estrutura_para_montagem(pai: &Path, saida: &Path) -> Result<Gerado, Strin
     }
     std::fs::create_dir_all(saida).map_err(|e| format!("{}: {e}", saida.display()))?;
     let rel = caminho_relativo(saida, pai);
-    let stem = pai.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "estrutura".into());
+    // nome da montagem = nome da peça (no projeto o arquivo se chama só pelo número)
+    let stem = limpo(&doc.name);
+    let stem = if stem.is_empty() { "estrutura".to_string() } else { stem };
     let mut asm = Assembly::new(&doc.name);
     asm.props.description = doc.props.description.clone();
     let mut gerado = Gerado { montagem: saida.join(format!("{stem}.fka")), grupos: vec![] };
@@ -78,6 +80,11 @@ pub fn estrutura_para_montagem(pai: &Path, saida: &Path) -> Result<Gerado, Strin
         p.props.custom.push(("estrutura_grupo".into(), g.signature.key()));
         p.props.custom.push(("estrutura_item".into(), g.item.to_string()));
         let geo = p.add_link(&doc.name, &rel, &format!("item {:02}", g.item), LinkedGeo::Surface(brep));
+        // a publicação "item NN" não existe no pai: 'atualizar links' a marcaria como quebrada.
+        // O link nasce congelado e a atualização é gerar a montagem de novo.
+        if let Some(e) = p.external.last_mut() {
+            e.state = LinkState::Congelado;
+        }
         p.add_feature(FeatureKind::LinkedBody(LinkedBody { geo }));
         let destino = saida.join(&arquivo);
         std::fs::write(&destino, p.to_json()).map_err(|e| format!("{}: {e}", destino.display()))?;
@@ -157,6 +164,15 @@ mod tests {
         assert_eq!(std::fs::canonicalize(saida.join(&ext.path)).unwrap(), std::fs::canonicalize(&pai).unwrap());
         assert!(p0.props.custom.iter().any(|(k, v)| k == "origem" && v == "estrutura_pai"));
         assert!(p0.props.description.contains("L=300"), "{}", p0.props.description);
+        // o link nasce congelado: 'atualizar links' não o marca como quebrado
+        assert!(g.grupos.iter().all(|x| {
+            let p = Document::from_json(&std::fs::read_to_string(&x.arquivo).unwrap()).unwrap();
+            p.external.len() == 1 && p.external[0].state == fenkra_core::LinkState::Congelado
+        }));
+
+        // gerar de novo sobrescreve com os mesmos nomes de arquivo
+        let de_novo = estrutura_para_montagem(&pai, &saida).unwrap();
+        assert_eq!(de_novo, g);
 
         // montagem: um componente por membro, em dois grupos de item
         let a = Assembly::from_json(&std::fs::read_to_string(&g.montagem).unwrap()).unwrap();

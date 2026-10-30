@@ -1961,7 +1961,7 @@ impl FeatureKind {
             SewSurface(_) => "⧉",
             BoundaryFill(_) => "▦",
             MeshImport(_) => "△",
-            LinkedBody(_) => "⬢",
+            LinkedBody(_) => "🔗",
             MoveBody(_) => "✥",
             SmWall(_) => "▭",
             SmFlange(_) => "⌐",

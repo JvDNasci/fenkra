@@ -476,7 +476,11 @@ impl Models {
                 rows: fenkra_solidos::cut_list(doc)
                     .iter()
                     .enumerate()
-                    .map(|(i, r)| vec![(i + 1).to_string(), r.designation.clone(), num(r.length), r.count.to_string(), (r.bars * r.count).to_string()])
+                    .map(|(i, r)| {
+                        // o número é o do item da estrutura (o mesmo da montagem gerada e dos balões); sem sólido cai no índice
+                        let item = if r.item > 0 { r.item } else { i + 1 };
+                        vec![item.to_string(), r.designation.clone(), num(r.length), r.count.to_string(), (r.bars * r.count).to_string()]
+                    })
                     .collect(),
             },
             (k, Model::Asm(_)) => TableData { headers: vec![k.label().into()], rows: vec![vec!["escolha uma peça (esta tabela não vale para montagem)".into()]] },

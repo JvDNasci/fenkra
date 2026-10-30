@@ -918,6 +918,10 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             crate::editor::check(ui, &mut m.solid, "fechar em sólido quando a malha for fechada");
             ui.label(RichText::new(tr("Cada triângulo vira uma face plana; malhas grandes ficam pesadas (máx. 200 mil triângulos).")).weak().small());
         }
+        FeatureKind::LinkedBody(_) => {
+            section(ui, "Corpo ligado");
+            ui.label(RichText::new(tr("Cópia do corpo de outra peça (link). Nas peças geradas da estrutura o link é congelado: para atualizar, gere a montagem de novo na bancada Estrutural.")).weak().small());
+        }
         _ => return false,
     }
     true

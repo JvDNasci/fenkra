@@ -4725,6 +4725,23 @@ pub fn structural_groups(doc: &Document) -> Vec<StructGroup> {
     group_members(&structural_members(doc))
 }
 
+/// Centro, no espaço da peça, do primeiro membro de cada item da lista de corte (âncora dos balões).
+pub fn item_centers(doc: &Document) -> Vec<(usize, V3)> {
+    let groups = structural_groups(doc);
+    cut_list(doc)
+        .iter()
+        .filter(|r| r.item > 0)
+        .filter_map(|r| {
+            let g = groups.iter().find(|g| g.item == r.item)?;
+            let (lo, hi) = g.shape.bbox()?;
+            let c = [0, 1, 2].map(|i| (lo[i] + hi[i]) / 2.);
+            let f = &g.members.first()?.frame;
+            let y = f.y();
+            Some((r.item, [0, 1, 2].map(|i| f.origin[i] + f.x[i] * c[0] + y[i] * c[1] + f.normal[i] * c[2])))
+        })
+        .collect()
+}
+
 /// Comprimento de corte de uma linha de membro (com os prolongamentos pedidos).
 fn member_length(g: &MemberGeom, explicit: (f64, f64)) -> f64 {
     if g.straight {

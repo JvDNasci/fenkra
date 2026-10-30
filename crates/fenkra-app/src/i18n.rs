@@ -1356,7 +1356,7 @@ static TABLE: &[(&str, &str)] = &[
     ("Clique num arco da vista.", "Click an arc in the view."),
     ("Clique num círculo da vista.", "Click a circle in the view."),
     ("Coincidência", "Coincidence"),
-    ("Coloque antes uma vista da montagem na folha", "First place a view of the assembly on the sheet"),
+    ("Coloque antes uma vista da montagem ou da peça estrutural na folha", "First place a view of the assembly or of the structural part on the sheet"),
     ("Comando", "Drive"),
     ("Comandos (leis no tempo t, em segundos)", "Drives (laws of time t, in seconds)"),
     ("Comandos por cursor ou por leis no tempo (t), quadros, velocidade e aceleração; análise de graus de liberdade.", "Drives by slider or by laws of time (t), frames, velocity and acceleration; degree-of-freedom analysis."),
@@ -2485,6 +2485,19 @@ static TABLE: &[(&str, &str)] = &[
     ("Aproximação: suporte trocado pelo plano tangente no meio da OML (dobra reta).", "Approximation: support replaced by the tangent plane at the middle of the OML (straight bend)."),
     ("Ângulo: linha de dobra no suporte, aba com o ângulo dado a partir da web.", "Angle: bend line on the support, flange at the given angle from the web."),
     ("Exato: a aba se apoia no suporte escolhido. A linha de dobra (OML) é a interseção do suporte com o plano da web.", "Exact: the flange lies on the chosen support. The bend line (OML) is the intersection of the support with the web plane."),
+    ("Gerar montagem", "Generate assembly"),
+    ("Gerar montagem da estrutura", "Generate assembly from the structure"),
+    ("Uma peça por grupo de peças iguais e uma montagem com as instâncias posicionadas, na pasta da peça (gerar de novo atualiza).", "One part per group of identical parts and an assembly with the positioned instances, in the part's folder (generating again updates them)."),
+    ("Salve a peça antes de gerar a montagem", "Save the part before generating the assembly"),
+    ("A peça tem alterações não salvas: salve antes de gerar a montagem", "The part has unsaved changes: save before generating the assembly"),
+    ("Revisão congelada: abra a versão de trabalho para gerar a montagem", "Frozen revision: open the working version to generate the assembly"),
+    ("Montagem gerada", "Assembly generated"),
+    ("peças", "parts"),
+    ("instâncias", "instances"),
+    ("a peça não tem membros estruturais calculados", "the part has no calculated structural members"),
+    ("CorpoLink", "Linked body"),
+    ("Corpo ligado", "Linked body"),
+    ("Cópia do corpo de outra peça (link). Nas peças geradas da estrutura o link é congelado: para atualizar, gere a montagem de novo na bancada Estrutural.", "Copy of another part's body (link). In the parts generated from the structure the link is frozen: to update, generate the assembly again in the Structural workbench."),
 ];
 
 #[cfg(test)]

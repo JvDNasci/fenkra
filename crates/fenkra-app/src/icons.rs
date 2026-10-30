@@ -328,6 +328,7 @@ pub fn get(name: &str) -> ImageSource<'static> {
         "st_canto_meia" => egui::include_image!("../../../assets/icons/st_canto_meia.svg"),
         "st_canto_nenhum" => egui::include_image!("../../../assets/icons/st_canto_nenhum.svg"),
         "st_corte" => egui::include_image!("../../../assets/icons/st_corte.svg"),
+        "st_montagem" => egui::include_image!("../../../assets/icons/st_montagem.svg"),
         "st_membro" => egui::include_image!("../../../assets/icons/st_membro.svg"),
         "st_placa" => egui::include_image!("../../../assets/icons/st_placa.svg"),
         "st_reforco" => egui::include_image!("../../../assets/icons/st_reforco.svg"),

@@ -823,4 +823,63 @@ mod tests {
         let txt = std::fs::read_to_string(&dx).unwrap();
         assert!(txt.contains("LINE") && txt.trim_end().ends_with("EOF"));
     }
+
+    #[test]
+    fn lista_de_corte_usa_o_numero_do_item_da_estrutura() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        use fenkra_core::{CornerMode, CurveRef, FeatureKind, PointRef, RefKind, SectionKind, StructMember};
+        let s = |x: &str| x.to_string();
+        // retângulo 400 x 300 de tubo quadrado: dois grupos (300 e 400)
+        let mut doc = fenkra_core::Document::new("Quadro");
+        let pts = [[0., 0., 0.], [400., 0., 0.], [400., 300., 0.], [0., 300., 0.]];
+        let mut paths = vec![];
+        for i in 0..4 {
+            let l = doc.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(pts[i]), b: PointRef::Fixed(pts[(i + 1) % 4]), start: s("0"), end: s("0") });
+            paths.push(CurveRef::Ref(l));
+        }
+        doc.add_feature(FeatureKind::StructMember(StructMember {
+            paths,
+            family: s("Tubo quadrado"),
+            designation: s("40x3"),
+            kind: SectionKind::TuboQuadrado,
+            dims: vec![s("40"), s("3")],
+            anchor: 0,
+            angle: s("0"),
+            off_x: s("0"),
+            off_y: s("0"),
+            ext1: s("0"),
+            ext2: s("0"),
+            corner: CornerMode::MeiaEsquadria,
+            gap: s("0"),
+            joints: vec![],
+        }));
+        let dir = std::env::temp_dir().join("fenkra_desenho_corte_item");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("quadro.fkp"), doc.to_json()).unwrap();
+        let src = Source { path: "quadro.fkp".into(), display_state: String::new(), hidden: vec![] };
+        let mut d = Drawing::new("Quadro", Format::A3);
+        let sheet = d.sheets[0].id;
+        let tid = d.alloc();
+        d.tables.push(Table { id: tid, sheet, kind: TableKind::CutList, source: src, pos: [20., 100.], level: Default::default() });
+        let mut m = Models::new(Some(dir));
+        let t = m.table(&d.tables[0], &d);
+
+        // cada linha leva o número do grupo (o mesmo de structural_groups) e o comprimento dele
+        let grupos = fenkra_solidos::structural_groups(&doc);
+        assert_eq!(grupos.len(), 2);
+        assert_eq!(t.rows.len(), 2);
+        for r in &t.rows {
+            let item: usize = r[0].parse().unwrap();
+            let g = grupos.iter().find(|g| g.item == item).unwrap_or_else(|| panic!("item {item} sem grupo"));
+            assert_eq!(r[2], d.num(g.signature.length_mm()), "comprimento do item {item}");
+        }
+
+        // os balões ancoram no centro do primeiro membro de cada item
+        let centros = fenkra_solidos::item_centers(&doc);
+        assert_eq!(centros.iter().map(|c| c.0).collect::<Vec<_>>(), vec![1, 2]);
+        let c1 = centros[0].1;
+        assert!((c1[1] - 150.).abs() < 1., "item 1 (L=300) no meio do lado: {c1:?}");
+    }
 }
