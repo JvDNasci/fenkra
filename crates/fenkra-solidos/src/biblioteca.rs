@@ -242,9 +242,114 @@ pub fn tamanho(familia_id: &str, designacao: &str) -> Option<&'static Tamanho> {
     familia(familia_id)?.tamanho(designacao)
 }
 
+/// Faixa de diâmetros de eixo (acima de `d_acima`, até `d_ate`) e a chaveta que serve a ela.
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+pub struct Chaveta {
+    pub d_acima: f64,
+    pub d_ate: f64,
+    /// largura
+    pub b: f64,
+    /// altura
+    pub h: f64,
+    /// profundidade do rasgo no eixo
+    pub t1: f64,
+    /// profundidade do rasgo no cubo
+    pub t2: f64,
+}
+
+/// Tabela de chavetas paralelas (DIN 6885-1) com a série de comprimentos.
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub struct TabelaChavetas {
+    pub id: String,
+    pub nome: String,
+    pub norma: String,
+    pub nivel: String,
+    pub licenca: String,
+    pub fontes: Vec<String>,
+    /// quem conferiu os valores contra uma segunda fonte (vazio = ainda ninguém)
+    #[serde(default)]
+    pub confirmado_por: Vec<String>,
+    pub faixas: Vec<Chaveta>,
+    pub comprimentos: Vec<f64>,
+}
+
+impl TabelaChavetas {
+    pub fn validar(&self) -> Result<(), String> {
+        let er = |m: &str| Err(format!("{}: {m}", self.id));
+        if self.id.trim().is_empty() || self.nome.trim().is_empty() || self.norma.trim().is_empty() || self.licenca.trim().is_empty() {
+            return er("id, nome, norma e licença são obrigatórios");
+        }
+        if !["A", "B", "C", "X"].contains(&self.nivel.as_str()) {
+            return er("nível deve ser A, B, C ou X");
+        }
+        if self.fontes.is_empty() || self.fontes.iter().any(|f| f.trim().is_empty()) {
+            return er("cite ao menos uma fonte");
+        }
+        if self.faixas.is_empty() {
+            return er("sem faixas");
+        }
+        for (i, f) in self.faixas.iter().enumerate() {
+            let medidas = [f.d_acima, f.d_ate, f.b, f.h, f.t1, f.t2];
+            if medidas.iter().any(|v| !v.is_finite() || *v <= 0.) {
+                return er(&format!("faixa {}–{}: todas as medidas devem ser positivas", f.d_acima, f.d_ate));
+            }
+            if f.d_ate <= f.d_acima || f.t1 >= f.h || f.t2 >= f.h {
+                return er(&format!("faixa {}–{}: faixa ou profundidades incoerentes", f.d_acima, f.d_ate));
+            }
+            if i > 0 && self.faixas[i - 1].d_ate != f.d_acima {
+                return er(&format!("faixa {}–{}: não continua a anterior", f.d_acima, f.d_ate));
+            }
+        }
+        if self.comprimentos.is_empty() || self.comprimentos.iter().any(|l| !(*l > 0.)) || self.comprimentos.windows(2).any(|w| w[0] >= w[1]) {
+            return er("comprimentos devem ser positivos e crescentes");
+        }
+        Ok(())
+    }
+}
+
+const CHAVETAS_DIN6885A: &str = include_str!("../../../biblioteca/chavetas/din6885a.json");
+
+/// Tabela de chavetas forma A embutida (validada nos testes; inválida = erro de programação).
+pub fn tabela_chavetas() -> &'static TabelaChavetas {
+    static T: OnceLock<TabelaChavetas> = OnceLock::new();
+    T.get_or_init(|| {
+        let t: TabelaChavetas = serde_json::from_str(CHAVETAS_DIN6885A).unwrap_or_else(|e| panic!("din6885a.json: {e}"));
+        t.validar().unwrap_or_else(|e| panic!("tabela de chavetas inválida: {e}"));
+        t
+    })
+}
+
+/// Chaveta da faixa do diâmetro de eixo `d` (acima de `d_acima`, até `d_ate`); `None` fora da tabela.
+pub fn chaveta_para_eixo(d: f64) -> Option<Chaveta> {
+    tabela_chavetas().faixas.iter().find(|f| d > f.d_acima && d <= f.d_ate).copied()
+}
+
+/// Série de comprimentos padrão de chaveta.
+pub fn comprimentos_chaveta() -> &'static [f64] {
+    &tabela_chavetas().comprimentos
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tabela_de_chavetas() {
+        let t = tabela_chavetas();
+        assert_eq!(t.faixas.len(), 13);
+        assert_eq!(t.nivel, "C");
+        assert!(!t.confirmado_por.is_empty() && t.licenca.starts_with("CC BY 4.0"));
+        let c = chaveta_para_eixo(20.).unwrap();
+        assert_eq!((c.b, c.h, c.t1, c.t2), (6., 6., 3.5, 2.8));
+        let c = chaveta_para_eixo(40.).unwrap();
+        assert_eq!((c.b, c.h, c.t1), (12., 8., 5.));
+        // limites: "acima de" exclui, "até" inclui
+        assert_eq!(chaveta_para_eixo(8.).unwrap().b, 2.);
+        assert_eq!(chaveta_para_eixo(8.01).unwrap().b, 3.);
+        assert!(chaveta_para_eixo(6.).is_none() && chaveta_para_eixo(85.1).is_none());
+        assert_eq!(chaveta_para_eixo(85.).unwrap().h, 14.);
+        assert_eq!(comprimentos_chaveta().len(), 28);
+    }
 
     #[test]
     fn todas_as_familias_carregam_e_validam() {

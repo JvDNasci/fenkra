@@ -119,11 +119,13 @@ pub struct GearsUi {
     pub p: fenkra_solidos::ParamEngrenagem,
     pub dentes_coroa: u32,
     pub msg: Vec<String>,
+    /// eixo escalonado e chaveta (seção "Eixo e chaveta")
+    pub eixo: fenkra_solidos::ParamEixo,
 }
 
 impl Default for GearsUi {
     fn default() -> Self {
-        GearsUi { p: fenkra_solidos::ParamEngrenagem { furo: 8., ..Default::default() }, dentes_coroa: 40, msg: vec![] }
+        GearsUi { p: fenkra_solidos::ParamEngrenagem { furo: 8., ..Default::default() }, dentes_coroa: 40, msg: vec![], eixo: Default::default() }
     }
 }
 
@@ -2835,11 +2837,15 @@ pub fn fasteners_window(app: &mut App, ctx: &egui::Context) {
 
 /// Grava o `.fkp` de uma engrenagem escolhendo o destino (pasta da montagem como sugestão).
 fn save_gear(app: &mut App, p: &fenkra_solidos::ParamEngrenagem, dir: Option<PathBuf>) {
-    let doc = match fenkra_solidos::engrenagem_documento(p) {
-        Ok(d) => d,
-        Err(e) => return app.toast(e, true),
-    };
-    let mut dlg = rfd::FileDialog::new().add_filter("Peça", &["fkp"]).set_file_name(format!("{}.fkp", p.chave()));
+    match fenkra_solidos::engrenagem_documento(p) {
+        Ok(d) => save_doc(app, &d, &p.chave(), dir),
+        Err(e) => app.toast(e, true),
+    }
+}
+
+/// Pergunta onde gravar a peça (`.fkp`) e grava o documento.
+fn save_doc(app: &mut App, doc: &Document, nome: &str, dir: Option<PathBuf>) {
+    let mut dlg = rfd::FileDialog::new().add_filter("Peça", &["fkp"]).set_file_name(format!("{nome}.fkp"));
     if let Some(d) = dir {
         dlg = dlg.set_directory(d);
     }
@@ -2858,6 +2864,7 @@ pub fn gears_window(app: &mut App, ctx: &egui::Context) {
     let mut open = true;
     let (mut inserir, mut close) = (false, false);
     let mut salvar: Option<bool> = None;
+    let (mut salvar_eixo, mut salvar_chaveta): (bool, Option<(f64, f64)>) = (false, None);
     let tipo = g.p.tipo;
     let par = calculo_par(&g.p, g.dentes_coroa);
     let campo = |ui: &mut egui::Ui, rotulo: &str, v: &mut f64, r: std::ops::RangeInclusive<f64>, suf: &str, vel: f64| {
@@ -2907,6 +2914,15 @@ pub fn gears_window(app: &mut App, ctx: &egui::Context) {
         campo(ui, "Folga entre dentes (par)", &mut g.p.folga_dentes, 0.0..=10., " mm", 0.01);
         if matches!(tipo, TipoEngrenagem::Reta | TipoEngrenagem::Helicoidal) {
             campo(ui, "Furo central", &mut g.p.furo, 0.0..=1000., " mm", 0.5);
+            if g.p.furo > 0. {
+                ui.checkbox(&mut g.p.rasgo_cubo, tr("Rasgo de chaveta no cubo (DIN 6885)")).on_hover_text(tr("Corta no furo o rasgo da chaveta forma A: largura b e profundidade t2 da tabela, pelo diâmetro do furo."));
+                if g.p.rasgo_cubo {
+                    match fenkra_solidos::biblioteca::chaveta_para_eixo(g.p.furo) {
+                        Some(c) => ui.label(RichText::new(format!("{}×{} · t2 {} mm", fmt(c.b), fmt(c.h), fmt(c.t2))).small()),
+                        None => ui.label(RichText::new(tr("furo fora da tabela DIN 6885 (Ø6 a Ø85)")).small()),
+                    };
+                }
+            }
             campo(ui, "Correção do perfil (x)", &mut g.p.coef_correcao, -1.0..=1., "", 0.01);
         }
 
@@ -2975,6 +2991,77 @@ pub fn gears_window(app: &mut App, ctx: &egui::Context) {
                 ui.label(RichText::new(format!("⚠ {m}")).small());
             }
         }
+
+        crate::editor::section(ui, "Eixo e chaveta");
+        ui.label(RichText::new(tr("Eixo escalonado ao longo de Z (a partir de z = 0), com chanfros e rasgos de chaveta DIN 6885 forma A cortados em +X. A chaveta vem da tabela pelo diâmetro de cada trecho.")).weak().small());
+        let mut remover: Option<usize> = None;
+        egui::Grid::new("grade_eixo").num_columns(8).spacing([8., 3.]).show(ui, |ui| {
+            for h in ["Ø", "L", "Chanfro", "Rasgo", "L rasgo", "Início", "Chaveta", ""] {
+                ui.label(RichText::new(tr(h)).strong());
+            }
+            ui.end_row();
+            for (i, t) in g.eixo.trechos.iter_mut().enumerate() {
+                for (v, r, vel) in [(&mut t.diametro, 1.0..=1000., 0.5), (&mut t.comprimento, 0.1..=10000., 1.), (&mut t.chanfro_fim, 0.0..=100., 0.1)] {
+                    let resp = ui.add(crate::ui_ext::dv(v).range(r).speed(vel).max_decimals(3));
+                    crate::ui_ext::wheel(ui, &resp, v);
+                }
+                let mut tem = t.rasgo.is_some();
+                if ui.checkbox(&mut tem, "").changed() {
+                    t.rasgo = tem.then(|| fenkra_solidos::RasgoChaveta { comprimento: t.comprimento.min(20.), desloc_inicio: 0. });
+                }
+                match t.rasgo.as_mut() {
+                    Some(r) => {
+                        let resp = ui.add(crate::ui_ext::dv(&mut r.comprimento).range(0.1..=10000.).speed(1.).max_decimals(3));
+                        crate::ui_ext::wheel(ui, &resp, &mut r.comprimento);
+                        let resp = ui.add(crate::ui_ext::dv(&mut r.desloc_inicio).range(0.0..=10000.).speed(1.).max_decimals(3));
+                        crate::ui_ext::wheel(ui, &resp, &mut r.desloc_inicio);
+                    }
+                    None => {
+                        ui.label("");
+                        ui.label("");
+                    }
+                }
+                match fenkra_solidos::biblioteca::chaveta_para_eixo(t.diametro) {
+                    Some(c) => ui.label(format!("{}×{} · t1 {} · t2 {}", fmt(c.b), fmt(c.h), fmt(c.t1), fmt(c.t2))),
+                    None => ui.label(RichText::new(tr("fora da tabela")).weak()),
+                };
+                if ui.small_button("✖").on_hover_text(tr("Remover trecho")).clicked() {
+                    remover = Some(i);
+                }
+                ui.end_row();
+            }
+        });
+        if let Some(i) = remover {
+            if g.eixo.trechos.len() > 1 {
+                g.eixo.trechos.remove(i);
+            }
+        }
+        ui.horizontal_wrapped(|ui| {
+            if ui.button(tr("+ Trecho")).clicked() {
+                let mut novo = g.eixo.trechos.last().copied().unwrap_or(fenkra_solidos::TrechoEixo { diametro: 20., comprimento: 30., chanfro_fim: 0., rasgo: None });
+                novo.rasgo = None;
+                g.eixo.trechos.push(novo);
+            }
+            ui.checkbox(&mut g.eixo.furo_centro, tr("Furos de centro nas pontas"));
+        });
+        let eixo_ok = g.eixo.validar();
+        if let Err(e) = &eixo_ok {
+            ui.label(RichText::new(format!("⚠ {e}")).color(Color32::from_rgb(220, 90, 60)));
+        }
+        // a chaveta é a do primeiro trecho com rasgo, no maior comprimento da série que cabe no rasgo
+        let chaveta = g.eixo.trechos.iter().find_map(|t| t.rasgo.map(|r| (t.diametro, fenkra_solidos::eixos::comprimento_chaveta_ate(r.comprimento))));
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new(format!("{}: {} mm", tr("Comprimento total"), fmt(g.eixo.comprimento_total()))).small());
+            if ui.add_enabled(eixo_ok.is_ok(), egui::Button::new(tr("Salvar eixo..."))).on_hover_text(tr("Salva o eixo (.fkp) com os trechos, chanfros e rasgos acima.")).clicked() {
+                salvar_eixo = true;
+            }
+            let b = ui.add_enabled(eixo_ok.is_ok() && matches!(chaveta, Some((_, Some(_)))), egui::Button::new(tr("Salvar chaveta...")));
+            if b.on_hover_text(tr("Salva a chaveta DIN 6885 A do primeiro trecho com rasgo, no maior comprimento da série que cabe no rasgo.")).clicked() {
+                if let Some((d, Some(l))) = chaveta {
+                    salvar_chaveta = Some((d, l));
+                }
+            }
+        });
     });
     if !open || close {
         st.gears_open = None;
@@ -3010,9 +3097,18 @@ pub fn gears_window(app: &mut App, ctx: &egui::Context) {
             }
         }
     }
+    let dir_peca = st.dir();
+    let eixo_doc = salvar_eixo.then(|| fenkra_solidos::eixo_documento(&g.eixo).map(|d| (d, g.eixo.chave())));
+    let chaveta_doc = salvar_chaveta.map(|(d, l)| fenkra_solidos::chaveta_documento(d, l).map(|doc| (doc, format!("chaveta-din6885a-d{d}-l{l}"))));
     st.gears_open = Some(g);
     if let Some((msg, erro)) = aviso {
         app.toast(msg, erro);
+    }
+    for r in [eixo_doc, chaveta_doc].into_iter().flatten() {
+        match r {
+            Ok((doc, nome)) => save_doc(app, &doc, &nome, dir_peca.clone()),
+            Err(e) => app.toast(e, true),
+        }
     }
     if let Some((p, dir)) = gravar {
         save_gear(app, &p, dir);

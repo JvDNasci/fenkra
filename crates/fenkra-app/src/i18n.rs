@@ -2572,6 +2572,22 @@ static TABLE: &[(&str, &str)] = &[
     ("Par de engrenagens inserido", "Gear pair inserted"),
     ("centros a", "centers at"),
     ("Peça salva", "Part saved"),
+    ("Eixo e chaveta", "Shaft and key"),
+    ("Eixo escalonado ao longo de Z (a partir de z = 0), com chanfros e rasgos de chaveta DIN 6885 forma A cortados em +X. A chaveta vem da tabela pelo diâmetro de cada trecho.", "Stepped shaft along Z (from z = 0), with chamfers and DIN 6885 form A keyways cut on +X. The key comes from the table by each section's diameter."),
+    ("L rasgo", "Slot L"),
+    ("Chaveta", "Key"),
+    ("fora da tabela", "outside the table"),
+    ("Remover trecho", "Remove section"),
+    ("+ Trecho", "+ Section"),
+    ("Furos de centro nas pontas", "Center holes at the ends"),
+    ("Comprimento total", "Total length"),
+    ("Salvar eixo...", "Save shaft..."),
+    ("Salva o eixo (.fkp) com os trechos, chanfros e rasgos acima.", "Saves the shaft (.fkp) with the sections, chamfers and keyways above."),
+    ("Salvar chaveta...", "Save key..."),
+    ("Salva a chaveta DIN 6885 A do primeiro trecho com rasgo, no maior comprimento da série que cabe no rasgo.", "Saves the DIN 6885 A key of the first section with a keyway, at the longest series length that fits the keyway."),
+    ("Rasgo de chaveta no cubo (DIN 6885)", "Keyway in the hub (DIN 6885)"),
+    ("Corta no furo o rasgo da chaveta forma A: largura b e profundidade t2 da tabela, pelo diâmetro do furo.", "Cuts the form A keyway in the bore: width b and depth t2 from the table, by the bore diameter."),
+    ("furo fora da tabela DIN 6885 (Ø6 a Ø85)", "bore outside the DIN 6885 table (Ø6 to Ø85)"),
 ];
 
 #[cfg(test)]

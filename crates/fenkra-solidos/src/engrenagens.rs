@@ -18,6 +18,7 @@
 //! trecho (o kernel não tem extrusão com torção); o ângulo de hélice fica gravado nas seções.
 //! A **interna** é um anel com o vão dos dentes desenhado no sketch (sempre reta).
 
+use crate::biblioteca::chaveta_para_eixo;
 use crate::fixadores::Montador;
 use fenkra_core::sketch::Curve;
 use fenkra_core::*;
@@ -65,6 +66,8 @@ pub struct ParamEngrenagem {
     pub furo: f64,
     /// comprimento da barra (só cremalheira)
     pub comprimento_cremalheira: f64,
+    /// rasgo de chaveta no cubo (DIN 6885 forma A pelo diâmetro do furo); só reta/helicoidal com furo > 0
+    pub rasgo_cubo: bool,
 }
 
 impl Default for ParamEngrenagem {
@@ -80,6 +83,7 @@ impl Default for ParamEngrenagem {
             coef_correcao: 0.,
             furo: 0.,
             comprimento_cremalheira: 100.,
+            rasgo_cubo: false,
         }
     }
 }
@@ -99,9 +103,10 @@ impl ParamEngrenagem {
     /// Nome de arquivo (sem extensão) que identifica o conjunto de parâmetros que mudam a peça.
     pub fn chave(&self) -> String {
         let base = format!("m{}-a{}-b{}-f{}", self.modulo, self.angulo_pressao, self.largura, self.folga_dentes);
+        let rasgo = if self.rasgo_cubo && self.furo > 0. { "-k" } else { "" };
         match self.tipo {
-            TipoEngrenagem::Reta => format!("engrenagem-reta-{base}-z{}-x{}-d{}", self.dentes, self.coef_correcao, self.furo),
-            TipoEngrenagem::Helicoidal => format!("engrenagem-helicoidal-{base}-z{}-x{}-d{}-h{}", self.dentes, self.coef_correcao, self.furo, self.angulo_helice),
+            TipoEngrenagem::Reta => format!("engrenagem-reta-{base}-z{}-x{}-d{}{rasgo}", self.dentes, self.coef_correcao, self.furo),
+            TipoEngrenagem::Helicoidal => format!("engrenagem-helicoidal-{base}-z{}-x{}-d{}-h{}{rasgo}", self.dentes, self.coef_correcao, self.furo, self.angulo_helice),
             TipoEngrenagem::Interna => format!("engrenagem-interna-{base}-z{}", self.dentes),
             TipoEngrenagem::Cremalheira => format!("cremalheira-{base}-l{}", self.comprimento_cremalheira),
         }
@@ -343,6 +348,12 @@ pub fn calculo(p: &ParamEngrenagem) -> Result<CalculoEngrenagem, String> {
             if p.furo >= c.diametro_raiz - 2. * m {
                 return Err(format!("o furo precisa ser menor que {:.2} mm (deixa 1 módulo de aro sob a raiz)", c.diametro_raiz - 2. * m));
             }
+            if p.rasgo_cubo && p.furo > 0. {
+                let k = chaveta_para_eixo(p.furo).ok_or_else(|| format!("furo Ø{} fora da tabela DIN 6885 (Ø6 a Ø85): sem rasgo de chaveta", p.furo))?;
+                if p.furo + 2. * k.t2 >= c.diametro_raiz - 2. * m {
+                    return Err(format!("o rasgo do cubo (furo + {:.1} mm) passa da raiz: aumente o módulo ou os dentes", k.t2));
+                }
+            }
             let z_min = 2. * (1. - p.coef_correcao) / g.alfa.sin().powi(2);
             if (p.dentes as f64) < z_min.floor() {
                 c.avisos.push(format!(
@@ -380,6 +391,18 @@ pub fn engrenagem_documento(p: &ParamEngrenagem) -> Result<Document, String> {
     if p.furo > 0. && matches!(p.tipo, TipoEngrenagem::Reta | TipoEngrenagem::Helicoidal) {
         let plano = m.plano("Plano_furo", "-1")?;
         m.prim("Furo", PrimKind::Cilindro, plano, ["furo/2", "b+2", "0", "0"], BoolOp::Cut)?;
+        if p.rasgo_cubo {
+            // rasgo do cubo: largura b e profundidade t2 a partir do furo, em +X, ao longo da largura
+            let k = chaveta_para_eixo(p.furo).ok_or("furo fora da tabela DIN 6885")?;
+            m.param("kb", &k.b.to_string())?;
+            m.param("kt2", &k.t2.to_string())?;
+            let plano = crate::eixos::plano_yz(&mut m, "Plano_rasgo_cubo", "furo/2-1")?;
+            let mut data = SketchData::default();
+            let mut al = || m.doc.alloc();
+            data.add_rect(&mut al, [-k.b / 2., -0.5], [k.b / 2., p.largura + 0.5], false);
+            let sk = m.sketch("Rasgo_cubo", plano, data);
+            crate::eixos::extrusao_cega(&mut m, "Rasgo_chaveta", sk, "kt2+1", BoolOp::Cut, true);
+        }
     }
     Ok(m.doc)
 }
@@ -483,7 +506,7 @@ impl Montador {
         self.sketch(nome, plano, data)
     }
 
-    fn sketch(&mut self, nome: &str, plano: PlaneRef, data: SketchData) -> Id {
+    pub(crate) fn sketch(&mut self, nome: &str, plano: PlaneRef, data: SketchData) -> Id {
         let id = self.doc.add_feature(FeatureKind::Sketch(Sketch { plane: plano, data }));
         if let Some(f) = self.doc.features.iter_mut().find(|f| f.id == id) {
             f.name = nome.into();
@@ -668,6 +691,27 @@ mod tests {
         // furo central
         let (vf, _, _) = medir(&engrenagem_documento(&ParamEngrenagem { furo: 10., ..Default::default() }).unwrap());
         assert!(perto(vf, v - PI * 25. * 10., v * 0.01), "furo {vf} vs {}", v - PI * 250.);
+    }
+
+    #[test]
+    fn rasgo_do_cubo_recalcula_e_valida() {
+        let base = ParamEngrenagem { furo: 20., rasgo_cubo: true, ..Default::default() };
+        assert_ne!(base.chave(), ParamEngrenagem { rasgo_cubo: false, ..base.clone() }.chave());
+        // furo fora da tabela (Ø5) e rasgo que passa da raiz
+        assert!(calculo(&ParamEngrenagem { furo: 5., ..base.clone() }).is_err());
+        assert!(calculo(&ParamEngrenagem { furo: 28., ..base.clone() }).is_err());
+        // sem furo o rasgo é ignorado
+        assert!(calculo(&ParamEngrenagem { furo: 0., ..base.clone() }).is_ok());
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let (v_furo, _, _) = medir(&engrenagem_documento(&ParamEngrenagem { rasgo_cubo: false, ..base.clone() }).unwrap());
+        let (v, _, hi) = medir(&engrenagem_documento(&base).unwrap());
+        // rasgo de 6 mm de largura, do arco do furo (x ≈ 9,54) até x = 12,8, ao longo dos 10 mm de largura
+        let cortado = v_furo - v;        assert!(cortado > 6. * 2.8 * 10. && cortado < 6. * 3.5 * 10., "cortou {cortado}");
+        assert!(hi[2] > 9.99);
+        let h = ParamEngrenagem { tipo: TipoEngrenagem::Helicoidal, angulo_helice: 15., ..base };
+        medir(&engrenagem_documento(&h).unwrap());
     }
 
     #[test]

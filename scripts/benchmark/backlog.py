@@ -68,7 +68,7 @@ c('B26', 3, 'P1', 'Estrutura Pai → montagem dinâmica', 'Corpos iguais viram u
 c('B27', 3, 'P1', 'Catálogo de perfis com dimensões', 'Perfis W/H/U/L Gerdau e Aço Brasil (NBR), IPE/HEA/HEB/HEM/UPN/UPE (ArcelorMittal, EN 10365), W/HP/S/C/MC/L/HSS (AISC), tubos EN 10210/10219, ASTM A500 e Vallourec; JIS e AS/NZS depois. Propriedades calculadas e conferidas com o publicado.',
   ['CTX-PRF', 'CTX-HW'], ['EST-03'], 250, 'Auto', 'Estrutural e soldas'),
 c('B28', 3, 'P2', 'Gerador de engrenagens, eixos e chavetas', 'Reta, helicoidal, interna e cremalheira (involuta), eixos e chaveta DIN 6885, com cálculo e inserção com restrições, no estilo do Inventor.',
-  ['CTX-ENG'], ['BIB-03', 'BIB-04'], 400, 'Auto', 'Biblioteca de normas', 'em andamento'),
+  ['CTX-ENG'], ['BIB-03', 'BIB-04'], 400, 'Auto', 'Biblioteca de normas', 'feito'),
 c('B29', 3, 'P1', 'Fixadores industriais e smart fasteners', 'Parafusos, porcas e arruelas ISO/DIN/ABNT (medidas pelos catálogos Ciser, Brasfixo, Vonder, Belzer) e preenchimento automático de furos com pilhas e restrições.',
   ['CTX-FIX', 'CTX-FXL', 'CTX-HW'], ['BIB-01', 'BIB-02', 'MON-16'], 450, 'Auto + Visual', 'Biblioteca de normas', 'feito'),
 c('B42', 3, 'P0', 'Infraestrutura da biblioteca', 'Formato aberto por família (norma, fonte, nível A/B/C, licença), camadas pública/empresa/usuário, gerador de geometria por família, cálculo e conferência de propriedades nos testes.',

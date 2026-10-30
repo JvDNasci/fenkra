@@ -10,10 +10,12 @@ pub mod hardware;
 pub mod biblioteca;
 pub mod fixadores;
 pub mod engrenagens;
+pub mod eixos;
 pub mod profile;
 pub mod refs;
 
 pub use engrenagens::{calculo as calculo_engrenagem, engrenagem_documento, CalculoEngrenagem, ParamEngrenagem, TipoEngrenagem};
+pub use eixos::{chaveta_documento, eixo_documento, ParamEixo, RasgoChaveta, TrechoEixo};
 
 use profile::{ev, eval_sketch, to3d, EvalSketch, Vars};
 use fenkra_core::sketch::{Curve, Kind};
