@@ -3677,9 +3677,18 @@ impl Ctx<'_> {
                         .collect();
                     (!long.is_empty() && lim > 0.).then(|| format!("⚠ emenda: barra maior que a matéria-prima de {lim:.0} mm — {}", long.join(", ")))
                 };
+                if logging_members() {
+                    let explicit = (ev(&m.ext1, &self.vars, "")?, ev(&m.ext2, &self.vars, "")?);
+                    let profile = member_profile(m, &self.vars)?;
+                    let name = format!("{} {}", m.family, m.designation);
+                    for (i, (g, sh)) in geo.iter().zip(&shapes).enumerate() {
+                        let frame = Frame { origin: g.start, x: g.x, normal: g.z };
+                        log_struct(f, i, StructItem::Member, &name, profile.clone(), member_length(g, explicit), frame, sh);
+                    }
+                }
                 let mut all = Shape::empty();
-                for sh in shapes {
-                    all = if all.is_null() { sh } else { all.compound(&sh) };
+                for sh in &shapes {
+                    all = if all.is_null() { sh.clone() } else { all.compound(sh) };
                 }
                 self.tools.insert(f.id, (all.clone(), BoolOp::Add));
                 self.add_separate(f, all);
@@ -3696,6 +3705,7 @@ impl Ctx<'_> {
                 let y = fenkra_kernel::cross(out, g.x);
                 let corner = geo3d::sub(geo3d::sub(c, geo3d::mul(g.x, w / 2.)), geo3d::mul(y, h / 2.));
                 let plate = Shape::box_tool(corner, g.x, out, [w, h, t]).map_err(k)?;
+                log_struct(f, 0, StructItem::Plate, "Placa", "Placa".into(), 0., Frame { origin: c, x: g.x, normal: out }, &plate);
                 self.add_separate(f, plate);
                 Ok(None)
             }
@@ -3723,6 +3733,7 @@ impl Ctx<'_> {
                     pts.push(geo3d::add(q, geo3d::mul(db, c)));
                 }
                 let plate = Shape::poly_prism(&pts, geo3d::mul(n, t)).map_err(k)?;
+                log_struct(f, 0, StructItem::Gusset, "Reforço", "Reforço".into(), 0., Frame { origin: q, x: da, normal: n }, &plate);
                 self.add_separate(f, plate);
                 Ok(None)
             }
@@ -3903,6 +3914,13 @@ impl Ctx<'_> {
                     self.bodies.insert(f.target, (r, vec![f.id; nf]));
                     Ok(Some(format!("{n} triângulos → superfície aberta (a malha não fecha um volume)")))
                 }
+            }
+            FeatureKind::LinkedBody(b) => {
+                let sh = self.surface(b.geo, 0)?;
+                // o B-rep de um corpo já volta sólido; casca fechada é costurada em sólido
+                let sh = if sh.is_solid() { sh } else { sh.closed_solid(0.01).map_err(k)? };
+                self.apply(f.target, sh, BoolOp::Add, f.id)?;
+                Ok(None)
             }
             // arestas escolhidas, mas nenhuma ainda: não aplica nada (todas = só pela opção "Todas")
             FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) if matches!(&o.edges, EdgeSel::Edges(m) if m.is_empty()) && matches!(o.mode, EdgeMode::Constant | EdgeMode::Variable(_) | EdgeMode::TwoDist(_) | EdgeMode::DistAngle(_)) => {
@@ -4530,6 +4548,181 @@ pub struct CutRow {
     pub count: usize,
     /// barras de matéria-prima por peça (> 1 = precisa de emenda)
     pub bars: usize,
+    /// número do item (o mesmo de `structural_groups`; 0 = membro sem sólido calculado)
+    pub item: usize,
+    /// membros da linha: (comando, trecho)
+    pub members: Vec<(Id, usize)>,
+}
+
+thread_local! {
+    /// coleta dos sólidos estruturais durante `structural_members` (fora dela fica `None`)
+    static MEMBER_LOG: RefCell<Option<Vec<MemberSolid>>> = const { RefCell::new(None) };
+}
+
+fn logging_members() -> bool {
+    MEMBER_LOG.with(|l| l.borrow().is_some())
+}
+
+/// Tipo de item da estrutura.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum StructItem {
+    Member,
+    Plate,
+    Gusset,
+}
+
+/// Assinatura de um item: peças com a mesma assinatura são iguais (mesmo perfil, comprimento,
+/// volume e caixa no referencial local — pontas diferentes separam os grupos).
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct StructSignature {
+    pub kind: StructItem,
+    /// família, designação, tipo e cotas avaliadas da seção (placa/reforço: só o nome)
+    pub profile: String,
+    /// comprimento em décimos de mm (0 = placa/reforço)
+    pub length: i64,
+    /// volume em mm³
+    pub volume: i64,
+    /// caixa local (mín. xyz, máx. xyz) em décimos de mm
+    pub bbox: [i64; 6],
+}
+
+impl StructSignature {
+    pub fn length_mm(&self) -> f64 {
+        self.length as f64 / 10.
+    }
+
+    /// Texto estável da assinatura (chave do grupo nas propriedades das peças geradas).
+    pub fn key(&self) -> String {
+        let b = self.bbox.map(|v| v.to_string()).join(",");
+        format!("{:?}|{}|L{}|V{}|B{}", self.kind, self.profile, self.length, self.volume, b)
+    }
+}
+
+/// Sólido de um trecho de membro (ou de uma placa/reforço) no referencial local.
+#[derive(Clone)]
+pub struct MemberSolid {
+    pub feature: Id,
+    pub collector: Id,
+    /// trecho dentro do comando (0 para placa e reforço)
+    pub index: usize,
+    pub kind: StructItem,
+    /// nome para listas: "família designação", "Placa" ou "Reforço"
+    pub name: String,
+    /// referencial local no mundo: origem na ponta inicial, Z ao longo do membro, X/Y da seção
+    pub frame: Frame,
+    /// o sólido expresso em `frame`
+    pub shape: Shape,
+    pub signature: StructSignature,
+}
+
+/// Membro de um grupo.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct StructRef {
+    pub feature: Id,
+    pub index: usize,
+    pub frame: Frame,
+}
+
+/// Peças iguais da estrutura.
+#[derive(Clone)]
+pub struct StructGroup {
+    /// número do item (1, 2, … na ordem de perfil e comprimento)
+    pub item: usize,
+    pub signature: StructSignature,
+    pub name: String,
+    /// sólido do primeiro membro, no referencial local
+    pub shape: Shape,
+    pub members: Vec<StructRef>,
+}
+
+/// Cotas da seção avaliadas, para a assinatura.
+fn member_profile(m: &StructMember, vars: &Vars) -> Result<String, String> {
+    let dims: Vec<String> = m.dims.iter().map(|e| ev(e, vars, "cota da seção").map(|v| format!("{v:.3}"))).collect::<Result<_, _>>()?;
+    Ok(format!("{} {} {:?} [{}]", m.family, m.designation, m.kind, dims.join(", ")))
+}
+
+/// Décimos de mm; o deslocamento tira a quebra do arredondamento de valores comuns (x,05).
+fn q10(v: f64) -> i64 {
+    (v * 10. + 0.37).round() as i64
+}
+
+/// Leva o sólido do mundo para o referencial `fr`.
+fn to_local(sh: &Shape, fr: &Frame) -> Result<Shape, String> {
+    let k = |e: KernelError| e.0;
+    let t = sh.transformed(Xform::Translate(geo3d::mul(fr.origin, -1.))).map_err(k)?;
+    // linhas da matriz mundo→local = eixos do referencial
+    let m = [fr.x, fr.y(), fr.normal];
+    let tr = m[0][0] + m[1][1] + m[2][2];
+    let ang = ((tr - 1.) / 2.).clamp(-1., 1.).acos();
+    if ang.abs() < 1e-12 {
+        return Ok(t);
+    }
+    let axis = if (std::f64::consts::PI - ang).abs() < 1e-6 {
+        // 180°: eixo pela coluna dominante de (M + I)
+        let c = (0..3).max_by(|i, j| m[*i][*i].total_cmp(&m[*j][*j])).unwrap();
+        unit([m[0][c] + (c == 0) as u8 as f64, m[1][c] + (c == 1) as u8 as f64, m[2][c] + (c == 2) as u8 as f64])
+    } else {
+        unit([m[2][1] - m[1][2], m[0][2] - m[2][0], m[1][0] - m[0][1]])
+    };
+    t.transformed(Xform::Rotate([0.; 3], axis, ang.to_degrees())).map_err(k)
+}
+
+/// Registra um sólido estrutural (só durante `structural_members`).
+#[allow(clippy::too_many_arguments)]
+fn log_struct(f: &Feature, index: usize, kind: StructItem, name: &str, profile: String, length: f64, frame: Frame, shape: &Shape) {
+    if !logging_members() {
+        return;
+    }
+    let Ok(local) = to_local(shape, &frame) else { return };
+    let Some((lo, hi)) = local.bbox() else { return };
+    let signature = StructSignature {
+        kind,
+        profile,
+        length: (length * 10.).round() as i64,
+        volume: local.mass().volume.round() as i64,
+        bbox: [lo[0], lo[1], lo[2], hi[0], hi[1], hi[2]].map(q10),
+    };
+    let item = MemberSolid { feature: f.id, collector: f.target, index, kind, name: name.into(), frame, shape: local, signature };
+    MEMBER_LOG.with(|l| {
+        if let Some(v) = l.borrow_mut().as_mut() {
+            v.push(item);
+        }
+    });
+}
+
+/// Um sólido por trecho de membro (com os cortes de canto e juntas), mais as placas e reforços,
+/// cada um no seu referencial local.
+pub fn structural_members(doc: &Document) -> Vec<MemberSolid> {
+    if !doc.active_features().any(|(_, f)| matches!(f.kind, FeatureKind::StructMember(_) | FeatureKind::StructPlate(_) | FeatureKind::StructGusset(_))) {
+        return vec![];
+    }
+    MEMBER_LOG.with(|l| *l.borrow_mut() = Some(vec![]));
+    let _ = final_shape(doc);
+    MEMBER_LOG.with(|l| l.borrow_mut().take()).unwrap_or_default()
+}
+
+/// Agrupa os sólidos de mesma assinatura; o número do item segue a ordem de perfil e comprimento.
+pub fn group_members(items: &[MemberSolid]) -> Vec<StructGroup> {
+    let mut by: std::collections::BTreeMap<StructSignature, StructGroup> = Default::default();
+    for it in items {
+        let r = StructRef { feature: it.feature, index: it.index, frame: it.frame };
+        by.entry(it.signature.clone())
+            .or_insert_with(|| StructGroup { item: 0, signature: it.signature.clone(), name: it.name.clone(), shape: it.shape.clone(), members: vec![] })
+            .members
+            .push(r);
+    }
+    by.into_values()
+        .enumerate()
+        .map(|(i, mut g)| {
+            g.item = i + 1;
+            g
+        })
+        .collect()
+}
+
+/// Grupos de peças iguais da estrutura (membros, placas e reforços), numerados.
+pub fn structural_groups(doc: &Document) -> Vec<StructGroup> {
+    group_members(&structural_members(doc))
 }
 
 /// Comprimento de corte de uma linha de membro (com os prolongamentos pedidos).
@@ -4558,20 +4751,42 @@ pub fn cut_list(doc: &Document) -> Vec<CutRow> {
         steps: HashMap::new(),
         miter_next: false,
     };
-    let mut rows: Vec<CutRow> = vec![];
+    let stock = ev(doc.props.stock_length.trim(), &cx.vars, "").ok().filter(|v| *v > 0.);
+    let bars_of = |len: f64| stock.map(|s| (len / s).ceil().max(1.) as usize).unwrap_or(1);
+    // mesmos grupos da estrutura: pontas diferentes viram linhas diferentes
+    let groups = structural_groups(doc);
+    let mut rows: Vec<CutRow> = groups
+        .iter()
+        .filter(|g| g.signature.kind == StructItem::Member)
+        .map(|g| CutRow {
+            feature: g.members[0].feature,
+            designation: g.name.clone(),
+            length: g.signature.length_mm(),
+            count: g.members.len(),
+            bars: bars_of(g.signature.length_mm()),
+            item: g.item,
+            members: g.members.iter().map(|m| (m.feature, m.index)).collect(),
+        })
+        .collect();
+    // comandos cujo sólido não foi calculado (erro no kernel) continuam na lista, só pelo comprimento
+    let solid: std::collections::HashSet<Id> = groups.iter().flat_map(|g| g.members.iter().map(|m| m.feature)).collect();
     for f in doc.active_features().map(|(_, f)| f) {
         let FeatureKind::StructMember(m) = &f.kind else { continue };
+        if solid.contains(&f.id) {
+            continue;
+        }
         let Ok(geo) = cx.members(m) else { continue };
         let explicit = (ev(&m.ext1, &cx.vars, "").unwrap_or(0.), ev(&m.ext2, &cx.vars, "").unwrap_or(0.));
-        let stock = ev(doc.props.stock_length.trim(), &cx.vars, "").ok().filter(|v| *v > 0.);
-        for g in geo {
-            let len = member_length(&g, explicit);
+        for (i, g) in geo.iter().enumerate() {
+            let len = member_length(g, explicit);
             let len = (len * 10.).round() / 10.;
             let name = format!("{} {}", m.family, m.designation);
-            let bars = stock.map(|s| (len / s).ceil().max(1.) as usize).unwrap_or(1);
-            match rows.iter_mut().find(|r| r.designation == name && (r.length - len).abs() < 0.05) {
-                Some(r) => r.count += 1,
-                None => rows.push(CutRow { feature: f.id, designation: name, length: len, count: 1, bars }),
+            match rows.iter_mut().find(|r| r.item == 0 && r.designation == name && (r.length - len).abs() < 0.05) {
+                Some(r) => {
+                    r.count += 1;
+                    r.members.push((f.id, i));
+                }
+                None => rows.push(CutRow { feature: f.id, designation: name, length: len, count: 1, bars: bars_of(len), item: 0, members: vec![(f.id, i)] }),
             }
         }
     }
@@ -4913,6 +5128,94 @@ mod tests {
         d.add_feature(FeatureKind::StructGusset(StructGusset { at: [0., 0., 500.], leg: s("60"), thickness: s("6"), chamfer: s("0") }));
         let v2 = vol(&d);
         assert!(near(v2 - v1, 0.5 * 60. * 60. * 6., 1e-3), "reforço {}", v2 - v1);
+    }
+
+    #[test]
+    fn estrutura_agrupa_pecas_iguais() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let s = |x: &str| x.to_string();
+        let mut d = Document::new("quadro");
+        let pts = [[0., 0., 0.], [400., 0., 0.], [400., 300., 0.], [0., 300., 0.]];
+        let mut paths = vec![];
+        for i in 0..4 {
+            let l = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(pts[i]), b: PointRef::Fixed(pts[(i + 1) % 4]), start: s("0"), end: s("0") });
+            paths.push(CurveRef::Ref(l));
+        }
+        let f = d.add_feature(FeatureKind::StructMember(StructMember {
+            paths,
+            family: s("Tubo quadrado"),
+            designation: s("40x3"),
+            kind: SectionKind::TuboQuadrado,
+            dims: vec![s("40"), s("3")],
+            anchor: 0,
+            angle: s("0"),
+            off_x: s("0"),
+            off_y: s("0"),
+            ext1: s("0"),
+            ext2: s("0"),
+            corner: CornerMode::MeiaEsquadria,
+            gap: s("0"),
+            joints: vec![],
+        }));
+        // um sólido por trecho, no referencial local (Z ao longo do membro, seção centrada)
+        let ms = structural_members(&d);
+        assert_eq!(ms.len(), 4);
+        for (m, len) in ms.iter().zip([400., 300., 400., 300.]) {
+            let s = &m.signature;
+            assert!((s.length_mm() - len).abs() < 1e-9, "{}", s.length_mm());
+            // meia-esquadria: as faces de fora passam meia seção das pontas da linha de centro
+            assert!((s.bbox[2] as f64 / 10. + 20.).abs() < 0.5 && (s.bbox[5] as f64 / 10. - len - 20.).abs() < 0.5, "{:?}", s.bbox);
+            assert!(s.bbox[0] >= -210 && s.bbox[1] >= -210 && s.bbox[3] <= 210 && s.bbox[4] <= 210, "{:?}", s.bbox);
+            // a meia-esquadria conserva o volume da barra reta
+            let v = (40. * 40. - 34. * 34.) * len;
+            assert!((m.shape.mass().volume - v).abs() < 1e-3 * v, "volume local {}", m.shape.mass().volume);
+        }
+        let gs = structural_groups(&d);
+        assert_eq!(gs.len(), 2, "quatro membros iguais dois a dois");
+        assert_eq!((gs[0].item, gs[1].item), (1, 2));
+        assert!((gs[0].signature.length_mm() - 300.).abs() < 1e-9 && (gs[1].signature.length_mm() - 400.).abs() < 1e-9);
+        assert!(gs.iter().all(|g| g.members.len() == 2 && g.members.iter().all(|m| m.feature == f)));
+        let cl = cut_list(&d);
+        assert_eq!(cl.iter().map(|r| (r.item, r.count)).collect::<Vec<_>>(), vec![(1, 2), (2, 2)]);
+        assert_eq!(cl[0].members, vec![(f, 1), (f, 3)]);
+        // outro tratamento num canto: os dois membros que ele toca deixam de ser iguais aos opostos
+        if let Some(FeatureKind::StructMember(m)) = d.feature_mut(f).map(|f| &mut f.kind) {
+            m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Aparar, first: false, gap: None });
+        }
+        let gs2 = structural_groups(&d);
+        assert!(gs2.len() > 2, "pontas diferentes separam os grupos: {}", gs2.len());
+        assert!(cut_list(&d).len() > 2);
+        assert_eq!(gs2.iter().map(|g| g.members.len()).sum::<usize>(), 4);
+        // placa e reforço entram como itens próprios
+        let mut d = Document::new("l");
+        let l1 = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([0., 0., 0.]), b: PointRef::Fixed([0., 0., 500.]), start: s("0"), end: s("0") });
+        let l2 = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([0., 0., 500.]), b: PointRef::Fixed([300., 0., 500.]), start: s("0"), end: s("0") });
+        d.add_feature(FeatureKind::StructMember(StructMember {
+            paths: vec![CurveRef::Ref(l1), CurveRef::Ref(l2)],
+            family: s("Tubo quadrado"),
+            designation: s("40x3"),
+            kind: SectionKind::TuboQuadrado,
+            dims: vec![s("40"), s("3")],
+            anchor: 0,
+            angle: s("0"),
+            off_x: s("0"),
+            off_y: s("0"),
+            ext1: s("0"),
+            ext2: s("0"),
+            corner: CornerMode::MeiaEsquadria,
+            gap: s("0"),
+            joints: vec![],
+        }));
+        d.add_feature(FeatureKind::StructPlate(StructPlate { at: [0., 0., 0.], thickness: s("8"), margin: s("5") }));
+        d.add_feature(FeatureKind::StructGusset(StructGusset { at: [0., 0., 500.], leg: s("60"), thickness: s("6"), chamfer: s("0") }));
+        let gs = structural_groups(&d);
+        let kinds: Vec<StructItem> = gs.iter().map(|g| g.signature.kind).collect();
+        assert_eq!(kinds, vec![StructItem::Member, StructItem::Member, StructItem::Plate, StructItem::Gusset]);
+        assert!((gs[2].shape.mass().volume - 50. * 50. * 8.).abs() < 1., "placa");
+        assert!((gs[3].shape.mass().volume - 0.5 * 60. * 60. * 6.).abs() < 1., "reforço");
+        assert_eq!(cut_list(&d).len(), 2);
     }
 
     #[test]

@@ -41,3 +41,6 @@ dist/
 
 # Ferramentas avulsas
 tools/*/target/
+
+# configuração local do Claude Code
+.claude/settings.local.json

@@ -64,7 +64,7 @@ c('B47', 2, 'P1', 'PNEngine: regras de part-number e ambientes', 'Editor de regr
   ['CTX-PN'], ['PLM-06'], 120, 'Auto', 'PDM / PLM'),
 # ---------------------------------------------------------------- onda 3
 c('B26', 3, 'P1', 'Estrutura Pai → montagem dinâmica', 'Corpos iguais viram uma peça com instâncias; subpeças linkadas; submontagens de solda; balões e lista de corte; desenho por corpo.',
-  ['CTX-EST', 'DR-33', 'DR-44', 'DR-45'], ['EST-06', 'EST-07', 'EST-08', 'DES-08', 'DES-11'], 500, 'Auto + Visual', 'Estrutural e soldas'),
+  ['CTX-EST', 'DR-33', 'DR-44', 'DR-45'], ['EST-06', 'EST-07', 'EST-08', 'DES-08', 'DES-11'], 500, 'Auto + Visual', 'Estrutural e soldas', 'em andamento'),
 c('B27', 3, 'P1', 'Catálogo de perfis com dimensões', 'Perfis W/H/U/L Gerdau e Aço Brasil (NBR), IPE/HEA/HEB/HEM/UPN/UPE (ArcelorMittal, EN 10365), W/HP/S/C/MC/L/HSS (AISC), tubos EN 10210/10219, ASTM A500 e Vallourec; JIS e AS/NZS depois. Propriedades calculadas e conferidas com o publicado.',
   ['CTX-PRF', 'CTX-HW'], ['EST-03'], 250, 'Auto', 'Estrutural e soldas'),
 c('B28', 3, 'P2', 'Gerador de engrenagens, eixos e chavetas', 'Reta, helicoidal, interna e cremalheira (involuta), eixos e chaveta DIN 6885, com cálculo e inserção com restrições, no estilo do Inventor.',

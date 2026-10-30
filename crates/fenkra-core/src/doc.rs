@@ -1357,6 +1357,8 @@ pub enum FeatureKind {
     BoundaryFill(BoundaryFill),
     /// Malha STL/OBJ convertida em B-rep.
     MeshImport(MeshImport),
+    /// Corpo sólido vindo de um elemento Linked/Isolated (peça gerada a partir de outra).
+    LinkedBody(LinkedBody),
     /// Mover o corpo inteiro: translação, rotação, simetria ou afinidade.
     MoveBody(MoveBody),
     /// Chapa: parede base a partir de um perfil fechado (espessura global).
@@ -1858,6 +1860,13 @@ pub struct MeshImport {
     pub solid: bool,
 }
 
+/// Insere no coletor de destino o corpo guardado num elemento Linked/Isolated (B-rep fechado).
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct LinkedBody {
+    /// elemento (Linked/Isolated) da pasta Referências que traz a superfície fechada
+    pub geo: Id,
+}
+
 impl FeatureKind {
     pub fn type_name(&self) -> &'static str {
         use FeatureKind::*;
@@ -1898,6 +1907,7 @@ impl FeatureKind {
             SewSurface(_) => "Costurar",
             BoundaryFill(_) => "PreencherFronteiras",
             MeshImport(_) => "Malha",
+            LinkedBody(_) => "CorpoLink",
             SmWall(_) => "ParedeBase",
             SmFlange(_) => "Aba",
             SmHem(_) => "Bainha",
@@ -1951,6 +1961,7 @@ impl FeatureKind {
             SewSurface(_) => "⧉",
             BoundaryFill(_) => "▦",
             MeshImport(_) => "△",
+            LinkedBody(_) => "⬢",
             MoveBody(_) => "✥",
             SmWall(_) => "▭",
             SmFlange(_) => "⌐",
@@ -2143,6 +2154,7 @@ impl FeatureKind {
                 }
             }
             MeshImport(_) => {}
+            LinkedBody(b) => ids(&mut b.geo),
             SmWall(w) => ids(&mut w.sketch),
             SmFlange(f) => {
                 for e in [&mut f.length, &mut f.angle, &mut f.off1, &mut f.off2] {
@@ -3351,6 +3363,7 @@ impl Document {
             CloseSurface(c) => sref(&c.surface).into_iter().collect(),
             SewSurface(s) => sref(&s.surface).into_iter().collect(),
             BoundaryFill(b) => b.tools.iter().filter_map(sref).collect(),
+            LinkedBody(b) => vec![b.geo],
             _ => vec![],
         }
     }
