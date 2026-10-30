@@ -9,12 +9,14 @@
 pub mod bom;
 pub mod display;
 pub mod estrutura;
+pub mod fixadores;
 pub mod kin;
 pub mod load;
 pub mod view;
 pub mod solve;
 
 pub use estrutura::{estrutura_para_montagem, Gerado, GrupoGerado};
+pub use fixadores::{preencher_furos, OpcoesFixadores, RelatorioFixadores};
 
 use fenkra_core::{expr, Id, Properties};
 use serde::{Deserialize, Serialize};

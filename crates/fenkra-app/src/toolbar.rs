@@ -234,6 +234,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("asm_furo_pecas", "Furo entre peças", "Furo atravessando peças", "Clique na face onde o furo começa (Ctrl+clique nas outras peças): o mesmo furo passa por todas, alinhado.", Cmd(C::AsmFeat(1))),
             ]),
             One(it("asm_link", "Copiar geometria", "Copiar geometria de outra peça (link)", "Escolha na árvore a peça que recebe e clique numa face plana de outra peça: a face é publicada automaticamente e entra por link (sem referência circular).", Cmd(C::AsmLink))),
+            One(it("asm_fixadores", "Fixadores", "Preencher furos com fixadores", "Insere parafuso, arruela e porca da biblioteca nos furos passantes (com a folga de um tamanho métrico) e nos roscados da montagem. Furos de peças diferentes no mesmo eixo recebem um parafuso só, com o comprimento tirado da espessura atravessada. Rodar de novo não duplica.", Cmd(C::AsmFasteners))),
             One(it("asm_grupo", "Grupo", "Grupo de organização", "Elemento vazio só para organizar a árvore (não muda a geometria).", Cmd(C::AsmGroup))),
             One(it("asm_substituir", "Substituir", "Substituir componente", "Troca a peça mantendo a posição e as restrições (as faces são reencontradas pelo ponto clicado).", Cmd(C::AsmReplace))),
             One(it("asm_repeticao", "Repetição", "Repetição inteligente de componente", "Copia o componente selecionado em padrão linear ou circular (ex.: parafusos); as cópias acompanham o original e mudam com a quantidade.", Cmd(C::AsmPattern))),

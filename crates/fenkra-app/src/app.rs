@@ -1756,7 +1756,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             // comandos de montagem são tratados em asm_ui::command
             Cmd::AsmNew | Cmd::AsmOpen | Cmd::AsmSave | Cmd::AsmInsert | Cmd::AsmSubAsm | Cmd::AsmNewPart | Cmd::AsmGroup | Cmd::AsmReplace | Cmd::AsmMate(_) | Cmd::AsmFix | Cmd::AsmRigid
             | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmPattern | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmComposer | Cmd::AsmBom
-            | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink => return,
+            | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink | Cmd::AsmFasteners => return,
             Cmd::Param => {
                 let n = (1..).map(|i| format!("P{i}")).find(|n| !d.params.iter().any(|p| &p.name == n)).unwrap();
                 let _ = d.add_param(&n, "10", Unit::Comprimento);
@@ -5904,6 +5904,8 @@ pub enum Cmd {
     AsmFeat(u8),
     /// copiar geometria de outra peça por link (publicação automática)
     AsmLink,
+    /// preencher os furos da montagem com parafuso, arruela e porca da biblioteca (janela de opções)
+    AsmFasteners,
     // ---- chapa metálica
     SmParams,
     SmWall,
@@ -6635,6 +6637,7 @@ impl eframe::App for App {
         crate::asm_ui::sim_window(self, ctx);
         crate::asm_ui::composer_window(self, ctx);
         crate::asm_ui::bom_window(self, ctx);
+        crate::asm_ui::fasteners_window(self, ctx);
         self.sheet_window(ctx);
         crate::st_ui::windows(self, ctx);
         self.side_toolbars(root);

@@ -104,6 +104,15 @@ fn quick_options(a: &Geom, b: &Geom) -> Vec<MateCmd> {
     }
 }
 
+/// Opções da janela "Preencher furos com fixadores" e os avisos da última aplicação.
+#[derive(Clone, Default)]
+pub struct FastenersUi {
+    pub op: OpcoesFixadores,
+    /// só nos componentes escolhidos (árvore ou viewport)
+    pub only_selected: bool,
+    pub warnings: Vec<String>,
+}
+
 pub struct AsmState {
     pub asm: Assembly,
     pub file: Option<PathBuf>,
@@ -159,6 +168,8 @@ pub struct AsmState {
     pub composer_open: bool,
     /// janela da lista de peças (nível escolhido)
     pub bom_open: Option<fenkra_montagem::bom::BomLevel>,
+    /// janela de preenchimento de furos com fixadores (opções e avisos da última aplicação)
+    pub fasteners_open: Option<FastenersUi>,
     pub anim_sel: usize,
     pub anim_t: f64,
     pub anim_play: bool,
@@ -220,6 +231,7 @@ impl AsmState {
             explode_mode: false,
             composer_open: false,
             bom_open: None,
+            fasteners_open: None,
             anim_sel: 0,
             anim_t: 0.,
             anim_play: false,
@@ -380,7 +392,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
             let is_asm = matches!(
                 c,
                 Cmd::AsmInsert | Cmd::AsmNewPart | Cmd::AsmGroup | Cmd::AsmReplace | Cmd::AsmMate(_) | Cmd::AsmFix | Cmd::AsmRigid | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmSubAsm | Cmd::AsmPattern
-                    | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmComposer | Cmd::AsmBom | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink
+                    | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmComposer | Cmd::AsmBom | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink | Cmd::AsmFasteners
             );
             let Some(st) = app.asm.as_mut() else {
                 // só os comandos de montagem avisam; os da peça seguem normalmente
@@ -539,6 +551,11 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                 }
                 Cmd::AsmBom => {
                     st.bom_open = Some(st.bom_open.unwrap_or_default());
+                }
+                Cmd::AsmFasteners => {
+                    if st.fasteners_open.is_none() {
+                        st.fasteners_open = Some(FastenersUi::default());
+                    }
                 }
                 Cmd::AsmSubFromSel => {
                     // subconjunto novo com os componentes escolhidos (na viewport ou na árvore)
@@ -2659,6 +2676,138 @@ pub fn bom_window(app: &mut App, ctx: &egui::Context) {
                 app.toast(format!("Erro: {e}"), true);
             }
         }
+    }
+}
+
+/// Resumo do preenchimento para o aviso na tela: "12 fixadores: 8× M6x35, 4× M8x40".
+fn fasteners_summary(r: &RelatorioFixadores) -> String {
+    let lista = r.por_tamanho.iter().map(|(t, n)| format!("{n}× {t}")).collect::<Vec<_>>().join(", ");
+    let mut s = format!("{} {}: {lista}", r.fixadores, tr(if r.fixadores == 1 { "fixador" } else { "fixadores" }));
+    if r.pulados > 0 {
+        s += &format!(" · {} {}", r.pulados, tr("furo(s) já preenchido(s)"));
+    }
+    if !r.avisos.is_empty() {
+        s += &format!(" · {} {}", r.avisos.len(), tr("aviso(s) na janela"));
+    }
+    s
+}
+
+/// Preenche os furos da montagem com parafuso, arruela e porca da biblioteca (B29).
+pub fn fasteners_window(app: &mut App, ctx: &egui::Context) {
+    use fenkra_solidos::biblioteca::{self, TipoFixador};
+    let Some(st) = app.asm.as_mut() else { return };
+    let Some(mut f) = st.fasteners_open.clone() else { return };
+    let mut open = true;
+    let (mut apply, mut close) = (false, false);
+    let familias = |pred: fn(TipoFixador) -> bool| biblioteca::familias().iter().filter(|x| pred(x.tipo)).map(|x| (x.id.clone(), x.norma.clone())).collect::<Vec<_>>();
+    let combo = |ui: &mut egui::Ui, id: &str, atual: &mut String, itens: &[(String, String)]| {
+        let rotulo = itens.iter().find(|(i, _)| i == atual).map(|(_, n)| n.clone()).unwrap_or_else(|| atual.clone());
+        egui::ComboBox::from_id_salt(id).selected_text(rotulo).show_ui(ui, |ui| {
+            for (i, n) in itens {
+                ui.selectable_value(atual, i.clone(), n);
+            }
+        });
+    };
+    egui::Window::new(tr("🔩 Preencher furos com fixadores")).id(egui::Id::unique("janela_fixadores")).open(&mut open).default_width(400.).show(ctx, |ui| {
+        if crate::app::done_bar(ui) {
+            close = true;
+        }
+        ui.label(RichText::new(tr("Os furos passantes com a folga de um tamanho métrico (e os roscados) recebem parafuso, arruela e porca da biblioteca. Furos de peças diferentes no mesmo eixo formam uma pilha só, e o comprimento sai da espessura atravessada.")).weak().small());
+        crate::editor::section(ui, "Parafuso");
+        ui.horizontal(|ui| {
+            ui.label(tr("Família"));
+            combo(ui, "fix_parafuso", &mut f.op.familia_parafuso, &familias(TipoFixador::e_parafuso));
+        });
+        ui.horizontal(|ui| {
+            ui.label(tr("Folga do furo"));
+            for (i, n) in ["Fina", "Normal", "Folgada"].into_iter().enumerate() {
+                ui.selectable_value(&mut f.op.folga, i as u8, tr(n));
+            }
+        });
+        ui.label(RichText::new(tr("M6: fina 6,4 · normal 6,6 · folgada 7,0 mm. Furos roscados não dependem da folga.")).weak().small());
+        crate::editor::section(ui, "Arruela e porca");
+        crate::editor::check(ui, &mut f.op.arruela, "arruela sob a cabeça (e sob a porca)");
+        if f.op.arruela {
+            ui.horizontal(|ui| {
+                ui.label(tr("Família da arruela"));
+                combo(ui, "fix_arruela", &mut f.op.familia_arruela, &familias(|t| t == TipoFixador::Arruela));
+            });
+        }
+        crate::editor::check(ui, &mut f.op.porca, "porca na saída (furos roscados não levam porca)");
+        if f.op.porca {
+            ui.horizontal(|ui| {
+                ui.label(tr("Família da porca"));
+                combo(ui, "fix_porca", &mut f.op.familia_porca, &familias(|t| t == TipoFixador::Porca));
+            });
+        }
+        crate::editor::section(ui, "Onde");
+        crate::editor::check(ui, &mut f.only_selected, "só nos componentes selecionados (árvore ou viewport)");
+        ui.add_space(4.);
+        apply = ui.add(egui::Button::new(RichText::new(tr("Preencher furos")).strong()).min_size(egui::vec2(140., 28.))).on_hover_text(tr("Insere os fixadores já na posição, com restrições de eixo e de contato, e resolve a montagem. Rodar de novo não duplica.")).clicked();
+        if !f.warnings.is_empty() {
+            crate::editor::section(ui, "Avisos");
+            egui::ScrollArea::vertical().max_height(140.).show(ui, |ui| {
+                for w in &f.warnings {
+                    ui.label(RichText::new(format!("⚠ {w}")).small());
+                }
+            });
+        }
+    });
+    if !open || close {
+        st.fasteners_open = None;
+        return;
+    }
+    // aviso na tela, dado só depois do último uso de `st` (o aviso empresta o app inteiro)
+    let mut aviso: Option<(String, bool)> = None;
+    if apply {
+        let dir = st.dir();
+        let mut op = f.op.clone();
+        if dir.is_none() {
+            aviso = Some((tr("Salve a montagem antes: as peças dos fixadores são gravadas na pasta dela").to_string(), true));
+        } else if f.only_selected {
+            let mut comps = st.comps_of(&app.picks);
+            if let Some(s) = st.sel.filter(|s| st.asm.node(*s).is_some_and(|n| matches!(n.kind, NodeKind::Part { .. }))) {
+                if !comps.contains(&s) {
+                    comps.push(s);
+                }
+            }
+            if comps.is_empty() {
+                aviso = Some((tr("Escolha os componentes na árvore ou na viewport (ou desmarque “só nos componentes selecionados”)").to_string(), true));
+            }
+            op.componentes = comps;
+        }
+        if aviso.is_none() {
+            let modificada = st.modified;
+            st.push_undo();
+            match preencher_furos(&mut st.asm, dir.as_deref(), &mut st.cache, &op) {
+                Ok(rel) => {
+                    if rel.fixadores > 0 {
+                        st.solve();
+                        aviso = Some((fasteners_summary(&rel), false));
+                    } else {
+                        // nada mudou: o passo de desfazer não vale
+                        st.undo.pop();
+                        st.modified = modificada;
+                        let msg = if rel.pulados > 0 { tr("Os furos já têm fixador") } else { tr("Nenhum furo compatível com um tamanho métrico encontrado") };
+                        aviso = Some((msg.to_string(), true));
+                    }
+                    f.warnings = rel.avisos;
+                }
+                Err(e) => {
+                    if let Some(antes) = st.undo.pop() {
+                        st.asm = antes;
+                    }
+                    st.modified = modificada;
+                    st.dirty = true;
+                    f.warnings = vec![e.clone()];
+                    aviso = Some((e, true));
+                }
+            }
+        }
+    }
+    st.fasteners_open = Some(f);
+    if let Some((msg, erro)) = aviso {
+        app.toast(msg, erro);
     }
 }
 
