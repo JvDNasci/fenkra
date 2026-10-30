@@ -1,30 +1,30 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 11340,
+ "tokens_total_k": 11830,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
    "versao": "0.1.0-alpha.28 a .30",
-   "tokens_k": 2750,
-   "pct": 24.3
+   "tokens_k": 2840,
+   "pct": 24.0
   },
   "1": {
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 1300,
-   "pct": 11.5
+   "pct": 11.0
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
    "tokens_k": 1850,
-   "pct": 16.3
+   "pct": 15.6
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
-   "tokens_k": 5440,
-   "pct": 48.0
+   "tokens_k": 5840,
+   "pct": 49.4
   }
  },
  "itens": [
@@ -48,7 +48,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 1.8
+   "pct": 1.7
   },
   {
    "id": "B02",
@@ -143,7 +143,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.9
   },
   {
    "id": "B07",
@@ -161,7 +161,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B08",
@@ -181,7 +181,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 1.1
+   "pct": 1.0
   },
   {
    "id": "B09",
@@ -238,7 +238,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B12",
@@ -256,7 +256,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.9
   },
   {
    "id": "B13",
@@ -313,7 +313,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "em andamento",
-   "pct": 3.5
+   "pct": 3.4
   },
   {
    "id": "B16",
@@ -352,7 +352,7 @@
    "teste": "Visual",
    "area": "Navegação",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.8
   },
   {
    "id": "B18",
@@ -421,7 +421,7 @@
    "teste": "Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.1
+   "pct": 1.0
   },
   {
    "id": "B21",
@@ -461,7 +461,7 @@
    "teste": "Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 1.1
+   "pct": 1.0
   },
   {
    "id": "B23",
@@ -524,7 +524,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 3.0
+   "pct": 2.9
   },
   {
    "id": "B47",
@@ -542,7 +542,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 1.1
+   "pct": 1.0
   },
   {
    "id": "B26",
@@ -567,7 +567,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "feito",
-   "pct": 4.4
+   "pct": 4.2
   },
   {
    "id": "B27",
@@ -586,7 +586,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 2.2
+   "pct": 2.1
   },
   {
    "id": "B28",
@@ -605,7 +605,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "feito",
-   "pct": 3.5
+   "pct": 3.4
   },
   {
    "id": "B29",
@@ -627,7 +627,7 @@
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
    "status": "feito",
-   "pct": 4.0
+   "pct": 3.8
   },
   {
    "id": "B42",
@@ -666,7 +666,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 1.8
+   "pct": 1.7
   },
   {
    "id": "B44",
@@ -720,7 +720,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 1.8
+   "pct": 1.7
   },
   {
    "id": "B30",
@@ -751,7 +751,7 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 2.6
+   "pct": 2.5
   },
   {
    "id": "B31",
@@ -799,7 +799,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 2.2
+   "pct": 2.1
   },
   {
    "id": "B33",
@@ -821,7 +821,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 1.8
+   "pct": 1.7
   },
   {
    "id": "B34",
@@ -865,7 +865,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 2.2
+   "pct": 2.1
   },
   {
    "id": "B36",
@@ -883,7 +883,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.8
   },
   {
    "id": "B37",
@@ -923,7 +923,7 @@
    "teste": "Auto",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 1.1
+   "pct": 1.0
   },
   {
    "id": "B39",
@@ -941,7 +941,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 2.2
+   "pct": 2.1
   },
   {
    "id": "B40",
@@ -957,7 +957,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 1.8
+   "pct": 1.7
   },
   {
    "id": "B41",
@@ -1010,7 +1010,7 @@
    "teste": "Auto + Visual",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 1.1
+   "pct": 1.0
   },
   {
    "id": "B50",
@@ -1030,7 +1030,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 2.2
+   "pct": 2.1
   },
   {
    "id": "B51",
@@ -1050,7 +1050,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 1.8
+   "pct": 1.7
   },
   {
    "id": "B52",
@@ -1069,7 +1069,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 2.6
+   "pct": 2.5
   },
   {
    "id": "B53",
@@ -1085,7 +1085,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 2.2
+   "pct": 2.1
   },
   {
    "id": "B54",
@@ -1107,7 +1107,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 4.0
+   "pct": 3.8
   },
   {
    "id": "B55",
@@ -1126,7 +1126,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 3.1
+   "pct": 3.0
   },
   {
    "id": "B56",
@@ -1166,33 +1166,71 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 3.1
+   "pct": 3.0
   },
   {
    "id": "B58",
    "onda": 0,
-   "prio": "P1",
-   "titulo": "Conexão parafusada e rebites guiados por pontos",
-   "oque": "Assistente tipo Bolted Connection: planos de início/fim, posição linear, concêntrica, por furo (seguir padrão) e por ponto publicado; cria os furos em todas as peças da pilha; pilhas superior/inferior ordenadas; comprimentos só da série do catálogo; editar depois pelo mesmo assistente; apagar a conexão apaga a pilha. Rebites: MS20470/AN470, MS20426/AN426 e cegos ISO 15983 (dados gratuitos em duas fontes, AC 43.13-1B para furos), inserção em massa por pontos, furos ou padrão, comprimento pela espessura do pacote.",
+   "prio": "P0",
+   "titulo": "Prendedores por pontos coloridos, conexão parafusada e assistente",
+   "oque": "Regra de publicação de furo: ponto + vetor publicado com COR que define o diâmetro (ex.: 3/16\" ou 5 mm), padronizado por dash number (polegada) ou mm; normal detectada da superfície no ponto. Preencher furos lê os pontos/vetores, agrupa por cor e deixa escolher o prendedor equivalente por cor (parafuso, rebite, Hi-Lok, Hi-Lite, lockbolt, cego...), com comprimento pela pega. Também por furo (seguir padrão), linear e concêntrico, planos início/fim e furos criados em todas as peças da pilha. Estrutura gerada: Conjunto de prendedores > Conjunto da junta > pasta final Prendedores. Assistente de edição/substituição (trocar família, tamanho, comprimento, pilha) e modo manual (inserir um a um, sem automação). Rebites e famílias aeronáuticas do B63.",
    "origem": [
     "PESQ-INV",
     "PESQ-REB",
-    "CTX-HW"
+    "CTX-HW",
+    "USR-PRENDEDORES"
    ],
    "catalogo": [
     "MON-18",
     "BIB-10"
    ],
-   "tokens_k": 400,
+   "tokens_k": 450,
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 3.5
+   "pct": 3.8
+  },
+  {
+   "id": "B62",
+   "onda": 0,
+   "prio": "P0",
+   "titulo": "Bug: parafuso automático com 1 grau de liberdade",
+   "oque": "Fixadores inseridos ficam com a rotação em torno do eixo livre (1 GDL). Travar a rotação (restrição angular ou fixar) por padrão, com opção de deixar livre; testar GDL = 0 em todo fixador inserido.",
+   "origem": [
+    "USR-BUG"
+   ],
+   "catalogo": [
+    "MON-16"
+   ],
+   "tokens_k": 40,
+   "teste": "Auto",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B63",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Biblioteca de prendedores aeronáuticos e industriais ampla",
+   "oque": "Todas as famílias pesquisadas (NAS, MS, AN, Hi-Lok, Hi-Lite, lockbolts, cegos estruturais, porcas âncora, insertos, pinos, anéis…) com dados gratuitos em duas fontes, dash number e equivalência mm↔pol; ver docs/pesquisa/prendedores-*.md.",
+   "origem": [
+    "PESQ-FIX",
+    "CTX-HW"
+   ],
+   "catalogo": [
+    "BIB-06"
+   ],
+   "tokens_k": 400,
+   "teste": "Auto",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 3.4
   },
   {
    "id": "B59",
    "onda": 0,
-   "prio": "P1",
+   "prio": "P0",
    "titulo": "Árvore robusta: objeto em trabalho e diagnóstico de atualização",
    "oque": "Objeto em trabalho visível (onde entra o próximo comando), barra de fim de peça para rollback e inserir no meio; contêineres ordenado (consome) e não ordenado (referencia) com regras de aninhamento; atualização manual/automática com estado desatualizado/falhou por comando; diálogo de diagnóstico com Editar (realça a referência perdida), Substituir, Isolar, Desativar e Reordenar; pais/filhos por comando; planos/eixos/pontos de referência oferecidos antes de faces ao criar sketch.",
    "origem": [
@@ -1208,7 +1246,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 2.6
+   "pct": 2.5
   },
   {
    "id": "B60",
@@ -1227,7 +1265,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 2.6
+   "pct": 2.5
   },
   {
    "id": "B61",
@@ -1249,7 +1287,7 @@
    "teste": "Auto + Visual",
    "area": "Navegação",
    "status": "a fazer",
-   "pct": 1.8
+   "pct": 1.7
   }
  ]
 }
