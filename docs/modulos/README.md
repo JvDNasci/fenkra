@@ -8,11 +8,11 @@ Estado de cada módulo no Fenkra (alpha.26), gerado do [catálogo](../benchmark/
 | [Sólidos](solidos.md) | 13 | 9 | 2 |
 | [Superfícies e wireframe](superficies-e-wireframe.md) | 13 | 10 | 0 |
 | [Chapa metálica](chapa-metalica.md) | 8 | 6 | 3 |
-| [Estrutural e soldas](estrutural-e-soldas.md) | 2 | 5 | 2 |
-| [Montagem](montagem.md) | 11 | 2 | 3 |
-| [Desenho técnico](desenho-tecnico.md) | 5 | 5 | 2 |
+| [Estrutural e soldas](estrutural-e-soldas.md) | 4 | 5 | 0 |
+| [Montagem](montagem.md) | 11 | 3 | 2 |
+| [Desenho técnico](desenho-tecnico.md) | 6 | 5 | 1 |
 | [PMI 3D](pmi-3d.md) | 3 | 1 | 1 |
 | [Navegação](navegacao.md) | 3 | 2 | 1 |
-| [Biblioteca de normas](biblioteca-de-normas.md) | 1 | 1 | 7 |
+| [Biblioteca de normas](biblioteca-de-normas.md) | 1 | 4 | 4 |
 | [PDM / PLM](pdm-plm.md) | 1 | 4 | 2 |
 | [Geral](geral.md) | 0 | 7 | 0 |

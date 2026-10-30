@@ -21,9 +21,9 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 ## 🟡 Parcial
 
 - **Loft (multi-seções)** (Loft) — Loft tem sections, ruled, closed, op; faltam restrição inicial/final, tensão, guias e coletor interativo (DR-07). `DR-07`
-- **Furo** (Furo) — HoleKind: Simples, Rebaixado, Escareado, Contrafurado; escareado nasce com 90° fixo; casca falha com furo escareado (DR-02). `DR-02`
+- **Furo** (Furo) — HoleKind: Simples, Rebaixado, Escareado, Contrafurado; escareado nasce com 90° fixo; casca falha com furo escareado (DR-02). `B48`
 - **Rosca** (Rosca) — Thread com modeled e end; sem passo/perfil personalizados, deslocamento inicial nem chanfro; tap com bugs; sem preview (DR-02, DR-03). `DR-03`
-- **Filete variável** (Filete variável) — FilletVar existe; sem pontos de controle intermediários editáveis.
+- **Filete variável** (Filete variável) — FilletVar existe; sem pontos de controle intermediários editáveis. `B49`
 - **Casca** (Casca) — Shell só com espessura única; falha com spline e furo escareado; para fora gera raio sem opção reta (DR-02, DR-07). `DR-07`
 - **Nervura de reforço** (Nervura) — Stiffener: thickness, depth, reverse, to_body; sem lado/ambos os lados (DR-05). `DR-05`
 - **Engrossar / espessura** (Espessura / Engrossar superfície) — Thickness e ThickSurface; falhou em face de sólido (DR-12). `DR-12`

@@ -802,7 +802,7 @@
     "inv-thread",
     "dr"
    ],
-   "backlog": "DR-02"
+   "backlog": "B48"
   },
   {
    "id": "SOL-07",
@@ -859,7 +859,7 @@
    "fontes": [
     "catia-pd-niar"
    ],
-   "backlog": null
+   "backlog": "B49"
   },
   {
    "id": "SOL-10",
@@ -1983,9 +1983,9 @@
    "catia": "BOM de estrutura",
    "sw": "Cut List",
    "inv": "Frame Member Info / Parts List",
-   "fenkra": "Lista de corte",
-   "status": "parcial",
-   "nota": "cut_list() agrupa por designação + comprimento; balões não funcionam para estrutural (DR-33).",
+   "fenkra": "Lista de corte por item",
+   "status": "ok",
+   "nota": "structural_groups(): item por perfil + comprimento + geometria; balões no desenho (B26).",
    "diferencas": "",
    "fontes": [
     "sw-weld-dwg",
@@ -2002,9 +2002,9 @@
    "catia": "— (via Product)",
    "sw": "Cut List folders",
    "inv": "Frame Generator (peças por membro)",
-   "fenkra": "—",
-   "status": "nao",
-   "nota": "",
+   "fenkra": "Gerar montagem (itens)",
+   "status": "ok",
+   "nota": "Corpos iguais viram uma peça com quantidade (estrutura_para_montagem, B26).",
    "diferencas": "Inventor gera arquivos por membro; SW agrupa só na lista.",
    "fontes": [
     "ctx-est",
@@ -2021,15 +2021,15 @@
    "catia": "Product a partir de Part (manual)",
    "sw": "Insert into New Part / Save Bodies",
    "inv": "Frame Generator assembly",
-   "fenkra": "—",
-   "status": "nao",
-   "nota": "",
+   "fenkra": "Gerar montagem",
+   "status": "parcial",
+   "nota": "Gera montagem com peças por item, mas os links ficam congelados: atualizar = gerar de novo; sem submontagens de solda.",
    "diferencas": "",
    "fontes": [
     "ctx-est",
     "dr"
    ],
-   "backlog": "CTX-EST"
+   "backlog": "B50"
   },
   {
    "id": "EST-09",
@@ -2332,16 +2332,16 @@
    "catia": "— (Catalog)",
    "sw": "Smart Fasteners",
    "inv": "Bolted Connection Generator",
-   "fenkra": "—",
-   "status": "nao",
-   "nota": "",
+   "fenkra": "Fixadores (preencher furos)",
+   "status": "parcial",
+   "nota": "preencher_furos: pilha parafuso/arruela/porca com restrições (B29); pega medida por sondas laterais; sem editar/trocar a pilha depois.",
    "diferencas": "",
    "fontes": [
     "sw-smartfast",
     "inv-da",
     "ctx-fix"
    ],
-   "backlog": "CTX-FIX"
+   "backlog": "B51"
   },
   {
    "id": "DES-01",
@@ -2479,8 +2479,8 @@
    "sw": "AutoBalloon / BOM / Cut List",
    "inv": "Auto Balloon / Parts List",
    "fenkra": "Balões, BOM",
-   "status": "parcial",
-   "nota": "Balões ligados à BOM; não funciona para estrutural (DR-33).",
+   "status": "ok",
+   "nota": "Balões automáticos ligados à BOM e à lista de corte por item, inclusive em vistas estruturais (B26).",
    "diferencas": "",
    "fontes": [
     "sw-weld-dwg",
@@ -2535,14 +2535,14 @@
    "sw": "Weldment drawings (body views)",
    "inv": "Frame drawings",
    "fenkra": "—",
-   "status": "nao",
-   "nota": "Sem vistas por corpo ligadas à lista (DR-44, DR-45).",
+   "status": "parcial",
+   "nota": "Lista de corte e balões por item (B26); falta vista própria por corpo/item e detalhe de ponta.",
    "diferencas": "",
    "fontes": [
     "sw-weld-dwg",
     "dr"
    ],
-   "backlog": "DR-45"
+   "backlog": "B50"
   },
   {
    "id": "DES-12",
@@ -2794,15 +2794,15 @@
    "sw": "Toolbox",
    "inv": "Content Center",
    "fenkra": "—",
-   "status": "nao",
-   "nota": "Lista de normas em contextos/fixadores.md.",
+   "status": "parcial",
+   "nota": "ISO 4762, ISO 4017, DIN 933, ISO 4032, DIN 934, ISO 7089 de M3 a M20 (B29); faltam pinos, prisioneiros, porcas autotravantes, ASTM/polegada e tamanhos > M20.",
    "diferencas": "",
    "fontes": [
     "sw-smartfast",
     "inv-da",
     "ctx-fxl"
    ],
-   "backlog": "CTX-FXL"
+   "backlog": "B51"
   },
   {
    "id": "BIB-03",
@@ -2813,15 +2813,15 @@
    "catia": "— (Gear add-ons)",
    "sw": "Toolbox Gears",
    "inv": "Spur/Helical/Bevel/Worm Gear Generator",
-   "fenkra": "—",
-   "status": "nao",
-   "nota": "Só acoplamento de engrenagem na montagem.",
+   "fenkra": "Engrenagens",
+   "status": "parcial",
+   "nota": "Reta, helicoidal (loft), interna e cremalheira com cálculo e par na montagem (B28); perfil fixo no documento, sem filete de raiz, sem cônica e sem coroa/sem-fim.",
    "diferencas": "Inventor calcula e insere com restrições de movimento.",
    "fontes": [
     "inv-da",
     "ctx-eng"
    ],
-   "backlog": "CTX-ENG"
+   "backlog": "B52"
   },
   {
    "id": "BIB-04",
@@ -2832,15 +2832,15 @@
    "catia": "—",
    "sw": "—",
    "inv": "Shaft Generator / Key Connection",
-   "fenkra": "—",
-   "status": "nao",
-   "nota": "",
+   "fenkra": "Eixo e chaveta",
+   "status": "parcial",
+   "nota": "Eixo escalonado, chaveta DIN 6885 A e rasgo de cubo (B28); perfil fixo no documento, sem ranhuras de anel, roscas e cálculo de resistência; t2 da tabela sem segunda fonte.",
    "diferencas": "",
    "fontes": [
     "inv-da",
     "ctx-eng"
    ],
-   "backlog": "CTX-ENG"
+   "backlog": "B52"
   },
   {
    "id": "BIB-05",

@@ -1,6 +1,6 @@
 # Catálogo de features
 
-160 features em 12 módulos, com o nome em cada ferramenta, como funcionam em geral e o status no Fenkra (alpha.26): ✅ 69 completas · 🟡 62 parciais · ❌ 29 inexistentes.
+160 features em 12 módulos, com o nome em cada ferramenta, como funcionam em geral e o status no Fenkra (alpha.26): ✅ 72 completas · 🟡 66 parciais · ❌ 22 inexistentes.
 
 > Gerado por `scripts/benchmark/gerar.py` a partir de `scripts/benchmark/dados_*.py`. Não edite à mão.
 > Nomes de outros produtos são marcas dos respectivos donos e aparecem só para comparação; textos próprios,
@@ -12,12 +12,12 @@
 | [Sólidos](#sólidos) | 13 | 9 | 2 | [Sólidos](solidos.md) |
 | [Superfícies e wireframe](#superfícies-e-wireframe) | 13 | 10 | 0 | [Superfícies e wireframe](superficies-e-wireframe.md) |
 | [Chapa metálica](#chapa-metálica) | 8 | 6 | 3 | [Chapa metálica](chapa-metalica.md) |
-| [Estrutural e soldas](#estrutural-e-soldas) | 2 | 5 | 2 | [Estrutural e soldas](estrutural-e-soldas.md) |
-| [Montagem](#montagem) | 11 | 2 | 3 | [Montagem](montagem.md) |
-| [Desenho técnico](#desenho-técnico) | 5 | 5 | 2 | [Desenho técnico](desenho-tecnico.md) |
+| [Estrutural e soldas](#estrutural-e-soldas) | 4 | 5 | 0 | [Estrutural e soldas](estrutural-e-soldas.md) |
+| [Montagem](#montagem) | 11 | 3 | 2 | [Montagem](montagem.md) |
+| [Desenho técnico](#desenho-técnico) | 6 | 5 | 1 | [Desenho técnico](desenho-tecnico.md) |
 | [PMI 3D](#pmi-3d) | 3 | 1 | 1 | [PMI 3D](pmi-3d.md) |
 | [Navegação](#navegação) | 3 | 2 | 1 | [Navegação](navegacao.md) |
-| [Biblioteca de normas](#biblioteca-de-normas) | 1 | 1 | 7 | [Biblioteca de normas](biblioteca-de-normas.md) |
+| [Biblioteca de normas](#biblioteca-de-normas) | 1 | 4 | 4 | [Biblioteca de normas](biblioteca-de-normas.md) |
 | [PDM / PLM](#pdm--plm) | 1 | 4 | 2 | [PDM / PLM](pdm-plm.md) |
 | [Geral](#geral) | 0 | 7 | 0 | [Geral](geral.md) |
 
@@ -249,10 +249,10 @@
 | SOL-03 | **Revolução** | Shaft / Groove | Revolved Boss / Cut | Revolve | ✅ Revolução / Ranhura |  |
 | SOL-04 | **Varredura** | Rib / Slot | Swept Boss / Cut | Sweep | ✅ Varredura |  |
 | SOL-05 | **Loft (multi-seções)** | Multi-Sections Solid | Lofted Boss/Base | Loft | 🟡 Loft | DR-07 |
-| SOL-06 | **Furo** | Hole | Hole Wizard / Advanced Hole | Hole | 🟡 Furo | DR-02 |
+| SOL-06 | **Furo** | Hole | Hole Wizard / Advanced Hole | Hole | 🟡 Furo | B48 |
 | SOL-07 | **Rosca** | Thread/Tap | Cosmetic Thread / Thread | Thread | 🟡 Rosca | DR-03 |
 | SOL-08 | **Filete de aresta** | Edge Fillet | Fillet (constant) | Fillet (edge) | ✅ Filete |  |
-| SOL-09 | **Filete variável** | Variable Radius Fillet | Variable Size Fillet | Fillet (variable) | 🟡 Filete variável |  |
+| SOL-09 | **Filete variável** | Variable Radius Fillet | Variable Size Fillet | Fillet (variable) | 🟡 Filete variável | B49 |
 | SOL-10 | **Chanfro** | Chamfer | Chamfer | Chamfer | ✅ Chanfro |  |
 | SOL-11 | **Casca** | Shell | Shell | Shell | 🟡 Casca | DR-07 |
 | SOL-12 | **Ângulo de saída (draft)** | Draft Angle / Variable Draft | Draft | Face Draft | ✅ Draft |  |
@@ -803,9 +803,9 @@
 | EST-03 | **Biblioteca de perfis** | Catálogos de seções | Weldment Profiles | Content Center (estrutural) | 🟡 Biblioteca de perfis | CTX-PRF |
 | EST-04 | **Chapas, reforços e tampas** | Plate / Stiffener | Gusset / End Cap | — (peças normais) | ✅ Placa, reforço |  |
 | EST-05 | **Cordões de solda** | Weld Design | Weld Bead / Fillet Bead | Weldment: Welds | 🟡 Símbolo de solda | BM-EST-02 |
-| EST-06 | **Lista de corte** | BOM de estrutura | Cut List | Frame Member Info / Parts List | 🟡 Lista de corte | DR-33 |
-| EST-07 | **Corpos iguais → peça + instâncias** | — (via Product) | Cut List folders | Frame Generator (peças por membro) | ❌ — | CTX-EST |
-| EST-08 | **Estrutura Pai → montagem dinâmica** | Product a partir de Part (manual) | Insert into New Part / Save Bodies | Frame Generator assembly | ❌ — | CTX-EST |
+| EST-06 | **Lista de corte** | BOM de estrutura | Cut List | Frame Member Info / Parts List | ✅ Lista de corte por item | DR-33 |
+| EST-07 | **Corpos iguais → peça + instâncias** | — (via Product) | Cut List folders | Frame Generator (peças por membro) | ✅ Gerar montagem (itens) | CTX-EST |
+| EST-08 | **Estrutura Pai → montagem dinâmica** | Product a partir de Part (manual) | Insert into New Part / Save Bodies | Frame Generator assembly | 🟡 Gerar montagem | B50 |
 | EST-09 | **Otimização de barras** | — | — (add-ins) | — | 🟡 Barras (cálculo) | BM-EST-03 |
 
 ### EST-01 — Membro estrutural
@@ -848,7 +848,7 @@
 
 - **O que faz:** Agrupa membros iguais com comprimento, ângulos e peso.
 - **Como funciona:** Agrupamento automático → propriedades por item → tabela no desenho.
-- **Fenkra:** 🟡 parcial. cut_list() agrupa por designação + comprimento; balões não funcionam para estrutural (DR-33).
+- **Fenkra:** ✅ completo. structural_groups(): item por perfil + comprimento + geometria; balões no desenho (B26).
 - **Fontes:** [SOLIDWORKS Help — Weldment Drawings](https://help.solidworks.com/2017/English/SolidWorks/sldworks/c_Weldment_Drawings.htm) · [Design review do usuário (DR-01…DR-58)](../contextos/design-review.md)
 
 ### EST-07 — Corpos iguais → peça + instâncias
@@ -856,14 +856,14 @@
 - **O que faz:** Detecta corpos idênticos e gera uma peça com várias instâncias.
 - **Como funciona:** Comparação (perfil, comprimento, cortes, material) → grupos → peça base + ocorrências ligadas.
 - **Diferenças:** Inventor gera arquivos por membro; SW agrupa só na lista.
-- **Fenkra:** ❌ não existe.
+- **Fenkra:** ✅ completo. Corpos iguais viram uma peça com quantidade (estrutura_para_montagem, B26).
 - **Fontes:** [Contexto: estrutural](../contextos/estrutural.md) · [Design review do usuário (DR-01…DR-58)](../contextos/design-review.md)
 
 ### EST-08 — Estrutura Pai → montagem dinâmica
 
 - **O que faz:** Gera montagem, subpeças linkadas e submontagens de solda a partir do estrutural.
 - **Como funciona:** Estrutura Pai → grupos/submontagens → subparts linkados → PMI e desenho por peça.
-- **Fenkra:** ❌ não existe.
+- **Fenkra:** 🟡 parcial. Gera montagem com peças por item, mas os links ficam congelados: atualizar = gerar de novo; sem submontagens de solda.
 - **Fontes:** [Contexto: estrutural](../contextos/estrutural.md) · [Design review do usuário (DR-01…DR-58)](../contextos/design-review.md)
 
 ### EST-09 — Otimização de barras
@@ -893,7 +893,7 @@
 | MON-13 | **Origem da montagem** | — (produto sem origem; usa peças) | Origin + reference planes | Origin | ❌ — | DR-31 |
 | MON-14 | **Seleção e edição na árvore** | Product tree | FeatureManager | Model browser | 🟡 Árvore da montagem | DR-32 |
 | MON-15 | **Lista de materiais (BOM)** | Bill of Material | BOM | Bill of Materials | ✅ BOM |  |
-| MON-16 | **Fixadores automáticos** | — (Catalog) | Smart Fasteners | Bolted Connection Generator | ❌ — | CTX-FIX |
+| MON-16 | **Fixadores automáticos** | — (Catalog) | Smart Fasteners | Bolted Connection Generator | 🟡 Fixadores (preencher furos) | B51 |
 
 ### MON-01 — Inserir componente e fixar
 
@@ -1006,7 +1006,7 @@
 
 - **O que faz:** Insere parafusos/porcas/arruelas nos furos com restrições.
 - **Como funciona:** Furos reconhecidos → norma/tamanho → pilha → restrições.
-- **Fenkra:** ❌ não existe.
+- **Fenkra:** 🟡 parcial. preencher_furos: pilha parafuso/arruela/porca com restrições (B29); pega medida por sondas laterais; sem editar/trocar a pilha depois.
 - **Fontes:** [SOLIDWORKS Help — Smart Fasteners Overview](https://help.solidworks.com/2017/English/SolidWorks/sldworks/c_Smart_Fasteners_Overview.htm) · [Inventor Help — Design Accelerator](https://help.autodesk.com/cloudhelp/2015/ENU/Inventor-Help/files/GUID-24104648-BE41-49C7-9DD0-1AF2BAFC102E.htm) · [Contexto: smart fastener](../contextos/smart-fastener.md)
 
 
@@ -1021,10 +1021,10 @@
 | DES-05 | **Cotas associativas** | Dimensions | Smart Dimension / Model Items | Dimension / Retrieve | ✅ Cotas |  |
 | DES-06 | **Hachuras** | Area Fill / Pattern | Area Hatch | Hatch | 🟡 Hachura | BM-DES-03 |
 | DES-07 | **Atualização e estado da vista** | Update / Update Status | Rebuild / Out of date | Update | ❌ Recarrega silencioso | DR-34 |
-| DES-08 | **Balões e lista de peças** | Balloon / BOM | AutoBalloon / BOM / Cut List | Auto Balloon / Parts List | 🟡 Balões, BOM | DR-33 |
+| DES-08 | **Balões e lista de peças** | Balloon / BOM | AutoBalloon / BOM / Cut List | Auto Balloon / Parts List | ✅ Balões, BOM | DR-33 |
 | DES-09 | **Tabelas** | Tables | Hole / Bend / Revision / Cut List Table | Hole / Revision / General Table | ✅ Tabelas |  |
 | DES-10 | **Propriedades por norma e herança** | Standards + Properties | Document Properties (Drafting Standard) | Styles and Standards | 🟡 Estilos | DR-35 |
-| DES-11 | **Desenho de estrutura soldada** | — | Weldment drawings (body views) | Frame drawings | ❌ — | DR-45 |
+| DES-11 | **Desenho de estrutura soldada** | — | Weldment drawings (body views) | Frame drawings | 🟡 — | B50 |
 | DES-12 | **Exportação** | Save As (PDF, DXF, DWG) | Save As | Export | ✅ PDF, SVG, DXF |  |
 
 ### DES-01 — Folhas, formatos e carimbo
@@ -1080,7 +1080,7 @@
 
 - **O que faz:** Balões automáticos ligados à BOM/lista de corte.
 - **Como funciona:** Vista → balões automáticos → tabela.
-- **Fenkra:** 🟡 parcial. Balões ligados à BOM; não funciona para estrutural (DR-33).
+- **Fenkra:** ✅ completo. Balões automáticos ligados à BOM e à lista de corte por item, inclusive em vistas estruturais (B26).
 - **Fontes:** [SOLIDWORKS Help — Weldment Drawings](https://help.solidworks.com/2017/English/SolidWorks/sldworks/c_Weldment_Drawings.htm) · [Inventor Help — Add balloons to drawing views](https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-491D178A-5C7A-485F-902A-46B1A02D1D09.htm) · [Design review do usuário (DR-01…DR-58)](../contextos/design-review.md)
 
 ### DES-09 — Tabelas
@@ -1101,7 +1101,7 @@
 
 - **O que faz:** Vistas por corpo, lista de corte, detalhes de ponta.
 - **Como funciona:** Corpo → vista própria → item da lista.
-- **Fenkra:** ❌ não existe. Sem vistas por corpo ligadas à lista (DR-44, DR-45).
+- **Fenkra:** 🟡 parcial. Lista de corte e balões por item (B26); falta vista própria por corpo/item e detalhe de ponta.
 - **Fontes:** [SOLIDWORKS Help — Weldment Drawings](https://help.solidworks.com/2017/English/SolidWorks/sldworks/c_Weldment_Drawings.htm) · [Design review do usuário (DR-01…DR-58)](../contextos/design-review.md)
 
 ### DES-12 — Exportação
@@ -1217,9 +1217,9 @@
 | ID | Feature | CATIA V5 | SOLIDWORKS | Inventor | Fenkra | Backlog |
 |---|---|---|---|---|---|---|
 | BIB-01 | **Tabelas de furos e roscas** | Hole standards | Hole Wizard data (Toolbox) | Thread.xls / Hole table | 🟡 hardware.rs | BM-BIB-01 |
-| BIB-02 | **Fixadores padrão** | Catalog (standard parts) | Toolbox | Content Center | ❌ — | CTX-FXL |
-| BIB-03 | **Gerador de engrenagens** | — (Gear add-ons) | Toolbox Gears | Spur/Helical/Bevel/Worm Gear Generator | ❌ — | CTX-ENG |
-| BIB-04 | **Gerador de eixos e chavetas** | — | — | Shaft Generator / Key Connection | ❌ — | CTX-ENG |
+| BIB-02 | **Fixadores padrão** | Catalog (standard parts) | Toolbox | Content Center | 🟡 — | B51 |
+| BIB-03 | **Gerador de engrenagens** | — (Gear add-ons) | Toolbox Gears | Spur/Helical/Bevel/Worm Gear Generator | 🟡 Engrenagens | B52 |
+| BIB-04 | **Gerador de eixos e chavetas** | — | — | Shaft Generator / Key Connection | 🟡 Eixo e chaveta | B52 |
 | BIB-05 | **Materiais e bitolas** | Material Library | Materials / Gauge Tables | Material / Sheet Metal Styles | ✅ Materiais, bitolas |  |
 | BIB-06 | **Fixadores aeronáuticos e militares** | Catalog (aero) | Toolbox (normas ANSI; aero por add-in) | Content Center (ANSI/aero limitado) | ❌ — | CTX-HW |
 | BIB-07 | **Rolamentos** | Catalog | Toolbox Bearings | Content Center Bearings / Bearing Generator | ❌ — | CTX-HW |
@@ -1237,7 +1237,7 @@
 
 - **O que faz:** Parafusos, porcas, arruelas, pinos por norma (ISO/DIN/ASTM).
 - **Como funciona:** Norma → tipo → tamanho/comprimento → peça.
-- **Fenkra:** ❌ não existe. Lista de normas em contextos/fixadores.md.
+- **Fenkra:** 🟡 parcial. ISO 4762, ISO 4017, DIN 933, ISO 4032, DIN 934, ISO 7089 de M3 a M20 (B29); faltam pinos, prisioneiros, porcas autotravantes, ASTM/polegada e tamanhos > M20.
 - **Fontes:** [SOLIDWORKS Help — Smart Fasteners Overview](https://help.solidworks.com/2017/English/SolidWorks/sldworks/c_Smart_Fasteners_Overview.htm) · [Inventor Help — Design Accelerator](https://help.autodesk.com/cloudhelp/2015/ENU/Inventor-Help/files/GUID-24104648-BE41-49C7-9DD0-1AF2BAFC102E.htm) · [Contexto: lista de fixadores](../contextos/fixadores.md)
 
 ### BIB-03 — Gerador de engrenagens
@@ -1245,14 +1245,14 @@
 - **O que faz:** Engrenagens reta, helicoidal, cônica, coroa/sem-fim, cremalheira com cálculo.
 - **Como funciona:** Tipo → módulo, dentes, ângulo de pressão, largura → cálculo → peças + restrições.
 - **Diferenças:** Inventor calcula e insere com restrições de movimento.
-- **Fenkra:** ❌ não existe. Só acoplamento de engrenagem na montagem.
+- **Fenkra:** 🟡 parcial. Reta, helicoidal (loft), interna e cremalheira com cálculo e par na montagem (B28); perfil fixo no documento, sem filete de raiz, sem cônica e sem coroa/sem-fim.
 - **Fontes:** [Inventor Help — Design Accelerator](https://help.autodesk.com/cloudhelp/2015/ENU/Inventor-Help/files/GUID-24104648-BE41-49C7-9DD0-1AF2BAFC102E.htm) · [Contexto: engrenagens](../contextos/engrenagens.md)
 
 ### BIB-04 — Gerador de eixos e chavetas
 
 - **O que faz:** Eixo com seções, chavetas (DIN 6885), ranhuras.
 - **Como funciona:** Seções → elementos → cálculo.
-- **Fenkra:** ❌ não existe.
+- **Fenkra:** 🟡 parcial. Eixo escalonado, chaveta DIN 6885 A e rasgo de cubo (B28); perfil fixo no documento, sem ranhuras de anel, roscas e cálculo de resistência; t2 da tabela sem segunda fonte.
 - **Fontes:** [Inventor Help — Design Accelerator](https://help.autodesk.com/cloudhelp/2015/ENU/Inventor-Help/files/GUID-24104648-BE41-49C7-9DD0-1AF2BAFC102E.htm) · [Contexto: engrenagens](../contextos/engrenagens.md)
 
 ### BIB-05 — Materiais e bitolas

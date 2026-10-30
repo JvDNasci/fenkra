@@ -94,8 +94,18 @@ c('B40', 3, 'P3', 'Herdados: varredura cônica, subdivisão, dobra cega', 'Varre
   ['histórico'], [], 200, 'Auto', 'Superfícies e wireframe'),
 c('B41', 1, 'P1', 'Teste com o mouse (usuário)', 'Pendências antigas que dependem do usuário: desenho por mouse, cotagem smart, menu rápido, arrastar na árvore, manipulador, bancadas.',
   ['histórico'], [], 0, 'Manual', 'Geral'),
+# ---------------------------------------------------------------- lacunas restantes do catálogo
+c('B48', 2, 'P1', 'Furo: ângulo do escareado e casca com escareado', 'Ângulo do escareado editável (82°, 90°, 100°, 120°) e por norma; casca deixa de falhar quando o corpo tem furo escareado.',
+  ['DR-02', 'BM-SOL'], ['SOL-06'], 80, 'Auto', 'Sólidos'),
+c('B49', 3, 'P2', 'Filete variável com pontos de controle', 'Pontos intermediários ao longo da aresta com raio próprio, transição linear ou suave, edição pelos pontos na viewport.',
+  ['BM-SOL'], ['SOL-09'], 120, 'Auto + Visual', 'Sólidos'),
+c('B50', 3, 'P1', 'Estrutura → montagem viva e desenho por item', 'Links vivos (atualizar sem gerar de novo), submontagens de solda, limpeza de arquivos órfãos; desenho com vista própria por item/corpo e detalhe de ponta.',
+  ['DR-44', 'DR-45'], ['EST-08', 'DES-11'], 250, 'Auto + Visual', 'Estrutural e soldas'),
+c('B51', 3, 'P2', 'Fixadores: mais famílias e edição da pilha', 'Pinos, prisioneiros, porcas autotravantes, polegada/ASTM e tamanhos acima de M20 (dados gratuitos em duas fontes); trocar norma/comprimento de uma pilha inserida; pega medida pela face em vez de sondas.',
+  ['CTX-FIX', 'CTX-HW'], ['MON-16', 'BIB-02'], 200, 'Auto', 'Biblioteca de normas'),
+c('B52', 3, 'P2', 'Engrenagens e eixos totalmente paramétricos', 'Perfil involuto recalculado ao mudar m/z/α/β no documento; filete de raiz (trocoide); engrenagem cônica e coroa/sem-fim; eixo com ranhuras de anel, roscas e cálculo de resistência; t2 da DIN 6885 em segunda fonte.',
+  ['CTX-ENG'], ['BIB-03', 'BIB-04'], 300, 'Auto', 'Biblioteca de normas'),
 ]
-
 
 def main():
     for x in B:

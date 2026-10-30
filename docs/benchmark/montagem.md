@@ -38,4 +38,4 @@
 | MON-13 | Origem da montagem | ❌ | Sem origem na montagem (DR-31). | DR-31 |
 | MON-14 | Seleção e edição na árvore | 🟡 | Ctrl+clique; sem Alt; ocultar/apagar diferentes das peças (DR-32). | DR-32 |
 | MON-15 | Lista de materiais (BOM) | ✅ | AsmBom; numeração de itens. |  |
-| MON-16 | Fixadores automáticos | ❌ |  | CTX-FIX |
+| MON-16 | Fixadores automáticos | 🟡 | preencher_furos: pilha parafuso/arruela/porca com restrições (B29); pega medida por sondas laterais; sem editar/trocar a pilha depois. | B51 |

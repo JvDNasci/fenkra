@@ -27,7 +27,7 @@
 | EST-03 | Biblioteca de perfis | 🟡 | Poucas famílias (tubos, W, U, L, barras, T); faltam IPE/HEA/HEB/RHS/CHS EN e ABNT com dimensões (CTX-PRF). | CTX-PRF |
 | EST-04 | Chapas, reforços e tampas | ✅ | StructPlate, StructGusset; teste estrutural_quadro_cantos_placa_reforco. |  |
 | EST-05 | Cordões de solda | 🟡 | Símbolo ISO 2553 no desenho/PMI; sem cordão 3D. | BM-EST-02 |
-| EST-06 | Lista de corte | 🟡 | cut_list() agrupa por designação + comprimento; balões não funcionam para estrutural (DR-33). | DR-33 |
-| EST-07 | Corpos iguais → peça + instâncias | ❌ |  | CTX-EST |
-| EST-08 | Estrutura Pai → montagem dinâmica | ❌ |  | CTX-EST |
+| EST-06 | Lista de corte | ✅ | structural_groups(): item por perfil + comprimento + geometria; balões no desenho (B26). | DR-33 |
+| EST-07 | Corpos iguais → peça + instâncias | ✅ | Corpos iguais viram uma peça com quantidade (estrutura_para_montagem, B26). | CTX-EST |
+| EST-08 | Estrutura Pai → montagem dinâmica | 🟡 | Gera montagem com peças por item, mas os links ficam congelados: atualizar = gerar de novo; sem submontagens de solda. | B50 |
 | EST-09 | Otimização de barras | 🟡 | Cálculo de barras na lista de corte; sem plano de corte otimizado. | BM-EST-03 |

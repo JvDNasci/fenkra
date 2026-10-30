@@ -29,10 +29,10 @@
 | SOL-03 | Revolução | ✅ | Revolve, Groove; teste revolucao_com_comando_de_angulo. |  |
 | SOL-04 | Varredura | ✅ | FeatureKind::Sweep. |  |
 | SOL-05 | Loft (multi-seções) | 🟡 | Loft tem sections, ruled, closed, op; faltam restrição inicial/final, tensão, guias e coletor interativo (DR-07). | DR-07 |
-| SOL-06 | Furo | 🟡 | HoleKind: Simples, Rebaixado, Escareado, Contrafurado; escareado nasce com 90° fixo; casca falha com furo escareado (DR-02). | DR-02 |
+| SOL-06 | Furo | 🟡 | HoleKind: Simples, Rebaixado, Escareado, Contrafurado; escareado nasce com 90° fixo; casca falha com furo escareado (DR-02). | B48 |
 | SOL-07 | Rosca | 🟡 | Thread com modeled e end; sem passo/perfil personalizados, deslocamento inicial nem chanfro; tap com bugs; sem preview (DR-02, DR-03). | DR-03 |
 | SOL-08 | Filete de aresta | ✅ | Fillet, FilletAll, FilletFull, FilletFaceFace. |  |
-| SOL-09 | Filete variável | 🟡 | FilletVar existe; sem pontos de controle intermediários editáveis. |  |
+| SOL-09 | Filete variável | 🟡 | FilletVar existe; sem pontos de controle intermediários editáveis. | B49 |
 | SOL-10 | Chanfro | ✅ | Chamfer, ChamferAll, ChamferDistAngle, ChamferTwoDist. |  |
 | SOL-11 | Casca | 🟡 | Shell só com espessura única; falha com spline e furo escareado; para fora gera raio sem opção reta (DR-02, DR-07). | DR-07 |
 | SOL-12 | Ângulo de saída (draft) | ✅ | FeatureKind::Draft. |  |

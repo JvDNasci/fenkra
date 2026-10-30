@@ -1,24 +1,24 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 7640,
+ "tokens_total_k": 8590,
  "ondas": {
   "1": {
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.27",
    "tokens_k": 1300,
-   "pct": 17.0
+   "pct": 15.1
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.28",
-   "tokens_k": 1770,
-   "pct": 23.2
+   "tokens_k": 1850,
+   "pct": 21.5
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.29+",
-   "tokens_k": 4570,
-   "pct": 59.8
+   "tokens_k": 5440,
+   "pct": 63.3
   }
  },
  "itens": [
@@ -42,7 +42,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 2.6
+   "pct": 2.3
   },
   {
    "id": "B02",
@@ -60,7 +60,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B03",
@@ -79,7 +79,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.8
   },
   {
    "id": "B04",
@@ -98,7 +98,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 1.0
   },
   {
    "id": "B05",
@@ -118,7 +118,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 1.8
+   "pct": 1.6
   },
   {
    "id": "B06",
@@ -137,7 +137,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 1.4
+   "pct": 1.3
   },
   {
    "id": "B07",
@@ -175,7 +175,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 1.6
+   "pct": 1.4
   },
   {
    "id": "B09",
@@ -194,7 +194,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 1.8
+   "pct": 1.6
   },
   {
    "id": "B10",
@@ -214,7 +214,7 @@
    "teste": "Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B11",
@@ -250,7 +250,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 1.4
+   "pct": 1.3
   },
   {
    "id": "B13",
@@ -269,7 +269,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B14",
@@ -288,7 +288,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B15",
@@ -307,7 +307,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "em andamento",
-   "pct": 5.2
+   "pct": 4.7
   },
   {
    "id": "B16",
@@ -326,7 +326,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.9
   },
   {
    "id": "B17",
@@ -346,7 +346,7 @@
    "teste": "Visual",
    "area": "Navegação",
    "status": "a fazer",
-   "pct": 1.3
+   "pct": 1.2
   },
   {
    "id": "B18",
@@ -371,7 +371,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 2.9
+   "pct": 2.6
   },
   {
    "id": "B19",
@@ -391,7 +391,7 @@
    "teste": "Visual",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B20",
@@ -415,7 +415,7 @@
    "teste": "Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.6
+   "pct": 1.4
   },
   {
    "id": "B21",
@@ -434,7 +434,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.9
   },
   {
    "id": "B22",
@@ -455,7 +455,7 @@
    "teste": "Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 1.6
+   "pct": 1.4
   },
   {
    "id": "B23",
@@ -475,7 +475,7 @@
    "teste": "Visual",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.8
   },
   {
    "id": "B24",
@@ -495,7 +495,7 @@
    "teste": "Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B25",
@@ -518,7 +518,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 4.5
+   "pct": 4.0
   },
   {
    "id": "B47",
@@ -536,7 +536,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 1.6
+   "pct": 1.4
   },
   {
    "id": "B26",
@@ -561,7 +561,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "feito",
-   "pct": 6.5
+   "pct": 5.8
   },
   {
    "id": "B27",
@@ -580,7 +580,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 3.3
+   "pct": 2.9
   },
   {
    "id": "B28",
@@ -599,7 +599,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "feito",
-   "pct": 5.2
+   "pct": 4.7
   },
   {
    "id": "B29",
@@ -621,7 +621,7 @@
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
    "status": "feito",
-   "pct": 5.9
+   "pct": 5.2
   },
   {
    "id": "B42",
@@ -641,7 +641,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "em andamento",
-   "pct": 2.0
+   "pct": 1.7
   },
   {
    "id": "B43",
@@ -660,7 +660,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 2.6
+   "pct": 2.3
   },
   {
    "id": "B44",
@@ -678,7 +678,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 2.0
+   "pct": 1.7
   },
   {
    "id": "B45",
@@ -696,7 +696,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 2.0
+   "pct": 1.7
   },
   {
    "id": "B46",
@@ -714,7 +714,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 2.6
+   "pct": 2.3
   },
   {
    "id": "B30",
@@ -745,7 +745,7 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 3.9
+   "pct": 3.5
   },
   {
    "id": "B31",
@@ -763,7 +763,7 @@
    "teste": "Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 2.0
+   "pct": 1.7
   },
   {
    "id": "B32",
@@ -793,7 +793,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 3.3
+   "pct": 2.9
   },
   {
    "id": "B33",
@@ -815,7 +815,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 2.6
+   "pct": 2.3
   },
   {
    "id": "B34",
@@ -837,7 +837,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 2.0
+   "pct": 1.7
   },
   {
    "id": "B35",
@@ -859,7 +859,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 3.3
+   "pct": 2.9
   },
   {
    "id": "B36",
@@ -877,7 +877,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 1.3
+   "pct": 1.2
   },
   {
    "id": "B37",
@@ -899,7 +899,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 2.0
+   "pct": 1.7
   },
   {
    "id": "B38",
@@ -917,7 +917,7 @@
    "teste": "Auto",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 1.6
+   "pct": 1.4
   },
   {
    "id": "B39",
@@ -935,7 +935,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 3.3
+   "pct": 2.9
   },
   {
    "id": "B40",
@@ -951,7 +951,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 2.6
+   "pct": 2.3
   },
   {
    "id": "B41",
@@ -968,6 +968,102 @@
    "area": "Geral",
    "status": "a fazer",
    "pct": 0.0
+  },
+  {
+   "id": "B48",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Furo: ângulo do escareado e casca com escareado",
+   "oque": "Ângulo do escareado editável (82°, 90°, 100°, 120°) e por norma; casca deixa de falhar quando o corpo tem furo escareado.",
+   "origem": [
+    "DR-02",
+    "BM-SOL"
+   ],
+   "catalogo": [
+    "SOL-06"
+   ],
+   "tokens_k": 80,
+   "teste": "Auto",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 0.9
+  },
+  {
+   "id": "B49",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Filete variável com pontos de controle",
+   "oque": "Pontos intermediários ao longo da aresta com raio próprio, transição linear ou suave, edição pelos pontos na viewport.",
+   "origem": [
+    "BM-SOL"
+   ],
+   "catalogo": [
+    "SOL-09"
+   ],
+   "tokens_k": 120,
+   "teste": "Auto + Visual",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 1.4
+  },
+  {
+   "id": "B50",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Estrutura → montagem viva e desenho por item",
+   "oque": "Links vivos (atualizar sem gerar de novo), submontagens de solda, limpeza de arquivos órfãos; desenho com vista própria por item/corpo e detalhe de ponta.",
+   "origem": [
+    "DR-44",
+    "DR-45"
+   ],
+   "catalogo": [
+    "EST-08",
+    "DES-11"
+   ],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 2.9
+  },
+  {
+   "id": "B51",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Fixadores: mais famílias e edição da pilha",
+   "oque": "Pinos, prisioneiros, porcas autotravantes, polegada/ASTM e tamanhos acima de M20 (dados gratuitos em duas fontes); trocar norma/comprimento de uma pilha inserida; pega medida pela face em vez de sondas.",
+   "origem": [
+    "CTX-FIX",
+    "CTX-HW"
+   ],
+   "catalogo": [
+    "MON-16",
+    "BIB-02"
+   ],
+   "tokens_k": 200,
+   "teste": "Auto",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 2.3
+  },
+  {
+   "id": "B52",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Engrenagens e eixos totalmente paramétricos",
+   "oque": "Perfil involuto recalculado ao mudar m/z/α/β no documento; filete de raiz (trocoide); engrenagem cônica e coroa/sem-fim; eixo com ranhuras de anel, roscas e cálculo de resistência; t2 da DIN 6885 em segunda fonte.",
+   "origem": [
+    "CTX-ENG"
+   ],
+   "catalogo": [
+    "BIB-03",
+    "BIB-04"
+   ],
+   "tokens_k": 300,
+   "teste": "Auto",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 3.5
   }
  ]
 }
