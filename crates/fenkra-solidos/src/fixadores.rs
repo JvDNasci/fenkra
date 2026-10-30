@@ -119,12 +119,12 @@ fn medida(fam: &Familia, t: &Tamanho, campo: &str) -> Result<f64, String> {
 }
 
 /// Monta o documento: propriedades da peça, parâmetros, planos de apoio ocultos e primitivas.
-struct Montador {
-    doc: Document,
+pub(crate) struct Montador {
+    pub(crate) doc: Document,
 }
 
 impl Montador {
-    fn novo(descricao: &str) -> Self {
+    pub(crate) fn novo(descricao: &str) -> Self {
         let mut doc = Document::new(descricao);
         doc.props.pn = String::new();
         doc.props.description = descricao.into();
@@ -133,12 +133,12 @@ impl Montador {
         Montador { doc }
     }
 
-    fn param(&mut self, nome: &str, expr: &str) -> Result<(), String> {
+    pub(crate) fn param(&mut self, nome: &str, expr: &str) -> Result<(), String> {
         self.doc.add_param(nome, expr, Unit::Comprimento).map(|_| ()).map_err(|e| e.to_string())
     }
 
     /// Plano paralelo ao XY deslocado por `desvio` (expressão), oculto na viewport.
-    fn plano(&mut self, nome: &str, desvio: &str) -> Result<PlaneRef, String> {
+    pub(crate) fn plano(&mut self, nome: &str, desvio: &str) -> Result<PlaneRef, String> {
         let id = self.doc.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), desvio);
         let r = self.doc.references.iter_mut().find(|r| r.id == id).ok_or("plano não criado")?;
         r.name = nome.into();
@@ -146,7 +146,7 @@ impl Montador {
         Ok(PlaneRef::Datum(id))
     }
 
-    fn prim(&mut self, nome: &str, kind: PrimKind, plane: PlaneRef, v: [&str; 4], op: BoolOp) -> Result<(), String> {
+    pub(crate) fn prim(&mut self, nome: &str, kind: PrimKind, plane: PlaneRef, v: [&str; 4], op: BoolOp) -> Result<(), String> {
         let [a, b, c, d] = v.map(String::from);
         let id = self.doc.add_feature(FeatureKind::Primitive(Primitive { kind, plane, a, b, c, d, op }));
         let f = self.doc.features.iter_mut().find(|f| f.id == id).ok_or("comando não criado")?;

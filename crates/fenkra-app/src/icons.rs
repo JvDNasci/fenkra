@@ -20,6 +20,7 @@ pub fn get(name: &str) -> ImageSource<'static> {
         "asm_inserir" => egui::include_image!("../../../assets/icons/asm_inserir.svg"),
         "asm_link" => egui::include_image!("../../../assets/icons/asm_link.svg"),
         "asm_fixadores" => egui::include_image!("../../../assets/icons/asm_fixadores.svg"),
+        "asm_engrenagens" => egui::include_image!("../../../assets/icons/asm_engrenagens.svg"),
         "asm_lista" => egui::include_image!("../../../assets/icons/asm_lista.svg"),
         "asm_nova" => egui::include_image!("../../../assets/icons/asm_nova.svg"),
         "asm_numerar" => egui::include_image!("../../../assets/icons/asm_numerar.svg"),

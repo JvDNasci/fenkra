@@ -113,6 +113,20 @@ pub struct FastenersUi {
     pub warnings: Vec<String>,
 }
 
+/// Janela "Engrenagens": parâmetros do par (o `tipo` é o do par), dentes da coroa e a última mensagem.
+#[derive(Clone)]
+pub struct GearsUi {
+    pub p: fenkra_solidos::ParamEngrenagem,
+    pub dentes_coroa: u32,
+    pub msg: Vec<String>,
+}
+
+impl Default for GearsUi {
+    fn default() -> Self {
+        GearsUi { p: fenkra_solidos::ParamEngrenagem { furo: 8., ..Default::default() }, dentes_coroa: 40, msg: vec![] }
+    }
+}
+
 pub struct AsmState {
     pub asm: Assembly,
     pub file: Option<PathBuf>,
@@ -170,6 +184,8 @@ pub struct AsmState {
     pub bom_open: Option<fenkra_montagem::bom::BomLevel>,
     /// janela de preenchimento de furos com fixadores (opções e avisos da última aplicação)
     pub fasteners_open: Option<FastenersUi>,
+    /// janela do gerador de engrenagens (B28)
+    pub gears_open: Option<GearsUi>,
     pub anim_sel: usize,
     pub anim_t: f64,
     pub anim_play: bool,
@@ -232,6 +248,7 @@ impl AsmState {
             composer_open: false,
             bom_open: None,
             fasteners_open: None,
+            gears_open: None,
             anim_sel: 0,
             anim_t: 0.,
             anim_play: false,
@@ -392,7 +409,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
             let is_asm = matches!(
                 c,
                 Cmd::AsmInsert | Cmd::AsmNewPart | Cmd::AsmGroup | Cmd::AsmReplace | Cmd::AsmMate(_) | Cmd::AsmFix | Cmd::AsmRigid | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmSubAsm | Cmd::AsmPattern
-                    | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmComposer | Cmd::AsmBom | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink | Cmd::AsmFasteners
+                    | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmComposer | Cmd::AsmBom | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink | Cmd::AsmFasteners | Cmd::AsmGears
             );
             let Some(st) = app.asm.as_mut() else {
                 // só os comandos de montagem avisam; os da peça seguem normalmente
@@ -555,6 +572,11 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                 Cmd::AsmFasteners => {
                     if st.fasteners_open.is_none() {
                         st.fasteners_open = Some(FastenersUi::default());
+                    }
+                }
+                Cmd::AsmGears => {
+                    if st.gears_open.is_none() {
+                        st.gears_open = Some(GearsUi::default());
                     }
                 }
                 Cmd::AsmSubFromSel => {
@@ -2808,6 +2830,192 @@ pub fn fasteners_window(app: &mut App, ctx: &egui::Context) {
     st.fasteners_open = Some(f);
     if let Some((msg, erro)) = aviso {
         app.toast(msg, erro);
+    }
+}
+
+/// Grava o `.fkp` de uma engrenagem escolhendo o destino (pasta da montagem como sugestão).
+fn save_gear(app: &mut App, p: &fenkra_solidos::ParamEngrenagem, dir: Option<PathBuf>) {
+    let doc = match fenkra_solidos::engrenagem_documento(p) {
+        Ok(d) => d,
+        Err(e) => return app.toast(e, true),
+    };
+    let mut dlg = rfd::FileDialog::new().add_filter("Peça", &["fkp"]).set_file_name(format!("{}.fkp", p.chave()));
+    if let Some(d) = dir {
+        dlg = dlg.set_directory(d);
+    }
+    let Some(path) = dlg.save_file() else { return };
+    match std::fs::write(&path, doc.to_json()) {
+        Ok(()) => app.toast(format!("{}: {}", tr("Peça salva"), path.display()), false),
+        Err(e) => app.toast(format!("Erro: {e}"), true),
+    }
+}
+
+/// Gerador de engrenagens (B28): cálculo ao vivo, par engrenado na montagem e peça avulsa.
+pub fn gears_window(app: &mut App, ctx: &egui::Context) {
+    use fenkra_solidos::TipoEngrenagem;
+    let Some(st) = app.asm.as_mut() else { return };
+    let Some(mut g) = st.gears_open.clone() else { return };
+    let mut open = true;
+    let (mut inserir, mut close) = (false, false);
+    let mut salvar: Option<bool> = None;
+    let tipo = g.p.tipo;
+    let par = calculo_par(&g.p, g.dentes_coroa);
+    let campo = |ui: &mut egui::Ui, rotulo: &str, v: &mut f64, r: std::ops::RangeInclusive<f64>, suf: &str, vel: f64| {
+        ui.horizontal(|ui| {
+            ui.label(tr(rotulo));
+            let resp = ui.add(crate::ui_ext::dv(v).range(r).speed(vel).max_decimals(3).suffix(suf));
+            crate::ui_ext::wheel(ui, &resp, v);
+        });
+    };
+    egui::Window::new(tr("⚙ Engrenagens")).id(egui::Id::unique("janela_engrenagens")).open(&mut open).default_width(430.).show(ctx, |ui| {
+        if crate::app::done_bar(ui) {
+            close = true;
+        }
+        ui.label(RichText::new(tr("Gera engrenagens com perfil em evolvente e insere o par já engrenado: distância entre centros, dentes encaixados e restrição de engrenagem. O pinhão é a peça de z1 dentes.")).weak().small());
+        crate::editor::section(ui, "Tipo");
+        ui.horizontal_wrapped(|ui| {
+            for t in TipoEngrenagem::ALL {
+                ui.selectable_value(&mut g.p.tipo, t, tr(t.rotulo()));
+            }
+        });
+        crate::editor::section(ui, "Medidas");
+        campo(ui, "Módulo", &mut g.p.modulo, 0.1..=50., " mm", 0.05);
+        if tipo != TipoEngrenagem::Cremalheira {
+            ui.horizontal(|ui| {
+                ui.label(tr("Dentes do pinhão (z1)"));
+                let resp = ui.add(crate::ui_ext::dv(&mut g.p.dentes).range(6..=400));
+                crate::ui_ext::wheel(ui, &resp, &mut g.p.dentes);
+            });
+            ui.horizontal(|ui| {
+                ui.label(tr(if tipo == TipoEngrenagem::Interna { "Dentes da coroa interna (z2)" } else { "Dentes da coroa (z2)" }));
+                let resp = ui.add(crate::ui_ext::dv(&mut g.dentes_coroa).range(6..=400));
+                crate::ui_ext::wheel(ui, &resp, &mut g.dentes_coroa);
+            });
+        } else {
+            campo(ui, "Comprimento da cremalheira", &mut g.p.comprimento_cremalheira, 1.0..=10000., " mm", 1.);
+            ui.horizontal(|ui| {
+                ui.label(tr("Dentes do pinhão (z1)"));
+                let resp = ui.add(crate::ui_ext::dv(&mut g.p.dentes).range(6..=400));
+                crate::ui_ext::wheel(ui, &resp, &mut g.p.dentes);
+            });
+        }
+        campo(ui, "Ângulo de pressão", &mut g.p.angulo_pressao, 14.5..=30., "°", 0.1);
+        if tipo == TipoEngrenagem::Helicoidal {
+            campo(ui, "Ângulo de hélice (sinal = sentido)", &mut g.p.angulo_helice, -45.0..=45., "°", 0.1);
+        }
+        campo(ui, "Largura", &mut g.p.largura, 0.1..=1000., " mm", 0.5);
+        campo(ui, "Folga entre dentes (par)", &mut g.p.folga_dentes, 0.0..=10., " mm", 0.01);
+        if matches!(tipo, TipoEngrenagem::Reta | TipoEngrenagem::Helicoidal) {
+            campo(ui, "Furo central", &mut g.p.furo, 0.0..=1000., " mm", 0.5);
+            campo(ui, "Correção do perfil (x)", &mut g.p.coef_correcao, -1.0..=1., "", 0.01);
+        }
+
+        crate::editor::section(ui, "Cálculo");
+        match &par {
+            Err(e) => {
+                ui.label(RichText::new(format!("⚠ {e}")).color(Color32::from_rgb(220, 90, 60)));
+            }
+            Ok(c) => {
+                let v = |x: f64| if x == 0. { "—".to_string() } else { fmt(x) };
+                let rack = tipo == TipoEngrenagem::Cremalheira;
+                egui::Grid::new("grade_engrenagens").num_columns(3).spacing([14., 3.]).show(ui, |ui| {
+                    ui.label("");
+                    ui.label(RichText::new(tr("Pinhão")).strong());
+                    ui.label(RichText::new(tr(if rack { "Cremalheira" } else { "Coroa" })).strong());
+                    ui.end_row();
+                    for (rotulo, a, b) in [
+                        ("Diâmetro primitivo d", c.calc_pinhao.diametro_primitivo, c.calc_coroa.diametro_primitivo),
+                        ("Diâmetro base db", c.calc_pinhao.diametro_base, c.calc_coroa.diametro_base),
+                        ("Diâmetro de topo da", c.calc_pinhao.diametro_externo, c.calc_coroa.diametro_externo),
+                        ("Diâmetro de raiz df", c.calc_pinhao.diametro_raiz, c.calc_coroa.diametro_raiz),
+                        ("Passo circular", c.calc_pinhao.passo, c.calc_coroa.passo),
+                        ("Espessura do dente", c.calc_pinhao.espessura_dente, c.calc_coroa.espessura_dente),
+                        ("Altura do dente", c.calc_pinhao.altura_dente, c.calc_coroa.altura_dente),
+                    ] {
+                        ui.label(tr(rotulo));
+                        ui.label(v(a));
+                        ui.label(v(b));
+                        ui.end_row();
+                    }
+                    if rack {
+                        ui.label(tr("Dentes da cremalheira"));
+                        ui.label("");
+                        ui.label(c.calc_coroa.dentes_cremalheira.to_string());
+                        ui.end_row();
+                    }
+                });
+                ui.add_space(4.);
+                if rack {
+                    ui.label(format!("{}: {} mm", tr("Centro do pinhão sobre a linha primitiva"), fmt(c.distancia_centros)));
+                    ui.label(format!("{}: {} mm", tr("Avanço por volta do pinhão"), fmt(c.mm_por_volta)));
+                } else {
+                    ui.label(format!("{}: {} mm", tr("Distância entre centros a"), fmt(c.distancia_centros)));
+                    ui.label(format!("{}: {} ({})", tr("Razão (giro da coroa por giro do pinhão)"), fmt(c.razao), crate::i18n::tr(if c.razao < 0. { "sentido contrário" } else { "mesmo sentido" })));
+                }
+                for a in &c.avisos {
+                    ui.label(RichText::new(format!("⚠ {a}")).small());
+                }
+            }
+        }
+        ui.add_space(4.);
+        ui.horizontal_wrapped(|ui| {
+            let ok = par.is_ok();
+            let b = ui.add_enabled(ok, egui::Button::new(RichText::new(tr("Inserir par na montagem")).strong()).min_size(egui::vec2(160., 28.)));
+            inserir = b.on_hover_text(tr("Grava as duas peças em “engrenagens/” ao lado da montagem, insere engrenadas (centros, dentes encaixados) e cria a restrição de movimento. Rodar de novo insere outro par.")).clicked();
+            let rotulo_b = if tipo == TipoEngrenagem::Cremalheira { "Salvar cremalheira..." } else { "Salvar coroa..." };
+            if ui.add_enabled(ok, egui::Button::new(tr("Salvar pinhão..."))).on_hover_text(tr("Salva só a peça do pinhão (.fkp), para usar em qualquer montagem.")).clicked() {
+                salvar = Some(false);
+            }
+            if ui.add_enabled(ok, egui::Button::new(tr(rotulo_b))).on_hover_text(tr("Salva só a outra peça do par (.fkp). A folga entre dentes é dividida entre as duas peças.")).clicked() {
+                salvar = Some(true);
+            }
+        });
+        if !g.msg.is_empty() {
+            for m in &g.msg {
+                ui.label(RichText::new(format!("⚠ {m}")).small());
+            }
+        }
+    });
+    if !open || close {
+        st.gears_open = None;
+        return;
+    }
+    let mut aviso: Option<(String, bool)> = None;
+    let mut gravar: Option<(fenkra_solidos::ParamEngrenagem, Option<PathBuf>)> = None;
+    if let (Some(coroa), Ok(c)) = (salvar, &par) {
+        gravar = Some((if coroa { c.coroa.clone() } else { c.pinhao.clone() }, st.dir()));
+    }
+    if inserir {
+        let dir = st.dir();
+        if dir.is_none() {
+            aviso = Some((tr("Salve a montagem antes: as peças das engrenagens são gravadas na pasta dela").to_string(), true));
+        } else {
+            let modificada = st.modified;
+            st.push_undo();
+            match inserir_par_engrenagens(&mut st.asm, dir.as_deref(), &g.p, g.dentes_coroa) {
+                Ok(rel) => {
+                    st.solve();
+                    aviso = Some((format!("{} · {} {} mm", tr("Par de engrenagens inserido"), tr("centros a"), fmt(rel.distancia_centros)), false));
+                    g.msg = rel.avisos;
+                }
+                Err(e) => {
+                    if let Some(antes) = st.undo.pop() {
+                        st.asm = antes;
+                    }
+                    st.modified = modificada;
+                    st.dirty = true;
+                    g.msg = vec![e.clone()];
+                    aviso = Some((e, true));
+                }
+            }
+        }
+    }
+    st.gears_open = Some(g);
+    if let Some((msg, erro)) = aviso {
+        app.toast(msg, erro);
+    }
+    if let Some((p, dir)) = gravar {
+        save_gear(app, &p, dir);
     }
 }
 

@@ -8,6 +8,7 @@
 
 pub mod bom;
 pub mod display;
+pub mod engrenagens;
 pub mod estrutura;
 pub mod fixadores;
 pub mod kin;
@@ -15,6 +16,7 @@ pub mod load;
 pub mod view;
 pub mod solve;
 
+pub use engrenagens::{calculo_par, inserir_par_engrenagens, CalculoPar, RelatorioEngrenagens};
 pub use estrutura::{estrutura_para_montagem, Gerado, GrupoGerado};
 pub use fixadores::{preencher_furos, OpcoesFixadores, RelatorioFixadores};
 
