@@ -13,6 +13,6 @@ Estado de cada módulo no Fenkra (alpha.26), gerado do [catálogo](../benchmark/
 | [Desenho técnico](desenho-tecnico.md) | 5 | 5 | 2 |
 | [PMI 3D](pmi-3d.md) | 3 | 1 | 1 |
 | [Navegação](navegacao.md) | 3 | 2 | 1 |
-| [Biblioteca de normas](biblioteca-de-normas.md) | 1 | 1 | 3 |
+| [Biblioteca de normas](biblioteca-de-normas.md) | 1 | 1 | 7 |
 | [PDM / PLM](pdm-plm.md) | 1 | 2 | 2 |
 | [Geral](geral.md) | 0 | 7 | 0 |

@@ -16,6 +16,7 @@ citadas.
 | [engrenagens.md](engrenagens.md) | Gerador de engrenagens, chavetas e furos | `CTX-ENG` |
 | [smart-fastener.md](smart-fastener.md) | Biblioteca de fixadores e preenchimento automático de furos | `CTX-FIX` |
 | [fixadores.md](fixadores.md) | Lista de fixadores com normas | `CTX-FXL` |
+| [hardwares.md](hardwares.md) | Fontes de dados para perfis e hardware mecânico (normas e catálogos) | `CTX-HW` |
 | [plm-vpm.md](plm-vpm.md) | VPM/PLM: modelo de dados, API, sincronização, fases | `CTX-PLM` |
 
 O arquivo original do review (`Contextos e deisgn review.pptx`) fica fora do repositório; o texto e as

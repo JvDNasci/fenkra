@@ -27,3 +27,7 @@
 | BIB-03 | Gerador de engrenagens | ❌ | Só acoplamento de engrenagem na montagem. | CTX-ENG |
 | BIB-04 | Gerador de eixos e chavetas | ❌ |  | CTX-ENG |
 | BIB-05 | Materiais e bitolas | ✅ | MATERIALS, SHEET_MATERIALS, SHEET_GAUGES. |  |
+| BIB-06 | Fixadores aeronáuticos e militares | ❌ | Fontes AN/MS/MIL de domínio público no ASSIST (ver biblioteca/fontes-de-dados.md). | CTX-HW |
+| BIB-07 | Rolamentos | ❌ |  | CTX-HW |
+| BIB-08 | Cilindros pneumáticos | ❌ |  | CTX-HW |
+| BIB-09 | Guias lineares e fusos | ❌ |  | CTX-HW |

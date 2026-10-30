@@ -1,24 +1,24 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 6580,
+ "tokens_total_k": 7480,
  "ondas": {
   "1": {
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.27",
    "tokens_k": 1300,
-   "pct": 19.8
+   "pct": 17.4
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.28",
    "tokens_k": 1610,
-   "pct": 24.5
+   "pct": 21.5
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.29+",
-   "tokens_k": 3670,
-   "pct": 55.8
+   "tokens_k": 4570,
+   "pct": 61.1
   }
  },
  "itens": [
@@ -42,7 +42,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 3.0
+   "pct": 2.7
   },
   {
    "id": "B02",
@@ -60,7 +60,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.8
   },
   {
    "id": "B03",
@@ -79,7 +79,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 1.1
+   "pct": 0.9
   },
   {
    "id": "B04",
@@ -98,7 +98,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 1.4
+   "pct": 1.2
   },
   {
    "id": "B05",
@@ -118,7 +118,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 2.1
+   "pct": 1.9
   },
   {
    "id": "B06",
@@ -137,7 +137,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 1.7
+   "pct": 1.5
   },
   {
    "id": "B07",
@@ -155,7 +155,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B08",
@@ -175,7 +175,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 1.8
+   "pct": 1.6
   },
   {
    "id": "B09",
@@ -194,7 +194,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 2.1
+   "pct": 1.9
   },
   {
    "id": "B10",
@@ -214,7 +214,7 @@
    "teste": "Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.8
   },
   {
    "id": "B11",
@@ -232,7 +232,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B12",
@@ -250,7 +250,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 1.7
+   "pct": 1.5
   },
   {
    "id": "B13",
@@ -269,7 +269,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.8
   },
   {
    "id": "B14",
@@ -288,7 +288,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.8
   },
   {
    "id": "B15",
@@ -307,7 +307,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 6.1
+   "pct": 5.3
   },
   {
    "id": "B16",
@@ -326,7 +326,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 1.1
   },
   {
    "id": "B17",
@@ -346,7 +346,7 @@
    "teste": "Visual",
    "area": "Navegação",
    "status": "a fazer",
-   "pct": 1.5
+   "pct": 1.3
   },
   {
    "id": "B18",
@@ -371,7 +371,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 3.3
+   "pct": 2.9
   },
   {
    "id": "B19",
@@ -391,7 +391,7 @@
    "teste": "Visual",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.8
   },
   {
    "id": "B20",
@@ -415,7 +415,7 @@
    "teste": "Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.8
+   "pct": 1.6
   },
   {
    "id": "B21",
@@ -434,7 +434,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 1.1
   },
   {
    "id": "B22",
@@ -455,7 +455,7 @@
    "teste": "Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 1.8
+   "pct": 1.6
   },
   {
    "id": "B23",
@@ -475,7 +475,7 @@
    "teste": "Visual",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 1.1
+   "pct": 0.9
   },
   {
    "id": "B24",
@@ -495,7 +495,7 @@
    "teste": "Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.8
   },
   {
    "id": "B25",
@@ -516,7 +516,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 4.6
+   "pct": 4.0
   },
   {
    "id": "B26",
@@ -541,25 +541,26 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 7.6
+   "pct": 6.7
   },
   {
    "id": "B27",
    "onda": 3,
-   "prio": "P2",
+   "prio": "P1",
    "titulo": "Catálogo de perfis com dimensões",
-   "oque": "IPE/HEA/HEB (EN 10365), W/C/L/HSS (AISC), RHS/CHS e ABNT. A lista do usuário só tem designações: falta uma fonte aberta das dimensões.",
+   "oque": "Perfis W/H/U/L Gerdau e Aço Brasil (NBR), IPE/HEA/HEB/HEM/UPN/UPE (ArcelorMittal, EN 10365), W/HP/S/C/MC/L/HSS (AISC), tubos EN 10210/10219, ASTM A500 e Vallourec; JIS e AS/NZS depois. Propriedades calculadas e conferidas com o publicado.",
    "origem": [
-    "CTX-PRF"
+    "CTX-PRF",
+    "CTX-HW"
    ],
    "catalogo": [
     "EST-03"
    ],
-   "tokens_k": 150,
+   "tokens_k": 250,
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 2.3
+   "pct": 3.3
   },
   {
    "id": "B28",
@@ -578,28 +579,122 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 6.1
+   "pct": 5.3
   },
   {
    "id": "B29",
    "onda": 3,
-   "prio": "P2",
-   "titulo": "Fixadores e smart fasteners",
-   "oque": "Biblioteca aberta de fixadores (lista do usuário) e preenchimento automático de furos com pilhas e restrições.",
+   "prio": "P1",
+   "titulo": "Fixadores industriais e smart fasteners",
+   "oque": "Parafusos, porcas e arruelas ISO/DIN/ABNT (medidas pelos catálogos Ciser, Brasfixo, Vonder, Belzer) e preenchimento automático de furos com pilhas e restrições.",
    "origem": [
     "CTX-FIX",
-    "CTX-FXL"
+    "CTX-FXL",
+    "CTX-HW"
    ],
    "catalogo": [
     "BIB-01",
     "BIB-02",
     "MON-16"
    ],
-   "tokens_k": 500,
+   "tokens_k": 450,
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 7.6
+   "pct": 6.0
+  },
+  {
+   "id": "B42",
+   "onda": 3,
+   "prio": "P0",
+   "titulo": "Infraestrutura da biblioteca",
+   "oque": "Formato aberto por família (norma, fonte, nível A/B/C, licença), camadas pública/empresa/usuário, gerador de geometria por família, cálculo e conferência de propriedades nos testes.",
+   "origem": [
+    "CTX-HW",
+    "ADR-0008"
+   ],
+   "catalogo": [
+    "BIB-01",
+    "EST-03"
+   ],
+   "tokens_k": 150,
+   "teste": "Auto",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 2.0
+  },
+  {
+   "id": "B43",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Fixadores aeronáuticos e militares",
+   "oque": "AN/MS/MIL de domínio público (ASSIST, Distribution A): AN3–AN10, MS20004, MS20073, MS21250, MS21042, MS20002, MS20392, AN470/AN426, AN310/AN315; NAS só por fontes públicas equivalentes.",
+   "origem": [
+    "CTX-HW",
+    "CTX-FXL"
+   ],
+   "catalogo": [
+    "BIB-06"
+   ],
+   "tokens_k": 200,
+   "teste": "Auto",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 2.7
+  },
+  {
+   "id": "B44",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Rolamentos",
+   "oque": "Rolamentos por medidas de contorno ISO 15 (iguais em SKF, FAG/INA, NSK); capacidade de carga citada do fabricante.",
+   "origem": [
+    "CTX-HW"
+   ],
+   "catalogo": [
+    "BIB-07"
+   ],
+   "tokens_k": 150,
+   "teste": "Auto",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 2.0
+  },
+  {
+   "id": "B45",
+   "onda": 3,
+   "prio": "P3",
+   "titulo": "Pneumática",
+   "oque": "Cilindros ISO 15552/6432 (Festo, Parker, SMC) com cursos e fixações; séries próprias como camada de fabricante.",
+   "origem": [
+    "CTX-HW"
+   ],
+   "catalogo": [
+    "BIB-08"
+   ],
+   "tokens_k": 150,
+   "teste": "Auto",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 2.0
+  },
+  {
+   "id": "B46",
+   "onda": 3,
+   "prio": "P3",
+   "titulo": "Guias lineares e fusos",
+   "oque": "Trilhos, patins e fusos por série de fabricante (THK, Hiwin, Bosch Rexroth).",
+   "origem": [
+    "CTX-HW"
+   ],
+   "catalogo": [
+    "BIB-09"
+   ],
+   "tokens_k": 200,
+   "teste": "Auto",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 2.7
   },
   {
    "id": "B30",
@@ -630,7 +725,7 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 4.6
+   "pct": 4.0
   },
   {
    "id": "B31",
@@ -648,7 +743,7 @@
    "teste": "Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 2.3
+   "pct": 2.0
   },
   {
    "id": "B32",
@@ -678,7 +773,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 3.8
+   "pct": 3.3
   },
   {
    "id": "B33",
@@ -700,7 +795,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 3.0
+   "pct": 2.7
   },
   {
    "id": "B34",
@@ -722,7 +817,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 2.3
+   "pct": 2.0
   },
   {
    "id": "B35",
@@ -744,7 +839,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 3.8
+   "pct": 3.3
   },
   {
    "id": "B36",
@@ -762,7 +857,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 1.5
+   "pct": 1.3
   },
   {
    "id": "B37",
@@ -784,7 +879,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 2.3
+   "pct": 2.0
   },
   {
    "id": "B38",
@@ -802,7 +897,7 @@
    "teste": "Auto",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 1.8
+   "pct": 1.6
   },
   {
    "id": "B39",
@@ -820,7 +915,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 3.8
+   "pct": 3.3
   },
   {
    "id": "B40",
@@ -836,7 +931,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 3.0
+   "pct": 2.7
   },
   {
    "id": "B41",

@@ -1,6 +1,6 @@
 # Catálogo de features
 
-154 features em 12 módulos, com o nome em cada ferramenta, como funcionam em geral e o status no Fenkra (alpha.26): ✅ 69 completas · 🟡 60 parciais · ❌ 25 inexistentes.
+158 features em 12 módulos, com o nome em cada ferramenta, como funcionam em geral e o status no Fenkra (alpha.26): ✅ 69 completas · 🟡 60 parciais · ❌ 29 inexistentes.
 
 > Gerado por `scripts/benchmark/gerar.py` a partir de `scripts/benchmark/dados_*.py`. Não edite à mão.
 > Nomes de outros produtos são marcas dos respectivos donos e aparecem só para comparação; textos próprios,
@@ -17,7 +17,7 @@
 | [Desenho técnico](#desenho-técnico) | 5 | 5 | 2 | [Desenho técnico](desenho-tecnico.md) |
 | [PMI 3D](#pmi-3d) | 3 | 1 | 1 | [PMI 3D](pmi-3d.md) |
 | [Navegação](#navegação) | 3 | 2 | 1 | [Navegação](navegacao.md) |
-| [Biblioteca de normas](#biblioteca-de-normas) | 1 | 1 | 3 | [Biblioteca de normas](biblioteca-de-normas.md) |
+| [Biblioteca de normas](#biblioteca-de-normas) | 1 | 1 | 7 | [Biblioteca de normas](biblioteca-de-normas.md) |
 | [PDM / PLM](#pdm--plm) | 1 | 2 | 2 | [PDM / PLM](pdm-plm.md) |
 | [Geral](#geral) | 0 | 7 | 0 | [Geral](geral.md) |
 
@@ -1221,6 +1221,10 @@
 | BIB-03 | **Gerador de engrenagens** | — (Gear add-ons) | Toolbox Gears | Spur/Helical/Bevel/Worm Gear Generator | ❌ — | CTX-ENG |
 | BIB-04 | **Gerador de eixos e chavetas** | — | — | Shaft Generator / Key Connection | ❌ — | CTX-ENG |
 | BIB-05 | **Materiais e bitolas** | Material Library | Materials / Gauge Tables | Material / Sheet Metal Styles | ✅ Materiais, bitolas |  |
+| BIB-06 | **Fixadores aeronáuticos e militares** | Catalog (aero) | Toolbox (normas ANSI; aero por add-in) | Content Center (ANSI/aero limitado) | ❌ — | CTX-HW |
+| BIB-07 | **Rolamentos** | Catalog | Toolbox Bearings | Content Center Bearings / Bearing Generator | ❌ — | CTX-HW |
+| BIB-08 | **Cilindros pneumáticos** | — (catálogos de fabricante) | — (catálogos de fabricante) | — (catálogos de fabricante) | ❌ — | CTX-HW |
+| BIB-09 | **Guias lineares e fusos** | — (catálogos de fabricante) | — (catálogos de fabricante) | — (catálogos de fabricante) | ❌ — | CTX-HW |
 
 ### BIB-01 — Tabelas de furos e roscas
 
@@ -1257,6 +1261,36 @@
 - **Como funciona:** Material → propriedades.
 - **Fenkra:** ✅ completo. MATERIALS, SHEET_MATERIALS, SHEET_GAUGES.
 - **Fontes:** [SOLIDWORKS Help — Sheet Metal Toolbar](https://help.solidworks.com/2022/English/SolidWorks/sldworks/r_Sheet_Metal_Toolbar.htm)
+
+### BIB-06 — Fixadores aeronáuticos e militares
+
+- **O que faz:** Parafusos, porcas, arruelas, pinos e rebites AN/MS/NAS/MIL.
+- **Como funciona:** Norma → tipo → código de tamanho/comprimento → peça.
+- **Fenkra:** ❌ não existe. Fontes AN/MS/MIL de domínio público no ASSIST (ver biblioteca/fontes-de-dados.md).
+- **Fontes:** [Contexto: fontes de perfis e hardware](../contextos/hardwares.md)
+
+### BIB-07 — Rolamentos
+
+- **O que faz:** Rolamentos de esferas e rolos pelas medidas de contorno ISO 15.
+- **Como funciona:** Série → diâmetro interno → d, D, B, r → peça simplificada.
+- **Diferenças:** Inventor calcula vida útil no Bearing Generator.
+- **Fenkra:** ❌ não existe.
+- **Fontes:** [Inventor Help — Design Accelerator](https://help.autodesk.com/cloudhelp/2015/ENU/Inventor-Help/files/GUID-24104648-BE41-49C7-9DD0-1AF2BAFC102E.htm) · [Contexto: fontes de perfis e hardware](../contextos/hardwares.md)
+
+### BIB-08 — Cilindros pneumáticos
+
+- **O que faz:** Cilindros ISO 15552/6432 com curso e fixações.
+- **Como funciona:** Diâmetro → curso → fixações → peça/montagem.
+- **Diferenças:** Normalmente vem de modelos baixados do fabricante.
+- **Fenkra:** ❌ não existe.
+- **Fontes:** [Contexto: fontes de perfis e hardware](../contextos/hardwares.md)
+
+### BIB-09 — Guias lineares e fusos
+
+- **O que faz:** Trilhos, patins e fusos de esferas por série de fabricante.
+- **Como funciona:** Série → tamanho → comprimento do trilho.
+- **Fenkra:** ❌ não existe.
+- **Fontes:** [Contexto: fontes de perfis e hardware](../contextos/hardwares.md)
 
 
 ## PDM / PLM

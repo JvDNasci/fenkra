@@ -23,6 +23,11 @@ estruturais (com peso por metro e propriedades de seção), materiais e tabelas 
 - Dados dimensionais (medidas, pesos) são fatos e podem ser registrados, mas **não copiar texto, figuras
   ou tabelas formatadas** de normas ABNT/ISO ou de catálogos de fabricantes. Registrar a fonte.
 
+## Fontes de dados (29/10/2026)
+As fontes indicadas pelo usuário e o nível de uso de cada uma (A livre, B catálogo público, C norma paga,
+X só conferência) estão em [biblioteca/fontes-de-dados.md](../../biblioteca/fontes-de-dados.md). Dados de
+projetos com licença incompatível (ex.: FreeCAD Fasteners, GPLv2) servem só para conferência.
+
 ## Consequências
 - ✅ Qualquer pessoa pode revisar, corrigir e ampliar a biblioteca.
 - ✅ Empresas mantêm bibliotecas privadas sobre a pública.

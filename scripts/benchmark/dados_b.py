@@ -189,6 +189,14 @@ e('BIB-04', BIB, 'Gerador de eixos e chavetas', 'Eixo com seções, chavetas (DI
   ('—', '—', 'Shaft Generator / Key Connection', '—'), 'nao', '', '', ['inv-da', 'ctx-eng'], 'CTX-ENG'),
 e('BIB-05', BIB, 'Materiais e bitolas', 'Densidade, propriedades e bitolas de chapa.', 'Material → propriedades.',
   ('Material Library', 'Materials / Gauge Tables', 'Material / Sheet Metal Styles', 'Materiais, bitolas'), 'ok', 'MATERIALS, SHEET_MATERIALS, SHEET_GAUGES.', '', ['sw-sm']),
+e('BIB-06', BIB, 'Fixadores aeronáuticos e militares', 'Parafusos, porcas, arruelas, pinos e rebites AN/MS/NAS/MIL.', 'Norma → tipo → código de tamanho/comprimento → peça.',
+  ('Catalog (aero)', 'Toolbox (normas ANSI; aero por add-in)', 'Content Center (ANSI/aero limitado)', '—'), 'nao', 'Fontes AN/MS/MIL de domínio público no ASSIST (ver biblioteca/fontes-de-dados.md).', '', ['ctx-hw'], 'CTX-HW'),
+e('BIB-07', BIB, 'Rolamentos', 'Rolamentos de esferas e rolos pelas medidas de contorno ISO 15.', 'Série → diâmetro interno → d, D, B, r → peça simplificada.',
+  ('Catalog', 'Toolbox Bearings', 'Content Center Bearings / Bearing Generator', '—'), 'nao', '', 'Inventor calcula vida útil no Bearing Generator.', ['inv-da', 'ctx-hw'], 'CTX-HW'),
+e('BIB-08', BIB, 'Cilindros pneumáticos', 'Cilindros ISO 15552/6432 com curso e fixações.', 'Diâmetro → curso → fixações → peça/montagem.',
+  ('— (catálogos de fabricante)', '— (catálogos de fabricante)', '— (catálogos de fabricante)', '—'), 'nao', '', 'Normalmente vem de modelos baixados do fabricante.', ['ctx-hw'], 'CTX-HW'),
+e('BIB-09', BIB, 'Guias lineares e fusos', 'Trilhos, patins e fusos de esferas por série de fabricante.', 'Série → tamanho → comprimento do trilho.',
+  ('— (catálogos de fabricante)', '— (catálogos de fabricante)', '— (catálogos de fabricante)', '—'), 'nao', '', '', ['ctx-hw'], 'CTX-HW'),
 
 # ------------------------------------------------------------------ PDM / PLM
 e('PLM-01', PLM, 'Versões e revisões', 'Versões automáticas e revisões congeladas (A, B, C).', 'Salvar → versão; liberar → revisão.',

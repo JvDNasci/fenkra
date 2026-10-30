@@ -213,6 +213,10 @@
   "ctx-plm": {
    "rotulo": "Contexto: PLM/VPM",
    "url": "../contextos/plm-vpm.md"
+  },
+  "ctx-hw": {
+   "rotulo": "Contexto: fontes de perfis e hardware",
+   "url": "../contextos/hardwares.md"
   }
  },
  "features": [
@@ -2851,6 +2855,79 @@
     "sw-sm"
    ],
    "backlog": null
+  },
+  {
+   "id": "BIB-06",
+   "modulo": "Biblioteca de normas",
+   "nome": "Fixadores aeronáuticos e militares",
+   "faz": "Parafusos, porcas, arruelas, pinos e rebites AN/MS/NAS/MIL.",
+   "como": "Norma → tipo → código de tamanho/comprimento → peça.",
+   "catia": "Catalog (aero)",
+   "sw": "Toolbox (normas ANSI; aero por add-in)",
+   "inv": "Content Center (ANSI/aero limitado)",
+   "fenkra": "—",
+   "status": "nao",
+   "nota": "Fontes AN/MS/MIL de domínio público no ASSIST (ver biblioteca/fontes-de-dados.md).",
+   "diferencas": "",
+   "fontes": [
+    "ctx-hw"
+   ],
+   "backlog": "CTX-HW"
+  },
+  {
+   "id": "BIB-07",
+   "modulo": "Biblioteca de normas",
+   "nome": "Rolamentos",
+   "faz": "Rolamentos de esferas e rolos pelas medidas de contorno ISO 15.",
+   "como": "Série → diâmetro interno → d, D, B, r → peça simplificada.",
+   "catia": "Catalog",
+   "sw": "Toolbox Bearings",
+   "inv": "Content Center Bearings / Bearing Generator",
+   "fenkra": "—",
+   "status": "nao",
+   "nota": "",
+   "diferencas": "Inventor calcula vida útil no Bearing Generator.",
+   "fontes": [
+    "inv-da",
+    "ctx-hw"
+   ],
+   "backlog": "CTX-HW"
+  },
+  {
+   "id": "BIB-08",
+   "modulo": "Biblioteca de normas",
+   "nome": "Cilindros pneumáticos",
+   "faz": "Cilindros ISO 15552/6432 com curso e fixações.",
+   "como": "Diâmetro → curso → fixações → peça/montagem.",
+   "catia": "— (catálogos de fabricante)",
+   "sw": "— (catálogos de fabricante)",
+   "inv": "— (catálogos de fabricante)",
+   "fenkra": "—",
+   "status": "nao",
+   "nota": "",
+   "diferencas": "Normalmente vem de modelos baixados do fabricante.",
+   "fontes": [
+    "ctx-hw"
+   ],
+   "backlog": "CTX-HW"
+  },
+  {
+   "id": "BIB-09",
+   "modulo": "Biblioteca de normas",
+   "nome": "Guias lineares e fusos",
+   "faz": "Trilhos, patins e fusos de esferas por série de fabricante.",
+   "como": "Série → tamanho → comprimento do trilho.",
+   "catia": "— (catálogos de fabricante)",
+   "sw": "— (catálogos de fabricante)",
+   "inv": "— (catálogos de fabricante)",
+   "fenkra": "—",
+   "status": "nao",
+   "nota": "",
+   "diferencas": "",
+   "fontes": [
+    "ctx-hw"
+   ],
+   "backlog": "CTX-HW"
   },
   {
    "id": "PLM-01",

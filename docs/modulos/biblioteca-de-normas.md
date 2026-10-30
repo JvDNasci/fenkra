@@ -15,3 +15,7 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 - **Fixadores padrão** (—) — Lista de normas em contextos/fixadores.md. `CTX-FXL`
 - **Gerador de engrenagens** (—) — Só acoplamento de engrenagem na montagem. `CTX-ENG`
 - **Gerador de eixos e chavetas** (—) —  `CTX-ENG`
+- **Fixadores aeronáuticos e militares** (—) — Fontes AN/MS/MIL de domínio público no ASSIST (ver biblioteca/fontes-de-dados.md). `CTX-HW`
+- **Rolamentos** (—) —  `CTX-HW`
+- **Cilindros pneumáticos** (—) —  `CTX-HW`
+- **Guias lineares e fusos** (—) —  `CTX-HW`

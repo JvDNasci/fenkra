@@ -2,7 +2,7 @@
 
 Comparação do Fenkra com CATIA V5, SOLIDWORKS e Inventor usando **só material público**.
 
-- [Catálogo de features](catalogo.md): 154 features, nome em cada ferramenta, como funcionam, status no Fenkra.
+- [Catálogo de features](catalogo.md): 158 features, nome em cada ferramenta, como funcionam, status no Fenkra.
 - Dados em [catalogo.json](catalogo.json) (alimenta o comparador interativo).
 - [Fontes](fontes.md) e [metodologia](#metodologia).
 

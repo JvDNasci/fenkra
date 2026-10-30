@@ -69,3 +69,4 @@ Consultadas em 29/10/2026. Nenhum texto foi copiado: tudo foi reescrito com pala
 - `ctx-fix` — [Contexto: smart fastener](../contextos/smart-fastener.md)
 - `ctx-fxl` — [Contexto: lista de fixadores](../contextos/fixadores.md)
 - `ctx-plm` — [Contexto: PLM/VPM](../contextos/plm-vpm.md)
+- `ctx-hw` — [Contexto: fontes de perfis e hardware](../contextos/hardwares.md)
