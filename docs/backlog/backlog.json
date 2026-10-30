@@ -1,0 +1,858 @@
+{
+ "gerado_em": "2026-10-29",
+ "tokens_total_k": 6580,
+ "ondas": {
+  "1": {
+   "titulo": "Onda 1 — bugs do design review",
+   "versao": "0.1.0-alpha.27",
+   "tokens_k": 1300,
+   "pct": 19.8
+  },
+  "2": {
+   "titulo": "Onda 2 — filosofia base + VPM local",
+   "versao": "0.1.0-alpha.28",
+   "tokens_k": 1610,
+   "pct": 24.5
+  },
+  "3": {
+   "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
+   "versao": "0.1.0-alpha.29+",
+   "tokens_k": 3670,
+   "pct": 55.8
+  }
+ },
+ "itens": [
+  {
+   "id": "B01",
+   "onda": 1,
+   "prio": "P0",
+   "titulo": "Chapa: abas em sequência, múltiplas e vizinhas",
+   "oque": "Corrigir dobras em sequência, várias dobras + outra lateral, abas compostas lado a lado (com validação de colisão) e aba em cadeia reta + curva.",
+   "origem": [
+    "DR-54",
+    "DR-55",
+    "DR-56",
+    "DR-57"
+   ],
+   "catalogo": [
+    "CHP-03",
+    "CHP-04"
+   ],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Chapa metálica",
+   "status": "a fazer",
+   "pct": 3.0
+  },
+  {
+   "id": "B02",
+   "onda": 1,
+   "prio": "P0",
+   "titulo": "Chapa: recorte planificado → dobrado no raio",
+   "oque": "O recorte feito no planificado deve voltar ao dobrado mesmo atravessando o raio de dobra.",
+   "origem": [
+    "DR-20"
+   ],
+   "catalogo": [
+    "CHP-11"
+   ],
+   "tokens_k": 60,
+   "teste": "Auto",
+   "area": "Chapa metálica",
+   "status": "a fazer",
+   "pct": 0.9
+  },
+  {
+   "id": "B03",
+   "onda": 1,
+   "prio": "P0",
+   "titulo": "Chapa: dobra por linha em spline",
+   "oque": "Dobra por linha aceitando spline e emendando os raios.",
+   "origem": [
+    "DR-17",
+    "DR-22"
+   ],
+   "catalogo": [
+    "CHP-10"
+   ],
+   "tokens_k": 70,
+   "teste": "Auto",
+   "area": "Chapa metálica",
+   "status": "a fazer",
+   "pct": 1.1
+  },
+  {
+   "id": "B04",
+   "onda": 1,
+   "prio": "P0",
+   "titulo": "Chapa: aba por superfície (nervura de asa)",
+   "oque": "Fazer a aba por superfície funcionar nos casos do usuário, incluindo a nervura de asa.",
+   "origem": [
+    "DR-19",
+    "DR-23"
+   ],
+   "catalogo": [
+    "CHP-06"
+   ],
+   "tokens_k": 90,
+   "teste": "Auto + Visual",
+   "area": "Chapa metálica",
+   "status": "a fazer",
+   "pct": 1.4
+  },
+  {
+   "id": "B05",
+   "onda": 1,
+   "prio": "P0",
+   "titulo": "Rosca: preview, personalização e início",
+   "oque": "Preview ao vivo; passo, perfil e tamanho personalizados; deslocamento inicial e chanfro de entrada; corrigir o tap.",
+   "origem": [
+    "DR-02",
+    "DR-03"
+   ],
+   "catalogo": [
+    "SOL-07",
+    "GER-02"
+   ],
+   "tokens_k": 140,
+   "teste": "Auto",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 2.1
+  },
+  {
+   "id": "B06",
+   "onda": 1,
+   "prio": "P0",
+   "titulo": "Casca: spline, furo escareado, opção reta",
+   "oque": "Casca funcionando com spline e furo escareado; para fora com opção reta/raio editável; espessura por face.",
+   "origem": [
+    "DR-02",
+    "DR-07"
+   ],
+   "catalogo": [
+    "SOL-11"
+   ],
+   "tokens_k": 110,
+   "teste": "Auto",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 1.7
+  },
+  {
+   "id": "B07",
+   "onda": 1,
+   "prio": "P1",
+   "titulo": "Engrossar face de sólido",
+   "oque": "Espessura aplicada a face de sólido.",
+   "origem": [
+    "DR-12"
+   ],
+   "catalogo": [
+    "SOL-14"
+   ],
+   "tokens_k": 40,
+   "teste": "Auto",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 0.6
+  },
+  {
+   "id": "B08",
+   "onda": 1,
+   "prio": "P0",
+   "titulo": "Sketch: tangência da spline e interseção",
+   "oque": "Spline tangente a outros elementos; interseção com elementos de outro plano devolvendo todos os pontos.",
+   "origem": [
+    "DR-02",
+    "DR-06"
+   ],
+   "catalogo": [
+    "SKT-04",
+    "SKT-21"
+   ],
+   "tokens_k": 120,
+   "teste": "Auto",
+   "area": "Sketch",
+   "status": "a fazer",
+   "pct": 1.8
+  },
+  {
+   "id": "B09",
+   "onda": 1,
+   "prio": "P0",
+   "titulo": "Fill, Join e Preencher com sketch",
+   "oque": "Aceitar linhas de sketch e seleção em cadeia em Fill, Join e Preencher fronteiras.",
+   "origem": [
+    "DR-13"
+   ],
+   "catalogo": [
+    "SUP-12",
+    "SUP-15"
+   ],
+   "tokens_k": 140,
+   "teste": "Auto",
+   "area": "Superfícies e wireframe",
+   "status": "a fazer",
+   "pct": 2.1
+  },
+  {
+   "id": "B10",
+   "onda": 1,
+   "prio": "P1",
+   "titulo": "Render: linhas indevidas e filete de superfície",
+   "oque": "Remover riscos no render (como o modo sem arestas, mas com as arestas principais) e corrigir arestas em filetes de superfície.",
+   "origem": [
+    "DR-08",
+    "DR-10"
+   ],
+   "catalogo": [
+    "GER-06",
+    "SUP-19"
+   ],
+   "tokens_k": 60,
+   "teste": "Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.9
+  },
+  {
+   "id": "B11",
+   "onda": 1,
+   "prio": "P1",
+   "titulo": "Nervura com parede dos dois lados",
+   "oque": "Espessura para um lado, para o outro ou simétrica.",
+   "origem": [
+    "DR-05"
+   ],
+   "catalogo": [
+    "SOL-13"
+   ],
+   "tokens_k": 40,
+   "teste": "Auto",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 0.6
+  },
+  {
+   "id": "B12",
+   "onda": 1,
+   "prio": "P1",
+   "titulo": "Loft com restrições e tensão",
+   "oque": "Restrição inicial/final por elemento, tensão de concordância, coletor com seleção múltipla.",
+   "origem": [
+    "DR-07"
+   ],
+   "catalogo": [
+    "SOL-05"
+   ],
+   "tokens_k": 110,
+   "teste": "Auto",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 1.7
+  },
+  {
+   "id": "B13",
+   "onda": 1,
+   "prio": "P1",
+   "titulo": "Planos de face e plano na curva",
+   "oque": "Plano de face entra em erro quando a face some; plano na curva por ponto contido ou projetado.",
+   "origem": [
+    "DR-21",
+    "DR-04"
+   ],
+   "catalogo": [
+    "SUP-03"
+   ],
+   "tokens_k": 60,
+   "teste": "Auto",
+   "area": "Superfícies e wireframe",
+   "status": "a fazer",
+   "pct": 0.9
+  },
+  {
+   "id": "B14",
+   "onda": 1,
+   "prio": "P1",
+   "titulo": "Superfícies: \"até elemento\" e dois limites",
+   "oque": "Extensões de superfície com até elemento; distâncias inicial e final juntas.",
+   "origem": [
+    "DR-24",
+    "DR-16"
+   ],
+   "catalogo": [
+    "SUP-09"
+   ],
+   "tokens_k": 60,
+   "teste": "Auto",
+   "area": "Superfícies e wireframe",
+   "status": "a fazer",
+   "pct": 0.9
+  },
+  {
+   "id": "B15",
+   "onda": 2,
+   "prio": "P0",
+   "titulo": "Referências v2 (ADR 0010)",
+   "oque": "Referências por dono + papel + assinatura, com o ponto como reserva; re-anexar sozinho ou mostrar reparo com candidatos no 3D.",
+   "origem": [
+    "DR-11"
+   ],
+   "catalogo": [
+    "SOL-24",
+    "GER-05"
+   ],
+   "tokens_k": 400,
+   "teste": "Auto",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 6.1
+  },
+  {
+   "id": "B16",
+   "onda": 2,
+   "prio": "P0",
+   "titulo": "Ocultar hierárquico",
+   "oque": "O pai oculta os filhos e cada um guarda o próprio estado; ocultar a origem e os menus da árvore no próprio item.",
+   "origem": [
+    "DR-15",
+    "DR-30"
+   ],
+   "catalogo": [
+    "GER-01"
+   ],
+   "tokens_k": 80,
+   "teste": "Auto + Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 1.2
+  },
+  {
+   "id": "B17",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Câmera no estilo CATIA",
+   "oque": "Duplo clique do meio recentra por raycast; pivô sob o cursor (SW/Rhino); zoom no cursor; turntable (Inventor).",
+   "origem": [
+    "CTX-CAM"
+   ],
+   "catalogo": [
+    "NAV-02",
+    "NAV-03",
+    "NAV-04"
+   ],
+   "tokens_k": 100,
+   "teste": "Visual",
+   "area": "Navegação",
+   "status": "a fazer",
+   "pct": 1.5
+  },
+  {
+   "id": "B18",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Relimitação do sketch",
+   "oque": "Quick trim (borracha) em todas as curvas, break, trim-extend, close arc e complement.",
+   "origem": [
+    "DR-50",
+    "DR-51",
+    "DR-52",
+    "DR-53"
+   ],
+   "catalogo": [
+    "SKT-10",
+    "SKT-11",
+    "SKT-12",
+    "SKT-13",
+    "SKT-14"
+   ],
+   "tokens_k": 220,
+   "teste": "Auto",
+   "area": "Sketch",
+   "status": "a fazer",
+   "pct": 3.3
+  },
+  {
+   "id": "B19",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Seleção por janela e geometria externa no sketch",
+   "oque": "Janela/cruzada pelo sentido do arrasto dentro do sketch; política de seleção externa (publicar ou bloquear).",
+   "origem": [
+    "DR-05",
+    "DR-18"
+   ],
+   "catalogo": [
+    "SKT-22",
+    "SKT-23"
+   ],
+   "tokens_k": 60,
+   "teste": "Visual",
+   "area": "Sketch",
+   "status": "a fazer",
+   "pct": 0.9
+  },
+  {
+   "id": "B20",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Filosofia dos painéis de comando",
+   "oque": "Ordem suporte → modo → parâmetros → avançado em todos os comandos; caixas quando o menu é curto e abas quando é longo; direção normal a plano/superfície.",
+   "origem": [
+    "DR-09",
+    "DR-25",
+    "DR-26",
+    "DR-27",
+    "DR-28",
+    "DR-29"
+   ],
+   "catalogo": [
+    "SUP-23",
+    "GER-03"
+   ],
+   "tokens_k": 120,
+   "teste": "Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 1.8
+  },
+  {
+   "id": "B21",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Extract com propagação gravada",
+   "oque": "Propagação recalculada a cada atualização; extract disponível no botão direito de outros comandos.",
+   "origem": [
+    "DR-13",
+    "DR-14"
+   ],
+   "catalogo": [
+    "SUP-08"
+   ],
+   "tokens_k": 80,
+   "teste": "Auto",
+   "area": "Superfícies e wireframe",
+   "status": "a fazer",
+   "pct": 1.2
+  },
+  {
+   "id": "B22",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Montagem: origem, seleção e contexto",
+   "oque": "Origem da montagem; Ctrl/Alt; ocultar/apagar como nas peças; editar peças vendo as outras.",
+   "origem": [
+    "DR-31",
+    "DR-32"
+   ],
+   "catalogo": [
+    "MON-11",
+    "MON-13",
+    "MON-14"
+   ],
+   "tokens_k": 120,
+   "teste": "Visual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 1.8
+  },
+  {
+   "id": "B23",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "PMI: realce e chamadas",
+   "oque": "Realce das entidades da anotação, várias setas por anotação e seta que não atravessa o quadro.",
+   "origem": [
+    "DR-31",
+    "DR-47",
+    "DR-48"
+   ],
+   "catalogo": [
+    "PMI-04"
+   ],
+   "tokens_k": 70,
+   "teste": "Visual",
+   "area": "PMI 3D",
+   "status": "a fazer",
+   "pct": 1.1
+  },
+  {
+   "id": "B24",
+   "onda": 2,
+   "prio": "P2",
+   "titulo": "Pastas e setas de referência",
+   "oque": "\"Selecionados → nova pasta\" escolhendo o pai; setas 3D do referencial nos pontos.",
+   "origem": [
+    "DR-46",
+    "DR-49"
+   ],
+   "catalogo": [
+    "GER-04",
+    "SUP-01"
+   ],
+   "tokens_k": 60,
+   "teste": "Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.9
+  },
+  {
+   "id": "B25",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "VPM fase 1 (local)",
+   "oque": "SQLite + cofre em pasta: produto, revisão, documento, estrutura (BOM) e histórico; migração do índice JSON do fenkra-project.",
+   "origem": [
+    "CTX-PLM"
+   ],
+   "catalogo": [
+    "PLM-02",
+    "PLM-03",
+    "PLM-04",
+    "PLM-05"
+   ],
+   "tokens_k": 300,
+   "teste": "Auto",
+   "area": "PDM / PLM",
+   "status": "a fazer",
+   "pct": 4.6
+  },
+  {
+   "id": "B26",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Estrutura Pai → montagem dinâmica",
+   "oque": "Corpos iguais viram uma peça com instâncias; subpeças linkadas; submontagens de solda; balões e lista de corte; desenho por corpo.",
+   "origem": [
+    "CTX-EST",
+    "DR-33",
+    "DR-44",
+    "DR-45"
+   ],
+   "catalogo": [
+    "EST-06",
+    "EST-07",
+    "EST-08",
+    "DES-08",
+    "DES-11"
+   ],
+   "tokens_k": 500,
+   "teste": "Auto + Visual",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 7.6
+  },
+  {
+   "id": "B27",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Catálogo de perfis com dimensões",
+   "oque": "IPE/HEA/HEB (EN 10365), W/C/L/HSS (AISC), RHS/CHS e ABNT. A lista do usuário só tem designações: falta uma fonte aberta das dimensões.",
+   "origem": [
+    "CTX-PRF"
+   ],
+   "catalogo": [
+    "EST-03"
+   ],
+   "tokens_k": 150,
+   "teste": "Auto",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 2.3
+  },
+  {
+   "id": "B28",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Gerador de engrenagens, eixos e chavetas",
+   "oque": "Reta, helicoidal, interna e cremalheira (involuta), eixos e chaveta DIN 6885, com cálculo e inserção com restrições, no estilo do Inventor.",
+   "origem": [
+    "CTX-ENG"
+   ],
+   "catalogo": [
+    "BIB-03",
+    "BIB-04"
+   ],
+   "tokens_k": 400,
+   "teste": "Auto",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 6.1
+  },
+  {
+   "id": "B29",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Fixadores e smart fasteners",
+   "oque": "Biblioteca aberta de fixadores (lista do usuário) e preenchimento automático de furos com pilhas e restrições.",
+   "origem": [
+    "CTX-FIX",
+    "CTX-FXL"
+   ],
+   "catalogo": [
+    "BIB-01",
+    "BIB-02",
+    "MON-16"
+   ],
+   "tokens_k": 500,
+   "teste": "Auto + Visual",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 7.6
+  },
+  {
+   "id": "B30",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Desenho: atualização, hachura e normas",
+   "oque": "Estado de atualização por vista; propriedades de hachura; 3º diedro; herança norma → folha → vista → elemento; vista interrompida e corte parcial.",
+   "origem": [
+    "DR-34",
+    "DR-35",
+    "DR-36",
+    "DR-37",
+    "DR-38",
+    "DR-39",
+    "DR-40",
+    "DR-41",
+    "DR-42",
+    "DR-43"
+   ],
+   "catalogo": [
+    "DES-02",
+    "DES-04",
+    "DES-06",
+    "DES-07",
+    "DES-10"
+   ],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Desenho técnico",
+   "status": "a fazer",
+   "pct": 4.6
+  },
+  {
+   "id": "B31",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Comando de aba unificado",
+   "oque": "Um comando com tipo (aresta, cadeia, perfil, superfície, entre perfis) que abre as caixas do tipo.",
+   "origem": [
+    "DR-54"
+   ],
+   "catalogo": [
+    "CHP-17"
+   ],
+   "tokens_k": 150,
+   "teste": "Visual",
+   "area": "Chapa metálica",
+   "status": "a fazer",
+   "pct": 2.3
+  },
+  {
+   "id": "B32",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Sketch: entidades e ferramentas que faltam",
+   "oque": "Retângulo por 3 pontos e paralelogramo, elipse/cônicas, rasgo em arco, girar/escalar, padrão, texto, sketch 3D com restrições.",
+   "origem": [
+    "BM-SKT-01",
+    "BM-SKT-02",
+    "BM-SKT-03",
+    "BM-SKT-05",
+    "BM-SKT-06",
+    "BM-SKT-07",
+    "BM-SKT-08"
+   ],
+   "catalogo": [
+    "SKT-02",
+    "SKT-05",
+    "SKT-06",
+    "SKT-17",
+    "SKT-19",
+    "SKT-24",
+    "SKT-25"
+   ],
+   "tokens_k": 250,
+   "teste": "Auto",
+   "area": "Sketch",
+   "status": "a fazer",
+   "pct": 3.8
+  },
+  {
+   "id": "B33",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Sólidos: relevo, mola, modelagem direta",
+   "oque": "Relevo/gravação, comando de mola (coil) e edição direta de faces.",
+   "origem": [
+    "BM-SOL-01",
+    "BM-SOL-02",
+    "BM-SOL-03"
+   ],
+   "catalogo": [
+    "SOL-21",
+    "SOL-22",
+    "SOL-23"
+   ],
+   "tokens_k": 200,
+   "teste": "Auto",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 3.0
+  },
+  {
+   "id": "B34",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Superfícies: guias, regrada e análises",
+   "oque": "Loft com várias guias, superfície regrada, análise de desvio e de continuidade.",
+   "origem": [
+    "BM-SUP-01",
+    "BM-SUP-02",
+    "BM-SUP-03"
+   ],
+   "catalogo": [
+    "SUP-11",
+    "SUP-18",
+    "SUP-22"
+   ],
+   "tokens_k": 150,
+   "teste": "Auto",
+   "area": "Superfícies e wireframe",
+   "status": "a fazer",
+   "pct": 2.3
+  },
+  {
+   "id": "B35",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Chapa: entre perfis, desdobrar parcial, converter",
+   "oque": "Aba entre perfis (lofted), desdobrar/redobrar parcial e converter sólido em chapa.",
+   "origem": [
+    "BM-CHP-01",
+    "BM-CHP-02",
+    "BM-CHP-03"
+   ],
+   "catalogo": [
+    "CHP-07",
+    "CHP-15",
+    "CHP-16"
+   ],
+   "tokens_k": 250,
+   "teste": "Auto",
+   "area": "Chapa metálica",
+   "status": "a fazer",
+   "pct": 3.8
+  },
+  {
+   "id": "B36",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Montagem: restrições avançadas",
+   "oque": "Largura, simetria, caminho e limite.",
+   "origem": [
+    "BM-MON-01"
+   ],
+   "catalogo": [
+    "MON-06"
+   ],
+   "tokens_k": 100,
+   "teste": "Auto",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 1.5
+  },
+  {
+   "id": "B37",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Estrutural: entalhe, cordões, barras",
+   "oque": "Entalhe (notch) por perfil, cordão de solda 3D e plano de corte otimizado.",
+   "origem": [
+    "BM-EST-01",
+    "BM-EST-02",
+    "BM-EST-03"
+   ],
+   "catalogo": [
+    "EST-02",
+    "EST-05",
+    "EST-09"
+   ],
+   "tokens_k": 150,
+   "teste": "Auto",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 2.3
+  },
+  {
+   "id": "B38",
+   "onda": 3,
+   "prio": "P3",
+   "titulo": "PMI: consultor de tolerância",
+   "oque": "Verificar se a peça está totalmente cotada e tolerada.",
+   "origem": [
+    "BM-PMI-01"
+   ],
+   "catalogo": [
+    "PMI-05"
+   ],
+   "tokens_k": 120,
+   "teste": "Auto",
+   "area": "PMI 3D",
+   "status": "a fazer",
+   "pct": 1.8
+  },
+  {
+   "id": "B39",
+   "onda": 3,
+   "prio": "P3",
+   "titulo": "API Python",
+   "oque": "Automação por scripts (RNF-011).",
+   "origem": [
+    "BM-GER-01"
+   ],
+   "catalogo": [
+    "GER-07"
+   ],
+   "tokens_k": 250,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 3.8
+  },
+  {
+   "id": "B40",
+   "onda": 3,
+   "prio": "P3",
+   "titulo": "Herdados: varredura cônica, subdivisão, dobra cega",
+   "oque": "Varredura cônica/adaptativa com várias guias e G2 exato; formas por subdivisão; dobra cega e cônica, cortes flangeados, alívios aeronáuticos.",
+   "origem": [
+    "histórico"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto",
+   "area": "Superfícies e wireframe",
+   "status": "a fazer",
+   "pct": 3.0
+  },
+  {
+   "id": "B41",
+   "onda": 1,
+   "prio": "P1",
+   "titulo": "Teste com o mouse (usuário)",
+   "oque": "Pendências antigas que dependem do usuário: desenho por mouse, cotagem smart, menu rápido, arrastar na árvore, manipulador, bancadas.",
+   "origem": [
+    "histórico"
+   ],
+   "catalogo": [],
+   "tokens_k": 0,
+   "teste": "Manual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.0
+  }
+ ]
+}

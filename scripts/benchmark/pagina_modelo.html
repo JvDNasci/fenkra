@@ -1,0 +1,254 @@
+<title>Backlog do Fenkra</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: prancheta técnica — cabeçalho com carimbo de totais, abas, kanban em 3 colunas (ondas) e tabela comparativa */
+:root{
+  --paper:#f3f5f7; --sheet:#ffffff; --ink:#16202b; --muted:#5b6774; --line:#d6dce3; --soft:#e9edf1;
+  --accent:#d2551e; --accent-ink:#ffffff; --blue:#1f5fa8;
+  --ok:#1d7a46; --ok-bg:#e3f3ea; --part:#9a6400; --part-bg:#fbf0d9; --no:#b3261e; --no-bg:#fbe5e3;
+  --p0:#b3261e; --p1:#d2551e; --p2:#1f5fa8; --p3:#5b6774;
+  --display:'Archivo', 'Segoe UI', system-ui, sans-serif; --body:'Source Sans 3', 'Segoe UI', system-ui, sans-serif; --mono:'JetBrains Mono', ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#11161c; --sheet:#18202a; --ink:#e6ebf0; --muted:#97a3b0; --line:#2b3644; --soft:#202a36;
+  --accent:#f0794a; --accent-ink:#1a0d06; --blue:#7fb0e8;
+  --ok:#6fd39b; --ok-bg:#16301f; --part:#f1c46b; --part-bg:#33290f; --no:#f19189; --no-bg:#3a1916;
+  --p0:#f19189; --p1:#f0794a; --p2:#7fb0e8; --p3:#97a3b0; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#11161c; --sheet:#18202a; --ink:#e6ebf0; --muted:#97a3b0; --line:#2b3644; --soft:#202a36;
+  --accent:#f0794a; --accent-ink:#1a0d06; --blue:#7fb0e8;
+  --ok:#6fd39b; --ok-bg:#16301f; --part:#f1c46b; --part-bg:#33290f; --no:#f19189; --no-bg:#3a1916;
+  --p0:#f19189; --p1:#f0794a; --p2:#7fb0e8; --p3:#97a3b0; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45;margin:0}
+.wrap{max-width:1320px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{display:flex;flex-wrap:wrap;gap:16px 32px;align-items:flex-end;justify-content:space-between;border-bottom:2px solid var(--ink);padding-bottom:14px}
+h1{font-family:var(--display);font-weight:800;font-size:clamp(26px,4vw,38px);letter-spacing:-.01em;margin:0;text-wrap:balance}
+h1 small{display:block;font-family:var(--mono);font-size:12px;font-weight:400;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.stamp{display:grid;grid-template-columns:repeat(4,auto);border:1.5px solid var(--ink);font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums}
+.stamp div{padding:6px 12px;border-left:1px solid var(--line)}
+.stamp div:first-child{border-left:0}
+.stamp b{display:block;font-family:var(--display);font-size:18px}
+.stamp span{color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+nav.tabs{display:flex;gap:4px;margin:18px 0 14px;flex-wrap:wrap}
+nav.tabs button{font:600 14px var(--body);background:transparent;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:7px 14px;cursor:pointer}
+nav.tabs button[aria-selected="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+nav.tabs button:focus-visible,.chip:focus-visible,select:focus-visible,input:focus-visible,.card:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+.filters label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-family:var(--mono)}
+select,input[type=search]{font:14px var(--body);color:var(--ink);background:var(--sheet);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-width:0}
+input[type=search]{flex:1 1 220px}
+.waves{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start}
+@media (max-width:980px){.waves{grid-template-columns:1fr}}
+.wave{background:var(--soft);border-radius:8px;padding:10px;min-width:0}
+.wave h2{font-family:var(--display);font-size:16px;margin:2px 4px 2px;text-wrap:balance}
+.wave .meta{display:flex;justify-content:space-between;gap:8px;font-family:var(--mono);font-size:12px;color:var(--muted);margin:0 4px 6px;font-variant-numeric:tabular-nums}
+.bar{height:6px;background:var(--line);border-radius:3px;margin:0 4px 10px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent)}
+.cards{display:flex;flex-direction:column;gap:8px}
+.card{background:var(--sheet);border:1px solid var(--line);border-left:4px solid var(--p3);border-radius:6px;padding:10px 12px;min-width:0}
+.card[data-p="P0"]{border-left-color:var(--p0)} .card[data-p="P1"]{border-left-color:var(--p1)} .card[data-p="P2"]{border-left-color:var(--p2)}
+.card .top{display:flex;gap:8px;align-items:baseline;justify-content:space-between}
+.card h3{font-family:var(--display);font-weight:700;font-size:15px;margin:0;text-wrap:balance}
+.card .id{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.card p{margin:6px 0 8px;color:var(--ink);font-size:14px}
+.tags{display:flex;flex-wrap:wrap;gap:4px}
+.chip{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-radius:4px;padding:1px 6px;background:transparent;color:var(--muted);cursor:default}
+button.chip{cursor:pointer;color:var(--blue);border-color:color-mix(in srgb,var(--blue) 40%,var(--line))}
+button.chip:hover{background:color-mix(in srgb,var(--blue) 12%,transparent)}
+.prio{font-family:var(--mono);font-size:11px;font-weight:600;padding:1px 6px;border-radius:4px;color:var(--sheet)}
+.prio.P0{background:var(--p0)} .prio.P1{background:var(--p1)} .prio.P2{background:var(--p2)} .prio.P3{background:var(--p3)}
+.foot{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;justify-content:space-between;margin-top:8px;font-family:var(--mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.state{padding:1px 7px;border-radius:10px;background:var(--soft);color:var(--muted)}
+.state.feito{background:var(--ok-bg);color:var(--ok)} .state.andamento{background:var(--part-bg);color:var(--part)}
+.tok{display:flex;align-items:center;gap:6px}
+.tok i{display:inline-block;height:6px;background:var(--accent);border-radius:3px;min-width:2px}
+.empty{color:var(--muted);font-size:14px;padding:8px 4px}
+/* comparador */
+.summary{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.sum{display:flex;gap:6px;align-items:center;background:var(--sheet);border:1px solid var(--line);border-radius:6px;padding:6px 10px;font-size:13px}
+.sum b{font-family:var(--display);font-size:16px;font-variant-numeric:tabular-nums}
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--sheet)}
+table{border-collapse:collapse;width:100%;min-width:900px;font-size:14px}
+th,td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);background:var(--soft);position:sticky;top:0}
+td.idc{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+td .nm{font-weight:600}
+tr.feat{cursor:pointer}
+tr.feat:hover td{background:color-mix(in srgb,var(--accent) 6%,transparent)}
+tr.feat.hit td{background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.st{display:inline-block;font-family:var(--mono);font-size:11px;font-weight:600;padding:1px 7px;border-radius:10px;white-space:nowrap}
+.st.ok{background:var(--ok-bg);color:var(--ok)} .st.parcial{background:var(--part-bg);color:var(--part)} .st.nao{background:var(--no-bg);color:var(--no)}
+tr.det td{background:var(--soft);font-size:14px}
+.det-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 24px}
+@media (max-width:700px){.det-grid{grid-template-columns:1fr}}
+.det-grid h4{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 2px}
+.det-grid p{margin:0}
+.det-grid a{color:var(--blue)}
+.note{font-size:13px;color:var(--muted);margin-top:14px;max-width:80ch}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1><small>Fenkra CAD · design review + benchmark · gerado em 29/10/2026</small>Backlog do Fenkra</h1>
+    <div class="stamp" id="stamp"></div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="tab-backlog" aria-selected="true" aria-controls="view-backlog">Backlog por onda</button>
+    <button role="tab" id="tab-comparador" aria-selected="false" aria-controls="view-comparador">Comparador de features</button>
+  </nav>
+
+  <section id="view-backlog" role="tabpanel" aria-labelledby="tab-backlog">
+    <div class="filters">
+      <label for="f-area">Área</label><select id="f-area"></select>
+      <label for="f-prio">Prioridade</label><select id="f-prio"><option value="">todas</option><option>P0</option><option>P1</option><option>P2</option><option>P3</option></select>
+      <label for="f-teste">Teste</label><select id="f-teste"><option value="">todos</option><option>Auto</option><option>Visual</option><option>Manual</option></select>
+      <input type="search" id="f-busca" placeholder="Buscar no backlog (ex.: rosca, DR-20, CHP-03)" aria-label="Buscar no backlog">
+    </div>
+    <div class="waves" id="waves"></div>
+    <p class="note">Tokens estimados pela média das últimas versões (≈ 300 tokens por linha de código). P0 quebra o uso, P1 importante, P2 desejável, P3 futuro. Teste Auto = <code>cargo test</code> com documento montado em código; Visual = captura do app com <code>FENKRA_DEMO_*</code>; Manual = depende do usuário. Clique num ID de catálogo para abrir a feature no comparador.</p>
+  </section>
+
+  <section id="view-comparador" role="tabpanel" aria-labelledby="tab-comparador" hidden>
+    <div class="summary" id="summary"></div>
+    <div class="filters">
+      <label for="c-mod">Módulo</label><select id="c-mod"></select>
+      <label for="c-st">Fenkra</label><select id="c-st"><option value="">todos</option><option value="ok">completo</option><option value="parcial">parcial</option><option value="nao">não existe</option></select>
+      <input type="search" id="c-busca" placeholder="Buscar feature ou nome em qualquer CAD (ex.: Pad, Hole Wizard, Frame)" aria-label="Buscar feature">
+    </div>
+    <div class="tablebox">
+      <table>
+        <thead><tr><th>ID</th><th>Feature</th><th>CATIA V5</th><th>SOLIDWORKS</th><th>Inventor</th><th>Fenkra</th><th>Backlog</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <p class="note">Nomes de outros produtos aparecem só para comparação e pertencem aos seus donos. Textos próprios, a partir de documentação pública (ajuda do SOLIDWORKS e do Inventor; apostilas abertas para o CATIA V5, cuja documentação oficial exige login). Clique numa linha para ver como a feature funciona, as diferenças e as fontes.</p>
+  </section>
+</div>
+
+<script>
+const BACKLOG = /*BACKLOG*/null;
+const CATALOGO = /*CATALOGO*/null;
+const ST_TXT = {ok:'completo', parcial:'parcial', nao:'não existe'};
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const featById = Object.fromEntries(CATALOGO.features.map(f => [f.id, f]));
+const cardsByFeat = {};
+BACKLOG.itens.forEach(b => b.catalogo.forEach(k => (cardsByFeat[k] ??= []).push(b.id)));
+
+// carimbo de totais
+const nAberto = BACKLOG.itens.filter(b => b.status !== 'feito').length;
+$('#stamp').innerHTML = [
+  [BACKLOG.itens.length, 'itens'], [nAberto, 'abertos'],
+  [(BACKLOG.tokens_total_k / 1000).toFixed(1).replace('.', ',') + ' M', 'tokens'],
+  [CATALOGO.features.length, 'features']
+].map(([v, l]) => `<div><b>${v}</b><span>${l}</span></div>`).join('');
+
+// ---------- backlog
+const areas = [...new Set(BACKLOG.itens.map(b => b.area))].sort();
+$('#f-area').innerHTML = '<option value="">todas</option>' + areas.map(a => `<option>${esc(a)}</option>`).join('');
+const maxTok = Math.max(...BACKLOG.itens.map(b => b.tokens_k));
+function stateClass(s){ return s === 'feito' ? 'feito' : s === 'em andamento' ? 'andamento' : '' }
+function renderBacklog(){
+  const area = $('#f-area').value, prio = $('#f-prio').value, teste = $('#f-teste').value, q = $('#f-busca').value.trim().toLowerCase();
+  const ok = b => (!area || b.area === area) && (!prio || b.prio === prio) && (!teste || b.teste.includes(teste)) &&
+    (!q || [b.id, b.titulo, b.oque, b.area, ...b.origem, ...b.catalogo].join(' ').toLowerCase().includes(q));
+  $('#waves').innerHTML = Object.entries(BACKLOG.ondas).map(([o, w]) => {
+    const itens = BACKLOG.itens.filter(b => String(b.onda) === o).sort((a, b) => a.prio.localeCompare(b.prio) || a.id.localeCompare(b.id));
+    const vis = itens.filter(ok);
+    const feitos = itens.filter(b => b.status === 'feito').length;
+    return `<div class="wave"><h2>${esc(w.titulo)}</h2>
+      <div class="meta"><span>${esc(w.versao)}</span><span>${feitos}/${itens.length} feitos · ${w.tokens_k} k · ${String(w.pct).replace('.', ',')}%</span></div>
+      <div class="bar" title="${w.pct}% do total de tokens"><i style="width:${w.pct}%"></i></div>
+      <div class="cards">${vis.map(b => `
+        <article class="card" data-p="${b.prio}" id="card-${b.id}" tabindex="-1">
+          <div class="top"><h3>${esc(b.titulo)}</h3><span class="id">${b.id}</span></div>
+          <p>${esc(b.oque)}</p>
+          <div class="tags"><span class="prio ${b.prio}">${b.prio}</span>
+            ${b.origem.map(x => `<span class="chip">${esc(x)}</span>`).join('')}
+            ${b.catalogo.map(x => `<button class="chip" data-feat="${x}" title="${esc(featById[x]?.nome)}">${x}</button>`).join('')}</div>
+          <div class="foot"><span class="tok"><i style="width:${Math.round(60 * b.tokens_k / maxTok)}px"></i>${b.tokens_k} k · ${String(b.pct).replace('.', ',')}%</span>
+            <span>${esc(b.teste)}</span><span class="state ${stateClass(b.status)}">${esc(b.status)}</span></div>
+        </article>`).join('') || '<div class="empty">Nenhum item com esses filtros.</div>'}</div></div>`;
+  }).join('');
+}
+['#f-area', '#f-prio', '#f-teste'].forEach(s => $(s).addEventListener('change', renderBacklog));
+$('#f-busca').addEventListener('input', renderBacklog);
+
+// ---------- comparador
+const mods = [...new Set(CATALOGO.features.map(f => f.modulo))];
+$('#c-mod').innerHTML = '<option value="">todos</option>' + mods.map(m => `<option>${esc(m)}</option>`).join('');
+const cnt = s => CATALOGO.features.filter(f => f.status === s).length;
+$('#summary').innerHTML = [['ok', cnt('ok')], ['parcial', cnt('parcial')], ['nao', cnt('nao')]]
+  .map(([s, n]) => `<div class="sum"><span class="st ${s}">${ST_TXT[s]}</span><b>${n}</b><span>de ${CATALOGO.features.length}</span></div>`).join('');
+let aberto = null, destaque = null;
+function fonteLink(k){
+  const f = CATALOGO.fontes[k]; if (!f) return esc(k);
+  return /^https?:/.test(f.url) ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.rotulo)}</a>` : esc(f.rotulo);
+}
+function renderRows(){
+  const mod = $('#c-mod').value, st = $('#c-st').value, q = $('#c-busca').value.trim().toLowerCase();
+  const fs = CATALOGO.features.filter(f => (!mod || f.modulo === mod) && (!st || f.status === st) &&
+    (!q || [f.id, f.nome, f.catia, f.sw, f.inv, f.fenkra, f.faz, f.backlog].join(' ').toLowerCase().includes(q)));
+  $('#rows').innerHTML = fs.map(f => {
+    const cards = (cardsByFeat[f.id] || []);
+    const row = `<tr class="feat${destaque === f.id ? ' hit' : ''}" data-id="${f.id}" tabindex="0" aria-expanded="${aberto === f.id}">
+      <td class="idc">${f.id}</td><td><div class="nm">${esc(f.nome)}</div><div style="color:var(--muted);font-size:13px">${esc(f.modulo)}</div></td>
+      <td>${esc(f.catia)}</td><td>${esc(f.sw)}</td><td>${esc(f.inv)}</td>
+      <td><span class="st ${f.status}">${ST_TXT[f.status]}</span><div style="font-size:13px">${esc(f.fenkra)}</div></td>
+      <td>${cards.map(c => `<button class="chip" data-card="${c}">${c}</button>`).join(' ') || `<span class="chip">${esc(f.backlog || '—')}</span>`}</td></tr>`;
+    const det = aberto === f.id ? `<tr class="det"><td></td><td colspan="6"><div class="det-grid">
+      <div><h4>O que faz</h4><p>${esc(f.faz)}</p></div>
+      <div><h4>Como funciona (suporte → modo → parâmetros → avançado)</h4><p>${esc(f.como)}</p></div>
+      <div><h4>Diferenças entre as ferramentas</h4><p>${esc(f.diferencas || '—')}</p></div>
+      <div><h4>Fenkra hoje</h4><p>${esc(f.nota || ST_TXT[f.status])}</p></div>
+      <div style="grid-column:1/-1"><h4>Fontes</h4><p>${f.fontes.map(fonteLink).join(' · ')}</p></div></div></td></tr>` : '';
+    return row + det;
+  }).join('') || '<tr><td colspan="7" class="empty">Nenhuma feature com esses filtros.</td></tr>';
+}
+['#c-mod', '#c-st'].forEach(s => $(s).addEventListener('change', renderRows));
+$('#c-busca').addEventListener('input', renderRows);
+$('#rows').addEventListener('click', ev => {
+  const card = ev.target.closest('[data-card]');
+  if (card) { ev.stopPropagation(); return irParaCard(card.dataset.card); }
+  const tr = ev.target.closest('tr.feat'); if (!tr) return;
+  aberto = aberto === tr.dataset.id ? null : tr.dataset.id; renderRows();
+});
+$('#rows').addEventListener('keydown', ev => {
+  const tr = ev.target.closest('tr.feat'); if (!tr || (ev.key !== 'Enter' && ev.key !== ' ')) return;
+  ev.preventDefault(); aberto = aberto === tr.dataset.id ? null : tr.dataset.id; renderRows();
+  document.querySelector(`tr.feat[data-id="${tr.dataset.id}"]`)?.focus();
+});
+
+// ---------- abas e navegação cruzada
+function aba(nome){
+  ['backlog', 'comparador'].forEach(n => {
+    $('#tab-' + n).setAttribute('aria-selected', String(n === nome));
+    $('#view-' + n).hidden = n !== nome;
+  });
+  try { localStorage.setItem('fenkra-aba', nome) } catch (e) {}
+}
+$('#tab-backlog').addEventListener('click', () => aba('backlog'));
+$('#tab-comparador').addEventListener('click', () => aba('comparador'));
+$('#waves').addEventListener('click', ev => {
+  const b = ev.target.closest('[data-feat]'); if (!b) return;
+  const f = featById[b.dataset.feat];
+  $('#c-mod').value = ''; $('#c-st').value = ''; $('#c-busca').value = f.id;
+  aberto = f.id; destaque = f.id; renderRows(); aba('comparador');
+  document.querySelector(`tr.feat[data-id="${f.id}"]`)?.focus();
+});
+function irParaCard(id){
+  $('#f-area').value = ''; $('#f-prio').value = ''; $('#f-teste').value = ''; $('#f-busca').value = '';
+  renderBacklog(); aba('backlog');
+  const el = document.getElementById('card-' + id);
+  if (el) { el.scrollIntoView({block: 'center'}); el.focus(); }
+}
+
+renderBacklog(); renderRows();
+const inicial = location.hash === '#comparador' ? 'comparador' : location.hash === '#backlog' ? 'backlog' : (() => { try { return localStorage.getItem('fenkra-aba') } catch (e) { return null } })();
+if (inicial === 'comparador') aba('comparador');
+</script>
