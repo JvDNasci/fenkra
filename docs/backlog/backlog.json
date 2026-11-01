@@ -1,30 +1,36 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 25820,
+ "tokens_total_k": 38530,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
    "versao": "0.1.0-alpha.28 a .30",
-   "tokens_k": 5850,
-   "pct": 22.7
+   "tokens_k": 5930,
+   "pct": 15.4
   },
   "1": {
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 5460,
-   "pct": 21.1
+   "pct": 14.2
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
    "tokens_k": 6270,
-   "pct": 24.3
+   "pct": 16.3
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
    "tokens_k": 8240,
-   "pct": 31.9
+   "pct": 21.4
+  },
+  "4": {
+   "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
+   "versao": "0.2.x",
+   "tokens_k": 12630,
+   "pct": 32.8
   }
  },
  "itens": [
@@ -48,7 +54,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B02",
@@ -85,7 +91,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B04",
@@ -104,7 +110,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B05",
@@ -124,7 +130,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B06",
@@ -143,7 +149,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B07",
@@ -161,7 +167,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B08",
@@ -181,7 +187,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.3
   },
   {
    "id": "B09",
@@ -200,7 +206,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B10",
@@ -238,7 +244,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B12",
@@ -256,7 +262,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B13",
@@ -313,7 +319,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "em andamento",
-   "pct": 1.5
+   "pct": 1.0
   },
   {
    "id": "B16",
@@ -332,7 +338,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B17",
@@ -352,7 +358,7 @@
    "teste": "Visual",
    "area": "Navegação",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B18",
@@ -377,7 +383,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.6
   },
   {
    "id": "B19",
@@ -421,7 +427,7 @@
    "teste": "Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.3
   },
   {
    "id": "B21",
@@ -440,7 +446,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B22",
@@ -461,7 +467,7 @@
    "teste": "Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.3
   },
   {
    "id": "B23",
@@ -481,7 +487,7 @@
    "teste": "Visual",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B24",
@@ -524,7 +530,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 1.3
+   "pct": 0.9
   },
   {
    "id": "B47",
@@ -542,7 +548,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.3
   },
   {
    "id": "B26",
@@ -567,7 +573,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "feito",
-   "pct": 1.9
+   "pct": 1.3
   },
   {
    "id": "B27",
@@ -586,7 +592,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.6
   },
   {
    "id": "B28",
@@ -605,7 +611,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "feito",
-   "pct": 1.5
+   "pct": 1.0
   },
   {
    "id": "B29",
@@ -627,7 +633,7 @@
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
    "status": "feito",
-   "pct": 1.7
+   "pct": 1.2
   },
   {
    "id": "B42",
@@ -647,7 +653,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "em andamento",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B43",
@@ -666,7 +672,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B44",
@@ -684,7 +690,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B45",
@@ -702,7 +708,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B46",
@@ -720,7 +726,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B30",
@@ -751,7 +757,7 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 0.8
   },
   {
    "id": "B31",
@@ -769,7 +775,7 @@
    "teste": "Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B32",
@@ -799,7 +805,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.6
   },
   {
    "id": "B33",
@@ -821,7 +827,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B34",
@@ -843,7 +849,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B35",
@@ -865,7 +871,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.6
   },
   {
    "id": "B36",
@@ -883,7 +889,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B37",
@@ -905,7 +911,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B38",
@@ -923,7 +929,7 @@
    "teste": "Auto",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.3
   },
   {
    "id": "B39",
@@ -941,7 +947,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.6
   },
   {
    "id": "B40",
@@ -957,7 +963,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B41",
@@ -992,7 +998,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B49",
@@ -1010,7 +1016,7 @@
    "teste": "Auto + Visual",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.3
   },
   {
    "id": "B50",
@@ -1030,7 +1036,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.6
   },
   {
    "id": "B51",
@@ -1050,7 +1056,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B52",
@@ -1069,7 +1075,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 0.8
   },
   {
    "id": "B53",
@@ -1085,7 +1091,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.6
   },
   {
    "id": "B54",
@@ -1107,7 +1113,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 1.7
+   "pct": 1.2
   },
   {
    "id": "B55",
@@ -1126,7 +1132,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 1.4
+   "pct": 0.9
   },
   {
    "id": "B56",
@@ -1146,7 +1152,7 @@
    "teste": "Auto + Visual",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B57",
@@ -1166,7 +1172,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 1.4
+   "pct": 0.9
   },
   {
    "id": "B58",
@@ -1188,7 +1194,7 @@
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 1.7
+   "pct": 1.2
   },
   {
    "id": "B62",
@@ -1206,7 +1212,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B63",
@@ -1225,7 +1231,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 1.5
+   "pct": 1.0
   },
   {
    "id": "B59",
@@ -1246,7 +1252,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 0.8
   },
   {
    "id": "B60",
@@ -1265,7 +1271,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 0.8
   },
   {
    "id": "B61",
@@ -1287,7 +1293,7 @@
    "teste": "Auto + Visual",
    "area": "Navegação",
    "status": "feito",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B64",
@@ -1304,7 +1310,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B65",
@@ -1322,7 +1328,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B66",
@@ -1339,7 +1345,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 0.8
   },
   {
    "id": "B67",
@@ -1356,7 +1362,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B68",
@@ -1373,7 +1379,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.6
   },
   {
    "id": "B69",
@@ -1392,7 +1398,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.4
+   "pct": 0.9
   },
   {
    "id": "B70",
@@ -1410,7 +1416,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 0.8
   },
   {
    "id": "B71",
@@ -1427,7 +1433,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 1.5
+   "pct": 1.0
   },
   {
    "id": "B72",
@@ -1446,7 +1452,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.4
+   "pct": 0.9
   },
   {
    "id": "B73",
@@ -1462,7 +1468,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B74",
@@ -1479,7 +1485,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 1.5
+   "pct": 1.0
   },
   {
    "id": "B75",
@@ -1495,7 +1501,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.6
   },
   {
    "id": "B76",
@@ -1511,7 +1517,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 1.7
+   "pct": 1.2
   },
   {
    "id": "B77",
@@ -1527,7 +1533,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 1.5
+   "pct": 1.0
   },
   {
    "id": "B78",
@@ -1543,7 +1549,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 0.8
   },
   {
    "id": "B79",
@@ -1559,7 +1565,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 0.8
   },
   {
    "id": "B80",
@@ -1575,7 +1581,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 0.8
   },
   {
    "id": "B81",
@@ -1591,7 +1597,7 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 1.5
+   "pct": 1.0
   },
   {
    "id": "B82",
@@ -1607,7 +1613,7 @@
    "teste": "Auto",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 1.4
+   "pct": 0.9
   },
   {
    "id": "B83",
@@ -1623,7 +1629,7 @@
    "teste": "Auto + Visual",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.6
   },
   {
    "id": "B84",
@@ -1639,7 +1645,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B85",
@@ -1656,7 +1662,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B86",
@@ -1673,7 +1679,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 0.8
   },
   {
    "id": "B87",
@@ -1690,7 +1696,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 0.8
   },
   {
    "id": "B88",
@@ -1707,7 +1713,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 0.8
   },
   {
    "id": "B89",
@@ -1723,7 +1729,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 0.8
   },
   {
    "id": "B90",
@@ -1740,7 +1746,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 0.8
   },
   {
    "id": "B91",
@@ -1756,7 +1762,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 0.8
   },
   {
    "id": "B92",
@@ -1773,7 +1779,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B93",
@@ -1790,7 +1796,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 0.8
   },
   {
    "id": "B94",
@@ -1807,7 +1813,7 @@
    "teste": "Auto + Visual",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 1.4
+   "pct": 0.9
   },
   {
    "id": "B95",
@@ -1824,7 +1830,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.5
+   "pct": 1.0
   },
   {
    "id": "B96",
@@ -1841,7 +1847,7 @@
    "teste": "Auto + Visual",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 1.4
+   "pct": 0.9
   },
   {
    "id": "B97",
@@ -1857,7 +1863,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 1.4
+   "pct": 0.9
   },
   {
    "id": "B98",
@@ -1875,7 +1881,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 1.4
+   "pct": 0.9
   },
   {
    "id": "B99",
@@ -1892,7 +1898,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 1.5
+   "pct": 1.0
   },
   {
    "id": "B100",
@@ -1909,7 +1915,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.6
   },
   {
    "id": "B101",
@@ -1927,7 +1933,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B102",
@@ -1945,7 +1951,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 1.4
+   "pct": 0.9
   },
   {
    "id": "B103",
@@ -1961,7 +1967,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 1.5
+   "pct": 1.0
   },
   {
    "id": "B104",
@@ -1978,7 +1984,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.5
+   "pct": 1.0
   },
   {
    "id": "B105",
@@ -1995,7 +2001,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.5
+   "pct": 1.0
   },
   {
    "id": "B106",
@@ -2011,7 +2017,7 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 1.7
+   "pct": 1.2
   },
   {
    "id": "B107",
@@ -2028,7 +2034,7 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 1.5
+   "pct": 1.0
   },
   {
    "id": "B108",
@@ -2044,7 +2050,7 @@
    "teste": "Auto + Visual",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 1.7
+   "pct": 1.2
   },
   {
    "id": "B109",
@@ -2063,6 +2069,678 @@
    "area": "Navegação",
    "status": "feito",
    "pct": 0.0
+  },
+  {
+   "id": "B110",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Calculadoras de projeto: parafuso, ajuste forçado, mola, viga",
+   "oque": "Painel de cálculo com fatores de segurança. Insere ou ajusta o componente. (BN01; módulo Cálculo mecânico; depende de B28, B52, B42, B90).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 0.8
+  },
+  {
+   "id": "B111",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Calculadora de rolamento, engrenagem e estriado",
+   "oque": "Vida L10 e verificação de engrenagem. Dados do fabricante como camada. (BN01b; módulo Cálculo mecânico; depende de BN01, B44).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 0.6
+  },
+  {
+   "id": "B112",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Perfil de regras DFM (furo, bolso, chapa)",
+   "oque": "Varredura com lista de violações e realce 3D. Perfis JSON editáveis. (BN02; módulo Fabricabilidade; depende de B90, B86, B75).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 0.8
+  },
+  {
+   "id": "B113",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Análise de espessura, saliência e canto vivo",
+   "oque": "Mapa de cor sobre as faces. Limites por processo. (BN02b; módulo Fabricabilidade; depende de BN02).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B114",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Análise de pórtico 1D",
+   "oque": "Matriz de rigidez de viga, apoios e cargas, diagramas M/V/N, flecha. (BN03; módulo Estrutural; depende de B27, B37, B79, B92).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 1.0
+  },
+  {
+   "id": "B115",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Verificação por norma de barras (aço)",
+   "oque": "Utilização por NBR 8800 / EN 1993 / AISC. Relatório. (BN03b; módulo Estrutural; depende de BN03).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 0.8
+  },
+  {
+   "id": "B116",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Nesting de chapa",
+   "oque": "Layout em chapas comerciais por jagua-rs/sparrow. Exporta DXF por chapa e aproveitamento. (BN04; módulo Chapa; depende de B86, B105, B80).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 350,
+   "teste": "Auto",
+   "area": "Chapa metálica",
+   "status": "a fazer",
+   "pct": 0.9
+  },
+  {
+   "id": "B117",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Plano de inspeção e FAI",
+   "oque": "Balões numerados do desenho/PMI, tabela de características, CSV/XLSX, formulário AS9102. (BN05; módulo Qualidade; depende de B81, B82, B107).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto",
+   "area": "Desenho técnico",
+   "status": "a fazer",
+   "pct": 0.8
+  },
+  {
+   "id": "B118",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Custeio por modelo de custo",
+   "oque": "Modelo de custo em arquivo (material, processos, taxas). Coluna de custo na BOM. (BN06; módulo Custeio; depende de B92, B86, B80, B37).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto",
+   "area": "PDM / PLM",
+   "status": "a fazer",
+   "pct": 0.8
+  },
+  {
+   "id": "B119",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Exportação 3MF e preparo de impressão",
+   "oque": "3MF via lib3mf, orientação, análise de balanço, abertura no slicer externo. (BN07; módulo Impressão 3D; depende de B84, B87, B92).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.6
+  },
+  {
+   "id": "B120",
+   "onda": 4,
+   "prio": "P3",
+   "titulo": "Lattice e preenchimento implícito",
+   "oque": "Corpo implícito/malha (TPMS, vigas) com export 3MF Beam Lattice. (BN07b; módulo Impressão 3D; depende de BN07).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 450,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 1.2
+  },
+  {
+   "id": "B121",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Estudo de movimento cinemático",
+   "oque": "Driver, gráficos de posição/velocidade/aceleração, trajetória, animação. (BN08; módulo Montagem; depende de B103, B36, B71).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.8
+  },
+  {
+   "id": "B122",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Envelope varrido e folga ao longo do curso",
+   "oque": "Volume varrido por amostragem e interferência em cada passo. (BN08b; módulo Montagem; depende de BN08).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.6
+  },
+  {
+   "id": "B123",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Posições nomeadas de montagem",
+   "oque": "Salva e restaura configurações de mecanismo. (BN08c; módulo Montagem; depende de B71, B102).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 100,
+   "teste": "Auto",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B124",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Instruções de montagem animadas",
+   "oque": "Passos com explodida, BOM por passo, saída HTML/PDF/quadros. (BN09; módulo Comunicação; depende de B92, BN08).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.8
+  },
+  {
+   "id": "B125",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Grandes montagens: carga leve e LOD",
+   "oque": "Representações simplificadas, envelope, carga parcial. (BN10; módulo Montagem; depende de B61, B68, B64).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 1.0
+  },
+  {
+   "id": "B126",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Tolerância empilhada 1D",
+   "oque": "Cadeia de cotas do PMI, pior caso/RSS/Monte Carlo, contribuição. (BN11; módulo Tolerâncias; depende de B108, B82).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto",
+   "area": "PMI 3D",
+   "status": "a fazer",
+   "pct": 0.6
+  },
+  {
+   "id": "B127",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Rota de tubo dobrado",
+   "oque": "Rota 3D, raio de dobra, tabela de dobra, lista de corte. (BN12; módulo Tubulação; depende de B32, B42, B99).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 1.0
+  },
+  {
+   "id": "B128",
+   "onda": 4,
+   "prio": "P3",
+   "titulo": "Biblioteca de conexões e isométrico",
+   "oque": "Conexões AN/MS e industriais. Desenho isométrico com lista. (BN12b; módulo Tubulação; depende de BN12, B42).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 350,
+   "teste": "Auto",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.9
+  },
+  {
+   "id": "B129",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Análise de moldagem (saída, undercut, partição)",
+   "oque": "Classificação de faces, linha de partição e divisão núcleo/cavidade. (BN13; módulo Moldes; depende de B09, B06, B75).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 350,
+   "teste": "Auto",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 0.9
+  },
+  {
+   "id": "B130",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Branch e merge de documento",
+   "oque": "Ramificação e merge de 3 vias por uid de feature. Comparação lado a lado. (BN14; módulo Gestão; depende de B15, B64, B66, B25, B94).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 450,
+   "teste": "Auto",
+   "area": "PDM / PLM",
+   "status": "a fazer",
+   "pct": 1.2
+  },
+  {
+   "id": "B131",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Features por script",
+   "oque": "Rhai/WASM, parâmetros tipados, versão da API. (BN15; módulo Automação; depende de B39, B67, B53).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 450,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 1.2
+  },
+  {
+   "id": "B132",
+   "onda": 4,
+   "prio": "P3",
+   "titulo": "Ponte para solver externo (CalculiX)",
+   "oque": "Malha (Netgen), arquivo .inp, execução, leitura e coloração de resultados. (BN16; módulo Simulação; depende de B87, B92, BN03 (**decisão do mantenedor**)).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 450,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 1.2
+  },
+  {
+   "id": "B133",
+   "onda": 4,
+   "prio": "P3",
+   "titulo": "Otimização topológica",
+   "oque": "SIMP 3D sobre BN16, saída em malha. (BN17; módulo Simulação; depende de BN16, BN07).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 450,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 1.2
+  },
+  {
+   "id": "B134",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Exportação IFC de estrutura de aço",
+   "oque": "`IfcMember`/`IfcPlate` por IfcOpenShell (lib dinâmica). (BN18; módulo Civil; depende de B27, B26, B87 (**reabre BIM**)).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 0.6
+  },
+  {
+   "id": "B135",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Ligações de aço e chumbadores",
+   "oque": "Chapa de base, ligações parafusadas e soldadas com cálculo à mão. (BN18b; módulo Civil; depende de BN03b, B27).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 1.0
+  },
+  {
+   "id": "B136",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Corrimão, escada e guarda-corpo",
+   "oque": "Geradores paramétricos por norma (NR-12, NBR 14718). (BN18c; módulo Estrutural; depende de B26, B42).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 0.8
+  },
+  {
+   "id": "B137",
+   "onda": 4,
+   "prio": "P3",
+   "titulo": "Laminado: camadas e ply book",
+   "oque": "Plies por zona, direção de fibra e padrão plano por draping. (BN19; módulo Compósitos; depende de B04, B34, B86).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 450,
+   "teste": "Auto",
+   "area": "Superfícies e wireframe",
+   "status": "a fazer",
+   "pct": 1.2
+  },
+  {
+   "id": "B138",
+   "onda": 4,
+   "prio": "P3",
+   "titulo": "Chicote: rota, lista e achatamento",
+   "oque": "Feixes 3D, lista de fios (CSV), formboard. VEC como destino futuro. (BN20; módulo Elétrica; depende de B32, B105).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 1.0
+  },
+  {
+   "id": "B139",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Viewport com sombra suave, oclusão e PBR",
+   "oque": "SSAO, sombra, PBR por material. Exporta glTF. (BN21; módulo Visual; depende de B61, B92).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto",
+   "area": "Navegação",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B140",
+   "onda": 4,
+   "prio": "P3",
+   "titulo": "Exportação de cena para Cycles/Blender",
+   "oque": "glTF/USD com materiais. Sem renderizador próprio. (BN21b; módulo Visual; depende de BN21).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Auto",
+   "area": "Navegação",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B141",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Pacote de liberação e exportação de BOM/ECO",
+   "oque": "STEP+PDF+DXF+BOM (CSV/JSON/XML) e registro de ECR/ECN em arquivo. (BN22; módulo Gestão; depende de B25, B47, B93).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto",
+   "area": "PDM / PLM",
+   "status": "a fazer",
+   "pct": 0.6
+  },
+  {
+   "id": "B142",
+   "onda": 4,
+   "prio": "P3",
+   "titulo": "Importar placa (STEP/IDX)",
+   "oque": "Contorno e furos para sketch. IDX quando o suporte amadurecer. (BN23; módulo ECAD–MCAD; depende de B88, B105).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B143",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Reconhecimento de features",
+   "oque": "Furos, bolsos, filetes e chapa em corpos importados. (BN24; módulo IA / automação; depende de B87, B35, BN02).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.8
+  },
+  {
+   "id": "B144",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Desenho automático por regras",
+   "oque": "Vistas padrão, cotas de contorno e furo, tabela e carimbo. (BN25; módulo Desenho; depende de B30, B106, B107, B81).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto",
+   "area": "Desenho técnico",
+   "status": "a fazer",
+   "pct": 1.0
+  },
+  {
+   "id": "B145",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Interface para agentes (JSON/ferramentas)",
+   "oque": "Esquema versionado do CLI. Servidor de ferramentas opcional. (BN25b; módulo IA / automação; depende de B39).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B146",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Visualizador HTML autocontido",
+   "oque": "glTF + visualizador JS, árvore, medição, seção. Sem kernel. (BN26; módulo Comunicação; depende de B87, BN21).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.6
+  },
+  {
+   "id": "B147",
+   "onda": 4,
+   "prio": "P3",
+   "titulo": "Pegada de carbono por material",
+   "oque": "Campo kg CO₂e/kg em materiais e soma na BOM. (BN27; módulo Sustentabilidade; depende de B92).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 80,
+   "teste": "Auto",
+   "area": "PDM / PLM",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B148",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Recursos de plástico (boss, snap, grelha, lip)",
+   "oque": "Features compostas parametrizadas. (BN28; módulo Sólidos; depende de B06, B11, B48).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 0.6
+  },
+  {
+   "id": "B149",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Recursos de desenho do Onshape",
+   "oque": "Replicar anotações, meia cota, arco, ISO 13715, acabamento multilinha. (BN29; módulo Desenho; depende de B107, B81).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto",
+   "area": "Desenho técnico",
+   "status": "a fazer",
+   "pct": 0.6
+  },
+  {
+   "id": "B150",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Bibliotecas de máquinas (correntes, correias, motores, O-rings, perfis T)",
+   "oque": "Novas famílias sobre o modelo genérico, com nível de dado A/B/C. (BN30; módulo Biblioteca; depende de B42).",
+   "origem": [
+    "PESQ-MOD"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 1.0
+  },
+  {
+   "id": "B151",
+   "onda": 0,
+   "prio": "P0",
+   "titulo": "Conformidade de licenças e propriedade intelectual",
+   "oque": "LICENSE (LGPL-2.1-or-later), NOTICE e THIRD-PARTY-LICENSES na raiz e dentro do zip do release (OCCT, FreeType, libpng e demais DLLs; oferta do código-fonte do OCCT); aviso de marcas de terceiros e revisão dos nomes de marca nos presets de atalhos/navegação; procedência do ícone da fênix; registro de procedência dos textos de docs/pesquisa e contextos; checagem do nome Fenkra no INPI/USPTO/EUIPO. Ver docs/pesquisa/propriedade-intelectual.md.",
+   "origem": [
+    "PESQ-PI"
+   ],
+   "catalogo": [],
+   "tokens_k": 80,
+   "teste": "Manual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.2
   }
  ]
 }
