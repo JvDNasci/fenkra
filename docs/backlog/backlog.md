@@ -8,8 +8,8 @@ Gerado por `scripts/benchmark/backlog.py`; o estado de cada item é atualizado a
 
 | Onda | Versão | Itens | Tokens | % |
 |---|---|---|---|---|
-| Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes) | `0.1.0-alpha.28 a .30` | 21 | ≈ 5840 k | 22.6% |
-| Onda 1 — bugs do design review | `0.1.0-alpha.31` | 30 | ≈ 5460 k | 21.2% |
+| Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes) | `0.1.0-alpha.28 a .30` | 22 | ≈ 5850 k | 22.7% |
+| Onda 1 — bugs do design review | `0.1.0-alpha.31` | 30 | ≈ 5460 k | 21.1% |
 | Onda 2 — filosofia base + VPM local | `0.1.0-alpha.32` | 27 | ≈ 6270 k | 24.3% |
 | Onda 3 — módulos novos e lacunas do benchmark | `0.1.0-alpha.33+` | 30 | ≈ 8240 k | 31.9% |
 
@@ -20,6 +20,7 @@ Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = 
 
 | ID | P | Item | Origem | Catálogo | Tokens | % | Teste | Estado |
 |---|---|---|---|---|---|---|---|---|
+| B109 | P0 | **Bug: riscos das arestas de trás ao afastar a câmera** — Avanço das arestas para a câmera passou a valer ~1,5 px de profundidade em qualquer distância (Camera::line_bias), em vez de crescer com a distância; corrigido no commit 1a89b7c. | USR-BUG | GER-06 | 10 k | 0.0% | Visual | feito |
 | B15 | P0 | **Referências v2 (ADR 0010)** — Referências por dono + papel + assinatura, com o ponto como reserva; re-anexar sozinho ou mostrar reparo com candidatos no 3D. Fase 2: face-face, tritangente/completo, rosca, furo e papéis em varredura/loft/até-plano; EdgeSel::CreatedBy por papéis; PointRef/AxisRef::Fixed substituídos quando há geometria de origem; arquivos antigos promovidos a chaves no primeiro recompute bem-sucedido. | DR-11 | SOL-24, GER-05 | 400 k | 1.5% | Auto | em andamento |
 | B42 | P0 | **Infraestrutura da biblioteca** — Família de fixador por dados: gerador nomeado + campos tipados + chave, sem enum fechado; designação livre (M, UNC/UNF, dash, Ø de pino, fabricante) guardando mm e valor original; grip_min/max e furo_min/max por tamanho; série de comprimentos por família (fim da regra 2d–10d); propriedades (PN, descrição, material pela classe, acabamento, massa conferida); norma com revisão, fonte, nível A/B/C e licença; camadas pública/empresa/usuário; versão da biblioteca gravada nas peças geradas, com aviso de desatualizado; publicações do fixador (eixo, plano de apoio, ponta); migra as 6 famílias; todos os tamanhos gerados no CI. | CTX-HW, ADR-0008 | BIB-01, EST-03 | 150 k | 0.6% | Auto | em andamento |
 | B53 | P0 | **Corpus de peças de referência e regressão** — 16 peças típicas (suporte usinado, flange, carcaça com casca, eixo, chapa, quadro soldado, garrafa, superfícies, engrenagem, mola, montagens com fixadores e mecanismo, PMI+desenho) com valores esperados; cada uma: recompute sem erro e igual ao cache, volume/área/bbox/nº de faces, BRepCheck e malha fechada, mudar cada cota e voltar (referências seguem, nada some calado), salvar/abrir idêntico, duas execuções com as mesmas medidas; fixtures de arquivos de cada alpha (migração), caminhos com acento e espaço; script de cobertura feature → teste que falha o CI; captura visual FENKRA_DEMO_CAPTURA comparada por pixels. Toda feature nova entra com peça no corpus. | PESQ-TST |  | 250 k | 1.0% | Auto + Visual | a fazer |

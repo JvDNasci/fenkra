@@ -1,18 +1,18 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 25810,
+ "tokens_total_k": 25820,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
    "versao": "0.1.0-alpha.28 a .30",
-   "tokens_k": 5840,
-   "pct": 22.6
+   "tokens_k": 5850,
+   "pct": 22.7
   },
   "1": {
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 5460,
-   "pct": 21.2
+   "pct": 21.1
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
@@ -2045,6 +2045,24 @@
    "area": "PMI 3D",
    "status": "a fazer",
    "pct": 1.7
+  },
+  {
+   "id": "B109",
+   "onda": 0,
+   "prio": "P0",
+   "titulo": "Bug: riscos das arestas de trás ao afastar a câmera",
+   "oque": "Avanço das arestas para a câmera passou a valer ~1,5 px de profundidade em qualquer distância (Camera::line_bias), em vez de crescer com a distância; corrigido no commit 1a89b7c.",
+   "origem": [
+    "USR-BUG"
+   ],
+   "catalogo": [
+    "GER-06"
+   ],
+   "tokens_k": 10,
+   "teste": "Visual",
+   "area": "Navegação",
+   "status": "feito",
+   "pct": 0.0
   }
  ]
 }

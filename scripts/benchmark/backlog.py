@@ -221,6 +221,8 @@ c('B107', 3, 'P1', 'Desenho: cotagem inteligente, chamadas e centros', 'Cota pel
   ['PESQ-DES', 'PESQ-FI'], [], 400, 'Auto + Visual', 'Desenho técnico'),
 c('B108', 3, 'P1', 'PMI semântico: tolerância, datum/DRF e advisor por norma', 'Tolerância tipada (simétrica, limites, ISO 286, básica, referência), modos de cota linear, precisão e separador; Datum e DRF como objetos com letra única. Advisor que só oferece características válidas para o elemento, modificadores como enum, norma ativa ISO/ASME, símbolos vetoriais e validação sintática em tempo real.',
   ['PESQ-PMI'], [], 450, 'Auto + Visual', 'PMI 3D'),
+c('B109', 0, 'P0', 'Bug: riscos das arestas de trás ao afastar a câmera', 'Avanço das arestas para a câmera passou a valer ~1,5 px de profundidade em qualquer distância (Camera::line_bias), em vez de crescer com a distância; corrigido no commit 1a89b7c.',
+  ['USR-BUG'], ['GER-06'], 10, 'Visual', 'Navegação', 'feito'),
 ]
 def main():
     for x in B:
