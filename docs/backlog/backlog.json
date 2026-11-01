@@ -1,36 +1,36 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 38530,
+ "tokens_total_k": 42780,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
    "versao": "0.1.0-alpha.28 a .30",
    "tokens_k": 5930,
-   "pct": 15.4
+   "pct": 13.9
   },
   "1": {
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 5460,
-   "pct": 14.2
+   "pct": 12.8
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
    "tokens_k": 6270,
-   "pct": 16.3
+   "pct": 14.7
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
    "tokens_k": 8240,
-   "pct": 21.4
+   "pct": 19.3
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
-   "tokens_k": 12630,
-   "pct": 32.8
+   "tokens_k": 16880,
+   "pct": 39.5
   }
  },
  "itens": [
@@ -72,7 +72,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B03",
@@ -130,7 +130,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B06",
@@ -206,7 +206,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B10",
@@ -226,7 +226,7 @@
    "teste": "Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B11",
@@ -281,7 +281,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B14",
@@ -300,7 +300,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B15",
@@ -319,7 +319,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "em andamento",
-   "pct": 1.0
+   "pct": 0.9
   },
   {
    "id": "B16",
@@ -358,7 +358,7 @@
    "teste": "Visual",
    "area": "Navegação",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B18",
@@ -383,7 +383,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B19",
@@ -403,7 +403,7 @@
    "teste": "Visual",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B20",
@@ -507,7 +507,7 @@
    "teste": "Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B25",
@@ -530,7 +530,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.8
   },
   {
    "id": "B47",
@@ -573,7 +573,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "feito",
-   "pct": 1.3
+   "pct": 1.2
   },
   {
    "id": "B27",
@@ -611,7 +611,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "feito",
-   "pct": 1.0
+   "pct": 0.9
   },
   {
    "id": "B29",
@@ -633,7 +633,7 @@
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
    "status": "feito",
-   "pct": 1.2
+   "pct": 1.1
   },
   {
    "id": "B42",
@@ -757,7 +757,7 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B31",
@@ -889,7 +889,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B37",
@@ -1075,7 +1075,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B53",
@@ -1113,7 +1113,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 1.1
   },
   {
    "id": "B55",
@@ -1132,7 +1132,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.8
   },
   {
    "id": "B56",
@@ -1172,7 +1172,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.8
   },
   {
    "id": "B58",
@@ -1194,7 +1194,7 @@
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 1.1
   },
   {
    "id": "B62",
@@ -1231,7 +1231,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.9
   },
   {
    "id": "B59",
@@ -1252,7 +1252,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B60",
@@ -1271,7 +1271,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B61",
@@ -1345,7 +1345,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B67",
@@ -1398,7 +1398,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.8
   },
   {
    "id": "B70",
@@ -1416,7 +1416,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B71",
@@ -1433,7 +1433,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.9
   },
   {
    "id": "B72",
@@ -1452,7 +1452,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.8
   },
   {
    "id": "B73",
@@ -1485,7 +1485,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.9
   },
   {
    "id": "B75",
@@ -1517,7 +1517,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 1.1
   },
   {
    "id": "B77",
@@ -1533,7 +1533,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.9
   },
   {
    "id": "B78",
@@ -1549,7 +1549,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B79",
@@ -1565,7 +1565,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B80",
@@ -1581,7 +1581,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B81",
@@ -1597,7 +1597,7 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.9
   },
   {
    "id": "B82",
@@ -1613,7 +1613,7 @@
    "teste": "Auto",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.8
   },
   {
    "id": "B83",
@@ -1679,7 +1679,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B87",
@@ -1696,7 +1696,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B88",
@@ -1713,7 +1713,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B89",
@@ -1729,7 +1729,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B90",
@@ -1746,7 +1746,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B91",
@@ -1762,7 +1762,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B92",
@@ -1796,7 +1796,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B94",
@@ -1813,7 +1813,7 @@
    "teste": "Auto + Visual",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.8
   },
   {
    "id": "B95",
@@ -1830,7 +1830,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.9
   },
   {
    "id": "B96",
@@ -1847,7 +1847,7 @@
    "teste": "Auto + Visual",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.8
   },
   {
    "id": "B97",
@@ -1863,7 +1863,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.8
   },
   {
    "id": "B98",
@@ -1881,7 +1881,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.8
   },
   {
    "id": "B99",
@@ -1898,7 +1898,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.9
   },
   {
    "id": "B100",
@@ -1951,7 +1951,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.8
   },
   {
    "id": "B103",
@@ -1967,7 +1967,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.9
   },
   {
    "id": "B104",
@@ -1984,7 +1984,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.9
   },
   {
    "id": "B105",
@@ -2001,7 +2001,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.9
   },
   {
    "id": "B106",
@@ -2017,7 +2017,7 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 1.1
   },
   {
    "id": "B107",
@@ -2034,7 +2034,7 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.9
   },
   {
    "id": "B108",
@@ -2050,7 +2050,7 @@
    "teste": "Auto + Visual",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 1.1
   },
   {
    "id": "B109",
@@ -2084,7 +2084,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B111",
@@ -2116,7 +2116,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B113",
@@ -2148,7 +2148,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.9
   },
   {
    "id": "B115",
@@ -2164,7 +2164,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B116",
@@ -2180,7 +2180,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.8
   },
   {
    "id": "B117",
@@ -2196,7 +2196,7 @@
    "teste": "Auto",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B118",
@@ -2212,7 +2212,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B119",
@@ -2244,7 +2244,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 1.1
   },
   {
    "id": "B121",
@@ -2260,7 +2260,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B122",
@@ -2292,12 +2292,12 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B124",
    "onda": 4,
-   "prio": "P2",
+   "prio": "P1",
    "titulo": "Instruções de montagem animadas",
    "oque": "Passos com explodida, BOM por passo, saída HTML/PDF/quadros. (BN09; módulo Comunicação; depende de B92, BN08).",
    "origem": [
@@ -2308,7 +2308,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B125",
@@ -2324,7 +2324,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.9
   },
   {
    "id": "B126",
@@ -2356,7 +2356,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.9
   },
   {
    "id": "B128",
@@ -2372,7 +2372,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.8
   },
   {
    "id": "B129",
@@ -2388,7 +2388,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.8
   },
   {
    "id": "B130",
@@ -2404,7 +2404,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 1.1
   },
   {
    "id": "B131",
@@ -2420,12 +2420,12 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 1.1
   },
   {
    "id": "B132",
    "onda": 4,
-   "prio": "P3",
+   "prio": "P1",
    "titulo": "Ponte para solver externo (CalculiX)",
    "oque": "Malha (Netgen), arquivo .inp, execução, leitura e coloração de resultados. (BN16; módulo Simulação; depende de B87, B92, BN03 (**decisão do mantenedor**)).",
    "origem": [
@@ -2436,7 +2436,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 1.1
   },
   {
    "id": "B133",
@@ -2452,7 +2452,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 1.1
   },
   {
    "id": "B134",
@@ -2484,7 +2484,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.9
   },
   {
    "id": "B136",
@@ -2500,12 +2500,12 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B137",
    "onda": 4,
-   "prio": "P3",
+   "prio": "P1",
    "titulo": "Laminado: camadas e ply book",
    "oque": "Plies por zona, direção de fibra e padrão plano por draping. (BN19; módulo Compósitos; depende de B04, B34, B86).",
    "origem": [
@@ -2516,12 +2516,12 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 1.2
+   "pct": 1.1
   },
   {
    "id": "B138",
    "onda": 4,
-   "prio": "P3",
+   "prio": "P1",
    "titulo": "Chicote: rota, lista e achatamento",
    "oque": "Feixes 3D, lista de fios (CSV), formboard. VEC como destino futuro. (BN20; módulo Elétrica; depende de B32, B105).",
    "origem": [
@@ -2532,12 +2532,12 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.9
   },
   {
    "id": "B139",
    "onda": 4,
-   "prio": "P2",
+   "prio": "P1",
    "titulo": "Viewport com sombra suave, oclusão e PBR",
    "oque": "SSAO, sombra, PBR por material. Exporta glTF. (BN21; módulo Visual; depende de B61, B92).",
    "origem": [
@@ -2612,7 +2612,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B144",
@@ -2628,7 +2628,7 @@
    "teste": "Auto",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.9
   },
   {
    "id": "B145",
@@ -2649,7 +2649,7 @@
   {
    "id": "B146",
    "onda": 4,
-   "prio": "P2",
+   "prio": "P1",
    "titulo": "Visualizador HTML autocontido",
    "oque": "glTF + visualizador JS, árvore, medição, seção. Sem kernel. (BN26; módulo Comunicação; depende de B87, BN21).",
    "origem": [
@@ -2681,7 +2681,7 @@
   {
    "id": "B148",
    "onda": 4,
-   "prio": "P2",
+   "prio": "P1",
    "titulo": "Recursos de plástico (boss, snap, grelha, lip)",
    "oque": "Features compostas parametrizadas. (BN28; módulo Sólidos; depende de B06, B11, B48).",
    "origem": [
@@ -2724,7 +2724,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.9
   },
   {
    "id": "B151",
@@ -2741,6 +2741,166 @@
    "area": "Geral",
    "status": "a fazer",
    "pct": 0.2
+  },
+  {
+   "id": "B152",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Bancada Ergonomia (manequim humano)",
+   "oque": "Manequins por percentil (P5/P50/P95, M/F, bases antropométricas abertas como ANSUR II), postura por juntas, envelopes de alcance e cone de visão, verificação de acesso/folga para mão e ferramenta, carga postural simples (RULA/REBA); inserção na montagem como componente. Referências: CATIA Human Builder/Ergonomics, Siemens Jack/Process Simulate Human.",
+   "origem": [
+    "USR-ERGO"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto + Visual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.9
+  },
+  {
+   "id": "B153",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Bancada Forma livre: modelagem orgânica por subdivisão (estilo Fusion Form)",
+   "oque": "Corpos por subdivisão (caixa, esfera, cilindro, plano) editados por faces/arestas/vértices com manipulador, vincar, simetria, extrudar/inserir arestas, suavidade; conversão para B-rep (NURBS) que entra na árvore como corpo e aceita filetes, casca e booleanas. Referências: Fusion Form (T-Splines), CATIA Imagine & Shape, Blender subdivisão; bibliotecas: OpenSubdiv (Apache-2.0).",
+   "origem": [
+    "USR-ORG"
+   ],
+   "catalogo": [],
+   "tokens_k": 450,
+   "teste": "Auto + Visual",
+   "area": "Superfícies e wireframe",
+   "status": "a fazer",
+   "pct": 1.1
+  },
+  {
+   "id": "B154",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Forma livre: curvas e superfícies por polos (estilo FreeStyle)",
+   "oque": "Curvas 3D e superfícies NURBS editadas por polos e grau, ajuste por continuidade G0–G3 entre superfícies, análise de curvatura/porco-espinho, zebra e reflexo ao vivo, correspondência de bordas (match surface), simetria; classe A como referência. Referências: CATIA FreeStyle Shaper/Optimizer, Alias, SW Freeform.",
+   "origem": [
+    "USR-ORG"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto + Visual",
+   "area": "Superfícies e wireframe",
+   "status": "a fazer",
+   "pct": 0.9
+  },
+  {
+   "id": "B155",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Corte de encaixe entre peças para laser/plasma (chapas e tubos)",
+   "oque": "Comando que corta uma peça pela outra seguindo a normal da superfície de contato (encaixe \"boca de lobo\"/saddle em tubos, rasgos entre chapas e perfis), com compensação de espessura escolhendo face interna, externa ou linha média, folga de corte (kerf) e bisel; vale para chapa, tubos redondos/retangulares e membros estruturais; gera o desenvolvimento do tubo (padrão planificado) e exporta para corte a laser/plasma de tubos (DXF desenvolvido e, depois, formatos de máquina). Referências: rasgo em chapa (tab & slot), SW Weldments trim/coped, Inventor Frame Generator notch, Lantek/Tekla tube.",
+   "origem": [
+    "USR-CORTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 350,
+   "teste": "Auto + Visual",
+   "area": "Chapa metálica",
+   "status": "a fazer",
+   "pct": 0.8
+  },
+  {
+   "id": "B156",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Fenkra Visualizador: app de roteiros, animações e visualização (local, web e celular)",
+   "oque": "Aplicativo separado, só leitura, que abre um pacote leve (malha glTF + árvore + PMI + estados de exibição) gerado pelo Fenkra: roteiros de montagem e manutenção passo a passo, câmeras e transições, explodidas e animações na linha do tempo, anotações e balões ligados à BOM, medição e corte; exporta vídeo, imagens e HTML. Mesmo núcleo para desktop, navegador (WebGPU/WASM) e celular. Referências: SOLIDWORKS Composer, Creo Illustrate, CATIA Composer, Onshape no navegador. Depende do glTF (B146) e das instruções animadas (B124).",
+   "origem": [
+    "USR-VIS"
+   ],
+   "catalogo": [],
+   "tokens_k": 450,
+   "teste": "Auto + Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 1.1
+  },
+  {
+   "id": "B157",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Bancada Render: iluminação, ambientes, materiais e imagem final",
+   "oque": "Bancada própria com ambientes HDRI e fundos (cor, degradê, imagem, chão com reflexo e sombra), iluminação de estúdio (pontos, área, sol), biblioteca de materiais PBR por aparência (metais, plásticos, vidro), decalques, câmeras salvas, profundidade de campo e render progressivo (path tracing) local; saída em imagem de alta resolução e turntable. Motor: próprio em wgpu ou Cycles (Apache-2.0) como processo externo. Referências: SW Visualize, Fusion Render, KeyShot, Onshape Render Studio. Estende B139/B140.",
+   "origem": [
+    "USR-RENDER"
+   ],
+   "catalogo": [],
+   "tokens_k": 450,
+   "teste": "Visual",
+   "area": "Navegação",
+   "status": "a fazer",
+   "pct": 1.1
+  },
+  {
+   "id": "B158",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Bancada Engenharia reversa: nuvem de pontos e malha para CAD",
+   "oque": "Importa nuvem de pontos e malhas (STL/OBJ/PLY/E57), limpeza, decimação e preenchimento de buracos, segmentação por curvatura, ajuste de planos, cilindros, cones e esferas, extração de seções e sketches a partir da malha, ajuste de superfícies NURBS (auto-surface) e comparação desvio CAD × malha com mapa de cores. Referências: CATIA Digitized Shape Editor/Quick Surface Reconstruction, Geomagic Design X, Fusion mesh, SW ScanTo3D; bibliotecas: Open3D (MIT), PCL (BSD).",
+   "origem": [
+    "USR-REV"
+   ],
+   "catalogo": [],
+   "tokens_k": 450,
+   "teste": "Auto + Visual",
+   "area": "Superfícies e wireframe",
+   "status": "a fazer",
+   "pct": 1.1
+  },
+  {
+   "id": "B159",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Bancada Simulação FEM (estrutura de análise no formato do FreeCAD)",
+   "oque": "Contêiner de análise na árvore como no FreeCAD FEM (material, restrições, cargas, malha, solver, resultados), com a filosofia Fenkra: referências estáveis às faces (ADR 0010), atualização e diagnóstico, painéis suporte→modo→parâmetros. Malha com Gmsh/Netgen e solver CalculiX como processos externos (arquivo .inp), análises estática linear, modal e térmica, resultados com mapa de cores, deformada animada, fator de segurança e relatório. Reaproveitar ideias e, quando útil, código LGPL do FreeCAD FEM; GPL só como processo externo. Absorve o B132.",
+   "origem": [
+    "USR-FEM"
+   ],
+   "catalogo": [],
+   "tokens_k": 450,
+   "teste": "Auto + Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 1.1
+  },
+  {
+   "id": "B160",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Simulação FEM: contato, não linear, fadiga e flambagem",
+   "oque": "Contato entre peças da montagem, não linearidade de material e geometria, flambagem linear e fadiga simples (S-N); casos de carga e combinações; estudos paramétricos ligados aos parâmetros do modelo.",
+   "origem": [
+    "USR-FEM"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.9
+  },
+  {
+   "id": "B161",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Bancada CFD (escoamento) via OpenFOAM externo",
+   "oque": "Domínio de fluido a partir da cavidade/envoltório, condições de contorno (entrada, saída, parede), malha (snappyHexMesh/cfMesh), execução do OpenFOAM como processo externo e pós-processamento (linhas de corrente, pressão, velocidade) no viewport. Referência: FreeCAD CfdOF, SW Flow Simulation, Fusion CFD. OpenFOAM é GPL: só processo externo.",
+   "origem": [
+    "USR-CFD"
+   ],
+   "catalogo": [],
+   "tokens_k": 450,
+   "teste": "Auto + Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 1.1
   }
  ]
 }
