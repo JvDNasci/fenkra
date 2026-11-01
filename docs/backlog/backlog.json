@@ -1,36 +1,36 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 42780,
+ "tokens_total_k": 43280,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
    "versao": "0.1.0-alpha.28 a .30",
    "tokens_k": 5930,
-   "pct": 13.9
+   "pct": 13.7
   },
   "1": {
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 5460,
-   "pct": 12.8
+   "pct": 12.6
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
    "tokens_k": 6270,
-   "pct": 14.7
+   "pct": 14.5
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
    "tokens_k": 8240,
-   "pct": 19.3
+   "pct": 19.0
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
-   "tokens_k": 16880,
-   "pct": 39.5
+   "tokens_k": 17380,
+   "pct": 40.2
   }
  },
  "itens": [
@@ -633,7 +633,7 @@
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
    "status": "feito",
-   "pct": 1.1
+   "pct": 1.0
   },
   {
    "id": "B42",
@@ -653,7 +653,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "em andamento",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B43",
@@ -690,7 +690,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B45",
@@ -708,7 +708,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B46",
@@ -775,7 +775,7 @@
    "teste": "Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B32",
@@ -849,7 +849,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B35",
@@ -911,7 +911,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B38",
@@ -1113,7 +1113,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 1.1
+   "pct": 1.0
   },
   {
    "id": "B55",
@@ -1152,7 +1152,7 @@
    "teste": "Auto + Visual",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B57",
@@ -1194,7 +1194,7 @@
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 1.1
+   "pct": 1.0
   },
   {
    "id": "B62",
@@ -1310,7 +1310,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B65",
@@ -1362,7 +1362,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B68",
@@ -1468,7 +1468,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B74",
@@ -1517,7 +1517,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 1.1
+   "pct": 1.0
   },
   {
    "id": "B77",
@@ -1662,7 +1662,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B86",
@@ -1779,7 +1779,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B93",
@@ -2017,7 +2017,7 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 1.1
+   "pct": 1.0
   },
   {
    "id": "B107",
@@ -2050,7 +2050,7 @@
    "teste": "Auto + Visual",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 1.1
+   "pct": 1.0
   },
   {
    "id": "B109",
@@ -2244,7 +2244,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.1
+   "pct": 1.0
   },
   {
    "id": "B121",
@@ -2404,7 +2404,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 1.1
+   "pct": 1.0
   },
   {
    "id": "B131",
@@ -2420,7 +2420,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.1
+   "pct": 1.0
   },
   {
    "id": "B132",
@@ -2436,7 +2436,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.1
+   "pct": 1.0
   },
   {
    "id": "B133",
@@ -2452,7 +2452,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.1
+   "pct": 1.0
   },
   {
    "id": "B134",
@@ -2516,7 +2516,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 1.1
+   "pct": 1.0
   },
   {
    "id": "B138",
@@ -2564,7 +2564,7 @@
    "teste": "Auto",
    "area": "Navegação",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B141",
@@ -2746,17 +2746,17 @@
    "id": "B152",
    "onda": 4,
    "prio": "P1",
-   "titulo": "Bancada Ergonomia (manequim humano)",
-   "oque": "Manequins por percentil (P5/P50/P95, M/F, bases antropométricas abertas como ANSUR II), postura por juntas, envelopes de alcance e cone de visão, verificação de acesso/folga para mão e ferramenta, carga postural simples (RULA/REBA); inserção na montagem como componente. Referências: CATIA Human Builder/Ergonomics, Siemens Jack/Process Simulate Human.",
+   "titulo": "Bancada Ergonomia: manequim editável (estilo CATIA Human)",
+   "oque": "Manequim humano editável como o do CATIA: medidas por segmento (estatura, alcance, quadril, mão…) a partir de percentis P5/P50/P95 M/F de bases abertas (ANSUR II) ou digitadas, postura por juntas com limites articulares, posturas prontas (sentado, em pé, agachado, alcançando), pegar/apontar para pontos da montagem. Métricas: envelope de alcance, cone e campo de visão (o que o manequim enxerga), ângulos de conforto por junta com cores, RULA/REBA, levantamento NIOSH, folga de acesso para mão/ferramenta e relatório. Entra na montagem como componente. Referências: CATIA Human Builder/Posture/Activity Analysis, Siemens Jack.",
    "origem": [
     "USR-ERGO"
    ],
    "catalogo": [],
-   "tokens_k": 400,
+   "tokens_k": 450,
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 1.0
   },
   {
    "id": "B153",
@@ -2772,7 +2772,7 @@
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 1.1
+   "pct": 1.0
   },
   {
    "id": "B154",
@@ -2820,7 +2820,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.1
+   "pct": 1.0
   },
   {
    "id": "B157",
@@ -2836,7 +2836,7 @@
    "teste": "Visual",
    "area": "Navegação",
    "status": "a fazer",
-   "pct": 1.1
+   "pct": 1.0
   },
   {
    "id": "B158",
@@ -2852,7 +2852,7 @@
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 1.1
+   "pct": 1.0
   },
   {
    "id": "B159",
@@ -2868,7 +2868,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.1
+   "pct": 1.0
   },
   {
    "id": "B160",
@@ -2900,7 +2900,23 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.1
+   "pct": 1.0
+  },
+  {
+   "id": "B162",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Módulo Realidade virtual e aumentada",
+   "oque": "Revisão de projeto imersiva: abrir peça/montagem em óculos VR via OpenXR (Meta Quest, SteamVR, Windows MR) com escala 1:1, teletransporte, corte, medição, explodida e o manequim de ergonomia (B152) para conferir alcance e visão; AR no celular/tablet pelo Fenkra Visualizador (B157) com WebXR/ARCore/ARKit, peça em escala real sobre a mesa ou no local de instalação; sessões multiusuário depois. Bibliotecas: OpenXR SDK (Apache-2.0), wgpu. Referências: CATIA/3DEXPERIENCE VR, SW eDrawings AR/VR, Fusion e Onshape em visores, Unity Reflect.",
+   "origem": [
+    "USR-XR"
+   ],
+   "catalogo": [],
+   "tokens_k": 450,
+   "teste": "Visual",
+   "area": "Navegação",
+   "status": "a fazer",
+   "pct": 1.0
   }
  ]
 }
