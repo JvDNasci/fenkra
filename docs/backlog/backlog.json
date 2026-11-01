@@ -2794,15 +2794,15 @@
    "id": "B155",
    "onda": 4,
    "prio": "P1",
-   "titulo": "Corte de encaixe entre peças para laser/plasma (chapas e tubos)",
-   "oque": "Comando que corta uma peça pela outra seguindo a normal da superfície de contato (encaixe \"boca de lobo\"/saddle em tubos, rasgos entre chapas e perfis), com compensação de espessura escolhendo face interna, externa ou linha média, folga de corte (kerf) e bisel; vale para chapa, tubos redondos/retangulares e membros estruturais; gera o desenvolvimento do tubo (padrão planificado) e exporta para corte a laser/plasma de tubos (DXF desenvolvido e, depois, formatos de máquina). Referências: rasgo em chapa (tab & slot), SW Weldments trim/coped, Inventor Frame Generator notch, Lantek/Tekla tube.",
+   "titulo": "Estrutural: corte de encaixe normal entre membros (laser/plasma em tubos)",
+   "oque": "Na bancada Estrutural, um comando no estilo do corte normal da chapa metálica: corta um membro pelo outro seguindo a normal da superfície de contato (encaixe boca de lobo/saddle em tubos redondos, entalhes e rasgos em tubos retangulares e perfis), com compensação de espessura escolhendo parede interna, externa ou linha média, folga de corte (kerf) e bisel; o corte acompanha o membro quando o esqueleto muda e entra na lista de corte; gera o desenvolvimento do tubo (padrão planificado do corte) e exporta para corte a laser/plasma de tubos (DXF desenvolvido e, depois, formatos de máquina). Referências: corte normal da chapa (Fenkra/CATIA/SW), SW Weldments coped/trim, Inventor Frame Generator notch, Tekla/Lantek tube.",
    "origem": [
     "USR-CORTE"
    ],
    "catalogo": [],
    "tokens_k": 350,
    "teste": "Auto + Visual",
-   "area": "Chapa metálica",
+   "area": "Estrutural e soldas",
    "status": "a fazer",
    "pct": 0.8
   },
