@@ -1,36 +1,36 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 43680,
+ "tokens_total_k": 45680,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
    "versao": "0.1.0-alpha.28 a .30",
    "tokens_k": 5930,
-   "pct": 13.6
+   "pct": 13.0
   },
   "1": {
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 5460,
-   "pct": 12.5
+   "pct": 12.0
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
    "tokens_k": 6270,
-   "pct": 14.4
+   "pct": 13.7
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
    "tokens_k": 8240,
-   "pct": 18.9
+   "pct": 18.0
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
-   "tokens_k": 17780,
-   "pct": 40.7
+   "tokens_k": 19780,
+   "pct": 43.3
   }
  },
  "itens": [
@@ -54,7 +54,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B02",
@@ -149,7 +149,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B07",
@@ -262,7 +262,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B13",
@@ -530,7 +530,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B47",
@@ -592,7 +592,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B28",
@@ -672,7 +672,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B44",
@@ -726,7 +726,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B30",
@@ -805,7 +805,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B33",
@@ -827,7 +827,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B34",
@@ -871,7 +871,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B36",
@@ -947,7 +947,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B40",
@@ -963,7 +963,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B41",
@@ -1036,7 +1036,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B51",
@@ -1056,7 +1056,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B52",
@@ -1091,7 +1091,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B54",
@@ -1293,7 +1293,7 @@
    "teste": "Auto + Visual",
    "area": "Navegação",
    "status": "feito",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B64",
@@ -1328,7 +1328,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B66",
@@ -1379,7 +1379,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B69",
@@ -1501,7 +1501,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B76",
@@ -1629,7 +1629,7 @@
    "teste": "Auto + Visual",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B84",
@@ -1915,7 +1915,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B101",
@@ -1933,7 +1933,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B102",
@@ -2100,7 +2100,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B112",
@@ -2121,7 +2121,7 @@
   {
    "id": "B113",
    "onda": 4,
-   "prio": "P2",
+   "prio": "P1",
    "titulo": "Análise de espessura, saliência e canto vivo",
    "oque": "Mapa de cor sobre as faces. Limites por processo. (BN02b; módulo Fabricabilidade; depende de BN02).",
    "origem": [
@@ -2132,7 +2132,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B114",
@@ -2217,7 +2217,7 @@
   {
    "id": "B119",
    "onda": 4,
-   "prio": "P2",
+   "prio": "P1",
    "titulo": "Exportação 3MF e preparo de impressão",
    "oque": "3MF via lib3mf, orientação, análise de balanço, abertura no slicer externo. (BN07; módulo Impressão 3D; depende de B84, B87, B92).",
    "origem": [
@@ -2228,12 +2228,12 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B120",
    "onda": 4,
-   "prio": "P3",
+   "prio": "P1",
    "titulo": "Lattice e preenchimento implícito",
    "oque": "Corpo implícito/malha (TPMS, vigas) com export 3MF Beam Lattice. (BN07b; módulo Impressão 3D; depende de BN07).",
    "origem": [
@@ -2276,7 +2276,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B123",
@@ -2340,7 +2340,7 @@
    "teste": "Auto",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B127",
@@ -2468,7 +2468,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B135",
@@ -2548,7 +2548,7 @@
    "teste": "Auto",
    "area": "Navegação",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B140",
@@ -2580,7 +2580,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B142",
@@ -2596,7 +2596,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B143",
@@ -2644,7 +2644,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B146",
@@ -2660,7 +2660,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B147",
@@ -2692,7 +2692,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B149",
@@ -2708,7 +2708,7 @@
    "teste": "Auto",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B150",
@@ -2933,6 +2933,86 @@
    "area": "Estrutural e soldas",
    "status": "a fazer",
    "pct": 0.9
+  },
+  {
+   "id": "B164",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Bancada Manufatura aditiva (impressão 3D completa)",
+   "oque": "Bancada própria que parte do sólido B-rep (sem perder a parametria): escolha do processo e da máquina (FDM/FFF, SLA/DLP, SLS/MJF, metal L-PBF/DED) com volume de construção; orientação automática e manual pesando suporte, acabamento, tempo e resistência por eixo; análise de ângulos de balanço com mapa de cores e correção sugerida (chanfrar/inclinar abaixo do ângulo crítico, \"tirar ângulos\"); análise de paredes e partes finas, furos e pinos mínimos por processo; suportes (árvore e linear) visualizados; estimativa de material, massa e tempo; exportação 3MF com cores/materiais/peças, STL, e abertura no fatiador externo (PrusaSlicer/Cura/Bambu Studio por linha de comando, sem AGPL no binário). Depende de B119.",
+   "origem": [
+    "USR-AM"
+   ],
+   "catalogo": [],
+   "tokens_k": 450,
+   "teste": "Auto + Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 1.0
+  },
+  {
+   "id": "B165",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Manufatura aditiva: partição, encaixes inteligentes e cores",
+   "oque": "Partir peças maiores que o volume de impressão (ou por cor/material) por planos ou superfícies com sugestão automática; criar encaixes inteligentes na junta: macho/fêmea com folga por processo, cauda de andorinha, pinos de alinhamento, snap-fit, rosca/porca embutida e furos para insertos térmicos; dividir por COR e por material (pintura de faces/regiões → corpos ou 3MF multimaterial/multicolor, AMS/MMU); numerar e etiquetar as partes (relevo de texto) e gerar a lista de montagem das partes. Referências: Fusion (Make/3D print), Meshmixer, Bambu Studio, Prusa (cortes com conectores).",
+   "origem": [
+    "USR-AM"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto + Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.9
+  },
+  {
+   "id": "B166",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Manufatura aditiva: DfAM avançado e compensação",
+   "oque": "Lattice e preenchimento (B120) integrados, alívio de massa, furos autoportantes (gota/teardrop) e pontes, conversão de furos horizontais, compensação de contração e de folga por material/máquina (calibração do usuário), regras de projeto por processo editáveis e relatório de imprimibilidade com nota por peça.",
+   "origem": [
+    "USR-AM"
+   ],
+   "catalogo": [],
+   "tokens_k": 350,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.8
+  },
+  {
+   "id": "B167",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Bancada Simulação de manufatura (máquinas, ferramentas e acesso)",
+   "oque": "Verificar a manufaturabilidade simulando as ferramentas reais sobre o modelo: tochas de solda MIG/TIG e eletrodo/alicate (alcance, ângulo de trabalho e de deslocamento, acesso ao cordão e colisão com as peças), pinças de solda a ponto, furadeiras/fresas (comprimento da broca, acesso perpendicular, mandril e colisão), dobradeira de chapa (sequência de dobras com punção e matriz, colisão da aba com a máquina e com a ferramenta, retorno elástico estimado, aba mínima), puncionadeira e laser/plasma (B163). Biblioteca editável de ferramentas e máquinas da empresa; resultado com marcação 3D do que não dá para fazer e sugestão (mudar ordem, ângulo, ferramenta). Complementa as regras DFM (B112/B113). Referências: Siemens Process Simulate, Delmia, SW/Inventor sheet metal bend sequence, Bystronic/Trumpf BendCAD.",
+   "origem": [
+    "USR-SIMFAB"
+   ],
+   "catalogo": [],
+   "tokens_k": 450,
+   "teste": "Auto + Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 1.0
+  },
+  {
+   "id": "B168",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Simulação de manufatura: sequência de montagem e ferramentas de montagem",
+   "oque": "Sequência de montagem/desmontagem com trajetória de cada peça e ferramenta (chave, parafusadeira, rebitadeira), checagem de acesso e espaço para a mão/ferramenta (com o manequim B152), animação e relatório por passo; exporta para o Visualizador (B156).",
+   "origem": [
+    "USR-SIMFAB"
+   ],
+   "catalogo": [],
+   "tokens_k": 350,
+   "teste": "Auto + Visual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.8
   }
  ]
 }

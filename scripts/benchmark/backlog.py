@@ -231,7 +231,7 @@ c('B111', 4, 'P2', 'Calculadora de rolamento, engrenagem e estriado', 'Vida L10 
   ['PESQ-MOD'], [], 250, 'Auto', 'Biblioteca de normas'),
 c('B112', 4, 'P1', 'Perfil de regras DFM (furo, bolso, chapa)', 'Varredura com lista de violações e realce 3D. Perfis JSON editáveis. (BN02; módulo Fabricabilidade; depende de B90, B86, B75).',
   ['PESQ-MOD'], [], 300, 'Auto', 'Sólidos'),
-c('B113', 4, 'P2', 'Análise de espessura, saliência e canto vivo', 'Mapa de cor sobre as faces. Limites por processo. (BN02b; módulo Fabricabilidade; depende de BN02).',
+c('B113', 4, 'P1', 'Análise de espessura, saliência e canto vivo', 'Mapa de cor sobre as faces. Limites por processo. (BN02b; módulo Fabricabilidade; depende de BN02).',
   ['PESQ-MOD'], [], 200, 'Auto', 'Sólidos'),
 c('B114', 4, 'P1', 'Análise de pórtico 1D', 'Matriz de rigidez de viga, apoios e cargas, diagramas M/V/N, flecha. (BN03; módulo Estrutural; depende de B27, B37, B79, B92).',
   ['PESQ-MOD'], [], 400, 'Auto', 'Estrutural e soldas'),
@@ -243,9 +243,9 @@ c('B117', 4, 'P1', 'Plano de inspeção e FAI', 'Balões numerados do desenho/PM
   ['PESQ-MOD'], [], 300, 'Auto', 'Desenho técnico'),
 c('B118', 4, 'P1', 'Custeio por modelo de custo', 'Modelo de custo em arquivo (material, processos, taxas). Coluna de custo na BOM. (BN06; módulo Custeio; depende de B92, B86, B80, B37).',
   ['PESQ-MOD'], [], 300, 'Auto', 'PDM / PLM'),
-c('B119', 4, 'P2', 'Exportação 3MF e preparo de impressão', '3MF via lib3mf, orientação, análise de balanço, abertura no slicer externo. (BN07; módulo Impressão 3D; depende de B84, B87, B92).',
+c('B119', 4, 'P1', 'Exportação 3MF e preparo de impressão', '3MF via lib3mf, orientação, análise de balanço, abertura no slicer externo. (BN07; módulo Impressão 3D; depende de B84, B87, B92).',
   ['PESQ-MOD'], [], 250, 'Auto', 'Geral'),
-c('B120', 4, 'P3', 'Lattice e preenchimento implícito', 'Corpo implícito/malha (TPMS, vigas) com export 3MF Beam Lattice. (BN07b; módulo Impressão 3D; depende de BN07).',
+c('B120', 4, 'P1', 'Lattice e preenchimento implícito', 'Corpo implícito/malha (TPMS, vigas) com export 3MF Beam Lattice. (BN07b; módulo Impressão 3D; depende de BN07).',
   ['PESQ-MOD'], [], 450, 'Auto', 'Geral'),
 c('B121', 4, 'P1', 'Estudo de movimento cinemático', 'Driver, gráficos de posição/velocidade/aceleração, trajetória, animação. (BN08; módulo Montagem; depende de B103, B36, B71).',
   ['PESQ-MOD'], [], 300, 'Auto', 'Montagem'),
@@ -334,6 +334,17 @@ c('B162', 4, 'P1', 'Módulo Realidade virtual e aumentada', 'Revisão de projeto
   ['USR-XR'], [], 450, 'Visual', 'Navegação'),
 c('B163', 4, 'P1', 'Estrutural: caminho de corte em tubo (laser/plasma rotativo) e representação', 'A partir dos cortes do B155, gerar o caminho da tocha sobre o tubo como na máquina de tubo rotativo: curva 3D do corte limpo calculado pelo B155 (trecho a trecho pela parede que governa o contato, interna ou externa), vetor da tocha em cada ponto (normal à superfície, radial, ou inclinado pelo bisel), ponto de início, entrada e saída (lead-in/lead-out), microjuntas, sentido e ordem dos cortes, compensação do kerf. Representação: linha do caminho sobre o tubo com setas da tocha, vista desenvolvida (planificada) do tubo com o caminho, tabela por ponto (X ao longo do tubo, rotação A, bisel, comprimento) e simulação animada do cabeçote girando o tubo; detecção de colisão da tocha com o próprio tubo/perfil. Saídas: DXF desenvolvido, CSV de pontos (X, A, bisel) e relatório de tempo/comprimento de corte; pós-processador de G-code por máquina fica como opcional (CAM é não-objetivo). Referências: Lantek Flex3d Tubes, SigmaTUBE, Tekla/BTL, HGG ProCAM.',
   ['USR-CORTE'], [], 400, 'Auto + Visual', 'Estrutural e soldas'),
+# ---------------------------------------------------------------- pedidos do usuário: manufatura aditiva e simulação de manufatura
+c('B164', 4, 'P1', 'Bancada Manufatura aditiva (impressão 3D completa)', 'Bancada própria que parte do sólido B-rep (sem perder a parametria): escolha do processo e da máquina (FDM/FFF, SLA/DLP, SLS/MJF, metal L-PBF/DED) com volume de construção; orientação automática e manual pesando suporte, acabamento, tempo e resistência por eixo; análise de ângulos de balanço com mapa de cores e correção sugerida (chanfrar/inclinar abaixo do ângulo crítico, "tirar ângulos"); análise de paredes e partes finas, furos e pinos mínimos por processo; suportes (árvore e linear) visualizados; estimativa de material, massa e tempo; exportação 3MF com cores/materiais/peças, STL, e abertura no fatiador externo (PrusaSlicer/Cura/Bambu Studio por linha de comando, sem AGPL no binário). Depende de B119.',
+  ['USR-AM'], [], 450, 'Auto + Visual', 'Geral'),
+c('B165', 4, 'P1', 'Manufatura aditiva: partição, encaixes inteligentes e cores', 'Partir peças maiores que o volume de impressão (ou por cor/material) por planos ou superfícies com sugestão automática; criar encaixes inteligentes na junta: macho/fêmea com folga por processo, cauda de andorinha, pinos de alinhamento, snap-fit, rosca/porca embutida e furos para insertos térmicos; dividir por COR e por material (pintura de faces/regiões → corpos ou 3MF multimaterial/multicolor, AMS/MMU); numerar e etiquetar as partes (relevo de texto) e gerar a lista de montagem das partes. Referências: Fusion (Make/3D print), Meshmixer, Bambu Studio, Prusa (cortes com conectores).',
+  ['USR-AM'], [], 400, 'Auto + Visual', 'Geral'),
+c('B166', 4, 'P1', 'Manufatura aditiva: DfAM avançado e compensação', 'Lattice e preenchimento (B120) integrados, alívio de massa, furos autoportantes (gota/teardrop) e pontes, conversão de furos horizontais, compensação de contração e de folga por material/máquina (calibração do usuário), regras de projeto por processo editáveis e relatório de imprimibilidade com nota por peça.',
+  ['USR-AM'], [], 350, 'Auto', 'Geral'),
+c('B167', 4, 'P1', 'Bancada Simulação de manufatura (máquinas, ferramentas e acesso)', 'Verificar a manufaturabilidade simulando as ferramentas reais sobre o modelo: tochas de solda MIG/TIG e eletrodo/alicate (alcance, ângulo de trabalho e de deslocamento, acesso ao cordão e colisão com as peças), pinças de solda a ponto, furadeiras/fresas (comprimento da broca, acesso perpendicular, mandril e colisão), dobradeira de chapa (sequência de dobras com punção e matriz, colisão da aba com a máquina e com a ferramenta, retorno elástico estimado, aba mínima), puncionadeira e laser/plasma (B163). Biblioteca editável de ferramentas e máquinas da empresa; resultado com marcação 3D do que não dá para fazer e sugestão (mudar ordem, ângulo, ferramenta). Complementa as regras DFM (B112/B113). Referências: Siemens Process Simulate, Delmia, SW/Inventor sheet metal bend sequence, Bystronic/Trumpf BendCAD.',
+  ['USR-SIMFAB'], [], 450, 'Auto + Visual', 'Geral'),
+c('B168', 4, 'P1', 'Simulação de manufatura: sequência de montagem e ferramentas de montagem', 'Sequência de montagem/desmontagem com trajetória de cada peça e ferramenta (chave, parafusadeira, rebitadeira), checagem de acesso e espaço para a mão/ferramenta (com o manequim B152), animação e relatório por passo; exporta para o Visualizador (B156).',
+  ['USR-SIMFAB'], [], 350, 'Auto + Visual', 'Montagem'),
 ]
 def main():
     for x in B:
