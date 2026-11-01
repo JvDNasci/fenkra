@@ -12,7 +12,7 @@ const SHADER: &str = r#"
 struct U {
     view_proj: mat4x4<f32>,
     eye: vec4<f32>,
-    params: vec4<f32>,     // x = estilo
+    params: vec4<f32>,     // x = estilo, yz = tamanho (px), w = avanço das arestas no clip (≈ 1 px de profundidade)
     bg_top: vec4<f32>,
     bg_bottom: vec4<f32>,  // w = 1 → degradê
     paper: vec4<f32>,      // cor das faces no estilo "linhas ocultas"
@@ -136,7 +136,7 @@ struct LOut { @builtin(position) clip: vec4<f32>, @location(0) col: vec4<f32> };
 @vertex fn vs_line(v: LIn) -> LOut {
     var o: LOut;
     var p = u.view_proj * vec4<f32>(v.pos, 1.0);
-    p.z = p.z - 0.00015 * p.w;  // arestas levemente à frente das faces coincidentes
+    p.z = p.z - u.params.w;  // arestas ≈ 1 px à frente das faces coincidentes, em qualquer distância
     o.clip = p; o.col = v.col;
     return o;
 }
@@ -160,7 +160,7 @@ struct WOut { @builtin(position) clip: vec4<f32>, @location(0) col: vec4<f32>, @
     let n = vec2<f32>(-d.y, d.x);
     var c = select(ca, cb, v.p.y > 0.5);
     let off = n * v.p.x * v.p.z * 0.5 / (size * 0.5);
-    c = vec4<f32>(c.xy + off * c.w, c.z - 0.0003 * c.w, c.w);
+    c = vec4<f32>(c.xy + off * c.w, c.z - 2.0 * u.params.w, c.w);
     o.clip = c;
     o.col = v.col;
     // distância em px ao longo da polilinha (para o tracejado)
@@ -363,6 +363,21 @@ impl Camera {
             glam::camera::rh::proj::directx::perspective(FOV, aspect, self.dist * 0.01, self.dist * 50.)
         };
         proj * view
+    }
+    /// Quanto as arestas são puxadas para a câmera (em unidades de clip): o equivalente a
+    /// `ARESTA_PX` pixels de profundidade na distância de cada aresta. Na perspectiva isso dá um valor
+    /// constante no clip (perto · tamanho do pixel por unidade de distância); um avanço proporcional a
+    /// `w` crescia com a distância e deixava aparecer as arestas de trás perto dos cantos.
+    pub fn line_bias(&self, height_px: f32) -> f32 {
+        const ARESTA_PX: f32 = 1.5;
+        let h = height_px.max(1.);
+        let px = 2. * (FOV / 2.).tan() / h * ARESTA_PX;
+        if self.ortho {
+            // profundidade linear em [-50·dist, 50·dist]; pixel = 2·dist·tan(FOV/2)/h
+            px * self.dist / (100. * self.dist)
+        } else {
+            self.dist * 0.01 * px
+        }
     }
     /// Vetores direita/cima no mundo (para pan).
     pub fn basis(&self) -> (Vec3, Vec3) {
@@ -715,7 +730,7 @@ impl Viewport {
         let u = Uniforms {
             view_proj: vp.to_cols_array_2d(),
             eye: [e.x, e.y, e.z, 1.],
-            params: [style.mode.code(), size[0] as f32, size[1] as f32, 0.],
+            params: [style.mode.code(), size[0] as f32, size[1] as f32, self.camera.line_bias(size[1] as f32)],
             bg_top: lin(style.bg_top),
             bg_bottom: bottom,
             paper: [0.96, 0.96, 0.95, 1.],
