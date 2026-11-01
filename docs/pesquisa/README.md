@@ -25,17 +25,22 @@
 | [conversor-de-arquivos.md](conversor-de-arquivos.md) | Importar/exportar (STEP AP242, IGES, JT, nativos, malhas), menu separado, ligação com VPM | 42 |
 | [plm-vpm-e-save.md](plm-vpm-e-save.md) | Save management, Salvar tudo, links, VPM/PDM/Vault, trava em pasta | 48 |
 
-## Onda B (pendente: depois do reset da cota semanal)
-Ainda faltam estes relatórios:
-- superfícies;
-- chapa;
-- estrutural e soldas;
-- desenho;
-- PMI;
-- visão macro e requisitos consolidados (`requisitos-macro.md`);
-- funções inteligentes de outros CADs (`funcoes-inteligentes.md`).
+## Onda B (feita)
+| Relatório | Tema |
+|---|---|
+| [superficies.md](superficies.md) | Superfícies e wireframe |
+| [chapa.md](chapa.md) | Chapa metálica |
+| [estrutural.md](estrutural.md) | Estrutural e soldas |
+| [desenho.md](desenho.md) | Desenho técnico |
+| [pmi.md](pmi.md) | PMI / FT&A / MBD |
+| [requisitos-macro.md](requisitos-macro.md) | Visão macro e requisitos consolidados |
+| [funcoes-inteligentes.md](funcoes-inteligentes.md) | Funções inteligentes de outros CADs |
 
-Depois da onda B vem a **síntese**, que entrega três coisas:
-- o relatório executivo;
-- a matriz requisito → backlog;
-- a revisão do backlog: novos itens, prioridades e onda 0.
+## Síntese
+[sintese.md](sintese.md) traz:
+- visão macro e 10 princípios;
+- lacunas por bancada;
+- 148 requisitos P0/P1 sem duplicatas, com rastreabilidade;
+- roteiro em ondas.
+
+Ela gerou 37 alterações e 45 itens novos (B64–B108) no backlog. O custo em cota está em [../backlog/custo-estimado.md](../backlog/custo-estimado.md).
