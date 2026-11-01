@@ -11,7 +11,9 @@ pub mod doc;
 pub mod expr;
 pub mod macros;
 pub mod pmi;
+pub mod qualidade;
 pub mod sketch;
 
 pub use doc::*;
+pub use qualidade::{PresetMalha, QualidadeMalha};
 pub use sketch::SketchData;

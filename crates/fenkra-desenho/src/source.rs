@@ -354,7 +354,7 @@ impl Models {
         };
         // sombreado: triângulos da malha projetados, do fundo para a frente (pintor)
         if v.render != Render::Arestas {
-            if let Ok(m) = target.mesh(big * 0.002) {
+            if let Ok(m) = target.mesh(fenkra_core::qualidade::desvio_com_fator(big, 0.002)) {
                 let pt = |i: u32| -> V3 { [0, 1, 2].map(|k| m.positions[i as usize * 3 + k] as f64) };
                 let mut tris: Vec<(f64, [V2; 3], u8)> = vec![];
                 for t in m.indices.chunks_exact(3) {

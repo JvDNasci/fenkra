@@ -1,7 +1,8 @@
 //! Configurações do usuário (persistidas em %APPDATA%\Fenkra\config.json).
 
-use crate::render::{DisplayMode, ViewStyle};
+use crate::render::{DisplayMode, Msaa, ViewStyle};
 use eframe::egui;
+use fenkra_core::{PresetMalha, QualidadeMalha};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use crate::i18n::tr;
@@ -280,6 +281,48 @@ impl Default for Filter {
     }
 }
 
+/// Qualidade gráfica: finura da malha, anti-serrilhamento e iluminação da viewport.
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Graficos {
+    /// ajuste de qualidade da malha (peça e montagem)
+    pub preset: PresetMalha,
+    /// valores da qualidade "Personalizada"
+    pub livre: QualidadeMalha,
+    pub msaa: Msaa,
+    /// durante órbita, pan e zoom desenha sem anti-serrilhamento e volta ao soltar
+    pub simplificar_ao_girar: bool,
+    /// iluminação de três pontos com ambiente hemisférico e brilho suave
+    pub iluminacao_realista: bool,
+}
+
+impl Default for Graficos {
+    fn default() -> Self {
+        Graficos { preset: PresetMalha::Normal, livre: QualidadeMalha::NORMAL, msaa: Msaa::X4, simplificar_ao_girar: false, iluminacao_realista: true }
+    }
+}
+
+impl Graficos {
+    /// Qualidade da malha em uso.
+    pub fn qualidade(&self) -> QualidadeMalha {
+        self.preset.qualidade(self.livre)
+    }
+
+    /// Escolhe um ajuste de qualidade. Na Personalizada parte dos valores do ajuste anterior; a
+    /// iluminação realista acompanha: desligada no Rascunho, ligada nos demais.
+    pub fn escolher(&mut self, p: PresetMalha) {
+        if p == PresetMalha::Personalizada && self.preset != PresetMalha::Personalizada {
+            self.livre = self.qualidade();
+        }
+        self.preset = p;
+        match p {
+            PresetMalha::Rascunho => self.iluminacao_realista = false,
+            PresetMalha::Normal | PresetMalha::Alta => self.iluminacao_realista = true,
+            PresetMalha::Personalizada => {}
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -364,6 +407,8 @@ pub struct Settings {
     pub flanged_holes: Vec<(String, f64, f64)>,
     /// última macro escrita na janela de automação
     pub macro_src: String,
+    /// qualidade gráfica (malha, anti-serrilhamento, iluminação)
+    pub graficos: Graficos,
 }
 
 /// Comandos ocultos, ordem própria em cada grupo e grupos criados pelo usuário.
@@ -441,6 +486,7 @@ impl Default for Settings {
             theme_name: "Escuro".into(),
             pmi_style: Default::default(),
             flanged_holes: vec![],
+            graficos: Default::default(),
         }
     }
 }
@@ -519,6 +565,10 @@ impl Settings {
             bg_bottom: self.bg_bottom,
             gradient: self.gradient,
             edges_in_render: self.edges_in_render,
+            msaa: self.graficos.msaa.amostras(),
+            simplificar: self.graficos.simplificar_ao_girar,
+            navegando: false,
+            realista: self.graficos.iluminacao_realista,
         }
     }
 
@@ -529,5 +579,46 @@ impl Settings {
         });
         crate::theme::apply(ctx, &def);
         ctx.set_zoom_factor(self.ui_scale.clamp(0.7, 2.0));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn configuracao_antiga_sem_graficos_usa_os_padroes() {
+        let s: Settings = serde_json::from_str(r#"{"ui_scale": 1.2, "grid": false}"#).unwrap();
+        assert_eq!(s.graficos, Graficos::default());
+        assert_eq!(s.graficos.qualidade(), QualidadeMalha::NORMAL);
+        assert_eq!(s.graficos.msaa, Msaa::X4);
+        assert!(s.graficos.iluminacao_realista && !s.graficos.simplificar_ao_girar);
+        // campos soltos da seção também têm padrão
+        let g: Settings = serde_json::from_str(r#"{"graficos": {"preset": "Alta"}}"#).unwrap();
+        assert_eq!(g.graficos.qualidade(), QualidadeMalha::ALTA);
+        assert_eq!(g.graficos.msaa, Msaa::X4);
+    }
+
+    #[test]
+    fn graficos_vao_e_voltam_do_arquivo() {
+        let mut s = Settings::default();
+        s.graficos.escolher(PresetMalha::Personalizada);
+        s.graficos.livre = QualidadeMalha { desvio_rel: 0.001, angulo_graus: 15. };
+        s.graficos.msaa = Msaa::X8;
+        s.graficos.simplificar_ao_girar = true;
+        let volta: Settings = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
+        assert_eq!(volta.graficos, s.graficos);
+        assert_eq!(volta.graficos.qualidade(), QualidadeMalha { desvio_rel: 0.001, angulo_graus: 15. });
+    }
+
+    #[test]
+    fn escolher_preset_ajusta_a_iluminacao_e_parte_do_anterior() {
+        let mut g = Graficos::default();
+        g.escolher(PresetMalha::Rascunho);
+        assert!(!g.iluminacao_realista);
+        g.escolher(PresetMalha::Alta);
+        assert!(g.iluminacao_realista);
+        g.escolher(PresetMalha::Personalizada);
+        assert_eq!(g.qualidade(), QualidadeMalha::ALTA, "a Personalizada parte dos valores do ajuste anterior");
     }
 }

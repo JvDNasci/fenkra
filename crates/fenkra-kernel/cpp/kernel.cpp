@@ -826,11 +826,13 @@ int32_t face_index(const Shape& s, double px, double py, double pz, double limit
     });
 }
 
-MeshData tessellate(const Shape& s, double deflection) {
+MeshData tessellate(const Shape& s, double deflection, double angle) {
     return guard("tesselação", [&] {
         MeshData m;
         if (s.s.IsNull()) return m;
-        BRepMesh_IncrementalMesh(s.s, deflection, Standard_False, 0.35, Standard_True);
+        // o OCCT não afina nem engrossa uma malha já feita; limpa para valer a qualidade pedida
+        BRepTools::Clean(s.s);
+        BRepMesh_IncrementalMesh(s.s, deflection, Standard_False, angle, Standard_True);
 
         // mesma ordem de faces usada pelas etiquetas (IndexedMap)
         TopTools_IndexedMapOfShape fmap;

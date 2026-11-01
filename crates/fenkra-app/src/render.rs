@@ -17,6 +17,7 @@ struct U {
     bg_bottom: vec4<f32>,  // w = 1 → degradê
     paper: vec4<f32>,      // cor das faces no estilo "linhas ocultas"
     tex_scale: array<vec4<f32>, 2>,  // tamanho (mm) de uma repetição de cada textura
+    qual: vec4<f32>,       // x = 1 → iluminação realista (três pontos, ambiente hemisférico, gama)
 };
 @group(0) @binding(0) var<uniform> u: U;
 @group(0) @binding(1) var tex: texture_2d_array<f32>;
@@ -31,6 +32,42 @@ fn triplanar(layer: i32, p: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
     let b = textureSampleLevel(tex, samp, p.xz / s, layer, 0.0).rgb;
     let c = textureSampleLevel(tex, samp, p.xy / s, layer, 0.0).rgb;
     return a * w.x + b * w.y + c * w.z;
+}
+
+// A textura da viewport é exibida pelo egui sem reconversão: as cores do tema são valores de tela (sRGB).
+// A iluminação realista soma luz em espaço linear e devolve o resultado em sRGB.
+fn to_linear(c: vec3<f32>) -> vec3<f32> { return pow(max(c, vec3<f32>(0.0)), vec3<f32>(2.2)); }
+fn to_display(c: vec3<f32>) -> vec3<f32> { return pow(clamp(c, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / 2.2)); }
+
+// luz de três pontos presa à câmera (principal acima à esquerda, preenchimento à direita, contraluz
+// fraco atrás), ambiente hemisférico (céu/chão, Z para cima) e brilho Blinn-Phong leve
+fn shade_realistic(base_s: vec3<f32>, n: vec3<f32>, v: vec3<f32>, rough: f32, metal: f32) -> vec3<f32> {
+    let base = to_linear(base_s);
+    var r = cross(vec3<f32>(0.0, 0.0, 1.0), v);
+    if (length(r) < 1e-3) { r = vec3<f32>(1.0, 0.0, 0.0); }
+    let right = normalize(r);
+    let up = cross(v, right);
+    let key = normalize(v * 0.55 + up * 0.60 - right * 0.55);
+    let fill = normalize(v * 0.70 + right * 0.70 - up * 0.10);
+    let rim = normalize(-v * 0.80 + up * 0.50 + right * 0.30);
+
+    let sky = vec3<f32>(0.62, 0.68, 0.80);
+    let ground = vec3<f32>(0.20, 0.18, 0.16);
+    let amb = mix(ground, sky, n.z * 0.5 + 0.5) * 0.34;
+    let kd = max(dot(n, key), 0.0);
+    let fd = max(dot(n, fill), 0.0);
+    let diffc = base * (1.0 - metal * 0.75);
+    var c = diffc * (amb + vec3<f32>(1.0, 0.98, 0.94) * kd * 0.70 + vec3<f32>(0.80, 0.88, 1.0) * fd * 0.24);
+
+    // contraluz: só nas bordas voltadas para longe da câmera
+    let edge = pow(1.0 - max(dot(n, v), 0.0), 3.0);
+    c = c + diffc * sky * edge * max(dot(n, rim) + 0.3, 0.0) * 0.28;
+
+    let shin = mix(110.0, 10.0, rough);
+    let spec = pow(max(dot(n, normalize(key + v)), 0.0), shin) * (1.0 - rough * 0.8);
+    c = c + mix(vec3<f32>(1.0), base, metal) * spec * 0.30 * kd;
+    c = c + base * metal * amb * 0.5;
+    return to_display(c);
 }
 
 // ---------- fundo
@@ -115,6 +152,8 @@ struct MOut {
         let diffc = base * (1.0 - metal);
         c = diffc * (amb * 0.45 + diff * 0.75) + fres * (env * (1.0 - rough * 0.7) * 0.9 + vec3<f32>(spec) * 1.4);
         if (metal > 0.5) { c = c + base * env * 0.35; }
+    } else if (u.qual.x > 0.5) {
+        c = shade_realistic(base, n, v, rough, metal);
     } else {
         let d = abs(dot(n, v));
         let k = normalize(vec3<f32>(0.3, 0.5, 1.0));
@@ -238,6 +277,36 @@ impl DisplayMode {
     }
 }
 
+/// Anti-serrilhamento (MSAA) pedido nas configurações.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum Msaa {
+    Desligado,
+    X2,
+    #[default]
+    X4,
+    X8,
+}
+
+impl Msaa {
+    pub const ALL: [Msaa; 4] = [Msaa::Desligado, Msaa::X2, Msaa::X4, Msaa::X8];
+    pub fn amostras(self) -> u32 {
+        match self {
+            Msaa::Desligado => 1,
+            Msaa::X2 => 2,
+            Msaa::X4 => 4,
+            Msaa::X8 => 8,
+        }
+    }
+    pub fn label(self) -> &'static str {
+        match self {
+            Msaa::Desligado => tr("Desligado"),
+            Msaa::X2 => "2×",
+            Msaa::X4 => "4×",
+            Msaa::X8 => "8×",
+        }
+    }
+}
+
 /// Aparência da viewport derivada das configurações.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct ViewStyle {
@@ -246,6 +315,13 @@ pub struct ViewStyle {
     pub bg_bottom: [u8; 3],
     pub gradient: bool,
     pub edges_in_render: bool,
+    /// amostras de anti-serrilhamento pedidas (1 = desligado); a viewport cai no maior valor que a placa aceita
+    pub msaa: u32,
+    /// "Simplificar ao girar" ligado: enquanto `navegando`, desenha sem anti-serrilhamento
+    pub simplificar: bool,
+    pub navegando: bool,
+    /// iluminação realista no sombreado (três pontos, ambiente hemisférico, gama)
+    pub realista: bool,
 }
 
 #[repr(C)]
@@ -299,6 +375,7 @@ struct Uniforms {
     bg_bottom: [f32; 4],
     paper: [f32; 4],
     tex_scale: [[f32; 4]; 2],
+    qual: [f32; 4],
 }
 
 /// Camadas do array de texturas (cada imagem é reduzida para TEX × TEX).
@@ -425,23 +502,40 @@ impl Camera {
     }
 }
 
+/// Cor e profundidade de uma contagem de amostras (com 1 amostra a cor é a própria `resolve`).
+struct MsTarget {
+    samples: u32,
+    color: Option<wgpu::TextureView>,
+    depth: wgpu::TextureView,
+}
+
 struct Targets {
     size: [u32; 2],
-    msaa: wgpu::TextureView,
-    depth: wgpu::TextureView,
+    ms: Vec<MsTarget>,
     resolve: wgpu::Texture,
     tex_id: egui::TextureId,
+}
+
+/// Os pipelines de uma contagem de amostras.
+struct Pipes {
+    samples: u32,
+    bg: wgpu::RenderPipeline,
+    mesh: wgpu::RenderPipeline,
+    xray: wgpu::RenderPipeline,
+    line: wgpu::RenderPipeline,
+    overlay: wgpu::RenderPipeline,
+    wide: wgpu::RenderPipeline,
 }
 
 type Buf = Option<(wgpu::Buffer, u32)>;
 
 pub struct Viewport {
-    bg_pipe: wgpu::RenderPipeline,
-    mesh_pipe: wgpu::RenderPipeline,
-    xray_pipe: wgpu::RenderPipeline,
-    line_pipe: wgpu::RenderPipeline,
-    overlay_pipe: wgpu::RenderPipeline,
-    wide_pipe: wgpu::RenderPipeline,
+    module: wgpu::ShaderModule,
+    layout: wgpu::PipelineLayout,
+    /// pipelines por contagem de amostras (só as que a qualidade atual pode usar)
+    pipes: Vec<Pipes>,
+    /// contagens de amostras que a placa aceita para cor e profundidade (sempre inclui 1)
+    suportadas: Vec<u32>,
     wb: Buf,
     ubuf: wgpu::Buffer,
     bind: wgpu::BindGroup,
@@ -459,11 +553,22 @@ pub struct Viewport {
     last: Option<(Camera, [u32; 2], u64, ViewStyle)>,
     scene_gen: u64,
     pub bounds: Option<(Vec3, Vec3)>,
+    /// último movimento de câmera (órbita, pan, zoom, animação) para "Simplificar ao girar"
+    ultimo_giro: Option<std::time::Instant>,
 }
 
 const FMT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 const DEPTH: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
-const SAMPLES: u32 = 4;
+/// Quanto tempo depois do último movimento a câmera ainda conta como "navegando".
+pub const PAUSA_NAVEGACAO: std::time::Duration = std::time::Duration::from_millis(220);
+
+/// Contagens de amostras (1, 2, 4, 8) que o dispositivo aceita para a cor e a profundidade.
+/// Só 1 e 4 são garantidas; 2 e 8 dependem da feature de formatos específicos do adaptador.
+fn amostras_suportadas(rs: &egui_wgpu::RenderState) -> Vec<u32> {
+    let extra = rs.device.features().contains(wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES);
+    let aceita = |fmt: wgpu::TextureFormat, n: u32| n == 1 || (rs.adapter.get_texture_format_features(fmt).flags.sample_count_supported(n) && (extra || n == 4));
+    [1u32, 2, 4, 8].into_iter().filter(|n| aceita(FMT, *n) && aceita(DEPTH, *n)).collect()
+}
 
 /// Cor da interface (sRGB 0–255) para o shader. A textura é exibida pelo egui sem reconversão,
 /// então os valores vão diretos, como as cores das faces.
@@ -472,7 +577,75 @@ fn lin(c: [u8; 3]) -> [f32; 4] {
     [f(c[0]), f(c[1]), f(c[2]), 1.]
 }
 
+/// Monta os pipelines para uma contagem de amostras.
+fn make_pipes(dev: &wgpu::Device, module: &wgpu::ShaderModule, layout: &wgpu::PipelineLayout, samples: u32) -> Pipes {
+    let target = [Some(wgpu::ColorTargetState { format: FMT, blend: Some(wgpu::BlendState::ALPHA_BLENDING), write_mask: wgpu::ColorWrites::ALL })];
+    let mesh_attrs = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x4];
+    let line_attrs = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x4];
+    let wide_attrs = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x4, 4 => Float32x2];
+    use wgpu::CompareFunction as C;
+    use wgpu::PrimitiveTopology as T;
+    let pipe = |vs: &str, fs: &str, attrs: &[wgpu::VertexAttribute], stride: usize, topo: T, cmp, write| {
+        let buffers = [Some(wgpu::VertexBufferLayout { array_stride: stride as u64, step_mode: wgpu::VertexStepMode::Vertex, attributes: attrs })];
+        dev.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some(vs),
+            layout: Some(layout),
+            vertex: wgpu::VertexState {
+                module,
+                entry_point: Some(vs),
+                buffers: if stride == 0 { &[] } else { &buffers },
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState { module, entry_point: Some(fs), targets: &target, compilation_options: Default::default() }),
+            primitive: wgpu::PrimitiveState { topology: if topo == T::LineStrip { T::TriangleList } else { topo }, ..Default::default() },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH,
+                depth_write_enabled: Some(write),
+                depth_compare: Some(cmp),
+                stencil: Default::default(),
+                // faces um pouco para trás (polygon offset) só pelo termo constante: o termo de
+                // inclinação empurrava faces vistas de lado tanto que arestas escondidas atrás delas
+                // apareciam perto dos cantos (a frente das arestas vem de `Camera::line_bias`)
+                bias: if topo == T::TriangleList && stride != std::mem::size_of::<WideVertex>() {
+                    wgpu::DepthBiasState { constant: 2, slope_scale: 0.0, clamp: 0.0 }
+                } else {
+                    Default::default()
+                },
+            }),
+            multisample: wgpu::MultisampleState { count: samples, ..Default::default() },
+            multiview_mask: None,
+            cache: None,
+        })
+    };
+    let ms = std::mem::size_of::<MeshVertex>();
+    let ls = std::mem::size_of::<LineVertex>();
+    Pipes {
+        samples,
+        bg: pipe("vs_bg", "fs_bg", &[], 0, T::TriangleList, C::Always, false),
+        mesh: pipe("vs_mesh", "fs_mesh", &mesh_attrs, ms, T::TriangleList, C::Less, true),
+        xray: pipe("vs_mesh", "fs_mesh", &mesh_attrs, ms, T::TriangleList, C::Less, false),
+        line: pipe("vs_line", "fs_line", &line_attrs, ls, T::LineList, C::LessEqual, false),
+        overlay: pipe("vs_line", "fs_line", &line_attrs, ls, T::LineList, C::Always, false),
+        wide: pipe("vs_wide", "fs_wide", &wide_attrs, std::mem::size_of::<WideVertex>(), T::LineStrip, C::LessEqual, false),
+    }
+}
+
 impl Viewport {
+    /// A câmera mudou (órbita, pan, zoom, animação): marca o instante para "Simplificar ao girar".
+    pub fn navegou(&mut self) {
+        self.ultimo_giro = Some(std::time::Instant::now());
+    }
+
+    /// A câmera se mexeu há pouco? (`PAUSA_NAVEGACAO`)
+    pub fn navegando(&self) -> bool {
+        self.ultimo_giro.is_some_and(|t| t.elapsed() < PAUSA_NAVEGACAO)
+    }
+
+    /// Maior contagem de amostras aceita pela placa que não passe do pedido.
+    pub fn amostras_efetivas(&self, pedido: u32) -> u32 {
+        self.suportadas.iter().copied().filter(|n| *n <= pedido).max().unwrap_or(1)
+    }
+
     /// A câmera mudou por um comando (vista, ajustar, alinhar): em vez de saltar, anima a partir de `before`.
     pub fn animate_from(&mut self, before: Camera) {
         let mut to = self.camera;
@@ -584,53 +757,12 @@ impl Viewport {
             ],
         });
         let layout = dev.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: None, bind_group_layouts: &[Some(&bgl)], ..Default::default() });
-        let target = [Some(wgpu::ColorTargetState { format: FMT, blend: Some(wgpu::BlendState::ALPHA_BLENDING), write_mask: wgpu::ColorWrites::ALL })];
-        let mesh_attrs = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x4];
-        let line_attrs = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x4];
-        let wide_attrs = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x4, 4 => Float32x2];
-        use wgpu::CompareFunction as C;
-        use wgpu::PrimitiveTopology as T;
-        let pipe = |vs: &str, fs: &str, attrs: &[wgpu::VertexAttribute], stride: usize, topo: T, cmp, write| {
-            let buffers = [Some(wgpu::VertexBufferLayout { array_stride: stride as u64, step_mode: wgpu::VertexStepMode::Vertex, attributes: attrs })];
-            dev.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(vs),
-                layout: Some(&layout),
-                vertex: wgpu::VertexState {
-                    module: &module,
-                    entry_point: Some(vs),
-                    buffers: if stride == 0 { &[] } else { &buffers },
-                    compilation_options: Default::default(),
-                },
-                fragment: Some(wgpu::FragmentState { module: &module, entry_point: Some(fs), targets: &target, compilation_options: Default::default() }),
-                primitive: wgpu::PrimitiveState { topology: if topo == T::LineStrip { T::TriangleList } else { topo }, ..Default::default() },
-                depth_stencil: Some(wgpu::DepthStencilState {
-                    format: DEPTH,
-                    depth_write_enabled: Some(write),
-                    depth_compare: Some(cmp),
-                    stencil: Default::default(),
-                    // faces um pouco para trás (polygon offset) só pelo termo constante: o termo de
-                    // inclinação empurrava faces vistas de lado tanto que arestas escondidas atrás delas
-                    // apareciam perto dos cantos (a frente das arestas vem de `Camera::line_bias`)
-                    bias: if topo == T::TriangleList && stride != std::mem::size_of::<WideVertex>() {
-                        wgpu::DepthBiasState { constant: 2, slope_scale: 0.0, clamp: 0.0 }
-                    } else {
-                        Default::default()
-                    },
-                }),
-                multisample: wgpu::MultisampleState { count: SAMPLES, ..Default::default() },
-                multiview_mask: None,
-                cache: None,
-            })
-        };
-        let ms = std::mem::size_of::<MeshVertex>();
-        let ls = std::mem::size_of::<LineVertex>();
         Viewport {
-            bg_pipe: pipe("vs_bg", "fs_bg", &[], 0, T::TriangleList, C::Always, false),
-            mesh_pipe: pipe("vs_mesh", "fs_mesh", &mesh_attrs, ms, T::TriangleList, C::Less, true),
-            xray_pipe: pipe("vs_mesh", "fs_mesh", &mesh_attrs, ms, T::TriangleList, C::Less, false),
-            line_pipe: pipe("vs_line", "fs_line", &line_attrs, ls, T::LineList, C::LessEqual, false),
-            overlay_pipe: pipe("vs_line", "fs_line", &line_attrs, ls, T::LineList, C::Always, false),
-            wide_pipe: pipe("vs_wide", "fs_wide", &wide_attrs, std::mem::size_of::<WideVertex>(), T::LineStrip, C::LessEqual, false),
+            module,
+            layout,
+            pipes: vec![],
+            suportadas: amostras_suportadas(rs),
+            ultimo_giro: None,
             wb: None,
             ubuf,
             bind,
@@ -682,11 +814,16 @@ impl Viewport {
         self.scene_gen += 1;
     }
 
-    fn ensure_targets(&mut self, rs: &egui_wgpu::RenderState, size: [u32; 2]) {
-        if self.targets.as_ref().is_some_and(|t| t.size == size) {
-            return;
-        }
+    /// Garante pipelines e alvos de cor/profundidade para cada contagem de `usar` (e descarta as outras),
+    /// no tamanho pedido. Trocar o anti-serrilhamento recria só o que mudou.
+    fn ensure_targets(&mut self, rs: &egui_wgpu::RenderState, size: [u32; 2], usar: &[u32]) {
         let dev = &rs.device;
+        self.pipes.retain(|p| usar.contains(&p.samples));
+        for &n in usar {
+            if !self.pipes.iter().any(|p| p.samples == n) {
+                self.pipes.push(make_pipes(dev, &self.module, &self.layout, n));
+            }
+        }
         let ext = wgpu::Extent3d { width: size[0], height: size[1], depth_or_array_layers: 1 };
         let tex = |fmt, samples, usage| {
             dev.create_texture(&wgpu::TextureDescriptor {
@@ -700,8 +837,22 @@ impl Viewport {
                 view_formats: &[],
             })
         };
-        let msaa = tex(FMT, SAMPLES, wgpu::TextureUsages::RENDER_ATTACHMENT).create_view(&Default::default());
-        let depth = tex(DEPTH, SAMPLES, wgpu::TextureUsages::RENDER_ATTACHMENT).create_view(&Default::default());
+        let make_ms = |n: u32| MsTarget {
+            samples: n,
+            color: (n > 1).then(|| tex(FMT, n, wgpu::TextureUsages::RENDER_ATTACHMENT).create_view(&Default::default())),
+            depth: tex(DEPTH, n, wgpu::TextureUsages::RENDER_ATTACHMENT).create_view(&Default::default()),
+        };
+        if let Some(t) = self.targets.as_mut().filter(|t| t.size == size) {
+            t.ms.retain(|m| usar.contains(&m.samples));
+            for &n in usar {
+                if !t.ms.iter().any(|m| m.samples == n) {
+                    t.ms.push(make_ms(n));
+                    self.last = None;
+                }
+            }
+            return;
+        }
+        let ms = usar.iter().map(|n| make_ms(*n)).collect();
         let resolve = tex(FMT, 1, wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING);
         let view = resolve.create_view(&Default::default());
         let mut r = rs.renderer.write();
@@ -712,14 +863,18 @@ impl Viewport {
             }
             None => r.register_native_texture(dev, &view, wgpu::FilterMode::Linear),
         };
-        self.targets = Some(Targets { size, msaa, depth, resolve, tex_id });
+        self.targets = Some(Targets { size, ms, resolve, tex_id });
         self.last = None;
     }
 
     /// Renderiza (se necessário) e devolve a textura para exibir.
     pub fn render(&mut self, rs: &egui_wgpu::RenderState, size: [u32; 2], style: ViewStyle) -> egui::TextureId {
         let size = [size[0].clamp(1, 8192), size[1].clamp(1, 8192)];
-        self.ensure_targets(rs, size);
+        // anti-serrilhamento de repouso (o que a placa aceita) e o de navegação (sem, se pedido)
+        let repouso = self.amostras_efetivas(style.msaa);
+        let usar: Vec<u32> = if style.simplificar && repouso > 1 { vec![repouso, 1] } else { vec![repouso] };
+        let amostras = if style.simplificar && style.navegando { 1 } else { repouso };
+        self.ensure_targets(rs, size, &usar);
         let key = (self.camera, size, self.scene_gen, style);
         let t = self.targets.as_ref().unwrap();
         if self.last == Some(key) {
@@ -737,29 +892,37 @@ impl Viewport {
             bg_bottom: bottom,
             paper: [0.96, 0.96, 0.95, 1.],
             tex_scale: self.tex_scale,
+            qual: [if style.realista { 1. } else { 0. }, 0., 0., 0.],
         };
         rs.queue.write_buffer(&self.ubuf, 0, bytemuck::bytes_of(&u));
 
+        let (Some(ms), Some(p)) = (t.ms.iter().find(|m| m.samples == amostras), self.pipes.iter().find(|p| p.samples == amostras)) else { return t.tex_id };
         let mut enc = rs.device.create_command_encoder(&Default::default());
         {
             let view = t.resolve.create_view(&Default::default());
+            // com anti-serrilhamento desenha na textura multiamostrada e resolve na `resolve`;
+            // sem ele (ou ao simplificar) desenha direto nela
+            let (alvo, resolve, store) = match &ms.color {
+                Some(c) => (c, Some(&view), wgpu::StoreOp::Discard),
+                None => (&view, None, wgpu::StoreOp::Store),
+            };
             let mut pass = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("viewport"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &t.msaa,
-                    resolve_target: Some(&view),
+                    view: alvo,
+                    resolve_target: resolve,
                     depth_slice: None,
-                    ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), store: wgpu::StoreOp::Discard },
+                    ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), store },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &t.depth,
+                    view: &ms.depth,
                     depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Clear(1.0), store: wgpu::StoreOp::Discard }),
                     stencil_ops: None,
                 }),
                 ..Default::default()
             });
             pass.set_bind_group(0, &self.bind, &[]);
-            pass.set_pipeline(&self.bg_pipe);
+            pass.set_pipeline(&p.bg);
             pass.draw(0..3, 0..1);
 
             let m = style.mode;
@@ -771,13 +934,13 @@ impl Viewport {
                 _ => true,
             };
             if let (true, Some((vb, ib, n))) = (faces, &self.vb) {
-                pass.set_pipeline(if m == DisplayMode::RaioX { &self.xray_pipe } else { &self.mesh_pipe });
+                pass.set_pipeline(if m == DisplayMode::RaioX { &p.xray } else { &p.mesh });
                 pass.set_vertex_buffer(0, vb.slice(..));
                 pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
                 pass.draw_indexed(0..*n, 0, 0..1);
             }
             if let (false, Some((fb, n))) = (m == DisplayMode::LinhasOcultas, &self.fb) {
-                pass.set_pipeline(&self.xray_pipe);
+                pass.set_pipeline(&p.xray);
                 pass.set_vertex_buffer(0, fb.slice(..));
                 pass.draw(0..*n, 0..1);
             }
@@ -789,11 +952,11 @@ impl Viewport {
                 }
             };
             if edges {
-                lines(&self.eb, if edges_always { &self.overlay_pipe } else { &self.line_pipe });
+                lines(&self.eb, if edges_always { &p.overlay } else { &p.line });
             }
-            lines(&self.lb, &self.line_pipe);
-            lines(&self.wb, &self.wide_pipe);
-            lines(&self.ob, &self.overlay_pipe);
+            lines(&self.lb, &p.line);
+            lines(&self.wb, &p.wide);
+            lines(&self.ob, &p.overlay);
         }
         rs.queue.submit([enc.finish()]);
         self.last = Some(key);

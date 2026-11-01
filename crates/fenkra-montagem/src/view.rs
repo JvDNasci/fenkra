@@ -123,8 +123,7 @@ pub fn compose(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, errors: 
         let cut = (visible && changed.contains(&n.id)).then(|| placed_shape(a, n.id, dir, cache)).flatten();
         if let Some(sh) = cut {
             // já no mundo: a malha da forma recortada não leva a posição de novo
-            let size = sh.bbox().map(|(l, h)| norm(sub(h, l))).unwrap_or(100.);
-            if let Ok(m) = sh.mesh((size * 1e-3).max(0.01)) {
+            if let Ok(m) = fenkra_solidos::tesselar(&sh, &cache.qualidade()) {
                 let color = n.color.unwrap_or_else(|| comp_mesh(&n.kind, dir, cache, false, 0).map(|x| x.1).unwrap_or([180, 190, 200]));
                 let label = if n.number > 0 { format!("{} · {}", n.number, n.name) } else { n.name.clone() };
                 doc.collectors.push(BodyCollector { id: n.id, name: label, color, visible, finish: Finish::default(), texture: None, marker: None, published: false });

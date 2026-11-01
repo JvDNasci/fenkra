@@ -2588,6 +2588,21 @@ static TABLE: &[(&str, &str)] = &[
     ("Rasgo de chaveta no cubo (DIN 6885)", "Keyway in the hub (DIN 6885)"),
     ("Corta no furo o rasgo da chaveta forma A: largura b e profundidade t2 da tabela, pelo diâmetro do furo.", "Cuts the form A keyway in the bore: width b and depth t2 from the table, by the bore diameter."),
     ("furo fora da tabela DIN 6885 (Ø6 a Ø85)", "bore outside the DIN 6885 table (Ø6 to Ø85)"),
+    ("Gráficos", "Graphics"),
+    ("Qualidade da malha", "Mesh quality"),
+    ("Rascunho", "Draft"),
+    ("Alta", "High"),
+    ("Personalizada", "Custom"),
+    ("Desligado", "Off"),
+    ("Desvio máximo (‰ da diagonal)", "Max deviation (‰ of diagonal)"),
+    ("Ângulo máximo entre triângulos (°)", "Max angle between triangles (°)"),
+    ("Malha mais fina deixa as curvas mais lisas, mas pesa mais. Vale para peças e montagens e só refaz a exibição, não o modelo.", "A finer mesh makes curves smoother but is heavier. It applies to parts and assemblies and only rebuilds the display, not the model."),
+    ("Anti-serrilhamento (MSAA)", "Anti-aliasing (MSAA)"),
+    ("Se a placa de vídeo não aceitar o valor, usa o maior que ela aceita.", "If the graphics card does not support the value, the highest it supports is used."),
+    ("Simplificar ao girar", "Simplify while orbiting"),
+    ("Durante órbita, pan e zoom desenha sem anti-serrilhamento e volta à qualidade total ao parar.", "While orbiting, panning and zooming it draws without anti-aliasing and returns to full quality when you stop."),
+    ("Iluminação realista", "Realistic lighting"),
+    ("Sombreado com luz de três pontos, ambiente de céu e chão e brilho suave. Desligado usa o sombreado simples.", "Shading with three-point light, sky and ground ambient and a soft highlight. Off uses the simple shading."),
 ];
 
 #[cfg(test)]

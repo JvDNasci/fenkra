@@ -408,9 +408,17 @@ pub fn origin_axis(a: OriginAxis) -> [f64; 3] {
     }
 }
 
+/// Malha de exibição de uma forma na qualidade pedida (desvio pela diagonal da caixa envolvente).
+pub fn tesselar(sh: &Shape, q: &QualidadeMalha) -> Result<Mesh, KernelError> {
+    let diagonal = sh.bbox().map(|(a, b)| geo3d::dist(a, b)).unwrap_or(100.);
+    sh.mesh_angle(q.desvio(diagonal), q.angulo_rad())
+}
+
 struct Ctx<'a> {
     doc: &'a Document,
     vars: Vars,
+    /// qualidade das malhas que o cálculo gera (nunca muda o sólido)
+    qualidade: QualidadeMalha,
     bodies: HashMap<Id, Body>,
     sketches: HashMap<Id, (Frame, Arc<EvalSketch>)>,
     /// referências v2 que o comando em execução calculou para pontos sem chave (promoção)
@@ -517,6 +525,16 @@ pub struct Cache {
     refs: HashMap<Id, (u64, Result<RefViz, String>)>,
     /// quantos comandos foram reaproveitados no último cálculo (diagnóstico)
     pub reused: usize,
+    /// qualidade pedida para as malhas; trocar re-tessela sem refazer nenhum comando
+    pub qualidade: QualidadeMalha,
+    /// qualidade com que as malhas guardadas (`meshes`, `fills`, `refs`) foram feitas
+    meshes_q: Option<QualidadeMalha>,
+}
+
+impl Cache {
+    pub fn com_qualidade(qualidade: QualidadeMalha) -> Self {
+        Cache { qualidade, ..Default::default() }
+    }
 }
 
 /// Valor exibível de uma referência (guardado no cache).
@@ -1640,9 +1658,7 @@ impl Ctx<'_> {
                 let vertex = matches!(l.source, LinkSrc::Vertex { .. });
                 let mut best: Option<(f64, Vec<V3>)> = None;
                 for (b, _, _) in self.bodies.values() {
-                    let Some((lo, hi)) = b.bbox() else { continue };
-                    let defl = (geo3d::dist(lo, hi) * 0.0015).clamp(0.005, 1.0);
-                    let Ok(m) = b.mesh(defl) else { continue };
+                    let Ok(m) = tesselar(b, &self.qualidade) else { continue };
                     if vertex {
                         for v in m.vertices.chunks_exact(3) {
                             let p = [v[0] as f64, v[1] as f64, v[2] as f64];
@@ -1923,7 +1939,7 @@ impl Ctx<'_> {
     fn minimal_edges(&self, b: &Shape, owners: &[Id], roles: &[i32], s: &Shape, own_s: &[Id], role_s: &[i32], mids: &[[f64; 3]], v: f64, fid: Id) -> Result<(Shape, Vec<Id>, Vec<i32>), String> {
         let k = |e: KernelError| e.0;
         let size = b.bbox().map(|(a, c)| geo3d::dist(a, c)).unwrap_or(100.).max(1.);
-        let m = b.mesh(size * 1e-3).map_err(k)?;
+        let m = tesselar(b, &self.qualidade).map_err(k)?;
         let nseg = m.edges.len() / 6;
         let r = 3. * v + 0.5;
         let mut tubes = Shape::empty();
@@ -4201,9 +4217,17 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         Ok(v) => (v, None),
         Err(e) => (HashMap::new(), Some(e.to_string())),
     };
+    // outra qualidade: as malhas guardadas não servem mais (os comandos continuam valendo)
+    if cache.meshes_q != Some(cache.qualidade) {
+        cache.meshes.clear();
+        cache.fills.clear();
+        cache.refs.clear();
+        cache.meshes_q = Some(cache.qualidade);
+    }
     let mut cx = Ctx {
         doc,
         vars,
+        qualidade: cache.qualidade,
         bodies: HashMap::new(),
         sketches: HashMap::new(),
         status: HashMap::new(),
@@ -4419,8 +4443,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                         Geo::Point(p) => RefViz::Point(p),
                         Geo::Curve(c) => RefViz::Curve(c.pts),
                         Geo::Surface(sh) => {
-                            let defl = sh.bbox().map(|(a, b)| ((0..3).map(|i| (b[i] - a[i]).powi(2)).sum::<f64>().sqrt() * 0.002).clamp(0.01, 1.0)).unwrap_or(0.05);
-                            RefViz::Surface(sh.mesh(defl).map_err(|e| e.0)?)
+                            RefViz::Surface(tesselar(&sh, &cx.qualidade).map_err(|e| e.0)?)
                         }
                     })
                 });
@@ -4472,7 +4495,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
             let key = (*id, hash_of(&[&format!("{:?}{:?}", es.loops, (fr.origin, fr.x, fr.normal))], 0));
             if let Some(f) = cache.fills.get(&key) {
                 v.fill = f.clone();
-            } else if let Ok(m) = Shape::face(fr, &es.loops).and_then(|f| f.mesh(0.2)) {
+            } else if let Ok(m) = Shape::face(fr, &es.loops).and_then(|f| tesselar(&f, &cx.qualidade)) {
                 for t in m.indices.chunks_exact(3) {
                     for &i in t {
                         let k = i as usize * 3;
@@ -4502,11 +4525,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         let r = match cached {
             Some(x) => Ok(x),
             None => {
-                let defl = s
-                    .bbox()
-                    .map(|(a, b)| ((0..3).map(|i| (b[i] - a[i]).powi(2)).sum::<f64>().sqrt() * 0.0015).clamp(0.005, 1.0))
-                    .unwrap_or(0.1);
-                s.mesh(defl).map(|m| {
+                tesselar(&s, &cx.qualidade).map(|m| {
                     let x = (m, s.mass(), s.face_count());
                     cache.meshes.insert(key, x.clone());
                     x
@@ -4576,6 +4595,7 @@ pub fn publications(doc: &Document) -> Vec<(String, LinkedGeo)> {
             let mut cx = Ctx {
                 doc,
                 vars,
+                qualidade: Default::default(),
                 bodies: HashMap::new(),
                 sketches: HashMap::new(),
                 status: HashMap::new(),
@@ -4607,6 +4627,7 @@ fn surface_brep(doc: &Document, id: Id) -> Option<String> {
     let mut cx = Ctx {
         doc,
         vars,
+        qualidade: Default::default(),
         bodies: HashMap::new(),
         sketches: HashMap::new(),
         status: HashMap::new(),
@@ -4956,6 +4977,7 @@ pub fn cut_list(doc: &Document) -> Vec<CutRow> {
     let cx = Ctx {
         doc,
         vars,
+        qualidade: Default::default(),
         bodies: HashMap::new(),
         sketches: HashMap::new(),
         status: HashMap::new(),
@@ -5016,6 +5038,7 @@ pub fn member_joints(doc: &Document) -> Vec<((Id, usize), (Id, usize), [f64; 3])
     let cx = Ctx {
         doc,
         vars,
+        qualidade: Default::default(),
         bodies: HashMap::new(),
         sketches: HashMap::new(),
         status: HashMap::new(),
@@ -5129,6 +5152,7 @@ pub fn export(doc: &Document, collector: Option<Id>, path: &str) -> Result<(), S
     let mut cx = Ctx {
         doc,
         vars,
+        qualidade: Default::default(),
         bodies: HashMap::new(),
         sketches: HashMap::new(),
         status: HashMap::new(),
@@ -5168,6 +5192,7 @@ pub fn final_shape(doc: &Document) -> Option<Shape> {
     let mut cx = Ctx {
         doc,
         vars,
+        qualidade: Default::default(),
         bodies: HashMap::new(),
         sketches: HashMap::new(),
         status: HashMap::new(),
@@ -6498,6 +6523,28 @@ mod tests {
         if fenkra_kernel::AVAILABLE {
             assert!((a.bodies[0].mass.volume - c.bodies[0].mass.volume).abs() < 1e-6);
         }
+    }
+
+    #[test]
+    fn qualidade_alta_gera_mais_triangulos_sem_refazer_comandos() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let mut d = Document::new("cilindro");
+        d.add_feature(FeatureKind::Primitive(Primitive { kind: PrimKind::Cilindro, plane: PlaneRef::Origin(OriginPlane::XY), a: "20".into(), b: "40".into(), c: "0".into(), d: "0".into(), op: BoolOp::Add }));
+        let tris = |r: &RecomputeResult| r.bodies[0].mesh.indices.len() / 3;
+        let rascunho = recompute_cached(&d, &mut Cache::com_qualidade(QualidadeMalha::RASCUNHO));
+        let alta = recompute_cached(&d, &mut Cache::com_qualidade(QualidadeMalha::ALTA));
+        assert!(tris(&alta) > tris(&rascunho), "alta {} vs rascunho {}", tris(&alta), tris(&rascunho));
+        // trocar a qualidade no mesmo cache só re-tessela: todos os comandos vêm prontos
+        let mut cache = Cache::com_qualidade(QualidadeMalha::RASCUNHO);
+        let a = recompute_cached(&d, &mut cache);
+        cache.qualidade = QualidadeMalha::ALTA;
+        let b = recompute_cached(&d, &mut cache);
+        assert_eq!(cache.reused, d.features.len());
+        assert_eq!(tris(&b), tris(&alta));
+        assert!(tris(&b) > tris(&a));
+        assert!((a.bodies[0].mass.volume - b.bodies[0].mass.volume).abs() < 1e-6);
     }
 
     #[test]

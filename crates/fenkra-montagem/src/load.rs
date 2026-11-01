@@ -2,7 +2,7 @@
 //! e entrega a malha e a forma para exibição, seleção e restrições.
 
 use crate::*;
-use fenkra_core::Document;
+use fenkra_core::{Document, QualidadeMalha};
 use fenkra_kernel::Shape;
 use fenkra_solidos::RecomputeResult;
 use std::path::{Path, PathBuf};
@@ -21,6 +21,8 @@ pub struct LoadedPart {
 #[derive(Default)]
 pub struct PartCache {
     parts: HashMap<PathBuf, LoadedPart>,
+    /// qualidade das malhas das peças (a mesma da peça aberta)
+    qualidade: QualidadeMalha,
 }
 
 /// Caminho completo de um componente (relativo à pasta da montagem ou absoluto).
@@ -33,6 +35,21 @@ pub fn full_path(asm_dir: Option<&Path>, path: &str) -> PathBuf {
 }
 
 impl PartCache {
+    pub fn qualidade(&self) -> QualidadeMalha {
+        self.qualidade
+    }
+
+    /// Troca a qualidade das malhas; as peças já lidas são descartadas para tesselar de novo.
+    /// Devolve `true` se mudou.
+    pub fn set_qualidade(&mut self, q: QualidadeMalha) -> bool {
+        if q == self.qualidade {
+            return false;
+        }
+        self.qualidade = q;
+        self.parts.clear();
+        true
+    }
+
     /// Lê e calcula a peça (só de novo se o arquivo mudou). `with_shape`: guarda a forma
     /// (modo editável); no modo visualização só a malha fica na memória.
     pub fn get(&mut self, full: &Path, with_shape: bool) -> Result<&LoadedPart, String> {
@@ -44,7 +61,7 @@ impl PartCache {
         if fresh {
             let txt = std::fs::read_to_string(full).map_err(|e| format!("{}: {e}", full.display()))?;
             let doc = Document::from_json(&txt).map_err(|e| e.to_string())?;
-            let result = fenkra_solidos::recompute(&doc);
+            let result = fenkra_solidos::recompute_cached(&doc, &mut fenkra_solidos::Cache::com_qualidade(self.qualidade));
             let shape = if with_shape { fenkra_solidos::final_shape(&doc) } else { None };
             self.parts.insert(full.to_path_buf(), LoadedPart { doc, result, shape, stamp });
         }

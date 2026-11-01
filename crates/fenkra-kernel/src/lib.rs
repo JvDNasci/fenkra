@@ -206,6 +206,9 @@ pub struct MassProps {
     pub center: [f64; 3],
 }
 
+/// Ângulo máximo entre normais vizinhas da malha quando ninguém pede outro (20°, em radianos).
+pub const ANGULO_PADRAO: f64 = 0.35;
+
 #[cfg(occt)]
 mod ffi;
 
@@ -650,7 +653,11 @@ mod imp {
         }
 
         pub fn mesh(&self, deflection: f64) -> KResult<Mesh> {
-            let m = b::tessellate(&self.0, deflection).map_err(err)?;
+            self.mesh_angle(deflection, ANGULO_PADRAO)
+        }
+        /// Malha com desvio linear (mm) e ângulo máximo entre normais vizinhas (radianos).
+        pub fn mesh_angle(&self, deflection: f64, angle: f64) -> KResult<Mesh> {
+            let m = b::tessellate(&self.0, deflection, angle).map_err(err)?;
             Ok(Mesh {
                 positions: m.positions,
                 normals: m.normals,
@@ -956,6 +963,9 @@ mod imp {
         pub fn mesh(&self, _: f64) -> KResult<Mesh> {
             no()
         }
+        pub fn mesh_angle(&self, _: f64, _: f64) -> KResult<Mesh> {
+            no()
+        }
         pub fn bbox(&self) -> Option<([f64; 3], [f64; 3])> {
             None
         }
@@ -1003,6 +1013,15 @@ mod tests {
         assert!((v - esperado).abs() < 1e-3, "{v} vs {esperado}");
         let m = s.mesh(0.1).unwrap();
         assert!(!m.indices.is_empty() && !m.edges.is_empty());
+    }
+
+    #[test]
+    fn malha_refaz_com_o_desvio_e_o_angulo_pedidos() {
+        let cil = Shape::face(&XY, &[vec![Seg2::Circle([0., 0.], 20.)]]).unwrap().extrude([0., 0., 1.], 30., 0.).unwrap();
+        let fina = cil.mesh_angle(0.005, 0.2).unwrap().indices.len();
+        // a mesma forma, agora com pedido grosso: a malha anterior não sobra
+        let grossa = cil.mesh_angle(0.5, 0.6).unwrap().indices.len();
+        assert!(fina > grossa, "{fina} vs {grossa}");
     }
 
     #[test]

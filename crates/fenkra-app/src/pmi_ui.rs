@@ -170,7 +170,7 @@ fn auto_balloons(app: &mut App) {
         let size = ((h[0] - l[0]).powi(2) + (h[1] - l[1]).powi(2)).sqrt();
         // âncora numa face visível: o triângulo mais voltado para a câmera (e maior), não o CG
         let mut anchor = [(l[0] + h[0]) / 2., (l[1] + h[1]) / 2., h[2]];
-        if let (Some(e), Ok(m)) = (eye, sh.mesh(size.max(1.) * 0.01)) {
+        if let (Some(e), Ok(m)) = (eye, sh.mesh(fenkra_core::qualidade::desvio_com_fator(size.max(1.), 0.01))) {
             let p = |i: u32| Vec3::new(m.positions[i as usize * 3], m.positions[i as usize * 3 + 1], m.positions[i as usize * 3 + 2]);
             let mut best = (0f32, None);
             for t in m.indices.chunks_exact(3) {

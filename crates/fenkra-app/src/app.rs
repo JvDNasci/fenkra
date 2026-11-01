@@ -58,15 +58,15 @@ enum LeftTab {
 }
 
 struct Worker {
-    /// (geração, documento, reconstruir do zero)
-    tx: Sender<(u64, Document, bool)>,
+    /// (geração, documento, reconstruir do zero, qualidade da malha)
+    tx: Sender<(u64, Document, bool, fenkra_core::QualidadeMalha)>,
     rx: Receiver<(u64, RecomputeResult)>,
 }
 
 impl Worker {
     /// Recompute fora da thread da interface (RNF-001); só o pedido mais recente é processado.
     fn spawn(ctx: egui::Context) -> Self {
-        let (tx, jobs) = channel::<(u64, Document, bool)>();
+        let (tx, jobs) = channel::<(u64, Document, bool, fenkra_core::QualidadeMalha)>();
         let (out, rx) = channel();
         std::thread::Builder::new()
             .name("recompute".into())
@@ -82,6 +82,8 @@ impl Worker {
                     if fresh {
                         cache = fenkra_solidos::Cache::default();
                     }
+                    // outra qualidade só re-tessela: os comandos continuam no cache
+                    cache.qualidade = job.3;
                     let r = fenkra_solidos::recompute_cached(&job.1, &mut cache);
                     if out.send((job.0, r)).is_err() {
                         break;
@@ -201,6 +203,8 @@ pub struct App {
     /// documento do último pedido de cálculo e do último resultado (para marcar o que está desatualizado)
     sent_doc: Option<Document>,
     result_doc: Option<Document>,
+    /// qualidade da malha enviada ao cálculo (a das configurações no último quadro)
+    qualidade_malha: fenkra_core::QualidadeMalha,
     /// início da varredura visual da árvore após um cálculo (comando a comando)
     sweep_t0: f64,
     /// assistente de referências quebradas
@@ -292,6 +296,7 @@ impl App {
             worker: Worker::spawn(cc.egui_ctx.clone()),
             gen_sent: 0,
             gen_done: 0,
+            qualidade_malha: settings.graficos.qualidade(),
             viewport,
             scene_dirty: true,
             fit_pending: true,
@@ -681,7 +686,25 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     fn send_recompute(&mut self, fresh: bool) {
         self.gen_sent += 1;
         self.sent_doc = Some(self.open.doc.clone());
-        let _ = self.worker.tx.send((self.gen_sent, self.open.doc.clone(), fresh));
+        let _ = self.worker.tx.send((self.gen_sent, self.open.doc.clone(), fresh, self.qualidade_malha));
+    }
+
+    /// A qualidade da malha mudou nas configurações: re-tessela a peça aberta e a montagem sem
+    /// recalcular o modelo (o último documento enviado volta ao worker, cujo cache guarda os comandos).
+    fn sincronizar_qualidade(&mut self) {
+        let q = self.settings.graficos.qualidade();
+        if let Some(a) = self.asm.as_mut() {
+            if a.cache.set_qualidade(q) {
+                a.dirty = true;
+            }
+        }
+        if q != self.qualidade_malha {
+            self.qualidade_malha = q;
+            let doc = self.sent_doc.clone().unwrap_or_else(|| self.open.doc.clone());
+            self.gen_sent += 1;
+            self.sent_doc = Some(doc.clone());
+            let _ = self.worker.tx.send((self.gen_sent, doc, false, q));
+        }
     }
 
     /// Índice do primeiro comando desatualizado (a geometria mudou depois do último cálculo).
@@ -5399,6 +5422,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             if pan || orbit || zoom_drag || (resp.hovered() && scroll != 0.) {
                 vp.stop_anim();
             }
+            if ((pan || orbit || zoom_drag) && delta != egui::Vec2::ZERO) || (resp.hovered() && scroll != 0.) {
+                vp.navegou();
+            }
             if pan {
                 let (r, u) = vp.camera.basis();
                 let k = vp.camera.dist * 0.0012;
@@ -5439,12 +5465,19 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 }
             }
             if vp.step_anim() {
+                vp.navegou();
                 ctx.request_repaint();
             }
 
             if let Some(rs) = frame.wgpu_render_state() {
                 let size = [(rect.width() * ppp) as u32, (rect.height() * ppp) as u32];
-                let tex = vp.render(rs, size, self.settings.style());
+                let mut style = self.settings.style();
+                style.navegando = vp.navegando();
+                if style.simplificar && style.navegando {
+                    // volta à qualidade total quando a câmera para: um redesenho logo depois da pausa
+                    ctx.request_repaint_after(crate::render::PAUSA_NAVEGACAO + std::time::Duration::from_millis(20));
+                }
+                let tex = vp.render(rs, size, style);
                 ui.painter().image(tex, rect, egui::Rect::from_min_max(egui::pos2(0., 0.), egui::pos2(1., 1.)), Color32::WHITE);
             }
 
@@ -6776,6 +6809,7 @@ impl eframe::App for App {
                 self.scene_dirty = true;
             }
         }
+        self.sincronizar_qualidade();
         // atualização automática: compara com o último documento enviado (pega também mudanças
         // feitas fora deste trecho, como Del, desfazer, assistentes e janelas)
         if self.settings.auto_update && self.open.frozen.is_none() && self.needs_recompute() {
@@ -7177,6 +7211,59 @@ pub fn line_style_ui(ui: &mut egui::Ui, st: &mut fenkra_core::LineStyle, lines: 
     }
 }
 
+/// Seção "Gráficos" (página Exibição): qualidade da malha, anti-serrilhamento e iluminação.
+fn graficos_ui(ui: &mut egui::Ui, g: &mut crate::settings::Graficos) {
+    use fenkra_core::PresetMalha as P;
+    ui.add_space(10.);
+    ui.separator();
+    ui.label(RichText::new(tr("Gráficos")).strong());
+    let nome = |p: P| match p {
+        P::Rascunho => tr("Rascunho"),
+        P::Normal => tr("Normal"),
+        P::Alta => tr("Alta"),
+        P::Personalizada => tr("Personalizada"),
+    };
+    ui.horizontal(|ui| {
+        ui.label(tr("Qualidade da malha"));
+        let mut p = g.preset;
+        egui::ComboBox::from_id_salt("preset_malha").selected_text(nome(p)).show_ui(ui, |ui| {
+            for o in P::TODOS {
+                ui.selectable_value(&mut p, o, nome(o));
+            }
+        });
+        if p != g.preset {
+            g.escolher(p);
+        }
+    });
+    if g.preset == P::Personalizada {
+        let (mut rel, mut ang) = ((g.livre.desvio_rel * 1000.) as f32, g.livre.angulo_graus as f32);
+        let (r0, r1) = ((QualidadeMalha::REL_MIN * 1000.) as f32, (QualidadeMalha::REL_MAX * 1000.) as f32);
+        if ui.add(crate::ui_ext::slider(&mut rel, r0..=r1).text(tr("Desvio máximo (‰ da diagonal)"))).changed() {
+            g.livre.desvio_rel = rel as f64 / 1000.;
+        }
+        if ui.add(crate::ui_ext::slider(&mut ang, QualidadeMalha::ANG_MIN as f32..=QualidadeMalha::ANG_MAX as f32).text(tr("Ângulo máximo entre triângulos (°)"))).changed() {
+            g.livre.angulo_graus = ang as f64;
+        }
+        g.livre = g.livre.saneada();
+    }
+    let q = g.qualidade();
+    ui.label(RichText::new(format!("{:.2} ‰ · {:.0}°", q.desvio_rel * 1000., q.angulo_graus)).weak().small());
+    ui.label(RichText::new(tr("Malha mais fina deixa as curvas mais lisas, mas pesa mais. Vale para peças e montagens e só refaz a exibição, não o modelo.")).weak().small());
+    ui.horizontal(|ui| {
+        ui.label(tr("Anti-serrilhamento (MSAA)"));
+        egui::ComboBox::from_id_salt("msaa").selected_text(g.msaa.label()).show_ui(ui, |ui| {
+            for m in crate::render::Msaa::ALL {
+                ui.selectable_value(&mut g.msaa, m, m.label());
+            }
+        });
+    });
+    ui.label(RichText::new(tr("Se a placa de vídeo não aceitar o valor, usa o maior que ela aceita.")).weak().small());
+    ui.checkbox(&mut g.simplificar_ao_girar, tr("Simplificar ao girar"));
+    ui.label(RichText::new(tr("Durante órbita, pan e zoom desenha sem anti-serrilhamento e volta à qualidade total ao parar.")).weak().small());
+    ui.checkbox(&mut g.iluminacao_realista, tr("Iluminação realista"));
+    ui.label(RichText::new(tr("Sombreado com luz de três pontos, ambiente de céu e chão e brilho suave. Desligado usa o sombreado simples.")).weak().small());
+}
+
 fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
     match page {
         0 => {
@@ -7352,6 +7439,7 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
                 ui.checkbox(&mut s.edges_in_render, tr("arestas no semi-renderizado"));
                 ui.checkbox(&mut s.tangent_edges, tr("arestas de tangência (fim dos raios)"));
                 ui.checkbox(&mut s.ortho, tr("projeção ortogonal"));
+                graficos_ui(ui, &mut s.graficos);
             }
         5 => {
                 for g in crate::settings::Group::ALL {
