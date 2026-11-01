@@ -167,6 +167,8 @@ pub struct App {
     hover_pick: Option<crate::picking::Pick>,
     /// já passou da tela inicial
     started: bool,
+    /// a tela inicial foi aberta pelo menu (há trabalho aberto para onde voltar)
+    inicio_pelo_menu: bool,
     /// comando aberto em edição (ambiente com Concluir/Cancelar)
     pub session: Option<Session>,
     /// novo sketch esperando o clique no plano/face
@@ -314,6 +316,7 @@ impl App {
             picks: vec![],
             hover_pick: None,
             started: false,
+            inicio_pelo_menu: false,
             session: None,
             view_menu: false,
             new_view_name: String::new(),
@@ -1043,6 +1046,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         section_title(ui, "Começar", accent);
                         ui.horizontal_wrapped(|ui| {
                             let big = |ui: &mut egui::Ui, icon: &str, name: &str, brief: &str| crate::icons::tool_button(ui, icon, name, 54., true, false, brief, "");
+                            if self.inicio_pelo_menu && ui.button(RichText::new(format!("↩ {}", tr("Voltar ao trabalho"))).size(15.)).on_hover_text(tr("Volta ao documento aberto sem mudar nada")).clicked() {
+                                self.started = true;
+                            }
                             if big(ui, "novo_projeto", "Novo projeto", "Cria uma pasta de projeto com versões e revisões").clicked() {
                                 action = Some(0);
                             }
@@ -2531,6 +2537,13 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 ui.label(RichText::new(tr("◆ Fenkra")).strong().color(Color32::from_rgb(120, 180, 255)));
                 ui.separator();
                 ui.menu_button(tr("Arquivo"), |ui| {
+                    if ui.button(tr("Tela inicial")).clicked() {
+                        self.started = false;
+                        self.inicio_pelo_menu = true;
+                        ui.ctx().request_repaint();
+                        ui.close();
+                    }
+                    ui.separator();
                     if ui.button(tr("Nova peça")).clicked() {
                         self.load_doc(Document::new("Peça"), None, None);
                         ui.close();
