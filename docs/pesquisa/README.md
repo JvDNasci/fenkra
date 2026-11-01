@@ -50,3 +50,15 @@ Ela gerou 37 alterações e 45 itens novos (B64–B108) no backlog. O custo em c
 |---|---|
 | [modulos-novos.md](modulos-novos.md) | Módulos e recursos de CADs similares (FreeCAD, Onshape, Fusion, Solid Edge, SW, Inventor, CATIA, Creo, NX…), com licenças das bibliotecas abertas e 41 itens propostos (onda 4: B110–B150) |
 | [propriedade-intelectual.md](propriedade-intelectual.md) | Auditoria de propriedade intelectual: licenças, marcas, patentes, dados de normas, ícones; checklist e perguntas para o advogado (gerou o B151). **Não é parecer jurídico.** |
+
+## Benchmarking 2: itens novos (01/11/2026)
+Mercado e funcionalidades, item a item, com MVP, integrações e riscos:
+
+| Relatório | Itens |
+|---|---|
+| [bench-forma-ergonomia-visualizacao.md](bench-forma-ergonomia-visualizacao.md) | forma livre (subdivisão e polos), ergonomia com manequim editável, Visualizador, Render, VR/AR |
+| [bench-fabricacao.md](bench-fabricacao.md) | corte de encaixe e caminho de corte em tubos, manufatura aditiva, simulação de manufatura (integrada à ergonomia), STL → STEP, engenharia reversa |
+| [bench-simulacao-sistemas.md](bench-simulacao-sistemas.md) | FEM e CFD no formato do FreeCAD, chicote, compósitos, plástico e moldes |
+| [bench-pmi-cotas.md](bench-pmi-cotas.md) | catálogo completo de tipos de cota e anotação do PMI × CATIA FT&A, SW MBD, Inventor, Creo, NX |
+
+Gerou 40 revisões e 31 itens novos (B170–B200). Os itens pedidos pelo usuário ficam com prioridade mínima P1.

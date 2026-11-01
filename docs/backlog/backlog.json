@@ -1,36 +1,36 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 45680,
+ "tokens_total_k": 54050,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
    "versao": "0.1.0-alpha.28 a .30",
    "tokens_k": 5930,
-   "pct": 13.0
+   "pct": 11.0
   },
   "1": {
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 5460,
-   "pct": 12.0
+   "pct": 10.1
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
-   "tokens_k": 6270,
-   "pct": 13.7
+   "tokens_k": 7040,
+   "pct": 13.0
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
-   "tokens_k": 8240,
-   "pct": 18.0
+   "tokens_k": 9270,
+   "pct": 17.2
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
-   "tokens_k": 19780,
-   "pct": 43.3
+   "tokens_k": 26350,
+   "pct": 48.8
   }
  },
  "itens": [
@@ -91,7 +91,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B04",
@@ -187,7 +187,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B09",
@@ -319,7 +319,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "em andamento",
-   "pct": 0.9
+   "pct": 0.7
   },
   {
    "id": "B16",
@@ -338,7 +338,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B17",
@@ -383,7 +383,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B19",
@@ -427,7 +427,7 @@
    "teste": "Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B21",
@@ -446,7 +446,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B22",
@@ -467,14 +467,14 @@
    "teste": "Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B23",
    "onda": 2,
    "prio": "P1",
    "titulo": "PMI: realce e chamadas",
-   "oque": "Realce das entidades da anotação, várias setas por anotação e seta que não atravessa o quadro.",
+   "oque": "Realce das entidades da anotação, várias setas por anotação (várias faces, arestas e vértices associados à mesma chamada, como o 3D Leader do Inventor) e seta que não atravessa o quadro. Realce funcionando em montagem.",
    "origem": [
     "DR-31",
     "DR-47",
@@ -487,7 +487,7 @@
    "teste": "Visual",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B24",
@@ -530,7 +530,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.6
   },
   {
    "id": "B47",
@@ -548,7 +548,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B26",
@@ -573,7 +573,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "feito",
-   "pct": 1.1
+   "pct": 0.9
   },
   {
    "id": "B27",
@@ -611,7 +611,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "feito",
-   "pct": 0.9
+   "pct": 0.7
   },
   {
    "id": "B29",
@@ -633,7 +633,7 @@
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
    "status": "feito",
-   "pct": 1.0
+   "pct": 0.8
   },
   {
    "id": "B42",
@@ -757,7 +757,7 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.6
   },
   {
    "id": "B31",
@@ -916,9 +916,9 @@
   {
    "id": "B38",
    "onda": 3,
-   "prio": "P3",
+   "prio": "P2",
    "titulo": "PMI: consultor de tolerância",
-   "oque": "Verificar se a peça está totalmente cotada e tolerada.",
+   "oque": "Consultor de tolerância em três camadas (sintática sempre ligada, de esquema sob demanda, de norma) com mensagens clicáveis que realçam o alvo e coloração de faces verde/amarelo/vermelho/cinza (sub e super restringida), no estilo Show Tolerance Status do SolidWorks e Face Status do Inventor. Modos 'tudo explícito' e 'mínimo para fabricar'. Regras iniciais copiadas das mensagens do Tolerance Advisor: forma menor que tamanho, nível composto menor que o anterior, valor zero, quadros que compartilham faces, DRF incompleto.",
    "origem": [
     "BM-PMI-01"
    ],
@@ -929,7 +929,7 @@
    "teste": "Auto",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B39",
@@ -998,7 +998,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B49",
@@ -1016,7 +1016,7 @@
    "teste": "Auto + Visual",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B50",
@@ -1075,7 +1075,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.6
   },
   {
    "id": "B53",
@@ -1113,7 +1113,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.8
   },
   {
    "id": "B55",
@@ -1132,7 +1132,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.6
   },
   {
    "id": "B56",
@@ -1172,7 +1172,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.6
   },
   {
    "id": "B58",
@@ -1194,7 +1194,7 @@
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.8
   },
   {
    "id": "B62",
@@ -1231,7 +1231,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.7
   },
   {
    "id": "B59",
@@ -1252,7 +1252,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.6
   },
   {
    "id": "B60",
@@ -1271,7 +1271,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.6
   },
   {
    "id": "B61",
@@ -1345,7 +1345,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.6
   },
   {
    "id": "B67",
@@ -1398,7 +1398,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.6
   },
   {
    "id": "B70",
@@ -1416,7 +1416,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.6
   },
   {
    "id": "B71",
@@ -1433,7 +1433,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.7
   },
   {
    "id": "B72",
@@ -1452,7 +1452,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.6
   },
   {
    "id": "B73",
@@ -1485,7 +1485,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.7
   },
   {
    "id": "B75",
@@ -1517,7 +1517,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.8
   },
   {
    "id": "B77",
@@ -1533,7 +1533,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.7
   },
   {
    "id": "B78",
@@ -1549,7 +1549,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.6
   },
   {
    "id": "B79",
@@ -1565,7 +1565,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.6
   },
   {
    "id": "B80",
@@ -1581,7 +1581,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.6
   },
   {
    "id": "B81",
@@ -1597,14 +1597,14 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.7
   },
   {
    "id": "B82",
    "onda": 1,
    "prio": "P0",
    "titulo": "PMI: âncoras topológicas e medida por alvo",
-   "oque": "Pmi.targets com chaves da ADR 0010 sobre o Anchor do desenho; cotas face-face, ao centro de furo e ao longo de eixo medidas pelo alvo. Sai o snap de 2 mm; âncoras antigas promovidas no primeiro recompute.",
+   "oque": "Pmi.targets com chaves da ADR 0010 sobre o Anchor do desenho; cotas face-face, eixo-eixo, ao centro de furo e ao longo de eixo medidas pelo alvo (não por pontos clicados). Valor de raio e diâmetro lido da superfície analítica (cilindro, cone, esfera, toro). Sai o snap de 2 mm; âncoras antigas promovidas no primeiro recompute. É pré-requisito de todos os tipos novos de cota.",
    "origem": [
     "PESQ-PMI"
    ],
@@ -1613,14 +1613,14 @@
    "teste": "Auto",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.6
   },
   {
    "id": "B83",
    "onda": 1,
    "prio": "P0",
    "titulo": "PMI: estado, diagnóstico e componente-dono",
-   "oque": "status OK/Isolada/Ambígua com ícone e texto; painel Editar/Substituir/Isolar/Desativar com candidatos realçados no 3D. Em montagem o alvo é (componente, chave) e a anotação segue os mates; apagar pede confirmação e é desfazível.",
+   "oque": "status OK/Isolada/Ambígua com ícone e texto; cota face-face que deixa de ser paralela vira Ambígua em vez de mudar o número calado. Painel Editar/Substituir/Isolar/Desativar com candidatos realçados no 3D. Em montagem o alvo é (componente, chave) e a anotação segue os mates; apagar pede confirmação e é desfazível.",
    "origem": [
     "PESQ-PMI"
    ],
@@ -1645,7 +1645,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B85",
@@ -1679,14 +1679,14 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.6
   },
   {
    "id": "B87",
    "onda": 2,
    "prio": "P0",
    "titulo": "Conversor: crate fenkra-conversor e ponte XDE",
-   "oque": "Crate com trait Provedor, opções serializáveis, relatório e processo filho fenkra-conv que isola falhas do OCCT. read_xcaf/write_xcaf via STEPCAFControl com AP203/214/242, nomes, cores, camadas e estrutura; ida e volta preserva volume, área e centroide em 1e-6.",
+   "oque": "Crate com trait Provedor, opções serializáveis, relatório e processo filho fenkra-conv que isola falhas do OCCT. read_xcaf/write_xcaf via STEPCAFControl com AP203/214/242, nomes, cores, camadas e estrutura; ida e volta preserva volume, área e centroide em 1e-6. Deixar o gancho para PMI (XCAFDoc_DimTolTool, write.step.schema AP242, SetDimTolMode) que o item de AP242 semântico preenche.",
    "origem": [
     "PESQ-CNV",
     "PESQ-PMI"
@@ -1696,7 +1696,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.6
   },
   {
    "id": "B88",
@@ -1713,7 +1713,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.6
   },
   {
    "id": "B89",
@@ -1729,7 +1729,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.6
   },
   {
    "id": "B90",
@@ -1746,7 +1746,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.6
   },
   {
    "id": "B91",
@@ -1762,7 +1762,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.6
   },
   {
    "id": "B92",
@@ -1796,7 +1796,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.6
   },
   {
    "id": "B94",
@@ -1813,7 +1813,7 @@
    "teste": "Auto + Visual",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.6
   },
   {
    "id": "B95",
@@ -1830,7 +1830,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.7
   },
   {
    "id": "B96",
@@ -1847,7 +1847,7 @@
    "teste": "Auto + Visual",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.6
   },
   {
    "id": "B97",
@@ -1863,7 +1863,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.6
   },
   {
    "id": "B98",
@@ -1881,7 +1881,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.6
   },
   {
    "id": "B99",
@@ -1898,7 +1898,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.7
   },
   {
    "id": "B100",
@@ -1951,7 +1951,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.6
   },
   {
    "id": "B103",
@@ -1967,7 +1967,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.7
   },
   {
    "id": "B104",
@@ -1984,7 +1984,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.7
   },
   {
    "id": "B105",
@@ -2001,7 +2001,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.7
   },
   {
    "id": "B106",
@@ -2017,14 +2017,14 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.8
   },
   {
    "id": "B107",
    "onda": 3,
    "prio": "P1",
    "titulo": "Desenho: cotagem inteligente, chamadas e centros",
-   "oque": "Cota pelo contexto da seleção; conjuntos ordenada, linha de base e cadeia; importar cotas do modelo (croqui, feature, PMI) sem duplicatas. Chamadas de furo e rosca lidas da feature, com contagem 4×; marcas e eixos de centro associativos.",
+   "oque": "Cota pelo contexto da seleção; conjuntos ordenada, linha de base e cadeia; importar cotas do modelo (croqui, feature, PMI) sem duplicatas. Chamadas de furo, rosca, chanfro e filete lidas da feature com contagem 4×, usando o MESMO gerador de texto de chamada do PMI 3D (item de cotas de feature) para 3D e 2D mostrarem a mesma nota. Marcas e eixos de centro associativos.",
    "origem": [
     "PESQ-DES",
     "PESQ-FI"
@@ -2034,14 +2034,14 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.7
   },
   {
    "id": "B108",
    "onda": 3,
    "prio": "P1",
    "titulo": "PMI semântico: tolerância, datum/DRF e advisor por norma",
-   "oque": "Tolerância tipada (simétrica, limites, ISO 286, básica, referência), modos de cota linear, precisão e separador; Datum e DRF como objetos com letra única. Advisor que só oferece características válidas para o elemento, modificadores como enum, norma ativa ISO/ASME, símbolos vetoriais e validação sintática em tempo real.",
+   "oque": "Tolerância tipada (Nenhuma, Simétrica, Bilateral, Limites, Classe ISO 286 furo/eixo) mais estado ortogonal básica/referência/inspecionável, usando o crate de tabelas normativas; precisão e separador decimal por norma ativa. Datum e DRF como objetos com letra única (sem I, O, Q), datum comum A-B e verificação de ordem e graus de liberdade. Advisor que só oferece características válidas para o elemento, norma ativa ISO/ASME (ASME 2018 sem concentricidade e simetria) e validação sintática em tempo real. Modificadores, zonas, quadro composto e símbolos vetoriais passam para o item de FCF completo.",
    "origem": [
     "PESQ-PMI"
    ],
@@ -2050,7 +2050,7 @@
    "teste": "Auto + Visual",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.8
   },
   {
    "id": "B109",
@@ -2084,7 +2084,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.6
   },
   {
    "id": "B111",
@@ -2107,7 +2107,7 @@
    "onda": 4,
    "prio": "P1",
    "titulo": "Perfil de regras DFM (furo, bolso, chapa)",
-   "oque": "Varredura com lista de violações e realce 3D. Perfis JSON editáveis. (BN02; módulo Fabricabilidade; depende de B90, B86, B75).",
+   "oque": "Motor de regras DFM com perfis JSON por processo (furo, bolso, chapa, injeção, aditivo), cada regra com identificador, tipo de entidade, limites, severidade e texto; varredura devolve violações com referência estável à face e realce 3D; limites editáveis sem recompilar. É a base de B113, B166 e B167. Referências: SOLIDWORKS DFMXpress, Protolabs, DFMPro.",
    "origem": [
     "PESQ-MOD"
    ],
@@ -2116,14 +2116,14 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.6
   },
   {
    "id": "B113",
    "onda": 4,
    "prio": "P1",
    "titulo": "Análise de espessura, saliência e canto vivo",
-   "oque": "Mapa de cor sobre as faces. Limites por processo. (BN02b; módulo Fabricabilidade; depende de BN02).",
+   "oque": "Mapa de espessura por raio-bola máxima ou ray casting sobre pontos das faces, saliência pela normal contra a direção de construção (B164) e canto vivo por raio mínimo da ferramenta, com legenda, filtro por violação e limites vindos do perfil do processo (B112). Aceite: degrau de 1 mm e 3 mm gera duas faixas com erro até 5%.",
    "origem": [
     "PESQ-MOD"
    ],
@@ -2148,7 +2148,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.7
   },
   {
    "id": "B115",
@@ -2164,7 +2164,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.6
   },
   {
    "id": "B116",
@@ -2180,14 +2180,14 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.6
   },
   {
    "id": "B117",
    "onda": 4,
    "prio": "P1",
    "titulo": "Plano de inspeção e FAI",
-   "oque": "Balões numerados do desenho/PMI, tabela de características, CSV/XLSX, formulário AS9102. (BN05; módulo Qualidade; depende de B81, B82, B107).",
+   "oque": "Balões numerados do desenho/PMI, tabela de características, CSV/XLSX, formulário AS9102. Usa o estado 'inspecionável' da cota (balão oval) e as classes ISO 286 para listar limites. Depende de B81, B82, B107, B108.",
    "origem": [
     "PESQ-MOD"
    ],
@@ -2196,7 +2196,7 @@
    "teste": "Auto",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.6
   },
   {
    "id": "B118",
@@ -2212,14 +2212,14 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.6
   },
   {
    "id": "B119",
    "onda": 4,
-   "prio": "P1",
+   "prio": "P0",
    "titulo": "Exportação 3MF e preparo de impressão",
-   "oque": "3MF via lib3mf, orientação, análise de balanço, abertura no slicer externo. (BN07; módulo Impressão 3D; depende de B84, B87, B92).",
+   "oque": "Base de entrada e saída para impressão: 3MF com unidade mm, tesselação configurável, múltiplos corpos, posição na mesa, metadados, miniatura e cores por face via Materials; escrita própria zip+XML validada com lib3mf (BSD-2) em CI; STL binário; verificação pré-impressão (estanque, não manifold, normais, partes soltas); assentar peça numa face e mapa de balanço mínimo; abertura no fatiador externo por processo separado com caminho configurável. A bancada completa de orientação e suportes é o B164.",
    "origem": [
     "PESQ-MOD"
    ],
@@ -2233,9 +2233,9 @@
   {
    "id": "B120",
    "onda": 4,
-   "prio": "P1",
+   "prio": "P2",
    "titulo": "Lattice e preenchimento implícito",
-   "oque": "Corpo implícito/malha (TPMS, vigas) com export 3MF Beam Lattice. (BN07b; módulo Impressão 3D; depende de BN07).",
+   "oque": "Lattice e preenchimento implícito sobre corpo de malha: TPMS uniforme (giroide, Schwarz-P, diamante) intersectado com o corpo e casca externa, fração de volume como alvo, parede mínima por processo, superfície por marching cubes ou dual contouring sobre grade esparsa (OpenVDB Apache-2.0 ou grade própria em Rust). Vigas, 3MF Beam Lattice e gradiente por campo ficam em item separado.",
    "origem": [
     "PESQ-MOD"
    ],
@@ -2244,7 +2244,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.8
   },
   {
    "id": "B121",
@@ -2260,7 +2260,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.6
   },
   {
    "id": "B122",
@@ -2299,7 +2299,7 @@
    "onda": 4,
    "prio": "P1",
    "titulo": "Instruções de montagem animadas",
-   "oque": "Passos com explodida, BOM por passo, saída HTML/PDF/quadros. (BN09; módulo Comunicação; depende de B92, BN08).",
+   "oque": "Instruções de montagem animadas: nó Instruções, Roteiro, Passo, com referências estáveis a instâncias, estado de exibição, câmera, balões e BOM por passo calculado, nunca digitado. Etapa 1 (cerca de 200 k): passos manuais com explodida, saída HTML (B146), PDF vetorial e PNG, usando a remoção de linhas ocultas do desenho técnico para figuras isométricas vetoriais com balões. Etapa 2 (cerca de 100 k): sequência automática por direção de remoção derivada dos graus de liberdade das restrições com teste de colisão, agrupamento de fixadores e vídeo via ffmpeg externo opcional. S1000D e DITA ficam fora. Integra com B168, B152 e B156.",
    "origem": [
     "PESQ-MOD"
    ],
@@ -2308,7 +2308,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.6
   },
   {
    "id": "B125",
@@ -2324,14 +2324,14 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.7
   },
   {
    "id": "B126",
    "onda": 4,
    "prio": "P2",
    "titulo": "Tolerância empilhada 1D",
-   "oque": "Cadeia de cotas do PMI, pior caso/RSS/Monte Carlo, contribuição. (BN11; módulo Tolerâncias; depende de B108, B82).",
+   "oque": "Cadeia de cotas do PMI (cota em cadeia e de base como conjuntos), pior caso/RSS/Monte Carlo, contribuição. Cotas de referência e teóricas fora do empilhamento; usa a Tolerance tipada e as classes ISO 286 do crate de tabelas. Depende de B108, B82.",
    "origem": [
     "PESQ-MOD"
    ],
@@ -2356,7 +2356,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.7
   },
   {
    "id": "B128",
@@ -2372,14 +2372,14 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.6
   },
   {
    "id": "B129",
    "onda": 4,
    "prio": "P2",
    "titulo": "Análise de moldagem (saída, undercut, partição)",
-   "oque": "Classificação de faces, linha de partição e divisão núcleo/cavidade. (BN13; módulo Moldes; depende de B09, B06, B75).",
+   "oque": "Moldes em fluxo suporte→modo→parâmetros→avançado, na ordem do SW Mold Tools: direção de abertura, linha de partição por silhueta com divisão das faces curvas, fechamento automático de furos passantes com Fill (B09), superfície de partição reta, tangente ou com raio e Tooling Split em núcleo e cavidade com folga de bloco. A análise de saída e undercut sai em item próprio, reutilizável no B164 e no B148. Base de molde e catálogos (HASCO, DME, direitos autorais) ficam para depois como dados de nível B/C. Tamanho de ~250 k. Testes: caixa com saída de 2° toda aprovada, furo lateral detectado como undercut, volume núcleo+cavidade+peça=bloco a 1e-6.",
    "origem": [
     "PESQ-MOD"
    ],
@@ -2388,7 +2388,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.6
   },
   {
    "id": "B130",
@@ -2404,7 +2404,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.8
   },
   {
    "id": "B131",
@@ -2420,14 +2420,14 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.8
   },
   {
    "id": "B132",
    "onda": 4,
    "prio": "P1",
    "titulo": "Ponte para solver externo (CalculiX)",
-   "oque": "Malha (Netgen), arquivo .inp, execução, leitura e coloração de resultados. (BN16; módulo Simulação; depende de B87, B92, BN03 (**decisão do mantenedor**)).",
+   "oque": "Motor da ponte para o CalculiX: malha tet10 pelo Netgen (LGPL-2.1) em processo filho fenkra-mesh, no padrão do fenkra-conv do B87, preservando o mapa face CAD→faces da malha; escrita determinística do .inp com NSET/ELSET/SURFACE por condição; execução assíncrona e cancelável do ccx externo com leitura de .sta/.cvg; parser próprio de .frd. O ccx é GPL e roda só como processo, com caminho configurável e assistente de download na 1ª versão; embalar no instalador depende de decisão do mantenedor e revisão jurídica. Testes: cubo sob tração, patch test com tet10 (ordem dos nós 9/10), cancelamento sem processo órfão, ccx ausente com mensagem clara.",
    "origem": [
     "PESQ-MOD"
    ],
@@ -2436,7 +2436,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.8
   },
   {
    "id": "B133",
@@ -2452,7 +2452,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.8
   },
   {
    "id": "B134",
@@ -2484,7 +2484,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.7
   },
   {
    "id": "B136",
@@ -2500,14 +2500,14 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.6
   },
   {
    "id": "B137",
    "onda": 4,
-   "prio": "P1",
+   "prio": "P2",
    "titulo": "Laminado: camadas e ply book",
-   "oque": "Plies por zona, direção de fibra e padrão plano por draping. (BN19; módulo Compósitos; depende de B04, B34, B86).",
+   "oque": "Laminado como objeto da árvore sobre uma superfície de molde (OML viva do B04/B34): roseta de referência 0°, plies por zona (contorno, material UD ou tecido, ângulo, posição), sequência de empilhamento com espelho/simetria, espessura e massa por zona, sólido ou casca do laminado por deslocamento e ply book em tabela, desenho e DXF por ply (B86). Draping cinemático (fishnet com ponto-semente, passo e cisalhamento limite) e teoria clássica de laminados para o FEM entram em itens próprios. Sem biblioteca aberta madura. Testes: cilindro e cone com cisalhamento ≈ 0 e área conservada, massa do laminado conferida, reanexação de plies quando a superfície muda.",
    "origem": [
     "PESQ-MOD"
    ],
@@ -2516,14 +2516,14 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.8
   },
   {
    "id": "B138",
    "onda": 4,
-   "prio": "P1",
+   "prio": "P2",
    "titulo": "Chicote: rota, lista e achatamento",
-   "oque": "Feixes 3D, lista de fios (CSV), formboard. VEC como destino futuro. (BN20; módulo Elétrica; depende de B32, B105).",
+   "oque": "Chicote com modelo de dados próprio: conectores como componentes com interface de pinos (B99), lista de fios importável e exportável em CSV, segmentos de feixe por sketch 3D (B32) com suportes e raio mínimo, diâmetro do feixe calculado, comprimento de cada fio pelo caminho no grafo mais folgas, coberturas por trecho e verificações (raio, colisão do tubo, fio sem rota, pino duplicado). Achatamento (formboard) parte do tronco, preserva o comprimento real de cada segmento e abre ramos em leque; saída em DXF (B105/B86), lista de corte e BOM. Criar uma linha de rota 3D comum com B127 e B163. KBL (XML prostep ivip, com dialetos) e VEC ficam para depois, sem biblioteca aberta. Testes: comprimentos 3D=achatado a 0,01 mm, chicote em Y sem sobreposição.",
    "origem": [
     "PESQ-MOD"
    ],
@@ -2532,14 +2532,14 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.7
   },
   {
    "id": "B139",
    "onda": 4,
    "prio": "P1",
    "titulo": "Viewport com sombra suave, oclusão e PBR",
-   "oque": "SSAO, sombra, PBR por material. Exporta glTF. (BN21; módulo Visual; depende de B61, B92).",
+   "oque": "Viewport PBR com GGX metálico-rugoso e IBL com HDRI embutido, sombra com PCF e GTAO em meia resolução, em três níveis de qualidade (Rápido, Padrão, Qualidade) por documento e por vista. O material do B92 carrega aparência PBR editável (cor base, metálico, rugosidade, clearcoat opcional) e a exportação glTF usa os mesmos valores, validada com o glTF-Validator. Base do B157, B146 e B156. Aceite: golden images por adaptador wgpu por software e 30 FPS em montagem de 5.000 componentes.",
    "origem": [
     "PESQ-MOD"
    ],
@@ -2555,7 +2555,7 @@
    "onda": 4,
    "prio": "P3",
    "titulo": "Exportação de cena para Cycles/Blender",
-   "oque": "glTF/USD com materiais. Sem renderizador próprio. (BN21b; módulo Visual; depende de BN21).",
+   "oque": "Exportação de cena para Cycles/Blender: GLB com KHR_materials (ior, transmission, clearcoat, emissive_strength), câmeras, luzes (KHR_lights_punctual) e IDs do Fenkra em extras, mais script Python que monta ambiente, câmera e amostras no Blender. Trata unidades (mm para m), eixo (Z-up para Y-up) e normais suaves divididas nas arestas vivas do B-rep. É também a base da fase opcional de Cycles externo do B157; se essa fase for adotada, sobe para P2. USD e MaterialX ficam para depois.",
    "origem": [
     "PESQ-MOD"
    ],
@@ -2612,7 +2612,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.6
   },
   {
    "id": "B144",
@@ -2628,7 +2628,7 @@
    "teste": "Auto",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.7
   },
   {
    "id": "B145",
@@ -2651,7 +2651,7 @@
    "onda": 4,
    "prio": "P1",
    "titulo": "Visualizador HTML autocontido",
-   "oque": "glTF + visualizador JS, árvore, medição, seção. Sem kernel. (BN26; módulo Comunicação; depende de B87, BN21).",
+   "oque": "Visualizador HTML autocontido em arquivo único e offline, com three.js (MIT), modelo glTF embutido, árvore com visibilidade e isolar, seção por planos, explodida, vistas salvas, PMI, passos do B124 e toque. A medição usa pontos de captura exatos do B-rep (centros e raios de furo, vértices, pontos médios) gravados no pacote, ficando exata sem kernel. Oferece decimação para proteger propriedade intelectual e orçamento de tamanho (alvo até 10 MB). Lê o mesmo pacote de visualização do B156. Aceite: abre sem rede em Chromium e Firefox e a medição bate com o CAD em 1e-6.",
    "origem": [
     "PESQ-MOD"
    ],
@@ -2676,14 +2676,14 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B148",
    "onda": 4,
    "prio": "P1",
    "titulo": "Recursos de plástico (boss, snap, grelha, lip)",
-   "oque": "Features compostas parametrizadas. (BN28; módulo Sólidos; depende de B06, B11, B48).",
+   "oque": "Recursos de plástico paramétricos lendo a regra plástica do documento (espessura, saída, raio nominal), com sobrescrita só em avançado: Boss (diâmetros, altura, saída, filete, nervuras quando o comprimento passa de 3 vezes o diâmetro, furo e inserto), Snap-fit em balanço com verificação de deformação admissível, Grelha (passo, borda, nervuras) e Lip & groove com folga (que o Fusion não tem). Referências estáveis (B15) e erro nomeado se o suporte some (B75). Depende de B06, B11 e B48. Testes: filetes e nervuras seguem a regra a 1e-6, alterar a regra atualiza todos os recursos, snap acima do limite avisa na árvore.",
    "origem": [
     "PESQ-MOD"
    ],
@@ -2724,7 +2724,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.7
   },
   {
    "id": "B151",
@@ -2740,14 +2740,14 @@
    "teste": "Manual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B152",
    "onda": 4,
-   "prio": "P1",
+   "prio": "P2",
    "titulo": "Bancada Ergonomia: manequim editável (estilo CATIA Human)",
-   "oque": "Manequim humano editável como o do CATIA: medidas por segmento (estatura, alcance, quadril, mão…) a partir de percentis P5/P50/P95 M/F de bases abertas (ANSUR II) ou digitadas, postura por juntas com limites articulares, posturas prontas (sentado, em pé, agachado, alcançando), pegar/apontar para pontos da montagem. Métricas: envelope de alcance, cone e campo de visão (o que o manequim enxerga), ângulos de conforto por junta com cores, RULA/REBA, levantamento NIOSH, folga de acesso para mão/ferramenta e relatório. Entra na montagem como componente. Referências: CATIA Human Builder/Posture/Activity Analysis, Siemens Jack.",
+   "oque": "Núcleo da bancada Ergonomia, reduzido a cerca de 300 k: manequim como componente da montagem com percentis P5/P50/P95 M/F do ANSUR II (base militar dos EUA, por isso com importação de CSV de qualquer outra base), esqueleto com limites articulares e cores de conforto, posturas prontas, pegar/apontar por cinemática inversa para referências estáveis, envelope de alcance, cone e janela de visão e folga de acesso mão/ferramenta. As análises RULA, REBA, OWAS, NIOSH e o relatório em português com campos da NR-17 saem para o item novo de análises ergonômicas. Integra com B168, B124, B156 e B162. Diferencial: conferir o posto por passo de montagem, o que hoje só DELMIA e Process Simulate Human fazem.",
    "origem": [
     "USR-ERGO"
    ],
@@ -2756,14 +2756,14 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.8
   },
   {
    "id": "B153",
    "onda": 4,
-   "prio": "P1",
+   "prio": "P2",
    "titulo": "Bancada Forma livre: modelagem orgânica por subdivisão (estilo Fusion Form)",
-   "oque": "Corpos por subdivisão (caixa, esfera, cilindro, plano) editados por faces/arestas/vértices com manipulador, vincar, simetria, extrudar/inserir arestas, suavidade; conversão para B-rep (NURBS) que entra na árvore como corpo e aceita filetes, casca e booleanas. Referências: Fusion Form (T-Splines), CATIA Imagine & Shape, Blender subdivisão; bibliotecas: OpenSubdiv (Apache-2.0).",
+   "oque": "Editor de forma por subdivisão reduzido a cerca de 300 k: malha half-edge com Catmull-Clark próprio em Rust, primitivas, edição por vértice/aresta/face com manipulador, inserir aresta, extrudar, vinco, simetria por plano e congelar. A forma é uma feature da árvore com faces nomeadas por índice persistente da malha. OpenSubdiv (Apache-2.0, sem bindings Rust) fica como opção posterior. A conversão para B-rep sai para item próprio. A patente de T-splines US 7,274,364 consta como expirada em 2024, mas patentes posteriores da Autodesk não foram verificadas.",
    "origem": [
     "USR-ORG"
    ],
@@ -2772,14 +2772,14 @@
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.8
   },
   {
    "id": "B154",
    "onda": 4,
-   "prio": "P1",
+   "prio": "P2",
    "titulo": "Forma livre: curvas e superfícies por polos (estilo FreeStyle)",
-   "oque": "Curvas 3D e superfícies NURBS editadas por polos e grau, ajuste por continuidade G0–G3 entre superfícies, análise de curvatura/porco-espinho, zebra e reflexo ao vivo, correspondência de bordas (match surface), simetria; classe A como referência. Referências: CATIA FreeStyle Shaper/Optimizer, Alias, SW Freeform.",
+   "oque": "Edição de curvas e superfícies NURBS por polos reduzida a cerca de 300 k: grau e número de polos como parâmetros, inserção de nó, simetria, Match de borda G0 a G2 por mínimos quadrados restritos entre duas arestas referenciadas e conector de continuidade (lacuna, ângulo e diferença de curvatura). G3, morphing e Classe A ficam como referência de qualidade, não como promessa. As análises de zebra, curvatura e porco-espinho saem para item próprio, por servirem a qualquer face. Reaproveita OCCT (GeomLProp, GeomFill, GeomPlate) e nalgebra.",
    "origem": [
     "USR-ORG"
    ],
@@ -2788,14 +2788,14 @@
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.7
   },
   {
    "id": "B155",
    "onda": 4,
-   "prio": "P1",
+   "prio": "P0",
    "titulo": "Estrutural: corte de encaixe normal entre membros (laser/plasma em tubos)",
-   "oque": "Na bancada Estrutural, um comando no estilo do corte normal da chapa metálica: corta um membro pelo outro seguindo a normal da superfície de contato (encaixe boca de lobo/saddle em tubos redondos, entalhes e rasgos em tubos retangulares e perfis), com compensação de espessura AUTOMÁTICA ponto a ponto: ao longo da linha de contato o comando calcula qual parede governa o encaixe (a interna em umas regiões, a externa em outras, como no encaixe boca de lobo, onde o fundo apoia pela parede interna e as laterais pela externa) e monta um corte único e limpo, sem folga nem interferência, com transição suave entre os trechos; mostra no 3D qual parede vale em cada trecho; escolha manual (interna, externa ou média) fica só como opção avançada; folga de corte (kerf) e bisel calculado para preparação de solda; o corte acompanha o membro quando o esqueleto muda e entra na lista de corte; gera o desenvolvimento do tubo (padrão planificado do corte) e exporta para corte a laser/plasma de tubos (DXF desenvolvido e, depois, formatos de máquina). Referências: corte normal da chapa (Fenkra/CATIA/SW), SW Weldments coped/trim, Inventor Frame Generator notch, Tekla/Lantek tube.",
+   "oque": "Na bancada Estrutural, comando de corte de encaixe normal entre membros (boca de lobo em tubos redondos, entalhes em retangulares e perfis) com seleção automática da parede que governa ponto a ponto por um ORÇAMENTO DE FOLGA de raiz: em cada ponto escolhe parede interna ou externa mantendo a abertura dentro do limite configurado, com histerese e transição suave, mostra a parede em vigor por cor no 3D e sinaliza trechos em que só um chanfro resolve. Modos manuais (interna, externa, média) ficam como avançado; parâmetros de kerf, chanfro e tolerâncias reais do tubo (diâmetro, parede, raio de canto). O corte acompanha o esqueleto, entra na lista de corte e gera o desenvolvimento do tubo em DXF. MVP: redondo×redondo, retangular×retangular e perfil sobre chapa; perfis abertos e excêntricos depois. Aceite por interferência zero e folga máxima dentro do orçamento.",
    "origem": [
     "USR-CORTE"
    ],
@@ -2804,14 +2804,14 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.6
   },
   {
    "id": "B156",
    "onda": 4,
-   "prio": "P1",
+   "prio": "P2",
    "titulo": "Fenkra Visualizador: app de roteiros, animações e visualização (local, web e celular)",
-   "oque": "Aplicativo separado, só leitura, que abre um pacote leve (malha glTF + árvore + PMI + estados de exibição) gerado pelo Fenkra: roteiros de montagem e manutenção passo a passo, câmeras e transições, explodidas e animações na linha do tempo, anotações e balões ligados à BOM, medição e corte; exporta vídeo, imagens e HTML. Mesmo núcleo para desktop, navegador (WebGPU/WASM) e celular. Referências: SOLIDWORKS Composer, Creo Illustrate, CATIA Composer, Onshape no navegador. Depende do glTF (B146) e das instruções animadas (B124).",
+   "oque": "Fenkra Visualizador reduzido a cerca de 300 k na primeira volta: app desktop só leitura que abre o pacote de visualização versionado (glTF com meshopt, árvore com IDs estáveis, estados, PMI, passos do B124, balões do BOM e pontos de captura exatos para medição). Reproduz passos, mede, corta e exporta imagens. Web (WASM/WebGPU) e celular nativo ficam para depois, já que o B146 cobre o navegador. Depende do pacote de visualização, do B146 e do B124.",
    "origem": [
     "USR-VIS"
    ],
@@ -2820,14 +2820,14 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.8
   },
   {
    "id": "B157",
    "onda": 4,
-   "prio": "P1",
+   "prio": "P2",
    "titulo": "Bancada Render: iluminação, ambientes, materiais e imagem final",
-   "oque": "Bancada própria com ambientes HDRI e fundos (cor, degradê, imagem, chão com reflexo e sombra), iluminação de estúdio (pontos, área, sol), biblioteca de materiais PBR por aparência (metais, plásticos, vidro), decalques, câmeras salvas, profundidade de campo e render progressivo (path tracing) local; saída em imagem de alta resolução e turntable. Motor: próprio em wgpu ou Cycles (Apache-2.0) como processo externo. Referências: SW Visualize, Fusion Render, KeyShot, Onshape Render Studio. Estende B139/B140.",
+   "oque": "Bancada Render reduzida a cerca de 300 k, em tempo real sobre o B139: ambientes HDRI e fundos, chão com reflexo e sombra, luzes de estúdio, biblioteca PBR de materiais com ativos CC0, câmeras salvas, profundidade de campo, imagem em alta resolução por ladrilhos e turntable. A qualidade vem de acumulação progressiva de quadros, sem path tracing próprio. O path tracing opcional vai para item novo, com Cycles (Apache-2.0) ou Blender como processo externo. Aparências, câmeras e luzes vivem no nó Cena da árvore, publicável.",
    "origem": [
     "USR-RENDER"
    ],
@@ -2836,14 +2836,14 @@
    "teste": "Visual",
    "area": "Navegação",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.8
   },
   {
    "id": "B158",
    "onda": 4,
-   "prio": "P1",
+   "prio": "P2",
    "titulo": "Bancada Engenharia reversa: nuvem de pontos e malha para CAD",
-   "oque": "Importa nuvem de pontos e malhas (STL/OBJ/PLY/E57), limpeza, decimação e preenchimento de buracos, segmentação por curvatura, ajuste de planos, cilindros, cones e esferas, extração de seções e sketches a partir da malha, ajuste de superfícies NURBS (auto-surface) e comparação desvio CAD × malha com mapa de cores. Referências: CATIA Digitized Shape Editor/Quick Surface Reconstruction, Geomagic Design X, Fusion mesh, SW ScanTo3D; bibliotecas: Open3D (MIT), PCL (BSD).",
+   "oque": "Bancada de engenharia reversa sobre o núcleo de malha: importação STL/OBJ/PLY/E57, limpeza, decimação, preenchimento de buracos, segmentação por curvatura, ajuste de primitivas, seções e croquis a partir da malha, desvio CAD x malha com mapa de cores, depois NURBS. Nuvem de pontos crua (octree, amostragem, normais) é custo à parte. Depende do item de núcleo de malha.",
    "origem": [
     "USR-REV"
    ],
@@ -2852,14 +2852,14 @@
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.8
   },
   {
    "id": "B159",
    "onda": 4,
    "prio": "P1",
    "titulo": "Bancada Simulação FEM (estrutura de análise no formato do FreeCAD)",
-   "oque": "Contêiner de análise na árvore como no FreeCAD FEM (material, restrições, cargas, malha, solver, resultados), com a filosofia Fenkra: referências estáveis às faces (ADR 0010), atualização e diagnóstico, painéis suporte→modo→parâmetros. Malha com Gmsh/Netgen e solver CalculiX como processos externos (arquivo .inp), análises estática linear, modal e térmica, resultados com mapa de cores, deformada animada, fator de segurança e relatório. Reaproveitar ideias e, quando útil, código LGPL do FreeCAD FEM; GPL só como processo externo. Absorve o B132.",
+   "oque": "Bancada Simulação FEM reduzida ao contêiner de análise na árvore (material, restrições, cargas, malha, solver, resultados), no modelo do FreeCAD FEM. Restrições e cargas usam referências estáveis às faces (ADR 0010/B15) e podem referenciar publicações da peça; painéis suporte→modo→parâmetros→avançado; verificador de modelo antes de rodar (corpo livre, carga em face perdida, material sem E, singularidade provável); resultado com estado válido, desatualizado ou órfão. Material vem da tabela do B92 em sistema mm-t-s-N-MPa. A malha, o .inp e a execução ficam no B132 (não absorver), e os resultados, modal/térmica e validação em itens próprios; tamanho de ~250 k. Cada condição tem teste de sobrevivência a edição.",
    "origem": [
     "USR-FEM"
    ],
@@ -2868,14 +2868,14 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.8
   },
   {
    "id": "B160",
    "onda": 4,
-   "prio": "P1",
+   "prio": "P2",
    "titulo": "Simulação FEM: contato, não linear, fadiga e flambagem",
-   "oque": "Contato entre peças da montagem, não linearidade de material e geometria, flambagem linear e fadiga simples (S-N); casos de carga e combinações; estudos paramétricos ligados aos parâmetros do modelo.",
+   "oque": "Executar em três partes depois do MVP do B159/B132: (1) contato automático por tolerância, colado por padrão, com tipos por par (colado, sem penetração, atrito), objetos editáveis na árvore e não linearidade de material e geometria; (2) flambagem linear, fadiga S–N em Rust (Basquin, Goodman, Miner) e combinação de casos por superposição de campos; (3) estudo paramétrico ligado à tabela de projeto (B101/B102). Contato e não linear vão ao CalculiX (*CONTACT PAIR, *TIE, *PLASTIC, *BUCKLE); fadiga é só pós-processamento e leva aviso de uso. Testes: blocos colados iguais a um bloco, Euler (erro ≤ 5%), plasticidade perfeita.",
    "origem": [
     "USR-FEM"
    ],
@@ -2884,14 +2884,14 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.7
   },
   {
    "id": "B161",
    "onda": 4,
-   "prio": "P1",
+   "prio": "P2",
    "titulo": "Bancada CFD (escoamento) via OpenFOAM externo",
-   "oque": "Domínio de fluido a partir da cavidade/envoltório, condições de contorno (entrada, saída, parede), malha (snappyHexMesh/cfMesh), execução do OpenFOAM como processo externo e pós-processamento (linhas de corrente, pressão, velocidade) no viewport. Referência: FreeCAD CfdOF, SW Flow Simulation, Fusion CFD. OpenFOAM é GPL: só processo externo.",
+   "oque": "Bancada CFD via OpenFOAM externo (GPL-3, só processo), em P2 por depender da instalação do OpenFOAM no Windows (BlueCFD, MinGW só 2212 ou Docker/Podman, segundo o CfdOF) e de teste de instalação para fixar uma distribuição suportada (Foundation ou OpenCFD). MVP: escoamento incompressível estacionário (simpleFoam, k-ômega SST), análise interna e externa, malha com snappyHexMesh (vem com o OpenFOAM), metas (perda de carga, vazão, força) com parada por convergência, e pós-processamento próprio (planos de corte, linhas de corrente por RK4 sobre VTK). Domínio, tampas e condições saem em item próprio. Testes: Poiseuille, fator de atrito, Cd de cilindro, volume aberto com lista de arestas livres.",
    "origem": [
     "USR-CFD"
    ],
@@ -2900,14 +2900,14 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.8
   },
   {
    "id": "B162",
    "onda": 4,
-   "prio": "P1",
+   "prio": "P3",
    "titulo": "Módulo Realidade virtual e aumentada",
-   "oque": "Revisão de projeto imersiva: abrir peça/montagem em óculos VR via OpenXR (Meta Quest, SteamVR, Windows MR) com escala 1:1, teletransporte, corte, medição, explodida e o manequim de ergonomia (B152) para conferir alcance e visão; AR no celular/tablet pelo Fenkra Visualizador (B157) com WebXR/ARCore/ARKit, peça em escala real sobre a mesa ou no local de instalação; sessões multiusuário depois. Bibliotecas: OpenXR SDK (Apache-2.0), wgpu. Referências: CATIA/3DEXPERIENCE VR, SW eDrawings AR/VR, Fusion e Onshape em visores, Unity Reflect.",
+   "oque": "Revisão imersiva em PC-VR por OpenXR (crate openxr, MIT ou Apache-2.0) em binário fenkra-vr separado, reduzida a cerca de 300 k: abre o pacote do Fenkra Visualizador (B156, e não B157 como estava escrito), escala 1:1, teletransporte, agarrar e escalar, corte, medição por raio, explodida, passos do B124 e manequim do B152. Quest entra por Link ou Steam Link. App Quest nativo, multiusuário e edição em VR ficam para depois. AR móvel sai para item próprio. Risco principal: interoperabilidade wgpu com OpenXR.",
    "origem": [
     "USR-XR"
    ],
@@ -2916,14 +2916,14 @@
    "teste": "Visual",
    "area": "Navegação",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.8
   },
   {
    "id": "B163",
    "onda": 4,
    "prio": "P1",
    "titulo": "Estrutural: caminho de corte em tubo (laser/plasma rotativo) e representação",
-   "oque": "A partir dos cortes do B155, gerar o caminho da tocha sobre o tubo como na máquina de tubo rotativo: curva 3D do corte limpo calculado pelo B155 (trecho a trecho pela parede que governa o contato, interna ou externa), vetor da tocha em cada ponto (normal à superfície, radial, ou inclinado pelo bisel), ponto de início, entrada e saída (lead-in/lead-out), microjuntas, sentido e ordem dos cortes, compensação do kerf. Representação: linha do caminho sobre o tubo com setas da tocha, vista desenvolvida (planificada) do tubo com o caminho, tabela por ponto (X ao longo do tubo, rotação A, bisel, comprimento) e simulação animada do cabeçote girando o tubo; detecção de colisão da tocha com o próprio tubo/perfil. Saídas: DXF desenvolvido, CSV de pontos (X, A, bisel) e relatório de tempo/comprimento de corte; pós-processador de G-code por máquina fica como opcional (CAM é não-objetivo). Referências: Lantek Flex3d Tubes, SigmaTUBE, Tekla/BTL, HGG ProCAM.",
+   "oque": "Caminho de corte em tubo rotativo a partir da curva limpa do B155: pontos (X, A, bisel) com vetor da tocha, início, lead-in/lead-out, microjuntas, ordem de cortes (corte final separa a peça), kerf e sentido. Representação com linha 3D e setas da tocha, vista desenvolvida, tabela por ponto, CSV e relatório de comprimento e tempo configurável, mais animação do cabeçote. Colisão da tocha com o perfil e corte em linha comum ficam em fase posterior; G-code por máquina continua fora do escopo, a interoperabilidade vem por DXF desenvolvido, CSV e STEP do tubo cortado.",
    "origem": [
     "USR-CORTE"
    ],
@@ -2932,14 +2932,14 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.7
   },
   {
    "id": "B164",
    "onda": 4,
    "prio": "P1",
    "titulo": "Bancada Manufatura aditiva (impressão 3D completa)",
-   "oque": "Bancada própria que parte do sólido B-rep (sem perder a parametria): escolha do processo e da máquina (FDM/FFF, SLA/DLP, SLS/MJF, metal L-PBF/DED) com volume de construção; orientação automática e manual pesando suporte, acabamento, tempo e resistência por eixo; análise de ângulos de balanço com mapa de cores e correção sugerida (chanfrar/inclinar abaixo do ângulo crítico, \"tirar ângulos\"); análise de paredes e partes finas, furos e pinos mínimos por processo; suportes (árvore e linear) visualizados; estimativa de material, massa e tempo; exportação 3MF com cores/materiais/peças, STL, e abertura no fatiador externo (PrusaSlicer/Cura/Bambu Studio por linha de comando, sem AGPL no binário). Depende de B119.",
+   "oque": "Bancada de manufatura aditiva a partir do B-rep: biblioteca JSON de máquinas e processos (volume, camada, ângulo crítico, parede e furo mínimos, folga), análise de balanço por faces analíticas com mapa de cor, orientação por amostragem que pontua área de suporte, contato com a mesa, altura e cabimento no volume (diferente do Fusion, que ignora o volume), parede fina, estimativa de massa e material, tempo e material reais lidos de fatiador externo por linha de comando (PrusaSlicer, Orca, Bambu, CuraEngine são AGPL, só como processo), exportação 3MF via B119. Geometria de suportes (árvore e linear) e resistência por eixo ficam em item separado.",
    "origem": [
     "USR-AM"
    ],
@@ -2948,14 +2948,14 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.8
   },
   {
    "id": "B165",
    "onda": 4,
-   "prio": "P1",
+   "prio": "P2",
    "titulo": "Manufatura aditiva: partição, encaixes inteligentes e cores",
-   "oque": "Partir peças maiores que o volume de impressão (ou por cor/material) por planos ou superfícies com sugestão automática; criar encaixes inteligentes na junta: macho/fêmea com folga por processo, cauda de andorinha, pinos de alinhamento, snap-fit, rosca/porca embutida e furos para insertos térmicos; dividir por COR e por material (pintura de faces/regiões → corpos ou 3MF multimaterial/multicolor, AMS/MMU); numerar e etiquetar as partes (relevo de texto) e gerar a lista de montagem das partes. Referências: Fusion (Make/3D print), Meshmixer, Bambu Studio, Prusa (cortes com conectores).",
+   "oque": "Partição de peças grandes ou por cor sobre o B-rep: planos de corte da árvore, sugestão automática de corte (menor seção, face plana de apoio, cabimento no volume), conectores paramétricos posicionados por croqui na face de corte com folga vinda do processo (pino separado, macho/fêmea, depois cauda de andorinha, snap-fit e inserto térmico), numeração em relevo e lista de montagem, divisão por cor pela pintura de faces com 3MF Materials. Diferencial sobre PrusaSlicer e Bambu: corte exato no B-rep, parametria preservada e posicionamento preciso.",
    "origem": [
     "USR-AM"
    ],
@@ -2964,14 +2964,14 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.9
+   "pct": 0.7
   },
   {
    "id": "B166",
    "onda": 4,
-   "prio": "P1",
+   "prio": "P2",
    "titulo": "Manufatura aditiva: DfAM avançado e compensação",
-   "oque": "Lattice e preenchimento (B120) integrados, alívio de massa, furos autoportantes (gota/teardrop) e pontes, conversão de furos horizontais, compensação de contração e de folga por material/máquina (calibração do usuário), regras de projeto por processo editáveis e relatório de imprimibilidade com nota por peça.",
+   "oque": "DfAM avançado com CORPO PARA IMPRESSÃO DERIVADO: gota ou losango automático em furos horizontais, folga por processo em pares furo/pino, compensação de contração por eixo calibrada pelo usuário com cupom de teste gerado pelo Fenkra, pontes e alívio de massa, relatório de imprimibilidade com nota por peça que reusa o motor de regras do B112 (perfil de processo JSON). O corpo de projeto nunca é alterado; a compensação é reversível e marcada no 3D.",
    "origem": [
     "USR-AM"
    ],
@@ -2980,14 +2980,14 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.6
   },
   {
    "id": "B167",
    "onda": 4,
-   "prio": "P1",
+   "prio": "P2",
    "titulo": "Bancada Simulação de manufatura (máquinas, ferramentas e acesso)",
-   "oque": "Verificar a manufaturabilidade simulando as ferramentas reais sobre o modelo: tochas de solda MIG/TIG e eletrodo/alicate (alcance, ângulo de trabalho e de deslocamento, acesso ao cordão e colisão com as peças), pinças de solda a ponto, furadeiras/fresas (comprimento da broca, acesso perpendicular, mandril e colisão), dobradeira de chapa (sequência de dobras com punção e matriz, colisão da aba com a máquina e com a ferramenta, retorno elástico estimado, aba mínima), puncionadeira e laser/plasma (B163). Biblioteca editável de ferramentas e máquinas da empresa; resultado com marcação 3D do que não dá para fazer e sugestão (mudar ordem, ângulo, ferramenta). Complementa as regras DFM (B112/B113). Referências: Siemens Process Simulate, Delmia, SW/Inventor sheet metal bend sequence, Bystronic/Trumpf BendCAD.",
+   "oque": "Dividir em frentes executáveis: (a) sequência de dobra de chapa com punção e matriz, colisão da aba com máquina e ferramenta, aba mínima e retorno elástico estimado; (b) acessibilidade de tocha MIG/TIG por cone de direções viáveis (ângulo de trabalho e de deslocamento) com colisão por BVH; (c) acesso de broca e fresa dentro do B112; (d) pinça de ponto e puncionadeira depois. Biblioteca editável de ferramentas e máquinas compartilhada com B112, B164 e B166. A integração com o manequim (B152) só entra depois que o B152 existir.",
    "origem": [
     "USR-SIMFAB"
    ],
@@ -2996,14 +2996,14 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 1.0
+   "pct": 0.8
   },
   {
    "id": "B168",
    "onda": 4,
-   "prio": "P1",
+   "prio": "P2",
    "titulo": "Simulação de manufatura: sequência de montagem e ferramentas de montagem",
-   "oque": "Sequência de montagem/desmontagem com trajetória de cada peça e ferramenta (chave, parafusadeira, rebitadeira), checagem de acesso e espaço para a mão/ferramenta (com o manequim B152), animação e relatório por passo; exporta para o Visualizador (B156).",
+   "oque": "Sequência de montagem e desmontagem: passos editáveis a partir da explodida, translação ou rosca por passo com colisão e volume varrido, ferramenta de montagem como volume de acesso (soquete, chave, parafusadeira) testado no ponto de fixação, animação e relatório por passo, exportação ao Visualizador (B156) e às instruções animadas (B124). Planejamento automático (grafo de bloqueio direcional, RRT/OMPL) e manequim com RULA/REBA/NIOSH ficam para depois do B152.",
    "origem": [
     "USR-SIMFAB"
    ],
@@ -3012,7 +3012,519 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
+   "pct": 0.6
+  },
+  {
+   "id": "B169",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Converter malha (STL/OBJ/3MF) em STEP sólido",
+   "oque": "Conversão de malha em STEP sólido em dois modos de produto: (1) facetado com costura e fusão de faces coplanares; (2) reconhecimento de primitivas (plano, cilindro, esfera, cone, toro) por crescimento de regiões e ajuste robusto, com arestas pela interseção das superfícies vizinhas e B-rep híbrido (faces analíticas onde há ajuste, triangulares onde não há) que garante sólido válido. Reparo básico, relatório de desvio malha x sólido, STEP AP242 e continuação do modelo sobre o resultado. O modo NURBS automático por regiões sai deste item e vira pesquisa separada.",
+   "origem": [
+    "USR-STL"
+   ],
+   "catalogo": [],
+   "tokens_k": 350,
+   "teste": "Auto + Visual",
+   "area": "Superfícies e wireframe",
+   "status": "a fazer",
+   "pct": 0.6
+  },
+  {
+   "id": "B170",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Núcleo de malha: corpo de malha na árvore, importação, reparo, decimação e BVH",
+   "oque": "Tipo de corpo de malha de primeira classe na árvore do Fenkra com importação e exportação de STL, OBJ, PLY e 3MF, solda de vértices, reparo (furos, normais, partes soltas, não manifold), decimação, BVH para consulta de distância e interseção, desvio malha x B-rep e booleanas de malha (Manifold, Apache-2.0, ou port Rust). Base compartilhada por B119, B120, B158, B164 e B169.",
+   "origem": [
+    "PESQ-BENCH2"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.6
+  },
+  {
+   "id": "B171",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Biblioteca de processos, máquinas e ferramentas de fabricação",
+   "oque": "Biblioteca JSON editável e versionada de processos (FDM, SLA, SLS, metal, laser de tubo, dobradeira), máquinas (volume, camada, kerf, curso), materiais (contração, retorno elástico), ferramentas (punção, matriz, tochas) e folgas por processo, com perfis de regras DFM referenciando-a. Compartilhada por B112, B113, B164, B165, B166, B167 e B163.",
+   "origem": [
+    "PESQ-BENCH2"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B172",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Corpo para impressão derivado (compensação sem alterar o projeto)",
+   "oque": "Objeto derivado do corpo de projeto que aplica contração por eixo, folgas em furos e pinos, gota em furos horizontais e conversões de DfAM, com marcação no 3D, reversão e exportação separada, preservando o corpo original e as exportações de engenharia. Calibração por cupom de teste gerado pelo Fenkra e medidas do usuário.",
+   "origem": [
+    "PESQ-BENCH2"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B173",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Dobra de chapa: sequência, punção e matriz, colisão e retorno elástico",
+   "oque": "Simulação da sequência de dobra sobre a chapa metálica do Fenkra: biblioteca de punções e matrizes, colisão da aba com a máquina e com a ferramenta em cada dobra, aba mínima, sugestão de ordem por busca limitada e retorno elástico estimado por fórmula analítica calibrável por material. Resultado com marcação 3D da dobra inviável e relatório por passo. Referências: HACO hacobend, Almacam Bend, Radan Radbend, MachineWorks.",
+   "origem": [
+    "PESQ-BENCH2"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto + Visual",
+   "area": "Chapa metálica",
+   "status": "a fazer",
+   "pct": 0.7
+  },
+  {
+   "id": "B174",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Acessibilidade de tocha de solda (cone de direções viáveis)",
+   "oque": "Para cada ponto de cordão MIG/TIG, amostra direções da tocha (ângulo de trabalho e de deslocamento) e testa o cone do bico contra a geometria com BVH (parry3d, Apache-2.0), mostrando no 3D o cone de direções viáveis colorido e marcando pontos inviáveis, com sugestão de mudar a ordem de soldagem ou o ângulo. Referências: Siemens Process Simulate Weld.",
+   "origem": [
+    "PESQ-BENCH2"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 0.6
+  },
+  {
+   "id": "B175",
+   "onda": 4,
+   "prio": "P3",
+   "titulo": "Conversão de malha em NURBS por regiões (auto-surface)",
+   "oque": "Modo de pesquisa do B169: superfícies NURBS ajustadas por regiões de malha orgânica, via remeshing quad externo (Instant Meshes) e remendos, com tolerância e limite de faces, relatório de desvio e fallback para o modo facetado. Expectativa de qualidade limitada fora de formas simples; Fusion Organic e ScanTo3D automático falham com frequência nesses casos.",
+   "origem": [
+    "PESQ-BENCH2"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto + Visual",
+   "area": "Superfícies e wireframe",
+   "status": "a fazer",
+   "pct": 0.7
+  },
+  {
+   "id": "B176",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Saídas de tubo para máquinas: STEP do tubo cortado, DSTV NC1 e tolerâncias reais",
+   "oque": "Exportação do tubo já cortado em STEP para os CAM de tubo (Lantek, SigmaTUBE, TRUMPF) e DSTV NC1 para perfis estruturais com furos e entalhes, mais campos de tolerância real do tubo (diâmetro, parede, ovalização, raio de canto de retangular, posição da costura) usados pelo B155 e pelo B163. BTL é formato de madeira e não é alvo.",
+   "origem": [
+    "PESQ-BENCH2"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B177",
+   "onda": 4,
+   "prio": "P3",
+   "titulo": "Lattice de vigas, 3MF Beam Lattice e gradiente por campo",
+   "oque": "Continuação do B120: células de viga (BCC, octeto) com export 3MF Beam Lattice 1.2.0, gradiente de espessura e densidade por campo (distância a uma face, carga) e validação com lib3mf. Slicers hobby podem ignorar Beam Lattice, então exportar também malha triangulada.",
+   "origem": [
+    "PESQ-BENCH2"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B178",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Ergonomia: análises RULA, REBA, OWAS, NIOSH e relatório",
+   "oque": "Implementa do zero, com testes contra exemplos resolvidos dos artigos originais, RULA, REBA, OWAS e o índice de levantamento do NIOSH sobre as posturas do manequim do B152. Mostra pontuação por postura e por família de percentis, tabela e gráficos, e gera relatório em português (PDF e CSV) com campos para a avaliação ergonômica preliminar e a AET da NR-17. O relatório informa que é apoio e não substitui o ergonomista. Estende o B152 e alimenta o B168 e o B124.",
+   "origem": [
+    "PESQ-BENCH2"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B179",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Conversão de subdivisão para B-rep com continuidade configurável",
+   "oque": "Converte a malha de subdivisão do B153 em B-rep: regiões regulares viram remendos bicúbicos exatos, pontos extraordinários são aproximados com G0, G1 ou G2 à escolha, como a opção do ToNURBS do Rhino, com relatório de desvio máximo. Costura com tolerância em corpo sólido ou aberto que aceita filete, casca e booleana, e diagnóstico claro de onde e por que falhou. Reaproveitável pelo B158 para ajuste de superfícies a malha.",
+   "origem": [
+    "PESQ-BENCH2"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "Superfícies e wireframe",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B180",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Análise de qualidade de superfície: zebra, curvatura e porco-espinho",
+   "oque": "Análises ao vivo em qualquer face ou curva, inclusive filetes e importados: zebra e reflexo por sombreador, isofotas, mapa de curvatura (gaussiana, média, mínima), porco-espinho de curvatura em curvas e seções, plano de corte dinâmico, mapa de inclinação (draft) e verificador de conexão G0 a G2 entre faces. Usa GeomLProp do OCCT para a curvatura exata e o pipeline do B139. Serve ao B154, ao B153 e à qualidade de filetes.",
+   "origem": [
+    "PESQ-BENCH2"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Auto + Visual",
+   "area": "Superfícies e wireframe",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B181",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Pacote de visualização versionado (glTF + árvore + passos + pontos de captura)",
+   "oque": "Formato único e versionado que alimenta o HTML autocontido (B146), o app Visualizador (B156), as instruções (B124), a VR e a AR (B162): malhas glTF com meshopt, árvore com IDs estáveis do Fenkra em extras, estados de exibição, PMI, câmeras, passos, balões ligados ao BOM e pontos de captura exatos para medição. Inclui opção de decimação e teste de conformidade que abre 5 pacotes de referência em cada leitor.",
+   "origem": [
+    "PESQ-BENCH2"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B182",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Cena de apresentação: câmeras, luzes, ambientes e aparências na árvore",
+   "oque": "Nó Cena na árvore, publicável, com câmeras salvas, luzes, ambiente (HDRI, degradê, cor, chão com reflexo e sombra) e aparências por componente ou face com referência estável. Reutilizado por B139, B157, B124, B146 e B156, de modo que as imagens de passo e o render usem a mesma câmera e a mesma iluminação. Painéis suporte, modo, parâmetros e avançado.",
+   "origem": [
+    "PESQ-BENCH2"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Auto + Visual",
+   "area": "Navegação",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B183",
+   "onda": 4,
+   "prio": "P3",
+   "titulo": "Render por path tracing via Cycles/Blender como processo externo",
+   "oque": "Fase opcional do B157: gera glTF e script (B140), localiza o Blender instalado, executa em segundo plano com progresso e cancelamento e devolve a imagem ou o turntable ao Fenkra. Sem Blender, o render em tempo real do B157 segue funcionando. Cycles é Apache-2.0 e o Blender GPL fica fora do processo. Não inclui path tracer próprio nem nuvem de render.",
+   "origem": [
+    "PESQ-BENCH2"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B184",
+   "onda": 4,
+   "prio": "P3",
+   "titulo": "AR móvel: GLB e USDZ em escala real com model-viewer",
+   "oque": "Exporta GLB e USDZ em escala real a partir do pacote de visualização e gera página HTML com model-viewer (Apache-2.0) que escolhe AR Quick Look no iOS e Scene Viewer ou WebXR no Android, com código QR. Limite de tamanho com aviso para montagens grandes. Âncoras no local de instalação e visionOS ficam para depois. Valida os arquivos com o glTF-Validator e abre em aparelhos de referência.",
+   "origem": [
+    "PESQ-BENCH2"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Manual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B185",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "PMI: cotas por par de alvos (linear, ordenada, base, cadeia, arco, ângulo)",
+   "oque": "Catálogo de cotas 3D sobre alvos resolvidos (B82): distância face-face, eixo-eixo, aresta-aresta, ponto-ponto, ao longo de eixo X/Y/Z e projetada no plano de anotação; variantes centro/interior/exterior para círculos (11 do AP242); conjuntos ordenada, linha de base, cadeia e simétrica com origem comum; comprimento de arco e corda; raio e diâmetro de esfera; ângulo entre faces ou arestas com modos interno, externo, complementar e reflexo. Cada cota sai como dimensional_location/size do AP242.",
+   "origem": [
+    "PESQ-PMI"
+   ],
+   "catalogo": [],
+   "tokens_k": 350,
+   "teste": "Auto + Visual",
+   "area": "PMI 3D",
+   "status": "a fazer",
+   "pct": 0.6
+  },
+  {
+   "id": "B186",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "PMI: cotas de feature (furo, rosca, rebaixo, chanfro, filete, espessura)",
+   "oque": "Chamada gerada a partir de Hole, Thread, Chamfer, Fillet e feature de chapa, sem digitar texto: '4× Ø6,5 ▽12 · M8×1,25-6H', C2/2×45°, espessura e raio de dobra. Contagem n× vinda do padrão, com estado Ambígua se um furo sair dele; opção de quebrar a chamada composta em cotas simples com tolerância independente (forma que o AP242 exige). Gerador de texto compartilhado com o desenho (B107).",
+   "origem": [
+    "PESQ-PMI"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "PMI 3D",
+   "status": "a fazer",
+   "pct": 0.6
+  },
+  {
+   "id": "B187",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Crate de tolerâncias normativas: ISO 286, ISO 2768 e graus IT",
+   "oque": "Dados e funções puras para desvios de classes ISO 286-1/-2 (A–ZC furo, a–zc eixo, IT01–IT18) por faixa de diâmetro nominal, tolerâncias gerais ISO 2768-1/-2, ajustes (folga, incerto, interferência) e limites resultantes. Tabelas versionadas com teste contra valores publicados (ex.: Ø20 H7 = +0,021/0). Usado por B108, B126, B117 e pelo limits_and_fits do AP242.",
+   "origem": [
+    "PESQ-PMI"
+   ],
+   "catalogo": [],
+   "tokens_k": 120,
+   "teste": "Auto",
+   "area": "PMI 3D",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B188",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "PMI: quadro de tolerância geométrica (FCF) completo ISO 1101:2017 e ASME Y14.5-2018",
+   "oque": "Modelo tipado do quadro: zona (largura, Ø, SØ, não uniforme, projetada com valor), modificadores como enum com compatibilidade por característica e posição (valor, datum, quadro: Ⓜ Ⓛ Ⓟ Ⓕ Ⓣ Ⓤ, CZ, ACS, UF, between, all around, all over, CF, LE, NC, ST), quadro composto e de segmento único, valor máximo, tolerância por unidade, perfil dinâmico, matriz de validade ISO/ASME e símbolos desenhados como caminhos vetoriais em vez de glifos de fonte. Corrige o modificador Ⓢ sem correspondência na norma. Mapeia para geometric_tolerance_with_modifiers e tolerance_zone_form.",
+   "origem": [
+    "PESQ-PMI"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto + Visual",
+   "area": "PMI 3D",
+   "status": "a fazer",
+   "pct": 0.7
+  },
+  {
+   "id": "B189",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "PMI: alvos de referência (datum targets), alvos móveis e áreas restritas",
+   "oque": "Datum target ponto, linha, círculo, círculo-curva, retângulo, área e curva, com número (A1), dimensões do alvo, símbolo vetorial e relação com o Datum; alvo móvel com direção e curso; áreas restritas e cotas enquadradas ligadas; aviso da regra 3-2-1. Mapeia para placed_datum_target_feature e alvos explícitos com advanced_face.",
+   "origem": [
+    "PESQ-PMI"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "PMI 3D",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B190",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "PMI: acabamento superficial estruturado e solda sistema B/AWS A2.4",
+   "oque": "Rugosidade como atributo da face: símbolos de remoção obrigatória e proibida, todo o contorno, parâmetros (Ra, Rz, Rq…), limites superior e inferior, comprimento de amostragem, lay, sobremetal, norma ISO 21920/ISO 1302/ASME Y14.36 e textura de área. Solda: sistema B (linha de referência dupla), padrão AWS A2.4 com símbolos suplementares, e geração a partir do cordão da bancada Estrutural. Exportação como PMI gráfico, pois o AP242 não tem entidade semântica para os dois.",
+   "origem": [
+    "PESQ-PMI"
+   ],
+   "catalogo": [],
+   "tokens_k": 380,
+   "teste": "Auto + Visual",
+   "area": "PMI 3D",
+   "status": "a fazer",
+   "pct": 0.7
+  },
+  {
+   "id": "B191",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "PMI: exportação STEP AP242 semântica (cotas, tolerâncias, datums) e releitura",
+   "oque": "Sobre a ponte XDE do B87: XCAFDoc_DimTolTool para dimensões (32 tipos do OCCT), tolerâncias geométricas, datums, DRF e datum targets ligados às faces por shape_aspect, mais PMI gráfico (polilinha ou tesselado) para rugosidade, solda e notas, e vistas salvas. Diálogo com PMI: nenhum / gráfico / gráfico + semântico. Relê o próprio arquivo e compara contagem e valores; checagem opcional com o NIST STEP File Analyzer.",
+   "origem": [
+    "PESQ-PMI"
+   ],
+   "catalogo": [],
+   "tokens_k": 420,
+   "teste": "Auto",
+   "area": "PMI 3D",
+   "status": "a fazer",
    "pct": 0.8
+  },
+  {
+   "id": "B192",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "PMI: esquema de cotagem automático (estilo DimXpert/Auto Dimension Scheme)",
+   "oque": "Assistente que escolhe o DRF primário, secundário e terciário e gera cotas, tolerâncias e datums sobre as features do modelo (furos, padrões, rasgos, chanfros), no modo Mais/Menos ou Geométrico (planeza no primário, perpendicularidade no secundário, posição no terciário). Tudo marcado como 'gerado' e regenerável sem apagar edições manuais; regras reutilizáveis por tipo de feature como as MBD logical rules do NX. Depende de B38, B108 e dos itens de cotas.",
+   "origem": [
+    "PESQ-PMI"
+   ],
+   "catalogo": [],
+   "tokens_k": 420,
+   "teste": "Auto + Visual",
+   "area": "PMI 3D",
+   "status": "a fazer",
+   "pct": 0.8
+  },
+  {
+   "id": "B193",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "FEM: resultados, deformada, fator de segurança e relatório",
+   "oque": "Visualização dos resultados do FEM no viewport: campos escalares e vetoriais com legenda e faixa editável, deformada animada com fator de escala, fator de segurança contra o escoamento com alvos superior e inferior (muito forte, atende, insuficiente), sondas e extração de linha, e relatório com malha, condições e aviso de uso. Resultado sempre ligado ao hash do modelo, da malha e da configuração, e marcado como desatualizado em cinza quando algo muda.",
+   "origem": [
+    "PESQ-BENCH2"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.6
+  },
+  {
+   "id": "B194",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "FEM: análise modal e térmica",
+   "oque": "Frequências naturais e modos de vibração (*FREQUENCY) e condução de calor estacionária e transiente, com temperaturas prescritas, fluxo, convecção, e tensão térmica como acoplamento sequencial. Mesmo contêiner, painéis e estados do B159.",
+   "origem": [
+    "PESQ-BENCH2"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B195",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "FEM: suíte de validação e qualidade de malha",
+   "oque": "Suíte de casos com solução conhecida (viga em balanço, placa com furo, coluna de Euler, vaso de pressão, modo de viga, condução 1D) rodando no CI, mais verificações na interface: qualidade mínima dos elementos, aviso de tet4, alerta de singularidade em carga pontual e estudo de convergência de malha com refino automático. Casos NAFEMS como meta posterior.",
+   "origem": [
+    "PESQ-BENCH2"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B196",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "CFD: domínio de fluido, tampas, condições e metas",
+   "oque": "Feature de domínio de fluido na árvore: cavidade interna com tampas nas aberturas e relatório de estanqueidade com as arestas livres, ou caixa externa com folgas proporcionais ao comprimento característico. Condições de entrada, saída, parede e simetria por referência estável, metas de perda de carga, vazão, força e temperatura, e exportação do domínio como STL com regiões nomeadas por face para o snappyHexMesh.",
+   "origem": [
+    "PESQ-BENCH2"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.6
+  },
+  {
+   "id": "B197",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Análise de saída e undercut por face",
+   "oque": "Dada uma direção de abertura, calcula o ângulo de saída de cada face com faixas de cor, detecta undercut por visibilidade ao longo da direção e classifica as faces em cavidade, núcleo, lateral ou ambígua. Reutilizável por moldes (B129), recursos de plástico (B148) e balanço da impressão 3D (B164), com limites por processo editáveis.",
+   "origem": [
+    "PESQ-BENCH2"
+   ],
+   "catalogo": [],
+   "tokens_k": 180,
+   "teste": "Auto + Visual",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B198",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Regras plásticas do documento",
+   "oque": "Objeto do documento com espessura nominal, ângulo de saída, raio nominal e limites, vindo de uma biblioteca editável e versionada (como as regras plásticas do Fusion). Consumido por casca, nervura, boss, snap-fit, grelha, lip e saída, com diagnóstico na árvore quando um recurso viola a regra e sobrescrita só em modo avançado.",
+   "origem": [
+    "PESQ-BENCH2"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Auto",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B199",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Compósitos: draping cinemático e padrão plano",
+   "oque": "Draping por fishnet cinemático: ponto-semente, fibras de urdidura e trama, passo e deslocamento do ângulo, mapa de cisalhamento com semáforo contra ângulos de aviso e limite do material, orientações previstas das fibras, espessura após drapeamento e padrão plano por ply exportado em DXF (B86) para nesting, com darts e emendas manuais. Exige superfície de molde robusta (B34).",
+   "origem": [
+    "PESQ-BENCH2"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.6
+  },
+  {
+   "id": "B200",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Compósitos: teoria de laminados e seção composta no FEM",
+   "oque": "Teoria clássica de laminados em Rust (matriz ABD, rigidezes equivalentes, tensões por ply, critérios Tsai-Wu e tensão máxima) e exportação do laminado do B137 como seção composta de casca para o CalculiX (*SHELL SECTION, COMPOSITE), ligando o ply book à análise. Valida contra casos analíticos de laminados simétricos.",
+   "origem": [
+    "PESQ-BENCH2"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.4
   }
  ]
 }
