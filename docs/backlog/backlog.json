@@ -1,36 +1,36 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 54650,
+ "tokens_total_k": 56400,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
    "versao": "0.1.0-alpha.28 a .30",
    "tokens_k": 6530,
-   "pct": 11.9
+   "pct": 11.6
   },
   "1": {
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 5460,
-   "pct": 10.0
+   "pct": 9.7
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
    "tokens_k": 7040,
-   "pct": 12.9
+   "pct": 12.5
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
-   "tokens_k": 9270,
-   "pct": 17.0
+   "tokens_k": 10070,
+   "pct": 17.9
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
-   "tokens_k": 26350,
-   "pct": 48.2
+   "tokens_k": 27300,
+   "pct": 48.4
   }
  },
  "itens": [
@@ -130,7 +130,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B06",
@@ -206,7 +206,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B10",
@@ -592,7 +592,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B28",
@@ -805,7 +805,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B33",
@@ -871,7 +871,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B36",
@@ -947,7 +947,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B40",
@@ -1036,7 +1036,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B51",
@@ -1091,7 +1091,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B54",
@@ -1379,7 +1379,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B69",
@@ -1501,7 +1501,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B76",
@@ -1629,7 +1629,7 @@
    "teste": "Auto + Visual",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B84",
@@ -1915,7 +1915,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B101",
@@ -2100,7 +2100,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B112",
@@ -2228,7 +2228,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B120",
@@ -2276,7 +2276,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B123",
@@ -2340,7 +2340,7 @@
    "teste": "Auto",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B127",
@@ -2468,7 +2468,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B135",
@@ -2580,7 +2580,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B142",
@@ -2660,7 +2660,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B147",
@@ -2692,7 +2692,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B149",
@@ -2708,7 +2708,7 @@
    "teste": "Auto",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B150",
@@ -2747,7 +2747,7 @@
    "onda": 4,
    "prio": "P2",
    "titulo": "Bancada Ergonomia: manequim editável (estilo CATIA Human)",
-   "oque": "Núcleo da bancada Ergonomia, reduzido a cerca de 300 k: manequim como componente da montagem com percentis P5/P50/P95 M/F do ANSUR II (base militar dos EUA, por isso com importação de CSV de qualquer outra base), esqueleto com limites articulares e cores de conforto, posturas prontas, pegar/apontar por cinemática inversa para referências estáveis, envelope de alcance, cone e janela de visão e folga de acesso mão/ferramenta. As análises RULA, REBA, OWAS, NIOSH e o relatório em português com campos da NR-17 saem para o item novo de análises ergonômicas. Integra com B168, B124, B156 e B162. Diferencial: conferir o posto por passo de montagem, o que hoje só DELMIA e Process Simulate Human fazem.",
+   "oque": "Núcleo da bancada Ergonomia, reduzido a cerca de 300 k: manequim como componente da montagem com percentis P5/P50/P95 M/F do ANSUR II (base militar dos EUA, por isso com importação de CSV de qualquer outra base), esqueleto com limites articulares e cores de conforto, posturas prontas, pegar/apontar por cinemática inversa para referências estáveis, envelope de alcance, cone e janela de visão e folga de acesso mão/ferramenta. As análises RULA, REBA, OWAS, NIOSH e o relatório em português com campos da NR-17 saem para o item novo de análises ergonômicas. Controle do manequim com mapa de conforto em B208 e animação em B209. Integra com B168, B124, B156 e B162. Diferencial: conferir o posto por passo de montagem, o que hoje só DELMIA e Process Simulate Human fazem.",
    "origem": [
     "USR-ERGO"
    ],
@@ -3076,7 +3076,7 @@
    "teste": "Auto + Visual",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B173",
@@ -3156,7 +3156,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B178",
@@ -3188,7 +3188,7 @@
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B180",
@@ -3252,7 +3252,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B184",
@@ -3348,7 +3348,7 @@
    "teste": "Auto + Visual",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B190",
@@ -3380,7 +3380,7 @@
    "teste": "Auto",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B192",
@@ -3396,7 +3396,7 @@
    "teste": "Auto + Visual",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.7
   },
   {
    "id": "B193",
@@ -3637,6 +3637,106 @@
    "area": "Geral",
    "status": "a fazer",
    "pct": 0.1
+  },
+  {
+   "id": "B208",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Ergonomia: controle do manequim e mapa de conforto ao vivo",
+   "oque": "Controle direto do manequim na montagem: manipulador por articulação (giro por junta com limites), arrastar mão, pé, cabeça ou quadril com cinemática inversa, travar articulações, espelhar lado, olhar para um ponto, posturas prontas e biblioteca de posturas salvas por documento. Mapa de conforto ao vivo: cada segmento do corpo colorido verde, amarelo ou vermelho conforme o ângulo da junta nas faixas de conforto (faixas abertas e editáveis, com fonte e página, conferidas em duas fontes), vermelho também quando passa do limite articular ou do alcance; nota global de conforto da postura e lista dos segmentos em vermelho. Estende o B152 e alimenta o B178. Ícone e PT/EN para cada comando.",
+   "origem": [
+    "USR-ERGO"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B209",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Ergonomia: animação do manequim e conforto ao longo do tempo",
+   "oque": "Linha do tempo de posturas por quadros-chave com interpolação das juntas, caminhar por trajeto no piso, pegar, levar e soltar uma peça (a peça segue a mão), seguir os passos da sequência de montagem. Curva de conforto ao longo do tempo por segmento e global, com os trechos em vermelho marcados na linha do tempo e no relatório; tempo acumulado em postura ruim. Exporta a animação para o pacote de visualização (B181/B156), vídeo e para a simulação de manufatura (B167/B168). Ícone e PT/EN.",
+   "origem": [
+    "USR-ERGO"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B210",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Conversor: todos os formatos abertos de malha e visualização",
+   "oque": "Ler e gravar OBJ (com MTL), PLY, 3MF, AMF, glTF/GLB, VRML/X3D e Collada; ler FBX (ufbx, MIT) e gravar USDZ/USD; cores, materiais, unidades e estrutura de montagem quando o formato tiver. Usa o núcleo de malha do B170 e o provedor padrão do B87; cada formato com opções no diálogo único (suporte → modo → parâmetros → avançado) e relatório do que não atravessa. Teste de ida e volta por formato no corpus.",
+   "origem": [
+    "USR-FMT",
+    "PESQ-CNV"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B211",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Conversor: formatos CAD e 2D abertos (3DM, IFC, PDF 3D, DWG, SVG)",
+   "oque": "Rhino 3DM por openNURBS (licença permissiva) com NURBS exatas, camadas e cores; IFC leitura e gravação (estende o B134); PDF 3D (PRC) para revisão; DWG por ODA (licença comercial) ou LibreDWG (GPL, só como processo externo); SVG e DXF 2D de sketch e desenho; STEP AP242 em XML quando o OCCT suportar. Relatório e testes de ida e volta por formato.",
+   "origem": [
+    "USR-FMT",
+    "PESQ-CNV"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B212",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Conversor: formatos proprietários por provedores opcionais (CATIA, SolidWorks, Inventor, Creo, NX, Parasolid, ACIS, JT)",
+   "oque": "Leitura de CATPart/CATProduct, SLDPRT/SLDASM, IPT/IAM, Creo e NX PRT, Solid Edge, Parasolid x_t/x_b, ACIS SAT e JT, e gravação de Parasolid, ACIS e JT onde o SDK permitir, por provedores comerciais (CAD Exchanger, HOOPS, Spatial) carregados como DLL em tempo de execução atrás da interface Provedor, nunca no binário principal. Sem provedor: detectar o formato e orientar a exportar STEP AP242 no CAD de origem. Avaliar custo e termos de licença de cada SDK antes (ver propriedade-intelectual.md) e registrar em ADR. Gravar nos nativos fechados (CATIA, SolidWorks, Inventor) não é possível legalmente sem SDK do fabricante; documentar.",
+   "origem": [
+    "USR-FMT",
+    "PESQ-CNV"
+   ],
+   "catalogo": [],
+   "tokens_k": 350,
+   "teste": "Auto + Manual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.6
+  },
+  {
+   "id": "B213",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Conversor: matriz de formatos suportados e conversão em lote",
+   "oque": "Tela \"Formatos suportados\" com ler e gravar por formato e o que atravessa (geometria exata, malha, cor, camadas, montagem, PMI, parâmetros), gerada do registro de provedores. Conversão em lote: entradas (arquivos, pastas, documentos do projeto), perfil de saída por formato, regra de nome {PN}_{REV}.{ext}, política para arquivo existente, simulação antes de executar e execução em processos filhos com tempo limite. Ícone e PT/EN.",
+   "origem": [
+    "USR-FMT",
+    "PESQ-CNV"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.4
   }
  ]
 }
