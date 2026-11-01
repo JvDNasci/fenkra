@@ -68,6 +68,17 @@ fn caixa() -> Document {
     d
 }
 
+fn placa_simples() -> Document {
+    let mut d = Document::new("Placa simples");
+    let mut data = SketchData::default();
+    let mut al = ids(16_000_000);
+    data.add_rect(&mut al, [0., 0.], [200., 180.], false);
+    let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XZ), data }));
+    let ex = d.add_feature(ext(sk, "20"));
+    d.hide_consumed(ex);
+    d
+}
+
 fn suporte() -> Document {
     let mut d = Document::new("Suporte de chapa");
     d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), ..Default::default() });
@@ -152,6 +163,7 @@ pub fn all() -> Vec<Example> {
         Example { name: "Caixa com casca", desc: "Perfil oblongo extrudado e esvaziado (Shell)", bench: Bench::Solidos, doc: caixa() },
         Example { name: "Suporte de chapa", desc: "Aba com alívio, bainha e veneziana — dobra e planifica", bench: Bench::Chapa, doc: suporte() },
         Example { name: "Bandeja curva", desc: "Aba em aresta curva com raio de dobra", bench: Bench::Chapa, doc: bandeja() },
+        Example { name: "Placa simples", desc: "Bloco de arestas vivas (referência de exibição)", bench: Bench::Solidos, doc: placa_simples() },
         Example { name: "Quadro de mesa", desc: "Tubos quadrados com meia-esquadria (estrutural)", bench: Bench::Estrutural, doc: quadro() },
     ]
 }

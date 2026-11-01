@@ -608,9 +608,11 @@ impl Viewport {
                     depth_write_enabled: Some(write),
                     depth_compare: Some(cmp),
                     stencil: Default::default(),
-                    // faces um pouco para trás (polygon offset): arestas aparecem sem atravessar faces
+                    // faces um pouco para trás (polygon offset) só pelo termo constante: o termo de
+                    // inclinação empurrava faces vistas de lado tanto que arestas escondidas atrás delas
+                    // apareciam perto dos cantos (a frente das arestas vem de `Camera::line_bias`)
                     bias: if topo == T::TriangleList && stride != std::mem::size_of::<WideVertex>() {
-                        wgpu::DepthBiasState { constant: 2, slope_scale: 1.0, clamp: 0.0 }
+                        wgpu::DepthBiasState { constant: 2, slope_scale: 0.0, clamp: 0.0 }
                     } else {
                         Default::default()
                     },

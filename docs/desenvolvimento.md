@@ -52,7 +52,8 @@ preferências do usuário.
 
 | Variável | Efeito |
 |---|---|
-| `FENKRA_DEMO_EXEMPLO=n` | abre o exemplo n (0–5) da tela inicial |
+| `FENKRA_DEMO_EXEMPLO=n` | abre o exemplo n (0–6) da tela inicial |
+| `FENKRA_DEMO_CAMERA=yaw,pitch,fator` | gira a câmera no primeiro enquadramento (graus, graus, distância × enquadrada) — capturas reproduzíveis |
 | `FENKRA_DEMO_INICIO=1` | mostra a tela inicial |
 | `FENKRA_DEMO_TEMA=<nome>` | usa o tema (Escuro, Claro, NeoTech Minimalista…) |
 | `FENKRA_DEMO_CHAPA`, `_EST`, `_SUP`, `_ASM`, `_PMI`, `_DWG` | abre o exemplo de cada bancada |

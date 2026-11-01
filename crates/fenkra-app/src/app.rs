@@ -5418,6 +5418,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 if let Some(b) = vp.bounds {
                     let before = vp.camera;
                     vp.camera.fit(b);
+                    demo_camera(&mut vp.camera);
                     vp.animate_from(before);
                     self.fit_pending = false;
                 }
@@ -7422,4 +7423,20 @@ fn bench_tab(ui: &mut egui::Ui, active: bool, text: &str, enabled: bool) -> egui
     }
     p.galley(r.center() - g.size() / 2., g, col);
     resp
+}
+
+/// Desenvolvimento: `FENKRA_DEMO_CAMERA=yaw,pitch,fator` (graus, graus, distância × enquadrada) gira a
+/// câmera no primeiro enquadramento, para capturas reproduzíveis.
+fn demo_camera(c: &mut crate::render::Camera) {
+    static FEITO: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    let Ok(v) = std::env::var("FENKRA_DEMO_CAMERA") else { return };
+    if FEITO.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        return;
+    }
+    let n: Vec<f32> = v.split(',').filter_map(|x| x.trim().parse().ok()).collect();
+    if let [yaw, pitch, fator] = n[..] {
+        c.yaw = yaw.to_radians();
+        c.pitch = pitch.to_radians();
+        c.dist *= fator;
+    }
 }
