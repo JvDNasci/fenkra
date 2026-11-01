@@ -1,36 +1,36 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 54050,
+ "tokens_total_k": 54650,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
    "versao": "0.1.0-alpha.28 a .30",
-   "tokens_k": 5930,
-   "pct": 11.0
+   "tokens_k": 6530,
+   "pct": 11.9
   },
   "1": {
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 5460,
-   "pct": 10.1
+   "pct": 10.0
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
    "tokens_k": 7040,
-   "pct": 13.0
+   "pct": 12.9
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
    "tokens_k": 9270,
-   "pct": 17.2
+   "pct": 17.0
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
    "tokens_k": 26350,
-   "pct": 48.8
+   "pct": 48.2
   }
  },
  "itens": [
@@ -757,7 +757,7 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B31",
@@ -1075,7 +1075,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B53",
@@ -1252,7 +1252,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B60",
@@ -1271,7 +1271,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B61",
@@ -1345,7 +1345,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B67",
@@ -1416,7 +1416,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B71",
@@ -1549,7 +1549,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B79",
@@ -1565,7 +1565,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B80",
@@ -1581,7 +1581,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B81",
@@ -1679,7 +1679,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B87",
@@ -1696,7 +1696,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B88",
@@ -1713,7 +1713,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B89",
@@ -1729,7 +1729,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B90",
@@ -1746,7 +1746,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B91",
@@ -1762,7 +1762,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B92",
@@ -1796,7 +1796,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B94",
@@ -2084,7 +2084,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B111",
@@ -2116,7 +2116,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B113",
@@ -2164,7 +2164,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B116",
@@ -2196,7 +2196,7 @@
    "teste": "Auto",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B118",
@@ -2212,7 +2212,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B119",
@@ -2260,7 +2260,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B122",
@@ -2308,7 +2308,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B125",
@@ -2500,7 +2500,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B137",
@@ -2612,7 +2612,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B144",
@@ -2730,14 +2730,14 @@
    "id": "B151",
    "onda": 0,
    "prio": "P0",
-   "titulo": "Conformidade de licenças e propriedade intelectual",
-   "oque": "LICENSE (LGPL-2.1-or-later), NOTICE e THIRD-PARTY-LICENSES na raiz e dentro do zip do release (OCCT, FreeType, libpng e demais DLLs; oferta do código-fonte do OCCT); aviso de marcas de terceiros e revisão dos nomes de marca nos presets de atalhos/navegação; procedência do ícone da fênix; registro de procedência dos textos de docs/pesquisa e contextos; checagem do nome Fenkra no INPI/USPTO/EUIPO. Ver docs/pesquisa/propriedade-intelectual.md.",
+   "titulo": "Licenças: LICENSE, NOTICE e THIRD-PARTY-LICENSES no repositório e no zip",
+   "oque": "LICENSE com o texto integral da LGPL-2.1 e o aviso \"LGPL-2.1-or-later\" (fechar o ADR 0003, hoje proposta); NOTICE com copyright, aviso proeminente do OpenCASCADE Technology 8.0.1, oferta escrita do código-fonte (LGPL §6c, 3 anos, versão exata, link upstream e porta vcpkg, como reconstruir), crédito do FreeType e escolha de licença dos itens duais (FTL no FreeType, Apache-2.0 no self_cell); THIRD-PARTY-LICENSES gerado por cargo-about e completado com os copyright do vcpkg (OCCT e exceção, FreeType, libpng, zlib, bzip2, Brotli) e as fontes embutidas do egui (OFL, UFL, Hack, emoji). release.ps1 copia os três para o zip, falha (throw) se faltar algum, grava a versão do OCCT e das libs a partir dos vcpkg.spdx.json e gera SHA256SUMS. Aceite: zip do release contém os três arquivos e o script falha sem eles. Ver docs/pesquisa/propriedade-intelectual.md §3.",
    "origem": [
     "PESQ-PI"
    ],
    "catalogo": [],
    "tokens_k": 80,
-   "teste": "Manual",
+   "teste": "Auto + Manual",
    "area": "Geral",
    "status": "a fazer",
    "pct": 0.1
@@ -3044,7 +3044,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B171",
@@ -3108,7 +3108,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B175",
@@ -3300,7 +3300,7 @@
    "teste": "Auto + Visual",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B187",
@@ -3412,7 +3412,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B194",
@@ -3460,7 +3460,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B197",
@@ -3508,7 +3508,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B200",
@@ -3525,6 +3525,118 @@
    "area": "Geral",
    "status": "a fazer",
    "pct": 0.4
+  },
+  {
+   "id": "B201",
+   "onda": 0,
+   "prio": "P0",
+   "titulo": "Licenças: cabeçalhos SPDX, cargo-deny e cargo-about na CI",
+   "oque": "SPDX-License-Identifier: LGPL-2.1-or-later no topo de todos os .rs, .cpp, .h e .inc; cargo-deny bloqueando GPL, AGPL e licenças sem texto para Windows, Linux e macOS; cargo-about gerando o THIRD-PARTY-LICENSES; teste que falha se um arquivo novo vier sem SPDX. Complementa o B67 (CI).",
+   "origem": [
+    "PESQ-PI"
+   ],
+   "catalogo": [],
+   "tokens_k": 120,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B202",
+   "onda": 0,
+   "prio": "P0",
+   "titulo": "Aviso de marcas e nomes neutros na interface",
+   "oque": "TRADEMARKS.md (SOLIDWORKS e CATIA da Dassault, Inventor e AutoCAD da Autodesk, Fusion, Onshape, Rhino, FreeCAD, Blender: sem afiliação, nomes só para compatibilidade e comparação) replicado na tela Sobre (nova, com versão, licença e créditos) e em docs/README.md; presets como \"Atalhos no estilo de [marca]\", sem ™/®, logos ou \"oficial\"; trocar \"como no AutoCAD\" por descrição neutra; renomear AsmComposer/composer.svg para nome neutro; nenhum comando com nome de marca (Hole Wizard, Smart Fasteners, Toolbox, Define In Work Object…); \"DWG\" só como extensão. Ícone e PT/EN para a tela Sobre.",
+   "origem": [
+    "PESQ-PI"
+   ],
+   "catalogo": [],
+   "tokens_k": 100,
+   "teste": "Auto + Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B203",
+   "onda": 0,
+   "prio": "P1",
+   "titulo": "Procedência do logo e dos ícones",
+   "oque": "Registrar a ferramenta de IA, prompt, data, plano e termos do fenix-ref.png, unificar o relato de origem em gerar_fenix.py, tools/vetorizar e assets/app; decidir entre refazer o logo com designer (titularidade clara) ou manter com procedência registrada; documentar a referência de estilo dos ícones de gerar_icones.py e rever formas parecidas com CAD comercial; conferir os JPEGs de docs/contextos/review.",
+   "origem": [
+    "PESQ-PI"
+   ],
+   "catalogo": [],
+   "tokens_k": 60,
+   "teste": "Manual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B204",
+   "onda": 0,
+   "prio": "P1",
+   "titulo": "Documentação gerada por IA: procedência e varredura de similaridade",
+   "oque": "docs/arquitetura/procedencia.md com uma linha por relatório de docs/pesquisa e arquivo de docs/contextos; cabeçalho \"gerado por IA, sem revisão jurídica; resumo em palavras próprias de fontes públicas\" em cada pesquisa; script de varredura de frases de 8+ palavras contra as páginas citadas; reescrever docs/contextos/smart-fastener.md e trechos de design-review.md com prosa de comandos de terceiros.",
+   "origem": [
+    "PESQ-PI"
+   ],
+   "catalogo": [],
+   "tokens_k": 120,
+   "teste": "Auto + Manual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B205",
+   "onda": 0,
+   "prio": "P1",
+   "titulo": "Política de dados de normas e catálogos",
+   "oque": "docs/biblioteca/POLITICA-DE-DADOS.md consolidando ADR 0008 e fontes-de-dados.md: fatos x tabelas (nunca copiar layout, notas ou figuras), níveis A/B/C/X, uma fonte por valor e duas independentes para nível C (uma não agregadora), proibição de copiar de fonte GPL, rótulo de licença nos JSON; guardar cópia datada dos termos de cada fonte (Gerdau, Aço Brasil, AISC, Ciser…); trocar a fonte \"contexto do projeto\" do din6885a.json; corrigir reuso-opensource.md (Fasteners Workbench é GPL-2.0). Teste que valida fonte, página e nível em todo JSON da biblioteca.",
+   "origem": [
+    "PESQ-PI"
+   ],
+   "catalogo": [],
+   "tokens_k": 100,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B206",
+   "onda": 0,
+   "prio": "P1",
+   "titulo": "Regras para contribuidores (CONTRIBUTING, DCO ou CLA)",
+   "oque": "CONTRIBUTING.md com DCO (Signed-off-by) ou CLA, se houver plano de dupla licença ou versão comercial; declaração de autoria; proibição de código GPL, de licença desconhecida ou de produto proprietário, de textos, imagens e capturas de ajudas de terceiros; declarar contribuições geradas por IA; dados de normas com nível e fonte; quem tem EULA de CAD comercial não contribui com o que aprendeu sob confidencialidade. Modelo de PR com essas caixas e checagem do Signed-off-by na CI.",
+   "origem": [
+    "PESQ-PI"
+   ],
+   "catalogo": [],
+   "tokens_k": 60,
+   "teste": "Auto + Manual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B207",
+   "onda": 0,
+   "prio": "P1",
+   "titulo": "Nome Fenkra e consulta jurídica",
+   "oque": "Busca de anterioridade do nome Fenkra no INPI, USPTO e EUIPO (classes 9 e 42) e domínios; decidir o registro; levar ao advogado as perguntas objetivas da §4 do relatório de propriedade intelectual (licença do projeto e exceção do OCCT, venda com LGPL, logo gerado por IA, presets com nomes de marca, dados de normas, CLA x DCO) e registrar as respostas em ADR.",
+   "origem": [
+    "PESQ-PI"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Manual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.1
   }
  ]
 }
