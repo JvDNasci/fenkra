@@ -713,6 +713,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
         }
         app.demo_previa = crate::previa::demo_preparar(&mut app.open.doc);
+        if let Some(id) = crate::sketch_demo::preparar(&mut app.open.doc) {
+            app.begin_sketch_pending = Some(id);
+            app.started = true;
+        }
         app.started |= app.demo_previa.is_some();
         app.request_recompute();
         app
@@ -6332,6 +6336,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 let casca = self.session.as_ref().and_then(|s| self.open.doc.feature(s.id)).is_some_and(|f| matches!(f.kind, FeatureKind::Shell(_)));
                 if casca && ctx.data(|d| d.get_temp::<bool>(crate::previa::chave_secao())).unwrap_or(false) {
                     style.secao = vp.bounds.map(|b| crate::previa::plano_de_secao(b, vp.camera.eye()));
+                }
+                // B274: corte no plano do sketch em edição, só para ver
+                if let Some(p) = self.sketch.as_ref().and_then(|e| e.plano_de_corte(vp.camera.eye())) {
+                    style.secao = Some(p);
                 }
                 if style.simplificar && style.navegando {
                     // volta à qualidade total quando a câmera para: um redesenho logo depois da pausa

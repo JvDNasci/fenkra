@@ -74,6 +74,8 @@ mod sketch_cota;
 mod sketch_relimita;
 mod sketch_arraste;
 mod sketch_barra;
+mod sketch_demo;
+mod sketch_sombra;
 mod sketch_painel;
 mod sketch_snap;
 mod sketch_textos;

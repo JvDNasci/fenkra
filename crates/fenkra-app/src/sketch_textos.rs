@@ -84,6 +84,16 @@ pub static TEXTOS: &[(&str, &str)] = &[
     // barra de restrições (B273)
     ("conflita com as restrições do sketch", "conflicts with the sketch constraints"),
     ("sketch grande: a prévia só destaca", "large sketch: the preview only highlights"),
+    // perfil sombreado e o que mostrar (B274)
+    ("Projetadas", "Projected"),
+    ("Fatiar no plano", "Slice at plane"),
+    ("Sombreia os contornos fechados, os mesmos que a extrusão usa.", "Shades the closed contours, the same ones the extrusion uses."),
+    ("Mostra os pontos do sketch. Oculto, ponto não recebe clique.", "Shows the sketch points. Hidden points take no clicks."),
+    ("Mostra as cotas. Elas continuam valendo quando ocultas.", "Shows the dimensions. They stay in force when hidden."),
+    ("Mostra os glifos das restrições. Elas continuam valendo quando ocultas.", "Shows the constraint glyphs. They stay in force when hidden."),
+    ("Mostra as curvas de construção. Oculta, curva não recebe clique nem atrai snap.", "Shows the construction curves. Hidden curves take no clicks and attract no snaps."),
+    ("Mostra a geometria que veio do 3D. Oculta, curva não recebe clique nem atrai snap.", "Shows the geometry brought from 3D. Hidden curves take no clicks and attract no snaps."),
+    ("Corta os corpos no plano do sketch enquanto ele está aberto. O modelo e o arquivo não mudam.", "Cuts the bodies at the sketch plane while it is open. The model and the file do not change."),
     // snaps (B96)
     ("origem", "origin"),
     ("ponta", "end"),

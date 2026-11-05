@@ -237,6 +237,16 @@ pub struct SketchEdit {
     pub(crate) confirmar_campo: bool,
     /// prévia das restrições e opções da barra de seleção
     barra: crate::sketch_barra::Memoria,
+    /// o que aparece na tela e o corte dos corpos: só visão, nada disso vai para o documento
+    pub exibir: crate::sketch_sombra::Exibir,
+    pub fatiar: bool,
+    /// plano do corte em vigor, para o renderizador
+    corte: Option<Frame>,
+    /// contornos sombreados e o sketch de onde saíram
+    sombra: Option<(SketchData, Vec<[[f64; 2]; 4]>)>,
+    /// `FENKRA_DEMO_SKETCH`: cursor e opção da barra sem mouse
+    pub(crate) demo_cursor: Option<[f64; 2]>,
+    pub(crate) demo_opcao: Option<CKind>,
 }
 
 /// Campo de valor aberto agora: o painel lê daqui o rótulo e a medida atual.
@@ -415,7 +425,20 @@ impl SketchEdit {
             campos: vec![],
             confirmar_campo: false,
             barra: Default::default(),
+            exibir: Default::default(),
+            fatiar: false,
+            corte: None,
+            sombra: None,
+            demo_cursor: None,
+            demo_opcao: None,
         }
+    }
+    /// Plano de corte dos corpos para o renderizador, com o olho em `olho`.
+    pub fn plano_de_corte(&self, olho: Vec3) -> Option<[f32; 4]> {
+        self.corte.as_ref().map(|f| crate::sketch_sombra::plano_de_corte(f, [olho.x as f64, olho.y as f64, olho.z as f64]))
+    }
+    pub(crate) fn demo_clique(&mut self, uv: [f64; 2]) {
+        self.clicks.push(Snap::livre(uv));
     }
     /// Troca o modo do comando sem recomeçar: os cliques dados continuam valendo, salvo se o modo novo
     /// já estaria completo com eles. Os campos recomeçam porque medem outra coisa.
@@ -2159,10 +2182,29 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
     let report = edit.report.clone();
     let failing: Vec<Id> = report.failing.clone();
     let selected = |e: Ent, ed: &SketchEdit| ed.sel.contains(&e);
+    let (curvas_ocultas, pontos_ocultos) = crate::sketch_sombra::ocultos(&sk, &edit.exibir);
+    let exibir = edit.exibir;
+
+    // corte no plano: o renderizador lê daqui no próximo quadro
+    let corte = edit.fatiar.then_some(v.f);
+    if corte.is_some() != edit.corte.is_some() {
+        ui.ctx().request_repaint();
+    }
+    edit.corte = corte;
+
+    // ---------- perfil sombreado: sai direto dos dados do sketch, sem esperar o recálculo da peça
+    if exibir.perfil {
+        if edit.sombra.as_ref().is_none_or(|s| s.0 != sk) {
+            edit.sombra = Some((sk.clone(), crate::sketch_sombra::faixas(&sk)));
+        }
+        if let Some((_, f)) = &edit.sombra {
+            crate::sketch_sombra::desenha(&painter, &|q| v.to_screen(q), f, crate::theme::accent(ui.visuals()).gamma_multiply(0.2));
+        }
+    }
 
     // ---------- curvas
     let pt_color = |id: Id| if report.fixed_points.contains(&id) { defined } else { FREE };
-    for c in &sk.curves {
+    for c in sk.curves.iter().filter(|c| !curvas_ocultas.contains(&c.id)) {
         let bad = failing.iter().any(|f| sk.constraints.iter().any(|k| k.id == *f && k.kind.refs().contains(&c.id)));
         let all_fixed = SketchData::curve_points(&c.geom).iter().all(|p| report.fixed_points.contains(p));
         let mut col = if c.construction { CONSTR } else if all_fixed { defined } else { FREE };
@@ -2185,7 +2227,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             painter.add(egui::Shape::line(pts, Stroke::new(w, col)));
         }
     }
-    for p in &sk.points {
+    for p in sk.points.iter().filter(|p| !pontos_ocultos.contains(&p.id)) {
         let s = v.to_screen([p.x, p.y]);
         let mut col = pt_color(p.id);
         if selected(Ent::Pt(p.id), edit) {
@@ -2246,6 +2288,10 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
     for c in &sk.constraints {
         let bad = failing.contains(&c.id);
         let sel = edit.sel.contains(&Ent::Cs(c.id));
+        // oculto, não entra em `hits`: sem desenho e sem clique
+        if !(if c.kind.is_dimension() { exibir.cotas } else { exibir.restricoes }) {
+            continue;
+        }
         if !c.kind.is_dimension() {
             let refs = c.kind.refs();
             let at = match &c.kind {
@@ -2321,13 +2367,13 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
 
     // ---------- entrada do mouse
     let (shift, ctrl, alt) = ui.input(|i| (i.modifiers.shift, i.modifiers.command, i.modifiers.alt));
-    let hover = resp.hover_pos();
+    let hover = edit.demo_cursor.map(|q| v.to_screen(q)).or(resp.hover_pos());
     let mut cursor_uv = hover.and_then(|p| v.to_uv(p));
 
     // curva mais perto do cursor, sem olhar os pontos: relimitar age na curva mesmo junto à ponta
     let pick_curve = |pos: Pos2, sk: &SketchData| -> Option<(f32, Id)> {
         let mut best: Option<(f32, Id)> = None;
-        for c in &sk.curves {
+        for c in sk.curves.iter().filter(|c| !curvas_ocultas.contains(&c.id)) {
             let d = match c.geom {
                 Curve::Line { a, b } => seg_dist(pos, v.to_screen(sk.pos(a)), v.to_screen(sk.pos(b))),
                 Curve::Circle { c: ctr, r } => ((pos - v.to_screen(sk.pos(ctr))).length() - r as f32 * ppm).abs(),
@@ -2352,7 +2398,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
     // pick: pontos > rótulos > curvas
     let pick = |pos: Pos2, sk: &SketchData, hits: &[(Rect, Ent)]| -> Option<Ent> {
         let mut best: Option<(f32, Ent)> = None;
-        for p in &sk.points {
+        for p in sk.points.iter().filter(|p| !pontos_ocultos.contains(&p.id)) {
             let d = (v.to_screen([p.x, p.y]) - pos).length();
             if d < 9. && best.is_none_or(|(bd, _)| d < bd) {
                 best = Some((d, Ent::Pt(p.id)));
@@ -2414,6 +2460,9 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         let curvas: Vec<&fenkra_core::sketch::SkCurve> = sk.curves.iter().filter(|c| d.circle == Some(c.id) || d.corpo.is_some_and(|k| k.curva() == c.id) || SketchData::curve_points(&c.geom).iter().any(|p| movidos.contains(p))).collect();
         (curvas.iter().flat_map(|c| SketchData::curve_points(&c.geom)).chain(movidos.iter().copied()).collect(), curvas.iter().map(|c| c.id).collect())
     });
+    // o que está oculto também não atrai o cursor
+    let sem_pontos: Vec<Id> = sem_pontos.into_iter().chain(pontos_ocultos.iter().copied()).collect();
+    let sem_curvas: Vec<Id> = sem_curvas.into_iter().chain(curvas_ocultas.iter().copied()).collect();
     let mut cur_snap = hover.and_then(|p| snap_at(p, &sk, &sem_pontos, &sem_curvas));
 
     // ---------- inferência: enquanto se desenha, sem apoio mais forte, o cursor procura alinhamentos
@@ -2669,7 +2718,12 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                         edit.sel.clear();
                     }
                     for e in achados {
-                        if !edit.sel.contains(&e) {
+                        let oculto = match e {
+                            Ent::Cv(c) => curvas_ocultas.contains(&c),
+                            Ent::Pt(p) => pontos_ocultos.contains(&p),
+                            Ent::Cs(_) => false,
+                        };
+                        if !oculto && !edit.sel.contains(&e) {
                             edit.sel.push(e);
                         }
                     }
@@ -3373,7 +3427,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         if let (Some(caixa), false) = (caixa_da_selecao(&sk, &v, &sel), opcoes.is_empty()) {
             let lugar = crate::sketch_barra::lugar(caixa, rect, opcoes.len());
             let (sobre, clicada) = crate::sketch_barra::mostrar(ui.ctx(), lugar, &opcoes);
-            if let Some(k) = sobre {
+            if let Some(k) = sobre.or(edit.demo_opcao) {
                 if let Some(p) = edit.barra.previa(&sk, k, &sel, &vars, report.redundant, crate::sketch_barra::ORCAMENTO) {
                     draw_previa(&painter, &v, &sk, &sel, p, lugar + egui::vec2(60., 52.), dark);
                 }
@@ -3694,6 +3748,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     // estado do sketch: abaixo do comando, porque vale para o desenho todo
     let (txt, col) = status_line(&edit.report);
     ui.label(RichText::new(txt).color(col).strong());
+    crate::sketch_sombra::painel(ui, &mut edit.exibir, &mut edit.fatiar);
     ui.add_space(4.);
     let mut finish = false;
     let mut remove = false;
@@ -3863,6 +3918,7 @@ pub fn begin(app: &mut App, id: Id) {
     crate::sketch_vinculos::sincroniza(app, id);
     if let Some(FeatureKind::Sketch(s)) = app.open.doc.feature(id).map(|f| &f.kind) {
         e.report = s.data.clone().solve(&vars, &[]);
+        crate::sketch_demo::aplicar(&mut e, &s.data);
     }
     app.sketch = Some(e);
     app.sel = Sel::Feature(id);
