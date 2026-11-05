@@ -11,6 +11,8 @@ use glam::Vec3;
 use fenkra_core::*;
 use crate::i18n::tr;
 
+mod solidos;
+
 /// Tamanho da pega das alças na tela, igual em toda seta (B228): um alvo que o mouse acerta sem mira.
 pub(crate) const PEGA: f32 = 28.;
 
@@ -359,6 +361,11 @@ fn write_slot(app: &mut App, id: Id, slot: u8, value: String) {
     if slot == 0 {
         return write_value(app, id, value);
     }
+    // B288: alças extras da bancada Sólidos têm os campos em handles/solidos.rs
+    if slot >= solidos::PRIMEIRO {
+        solidos::aplicar(&mut app.open.doc, id, slot, value);
+        return;
+    }
     if let Some(rf) = app.open.doc.references.iter_mut().find(|r| r.id == id) {
         match &mut rf.kind {
             RefKind::SurfExtrude { length2, .. } => *length2 = value,
@@ -409,12 +416,12 @@ fn revolve_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id
     let Some(sk) = r.sketches.iter().find(|s| s.feature == rv.sketch) else { return };
     let Some((o, d)) = revolve_axis(app, &rv.axis) else { return };
     let c = if sk.lines.is_empty() { v3(sk.frame.origin) } else { sk.lines.iter().fold(Vec3::ZERO, |a, p| a + Vec3::from(*p)) / sk.lines.len() as f32 };
-    arc_handle(app, ui, rect, cam, id, c, (o, d), &rv.angle, rv.symmetric);
+    arc_handle(app, ui, rect, cam, id, c, (o, d), &rv.angle, rv.symmetric, 0, (1., 360.));
 }
 
 /// Alça em arco do ângulo de revolução, em volta de `(o, d)`, a partir do ponto `c`.
 #[allow(clippy::too_many_arguments)]
-fn arc_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id, c: Vec3, (o, d): (Vec3, Vec3), expr: &str, symmetric: bool) {
+fn arc_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id, c: Vec3, (o, d): (Vec3, Vec3), expr: &str, symmetric: bool, slot: u8, lim: (f64, f64)) {
     let foot = o + d * (c - o).dot(d);
     let r0 = c - foot;
     if r0.length() < 1e-4 {
@@ -443,7 +450,7 @@ fn arc_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id
         if let Some(m) = ui.input(|i| i.pointer.interact_pos()) {
             // ângulo cujo ponto projetado fica mais perto do mouse
             let mut best = (f32::MAX, ang);
-            for k in 1..=360 {
+            for k in (lim.0 as i32)..=(lim.1 as i32) {
                 if let Some(p) = cam.project(rect, at(start + k as f64)) {
                     let dd = (p - m).length();
                     if dd < best.0 {
@@ -452,8 +459,8 @@ fn arc_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id
                 }
             }
             let step = if ui.input(|i| i.modifiers.shift) { 5. } else { 1. };
-            let v = ((best.1 / step).round() * step).clamp(1., 360.);
-            write_value(app, id, fmt(v));
+            let v = ((best.1 / step).round() * step).clamp(lim.0, lim.1);
+            write_slot(app, id, slot, fmt(v));
         }
     }
     let txt = if numeric { format!("{}°", fmt(ang)) } else { format!("🔒 {} = {}°", expr.trim(), fmt(ang)) };
@@ -575,7 +582,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: Camera) {
     if let Some(RefKind::SurfRevolve { curve, axis, angle, .. }) = app.open.doc.reference(id).map(|r| r.kind.clone()) {
         let c = app.result.as_ref().and_then(|r| curve_mid(r, &curve));
         if let (Some(c), Some(ax)) = (c, revolve_axis(app, &axis)) {
-            arc_handle(app, ui, rect, &cam, id, c, ax, &angle, false);
+            arc_handle(app, ui, rect, &cam, id, c, ax, &angle, false, 0, (1., 360.));
         }
         return;
     }
@@ -583,9 +590,14 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: Camera) {
     if let (true, Some(h)) = (list.is_empty(), handle_for(app, id)) {
         list.push((0, h));
     }
+    // B288: saída, dois lados, base das primitivas, mover e escala
+    if let Some(r) = app.result.as_ref() {
+        list.extend(solidos::alcas(r, &app.open.doc, id));
+    }
     for (i, (slot, h)) in list.into_iter().enumerate() {
         linear_handle(app, ui, rect, &cam, id, slot, i, h);
     }
+    solidos::arcos(app, ui, rect, &cam, id);
     // B275: o plano de referência do comando (espelho, saída, base) tem a seta do próprio deslocamento
     if let Some(rid) = plano_deslocavel(&app.open.doc, id) {
         if let Some(h) = handle_for(app, rid) {

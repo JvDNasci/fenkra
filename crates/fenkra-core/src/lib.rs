@@ -9,6 +9,7 @@
 //! editar altera o objeto no lugar e as referências apontam para o `Id`, nunca para posições.
 
 pub mod config;
+pub mod configuracoes;
 pub mod doc;
 pub mod expr;
 pub mod formato;

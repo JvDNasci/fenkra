@@ -745,7 +745,7 @@ mod tests {
         }
         for (nome, modo) in [("filete", true), ("chanfro", false)] {
             let (d, _) = caixa_com_tampa();
-            let op = EdgeOp { value: s("2"), edges: EdgeSel::AllOfBody, mode: EdgeMode::Constant, prop: Default::default(), keys: vec![] };
+            let op = EdgeOp { value: s("2"), edges: EdgeSel::AllOfBody, mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: Default::default() };
             casos.push((nome, d, if modo { FeatureKind::Fillet(op) } else { FeatureKind::Chamfer(op) }, ENTRA, false));
         }
         casos.push(("casca", caixa(), FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: s("2"), outward: false, face_keys: vec![], closed: false }), ENTRA, false));

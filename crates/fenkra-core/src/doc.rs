@@ -2576,7 +2576,11 @@ impl FeatureKind {
                 }
                 match &mut o.mode {
                     EdgeMode::Constant | EdgeMode::FaceFace(..) | EdgeMode::FullRound { .. } => {}
-                    EdgeMode::Variable(v) | EdgeMode::TwoDist(v) | EdgeMode::DistAngle(v) => exprs(v),
+                    EdgeMode::Variable(v) | EdgeMode::TwoDist(v) | EdgeMode::DistAngle(v) | EdgeMode::Asym(v) => exprs(v),
+                }
+                if let Some([a, b]) = &mut o.extra.partial {
+                    exprs(a);
+                    exprs(b);
                 }
             }
             Sweep(w) => {
@@ -3255,6 +3259,39 @@ pub struct EdgeOp {
     /// referência v2 de cada aresta de `EdgeSel::Edges` (paralelo a ela; `None` = só o ponto)
     #[serde(default)]
     pub keys: Vec<Option<EdgeKey>>,
+    /// inverter por aresta e trecho parcial (B289)
+    #[serde(default)]
+    pub extra: EdgeExtra,
+}
+
+/// Opções extras de filete e chanfro (B289), à parte para o comando seguir simples.
+#[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
+pub struct EdgeExtra {
+    /// inverter por aresta (paralelo a `EdgeSel::Edges`): a 1ª medida passa para a outra face.
+    /// Vazio ou mais curto que a lista = sem inversão nas que faltam.
+    #[serde(default)]
+    pub flips: Vec<bool>,
+    /// filete parcial: início e fim, em mm contados desde o começo da aresta; só as arestas
+    /// escolhidas, e o filete termina reto nos dois extremos
+    #[serde(default)]
+    pub partial: Option<[String; 2]>,
+}
+
+impl EdgeExtra {
+    /// A aresta `i` está invertida?
+    pub fn flip(&self, i: usize) -> bool {
+        self.flips.get(i).copied().unwrap_or(false)
+    }
+
+    /// A lista de arestas mudou de `old_pts` para `new_pts`: cada aresta que continua leva a
+    /// inversão dela; a nova entra sem inverter.
+    pub fn carry_flips(&mut self, old_pts: &[[f64; 3]], new_pts: &[[f64; 3]]) {
+        if self.flips.is_empty() {
+            return;
+        }
+        let old: Vec<Option<bool>> = self.flips.iter().map(|b| Some(*b)).collect();
+        self.flips = carry_keys(old_pts, &old, new_pts).into_iter().map(|x| x.unwrap_or(false)).collect();
+    }
 }
 
 /// Até onde o filete/chanfro continua a partir das arestas escolhidas.
@@ -3277,6 +3314,8 @@ pub enum EdgeMode {
     Variable(String),
     /// chanfro com duas distâncias (a segunda)
     TwoDist(String),
+    /// filete assimétrico: o raio é o da 1ª face e este o da 2ª (aresta reta entre planos)
+    Asym(String),
     /// chanfro por distância e ângulo (graus)
     DistAngle(String),
     /// filete entre duas faces (pontos clicados): arredonda a aresta comum
@@ -3346,6 +3385,9 @@ pub struct Document {
     /// parâmetros de chapa metálica (espessura, raio, fator K, estado planificado)
     #[serde(default)]
     pub sheet: Option<SheetParams>,
+    /// tabela de projeto: variantes da peça por linha, e qual está ativa (B102)
+    #[serde(default, skip_serializing_if = "crate::configuracoes::TabelaProjeto::vazia")]
+    pub tabela: crate::configuracoes::TabelaProjeto,
     /// anotações 3D (PMI) desta peça
     #[serde(default)]
     pub pmi: Vec<crate::pmi::Pmi>,
@@ -3408,6 +3450,7 @@ impl Document {
             views: vec![],
             textures: vec![],
             sheet: None,
+            tabela: Default::default(),
             pmi: vec![],
             pmi_captures: vec![],
             line_styles: vec![],
@@ -4711,7 +4754,7 @@ mod tests {
             extent: Extent::Blind(s("10")),
             reverse: false, taper: s("0"), thin: None, dir: None, ends: Default::default(),
         }));
-        let fil = d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::CreatedBy(ex), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![] }));
+        let fil = d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::CreatedBy(ex), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: Default::default() }));
         assert_eq!(d.dependents(sk1), vec![ex, fil]);
 
         // substituir referência mantém o comando e muda a entrada

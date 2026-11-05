@@ -353,7 +353,7 @@ mod tests {
     /// Filete entre faces: o primeiro clique preenche uma face e o campo continua ativo até a segunda.
     #[test]
     fn filete_face_face_pede_duas_faces() {
-        let op = EdgeOp { value: s("2"), edges: EdgeSel::AllOfBody, mode: EdgeMode::FaceFace([0.; 3], [0.; 3]), prop: Default::default(), keys: vec![] };
+        let op = EdgeOp { value: s("2"), edges: EdgeSel::AllOfBody, mode: EdgeMode::FaceFace([0.; 3], [0.; 3]), prop: Default::default(), keys: vec![], extra: Default::default() };
         let mut k = FeatureKind::Fillet(op);
         assert_eq!(campo_ativo(&k), Some(Espera::Face));
         crate::feat_ui::add_face(&mut k, [0., 0., 20.]);
@@ -363,7 +363,7 @@ mod tests {
         assert_eq!(campo_ativo(&k), None);
         assert_eq!(contagem(&k), Some((Espera::Face, 2)));
         // arestas: vazio pede aresta; uma aresta basta
-        let op = EdgeOp { value: s("2"), edges: EdgeSel::Edges(vec![]), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![] };
+        let op = EdgeOp { value: s("2"), edges: EdgeSel::Edges(vec![]), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: Default::default() };
         let mut k = FeatureKind::Chamfer(op);
         assert_eq!(campo_ativo(&k), Some(Espera::Aresta));
         if let FeatureKind::Chamfer(o) = &mut k {
@@ -452,7 +452,7 @@ mod tests {
         assert!(dist < 1e-3, "{dist}");
         let nseg = m.edges.len() / 6;
         let seg = |e: usize| m.edge_ranges.get(e + 1).map(|x| *x as usize).unwrap_or(nseg) - m.edge_ranges[e] as usize;
-        let id = d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("2"), edges: EdgeSel::Edges(vec![[0., 20., 20.]]), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![] }));
+        let id = d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("2"), edges: EdgeSel::Edges(vec![[0., 20., 20.]]), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: Default::default() }));
         let r = recompute(&d);
         let mut cena = Scene::default();
         destacar(&d, &r, &fantasma(id, &base), &mut cena);
@@ -462,7 +462,7 @@ mod tests {
         assert!(xs.iter().cloned().fold(f32::MAX, f32::min) < -19.9 && xs.iter().cloned().fold(f32::MIN, f32::max) > 19.9, "vai de ponta a ponta");
         assert!(!cena.wide.is_empty());
         // ponto longe de qualquer aresta não realça nada
-        let id2 = d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("2"), edges: EdgeSel::Edges(vec![[0., 0., 10.]]), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![] }));
+        let id2 = d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("2"), edges: EdgeSel::Edges(vec![[0., 0., 10.]]), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: Default::default() }));
         let mut vazia = Scene::default();
         destacar(&d, &r, &fantasma(id2, &base), &mut vazia);
         assert!(vazia.overlay.is_empty());
