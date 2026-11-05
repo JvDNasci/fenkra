@@ -14,6 +14,7 @@
 //! - **Liberar revisão** marca a versão atual com uma letra e a congela (RF-GPR-011).
 
 pub mod diario;
+pub mod estados;
 pub mod importacao;
 pub mod pacote;
 pub mod plano;
@@ -52,6 +53,8 @@ pub enum ProjectError {
     Importacao(String),
     #[error("recusado: {0}")]
     Recusado(String),
+    #[error("lista de conferência reprovada: {0}")]
+    Conferencia(String),
 }
 
 pub type PResult<T> = Result<T, ProjectError>;
@@ -59,6 +62,8 @@ pub type PResult<T> = Result<T, ProjectError>;
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum DocState {
     EmTrabalho,
+    /// pedido de aprovação em andamento (só nos ciclos que usam este estado)
+    EmAprovacao,
     Liberado,
     Obsoleto,
 }
@@ -67,6 +72,7 @@ impl DocState {
     pub fn label(self) -> &'static str {
         match self {
             DocState::EmTrabalho => "Em trabalho",
+            DocState::EmAprovacao => "Em aprovação",
             DocState::Liberado => "Liberado",
             DocState::Obsoleto => "Obsoleto",
         }
@@ -149,6 +155,9 @@ pub struct Index {
     /// a própria pasta do projeto sempre entra (B94)
     #[serde(default)]
     pub pastas_busca: Vec<String>,
+    /// ciclo de vida: estados, transições permitidas e esquema de revisão (B265)
+    #[serde(default)]
+    pub ciclo: estados::Ciclo,
     next_id: u64,
     pub documents: Vec<DocEntry>,
 }
@@ -160,6 +169,13 @@ pub struct Project {
     pub aviso_formato: Option<String>,
     /// quem está operando o projeto: entra em versões e no diário (B25)
     pub autor: String,
+    /// papéis de quem opera (B265): decidem quais transições do ciclo estão liberadas. Numa estação
+    /// local sem controle de acesso o usuário acumula os papéis padrão.
+    pub papeis: Vec<String>,
+}
+
+fn papeis_padrao() -> Vec<String> {
+    vec!["projetista".into(), "aprovador".into()]
 }
 
 /// Autor padrão: o usuário do sistema operacional.
@@ -220,11 +236,13 @@ impl Project {
                 pn_ambientes: vec![],
                 pn_ambiente: String::new(),
                 pastas_busca: vec![],
+                ciclo: estados::Ciclo::padrao(),
                 next_id: 1,
                 documents: vec![],
             },
             aviso_formato: None,
             autor: autor_do_sistema(),
+            papeis: papeis_padrao(),
         };
         p.save_index()?;
         Ok(p)
@@ -236,7 +254,7 @@ impl Project {
         let s = std::fs::read_to_string(root.join(INDEX))?;
         let prep = preparar(Tipo::Indice, &s)?;
         let aviso_formato = prep.aviso(Tipo::Indice);
-        Ok(Project { root: root.into(), index: serde_json::from_value(prep.valor)?, aviso_formato, autor: autor_do_sistema() })
+        Ok(Project { root: root.into(), index: serde_json::from_value(prep.valor)?, aviso_formato, autor: autor_do_sistema(), papeis: papeis_padrao() })
     }
 
     fn pode_gravar(&self) -> PResult<()> {
@@ -476,10 +494,12 @@ impl Project {
         e.description = doc.props.description.clone();
         e.origem = doc.origem.clone();
         let mut volta_a_trabalho = false;
+        let mut estado_antes_edicao = None;
         let nova = e.versions.last().map(|v| v.hash != hash).unwrap_or(true);
         if nova {
             e.versions.push(Version { hash: hash.clone(), time: now(), note: note.into(), author: autor, comment: comentario.into(), restored_from: None });
-            if e.state == DocState::Liberado {
+            if matches!(e.state, DocState::Liberado | DocState::EmAprovacao) {
+                estado_antes_edicao = Some(e.state);
                 e.state = DocState::EmTrabalho;
                 volta_a_trabalho = true;
             }
@@ -489,7 +509,8 @@ impl Project {
             self.registrar(diario::TipoEvento::Versao, id, "", &hash, note)?;
         }
         if volta_a_trabalho {
-            self.registrar(diario::TipoEvento::Transicao, id, DocState::Liberado.label(), DocState::EmTrabalho.label(), "automático: documento liberado foi editado")?;
+            let de = estado_antes_edicao.unwrap_or(DocState::Liberado);
+            self.registrar(diario::TipoEvento::Transicao, id, de.label(), DocState::EmTrabalho.label(), "automático: o documento foi editado")?;
         }
         Ok(())
     }
@@ -529,7 +550,7 @@ impl Project {
             restored_from: Some(numero),
         });
         let antes_estado = e.state;
-        if e.state == DocState::Liberado && e.dirty_since_release() {
+        if matches!(e.state, DocState::Liberado | DocState::EmAprovacao) && e.dirty_since_release() {
             e.state = DocState::EmTrabalho;
         }
         let depois_estado = e.state;
@@ -557,31 +578,171 @@ impl Project {
         Ok(Document::from_json(&s)?)
     }
 
-    /// Libera uma revisão a partir da última versão salva e a congela (RF-GPR-011).
-    pub fn release(&mut self, id: u64, comment: &str) -> PResult<String> {
+    /// Transições que o usuário pode fazer agora a partir do estado do documento (botões da interface).
+    pub fn transicoes_disponiveis(&self, id: u64) -> PResult<Vec<estados::Transicao>> {
+        let e = self.entry(id)?;
+        Ok(self.index.ciclo.disponiveis(e.state, &self.papeis).into_iter().cloned().collect())
+    }
+
+    /// Troca o ciclo de vida do projeto (B265). O ciclo é validado; os documentos que estão num
+    /// estado que o ciclo novo não conhece voltam para o estado inicial, e cada volta é registrada.
+    pub fn definir_ciclo(&mut self, ciclo: estados::Ciclo) -> PResult<()> {
         self.pode_gravar()?;
-        let e = self.entry_mut(id)?;
-        if !e.dirty_since_release() {
+        ciclo.validar().map_err(ProjectError::Recusado)?;
+        let antes = self.index.clone();
+        let mut ajustados = vec![];
+        for d in &mut self.index.documents {
+            if !ciclo.estados.contains(&d.state) {
+                ajustados.push((d.id, d.state));
+                d.state = ciclo.inicial;
+            }
+        }
+        self.index.ciclo = ciclo;
+        if let Err(e) = self.save_index() {
+            self.index = antes;
+            return Err(e);
+        }
+        for (id, estado) in ajustados {
+            self.registrar(diario::TipoEvento::Transicao, id, estado.label(), self.index.ciclo.inicial.label(), "automático: o estado não existe no ciclo novo")?;
+        }
+        Ok(())
+    }
+
+    /// Troca o ciclo a partir do JSON (arquivo do usuário).
+    pub fn definir_ciclo_json(&mut self, json: &str) -> PResult<()> {
+        let c = estados::Ciclo::de_json(json).map_err(ProjectError::Recusado)?;
+        self.definir_ciclo(c)
+    }
+
+    /// Muda o estado do documento conforme a tabela de transições do ciclo (B265). Toda mudança fora
+    /// da tabela, sem o papel exigido ou sem motivo (quando a regra pede) é recusada com a razão.
+    /// Liberar não passa por aqui: [`Project::liberar`] confere a lista e cria a letra.
+    pub fn transicionar(&mut self, id: u64, para: DocState, motivo: &str) -> PResult<()> {
+        self.pode_gravar()?;
+        if para == DocState::Liberado {
+            return Err(ProjectError::Recusado("para liberar use Liberar revisão: ela roda a lista de conferência e cria a letra".into()));
+        }
+        let de = self.entry(id)?.state;
+        self.index.ciclo.verificar(de, para, &self.papeis, motivo).map_err(ProjectError::Recusado)?;
+        self.entry_mut(id)?.state = para;
+        if let Err(e) = self.save_index() {
+            self.entry_mut(id)?.state = de;
+            return Err(e);
+        }
+        self.registrar(diario::TipoEvento::Transicao, id, de.label(), para.label(), motivo)
+    }
+
+    /// Lista de conferência da liberação: recálculo sem erro, referências resolvidas, PN definido e
+    /// desenho atualizado. `ext` traz o que só quem tem o documento aberto sabe (recálculo).
+    pub fn conferir_liberacao(&self, id: u64, ext: &estados::Externos) -> PResult<estados::Conferencia> {
+        use estados::{EstadoItem, ItemConferencia};
+        let e = self.entry(id)?;
+        let versao = e.versions.last().ok_or(ProjectError::NotFound)?;
+        fn item(chave: &'static str, rotulo: &'static str, estado: EstadoItem, detalhe: String) -> ItemConferencia {
+            ItemConferencia { chave, rotulo, estado, detalhe }
+        }
+        let mut itens = vec![];
+
+        itens.push(match &ext.recalculo {
+            Some(Ok(())) => item("recalculo", "Recalcula sem erro", EstadoItem::Ok, String::new()),
+            Some(Err(m)) => item("recalculo", "Recalcula sem erro", EstadoItem::Falha, m.clone()),
+            None => item("recalculo", "Recalcula sem erro", EstadoItem::NaoVerificado, "o documento não está aberto para recalcular".into()),
+        });
+
+        // referências do conteúdo que será congelado, resolvidas a partir da pasta do documento
+        let dir = self.root.join(&e.file).parent().map(Path::to_path_buf).unwrap_or_else(|| self.root.clone());
+        let busca = self.pastas_de_busca();
+        itens.push(match std::fs::read_to_string(self.root.join(VERSIONS).join(format!("{}.fkp", versao.hash))) {
+            Err(_) => item("referencias", "Referências resolvidas", EstadoItem::Falha, format!("a versão {} não está no projeto", versao.hash)),
+            Ok(json) => {
+                let quebradas: Vec<String> = relacoes::referencias_do_json(&json)
+                    .into_iter()
+                    .filter(|r| {
+                        let ref_ = referencias::Ref { uid: r.uid.clone(), caminho: r.caminho.clone() };
+                        !matches!(referencias::resolver(&dir, &ref_, &busca), referencias::Resolucao::Encontrado(_))
+                    })
+                    .map(|r| r.caminho)
+                    .collect();
+                if quebradas.is_empty() {
+                    item("referencias", "Referências resolvidas", EstadoItem::Ok, String::new())
+                } else {
+                    item("referencias", "Referências resolvidas", EstadoItem::Falha, format!("{} sem resolver ({}); use Reparar links", quebradas.len(), quebradas.join(", ")))
+                }
+            }
+        });
+
+        let pn_ok = !e.pn.trim().is_empty() && self.check_pn(Some(id), &e.pn).is_ok();
+        itens.push(if pn_ok {
+            item("pn", "PN definido", EstadoItem::Ok, String::new())
+        } else if e.pn.trim().is_empty() {
+            item("pn", "PN definido", EstadoItem::Falha, "o documento está sem PN".into())
+        } else {
+            item("pn", "PN definido", EstadoItem::Falha, format!("o PN {} já é de outro documento", e.pn))
+        });
+
+        itens.push(match ext.desenho_atualizado {
+            Some(true) => item("desenho", "Desenho atualizado", EstadoItem::Ok, String::new()),
+            Some(false) => item("desenho", "Desenho atualizado", EstadoItem::Falha, "o desenho está desatualizado".into()),
+            None => {
+                // sem informação de quem tem o desenho aberto: compara a data de gravação de cada
+                // desenho que usa a peça com a data da última versão
+                let desenhos: Vec<relacoes::Uso> = self.onde_usado(id)?.into_iter().filter(|u| u.arquivo.extension().and_then(|x| x.to_str()) == Some("fkd")).collect();
+                if desenhos.is_empty() {
+                    item("desenho", "Desenho atualizado", EstadoItem::NaoAplicavel, "nenhum desenho usa esta peça".into())
+                } else {
+                    let velhos: Vec<String> = desenhos
+                        .iter()
+                        .filter(|u| {
+                            let gravado = std::fs::metadata(&u.arquivo).and_then(|m| m.modified()).ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_secs()).unwrap_or(0);
+                            gravado < versao.time
+                        })
+                        .map(|u| u.arquivo.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default())
+                        .collect();
+                    if velhos.is_empty() {
+                        item("desenho", "Desenho atualizado", EstadoItem::Ok, String::new())
+                    } else {
+                        item("desenho", "Desenho atualizado", EstadoItem::Falha, format!("gravado antes da última versão da peça: {}", velhos.join(", ")))
+                    }
+                }
+            }
+        });
+        Ok(estados::Conferencia { itens })
+    }
+
+    /// Libera uma revisão a partir da última versão salva e a congela (RF-GPR-011). Antes da letra:
+    /// a transição para `Liberado` precisa existir na tabela para o papel do usuário e a lista de
+    /// conferência não pode ter falha (B265). A letra segue o esquema de revisão do ciclo.
+    pub fn liberar(&mut self, id: u64, comment: &str, ext: &estados::Externos) -> PResult<String> {
+        self.pode_gravar()?;
+        if !self.entry(id)?.dirty_since_release() {
             return Err(ProjectError::NothingToRelease);
         }
+        let estado_antes = self.entry(id)?.state;
+        self.index.ciclo.verificar(estado_antes, DocState::Liberado, &self.papeis, comment).map_err(ProjectError::Recusado)?;
+        let conferencia = self.conferir_liberacao(id, ext)?;
+        if conferencia.bloqueia() {
+            return Err(ProjectError::Conferencia(conferencia.resumo()));
+        }
+        let antes = self.entry(id)?.clone();
+        let esquema = self.index.ciclo.esquema_revisao;
+        let e = self.entry_mut(id)?;
         let hash = e.versions.last().unwrap().hash.clone();
-        let label = next_label(e.revisions.last().map(|r| r.label.as_str()));
-        let estado_antes = e.state;
+        let label = esquema.proxima(e.revisions.last().map(|r| r.label.as_str()));
         e.revisions.push(Revision { label: label.clone(), hash, time: now(), comment: comment.into() });
         e.state = DocState::Liberado;
-        self.save_index()?;
+        if let Err(err) = self.save_index() {
+            *self.entry_mut(id)? = antes;
+            return Err(err);
+        }
         self.registrar(diario::TipoEvento::Revisao, id, "", &label, comment)?;
         self.registrar(diario::TipoEvento::Transicao, id, estado_antes.label(), DocState::Liberado.label(), comment)?;
         Ok(label)
     }
 
-    pub fn set_state(&mut self, id: u64, st: DocState, motivo: &str) -> PResult<()> {
-        self.pode_gravar()?;
-        let e = self.entry_mut(id)?;
-        let antes = e.state;
-        e.state = st;
-        self.save_index()?;
-        self.registrar(diario::TipoEvento::Transicao, id, antes.label(), st.label(), motivo)
+    /// Atalho para quem não tem o documento aberto: libera sem informar o recálculo (o item aparece
+    /// como não verificado na lista). A interface usa [`Project::liberar`] com o recálculo.
+    pub fn release(&mut self, id: u64, comment: &str) -> PResult<String> {
+        self.liberar(id, comment, &estados::Externos::default())
     }
 
     /// Pastas varridas para achar montagens e desenhos que usam os documentos do projeto.
@@ -773,7 +934,7 @@ mod tests {
         let mut p = Project::create(&root, "T").unwrap();
         p.autor = "ana".into();
         let id = p.add_document(Document::new("Placa")).unwrap();
-        p.set_state(id, DocState::Obsoleto, "substituída pelo modelo 2").unwrap();
+        p.transicionar(id, DocState::Obsoleto, "substituída pelo modelo 2").unwrap();
         let (ev, puladas) = diario::ler(&root);
         assert_eq!(puladas, 0);
         let t = ev.iter().find(|e| e.tipo == diario::TipoEvento::Transicao).expect("transição registrada");
@@ -782,7 +943,7 @@ mod tests {
         assert!(t.tempo > 0 && t.doc_id == id && t.uid.len() == 32);
         // mudar de estado de novo só acrescenta: as linhas anteriores ficam idênticas
         let antes = std::fs::read_to_string(diario::caminho(&root)).unwrap();
-        p.set_state(id, DocState::EmTrabalho, "voltou").unwrap();
+        p.transicionar(id, DocState::EmTrabalho, "voltou").unwrap();
         assert!(std::fs::read_to_string(diario::caminho(&root)).unwrap().starts_with(&antes));
         let _ = std::fs::remove_dir_all(root);
     }
@@ -841,6 +1002,8 @@ mod tests {
         let mut p = Project::create(&root, "T").unwrap();
         let mut d = Document::new("Placa");
         let id = p.add_document(d.clone()).unwrap();
+        // o aplicativo copia o PN que o projeto atribuiu para o documento aberto; o teste faz o mesmo
+        d.props.pn = p.entry(id).unwrap().pn.clone();
         d.props.description = "nova".into();
         p.save(id, &d, "v2").unwrap();
         p.release(id, "A").unwrap();
@@ -1014,5 +1177,191 @@ mod tests {
         assert_eq!((c.nome.as_str(), c.pn.as_str()), ("Placa", p.entry(id).unwrap().pn.as_str()));
         assert_eq!(c.uid, p.entry(id).unwrap().uid);
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    /// Cria uma versão com conteúdo arbitrário (para montar documentos com referências no teste).
+    fn versao_manual(p: &mut Project, id: u64, nome: &str, json: &str) {
+        std::fs::write(p.root.join(VERSIONS).join(format!("{nome}.fkp")), json).unwrap();
+        let e = p.entry_mut(id).unwrap();
+        e.versions.push(Version { hash: nome.into(), time: now(), note: "manual".into(), author: String::new(), comment: String::new(), restored_from: None });
+    }
+
+    #[test]
+    fn transicao_fora_da_tabela_e_recusada_com_motivo_e_o_estado_nao_muda() {
+        let root = tmp("trans");
+        let mut p = Project::create(&root, "T").unwrap();
+        let id = p.add_document(Document::new("a")).unwrap();
+        // pedir motivo
+        let e = p.transicionar(id, DocState::Obsoleto, "").unwrap_err().to_string();
+        assert!(e.contains("exige um motivo"), "{e}");
+        assert_eq!(p.entry(id).unwrap().state, DocState::EmTrabalho);
+        p.transicionar(id, DocState::Obsoleto, "descontinuada").unwrap();
+        // Obsoleto -> Liberado não existe na tabela: a revisão não é criada
+        let mut d = Document::new("a");
+        d.props.description = "mudou".into();
+        p.save(id, &d, "v2").unwrap();
+        let e = p.liberar(id, "x", &estados::Externos::default()).unwrap_err().to_string();
+        assert!(e.contains("não existe no ciclo") && e.contains("Obsoleto"), "{e}");
+        assert!(p.entry(id).unwrap().revisions.is_empty());
+        assert_eq!(p.entry(id).unwrap().state, DocState::Obsoleto);
+        // ir para Liberado só pelo liberar
+        p.transicionar(id, DocState::EmTrabalho, "voltou").unwrap();
+        assert!(p.transicionar(id, DocState::Liberado, "x").unwrap_err().to_string().contains("Liberar revisão"));
+        // a tabela vale também para o que sobe: mudar para o mesmo estado é recusado
+        assert!(p.transicionar(id, DocState::EmTrabalho, "x").is_err());
+        // o diário só tem as transições que aconteceram
+        let (ev, _) = diario::ler(&root);
+        let trans: Vec<(&str, &str)> = ev.iter().filter(|e| e.tipo == diario::TipoEvento::Transicao).map(|e| (e.de.as_str(), e.para.as_str())).collect();
+        assert_eq!(trans, vec![("Em trabalho", "Obsoleto"), ("Obsoleto", "Em trabalho")]);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn liberar_com_referencia_quebrada_e_bloqueado_e_depois_de_reparar_libera() {
+        let root = tmp("lib-ref");
+        let mut p = Project::create(&root, "T").unwrap();
+        let id = p.add_document(Document::new("a")).unwrap();
+        versao_manual(&mut p, id, "comref", r#"{"format_version":1,"uid":"x","name":"a","links":[{"uid":"u-alvo","caminho":"../alvo.fkp"}]}"#);
+        let ext = estados::Externos { recalculo: Some(Ok(())), desenho_atualizado: None };
+        let conf = p.conferir_liberacao(id, &ext).unwrap();
+        assert!(conf.bloqueia());
+        let f = conf.falhas().next().unwrap();
+        assert_eq!(f.chave, "referencias");
+        assert!(f.detalhe.contains("../alvo.fkp") && f.detalhe.contains("Reparar links"), "{}", f.detalhe);
+        let e = p.liberar(id, "primeira", &ext).unwrap_err();
+        assert!(matches!(e, ProjectError::Conferencia(_)), "{e}");
+        assert!(p.entry(id).unwrap().revisions.is_empty(), "nenhuma letra foi criada");
+        assert_eq!(p.entry(id).unwrap().state, DocState::EmTrabalho);
+        // a referência passa a resolver (o arquivo existe com o uid certo)
+        std::fs::write(root.join("alvo.fkp"), r#"{"format_version":1,"uid":"u-alvo","name":"alvo"}"#).unwrap();
+        assert!(!p.conferir_liberacao(id, &ext).unwrap().bloqueia());
+        assert_eq!(p.liberar(id, "primeira", &ext).unwrap(), "A");
+        assert_eq!(p.entry(id).unwrap().state, DocState::Liberado);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn referencia_movida_tambem_bloqueia_porque_o_caminho_gravado_esta_errado() {
+        let root = tmp("lib-movida");
+        let mut p = Project::create(&root, "T").unwrap();
+        let id = p.add_document(Document::new("a")).unwrap();
+        versao_manual(&mut p, id, "movida", r#"{"format_version":1,"uid":"x","name":"a","links":[{"uid":"u-alvo","caminho":"../antigo.fkp"}]}"#);
+        std::fs::create_dir_all(root.join("novo")).unwrap();
+        std::fs::write(root.join("novo/alvo.fkp"), r#"{"format_version":1,"uid":"u-alvo","name":"alvo"}"#).unwrap();
+        let e = p.release(id, "x").unwrap_err();
+        assert!(matches!(e, ProjectError::Conferencia(m) if m.contains("antigo.fkp")));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn falha_de_recalculo_e_desenho_desatualizado_bloqueiam() {
+        let root = tmp("lib-conf");
+        let mut p = Project::create(&root, "T").unwrap();
+        let id = p.add_document(Document::new("a")).unwrap();
+        let ok = estados::Externos { recalculo: Some(Ok(())), desenho_atualizado: None };
+        // recálculo com erro
+        let ruim = estados::Externos { recalculo: Some(Err("extrusão sem perfil".into())), desenho_atualizado: None };
+        let e = p.liberar(id, "x", &ruim).unwrap_err().to_string();
+        assert!(e.contains("Recalcula sem erro") && e.contains("extrusão sem perfil"), "{e}");
+        // sem desenho: não se aplica
+        let conf = p.conferir_liberacao(id, &ok).unwrap();
+        assert_eq!(conf.itens.iter().find(|i| i.chave == "desenho").unwrap().estado, estados::EstadoItem::NaoAplicavel);
+        // desenho gravado antes da última versão da peça
+        let caminho = p.entry(id).unwrap().file.clone();
+        let desenho = root.join("d.fkd");
+        std::fs::write(&desenho, format!(r#"{{"name":"D","views":[{{"id":1,"name":"F","source":{{"path":"{caminho}"}}}}]}}"#)).unwrap();
+        let velho = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1000);
+        std::fs::File::options().write(true).open(&desenho).unwrap().set_modified(velho).unwrap();
+        let e = p.liberar(id, "x", &ok).unwrap_err().to_string();
+        assert!(e.contains("Desenho atualizado") && e.contains("d.fkd"), "{e}");
+        // quem tem o desenho aberto pode afirmar que está em dia
+        let em_dia = estados::Externos { recalculo: Some(Ok(())), desenho_atualizado: Some(true) };
+        assert_eq!(p.liberar(id, "x", &em_dia).unwrap(), "A");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn modelo_com_aprovacao_exige_o_papel_e_edicao_durante_aprovacao_volta_a_trabalho() {
+        let root = tmp("aprov");
+        let mut p = Project::create(&root, "T").unwrap();
+        p.definir_ciclo(estados::Ciclo::com_aprovacao()).unwrap();
+        p.papeis = vec!["projetista".into()];
+        let mut d = Document::new("a");
+        let id = p.add_document(d.clone()).unwrap();
+        // o aplicativo copia o PN que o projeto atribuiu para o documento aberto; o teste faz o mesmo
+        d.props.pn = p.entry(id).unwrap().pn.clone();
+        let e = p.release(id, "x").unwrap_err().to_string();
+        assert!(e.contains("exige o papel aprovador"), "{e}");
+        p.transicionar(id, DocState::EmAprovacao, "").unwrap();
+        assert_eq!(p.entry(id).unwrap().state, DocState::EmAprovacao);
+        assert!(p.release(id, "x").unwrap_err().to_string().contains("aprovador"));
+        // quem edita durante a aprovação invalida o pedido
+        d.props.description = "mexi".into();
+        p.save(id, &d, "v2").unwrap();
+        assert_eq!(p.entry(id).unwrap().state, DocState::EmTrabalho);
+        p.transicionar(id, DocState::EmAprovacao, "").unwrap();
+        // o aprovador libera
+        p.papeis.push("aprovador".into());
+        assert_eq!(p.release(id, "aprovado").unwrap(), "A");
+        // o disponível a partir de Liberado para um projetista sem o papel de aprovador é só reabrir
+        p.papeis = vec!["projetista".into()];
+        let destinos: Vec<DocState> = p.transicoes_disponiveis(id).unwrap().iter().map(|t| t.para).collect();
+        assert_eq!(destinos, vec![DocState::EmTrabalho]);
+        // o ciclo escolhido sobrevive à reabertura
+        assert_eq!(Project::open(&root).unwrap().index.ciclo.nome, "Com aprovação");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn esquema_de_revisao_configuravel_numeros_e_previa() {
+        let root = tmp("esquema");
+        let mut p = Project::create(&root, "T").unwrap();
+        let mut ciclo = estados::Ciclo::padrao();
+        ciclo.esquema_revisao = estados::EsquemaRevisao::Previa;
+        p.definir_ciclo(ciclo.clone()).unwrap();
+        let mut d = Document::new("a");
+        let id = p.add_document(d.clone()).unwrap();
+        // o aplicativo copia o PN que o projeto atribuiu para o documento aberto; o teste faz o mesmo
+        d.props.pn = p.entry(id).unwrap().pn.clone();
+        assert_eq!(p.release(id, "").unwrap(), "0.1");
+        d.props.description = "2".into();
+        p.save(id, &d, "v2").unwrap();
+        assert_eq!(p.release(id, "").unwrap(), "0.2");
+        // vira para letras no meio do caminho: recomeça em A
+        ciclo.esquema_revisao = estados::EsquemaRevisao::Letras;
+        p.definir_ciclo(ciclo.clone()).unwrap();
+        d.props.description = "3".into();
+        p.save(id, &d, "v3").unwrap();
+        assert_eq!(p.release(id, "").unwrap(), "A");
+        ciclo.esquema_revisao = estados::EsquemaRevisao::Numeros;
+        p.definir_ciclo(ciclo).unwrap();
+        d.props.description = "4".into();
+        p.save(id, &d, "v4").unwrap();
+        assert_eq!(p.release(id, "").unwrap(), "1");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn ciclo_novo_sem_o_estado_do_documento_devolve_ao_inicial_e_registra() {
+        let root = tmp("ciclo-troca");
+        let mut p = Project::create(&root, "T").unwrap();
+        let id = p.add_document(Document::new("a")).unwrap();
+        p.transicionar(id, DocState::Obsoleto, "fim").unwrap();
+        let json = r#"{"nome":"Dois","estados":["EmTrabalho","Liberado"],"inicial":"EmTrabalho","transicoes":[{"de":"EmTrabalho","para":"Liberado"}]}"#;
+        p.definir_ciclo_json(json).unwrap();
+        assert_eq!(p.entry(id).unwrap().state, DocState::EmTrabalho);
+        let (ev, _) = diario::ler(&root);
+        assert!(ev.iter().any(|e| e.motivo.contains("não existe no ciclo novo")));
+        // ciclo inválido não troca nada
+        assert!(p.definir_ciclo_json(r#"{"nome":"x","estados":[],"inicial":"EmTrabalho","transicoes":[]}"#).is_err());
+        assert_eq!(p.index.ciclo.nome, "Dois");
+        // índice antigo, sem ciclo, abre com o modelo padrão
+        let antigo = INDICE_ALPHA28;
+        let r2 = tmp("ciclo-antigo");
+        std::fs::create_dir_all(&r2).unwrap();
+        std::fs::write(r2.join(INDEX), antigo).unwrap();
+        assert_eq!(Project::open(&r2).unwrap().index.ciclo, estados::Ciclo::padrao());
+        let _ = std::fs::remove_dir_all(root);
+        let _ = std::fs::remove_dir_all(r2);
     }
 }

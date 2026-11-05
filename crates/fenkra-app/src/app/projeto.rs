@@ -8,6 +8,7 @@
 use super::*;
 use fenkra_project::pacote::{self, Estrutura, OpcoesPacote, ResultadoPacote};
 use fenkra_project::pn::{self, AmbientePn};
+use fenkra_project::estados::{Conferencia, EstadoItem, Externos};
 use fenkra_project::relacoes::{self, Diagnostico, Uso, Veredito};
 use fenkra_project::salvar_como::{AcaoRef, Conflito, ModoSalvarComo, PlanoSalvarComo, ResolucaoConflito};
 
@@ -195,6 +196,8 @@ impl App {
         self.janela_salvar_como(ctx);
         self.janela_empacotar(ctx);
         self.janela_reparar_links(ctx);
+        self.dialogo_transicao(ctx);
+        self.dialogo_liberar(ctx);
     }
 
     fn janela_salvar_como(&mut self, ctx: &egui::Context) {
@@ -586,5 +589,204 @@ impl App {
             }
         }
         ctx.data_mut(|d| d.insert_temp(id_reparo(), if fechar { None } else { Some(st) }));
+    }
+}
+
+// ----------------------------------------------------------------------------- B265
+
+/// Pedido de mudança de estado esperando motivo e confirmação.
+#[derive(Clone)]
+struct TransicaoUi {
+    id: u64,
+    para: DocState,
+    motivo: String,
+    usos: Vec<Uso>,
+}
+
+fn id_transicao() -> egui::Id {
+    egui::Id::new("fenkra_transicao_estado")
+}
+
+impl App {
+    /// Cor do estado do documento, só por tema.
+    pub(super) fn cor_do_estado(&self, ui: &egui::Ui, e: DocState) -> egui::Color32 {
+        let v = ui.visuals();
+        match e {
+            DocState::Liberado => v.hyperlink_color,
+            DocState::Obsoleto => v.weak_text_color(),
+            DocState::EmTrabalho => v.warn_fg_color,
+            DocState::EmAprovacao => v.selection.bg_fill,
+        }
+    }
+
+    /// O que o programa sabe do documento aberto para a lista de conferência.
+    fn externos_da_liberacao(&self, id: u64) -> Externos {
+        let mut ext = Externos::default();
+        if self.open.entry == Some(id) {
+            if let Some(r) = &self.result {
+                let erro = r.param_error.clone().or_else(|| r.status.values().find_map(|s| if let Status::Error(e) = s { Some(e.clone()) } else { None }));
+                ext.recalculo = Some(match erro {
+                    Some(e) => Err(e),
+                    None => Ok(()),
+                });
+            }
+        }
+        ext
+    }
+
+    /// Botões das transições permitidas a partir do estado atual (exceto liberar, que tem diálogo próprio).
+    pub(super) fn botoes_de_transicao(&mut self, ui: &mut egui::Ui, id: u64) {
+        let Some(p) = self.project.as_ref() else { return };
+        let Ok(disponiveis) = p.transicoes_disponiveis(id) else { return };
+        let mut pedir: Option<DocState> = None;
+        for t in disponiveis.iter().filter(|t| t.para != DocState::Liberado) {
+            let rotulo = format!("→ {}", tr(t.para.label()));
+            let dica = if t.exige_motivo { tr("Pede um motivo, que fica no diário do projeto") } else { tr("Muda o estado do documento") };
+            if ui.button(rotulo).on_hover_text(dica).clicked() {
+                pedir = Some(t.para);
+            }
+        }
+        if let Some(para) = pedir {
+            let usos = if matches!(para, DocState::Obsoleto) { self.project.as_ref().and_then(|p| p.onde_usado(id).ok()).unwrap_or_default() } else { vec![] };
+            ui.ctx().data_mut(|d| d.insert_temp(id_transicao(), Some(TransicaoUi { id, para, motivo: String::new(), usos })));
+        }
+    }
+
+    /// Diálogo de mudança de estado: motivo e, ao tornar obsoleto, quem usa a peça (B94).
+    pub(super) fn dialogo_transicao(&mut self, ctx: &egui::Context) {
+        let Some(mut st) = ctx.data(|d| d.get_temp::<Option<TransicaoUi>>(id_transicao())).flatten() else { return };
+        let Some(p) = self.project.as_ref() else { return };
+        let Ok(e) = p.entry(st.id).cloned() else { return };
+        let regra = p.index.ciclo.verificar(e.state, st.para, &p.papeis, &st.motivo);
+        let (mut confirmar, mut cancelar) = (false, false);
+        let mut ir: Option<Uso> = None;
+        egui::Modal::new(egui::Id::new("fenkra_transicao_modal")).show(ctx, |ui| {
+            ui.heading(format!("{} → {}", tr(e.state.label()), tr(st.para.label())));
+            ui.label(RichText::new(format!("{} — {}", e.pn, e.name)).weak());
+            if !st.usos.is_empty() {
+                ui.add_space(4.);
+                ui.label(RichText::new(format!("{} ({})", tr("Quem usa esta peça"), st.usos.len())).strong().color(ui.visuals().warn_fg_color));
+                ui.label(RichText::new(tr("Estes documentos continuarão apontando para ela. Confira antes de confirmar.")).weak().small());
+                ir = self.lista_de_usos(ui, &st.usos);
+            }
+            ui.add(egui::TextEdit::multiline(&mut st.motivo).hint_text(tr("Motivo")).desired_rows(2).desired_width(380.));
+            if let Err(m) = &regra {
+                // sem motivo ainda não é erro de verdade: a dica já diz o que falta
+                ui.label(RichText::new(m).color(ui.visuals().error_fg_color).small());
+            }
+            ui.horizontal(|ui| {
+                confirmar = ui.add_enabled(regra.is_ok(), egui::Button::new(tr("Confirmar"))).clicked();
+                cancelar = ui.button(tr("Cancelar")).clicked();
+            });
+        });
+        let mut fechar = cancelar;
+        if confirmar {
+            match self.project.as_mut().unwrap().transicionar(st.id, st.para, &st.motivo) {
+                Ok(()) => self.toast(format!("{}: {}", tr("Estado"), tr(st.para.label())), false),
+                Err(e) => self.toast(e.to_string(), true),
+            }
+            fechar = true;
+        }
+        if let Some(u) = ir {
+            fechar = true;
+            self.ir_para_uso(&u);
+        }
+        ctx.data_mut(|d| d.insert_temp(id_transicao(), if fechar { None } else { Some(st) }));
+    }
+
+    /// Diálogo Liberar revisão: lista de conferência, quem usa a peça e o comentário (B265, B94).
+    pub(super) fn dialogo_liberar(&mut self, ctx: &egui::Context) {
+        let Some((id, mut comentario)) = self.release_dialog.clone() else { return };
+        let chave = egui::Id::new(("fenkra_liberar_cache", id));
+        let mut cache: Option<(Conferencia, Vec<Uso>)> = ctx.data(|d| d.get_temp(chave));
+        if cache.is_none() {
+            let ext = self.externos_da_liberacao(id);
+            let Some(p) = self.project.as_ref() else { return };
+            match p.conferir_liberacao(id, &ext) {
+                Ok(c) => cache = Some((c, p.onde_usado(id).unwrap_or_default())),
+                Err(e) => {
+                    self.toast(e.to_string(), true);
+                    self.release_dialog = None;
+                    return;
+                }
+            }
+        }
+        let (conf, usos) = cache.clone().unwrap();
+        let entrada = self.project.as_ref().and_then(|p| p.entry(id).ok().cloned());
+        let (mut liberar, mut reconferir, mut cancelar) = (false, false, false);
+        let mut ir: Option<Uso> = None;
+        let por_salvar = self.open.entry == Some(id) && self.open.modified;
+        egui::Modal::new(egui::Id::new("fenkra_liberar_modal")).show(ctx, |ui| {
+            ui.heading(tr("Liberar revisão"));
+            if let Some(e) = &entrada {
+                ui.label(RichText::new(format!("{} — {}", e.pn, e.name)).weak());
+            }
+            ui.label(tr("A versão salva mais recente será congelada (somente leitura)."));
+            if por_salvar {
+                ui.label(RichText::new(tr("Há alterações por salvar: ao liberar, o documento é salvo e a lista é conferida de novo.")).color(ui.visuals().warn_fg_color).small());
+            }
+            ui.add_space(4.);
+            ui.label(RichText::new(tr("Lista de conferência")).strong());
+            for i in &conf.itens {
+                ui.horizontal(|ui| {
+                    let (marca, cor) = match i.estado {
+                        EstadoItem::Ok => ("✔", ui.visuals().hyperlink_color),
+                        EstadoItem::Falha => ("✖", ui.visuals().error_fg_color),
+                        EstadoItem::NaoVerificado => ("?", ui.visuals().warn_fg_color),
+                        EstadoItem::NaoAplicavel => ("–", ui.visuals().weak_text_color()),
+                    };
+                    ui.label(RichText::new(marca).color(cor).strong());
+                    ui.label(tr(i.rotulo));
+                    if !i.detalhe.is_empty() {
+                        ui.label(RichText::new(&i.detalhe).weak().small());
+                    }
+                });
+            }
+            if !usos.is_empty() {
+                ui.add_space(4.);
+                ui.label(RichText::new(format!("{} ({})", tr("Quem usa esta peça"), usos.len())).strong());
+                ir = self.lista_de_usos(ui, &usos);
+            }
+            ui.add_space(4.);
+            ui.add(egui::TextEdit::multiline(&mut comentario).hint_text(tr("Comentário da revisão")).desired_rows(3).desired_width(420.));
+            ui.horizontal(|ui| {
+                liberar = ui.add_enabled(!conf.bloqueia(), egui::Button::new(tr("🔒 Liberar"))).on_hover_text(if conf.bloqueia() { tr("Corrija os itens com ✖ para liberar") } else { tr("Cria a letra da revisão e congela a versão") }).clicked();
+                reconferir = ui.button(tr("Conferir de novo")).clicked();
+                cancelar = ui.button(tr("Cancelar")).clicked();
+            });
+        });
+        if reconferir {
+            cache = None;
+        }
+        if liberar {
+            if self.open.entry == Some(id) && self.open.modified {
+                self.save();
+            }
+            let ext = self.externos_da_liberacao(id);
+            match self.project.as_mut().unwrap().liberar(id, &comentario, &ext) {
+                Ok(l) => self.toast(format!("Revisão {l} liberada"), false),
+                Err(e) => self.toast(e.to_string(), true),
+            }
+        }
+        if let Some(u) = ir {
+            self.release_dialog = None;
+            ctx.data_mut(|d| d.remove::<(Conferencia, Vec<Uso>)>(chave));
+            self.ir_para_uso(&u);
+            return;
+        }
+        if liberar || cancelar {
+            self.release_dialog = None;
+            ctx.data_mut(|d| d.remove::<(Conferencia, Vec<Uso>)>(chave));
+        } else {
+            self.release_dialog = Some((id, comentario));
+            ctx.data_mut(|d| {
+                match cache {
+                    Some(c) => {
+                        d.insert_temp(chave, c);
+                    }
+                    None => d.remove::<(Conferencia, Vec<Uso>)>(chave),
+                };
+            });
+        }
     }
 }

@@ -3188,6 +3188,26 @@ static TABLE: &[(&str, &str)] = &[
     ("Localizar…", "Locate…"),
     ("Reparar os encontrados", "Repair the ones found"),
     ("Referências gravadas no arquivo. Salve ou descarte as alterações e reabra para vê-las.", "References written to the file. Save or discard your changes and reopen to see them."),
+    // PDM: ciclo de vida, transições e conferência (B265)
+    ("Em trabalho", "In progress"),
+    ("Em aprovação", "Awaiting approval"),
+    ("Liberado", "Released"),
+    ("Obsoleto", "Obsolete"),
+    ("Pede um motivo, que fica no diário do projeto", "Asks for a reason, which is kept in the project journal"),
+    ("Muda o estado do documento", "Changes the document state"),
+    ("Quem usa esta peça", "What uses this part"),
+    ("Estes documentos continuarão apontando para ela. Confira antes de confirmar.", "These documents will keep pointing to it. Check before confirming."),
+    ("Motivo", "Reason"),
+    ("Confirmar", "Confirm"),
+    ("Há alterações por salvar: ao liberar, o documento é salvo e a lista é conferida de novo.", "There are unsaved changes: on release the document is saved and the list is checked again."),
+    ("Lista de conferência", "Checklist"),
+    ("Recalcula sem erro", "Recomputes without errors"),
+    ("Referências resolvidas", "References resolved"),
+    ("PN definido", "PN defined"),
+    ("Desenho atualizado", "Drawing up to date"),
+    ("Corrija os itens com ✖ para liberar", "Fix the items marked ✖ to release"),
+    ("Cria a letra da revisão e congela a versão", "Creates the revision letter and freezes the version"),
+    ("Conferir de novo", "Check again"),
 ];
 
 #[cfg(test)]

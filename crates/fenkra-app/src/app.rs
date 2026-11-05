@@ -5824,12 +5824,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         ui.label(&d.name);
                     }
                 }
-                let c = match d.state {
-                    DocState::Liberado => Color32::from_rgb(120, 200, 120),
-                    DocState::Obsoleto => Color32::GRAY,
-                    DocState::EmTrabalho => Color32::from_rgb(230, 190, 90),
-                };
-                ui.label(RichText::new(d.state.label()).color(c));
+                let c = self.cor_do_estado(ui, d.state);
+                ui.label(RichText::new(tr(d.state.label())).color(c));
                 ui.label(d.current_revision().map(|r| r.label.as_str()).unwrap_or("-"));
                 ui.end_row();
             }
@@ -5901,9 +5897,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     self.toast(err.to_string(), true);
                 }
             }
-            if e.state != DocState::Obsoleto && ui.button(tr("Tornar obsoleto")).clicked() {
-                let _ = self.project.as_mut().unwrap().set_state(sel, DocState::Obsoleto, "");
-            }
+            self.botoes_de_transicao(ui, sel);
         });
         egui::CollapsingHeader::new(format!("Revisões ({})", e.revisions.len())).default_open(true).show(ui, |ui| {
             for r in e.revisions.iter().rev() {
@@ -6580,31 +6574,6 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
         }
 
-        if let Some((id, comment)) = &mut self.release_dialog {
-            let (id, mut done, mut cancel) = (*id, false, false);
-            egui::Modal::new(egui::Id::unique("liberar")).show(ctx, |ui| {
-                ui.heading(tr("Liberar revisão"));
-                ui.label(tr("A versão salva mais recente será congelada (somente leitura)."));
-                ui.add(egui::TextEdit::multiline(comment).hint_text(tr("Comentário da revisão")).desired_rows(3));
-                ui.horizontal(|ui| {
-                    done = ui.button(tr("🔒 Liberar")).clicked();
-                    cancel = ui.button(tr("Cancelar")).clicked();
-                });
-            });
-            if done {
-                let c = comment.clone();
-                if self.open.entry == Some(id) && self.open.modified {
-                    self.save();
-                }
-                match self.project.as_mut().unwrap().release(id, &c) {
-                    Ok(l) => self.toast(format!("Revisão {l} liberada"), false),
-                    Err(e) => self.toast(e.to_string(), true),
-                }
-            }
-            if done || cancel {
-                self.release_dialog = None;
-            }
-        }
     }
 
     fn toasts(&mut self, ctx: &egui::Context) {
