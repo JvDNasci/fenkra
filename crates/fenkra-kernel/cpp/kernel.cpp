@@ -3,6 +3,8 @@
 #include "fenkra-kernel/src/ffi.rs.h"
 
 #include <algorithm>
+#include <functional>
+#include <map>
 #include <atomic>
 #include <cmath>
 #include <limits>

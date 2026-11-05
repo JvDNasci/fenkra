@@ -763,6 +763,107 @@ pub fn xform_dir(x: &fenkra_kernel::Xform, v: V3) -> V3 {
     }
 }
 
+/// Folga entre duas pontas do contorno.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Gap {
+    pub a: V3,
+    pub b: V3,
+    pub d: f64,
+    /// a tolerância fecha esta folga
+    pub closed: bool,
+}
+
+/// Como um conjunto de curvas se fecha: é o que o preenchimento mostra no 3D.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ContourReport {
+    /// grupos de curvas ligadas pelas pontas
+    pub loops: usize,
+    /// pontas que nenhuma outra toca dentro da tolerância
+    pub open_ends: Vec<V3>,
+    pub gaps: Vec<Gap>,
+    pub max_gap: f64,
+    /// pares de pontas (curva, é o fim?) que a tolerância fecha
+    pairs: Vec<((usize, bool), (usize, bool))>,
+}
+
+/// Casa as pontas das curvas, da dupla mais próxima para a mais distante. Curva fechada não tem ponta.
+pub fn contour_report(cs: &[Curve3], tol: f64) -> ContourReport {
+    let closed = |c: &Curve3| c.closed || dist(c.start(), c.end()) < 1e-9;
+    let mut ends = vec![];
+    for (i, c) in cs.iter().enumerate().filter(|(_, c)| !closed(c)) {
+        ends.push((i, false, c.start()));
+        ends.push((i, true, c.end()));
+    }
+    let mut cand = vec![];
+    for x in 0..ends.len() {
+        for y in x + 1..ends.len() {
+            cand.push((dist(ends[x].2, ends[y].2), x, y));
+        }
+    }
+    cand.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut used = vec![false; ends.len()];
+    let mut up: Vec<usize> = (0..cs.len()).collect();
+    fn root(up: &mut [usize], x: usize) -> usize {
+        if up[x] != x {
+            up[x] = root(up, up[x]);
+        }
+        up[x]
+    }
+    let mut rep = ContourReport::default();
+    for (d, x, y) in cand {
+        if used[x] || used[y] {
+            continue;
+        }
+        used[x] = true;
+        used[y] = true;
+        let ok = d <= tol;
+        rep.max_gap = rep.max_gap.max(d);
+        if d > 1e-9 {
+            rep.gaps.push(Gap { a: ends[x].2, b: ends[y].2, d, closed: ok });
+        }
+        if ok {
+            rep.pairs.push(((ends[x].0, ends[x].1), (ends[y].0, ends[y].1)));
+            let (a, b) = (root(&mut up, ends[x].0), root(&mut up, ends[y].0));
+            up[a] = b;
+        } else {
+            rep.open_ends.push(ends[x].2);
+            rep.open_ends.push(ends[y].2);
+        }
+    }
+    rep.open_ends.extend(ends.iter().zip(&used).filter(|(_, u)| !**u).map(|(e, _)| e.2));
+    rep.loops = (0..cs.len()).filter(|i| root(&mut up, *i) == *i).count();
+    rep
+}
+
+/// Leva as pontas que a tolerância fechou para o meio da folga: o contorno passa a fechar exato.
+pub fn snap_contour(cs: &mut [Curve3], rep: &ContourReport) {
+    let tip = |c: &Curve3, at_end: bool| if at_end { c.end() } else { c.start() };
+    for ((i, ie), (j, je)) in &rep.pairs {
+        let m = lerp(tip(&cs[*i], *ie), tip(&cs[*j], *je), 0.5);
+        for (k, at_end) in [(*i, *ie), (*j, *je)] {
+            let n = cs[k].pts.len();
+            cs[k].pts[if at_end { n - 1 } else { 0 }] = m;
+        }
+    }
+}
+
+/// Índices das curvas ligadas à curva `start` pelas pontas (seleção em cadeia), em ordem crescente.
+pub fn chain_indices(cs: &[Curve3], start: usize, tol: f64) -> Vec<usize> {
+    let mut seen = vec![false; cs.len()];
+    let mut todo = vec![start];
+    seen[start] = true;
+    while let Some(i) = todo.pop() {
+        for j in 0..cs.len() {
+            let touch = [cs[i].start(), cs[i].end()].iter().any(|p| dist(*p, cs[j].start()) <= tol || dist(*p, cs[j].end()) <= tol);
+            if !seen[j] && touch {
+                seen[j] = true;
+                todo.push(j);
+            }
+        }
+    }
+    (0..cs.len()).filter(|i| seen[*i]).collect()
+}
+
 /// Reamostra a curva em `n` pontos igualmente espaçados pelo comprimento.
 pub fn resample(c: &Curve3, n: usize) -> Vec<V3> {
     (0..n).map(|i| c.at_ratio(i as f64 / (n - 1).max(1) as f64).0).collect()

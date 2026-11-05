@@ -217,6 +217,18 @@ pub struct MassProps {
     pub center: [f64; 3],
 }
 
+/// Relatório de uma junção costurada.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct SewReport {
+    /// pedaços que continuam separados
+    pub domains: u32,
+    pub free_edges: u32,
+    /// maior folga que a costura fechou (mm)
+    pub closed_gap: f64,
+    /// maior distância entre domínios que ficaram separados (mm)
+    pub open_gap: f64,
+}
+
 /// Ângulo máximo entre normais vizinhas da malha quando ninguém pede outro (20°, em radianos).
 pub const ANGULO_PADRAO: f64 = 0.35;
 
@@ -479,6 +491,30 @@ mod imp {
                 ends.push((flat.len() / 3) as u32);
             }
             b::fill_surface(&flat, &ends).map(Shape).map_err(err)
+        }
+        /// Preenchimento com condição por curva: ordem 0 (G0), 1 (G1) ou 2 (G2), alcance da tangente
+        /// (`weights`, 1 = neutro), faces de apoio e pontos de passagem. Devolve o erro G0 (mm) e G1 (rad).
+        pub fn fill_surface_x(curves: &[Vec<[f64; 3]>], orders: &[i32], weights: &[f64], support: &Shape, pts: &[[f64; 3]]) -> KResult<(Shape, f64, f64)> {
+            let mut flat = vec![];
+            let mut ends = vec![];
+            for c in curves {
+                flat.extend(c.iter().flatten().copied());
+                ends.push((flat.len() / 3) as u32);
+            }
+            let p: Vec<f64> = pts.iter().flatten().copied().collect();
+            let mut errs = vec![];
+            let s = b::fill_surface_x(&flat, &ends, orders, weights, &support.0, &p, &mut errs).map(Shape).map_err(err)?;
+            Ok((s, errs.first().copied().unwrap_or(0.), errs.get(1).copied().unwrap_or(0.)))
+        }
+        /// Curva solta como forma (fio).
+        pub fn curve_shape(pts: &[[f64; 3]]) -> KResult<Shape> {
+            let flat: Vec<f64> = pts.iter().flatten().copied().collect();
+            b::curve_shape(&flat).map(Shape).map_err(err)
+        }
+        /// Relatório de uma junção já costurada.
+        pub fn sew_report(&self) -> KResult<SewReport> {
+            let v = b::sew_report(&self.0).map_err(err)?;
+            Ok(SewReport { domains: v[0] as u32, free_edges: v[1] as u32, closed_gap: v[2], open_gap: v[3] })
         }
         pub fn extrude_curve(pts: &[[f64; 3]], dir: [f64; 3], len: f64) -> KResult<Shape> {
             let flat: Vec<f64> = pts.iter().flatten().copied().collect();
@@ -891,6 +927,15 @@ mod imp {
             no()
         }
         pub fn fill_surface(_: &[Vec<[f64; 3]>]) -> KResult<Shape> {
+            no()
+        }
+        pub fn fill_surface_x(_: &[Vec<[f64; 3]>], _: &[i32], _: &[f64], _: &Shape, _: &[[f64; 3]]) -> KResult<(Shape, f64, f64)> {
+            no()
+        }
+        pub fn curve_shape(_: &[[f64; 3]]) -> KResult<Shape> {
+            no()
+        }
+        pub fn sew_report(&self) -> KResult<SewReport> {
             no()
         }
         pub fn extrude_curve(_: &[[f64; 3]], _: [f64; 3], _: f64) -> KResult<Shape> {

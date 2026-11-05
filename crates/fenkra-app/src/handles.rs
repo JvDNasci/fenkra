@@ -320,9 +320,100 @@ fn revolve_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id
 }
 
 /// Desenha e trata a alça do comando aberto. Chamado pela viewport fora do modo sketch.
+/// Etiqueta pequena na tela; a resposta traz o clique.
+fn tag(ui: &mut egui::Ui, rect: Rect, at: egui::Pos2, text: String, fg: Color32, salt: impl std::hash::Hash + std::fmt::Debug) -> egui::Response {
+    let painter = ui.painter_at(rect);
+    let g = painter.layout_no_wrap(text, egui::FontId::proportional(12.), fg);
+    let r = Rect::from_center_size(at, g.size() + egui::vec2(8., 4.));
+    painter.rect_filled(r, 3., ui.visuals().extreme_bg_color);
+    painter.rect_stroke(r, 3., Stroke::new(1., fg), egui::StrokeKind::Inside);
+    painter.galley(r.min + egui::vec2(4., 2.), g, fg);
+    ui.interact(r, egui::Id::unique(salt), egui::Sense::click())
+}
+
+/// Contorno do preenchimento no 3D: bola em cada ponta aberta, folga em mm (fica como "ok" quando a
+/// tolerância a fecha), etiqueta clicável de continuidade por curva e pontos de passagem arrastáveis.
+fn contour_overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id) {
+    let Some(r) = app.result.as_ref() else { return };
+    let (bad, good) = (crate::theme::st_err(), crate::theme::st_ok());
+    let mut tags = vec![];
+    if let Some(c) = r.notes.get(&id).and_then(|n| n.contour.as_ref()) {
+        let painter = ui.painter_at(rect);
+        for (i, p) in c.open_ends.iter().enumerate() {
+            if let Some(s) = cam.project(rect, v3(*p)) {
+                painter.circle_filled(s, 6., bad);
+                if i == 0 {
+                    tags.push((s + egui::vec2(0., -16.), format!("{} {}", c.open_ends.len(), tr("ponta(s) aberta(s)")), bad));
+                }
+            }
+        }
+        for g in &c.gaps {
+            let m = fenkra_solidos::geo3d::lerp(g.a, g.b, 0.5);
+            if let Some(s) = cam.project(rect, v3(m)) {
+                tags.push((s + egui::vec2(0., 16.), format!("{} mm", fmt(g.d)), if g.closed { good } else { bad }));
+            }
+        }
+    }
+    for (i, (at, t, c)) in tags.into_iter().enumerate() {
+        tag(ui, rect, at, t, c, ("folga_3d", id.0, i));
+    }
+    let Some(RefKind::SurfFill { curves, conds, points, .. }) = app.open.doc.reference(id).map(|x| x.kind.clone()) else { return };
+    let mut cycle = None;
+    for (i, c) in curves.iter().enumerate() {
+        let Some(s) = curve_mid(r, c).and_then(|m| cam.project(rect, m)) else { continue };
+        let cont = conds.get(i).map_or(Continuity::G0, |c| c.cont);
+        let name = match cont {
+            Continuity::G0 => "G0",
+            Continuity::G1 => "G1",
+            _ => "G2",
+        };
+        let fg = ui.visuals().strong_text_color();
+        if tag(ui, rect, s, name.to_string(), fg, ("cont_3d", id.0, i)).on_hover_text(tr("Clique para trocar a continuidade desta curva.")).clicked() {
+            cycle = Some(i);
+        }
+    }
+    let mut moved = None;
+    for (i, p) in points.iter().enumerate() {
+        let PointRef::Fixed(q) = *p else { continue };
+        let Some(s) = cam.project(rect, v3(q)) else { continue };
+        let hr = ui.interact(Rect::from_center_size(s, egui::vec2(18., 18.)), egui::Id::unique(("passagem_3d", id.0, i)), egui::Sense::drag());
+        ui.painter_at(rect).circle_stroke(s, 6., Stroke::new(2., ui.visuals().selection.stroke.color));
+        if hr.dragged() {
+            if let Some(m) = ui.input(|x| x.pointer.interact_pos()) {
+                // o ponto corre no plano que passa por ele de frente para a câmera
+                let (o, d) = cam.ray(rect, m);
+                let (_, d0) = cam.ray(rect, s);
+                let t = (v3(q) - o).dot(d0) / d.dot(d0).max(1e-6);
+                let n = o + d * t;
+                moved = Some((i, [n.x as f64, n.y as f64, n.z as f64]));
+            }
+        }
+    }
+    if cycle.is_none() && moved.is_none() {
+        return;
+    }
+    if let Some(RefKind::SurfFill { curves, conds, points, .. }) = app.open.doc.references.iter_mut().find(|x| x.id == id).map(|x| &mut x.kind) {
+        conds.resize(curves.len(), FillCond::default());
+        if let Some(i) = cycle {
+            conds[i].cont = match conds[i].cont {
+                Continuity::G0 => Continuity::G1,
+                Continuity::G1 => Continuity::G2,
+                _ => Continuity::G0,
+            };
+        }
+        if let Some((i, p)) = moved {
+            points[i] = PointRef::Fixed(p);
+        }
+    }
+}
+
 pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: Camera) {
     let Some(id) = app.session.as_ref().map(|s| s.id) else { return };
     if crate::gizmo::overlay(app, ui, rect, &cam, id) {
+        return;
+    }
+    if matches!(app.open.doc.reference(id).map(|r| &r.kind), Some(RefKind::SurfFill { .. })) {
+        contour_overlay(app, ui, rect, &cam, id);
         return;
     }
     if matches!(app.open.doc.feature(id).map(|f| &f.kind), Some(FeatureKind::Revolve(_))) {

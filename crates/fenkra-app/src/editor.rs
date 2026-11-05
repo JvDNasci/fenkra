@@ -552,6 +552,10 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         },
         _ => None,
     };
+    let ref_note = match sel {
+        Sel::Ref(id) => app.result.as_ref().and_then(|r| r.notes.get(&id).cloned()),
+        _ => None,
+    };
     let mut sess_act: Option<u8> = None; // 0 = concluir, 1 = cancelar, 2 = abrir
     let tex_names: Vec<String> = app.open.doc.textures.iter().map(|t| t.name.clone()).collect();
     let doc = &mut app.open.doc;
@@ -691,7 +695,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             command_bar(ui, session.map(|s| s.0) == Some(id), &mut sess_act);
             tabs_begin(ui, ("elemento", format!("{:?}", crate::geo_ui::GeoKind::of(&r.kind))));
             section(ui, "Definição");
-            crate::geo_ui::panel(ui, &doc_ro, r, &vars, &seed, ref_err.as_deref());
+            crate::geo_ui::panel(ui, &doc_ro, r, &vars, &seed, ref_err.as_deref(), ref_note.as_ref());
             section(ui, "Nome e exibição");
             ui.horizontal(|ui| {
                 ui.add_sized([96., 18.], egui::Label::new(tr("Nome (variável)")));

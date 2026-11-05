@@ -1336,6 +1336,43 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     }
 
     /// Entradas para geometria de referência a partir da seleção (viewport e, se `with_sel`, árvore).
+
+    /// Seleção em cadeia: uma curva só escolhida puxa as vizinhas que a tocam nas pontas, entre as do
+    /// mesmo sketch, as curvas de referência ou as arestas da mesma superfície.
+    fn chained(&self, picked: Vec<CurveRef>) -> Vec<CurveRef> {
+        use crate::picking::{edge_polyline, Pick, SURF_BASE};
+        use fenkra_solidos::geo3d::{chain_indices, Curve3};
+        let (Some(r), [one]) = (self.result.as_ref(), picked.as_slice()) else { return picked };
+        let to64 = |p: &Vec<[f32; 3]>| p.iter().map(|q| q.map(|v| v as f64)).collect::<Vec<_>>();
+        let mut all: Vec<(CurveRef, Vec<[f64; 3]>)> = vec![];
+        match one {
+            CurveRef::SketchCurve { sketch, .. } => {
+                if let Some(sk) = r.sketches.iter().find(|s| s.feature == *sketch) {
+                    all.extend(sk.ents.iter().filter(|(_, cons, _)| !*cons).map(|(c, _, p)| (CurveRef::SketchCurve { sketch: *sketch, curve: *c }, to64(p))));
+                }
+            }
+            CurveRef::Ref(_) => all.extend(r.curves.iter().map(|c| (CurveRef::Ref(c.id), c.pts.clone()))),
+            CurveRef::Edge(_) => {
+                for p in &self.picks {
+                    if let Pick::Edge { body, .. } = *p {
+                        if body >= SURF_BASE {
+                            let lines = (0..).map(|e| edge_polyline(r, body, e)).take_while(|l| !l.is_empty());
+                            all.extend(lines.map(|l| (CurveRef::Edge(l.clone()), l)));
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+        let same = |c: &CurveRef| match (c, one) {
+            (CurveRef::Edge(a), CurveRef::Edge(b)) => a.first() == b.first() && a.last() == b.last(),
+            _ => c == one,
+        };
+        let Some(start) = all.iter().position(|(c, _)| same(c)) else { return picked };
+        let Ok(cs) = all.iter().map(|(_, p)| Curve3::poly(p.clone(), false)).collect::<Result<Vec<_>, _>>() else { return picked };
+        chain_indices(&cs, start, 1e-3).into_iter().map(|i| all[i].0.clone()).collect()
+    }
+
     pub fn seed(&self, with_sel: bool) -> crate::geo_ui::Seed {
         use crate::picking::Pick;
         let mut s = crate::geo_ui::Seed::default();
@@ -1461,6 +1498,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             Cmd::SplitBody | Cmd::ThickSurface | Cmd::CloseSurface | Cmd::SewSurface | Cmd::BoundaryFill => self.seed(true),
             Cmd::Geo(k) => {
                 let mut s = self.seed(true);
+                if matches!(k, crate::geo_ui::GeoKind::SurfFill | crate::geo_ui::GeoKind::OpJoin | crate::geo_ui::GeoKind::CurveJoin) {
+                    s.curves = self.chained(std::mem::take(&mut s.curves));
+                }
                 // face clicada para um tipo que usa plano: vira um plano da face
                 if k.uses_plane() && s.planes.is_empty() && s.surface.is_some() {
                     s.planes.push(self.plane_for_new());

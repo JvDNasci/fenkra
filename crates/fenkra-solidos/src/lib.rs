@@ -409,6 +409,19 @@ pub enum Geo {
     Surface(Shape),
 }
 
+/// O que o cálculo apurou sobre uma referência. `text` vira aviso quando `warn`.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct RefNote {
+    pub text: String,
+    pub warn: bool,
+    /// como as curvas se fecham (preenchimento)
+    pub contour: Option<geo3d::ContourReport>,
+    /// resultado da costura (juntar)
+    pub join: Option<fenkra_kernel::SewReport>,
+    /// erro de tangência medido no contorno, em graus
+    pub g1_deg: Option<f64>,
+}
+
 /// Superfície de referência exibível (malha).
 pub struct SurfaceViz {
     pub id: Id,
@@ -451,6 +464,8 @@ pub enum Promoted {
 }
 
 pub struct RecomputeResult {
+    /// o que o cálculo apurou sobre cada referência, além do status
+    pub notes: HashMap<Id, RefNote>,
     pub bodies: Vec<BodyResult>,
     /// comando → chaves v2 promovidas neste cálculo (pontos antigos que resolveram)
     pub promoted: HashMap<Id, Promoted>,
@@ -505,6 +520,8 @@ struct Ctx<'a> {
     tools: HashMap<Id, (Shape, BoolOp)>,
     /// geometria de referência já avaliada neste cálculo (cadeias de referências não recalculam)
     memo: RefCell<HashMap<Id, Geo>>,
+    /// o que cada referência tem a dizer além do resultado
+    notes: RefCell<HashMap<Id, RefNote>>,
     /// assinatura do último passo que mudou o corpo de cada coletor (cache de malha)
     body_sig: HashMap<Id, u64>,
     /// medidas da última aba de chapa (para os alívios)
@@ -637,6 +654,8 @@ pub struct Cache {
     fills: HashMap<(Id, u64), Vec<[f32; 3]>>,
     /// geometria de referência já avaliada: (assinatura, resultado) — só refaz o que mudou
     refs: HashMap<Id, (u64, Result<RefViz, String>)>,
+    /// notas das referências guardadas em `refs`
+    notes: HashMap<Id, RefNote>,
     /// quantos comandos foram reaproveitados no último cálculo (diagnóstico)
     pub reused: usize,
     /// qualidade pedida para as malhas; trocar re-tessela sem refazer nenhum comando
@@ -1038,6 +1057,80 @@ impl Ctx<'_> {
         Shape::loft_surface(&sections, cont == Continuity::G0, false, None).map_err(|x| x.0)
     }
 
+    /// Preenchimento: confere o contorno, fecha as folgas dentro da tolerância e monta as condições.
+    fn fill(&self, me: Id, curves: &[CurveRef], conds: &[FillCond], points: &[PointRef], tol: f64, d: u32, e: &dyn Fn(&String, &str) -> Result<f64, String>) -> Result<Shape, String> {
+        let mut cs: Vec<Curve3> = curves.iter().map(|c| self.curve(c, d)).collect::<Result<_, _>>()?;
+        let rep = geo3d::contour_report(&cs, tol);
+        self.notes.borrow_mut().insert(me, RefNote { contour: Some(rep.clone()), ..Default::default() });
+        if !rep.open_ends.is_empty() {
+            return Err(format!("contorno aberto: {} ponta(s) solta(s), maior folga {:.3} mm (tolerância {:.3} mm)", rep.open_ends.len(), rep.max_gap, tol));
+        }
+        if rep.loops > 1 {
+            return Err(format!("as curvas formam {} contornos separados: o preenchimento fecha um só", rep.loops));
+        }
+        geo3d::snap_contour(&mut cs, &rep);
+        let (mut orders, mut weights, mut support) = (vec![], vec![], Shape::empty());
+        for (i, c) in cs.iter().enumerate() {
+            let cond = conds.get(i).cloned().unwrap_or_default();
+            let order = match cond.cont {
+                Continuity::G0 => 0,
+                Continuity::G1 => 1,
+                Continuity::G2 | Continuity::G3 => 2,
+            };
+            let w = e(&cond.weight, "peso")?;
+            if w < 1. {
+                return Err(format!("o peso da curva {} precisa ser 1 ou mais", i + 1));
+            }
+            orders.push(order);
+            weights.push(w);
+            if order > 0 {
+                let s = match &cond.support {
+                    Some(s) => self.cut_shape(s, d)?,
+                    None => self.fill_support(me, c, i, d)?,
+                };
+                support = if support.is_null() { s } else { support.compound(&s) };
+            }
+        }
+        let pts: Vec<Vec<V3>> = cs.into_iter().map(|c| c.pts).collect();
+        let (sh, _, g1) = Shape::fill_surface_x(&pts, &orders, &weights, &support, &self.points(points, d)?).map_err(|x| x.0)?;
+        if orders.iter().any(|o| *o > 0) {
+            let deg = g1.to_degrees();
+            let mut n = self.notes.borrow_mut();
+            let note = n.entry(me).or_default();
+            note.g1_deg = Some(deg);
+            if deg > 0.5 {
+                note.warn = true;
+                note.text = format!("tangência no contorno com erro de {deg:.2} graus (limite 0,5)");
+            }
+        }
+        Ok(sh)
+    }
+
+    /// Face vizinha de uma curva sem apoio escolhido: a superfície de referência em que ela está. Se
+    /// houver mais de uma, quem decide é a pessoa.
+    fn fill_support(&self, me: Id, c: &Curve3, i: usize, d: u32) -> Result<Shape, String> {
+        let deps = self.doc.dependents(me);
+        let on = |sh: &Shape| {
+            [0., 0.5, 1.].iter().all(|t| {
+                let p = c.at_ratio(*t).0;
+                sh.surface_near(p).is_ok_and(|(q, _)| geo3d::dist(p, q) < 0.15)
+            })
+        };
+        let mut found: Vec<Shape> = self
+            .doc
+            .references
+            .iter()
+            .filter(|r| r.id != me && !deps.contains(&r.id) && r.kind.class() == RefClass::Surface)
+            .filter_map(|r| self.surface(r.id, d).ok())
+            .filter(on)
+            .collect();
+        match found.len() {
+            0 => Err(format!("a curva {} pede uma face de apoio: escolha a face vizinha", i + 1)),
+            1 => Ok(found.remove(0)),
+            n => Err(format!("a curva {} encosta em {n} superfícies: escolha a face de apoio", i + 1)),
+        }
+    }
+
     /// Cópia da face de algum corpo que passa pelo ponto.
     fn face_of_bodies(&self, p: V3) -> Result<Shape, String> {
         for (b, _, _) in self.bodies.values() {
@@ -1419,10 +1512,7 @@ impl Ctx<'_> {
                 let sh = self.cut_shape(surface, d)?;
                 Geo::Surface(edge_fillet(&sh, edges, e(radius, "raio")?, radius2.as_ref().map(|r| e(r, "raio final")).transpose()?)?)
             }
-            SurfFill { curves } => {
-                let cs: Vec<Vec<V3>> = curves.iter().map(|c| self.curve(c, d).map(|c| c.pts)).collect::<Result<_, _>>()?;
-                Geo::Surface(Shape::fill_surface(&cs).map_err(|x| x.0)?)
-            }
+            SurfFill { curves, conds, points, tol } => Geo::Surface(self.fill(id, curves, conds, points, e(tol, "tolerância")?, d, &|s: &String, w: &str| e(s, w))?),
             SurfExtrude { curve, dir, length, length2 } => {
                 let c = self.curve(curve, d)?;
                 let (_, v) = self.axis_d(dir, d)?;
@@ -1476,16 +1566,30 @@ impl Ctx<'_> {
                 Geo::Surface(Shape::loft_surface(&cs, *ruled, *closed, g.as_deref()).map_err(|x| x.0)?)
             }
             SurfBlend { a, sa, b, sb, cont, tension } => Geo::Surface(self.blend(a, sa.as_ref(), b, sb.as_ref(), *cont, e(tension, "tensão")?, d)?),
-            SurfJoin { items, tol } => {
+            SurfJoin { items, tol, curves } => {
+                let t = e(tol, "tolerância")?;
                 let mut acc = Shape::empty();
                 for it in items {
                     let x = self.cut_shape(it, d)?;
                     acc = if acc.is_null() { x } else { acc.compound(&x) };
                 }
+                if !acc.is_null() {
+                    acc = acc.sewn(t).map_err(|x| x.0)?;
+                }
+                // as curvas entram encadeadas: cada cadeia vira um fio ao lado das faces
+                let mut rest: Vec<Curve3> = curves.iter().map(|c| self.curve(c, d)).collect::<Result<_, _>>()?;
+                while !rest.is_empty() {
+                    let group = chain_indices(&rest, 0, t.max(1e-3));
+                    let cs: Vec<Curve3> = group.iter().rev().map(|i| rest.remove(*i)).rev().collect();
+                    let w = Shape::curve_shape(&join_curves(cs)?.pts).map_err(|x| x.0)?;
+                    acc = if acc.is_null() { w } else { acc.compound(&w) };
+                }
                 if acc.is_null() {
                     return Err("escolha as superfícies a juntar".into());
                 }
-                Geo::Surface(acc.sewn(e(tol, "tolerância")?).map_err(|x| x.0)?)
+                let rep = acc.sew_report().map_err(|x| x.0)?;
+                self.notes.borrow_mut().insert(id, RefNote { join: Some(rep), ..Default::default() });
+                Geo::Surface(acc)
             }
             SurfHeal { surface, tol } => Geo::Surface(self.cut_shape(surface, d)?.healed(e(tol, "tolerância")?).map_err(|x| x.0)?),
             SurfSplit { surface, tool, flip, more, curve } => {
@@ -4477,6 +4581,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         status: HashMap::new(),
         tools: HashMap::new(),
         memo: RefCell::new(HashMap::new()),
+        notes: Default::default(),
         body_sig: HashMap::new(),
         last_sheet: None,
         sheet_maps: vec![],
@@ -4676,6 +4781,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
     let tail = h;
     let (mut points, mut curves, mut surfaces) = (vec![], vec![], vec![]);
     cache.refs.retain(|id, _| doc.reference(*id).is_some());
+    cache.notes.retain(|id, _| doc.reference(*id).is_some());
     for r in &doc.references {
         let key = hash_of(&[&ref_sig(doc, r.id, &cx.vars, 0)], if ref_reads_bodies(doc, r.id, 0) { tail } else { global });
         let v = match cache.refs.get(&r.id).filter(|(k, _)| *k == key) {
@@ -4692,12 +4798,16 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                     })
                 });
                 cache.refs.insert(r.id, (key, v.clone()));
+                match cx.notes.borrow().get(&r.id) {
+                    Some(n) => cache.notes.insert(r.id, n.clone()),
+                    None => cache.notes.remove(&r.id),
+                };
                 v
             }
         };
         match v {
             Ok(g) => {
-                cx.status.insert(r.id, Status::Ok);
+                cx.status.insert(r.id, cache.notes.get(&r.id).filter(|n| n.warn).map_or(Status::Ok, |n| Status::Warning(n.text.clone())));
                 match g {
                     RefViz::Plane(fr) => planes.push(PlaneViz { id: Some(r.id), name: r.name.clone(), frame: fr }),
                     RefViz::Point(p) => points.push(PointViz { id: r.id, name: r.name.clone(), p }),
@@ -4802,6 +4912,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
     cache.limitar(&vivas, &fills_vivos, TETO_CACHE_MALHAS);
 
     RecomputeResult {
+        notes: cache.notes.clone(),
         bodies,
         promoted,
         sketches,
@@ -4854,6 +4965,7 @@ pub fn publications(doc: &Document) -> Vec<(String, LinkedGeo)> {
                 status: HashMap::new(),
                 tools: HashMap::new(),
                 memo: RefCell::new(HashMap::new()),
+                notes: Default::default(),
                 body_sig: HashMap::new(),
                 last_sheet: None,
                 sheet_maps: vec![],
@@ -4875,7 +4987,7 @@ pub fn publications(doc: &Document) -> Vec<(String, LinkedGeo)> {
 }
 
 /// Superfície de referência avaliada no fim da linha do tempo, em texto B-rep.
-fn surface_brep(doc: &Document, id: Id) -> Option<String> {
+pub fn surface_brep(doc: &Document, id: Id) -> Option<String> {
     let vars = doc.eval_params().ok()?;
     let mut cx = Ctx {
         doc,
@@ -4886,6 +4998,7 @@ fn surface_brep(doc: &Document, id: Id) -> Option<String> {
         status: HashMap::new(),
         tools: HashMap::new(),
         memo: RefCell::new(HashMap::new()),
+        notes: Default::default(),
         body_sig: HashMap::new(),
         last_sheet: None,
         sheet_maps: vec![],
@@ -5236,6 +5349,7 @@ pub fn cut_list(doc: &Document) -> Vec<CutRow> {
         status: HashMap::new(),
         tools: HashMap::new(),
         memo: RefCell::new(HashMap::new()),
+        notes: Default::default(),
         body_sig: HashMap::new(),
         last_sheet: None,
         sheet_maps: vec![],
@@ -5297,6 +5411,7 @@ pub fn member_joints(doc: &Document) -> Vec<((Id, usize), (Id, usize), [f64; 3])
         status: HashMap::new(),
         tools: HashMap::new(),
         memo: RefCell::new(HashMap::new()),
+        notes: Default::default(),
         body_sig: HashMap::new(),
         last_sheet: None,
         sheet_maps: vec![],
@@ -5414,6 +5529,7 @@ pub fn export(doc: &Document, collector: Option<Id>, path: &str) -> Result<(), S
         status: HashMap::new(),
         tools: HashMap::new(),
         memo: RefCell::new(HashMap::new()),
+        notes: Default::default(),
         body_sig: HashMap::new(),
         last_sheet: None,
         sheet_maps: vec![],
@@ -5454,6 +5570,7 @@ pub fn final_shape(doc: &Document) -> Option<Shape> {
         status: HashMap::new(),
         tools: HashMap::new(),
         memo: RefCell::new(HashMap::new()),
+        notes: Default::default(),
         body_sig: HashMap::new(),
         last_sheet: None,
         sheet_maps: vec![],
@@ -6464,7 +6581,7 @@ mod tests {
         let s = |x: &str| x.to_string();
         let a = d.add_geometry(RefKind::SurfSphere { center: PointRef::Origin, radius: s("10") });
         let b = d.add_geometry(RefKind::SurfSphere { center: PointRef::Fixed([15., 0., 0.]), radius: s("10") });
-        let j = d.add_geometry(RefKind::SurfJoin { items: vec![SurfRef::Ref(a), SurfRef::Ref(b)], tol: s("0.01") });
+        let j = d.add_geometry(RefKind::SurfJoin { items: vec![SurfRef::Ref(a), SurfRef::Ref(b)], tol: s("0.01"), curves: vec![] });
         d.hide_consumed(j);
         assert!(!d.reference(a).unwrap().visible && !d.reference(b).unwrap().visible);
         d.delete(j, false);
@@ -6629,7 +6746,7 @@ mod tests {
             cont: Continuity::G1,
             tension: s("1"),
         });
-        let join = d.add_geometry(RefKind::SurfJoin { items: vec![SurfRef::Ref(fa), SurfRef::Ref(blend), SurfRef::Ref(fb)], tol: s("0.01") });
+        let join = d.add_geometry(RefKind::SurfJoin { items: vec![SurfRef::Ref(fa), SurfRef::Ref(blend), SurfRef::Ref(fb)], tol: s("0.01"), curves: vec![] });
         let bounds = d.add_geometry(RefKind::CurveBoundary { surface: SurfRef::Ref(join), which: 0 });
         let r = recompute(&d);
         for id in [sph, half, circ, cyl, bnd, moved, pmov, tube, loft, fa, fb, blend, join, bounds] {
@@ -6880,7 +6997,7 @@ mod tests {
         let se = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(sp), dir: AxisRef::Origin(OriginAxis::Z), length: s_("10"), length2: "0".into() });
         let so = d.add_geometry(RefKind::SurfOffset { surface: SurfRef::Ref(se), dist: s_("2"), both: false, join: OffsetJoin::Automatico });
         let sq = d.add_geometry(RefKind::Polyline { points: vec![PointRef::Origin, PointRef::Fixed([10., 0., 0.]), PointRef::Fixed([10., 10., 3.]), PointRef::Fixed([0., 10., 0.])], closed: true });
-        let sf = d.add_geometry(RefKind::SurfFill { curves: vec![CurveRef::Ref(sq)] });
+        let sf = d.add_geometry(RefKind::SurfFill { curves: vec![CurveRef::Ref(sq)], conds: vec![], points: vec![], tol: "0.01".into() });
         let pp = d.add_geometry(RefKind::PointProject { point: PointRef::Fixed([5., 5., 20.]), surface: SurfRef::Ref(sf) });
         let r = recompute(&d);
         for id in [se, so, sq, sf, pp] {

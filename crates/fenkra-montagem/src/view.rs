@@ -156,6 +156,7 @@ pub fn compose(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, errors: 
         doc.active_collector = c.id;
     }
     let r = RecomputeResult {
+        notes: Default::default(),
         bodies,
         promoted: Default::default(),
         sketches: vec![],

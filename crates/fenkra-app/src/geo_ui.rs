@@ -386,7 +386,7 @@ impl GeoKind {
             SurfSweepX => R::SurfSweepX { kind: SweepKind::Explicit { profile: c(0), guide1: c(1), guide2: None }, spine: None, solution: 0, smooth: false, sections: t("24") },
             SurfFilletSS => R::SurfFillet { a: sf, b: crate::slots::surf(), flip_a: false, flip_b: false, radius: t("5"), radius2: None },
             SurfEdgeFillet => R::SurfEdgeFillet { surface: sf, edges: edge_mids(s), radius: t("3"), radius2: None },
-            SurfFill => R::SurfFill { curves: if s.curves.is_empty() { vec![c(0)] } else { s.curves.clone() } },
+            SurfFill => R::SurfFill { curves: if s.curves.is_empty() { vec![c(0)] } else { s.curves.clone() }, conds: vec![], points: s.points.clone(), tol: t("0.01") },
             SurfExtrude => R::SurfExtrude { curve: c(0), dir: AxisRef::Origin(OriginAxis::Z), length: t("30"), length2: t("0") },
             SurfRevolve => R::SurfRevolve { curve: c(0), axis: AxisRef::Origin(OriginAxis::Z), angle: t("360") },
             SurfSphere => R::SurfSphere { center: p(0), radius: t("20") },
@@ -395,7 +395,9 @@ impl GeoKind {
             SurfTube => R::SurfSweep { profile: SweepProfile::Circle(t("5")), spine: c(0), mode: SweepMode::Corrigido },
             SurfLoft => R::SurfLoft { sections: if s.curves.len() >= 2 { s.curves.clone() } else { vec![c(0), c(1)] }, guide: None, ruled: false, closed: false },
             SurfBlend => R::SurfBlend { a: c(0), sa: None, b: c(1), sb: None, cont: Continuity::G1, tension: t("1") },
-            OpJoin => R::SurfJoin { items: vec![sf], tol: t("0.01") },
+            // só curvas: a junção é uma curva; com faces, as curvas entram ao lado delas
+            OpJoin if s.surface.is_none() && !s.curves.is_empty() => R::CurveJoin { curves: s.curves.clone() },
+            OpJoin => R::SurfJoin { items: vec![sf], tol: t("0.01"), curves: s.curves.clone() },
             OpHeal => R::SurfHeal { surface: sf, tol: t("0.1") },
             OpSplit => R::SurfSplit { surface: sf, tool: crate::slots::surf(), flip: false, more: vec![], curve: None },
             OpTrim => R::SurfTrim { a: sf, b: crate::slots::surf(), flip_a: false, flip_b: false },
@@ -522,7 +524,7 @@ pub fn inputs_of(k: &RefKind) -> Seed {
         R::PointOffset { point, .. } => s.points.push(*point),
         R::SplineControl { points, .. } => s.points.extend(points.iter().copied()),
         R::CurveCopy { curve } | R::SurfExtrude { curve, .. } | R::SurfRevolve { curve, .. } => s.curves.push(curve.clone()),
-        R::SurfFill { curves } | R::CurveJoin { curves } => s.curves.extend(curves.iter().cloned()),
+        R::SurfFill { curves, .. } | R::CurveJoin { curves } => s.curves.extend(curves.iter().cloned()),
         R::SurfOffset { surface, .. } => s.surface = Some(*surface),
         R::SurfSphere { center, .. } => s.points.push(*center),
         R::SurfCylinder { point, .. } => s.points.push(*point),
@@ -534,7 +536,10 @@ pub fn inputs_of(k: &RefKind) -> Seed {
         }
         R::SurfLoft { sections, .. } => s.curves.extend(sections.iter().cloned()),
         R::SurfBlend { a, b, .. } => s.curves.extend([a.clone(), b.clone()]),
-        R::SurfJoin { items, .. } => s.surface = items.first().copied(),
+        R::SurfJoin { items, curves, .. } => {
+            s.surface = items.first().copied();
+            s.curves.extend(curves.iter().cloned());
+        }
         R::SurfHeal { surface, .. } | R::SurfPart { surface, .. } | R::SurfUntrim { surface } | R::CurveBoundary { surface, .. } => s.surface = Some(*surface),
         R::SurfSplit { surface, tool, .. } => {
             s.surface = Some(*surface);
@@ -957,7 +962,41 @@ fn on_curve(ui: &mut egui::Ui, at: &mut OnCurve, reverse: &mut bool, vars: &Hash
 }
 
 /// Painel de um elemento de geometria de referência.
-pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashMap<String, f64>, seed: &Seed, error: Option<&str>) {
+/// Uma condição de contorno do preenchimento: continuidade, face de apoio e peso.
+fn fill_cond_ui(ui: &mut egui::Ui, i: usize, doc: &Document, me: Id, c: &mut FillCond, vars: &HashMap<String, f64>, seed: &Seed) {
+    ui.horizontal(|ui| {
+        ui.label(tr("Continuidade"));
+        for (v, n) in [(Continuity::G0, "G0"), (Continuity::G1, "G1"), (Continuity::G2, "G2")] {
+            ui.radio_value(&mut c.cont, v, n);
+        }
+    });
+    if c.cont != Continuity::G0 {
+        opt_surf(ui, &format!("g_fs{i}"), "Face de apoio", doc, me, &mut c.support, seed);
+        expr(ui, "Peso", &mut c.weight, vars, "");
+    }
+}
+
+/// O que o cálculo apurou sobre o contorno e a junção.
+fn note_ui(ui: &mut egui::Ui, n: &fenkra_solidos::RefNote) {
+    if let Some(c) = &n.contour {
+        let t = if c.open_ends.is_empty() { format!("{} {}", c.loops, tr("contorno(s) fechado(s)")) } else { format!("{} {}", c.open_ends.len(), tr("ponta(s) aberta(s)")) };
+        ui.label(RichText::new(t).small());
+        if c.max_gap > 1e-9 {
+            ui.label(RichText::new(format!("{}: {} mm", tr("Maior folga"), fmt(c.max_gap))).small());
+        }
+    }
+    if let Some(g) = n.g1_deg {
+        ui.label(RichText::new(format!("{}: {g:.3}°", tr("Erro de tangência"))).small());
+    }
+    if let Some(j) = &n.join {
+        ui.label(RichText::new(format!("{}: {}", tr("Domínios conexos"), j.domains)).small());
+        ui.label(RichText::new(format!("{}: {}", tr("Bordas livres"), j.free_edges)).small());
+        ui.label(RichText::new(format!("{}: {} mm", tr("Folga fechada"), fmt(j.closed_gap))).small());
+        ui.label(RichText::new(format!("{}: {} mm", tr("Folga aberta"), fmt(j.open_gap))).small());
+    }
+}
+
+pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashMap<String, f64>, seed: &Seed, error: Option<&str>, note: Option<&fenkra_solidos::RefNote>) {
     let me = r.id;
     let class = r.kind.class();
     let cur = GeoKind::of(&r.kind);
@@ -993,6 +1032,9 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         ui.label(RichText::new(k.info().3).weak().small());
     }
     section(ui, "Definição");
+    if let Some(n) = note {
+        note_ui(ui, n);
+    }
     use RefKind as R;
     match &mut r.kind {
         R::FacePlane { owner, .. } => {
@@ -1437,7 +1479,8 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             radius_ui(ui, radius, radius2, vars);
             ui.label(RichText::new(tr("Arestas entre faces de uma superfície juntada (Juntar). Clique nelas na viewport.")).weak().small());
         }
-        R::SurfFill { curves } => {
+        R::SurfFill { curves, conds, points, tol } => {
+            conds.resize(curves.len(), FillCond::default());
             let mut del = None;
             for (i, c) in curves.iter_mut().enumerate() {
                 ui.horizontal(|ui| {
@@ -1446,7 +1489,18 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                         del = Some(i);
                     }
                 });
+                fill_cond_ui(ui, i, doc, me, &mut conds[i], vars, seed);
             }
+            if curves.len() > 1 && ui.button(tr("Aplicar a todas")).on_hover_text(tr("Copia a continuidade e o peso da primeira curva para as outras.")).clicked() {
+                let (cont, weight) = (conds[0].cont, conds[0].weight.clone());
+                for c in conds.iter_mut() {
+                    c.cont = cont;
+                    c.weight = weight.clone();
+                }
+            }
+            section(ui, "Pontos de passagem");
+            points_list(ui, "g_fp", doc, me, points, seed, 0);
+            expr(ui, "Tolerância", tol, vars, "mm");
             if let Some(i) = del {
                 if curves.len() > 1 {
                     curves.remove(i);
@@ -1533,8 +1587,9 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             }
             ui.label(RichText::new(tr("Bordas: use 'Contorno' ou 'Curva extraída' de uma aresta; apoio = a superfície daquela borda.")).weak().small());
         }
-        R::SurfJoin { items, tol } => {
+        R::SurfJoin { items, tol, curves } => {
             surfs_list(ui, "g_j", doc, me, items, seed);
+            curves_list(ui, "g_jc", "Curva", doc, me, curves, seed, 0);
             expr(ui, "Tolerância", tol, vars, "mm");
         }
         R::SurfHeal { surface, tol } => {

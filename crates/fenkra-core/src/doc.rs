@@ -144,6 +144,32 @@ impl CurveRef {
     }
 }
 
+/// Condição de uma curva do contorno de um preenchimento.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct FillCond {
+    pub cont: Continuity,
+    /// face vizinha (G1 e G2 precisam dela)
+    #[serde(default)]
+    pub support: Option<SurfRef>,
+    /// alcance da tangente da vizinha para dentro do buraco (1 = neutro)
+    #[serde(default = "um")]
+    pub weight: String,
+}
+
+impl Default for FillCond {
+    fn default() -> Self {
+        FillCond { cont: Continuity::G0, support: None, weight: um() }
+    }
+}
+
+fn um() -> String {
+    "1".into()
+}
+
+fn tol_fill() -> String {
+    "0.01".into()
+}
+
 /// Superfície usada como entrada: plano ou face clicada (ponto e normal, fixa nesta versão).
 #[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
 pub enum SurfRef {
@@ -589,7 +615,18 @@ pub enum RefKind {
         join: OffsetJoin,
     },
     /// Preenchimento de um contorno de curvas.
-    SurfFill { curves: Vec<CurveRef> },
+    SurfFill {
+        curves: Vec<CurveRef>,
+        /// condição de cada curva, na mesma ordem (faltando, vale G0)
+        #[serde(default)]
+        conds: Vec<FillCond>,
+        /// pontos por onde a superfície tem de passar
+        #[serde(default)]
+        points: Vec<PointRef>,
+        /// folga entre pontas que ainda conta como contorno fechado
+        #[serde(default = "tol_fill")]
+        tol: String,
+    },
     /// Curva extrudada ao longo de uma direção.
     SurfExtrude {
         curve: CurveRef,
@@ -614,7 +651,13 @@ pub enum RefKind {
     /// Concordância entre duas bordas, com continuidade G0/G1/G2 às superfícies de apoio.
     SurfBlend { a: CurveRef, sa: Option<SurfRef>, b: CurveRef, sb: Option<SurfRef>, cont: Continuity, tension: String },
     /// Juntar superfícies (costura) numa só.
-    SurfJoin { items: Vec<SurfRef>, tol: String },
+    SurfJoin {
+        items: Vec<SurfRef>,
+        tol: String,
+        /// curvas que entram na junção ao lado das faces
+        #[serde(default)]
+        curves: Vec<CurveRef>,
+    },
     /// Curar: fecha frestas até a tolerância e une faces do mesmo suporte.
     SurfHeal { surface: SurfRef, tol: String },
     /// Dividir uma superfície por outra (ou plano) e ficar com um lado.
@@ -972,10 +1015,25 @@ impl RefKind {
                     exprs(r)
                 }
             }
-            SurfFill { curves } | CurveJoin { curves } => {
+            CurveJoin { curves } => {
                 for c in curves {
                     c.walk(ids)
                 }
+            }
+            SurfFill { curves, conds, points, tol } => {
+                for c in curves {
+                    c.walk(ids)
+                }
+                for c in conds {
+                    if let Some(s) = &mut c.support {
+                        s.walk(ids)
+                    }
+                    exprs(&mut c.weight)
+                }
+                for p in points {
+                    p.walk(ids)
+                }
+                exprs(tol)
             }
             SurfExtrude { curve, dir, length, length2 } => {
                 curve.walk(ids);
@@ -1022,9 +1080,12 @@ impl RefKind {
                 }
                 exprs(tension)
             }
-            SurfJoin { items, tol } => {
+            SurfJoin { items, tol, curves } => {
                 for s in items {
                     s.walk(ids)
+                }
+                for c in curves {
+                    c.walk(ids)
                 }
                 exprs(tol)
             }
@@ -3402,9 +3463,9 @@ impl Document {
                 _ => None,
             };
             return match &r.kind {
-                SurfJoin { items, .. } => items.iter().filter_map(sref).collect(),
+                SurfJoin { items, curves, .. } => items.iter().filter_map(sref).chain(curves.iter().filter_map(cref)).collect(),
                 SurfOffset { surface, .. } => sref(surface).into_iter().collect(),
-                SurfFill { curves } => curves.iter().filter_map(cref).collect(),
+                SurfFill { curves, conds, .. } => curves.iter().filter_map(cref).chain(conds.iter().filter_map(|c| c.support.as_ref().and_then(sref))).collect(),
                 SurfExtrude { curve, .. } | SurfRevolve { curve, .. } => cref(curve).into_iter().collect(),
                 SurfSweep { profile, spine, .. } => {
                     let mut v: Vec<Id> = cref(spine).into_iter().collect();
