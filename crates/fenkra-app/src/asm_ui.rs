@@ -130,6 +130,21 @@ impl Default for GearsUi {
     }
 }
 
+/// Até onde subir ao sair do contexto.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Volta {
+    /// um nível: da peça para o conjunto dela, do subconjunto para a montagem mãe
+    Pai,
+    Topo,
+}
+
+/// Janela da peça nova no contexto.
+pub struct NovaPecaUi {
+    nome: String,
+    pasta: String,
+    msg: Option<String>,
+}
+
 pub struct AsmState {
     pub asm: Assembly,
     pub file: Option<PathBuf>,
@@ -157,6 +172,20 @@ pub struct AsmState {
     pub stop_collision: bool,
     /// peça aberta na Modelagem Sólida a partir da montagem (componente, arquivo)
     pub editing_part: Option<(Id, PathBuf)>,
+    /// montagens de cima, do topo até a mãe desta (subconjunto ativado no lugar)
+    pub pais: Vec<AsmState>,
+    /// o conjunto em volta do que está ativo, no sistema dele
+    pub vista_contexto: Option<RecomputeResult>,
+    /// o contexto desta montagem enquanto uma peça dela está ativa (volta quando a peça fecha)
+    vista_contexto_acima: Option<RecomputeResult>,
+    /// elemento do contexto escolhido para virar referência (no sistema do ativo)
+    contexto_pick: Option<Pick>,
+    /// pedido de volta esperando a escolha entre salvar, descartar e cancelar
+    volta: Option<Volta>,
+    /// janela da peça nova no contexto
+    nova_peca: Option<NovaPecaUi>,
+    /// componentes cuja peça mudou no contexto desde o último Salvar
+    pub pecas_alteradas: std::collections::HashSet<Id>,
     pub renaming: Option<Id>,
     /// item em edição e o estado de antes (Cancelar volta para ele; item novo some)
     pub edit_snap: Option<(Id, Assembly)>,
@@ -241,6 +270,13 @@ impl AsmState {
             respect: true,
             stop_collision: false,
             editing_part: None,
+            pais: vec![],
+            vista_contexto: None,
+            vista_contexto_acima: None,
+            contexto_pick: None,
+            volta: None,
+            nova_peca: None,
+            pecas_alteradas: Default::default(),
             renaming: None,
             edit_snap: None,
             drag_start: None,
@@ -538,26 +574,9 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                     }
                 }
                 Cmd::AsmNewPart => {
-                    // peça nova no contexto: cria o arquivo ao lado da montagem e abre para modelar
-                    let mut dlg = rfd::FileDialog::new().add_filter("Peça", &["fkp"]).set_file_name("Peça nova.fkp");
-                    if let Some(d) = st.dir() {
-                        dlg = dlg.set_directory(d);
-                    }
-                    let Some(f) = dlg.save_file() else { return true };
-                    let name = f.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "Peça".into());
-                    if let Err(e) = std::fs::write(&f, Document::new(&name).to_json()) {
-                        app.toast(format!("Erro ao criar a peça: {e}"), true);
-                        return true;
-                    }
-                    st.push_undo();
-                    let path = st.rel_path(&f);
-                    let id = st.asm.add_component(&name, NodeKind::Part { path }, Placement::default(), None);
-                    if st.asm.relational {
-                        st.asm.node_mut(id).unwrap().fixed = true;
-                    }
-                    st.sel = Some(id);
-                    st.dirty = true;
-                    edit_part(app, id);
+                    // peça nova no contexto: pede nome e pasta; o arquivo só nasce no Salvar
+                    let pasta = st.dir().map(|d| d.to_string_lossy().to_string()).unwrap_or_default();
+                    st.nova_peca = Some(NovaPecaUi { nome: String::new(), pasta, msg: None });
                 }
                 Cmd::AsmGroup => {
                     st.push_undo();
@@ -1018,35 +1037,184 @@ fn eixo_do_suporte(st: &mut AsmState, p: Pick) -> Result<EixoFuro, String> {
     }
 }
 
-/// Abre a peça do componente na Modelagem Sólida; "Voltar à montagem" recarrega.
+/// Ativa o componente sem sair da montagem: a peça abre para modelar com o conjunto em volta, e o
+/// subconjunto passa a ser a montagem ativa, com a de cima guardada.
 pub fn edit_part(app: &mut App, id: Id) {
     let Some(st) = app.asm.as_mut() else { return };
-    let Some(NodeKind::Part { path }) = st.asm.node(id).map(|n| n.kind.clone()) else {
-        app.toast(tr("Só peças abrem para edição (subconjunto: abra a montagem dele)"), true);
-        return;
-    };
-    let full = full_path(st.dir().as_deref(), &path);
-    match std::fs::read_to_string(&full).map_err(|e| e.to_string()).and_then(|s| Document::from_json(&s).map_err(|e| e.to_string())) {
-        Ok(d) => {
-            st.editing_part = Some((id, full.clone()));
-            app.load_doc_pub(d, Some(full));
-            app.settings.bench = crate::settings::Bench::Solidos;
-            app.toast(tr("Editando a peça no contexto da montagem — salve e use ↩ Voltar à montagem"), false);
+    match st.asm.node(id).map(|n| n.kind.clone()) {
+        Some(NodeKind::Part { path }) => {
+            let full = full_path(st.dir().as_deref(), &path);
+            match st.cache.get(&full, false).map(|p| p.doc.clone()) {
+                Ok(d) => {
+                    st.refresh();
+                    let pl = st.asm.node(id).map(|n| n.placement).unwrap_or_default();
+                    let mut vistas: Vec<&RecomputeResult> = st.view.iter().collect();
+                    vistas.extend(st.vista_contexto.iter());
+                    let ctx = fenkra_montagem::contexto::vista_no_sistema(&vistas, id, &pl);
+                    st.vista_contexto_acima = st.vista_contexto.replace(ctx);
+                    st.editing_part = Some((id, full.clone()));
+                    let n = fenkra_montagem::contexto::instancias(&st.asm, id);
+                    app.load_doc_pub(d, Some(full));
+                    app.settings.bench = crate::settings::Bench::Solidos;
+                    if n > 1 {
+                        app.toast(format!("{} {n} {}", tr("Esta peça tem"), tr("instâncias: a mudança vale para todas")), false);
+                    }
+                }
+                Err(e) => app.toast(format!("{}: {e}", tr("Não foi possível abrir a peça")), true),
+            }
         }
-        Err(e) => app.toast(format!("Não foi possível abrir a peça: {e}"), true),
+        Some(NodeKind::SubAssembly { path }) => ativar_subconjunto(app, id, &path),
+        _ => app.toast(tr("Grupos não abrem para edição"), true),
     }
 }
 
-/// Volta da edição de uma peça: salva, recarrega e reposiciona.
-pub fn back_to_assembly(app: &mut App) {
-    app.save_pub();
+/// O subconjunto vira a montagem ativa. A mãe fica guardada inteira, com os desfazer dela.
+fn ativar_subconjunto(app: &mut App, id: Id, path: &str) {
     let Some(st) = app.asm.as_mut() else { return };
-    if let Some((_, f)) = st.editing_part.take() {
-        st.cache.forget(&f);
+    let full = full_path(st.dir().as_deref(), path);
+    let sub = match std::fs::read_to_string(&full).map_err(|e| e.to_string()).and_then(|t| Assembly::from_json(&t)) {
+        Ok(s) => s,
+        Err(e) => return app.toast(format!("{}: {e}", tr("Não foi possível abrir o subconjunto")), true),
+    };
+    st.refresh();
+    let pl = st.asm.node(id).map(|n| n.placement).unwrap_or_default();
+    let mut vistas: Vec<&RecomputeResult> = st.view.iter().collect();
+    vistas.extend(st.vista_contexto.iter());
+    let ctx = fenkra_montagem::contexto::vista_no_sistema(&vistas, id, &pl);
+    let mut filho = AsmState::new(sub, Some(full));
+    filho.vista_contexto = Some(ctx);
+    let mut mae = app.asm.take().unwrap();
+    filho.pais = std::mem::take(&mut mae.pais);
+    filho.pais.push(mae);
+    filho.solve();
+    app.asm = Some(filho);
+    app.picks.clear();
+    app.fit_now();
+}
+
+/// Profundidade do que está ativo: 0 é o topo.
+pub fn nivel_ativo(st: &AsmState) -> usize {
+    st.pais.len() + st.editing_part.is_some() as usize
+}
+
+/// Pede a saída do contexto. Com algo por salvar, pergunta: não se volta sem salvar ou descartar.
+pub fn pedir_volta(app: &mut App, destino: Volta) {
+    let parte_suja = app.open.modified;
+    let Some(st) = app.asm.as_mut() else { return };
+    let sujo = if st.editing_part.is_some() { parte_suja } else { st.modified };
+    if sujo {
+        st.volta = Some(destino);
+    } else {
+        concluir_volta(app, destino, false);
     }
+}
+
+/// Sai um nível (ou todos). `salvar`: grava antes; se a gravação falhar, fica onde está.
+fn concluir_volta(app: &mut App, destino: Volta, salvar: bool) {
+    let Some(st) = app.asm.as_mut() else { return };
+    st.volta = None;
+    st.contexto_pick = None;
+    if st.editing_part.is_some() {
+        if !sair_da_peca(app, salvar) {
+            return;
+        }
+    } else if !st.pais.is_empty() {
+        if salvar {
+            save(app);
+            if app.asm.as_ref().is_some_and(|s| s.modified) {
+                return;
+            }
+        }
+        sair_do_subconjunto(app);
+    }
+    if destino == Volta::Topo && app.asm.as_ref().is_some_and(|s| !s.pais.is_empty()) {
+        pedir_volta(app, Volta::Topo);
+    }
+}
+
+/// Fecha a peça ativa e volta ao conjunto. Devolve `false` se a gravação falhou.
+fn sair_da_peca(app: &mut App, salvar: bool) -> bool {
+    let Some((id, f)) = app.asm.as_ref().and_then(|s| s.editing_part.clone()) else { return true };
+    if salvar {
+        app.save_pub();
+        if app.open.modified {
+            return false;
+        }
+    }
+    let st = app.asm.as_mut().unwrap();
+    // o que mudou se mede no que ficou guardado, pois um Ctrl+S antes de voltar também conta
+    let antes = st.cache.peek(&f).map(|p| p.doc.clone());
+    st.cache.forget(&f);
+    let depois = st.cache.get(&f, false).ok().map(|p| p.doc.clone());
+    if st.cache.e_pendente(&f) && depois.as_ref().is_some_and(|d| d.features.is_empty()) {
+        // a peça que nasceu e não recebeu nada some sem deixar arquivo
+        st.cache.descartar_pendente(&f);
+        st.asm.delete(id);
+        st.sel = None;
+    } else if antes != depois {
+        st.pecas_alteradas.insert(id);
+        st.modified = true;
+    }
+    st.editing_part = None;
+    st.vista_contexto = st.vista_contexto_acima.take();
     st.solve();
+    // o documento aberto não fica para trás: salvá-lo depois gravaria por cima do arquivo
+    app.load_doc_pub(Document::new("Peça"), None);
     app.settings.bench = crate::settings::Bench::Montagem;
     app.fit_now();
+    true
+}
+
+/// A mãe volta a ser a montagem ativa e recarrega o que o subconjunto mudou.
+fn sair_do_subconjunto(app: &mut App) {
+    let Some(mut filho) = app.asm.take() else { return };
+    let Some(mut mae) = filho.pais.pop() else {
+        app.asm = Some(filho);
+        return;
+    };
+    mae.pais = std::mem::take(&mut filho.pais);
+    mae.cache = PartCache::default();
+    mae.solve();
+    app.asm = Some(mae);
+    app.picks.clear();
+    app.fit_now();
+}
+
+/// Ctrl+S numa peça que ainda não tem arquivo: guarda na memória, e o arquivo nasce com o Salvar da
+/// montagem. Devolve `true` se tratou a gravação.
+pub fn salvar_peca_pendente(app: &mut App) -> bool {
+    let doc = app.open.doc.clone();
+    let Some(st) = app.asm.as_mut() else { return false };
+    let Some((_, f)) = st.editing_part.clone().filter(|(_, f)| st.cache.e_pendente(f)) else { return false };
+    let antes = st.cache.peek(&f).map(|p| p.doc.clone());
+    st.cache.definir_pendente(&f, doc);
+    // `definir_pendente` esquece a leitura, e a saída compara com ela
+    if let Some(d) = antes {
+        st.cache.lembrar(&f, d);
+    }
+    app.open.modified = false;
+    app.toast(tr("Peça guardada: o arquivo nasce ao salvar a montagem"), false);
+    true
+}
+
+/// Volta da edição de uma peça pelo botão da barra.
+pub fn back_to_assembly(app: &mut App) {
+    pedir_volta(app, Volta::Pai);
+}
+
+/// O contexto na cena: as outras peças sombreadas e esmaecidas, em volta da ativa.
+pub fn contexto_na_cena(st: Option<&AsmState>, cena: &mut crate::render::Scene) {
+    let Some(v) = st.and_then(|s| s.vista_contexto.as_ref()) else { return };
+    for b in &v.bodies {
+        let [r, g, bl] = b.color.map(|c| c as f32 / 255.);
+        let cinza = (r + g + bl) / 3.;
+        let col = [(r + cinza) / 2., (g + cinza) / 2., (bl + cinza) / 2., 1.];
+        let m = &b.mesh;
+        for &i in &m.indices {
+            let k = i as usize * 3;
+            cena.fill.push(crate::render::MeshVertex { pos: [m.positions[k], m.positions[k + 1], m.positions[k + 2]], nrm: [m.normals[k], m.normals[k + 1], m.normals[k + 2]], col, mat: [1., 0., 0.3, 0.] });
+        }
+    }
 }
 
 pub fn save(app: &mut App) {
@@ -1069,10 +1237,15 @@ pub fn save(app: &mut App) {
     }
     // números de item fixos para os componentes novos
     st.asm.assign_items(dir.as_deref());
+    if let Err(e) = st.cache.gravar_pendentes(&st.asm, dir.as_deref()) {
+        app.toast(format!("{}: {e}", tr("Erro ao salvar")), true);
+        return;
+    }
     match fenkra_project::seguro::gravar_atomico(&path, st.asm.to_json().as_bytes()) {
         Ok(()) => {
             st.file = Some(path.clone());
             st.modified = false;
+            st.pecas_alteradas.clear();
             app.settings.add_recent_file(&path);
             app.toast(tr("Montagem salva"), false);
         }
@@ -1243,7 +1416,8 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                 _ => 1,
             };
             let inst = if copies > 1 { format!("  ×{copies}") } else { String::new() };
-            let txt = format!("{num}{}{}{mode}{}{inst}", n.name, if n.fixed { " 📌" } else { "" }, if err.is_some() { " ✖" } else { "" });
+            let alterada = if st.pecas_alteradas.contains(&n.id) { " •" } else { "" };
+            let txt = format!("{num}{}{alterada}{}{mode}{}{inst}", n.name, if n.fixed { " 📌" } else { "" }, if err.is_some() { " ✖" } else { "" });
             let open_key = egui::Id::unique(("asm_expandir", n.id.0));
             let has_kids = info.feats.get(&n.id).is_some_and(|v| !v.is_empty()) || info.subs.get(&n.id).is_some_and(|v| !v.is_empty()) || matches!(n.kind, NodeKind::Group);
             let mut open = ui.ctx().data(|m| m.get_temp::<bool>(open_key)).unwrap_or(false);
@@ -2740,6 +2914,30 @@ impl AsmState {
 fn link_in_context(st: &mut AsmState, src: Id, target: Id, pick: Pick) -> Result<String, String> {
     let r = st.mate_ref(pick)?;
     let Geom::Plane { p, n } = r.geom else { return Err(tr("escolha uma face plana (o link copia o plano)").to_string()) };
+    let o = publicar_plano(st, src, target, p, n)?;
+    let dir = st.dir();
+    let Some(NodeKind::Part { path: pt }) = st.asm.node(target).map(|n| n.kind.clone()) else { return Err(tr("o link liga duas peças").to_string()) };
+    let ft = full_path(dir.as_deref(), &pt);
+    let txt = std::fs::read_to_string(&ft).map_err(|e| format!("{}: {e}", ft.display()))?;
+    let mut dt = Document::from_json(&txt).map_err(|e| e.to_string())?;
+    let tid = dt.add_link_xf(&o.origem, &o.arquivo, &o.publicacao, o.geo, o.xf);
+    std::fs::write(&ft, dt.to_json()).map_err(|e| e.to_string())?;
+    st.cache.forget(&ft);
+    st.dirty = true;
+    Ok(format!("{} ← {}.{} ({})", dt.name_of(tid), o.origem, o.publicacao, tr("publicação criada automaticamente na origem")))
+}
+
+/// Plano publicado na peça de origem, pronto para virar link em outra peça.
+struct PlanoPublicado {
+    origem: String,
+    arquivo: String,
+    publicacao: String,
+    geo: fenkra_core::LinkedGeo,
+    xf: fenkra_core::LinkXf,
+}
+
+/// Publica o plano (`p`, `n`, no sistema da origem) e calcula a passagem para o sistema do alvo.
+fn publicar_plano(st: &mut AsmState, src: Id, target: Id, p: [f64; 3], n: [f64; 3]) -> Result<PlanoPublicado, String> {
     let dir = st.dir();
     let (Some(ns), Some(nt)) = (st.asm.node(src).cloned(), st.asm.node(target).cloned()) else { return Err("componente não encontrado".into()) };
     let (NodeKind::Part { path: ps }, NodeKind::Part { path: pt }) = (&ns.kind, &nt.kind) else { return Err(tr("o link liga duas peças").to_string()) };
@@ -2750,8 +2948,7 @@ fn link_in_context(st: &mut AsmState, src: Id, target: Id, pick: Pick) -> Result
     if links::depende_de(&fs, &ft, dir.as_deref()) {
         return Err(tr("referência circular: a peça de origem já usa geometria desta").to_string());
     }
-    let read = |f: &std::path::Path| std::fs::read_to_string(f).map_err(|e| format!("{}: {e}", f.display())).and_then(|t| Document::from_json(&t).map_err(|e| e.to_string()));
-    let mut ds = read(&fs)?;
+    let mut ds = st.cache.get(&fs, false)?.doc.clone();
     let x = any_perp(n);
     // publicação automática na origem (reaproveita o mesmo plano, se já publicado)
     let existing = ds
@@ -2769,6 +2966,7 @@ fn link_in_context(st: &mut AsmState, src: Id, target: Id, pick: Pick) -> Result
                 e.published = true;
             }
             std::fs::write(&fs, ds.to_json()).map_err(|e| e.to_string())?;
+            st.cache.forget(&fs);
             nm
         }
     };
@@ -2776,13 +2974,30 @@ fn link_in_context(st: &mut AsmState, src: Id, target: Id, pick: Pick) -> Result
     // sistema da origem → mundo → sistema da peça que recebe
     let rel = nt.placement.inverse().then(&ns.placement);
     let xf: fenkra_core::LinkXf = [rel.origin, rel.rot[0], rel.rot[1], rel.rot[2]];
-    let mut dt = read(&ft)?;
-    let tid = dt.add_link_xf(&ns.name, &fs.to_string_lossy(), &pub_name, geo, xf);
-    std::fs::write(&ft, dt.to_json()).map_err(|e| e.to_string())?;
-    st.cache.forget(&fs);
-    st.cache.forget(&ft);
-    st.dirty = true;
-    Ok(format!("{} ← {}.{} ({})", dt.name_of(tid), ns.name, pub_name, tr("publicação criada automaticamente na origem")))
+    Ok(PlanoPublicado { origem: ns.name.clone(), arquivo: fs.to_string_lossy().to_string(), publicacao: pub_name, geo, xf })
+}
+
+/// Face do contexto escolhida vira referência na peça ativa: o link entra no documento aberto, e
+/// a publicação na peça de origem.
+fn referencia_do_contexto(app: &mut App) -> Result<String, String> {
+    let st = app.asm.as_mut().ok_or("sem montagem")?;
+    let (ativo, _) = st.editing_part.clone().ok_or("nenhuma peça ativa")?;
+    let Some(Pick::Face { body, point, .. }) = st.contexto_pick else { return Err(tr("escolha uma face plana (o link copia o plano)").to_string()) };
+    let comp = st.vista_contexto.as_ref().and_then(|v| v.bodies.get(body)).map(|b| b.collector).ok_or("elemento perdido")?;
+    let no = st.asm.node(comp).cloned().ok_or_else(|| tr("Só as peças deste conjunto viram referência").to_string())?;
+    let NodeKind::Part { path } = &no.kind else { return Err(tr("Só as peças deste conjunto viram referência").to_string()) };
+    let pl = st.asm.node(ativo).ok_or("componente não encontrado")?.placement;
+    let local = no.placement.to_local(pl.point(point.map(|v| v as f64)));
+    let full = full_path(st.dir().as_deref(), path);
+    let lp = st.cache.get(&full, true)?;
+    let sh = lp.shape.as_ref().ok_or("peça em modo visualização: passe para editável para restringir")?;
+    let Geom::Plane { p, n } = geom_at(sh, local)? else { return Err(tr("escolha uma face plana (o link copia o plano)").to_string()) };
+    let o = publicar_plano(st, comp, ativo, p, n)?;
+    st.contexto_pick = None;
+    let antes = app.open.doc.clone();
+    let tid = app.open.doc.add_link_xf(&o.origem, &o.arquivo, &o.publicacao, o.geo, o.xf);
+    app.push_undo_pub(antes);
+    Ok(format!("{} ← {}.{}", app.open.doc.name_of(tid), o.origem, o.publicacao))
 }
 
 /// Menu do botão direito na viewport da montagem: restrições possíveis entre os dois elementos
@@ -2871,29 +3086,178 @@ fn apply_ctx(app: &mut App, act: AsmCtx) {
 
 /// Peça aberta no contexto da montagem: as outras peças aparecem em linhas claras (o conjunto
 /// "pai" em volta do objeto de trabalho), no sistema da peça.
-pub fn context_overlay(app: &App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::render::Camera) {
+pub fn context_overlay(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::render::Camera) {
     let Some(st) = app.asm.as_ref() else { return };
-    let Some((cid, _)) = &st.editing_part else { return };
-    if app.settings.bench == crate::settings::Bench::Montagem {
+    let nivel = nivel_ativo(st);
+    if nivel == 0 {
         return;
     }
-    let (Some(pl), Some(v)) = (st.asm.node(*cid).map(|n| n.placement), st.view.as_ref()) else { return };
-    let painter = ui.painter_at(rect);
-    let col = Color32::from_rgba_unmultiplied(120, 170, 235, 90);
-    let mut n = 0;
-    for b in v.bodies.iter().filter(|b| b.collector != *cid) {
-        for s in b.mesh.edges.chunks_exact(6) {
-            n += 1;
-            if n > 40000 {
-                break;
-            }
-            let a = pl.to_local([s[0] as f64, s[1] as f64, s[2] as f64]);
-            let c = pl.to_local([s[3] as f64, s[4] as f64, s[5] as f64]);
-            let (Some(pa), Some(pc)) = (cam.project(rect, glam::Vec3::new(a[0] as f32, a[1] as f32, a[2] as f32)), cam.project(rect, glam::Vec3::new(c[0] as f32, c[1] as f32, c[2] as f32))) else { continue };
-            painter.line_segment([pa, pc], egui::Stroke::new(1., col));
+    let mut trilha: Vec<String> = st.pais.iter().map(|p| p.asm.name.clone()).collect();
+    trilha.push(st.asm.name.clone());
+    if let Some((id, _)) = &st.editing_part {
+        trilha.push(st.asm.name_of(*id));
+    }
+    let mut volta = None;
+    let barra = egui::Area::new(egui::Id::unique("asm_contexto_barra")).order(egui::Order::Foreground).fixed_pos(rect.left_top() + egui::vec2(12., 12.)).show(ui.ctx(), |ui| {
+        egui::Frame::popup(ui.style()).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(trilha.join(" › ")).strong()).on_hover_text(tr("Componente ativo: o resto do conjunto fica esmaecido e serve de referência."));
+                if ui.button(format!("↩ {}", tr("Voltar"))).on_hover_text(tr("Fecha o ativo; com algo por salvar, pergunta antes")).clicked() {
+                    volta = Some(Volta::Pai);
+                }
+                if nivel > 1 {
+                    if ui.button(tr("Voltar ao pai")).on_hover_text(tr("Sobe um nível na estrutura do produto")).clicked() {
+                        volta = Some(Volta::Pai);
+                    }
+                    if ui.button(tr("Voltar ao topo")).on_hover_text(tr("Sobe até a montagem de cima, nível a nível")).clicked() {
+                        volta = Some(Volta::Topo);
+                    }
+                }
+            });
+        });
+    });
+    if let Some(v) = volta {
+        pedir_volta(app, v);
+        return;
+    }
+    // clique no que está em volta: escolhe a referência. A peça ativa tem a vez, pois está na frente
+    let hover_ativo = app.hover_pick.is_some();
+    let filtro = crate::picking::Filter { faces: true, edges: false, vertices: false, planes: false, hidden_env: false, exclude_sketch: None };
+    let Some(st) = app.asm.as_mut() else { return };
+    if st.editing_part.is_none() {
+        return;
+    }
+    let pos = ui.input(|i| i.pointer.latest_pos());
+    if let Some(pos) = pos.filter(|p| rect.contains(*p) && !barra.response.rect.contains(*p) && ui.input(|i| i.pointer.primary_clicked()) && !hover_ativo) {
+        if let Some(v) = &st.vista_contexto {
+            st.contexto_pick = crate::picking::pick(v, &st.view_doc, cam, rect, pos, &filtro);
         }
     }
-    painter.text(rect.right_bottom() + egui::vec2(-12., -30.), egui::Align2::RIGHT_BOTTOM, format!("{} — {}", tr("contexto da montagem"), st.asm.name), egui::FontId::proportional(12.), col.gamma_multiply(2.));
+    let (Some(p), Some(v)) = (st.contexto_pick, st.vista_contexto.as_ref()) else { return };
+    crate::picking::draw(&ui.painter_at(rect), v, cam, rect, &p, true);
+    let nome = match p {
+        Pick::Face { body, .. } | Pick::Edge { body, .. } | Pick::Vertex { body, .. } => v.bodies.get(body).map(|b| st.asm.name_of(b.collector)),
+        _ => None,
+    }
+    .unwrap_or_default();
+    let mut usar = false;
+    let mut limpar = false;
+    egui::Area::new(egui::Id::unique("asm_contexto_ref")).order(egui::Order::Foreground).fixed_pos(rect.left_bottom() + egui::vec2(12., -56.)).show(ui.ctx(), |ui| {
+        egui::Frame::popup(ui.style()).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(nome);
+                if ui.button(tr("Copiar como referência")).on_hover_text(tr("Publica a face na peça de origem e cria um link nesta peça")).clicked() {
+                    usar = true;
+                }
+                if ui.small_button("✖").clicked() {
+                    limpar = true;
+                }
+            });
+        });
+    });
+    if limpar {
+        st.contexto_pick = None;
+    }
+    if usar {
+        match referencia_do_contexto(app) {
+            Ok(m) => app.toast(m, false),
+            Err(e) => app.toast(e, true),
+        }
+    }
+}
+
+/// Janelas do contexto: a escolha ao voltar e a peça nova.
+pub fn contexto_window(app: &mut App, ctx: &egui::Context) {
+    let montagem = app.settings.bench == crate::settings::Bench::Montagem;
+    let Some(st) = app.asm.as_mut() else { return };
+    // a aba Montagem com uma peça ativa é um pedido de volta: sem isso a pessoa ganharia a montagem
+    // com a peça ainda aberta por cima
+    if montagem && st.editing_part.is_some() && st.volta.is_none() {
+        pedir_volta(app, Volta::Pai);
+    }
+    let Some(st) = app.asm.as_mut() else { return };
+    if let Some(destino) = st.volta {
+        let peca = st.editing_part.is_some();
+        let mut escolha = None;
+        egui::Window::new(tr("Voltar")).collapsible(false).resizable(false).anchor(egui::Align2::CENTER_CENTER, [0., 0.]).show(ctx, |ui| {
+            ui.label(if peca { tr("A peça tem alterações que não foram salvas.") } else { tr("O subconjunto tem alterações que não foram salvas.") });
+            ui.horizontal(|ui| {
+                if ui.button(RichText::new(tr("Salvar e voltar")).strong()).clicked() {
+                    escolha = Some(1);
+                }
+                if ui.button(tr("Descartar")).clicked() {
+                    escolha = Some(2);
+                }
+                if ui.button(tr("Cancelar")).clicked() {
+                    escolha = Some(0);
+                }
+            });
+        });
+        match escolha {
+            Some(0) => {
+                st.volta = None;
+                if peca && montagem {
+                    app.settings.bench = crate::settings::Bench::Solidos;
+                }
+            }
+            Some(1) => concluir_volta(app, destino, true),
+            Some(_) => concluir_volta(app, destino, false),
+            None => {}
+        }
+    }
+    let Some(st) = app.asm.as_mut() else { return };
+    let Some(mut nova) = st.nova_peca.take() else { return };
+    let (mut criar, mut fechar) = (false, false);
+    egui::Window::new(tr("Peça nova no contexto")).collapsible(false).resizable(false).anchor(egui::Align2::CENTER_CENTER, [0., 0.]).show(ctx, |ui| {
+        ui.horizontal(|ui| {
+            ui.label(tr("Nome"));
+            ui.text_edit_singleline(&mut nova.nome).on_hover_text(tr("Vira o nome do arquivo e do componente"));
+        });
+        ui.horizontal(|ui| {
+            ui.label(tr("Pasta"));
+            ui.text_edit_singleline(&mut nova.pasta).on_hover_text(tr("Onde o arquivo nasce ao salvar a montagem"));
+            if ui.button("…").clicked() {
+                if let Some(d) = rfd::FileDialog::new().set_directory(&nova.pasta).pick_folder() {
+                    nova.pasta = d.to_string_lossy().to_string();
+                }
+            }
+        });
+        ui.label(RichText::new(tr("O arquivo só é gravado no Salvar da montagem: cancelar não deixa nada para trás.")).weak().small());
+        if let Some(m) = &nova.msg {
+            ui.label(RichText::new(tr(m)).color(crate::theme::st_err()));
+        }
+        ui.horizontal(|ui| {
+            criar = ui.button(RichText::new(tr("Criar")).strong()).clicked();
+            fechar = ui.button(tr("Cancelar")).clicked();
+        });
+    });
+    if fechar {
+        return;
+    }
+    if !criar {
+        st.nova_peca = Some(nova);
+        return;
+    }
+    match fenkra_montagem::contexto::arquivo_novo(std::path::Path::new(nova.pasta.trim()), &nova.nome) {
+        Ok(f) => {
+            let nome = nova.nome.trim().to_string();
+            st.cache.definir_pendente(&f, Document::new(&nome));
+            st.push_undo();
+            let path = st.rel_path(&f);
+            let id = st.asm.add_component(&nome, NodeKind::Part { path }, Placement::default(), None);
+            if st.asm.relational {
+                st.asm.node_mut(id).unwrap().fixed = true;
+            }
+            st.sel = Some(id);
+            st.dirty = true;
+            st.modified = true;
+            edit_part(app, id);
+        }
+        Err(e) => {
+            nova.msg = Some(e);
+            st.nova_peca = Some(nova);
+        }
+    }
 }
 
 /// Prévia da série em edição: cada eixo como uma reta saindo da boca, e o que falhou fica na

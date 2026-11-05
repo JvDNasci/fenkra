@@ -165,7 +165,7 @@ pub struct App {
     begin_sketch_pending: Option<Id>,
     /// seleção na viewport (faces, arestas, vértices, planos)
     pub picks: Vec<crate::picking::Pick>,
-    hover_pick: Option<crate::picking::Pick>,
+    pub(crate) hover_pick: Option<crate::picking::Pick>,
     /// já passou da tela inicial
     started: bool,
     /// a tela inicial foi aberta pelo menu (há trabalho aberto para onde voltar)
@@ -652,6 +652,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         self.save();
     }
 
+    /// Guarda o estado de antes de uma mudança feita de fora do documento e pede o recálculo.
+    pub fn push_undo_pub(&mut self, antes: Document) {
+        self.undo.push(antes);
+        self.redo.clear();
+        self.open.modified = true;
+        self.request_recompute();
+    }
+
     /// Câmera atual (para estados de exibição e animações).
     /// Id novo para uma anotação (não colide com os ids do documento nem da montagem).
     pub fn next_pmi_id(&mut self) -> u64 {
@@ -827,6 +835,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     // ------------------------------------------------------------ arquivo e projeto
 
     fn save(&mut self) {
+        if crate::asm_ui::salvar_peca_pendente(self) {
+            return;
+        }
         if self.open.frozen.is_some() {
             self.toast("Revisão congelada não pode ser salva. Abra a versão de trabalho.", true);
             return;
@@ -2680,7 +2691,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 }
                 if self.asm.as_ref().is_some_and(|s| s.editing_part.is_some()) && self.settings.bench != Bench::Montagem {
                     ui.add_space(8.);
-                    if ui.button(RichText::new(tr("↩ Voltar à montagem")).strong().color(Color32::from_rgb(120, 190, 255))).on_hover_text(tr("salva a peça e volta para a montagem")).clicked() {
+                    if ui.button(RichText::new(tr("↩ Voltar à montagem")).strong().color(crate::theme::accent(ui.visuals()))).on_hover_text(tr("Fecha a peça ativa; com algo por salvar, pergunta antes")).clicked() {
                         crate::asm_ui::back_to_assembly(self);
                     }
                 }
@@ -6880,6 +6891,7 @@ impl eframe::App for App {
         crate::asm_ui::composer_window(self, ctx);
         crate::asm_ui::bom_window(self, ctx);
         crate::asm_ui::fasteners_window(self, ctx);
+        crate::asm_ui::contexto_window(self, ctx);
         crate::asm_ui::gears_window(self, ctx);
         self.sheet_window(ctx);
         crate::st_ui::windows(self, ctx);
@@ -7050,7 +7062,8 @@ impl eframe::App for App {
                     line_dash: self.settings.ref_line_dash,
                     point_style: self.settings.point_style,
                 };
-                let s = scene::build(scene_doc, r, &opts);
+                let mut s = scene::build(scene_doc, r, &opts);
+                crate::asm_ui::contexto_na_cena(self.asm.as_ref(), &mut s);
                 vp.set_scene(rs, &s);
                 self.scene_dirty = false;
                 ctx.request_repaint();

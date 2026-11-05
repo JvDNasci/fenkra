@@ -155,7 +155,12 @@ pub fn compose(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, errors: 
     if let Some(c) = doc.collectors.first() {
         doc.active_collector = c.id;
     }
-    let r = RecomputeResult {
+    (doc, resultado_de(bodies))
+}
+
+/// Resultado só com malhas: a forma como a montagem entrega as vistas compostas.
+pub(crate) fn resultado_de(bodies: Vec<BodyResult>) -> RecomputeResult {
+    RecomputeResult {
         bodies,
         promoted: Default::default(),
         sketches: vec![],
@@ -169,8 +174,7 @@ pub fn compose(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, errors: 
         elapsed_ms: 0.,
         kernel: String::new(),
         bend_lines: vec![],
-    };
-    (doc, r)
+    }
 }
 
 /// Forma do componente posicionada no mundo, com os recursos entre peças que o atingem.

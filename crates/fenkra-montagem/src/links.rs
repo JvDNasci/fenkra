@@ -271,6 +271,11 @@ pub fn links_da_peca(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, co
 }
 
 pub(crate) fn gravar(full: &Path, doc: &Document, cache: &mut PartCache) -> Result<(), String> {
+    // peça nova ainda sem arquivo: o disco só a conhece no Salvar da montagem
+    if cache.e_pendente(full) {
+        cache.definir_pendente(full, doc.clone());
+        return Ok(());
+    }
     std::fs::write(full, doc.to_json()).map_err(|e| format!("{}: {e}", full.display()))?;
     cache.forget(full);
     Ok(())

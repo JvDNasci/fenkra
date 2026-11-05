@@ -7,6 +7,7 @@
 //! - [`load`]: carrega e calcula as peças referenciadas (com cache por arquivo).
 
 pub mod bom;
+pub mod contexto;
 pub mod display;
 pub mod engrenagens;
 pub mod estrutura;
