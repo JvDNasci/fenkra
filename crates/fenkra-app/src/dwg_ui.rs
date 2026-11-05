@@ -12,8 +12,11 @@ use fenkra_desenho::source::Models;
 use fenkra_desenho::*;
 use std::path::PathBuf;
 
+mod alcas;
+mod assistentes;
 mod ghost;
 mod options;
+mod simbolos;
 
 /// Comandos (índice do `Cmd::Dwg`).
 pub mod c {
@@ -79,6 +82,8 @@ pub struct DwgState {
     boxes: Vec<(Id, V2, V2)>,
     last_check: f64,
     dragging: bool,
+    /// desenho de antes do arraste em curso: vira um único passo de desfazer (B250)
+    drag_snap: Option<Drawing>,
     pub renaming: Option<Id>,
     /// painel com as propriedades do desenho (folha, origem, legenda) aberto
     pub props_open: bool,
@@ -111,6 +116,10 @@ pub struct DwgState {
     new_label: String,
     /// dados da tabela do fantasma (ferramenta, dados): refeitos quando o desenho muda
     ghost_table: Option<(u8, fenkra_desenho::source::TableData)>,
+    /// diálogos de Novo desenho e de exportação (B252) e a mensagem para o aviso do app
+    novo: Option<assistentes::NovoUi>,
+    export: Option<assistentes::ExportUi>,
+    toast: Option<(String, bool)>,
 }
 
 impl DwgState {
@@ -160,6 +169,7 @@ impl DwgState {
             boxes: vec![],
             last_check: 0.,
             dragging: false,
+            drag_snap: None,
             renaming: None,
             props_open: false,
             focus: None,
@@ -178,6 +188,9 @@ impl DwgState {
             new_hidden: false,
             new_label: String::new(),
             ghost_table: None,
+            novo: None,
+            export: None,
+            toast: None,
         }
     }
 
@@ -250,6 +263,37 @@ pub fn ensure(app: &mut App) {
     }
 }
 
+/// Desenvolvimento (`FENKRA_DEMO_DWG`): deixa a folha de exemplo no estado a capturar. `ALCA` =
+/// `corte`, `detalhe` ou `projetada` seleciona a vista (mostra as alças); `SIMBOLO` = `rug` ou
+/// `solda` cria e seleciona o símbolo (mostra o construtor); `DIALOGO` = `novo`, `exportar` abre o
+/// diálogo. Nada disso grava no disco.
+pub fn demo_ajustar(st: &mut DwgState) {
+    let alca = std::env::var("FENKRA_DEMO_DWG_ALCA").unwrap_or_default();
+    let achar = |st: &DwgState, f: &dyn Fn(&ViewKind) -> bool| st.d.views.iter().find(|v| f(&v.kind)).map(|v| v.id);
+    st.sel = match alca.as_str() {
+        "corte" => achar(st, &|k| matches!(k, ViewKind::Section { .. })),
+        "detalhe" => achar(st, &|k| matches!(k, ViewKind::Detail { .. })),
+        "projetada" => achar(st, &|k| matches!(k, ViewKind::Projected { .. })),
+        _ => None,
+    };
+    let sheet = st.sheet;
+    match std::env::var("FENKRA_DEMO_DWG_SIMBOLO").unwrap_or_default().as_str() {
+        kind @ ("rug" | "solda") => {
+            let id = st.d.alloc();
+            let (k, text) = if kind == "rug" { (NoteKind::Roughness, "Ra 1,6") } else { (NoteKind::Weld, "a4") };
+            st.d.notes.push(Note { id, sheet, kind: k, pos: [330., 250.], leader: Some([310., 235.]), text: text.into(), ..Default::default() });
+            st.sel = Some(id);
+        }
+        _ => {}
+    }
+    let fonte = Source { path: std::env::temp_dir().join("fenkra_demo_desenho").join("placa.fkp").to_string_lossy().to_string(), display_state: String::new(), hidden: vec![] };
+    match std::env::var("FENKRA_DEMO_DWG_DIALOGO").unwrap_or_default().as_str() {
+        "novo" => assistentes::abrir_novo(st, Some(fonte)),
+        "exportar" => assistentes::abrir_exportar(st, "pdf"),
+        _ => {}
+    }
+}
+
 /// Peça ou montagem aberta como origem (precisa estar salva).
 fn current_source(app: &App) -> Option<Source> {
     let f = app.asm.as_ref().and_then(|s| s.file.clone()).filter(|_| app.settings.bench == crate::settings::Bench::Montagem).or_else(|| app.open.file.clone())?;
@@ -314,12 +358,11 @@ pub fn command(app: &mut App, i: u8) {
     ensure(app);
     match i {
         c::NEW => {
-            if app.dwg.as_ref().is_some_and(|s| s.modified) {
-                app.toast(tr("O desenho atual tinha alterações não salvas — começando um novo."), false);
+            // diálogo curto: formato, orientação, norma, projeção, escala e origem (a peça aberta)
+            let aberta = current_source(app);
+            if let Some(st) = app.dwg.as_mut() {
+                assistentes::abrir_novo(st, aberta);
             }
-            let mut st = DwgState::new(Drawing::new(&tr("Desenho"), Format::A3), None);
-            st.source = current_source(app);
-            app.dwg = Some(st);
         }
         c::OPEN => {
             let Some(p) = rfd::FileDialog::new().add_filter(tr("Desenho Fenkra"), &["fkd"]).pick_file() else { return };
@@ -338,14 +381,9 @@ pub fn command(app: &mut App, i: u8) {
                 c::SVG => "svg",
                 _ => "dxf",
             };
+            // diálogo com as folhas, a cor, o mapeamento de espessura e a prévia
             let st = app.dwg.as_mut().unwrap();
-            let name = format!("{}.{ext}", st.d.name);
-            let Some(p) = rfd::FileDialog::new().add_filter(ext.to_uppercase(), &[ext]).set_file_name(name).save_file() else { return };
-            let sheet = st.sheet;
-            match export::save(&st.d, sheet, &mut st.models, &p.to_string_lossy()) {
-                Ok(()) => app.toast(format!("{} {}", tr("Exportado:"), p.display()), false),
-                Err(e) => app.toast(e, true),
-            }
+            assistentes::abrir_exportar(st, ext);
         }
         c::SHEET => {
             let st = app.dwg.as_mut().unwrap();
@@ -552,6 +590,9 @@ fn style_px(s: Style, z: f32) -> f32 {
 /// Folha na tela.
 pub fn canvas(app: &mut App, root: &mut egui::Ui) {
     ensure(app);
+    if let Some((m, e)) = app.dwg.as_mut().and_then(|s| s.toast.take()) {
+        app.toast(m, e);
+    }
     let cur_src = current_source(app);
     let dark = root.ctx().global_style().visuals.dark_mode;
     egui::CentralPanel::no_frame().show(root, |ui| {
@@ -571,7 +612,7 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
         // mudanças no desenho: desfazer e recalcular a folha
         layout::align_views(&mut st.d);
         if st.d != st.last {
-            if !st.dragging || st.undo.is_empty() {
+            if !st.dragging {
                 st.undo.push(st.last.clone());
                 if st.undo.len() > 100 {
                     st.undo.remove(0);
@@ -736,6 +777,10 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
                 painter.circle_stroke(to_scr(t), 5.5, Stroke::new(1.8, orange));
             }
         }
+        // alças diretas da vista em foco (B250)
+        if st.tool.is_none() && st.reassign.is_none() {
+            alcas::show(ui, &painter, st, &to_scr, &to_mm, z);
+        }
         // ---------- ferramentas
         let snap = |st: &mut DwgState, p: V2, view_only: Option<Id>| -> Option<(Id, V2, V2)> {
             // vértice mais próximo (extremos das polilinhas) das vistas da folha, em mm da folha
@@ -852,7 +897,7 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
                         st.focus = id;
                     }
                 }
-                st.dragging = true;
+                alcas::begin_drag(st);
             } else if resp.dragged_by(egui::PointerButton::Primary) && st.dragging {
                 let dv = resp.drag_delta();
                 let dm = [(dv.x / z) as f64, (-dv.y / z) as f64];
@@ -903,8 +948,7 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
                     }
                 }
             }
-            st.dragging = false;
-            st.drag_kind = 0;
+            alcas::end_drag(st);
         }
         if st.tool.is_none() {
             let item = st.ctx_item;
@@ -931,6 +975,14 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
             x = r.left() - 4.;
         }
         dim_edit_window(ui.ctx(), st);
+        let (pedido, msg) = assistentes::janelas(ui.ctx(), st, cur_src.clone());
+        st.toast = msg;
+        if let Some(assistentes::Pedido::Criar(d, origem)) = pedido {
+            let aviso = st.modified.then(|| (tr("O desenho atual tinha alterações não salvas — começando um novo.").to_string(), false));
+            *st = DwgState::new(d, None);
+            st.source = origem;
+            st.toast = aviso;
+        }
     });
 }
 
@@ -1207,7 +1259,7 @@ fn click(app: &mut App, m: V2, snap: &SnapFn, view_at: &ViewAt) {
         c::PROJ => {
             let Some(parent) = st.cur().and_then(|s| st.d.view(s).cloned()) else { return };
             // 1º diedro, a partir da frente: abaixo vê-se de cima, à direita vê-se da esquerda
-            let dir = ghost::proj_dir(&parent, m);
+            let dir = ghost::proj_dir(&parent, m, st.d.projection);
             let id = st.d.add_view(sheet, parent.source.clone(), ViewKind::Projected { parent: parent.id, dir }, m, parent.scale);
             style_new(st, id);
             done(st, id);
@@ -1826,26 +1878,28 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                         ui.selectable_value(&mut n.kind, k, l);
                     }
                 });
-            ui.label(tr(match n.kind {
+            // rugosidade e solda têm o construtor (sem campo de texto): a legenda só vale para os demais
+            if !matches!(n.kind, NoteKind::Roughness | NoteKind::Weld) {
+                ui.label(tr(match n.kind {
                 NoteKind::Text => "Texto (várias linhas)",
                 NoteKind::Balloon => "Número do item",
-                NoteKind::Roughness => "Rugosidade (ex.: Ra 1,6)",
-                NoteKind::Weld => "Medida da solda (ex.: a4)",
                 NoteKind::CenterMark => "Raio da marca (mm)",
                 NoteKind::Gdt => "Quadro de controle geométrico",
                 NoteKind::Datum => "Letra da referência",
-            }));
+                NoteKind::Roughness | NoteKind::Weld => "",
+                }));
+            }
             if n.kind == NoteKind::Gdt {
                 let g = n.gdt.get_or_insert_with(Default::default);
                 crate::pmi_ui::gdt_ui(ui, "dwg_gdt", &mut g.ch, &mut g.tol, &mut g.datums, &mut g.extra);
+            } else if n.kind == NoteKind::Roughness {
+                simbolos::previa(ui, n, st.d.text_height);
+                simbolos::rugosidade(ui, n);
+            } else if n.kind == NoteKind::Weld {
+                simbolos::previa(ui, n, st.d.text_height);
+                simbolos::solda(ui, n);
             } else {
                 ui.text_edit_multiline(&mut n.text);
-            }
-            if n.kind == NoteKind::Weld {
-                let w = n.weld.get_or_insert(fenkra_desenho::DwgWeld { kind: fenkra_core::pmi::WeldKind::Filete, all_around: false, extra: Default::default() });
-                let mut size = n.text.clone();
-                crate::pmi_ui::weld_ui(ui, "dwg_solda", &mut w.kind, &mut size, &mut w.all_around, &mut w.extra);
-                n.text = size;
             }
             ui.horizontal(|ui| {
                 ui.label(tr("Altura do texto"));
@@ -2152,6 +2206,54 @@ mod tests {
         let src = Source { path: "x.fkp".into(), display_state: String::new(), hidden: vec![] };
         let v = d.add_view(s, src, ViewKind::Standard(Dir::Frente), [100., 100.], 1.);
         (DwgState::new(d, None), v)
+    }
+
+    #[test]
+    fn arraste_de_alca_e_um_unico_passo_de_desfazer() {
+        let (mut st, v) = estado_com_vista();
+        let antes = st.d.clone();
+        alcas::begin_drag(&mut st);
+        for k in 1..=30 {
+            move_item(&mut st, v, [1., 0.]);
+            // o quadro a quadro do canvas não empilha enquanto arrasta
+            assert!(st.undo.is_empty(), "quadro {k}");
+        }
+        alcas::end_drag(&mut st);
+        assert_eq!(st.undo.len(), 1, "o arraste inteiro é um passo");
+        assert_eq!(st.undo[0], antes);
+        assert!((st.d.view(v).unwrap().pos[0] - 130.).abs() < 1e-9);
+        assert!(!st.dragging && st.drag_snap.is_none());
+        // arrastar sem mudar nada não suja a pilha
+        alcas::begin_drag(&mut st);
+        alcas::end_drag(&mut st);
+        assert_eq!(st.undo.len(), 1);
+    }
+
+    #[test]
+    fn clique_nas_setas_do_corte_e_no_raio_desfazem_em_um_passo() {
+        let (mut st, m) = estado_com_vista();
+        let s = st.sheet;
+        let src = st.d.view(m).unwrap().source.clone();
+        let c = st.d.add_view(s, src.clone(), ViewKind::Section { parent: m, a: [0., 5.], b: [40., 5.], label: "A".into() }, [200., 100.], 1.);
+        let det = st.d.add_view(s, src, ViewKind::Detail { parent: m, center: [1., 2.], radius: 10., label: "B".into() }, [200., 40.], 2.);
+        st.last = st.d.clone();
+        // inverter o lado: uma operação, um passo (o canvas empilha o estado anterior)
+        let antes = st.d.clone();
+        assert!(fenkra_desenho::alcas::inverter_corte(&mut st.d, c));
+        st.undo.push(std::mem::replace(&mut st.last, st.d.clone()));
+        assert_ne!(st.d, antes);
+        let prev = st.undo.pop().unwrap();
+        st.d = prev;
+        assert_eq!(st.d, antes);
+        // raio: arrasto com várias amostras, um único passo
+        alcas::begin_drag(&mut st);
+        for r in [11., 12., 13.5, 16.] {
+            fenkra_desenho::alcas::definir_raio_detalhe(&mut st.d, det, r);
+        }
+        alcas::end_drag(&mut st);
+        assert_eq!(st.undo.len(), 1);
+        assert!(matches!(&st.undo[0].view(det).unwrap().kind, ViewKind::Detail { radius, .. } if (*radius - 10.).abs() < 1e-12));
+        assert!(matches!(&st.d.view(det).unwrap().kind, ViewKind::Detail { radius, .. } if (*radius - 16.).abs() < 1e-12));
     }
 
     #[test]

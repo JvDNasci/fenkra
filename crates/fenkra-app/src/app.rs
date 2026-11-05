@@ -691,7 +691,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
             let f = dir.join("placa.fkd");
             let _ = std::fs::write(&f, d.to_json());
-            app.dwg = Some(crate::dwg_ui::DwgState::new(d, Some(f)));
+            let mut dst = crate::dwg_ui::DwgState::new(d, Some(f));
+            crate::dwg_ui::demo_ajustar(&mut dst);
+            app.dwg = Some(dst);
             app.settings.bench = crate::settings::Bench::Desenho;
             app.started = true;
         }

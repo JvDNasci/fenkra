@@ -55,6 +55,7 @@ mod partida;
 mod ajuda_cmd;
 mod textos_ajuda;
 mod textos_biblioteca;
+mod textos_desenho;
 mod textos_estrutural;
 mod st_alcas;
 mod st_secao;
