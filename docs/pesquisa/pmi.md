@@ -1,5 +1,7 @@
 # PMI / FT&A / MBD
 
+> Gerado por IA, sem revisão jurídica; resumo em palavras próprias de fontes públicas.
+
 > Relatório de pesquisa para o Fenkra. [V] marca o que foi confirmado em fonte pública. [C] marca conhecimento geral não confirmado nesta rodada.
 >
 > **Limites da pesquisa:**

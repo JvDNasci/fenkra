@@ -1,5 +1,7 @@
 # Estrutural e soldas (Structure Design / Weldments / Frame Generator)
 
+> Gerado por IA, sem revisão jurídica; resumo em palavras próprias de fontes públicas.
+
 > Relatório de pesquisa para gravar em `docs/pesquisa/estrutural.md`. Nenhum arquivo foi criado ou alterado.
 > **[V]** = confirmado em fonte lida (lista na seção 5). **[C]** = conhecimento geral ou inferência minha, não confirmado em fonte.
 > Limitações da pesquisa:

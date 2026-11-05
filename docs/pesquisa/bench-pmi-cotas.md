@@ -1,5 +1,7 @@
 # Benchmarking: tipos de cota e anotação do PMI
 
+> Gerado por IA, sem revisão jurídica; resumo em palavras próprias de fontes públicas.
+
 Este relatório não alterou nenhum arquivo do projeto. Só li código e fontes, e extraí um PDF público para o scratchpad. Marquei cada afirmação como **[V]**, confirmada em fonte lida nesta rodada, ou **[C]**, conhecimento geral não confirmado.
 
 Limites da pesquisa, que afetam a confiança do que segue:

@@ -1,5 +1,7 @@
 # Conversor de arquivos: importação e exportação
 
+> Gerado por IA, sem revisão jurídica; resumo em palavras próprias de fontes públicas.
+
 > Pesquisa para o Fenkra (Rust + OpenCascade 8.0.1, egui em português). Escrita com palavras próprias.
 > **[V]** = confirmado em fonte consultada (URL na seção 5, ou leitura do código). **[C]** = conhecimento geral, não confirmado nesta pesquisa.
 > Limite de leitura: as páginas de ajuda do CAD avançado A (help.CAD avançado A.com) devolvem só o esqueleto do site ao WebFetch. Para o CAD avançado A usei resumos de busca, blogs de revendas e a documentação de PDM. Esses itens estão marcados [V] pela fonte citada, mas sem o texto integral da página oficial.

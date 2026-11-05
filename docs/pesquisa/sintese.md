@@ -1,5 +1,7 @@
 # Síntese da pesquisa avançada
 
+> Gerado por IA, sem revisão jurídica; resumo em palavras próprias de fontes públicas.
+
 **Base:** os 15 relatórios de `docs/pesquisa/` (seções 1, 3 e 4 de cada um; seção 2 só para desempate), o [ADR 0011](../arquitetura/adr/0011-filosofia-de-modelagem.md) e o backlog B01–B63 com estado em 31/10/2026.
 
 **Códigos de origem usados aqui e no JSON:**

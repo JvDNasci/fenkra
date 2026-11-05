@@ -1,5 +1,7 @@
 # Prendedores aeronáuticos
 
+> Gerado por IA, sem revisão jurídica; resumo em palavras próprias de fontes públicas.
+
 **Escopo:** prendedores aeronáuticos e militares (AN, MS, NAS, Hi-Lok, Hi-Lite, lockbolts, cegos estruturais, rebites, porcas, arruelas, insertos, pinos, presilhas, clamps) e a inserção em massa por pontos publicados. Data da pesquisa: 2026-10-30.
 
 **Convenção de confiança.**

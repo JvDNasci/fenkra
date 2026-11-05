@@ -1,5 +1,7 @@
 # Visão macro do software e requisitos
 
+> Gerado por IA, sem revisão jurídica; resumo em palavras próprias de fontes públicas.
+
 > Pesquisa de plataforma: CAD avançado B × CAD avançado A × CAD avançado C × Fenkra (alpha.27, `develop`). Nada no repositório foi criado ou alterado.
 > Convenção: **[V]** = confirmado em fonte pública consultada; **[C]** = conhecimento geral, não confirmado nesta pesquisa; **[R]** = lido por mim no repositório. Muitas fontes públicas são blogs de revendas, fóruns e notas de suporte, e poucas são ajuda oficial. Onde a fonte é secundária, eu digo.
 

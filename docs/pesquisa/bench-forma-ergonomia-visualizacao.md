@@ -1,5 +1,7 @@
 # Benchmarking: forma livre, ergonomia, visualizador, render e realidade virtual/aumentada
 
+> Gerado por IA, sem revisão jurídica; resumo em palavras próprias de fontes públicas.
+
 **Escopo.** Itens avaliados: B152, B153, B154, B156, B157, B162, B139, B140, B146 e B124. Não alterei nenhum arquivo. A pesquisa na web foi feita em 01/11/2026.
 
 **Convenções de evidência.**

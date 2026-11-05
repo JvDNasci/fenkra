@@ -1,5 +1,7 @@
 # Sketcher
 
+> Gerado por IA, sem revisão jurídica; resumo em palavras próprias de fontes públicas.
+
 > Relatório de pesquisa para o Fenkra. Marcações: **[V]** confirmado em fonte pública consultada nesta rodada; **[C]** conhecimento geral, não confirmado agora; **[código]** lido no repositório.
 >
 > **Limite das fontes:** as páginas de ajuda do CAD avançado A (`help.CAD avançado A.com`) devolveram só o menu quando abertas direto. Os fatos de CAD avançado A marcados [V] vêm de blogs de revendas lidos por inteiro (GoEngineer, Hawk Ridge, CATI, CADimensions, Javelin) ou de resumos de busca sobre as páginas oficiais. Várias páginas de CAD avançado B (GrabCAD, Technia, Eng-Tips) deram 403 ou 404. Os fatos de CAD avançado B [V] vêm de notas IBM/fornecedor de CAD avançado (APAR), CERN, Skill-Lync, SlideShare e descrições de cursos. A ajuda do CAD avançado C abriu bem e é a fonte mais forte.

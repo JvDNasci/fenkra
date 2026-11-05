@@ -1,5 +1,7 @@
 # Part Design / Features de sólido
 
+> Gerado por IA, sem revisão jurídica; resumo em palavras próprias de fontes públicas.
+
 > **Nota de método e confiabilidade.**
 > - **[V]** marca o que li em fonte pública. **[C]** marca conhecimento geral que não confirmei nesta sessão.
 > - **CAD avançado B.** Li o guia oficial de Part Design copiado no site da City University (Londres). O CSS é da era V5R5, então os rótulos podem diferir do V5-6R2024. A estrutura funcional é estável.

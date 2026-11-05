@@ -1,5 +1,7 @@
 # Montagem (Assembly Design / Assemblies)
 
+> Gerado por IA, sem revisão jurídica; resumo em palavras próprias de fontes públicas.
+
 > **Método e legenda.** [V] = confirmado em fonte lida ou citada pela busca (a URL está na seção 5). [C] = conhecimento geral, não confirmado nesta pesquisa.
 > - **CAD avançado B:** a base principal é o manual oficial *Assembly Design V5R14* (PDF do CAD avançado Bdesign.org), que li quase inteiro, mais as apostilas da City University London e do NIAR/WSU.
 > - **CAD avançado C e CAD avançado E:** li as páginas de ajuda diretamente.

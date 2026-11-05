@@ -1,5 +1,7 @@
 # Interface geral, árvore, atualização e gráficos
 
+> Gerado por IA, sem revisão jurídica; resumo em palavras próprias de fontes públicas.
+
 > Relatório de pesquisa para o Fenkra, a gravar em `docs/pesquisa/interface-e-arvore.md`.
 > **Legenda:** **[V]** foi confirmado em fonte pública que li (páginas ou resumos de busca, listados na seção 5). **[C]** é conhecimento geral meu, não confirmado nesta pesquisa.
 > **Limite de verificação:** as páginas `help.CAD avançado A.com` não renderizam para o leitor automático. Os fatos do CAD avançado A vêm de resumos de busca dessas páginas e de blogs de revendas (Hawk Ridge, Javelin, CATI, GoEngineer). A ajuda oficial do CAD avançado B também não está pública. As fontes do CAD avançado B são apostilas de universidades (City University), blogs de revendas (CATI, EDS, Technia, 3DCS) e registros de suporte da IBM. O que sai de blog ou fórum está marcado como tal.

@@ -119,106 +119,30 @@ Próximo PPT ajudará com extract e ele deve funcionar dentro de outras features
 
 ## DR-14
 
-r = 0.98 → tolerância padrão do modelo
-r baixo → aceita grandes descontinuidades
-Disponível apenas para:
-Curvature continuity
-🧮 4. Outputs (saídas)
-4.1 Novo elemento geométrico
-O comando gera:
-Extract.xxx (para extrair um único elemento)
-Multiple Extract.xxx (para extrair vários elementos)
-Esse novo feature:
-Aparece no spec tree
-É independente do elemento original
-Pode ser usado como entrada para outros comandos (offset, split, trim, loft etc.)
-4.2 Elementos colocados em “No Show”
-Alguns comandos criam contextual extracts automaticamente, que ficam ocultos. Exemplo: Parallel Curve → Create Extract (in point/tangency)
-🛠️ 5. Ferramentas e comportamentos internos
-5.1 User Selection Filter
-Se estiver ativado:
-Intersection edges activation
-Tangent intersection edges activation
-O CAD avançado B automaticamente ativa:
-Geometrical Element Filter
-E ajusta o tipo de propagação conforme o filtro. Ao confirmar o comando, o filtro volta ao estado normal.
-5.2 Complementary Mode
-Permite selecionar “o inverso” da seleção atual.
-Útil para extrair tudo exceto o que foi clicado.
-Desativado para pontos e volumes.
-5.3 Federation (Multiple Extract)
-Agrupa células extraídas conforme sua conectividade.
-Útil para superfícies com múltiplas regiões desconexas.
-📌 6. Quando usar cada tipo de propagação
-📘 7. Exemplos práticos
-7.1 Extrair uma borda suave de uma superfície
-Selecionar a aresta
-Propagation: Tangent continuity
-Ajustar Angular Threshold para 1° → Extrai toda a borda contínua sem quebras.
-7.2 Extrair segmentos desconexos de uma curva composta
-Multiple Extract
-Complementary Mode → Seleciona automaticamente os segmentos não marcados.
-7.3 Extrair apenas um segmento específico
-No propagation → Ignora continuidade e parâmetros.
-O comando Extract serve para extrair sub‑geometrias de elementos complexos, como:
-Curvas compostas por vários segmentos
-Superfícies com múltiplas regiões
-Sólidos com múltiplos volumes
-Bordas de faces
-Pontos específicos
-Ele cria um novo elemento geométrico baseado na seleção e nas regras de propagação.
-🎯 2. Inputs (entradas)
-O usuário fornece:
-2.1 Elemento selecionado
-Pode ser:
-Curva
-Ponto
-Superfície
-Face
-Aresta
-Volume
-Sólido
-A seleção pode ser:
-Simples (um elemento)
-Múltipla (vários elementos) → via Multiple Extract
-2.2 Tipo de propagação
-Define como o CAD avançado B continua a extração além do elemento selecionado:
-Point continuity Extrai elementos conectados por continuidade de ponto (C0).
-Tangent continuity Extrai elementos conectados por continuidade de tangência (C1).
-Curvature continuity Extrai elementos conectados por continuidade de curvatura (C2).
-No propagation Extrai somente o elemento selecionado.
-2.3 Parâmetros adicionais (somente para curvas)
-Aparecem ao clicar Show Parameters >>:
-Distance Threshold Intervalo: 0.001 mm a 0.1 mm Controla a distância máxima entre sub‑elementos para serem considerados conectados.
-Angular Threshold Intervalo: 0.5° a 5° Controla a diferença angular máxima entre segmentos para serem considerados contínuos.
-Curvature Threshold Intervalo: 0 a 1 Controla a diferença de curvatura permitida para suavizar descontinuidades.
-2.4 Opções especiais
-Complementary Mode Inverte a seleção: seleciona o que não foi selecionado e desmarca o que foi marcado. (Não funciona para pontos ou volumes.)
-Federation (Multiple Extract) Agrupa células extraídas conforme sua conectividade.
-⚙️ 3. Parâmetros explicados em profundidade
-3.1 Distance Threshold
-Usado para determinar se dois segmentos estão “próximos o suficiente” para serem considerados parte da mesma extração.
-Default: 0.1 mm
-Se o usuário definiu Merging Distance diferente de 0.001 mm, o valor inicial muda.
-Disponível para:
-Point continuity
-Tangent continuity
-Curvature continuity Não disponível para No propagation
-3.2 Angular Threshold
-Define se a mudança de direção entre dois segmentos ainda é considerada contínua.
-Default: 0.5°
-Disponível para:
-Tangent continuity
-Curvature continuity
-3.3 Curvature Threshold
-Define se a diferença de curvatura entre dois segmentos ainda é aceitável para continuidade C2.
-A regra é:
-Onde:
-Rho1 = vetor de curvatura antes da descontinuidade
-Rho2 = vetor de curvatura depois
-r = valor definido pelo usuário (0 a 1)
-Interpretação:
-r = 1 → curvatura totalmente contínua
+> Reescrito com palavras do Fenkra (B204). O slide original descrevia o comando de extração de um
+> software de terceiros; aqui fica só o comportamento que queremos.
+
+**Extrair** cria uma geometria nova e independente a partir de partes de outra: um trecho de curva, uma
+região de superfície, uma face, uma aresta, um ponto ou um volume.
+
+- **Entrada:** uma seleção simples ou várias. O resultado aparece na árvore e serve de entrada a outros
+  comandos (deslocar, dividir, aparar, loft).
+- **Propagação:** além do elemento clicado, o comando pode seguir os vizinhos que continuam a geometria:
+  só por ponto em comum (G0), por tangência (G1), por curvatura (G2) ou sem propagar.
+- **Limiares (só para curvas):** distância máxima entre trechos para contarem como ligados, diferença
+  angular máxima e diferença de curvatura tolerada. Valores padrão sensatos; a faixa fica numa seção
+  recolhida "avançado".
+- **Modo complementar:** inverte a seleção (extrai tudo menos o que foi clicado). Não vale para pontos
+  nem volumes.
+- **Agrupar por conectividade:** na extração múltipla, trechos ligados entre si formam um só resultado.
+- **Extrações automáticas:** alguns comandos criam extrações auxiliares ocultas (por exemplo, o ponto de
+  tangência de uma curva paralela). No Fenkra elas ficam recolhidas sob o comando que as criou.
+- **Filtros de seleção:** ao escolher a propagação, o filtro de seleção ajusta-se sozinho e volta ao
+  normal ao confirmar.
+
+Exemplos de uso: extrair uma borda suave inteira (propagação por tangência, limiar angular pequeno);
+extrair os trechos soltos de uma curva composta (múltiplo mais complementar); extrair um único trecho
+(sem propagação).
 
 ![DR-14 imagem 1](review/dr-14-1.jpg)
 

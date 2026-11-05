@@ -1,5 +1,7 @@
 # Desenho técnico (Drafting / Drawings)
 
+> Gerado por IA, sem revisão jurídica; resumo em palavras próprias de fontes públicas.
+
 > **Como ler as marcas.** [V] = confirmado em página que li, ou em trecho de busca que citava a ajuda oficial. [C] = conhecimento geral, não confirmado nesta pesquisa.
 >
 > **Limite desta pesquisa.** As páginas `help.CAD avançado A.com` são montadas por JavaScript e o WebFetch devolveu só o menu. Todo [V] do CAD avançado A vem dos trechos que a busca extraiu da ajuda e de blogs de revendas, não da página lida por inteiro. CAD avançado B (tutorial da City University) e CAD avançado C (`help.fornecedor de CAD avançado.com`) li direto, página a página.

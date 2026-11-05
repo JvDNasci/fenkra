@@ -1,5 +1,7 @@
 # Módulos e recursos de softwares similares
 
+> Gerado por IA, sem revisão jurídica; resumo em palavras próprias de fontes públicas.
+
 **Data da pesquisa:** 2026-11-01. **Escopo:** só leitura. Nenhum arquivo foi criado nem alterado.
 
 **Convenções.** `[V]` marca fato lido numa fonte desta pesquisa, listada na seção 5. `[C]` marca conhecimento prévio que não consegui confirmar aqui e que deve ser conferido antes de virar requisito. Licenças são leitura técnica, não parecer jurídico. O `reuso-opensource.md` do Fenkra já pede validação antes da primeira versão pública.

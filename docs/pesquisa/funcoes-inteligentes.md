@@ -1,5 +1,7 @@
 # Funções inteligentes de outros CADs aplicáveis às bancadas do Fenkra
 
+> Gerado por IA, sem revisão jurídica; resumo em palavras próprias de fontes públicas.
+
 > Pesquisa de 30/10/2026. Marcação: **[V]** = confirmado em fonte pública consultada nesta pesquisa; **[C]** = conhecimento geral não confirmado.
 > Limite da coleta: as páginas de ajuda do CAD avançado A (help.CAD avançado A.com) não renderizam no WebFetch (só devolvem o cabeçalho do site). Para CAD avançado A, usei os resumos dos resultados de busca sobre essas páginas e blogs de revendas. Alguns blogs (Javelin, TriMech) devolveram HTTP 403.
 > O que as pesquisas [sketch.md](sketch.md) e [montagem.md](montagem.md) já cobrem não é repetido por inteiro. Cada ficha aponta a seção e acrescenta o que é específico deste tema.

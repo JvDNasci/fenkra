@@ -1,5 +1,7 @@
 # PRENDEDORES E ELEMENTOS DE MÁQUINA INDUSTRIAIS
 
+> Gerado por IA, sem revisão jurídica; resumo em palavras próprias de fontes públicas.
+
 > Pesquisa de 30/10/2026. **[V]** = confirmado em fonte aberta nesta pesquisa. **[C]** = conhecimento geral, não confirmado agora.
 > Texto próprio, sem cópia de trechos. As medidas citadas são fatos dimensionais (ADR 0008). Quase todas vêm de **uma** fonte aberta (fasten.it). A segunda fonte exigida pelo nível C ainda precisa ser aberta e está nomeada em cada ficha.
 

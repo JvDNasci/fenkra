@@ -1,5 +1,7 @@
 # Benchmarking: simulação FEM/CFD e sistemas (chicote, compósitos, plástico)
 
+> Gerado por IA, sem revisão jurídica; resumo em palavras próprias de fontes públicas.
+
 **Escopo.** Itens avaliados: B159, B160, B161, B132 (simulação), B138 (chicote), B137 (compósitos), B148 e B129 (plástico e moldes). Nenhum arquivo foi criado ou alterado.
 
 **Legenda de confiança.**

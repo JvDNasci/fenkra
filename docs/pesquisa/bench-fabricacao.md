@@ -1,5 +1,7 @@
 # Benchmarking: manufatura aditiva, simulação de manufatura, corte de tubos e conversão de malha
 
+> Gerado por IA, sem revisão jurídica; resumo em palavras próprias de fontes públicas.
+
 **Escopo e honestidade das evidências.** Pesquisei na web (buscas e leitura de páginas) e li os 13 itens no `docs/backlog/backlog.md`. Nenhum arquivo foi criado ou alterado, e não rodei checagens de código. Limites que afetam a confiança:
 
 - Várias páginas-chave bloquearam a leitura: Lantek (404), The Fabricator (403), fornecedor de CAD avançado Blog sobre face groups (403) e wiki Bambu (402). Nesses casos usei os resumos das buscas.

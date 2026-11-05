@@ -1,5 +1,7 @@
 # PLM/VPM, save management e arquivos
 
+> Gerado por IA, sem revisão jurídica; resumo em palavras próprias de fontes públicas.
+
 > Pesquisa para o Fenkra (Rust + OpenCascade, egui em português), datada de 2026-10-30.
 > Escopo: salvamento e gestão de arquivos, PLM/VPM, referências entre arquivos, empacotamento, multiusuário e travamento.
 >

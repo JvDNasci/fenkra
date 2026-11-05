@@ -1,5 +1,7 @@
 # Auditoria de propriedade intelectual
 
+> Gerado por IA, sem revisão jurídica; resumo em palavras próprias de fontes públicas.
+
 **Projeto:** Fenkra CAD, versão `0.1.0-alpha.28`, branch `develop`, repositório `github.com/JvDNasci/fenkra`
 **Data:** 01/11/2026 · **Método:** leitura do repositório, do zip de release e do vcpkg local, mais pesquisa em fontes públicas na web.
 

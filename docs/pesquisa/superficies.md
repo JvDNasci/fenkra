@@ -1,5 +1,7 @@
 # Superfícies e wireframe (GSD / Surfaces / Freeform)
 
+> Gerado por IA, sem revisão jurídica; resumo em palavras próprias de fontes públicas.
+
 > Relatório de pesquisa avançada para `docs/pesquisa/superficies.md`. Escrito com palavras próprias.
 > **[V]** = confirmado em fonte pública lida (ou trecho de busca citado na seção 5). **[C]** = conhecimento geral, não confirmado nesta rodada.
 > Os números `RF-SUP-nn` (2 dígitos) são novos. Eles não substituem os `RF-SUP-0nn` (3 dígitos) de `docs/requisitos/superficies.md`.

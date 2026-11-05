@@ -1,5 +1,7 @@
 # Chapa metálica (Generative Sheetmetal Design / Sheet Metal)
 
+> Gerado por IA, sem revisão jurídica; resumo em palavras próprias de fontes públicas.
+
 > Pesquisa de filosofia para o Fenkra. Não alterei nenhum arquivo.
 > Legenda: **[V]** = confirmado em fonte pública; **[C]** = conhecimento geral ou inferência minha, não confirmado.
 >
