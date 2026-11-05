@@ -3079,6 +3079,8 @@ pub enum DocError {
     DuplicateName(String),
     #[error("nome inválido: {0}")]
     InvalidName(String),
+    #[error("nome reservado para constante: {0}")]
+    ReservedName(String),
     #[error("parâmetro {0}: {1}")]
     Param(String, ExprError),
     #[error("a ordem violaria a dependência de {0}")]
@@ -4098,7 +4100,15 @@ impl Document {
 fn validate_name(n: &str) -> Result<(), DocError> {
     let ok = n.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
         && n.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
-    if ok { Ok(()) } else { Err(DocError::InvalidName(n.into())) }
+    if !ok {
+        return Err(DocError::InvalidName(n.into()));
+    }
+    // `e` e `pi` são constantes: a expressão ignoraria o valor do parâmetro. Só recusamos nomes novos;
+    // documentos já salvos com esses nomes continuam avaliando como antes.
+    if expr::is_constant(n) {
+        return Err(DocError::ReservedName(n.into()));
+    }
+    Ok(())
 }
 
 /// Troca o identificador `old` por `new` respeitando limites de palavra.

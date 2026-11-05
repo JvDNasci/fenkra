@@ -810,7 +810,6 @@ fn invalido_expressao_com_parametro_inexistente() {
 /// leva o infinito ao kernel, que estoura a pilha do processo (STATUS_STACK_OVERFLOW) em vez de
 /// devolver erro. Corrigir: expressão não finita é erro de parâmetro/expressão.
 #[test]
-#[ignore = "bug: divisão por zero em expressão gera infinito e estoura a pilha no kernel (expr.rs:75)"]
 fn invalido_expressao_com_divisao_por_zero() {
     precisa_kernel!();
     let (r, id) = com(|d| {
@@ -875,7 +874,6 @@ fn invalido_chanfro_maior_que_a_face() {
 /// BUG achado (B72): casca de espessura 30 num corpo de 20 de altura volta `Ok` e devolve o corpo
 /// maciço (volume 24000 intacto). Devia ser erro nomeado (espessura maior que o corpo).
 #[test]
-#[ignore = "bug: casca mais grossa que o corpo devolve Ok com o sólido sem esvaziar"]
 fn invalido_casca_mais_grossa_que_o_corpo() {
     precisa_kernel!();
     let (r, id) = com(|_| FeatureKind::Shell(Shell { faces: vec![[20., 15., 20.]], thickness: s("30"), outward: false, face_keys: vec![], closed: false }));
@@ -1002,7 +1000,6 @@ fn invalido_superficie_deslocada_de_superficie_que_nao_existe() {
 /// BUG achado (B72): corte passante cujo sentido não alcança o corpo (sketch na base, sem inverter)
 /// volta `Ok` com o volume intacto; um corte que não remove nada devia avisar.
 #[test]
-#[ignore = "bug: corte passante que não toca o corpo devolve Ok em silêncio"]
 fn invalido_corte_que_nao_remove_nada_avisa() {
     precisa_kernel!();
     let (mut d, _, _) = caixa_cotada();
@@ -1016,7 +1013,6 @@ fn invalido_corte_que_nao_remove_nada_avisa() {
 /// constante de Euler (2,718...) e o valor do usuário é ignorado em silêncio (a parede fina de `e = 2`
 /// saiu com 2,718). Ou `add_param` recusa nomes de constante, ou o parâmetro tem de vencer a constante.
 #[test]
-#[ignore = "bug: parâmetro chamado 'e' perde para a constante de Euler em silêncio (expr.rs)"]
 fn parametro_com_nome_de_constante_nao_e_ignorado_em_silencio() {
     let mut d = Document::new("nome de constante");
     match d.add_param("e", "2", Unit::Comprimento) {

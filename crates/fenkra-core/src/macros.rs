@@ -314,7 +314,8 @@ sketch Base em XY
   retangulo (-L/2) (-W/2) (L/2) (W/2)
 fim
 extrusao Placa Base esp
-sketch Furos em XY
+plano Topo deslocado XY esp
+sketch Furos em Topo
   para i de 0 a 3
     circulo (-45+i*30) 0 4
   fim

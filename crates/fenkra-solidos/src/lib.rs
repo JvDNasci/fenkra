@@ -3609,7 +3609,15 @@ impl Ctx<'_> {
                     roles = Some(r);
                     t
                 };
+                // corte que não alcança o corpo (sentido errado, ferramenta fora dele) não remove nada
+                let vol0 = if e.op == BoolOp::Cut { self.body(f.target).map(|b| b.mass().volume) } else { None };
                 self.apply_roles(f.target, tool, e.op, f.id, roles)?;
+                if let Some(v0) = vol0 {
+                    let v1 = self.body(f.target).map_or(0., |b| b.mass().volume);
+                    if (v0 - v1).abs() <= 1e-9 * v0.abs().max(1.) {
+                        return Ok(Some("o corte não removeu material: a ferramenta não alcança o corpo — confira o sentido ('inverter') e a distância".into()));
+                    }
+                }
                 Ok(warn_open)
             }
             FeatureKind::Revolve(r) => {
@@ -3890,8 +3898,21 @@ impl Ctx<'_> {
             FeatureKind::Shell(sh) => {
                 let t = ev(&sh.thickness, &self.vars, "espessura")?;
                 let (b, owners, roles) = self.body_owned(f.target).ok_or("não há corpo para esvaziar")?;
+                // a parede para dentro não cabe se for tão grossa quanto a menor dimensão do corpo
+                if !sh.outward {
+                    if let Some((lo, hi)) = b.bbox() {
+                        let menor = (0..3).map(|i| hi[i] - lo[i]).fold(f64::INFINITY, f64::min);
+                        if t >= menor - 1e-9 {
+                            return Err(format!("espessura {t} grande demais para a peça: a menor dimensão do corpo é {menor}"));
+                        }
+                    }
+                }
                 let pts = self.resolve_faces("casca", f, b, owners, roles, &sh.faces, &sh.face_keys)?;
                 let (s, out) = b.shell_tagged(&pts, t, sh.outward, &tags_for(owners)).map_err(k)?;
+                // o kernel pode devolver o corpo maciço sem erro: casca que não tirou material falhou
+                if !sh.outward && s.mass().volume >= b.mass().volume - 1e-9 * b.mass().volume.abs().max(1.) {
+                    return Err("a casca não esvaziou o corpo: espessura grande demais para a peça".into());
+                }
                 let body = remap_body(s, owners, roles, &out, f.id);
                 self.bodies.insert(f.target, body);
                 Ok(None)
