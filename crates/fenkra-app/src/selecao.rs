@@ -123,7 +123,7 @@ mod testes {
         };
         data.add_rect(&mut al, [0., 0.], [20., 20.], false);
         let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
-        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind("20".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0 }));
+        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind("20".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
         let r = fenkra_solidos::recompute(&d);
         let rect = eframe::egui::Rect::from_min_size(Pos2::new(0., 0.), eframe::egui::vec2(800., 600.));
         let cam = crate::render::Camera { target: glam::Vec3::new(10., 10., 10.), yaw: 0., pitch: 1.5, dist: 200., ortho: true };

@@ -673,7 +673,7 @@ mod tests {
     }
 
     fn extrusao(sk: Id, op: BoolOp, reverse: bool, extent: &str) -> FeatureKind {
-        FeatureKind::Extrude(Extrude { sketch: sk, op, extent: Extent::Blind(s(extent)), reverse, taper: s("0"), thin: None, thin_side: 0, dir: None })
+        FeatureKind::Extrude(Extrude { sketch: sk, op, extent: Extent::Blind(s(extent)), reverse, taper: s("0"), thin: None, thin_side: 0, dir: None, ends: Default::default() })
     }
 
     /// B246: cada comando de sólido, aberto sobre a peça, aparece no fantasma, translúcido e na cor do
@@ -707,7 +707,7 @@ mod tests {
         {
             let (mut d, topo) = caixa_com_tampa();
             let pt = sk_pontos(&mut d, PlaneRef::Datum(topo), &[[0., 0.]]);
-            let furo = FeatureKind::Hole(Hole { sketch: pt, kind: HoleKind::Simples, diameter: s("8"), depth: Extent::Blind(s("10")), thread: None, thread_modeled: false, standard: None, points: vec![], dir: None, reverse: true, tip: None, taper: s("0"), left_hand: false });
+            let furo = FeatureKind::Hole(Hole { sketch: pt, kind: HoleKind::Simples, diameter: s("8"), depth: Extent::Blind(s("10")), thread: None, thread_modeled: false, extra: Default::default(), standard: None, points: vec![], dir: None, reverse: true, tip: None, taper: s("0"), left_hand: false });
             casos.push(("furo", d, furo, SAI, false));
         }
         for (nome, modo) in [("filete", true), ("chanfro", false)] {
@@ -747,7 +747,7 @@ mod tests {
         let base = corpos_base(Some(&antes));
         let pad = d.add_feature(FeatureKind::Pattern(Pattern {
             kind: PatternKind::Linear { dir: AxisRef::Origin(OriginAxis::X), count: s("3"), spacing: s("12"), dir2: None, count2: s("1"), spacing2: s("0"), total: false },
-            sources: vec![poste],
+            sources: vec![poste], skip: Default::default(),
         }));
         let r = recompute(&d);
         assert!(valido(r.status.get(&pad)), "{:?}", r.status.get(&pad));
