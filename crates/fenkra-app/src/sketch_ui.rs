@@ -82,7 +82,7 @@ impl Tool {
     /// (ícone, nome curto, descrição breve, descrição avançada)
     pub fn info(self) -> (&'static str, &'static str, &'static str, &'static str) {
         match self {
-            Tool::Select => ("sk_selecionar", "Selecionar", "Selecionar e arrastar", "Clique para selecionar (Shift soma). Arraste pontos, linhas ou a borda de círculos: o solver mantém as restrições. Delete apaga a seleção."),
+            Tool::Select => ("sk_selecionar", "Selecionar", "Selecionar e arrastar", "Clique para selecionar (Shift soma). Arraste pontos, linhas, arcos, splines ou a borda de círculos: o solver mantém as restrições. Passe o mouse para ver as setas do que ainda pode se mover. Delete apaga a seleção."),
             Tool::Line => ("sk_polilinha", "Linha", "Linha / polilinha  (L)", "Cada clique cria um segmento ligado ao anterior. Clique no primeiro ponto para fechar o perfil; Esc ou botão direito termina. Linhas quase horizontais/verticais recebem a restrição automaticamente."),
             Tool::Rect => ("sk_retangulo", "Retângulo", "Retângulo por 2 cantos  (R)", "Clique em dois cantos opostos. Cria 4 linhas com restrições horizontal/vertical; com cotas automáticas, recebe largura e altura."),
             Tool::RectCenter => ("sk_retangulo_centro", "Ret. centro", "Retângulo pelo centro", "Clique no centro e depois num canto. O centro fica preso à diagonal (ponto médio), ótimo para peças simétricas na origem."),
@@ -166,6 +166,24 @@ struct Drag {
     pts: Vec<(Id, [f64; 2])>,
     start: [f64; 2],
     circle: Option<Id>,
+    /// arco ou spline agarrados pelo corpo
+    corpo: Option<Corpo>,
+}
+
+/// Curva puxada por um ponto qualquer dela: o solver decide como o resto acompanha.
+#[derive(Clone, Copy)]
+enum Corpo {
+    Arco(Id),
+    /// spline e o parâmetro agarrado
+    Spline(Id, f64),
+}
+
+impl Corpo {
+    fn curva(self) -> Id {
+        match self {
+            Corpo::Arco(c) | Corpo::Spline(c, _) => c,
+        }
+    }
 }
 
 pub struct SketchEdit {
@@ -2014,6 +2032,17 @@ fn status_line(st: &SolveReport) -> (String, Color32) {
 }
 
 /// Desenha o sketch em edição e trata a interação. Chamado pela viewport.
+/// Curva-ponto é o ponto dela.
+fn norm_ponto(e: Ent, sk: &SketchData) -> Ent {
+    match e {
+        Ent::Cv(c) => match sk.curve(c).map(|c| &c.geom) {
+            Some(Curve::Point { p }) => Ent::Pt(*p),
+            _ => e,
+        },
+        _ => e,
+    }
+}
+
 pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Response, cam: Camera) {
     let Some(f) = frame(app) else { return };
     let Some(mut sk) = data(app).cloned() else {
@@ -2326,7 +2355,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
     // o que se arrasta não se apoia em si mesmo: nem nas suas curvas, nem nas outras pontas delas
     let (sem_pontos, sem_curvas) = edit.drag.as_ref().map_or((vec![], vec![]), |d| {
         let movidos: Vec<Id> = d.pts.iter().map(|x| x.0).collect();
-        let curvas: Vec<&fenkra_core::sketch::SkCurve> = sk.curves.iter().filter(|c| d.circle == Some(c.id) || SketchData::curve_points(&c.geom).iter().any(|p| movidos.contains(p))).collect();
+        let curvas: Vec<&fenkra_core::sketch::SkCurve> = sk.curves.iter().filter(|c| d.circle == Some(c.id) || d.corpo.is_some_and(|k| k.curva() == c.id) || SketchData::curve_points(&c.geom).iter().any(|p| movidos.contains(p))).collect();
         (curvas.iter().flat_map(|c| SketchData::curve_points(&c.geom)).chain(movidos.iter().copied()).collect(), curvas.iter().map(|c| c.id).collect())
     });
     let mut cur_snap = hover.and_then(|p| snap_at(p, &sk, &sem_pontos, &sem_curvas));
@@ -2348,8 +2377,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         }
     }
 
-    // glifo do snap, antes do clique e também ao arrastar com Selecionar
-    if let (Some(s), true) = (cur_snap, desenha || matches!(tool, Tool::Move | Tool::Copy) || edit.drag.is_some()) {
+    // glifo do snap, antes do clique e também ao arrastar com Selecionar; corpo de curva não usa snap
+    if let (Some(s), true) = (cur_snap, desenha || matches!(tool, Tool::Move | Tool::Copy) || edit.drag.as_ref().is_some_and(|d| d.corpo.is_none())) {
         crate::sketch_snap::desenha_glifo(&painter, v.to_screen(s.uv), s.tipo, SEL);
     }
 
@@ -2394,19 +2423,67 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         }
     }
 
+    // ---------- pega do filete ou do offset selecionado: arrastar muda o valor da cota
+    if let (Tool::Select, Some(pega)) = (tool, crate::sketch_arraste::pega_da_selecao(&sk, &edit.sel)) {
+        let at = v.to_screen(pega.at);
+        let r = ui.interact(Rect::from_center_size(at, egui::vec2(18., 18.)), egui::Id::unique(("pega_cota", pega.cota.0)), if pega.trancada { egui::Sense::hover() } else { egui::Sense::drag() });
+        let quente = r.hovered() || r.dragged();
+        if pega.trancada {
+            draw_lock(&painter, at, FREE);
+        } else {
+            painter.circle_filled(at, if quente { 7. } else { 5.5 }, if quente { SEL } else { FREE });
+            painter.circle_stroke(at, 8., Stroke::new(1., FREE));
+        }
+        if r.dragged() {
+            if let Some(q) = r.interact_pointer_pos().and_then(|x| v.to_uv(x)) {
+                let valor = crate::sketch_arraste::valor_da_pega(&pega, q);
+                let antes = sk.clone();
+                if let Some(t) = sk.constraints.iter_mut().find(|c| c.id == pega.cota).and_then(|c| c.kind.value_mut()) {
+                    *t = fmt(valor);
+                }
+                for (id, q) in crate::sketch_arraste::posicoes_da_pega(&pega, valor) {
+                    if let Some(p) = sk.point_mut(id) {
+                        (p.x, p.y) = (q[0], q[1]);
+                    }
+                }
+                let mut rep = sk.solve(&vars, &pega.apoios);
+                if !rep.converged {
+                    rep = sk.solve(&vars, &[]);
+                }
+                if rep.converged {
+                    edit.report = rep;
+                } else {
+                    sk = antes;
+                }
+                handle_busy = true;
+            }
+        }
+        if r.drag_stopped() {
+            edit.report = sk.solve(&vars, &[]);
+        }
+        if quente {
+            let medida = sk.constraints.iter().find(|c| c.id == pega.cota).and_then(|c| sk.measure(&c.kind)).unwrap_or(0.);
+            let nome = if pega.trancada { format!("{} ({})", tr(pega.rotulo), tr("a cota usa expressão")) } else { tr(pega.rotulo).to_string() };
+            draw_tag(&painter, at + egui::vec2(0., -18.), format!("{nome} {}", fmt(medida)), dark);
+        }
+    }
+
+    // ---------- setas de grau de liberdade: o que o elemento sob o cursor ainda pode fazer
+    if tool == Tool::Select && edit.drag.is_none() && edit.janela.is_none() {
+        if let Some(e) = hover.and_then(|p| pick(p, &sk, &edit.hits)).map(|e| norm_ponto(e, &sk)) {
+            for s in crate::sketch_arraste::setas(&sk, &report.liberdade, e, cursor_uv) {
+                crate::sketch_arraste::desenha_seta(&painter, &|q| v.to_screen(q), s, FREE);
+            }
+        }
+    }
+
     let mut primary_click = resp.clicked_by(egui::PointerButton::Primary) && !handle_busy;
     let secondary_click = resp.clicked_by(egui::PointerButton::Secondary);
     // clique fora do menu rápido só o fecha
     if primary_click && edit.menu.take().is_some() {
         primary_click = false;
     }
-    let norm = |e: Ent, sk: &SketchData| match e {
-        Ent::Cv(c) => match sk.curve(c).map(|c| &c.geom) {
-            Some(Curve::Point { p }) => Ent::Pt(*p),
-            _ => e,
-        },
-        _ => e,
-    };
+    let norm = norm_ponto;
     let double = resp.double_clicked();
 
     // ---------- campos de valor: o digitado trava o cursor, e prévia e clique usam o cursor travado
@@ -2506,11 +2583,13 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                 let origin = ui.input(|i| i.pointer.press_origin()).unwrap_or_default();
                 let start = v.to_uv(origin).unwrap_or([0., 0.]);
                 match pick(origin, &sk, &edit.hits) {
-                    Some(Ent::Pt(p)) if !sk.point(p).is_some_and(|x| x.fixed) => edit.drag = Some(Drag { pts: vec![(p, sk.pos(p))], start, circle: None }),
+                    Some(Ent::Pt(p)) if !sk.point(p).is_some_and(|x| x.fixed) => edit.drag = Some(Drag { pts: vec![(p, sk.pos(p))], start, circle: None, corpo: None }),
                     Some(Ent::Cs(c)) if sk.constraints.iter().any(|x| x.id == c && x.kind.is_dimension()) => edit.drag_label = Some(c),
                     Some(Ent::Cv(c)) => match sk.curve(c).map(|c| c.geom.clone()) {
-                        Some(Curve::Line { a, b }) => edit.drag = Some(Drag { pts: vec![(a, sk.pos(a)), (b, sk.pos(b))], start, circle: None }),
-                        Some(Curve::Circle { .. }) => edit.drag = Some(Drag { pts: vec![], start, circle: Some(c) }),
+                        Some(Curve::Line { a, b }) => edit.drag = Some(Drag { pts: vec![(a, sk.pos(a)), (b, sk.pos(b))], start, circle: None, corpo: None }),
+                        Some(Curve::Circle { .. }) => edit.drag = Some(Drag { pts: vec![], start, circle: Some(c), corpo: None }),
+                        Some(Curve::Arc { .. }) => edit.drag = Some(Drag { pts: vec![], start, circle: None, corpo: Some(Corpo::Arco(c)) }),
+                        Some(Curve::Spline { .. }) => edit.drag = Some(Drag { pts: vec![], start, circle: None, corpo: Some(Corpo::Spline(c, sk.spline_param(c, start))) }),
                         _ => {}
                     },
                     None => edit.janela = Some(origin),
@@ -2543,7 +2622,16 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             } else if resp.drag_stopped() {
                 edit.janela = None;
             }
-            if let (Some(d), true, Some(uv)) = (&edit.drag, resp.dragged_by(egui::PointerButton::Primary), cursor_uv) {
+            if let (Some(Drag { corpo: Some(k), .. }), true, Some(uv)) = (&edit.drag, resp.dragged_by(egui::PointerButton::Primary), cursor_uv) {
+                // sem solução a curva para onde estava: quebrar a restrição seria pior que não seguir
+                let rep = match *k {
+                    Corpo::Arco(c) => sk.arrastar_arco(c, uv, &vars),
+                    Corpo::Spline(c, u) => sk.arrastar_spline(c, u, uv, &vars),
+                };
+                if let Some(rep) = rep {
+                    edit.report = rep;
+                }
+            } else if let (Some(d), true, Some(uv)) = (&edit.drag, resp.dragged_by(egui::PointerButton::Primary), cursor_uv) {
                 let delta = [uv[0] - d.start[0], uv[1] - d.start[1]];
                 let mut pins = vec![];
                 if d.pts.len() == 1 {
@@ -3685,6 +3773,16 @@ pub fn begin(app: &mut App, id: Id) {
     }
     app.sketch = Some(e);
     app.sel = Sel::Feature(id);
+}
+
+/// Filete de raio dado no canto `p`: devolve a cota.
+pub(crate) fn filete_com_raio(sk: &mut SketchData, al: &mut impl FnMut() -> Id, p: Id, r: f64) -> Id {
+    fillet_corner(sk, al, p, Some(r)).expect("canto entre duas linhas")
+}
+
+#[cfg(test)]
+pub(crate) fn offset_ate(sk: &mut SketchData, al: &mut impl FnMut() -> Id, c: Id, uv: [f64; 2]) -> Id {
+    offset_curve(sk, al, c, uv, false).expect("curva com offset")
 }
 
 #[cfg(test)]

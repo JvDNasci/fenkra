@@ -78,6 +78,9 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Linhas quase horizontais ou verticais e os apoios dos snaps viram restrições ao criar.", "Nearly horizontal or vertical lines and snap supports become constraints when created."),
     ("A forma nasce com as cotas principais.", "The shape is created with its main dimensions."),
     ("O cursor procura pontos, curvas e alinhamentos antes da grade.", "The cursor looks for points, curves and alignments before the grid."),
+    // arraste direto (B272)
+    ("a cota usa expressão", "the dimension uses an expression"),
+    ("Clique para selecionar (Shift soma). Arraste pontos, linhas, arcos, splines ou a borda de círculos: o solver mantém as restrições. Passe o mouse para ver as setas do que ainda pode se mover. Delete apaga a seleção.", "Click to select (Shift adds). Drag points, lines, arcs, splines or the edge of circles: the solver keeps the constraints. Hover to see arrows showing what can still move. Delete removes the selection."),
     // snaps (B96)
     ("origem", "origin"),
     ("ponta", "end"),

@@ -12,6 +12,7 @@ use crate::expr;
 use crate::Id;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::time::Instant;
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct SkPoint {
@@ -180,6 +181,21 @@ pub struct SolveReport {
     /// restrições redundantes (não acrescentam informação)
     pub redundant: usize,
     pub errors: Vec<String>,
+    /// como a geometria ainda pode se mover sem violar as restrições
+    pub liberdade: Liberdade,
+    /// `solve_ate`: o prazo acabou antes do fim e o sketch ficou como estava
+    pub estourou: bool,
+}
+
+/// Movimentos que as restrições ainda deixam: o espaço nulo do Jacobiano no ponto resolvido. Um vetor
+/// desse espaço é uma velocidade dos pontos que, em primeira ordem, não muda nenhuma equação.
+#[derive(Clone, PartialEq, Debug, Default)]
+pub struct Liberdade {
+    /// direções unitárias de cada ponto: uma se ele só desliza, duas se anda no plano. Ponto
+    /// determinado não aparece.
+    pub pontos: HashMap<Id, Vec<[f64; 2]>>,
+    /// círculos cujo raio ainda pode mudar
+    pub raios: HashSet<Id>,
 }
 
 impl SolveReport {
@@ -1332,11 +1348,15 @@ impl Sys<'_> {
         r
     }
 
-    fn jacobian(&self, x: &[f64], m: usize) -> Vec<Vec<f64>> {
+    /// Jacobiano numérico, ou `None` se o prazo acabar no meio: em sketch grande, é ele que pesa.
+    fn jacobian(&self, x: &[f64], m: usize, prazo: Option<Instant>) -> Option<Vec<Vec<f64>>> {
         let n = x.len();
         let mut j = vec![vec![0.; n]; m];
         let mut xp = x.to_vec();
         for c in 0..n {
+            if prazo.is_some_and(|t| Instant::now() >= t) {
+                return None;
+            }
             let h = 1e-7 * (1. + x[c].abs());
             xp[c] = x[c] + h;
             let rp = self.all(&xp);
@@ -1347,8 +1367,31 @@ impl Sys<'_> {
                 j[i][c] = (rp[i] - rm[i]) / (2. * h);
             }
         }
-        j
+        Some(j)
     }
+}
+
+/// Direções de um ponto, a partir das suas velocidades nos vetores do espaço nulo: os autovetores da
+/// matriz 2x2 Σ v vᵀ. Autovalor menor desprezível quer dizer que todas apontam para o mesmo lado.
+fn direcoes(vel: impl Iterator<Item = [f64; 2]>) -> Vec<[f64; 2]> {
+    let (mut a, mut b, mut c) = (0., 0., 0.);
+    for v in vel {
+        a += v[0] * v[0];
+        b += v[0] * v[1];
+        c += v[1] * v[1];
+    }
+    let meio = (a + c) / 2.;
+    let raiz = (((a - c) / 2.).powi(2) + b * b).sqrt();
+    let (l1, l2) = (meio + raiz, meio - raiz);
+    if l1 < 1e-14 {
+        return vec![];
+    }
+    if l2 > 1e-8 * l1 {
+        return vec![[1., 0.], [0., 1.]];
+    }
+    let d = if b.abs() > 1e-14 { [l1 - c, b] } else if a >= c { [1., 0.] } else { [0., 1.] };
+    let l = len2(d);
+    vec![[d[0] / l, d[1] / l]]
 }
 
 /// Resolve (A + λI) δ = b por eliminação de Gauss com pivotamento parcial.
@@ -1432,17 +1475,16 @@ impl SketchData {
 
     /// Resolve o sketch no lugar. `pinned`: pontos mantidos fixos (ex.: o ponto sendo arrastado).
     pub fn solve(&mut self, vars: &Vars, pinned: &[Id]) -> SolveReport {
+        self.solve_ate(vars, pinned, None)
+    }
+
+    /// Como `solve`, mas desiste se passar de `prazo`: devolve `estourou` e deixa os pontos como
+    /// estavam. É o que permite resolver a cada movimento do mouse sem travar em sketch grande.
+    pub fn solve_ate(&mut self, vars: &Vars, pinned: &[Id], prazo: Option<Instant>) -> SolveReport {
         let mut rep = SolveReport::default();
         let vals = self.values(vars, &mut rep.errors);
 
-        let fixed: HashSet<Id> = self
-            .points
-            .iter()
-            .filter(|p| p.fixed)
-            .map(|p| p.id)
-            .chain(self.constraints.iter().filter_map(|c| if let Kind::Fixed(p) = &c.kind { Some(*p) } else { None }))
-            .chain(pinned.iter().copied())
-            .collect();
+        let fixed: HashSet<Id> = self.fixed_ids().into_iter().chain(pinned.iter().copied()).collect();
         self.apply_sides(&vals, &fixed);
 
         let mut x0 = vec![];
@@ -1488,7 +1530,10 @@ impl SketchData {
                 if f < 1e-20 {
                     break;
                 }
-                let j = sys.jacobian(&x, m);
+                let Some(j) = sys.jacobian(&x, m, prazo) else {
+                    rep.estourou = true;
+                    return rep;
+                };
                 // (JᵀJ + λ diag) δ = −Jᵀ r, com um pequeno termo que prende ao ponto atual
                 let mut a = vec![vec![0.; n]; n];
                 let mut g = vec![0.; n];
@@ -1544,7 +1589,10 @@ impl SketchData {
 
         // graus de liberdade e pontos determinados
         if n > 0 {
-            let j = sys.jacobian(&x, m);
+            let Some(j) = sys.jacobian(&x, m, prazo) else {
+                rep.estourou = true;
+                return rep;
+            };
             let (piv, red) = rref(j, n, 1e-7);
             rep.dof = n - piv.len();
             rep.redundant = m.saturating_sub(piv.len());
@@ -1553,9 +1601,28 @@ impl SketchData {
             for (row, &pc) in piv.iter().enumerate() {
                 determined[pc] = free.iter().all(|&fc| red[row][fc].abs() < 1e-7);
             }
+            // cada coluna livre dá um vetor do espaço nulo: 1 nela e o oposto da linha nas colunas pivô
+            let mut linha = vec![None; n];
+            for (row, &pc) in piv.iter().enumerate() {
+                linha[pc] = Some(row);
+            }
+            let nulo = |i: usize, f: usize| match linha[i] {
+                Some(row) => -red[row][f],
+                None => f64::from(i == f),
+            };
             for (id, &i) in &pvar {
                 if determined[i] && determined[i + 1] {
                     rep.fixed_points.insert(*id);
+                } else {
+                    let d = direcoes(free.iter().map(|&f| [nulo(i, f), nulo(i + 1, f)]));
+                    if !d.is_empty() {
+                        rep.liberdade.pontos.insert(*id, d);
+                    }
+                }
+            }
+            for (id, &i) in &rvar {
+                if !determined[i] {
+                    rep.liberdade.raios.insert(*id);
                 }
             }
         } else {
@@ -1581,6 +1648,103 @@ impl SketchData {
         }
         self.apply_spline_tangency();
         rep
+    }
+
+    /// Leva o arco a passar por `alvo` e deixa o solver decidir o resto: um ponto temporário preso ao
+    /// arco e parado no alvo é o que puxa. Assim tangências e cotas continuam valendo, e o arco muda
+    /// só o que elas deixam. Sem solução, nada muda e devolve `None`: quem arrasta para no último
+    /// lugar válido, em vez de ver a restrição quebrar.
+    pub fn arrastar_arco(&mut self, arco: Id, alvo: [f64; 2], vars: &Vars) -> Option<SolveReport> {
+        let mut g = self.clone();
+        let mut n = u64::MAX;
+        let mut al = || {
+            n -= 1;
+            Id(n)
+        };
+        let pega = g.add_point(&mut al, alvo[0], alvo[1]);
+        let sobre = g.add_constraint(&mut al, Kind::PointOnCurve(pega, arco));
+        let rep = g.solve(vars, &[pega]);
+        if !rep.converged {
+            return None;
+        }
+        g.constraints.retain(|c| c.id != sobre);
+        g.points.retain(|p| p.id != pega);
+        *self = g;
+        Some(rep)
+    }
+
+    /// Parâmetro da spline mais perto de `q` (0 no primeiro ponto, 1 no segundo, e assim por diante).
+    pub fn spline_param(&self, curve: Id, q: [f64; 2]) -> f64 {
+        let Some(Curve::Spline { pts }) = self.curve(curve).map(|c| &c.geom) else { return 0. };
+        let p: Vec<[f64; 2]> = pts.iter().map(|x| self.pos(*x)).collect();
+        if p.len() < 2 {
+            return 0.;
+        }
+        let m = spline_tangents(&p, &self.own_tangents(curve));
+        let n = 24 * (p.len() - 1);
+        let u = |k: usize| (p.len() - 1) as f64 * k as f64 / n as f64;
+        (0..=n).map(u).min_by(|a, b| len2(sub(hermite_at(&p, &m, *a), q)).total_cmp(&len2(sub(hermite_at(&p, &m, *b), q)))).unwrap_or(0.)
+    }
+
+    /// Arrasta a spline pelo parâmetro `u`: os dois pontos do trecho seguem na proporção da distância
+    /// até eles, até a curva passar por `alvo`. Depois o solver mantém as restrições, primeiro com os
+    /// dois parados no lugar pedido e, se isso conflitar (ponto preso a outra curva), deixando-os
+    /// escorregar. Sem solução, nada muda e devolve `None`.
+    pub fn arrastar_spline(&mut self, curve: Id, u: f64, alvo: [f64; 2], vars: &Vars) -> Option<SolveReport> {
+        let Some(Curve::Spline { pts }) = self.curve(curve).map(|c| c.geom.clone()) else { return None };
+        if pts.len() < 2 {
+            return None;
+        }
+        let presos = self.fixed_ids();
+        let i = (u.max(0.) as usize).min(pts.len() - 2);
+        let t = (u - i as f64).clamp(0., 1.);
+        let peso = |id: Id, w: f64| if presos.contains(&id) { 0. } else { w };
+        let w = [peso(pts[i], 1. - t), peso(pts[i + 1], t)];
+        if w[0] + w[1] < 1e-9 {
+            return None;
+        }
+        let base: Vec<[f64; 2]> = pts.iter().map(|x| self.pos(*x)).collect();
+        let own = self.own_tangents(curve);
+        // ganho do deslocamento na curva: as funções de Hermite dos dois pontos, nos pesos deles
+        let h01 = t * t * (3. - 2. * t);
+        let ganho = (w[0] * (1. - h01) + w[1] * h01).max(0.1);
+        let mut d = [0., 0.];
+        let mut p = base.clone();
+        for _ in 0..8 {
+            let m = spline_tangents(&p, &own);
+            let e = sub(alvo, hermite_at(&p, &m, u));
+            if len2(e) < 1e-9 {
+                break;
+            }
+            d = [d[0] + e[0] / ganho, d[1] + e[1] / ganho];
+            for (k, wk) in [(i, w[0]), (i + 1, w[1])] {
+                p[k] = [base[k][0] + d[0] * wk, base[k][1] + d[1] * wk];
+            }
+        }
+        let mut g = self.clone();
+        let mut movidos = vec![];
+        for k in [i, i + 1] {
+            if let Some(q) = g.point_mut(pts[k]) {
+                (q.x, q.y) = (p[k][0], p[k][1]);
+            }
+            if !presos.contains(&pts[k]) {
+                movidos.push(pts[k]);
+            }
+        }
+        for pins in [movidos.as_slice(), &[]] {
+            let mut tentativa = g.clone();
+            let rep = tentativa.solve(vars, pins);
+            if rep.converged {
+                *self = tentativa;
+                return Some(rep);
+            }
+        }
+        None
+    }
+
+    /// Pontos que o solver nunca move: fixos ou com restrição de fixar.
+    fn fixed_ids(&self) -> HashSet<Id> {
+        self.points.iter().filter(|p| p.fixed).map(|p| p.id).chain(self.constraints.iter().filter_map(|c| if let Kind::Fixed(p) = &c.kind { Some(*p) } else { None })).collect()
     }
 
     /// Ponto em que a spline toca a outra curva por construção: ponto compartilhado, coincidência ou
@@ -1892,6 +2056,168 @@ mod tests {
         let (loops, open) = s.loops();
         assert_eq!((loops.len(), open), (1, 0));
         assert_eq!(loops[0].len(), 4);
+    }
+
+    /// Linha presa em (0,0)-(30,0) e arco tangente saindo da ponta, de 90°, raio 10.
+    fn arco_tangente() -> (SketchData, Id, Id, [Id; 3]) {
+        let mut s = SketchData::default();
+        let mut al = alloc();
+        let a = s.add_point(&mut al, 0., 0.);
+        let b = s.add_point(&mut al, 30., 0.);
+        let c = s.add_point(&mut al, 30., 10.);
+        let e = s.add_point(&mut al, 40., 10.);
+        let l = s.add_curve(&mut al, Curve::Line { a, b }, false);
+        let arc = s.add_curve(&mut al, Curve::Arc { c, s: b, e }, false);
+        s.add_constraint(&mut al, Kind::Fixed(a));
+        s.add_constraint(&mut al, Kind::Fixed(b));
+        s.add_constraint(&mut al, Kind::Tangent(l, arc));
+        (s, l, arc, [c, b, e])
+    }
+
+    /// B272: arrastar o arco por um ponto qualquer não quebra a tangência.
+    #[test]
+    fn arrastar_arco_tangente_mantem_a_tangencia() {
+        let (mut s, _, arc, [c, b, e]) = arco_tangente();
+        let vars = Vars::new();
+        assert!(s.solve(&vars, &[]).converged);
+        let alvo = [38., 2.5];
+        for k in 1..=5 {
+            let t = k as f64 / 5.;
+            let meio = SketchData::arc_mid(s.pos(c), s.pos(b), s.pos(e));
+            let q = [meio[0] + (alvo[0] - meio[0]) * t, meio[1] + (alvo[1] - meio[1]) * t];
+            let rep = s.arrastar_arco(arc, q, &vars).expect("o arco tem liberdade para seguir");
+            assert!(rep.converged);
+        }
+        let (pc, pb, pe) = (s.pos(c), s.pos(b), s.pos(e));
+        // tangente: o raio no ponto comum é perpendicular à linha, que é horizontal
+        assert!((pc[0] - 30.).abs() < 1e-6, "tangência perdida: centro em {pc:?}");
+        assert_eq!(pb, [30., 0.], "o ponto preso não se move");
+        let r = len2(sub(pb, pc));
+        assert!((len2(sub(pe, pc)) - r).abs() < 1e-6, "o arco deixou de ser arco");
+        assert!((len2(sub(alvo, pc)) - r).abs() < 1e-6, "o arco não chegou ao cursor");
+        assert_eq!(s.points.len(), 4, "o ponto temporário não fica no sketch");
+        assert_eq!(s.constraints.len(), 3);
+    }
+
+    #[test]
+    fn arco_sem_folga_nao_muda_ao_arrastar() {
+        let (mut s, _, arc, [c, _, e]) = arco_tangente();
+        let mut n = 500;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        s.add_constraint(&mut al, Kind::Fixed(c));
+        s.add_constraint(&mut al, Kind::Fixed(e));
+        let vars = Vars::new();
+        s.solve(&vars, &[]);
+        let antes = s.clone();
+        assert!(s.arrastar_arco(arc, [60., 60.], &vars).is_none());
+        assert_eq!(s, antes);
+    }
+
+    /// B272: a spline segue pelo trecho agarrado e o ponto preso a uma linha continua nela.
+    #[test]
+    fn arrastar_spline_pela_curva_respeita_as_restricoes() {
+        let mut s = SketchData::default();
+        let mut al = alloc();
+        let pts: Vec<Id> = [[0., 0.], [20., 10.], [40., 0.], [60., 10.]].iter().map(|q| s.add_point(&mut al, q[0], q[1])).collect();
+        let sp = s.add_curve(&mut al, Curve::Spline { pts: pts.clone() }, false);
+        let a = s.add_point(&mut al, 40., -20.);
+        let b = s.add_point(&mut al, 40., 20.);
+        let trilho = s.add_curve(&mut al, Curve::Line { a, b }, false);
+        s.add_constraint(&mut al, Kind::Fixed(a));
+        s.add_constraint(&mut al, Kind::Fixed(b));
+        s.add_constraint(&mut al, Kind::PointOnCurve(pts[2], trilho));
+        s.add_constraint(&mut al, Kind::Fixed(pts[0]));
+        let vars = Vars::new();
+        assert!(s.solve(&vars, &[]).converged);
+
+        // num trecho livre, a curva passa exatamente pelo cursor
+        let u = s.spline_param(sp, [20., 10.]);
+        assert!((u - 1.).abs() < 0.05, "parâmetro {u}");
+        let alvo = [22., 16.];
+        assert!(s.arrastar_spline(sp, u, alvo, &vars).is_some());
+        let p: Vec<[f64; 2]> = pts.iter().map(|x| s.pos(*x)).collect();
+        let m = spline_tangents(&p, &s.own_tangents(sp));
+        assert!(len2(sub(hermite_at(&p, &m, u), alvo)) < 0.5, "a curva não chegou ao cursor");
+        assert_eq!(s.pos(pts[0]), [0., 0.], "ponto fixo não se move");
+
+        // no trecho do ponto preso ao trilho: ele escorrega, mas fica no trilho
+        assert!(s.arrastar_spline(sp, 2., [47., 5.], &vars).is_some());
+        assert!((s.pos(pts[2])[0] - 40.).abs() < 1e-6, "saiu do trilho: {:?}", s.pos(pts[2]));
+    }
+
+    /// B272: o que as setas mostram vem do espaço nulo do Jacobiano.
+    #[test]
+    fn liberdade_diz_como_cada_ponto_pode_mover() {
+        let mut s = SketchData::default();
+        let mut al = alloc();
+        let a = s.add_point(&mut al, 0., 0.);
+        let b = s.add_point(&mut al, 30., 0.);
+        let l = s.add_curve(&mut al, Curve::Line { a, b }, false);
+        let vars = Vars::new();
+
+        // linha solta: as duas pontas andam no plano
+        let lib = s.solve(&vars, &[]).liberdade;
+        assert_eq!(lib.pontos[&a].len(), 2);
+        assert_eq!(lib.pontos[&b].len(), 2);
+
+        // ponta presa e linha horizontal: a outra só desliza na horizontal
+        s.add_constraint(&mut al, Kind::Fixed(a));
+        s.add_constraint(&mut al, Kind::Horizontal(l));
+        let lib = s.solve(&vars, &[]).liberdade;
+        assert!(!lib.pontos.contains_key(&a));
+        let d = &lib.pontos[&b];
+        assert_eq!(d.len(), 1);
+        assert!((d[0][0].abs() - 1.).abs() < 1e-6 && d[0][1].abs() < 1e-6, "{d:?}");
+
+        // com a cota, a seta some
+        s.add_constraint(&mut al, Kind::Length(l, "30".into()));
+        let rep = s.solve(&vars, &[]);
+        assert_eq!(rep.dof, 0);
+        assert!(rep.liberdade.pontos.is_empty());
+
+        // círculo: centro e raio, cada um com a sua liberdade
+        let c = s.add_point(&mut al, 80., 0.);
+        let k = s.add_curve(&mut al, Curve::Circle { c, r: 5. }, false);
+        let lib = s.solve(&vars, &[]).liberdade;
+        assert!(lib.raios.contains(&k) && lib.pontos.contains_key(&c));
+        s.add_constraint(&mut al, Kind::Diameter(k, "10".into()));
+        assert!(!s.solve(&vars, &[]).liberdade.raios.contains(&k));
+    }
+
+    /// A direção de quem desliza numa linha inclinada acompanha a linha.
+    #[test]
+    fn liberdade_de_ponto_sobre_linha_inclinada() {
+        let mut s = SketchData::default();
+        let mut al = alloc();
+        let a = s.add_point(&mut al, 0., 0.);
+        let b = s.add_point(&mut al, 30., 40.);
+        let l = s.add_curve(&mut al, Curve::Line { a, b }, false);
+        let p = s.add_point(&mut al, 15., 20.);
+        s.add_constraint(&mut al, Kind::Fixed(a));
+        s.add_constraint(&mut al, Kind::Fixed(b));
+        s.add_constraint(&mut al, Kind::PointOnCurve(p, l));
+        let lib = s.solve(&Vars::new(), &[]).liberdade;
+        let d = lib.pontos[&p][0];
+        assert!(cross(d, [0.6, 0.8]).abs() < 1e-6, "{d:?}");
+    }
+
+    /// B273: sem prazo sobrando, o solver desiste sem mexer no sketch.
+    #[test]
+    fn solve_com_prazo_vencido_nao_muda_nada() {
+        let mut s = SketchData::default();
+        let mut al = alloc();
+        let a = s.add_point(&mut al, 0., 0.);
+        let b = s.add_point(&mut al, 30., 5.);
+        let l = s.add_curve(&mut al, Curve::Line { a, b }, false);
+        s.add_constraint(&mut al, Kind::Horizontal(l));
+        let antes = s.clone();
+        let rep = s.solve_ate(&Vars::new(), &[], Some(Instant::now()));
+        assert!(rep.estourou && !rep.converged);
+        assert_eq!(s, antes);
+        assert!(!s.solve_ate(&Vars::new(), &[], Some(Instant::now() + std::time::Duration::from_secs(60))).estourou);
     }
 
     #[test]
