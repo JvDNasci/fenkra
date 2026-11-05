@@ -48,4 +48,16 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Sketch · filete", "Sketch · fillet"),
     ("Sketch · espelhar", "Sketch · mirror"),
     ("Sketch · spline", "Sketch · spline"),
+    // campo numérico padrão (B227)
+    ("Só depois de clicar no campo (padrão)", "Only after clicking the field (default)"),
+    ("Só com Ctrl pressionado", "Only while Ctrl is held"),
+    ("Sempre que o mouse estiver sobre o campo", "Whenever the mouse is over the field"),
+    ("Rolar o painel com o mouse por cima de um campo não altera valores; clique no campo para liberar a roda.", "Scrolling the panel with the mouse over a field does not change values; click the field to enable the wheel."),
+    ("A roda só altera o campo com Ctrl pressionado; sem Ctrl o painel rola normalmente.", "The wheel only changes the field while Ctrl is held; without Ctrl the panel scrolls normally."),
+    ("A roda altera o campo sob o mouse, sem clicar. Rápido, mas rolar o painel pode mudar valores sem querer.", "The wheel changes the field under the mouse without clicking. Fast, but scrolling the panel may change values by accident."),
+    ("Roda do mouse nos campos numéricos", "Mouse wheel on numeric fields"),
+    ("Campo de teste:", "Test field:"),
+    ("Restaurar padrão", "Restore default"),
+    ("Restaurar valor inicial", "Restore initial value"),
+    ("arraste o nome para mudar o valor; duplo clique restaura o valor inicial", "drag the name to change the value; double-click restores the initial value"),
 ];

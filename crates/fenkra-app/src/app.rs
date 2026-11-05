@@ -6889,6 +6889,7 @@ impl eframe::App for App {
         crate::partida::contar_quadro();
         let ctx = &root.ctx().clone();
         crate::i18n::set_english(self.settings.english);
+        crate::ui_ext::definir_modo_roda(crate::ui_ext::ModoRoda::de_u8(self.settings.wheel_mode));
         // cores salvas: preferências ↔ paleta usada pelos painéis
         {
             let mut dirty = crate::palette::DIRTY.lock().unwrap();
@@ -7841,6 +7842,9 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
                 });
                 ui.label(RichText::new(s.nav.help()).weak().small());
                 ui.checkbox(&mut s.invert_zoom, tr("inverter o sentido do zoom"));
+                ui.separator();
+                crate::ui_ext::modo_roda_ui(ui, &mut s.wheel_mode);
+                ui.separator();
                 ui.horizontal(|ui| {
                     ui.label(tr("Selecionar:"));
                     ui.checkbox(&mut s.sel_faces, tr("faces"));
