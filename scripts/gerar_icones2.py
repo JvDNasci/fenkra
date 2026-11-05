@@ -362,6 +362,7 @@ def desenhos():
     ic("filete_completo", B="M12 42V20M36 42V20M4 42h40", R="M12 20a12 12 0 0 1 24 0")
     ic("filete_face_face", B="M6 8l14 22M42 8L28 30", R="M20 30a7 7 0 0 0 8 0")
     ic("filete_variavel", B="M6 14h28", R="M6 14l28 20M34 14a10 10 0 0 1 0 20")
+    ic("filete_assimetrico", B="M6 40V8M6 40h38", R="M6 14a16 26 0 0 0 16 26")
     ic("arestas_selecionar", B=CUBO(), R=L((8, 14), (24, 22)))
     ic("arestas_todas", b=CUBO_OCULTO(), R=CUBO())
     ic("arestas_comando", B=CUBO(21, 8, 15, 7.5, 16), R=L((6, 15.5), (21, 23)) + CURSOR(30, 22, .85))

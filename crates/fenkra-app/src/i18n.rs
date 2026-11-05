@@ -35,6 +35,7 @@ fn map() -> &'static HashMap<&'static str, &'static str> {
             .chain(crate::selecao_regras::TEXTOS.iter())
             .chain(crate::alca_estado::TEXTOS.iter())
             .chain(crate::textos_superficies::TEXTOS.iter())
+            .chain(crate::textos_solidos::TEXTOS.iter())
             .copied()
             .chain(crate::textos_campos::pares())
             .collect()

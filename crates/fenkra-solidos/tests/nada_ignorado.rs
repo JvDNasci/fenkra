@@ -108,7 +108,7 @@ fn filete_por_comando_atua_so_nas_arestas_criadas_por_ele() {
     let r0 = recompute(&d);
     assert_eq!(r0.status[&pino], Status::Ok);
     let v0 = volume_total(&r0);
-    let fil = d.add_feature(FeatureKind::Fillet(EdgeOp { value: "1".into(), edges: EdgeSel::CreatedBy(pino), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![] }));
+    let fil = d.add_feature(FeatureKind::Fillet(EdgeOp { value: "1".into(), edges: EdgeSel::CreatedBy(pino), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: Default::default() }));
     let r = recompute(&d);
     assert_eq!(r.status[&fil], Status::Ok, "{:?}", r.status[&fil]);
     let v = volume_total(&r);
@@ -127,7 +127,7 @@ fn filete_por_comando_sem_arestas_do_dono_e_erro() {
     }
     let (mut d, sk) = caixa(40., 30., 10.);
     // o sketch não cria face nenhuma: nada para arredondar
-    let fil = d.add_feature(FeatureKind::Fillet(EdgeOp { value: "1".into(), edges: EdgeSel::CreatedBy(sk), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![] }));
+    let fil = d.add_feature(FeatureKind::Fillet(EdgeOp { value: "1".into(), edges: EdgeSel::CreatedBy(sk), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: Default::default() }));
     let r = recompute(&d);
     let m = erro(&r, fil);
     assert!(m.contains("não criou nenhuma aresta"), "{m}");

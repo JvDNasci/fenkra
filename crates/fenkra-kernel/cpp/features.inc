@@ -341,9 +341,99 @@ std::unique_ptr<Shape> thick_segments(rust::Slice<const double> segs, double nx,
     });
 }
 
-std::unique_ptr<Shape> edges_mode_t(const Shape& s, uint8_t mode, double v1, double v2, rust::Slice<const double> mids, double tol,
-                                    rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out) {
-    return guard(mode == 0 ? "filete variável" : "chanfro", [&] {
+namespace {
+
+// Ferramenta do filete assimétrico (B289) numa aresta reta entre duas faces planas.
+//
+// No plano normal à aresta, u e w saem da aresta e correm sobre cada face. Um filete simétrico de
+// "comprimento de tangência" 1 nesse par de eixos oblíquos é um arco de círculo; esticar o eixo u
+// por d1 e o eixo w por d2 (transformação afim) leva círculo em elipse e tangente em tangente. Então
+// o filete com distâncias d1 e d2 é o arco elíptico tangente às duas faces a d1 e d2 da aresta.
+// A região entre o arco e a quina, extrudada pelo comprimento da aresta, é o que sai (aresta
+// convexa, `fuse = false`) ou o que entra (aresta côncava, `fuse = true`).
+struct AsymTool {
+    TopoDS_Shape tool;
+    bool fuse = false;
+};
+
+AsymTool asym_tool(const TopoDS_Shape& solid, const TopoDS_Edge& e, const TopoDS_Face& fa, const TopoDS_Face& fb, double d1, double d2) {
+    BRepAdaptor_Curve c(e);
+    if (c.GetType() != GeomAbs_Line) throw std::runtime_error("o filete assimétrico precisa de aresta reta");
+    BRepAdaptor_Surface sa(fa), sb(fb);
+    if (sa.GetType() != GeomAbs_Plane || sb.GetType() != GeomAbs_Plane) throw std::runtime_error("o filete assimétrico precisa de duas faces planas");
+    const double t0 = c.FirstParameter(), t1 = c.LastParameter();
+    const gp_Pnt p0 = c.Value(t0), p1 = c.Value(t1), mid = c.Value((t0 + t1) / 2);
+    gp_Vec t(p0, p1);
+    const double len = t.Magnitude();
+    if (len < 1e-9) throw std::runtime_error("aresta degenerada");
+    t.Normalize();
+    const double probe = 1e-3 * std::min(len, d1 + d2);
+    auto inward = [&](const TopoDS_Face& f, const gp_Pln& pl) {
+        gp_Vec u = gp_Vec(pl.Axis().Direction()).Crossed(t);
+        u.Normalize();
+        BRepClass_FaceClassifier fc(f, mid.Translated(u * probe), 1e-7);
+        return fc.State() == TopAbs_IN ? u : u.Reversed();
+    };
+    const gp_Vec u = inward(fa, sa.Plane()), w = inward(fb, sb.Plane());
+    const double cs = u.Dot(w);
+    if (std::abs(cs) > 0.9962) throw std::runtime_error("as duas faces são quase tangentes: não há quina para arredondar");
+    const double phi = std::acos(cs);  // ângulo entre as duas faces, no plano normal à aresta
+    gp_Vec bis = u + w;
+    bis.Normalize();
+    BRepClass3d_SolidClassifier sc(solid, mid.Translated(bis * probe), 1e-7);
+    AsymTool out;
+    out.fuse = sc.State() != TopAbs_IN;  // a cunha entre as faces é vazia: aresta côncava
+    // coordenadas oblíquas (alfa ao longo de u, beta ao longo de w) e o alongamento L
+    const double den = 1 - cs * cs;
+    auto L = [&](const gp_Vec& x) {
+        const double al = (x.Dot(u) - cs * x.Dot(w)) / den, be = (x.Dot(w) - cs * x.Dot(u)) / den;
+        return u * (al * d1) + w * (be * d2);
+    };
+    const double kappa = 1.0 / (2 * std::cos(phi / 2) * std::cos(phi / 2));
+    const gp_Vec cc0 = (u + w) * kappa, a0 = u - cc0, b0 = w - cc0;
+    gp_Vec e2 = t.Crossed(a0);
+    if (e2.Dot(b0) < 0) e2.Reverse();
+    const gp_Vec A = L(a0), B = L(e2);
+    const gp_Pnt cc = p0.Translated(L(cc0));
+    const double gamma = M_PI - phi;
+    const double ts = 0.5 * std::atan2(2 * A.Dot(B), A.SquareMagnitude() - B.SquareMagnitude());
+    const gp_Vec M = A * std::cos(ts) + B * std::sin(ts), m = B * std::cos(ts) - A * std::sin(ts);
+    if (M.Magnitude() < 1e-9 || m.Magnitude() < 1e-9) throw std::runtime_error("distâncias do filete assimétrico degeneradas");
+    gp_Ax2 ax(cc, gp_Dir(t), gp_Dir(M));
+    double s0 = -ts, s1 = gamma - ts;
+    if (m.Dot(gp_Vec(ax.YDirection())) < 0) {
+        const double a = -s1, b = -s0;
+        s0 = a;
+        s1 = b;
+    }
+    gp_Elips el(ax, M.Magnitude(), m.Magnitude());
+    TopoDS_Edge arc = BRepBuilderAPI_MakeEdge(el, s0, s1).Edge();
+    // margem fora da peça (corte) ou dentro do material (preenchimento): sem faces coincidentes
+    gp_Vec nu = w - u * cs, nw = u - w * cs;
+    nu.Reverse();
+    nw.Reverse();
+    nu.Normalize();
+    nw.Normalize();
+    const double g = 0.02 * std::min(d1, d2);
+    const gp_Pnt ta = p0.Translated(u * d1), tb = p0.Translated(w * d2);
+    const gp_Pnt qb = tb.Translated(nw * g), qc = p0.Translated((nu + nw) * g), qa = ta.Translated(nu * g);
+    BRepBuilderAPI_MakeWire mw;
+    mw.Add(arc);
+    mw.Add(BRepBuilderAPI_MakeEdge(tb, qb).Edge());
+    mw.Add(BRepBuilderAPI_MakeEdge(qb, qc).Edge());
+    mw.Add(BRepBuilderAPI_MakeEdge(qc, qa).Edge());
+    mw.Add(BRepBuilderAPI_MakeEdge(qa, ta).Edge());
+    if (!mw.IsDone()) throw std::runtime_error("não foi possível montar o perfil do filete assimétrico");
+    TopoDS_Face face = BRepBuilderAPI_MakeFace(mw.Wire(), Standard_True).Face();
+    out.tool = BRepPrimAPI_MakePrism(face, gp_Vec(p0, p1)).Shape();
+    return out;
+}
+
+}  // namespace
+
+std::unique_ptr<Shape> edges_mode_t(const Shape& s, uint8_t mode, double v1, double v2, rust::Slice<const double> mids, rust::Slice<const uint8_t> flips,
+                                    double tol, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out) {
+    return guard(mode == 0 ? "filete variável" : mode == 3 ? "filete assimétrico" : "chanfro", [&] {
         TopTools_IndexedMapOfShape edges;
         TopExp::MapShapes(s.s, TopAbs_EDGE, edges);
         TopTools_IndexedDataMapOfShapeListOfShape e2f;
@@ -369,6 +459,15 @@ std::unique_ptr<Shape> edges_mode_t(const Shape& s, uint8_t mode, double v1, dou
         }
         if (missing > 0) throw std::runtime_error(std::to_string(missing) + " das arestas escolhidas não existe(m) mais — reedite a seleção de arestas");
         if (chosen.empty()) throw std::runtime_error("escolha as arestas na viewport");
+        // inverter por aresta: a 1ª distância (ou raio) passa para a outra face da aresta
+        auto flipped = [&](size_t i) { return i < flips.size() && flips[i] != 0; };
+        auto faces_of = [&](const TopoDS_Edge& e, size_t i) {
+            const TopTools_ListOfShape& l = e2f.FindFromKey(e);
+            if (l.Extent() != 2) throw std::runtime_error("a aresta não separa exatamente duas faces");
+            TopoDS_Face a = TopoDS::Face(l.First()), b = TopoDS::Face(l.Last());
+            if (flipped(i)) std::swap(a, b);
+            return std::make_pair(a, b);
+        };
         if (mode == 0) {
             BRepFilletAPI_MakeFillet mk(s.s);
             for (auto& e : chosen) mk.Add(v1, v2, e);
@@ -376,11 +475,39 @@ std::unique_ptr<Shape> edges_mode_t(const Shape& s, uint8_t mode, double v1, dou
             if (!mk.IsDone()) throw std::runtime_error("raios grandes demais para as arestas");
             return tagged_result(mk, s.s, tags, out);
         }
+        if (mode == 3) {
+            TopTools_ListOfShape cuts, fuses;
+            for (size_t i = 0; i < chosen.size(); ++i) {
+                auto fs = faces_of(chosen[i], i);
+                AsymTool at = asym_tool(s.s, chosen[i], fs.first, fs.second, v1, v2);
+                (at.fuse ? fuses : cuts).Append(at.tool);
+            }
+            TopoDS_Shape cur = s.s;
+            std::vector<int> tg = to_vec(tags);
+            auto step = [&](TopTools_ListOfShape& tools, bool fuse) {
+                if (tools.IsEmpty()) return;
+                TopTools_ListOfShape args;
+                args.Append(cur);
+                std::unique_ptr<BRepAlgoAPI_BooleanOperation> op;
+                if (fuse) op = std::make_unique<BRepAlgoAPI_Fuse>();
+                else op = std::make_unique<BRepAlgoAPI_Cut>();
+                op->SetArguments(args);
+                op->SetTools(tools);
+                op->Build();
+                if (!op->IsDone() || op->Shape().IsNull()) throw std::runtime_error("distâncias grandes demais para as arestas");
+                tg = carry(cur, tg, op->Shape(), [&](const TopoDS_Shape& f) -> const TopTools_ListOfShape& { return op->Modified(f); }, -1);
+                cur = op->Shape();
+            };
+            step(cuts, false);
+            step(fuses, true);
+            fill(out, tg);
+            return wrap(cur);
+        }
         BRepFilletAPI_MakeChamfer mk(s.s);
-        for (auto& e : chosen) {
-            const TopoDS_Face& f = TopoDS::Face(e2f.FindFromKey(e).First());
-            if (mode == 1) mk.Add(v1, v2, e, f);
-            else mk.AddDA(v1, v2 * M_PI / 180.0, e, f);
+        for (size_t i = 0; i < chosen.size(); ++i) {
+            const TopoDS_Face f = faces_of(chosen[i], i).first;
+            if (mode == 1) mk.Add(v1, v2, chosen[i], f);
+            else mk.AddDA(v1, v2 * M_PI / 180.0, chosen[i], f);
         }
         mk.Build();
         if (!mk.IsDone()) throw std::runtime_error("valores grandes demais para as arestas");

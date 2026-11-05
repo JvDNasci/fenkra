@@ -27,6 +27,7 @@ pub mod padrao;
 pub mod furo_norma;
 pub mod chapa_linha;
 mod chapa_flat;
+mod arestas;
 pub mod planificada;
 pub use chapa_flat::{passos_planificados, PassoPlanificado};
 pub mod st_frames;
@@ -359,7 +360,7 @@ fn edge_fillet(sh: &Shape, mids: &[[f64; 3]], r: f64, r2: Option<f64>) -> Result
     let tags: Vec<i32> = (0..sh.face_count() as i32).collect();
     let tol = sh.bbox().map(|(a, c)| geo3d::dist(a, c) * 0.05).unwrap_or(1.).max(1.);
     let res = match r2 {
-        Some(r2) => sh.edges_mode_tagged(0, r, r2, mids, tol, &tags),
+        Some(r2) => sh.edges_mode_tagged(0, r, r2, mids, &[], tol, &tags),
         None => sh.edges_tagged(r, mids, tol, false, &tags),
     };
     res.map(|x| x.0).map_err(|e| format!("filete da superfície: {} (raio grande demais ou arestas que não ligam duas faces)", e.0))
@@ -2753,7 +2754,7 @@ impl Ctx<'_> {
     /// dentro de tubos em volta das arestas escolhidas (tampas normais às pontas), e fora dele
     /// o corpo fica como estava: resultado = (corpo − (tubos − cadeia)) ∪ (tubos ∩ cadeia).
     #[allow(clippy::too_many_arguments)]
-    fn minimal_edges(&self, b: &Shape, owners: &[Id], roles: &[i32], s: &Shape, own_s: &[Id], role_s: &[i32], mids: &[[f64; 3]], v: f64, fid: Id) -> Result<(Shape, Vec<Id>, Vec<i32>), String> {
+    fn minimal_edges(&self, b: &Shape, owners: &[Id], roles: &[i32], s: &Shape, own_s: &[Id], role_s: &[i32], mids: &[[f64; 3]], v: f64, range: Option<(f64, f64)>, fid: Id) -> Result<(Shape, Vec<Id>, Vec<i32>), String> {
         let k = |e: KernelError| e.0;
         let size = b.bbox().map(|(a, c)| geo3d::dist(a, c)).unwrap_or(100.).max(1.);
         let m = tesselar(b, &self.qualidade).map_err(k)?;
@@ -2774,6 +2775,10 @@ impl Ctx<'_> {
                     pts.push([g[0] as f64, g[1] as f64, g[2] as f64]);
                 }
                 pts.push([g[3] as f64, g[4] as f64, g[5] as f64]);
+            }
+            // filete parcial: só o trecho pedido da aresta (mm contados do começo dela)
+            if let Some((a, c)) = range {
+                pts = arestas::sub_polyline(&pts, a, c);
             }
             if pts.len() < 2 {
                 continue;
@@ -5353,35 +5358,45 @@ impl Ctx<'_> {
                     }
                     _ => None,
                 };
-                if o.mode != EdgeMode::Constant {
-                    let Some(mids) = &picked else {
-                        return Err("esta variação precisa das arestas escolhidas na viewport".into());
-                    };
-                    let tol = b.bbox().map(|(a, c)| (0..3).map(|i| (c[i] - a[i]).powi(2)).sum::<f64>().sqrt() * 0.05).unwrap_or(1.).max(1.);
-                    let (mode, v2) = match &o.mode {
-                        EdgeMode::Variable(x) => (0, ev(x, &self.vars, "raio final")?),
-                        EdgeMode::TwoDist(x) => (1, ev(x, &self.vars, "segunda distância")?),
-                        EdgeMode::DistAngle(x) => (2, ev(x, &self.vars, "ângulo")?),
-                        _ => unreachable!(),
-                    };
-                    let (s, out) = b.edges_mode_tagged(mode, v, v2, mids, tol, &tags).map_err(k)?;
-                    let body = remap_body(s, owners, roles, &out, f.id);
-                    self.bodies.insert(f.target, body);
-                    return Ok(None);
-                }
-                let r = match &picked {
-                    Some(mids) => {
-                        let tol = b.bbox().map(|(a, c)| (0..3).map(|i| (c[i] - a[i]).powi(2)).sum::<f64>().sqrt() * 0.05).unwrap_or(1.).max(1.);
-                        b.edges_tagged(v, mids, tol, chamfer, &tags)
-                    }
-                    None if chamfer => b.chamfer_tagged(v, &tags),
-                    None => b.fillet_tagged(v, &tags),
+                let tol = b.bbox().map(|(a, c)| (0..3).map(|i| (c[i] - a[i]).powi(2)).sum::<f64>().sqrt() * 0.05).unwrap_or(1.).max(1.);
+                let (mode_code, v2) = match &o.mode {
+                    EdgeMode::Variable(x) => (Some(0u8), ev(x, &self.vars, "raio final")?),
+                    EdgeMode::TwoDist(x) => (Some(1), ev(x, &self.vars, "segunda distância")?),
+                    EdgeMode::DistAngle(x) => (Some(2), ev(x, &self.vars, "ângulo")?),
+                    EdgeMode::Asym(x) => (Some(3), ev(x, &self.vars, "raio da 2ª face")?),
+                    _ => (None, 0.),
                 };
-                let (s, out) = r.map_err(k)?;
+                if mode_code.is_some() && picked.is_none() {
+                    return Err("esta variação precisa das arestas escolhidas na viewport".into());
+                }
+                let partial = match &o.extra.partial {
+                    Some([a, c]) => {
+                        if picked.is_none() {
+                            return Err("o trecho parcial precisa das arestas escolhidas na viewport".into());
+                        }
+                        Some((ev(a, &self.vars, "início do trecho")?, ev(c, &self.vars, "fim do trecho")?))
+                    }
+                    None => None,
+                };
+                let run = |val: f64, val2: f64| match (&picked, mode_code) {
+                    (Some(mids), Some(m)) => b.edges_mode_tagged(m, val, val2, mids, &o.extra.flips, tol, &tags),
+                    (Some(mids), None) => b.edges_tagged(val, mids, tol, chamfer, &tags),
+                    (None, _) if chamfer => b.chamfer_tagged(val, &tags),
+                    (None, _) => b.fillet_tagged(val, &tags),
+                };
+                let (s, out) = match run(v, v2) {
+                    Ok(x) => x,
+                    Err(e) => {
+                        // a medida de apoio acompanha a tentada (menos o ângulo, que não escala)
+                        let scales = matches!(mode_code, Some(0 | 1 | 3));
+                        let fits = arestas::max_that_fits(v, |x| run(x, if scales { v2 * x / v } else { v2 }).is_ok());
+                        return Err(self.explain_edge_failure(b, picked.as_deref(), chamfer, v.max(if scales { v2 } else { 0. }), fits, &e.0));
+                    }
+                };
                 let (mut s, mut own, mut role) = remap_body(s, owners, roles, &out, f.id);
-                // mínima: o resultado da cadeia vale só junto das arestas escolhidas
-                if let (EdgeProp::Minima, Some(mids)) = (o.prop, &picked) {
-                    let (s2, own2, role2) = self.minimal_edges(b, owners, roles, &s, &own, &role, mids, v, f.id)?;
+                // mínima ou parcial: o resultado da cadeia vale só junto das arestas escolhidas (e do trecho)
+                if let (true, Some(mids)) = (o.prop == EdgeProp::Minima || partial.is_some(), &picked) {
+                    let (s2, own2, role2) = self.minimal_edges(b, owners, roles, &s, &own, &role, mids, if mode_code == Some(2) { v } else { v.max(v2) }, partial, f.id)?;
                     s = s2;
                     own = own2;
                     role = role2;
@@ -5399,7 +5414,23 @@ pub fn recompute(doc: &Document) -> RecomputeResult {
 }
 
 /// Recalcula reaproveitando o cache: os comandos antes da primeira mudança não são refeitos.
+/// Vale a configuração ativa da tabela de projeto (B102). Se o nome ativo não existe mais, calcula os
+/// valores base e devolve o motivo em `param_error` (nunca troca por "a primeira" configuração).
 pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
+    if doc.tabela.ativa.is_empty() {
+        return recompute_efetivo(doc, cache);
+    }
+    match doc.com_configuracao(&doc.tabela.ativa) {
+        Ok(efetivo) => recompute_efetivo(&efetivo, cache),
+        Err(e) => {
+            let mut r = recompute_efetivo(doc, cache);
+            r.param_error = Some(e.to_string());
+            r
+        }
+    }
+}
+
+fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
     let t0 = Instant::now();
     let (vars, param_error) = match doc.eval_params() {
         Ok(v) => (v, None),
@@ -6833,6 +6864,9 @@ pub fn export_com_preset(doc: &Document, collector: Option<Id>, path: &str, pres
 /// Forma final da peça (todos os corpos visíveis juntos) — usada pela montagem para achar faces
 /// e eixos das restrições.
 pub fn final_shape(doc: &Document) -> Option<Shape> {
+    // B102: vale a configuração ativa; se ela não existe mais, não há forma (nunca a primeira linha)
+    let efetivo = doc.efetivo().ok()?;
+    let doc: &Document = &efetivo;
     let vars = doc.eval_params().ok()?;
     let mut cx = Ctx {
         doc,
@@ -6939,7 +6973,7 @@ pub fn example_document() -> Document {
     }));
     d.feature_mut(furo).unwrap().name = s("Furos M6");
     let fol = d.add_folder("Acabamentos");
-    let fil = d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::AllOfBody, mode: EdgeMode::Constant, prop: Default::default(), keys: vec![] }));
+    let fil = d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::AllOfBody, mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: Default::default() }));
     d.feature_mut(fil).unwrap().folder = Some(fol);
     d
 }
@@ -7476,7 +7510,7 @@ mod tests {
         assert!((v3 - v4_fold - 400.).abs() < 1., "o recorte do planificado vai para o dobrado: {v3} − {v4_fold}");
         // filete no canto da aba (aresta da espessura), feito no dobrado: arredonda no planificado também
         let (mut d5, ids5) = quarto_de_disco(false);
-        let fil = d5.add_feature(FeatureKind::Fillet(EdgeOp { value: "5".into(), edges: EdgeSel::Edges(vec![[95., -3., 34.]]), mode: EdgeMode::Constant, prop: EdgeProp::Tangente, keys: vec![] }));
+        let fil = d5.add_feature(FeatureKind::Fillet(EdgeOp { value: "5".into(), edges: EdgeSel::Edges(vec![[95., -3., 34.]]), mode: EdgeMode::Constant, prop: EdgeProp::Tangente, keys: vec![], extra: Default::default() }));
         let mut all5 = ids5.clone();
         all5.push(fil);
         let f_fold = vol(&d5, &all5);
@@ -7654,9 +7688,9 @@ mod tests {
             let mut d = Document::new("fm");
             let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [40., 20.]);
             d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
-            d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("5"), edges: EdgeSel::Edges(vec![[40., 20., 5.]]), mode: EdgeMode::Constant, prop: EdgeProp::Tangente, keys: vec![] }));
+            d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("5"), edges: EdgeSel::Edges(vec![[40., 20., 5.]]), mode: EdgeMode::Constant, prop: EdgeProp::Tangente, keys: vec![], extra: Default::default() }));
             // filete de 1 na aresta de cima do lado y = 20 (que continua tangente pelo arco do canto)
-            d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::Edges(vec![[17.5, 20., 10.]]), mode: EdgeMode::Constant, prop, keys: vec![] }));
+            d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::Edges(vec![[17.5, 20., 10.]]), mode: EdgeMode::Constant, prop, keys: vec![], extra: Default::default() }));
             d
         };
         let vol = |d: &Document| {
@@ -8555,7 +8589,7 @@ mod tests {
             edges: EdgeSel::AllOfBody,
             mode: EdgeMode::FullRound { mid: [0., 0., 10.], a: [2., 0., 5.], b: [-2., 0., 5.] },
             prop: Default::default(),
-            keys: vec![],
+            keys: vec![], extra: Default::default()
         }));
         let v = vol(&d);
         assert!(v < 4. * 40. * 10. && v > 4. * 40. * 8., "filete completo {v}");
@@ -8713,7 +8747,7 @@ mod tests {
         // filete variável e chanfro por distância e ângulo numa aresta do topo
         for mode in [EdgeMode::Variable("4".into()), EdgeMode::TwoDist("3".into()), EdgeMode::DistAngle("30".into())] {
             let mut d = caixa();
-            let op = EdgeOp { value: "2".into(), edges: EdgeSel::Edges(vec![[0., 15., 20.]]), mode: mode.clone(), prop: Default::default(), keys: vec![] };
+            let op = EdgeOp { value: "2".into(), edges: EdgeSel::Edges(vec![[0., 15., 20.]]), mode: mode.clone(), prop: Default::default(), keys: vec![], extra: Default::default() };
             d.add_feature(if matches!(mode, EdgeMode::Variable(_)) { FeatureKind::Fillet(op) } else { FeatureKind::Chamfer(op) });
             assert!(vol(&d) < v0, "{mode:?}");
         }
@@ -8866,7 +8900,7 @@ mod tests {
     }
 
     fn filete(valor: &str, mids: Vec<[f64; 3]>, keys: Vec<Option<EdgeKey>>) -> FeatureKind {
-        FeatureKind::Fillet(EdgeOp { value: valor.into(), edges: EdgeSel::Edges(mids), mode: EdgeMode::Constant, prop: Default::default(), keys })
+        FeatureKind::Fillet(EdgeOp { value: valor.into(), edges: EdgeSel::Edges(mids), mode: EdgeMode::Constant, prop: Default::default(), keys, extra: Default::default() })
     }
 
     #[test]
@@ -9229,7 +9263,7 @@ mod tests_filete_planificado {
         }
         assert!(best.0 < 0.5, "aresta da ponta {:?}", best);
         let v0 = r.bodies[0].mass.volume;
-        d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("3"), edges: EdgeSel::Edges(vec![best.1]), mode: Default::default(), prop: Default::default(), keys: vec![] }));
+        d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("3"), edges: EdgeSel::Edges(vec![best.1]), mode: Default::default(), prop: Default::default(), keys: vec![], extra: Default::default() }));
         let r = recompute(&d);
         let v1 = r.bodies[0].mass.volume;
         assert!(v1 < v0 - 1., "filete dobrado {v0} {v1}");
@@ -9282,7 +9316,7 @@ mod tests_filete_planificado {
         }
         assert!(best.0 < 0.5, "aresta da ponta {:?}", best);
         let v0 = r.bodies[0].mass.volume;
-        d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("3"), edges: EdgeSel::Edges(vec![best.1]), mode: Default::default(), prop: Default::default(), keys: vec![] }));
+        d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("3"), edges: EdgeSel::Edges(vec![best.1]), mode: Default::default(), prop: Default::default(), keys: vec![], extra: Default::default() }));
         let r = recompute(&d);
         let v1 = r.bodies[0].mass.volume;
         assert!(v1 < v0 - 1., "filete dobrado {v0} {v1}");

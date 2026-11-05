@@ -2183,7 +2183,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 // atalho de manufatura: extrusão com saída + filete nas arestas criadas por ela
                 let sk = sk_or_unset;
                 let ex = d.add_feature(FeatureKind::Extrude(Extrude { thin_side: 0, sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("20")), reverse: false, taper: s("3"), thin: None, dir: None, ends: Default::default() }));
-                d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::CreatedBy(ex), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![] }));
+                d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::CreatedBy(ex), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: Default::default() }));
                 Sel::Feature(ex)
             }
             Cmd::SplitBody | Cmd::ThickSurface | Cmd::CloseSurface | Cmd::SewSurface | Cmd::BoundaryFill => {
@@ -2232,7 +2232,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             Cmd::FilletFaceFace | Cmd::FilletFull => {
                 let f = |k: usize| faces.get(k).copied().unwrap_or([0.; 3]);
                 let mode = if c == Cmd::FilletFull { EdgeMode::FullRound { mid: f(0), a: f(1), b: f(2) } } else { EdgeMode::FaceFace(f(0), f(1)) };
-                Sel::Feature(d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("2"), edges: EdgeSel::AllOfBody, mode, prop: Default::default(), keys: vec![] })))
+                Sel::Feature(d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("2"), edges: EdgeSel::AllOfBody, mode, prop: Default::default(), keys: vec![], extra: Default::default() })))
             }
             Cmd::Hole | Cmd::HoleCounterbore | Cmd::HoleCountersink | Cmd::HoleTapped => {
                 // vértices / pontos selecionados: um furo em cada, normal à superfície (sem sketch)
@@ -2280,7 +2280,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     self.toast("Clique nas arestas na viewport para pô-las no comando (clique de novo tira)", false);
                 }
                 let keys = if all { vec![] } else { edge_keys.clone() };
-                let op = EdgeOp { value: s("1"), edges: sel, mode, prop: Default::default(), keys };
+                // B289: o comando novo começa com o último valor usado (raio ou distância)
+                let fillet = matches!(c, Cmd::Fillet | Cmd::FilletAll | Cmd::FilletVar);
+                let ultimo = crate::arestas_ui::ultimo_valor_aresta(&self.open.doc, fillet);
+                let op = EdgeOp { value: ultimo, edges: sel, mode, prop: Default::default(), keys, extra: Default::default() };
                 let d = &mut self.open.doc;
                 Sel::Feature(d.add_feature(if matches!(c, Cmd::Fillet | Cmd::FilletAll | Cmd::FilletVar) { FeatureKind::Fillet(op) } else { FeatureKind::Chamfer(op) }))
             }
@@ -4550,6 +4553,20 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             if doc.params.is_empty() && pick(ui, Sel::Params, RichText::new(tr("vazio — clique para editar")).weak().italics()).clicked() {
                 *new_sel = Some(Sel::Params);
             }
+            // B102: a tabela de projeto é um objeto da árvore, com a configuração ativa à vista
+            if !doc.tabela.vazia() {
+                crate::tree_ui::marca(ui);
+                let ativa = if doc.tabela.ativa.is_empty() { tr("valores base").to_string() } else { doc.tabela.ativa.clone() };
+                let erro = !doc.tabela.ativa.is_empty() && doc.tabela.linha(&doc.tabela.ativa).is_none();
+                let txt = format!("▦ {} — {}: {ativa}{}", tr("Tabela de projeto"), tr("ativa"), if erro { " ⚠" } else { "" });
+                let mut r = pick(ui, Sel::Params, RichText::new(txt));
+                if erro {
+                    r = r.on_hover_text(doc.com_configuracao(&doc.tabela.ativa).err().map(|e| e.to_string()).unwrap_or_default());
+                }
+                if r.clicked() {
+                    *new_sel = Some(Sel::Params);
+                }
+            }
         });
         h.context_menu(|ui| {
             if ui.button(tr("➕ Novo parâmetro")).clicked() {
@@ -6673,6 +6690,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                                         }
                                     }
                                     o.keys = carried;
+                                    o.extra.carry_flips(&before, list);
                                 }
                             }
                         }

@@ -270,7 +270,7 @@ mod testes {
     #[test]
     fn comando_de_arestas_filtra_so_arestas_e_o_resto_usa_a_barra() {
         use fenkra_core::{EdgeMode, EdgeOp, EdgeProp, EdgeSel, FeatureKind};
-        let fil = |edges| FeatureKind::Fillet(EdgeOp { value: "1".into(), edges, mode: EdgeMode::Constant, prop: EdgeProp::Tangente, keys: vec![] });
+        let fil = |edges| FeatureKind::Fillet(EdgeOp { value: "1".into(), edges, mode: EdgeMode::Constant, prop: EdgeProp::Tangente, keys: vec![], extra: Default::default() });
         assert_eq!(tipos_do_comando(&fil(EdgeSel::Edges(vec![]))).map(|t| t.nome()), Some("arestas"));
         assert_eq!(tipos_do_comando(&fil(EdgeSel::AllOfBody)), None, "todas as arestas não pede clique");
     }

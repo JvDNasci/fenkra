@@ -106,11 +106,11 @@ pub fn primitiva(kind: PrimKind, a: &str, b: &str, c: &str, d: &str) -> FeatureK
 }
 
 pub fn filete(valor: &str, mids: Vec<[f64; 3]>, keys: Vec<Option<EdgeKey>>) -> FeatureKind {
-    FeatureKind::Fillet(EdgeOp { value: valor.into(), edges: EdgeSel::Edges(mids), mode: EdgeMode::Constant, prop: Default::default(), keys })
+    FeatureKind::Fillet(EdgeOp { value: valor.into(), edges: EdgeSel::Edges(mids), mode: EdgeMode::Constant, prop: Default::default(), keys, extra: Default::default() })
 }
 
 pub fn chanfro(valor: &str, mids: Vec<[f64; 3]>, keys: Vec<Option<EdgeKey>>) -> FeatureKind {
-    FeatureKind::Chamfer(EdgeOp { value: valor.into(), edges: EdgeSel::Edges(mids), mode: EdgeMode::Constant, prop: Default::default(), keys })
+    FeatureKind::Chamfer(EdgeOp { value: valor.into(), edges: EdgeSel::Edges(mids), mode: EdgeMode::Constant, prop: Default::default(), keys, extra: Default::default() })
 }
 
 pub fn definir_param(d: &mut Document, nome: &str, expr: &str) {

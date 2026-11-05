@@ -1067,6 +1067,7 @@ pub fn edge_mode_ui(ui: &mut egui::Ui, o: &mut EdgeOp, vars: &Vars, fillet: bool
         EdgeMode::Variable(_) | EdgeMode::TwoDist(_) => 1,
         EdgeMode::DistAngle(_) | EdgeMode::FaceFace(..) => 2,
         EdgeMode::FullRound { .. } => 3,
+        EdgeMode::Asym(_) => 4,
     };
     let opts: Vec<(&str, &str, &str, bool)> = if fillet {
         vec![
@@ -1074,6 +1075,7 @@ pub fn edge_mode_ui(ui: &mut egui::Ui, o: &mut EdgeOp, vars: &Vars, fillet: bool
             ("filete_variavel", "Variável", "Raio muda do início ao fim da aresta", cur == 1),
             ("filete_face_face", "Face-face", "Entre duas faces (arredonda a aresta comum)", cur == 2),
             ("filete_completo", "Completo", "Tritangente: consome a face do meio entre duas laterais", cur == 3),
+            ("filete_assimetrico", "Assimétrico", "Um raio em cada face da aresta (reta, entre planos); a seta inverte o lado", cur == 4),
         ]
     } else {
         vec![
@@ -1088,6 +1090,7 @@ pub fn edge_mode_ui(ui: &mut egui::Ui, o: &mut EdgeOp, vars: &Vars, fillet: bool
             (_, 0) => EdgeMode::Constant,
             (true, 1) => EdgeMode::Variable("3".into()),
             (true, 2) => EdgeMode::FaceFace(f(0), f(1)),
+            (true, 4) => EdgeMode::Asym("1".into()),
             (true, _) => EdgeMode::FullRound { mid: f(0), a: f(1), b: f(2) },
             (false, 1) => EdgeMode::TwoDist("2".into()),
             _ => EdgeMode::DistAngle("45".into()),
@@ -1101,6 +1104,7 @@ pub fn edge_mode_ui(ui: &mut egui::Ui, o: &mut EdgeOp, vars: &Vars, fillet: bool
         EdgeMode::Variable(v) => expr(ui, "Raio final", v, vars, "mm"),
         EdgeMode::TwoDist(v) => expr(ui, "Distância 2", v, vars, "mm"),
         EdgeMode::DistAngle(v) => expr(ui, "Ângulo", v, vars, "°"),
+        EdgeMode::Asym(v) => expr(ui, "Raio da 2ª face", v, vars, "mm"),
         EdgeMode::FaceFace(..) => {
             ui.label(RichText::new(tr("Clique nas duas faces na viewport (com o comando aberto).")).weak().small());
         }
@@ -1108,7 +1112,7 @@ pub fn edge_mode_ui(ui: &mut egui::Ui, o: &mut EdgeOp, vars: &Vars, fillet: bool
             ui.label(RichText::new(tr("Clique na face do meio e depois nas duas laterais. O raio sai da largura (o valor abaixo é ignorado).")).weak().small());
         }
     }
-    if matches!(o.mode, EdgeMode::Variable(_) | EdgeMode::TwoDist(_) | EdgeMode::DistAngle(_)) && !matches!(o.edges, EdgeSel::Edges(_)) {
+    if matches!(o.mode, EdgeMode::Variable(_) | EdgeMode::TwoDist(_) | EdgeMode::DistAngle(_) | EdgeMode::Asym(_)) && !matches!(o.edges, EdgeSel::Edges(_)) {
         ui.label(RichText::new(tr("esta variação usa as arestas escolhidas (não 'Todas')")).color(Color32::from_rgb(255, 170, 60)).small());
     }
 }

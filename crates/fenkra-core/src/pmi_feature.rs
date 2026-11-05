@@ -385,9 +385,9 @@ mod tests {
         assert_eq!(c.hole_diameter, Some(6.5));
         // parâmetro nomeado na expressão
         d.add_param("raio", "3", crate::doc::Unit::Comprimento).unwrap();
-        let f = d.add_feature(FeatureKind::Fillet(EdgeOp { value: "raio".into(), edges: EdgeSel::Edges(vec![[0.; 3], [1.; 3]]), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![] }));
+        let f = d.add_feature(FeatureKind::Fillet(EdgeOp { value: "raio".into(), edges: EdgeSel::Edges(vec![[0.; 3], [1.; 3]]), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: Default::default() }));
         assert_eq!(callout(&d, f, false).unwrap().text, "2× R3");
-        let ch = d.add_feature(FeatureKind::Chamfer(EdgeOp { value: "2".into(), edges: EdgeSel::AllOfBody, mode: EdgeMode::Constant, prop: Default::default(), keys: vec![] }));
+        let ch = d.add_feature(FeatureKind::Chamfer(EdgeOp { value: "2".into(), edges: EdgeSel::AllOfBody, mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: Default::default() }));
         assert_eq!(callout(&d, ch, false).unwrap().text, "C2");
         let th = d.add_feature(FeatureKind::Thread(Thread { face: [0.; 3], spec: "M8x1.25".into(), length: "16".into(), modeled: false, end: None, start: String::new() }));
         assert_eq!(callout(&d, th, false).unwrap().text, "M8×1,25-6g ▽16");

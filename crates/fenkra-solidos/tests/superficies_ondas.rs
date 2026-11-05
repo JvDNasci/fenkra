@@ -194,7 +194,7 @@ fn juntar_faces_e_curvas_relata_dominios_bordas_e_folga() {
 /// Caixa com todas as arestas arredondadas: 6 faces planas, 12 de filete e 8 de canto.
 fn caixa_arredondada(d: &mut Document) -> Id {
     d.add_feature(FeatureKind::Primitive(Primitive { kind: PrimKind::Caixa, plane: PlaneRef::Origin(OriginPlane::XY), a: s("40"), b: s("40"), c: s("40"), d: s("0"), op: BoolOp::Add }));
-    d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("5"), edges: EdgeSel::AllOfBody, mode: Default::default(), prop: Default::default(), keys: vec![] }))
+    d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("5"), edges: EdgeSel::AllOfBody, mode: Default::default(), prop: Default::default(), keys: vec![], extra: Default::default() }))
 }
 
 /// Centro da face de cima do primeiro corpo.

@@ -109,7 +109,7 @@ modelos!(
     "des_tab_dobras", "des_tab_furos", "des_tres_vistas", "des_vista", "des_vista_camera", "escala", "espelho",
     "espessura", "espiral", "estilo", "exemplo", "ext_ate_face", "ext_ate_plano", "ext_ate_superficie",
     "ext_ate_ultimo", "ext_cego", "ext_dois_sentidos", "ext_passante", "ext_saida_filete", "ext_simetrico",
-    "extrair", "extrusao", "filete", "filete_completo", "filete_face_face", "filete_variavel", "filtro", "furo",
+    "extrair", "extrusao", "filete", "filete_assimetrico", "filete_completo", "filete_face_face", "filete_variavel", "filtro", "furo",
     "furo_cego", "furo_contrafurado", "furo_escareado", "furo_passante", "furo_rebaixado", "furo_roscado",
     "furo_simples", "helice", "hib_costurar", "hib_dividir", "hib_engrossar", "hib_fechar", "hib_malha",
     "hib_preencher", "idioma", "importar_arquivo", "junta_came", "junta_cilindrica", "junta_esferica", "junta_parafuso",
