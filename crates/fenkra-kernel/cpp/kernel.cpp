@@ -1046,11 +1046,16 @@ MeshData tessellate(const Shape& s, double deflection, double angle) {
                     try {
                         if (BRep_Tool::HasContinuity(e, f1, f2) && BRep_Tool::Continuity(e, f1, f2) != GeomAbs_C0) smooth = 1;
                         else {
-                            // sem a informação gravada: compara as normais no meio da aresta
+                            // sem informação (ou só C0 gravado, comum em filetes e superfícies): compara as
+                            // normais em cinco pontos da aresta. Só é suave se for tangente em todos; um
+                            // ponto no meio aceitava aresta que só se encosta ali e escondia aresta viva
                             BRepAdaptor_Curve cc(e);
-                            const double tm = (cc.FirstParameter() + cc.LastParameter()) / 2;
-                            gp_Pnt pm = cc.Value(tm);
-                            if (face_normal_at_edge(e, f1, pm).Angle(face_normal_at_edge(e, f2, pm)) < 2.0 * M_PI / 180.0) smooth = 1;
+                            const double t0 = cc.FirstParameter(), t1 = cc.LastParameter();
+                            smooth = 1;
+                            for (int j = 0; j < 5 && smooth; ++j) {
+                                const gp_Pnt pm = cc.Value(t0 + (t1 - t0) * (0.1 + 0.2 * j));
+                                if (face_normal_at_edge(e, f1, pm).Angle(face_normal_at_edge(e, f2, pm)) >= 2.0 * M_PI / 180.0) smooth = 0;
+                            }
                         }
                     } catch (...) {}
                 }

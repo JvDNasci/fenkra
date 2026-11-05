@@ -549,3 +549,24 @@ fn filete_de_aresta_de_superficie_nao_troca_de_aresta() {
     ok(&r, bom);
     assert!(matches!(&r.status[&ruim], Status::Error(m) if m.starts_with("referência perdida")), "{:?}", r.status[&ruim]);
 }
+
+/// B10 / DR-10: no filete de aresta de superfície, as bordas onde o filete encontra as duas superfícies
+/// são tangentes e não podem aparecer como aresta viva. Sobram vivas só as bordas livres do filete.
+#[test]
+fn filete_de_superficie_marca_as_bordas_tangentes_como_suaves() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    let mut d = Document::new("t");
+    let a = faixa(&mut d);
+    let l = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([20., 0., 0.]), b: PointRef::Fixed([20., 20., 0.]), start: s("0"), end: s("0") });
+    let b = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(l), dir: AxisRef::Origin(OriginAxis::Z), length: s("30"), length2: s("0"), until: None, until2: None });
+    let j = d.add_geometry(RefKind::SurfJoin { items: vec![SurfRef::Ref(a), SurfRef::Ref(b)], tol: s("0.01"), curves: vec![] });
+    let f = d.add_geometry(RefKind::SurfEdgeFillet { surface: SurfRef::Ref(j), edges: vec![[20., 0., 15.]], radius: s("3"), radius2: None });
+    let r = recompute(&d);
+    ok(&r, f);
+    let malha = fenkra_solidos::tesselar(&forma(&d, f), &Default::default()).expect("malha");
+    let suaves = malha.edge_smooth.iter().filter(|x| **x != 0).count();
+    eprintln!("filete de superfície: {} arestas, {} suaves, {} faces", malha.edge_smooth.len(), suaves, malha.face_ranges.len());
+    assert!(suaves >= 2, "as duas bordas tangentes do filete devem ser suaves: {suaves} de {}", malha.edge_smooth.len());
+}
