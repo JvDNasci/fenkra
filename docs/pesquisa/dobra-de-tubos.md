@@ -152,7 +152,169 @@ Em linhas gerais, pela documentação pública [V][F22, F23, F24]:
   correção da tabela [V][F24 resumo].
 - Há extensões de terceiros que exportam XYZ e LRA/YBC com desenvolvido e conversão de unidades [V][F22].
 
-## 7. Proposta de itens de backlog (bancada Estrutural)
+## 7. Canto com gabarito
+
+Aprofundamento a partir das fotos do usuário. O que as fotos mostram é dado do usuário, não fonte. Os
+números abaixo vêm de derivação própria conferida por script numérico (`tubo_geometria.py`, fora do
+repositório): ficam **[C]** até haver protótipo real.
+
+### 7.1 O gabarito
+
+- Nome genérico: **régua marcadora de ângulo e arco para tubo quadrado** (em inglês, "angle and arc
+  marking tool" ou "angle arc scriber for square tube"). É uma cantoneira em L de aço inox que abraça duas
+  faces do tubo, com escala de largura, arcos concêntricos nas pontas para riscar o raio do canto e um V de 90° no
+  meio para riscar a bissetriz [fotos do usuário].
+- **[V]** Existem anúncios de venda de ferramenta com esse nome e função, para riscar o corte de cantos em tubo
+  quadrado, com faixas como R20–80 mm e uma com a sigla "S 2065 mm", que pode ser a escala 20–65 mm das fotos
+  [F25]. Os resumos não trazem manual, fabricante confirmado nem origem.
+- **[C]** Que seja a mesma peça das fotos, que tenha origem chinesa ou japonesa e que o uso seja o descrito abaixo.
+  Não achamos guia de uso confiável; a descrição de uso é dedução. A busca em chinês não achou nada específico.
+- Padrão de marcação por raio e ângulo existe em patentes de gabarito de tubo redondo [F26], o que sustenta a
+  ideia de gabarito paramétrico por raio e ângulo.
+
+### 7.2 Variáveis e quadro
+
+H altura lateral (dimensão do tubo no plano da dobra: é a que a escala do gabarito lê), b largura da
+placa externa, t parede, Ro raio da face externa da placa, Θ ângulo da dobra, h = Θ/2, rf = Ro − t (raio dos
+arcos dos setores), rn raio da linha neutra da placa, K fator de neutra. Quadro: x ao longo da perna 1, contado do ponto
+onde o arco externo começa; y profundidade a partir da face externa; C = (0, Ro) centro do arco.
+
+### 7.3 Geometria derivada
+
+Estrutura: a **placa externa** (parede do extradorso) fica inteira e é dobrada em arco; cada **parede lateral**
+mantém, em cada perna, um **setor** de ângulo h com ápice em C; a **parede interna** termina nas bordas radiais
+dos setores. As laterais são cortadas no contorno "andorinha"; a placa se enrola nos arcos dos setores, e a bissetriz e
+os arcos viram solda.
+
+1. Setor A (perna 1): pontos com y de t a H, dentro do círculo de centro C e raio rf para x > 0, do lado da perna 1
+   em relação à bissetriz. O setor B (perna 2) é o espelho de A na bissetriz.
+2. Comprimento plano da placa: `ℓ = rn · Θ`, com rn pela neutra de volume constante `rn = raiz(rf · Ro)`
+   (equivale a K ≈ 0,46) ou por K cadastrado: `rn = rf + K·t`.
+3. No estado plano, B é o espelho de A em torno de x = ℓ/2 (a reflexão na bissetriz seguida da rotação de −Θ
+   em torno de C é a reflexão no eixo x = 0; conferido no script: nenhuma sobreposição e coincidência de 99,9%
+   na grade, sobra só erro de borda da grade).
+4. Contorno do corte por lateral (andorinha), fechado: (0,t) → (ℓ,t) [libera a placa] → arco de B até o fim do arco →
+   bissetriz de B até (ℓ,H) → (ℓ,H) → (0,H) pela face interna → bissetriz de A até o fim do arco → arco de A de volta
+   a (0,t). Fim do arco de A: `(rf·sen h, Ro − rf·cos h)`.
+5. Folga plana no alto do corte entre os setores: `g = ℓ − 2·rf·sen h`, que fecha a zero ao dobrar. Folga de raiz de solda `e` (parâmetro, 1 a 2 mm): recua cada bissetriz de e/2, e a folga plana
+   passa a `ℓ − 2·rf·sen(h − asen(e/(2·rf)))`.
+6. Dedução de dobra e comprimento de corte, com X1 e X2 medidos nas faces externas até o canto virtual:
+   `BD = 2·Ro·tan h − ℓ`; `L_corte = X1 + X2 − BD`. A zona começa em `X1 − Ro·tan h`.
+7. Solda: arcos `4·rf·h` (2 laterais × 2 setores), bissetrizes `2·(rf + m)` e a linha do canto interno (b), com m abaixo.
+8. Raio de dobra da placa: plana → arco com raio interno rf. Deformação da fibra externa da placa ≈ t / (2·rn) ≈ 2%,
+   muito abaixo do alongamento do aço. O problema é o retorno elástico, grande para rf/t = 24: a placa precisa ser forçada contra os arcos
+   dos setores e pontear antes de soldar [C].
+
+**Exemplo 30×30×1,2, Θ = 90°, Ro = 30** (script): rf = 28,8; rn = 29,39 (K = 0,33 dá 29,20; K = 0,5 dá 29,40);
+ℓ = 46,17 mm (K = 0,33: 45,86); arco externo 47,12; arco interno 45,24; BD = 13,83; folga plana 5,44; fim do arco em (20,36; 9,64);
+e = 1 → folga 6,16; e = 2 → 6,88; solda: arcos 90,5 + bissetrizes 57,6 = 148,1 mm, mais a linha do canto interno de 30 mm.
+
+### 7.4 Hipótese do coordenador: onde confirma e onde falha
+
+Confirma (com t = 0): zona de πW/2 na face externa; setores de 45° com ápice no canto interno; os dois setores
+ocupam 2·W·sen45° = 1,414 W no estado plano; folga plana de 0,157 W (script: 4,697 para W = 30, ou 0,1566 W).
+
+Corrige ou falha:
+
+1. O raio do setor é **W − t**, não W: a placa ocupa de W − t a W. Só o arco externo da placa vale W.
+2. O comprimento plano da placa é o da **linha neutra**, 46,17, e não o da face externa (47,12): 2,0% a
+   menos. Usar a face externa gera tira longa demais (cerca de 1 mm em 47).
+3. A folga de 0,157 W é a folga **plana**; com parede 1,2 vira 5,44 (16% maior que 4,70). Fechada, é zero. A folga de solda é outro
+   parâmetro e.
+4. A parede interna não "some": as pontas das duas pernas terminam em planos radiais e **se tocam só na linha do canto
+   interno**, sem sobreposição e sem área de contato. O encontro é soldado em filete na linha ou deixado com abertura.
+5. O corte não é só "arco e bissetriz": falta o corte de liberação ao longo da face interna da placa (y = t),
+   que passa pelos cantos arredondados de fábrica do tubo [C]. As lascas entre o arco e a placa são descartadas.
+6. A hipótese vale **só para Ro = H**, quando o centro C coincide com o canto interno I. Para Ro ≠ H, I fica a `m = (H − Ro)/cos h` de C, sobre a bissetriz.
+7. Retangular: o raio do canto é a altura lateral (dimensão no plano da dobra), nunca a largura da placa.
+
+### 7.5 Variações (script)
+
+| Caso | Resultado |
+|---|---|
+| Θ = 30, 60, 90, 120, 135, 150 (H = Ro = 30, t = 1,2) | ℓ = 15,39 / 30,78 / 46,17 / 61,56 / 69,26 / 76,95 · folga = 0,48 / 1,98 / 5,44 / 11,68 / 16,04 / 21,32 · BD = 0,69 / 3,86 / 13,83 / 42,36 / 75,60 / 146,97. Sem sobreposição em todos; abaixo de 30° o ganho é pequeno (use V ou rolos). |
+| Ro = 15, 22,5, 30, 45, 60, 90 (H = 30, 90°) | ℓ = 22,60 / 34,39 / 46,17 / 69,74 / 93,30 / 140,43 · abertura plana da parede interna ℓ − 2·Ix = 52,6 / 49,4 / 46,2 / 39,7 / 33,3 / 20,4 · bissetriz = 35,0 / 31,9 / 28,8 / 22,6 / 16,4 / 4,0. Ro menor que H abre mais a parede interna; Ro maior estreita os setores e a abertura zera perto de Ro ≈ 4,6 H, quando o modo deixa de existir. |
+| Retangular 20×40×1,5, dobra com lateral de 20 (placa de 40) | Ro = 20, ℓ = 30,21, folga 4,05, BD = 9,79, solda arcos 58,1 + bissetrizes 37,0 |
+| Mesmo tubo, dobra pela outra face (lateral de 40, placa de 20) | Ro = 40, ℓ = 61,64, folga 7,20, BD = 18,36, solda arcos 121,0 + bissetrizes 77,0 |
+
+Trocar a face da dobra muda o raio (20 ou 40), o comprimento da zona e a solda. O CAD deve perguntar qual dimensão fica no plano da dobra.
+O campo "largura do tubo" do gabarito é a altura lateral nessa escolha.
+
+## 8. Modos em detalhe: como o CAD modela
+
+Convenção: o nó guarda modo, Θ, raio (Ro ou CLR), regra de dobra, parâmetros (n, e, K, ε_adm). Mapeamento com os modos de B326:
+"dobra por dobradeira" = M1; "dobra por corte" = M2, M3 e M4 (cortar, fechar e soldar); "corte mais dobradeira" = M2 ou M3 fechados por ferramenta, com o
+retorno compensado; "corte simples" = M5.
+
+### M1. Dobradeira ou rolos (sólido curvo)
+
+- Entradas: perfil, Θ, CLR (raio do eixo), regra com ε_adm, retorno Δ, processo (mandril, rolos).
+- Geometria: varredura da seção ao longo de reta, arco de raio CLR, reta. Uma peça só. Prévia mostra afinamento e espessamento estimados.
+- Lista de corte: `L_corte = X1 + X2 − BD`, `BD = 2·CLR·tan h − CLR·Θ`; por dobra: avanço, rotação, ângulo + Δ, CLR; pontas de pega.
+- Limites: `CLR ≥ (D/2)/ε_adm` (triagem); redondo precisa de mandril em parede fina; retangular tem concavidade e achatamento.
+- Quando usar: série, tubo redondo, raio ≥ ~2 D ou 3 H com a regra do material.
+- Solda: nada.
+- Exemplo redondo 25,4×1,5, Θ = 90°, CLR = 2 D = 50,8: L = 79,80; BD = 21,80; e_ext = 12,7/50,8 = 25%; parede externa ≈ 1,5·50,8/63,5 = 1,20
+  (−20%); interna ≈ 1,5·50,8/38,1 = 2,00 (+33%) [C]. Com CLR = 1,5 D = 38,1: L = 59,85, e_ext = 33%, parede externa 1,125 (−25%).
+- Exemplo 30×30×1,2, CLR = 60: L = 94,25; BD = 25,75; e_ext = 15/60 = 25%; parede externa 0,96 (−20%), interna 1,60 (+33%). Com ε_adm = 0,15, CLR mínimo = 15/0,15 = 100
+  (3,3 H): o CAD deve avisar em 60. Retorno: ângulo da máquina 90 + Δ (Δ vem da regra, por exemplo 3°); o avanço não muda.
+- Dados de máquina: `L1 = X1 − CLR·tan h`, rotação 0, ângulo 90 + Δ, `L2 = X2 − CLR·tan h`.
+
+### M2. V único com dobradiça
+
+- Entradas: Θ, ri da dobradiça, K, perfil quadrado ou retangular (não serve em redondo).
+- Geometria: V atravessando as paredes lateral, interna e a outra lateral, com vértice na face interna da placa; a placa é a dobradiça (extradorso), que estica.
+  Abertura do V na face externa do intradorso `w = 2·(H−t)·tan h`; lado do V `(H−t)/cos h`. A patente [F12] risca a dobradiça para reduzir a espessura.
+- Lista de corte: fórmula de chapa pela face externa da placa: `BA = Θ·(ri + K·t)`, `OSSB = (ri + t)·tan h`, `BD = 2·OSSB − BA`, `L_corte = X1 + X2 − BD`;
+  posição do V; contorno do V por parede.
+- Limites: a deformação da fibra externa da dobradiça `t/(2·ri + t)` pede `ri ≥ t·(1/ε_adm − 1)/2` (ε_adm = 0,25 dá ri ≥ 1,5 t); a dobra fica com raio externo pequeno
+  (ri + t). Estrutural de carga só com ensaio [F13].
+- Quando usar: canto vivo, peça única, pouca série.
+- Solda: as três costuras do V (ponto de solda na patente [F12]).
+- Exemplo 30×30×1,2, 90°, ri = 1,8, K = 0,33: BA = 3,449; OSSB = 3,000; BD = 2,551; w = 57,6; lado do V = 40,73; solda = 2·40,73 + 30 = 111,5 mm.
+
+### M3. V múltiplo (segmentado)
+
+- Entradas: Θ, raio da linha de articulações Rp (na face interna da placa), n.
+- Geometria: n V iguais; `φ = Θ/n`, passo `p = 2·Rp·sen(φ/2)`, abertura `w = 2·(H−t)·tan(φ/2)`.
+  **Condição nova**: as sobras entre V na face do intradorso não podem ser negativas: `p ≥ w`, ou seja, `Rp ≥ (H−t)/cos(φ/2)`. Com Rp = H − t o canto vivo é impossível nesse modo (as sobras
+  somem): para canto vivo, M4.
+- Lista de corte: por face interna da placa, `L = X1i + X2i − 2·s + (n−1)·p`, `s = Rv·sen((n−1)φ/2)/cos(Θ/2)`, `Rv = p/(2·sen(φ/2))`; posições a cada p.
+- Limites: n pequeno gera polígono visível; n grande multiplica corte e solda; ri das articulações pelo mesmo critério de M2.
+- Quando usar: raio grande em quadrado, sem dobradeira.
+- Solda: n × (2 costuras laterais de `(H−t)/cos(φ/2)` + a interna de b).
+- Exemplo 30×30×1,2, 90°, Rp = 45: n = 3: φ = 30°, p = 23,29, w = 15,43, solda ≈ 269 mm; n = 6: φ = 15°, p = 11,75, w = 7,58,
+  sobra 4,16, Σp = 70,48 contra arco 70,69, s = 38,74, `L = X1i + X2i − 18,75`, solda ≈ 529 mm; n = 9: p = 7,84, w = 5,04, solda ≈ 790 mm. Rp mínimo para n = 6: 29,05.
+
+### M4. Canto com gabarito (andorinha)
+
+- Entradas: H (lateral), b, t, Ro (por padrão H), Θ, K ou neutra, folga e.
+- Geometria: seção 7.3. Saída por lateral: contorno do corte (arcos, bissetrizes, liberação da placa); da placa: ℓ.
+- Lista de corte: `L_corte = X1 + X2 − BD`, `BD = 2·Ro·tan h − ℓ`; zona começando em `X1 − Ro·tan h`; contorno em DXF/SVG para laser.
+- Limites: Ro até cerca de 4,6 H em 90°; Θ de 30° a 150° testado; placa precisa ser forçada contra os arcos (retorno).
+- Quando usar: canto de quadro com raio externo e canto interno vivo, tubo quadrado ou retangular de parede fina, sem dobradeira.
+- Solda: arcos (placa nos setores), bissetriz de cada lateral, linha do canto interno. 30×30×1,2: 148,1 mm mais 30.
+
+### M5. Corte simples com solda (esquadria e gomos)
+
+- Entradas: Θ, perfil, n de juntas (redondo), CLR de referência.
+- Geometria: corte a Θ/2 em cada ponta (esquadria); gomos: m juntas de φ = Θ/m, peças do meio com `2·CLR·tan(φ/2)` e meias nas pontas.
+- Lista de corte: comprimento externo e interno por peça (diferença `H·tan h` em quadrado), ângulo de cada corte, ordem.
+- Limites: canto externo vivo (sem raio), costura mais longa, resistência de junta soldada.
+- Quando usar: canto vivo, série pequena, redondo com raio aproximado.
+- Solda: toda a costura. Quadrado 30×30, 90°: 2·30·√2 + 2·30 = 144,85 mm.
+- Exemplo redondo 25,4: uma esquadria de 45° tem elipse de semieixos 17,96 e 12,70, perímetro 97,03 mm. Gomos para raio 50,8, 90°:
+  m = 2: zona 84,17, solda 166,2; m = 3: φ = 30°, meio 27,22, ponta 13,61, zona 81,67, solda 243,6; m = 4: zona 80,84, solda 322,3 (arco 79,80).
+  O polígono fica uns 2% mais longo que o arco.
+
+Retorno e neutra em todos os modos: parâmetro cadastrável; erro de desenvolvido `δ·Θ` para um deslocamento de neutra δ [C]
+(com δ = 1 mm e 90°, 1,57 mm).
+
+## 9. Fontes novas desta rodada
+
+Referências [F25] a [F26] estão em `tubo_fontes.md` para a procedência. Nenhuma norma paga foi copiada.
+
+## 10. Proposta de itens de backlog (bancada Estrutural)
 
 Tamanho em milhares de tokens (mil tokens), estimativa para o especialista com testes.
 
@@ -168,3 +330,14 @@ Tamanho em milhares de tokens (mil tokens), estimativa para o especialista com t
 | 8 | Tradução e tooltips | Textos novos em `i18n.rs`, dicas por campo, GIF de tooltip, ícone da família. | Teste de chaves de tradução presentes | 20 |
 
 Ordem sugerida: 2 e 5 (sem geometria nova), depois 1, 3, 6, 4 e 7.
+
+### Efeito da segunda rodada sobre os itens já abertos
+
+- **B326** muda: a lista de modos passa a ter M1 a M5 da seção 8 (inclui "canto com gabarito" e gomos para redondo) e a
+  pergunta de qual dimensão fica no plano da dobra no retangular.
+- **B327** muda: usar neutra `raiz(rf·Ro)` ou K cadastrado, e `L_corte = X1 + X2 − BD` por modo; `ε_adm` e o critério `CLR ≥ (D/2)/ε_adm`.
+- **B328** muda: acrescentar a condição `Rp ≥ (H−t)/cos(φ/2)`, o comprimento por face interna e as fórmulas de n, φ, p, w da seção 8 (M2, M3).
+- **B329** muda: o gabarito imprimível cobre também o canto (arcos de raio Ro nas pontas, V de 90° da bissetriz, escala pela altura lateral).
+- **B330** muda: campos novos `ε_adm`, K da placa, folga de raiz e, Rp mínimo.
+- **Falta item novo**: "Estrutural: canto com gabarito (andorinha)", cerca de 220 mil tokens: contorno do corte por lateral, placa, prévia aberto e fechado, solda; teste:
+  30×30×1,2 a 90° dá ℓ = 46,17, BD = 13,83, folga 5,44, solda 148,1. E "contorno plano do corte em DXF/SVG para laser", cerca de 100 mil tokens.
