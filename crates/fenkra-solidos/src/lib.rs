@@ -10,6 +10,7 @@ pub mod regioes;
 pub mod importacao;
 pub mod mesh_io;
 pub mod structural;
+pub mod perfis_catalogo;
 pub mod hardware;
 pub mod biblioteca;
 pub mod catalogo;

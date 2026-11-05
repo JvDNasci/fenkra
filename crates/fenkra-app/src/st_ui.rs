@@ -16,6 +16,7 @@ use std::collections::HashMap;
 pub fn families(s: &Settings) -> Vec<Family> {
     let mut v: Vec<Family> = s.user_profiles.iter().map(|u| Family { name: u.name.clone(), norm: crate::st_painel::norma_do_usuario().into(), kind: u.kind, sizes: u.sizes.clone() }).collect();
     v.extend(structural::builtin());
+    v.extend(fenkra_solidos::perfis_catalogo::familias());
     v
 }
 
