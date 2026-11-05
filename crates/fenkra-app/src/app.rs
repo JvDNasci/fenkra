@@ -2939,6 +2939,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         self.abrir_plano();
                         ui.close();
                     }
+                    if ui.button(tr("Salvar como com referências…")).clicked() {
+                        self.abrir_salvar_como(ui.ctx());
+                        ui.close();
+                    }
+                    if ui.button(tr("Empacotar…")).clicked() {
+                        self.abrir_empacotar(ui.ctx());
+                        ui.close();
+                    }
                     ui.separator();
                     if ui.button(tr("Importar STEP…")).clicked() {
                         self.importar_step();
@@ -6499,6 +6507,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
 
     fn dialogs(&mut self, ctx: &egui::Context) {
         self.dialogos_de_gravacao(ctx);
+        self.janelas_projeto(ctx);
         self.janelas_de_diagnostico(ctx);
         if let Some(dd) = &mut self.delete_dialog {
             let doc = &self.open.doc;

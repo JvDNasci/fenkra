@@ -15,9 +15,12 @@
 
 pub mod diario;
 pub mod importacao;
+pub mod pacote;
 pub mod plano;
 pub mod pn;
 pub mod referencias;
+pub mod relacoes;
+pub mod salvar_como;
 pub mod seguro;
 
 use fenkra_core::formato::{preparar, Tipo, APP_VERSION};
