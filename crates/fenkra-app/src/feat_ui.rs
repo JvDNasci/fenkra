@@ -274,6 +274,11 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 s.face_keys = carry_keys(&before, &s.face_keys, &s.faces);
                 ui.label(RichText::new(tr("As faces escolhidas ficam abertas; o resto vira parede com a espessura.")).weak().small());
             }
+            let chave = crate::previa::chave_secao();
+            let mut corte = ui.ctx().data(|d| d.get_temp::<bool>(chave)).unwrap_or(false);
+            if crate::editor::check(ui, &mut corte, "corte de seção na prévia").on_hover_text(tr("Esconde a metade da frente enquanto o comando está aberto, para ver a parede. Não muda a peça.")).changed() {
+                ui.ctx().data_mut(|d| d.insert_temp(chave, corte));
+            }
         }
         FeatureKind::Draft(d) => {
             expr(ui, "Ângulo", &mut d.angle, vars, "°");

@@ -2587,6 +2587,8 @@ static TABLE: &[(&str, &str)] = &[
     ("pontilhada", "dotted"),
     ("fantasma", "phantom"),
     ("Prévia inválida", "Invalid preview"),
+    ("corte de seção na prévia", "section cut in the preview"),
+    ("Esconde a metade da frente enquanto o comando está aberto, para ver a parede. Não muda a peça.", "Hides the front half while the command is open, to show the wall. It does not change the part."),
     ("Atualizando a prévia…", "Updating the preview…"),
     ("traço-ponto", "dash-dot"),
     ("contínua", "continuous"),

@@ -134,6 +134,27 @@ fn helice(h: &fenkra_solidos::RoscaViz, cor: [f32; 4], anel: [f32; 4], dst: &mut
     }
 }
 
+/// Plano de corte da prévia da casca: passa pelo centro da peça, normal ao eixo que mais aponta para
+/// a câmera, e tira a metade da frente. Assim a parede aparece de qualquer ângulo.
+pub fn plano_de_secao(limites: (Vec3, Vec3), olho: Vec3) -> [f32; 4] {
+    let c = (limites.0 + limites.1) / 2.;
+    let v = olho - c;
+    let a = v.abs();
+    let n = if a.x >= a.y && a.x >= a.z {
+        Vec3::X * v.x.signum()
+    } else if a.y >= a.z {
+        Vec3::Y * v.y.signum()
+    } else {
+        Vec3::Z * v.z.signum()
+    };
+    [n.x, n.y, n.z, n.dot(c)]
+}
+
+/// Chave da opção "corte de seção na prévia" (vale enquanto o app está aberto).
+pub fn chave_secao() -> egui::Id {
+    egui::Id::unique("casca_secao_previa")
+}
+
 /// Acrescenta os triângulos da face `fi` à camada de fantasma.
 pub fn face_fantasma(dst: &mut Vec<MeshVertex>, m: &Mesh, fi: usize, cor: [u8; 3]) {
     let c = cor_f(cor);
@@ -459,6 +480,42 @@ mod tests {
     /// Cor da face na camada de fantasma, em u8.
     fn tem_cor(c: &Scene, cor: [u8; 3]) -> bool {
         c.ghost.iter().any(|v| (0..3).all(|i| (v.col[i] - cor[i] as f32 / 255.).abs() < 1e-6))
+    }
+
+    /// B06: a face aberta da casca sai na cor própria; se a casca falha, a mesma face sai na cor de erro.
+    #[test]
+    fn casca_mostra_a_face_aberta_e_a_regiao_do_erro() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let mut d = caixa();
+        let antes = recompute(&d);
+        let base = corpos_base(Some(&antes));
+        let casca = d.add_feature(FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: s("2"), outward: false, face_keys: vec![], closed: false }));
+        let r = recompute(&d);
+        assert!(valido(r.status.get(&casca)), "{:?}", r.status.get(&casca));
+        let v = r.bodies[0].mass.volume;
+        assert!(v < 40. * 40. * 20. * 0.5, "a casca tira material: {v}");
+        let c = cena(&d, &r, casca, &base);
+        assert!(tem_cor(&c, [40, 50, 60]), "face aberta na cor de entrada");
+        assert!(tem_cor(&c, [10, 20, 30]), "paredes novas na cor da prévia");
+        // expressão inválida: o cálculo falha e a face escolhida vira a marca do erro
+        if let Some(FeatureKind::Shell(sh)) = d.feature_mut(casca).map(|f| &mut f.kind) {
+            sh.thickness = s("nao_existe");
+        }
+        let r = recompute(&d);
+        assert!(matches!(r.status.get(&casca), Some(Status::Error(_))), "{:?}", r.status.get(&casca));
+        let c = cena(&d, &r, casca, &base);
+        assert!(tem_cor(&c, [70, 80, 90]), "a face do comando que falhou fica na cor de erro");
+        assert!(!tem_cor(&c, [40, 50, 60]));
+    }
+
+    #[test]
+    fn plano_de_secao_tira_a_metade_da_frente() {
+        let p = plano_de_secao((Vec3::ZERO, Vec3::splat(10.)), Vec3::new(5., -100., 6.));
+        assert_eq!(p, [0., -1., 0., -5.]);
+        // ponto perto do olho fica do lado cortado (positivo)
+        assert!(Vec3::new(p[0], p[1], p[2]).dot(Vec3::new(5., -1., 5.)) > p[3]);
     }
 
     /// B05: a hélice começa e termina onde o cálculo disse, e o raio é o da face.

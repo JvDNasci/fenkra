@@ -5910,6 +5910,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 let size = [(rect.width() * ppp) as u32, (rect.height() * ppp) as u32];
                 let mut style = self.settings.style();
                 style.navegando = vp.navegando();
+                // B06: corte de seção para ver a parede da casca aberta
+                let casca = self.session.as_ref().and_then(|s| self.open.doc.feature(s.id)).is_some_and(|f| matches!(f.kind, FeatureKind::Shell(_)));
+                if casca && ctx.data(|d| d.get_temp::<bool>(crate::previa::chave_secao())).unwrap_or(false) {
+                    style.secao = vp.bounds.map(|b| crate::previa::plano_de_secao(b, vp.camera.eye()));
+                }
                 if style.simplificar && style.navegando {
                     // volta à qualidade total quando a câmera para: um redesenho logo depois da pausa
                     ctx.request_repaint_after(crate::render::PAUSA_NAVEGACAO + std::time::Duration::from_millis(20));
@@ -7277,6 +7282,9 @@ impl eframe::App for App {
                     crate::previa::DemoPrevia::Plano => self.open.doc.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "30"),
                 };
                 self.start_session(id, true, Some(snapshot));
+                if std::env::var("FENKRA_DEMO_SECAO").is_ok() {
+                    ctx.data_mut(|d| d.insert_temp(crate::previa::chave_secao(), true));
+                }
             }
         }
         if let Some(id) = self.begin_sketch_pending.take() {
