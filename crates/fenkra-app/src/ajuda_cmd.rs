@@ -356,6 +356,17 @@ mod testes {
         assert!(!atalhos_do_mapa(&km).contains_key("extrusao"));
     }
 
+    /// B278: o tooltip mostra nome, frase e passo a passo; os três precisam de tradução, não só os dois
+    /// primeiros que `padrao.rs` confere. Comando novo sem passo a passo traduzido reprova aqui.
+    #[test]
+    fn todo_comando_tem_dica_em_camadas_traduzida() {
+        let faltam: Vec<&str> = comandos().iter().filter(|i| i.advanced.trim().is_empty() || !crate::i18n::tem_traducao(i.advanced)).map(|i| i.name).collect();
+        assert!(faltam.len() <= PASSO_A_PASSO_SEM_TRADUCAO, "{} comandos com passo a passo sem tradução (limite {PASSO_A_PASSO_SEM_TRADUCAO}): {faltam:?}", faltam.len());
+    }
+
+    /// Dívida de quando a regra nasceu; só pode encolher.
+    const PASSO_A_PASSO_SEM_TRADUCAO: usize = 10;
+
     #[test]
     fn busca_ignora_acento_e_caixa() {
         assert_eq!(normalizar("Extrusão"), "extrusao");

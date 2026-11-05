@@ -252,6 +252,34 @@ mod testes {
         .unwrap()
     }
 
+    /// Cobertura por hash (aceite do B257): todo roteiro versionado tem mídia em dia no manifesto, o GIF
+    /// cabe no limite, decodifica com a medida e os quadros do roteiro, e está no pacote.
+    #[test]
+    fn todo_roteiro_tem_midia_em_dia_no_manifesto_e_no_pacote() {
+        let pasta = pasta_docs();
+        let roteiros = ler_roteiros(&pasta.join("roteiros")).expect("roteiros");
+        assert!(roteiros.len() >= 10, "esperava dez roteiros ou mais, achei {}", roteiros.len());
+        let man = Manifesto::ler(&pasta).expect("manifesto: rode scripts/media/montar.py gerar-todos");
+        assert_eq!(man.versao, 1);
+        let mut pacote = pacote::Midias::abrir(Some(&pasta.join("ajuda.pack")));
+        assert!(pacote.tem_pacote(), "falta docs/media/ajuda.pack: rode montar.py empacotar");
+        for (arq, r) in &roteiros {
+            let e = man.midias.iter().find(|e| e.id == r.comando).unwrap_or_else(|| panic!("{}: sem mídia no manifesto", r.comando));
+            let bytes_roteiro = std::fs::read(arq).unwrap();
+            assert_eq!(e.hash_roteiro, hash(&bytes_roteiro), "{}: roteiro mudou depois da mídia; gere de novo", r.comando);
+            let gif_bytes = std::fs::read(pasta.join(&e.gif)).unwrap_or_else(|_| panic!("{}: GIF ausente", r.comando));
+            assert_eq!(hash(&gif_bytes), e.hash_gif, "{}: GIF não confere com o manifesto", r.comando);
+            assert!(gif_bytes.len() as u64 <= LIMITE_BYTES && e.bytes_gif == gif_bytes.len() as u64, "{}: {} bytes", r.comando, gif_bytes.len());
+            let g = gif::ler(&gif_bytes).unwrap_or_else(|er| panic!("{}: {er}", r.comando));
+            assert_eq!((g.largura as u32, g.altura as u32, g.quadros.len()), (LARGURA, ALTURA, r.quadros()), "{}", r.comando);
+            assert_eq!(pacote.bytes(&r.comando).map(|b| hash(&b)), Some(e.hash_gif.clone()), "{}: pacote difere do manifesto", r.comando);
+        }
+        // nenhuma mídia órfã: o manifesto só tem comandos que têm roteiro
+        for e in &man.midias {
+            assert!(roteiros.iter().any(|(_, r)| r.comando == e.id), "{}: mídia sem roteiro", e.id);
+        }
+    }
+
     #[test]
     fn roteiro_tem_padroes_e_valida() {
         let r = exemplo();

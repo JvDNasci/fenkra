@@ -189,6 +189,13 @@ def montar_gif(quadros):
     anterior = None
     for k, q in enumerate(quadros):
         idx = indexar(q, pal)
+        if anterior is not None:
+            # delta com perda leve: cor quase igual a do quadro anterior (ruido de borda) nao conta
+            # como mudanca; so assim o GIF cabe nos 150 KB sem cortar o tempo do roteiro
+            for i in range(len(idx)):
+                a, b = pal[idx[i]], pal[anterior[i]]
+                if idx[i] != anterior[i] and (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2 <= 192:
+                    idx[i] = anterior[i]
         if anterior is None:
             x, y, w, h, dados, transp = 0, 0, LARGURA, ALTURA, idx, False
         else:

@@ -170,7 +170,9 @@ impl App {
                     g.quadro += 1;
                     if g.quadro >= g.roteiro.quadros() {
                         let _ = std::fs::write(g.pasta.join("pronto.txt"), format!("{}\n", g.quadro));
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        // sai direto: o fechamento gracioso pode travar com a máquina carregada e a
+                        // esteira espera o processo terminar
+                        std::process::exit(0);
                     } else {
                         g.fase = Fase::Aplicar;
                     }
