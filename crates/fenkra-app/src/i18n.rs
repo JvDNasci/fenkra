@@ -2711,6 +2711,10 @@ static TABLE: &[(&str, &str)] = &[
     ("estender funciona em linhas", "extend works on lines"),
     ("não há curva na direção da linha para estender até ela", "there is no curve in the line's direction to extend to"),
     ("esse elemento não tem cota com esta ferramenta", "this element has no dimension with this tool"),
+    // sketch: campos de valor
+    ("digite o valor · Tab trava e avança · Enter confirma", "type the value · Tab locks and moves on · Enter confirms"),
+    ("Criar cota ao digitar", "Create dimension when typing"),
+    ("O valor digitado no campo do cursor vira cota da curva, guardando a expressão. Desligado, ele só posiciona a geometria.", "The value typed in the cursor field becomes a dimension on the curve, keeping the expression. Off, it only places the geometry."),
     // sketch: restrições e geometria externa
     ("Linha e círculo/arco, dois círculos, ou spline e outra curva. Com ponto comum, a spline sai na direção da curva; sem ponto comum, ela se move até encostar.", "Line and circle/arc, two circles, or a spline and another curve. With a shared point the spline leaves in the curve's direction; without one it moves until it touches."),
     ("duas splines só ficam tangentes num ponto comum", "two splines can only be tangent at a shared point"),

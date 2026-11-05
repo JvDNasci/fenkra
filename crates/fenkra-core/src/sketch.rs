@@ -66,6 +66,8 @@ pub enum Kind {
     Diameter(Id, String),
     Angle(Id, Id, String),
     PointLineDistance(Id, Id, String),
+    /// ângulo da linha, de `a` para `b`, com a horizontal do sketch (com sinal)
+    LineAngle(Id, String),
 }
 
 impl Kind {
@@ -91,6 +93,7 @@ impl Kind {
             Kind::Diameter(..) => "Diâmetro",
             Kind::Angle(..) => "Ângulo",
             Kind::PointLineDistance(..) => "Distância ponto-linha",
+            Kind::LineAngle(..) => "Ângulo com a horizontal",
         }
     }
     /// Valor (expressão) se for cota.
@@ -103,7 +106,8 @@ impl Kind {
             | Kind::Radius(_, v)
             | Kind::Diameter(_, v)
             | Kind::Angle(_, _, v)
-            | Kind::PointLineDistance(_, _, v) => Some(v),
+            | Kind::PointLineDistance(_, _, v)
+            | Kind::LineAngle(_, v) => Some(v),
             _ => None,
         }
     }
@@ -117,7 +121,7 @@ impl Kind {
     /// Ids referenciados (pontos ou curvas).
     pub fn refs(&self) -> Vec<Id> {
         match self {
-            Kind::Horizontal(a) | Kind::Vertical(a) | Kind::Fixed(a) | Kind::Length(a, _) | Kind::Radius(a, _) | Kind::Diameter(a, _) => vec![*a],
+            Kind::Horizontal(a) | Kind::Vertical(a) | Kind::Fixed(a) | Kind::Length(a, _) | Kind::Radius(a, _) | Kind::Diameter(a, _) | Kind::LineAngle(a, _) => vec![*a],
             Kind::Coincident(a, b)
             | Kind::Parallel(a, b)
             | Kind::Perpendicular(a, b)
@@ -1238,6 +1242,12 @@ impl Sys<'_> {
                         out.push(cross(d, sub(self.p(x, *p), a)).abs() / len2(d).max(1e-12) - v);
                     }
                 }
+                Kind::LineAngle(l, _) => {
+                    if let Some((a, b)) = ln(*l) {
+                        let (d, t) = (sub(b, a), v.to_radians());
+                        out.push((d[1] * t.cos() - d[0] * t.sin()) / len2(d).max(1e-12));
+                    }
+                }
             },
         }
     }
@@ -1717,6 +1727,11 @@ impl SketchData {
             Kind::Radius(c, _) => Kind::Radius(*c, String::new()),
             Kind::Diameter(c, _) => Kind::Diameter(*c, String::new()),
             Kind::PointLineDistance(p, l, _) => Kind::PointLineDistance(*p, *l, String::new()),
+            Kind::LineAngle(l, _) => {
+                let (a, b) = sys.line(&x, *l)?;
+                let d = sub(b, a);
+                return Some(d[1].atan2(d[0]).to_degrees());
+            }
             Kind::Angle(l1, l2, _) => {
                 let (a, b) = sys.line(&x, *l1)?;
                 let (c, d) = sys.line(&x, *l2)?;
@@ -2000,6 +2015,26 @@ mod tests {
             let k = s.constraints.iter().find(|x| x.id == c).unwrap();
             assert!(k.flipped == virada && matches!(&k.kind, Kind::DistanceX(_, _, t) if t == "L"));
         }
+    }
+
+    #[test]
+    fn angulo_com_a_horizontal_tem_sinal() {
+        let mut al = alloc();
+        let mut s = SketchData::default();
+        let a = s.add_point(&mut al, 0., 0.);
+        s.point_mut(a).unwrap().fixed = true;
+        let b = s.add_point(&mut al, 30., 10.);
+        let l = s.add_curve(&mut al, Curve::Line { a, b }, false);
+        s.add_constraint(&mut al, Kind::Length(l, "20".into()));
+        let c = s.add_constraint(&mut al, Kind::LineAngle(l, "30".into()));
+        let r = s.solve(&Vars::new(), &[]);
+        assert!(r.converged && r.dof == 0, "{r:?}");
+        assert!((s.pos(b)[1] - 10.).abs() < 1e-6);
+        let k = s.constraints.iter().find(|x| x.id == c).unwrap().kind.clone();
+        assert!((s.measure(&k).unwrap() - 30.).abs() < 1e-6);
+        *s.constraints.iter_mut().find(|x| x.id == c).unwrap().kind.value_mut().unwrap() = "-30".into();
+        assert!(s.solve(&Vars::new(), &[]).converged);
+        assert!((s.pos(b)[1] + 10.).abs() < 1e-6, "{:?}", s.pos(b));
     }
 
     #[test]

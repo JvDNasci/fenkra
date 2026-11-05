@@ -186,6 +186,98 @@ pub struct SketchEdit {
     last_chamfer: Option<f64>,
     /// cota de filete (`false`) ou chanfro (`true`) aberta para digitar
     round_dim: Option<(Id, bool)>,
+    /// campos de valor junto ao cursor
+    pub entry: ValueEntry,
+    /// valores já confirmados nos passos desta forma: (rótulo do campo, texto, valor)
+    typed: Vec<(&'static str, String, f64)>,
+    /// última posição do cursor no plano: o teclado continua valendo com o mouse fora da vista
+    last_uv: Option<[f64; 2]>,
+    /// um campo da interface tinha o teclado no quadro anterior
+    keyboard_busy: bool,
+    /// quadros em que o foco que o Tab deu a outro campo é devolvido
+    tab_guard: u8,
+}
+
+/// Tecla que os campos de valor tratam.
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum EntryKey {
+    Char(char),
+    Back,
+    Tab { back: bool },
+    Enter,
+}
+
+/// Campos de valor do comando. O teclado é lido aqui, sem caixa de texto de verdade: uma caixa com foco
+/// tomaria Esc e os atalhos do sketch durante todo o desenho. Por isso um dígito abre o campo sozinho e
+/// uma letra só entra depois de Tab (ou com o campo já aberto), senão é atalho.
+#[derive(Clone, Default, Debug)]
+pub struct ValueEntry {
+    focus: usize,
+    /// campos travados: (campo, texto digitado, valor)
+    locks: Vec<(usize, String, f64)>,
+    text: String,
+    /// Tab chegou neste campo: letras de expressão entram nele
+    armed: bool,
+}
+
+impl ValueEntry {
+    /// As letras pertencem ao campo, não aos atalhos.
+    pub fn typing(&self) -> bool {
+        !self.text.is_empty() || self.armed
+    }
+    pub fn active(&self) -> bool {
+        self.typing() || !self.locks.is_empty()
+    }
+    /// Valor de cada campo: o travado ou o que está sendo digitado, se já for válido.
+    fn values(&self, n: usize, vars: &HashMap<String, f64>) -> Vec<Option<f64>> {
+        let typed = fenkra_core::expr::eval_str(&self.text, vars).ok().filter(|_| !self.text.trim().is_empty());
+        (0..n).map(|i| if i == self.focus && typed.is_some() { typed } else { self.locks.iter().find(|l| l.0 == i).map(|l| l.2) }).collect()
+    }
+    /// Trava o campo em foco com o texto digitado. False se a expressão não vale.
+    fn commit(&mut self, vars: &HashMap<String, f64>) -> bool {
+        if self.text.trim().is_empty() {
+            return true;
+        }
+        let Ok(v) = fenkra_core::expr::eval_str(&self.text, vars) else { return false };
+        let focus = self.focus;
+        self.locks.retain(|l| l.0 != focus);
+        self.locks.push((focus, self.text.trim().to_string(), v));
+        self.text.clear();
+        true
+    }
+    /// Trata a tecla: (a tecla foi usada, confirmar o passo).
+    fn key(&mut self, k: EntryKey, n: usize, vars: &HashMap<String, f64>) -> (bool, bool) {
+        match k {
+            EntryKey::Char(c) => {
+                let opens = c.is_ascii_digit() || matches!(c, '.' | ',' | '-' | '(');
+                if !self.typing() && !opens {
+                    return (false, false);
+                }
+                self.text.push(c);
+                (true, false)
+            }
+            EntryKey::Back => {
+                if self.text.pop().is_some() {
+                    return (true, false);
+                }
+                let (focus, had) = (self.focus, self.locks.len());
+                self.locks.retain(|l| l.0 != focus);
+                (self.locks.len() != had, false)
+            }
+            EntryKey::Tab { back } => {
+                if !self.commit(vars) {
+                    return (true, false);
+                }
+                self.focus = (self.focus + if back { n - 1 } else { 1 }) % n;
+                self.armed = true;
+                (true, false)
+            }
+            EntryKey::Enter => {
+                let had = self.active();
+                (had, had && self.commit(vars) && !self.locks.is_empty())
+            }
+        }
+    }
 }
 
 /// Cota ainda não criada: elementos clicados e, se escolhido no menu, o tipo fixo.
@@ -239,7 +331,16 @@ impl SketchEdit {
             last_fillet: None,
             last_chamfer: None,
             round_dim: None,
+            entry: ValueEntry::default(),
+            typed: vec![],
+            last_uv: None,
+            keyboard_busy: false,
+            tab_guard: 0,
         }
+    }
+    /// Há um passo de desenho em andamento, com campos de valor à espera.
+    pub fn in_step(&self) -> bool {
+        !self.clicks.is_empty() || self.chain_last.is_some()
     }
     pub fn set_tool(&mut self, t: Tool) {
         self.tool = t;
@@ -248,6 +349,8 @@ impl SketchEdit {
         self.chain_first = None;
         self.pending = None;
         self.menu = None;
+        self.entry = ValueEntry::default();
+        self.typed.clear();
         if !matches!(t, Tool::Constr(_) | Tool::Select | Tool::Move | Tool::Copy | Tool::Mirror | Tool::Offset) {
             self.sel.clear();
         }
@@ -257,6 +360,11 @@ impl SketchEdit {
         if self.menu.take().is_some() {
             return true;
         }
+        if self.entry.active() {
+            self.entry = ValueEntry::default();
+            return true;
+        }
+        self.typed.clear();
         if self.pending.take().is_some() {
             self.sel.clear();
             return true;
@@ -631,6 +739,7 @@ fn dim_anchor(sk: &SketchData, k: &Kind) -> Option<[f64; 2]> {
         Kind::PointLineDistance(p, l, _) => Some(mid(sk.pos(*p), foot(sk, *p, *l)?)),
         Kind::Radius(c, _) | Kind::Diameter(c, _) => center_of(sk, *c).map(|(c, _)| sk.pos(c)),
         Kind::Angle(a, b, _) => angle_vertex(sk, *a, *b).map(|v| v.0),
+        Kind::LineAngle(l, _) => line_ends(sk, *l).map(|(a, _)| sk.pos(a)),
         _ => None,
     }
 }
@@ -642,7 +751,7 @@ fn dim_text(sk: &SketchData, k: &Kind, reference: bool) -> String {
     let base = match k {
         Kind::Radius(..) => format!("R{}", fmt(val)),
         Kind::Diameter(..) => format!("Ø{}", fmt(val)),
-        Kind::Angle(..) => format!("{}°", fmt(val)),
+        Kind::Angle(..) | Kind::LineAngle(..) => format!("{}°", fmt(val)),
         _ => fmt(val),
     };
     // cota de referência entre parênteses, como nos desenhos: só informa
@@ -757,6 +866,23 @@ fn draw_dim(painter: &egui::Painter, v: &View, sk: &SketchData, k: &Kind, label:
                 da += std::f32::consts::TAU;
             }
             let ar = lpos.map(|l| (l - sv).length()).unwrap_or(34.).max(14.);
+            let pts: Vec<Pos2> = (0..=24).map(|i| sv + egui::Vec2::angled(a1 + da * i as f32 / 24.) * ar).collect();
+            painter.add(egui::Shape::line(pts, st));
+            lpos.unwrap_or(sv + egui::Vec2::angled(a1 + da / 2.) * 46.)
+        }
+        Kind::LineAngle(l, _) => {
+            let (a, b) = line_ends(sk, *l)?;
+            let sv = v.to_screen(sk.pos(a));
+            let (a1, a2) = (ux.angle(), (v.to_screen(sk.pos(b)) - sv).angle());
+            let mut da = a2 - a1;
+            while da > std::f32::consts::PI {
+                da -= std::f32::consts::TAU;
+            }
+            while da < -std::f32::consts::PI {
+                da += std::f32::consts::TAU;
+            }
+            let ar = lpos.map(|l| (l - sv).length()).unwrap_or(34.).max(14.);
+            painter.line_segment([sv, sv + ux * (ar + 6.)], Stroke::new(0.8, col));
             let pts: Vec<Pos2> = (0..=24).map(|i| sv + egui::Vec2::angled(a1 + da * i as f32 / 24.) * ar).collect();
             painter.add(egui::Shape::line(pts, st));
             lpos.unwrap_or(sv + egui::Vec2::angled(a1 + da / 2.) * 46.)
@@ -1486,6 +1612,196 @@ fn measures(tool: Tool, c: &[[f64; 2]], m: [f64; 2]) -> Vec<Measure> {
     }
 }
 
+/// Aonde o cursor vai com os campos travados: o inverso de `measures`. O que não está travado segue o
+/// mouse `m`. Valor negativo em comprimento ou largura aponta para o lado oposto.
+fn lock_cursor(tool: Tool, c: &[[f64; 2]], m: [f64; 2], locks: &[Option<f64>]) -> [f64; 2] {
+    let lock = |i: usize| locks.get(i).copied().flatten();
+    let polar = |o: [f64; 2], len: Option<f64>, ang: Option<f64>| {
+        let d = [m[0] - o[0], m[1] - o[1]];
+        let a = ang.map_or(d[1].atan2(d[0]), f64::to_radians);
+        let (cs, sn) = (a.cos(), a.sin());
+        // só o ângulo travado: o comprimento é a sombra do mouse nessa direção
+        let l = len.unwrap_or(if ang.is_some() { d[0] * cs + d[1] * sn } else { d[0].hypot(d[1]) });
+        [o[0] + l * cs, o[1] + l * sn]
+    };
+    let side = |d: f64| if d < 0. { -1. } else { 1. };
+    match (tool, c.len()) {
+        (Tool::Line | Tool::Slot | Tool::Arc3 | Tool::Move | Tool::Copy | Tool::Polygon, 1) => polar(c[0], lock(0), lock(1)),
+        (Tool::Circle | Tool::ArcCenter, 1) => polar(c[0], lock(0).map(f64::abs), None),
+        (Tool::Rect | Tool::RectCenter, 1) => {
+            let k = if tool == Tool::Rect { 1. } else { 0.5 };
+            let at = |i: usize, f: Option<f64>| f.map_or(m[i], |w| c[0][i] + side(m[i] - c[0][i]) * w * k);
+            [at(0, lock(0)), at(1, lock(1))]
+        }
+        (Tool::ArcCenter, 2) => {
+            let Some(sweep) = lock(0) else { return m };
+            let (u, w) = ([c[1][0] - c[0][0], c[1][1] - c[0][1]], [m[0] - c[0][0], m[1] - c[0][1]]);
+            let a = u[1].atan2(u[0]) + side(u[0] * w[1] - u[1] * w[0]) * sweep.to_radians();
+            let r = d2(c[0], c[1]);
+            [c[0][0] + r * a.cos(), c[0][1] + r * a.sin()]
+        }
+        (Tool::Arc3 | Tool::Circle3, 2) => {
+            let Some(r) = lock(0).map(f64::abs) else { return m };
+            // topo do arco menor de raio r sobre a corda, do lado do mouse
+            let (u, l) = ([c[1][0] - c[0][0], c[1][1] - c[0][1]], d2(c[0], c[1]).max(1e-9));
+            let n = [-u[1] / l, u[0] / l];
+            let r = r.max(l / 2.);
+            let mid = [(c[0][0] + c[1][0]) / 2., (c[0][1] + c[1][1]) / 2.];
+            let h = side((m[0] - mid[0]) * n[0] + (m[1] - mid[1]) * n[1]) * (r - (r * r - l * l / 4.).sqrt());
+            [mid[0] + n[0] * h, mid[1] + n[1] * h]
+        }
+        (Tool::Slot, 2) => {
+            let Some(w) = lock(0).map(f64::abs) else { return m };
+            let (u, l) = ([c[1][0] - c[0][0], c[1][1] - c[0][1]], d2(c[0], c[1]).max(1e-9));
+            let n = [-u[1] / l, u[0] / l];
+            let h = side((m[0] - c[1][0]) * n[0] + (m[1] - c[1][1]) * n[1]) * w / 2.;
+            [c[1][0] + n[0] * h, c[1][1] + n[1] * h]
+        }
+        _ => m,
+    }
+}
+
+/// Distância do offset de `curve` com o cursor em `m`.
+fn offset_field(sk: &SketchData, curve: Id, m: [f64; 2]) -> Option<f64> {
+    if let Some(r) = sk.radius_of(curve) {
+        let (c, _) = center_of(sk, curve)?;
+        return Some((d2(m, sk.pos(c)) - r).abs());
+    }
+    let (a, b) = line_ends(sk, curve)?;
+    let (pa, pb) = (sk.pos(a), sk.pos(b));
+    let d = [pb[0] - pa[0], pb[1] - pa[1]];
+    Some(((m[0] - pa[0]) * d[1] - (m[1] - pa[1]) * d[0]).abs() / d[0].hypot(d[1]).max(1e-12))
+}
+
+/// Ponto a `dist` da curva, do lado do mouse: é por ele que a paralela passa.
+fn offset_lock(sk: &SketchData, curve: Id, m: [f64; 2], dist: f64) -> [f64; 2] {
+    let dist = dist.abs();
+    if let (Some(r), Some((c, _))) = (sk.radius_of(curve), center_of(sk, curve)) {
+        let pc = sk.pos(c);
+        let l = d2(m, pc).max(1e-9);
+        let r2 = if l >= r { r + dist } else { (r - dist).max(1e-3) };
+        return [pc[0] + (m[0] - pc[0]) * r2 / l, pc[1] + (m[1] - pc[1]) * r2 / l];
+    }
+    let Some((a, b)) = line_ends(sk, curve) else { return m };
+    let (pa, pb) = (sk.pos(a), sk.pos(b));
+    let d = [pb[0] - pa[0], pb[1] - pa[1]];
+    let l2 = (d[0] * d[0] + d[1] * d[1]).max(1e-18);
+    let t = ((m[0] - pa[0]) * d[0] + (m[1] - pa[1]) * d[1]) / l2;
+    let f = [pa[0] + d[0] * t, pa[1] + d[1] * t];
+    let (n, l) = ([m[0] - f[0], m[1] - f[1]], d2(m, f));
+    if l < 1e-9 {
+        let k = dist / l2.sqrt();
+        return [f[0] - d[1] * k, f[1] + d[0] * k];
+    }
+    [f[0] + n[0] * dist / l, f[1] + n[1] * dist / l]
+}
+
+/// Linha nova ligando dois pontos, com as restrições e a cota automáticas.
+fn add_segment(sk: &mut SketchData, al: &mut impl FnMut() -> Id, last: Id, p: Id, construction: bool, auto_constraints: bool, auto_dims: bool) -> Id {
+    let l = sk.add_curve(al, Curve::Line { a: last, b: p }, construction);
+    let (a, b) = (sk.pos(last), sk.pos(p));
+    let ang = (b[1] - a[1]).atan2(b[0] - a[0]).to_degrees().abs();
+    if auto_constraints {
+        if ang < 2.5 || (180. - ang) < 2.5 {
+            sk.add_constraint(al, Kind::Horizontal(l));
+        } else if (ang - 90.).abs() < 2.5 {
+            sk.add_constraint(al, Kind::Vertical(l));
+        }
+    }
+    if auto_dims {
+        sk.add_constraint(al, Kind::Length(l, fmt(d2(a, b))));
+    }
+    l
+}
+
+/// Transforma os valores digitados em cotas das curvas recém-criadas, guardando a expressão. A cota
+/// automática de mesma medida dá lugar à digitada, e a que sobre-restringir vira referência.
+fn dims_from_fields(sk: &mut SketchData, al: &mut impl FnMut() -> Id, tool: Tool, made: &[Id], typed: &[(&'static str, String, f64)], vars: &HashMap<String, f64>) {
+    let find = |l: &str| typed.iter().rev().find(|t| t.0 == l);
+    // o módulo fica na cota: o lado já foi escolhido pelo próprio valor ao desenhar
+    let text = |l: &str| find(l).map(|t| if t.2 < 0. { fmt(t.2.abs()) } else { t.1.clone() });
+    let lines: Vec<Id> = made.iter().copied().filter(|c| is_line(sk, *c)).collect();
+    let round = made.iter().copied().find(|c| is_round(sk, *c));
+    let rounds: Vec<Id> = made.iter().copied().filter(|c| is_round(sk, *c)).collect();
+    let mut wanted: Vec<Kind> = vec![];
+    match tool {
+        Tool::Line => {
+            if let Some(&l) = lines.first() {
+                wanted.extend(text("comprimento").map(|t| Kind::Length(l, t)));
+                wanted.extend(find("ângulo").map(|t| Kind::LineAngle(l, t.1.clone())));
+            }
+        }
+        Tool::Rect | Tool::RectCenter => {
+            if let [w, h, ..] = lines[..] {
+                wanted.extend(text("largura").map(|t| Kind::Length(w, t)));
+                wanted.extend(text("altura").map(|t| Kind::Length(h, t)));
+            }
+        }
+        Tool::Circle | Tool::ArcCenter | Tool::Arc3 | Tool::Polygon => {
+            if let Some(r) = round {
+                wanted.extend(text("raio").map(|t| Kind::Radius(r, t)));
+            }
+        }
+        Tool::Slot => {
+            if let Some(&axis) = lines.last() {
+                wanted.extend(text("comprimento").map(|t| Kind::Length(axis, t)));
+                wanted.extend(find("ângulo").map(|t| Kind::LineAngle(axis, t.1.clone())));
+            }
+            if let Some(&arc) = rounds.last() {
+                wanted.extend(text("largura").map(|t| Kind::Diameter(arc, t)));
+            }
+        }
+        _ => {}
+    }
+    for k in wanted {
+        let same = |c: &fenkra_core::sketch::Constraint| match (&k, &c.kind) {
+            (Kind::Length(a, _), Kind::Length(b, _)) => a == b,
+            (Kind::Radius(_, _) | Kind::Diameter(_, _), Kind::Radius(b, _) | Kind::Diameter(b, _)) => rounds.contains(b),
+            _ => false,
+        };
+        // o rasgo cotado pelo eixo não precisa mais da distância automática entre os centros
+        let axis_ends = if let Kind::Length(a, _) = &k { line_ends(sk, *a) } else { None };
+        sk.constraints.retain(|c| !same(c) && !matches!(c.kind, Kind::Distance(p, q, _) if Some((p, q)) == axis_ends));
+        let id = sk.add_constraint(al, k);
+        sk.settle_dimension(id, vars);
+    }
+}
+
+/// Cadeado desenhado, sem depender de a fonte ter o símbolo.
+fn draw_lock(painter: &egui::Painter, at: Pos2, col: Color32) {
+    painter.rect_filled(Rect::from_center_size(at + egui::vec2(0., 2.), egui::vec2(9., 7.)), 1., col);
+    painter.circle_stroke(at + egui::vec2(0., -2.), 3., Stroke::new(1.3, col));
+}
+
+/// Campos ao lado do cursor: rótulo, valor e cadeado de cada um, com o foco marcado.
+fn draw_fields(painter: &egui::Painter, at: Pos2, entry: &ValueEntry, fields: &[Measure], vars: &HashMap<String, f64>, vis: &egui::Visuals) {
+    let font = egui::FontId::proportional(12.);
+    let mut y = at.y;
+    for (i, f) in fields.iter().enumerate() {
+        let lock = entry.locks.iter().find(|l| l.0 == i);
+        let focus = i == entry.focus;
+        let writing = focus && !entry.text.is_empty();
+        let valid = !writing || fenkra_core::expr::eval_str(&entry.text, vars).is_ok();
+        let value = if writing {
+            format!("{}|", entry.text)
+        } else if let Some(l) = lock {
+            l.1.clone()
+        } else {
+            format!("{}{}", fmt(f.value), if f.angle { "°" } else { "" })
+        };
+        let row = Rect::from_min_size(Pos2::new(at.x, y), egui::vec2(170., 20.));
+        painter.rect_filled(row, 3., vis.extreme_bg_color);
+        painter.rect_stroke(row, 3., if focus { vis.selection.stroke } else { vis.widgets.noninteractive.bg_stroke }, egui::StrokeKind::Inside);
+        painter.text(row.left_center() + egui::vec2(6., 0.), egui::Align2::LEFT_CENTER, tr(f.label), egui::FontId::proportional(11.), vis.weak_text_color());
+        painter.text(row.right_center() - egui::vec2(22., 0.), egui::Align2::RIGHT_CENTER, value, font.clone(), if valid { vis.text_color() } else { BAD });
+        if lock.is_some() {
+            draw_lock(painter, row.right_center() - egui::vec2(11., 0.), vis.selection.stroke.color);
+        }
+        y += 22.;
+    }
+    painter.text(Pos2::new(at.x, y + 1.), egui::Align2::LEFT_TOP, tr("digite o valor · Tab trava e avança · Enter confirma"), egui::FontId::proportional(10.), vis.weak_text_color());
+}
+
 /// Dica junto ao cursor das ferramentas de forma.
 fn shape_hint(tool: Tool, clicks: usize) -> &'static str {
     match (tool, clicks) {
@@ -1868,7 +2184,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
     // ---------- entrada do mouse
     let (shift, ctrl, alt) = ui.input(|i| (i.modifiers.shift, i.modifiers.command, i.modifiers.alt));
     let hover = resp.hover_pos();
-    let cursor_uv = hover.and_then(|p| v.to_uv(p));
+    let mut cursor_uv = hover.and_then(|p| v.to_uv(p));
 
     // pick: pontos > rótulos > curvas
     let pick = |pos: Pos2, sk: &SketchData, hits: &[(Rect, Ent)]| -> Option<Ent> {
@@ -1943,7 +2259,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
     };
 
     let tool = edit.tool;
-    let cur_snap = hover.and_then(|p| {
+    let mut cur_snap = hover.and_then(|p| {
         let excl: Vec<Id> = edit.drag.as_ref().map(|d| d.pts.iter().map(|x| x.0).collect()).unwrap_or_default();
         snap_at(p, &sk, &excl)
     });
@@ -2013,6 +2329,82 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         _ => e,
     };
     let double = resp.double_clicked();
+
+    // ---------- campos de valor: o digitado trava o cursor, e prévia e clique usam o cursor travado
+    let stage: Vec<[f64; 2]> = match tool {
+        Tool::Line => edit.chain_last.map(|p| vec![sk.pos(p)]).unwrap_or_default(),
+        _ => edit.clicks.iter().map(|c| c.uv).collect(),
+    };
+    let offset_of = match edit.sel.as_slice() {
+        [Ent::Cv(c)] if tool == Tool::Offset => Some(*c),
+        _ => None,
+    };
+    if let Some(s) = cur_snap {
+        edit.last_uv = Some(s.uv);
+    }
+    let raw = cur_snap.map(|s| s.uv).or(edit.last_uv);
+    let fields_at = |uv: [f64; 2], sk: &SketchData| -> Vec<Measure> {
+        match offset_of {
+            Some(c) => offset_field(sk, c, uv).map(|value| Measure { label: "distância", angle: false, value, at: uv }).into_iter().collect(),
+            None => measures(tool, &stage, uv),
+        }
+    };
+    let n_fields = raw.map_or(0, |m| fields_at(m, &sk).len());
+    let mut confirm = false;
+    if n_fields == 0 {
+        edit.entry = ValueEntry::default();
+    } else if edit.dim_edit.is_none() && !edit.keyboard_busy {
+        let keys: Vec<EntryKey> = ui.input(|i| {
+            i.events
+                .iter()
+                .flat_map(|e| match e {
+                    egui::Event::Text(t) => t.chars().filter(|c| !c.is_whitespace()).map(EntryKey::Char).collect(),
+                    egui::Event::Key { key: egui::Key::Tab, pressed: true, modifiers, .. } => vec![EntryKey::Tab { back: modifiers.shift }],
+                    egui::Event::Key { key: egui::Key::Enter, pressed: true, .. } => vec![EntryKey::Enter],
+                    egui::Event::Key { key: egui::Key::Backspace, pressed: true, .. } => vec![EntryKey::Back],
+                    _ => vec![],
+                })
+                .collect()
+        });
+        for k in keys {
+            confirm |= edit.entry.key(k, n_fields, &vars).1;
+            if matches!(k, EntryKey::Tab { .. }) {
+                edit.tab_guard = 2;
+            }
+        }
+    }
+    // o Tab também passa o foco da interface para o primeiro campo que o aceite: devolve
+    if edit.tab_guard > 0 {
+        edit.tab_guard -= 1;
+        ui.ctx().memory_mut(|m| {
+            if let Some(id) = m.focused() {
+                m.surrender_focus(id);
+            }
+        });
+    }
+    if let (Some(m), true) = (raw, n_fields > 0) {
+        let locks = edit.entry.values(n_fields, &vars);
+        let mut at = m;
+        if locks.iter().any(Option::is_some) {
+            at = match (offset_of, locks[0]) {
+                (Some(c), Some(d)) => offset_lock(&sk, c, m, d),
+                _ => lock_cursor(tool, &stage, m, &locks),
+            };
+            cur_snap = Some(Snap { uv: at, point: None, origin: false });
+            cursor_uv = Some(at);
+        }
+        let pos = hover.unwrap_or(v.to_screen(at)) + egui::vec2(14., 30.);
+        draw_fields(&painter, pos, &edit.entry, &fields_at(at, &sk), &vars, ui.visuals());
+    }
+    if confirm {
+        primary_click = true;
+    }
+    if primary_click && n_fields > 0 && edit.entry.commit(&vars) {
+        let shown = raw.map(|m| fields_at(m, &sk)).unwrap_or_default();
+        edit.typed.extend(edit.entry.locks.iter().filter_map(|(i, t, val)| Some((shown.get(*i)?.label, t.clone(), *val))));
+    }
+    let steps_before = (edit.clicks.len(), edit.chain_last);
+    let curves_before: std::collections::HashSet<Id> = sk.curves.iter().map(|c| c.id).collect();
 
     match tool {
         Tool::Select => {
@@ -2133,19 +2525,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                             edit.chain_last = Some(p);
                         }
                         Some(last) if last != p => {
-                            let l = sk.add_curve(&mut al, Curve::Line { a: last, b: p }, edit.construction);
-                            let (a, b) = (sk.pos(last), sk.pos(p));
-                            let ang = (b[1] - a[1]).atan2(b[0] - a[0]).to_degrees().abs();
-                            if settings.auto_constraints {
-                                if ang < 2.5 || (180. - ang) < 2.5 {
-                                    sk.add_constraint(&mut al, Kind::Horizontal(l));
-                                } else if (ang - 90.).abs() < 2.5 {
-                                    sk.add_constraint(&mut al, Kind::Vertical(l));
-                                }
-                            }
-                            if settings.auto_dims {
-                                sk.add_constraint(&mut al, Kind::Length(l, fmt(d2(a, b))));
-                            }
+                            add_segment(&mut sk, &mut al, last, p, edit.construction, settings.auto_constraints, settings.auto_dims);
                             if Some(p) == edit.chain_first {
                                 edit.chain_last = None;
                                 edit.chain_first = None;
@@ -2545,6 +2925,27 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         }
     }
 
+    // ---------- o passo terminou: os campos recomeçam, e o que foi digitado vira cota da forma nova
+    let made: Vec<Id> = sk.curves.iter().map(|c| c.id).filter(|c| !curves_before.contains(c)).collect();
+    if (edit.clicks.len(), edit.chain_last) != steps_before || !made.is_empty() {
+        edit.entry = ValueEntry::default();
+    }
+    if !made.is_empty() {
+        if !edit.typed.is_empty() {
+            if tool == Tool::Offset {
+                // a distância já veio digitada: não há o que perguntar de novo
+                edit.dim_edit = None;
+            }
+            if settings.dim_on_type {
+                dims_from_fields(&mut sk, &mut al, tool, &made, &edit.typed, &vars);
+                edit.report = sk.solve(&vars, &[]);
+            }
+        }
+        edit.typed.clear();
+    } else if edit.clicks.is_empty() && edit.chain_last.is_none() {
+        edit.typed.clear();
+    }
+
     // ---------- menu rápido (botão direito): cotas e restrições possíveis para a seleção
     let mut menu_act: Option<(MenuAct, Vec<Ent>)> = None;
     if let Some(m) = &edit.menu {
@@ -2776,6 +3177,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
     let tool_name = tr(tool.info().2);
     painter.text(rect.center_top() + egui::vec2(0., 44.), egui::Align2::CENTER_TOP, format!("{}: {tool_name} · {}", tr("Ferramenta"), tr("Esc cancela o passo atual")), egui::FontId::proportional(11.), col.gamma_multiply(0.8));
 
+    edit.keyboard_busy = ui.ctx().egui_wants_keyboard_input();
+
     // ---------- grava no documento (ids alocados aqui são reservados no documento)
     let _ = &mut al_ids;
     app.open.doc.reserve_ids(next_tmp);
@@ -2799,6 +3202,10 @@ pub fn keys(app: &mut App, ctx: &egui::Context) -> bool {
     let Some(edit) = app.sketch.as_mut() else { return false };
     if ctx.input(|i| i.key_pressed(egui::Key::Escape) && !i.modifiers.command) && !edit.cancel() {
         return true;
+    }
+    // com o campo de valor aberto, as letras são da expressão
+    if edit.entry.typing() {
+        return false;
     }
     for (a, t) in [(K::SkLine, Tool::Line), (K::SkRect, Tool::Rect), (K::SkCircle, Tool::Circle), (K::SkArc, Tool::Arc3), (K::SkPoint, Tool::Point), (K::SkDim, Tool::Dimension), (K::SkSelect, Tool::Select)] {
         if km.pressed(ctx, a) {
@@ -2837,6 +3244,9 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     ui.label(RichText::new(tr(tool.info().3)).weak().small());
     if tool == Tool::Polygon {
         ui.add(crate::ui_ext::slider(&mut edit.polygon_sides, 3..=24).text(tr("lados")));
+    }
+    if matches!(tool, Tool::Line | Tool::Rect | Tool::RectCenter | Tool::Circle | Tool::Arc3 | Tool::ArcCenter | Tool::Slot | Tool::Polygon) {
+        ui.checkbox(&mut app.settings.dim_on_type, tr("Criar cota ao digitar")).on_hover_text(tr("O valor digitado no campo do cursor vira cota da curva, guardando a expressão. Desligado, ele só posiciona a geometria."));
     }
     ui.add_space(4.);
     let mut finish = false;
@@ -3218,6 +3628,138 @@ mod tests {
         assert_eq!(trim_span(&sk, h, [5., 0.]), Some((0.5, 1.)));
     }
 
+    fn digita(e: &mut ValueEntry, texto: &str, n: usize, vars: &HashMap<String, f64>) -> bool {
+        let mut confirma = false;
+        for c in texto.chars() {
+            let k = match c {
+                '\t' => EntryKey::Tab { back: false },
+                '\n' => EntryKey::Enter,
+                c => EntryKey::Char(c),
+            };
+            confirma |= e.key(k, n, vars).1;
+        }
+        confirma
+    }
+
+    /// Fecha o passo como o overlay faz: guarda os valores com os rótulos dos campos.
+    fn guarda(e: &ValueEntry, f: &[Measure]) -> Vec<(&'static str, String, f64)> {
+        e.locks.iter().map(|(i, t, v)| (f[*i].label, t.clone(), *v)).collect()
+    }
+
+    #[test]
+    fn linha_de_40_a_30_graus_so_com_teclado() {
+        let vars = HashMap::new();
+        let mut al = ids();
+        let mut sk = SketchData::default();
+        let a = sk.add_point(&mut al, 0., 0.);
+        sk.point_mut(a).unwrap().fixed = true;
+        let mouse = [7., 2.];
+        let f = measures(Tool::Line, &[[0., 0.]], mouse);
+        let mut e = ValueEntry::default();
+        assert!(digita(&mut e, "40\t30\n", f.len(), &vars), "Enter confirma");
+        let q = lock_cursor(Tool::Line, &[[0., 0.]], mouse, &e.values(2, &vars));
+        assert!((q[0] - 34.641016).abs() < 1e-5 && (q[1] - 20.).abs() < 1e-9, "{q:?}");
+        let b = sk.add_point(&mut al, q[0], q[1]);
+        let l = add_segment(&mut sk, &mut al, a, b, false, true, false);
+        dims_from_fields(&mut sk, &mut al, Tool::Line, &[l], &guarda(&e, &f), &vars);
+        assert!(sk.constraints.iter().any(|c| matches!(&c.kind, Kind::Length(x, t) if *x == l && t == "40")));
+        assert!(sk.constraints.iter().any(|c| matches!(&c.kind, Kind::LineAngle(x, t) if *x == l && t == "30")));
+        let r = sk.solve(&vars, &[]);
+        assert!(r.converged && r.dof == 0 && r.redundant == 0, "{r:?}");
+    }
+
+    #[test]
+    fn campo_trava_aceita_expressao_e_respeita_atalhos() {
+        let mut vars = HashMap::new();
+        vars.insert("L".to_string(), 80.);
+        let mut e = ValueEntry::default();
+        // letra sem campo aberto é atalho; dígito abre o campo
+        assert_eq!(e.key(EntryKey::Char('L'), 2, &vars), (false, false));
+        assert!(!e.active());
+        assert_eq!(e.key(EntryKey::Enter, 2, &vars), (false, false), "Enter à toa não confirma");
+        // Tab abre o campo seguinte para letras: pula o comprimento e digita o ângulo
+        digita(&mut e, "\tL/2\t", 2, &vars);
+        assert_eq!(e.values(2, &vars), [None, Some(40.)]);
+        assert_eq!(e.focus, 0);
+        // só o ângulo travado: o comprimento continua vindo do mouse, na direção travada
+        let q = lock_cursor(Tool::Line, &[[0., 0.]], [10., 0.], &e.values(2, &vars));
+        assert!((q[1] / q[0] - 40f64.to_radians().tan()).abs() < 1e-9);
+        // expressão inválida não trava nem confirma, e Backspace conserta
+        e.key(EntryKey::Tab { back: true }, 2, &vars);
+        digita(&mut e, "zz", 2, &vars);
+        assert!(!digita(&mut e, "\n", 2, &vars));
+        e.key(EntryKey::Back, 2, &vars);
+        e.key(EntryKey::Back, 2, &vars);
+        assert_eq!(e.values(2, &vars), [None, Some(40.)]);
+        // Backspace no campo vazio solta o cadeado
+        assert_eq!(e.key(EntryKey::Back, 2, &vars), (true, false));
+        assert_eq!(e.values(2, &vars), [None, None]);
+    }
+
+    #[test]
+    fn campos_de_cada_forma_levam_ao_valor_digitado() {
+        let n = |t: Tool, c: &[[f64; 2]], m: [f64; 2], l: &[Option<f64>]| {
+            let q = lock_cursor(t, c, m, l);
+            measures(t, c, q).iter().map(|x| x.value).collect::<Vec<f64>>()
+        };
+        let near = |a: &[f64], b: &[f64]| a.len() == b.len() && a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-6);
+        assert!(near(&n(Tool::Rect, &[[1., 1.]], [-9., 9.], &[Some(60.), Some(30.)]), &[60., 30.]));
+        assert_eq!(lock_cursor(Tool::Rect, &[[1., 1.]], [-9., 9.], &[Some(60.), None]), [-59., 9.], "lado do mouse");
+        assert!(near(&n(Tool::RectCenter, &[[0., 0.]], [3., 3.], &[Some(60.), Some(30.)]), &[60., 30.]));
+        assert!(near(&n(Tool::Circle, &[[2., 2.]], [3., 9.], &[Some(12.)]), &[12.]));
+        assert!(near(&n(Tool::Polygon, &[[0., 0.]], [3., 9.], &[Some(10.), Some(45.)]), &[10., 45.]));
+        assert!(near(&n(Tool::ArcCenter, &[[0., 0.], [10., 0.]], [1., 5.], &[Some(60.)]), &[60.]));
+        assert!(near(&n(Tool::Arc3, &[[0., 0.], [10., 0.]], [5., 2.], &[Some(13.)]), &[13.]));
+        assert!(near(&n(Tool::Slot, &[[0., 0.], [30., 0.]], [5., -3.], &[Some(16.)]), &[16.]));
+        assert!(near(&n(Tool::Move, &[[0., 0.]], [5., 5.], &[Some(25.), Some(90.)]), &[25., 90.]));
+    }
+
+    #[test]
+    fn offset_digitado_fica_na_distancia_e_do_lado_do_mouse() {
+        let (sk, l) = line_sketch([0., 0.], [40., 0.]);
+        let q = offset_lock(&sk, l, [10., -3.], 8.);
+        assert_eq!(q, [10., -8.]);
+        assert!((offset_field(&sk, l, q).unwrap() - 8.).abs() < 1e-9);
+        let mut sk = SketchData::default();
+        let mut al = ids();
+        let c = sk.add_point(&mut al, 0., 0.);
+        let ci = sk.add_curve(&mut al, Curve::Circle { c, r: 10. }, false);
+        assert_eq!(offset_lock(&sk, ci, [20., 0.], 5.), [15., 0.]);
+        assert_eq!(offset_lock(&sk, ci, [2., 0.], 5.), [5., 0.]);
+    }
+
+    #[test]
+    fn forma_digitada_nasce_cotada_e_opcao_desliga() {
+        let vars = HashMap::new();
+        let run = |tool: Tool, c: &[[f64; 2]], typed: &[(&'static str, String, f64)], o: &Build| {
+            let mut sk = SketchData::default();
+            let mut al = ids();
+            let cl: Vec<Snap> = c.iter().map(|q| snap(*q)).collect();
+            build_shape(&mut sk, &mut al, tool, &cl, o);
+            let made: Vec<Id> = sk.curves.iter().map(|c| c.id).collect();
+            dims_from_fields(&mut sk, &mut al, tool, &made, typed, &HashMap::new());
+            sk
+        };
+        let t = |l: &'static str, v: f64| (l, v.to_string(), v);
+        // retângulo: largura e altura; com cotas automáticas ligadas, a digitada toma o lugar
+        let mut sk = run(Tool::Rect, &[[0., 0.], [60., 30.]], &[t("largura", 60.), t("altura", 30.)], &opts());
+        assert_eq!(sk.constraints.iter().filter(|c| matches!(c.kind, Kind::Length(..))).count(), 2);
+        assert!(sk.solve(&vars, &[]).converged);
+        // círculo: o raio digitado substitui o diâmetro automático
+        let sk = run(Tool::Circle, &[[0., 0.], [12., 0.]], &[t("raio", 12.)], &opts());
+        assert_eq!(sk.constraints.iter().filter(|c| matches!(c.kind, Kind::Radius(..) | Kind::Diameter(..))).count(), 1);
+        // rasgo: largura e comprimento, sem cota dobrada
+        let mut sk = run(Tool::Slot, &[[0., 0.], [30., 0.], [30., 4.]], &[t("comprimento", 30.), t("ângulo", 0.), t("largura", 8.)], &opts());
+        let r = sk.solve(&vars, &[]);
+        assert!(r.converged && r.redundant == 0, "{r:?}");
+        assert!(sk.constraints.iter().filter(|c| c.kind.is_dimension()).all(|c| !c.reference));
+        // comprimento negativo aponta para o outro lado ao desenhar; a cota guarda o módulo
+        let mut al = ids();
+        let (mut sk, l) = line_sketch([0., 0.], [-40., 0.]);
+        dims_from_fields(&mut sk, &mut al, Tool::Line, &[l], &[("comprimento", "-40".to_string(), -40.)], &vars);
+        assert!(sk.constraints.iter().any(|c| matches!(&c.kind, Kind::Length(_, v) if v == "40")));
+    }
+
     #[test]
     fn dicas_tem_traducao() {
         use crate::i18n::tem_traducao;
@@ -3228,7 +3770,7 @@ mod tests {
                 t.push(edit_hint(k, a, b, n));
             }
         }
-        t.extend(["comprimento", "ângulo", "distância", "largura", "altura", "raio"]);
+        t.extend(["comprimento", "ângulo", "distância", "largura", "altura", "raio", "digite o valor · Tab trava e avança · Enter confirma"]);
         t.extend(["filete e chanfro funcionam entre duas linhas", "esse ponto não é um canto entre duas linhas", "as linhas são colineares", "offset funciona em linha, círculo e arco"]);
         let faltam: Vec<&&str> = t.iter().filter(|x| !x.is_empty() && !tem_traducao(x)).collect();
         assert!(faltam.is_empty(), "{faltam:?}");
