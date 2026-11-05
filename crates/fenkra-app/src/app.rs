@@ -18,6 +18,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use crate::i18n::tr;
 
+mod diag;
 mod salvar;
 use salvar::Acao;
 
@@ -155,6 +156,8 @@ pub struct App {
     hist: crate::historico::Historico,
     /// diálogos de gravação (B65, B56)
     salvar: salvar::Estado,
+    /// diagnóstico e pais/filhos (B69)
+    diag: diag::Estado,
     last_edit: f64,
     toasts: Vec<(String, f64, bool)>,
     left: LeftTab,
@@ -314,6 +317,7 @@ impl App {
             fit_pending: true,
             hist: crate::historico::Historico::new(settings.historico_mb),
             salvar: Default::default(),
+            diag: Default::default(),
             last_edit: -10.,
             toasts: vec![],
             left: LeftTab::Peca,
@@ -2683,6 +2687,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         self.redo();
                         ui.close();
                     }
+                    ui.separator();
+                    if ui.button(tr("Diagnóstico…")).clicked() {
+                        self.abrir_diagnostico();
+                        ui.close();
+                    }
                 });
                 ui.separator();
                 // abas de módulo (RF-UI-006)
@@ -3529,6 +3538,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let r = if doc.props.pn.is_empty() { r } else { r.on_hover_text(format!("PN {} · {}", doc.props.pn, doc.props.part_type.label())) };
         let _ = r;
 
+        diag::caixa_de_filtro(ui);
         crate::tree_ui::filhos(ui, |ui| {
         if !hide("origem") {
         // ---------- Origem (fixa)
@@ -4210,6 +4220,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
 
     fn feature_row(&self, ui: &mut egui::Ui, doc: &Document, i: usize, f: &Feature, new_sel: &mut Option<Sel>, actions: &mut Vec<TreeAction>) {
         let st = self.status_of(f.id);
+        let filtro = diag::filtro_atual(ui.ctx());
+        if !filtro.vazio() && !filtro.passa(f, st) {
+            return;
+        }
         let now = ui.input(|x| x.time);
         let (stale, sweeping) = self.row_pending(i, now);
         let (badge, color) = match st {
@@ -4276,6 +4290,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
             if ui.button(tr("✎ Renomear   F2")).clicked() {
                 actions.push(TreeAction::StartRename(f.id));
+                ui.close();
+            }
+            if ui.button(tr("Pais e filhos…")).clicked() {
+                actions.push(TreeAction::ParentsChildren(f.id));
                 ui.close();
             }
             ui.menu_button(tr("👁 Exibição"), |ui| {
@@ -4397,6 +4415,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 }
             }
             TreeAction::Delete(id) => self.ask_delete(id),
+            TreeAction::ParentsChildren(id) => self.abrir_pais_filhos(id),
             TreeAction::SketchOn(p) => {
                 self.sel = match p {
                     PlaneRef::Datum(id) => Sel::Ref(id),
@@ -6031,6 +6050,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
 
     fn dialogs(&mut self, ctx: &egui::Context) {
         self.dialogos_de_gravacao(ctx);
+        self.janelas_de_diagnostico(ctx);
         if let Some(dd) = &mut self.delete_dialog {
             let doc = &self.open.doc;
             let mut close = false;
@@ -6347,6 +6367,7 @@ fn eye(ui: &mut egui::Ui, hidden: bool) -> bool {
 }
 
 enum TreeAction {
+    ParentsChildren(Id),
     ApplyView(usize),
     NewGeometryFolder,
     NewCommandFolder,

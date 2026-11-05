@@ -37,6 +37,22 @@ pub fn tem_traducao(s: &str) -> bool {
 }
 
 static TABLE: &[(&str, &str)] = &[
+    ("Filtrar: nome, :erro, :suprimido, :oculto", "Filter: name, :erro, :suprimido, :oculto"),
+    ("Limpar o filtro", "Clear the filter"),
+    ("Nenhum comando com erro.", "No commands with errors."),
+    ("Do primeiro ao último: corrija a causa e as consequências somem sozinhas.", "Top to bottom: fix the cause and the consequences go away on their own."),
+    ("consequência de", "consequence of"),
+    ("causa", "cause"),
+    ("Realçar", "Highlight"),
+    ("Desativar", "Deactivate"),
+    ("Pais e filhos", "Parents and children"),
+    ("Pais e filhos…", "Parents and children…"),
+    ("Ir à causa", "Go to the cause"),
+    ("Pais (de que depende)", "Parents (what it depends on)"),
+    ("Filhos (quem depende dele)", "Children (what depends on it)"),
+    ("Diagnóstico", "Diagnostics"),
+    ("Diagnóstico…", "Diagnostics…"),
+    ("Apagar este objeto leva os filhos junto; edite ou substitua os pais antes de apagar.", "Deleting this object also removes its children; edit or replace the parents first."),
     ("Nada a salvar", "Nothing to save"),
     ("Não foi gravado", "Was not saved"),
     ("Salvar as alterações?", "Save your changes?"),

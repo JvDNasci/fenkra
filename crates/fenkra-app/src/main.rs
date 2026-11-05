@@ -34,6 +34,7 @@ mod measure;
 mod i18n;
 mod tree_ui;
 mod historico;
+mod diagnostico;
 mod paineis;
 mod partida;
 #[cfg(test)]
