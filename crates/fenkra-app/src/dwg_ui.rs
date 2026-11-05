@@ -11,6 +11,9 @@ use fenkra_desenho::source::Models;
 use fenkra_desenho::*;
 use std::path::PathBuf;
 
+mod ghost;
+mod options;
+
 /// Comandos (índice do `Cmd::Dwg`).
 pub mod c {
     pub const NEW: u8 = 0;
@@ -88,6 +91,25 @@ pub struct DwgState {
     style_clip: Option<fenkra_core::pmi::PmiStyle>,
     /// direção da câmera do 3D para a próxima vista (para o observador, eixo x)
     cam: Option<(V3, V3)>,
+    /// estado de atualização de cada vista (refeito de tempos em tempos e a cada mudança)
+    states: std::collections::HashMap<Id, ViewState>,
+    /// recarregar sozinho quando a peça ou a montagem de origem muda no disco
+    pub auto_update: bool,
+    /// âncoras quebradas (cota ou nota presa à vista): índices das âncoras que não existem mais
+    broken: std::collections::HashMap<Id, Vec<usize>>,
+    /// reatribuindo uma âncora quebrada: o objeto e o índice da âncora
+    reassign: Option<(Id, usize)>,
+    /// o clique em andamento não pegou nenhum vértice (a âncora não dá para conferir depois)
+    loose: bool,
+    /// caixa de edição da cota (duplo clique)
+    dim_edit: Option<Id>,
+    /// barra de opções (B225): escala automática, estilo e rótulo das próximas vistas
+    scale_auto: bool,
+    new_render: Render,
+    new_hidden: bool,
+    new_label: String,
+    /// dados da tabela do fantasma (ferramenta, dados): refeitos quando o desenho muda
+    ghost_table: Option<(u8, fenkra_desenho::source::TableData)>,
 }
 
 impl DwgState {
@@ -144,11 +166,54 @@ impl DwgState {
             drag_kind: 0,
             style_clip: None,
             cam: None,
+            states: Default::default(),
+            auto_update: true,
+            broken: Default::default(),
+            reassign: None,
+            loose: false,
+            dim_edit: None,
+            scale_auto: true,
+            new_render: Render::Arestas,
+            new_hidden: false,
+            new_label: String::new(),
+            ghost_table: None,
         }
     }
 
     fn invalidate(&mut self) {
         self.items = None;
+        self.states.clear();
+        self.broken.clear();
+        self.ghost_table = None;
+    }
+
+    /// Refaz o estado (atualizada, desatualizada, erro) de cada vista.
+    fn refresh_states(&mut self) {
+        let ids: Vec<Id> = self.d.views.iter().map(|v| v.id).collect();
+        self.states = ids.into_iter().map(|id| (id, self.models.view_state(&self.d, id))).collect();
+        self.refresh_broken();
+    }
+
+    /// Refaz a lista das cotas e notas cuja âncora não cai mais sobre um vértice da vista.
+    fn refresh_broken(&mut self) {
+        let mut out = std::collections::HashMap::new();
+        let dims: Vec<Dim> = self.d.dims.iter().filter(|d| !d.loose).cloned().collect();
+        for dm in dims {
+            let p = self.models.proj(&self.d, dm.view);
+            let bad: Vec<usize> = layout::dim_anchors_ok(&dm, &p).iter().enumerate().filter(|(_, ok)| !**ok).map(|(i, _)| i).collect();
+            if !bad.is_empty() && self.d.view(dm.view).is_some_and(|v| v.sheet == self.sheet) {
+                out.insert(dm.id, bad);
+            }
+        }
+        let notes: Vec<Note> = self.d.notes.iter().filter(|n| n.snapped && n.sheet == self.sheet).cloned().collect();
+        for n in notes {
+            let (Some(v), Some(a3)) = (n.view, n.anchor3) else { continue };
+            let p = self.models.proj(&self.d, v);
+            if p.error.is_none() && !layout::point_on_geometry(&p, a3) {
+                out.insert(n.id, vec![0]);
+            }
+        }
+        self.broken = out;
     }
 
     /// Caminho da origem relativo à pasta do desenho (se der).
@@ -188,6 +253,33 @@ pub fn ensure(app: &mut App) {
 fn current_source(app: &App) -> Option<Source> {
     let f = app.asm.as_ref().and_then(|s| s.file.clone()).filter(|_| app.settings.bench == crate::settings::Bench::Montagem).or_else(|| app.open.file.clone())?;
     Some(Source { path: f.to_string_lossy().to_string(), display_state: String::new(), hidden: vec![] })
+}
+
+fn needs_parent(tool: u8) -> bool {
+    matches!(tool, c::PROJ | c::SECTION | c::DETAIL)
+}
+
+fn needs_source(tool: u8) -> bool {
+    matches!(tool, c::SET | c::VIEW | c::ISO | c::FLAT | c::SCHEMA | c::VIEW_CAM | c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT)
+}
+
+/// Vista selecionada que serve de mãe (o detalhe não gera outras vistas).
+fn parent_of(st: &DwgState) -> Option<Id> {
+    st.cur().filter(|s| st.d.view(*s).is_some_and(|v| !matches!(v.kind, ViewKind::Detail { .. })))
+}
+
+/// O que falta para a ferramenta armada funcionar, dito antes do clique (None = pronta).
+pub fn block_reason(st: &DwgState) -> Option<&'static str> {
+    let t = st.tool?;
+    if needs_parent(t) && parent_of(st).is_none() {
+        Some("Selecione uma vista mãe: clique nela na folha")
+    } else if needs_source(t) && st.source.is_none() {
+        Some("Falta a origem: escolha uma peça ou montagem salva")
+    } else if (c::DIM_H..=c::DIM_ANG).contains(&t) && st.d.views.iter().all(|v| v.sheet != st.sheet) {
+        Some("A folha não tem vistas para cotar")
+    } else {
+        None
+    }
 }
 
 fn hint(tool: u8, n: usize) -> &'static str {
@@ -274,28 +366,16 @@ pub fn command(app: &mut App, i: u8) {
             }
             let st = app.dwg.as_mut().unwrap();
             st.cam = cam;
-            let needs_parent = matches!(i, c::PROJ | c::SECTION | c::DETAIL);
-            let needs_view = (c::DIM_H..=c::DIM_ANG).contains(&i);
-            let needs_source = matches!(i, c::SET | c::VIEW | c::ISO | c::FLAT | c::SCHEMA | c::VIEW_CAM | c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT);
-            if needs_parent && !st.cur().is_some_and(|s| st.d.view(s).is_some_and(|v| !matches!(v.kind, ViewKind::Detail { .. }))) {
-                app.toast(tr("Selecione antes a vista de origem (clique nela na folha)"), true);
-                return;
-            }
-            if needs_source && st.source.is_none() {
-                st.props_open = true;
-                app.toast(tr("Escolha a origem (peça ou montagem salva) no painel do desenho"), true);
-                return;
-            }
-            if needs_view && st.d.views.iter().all(|v| v.sheet != st.sheet) {
-                app.toast(tr("A folha não tem vistas para cotar"), true);
-                return;
-            }
-            if needs_parent {
-                st.sel = st.cur();
+            // a ferramenta arma mesmo com pré-requisito faltando: a folha diz o motivo na hora
+            // (`block_reason`) e o clique certo resolve, em vez de um aviso depois do clique
+            if needs_parent(i) {
+                st.sel = st.cur().filter(|s| st.d.view(*s).is_some());
             }
             st.tool = Some(i);
             st.clicks.clear();
             st.tool_view = None;
+            st.loose = false;
+            st.reassign = None;
         }
     }
 }
@@ -447,6 +527,8 @@ pub fn keys(app: &mut App, ctx: &egui::Context, save_k: bool, undo: bool, redo: 
     if !typing && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
         st.tool = None;
         st.clicks.clear();
+        st.loose = false;
+        st.reassign = None;
     }
     if del && !typing {
         if let Some(id) = st.sel.take().or(st.focus.take()) {
@@ -469,6 +551,7 @@ fn style_px(s: Style, z: f32) -> f32 {
 /// Folha na tela.
 pub fn canvas(app: &mut App, root: &mut egui::Ui) {
     ensure(app);
+    let cur_src = current_source(app);
     let dark = root.ctx().global_style().visuals.dark_mode;
     egui::CentralPanel::no_frame().show(root, |ui| {
         let rect = ui.max_rect();
@@ -478,9 +561,11 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
         // o 3D mudou no disco? (de tempos em tempos)
         if now - st.last_check > 1.5 {
             st.last_check = now;
-            if st.models.refresh() {
+            if st.auto_update && st.models.refresh() {
                 st.invalidate();
             }
+            // sem atualização automática o arquivo pode ter mudado: o selo avisa
+            st.states.clear();
         }
         // mudanças no desenho: desfazer e recalcular a folha
         layout::align_views(&mut st.d);
@@ -533,6 +618,9 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
             st.boxes = layout::owner_boxes(&items);
             st.items = Some(items);
         }
+        if st.states.is_empty() && !st.d.views.is_empty() {
+            st.refresh_states();
+        }
         // seleção: menor caixa que contém o ponto
         let mouse_mm = hover.map(to_mm);
         let pick = |st: &DwgState, p: V2| -> Option<Id> {
@@ -557,6 +645,8 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
                 Color32::from_rgb(20, 110, 230)
             } else if mine && (it.owner == hot || it.owner == st.focus) {
                 Color32::from_rgb(70, 150, 255)
+            } else if it.alert {
+                ui.visuals().error_fg_color
             } else {
                 own
             };
@@ -614,6 +704,27 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
                 }
             }
         }
+        // selo de estado no canto de cada vista (forma e texto, não só a cor)
+        for (id, state) in st.states.iter().filter(|(id, _)| st.d.view(**id).is_some_and(|v| v.sheet == st.sheet)) {
+            let Some((_, _, hi)) = st.boxes.iter().find(|b| b.0 == *id) else { continue };
+            seal(&painter, ui, to_scr(*hi), *state);
+        }
+        // âncora quebrada na cota ou nota em foco: alça "Reatribuir" (acende os candidatos na vista)
+        if st.tool.is_none() && st.reassign.is_none() {
+            if let Some((id, bad)) = active.and_then(|a| st.broken.get(&a).map(|b| (a, b.clone()))) {
+                if let Some((_, _, hi)) = st.boxes.iter().find(|b| b.0 == id) {
+                    let err = ui.visuals().error_fg_color;
+                    let g = painter.layout_no_wrap(tr("Reatribuir").to_string(), egui::FontId::proportional(12.), err);
+                    let r = Rect::from_min_size(to_scr(*hi) + Vec2::new(4., -g.size().y - 12.), g.size() + Vec2::new(10., 6.));
+                    painter.rect_filled(r, 3., ui.visuals().window_fill);
+                    painter.rect_stroke(r, 3., Stroke::new(1.5, err), egui::StrokeKind::Inside);
+                    painter.galley(r.min + Vec2::new(5., 3.), g, err);
+                    if ui.interact(r, ui.scope_id().with(("reatribuir", id.0)), egui::Sense::click()).clicked() {
+                        st.reassign = Some((id, bad[0]));
+                    }
+                }
+            }
+        }
         // alças: texto da cota (arrastar solta o texto) e ponta da chamada
         let orange = Color32::from_rgb(255, 130, 20);
         if st.tool.is_none() {
@@ -655,8 +766,11 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
         let view_at = |st: &DwgState, p: V2| -> Option<Id> {
             st.boxes.iter().filter(|(id, lo, hi)| st.d.view(*id).is_some() && p[0] >= lo[0] && p[0] <= hi[0] && p[1] >= lo[1] && p[1] <= hi[1]).map(|x| x.0).next()
         };
-        if let Some(tool) = st.tool {
-            painter.text(rect.center_top() + Vec2::new(0., 10.), egui::Align2::CENTER_TOP, format!("{}   (Esc {})", tr(hint(tool, st.clicks.len())), tr("cancela")), egui::FontId::proportional(14.), if dark { Color32::from_rgb(255, 210, 120) } else { Color32::from_rgb(120, 60, 0) });
+        if let Some(target) = st.reassign {
+            reassign_pass(st, ui, &painter, rect, &resp, mouse_mm, &to_scr, target);
+        } else if let Some(tool) = st.tool {
+            let blocked = block_reason(st);
+            painter.text(rect.center_top() + Vec2::new(0., 10.), egui::Align2::CENTER_TOP, format!("{}   (Esc {})", tr(blocked.unwrap_or_else(|| hint(tool, st.clicks.len()))), tr("cancela")), egui::FontId::proportional(14.), if dark { Color32::from_rgb(255, 210, 120) } else { Color32::from_rgb(120, 60, 0) });
             let dim_tool = (c::DIM_H..=c::DIM_ANG).contains(&tool);
             // marcador do snap sob o mouse
             if let Some(m) = mouse_mm {
@@ -672,9 +786,28 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
                     painter.line_segment([to_scr(*last), to_scr(m)], Stroke::new(1., Color32::from_rgb(255, 120, 0)));
                 }
             }
-            if resp.clicked_by(egui::PointerButton::Primary) {
+            // fantasma preso ao cursor (nada é criado antes da confirmação)
+            if let Some(m) = mouse_mm.filter(|_| blocked.is_none()) {
+                if let Some(g) = ghost::compute(st, m, &snap, &view_at) {
+                    ghost::paint(ui, &painter, &g, &to_scr, z);
+                }
+            }
+            options::bar(ui.ctx(), st, rect, cur_src.clone());
+            // Enter confirma na posição do cursor, como o clique
+            let enter = !ui.ctx().egui_wants_keyboard_input() && ui.ctx().input(|i| i.key_pressed(egui::Key::Enter));
+            if resp.clicked_by(egui::PointerButton::Primary) || (enter && resp.hovered()) {
                 if let Some(m) = mouse_mm {
-                    click(app, m, &snap, &view_at);
+                    let m = ghost::placed(st, tool, m);
+                    if block_reason(st).is_some() {
+                        // pré-requisito faltando: o clique numa vista a escolhe como mãe
+                        if needs_parent(tool) {
+                            if let Some(v) = view_at(st, m).filter(|v| st.d.view(*v).is_some_and(|x| !matches!(x.kind, ViewKind::Detail { .. }))) {
+                                st.sel = Some(v);
+                            }
+                        }
+                    } else {
+                        click(app, m, &snap, &view_at);
+                    }
                 }
             }
         } else {
@@ -686,6 +819,9 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
                         st.sel = Some(id);
                         st.focus = Some(id);
                         st.props_open = false;
+                        if st.d.dims.iter().any(|d| d.id == id) {
+                            st.dim_edit = Some(id);
+                        }
                     }
                     None => st.origin = None,
                 }
@@ -759,6 +895,7 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
                             if let Some((vid, s, a3)) = assoc {
                                 n.view = Some(vid);
                                 n.anchor3 = Some(a3);
+                                n.snapped = true;
                                 n.leader = Some(s);
                             }
                         }
@@ -792,7 +929,196 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
             }
             x = r.left() - 4.;
         }
+        dim_edit_window(ui.ctx(), st);
     });
+}
+
+/// Reatribuição de âncora: acende os vértices candidatos da vista (o mais perto da âncora antiga
+/// maior) e o clique no escolhido recoloca a âncora; segue para a próxima quebrada, se houver.
+#[allow(clippy::too_many_arguments)]
+fn reassign_pass(st: &mut DwgState, ui: &egui::Ui, painter: &egui::Painter, rect: Rect, resp: &egui::Response, mouse_mm: Option<V2>, to_scr: &dyn Fn(V2) -> Pos2, target: (Id, usize)) {
+    let (id, idx) = target;
+    let (vid, old) = match (st.d.dims.iter().find(|d| d.id == id), st.d.notes.iter().find(|n| n.id == id)) {
+        (Some(dm), _) => (dm.view, dm.anchors.get(idx).copied()),
+        (_, Some(n)) => (n.view.unwrap_or(Id(0)), n.anchor3),
+        _ => (Id(0), None),
+    };
+    let (Some(v), Some(old)) = (st.d.view(vid).cloned(), old) else {
+        st.reassign = None;
+        return;
+    };
+    let p = st.models.proj(&st.d, vid);
+    let Some(ax) = p.axes else {
+        st.reassign = None;
+        return;
+    };
+    let q_old = ax.project(old);
+    let cands = layout::nearest_candidates(&p, q_old, 40);
+    let col = ui.visuals().selection.stroke.color;
+    let err = ui.visuals().error_fg_color;
+    let at_old = to_scr(layout::to_sheet(&v, &p, q_old));
+    painter.line_segment([at_old + Vec2::new(-6., -6.), at_old + Vec2::new(6., 6.)], Stroke::new(2., err));
+    painter.line_segment([at_old + Vec2::new(-6., 6.), at_old + Vec2::new(6., -6.)], Stroke::new(2., err));
+    let scr: Vec<Pos2> = cands.iter().map(|c| to_scr(layout::to_sheet(&v, &p, *c))).collect();
+    for (i, s) in scr.iter().enumerate() {
+        painter.circle_stroke(*s, if i == 0 { 7. } else { 4.5 }, Stroke::new(if i == 0 { 2.2 } else { 1.4 }, col));
+    }
+    painter.text(
+        rect.center_top() + Vec2::new(0., 10.),
+        egui::Align2::CENTER_TOP,
+        format!("{} {}   (Esc {})", tr("Clique o vértice que substitui a âncora"), idx + 1, tr("cancela")),
+        egui::FontId::proportional(14.),
+        ui.visuals().text_color(),
+    );
+    let _ = mouse_mm;
+    if resp.clicked_by(egui::PointerButton::Primary) {
+        let Some(click) = ui.ctx().input(|i| i.pointer.interact_pos()) else { return };
+        let best = scr.iter().enumerate().map(|(i, s)| (i, s.distance(click))).filter(|(_, d)| *d < 16.).min_by(|a, b| a.1.total_cmp(&b.1));
+        let Some((i, _)) = best else { return };
+        let q = cands[i];
+        let ok = if st.d.dims.iter().any(|d| d.id == id) { layout::reassign_dim_anchor(&mut st.d, id, idx, q, &p) } else { layout::reassign_note_anchor(&mut st.d, id, q, &p) };
+        if ok {
+            st.refresh_broken();
+            st.reassign = st.broken.get(&id).and_then(|b| b.first().copied()).map(|n| (id, n));
+        }
+    }
+}
+
+/// Caixa de edição da cota (duplo clique): texto com o marcador do valor medido, precisão,
+/// tolerância tipada e símbolos, com o resultado ao vivo.
+fn dim_edit_window(ctx: &egui::Context, st: &mut DwgState) {
+    let Some(id) = st.dim_edit else { return };
+    let Some(dm0) = st.d.dims.iter().find(|d| d.id == id).cloned() else {
+        st.dim_edit = None;
+        return;
+    };
+    let measured = st.d.view(dm0.view).cloned().and_then(|v| {
+        let p = st.models.proj(&st.d, v.id);
+        layout::dim_value(&dm0, &v, &p).map(|x| x.0)
+    });
+    let mut dm = dm0.clone();
+    let (mut open, mut close) = (true, false);
+    let decimals = st.d.decimals;
+    egui::Window::new(format!("{} — {}", tr("Editar cota"), tr(dm.kind.label()))).open(&mut open).collapsible(false).resizable(false).show(ctx, |ui| {
+        ui.label(tr("Texto"));
+        ui.text_edit_singleline(&mut dm.text);
+        ui.horizontal_wrapped(|ui| {
+            if ui.small_button(format!("<> {}", tr("valor"))).on_hover_text(tr("insere o marcador do valor medido")).clicked() {
+                dm.text.push_str("<>");
+            }
+            for sym in ["Ø", "°", "±", "R", "□", "×"] {
+                if ui.small_button(sym).clicked() {
+                    dm.text.push_str(sym);
+                }
+            }
+        });
+        ui.label(RichText::new(tr("Vazio = valor medido. O marcador <> vira o valor (ex.: 4x <> passante).")).weak().small());
+        ui.horizontal(|ui| {
+            let mut own = dm.precision.is_some();
+            if crate::editor::check(ui, &mut own, "Precisão própria").changed() {
+                dm.precision = own.then_some(decimals);
+            }
+            match dm.precision.as_mut() {
+                Some(pr) => {
+                    ui.add(crate::ui_ext::dv(pr).range(0..=4));
+                }
+                None => {
+                    ui.label(RichText::new(format!("{}: {decimals}", tr("casas do desenho"))).weak().small());
+                }
+            }
+        });
+        ui.horizontal(|ui| {
+            ui.label(tr("Tolerância"));
+            egui::ComboBox::from_id_salt(("tol_modo", id.0)).selected_text(tr(dm.tol_mode.label())).show_ui(ui, |ui| {
+                for m in TolMode::ALL {
+                    ui.selectable_value(&mut dm.tol_mode, m, tr(m.label()));
+                }
+            });
+        });
+        match dm.tol_mode {
+            TolMode::Livre => {
+                ui.text_edit_singleline(&mut dm.tol);
+                ui.horizontal_wrapped(|ui| {
+                    for t in ["±0,1", "+0,1/0", "H7", "h6", "g6"] {
+                        if ui.small_button(t).clicked() {
+                            dm.tol = t.into();
+                        }
+                    }
+                });
+            }
+            TolMode::Simetrica => {
+                ui.horizontal(|ui| {
+                    ui.label("±");
+                    ui.add(crate::ui_ext::dv(&mut dm.tol_a).range(0.0..=100.).speed(0.01));
+                    ui.label("mm");
+                });
+            }
+            TolMode::Bilateral => {
+                ui.horizontal(|ui| {
+                    ui.label("+");
+                    ui.add(crate::ui_ext::dv(&mut dm.tol_a).range(0.0..=100.).speed(0.01));
+                    ui.label("/ −");
+                    ui.add(crate::ui_ext::dv(&mut dm.tol_b).range(0.0..=100.).speed(0.01));
+                    ui.label("mm");
+                });
+            }
+        }
+        if let Some(val) = measured {
+            ui.separator();
+            ui.label(RichText::new(format!("{} {}", tr("Resultado:"), layout::dim_text(&st.d, &dm, val))).strong());
+        }
+        if ui.button(tr("Pronto")).clicked() {
+            close = true;
+        }
+    });
+    if dm != dm0 {
+        if let Some(x) = st.d.dims.iter_mut().find(|d| d.id == id) {
+            *x = dm;
+        }
+    }
+    if !open || close {
+        st.dim_edit = None;
+    }
+}
+
+/// Estilo da barra de opções (renderização, ocultas, rótulo) numa vista recém-criada.
+fn style_new(st: &mut DwgState, id: Id) {
+    let (render, hidden, label) = (st.new_render, st.new_hidden, st.new_label.trim().to_string());
+    if let Some(v) = st.d.views.iter_mut().find(|v| v.id == id) {
+        v.render = render;
+        v.hidden_lines = hidden;
+        if !label.is_empty() {
+            v.name = label;
+        }
+    }
+}
+
+/// Cor do estado: tokens do tema (erro, aviso, texto discreto).
+fn state_color(ui: &egui::Ui, s: ViewState) -> Color32 {
+    match s {
+        ViewState::Atualizada => ui.visuals().weak_text_color(),
+        ViewState::Desatualizada => ui.visuals().warn_fg_color,
+        ViewState::Erro => ui.visuals().error_fg_color,
+    }
+}
+
+/// Símbolo que acompanha a cor do estado (daltonismo: nunca só a cor).
+fn state_icon(s: ViewState) -> &'static str {
+    match s {
+        ViewState::Atualizada => "●",
+        ViewState::Desatualizada => "▲",
+        ViewState::Erro => "■",
+    }
+}
+
+/// Selo de estado da vista, preso ao canto superior direito dela.
+fn seal(painter: &egui::Painter, ui: &egui::Ui, corner: Pos2, s: ViewState) {
+    let col = state_color(ui, s);
+    let g = painter.layout_no_wrap(format!("{} {}", state_icon(s), tr(s.label())), egui::FontId::proportional(11.), col);
+    let r = Rect::from_min_size(corner + Vec2::new(-g.size().x - 10., -g.size().y - 8.), g.size() + Vec2::new(8., 4.));
+    painter.rect_filled(r, 3., ui.visuals().window_fill);
+    painter.rect_stroke(r, 3., Stroke::new(1., col), egui::StrokeKind::Inside);
+    painter.galley(r.min + Vec2::new(4., 2.), g, col);
 }
 
 /// Centro e raio de uma polilinha que é um arco (três pontos e conferência dos outros).
@@ -866,55 +1192,23 @@ fn click(app: &mut App, m: V2, snap: &SnapFn, view_at: &ViewAt) {
         st.tool = None;
         st.clicks.clear();
         st.tool_view = None;
+        st.loose = false;
         st.sel = Some(id);
     };
     match tool {
         c::SET | c::VIEW | c::ISO | c::FLAT | c::SCHEMA | c::VIEW_CAM => {
-            let src = st.source.clone().unwrap();
-            let sc = st.new_scale;
-            let id = match tool {
-                c::SET => {
-                    // espaçamento pelo tamanho da peça (a superior e a lateral não se encostam)
-                    let f = st.d.add_view(sheet, src.clone(), ViewKind::Standard(Dir::Frente), m, sc);
-                    let p = st.models.proj(&st.d, f);
-                    let gap = ((p.hi[0] - p.lo[0]).max(p.hi[1] - p.lo[1]) * sc + 25.).max(40.);
-                    st.d.delete(f);
-                    st.d.add_standard_set(sheet, src, m, sc, gap)[0]
-                }
-                c::ISO => st.d.add_view(sheet, src, ViewKind::Standard(Dir::Iso), m, sc),
-                c::FLAT => st.d.add_view(sheet, src, ViewKind::Flat, m, sc),
-                c::SCHEMA => st.d.add_view(sheet, src, ViewKind::Schematic(st.new_dir), m, sc),
-                c::VIEW_CAM => {
-                    let (toward, x) = st.cam.unwrap_or(([0., -1., 0.], [1., 0., 0.]));
-                    st.d.add_view(sheet, src, ViewKind::Camera { toward, x }, m, sc)
-                }
-                _ => st.d.add_view(sheet, src, ViewKind::Standard(st.new_dir), m, sc),
-            };
+            // as mesmas funções do fantasma: o que se viu é o que é criado
+            let Some((t, ids)) = ghost::new_views(st, tool, m) else { return };
+            let novas = ghost::commit_views(st, &t, &ids);
+            let Some(id) = novas.first().copied() else { return };
             done(st, id);
         }
         c::PROJ => {
             let Some(parent) = st.cur().and_then(|s| st.d.view(s).cloned()) else { return };
-            let (dx, dy) = (m[0] - parent.pos[0], m[1] - parent.pos[1]);
-            let base = match &parent.kind {
-                ViewKind::Standard(d) | ViewKind::Projected { dir: d, .. } => *d,
-                _ => Dir::Frente,
-            };
             // 1º diedro, a partir da frente: abaixo vê-se de cima, à direita vê-se da esquerda
-            let dir = if dx.abs() > dy.abs() {
-                match (base, dx > 0.) {
-                    (Dir::Frente, true) => Dir::Esquerda,
-                    (Dir::Frente, false) => Dir::Direita,
-                    (Dir::Esquerda, true) => Dir::Tras,
-                    (Dir::Direita, false) => Dir::Tras,
-                    (_, true) => Dir::Esquerda,
-                    (_, false) => Dir::Direita,
-                }
-            } else if dy < 0. {
-                Dir::Topo
-            } else {
-                Dir::Base
-            };
+            let dir = ghost::proj_dir(&parent, m);
             let id = st.d.add_view(sheet, parent.source.clone(), ViewKind::Projected { parent: parent.id, dir }, m, parent.scale);
+            style_new(st, id);
             done(st, id);
         }
         c::SECTION | c::DETAIL => {
@@ -923,22 +1217,16 @@ fn click(app: &mut App, m: V2, snap: &SnapFn, view_at: &ViewAt) {
             if st.clicks.len() < 3 {
                 return;
             }
-            let p = st.models.proj(&st.d, parent.id);
-            let a = layout::from_sheet(&parent, &p, st.clicks[0]);
-            let b = layout::from_sheet(&parent, &p, st.clicks[1]);
-            let label = st.next_label();
-            let kind = if tool == c::SECTION {
-                ViewKind::Section { parent: parent.id, a, b, label }
-            } else {
-                let r = ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2)).sqrt().max(1.);
-                ViewKind::Detail { parent: parent.id, center: a, radius: r, label }
-            };
-            let sc = if tool == c::DETAIL { parent.scale * 2. } else { parent.scale };
+            let Some((kind, sc)) = ghost::section_kind(st, tool, &parent) else { return };
             let id = st.d.add_view(sheet, parent.source.clone(), kind, st.clicks[2], sc);
+            style_new(st, id);
             done(st, id);
         }
         c::DIM_H | c::DIM_V | c::DIM_A | c::DIM_ANG => {
-            let Some((vid, s, _)) = snap(st, m, st.tool_view).or_else(|| view_at(st, m).filter(|v| st.tool_view.is_none_or(|x| x == *v)).map(|v| (v, m, m))) else { return };
+            let hit = snap(st, m, st.tool_view);
+            // clique solto (sem vértice): a cota não tem âncora para conferir depois
+            st.loose |= hit.is_none();
+            let Some((vid, s, _)) = hit.or_else(|| view_at(st, m).filter(|v| st.tool_view.is_none_or(|x| x == *v)).map(|v| (v, m, m))) else { return };
             st.tool_view = Some(vid);
             st.clicks.push(s);
             let need = if tool == c::DIM_ANG { 3 } else { 2 };
@@ -956,29 +1244,12 @@ fn click(app: &mut App, m: V2, snap: &SnapFn, view_at: &ViewAt) {
                 _ => DimKind::Angle,
             };
             let id = st.d.alloc();
-            st.d.dims.push(Dim { id, view: vid, kind, anchors, offset: if kind == DimKind::Angle { 0. } else { 8. }, text: String::new(), tol: String::new(), ..Default::default() });
+            st.d.dims.push(Dim { id, view: vid, kind, anchors, offset: if kind == DimKind::Angle { 0. } else { 8. }, text: String::new(), tol: String::new(), loose: st.loose, ..Default::default() });
             done(st, id);
         }
         c::DIM_R | c::DIM_D => {
             // arco mais próximo do clique
-            let tol = 4.;
-            let mut best: Option<(f64, Id, V2, V2)> = None;
-            let views: Vec<View> = st.d.views.iter().filter(|v| v.sheet == sheet).cloned().collect();
-            for v in &views {
-                let p = st.models.proj(&st.d, v.id);
-                let q = layout::from_sheet(v, &p, m);
-                for (pl, _) in &p.lines {
-                    let Some((c, r)) = arc_center(pl) else { continue };
-                    let d = ((((q[0] - c[0]).powi(2) + (q[1] - c[1]).powi(2)).sqrt() - r) * v.scale).abs();
-                    if d < tol && best.as_ref().is_none_or(|b| d < b.0) {
-                        // ponto do arco na direção do clique
-                        let u = [q[0] - c[0], q[1] - c[1]];
-                        let l = (u[0] * u[0] + u[1] * u[1]).sqrt().max(1e-9);
-                        best = Some((d, v.id, c, [c[0] + u[0] / l * r, c[1] + u[1] / l * r]));
-                    }
-                }
-            }
-            let Some((_, vid, c, on)) = best else {
+            let Some((vid, c, on)) = ghost::arc_near(st, m) else {
                 app.toast(tr("Nenhum arco ou círculo perto do clique"), true);
                 return;
             };
@@ -990,7 +1261,7 @@ fn click(app: &mut App, m: V2, snap: &SnapFn, view_at: &ViewAt) {
         }
         c::NOTE | c::CENTER => {
             let id = st.d.alloc();
-            let (kind, text) = if tool == c::NOTE { (NoteKind::Text, tr("Nota").to_string()) } else { (NoteKind::CenterMark, "5".to_string()) };
+            let (kind, text) = ghost::symbol_note(st, tool);
             // dentro de uma vista: pertence a ela (anda junto)
             let view = view_at(st, m);
             st.d.notes.push(Note { id, sheet, kind, pos: m, leader: None, text, size: th, weld: None, view, ..Default::default() });
@@ -1006,22 +1277,14 @@ fn click(app: &mut App, m: V2, snap: &SnapFn, view_at: &ViewAt) {
                     }
                     None => {
                         st.tool_view = view_at(st, m);
+                        st.loose = true;
                         st.clicks.push(m);
                     }
                 }
                 return;
             }
             st.clicks.push(m);
-            let (kind, text) = match tool {
-                c::BALLOON => (NoteKind::Balloon, (st.d.notes.iter().filter(|n| n.kind == NoteKind::Balloon).count() + 1).to_string()),
-                c::ROUGH => (NoteKind::Roughness, "Ra 1,6".to_string()),
-                c::GDT => (NoteKind::Gdt, String::new()),
-                c::DATUM => {
-                    let used: Vec<&str> = st.d.notes.iter().filter(|n| n.kind == NoteKind::Datum).map(|n| n.text.as_str()).collect();
-                    (NoteKind::Datum, ('A'..='Z').map(|c| c.to_string()).find(|l| !used.contains(&l.as_str())).unwrap_or_else(|| "A".into()))
-                }
-                _ => (NoteKind::Weld, "a4".to_string()),
-            };
+            let (kind, text) = ghost::symbol_note(st, tool);
             let (view, anchor3) = match st.tool_view.and_then(|vid| st.d.view(vid).cloned()) {
                 Some(v) => {
                     let p = st.models.proj(&st.d, v.id);
@@ -1031,7 +1294,7 @@ fn click(app: &mut App, m: V2, snap: &SnapFn, view_at: &ViewAt) {
             };
             let gdt = (kind == NoteKind::Gdt).then(DwgGdt::default);
             let id = st.d.alloc();
-            st.d.notes.push(Note { id, sheet, kind, pos: st.clicks[1], leader: Some(st.clicks[0]), text, size: th, weld: None, gdt, view, anchor3, ..Default::default() });
+            st.d.notes.push(Note { id, sheet, kind, pos: st.clicks[1], leader: Some(st.clicks[0]), text, size: th, weld: None, gdt, view, anchor3, snapped: !st.loose && anchor3.is_some(), ..Default::default() });
             done(st, id);
         }
         c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT => {
@@ -1391,9 +1654,17 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     });
     let st = app.dwg.as_mut().unwrap();
     let mut changed_src = false;
+    let mut refresh_now = false;
     if let Some(id) = st.sel {
         if let Some(v) = st.d.views.iter_mut().find(|v| v.id == id) {
             ui.heading(tr("Vista"));
+            let state = st.states.get(&id).copied().unwrap_or(ViewState::Atualizada);
+            ui.horizontal(|ui| {
+                ui.colored_label(state_color(ui, state), format!("{} {}", state_icon(state), tr(state.label())));
+                if state == ViewState::Desatualizada && ui.small_button(tr("Atualizar agora")).on_hover_text(tr("recarrega a peça ou montagem de origem")).clicked() {
+                    refresh_now = true;
+                }
+            });
             ui.horizontal(|ui| {
                 ui.label(tr("Nome"));
                 ui.text_edit_singleline(&mut v.name);
@@ -1412,6 +1683,9 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             });
             ui.label(RichText::new(tr("Arestas visíveis")).weak().small());
             color_width(ui, &mut v.color, &mut v.line_width);
+            if matches!(v.kind, ViewKind::Section { .. }) {
+                hatch_ui(ui, &mut v.hatch, id);
+            }
             match &mut v.kind {
                 ViewKind::Camera { toward, x } => {
                     ui.label(RichText::new(format!("{} {}", tr("Direção"), crate::app::p3(&*toward, 2))).weak().small());
@@ -1713,6 +1987,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             }
         });
     });
+    crate::editor::check(ui, &mut st.scale_auto, "Escala automática");
     scale_combo(ui, &mut st.new_scale, ("escala_nova", 0));
     ui.separator();
     ui.label(RichText::new(tr("Legenda")).strong());
@@ -1758,9 +2033,70 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         (t.company, t.revision, t.notes, t.style, t.density) = keep;
     }
     ui.separator();
+    crate::editor::check(ui, &mut st.auto_update, "Atualizar sozinho quando a origem mudar");
     ui.label(RichText::new(tr("Vistas associativas: quando a peça ou a montagem é salva, o desenho se atualiza sozinho (F5 força). As cotas ficam presas às posições projetadas: se a geometria mudar muito, confira as cotas.")).weak().small());
-    if changed_src {
+    if changed_src || refresh_now {
+        if refresh_now {
+            st.models.refresh();
+        }
         st.invalidate();
+    }
+}
+
+/// Linha de um valor editável: mostra o valor padrão do estilo em cinza enquanto não foi alterado e,
+/// depois de alterado, um botão que devolve só esse valor ao padrão.
+fn default_row(ui: &mut egui::Ui, label: &str, own: &mut bool, default_text: String, edit: impl FnOnce(&mut egui::Ui) -> bool) {
+    ui.horizontal(|ui| {
+        ui.label(tr(label));
+        if edit(ui) {
+            *own = true;
+        }
+        if *own {
+            if ui.small_button("↺").on_hover_text(tr("Voltar ao padrão do estilo")).clicked() {
+                *own = false;
+            }
+        } else {
+            ui.label(RichText::new(format!("{}: {default_text}", tr("padrão"))).weak().small());
+        }
+    });
+}
+
+/// Hachura da vista em corte: padrão, ângulo e passo, com o padrão do estilo em cinza.
+fn hatch_ui(ui: &mut egui::Ui, h: &mut HatchStyle, id: Id) {
+    ui.label(RichText::new(tr("Hachura")).strong());
+    let mut own = h.pattern.is_some();
+    let mut pat = h.pattern();
+    default_row(ui, "Padrão", &mut own, tr(HATCH_PATTERN.label()).to_string(), |ui| {
+        let mut ch = false;
+        egui::ComboBox::from_id_salt(("hachura_padrao", id.0)).selected_text(tr(pat.label())).show_ui(ui, |ui| {
+            for x in HatchPattern::ALL {
+                ch |= ui.selectable_value(&mut pat, x, tr(x.label())).changed();
+            }
+        });
+        ch
+    });
+    h.pattern = own.then_some(pat);
+    let mut own = h.angle.is_some();
+    let mut ang = h.angle();
+    default_row(ui, "Ângulo (°)", &mut own, dec_txt(HATCH_ANGLE), |ui| ui.add(crate::ui_ext::dv(&mut ang).range(-180.0..=180.).speed(1.)).changed());
+    h.angle = own.then_some(ang);
+    let mut own = h.step.is_some();
+    let mut step = h.step();
+    default_row(ui, "Passo (mm)", &mut own, dec_txt(HATCH_STEP), |ui| ui.add(crate::ui_ext::dv(&mut step).range(0.3..=20.).speed(0.1)).changed());
+    h.step = own.then_some(step);
+    crate::editor::check(ui, &mut h.alternate, "Alternar o ângulo entre peças vizinhas");
+    if h.custom() && ui.button(tr("Voltar ao padrão do estilo")).clicked() {
+        h.reset();
+    }
+}
+
+/// Número com o separador decimal do idioma.
+fn dec_txt(v: f64) -> String {
+    let s = format!("{v}");
+    if crate::i18n::english() {
+        s
+    } else {
+        s.replace('.', ",")
     }
 }
 
@@ -1803,4 +2139,226 @@ fn today() -> String {
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     let y = yoe + era * 400 + if m <= 2 { 1 } else { 0 };
     format!("{d:02}/{m:02}/{y}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn estado_com_vista() -> (DwgState, Id) {
+        let mut d = Drawing::new("T", Format::A3);
+        let s = d.sheets[0].id;
+        let src = Source { path: "x.fkp".into(), display_state: String::new(), hidden: vec![] };
+        let v = d.add_view(s, src, ViewKind::Standard(Dir::Frente), [100., 100.], 1.);
+        (DwgState::new(d, None), v)
+    }
+
+    #[test]
+    fn ferramenta_diz_o_que_falta_antes_do_clique() {
+        let (mut st, v) = estado_com_vista();
+        st.source = None;
+        // vista projetada sem vista mãe selecionada
+        st.tool = Some(c::PROJ);
+        assert_eq!(block_reason(&st), Some("Selecione uma vista mãe: clique nela na folha"));
+        st.sel = Some(v);
+        assert_eq!(block_reason(&st), None);
+        // vista nova sem origem
+        st.tool = Some(c::VIEW);
+        assert_eq!(block_reason(&st), Some("Falta a origem: escolha uma peça ou montagem salva"));
+        st.source = Some(Source { path: "x.fkp".into(), display_state: String::new(), hidden: vec![] });
+        assert_eq!(block_reason(&st), None);
+        // cota numa folha sem vistas
+        st.d.delete(v);
+        st.tool = Some(c::DIM_H);
+        assert_eq!(block_reason(&st), Some("A folha não tem vistas para cotar"));
+        // sem ferramenta, nada bloqueia
+        st.tool = None;
+        assert_eq!(block_reason(&st), None);
+    }
+
+    /// Estado com a placa de exemplo gravada numa pasta própria do teste.
+    fn estado_com_placa(nome: &str) -> (DwgState, std::path::PathBuf, Id) {
+        let dir = std::env::temp_dir().join(nome);
+        std::fs::create_dir_all(&dir).unwrap();
+        let arq = dir.join("placa.fkp");
+        std::fs::write(&arq, fenkra_solidos::example_document().to_json()).unwrap();
+        let mut d = Drawing::new("T", Format::A3);
+        let s = d.sheets[0].id;
+        let src = Source { path: "placa.fkp".into(), display_state: String::new(), hidden: vec![] };
+        let v = d.add_view(s, src.clone(), ViewKind::Standard(Dir::Frente), [150., 150.], 1.);
+        let mut st = DwgState::new(d, Some(dir.join("t.fkd")));
+        st.source = Some(src);
+        (st, arq, v)
+    }
+
+    #[test]
+    fn cota_com_ancora_quebrada_e_listada_e_a_reatribuicao_limpa() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let (mut st, arq, v) = estado_com_placa("fenkra_dwg_ui_ancora");
+        let front = st.models.proj(&st.d, v);
+        let ax = front.axes.unwrap();
+        let id = st.d.alloc();
+        st.d.dims.push(Dim { id, view: v, kind: DimKind::Horizontal, anchors: vec![ax.unproject([front.lo[0] + 1., front.lo[1]]), ax.unproject([front.hi[0] - 1., front.lo[1]])], ..Default::default() });
+        st.refresh_broken();
+        assert!(st.broken.is_empty(), "cota recém-criada não tem âncora quebrada");
+        // a peça cresce no disco
+        let mut doc = fenkra_solidos::example_document();
+        doc.params.iter_mut().find(|p| p.name == "L").unwrap().expr = "150".into();
+        std::fs::write(&arq, doc.to_json()).unwrap();
+        let lido = std::fs::metadata(&arq).and_then(|x| x.modified()).unwrap();
+        std::fs::OpenOptions::new().write(true).open(&arq).unwrap().set_modified(lido + std::time::Duration::from_secs(5)).unwrap();
+        assert!(st.models.refresh());
+        st.invalidate();
+        st.refresh_broken();
+        assert_eq!(st.broken.get(&id), Some(&vec![0, 1]), "as duas pontas quebraram");
+        // clique no candidato certo, ponta a ponta (o que a alça Reatribuir faz)
+        let p = st.models.proj(&st.d, v);
+        let cands = layout::nearest_candidates(&p, [p.lo[0] + 1., p.lo[1]], 40);
+        let alvo = |q: V2| *cands.iter().find(|c| (c[0] - q[0]).abs() < 1e-6 && (c[1] - q[1]).abs() < 1e-6).expect("candidato aceso");
+        assert!(layout::reassign_dim_anchor(&mut st.d, id, 0, alvo([p.lo[0] + 1., p.lo[1]]), &p));
+        st.refresh_broken();
+        assert_eq!(st.broken.get(&id), Some(&vec![1]), "falta a segunda ponta");
+        assert!(layout::reassign_dim_anchor(&mut st.d, id, 1, alvo([p.hi[0] - 1., p.lo[1]]), &p));
+        st.refresh_broken();
+        assert!(st.broken.is_empty());
+        let dm = st.d.dims.iter().find(|d| d.id == id).unwrap();
+        let (valor, _) = layout::dim_value(dm, st.d.view(v).unwrap(), &p).unwrap();
+        assert!((valor - 148.).abs() < 1e-6, "valor devolvido: {valor}");
+        // cota clicada fora das arestas nunca é dada como quebrada
+        let solta = st.d.alloc();
+        st.d.dims.push(Dim { id: solta, view: v, kind: DimKind::Horizontal, anchors: vec![ax.unproject([3.3, 4.4]), ax.unproject([50.5, 4.4])], loose: true, ..Default::default() });
+        st.refresh_broken();
+        assert!(!st.broken.contains_key(&solta));
+    }
+
+    /// Largura e altura das linhas do fantasma (mm na folha).
+    fn caixa(g: &ghost::Ghost) -> (f64, f64) {
+        let (mut lo, mut hi) = ([f64::MAX; 2], [f64::MIN; 2]);
+        for it in &g.items {
+            if let Prim::Line { pts, .. } = &it.prim {
+                for p in pts {
+                    for k in 0..2 {
+                        lo[k] = lo[k].min(p[k]);
+                        hi[k] = hi[k].max(p[k]);
+                    }
+                }
+            }
+        }
+        (hi[0] - lo[0], hi[1] - lo[1])
+    }
+
+    #[test]
+    fn fantasma_de_cada_ferramenta_nao_cria_nada_antes_da_confirmacao() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let (mut st, _arq, v) = estado_com_placa("fenkra_dwg_ui_fantasma");
+        let snap = |_: &mut DwgState, _: V2, _: Option<Id>| None;
+        let sempre_v = move |_: &DwgState, _: V2| Some(v);
+        let antes = st.d.clone();
+        let m = [250., 120.];
+        // (ferramenta, cliques já dados, vista de origem selecionada, tem linhas)
+        let casos: Vec<(u8, Vec<V2>, bool, bool)> = vec![
+            (c::SET, vec![], false, true),
+            (c::VIEW, vec![], false, true),
+            (c::ISO, vec![], false, true),
+            (c::PROJ, vec![], true, true),
+            (c::DETAIL, vec![[150., 150.]], true, true),
+            (c::SECTION, vec![[100., 150.], [200., 150.]], true, true),
+            (c::NOTE, vec![], false, false),
+            (c::BALLOON, vec![], false, false),
+            (c::BALLOON, vec![[150., 150.]], false, false),
+            (c::T_BOM, vec![], false, false),
+            (c::T_HOLES, vec![], false, false),
+        ];
+        for (tool, clicks, sel, linhas) in casos {
+            st.tool = Some(tool);
+            st.clicks = clicks;
+            st.sel = sel.then_some(v);
+            let g = ghost::compute(&mut st, m, &snap, &sempre_v).unwrap_or_else(|| panic!("ferramenta {tool} sem fantasma"));
+            assert!(!g.items.is_empty(), "ferramenta {tool}: fantasma vazio");
+            if linhas {
+                let (w, h) = caixa(&g);
+                assert!(w > 1. && h > 1., "ferramenta {tool}: sem contorno ({w} x {h})");
+            }
+            assert_eq!(st.d, antes, "ferramenta {tool}: o fantasma alterou o desenho");
+        }
+        // cota viva: depois do primeiro clique mostra o valor medido, sem criar a cota
+        let p = st.models.proj(&st.d, v);
+        let (a, b) = (layout::to_sheet(st.d.view(v).unwrap(), &p, [p.lo[0] + 1., p.lo[1]]), layout::to_sheet(st.d.view(v).unwrap(), &p, [p.hi[0] - 1., p.lo[1]]));
+        st.tool = Some(c::DIM_H);
+        st.tool_view = Some(v);
+        st.clicks = vec![a];
+        st.sel = None;
+        let vivo = move |_: &mut DwgState, _: V2, _: Option<Id>| Some((v, b, [0., 0.]));
+        let g = ghost::compute(&mut st, b, &vivo, &sempre_v).expect("cota viva");
+        let textos: Vec<&str> = g.items.iter().filter_map(|i| if let Prim::Text { text, .. } = &i.prim { Some(text.as_str()) } else { None }).collect();
+        assert!(textos.contains(&"118"), "valor medido ao vivo: {textos:?}");
+        assert_eq!(st.d, antes, "a cota viva não pode entrar no desenho");
+        // balão: mostra o número do item que vai receber
+        st.tool = Some(c::BALLOON);
+        st.clicks = vec![];
+        let g = ghost::compute(&mut st, m, &snap, &sempre_v).unwrap();
+        assert!(g.items.iter().any(|i| matches!(&i.prim, Prim::Text { text, .. } if text == "1")));
+    }
+
+    #[test]
+    fn fantasma_na_escala_real_e_alinhado_com_a_vista_mae() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let (mut st, _arq, v) = estado_com_placa("fenkra_dwg_ui_fantasma_escala");
+        let snap = |_: &mut DwgState, _: V2, _: Option<Id>| None;
+        let va = |_: &DwgState, _: V2| None;
+        st.tool = Some(c::VIEW);
+        st.scale_auto = false;
+        st.new_scale = 1.;
+        let g1 = ghost::compute(&mut st, [300., 80.], &snap, &va).unwrap();
+        st.new_scale = 0.5;
+        let g2 = ghost::compute(&mut st, [300., 80.], &snap, &va).unwrap();
+        let (w1, w2) = (caixa(&g1).0, caixa(&g2).0);
+        assert!((w2 / w1 - 0.5).abs() < 0.02, "1:2 tem metade da largura de 1:1 ({w1} -> {w2})");
+        // criar em 1:2 sem abrir painel nenhum: a barra de opções basta
+        let (t, ids) = ghost::new_views(&mut st, c::VIEW, [300., 80.]).unwrap();
+        let novas = ghost::commit_views(&mut st, &t, &ids);
+        assert!(!st.props_open && st.sel.is_none());
+        assert_eq!(st.d.view(novas[0]).unwrap().scale, 0.5);
+        // alinhamento com o centro da vista existente (v em x=150): imã de 8 px
+        st.boxes = vec![(v, [90., 140.], [210., 160.])];
+        let (p, guias) = ghost::align(&st, [150.8, 60.]);
+        assert_eq!(p[0], 150.);
+        assert_eq!(guias.len(), 1);
+        let (p, guias) = ghost::align(&st, [190., 60.]);
+        assert_eq!((p, guias.len()), ([190., 60.], 0), "longe de tudo não gruda");
+    }
+
+    #[test]
+    fn escala_auto_cabe_na_folha_e_a_manual_vale() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let (mut st, _arq, v) = estado_com_placa("fenkra_dwg_ui_auto");
+        st.d.delete(v);
+        // placa 120 x 72 x 10 numa A3: a frente (120 x 10) cabe em 2:1; as três vistas, em 1:1
+        st.scale_auto = true;
+        assert_eq!(options::scale_for(&mut st, c::VIEW), 2.);
+        assert_eq!(options::scale_for(&mut st, c::SET), 1.);
+        // com vista na folha, o Auto mantém a escala dela (desenho todo na mesma escala)
+        let src = st.source.clone().unwrap();
+        let s = st.sheet;
+        st.d.add_view(s, src, ViewKind::Standard(Dir::Frente), [100., 100.], 0.5);
+        assert_eq!(options::scale_for(&mut st, c::ISO), 0.5);
+        st.scale_auto = false;
+        st.new_scale = 5.;
+        assert_eq!(options::scale_for(&mut st, c::ISO), 5.);
+    }
+
+    #[test]
+    fn os_textos_do_bloqueio_tem_traducao() {
+        for t in ["Selecione uma vista mãe: clique nela na folha", "Falta a origem: escolha uma peça ou montagem salva", "A folha não tem vistas para cotar", "Atualizada", "Desatualizada", "Erro"] {
+            assert!(crate::i18n::tem_traducao(t), "{t}");
+        }
+    }
 }

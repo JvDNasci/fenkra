@@ -23,6 +23,8 @@ pub struct Loaded {
     pub model: Model,
     /// forma no mundo (montagem: peças posicionadas, com o estado de exibição)
     pub shape: Option<Shape>,
+    /// montagem: cada peça posicionada (para hachurar cada uma com o seu ângulo no corte)
+    pub pieces: Vec<Shape>,
     /// arquivos de que depende (para saber quando recarregar)
     files: Vec<(PathBuf, Option<SystemTime>)>,
     pub error: Option<String>,
@@ -61,6 +63,9 @@ pub struct Proj {
     pub lines: Vec<(Vec<V2>, u8)>,
     /// contornos cortados (hachura)
     pub hatch: Vec<Vec<V2>>,
+    /// peça a que cada contorno de `hatch` pertence (0, 1, 2… só entre as peças cortadas): no corte
+    /// de montagem cada peça recebe o seu ângulo
+    pub hatch_group: Vec<usize>,
     /// triângulos sombreados (do fundo para a frente) e o tom de cinza
     pub shade: Vec<([V2; 3], u8)>,
     /// textos presos à vista (ex.: "↑ 90° R2" nas linhas de dobra da planificada)
@@ -138,6 +143,28 @@ impl Models {
         !stale.is_empty()
     }
 
+    /// Estado da vista: erro de projeção, origem (ou vista mãe) alterada no disco desde a última
+    /// leitura, ou atualizada. Lê só as datas dos arquivos; não recalcula nada que já esteja em cache.
+    pub fn view_state(&mut self, d: &Drawing, id: Id) -> ViewState {
+        let Some(v) = d.view(id) else { return ViewState::Erro };
+        let parent = match &v.kind {
+            ViewKind::Projected { parent, .. } | ViewKind::Section { parent, .. } | ViewKind::Detail { parent, .. } => Some(*parent),
+            _ => None,
+        };
+        let pstate = parent.map(|p| self.view_state(d, p));
+        if pstate == Some(ViewState::Erro) || self.proj(d, id).error.is_some() {
+            return ViewState::Erro;
+        }
+        let full = self.full(&v.source.path);
+        let key = (full, format!("{}|{:?}", v.source.display_state, v.source.hidden));
+        let stale = self.loaded.get(&key).is_some_and(|l| l.files.iter().any(|(p, t)| stamp(p) != *t));
+        if stale || pstate == Some(ViewState::Desatualizada) {
+            ViewState::Desatualizada
+        } else {
+            ViewState::Atualizada
+        }
+    }
+
     /// Esquece tudo (recarregar à força).
     pub fn clear(&mut self) {
         self.loaded.clear();
@@ -157,7 +184,7 @@ impl Models {
 
     fn read(&mut self, full: &Path, state: &str, hidden: &[u64]) -> Loaded {
         let mut files = vec![(full.to_path_buf(), stamp(full))];
-        let fail = |files, e: String| Loaded { model: Model::Part(Box::new(Document::new("?"))), shape: None, files, error: Some(e) };
+        let fail = |files, e: String| Loaded { model: Model::Part(Box::new(Document::new("?"))), shape: None, pieces: vec![], files, error: Some(e) };
         let txt = match std::fs::read_to_string(full) {
             Ok(t) => t,
             Err(e) => return fail(files, format!("{}: {e}", full.display())),
@@ -168,7 +195,7 @@ impl Models {
                 Ok(doc) => {
                     let shape = fenkra_solidos::final_shape(&doc);
                     let error = shape.is_none().then(|| "a peça não tem corpo visível".to_string());
-                    Loaded { model: Model::Part(Box::new(doc)), shape, files, error }
+                    Loaded { model: Model::Part(Box::new(doc)), shape, pieces: vec![], files, error }
                 }
                 Err(e) => fail(files, e.to_string()),
             };
@@ -189,6 +216,7 @@ impl Models {
             }
         }
         let mut all = Shape::empty();
+        let mut pieces: Vec<Shape> = vec![];
         for n in &shown_asm.nodes {
             let NodeKind::Part { path } = &n.kind else { continue };
             let fp = full_path(dir.as_deref(), path);
@@ -197,12 +225,13 @@ impl Models {
                 continue;
             }
             if let Some(s) = placed_shape(&shown_asm, n.id, dir.as_deref(), &mut self.parts) {
-                all = if all.is_null() { s } else { all.compound(&s) };
+                all = if all.is_null() { s.clone() } else { all.compound(&s) };
+                pieces.push(s);
             }
         }
         let shape = (!all.is_null()).then_some(all);
         let error = shape.is_none().then(|| "a montagem não tem peças visíveis".to_string());
-        Loaded { model: Model::Asm(Box::new(a)), shape, files, error }
+        Loaded { model: Model::Asm(Box::new(a)), shape, pieces, files, error }
     }
 
     /// Projeção da vista (calcula só quando a vista, a mãe ou o arquivo mudam).
@@ -288,6 +317,7 @@ impl Models {
             }
             _ => l.shape.clone(),
         };
+        let pieces: Vec<Shape> = if matches!(v.kind, ViewKind::Section { .. }) { l.pieces.clone() } else { vec![] };
         let Some(shape) = shape else { return out };
         let Some((lo, hi)) = shape.bbox() else { return out };
         let c3 = [0, 1, 2].map(|k| (lo[k] + hi[k]) / 2.);
@@ -339,8 +369,26 @@ impl Models {
             let corner = sub(sub(o, scale3(x, big)), scale3(y, big));
             match Shape::box_tool(corner, x, n, [2. * big, 2. * big, big]).and_then(|b| shape.boolean(&b, Bool::Cut)) {
                 Ok(s) => {
-                    if let Ok(loops) = shape.section_loops(o, n, big) {
-                        out.hatch = loops.iter().map(|lp| lp.iter().map(|p| axes.project(*p)).collect()).collect();
+                    // montagem: contornos peça a peça (cada uma ganha o seu ângulo); peça única
+                    // ou falha por peça: contornos do conjunto, todos no grupo 0
+                    let mut group = 0;
+                    for piece in &pieces {
+                        if let Ok(loops) = piece.section_loops(o, n, big) {
+                            if loops.is_empty() {
+                                continue;
+                            }
+                            for lp in &loops {
+                                out.hatch.push(lp.iter().map(|p| axes.project(*p)).collect());
+                                out.hatch_group.push(group);
+                            }
+                            group += 1;
+                        }
+                    }
+                    if out.hatch.is_empty() {
+                        if let Ok(loops) = shape.section_loops(o, n, big) {
+                            out.hatch = loops.iter().map(|lp| lp.iter().map(|p| axes.project(*p)).collect()).collect();
+                            out.hatch_group = vec![0; out.hatch.len()];
+                        }
                     }
                     s
                 }

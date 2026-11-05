@@ -288,6 +288,109 @@ pub struct View {
     /// estilo herdado pelas cotas e anotações desta vista
     #[serde(default)]
     pub ann: fenkra_core::pmi::PmiStyle,
+    /// hachura da face cortada (campos vazios herdam o padrão do estilo)
+    #[serde(default)]
+    pub hatch: HatchStyle,
+}
+
+/// Padrão da hachura da face cortada.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub enum HatchPattern {
+    /// linhas paralelas (uso geral)
+    Linhas,
+    /// duas famílias de linhas perpendiculares
+    Cruzada,
+    /// face cortada preenchida (peças muito finas)
+    Solida,
+}
+
+impl HatchPattern {
+    pub const ALL: [HatchPattern; 3] = [HatchPattern::Linhas, HatchPattern::Cruzada, HatchPattern::Solida];
+    pub fn label(self) -> &'static str {
+        match self {
+            HatchPattern::Linhas => "Linhas",
+            HatchPattern::Cruzada => "Cruzada",
+            HatchPattern::Solida => "Sólida",
+        }
+    }
+}
+
+/// Valores padrão do estilo de desenho para a hachura.
+pub const HATCH_ANGLE: f64 = 45.;
+pub const HATCH_STEP: f64 = 2.5;
+pub const HATCH_PATTERN: HatchPattern = HatchPattern::Linhas;
+
+/// Hachura editável por vista. `None` = usa o padrão do estilo (mostrado em cinza no painel).
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
+pub struct HatchStyle {
+    #[serde(default)]
+    pub pattern: Option<HatchPattern>,
+    /// ângulo das linhas (graus, anti-horário na folha)
+    #[serde(default)]
+    pub angle: Option<f64>,
+    /// distância entre linhas (mm na folha)
+    #[serde(default)]
+    pub step: Option<f64>,
+    /// num corte de montagem, peças vizinhas alternam o ângulo (e a densidade)
+    #[serde(default = "yes")]
+    pub alternate: bool,
+}
+
+impl Default for HatchStyle {
+    fn default() -> Self {
+        HatchStyle { pattern: None, angle: None, step: None, alternate: true }
+    }
+}
+
+impl HatchStyle {
+    pub fn pattern(&self) -> HatchPattern {
+        self.pattern.unwrap_or(HATCH_PATTERN)
+    }
+    pub fn angle(&self) -> f64 {
+        self.angle.unwrap_or(HATCH_ANGLE)
+    }
+    pub fn step(&self) -> f64 {
+        self.step.filter(|s| *s >= 0.3).unwrap_or(HATCH_STEP)
+    }
+    /// Alguma coisa foi alterada em relação ao padrão do estilo?
+    pub fn custom(&self) -> bool {
+        self.pattern.is_some() || self.angle.is_some() || self.step.is_some() || !self.alternate
+    }
+    /// Volta tudo ao padrão do estilo.
+    pub fn reset(&mut self) {
+        *self = HatchStyle::default();
+    }
+    /// Ângulo e passo da peça número `group` do corte (0, 1, 2…): vizinhas alternam 90° e a
+    /// terceira em diante afina o passo, para nunca duas peças em contato terem a mesma textura.
+    pub fn for_group(&self, group: usize) -> (f64, f64) {
+        if !self.alternate {
+            return (self.angle(), self.step());
+        }
+        let ang = self.angle() + if group % 2 == 1 { 90. } else { 0. };
+        let step = if (group / 2) % 2 == 1 { self.step() * 0.6 } else { self.step() };
+        (ang, step)
+    }
+}
+
+/// Estado de atualização de uma vista em relação ao arquivo de origem.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ViewState {
+    /// a projeção reflete o arquivo no disco
+    Atualizada,
+    /// o arquivo de origem (ou a vista mãe) mudou e a projeção ainda não foi refeita
+    Desatualizada,
+    /// a projeção falhou (origem ausente, corte sem corpo, falha do kernel)
+    Erro,
+}
+
+impl ViewState {
+    pub fn label(self) -> &'static str {
+        match self {
+            ViewState::Atualizada => "Atualizada",
+            ViewState::Desatualizada => "Desatualizada",
+            ViewState::Erro => "Erro",
+        }
+    }
 }
 
 fn yes() -> bool {
@@ -340,11 +443,60 @@ pub struct Dim {
     /// setas: 0 automático, 1 por dentro, 2 por fora, 3 só a primeira, 4 só a segunda, 5 nenhuma
     #[serde(default)]
     pub arrows: u8,
+    /// alguma âncora foi clicada fora das arestas (sem snap): não há o que conferir nela
+    #[serde(default)]
+    pub loose: bool,
+    /// casas decimais só desta cota (None = as do desenho)
+    #[serde(default)]
+    pub precision: Option<u8>,
+    /// tolerância tipada (valores em mm); `Livre` usa o texto de `tol`
+    #[serde(default)]
+    pub tol_mode: TolMode,
+    #[serde(default)]
+    pub tol_a: f64,
+    #[serde(default)]
+    pub tol_b: f64,
+}
+
+/// Como a tolerância da cota é escrita.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum TolMode {
+    /// texto livre (ex.: H7, +0,1/0)
+    #[default]
+    Livre,
+    /// ±a
+    Simetrica,
+    /// +a/-b
+    Bilateral,
+}
+
+impl TolMode {
+    pub const ALL: [TolMode; 3] = [TolMode::Livre, TolMode::Simetrica, TolMode::Bilateral];
+    pub fn label(self) -> &'static str {
+        match self {
+            TolMode::Livre => "Texto livre",
+            TolMode::Simetrica => "Simétrica ±",
+            TolMode::Bilateral => "Bilateral +/-",
+        }
+    }
+}
+
+impl Dim {
+    /// Texto da tolerância (vazio = sem tolerância).
+    pub fn tol_text(&self, d: &Drawing) -> String {
+        let n = |v: f64| d.num_p(v, self.precision);
+        match self.tol_mode {
+            TolMode::Livre => self.tol.clone(),
+            TolMode::Simetrica if self.tol_a > 0. => format!("±{}", n(self.tol_a)),
+            TolMode::Bilateral if self.tol_a > 0. || self.tol_b > 0. => format!("+{}/-{}", n(self.tol_a), n(self.tol_b)),
+            _ => String::new(),
+        }
+    }
 }
 
 impl Default for Dim {
     fn default() -> Self {
-        Dim { id: Id(0), view: Id(0), kind: DimKind::Horizontal, anchors: vec![], offset: 8., text: String::new(), tol: String::new(), style: Default::default(), text_pos: None, arrows: 0 }
+        Dim { id: Id(0), view: Id(0), kind: DimKind::Horizontal, anchors: vec![], offset: 8., text: String::new(), tol: String::new(), style: Default::default(), text_pos: None, arrows: 0, loose: false, precision: None, tol_mode: TolMode::Livre, tol_a: 0., tol_b: 0. }
     }
 }
 
@@ -407,11 +559,14 @@ pub struct Note {
     pub view: Option<Id>,
     #[serde(default)]
     pub anchor3: Option<V3>,
+    /// `anchor3` foi tomado de um vértice da vista: dá para conferir se ele ainda existe
+    #[serde(default)]
+    pub snapped: bool,
 }
 
 impl Default for Note {
     fn default() -> Self {
-        Note { id: Id(0), sheet: Id(0), kind: NoteKind::Text, pos: [0., 0.], leader: None, text: String::new(), size: 3.5, weld: None, gdt: None, style: Default::default(), view: None, anchor3: None }
+        Note { id: Id(0), sheet: Id(0), kind: NoteKind::Text, pos: [0., 0.], leader: None, text: String::new(), size: 3.5, weld: None, gdt: None, style: Default::default(), view: None, anchor3: None, snapped: false }
     }
 }
 
@@ -557,6 +712,12 @@ impl Drawing {
         d
     }
 
+    /// Os próximos ids partem de `from`: desenho de rascunho das prévias, que nunca colide com ids
+    /// do desenho real (o cache de projeções é por id).
+    pub fn reserve_ids(&mut self, from: u64) {
+        self.next_id = self.next_id.max(from);
+    }
+
     pub fn alloc(&mut self) -> Id {
         let id = Id(self.next_id);
         self.next_id += 1;
@@ -588,7 +749,7 @@ impl Drawing {
             ViewKind::Schematic(_) => "Esquema cinemático".into(),
             ViewKind::Camera { .. } => "Vista da câmera".into(),
         };
-        self.views.push(View { id, sheet, name, source, kind, pos, scale, hidden_lines: false, tangent_edges: true, label: true, render: Render::Arestas, color: None, line_width: 0., ann: Default::default() });
+        self.views.push(View { id, sheet, name, source, kind, pos, scale, hidden_lines: false, tangent_edges: true, label: true, render: Render::Arestas, color: None, line_width: 0., ann: Default::default(), hatch: HatchStyle::default() });
         id
     }
 
@@ -653,7 +814,12 @@ impl Drawing {
 
     /// Texto de um número com as casas decimais do desenho (vírgula decimal).
     pub fn num(&self, v: f64) -> String {
-        let s = format!("{:.*}", self.decimals as usize, v);
+        self.num_p(v, None)
+    }
+
+    /// Como `num`, com as casas da cota quando ela define as suas.
+    pub fn num_p(&self, v: f64, precision: Option<u8>) -> String {
+        let s = format!("{:.*}", precision.unwrap_or(self.decimals) as usize, v);
         let s = if s.contains('.') { s.trim_end_matches('0').trim_end_matches('.').to_string() } else { s };
         s.replace('.', ",")
     }
@@ -892,5 +1058,176 @@ mod tests {
         assert_eq!(centros.iter().map(|c| c.0).collect::<Vec<_>>(), vec![1, 2]);
         let c1 = centros[0].1;
         assert!((c1[1] - 150.).abs() < 1., "item 1 (L=300) no meio do lado: {c1:?}");
+    }
+    #[test]
+    fn hachura_com_angulo_passo_e_alternancia_por_peca() {
+        let sq = vec![[0., 0.], [10., 0.], [10., 10.], [0., 10.]];
+        // 0° = linhas horizontais (y constante); 90° = verticais; passo 2 mm cobre ~5 linhas
+        let h0 = layout::hatch_at(&[sq.clone()], 2., 0.);
+        assert!((4..=6).contains(&h0.len()), "{}", h0.len());
+        assert!(h0.iter().all(|(a, b)| (a[1] - b[1]).abs() < 1e-9));
+        let h90 = layout::hatch_at(&[sq.clone()], 2., 90.);
+        assert!(h90.iter().all(|(a, b)| (a[0] - b[0]).abs() < 1e-9));
+        // passo menor, mais linhas
+        assert!(layout::hatch_at(&[sq.clone()], 1., 0.).len() > h0.len() * 3 / 2);
+        // o padrão continua sendo 45° e 2,5 mm
+        let st = HatchStyle::default();
+        assert_eq!((st.angle(), st.step(), st.custom()), (45., 2.5, false));
+        // peças vizinhas alternam 90°; a terceira afina o passo
+        let (a0, s0) = st.for_group(0);
+        let (a1, s1) = st.for_group(1);
+        let (_, s2) = st.for_group(2);
+        assert_eq!(a1 - a0, 90.);
+        assert_eq!(s0, s1);
+        assert!(s2 < s0);
+        // sem alternância, todas iguais; voltar ao padrão limpa as edições
+        let mut fixo = HatchStyle { angle: Some(30.), alternate: false, ..Default::default() };
+        assert_eq!(fixo.for_group(1), (30., 2.5));
+        assert!(fixo.custom());
+        fixo.reset();
+        assert!(!fixo.custom());
+        // dois grupos numa vista: cada um com seu ângulo
+        let mut d = Drawing::new("H", Format::A4);
+        let s = d.sheets[0].id;
+        let v = d.add_view(s, Source { path: "x.fkp".into(), display_state: String::new(), hidden: vec![] }, ViewKind::Standard(Dir::Frente), [0., 0.], 1.);
+        let outro: Vec<V2> = sq.iter().map(|p| [p[0] + 20., p[1]]).collect();
+        let segs = layout::view_hatch(d.view(v).unwrap(), &[sq, outro], &[0, 1]);
+        let dir = |a: V2, b: V2| ((b[1] - a[1]).atan2(b[0] - a[0]).to_degrees().rem_euclid(180.)).round();
+        let angs: std::collections::BTreeSet<i64> = segs.iter().map(|(a, b)| dir(*a, *b) as i64).collect();
+        assert_eq!(angs, [45, 135].into_iter().collect(), "grupos 0 e 1 a 45° e 135°");
+    }
+
+    #[test]
+    fn hachura_antiga_sem_campo_abre_com_o_padrao() {
+        let mut d = Drawing::new("Velho", Format::A4);
+        let s = d.sheets[0].id;
+        d.add_view(s, Source { path: "x.fkp".into(), display_state: String::new(), hidden: vec![] }, ViewKind::Flat, [0., 0.], 1.);
+        let mut j: serde_json::Value = serde_json::from_str(&d.to_json()).unwrap();
+        j["views"][0].as_object_mut().unwrap().remove("hatch");
+        let d2 = Drawing::from_json(&j.to_string()).unwrap();
+        assert_eq!(d2.views[0].hatch, HatchStyle::default());
+    }
+
+    #[test]
+    fn estado_da_vista_atualizada_desatualizada_e_erro() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let dir = std::env::temp_dir().join("fenkra_desenho_estado");
+        std::fs::create_dir_all(&dir).unwrap();
+        let arq = dir.join("peca.fkp");
+        std::fs::write(&arq, fenkra_solidos::example_document().to_json()).unwrap();
+        let src = Source { path: "peca.fkp".into(), display_state: String::new(), hidden: vec![] };
+        let mut d = Drawing::new("Estado", Format::A3);
+        let s = d.sheets[0].id;
+        let ids = d.add_standard_set(s, src, [130., 190.], 1., 100.);
+        let mut m = Models::new(Some(dir.clone()));
+        assert_eq!(m.view_state(&d, ids[0]), ViewState::Atualizada);
+        // a origem muda no disco: a vista e as projetadas dela ficam desatualizadas até recarregar
+        let lido = std::fs::metadata(&arq).and_then(|x| x.modified()).unwrap();
+        let f = std::fs::OpenOptions::new().write(true).open(&arq).unwrap();
+        f.set_modified(lido + std::time::Duration::from_secs(5)).unwrap();
+        drop(f);
+        assert_eq!(m.view_state(&d, ids[0]), ViewState::Desatualizada);
+        assert_eq!(m.view_state(&d, ids[1]), ViewState::Desatualizada, "a projetada herda da mãe");
+        assert!(m.refresh());
+        assert_eq!(m.view_state(&d, ids[0]), ViewState::Atualizada);
+        // origem apagada: erro (e as projetadas, que dependem dela, também)
+        std::fs::remove_file(&arq).unwrap();
+        m.refresh();
+        assert_eq!(m.view_state(&d, ids[0]), ViewState::Erro);
+        assert_eq!(m.view_state(&d, ids[1]), ViewState::Erro);
+    }
+    #[test]
+    fn ancora_quebrada_fica_em_alerta_e_a_reatribuicao_devolve_o_valor() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let dir = std::env::temp_dir().join("fenkra_desenho_ancora");
+        std::fs::create_dir_all(&dir).unwrap();
+        let arq = dir.join("placa.fkp");
+        std::fs::write(&arq, fenkra_solidos::example_document().to_json()).unwrap();
+        let src = Source { path: "placa.fkp".into(), display_state: String::new(), hidden: vec![] };
+        let mut d = Drawing::new("Ancora", Format::A3);
+        let s = d.sheets[0].id;
+        let v = d.add_view(s, src, ViewKind::Standard(Dir::Frente), [150., 150.], 1.);
+        let mut m = Models::new(Some(dir));
+        let front = m.proj(&d, v);
+        let ax = front.axes.unwrap();
+        let (lo, hi) = (front.lo, front.hi);
+        // a placa tem filete de 1 mm: os vértices da base ficam 1 mm para dentro das pontas
+        let largura = hi[0] - lo[0] - 2.;
+        let id = d.alloc();
+        d.dims.push(Dim { id, view: v, kind: DimKind::Horizontal, anchors: vec![ax.unproject([lo[0] + 1., lo[1]]), ax.unproject([hi[0] - 1., lo[1]])], offset: -8., ..Default::default() });
+        // com a peça como foi cotada, nada em alerta
+        assert_eq!(layout::dim_anchors_ok(&d.dims[0], &front), vec![true, true]);
+        assert!(layout::sheet(&d, s, &mut m).iter().filter(|i| i.owner == Some(id)).all(|i| !i.alert));
+        let valor = |d: &Drawing, p: &source::Proj| layout::dim_value(&d.dims[0], d.view(v).unwrap(), p).unwrap().0;
+        assert!((valor(&d, &front) - largura).abs() < 1e-6);
+
+        // a peça cresce (parâmetro L 120 → 150): as duas pontas da cota deixam de existir
+        let mut doc = fenkra_solidos::example_document();
+        doc.params.iter_mut().find(|p| p.name == "L").unwrap().expr = "150".into();
+        std::fs::write(&arq, doc.to_json()).unwrap();
+        let lido = std::fs::metadata(&arq).and_then(|x| x.modified()).unwrap();
+        let f = std::fs::OpenOptions::new().write(true).open(&arq).unwrap();
+        f.set_modified(lido + std::time::Duration::from_secs(5)).unwrap();
+        drop(f);
+        assert!(m.refresh());
+        let nova = m.proj(&d, v);
+        let nova_largura = nova.hi[0] - nova.lo[0];
+        assert!((nova_largura - 150.).abs() < 1e-6, "a peça tem 150 de largura: {nova_largura}");
+        assert_eq!(layout::dim_anchors_ok(&d.dims[0], &nova), vec![false, false]);
+        assert!(layout::sheet(&d, s, &mut m).iter().filter(|i| i.owner == Some(id)).any(|i| i.alert), "a cota quebrada vai em alerta");
+        // a cota continua mostrando o valor antigo: 120
+        assert!((valor(&d, &nova) - largura).abs() < 1e-6);
+
+        // reatribuição por clique: a vista acende os vértices candidatos e o clique escolhe um
+        let cands = layout::nearest_candidates(&nova, lo, 40);
+        let esq = [nova.lo[0] + 1., nova.lo[1]];
+        let dir_ = [nova.hi[0] - 1., nova.lo[1]];
+        for alvo in [esq, dir_] {
+            assert!(cands.iter().any(|c| (c[0] - alvo[0]).abs() < 1e-6 && (c[1] - alvo[1]).abs() < 1e-6), "o canto {alvo:?} é candidato");
+        }
+        assert!(layout::reassign_dim_anchor(&mut d, id, 0, esq, &nova));
+        assert!(layout::reassign_dim_anchor(&mut d, id, 1, dir_, &nova));
+        assert_eq!(layout::dim_anchors_ok(&d.dims[0], &nova), vec![true, true]);
+        assert!((valor(&d, &nova) - 148.).abs() < 1e-6, "valor depois de reatribuir: {}", valor(&d, &nova));
+        assert!(layout::sheet(&d, s, &mut m).iter().filter(|i| i.owner == Some(id)).all(|i| !i.alert));
+        // anchor fora do alcance: índice inexistente não faz nada
+        assert!(!layout::reassign_dim_anchor(&mut d, id, 5, esq, &nova));
+    }
+
+    #[test]
+    fn cota_com_precisao_e_tolerancia_tipadas() {
+        let d = Drawing::new("T", Format::A4);
+        let mut dm = Dim { id: Id(1), view: Id(2), kind: DimKind::Horizontal, ..Default::default() };
+        // texto com o marcador do valor medido e as casas do desenho (1)
+        dm.text = "2x <> passante".into();
+        assert_eq!(layout::dim_text(&d, &dm, 12.34), "2x 12,3 passante");
+        // precisão própria da cota
+        dm.precision = Some(3);
+        assert_eq!(layout::dim_text(&d, &dm, 12.3456), "2x 12,346 passante");
+        dm.text.clear();
+        dm.precision = Some(2);
+        dm.tol_mode = TolMode::Simetrica;
+        dm.tol_a = 0.05;
+        assert_eq!(layout::dim_text(&d, &dm, 10.), "10 ±0,05");
+        dm.tol_mode = TolMode::Bilateral;
+        dm.tol_a = 0.1;
+        dm.tol_b = 0.;
+        assert_eq!(layout::dim_text(&d, &dm, 10.), "10 +0,1/-0");
+        // texto livre continua valendo (H7, +0,1/0…)
+        dm.tol_mode = TolMode::Livre;
+        dm.tol = "H7".into();
+        assert_eq!(layout::dim_text(&d, &dm, 10.), "10 H7");
+        // arquivo antigo (sem os campos novos) abre como texto livre
+        let j = serde_json::to_value(&dm).unwrap();
+        let mut j = j.as_object().unwrap().clone();
+        for k in ["loose", "precision", "tol_mode", "tol_a", "tol_b"] {
+            j.remove(k);
+        }
+        let velho: Dim = serde_json::from_value(serde_json::Value::Object(j)).unwrap();
+        assert_eq!((velho.tol_mode, velho.precision, velho.loose), (TolMode::Livre, None, false));
     }
 }
