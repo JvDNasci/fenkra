@@ -399,9 +399,26 @@ impl Comando {
         if curso_medido && al.desloc[2] != 0. {
             giro(c, [0.; 3], za.map(|v| v * al.desloc[2]));
         }
-        let pb = lugar(c, b.r.comp);
         let dz = if curso_medido { 0. } else { al.desloc[2] };
         let d = [0, 1, 2].map(|i| xa[i] * al.desloc[0] + ya[i] * al.desloc[1] + za[i] * dz);
+        // eixos já paralelos: a peça vai direto para o lugar. Deixar para o solucionador custaria um
+        // giro à toa, porque ele divide o caminho entre as seis incógnitas
+        let (_, zb2, _) = fb.world(&lugar(c, b.r.comp));
+        if norm(cross(za, zb2)) < 1e-9 {
+            let (ob2, ..) = fb.world(&lugar(c, b.r.comp));
+            let falta = sub(oa, ob2);
+            let ao_longo = dot(falta, za);
+            let radial = [0, 1, 2].map(|i| falta[i] - za[i] * ao_longo);
+            let leva = match k {
+                JointKind::Revolute | JointKind::Prismatic | JointKind::Cylindrical | JointKind::Screw { .. } => Some(radial),
+                JointKind::Spherical | JointKind::Rigid => Some(falta),
+                _ => None,
+            };
+            if let Some(t) = leva {
+                giro(c, [0.; 3], [0, 1, 2].map(|i| t[i] + d[i]));
+            }
+        }
+        let pb = lugar(c, b.r.comp);
         fb.o = sub(fb.o, pb.dir_to_local(d));
         let pa = lugar(c, a.r.comp);
         let xw = pb.dir_to_local(pa.dir(fa.x));
@@ -1127,6 +1144,22 @@ mod tests {
         let mut b = a.clone();
         b.joints.clear();
         assert!(animar(&b, &sem.resolver(&b).unwrap(), &OpcoesAnimar::default()).is_err(), "sem junta no came não há o que girar");
+    }
+
+    #[test]
+    fn junta_entre_eixos_paralelos_nao_gira_a_peca_a_toa() {
+        let (a, f, m) = par();
+        let c = revolucao_entre_furos(f, m);
+        let p = c.resolver(&a).unwrap();
+        let pl = p.copia.node(m).unwrap().placement;
+        assert!(norm(sub(pl.dir([1., 0., 0.]), [1., 0., 0.])) < 1e-9, "só translada");
+        assert!(norm(sub(pl.origin, [10., 0., 30.])) < 1e-6);
+        let mut c = c;
+        c.alinhamento.desloc = [5., 0., 0.];
+        let p = c.resolver(&a).unwrap();
+        let x = p.copia.joints[0].a.frame.x;
+        let o = p.copia.node(m).unwrap().placement.origin;
+        assert!(norm(sub(o, [10. + 5. * x[0], 5. * x[1], 30.])) < 1e-6, "vai para o raio pedido, na direção do X da junta: {o:?}");
     }
 
     #[test]
