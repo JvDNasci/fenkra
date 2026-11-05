@@ -300,6 +300,10 @@ pub fn command(app: &mut App, i: u8) {
     }
 }
 
+pub fn salvar(app: &mut App, ask: bool) {
+    save(app, ask)
+}
+
 fn save(app: &mut App, ask: bool) {
     let Some(st) = app.dwg.as_mut() else { return };
     let path = match (&st.path, ask) {

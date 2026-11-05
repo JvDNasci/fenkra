@@ -18,6 +18,9 @@ use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use crate::i18n::tr;
 
+mod salvar;
+use salvar::Acao;
+
 /// Seleção na árvore / linha de tempo.
 #[derive(Clone, Copy, PartialEq, Debug, Default)]
 pub enum Sel {
@@ -150,6 +153,8 @@ pub struct App {
     pub scene_dirty: bool,
     fit_pending: bool,
     hist: crate::historico::Historico,
+    /// diálogos de gravação (B65, B56)
+    salvar: salvar::Estado,
     last_edit: f64,
     toasts: Vec<(String, f64, bool)>,
     left: LeftTab,
@@ -308,6 +313,7 @@ impl App {
             scene_dirty: true,
             fit_pending: true,
             hist: crate::historico::Historico::new(settings.historico_mb),
+            salvar: Default::default(),
             last_edit: -10.,
             toasts: vec![],
             left: LeftTab::Peca,
@@ -817,6 +823,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         self.open = OpenDoc { doc, entry, frozen, file: None, modified: false };
         self.sel = Sel::None;
         self.hist.limpar();
+        self.salvar.esquecer();
         self.fit_pending = true;
         self.request_recompute();
     }
@@ -868,6 +875,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     pub fn open_path(&mut self, path: &std::path::Path) {
         let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
         if ext == "fka" {
+            self.salvar.esquecer();
             match std::fs::read_to_string(path).map_err(|e| e.to_string()).and_then(|s| fenkra_montagem::Assembly::from_json(&s)) {
                 Ok(a) => {
                     self.asm = Some(crate::asm_ui::AsmState::new(a, Some(path.to_path_buf())));
@@ -881,6 +889,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             return;
         }
         if ext == "fkd" {
+            self.salvar.esquecer();
             match std::fs::read_to_string(path).map_err(|e| e.to_string()).and_then(|t| fenkra_desenho::Drawing::from_json(&t)) {
                 Ok(d) => {
                     self.dwg = Some(crate::dwg_ui::DwgState::new(d, Some(path.to_path_buf())));
@@ -1163,7 +1172,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             self.open_project_at(std::path::Path::new(&r));
         }
         if let Some(f) = file_open {
-            self.open_path(std::path::Path::new(&f));
+            self.com_confirmacao(Acao::AbrirCaminho(PathBuf::from(&f)));
         }
         if let Some(i) = example {
             if let Some(e) = crate::examples::all().into_iter().nth(i) {
@@ -1175,14 +1184,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         match action {
             Some(0) => self.new_project(),
             Some(1) => self.open_project(),
-            Some(2) => {
-                self.load_doc(Document::new("Peça"), None, None);
-                self.started = true;
-            }
-            Some(3) => {
-                self.open_file();
-                self.started = true;
-            }
+            Some(2) => self.com_confirmacao(Acao::NovaPeca),
+            Some(3) => self.com_confirmacao(Acao::AbrirDialogo),
             Some(5) => {
                 self.started = true;
                 self.command(Cmd::AsmNew);
@@ -2586,19 +2589,23 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     }
                     ui.separator();
                     if ui.button(tr("Nova peça")).clicked() {
-                        self.load_doc(Document::new("Peça"), None, None);
+                        self.com_confirmacao(Acao::NovaPeca);
                         ui.close();
                     }
                     if ui.button(tr("Nova peça de exemplo")).clicked() {
-                        self.load_doc(fenkra_solidos::example_document(), None, None);
+                        self.com_confirmacao(Acao::Exemplo);
                         ui.close();
                     }
                     if ui.button(tr("Abrir peça…")).clicked() {
-                        self.open_file();
+                        self.com_confirmacao(Acao::AbrirDialogo);
                         ui.close();
                     }
                     if ui.button(tr("Salvar   Ctrl+S")).clicked() {
-                        self.save();
+                        self.salvar_ativo();
+                        ui.close();
+                    }
+                    if ui.button(tr("Salvar tudo…   Ctrl+Shift+S")).clicked() {
+                        self.abrir_plano();
                         ui.close();
                     }
                     ui.separator();
@@ -6023,6 +6030,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     }
 
     fn dialogs(&mut self, ctx: &egui::Context) {
+        self.dialogos_de_gravacao(ctx);
         if let Some(dd) = &mut self.delete_dialog {
             let doc = &self.open.doc;
             let mut close = false;
@@ -6684,6 +6692,14 @@ impl eframe::App for App {
         let typing = ctx.egui_wants_keyboard_input() || self.sketch.as_ref().is_some_and(|e| e.entry.typing());
         let (save, undo, redo) = (km.pressed(ctx, K::Save), !typing && km.pressed(ctx, K::Undo), !typing && km.pressed(ctx, K::Redo));
         let del = km.pressed(ctx, K::Delete);
+        // Ctrl+S salva o documento ativo (com a checagem de mudança externa); Ctrl+Shift+S abre o plano
+        if save {
+            self.salvar_ativo();
+        }
+        if km.pressed(ctx, K::SaveAll) {
+            self.abrir_plano();
+        }
+        let save = false;
         let asm_mode = self.in_asm();
         let dwg_mode = self.settings.bench == crate::settings::Bench::Desenho;
         if dwg_mode {
