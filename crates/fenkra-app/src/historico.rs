@@ -100,51 +100,51 @@ impl Historico {
     }
 }
 
-/// Nome curto da edição, comparando o documento antes e depois.
+/// Nome curto da edição já traduzido, comparando o documento antes e depois.
 pub fn nome_da_edicao(antes: &Document, depois: &Document) -> String {
-    use crate::i18n::tr;
+    let (verbo, alvo) = descrever(antes, depois);
+    if alvo.is_empty() {
+        crate::i18n::tr(verbo).to_string()
+    } else {
+        format!("{} {alvo}", crate::i18n::tr(verbo))
+    }
+}
+
+/// Verbo (em português, ainda sem tradução) e objeto afetado; separado para testar sem depender do idioma.
+fn descrever(antes: &Document, depois: &Document) -> (&'static str, String) {
     let (a, d) = (&antes.features, &depois.features);
     if d.len() > a.len() {
         let novo = d.iter().find(|f| !a.iter().any(|x| x.id == f.id)).or(d.last());
-        return format!("{} {}", tr("Criar"), novo.map(|f| f.name.as_str()).unwrap_or(""));
+        return ("Criar", novo.map(|f| f.name.clone()).unwrap_or_default());
     }
     if d.len() < a.len() {
         let ido = a.iter().find(|f| !d.iter().any(|x| x.id == f.id));
-        return format!("{} {}", tr("Apagar"), ido.map(|f| f.name.as_str()).unwrap_or(""));
+        return ("Apagar", ido.map(|f| f.name.clone()).unwrap_or_default());
     }
     if a.iter().map(|f| f.id).ne(d.iter().map(|f| f.id)) {
-        return tr("Reordenar comandos").to_string();
+        return ("Reordenar comandos", String::new());
     }
     for (x, y) in a.iter().zip(d) {
         if x == y {
             continue;
         }
-        let verbo = if x.suppressed != y.suppressed {
-            if y.suppressed {
-                "Suprimir"
-            } else {
-                "Reativar"
-            }
+        return if x.suppressed != y.suppressed {
+            (if y.suppressed { "Suprimir" } else { "Reativar" }, y.name.clone())
         } else if x.hidden != y.hidden {
-            if y.hidden {
-                "Ocultar"
-            } else {
-                "Exibir"
-            }
+            (if y.hidden { "Ocultar" } else { "Exibir" }, y.name.clone())
         } else if x.name != y.name {
-            "Renomear"
+            ("Renomear", x.name.clone())
         } else {
-            "Editar"
+            ("Editar", y.name.clone())
         };
-        return format!("{} {}", tr(verbo), if verbo == "Renomear" { &x.name } else { &y.name });
     }
     if antes.rollback != depois.rollback {
-        return tr("Mover o marcador de retrocesso").to_string();
+        return ("Mover o marcador de retrocesso", String::new());
     }
     if antes.params != depois.params {
-        return tr("Editar parâmetros").to_string();
+        return ("Editar parâmetros", String::new());
     }
-    tr("Editar o documento").to_string()
+    ("Editar o documento", String::new())
 }
 
 #[cfg(test)]
@@ -167,11 +167,11 @@ mod testes {
         let mut b = a.clone();
         let id = b.add_feature(FeatureKind::Sketch(Default::default()));
         b.feature_mut(id).unwrap().name = "Sketch 2".into();
-        assert_eq!(nome_da_edicao(&a, &b), "Criar Sketch 2");
-        assert_eq!(nome_da_edicao(&b, &a), "Apagar Sketch 2");
+        assert_eq!(descrever(&a, &b), ("Criar", "Sketch 2".to_string()));
+        assert_eq!(descrever(&b, &a), ("Apagar", "Sketch 2".to_string()));
         let mut c = a.clone();
         c.features[0].suppressed = true;
-        assert_eq!(nome_da_edicao(&a, &c), "Suprimir Sketch 1");
+        assert_eq!(descrever(&a, &c), ("Suprimir", "Sketch 1".to_string()));
     }
 
     #[test]
@@ -181,11 +181,12 @@ mod testes {
         b.features[0].hidden = true;
         let mut h = Historico::new(64);
         h.registrar(a.clone(), &b);
-        assert_eq!(h.nome_desfazer(), Some("Ocultar Sketch 1"));
+        let esperado = nome_da_edicao(&a, &b);
+        assert_eq!(h.nome_desfazer(), Some(esperado.as_str()));
         let (volta, nome) = h.desfazer(b.clone()).unwrap();
-        assert_eq!(nome, "Ocultar Sketch 1");
+        assert_eq!(nome, esperado);
         assert!(!volta.features[0].hidden);
-        assert_eq!(h.nome_refazer(), Some("Ocultar Sketch 1"));
+        assert_eq!(h.nome_refazer(), Some(esperado.as_str()));
         let (de_novo, _) = h.refazer(volta).unwrap();
         assert!(de_novo.features[0].hidden);
         assert!(!h.pode_refazer());
