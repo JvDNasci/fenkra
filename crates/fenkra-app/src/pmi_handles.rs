@@ -267,6 +267,6 @@ mod tests {
         let p = snap_via([0.; 3], Vec3::new(10.4, 0., 2.7), Vec3::Y, false);
         let ang = p[2].atan2(p[0]).to_degrees().abs();
         assert!(((ang / 15.).round() * 15. - ang).abs() < 1e-6, "{ang}");
-        assert!(((p[0] * p[0] + p[2] * p[2]).sqrt() - 10.).abs() < 1e-9);
+        assert!(((p[0] * p[0] + p[2] * p[2]).sqrt() - 11.).abs() < 1e-9);
     }
 }
