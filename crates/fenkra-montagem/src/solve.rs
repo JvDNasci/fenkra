@@ -314,8 +314,13 @@ pub fn solve_with(a: &mut Assembly, extra: &HashMap<String, f64>) -> SolveReport
 
 /// Resolve puxando o componente `id` para `target` (peso pequeno): é o arraste que respeita as
 /// restrições — o que elas permitem acompanha o mouse, o resto fica.
+///
+/// A puxada é um resíduo a mais, então o mínimo dos quadrados divide o erro entre ela e as
+/// restrições: na rotação os pesos se igualam e uma peça sem giro livre sairia do lugar. Por isso
+/// um segundo passo, sem puxada, projeta o resultado de volta nas restrições.
 pub fn solve_toward(a: &mut Assembly, id: Id, target: Placement, weight: f64) -> SolveReport {
-    solve_inner(a, &HashMap::new(), Some((id, target, weight)))
+    solve_inner(a, &HashMap::new(), Some((id, target, weight)));
+    solve_inner(a, &HashMap::new(), None)
 }
 
 fn solve_inner(a: &mut Assembly, extra: &HashMap<String, f64>, pull: Option<(Id, Placement, f64)>) -> SolveReport {

@@ -2812,10 +2812,12 @@ pub fn fasteners_window(app: &mut App, ctx: &egui::Context) {
                 combo(ui, "fix_porca", &mut f.op.familia_porca, &familias(|t| t == TipoFixador::Porca));
             });
         }
+        crate::editor::section(ui, "Giro");
+        crate::editor::check(ui, &mut f.op.travar_giro, "travar o giro em torno do eixo (fixador sem graus de liberdade)");
         crate::editor::section(ui, "Onde");
         crate::editor::check(ui, &mut f.only_selected, "só nos componentes selecionados (árvore ou viewport)");
         ui.add_space(4.);
-        apply = ui.add(egui::Button::new(RichText::new(tr("Preencher furos")).strong()).min_size(egui::vec2(140., 28.))).on_hover_text(tr("Insere os fixadores já na posição, com restrições de eixo e de contato, e resolve a montagem. Rodar de novo não duplica.")).clicked();
+        apply = ui.add(egui::Button::new(RichText::new(tr("Preencher furos")).strong()).min_size(egui::vec2(140., 28.))).on_hover_text(tr("Insere os fixadores já na posição, com restrições de eixo, de contato e trava de giro, e resolve a montagem. Rodar de novo não duplica.")).clicked();
         if !f.warnings.is_empty() {
             crate::editor::section(ui, "Avisos");
             egui::ScrollArea::vertical().max_height(140.).show(ui, |ui| {
