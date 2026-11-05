@@ -178,6 +178,44 @@ pub fn shifted(loops: &[Loop2], by: [f64; 2]) -> Vec<Loop2> {
         .collect()
 }
 
+/// Agrupa as linhas do esqueleto por contiguidade: duas linhas que dividem uma ponta (dentro de
+/// `tol`) caem no mesmo grupo, direta ou indiretamente. Cada grupo guarda os índices das linhas na
+/// ordem em que foram escolhidas; os grupos saem pela primeira linha de cada um (B226).
+pub fn contiguous_groups(ends: &[([f64; 3], [f64; 3])], tol: f64) -> Vec<Vec<usize>> {
+    let n = ends.len();
+    let mut root: Vec<usize> = (0..n).collect();
+    fn find(r: &mut [usize], mut i: usize) -> usize {
+        while r[i] != i {
+            r[i] = r[r[i]];
+            i = r[i];
+        }
+        i
+    }
+    let near = |p: [f64; 3], q: [f64; 3]| (0..3).map(|k| (p[k] - q[k]) * (p[k] - q[k])).sum::<f64>().sqrt() <= tol;
+    for i in 0..n {
+        for j in i + 1..n {
+            let (a, b) = (ends[i], ends[j]);
+            if near(a.0, b.0) || near(a.0, b.1) || near(a.1, b.0) || near(a.1, b.1) {
+                let (ri, rj) = (find(&mut root, i), find(&mut root, j));
+                if ri != rj {
+                    root[rj.max(ri)] = ri.min(rj);
+                }
+            }
+        }
+    }
+    let mut groups: Vec<Vec<usize>> = vec![];
+    let mut slot: std::collections::HashMap<usize, usize> = Default::default();
+    for i in 0..n {
+        let r = find(&mut root, i);
+        let g = *slot.entry(r).or_insert_with(|| {
+            groups.push(vec![]);
+            groups.len() - 1
+        });
+        groups[g].push(i);
+    }
+    groups
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -194,5 +232,14 @@ mod tests {
         assert!(c[0] < 0. && c[1] < 0., "centróide da cantoneira puxado para o canto: {c:?}");
         assert_eq!(anchor_point(5, 40., 20., c), [20., -10.]);
         assert!(section(SectionKind::TuboQuadrado, &[20., 12.]).is_err());
+    }
+
+    #[test]
+    fn linhas_contiguas_formam_um_grupo() {
+        let l = |a: [f64; 3], b: [f64; 3]| (a, b);
+        // L (duas linhas que se tocam), uma barra solta e uma terceira perna ligada ao L pela outra ponta
+        let ends = [l([0., 0., 0.], [100., 0., 0.]), l([500., 0., 0.], [500., 90., 0.]), l([100., 0., 0.], [100., 80., 0.]), l([0., 0., 0.], [0., -60., 0.])];
+        assert_eq!(contiguous_groups(&ends, 1e-4), vec![vec![0, 2, 3], vec![1]]);
+        assert!(contiguous_groups(&[], 1e-4).is_empty());
     }
 }

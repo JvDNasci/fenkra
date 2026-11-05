@@ -5449,6 +5449,31 @@ pub fn member_joints(doc: &Document) -> Vec<((Id, usize), (Id, usize), [f64; 3])
     out
 }
 
+/// Grupos de linhas contíguas do esqueleto (B226): índices em `paths`, cada grupo com as linhas que
+/// dividem pontas entre si. Linha que não resolve fica sozinha no seu grupo.
+pub fn skeleton_groups(doc: &Document, paths: &[CurveRef]) -> Vec<Vec<usize>> {
+    let vars = doc.eval_params().unwrap_or_default();
+    let cx = Ctx {
+        doc,
+        vars,
+        qualidade: Default::default(),
+        bodies: HashMap::new(),
+        sketches: HashMap::new(),
+        status: HashMap::new(),
+        tools: HashMap::new(),
+        memo: RefCell::new(HashMap::new()),
+        body_sig: HashMap::new(),
+        last_sheet: None,
+        sheet_maps: vec![],
+        steps: HashMap::new(),
+        miter_next: false,
+        promoted: RefCell::new(None),
+    };
+    let nan = [f64::NAN; 3];
+    let ends: Vec<(V3, V3)> = paths.iter().map(|p| cx.curve(p, 0).map(|c| (c.start(), c.end())).unwrap_or((nan, nan))).collect();
+    structural::contiguous_groups(&ends, 1e-4)
+}
+
 /// Parâmetros de chapa já avaliados.
 #[derive(Clone, Copy, Debug)]
 struct SheetValues {

@@ -1609,6 +1609,7 @@ static TABLE: &[(&str, &str)] = &[
     ("Nenhum arco ou círculo perto do clique", "No arc or circle near the click"),
     ("Nenhum membro estrutural na peça.", "No structural member in the part."),
     ("Nenhuma interferência entre os componentes", "No interference between the components"),
+    ("grupos de linhas contíguas: um membro para cada, com perfil próprio", "groups of contiguous lines: one member each, with its own profile"),
     ("Material", "Material"),
     ("Todos", "All"),
     ("Qtd.", "Qty."),

@@ -1583,24 +1583,40 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     // o comando abre pedindo o esqueleto: cada clique em linha entra no membro; sem linhas, ao concluir, nada é criado
                     self.toast(crate::i18n::tr("Clique nas linhas do esqueleto no 3D (arestas, linhas ou curvas de referência); sem linhas o membro não é criado"), false);
                 }
+                // B226: linhas contíguas formam um grupo; cada grupo vira um membro com perfil, rotação e
+                // folgas próprios (sem linhas, um único membro vazio espera o esqueleto)
+                let grupos: Vec<Vec<CurveRef>> = if paths.len() > 1 {
+                    fenkra_solidos::skeleton_groups(&self.open.doc, &paths).into_iter().map(|g| g.into_iter().map(|i| paths[i].clone()).collect()).collect()
+                } else {
+                    vec![paths]
+                };
                 let d = &mut self.open.doc;
-                Sel::Feature(d.add_feature(FeatureKind::StructMember(StructMember {
-                    paths,
-                    family: fam.name.clone(),
-                    designation: des,
-                    kind: fam.kind,
-                    dims: dims.iter().map(|v| fmt(*v)).collect(),
-                    anchor: rule.0,
-                    angle: fmt(rule.1),
-                    off_x: s("0"),
-                    off_y: s("0"),
-                    ext1: s("0"),
-                    ext2: s("0"),
-                    corner: CornerMode::MeiaEsquadria,
-                    gap: s("0"),
-                    joints: vec![],
-                    material: String::new(),
-                })))
+                let ids: Vec<Id> = grupos
+                    .into_iter()
+                    .map(|paths| {
+                        d.add_feature(FeatureKind::StructMember(StructMember {
+                            paths,
+                            family: fam.name.clone(),
+                            designation: des.clone(),
+                            kind: fam.kind,
+                            dims: dims.iter().map(|v| fmt(*v)).collect(),
+                            anchor: rule.0,
+                            angle: fmt(rule.1),
+                            off_x: s("0"),
+                            off_y: s("0"),
+                            ext1: s("0"),
+                            ext2: s("0"),
+                            corner: CornerMode::MeiaEsquadria,
+                            gap: s("0"),
+                            joints: vec![],
+                            material: String::new(),
+                        }))
+                    })
+                    .collect();
+                if ids.len() > 1 {
+                    self.toast(format!("{} {}", ids.len(), crate::i18n::tr("grupos de linhas contíguas: um membro para cada, com perfil próprio")), false);
+                }
+                Sel::Feature(ids[0])
             }
             Cmd::StPlate | Cmd::StGusset => {
                 let at = seed.points.iter().find_map(|p| match p {
