@@ -2343,7 +2343,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
 
     /// Relê as peças de origem e atualiza a cópia de cada link ativo.
     pub fn refresh_links(&mut self) {
-        let exts: Vec<(Id, String, String)> = self.open.doc.external.iter().map(|e| (e.id, e.path.clone(), e.publication.clone())).collect();
+        // o furo de série não tem cópia a reler: quem o atualiza é a montagem
+        let exts: Vec<(Id, String, String)> = self.open.doc.external.iter().filter(|e| !fenkra_montagem::furos::e_recurso(e)).map(|e| (e.id, e.path.clone(), e.publication.clone())).collect();
         let mut cache: std::collections::HashMap<String, Option<Vec<(String, LinkedGeo)>>> = Default::default();
         let (mut ok, mut broken) = (0, 0);
         for (id, path, publ) in exts {
@@ -3775,7 +3776,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     LinkState::Desativado => "⏸",
                 };
                 let ctx = if e.xform.is_some() { " ⚙" } else { "" };
-                let txt = format!("🔗 {st} {} ← {}.{}{ctx}", e.target.map(|t| doc.name_of(t)).unwrap_or_default(), e.source, e.publication);
+                let txt = format!("🔗 {st} {} ← {}.{}{ctx}", e.target.map(|t| doc.name_of(t)).unwrap_or_default(), e.source, tr(fenkra_montagem::links::rotulo_publicacao(&e.publication)));
                 crate::tree_ui::marca(ui);
                 let r = ui.selectable_label(e.target.is_some_and(|t| self.sel == Sel::Ref(t)), txt).on_hover_text(format!("caminho: {}", e.path));
                 if r.clicked() {

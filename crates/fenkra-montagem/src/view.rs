@@ -181,7 +181,8 @@ pub fn placed_shape(a: &Assembly, id: Id, dir: Option<&Path>, cache: &mut PartCa
 
 /// Componentes que algum recurso entre peças muda.
 pub fn featured(a: &Assembly) -> Vec<Id> {
-    a.features.iter().filter(|f| !f.suppressed).flat_map(|f| f.targets.iter().copied()).collect()
+    // a série gravada já está na peça: nada a refazer na vista
+    a.features.iter().filter(|f| !f.suppressed && !matches!(&f.kind, AsmFeatKind::Serie(s) if s.gravar)).flat_map(|f| f.targets.iter().copied()).collect()
 }
 
 /// Aplica os recursos entre peças (no mundo) à forma do componente `id`.
@@ -189,6 +190,12 @@ fn apply_features(a: &Assembly, id: Id, mut sh: Shape, dir: Option<&Path>, cache
     let vars = a.vars();
     let num = |e: &str| fenkra_core::expr::eval_str(e, &vars).ok();
     for f in a.features.iter().filter(|f| !f.suppressed && f.targets.contains(&id)) {
+        if let AsmFeatKind::Serie(s) = &f.kind {
+            if !s.gravar {
+                sh = serie_na_vista(a, s, sh, dir, cache);
+            }
+            continue;
+        }
         let tool = match &f.kind {
             AsmFeatKind::Cut { tool, .. } => {
                 if *tool == id {
@@ -197,24 +204,29 @@ fn apply_features(a: &Assembly, id: Id, mut sh: Shape, dir: Option<&Path>, cache
                 raw_shape(a, *tool, dir, cache)
             }
             AsmFeatKind::Hole { p, d, dia, depth } => {
-                let r = num(dia).unwrap_or(5.) / 2.;
-                let big = sh.bbox().map(|(l, h)| norm(sub(h, l)) * 2. + 10.).unwrap_or(1000.);
-                let len = num(depth).filter(|v| *v > 0.).unwrap_or(big);
                 let d = unit(*d);
-                let u = any_perp(d);
-                let w = cross(d, u);
-                // um pouco antes da face, para cortar limpo
-                let o = [0, 1, 2].map(|i| p[i] - d[i] * 0.05);
-                let circle: Vec<V3> = (0..64)
-                    .map(|k| {
-                        let t = k as f64 / 64. * std::f64::consts::TAU;
-                        [0, 1, 2].map(|i| o[i] + (u[i] * t.cos() + w[i] * t.sin()) * r)
-                    })
-                    .collect();
-                Shape::poly_prism(&circle, [d[0] * (len + 0.05), d[1] * (len + 0.05), d[2] * (len + 0.05)]).ok()
+                let len = num(depth).filter(|v| *v > 0.).or_else(|| crate::furos::alcance(&sh, *p, d)).unwrap_or(1000.);
+                crate::furos::cilindro(*p, d, num(dia).unwrap_or(5.), len)
             }
+            AsmFeatKind::Serie(_) => None,
         };
         if let Some(t) = tool {
+            if let Ok(x) = sh.boolean(&t, Bool::Cut) {
+                sh = x;
+            }
+        }
+    }
+    sh
+}
+
+/// Série só na montagem: cilindros exatos cortam a forma exibida do participante.
+fn serie_na_vista(a: &Assembly, s: &SerieFuros, mut sh: Shape, dir: Option<&Path>, cache: &mut PartCache) -> Shape {
+    let vars = a.vars();
+    let num = |e: &str| fenkra_core::expr::eval_str(e, &vars).ok().filter(|v| *v > 0.);
+    let Some(dia) = num(&s.dia) else { return sh };
+    for (p, d) in crate::furos::eixos(a, s, dir, cache).unwrap_or_default() {
+        let Some(len) = num(&s.depth).or_else(|| crate::furos::alcance(&sh, p, d)) else { continue };
+        if let Some(t) = crate::furos::cilindro(p, d, dia, len) {
             if let Ok(x) = sh.boolean(&t, Bool::Cut) {
                 sh = x;
             }
@@ -243,7 +255,7 @@ pub fn collides(a: &Assembly, id: Id, dir: Option<&Path>, cache: &mut PartCache,
 }
 
 /// Forma do componente posicionada no mundo (peças no modo editável), sem recursos.
-fn raw_shape(a: &Assembly, id: Id, dir: Option<&Path>, cache: &mut PartCache) -> Option<Shape> {
+pub(crate) fn raw_shape(a: &Assembly, id: Id, dir: Option<&Path>, cache: &mut PartCache) -> Option<Shape> {
     let n = a.node(id)?;
     let NodeKind::Part { path } = &n.kind else { return None };
     let sh = cache.get(&full_path(dir, path), true).ok()?.shape.clone()?;

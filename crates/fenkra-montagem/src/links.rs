@@ -183,7 +183,9 @@ fn usados(arquivo: &Path, raiz: Option<&Path>) -> Vec<PathBuf> {
         }).collect();
     }
     let Ok(d) = Document::from_json(&txt) else { return vec![] };
-    d.external.iter().filter(|e| !e.path.is_empty()).map(|e| resolver(arquivo, &e.path, raiz)).collect()
+    // o furo de série aponta para a montagem que o manda, mas não depende dela para existir: se
+    // contasse, toda peça com furo de montagem fecharia ciclo com a própria montagem
+    d.external.iter().filter(|e| !e.path.is_empty() && !crate::furos::e_recurso(e)).map(|e| resolver(arquivo, &e.path, raiz)).collect()
 }
 
 /// `origem` usa `alvo`, direta ou indiretamente? Ligar `alvo` a `origem` nesse caso fecha um ciclo.
@@ -235,12 +237,24 @@ fn estado(a: &Assembly, dir: Option<&Path>, peca: &Path, e: &ExternalRef) -> Est
         return EstadoLink::Quebrado;
     }
     let src = resolver(peca, &e.path, dir);
-    if !src.exists() {
+    if crate::furos::e_recurso(e) && e.source == a.name {
+        // a origem é esta própria montagem, não um componente dela
+        EstadoLink::EmContexto
+    } else if !src.exists() {
         EstadoLink::Pendurado
     } else if no_da_origem(a, dir, &src, &e.source).is_some() {
         EstadoLink::EmContexto
     } else {
         EstadoLink::ForaDeContexto
+    }
+}
+
+/// Publicação como a pessoa lê: o furo de série tem nome interno.
+pub fn rotulo_publicacao(p: &str) -> &str {
+    if p.starts_with(crate::furos::PREFIXO) {
+        "furo da montagem"
+    } else {
+        p
     }
 }
 
@@ -256,7 +270,7 @@ pub fn links_da_peca(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, co
         .collect()
 }
 
-fn gravar(full: &Path, doc: &Document, cache: &mut PartCache) -> Result<(), String> {
+pub(crate) fn gravar(full: &Path, doc: &Document, cache: &mut PartCache) -> Result<(), String> {
     std::fs::write(full, doc.to_json()).map_err(|e| format!("{}: {e}", full.display()))?;
     cache.forget(full);
     Ok(())
@@ -345,7 +359,7 @@ type Ext = Id;
 
 #[allow(clippy::too_many_arguments)]
 fn atualizar_link(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, gatilho: Gatilho, comp: Id, rotulo: &str, full: &Path, doc: &mut Document, e: &ExternalRef, rel: &mut RelatorioLinks, conta: bool) {
-    if e.path.is_empty() || e.state == LinkState::Desativado {
+    if e.path.is_empty() || e.state == LinkState::Desativado || crate::furos::e_recurso(e) {
         return;
     }
     if e.state == LinkState::Congelado {

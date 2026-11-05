@@ -11,6 +11,7 @@ pub mod display;
 pub mod engrenagens;
 pub mod estrutura;
 pub mod fixadores;
+pub mod furos;
 pub mod kin;
 pub mod links;
 pub mod load;
@@ -21,6 +22,7 @@ pub mod subconjunto;
 pub use engrenagens::{calculo_par, inserir_par_engrenagens, CalculoPar, RelatorioEngrenagens};
 pub use estrutura::{estrutura_para_montagem, Gerado, GrupoGerado};
 pub use fixadores::{preencher_furos, OpcoesFixadores, RelatorioFixadores};
+pub use furos::{EixoFuro, FuroPeca, SerieFuros};
 pub use subconjunto::{Religacao, RelatorioExtracao};
 
 use fenkra_core::{expr, Id, Properties};
@@ -333,15 +335,18 @@ pub struct AsmFeature {
 pub enum AsmFeatKind {
     /// recorte pela forma de outro componente (furo do pino, ranhura da aba, encaixe)
     Cut { tool: Id, #[serde(default)] clearance: String },
-    /// furo atravessando as peças: ponto e direção no mundo, diâmetro e profundidade (vazio = passante)
+    /// furo atravessando as peças: ponto e direção no mundo, diâmetro e profundidade (vazio = passante).
+    /// Forma antiga: só muda a vista e não segue as peças. O comando novo cria [`AsmFeatKind::Serie`]
     Hole { p: V3, d: V3, dia: String, depth: String },
+    /// furo de montagem pelo eixo, gravado nas peças (ou só na montagem): ver [`furos`]
+    Serie(SerieFuros),
 }
 
 impl AsmFeatKind {
     pub fn label(&self) -> &'static str {
         match self {
             AsmFeatKind::Cut { .. } => "Recorte pela peça",
-            AsmFeatKind::Hole { .. } => "Furo entre peças",
+            AsmFeatKind::Hole { .. } | AsmFeatKind::Serie(_) => "Furo entre peças",
         }
     }
 }
@@ -706,8 +711,16 @@ impl Assembly {
     /// Apaga um nó (filhos sobem um nível) ou uma restrição; restrições do componente vão junto.
     pub fn delete(&mut self, id: Id) {
         self.features.retain(|f| f.id != id && !matches!(f.kind, AsmFeatKind::Cut { tool, .. } if tool == id));
+        let posicao = self.node(id).map(|n| n.placement);
         for f in &mut self.features {
             f.targets.retain(|t| *t != id);
+            if let AsmFeatKind::Serie(s) = &mut f.kind {
+                s.pecas.retain(|p| p.comp != id);
+                // o eixo não some com a peça que o ancorava: fica onde está
+                if let (Some(pl), true) = (&posicao, s.eixo.ancora() == Some(id)) {
+                    s.eixo.congelar(pl);
+                }
+            }
         }
         let parent = self.node(id).and_then(|n| n.parent);
         for n in self.nodes.iter_mut().filter(|n| n.parent == Some(id)) {

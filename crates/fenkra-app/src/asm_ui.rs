@@ -209,6 +209,13 @@ pub struct AsmState {
     pub ctx_act: Option<AsmCtx>,
     /// subconjuntos lidos para a árvore (caminho → linhas)
     sub_rows: std::collections::HashMap<PathBuf, Vec<(usize, String, bool)>>,
+    /// recursos e posições na última sincronização dos furos com as peças
+    furos_chave: String,
+    /// última sincronização e verificação da série em edição
+    furos_rel: furos::RelatorioFuros,
+    furos_verif: Option<(Id, Vec<furos::Verificacao>)>,
+    /// pontos publicados pela âncora da série em edição (publicar exige recalcular a peça)
+    furos_publicos: Option<(Id, Vec<String>)>,
 }
 
 impl AsmState {
@@ -258,6 +265,10 @@ impl AsmState {
             anim_t: 0.,
             anim_play: false,
             view_only: false,
+            furos_chave: String::new(),
+            furos_rel: Default::default(),
+            furos_verif: None,
+            furos_publicos: None,
             comp_dof: Default::default(),
             rot_drag: None,
             drag_center: None,
@@ -283,11 +294,49 @@ impl AsmState {
         self.modified = true;
     }
 
+    /// Acerta as peças com as séries de furos. Roda por comparação de estado: desfazer, refazer,
+    /// mover, editar e apagar passam todos por aqui, sem cada um lembrar de chamar.
+    fn sincronizar_furos(&mut self) {
+        // durante o arraste as posições são provisórias: gravar a cada quadro regravaria as peças
+        if self.drag_start.is_some() {
+            return;
+        }
+        let tem = self.asm.features.iter().any(|f| matches!(f.kind, AsmFeatKind::Serie(_)));
+        if !tem && self.furos_chave.is_empty() {
+            return;
+        }
+        let chave = |a: &Assembly| format!("{:?}{:?}", a.features, a.nodes.iter().map(|n| (n.id, n.placement)).collect::<Vec<_>>());
+        if chave(&self.asm) == self.furos_chave {
+            return;
+        }
+        let dir = self.dir();
+        let aberta = self.editing_part.as_ref().map(|(_, f)| f.clone());
+        let antes = self.asm.features.clone();
+        let rel = furos::sincronizar(&mut self.asm, dir.as_deref(), self.file.as_deref(), &mut self.cache, aberta.as_deref());
+        self.furos_chave = if tem { chave(&self.asm) } else { String::new() };
+        self.furos_verif = None;
+        if self.asm.features != antes {
+            self.modified = true;
+        }
+        if !rel.pecas.is_empty() {
+            fenkra_montagem::load::refresh_refs(&mut self.asm, &mut self.cache, dir.as_deref());
+            self.report = fenkra_montagem::solve::solve(&mut self.asm);
+        }
+        let problemas: Vec<&String> = rel.erros.iter().chain(&rel.faltas).collect();
+        if let Some(p) = problemas.first() {
+            self.aviso = Some(((*p).clone(), true));
+        } else if let Some(a) = rel.avisos.first() {
+            self.aviso = Some((a.clone(), false));
+        }
+        self.furos_rel = rel;
+    }
+
     /// Recompõe a vista se preciso.
     pub fn refresh(&mut self) -> bool {
         if !self.dirty {
             return false;
         }
+        self.sincronizar_furos();
         let dir = self.dir();
         self.errors.clear();
         let mut shown = self.asm.with_state(&self.live);
@@ -658,6 +707,13 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                         app.toast(format!("{}: {e}", tr("Erro ao gravar o subconjunto")), true);
                         return true;
                     }
+                    // os furos das peças que foram passam a responder ao subconjunto: a montagem
+                    // de cima já não enxerga esses arquivos para cuidar deles
+                    if sub.features.iter().any(|x| matches!(x.kind, AsmFeatKind::Serie(_))) {
+                        furos::adotar(&sub, &st.asm.name, new_dir.as_deref(), &f, &mut st.cache);
+                        furos::sincronizar(&mut sub, new_dir.as_deref(), Some(&f), &mut st.cache, None);
+                        let _ = std::fs::write(&f, sub.to_json());
+                    }
                     st.sel = Some(id);
                     app.picks.clear();
                     st.solve();
@@ -678,16 +734,29 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                         st.push_undo();
                         st.asm.add_feature(AsmFeatKind::Cut { tool, clearance: String::new() }, targets)
                     } else {
-                        let face = app.picks.iter().find_map(|p| match p {
-                            Pick::Face { point, normal, .. } => Some((point.map(|v| v as f64), normal.map(|v| v as f64))),
-                            _ => None,
-                        });
-                        let Some((p, n)) = face else {
-                            app.toast(tr("Furo entre peças: clique na face onde o furo começa (Ctrl+clique nas outras peças que ele atravessa)"), true);
+                        let Some(suporte) = app.picks.first().copied() else {
+                            app.toast(tr("Furo entre peças: clique na face onde o furo começa, ou no eixo de um furo existente"), true);
                             return true;
                         };
-                        st.push_undo();
-                        st.asm.add_feature(AsmFeatKind::Hole { p, d: [-n[0], -n[1], -n[2]], dia: "6".into(), depth: String::new() }, comps)
+                        let dir = st.dir();
+                        let eixo = match eixo_do_suporte(st, suporte) {
+                            Ok(e) => e,
+                            Err(e) => {
+                                app.toast(tr(&e).to_string(), true);
+                                return true;
+                            }
+                        };
+                        let antes = st.asm.clone();
+                        match st.asm.add_serie_furos(SerieFuros::nova(eixo, "6"), comps, dir.as_deref(), &mut st.cache) {
+                            Ok(id) => {
+                                st.undo.push(antes);
+                                id
+                            }
+                            Err(e) => {
+                                app.toast(tr(&e).to_string(), true);
+                                return true;
+                            }
+                        }
                     };
                     app.picks.clear();
                     st.sel = Some(fid);
@@ -927,6 +996,25 @@ pub fn after_viewport(app: &mut App) {
         if app.asm.as_ref().is_some_and(|s| s.asm.node(id).is_some()) {
             edit_part(app, id);
         }
+    }
+}
+
+/// Eixo da série a partir do que foi clicado. Face plana: começa no ponto clicado, para dentro da
+/// peça. Eixo de furo ou aresta: começa antes da peça, para a série atravessar o que vier nele.
+fn eixo_do_suporte(st: &mut AsmState, p: Pick) -> Result<EixoFuro, String> {
+    let r = st.mate_ref(p)?;
+    let pl = st.asm.node(r.comp).ok_or("componente não encontrado")?.placement;
+    match r.geom {
+        Geom::Plane { n, .. } => {
+            let Pick::Face { point, .. } = p else { return Err("clique na face onde o furo começa".into()) };
+            Ok(EixoFuro::Componente { comp: r.comp, p: pl.to_local(point.map(|v| v as f64)), d: n.map(|x| -x) })
+        }
+        Geom::Axis { p: o, d } => {
+            let dir = st.dir();
+            let back = fenkra_montagem::view::placed_shape(&st.asm, r.comp, dir.as_deref(), &mut st.cache).and_then(|sh| furos::alcance(&sh, pl.point(o), pl.dir(d).map(|x| -x))).unwrap_or(0.);
+            Ok(EixoFuro::Componente { comp: r.comp, p: [0, 1, 2].map(|i| o[i] - d[i] * back), d })
+        }
+        Geom::Point(_) => Err("clique numa face ou no eixo de um furo".into()),
     }
 }
 
@@ -1772,7 +1860,7 @@ fn links_panel(st: &mut AsmState, ui: &mut egui::Ui, comp: Id) -> Option<(String
         };
         ui.horizontal(|ui| {
             ui.label(RichText::new(l.estado.simbolo()).monospace().color(cor)).on_hover_text(tr(l.estado.label()));
-            ui.label(RichText::new(format!("{}.{}", l.origem, l.publicacao)).small()).on_hover_text(format!("{} · {}", l.nome, tr(l.estado.label())));
+            ui.label(RichText::new(format!("{}.{}", l.origem, tr(links::rotulo_publicacao(&l.publicacao)))).small()).on_hover_text(format!("{} · {}", l.nome, tr(l.estado.label())));
         });
         ui.horizontal_wrapped(|ui| {
             let vivo = !matches!(l.estado, E::Quebrado);
@@ -1816,6 +1904,7 @@ fn links_panel(st: &mut AsmState, ui: &mut egui::Ui, comp: Id) -> Option<(String
         Some(a) => {
             let r = links::aplicar(&st.asm, dir.as_deref(), &mut st.cache, comp, ext, a);
             st.dirty = true;
+            st.furos_chave.clear();
             match (r, a) {
                 (Err(e), _) => (e, true),
                 (Ok(()), AcaoLink::Destravar) => {
@@ -1842,6 +1931,212 @@ fn links_panel(st: &mut AsmState, ui: &mut egui::Ui, comp: Id) -> Option<(String
 // ============================================================== painel
 
 /// Ícone, tipo, nome e selo do item escolhido (componente, restrição, junta, padrão…).
+/// Ação do painel da série, aplicada depois que ele solta o empréstimo da montagem.
+enum AcaoSerie {
+    Verificar,
+    Reescopar,
+    SoltarParaCotas,
+    Isolar(Id),
+}
+
+/// Nomes dos pontos que a âncora da série publica.
+fn pontos_da_ancora(st: &mut AsmState, i: usize) -> Vec<String> {
+    let f = &st.asm.features[i];
+    let AsmFeatKind::Serie(s) = &f.kind else { return vec![] };
+    let Some(comp) = s.eixo.ancora() else { return vec![] };
+    if let Some((c, v)) = &st.furos_publicos {
+        if *c == comp {
+            return v.clone();
+        }
+    }
+    let dir = st.dir();
+    let v: Vec<String> = match st.asm.node(comp).map(|n| &n.kind) {
+        Some(NodeKind::Part { path }) => st.cache.get(&full_path(dir.as_deref(), path), false).map(|p| fenkra_solidos::publications(&p.doc)).unwrap_or_default().into_iter().filter(|(_, g)| matches!(g, fenkra_core::LinkedGeo::Point(_))).map(|(n, _)| n).collect(),
+        _ => vec![],
+    };
+    st.furos_publicos = Some((comp, v.clone()));
+    v
+}
+
+fn aplicar_acao_serie(st: &mut AsmState, fid: Id, a: AcaoSerie) {
+    let dir = st.dir();
+    match a {
+        AcaoSerie::Verificar => {
+            st.furos_verif = Some((fid, furos::verificar(&st.asm, fid, dir.as_deref(), &mut st.cache)));
+        }
+        AcaoSerie::Reescopar => {
+            let Some(i) = st.asm.features.iter().position(|f| f.id == fid) else { return };
+            let AsmFeatKind::Serie(s) = st.asm.features[i].kind.clone() else { return };
+            match furos::escopo_pelo_eixo(&st.asm, &s, dir.as_deref(), &mut st.cache) {
+                Ok(novos) => {
+                    let alvos = &mut st.asm.features[i].targets;
+                    for c in novos {
+                        if !alvos.contains(&c) {
+                            alvos.push(c);
+                        }
+                    }
+                }
+                Err(e) => st.aviso = Some((e, true)),
+            }
+        }
+        AcaoSerie::SoltarParaCotas => {
+            let Some(i) = st.asm.features.iter().position(|f| f.id == fid) else { return };
+            let AsmFeatKind::Serie(s) = &st.asm.features[i].kind else { return };
+            let Some(pl) = s.eixo.ancora().and_then(|c| st.asm.node(c)).map(|n| n.placement) else { return };
+            if let AsmFeatKind::Serie(s) = &mut st.asm.features[i].kind {
+                s.eixo.congelar(&pl);
+            }
+        }
+        AcaoSerie::Isolar(comp) => {
+            let Some(AsmFeatKind::Serie(s)) = st.asm.features.iter().find(|f| f.id == fid).map(|f| f.kind.clone()) else { return };
+            for g in s.gravados.iter().filter(|g| g.comp == comp) {
+                if let Err(e) = links::aplicar(&st.asm, dir.as_deref(), &mut st.cache, comp, g.ext, AcaoLink::Isolar) {
+                    st.aviso = Some((e, true));
+                }
+            }
+            st.furos_chave.clear();
+            st.dirty = true;
+        }
+    }
+}
+
+/// Painel da série na ordem suporte, modo, parâmetros, peças e avançado.
+#[allow(clippy::too_many_arguments)]
+fn serie_ui(ui: &mut egui::Ui, s: &mut SerieFuros, alvos: &mut Vec<Id>, names: &std::collections::HashMap<Id, String>, vars: &crate::editor::Vars, publicos: &[String], rel: &furos::RelatorioFuros, verif: Option<&Vec<furos::Verificacao>>) -> Option<AcaoSerie> {
+    let mut acao = None;
+    crate::editor::section(ui, "Suporte");
+    let ancora = s.eixo.ancora();
+    match &mut s.eixo {
+        EixoFuro::Componente { comp, d, .. } => {
+            ui.label(format!("{} {}", tr("Eixo preso a"), names.get(comp).cloned().unwrap_or_default())).on_hover_text(tr("O eixo acompanha este componente; as outras peças se ajustam a ele."));
+            let (comp, d) = (*comp, *d);
+            if !publicos.is_empty() {
+                egui::ComboBox::from_id_salt("serie_publicado").selected_text(tr("Usar ponto publicado…")).show_ui(ui, |ui| {
+                    for n in publicos {
+                        if ui.selectable_label(false, n).clicked() {
+                            s.eixo = EixoFuro::Publicado { comp, nome: n.clone(), d, p: [0.; 3] };
+                        }
+                    }
+                });
+            }
+        }
+        EixoFuro::Publicado { comp, nome, .. } => {
+            ui.label(format!("{} {nome} · {}", tr("Ponto publicado"), names.get(comp).cloned().unwrap_or_default())).on_hover_text(tr("Se a publicação sumir, a série fica em erro e os furos não se movem."));
+        }
+        EixoFuro::Cotas { x, y, z, .. } => {
+            crate::editor::expr(ui, "X", x, vars, "mm");
+            crate::editor::expr(ui, "Y", y, vars, "mm");
+            crate::editor::expr(ui, "Z", z, vars, "mm");
+        }
+    }
+    ui.horizontal(|ui| {
+        if ui.button(tr("⇅ Inverter sentido")).on_hover_text(tr("O furo passa a seguir para o outro lado do ponto inicial.")).clicked() {
+            match &mut s.eixo {
+                EixoFuro::Componente { d, .. } | EixoFuro::Publicado { d, .. } | EixoFuro::Cotas { d, .. } => *d = d.map(|x| -x),
+            }
+        }
+        if ancora.is_some() && ui.button(tr("Soltar para cotas")).on_hover_text(tr("Troca a âncora por cotas da montagem, na posição de agora.")).clicked() {
+            acao = Some(AcaoSerie::SoltarParaCotas);
+        }
+    });
+
+    crate::editor::section(ui, "Modo");
+    ui.radio_value(&mut s.gravar, true, tr("Gravar nas peças")).on_hover_text(tr("Cada peça recebe um furo real, com link. Só a montagem edita; Isolar deixa o furo comum."));
+    ui.radio_value(&mut s.gravar, false, tr("Só na montagem")).on_hover_text(tr("As peças não mudam: o furo existe só neste conjunto, nas peças participantes."));
+
+    crate::editor::section(ui, "Parâmetros");
+    crate::editor::expr(ui, "Diâmetro", &mut s.dia, vars, "mm");
+    crate::editor::expr(ui, "Profundidade", &mut s.depth, vars, "mm");
+    ui.label(RichText::new(tr("profundidade vazia = passante")).weak().small());
+
+    crate::editor::section(ui, "Peças do escopo");
+    let mut tirar = None;
+    for (k, t) in alvos.iter().enumerate() {
+        ui.horizontal(|ui| {
+            ui.label(format!("🧩 {}", names.get(t).cloned().unwrap_or_default()));
+            if ui.small_button("✖").on_hover_text(tr("Tira a peça do escopo; o furo sai dela.")).clicked() {
+                tirar = Some(k);
+            }
+            if s.gravar && s.gravados.iter().any(|g| g.comp == *t) && ui.small_button(tr("Isolar")).on_hover_text(tr("Corta o link: o furo vira comum na peça e sai da série.")).clicked() {
+                acao = Some(AcaoSerie::Isolar(*t));
+            }
+        });
+        if s.gravar {
+            let (mut dia, mut rosca, mut prof) = s.peca(*t).map(|p| (p.dia.clone(), p.rosca.clone(), p.prof.clone())).unwrap_or_default();
+            let antes = (dia.clone(), rosca.clone(), prof.clone());
+            ui.indent(("serie_peca", t.0), |ui| {
+                crate::editor::expr(ui, "Ø nesta peça", &mut dia, vars, "mm");
+                ui.horizontal(|ui| {
+                    ui.label(tr("Rosca"));
+                    ui.add(egui::TextEdit::singleline(&mut rosca).desired_width(80.).hint_text("M6")).on_hover_text(tr("Vazio: sem rosca. Informe o Ø da broca acima."));
+                });
+                crate::editor::expr(ui, "Cego até", &mut prof, vars, "mm");
+            });
+            if antes != (dia.clone(), rosca.clone(), prof.clone()) {
+                let p = s.peca_mut(*t);
+                (p.dia, p.rosca, p.prof) = (dia, rosca, prof);
+            }
+        }
+    }
+    if let Some(k) = tirar {
+        let c = alvos.remove(k);
+        s.pecas.retain(|p| p.comp != c);
+    }
+    if ui.button(tr("⟳ Escopo pelo eixo")).on_hover_text(tr("Acrescenta as peças que o eixo cruza agora.")).clicked() {
+        acao = Some(AcaoSerie::Reescopar);
+    }
+
+    crate::editor::section(ui, "Avançado");
+    let mut tipo = match &s.padrao {
+        None => 0,
+        Some(PatternKind::Linear { .. }) => 1,
+        Some(PatternKind::Circular { .. }) => 2,
+    };
+    let antes = tipo;
+    ui.horizontal(|ui| {
+        ui.label(tr("Padrão"));
+        ui.selectable_value(&mut tipo, 0, tr("Nenhum"));
+        ui.selectable_value(&mut tipo, 1, tr("Linear"));
+        ui.selectable_value(&mut tipo, 2, tr("Circular"));
+    });
+    if tipo != antes {
+        s.padrao = match tipo {
+            1 => Some(PatternKind::Linear { dir: [1., 0., 0.], count: "2".into(), spacing: "20".into() }),
+            2 => Some(PatternKind::Circular { origin: [0.; 3], axis: [0., 0., 1.], count: "4".into(), angle: "360".into() }),
+            _ => None,
+        };
+    }
+    match &mut s.padrao {
+        Some(PatternKind::Linear { count, spacing, .. }) => {
+            crate::editor::expr(ui, "Quantidade", count, vars, "");
+            crate::editor::expr(ui, "Espaçamento", spacing, vars, "mm");
+        }
+        Some(PatternKind::Circular { count, angle, .. }) => {
+            crate::editor::expr(ui, "Quantidade", count, vars, "");
+            crate::editor::expr(ui, "Ângulo", angle, vars, "°");
+        }
+        None => {}
+    }
+
+    crate::editor::section(ui, "Verificação");
+    for m in rel.erros.iter().chain(&rel.faltas) {
+        ui.label(RichText::new(format!("⚠ {m}")).color(crate::theme::st_err()).small());
+    }
+    for m in &rel.avisos {
+        ui.label(RichText::new(format!("⚠ {m}")).color(crate::theme::st_warn()).small());
+    }
+    if s.gravar && ui.button(tr("✔ Verificar peças")).on_hover_text(tr("Confere na tabela de furos se toda peça do escopo recebeu o furo.")).clicked() {
+        acao = Some(AcaoSerie::Verificar);
+    }
+    for v in verif.into_iter().flatten() {
+        match &v.motivo {
+            None => ui.label(RichText::new(format!("✔ {} ({})", v.nome, v.furos)).color(crate::theme::st_ok()).small()),
+            Some(m) => ui.label(RichText::new(format!("⚠ {}: {m}", v.nome)).color(crate::theme::st_err()).small()),
+        };
+    }
+    acao
+}
+
 fn item_info(st: &AsmState, sel: Option<Id>) -> Option<(String, String, String, (&'static str, Color32))> {
     let s = sel?;
     let ok = ("OK", crate::theme::st_ok());
@@ -2047,6 +2342,10 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             let fi = sel.and_then(|s| st.asm.features.iter().position(|f| f.id == s));
             if let Some(i) = fi {
                 let names: std::collections::HashMap<Id, String> = st.asm.nodes.iter().map(|n| (n.id, n.name.clone())).collect();
+                let vars = st.asm.vars().into_iter().collect();
+                let publicos = pontos_da_ancora(st, i);
+                let (rel, verif) = (st.furos_rel.clone(), st.furos_verif.clone());
+                let mut acao_serie = None;
                 let f = &mut st.asm.features[i];
                 crate::editor::section(ui, "Recurso entre peças");
                 ui.horizontal(|ui| {
@@ -2063,10 +2362,15 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                         crate::editor::expr(ui, "Profundidade", depth, &Default::default(), "mm");
                         ui.label(RichText::new(format!("{} {} · {}", tr("início"), crate::app::p3(p, 1), tr("profundidade vazia = passante"))).weak().small());
                     }
+                    AsmFeatKind::Serie(s) => acao_serie = serie_ui(ui, s, &mut f.targets, &names, &vars, &publicos, &rel, verif.as_ref().filter(|v| v.0 == f.id).map(|v| &v.1)),
                 }
-                crate::editor::section(ui, "Peças afetadas");
+                let serie = matches!(f.kind, AsmFeatKind::Serie(_));
+                let fid = f.id;
+                if !serie {
+                    crate::editor::section(ui, "Peças afetadas");
+                }
                 let mut del = None;
-                for (k, t) in f.targets.iter().enumerate() {
+                for (k, t) in f.targets.iter().enumerate().filter(|_| !serie) {
                     ui.horizontal(|ui| {
                         ui.label(format!("🧩 {}", names.get(t).cloned().unwrap_or_default()));
                         if ui.small_button("✖").clicked() {
@@ -2083,6 +2387,9 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                 }
                 crate::editor::section(ui, "Estado");
                 crate::editor::check(ui, &mut f.suppressed, "suprimido");
+                if let Some(a) = acao_serie {
+                    aplicar_acao_serie(st, fid, a);
+                }
             } else if let Some(i) = ji {
                 let others: Vec<(Id, String)> = st.asm.joints.iter().filter(|o| o.id != st.asm.joints[i].id).map(|o| (o.id, o.name.clone())).collect();
                 let (na, nb) = (st.asm.name_of(st.asm.joints[i].a.comp), st.asm.name_of(st.asm.joints[i].b.comp));
@@ -2388,7 +2695,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         if st.asm.patterns != before.patterns {
             st.asm.update_patterns();
         }
-        let positions_only = st.asm.mates == before.mates && st.asm.rigid == before.rigid;
+        let positions_only = st.asm.mates == before.mates && st.asm.rigid == before.rigid && st.asm.features == before.features;
         st.undo.push(before);
         st.modified = true;
         if !positions_only || st.asm.params != st.undo.last().unwrap().params {
@@ -2589,6 +2896,30 @@ pub fn context_overlay(app: &App, ui: &mut egui::Ui, rect: egui::Rect, cam: &cra
     painter.text(rect.right_bottom() + egui::vec2(-12., -30.), egui::Align2::RIGHT_BOTTOM, format!("{} — {}", tr("contexto da montagem"), st.asm.name), egui::FontId::proportional(12.), col.gamma_multiply(2.));
 }
 
+/// Prévia da série em edição: cada eixo como uma reta saindo da boca, e o que falhou fica na
+/// lista do painel.
+fn eixos_da_serie(st: &mut AsmState, ui: &egui::Ui, rect: egui::Rect, cam: &crate::render::Camera) {
+    let Some(s) = st.sel.and_then(|id| st.asm.features.iter().find(|f| f.id == id)).and_then(|f| match &f.kind {
+        AsmFeatKind::Serie(s) => Some(s.clone()),
+        _ => None,
+    }) else {
+        return;
+    };
+    let dir = st.dir();
+    let Ok(eixos) = furos::eixos(&st.asm, &s, dir.as_deref(), &mut st.cache) else { return };
+    let tamanho = st.view.as_ref().and_then(|v| v.bodies.iter().flat_map(|b| b.mesh.positions.chunks_exact(3)).map(|p| p[0].abs().max(p[1].abs()).max(p[2].abs())).reduce(f32::max)).unwrap_or(100.);
+    let painter = ui.painter_at(rect);
+    let cor = crate::theme::accent(ui.visuals());
+    let v3 = |p: [f64; 3]| glam::Vec3::new(p[0] as f32, p[1] as f32, p[2] as f32);
+    for (p, d) in eixos {
+        let fim = [0, 1, 2].map(|i| p[i] + d[i] * tamanho as f64 * 2.);
+        if let (Some(a), Some(b)) = (cam.project(rect, v3(p)), cam.project(rect, v3(fim))) {
+            painter.line_segment([a, b], egui::Stroke::new(1.5, cor));
+            painter.circle_stroke(a, 6., egui::Stroke::new(1.5, cor));
+        }
+    }
+}
+
 /// Manipulador do componente selecionado: setas e quadrados (mover), anéis (girar). Com
 /// "respeitar restrições" o componente segue o mouse só no que as restrições deixam; com a parada
 /// por colisão ele não entra em outra peça. Também mostra a restrição rápida para duas seleções.
@@ -2611,6 +2942,7 @@ fn after_view_quick(app: &mut App) {
 
 pub fn gizmo(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::render::Camera) {
     let Some(st) = app.asm.as_mut() else { return };
+    eixos_da_serie(st, ui, rect, cam);
     // restrição rápida: dois elementos de peças diferentes escolhidos (opções calculadas depois
     // da viewport; o clique vira ação aplicada lá)
     if !st.view_only && st.pending.is_none() && st.pending_joint.is_none() && app.picks.len() == 2 && st.quick.as_ref().is_some_and(|q| q.0 == app.picks) {
