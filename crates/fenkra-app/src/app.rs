@@ -167,6 +167,8 @@ pub struct App {
     left: LeftTab,
     pub settings: Settings,
     settings_open: bool,
+    /// busca de comandos (Ctrl+K, B60)
+    busca_cmd: crate::ajuda_cmd::Busca,
     /// ambiente de ocultos: mostra só o que está oculto (para reexibir)
     pub hidden_env: bool,
     /// sketch cuja vista deve ser alinhada quando o resultado chegar
@@ -332,6 +334,7 @@ impl App {
             left: LeftTab::Peca,
             settings,
             settings_open: false,
+            busca_cmd: Default::default(),
             hidden_env: false,
             align_pending: None,
             sketch: None,
@@ -5792,6 +5795,17 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     ui.separator();
                     ui.label(RichText::new(format!("Parâmetros: {e}")).small().color(crate::theme::st_err()));
                 }
+                let passo_sk = self.sketch.as_ref().map(|e| e.tool.info().2).map(tr);
+                let ctx_ajuda = crate::ajuda_cmd::Contexto {
+                    sketch: passo_sk,
+                    n_comandos: n,
+                    ultimo_e_sketch: self.open.doc.features.last().is_some_and(|f| matches!(f.kind, FeatureKind::Sketch(_))),
+                    n_selecionados: self.picks.len(),
+                };
+                if let Some(t) = crate::ajuda_cmd::proximo_passo(&ctx_ajuda) {
+                    ui.separator();
+                    ui.label(RichText::new(t).small().color(crate::theme::accent(ui.visuals())));
+                }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.label(RichText::new(format!("{} · duplo clique: ajustar", self.settings.nav.help())).small().weak());
                 });
@@ -6924,6 +6938,9 @@ impl eframe::App for App {
 
         // atalhos (mapa configurável em Configurações → Atalhos e navegação)
         use crate::keymap::KeyAction as K;
+        if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::K)) {
+            self.busca_cmd.alternar();
+        }
         let km = self.settings.keys.clone();
         let typing = ctx.egui_wants_keyboard_input() || self.sketch.as_ref().is_some_and(|e| e.entry.typing());
         let (save, undo, redo) = (km.pressed(ctx, K::Save), !typing && km.pressed(ctx, K::Undo), !typing && km.pressed(ctx, K::Redo));
@@ -7146,6 +7163,9 @@ impl eframe::App for App {
         crate::st_ui::windows(self, ctx);
         self.side_toolbars(ctx, area);
         self.settings_window(ctx);
+        if let Some(a) = self.busca_cmd.ui(ctx) {
+            self.act(a);
+        }
         self.view_menu_window(ctx);
         self.dialogs(ctx);
         if self.settings.bench == crate::settings::Bench::Desenho {

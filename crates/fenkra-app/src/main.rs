@@ -38,6 +38,8 @@ mod historico;
 mod diagnostico;
 mod paineis;
 mod partida;
+mod ajuda_cmd;
+mod textos_ajuda;
 #[cfg(test)]
 mod padrao;
 
