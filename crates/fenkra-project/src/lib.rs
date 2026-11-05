@@ -11,7 +11,10 @@
 //! - Cada salvamento cria uma **versão** (RF-GPR-010).
 //! - **Liberar revisão** marca a versão atual com uma letra e a congela (RF-GPR-011).
 
+pub mod seguro;
+
 use fenkra_core::formato::{preparar, Tipo, APP_VERSION};
+use seguro::gravar_atomico;
 use fenkra_core::Document;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -183,9 +186,7 @@ impl Project {
         self.pode_gravar()?;
         let mut index = self.index.clone();
         index.app_version = APP_VERSION.into();
-        let tmp = self.root.join(format!("{INDEX}.tmp"));
-        std::fs::write(&tmp, serde_json::to_string_pretty(&index)?)?;
-        std::fs::rename(tmp, self.root.join(INDEX))?;
+        gravar_atomico(&self.root.join(INDEX), serde_json::to_string_pretty(&index)?.as_bytes())?;
         Ok(())
     }
 
@@ -243,10 +244,10 @@ impl Project {
         let hash = blake3::hash(json.as_bytes()).to_hex()[..16].to_string();
         let vpath = self.root.join(VERSIONS).join(format!("{hash}.fkp"));
         if !vpath.exists() {
-            std::fs::write(&vpath, &json)?;
+            gravar_atomico(&vpath, json.as_bytes())?;
         }
         let file = self.root.join(&self.entry(id)?.file);
-        std::fs::write(file, &json)?;
+        gravar_atomico(&file, json.as_bytes())?;
         let e = self.entry_mut(id)?;
         e.name = doc.name.clone();
         e.pn = doc.props.pn.clone();

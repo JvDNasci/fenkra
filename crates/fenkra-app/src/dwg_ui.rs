@@ -334,7 +334,7 @@ fn save(app: &mut App, ask: bool) {
         st.last = st.d.clone();
         st.invalidate();
     }
-    match std::fs::write(&path, st.d.to_json()) {
+    match fenkra_project::seguro::gravar_atomico(&path, st.d.to_json().as_bytes()) {
         Ok(()) => {
             st.path = Some(path.clone());
             st.modified = false;

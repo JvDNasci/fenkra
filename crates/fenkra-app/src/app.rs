@@ -850,7 +850,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 .save_file(),
         };
         if let Some(path) = path {
-            match std::fs::write(&path, self.open.doc.to_json()) {
+            match fenkra_project::seguro::gravar_atomico(&path, self.open.doc.to_json().as_bytes()) {
                 Ok(()) => {
                     self.settings.add_recent_file(&path);
                     self.open.file = Some(path);

@@ -937,7 +937,7 @@ pub fn save(app: &mut App) {
     }
     // números de item fixos para os componentes novos
     st.asm.assign_items(dir.as_deref());
-    match std::fs::write(&path, st.asm.to_json()) {
+    match fenkra_project::seguro::gravar_atomico(&path, st.asm.to_json().as_bytes()) {
         Ok(()) => {
             st.file = Some(path.clone());
             st.modified = false;
@@ -2898,7 +2898,7 @@ fn save_doc(app: &mut App, doc: &Document, nome: &str, dir: Option<PathBuf>) {
         dlg = dlg.set_directory(d);
     }
     let Some(path) = dlg.save_file() else { return };
-    match std::fs::write(&path, doc.to_json()) {
+    match fenkra_project::seguro::gravar_atomico(&path, doc.to_json().as_bytes()) {
         Ok(()) => app.toast(format!("{}: {}", tr("Peça salva"), path.display()), false),
         Err(e) => app.toast(format!("Erro: {e}"), true),
     }
