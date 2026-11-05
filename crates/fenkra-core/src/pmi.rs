@@ -619,6 +619,16 @@ pub struct PmiStyle {
     /// ponta); vazio = chamada reta (B23, ver `pmi_leader`)
     #[serde(default)]
     pub leader_via: Vec<Vec<[f64; 3]>>,
+    // ---- cota (B269)
+    /// quanto as linhas de apoio passam da linha de cota (mm no modelo); 0 = o padrão curto
+    #[serde(default)]
+    pub ext_over: f64,
+    /// posição do texto ao longo da linha de cota, a partir do meio (mm no modelo; 0 = no meio)
+    #[serde(default)]
+    pub text_along: f64,
+    /// casas decimais do valor medido; `None` = o padrão (até 2, sem zeros sobrando) (B270)
+    #[serde(default)]
+    pub decimals: Option<u8>,
 }
 
 fn centro() -> u8 {
@@ -659,6 +669,9 @@ impl PmiStyle {
             leader_dash: if self.leader_dash != 0 { self.leader_dash } else { base.leader_dash },
             leader_color: self.leader_color.or(base.leader_color),
             leader_via: self.leader_via.clone(),
+            ext_over: self.ext_over,
+            text_along: self.text_along,
+            decimals: self.decimals.or(base.decimals),
         }
     }
 }
@@ -693,6 +706,9 @@ impl Default for PmiStyle {
             leader_dash: 0,
             leader_color: None,
             leader_via: vec![],
+            ext_over: 0.,
+            text_along: 0.,
+            decimals: None,
         }
     }
 }
@@ -942,7 +958,7 @@ impl Pmi {
         } else {
             format!(" +{}/−{}", self.tol_plus.trim(), self.tol_minus.trim())
         };
-        let base = |pre: &str, v: Option<f64>, suf: &str| if !self.text.trim().is_empty() { self.text.clone() } else { format!("{pre}{}{suf}", v.map(num).unwrap_or("?".into())) };
+        let base = |pre: &str, v: Option<f64>, suf: &str| if !self.text.trim().is_empty() { self.text.clone() } else { format!("{pre}{}{suf}", v.map(|x| num_dec(x, self.style.decimals)).unwrap_or("?".into())) };
         match &self.kind {
             PmiKind::Linear => base("", value, "") + &tol,
             PmiKind::Radius => base("R", value, "") + &tol,
@@ -1002,6 +1018,19 @@ pub struct PmiTarget {
 }
 
 /// Número no formato do Fenkra: até 2 casas, vírgula decimal, sem zeros sobrando.
+/// Número com `casas` decimais fixas (vírgula decimal) ou, sem `casas`, no formato padrão.
+pub fn num_dec(v: f64, casas: Option<u8>) -> String {
+    match casas {
+        Some(n) => {
+            // arredonda a metade para longe do zero (o formato do Rust arredonda para o par)
+            let n = n.min(6) as usize;
+            let k = 10f64.powi(n as i32);
+            format!("{:.*}", n, (v * k).round() / k).replace('.', ",")
+        }
+        None => num(v),
+    }
+}
+
 pub fn num(v: f64) -> String {
     let s = format!("{:.2}", v);
     let s = s.trim_end_matches('0').trim_end_matches('.').replace('.', ",");
@@ -1269,6 +1298,22 @@ mod tests {
         assert_eq!(p.display(None), "| ⏥ | 0,05 | A |");
         p.kind = PmiKind::Gdt { ch: GdtChar::Posicao, tol: "0,1".into(), datums: "A B C".into(), extra: GdtExtra { zone_dia: true, modifier: "Ⓜ".into(), second: None } };
         assert_eq!(p.display(None), "| ⌖ | Ø0,1 Ⓜ | A | B | C |");
+    }
+
+    #[test]
+    fn precisao_da_cota_fixa_as_casas_decimais() {
+        let mut p = Pmi { id: Id(1), name: "c".into(), kind: PmiKind::Linear, anchors: vec![], offset: [0.; 3], text: String::new(), tol_plus: String::new(), tol_minus: String::new(), visible: true, plane: None, style: Default::default(), folder: String::new(), targets: vec![] };
+        assert_eq!(p.display(Some(12.5)), "12,5", "padrão: sem zeros sobrando");
+        p.style.decimals = Some(0);
+        assert_eq!(p.display(Some(12.5)), "13");
+        p.style.decimals = Some(3);
+        assert_eq!(p.display(Some(12.5)), "12,500");
+        p.kind = PmiKind::Diameter;
+        assert_eq!(p.display(Some(8.)), "Ø8,000");
+        // o estilo geral entra por baixo: a anotação sem valor próprio herda a precisão
+        let geral = PmiStyle { decimals: Some(1), ..Default::default() };
+        assert_eq!(PmiStyle::default().over(&geral).decimals, Some(1));
+        assert_eq!(p.style.over(&geral).decimals, Some(3));
     }
 
     #[test]

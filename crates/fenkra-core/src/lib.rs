@@ -8,18 +8,23 @@
 //! Princípio de edição não destrutiva (RF-NUC-020): todo objeto tem um [`Id`] estável;
 //! editar altera o objeto no lugar e as referências apontam para o `Id`, nunca para posições.
 
+pub mod config;
 pub mod doc;
 pub mod expr;
 pub mod formato;
 pub mod macros;
 pub mod materiais;
+pub mod parametros;
 pub mod pmi;
 pub mod pmi_cotas;
 pub mod pmi_feature;
 pub mod pmi_leader;
+pub mod pmi_infer;
+pub mod pmi_snap;
 pub mod projecao;
 pub mod qualidade;
 pub mod sketch;
+pub mod trabalho;
 
 pub use doc::*;
 pub use qualidade::{PresetMalha, PresetStl, QualidadeMalha};

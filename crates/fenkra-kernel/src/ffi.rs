@@ -201,6 +201,9 @@ pub mod bridge {
         fn sew_shapes(s: &Shape, tol: f64) -> Result<UniquePtr<Shape>>;
         fn heal_shape(s: &Shape, tol: f64) -> Result<UniquePtr<Shape>>;
         fn split_side(s: &Shape, tool: &Shape, keep_pos: bool, extend: bool) -> Result<UniquePtr<Shape>>;
+        fn split_regions(s: &Shape, tool: &Shape, extend: bool) -> Result<UniquePtr<Shape>>;
+        fn child_count(s: &Shape) -> u32;
+        fn nth_child(s: &Shape, i: u32) -> Result<UniquePtr<Shape>>;
         fn nth_face(s: &Shape, i: u32) -> Result<UniquePtr<Shape>>;
         fn untrim_face(s: &Shape) -> Result<UniquePtr<Shape>>;
         fn extrapolate_face(s: &Shape, px: f64, py: f64, pz: f64, len: f64, cont: i32) -> Result<UniquePtr<Shape>>;
@@ -251,6 +254,8 @@ pub mod bridge {
         fn discard_mesh(s: &Shape) -> Result<()>;
         /// Teto de fios do malhador; 0 volta ao padrão.
         fn set_mesh_threads(n: i32);
+        /// Registra o endereço de uma bandeira de cancelamento (0 limpa) para a thread atual (B259).
+        fn set_cancel_flag(p: usize);
         /// Teto de fios em vigor.
         fn mesh_threads() -> i32;
         /// Algoritmo do malhador (só medição, B235): 0 padrão, 1 Delabella.

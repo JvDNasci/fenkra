@@ -87,6 +87,7 @@ pub enum GeoKind {
     OpHeal,
     OpSplit,
     OpTrim,
+    OpCut,
     OpBoundary,
     OpMulti,
     OpPart,
@@ -112,7 +113,7 @@ pub const CURVES: [GeoKind; 17] =
     [Circle, Circle3, Spline, SplineControl, Helix, Spiral, Conic, Connect, Corner, Spine, CurveProject, CurveIntersect, CurveProjSurf, CurveParallel, OpBoundary, CurveCopy, CurveJoin];
 pub const SURFACES: [GeoKind; 13] = [SurfExtrude, SurfRevolve, SurfSphere, SurfCylinder, SurfOffset, SurfSweep, SurfSweepX, SurfTube, SurfLoft, SurfBlend, SurfConnect, SurfFill, SurfExtract];
 /// Operações sobre superfícies (resultado é superfície).
-pub const OPERATIONS: [GeoKind; 10] = [OpJoin, OpHeal, OpSplit, OpTrim, SurfFilletSS, SurfEdgeFillet, OpMulti, OpPart, OpUntrim, OpExtrapolate];
+pub const OPERATIONS: [GeoKind; 9] = [OpJoin, OpHeal, OpCut, SurfFilletSS, SurfEdgeFillet, OpMulti, OpPart, OpUntrim, OpExtrapolate];
 /// Transformações de qualquer elemento (ponto, curva, plano, superfície).
 pub const TRANSFORMS: [GeoKind; 4] = [XfTranslate, XfRotate, XfMirror, XfScale];
 
@@ -185,6 +186,7 @@ impl GeoKind {
             OpJoin => ("op_juntar", "Juntar", "Juntar superfícies (join)", "Costura superfícies que se tocam numa só: bordas comuns viram uma."),
             OpHeal => ("op_curar", "Curar", "Curar superfície (heal)", "Fecha frestas até a tolerância e une faces do mesmo suporte."),
             OpSplit => ("op_dividir", "Dividir", "Dividir superfície (split)", "Corta a superfície por outra superfície ou plano e mantém um lado."),
+            OpCut => ("op_aparar", "Aparar e dividir", "Aparar e dividir por região", "Corta a superfície por ferramentas, ou duas superfícies uma pela outra, e você clica nos pedaços que ficam ou saem. A escolha sobrevive quando o modelo muda."),
             OpTrim => ("op_aparar", "Aparar", "Aparar duas superfícies (trim)", "Corta uma pela outra e junta os lados escolhidos de cada uma."),
             OpBoundary => ("op_contorno", "Contorno", "Contorno da superfície (boundary)", "Curva da borda livre da superfície (escolha qual quando houver várias)."),
             OpMulti => ("op_multi_extrair", "Multi-extração", "Extrair várias faces", "Copia várias faces do modelo como uma superfície só."),
@@ -295,6 +297,7 @@ impl GeoKind {
             R::SurfHeal { .. } => OpHeal,
             R::SurfSplit { .. } => OpSplit,
             R::SurfTrim { .. } => OpTrim,
+            R::SurfRegions { .. } => OpCut,
             R::CurveBoundary { .. } => OpBoundary,
             R::SurfMulti { .. } => OpMulti,
             R::SurfPart { .. } => OpPart,
@@ -402,6 +405,7 @@ impl GeoKind {
             OpHeal => R::SurfHeal { surface: sf, tol: t("0.1") },
             OpSplit => R::SurfSplit { surface: sf, tool: crate::slots::surf(), flip: false, more: vec![], curve: None, more_flip: vec![] },
             OpTrim => R::SurfTrim { a: sf, b: crate::slots::surf(), flip_a: false, flip_b: false },
+            OpCut => R::SurfRegions { surface: sf, tools: vec![crate::slots::surf()], curve: None, mutual: false, remove: true, extend: false, marks: vec![] },
             OpBoundary => R::CurveBoundary { surface: sf, which: 0, prop: Propagation::Nenhuma, near: None, expected: None },
             OpMulti => R::SurfMulti { faces: vec![face_pt(s)], keys: vec![if let Some(SurfRef::Face { key, .. }) = s.surface { key } else { None }] },
             OpPart => R::SurfPart { surface: sf, index: 0 },
@@ -562,6 +566,7 @@ pub fn inputs_of(k: &RefKind) -> Seed {
             }
         }
         R::SurfTrim { a, .. } | R::CurveIntersect { a, .. } => s.surface = Some(*a),
+        R::SurfRegions { surface, .. } => s.surface = Some(*surface),
         R::SurfExtrapolate { surface, near, .. } => {
             s.surface = Some(*surface);
             s.points.push(*near)
@@ -1104,6 +1109,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         RefClass::Point => "Ponto de referência",
         RefClass::Curve => "Linha / curva de referência",
     });
+    crate::sup3d::legenda(ui, &crate::sup3d::de_referencia(&r.kind));
     if let Some(e) = error {
         egui::Frame::NONE.fill(Color32::from_rgb(80, 30, 28)).inner_margin(6.).corner_radius(4.).show(ui, |ui| {
             ui.label(RichText::new(format!("✖ {e}")).color(Color32::from_rgb(255, 150, 140)));
@@ -1251,10 +1257,8 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         R::PointTangent { curve, dir, which } => {
             curve_slot(ui, "g_c", "Curva planar", doc, me, curve, seed);
             axis_slot(ui, "g_d", "Direção", doc, me, dir, seed);
-            row(ui, "Solução", |ui| {
-                ui.radio_value(which, 0, tr("1"));
-                ui.radio_value(which, 1, tr("2"));
-            });
+            let _ = which;
+            crate::sup3d::dica_de_solucao(ui, note);
         }
         R::PointBetween { a, b, ratio } => {
             point_slot(ui, "g_a", "Ponto 1", doc, me, a, seed);
@@ -1405,9 +1409,8 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         R::PointCurvePlane { curve, plane, which } => {
             curve_slot(ui, "g_c", "Curva", doc, me, curve, seed);
             plane_slot(ui, "g_pl", "Plano", doc, me, plane, seed);
-            row(ui, "Solução", |ui| {
-                ui.add(crate::ui_ext::dv(which).range(0..=20));
-            });
+            let _ = which;
+            crate::sup3d::dica_de_solucao(ui, note);
         }
         R::PointCurveCurve { a, b } => {
             curve_slot(ui, "g_a", "Curva 1", doc, me, a, seed);
@@ -1593,19 +1596,8 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                     expr(ui, "ρ", rho, vars, "");
                 }
             }
-            let nsol = match kind {
-                SweepKind::Circle3 { .. } => 2,
-                SweepKind::CircleRadius { .. } => 4,
-                SweepKind::Conic { .. } => 2,
-                _ => 1,
-            };
-            if nsol > 1 {
-                row(ui, "Solução", |ui| {
-                    for k in 0..nsol {
-                        ui.selectable_value(solution, k, format!("{}", k + 1));
-                    }
-                });
-            }
+            *solution = (*solution).min(fenkra_solidos::geo3d::solucoes_da_varredura(kind) - 1);
+            crate::sup3d::dica_de_solucao(ui, note);
             let mut own_spine = spine.is_some();
             if crate::editor::check(ui, &mut own_spine, "spine própria (senão, a primeira guia)").changed() {
                 *spine = own_spine.then(crate::slots::curve);
@@ -1618,10 +1610,10 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             ui.label(RichText::new(tr("As seções ficam em planos normais à spine; as guias são cortadas nesses planos.")).weak().small());
         }
         R::SurfFillet { a, b, flip_a, flip_b, radius, radius2 } => {
+            let _ = (flip_a, flip_b);
             surf_slot(ui, "g_a", "Superfície 1", doc, me, a, seed);
-            ui.checkbox(flip_a, tr("outro lado da 1"));
             surf_slot(ui, "g_b", "Superfície 2", doc, me, b, seed);
-            ui.checkbox(flip_b, tr("outro lado da 2"));
+            crate::sup3d::dica_de_lado(ui);
             radius_ui(ui, radius, radius2, vars);
         }
         R::SurfEdgeFillet { surface, edges, radius, radius2 } => {
@@ -1770,7 +1762,6 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                 ui.horizontal(|ui| {
                     ui.vertical(|ui| {
                         surf_slot(ui, &format!("g_tm{i}"), &format!("{} {}", tr("Cortar com"), i + 2), doc, me, m, seed);
-                        ui.checkbox(&mut more_flip[i], tr("Outro lado deste corte"));
                     });
                     if ui.small_button(tr("✖")).clicked() {
                         del = Some(i);
@@ -1791,13 +1782,72 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             if let Some(c) = curve {
                 curve_slot(ui, "g_tc", "Curva de corte", doc, me, c, seed);
             }
-            ui.checkbox(flip, tr("manter o outro lado"));
+            crate::sup3d::dica_de_lado(ui);
         }
-        R::SurfTrim { a, b, flip_a, flip_b } => {
+        R::SurfTrim { a, b, .. } => {
             surf_slot(ui, "g_a", "Superfície 1", doc, me, a, seed);
-            ui.checkbox(flip_a, tr("outro lado da 1"));
             surf_slot(ui, "g_b", "Superfície 2", doc, me, b, seed);
-            ui.checkbox(flip_b, tr("outro lado da 2"));
+            crate::sup3d::dica_de_lado(ui);
+        }
+        R::SurfRegions { surface, tools, curve, mutual, remove, extend, marks } => {
+            surf_slot(ui, "g_s", "Superfície", doc, me, surface, seed);
+            let mut del = None;
+            for (i, t) in tools.iter_mut().enumerate() {
+                ui.horizontal(|ui| {
+                    surf_slot(ui, &format!("g_tm{i}"), &format!("{} {}", tr("Cortar com"), i + 1), doc, me, t, seed);
+                    if i > 0 && ui.small_button(tr("✖")).clicked() {
+                        del = Some(i);
+                    }
+                });
+            }
+            if let Some(i) = del {
+                tools.remove(i);
+                // a marca guarda a origem pelo número: o que veio da ferramenta tirada perde o sentido
+                marks.retain(|m| m.source as usize != i + 1);
+                marks.iter_mut().filter(|m| m.source as usize > i + 1).for_each(|m| m.source -= 1);
+            }
+            if ui.button(tr("+ plano/superfície de corte")).clicked() {
+                tools.push(crate::slots::surf());
+            }
+            let mut by_curve = curve.is_some();
+            if crate::editor::check(ui, &mut by_curve, "cortar também por uma curva (wireframe) sobre a superfície").changed() {
+                *curve = by_curve.then(|| seed.curves.first().cloned().unwrap_or_else(crate::slots::curve));
+            }
+            if let Some(c) = curve {
+                curve_slot(ui, "g_tc", "Curva de corte", doc, me, c, seed);
+            }
+            section(ui, "Modo");
+            let modos = [
+                ("op_dividir", "Por ferramenta", "Só a superfície é cortada; as ferramentas não mudam", !*mutual),
+                ("op_aparar", "Mútuo", "Cada superfície corta as outras, e todas dão pedaços", *mutual),
+            ];
+            match icon_choice(ui, &modos) {
+                Some(0) => {
+                    *mutual = false;
+                    marks.retain(|m| m.source == 0);
+                }
+                Some(1) => *mutual = true,
+                _ => {}
+            }
+            section(ui, "Ação");
+            let acoes = [
+                ("op_remover", "Remover", "O pedaço clicado sai; o resto fica", *remove),
+                ("op_adicionar", "Manter", "Só os pedaços clicados ficam", !*remove),
+            ];
+            match icon_choice(ui, &acoes) {
+                Some(0) => *remove = true,
+                Some(1) => *remove = false,
+                _ => {}
+            }
+            if let Some(n) = note.filter(|n| !n.regioes.is_empty()) {
+                let ficam = n.regioes.iter().filter(|g| g.fica).count();
+                ui.label(format!("{} {} · {} {}", n.regioes.len(), tr("pedaços"), ficam, tr("ficam")));
+            }
+            ui.label(RichText::new(tr("Clique nos pedaços no 3D. O que fica sai cheio; o que sai, translúcido.")).weak().small());
+            if !marks.is_empty() && ui.button(tr("Limpar escolhas")).clicked() {
+                marks.clear();
+            }
+            crate::editor::check(ui, extend, "prolongar a ferramenta até atravessar").on_hover_text(tr("A ferramenta curta demais cresce pelo próprio suporte até cortar a superfície inteira."));
         }
         R::SurfPart { surface, index: which } => {
             surf_slot(ui, "g_s", "Superfície", doc, me, surface, seed);
@@ -1889,13 +1939,8 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         R::CurveIntersect { a, b, which, near } => {
             surf_slot(ui, "g_a", "Elemento 1", doc, me, a, seed);
             surf_slot(ui, "g_b", "Elemento 2", doc, me, b, seed);
-            ui.horizontal(|ui| {
-                ui.add_sized([96., 18.], egui::Label::new(tr("Solução")));
-                // trocar o número troca a escolha: a âncora é refeita no próximo cálculo
-                if ui.add(crate::ui_ext::dv(which).range(0..=99)).changed() {
-                    *near = None;
-                }
-            });
+            let _ = which;
+            crate::sup3d::dica_de_solucao(ui, note);
             if near.is_some() {
                 ui.label(RichText::new(tr("A solução fica presa à posição no espaço.")).weak().small());
             }
@@ -1934,7 +1979,8 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             surf_slot(ui, "g_s", "Apoio", doc, me, support, seed);
             expr(ui, "Distância inicial", d1, vars, "mm");
             expr(ui, "Distância final", d2, vars, "mm");
-            ui.checkbox(flip, tr("para o outro lado"));
+            let _ = flip;
+            crate::sup3d::dica_de_lado(ui);
             ui.label(RichText::new(tr("Distâncias iguais = paralela constante; diferentes = lei linear do início ao fim.")).weak().small());
         }
         R::Linked { ext, .. } => {

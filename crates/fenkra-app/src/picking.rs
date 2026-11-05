@@ -169,7 +169,7 @@ fn seg_dist(p: Pos2, a: Pos2, b: Pos2) -> (f32, f32) {
 }
 
 /// Interseção raio–triângulo (Möller–Trumbore).
-fn ray_tri(o: Vec3, d: Vec3, a: Vec3, b: Vec3, c: Vec3) -> Option<f32> {
+pub(crate) fn ray_tri(o: Vec3, d: Vec3, a: Vec3, b: Vec3, c: Vec3) -> Option<f32> {
     let (e1, e2) = (b - a, c - a);
     let p = d.cross(e2);
     let det = e1.dot(p);
@@ -464,9 +464,22 @@ pub fn pilha_de_faces(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: R
 /// Seleção em caixa: janela (`crossing = false`, só o que está inteiro dentro) ou cruzada
 /// (o que toca a caixa). Respeita o filtro de seleção e a visibilidade.
 pub fn box_select(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, b: Rect, crossing: bool, f: &Filter) -> Vec<Pick> {
+    selecionar_regiao(r, doc, cam, rect, &|s| b.contains(s), crossing, f)
+}
+
+/// Seleção por laço (B95): como a caixa, mas a região é o polígono desenhado à mão livre.
+pub fn laco_select(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, laco: &[Pos2], crossing: bool, f: &Filter) -> Vec<Pick> {
+    if laco.len() < 3 {
+        return vec![];
+    }
+    selecionar_regiao(r, doc, cam, rect, &|s| crate::selecao::ponto_no_poligono(s, laco), crossing, f)
+}
+
+/// Núcleo comum da caixa e do laço: `dentro` diz se um ponto da tela está na região.
+fn selecionar_regiao(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, dentro: &dyn Fn(Pos2) -> bool, crossing: bool, f: &Filter) -> Vec<Pick> {
     let meshes = pickable(r, doc, f);
     let ref_ok = |id: Id| doc.reference(id).is_some_and(|x| doc.ref_shown(x) != f.hidden_env);
-    let inside = |w: Vec3| cam.project(rect, w).is_some_and(|s| b.contains(s));
+    let inside = |w: Vec3| cam.project(rect, w).is_some_and(dentro);
     // todos dentro (janela) ou algum dentro (cruzada)
     let take = |pts: &mut dyn Iterator<Item = Vec3>| {
         let mut any = false;
@@ -543,7 +556,7 @@ pub fn box_select(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect,
 }
 
 /// Ponto mais próximo de `p` no triângulo abc (Ericson).
-fn closest_on_tri(p: Vec3, a: Vec3, b: Vec3, c: Vec3) -> Vec3 {
+pub(crate) fn closest_on_tri(p: Vec3, a: Vec3, b: Vec3, c: Vec3) -> Vec3 {
     let (ab, ac, ap) = (b - a, c - a, p - a);
     let (d1, d2) = (ab.dot(ap), ac.dot(ap));
     if d1 <= 0. && d2 <= 0. {

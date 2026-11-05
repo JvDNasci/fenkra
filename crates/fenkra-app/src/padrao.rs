@@ -20,14 +20,14 @@ const CORES_FIXAS: &[(&str, usize)] = &[
     ("feat_ui.rs", 4),
     ("geo_ui.rs", 5),
     ("gizmo.rs", 7),
-    ("handles.rs", 6),
+    ("handles.rs", 2),
     ("picking.rs", 4),
     ("pmi_draw.rs", 6),
     ("pmi_ui.rs", 3),
     ("roles.rs", 1),
     ("scene.rs", 4),
     ("sketch_ui.rs", 18),
-    ("st_ui.rs", 2),
+    ("st_ui.rs", 1),
     ("toolbar.rs", 18),
 ];
 

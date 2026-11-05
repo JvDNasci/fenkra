@@ -360,7 +360,8 @@ pub fn entries(g: Group) -> Vec<Entry> {
         ],
         Group::Pmi => vec![
             Family("pmi_cota", vec![
-                it("pmi_linear", "Cota", "Cota linear 3D", "Escolha dois vértices/arestas: a distância fica anotada no modelo e se atualiza com ele.", Cmd(C::Pmi(0))),
+                it("pmi_linear", "Cota", "Cota inteligente 3D", "Escolha os elementos e o tipo sai da seleção: aresta circular dá diâmetro, duas faces paralelas dão a distância, duas arestas dão o ângulo, dois furos dão a distância entre eixos. Tab alterna a variante; Enter confirma a cota provisória.", Cmd(C::Pmi(17))),
+                it("pmi_linear", "Linear", "Cota linear 3D", "Escolha dois vértices/arestas: a distância fica anotada no modelo e se atualiza com ele.", Cmd(C::Pmi(0))),
                 it("pmi_raio", "Raio", "Cota de raio 3D", "Escolha uma aresta circular.", Cmd(C::Pmi(1))),
                 it("pmi_diametro", "Diâmetro", "Cota de diâmetro 3D", "Escolha uma aresta circular.", Cmd(C::Pmi(2))),
                 it("pmi_angulo", "Ângulo", "Cota angular 3D", "Escolha o vértice e dois pontos.", Cmd(C::Pmi(3))),
@@ -470,7 +471,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             };
             vec![
                 Family("op_juntar", vec![g(GeoKind::OpJoin), g(GeoKind::OpHeal)]),
-                Family("op_dividir", vec![g(GeoKind::OpSplit), g(GeoKind::OpTrim)]),
+                One(g(GeoKind::OpCut)),
                 Family("op_extrair", vec![
                     it("extrair", "Extrair", "Extrair a seleção (faces, arestas, vértices)", "Faces, arestas e vértices viram superfície, curva ou ponto de referência. Simples = um elemento por item; múltipla = um só. Propagação por ponto, tangente ou curvatura; o resultado pode ser publicado.", Cmd(C::Extract)),
                     g(GeoKind::SurfExtract),

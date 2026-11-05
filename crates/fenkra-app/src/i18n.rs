@@ -18,7 +18,22 @@ pub fn english() -> bool {
 
 fn map() -> &'static HashMap<&'static str, &'static str> {
     static M: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
-    M.get_or_init(|| TABLE.iter().chain(crate::textos_ajuda::TEXTOS.iter()).chain(crate::textos_biblioteca::TEXTOS.iter()).chain(crate::sketch_textos::TEXTOS.iter()).copied().collect())
+    M.get_or_init(|| {
+        TABLE.iter()
+            .chain(crate::textos_ajuda::TEXTOS.iter())
+            .chain(crate::textos_biblioteca::TEXTOS.iter())
+            .chain(crate::textos_desenho::TEXTOS.iter())
+            .chain(crate::sketch_textos::TEXTOS.iter())
+            .chain(crate::textos_estrutural::TEXTOS.iter())
+            .chain(crate::textos_montagem::TEXTOS.iter())
+            .chain(crate::textos_pmi::TEXTOS.iter())
+            .chain(crate::textos_config::TEXTOS.iter())
+            .chain(crate::selecao_regras::TEXTOS.iter())
+            .chain(crate::alca_estado::TEXTOS.iter())
+            .chain(crate::textos_superficies::TEXTOS.iter())
+            .copied()
+            .collect()
+    })
 }
 
 /// Tradução do texto (ou o próprio texto, em português ou sem tradução).
@@ -267,7 +282,6 @@ static TABLE: &[(&str, &str)] = &[
     ("Cego até", "Blind to"),
     ("⟳ Escopo pelo eixo", "⟳ Scope from axis"),
     ("Acrescenta as peças que o eixo cruza agora.", "Adds the parts the axis crosses now."),
-    ("Linear", "Linear"),
     ("Circular", "Circular"),
     ("✔ Verificar peças", "✔ Check parts"),
     ("Confere na tabela de furos se toda peça do escopo recebeu o furo.", "Checks in the hole table that every part in scope received the hole."),
@@ -471,7 +485,6 @@ static TABLE: &[(&str, &str)] = &[
     ("Corpo ferramenta", "Tool body"),
     ("Corpos", "Bodies"),
     ("Cosmética", "Cosmetic"),
-    ("Cota", "Dimension"),
     ("Cota de diâmetro", "Diameter dimension"),
     ("Cota de raio", "Radius dimension"),
     ("Cota de ângulo", "Angle dimension"),
@@ -1018,7 +1031,6 @@ static TABLE: &[(&str, &str)] = &[
     ("Usado por", "Used by"),
     ("Usar a face selecionada", "Use the selected face"),
     ("Use os botões ✏ Sketch ou ▱ Plano para criar a partir deste plano.", "Use ✏ Sketch or ▱ Plane to create from this plane."),
-    ("Valor", "Value"),
     ("Valor (aceita expressão)", "Value (accepts expressions)"),
     ("Variável", "Variable"),
     ("Varrer o perfil ao longo de uma curva (Rib)", "Sweep the profile along a curve (Rib)"),
@@ -1244,7 +1256,6 @@ static TABLE: &[(&str, &str)] = &[
     ("Entre dois pontos, com prolongamento opcional nas pontas.", "Between two points, with optional extension at the ends."),
     ("Escolha quais tipos de elemento aparecem na viewport.", "Choose which element types appear in the viewport."),
     ("Espelha os comandos escolhidos (ou o corpo) por um plano.", "Mirrors the chosen commands (or the body) across a plane."),
-    ("Estilo", "Style"),
     ("Fica só o volume comum aos dois corpos.", "Keeps only the volume common to both bodies."),
     ("Filtro de exibição", "Display filter"),
     ("Furo nos pontos de um sketch, com diâmetro de passagem para o parafuso escolhido.", "Hole at sketch points, with clearance diameter for the chosen screw."),
@@ -1566,7 +1577,6 @@ static TABLE: &[(&str, &str)] = &[
     ("Tangente às superfícies de apoio", "Tangent to the support surfaces"),
     ("Tira do corpo", "Removes from the body"),
     ("Todas as células fechadas entram; para tirar uma, selecione um vértice/ponto dentro dela.", "All closed cells are included; to drop one, select a vertex/point inside it."),
-    ("Tolerância", "Tolerance"),
     ("Transforma a superfície em sólido com espessura para um ou dois lados.", "Turns the surface into a solid with thickness to one or both sides."),
     ("Transição suave entre duas ou mais curvas; com guia, as seções seguem a guia.", "Smooth transition between two or more curves; with a guide, the sections follow it."),
     ("Translação", "Translation"),
@@ -1581,9 +1591,6 @@ static TABLE: &[(&str, &str)] = &[
     ("com curva guia", "with guide curve"),
     ("fechar (volta à primeira seção)", "close (back to the first section)"),
     ("fechar em sólido quando a malha for fechada", "close into a solid when the mesh is closed"),
-    ("manter o outro lado", "keep the other side"),
-    ("outro lado da 1", "other side of 1"),
-    ("outro lado da 2", "other side of 2"),
     ("para na primeira parede do corpo encontrada", "stops at the first body wall it meets"),
     ("regrada (faces retas entre seções)", "ruled (straight faces between sections)"),
     ("rosca em toda a face cilíndrica", "thread along the whole cylindrical face"),
@@ -1949,7 +1956,6 @@ static TABLE: &[(&str, &str)] = &[
     ("Juntar tudo (sem explosão)", "Collapse all (no explode)"),
     ("Largura do alívio", "Relief width"),
     ("Legenda", "Title block"),
-    ("Letra", "Letter"),
     ("Letra de referência na face escolhida.", "Datum letter on the chosen face."),
     ("Letra do corte", "Section letter"),
     ("Letra do detalhe", "Detail letter"),
@@ -2483,7 +2489,6 @@ static TABLE: &[(&str, &str)] = &[
     ("Caixa janela (inteiro dentro)", "Window box (fully inside)"),
     ("Caixa pela direção", "Box by direction"),
     ("Chanfro de canto", "Corner chamfer"),
-    ("Clique", "Click"),
     ("Clique no canto entre duas linhas: corta o canto com uma linha reta (distâncias iguais) e abre a cota da distância.", "Click the corner between two lines: cuts it with a straight line (equal distances) and opens the distance dimension."),
     ("Clique seleciona; Shift/Ctrl somam. Ctrl + arrastar faz caixa: da esquerda para a direita só o que está inteiro dentro, da direita para a esquerda o que toca.", "Click selects; Shift/Ctrl add. Ctrl + drag draws a box: left to right selects only what is fully inside, right to left what touches it."),
     ("Cruzada", "Crossing"),
@@ -2598,7 +2603,6 @@ static TABLE: &[(&str, &str)] = &[
     ("Legenda 3D", "3D title block"),
     ("Modelo (os campos entre chaves são preenchidos com os dados da peça)", "Template (fields in braces are filled with the part data)"),
     ("Modificador", "Modifier"),
-    ("Moldura", "Frame"),
     ("Não guardar a visibilidade do modelo", "Do not store model visibility"),
     ("Ocultar a pasta", "Hide folder"),
     ("Prefixo", "Prefix"),
@@ -3207,7 +3211,6 @@ static TABLE: &[(&str, &str)] = &[
     ("centro", "center"),
     ("canto", "corner"),
     ("raio", "radius"),
-    ("vértice", "vertex"),
     ("1º ponto", "1st point"),
     ("2º ponto", "2nd point"),
     ("3º ponto", "3rd point"),

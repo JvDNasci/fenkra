@@ -22,7 +22,7 @@ pub fn is_shape(k: &FeatureKind) -> bool {
 
 /// Comandos em que clicar numa face na viewport (com o comando aberto) acrescenta a face.
 pub fn wants_faces(k: &FeatureKind) -> bool {
-    matches!(k, FeatureKind::Shell(_) | FeatureKind::Draft(_) | FeatureKind::Thickness(_) | FeatureKind::Thread(_) | FeatureKind::SmCornerRelief(_) | FeatureKind::SmArcSlot(_) | FeatureKind::SmSurfFlange(_))
+    matches!(k, FeatureKind::Shell(_) | FeatureKind::Draft(_) | FeatureKind::Thickness(_) | FeatureKind::Thread(_) | FeatureKind::StructPlate(_) | FeatureKind::SmCornerRelief(_) | FeatureKind::SmArcSlot(_) | FeatureKind::SmSurfFlange(_))
         || matches!(k, FeatureKind::SmFlangedHole(h) if crate::slots::is_unset(h.sketch) || !h.points.is_empty())
         || matches!(k, FeatureKind::Fillet(o) if matches!(o.mode, EdgeMode::FaceFace(..) | EdgeMode::FullRound { .. }))
 }
@@ -34,6 +34,8 @@ pub fn add_face(k: &mut FeatureKind, p: [f64; 3]) {
         FeatureKind::Draft(d) => d.faces.push(p),
         FeatureKind::Thickness(t) => t.faces.push(p),
         FeatureKind::Thread(t) => t.face = p,
+        // B255: o clique na face da ponta grava o ponto dela; o recálculo acha a ponta que a tem
+        FeatureKind::StructPlate(pl) => pl.at = p,
         FeatureKind::SmFlangedHole(h) => h.points.push(p),
         FeatureKind::SmCornerRelief(c) => c.at = p,
         FeatureKind::SmArcSlot(c) => c.center = p,
@@ -93,6 +95,7 @@ pub fn face_marks(k: &FeatureKind) -> Vec<[f64; 3]> {
         FeatureKind::Draft(d) => d.faces.clone(),
         FeatureKind::Thickness(t) => t.faces.clone(),
         FeatureKind::Thread(t) => vec![t.face],
+        FeatureKind::StructPlate(pl) => vec![pl.at],
         FeatureKind::Fillet(o) => match o.mode {
             EdgeMode::FaceFace(a, b) => vec![a, b],
             EdgeMode::FullRound { mid, a, b } => vec![mid, a, b],
@@ -468,28 +471,10 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             crate::st_ui::member_panel(ui, doc, me, m, vars, seed);
         }
         FeatureKind::StructPlate(p) => {
-            section(ui, "Placa de extremidade");
-            ui.label(RichText::new(format!("ponta perto de {}", crate::app::p3(p.at, 1))).small());
-            if let Some(q) = seed.points.iter().find_map(|x| if let PointRef::Fixed(q) = x { Some(*q) } else { None }) {
-                if ui.button(tr("⊙ Usar o vértice selecionado")).clicked() {
-                    p.at = q;
-                }
-            }
-            expr(ui, "Espessura", &mut p.thickness, vars, "mm");
-            expr(ui, "Sobra", &mut p.margin, vars, "mm");
+            crate::st_placas_ui::placa_panel(ui, p, vars, seed);
         }
         FeatureKind::StructGusset(g) => {
-            section(ui, "Reforço");
-            ui.label(RichText::new(format!("encontro perto de {}", crate::app::p3(g.at, 1))).small());
-            if let Some(q) = seed.points.iter().find_map(|x| if let PointRef::Fixed(q) = x { Some(*q) } else { None }) {
-                if ui.button(tr("⊙ Usar o vértice selecionado")).clicked() {
-                    g.at = q;
-                }
-            }
-            expr(ui, "Aba", &mut g.leg, vars, "mm");
-            expr(ui, "Espessura", &mut g.thickness, vars, "mm");
-            expr(ui, "Chanfro de alívio", &mut g.chamfer, vars, "mm");
-            ui.label(RichText::new(tr("Chanfro 0 = triangular; maior que 0 corta o canto (passagem do cordão de solda).")).weak().small());
+            crate::st_placas_ui::reforco_panel(ui, g, vars, seed);
         }
         FeatureKind::SmWall(w) => {
             section(ui, "Parede base");
@@ -912,7 +897,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         FeatureKind::SplitBody(sp) => {
             section(ui, "Dividir o corpo");
             geo_ui::surf_slot(ui, "hb_s", "Superfície", doc, me, &mut sp.surface, seed);
-            crate::editor::check(ui, &mut sp.flip, "manter o outro lado");
+            crate::sup3d::dica_de_lado(ui);
             ui.label(RichText::new(tr("Face do corpo é estendida para cortar a peça inteira; superfícies de referência cortam como estão.")).weak().small());
         }
         FeatureKind::ThickSurface(t) => {
@@ -921,6 +906,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             expr(ui, "Espessura 1", &mut t.t1, vars, "mm");
             expr(ui, "Espessura 2", &mut t.t2, vars, "mm");
             ui.label(RichText::new(tr("1 = lado da normal; 2 = lado oposto (0 = só um lado).")).weak().small());
+            crate::sup3d::dica_de_lado(ui);
             hyb_op(ui, &mut t.op);
         }
         FeatureKind::CloseSurface(c) => {
@@ -941,7 +927,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 sw.remove = i == 1;
             }
             if sw.remove {
-                crate::editor::check(ui, &mut sw.flip, "tirar o outro lado");
+                crate::sup3d::dica_de_lado(ui);
             }
         }
         FeatureKind::BoundaryFill(bf) => {

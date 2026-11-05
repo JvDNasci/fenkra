@@ -11,7 +11,7 @@ use crate::picking::Pick;
 use eframe::egui::{self, Color32, RichText};
 use fenkra_core::{Document, Id};
 use fenkra_montagem::load::{full_path, geom_at, PartCache};
-use fenkra_montagem::kin::{self, CouplingKind, JFrame, JRef, JointKind};
+use fenkra_montagem::kin::{self, CouplingKind, JointKind};
 use fenkra_montagem::links::{self, AcaoLink, Gatilho, Politica};
 use fenkra_montagem::solve::SolveReport;
 use fenkra_montagem::*;
@@ -66,7 +66,7 @@ impl MateCmd {
             MateCmd::RackPinion => "⛭",
         }
     }
-    fn kind(self) -> Option<MateKind> {
+    pub(crate) fn kind(self) -> Option<MateKind> {
         Some(match self {
             MateCmd::Gear => MateKind::Gear { ratio: "-1".into(), belt: false, refs: [[0.; 3]; 4] },
             MateCmd::Pulley => MateKind::Gear { ratio: "1".into(), belt: true, refs: [[0.; 3]; 4] },
@@ -184,8 +184,18 @@ pub struct AsmState {
     /// recompor a vista (peças ou posições mudaram)
     pub dirty: bool,
     pub sel: Option<Id>,
-    /// restrição esperando as duas seleções
-    pub pending: Option<MateCmd>,
+    /// restrição ou junta em criação: nada entra na montagem antes de aceitar
+    pub cmd: Option<crate::asm_cmd::Pendente>,
+    /// a prévia mudou: a cena precisa do fantasma novo (sem recompor as peças)
+    pub fantasma_novo: bool,
+    /// símbolos de restrição e junta no modelo
+    pub simbolos: crate::asm_simbolos::Exibicao,
+    /// peças escolhidas juntas (Ctrl, Shift ou caixa): ocultar e apagar valem para todas
+    pub multi: Vec<Id>,
+    /// item da origem escolhido na árvore: entra como primeiro elemento do próximo comando
+    pub origem_sel: Option<crate::asm_selecao::ItemOrigem>,
+    /// último elemento clicado no 3D e quantos havia: a seleção só reage quando isso muda
+    ultimo_pick: (Option<Pick>, usize),
     /// propriedades do componente escolhido (ou da montagem, sem escolha) abertas no painel
     pub props: bool,
     pub report: SolveReport,
@@ -222,12 +232,10 @@ pub struct AsmState {
     /// item em edição e o estado de antes (Cancelar volta para ele; item novo some)
     pub edit_snap: Option<(Id, Assembly)>,
     /// posição antes do arrasto do manipulador
-    drag_start: Option<Placement>,
-    snapshot: Option<Assembly>,
+    pub(crate) drag_start: Option<Placement>,
+    pub(crate) snapshot: Option<Assembly>,
     /// aviso de uma ação do painel, para mostrar no quadro seguinte
     aviso: Option<(String, bool)>,
-    /// junta esperando as duas seleções
-    pub pending_joint: Option<u8>,
     // ---- simulação
     pub sim_open: bool,
     pub sim_frames: Vec<kin::Frame>,
@@ -262,8 +270,10 @@ pub struct AsmState {
     /// graus de liberdade de cada componente (depois da última resolução)
     pub comp_dof: std::collections::HashMap<Id, usize>,
     /// anel de rotação em arraste (eixo, ângulo) e o centro do giro
-    rot_drag: Option<(usize, f64)>,
-    drag_center: Option<[f64; 3]>,
+    pub(crate) rot_drag: Option<(usize, f64)>,
+    pub(crate) drag_center: Option<[f64; 3]>,
+    /// opções e estado do manipulador
+    pub manip: crate::asm_manip::Manip,
     /// o arraste parou num contato
     pub contact: bool,
     /// restrições possíveis para as duas seleções atuais
@@ -293,7 +303,12 @@ impl AsmState {
             view: None,
             dirty: true,
             sel: None,
-            pending: None,
+            cmd: None,
+            fantasma_novo: false,
+            simbolos: Default::default(),
+            multi: vec![],
+            origem_sel: None,
+            ultimo_pick: (None, 0),
             report: SolveReport { converged: true, dof: report_dof, ..Default::default() },
             errors: vec![],
             undo: vec![],
@@ -316,7 +331,6 @@ impl AsmState {
             edit_snap: None,
             drag_start: None,
             snapshot: None,
-            pending_joint: None,
             sim_open: false,
             sim_frames: vec![],
             sim_t: 0.,
@@ -343,6 +357,7 @@ impl AsmState {
             furos_publicos: None,
             comp_dof: Default::default(),
             rot_drag: None,
+            manip: Default::default(),
             drag_center: None,
             contact: false,
             quick: None,
@@ -413,9 +428,10 @@ impl AsmState {
         self.errors.clear();
         let mut shown = self.asm.with_state(&self.live);
         if self.isolate {
-            if let Some(s) = self.sel {
+            let manter: Vec<Id> = self.multi.iter().copied().chain(self.sel).collect();
+            if !manter.is_empty() {
                 for n in &mut shown.nodes {
-                    if n.id != s && !matches!(n.kind, NodeKind::Group) {
+                    if !manter.contains(&n.id) && !matches!(n.kind, NodeKind::Group) {
                         n.visible = false;
                     }
                 }
@@ -436,6 +452,7 @@ impl AsmState {
         self.atualizar_links(Gatilho::Posicao);
         self.comp_dof = fenkra_montagem::solve::dof_per_comp(&self.asm);
         self.sub_rows.clear();
+        self.manip.esquecer();
         self.dirty = true;
     }
 
@@ -472,7 +489,15 @@ impl AsmState {
     }
 
     /// Elemento da restrição a partir de uma seleção da viewport.
-    fn mate_ref(&mut self, p: Pick) -> Result<MateRef, String> {
+    pub(crate) fn mate_ref(&mut self, p: Pick) -> Result<MateRef, String> {
+        // plano da origem ou da geometria da montagem: referência no sistema da montagem
+        if let Pick::Plane(pr) = p {
+            let f = match pr {
+                fenkra_core::PlaneRef::Origin(o) => fenkra_solidos::origin_frame(o),
+                fenkra_core::PlaneRef::Datum(id) => self.view.as_ref().and_then(|r| r.planes.iter().find(|x| x.id == Some(id))).map(|x| x.frame).ok_or("plano não encontrado")?,
+            };
+            return Ok(MateRef { comp: ORIGEM, geom: Geom::Plane { p: f.origin, n: f.normal }, pick: None });
+        }
         let (body, world) = match p {
             Pick::Face { body, point, .. } => (body, point.map(|v| v as f64)),
             Pick::Vertex { body, pos } => (body, pos.map(|v| v as f64)),
@@ -515,23 +540,8 @@ impl AsmState {
     }
 }
 
-const DICA_ALINHAMENTO: &str = "Troca o sentido das normais: a peça vira, e a cota continua do mesmo lado.";
-const DICA_LADO: &str = "Passa a cota para o outro lado da referência: a peça muda de lado sem virar.";
-
-/// Restrição automática: o tipo mais lógico para o par escolhido.
-fn auto_kind(a: &Geom, b: &Geom, wa: &Placement, wb: &Placement) -> MateKind {
-    match (a, b) {
-        (Geom::Plane { n: na, .. }, Geom::Plane { n: nb, .. }) => {
-            // faces de frente uma para a outra → contato; mesmo sentido → coincidência
-            if dot(wa.dir(*na), wb.dir(*nb)) < 0. {
-                MateKind::Contact
-            } else {
-                MateKind::Coincident { flip: false }
-            }
-        }
-        _ => MateKind::Coincident { flip: false },
-    }
-}
+pub(crate) const DICA_ALINHAMENTO: &str = "Troca o sentido das normais: a peça vira, e a cota continua do mesmo lado.";
+pub(crate) const DICA_LADO: &str = "Passa a cota para o outro lado da referência: a peça muda de lado sem virar.";
 
 // ============================================================== comandos
 
@@ -639,17 +649,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                         Err(e) => app.toast(e, true),
                     }
                 }
-                Cmd::AsmMate(m) => {
-                    if app.picks.len() >= 2 {
-                        let picks = app.picks.clone();
-                        app.picks.clear();
-                        create_mate(app, m, picks[0], picks[1]);
-                    } else {
-                        let st = app.asm.as_mut().unwrap();
-                        st.pending = Some(m);
-                        app.toast(tr("Escolha dois elementos (faces, arestas ou vértices) de peças diferentes"), false);
-                    }
-                }
+                Cmd::AsmMate(m) => crate::asm_cmd::abrir(app, crate::asm_cmd::tipo_da_restricao(m)),
                 Cmd::AsmFix => {
                     let Some(id) = st.sel else {
                         app.toast(tr("Selecione o componente"), true);
@@ -694,18 +694,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                     st.sel = Some(id);
                     st.dirty = true;
                 }
-                Cmd::AsmJoint(k) => {
-                    if app.picks.len() >= 2 {
-                        let picks = app.picks.clone();
-                        app.picks.clear();
-                        create_joint(app, k, picks[0], picks[1]);
-                    } else {
-                        let st = app.asm.as_mut().unwrap();
-                        st.pending_joint = Some(k);
-                        st.pending = None;
-                        app.toast(tr("Escolha os elementos das duas peças (eixo/face cilíndrica, face plana, vértice ou aresta)"), false);
-                    }
-                }
+                Cmd::AsmJoint(k) => crate::asm_cmd::abrir(app, crate::asm_cmd::tipo_da_junta(k)),
                 Cmd::AsmAutoJoints => {
                     st.push_undo();
                     let made = st.asm.joints_from_mates();
@@ -856,200 +845,12 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
     true
 }
 
-/// Cria a restrição entre duas seleções e resolve.
-fn create_mate(app: &mut App, m: MateCmd, a: Pick, b: Pick) {
-    let Some(st) = app.asm.as_mut() else { return };
-    let (ra, rb) = match (st.mate_ref(a), st.mate_ref(b)) {
-        (Ok(x), Ok(y)) => (x, y),
-        (Err(e), _) | (_, Err(e)) => {
-            app.toast(e, true);
-            return;
-        }
-    };
-    if ra.comp == rb.comp {
-        app.toast(tr("Os dois elementos são do mesmo componente"), true);
-        return;
-    }
-    let (pa, pb) = (st.asm.node(ra.comp).unwrap().placement, st.asm.node(rb.comp).unwrap().placement);
-    let kind = m.kind().unwrap_or_else(|| auto_kind(&ra.geom, &rb.geom, &pa, &pb));
-    if !fenkra_montagem::par_valido(&kind, &ra.geom, &rb.geom) {
-        app.toast(format!("{}: {}", tr(kind.label()), tr("este par de elementos não define a restrição (escolha planos ou eixos)")), true);
-        return;
-    }
-    st.push_undo();
-    let id = st.asm.add_mate(kind, ra, rb);
-    // engrenagem/cremalheira: o giro de agora é o zero
-    st.asm.init_motion(id);
-    // distância e ângulo: a medida de agora, para a peça não saltar
-    st.asm.iniciar_medida(id);
-    st.solve();
-    if m == MateCmd::AlignOnce {
-        // alinhamento instantâneo: posiciona e não deixa histórico
-        st.asm.mates.retain(|x| x.id != id);
-        app.toast(tr("Alinhado (sem restrição guardada)"), false);
-    } else {
-        st.sel = Some(id);
-        let ok = !st.report.failed.contains(&id);
-        let msg = if ok { format!("{} criada · {} GDL livres", st.asm.name_of(id), st.report.dof) } else { format!("{}: não foi possível satisfazer (conflito com outras restrições)", st.asm.name_of(id)) };
-        app.toast(msg, !ok);
-    }
-}
-
-/// Cria a junta entre duas seleções (o sistema de B começa alinhado ao de A: ângulo e curso 0).
-fn create_joint(app: &mut App, k: u8, a: Pick, b: Pick) {
-    let Some(st) = app.asm.as_mut() else { return };
-    let kind = match k {
-        0 => JointKind::Revolute,
-        1 => JointKind::Prismatic,
-        2 => JointKind::Cylindrical,
-        3 => JointKind::Screw { pitch: "2".into() },
-        4 => JointKind::Spherical,
-        5 => JointKind::Planar,
-        6 => JointKind::Rigid,
-        7 => JointKind::PointCurve { curve: vec![] },
-        _ => JointKind::Cam { profile: vec![], radius: "0".into() },
-    };
-    // came: perfil = contorno da seção da peça pelo plano da aresta escolhida (vários arcos
-    // viram um perfil só); seguidor = vértice (ponta) ou aresta circular (rolete)
-    let cam = if let (JointKind::Cam { .. }, Pick::Edge { body, edge, mid }) = (&kind, a) {
-        let comp = st.comp_of_body(body);
-        let node = comp.and_then(|c| st.asm.node(c)).cloned();
-        let poly: Vec<[f64; 3]> = st.view.as_ref().map(|r| crate::picking::edge_polyline(r, body, edge)).unwrap_or_default();
-        match (node, poly.len() >= 3) {
-            (Some(n), true) => {
-                let pl = n.placement;
-                let loc: Vec<[f64; 3]> = poly.iter().map(|q| pl.to_local(*q)).collect();
-                // normal do plano da aresta (Newell; aresta reta: cai no eixo z da peça)
-                let mut nn = [0.; 3];
-                for i in 0..loc.len() {
-                    let (p, q) = (loc[i], loc[(i + 1) % loc.len()]);
-                    nn[0] += (p[1] - q[1]) * (p[2] + q[2]);
-                    nn[1] += (p[2] - q[2]) * (p[0] + q[0]);
-                    nn[2] += (p[0] - q[0]) * (p[1] + q[1]);
-                }
-                let nn = if norm(nn) > 1e-9 { unit(nn) } else { [0., 0., 1.] };
-                let m = pl.to_local(mid.map(|v| v as f64));
-                let dir = st.file.as_ref().and_then(|f| f.parent()).map(|p| p.to_path_buf());
-                let shape = match &n.kind {
-                    NodeKind::Part { path } => st.cache.get(&fenkra_montagem::load::full_path(dir.as_deref(), path), true).ok().and_then(|p| p.shape.clone()),
-                    _ => None,
-                };
-                let lp = shape.and_then(|s| s.section_loops(m, nn, 1e4).ok()).and_then(|loops| {
-                    loops.into_iter().min_by(|x, y| {
-                        let dmin = |l: &Vec<[f64; 3]>| l.iter().map(|p| norm(sub(*p, m))).fold(f64::MAX, f64::min);
-                        dmin(x).total_cmp(&dmin(y))
-                    })
-                });
-                Some(lp.unwrap_or(loc))
-            }
-            _ => None,
-        }
-    } else {
-        None
-    };
-    let roller = match (&kind, b) {
-        (JointKind::Cam { .. }, Pick::Edge { body, edge, .. }) => st
-            .view
-            .as_ref()
-            .map(|r| crate::picking::edge_polyline(r, body, edge))
-            .and_then(|pts| fenkra_solidos::geo3d::Curve3::poly(pts, false).ok())
-            .filter(|c| !c.is_straight())
-            .and_then(|c| fenkra_solidos::geo3d::fit_circle(&c).ok())
-            .map(|(_, _, r)| r),
-        _ => None,
-    };
-    // ponto em curva: a aresta (trajetória) é da peça A, o vértice da peça B
-    let curve = if let (JointKind::PointCurve { .. }, Pick::Edge { body, edge, .. }) = (&kind, a) {
-        let comp = st.comp_of_body(body);
-        let pl = comp.and_then(|c| st.asm.node(c)).map(|n| n.placement).unwrap_or_default();
-        st.view.as_ref().map(|r| crate::picking::edge_polyline(r, body, edge).into_iter().map(|q| pl.to_local(q)).collect::<Vec<_>>())
-    } else {
-        None
-    };
-    let (ra, rb) = match (st.mate_ref(a), st.mate_ref(b)) {
-        (Ok(x), Ok(y)) => (x, y),
-        (Err(e), _) | (_, Err(e)) => {
-            app.toast(e, true);
-            return;
-        }
-    };
-    if ra.comp == rb.comp {
-        app.toast(tr("Os dois elementos são da mesma peça"), true);
-        return;
-    }
-    let frame = |g: &Geom| match *g {
-        Geom::Axis { p, d } => JFrame::from_axis(p, d),
-        Geom::Plane { p, n } => JFrame::from_axis(p, n),
-        Geom::Point(p) => JFrame::from_axis(p, [0., 0., 1.]),
-    };
-    let (pa, pb) = (st.asm.node(ra.comp).unwrap().placement, st.asm.node(rb.comp).unwrap().placement);
-    let fa = frame(&ra.geom);
-    let mut fb = frame(&rb.geom);
-    // x de B = x de A projetado no plano de B (zero comum do ângulo)
-    let xa = pb.dir_to_local(pa.dir(fa.x));
-    let k2 = dot(xa, fb.z);
-    let px = [xa[0] - fb.z[0] * k2, xa[1] - fb.z[1] * k2, xa[2] - fb.z[2] * k2];
-    if norm(px) > 1e-6 {
-        fb.x = unit(px);
-    }
-    let kind = match (kind, curve) {
-        (JointKind::PointCurve { .. }, Some(c)) => JointKind::PointCurve { curve: c },
-        (JointKind::PointCurve { .. }, None) => {
-            app.toast(tr("Ponto em curva: escolha primeiro a aresta (trajetória) e depois o vértice"), true);
-            return;
-        }
-        (JointKind::Cam { .. }, _) => match cam {
-            Some(p) => JointKind::Cam { profile: p, radius: roller.map(|r| format!("{r:.3}")).unwrap_or_else(|| "0".into()) },
-            None => {
-                app.toast(tr("Came: escolha primeiro uma aresta do perfil do came e depois o seguidor (vértice ou aresta circular do rolete)"), true);
-                return;
-            }
-        },
-        (k, _) => k,
-    };
-    st.push_undo();
-    let id = st.asm.add_joint(kind, JRef { comp: ra.comp, frame: fa }, JRef { comp: rb.comp, frame: fb });
-    st.solve();
-    st.sel = Some(id);
-    let (sem, com) = kin::analyze(&st.asm);
-    let msg = format!("{} criada · mecanismo com {sem} GDL ({com} com os comandos)", st.asm.name_of(id));
-    app.toast(msg, false);
-}
-
-/// Seleções feitas na viewport com uma restrição pendente: cria quando houver duas.
-pub fn after_viewport(app: &mut App) {
+/// Depois da viewport: com um comando aberto, cada clique vai para a caixa ativa; sem comando, um
+/// clique numa peça a seleciona na árvore.
+pub fn after_viewport(app: &mut App, ctx: &egui::Context) {
     after_view_quick(app);
-    let pj = app.asm.as_ref().and_then(|s| s.pending_joint);
-    if let (Some(k), true) = (pj, app.picks.len() >= 2) {
-        let picks = app.picks.clone();
-        app.picks.clear();
-        if let Some(st) = app.asm.as_mut() {
-            st.pending_joint = None;
-        }
-        create_joint(app, k, picks[0], picks[1]);
-        return;
-    }
-    let pending = app.asm.as_ref().and_then(|s| s.pending);
-    if let Some(m) = pending {
-        if app.picks.len() >= 2 {
-            let picks = app.picks.clone();
-            app.picks.clear();
-            if let Some(st) = app.asm.as_mut() {
-                st.pending = None;
-            }
-            create_mate(app, m, picks[0], picks[1]);
-        }
-    } else if let Some(p) = app.picks.last().copied() {
-        // um clique numa peça seleciona o componente na árvore
-        if let Pick::Face { body, .. } | Pick::Edge { body, .. } | Pick::Vertex { body, .. } = p {
-            if let Some(st) = app.asm.as_mut() {
-                if let Some(c) = st.comp_of_body(body) {
-                    if st.sel != Some(c) {
-                        st.sel = Some(c);
-                    }
-                }
-            }
-        }
+    if !crate::asm_cmd::apos_viewport(app) && !crate::asm_manip::apos_viewport(app) {
+        selecao_do_clique(app, ctx.input(|i| i.modifiers.alt));
     }
     // duplo clique numa peça: abre para editar
     if let Some(id) = app.take_open_pending() {
@@ -1057,6 +858,37 @@ pub fn after_viewport(app: &mut App) {
             edit_part(app, id);
         }
     }
+}
+
+/// O clique no 3D escolhe o componente. Só reage quando a seleção muda: escolher outra linha da
+/// árvore não pode voltar para a peça clicada antes. Alt+clique fica no nível da peça e sobe para o
+/// grupo dela; com várias escolhidas (Ctrl ou caixa), a seleção de peças acompanha.
+fn selecao_do_clique(app: &mut App, alt: bool) {
+    let Some(st) = app.asm.as_mut() else { return };
+    let ultimo = app.picks.last().copied();
+    if (ultimo, app.picks.len()) == st.ultimo_pick {
+        return;
+    }
+    st.ultimo_pick = (ultimo, app.picks.len());
+    let Some(p) = ultimo else {
+        if !st.multi.is_empty() {
+            st.multi.clear();
+            st.fantasma_novo = true;
+        }
+        return;
+    };
+    let (Pick::Face { body, .. } | Pick::Edge { body, .. } | Pick::Vertex { body, .. }) = p else { return };
+    let Some(c) = st.comp_of_body(body) else { return };
+    if alt {
+        st.sel = Some(crate::asm_selecao::subir_nivel(&st.asm, st.sel, c));
+        st.multi.clear();
+        app.picks.clear();
+        st.ultimo_pick = (None, 0);
+    } else {
+        st.sel = Some(c);
+        st.multi = if app.picks.len() > 1 { st.comps_of(&app.picks) } else { vec![] };
+    }
+    st.fantasma_novo = true;
 }
 
 /// Eixo da série a partir do que foi clicado. Face plana: começa no ponto clicado, para dentro da
@@ -1463,6 +1295,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
         TreeInfo { feats, subs, inst }
     };
     ui.separator();
+    crate::asm_selecao::arvore(st, ui);
     // nós, com grupos aninhados (a ordem da árvore só muda a visualização)
     #[allow(clippy::too_many_arguments)]
     fn rows(ui: &mut egui::Ui, st: &AsmState, info: &TreeInfo, parent: Option<Id>, depth: usize, new_sel: &mut Option<Id>, act: &mut Option<(Id, u8)>, hover: &mut Option<Id>) {
@@ -1533,7 +1366,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                         r
                     } else {
                         let t = if err.is_some() { RichText::new(txt).color(crate::theme::st_err()) } else if n.visible { RichText::new(txt) } else { RichText::new(txt).weak() };
-                        let r = ui.selectable_label(st.sel == Some(n.id), t);
+                        let r = ui.selectable_label(st.sel == Some(n.id) || st.multi.contains(&n.id), t);
                         if st.sel == Some(n.id) {
                             crate::tree_ui::achar(r.rect);
                         }
@@ -1758,7 +1591,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                 t = t.strikethrough().weak();
             }
             crate::tree_ui::marca(ui);
-            let r = ui.selectable_label(st.sel == Some(m.id), t);
+            let r = ui.selectable_label(st.sel == Some(m.id) || st.simbolos.hover == Some(m.id), t);
             if st.sel == Some(m.id) {
                 crate::tree_ui::achar(r.rect);
             }
@@ -1802,7 +1635,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                 t = t.strikethrough().weak();
             }
             crate::tree_ui::marca(ui);
-            let r = ui.selectable_label(st.sel == Some(j.id), t);
+            let r = ui.selectable_label(st.sel == Some(j.id) || st.simbolos.hover == Some(j.id), t);
             if st.sel == Some(j.id) {
                 crate::tree_ui::achar(r.rect);
             }
@@ -1905,7 +1738,16 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
         if st.sel != Some(s) {
             st.props = false;
         }
-        st.sel = Some(s);
+        if st.asm.node(s).is_some() {
+            // peças: a seleção segue as teclas da árvore das peças
+            let (ctrl, shift) = ui.input(|i| (i.modifiers.command, i.modifiers.shift));
+            let ordem: Vec<Id> = st.asm.nodes.iter().map(|n| n.id).collect();
+            crate::asm_selecao::clique(&mut st.sel, &mut st.multi, &ordem, s, ctrl, shift);
+            st.fantasma_novo = true;
+        } else {
+            st.sel = Some(s);
+            st.multi.clear();
+        }
         if st.isolate {
             st.dirty = true;
         }
@@ -1946,6 +1788,10 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
 /// 6 substituir, 7 subir, 8 descer, 9 renomear, 10 isolar, 11 suprimir restrição.
 pub fn node_action(app: &mut App, id: Id, k: u8) {
     let Some(st) = app.asm.as_mut() else { return };
+    // na seleção de várias peças, ocultar e apagar valem para todas
+    if matches!(k, 0 | 1) && st.multi.len() > 1 && st.multi.contains(&id) {
+        return crate::asm_selecao::em_lote(app, k);
+    }
     match k {
         2 => return edit_part(app, id),
         16 => {
@@ -2427,15 +2273,8 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         ui.label(RichText::new(tr("Crie uma montagem nova ou abra uma existente pela árvore à esquerda.")).weak());
         return;
     };
-    if let Some(m) = st.pending {
-        egui::Frame::NONE.fill(Color32::from_rgba_unmultiplied(40, 90, 160, 60)).inner_margin(6.).corner_radius(4.).show(ui, |ui| {
-            ui.label(RichText::new(format!("{} — {}", tr("Restrição"), format!("{m:?}"))).strong());
-            ui.label(format!("{} {}/2", tr("Clique nos dois elementos na viewport:"), app.picks.len()));
-            if ui.button(tr("Cancelar")).clicked() {
-                st.pending = None;
-            }
-        });
-        ui.add_space(6.);
+    if st.cmd.is_some() {
+        return crate::asm_cmd::painel(app, ui);
     }
     let sel = st.sel;
     if let Some(s) = sel {
@@ -2973,11 +2812,11 @@ impl AsmState {
     /// Há algo em edição (o painel de edição toma o lugar da árvore, como nos outros módulos)?
     /// Escolher um componente só o seleciona; restrições, juntas e recursos abrem a edição.
     pub fn editing(&self) -> bool {
-        self.pending.is_some() || self.pending_joint.is_some() || self.props || self.sel.is_some_and(|s| !self.asm.nodes.iter().any(|n| n.id == s))
+        self.cmd.is_some() || self.props || self.sel.is_some_and(|s| !self.asm.nodes.iter().any(|n| n.id == s) && !(crate::pmi_minibar::open() && self.asm.pmi.iter().any(|p| p.id == s)))
     }
 
     /// Componentes das seleções da viewport (sem repetir, na ordem do clique).
-    fn comps_of(&self, picks: &[Pick]) -> Vec<Id> {
+    pub(crate) fn comps_of(&self, picks: &[Pick]) -> Vec<Id> {
         let mut out = vec![];
         for p in picks {
             if let Pick::Face { body, .. } | Pick::Edge { body, .. } | Pick::Vertex { body, .. } = p {
@@ -3151,9 +2990,7 @@ fn apply_ctx(app: &mut App, act: AsmCtx) {
     match act {
         AsmCtx::Mate(m) => {
             if app.picks.len() >= 2 {
-                let picks = app.picks.clone();
-                app.picks.clear();
-                create_mate(app, m, picks[0], picks[1]);
+                crate::asm_cmd::abrir(app, crate::asm_cmd::tipo_da_restricao(m));
             }
         }
         AsmCtx::Fix(id) => node_action(app, id, 5),
@@ -3686,7 +3523,7 @@ pub fn gizmo(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::re
     eixos_da_serie(st, ui, rect, cam);
     // restrição rápida: dois elementos de peças diferentes escolhidos (opções calculadas depois
     // da viewport; o clique vira ação aplicada lá)
-    if !st.view_only && st.pending.is_none() && st.pending_joint.is_none() && app.picks.len() == 2 && st.quick.as_ref().is_some_and(|q| q.0 == app.picks) {
+    if !st.view_only && st.cmd.is_none() && app.picks.len() == 2 && st.quick.as_ref().is_some_and(|q| q.0 == app.picks) {
         let picks = app.picks.clone();
         let opts = st.quick.as_ref().map(|q| q.1.clone()).unwrap_or_default();
         if !opts.is_empty() {
@@ -3710,102 +3547,7 @@ pub fn gizmo(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::re
             }
         }
     }
-    let Some(st) = app.asm.as_mut() else { return };
-    if st.view_only {
-        return;
-    }
-    let Some(id) = st.sel else { return };
-    let Some(n) = st.asm.node(id) else { return };
-    if matches!(n.kind, NodeKind::Group) || n.fixed {
-        return;
-    }
-    let p = n.placement;
-    let view = app.result.as_ref();
-    let center = |_: &AsmState| {
-        view
-            .and_then(|r| r.bodies.iter().find(|b| b.collector == id))
-            .map(|b| {
-                let k = (b.mesh.positions.len() / 3).max(1) as f32;
-                b.mesh.positions.chunks_exact(3).fold(glam::Vec3::ZERO, |a, q| a + glam::Vec3::new(q[0], q[1], q[2])) / k
-            })
-    };
-    if st.explode_mode {
-        let off = st.live.offset(id);
-        let c = center(st).unwrap_or(glam::Vec3::ZERO);
-        if let Some(v) = crate::gizmo::translate_gizmo(ui, rect, cam, id.0 ^ 0x5eed, c, [glam::Vec3::X, glam::Vec3::Y, glam::Vec3::Z], off, [false; 3]) {
-            st.live.set_offset(id, v);
-            st.dirty = true;
-        }
-        return;
-    }
-    // centro do componente na tela: centro da malha posicionada
-    let c = center(st).unwrap_or(glam::Vec3::new(p.origin[0] as f32, p.origin[1] as f32, p.origin[2] as f32));
-    let mut cand: Option<Placement> = None;
-    if let Some(v) = crate::gizmo::translate_gizmo(ui, rect, cam, id.0, c, [glam::Vec3::X, glam::Vec3::Y, glam::Vec3::Z], p.origin, [false; 3]) {
-        let base = st.drag_start.unwrap_or(p);
-        cand = Some(Placement { origin: v, rot: base.rot });
-    }
-    // anéis de rotação em volta dos eixos do mundo, pelo centro do componente
-    let ppm = {
-        let (r, _) = cam.basis();
-        match (cam.project(rect, c), cam.project(rect, c + r)) {
-            (Some(a), Some(b)) => (b - a).length().max(1e-3),
-            _ => 1.,
-        }
-    };
-    let rad = 95. / ppm;
-    let axes = [glam::Vec3::X, glam::Vec3::Y, glam::Vec3::Z];
-    // alças em diagonais diferentes (não caem umas sobre as outras nem sobre as setas)
-    let starts = [(glam::Vec3::Y + glam::Vec3::Z).normalize(), (glam::Vec3::Z + glam::Vec3::X).normalize(), (glam::Vec3::X + glam::Vec3::Y).normalize()];
-    for (k, ax) in axes.iter().enumerate() {
-        let src = c + starts[k] * rad;
-        let cur = st.rot_drag.filter(|r| r.0 == k).map(|r| r.1).unwrap_or(0.);
-        if let Some(v) = crate::gizmo::rotate_arc_col(ui, rect, cam, id.0.wrapping_mul(31).wrapping_add(k as u64 + 7), c, *ax, src, cur, false, crate::gizmo::AXIS_COL[k]) {
-            let start = st.drag_start.unwrap_or(p);
-            let about = *st.drag_center.get_or_insert([c.x as f64, c.y as f64, c.z as f64]);
-            st.rot_drag = Some((k, v));
-            let w = [0, 1, 2].map(|i| ax[i] as f64 * v.to_radians());
-            cand = Some(start.moved([0.; 3], w, about));
-        }
-    }
-    let released = ui.input(|i| i.pointer.any_released());
-    if let Some(q) = cand {
-        if st.drag_start.is_none() {
-            st.drag_start = Some(p);
-            st.snapshot = Some(st.asm.clone());
-        }
-        // tentativa: com restrições, o componente vai até onde elas deixam
-        let mut trial = st.asm.clone();
-        let constrained = st.respect && (!trial.mates.is_empty() || !trial.joints.is_empty());
-        if constrained {
-            fenkra_montagem::solve::solve_toward(&mut trial, id, q, 0.05);
-        } else if let Some(n) = trial.node_mut(id) {
-            n.placement = q;
-        }
-        let dir = st.dir();
-        st.contact = st.stop_collision && fenkra_montagem::view::collides(&trial, id, dir.as_deref(), &mut st.cache, 0.01);
-        if !st.contact {
-            st.asm = trial;
-            st.dirty = true;
-        }
-    } else if released {
-        st.rot_drag = None;
-        st.drag_center = None;
-        if let (Some(_), Some(snap)) = (st.drag_start.take(), st.snapshot.take()) {
-            st.undo.push(snap);
-            st.modified = true;
-            if st.respect && !st.asm.mates.is_empty() {
-                st.solve();
-            }
-            st.dirty = true;
-        }
-        st.contact = false;
-    }
-    if st.contact {
-        if let Some(s) = cam.project(rect, c) {
-            ui.painter_at(rect).text(s + egui::vec2(18., 18.), egui::Align2::LEFT_TOP, tr("⛔ contato — o movimento parou na colisão"), egui::FontId::proportional(13.), Color32::from_rgb(255, 120, 90));
-        }
-    }
+    crate::asm_manip::desenhar(app, ui, rect, cam);
 }
 
 // ============================================================== simulação

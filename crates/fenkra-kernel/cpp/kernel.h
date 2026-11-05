@@ -95,6 +95,9 @@ std::unique_ptr<Shape> loft_surface(rust::Slice<const double> flat, rust::Slice<
 std::unique_ptr<Shape> sew_shapes(const Shape& s, double tol);
 std::unique_ptr<Shape> heal_shape(const Shape& s, double tol);
 std::unique_ptr<Shape> split_side(const Shape& s, const Shape& tool, bool keep_pos, bool extend);
+std::unique_ptr<Shape> split_regions(const Shape& s, const Shape& tool, bool extend);
+uint32_t child_count(const Shape& s);
+std::unique_ptr<Shape> nth_child(const Shape& s, uint32_t i);
 std::unique_ptr<Shape> nth_face(const Shape& s, uint32_t i);
 std::unique_ptr<Shape> untrim_face(const Shape& s);
 std::unique_ptr<Shape> extrapolate_face(const Shape& s, double px, double py, double pz, double len, int32_t cont);
@@ -130,6 +133,8 @@ void topology(const Shape& s, rust::Vec<double>& face_info, rust::Vec<double>& e
 MeshData tessellate(const Shape& s, double deflection, double angle);
 void discard_mesh(const Shape& s);
 void set_mesh_threads(int32_t n);
+/// Registra (endereço de uma bandeira atômica, ou 0) o cancelamento da thread atual.
+void set_cancel_flag(size_t p);
 int32_t mesh_threads();
 void set_mesh_algo(int32_t a);
 int32_t mesh_algo();

@@ -59,7 +59,9 @@ preferências do usuário.
 | `FENKRA_DEMO_INICIO=1` | mostra a tela inicial |
 | `FENKRA_DEMO_TEMA=<nome>` | usa o tema (Escuro, Claro, NeoTech Minimalista…) |
 | `FENKRA_DEMO_CHAPA`, `_EST`, `_SUP`, `_ASM`, `_PMI`, `_DWG` | abre o exemplo de cada bancada |
-| `FENKRA_DEMO_PREVIA=<nome>` | abre um comando como novo, para ver a prévia fantasma: `ultimo` (último comando da peça de exemplo), `membro` (com `FENKRA_DEMO_EST`), `casca`, `espessura`, `rosca`, `nervura`, `plano` |
+| `FENKRA_DEMO_ASM=<nome>` | montagem de exemplo com: `mec` (mecanismo), `cmd` (restrição com fantasma), `junta` (junta automática), `simbolos` (cota e junta no modelo), `manip` (manipulador numa dobradiça), `duzentas` (200 restrições) |
+| `FENKRA_DEMO_FOTO=<arquivo.png>` | grava a janela depois de 9 s e fecha o programa |
+| `FENKRA_DEMO_PREVIA=<nome>` | abre um comando como novo, para ver a prévia fantasma: `ultimo` (último comando da peça de exemplo), `membro` (com `FENKRA_DEMO_EST`), `casca`, `espessura`, `rosca`, `nervura`, `plano`; os comandos de superfície têm `sup_dividir`, `sup_aparar`, `sup_filete`, `sup_paralela`, `sup_tangente`, `sup_intersecao`, `sup_varredura`, `sup_engrossar`, `sup_corpo`, `sup_regioes`, `sup_regioes_manter` |
 | `FENKRA_DEMO_IMPORTAR=<arquivo>` | abre o painel de importação com o arquivo, sem o seletor; o `fenkra-conv` precisa estar ao lado do executável; com `FENKRA_DEMO_IMPORTAR_OK=1`, confirma sozinho e mostra o relatório |
 | `FENKRA_DEMO_SECAO=1` | liga o corte de seção na prévia da casca |
 | `FENKRA_ABRIR=<arquivo>`, `FENKRA_BANCADA=<bancada>` | abre um arquivo / uma bancada |

@@ -7,8 +7,12 @@
 //! - [`layout`]: tudo vira primitivas na folha (mm) — a tela e as exportações usam as mesmas.
 //! - [`export`]: PDF, SVG e DXF.
 
+pub mod alcas;
 pub mod export;
 pub mod layout;
+pub mod novo;
+pub mod opcoes;
+pub mod simbolos;
 pub mod source;
 
 use fenkra_core::Id;
@@ -549,6 +553,9 @@ pub struct Note {
     /// símbolo de solda completo (ISO 2553); `None` = filete com a medida do texto
     #[serde(default)]
     pub weld: Option<DwgWeld>,
+    /// campos extras da rugosidade (método, sobremedida, direção…); `None` = só o valor do texto
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rough: Option<simbolos::DwgRough>,
     #[serde(default)]
     pub gdt: Option<DwgGdt>,
     /// estilo (moldura, cor, negrito, justificação, ancoragem, chamada…)
@@ -567,7 +574,7 @@ pub struct Note {
 
 impl Default for Note {
     fn default() -> Self {
-        Note { id: Id(0), sheet: Id(0), kind: NoteKind::Text, pos: [0., 0.], leader: None, text: String::new(), size: 3.5, weld: None, gdt: None, style: Default::default(), view: None, anchor3: None, snapped: false }
+        Note { id: Id(0), sheet: Id(0), kind: NoteKind::Text, pos: [0., 0.], leader: None, text: String::new(), size: 3.5, weld: None, rough: None, gdt: None, style: Default::default(), view: None, anchor3: None, snapped: false }
     }
 }
 
@@ -687,6 +694,9 @@ pub struct Drawing {
     pub text_height: f64,
     #[serde(default = "one")]
     pub decimals: u8,
+    /// método de projeção das vistas (1º ou 3º diedro)
+    #[serde(default)]
+    pub projection: novo::Projecao,
 }
 
 fn one() -> u8 {
@@ -708,6 +718,7 @@ impl Drawing {
             title: TitleBlock::default(),
             text_height: 3.5,
             decimals: 1,
+            projection: novo::Projecao::Primeiro,
         };
         d.add_sheet(format);
         d
@@ -759,8 +770,10 @@ impl Drawing {
     /// para cima.
     pub fn add_standard_set(&mut self, sheet: Id, source: Source, center: V2, scale: f64, gap: f64) -> Vec<Id> {
         let f = self.add_view(sheet, source.clone(), ViewKind::Standard(Dir::Frente), center, scale);
-        let t = self.add_view(sheet, source.clone(), ViewKind::Projected { parent: f, dir: Dir::Topo }, [center[0], center[1] - gap], scale);
-        let l = self.add_view(sheet, source.clone(), ViewKind::Projected { parent: f, dir: Dir::Esquerda }, [center[0] + gap, center[1]], scale);
+        let (dir_sup, dir_lat) = self.projection.vistas_da_frente();
+        let (ps, pl) = self.projection.posicoes();
+        let t = self.add_view(sheet, source.clone(), ViewKind::Projected { parent: f, dir: dir_sup }, [center[0] + ps[0] * gap, center[1] + ps[1] * gap], scale);
+        let l = self.add_view(sheet, source.clone(), ViewKind::Projected { parent: f, dir: dir_lat }, [center[0] + pl[0] * gap, center[1] + pl[1] * gap], scale);
         let i = self.add_view(sheet, source, ViewKind::Standard(Dir::Iso), [center[0] + 2. * gap, center[1]], scale);
         vec![f, t, l, i]
     }
@@ -1032,6 +1045,7 @@ mod tests {
             gap: s("0"),
             joints: vec![],
             material: String::new(),
+            mirror: false,
         }));
         let dir = std::env::temp_dir().join("fenkra_desenho_corte_item");
         std::fs::create_dir_all(&dir).unwrap();

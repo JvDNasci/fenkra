@@ -6,6 +6,7 @@
 
 pub mod erro;
 pub mod geo3d;
+pub mod regioes;
 pub mod importacao;
 pub mod mesh_io;
 pub mod structural;
@@ -26,6 +27,8 @@ pub mod chapa_linha;
 mod chapa_flat;
 pub mod planificada;
 pub use chapa_flat::{passos_planificados, PassoPlanificado};
+pub mod st_frames;
+mod st_placas;
 
 pub use engrenagens::{calculo as calculo_engrenagem, engrenagem_documento, CalculoEngrenagem, ParamEngrenagem, TipoEngrenagem};
 pub use eixos::{chaveta_documento, eixo_documento, ParamEixo, RasgoChaveta, TrechoEixo};
@@ -444,6 +447,12 @@ pub struct RefNote {
     pub arrow: Option<(V3, V3)>,
     /// ponto da curva escolhida pelo número: vira a âncora espacial dela
     pub anchor: Option<V3>,
+    /// B276: as soluções possíveis no espaço (número, ponto): cada uma vira uma bolinha no 3D
+    pub solucoes: Vec<(usize, V3)>,
+    /// número da solução em uso
+    pub solucao: Option<usize>,
+    /// B277: pedaços do corte, com o que fica e o que sai
+    pub regioes: Vec<regioes::RegiaoNota>,
 }
 
 /// Superfície de referência exibível (malha).
@@ -800,6 +809,9 @@ pub struct Cache {
     /// Cancelar real (B59): quando a interface liga esta bandeira, o cálculo para antes do próximo
     /// comando. O que já foi feito fica no cache, então calcular de novo continua de onde parou.
     pub cancelar: Option<Arc<std::sync::atomic::AtomicBool>>,
+    /// Progresso do cálculo (B259): o total de comandos ativos e quantos já terminaram, para a
+    /// interface mostrar a barra enquanto a thread de cálculo trabalha.
+    pub progresso: Option<fenkra_core::trabalho::Controle>,
     /// Atualizar esta feature (B59): calcula só até este comando (inclusive); os de depois ficam
     /// listados em `desatualizados`. Vale para o próximo cálculo e é limpo ao terminar.
     pub ate: Option<Id>,
@@ -1349,11 +1361,14 @@ impl Ctx<'_> {
     /// soluções é do kernel e muda quando o modelo muda.
     fn pick_curve(&self, id: Id, mut cs: Vec<Vec<V3>>, which: usize, near: Option<V3>) -> Result<Vec<V3>, String> {
         let n = cs.len();
+        let pontos: Vec<(usize, V3)> = cs.iter().enumerate().filter(|(_, c)| !c.is_empty()).map(|(i, c)| (i, c[c.len() / 2])).collect();
         if let Some(p) = near {
             let gap = |c: &Vec<V3>| Curve3::poly(c.clone(), false).map_or(f64::MAX, |k| geo3d::dist(k.nearest(p).1, p));
             let i = (0..n).min_by(|a, b| gap(&cs[*a]).total_cmp(&gap(&cs[*b]))).ok_or("sem soluções")?;
+            self.publicar_solucoes(id, pontos, Some(i));
             return Ok(cs.swap_remove(i));
         }
+        self.publicar_solucoes(id, pontos, (which < n).then_some(which));
         if which >= n {
             return Err(format!("a solução {which} não existe: há {n} (de 0 a {})", n - 1));
         }
@@ -1362,6 +1377,16 @@ impl Ctx<'_> {
             self.notes.borrow_mut().entry(id).or_default().anchor = Some(c[c.len() / 2]);
         }
         Ok(c)
+    }
+
+    /// Soluções possíveis da referência: a tela as mostra como bolinhas. Só faz sentido com mais de uma.
+    fn publicar_solucoes(&self, id: Id, pontos: Vec<(usize, V3)>, atual: Option<usize>) {
+        if pontos.len() > 1 {
+            let mut n = self.notes.borrow_mut();
+            let nota = n.entry(id).or_default();
+            nota.solucoes = pontos;
+            nota.solucao = atual;
+        }
     }
 
     /// Extração refeita a partir do ponto clicado, com a propagação gravada.
@@ -1651,7 +1676,9 @@ impl Ctx<'_> {
             PointCenter { curve } => Geo::Point(fit_circle(&self.curve(curve, d)?)?.0),
             PointTangent { curve, dir, which } => {
                 let (_, dv) = self.axis_d(dir, d)?;
-                Geo::Point(tangent_points(&self.curve(curve, d)?, dv)?[(*which).min(1)])
+                let pontos = tangent_points(&self.curve(curve, d)?, dv)?;
+                self.publicar_solucoes(id, pontos.iter().copied().enumerate().collect(), Some((*which).min(1)));
+                Geo::Point(pontos[(*which).min(1)])
             }
             PointBetween { a, b, ratio } => Geo::Point(lerp(self.point(a, d)?, self.point(b, d)?, e(ratio, "proporção")?)),
 
@@ -1747,7 +1774,9 @@ impl Ctx<'_> {
                 if hits.is_empty() {
                     return Err("a curva não cruza o plano".into());
                 }
-                Geo::Point(hits[(*which).min(hits.len() - 1)])
+                let i = (*which).min(hits.len() - 1);
+                self.publicar_solucoes(id, hits.iter().copied().enumerate().collect(), Some(i));
+                Geo::Point(hits[i])
             }
             PointCurveCurve { a, b } => {
                 let (ca, cb) = (self.curve(a, d)?, self.curve(b, d)?);
@@ -1881,7 +1910,18 @@ impl Ctx<'_> {
             }
             SurfSweepX { kind, spine, solution, smooth, sections } => {
                 let n = e(sections, "seções")?.round().clamp(4., 200.) as usize;
-                Geo::Surface(self.sweep_x(kind, spine.as_ref(), *solution, *smooth, n, d, &|s: &String, w: &str| e(s, w))?)
+                let ev = |s: &String, w: &str| e(s, w);
+                // cada solução é outra superfície: a bolinha fica sobre ela, no meio da caixa envolvente
+                let total = geo3d::solucoes_da_varredura(kind);
+                if total > 1 {
+                    let meio = |k: usize| {
+                        let sh = self.sweep_x(kind, spine.as_ref(), k, *smooth, n, d, &ev).ok()?;
+                        let (a, b) = sh.bbox()?;
+                        sh.surface_near(lerp(a, b, 0.5)).ok().map(|x| (k, x.0))
+                    };
+                    self.publicar_solucoes(id, (0..total).filter_map(meio).collect(), Some(*solution));
+                }
+                Geo::Surface(self.sweep_x(kind, spine.as_ref(), *solution, *smooth, n, d, &ev)?)
             }
             SurfFillet { a, b, flip_a, flip_b, radius, radius2 } => {
                 let (sa, sb) = (self.cut_shape(a, d)?, self.cut_shape(b, d)?);
@@ -2054,6 +2094,10 @@ impl Ctx<'_> {
                 let pa = sa.split_side(&sb, !*flip_a, false).map_err(|x| x.0)?;
                 let pb = sb.split_side(&sa, !*flip_b, false).map_err(|x| x.0)?;
                 Geo::Surface(pa.compound(&pb).sewn(1e-3).map_err(|x| x.0)?)
+            }
+            SurfRegions { surface, tools, curve, mutual, remove, extend, marks } => {
+                let corte = regioes::Corte { surface, tools, curve: curve.as_ref(), mutual: *mutual, remove: *remove, extend: *extend, marks };
+                Geo::Surface(self.regioes(id, corte, d)?)
             }
             SurfMulti { faces, keys } => {
                 let mut acc = Shape::empty();
@@ -2504,6 +2548,9 @@ impl Ctx<'_> {
     fn members(&self, m: &StructMember) -> Result<Vec<MemberGeom>, String> {
         let dims: Vec<f64> = m.dims.iter().map(|e| ev(e, &self.vars, "cota da seção")).collect::<Result<_, _>>()?;
         let (loops, w, h, cen) = structural::section(m.kind, &dims)?;
+        // B253: espelhar a seção troca o lado dos perfis sem simetria (a caixa não muda)
+        let (loops, cen) = if m.mirror { (structural::mirrored(&loops), [-cen[0], cen[1]]) } else { (loops, cen) };
+        let wall = structural::wall(m.kind, &dims);
         let ang = ev(&m.angle, &self.vars, "rotação")?.to_radians();
         let off = [ev(&m.off_x, &self.vars, "deslocamento x")?, ev(&m.off_y, &self.vars, "deslocamento y")?];
         let a = structural::anchor_point(m.anchor, w, h, cen);
@@ -2541,7 +2588,7 @@ impl Ctx<'_> {
             let x0 = fenkra_kernel::cross(v, z);
             let x = geo3d::rotate(x0, z, ang);
             let y = fenkra_kernel::cross(z, x);
-            out.push(MemberGeom { start, end, z, x, y, w, h, shift, ext: (e1, e2), loops: loops.clone(), pts: c.pts.clone(), straight: c.is_straight() });
+            out.push(MemberGeom { start, end, z, x, x0, y, w, h, wall, shift, ext: (e1, e2), loops: loops.clone(), pts: c.pts.clone(), straight: c.is_straight() });
         }
         Ok(out)
     }
@@ -2928,14 +2975,20 @@ impl Ctx<'_> {
         Shape::loft_surface(&sections, false, false, None).map_err(|x| format!("varredura: {}", x.0))
     }
 
-    /// Membro (de comandos estruturais anteriores) com a ponta mais perto de `at`.
+    /// Membro (de comandos estruturais anteriores) com a ponta mais perto de `at`. Um ponto sobre a
+    /// face de uma ponta (face clicada, B255) escolhe essa ponta mesmo que outra esteja mais perto.
     fn member_end(&self, at: V3, me: &Feature) -> Result<(MemberGeom, bool), String> {
         let mut best: Option<(f64, MemberGeom, bool)> = None;
         for f in self.doc.features.iter().take_while(|g| g.id != me.id) {
             let FeatureKind::StructMember(m) = &f.kind else { continue };
             for g in self.members(m)? {
                 for (p, s) in [(g.start, true), (g.end, false)] {
-                    let dd = geo3d::dist(p, at);
+                    let d = geo3d::sub(at, p);
+                    let along = geo3d::dot(d, g.z);
+                    let lateral = geo3d::dist(d, geo3d::mul(g.z, along));
+                    // fora da face, vale a distância; sobre a face (plano da ponta e dentro da seção), vale o lateral
+                    let on_face = along.abs() < 1e-3 && lateral <= (g.w * g.w + g.h * g.h).sqrt() / 2. + 1e-3;
+                    let dd = if on_face { lateral * 1e-3 } else { geo3d::dist(p, at) + 1e-3 };
                     if best.as_ref().is_none_or(|b| dd < b.0) {
                         best = Some((dd, g.clone(), s));
                     }
@@ -5035,49 +5088,8 @@ impl Ctx<'_> {
                 self.add_separate(f, all);
                 Ok(warn)
             }
-            FeatureKind::StructPlate(pl) => {
-                let (g, end_at_start) = self.member_end(pl.at, f)?;
-                let t = ev(&pl.thickness, &self.vars, "espessura")?;
-                let mg = ev(&pl.margin, &self.vars, "sobra")?;
-                let (e, out) = if end_at_start { (geo3d::sub(g.start, geo3d::mul(g.z, g.ext.0)), geo3d::mul(g.z, -1.)) } else { (geo3d::add(g.end, geo3d::mul(g.z, g.ext.1)), g.z) };
-                let (w, h) = (g.w + 2. * mg, g.h + 2. * mg);
-                // centro da seção (a linha guia pode estar num canto, pela ancoragem)
-                let c = geo3d::add(geo3d::add(e, geo3d::mul(g.x, -g.shift[0])), geo3d::mul(g.y, -g.shift[1]));
-                let y = fenkra_kernel::cross(out, g.x);
-                let corner = geo3d::sub(geo3d::sub(c, geo3d::mul(g.x, w / 2.)), geo3d::mul(y, h / 2.));
-                let plate = Shape::box_tool(corner, g.x, out, [w, h, t]).map_err(k)?;
-                log_struct(f, 0, StructItem::Plate, "Placa", "Placa".into(), 0., Frame { origin: c, x: g.x, normal: out }, &plate, "");
-                self.add_separate(f, plate);
-                Ok(None)
-            }
-            FeatureKind::StructGusset(gs) => {
-                let (a, b, p) = self.member_pair(gs.at, f)?;
-                let leg = ev(&gs.leg, &self.vars, "aba")?;
-                let t = ev(&gs.thickness, &self.vars, "espessura")?;
-                let c = ev(&gs.chamfer, &self.vars, "chanfro")?;
-                let (da, db) = (a.1, b.1);
-                let n = geo3d::unit(fenkra_kernel::cross(da, db)).ok_or("membros colineares não levam reforço")?;
-                // canto do reforço junto às faces dos membros, no plano das linhas guia
-                let ha = a.0.w.max(a.0.h) / 2.;
-                let hb = b.0.w.max(b.0.h) / 2.;
-                let q = geo3d::add(geo3d::add(p, geo3d::mul(da, hb)), geo3d::mul(db, ha));
-                let q = geo3d::sub(q, geo3d::mul(n, t / 2.));
-                let mut pts = vec![];
-                if c > 1e-9 {
-                    pts.push(geo3d::add(q, geo3d::mul(da, c)));
-                } else {
-                    pts.push(q);
-                }
-                pts.push(geo3d::add(q, geo3d::mul(da, leg)));
-                pts.push(geo3d::add(q, geo3d::mul(db, leg)));
-                if c > 1e-9 {
-                    pts.push(geo3d::add(q, geo3d::mul(db, c)));
-                }
-                let plate = Shape::poly_prism(&pts, geo3d::mul(n, t)).map_err(k)?;
-                log_struct(f, 0, StructItem::Gusset, "Reforço", "Reforço".into(), 0., Frame { origin: q, x: da, normal: n }, &plate, "");
-                self.add_separate(f, plate);
-                Ok(None)
-            }
+            FeatureKind::StructPlate(pl) => self.struct_plate(f, pl),
+            FeatureKind::StructGusset(gs) => self.struct_gusset(f, gs),
             FeatureKind::MoveBody(m) => {
                 let (b, owners, roles) = self.body_owned(f.target).ok_or("não há corpo para mover")?;
                 let rigid = match &m.xf {
@@ -5449,12 +5461,23 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
     cache.reused = 0;
     let ate_pos = cache.ate.take().and_then(|a| order.iter().position(|i| doc.features[*i].id == a));
     let cancelar = cache.cancelar.clone();
+    // as booleanas e a malha longas do OpenCASCADE também abandonam o cálculo quando a bandeira sobe
+    let _guarda_kernel = cancelar.clone().map(fenkra_kernel::ligar_cancelamento);
+    let progresso = cache.progresso.clone();
+    if let Some(p) = &progresso {
+        p.definir_total(order.iter().filter(|i| doc.is_active(**i)).count() as u32);
+    }
     let mut parou = false;
     let mut cancelado = false;
     let mut desatualizados: Vec<Id> = vec![];
     for (pos, i) in order.into_iter().enumerate() {
         let f = &doc.features[i];
         seen.insert(f.id);
+        if let Some(p) = &progresso {
+            if pos > 0 {
+                p.avancar();
+            }
+        }
         if !parou {
             if cancelar.as_ref().is_some_and(|c| c.load(std::sync::atomic::Ordering::Relaxed)) {
                 parou = true;
@@ -5568,6 +5591,15 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                     Ok(Some(w)) => Status::Warning(w),
                     Err(e) => Status::Error(e),
                 };
+                // cancelado no meio do kernel: o que veio é lixo (erro "cancelado" ou resultado parcial).
+                // Não vai para o cache, para o próximo cálculo refazer este comando do zero.
+                if matches!(st, Status::Error(_)) && cancelar.as_ref().is_some_and(|c| c.load(std::sync::atomic::Ordering::Relaxed)) {
+                    parou = true;
+                    cancelado = true;
+                    desatualizados.push(f.id);
+                    cx.status.insert(f.id, Status::Inactive);
+                    continue;
+                }
                 cx.status.insert(f.id, st.clone());
                 // chaves v2 calculadas para pontos antigos só valem se o comando deu certo
                 let new_keys = cx.promoted.borrow_mut().take().filter(|_| !matches!(st, Status::Error(_)));
@@ -5895,9 +5927,13 @@ struct MemberGeom {
     /// eixo do membro e eixos da seção (x, y)
     z: V3,
     x: V3,
+    /// eixo X da seção sem a rotação do comando (referência do arco de rotação)
+    x0: V3,
     y: V3,
     w: f64,
     h: f64,
+    /// espessura da parede do perfil (0 nas barras maciças)
+    wall: f64,
     /// deslocamento da seção (ancoragem − deslocamentos)
     shift: [f64; 2],
     ext: (f64, f64),
@@ -6885,6 +6921,7 @@ mod tests {
                 gap: s("0"),
                 joints: vec![],
                 material: String::new(),
+                mirror: false,
             }));
             d
         };
@@ -6921,12 +6958,13 @@ mod tests {
             gap: s("0"),
             joints: vec![],
             material: String::new(),
+            mirror: false,
         }));
         let v0 = vol(&d);
-        d.add_feature(FeatureKind::StructPlate(StructPlate { at: [0., 0., 0.], thickness: s("8"), margin: s("5") }));
+        d.add_feature(FeatureKind::StructPlate(StructPlate::nova([0., 0., 0.], "8", "5")));
         let v1 = vol(&d);
         assert!(near(v1 - v0, 50. * 50. * 8., 1e-3), "placa {}", v1 - v0);
-        d.add_feature(FeatureKind::StructGusset(StructGusset { at: [0., 0., 500.], leg: s("60"), thickness: s("6"), chamfer: s("0") }));
+        d.add_feature(FeatureKind::StructGusset(StructGusset::novo([0., 0., 500.], "60", "6", "0")));
         let v2 = vol(&d);
         assert!(near(v2 - v1, 0.5 * 60. * 60. * 6., 1e-3), "reforço {}", v2 - v1);
     }
@@ -6960,6 +6998,7 @@ mod tests {
             gap: s("0"),
             joints: vec![],
             material: String::new(),
+            mirror: false,
         }));
         // um sólido por trecho, no referencial local (Z ao longo do membro, seção centrada)
         let ms = structural_members(&d);
@@ -7010,9 +7049,10 @@ mod tests {
             gap: s("0"),
             joints: vec![],
             material: String::new(),
+            mirror: false,
         }));
-        d.add_feature(FeatureKind::StructPlate(StructPlate { at: [0., 0., 0.], thickness: s("8"), margin: s("5") }));
-        d.add_feature(FeatureKind::StructGusset(StructGusset { at: [0., 0., 500.], leg: s("60"), thickness: s("6"), chamfer: s("0") }));
+        d.add_feature(FeatureKind::StructPlate(StructPlate::nova([0., 0., 0.], "8", "5")));
+        d.add_feature(FeatureKind::StructGusset(StructGusset::novo([0., 0., 500.], "60", "6", "0")));
         let gs = structural_groups(&d);
         let kinds: Vec<StructItem> = gs.iter().map(|g| g.signature.kind).collect();
         assert_eq!(kinds, vec![StructItem::Member, StructItem::Member, StructItem::Plate, StructItem::Gusset]);
@@ -7289,6 +7329,7 @@ mod tests {
             gap: s("0"),
             joints: vec![],
             material: String::new(),
+            mirror: false,
         }));
         let r = recompute(&d);
         assert!(matches!(r.status[&m], Status::Ok), "{:?}", r.status[&m]);
@@ -7595,6 +7636,7 @@ mod tests {
             gap: s("0"),
             joints: vec![],
             material: String::new(),
+            mirror: false,
         };
         let vol = |d: &Document| recompute(d).bodies.iter().map(|b| b.mass.volume).sum::<f64>();
         let lado = |d: &mut Document, a: [f64; 3], b: [f64; 3]| CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: s("0"), end: s("0") }));

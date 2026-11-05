@@ -30,7 +30,7 @@ fn v3(p: [f64; 3]) -> Vec3 {
 }
 
 /// Origem e normal de um plano já calculado.
-fn plane_of(r: &fenkra_solidos::RecomputeResult, p: &PlaneRef) -> Option<(Vec3, Vec3)> {
+pub(crate) fn plane_of(r: &fenkra_solidos::RecomputeResult, p: &PlaneRef) -> Option<(Vec3, Vec3)> {
     let f = match p {
         PlaneRef::Origin(o) => fenkra_solidos::origin_frame(*o),
         PlaneRef::Datum(id) => r.planes.iter().find(|x| x.id == Some(*id))?.frame,
@@ -368,7 +368,7 @@ fn write_slot(app: &mut App, id: Id, slot: u8, value: String) {
     }
 }
 
-fn mesh_center(m: &fenkra_kernel::Mesh) -> Vec3 {
+pub(crate) fn mesh_center(m: &fenkra_kernel::Mesh) -> Vec3 {
     let n = (m.positions.len() / 3).max(1) as f32;
     m.positions.chunks_exact(3).fold(Vec3::ZERO, |a, p| a + Vec3::new(p[0], p[1], p[2])) / n
 }
@@ -430,9 +430,14 @@ fn arc_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id
     let painter = ui.painter_at(rect);
     let hid = egui::Id::unique(("alca_rev", id.0));
     let hr = ui.interact(Rect::from_center_size(tip, egui::vec2(PEGA, PEGA)), hid, if numeric { egui::Sense::drag() } else { egui::Sense::hover() });
-    let col = if hr.hovered() || hr.dragged() { Color32::from_rgb(255, 190, 40) } else { Color32::from_rgb(90, 200, 255) };
-    painter.add(egui::Shape::line(pts, Stroke::new(2.5, col)));
-    painter.circle_stroke(tip, 9., Stroke::new(1.5, col));
+    let erro = matches!(app.result.as_ref().and_then(|r| r.status.get(&id)), Some(fenkra_solidos::Status::Error(_)));
+    let estado = crate::alca_estado::EstadoAlca::de(hr.hovered(), hr.dragged(), !numeric, erro);
+    let col = estado.cor(ui.visuals());
+    if let Some(d) = estado.dica_traduzida() {
+        let _ = hr.clone().on_hover_text(d);
+    }
+    painter.add(egui::Shape::line(pts, Stroke::new(estado.espessura() + 1., col)));
+    painter.circle_stroke(tip, 9., Stroke::new(estado.espessura(), col));
     painter.circle_filled(tip, 4., col);
     if hr.dragged() {
         if let Some(m) = ui.input(|i| i.pointer.interact_pos()) {
@@ -452,7 +457,7 @@ fn arc_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id
         }
     }
     let txt = if numeric { format!("{}°", fmt(ang)) } else { format!("🔒 {} = {}°", expr.trim(), fmt(ang)) };
-    let galley = painter.layout_no_wrap(txt, egui::FontId::proportional(13.), Color32::WHITE);
+    let galley = painter.layout_no_wrap(txt, egui::FontId::proportional(estado.fonte()), Color32::WHITE);
     let lr = Rect::from_min_size(tip + egui::vec2(14., -10.), galley.size() + egui::vec2(10., 6.));
     painter.rect_filled(lr, 4., Color32::from_rgba_unmultiplied(20, 60, 110, 220));
     painter.galley(lr.min + egui::vec2(5., 3.), galley, Color32::WHITE);
@@ -460,7 +465,7 @@ fn arc_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id
 
 /// Desenha e trata a alça do comando aberto. Chamado pela viewport fora do modo sketch.
 /// Etiqueta pequena na tela; a resposta traz o clique.
-fn tag(ui: &mut egui::Ui, rect: Rect, at: egui::Pos2, text: String, fg: Color32, salt: impl std::hash::Hash + std::fmt::Debug) -> egui::Response {
+pub(crate) fn tag(ui: &mut egui::Ui, rect: Rect, at: egui::Pos2, text: String, fg: Color32, salt: impl std::hash::Hash + std::fmt::Debug) -> egui::Response {
     let painter = ui.painter_at(rect);
     let g = painter.layout_no_wrap(text, egui::FontId::proportional(12.), fg);
     let r = Rect::from_center_size(at, g.size() + egui::vec2(8., 4.));
@@ -548,11 +553,17 @@ fn contour_overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, i
 
 pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: Camera) {
     let Some(id) = app.session.as_ref().map(|s| s.id) else { return };
+    crate::sup3d::overlay(app, ui, rect, &cam, id);
     if crate::gizmo::overlay(app, ui, rect, &cam, id) {
         return;
     }
     // chapa: linha de dobra na face e alças de ângulo, raio, largura e recuos (B243 e B249)
     crate::chapa_manip_ui::overlay(app, ui, rect, &cam, id);
+    // B253: o Membro tem as próprias alças (deslocamento, rotação com ímã de 45°, prolongar, espelhar)
+    if matches!(app.open.doc.feature(id).map(|f| &f.kind), Some(FeatureKind::StructMember(_))) {
+        crate::st_alcas::overlay(app, ui, rect, &cam, id);
+        return;
+    }
     if matches!(app.open.doc.reference(id).map(|r| &r.kind), Some(RefKind::SurfFill { .. })) {
         contour_overlay(app, ui, rect, &cam, id);
         return;
@@ -607,20 +618,24 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
     let axis = (s1 - sb) / ppm;
 
     let painter = ui.painter_at(rect);
-    let col = Color32::from_rgb(90, 200, 255);
-    let hot = Color32::from_rgb(255, 190, 40);
     let hid = egui::Id::unique(("alca_3d", id.0, nth));
     let hr = ui.interact(Rect::from_center_size(st, egui::vec2(PEGA, PEGA)), hid, if numeric { egui::Sense::click_and_drag() } else { egui::Sense::hover() });
-    let active = hr.hovered() || hr.dragged();
-    let c = if active { hot } else { col };
+    // B20: cinco estados (repouso, pairando, ativa, travada, erro) com a cor do tema
+    let erro = matches!(app.result.as_ref().and_then(|r| r.status.get(&id)), Some(fenkra_solidos::Status::Error(_)));
+    let estado = crate::alca_estado::EstadoAlca::de(hr.hovered(), hr.dragged(), !numeric, erro);
+    let c = estado.cor(ui.visuals());
+    if let Some(d) = estado.dica_traduzida() {
+        let _ = hr.clone().on_hover_text(d);
+    }
+    let esp = estado.espessura();
 
     // haste e ponta
-    painter.line_segment([sb, st], Stroke::new(2.5, c));
+    painter.line_segment([sb, st], Stroke::new(esp + 1., c));
     let d = if (st - sb).length() > 1. { (st - sb).normalized() } else { axis };
     let n = egui::vec2(-d.y, d.x);
     painter.add(egui::Shape::convex_polygon(vec![st + d * 14., st + n * 7., st - n * 7.], c, Stroke::new(1., Color32::from_black_alpha(120))));
     painter.circle_filled(sb, 3.5, c);
-    painter.circle_stroke(st, PEGA / 2., Stroke::new(1.5, c));
+    painter.circle_stroke(st, PEGA / 2., Stroke::new(esp, c));
 
     // arrastar ao longo do eixo
     if hr.dragged() {
@@ -644,7 +659,7 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
     let mut editing: Option<String> = ui.ctx().data(|m| m.get_temp(key));
     let txt = if numeric { format!("{} {} mm", tr(h.label), fmt(val)) } else { format!("🔒 {} = {}", h.expr.trim(), fmt(val)) };
     let lp = st + n * 22. + d * 10.;
-    let galley = painter.layout_no_wrap(txt, egui::FontId::proportional(13.), Color32::WHITE);
+    let galley = painter.layout_no_wrap(txt, egui::FontId::proportional(estado.fonte()), Color32::WHITE);
     let lr = Rect::from_min_size(lp, galley.size() + egui::vec2(10., 6.));
     painter.rect_filled(lr, 4., Color32::from_rgba_unmultiplied(20, 60, 110, 220));
     painter.rect_stroke(lr, 4., Stroke::new(1., c), egui::StrokeKind::Inside);

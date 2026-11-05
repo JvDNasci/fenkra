@@ -186,6 +186,8 @@ pub fn legenda(k: &FeatureKind, destaque: Color32) -> Vec<(Color32, &'static str
         FeatureKind::Thickness(_) | FeatureKind::Thread(_) => vec![(crate::theme::st_warn(), "Face")],
         FeatureKind::Fillet(_) | FeatureKind::Chamfer(_) => vec![(crate::theme::st_warn(), "Aresta ou face")],
         FeatureKind::Combine(_) => vec![(crate::theme::papel_ferramenta(), "Corpo ferramenta")],
+        FeatureKind::SplitBody(_) | FeatureKind::SewSurface(_) => vec![(crate::theme::papel_ferramenta(), "Ferramenta")],
+        FeatureKind::ThickSurface(_) | FeatureKind::CloseSurface(_) => vec![(crate::theme::st_warn(), "Superfície")],
         _ => vec![],
     }
 }
