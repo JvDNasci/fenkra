@@ -34,6 +34,13 @@ pub fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
     [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
 }
 
+/// O que um arquivo STEP declara sobre si: esquema do cabeçalho e unidade de comprimento.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct InfoStep {
+    pub esquema: String,
+    pub unidades: String,
+}
+
 /// Parâmetros de uma aba de chapa.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SheetFlange {
@@ -730,7 +737,14 @@ mod imp {
             b::export_stl(&self.0, path, deflection, angle).map_err(err)
         }
         pub fn import_step(path: &str) -> KResult<Shape> {
-            b::import_step(path).map(Shape).map_err(err)
+            Self::import_step_info(path).map(|(s, _)| s)
+        }
+        /// Lê o STEP e devolve também o que o arquivo declara. A forma sai em milímetros.
+        pub fn import_step_info(path: &str) -> KResult<(Shape, crate::InfoStep)> {
+            let mut info = Vec::new();
+            let s = b::import_step(path, &mut info).map(Shape).map_err(err)?;
+            let mut campos = info.into_iter();
+            Ok((s, crate::InfoStep { esquema: campos.next().unwrap_or_default(), unidades: campos.next().unwrap_or_default() }))
         }
     }
 
@@ -1030,6 +1044,9 @@ mod imp {
             no()
         }
         pub fn import_step(_: &str) -> KResult<Shape> {
+            no()
+        }
+        pub fn import_step_info(_: &str) -> KResult<(Shape, crate::InfoStep)> {
             no()
         }
     }

@@ -4,6 +4,7 @@
 //! o corpo continua do estado anterior e o comando fica marcado com a mensagem do erro.
 
 pub mod geo3d;
+pub mod importacao;
 pub mod mesh_io;
 pub mod structural;
 pub mod hardware;

@@ -12,3 +12,7 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 blake3 = "1"
+
+[dev-dependencies]
+fenkra-kernel = { path = "../fenkra-kernel" }
+fenkra-solidos = { path = "../fenkra-solidos" }

@@ -114,7 +114,12 @@
 #include <OSD_ThreadPool.hxx>
 #include <Poly_Triangulation.hxx>
 #include <Poly_TriangulationParameters.hxx>
+#include <HeaderSection_FileSchema.hxx>
+#include <NCollection_Sequence.hxx>
 #include <STEPControl_Reader.hxx>
+#include <StepData_StepModel.hxx>
+#include <TCollection_AsciiString.hxx>
+#include <TCollection_HAsciiString.hxx>
 #include <STEPControl_Writer.hxx>
 #include <ShapeUpgrade_UnifySameDomain.hxx>
 #include <Standard_Failure.hxx>
@@ -1099,8 +1104,13 @@ uint32_t count_faces(const Shape& s) {
     return static_cast<uint32_t>(f.Extent());
 }
 
+// Leitor e gravador de STEP dividem as tabelas globais de `Interface_Static`, que não têm trava.
+// O acesso é um por vez: uma corrida ali derruba o processo, e o `guard` não pega isso.
+static std::mutex g_step_gate;
+
 void export_step(const Shape& s, rust::Str path) {
     guard("STEP", [&] {
+        std::lock_guard<std::mutex> gate(g_step_gate);
         STEPControl_Writer w;
         if (w.Transfer(s.s, STEPControl_AsIs) != IFSelect_RetDone) throw std::runtime_error("falha ao converter para STEP");
         if (w.Write(to_std(path).c_str()) != IFSelect_RetDone) throw std::runtime_error("falha ao gravar o arquivo STEP");
@@ -1130,12 +1140,28 @@ void export_stl(const Shape& s, rust::Str path, double deflection, double angle)
     });
 }
 
-std::unique_ptr<Shape> import_step(rust::Str path) {
+// `info` recebe o esquema do cabeçalho e a unidade de comprimento declarada no arquivo. A forma sai
+// sempre em milímetros: o leitor converte da unidade do arquivo para a do sistema.
+std::unique_ptr<Shape> import_step(rust::Str path, rust::Vec<rust::String>& info) {
     return guard("STEP", [&] {
+        std::lock_guard<std::mutex> gate(g_step_gate);
         STEPControl_Reader r;
         if (r.ReadFile(to_std(path).c_str()) != IFSelect_RetDone) throw std::runtime_error("não foi possível ler o STEP");
+        std::string schema;
+        Handle(StepData_StepModel) model = r.StepModel();
+        if (!model.IsNull()) {
+            Handle(HeaderSection_FileSchema) fs =
+                Handle(HeaderSection_FileSchema)::DownCast(model->HeaderEntity(STANDARD_TYPE(HeaderSection_FileSchema)));
+            if (!fs.IsNull() && fs->NbSchemaIdentifiers() > 0) schema = fs->SchemaIdentifiersValue(1)->ToCString();
+        }
+        NCollection_Sequence<TCollection_AsciiString> lengths, angles, solid_angles;
+        r.FileUnits(lengths, angles, solid_angles);
         r.TransferRoots();
-        return wrap(r.OneShape());
+        TopoDS_Shape shape = r.OneShape();
+        if (shape.IsNull()) throw std::runtime_error("o STEP não tem geometria");
+        info.push_back(rust::String(schema));
+        info.push_back(rust::String(lengths.IsEmpty() ? "" : lengths.First().ToCString()));
+        return wrap(shape);
     });
 }
 
