@@ -303,8 +303,11 @@ pub(crate) fn raw_shape(a: &Assembly, id: Id, dir: Option<&Path>, cache: &mut Pa
     let n = a.node(id)?;
     let NodeKind::Part { path } = &n.kind else { return None };
     let sh = cache.get(&full_path(dir, path), true).ok()?.shape.clone()?;
-    let p = n.placement;
-    // rotação (eixo-ângulo da matriz) + translação
+    posicionado(sh, &n.placement)
+}
+
+/// Forma levada à posição `p`: rotação (eixo-ângulo da matriz) e translação.
+pub(crate) fn posicionado(sh: Shape, p: &Placement) -> Option<Shape> {
     let r = &p.rot;
     let tr = r[0][0] + r[1][1] + r[2][2];
     let ang = ((tr - 1.) / 2.).clamp(-1., 1.).acos();

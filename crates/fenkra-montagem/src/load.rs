@@ -193,4 +193,5 @@ pub fn refresh_refs(a: &mut Assembly, cache: &mut PartCache, asm_dir: Option<&Pa
             }
         }
     }
+    crate::repeticao::sincronizar(a, cache, asm_dir);
 }

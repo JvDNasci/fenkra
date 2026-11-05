@@ -26,6 +26,10 @@ pub struct Pendente {
     /// quadros do Animar e a hora em que começou
     animacao: Option<(Vec<Vec<Movido>>, f64)>,
     opcoes_animar: OpcoesAnimar,
+    /// pontos de encaixe da face sob o cursor (B99)
+    pub encaixe: crate::asm_encaixe::Encaixe,
+    /// deslocamento em X, Y e Z, com fórmula
+    formulas: [String; 3],
 }
 
 /// Quadros por segundo do Animar.
@@ -33,7 +37,7 @@ const QUADROS_POR_SEGUNDO: f64 = 24.;
 
 impl Pendente {
     fn novo(tipo: Tipo) -> Self {
-        Pendente { c: Comando::novo(tipo), picks: Default::default(), textos: Default::default(), resultado: None, resolvida: None, aviso: None, animacao: None, opcoes_animar: Default::default() }
+        Pendente { c: Comando::novo(tipo), picks: Default::default(), textos: Default::default(), resultado: None, resolvida: None, aviso: None, animacao: None, opcoes_animar: Default::default(), encaixe: Default::default(), formulas: ["0".into(), "0".into(), "0".into()] }
     }
 
     /// Peças fora do lugar agora: as da prévia ou as do quadro do Animar.
@@ -178,7 +182,12 @@ fn perfil_do_came(st: &mut AsmState, comp: fenkra_core::Id, aresta: &[[f64; 3]],
 }
 
 fn receber(st: &mut AsmState, p: Pick) {
-    let achado = elemento_de(st, p);
+    // ponto de encaixe aceso ou travado vale no lugar da face inteira
+    let ponto = st.cmd.as_ref().and_then(|c| c.encaixe.escolhido()).and_then(|(b, c)| crate::asm_encaixe::elemento(st, b, &c));
+    let achado = ponto.map_or_else(|| elemento_de(st, p), Ok);
+    if let Some(c) = st.cmd.as_mut() {
+        c.encaixe.travado = None;
+    }
     let nome = achado.as_ref().map(|e| st.asm.name_of(e.r.comp)).unwrap_or_default();
     let Some(pen) = st.cmd.as_mut() else { return };
     match achado {
@@ -497,15 +506,23 @@ pub fn painel(app: &mut App, ui: &mut egui::Ui) {
             ui.label(tr("Ângulo inicial"));
             ui.add(crate::ui_ext::dv(&mut al.angulo).speed(1.).suffix("°").dica("Gira a peça em volta do eixo da junta antes de aceitar"));
         });
+        for (k, l) in ["Deslocamento X", "Deslocamento Y", "Deslocamento Z"].into_iter().enumerate() {
+            crate::editor::expr(ui, l, &mut pen.formulas[k], &vars, "mm");
+        }
+        let (desloc, ruim) = fenkra_montagem::encaixe::avaliar_desloc(&pen.formulas, &vars);
+        al.desloc = desloc;
+        if ruim.is_some() {
+            ui.label(RichText::new(tr("Fórmula inválida: conta como zero")).small().color(crate::theme::st_err()));
+        }
         ui.horizontal(|ui| {
-            ui.label(tr("Deslocamento"));
-            for (k, (l, dica)) in [("X", "Desloca a origem da peça no X da junta"), ("Y", "Desloca a origem da peça no Y da junta"), ("Z", "Desloca a origem da peça ao longo do eixo da junta")].into_iter().enumerate() {
-                ui.add(crate::ui_ext::dv(&mut al.desloc[k]).speed(0.5).prefix(format!("{l} ")).dica(dica));
+            if ui.selectable_label(al.inverter, tr("Inverter")).on_hover_text(tr("Tab: a peça vira, e o eixo dela passa a apontar ao contrário")).clicked() {
+                al.inverter = !al.inverter;
+            }
+            if ui.button(tr("Girar 90°")).on_hover_text(tr("Gira a peça de 90 em 90 graus em volta do eixo principal.")).clicked() {
+                al.angulo = (al.angulo + 90.) % 360.;
             }
         });
-        if ui.selectable_label(al.inverter, tr("Inverter")).on_hover_text(tr("Tab: a peça vira, e o eixo dela passa a apontar ao contrário")).clicked() {
-            al.inverter = !al.inverter;
-        }
+        ui.label(RichText::new(tr("Na vista: passe o mouse numa face para ver os pontos de encaixe; a tecla L trava o ponto.")).weak().small());
         // ---- animar: ir e voltar no 3D, sem a janela de simulação
         ui.add_space(4.);
         ui.horizontal(|ui| {
@@ -605,6 +622,35 @@ fn alternar_animacao(app: &mut App, agora: f64) {
 
 /// `FENKRA_DEMO_ASM=cmd|junta|simbolos|manip|duzentas`: abre o comando ou os símbolos nas placas de exemplo.
 pub fn demo(st: &mut AsmState, nome: &str) {
+    if nome == "fixadores" {
+        crate::asm_fixadores::demo(st);
+        return;
+    }
+    if nome == "encaixe" {
+        st.cmd = Some(Pendente::novo(Tipo::Junta(JointKind::Rigid)));
+        crate::asm_encaixe::demo(st);
+        return;
+    }
+    if nome == "repeticao" {
+        crate::asm_repeticao::demo(st);
+        return;
+    }
+    if let Some(n) = nome.strip_prefix("grade").and_then(|x| x.parse::<usize>().ok()) {
+        // grade de peças iguais: `grade100` para olhar a cena com muitos corpos
+        for k in 2..n {
+            st.asm.add_component("Placa", NodeKind::Part { path: "placa.fkp".into() }, Placement { origin: [(k % 10) as f64 * 150., (k / 10) as f64 * 100., 0.], ..Default::default() }, None);
+        }
+        st.dirty = true;
+        return;
+    }
+    if nome.starts_with("interf") {
+        crate::asm_interf::demo(st, nome);
+        return;
+    }
+    if nome.starts_with("inserir") {
+        crate::asm_inserir::demo(st, nome == "inserir_vazia");
+        return;
+    }
     let ids: Vec<fenkra_core::Id> = st.asm.nodes.iter().filter(|n| !matches!(n.kind, NodeKind::Group)).map(|n| n.id).collect();
     let [base, tampa] = ids[..] else { return };
     st.asm.node_mut(base).unwrap().fixed = true;

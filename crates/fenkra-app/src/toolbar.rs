@@ -232,8 +232,8 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("salvar", "Salvar", "Salvar montagem  (Ctrl+S)", "Grava a montagem; as peças ficam nos arquivos delas.", Cmd(C::AsmSave)),
             ]),
             Family("asm_inserir", vec![
-                it("asm_inserir", "Inserir peça", "Inserir peça existente", "Escolha um ou mais arquivos .fkp; o primeiro componente entra fixo.", Cmd(C::AsmInsert)),
-                it("asm_subconjunto", "Subconjunto", "Inserir subconjunto", "Insere outra montagem (.fka) como um componente.", Cmd(C::AsmSubAsm)),
+                it("asm_inserir", "Inserir peça", "Inserir peça existente", "Abre a lista de peças com miniatura; a peça escolhida segue o cursor e cada clique coloca uma cópia.", Cmd(C::AsmInsert)),
+                it("asm_subconjunto", "Subconjunto", "Inserir subconjunto", "Insere outra montagem (.fka) como um componente: escolha na lista e clique na vista para colocar.", Cmd(C::AsmSubAsm)),
                 it("asm_peca_nova", "Peça nova", "Peça nova no contexto", "Cria o arquivo da peça ao lado da montagem e abre para modelar.", Cmd(C::AsmNewPart)),
                 it("asm_sub_selecao", "Subconjunto da seleção", "Subconjunto dos selecionados", "Os componentes escolhidos viram uma montagem nova (.fka), inserida no lugar deles; as restrições entre eles vão junto.", Cmd(C::AsmSubFromSel)),
             ]),
@@ -247,7 +247,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("asm_engrenagens", "Engrenagens", "Gerar engrenagens", "Gera engrenagem reta, helicoidal, interna ou cremalheira (módulo, dentes, ângulo de pressão, hélice, folga) com o cálculo ao vivo, e insere o par já engrenado na montagem — distância entre centros, dentes encaixados e restrição de engrenagem. Também salva uma engrenagem avulsa como peça.", Cmd(C::AsmGears))),
             One(it("asm_grupo", "Grupo", "Grupo de organização", "Elemento vazio só para organizar a árvore (não muda a geometria).", Cmd(C::AsmGroup))),
             One(it("asm_substituir", "Substituir", "Substituir componente", "Troca a peça mantendo a posição e as restrições (as faces são reencontradas pelo ponto clicado).", Cmd(C::AsmReplace))),
-            One(it("asm_repeticao", "Repetição", "Repetição inteligente de componente", "Copia o componente selecionado em padrão linear ou circular (ex.: parafusos); as cópias acompanham o original e mudam com a quantidade.", Cmd(C::AsmPattern))),
+            One(it("asm_repeticao", "Repetição", "Repetição inteligente de componente", "Copia componentes numa direção dada por aresta, eixo ou face, em volta de um eixo ou pelos furos de uma peça. Mostra as cópias antes de aceitar.", Cmd(C::AsmPattern))),
             One(it("asm_numerar", "Numerar", "Numeração automática", "Renumera os componentes em sequência, na ordem da árvore.", Cmd(C::AsmNumber))),
             One(it("asm_lista", "Lista de peças", "Lista de peças por nível", "Primeiro nível, só peças (todos os níveis) ou estruturada. Os números de item ficam fixos entre revisões e são os mesmos dos balões e da tabela do desenho.", Cmd(C::AsmBom))),
         ],
@@ -270,7 +270,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("rest_conjunta", "Fixação conjunta", "Fixação conjunta", "As peças selecionadas passam a se mover como um corpo rígido.", Cmd(C::AsmRigid))),
             One(it("rest_alinhar", "Alinhar", "Alinhamento instantâneo", "Posiciona pelos dois elementos escolhidos sem guardar restrição (sem histórico).", Cmd(C::AsmMate(crate::asm_ui::MateCmd::AlignOnce)))),
             One(it("rest_atualizar", "Atualizar", "Resolver restrições", "Recalcula as posições de todos os componentes.", Cmd(C::AsmSolve))),
-            One(it("rest_interferencia", "Interferências", "Verificar interferências", "Procura volumes em comum entre os componentes (colisões).", Cmd(C::AsmInterf))),
+            One(it("rest_interferencia", "Interferências", "Verificar interferências", "Abre o painel de interferências: lista por volume, realce no 3D e pares ignorados, salvos na montagem.", Cmd(C::AsmInterf))),
         ],
         Group::Chapa => vec![
             One(it("sm_parametros", "Parâmetros", "Parâmetros da chapa", "Espessura, raio de dobra e fator K da peça; tabela de dobras.", Cmd(C::SmParams))),

@@ -203,7 +203,8 @@ pub struct AsmState {
     pub undo: Vec<Assembly>,
     pub redo: Vec<Assembly>,
     pub modified: bool,
-    pub interf: Vec<(Id, Id, f64)>,
+    /// painel de interferências aberto, com a última análise (B264)
+    pub interf: Option<crate::asm_interf::Estado>,
     /// mostrar só o componente selecionado
     pub isolate: bool,
     /// mover respeitando as restrições (resolve ao soltar)
@@ -260,6 +261,14 @@ pub struct AsmState {
     pub fasteners_open: Option<FastenersUi>,
     /// painel Biblioteca (catálogo de normas) aberto, com a inserção em andamento
     pub catalogo: Option<crate::biblioteca_ui::Estado>,
+    /// assistente de prendedores aberto (B98)
+    pub fixadores: Option<crate::asm_fixadores::Estado>,
+    /// como estava cada ponto no último recálculo das pilhas
+    pub pilhas_diag: fenkra_montagem::pilhas::Recalculo,
+    /// comando Repetição aberto (B263)
+    pub repeticao: Option<crate::asm_repeticao::Estado>,
+    /// comando Inserir aberto, com a peça na mão (B262)
+    pub inserir: Option<crate::asm_inserir::Estado>,
     /// janela do gerador de engrenagens (B28)
     pub gears_open: Option<GearsUi>,
     pub anim_sel: usize,
@@ -314,7 +323,7 @@ impl AsmState {
             undo: vec![],
             redo: vec![],
             modified: false,
-            interf: vec![],
+            interf: None,
             isolate: false,
             respect: true,
             stop_collision: false,
@@ -346,6 +355,10 @@ impl AsmState {
             bom_open: None,
             fasteners_open: None,
             catalogo: None,
+            inserir: None,
+            repeticao: None,
+            fixadores: None,
+            pilhas_diag: Default::default(),
             gears_open: None,
             anim_sel: 0,
             anim_t: 0.,
@@ -475,13 +488,17 @@ impl AsmState {
     }
 
     /// Caminho guardado para uma peça: relativo à pasta da montagem quando possível.
-    fn rel_path(&self, p: &std::path::Path) -> String {
+    pub(crate) fn rel_path(&self, p: &std::path::Path) -> String {
         // relativo à pasta da montagem, subindo com `..` quando o componente está fora dela (B66);
         // absoluto só entre drives diferentes
         match self.dir() {
             Some(d) => fenkra_project::referencias::caminho_relativo(&d, p),
             None => p.to_string_lossy().to_string(),
         }
+    }
+
+    pub(crate) fn comp_de(&self, body: usize) -> Option<Id> {
+        self.comp_of_body(body)
     }
 
     fn comp_of_body(&self, body: usize) -> Option<Id> {
@@ -583,42 +600,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                 return is_asm;
             };
             match c {
-                Cmd::AsmInsert | Cmd::AsmSubAsm => {
-                    let sub = c == Cmd::AsmSubAsm;
-                    let (filter, ext) = if sub { ("Montagem", "fka") } else { ("Peça", "fkp") };
-                    let Some(files) = rfd::FileDialog::new().add_filter(filter, &[ext]).pick_files() else { return true };
-                    st.push_undo();
-                    let parent = st.sel.filter(|s| st.asm.node(*s).is_some_and(|n| matches!(n.kind, NodeKind::Group)));
-                    // peças novas entram um pouco ao lado da última, para não ficarem sobrepostas
-                    let mut x = st.view.as_ref().map(|r| r.bodies.iter().flat_map(|b| b.mesh.positions.chunks_exact(3).map(|p| p[0] as f64)).fold(0f64, f64::max)).unwrap_or(0.);
-                    let atual = st.file.clone();
-                    let mut circular = false;
-                    for f in files {
-                        // a montagem não pode conter a si mesma, nem por outro subconjunto
-                        if atual.as_ref().is_some_and(|a| links::depende_de(&f, a, None)) {
-                            circular = true;
-                            continue;
-                        }
-                        let name = f.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "Peça".into());
-                        let path = st.rel_path(&f);
-                        let kind = if sub { NodeKind::SubAssembly { path } } else { NodeKind::Part { path } };
-                        let first = st.asm.nodes.iter().all(|n| matches!(n.kind, NodeKind::Group));
-                        let at = if first { [0.; 3] } else { [x + 20., 0., 0.] };
-                        let id = st.asm.add_component(&name, kind, Placement { origin: if st.asm.relational { [0.; 3] } else { at }, ..Default::default() }, parent);
-                        if st.asm.relational {
-                            // projeto relacional: a peça fica na origem da montagem, a forma vem dos links
-                            st.asm.node_mut(id).unwrap().fixed = true;
-                        }
-                        st.sel = Some(id);
-                        st.dirty = true;
-                        st.refresh();
-                        x = st.view.as_ref().map(|r| r.bodies.iter().flat_map(|b| b.mesh.positions.chunks_exact(3).map(|p| p[0] as f64)).fold(0f64, f64::max)).unwrap_or(x);
-                    }
-                    app.fit_now();
-                    if circular {
-                        app.toast(tr("Referência circular: o subconjunto já contém esta montagem"), true);
-                    }
-                }
+                Cmd::AsmInsert | Cmd::AsmSubAsm => crate::asm_inserir::abrir(st, c == Cmd::AsmSubAsm),
                 Cmd::AsmNewPart => {
                     // peça nova no contexto: pede nome e pasta; o arquivo só nasce no Salvar
                     let pasta = st.dir().map(|d| d.to_string_lossy().to_string()).unwrap_or_default();
@@ -684,16 +666,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                     st.asm.renumber();
                     st.dirty = true;
                 }
-                Cmd::AsmPattern => {
-                    let Some(src) = st.sel.filter(|s| st.asm.node(*s).is_some_and(|n| !matches!(n.kind, NodeKind::Group))) else {
-                        app.toast(tr("Selecione o componente a repetir"), true);
-                        return true;
-                    };
-                    st.push_undo();
-                    let id = st.asm.add_pattern(src, PatternKind::Linear { dir: [1., 0., 0.], count: "3".into(), spacing: "20".into() });
-                    st.sel = Some(id);
-                    st.dirty = true;
-                }
+                Cmd::AsmPattern => crate::asm_repeticao::abrir(st),
                 Cmd::AsmJoint(k) => crate::asm_cmd::abrir(app, crate::asm_cmd::tipo_da_junta(k)),
                 Cmd::AsmAutoJoints => {
                     st.push_undo();
@@ -832,12 +805,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                         Err(e) => app.toast(e, true),
                     }
                 }
-                Cmd::AsmInterf => {
-                    let dir = st.dir();
-                    st.interf = fenkra_montagem::view::interferences(&st.asm, dir.as_deref(), &mut st.cache, 0.01);
-                    let n = st.interf.len();
-                    app.toast(if n == 0 { tr("Nenhuma interferência entre os componentes").to_string() } else { format!("{n} interferência(s) — veja no painel") }, n > 0);
-                }
+                Cmd::AsmInterf => crate::asm_interf::abrir(st),
                 _ => return false,
             }
         }
@@ -849,7 +817,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
 /// clique numa peça a seleciona na árvore.
 pub fn after_viewport(app: &mut App, ctx: &egui::Context) {
     after_view_quick(app);
-    if !crate::asm_cmd::apos_viewport(app) && !crate::asm_manip::apos_viewport(app) {
+    if !crate::asm_inserir::apos_viewport(app) && !crate::asm_fixadores::apos_viewport(app) && !crate::asm_repeticao::apos_viewport(app) && !crate::asm_cmd::apos_viewport(app) && !crate::asm_manip::apos_viewport(app) {
         selecao_do_clique(app, ctx.input(|i| i.modifiers.alt));
     }
     // duplo clique numa peça: abre para editar
@@ -1056,6 +1024,10 @@ fn sair_da_peca(app: &mut App, salvar: bool) -> bool {
     st.editing_part = None;
     st.vista_contexto = st.vista_contexto_acima.take();
     st.solve();
+    // a peça pode ter mudado um furo: os prendedores dele acompanham
+    if let Some(m) = crate::asm_fixadores::apos_mudar_peca(st) {
+        st.aviso = Some((m, false));
+    }
     // o documento aberto não fica para trás: salvá-lo depois gravaria por cima do arquivo
     app.load_doc_pub(Document::new("Peça"), None);
     app.settings.bench = crate::settings::Bench::Montagem;
@@ -1454,6 +1426,10 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                         }
                     }
                 });
+                if fenkra_montagem::pilhas::da_peca(&st.asm, n.id).is_some() && ui.button(tr("Editar prendedor")).on_hover_text(tr("Abre o assistente na linha deste ponto.")).clicked() {
+                    *act = Some((n.id, 40));
+                    ui.close();
+                }
                 ui.separator();
                 if ui.button(tr("🗑 Apagar   Del")).clicked() {
                     *act = Some((n.id, 0));
@@ -1822,6 +1798,10 @@ pub fn node_action(app: &mut App, id: Id, k: u8) {
         _ => {}
     }
     st.push_undo();
+    if k == 40 {
+        let p = fenkra_montagem::pilhas::da_peca(&st.asm, id);
+        return crate::asm_fixadores::abrir(st, p);
+    }
     match k {
         0 => {
             st.asm.delete(id);
@@ -2184,6 +2164,7 @@ fn serie_ui(ui: &mut egui::Ui, s: &mut SerieFuros, alvos: &mut Vec<Id>, names: &
         None => 0,
         Some(PatternKind::Linear { .. }) => 1,
         Some(PatternKind::Circular { .. }) => 2,
+        Some(PatternKind::Furos { .. }) => 0,
     };
     let antes = tipo;
     ui.horizontal(|ui| {
@@ -2194,7 +2175,7 @@ fn serie_ui(ui: &mut egui::Ui, s: &mut SerieFuros, alvos: &mut Vec<Id>, names: &
     });
     if tipo != antes {
         s.padrao = match tipo {
-            1 => Some(PatternKind::Linear { dir: [1., 0., 0.], count: "2".into(), spacing: "20".into() }),
+            1 => Some(PatternKind::Linear { dir: [1., 0., 0.], count: "2".into(), spacing: "20".into(), dir2: None, count2: "2".into(), spacing2: "20".into() }),
             2 => Some(PatternKind::Circular { origin: [0.; 3], axis: [0., 0., 1.], count: "4".into(), angle: "360".into() }),
             _ => None,
         };
@@ -2208,7 +2189,7 @@ fn serie_ui(ui: &mut egui::Ui, s: &mut SerieFuros, alvos: &mut Vec<Id>, names: &
             crate::editor::expr(ui, "Quantidade", count, vars, "");
             crate::editor::expr(ui, "Ângulo", angle, vars, "°");
         }
-        None => {}
+        _ => {}
     }
 
     crate::editor::section(ui, "Verificação");
@@ -2277,6 +2258,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         return crate::asm_cmd::painel(app, ui);
     }
     let sel = st.sel;
+    let mut editar_repeticao = None;
     if let Some(s) = sel {
         if st.asm.pmi.iter().any(|p| p.id == s) {
             crate::pmi_ui::panel(app, ui, s);
@@ -2567,35 +2549,8 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     ui.text_edit_singleline(&mut p.name);
                 });
                 ui.label(RichText::new(format!("{} {src}", tr("Original:"))).weak());
-                let circ = matches!(p.kind, PatternKind::Circular { .. });
-                ui.horizontal(|ui| {
-                    if ui.radio(!circ, tr("linear")).clicked() && circ {
-                        p.kind = PatternKind::Linear { dir: [1., 0., 0.], count: "3".into(), spacing: "20".into() };
-                    }
-                    if ui.radio(circ, tr("circular")).clicked() && !circ {
-                        p.kind = PatternKind::Circular { origin: [0.; 3], axis: [0., 0., 1.], count: "4".into(), angle: "360".into() };
-                    }
-                });
-                let v3 = |ui: &mut egui::Ui, l: &str, v: &mut [f64; 3]| {
-                    ui.horizontal(|ui| {
-                        ui.label(tr(l));
-                        for x in v.iter_mut() {
-                            ui.add(crate::ui_ext::dv(x).speed(0.1).max_decimals(3));
-                        }
-                    });
-                };
-                match &mut p.kind {
-                    PatternKind::Linear { dir, count, spacing } => {
-                        v3(ui, "Direção", dir);
-                        crate::editor::expr(ui, "Quantidade", count, &Default::default(), "");
-                        crate::editor::expr(ui, "Espaçamento", spacing, &Default::default(), "mm");
-                    }
-                    PatternKind::Circular { origin, axis, count, angle } => {
-                        v3(ui, "Centro", origin);
-                        v3(ui, "Eixo", axis);
-                        crate::editor::expr(ui, "Quantidade", count, &Default::default(), "");
-                        crate::editor::expr(ui, "Ângulo total", angle, &Default::default(), "°");
-                    }
+                if ui.button(tr("Editar repetição")).on_hover_text(tr("Abre o comando com fantasmas e marcas na vista.")).clicked() {
+                    editar_repeticao = Some(p.id);
                 }
                 ui.label(RichText::new(tr("A quantidade inclui o original; as cópias se refazem quando ela muda.")).weak().small());
             } else {
@@ -2726,13 +2681,6 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         }
         st.solve();
     }
-    // interferências
-    if !st.interf.is_empty() {
-        crate::editor::section(ui, "Interferências");
-        for (a, b, v) in &st.interf {
-            ui.label(RichText::new(format!("✖ {} × {} — {} mm³", st.asm.name_of(*a), st.asm.name_of(*b), fmt(*v))).color(crate::theme::st_err()));
-        }
-    }
     let acao_refs = if sel.is_none() && st.props { referencias_panel(st, ui) } else { None };
     crate::editor::tabs_end(ui);
     match acao_refs {
@@ -2788,6 +2736,10 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         };
         let id = st.asm.add_coupling(kind, ja, jb, ratio);
         st.sel = Some(id);
+    }
+    if let Some(id) = editar_repeticao {
+        crate::asm_repeticao::editar(st, id);
+        return;
     }
     if st.asm != before {
         if st.asm.patterns != before.patterns {
@@ -3520,6 +3472,10 @@ fn after_view_quick(app: &mut App) {
 
 pub fn gizmo(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::render::Camera) {
     let Some(st) = app.asm.as_mut() else { return };
+    // com a peça na mão o clique é da colocação
+    if st.inserir.is_some() || st.repeticao.is_some() {
+        return;
+    }
     eixos_da_serie(st, ui, rect, cam);
     // restrição rápida: dois elementos de peças diferentes escolhidos (opções calculadas depois
     // da viewport; o clique vira ação aplicada lá)
@@ -3821,6 +3777,7 @@ pub fn fasteners_window(app: &mut App, ctx: &egui::Context) {
     let Some(mut f) = st.fasteners_open.clone() else { return };
     let mut open = true;
     let (mut apply, mut close) = (false, false);
+    let mut abrir_assistente = false;
     let familias = |pred: fn(TipoFixador) -> bool| biblioteca::familias().iter().filter(|x| pred(x.tipo)).map(|x| (x.id.clone(), x.norma.clone())).collect::<Vec<_>>();
     let combo = |ui: &mut egui::Ui, id: &str, atual: &mut String, itens: &[(String, String)]| {
         let rotulo = itens.iter().find(|(i, _)| i == atual).map(|(_, n)| n.clone()).unwrap_or_else(|| atual.clone());
@@ -3833,6 +3790,9 @@ pub fn fasteners_window(app: &mut App, ctx: &egui::Context) {
     egui::Window::new(tr("🔩 Preencher furos com fixadores")).id(egui::Id::unique("janela_fixadores")).open(&mut open).default_width(400.).show(ctx, |ui| {
         if crate::app::done_bar(ui) {
             close = true;
+        }
+        if ui.button(tr("Assistente de prendedores…")).on_hover_text(tr("Tabela com cada ponto: troque família, tamanho, comprimento e pilha.")).clicked() {
+            abrir_assistente = true;
         }
         ui.label(RichText::new(tr("Os furos passantes com a folga de um tamanho métrico (e os roscados) recebem parafuso, arruela e porca da biblioteca. Furos de peças diferentes no mesmo eixo formam uma pilha só, e o comprimento sai da espessura atravessada.")).weak().small());
         crate::editor::section(ui, "Parafuso");
@@ -3935,6 +3895,9 @@ pub fn fasteners_window(app: &mut App, ctx: &egui::Context) {
             });
         }
     });
+    if abrir_assistente {
+        crate::asm_fixadores::abrir(st, None);
+    }
     if !open || close {
         st.fasteners_open = None;
         return;

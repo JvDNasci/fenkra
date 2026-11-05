@@ -164,7 +164,7 @@ pub struct App {
     start_t0: Option<f64>,
     card_spin: std::collections::HashMap<String, f32>,
     /// prévias 3D da tela inicial (exemplos e peças recentes)
-    previews: crate::examples::PreviewCache,
+    pub(crate) previews: crate::examples::PreviewCache,
     /// comando a abrir como ambiente (duplo clique na face)
     open_pending: Option<Id>,
     release_dialog: Option<(u64, String)>,
@@ -764,6 +764,15 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     /// Bancada de montagem ativa (com montagem aberta)?
     pub fn in_asm(&self) -> bool {
         self.settings.bench == crate::settings::Bench::Montagem && self.asm.is_some()
+    }
+
+    /// Leva a câmera até a caixa, com a mesma animação do enquadrar.
+    pub fn enquadrar_caixa(&mut self, b: (glam::Vec3, glam::Vec3)) {
+        if let Some(vp) = self.viewport.as_mut() {
+            let antes = vp.camera;
+            vp.camera.fit(b);
+            vp.animate_from(antes);
+        }
     }
 
     pub fn fit_now(&mut self) {
@@ -6890,6 +6899,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 crate::asm_ui::fasteners_handles(self, ui, rect, &cam);
                 crate::biblioteca_ui::candidatos_overlay(self, ui, rect, &cam);
                 crate::biblioteca_ui::overlay(self, ui, rect, &cam);
+                crate::asm_inserir::overlay(self, ui, rect, &cam);
+                crate::asm_repeticao::overlay(self, ui, rect, &cam);
+                crate::asm_fixadores::overlay(self, ui, rect, &cam);
+                crate::asm_encaixe::overlay(self, ui, rect, &cam);
                 crate::feat_ui::bend_overlay(self, ui, rect, &cam);
                 crate::feat_ui::cut_overlay(self, ui, rect, &cam);
                 crate::previa::overlay(self, ui, rect, &cam);
@@ -7613,6 +7626,9 @@ impl eframe::App for App {
         if dwg_mode {
             crate::dwg_ui::keys(self, ctx, save, undo, redo, del);
         } else if asm_mode {
+            crate::asm_inserir::teclas(self, ctx);
+            crate::asm_repeticao::teclas(self, ctx);
+            crate::asm_encaixe::teclas(self, ctx);
             crate::asm_cmd::teclas(self, ctx);
             crate::asm_selecao::teclas(self, ctx);
             if save {
@@ -7813,6 +7829,10 @@ impl eframe::App for App {
         crate::asm_ui::bom_window(self, ctx);
         crate::asm_ui::fasteners_window(self, ctx);
         crate::biblioteca_ui::painel(self, ctx, area);
+        crate::asm_inserir::painel(self, ctx, area);
+        crate::asm_interf::painel(self, ctx, area);
+        crate::asm_repeticao::painel(self, ctx, area);
+        crate::asm_fixadores::painel(self, ctx, area);
         crate::asm_ui::contexto_window(self, ctx);
         crate::asm_ui::gears_window(self, ctx);
         self.sheet_window(ctx);
@@ -8016,8 +8036,14 @@ impl eframe::App for App {
                 }
                 crate::asm_ui::contexto_na_cena(self.asm.as_ref(), &mut s);
                 crate::asm_cmd::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, ctx.input(|i| i.time), &mut s);
+                crate::asm_interf::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
+                crate::asm_repeticao::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
                 vp.set_scene(rs, &s);
+                let grande = vp.cena_grande;
                 self.scene_dirty = false;
+                if grande {
+                    self.toast(tr("A cena passou do que a placa de vídeo aceita: as faces não aparecem. Oculte peças ou reduza a qualidade da malha."), true);
+                }
                 ctx.request_repaint();
             }
         }

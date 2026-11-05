@@ -584,6 +584,8 @@ pub struct Viewport {
     last: Option<(Camera, [u32; 2], u64, ViewStyle)>,
     scene_gen: u64,
     pub bounds: Option<(Vec3, Vec3)>,
+    /// a última cena passou do maior buffer que a placa aceita e ficou sem as faces
+    pub cena_grande: bool,
     /// último movimento de câmera (órbita, pan, zoom, animação) para "Simplificar ao girar"
     ultimo_giro: Option<std::time::Instant>,
     /// transições de câmera ligadas (desligadas no modo leve: a vista salta direto)
@@ -834,6 +836,7 @@ impl Viewport {
             animar: true,
             last: None,
             scene_gen: 0,
+            cena_grande: false,
             bounds: None,
         }
     }
@@ -854,7 +857,10 @@ impl Viewport {
         let dev = &rs.device;
         let mk = |data: &[u8], usage| dev.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: None, contents: data, usage });
         let lines = |v: &Vec<LineVertex>| (!v.is_empty()).then(|| (mk(bytemuck::cast_slice(v), wgpu::BufferUsages::VERTEX), v.len() as u32));
-        self.vb = (!s.indices.is_empty()).then(|| {
+        // além do que a placa aceita, criar o buffer derruba o programa: a cena fica sem as faces e avisa
+        let cabe = (std::mem::size_of_val(s.mesh.as_slice()) as u64) <= dev.limits().max_buffer_size;
+        self.cena_grande = !cabe;
+        self.vb = (!s.indices.is_empty() && cabe).then(|| {
             (
                 mk(bytemuck::cast_slice(&s.mesh), wgpu::BufferUsages::VERTEX),
                 mk(bytemuck::cast_slice(&s.indices), wgpu::BufferUsages::INDEX),
