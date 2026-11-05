@@ -27,6 +27,9 @@ pub mod projecao;
 pub mod qualidade;
 pub mod regras;
 pub mod sketch;
+pub mod subd;
+pub mod subd_ops;
+pub mod subd_brep;
 pub mod trabalho;
 
 pub use doc::*;

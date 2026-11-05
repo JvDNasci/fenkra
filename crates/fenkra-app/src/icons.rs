@@ -94,6 +94,7 @@ macro_rules! modelos {
 modelos!(
     "comparar", "estado_conflito", "estado_editado", "estado_leitura", "estado_liberada", "estado_sem_revisao",
     "exportar_arquivo", "liberar_revisao", "onde_usado",
+    "forma", "forma_caixa", "forma_esfera", "forma_cilindro", "forma_plano", "forma_extrudar", "forma_laco", "forma_aresta", "forma_borda", "forma_tangencia", "forma_simetria", "forma_converter",
     "abrir_projeto", "ajustar", "an_curvatura", "an_sombreado", "an_zebra", "aparencia", "arestas_comando",
     "arestas_selecionar", "arestas_todas", "asm_catalogo", "asm_engrenagens", "asm_fixadores", "asm_furo_pecas", "asm_grupo",
     "asm_inserir", "asm_link", "asm_lista", "asm_nova", "asm_numerar", "asm_peca_nova", "asm_recorte_peca",

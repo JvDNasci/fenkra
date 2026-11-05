@@ -159,6 +159,10 @@ fn walk(doc: &Document, r: &RecomputeResult, key: &str, v: &Value, out: &mut Vec
 
 /// Entradas do comando/elemento em edição.
 pub fn inputs(doc: &Document, r: &RecomputeResult, id: Id) -> Vec<([f64; 3], String, Option<Id>)> {
+    // os nós da gaiola são o próprio dado da forma, não entradas: a gaiola já os mostra
+    if matches!(doc.feature(id).map(|f| &f.kind), Some(FeatureKind::Forma(_))) {
+        return vec![];
+    }
     let v = if let Some(f) = doc.feature(id) {
         serde_json::to_value(&f.kind).ok()
     } else {

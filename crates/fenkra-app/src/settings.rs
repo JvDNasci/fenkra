@@ -43,6 +43,8 @@ pub enum Group {
     Chapa,
     /// membros estruturais
     Estrutural,
+    /// primitivas da forma livre
+    FormaLivre,
     /// detalhamento 3D (PMI)
     Pmi,
     // detalhamento 2D
@@ -60,7 +62,7 @@ pub enum Group {
 }
 
 impl Group {
-    pub const ALL: [Group; 29] = [
+    pub const ALL: [Group; 30] = [
         Group::DesArquivo,
         Group::DesVistas,
         Group::DesCotas,
@@ -68,6 +70,7 @@ impl Group {
         Group::DesTabelas,
         Group::Chapa,
         Group::Estrutural,
+        Group::FormaLivre,
         Group::Pmi,
         Group::Montagem,
         Group::Restricoes,
@@ -104,7 +107,10 @@ impl Group {
         if b == Bench::Estrutural {
             return matches!(self, Group::Sketch | Group::Estrutural | Group::Referencias | Group::Organizacao | Group::Pmi | Group::Vista | Group::Selecao | Group::Analise);
         }
-        if matches!(self, Group::Chapa | Group::Estrutural) {
+        if b == Bench::FormaLivre {
+            return matches!(self, Group::FormaLivre | Group::Referencias | Group::Organizacao | Group::Vista | Group::Selecao | Group::Analise);
+        }
+        if matches!(self, Group::Chapa | Group::Estrutural | Group::FormaLivre) {
             return false;
         }
         if b == Bench::Montagem {
@@ -130,6 +136,7 @@ impl Group {
             Bench::Montagem => matches!(self, Group::Montagem | Group::Restricoes),
             Bench::Chapa => matches!(self, Group::Sketch | Group::Chapa),
             Bench::Estrutural => matches!(self, Group::Sketch | Group::Estrutural),
+            Bench::FormaLivre => matches!(self, Group::FormaLivre),
             Bench::Desenho => matches!(self, Group::DesVistas | Group::DesCotas | Group::DesAnotacoes),
         }
     }
@@ -157,6 +164,7 @@ impl Group {
             Group::Cinematica => tr("Cinemática"),
             Group::Chapa => tr("Chapa metálica"),
             Group::Estrutural => tr("Estrutural"),
+            Group::FormaLivre => tr("Forma livre"),
             Group::Pmi => tr("Detalhamento 3D (PMI)"),
             Group::DesArquivo => tr("Desenho"),
             Group::DesVistas => tr("Vistas"),
@@ -183,6 +191,8 @@ pub enum Bench {
     Estrutural,
     /// detalhamento 2D (módulo separado: arquivo .fkd)
     Desenho,
+    /// modelagem orgânica por subdivisão
+    FormaLivre,
 }
 
 /// Família de perfis cadastrada: tipo de seção, tamanhos e a regra de criação (ancoragem e rotação
