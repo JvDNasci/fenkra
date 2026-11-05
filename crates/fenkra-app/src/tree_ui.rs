@@ -454,6 +454,7 @@ pub fn icone_comando(k: &FeatureKind) -> &'static str {
         ThickSurface(_) => "hib_engrossar",
         CloseSurface(_) => "hib_fechar",
         SewSurface(_) => "hib_costurar",
+        Forma(_) => "forma",
         BoundaryFill(_) => "hib_preencher",
         MeshImport(_) => "hib_malha",
         LinkedBody(_) => "asm_link",

@@ -668,8 +668,22 @@ def desenhos():
 
 desenhos()
 
+# forma livre: nós em ponto sobre a gaiola fina, e a superfície no traço do resultado
+ic("forma", b=Q(8, 8, 32, 32), R=C(24, 24, 14), pb=[(8, 8), (40, 8), (40, 40), (8, 40)])
+ic("forma_caixa", R=CUBO(), pb=[(24, 6), (40, 14), (40, 32), (24, 40), (8, 32), (8, 14)])
+ic("forma_esfera", R=C(24, 24, 18), pb=[(24, 6), (42, 24), (24, 42), (6, 24)])
+ic("forma_cilindro", R=E(24, 12, 15, 6) + "M9 12v24a15 6 0 0 0 30 0V12", pb=[(9, 12), (39, 12), (9, 36), (39, 36)])
+ic("forma_plano", R=Z((6, 34), (18, 14), (42, 14), (30, 34)), pb=[(6, 34), (18, 14), (42, 14), (30, 34)])
+ic("forma_extrudar", B=Q(10, 28, 28, 14), R="M10 28V14h28v14" + S(24, 26, 24, 8))
+ic("forma_laco", B=Q(8, 10, 32, 28), R="M24 10v28", pr=[(24, 10), (24, 38)])
+ic("forma_aresta", B=Q(8, 10, 32, 28), R=L((8, 10), (40, 38)), pr=[(8, 10), (40, 38)])
+ic("forma_borda", b="M8 8h20l12 12v20", R="M8 8h14a18 18 0 0 1 18 18v14")
+ic("forma_tangencia", B="M6 36c10-14 26-14 36 0", R=L((8, 25), (40, 25)) + S(24, 25, 24, 7), pr=[(24, 25)])
+ic("forma_simetria", b="M24 4v40", R="M20 10c-16 2-16 26 0 28M28 10c16 2 16 26 0 28")
+ic("forma_converter", b=Q(6, 12, 18, 24), R=CUBO(32, 12, 10, 5, 12) + "M18 24h4", pb=[(6, 12), (24, 12), (24, 36), (6, 36)])
 
-SO_INTERFACE = {"importar_arquivo", "asm_catalogo", "arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais"}
+
+SO_INTERFACE = {"forma", "forma_caixa", "forma_esfera", "forma_cilindro", "forma_plano", "forma_extrudar", "forma_laco", "forma_aresta", "forma_borda", "forma_tangencia", "forma_simetria", "forma_converter", "importar_arquivo", "asm_catalogo", "arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais"}
 
 
 # ---------- saída ----------

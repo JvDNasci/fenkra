@@ -5,6 +5,7 @@
 
 use crate::app::Cmd;
 use crate::geo_ui::{self, GeoKind};
+use fenkra_core::subd_ops::PrimitivaForma;
 use fenkra_core::{BoolOp, PrimKind};
 use crate::icons::tool_button;
 use crate::render::DisplayMode;
@@ -483,6 +484,12 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 Family("xf", vec![g(GeoKind::XfTranslate), g(GeoKind::XfRotate), g(GeoKind::XfMirror), g(GeoKind::XfScale)]),
             ]
         }
+        Group::FormaLivre => vec![
+            One(it("forma_caixa", "Caixa de forma", "Caixa com nós: arraste no plano", "Clique no plano e arraste o tamanho. Nasce uma gaiola de 2 por 2 por 2 faces, com a superfície lisa por dentro; depois é só clicar num nó e puxar.", Cmd(C::Forma(PrimitivaForma::Caixa)))),
+            One(it("forma_esfera", "Esfera de forma", "Esfera de quadriláteros", "Arraste o diâmetro no plano. Tem oito nós de valência 3, sem polos.", Cmd(C::Forma(PrimitivaForma::Esfera)))),
+            One(it("forma_cilindro", "Cilindro de forma", "Cilindro com tampas", "Arraste o diâmetro no plano. Oito lados e dois andares para puxar.", Cmd(C::Forma(PrimitivaForma::Cilindro)))),
+            One(it("forma_plano", "Plano de forma", "Folha aberta", "Arraste o retângulo no plano. A folha tem borda: vira superfície, não sólido.", Cmd(C::Forma(PrimitivaForma::Plano)))),
+        ],
         Group::Hibrido => vec![
             One(it("hib_dividir", "Dividir corpo", "Dividir o sólido por superfície (Split)", "Corta o corpo com uma superfície, face ou plano e mantém um lado.", Cmd(C::SplitBody))),
             Family("hib_engrossar", vec![

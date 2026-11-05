@@ -462,6 +462,13 @@ pub struct SurfaceViz {
     pub mesh: Mesh,
 }
 
+/// Superfície lisa de uma forma livre, para desenhar (B153).
+#[derive(Clone, Debug)]
+pub struct FormaViz {
+    pub id: Id,
+    pub malha: fenkra_core::subd::MalhaLisa,
+}
+
 /// Contorno de um recorte de chapa nos dois estados: o desenhado no estado do comando e o levado
 /// ao outro (inclusive pelo raio da dobra), cada um como polilinhas fechadas em 3D.
 #[derive(Clone, Debug, PartialEq)]
@@ -554,6 +561,8 @@ pub struct RecomputeResult {
     pub points: Vec<PointViz>,
     pub curves: Vec<CurveViz>,
     pub surfaces: Vec<SurfaceViz>,
+    /// formas livres ainda sem B-rep
+    pub formas: Vec<FormaViz>,
     pub status: HashMap<Id, Status>,
     pub params: HashMap<String, f64>,
     pub param_error: Option<String>,
@@ -5257,6 +5266,10 @@ impl Ctx<'_> {
                 }
                 Ok(None)
             }
+            FeatureKind::Forma(fm) => {
+                fm.gaiola.inteira().topologia()?;
+                Ok(None)
+            }
             FeatureKind::BoundaryFill(bf) => {
                 let mut acc = Shape::empty();
                 for t in &bf.tools {
@@ -5392,6 +5405,18 @@ impl Ctx<'_> {
 }
 
 /// Recalcula o documento inteiro. Roda fora da thread da interface (RNF-001).
+/// Superfície de cada forma livre que calculou. Fica fora do cache: a subdivisão leva menos que a busca.
+fn formas_visiveis(doc: &Document, status: &HashMap<Id, Status>) -> Vec<FormaViz> {
+    doc.features
+        .iter()
+        .filter(|f| matches!(status.get(&f.id), Some(Status::Ok | Status::Warning(_))))
+        .filter_map(|f| match &f.kind {
+            FeatureKind::Forma(fm) => fm.gaiola.lisa(fm.niveis as u32).ok().map(|malha| FormaViz { id: f.id, malha }),
+            _ => None,
+        })
+        .collect()
+}
+
 pub fn recompute(doc: &Document) -> RecomputeResult {
     recompute_cached(doc, &mut Cache::default())
 }
@@ -5806,6 +5831,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         }
     }
     cache.limitar(&vivas, &fills_vivos, TETO_CACHE_MALHAS);
+    let formas = formas_visiveis(doc, &cx.status);
 
     RecomputeResult {
         notes: cache.notes.clone(),
@@ -5816,6 +5842,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         points,
         curves,
         surfaces,
+        formas,
         status: cx.status,
         params: cx.vars,
         param_error,

@@ -197,6 +197,7 @@ impl Contexto {
             Bench::Montagem => "montagem",
             Bench::Chapa => "chapa",
             Bench::Estrutural => "estrutural",
+            Bench::FormaLivre => "forma_livre",
             Bench::Desenho => "desenho",
         };
         let m = match self.modo {

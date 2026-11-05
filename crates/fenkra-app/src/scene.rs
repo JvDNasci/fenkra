@@ -35,6 +35,8 @@ pub struct SceneOpts<'a> {
     pub line_dash: u8,
     /// símbolo dos pontos: 0 = cruz 3D na cena; outros são desenhados na tela pela viewport
     pub point_style: u8,
+    /// forma livre cuja superfície não aparece (modo Gaiola)
+    pub forma_oculta: Option<Id>,
     /// prévia do comando aberto
     pub fantasma: Option<crate::previa::Fantasma<'a>>,
 }
@@ -339,6 +341,8 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
             push_edges(&mut s.edges, m, o.tangent_edges, if selected { HILITE } else { edge_col });
         }
     }
+
+    crate::forma_ui::na_cena(doc, r, o.forma_oculta, &mut s, &mut |p| grow(&mut bounds, p));
 
     // pontos, linhas e curvas de referência
     let geo_col = [0.95, 0.7, 0.3, 1.0];

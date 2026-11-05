@@ -24,6 +24,8 @@ pub mod pmi_snap;
 pub mod projecao;
 pub mod qualidade;
 pub mod sketch;
+pub mod subd;
+pub mod subd_ops;
 pub mod trabalho;
 
 pub use doc::*;

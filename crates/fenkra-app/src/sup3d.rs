@@ -737,7 +737,7 @@ mod tests {
 
     fn cena(d: &Document, r: &RecomputeResult, id: Id) -> Scene {
         let (sel, filtro) = (crate::app::Sel::None, Filter::default());
-        let o = SceneOpts { editing: None, sel: &sel, filter: &filtro, hidden_env: false, dark_edges: true, tangent_edges: false, hilite: None, hilite_extra: &[], line_w: 1., line_dash: 0, point_style: 0, fantasma: Some(fantasma(id, &[])) };
+        let o = SceneOpts { forma_oculta: None, editing: None, sel: &sel, filter: &filtro, hidden_env: false, dark_edges: true, tangent_edges: false, hilite: None, hilite_extra: &[], line_w: 1., line_dash: 0, point_style: 0, fantasma: Some(fantasma(id, &[])) };
         build(d, r, &o)
     }
 

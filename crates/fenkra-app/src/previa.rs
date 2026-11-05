@@ -557,6 +557,7 @@ mod tests {
             line_w: 1.,
             line_dash: 0,
             point_style: 0,
+            forma_oculta: None,
             fantasma: Some(Fantasma { id, cor: [10, 20, 30], entrada: [40, 50, 60], erro: [70, 80, 90], retirada: [100, 110, 120], ferramenta: [130, 140, 150], neutro: [160, 170, 180], antes }),
         };
         build(d, r, &o)

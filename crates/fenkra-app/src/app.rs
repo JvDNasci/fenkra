@@ -212,6 +212,8 @@ pub struct App {
     begin_sketch_pending: Option<Id>,
     /// seleção na viewport (faces, arestas, vértices, planos)
     pub picks: Vec<crate::picking::Pick>,
+    /// estado da bancada Forma livre
+    pub forma: crate::forma_ui::Estado,
     pub(crate) hover_pick: Option<crate::picking::Pick>,
     /// já passou da tela inicial
     started: bool,
@@ -394,6 +396,7 @@ impl App {
             sketch: None,
             begin_sketch_pending: None,
             picks: vec![],
+            forma: Default::default(),
             hover_pick: None,
             started: false,
             inicio_pelo_menu: false,
@@ -560,6 +563,12 @@ impl App {
             d.hide_consumed(d.features[1].id);
             app.load_doc(d, None, None);
             app.settings.bench = crate::settings::Bench::Chapa;
+            app.started = true;
+        }
+        // desenvolvimento: FENKRA_DEMO_FORMA=1 (ou gaiola, liso, laco, tangencia) abre uma cúpula em edição
+        if let Ok(modo) = std::env::var("FENKRA_DEMO_FORMA") {
+            app.load_doc(Document::new("Forma"), None, None);
+            crate::forma_ui::demo(&mut app, &modo);
             app.started = true;
         }
         // desenvolvimento: FENKRA_DEMO_EST=1 abre um quadro de mesa estrutural de exemplo
@@ -1801,6 +1810,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         if crate::asm_ui::command(self, c) {
             return;
         }
+        if let Cmd::Forma(p) = c {
+            crate::forma_ui::comecar(self, p);
+            return;
+        }
         self.conclude_session();
         let snapshot = self.open.doc.clone();
         let sel_now = self.sel;
@@ -2129,6 +2142,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     }),
                 }))
             }
+            // tratado no começo de `command`: nasce do arraste no plano
+            Cmd::Forma(_) => return,
             Cmd::Stiffener => {
                 let sk = sk_or_unset;
                 Sel::Feature(d.add_feature(FeatureKind::Stiffener(Stiffener { sketch: sk, thickness: s("3"), depth: s("20"), reverse: false, to_body: false, side: 0 })))
@@ -3143,7 +3158,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 // abas de módulo (RF-UI-006)
                 use crate::settings::Bench;
                 ui.add_space(10.);
-                for (b, n, icon) in [(Bench::Solidos, "Modelagem Sólida", "▣"), (Bench::Superficies, "Superfícies", "◫"), (Bench::Montagem, "Montagem", "⚙"), (Bench::Chapa, "Chapa metálica", "▭"), (Bench::Estrutural, "Estrutural", "⌶"), (Bench::Desenho, "Desenho", "📐")] {
+                for (b, n, icon) in [(Bench::Solidos, "Modelagem Sólida", "▣"), (Bench::Superficies, "Superfícies", "◫"), (Bench::Montagem, "Montagem", "⚙"), (Bench::Chapa, "Chapa metálica", "▭"), (Bench::Estrutural, "Estrutural", "⌶"), (Bench::FormaLivre, "Forma livre", "◍"), (Bench::Desenho, "Desenho", "📐")] {
                     if bench_tab(ui, self.settings.bench == b, &format!("{icon}  {}", tr(n)), true).on_hover_text(tr("As bancadas compartilham o mesmo modelo: sólidos e superfícies se conversam.")).clicked() {
                         self.settings.bench = b;
                     }
@@ -6755,6 +6770,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 crate::feat_ui::bend_overlay(self, ui, rect, &cam);
                 crate::feat_ui::cut_overlay(self, ui, rect, &cam);
                 crate::previa::overlay(self, ui, rect, &cam);
+                crate::forma_ui::overlay(self, ui, rect, &cam, &resp);
             }
             // seta e cota 3D do comando aberto (fast 3D)
             if self.sketch.is_none() {
@@ -6880,6 +6896,8 @@ pub enum Cmd {
     ChamferAll,
     /// plano, ponto, linha ou curva de referência
     Geo(crate::geo_ui::GeoKind),
+    /// forma livre: espera o arraste no plano
+    Forma(fenkra_core::subd_ops::PrimitivaForma),
     Groove,
     Rib,
     Slot,
@@ -7848,6 +7866,7 @@ impl eframe::App for App {
         }
 
         if self.scene_dirty {
+            let forma_oculta = crate::forma_ui::oculta(self);
             let asm_view = if self.in_asm() { self.asm.as_ref().and_then(|s| s.view.as_ref().map(|v| (&s.view_doc, v))) } else { None };
             let (scene_doc, scene_res) = match asm_view {
                 Some((d, v)) => (d, Some(v)),
@@ -7868,6 +7887,7 @@ impl eframe::App for App {
                     line_dash: self.settings.ref_line_dash,
                     point_style: self.settings.point_style,
                     fantasma: crate::previa::da_sessao(self.session.as_ref().filter(|_| asm_view.is_none()), &ctx.global_style().visuals),
+                    forma_oculta,
                 };
                 let mut s = scene::build(scene_doc, r, &opts);
                 if let Some(sess) = self.session.as_mut().filter(|_| asm_view.is_none()) {
@@ -8081,6 +8101,7 @@ fn example_card(ui: &mut egui::Ui, key: &str, name: &str, desc: &str, bench: cra
     let chip_txt = tr(match bench {
         B::Chapa => "Chapa metálica",
         B::Estrutural => "Estrutural",
+        B::FormaLivre => "Forma livre",
         B::Superficies => "Superfícies",
         B::Montagem => "Montagem",
         B::Desenho => "Desenho",

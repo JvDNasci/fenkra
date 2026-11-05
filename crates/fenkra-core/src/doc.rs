@@ -1719,12 +1719,31 @@ pub enum FeatureKind {
     SmArcSlot(SmArcSlot),
     /// Chapa: aba por superfície (suporte).
     SmSurfFlange(SmSurfFlange),
+    /// Forma livre por subdivisão: a gaiola de controle e como ela vira superfície.
+    Forma(Forma),
     /// Estrutural: membros (perfis) ao longo de linhas/curvas do esqueleto.
     StructMember(StructMember),
     /// Estrutural: placa de extremidade na ponta de um membro.
     StructPlate(StructPlate),
     /// Estrutural: reforço (cantoneira/gusset) entre dois membros.
     StructGusset(StructGusset),
+}
+
+fn niveis_padrao() -> u8 {
+    3
+}
+
+/// Forma livre (B153). A gaiola guarda nós e faces por número persistente; quem aponta para uma face
+/// da forma aponta para esse número.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct Forma {
+    pub gaiola: crate::subd::Gaiola,
+    /// passos de subdivisão da superfície mostrada
+    #[serde(default = "niveis_padrao")]
+    pub niveis: u8,
+    /// congelada: a gaiola fica guardada, mas não aceita edição
+    #[serde(default)]
+    pub congelada: bool,
 }
 
 /// Tipo de seção de perfil estrutural.
@@ -2411,6 +2430,7 @@ impl FeatureKind {
             ThickSurface(_) => "Engrossar",
             CloseSurface(_) => "Fechar",
             SewSurface(_) => "Costurar",
+            Forma(_) => "Forma",
             BoundaryFill(_) => "PreencherFronteiras",
             MeshImport(_) => "Malha",
             LinkedBody(_) => "CorpoLink",
@@ -2465,6 +2485,7 @@ impl FeatureKind {
             ThickSurface(_) => "▥",
             CloseSurface(_) => "⬢",
             SewSurface(_) => "⧉",
+            Forma(_) => "◍",
             BoundaryFill(_) => "▦",
             MeshImport(_) => "△",
             LinkedBody(_) => "🔗",
@@ -2493,6 +2514,7 @@ impl FeatureKind {
     pub fn walk(&mut self, ids: &mut dyn FnMut(&mut Id), exprs: &mut dyn FnMut(&mut String)) {
         use FeatureKind::*;
         match self {
+            Forma(_) => {}
             Sketch(s) => {
                 s.plane.walk(ids);
                 for v in s.data.exprs_mut() {
