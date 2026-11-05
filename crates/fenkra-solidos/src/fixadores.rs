@@ -20,16 +20,30 @@ use fenkra_core::*;
 /// Número de lados do sextavado.
 const LADOS: &str = "6";
 
+/// Geração dos geradores de geometria. Sobe quando a forma de uma peça gerada muda (novo chanfro,
+/// novo eixo de apoio...): peças gravadas com número menor aparecem como desatualizadas.
+pub const VERSAO_BIBLIOTECA: u32 = 2;
+
+/// Nomes das propriedades personalizadas que carregam o selo da biblioteca na peça gerada.
+const SELO_GERACAO: &str = "Biblioteca: geração";
+const SELO_FAMILIA: &str = "Biblioteca: família";
+
 /// Documento de um fixador da biblioteca. `comprimento` (L, mm) vale só para parafusos: `None`
-/// escolhe o primeiro comprimento da série com `L >= 4·d`; um valor explícito precisa estar entre
-/// `2·d` e `10·d` (mínimo de 6 mm). Para porcas e arruelas o comprimento é ignorado.
+/// escolhe o primeiro comprimento da série do tamanho com `L >= 4·d`; um valor explícito precisa
+/// estar entre o menor e o maior da série do tamanho. Para porcas e arruelas o comprimento é ignorado.
 pub fn fixador_documento(familia_id: &str, tamanho: &str, comprimento: Option<f64>) -> Result<Document, String> {
     let fam = biblioteca::familia(familia_id).ok_or_else(|| format!("família de fixador desconhecida: {familia_id}"))?;
+    gerar(fam, tamanho, comprimento)
+}
+
+/// Como [`fixador_documento`], para uma família já em mãos (de qualquer camada).
+pub fn gerar(fam: &Familia, tamanho: &str, comprimento: Option<f64>) -> Result<Document, String> {
     let t = fam.tamanho(tamanho).ok_or_else(|| format!("{}: tamanho {tamanho} não existe", fam.norma))?;
     let d = t.diametro_nominal().ok_or_else(|| format!("{}: designação inválida {}", fam.id, t.designacao))?;
     let curta = fam.norma.split(" (").next().unwrap_or(&fam.norma).to_string();
 
     let (desc, comp) = if fam.tipo.e_parafuso() {
+        let (minimo, maximo) = fam.limites_de_comprimento(t).ok_or("sem comprimentos para o tamanho")?;
         let l = match comprimento {
             Some(l) => l,
             None => {
@@ -37,8 +51,8 @@ pub fn fixador_documento(familia_id: &str, tamanho: &str, comprimento: Option<f6
                 serie.iter().copied().find(|l| *l >= 4. * d).or(serie.last().copied()).ok_or("sem comprimentos para o tamanho")?
             }
         };
-        if !l.is_finite() || l < (2. * d).max(6.) || l > 10. * d {
-            return Err(format!("{} {}: comprimento {l} fora de {} a {} mm", curta, t.designacao, (2. * d).max(6.), 10. * d));
+        if !l.is_finite() || l < minimo || l > maximo {
+            return Err(format!("{} {}: comprimento {l} fora de {} a {} mm", curta, t.designacao, minimo, maximo));
         }
         (format!("{curta} {}x{l}", t.designacao), Some(l))
     } else {
@@ -53,7 +67,75 @@ pub fn fixador_documento(familia_id: &str, tamanho: &str, comprimento: Option<f6
         TipoFixador::Porca => porca(&mut m, fam, t)?,
         TipoFixador::Arruela => arruela(&mut m, fam, t)?,
     }
+    propriedades(&mut m.doc, fam, t);
+    publicacoes(&mut m, fam)?;
     Ok(m.doc)
+}
+
+/// PN, material pela classe, acabamento, norma com revisão, massa nominal e o selo da biblioteca.
+fn propriedades(doc: &mut Document, fam: &Familia, t: &Tamanho) {
+    if let Some(pn) = &t.pn {
+        doc.props.pn = pn.clone();
+    }
+    if let Some(c) = &fam.classe {
+        doc.props.material = biblioteca::material_da_classe(c);
+    }
+    let mut extra = vec![("Norma".to_string(), format!("{}:{}", fam.norma, fam.revisao))];
+    if let Some(c) = &fam.classe {
+        extra.push(("Classe".into(), c.clone()));
+    }
+    if let Some(a) = &fam.acabamento {
+        extra.push(("Acabamento".into(), a.clone()));
+    }
+    if let Some(g) = t.massa_g {
+        extra.push(("Massa nominal (g)".into(), g.to_string()));
+    }
+    extra.push((SELO_GERACAO.into(), VERSAO_BIBLIOTECA.to_string()));
+    extra.push((SELO_FAMILIA.into(), format!("{}@{}", fam.id, fam.versao)));
+    doc.props.custom.extend(extra);
+}
+
+/// Publica o eixo, o plano de apoio e (nos parafusos) a ponta, para a montagem se prender a eles
+/// por link. Todos seguem os parâmetros: mudar `L` move a ponta.
+fn publicacoes(m: &mut Montador, fam: &Familia) -> Result<(), String> {
+    let (inicio, fim) = match fam.tipo {
+        TipoFixador::ParafusoAllen | TipoFixador::ParafusoSextavado => ("-L", "k"),
+        TipoFixador::Porca => ("-m", "0"),
+        TipoFixador::Arruela => ("-h", "0"),
+    };
+    let ponto0 = PointRef::Origin;
+    m.publicar("Eixo", RefKind::LineDir { point: ponto0, dir: AxisRef::Origin(OriginAxis::Z), start: inicio.into(), end: fim.into() });
+    m.publicar("Plano_apoio", RefKind::OffsetPlane { base: PlaneRef::Origin(OriginPlane::XY), offset: "0".into() });
+    if fam.tipo.e_parafuso() {
+        m.publicar("Ponta", RefKind::PointCoords { x: "0".into(), y: "0".into(), z: "-L".into(), frame: None });
+    }
+    Ok(())
+}
+
+/// Situação do selo de uma peça de fixador gerada pela biblioteca.
+#[derive(Clone, Debug, PartialEq)]
+pub enum SituacaoSelo {
+    Atual,
+    /// a peça é mais antiga que os geradores ou que os dados da família; o texto diz por quê
+    Desatualizada(String),
+    /// a peça não vem da biblioteca (sem selo)
+    SemSelo,
+}
+
+/// Compara o selo gravado na peça com a biblioteca de agora.
+pub fn situacao_do_selo(doc: &Document) -> SituacaoSelo {
+    let get = |n: &str| doc.props.custom.iter().find(|(k, _)| k == n).map(|(_, v)| v.as_str());
+    let (Some(g), Some(f)) = (get(SELO_GERACAO), get(SELO_FAMILIA)) else { return SituacaoSelo::SemSelo };
+    let geracao: u32 = g.parse().unwrap_or(0);
+    if geracao < VERSAO_BIBLIOTECA {
+        return SituacaoSelo::Desatualizada(format!("gerada com a versão {geracao} da biblioteca; a atual é a {VERSAO_BIBLIOTECA}"));
+    }
+    let (id, v) = f.split_once('@').unwrap_or((f, "0"));
+    match biblioteca::familia(id) {
+        Some(fam) if v.parse::<u32>().unwrap_or(0) < fam.versao => SituacaoSelo::Desatualizada(format!("{id} está na versão {v} dos dados; a atual é a {}", fam.versao)),
+        Some(_) => SituacaoSelo::Atual,
+        None => SituacaoSelo::Desatualizada(format!("a família {id} não existe mais na biblioteca")),
+    }
 }
 
 /// ISO 4762: cabeça cilíndrica dk × k com sextavado interno de abertura s e profundidade k/2.
@@ -146,6 +228,16 @@ impl Montador {
         Ok(PlaneRef::Datum(id))
     }
 
+    /// Elemento de referência publicado (outras peças o usam por link), oculto na viewport.
+    pub(crate) fn publicar(&mut self, nome: &str, kind: RefKind) {
+        let id = self.doc.add_geometry(kind);
+        if let Some(r) = self.doc.references.iter_mut().find(|r| r.id == id) {
+            r.name = nome.into();
+            r.visible = false;
+            r.published = true;
+        }
+    }
+
     pub(crate) fn prim(&mut self, nome: &str, kind: PrimKind, plane: PlaneRef, v: [&str; 4], op: BoolOp) -> Result<(), String> {
         let [a, b, c, d] = v.map(String::from);
         let id = self.doc.add_feature(FeatureKind::Primitive(Primitive { kind, plane, a, b, c, d, op }));
@@ -199,11 +291,74 @@ mod tests {
     }
 
     #[test]
+    fn propriedades_da_biblioteca_e_selo() {
+        let d = fixador_documento("iso4017", "M6", Some(20.)).unwrap();
+        assert_eq!(d.props.material, "Aço classe 8.8");
+        let custom = |n: &str| d.props.custom.iter().find(|(k, _)| k == n).map(|(_, v)| v.clone());
+        assert_eq!(custom("Norma").as_deref(), Some("ISO 4017:2014"));
+        assert_eq!(custom("Classe").as_deref(), Some("8.8"));
+        assert_eq!(situacao_do_selo(&d), SituacaoSelo::Atual);
+        // geração antiga e versão antiga dos dados aparecem como desatualizadas
+        let mut velho = d.clone();
+        velho.props.custom.iter_mut().find(|(k, _)| k == SELO_GERACAO).unwrap().1 = "1".into();
+        assert!(matches!(situacao_do_selo(&velho), SituacaoSelo::Desatualizada(m) if m.contains("versão 1")));
+        let mut sem_familia = d.clone();
+        sem_familia.props.custom.iter_mut().find(|(k, _)| k == SELO_FAMILIA).unwrap().1 = "nada@1".into();
+        assert!(matches!(situacao_do_selo(&sem_familia), SituacaoSelo::Desatualizada(_)));
+        let mut dados = d.clone();
+        dados.props.custom.iter_mut().find(|(k, _)| k == SELO_FAMILIA).unwrap().1 = "iso4017@0".into();
+        assert!(matches!(situacao_do_selo(&dados), SituacaoSelo::Desatualizada(_)));
+        assert_eq!(situacao_do_selo(&Document::new("avulsa")), SituacaoSelo::SemSelo);
+        // material pela classe também nas porcas e arruelas
+        assert_eq!(fixador_documento("iso4032", "M8", None).unwrap().props.material, "Aço classe 8");
+    }
+
+    #[test]
+    fn publicacoes_do_fixador() {
+        let d = fixador_documento("iso4762", "M6", Some(20.)).unwrap();
+        let pub_ = |n: &str| d.references.iter().find(|r| r.name == n).unwrap_or_else(|| panic!("sem publicação {n}"));
+        for n in ["Eixo", "Plano_apoio", "Ponta"] {
+            let r = pub_(n);
+            assert!(r.published && !r.visible, "{n}");
+        }
+        assert!(matches!(&pub_("Ponta").kind, RefKind::PointCoords { z, .. } if z == "-L"));
+        // porca e arruela não têm ponta
+        assert!(!fixador_documento("iso4032", "M8", None).unwrap().references.iter().any(|r| r.name == "Ponta"));
+    }
+
+    #[test]
+    fn serie_de_comprimentos_por_tamanho() {
+        // M3 vai de 6 a 30, M20 de 40 a 120 (a série publicada para o tamanho, sem regra geral)
+        assert!(fixador_documento("iso4762", "M3", Some(6.)).is_ok());
+        assert!(fixador_documento("iso4762", "M3", Some(31.)).is_err());
+        assert!(fixador_documento("iso4762", "M20", Some(30.)).is_err());
+        assert!(fixador_documento("iso4762", "M20", Some(120.)).is_ok());
+        // designação livre
+        assert!(fixador_documento("iso4762", "m 6", Some(20.)).is_ok());
+    }
+
+    #[test]
+    fn massa_nominal_confere_com_o_volume() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        // só vale para itens sem comprimento que trazem massa_g na biblioteca
+        for f in biblioteca::familias().iter().filter(|f| !f.tipo.e_parafuso()) {
+            for t in f.tamanhos.iter().filter(|t| t.massa_g.is_some()) {
+                let (v, _, _) = medir(&gerar(f, &t.designacao, None).unwrap());
+                let g = v * biblioteca::DENSIDADE_ACO_G_MM3;
+                let nominal = t.massa_g.unwrap();
+                assert!((g - nominal).abs() / nominal < 0.15, "{} {}: {g:.2} g contra {nominal} g", f.id, t.designacao);
+            }
+        }
+    }
+
+    #[test]
     fn entradas_invalidas() {
         assert!(fixador_documento("nada", "M6", None).is_err());
         assert!(fixador_documento("iso4762", "M7", None).is_err());
-        assert!(fixador_documento("iso4762", "M6", Some(10.)).is_err(), "L < 2d");
-        assert!(fixador_documento("iso4762", "M6", Some(61.)).is_err(), "L > 10d");
+        assert!(fixador_documento("iso4762", "M6", Some(10.)).is_err(), "abaixo da série");
+        assert!(fixador_documento("iso4762", "M6", Some(61.)).is_err(), "acima da série");
         assert!(fixador_documento("iso4762", "M3", Some(5.)).is_err(), "mínimo de 6 mm");
         assert!(fixador_documento("iso4762", "M6", Some(f64::NAN)).is_err());
         // porca e arruela ignoram o comprimento
@@ -278,6 +433,12 @@ mod tests {
                 let doc = fixador_documento(&f.id, &t.designacao, None).unwrap_or_else(|e| panic!("{} {}: {e}", f.id, t.designacao));
                 let (v, _, hi) = medir(&doc);
                 assert!(v > 0. && hi[2] >= -1e-6, "{} {}", f.id, t.designacao);
+                // e todo comprimento da série do tamanho
+                for l in f.comprimentos_de(t).into_iter().filter(|_| f.tipo.e_parafuso()) {
+                    let doc = fixador_documento(&f.id, &t.designacao, Some(l)).unwrap_or_else(|e| panic!("{} {} L{l}: {e}", f.id, t.designacao));
+                    let (v, lo, _) = medir(&doc);
+                    assert!(v > 0. && (lo[2] + l).abs() < 1e-3, "{} {} L{l}", f.id, t.designacao);
+                }
             }
         }
     }

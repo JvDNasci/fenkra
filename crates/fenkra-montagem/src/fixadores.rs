@@ -24,10 +24,10 @@
 
 use crate::load::{full_path, PartCache};
 use crate::*;
-use fenkra_core::PartType;
+use fenkra_core::{Document, PartType};
 use fenkra_kernel::Shape;
 use fenkra_solidos::biblioteca::{self, Familia, Tamanho};
-use fenkra_solidos::fixadores::fixador_documento;
+use fenkra_solidos::fixadores::{fixador_documento, situacao_do_selo, SituacaoSelo};
 use fenkra_solidos::hardware;
 use std::collections::HashMap;
 use std::path::Path;
@@ -284,7 +284,8 @@ pub fn preencher_furos(asm: &mut Assembly, dir: Option<&Path>, cache: &mut PartC
         };
 
         // 4) peças e restrições
-        let mut peca = |fam: &Familia, t: &Tamanho, l: Option<f64>| -> Result<(String, String), String> { arquivo_fixador(dir, fam, t, l, &mut arquivos) };
+        let mut velhos: Vec<String> = vec![];
+        let mut peca = |fam: &Familia, t: &Tamanho, l: Option<f64>| -> Result<(String, String), String> { arquivo_fixador(dir, fam, t, l, &mut arquivos, &mut velhos) };
         let (arq_parafuso, nome_parafuso) = peca(fam_p, t_p, Some(comprimento))?;
         let pasta = *grupo.get_or_insert_with(|| asm.add_group(GRUPO, None));
 
@@ -343,6 +344,7 @@ pub fn preencher_furos(asm: &mut Assembly, dir: Option<&Path>, cache: &mut PartC
                 rel.porcas += 1;
             }
         }
+        rel.avisos.extend(velhos);
         rel.conta(format!("{desig}x{}", num(comprimento)));
     }
     Ok(rel)
@@ -392,7 +394,9 @@ fn trava_de_giro(asm: &mut Assembly, a: Id, b: Id, eixo: (V3, V3)) {
 }
 
 /// Grava a peça do fixador (se ainda não existe) e devolve (caminho relativo à montagem, nome).
-fn arquivo_fixador(dir: &Path, fam: &Familia, t: &Tamanho, l: Option<f64>, memo: &mut HashMap<String, (String, String)>) -> Result<(String, String), String> {
+/// Peça já gravada que a biblioteca atual superou entra em `velhos` (o arquivo não é regravado:
+/// a montagem pode ter restrições apoiadas nele).
+fn arquivo_fixador(dir: &Path, fam: &Familia, t: &Tamanho, l: Option<f64>, memo: &mut HashMap<String, (String, String)>, velhos: &mut Vec<String>) -> Result<(String, String), String> {
     let base = match l {
         Some(l) => format!("{}_{}x{}", fam.id, t.designacao, num(l)),
         None => format!("{}_{}", fam.id, t.designacao),
@@ -403,7 +407,12 @@ fn arquivo_fixador(dir: &Path, fam: &Familia, t: &Tamanho, l: Option<f64>, memo:
     let doc = fixador_documento(&fam.id, &t.designacao, l)?;
     let rel = format!("fixadores/{base}.fkp");
     let destino = dir.join("fixadores").join(format!("{base}.fkp"));
-    if !destino.exists() {
+    if destino.exists() {
+        let lida = std::fs::read_to_string(&destino).ok().and_then(|j| Document::from_json(&j).ok());
+        if let Some(SituacaoSelo::Desatualizada(porque)) = lida.as_ref().map(situacao_do_selo) {
+            velhos.push(format!("{rel}: peça desatualizada ({porque}); apague o arquivo para gerar de novo"));
+        }
+    } else {
         std::fs::create_dir_all(dir.join("fixadores")).map_err(|e| format!("{}: {e}", dir.join("fixadores").display()))?;
         std::fs::write(&destino, doc.to_json()).map_err(|e| format!("{}: {e}", destino.display()))?;
     }
@@ -750,6 +759,26 @@ mod tests {
         // profundidade 18 + arruela 1,6 = 19,6 → arredonda para baixo: L16
         assert_eq!((rel.fixadores, rel.arruelas, rel.porcas), (1, 1, 0), "{rel:?}");
         assert_eq!(rel.por_tamanho, vec![("M6x16".to_string(), 1)]);
+    }
+
+    #[test]
+    fn peca_gravada_com_biblioteca_antiga_avisa_sem_regravar() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let dir = pasta("selo_velho");
+        let (mut a, _, _) = pilha_de_placas(&dir, &placa(10., 6.6, None));
+        // um M6x35 de uma geração antiga já está na pasta
+        std::fs::create_dir_all(dir.join("fixadores")).unwrap();
+        let mut velho = fixador_documento("iso4762", "M6", Some(35.)).unwrap();
+        velho.props.custom.iter_mut().find(|(k, _)| k.starts_with("Biblioteca: geração")).unwrap().1 = "1".into();
+        let arq = dir.join("fixadores").join("iso4762_M6x35.fkp");
+        std::fs::write(&arq, velho.to_json()).unwrap();
+        let antes = std::fs::read_to_string(&arq).unwrap();
+        let rel = preencher_furos(&mut a, Some(&dir), &mut PartCache::default(), &OpcoesFixadores::default()).unwrap();
+        assert_eq!(rel.por_tamanho, vec![("M6x35".to_string(), 1)], "{rel:?}");
+        assert!(rel.avisos.iter().any(|m| m.contains("iso4762_M6x35.fkp") && m.contains("desatualizada")), "{:?}", rel.avisos);
+        assert_eq!(std::fs::read_to_string(&arq).unwrap(), antes, "não regrava");
     }
 
     #[test]
