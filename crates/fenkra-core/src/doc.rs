@@ -1502,6 +1502,10 @@ pub struct Folder {
     /// regra do contêiner (B59); `Livre` é só organização, como as pastas dos arquivos antigos
     #[serde(default, skip_serializing_if = "OrdemConteiner::e_livre")]
     pub ordem: OrdemConteiner,
+    /// Pasta oculta (B16): esconde tudo que está dentro sem mexer no estado de cada item, que
+    /// volta como estava quando a pasta é mostrada de novo.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub hidden: bool,
 }
 
 /// Como os membros de um contêiner se relacionam (B59).
@@ -3184,7 +3188,7 @@ impl Document {
     /// Pasta de geometria livre (sem linha do tempo).
     pub fn add_geometry_folder(&mut self, name: &str) -> Id {
         let id = self.alloc();
-        self.folders.push(Folder { id, name: name.into(), kind: FolderKind::Geometria, parent: None, ordem: OrdemConteiner::Livre });
+        self.folders.push(Folder { id, name: name.into(), kind: FolderKind::Geometria, parent: None, ordem: OrdemConteiner::Livre, hidden: false });
         id
     }
 
@@ -3226,7 +3230,7 @@ impl Document {
 
     pub fn add_folder(&mut self, name: &str) -> Id {
         let id = self.alloc();
-        self.folders.push(Folder { id, name: name.into(), kind: FolderKind::Comandos, parent: None, ordem: OrdemConteiner::Livre });
+        self.folders.push(Folder { id, name: name.into(), kind: FolderKind::Comandos, parent: None, ordem: OrdemConteiner::Livre, hidden: false });
         id
     }
 
@@ -3270,6 +3274,56 @@ impl Document {
             f.parent = Some(parent);
         }
         id
+    }
+
+    /// Cria uma pasta de geometria (dentro de `pai`, ou na raiz) e move os `itens` para ela
+    /// (B24, "Selecionados → nova pasta"). Itens que não podem ir (comandos de linha do tempo,
+    /// o próprio pai) ficam onde estão; sem nenhum item movível nada é criado.
+    pub fn agrupar_em_pasta(&mut self, itens: &[Id], pai: Option<Id>, nome: &str) -> Result<Id, DocError> {
+        if let Some(p) = pai {
+            if self.folder(p).is_none_or(|f| f.kind != FolderKind::Geometria) {
+                return Err(DocError::Incompatible);
+            }
+        }
+        let antes = self.folders.clone();
+        let nova = match pai {
+            Some(p) => self.add_subfolder(nome, p),
+            None => self.add_geometry_folder(nome),
+        };
+        let movidos = itens.iter().filter(|i| **i != nova && self.move_to_folder(**i, nova).is_ok()).count();
+        if movidos == 0 {
+            self.folders = antes;
+            return Err(DocError::Incompatible);
+        }
+        Ok(nova)
+    }
+
+    /// Alguma pasta da cadeia (a própria e as mães) está oculta? (B16: o pai oculta os filhos)
+    pub fn folder_hidden(&self, fo: Option<Id>) -> bool {
+        let mut cur = fo;
+        let mut guard = 0;
+        while let Some(c) = cur {
+            let Some(f) = self.folder(c) else { break };
+            if f.hidden {
+                return true;
+            }
+            cur = f.parent;
+            guard += 1;
+            if guard > 64 {
+                break;
+            }
+        }
+        false
+    }
+
+    /// Elemento de referência aparece de fato: o seu estado e o das pastas acima (B16).
+    pub fn ref_shown(&self, r: &RefElement) -> bool {
+        r.visible && !self.folder_hidden(r.folder)
+    }
+
+    /// Sketch oculto de fato: o seu estado ou o de uma pasta acima (B16).
+    pub fn sketch_hidden(&self, f: &Feature) -> bool {
+        f.hidden || self.folder_hidden(f.folder)
     }
 
     /// `a` está dentro de `b` (ou é `b`)?
@@ -4155,6 +4209,54 @@ mod tests {
         d.remove_folder(b);
         assert_eq!(d.reference(p).unwrap().folder, Some(a));
         assert!(d.is_free(d.feature(sk).unwrap()));
+    }
+
+    #[test]
+    fn pasta_oculta_esconde_filhos_sem_perder_o_estado_de_cada_um() {
+        let mut d = Document::new("t");
+        let a = d.add_geometry_folder("A");
+        let b = d.add_subfolder("B", a);
+        let p = d.add_geometry(RefKind::PointCoords { x: "1".into(), y: "0".into(), z: "0".into(), frame: None });
+        let q = d.add_geometry(RefKind::PointCoords { x: "2".into(), y: "0".into(), z: "0".into(), frame: None });
+        d.move_to_folder(p, b).unwrap();
+        d.move_to_folder(q, b).unwrap();
+        let sk = d.add_free_sketch(PlaneRef::default(), b);
+        // q já estava oculto por conta própria
+        d.references.iter_mut().find(|r| r.id == q).unwrap().visible = false;
+        assert!(d.ref_shown(d.reference(p).unwrap()));
+        // ocultar a pasta-avó esconde tudo, em qualquer profundidade
+        d.folders.iter_mut().find(|f| f.id == a).unwrap().hidden = true;
+        assert!(!d.ref_shown(d.reference(p).unwrap()));
+        assert!(d.sketch_hidden(d.feature(sk).unwrap()));
+        // os filhos guardam o próprio estado
+        assert!(d.reference(p).unwrap().visible);
+        assert!(!d.feature(sk).unwrap().hidden);
+        // mostrar a pasta devolve cada um como estava: p visível, q continua oculto
+        d.folders.iter_mut().find(|f| f.id == a).unwrap().hidden = false;
+        assert!(d.ref_shown(d.reference(p).unwrap()));
+        assert!(!d.ref_shown(d.reference(q).unwrap()));
+        assert!(!d.sketch_hidden(d.feature(sk).unwrap()));
+    }
+
+    #[test]
+    fn selecionados_viram_nova_pasta_dentro_do_pai_escolhido() {
+        let mut d = Document::new("t");
+        let a = d.add_geometry_folder("A");
+        let p = d.add_geometry(RefKind::PointCoords { x: "1".into(), y: "0".into(), z: "0".into(), frame: None });
+        let q = d.add_geometry(RefKind::PointCoords { x: "2".into(), y: "0".into(), z: "0".into(), frame: None });
+        let sk = d.add_free_sketch(PlaneRef::default(), a);
+        let n = d.agrupar_em_pasta(&[p, q, sk], Some(a), "Novos").unwrap();
+        assert_eq!(d.folder(n).unwrap().parent, Some(a));
+        assert_eq!(d.reference(p).unwrap().folder, Some(n));
+        assert_eq!(d.reference(q).unwrap().folder, Some(n));
+        assert_eq!(d.feature(sk).unwrap().folder, Some(n));
+        // na raiz, sem pai
+        let r = d.agrupar_em_pasta(&[p], None, "Raiz").unwrap();
+        assert_eq!(d.folder(r).unwrap().parent, None);
+        // o pai não pode ir para dentro da própria pasta nova: nada é criado
+        let antes = d.folders.len();
+        assert!(d.agrupar_em_pasta(&[a], Some(a), "Ciclo").is_err());
+        assert_eq!(d.folders.len(), antes);
     }
 
     #[test]

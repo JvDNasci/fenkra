@@ -20,7 +20,10 @@ pub fn caixa_de_filtro(ui: &mut egui::Ui) -> String {
     let chave = egui::Id::new("fenkra_filtro_arvore");
     let mut q: String = ui.ctx().data(|m| m.get_temp(chave)).unwrap_or_default();
     ui.horizontal(|ui| {
-        ui.add(egui::TextEdit::singleline(&mut q).desired_width(ui.available_width() - 28.).hint_text(tr("Filtrar: nome, :erro, :suprimido, :oculto")));
+        let larg = ui.available_width() - 28.;
+        crate::tree_ui::campo_discreto(ui, |ui| {
+            ui.add(egui::TextEdit::singleline(&mut q).desired_width(larg).hint_text(tr("Filtrar: nome, :erro, :suprimido, :oculto")));
+        });
         if !q.is_empty() && ui.small_button("✕").on_hover_text(tr("Limpar o filtro")).clicked() {
             q.clear();
         }

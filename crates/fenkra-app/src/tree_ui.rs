@@ -195,6 +195,19 @@ pub fn estilo(ui: &mut Ui, zoom: f32) {
     w.open.weak_bg_fill = destaque.gamma_multiply(0.16);
 }
 
+/// Fundo de campo de texto dentro da árvore: um véu discreto do tema em vez do `extreme_bg_color`
+/// (branco opaco no tema claro), que quebrava a árvore transparente.
+pub fn campo_discreto(ui: &mut Ui, f: impl FnOnce(&mut Ui)) {
+    ui.scope(|ui| {
+        let v = ui.visuals_mut();
+        let texto = v.text_color();
+        v.extreme_bg_color = texto.gamma_multiply(0.07);
+        v.widgets.inactive.bg_stroke = Stroke::new(1., texto.gamma_multiply(0.25));
+        v.widgets.hovered.bg_stroke = Stroke::new(1., texto.gamma_multiply(0.45));
+        f(ui);
+    });
+}
+
 fn traco(ui: &Ui) -> Stroke {
     Stroke::new(1., ui.visuals().text_color().gamma_multiply(0.45))
 }

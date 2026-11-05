@@ -162,6 +162,8 @@ pub struct App {
     importacao_pendente: Option<importar::Pendente>,
     /// diagnóstico e pais/filhos (B69)
     diag: diag::Estado,
+    /// "Selecionar outro": ciclo de candidatos sob o ponteiro com Alt + roda (B95)
+    selecao_ciclo: crate::selecao::Estado,
     last_edit: f64,
     toasts: Vec<(String, f64, bool)>,
     /// motivos pelos quais o modo leve é sugerido, até a pessoa responder (B236)
@@ -341,6 +343,7 @@ impl App {
             salvar: Default::default(),
             importacao_pendente: None,
             diag: Default::default(),
+            selecao_ciclo: Default::default(),
             last_edit: -10.,
             toasts: vec![],
             sugestao_leve: None,
@@ -3917,7 +3920,24 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         crate::tree_ui::filhos(ui, |ui| {
         if !hide("origem") {
         // ---------- Origem (fixa)
-        let _ = crate::tree_ui::grupo(ui, "arvore_origem", Some("ortho"), tr("Origem"), false).corpo(ui, |ui| {
+        let origem_oculta = !doc.origin_visible;
+        let aberto_origem = crate::tree_ui::no(ui, "arvore_origem", false, |ui| {
+            // B16: a origem é pai dos três planos; o olho e o menu ficam no próprio item
+            if eye(ui, origem_oculta) {
+                actions.push(TreeAction::OriginVisible(origem_oculta));
+            }
+            crate::tree_ui::icone(ui, "ortho");
+            let t = if origem_oculta { RichText::new(tr("Origem")).weak() } else { RichText::new(tr("Origem")) };
+            let r = ui.selectable_label(false, t);
+            r.context_menu(|ui| {
+                if ui.button(if origem_oculta { tr("Mostrar   H") } else { tr("Ocultar   H") }).clicked() {
+                    actions.push(TreeAction::OriginVisible(origem_oculta));
+                    ui.close();
+                }
+            });
+            r
+        });
+        let _ = aberto_origem.corpo(ui, |ui| {
             for o in [OriginPlane::XY, OriginPlane::XZ, OriginPlane::YZ] {
                 let r = crate::tree_ui::linha(ui, "plano", sel == Sel::Origin(o), format!("{} {}", tr("Plano"), scene::plane_name(o)));
                 if r.clicked() {
@@ -4338,7 +4358,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let has_clip = self.clip.is_some();
         let n = refs.len() + sketches.len() + subs.len();
         crate::tree_ui::no(ui, ("geo", fo.id.0), n > 0, |ui| {
-                let all_hidden = n > 0 && refs.iter().all(|r| !r.visible) && sketches.iter().all(|(_, f)| f.hidden);
+                let all_hidden = fo.hidden;
                 if eye(ui, all_hidden) {
                     actions.push(TreeAction::FolderShown(fo.id, all_hidden));
                 }
@@ -4532,7 +4552,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 }
                 let t = if err || stale {
                     RichText::new(txt).color(crate::theme::st_err())
-                } else if r.visible {
+                } else if doc.ref_shown(r) {
                     RichText::new(txt)
                 } else {
                     RichText::new(txt).weak()
@@ -4584,7 +4604,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 actions.push(TreeAction::SketchOn(PlaneRef::Datum(r.id)));
                 ui.close();
             }
-            ui.menu_button(tr("📁 Organizar"), |ui| clip_menu(ui, r.id, doc, actions));
+            ui.menu_button(tr("📁 Organizar"), |ui| clip_menu(ui, r.id, doc, &self.multi.borrow(), actions));
             ui.separator();
             if ui.button(tr("🗑 Apagar   Del")).clicked() {
                 actions.push(TreeAction::Delete(r.id));
@@ -4614,7 +4634,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         if f.suppressed {
             text = text.strikethrough();
         }
-        if is_sketch && f.hidden {
+        if is_sketch && doc.sketch_hidden(f) {
             text = text.italics();
         }
         // entradas do comando (sketch, pontos, curvas, superfícies) como subitens
@@ -4715,7 +4735,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             });
             ui.menu_button(tr("📁 Organizar"), |ui| {
                 if free {
-                    clip_menu(ui, f.id, doc, actions);
+                    clip_menu(ui, f.id, doc, &self.multi.borrow(), actions);
                     ui.separator();
                 }
                 ui.label(RichText::new(tr("Coletor (linha do tempo)")).weak().small());
@@ -4905,6 +4925,13 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     self.toast("Não dá para mover para lá (pasta dentro dela mesma, ou item de linha do tempo)", true);
                 }
             }
+            TreeAction::GroupInNewFolder(itens, pai) => {
+                let n = d.unique_name("Pasta");
+                match d.agrupar_em_pasta(&itens, pai, &n) {
+                    Ok(id) => self.sel = Sel::Folder(id),
+                    Err(_) => self.toast("Nenhum dos selecionados pode ir para uma pasta de geometria", true),
+                }
+            }
             TreeAction::ImportLink => self.link_open = true,
             TreeAction::RefreshLinks => self.refresh_links(),
             TreeAction::Copy(id) => self.clip = Some((id, false)),
@@ -5016,12 +5043,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
             TreeAction::SelectSel(s) => self.sel = s,
 
+            // B16: a pasta guarda o próprio estado e esconde os filhos; cada filho guarda o seu
             TreeAction::FolderShown(fo, on) => {
-                let inside: Vec<Id> = d.folders.iter().filter(|f| d.folder_within(f.id, fo)).map(|f| f.id).collect();
-                for r in d.references.iter_mut().filter(|r| r.folder.is_some_and(|x| x == fo || inside.contains(&x))) {
-                    r.visible = on;
-                }
-                for f in d.features.iter_mut().filter(|f| f.folder.is_some_and(|x| x == fo || inside.contains(&x))) {
+                if let Some(f) = d.folders.iter_mut().find(|f| f.id == fo) {
                     f.hidden = !on;
                 }
             }
@@ -5701,16 +5725,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         self.pub_open = open;
     }
 
-    /// Pasta (e subpastas): oculta tudo se algo aparece; senão mostra tudo.
+    /// Pasta (B16): alterna só o estado da pasta; o que está dentro guarda o próprio estado e
+    /// volta como estava quando a pasta é mostrada.
     fn toggle_folder(d: &mut Document, fo: Id) {
-        let inside: Vec<Id> = d.folders.iter().filter(|f| f.id == fo || d.folder_within(f.id, fo)).map(|f| f.id).collect();
-        let within = |x: Option<Id>| x.is_some_and(|x| inside.contains(&x));
-        let any_shown = d.references.iter().any(|r| within(r.folder) && r.visible) || d.features.iter().any(|f| within(f.folder) && !f.hidden);
-        for r in d.references.iter_mut().filter(|r| within(r.folder)) {
-            r.visible = !any_shown;
-        }
-        for f in d.features.iter_mut().filter(|f| within(f.folder)) {
-            f.hidden = any_shown;
+        if let Some(f) = d.folders.iter_mut().find(|f| f.id == fo) {
+            f.hidden = !f.hidden;
         }
     }
 
@@ -6022,6 +6041,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 (i.modifiers.shift, i.modifiers.command, i.smooth_scroll_delta.y, i.pixels_per_point, i.pointer.secondary_down(), i.pointer.primary_down())
             });
             let scroll = if arvore_com_roda { 0. } else { scroll };
+            // B95: Alt + roda percorre o que está sob o ponteiro em vez de dar zoom
+            let alt_roda = ctx.input(|i| i.modifiers.alt) && resp.hovered() && !ctrl;
+            let passo_ciclo = if alt_roda { self.selecao_ciclo.roda(scroll) } else { 0 };
+            let scroll = if alt_roda { 0. } else { scroll };
             let delta = resp.drag_delta();
             let (left, mid, right) = (
                 resp.dragged_by(egui::PointerButton::Primary),
@@ -6129,7 +6152,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 for p in &r.planes {
                     let (vis, name) = match p.id {
                         Some(id) => match d.reference(id) {
-                            Some(rf) => (flt.planos_ref && shown(!rf.visible), rf.name.clone()),
+                            Some(rf) => (flt.planos_ref && shown(!d.ref_shown(rf)), rf.name.clone()),
                             None => (false, String::new()),
                         },
                         None => (flt.planos_origem && d.origin_visible && !env, p.name.clone()),
@@ -6152,7 +6175,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             // rótulos de pontos e curvas de referência
             if let (Some(r), true) = (&self.result, self.settings.filter.rotulos) {
                 let d = &self.open.doc;
-                let vis = |id: Id| d.reference(id).filter(|rf| rf.visible != self.hidden_env).map(|rf| rf.name.clone());
+                let vis = |id: Id| d.reference(id).filter(|rf| d.ref_shown(rf) != self.hidden_env).map(|rf| rf.name.clone());
                 for p in &r.points {
                     let Some(name) = vis(p.id).filter(|_| self.settings.filter.pontos) else { continue };
                     if let Some(pos) = vp.project(rect, Vec3::from(p.p.map(|v| v as f32))) {
@@ -6253,8 +6276,19 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 };
                 let dragging = resp.dragged();
                 self.hover_pick = match (resp.hover_pos(), dragging) {
-                    (Some(h), false) => crate::picking::pick(r, &self.open.doc, &cam, rect, h, &filt),
-                    _ => None,
+                    (Some(h), false) => {
+                        let doc = &self.open.doc;
+                        let outro = self.selecao_ciclo.escolher(h, passo_ciclo, || crate::picking::pilha_de_faces(r, doc, &cam, rect, h, &filt));
+                        if let (Some(_), Some((i, n))) = (outro, self.selecao_ciclo.posicao()) {
+                            let cor = ui.visuals().text_color();
+                            ui.painter().text(h + egui::vec2(14., 18.), egui::Align2::LEFT_TOP, format!("{i}/{n}  {}", tr("Alt + roda: selecionar outro")), egui::FontId::proportional(12.), cor);
+                        }
+                        outro.or_else(|| crate::picking::pick(r, doc, &cam, rect, h, &filt))
+                    }
+                    _ => {
+                        self.selecao_ciclo.reiniciar();
+                        None
+                    }
                 };
                 // filete/chanfro aberto com arestas escolhidas: clicar numa aresta põe/tira do comando
                 let edge_cmd = self.session.as_ref().map(|x| x.id).filter(|id| {
@@ -6816,6 +6850,8 @@ enum TreeAction {
     NewSubfolder(Id),
     NewGeoIn(Id, crate::geo_ui::GeoKind),
     MoveTo(Id, Id),
+    /// B24: itens, pasta-mãe da pasta nova
+    GroupInNewFolder(Vec<Id>, Option<Id>),
     Copy(Id),
     Cut(Id),
     Paste(Id),
@@ -6935,7 +6971,7 @@ fn drag_item(ui: &mut egui::Ui, resp: egui::Response, id: Id, enabled: bool) -> 
 }
 
 /// Copiar / recortar / duplicar / mover para pasta.
-fn clip_menu(ui: &mut egui::Ui, id: Id, doc: &Document, actions: &mut Vec<TreeAction>) {
+fn clip_menu(ui: &mut egui::Ui, id: Id, doc: &Document, multi: &[Id], actions: &mut Vec<TreeAction>) {
     if ui.button(tr("Copiar  (Ctrl+C)")).clicked() {
         actions.push(TreeAction::Copy(id));
         ui.close();
@@ -6961,6 +6997,24 @@ fn clip_menu(ui: &mut egui::Ui, id: Id, doc: &Document, actions: &mut Vec<TreeAc
             }
         }
         level(ui, doc, None, 0, id, actions);
+    });
+    // B24: os selecionados da árvore viram uma pasta nova, no pai escolhido (ou na raiz)
+    let grupo: Vec<Id> = if multi.len() > 1 && multi.contains(&id) { multi.to_vec() } else { vec![id] };
+    ui.menu_button(tr("Selecionados → nova pasta"), |ui| {
+        fn pai(ui: &mut egui::Ui, doc: &Document, parent: Option<Id>, depth: usize, grupo: &[Id], actions: &mut Vec<TreeAction>) {
+            for g in doc.folders.iter().filter(|f| f.kind == FolderKind::Geometria && f.parent == parent) {
+                if ui.button(format!("{}📁 {}", "   ".repeat(depth), g.name)).clicked() {
+                    actions.push(TreeAction::GroupInNewFolder(grupo.to_vec(), Some(g.id)));
+                    ui.close();
+                }
+                pai(ui, doc, Some(g.id), depth + 1, grupo, actions);
+            }
+        }
+        if ui.button(tr("📂 Na raiz")).clicked() {
+            actions.push(TreeAction::GroupInNewFolder(grupo.clone(), None));
+            ui.close();
+        }
+        pai(ui, doc, None, 0, &grupo, actions);
     });
 }
 
