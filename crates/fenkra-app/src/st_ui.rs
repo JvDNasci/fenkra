@@ -166,6 +166,8 @@ pub fn windows(app: &mut App, ctx: &egui::Context) {
     }
     library(app, ctx);
     cut_list(app, ctx);
+    crate::st_cantos_ui::window(app, ctx);
+    crate::st_montagem_ui::window(app, ctx);
 }
 
 /// Gerar montagem: uma peça por grupo de peças iguais e a montagem, em `<nome>_montagem` ao lado

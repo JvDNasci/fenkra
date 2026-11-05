@@ -405,6 +405,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("st_reforco", "Reforço", "Reforço (gusset)", "Chapa triangular ou com chanfro de alívio no encontro de dois membros.", Cmd(C::StGusset)),
             ]),
             One(it("st_biblioteca", "Biblioteca", "Biblioteca de perfis", "Cadastre famílias de perfis padronizados (tamanhos, ancoragem e rotação padrão).", Cmd(C::StLibrary))),
+            One(it("st_canto_meia", "Cantos", "Cantos da estrutura", "Lista os cantos onde os membros se encontram, realça cada um no 3D, troca o tratamento e quem continua, e agrupa cantos iguais.", Cmd(C::StCorners))),
             One(it("st_corte", "Lista de corte", "Lista de corte", "Comprimento, quantidade e barras de matéria-prima (emendas) de cada perfil.", Cmd(C::StCutList))),
             One(it("st_montagem", "Gerar montagem", "Gerar montagem da estrutura", "Uma peça por grupo de peças iguais e uma montagem com as instâncias posicionadas, na pasta da peça (gerar de novo atualiza).", Cmd(C::StAssembly))),
             ]
