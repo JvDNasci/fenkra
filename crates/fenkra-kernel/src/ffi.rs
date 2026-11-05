@@ -43,6 +43,7 @@ pub mod bridge {
         edge_ranges: Vec<u32>,
         /// ponto médio (xyz) de cada aresta — assinatura para referência persistente
         edge_mids: Vec<f32>,
+        edge_geom: Vec<f64>,
         /// 1 = aresta suave (tangência entre faces, ex.: fim de um raio); 0 = aresta viva
         edge_smooth: Vec<u8>,
         /// posição (xyz) de cada vértice
@@ -51,6 +52,54 @@ pub mod bridge {
         edge_faces: Vec<u32>,
         /// assinatura de cada face, 8 valores: tipo, nx, ny, nz, área, px, py, pz
         face_info: Vec<f64>,
+    }
+
+    /// Ocorrência de um produto dentro de uma montagem.
+    struct XdeInst {
+        product: u32,
+        name: String,
+        /// matriz 3x4 por linhas; vazia na gravação vale identidade
+        m: Vec<f64>,
+        /// rgba da ocorrência; vazio = sem cor própria
+        rgba: Vec<f32>,
+    }
+
+    /// Definição de um produto: montagem (com `comps`) ou peça (com forma, lida à parte).
+    struct XdeProduct {
+        name: String,
+        is_assembly: bool,
+        rgba: Vec<f32>,
+        layers: Vec<String>,
+        /// faces com cor própria, na ordem de `TopExp::MapShapes`; `face_rgba` tem 4 valores por face
+        face_ids: Vec<u32>,
+        face_rgba: Vec<f32>,
+        comps: Vec<XdeInst>,
+    }
+
+    struct XdeInfo {
+        schema: String,
+        units: String,
+        roots: Vec<u32>,
+        dims: u32,
+        tols: u32,
+        datums: u32,
+    }
+
+    struct XdeReadOpts {
+        colors: bool,
+        names: bool,
+        layers: bool,
+        gdt: bool,
+    }
+
+    /// schema: 0 AP203, 1 AP214, 2 AP242. unit: 0 mm, 1 polegada, 2 metro.
+    struct XdeWriteOpts {
+        schema: u8,
+        unit: u8,
+        colors: bool,
+        names: bool,
+        layers: bool,
+        gdt: bool,
     }
 
     unsafe extern "C++" {
@@ -133,6 +182,7 @@ pub mod bridge {
         fn sew_report(s: &Shape) -> Result<Vec<f64>>;
         fn clip_surface(s: &Shape, cutter: &Shape, px: f64, py: f64, pz: f64, extend: bool) -> Result<UniquePtr<Shape>>;
         fn edge_pts_at(s: &Shape, px: f64, py: f64, pz: f64) -> Result<Vec<f64>>;
+        fn edge_plane_pts(s: &Shape, px: f64, py: f64, pz: f64, ox: f64, oy: f64, oz: f64, nx: f64, ny: f64, nz: f64) -> Result<Vec<f64>>;
         fn free_edge_pts(s: &Shape, ends: &mut Vec<u32>) -> Result<Vec<f64>>;
         fn face_propagate(s: &Shape, px: f64, py: f64, pz: f64, prop: i32, complement: bool, counts: &mut Vec<u32>) -> Result<UniquePtr<Shape>>;
         fn extrude_curve(pts: &[f64], dx: f64, dy: f64, dz: f64, len: f64) -> Result<UniquePtr<Shape>>;
@@ -212,10 +262,27 @@ pub mod bridge {
         fn bounding_box(s: &Shape) -> Vec<f64>;
         /// [volume, área, cx, cy, cz]
         fn mass_props(s: &Shape) -> Vec<f64>;
+        /// [xx, yy, zz, xy, xz, yz, I1, I2, I3, eixo1 (3), eixo2 (3), eixo3 (3)]; vazio sem volume
+        fn inertia_props(s: &Shape) -> Vec<f64>;
         fn count_faces(s: &Shape) -> u32;
         fn export_step(s: &Shape, path: &str) -> Result<()>;
         fn export_stl(s: &Shape, path: &str, deflection: f64, angle: f64) -> Result<()>;
         fn import_step(path: &str, info: &mut Vec<String>) -> Result<UniquePtr<Shape>>;
+        type XdeDoc;
+        fn xde_new() -> Result<UniquePtr<XdeDoc>>;
+        fn xde_read(path: &str, o: &XdeReadOpts) -> Result<UniquePtr<XdeDoc>>;
+        fn xde_info(d: &XdeDoc) -> XdeInfo;
+        fn xde_products(d: &XdeDoc) -> Result<Vec<XdeProduct>>;
+        fn xde_shape(d: &XdeDoc, i: u32) -> Result<UniquePtr<Shape>>;
+        fn xde_add(d: Pin<&mut XdeDoc>, p: &XdeProduct, s: &Shape) -> Result<u32>;
+        fn xde_add_component(d: Pin<&mut XdeDoc>, assembly: u32, c: &XdeInst) -> Result<()>;
+        fn xde_write(d: Pin<&mut XdeDoc>, path: &str, o: &XdeWriteOpts) -> Result<()>;
+        /// `m`: matriz 3x4 por linhas
+        fn xde_moved(s: &Shape, m: &[f64]) -> Result<UniquePtr<Shape>>;
+        fn xde_solid_count(s: &Shape) -> u32;
+        fn xde_solid_at(s: &Shape, i: u32) -> Result<UniquePtr<Shape>>;
+        /// `stats`: ver `xde_heal` em cpp/xde.inc
+        fn xde_heal(s: &Shape, level: u8, tol: f64, stats: &mut Vec<f64>) -> Result<UniquePtr<Shape>>;
         fn occt_version() -> String;
     }
 }

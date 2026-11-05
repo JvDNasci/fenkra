@@ -26,7 +26,7 @@ fn s(x: &str) -> String {
 }
 
 fn ext(sketch: Id, d: &str) -> FeatureKind {
-    FeatureKind::Extrude(Extrude { sketch, op: BoolOp::Add, extent: Extent::Blind(d.into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0 })
+    FeatureKind::Extrude(Extrude { sketch, op: BoolOp::Add, extent: Extent::Blind(d.into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() })
 }
 
 fn flange() -> Document {
@@ -148,6 +148,7 @@ fn quadro() -> Document {
         gap: s("0"),
         joints: vec![],
         material: String::new(),
+        mirror: false,
     };
     d.add_feature(FeatureKind::StructMember(mk(paths, CornerMode::MeiaEsquadria)));
     d.add_feature(FeatureKind::StructMember(mk(legs, CornerMode::Nenhum)));
@@ -180,6 +181,8 @@ pub struct Preview {
     pub tris: Vec<[u32; 3]>,
     pub edges: Vec<[[f32; 3]; 2]>,
     pub color: [u8; 3],
+    /// cor de cada vértice, para peças de várias cores; vazio usa `color`
+    pub cores: Vec<[u8; 3]>,
     pub radius: f32,
 }
 
@@ -265,8 +268,8 @@ pub fn paint_preview(p: &egui::Painter, rect: egui::Rect, pv: &Preview, angle: f
         let k = (l[0] * l[0] + l[1] * l[1] + l[2] * l[2]).sqrt();
         l.map(|x| x / k)
     };
-    let base = pv.color.map(|x| x as f32);
-    let shade = |n: [f32; 3]| {
+    let shade = |n: [f32; 3], cor: [u8; 3]| {
+        let base = cor.map(|x| x as f32);
         let rn = rotn(n);
         let d = (rn[0] * light[0] + rn[1] * light[1] + rn[2] * light[2]).abs();
         let k = 0.42 + 0.58 * d;
@@ -312,7 +315,8 @@ pub fn paint_preview(p: &egui::Painter, rect: egui::Rect, pv: &Preview, angle: f
             let t = pv.tris[i as usize];
             let k = m.vertices.len() as u32;
             for j in t {
-                m.colored_vertex(sc(vs[j as usize]), shade(pv.nrm[j as usize]));
+                let cor = pv.cores.get(j as usize).copied().unwrap_or(pv.color);
+                m.colored_vertex(sc(vs[j as usize]), shade(pv.nrm[j as usize], cor));
             }
             m.add_triangle(k, k + 1, k + 2);
         }

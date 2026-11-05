@@ -62,7 +62,7 @@ pub fn linhas_dobra(open: &[Vec<[f64; 2]>]) -> Result<(Vec<([f64; 2], [f64; 2])>
                 }
                 Seg2::Arc(a, m, b) => (vec![a, m, b], true),
                 Seg2::Spline(p) => (p, true),
-                Seg2::Circle(..) => continue,
+                Seg2::Circle(..) | Seg2::Ellipse(..) => continue,
             };
             let (a, b) = (pts[0], *pts.last().unwrap());
             let corda = (b[0] - a[0]).hypot(b[1] - a[1]);

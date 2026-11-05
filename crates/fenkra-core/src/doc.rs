@@ -1487,6 +1487,9 @@ pub struct BodyCollector {
     /// corpo publicado para outras peças (importado como forma B-rep)
     #[serde(default)]
     pub published: bool,
+    /// B92: material deste corpo (vazio = o material da peça)
+    #[serde(default)]
+    pub material: String,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -1708,6 +1711,9 @@ pub struct StructMember {
     /// material deste membro (vazio = o material da peça); separa itens iguais na lista de corte
     #[serde(default)]
     pub material: String,
+    /// espelha a seção em torno do eixo Y dela (B253): perfis sem simetria (U, L, T) trocam de lado
+    #[serde(default)]
+    pub mirror: bool,
 }
 
 /// Regra de um canto entre a linha `mine` deste membro e a linha `other_path` de outro membro
@@ -1724,23 +1730,155 @@ pub struct StructJoint {
     pub gap: Option<String>,
 }
 
+/// Lado da placa em relação à face da ponta do membro (B255).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum PlateSide {
+    /// a placa fica além da ponta (comportamento original)
+    #[default]
+    Externo,
+    /// a placa entra no membro, recuada da face da ponta
+    Interno,
+}
+
+/// Como a sobra da placa é dada (B255).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum MarginMode {
+    /// em milímetros
+    #[default]
+    Valor,
+    /// múltiplo da espessura da parede do perfil (1 = uma parede)
+    RazaoParede,
+}
+
+/// Furos de fixação da placa: quatro, um em cada canto, a `edge` da borda.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct PlateHoles {
+    pub diameter: String,
+    /// distância do centro do furo às bordas da placa
+    pub edge: String,
+}
+
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct StructPlate {
-    /// ponto perto da ponta do membro
+    /// ponto na face da ponta do membro (clicar a face grava o ponto clicado; arquivos antigos
+    /// guardavam só o ponto perto da ponta e continuam valendo)
     pub at: [f64; 3],
     pub thickness: String,
-    /// sobra além da seção, em cada lado
+    /// sobra além da seção, em cada lado (valor ou razão da parede, conforme `margin_mode`)
     pub margin: String,
+    #[serde(default)]
+    pub side: PlateSide,
+    /// recuo da placa interna em relação à face da ponta (vazio = 0)
+    #[serde(default)]
+    pub recess: String,
+    #[serde(default)]
+    pub margin_mode: MarginMode,
+    #[serde(default)]
+    pub holes: Option<PlateHoles>,
+}
+
+impl StructPlate {
+    pub fn nova(at: [f64; 3], thickness: &str, margin: &str) -> Self {
+        StructPlate { at, thickness: thickness.into(), margin: margin.into(), side: PlateSide::Externo, recess: String::new(), margin_mode: MarginMode::Valor, holes: None }
+    }
+}
+
+/// Forma do reforço no plano das duas abas (B255).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum GussetProfile {
+    /// triangular quando o chanfro é 0; com chanfro maior que 0, o canto do encontro é cortado
+    #[default]
+    Chanfrado,
+    /// contorno livre dado por `poly`
+    Poligonal,
+}
+
+/// De que lado do plano de referência a espessura do reforço cresce (B255).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum GussetSide {
+    /// metade para cada lado
+    #[default]
+    DoisLados,
+    /// contra o sentido da aresta de encontro
+    Interno,
+    /// a favor do sentido da aresta de encontro
+    Externo,
+}
+
+/// Onde o reforço fica ao longo da aresta de encontro (B255).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum GussetPos {
+    Inicio,
+    #[default]
+    Meio,
+    Fim,
+}
+
+/// Repetição do reforço ao longo da aresta de encontro (B255).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum GussetRepeat {
+    #[default]
+    Nenhuma,
+    /// `count` cópias distribuídas por igual entre as duas extremidades úteis
+    Quantidade,
+    /// uma cópia a cada `spacing`, a partir da posição, até o fim da aresta
+    Espacamento,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct StructGusset {
-    /// ponto perto do encontro dos dois membros
+    /// ponto perto do encontro dos dois membros (clicar a aresta de encontro grava o meio dela)
     pub at: [f64; 3],
+    /// aba D1 (ao longo do primeiro membro; com `swap`, do segundo)
     pub leg: String,
     pub thickness: String,
     /// chanfro de alívio no canto (0 = triangular)
     pub chamfer: String,
+    /// aba D2; vazio = igual a D1
+    #[serde(default)]
+    pub leg2: String,
+    /// inverte qual membro recebe D1 e qual recebe D2
+    #[serde(default)]
+    pub swap: bool,
+    #[serde(default)]
+    pub profile: GussetProfile,
+    /// vértices do perfil poligonal: (u ao longo de D1, v ao longo de D2), em mm a partir do canto
+    #[serde(default)]
+    pub poly: Vec<[String; 2]>,
+    #[serde(default)]
+    pub side: GussetSide,
+    #[serde(default)]
+    pub position: GussetPos,
+    /// afastamento da posição em relação à extremidade da aresta (vazio = 0)
+    #[serde(default)]
+    pub offset: String,
+    #[serde(default)]
+    pub repeat: GussetRepeat,
+    #[serde(default)]
+    pub count: String,
+    #[serde(default)]
+    pub spacing: String,
+}
+
+impl StructGusset {
+    pub fn novo(at: [f64; 3], leg: &str, thickness: &str, chamfer: &str) -> Self {
+        StructGusset {
+            at,
+            leg: leg.into(),
+            thickness: thickness.into(),
+            chamfer: chamfer.into(),
+            leg2: String::new(),
+            swap: false,
+            profile: GussetProfile::Chanfrado,
+            poly: vec![],
+            side: GussetSide::DoisLados,
+            position: GussetPos::Meio,
+            offset: String::new(),
+            repeat: GussetRepeat::Nenhuma,
+            count: String::new(),
+            spacing: String::new(),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -2297,6 +2435,12 @@ impl FeatureKind {
                 if let Some(t) = &mut e.thin {
                     exprs(t)
                 }
+                exprs(&mut e.ends.start);
+                exprs(&mut e.ends.offset);
+                exprs(&mut e.ends.offset2);
+                if let Some(x) = &mut e.ends.extent2 {
+                    extent_walk(x, ids, exprs)
+                }
             }
             Revolve(r) => {
                 ids(&mut r.sketch);
@@ -2312,6 +2456,9 @@ impl FeatureKind {
             Hole(h) => {
                 ids(&mut h.sketch);
                 exprs(&mut h.diameter);
+                exprs(&mut h.extra.thread_depth);
+                exprs(&mut h.extra.thread_relief);
+                exprs(&mut h.extra.tip_offset);
                 extent_walk(&mut h.depth, ids, exprs);
                 match &mut h.kind {
                     HoleKind::Simples => {}
@@ -2521,12 +2668,24 @@ impl FeatureKind {
             }
             StructPlate(p) => {
                 exprs(&mut p.thickness);
-                exprs(&mut p.margin)
+                exprs(&mut p.margin);
+                exprs(&mut p.recess);
+                if let Some(h) = &mut p.holes {
+                    exprs(&mut h.diameter);
+                    exprs(&mut h.edge)
+                }
             }
             StructGusset(g) => {
                 exprs(&mut g.leg);
                 exprs(&mut g.thickness);
-                exprs(&mut g.chamfer)
+                exprs(&mut g.chamfer);
+                for e in [&mut g.leg2, &mut g.offset, &mut g.count, &mut g.spacing] {
+                    exprs(e)
+                }
+                for q in &mut g.poly {
+                    exprs(&mut q[0]);
+                    exprs(&mut q[1])
+                }
             }
             SmHem(h) => {
                 exprs(&mut h.length);
@@ -2743,6 +2902,11 @@ pub enum PatternKind {
 pub struct Pattern {
     pub kind: PatternKind,
     pub sources: Vec<Id>,
+    /// B91: instâncias puladas, por posição (i, j): linear = índice em cada direção; circular e por
+    /// pontos = (índice, 0). A instância original (0, 0) não se pula. Posições que deixam de existir
+    /// (quantidade menor) são ignoradas e avisadas no recompute.
+    #[serde(default)]
+    pub skip: Vec<(u32, u32)>,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -2850,6 +3014,27 @@ pub struct Extrude {
     /// direção da extrusão (linha, aresta, eixo); `None` = normal ao plano do sketch
     #[serde(default)]
     pub dir: Option<AxisRef>,
+    /// B89: início deslocado, deslocamento do término e término próprio do segundo lado
+    #[serde(default)]
+    pub ends: ExtrudeEnds,
+}
+
+/// B89: o que a extrusão tem além do término principal. Campos de texto vazios valem 0.
+#[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
+pub struct ExtrudeEnds {
+    /// início deslocado: o perfil começa a esta distância do plano do sketch, na direção da extrusão
+    #[serde(default)]
+    pub start: String,
+    /// deslocamento do término principal (passante, até o próximo/último, até plano e até superfície):
+    /// positivo avança além do alvo, negativo para antes dele
+    #[serde(default)]
+    pub offset: String,
+    /// término próprio do lado 2 (sentido contrário), com um término de um só lado em cada lado
+    #[serde(default)]
+    pub extent2: Option<Extent>,
+    /// deslocamento do término do lado 2
+    #[serde(default)]
+    pub offset2: String,
 }
 
 fn zero() -> String {
@@ -2914,6 +3099,24 @@ pub struct Hole {
     /// Rosca à esquerda.
     #[serde(default)]
     pub left_hand: bool,
+    /// B90: profundidade de rosca, folga no fundo e deslocamento da ponta da broca
+    #[serde(default)]
+    pub extra: HoleExtra,
+}
+
+/// B90: ajustes do furo guiado por norma. Campos de texto vazios valem 0 (ou "não definido").
+#[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
+pub struct HoleExtra {
+    /// profundidade da rosca, separada da profundidade do furo (vazio = a do furo menos a folga)
+    #[serde(default)]
+    pub thread_depth: String,
+    /// folga no fundo, em passos de rosca, entre o fim da rosca e o fundo do furo
+    #[serde(default)]
+    pub thread_relief: String,
+    /// deslocamento da ponta da broca (mm): soma à profundidade do cilindro; negativo faz a ponta
+    /// em V terminar dentro da profundidade pedida
+    #[serde(default)]
+    pub tip_offset: String,
 }
 
 /// Referência v2 a uma face (ADR 0010): dono + papel + assinatura geométrica. O ponto clicado
@@ -3181,7 +3384,7 @@ impl Document {
     pub fn add_collector(&mut self, name: &str) -> Id {
         let id = self.alloc();
         let color = PALETTE[self.collectors.len() % PALETTE.len()];
-        self.collectors.push(BodyCollector { id, name: name.into(), color, visible: true, finish: Finish::default(), texture: None, marker: None, published: false });
+        self.collectors.push(BodyCollector { id, name: name.into(), color, visible: true, finish: Finish::default(), texture: None, marker: None, published: false, material: String::new() });
         id
     }
 
@@ -4319,7 +4522,7 @@ mod tests {
     }
 
     fn extrusao_de(d: &mut Document, sk: Id) -> Id {
-        d.add_feature(FeatureKind::Extrude(Extrude { thin_side: 0, sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None }))
+        d.add_feature(FeatureKind::Extrude(Extrude { thin_side: 0, sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None, ends: Default::default() }))
     }
 
     #[test]
@@ -4409,7 +4612,7 @@ mod tests {
             sketch: sk1,
             op: BoolOp::Add,
             extent: Extent::Blind(s("10")),
-            reverse: false, taper: s("0"), thin: None, dir: None
+            reverse: false, taper: s("0"), thin: None, dir: None, ends: Default::default(),
         }));
         let fil = d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::CreatedBy(ex), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![] }));
         assert_eq!(d.dependents(sk1), vec![ex, fil]);
@@ -4435,7 +4638,7 @@ mod tests {
             sketch: sk,
             op: BoolOp::Add,
             extent: Extent::Blind(s("10")),
-            reverse: false, taper: s("0"), thin: None, dir: None
+            reverse: false, taper: s("0"), thin: None, dir: None, ends: Default::default(),
         }));
         assert!(d.move_feature(ex, 0).is_err());
         assert_eq!(d.features[1].id, ex);

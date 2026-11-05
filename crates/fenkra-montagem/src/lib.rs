@@ -19,7 +19,10 @@ pub mod geometria;
 pub mod kin;
 pub mod links;
 pub mod load;
+pub mod manipulador;
+pub mod proposta;
 pub mod publicacoes;
+pub mod simbolos;
 pub mod substituicao;
 pub mod view;
 pub mod solve;
@@ -36,6 +39,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub type V3 = [f64; 3];
+
+/// Id reservado da origem da montagem: uma restrição ou junta pode usá-la no lugar de um componente.
+/// Ela não é um nó da árvore: não se move, não entra na lista de peças e não tem arquivo. Os ids dos
+/// nós começam em 1.
+pub const ORIGEM: Id = Id(0);
 
 /// Posição de um componente: origem e rotação (colunas = eixos locais no mundo).
 #[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
@@ -449,6 +457,9 @@ pub struct Assembly {
     /// a seleção em contexto aceita geometria não publicada (o padrão é só publicada)
     #[serde(default)]
     pub contexto_livre: bool,
+    /// planos e eixos da origem fora da vista
+    #[serde(default)]
+    pub origem_oculta: bool,
 }
 
 impl Assembly {
@@ -469,7 +480,7 @@ impl Assembly {
     pub fn init_motion(&mut self, id: Id) {
         let Some(i) = self.mates.iter().position(|m| m.id == id) else { return };
         let (ra, rb) = (self.mates[i].a, self.mates[i].b);
-        let (Some(pa), Some(pb)) = (self.node(ra.comp).map(|n| n.placement), self.node(rb.comp).map(|n| n.placement)) else { return };
+        let (Some(pa), Some(pb)) = (self.lugar(ra.comp), self.lugar(rb.comp)) else { return };
         let axis = |g: &Geom| match *g {
             Geom::Axis { p, d } => (p, d),
             Geom::Plane { p, n } => (p, n),
@@ -495,7 +506,7 @@ impl Assembly {
         if !matches!(m.kind, MateKind::Distance(_) | MateKind::Angle(_)) {
             return true;
         }
-        let (Some(pa), Some(pb)) = (self.node(m.a.comp).map(|n| n.placement), self.node(m.b.comp).map(|n| n.placement)) else { return false };
+        let (Some(pa), Some(pb)) = (self.lugar(m.a.comp), self.lugar(m.b.comp)) else { return false };
         let Some(v) = solve::medida(&m.kind, &m.a.geom, &pa, &m.b.geom, &pb) else { return false };
         let m = &mut self.mates[i];
         m.sentido = Sentido::Livre;
@@ -522,8 +533,8 @@ impl Assembly {
             return false;
         }
         let (ra, rb) = (self.mates[i].a, self.mates[i].b);
-        let atual = match (self.node(ra.comp), self.node(rb.comp)) {
-            (Some(na), Some(nb)) => solve::sentido_atual(&ra.geom, &na.placement, &rb.geom, &nb.placement),
+        let atual = match (self.lugar(ra.comp), self.lugar(rb.comp)) {
+            (Some(pa), Some(pb)) => solve::sentido_atual(&ra.geom, &pa, &rb.geom, &pb),
             _ => return false,
         };
         let m = &mut self.mates[i];
@@ -565,7 +576,7 @@ impl Assembly {
     }
 
     pub fn new(name: &str) -> Self {
-        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], relational: false, politicas_link: vec![], religacoes: vec![], geometria: None, esqueleto: None, contexto_livre: false }
+        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], relational: false, politicas_link: vec![], religacoes: vec![], geometria: None, esqueleto: None, contexto_livre: false, origem_oculta: false }
     }
 
     pub fn alloc(&mut self) -> Id {
@@ -588,6 +599,14 @@ impl Assembly {
         self.format_version > fenkra_core::formato::Tipo::Montagem.versao_atual()
     }
 
+    /// Posição de um componente. A origem da montagem é o sistema do mundo.
+    pub fn lugar(&self, id: Id) -> Option<Placement> {
+        if id == ORIGEM {
+            return Some(Placement::default());
+        }
+        self.node(id).map(|n| n.placement)
+    }
+
     pub fn node(&self, id: Id) -> Option<&Node> {
         self.nodes.iter().find(|n| n.id == id)
     }
@@ -597,6 +616,9 @@ impl Assembly {
     }
 
     pub fn name_of(&self, id: Id) -> String {
+        if id == ORIGEM {
+            return "Origem".into();
+        }
         self.node(id)
             .map(|n| n.name.clone())
             .or_else(|| self.mates.iter().find(|m| m.id == id).map(|m| m.name.clone()))

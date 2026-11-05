@@ -34,6 +34,8 @@ if (-not $SkipBuild) {
 $targetDir = (cargo metadata --no-deps --format-version 1 | ConvertFrom-Json).target_directory
 $exe = Join-Path $targetDir "release\fenkra.exe"
 if (-not (Test-Path $exe)) { throw "executável não encontrado: $exe" }
+$conv = Join-Path $targetDir "release\fenkra-conv.exe"
+if (-not (Test-Path $conv)) { throw "conversor não encontrado: $conv" }
 
 # dumpbin do Visual Studio
 $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
@@ -52,6 +54,8 @@ $bin = Join-Path $OcctRoot "bin"
 $needed = @{}
 $queue = New-Object System.Collections.Queue
 $queue.Enqueue($exe)
+# o XCAF só é usado pelo processo filho: o fechamento precisa partir dos dois executáveis
+$queue.Enqueue($conv)
 while ($queue.Count -gt 0) {
     $f = $queue.Dequeue()
     foreach ($d in Get-Deps $f) {
@@ -66,6 +70,7 @@ while ($queue.Count -gt 0) {
 if (Test-Path $out) { Remove-Item -Recurse -Force $out }
 New-Item -ItemType Directory -Force $out | Out-Null
 Copy-Item $exe $out
+Copy-Item $conv $out
 foreach ($p in $needed.Values) { Copy-Item $p $out }
 
 # runtime C++: sem ele o app nem abre em PC que não tenha o redistribuível instalado

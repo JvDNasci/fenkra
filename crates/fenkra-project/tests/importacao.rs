@@ -23,7 +23,7 @@ fn step_de_bloco(caminho: &Path, x: f64) {
     let mut al = || d.alloc();
     data.add_rect(&mut al, [0., 0.], [x, 30.], false);
     let s = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
-    d.add_feature(FeatureKind::Extrude(Extrude { sketch: s, op: BoolOp::Add, extent: Extent::Blind("20".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0 }));
+    d.add_feature(FeatureKind::Extrude(Extrude { sketch: s, op: BoolOp::Add, extent: Extent::Blind("20".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
     export(&d, None, caminho.to_str().unwrap()).unwrap();
 }
 
@@ -135,5 +135,44 @@ fn importar_recusa_o_que_nao_e_step() {
     fs::write(&falso, "o").unwrap();
     assert!(importar_step(falso.to_str().unwrap()).is_err());
     assert!(importar_step(dir.join("não existe.step").to_str().unwrap()).is_err());
+    fs::remove_dir_all(dir).unwrap();
+}
+
+/// Soma ao documento importado um segundo corpo com a mesma geometria, como um STEP de duas peças.
+fn com_segundo_corpo(mut d: Document) -> Document {
+    let geo = d.references.iter().find_map(|r| match &r.kind {
+        RefKind::Isolated { geo } => Some(geo.clone()),
+        _ => None,
+    });
+    let coletor = d.add_collector("Outro");
+    d.active_collector = coletor;
+    let alvo = d.add_link("importação", "x", "outro", geo.unwrap());
+    let ext = d.external.last().map(|e| e.id).unwrap();
+    d.isolate_link(ext);
+    d.add_feature(FeatureKind::LinkedBody(LinkedBody { geo: alvo }));
+    d
+}
+
+#[test]
+fn atualizar_troca_todos_os_corpos_e_recusa_contagem_diferente() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    let dir = pasta("corpos");
+    let arquivo = dir.join("par.step");
+    step_de_bloco(&arquivo, 40.);
+    let i = importar_step(arquivo.to_str().unwrap()).unwrap();
+    let mut p = Project::create(&dir.join("projeto"), "P").unwrap();
+    let id = p.adicionar_importado(&arquivo, com_segundo_corpo(i.doc), &i.relatorio).unwrap();
+    assert!((volume(&p.load(id).unwrap()) - 48000.).abs() < 1e-3);
+
+    step_de_bloco(&arquivo, 50.);
+    let nova = importar_step(arquivo.to_str().unwrap()).unwrap();
+    p.atualizar_importado(id, &arquivo, &com_segundo_corpo(nova.doc.clone()), &nova.relatorio).unwrap();
+    assert!((volume(&p.load(id).unwrap()) - 60000.).abs() < 1e-3, "os dois corpos foram trocados");
+
+    let e = p.atualizar_importado(id, &arquivo, &nova.doc, &nova.relatorio).unwrap_err();
+    assert!(e.to_string().contains("crie um derivado"), "{e}");
+    assert!((volume(&p.load(id).unwrap()) - 60000.).abs() < 1e-3, "recusar não muda o documento");
     fs::remove_dir_all(dir).unwrap();
 }

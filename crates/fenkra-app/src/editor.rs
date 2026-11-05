@@ -591,6 +591,8 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     };
     let mut sess_act: Option<u8> = None; // 0 = concluir, 1 = cancelar, 2 = abrir
     let tex_names: Vec<String> = app.open.doc.textures.iter().map(|t| t.name.clone()).collect();
+    // prévia do PN (B47): só para o documento que ainda não está no projeto
+    let pn_info = if app.open.entry.is_none() { app.project.as_ref().map(|p| (p.pn_previa(&app.open.doc).ok(), p.pn_mascara_ativa())) } else { None };
     let doc = &mut app.open.doc;
 
     if let Some(rev) = &frozen {
@@ -626,7 +628,31 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             let p = &mut doc.props;
             ui.horizontal(|ui| {
                 ui.add_sized([96., 18.], egui::Label::new(tr("PN")));
-                ui.text_edit_singleline(&mut p.pn);
+                match &pn_info {
+                    Some((Some(segs), mascara)) if p.pn.is_empty() => {
+                        // cinza enquanto há campo por preencher (hint do campo vazio é cinza)
+                        let hint = fenkra_project::pn::texto(segs);
+                        let r = ui.add(egui::TextEdit::singleline(&mut p.pn).hint_text(hint));
+                        let exemplo = fenkra_project::pn::exemplo(mascara).unwrap_or_default();
+                        r.on_hover_text(format!(
+                            "{}: {}
+{}: {}
+{}",
+                            tr("Máscara"),
+                            mascara,
+                            tr("Exemplo"),
+                            exemplo,
+                            tr("Vazio = automático. A prévia em cinza vira definitiva ao salvar no projeto.")
+                        ));
+                        let faltam: Vec<&str> = segs.iter().filter(|x| !x.preenchido).map(|x| x.texto.as_str()).collect();
+                        if !faltam.is_empty() {
+                            ui.label(RichText::new(format!("{} {}", tr("falta preencher:"), faltam.join(", "))).weak().small());
+                        }
+                    }
+                    _ => {
+                        ui.text_edit_singleline(&mut p.pn);
+                    }
+                }
             });
             ui.horizontal(|ui| {
                 ui.add_sized([96., 18.], egui::Label::new(tr("Descrição")));
@@ -1292,7 +1318,7 @@ fn feature_ui(
             if let Some(a) = &mut e.dir {
                 crate::geo_ui::axis_slot(ui, "ex_dir", "Direção", doc, Id(u64::MAX), a, seed);
             }
-            crate::feat_ui::extrude_extras(ui, e, vars);
+            crate::feat_ui::extrude_extras(ui, e, vars, doc, seed);
             if e.op == BoolOp::Cut {
                 ui.label(RichText::new(tr("O recorte entra no material (contra a normal do plano). Use 'inverter' se necessário.")).weak().small());
             }
@@ -1606,6 +1632,21 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
     }
     expr(ui, "Conicidade", &mut h.taper, vars, "°");
     ui.label(RichText::new(tr("Conicidade ≠ 0 faz um furo cônico (meio-ângulo); 0 = cilíndrico.")).weak().small());
+    // B90: ponta, rosca e folga
+    egui::CollapsingHeader::new(tr("Ponta, rosca e folga")).default_open(false).show(ui, |ui| {
+        if h.tip.is_some() {
+            expr(ui, "Deslocamento da ponta", &mut h.extra.tip_offset, vars, "mm");
+            ui.label(RichText::new(tr("Soma à profundidade do cilindro; negativo faz a ponta em V caber na profundidade pedida.")).weak().small());
+        }
+        if h.thread.is_some() {
+            expr(ui, "Profundidade da rosca", &mut h.extra.thread_depth, vars, "mm");
+            expr(ui, "Folga no fundo", &mut h.extra.thread_relief, vars, "passos");
+            ui.label(RichText::new(tr("Vazio na profundidade da rosca = a do furo menos a folga em passos de rosca.")).weak().small());
+        }
+        if h.tip.is_none() && h.thread.is_none() {
+            ui.label(RichText::new(tr("Ative o fundo em V ou a rosca para ajustar a ponta e a folga.")).weak().small());
+        }
+    });
 
     egui::CollapsingHeader::new(tr("Ajuste fino das dimensões")).default_open(false).show(ui, |ui| {
         expr(ui, "Diâmetro", &mut h.diameter, vars, "mm");
@@ -1618,6 +1659,22 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
             HoleKind::Escareado { diameter, angle } => {
                 expr(ui, "Ø escareado", diameter, vars, "mm");
                 expr(ui, "Ângulo", angle, vars, "°");
+                // B48: ângulos usuais e por norma
+                ui.horizontal_wrapped(|ui| {
+                    for a in fenkra_solidos::hardware::ANGULOS_ESCAREADO {
+                        let atual = angle.trim().parse::<f64>().is_ok_and(|v| (v - a).abs() < 1e-9);
+                        if ui.selectable_label(atual, format!("{a}°")).clicked() {
+                            *angle = format!("{a}");
+                        }
+                    }
+                });
+                egui::ComboBox::from_id_salt("esc_norma").selected_text(tr("Ângulo por norma")).show_ui(ui, |ui| {
+                    for (nome, a) in fenkra_solidos::hardware::NORMAS_ESCAREADO {
+                        if ui.selectable_label(false, format!("{nome} ({a}°)")).clicked() {
+                            *angle = format!("{a}");
+                        }
+                    }
+                });
             }
             HoleKind::Contrafurado { diameter, depth, angle } => {
                 expr(ui, "Ø contrafuro", diameter, vars, "mm");

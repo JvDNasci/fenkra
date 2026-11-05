@@ -524,7 +524,7 @@ impl Montador {
             taper: "0".into(),
             thin: None,
             thin_side: 0,
-            dir: None,
+            dir: None, ends: Default::default(),
         }));
         if let Some(f) = self.doc.features.iter_mut().find(|f| f.id == id) {
             f.name = nome.into();

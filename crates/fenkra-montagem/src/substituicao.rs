@@ -183,7 +183,7 @@ mod tests {
         let mut s = SketchData::default();
         s.add_rect(&mut al, [-20., -20.], [20., 20.], false);
         let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data: s }));
-        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(valor_cota(h)), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0 }));
+        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(valor_cota(h)), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
         if publica {
             let id = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), &valor_cota(h));
             let r = d.references.iter_mut().find(|r| r.id == id).unwrap();

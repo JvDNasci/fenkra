@@ -110,7 +110,7 @@ modelos!(
     "extrair", "extrusao", "filete", "filete_completo", "filete_face_face", "filete_variavel", "filtro", "furo",
     "furo_cego", "furo_contrafurado", "furo_escareado", "furo_passante", "furo_rebaixado", "furo_roscado",
     "furo_simples", "helice", "hib_costurar", "hib_dividir", "hib_engrossar", "hib_fechar", "hib_malha",
-    "hib_preencher", "idioma", "junta_came", "junta_cilindrica", "junta_esferica", "junta_parafuso",
+    "hib_preencher", "idioma", "importar_arquivo", "junta_came", "junta_cilindrica", "junta_esferica", "junta_parafuso",
     "junta_planar", "junta_ponto_curva", "junta_prismatica", "junta_revolucao", "junta_rigida", "linha_angulo",
     "linha_bissetriz", "linha_direcao", "linha_eixo", "linha_normal", "linha_planos", "linha_pontos",
     "linha_tangente", "macro", "mec_auto", "mec_simular", "mostrar", "multisecoes", "multisecoes_remover",

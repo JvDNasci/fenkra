@@ -22,7 +22,7 @@ pub fn is_shape(k: &FeatureKind) -> bool {
 
 /// Comandos em que clicar numa face na viewport (com o comando aberto) acrescenta a face.
 pub fn wants_faces(k: &FeatureKind) -> bool {
-    matches!(k, FeatureKind::Shell(_) | FeatureKind::Draft(_) | FeatureKind::Thickness(_) | FeatureKind::Thread(_) | FeatureKind::SmCornerRelief(_) | FeatureKind::SmArcSlot(_) | FeatureKind::SmSurfFlange(_))
+    matches!(k, FeatureKind::Shell(_) | FeatureKind::Draft(_) | FeatureKind::Thickness(_) | FeatureKind::Thread(_) | FeatureKind::StructPlate(_) | FeatureKind::SmCornerRelief(_) | FeatureKind::SmArcSlot(_) | FeatureKind::SmSurfFlange(_))
         || matches!(k, FeatureKind::SmFlangedHole(h) if crate::slots::is_unset(h.sketch) || !h.points.is_empty())
         || matches!(k, FeatureKind::Fillet(o) if matches!(o.mode, EdgeMode::FaceFace(..) | EdgeMode::FullRound { .. }))
 }
@@ -34,6 +34,8 @@ pub fn add_face(k: &mut FeatureKind, p: [f64; 3]) {
         FeatureKind::Draft(d) => d.faces.push(p),
         FeatureKind::Thickness(t) => t.faces.push(p),
         FeatureKind::Thread(t) => t.face = p,
+        // B255: o clique na face da ponta grava o ponto dela; o recálculo acha a ponta que a tem
+        FeatureKind::StructPlate(pl) => pl.at = p,
         FeatureKind::SmFlangedHole(h) => h.points.push(p),
         FeatureKind::SmCornerRelief(c) => c.at = p,
         FeatureKind::SmArcSlot(c) => c.center = p,
@@ -93,6 +95,7 @@ pub fn face_marks(k: &FeatureKind) -> Vec<[f64; 3]> {
         FeatureKind::Draft(d) => d.faces.clone(),
         FeatureKind::Thickness(t) => t.faces.clone(),
         FeatureKind::Thread(t) => vec![t.face],
+        FeatureKind::StructPlate(pl) => vec![pl.at],
         FeatureKind::Fillet(o) => match o.mode {
             EdgeMode::FaceFace(a, b) => vec![a, b],
             EdgeMode::FullRound { mid, a, b } => vec![mid, a, b],
@@ -352,6 +355,24 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 }
             }
             sources_ui(ui, doc, idx, &mut p.sources);
+            // B91: instâncias puladas, com X para restaurar
+            section(ui, "Instâncias puladas");
+            let mut volta = None;
+            for (i, (a, b)) in p.skip.iter().enumerate() {
+                ui.horizontal(|ui| {
+                    let nome = if *b == 0 { format!("{}", a + 1) } else { format!("{} × {}", a + 1, b + 1) };
+                    ui.label(format!("{} {}", tr("Instância"), nome));
+                    if ui.small_button("✖").on_hover_text(tr("Restaurar esta instância")).clicked() {
+                        volta = Some(i);
+                    }
+                });
+            }
+            if let Some(i) = volta {
+                p.skip.remove(i);
+            }
+            if p.skip.is_empty() {
+                ui.label(RichText::new(tr("Nenhuma. Clique no ponto de uma instância na prévia para pulá-la.")).weak().small());
+            }
         }
         FeatureKind::Mirror(m) => {
             ui.horizontal(|ui| {
@@ -450,28 +471,10 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             crate::st_ui::member_panel(ui, doc, me, m, vars, seed);
         }
         FeatureKind::StructPlate(p) => {
-            section(ui, "Placa de extremidade");
-            ui.label(RichText::new(format!("ponta perto de {}", crate::app::p3(p.at, 1))).small());
-            if let Some(q) = seed.points.iter().find_map(|x| if let PointRef::Fixed(q) = x { Some(*q) } else { None }) {
-                if ui.button(tr("⊙ Usar o vértice selecionado")).clicked() {
-                    p.at = q;
-                }
-            }
-            expr(ui, "Espessura", &mut p.thickness, vars, "mm");
-            expr(ui, "Sobra", &mut p.margin, vars, "mm");
+            crate::st_placas_ui::placa_panel(ui, p, vars, seed);
         }
         FeatureKind::StructGusset(g) => {
-            section(ui, "Reforço");
-            ui.label(RichText::new(format!("encontro perto de {}", crate::app::p3(g.at, 1))).small());
-            if let Some(q) = seed.points.iter().find_map(|x| if let PointRef::Fixed(q) = x { Some(*q) } else { None }) {
-                if ui.button(tr("⊙ Usar o vértice selecionado")).clicked() {
-                    g.at = q;
-                }
-            }
-            expr(ui, "Aba", &mut g.leg, vars, "mm");
-            expr(ui, "Espessura", &mut g.thickness, vars, "mm");
-            expr(ui, "Chanfro de alívio", &mut g.chamfer, vars, "mm");
-            ui.label(RichText::new(tr("Chanfro 0 = triangular; maior que 0 corta o canto (passagem do cordão de solda).")).weak().small());
+            crate::st_placas_ui::reforco_panel(ui, g, vars, seed);
         }
         FeatureKind::SmWall(w) => {
             section(ui, "Parede base");
@@ -556,10 +559,6 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         }
         FeatureKind::SmJoggle(j) => {
             section(ui, "Joggle");
-            let pts: Vec<[f64; 3]> = seed.points.iter().filter_map(|p| match p {
-                PointRef::Fixed(q) => Some(*q),
-                _ => None,
-            }).collect();
             let mut by_plane = j.plane.is_some();
             ui.horizontal_wrapped(|ui| {
                 if ui.selectable_label(!by_plane, tr("por dois pontos")).clicked() {
@@ -573,10 +572,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 j.plane = by_plane.then(|| seed.planes.last().copied().unwrap_or(PlaneRef::Origin(OriginPlane::YZ)));
             }
             ui.label(RichText::new(format!("linha de {} a {}", crate::app::p3(j.a, 1), crate::app::p3(j.b, 1))).small());
-            if ui.add_enabled(pts.len() >= 2, egui::Button::new(tr("⊙ Usar os dois vértices selecionados"))).clicked() {
-                j.a = pts[0];
-                j.b = pts[1];
-            }
+            ui.label(RichText::new(tr("Clique na face fixa e desenhe a linha na face, direto no 3D: o lado oposto ao da face fixa desce.")).weak().small());
             if let Some(p) = &mut j.plane {
                 crate::editor::plane_combo(ui, "jog_plano", doc, p, Some(me));
                 ui.label(RichText::new(tr("A linha é a interseção do plano com a face (o primeiro ponto marca a face).")).weak().small());
@@ -595,10 +591,6 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         }
         FeatureKind::SmBend(b) => {
             section(ui, "Dobra por linha");
-            let pts: Vec<[f64; 3]> = seed.points.iter().filter_map(|p| match p {
-                PointRef::Fixed(q) => Some(*q),
-                _ => None,
-            }).collect();
             let mut from_sketch = b.sketch.is_some();
             if crate::editor::check(ui, &mut from_sketch, "linhas de um sketch (várias; curva quase reta)").changed() {
                 b.sketch = from_sketch.then_some(Id(0));
@@ -610,10 +602,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 }
                 None => {
                     ui.label(RichText::new(format!("linha de {} a {}", crate::app::p3(b.a, 1), crate::app::p3(b.b, 1))).small());
-                    if ui.add_enabled(pts.len() >= 2, egui::Button::new(tr("⊙ Usar os dois vértices selecionados"))).clicked() {
-                        b.a = pts[0];
-                        b.b = pts[1];
-                    }
+                    ui.label(RichText::new(tr("Clique na face fixa e desenhe a linha na face, direto no 3D: o lado oposto ao da face fixa gira.")).weak().small());
                 }
             }
             ui.horizontal(|ui| {
@@ -638,15 +627,8 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         }
         FeatureKind::SmLouver(l) => {
             section(ui, "Veneziana");
-            let pts: Vec<[f64; 3]> = seed.points.iter().filter_map(|p| match p {
-                PointRef::Fixed(q) => Some(*q),
-                _ => None,
-            }).collect();
             ui.label(RichText::new(format!("abertura de {} a {}", crate::app::p3(l.a, 1), crate::app::p3(l.b, 1))).small());
-            if ui.add_enabled(pts.len() >= 2, egui::Button::new(tr("⊙ Usar os dois vértices selecionados"))).clicked() {
-                l.a = pts[0];
-                l.b = pts[1];
-            }
+            ui.label(RichText::new(tr("Clique na face fixa e desenhe a linha na face, direto no 3D: a rampa sai do lado oposto ao da face fixa.")).weak().small());
             expr(ui, "Largura da rampa", &mut l.width, vars, "mm");
             expr(ui, "Altura da abertura", &mut l.height, vars, "mm");
             crate::editor::check(ui, &mut l.flip, "rampa do outro lado da linha");
@@ -1028,7 +1010,30 @@ pub fn default_pattern(i: usize, seed: &Seed) -> PatternKind {
 }
 
 /// Opções extras da extrusão: ângulo de saída e parede fina.
-pub fn extrude_extras(ui: &mut egui::Ui, e: &mut Extrude, vars: &Vars) {
+pub fn extrude_extras(ui: &mut egui::Ui, e: &mut Extrude, vars: &Vars, doc: &Document, seed: &Seed) {
+    // B89: só os campos que valem para o término escolhido
+    egui::CollapsingHeader::new(tr("Início e términos por lado")).default_open(false).show(ui, |ui| {
+        let campos = fenkra_solidos::termino::campos_do_termino(&e.extent);
+        expr(ui, "Início deslocado", &mut e.ends.start, vars, "mm");
+        ui.label(RichText::new(tr("Distância do plano do sketch até onde a extrusão começa, na direção dela (vazio = 0).")).weak().small());
+        if campos.deslocamento {
+            expr(ui, "Deslocamento do término", &mut e.ends.offset, vars, "mm");
+            ui.label(RichText::new(tr("Positivo passa do alvo; negativo para antes dele.")).weak().small());
+        }
+        let um_lado = !matches!(e.extent, Extent::Symmetric(_) | Extent::TwoSides(..));
+        if um_lado {
+            let mut dois = e.ends.extent2.is_some();
+            if crate::editor::check(ui, &mut dois, "término próprio no outro lado").changed() {
+                e.ends.extent2 = dois.then(|| Extent::Blind("5".into()));
+            }
+            if let Some(x2) = &mut e.ends.extent2 {
+                crate::editor::extent_ui(ui, "ext_ex2", x2, vars, &["Cego", "Passante", "Até o próximo", "Até o último", "Até plano", "Até a superfície"], doc, seed);
+                if fenkra_solidos::termino::campos_do_termino(x2).deslocamento {
+                    expr(ui, "Deslocamento do término 2", &mut e.ends.offset2, vars, "mm");
+                }
+            }
+        }
+    });
     egui::CollapsingHeader::new(tr("Ângulo de saída e parede fina")).default_open(true).show(ui, |ui| {
         expr(ui, "Ângulo de saída", &mut e.taper, vars, "°");
         if e.taper.trim() != "0" && !matches!(e.extent, Extent::Blind(_)) {

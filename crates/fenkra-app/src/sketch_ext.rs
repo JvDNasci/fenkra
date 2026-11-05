@@ -4,7 +4,8 @@
 //! fica guardado no sketch (associativo): o cálculo reposiciona a geometria quando o 3D muda.
 
 use crate::picking::Pick;
-use fenkra_core::sketch::{Curve, LinkSrc};
+use fenkra_core::projecao::{corta, projeta, reconhece, Curva3};
+use fenkra_core::sketch::{Curve, LinkPolicy, LinkSrc};
 use fenkra_core::*;
 use fenkra_kernel::Frame;
 use fenkra_solidos::RecomputeResult;
@@ -36,9 +37,10 @@ fn lerp(a: V3, b: V3, t: f64) -> V3 {
     [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
 }
 
-/// Todos os pontos em que a polilinha encontra o plano do sketch.
-fn crossings(f: &Frame, pts: &[V3]) -> Vec<V3> {
-    fenkra_core::sketch::plane_crossings(pts, f.origin, f.normal)
+/// Todos os pontos em que a curva encontra o plano do sketch. Com fórmula, o corte é exato; sem ela,
+/// vale a travessia da polilinha, e o recálculo refina a aresta de corpo pelo kernel.
+fn crossings(f: &Frame, curva: &Curva3, pts: &[V3]) -> Vec<V3> {
+    corta(curva, &fenkra_solidos::profile::plano_do(f)).unwrap_or_else(|| fenkra_core::sketch::plane_crossings(pts, f.origin, f.normal))
 }
 
 /// Triângulos (posições, índices) cortados pelo plano → maior polilinha encadeada.
@@ -95,38 +97,58 @@ pub struct External {
     pub pts: Vec<V3>,
     /// pontos soltos (travessias de uma curva pelo plano), não uma polilinha
     pub isolated: bool,
+    /// a fórmula da curva, quando se conhece: o sketch recebe a forma exata
+    pub curva: Curva3,
 }
 
 impl External {
-    fn line(src: LinkSrc, pts: Vec<V3>) -> Self {
-        External { src, pts, isolated: false }
+    /// Polilinha exata (outro sketch, referência): a fórmula é reconhecida nos pontos.
+    pub fn line(src: LinkSrc, pts: Vec<V3>) -> Self {
+        let curva = reconhece(&pts);
+        External { src, pts, isolated: false, curva }
     }
     /// Travessias da curva pelo plano; nenhuma, nada a trazer.
-    fn cut(src: LinkSrc, f: &Frame, curve: &[V3]) -> Option<Self> {
-        let pts = crossings(f, curve);
-        (!pts.is_empty()).then_some(External { src, pts, isolated: true })
+    fn cut(src: LinkSrc, f: &Frame, curva: Curva3, curve: &[V3]) -> Option<Self> {
+        let pts = crossings(f, &curva, curve);
+        (!pts.is_empty()).then_some(External { src, pts, isolated: true, curva })
+    }
+    /// Nome da forma que vai nascer, para a dica junto ao cursor.
+    pub fn forma(&self, f: &Frame) -> Option<&'static str> {
+        (!self.isolated).then(|| projeta(&self.curva, &fenkra_solidos::profile::plano_do(f))).flatten().map(|x| x.nome())
     }
     /// Grava no sketch como geometria externa.
     pub fn add_to(self, sk: &mut SketchData, al: &mut impl FnMut() -> Id, f: &Frame, intersect: bool, construction: bool) -> Option<Id> {
         let uv = to_uv(f, &self.pts);
-        if self.isolated {
-            sk.add_link_points(al, self.src, &uv, construction)
-        } else {
-            sk.add_link(al, self.src, intersect, &uv, construction)
+        let exata = projeta(&self.curva, &fenkra_solidos::profile::plano_do(f));
+        let id = match (self.isolated, exata) {
+            (true, _) => sk.add_link_points(al, self.src, &uv, construction),
+            (false, Some(forma)) => Some(sk.add_link_exata(al, self.src, intersect, &forma, construction)),
+            (false, None) => sk.add_link(al, self.src, intersect, &uv, construction),
+        };
+        // instantâneo: nasce solta, como geometria comum
+        if let (LinkPolicy::Instantaneo, Some(l)) = (sk.link_policy, id) {
+            sk.release_link(l);
         }
+        id
     }
 }
 
 /// Origem e geometria 3D do item clicado (converter = projetar; interseção = corte pelo plano).
-pub fn world(r: &RecomputeResult, p: &Pick, intersect: bool, f: &Frame) -> Option<External> {
+pub fn world(doc: &Document, r: &RecomputeResult, p: &Pick, intersect: bool, f: &Frame) -> Option<External> {
     match *p {
         Pick::Edge { body, edge, mid } => {
             let pts = crate::picking::edge_polyline(r, body, edge);
             let src = LinkSrc::Edge { mid: mid.map(|v| v as f64) };
+            // o kernel diz o tipo da aresta: a polilinha da malha é só uma aproximação dela
+            let curva = match r.bodies.get(body).and_then(|b| b.mesh.edge_formula(edge)) {
+                Some(fenkra_kernel::EdgeFormula::Line { a, b }) => Curva3::Reta { a, b },
+                Some(fenkra_kernel::EdgeFormula::Conic { c, u, v, t0, t1 }) => Curva3::Conica { c, u, v, t0, t1 },
+                None => Curva3::Outra,
+            };
             if intersect {
-                External::cut(src, f, &pts)
+                External::cut(src, f, curva, &pts)
             } else {
-                Some(External::line(src, pts))
+                Some(External { src, pts, isolated: false, curva })
             }
         }
         Pick::Vertex { pos, .. } | Pick::SkPoint { pos, .. } | Pick::CurveVtx { pos, .. } => {
@@ -135,12 +157,11 @@ pub fn world(r: &RecomputeResult, p: &Pick, intersect: bool, f: &Frame) -> Optio
         }
         // curva de outro sketch: projeção (ou interseção) associativa
         Pick::SkCurve { sketch, curve, .. } => {
-            let s = r.sketches.iter().find(|s| s.feature == sketch)?;
-            let (_, _, pts) = s.ents.iter().find(|(i, ..)| *i == curve)?;
-            let p3: Vec<V3> = pts.iter().map(|q| q.map(|v| v as f64)).collect();
+            // os pontos em precisão dupla: a fórmula é reconhecida neles
+            let p3 = sketch_curves(doc, r, sketch).into_iter().find(|x| x.0 == curve)?.1;
             let src = LinkSrc::SketchCurve { sketch, curve };
             if intersect {
-                External::cut(src, f, &p3)
+                External::cut(src, f, reconhece(&p3), &p3)
             } else {
                 Some(External::line(src, p3))
             }
@@ -157,7 +178,7 @@ pub fn world(r: &RecomputeResult, p: &Pick, intersect: bool, f: &Frame) -> Optio
                 return Some(External::line(LinkSrc::Ref(id), vec![pt.p]));
             }
             if let Some(c) = r.curves.iter().find(|x| x.id == id) {
-                return if intersect { External::cut(LinkSrc::Ref(id), f, &c.pts) } else { Some(External::line(LinkSrc::Ref(id), c.pts.clone())) };
+                return if intersect { External::cut(LinkSrc::Ref(id), f, reconhece(&c.pts), &c.pts) } else { Some(External::line(LinkSrc::Ref(id), c.pts.clone())) };
             }
             if let Some(s) = r.surfaces.iter().find(|x| x.id == id) {
                 let pts = mesh_cut(f, &s.mesh.positions, &s.mesh.indices);
@@ -182,6 +203,7 @@ pub fn sketch_curves(doc: &Document, r: &RecomputeResult, sketch: Id) -> Vec<(Id
                 Curve::Spline { .. } => fenkra_core::sketch::spline_samples(&d.spline_uv(c.id), 12),
                 Curve::Line { a, b } => vec![d.pos(a), d.pos(b)],
                 Curve::Point { p } => vec![d.pos(p)],
+                Curve::Ellipse { c: ctr, major, minor, t0, t1, .. } => fenkra_core::projecao::elipse_amostras(d.pos(ctr), major, minor, t0, t1),
                 Curve::Circle { c: ctr, r } => {
                     let cc = d.pos(ctr);
                     (0..=48).map(|i| {
@@ -208,4 +230,65 @@ pub fn sketch_curves(doc: &Document, r: &RecomputeResult, sketch: Id) -> Vec<(Id
             Some((c.id, pts2.into_iter().map(to3).collect()))
         })
         .collect()
+}
+
+#[cfg(test)]
+mod testes {
+    use super::*;
+
+    const XY: Frame = Frame { origin: [0., 0., 0.], x: [1., 0., 0.], normal: [0., 0., 1.] };
+
+    fn ids() -> impl FnMut() -> Id {
+        let mut n = 40u64;
+        move || {
+            n += 1;
+            Id(n)
+        }
+    }
+
+    /// Círculo de raio 10 em torno de z = 5, inclinado 60° em torno de x.
+    fn inclinado() -> External {
+        let (s, c) = (60f64.to_radians().sin(), 60f64.to_radians().cos());
+        let curva = Curva3::Conica { c: [0., 0., 5.], u: [10., 0., 0.], v: [0., 10. * c, 10. * s], t0: 0., t1: std::f64::consts::TAU };
+        External { src: LinkSrc::Edge { mid: [0.; 3] }, pts: vec![[10., 0., 5.], [0., 5., 13.]], isolated: false, curva }
+    }
+
+    #[test]
+    fn aresta_com_formula_nasce_com_a_forma_exata() {
+        let (mut sk, mut al) = (SketchData::default(), ids());
+        assert_eq!(inclinado().forma(&XY), Some("elipse"));
+        let l = inclinado().add_to(&mut sk, &mut al, &XY, false, false).unwrap();
+        assert!(sk.links.iter().any(|x| x.id == l));
+        assert!(matches!(sk.curves[0].geom, Curve::Ellipse { minor, .. } if (minor - 5.).abs() < 1e-9));
+    }
+
+    #[test]
+    fn politica_do_sketch_decide_o_vinculo_novo() {
+        let (mut sk, mut al) = (SketchData { link_policy: LinkPolicy::Instantaneo, ..Default::default() }, ids());
+        inclinado().add_to(&mut sk, &mut al, &XY, false, false).unwrap();
+        assert!(sk.links.is_empty() && sk.points.iter().all(|p| !p.fixed), "instantânea nasce solta");
+        let (mut sk, mut al) = (SketchData { link_policy: LinkPolicy::Isolado, ..Default::default() }, ids());
+        inclinado().add_to(&mut sk, &mut al, &XY, false, false).unwrap();
+        assert_eq!(sk.links[0].policy, LinkPolicy::Isolado);
+    }
+
+    #[test]
+    fn curva_sem_formula_fica_como_polilinha() {
+        let (mut sk, mut al) = (SketchData::default(), ids());
+        let pts: Vec<V3> = (0..12).map(|i| [i as f64, (i as f64 * 0.8).sin() * 4., 0.]).collect();
+        let x = External::line(LinkSrc::Edge { mid: [0.; 3] }, pts);
+        assert_eq!(x.forma(&XY), None);
+        x.add_to(&mut sk, &mut al, &XY, false, false).unwrap();
+        assert!(matches!(sk.links[0].shape, fenkra_core::sketch::LinkShape::Poly { .. }));
+    }
+
+    #[test]
+    fn interseccao_usa_a_formula_e_acha_todos_os_pontos() {
+        let curva = Curva3::Conica { c: [0., 0., 0.], u: [10., 0., 0.], v: [0., 0., 10.], t0: 0., t1: std::f64::consts::TAU };
+        let plano = Frame { origin: [0., 0., 6.], ..XY };
+        // a polilinha dada é grosseira de propósito: quem responde é a fórmula
+        let x = External::cut(LinkSrc::Edge { mid: [0.; 3] }, &plano, curva, &[[10., 0., 0.], [-10., 0., 0.]]).unwrap();
+        assert!(x.isolated && x.pts.len() == 2);
+        assert!(x.pts.iter().all(|p| (p[0].abs() - 8.).abs() < 1e-12));
+    }
 }

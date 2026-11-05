@@ -27,7 +27,7 @@ const CORES_FIXAS: &[(&str, usize)] = &[
     ("roles.rs", 1),
     ("scene.rs", 4),
     ("sketch_ui.rs", 18),
-    ("st_ui.rs", 2),
+    ("st_ui.rs", 1),
     ("toolbar.rs", 18),
 ];
 

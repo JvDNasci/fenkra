@@ -360,6 +360,7 @@ mod tests {
             diameter: "6.5".into(),
             depth: Extent::Blind("12".into()),
             thread: Some("M8x1.25".into()),
+            extra: Default::default(),
             thread_modeled: false,
             standard: None,
             points: vec![],
@@ -376,6 +377,7 @@ mod tests {
         d.add_feature(FeatureKind::Pattern(Pattern {
             kind: PatternKind::Linear { dir: crate::doc::AxisRef::Fixed { origin: [0.; 3], dir: [1., 0., 0.] }, count: "4".into(), spacing: "20".into(), dir2: None, count2: "1".into(), spacing2: "0".into(), total: false },
             sources: vec![h],
+            skip: Default::default(),
         }));
         let c = callout(&d, h, true).unwrap();
         assert_eq!(c.text, "4× Ø6,5 ▽12 · M8×1,25-6H");

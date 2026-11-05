@@ -18,6 +18,16 @@ pub mod eixos;
 pub mod profile;
 pub mod refs;
 pub mod chapa;
+pub mod massa;
+pub mod termino;
+pub mod padrao;
+pub mod furo_norma;
+pub mod chapa_linha;
+mod chapa_flat;
+pub mod planificada;
+pub use chapa_flat::{passos_planificados, PassoPlanificado};
+pub mod st_frames;
+mod st_placas;
 
 pub use engrenagens::{calculo as calculo_engrenagem, engrenagem_documento, CalculoEngrenagem, ParamEngrenagem, TipoEngrenagem};
 pub use eixos::{chaveta_documento, eixo_documento, ParamEixo, RasgoChaveta, TrechoEixo};
@@ -112,6 +122,7 @@ fn seg_points(sgm: &fenkra_kernel::Seg2) -> Vec<[f64; 2]> {
         Seg2::Line(a, b) => vec![*a, *b],
         Seg2::Circle(c, r) => circle(*c, *r, 0., std::f64::consts::TAU),
         Seg2::Spline(p) => p.clone(),
+        Seg2::Ellipse(c, m, r, t0, t1) => fenkra_core::projecao::elipse_amostras(*c, *m, *r, *t0, *t1),
         Seg2::Arc(a, m, b) => {
             // círculo pelos três pontos
             let (d, a2, m2, b2) = (2. * (a[0] * (m[1] - b[1]) + m[0] * (b[1] - a[1]) + b[0] * (a[1] - m[1])), a[0] * a[0] + a[1] * a[1], m[0] * m[0] + m[1] * m[1], b[0] * b[0] + b[1] * b[1]);
@@ -201,6 +212,7 @@ fn loops_size(loops: &[fenkra_kernel::Loop2]) -> f64 {
                 }
                 fenkra_kernel::Seg2::Circle(c, r) => add(c, r),
                 fenkra_kernel::Seg2::Spline(ref p) => p.iter().for_each(|q| add(*q, 0.)),
+                fenkra_kernel::Seg2::Ellipse(c, m, r, t0, t1) => fenkra_core::projecao::elipse_amostras(c, m, r, t0, t1).into_iter().for_each(|q| add(q, 0.)),
             }
         }
     }
@@ -245,6 +257,10 @@ pub struct SketchViz {
     /// posições atuais da geometria externa (o editor do sketch copia para o documento)
     pub link_pts: Vec<(Id, [f64; 2])>,
     pub link_r: Vec<(Id, f64)>,
+    /// elipses externas: curva, semieixo maior, semieixo menor, t0 e t1
+    pub link_e: Vec<(Id, [f64; 2], f64, f64, f64)>,
+    /// vínculos que perderam a origem (o estado "→✕" do painel)
+    pub link_quebrados: Vec<Id>,
     /// cada curva do sketch no mundo (id, construção, polilinha) — subelementos selecionáveis
     pub ents: Vec<(Id, bool, Vec<[f32; 3]>)>,
     /// cada ponto do sketch no mundo (id, posição)
@@ -446,6 +462,10 @@ pub struct CutOutline {
     pub feature: Id,
     pub folded: Vec<Vec<V3>>,
     pub flat: Vec<Vec<V3>>,
+    /// Na planificada, o que o comando faz além de cortar também passa por aqui: veneziana e
+    /// estampo guardam o contorno da ferramenta em `flat` (`folded` vazio), e cada canto da aba por
+    /// perfil guarda a linha de dobra em `dobra` (as dobras do mapa vêm de `sheet_maps`).
+    pub dobra: Option<BendLine>,
 }
 
 /// Onde a rosca fica, com o eixo e o sentido que a ferramenta usa, para a prévia desenhar a hélice.
@@ -470,6 +490,28 @@ pub struct BendLine {
     pub angle: f64,
     pub radius: f64,
     pub up: bool,
+    /// comando que fez a dobra
+    pub feature: Id,
+    /// comprimento desenvolvido (linha neutra) e dedução de dobra: os mesmos da geometria
+    pub allowance: f64,
+    pub deduction: f64,
+    /// eixo da dobra no espaço dobrado (as alças 3D e a linha de dobra desenhada leem daqui);
+    /// `None` nas dobras que só existem na planificada (cantos da aba por perfil)
+    pub eixo: Option<EixoDobra>,
+}
+
+/// Eixo de uma dobra no espaço dobrado.
+#[derive(Clone, Debug, PartialEq)]
+pub struct EixoDobra {
+    /// pontas do eixo, na face interna, no começo do arco
+    pub a: V3,
+    pub b: V3,
+    /// centro de curvatura na ponta `a`
+    pub centro: V3,
+    /// normal da chapa apontando para o centro de curvatura
+    pub normal: V3,
+    /// direção em que a aba sai (antes de dobrar)
+    pub saida: V3,
 }
 
 impl BendLine {
@@ -604,6 +646,8 @@ struct SheetMap {
     length: f64,
     /// a dobra vai para o lado de dentro do material (para baixo da face de referência)
     down: bool,
+    /// comando que fez a dobra (preenchido por `Ctx::run`; vale `Id(0)` enquanto o comando roda)
+    feature: Id,
 }
 
 impl SheetMap {
@@ -2301,6 +2345,52 @@ impl Ctx<'_> {
     }
 
     /// Polilinha 3D da geometria externa de um sketch, no estado atual do modelo.
+    /// Aresta de corpo mais perto de `mid`: o corpo, o ponto médio dela, a fórmula e a polilinha.
+    fn aresta_perto(&self, mid: V3) -> Result<(Shape, V3, Option<fenkra_kernel::EdgeFormula>, Vec<V3>), String> {
+        let mut best: Option<(f64, Shape, V3, Option<fenkra_kernel::EdgeFormula>, Vec<V3>)> = None;
+        for (b, _, _) in self.bodies.values() {
+            let Ok(m) = tesselar(b, &self.qualidade) else { continue };
+            for e in 0..m.edge_mids.len() / 3 {
+                let q = [m.edge_mids[3 * e] as f64, m.edge_mids[3 * e + 1] as f64, m.edge_mids[3 * e + 2] as f64];
+                let d = geo3d::dist(q, mid);
+                if best.as_ref().is_none_or(|x| d < x.0) {
+                    let s0 = m.edge_ranges[e] as usize;
+                    let s1 = m.edge_ranges.get(e + 1).map(|x| *x as usize).unwrap_or(m.edges.len() / 6);
+                    let mut pl: Vec<V3> = vec![];
+                    for sg in m.edges.chunks_exact(6).take(s1).skip(s0) {
+                        if pl.is_empty() {
+                            pl.push([sg[0] as f64, sg[1] as f64, sg[2] as f64]);
+                        }
+                        pl.push([sg[3] as f64, sg[4] as f64, sg[5] as f64]);
+                    }
+                    best = Some((d, b.clone(), q, m.edge_formula(e), pl));
+                }
+            }
+        }
+        let (d, b, q, f, pl) = best.ok_or("nenhum corpo com arestas")?;
+        // a aresta pode ter mudado um pouco; longe demais = perdida
+        if d > 5. {
+            return Err(format!("aresta não encontrada (a {d:.1} mm do lugar)"));
+        }
+        Ok((b, q, f, pl))
+    }
+
+    /// Forma exata da origem no plano do sketch; `None` se ela não tiver fórmula.
+    fn link_exata(&self, l: &fenkra_core::sketch::SkLink, frame: &Frame) -> Result<Option<fenkra_core::projecao::Exata>, String> {
+        use fenkra_core::projecao::{projeta, reconhece, Curva3};
+        use fenkra_core::sketch::LinkSrc;
+        let curva = match &l.source {
+            LinkSrc::Edge { mid } => match self.aresta_perto(*mid)?.2 {
+                Some(fenkra_kernel::EdgeFormula::Line { a, b }) => Curva3::Reta { a, b },
+                Some(fenkra_kernel::EdgeFormula::Conic { c, u, v, t0, t1 }) => Curva3::Conica { c, u, v, t0, t1 },
+                None => Curva3::Outra,
+            },
+            LinkSrc::SketchCurve { .. } | LinkSrc::Ref(_) if !l.intersect => reconhece(&self.link_world(l, frame)?),
+            _ => Curva3::Outra,
+        };
+        Ok(projeta(&curva, &profile::plano_do(frame)))
+    }
+
     fn link_world(&self, l: &fenkra_core::sketch::SkLink, frame: &Frame) -> Result<Vec<V3>, String> {
         use fenkra_core::sketch::LinkSrc;
         let k = |e: KernelError| e.0;
@@ -2312,7 +2402,11 @@ impl Ctx<'_> {
             Ok(loops.into_iter().max_by(|a, b| len(a).total_cmp(&len(b))).unwrap_or_default())
         };
         // pontos onde a polilinha atravessa o plano
-        let crossings = |pts: &[V3]| -> Vec<V3> { fenkra_core::sketch::plane_crossings(pts, frame.origin, frame.normal) };
+        // com fórmula, o corte é exato; sem ela, fica a travessia da polilinha
+        let crossings = |pts: &[V3]| -> Vec<V3> {
+            let curva = fenkra_core::projecao::reconhece(pts);
+            fenkra_core::projecao::corta(&curva, &profile::plano_do(frame)).unwrap_or_else(|| fenkra_core::sketch::plane_crossings(pts, frame.origin, frame.normal))
+        };
         match &l.source {
             LinkSrc::Ref(id) => match self.geo(*id, 0)? {
                 Geo::Point(p) => Ok(vec![p]),
@@ -2327,45 +2421,31 @@ impl Ctx<'_> {
                 let p3: Vec<V3> = pts.iter().map(|q| fr.point(q[0], q[1])).collect();
                 Ok(if l.intersect { crossings(&p3) } else { p3 })
             }
-            LinkSrc::Edge { mid } | LinkSrc::Vertex { pos: mid } => {
-                let vertex = matches!(l.source, LinkSrc::Vertex { .. });
-                let mut best: Option<(f64, Vec<V3>)> = None;
+            LinkSrc::Edge { mid } => {
+                let (b, q, _, pl) = self.aresta_perto(*mid)?;
+                // a interseção pergunta ao kernel: é exata para qualquer tipo de curva
+                if l.intersect {
+                    return b.edge_plane(q, frame.origin, frame.normal).map_err(k);
+                }
+                Ok(pl)
+            }
+            LinkSrc::Vertex { pos: mid } => {
+                let mut best: Option<(f64, V3)> = None;
                 for (b, _, _) in self.bodies.values() {
                     let Ok(m) = tesselar(b, &self.qualidade) else { continue };
-                    if vertex {
-                        for v in m.vertices.chunks_exact(3) {
-                            let p = [v[0] as f64, v[1] as f64, v[2] as f64];
-                            let d = geo3d::dist(p, *mid);
-                            if best.as_ref().is_none_or(|x| d < x.0) {
-                                best = Some((d, vec![p]));
-                            }
-                        }
-                        continue;
-                    }
-                    let ne = m.edge_mids.len() / 3;
-                    for e in 0..ne {
-                        let q = [m.edge_mids[3 * e] as f64, m.edge_mids[3 * e + 1] as f64, m.edge_mids[3 * e + 2] as f64];
-                        let d = geo3d::dist(q, *mid);
+                    for v in m.vertices.chunks_exact(3) {
+                        let p = [v[0] as f64, v[1] as f64, v[2] as f64];
+                        let d = geo3d::dist(p, *mid);
                         if best.as_ref().is_none_or(|x| d < x.0) {
-                            let s0 = m.edge_ranges[e] as usize;
-                            let s1 = m.edge_ranges.get(e + 1).map(|x| *x as usize).unwrap_or(m.edges.len() / 6);
-                            let mut pl: Vec<V3> = vec![];
-                            for sg in m.edges.chunks_exact(6).take(s1).skip(s0) {
-                                if pl.is_empty() {
-                                    pl.push([sg[0] as f64, sg[1] as f64, sg[2] as f64]);
-                                }
-                                pl.push([sg[3] as f64, sg[4] as f64, sg[5] as f64]);
-                            }
-                            best = Some((d, pl));
+                            best = Some((d, p));
                         }
                     }
                 }
-                let (d, pl) = best.ok_or("nenhum corpo com arestas")?;
-                // a aresta pode ter mudado um pouco; longe demais = perdida
+                let (d, p) = best.ok_or("nenhum corpo com arestas")?;
                 if d > 5. {
-                    return Err(format!("{} não encontrada (a {d:.1} mm do lugar)", if vertex { "vértice" } else { "aresta" }));
+                    return Err(format!("vértice não encontrado (a {d:.1} mm do lugar)"));
                 }
-                Ok(if l.intersect { crossings(&pl) } else { pl })
+                Ok(vec![p])
             }
             LinkSrc::Face { point } => cut(&self.face_of_bodies(*point)?),
         }
@@ -2426,6 +2506,9 @@ impl Ctx<'_> {
     fn members(&self, m: &StructMember) -> Result<Vec<MemberGeom>, String> {
         let dims: Vec<f64> = m.dims.iter().map(|e| ev(e, &self.vars, "cota da seção")).collect::<Result<_, _>>()?;
         let (loops, w, h, cen) = structural::section(m.kind, &dims)?;
+        // B253: espelhar a seção troca o lado dos perfis sem simetria (a caixa não muda)
+        let (loops, cen) = if m.mirror { (structural::mirrored(&loops), [-cen[0], cen[1]]) } else { (loops, cen) };
+        let wall = structural::wall(m.kind, &dims);
         let ang = ev(&m.angle, &self.vars, "rotação")?.to_radians();
         let off = [ev(&m.off_x, &self.vars, "deslocamento x")?, ev(&m.off_y, &self.vars, "deslocamento y")?];
         let a = structural::anchor_point(m.anchor, w, h, cen);
@@ -2463,7 +2546,7 @@ impl Ctx<'_> {
             let x0 = fenkra_kernel::cross(v, z);
             let x = geo3d::rotate(x0, z, ang);
             let y = fenkra_kernel::cross(z, x);
-            out.push(MemberGeom { start, end, z, x, y, w, h, shift, ext: (e1, e2), loops: loops.clone(), pts: c.pts.clone(), straight: c.is_straight() });
+            out.push(MemberGeom { start, end, z, x, x0, y, w, h, wall, shift, ext: (e1, e2), loops: loops.clone(), pts: c.pts.clone(), straight: c.is_straight() });
         }
         Ok(out)
     }
@@ -2850,14 +2933,20 @@ impl Ctx<'_> {
         Shape::loft_surface(&sections, false, false, None).map_err(|x| format!("varredura: {}", x.0))
     }
 
-    /// Membro (de comandos estruturais anteriores) com a ponta mais perto de `at`.
+    /// Membro (de comandos estruturais anteriores) com a ponta mais perto de `at`. Um ponto sobre a
+    /// face de uma ponta (face clicada, B255) escolhe essa ponta mesmo que outra esteja mais perto.
     fn member_end(&self, at: V3, me: &Feature) -> Result<(MemberGeom, bool), String> {
         let mut best: Option<(f64, MemberGeom, bool)> = None;
         for f in self.doc.features.iter().take_while(|g| g.id != me.id) {
             let FeatureKind::StructMember(m) = &f.kind else { continue };
             for g in self.members(m)? {
                 for (p, s) in [(g.start, true), (g.end, false)] {
-                    let dd = geo3d::dist(p, at);
+                    let d = geo3d::sub(at, p);
+                    let along = geo3d::dot(d, g.z);
+                    let lateral = geo3d::dist(d, geo3d::mul(g.z, along));
+                    // fora da face, vale a distância; sobre a face (plano da ponta e dentro da seção), vale o lateral
+                    let on_face = along.abs() < 1e-3 && lateral <= (g.w * g.w + g.h * g.h).sqrt() / 2. + 1e-3;
+                    let dd = if on_face { lateral * 1e-3 } else { geo3d::dist(p, at) + 1e-3 };
                     if best.as_ref().is_none_or(|b| dd < b.0) {
                         best = Some((dd, g.clone(), s));
                     }
@@ -2956,9 +3045,9 @@ impl Ctx<'_> {
         let smax = corners(&moving).iter().map(|q| geo3d::dot(geo3d::sub(*q, p0), side)).fold(ba, f64::max);
         let c0 = geo3d::add(p0, geo3d::mul(e, e0));
         let map = if down {
-            SheetMap { c0: geo3d::sub(c0, geo3d::mul(n, t)), ev: e, l: e1 - e0, n: geo3d::mul(n, -1.), u: side, t, o: geo3d::sub(c0, geo3d::mul(n, t + r)), axis: fenkra_kernel::cross(n, side), a: ang.to_radians(), ba, length: smax - ba, down: true }
+            SheetMap { c0: geo3d::sub(c0, geo3d::mul(n, t)), ev: e, l: e1 - e0, n: geo3d::mul(n, -1.), u: side, t, o: geo3d::sub(c0, geo3d::mul(n, t + r)), axis: fenkra_kernel::cross(n, side), a: ang.to_radians(), ba, length: smax - ba, down: true, feature: Id(0) }
         } else {
-            SheetMap { c0, ev: e, l: e1 - e0, n, u: side, t, o: geo3d::add(c0, geo3d::mul(n, r)), axis: fenkra_kernel::cross(side, n), a: ang.to_radians(), ba, length: smax - ba, down: false }
+            SheetMap { c0, ev: e, l: e1 - e0, n, u: side, t, o: geo3d::add(c0, geo3d::mul(n, r)), axis: fenkra_kernel::cross(side, n), a: ang.to_radians(), ba, length: smax - ba, down: false, feature: Id(0) }
         };
         if !build {
             return Ok((None, map));
@@ -3024,6 +3113,7 @@ impl Ctx<'_> {
             ba: chapa::compensacao(p.t, p.r, p.angle, p.k).ba,
             length: p.length,
             down: false,
+            feature: Id(0),
         });
         // a lateral da aresta escolhida precisa ser a espessura da chapa (senão não é parede de chapa)
         if let Some(msg) = chapa::valida_lateral(info.thickness, p.t) {
@@ -3520,18 +3610,53 @@ impl Ctx<'_> {
         Ok(())
     }
 
+    /// Roda o comando e marca com ele as dobras que ele registrou (a tabela e as linhas de dobra
+    /// dizem de qual comando cada dobra veio).
     fn run(&mut self, f: &Feature) -> Result<Option<String>, String> {
+        let n0 = self.sheet_maps.len();
+        let r = self.run_feature(f);
+        for m in self.sheet_maps.iter_mut().skip(n0) {
+            m.feature = f.id;
+        }
+        r
+    }
+
+    fn run_feature(&mut self, f: &Feature) -> Result<Option<String>, String> {
         let k = |e: KernelError| e.0;
         match &f.kind {
             FeatureKind::Sketch(s) => {
-                let frame = self.plane(&s.plane, 0)?;
+                let frame = profile::posiciona(self.plane(&s.plane, 0)?, &s.data.pos);
                 // geometria externa (converter/projetar/interseção): reposiciona antes de resolver
                 let mut link_warn = vec![];
+                let mut quebrados = vec![];
                 let data = if s.data.links.is_empty() {
                     std::borrow::Cow::Borrowed(&s.data)
                 } else {
+                    use fenkra_core::sketch::{LinkPolicy, LinkShape};
                     let mut d = s.data.clone();
                     for l in &s.data.links {
+                        // isolado fica como está, mesmo sem a origem
+                        if l.policy == LinkPolicy::Isolado {
+                            continue;
+                        }
+                        // forma exata: a fórmula da origem manda
+                        if !matches!(l.shape, LinkShape::Poly { .. }) {
+                            match self.link_exata(l, &frame) {
+                                Ok(Some(forma)) => {
+                                    if !d.update_link_exata(l.id, &forma) {
+                                        quebrados.push(l.id);
+                                        link_warn.push(format!("geometria externa: a origem virou {}", forma.nome()));
+                                    }
+                                    continue;
+                                }
+                                Ok(None) => {}
+                                Err(e) => {
+                                    quebrados.push(l.id);
+                                    link_warn.push(format!("geometria externa: {e}"));
+                                    continue;
+                                }
+                            }
+                        }
                         match self.link_world(l, &frame) {
                             Ok(p3) if !p3.is_empty() => {
                                 let y = frame.y();
@@ -3544,21 +3669,37 @@ impl Ctx<'_> {
                                     .collect();
                                 d.update_link(l.id, &uv);
                             }
-                            Ok(_) => link_warn.push("geometria externa sem interseção com o plano".to_string()),
-                            Err(e) => link_warn.push(format!("geometria externa: {e}")),
+                            Ok(_) => {
+                                quebrados.push(l.id);
+                                link_warn.push("geometria externa sem interseção com o plano".to_string());
+                            }
+                            Err(e) => {
+                                quebrados.push(l.id);
+                                link_warn.push(format!("geometria externa: {e}"));
+                            }
                         }
                     }
                     std::borrow::Cow::Owned(d)
                 };
                 let mut es = eval_sketch(&data, &self.vars)?;
                 es.warnings.extend(link_warn);
-                for l in &data.links {
+                es.link_quebrados = quebrados;
+                for l in data.links.iter().filter(|l| l.policy != fenkra_core::sketch::LinkPolicy::Isolado) {
+                    use fenkra_core::sketch::{Curve, LinkShape};
                     match &l.shape {
-                        fenkra_core::sketch::LinkShape::Poly { points, .. } => es.link_pts.extend(points.iter().map(|p| (*p, data.pos(*p)))),
-                        fenkra_core::sketch::LinkShape::Circle { center, curve } => {
+                        LinkShape::Poly { points, .. } => es.link_pts.extend(points.iter().map(|p| (*p, data.pos(*p)))),
+                        LinkShape::Line { a, b, .. } => es.link_pts.extend([*a, *b].map(|p| (p, data.pos(p)))),
+                        LinkShape::Circle { center, curve } => {
                             es.link_pts.push((*center, data.pos(*center)));
-                            if let Some(fenkra_core::sketch::Curve::Circle { r, .. }) = data.curve(*curve).map(|c| &c.geom) {
+                            if let Some(Curve::Circle { r, .. }) = data.curve(*curve).map(|c| &c.geom) {
                                 es.link_r.push((*curve, *r));
+                            }
+                        }
+                        LinkShape::Arc { center, s, e, .. } => es.link_pts.extend([*center, *s, *e].map(|p| (p, data.pos(p)))),
+                        LinkShape::Ellipse { center, s, e, curve } => {
+                            es.link_pts.extend([*center, *s, *e].map(|p| (p, data.pos(p))));
+                            if let Some(Curve::Ellipse { major, minor, t0, t1, .. }) = data.curve(*curve).map(|c| &c.geom) {
+                                es.link_e.push((*curve, *major, *minor, *t0, *t1));
                             }
                         }
                     }
@@ -3587,45 +3728,10 @@ impl Ctx<'_> {
                 };
                 let dir = if into { n.map(|x| -x) } else { n };
                 let _ = &warn_open;
-                // papel de cada face da ferramenta (só nas extrusões simples; nas demais fica desconhecido)
-                let mut roles = None;
-                let tool = if let Extent::UpTo(p) = &e.extent {
-                    let target = self.plane(p, 0)?;
-                    let n = target.normal;
-                    let den = dot(dir, n);
-                    if den.abs() < 1e-9 {
-                        return Err("o plano de término é paralelo à direção da extrusão".into());
-                    }
-                    let t = dot(sub(target.origin, frame.origin), n) / den;
-                    if t <= 1e-9 {
-                        return Err("o plano de término está do outro lado — use 'inverter sentido'".into());
-                    }
-                    let size = loops_size(&sk.loops);
-                    face.extrude_until(dir, t * 4. + size * 10. + 100., target.origin, n).map_err(k)?
-                } else if e.extent == Extent::UpToLast {
-                    let len = self.last_dist(f.target, frame.origin, dir)?;
-                    let (t, r) = face.extrude_roles(dir, len, 0.).map_err(k)?;
-                    roles = Some(r);
-                    t
-                } else if e.extent == Extent::UpToNext && e.op == BoolOp::Add {
-                    let body = self.body(f.target).ok_or("'até o próximo' precisa de um corpo no coletor")?;
-                    face.extrude_to_next(dir, self.through(f.target)?, body).map_err(k)?
-                } else if let Some((cut, ext)) = self.end_cutter(&e.extent, f.target)? {
-                    // até a superfície/face (ou recorte até o próximo): ferramenta longa dividida pela superfície
-                    let start = face.surface_near(frame.origin).map_err(k)?.0;
-                    let len = self.reach(&cut, frame.origin, f.target) + loops_size(&sk.loops);
-                    face.extrude(dir, len, 0.).map_err(k)?.clip_until(&cut, start, ext).map_err(k)?
-                } else if taper.abs() > 1e-9 {
-                    let Extent::Blind(d) = &e.extent else {
-                        return Err("o ângulo de saída vale só com término 'cego'".into());
-                    };
-                    face.extrude_taper(dir, ev(d, &self.vars, "distância")?, taper).map_err(k)?
-                } else {
-                    let (front, back) = self.extent(&e.extent, f.target)?;
-                    let (t, r) = face.extrude_roles(dir, front, back).map_err(k)?;
-                    roles = Some(r);
-                    t
-                };
+                // ferramenta de cada lado (término, deslocamento e início deslocado: ver `termino.rs`);
+                // papel de cada face só nas extrusões simples, nas demais fica desconhecido
+                let _ = &sk.loops;
+                let (tool, roles) = self.tool_extrusao(e, &face, frame, dir, loops_size(&sk.loops), taper, f.target)?;
                 // corte que não alcança o corpo (sentido errado, ferramenta fora dele) não remove nada
                 let vol0 = if e.op == BoolOp::Cut { self.body(f.target).map(|b| b.mass().volume) } else { None };
                 self.apply_roles(f.target, tool, e.op, f.id, roles)?;
@@ -3735,6 +3841,13 @@ impl Ctx<'_> {
                     None => 0.,
                 };
                 let taper = ev(&h.taper, &self.vars, "conicidade")?;
+                // B90: deslocamento da ponta, profundidade de rosca e folga no fundo
+                let tip_off = self.mm_opcional(&h.extra.tip_offset, "deslocamento da ponta")?;
+                let rosca_prof = if h.extra.thread_depth.trim().is_empty() { None } else { Some(ev(&h.extra.thread_depth, &self.vars, "profundidade da rosca")?) };
+                let rosca_folga = self.mm_opcional(&h.extra.thread_relief, "folga no fundo da rosca")?;
+                if rosca_prof.is_some_and(|p| p <= 0.) || rosca_folga < 0. {
+                    return Err("a profundidade da rosca precisa ser positiva e a folga no fundo não pode ser negativa".into());
+                }
                 let cut = self.end_cutter(&h.depth, f.target)?;
                 let mut tool = Shape::empty();
                 let mut depths = vec![];
@@ -3760,10 +3873,15 @@ impl Ctx<'_> {
                                 HoleShape::Counterdrill { diameter, depth, angle } => (FormaFuro::Contrafuro, diameter, depth, angle),
                             };
                             let tolerancia = h.standard.as_deref().map(tolerancia_do_texto).unwrap_or_default();
-                            v.push(HoleRow { feature: f.id, pos: *o, dir: *dir, diameter: d, depth, through: matches!(h.depth, Extent::ThroughAll | Extent::UpToLast), thread: h.thread.clone().unwrap_or_default(), forma, d_boca, prof_boca, angulo, tolerancia });
+                            let prof_rosca = h.thread.as_deref().and_then(hardware::thread).map_or(0., |sp| furo_norma::comprimento_de_rosca(depth, rosca_prof, rosca_folga, sp.pitch).max(0.));
+                            v.push(HoleRow { feature: f.id, prof_rosca, pos: *o, dir: *dir, diameter: d, depth, through: matches!(h.depth, Extent::ThroughAll | Extent::UpToLast), thread: h.thread.clone().unwrap_or_default(), forma, d_boca, prof_boca, angulo, tolerancia });
                         }
                     });
-                    let mut t = Shape::hole_tool_ext(*o, *dir, d, depth, shape, tip, taper).map_err(k)?;
+                    let depth_broca = furo_norma::profundidade_com_ponta(depth, tip_off);
+                    if depth_broca <= 1e-9 {
+                        return Err("o deslocamento da ponta anula a profundidade do furo".into());
+                    }
+                    let mut t = Shape::hole_tool_ext(*o, *dir, d, depth_broca, shape, tip, taper).map_err(k)?;
                     if let Some((c, ext)) = &cut {
                         t = t.clip_until(c, *o, *ext).map_err(k)?;
                     }
@@ -3796,7 +3914,11 @@ impl Ctx<'_> {
                     let (tdir, ext) = if fwd >= back { (dir, fwd) } else { (dir.map(|x| -x), back) };
                     // a rosca começa abaixo do rebaixo/escareado (começar no vazio faz a booleana falhar)
                     let s0 = if fwd >= back { shape.head_depth(d) } else { 0. };
-                    let len = depth.min(ext) - s0;
+                    let lim = depth.min(ext);
+                    if rosca_prof.is_some_and(|p| p > lim + 1e-9) {
+                        return Err(format!("a profundidade da rosca ({}) passa da profundidade do furo ({})", rosca_prof.unwrap_or(0.), lim));
+                    }
+                    let len = furo_norma::comprimento_de_rosca(lim, rosca_prof, rosca_folga, spec.pitch) - s0;
                     if len < spec.pitch {
                         continue;
                     }
@@ -3960,6 +4082,8 @@ impl Ctx<'_> {
             }
             FeatureKind::Pattern(pt) => {
                 let mut xs: Vec<Xform> = vec![];
+                // B91: posição (i, j) de cada instância, para pular por posição e não por ordem
+                let mut keys: Vec<(u32, u32)> = vec![];
                 match &pt.kind {
                     PatternKind::Linear { dir, count, spacing, dir2, count2, spacing2, total } => {
                         let n1 = ev(count, &self.vars, "quantidade")?.round().max(1.) as usize;
@@ -3979,6 +4103,7 @@ impl Ctx<'_> {
                                     continue;
                                 }
                                 xs.push(Xform::Translate([0, 1, 2].map(|c| u1[c] * d1 * i as f64 + u2[c] * d2 * j as f64)));
+                                keys.push((i as u32, j as u32));
                             }
                         }
                     }
@@ -3990,21 +4115,28 @@ impl Ctx<'_> {
                         let step = if (total.abs() - 360.).abs() < 1e-6 { total / n as f64 } else { total / (n.max(2) - 1) as f64 };
                         for i in 1..n {
                             xs.push(Xform::Rotate(o, d, step * i as f64));
+                            keys.push((i as u32, 0));
                         }
                     }
                     PatternKind::Points { points, base } => {
                         let b0 = self.point(base, 0)?;
-                        for q in points {
+                        for (i, q) in points.iter().enumerate() {
                             let p = self.point(q, 0)?;
                             xs.push(Xform::Translate([p[0] - b0[0], p[1] - b0[1], p[2] - b0[2]]));
+                            keys.push((i as u32, 0));
                         }
                     }
                 }
                 if xs.is_empty() {
                     return Ok(Some("padrão com uma só instância".into()));
                 }
+                // B91: instâncias puladas saem da lista; posição que não existe mais é avisada
+                let (xs, aviso) = padrao::sem_puladas(xs, &keys, &pt.skip);
+                if xs.is_empty() {
+                    return Ok(Some("todas as instâncias do padrão estão puladas".into()));
+                }
                 self.replicate(f, &pt.sources, &xs)?;
-                Ok(None)
+                Ok(aviso)
             }
             FeatureKind::Mirror(m) => {
                 let pl = self.plane(&m.plane, 0)?;
@@ -4246,12 +4378,7 @@ impl Ctx<'_> {
                 let kloc = sp.k_for(r);
                 let cmp = chapa::compensacao(sp.t, r, ang, kloc);
                 // a linha marca o centro, o começo ou o fim da zona, ou o vértice de fora
-                let delta = match bd.position {
-                    1 => cmp.ba / 2.,
-                    2 => -cmp.ba / 2.,
-                    3 => cmp.ba / 2. - cmp.ossb,
-                    _ => 0.,
-                };
+                let delta = chapa_linha::deslocamento_posicao(bd.position, &cmp);
                 for w in lines.windows(2) {
                     let gap = geo3d::dot(geo3d::sub(geo3d::lerp(w[1].0, w[1].1, 0.5), geo3d::lerp(w[0].0, w[0].1, 0.5)), side_ref);
                     if gap < cmp.ba - 1e-6 {
@@ -4305,7 +4432,7 @@ impl Ctx<'_> {
             FeatureKind::SmLouver(lv) => {
                 let sp = self.sheet()?;
                 if sp.flat {
-                    return Ok(Some("planificada: veneziana mostrada só pelo corte".into()));
+                    return self.veneziana_planificada(f, lv);
                 }
                 let w = ev(&lv.width, &self.vars, "largura")?;
                 let h = ev(&lv.height, &self.vars, "altura")?;
@@ -4357,6 +4484,10 @@ impl Ctx<'_> {
                 let (frame, sk) = &self.sketch(st.sketch)?;
                 let frame = *frame;
                 let p = if st.flip { frame.normal } else { frame.normal.map(|x| -x) };
+                // planificada: a chapa plana não leva o copo; o contorno da ferramenta fica marcado
+                if sp.flat {
+                    return self.estampo_planificado(f, st, &frame, sk, sp.t, width);
+                }
                 match st.kind {
                     // nervura ao longo das curvas do sketch: seção trapezoidal varrida
                     1 => {
@@ -4521,7 +4652,7 @@ impl Ctx<'_> {
                         here.iter().map(|l| l.iter().map(|q| self.map_outline_point(*q, from_flat, !from_flat)).collect()).collect()
                     };
                     let (folded, flat) = if f.flat_space { (other(true), here.clone()) } else { (here.clone(), other(false)) };
-                    self.cut_outlines.push(CutOutline { feature: f.id, folded, flat });
+                    self.cut_outlines.push(CutOutline { feature: f.id, folded, flat, dobra: None });
                 }
                 let mut face = Shape::face(&frame, &sk.loops).map_err(k)?;
                 let off = if c.offset.trim().is_empty() { 0. } else { ev(&c.offset, &self.vars, "folga")? };
@@ -4559,9 +4690,6 @@ impl Ctx<'_> {
             }
             FeatureKind::SmProfileFlange(pf) => {
                 let sp = self.sheet()?;
-                if sp.flat {
-                    return Ok(Some("planificada: a aba por perfil aparece só dobrada".into()));
-                }
                 let (frame, sk) = &self.sketch(pf.sketch)?;
                 let frame = *frame;
                 if sk.open.is_empty() {
@@ -4571,6 +4699,11 @@ impl Ctx<'_> {
                     Some(e) => ev(e, &self.vars, "raio")?,
                     None => sp.r,
                 };
+                if sp.flat {
+                    let l1 = ev(&pf.l1, &self.vars, "comprimento 1")?;
+                    let l2 = if pf.l2.trim().is_empty() { 0. } else { ev(&pf.l2, &self.vars, "comprimento 2")? };
+                    return self.aba_perfil_planificada(f, &frame, sk, sp, r, l1, l2, !pf.flip);
+                }
                 // cantos arredondados no raio de dobra (linha média da chapa)
                 let mut sk2 = (**sk).clone();
                 sk2.loops.clear();
@@ -4913,49 +5046,8 @@ impl Ctx<'_> {
                 self.add_separate(f, all);
                 Ok(warn)
             }
-            FeatureKind::StructPlate(pl) => {
-                let (g, end_at_start) = self.member_end(pl.at, f)?;
-                let t = ev(&pl.thickness, &self.vars, "espessura")?;
-                let mg = ev(&pl.margin, &self.vars, "sobra")?;
-                let (e, out) = if end_at_start { (geo3d::sub(g.start, geo3d::mul(g.z, g.ext.0)), geo3d::mul(g.z, -1.)) } else { (geo3d::add(g.end, geo3d::mul(g.z, g.ext.1)), g.z) };
-                let (w, h) = (g.w + 2. * mg, g.h + 2. * mg);
-                // centro da seção (a linha guia pode estar num canto, pela ancoragem)
-                let c = geo3d::add(geo3d::add(e, geo3d::mul(g.x, -g.shift[0])), geo3d::mul(g.y, -g.shift[1]));
-                let y = fenkra_kernel::cross(out, g.x);
-                let corner = geo3d::sub(geo3d::sub(c, geo3d::mul(g.x, w / 2.)), geo3d::mul(y, h / 2.));
-                let plate = Shape::box_tool(corner, g.x, out, [w, h, t]).map_err(k)?;
-                log_struct(f, 0, StructItem::Plate, "Placa", "Placa".into(), 0., Frame { origin: c, x: g.x, normal: out }, &plate, "");
-                self.add_separate(f, plate);
-                Ok(None)
-            }
-            FeatureKind::StructGusset(gs) => {
-                let (a, b, p) = self.member_pair(gs.at, f)?;
-                let leg = ev(&gs.leg, &self.vars, "aba")?;
-                let t = ev(&gs.thickness, &self.vars, "espessura")?;
-                let c = ev(&gs.chamfer, &self.vars, "chanfro")?;
-                let (da, db) = (a.1, b.1);
-                let n = geo3d::unit(fenkra_kernel::cross(da, db)).ok_or("membros colineares não levam reforço")?;
-                // canto do reforço junto às faces dos membros, no plano das linhas guia
-                let ha = a.0.w.max(a.0.h) / 2.;
-                let hb = b.0.w.max(b.0.h) / 2.;
-                let q = geo3d::add(geo3d::add(p, geo3d::mul(da, hb)), geo3d::mul(db, ha));
-                let q = geo3d::sub(q, geo3d::mul(n, t / 2.));
-                let mut pts = vec![];
-                if c > 1e-9 {
-                    pts.push(geo3d::add(q, geo3d::mul(da, c)));
-                } else {
-                    pts.push(q);
-                }
-                pts.push(geo3d::add(q, geo3d::mul(da, leg)));
-                pts.push(geo3d::add(q, geo3d::mul(db, leg)));
-                if c > 1e-9 {
-                    pts.push(geo3d::add(q, geo3d::mul(db, c)));
-                }
-                let plate = Shape::poly_prism(&pts, geo3d::mul(n, t)).map_err(k)?;
-                log_struct(f, 0, StructItem::Gusset, "Reforço", "Reforço".into(), 0., Frame { origin: q, x: da, normal: n }, &plate, "");
-                self.add_separate(f, plate);
-                Ok(None)
-            }
+            FeatureKind::StructPlate(pl) => self.struct_plate(f, pl),
+            FeatureKind::StructGusset(gs) => self.struct_gusset(f, gs),
             FeatureKind::MoveBody(m) => {
                 let (b, owners, roles) = self.body_owned(f.target).ok_or("não há corpo para mover")?;
                 let rigid = match &m.xf {
@@ -5481,7 +5573,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
     }
     cache.feats.retain(|id, _| seen.contains(id));
     // linhas de dobra no planificado: cada dobra leva as linhas pelas dobras anteriores
-    let bend_lines: Vec<BendLine> = (0..cx.sheet_maps.len())
+    let mut bend_lines: Vec<BendLine> = (0..cx.sheet_maps.len())
         .map(|i| {
             let m = cx.sheet_maps[i];
             let up_to = |q: V3| {
@@ -5497,9 +5589,13 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                 let a = geo3d::add(m.c0, geo3d::mul(m.u, du));
                 [up_to(a), up_to(geo3d::add(a, geo3d::mul(m.ev, m.l)))]
             };
-            BendLine { start: line(0.), center: line(m.ba / 2.), end: line(m.ba), angle: m.a.to_degrees().abs(), radius: geo3d::dist(m.o, m.c0), up: m.a > 0. && !m.down }
+            BendLine { start: line(0.), center: line(m.ba / 2.), end: line(m.ba), angle: m.a.to_degrees().abs(), radius: geo3d::dist(m.o, m.c0), up: m.a > 0. && !m.down, feature: m.feature, eixo: Some(EixoDobra { a: m.c0, b: geo3d::add(m.c0, geo3d::mul(m.ev, m.l)), centro: m.o, normal: m.n, saida: m.u }), allowance: m.ba, deduction: 2. * (if m.a.abs() < 179.9_f64.to_radians() { (m.a.abs() / 2.).tan() * (geo3d::dist(m.o, m.c0) + m.t) } else { geo3d::dist(m.o, m.c0) + m.t }) - m.ba }
         })
         .collect();
+    // cantos da aba por perfil (linhas soltas) entram no mapa; a ordem segue a dos comandos
+    bend_lines.extend(cx.cut_outlines.iter().filter_map(|o| o.dobra.clone()));
+    let ordem_cmd: HashMap<Id, usize> = doc.features.iter().enumerate().map(|(i, f)| (f.id, i)).collect();
+    bend_lines.sort_by_key(|b| ordem_cmd.get(&b.feature).copied().unwrap_or(usize::MAX));
     let h = hash_of(&[&all_bodies(&cx.body_sig)], global);
 
     // planos: Origem + Referências. Todas entram no resultado (ocultas também: a cena filtra pela
@@ -5578,6 +5674,8 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
             converged: es.report.converged,
             link_pts: es.link_pts.clone(),
             link_r: es.link_r.clone(),
+            link_e: es.link_e.clone(),
+            link_quebrados: es.link_quebrados.clone(),
             ents: es.curves.iter().map(|(cid, pts)| (*cid, es.cons.contains(cid), pts.iter().map(|q| to3d(fr, *q)).collect())).collect(),
             pt_ids: es.pts.iter().map(|(pid, q)| (*pid, to3d(fr, *q))).collect(),
         };
@@ -5767,9 +5865,13 @@ struct MemberGeom {
     /// eixo do membro e eixos da seção (x, y)
     z: V3,
     x: V3,
+    /// eixo X da seção sem a rotação do comando (referência do arco de rotação)
+    x0: V3,
     y: V3,
     w: f64,
     h: f64,
+    /// espessura da parede do perfil (0 nas barras maciças)
+    wall: f64,
     /// deslocamento da seção (ancoragem − deslocamentos)
     shift: [f64; 2],
     ext: (f64, f64),
@@ -5854,6 +5956,7 @@ fn loops_points(loops: &[fenkra_kernel::Loop2]) -> Vec<Vec<[f64; 2]>> {
                         [c[0] + r * t.cos(), c[1] + r * t.sin()]
                     })),
                     fenkra_kernel::Seg2::Spline(p) => v.extend(p.iter().copied()),
+                    fenkra_kernel::Seg2::Ellipse(c, m, r, t0, t1) => v.extend(fenkra_core::projecao::elipse_amostras(*c, *m, *r, *t0, *t1)),
                 }
             }
             v.dedup_by(|x, y| (x[0] - y[0]).abs() + (x[1] - y[1]).abs() < 1e-9);
@@ -6368,6 +6471,8 @@ pub struct HoleRow {
     pub angulo: f64,
     /// classe de tolerância escrita na especificação do furo ("H7"); vazia quando não há
     pub tolerancia: String,
+    /// comprimento da rosca medido da boca (0 quando o furo não é roscado)
+    pub prof_rosca: f64,
 }
 
 /// Classe de tolerância ISO ("H7", "h6", "JS9") dentro de um texto de especificação: uma ou duas
@@ -6410,6 +6515,10 @@ pub struct BendRow {
     pub allowance: f64,
     /// dedução de dobra (2 × recuo externo − allowance), para quem cota por fora
     pub deduction: f64,
+    /// posição da dobra no mapa (1, 2, 3...): a mesma ordem das linhas de dobra da vista
+    pub ordem: usize,
+    /// etiqueta da vista ("↑ 90° R2"), igual à que a planificada mostra sobre a linha
+    pub rotulo: String,
 }
 
 /// Prévia de um comando de chapa: o resultado que ele daria agora, sem gravar nada no documento.
@@ -6486,10 +6595,33 @@ pub fn bend_table(doc: &Document) -> Vec<BendRow> {
         let c = chapa::compensacao(t, r, ang, fenkra_core::sheet_k(s.method, k0, t, r, allowance));
         for i in 0..n {
             let name = if n > 1 { format!("{} ({}/{n})", f.name, i + 1) } else { f.name.clone() };
-            out.push(BendRow { feature: f.id, name, angle: ang, radius: r, allowance: c.ba, deduction: c.deducao });
+            out.push(BendRow { feature: f.id, name, angle: ang, radius: r, allowance: c.ba, deduction: c.deducao, ordem: out.len() + 1, rotulo: String::new() });
         }
     }
     out
+}
+
+/// Tabela de dobras do mapa: uma linha por linha de dobra da vista, na mesma ordem e com a mesma
+/// etiqueta (`BendLine::label`). Os números vêm da própria dobra feita na geometria, então a
+/// tabela, a vista e o DXF nunca discordam. `linhas` é `RecomputeResult::bend_lines`.
+pub fn tabela_dobras(doc: &Document, linhas: &[BendLine]) -> Vec<BendRow> {
+    let mut por_comando: HashMap<Id, usize> = HashMap::new();
+    for l in linhas {
+        *por_comando.entry(l.feature).or_default() += 1;
+    }
+    let mut visto: HashMap<Id, usize> = HashMap::new();
+    linhas
+        .iter()
+        .enumerate()
+        .map(|(i, l)| {
+            let nome = doc.feature(l.feature).map(|f| f.name.clone()).unwrap_or_else(|| "dobra".into());
+            let total = por_comando[&l.feature];
+            let k = visto.entry(l.feature).or_default();
+            *k += 1;
+            let name = if total > 1 { format!("{nome} ({k}/{total})") } else { nome };
+            BendRow { feature: l.feature, name, angle: l.angle, radius: l.radius, allowance: l.allowance, deduction: l.deduction, ordem: i + 1, rotulo: l.label() }
+        })
+        .collect()
 }
 
 /// Geometria guardada de um link (ou cópia isolada).
@@ -6652,7 +6784,7 @@ pub fn example_document() -> Document {
     }
     let base = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data: sk }));
     d.feature_mut(base).unwrap().name = s("Sketch base");
-    let ex = d.add_feature(FeatureKind::Extrude(Extrude { sketch: base, op: BoolOp::Add, extent: Extent::Blind(s("esp")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0 }));
+    let ex = d.add_feature(FeatureKind::Extrude(Extrude { sketch: base, op: BoolOp::Add, extent: Extent::Blind(s("esp")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
     d.feature_mut(ex).unwrap().name = s("Placa");
 
     let topo = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "esp");
@@ -6683,7 +6815,7 @@ pub fn example_document() -> Document {
         thread: None,
         thread_modeled: false,
         standard: Some(s("M6 passagem normal")),
-        points: vec![], dir: None, reverse: false, tip: None, taper: "0".into(), left_hand: false,
+        points: vec![], dir: None, reverse: false, tip: None, taper: "0".into(), left_hand: false, extra: Default::default(),
     }));
     d.feature_mut(furo).unwrap().name = s("Furos M6");
     let fol = d.add_folder("Acabamentos");
@@ -6727,6 +6859,7 @@ mod tests {
                 gap: s("0"),
                 joints: vec![],
                 material: String::new(),
+                mirror: false,
             }));
             d
         };
@@ -6763,12 +6896,13 @@ mod tests {
             gap: s("0"),
             joints: vec![],
             material: String::new(),
+            mirror: false,
         }));
         let v0 = vol(&d);
-        d.add_feature(FeatureKind::StructPlate(StructPlate { at: [0., 0., 0.], thickness: s("8"), margin: s("5") }));
+        d.add_feature(FeatureKind::StructPlate(StructPlate::nova([0., 0., 0.], "8", "5")));
         let v1 = vol(&d);
         assert!(near(v1 - v0, 50. * 50. * 8., 1e-3), "placa {}", v1 - v0);
-        d.add_feature(FeatureKind::StructGusset(StructGusset { at: [0., 0., 500.], leg: s("60"), thickness: s("6"), chamfer: s("0") }));
+        d.add_feature(FeatureKind::StructGusset(StructGusset::novo([0., 0., 500.], "60", "6", "0")));
         let v2 = vol(&d);
         assert!(near(v2 - v1, 0.5 * 60. * 60. * 6., 1e-3), "reforço {}", v2 - v1);
     }
@@ -6802,6 +6936,7 @@ mod tests {
             gap: s("0"),
             joints: vec![],
             material: String::new(),
+            mirror: false,
         }));
         // um sólido por trecho, no referencial local (Z ao longo do membro, seção centrada)
         let ms = structural_members(&d);
@@ -6852,9 +6987,10 @@ mod tests {
             gap: s("0"),
             joints: vec![],
             material: String::new(),
+            mirror: false,
         }));
-        d.add_feature(FeatureKind::StructPlate(StructPlate { at: [0., 0., 0.], thickness: s("8"), margin: s("5") }));
-        d.add_feature(FeatureKind::StructGusset(StructGusset { at: [0., 0., 500.], leg: s("60"), thickness: s("6"), chamfer: s("0") }));
+        d.add_feature(FeatureKind::StructPlate(StructPlate::nova([0., 0., 0.], "8", "5")));
+        d.add_feature(FeatureKind::StructGusset(StructGusset::novo([0., 0., 500.], "60", "6", "0")));
         let gs = structural_groups(&d);
         let kinds: Vec<StructItem> = gs.iter().map(|g| g.signature.kind).collect();
         assert_eq!(kinds, vec![StructItem::Member, StructItem::Member, StructItem::Plate, StructItem::Gusset]);
@@ -6895,6 +7031,185 @@ mod tests {
         let _ = link;
     }
 
+    /// Elipse de semieixos 30 e 10 em XY, extrudada 20: a curva exata atravessa o sketch e o kernel.
+    fn cilindro_eliptico() -> (Document, Id) {
+        use fenkra_core::projecao::Exata;
+        use fenkra_core::sketch::LinkSrc;
+        let mut d = Document::new("elipse");
+        let mut data = SketchData::default();
+        let mut n = 9_000_000u64;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        let forma = Exata::Elipse { c: [5., 0.], maior: [30., 0.], menor: 10., t0: 0., t1: std::f64::consts::TAU };
+        data.add_link_exata(&mut al, LinkSrc::Vertex { pos: [0.; 3] }, false, &forma, false);
+        data.links.clear();
+        let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
+        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind("10".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
+        (d, sk)
+    }
+
+    /// Sketch em `plano` com um vínculo exato à aresta de `mid`.
+    fn sketch_ligado(d: &mut Document, plano: OriginPlane, mid: [f64; 3], base: u64, inter: bool) -> (Id, Id) {
+        use fenkra_core::projecao::Exata;
+        use fenkra_core::sketch::LinkSrc;
+        let mut data = SketchData::default();
+        let mut n = base;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        let l = if inter {
+            data.add_link_points(&mut al, LinkSrc::Edge { mid }, &[[0., 0.], [1., 0.]], true).unwrap()
+        } else {
+            data.add_link_exata(&mut al, LinkSrc::Edge { mid }, false, &Exata::Elipse { c: [0., 0.], maior: [2., 0.], menor: 1., t0: 0., t1: std::f64::consts::TAU }, true)
+        };
+        (d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(plano), data })), l)
+    }
+
+    #[test]
+    fn elipse_exata_vira_solido_e_aresta_conhecida() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let (d, sk) = cilindro_eliptico();
+        let r = recompute(&d);
+        assert!(r.status.values().all(|s| matches!(s, Status::Ok)), "{:?}", r.status);
+        let v = r.bodies[0].mass.volume;
+        let h = 10.;
+        assert!((v - std::f64::consts::PI * 30. * 10. * h).abs() / v < 1e-6, "volume {v}");
+        let f = (0..r.bodies[0].mesh.edge_mids.len() / 3).filter_map(|e| r.bodies[0].mesh.edge_formula(e)).find(|f| matches!(f, fenkra_kernel::EdgeFormula::Conic { .. }));
+        let Some(fenkra_kernel::EdgeFormula::Conic { u, v, .. }) = f else { panic!("sem cônica: {f:?}") };
+        let n = |a: [f64; 3]| (a[0] * a[0] + a[1] * a[1] + a[2] * a[2]).sqrt();
+        assert!((n(u) - 30.).abs() < 1e-9 && (n(v) - 10.).abs() < 1e-9, "{u:?} {v:?}");
+        let _ = sk;
+    }
+
+    #[test]
+    fn projecao_de_aresta_eliptica_e_exata_e_acompanha() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        use fenkra_core::sketch::Curve;
+        let (mut d, _) = cilindro_eliptico();
+        // a aresta de cima: projetada em XY é a própria elipse, com o semieixo certo
+        let (sk, _) = sketch_ligado(&mut d, OriginPlane::XY, [-25., 0., 10.], 9_100_000, false);
+        let _ = recompute(&d);
+        let r = recompute(&d);
+        assert!(matches!(r.status[&sk], Status::Ok), "{:?}", r.status[&sk]);
+        let v = r.sketches.iter().find(|v| v.feature == sk).unwrap();
+        assert!(v.link_quebrados.is_empty());
+        let (_, m, menor, t0, t1) = v.link_e[0];
+        assert!((m[0].hypot(m[1]) - 30.).abs() < 1e-9 && (menor - 10.).abs() < 1e-9, "{m:?} {menor}");
+        assert!((t1 - t0 - std::f64::consts::TAU).abs() < 1e-9);
+        // a elipse de origem cresce no eixo menor: o vínculo acompanha sem escolher de novo
+        let id = d.features[0].id;
+        if let Some(FeatureKind::Sketch(s)) = d.feature_mut(id).map(|f| &mut f.kind) {
+            if let Curve::Ellipse { minor, .. } = &mut s.data.curves[0].geom {
+                *minor = 12.;
+            }
+        }
+        let r = recompute(&d);
+        let v = r.sketches.iter().find(|v| v.feature == sk).unwrap();
+        assert!((v.link_e[0].2 - 12.).abs() < 1e-9, "{:?}", v.link_e);
+    }
+
+    #[test]
+    fn interseccao_de_aresta_da_todos_os_pontos_exatos() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        // a elipse de baixo atravessa o plano XZ nas pontas do eixo maior: x = 5 ± 30
+        let (mut d, _) = cilindro_eliptico();
+        let (sk, _) = sketch_ligado(&mut d, OriginPlane::XZ, [-25., 0., 0.], 9_200_000, true);
+        let r = recompute(&d);
+        let v = r.sketches.iter().find(|v| v.feature == sk).unwrap();
+        assert!(v.link_quebrados.is_empty(), "{:?}", r.status[&sk]);
+        let mut xs: Vec<f64> = v.link_pts.iter().map(|p| p.1[0]).collect();
+        xs.sort_by(f64::total_cmp);
+        assert_eq!(xs.len(), 2);
+        assert!((xs[0].abs() - 25.).abs() < 1e-9 || (xs[0].abs() - 35.).abs() < 1e-9, "{xs:?}");
+        assert!((xs[1] - xs[0] - 60.).abs() < 1e-9, "{xs:?}");
+    }
+
+    #[test]
+    fn vinculo_sem_origem_quebra_e_isolado_nao_avisa() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        use fenkra_core::sketch::LinkPolicy;
+        let (mut d, _) = cilindro_eliptico();
+        // nenhuma aresta perto: a origem sumiu
+        let (sk, _) = sketch_ligado(&mut d, OriginPlane::XY, [500., 500., 500.], 9_300_000, false);
+        let r = recompute(&d);
+        assert_eq!(r.sketches.iter().find(|v| v.feature == sk).unwrap().link_quebrados.len(), 1);
+        assert!(matches!(r.status[&sk], Status::Warning(_)), "{:?}", r.status[&sk]);
+        // isolado: guarda a origem, não procura por ela
+        if let Some(FeatureKind::Sketch(s)) = d.feature_mut(sk).map(|f| &mut f.kind) {
+            s.data.links[0].policy = LinkPolicy::Isolado;
+        }
+        let r = recompute(&d);
+        assert!(r.sketches.iter().find(|v| v.feature == sk).unwrap().link_quebrados.is_empty());
+        assert!(matches!(r.status[&sk], Status::Ok), "{:?}", r.status[&sk]);
+        // voltou a associar: o estado reaparece, sem ninguém escolher a aresta de novo
+        if let Some(FeatureKind::Sketch(s)) = d.feature_mut(sk).map(|f| &mut f.kind) {
+            s.data.links[0].policy = LinkPolicy::Associativo;
+            if let fenkra_core::sketch::LinkSrc::Edge { mid } = &mut s.data.links[0].source {
+                *mid = [-25., 0., 10.];
+            }
+        }
+        let r = recompute(&d);
+        let v = r.sketches.iter().find(|v| v.feature == sk).unwrap();
+        assert!(v.link_quebrados.is_empty() && !v.link_e.is_empty());
+    }
+
+    #[test]
+    fn sketch_com_origem_e_orientacao_proprias() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        use fenkra_core::sketch::SketchPos;
+        let caixa = |pos: SketchPos| {
+            let mut d = Document::new("pos");
+            let mut data = SketchData::default();
+            let mut n = 9_400_000u64;
+            let mut al = || {
+                n += 1;
+                Id(n)
+            };
+            data.add_rect(&mut al, [0., 0.], [40., 10.], false);
+            data.pos = pos;
+            let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
+            d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind("10".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
+            let r = recompute(&d);
+            assert!(r.status.values().all(|s| matches!(s, Status::Ok)), "{:?}", r.status);
+            assert!((r.bodies[0].mass.volume - 4000.).abs() < 1e-6);
+            r.bodies[0].mesh.positions.chunks_exact(3).fold(([f32::MAX; 3], [f32::MIN; 3]), |(mut lo, mut hi), p| {
+                for i in 0..3 {
+                    lo[i] = lo[i].min(p[i]);
+                    hi[i] = hi[i].max(p[i]);
+                }
+                (lo, hi)
+            })
+        };
+        let perto = |a: [f32; 3], b: [f32; 3]| (0..3).all(|i| (a[i] - b[i]).abs() < 1e-3);
+        let (lo, hi) = caixa(SketchPos::default());
+        assert!(perto(lo, [0., 0., 0.]) && perto(hi, [40., 10., 10.]), "{lo:?} {hi:?}");
+        // origem própria: tudo anda junto no plano
+        let (lo, hi) = caixa(SketchPos { origem: [100., -50.], ..Default::default() });
+        assert!(perto(lo, [100., -50., 0.]) && perto(hi, [140., -40., 10.]), "{lo:?} {hi:?}");
+        // inverter H e V juntos é meia volta, com a mesma normal
+        let (lo, hi) = caixa(SketchPos { inverter_h: true, inverter_v: true, ..Default::default() });
+        assert!(perto(lo, [-40., -10., 0.]) && perto(hi, [0., 0., 10.]), "{lo:?} {hi:?}");
+        // inverter H sozinho vê o sketch por trás: a normal vira e a extrusão desce
+        let (lo, hi) = caixa(SketchPos { inverter_h: true, ..Default::default() });
+        assert!(perto(lo, [-40., 0., -10.]) && perto(hi, [0., 10., 0.]), "{lo:?} {hi:?}");
+        // trocar H e V: o lado de 40 passa para y, e a normal também vira
+        let (lo, hi) = caixa(SketchPos { trocar: true, ..Default::default() });
+        assert!(perto(lo, [0., 0., -10.]) && perto(hi, [10., 40., 0.]), "{lo:?} {hi:?}");
+    }
+
     /// Quarto de disco com abas nas duas retas: dobrado e planificado (com recorte e filete
     /// feitos no dobrado, que vão junto para o planificado).
     fn quarto_de_disco(flat: bool) -> (Document, Vec<Id>) {
@@ -6921,7 +7236,7 @@ mod tests {
         }
         // furo retangular na aba do lado y = 0 (feito no dobrado: a aba sobe em z)
         let cut = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XZ), [40., 15.], [60., 25.]);
-        ids.push(d.add_feature(FeatureKind::Extrude(Extrude { sketch: cut, op: BoolOp::Cut, extent: Extent::ThroughAll, reverse: true, taper: s("0"), thin: None, dir: None, thin_side: 0 })));
+        ids.push(d.add_feature(FeatureKind::Extrude(Extrude { sketch: cut, op: BoolOp::Cut, extent: Extent::ThroughAll, reverse: true, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() })));
         if let Some(sh) = d.sheet.as_mut() {
             sh.flat = flat;
         }
@@ -6952,6 +7267,7 @@ mod tests {
             gap: s("0"),
             joints: vec![],
             material: String::new(),
+            mirror: false,
         }));
         let r = recompute(&d);
         assert!(matches!(r.status[&m], Status::Ok), "{:?}", r.status[&m]);
@@ -6981,7 +7297,7 @@ mod tests {
                 };
                 sk.data.add_constraint(&mut al, fenkra_core::sketch::Kind::Coincident(ids[1], ids[2]));
             }
-            let e = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: thin.map(s), dir: None, thin_side: side }));
+            let e = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: thin.map(s), dir: None, thin_side: side, ends: Default::default() }));
             let r = recompute(&d);
             (r.status[&e].clone(), r.bodies.iter().map(|b| b.mass.volume).sum::<f64>())
         };
@@ -7031,7 +7347,7 @@ mod tests {
         let c4 = ids4.pop().unwrap();
         d4.features.retain(|f| f.id != c4);
         let sk = sk_rect(&mut d4, PlaneRef::Origin(OriginPlane::XY), [40., -25.], [60., -15.]);
-        ids4.push(d4.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Cut, extent: Extent::ThroughAll, reverse: true, taper: "0".into(), thin: None, dir: None, thin_side: 0 })));
+        ids4.push(d4.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Cut, extent: Extent::ThroughAll, reverse: true, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() })));
         assert!(d4.features.last().unwrap().flat_space);
         let v4_flat = vol(&d4, &ids4);
         assert!((v2 - v4_flat - 400.).abs() < 1., "recorte no planificado: {v2} − {v4_flat}");
@@ -7126,7 +7442,7 @@ mod tests {
         ] {
             let mut d = Document::new("tf");
             let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [40., 40.]);
-            d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0 }));
+            d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
             d.add_feature(FeatureKind::Hole(Hole {
                 sketch: Id(0),
                 kind,
@@ -7140,7 +7456,7 @@ mod tests {
                 reverse: false,
                 tip: None,
                 taper: s("0"),
-                left_hand: false,
+                left_hand: false, extra: Default::default(),
             }));
             let t = hole_table(&d);
             assert_eq!(t.len(), 1);
@@ -7166,7 +7482,7 @@ mod tests {
         let base = || {
             let mut d = Document::new("fp");
             let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [40., 40.]);
-            d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0 }));
+            d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
             d
         };
         let hole = |pts: Vec<PointRef>| Hole {
@@ -7182,7 +7498,7 @@ mod tests {
             reverse: false,
             tip: None,
             taper: s("0"),
-            left_hand: false,
+            left_hand: false, extra: Default::default(),
         };
         let vol = |d: &Document| {
             let r = recompute(d);
@@ -7217,7 +7533,7 @@ mod tests {
         let mk = |prop: EdgeProp| {
             let mut d = Document::new("fm");
             let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [40., 20.]);
-            d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0 }));
+            d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
             d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("5"), edges: EdgeSel::Edges(vec![[40., 20., 5.]]), mode: EdgeMode::Constant, prop: EdgeProp::Tangente, keys: vec![] }));
             // filete de 1 na aresta de cima do lado y = 20 (que continua tangente pelo arco do canto)
             d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::Edges(vec![[17.5, 20., 10.]]), mode: EdgeMode::Constant, prop, keys: vec![] }));
@@ -7258,6 +7574,7 @@ mod tests {
             gap: s("0"),
             joints: vec![],
             material: String::new(),
+            mirror: false,
         };
         let vol = |d: &Document| recompute(d).bodies.iter().map(|b| b.mass.volume).sum::<f64>();
         let lado = |d: &mut Document, a: [f64; 3], b: [f64; 3]| CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: s("0"), end: s("0") }));
@@ -7325,7 +7642,7 @@ mod tests {
         }
         let s = |x: &str| x.to_string();
         let ext = |d: &mut Document, prof: Id, h: &str| {
-            d.add_feature(FeatureKind::Extrude(Extrude { sketch: prof, op: BoolOp::Add, extent: Extent::Blind(s(h)), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0 }))
+            d.add_feature(FeatureKind::Extrude(Extrude { sketch: prof, op: BoolOp::Add, extent: Extent::Blind(s(h)), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() }))
         };
         let vol = |d: &Document, f: Id| {
             let r = recompute(d);
@@ -7386,7 +7703,7 @@ mod tests {
         data.add_curve(&mut al, Curve::Spline { pts: vec![p[1], p[2], p[3], p[4]] }, false);
         data.add_curve(&mut al, Curve::Line { a: p[4], b: p[0] }, false);
         let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
-        let ex = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0 }));
+        let ex = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
         let r = recompute(&d);
         assert!(matches!(r.status[&ex], Status::Ok | Status::Warning(_)), "{:?}", r.status[&ex]);
         let v = r.bodies.iter().map(|b| b.mass.volume).sum::<f64>();
@@ -7535,7 +7852,7 @@ mod tests {
         assert!(v1 > 10000., "estampo circular {v1}");
         d.add_feature(FeatureKind::Pattern(Pattern {
             kind: PatternKind::Linear { dir: AxisRef::Origin(OriginAxis::X), count: s("3"), spacing: s("25"), dir2: None, count2: s("1"), spacing2: s("0"), total: false },
-            sources: vec![st],
+            sources: vec![st], skip: Default::default(),
         }));
         let v3 = vol(&check(&d));
         assert!(near(v3 - 10000., 3. * (v1 - 10000.), 2e-2), "padrão do estampo {v3} {v1}");
@@ -7688,7 +8005,7 @@ mod tests {
             reverse: false,
             tip,
             taper: s("0"),
-            left_hand: false,
+            left_hand: false, extra: Default::default(),
         };
         // dois furos Ø6 × 5 por pontos 3D no topo (normal à superfície, para baixo)
         let topo = vec![PointRef::Fixed([-10., 0., 20.]), PointRef::Fixed([10., 0., 20.])];
@@ -7714,14 +8031,14 @@ mod tests {
         let mut d = caixa();
         let alto = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "30");
         let sk = sk_rect(&mut d, PlaneRef::Datum(alto), [-5., -5.], [5., 5.]);
-        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::UpToLast, reverse: true, taper: s("0"), thin: None, dir: None, thin_side: 0 }));
+        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::UpToLast, reverse: true, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
         assert!(near(vol(&d), v0 + 100. * 10., 1e-6), "até o último {}", vol(&d));
 
         // extrusão inclinada por uma direção: o volume do prisma oblíquo é área × altura
         let mut d = Document::new("e");
         let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [10., 10.]);
         let l = d.add_geometry(RefKind::LinePoints { a: PointRef::Origin, b: PointRef::Fixed([10., 0., 10.]), start: s("0"), end: s("0") });
-        d.add_feature(FeatureKind::Extrude(Extrude { thin_side: 0, sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: Some(AxisRef::Ref(l)) }));
+        d.add_feature(FeatureKind::Extrude(Extrude { thin_side: 0, sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: Some(AxisRef::Ref(l)), ends: Default::default() }));
         assert!(near(vol(&d), 100. * 10. / 2f64.sqrt(), 1e-6), "oblíqua {}", vol(&d));
 
         // padrão linear por comprimento total: 3 bolsos em 20 mm = espaçamento 10
@@ -7731,7 +8048,7 @@ mod tests {
         let pocket = d.add_feature(ext(sp, BoolOp::Cut, "5"));
         d.add_feature(FeatureKind::Pattern(Pattern {
             kind: PatternKind::Linear { dir: AxisRef::Origin(OriginAxis::X), count: s("3"), spacing: s("20"), dir2: None, count2: s("1"), spacing2: s("0"), total: true },
-            sources: vec![pocket],
+            sources: vec![pocket], skip: Default::default(),
         }));
         assert!(near(vol(&d), v0 - 240., 1e-6), "padrão por total {}", vol(&d));
 
@@ -7896,7 +8213,7 @@ mod tests {
             extent: Extent::UpToSurface(SurfRef::Face { point: [0., 0., 20.], normal: [0., 0., 1.], owner: None, key: None }),
             reverse: true,
             taper: "0".into(),
-            thin: None, dir: None,
+            thin: None, dir: None, ends: Default::default(),
         }));
         assert!(near(vol(&d), v0 + 2000., 1e-6), "até a face {}", vol(&d));
 
@@ -7911,7 +8228,7 @@ mod tests {
             extent: Extent::UpToSurface(SurfRef::Plane(PlaneRef::Datum(fundo))),
             reverse: false,
             taper: "0".into(),
-            thin: None, dir: None,
+            thin: None, dir: None, ends: Default::default(),
         }));
         assert!(near(vol(&d), v0 - 800., 1e-6), "recorte até plano {}", vol(&d));
 
@@ -7928,7 +8245,7 @@ mod tests {
         let p0 = data.add_point(&mut al, 0., 0.);
         data.add_curve(&mut al, fenkra_core::sketch::Curve::Point { p: p0 }, false);
         let sp = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Datum(topo), data }));
-        let furo = Hole { sketch: sp, kind: HoleKind::Simples, diameter: "6".into(), depth: Extent::UpTo(PlaneRef::Datum(fundo)), thread: None, thread_modeled: false, standard: None, points: vec![], dir: None, reverse: false, tip: None, taper: "0".into(), left_hand: false };
+        let furo = Hole { sketch: sp, kind: HoleKind::Simples, diameter: "6".into(), depth: Extent::UpTo(PlaneRef::Datum(fundo)), thread: None, thread_modeled: false, standard: None, points: vec![], dir: None, reverse: false, tip: None, taper: "0".into(), left_hand: false, extra: Default::default() };
         let mut e = d.clone();
         e.add_feature(FeatureKind::Hole(furo.clone()));
         assert!(near(vol(&e), v0 - std::f64::consts::PI * 9. * 8., 1e-3), "furo até plano {}", vol(&e));
@@ -8001,12 +8318,12 @@ mod tests {
         let mut d = Document::new("dois corpos");
         let a_col = d.active_collector;
         let ska = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [20., 20.]);
-        let exa = d.add_feature(FeatureKind::Extrude(Extrude { sketch: ska, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0 }));
+        let exa = d.add_feature(FeatureKind::Extrude(Extrude { sketch: ska, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
         let b_col = d.add_collector("B");
         d.active_collector = b_col;
         let skb = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [50., 0.], [70., 20.]);
         d.add_param("HB", "5", Unit::Comprimento).unwrap();
-        d.add_feature(FeatureKind::Extrude(Extrude { sketch: skb, op: BoolOp::Add, extent: Extent::Blind(s("HB")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0 }));
+        d.add_feature(FeatureKind::Extrude(Extrude { sketch: skb, op: BoolOp::Add, extent: Extent::Blind(s("HB")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
         let _ = a_col;
         let mut cache = Cache::default();
         recompute_cached(&d, &mut cache);
@@ -8151,7 +8468,7 @@ mod tests {
     }
 
     fn ext(sketch: Id, op: BoolOp, d: &str) -> FeatureKind {
-        FeatureKind::Extrude(Extrude { sketch, op, extent: Extent::Blind(d.into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0 })
+        FeatureKind::Extrude(Extrude { sketch, op, extent: Extent::Blind(d.into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() })
     }
 
     /// Caixa 40 × 30 × 20 centrada na origem (base em z = 0).
@@ -8206,7 +8523,7 @@ mod tests {
         assert!(near(v1, v0 - 80., 1e-6));
         d.add_feature(FeatureKind::Pattern(Pattern {
             kind: PatternKind::Linear { dir: AxisRef::Origin(OriginAxis::X), count: "3".into(), spacing: "8".into(), dir2: None, count2: "1".into(), spacing2: "0".into(), total: false },
-            sources: vec![pocket],
+            sources: vec![pocket], skip: Default::default(),
         }));
         assert!(near(vol(&d), v0 - 240., 1e-6));
         // espelho do bolso pelo YZ e padrão circular de 4 em volta de Z
@@ -8215,7 +8532,7 @@ mod tests {
         assert!(near(vol(&e), v0 - 320., 1e-6));
         let mut e = d.clone();
         e.features.pop();
-        e.add_feature(FeatureKind::Pattern(Pattern { kind: PatternKind::Circular { axis: AxisRef::Origin(OriginAxis::Z), count: "2".into(), angle: "360".into() }, sources: vec![pocket] }));
+        e.add_feature(FeatureKind::Pattern(Pattern { kind: PatternKind::Circular { axis: AxisRef::Origin(OriginAxis::Z), count: "2".into(), angle: "360".into() }, sources: vec![pocket], skip: Default::default() }));
         assert!(near(vol(&e), v0 - 160., 1e-6));
 
         // primitiva: cilindro r5 h10 sobre o topo
@@ -8632,7 +8949,7 @@ mod tests_spline_perfil {
             data.add_curve(&mut al, Curve::Spline { pts: vec![q1, p2, p3, q4] }, false);
         }
         let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
-        let e = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind("10".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0 }));
+        let e = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind("10".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
         (d, e)
     }
 

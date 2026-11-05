@@ -67,6 +67,10 @@
 #include <BRepTools.hxx>
 #include <GeomAPI_PointsToBSpline.hxx>
 #include <GeomAPI_Interpolate.hxx>
+#include <GeomAPI_IntCS.hxx>
+#include <Geom_TrimmedCurve.hxx>
+#include <gp_Circ.hxx>
+#include <gp_Elips.hxx>
 #include <TColgp_HArray1OfPnt.hxx>
 #include <Geom_BSplineCurve.hxx>
 #include <GeomFill_Trihedron.hxx>
@@ -111,6 +115,7 @@
 #include <GeomAdaptor_Curve.hxx>
 #include <GC_MakeArcOfCircle.hxx>
 #include <GProp_GProps.hxx>
+#include <GProp_PrincipalProps.hxx>
 #include <IFSelect_ReturnStatus.hxx>
 #include <Geom_Plane.hxx>
 #include <Geom2d_Curve.hxx>
@@ -185,6 +190,49 @@ std::unique_ptr<Shape> shape_clone(const Shape& s) { return wrap(s.s); }
 bool shape_is_null(const Shape& s) { return s.s.IsNull(); }
 std::unique_ptr<Shape> shape_empty() { return std::make_unique<Shape>(); }
 
+// Fórmula da aresta, em kEdgeGeom números: tipo (0 sem fórmula, 1 reta, 2 cônica) e dados.
+// Reta: as duas pontas. Cônica: centro, u, v, t0 e t1 de P(t) = c + u cos t + v sin t.
+constexpr int kEdgeGeom = 12;
+static void push_edge_geom(const BRepAdaptor_Curve& c, rust::Vec<double>& out) {
+    double g[kEdgeGeom] = {0};
+    const double t0 = c.FirstParameter(), t1 = c.LastParameter();
+    auto put = [&](int at, const gp_XYZ& v) {
+        g[at] = v.X();
+        g[at + 1] = v.Y();
+        g[at + 2] = v.Z();
+    };
+    switch (c.GetType()) {
+        case GeomAbs_Line:
+            g[0] = 1;
+            put(1, c.Value(t0).XYZ());
+            put(4, c.Value(t1).XYZ());
+            break;
+        case GeomAbs_Circle: {
+            const gp_Circ k = c.Circle();
+            g[0] = 2;
+            put(1, k.Location().XYZ());
+            put(4, k.Position().XDirection().XYZ() * k.Radius());
+            put(7, k.Position().YDirection().XYZ() * k.Radius());
+            g[10] = t0;
+            g[11] = t1;
+            break;
+        }
+        case GeomAbs_Ellipse: {
+            const gp_Elips k = c.Ellipse();
+            g[0] = 2;
+            put(1, k.Location().XYZ());
+            put(4, k.Position().XDirection().XYZ() * k.MajorRadius());
+            put(7, k.Position().YDirection().XYZ() * k.MinorRadius());
+            g[10] = t0;
+            g[11] = t1;
+            break;
+        }
+        default:
+            break;
+    }
+    for (double v : g) out.push_back(v);
+}
+
 std::unique_ptr<Shape> make_face(const Frame& fr, rust::Slice<const Seg> segs, rust::Slice<const uint32_t> loop_ends) {
     return guard("perfil", [&] {
         gp_Pnt O(fr.ox, fr.oy, fr.oz);
@@ -224,6 +272,16 @@ std::unique_ptr<Shape> make_face(const Frame& fr, rust::Slice<const Seg> segs, r
                 } else if (g.kind == 1) {
                     Handle(Geom_TrimmedCurve) arc = GC_MakeArcOfCircle(P(g.x1, g.y1), P(g.x2, g.y2), P(g.x3, g.y3)).Value();
                     mw.Add(BRepBuilderAPI_MakeEdge(arc).Edge());
+                } else if (g.kind == 4) {
+                    // elipse: centro, semieixo maior (vetor), semieixo menor e, no registro seguinte, t0 e t1
+                    if (i + 1 >= end) throw std::runtime_error("elipse do sketch incompleta");
+                    const Seg& h = segs[++i];
+                    const gp_XYZ d = X.XYZ() * g.x2 + Y.XYZ() * g.y2;
+                    gp_Elips el(gp_Ax2(P(g.x1, g.y1), N, gp_Dir(d)), d.Modulus(), g.x3);
+                    if (h.x2 - h.x1 >= 2 * M_PI - 1e-9)
+                        mw.Add(BRepBuilderAPI_MakeEdge(el).Edge());
+                    else
+                        mw.Add(BRepBuilderAPI_MakeEdge(el, h.x1, h.x2).Edge());
                 } else {
                     gp_Circ c(gp_Ax2(P(g.x1, g.y1), N, X), g.x2);
                     mw.Add(BRepBuilderAPI_MakeEdge(c).Edge());
@@ -1070,9 +1128,11 @@ MeshData tessellate(const Shape& s, double deflection, double angle) {
             }
             if (skip) {
                 for (int k = 0; k < 3; ++k) m.edge_mids.push_back(0.f);
+                for (int k = 0; k < kEdgeGeom; ++k) m.edge_geom.push_back(0.);
                 continue;
             }
             BRepAdaptor_Curve c(e);
+            push_edge_geom(c, m.edge_geom);
             gp_Pnt mp = c.Value((c.FirstParameter() + c.LastParameter()) / 2);
             for (double v : {mp.X(), mp.Y(), mp.Z()}) m.edge_mids.push_back(float(v));
             GCPnts_TangentialDeflection d(c, 0.2, deflection);
@@ -1112,6 +1172,27 @@ rust::Vec<double> mass_props(const Shape& s) {
     // superfície aberta não tem volume: o centro de massa do volume seria zero, longe da peça
     gp_Pnt c = TopExp_Explorer(s.s, TopAbs_SOLID).More() ? vp.CentreOfMass() : sp.CentreOfMass();
     for (double x : {vp.Mass(), sp.Mass(), c.X(), c.Y(), c.Z()}) v.push_back(x);
+    return v;
+}
+
+// B92: inércia do volume (densidade 1) em torno do centro de massa: matriz simétrica [xx,yy,zz,xy,xz,yz],
+// momentos principais [I1,I2,I3] e os três eixos principais (um vetor unitário por momento).
+rust::Vec<double> inertia_props(const Shape& s) {
+    rust::Vec<double> v;
+    if (s.s.IsNull() || !TopExp_Explorer(s.s, TopAbs_SOLID).More()) return v;
+    GProp_GProps vp;
+    BRepGProp::VolumeProperties(s.s, vp);
+    gp_Mat m = vp.MatrixOfInertia();
+    for (double x : {m(1, 1), m(2, 2), m(3, 3), m(1, 2), m(1, 3), m(2, 3)}) v.push_back(x);
+    GProp_PrincipalProps pp = vp.PrincipalProperties();
+    double i1, i2, i3;
+    pp.Moments(i1, i2, i3);
+    for (double x : {i1, i2, i3}) v.push_back(x);
+    for (const gp_Vec& a : {pp.FirstAxisOfInertia(), pp.SecondAxisOfInertia(), pp.ThirdAxisOfInertia()}) {
+        v.push_back(a.X());
+        v.push_back(a.Y());
+        v.push_back(a.Z());
+    }
     return v;
 }
 
@@ -1191,3 +1272,4 @@ rust::String occt_version() { return rust::String(OCC_VERSION_COMPLETE); }
 #include "hybrid.inc"
 #include "sheet.inc"
 #include "drawing.inc"
+#include "xde.inc"

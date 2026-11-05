@@ -344,7 +344,7 @@ pub fn demo_preparar(doc: &mut Document) -> Option<DemoPrevia> {
         let sk = sketch(d, PlaneRef::Origin(OriginPlane::XY), &|data, al| {
             data.add_rect(&mut &mut *al, [-30., -20.], [30., 20.], false);
         });
-        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("30")), reverse: false, taper: s("0"), thin: None, thin_side: 0, dir: None }));
+        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("30")), reverse: false, taper: s("0"), thin: None, thin_side: 0, dir: None, ends: Default::default() }));
     };
     // os casos próprios partem do zero: a placa de exemplo faria a casca falhar
     if matches!(nome.as_str(), "casca" | "espessura" | "rosca" | "nervura") {
@@ -357,6 +357,8 @@ pub fn demo_preparar(doc: &mut Document) -> Option<DemoPrevia> {
             doc.features.pop()?.kind
         }
         "plano" => return Some(DemoPrevia::Plano),
+        // B255: o reforço no canto do quadro de exemplo (com `FENKRA_DEMO_EST`); a placa é o `ultimo`
+        "reforco" => FeatureKind::StructGusset(StructGusset::novo([0., 0., 700.], "80", "6", "10")),
         "casca" => {
             caixa(doc);
             FeatureKind::Shell(Shell { faces: vec![[0., 0., 30.]], thickness: s("3"), outward: false, face_keys: vec![], closed: false })
@@ -628,7 +630,7 @@ mod tests {
     fn caixa() -> Document {
         let mut d = Document::new("caixa");
         let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [-20., -20.], [20., 20.]);
-        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("20")), reverse: false, taper: s("0"), thin: None, thin_side: 0, dir: None }));
+        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("20")), reverse: false, taper: s("0"), thin: None, thin_side: 0, dir: None, ends: Default::default() }));
         d
     }
 
@@ -673,7 +675,7 @@ mod tests {
     }
 
     fn extrusao(sk: Id, op: BoolOp, reverse: bool, extent: &str) -> FeatureKind {
-        FeatureKind::Extrude(Extrude { sketch: sk, op, extent: Extent::Blind(s(extent)), reverse, taper: s("0"), thin: None, thin_side: 0, dir: None })
+        FeatureKind::Extrude(Extrude { sketch: sk, op, extent: Extent::Blind(s(extent)), reverse, taper: s("0"), thin: None, thin_side: 0, dir: None, ends: Default::default() })
     }
 
     /// B246: cada comando de sólido, aberto sobre a peça, aparece no fantasma, translúcido e na cor do
@@ -707,7 +709,7 @@ mod tests {
         {
             let (mut d, topo) = caixa_com_tampa();
             let pt = sk_pontos(&mut d, PlaneRef::Datum(topo), &[[0., 0.]]);
-            let furo = FeatureKind::Hole(Hole { sketch: pt, kind: HoleKind::Simples, diameter: s("8"), depth: Extent::Blind(s("10")), thread: None, thread_modeled: false, standard: None, points: vec![], dir: None, reverse: true, tip: None, taper: s("0"), left_hand: false });
+            let furo = FeatureKind::Hole(Hole { sketch: pt, kind: HoleKind::Simples, diameter: s("8"), depth: Extent::Blind(s("10")), thread: None, thread_modeled: false, extra: Default::default(), standard: None, points: vec![], dir: None, reverse: true, tip: None, taper: s("0"), left_hand: false });
             casos.push(("furo", d, furo, SAI, false));
         }
         for (nome, modo) in [("filete", true), ("chanfro", false)] {
@@ -747,7 +749,7 @@ mod tests {
         let base = corpos_base(Some(&antes));
         let pad = d.add_feature(FeatureKind::Pattern(Pattern {
             kind: PatternKind::Linear { dir: AxisRef::Origin(OriginAxis::X), count: s("3"), spacing: s("12"), dir2: None, count2: s("1"), spacing2: s("0"), total: false },
-            sources: vec![poste],
+            sources: vec![poste], skip: Default::default(),
         }));
         let r = recompute(&d);
         assert!(valido(r.status.get(&pad)), "{:?}", r.status.get(&pad));
@@ -934,6 +936,7 @@ mod tests {
             gap: s("0"),
             joints: vec![],
             material: String::new(),
+            mirror: false,
         }
     }
 

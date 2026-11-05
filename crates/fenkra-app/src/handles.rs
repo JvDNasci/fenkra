@@ -460,7 +460,7 @@ fn arc_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id
 
 /// Desenha e trata a alça do comando aberto. Chamado pela viewport fora do modo sketch.
 /// Etiqueta pequena na tela; a resposta traz o clique.
-fn tag(ui: &mut egui::Ui, rect: Rect, at: egui::Pos2, text: String, fg: Color32, salt: impl std::hash::Hash + std::fmt::Debug) -> egui::Response {
+pub(crate) fn tag(ui: &mut egui::Ui, rect: Rect, at: egui::Pos2, text: String, fg: Color32, salt: impl std::hash::Hash + std::fmt::Debug) -> egui::Response {
     let painter = ui.painter_at(rect);
     let g = painter.layout_no_wrap(text, egui::FontId::proportional(12.), fg);
     let r = Rect::from_center_size(at, g.size() + egui::vec2(8., 4.));
@@ -549,6 +549,13 @@ fn contour_overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, i
 pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: Camera) {
     let Some(id) = app.session.as_ref().map(|s| s.id) else { return };
     if crate::gizmo::overlay(app, ui, rect, &cam, id) {
+        return;
+    }
+    // chapa: linha de dobra na face e alças de ângulo, raio, largura e recuos (B243 e B249)
+    crate::chapa_manip_ui::overlay(app, ui, rect, &cam, id);
+    // B253: o Membro tem as próprias alças (deslocamento, rotação com ímã de 45°, prolongar, espelhar)
+    if matches!(app.open.doc.feature(id).map(|f| &f.kind), Some(FeatureKind::StructMember(_))) {
+        crate::st_alcas::overlay(app, ui, rect, &cam, id);
         return;
     }
     if matches!(app.open.doc.reference(id).map(|r| &r.kind), Some(RefKind::SurfFill { .. })) {

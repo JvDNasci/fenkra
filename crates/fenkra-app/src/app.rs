@@ -21,6 +21,7 @@ use crate::i18n::tr;
 
 mod diag;
 mod importar;
+mod projeto;
 mod salvar;
 use salvar::Acao;
 
@@ -160,6 +161,10 @@ pub struct App {
     salvar: salvar::Estado,
     /// arquivo reimportado que mudou, esperando a escolha entre atualizar e derivar
     importacao_pendente: Option<importar::Pendente>,
+    /// painel de importação, aberto só enquanto a pessoa decide
+    importar_dialogo: Option<importar::Dialogo>,
+    /// relatório da última importação, até a pessoa fechar
+    importar_relatorio: Option<fenkra_conversor::Relatorio>,
     /// diagnóstico e pais/filhos (B69)
     diag: diag::Estado,
     /// "Selecionar outro": ciclo de candidatos sob o ponteiro com Alt + roda (B95)
@@ -344,6 +349,8 @@ impl App {
             hist: crate::historico::Historico::new(settings.historico_mb),
             salvar: Default::default(),
             importacao_pendente: None,
+            importar_dialogo: None,
+            importar_relatorio: None,
             diag: Default::default(),
             selecao_ciclo: Default::default(),
             last_edit: -10.,
@@ -438,6 +445,11 @@ impl App {
 [2] adaptador: exemplo"));
             app.started = true;
         }
+        // desenvolvimento: FENKRA_DEMO_IMPORTAR=<arquivo> abre o painel de importação com esse arquivo
+        if let Ok(arquivo) = std::env::var("FENKRA_DEMO_IMPORTAR") {
+            app.abrir_painel_importar(arquivo.into());
+            app.started = true;
+        }
         // desenvolvimento: FENKRA_AJUSTES=1 abre as configurações ao iniciar
         if std::env::var("FENKRA_AJUSTES").is_ok() {
             app.settings_open = true;
@@ -489,6 +501,7 @@ impl App {
             let _ = std::fs::write(&f, a.to_json());
             let mut stt = crate::asm_ui::AsmState::new(a, Some(f));
             stt.sim_open = stt.asm.joints.len() > 0;
+            crate::asm_cmd::demo(&mut stt, &std::env::var("FENKRA_DEMO_ASM").unwrap_or_default());
             app.asm = Some(stt);
             app.settings.bench = crate::settings::Bench::Montagem;
             app.started = true;
@@ -551,10 +564,11 @@ impl App {
                 gap: s("0"),
                 joints: vec![],
                 material: String::new(),
+                mirror: false,
             };
             d.add_feature(FeatureKind::StructMember(mk(paths, CornerMode::MeiaEsquadria, 0)));
             d.add_feature(FeatureKind::StructMember(mk(legs, CornerMode::Nenhum, 0)));
-            d.add_feature(FeatureKind::StructPlate(StructPlate { at: [0., 0., 0.], thickness: s("8"), margin: s("15") }));
+            d.add_feature(FeatureKind::StructPlate(StructPlate::nova([0., 0., 0.], "8", "15")));
             for r in &mut d.references {
                 r.visible = false;
             }
@@ -1819,7 +1833,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     Cmd::ExtrudeUpTo | Cmd::CutUpTo => Extent::UpTo(up_to),
                     _ => Extent::ThroughAll,
                 };
-                Sel::Feature(d.add_feature(FeatureKind::Extrude(Extrude { thin_side: 0, sketch: sk, op: if cut { BoolOp::Cut } else { BoolOp::Add }, extent, reverse: false, taper: s("0"), thin: None, dir: None })))
+                Sel::Feature(d.add_feature(FeatureKind::Extrude(Extrude { thin_side: 0, sketch: sk, op: if cut { BoolOp::Cut } else { BoolOp::Add }, extent, reverse: false, taper: s("0"), thin: None, dir: None, ends: Default::default() })))
             }
             Cmd::Revolve | Cmd::Groove => {
                 let sk = sk_or_unset;
@@ -1912,6 +1926,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                             gap: s("0"),
                             joints: vec![],
                             material: String::new(),
+                            mirror: false,
                         }))
                     })
                     .collect();
@@ -1925,14 +1940,16 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     PointRef::Fixed(q) => Some(*q),
                     _ => None,
                 });
+                // B255: a placa também nasce de uma face clicada (a da ponta) e o reforço de uma aresta
+                let at = at.or_else(|| if c == Cmd::StPlate { faces.first().copied() } else { edges.first().copied() });
                 let Some(at) = at else {
-                    self.toast("Selecione o vértice da ponta (placa) ou do encontro dos membros (reforço)", true);
+                    self.toast("Selecione a face da ponta (placa) ou a aresta de encontro dos membros (reforço)", true);
                     return;
                 };
                 Sel::Feature(d.add_feature(if c == Cmd::StPlate {
-                    FeatureKind::StructPlate(StructPlate { at, thickness: s("8"), margin: s("10") })
+                    FeatureKind::StructPlate(StructPlate::nova(at, "8", "10"))
                 } else {
-                    FeatureKind::StructGusset(StructGusset { at, leg: s("80"), thickness: s("6"), chamfer: s("10") })
+                    FeatureKind::StructGusset(StructGusset::novo(at, "80", "6", "10"))
                 }))
             }
             Cmd::SmParams => {
@@ -2095,7 +2112,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     _ => None,
                 };
                 Sel::Feature(d.add_feature(match kind {
-                    Some(i) => FeatureKind::Pattern(Pattern { kind: crate::feat_ui::default_pattern(i, &seed), sources }),
+                    Some(i) => FeatureKind::Pattern(Pattern { kind: crate::feat_ui::default_pattern(i, &seed), sources, skip: Default::default() }),
                     None => FeatureKind::Mirror(Mirror { plane: opt_plane, sources }),
                 }))
             }
@@ -2104,7 +2121,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             Cmd::ExtrudeDraftFillet => {
                 // atalho de manufatura: extrusão com saída + filete nas arestas criadas por ela
                 let sk = sk_or_unset;
-                let ex = d.add_feature(FeatureKind::Extrude(Extrude { thin_side: 0, sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("20")), reverse: false, taper: s("3"), thin: None, dir: None }));
+                let ex = d.add_feature(FeatureKind::Extrude(Extrude { thin_side: 0, sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("20")), reverse: false, taper: s("3"), thin: None, dir: None, ends: Default::default() }));
                 d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::CreatedBy(ex), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![] }));
                 Sel::Feature(ex)
             }
@@ -2133,6 +2150,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
             Cmd::Extract => {
                 self.extract = Some(self.extract_last);
+                return;
+            }
+            Cmd::ImportarArquivo => {
+                self.com_confirmacao(Acao::Importar);
                 return;
             }
             Cmd::MeshImport => {
@@ -2182,7 +2203,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     thread,
                     thread_modeled: false,
                     standard: Some(s(std)),
-                    points: if sk == Id(0) { pts3 } else { vec![] }, dir: None, reverse: false, tip: None, taper: "0".into(), left_hand: false,
+                    points: if sk == Id(0) { pts3 } else { vec![] }, dir: None, reverse: false, tip: None, taper: "0".into(), left_hand: false, extra: Default::default(),
                 })))
             }
             Cmd::Fillet | Cmd::FilletAll | Cmd::Chamfer | Cmd::ChamferAll | Cmd::FilletVar | Cmd::ChamferTwoDist | Cmd::ChamferDistAngle => {
@@ -2945,9 +2966,23 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         self.abrir_plano();
                         ui.close();
                     }
+                    if ui.button(tr("Salvar como com referências…")).clicked() {
+                        self.abrir_salvar_como(ui.ctx());
+                        ui.close();
+                    }
+                    if ui.button(tr("Empacotar…")).clicked() {
+                        self.abrir_empacotar(ui.ctx());
+                        ui.close();
+                    }
+                    if ui.button(tr("Reparar links…")).clicked() {
+                        self.abrir_reparar_links(ui.ctx());
+                        ui.close();
+                    }
                     ui.separator();
-                    if ui.button(tr("Importar STEP…")).clicked() {
-                        self.importar_step();
+                    let importar = ui.add(egui::Button::image_and_text(crate::icons::get("importar_arquivo"), tr("Importar STEP ou BREP…")));
+                    let (nome, frase, passos) = crate::toolbar::TEXTO_IMPORTAR;
+                    if crate::icons::hover_help(ui, importar, tr(nome), tr(frase), tr(passos)).clicked() {
+                        self.com_confirmacao(Acao::Importar);
                         ui.close();
                     }
                     if ui.button(tr("Exportar STEP…")).clicked() {
@@ -3143,6 +3178,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             tr("Sketch").to_string()
         } else if let Some(s) = &self.session {
             self.open.doc.name_of(s.id)
+        } else if let Some(p) = self.asm.as_ref().and_then(|s| s.cmd.as_ref()).filter(|_| self.in_asm()) {
+            tr(p.c.tipo.label()).to_string()
         } else {
             tr("Edição").to_string()
         };
@@ -3614,7 +3651,13 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         }
         let vars = self.vars();
         let mut open = true;
-        let table = fenkra_solidos::bend_table(&self.open.doc);
+        // tabela do mapa: mesma ordem e etiqueta das linhas de dobra da vista
+        let table = match &self.result {
+            Some(r) => fenkra_solidos::tabela_dobras(&self.open.doc, &r.bend_lines),
+            None => fenkra_solidos::bend_table(&self.open.doc),
+        };
+        let k_blank = egui::Id::new("planificada_resultado");
+        let blank: Option<Result<fenkra_solidos::planificada::Planificada, String>> = ctx.data(|m| m.get_temp(k_blank));
         let d = &mut self.open.doc;
         let sp = d.sheet.get_or_insert_with(SheetParams::default);
         let fechar = egui::Id::unique(("concluir_janela", "app.rs1"));
@@ -3686,12 +3729,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 if table.is_empty() {
                     ui.label(RichText::new(tr("nenhuma dobra ainda")).weak());
                 }
-                egui::Grid::new("tab_dobras").striped(true).num_columns(5).show(ui, |ui| {
-                    for h in ["Dobra", "Ângulo", "Raio", "Desenvolvido", "Dedução"] {
+                egui::Grid::new("tab_dobras").striped(true).num_columns(7).show(ui, |ui| {
+                    for h in ["Nº", "Etiqueta", "Dobra", "Ângulo", "Raio", "Desenvolvido", "Dedução"] {
                         ui.label(RichText::new(tr(h)).strong().small());
                     }
                     ui.end_row();
                     for r in &table {
+                        ui.label(RichText::new(r.ordem.to_string()).small());
+                        ui.label(RichText::new(&r.rotulo).small());
                         ui.label(RichText::new(&r.name).small());
                         ui.label(RichText::new(format!("{}°", fmt(r.angle))).small());
                         ui.label(RichText::new(fmt(r.radius)).small());
@@ -3700,7 +3745,54 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         ui.end_row();
                     }
                 });
+                editor::section(ui, "Planificada");
+                ui.horizontal(|ui| {
+                    if ui.button(tr("Verificar planificada")).on_hover_text(tr("Recalcula a chapa plana, confere se algum comando some ou se sobrepõe e mostra as propriedades do blank.")).clicked() {
+                        ui.ctx().data_mut(|m| m.insert_temp(egui::Id::new("planificada_pedido"), 1u8));
+                    }
+                    if ui.button(tr("Exportar DXF…")).on_hover_text(tr("DXF 1:1 em milímetros, com camadas fixas: contorno, furos, dobra para cima, dobra para baixo e ferramenta.")).clicked() {
+                        ui.ctx().data_mut(|m| m.insert_temp(egui::Id::new("planificada_pedido"), 2u8));
+                    }
+                });
+                match &blank {
+                    Some(Ok(p)) => {
+                        let pr = &p.propriedades;
+                        ui.label(RichText::new(format!("{} × {} mm · {} {} mm² · {} {}", fmt(pr.largura), fmt(pr.altura), tr("área"), fmt(pr.area), pr.dobras, tr("dobras"))).small());
+                        if let Some(m) = pr.massa {
+                            ui.label(RichText::new(format!("{} {} kg", tr("massa"), fmt((m * 1000.).round() / 1000.))).small());
+                        }
+                        for msg in p.problemas() {
+                            ui.label(RichText::new(msg).small().color(ui.visuals().error_fg_color));
+                        }
+                        if p.valida() {
+                            ui.label(RichText::new(tr("Nenhum comando some e nada se sobrepõe.")).small().weak());
+                        }
+                    }
+                    Some(Err(e)) => {
+                        ui.label(RichText::new(e).small().color(ui.visuals().error_fg_color));
+                    }
+                    None => {}
+                }
             });
+        // pedidos dos botões da planificada
+        let k_pedido = egui::Id::new("planificada_pedido");
+        match ctx.data_mut(|m| m.remove_temp::<u8>(k_pedido)).unwrap_or(0) {
+            1 => {
+                let r = fenkra_solidos::planificada::planificar(&self.open.doc);
+                ctx.data_mut(|m| m.insert_temp(k_blank, r));
+            }
+            2 => {
+                if let Some(path) = rfd::FileDialog::new().add_filter("DXF", &["dxf"]).set_file_name(format!("{}-planificada.dxf", self.open.doc.name)).save_file() {
+                    let r = fenkra_solidos::planificada::exportar_dxf(&self.open.doc, &path.to_string_lossy(), true);
+                    match &r {
+                        Ok(_) => self.toast(format!("Exportado: {}", path.display()), false),
+                        Err(e) => self.toast(format!("Falha ao exportar a planificada: {e}"), true),
+                    }
+                    ctx.data_mut(|m| m.insert_temp(k_blank, r));
+                }
+            }
+            _ => {}
+        }
         if !open {
             self.sheet_open = false;
         }
@@ -5231,23 +5323,16 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
             Bench::Montagem => {
                 let Some(st) = self.asm.as_mut() else { return };
-                // componentes e restrições têm a barra no próprio painel; aqui só comandos esperando
-                // seleção e anotações 3D
+                // componentes, restrições e juntas têm a barra no próprio painel; aqui só anotações 3D
                 let pmi_sel = st.sel.is_some_and(|s| st.asm.pmi.iter().any(|p| p.id == s));
-                if st.pending.is_none() && st.pending_joint.is_none() && !pmi_sel {
+                if st.cmd.is_some() || !pmi_sel {
                     return;
                 }
                 ui.horizontal(|ui| {
                     if big(ui, "✔ Concluir").on_hover_text("Enter").clicked() || enter {
                         st.sel = None;
-                        st.pending = None;
-                        st.pending_joint = None;
                     }
-                    if (st.pending.is_some() || st.pending_joint.is_some()) && big(ui, "✖ Cancelar").clicked() {
-                        st.pending = None;
-                        st.pending_joint = None;
-                    }
-                    if let Some(id) = st.sel.filter(|_| st.pending.is_none() && st.pending_joint.is_none()) {
+                    if let Some(id) = st.sel {
                         if big(ui, "🗑 Excluir").on_hover_text("Del").clicked() {
                             ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique("asm_excluir"), id.0));
                         }
@@ -5834,12 +5919,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         ui.label(&d.name);
                     }
                 }
-                let c = match d.state {
-                    DocState::Liberado => Color32::from_rgb(120, 200, 120),
-                    DocState::Obsoleto => Color32::GRAY,
-                    DocState::EmTrabalho => Color32::from_rgb(230, 190, 90),
-                };
-                ui.label(RichText::new(d.state.label()).color(c));
+                let c = self.cor_do_estado(ui, d.state);
+                ui.label(RichText::new(tr(d.state.label())).color(c));
                 ui.label(d.current_revision().map(|r| r.label.as_str()).unwrap_or("-"));
                 ui.end_row();
             }
@@ -5890,10 +5971,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
         });
 
+        self.painel_pn(ui);
         let Some(sel) = self.project_sel else { return };
         let Ok(e) = self.project.as_ref().unwrap().entry(sel).cloned() else { return };
         ui.separator();
         ui.label(RichText::new(format!("{} — {}", e.pn, e.name)).strong());
+        self.painel_onde_usado(ui, sel);
         if !e.description.is_empty() {
             ui.label(&e.description);
         }
@@ -5909,9 +5992,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     self.toast(err.to_string(), true);
                 }
             }
-            if e.state != DocState::Obsoleto && ui.button(tr("Tornar obsoleto")).clicked() {
-                let _ = self.project.as_mut().unwrap().set_state(sel, DocState::Obsoleto);
-            }
+            self.botoes_de_transicao(ui, sel);
         });
         egui::CollapsingHeader::new(format!("Revisões ({})", e.revisions.len())).default_open(true).show(ui, |ui| {
             for r in e.revisions.iter().rev() {
@@ -5924,17 +6005,42 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 });
             }
         });
+        let mut restaurar: Option<usize> = None;
         egui::CollapsingHeader::new(format!("Versões ({})", e.versions.len())).show(ui, |ui| {
             for (i, v) in e.versions.iter().enumerate().rev().take(30) {
                 ui.horizontal(|ui| {
                     ui.label(format!("v{}", i + 1));
-                    ui.label(RichText::new(format!("{} · {}", v.note, &v.hash[..8])).weak());
+                    let mut linha = format!("{} · {}", v.note, &v.hash[..8]);
+                    if !v.author.is_empty() {
+                        linha += &format!(" · {}", v.author);
+                    }
+                    let r = ui.label(RichText::new(linha).weak());
+                    if !v.comment.is_empty() {
+                        r.on_hover_text(&v.comment);
+                    }
                     if ui.small_button(tr("abrir")).clicked() {
                         self.open_entry(sel, Some((v.hash.clone(), format!("v{}", i + 1))));
+                    }
+                    if i + 1 != e.versions.len()
+                        && ui.small_button(tr("↩ restaurar")).on_hover_text(tr("Cria uma versão nova com o conteúdo desta; o histórico não é reescrito")).clicked()
+                    {
+                        restaurar = Some(i + 1);
                     }
                 });
             }
         });
+        if let Some(n) = restaurar {
+            let reabrir = self.open.entry == Some(sel);
+            match self.project.as_mut().unwrap().restaurar_versao(sel, n, "") {
+                Ok(()) => {
+                    self.toast(format!("Versão v{n} restaurada como versão nova"), false);
+                    if reabrir {
+                        self.open_entry(sel, None);
+                    }
+                }
+                Err(err) => self.toast(err.to_string(), true),
+            }
+        }
     }
 
     /// Status em uma linha sobre o modelo, sem painel.
@@ -6487,6 +6593,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             if self.sketch.is_none() {
                 crate::pmi_ui::overlay(self, ui, rect, &cam);
                 crate::asm_ui::context_overlay(self, ui, rect, &cam);
+                crate::asm_cmd::overlay(self, ui, rect, &cam);
                 crate::asm_ui::fasteners_overlay(self, ui, rect, &cam);
                 crate::asm_ui::fasteners_handles(self, ui, rect, &cam);
                 crate::biblioteca_ui::candidatos_overlay(self, ui, rect, &cam);
@@ -6498,6 +6605,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             // seta e cota 3D do comando aberto (fast 3D)
             if self.sketch.is_none() {
                 if self.settings.bench == crate::settings::Bench::Montagem && self.asm.is_some() {
+                    crate::asm_simbolos::overlay(self, ui, rect, &cam);
                     crate::asm_ui::gizmo(self, ui, rect, &cam);
                 } else {
                     crate::handles::overlay(self, ui, rect, cam);
@@ -6508,6 +6616,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
 
     fn dialogs(&mut self, ctx: &egui::Context) {
         self.dialogos_de_gravacao(ctx);
+        self.janelas_projeto(ctx);
         self.janelas_de_diagnostico(ctx);
         if let Some(dd) = &mut self.delete_dialog {
             let doc = &self.open.doc;
@@ -6575,31 +6684,6 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
         }
 
-        if let Some((id, comment)) = &mut self.release_dialog {
-            let (id, mut done, mut cancel) = (*id, false, false);
-            egui::Modal::new(egui::Id::unique("liberar")).show(ctx, |ui| {
-                ui.heading(tr("Liberar revisão"));
-                ui.label(tr("A versão salva mais recente será congelada (somente leitura)."));
-                ui.add(egui::TextEdit::multiline(comment).hint_text(tr("Comentário da revisão")).desired_rows(3));
-                ui.horizontal(|ui| {
-                    done = ui.button(tr("🔒 Liberar")).clicked();
-                    cancel = ui.button(tr("Cancelar")).clicked();
-                });
-            });
-            if done {
-                let c = comment.clone();
-                if self.open.entry == Some(id) && self.open.modified {
-                    self.save();
-                }
-                match self.project.as_mut().unwrap().release(id, &c) {
-                    Ok(l) => self.toast(format!("Revisão {l} liberada"), false),
-                    Err(e) => self.toast(e.to_string(), true),
-                }
-            }
-            if done || cancel {
-                self.release_dialog = None;
-            }
-        }
     }
 
     fn toasts(&mut self, ctx: &egui::Context) {
@@ -6747,6 +6831,7 @@ pub enum Cmd {
     SewSurface,
     BoundaryFill,
     MeshImport,
+    ImportarArquivo,
     Param,
     Folder,
     Collector,
@@ -7145,6 +7230,7 @@ fn setup_fonts(_ctx: &egui::Context) {
 
 impl eframe::App for App {
     fn ui(&mut self, root: &mut egui::Ui, frame: &mut eframe::Frame) {
+        crate::demo_foto::quadro(root.ctx());
         crate::partida::contar_quadro();
         let ctx = &root.ctx().clone();
         crate::i18n::set_english(self.settings.english);
@@ -7218,6 +7304,8 @@ impl eframe::App for App {
         if dwg_mode {
             crate::dwg_ui::keys(self, ctx, save, undo, redo, del);
         } else if asm_mode {
+            crate::asm_cmd::teclas(self, ctx);
+            crate::asm_selecao::teclas(self, ctx);
             if save {
                 crate::asm_ui::save(self);
             }
@@ -7239,14 +7327,10 @@ impl eframe::App for App {
                 }
             }
             if del && !ctx.egui_wants_keyboard_input() {
-                if let Some(id) = self.asm.as_ref().and_then(|s| s.sel) {
-                    crate::asm_ui::node_action(self, id, 0);
-                }
+                crate::asm_selecao::em_lote(self, 0);
             }
             if !typing && km.pressed(ctx, K::Hide) {
-                if let Some(id) = self.asm.as_ref().and_then(|s| s.sel) {
-                    crate::asm_ui::node_action(self, id, 1);
-                }
+                crate::asm_selecao::em_lote(self, 1);
             }
         } else {
             if save {
@@ -7407,6 +7491,7 @@ impl eframe::App for App {
         if active {
             self.painel_comando(ctx, area);
         }
+        self.painel_importar(ctx, area);
         if let Some(id) = ctx.data(|m| m.get_temp::<Id>(egui::Id::unique("fenkra_props"))) {
             ctx.data_mut(|m| m.remove::<Id>(egui::Id::unique("fenkra_props")));
             self.props_target = Some(if self.open.doc.reference(id).is_some() { AppTarget::Ref(id) } else { AppTarget::Feature(id) });
@@ -7444,9 +7529,9 @@ impl eframe::App for App {
             let st = self.asm.as_mut().unwrap();
             std::mem::swap(&mut self.result, &mut st.view);
             std::mem::swap(&mut self.open.doc, &mut st.view_doc);
-            crate::asm_ui::after_viewport(self);
+            crate::asm_ui::after_viewport(self, ctx);
             crate::pmi_ui::after_viewport(self);
-            if self.asm.as_ref().is_some_and(|s| s.dirty) {
+            if self.asm.as_mut().is_some_and(|s| s.dirty || std::mem::take(&mut s.fantasma_novo)) {
                 self.scene_dirty = true;
             }
         } else {
@@ -7607,7 +7692,7 @@ impl eframe::App for App {
                     dark_edges: !matches!(self.settings.display, crate::render::DisplayMode::Arame) || lum(self.settings.bg_bottom) > 140.,
                     tangent_edges: self.settings.tangent_edges || matches!(self.settings.display, crate::render::DisplayMode::Arame),
                     hilite: self.hover_item.or(self.session.as_ref().map(|s| s.id)),
-                    hilite_extra: &self.st_cut_hi,
+                    hilite_extra: self.asm.as_ref().filter(|_| asm_view.is_some()).map_or(&self.st_cut_hi, |s| &s.multi),
                     line_w: self.settings.ref_line_width,
                     line_dash: self.settings.ref_line_dash,
                     point_style: self.settings.point_style,
@@ -7618,6 +7703,7 @@ impl eframe::App for App {
                     crate::previa::reter_ultima(&mut sess.ultima_valida, &mut s, r.status.get(&sess.id));
                 }
                 crate::asm_ui::contexto_na_cena(self.asm.as_ref(), &mut s);
+                crate::asm_cmd::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, ctx.input(|i| i.time), &mut s);
                 vp.set_scene(rs, &s);
                 self.scene_dirty = false;
                 ctx.request_repaint();

@@ -119,7 +119,7 @@ mod testes {
 
     fn extrude_de(origem: Id) -> fenkra_core::doc::Extrude {
         use fenkra_core::doc::{BoolOp, Extent, Extrude};
-        Extrude { sketch: origem, op: BoolOp::Add, extent: Extent::Blind("10".into()), reverse: false, taper: "0".into(), thin: None, thin_side: 0, dir: None }
+        Extrude { sketch: origem, op: BoolOp::Add, extent: Extent::Blind("10".into()), reverse: false, taper: "0".into(), thin: None, thin_side: 0, dir: None, ends: Default::default() }
     }
 
     /// sketch -> extrusão A -> extrusão B (B referencia A)
