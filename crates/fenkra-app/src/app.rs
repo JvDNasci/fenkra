@@ -5203,23 +5203,16 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
             Bench::Montagem => {
                 let Some(st) = self.asm.as_mut() else { return };
-                // componentes e restrições têm a barra no próprio painel; aqui só comandos esperando
-                // seleção e anotações 3D
+                // componentes, restrições e juntas têm a barra no próprio painel; aqui só anotações 3D
                 let pmi_sel = st.sel.is_some_and(|s| st.asm.pmi.iter().any(|p| p.id == s));
-                if st.pending.is_none() && st.pending_joint.is_none() && !pmi_sel {
+                if st.cmd.is_some() || !pmi_sel {
                     return;
                 }
                 ui.horizontal(|ui| {
                     if big(ui, "✔ Concluir").on_hover_text("Enter").clicked() || enter {
                         st.sel = None;
-                        st.pending = None;
-                        st.pending_joint = None;
                     }
-                    if (st.pending.is_some() || st.pending_joint.is_some()) && big(ui, "✖ Cancelar").clicked() {
-                        st.pending = None;
-                        st.pending_joint = None;
-                    }
-                    if let Some(id) = st.sel.filter(|_| st.pending.is_none() && st.pending_joint.is_none()) {
+                    if let Some(id) = st.sel {
                         if big(ui, "🗑 Excluir").on_hover_text("Del").clicked() {
                             ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique("asm_excluir"), id.0));
                         }
@@ -6453,6 +6446,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             if self.sketch.is_none() {
                 crate::pmi_ui::overlay(self, ui, rect, &cam);
                 crate::asm_ui::context_overlay(self, ui, rect, &cam);
+                crate::asm_cmd::overlay(self, ui, rect, &cam);
                 crate::asm_ui::fasteners_overlay(self, ui, rect, &cam);
                 crate::asm_ui::fasteners_handles(self, ui, rect, &cam);
                 crate::feat_ui::bend_overlay(self, ui, rect, &cam);
@@ -7160,6 +7154,7 @@ impl eframe::App for App {
         if dwg_mode {
             crate::dwg_ui::keys(self, ctx, save, undo, redo, del);
         } else if asm_mode {
+            crate::asm_cmd::teclas(self, ctx);
             if save {
                 crate::asm_ui::save(self);
             }
@@ -7387,7 +7382,7 @@ impl eframe::App for App {
             std::mem::swap(&mut self.open.doc, &mut st.view_doc);
             crate::asm_ui::after_viewport(self);
             crate::pmi_ui::after_viewport(self);
-            if self.asm.as_ref().is_some_and(|s| s.dirty) {
+            if self.asm.as_mut().is_some_and(|s| s.dirty || std::mem::take(&mut s.fantasma_novo)) {
                 self.scene_dirty = true;
             }
         } else {
@@ -7556,6 +7551,7 @@ impl eframe::App for App {
                 };
                 let mut s = scene::build(scene_doc, r, &opts);
                 crate::asm_ui::contexto_na_cena(self.asm.as_ref(), &mut s);
+                crate::asm_cmd::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
                 vp.set_scene(rs, &s);
                 self.scene_dirty = false;
                 ctx.request_repaint();

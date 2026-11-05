@@ -92,7 +92,7 @@ fn snap(v: f64, s: f64) -> f64 {
     (v / s).round() * s
 }
 
-fn arrow(p: &egui::Painter, a: Pos2, b: Pos2, c: Color32) {
+pub(crate) fn arrow(p: &egui::Painter, a: Pos2, b: Pos2, c: Color32) {
     p.line_segment([a, b], Stroke::new(2.5, c));
     let d = if (b - a).length() > 1. { (b - a).normalized() } else { Vec2::X };
     let n = egui::vec2(-d.y, d.x);
@@ -108,7 +108,7 @@ fn label(p: &egui::Painter, at: Pos2, txt: String, c: Color32) {
 }
 
 /// Pixels por mm ao longo de `dir` a partir de `o`, e a direção na tela.
-fn screen_axis(cam: &Camera, rect: Rect, o: Vec3, dir: Vec3) -> Option<(Pos2, Vec2, f32)> {
+pub(crate) fn screen_axis(cam: &Camera, rect: Rect, o: Vec3, dir: Vec3) -> Option<(Pos2, Vec2, f32)> {
     let a = cam.project(rect, o)?;
     let b = cam.project(rect, o + dir)?;
     let ppm = (b - a).length();

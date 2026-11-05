@@ -18,6 +18,7 @@ pub mod geometria;
 pub mod kin;
 pub mod links;
 pub mod load;
+pub mod proposta;
 pub mod publicacoes;
 pub mod substituicao;
 pub mod view;

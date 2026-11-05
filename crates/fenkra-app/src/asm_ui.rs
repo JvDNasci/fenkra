@@ -11,7 +11,7 @@ use crate::picking::Pick;
 use eframe::egui::{self, Color32, RichText};
 use fenkra_core::{Document, Id};
 use fenkra_montagem::load::{full_path, geom_at, PartCache};
-use fenkra_montagem::kin::{self, CouplingKind, JFrame, JRef, JointKind};
+use fenkra_montagem::kin::{self, CouplingKind, JointKind};
 use fenkra_montagem::links::{self, AcaoLink, Gatilho, Politica};
 use fenkra_montagem::solve::SolveReport;
 use fenkra_montagem::*;
@@ -66,7 +66,7 @@ impl MateCmd {
             MateCmd::RackPinion => "⛭",
         }
     }
-    fn kind(self) -> Option<MateKind> {
+    pub(crate) fn kind(self) -> Option<MateKind> {
         Some(match self {
             MateCmd::Gear => MateKind::Gear { ratio: "-1".into(), belt: false, refs: [[0.; 3]; 4] },
             MateCmd::Pulley => MateKind::Gear { ratio: "1".into(), belt: true, refs: [[0.; 3]; 4] },
@@ -182,8 +182,10 @@ pub struct AsmState {
     /// recompor a vista (peças ou posições mudaram)
     pub dirty: bool,
     pub sel: Option<Id>,
-    /// restrição esperando as duas seleções
-    pub pending: Option<MateCmd>,
+    /// restrição ou junta em criação: nada entra na montagem antes de aceitar
+    pub cmd: Option<crate::asm_cmd::Pendente>,
+    /// a prévia mudou: a cena precisa do fantasma novo (sem recompor as peças)
+    pub fantasma_novo: bool,
     /// propriedades do componente escolhido (ou da montagem, sem escolha) abertas no painel
     pub props: bool,
     pub report: SolveReport,
@@ -224,8 +226,6 @@ pub struct AsmState {
     snapshot: Option<Assembly>,
     /// aviso de uma ação do painel, para mostrar no quadro seguinte
     aviso: Option<(String, bool)>,
-    /// junta esperando as duas seleções
-    pub pending_joint: Option<u8>,
     // ---- simulação
     pub sim_open: bool,
     pub sim_frames: Vec<kin::Frame>,
@@ -289,7 +289,8 @@ impl AsmState {
             view: None,
             dirty: true,
             sel: None,
-            pending: None,
+            cmd: None,
+            fantasma_novo: false,
             report: SolveReport { converged: true, dof: report_dof, ..Default::default() },
             errors: vec![],
             undo: vec![],
@@ -312,7 +313,6 @@ impl AsmState {
             edit_snap: None,
             drag_start: None,
             snapshot: None,
-            pending_joint: None,
             sim_open: false,
             sim_frames: vec![],
             sim_t: 0.,
@@ -467,7 +467,7 @@ impl AsmState {
     }
 
     /// Elemento da restrição a partir de uma seleção da viewport.
-    fn mate_ref(&mut self, p: Pick) -> Result<MateRef, String> {
+    pub(crate) fn mate_ref(&mut self, p: Pick) -> Result<MateRef, String> {
         let (body, world) = match p {
             Pick::Face { body, point, .. } => (body, point.map(|v| v as f64)),
             Pick::Vertex { body, pos } => (body, pos.map(|v| v as f64)),
@@ -510,23 +510,8 @@ impl AsmState {
     }
 }
 
-const DICA_ALINHAMENTO: &str = "Troca o sentido das normais: a peça vira, e a cota continua do mesmo lado.";
-const DICA_LADO: &str = "Passa a cota para o outro lado da referência: a peça muda de lado sem virar.";
-
-/// Restrição automática: o tipo mais lógico para o par escolhido.
-fn auto_kind(a: &Geom, b: &Geom, wa: &Placement, wb: &Placement) -> MateKind {
-    match (a, b) {
-        (Geom::Plane { n: na, .. }, Geom::Plane { n: nb, .. }) => {
-            // faces de frente uma para a outra → contato; mesmo sentido → coincidência
-            if dot(wa.dir(*na), wb.dir(*nb)) < 0. {
-                MateKind::Contact
-            } else {
-                MateKind::Coincident { flip: false }
-            }
-        }
-        _ => MateKind::Coincident { flip: false },
-    }
-}
+pub(crate) const DICA_ALINHAMENTO: &str = "Troca o sentido das normais: a peça vira, e a cota continua do mesmo lado.";
+pub(crate) const DICA_LADO: &str = "Passa a cota para o outro lado da referência: a peça muda de lado sem virar.";
 
 // ============================================================== comandos
 
@@ -634,17 +619,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                         Err(e) => app.toast(e, true),
                     }
                 }
-                Cmd::AsmMate(m) => {
-                    if app.picks.len() >= 2 {
-                        let picks = app.picks.clone();
-                        app.picks.clear();
-                        create_mate(app, m, picks[0], picks[1]);
-                    } else {
-                        let st = app.asm.as_mut().unwrap();
-                        st.pending = Some(m);
-                        app.toast(tr("Escolha dois elementos (faces, arestas ou vértices) de peças diferentes"), false);
-                    }
-                }
+                Cmd::AsmMate(m) => crate::asm_cmd::abrir(app, crate::asm_cmd::tipo_da_restricao(m)),
                 Cmd::AsmFix => {
                     let Some(id) = st.sel else {
                         app.toast(tr("Selecione o componente"), true);
@@ -689,18 +664,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                     st.sel = Some(id);
                     st.dirty = true;
                 }
-                Cmd::AsmJoint(k) => {
-                    if app.picks.len() >= 2 {
-                        let picks = app.picks.clone();
-                        app.picks.clear();
-                        create_joint(app, k, picks[0], picks[1]);
-                    } else {
-                        let st = app.asm.as_mut().unwrap();
-                        st.pending_joint = Some(k);
-                        st.pending = None;
-                        app.toast(tr("Escolha os elementos das duas peças (eixo/face cilíndrica, face plana, vértice ou aresta)"), false);
-                    }
-                }
+                Cmd::AsmJoint(k) => crate::asm_cmd::abrir(app, crate::asm_cmd::tipo_da_junta(k)),
                 Cmd::AsmAutoJoints => {
                     st.push_undo();
                     let made = st.asm.joints_from_mates();
@@ -847,196 +811,18 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
     true
 }
 
-/// Cria a restrição entre duas seleções e resolve.
-fn create_mate(app: &mut App, m: MateCmd, a: Pick, b: Pick) {
-    let Some(st) = app.asm.as_mut() else { return };
-    let (ra, rb) = match (st.mate_ref(a), st.mate_ref(b)) {
-        (Ok(x), Ok(y)) => (x, y),
-        (Err(e), _) | (_, Err(e)) => {
-            app.toast(e, true);
-            return;
-        }
-    };
-    if ra.comp == rb.comp {
-        app.toast(tr("Os dois elementos são do mesmo componente"), true);
-        return;
-    }
-    let (pa, pb) = (st.asm.node(ra.comp).unwrap().placement, st.asm.node(rb.comp).unwrap().placement);
-    let kind = m.kind().unwrap_or_else(|| auto_kind(&ra.geom, &rb.geom, &pa, &pb));
-    if !fenkra_montagem::par_valido(&kind, &ra.geom, &rb.geom) {
-        app.toast(format!("{}: {}", tr(kind.label()), tr("este par de elementos não define a restrição (escolha planos ou eixos)")), true);
-        return;
-    }
-    st.push_undo();
-    let id = st.asm.add_mate(kind, ra, rb);
-    // engrenagem/cremalheira: o giro de agora é o zero
-    st.asm.init_motion(id);
-    // distância e ângulo: a medida de agora, para a peça não saltar
-    st.asm.iniciar_medida(id);
-    st.solve();
-    if m == MateCmd::AlignOnce {
-        // alinhamento instantâneo: posiciona e não deixa histórico
-        st.asm.mates.retain(|x| x.id != id);
-        app.toast(tr("Alinhado (sem restrição guardada)"), false);
-    } else {
-        st.sel = Some(id);
-        let ok = !st.report.failed.contains(&id);
-        let msg = if ok { format!("{} criada · {} GDL livres", st.asm.name_of(id), st.report.dof) } else { format!("{}: não foi possível satisfazer (conflito com outras restrições)", st.asm.name_of(id)) };
-        app.toast(msg, !ok);
-    }
-}
-
-/// Cria a junta entre duas seleções (o sistema de B começa alinhado ao de A: ângulo e curso 0).
-fn create_joint(app: &mut App, k: u8, a: Pick, b: Pick) {
-    let Some(st) = app.asm.as_mut() else { return };
-    let kind = match k {
-        0 => JointKind::Revolute,
-        1 => JointKind::Prismatic,
-        2 => JointKind::Cylindrical,
-        3 => JointKind::Screw { pitch: "2".into() },
-        4 => JointKind::Spherical,
-        5 => JointKind::Planar,
-        6 => JointKind::Rigid,
-        7 => JointKind::PointCurve { curve: vec![] },
-        _ => JointKind::Cam { profile: vec![], radius: "0".into() },
-    };
-    // came: perfil = contorno da seção da peça pelo plano da aresta escolhida (vários arcos
-    // viram um perfil só); seguidor = vértice (ponta) ou aresta circular (rolete)
-    let cam = if let (JointKind::Cam { .. }, Pick::Edge { body, edge, mid }) = (&kind, a) {
-        let comp = st.comp_of_body(body);
-        let node = comp.and_then(|c| st.asm.node(c)).cloned();
-        let poly: Vec<[f64; 3]> = st.view.as_ref().map(|r| crate::picking::edge_polyline(r, body, edge)).unwrap_or_default();
-        match (node, poly.len() >= 3) {
-            (Some(n), true) => {
-                let pl = n.placement;
-                let loc: Vec<[f64; 3]> = poly.iter().map(|q| pl.to_local(*q)).collect();
-                // normal do plano da aresta (Newell; aresta reta: cai no eixo z da peça)
-                let mut nn = [0.; 3];
-                for i in 0..loc.len() {
-                    let (p, q) = (loc[i], loc[(i + 1) % loc.len()]);
-                    nn[0] += (p[1] - q[1]) * (p[2] + q[2]);
-                    nn[1] += (p[2] - q[2]) * (p[0] + q[0]);
-                    nn[2] += (p[0] - q[0]) * (p[1] + q[1]);
-                }
-                let nn = if norm(nn) > 1e-9 { unit(nn) } else { [0., 0., 1.] };
-                let m = pl.to_local(mid.map(|v| v as f64));
-                let dir = st.file.as_ref().and_then(|f| f.parent()).map(|p| p.to_path_buf());
-                let shape = match &n.kind {
-                    NodeKind::Part { path } => st.cache.get(&fenkra_montagem::load::full_path(dir.as_deref(), path), true).ok().and_then(|p| p.shape.clone()),
-                    _ => None,
-                };
-                let lp = shape.and_then(|s| s.section_loops(m, nn, 1e4).ok()).and_then(|loops| {
-                    loops.into_iter().min_by(|x, y| {
-                        let dmin = |l: &Vec<[f64; 3]>| l.iter().map(|p| norm(sub(*p, m))).fold(f64::MAX, f64::min);
-                        dmin(x).total_cmp(&dmin(y))
-                    })
-                });
-                Some(lp.unwrap_or(loc))
-            }
-            _ => None,
-        }
-    } else {
-        None
-    };
-    let roller = match (&kind, b) {
-        (JointKind::Cam { .. }, Pick::Edge { body, edge, .. }) => st
-            .view
-            .as_ref()
-            .map(|r| crate::picking::edge_polyline(r, body, edge))
-            .and_then(|pts| fenkra_solidos::geo3d::Curve3::poly(pts, false).ok())
-            .filter(|c| !c.is_straight())
-            .and_then(|c| fenkra_solidos::geo3d::fit_circle(&c).ok())
-            .map(|(_, _, r)| r),
-        _ => None,
-    };
-    // ponto em curva: a aresta (trajetória) é da peça A, o vértice da peça B
-    let curve = if let (JointKind::PointCurve { .. }, Pick::Edge { body, edge, .. }) = (&kind, a) {
-        let comp = st.comp_of_body(body);
-        let pl = comp.and_then(|c| st.asm.node(c)).map(|n| n.placement).unwrap_or_default();
-        st.view.as_ref().map(|r| crate::picking::edge_polyline(r, body, edge).into_iter().map(|q| pl.to_local(q)).collect::<Vec<_>>())
-    } else {
-        None
-    };
-    let (ra, rb) = match (st.mate_ref(a), st.mate_ref(b)) {
-        (Ok(x), Ok(y)) => (x, y),
-        (Err(e), _) | (_, Err(e)) => {
-            app.toast(e, true);
-            return;
-        }
-    };
-    if ra.comp == rb.comp {
-        app.toast(tr("Os dois elementos são da mesma peça"), true);
-        return;
-    }
-    let frame = |g: &Geom| match *g {
-        Geom::Axis { p, d } => JFrame::from_axis(p, d),
-        Geom::Plane { p, n } => JFrame::from_axis(p, n),
-        Geom::Point(p) => JFrame::from_axis(p, [0., 0., 1.]),
-    };
-    let (pa, pb) = (st.asm.node(ra.comp).unwrap().placement, st.asm.node(rb.comp).unwrap().placement);
-    let fa = frame(&ra.geom);
-    let mut fb = frame(&rb.geom);
-    // x de B = x de A projetado no plano de B (zero comum do ângulo)
-    let xa = pb.dir_to_local(pa.dir(fa.x));
-    let k2 = dot(xa, fb.z);
-    let px = [xa[0] - fb.z[0] * k2, xa[1] - fb.z[1] * k2, xa[2] - fb.z[2] * k2];
-    if norm(px) > 1e-6 {
-        fb.x = unit(px);
-    }
-    let kind = match (kind, curve) {
-        (JointKind::PointCurve { .. }, Some(c)) => JointKind::PointCurve { curve: c },
-        (JointKind::PointCurve { .. }, None) => {
-            app.toast(tr("Ponto em curva: escolha primeiro a aresta (trajetória) e depois o vértice"), true);
-            return;
-        }
-        (JointKind::Cam { .. }, _) => match cam {
-            Some(p) => JointKind::Cam { profile: p, radius: roller.map(|r| format!("{r:.3}")).unwrap_or_else(|| "0".into()) },
-            None => {
-                app.toast(tr("Came: escolha primeiro uma aresta do perfil do came e depois o seguidor (vértice ou aresta circular do rolete)"), true);
-                return;
-            }
-        },
-        (k, _) => k,
-    };
-    st.push_undo();
-    let id = st.asm.add_joint(kind, JRef { comp: ra.comp, frame: fa }, JRef { comp: rb.comp, frame: fb });
-    st.solve();
-    st.sel = Some(id);
-    let (sem, com) = kin::analyze(&st.asm);
-    let msg = format!("{} criada · mecanismo com {sem} GDL ({com} com os comandos)", st.asm.name_of(id));
-    app.toast(msg, false);
-}
-
-/// Seleções feitas na viewport com uma restrição pendente: cria quando houver duas.
+/// Depois da viewport: com um comando aberto, cada clique vai para a caixa ativa; sem comando, um
+/// clique numa peça a seleciona na árvore.
 pub fn after_viewport(app: &mut App) {
     after_view_quick(app);
-    let pj = app.asm.as_ref().and_then(|s| s.pending_joint);
-    if let (Some(k), true) = (pj, app.picks.len() >= 2) {
-        let picks = app.picks.clone();
-        app.picks.clear();
-        if let Some(st) = app.asm.as_mut() {
-            st.pending_joint = None;
-        }
-        create_joint(app, k, picks[0], picks[1]);
-        return;
-    }
-    let pending = app.asm.as_ref().and_then(|s| s.pending);
-    if let Some(m) = pending {
-        if app.picks.len() >= 2 {
-            let picks = app.picks.clone();
-            app.picks.clear();
-            if let Some(st) = app.asm.as_mut() {
-                st.pending = None;
-            }
-            create_mate(app, m, picks[0], picks[1]);
-        }
-    } else if let Some(p) = app.picks.last().copied() {
-        // um clique numa peça seleciona o componente na árvore
-        if let Pick::Face { body, .. } | Pick::Edge { body, .. } | Pick::Vertex { body, .. } = p {
-            if let Some(st) = app.asm.as_mut() {
-                if let Some(c) = st.comp_of_body(body) {
-                    if st.sel != Some(c) {
-                        st.sel = Some(c);
+    if !crate::asm_cmd::apos_viewport(app) {
+        if let Some(p) = app.picks.last().copied() {
+            if let Pick::Face { body, .. } | Pick::Edge { body, .. } | Pick::Vertex { body, .. } = p {
+                if let Some(st) = app.asm.as_mut() {
+                    if let Some(c) = st.comp_of_body(body) {
+                        if st.sel != Some(c) {
+                            st.sel = Some(c);
+                        }
                     }
                 }
             }
@@ -2418,15 +2204,8 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         ui.label(RichText::new(tr("Crie uma montagem nova ou abra uma existente pela árvore à esquerda.")).weak());
         return;
     };
-    if let Some(m) = st.pending {
-        egui::Frame::NONE.fill(Color32::from_rgba_unmultiplied(40, 90, 160, 60)).inner_margin(6.).corner_radius(4.).show(ui, |ui| {
-            ui.label(RichText::new(format!("{} — {}", tr("Restrição"), format!("{m:?}"))).strong());
-            ui.label(format!("{} {}/2", tr("Clique nos dois elementos na viewport:"), app.picks.len()));
-            if ui.button(tr("Cancelar")).clicked() {
-                st.pending = None;
-            }
-        });
-        ui.add_space(6.);
+    if st.cmd.is_some() {
+        return crate::asm_cmd::painel(app, ui);
     }
     let sel = st.sel;
     if let Some(s) = sel {
@@ -2964,7 +2743,7 @@ impl AsmState {
     /// Há algo em edição (o painel de edição toma o lugar da árvore, como nos outros módulos)?
     /// Escolher um componente só o seleciona; restrições, juntas e recursos abrem a edição.
     pub fn editing(&self) -> bool {
-        self.pending.is_some() || self.pending_joint.is_some() || self.props || self.sel.is_some_and(|s| !self.asm.nodes.iter().any(|n| n.id == s))
+        self.cmd.is_some() || self.props || self.sel.is_some_and(|s| !self.asm.nodes.iter().any(|n| n.id == s))
     }
 
     /// Componentes das seleções da viewport (sem repetir, na ordem do clique).
@@ -3142,9 +2921,7 @@ fn apply_ctx(app: &mut App, act: AsmCtx) {
     match act {
         AsmCtx::Mate(m) => {
             if app.picks.len() >= 2 {
-                let picks = app.picks.clone();
-                app.picks.clear();
-                create_mate(app, m, picks[0], picks[1]);
+                crate::asm_cmd::abrir(app, crate::asm_cmd::tipo_da_restricao(m));
             }
         }
         AsmCtx::Fix(id) => node_action(app, id, 5),
@@ -3676,7 +3453,7 @@ pub fn gizmo(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::re
     eixos_da_serie(st, ui, rect, cam);
     // restrição rápida: dois elementos de peças diferentes escolhidos (opções calculadas depois
     // da viewport; o clique vira ação aplicada lá)
-    if !st.view_only && st.pending.is_none() && st.pending_joint.is_none() && app.picks.len() == 2 && st.quick.as_ref().is_some_and(|q| q.0 == app.picks) {
+    if !st.view_only && st.cmd.is_none() && app.picks.len() == 2 && st.quick.as_ref().is_some_and(|q| q.0 == app.picks) {
         let picks = app.picks.clone();
         let opts = st.quick.as_ref().map(|q| q.1.clone()).unwrap_or_default();
         if !opts.is_empty() {
