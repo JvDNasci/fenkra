@@ -1005,6 +1005,27 @@ mod tests {
     }
 
     #[test]
+    fn normais_de_exibicao_vem_da_superficie() {
+        let s = Shape::cylinder_surface([0., 0., 0.], [0., 0., 1.], 10., 0., 30.).unwrap();
+        let m = s.mesh_angle(0.5, 0.5).unwrap();
+        assert!(!m.indices.is_empty());
+        let at = |v: &[f32], i: u32| [v[i as usize * 3], v[i as usize * 3 + 1], v[i as usize * 3 + 2]];
+        for i in 0..(m.positions.len() / 3) as u32 {
+            let (p, n) = (at(&m.positions, i), at(&m.normals, i));
+            let radial = (p[0] * n[0] + p[1] * n[1]) / 10.;
+            assert!((radial.abs() - 1.).abs() < 1e-4 && n[2].abs() < 1e-4, "vértice {i}: {p:?} {n:?}");
+        }
+        // o sentido acompanha a orientação dos triângulos
+        for t in m.indices.chunks_exact(3) {
+            let [a, b, c] = [t[0], t[1], t[2]].map(|i| at(&m.positions, i));
+            let (u, v) = ([b[0] - a[0], b[1] - a[1], b[2] - a[2]], [c[0] - a[0], c[1] - a[1], c[2] - a[2]]);
+            let g = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+            let n = at(&m.normals, t[0]);
+            assert!(g[0] * n[0] + g[1] * n[1] + g[2] * n[2] > 0.);
+        }
+    }
+
+    #[test]
     fn extrusao_com_furo_no_perfil() {
         let f = Shape::face(&XY, &[rect(100., 50.), vec![Seg2::Circle([0., 0.], 10.)]]).unwrap();
         let s = f.extrude([0., 0., 1.], 20., 0.).unwrap();

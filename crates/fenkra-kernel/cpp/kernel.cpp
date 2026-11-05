@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -867,11 +868,23 @@ MeshData tessellate(const Shape& s, double deflection, double angle) {
                 m.indices.push_back(base + b - 1);
                 m.indices.push_back(base + c - 1);
             }
+            std::optional<BRepAdaptor_Surface> su;
+            if (tri->HasUVNodes()) su.emplace(face);
             for (int i = 0; i < nn; ++i) {
                 m.positions.push_back(float(pts[i].X()));
                 m.positions.push_back(float(pts[i].Y()));
                 m.positions.push_back(float(pts[i].Z()));
                 gp_Vec n = nrm[i];
+                if (su) {
+                    // normal exata da superfície: a média dos triângulos revela a malha no sombreamento
+                    const gp_Pnt2d uv = tri->UVNode(i + 1);
+                    gp_Pnt p;
+                    gp_Vec du, dv;
+                    su->D1(uv.X(), uv.Y(), p, du, dv);
+                    gp_Vec e = du.Crossed(dv);
+                    // polos degeneram (e ≈ 0) e ficam com a média; o sentido segue o da malha
+                    if (e.Magnitude() > 1e-12) n = e.Dot(n) < 0 ? -e : e;
+                }
                 if (n.Magnitude() > 1e-12) n.Normalize();
                 m.normals.push_back(float(n.X()));
                 m.normals.push_back(float(n.Y()));
