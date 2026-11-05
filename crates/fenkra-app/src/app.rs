@@ -501,6 +501,7 @@ impl App {
             let _ = std::fs::write(&f, a.to_json());
             let mut stt = crate::asm_ui::AsmState::new(a, Some(f));
             stt.sim_open = stt.asm.joints.len() > 0;
+            crate::asm_cmd::demo(&mut stt, &std::env::var("FENKRA_DEMO_ASM").unwrap_or_default());
             app.asm = Some(stt);
             app.settings.bench = crate::settings::Bench::Montagem;
             app.started = true;
@@ -563,10 +564,11 @@ impl App {
                 gap: s("0"),
                 joints: vec![],
                 material: String::new(),
+                mirror: false,
             };
             d.add_feature(FeatureKind::StructMember(mk(paths, CornerMode::MeiaEsquadria, 0)));
             d.add_feature(FeatureKind::StructMember(mk(legs, CornerMode::Nenhum, 0)));
-            d.add_feature(FeatureKind::StructPlate(StructPlate { at: [0., 0., 0.], thickness: s("8"), margin: s("15") }));
+            d.add_feature(FeatureKind::StructPlate(StructPlate::nova([0., 0., 0.], "8", "15")));
             for r in &mut d.references {
                 r.visible = false;
             }
@@ -1922,6 +1924,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                             gap: s("0"),
                             joints: vec![],
                             material: String::new(),
+                            mirror: false,
                         }))
                     })
                     .collect();
@@ -1935,14 +1938,16 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     PointRef::Fixed(q) => Some(*q),
                     _ => None,
                 });
+                // B255: a placa também nasce de uma face clicada (a da ponta) e o reforço de uma aresta
+                let at = at.or_else(|| if c == Cmd::StPlate { faces.first().copied() } else { edges.first().copied() });
                 let Some(at) = at else {
-                    self.toast("Selecione o vértice da ponta (placa) ou do encontro dos membros (reforço)", true);
+                    self.toast("Selecione a face da ponta (placa) ou a aresta de encontro dos membros (reforço)", true);
                     return;
                 };
                 Sel::Feature(d.add_feature(if c == Cmd::StPlate {
-                    FeatureKind::StructPlate(StructPlate { at, thickness: s("8"), margin: s("10") })
+                    FeatureKind::StructPlate(StructPlate::nova(at, "8", "10"))
                 } else {
-                    FeatureKind::StructGusset(StructGusset { at, leg: s("80"), thickness: s("6"), chamfer: s("10") })
+                    FeatureKind::StructGusset(StructGusset::novo(at, "80", "6", "10"))
                 }))
             }
             Cmd::SmParams => {
@@ -3171,6 +3176,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             tr("Sketch").to_string()
         } else if let Some(s) = &self.session {
             self.open.doc.name_of(s.id)
+        } else if let Some(p) = self.asm.as_ref().and_then(|s| s.cmd.as_ref()).filter(|_| self.in_asm()) {
+            tr(p.c.tipo.label()).to_string()
         } else {
             tr("Edição").to_string()
         };
@@ -5314,23 +5321,16 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
             Bench::Montagem => {
                 let Some(st) = self.asm.as_mut() else { return };
-                // componentes e restrições têm a barra no próprio painel; aqui só comandos esperando
-                // seleção e anotações 3D
+                // componentes, restrições e juntas têm a barra no próprio painel; aqui só anotações 3D
                 let pmi_sel = st.sel.is_some_and(|s| st.asm.pmi.iter().any(|p| p.id == s));
-                if st.pending.is_none() && st.pending_joint.is_none() && !pmi_sel {
+                if st.cmd.is_some() || !pmi_sel {
                     return;
                 }
                 ui.horizontal(|ui| {
                     if big(ui, "✔ Concluir").on_hover_text("Enter").clicked() || enter {
                         st.sel = None;
-                        st.pending = None;
-                        st.pending_joint = None;
                     }
-                    if (st.pending.is_some() || st.pending_joint.is_some()) && big(ui, "✖ Cancelar").clicked() {
-                        st.pending = None;
-                        st.pending_joint = None;
-                    }
-                    if let Some(id) = st.sel.filter(|_| st.pending.is_none() && st.pending_joint.is_none()) {
+                    if let Some(id) = st.sel {
                         if big(ui, "🗑 Excluir").on_hover_text("Del").clicked() {
                             ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique("asm_excluir"), id.0));
                         }
@@ -6591,6 +6591,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             if self.sketch.is_none() {
                 crate::pmi_ui::overlay(self, ui, rect, &cam);
                 crate::asm_ui::context_overlay(self, ui, rect, &cam);
+                crate::asm_cmd::overlay(self, ui, rect, &cam);
                 crate::asm_ui::fasteners_overlay(self, ui, rect, &cam);
                 crate::asm_ui::fasteners_handles(self, ui, rect, &cam);
                 crate::biblioteca_ui::candidatos_overlay(self, ui, rect, &cam);
@@ -6602,6 +6603,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             // seta e cota 3D do comando aberto (fast 3D)
             if self.sketch.is_none() {
                 if self.settings.bench == crate::settings::Bench::Montagem && self.asm.is_some() {
+                    crate::asm_simbolos::overlay(self, ui, rect, &cam);
                     crate::asm_ui::gizmo(self, ui, rect, &cam);
                 } else {
                     crate::handles::overlay(self, ui, rect, cam);
@@ -7226,6 +7228,7 @@ fn setup_fonts(_ctx: &egui::Context) {
 
 impl eframe::App for App {
     fn ui(&mut self, root: &mut egui::Ui, frame: &mut eframe::Frame) {
+        crate::demo_foto::quadro(root.ctx());
         crate::partida::contar_quadro();
         let ctx = &root.ctx().clone();
         crate::i18n::set_english(self.settings.english);
@@ -7299,6 +7302,8 @@ impl eframe::App for App {
         if dwg_mode {
             crate::dwg_ui::keys(self, ctx, save, undo, redo, del);
         } else if asm_mode {
+            crate::asm_cmd::teclas(self, ctx);
+            crate::asm_selecao::teclas(self, ctx);
             if save {
                 crate::asm_ui::save(self);
             }
@@ -7320,14 +7325,10 @@ impl eframe::App for App {
                 }
             }
             if del && !ctx.egui_wants_keyboard_input() {
-                if let Some(id) = self.asm.as_ref().and_then(|s| s.sel) {
-                    crate::asm_ui::node_action(self, id, 0);
-                }
+                crate::asm_selecao::em_lote(self, 0);
             }
             if !typing && km.pressed(ctx, K::Hide) {
-                if let Some(id) = self.asm.as_ref().and_then(|s| s.sel) {
-                    crate::asm_ui::node_action(self, id, 1);
-                }
+                crate::asm_selecao::em_lote(self, 1);
             }
         } else {
             if save {
@@ -7526,9 +7527,9 @@ impl eframe::App for App {
             let st = self.asm.as_mut().unwrap();
             std::mem::swap(&mut self.result, &mut st.view);
             std::mem::swap(&mut self.open.doc, &mut st.view_doc);
-            crate::asm_ui::after_viewport(self);
+            crate::asm_ui::after_viewport(self, ctx);
             crate::pmi_ui::after_viewport(self);
-            if self.asm.as_ref().is_some_and(|s| s.dirty) {
+            if self.asm.as_mut().is_some_and(|s| s.dirty || std::mem::take(&mut s.fantasma_novo)) {
                 self.scene_dirty = true;
             }
         } else {
@@ -7689,7 +7690,7 @@ impl eframe::App for App {
                     dark_edges: !matches!(self.settings.display, crate::render::DisplayMode::Arame) || lum(self.settings.bg_bottom) > 140.,
                     tangent_edges: self.settings.tangent_edges || matches!(self.settings.display, crate::render::DisplayMode::Arame),
                     hilite: self.hover_item.or(self.session.as_ref().map(|s| s.id)),
-                    hilite_extra: &self.st_cut_hi,
+                    hilite_extra: self.asm.as_ref().filter(|_| asm_view.is_some()).map_or(&self.st_cut_hi, |s| &s.multi),
                     line_w: self.settings.ref_line_width,
                     line_dash: self.settings.ref_line_dash,
                     point_style: self.settings.point_style,
@@ -7700,6 +7701,7 @@ impl eframe::App for App {
                     crate::previa::reter_ultima(&mut sess.ultima_valida, &mut s, r.status.get(&sess.id));
                 }
                 crate::asm_ui::contexto_na_cena(self.asm.as_ref(), &mut s);
+                crate::asm_cmd::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, ctx.input(|i| i.time), &mut s);
                 vp.set_scene(rs, &s);
                 self.scene_dirty = false;
                 ctx.request_repaint();

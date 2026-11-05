@@ -137,6 +137,7 @@ mod tests {
             gap: s("0"),
             joints: vec![],
             material: String::new(),
+            mirror: false,
         }));
         d
     }

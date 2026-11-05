@@ -18,7 +18,17 @@ pub fn english() -> bool {
 
 fn map() -> &'static HashMap<&'static str, &'static str> {
     static M: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
-    M.get_or_init(|| TABLE.iter().chain(crate::textos_ajuda::TEXTOS.iter()).chain(crate::textos_biblioteca::TEXTOS.iter()).copied().collect())
+    M.get_or_init(|| {
+        TABLE.iter()
+            .chain(crate::textos_ajuda::TEXTOS.iter())
+            .chain(crate::textos_biblioteca::TEXTOS.iter())
+            .chain(crate::sketch_textos::TEXTOS.iter())
+            .chain(crate::textos_estrutural::TEXTOS.iter())
+            .chain(crate::textos_montagem::TEXTOS.iter())
+            .chain(crate::textos_pmi::TEXTOS.iter())
+            .copied()
+            .collect()
+    })
 }
 
 /// Tradução do texto (ou o próprio texto, em português ou sem tradução).
@@ -267,7 +277,6 @@ static TABLE: &[(&str, &str)] = &[
     ("Cego até", "Blind to"),
     ("⟳ Escopo pelo eixo", "⟳ Scope from axis"),
     ("Acrescenta as peças que o eixo cruza agora.", "Adds the parts the axis crosses now."),
-    ("Linear", "Linear"),
     ("Circular", "Circular"),
     ("✔ Verificar peças", "✔ Check parts"),
     ("Confere na tabela de furos se toda peça do escopo recebeu o furo.", "Checks in the hole table that every part in scope received the hole."),
@@ -471,7 +480,6 @@ static TABLE: &[(&str, &str)] = &[
     ("Corpo ferramenta", "Tool body"),
     ("Corpos", "Bodies"),
     ("Cosmética", "Cosmetic"),
-    ("Cota", "Dimension"),
     ("Cota de diâmetro", "Diameter dimension"),
     ("Cota de raio", "Radius dimension"),
     ("Cota de ângulo", "Angle dimension"),
@@ -1018,7 +1026,6 @@ static TABLE: &[(&str, &str)] = &[
     ("Usado por", "Used by"),
     ("Usar a face selecionada", "Use the selected face"),
     ("Use os botões ✏ Sketch ou ▱ Plano para criar a partir deste plano.", "Use ✏ Sketch or ▱ Plane to create from this plane."),
-    ("Valor", "Value"),
     ("Valor (aceita expressão)", "Value (accepts expressions)"),
     ("Variável", "Variable"),
     ("Varrer o perfil ao longo de uma curva (Rib)", "Sweep the profile along a curve (Rib)"),
@@ -1244,7 +1251,6 @@ static TABLE: &[(&str, &str)] = &[
     ("Entre dois pontos, com prolongamento opcional nas pontas.", "Between two points, with optional extension at the ends."),
     ("Escolha quais tipos de elemento aparecem na viewport.", "Choose which element types appear in the viewport."),
     ("Espelha os comandos escolhidos (ou o corpo) por um plano.", "Mirrors the chosen commands (or the body) across a plane."),
-    ("Estilo", "Style"),
     ("Fica só o volume comum aos dois corpos.", "Keeps only the volume common to both bodies."),
     ("Filtro de exibição", "Display filter"),
     ("Furo nos pontos de um sketch, com diâmetro de passagem para o parafuso escolhido.", "Hole at sketch points, with clearance diameter for the chosen screw."),
@@ -1566,7 +1572,6 @@ static TABLE: &[(&str, &str)] = &[
     ("Tangente às superfícies de apoio", "Tangent to the support surfaces"),
     ("Tira do corpo", "Removes from the body"),
     ("Todas as células fechadas entram; para tirar uma, selecione um vértice/ponto dentro dela.", "All closed cells are included; to drop one, select a vertex/point inside it."),
-    ("Tolerância", "Tolerance"),
     ("Transforma a superfície em sólido com espessura para um ou dois lados.", "Turns the surface into a solid with thickness to one or both sides."),
     ("Transição suave entre duas ou mais curvas; com guia, as seções seguem a guia.", "Smooth transition between two or more curves; with a guide, the sections follow it."),
     ("Translação", "Translation"),
@@ -1949,7 +1954,6 @@ static TABLE: &[(&str, &str)] = &[
     ("Juntar tudo (sem explosão)", "Collapse all (no explode)"),
     ("Largura do alívio", "Relief width"),
     ("Legenda", "Title block"),
-    ("Letra", "Letter"),
     ("Letra de referência na face escolhida.", "Datum letter on the chosen face."),
     ("Letra do corte", "Section letter"),
     ("Letra do detalhe", "Detail letter"),
@@ -2483,7 +2487,6 @@ static TABLE: &[(&str, &str)] = &[
     ("Caixa janela (inteiro dentro)", "Window box (fully inside)"),
     ("Caixa pela direção", "Box by direction"),
     ("Chanfro de canto", "Corner chamfer"),
-    ("Clique", "Click"),
     ("Clique no canto entre duas linhas: corta o canto com uma linha reta (distâncias iguais) e abre a cota da distância.", "Click the corner between two lines: cuts it with a straight line (equal distances) and opens the distance dimension."),
     ("Clique seleciona; Shift/Ctrl somam. Ctrl + arrastar faz caixa: da esquerda para a direita só o que está inteiro dentro, da direita para a esquerda o que toca.", "Click selects; Shift/Ctrl add. Ctrl + drag draws a box: left to right selects only what is fully inside, right to left what touches it."),
     ("Cruzada", "Crossing"),
@@ -2598,7 +2601,6 @@ static TABLE: &[(&str, &str)] = &[
     ("Legenda 3D", "3D title block"),
     ("Modelo (os campos entre chaves são preenchidos com os dados da peça)", "Template (fields in braces are filled with the part data)"),
     ("Modificador", "Modifier"),
-    ("Moldura", "Frame"),
     ("Não guardar a visibilidade do modelo", "Do not store model visibility"),
     ("Ocultar a pasta", "Hide folder"),
     ("Prefixo", "Prefix"),
@@ -3207,7 +3209,6 @@ static TABLE: &[(&str, &str)] = &[
     ("centro", "center"),
     ("canto", "corner"),
     ("raio", "radius"),
-    ("vértice", "vertex"),
     ("1º ponto", "1st point"),
     ("2º ponto", "2nd point"),
     ("3º ponto", "3rd point"),
@@ -3390,45 +3391,6 @@ static TABLE: &[(&str, &str)] = &[
     ("Corrija os itens com ✖ para liberar", "Fix the items marked ✖ to release"),
     ("Cria a letra da revisão e congela a versão", "Creates the revision letter and freezes the version"),
     ("Conferir de novo", "Check again"),
-    ("◎ Cota inteligente", "◎ Smart dimension"),
-    ("Cota inteligente 3D", "3D smart dimension"),
-    ("Escolha os elementos e o tipo sai da seleção: aresta circular dá diâmetro, duas faces paralelas dão a distância, duas arestas dão o ângulo, dois furos dão a distância entre eixos. Tab alterna a variante; Enter confirma a cota provisória.", "Pick the elements and the type comes from the selection: a circular edge gives a diameter, two parallel faces give the distance, two edges give the angle, two holes give the axis distance. Tab switches the variant; Enter confirms the provisional dimension."),
-    ("Cota: escolha os elementos; o tipo é reconhecido pela seleção", "Dimension: pick the elements; the type is recognized from the selection"),
-    ("aponte para um elemento: o tipo da cota sai da escolha", "point at an element: the dimension type comes from the pick"),
-    ("escolha o segundo elemento", "pick the second element"),
-    ("Cota reconhecida", "Recognized dimension"),
-    ("Tab alterna a variante", "Tab switches the variant"),
-    ("Enter confirma; outro clique muda o tipo", "Enter confirms; another click changes the type"),
-    ("próximo:", "next:"),
-    ("ponto 1", "point 1"),
-    ("ponto 2", "point 2"),
-    ("clique", "click"),
-    ("elementos", "elements"),
-    ("este elemento não tem medida para a cota", "this element has no measure for a dimension"),
-    ("faces não paralelas: escolha duas arestas para o ângulo", "faces are not parallel: pick two edges for the angle"),
-    ("pontos alinhados ou repetidos: o 1º clique é o vértice e os outros dois precisam sair da mesma reta", "points are collinear or repeated: the 1st click is the vertex and the other two must leave the same line"),
-    ("as duas arestas estão na mesma reta", "both edges lie on the same line"),
-    ("arraste para afastar a linha de cota; encaixa em eixos e em 1 mm (Shift solta)", "drag to move the dimension line away; snaps to axes and 1 mm (Shift releases)"),
-    ("arraste para estender as linhas de apoio além da linha de cota (1 mm; Shift solta)", "drag to extend the extension lines past the dimension line (1 mm; Shift releases)"),
-    ("arraste para deslizar o texto ao longo da linha de cota (1 mm; Shift solta)", "drag to slide the text along the dimension line (1 mm; Shift releases)"),
-    ("afastamento", "offset"),
-    ("extensão", "extension"),
-    ("texto", "text"),
-    ("vértice da chamada: arraste para mudar o caminho (encaixa em 1 mm e 15°, Shift solta); botão direito remove", "leader vertex: drag to change the path (snaps to 1 mm and 15°, Shift releases); right-click removes"),
-    ("digite a nota · Enter fecha · Esc cancela", "type the note · Enter closes · Esc cancels"),
-    ("Plano do texto: de frente para a tela ou deitado no plano da vista atual", "Text plane: facing the screen or lying on the current view plane"),
-    ("Avançado…", "Advanced…"),
-    ("Abre o painel lateral com todos os campos da anotação", "Opens the side panel with every field of the annotation"),
-    ("Enter aceita · Esc volta ao que era", "Enter accepts · Esc restores what it was"),
-    ("Ra", "Ra"),
-    ("Item", "Item"),
-    ("medido", "measured"),
-    ("Texto que substitui o valor medido; vazio mostra a medida", "Text that replaces the measured value; empty shows the measure"),
-    ("Casas", "Decimals"),
-    ("auto", "auto"),
-    ("Tolerância superior; igual à inferior vira ±", "Upper tolerance; equal to the lower one becomes ±"),
-    ("Tolerância inferior", "Lower tolerance"),
-    ("Negrito", "Bold"),
 ];
 
 #[cfg(test)]

@@ -245,6 +245,17 @@ fn laco_em_entidades(p: &[[f64; 2]]) -> Vec<Entidade> {
                 Seg2::Arc(a, m, b) => out.push(arco(a, m, b).unwrap_or(Entidade::Linha(a, b))),
                 Seg2::Spline(q) => out.push(Entidade::Polilinha(q, false)),
                 Seg2::Circle(c, r) => out.push(Entidade::Circulo { centro: c, raio: r }),
+                Seg2::Ellipse(c, m, r, t0, t1) => {
+                    // o DXF da planificada não tem elipse: sai como polilinha fina
+                    let maior = m[0].hypot(m[1]).max(1e-12);
+                    let (ux, uy) = (m[0] / maior, m[1] / maior);
+                    let q = (0..=64).map(|i| {
+                        let t = t0 + (t1 - t0) * i as f64 / 64.;
+                        let (a, b) = (maior * t.cos(), r * t.sin());
+                        [c[0] + a * ux - b * uy, c[1] + a * uy + b * ux]
+                    }).collect();
+                    out.push(Entidade::Polilinha(q, false));
+                }
             }
         }
     };
