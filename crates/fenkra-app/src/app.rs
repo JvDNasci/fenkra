@@ -79,7 +79,7 @@ impl Worker {
         let fila = fenkra_core::trabalho::Fila::nova(
             "recompute",
             // pedidos pulados passam adiante o "reconstruir do zero"
-            |antes, novo| (novo.0, novo.1, novo.2 | antes.2, novo.3),
+            |antes: PedidoCalculo, novo: PedidoCalculo| (novo.0, novo.1, novo.2 | antes.2, novo.3),
             || {
                 fenkra_kernel::reduzir_prioridade_da_thread();
                 // cache entre cálculos: só refaz a partir do primeiro comando que mudou
