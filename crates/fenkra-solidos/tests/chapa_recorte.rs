@@ -81,3 +81,43 @@ fn recorte_normal_a_face_nao_acompanha_a_dobra() {
     // reto pelo plano XY: leva também a perna vertical (z até 10), bem mais que a fatia da dobra
     assert!(tirou > 150., "tirou {tirou}");
 }
+
+/// B02: o contorno do recorte sai nos dois estados ao mesmo tempo (prévia simultânea). O canto que cai
+/// na zona da dobra segue o arco (fibra neutra mantém o comprimento) e o resto fica onde está; a
+/// planificada projetada no sketch devolve o retângulo original para cotar contra ele.
+#[test]
+fn contorno_do_recorte_nos_dois_estados_e_projecao_no_sketch() {
+    if !kernel_disponivel() {
+        return;
+    }
+    let mut d = chapa_com_aba();
+    d.sheet.as_mut().unwrap().flat = true;
+    recorte(&mut d, [98., 10.], [104., 20.], false);
+    let cut = d.features.last().unwrap().id;
+    for flat in [false, true] {
+        let r = recalcula(&d, flat);
+        tudo_ok(&d, &r, "contorno");
+        assert_eq!(r.cut_outlines.len(), 1, "um contorno por recorte (planificada: {flat})");
+        let o = &r.cut_outlines[0];
+        assert_eq!(o.feature, cut);
+        let pts = |l: &Vec<Vec<[f64; 3]>>| l.iter().flatten().copied().collect::<Vec<_>>();
+        // planificado: o retângulo desenhado, no plano do sketch
+        assert!(pts(&o.flat).iter().all(|p| (97.99..=104.01).contains(&p[0]) && (9.99..=20.01).contains(&p[1]) && p[2].abs() < 1e-6), "planificado {:?}", o.flat);
+        // dobrado: x = 98 não mexe; x = 104 cai na zona (ba = 4,52) e sobe pelo arco de raio r + t = 4
+        let dob = pts(&o.folded);
+        assert!(dob.iter().any(|p| (p[0] - 98.).abs() < 1e-6 && p[2].abs() < 1e-6), "o canto fora da dobra fica parado");
+        let phi: f64 = 4. / (2. + 0.44 * 2.);
+        let (x, z) = (100. + 4. * phi.sin(), 4. - 4. * phi.cos());
+        assert!(dob.iter().any(|p| (p[0] - x).abs() < 0.02 && (p[2] - z).abs() < 0.02), "canto na zona da dobra esperado em ({x:.2}, {z:.2}): {dob:?}");
+    }
+    // projetar a planificada no sketch: o retângulo de volta, em coordenadas do plano
+    let uv = fenkra_solidos::contorno_planificado_no_sketch(&d, cut).unwrap();
+    let todos: Vec<[f64; 2]> = uv.iter().flatten().copied().collect();
+    assert!(!todos.is_empty() && todos.iter().all(|p| (97.99..=104.01).contains(&p[0]) && (9.99..=20.01).contains(&p[1])), "{todos:?}");
+    // normal à face: os dois estados mostram o mesmo contorno reto
+    let mut d = chapa_com_aba();
+    d.sheet.as_mut().unwrap().flat = true;
+    recorte(&mut d, [98., 10.], [104., 20.], true);
+    let r = recalcula(&d, false);
+    assert_eq!(r.cut_outlines[0].flat, r.cut_outlines[0].folded);
+}
