@@ -899,7 +899,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         match std::fs::read_to_string(&path).map_err(|e| e.to_string()).and_then(|s| Document::from_json(&s).map_err(|e| e.to_string())) {
             Ok(d) => {
                 let bench = if d.sheet.is_some() { Some(crate::settings::Bench::Chapa) } else { None };
-                self.load_doc(d, None, None);
+                // formato mais novo que este programa: abre travado para não regravar por cima (B64)
+                let futuro = d.formato_futuro().then(|| format!("de formato v{}", d.format_version));
+                if let Some(f) = &futuro {
+                    self.toast(tr("Arquivo de formato mais novo: abre somente para leitura. Atualize o Fenkra para editar.").to_string() + &format!(" ({f})"), true);
+                }
+                self.load_doc(d, None, futuro);
                 self.settings.add_recent_file(&path);
                 self.open.file = Some(path);
                 if let Some(b) = bench {

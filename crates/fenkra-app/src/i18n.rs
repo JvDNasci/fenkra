@@ -84,6 +84,7 @@ static TABLE: &[(&str, &str)] = &[
     ("2 linhas", "2 lines"),
     ("3 pontos", "3 points"),
     ("360° distribui por igual; menos que isso põe a primeira e a última nas pontas do arco.", "360° spreads evenly; less puts the first and last at the arc ends."),
+    ("Arquivo de formato mais novo: abre somente para leitura. Atualize o Fenkra para editar.", "Newer file format: opens read-only. Update Fenkra to edit it."),
     ("A versão salva mais recente será congelada (somente leitura).", "The latest saved version will be frozen (read-only)."),
     ("Abrir", "Open"),
     ("Abrir peça…", "Open part…"),

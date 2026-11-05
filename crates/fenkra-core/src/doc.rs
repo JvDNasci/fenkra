@@ -2672,6 +2672,9 @@ pub enum EdgeMode {
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct Document {
     pub format_version: u32,
+    /// versão do programa que gravou o arquivo (informativo, fora da igualdade)
+    #[serde(default)]
+    pub app_version: crate::formato::VersaoApp,
     pub name: String,
     pub props: Properties,
     /// Aparência da peça inteira (sobrepõe a cor dos coletores).
@@ -2735,6 +2738,7 @@ impl Document {
     pub fn new(name: &str) -> Self {
         let mut d = Document {
             format_version: FORMAT_VERSION,
+            app_version: crate::formato::VersaoApp::atual(),
             name: name.into(),
             props: Properties::default(),
             appearance: None,
@@ -2776,10 +2780,20 @@ impl Document {
     }
 
     pub fn to_json(&self) -> String {
-        serde_json::to_string_pretty(self).expect("serialização")
+        // grava sempre a versão do programa que está salvando; o documento em memória não muda
+        let mut c = self.clone();
+        c.app_version = crate::formato::VersaoApp::atual();
+        serde_json::to_string_pretty(&c).expect("serialização")
     }
+    /// Abre o JSON de qualquer versão antiga (cadeia de migração, B64). Arquivo de formato futuro
+    /// abre tolerante com `format_version` preservado: use [`Self::formato_futuro`] para travar a edição.
     pub fn from_json(s: &str) -> Result<Self, serde_json::Error> {
-        serde_json::from_str(s)
+        let p = crate::formato::preparar(crate::formato::Tipo::Peca, s)?;
+        serde_json::from_value(p.valor)
+    }
+    /// O arquivo veio de um Fenkra mais novo: deve abrir somente para leitura.
+    pub fn formato_futuro(&self) -> bool {
+        self.format_version > crate::formato::Tipo::Peca.versao_atual()
     }
 
     // ------------------------------------------------ nomes

@@ -637,8 +637,14 @@ impl Drawing {
         serde_json::to_string_pretty(self).unwrap_or_default()
     }
 
+    /// Abre qualquer versão antiga pela cadeia de migração (B64).
     pub fn from_json(s: &str) -> Result<Self, String> {
-        serde_json::from_str(s).map_err(|e| e.to_string())
+        let p = fenkra_core::formato::preparar(fenkra_core::formato::Tipo::Desenho, s).map_err(|e| e.to_string())?;
+        serde_json::from_value(p.valor).map_err(|e| e.to_string())
+    }
+    /// Gravado por um Fenkra mais novo: abrir somente para leitura.
+    pub fn formato_futuro(&self) -> bool {
+        self.format_version > fenkra_core::formato::Tipo::Desenho.versao_atual()
     }
 
     /// Texto de um número com as casas decimais do desenho (vírgula decimal).

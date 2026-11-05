@@ -11,6 +11,7 @@
 //! - Cada salvamento cria uma **versão** (RF-GPR-010).
 //! - **Liberar revisão** marca a versão atual com uma letra e a congela (RF-GPR-011).
 
+use fenkra_core::formato::{preparar, Tipo, APP_VERSION};
 use fenkra_core::Document;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -32,6 +33,8 @@ pub enum ProjectError {
     DuplicatePn(String),
     #[error("não há alterações desde a última revisão")]
     NothingToRelease,
+    #[error("projeto somente leitura: {0}")]
+    SomenteLeitura(String),
 }
 
 pub type PResult<T> = Result<T, ProjectError>;
@@ -97,6 +100,9 @@ impl DocEntry {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Index {
     pub format_version: u32,
+    /// versão do programa que gravou o índice (informativo)
+    #[serde(default)]
+    pub app_version: String,
     pub name: String,
     pub pn_prefix: String,
     pub next_pn: u32,
@@ -107,6 +113,8 @@ pub struct Index {
 pub struct Project {
     pub root: PathBuf,
     pub index: Index,
+    /// índice de formato mais novo que este programa entende: o projeto abre só para leitura (B64)
+    pub aviso_formato: Option<String>,
 }
 
 fn now() -> u64 {
@@ -140,20 +148,43 @@ impl Project {
         std::fs::create_dir_all(root.join(VERSIONS))?;
         let p = Project {
             root: root.into(),
-            index: Index { format_version: 1, name: name.into(), pn_prefix: "FK-".into(), next_pn: 1, next_id: 1, documents: vec![] },
+            index: Index {
+                format_version: Tipo::Indice.versao_atual(),
+                app_version: APP_VERSION.into(),
+                name: name.into(),
+                pn_prefix: "FK-".into(),
+                next_pn: 1,
+                next_id: 1,
+                documents: vec![],
+            },
+            aviso_formato: None,
         };
         p.save_index()?;
         Ok(p)
     }
 
+    /// Abre o projeto de qualquer versão antiga (cadeia de migração). Índice de formato futuro abre
+    /// tolerante, mas com [`Project::aviso_formato`] preenchido e toda gravação recusada.
     pub fn open(root: &Path) -> PResult<Project> {
         let s = std::fs::read_to_string(root.join(INDEX))?;
-        Ok(Project { root: root.into(), index: serde_json::from_str(&s)? })
+        let prep = preparar(Tipo::Indice, &s)?;
+        let aviso_formato = prep.aviso(Tipo::Indice);
+        Ok(Project { root: root.into(), index: serde_json::from_value(prep.valor)?, aviso_formato })
+    }
+
+    fn pode_gravar(&self) -> PResult<()> {
+        match &self.aviso_formato {
+            Some(a) => Err(ProjectError::SomenteLeitura(a.clone())),
+            None => Ok(()),
+        }
     }
 
     pub fn save_index(&self) -> PResult<()> {
+        self.pode_gravar()?;
+        let mut index = self.index.clone();
+        index.app_version = APP_VERSION.into();
         let tmp = self.root.join(format!("{INDEX}.tmp"));
-        std::fs::write(&tmp, serde_json::to_string_pretty(&self.index)?)?;
+        std::fs::write(&tmp, serde_json::to_string_pretty(&index)?)?;
         std::fs::rename(tmp, self.root.join(INDEX))?;
         Ok(())
     }
@@ -203,6 +234,10 @@ impl Project {
 
     /// Salva o documento de trabalho e cria uma versão (se o conteúdo mudou).
     pub fn save(&mut self, id: u64, doc: &Document, note: &str) -> PResult<()> {
+        self.pode_gravar()?;
+        if doc.formato_futuro() {
+            return Err(ProjectError::SomenteLeitura(fenkra_core::formato::aviso_futuro(Tipo::Peca, doc.format_version)));
+        }
         self.check_pn(Some(id), &doc.props.pn)?;
         let json = doc.to_json();
         let hash = blake3::hash(json.as_bytes()).to_hex()[..16].to_string();
@@ -318,6 +353,48 @@ mod tests {
         // reabrir o projeto
         let p2 = Project::open(&root).unwrap();
         assert_eq!(p2.entry(id).unwrap().revisions.len(), 2);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    /// Índice gravado pelo alpha.28: sem `app_version`.
+    const INDICE_ALPHA28: &str = r#"{
+  "format_version": 1,
+  "name": "Antigo",
+  "pn_prefix": "FK-",
+  "next_pn": 3,
+  "next_id": 2,
+  "documents": [
+    { "id": 1, "file": "pecas/00001.fkp", "name": "Placa", "pn": "FK-0002", "description": "",
+      "state": "EmTrabalho", "versions": [ { "hash": "abc", "time": 10, "note": "criado" } ], "revisions": [] }
+  ]
+}"#;
+
+    #[test]
+    fn indice_do_alpha28_abre_e_e_regravado_com_app_version() {
+        let root = tmp("migra");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join(INDEX), INDICE_ALPHA28).unwrap();
+        let mut p = Project::open(&root).unwrap();
+        assert!(p.aviso_formato.is_none());
+        assert_eq!(p.index.documents.len(), 1);
+        assert_eq!(p.index.documents[0].pn, "FK-0002");
+        assert_eq!(p.next_pn(), "FK-0003");
+        p.save_index().unwrap();
+        let regravado = std::fs::read_to_string(root.join(INDEX)).unwrap();
+        assert!(regravado.contains(&format!("\"app_version\": \"{APP_VERSION}\"")));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn indice_de_formato_futuro_abre_somente_leitura_e_nao_e_regravado() {
+        let root = tmp("futuro");
+        std::fs::create_dir_all(&root).unwrap();
+        let futuro = INDICE_ALPHA28.replace("\"format_version\": 1", "\"format_version\": 42").replace("\"documents\"", "\"campo_novo\": true, \"documents\"");
+        std::fs::write(root.join(INDEX), &futuro).unwrap();
+        let p = Project::open(&root).unwrap();
+        assert!(p.aviso_formato.as_deref().unwrap().contains("v42"));
+        assert!(matches!(p.save_index(), Err(ProjectError::SomenteLeitura(_))));
+        assert_eq!(std::fs::read_to_string(root.join(INDEX)).unwrap(), futuro, "o arquivo do usuário não pode mudar");
         let _ = std::fs::remove_dir_all(root);
     }
 
