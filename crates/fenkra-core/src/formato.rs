@@ -27,8 +27,22 @@ pub enum Tipo {
 }
 
 /// Passos de migração por tipo. O passo `i` leva da versão `i + 1` para a `i + 2`.
-/// Hoje todos os tipos estão na versão 1, então as cadeias são vazias.
-const PASSOS_PECA: &[Passo] = &[];
+/// A peça está na versão 2 (B101); os demais tipos seguem na 1 e têm cadeia vazia.
+const PASSOS_PECA: &[Passo] = &[peca_v1_para_v2];
+
+/// v1 -> v2 (B101): parâmetros ganham tipo, unidade de exibição, limites e opções, e comandos ganham
+/// supressão por expressão. Todos os campos novos têm padrão, então o passo só declara os padrões
+/// e `format_version` sobe (um Fenkra v1 abre o arquivo v2 somente leitura).
+fn peca_v1_para_v2(v: &mut Value) {
+    if let Some(ps) = v.get_mut("params").and_then(Value::as_array_mut) {
+        for p in ps {
+            if let Some(o) = p.as_object_mut() {
+                o.entry("tipo").or_insert(Value::from("Numero"));
+                o.entry("exibir").or_insert(Value::from("Mm"));
+            }
+        }
+    }
+}
 const PASSOS_MONTAGEM: &[Passo] = &[];
 const PASSOS_DESENHO: &[Passo] = &[];
 const PASSOS_INDICE: &[Passo] = &[];

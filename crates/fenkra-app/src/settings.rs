@@ -611,12 +611,9 @@ impl Settings {
         std::env::var_os("APPDATA").map(|a| PathBuf::from(a).join("Fenkra").join("config.json"))
     }
 
+    /// Lê as camadas (programa, empresa, projeto, usuário) e devolve as configurações em vigor (B100).
     pub fn load() -> Self {
-        Self::path()
-            .and_then(|p| std::fs::read_to_string(p).ok())
-            .and_then(|s| serde_json::from_str::<Settings>(&s).ok())
-            .unwrap_or_default()
-            .migrar_tema()
+        crate::config_camadas::carregar()
     }
 
     /// Quem tinha um tema que não existe mais (removido) cai no padrão, com o fundo da viewport dele.
@@ -637,10 +634,8 @@ impl Settings {
         if std::env::vars().any(|(k, _)| k.starts_with("FENKRA_DEMO") || k == "FENKRA_ABRIR" || k == "FENKRA_BANCADA") {
             return;
         }
-        if let Some(p) = Self::path() {
-            let _ = std::fs::create_dir_all(p.parent().unwrap());
-            let _ = std::fs::write(p, serde_json::to_string_pretty(self).unwrap_or_default());
-        }
+        // com backup do arquivo anterior; se falhar, o aviso aparece na interface (B100)
+        let _ = crate::config_camadas::gravar(self);
     }
 
     pub fn family(&self, key: &str) -> usize {

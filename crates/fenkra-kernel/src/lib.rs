@@ -848,6 +848,24 @@ mod imp {
         b::set_mesh_threads(fios.map_or(0, |n| n.clamp(1, i32::MAX as usize) as i32));
     }
 
+    /// Liga o cancelamento a esta thread: as booleanas e a malha em andamento abandonam o cálculo
+    /// (erro "cancelado") quando a bandeira sobe. Solta ao largar a guarda.
+    pub fn ligar_cancelamento(bandeira: std::sync::Arc<std::sync::atomic::AtomicBool>) -> GuardaCancelamento {
+        b::set_cancel_flag(std::sync::Arc::as_ptr(&bandeira) as usize);
+        GuardaCancelamento { _bandeira: bandeira }
+    }
+
+    /// Mantém a bandeira viva enquanto a thread a usa; ao cair, a thread deixa de ser cancelável.
+    pub struct GuardaCancelamento {
+        _bandeira: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    }
+
+    impl Drop for GuardaCancelamento {
+        fn drop(&mut self) {
+            b::set_cancel_flag(0);
+        }
+    }
+
     /// Escolhe o algoritmo do malhador: `true` usa o Delabella. Existe só para medir (B235); o padrão
     /// do programa continua o do OpenCASCADE. Quem troca deve chamar `discard_mesh` antes de comparar.
     pub fn definir_malhador_delabella(ligar: bool) {
@@ -1185,6 +1203,12 @@ mod imp {
 
     pub fn definir_fios_malhador(_: Option<usize>) {}
 
+    pub fn ligar_cancelamento(_: std::sync::Arc<std::sync::atomic::AtomicBool>) -> GuardaCancelamento {
+        GuardaCancelamento
+    }
+
+    pub struct GuardaCancelamento;
+
     pub fn definir_malhador_delabella(_: bool) {}
 
     pub fn malhador_delabella() -> bool {
@@ -1200,7 +1224,7 @@ mod imp {
     }
 }
 
-pub use imp::{definir_fios_malhador, definir_malhador_delabella, malhador_delabella, fios_aplicados, fios_malhador, version, Shape, AVAILABLE};
+pub use imp::{ligar_cancelamento, GuardaCancelamento, definir_fios_malhador, definir_malhador_delabella, malhador_delabella, fios_aplicados, fios_malhador, version, Shape, AVAILABLE};
 
 /// Põe a thread atual abaixo da prioridade normal, para o cálculo não disputar processador com a
 /// interface. Chame uma vez, dentro da thread de cálculo. Devolve se a prioridade mudou.

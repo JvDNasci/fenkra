@@ -50,6 +50,10 @@ mod biblioteca_ui;
 mod sketch_fluxo;
 mod perfil;
 mod relatorio;
+mod param_ui;
+mod config_camadas;
+mod config_ui;
+mod textos_config;
 #[cfg(test)]
 mod padrao;
 

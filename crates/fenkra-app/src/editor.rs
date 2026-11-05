@@ -855,6 +855,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 }
                 crate::editor::check(ui, &mut f.suppressed, "suprimido");
             });
+            crate::param_ui::suprimir_se(ui, &mut f.suppress_if, &doc_ro);
             ui.label(RichText::new(tr("Duplo clique na árvore também abre a edição.")).weak().small());
             used_by(ui, &doc_ro, id, &mut new_sel);
         }
@@ -920,6 +921,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                         ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique("fenkra_props"), f.id));
                     }
                 });
+                crate::param_ui::suprimir_se(ui, &mut f.suppress_if, &doc_ro);
                 let _ = &tex_names;
             }
             let mut target = doc.features[idx].target;
@@ -1163,12 +1165,17 @@ fn params_table(ui: &mut egui::Ui, doc: &mut Document, vars: &Vars, _sink: &mut 
     ui.add_space(4.);
     let mut rename: Option<(Id, String)> = None;
     let mut remove = None;
-    egui::Grid::new("params").striped(true).num_columns(6).show(ui, |ui| {
+    let det_key = egui::Id::new("param_detalhes");
+    let det: Option<Id> = ui.ctx().data(|d| d.get_temp(det_key));
+    let mut det_novo = det;
+    let avisos = doc.avisos_param();
+    egui::Grid::new("params").striped(true).num_columns(7).show(ui, |ui| {
         ui.label(RichText::new(tr("Nome")).strong());
         ui.label(RichText::new(tr("Expressão")).strong());
         ui.label(RichText::new(tr("Unid.")).strong());
         ui.label(RichText::new(tr("Valor")).strong());
         ui.label(RichText::new(tr("📤")).strong()).on_hover_text(tr("publicado: outras peças podem usar por link"));
+        ui.label(tr(""));
         ui.label(tr(""));
         ui.end_row();
         for p in &mut doc.params {
@@ -1177,8 +1184,7 @@ fn params_table(ui: &mut egui::Ui, doc: &mut Document, vars: &Vars, _sink: &mut 
             if r.changed() {
                 rename = Some((p.id, n));
             }
-            let re = ui.add(egui::TextEdit::singleline(&mut p.expr).desired_width(100.));
-            crate::ui_ext::wheel_text(ui, &re, &mut p.expr);
+            crate::param_ui::editar_expr(ui, p);
             egui::ComboBox::from_id_salt(("un", p.id.0)).width(40.).selected_text(match p.unit {
                 Unit::Comprimento => "mm",
                 Unit::Angulo => "°",
@@ -1188,15 +1194,33 @@ fn params_table(ui: &mut egui::Ui, doc: &mut Document, vars: &Vars, _sink: &mut 
                 ui.selectable_value(&mut p.unit, Unit::Angulo, tr("°"));
                 ui.selectable_value(&mut p.unit, Unit::Numero, tr("—"));
             });
-            match vars.get(&p.name) {
-                Some(v) => ui.label(fmt(*v)),
-                None => ui.label(RichText::new(tr("⚠")).color(crate::theme::st_err())),
-            };
+            ui.horizontal(|ui| {
+                match crate::param_ui::valor_texto(p, vars) {
+                    Some(v) => ui.label(v),
+                    None => ui.label(RichText::new(tr("⚠")).color(crate::theme::st_err())),
+                };
+                if let Some(m) = crate::param_ui::avisos_do_param_texto(&avisos, p.id) {
+                    ui.label(RichText::new("⚠").color(crate::theme::st_warn())).on_hover_text(m);
+                }
+            });
             ui.checkbox(&mut p.published, tr(""));
+            if ui.selectable_label(det == Some(p.id), "⚙").on_hover_text(tr("Detalhes do parâmetro: tipo, unidade, limites, checagem e opções")).clicked() {
+                det_novo = if det == Some(p.id) { None } else { Some(p.id) };
+            }
             if ui.small_button(tr("✖")).clicked() {
                 remove = Some(p.id);
             }
             ui.end_row();
+        }
+    });
+    if let Some(p) = det.and_then(|id| doc.params.iter_mut().find(|p| p.id == id)) {
+        crate::param_ui::detalhes(ui, p);
+    }
+    ui.ctx().data_mut(|d| {
+        if let Some(id) = det_novo {
+            d.insert_temp(det_key, id);
+        } else {
+            d.remove::<Id>(det_key);
         }
     });
     if let Some((id, n)) = rename {

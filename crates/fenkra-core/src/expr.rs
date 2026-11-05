@@ -36,7 +36,7 @@ pub enum Ast {
 }
 
 pub fn parse(src: &str) -> Result<Ast, ExprError> {
-    let mut p = Parser { s: src.as_bytes(), i: 0, call: 0, semi: src.contains(';') };
+    let mut p = Parser { s: src.as_bytes(), i: 0, call: 0, semi: src.contains(';'), dims: vec![] };
     let ast = p.expr()?;
     p.ws();
     if p.i < p.s.len() {
@@ -63,7 +63,35 @@ pub fn names(ast: &Ast, out: &mut Vec<String>) {
     }
 }
 
-const CONSTS: [(&str, f64); 2] = [("pi", std::f64::consts::PI), ("e", std::f64::consts::E)];
+const CONSTS: [(&str, f64); 4] = [("pi", std::f64::consts::PI), ("e", std::f64::consts::E), ("true", 1.0), ("false", 0.0)];
+
+/// Unidade escrita logo depois de um número (`2 in`, `10cm`, `90deg`). O valor interno continua em
+/// milímetros e graus: a unidade só converte o que foi digitado, nunca a geometria (B101).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum DimUnidade {
+    Comprimento,
+    Angulo,
+}
+
+/// Sufixos reconhecidos: nome, fator para a unidade interna e dimensão.
+pub const SUFIXOS: [(&str, f64, DimUnidade); 8] = [
+    ("mm", 1.0, DimUnidade::Comprimento),
+    ("cm", 10.0, DimUnidade::Comprimento),
+    ("m", 1000.0, DimUnidade::Comprimento),
+    ("in", 25.4, DimUnidade::Comprimento),
+    ("pol", 25.4, DimUnidade::Comprimento),
+    ("deg", 1.0, DimUnidade::Angulo),
+    ("grau", 1.0, DimUnidade::Angulo),
+    ("rad", 180.0 / std::f64::consts::PI, DimUnidade::Angulo),
+];
+
+/// Dimensões das unidades escritas na expressão (vazio se não houver sufixo), para checar se um
+/// parâmetro de ângulo recebeu `mm` ou o contrário.
+pub fn dimensoes(src: &str) -> Vec<DimUnidade> {
+    let mut p = Parser { s: src.as_bytes(), i: 0, call: 0, semi: src.contains(';'), dims: vec![] };
+    let _ = p.expr();
+    p.dims
+}
 
 pub fn eval(ast: &Ast, vars: &HashMap<String, f64>) -> Result<f64, ExprError> {
     Ok(match ast {
@@ -134,6 +162,7 @@ struct Parser<'a> {
     /// texto usar ';' para isso)
     call: usize,
     semi: bool,
+    dims: Vec<DimUnidade>,
 }
 
 impl Parser<'_> {
@@ -145,6 +174,28 @@ impl Parser<'_> {
     fn peek(&mut self) -> Option<u8> {
         self.ws();
         self.s.get(self.i).copied()
+    }
+    /// Unidade logo depois de um número: devolve o fator para mm/graus (1 se não houver).
+    /// Só consome a palavra se ela for uma unidade conhecida, para `2 max(...)` seguir sendo erro.
+    fn sufixo(&mut self) -> f64 {
+        let ini = self.i;
+        self.ws();
+        let st = self.i;
+        while self.i < self.s.len() && self.s[self.i].is_ascii_alphabetic() {
+            self.i += 1;
+        }
+        let w = std::str::from_utf8(&self.s[st..self.i]).unwrap_or("").to_ascii_lowercase();
+        let continua = self.s.get(self.i).is_some_and(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'.' | b'('));
+        match SUFIXOS.iter().find(|(n, _, _)| *n == w) {
+            Some((_, f, d)) if !continua => {
+                self.dims.push(*d);
+                *f
+            }
+            _ => {
+                self.i = ini;
+                1.0
+            }
+        }
     }
     fn err<T>(&self, m: &str) -> Result<T, ExprError> {
         Err(ExprError::Syntax(self.i, m.into()))
@@ -222,7 +273,8 @@ impl Parser<'_> {
                     self.i += 1;
                 }
                 let t = std::str::from_utf8(&self.s[st..self.i]).unwrap().replace(',', ".");
-                t.parse::<f64>().ok().filter(|v| v.is_finite()).map(Ast::Num).ok_or(()).or_else(|_| self.err("número inválido"))
+                let v = t.parse::<f64>().ok().filter(|v| v.is_finite()).ok_or(()).or_else(|_| self.err("número inválido"))?;
+                Ok(Ast::Num(v * self.sufixo()))
             }
             Some(c) if c.is_ascii_alphabetic() || c == b'_' => {
                 let st = self.i;
@@ -269,6 +321,22 @@ mod tests {
         assert_eq!(eval_str("max(1,2)", &v).unwrap(), 2.);
         assert_eq!(eval_str("max(1,5; 2)", &v).unwrap(), 2.);
         assert_eq!(eval_str("max(3,5; 2)", &v).unwrap(), 3.5);
+    }
+
+    #[test]
+    fn unidades_convertem_o_que_foi_digitado_para_mm_e_graus() {
+        let v = HashMap::new();
+        assert_eq!(eval_str("2 in", &v).unwrap(), 50.8);
+        assert_eq!(eval_str("10cm + 5mm", &v).unwrap(), 105.0);
+        assert_eq!(eval_str("1,5 m", &v).unwrap(), 1500.0);
+        assert_eq!(eval_str("90deg", &v).unwrap(), 90.0);
+        assert!((eval_str("pi rad", &v).is_err()) as i32 == 1, "unidade só vale depois de número");
+        assert!((eval_str("3.14159265358979 rad", &v).unwrap() - 180.0).abs() < 1e-9);
+        assert_eq!(eval_str("2*3 mm", &v).unwrap(), 6.0);
+        assert_eq!(eval_str("2 max(1,3)", &v).is_err(), true);
+        assert_eq!(dimensoes("2in + 3"), vec![DimUnidade::Comprimento]);
+        assert!(dimensoes("5").is_empty());
+        assert_eq!(eval_str("true + false", &v).unwrap(), 1.0);
     }
 
     #[test]
