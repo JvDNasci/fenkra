@@ -10,6 +10,7 @@
 
 pub mod config;
 pub mod doc;
+pub mod estilo_chapa;
 pub mod expr;
 pub mod formato;
 pub mod macros;
@@ -23,9 +24,11 @@ pub mod pmi_infer;
 pub mod pmi_snap;
 pub mod projecao;
 pub mod qualidade;
+pub mod regras;
 pub mod sketch;
 pub mod trabalho;
 
 pub use doc::*;
+pub use regras::{EstiloRegras, Origem};
 pub use qualidade::{PresetMalha, PresetStl, QualidadeMalha};
 pub use sketch::SketchData;

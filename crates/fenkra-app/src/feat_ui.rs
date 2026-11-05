@@ -507,9 +507,15 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             expr(ui, "Comprimento reto", &mut fl.length, vars, "mm");
             expr(ui, "Ângulo", &mut fl.angle, vars, "°");
             let mut own = fl.radius.is_some();
-            if crate::editor::check(ui, &mut own, "raio próprio (senão o da chapa)").changed() {
-                fl.radius = own.then(|| "2".to_string());
-            }
+            ui.horizontal(|ui| {
+                if crate::editor::check(ui, &mut own, "raio próprio (senão o da chapa)").changed() {
+                    fl.radius = own.then(|| "2".to_string());
+                }
+                // cadeado: a aba sobrescreve o raio do estilo da chapa (B283)
+                if crate::chapa_estilo_ui::cadeado_comando(ui, doc, fl.radius.is_some()) {
+                    fl.radius = None;
+                }
+            });
             if let Some(r) = &mut fl.radius {
                 expr(ui, "Raio interno", r, vars, "mm");
             }
@@ -526,9 +532,15 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             crate::editor::check(ui, &mut fl.miter, "pontas em meia-esquadria (45°) para a aba vizinha");
             crate::editor::check(ui, &mut fl.min_gap, "recuo mínimo para aba vizinha (0,0001)").on_hover_text(tr("abas em arestas vizinhas sem recuo: planifica sem sobrepor"));
             let mut rel = fl.relief.is_some();
-            if crate::editor::check(ui, &mut rel, "alívio de canto nas pontas recuadas").changed() {
-                fl.relief = rel.then(|| "2".to_string());
-            }
+            ui.horizontal(|ui| {
+                if crate::editor::check(ui, &mut rel, "alívio de canto nas pontas recuadas").changed() {
+                    fl.relief = rel.then(|| "2".to_string());
+                }
+                // cadeado: alívio próprio da aba no lugar do alívio padrão do estilo (B283)
+                if crate::chapa_estilo_ui::cadeado_comando(ui, doc, fl.relief.is_some()) {
+                    fl.relief = None;
+                }
+            });
             if let Some(w) = &mut fl.relief {
                 expr(ui, "Largura do alívio", w, vars, "mm");
                 ui.horizontal_wrapped(|ui| {
@@ -539,6 +551,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 });
             }
         }
+        FeatureKind::SmFlangeLoop(lp) => crate::chapa_laco_ui::painel(ui, doc, lp, vars),
         FeatureKind::SmHem(h) => {
             section(ui, "Bainha");
             edge_line(ui, &h.edge);

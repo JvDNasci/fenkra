@@ -140,6 +140,7 @@ fn eh_comando_de_chapa(k: &FeatureKind) -> bool {
             | FeatureKind::SmCut(_)
             | FeatureKind::SmProfileFlange(_)
             | FeatureKind::SmCurveFlange(_)
+            | FeatureKind::SmFlangeLoop(_)
             | FeatureKind::SmSurfFlange(_)
             | FeatureKind::SmArcSlot(_)
             | FeatureKind::SmCornerRelief(_)

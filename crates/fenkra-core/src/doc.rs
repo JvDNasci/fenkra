@@ -1713,6 +1713,8 @@ pub enum FeatureKind {
     SmProfileFlange(SmProfileFlange),
     /// Chapa: aba numa aresta curva.
     SmCurveFlange(SmCurveFlange),
+    /// Chapa: abas por extensão lateral e por laço de arestas (várias abas em um comando).
+    SmFlangeLoop(SmFlangeLoop),
     /// Chapa: alívio de canto.
     SmCornerRelief(SmCornerRelief),
     /// Chapa: rasgo circular.
@@ -2086,6 +2088,58 @@ pub struct SmProfileFlange {
     pub flip: bool,
 }
 
+/// Trecho da aresta que recebe a aba (B284). As medidas são fórmulas em mm, a partir da ponta de
+/// menor (x, y, z) da aresta (ou da outra, com `SmFlangeLoop::invert`).
+#[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
+pub enum ExtensaoAba {
+    /// a aresta inteira
+    #[default]
+    Inteira,
+    /// largura `largura` centrada na aresta
+    Centrada { largura: String },
+    /// largura `largura` começando a `inicio` da ponta de referência
+    Deslocada { inicio: String, largura: String },
+    /// do ponto `a` ao ponto `b`, projetados sobre a aresta (duas referências escolhidas no 3D)
+    Entre { a: [f64; 3], b: [f64; 3] },
+}
+
+/// Abas em várias arestas de uma vez (laço) e/ou com extensão lateral. Uma aba por aresta, todas
+/// com o mesmo comprimento, ângulo, raio, lado e extensão. O laço retangular com mitra fecha os
+/// cantos como as abas de aresta vizinhas.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct SmFlangeLoop {
+    /// ponto médio de cada aresta escolhida
+    pub edges: Vec<[f64; 3]>,
+    /// aresta por dono + papel das faces (uma por aresta de `edges`; o ponto é só reserva)
+    #[serde(default)]
+    pub edge_keys: Vec<Option<EdgeKey>>,
+    /// em vez de só as arestas escolhidas, usa o laço de arestas retas da face maior que toca
+    /// a primeira delas
+    #[serde(default)]
+    pub loop_all: bool,
+    #[serde(default)]
+    pub extent: ExtensaoAba,
+    /// mede a extensão a partir da outra ponta da aresta
+    #[serde(default)]
+    pub invert: bool,
+    pub length: String,
+    pub angle: String,
+    #[serde(default)]
+    pub radius: Option<String>,
+    #[serde(default)]
+    pub flip: bool,
+    /// lado do material, como em `SmFlange::side`
+    #[serde(default)]
+    pub side: u8,
+    /// pontas em meia-esquadria (45°) para encontrar a aba vizinha
+    #[serde(default = "yes_bool")]
+    pub miter: bool,
+    #[serde(default)]
+    pub relief: Option<String>,
+    #[serde(default)]
+    pub relief_kind: u8,
+}
+
 /// Aba numa aresta curva (aba por superfície): parede normal à chapa ao longo da aresta.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct SmCurveFlange {
@@ -2196,11 +2250,40 @@ pub struct SheetParams {
     /// valor da dedução/tolerância (mm, para 90°) quando o método não é o fator K
     #[serde(default)]
     pub allowance: String,
+    /// estilo de chapa escolhido (nome em `Document::sheet_styles`; vazio = sem estilo). Os campos
+    /// acima valem como sobrescrita só nas chaves de `overrides`; as outras vêm do estilo.
+    #[serde(default)]
+    pub style: String,
+    /// chaves do estilo que esta peça sobrescreve (cadeado), veja `estilo_chapa::CHAVES`
+    #[serde(default)]
+    pub overrides: Vec<String>,
+    /// largura padrão do alívio de dobra nas pontas recuadas (vazio = sem alívio padrão)
+    #[serde(default)]
+    pub relief: String,
+    /// forma padrão do alívio: 0 retangular, 1 redondo, 2 rasgo
+    #[serde(default)]
+    pub relief_kind: u8,
+    /// tamanho padrão do alívio de canto (vazio = o comando pergunta)
+    #[serde(default)]
+    pub corner: String,
 }
 
 impl Default for SheetParams {
     fn default() -> Self {
-        SheetParams { thickness: "2".into(), radius: "2".into(), k: "0.44".into(), flat: false, material: String::new(), method: 0, allowance: String::new() }
+        SheetParams {
+            thickness: "2".into(),
+            radius: "2".into(),
+            k: "0.44".into(),
+            flat: false,
+            material: String::new(),
+            method: 0,
+            allowance: String::new(),
+            style: String::new(),
+            overrides: vec![],
+            relief: String::new(),
+            relief_kind: 0,
+            corner: String::new(),
+        }
     }
 }
 
@@ -2425,6 +2508,7 @@ impl FeatureKind {
             SmCut(_) => "RecorteChapa",
             SmProfileFlange(_) => "AbaPerfil",
             SmCurveFlange(_) => "AbaCurva",
+            SmFlangeLoop(_) => "AbaLaço",
             SmCornerRelief(_) => "AlívioCanto",
             SmArcSlot(_) => "RasgoCircular",
             SmSurfFlange(_) => "AbaSuperfície",
@@ -2480,6 +2564,7 @@ impl FeatureKind {
             SmCut(_) => "⬇",
             SmProfileFlange(_) => "⌐",
             SmCurveFlange(_) => "⌒",
+            SmFlangeLoop(_) => "⌐",
             SmCornerRelief(_) => "◔",
             SmArcSlot(_) => "◠",
             SmSurfFlange(_) => "⌓",
@@ -2718,6 +2803,24 @@ impl FeatureKind {
                 exprs(&mut p.l2);
                 if let Some(r) = &mut p.radius {
                     exprs(r)
+                }
+            }
+            SmFlangeLoop(p) => {
+                exprs(&mut p.length);
+                exprs(&mut p.angle);
+                if let Some(r) = &mut p.radius {
+                    exprs(r)
+                }
+                if let Some(r) = &mut p.relief {
+                    exprs(r)
+                }
+                match &mut p.extent {
+                    ExtensaoAba::Inteira | ExtensaoAba::Entre { .. } => {}
+                    ExtensaoAba::Centrada { largura } => exprs(largura),
+                    ExtensaoAba::Deslocada { inicio, largura } => {
+                        exprs(inicio);
+                        exprs(largura)
+                    }
                 }
             }
             SmCurveFlange(p) => {
@@ -3346,6 +3449,9 @@ pub struct Document {
     /// parâmetros de chapa metálica (espessura, raio, fator K, estado planificado)
     #[serde(default)]
     pub sheet: Option<SheetParams>,
+    /// estilos de chapa nomeados (B283): material, espessura, raio por fórmula, compensação, alívios
+    #[serde(default)]
+    pub sheet_styles: Vec<crate::regras::EstiloRegras>,
     /// anotações 3D (PMI) desta peça
     #[serde(default)]
     pub pmi: Vec<crate::pmi::Pmi>,
@@ -3408,6 +3514,7 @@ impl Document {
             views: vec![],
             textures: vec![],
             sheet: None,
+            sheet_styles: vec![],
             pmi: vec![],
             pmi_captures: vec![],
             line_styles: vec![],

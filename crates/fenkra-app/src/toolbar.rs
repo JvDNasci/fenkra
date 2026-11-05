@@ -277,6 +277,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("sm_parede", "Parede base", "Parede base", "Primeira parede a partir de um perfil fechado do sketch selecionado (lê a espessura global).", Cmd(C::SmWall))),
             Family("sm_aba", vec![
                 it("sm_aba", "Aba", "Aba de aresta", "Dobra a partir da aresta selecionada: comprimento, ângulo, raio, recuos laterais e alívio de canto.", Cmd(C::SmFlange)),
+                it("sm_aba", "Aba por laço", "Aba por laço e extensão lateral", "Escolha uma aresta (laço da face inteira) ou várias: uma aba por aresta em um comando só, com mitra nos cantos. A extensão pode ser a aresta inteira, uma largura centrada ou deslocada, ou o trecho entre duas referências.", Cmd(C::SmFlangeLoop)),
                 it("sm_bainha", "Bainha", "Bainha", "Dobra de 180° na borda: esmagada (folga 0) ou aberta/circular.", Cmd(C::SmHem)),
             ]),
             Family("sm_linha", vec![

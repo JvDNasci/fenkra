@@ -539,7 +539,7 @@ impl App {
         if std::env::var("FENKRA_DEMO_CHAPA").is_ok() {
             let s = |x: &str| x.to_string();
             let mut d = Document::new("Suporte de chapa");
-            d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), material: String::new(), method: 0, allowance: String::new(), flat: std::env::var("FENKRA_DEMO_CHAPA").is_ok_and(|v| v == "plana") });
+            d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), flat: std::env::var("FENKRA_DEMO_CHAPA").is_ok_and(|v| v == "plana"), ..Default::default() });
             let mut data = SketchData::default();
             {
                 let mut n = 9_000_000u64;
@@ -2065,10 +2065,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 Sel::Feature(d.add_feature(match c {
                     Cmd::SmCurveFlange => FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("15"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None }),
                     Cmd::SmArcSlot => FeatureKind::SmArcSlot(SmArcSlot { center: at.unwrap_or([0.; 3]), radius: s("20"), width: s("6"), start: s("0"), sweep: s("90") }),
-                    _ => FeatureKind::SmCornerRelief(SmCornerRelief { at: at.unwrap_or([0.; 3]), size: s("4"), kind: 0 }),
+                    // o tamanho padrão do canto vem do estilo da chapa, quando ele define um
+                    _ => {
+                        let tam = d.sheet_efetivo().map(|e| e.corner).filter(|c| !c.trim().is_empty()).unwrap_or_else(|| s("4"));
+                        FeatureKind::SmCornerRelief(SmCornerRelief { at: at.unwrap_or([0.; 3]), size: tam, kind: 0 })
+                    }
                 }))
             }
-            Cmd::SmFlange | Cmd::SmHem | Cmd::SmJoggle | Cmd::SmBend | Cmd::SmLouver => {
+            Cmd::SmFlange | Cmd::SmFlangeLoop | Cmd::SmHem | Cmd::SmJoggle | Cmd::SmBend | Cmd::SmLouver => {
                 if d.sheet.is_none() {
                     d.sheet = Some(SheetParams::default());
                 }
@@ -2077,6 +2081,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     Pick::Edge { mid, .. } => Some(mid.map(|v| v as f64)),
                     _ => None,
                 });
+                let edges: Vec<[f64; 3]> = self.picks.iter().filter_map(|p| match p {
+                    Pick::Edge { mid, .. } => Some(mid.map(|v| v as f64)),
+                    _ => None,
+                }).collect();
                 let verts: Vec<[f64; 3]> = self.picks.iter().filter_map(|p| match p {
                     Pick::Vertex { pos, .. } => Some(pos.map(|v| v as f64)),
                     _ => None,
@@ -2097,6 +2105,22 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         miter: false,
                         min_gap: true,
                         edge_key: None,
+                    }),
+                    // uma aresta escolhida vira o laço da face; várias arestas valem como estão
+                    Cmd::SmFlangeLoop => FeatureKind::SmFlangeLoop(SmFlangeLoop {
+                        loop_all: edges.len() <= 1,
+                        edges: if edges.is_empty() { vec![[0.; 3]] } else { edges },
+                        edge_keys: vec![],
+                        extent: ExtensaoAba::Inteira,
+                        invert: false,
+                        length: s("20"),
+                        angle: s("90"),
+                        radius: None,
+                        flip: false,
+                        side: 0,
+                        miter: true,
+                        relief: None,
+                        relief_kind: 0,
                     }),
                     Cmd::SmHem => FeatureKind::SmHem(SmHem { edge: edge.unwrap_or([0.; 3]), length: s("8"), gap: s("0"), flip: false, kind: 0, edge_key: None }),
                     Cmd::SmBend => FeatureKind::SmBend(SmBend {
@@ -3723,7 +3747,17 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let k_blank = egui::Id::new("planificada_resultado");
         let blank: Option<Result<fenkra_solidos::planificada::Planificada, String>> = ctx.data(|m| m.get_temp(k_blank));
         let d = &mut self.open.doc;
-        let sp = d.sheet.get_or_insert_with(SheetParams::default);
+        let sp_real = d.sheet.get_or_insert_with(SheetParams::default);
+        // a janela edita a cópia efetiva (estilo aplicado); `aplica_edicao` grava só o que mudou,
+        // marcando como sobrescrita (cadeado) o que difere do estilo
+        let estilos = d.sheet_styles.clone();
+        let antes = sp_real.efetivo(&estilos);
+        let mut editado = antes.clone();
+        let sp = &mut editado;
+        let vars = antes.vars_com_espessura(&vars);
+        let estilo_atual = sp_real.style.clone();
+        let sobrescritas = sp_real.overrides.clone();
+        let mut acoes = crate::chapa_estilo_ui::Acoes::default();
         let fechar = egui::Id::unique(("concluir_janela", "app.rs1"));
         if ctx.data_mut(|m| m.remove_temp::<bool>(fechar)).unwrap_or(false) {
             open = false;
@@ -3737,6 +3771,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             if crate::app::done_bar(ui) {
                 ui.ctx().data_mut(|m| m.insert_temp(fechar, true));
             }
+                crate::chapa_estilo_ui::topo(ui, &estilos, &estilo_atual, &mut acoes);
                 editor::section(ui, "Material");
                 ui.horizontal(|ui| {
                     egui::ComboBox::from_id_salt("chapa_material").selected_text(if sp.material.is_empty() { tr("(à mão)").to_string() } else { sp.material.clone() }).width(220.).show_ui(ui, |ui| {
@@ -3745,9 +3780,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                             ui.selectable_value(&mut sp.material, m.0.to_string(), m.0);
                         }
                     });
+                    crate::chapa_estilo_ui::cadeado(ui, &estilo_atual, &sobrescritas, "material", &mut acoes);
                 });
                 ui.horizontal(|ui| {
                     editor::expr(ui, "Espessura", &mut sp.thickness, &vars, "mm");
+                    crate::chapa_estilo_ui::cadeado(ui, &estilo_atual, &sobrescritas, "espessura", &mut acoes);
                     egui::ComboBox::from_id_salt("chapa_bitola").selected_text(tr("comercial")).width(80.).show_ui(ui, |ui| {
                         for g in fenkra_core::SHEET_GAUGES {
                             if ui.selectable_label(false, format!("{} mm", fmt(g))).clicked() {
@@ -3765,25 +3802,64 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         sp.k = fmt(k);
                     }
                 }
-                editor::expr(ui, "Raio de dobra", &mut sp.radius, &vars, "mm");
+                ui.horizontal(|ui| {
+                    editor::expr(ui, "Raio de dobra", &mut sp.radius, &vars, "mm");
+                    crate::chapa_estilo_ui::cadeado(ui, &estilo_atual, &sobrescritas, "raio", &mut acoes);
+                });
+                ui.label(RichText::new(tr("O raio aceita fórmula da espessura, por exemplo 1.15*espessura.")).weak().small());
                 editor::section(ui, "Compensação de dobra");
                 ui.horizontal(|ui| {
                     ui.radio_value(&mut sp.method, 0, tr("fator K"));
                     ui.radio_value(&mut sp.method, 1, tr("dedução (BD)"));
                     ui.radio_value(&mut sp.method, 2, tr("tolerância (BA)"));
+                    crate::chapa_estilo_ui::cadeado(ui, &estilo_atual, &sobrescritas, "metodo", &mut acoes);
                 });
                 if sp.method == 0 {
-                    editor::expr(ui, "Fator K", &mut sp.k, &vars, "");
+                    ui.horizontal(|ui| {
+                        editor::expr(ui, "Fator K", &mut sp.k, &vars, "");
+                        crate::chapa_estilo_ui::cadeado(ui, &estilo_atual, &sobrescritas, "k", &mut acoes);
+                    });
                     ui.label(RichText::new(tr("Fator K: posição da linha neutra (0 = face interna, 0,5 = meio). Comprimento desenvolvido de cada dobra = ângulo × (R + K·t).")).weak().small());
                 } else {
                     if sp.allowance.trim().is_empty() {
                         sp.allowance = "0".into();
                     }
-                    editor::expr(ui, if sp.method == 1 { "Dedução a 90°" } else { "Tolerância a 90°" }, &mut sp.allowance, &vars, "mm");
+                    ui.horizontal(|ui| {
+                        editor::expr(ui, if sp.method == 1 { "Dedução a 90°" } else { "Tolerância a 90°" }, &mut sp.allowance, &vars, "mm");
+                        crate::chapa_estilo_ui::cadeado(ui, &estilo_atual, &sobrescritas, "tolerancia", &mut acoes);
+                    });
                     let r = fenkra_core::expr::eval_str(&sp.radius, &vars).unwrap_or(0.);
                     let al = fenkra_core::expr::eval_str(&sp.allowance, &vars).unwrap_or(0.);
                     let k = fenkra_core::sheet_k(sp.method, 0.44, t_now, r, al);
                     ui.label(RichText::new(format!("{} {}", tr("convertido em fator K equivalente:"), fmt((k * 1000.).round() / 1000.))).small());
+                }
+                editor::section(ui, "Alívios padrão");
+                ui.horizontal(|ui| {
+                    let mut tem = !sp.relief.trim().is_empty();
+                    if editor::check(ui, &mut tem, "Alívio padrão nas abas").changed() {
+                        sp.relief = if tem { "2".into() } else { String::new() };
+                    }
+                    crate::chapa_estilo_ui::cadeado(ui, &estilo_atual, &sobrescritas, "alivio", &mut acoes);
+                });
+                if !sp.relief.trim().is_empty() {
+                    editor::expr(ui, "Alívio padrão", &mut sp.relief, &vars, "mm");
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(tr("Tipo"));
+                        for (k, n) in [(0u8, "retangular"), (1, "redondo"), (2, "rasgo")] {
+                            ui.selectable_value(&mut sp.relief_kind, k, tr(n));
+                        }
+                        crate::chapa_estilo_ui::cadeado(ui, &estilo_atual, &sobrescritas, "alivio_forma", &mut acoes);
+                    });
+                }
+                ui.horizontal(|ui| {
+                    let mut tem = !sp.corner.trim().is_empty();
+                    if editor::check(ui, &mut tem, "Tamanho padrão do canto").changed() {
+                        sp.corner = if tem { "4".into() } else { String::new() };
+                    }
+                    crate::chapa_estilo_ui::cadeado(ui, &estilo_atual, &sobrescritas, "canto", &mut acoes);
+                });
+                if !sp.corner.trim().is_empty() {
+                    editor::expr(ui, "Tamanho do canto", &mut sp.corner, &vars, "mm");
                 }
                 ui.horizontal(|ui| {
                     ui.radio_value(&mut sp.flat, false, tr("dobrada"));
@@ -3838,6 +3914,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     None => {}
                 }
             });
+        // grava as edições (cadeado nas mudanças) e depois as ações do seletor de estilo
+        let sp_real = d.sheet.get_or_insert_with(SheetParams::default);
+        sp_real.aplica_edicao(&antes, &editado, &estilos);
+        crate::chapa_estilo_ui::aplica(d, acoes);
         // pedidos dos botões da planificada
         let k_pedido = egui::Id::new("planificada_pedido");
         match ctx.data_mut(|m| m.remove_temp::<u8>(k_pedido)).unwrap_or(0) {
@@ -6958,6 +7038,8 @@ pub enum Cmd {
     SmProfileFlange,
     /// aba numa aresta curva
     SmCurveFlange,
+    /// abas por extensão lateral e por laço de arestas
+    SmFlangeLoop,
     /// alívio de canto
     SmCornerRelief,
     /// rasgo circular
