@@ -241,8 +241,8 @@ impl<'a> Tabela<'a> {
                 left_hand: false,
                 extra: Default::default(),
             }),
-            Comando::Filete { raio, arestas } => FeatureKind::Fillet(EdgeOp { value: raio.clone(), edges: self.arestas(arestas)?, mode: EdgeMode::Constant, prop: Default::default(), keys: vec![] }),
-            Comando::Chanfro { distancia, arestas } => FeatureKind::Chamfer(EdgeOp { value: distancia.clone(), edges: self.arestas(arestas)?, mode: EdgeMode::Constant, prop: Default::default(), keys: vec![] }),
+            Comando::Filete { raio, arestas } => FeatureKind::Fillet(EdgeOp { extra: Default::default(), value: raio.clone(), edges: self.arestas(arestas)?, mode: EdgeMode::Constant, prop: Default::default(), keys: vec![] }),
+            Comando::Chanfro { distancia, arestas } => FeatureKind::Chamfer(EdgeOp { extra: Default::default(), value: distancia.clone(), edges: self.arestas(arestas)?, mode: EdgeMode::Constant, prop: Default::default(), keys: vec![] }),
             Comando::Casca { faces, espessura, para_fora, fechada } => FeatureKind::Shell(Shell { faces: faces.clone(), thickness: espessura.clone(), outward: *para_fora, face_keys: vec![], closed: *fechada }),
             Comando::Primitiva { forma, plano, a, b, c, d: dd, operacao: op } => {
                 FeatureKind::Primitive(Primitive { kind: primitiva(*forma), plane: self.plano(plano)?, a: a.clone(), b: b.clone(), c: c.clone(), d: dd.clone(), op: operacao(*op) })
