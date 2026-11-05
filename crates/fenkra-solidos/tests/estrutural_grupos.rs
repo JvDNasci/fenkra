@@ -22,6 +22,7 @@ fn membro(paths: Vec<CurveRef>, designation: &str, dims: [&str; 2]) -> StructMem
         gap: s("0"),
         joints: vec![],
         material: String::new(),
+        mirror: false,
     }
 }
 

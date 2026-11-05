@@ -14,7 +14,7 @@ use std::collections::HashMap;
 
 /// Famílias disponíveis: as cadastradas pelo usuário primeiro, depois as de fábrica.
 pub fn families(s: &Settings) -> Vec<Family> {
-    let mut v: Vec<Family> = s.user_profiles.iter().map(|u| Family { name: u.name.clone(), kind: u.kind, sizes: u.sizes.clone() }).collect();
+    let mut v: Vec<Family> = s.user_profiles.iter().map(|u| Family { name: u.name.clone(), norm: crate::st_painel::norma_do_usuario().into(), kind: u.kind, sizes: u.sizes.clone() }).collect();
     v.extend(structural::builtin());
     v
 }
@@ -22,34 +22,7 @@ pub fn families(s: &Settings) -> Vec<Family> {
 pub fn member_panel(ui: &mut egui::Ui, doc: &Document, me: Id, m: &mut StructMember, vars: &HashMap<String, f64>, seed: &Seed) {
     let fams: Vec<Family> = ui.ctx().data(|d| d.get_temp::<Vec<FamCache>>(egui::Id::unique("st_fams"))).map(|v| v.into_iter().map(|f| f.0).collect()).unwrap_or_else(structural::builtin);
     section(ui, "Perfil");
-    ui.horizontal(|ui| {
-        ui.add_sized([96., 18.], egui::Label::new(tr("Família")));
-        egui::ComboBox::from_id_salt("st_fam").selected_text(&m.family).width(180.).show_ui(ui, |ui| {
-            for f in &fams {
-                if ui.selectable_label(f.name == m.family, &f.name).clicked() && f.name != m.family {
-                    m.family = f.name.clone();
-                    m.kind = f.kind;
-                    if let Some((n, d)) = f.sizes.first() {
-                        m.designation = n.clone();
-                        m.dims = d.iter().map(|v| fmt(*v)).collect();
-                    }
-                }
-            }
-        });
-    });
-    if let Some(f) = fams.iter().find(|f| f.name == m.family) {
-        ui.horizontal(|ui| {
-            ui.add_sized([96., 18.], egui::Label::new(tr("Medida")));
-            egui::ComboBox::from_id_salt("st_size").selected_text(&m.designation).width(180.).show_ui(ui, |ui| {
-                for (n, d) in &f.sizes {
-                    if ui.selectable_label(*n == m.designation, n).clicked() {
-                        m.designation = n.clone();
-                        m.dims = d.iter().map(|v| fmt(*v)).collect();
-                    }
-                }
-            });
-        });
-    }
+    crate::st_painel::seletor(ui, &fams, m);
     let names = structural::dim_names(m.kind);
     m.dims.resize(names.len(), "1".into());
     egui::CollapsingHeader::new(tr("Cotas da seção")).id_salt("st_cotas").show(ui, |ui| {
@@ -60,24 +33,7 @@ pub fn member_panel(ui: &mut egui::Ui, doc: &Document, me: Id, m: &mut StructMem
     section(ui, "Linhas guia (esqueleto)");
     crate::geo_ui::curves_list(ui, "st_paths", "Linha", doc, me, &mut m.paths, seed, 1);
     section(ui, "Ancoragem e orientação");
-    // grade 3×3 dos pontos de ancoragem da seção + centróide
-    let grid = [[1u8, 2, 3], [8, 0, 4], [7, 6, 5]];
-    ui.horizontal(|ui| {
-        egui::Grid::new("st_anchor").spacing([2., 2.]).show(ui, |ui| {
-            for row in grid {
-                for a in row {
-                    let txt = if a == 0 { "◉" } else { "•" };
-                    if ui.selectable_label(m.anchor == a, txt).on_hover_text(tr("ponto da seção que fica sobre a linha guia")).clicked() {
-                        m.anchor = a;
-                    }
-                }
-                ui.end_row();
-            }
-        });
-        if ui.selectable_label(m.anchor == 9, tr("centróide")).clicked() {
-            m.anchor = 9;
-        }
-    });
+    crate::st_painel::ancoragem(ui, m, vars);
     expr(ui, "Rotação", &mut m.angle, vars, "°");
     expr(ui, "Deslocamento X", &mut m.off_x, vars, "mm");
     expr(ui, "Deslocamento Y", &mut m.off_y, vars, "mm");
@@ -251,6 +207,9 @@ fn library(app: &mut App, ctx: &egui::Context) {
     let mut open = true;
     let s = &mut app.settings;
     let sel = &mut app.st_lib_sel;
+    let medida_id = egui::Id::unique("st_lib_medida");
+    let mut medida_v: usize = ctx.data(|d| d.get_temp(medida_id)).unwrap_or(0);
+    let medida = &mut medida_v;
     let fechar = egui::Id::unique(("concluir_janela", "st1"));
     if ctx.data_mut(|m| m.remove_temp::<bool>(fechar)).unwrap_or(false) {
         open = false;
@@ -319,11 +278,26 @@ fn library(app: &mut App, ctx: &egui::Context) {
                             }
                             ui.end_row();
                             let mut del = None;
+                            let tipo = f.kind;
                             for (i, (n, d)) in f.sizes.iter_mut().enumerate() {
                                 d.resize(names.len(), 1.);
-                                ui.add(egui::TextEdit::singleline(n).desired_width(80.));
+                                // B254: a linha da medida inválida fica marcada, com o motivo na dica
+                                let erro = structural::section(tipo, d).err();
+                                let escolhida = *medida == i;
+                                let nome = ui.add(egui::TextEdit::singleline(n).desired_width(80.).text_color_opt(erro.as_ref().map(|_| crate::theme::st_err())));
+                                if nome.clicked() || nome.gained_focus() {
+                                    *medida = i;
+                                }
                                 for v in d.iter_mut() {
-                                    ui.add(crate::ui_ext::dv(v).speed(0.1).max_decimals(3));
+                                    let r = ui.add(crate::ui_ext::dv(v).speed(0.1).max_decimals(3));
+                                    if r.dragged() || r.gained_focus() {
+                                        *medida = i;
+                                    }
+                                }
+                                if let Some(e) = &erro {
+                                    ui.label(RichText::new("⚠").color(crate::theme::st_err())).on_hover_text(e.clone());
+                                } else {
+                                    ui.label(if escolhida { "◀" } else { "" });
                                 }
                                 if ui.small_button("✖").clicked() {
                                     del = Some(i);
@@ -340,11 +314,19 @@ fn library(app: &mut App, ctx: &egui::Context) {
                     }
                     let bad: Vec<String> = f.sizes.iter().filter(|(_, d)| structural::section(f.kind, d).is_err()).map(|(n, _)| n.clone()).collect();
                     if !bad.is_empty() {
-                        ui.label(RichText::new(format!("⚠ medidas inválidas: {}", bad.join(", "))).color(egui::Color32::from_rgb(240, 170, 80)));
+                        ui.label(RichText::new(format!("{} {}", tr("⚠ medidas inválidas:"), bad.join(", "))).color(crate::theme::st_warn()));
+                    }
+                    // o mesmo desenho do painel do membro, com o nome de cada cota, para a medida escolhida
+                    let ix = (*medida).min(f.sizes.len().saturating_sub(1));
+                    if let Some((n, d)) = f.sizes.get(ix) {
+                        ui.separator();
+                        ui.label(RichText::new(format!("{} {}", tr("Desenho da medida"), n)).small());
+                        crate::st_painel::desenho_da_medida(ui, f.kind, d);
                     }
                 });
             });
         });
+    ctx.data_mut(|d| d.insert_temp(medida_id, medida_v));
     if !open {
         app.st_lib_open = false;
     }
@@ -589,6 +571,7 @@ mod tests {
             gap: s("0"),
             joints: vec![],
             material: String::new(),
+            mirror: false,
         }));
         assert!(membro_sem_linhas(&d, id));
         if let Some(FeatureKind::StructMember(m)) = d.feature_mut(id).map(|f| &mut f.kind) {
