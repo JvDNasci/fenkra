@@ -470,7 +470,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             };
             vec![
                 Family("op_juntar", vec![g(GeoKind::OpJoin), g(GeoKind::OpHeal)]),
-                Family("op_dividir", vec![g(GeoKind::OpSplit), g(GeoKind::OpTrim)]),
+                One(g(GeoKind::OpCut)),
                 Family("op_extrair", vec![
                     it("extrair", "Extrair", "Extrair a seleção (faces, arestas, vértices)", "Faces, arestas e vértices viram superfície, curva ou ponto de referência. Simples = um elemento por item; múltipla = um só. Propagação por ponto, tangente ou curvatura; o resultado pode ser publicado.", Cmd(C::Extract)),
                     g(GeoKind::SurfExtract),

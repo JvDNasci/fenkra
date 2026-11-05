@@ -200,6 +200,87 @@ std::unique_ptr<Shape> split_side(const Shape& s, const Shape& tool, bool keep_p
     });
 }
 
+// Formas de verdade dentro de compostos aninhados. A ferramenta vai ao corte uma a uma: num composto
+// só, duas ferramentas que se cruzam contam como uma forma que se corta, e a operação exige o contrário.
+static void leaves(const TopoDS_Shape& s, TopTools_ListOfShape& out) {
+    if (s.ShapeType() != TopAbs_COMPOUND) {
+        out.Append(s);
+        return;
+    }
+    for (TopoDS_Iterator it(s); it.More(); it.Next()) leaves(it.Value(), out);
+}
+
+// Pedaços de `s` depois do corte. O corte devolve faces, e uma folha dobrada já tem duas antes de ser
+// cortada: o que separa um pedaço do outro é a aresta sobre a ferramenta. Faces ligadas por qualquer
+// outra aresta continuam juntas. Devolve um composto com um filho por pedaço.
+std::unique_ptr<Shape> split_regions(const Shape& s, const Shape& tool, bool extend) {
+    return guard("regiões", [&] {
+        double L = size_of(s.s, tool.s);
+        TopTools_ListOfShape args, tools, given;
+        leaves(tool.s, given);
+        for (TopTools_ListIteratorOfListOfShape it(given); it.More(); it.Next())
+            leaves(extend ? extended_faces(it.Value(), L) : it.Value(), tools);
+        args.Append(s.s);
+        BRepAlgoAPI_Splitter sp;
+        sp.SetArguments(args);
+        sp.SetTools(tools);
+        sp.Build();
+        if (!sp.IsDone()) throw std::runtime_error("não foi possível dividir");
+        TopTools_IndexedMapOfShape faces;
+        TopExp::MapShapes(sp.Shape(), TopAbs_FACE, faces);
+        TopTools_IndexedDataMapOfShapeListOfShape vizinhas;
+        TopExp::MapShapesAndAncestors(sp.Shape(), TopAbs_EDGE, TopAbs_FACE, vizinhas);
+        std::vector<int> pai(faces.Extent() + 1);
+        for (int i = 0; i <= faces.Extent(); ++i) pai[i] = i;
+        std::function<int(int)> raiz = [&](int i) { return pai[i] == i ? i : pai[i] = raiz(pai[i]); };
+        auto no_corte = [&](const TopoDS_Edge& e) {
+            BRepAdaptor_Curve c(e);
+            gp_Pnt m = c.Value((c.FirstParameter() + c.LastParameter()) / 2);
+            TopoDS_Vertex v = BRepBuilderAPI_MakeVertex(m).Vertex();
+            for (TopTools_ListIteratorOfListOfShape it(tools); it.More(); it.Next()) {
+                BRepExtrema_DistShapeShape d(it.Value(), v);
+                if (d.IsDone() && d.Value() < 1e-4) return true;
+            }
+            return false;
+        };
+        for (int i = 1; i <= vizinhas.Extent(); ++i) {
+            const TopTools_ListOfShape& l = vizinhas.FindFromIndex(i);
+            const TopoDS_Edge& e = TopoDS::Edge(vizinhas.FindKey(i));
+            if (l.Extent() < 2 || BRep_Tool::Degenerated(e) || no_corte(e)) continue;
+            int primeira = faces.FindIndex(l.First());
+            for (TopTools_ListIteratorOfListOfShape it(l); it.More(); it.Next()) pai[raiz(faces.FindIndex(it.Value()))] = raiz(primeira);
+        }
+        BRep_Builder bb;
+        TopoDS_Compound out;
+        bb.MakeCompound(out);
+        for (int r = 1; r <= faces.Extent(); ++r) {
+            if (raiz(r) != r) continue;
+            TopoDS_Compound g;
+            bb.MakeCompound(g);
+            int n = 0;
+            for (int i = 1; i <= faces.Extent(); ++i)
+                if (raiz(i) == r) bb.Add(g, faces(i)), ++n;
+            bb.Add(out, n == 1 ? TopoDS_Shape(TopoDS_Iterator(g).Value()) : sewn(g, 1e-4));
+        }
+        return wrap(out);
+    });
+}
+
+uint32_t child_count(const Shape& s) {
+    uint32_t n = 0;
+    for (TopoDS_Iterator it(s.s); it.More(); it.Next()) ++n;
+    return n;
+}
+
+std::unique_ptr<Shape> nth_child(const Shape& s, uint32_t i) {
+    return guard("desmontar", [&] {
+        uint32_t k = 0;
+        for (TopoDS_Iterator it(s.s); it.More(); it.Next(), ++k)
+            if (k == i) return wrap(it.Value());
+        throw std::runtime_error("a forma tem menos partes");
+    });
+}
+
 std::unique_ptr<Shape> nth_face(const Shape& s, uint32_t i) {
     return guard("desmontar", [&] {
         uint32_t k = 0;

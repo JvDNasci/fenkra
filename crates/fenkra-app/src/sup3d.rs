@@ -114,6 +114,13 @@ pub fn de_referencia(k: &RefKind) -> Vec<Suporte> {
             v.extend(curve.iter().map(|c| cur(Papel::Ferramenta, c)));
             v
         }
+        R::SurfRegions { surface, tools, curve, mutual, .. } => {
+            let papel = if *mutual { Papel::Base } else { Papel::Ferramenta };
+            let mut v = vec![sup(Papel::Base, surface)];
+            v.extend(tools.iter().map(|t| sup(papel, t)));
+            v.extend(curve.iter().map(|c| cur(Papel::Ferramenta, c)));
+            v
+        }
         R::SurfTrim { a, b, .. } | R::SurfFillet { a, b, .. } | R::SurfConnect { a, b, .. } | R::CurveIntersect { a, b, .. } => vec![sup(Papel::Base, a), sup(Papel::Base, b)],
         R::SurfJoin { items, curves, .. } => items.iter().map(|s| sup(Papel::Base, s)).chain(curves.iter().map(|c| cur(Papel::Curva, c))).collect(),
         R::SurfEdgeFillet { surface, .. } => vec![sup(Papel::Base, surface)],
@@ -362,6 +369,66 @@ pub fn escolher_solucao(doc: &mut Document, id: Id, k: usize, p: [f64; 3]) {
     }
 }
 
+// ---------------------------------------------------------------- pedaços (B277)
+
+/// Pedaços do corte por região do comando aberto.
+pub fn regioes(r: &RecomputeResult, id: Id) -> &[fenkra_solidos::regioes::RegiaoNota] {
+    r.notes.get(&id).map_or(&[], |n| n.regioes.as_slice())
+}
+
+/// `sf` é cortada pelo comando `id`? Enquanto ele está aberto, quem aparece são os pedaços.
+pub fn entrada_das_regioes(doc: &Document, id: Id, sf: Id) -> bool {
+    let Some(RefKind::SurfRegions { surface, tools, mutual, .. }) = doc.reference(id).map(|r| &r.kind) else { return false };
+    *surface == SurfRef::Ref(sf) || (*mutual && tools.contains(&SurfRef::Ref(sf)))
+}
+
+/// Pedaço sob o ponteiro: o mais perto da câmera, inclusive os que saem, para poderem voltar.
+pub fn regiao_sob(r: &RecomputeResult, id: Id, cam: &Camera, rect: Rect, pos: Pos2) -> Option<usize> {
+    let (o, d) = cam.ray(rect, pos);
+    let mut melhor: Option<(f32, usize)> = None;
+    for (i, g) in regioes(r, id).iter().enumerate() {
+        let m = &*g.malha;
+        let p = |k: u32| Vec3::new(m.positions[k as usize * 3], m.positions[k as usize * 3 + 1], m.positions[k as usize * 3 + 2]);
+        for t in m.indices.chunks_exact(3) {
+            if let Some(dist) = crate::picking::ray_tri(o, d, p(t[0]), p(t[1]), p(t[2])) {
+                if melhor.is_none_or(|x| dist < x.0) {
+                    melhor = Some((dist, i));
+                }
+            }
+        }
+    }
+    melhor.map(|x| x.1)
+}
+
+/// Clique no pedaço `i`: sem marca, ganha uma; com marca, perde todas as que caíram nele.
+pub fn alternar_regiao(doc: &mut Document, r: &RecomputeResult, id: Id, i: usize) {
+    let Some(g) = regioes(r, id).get(i) else { return };
+    let Some(rf) = doc.references.iter_mut().find(|x| x.id == id) else { return };
+    let RefKind::SurfRegions { marks, .. } = &mut rf.kind else { return };
+    if g.marcas.is_empty() {
+        marks.push(g.marca());
+    } else {
+        let mut k = 0;
+        marks.retain(|_| {
+            k += 1;
+            !g.marcas.contains(&(k - 1))
+        });
+    }
+}
+
+/// Opacidade do pedaço que fica: quase cheio, mas ainda deixa ver que é prévia.
+const ALFA_FICA: f32 = 0.82;
+/// Opacidade do pedaço que sai.
+const ALFA_SAI: f32 = 0.16;
+
+fn pintar_regioes(r: &RecomputeResult, f: &crate::previa::Fantasma, s: &mut Scene) {
+    for g in regioes(r, f.id) {
+        let (cor, alfa) = if g.fica { (f.cor, ALFA_FICA) } else { (f.retirada, ALFA_SAI) };
+        crate::previa::malha_fantasma(&mut s.ghost, &g.malha, cor, alfa);
+        contorno(&g.malha, crate::previa::cor_linha(cor), s);
+    }
+}
+
 // ---------------------------------------------------------------- camada 3D
 
 /// O resultado do comando fica em cima da entrada? Então a entrada só tem contorno: duas camadas
@@ -371,7 +438,7 @@ fn cobre_a_entrada(doc: &Document, id: Id) -> bool {
     doc.reference(id).is_some_and(|r| {
         matches!(
             r.kind,
-            R::SurfSplit { .. } | R::SurfTrim { .. } | R::SurfFillet { .. } | R::SurfEdgeFillet { .. } | R::SurfHeal { .. } | R::SurfJoin { .. } | R::SurfUntrim { .. } | R::SurfExtrapolate { .. } | R::SurfPart { .. }
+            R::SurfSplit { .. } | R::SurfTrim { .. } | R::SurfRegions { .. } | R::SurfFillet { .. } | R::SurfEdgeFillet { .. } | R::SurfHeal { .. } | R::SurfJoin { .. } | R::SurfUntrim { .. } | R::SurfExtrapolate { .. } | R::SurfPart { .. }
         )
     })
 }
@@ -395,7 +462,13 @@ fn contorno(m: &Mesh, col: [f32; 4], s: &mut Scene) {
 /// Realce das entradas na cena, cada uma na cor do seu papel.
 pub fn decorar(doc: &Document, r: &RecomputeResult, f: &crate::previa::Fantasma, s: &mut Scene) {
     let cobre = cobre_a_entrada(doc, f.id);
+    pintar_regioes(r, f, s);
+    let tem_regioes = !regioes(r, f.id).is_empty();
     for x in suportes(doc, f.id) {
+        // os pedaços já mostram a superfície inteira, com contorno
+        if tem_regioes && matches!(x.alvo, Alvo::Sup(SurfRef::Ref(_))) {
+            continue;
+        }
         let rgb = x.papel.rgb(f.cor);
         let col = crate::previa::cor_linha(rgb);
         match &x.alvo {
@@ -534,6 +607,27 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: I
             escolha = Some((*k, *p));
         }
     }
+    let mut alternar = None;
+    for (i, g) in regioes(r, id).iter().enumerate() {
+        let Some(q) = cam.project(rect, v3(g.ponto)) else { continue };
+        let (nome, cor) = if g.fica { ("Fica", destaque) } else { ("Sai", crate::theme::papel_retirada()) };
+        let t = pintor.layout_no_wrap(tr(nome).to_string(), egui::FontId::proportional(12.), cor);
+        let caixa = Rect::from_center_size(q, t.size() + egui::vec2(12., 6.));
+        let hr = ui.interact(caixa, egui::Id::unique(("regiao_3d", id.0, i)), egui::Sense::click());
+        pintor.rect_filled(caixa, 4., ui.visuals().extreme_bg_color);
+        pintor.rect_stroke(caixa, 4., Stroke::new(if hr.hovered() { 2. } else { 1. }, cor), egui::StrokeKind::Inside);
+        pintor.galley(caixa.min + egui::vec2(6., 3.), t, cor);
+        if hr.on_hover_text(tr("Clique para trocar entre ficar e sair.")).on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+            alternar = Some(i);
+        }
+    }
+    if let Some(i) = alternar {
+        let r = app.result.take();
+        if let Some(r) = &r {
+            alternar_regiao(&mut app.open.doc, r, id, i);
+        }
+        app.result = r;
+    }
     if let Some(c) = inverter {
         inverter_lado(&mut app.open.doc, id, c);
     }
@@ -577,6 +671,13 @@ pub fn demo(nome: &str, doc: &mut Document) -> Option<crate::previa::DemoPrevia>
             let a = folha(doc, [-40., 0., 0.], [40., 0., 0.]);
             let b = folha(doc, [0., -40., 0.], [0., 40., 0.]);
             Ref(if nome == "sup_aparar" { RefKind::SurfTrim { a, b, flip_a: false, flip_b: false } } else { RefKind::SurfFillet { a, b, flip_a: false, flip_b: false, radius: t("6"), radius2: None } })
+        }
+        "sup_regioes" | "sup_regioes_manter" => {
+            let a = folha(doc, [-40., 0., 0.], [40., 0., 0.]);
+            let b = folha(doc, [0., -40., 0.], [0., 40., 0.]);
+            let marca = |source, point| RegionMark { source, point, sides: vec![] };
+            let remove = nome == "sup_regioes";
+            Ref(RefKind::SurfRegions { surface: a, tools: vec![b], curve: None, mutual: true, remove, extend: false, marks: vec![marca(0, [-20., 0., 0.]), marca(1, [0., 20., 0.])] })
         }
         "sup_paralela" => {
             let c = reta(doc, [-40., 0., 0.], [40., 0., 0.]);
@@ -829,6 +930,40 @@ mod tests {
                 assert!((0..3).any(|k| (a.1[k] - b.1[k]).abs() > 1.), "{a:?} {b:?}");
             }
         }
+    }
+
+    /// Duas folhas cruzadas: os pedaços vão para a cena em duas cores e o clique alterna.
+    #[test]
+    fn pedacos_em_duas_cores_e_clique_alterna() {
+        let mut d = Document::new("t");
+        let a = folha(&mut d, [-40., 0., 0.], [40., 0., 0.]);
+        let b = folha(&mut d, [0., -40., 0.], [0., 40., 0.]);
+        let id = d.add_geometry(RefKind::SurfRegions { surface: SurfRef::Ref(a), tools: vec![SurfRef::Ref(b)], curve: None, mutual: true, remove: true, extend: false, marks: vec![] });
+        let r = recompute(&d);
+        assert_eq!(regioes(&r, id).len(), 4);
+        assert!(regioes(&r, id).iter().all(|g| g.fica), "sem clique, tudo fica");
+        let area = |r: &RecomputeResult| r.surfaces.iter().find(|s| s.id == id).map(|s| fenkra_solidos::regioes::area_da_malha(&s.mesh));
+        assert!((area(&r).unwrap() - 4. * 40. * 60.).abs() < 0.5, "{:?}", area(&r));
+
+        alternar_regiao(&mut d, &r, id, 2);
+        let r = recompute(&d);
+        assert_eq!(regioes(&r, id).iter().filter(|g| !g.fica).count(), 1);
+        assert!((area(&r).unwrap() - 3. * 40. * 60.).abs() < 0.5, "{:?}", area(&r));
+        let s = cena(&d, &r, id);
+        let tem = |c: [u8; 3], alfa: f32| {
+            let c = c.map(|x| x as f32 / 255.);
+            s.ghost.iter().filter(|v| (v.col[0] - c[0]).abs() < 1e-3 && (v.col[2] - c[2]).abs() < 1e-3 && (v.col[3] - alfa).abs() < 1e-3).count()
+        };
+        assert!(tem([10, 20, 200], ALFA_FICA) > 0, "o que fica");
+        assert!(tem([150, 0, 150], ALFA_SAI) > 0, "o que sai");
+        assert_eq!(s.ghost.len(), regioes(&r, id).iter().map(|g| g.malha.indices.len()).sum::<usize>(), "a superfície inteira não vai por cima dos pedaços");
+
+        // o segundo clique no mesmo pedaço devolve
+        let i = regioes(&r, id).iter().position(|g| !g.fica).unwrap();
+        alternar_regiao(&mut d, &r, id, i);
+        let r = recompute(&d);
+        assert!(regioes(&r, id).iter().all(|g| g.fica));
+        assert!(matches!(d.reference(id).map(|x| &x.kind), Some(RefKind::SurfRegions { marks, .. }) if marks.is_empty()));
     }
 
     /// Entradas na cena: a ferramenta e a superfície na cor do papel, a curva com traço grosso.

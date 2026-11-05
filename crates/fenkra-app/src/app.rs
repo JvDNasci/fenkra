@@ -6406,7 +6406,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 let face_cmd = self.session.as_ref().map(|x| x.id).filter(|id| self.open.doc.feature(*id).is_some_and(|f| crate::feat_ui::wants_faces(&f.kind) && !crate::entradas::clique_vai_para_plano(&ctx, *id, &f.kind)));
                 // booleana aberta: clicar num corpo o faz de ferramenta (B247)
                 let combine_cmd = self.session.as_ref().map(|x| x.id).filter(|id| matches!(self.open.doc.feature(*id).map(|f| &f.kind), Some(FeatureKind::Combine(_))));
-                if let (Some(fid), true, Some(crate::picking::Pick::Face { point, body, face, .. })) = (face_cmd, resp.clicked_by(egui::PointerButton::Primary), self.hover_pick) {
+                // corte por região aberto: clicar num pedaço troca entre ficar e sair (B277)
+                let regiao = self.session.as_ref().map(|x| x.id).zip(resp.hover_pos()).and_then(|(id, h)| crate::sup3d::regiao_sob(r, id, &cam, rect, h).map(|i| (id, i)));
+                if regiao.is_some() {
+                    ctx.set_cursor_icon(egui::CursorIcon::PointingHand);
+                }
+                if let (Some((rid, i)), true) = (regiao, resp.clicked_by(egui::PointerButton::Primary)) {
+                    crate::sup3d::alternar_regiao(&mut self.open.doc, r, rid, i);
+                } else if let (Some(fid), true, Some(crate::picking::Pick::Face { point, body, face, .. })) = (face_cmd, resp.clicked_by(egui::PointerButton::Primary), self.hover_pick) {
                     // a mesma face do corpo (pela malha atual) é tirada em vez de repetida
                     let same = |a: [f64; 3], b: [f64; 3]| crate::picking::same_face(r, body, a, b);
                     // referência v2: o picking sabe a face; o resultado sabe o dono e o papel dela

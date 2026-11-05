@@ -608,6 +608,11 @@ mod imp {
         pub fn split_side(&self, tool: &Shape, keep_pos: bool, extend: bool) -> KResult<Shape> {
             b::split_side(&self.0, &tool.0, keep_pos, extend).map(Shape).map_err(err)
         }
+        /// Pedaços depois do corte por `tool`: faces ligadas por arestas fora do corte são um pedaço só.
+        pub fn regions(&self, tool: &Shape, extend: bool) -> KResult<Vec<Shape>> {
+            let c = b::split_regions(&self.0, &tool.0, extend).map_err(err)?;
+            (0..b::child_count(&c)).map(|i| b::nth_child(&c, i).map(Shape).map_err(err)).collect()
+        }
         pub fn nth_face(&self, i: u32) -> KResult<Shape> {
             b::nth_face(&self.0, i).map(Shape).map_err(err)
         }
@@ -1060,6 +1065,9 @@ mod imp {
             no()
         }
         pub fn split_side(&self, _: &Shape, _: bool, _: bool) -> KResult<Shape> {
+            no()
+        }
+        pub fn regions(&self, _: &Shape, _: bool) -> KResult<Vec<Shape>> {
             no()
         }
         pub fn nth_face(&self, _: u32) -> KResult<Shape> {

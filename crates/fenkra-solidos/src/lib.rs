@@ -6,6 +6,7 @@
 
 pub mod erro;
 pub mod geo3d;
+pub mod regioes;
 pub mod importacao;
 pub mod mesh_io;
 pub mod structural;
@@ -442,6 +443,8 @@ pub struct RefNote {
     pub solucoes: Vec<(usize, V3)>,
     /// número da solução em uso
     pub solucao: Option<usize>,
+    /// B277: pedaços do corte, com o que fica e o que sai
+    pub regioes: Vec<regioes::RegiaoNota>,
 }
 
 /// Superfície de referência exibível (malha).
@@ -2080,6 +2083,10 @@ impl Ctx<'_> {
                 let pa = sa.split_side(&sb, !*flip_a, false).map_err(|x| x.0)?;
                 let pb = sb.split_side(&sa, !*flip_b, false).map_err(|x| x.0)?;
                 Geo::Surface(pa.compound(&pb).sewn(1e-3).map_err(|x| x.0)?)
+            }
+            SurfRegions { surface, tools, curve, mutual, remove, extend, marks } => {
+                let corte = regioes::Corte { surface, tools, curve: curve.as_ref(), mutual: *mutual, remove: *remove, extend: *extend, marks };
+                Geo::Surface(self.regioes(id, corte, d)?)
             }
             SurfMulti { faces, keys } => {
                 let mut acc = Shape::empty();

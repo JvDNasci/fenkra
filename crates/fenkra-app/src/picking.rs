@@ -169,7 +169,7 @@ fn seg_dist(p: Pos2, a: Pos2, b: Pos2) -> (f32, f32) {
 }
 
 /// Interseção raio–triângulo (Möller–Trumbore).
-fn ray_tri(o: Vec3, d: Vec3, a: Vec3, b: Vec3, c: Vec3) -> Option<f32> {
+pub(crate) fn ray_tri(o: Vec3, d: Vec3, a: Vec3, b: Vec3, c: Vec3) -> Option<f32> {
     let (e1, e2) = (b - a, c - a);
     let p = d.cross(e2);
     let det = e1.dot(p);

@@ -281,6 +281,20 @@ pub fn face_fantasma(dst: &mut Vec<MeshVertex>, m: &Mesh, fi: usize, cor: [u8; 3
     }
 }
 
+/// Malha inteira na camada de fantasma, com opacidade própria.
+pub fn malha_fantasma(dst: &mut Vec<MeshVertex>, m: &Mesh, cor: [u8; 3], alfa: f32) {
+    let c = cor_f(cor);
+    for &vi in &m.indices {
+        let k = vi as usize * 3;
+        dst.push(MeshVertex {
+            pos: [m.positions[k], m.positions[k + 1], m.positions[k + 2]],
+            nrm: [m.normals[k], m.normals[k + 1], m.normals[k + 2]],
+            col: [c[0], c[1], c[2], alfa],
+            mat: [1., 0., 1., 0.],
+        });
+    }
+}
+
 /// B246: com o comando falhando, a viewport não volta ao corpo de antes: a última prévia válida
 /// continua desenhada e a causa aparece na etiqueta. Guarda a prévia de cada cálculo bom e a repõe
 /// enquanto o cálculo erra. Devolve se repôs.

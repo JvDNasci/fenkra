@@ -87,6 +87,7 @@ pub enum GeoKind {
     OpHeal,
     OpSplit,
     OpTrim,
+    OpCut,
     OpBoundary,
     OpMulti,
     OpPart,
@@ -112,7 +113,7 @@ pub const CURVES: [GeoKind; 17] =
     [Circle, Circle3, Spline, SplineControl, Helix, Spiral, Conic, Connect, Corner, Spine, CurveProject, CurveIntersect, CurveProjSurf, CurveParallel, OpBoundary, CurveCopy, CurveJoin];
 pub const SURFACES: [GeoKind; 13] = [SurfExtrude, SurfRevolve, SurfSphere, SurfCylinder, SurfOffset, SurfSweep, SurfSweepX, SurfTube, SurfLoft, SurfBlend, SurfConnect, SurfFill, SurfExtract];
 /// Operações sobre superfícies (resultado é superfície).
-pub const OPERATIONS: [GeoKind; 10] = [OpJoin, OpHeal, OpSplit, OpTrim, SurfFilletSS, SurfEdgeFillet, OpMulti, OpPart, OpUntrim, OpExtrapolate];
+pub const OPERATIONS: [GeoKind; 9] = [OpJoin, OpHeal, OpCut, SurfFilletSS, SurfEdgeFillet, OpMulti, OpPart, OpUntrim, OpExtrapolate];
 /// Transformações de qualquer elemento (ponto, curva, plano, superfície).
 pub const TRANSFORMS: [GeoKind; 4] = [XfTranslate, XfRotate, XfMirror, XfScale];
 
@@ -185,6 +186,7 @@ impl GeoKind {
             OpJoin => ("op_juntar", "Juntar", "Juntar superfícies (join)", "Costura superfícies que se tocam numa só: bordas comuns viram uma."),
             OpHeal => ("op_curar", "Curar", "Curar superfície (heal)", "Fecha frestas até a tolerância e une faces do mesmo suporte."),
             OpSplit => ("op_dividir", "Dividir", "Dividir superfície (split)", "Corta a superfície por outra superfície ou plano e mantém um lado."),
+            OpCut => ("op_aparar", "Aparar e dividir", "Aparar e dividir por região", "Corta a superfície por ferramentas, ou duas superfícies uma pela outra, e você clica nos pedaços que ficam ou saem. A escolha sobrevive quando o modelo muda."),
             OpTrim => ("op_aparar", "Aparar", "Aparar duas superfícies (trim)", "Corta uma pela outra e junta os lados escolhidos de cada uma."),
             OpBoundary => ("op_contorno", "Contorno", "Contorno da superfície (boundary)", "Curva da borda livre da superfície (escolha qual quando houver várias)."),
             OpMulti => ("op_multi_extrair", "Multi-extração", "Extrair várias faces", "Copia várias faces do modelo como uma superfície só."),
@@ -295,6 +297,7 @@ impl GeoKind {
             R::SurfHeal { .. } => OpHeal,
             R::SurfSplit { .. } => OpSplit,
             R::SurfTrim { .. } => OpTrim,
+            R::SurfRegions { .. } => OpCut,
             R::CurveBoundary { .. } => OpBoundary,
             R::SurfMulti { .. } => OpMulti,
             R::SurfPart { .. } => OpPart,
@@ -402,6 +405,7 @@ impl GeoKind {
             OpHeal => R::SurfHeal { surface: sf, tol: t("0.1") },
             OpSplit => R::SurfSplit { surface: sf, tool: crate::slots::surf(), flip: false, more: vec![], curve: None, more_flip: vec![] },
             OpTrim => R::SurfTrim { a: sf, b: crate::slots::surf(), flip_a: false, flip_b: false },
+            OpCut => R::SurfRegions { surface: sf, tools: vec![crate::slots::surf()], curve: None, mutual: false, remove: true, extend: false, marks: vec![] },
             OpBoundary => R::CurveBoundary { surface: sf, which: 0, prop: Propagation::Nenhuma, near: None, expected: None },
             OpMulti => R::SurfMulti { faces: vec![face_pt(s)], keys: vec![if let Some(SurfRef::Face { key, .. }) = s.surface { key } else { None }] },
             OpPart => R::SurfPart { surface: sf, index: 0 },
@@ -562,6 +566,7 @@ pub fn inputs_of(k: &RefKind) -> Seed {
             }
         }
         R::SurfTrim { a, .. } | R::CurveIntersect { a, .. } => s.surface = Some(*a),
+        R::SurfRegions { surface, .. } => s.surface = Some(*surface),
         R::SurfExtrapolate { surface, near, .. } => {
             s.surface = Some(*surface);
             s.points.push(*near)
@@ -1783,6 +1788,66 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             surf_slot(ui, "g_a", "Superfície 1", doc, me, a, seed);
             surf_slot(ui, "g_b", "Superfície 2", doc, me, b, seed);
             crate::sup3d::dica_de_lado(ui);
+        }
+        R::SurfRegions { surface, tools, curve, mutual, remove, extend, marks } => {
+            surf_slot(ui, "g_s", "Superfície", doc, me, surface, seed);
+            let mut del = None;
+            for (i, t) in tools.iter_mut().enumerate() {
+                ui.horizontal(|ui| {
+                    surf_slot(ui, &format!("g_tm{i}"), &format!("{} {}", tr("Cortar com"), i + 1), doc, me, t, seed);
+                    if i > 0 && ui.small_button(tr("✖")).clicked() {
+                        del = Some(i);
+                    }
+                });
+            }
+            if let Some(i) = del {
+                tools.remove(i);
+                // a marca guarda a origem pelo número: o que veio da ferramenta tirada perde o sentido
+                marks.retain(|m| m.source as usize != i + 1);
+                marks.iter_mut().filter(|m| m.source as usize > i + 1).for_each(|m| m.source -= 1);
+            }
+            if ui.button(tr("+ plano/superfície de corte")).clicked() {
+                tools.push(crate::slots::surf());
+            }
+            let mut by_curve = curve.is_some();
+            if crate::editor::check(ui, &mut by_curve, "cortar também por uma curva (wireframe) sobre a superfície").changed() {
+                *curve = by_curve.then(|| seed.curves.first().cloned().unwrap_or_else(crate::slots::curve));
+            }
+            if let Some(c) = curve {
+                curve_slot(ui, "g_tc", "Curva de corte", doc, me, c, seed);
+            }
+            section(ui, "Modo");
+            let modos = [
+                ("op_dividir", "Por ferramenta", "Só a superfície é cortada; as ferramentas não mudam", !*mutual),
+                ("op_aparar", "Mútuo", "Cada superfície corta as outras, e todas dão pedaços", *mutual),
+            ];
+            match icon_choice(ui, &modos) {
+                Some(0) => {
+                    *mutual = false;
+                    marks.retain(|m| m.source == 0);
+                }
+                Some(1) => *mutual = true,
+                _ => {}
+            }
+            section(ui, "Ação");
+            let acoes = [
+                ("op_remover", "Remover", "O pedaço clicado sai; o resto fica", *remove),
+                ("op_adicionar", "Manter", "Só os pedaços clicados ficam", !*remove),
+            ];
+            match icon_choice(ui, &acoes) {
+                Some(0) => *remove = true,
+                Some(1) => *remove = false,
+                _ => {}
+            }
+            if let Some(n) = note.filter(|n| !n.regioes.is_empty()) {
+                let ficam = n.regioes.iter().filter(|g| g.fica).count();
+                ui.label(format!("{} {} · {} {}", n.regioes.len(), tr("pedaços"), ficam, tr("ficam")));
+            }
+            ui.label(RichText::new(tr("Clique nos pedaços no 3D. O que fica sai cheio; o que sai, translúcido.")).weak().small());
+            if !marks.is_empty() && ui.button(tr("Limpar escolhas")).clicked() {
+                marks.clear();
+            }
+            crate::editor::check(ui, extend, "prolongar a ferramenta até atravessar").on_hover_text(tr("A ferramenta curta demais cresce pelo próprio suporte até cortar a superfície inteira."));
         }
         R::SurfPart { surface, index: which } => {
             surf_slot(ui, "g_s", "Superfície", doc, me, surface, seed);
