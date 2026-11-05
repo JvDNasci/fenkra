@@ -3824,8 +3824,21 @@ impl Ctx<'_> {
             FeatureKind::Shell(sh) => {
                 let t = ev(&sh.thickness, &self.vars, "espessura")?;
                 let (b, owners, roles) = self.body_owned(f.target).ok_or("não há corpo para esvaziar")?;
+                // a parede para dentro não cabe se for tão grossa quanto a menor dimensão do corpo
+                if !sh.outward {
+                    if let Some((lo, hi)) = b.bbox() {
+                        let menor = (0..3).map(|i| hi[i] - lo[i]).fold(f64::INFINITY, f64::min);
+                        if t >= menor - 1e-9 {
+                            return Err(format!("espessura {t} grande demais para a peça: a menor dimensão do corpo é {menor}"));
+                        }
+                    }
+                }
                 let pts = self.resolve_faces("casca", f, b, owners, roles, &sh.faces, &sh.face_keys)?;
                 let (s, out) = b.shell_tagged(&pts, t, sh.outward, &tags_for(owners)).map_err(k)?;
+                // o kernel pode devolver o corpo maciço sem erro: casca que não tirou material falhou
+                if !sh.outward && s.mass().volume >= b.mass().volume - 1e-9 * b.mass().volume.abs().max(1.) {
+                    return Err("a casca não esvaziou o corpo: espessura grande demais para a peça".into());
+                }
                 let body = remap_body(s, owners, roles, &out, f.id);
                 self.bodies.insert(f.target, body);
                 Ok(None)

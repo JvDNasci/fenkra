@@ -874,7 +874,6 @@ fn invalido_chanfro_maior_que_a_face() {
 /// BUG achado (B72): casca de espessura 30 num corpo de 20 de altura volta `Ok` e devolve o corpo
 /// maciço (volume 24000 intacto). Devia ser erro nomeado (espessura maior que o corpo).
 #[test]
-#[ignore = "bug: casca mais grossa que o corpo devolve Ok com o sólido sem esvaziar"]
 fn invalido_casca_mais_grossa_que_o_corpo() {
     precisa_kernel!();
     let (r, id) = com(|_| FeatureKind::Shell(Shell { faces: vec![[20., 15., 20.]], thickness: s("30"), outward: false, face_keys: vec![], closed: false }));
