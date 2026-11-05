@@ -17,6 +17,7 @@ pub mod pmi;
 pub mod pmi_cotas;
 pub mod pmi_feature;
 pub mod pmi_leader;
+pub mod projecao;
 pub mod qualidade;
 pub mod sketch;
 

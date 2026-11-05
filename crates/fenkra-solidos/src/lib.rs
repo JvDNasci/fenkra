@@ -27,6 +27,8 @@ pub mod chapa_linha;
 mod chapa_flat;
 pub mod planificada;
 pub use chapa_flat::{passos_planificados, PassoPlanificado};
+pub mod st_frames;
+mod st_placas;
 
 pub use engrenagens::{calculo as calculo_engrenagem, engrenagem_documento, CalculoEngrenagem, ParamEngrenagem, TipoEngrenagem};
 pub use eixos::{chaveta_documento, eixo_documento, ParamEixo, RasgoChaveta, TrechoEixo};
@@ -121,6 +123,7 @@ fn seg_points(sgm: &fenkra_kernel::Seg2) -> Vec<[f64; 2]> {
         Seg2::Line(a, b) => vec![*a, *b],
         Seg2::Circle(c, r) => circle(*c, *r, 0., std::f64::consts::TAU),
         Seg2::Spline(p) => p.clone(),
+        Seg2::Ellipse(c, m, r, t0, t1) => fenkra_core::projecao::elipse_amostras(*c, *m, *r, *t0, *t1),
         Seg2::Arc(a, m, b) => {
             // círculo pelos três pontos
             let (d, a2, m2, b2) = (2. * (a[0] * (m[1] - b[1]) + m[0] * (b[1] - a[1]) + b[0] * (a[1] - m[1])), a[0] * a[0] + a[1] * a[1], m[0] * m[0] + m[1] * m[1], b[0] * b[0] + b[1] * b[1]);
@@ -210,6 +213,7 @@ fn loops_size(loops: &[fenkra_kernel::Loop2]) -> f64 {
                 }
                 fenkra_kernel::Seg2::Circle(c, r) => add(c, r),
                 fenkra_kernel::Seg2::Spline(ref p) => p.iter().for_each(|q| add(*q, 0.)),
+                fenkra_kernel::Seg2::Ellipse(c, m, r, t0, t1) => fenkra_core::projecao::elipse_amostras(c, m, r, t0, t1).into_iter().for_each(|q| add(q, 0.)),
             }
         }
     }
@@ -254,6 +258,10 @@ pub struct SketchViz {
     /// posições atuais da geometria externa (o editor do sketch copia para o documento)
     pub link_pts: Vec<(Id, [f64; 2])>,
     pub link_r: Vec<(Id, f64)>,
+    /// elipses externas: curva, semieixo maior, semieixo menor, t0 e t1
+    pub link_e: Vec<(Id, [f64; 2], f64, f64, f64)>,
+    /// vínculos que perderam a origem (o estado "→✕" do painel)
+    pub link_quebrados: Vec<Id>,
     /// cada curva do sketch no mundo (id, construção, polilinha) — subelementos selecionáveis
     pub ents: Vec<(Id, bool, Vec<[f32; 3]>)>,
     /// cada ponto do sketch no mundo (id, posição)
@@ -2376,6 +2384,52 @@ impl Ctx<'_> {
     }
 
     /// Polilinha 3D da geometria externa de um sketch, no estado atual do modelo.
+    /// Aresta de corpo mais perto de `mid`: o corpo, o ponto médio dela, a fórmula e a polilinha.
+    fn aresta_perto(&self, mid: V3) -> Result<(Shape, V3, Option<fenkra_kernel::EdgeFormula>, Vec<V3>), String> {
+        let mut best: Option<(f64, Shape, V3, Option<fenkra_kernel::EdgeFormula>, Vec<V3>)> = None;
+        for (b, _, _) in self.bodies.values() {
+            let Ok(m) = tesselar(b, &self.qualidade) else { continue };
+            for e in 0..m.edge_mids.len() / 3 {
+                let q = [m.edge_mids[3 * e] as f64, m.edge_mids[3 * e + 1] as f64, m.edge_mids[3 * e + 2] as f64];
+                let d = geo3d::dist(q, mid);
+                if best.as_ref().is_none_or(|x| d < x.0) {
+                    let s0 = m.edge_ranges[e] as usize;
+                    let s1 = m.edge_ranges.get(e + 1).map(|x| *x as usize).unwrap_or(m.edges.len() / 6);
+                    let mut pl: Vec<V3> = vec![];
+                    for sg in m.edges.chunks_exact(6).take(s1).skip(s0) {
+                        if pl.is_empty() {
+                            pl.push([sg[0] as f64, sg[1] as f64, sg[2] as f64]);
+                        }
+                        pl.push([sg[3] as f64, sg[4] as f64, sg[5] as f64]);
+                    }
+                    best = Some((d, b.clone(), q, m.edge_formula(e), pl));
+                }
+            }
+        }
+        let (d, b, q, f, pl) = best.ok_or("nenhum corpo com arestas")?;
+        // a aresta pode ter mudado um pouco; longe demais = perdida
+        if d > 5. {
+            return Err(format!("aresta não encontrada (a {d:.1} mm do lugar)"));
+        }
+        Ok((b, q, f, pl))
+    }
+
+    /// Forma exata da origem no plano do sketch; `None` se ela não tiver fórmula.
+    fn link_exata(&self, l: &fenkra_core::sketch::SkLink, frame: &Frame) -> Result<Option<fenkra_core::projecao::Exata>, String> {
+        use fenkra_core::projecao::{projeta, reconhece, Curva3};
+        use fenkra_core::sketch::LinkSrc;
+        let curva = match &l.source {
+            LinkSrc::Edge { mid } => match self.aresta_perto(*mid)?.2 {
+                Some(fenkra_kernel::EdgeFormula::Line { a, b }) => Curva3::Reta { a, b },
+                Some(fenkra_kernel::EdgeFormula::Conic { c, u, v, t0, t1 }) => Curva3::Conica { c, u, v, t0, t1 },
+                None => Curva3::Outra,
+            },
+            LinkSrc::SketchCurve { .. } | LinkSrc::Ref(_) if !l.intersect => reconhece(&self.link_world(l, frame)?),
+            _ => Curva3::Outra,
+        };
+        Ok(projeta(&curva, &profile::plano_do(frame)))
+    }
+
     fn link_world(&self, l: &fenkra_core::sketch::SkLink, frame: &Frame) -> Result<Vec<V3>, String> {
         use fenkra_core::sketch::LinkSrc;
         let k = |e: KernelError| e.0;
@@ -2387,7 +2441,11 @@ impl Ctx<'_> {
             Ok(loops.into_iter().max_by(|a, b| len(a).total_cmp(&len(b))).unwrap_or_default())
         };
         // pontos onde a polilinha atravessa o plano
-        let crossings = |pts: &[V3]| -> Vec<V3> { fenkra_core::sketch::plane_crossings(pts, frame.origin, frame.normal) };
+        // com fórmula, o corte é exato; sem ela, fica a travessia da polilinha
+        let crossings = |pts: &[V3]| -> Vec<V3> {
+            let curva = fenkra_core::projecao::reconhece(pts);
+            fenkra_core::projecao::corta(&curva, &profile::plano_do(frame)).unwrap_or_else(|| fenkra_core::sketch::plane_crossings(pts, frame.origin, frame.normal))
+        };
         match &l.source {
             LinkSrc::Ref(id) => match self.geo(*id, 0)? {
                 Geo::Point(p) => Ok(vec![p]),
@@ -2402,45 +2460,31 @@ impl Ctx<'_> {
                 let p3: Vec<V3> = pts.iter().map(|q| fr.point(q[0], q[1])).collect();
                 Ok(if l.intersect { crossings(&p3) } else { p3 })
             }
-            LinkSrc::Edge { mid } | LinkSrc::Vertex { pos: mid } => {
-                let vertex = matches!(l.source, LinkSrc::Vertex { .. });
-                let mut best: Option<(f64, Vec<V3>)> = None;
+            LinkSrc::Edge { mid } => {
+                let (b, q, _, pl) = self.aresta_perto(*mid)?;
+                // a interseção pergunta ao kernel: é exata para qualquer tipo de curva
+                if l.intersect {
+                    return b.edge_plane(q, frame.origin, frame.normal).map_err(k);
+                }
+                Ok(pl)
+            }
+            LinkSrc::Vertex { pos: mid } => {
+                let mut best: Option<(f64, V3)> = None;
                 for (b, _, _) in self.bodies.values() {
                     let Ok(m) = tesselar(b, &self.qualidade) else { continue };
-                    if vertex {
-                        for v in m.vertices.chunks_exact(3) {
-                            let p = [v[0] as f64, v[1] as f64, v[2] as f64];
-                            let d = geo3d::dist(p, *mid);
-                            if best.as_ref().is_none_or(|x| d < x.0) {
-                                best = Some((d, vec![p]));
-                            }
-                        }
-                        continue;
-                    }
-                    let ne = m.edge_mids.len() / 3;
-                    for e in 0..ne {
-                        let q = [m.edge_mids[3 * e] as f64, m.edge_mids[3 * e + 1] as f64, m.edge_mids[3 * e + 2] as f64];
-                        let d = geo3d::dist(q, *mid);
+                    for v in m.vertices.chunks_exact(3) {
+                        let p = [v[0] as f64, v[1] as f64, v[2] as f64];
+                        let d = geo3d::dist(p, *mid);
                         if best.as_ref().is_none_or(|x| d < x.0) {
-                            let s0 = m.edge_ranges[e] as usize;
-                            let s1 = m.edge_ranges.get(e + 1).map(|x| *x as usize).unwrap_or(m.edges.len() / 6);
-                            let mut pl: Vec<V3> = vec![];
-                            for sg in m.edges.chunks_exact(6).take(s1).skip(s0) {
-                                if pl.is_empty() {
-                                    pl.push([sg[0] as f64, sg[1] as f64, sg[2] as f64]);
-                                }
-                                pl.push([sg[3] as f64, sg[4] as f64, sg[5] as f64]);
-                            }
-                            best = Some((d, pl));
+                            best = Some((d, p));
                         }
                     }
                 }
-                let (d, pl) = best.ok_or("nenhum corpo com arestas")?;
-                // a aresta pode ter mudado um pouco; longe demais = perdida
+                let (d, p) = best.ok_or("nenhum corpo com arestas")?;
                 if d > 5. {
-                    return Err(format!("{} não encontrada (a {d:.1} mm do lugar)", if vertex { "vértice" } else { "aresta" }));
+                    return Err(format!("vértice não encontrado (a {d:.1} mm do lugar)"));
                 }
-                Ok(if l.intersect { crossings(&pl) } else { pl })
+                Ok(vec![p])
             }
             LinkSrc::Face { point } => cut(&self.face_of_bodies(*point)?),
         }
@@ -2501,6 +2545,9 @@ impl Ctx<'_> {
     fn members(&self, m: &StructMember) -> Result<Vec<MemberGeom>, String> {
         let dims: Vec<f64> = m.dims.iter().map(|e| ev(e, &self.vars, "cota da seção")).collect::<Result<_, _>>()?;
         let (loops, w, h, cen) = structural::section(m.kind, &dims)?;
+        // B253: espelhar a seção troca o lado dos perfis sem simetria (a caixa não muda)
+        let (loops, cen) = if m.mirror { (structural::mirrored(&loops), [-cen[0], cen[1]]) } else { (loops, cen) };
+        let wall = structural::wall(m.kind, &dims);
         let ang = ev(&m.angle, &self.vars, "rotação")?.to_radians();
         let off = [ev(&m.off_x, &self.vars, "deslocamento x")?, ev(&m.off_y, &self.vars, "deslocamento y")?];
         let a = structural::anchor_point(m.anchor, w, h, cen);
@@ -2538,7 +2585,7 @@ impl Ctx<'_> {
             let x0 = fenkra_kernel::cross(v, z);
             let x = geo3d::rotate(x0, z, ang);
             let y = fenkra_kernel::cross(z, x);
-            out.push(MemberGeom { start, end, z, x, y, w, h, shift, ext: (e1, e2), loops: loops.clone(), pts: c.pts.clone(), straight: c.is_straight() });
+            out.push(MemberGeom { start, end, z, x, x0, y, w, h, wall, shift, ext: (e1, e2), loops: loops.clone(), pts: c.pts.clone(), straight: c.is_straight() });
         }
         Ok(out)
     }
@@ -2925,14 +2972,20 @@ impl Ctx<'_> {
         Shape::loft_surface(&sections, false, false, None).map_err(|x| format!("varredura: {}", x.0))
     }
 
-    /// Membro (de comandos estruturais anteriores) com a ponta mais perto de `at`.
+    /// Membro (de comandos estruturais anteriores) com a ponta mais perto de `at`. Um ponto sobre a
+    /// face de uma ponta (face clicada, B255) escolhe essa ponta mesmo que outra esteja mais perto.
     fn member_end(&self, at: V3, me: &Feature) -> Result<(MemberGeom, bool), String> {
         let mut best: Option<(f64, MemberGeom, bool)> = None;
         for f in self.doc.features.iter().take_while(|g| g.id != me.id) {
             let FeatureKind::StructMember(m) = &f.kind else { continue };
             for g in self.members(m)? {
                 for (p, s) in [(g.start, true), (g.end, false)] {
-                    let dd = geo3d::dist(p, at);
+                    let d = geo3d::sub(at, p);
+                    let along = geo3d::dot(d, g.z);
+                    let lateral = geo3d::dist(d, geo3d::mul(g.z, along));
+                    // fora da face, vale a distância; sobre a face (plano da ponta e dentro da seção), vale o lateral
+                    let on_face = along.abs() < 1e-3 && lateral <= (g.w * g.w + g.h * g.h).sqrt() / 2. + 1e-3;
+                    let dd = if on_face { lateral * 1e-3 } else { geo3d::dist(p, at) + 1e-3 };
                     if best.as_ref().is_none_or(|b| dd < b.0) {
                         best = Some((dd, g.clone(), s));
                     }
@@ -3611,14 +3664,38 @@ impl Ctx<'_> {
         let k = |e: KernelError| e.0;
         match &f.kind {
             FeatureKind::Sketch(s) => {
-                let frame = self.plane(&s.plane, 0)?;
+                let frame = profile::posiciona(self.plane(&s.plane, 0)?, &s.data.pos);
                 // geometria externa (converter/projetar/interseção): reposiciona antes de resolver
                 let mut link_warn = vec![];
+                let mut quebrados = vec![];
                 let data = if s.data.links.is_empty() {
                     std::borrow::Cow::Borrowed(&s.data)
                 } else {
+                    use fenkra_core::sketch::{LinkPolicy, LinkShape};
                     let mut d = s.data.clone();
                     for l in &s.data.links {
+                        // isolado fica como está, mesmo sem a origem
+                        if l.policy == LinkPolicy::Isolado {
+                            continue;
+                        }
+                        // forma exata: a fórmula da origem manda
+                        if !matches!(l.shape, LinkShape::Poly { .. }) {
+                            match self.link_exata(l, &frame) {
+                                Ok(Some(forma)) => {
+                                    if !d.update_link_exata(l.id, &forma) {
+                                        quebrados.push(l.id);
+                                        link_warn.push(format!("geometria externa: a origem virou {}", forma.nome()));
+                                    }
+                                    continue;
+                                }
+                                Ok(None) => {}
+                                Err(e) => {
+                                    quebrados.push(l.id);
+                                    link_warn.push(format!("geometria externa: {e}"));
+                                    continue;
+                                }
+                            }
+                        }
                         match self.link_world(l, &frame) {
                             Ok(p3) if !p3.is_empty() => {
                                 let y = frame.y();
@@ -3631,21 +3708,37 @@ impl Ctx<'_> {
                                     .collect();
                                 d.update_link(l.id, &uv);
                             }
-                            Ok(_) => link_warn.push("geometria externa sem interseção com o plano".to_string()),
-                            Err(e) => link_warn.push(format!("geometria externa: {e}")),
+                            Ok(_) => {
+                                quebrados.push(l.id);
+                                link_warn.push("geometria externa sem interseção com o plano".to_string());
+                            }
+                            Err(e) => {
+                                quebrados.push(l.id);
+                                link_warn.push(format!("geometria externa: {e}"));
+                            }
                         }
                     }
                     std::borrow::Cow::Owned(d)
                 };
                 let mut es = eval_sketch(&data, &self.vars)?;
                 es.warnings.extend(link_warn);
-                for l in &data.links {
+                es.link_quebrados = quebrados;
+                for l in data.links.iter().filter(|l| l.policy != fenkra_core::sketch::LinkPolicy::Isolado) {
+                    use fenkra_core::sketch::{Curve, LinkShape};
                     match &l.shape {
-                        fenkra_core::sketch::LinkShape::Poly { points, .. } => es.link_pts.extend(points.iter().map(|p| (*p, data.pos(*p)))),
-                        fenkra_core::sketch::LinkShape::Circle { center, curve } => {
+                        LinkShape::Poly { points, .. } => es.link_pts.extend(points.iter().map(|p| (*p, data.pos(*p)))),
+                        LinkShape::Line { a, b, .. } => es.link_pts.extend([*a, *b].map(|p| (p, data.pos(p)))),
+                        LinkShape::Circle { center, curve } => {
                             es.link_pts.push((*center, data.pos(*center)));
-                            if let Some(fenkra_core::sketch::Curve::Circle { r, .. }) = data.curve(*curve).map(|c| &c.geom) {
+                            if let Some(Curve::Circle { r, .. }) = data.curve(*curve).map(|c| &c.geom) {
                                 es.link_r.push((*curve, *r));
+                            }
+                        }
+                        LinkShape::Arc { center, s, e, .. } => es.link_pts.extend([*center, *s, *e].map(|p| (p, data.pos(p)))),
+                        LinkShape::Ellipse { center, s, e, curve } => {
+                            es.link_pts.extend([*center, *s, *e].map(|p| (p, data.pos(p))));
+                            if let Some(Curve::Ellipse { major, minor, t0, t1, .. }) = data.curve(*curve).map(|c| &c.geom) {
+                                es.link_e.push((*curve, *major, *minor, *t0, *t1));
                             }
                         }
                     }
@@ -4992,49 +5085,8 @@ impl Ctx<'_> {
                 self.add_separate(f, all);
                 Ok(warn)
             }
-            FeatureKind::StructPlate(pl) => {
-                let (g, end_at_start) = self.member_end(pl.at, f)?;
-                let t = ev(&pl.thickness, &self.vars, "espessura")?;
-                let mg = ev(&pl.margin, &self.vars, "sobra")?;
-                let (e, out) = if end_at_start { (geo3d::sub(g.start, geo3d::mul(g.z, g.ext.0)), geo3d::mul(g.z, -1.)) } else { (geo3d::add(g.end, geo3d::mul(g.z, g.ext.1)), g.z) };
-                let (w, h) = (g.w + 2. * mg, g.h + 2. * mg);
-                // centro da seção (a linha guia pode estar num canto, pela ancoragem)
-                let c = geo3d::add(geo3d::add(e, geo3d::mul(g.x, -g.shift[0])), geo3d::mul(g.y, -g.shift[1]));
-                let y = fenkra_kernel::cross(out, g.x);
-                let corner = geo3d::sub(geo3d::sub(c, geo3d::mul(g.x, w / 2.)), geo3d::mul(y, h / 2.));
-                let plate = Shape::box_tool(corner, g.x, out, [w, h, t]).map_err(k)?;
-                log_struct(f, 0, StructItem::Plate, "Placa", "Placa".into(), 0., Frame { origin: c, x: g.x, normal: out }, &plate, "");
-                self.add_separate(f, plate);
-                Ok(None)
-            }
-            FeatureKind::StructGusset(gs) => {
-                let (a, b, p) = self.member_pair(gs.at, f)?;
-                let leg = ev(&gs.leg, &self.vars, "aba")?;
-                let t = ev(&gs.thickness, &self.vars, "espessura")?;
-                let c = ev(&gs.chamfer, &self.vars, "chanfro")?;
-                let (da, db) = (a.1, b.1);
-                let n = geo3d::unit(fenkra_kernel::cross(da, db)).ok_or("membros colineares não levam reforço")?;
-                // canto do reforço junto às faces dos membros, no plano das linhas guia
-                let ha = a.0.w.max(a.0.h) / 2.;
-                let hb = b.0.w.max(b.0.h) / 2.;
-                let q = geo3d::add(geo3d::add(p, geo3d::mul(da, hb)), geo3d::mul(db, ha));
-                let q = geo3d::sub(q, geo3d::mul(n, t / 2.));
-                let mut pts = vec![];
-                if c > 1e-9 {
-                    pts.push(geo3d::add(q, geo3d::mul(da, c)));
-                } else {
-                    pts.push(q);
-                }
-                pts.push(geo3d::add(q, geo3d::mul(da, leg)));
-                pts.push(geo3d::add(q, geo3d::mul(db, leg)));
-                if c > 1e-9 {
-                    pts.push(geo3d::add(q, geo3d::mul(db, c)));
-                }
-                let plate = Shape::poly_prism(&pts, geo3d::mul(n, t)).map_err(k)?;
-                log_struct(f, 0, StructItem::Gusset, "Reforço", "Reforço".into(), 0., Frame { origin: q, x: da, normal: n }, &plate, "");
-                self.add_separate(f, plate);
-                Ok(None)
-            }
+            FeatureKind::StructPlate(pl) => self.struct_plate(f, pl),
+            FeatureKind::StructGusset(gs) => self.struct_gusset(f, gs),
             FeatureKind::MoveBody(m) => {
                 let (b, owners, roles) = self.body_owned(f.target).ok_or("não há corpo para mover")?;
                 let rigid = match &m.xf {
@@ -5661,6 +5713,8 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
             converged: es.report.converged,
             link_pts: es.link_pts.clone(),
             link_r: es.link_r.clone(),
+            link_e: es.link_e.clone(),
+            link_quebrados: es.link_quebrados.clone(),
             ents: es.curves.iter().map(|(cid, pts)| (*cid, es.cons.contains(cid), pts.iter().map(|q| to3d(fr, *q)).collect())).collect(),
             pt_ids: es.pts.iter().map(|(pid, q)| (*pid, to3d(fr, *q))).collect(),
         };
@@ -5850,9 +5904,13 @@ struct MemberGeom {
     /// eixo do membro e eixos da seção (x, y)
     z: V3,
     x: V3,
+    /// eixo X da seção sem a rotação do comando (referência do arco de rotação)
+    x0: V3,
     y: V3,
     w: f64,
     h: f64,
+    /// espessura da parede do perfil (0 nas barras maciças)
+    wall: f64,
     /// deslocamento da seção (ancoragem − deslocamentos)
     shift: [f64; 2],
     ext: (f64, f64),
@@ -5937,6 +5995,7 @@ fn loops_points(loops: &[fenkra_kernel::Loop2]) -> Vec<Vec<[f64; 2]>> {
                         [c[0] + r * t.cos(), c[1] + r * t.sin()]
                     })),
                     fenkra_kernel::Seg2::Spline(p) => v.extend(p.iter().copied()),
+                    fenkra_kernel::Seg2::Ellipse(c, m, r, t0, t1) => v.extend(fenkra_core::projecao::elipse_amostras(*c, *m, *r, *t0, *t1)),
                 }
             }
             v.dedup_by(|x, y| (x[0] - y[0]).abs() + (x[1] - y[1]).abs() < 1e-9);
@@ -6839,6 +6898,7 @@ mod tests {
                 gap: s("0"),
                 joints: vec![],
                 material: String::new(),
+                mirror: false,
             }));
             d
         };
@@ -6875,12 +6935,13 @@ mod tests {
             gap: s("0"),
             joints: vec![],
             material: String::new(),
+            mirror: false,
         }));
         let v0 = vol(&d);
-        d.add_feature(FeatureKind::StructPlate(StructPlate { at: [0., 0., 0.], thickness: s("8"), margin: s("5") }));
+        d.add_feature(FeatureKind::StructPlate(StructPlate::nova([0., 0., 0.], "8", "5")));
         let v1 = vol(&d);
         assert!(near(v1 - v0, 50. * 50. * 8., 1e-3), "placa {}", v1 - v0);
-        d.add_feature(FeatureKind::StructGusset(StructGusset { at: [0., 0., 500.], leg: s("60"), thickness: s("6"), chamfer: s("0") }));
+        d.add_feature(FeatureKind::StructGusset(StructGusset::novo([0., 0., 500.], "60", "6", "0")));
         let v2 = vol(&d);
         assert!(near(v2 - v1, 0.5 * 60. * 60. * 6., 1e-3), "reforço {}", v2 - v1);
     }
@@ -6914,6 +6975,7 @@ mod tests {
             gap: s("0"),
             joints: vec![],
             material: String::new(),
+            mirror: false,
         }));
         // um sólido por trecho, no referencial local (Z ao longo do membro, seção centrada)
         let ms = structural_members(&d);
@@ -6964,9 +7026,10 @@ mod tests {
             gap: s("0"),
             joints: vec![],
             material: String::new(),
+            mirror: false,
         }));
-        d.add_feature(FeatureKind::StructPlate(StructPlate { at: [0., 0., 0.], thickness: s("8"), margin: s("5") }));
-        d.add_feature(FeatureKind::StructGusset(StructGusset { at: [0., 0., 500.], leg: s("60"), thickness: s("6"), chamfer: s("0") }));
+        d.add_feature(FeatureKind::StructPlate(StructPlate::nova([0., 0., 0.], "8", "5")));
+        d.add_feature(FeatureKind::StructGusset(StructGusset::novo([0., 0., 500.], "60", "6", "0")));
         let gs = structural_groups(&d);
         let kinds: Vec<StructItem> = gs.iter().map(|g| g.signature.kind).collect();
         assert_eq!(kinds, vec![StructItem::Member, StructItem::Member, StructItem::Plate, StructItem::Gusset]);
@@ -7005,6 +7068,185 @@ mod tests {
         let xmax = v.construction.iter().map(|p| p[0]).fold(f32::MIN, f32::max);
         assert!((xmax - 70.).abs() < 1e-3, "a linha projetada foi para 70: {xmax}");
         let _ = link;
+    }
+
+    /// Elipse de semieixos 30 e 10 em XY, extrudada 20: a curva exata atravessa o sketch e o kernel.
+    fn cilindro_eliptico() -> (Document, Id) {
+        use fenkra_core::projecao::Exata;
+        use fenkra_core::sketch::LinkSrc;
+        let mut d = Document::new("elipse");
+        let mut data = SketchData::default();
+        let mut n = 9_000_000u64;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        let forma = Exata::Elipse { c: [5., 0.], maior: [30., 0.], menor: 10., t0: 0., t1: std::f64::consts::TAU };
+        data.add_link_exata(&mut al, LinkSrc::Vertex { pos: [0.; 3] }, false, &forma, false);
+        data.links.clear();
+        let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
+        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind("10".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
+        (d, sk)
+    }
+
+    /// Sketch em `plano` com um vínculo exato à aresta de `mid`.
+    fn sketch_ligado(d: &mut Document, plano: OriginPlane, mid: [f64; 3], base: u64, inter: bool) -> (Id, Id) {
+        use fenkra_core::projecao::Exata;
+        use fenkra_core::sketch::LinkSrc;
+        let mut data = SketchData::default();
+        let mut n = base;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        let l = if inter {
+            data.add_link_points(&mut al, LinkSrc::Edge { mid }, &[[0., 0.], [1., 0.]], true).unwrap()
+        } else {
+            data.add_link_exata(&mut al, LinkSrc::Edge { mid }, false, &Exata::Elipse { c: [0., 0.], maior: [2., 0.], menor: 1., t0: 0., t1: std::f64::consts::TAU }, true)
+        };
+        (d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(plano), data })), l)
+    }
+
+    #[test]
+    fn elipse_exata_vira_solido_e_aresta_conhecida() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let (d, sk) = cilindro_eliptico();
+        let r = recompute(&d);
+        assert!(r.status.values().all(|s| matches!(s, Status::Ok)), "{:?}", r.status);
+        let v = r.bodies[0].mass.volume;
+        let h = 10.;
+        assert!((v - std::f64::consts::PI * 30. * 10. * h).abs() / v < 1e-6, "volume {v}");
+        let f = (0..r.bodies[0].mesh.edge_mids.len() / 3).filter_map(|e| r.bodies[0].mesh.edge_formula(e)).find(|f| matches!(f, fenkra_kernel::EdgeFormula::Conic { .. }));
+        let Some(fenkra_kernel::EdgeFormula::Conic { u, v, .. }) = f else { panic!("sem cônica: {f:?}") };
+        let n = |a: [f64; 3]| (a[0] * a[0] + a[1] * a[1] + a[2] * a[2]).sqrt();
+        assert!((n(u) - 30.).abs() < 1e-9 && (n(v) - 10.).abs() < 1e-9, "{u:?} {v:?}");
+        let _ = sk;
+    }
+
+    #[test]
+    fn projecao_de_aresta_eliptica_e_exata_e_acompanha() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        use fenkra_core::sketch::Curve;
+        let (mut d, _) = cilindro_eliptico();
+        // a aresta de cima: projetada em XY é a própria elipse, com o semieixo certo
+        let (sk, _) = sketch_ligado(&mut d, OriginPlane::XY, [-25., 0., 10.], 9_100_000, false);
+        let _ = recompute(&d);
+        let r = recompute(&d);
+        assert!(matches!(r.status[&sk], Status::Ok), "{:?}", r.status[&sk]);
+        let v = r.sketches.iter().find(|v| v.feature == sk).unwrap();
+        assert!(v.link_quebrados.is_empty());
+        let (_, m, menor, t0, t1) = v.link_e[0];
+        assert!((m[0].hypot(m[1]) - 30.).abs() < 1e-9 && (menor - 10.).abs() < 1e-9, "{m:?} {menor}");
+        assert!((t1 - t0 - std::f64::consts::TAU).abs() < 1e-9);
+        // a elipse de origem cresce no eixo menor: o vínculo acompanha sem escolher de novo
+        let id = d.features[0].id;
+        if let Some(FeatureKind::Sketch(s)) = d.feature_mut(id).map(|f| &mut f.kind) {
+            if let Curve::Ellipse { minor, .. } = &mut s.data.curves[0].geom {
+                *minor = 12.;
+            }
+        }
+        let r = recompute(&d);
+        let v = r.sketches.iter().find(|v| v.feature == sk).unwrap();
+        assert!((v.link_e[0].2 - 12.).abs() < 1e-9, "{:?}", v.link_e);
+    }
+
+    #[test]
+    fn interseccao_de_aresta_da_todos_os_pontos_exatos() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        // a elipse de baixo atravessa o plano XZ nas pontas do eixo maior: x = 5 ± 30
+        let (mut d, _) = cilindro_eliptico();
+        let (sk, _) = sketch_ligado(&mut d, OriginPlane::XZ, [-25., 0., 0.], 9_200_000, true);
+        let r = recompute(&d);
+        let v = r.sketches.iter().find(|v| v.feature == sk).unwrap();
+        assert!(v.link_quebrados.is_empty(), "{:?}", r.status[&sk]);
+        let mut xs: Vec<f64> = v.link_pts.iter().map(|p| p.1[0]).collect();
+        xs.sort_by(f64::total_cmp);
+        assert_eq!(xs.len(), 2);
+        assert!((xs[0].abs() - 25.).abs() < 1e-9 || (xs[0].abs() - 35.).abs() < 1e-9, "{xs:?}");
+        assert!((xs[1] - xs[0] - 60.).abs() < 1e-9, "{xs:?}");
+    }
+
+    #[test]
+    fn vinculo_sem_origem_quebra_e_isolado_nao_avisa() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        use fenkra_core::sketch::LinkPolicy;
+        let (mut d, _) = cilindro_eliptico();
+        // nenhuma aresta perto: a origem sumiu
+        let (sk, _) = sketch_ligado(&mut d, OriginPlane::XY, [500., 500., 500.], 9_300_000, false);
+        let r = recompute(&d);
+        assert_eq!(r.sketches.iter().find(|v| v.feature == sk).unwrap().link_quebrados.len(), 1);
+        assert!(matches!(r.status[&sk], Status::Warning(_)), "{:?}", r.status[&sk]);
+        // isolado: guarda a origem, não procura por ela
+        if let Some(FeatureKind::Sketch(s)) = d.feature_mut(sk).map(|f| &mut f.kind) {
+            s.data.links[0].policy = LinkPolicy::Isolado;
+        }
+        let r = recompute(&d);
+        assert!(r.sketches.iter().find(|v| v.feature == sk).unwrap().link_quebrados.is_empty());
+        assert!(matches!(r.status[&sk], Status::Ok), "{:?}", r.status[&sk]);
+        // voltou a associar: o estado reaparece, sem ninguém escolher a aresta de novo
+        if let Some(FeatureKind::Sketch(s)) = d.feature_mut(sk).map(|f| &mut f.kind) {
+            s.data.links[0].policy = LinkPolicy::Associativo;
+            if let fenkra_core::sketch::LinkSrc::Edge { mid } = &mut s.data.links[0].source {
+                *mid = [-25., 0., 10.];
+            }
+        }
+        let r = recompute(&d);
+        let v = r.sketches.iter().find(|v| v.feature == sk).unwrap();
+        assert!(v.link_quebrados.is_empty() && !v.link_e.is_empty());
+    }
+
+    #[test]
+    fn sketch_com_origem_e_orientacao_proprias() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        use fenkra_core::sketch::SketchPos;
+        let caixa = |pos: SketchPos| {
+            let mut d = Document::new("pos");
+            let mut data = SketchData::default();
+            let mut n = 9_400_000u64;
+            let mut al = || {
+                n += 1;
+                Id(n)
+            };
+            data.add_rect(&mut al, [0., 0.], [40., 10.], false);
+            data.pos = pos;
+            let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
+            d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind("10".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
+            let r = recompute(&d);
+            assert!(r.status.values().all(|s| matches!(s, Status::Ok)), "{:?}", r.status);
+            assert!((r.bodies[0].mass.volume - 4000.).abs() < 1e-6);
+            r.bodies[0].mesh.positions.chunks_exact(3).fold(([f32::MAX; 3], [f32::MIN; 3]), |(mut lo, mut hi), p| {
+                for i in 0..3 {
+                    lo[i] = lo[i].min(p[i]);
+                    hi[i] = hi[i].max(p[i]);
+                }
+                (lo, hi)
+            })
+        };
+        let perto = |a: [f32; 3], b: [f32; 3]| (0..3).all(|i| (a[i] - b[i]).abs() < 1e-3);
+        let (lo, hi) = caixa(SketchPos::default());
+        assert!(perto(lo, [0., 0., 0.]) && perto(hi, [40., 10., 10.]), "{lo:?} {hi:?}");
+        // origem própria: tudo anda junto no plano
+        let (lo, hi) = caixa(SketchPos { origem: [100., -50.], ..Default::default() });
+        assert!(perto(lo, [100., -50., 0.]) && perto(hi, [140., -40., 10.]), "{lo:?} {hi:?}");
+        // inverter H e V juntos é meia volta, com a mesma normal
+        let (lo, hi) = caixa(SketchPos { inverter_h: true, inverter_v: true, ..Default::default() });
+        assert!(perto(lo, [-40., -10., 0.]) && perto(hi, [0., 0., 10.]), "{lo:?} {hi:?}");
+        // inverter H sozinho vê o sketch por trás: a normal vira e a extrusão desce
+        let (lo, hi) = caixa(SketchPos { inverter_h: true, ..Default::default() });
+        assert!(perto(lo, [-40., 0., -10.]) && perto(hi, [0., 10., 0.]), "{lo:?} {hi:?}");
+        // trocar H e V: o lado de 40 passa para y, e a normal também vira
+        let (lo, hi) = caixa(SketchPos { trocar: true, ..Default::default() });
+        assert!(perto(lo, [0., 0., -10.]) && perto(hi, [10., 40., 0.]), "{lo:?} {hi:?}");
     }
 
     /// Quarto de disco com abas nas duas retas: dobrado e planificado (com recorte e filete
@@ -7064,6 +7306,7 @@ mod tests {
             gap: s("0"),
             joints: vec![],
             material: String::new(),
+            mirror: false,
         }));
         let r = recompute(&d);
         assert!(matches!(r.status[&m], Status::Ok), "{:?}", r.status[&m]);
@@ -7370,6 +7613,7 @@ mod tests {
             gap: s("0"),
             joints: vec![],
             material: String::new(),
+            mirror: false,
         };
         let vol = |d: &Document| recompute(d).bodies.iter().map(|b| b.mass.volume).sum::<f64>();
         let lado = |d: &mut Document, a: [f64; 3], b: [f64; 3]| CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: s("0"), end: s("0") }));

@@ -388,6 +388,8 @@ pub fn demo_preparar(doc: &mut Document) -> Option<DemoPrevia> {
             doc.features.pop()?.kind
         }
         "plano" => return Some(DemoPrevia::Plano),
+        // B255: o reforço no canto do quadro de exemplo (com `FENKRA_DEMO_EST`); a placa é o `ultimo`
+        "reforco" => FeatureKind::StructGusset(StructGusset::novo([0., 0., 700.], "80", "6", "10")),
         "casca" => {
             caixa(doc);
             FeatureKind::Shell(Shell { faces: vec![[0., 0., 30.]], thickness: s("3"), outward: false, face_keys: vec![], closed: false })
@@ -965,6 +967,7 @@ mod tests {
             gap: s("0"),
             joints: vec![],
             material: String::new(),
+            mirror: false,
         }
     }
 

@@ -18,7 +18,17 @@ pub fn english() -> bool {
 
 fn map() -> &'static HashMap<&'static str, &'static str> {
     static M: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
-    M.get_or_init(|| TABLE.iter().chain(crate::textos_ajuda::TEXTOS.iter()).chain(crate::textos_biblioteca::TEXTOS.iter()).copied().collect())
+    M.get_or_init(|| {
+        TABLE.iter()
+            .chain(crate::textos_ajuda::TEXTOS.iter())
+            .chain(crate::textos_biblioteca::TEXTOS.iter())
+            .chain(crate::sketch_textos::TEXTOS.iter())
+            .chain(crate::textos_estrutural::TEXTOS.iter())
+            .chain(crate::textos_montagem::TEXTOS.iter())
+            .chain(crate::textos_superficies::TEXTOS.iter())
+            .copied()
+            .collect()
+    })
 }
 
 /// Tradução do texto (ou o próprio texto, em português ou sem tradução).
@@ -1581,35 +1591,6 @@ static TABLE: &[(&str, &str)] = &[
     ("com curva guia", "with guide curve"),
     ("fechar (volta à primeira seção)", "close (back to the first section)"),
     ("fechar em sólido quando a malha for fechada", "close into a solid when the mesh is closed"),
-    ("A seta do 3D aponta o lado que fica. Clique nela para inverter.", "The 3D arrow points to the side that stays. Click it to flip."),
-    ("Clique para inverter o lado.", "Click to flip the side."),
-    ("Aparar e dividir", "Trim and split"),
-    ("Aparar e dividir por região", "Trim and split by region"),
-    ("Corta a superfície por ferramentas, ou duas superfícies uma pela outra, e você clica nos pedaços que ficam ou saem. A escolha sobrevive quando o modelo muda.", "Cuts the surface with tools, or two surfaces by each other, and you click the pieces that stay or go. The choice survives model changes."),
-    ("Por ferramenta", "By tool"),
-    ("Só a superfície é cortada; as ferramentas não mudam", "Only the surface is cut; tools stay unchanged"),
-    ("Mútuo", "Mutual"),
-    ("Cada superfície corta as outras, e todas dão pedaços", "Each surface cuts the others, and all give pieces"),
-    ("Ação", "Action"),
-    ("O pedaço clicado sai; o resto fica", "The clicked piece goes; the rest stays"),
-    ("Manter", "Keep"),
-    ("Só os pedaços clicados ficam", "Only the clicked pieces stay"),
-    ("pedaços", "pieces"),
-    ("ficam", "stay"),
-    ("Fica", "Stays"),
-    ("Sai", "Goes"),
-    ("Clique nos pedaços no 3D. O que fica sai cheio; o que sai, translúcido.", "Click the pieces in 3D. What stays is solid; what goes is translucent."),
-    ("Limpar escolhas", "Clear choices"),
-    ("prolongar a ferramenta até atravessar", "extend the tool until it goes through"),
-    ("A ferramenta curta demais cresce pelo próprio suporte até cortar a superfície inteira.", "A tool that is too short grows along its own support until it cuts the whole surface."),
-    ("Clique para trocar entre ficar e sair.", "Click to switch between staying and going."),
-    ("Clique para ficar com esta solução.", "Click to keep this solution."),
-    ("Clique na bolinha do 3D para trocar.", "Click a 3D dot to change it."),
-    ("Fica deste lado", "This side stays"),
-    ("Fica da superfície 1", "Surface 1 side that stays"),
-    ("Fica da superfície 2", "Surface 2 side that stays"),
-    ("Lado da paralela", "Parallel side"),
-    ("de", "of"),
     ("para na primeira parede do corpo encontrada", "stops at the first body wall it meets"),
     ("regrada (faces retas entre seções)", "ruled (straight faces between sections)"),
     ("rosca em toda a face cilíndrica", "thread along the whole cylindrical face"),

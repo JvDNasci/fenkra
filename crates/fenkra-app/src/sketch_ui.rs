@@ -14,6 +14,7 @@ use fenkra_core::{FeatureKind, Id, PlaneRef, SketchData};
 use fenkra_kernel::Frame;
 use std::collections::HashMap;
 use crate::i18n::tr;
+use crate::sketch_snap::TipoSnap;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Tool {
@@ -104,8 +105,8 @@ impl Tool {
             Tool::Fillet => ("sk_filete", "Filete", "Filete de canto", "Passe sobre um canto entre duas linhas, ou numa linha perto dele, e veja o arco em prévia. O clique insere o arco tangente e abre a cota do raio; o próximo filete repete o último raio."),
             Tool::Chamfer => ("sk_chanfro", "Chanfro", "Chanfro de canto", "Passe sobre um canto entre duas linhas, ou numa linha perto dele, e veja o corte em prévia. O clique corta o canto com uma linha reta (distâncias iguais) e abre a cota da distância."),
             Tool::Spline => ("sk_spline", "Spline", "Spline por pontos", "Cada clique adiciona um ponto por onde a curva passa. Enter, duplo clique ou botão direito termina. Os pontos continuam editáveis e podem receber cotas e restrições."),
-            Tool::Trim => ("sk_aparar", "Aparar", "Aparar linha", "Clique no trecho da linha a remover: ela é cortada nas interseções com as outras curvas (sem interseção, a linha some)."),
-            Tool::Extend => ("sk_estender", "Estender", "Estender linha", "Clique perto da ponta de uma linha: ela cresce até a próxima curva na mesma direção."),
+            Tool::Trim => ("sk_aparar", "Aparar", "Aparar", "Pare o cursor no trecho: ele fica vermelho tracejado e os cortes aparecem. Clique para remover. Vale para linha, arco, círculo e spline. Shift estende; clique no vazio, botão direito ou Esc encerra."),
+            Tool::Extend => ("sk_estender", "Estender", "Estender", "Pare o cursor perto da ponta de uma linha ou arco: a prévia vai até a próxima curva no caminho. Clique para estender. Shift apara; clique no vazio, botão direito ou Esc encerra."),
             Tool::Convert => ("sk_projetar", "Converter", "Converter / projetar 3D", "Clique em arestas, vértices, linhas ou curvas do modelo: viram geometria fixa do sketch, projetada no plano e ligada à origem — se o 3D mudar, o sketch acompanha."),
             Tool::Intersect => ("sk_intersecao", "Interseção", "Interseção com o plano", "Clique numa face do corpo, superfície ou aresta: a curva (ou ponto) onde ela corta o plano do sketch entra como geometria fixa e associativa."),
             Tool::Dimension => ("sk_cota", "Cota", "Cotagem inteligente  (D)", "Clique num elemento: a cota fica em prévia seguindo o mouse (acima/abaixo = horizontal, ao lado = vertical, na diagonal = alinhada) e o próximo clique no vazio a posiciona. Clique num segundo elemento para cotar entre os dois (distância, ângulo, centro a centro). Botão direito: todas as cotas e restrições possíveis. O valor aceita expressões e parâmetros (ex.: L/2)."),
@@ -148,6 +149,17 @@ struct Snap {
     uv: [f64; 2],
     point: Option<Id>,
     origin: bool,
+    /// o que o glifo mostra e em que curvas o ponto novo se apoia
+    tipo: TipoSnap,
+    apoio: [Option<Id>; 2],
+    /// o apoio vira restrição no ponto novo (restrições automáticas ligadas)
+    vincula: bool,
+}
+
+impl Snap {
+    fn livre(uv: [f64; 2]) -> Self {
+        Snap { uv, point: None, origin: false, tipo: TipoSnap::Livre, apoio: [None; 2], vincula: false }
+    }
 }
 
 struct Drag {
@@ -164,6 +176,8 @@ pub struct SketchEdit {
     chain_first: Option<Id>,
     pub sel: Vec<Ent>,
     drag: Option<Drag>,
+    /// canto em que começou o arrasto da seleção por janela
+    janela: Option<Pos2>,
     pub dim_edit: Option<(Id, String, bool)>,
     pub report: SolveReport,
     pub construction: bool,
@@ -337,6 +351,7 @@ impl SketchEdit {
             last_uv: None,
             keyboard_busy: false,
             tab_guard: 0,
+            janela: None,
         }
     }
     /// Há um passo de desenho em andamento, com campos de valor à espera.
@@ -440,10 +455,11 @@ pub fn frame(app: &App) -> Option<Frame> {
     if let Some(f) = r.and_then(|r| r.sketches.iter().find(|s| s.feature == id)).map(|s| s.frame) {
         return Some(f);
     }
-    match plane_of(app)? {
-        PlaneRef::Origin(o) => Some(fenkra_solidos::origin_frame(o)),
-        PlaneRef::Datum(d) => r?.planes.iter().find(|p| p.id == Some(d)).map(|p| p.frame),
-    }
+    let base = match plane_of(app)? {
+        PlaneRef::Origin(o) => fenkra_solidos::origin_frame(o),
+        PlaneRef::Datum(d) => r?.planes.iter().find(|p| p.id == Some(d)).map(|p| p.frame)?,
+    };
+    Some(fenkra_solidos::profile::posiciona(base, &data(app)?.pos))
 }
 
 struct View {
@@ -510,7 +526,11 @@ fn point_for(sk: &mut SketchData, al: &mut impl FnMut() -> Id, s: Snap) -> Id {
         }
         return fenkra_solidos::origin_point(sk, al);
     }
-    sk.add_point(al, s.uv[0], s.uv[1])
+    let p = sk.add_point(al, s.uv[0], s.uv[1]);
+    if s.vincula {
+        crate::sketch_snap::vincula(sk, al, p, s.tipo, s.apoio);
+    }
+    p
 }
 
 fn is_line(sk: &SketchData, id: Id) -> bool {
@@ -633,7 +653,7 @@ fn foot(sk: &SketchData, p: Id, l: Id) -> Option<[f64; 2]> {
 }
 
 /// Vértice do ângulo entre duas linhas (extremo comum ou interseção) e o extremo mais distante de cada uma.
-fn angle_vertex(sk: &SketchData, l1: Id, l2: Id) -> Option<([f64; 2], [f64; 2], [f64; 2])> {
+pub(crate) fn angle_vertex(sk: &SketchData, l1: Id, l2: Id) -> Option<([f64; 2], [f64; 2], [f64; 2])> {
     let (a, b) = line_ends(sk, l1)?;
     let (c, d) = line_ends(sk, l2)?;
     let (pa, pb, pc, pd) = (sk.pos(a), sk.pos(b), sk.pos(c), sk.pos(d));
@@ -727,7 +747,7 @@ fn tool_accepts(tool: Tool, k: &Kind) -> bool {
     match tool {
         Tool::DimH => matches!(k, Kind::DistanceX(..)),
         Tool::DimV => matches!(k, Kind::DistanceY(..)),
-        Tool::DimAngle => matches!(k, Kind::Angle(..)),
+        Tool::DimAngle => matches!(k, Kind::Angle(..) | Kind::AngleSupp(..)),
         Tool::DimRadius => matches!(k, Kind::Radius(..)),
         Tool::DimDiameter => matches!(k, Kind::Diameter(..)),
         _ => true,
@@ -738,6 +758,13 @@ fn tool_accepts(tool: Tool, k: &Kind) -> bool {
 /// na diagonal ou entre eles → a sugestão (alinhada). `mods` (Ctrl, Alt) forçam horizontal/vertical.
 fn choose_dim(sk: &SketchData, opts: &[(&str, &str, Kind)], cur: Option<[f64; 2]>, mods: (bool, bool)) -> Option<Kind> {
     let first = opts.first()?.2.clone();
+    // círculo e arco: dentro é raio, fora é diâmetro; duas linhas: o quadrante escolhe o ângulo.
+    // Com a ferramenta de raio ou de diâmetro só há uma opção, e ela não troca.
+    let tem = |f: fn(&Kind) -> bool| opts.iter().any(|o| f(&o.2));
+    let raio_e_diametro = tem(|k| matches!(k, Kind::Radius(..))) && tem(|k| matches!(k, Kind::Diameter(..)));
+    if let (true, Some(c)) = (raio_e_diametro || matches!(first, Kind::Angle(..)), cur) {
+        return Some(crate::sketch_cota::pelo_cursor(sk, &first, c).unwrap_or(first));
+    }
     let x = opts.iter().find(|o| matches!(o.2, Kind::DistanceX(..))).map(|o| o.2.clone());
     let y = opts.iter().find(|o| matches!(o.2, Kind::DistanceY(..))).map(|o| o.2.clone());
     match mods {
@@ -767,7 +794,7 @@ fn dim_anchor(sk: &SketchData, k: &Kind) -> Option<[f64; 2]> {
         Kind::Distance(a, b, _) | Kind::DistanceX(a, b, _) | Kind::DistanceY(a, b, _) => Some(mid(sk.pos(*a), sk.pos(*b))),
         Kind::PointLineDistance(p, l, _) => Some(mid(sk.pos(*p), foot(sk, *p, *l)?)),
         Kind::Radius(c, _) | Kind::Diameter(c, _) => center_of(sk, *c).map(|(c, _)| sk.pos(c)),
-        Kind::Angle(a, b, _) => angle_vertex(sk, *a, *b).map(|v| v.0),
+        Kind::Angle(a, b, _) | Kind::AngleSupp(a, b, _) => angle_vertex(sk, *a, *b).map(|v| v.0),
         Kind::LineAngle(l, _) => line_ends(sk, *l).map(|(a, _)| sk.pos(a)),
         _ => None,
     }
@@ -780,7 +807,7 @@ fn dim_text(sk: &SketchData, k: &Kind, reference: bool) -> String {
     let base = match k {
         Kind::Radius(..) => format!("R{}", fmt(val)),
         Kind::Diameter(..) => format!("Ø{}", fmt(val)),
-        Kind::Angle(..) | Kind::LineAngle(..) => format!("{}°", fmt(val)),
+        Kind::Angle(..) | Kind::AngleSupp(..) | Kind::LineAngle(..) => format!("{}°", fmt(val)),
         _ => fmt(val),
     };
     // cota de referência entre parênteses, como nos desenhos: só informa
@@ -883,16 +910,20 @@ fn draw_dim(painter: &egui::Painter, v: &View, sk: &SketchData, k: &Kind, label:
             arrow(sc, se);
             lpos.unwrap_or(out + d * 4.)
         }
-        Kind::Angle(l1, l2, _) => {
+        Kind::Angle(l1, l2, _) | Kind::AngleSupp(l1, l2, _) => {
             let (vtx, e1, e2) = angle_vertex(sk, *l1, *l2)?;
             let sv = v.to_screen(vtx);
-            let (a1, a2) = ((v.to_screen(e1) - sv).angle(), (v.to_screen(e2) - sv).angle());
+            let (mut a1, a2) = ((v.to_screen(e1) - sv).angle(), (v.to_screen(e2) - sv).angle());
             let mut da = a2 - a1;
             while da > std::f32::consts::PI {
                 da -= std::f32::consts::TAU;
             }
             while da < -std::f32::consts::PI {
                 da += std::f32::consts::TAU;
+            }
+            // com o texto posicionado, o arco fica no quadrante dele
+            if let Some(l) = lpos {
+                (a1, da) = crate::sketch_cota::setor(a1, a2, (l - sv).angle());
             }
             let ar = lpos.map(|l| (l - sv).length()).unwrap_or(34.).max(14.);
             let pts: Vec<Pos2> = (0..=24).map(|i| sv + egui::Vec2::angled(a1 + da * i as f32 / 24.) * ar).collect();
@@ -960,125 +991,6 @@ fn applicable(sk: &SketchData, sel: &[Ent]) -> Vec<CKind> {
 }
 
 /// Parâmetros (ao longo da linha a→b, 0..1 = dentro) onde a linha cruza as outras curvas.
-fn line_hits(sk: &SketchData, line: Id, a: [f64; 2], b: [f64; 2]) -> Vec<f64> {
-    let d = [b[0] - a[0], b[1] - a[1]];
-    let mut ts = vec![];
-    for c in &sk.curves {
-        if c.id == line {
-            continue;
-        }
-        match c.geom {
-            Curve::Spline { .. } => {}
-            Curve::Line { a: p, b: q } => {
-                let (pp, qq) = (sk.pos(p), sk.pos(q));
-                let e = [qq[0] - pp[0], qq[1] - pp[1]];
-                let den = d[0] * e[1] - d[1] * e[0];
-                if den.abs() < 1e-12 {
-                    continue;
-                }
-                let w = [pp[0] - a[0], pp[1] - a[1]];
-                let t = (w[0] * e[1] - w[1] * e[0]) / den;
-                let u = (w[0] * d[1] - w[1] * d[0]) / den;
-                if (-1e-9..=1. + 1e-9).contains(&u) {
-                    ts.push(t);
-                }
-            }
-            Curve::Circle { c: ctr, r } => ts.extend(circle_hits(a, d, sk.pos(ctr), r, None)),
-            Curve::Arc { c: ctr, s, e } => {
-                let (pc, ps, pe) = (sk.pos(ctr), sk.pos(s), sk.pos(e));
-                ts.extend(circle_hits(a, d, pc, d2(ps, pc), Some((ps, pe))));
-            }
-            Curve::Point { .. } => {}
-        }
-    }
-    ts
-}
-
-fn circle_hits(a: [f64; 2], d: [f64; 2], c: [f64; 2], r: f64, arc: Option<([f64; 2], [f64; 2])>) -> Vec<f64> {
-    let f = [a[0] - c[0], a[1] - c[1]];
-    let (qa, qb, qc) = (d[0] * d[0] + d[1] * d[1], 2. * (f[0] * d[0] + f[1] * d[1]), f[0] * f[0] + f[1] * f[1] - r * r);
-    let disc = qb * qb - 4. * qa * qc;
-    if disc < 0. || qa < 1e-18 {
-        return vec![];
-    }
-    let sq = disc.sqrt();
-    let mut out = vec![];
-    for t in [(-qb - sq) / (2. * qa), (-qb + sq) / (2. * qa)] {
-        let p = [a[0] + d[0] * t, a[1] + d[1] * t];
-        let ok = match arc {
-            None => true,
-            Some((s, e)) => {
-                let ang = |q: [f64; 2]| (q[1] - c[1]).atan2(q[0] - c[0]);
-                let norm = |x: f64| x.rem_euclid(std::f64::consts::TAU);
-                norm(ang(p) - ang(s)) <= norm(ang(e) - ang(s)) + 1e-9
-            }
-        };
-        if ok {
-            out.push(t);
-        }
-    }
-    out
-}
-
-/// Trecho da linha que o clique apara: parâmetros (0..1) entre os cortes vizinhos.
-fn trim_span(sk: &SketchData, line: Id, click: [f64; 2]) -> Option<(f64, f64)> {
-    let (a, b) = line_ends(sk, line)?;
-    let (pa, pb) = (sk.pos(a), sk.pos(b));
-    let d = [pb[0] - pa[0], pb[1] - pa[1]];
-    let l2 = d[0] * d[0] + d[1] * d[1];
-    let tc = ((click[0] - pa[0]) * d[0] + (click[1] - pa[1]) * d[1]) / l2.max(1e-18);
-    let cuts: Vec<f64> = line_hits(sk, line, pa, pb).into_iter().filter(|t| *t > 1e-6 && *t < 1. - 1e-6).collect();
-    Some((cuts.iter().copied().filter(|t| *t < tc).fold(0., f64::max), cuts.iter().copied().filter(|t| *t > tc).fold(1., f64::min)))
-}
-
-/// Aparar: corta a linha nas interseções e remove o trecho clicado.
-fn trim_line(sk: &mut SketchData, al: &mut impl FnMut() -> Id, line: Id, click: [f64; 2]) -> Result<(), &'static str> {
-    let Some(Curve::Line { a, b }) = sk.curve(line).map(|c| c.geom.clone()) else {
-        return Err("aparar funciona em linhas");
-    };
-    let (pa, pb) = (sk.pos(a), sk.pos(b));
-    let d = [pb[0] - pa[0], pb[1] - pa[1]];
-    let Some((lo, hi)) = trim_span(sk, line, click) else { return Err("aparar funciona em linhas") };
-    let at = |t: f64| [pa[0] + d[0] * t, pa[1] + d[1] * t];
-    let construction = sk.curve(line).is_some_and(|c| c.construction);
-    match (lo <= 0., hi >= 1.) {
-        (true, true) => {
-            sk.remove_curve(line);
-            sk.prune_constraints();
-        }
-        (true, false) => {
-            let q = at(hi);
-            let np = sk.add_point(al, q[0], q[1]);
-            set_line(sk, line, np, b);
-        }
-        (false, true) => {
-            let q = at(lo);
-            let np = sk.add_point(al, q[0], q[1]);
-            set_line(sk, line, a, np);
-        }
-        (false, false) => {
-            let (q1, q2) = (at(lo), at(hi));
-            let n1 = sk.add_point(al, q1[0], q1[1]);
-            let n2 = sk.add_point(al, q2[0], q2[1]);
-            set_line(sk, line, a, n1);
-            sk.add_curve(al, Curve::Line { a: n2, b }, construction);
-        }
-    }
-    Ok(())
-}
-
-fn set_line(sk: &mut SketchData, line: Id, a: Id, b: Id) {
-    if let Some(c) = sk.curves.iter_mut().find(|c| c.id == line) {
-        c.geom = Curve::Line { a, b };
-    }
-    // cotas de comprimento da linha antiga não valem mais
-    sk.constraints.retain(|k| !matches!(k.kind, Kind::Length(l, _) if l == line));
-    // pontos que ficaram soltos somem (os fixos ficam)
-    let used: std::collections::HashSet<Id> = sk.curves.iter().flat_map(|c| SketchData::curve_points(&c.geom)).collect();
-    sk.points.retain(|p| p.fixed || used.contains(&p.id));
-    sk.prune_constraints();
-}
-
 /// Traz referências (pontos, curvas, superfícies — inclusive links de outras peças) e curvas de
 /// outros sketches para este sketch, associativas: a geometria acompanha a origem.
 fn project_ui(app: &mut App, ui: &mut egui::Ui) {
@@ -1111,7 +1023,7 @@ fn project_ui(app: &mut App, ui: &mut egui::Ui) {
         }
         for (id, n, inter) in &refs {
             if ui.button(n).clicked() {
-                chosen = crate::sketch_ext::world(r, &crate::picking::Pick::Geo(*id), *inter, &f).map(|x| (x, *inter));
+                chosen = crate::sketch_ext::world(&app.open.doc, r, &crate::picking::Pick::Geo(*id), *inter, &f).map(|x| (x, *inter));
             }
         }
         if !others.is_empty() {
@@ -1130,7 +1042,7 @@ fn project_ui(app: &mut App, ui: &mut egui::Ui) {
     let mut items: Vec<(crate::sketch_ext::External, bool)> = chosen.into_iter().collect();
     if let Some(s) = chosen_sketch {
         for (cid, pts) in crate::sketch_ext::sketch_curves(&app.open.doc, r, s) {
-            items.push((crate::sketch_ext::External { src: LinkSrc::SketchCurve { sketch: s, curve: cid }, pts, isolated: false }, false));
+            items.push((crate::sketch_ext::External::line(LinkSrc::SketchCurve { sketch: s, curve: cid }, pts), false));
         }
     }
     if items.is_empty() {
@@ -1150,29 +1062,6 @@ fn project_ui(app: &mut App, ui: &mut egui::Ui) {
     app.open.doc.reserve_ids(n);
 }
 
-/// Estender: a ponta mais perto do clique vai até a próxima curva na direção da linha.
-fn extend_line(sk: &mut SketchData, al: &mut impl FnMut() -> Id, line: Id, click: [f64; 2]) -> Result<(), &'static str> {
-    let Some(Curve::Line { a, b }) = sk.curve(line).map(|c| c.geom.clone()) else {
-        return Err("estender funciona em linhas");
-    };
-    let (pa, pb) = (sk.pos(a), sk.pos(b));
-    let at_b = d2(click, pb) < d2(click, pa);
-    let d = [pb[0] - pa[0], pb[1] - pa[1]];
-    let hits = line_hits(sk, line, pa, pb);
-    let t = if at_b { hits.into_iter().filter(|t| *t > 1. + 1e-6).fold(f64::MAX, f64::min) } else { hits.into_iter().filter(|t| *t < -1e-6).fold(f64::MIN, f64::max) };
-    if !t.is_finite() || t.abs() > 1e8 {
-        return Err("não há curva na direção da linha para estender até ela");
-    }
-    let q = [pa[0] + d[0] * t, pa[1] + d[1] * t];
-    let np = sk.add_point(al, q[0], q[1]);
-    if at_b {
-        set_line(sk, line, a, np);
-    } else {
-        set_line(sk, line, np, b);
-    }
-    Ok(())
-}
-
 /// Remove a seleção do sketch.
 pub fn delete_selection(sk: &mut SketchData, sel: &[Ent]) {
     delete_selection_raw(sk, sel);
@@ -1181,6 +1070,8 @@ pub fn delete_selection(sk: &mut SketchData, sel: &[Ent]) {
     sk.links.retain(|l| match &l.shape {
         fenkra_core::sketch::LinkShape::Poly { points, .. } => points.iter().all(|p| ids.contains(p)),
         fenkra_core::sketch::LinkShape::Circle { center, .. } => ids.contains(center),
+        fenkra_core::sketch::LinkShape::Line { a, b, .. } => ids.contains(a) && ids.contains(b),
+        fenkra_core::sketch::LinkShape::Arc { center, s, e, .. } | fenkra_core::sketch::LinkShape::Ellipse { center, s, e, .. } => [center, s, e].iter().all(|p| ids.contains(p)),
     });
 }
 
@@ -1302,7 +1193,7 @@ fn build_shape(sk: &mut SketchData, al: &mut impl FnMut() -> Id, tool: Tool, cl:
                     let r = d2(c[0], c[1]);
                     let e = c[2];
                     let de = d2(e, c[0]).max(1e-9);
-                    ends[1] = Snap { uv: [c[0][0] + (e[0] - c[0][0]) * r / de, c[0][1] + (e[1] - c[0][1]) * r / de], point: None, origin: false };
+                    ends[1] = Snap::livre([c[0][0] + (e[0] - c[0][0]) * r / de, c[0][1] + (e[1] - c[0][1]) * r / de]);
                 }
                 let ps = point_for(sk, al, ends[0]);
                 let pe = point_for(sk, al, ends[1]);
@@ -1385,6 +1276,9 @@ fn clone_curves(sk: &mut SketchData, al: &mut impl FnMut() -> Id, curves: &[Id],
                 Curve::Arc { c, s, e } => Curve::Arc { c: m(c), s: m(s), e: m(e) },
                 Curve::Point { p } => Curve::Point { p: m(p) },
                 Curve::Spline { ref pts } => Curve::Spline { pts: pts.iter().map(|x| m(*x)).collect() },
+                // o eixo da elipse é um vetor, que os pontos não levam: espelhar pede a origem dela
+                Curve::Ellipse { .. } if flip => continue,
+                Curve::Ellipse { c, s, e, major, minor, t0, t1 } => Curve::Ellipse { c: m(c), s: m(s), e: m(e), major, minor, t0, t1 },
             };
             sk.add_curve(al, g, cv.construction);
         }
@@ -1491,6 +1385,50 @@ fn corner_da_selecao(sk: &SketchData, sel: &[Ent]) -> Option<Id> {
     let (a1, b1) = line_ends(sk, *c1)?;
     let (a2, b2) = line_ends(sk, *c2)?;
     [a1, b1].into_iter().find(|p| (*p == a2 || *p == b2) && lines_at(sk, *p).len() == 2)
+}
+
+/// Filete ou chanfro em vários cantos, com o mesmo valor. O primeiro leva a cota; os outros ficam
+/// iguais a ele por restrição, então editar uma cota muda a cadeia toda. `base`: a cota que já existe
+/// e comanda os novos. Canto em que o valor não cabe fica como estava. Devolve a cota e os que sobraram.
+fn corners_em_lote(sk: &mut SketchData, al: &mut impl FnMut() -> Id, cantos: &[Id], chamfer: bool, valor: Option<f64>, base: Option<Id>) -> Result<(Id, usize), &'static str> {
+    let faz = |sk: &mut SketchData, al: &mut dyn FnMut() -> Id, p: Id, v: Option<f64>| {
+        let mut al = al;
+        if chamfer {
+            chamfer_corner(sk, &mut al, p, v)
+        } else {
+            fillet_corner(sk, &mut al, p, v)
+        }
+    };
+    let (dim, resto) = match base {
+        Some(d) => (d, cantos),
+        None => {
+            let (p, r) = cantos.split_first().ok_or("não há canto entre duas linhas na seleção")?;
+            (faz(sk, al, *p, valor)?, r)
+        }
+    };
+    let cota = |sk: &SketchData, id: Id| sk.constraints.iter().find(|x| x.id == id).map(|x| x.kind.clone());
+    let curva_da = |k: &Kind| match k {
+        Kind::Radius(c, _) | Kind::Length(c, _) => Some(*c),
+        _ => None,
+    };
+    let k0 = cota(sk, dim).ok_or("a cota do canto sumiu")?;
+    let (Some(medida), Some(mestre)) = (sk.measure(&k0), curva_da(&k0)) else { return Err("a cota do canto sumiu") };
+    let mut sobra = 0;
+    for p in resto {
+        // tenta numa cópia: `corner_setback` encolhe o valor que não cabe, e aqui ele tem de ser igual
+        let mut g = sk.clone();
+        let feito = faz(&mut g, al, *p, Some(medida)).ok().and_then(|id| Some((id, cota(&g, id)?)));
+        match feito {
+            Some((id, k)) if g.measure(&k).is_some_and(|m| (m - medida).abs() < 1e-6) => {
+                let Some(c) = curva_da(&k) else { continue };
+                g.constraints.retain(|x| x.id != id);
+                g.add_constraint(al, Kind::Equal(mestre, c));
+                *sk = g;
+            }
+            _ => sobra += 1,
+        }
+    }
+    Ok((dim, sobra))
 }
 
 /// Recuo do canto nas duas linhas. Limitado para sobrar linha: um valor repetido de um canto maior
@@ -1868,17 +1806,18 @@ pub(crate) fn edit_hint(tool: Tool, no_curves: bool, nothing_selected: bool, cli
         (Tool::Move | Tool::Copy, false, _) => "destino",
         (Tool::Mirror, true, _) => "selecione as curvas a espelhar",
         (Tool::Mirror, false, _) => "clique na linha de simetria",
-        (Tool::Offset, _, _) if nothing_selected => "clique na curva",
+        (Tool::Offset, _, _) if nothing_selected => "clique na curva; duplo clique pega a cadeia",
         (Tool::Offset, _, _) => "clique onde a paralela deve passar",
-        (Tool::Fillet | Tool::Chamfer, _, _) => "clique no canto, ou numa linha perto dele",
+        (Tool::Fillet | Tool::Chamfer, _, _) => "clique no canto, ou numa linha perto dele; duplo clique faz a cadeia",
         _ => "",
     }
 }
 
 /// Pontos da curva no plano do sketch, para desenhar.
-fn curve_uv(sk: &SketchData, c: &fenkra_core::sketch::SkCurve) -> Vec<[f64; 2]> {
+pub(crate) fn curve_uv(sk: &SketchData, c: &fenkra_core::sketch::SkCurve) -> Vec<[f64; 2]> {
     match c.geom {
         Curve::Spline { .. } => fenkra_core::sketch::spline_samples(&sk.spline_uv(c.id), 12),
+        Curve::Ellipse { c: ctr, major, minor, t0, t1, .. } => fenkra_core::projecao::elipse_amostras(sk.pos(ctr), major, minor, t0, t1),
         Curve::Line { a, b } => vec![sk.pos(a), sk.pos(b)],
         Curve::Circle { c: ctr, r } => {
             let cc = sk.pos(ctr);
@@ -2139,6 +2078,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             Some(Curve::Arc { c, s, e }) => SketchData::arc_mid(sk.pos(*c), sk.pos(*s), sk.pos(*e)),
             Some(Curve::Point { p }) => sk.pos(*p),
             Some(Curve::Spline { pts }) => pts.get(pts.len() / 2).map(|p| sk.pos(*p)).unwrap_or([0., 0.]),
+            Some(Curve::Ellipse { c, major, minor, t0, t1, .. }) => fenkra_core::projecao::elipse_em(sk.pos(*c), *major, *minor, (t0 + t1) / 2.),
             None => [0., 0.],
         }
     };
@@ -2223,6 +2163,31 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
     let hover = resp.hover_pos();
     let mut cursor_uv = hover.and_then(|p| v.to_uv(p));
 
+    // curva mais perto do cursor, sem olhar os pontos: relimitar age na curva mesmo junto à ponta
+    let pick_curve = |pos: Pos2, sk: &SketchData| -> Option<(f32, Id)> {
+        let mut best: Option<(f32, Id)> = None;
+        for c in &sk.curves {
+            let d = match c.geom {
+                Curve::Line { a, b } => seg_dist(pos, v.to_screen(sk.pos(a)), v.to_screen(sk.pos(b))),
+                Curve::Circle { c: ctr, r } => ((pos - v.to_screen(sk.pos(ctr))).length() - r as f32 * ppm).abs(),
+                // só o trecho que existe: o resto do círculo do arco é vazio
+                Curve::Arc { c: ctr, s, .. } => match v.to_uv(pos).zip(crate::sketch_relimita::traco(sk, c.id)) {
+                    Some((q, t)) if t.param(q) <= 1. => ((pos - v.to_screen(sk.pos(ctr))).length() - d2(sk.pos(s), sk.pos(ctr)) as f32 * ppm).abs(),
+                    _ => f32::MAX,
+                },
+                Curve::Point { .. } => f32::MAX,
+                Curve::Spline { .. } | Curve::Ellipse { .. } => {
+                    let s = curve_uv(sk, c);
+                    s.windows(2).map(|w| seg_dist(pos, v.to_screen(w[0]), v.to_screen(w[1]))).fold(f32::MAX, f32::min)
+                }
+            };
+            if d < 7. && best.is_none_or(|(bd, _)| d < bd) {
+                best = Some((d, c.id));
+            }
+        }
+        best
+    };
+
     // pick: pontos > rótulos > curvas
     let pick = |pos: Pos2, sk: &SketchData, hits: &[(Rect, Ent)]| -> Option<Ent> {
         let mut best: Option<(f32, Ent)> = None;
@@ -2238,36 +2203,22 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         if let Some((_, e)) = hits.iter().rev().find(|(r, _)| r.contains(pos)) {
             return Some(*e);
         }
-        for c in &sk.curves {
-            let d = match c.geom {
-                Curve::Line { a, b } => seg_dist(pos, v.to_screen(sk.pos(a)), v.to_screen(sk.pos(b))),
-                Curve::Circle { c: ctr, r } => ((pos - v.to_screen(sk.pos(ctr))).length() - r as f32 * ppm).abs(),
-                Curve::Arc { c: ctr, s, .. } => ((pos - v.to_screen(sk.pos(ctr))).length() - d2(sk.pos(s), sk.pos(ctr)) as f32 * ppm).abs(),
-                Curve::Point { .. } => f32::MAX,
-                Curve::Spline { .. } => {
-                    let s = fenkra_core::sketch::spline_samples(&sk.spline_uv(c.id), 10);
-                    s.windows(2).map(|w| seg_dist(pos, v.to_screen(w[0]), v.to_screen(w[1]))).fold(f32::MAX, f32::min)
-                }
-            };
-            if d < 7. && best.is_none_or(|(bd, _)| d < bd) {
-                best = Some((d, Ent::Cv(c.id)));
-            }
-        }
-        best.map(|b| b.1)
+        pick_curve(pos, sk).map(|(_, c)| Ent::Cv(c))
     };
 
-    let snap_at = |pos: Pos2, sk: &SketchData, exclude: &[Id]| -> Option<Snap> {
+    let snap_at = |pos: Pos2, sk: &SketchData, exclude: &[Id], sem_curvas: &[Id]| -> Option<Snap> {
         let uv = v.to_uv(pos)?;
-        for p in &sk.points {
-            if exclude.contains(&p.id) {
-                continue;
-            }
-            if (v.to_screen([p.x, p.y]) - pos).length() < 10. {
-                return Some(Snap { uv: [p.x, p.y], point: Some(p.id), origin: false });
-            }
+        let achado = crate::sketch_snap::achar(sk, pos, uv, &|q| v.to_screen(q), exclude, sem_curvas, settings.snaps);
+        let de = |a: crate::sketch_snap::Achado| Snap { uv: a.uv, point: a.ponto, origin: false, tipo: a.tipo, apoio: a.curvas, vincula: settings.auto_constraints };
+        // ponto que já existe vence; a origem vence o que seria um ponto novo
+        if let Some(a) = achado.filter(|a| a.ponto.is_some()) {
+            return Some(de(a));
         }
         if settings.snaps && (v.to_screen([0., 0.]) - pos).length() < 10. {
-            return Some(Snap { uv: [0., 0.], point: None, origin: true });
+            return Some(Snap { origin: true, tipo: TipoSnap::Origem, ..Snap::livre([0., 0.]) });
+        }
+        if let Some(a) = achado {
+            return Some(de(a));
         }
         if settings.snaps && settings.grid {
             let step = {
@@ -2279,10 +2230,10 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             };
             let g = [(uv[0] / step).round() * step, (uv[1] / step).round() * step];
             if (v.to_screen(g) - pos).length() < 7. {
-                return Some(Snap { uv: g, point: None, origin: false });
+                return Some(Snap { tipo: TipoSnap::Grade, ..Snap::livre(g) });
             }
         }
-        Some(Snap { uv, point: None, origin: false })
+        Some(Snap::livre(uv))
     };
 
     let mut al_ids: Vec<Id> = vec![];
@@ -2296,19 +2247,34 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
     };
 
     let tool = edit.tool;
-    let mut cur_snap = hover.and_then(|p| {
-        let excl: Vec<Id> = edit.drag.as_ref().map(|d| d.pts.iter().map(|x| x.0).collect()).unwrap_or_default();
-        snap_at(p, &sk, &excl)
+    // o que se arrasta não se apoia em si mesmo: nem nas suas curvas, nem nas outras pontas delas
+    let (sem_pontos, sem_curvas) = edit.drag.as_ref().map_or((vec![], vec![]), |d| {
+        let movidos: Vec<Id> = d.pts.iter().map(|x| x.0).collect();
+        let curvas: Vec<&fenkra_core::sketch::SkCurve> = sk.curves.iter().filter(|c| d.circle == Some(c.id) || SketchData::curve_points(&c.geom).iter().any(|p| movidos.contains(p))).collect();
+        (curvas.iter().flat_map(|c| SketchData::curve_points(&c.geom)).chain(movidos.iter().copied()).collect(), curvas.iter().map(|c| c.id).collect())
     });
+    let mut cur_snap = hover.and_then(|p| snap_at(p, &sk, &sem_pontos, &sem_curvas));
 
-    // destaque do snap
-    if let (Some(s), true) = (cur_snap, tool != Tool::Select) {
-        let sp = v.to_screen(s.uv);
-        if s.point.is_some() || s.origin {
-            painter.circle_stroke(sp, 7., Stroke::new(1.6, SEL));
-        } else {
-            painter.circle_filled(sp, 2.5, SEL);
+    // ---------- inferência: enquanto se desenha, sem apoio mais forte, o cursor procura alinhamentos
+    let desenha = matches!(tool, Tool::Line | Tool::Rect | Tool::RectCenter | Tool::Circle | Tool::Circle3 | Tool::Arc3 | Tool::ArcCenter | Tool::Slot | Tool::Polygon | Tool::Point | Tool::Spline);
+    let mut direcao_inferida = None;
+    if let (true, false, true, Some(uv)) = (desenha, ctrl, settings.snaps, hover.and_then(|p| v.to_uv(p))) {
+        if cur_snap.is_some_and(|s| matches!(s.tipo, TipoSnap::Livre | TipoSnap::Grade)) {
+            let ancora = if tool == Tool::Line { edit.chain_last.map(|p| sk.pos(p)) } else { edit.clicks.last().map(|c| c.uv) };
+            let anterior = edit.chain_last.filter(|_| tool == Tool::Line).and_then(|p| if let [l] = lines_at(&sk, p)[..] { Some(l.0) } else { None });
+            let inf = crate::sketch_snap::inferir(&sk, uv, ancora, anterior, 6. / ppm as f64, &[]);
+            if !inf.linhas.is_empty() {
+                crate::sketch_snap::desenha_inferencia(&painter, &|q| v.to_screen(q), &inf, FREE);
+                cur_snap = Some(Snap::livre(inf.uv));
+                cursor_uv = Some(inf.uv);
+                direcao_inferida = inf.direcao;
+            }
         }
+    }
+
+    // glifo do snap, antes do clique e também ao arrastar com Selecionar
+    if let (Some(s), true) = (cur_snap, desenha || matches!(tool, Tool::Move | Tool::Copy) || edit.drag.is_some()) {
+        crate::sketch_snap::desenha_glifo(&painter, v.to_screen(s.uv), s.tipo, SEL);
     }
 
     // ---------- spline: pontos de inflexão e alças de tangência (Bézier)
@@ -2372,14 +2338,19 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         Tool::Line => edit.chain_last.map(|p| vec![sk.pos(p)]).unwrap_or_default(),
         _ => edit.clicks.iter().map(|c| c.uv).collect(),
     };
-    let offset_of = match edit.sel.as_slice() {
-        [Ent::Cv(c)] if tool == Tool::Offset => Some(*c),
-        _ => None,
-    };
     if let Some(s) = cur_snap {
         edit.last_uv = Some(s.uv);
     }
     let raw = cur_snap.map(|s| s.uv).or(edit.last_uv);
+    // na cadeia, o campo mede a distância até a curva mais perto do cursor
+    let offset_of = match edit.sel.as_slice() {
+        [Ent::Cv(c)] if tool == Tool::Offset => Some(*c),
+        s if tool == Tool::Offset && s.len() > 1 => {
+            let curvas: Vec<Id> = s.iter().filter_map(|e| if let Ent::Cv(c) = e { Some(*c) } else { None }).collect();
+            raw.and_then(|m| crate::sketch_cadeia::mais_perto(&sk, &curvas, m))
+        }
+        _ => None,
+    };
     let fields_at = |uv: [f64; 2], sk: &SketchData| -> Vec<Measure> {
         match offset_of {
             Some(c) => offset_field(sk, c, uv).map(|value| Measure { label: "distância", angle: false, value, at: uv }).into_iter().collect(),
@@ -2427,8 +2398,9 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                 (Some(c), Some(d)) => offset_lock(&sk, c, m, d),
                 _ => lock_cursor(tool, &stage, m, &locks),
             };
-            cur_snap = Some(Snap { uv: at, point: None, origin: false });
+            cur_snap = Some(Snap::livre(at));
             cursor_uv = Some(at);
+            direcao_inferida = None;
         }
         let pos = hover.unwrap_or(v.to_screen(at)) + egui::vec2(14., 30.);
         draw_fields(&painter, pos, &edit.entry, &fields_at(at, &sk), &vars, ui.visuals());
@@ -2457,14 +2429,41 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                         Some(Curve::Circle { .. }) => edit.drag = Some(Drag { pts: vec![], start, circle: Some(c) }),
                         _ => {}
                     },
+                    None => edit.janela = Some(origin),
                     _ => {}
                 }
+            }
+            // janela para a direita pega o que está dentro; para a esquerda, também o que ela toca
+            if let (Some(ini), Some(fim)) = (edit.janela, hover.or(ui.input(|i| i.pointer.latest_pos()))) {
+                let r = Rect::from_two_pos(ini, fim);
+                let cruzada = crate::sketch_cadeia::e_cruzada(ini, fim);
+                painter.rect_filled(r, 0., SEL.gamma_multiply(0.08));
+                let borda: Vec<Pos2> = vec![r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom(), r.left_top()];
+                if cruzada {
+                    painter.extend(egui::Shape::dashed_line(&borda, Stroke::new(1., SEL), 6., 4.));
+                } else {
+                    painter.add(egui::Shape::line(borda, Stroke::new(1., SEL)));
+                }
+                if resp.drag_stopped() {
+                    let achados = crate::sketch_cadeia::na_janela(&sk, &|q| v.to_screen(q), r, cruzada);
+                    if !shift {
+                        edit.sel.clear();
+                    }
+                    for e in achados {
+                        if !edit.sel.contains(&e) {
+                            edit.sel.push(e);
+                        }
+                    }
+                    edit.janela = None;
+                }
+            } else if resp.drag_stopped() {
+                edit.janela = None;
             }
             if let (Some(d), true, Some(uv)) = (&edit.drag, resp.dragged_by(egui::PointerButton::Primary), cursor_uv) {
                 let delta = [uv[0] - d.start[0], uv[1] - d.start[1]];
                 let mut pins = vec![];
                 if d.pts.len() == 1 {
-                    let target = cur_snap.filter(|s| s.point.is_none()).map(|s| s.uv).unwrap_or(uv);
+                    let target = cur_snap.map(|s| s.uv).unwrap_or(uv);
                     if let Some(p) = sk.point_mut(d.pts[0].0) {
                         p.x = target[0];
                         p.y = target[1];
@@ -2494,13 +2493,26 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             }
             if let (Some(cid), true, Some(uv)) = (edit.drag_label, resp.dragged_by(egui::PointerButton::Primary), cursor_uv) {
                 let anchor = sk.constraints.iter().find(|x| x.id == cid).and_then(|x| dim_anchor(&sk, &x.kind));
+                // arrastar para outro lado troca o que a cota mede: raio e diâmetro, ângulo e suplemento
+                let outra = sk.constraints.iter().find(|x| x.id == cid).and_then(|x| crate::sketch_cota::pelo_cursor(&sk, &x.kind, uv));
                 if let (Some(a), Some(c)) = (anchor, sk.constraints.iter_mut().find(|x| x.id == cid)) {
                     c.label = Some([uv[0] - a[0], uv[1] - a[1]]);
+                    if let Some(k) = outra {
+                        c.kind = k;
+                    }
                 }
             }
             if resp.drag_stopped() {
                 edit.drag_label = None;
-                if edit.drag.take().is_some() {
+                if let Some(d) = edit.drag.take() {
+                    // o que o glifo prometeu: juntar ao ponto, ou guardar o apoio como restrição
+                    if let ([(p, _)], Some(s)) = (d.pts.as_slice(), cur_snap) {
+                        match s.point {
+                            Some(q) => sk.merge_points(*p, q),
+                            None if s.vincula => crate::sketch_snap::vincula(&mut sk, &mut al, *p, s.tipo, s.apoio),
+                            None => {}
+                        }
+                    }
                     edit.report = sk.solve(&vars, &[]);
                 }
             }
@@ -2525,6 +2537,17 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                             }
                         } else {
                             edit.sel = vec![e];
+                        }
+                        if let (true, Ent::Cv(c)) = (double, e) {
+                            // duplo clique: a cadeia inteira; com Shift, soma à seleção
+                            if !shift {
+                                edit.sel.clear();
+                            }
+                            for k in crate::sketch_cadeia::cadeia(&sk, c).curvas() {
+                                if !edit.sel.contains(&Ent::Cv(k)) {
+                                    edit.sel.push(Ent::Cv(k));
+                                }
+                            }
                         }
                         if double {
                             if let Ent::Cs(c) = e {
@@ -2562,7 +2585,13 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                             edit.chain_last = Some(p);
                         }
                         Some(last) if last != p => {
-                            add_segment(&mut sk, &mut al, last, p, edit.construction, settings.auto_constraints, settings.auto_dims);
+                            let nova = add_segment(&mut sk, &mut al, last, p, edit.construction, settings.auto_constraints, settings.auto_dims);
+                            // a inferência escolhida vira restrição, se a linha não ficou horizontal ou vertical
+                            let reta = sk.constraints.iter().any(|k| matches!(k.kind, Kind::Horizontal(l) | Kind::Vertical(l) if l == nova));
+                            if let (true, false, Some((base, m))) = (settings.auto_constraints, reta, direcao_inferida) {
+                                let k = if m == crate::sketch_snap::Motivo::Perpendicular { Kind::Perpendicular(base, nova) } else { Kind::Parallel(base, nova) };
+                                sk.add_constraint(&mut al, k);
+                            }
                             if Some(p) == edit.chain_first {
                                 edit.chain_last = None;
                                 edit.chain_first = None;
@@ -2666,8 +2695,10 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                 let filt = crate::picking::Filter { faces: intersect, edges: true, vertices: !intersect, planes: true, hidden_env: false, exclude_sketch: Some(edit.feature), fantasma: None };
                 if let Some(p) = crate::picking::pick(r, &app.open.doc, &v.cam, rect, h, &filt) {
                     crate::picking::draw(&painter, r, &v.cam, rect, &p, false);
-                    painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, p.label(&app.open.doc), egui::FontId::proportional(11.), FREE);
-                    let made = crate::sketch_ext::world(r, &p, intersect, &v.f);
+                    let made = crate::sketch_ext::world(&app.open.doc, r, &p, intersect, &v.f);
+                    // a dica diz a forma exata que vai nascer
+                    let forma = made.as_ref().and_then(|x| x.forma(&v.f)).map_or(String::new(), |n| format!(" → {}", tr(n)));
+                    painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, format!("{}{forma}", p.label(&app.open.doc)), egui::FontId::proportional(11.), FREE);
                     // fantasma do que vai nascer no plano, não só da origem
                     if let Some(x) = &made {
                         let uv = crate::sketch_ext::to_uv(&v.f, &x.pts);
@@ -2691,43 +2722,71 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             }
         }
         Tool::Trim | Tool::Extend => {
-            let mut over = hover.and_then(|p| pick(p, &sk, &edit.hits));
+            use crate::sketch_relimita as rl;
+            // Shift segurado troca aparar e estender; a curva vale até junto da ponta
+            let modo = rl::efetiva(tool, shift);
+            let mut over = hover.and_then(|p| pick_curve(p, &sk)).map(|x| x.1);
             // seleção prévia: só as curvas escolhidas antes valem; o resto é recusado com o motivo
             let previa: Vec<Id> = edit.sel.iter().filter_map(|e| if let Ent::Cv(c) = e { Some(*c) } else { None }).collect();
             let mut fora = false;
-            if let (Some(Ent::Cv(c)), false) = (over, previa.is_empty()) {
+            if let (Some(c), false) = (over, previa.is_empty()) {
                 if !previa.contains(&c) {
                     over = None;
                     fora = true;
                 }
             }
+            let mut recusa: Option<&'static str> = None;
+            if let (Some(c), Some(uv)) = (over, cursor_uv) {
+                if modo == Tool::Trim {
+                    if let Some(plano) = rl::plano_aparar(&sk, c, uv) {
+                        // o que sai, tracejado em vermelho; os cortes da curva, e cheios os que limitam
+                        let linha: Vec<Pos2> = plano.sai.iter().map(|q| v.to_screen(*q)).collect();
+                        painter.extend(egui::Shape::dashed_line(&linha, Stroke::new(2.5, BAD), 6., 4.));
+                        for q in &plano.cortes {
+                            painter.circle_stroke(v.to_screen(*q), 5., Stroke::new(1.5, BAD));
+                        }
+                        for k in &plano.limites {
+                            painter.circle_filled(v.to_screen(k.p), 3.5, BAD);
+                        }
+                    } else {
+                        recusa = Some("esse elemento não tem trecho para aparar");
+                    }
+                } else {
+                    match rl::plano_estender(&sk, c, uv) {
+                        Ok(plano) => {
+                            draw_ghost_uv(&painter, &v, &plano.novo, false);
+                            painter.circle_stroke(v.to_screen(plano.destino), 5., Stroke::new(1.5, FREE));
+                            painter.circle_filled(v.to_screen(sk.pos(plano.ponta)), 3.5, FREE);
+                        }
+                        Err(m) => recusa = Some(m),
+                    }
+                }
+            }
+            if fora || recusa.is_some() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::NotAllowed);
+            }
+            match rl::gesto(over.is_some(), fora, primary_click, secondary_click) {
+                rl::Gesto::Encerrar => edit.set_tool(Tool::Select),
+                rl::Gesto::Agir => {
+                    if let (Some(c), Some(uv)) = (over, cursor_uv) {
+                        let r = if modo == Tool::Trim { rl::aparar(&mut sk, &mut al, c, uv) } else { rl::estender(&mut sk, &mut al, c, uv) };
+                        match r {
+                            Ok(()) => edit.report = sk.solve(&vars, &[]),
+                            Err(m) => toast = Some((m.to_string(), true)),
+                        }
+                    }
+                }
+                rl::Gesto::Nada => {}
+            }
             if fora && primary_click {
                 toast = Some((crate::sketch_fluxo::FORA_DA_SELECAO.to_string(), true));
             }
-            if let (Some(Ent::Cv(c)), Some(uv)) = (over, cursor_uv) {
-                if tool == Tool::Trim {
-                    // o trecho que sai, tracejado em vermelho
-                    if let (Some((lo, hi)), Some((a, b))) = (trim_span(&sk, c, uv), line_ends(&sk, c)) {
-                        let (pa, pb) = (sk.pos(a), sk.pos(b));
-                        let at = |t: f64| v.to_screen([pa[0] + (pb[0] - pa[0]) * t, pa[1] + (pb[1] - pa[1]) * t]);
-                        painter.extend(egui::Shape::dashed_line(&[at(lo), at(hi)], Stroke::new(2.5, BAD), 6., 4.));
-                    }
-                } else {
-                    let mut g = sk.clone();
-                    if extend_line(&mut g, &mut ghost_ids(), c, uv).is_ok() {
-                        draw_ghost(&painter, &v, &sk, &g);
-                    }
-                }
-                if primary_click {
-                    let r = if tool == Tool::Trim { trim_line(&mut sk, &mut al, c, uv) } else { extend_line(&mut sk, &mut al, c, uv) };
-                    match r {
-                        Ok(()) => edit.report = sk.solve(&vars, &[]),
-                        Err(m) => toast = Some((m.to_string(), true)),
-                    }
-                }
-            }
             if let Some(h) = hover {
-                let (hint, col) = if fora { (tr(crate::sketch_fluxo::FORA_DA_SELECAO).to_string(), BAD) } else { (edit.dica_passo(), FREE) };
+                let (hint, col) = match (fora, recusa) {
+                    (true, _) => (tr(crate::sketch_fluxo::FORA_DA_SELECAO).to_string(), BAD),
+                    (_, Some(m)) => (tr(m).to_string(), BAD),
+                    _ => (crate::sketch_fluxo::dica(modo, 0, None, false, !edit.sel.is_empty()), FREE),
+                };
                 painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, hint, egui::FontId::proportional(11.), col);
             }
         }
@@ -2791,9 +2850,34 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                     }
                 }
                 Tool::Offset => {
-                    if edit.sel.is_empty() {
+                    if let (true, Some(Ent::Cv(c))) = (double, over) {
+                        // duplo clique: a cadeia inteira vira o alvo do offset
+                        edit.sel = crate::sketch_cadeia::cadeia(&sk, c).curvas().into_iter().map(Ent::Cv).collect();
+                    } else if edit.sel.is_empty() {
                         if let Some(Ent::Cv(c)) = picked {
                             edit.sel = vec![Ent::Cv(c)];
+                        }
+                    } else if let (Some(uv), true) = (cursor_uv, sel_curves.len() > 1) {
+                        use crate::sketch_cadeia as ca;
+                        match ca::caminho_das(&sk, &sel_curves) {
+                            None => refusal = Some("a seleção não forma uma cadeia"),
+                            Some(cam) => {
+                                let d = ca::lado_e_distancia(&sk, &cam, uv).unwrap_or(0.);
+                                let mut g = sk.clone();
+                                match ca::offset_caminho(&mut g, &mut ghost_ids(), &cam, d, edit.construction) {
+                                    Ok(_) => {
+                                        draw_ghost(&painter, &v, &sk, &g);
+                                        if let Some(h) = hover {
+                                            draw_tag(&painter, h + egui::vec2(0., -14.), format!("{} {}", tr("distância"), fmt(d.abs())), dark);
+                                        }
+                                        if primary_click && ca::offset_caminho(&mut sk, &mut al, &cam, d, edit.construction).is_ok() {
+                                            edit.sel.clear();
+                                            edit.report = sk.solve(&vars, &[]);
+                                        }
+                                    }
+                                    Err(m) => refusal = Some(m),
+                                }
+                            }
                         }
                     } else if let (Some(uv), [Ent::Cv(c)]) = (cursor_uv, edit.sel.clone().as_slice()) {
                         let mut g = sk.clone();
@@ -2828,15 +2912,43 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                         }
                     };
                     // seleção prévia: duas linhas que formam um canto viram o filete/chanfro de uma vez
-                    if let Some(p) = corner_da_selecao(&sk, &edit.sel) {
+                    // e a cadeia selecionada, todos os seus cantos de uma vez, com o mesmo valor
+                    let lote = match corner_da_selecao(&sk, &edit.sel) {
+                        Some(p) => vec![p],
+                        None => crate::sketch_cadeia::cantos(&sk, &sel_curves),
+                    };
+                    if !lote.is_empty() {
                         edit.sel.clear();
-                        match run(&mut sk, &mut al, p) {
-                            Ok(id) => {
+                        match corners_em_lote(&mut sk, &mut al, &lote, chamfer, last, None) {
+                            Ok((id, sobra)) => {
                                 edit.dim_edit = Some((id, String::new(), true));
                                 edit.round_dim = Some((id, chamfer));
                                 edit.report = sk.solve(&vars, &[]);
+                                if sobra > 0 {
+                                    toast = Some(("alguns cantos não comportam esse valor e ficaram como estavam".to_string(), true));
+                                }
                             }
                             Err(m) => toast = Some((m.to_string(), true)),
+                        }
+                    }
+                    // duplo clique: o 1º clique fez um canto; o 2º leva o mesmo valor ao resto da cadeia
+                    if let (true, Some(Ent::Cv(c))) = (double, over) {
+                        let resto = crate::sketch_cadeia::cantos(&sk, &crate::sketch_cadeia::cadeia(&sk, c).curvas());
+                        let base = edit.round_dim.filter(|x| x.1 == chamfer).map(|x| x.0);
+                        if !resto.is_empty() {
+                            match corners_em_lote(&mut sk, &mut al, &resto, chamfer, last, base) {
+                                Ok((id, sobra)) => {
+                                    if base.is_none() {
+                                        edit.dim_edit = Some((id, String::new(), true));
+                                        edit.round_dim = Some((id, chamfer));
+                                    }
+                                    edit.report = sk.solve(&vars, &[]);
+                                    if sobra > 0 {
+                                        toast = Some(("alguns cantos não comportam esse valor e ficaram como estavam".to_string(), true));
+                                    }
+                                }
+                                Err(m) => toast = Some((m.to_string(), true)),
+                            }
                         }
                     }
                     match over.zip(cursor_uv).and_then(|(e, uv)| corner_of(&sk, e, uv)) {
@@ -2849,7 +2961,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                                     if let (Some(d), Some(h)) = (k.and_then(|k| g.measure(&k)), hover) {
                                         draw_tag(&painter, h + egui::vec2(0., -14.), format!("{} {}", tr(if chamfer { "distância" } else { "raio" }), fmt(d)), dark);
                                     }
-                                    if primary_click {
+                                    if primary_click && !double {
                                         if let Ok(id) = run(&mut sk, &mut al, p) {
                                             edit.dim_edit = Some((id, String::new(), true));
                                             edit.round_dim = Some((id, chamfer));
@@ -3301,6 +3413,9 @@ pub fn keys(app: &mut App, ctx: &egui::Context) -> bool {
 /// Painel lateral do sketch em edição: limpo, mostra só o necessário para o passo atual.
 pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     let vars = app.vars();
+    if let Some(id) = app.sketch.as_ref().map(|e| e.feature) {
+        crate::sketch_vinculos::sincroniza(app, id);
+    }
     let Some(edit) = app.sketch.as_mut() else { return };
     let id = edit.feature;
     let name = app.open.doc.feature(id).map(|f| f.name.clone()).unwrap_or_default();
@@ -3333,6 +3448,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         return;
     }
     project_ui(app, ui);
+    crate::sketch_vinculos::painel(app, ui);
     let Some(edit) = app.sketch.as_mut() else { return };
     ui.separator();
     let sel = edit.sel.clone();
@@ -3378,6 +3494,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                             Curve::Arc { .. } => "Arco",
                             Curve::Point { .. } => "Ponto",
                             Curve::Spline { .. } => "Spline",
+                            Curve::Ellipse { .. } => "Elipse",
                         };
                         ui.horizontal(|ui| {
                             ui.label(RichText::new(kind).strong());
@@ -3478,28 +3595,9 @@ pub fn begin(app: &mut App, id: Id) {
     let prev = app.settings.ortho;
     let mut e = SketchEdit::new(id, prev);
     let vars = app.vars();
-    let (lp, lr) = app
-        .result
-        .as_ref()
-        .and_then(|r| r.sketches.iter().find(|v| v.feature == id))
-        .map(|v| (v.link_pts.clone(), v.link_r.clone()))
-        .unwrap_or_default();
-    if let Some(FeatureKind::Sketch(s)) = app.open.doc.feature_mut(id).map(|f| &mut f.kind) {
-        // a geometria externa vem na posição atual do 3D
-        for (p, q) in lp {
-            if let Some(pt) = s.data.point_mut(p) {
-                if (pt.x - q[0]).abs() > 1e-9 || (pt.y - q[1]).abs() > 1e-9 {
-                    (pt.x, pt.y) = (q[0], q[1]);
-                }
-            }
-        }
-        for (c, rr) in lr {
-            if let Some(Curve::Circle { r, .. }) = s.data.curves.iter_mut().find(|x| x.id == c).map(|x| &mut x.geom) {
-                if (*r - rr).abs() > 1e-9 {
-                    *r = rr;
-                }
-            }
-        }
+    // a geometria externa vem na posição atual do 3D
+    crate::sketch_vinculos::sincroniza(app, id);
+    if let Some(FeatureKind::Sketch(s)) = app.open.doc.feature(id).map(|f| &f.kind) {
         e.report = s.data.clone().solve(&vars, &[]);
     }
     app.sketch = Some(e);
@@ -3539,11 +3637,11 @@ mod tests {
         let d = sk.add_point(&mut al, 20., 10.);
         sk.add_curve(&mut al, Curve::Line { a: c, b: d }, false);
         // tira o trecho da direita (x > 0) da horizontal
-        trim_line(&mut sk, &mut al, h, [5., 0.]).unwrap();
+        crate::sketch_relimita::aparar(&mut sk, &mut al, h, [5., 0.]).unwrap();
         let Some(Curve::Line { a: ha, b: hb }) = sk.curve(h).map(|c| c.geom.clone()) else { panic!() };
         assert!((sk.pos(hb)[0] - 0.).abs() < 1e-9 && (sk.pos(ha)[0] + 10.).abs() < 1e-9);
         // estende de volta até a vertical em x = 20 (passa pela de x = 0? não: a ponta está em 0, vai até 20)
-        extend_line(&mut sk, &mut al, h, [0., 0.]).unwrap();
+        crate::sketch_relimita::estender(&mut sk, &mut al, h, [0., 0.]).unwrap();
         let Some(Curve::Line { b: hb, .. }) = sk.curve(h).map(|c| c.geom.clone()) else { panic!() };
         assert!((sk.pos(hb)[0] - 20.).abs() < 1e-9);
     }
@@ -3558,7 +3656,7 @@ mod tests {
     }
 
     fn snap(uv: [f64; 2]) -> Snap {
-        Snap { uv, point: None, origin: false }
+        Snap::livre(uv)
     }
 
     fn opts() -> Build {
@@ -3695,7 +3793,8 @@ mod tests {
         let mut al = ghost_ids();
         let (a, b) = (sk.add_point(&mut al, 0., -10.), sk.add_point(&mut al, 0., 10.));
         sk.add_curve(&mut al, Curve::Line { a, b }, false);
-        assert_eq!(trim_span(&sk, h, [5., 0.]), Some((0.5, 1.)));
+        let p = crate::sketch_relimita::plano_aparar(&sk, h, [5., 0.]).unwrap();
+        assert_eq!((p.lo, p.hi), (0.5, 1.));
     }
 
     fn digita(e: &mut ValueEntry, texto: &str, n: usize, vars: &HashMap<String, f64>) -> bool {
@@ -3855,6 +3954,63 @@ mod tests {
             assert_eq!(!e.sel.is_empty(), crate::sketch_fluxo::usa_selecao(t), "{t:?}");
             assert_eq!(e.pending.is_some(), crate::sketch_fluxo::cota(t), "{t:?}: a cota começa com a seleção prévia");
         }
+    }
+
+    #[test]
+    fn cota_de_circulo_e_de_angulo_seguem_o_cursor() {
+        let mut al = ids();
+        let mut sk = SketchData::default();
+        let c = sk.add_point(&mut al, 0., 0.);
+        let k = sk.add_curve(&mut al, Curve::Circle { c, r: 10. }, false);
+        let opts = dim_options(&sk, &[Ent::Cv(k)]);
+        assert!(matches!(choose_dim(&sk, &opts, Some([2., 0.]), (false, false)), Some(Kind::Radius(..))));
+        assert!(matches!(choose_dim(&sk, &opts, Some([20., 0.]), (false, false)), Some(Kind::Diameter(..))));
+        // a ferramenta de raio só tem o raio: fora do círculo ele continua raio
+        let so_raio: Vec<_> = opts.iter().filter(|o| tool_accepts(Tool::DimRadius, &o.2)).cloned().collect();
+        assert!(matches!(choose_dim(&sk, &so_raio, Some([20., 0.]), (false, false)), Some(Kind::Radius(..))));
+        let o = sk.add_point(&mut al, 0., 0.);
+        let (p, q) = (sk.add_point(&mut al, 10., 0.), sk.add_point(&mut al, 5., 8.));
+        let l1 = sk.add_curve(&mut al, Curve::Line { a: o, b: p }, false);
+        let l2 = sk.add_curve(&mut al, Curve::Line { a: o, b: q }, false);
+        let opts = dim_options(&sk, &[Ent::Cv(l1), Ent::Cv(l2)]);
+        assert!(matches!(choose_dim(&sk, &opts, Some([3., 1.5]), (false, false)), Some(Kind::Angle(..))));
+        assert!(matches!(choose_dim(&sk, &opts, Some([-3., 3.]), (false, false)), Some(Kind::AngleSupp(..))));
+    }
+
+    #[test]
+    fn filete_e_chanfro_percorrem_a_cadeia_com_um_valor_so() {
+        for chamfer in [false, true] {
+            let mut al = ids();
+            let mut sk = SketchData::default();
+            let (_, rect) = sk.add_rect(&mut al, [0., 0.], [40., 30.], false);
+            let cantos = crate::sketch_cadeia::cantos(&sk, &rect);
+            assert_eq!(cantos.len(), 4);
+            let (dim, sobra) = corners_em_lote(&mut sk, &mut al, &cantos, chamfer, Some(5.), None).unwrap();
+            assert_eq!(sobra, 0);
+            let iguais = sk.constraints.iter().filter(|k| matches!(k.kind, Kind::Equal(..))).count();
+            assert!(iguais >= 3, "{iguais}");
+            assert_eq!(sk.constraints.iter().filter(|k| matches!(k.kind, Kind::Radius(..))).count(), usize::from(!chamfer));
+            let (loops, _) = sk.loops();
+            assert_eq!(loops.len(), 1, "o contorno segue fechado");
+            // uma cota só comanda os quatro cantos
+            let k = sk.constraints.iter_mut().find(|x| x.id == dim).unwrap();
+            *k.kind.value_mut().unwrap() = "3".into();
+            assert!(sk.solve(&HashMap::new(), &[]).converged);
+            for c in sk.curves.iter().filter(|c| matches!(c.geom, Curve::Arc { .. })) {
+                assert!((sk.radius_of(c.id).unwrap() - 3.).abs() < 1e-6);
+            }
+        }
+    }
+
+    #[test]
+    fn canto_em_que_o_valor_nao_cabe_fica_como_estava() {
+        let mut al = ids();
+        let mut sk = SketchData::default();
+        let (_, rect) = sk.add_rect(&mut al, [0., 0.], [40., 10.], false);
+        let cantos = crate::sketch_cadeia::cantos(&sk, &rect);
+        // 8 de recuo em cada ponta do lado de 10 não cabem: o segundo canto desse lado é recusado
+        let (_, sobra) = corners_em_lote(&mut sk, &mut al, &cantos, false, Some(8.), None).unwrap();
+        assert!(sobra >= 1, "{sobra}");
     }
 
     #[test]

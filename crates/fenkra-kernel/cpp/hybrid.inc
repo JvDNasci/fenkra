@@ -452,6 +452,35 @@ rust::Vec<double> edge_pts_at(const Shape& s, double px, double py, double pz) {
     });
 }
 
+// Pontos em que a aresta mais perto de p atravessa o plano, calculados na curva da aresta.
+rust::Vec<double> edge_plane_pts(const Shape& s, double px, double py, double pz, double ox, double oy, double oz, double nx, double ny, double nz) {
+    return guard("aresta", [&] {
+        TopoDS_Vertex v = BRepBuilderAPI_MakeVertex(gp_Pnt(px, py, pz));
+        TopoDS_Edge best;
+        double bd = 1e300;
+        for (TopExp_Explorer x(s.s, TopAbs_EDGE); x.More(); x.Next()) {
+            if (BRep_Tool::Degenerated(TopoDS::Edge(x.Current()))) continue;
+            BRepExtrema_DistShapeShape d(x.Current(), v);
+            if (d.IsDone() && d.Value() < bd) bd = d.Value(), best = TopoDS::Edge(x.Current());
+        }
+        if (best.IsNull()) throw std::runtime_error("a forma não tem arestas");
+        double f, l;
+        Handle(Geom_Curve) c = BRep_Tool::Curve(best, f, l);
+        if (c.IsNull()) throw std::runtime_error("a aresta não tem curva 3D");
+        const TopLoc_Location loc = best.Location();
+        if (!loc.IsIdentity()) c = Handle(Geom_Curve)::DownCast(c->Transformed(loc.Transformation()));
+        Handle(Geom_Plane) pl = new Geom_Plane(gp_Pln(gp_Pnt(ox, oy, oz), gp_Dir(nx, ny, nz)));
+        GeomAPI_IntCS it(new Geom_TrimmedCurve(c, f, l), pl);
+        if (!it.IsDone()) throw std::runtime_error("interseção da aresta com o plano falhou");
+        rust::Vec<double> out;
+        for (int i = 1; i <= it.NbPoints(); ++i) {
+            gp_Pnt p = it.Point(i);
+            for (double w : {p.X(), p.Y(), p.Z()}) out.push_back(w);
+        }
+        return out;
+    });
+}
+
 // A aresta é lisa entre as duas faces? Normais comparadas em três pontos, com 1 grau de folga.
 static bool smooth_across(const TopoDS_Edge& e, const TopoDS_Face& f, const TopoDS_Face& g) {
     double a1, b1, a2, b2;
