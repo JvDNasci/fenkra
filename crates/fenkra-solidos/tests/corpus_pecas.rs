@@ -96,7 +96,7 @@ fn caixa_arredondada() -> Document {
 /// Caixa 40 × 30 × 20 esvaziada com parede de 2, aberta em cima.
 fn caixa_casca() -> Document {
     let mut d = caixa();
-    d.add_feature(FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![] }));
+    d.add_feature(FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![], closed: false }));
     d
 }
 

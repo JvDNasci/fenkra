@@ -201,6 +201,21 @@ std::unique_ptr<Shape> shell_t(const Shape& s, rust::Slice<const double> pts, do
     return guard("casca", [&] {
         if (thickness <= 0) throw std::runtime_error("a espessura precisa ser positiva");
         TopTools_ListOfShape rm;
+        // sem faces = casca fechada: o sólido deslocado (para dentro, ou para fora) vira a cavidade,
+        // subtraída por booleana; as faces de origem mantêm a chave pela história da booleana
+        if (pts.size() < 3) {
+            BRepOffsetAPI_MakeOffsetShape off;
+            off.PerformByJoin(s.s, outward ? thickness : -thickness, 1e-3, BRepOffset_Skin, Standard_False, Standard_False, GeomAbs_Arc);
+            if (!off.IsDone() || off.Shape().IsNull()) throw std::runtime_error("espessura grande demais para a peça");
+            if (outward) {
+                BRepAlgoAPI_Cut cut(off.Shape(), s.s);
+                if (!cut.IsDone()) throw std::runtime_error("não foi possível esvaziar o corpo");
+                return tagged_result(cut, s.s, tags, out);
+            }
+            BRepAlgoAPI_Cut cut(s.s, off.Shape());
+            if (!cut.IsDone()) throw std::runtime_error("não foi possível esvaziar o corpo");
+            return tagged_result(cut, s.s, tags, out);
+        }
         for (auto& f : faces_near(s.s, pts)) rm.Append(f);
         BRepOffsetAPI_MakeThickSolid mk;
         mk.MakeThickSolidByJoin(s.s, rm, outward ? thickness : -thickness, 1e-3, BRepOffset_Skin, Standard_False, Standard_False, GeomAbs_Arc);

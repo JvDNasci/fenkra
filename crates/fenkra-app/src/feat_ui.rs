@@ -264,10 +264,15 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         FeatureKind::Shell(s) => {
             expr(ui, "Espessura", &mut s.thickness, vars, "mm");
             crate::editor::check(ui, &mut s.outward, "parede para fora (mantém o volume interno)");
-            let before = s.faces.clone();
-            faces_ui(ui, &mut s.faces, picked_faces);
-            s.face_keys = carry_keys(&before, &s.face_keys, &s.faces);
-            ui.label(RichText::new(tr("As faces escolhidas ficam abertas; o resto vira parede com a espessura.")).weak().small());
+            crate::editor::check(ui, &mut s.closed, "esvaziar sem abrir faces (cavidade fechada)");
+            if s.closed {
+                ui.label(RichText::new(tr("Sem face aberta: o corpo vira uma casca com a cavidade fechada por dentro.")).weak().small());
+            } else {
+                let before = s.faces.clone();
+                faces_ui(ui, &mut s.faces, picked_faces);
+                s.face_keys = carry_keys(&before, &s.face_keys, &s.faces);
+                ui.label(RichText::new(tr("As faces escolhidas ficam abertas; o resto vira parede com a espessura.")).weak().small());
+            }
         }
         FeatureKind::Draft(d) => {
             expr(ui, "Ângulo", &mut d.angle, vars, "°");
@@ -282,8 +287,12 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             ui.label(RichText::new(tr("Inclina as faces a partir do plano neutro; a extração segue a normal dele.")).weak().small());
         }
         FeatureKind::Thickness(t) => {
-            expr(ui, "Espessura", &mut t.value, vars, "mm");
-            ui.label(RichText::new(tr("Positivo acrescenta material, negativo remove.")).weak().small());
+            expr(ui, "Distância", &mut t.value, vars, "mm");
+            ui.horizontal(|ui| {
+                ui.radio_value(&mut t.remove, false, tr("Acrescentar"));
+                ui.radio_value(&mut t.remove, true, tr("Remover"));
+            });
+            ui.label(RichText::new(tr("Escolha acrescentar ou remover; a distância é sempre positiva (valor negativo também remove).")).weak().small());
             let before = t.faces.clone();
             faces_ui(ui, &mut t.faces, picked_faces);
             t.face_keys = carry_keys(&before, &t.face_keys, &t.faces);
@@ -358,6 +367,12 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 expr(ui, "Profundidade", &mut st.depth, vars, "mm");
             }
             crate::editor::check(ui, &mut st.reverse, "para o lado da normal do plano");
+            ui.horizontal_wrapped(|ui| {
+                ui.label(tr("Lado da parede"));
+                ui.radio_value(&mut st.side, 0, tr("dois lados"));
+                ui.radio_value(&mut st.side, 1, tr("um lado"));
+                ui.radio_value(&mut st.side, 2, tr("outro lado"));
+            });
             ui.label(RichText::new(tr("Cada linha do sketch vira uma parede com a espessura, extrudada a partir do plano.")).weak().small());
         }
         FeatureKind::Thread(t) => {
@@ -392,6 +407,8 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             if let Some(i) = icon_choice(ui, &opts) {
                 t.modeled = i == 1;
             }
+            expr(ui, "Início", &mut t.start, vars, "mm");
+            ui.label(RichText::new(tr("Distância da borda da face até onde a rosca começa; vazio começa na borda.")).weak().small());
             section(ui, "Face cilíndrica");
             ui.label(RichText::new(format!("{}", crate::app::p3(t.face, 1))).small());
             if let Some(p) = picked_faces.last() {

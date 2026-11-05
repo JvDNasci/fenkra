@@ -1748,12 +1748,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
             Cmd::Stiffener => {
                 let sk = sk_or_unset;
-                Sel::Feature(d.add_feature(FeatureKind::Stiffener(Stiffener { sketch: sk, thickness: s("3"), depth: s("20"), reverse: false, to_body: false })))
+                Sel::Feature(d.add_feature(FeatureKind::Stiffener(Stiffener { sketch: sk, thickness: s("3"), depth: s("20"), reverse: false, to_body: false, side: 0 })))
             }
-            Cmd::Shell => Sel::Feature(d.add_feature(FeatureKind::Shell(Shell { faces: faces.clone(), thickness: s("2"), outward: false, face_keys: face_keys.clone() }))),
+            Cmd::Shell => Sel::Feature(d.add_feature(FeatureKind::Shell(Shell { faces: faces.clone(), thickness: s("2"), outward: false, face_keys: face_keys.clone(), closed: false }))),
             Cmd::Draft => Sel::Feature(d.add_feature(FeatureKind::Draft(Draft { faces: faces.clone(), neutral: opt_plane, angle: s("3"), reverse: false, face_keys: face_keys.clone() }))),
-            Cmd::Thickness => Sel::Feature(d.add_feature(FeatureKind::Thickness(Thickness { faces: faces.clone(), value: s("2"), face_keys: face_keys.clone() }))),
-            Cmd::Thread => Sel::Feature(d.add_feature(FeatureKind::Thread(Thread { face: faces.last().copied().unwrap_or([0.; 3]), spec: s("M10x1.5"), length: s("15"), modeled: false, end: None }))),
+            Cmd::Thickness => Sel::Feature(d.add_feature(FeatureKind::Thickness(Thickness { faces: faces.clone(), value: s("2"), face_keys: face_keys.clone(), remove: false }))),
+            Cmd::Thread => Sel::Feature(d.add_feature(FeatureKind::Thread(Thread { face: faces.last().copied().unwrap_or([0.; 3]), spec: s("M10x1.5"), length: s("15"), modeled: false, end: None, start: String::new() }))),
             Cmd::PatternLinear | Cmd::PatternCircular | Cmd::PatternPoints | Cmd::Mirror => {
                 let sources: Vec<Id> = match sel_now {
                     Sel::Feature(id) if d.feature(id).is_some_and(|f| crate::feat_ui::is_shape(&f.kind)) => vec![id],

@@ -2150,6 +2150,7 @@ impl FeatureKind {
             }
             Thread(t) => {
                 exprs(&mut t.length);
+                exprs(&mut t.start);
                 if let Some(e) = &mut t.end {
                     extent_walk(e, ids, exprs);
                 }
@@ -2385,6 +2386,9 @@ pub struct Shell {
     /// referência v2 de cada face (paralelo a `faces`; `None` = só o ponto)
     #[serde(default)]
     pub face_keys: Vec<Option<FaceKey>>,
+    /// B06: esvazia sem abrir nenhuma face (cavidade interna fechada)
+    #[serde(default)]
+    pub closed: bool,
 }
 
 /// Ângulo de saída nas faces escolhidas, a partir de um plano neutro (puxa pela normal dele).
@@ -2407,6 +2411,9 @@ pub struct Thickness {
     /// referência v2 de cada face (paralelo a `faces`; `None` = só o ponto)
     #[serde(default)]
     pub face_keys: Vec<Option<FaceKey>>,
+    /// B07: remove material em vez de acrescentar (o valor é sempre a distância positiva)
+    #[serde(default)]
+    pub remove: bool,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -2458,6 +2465,9 @@ pub struct Stiffener {
     /// vai até encontrar o corpo (ignora a profundidade)
     #[serde(default)]
     pub to_body: bool,
+    /// B11: lado da parede em relação a cada linha: 0 = dois lados (centrada), 1 = um lado, 2 = o outro
+    #[serde(default)]
+    pub side: u8,
 }
 
 /// Booleana entre coletores de corpos.
@@ -2483,6 +2493,9 @@ pub struct Thread {
     /// término: `None` = comprimento; passante = face inteira; até plano/superfície
     #[serde(default)]
     pub end: Option<Extent>,
+    /// B05: deslocamento do início da rosca ao longo do eixo, a partir da borda da face (vazio = 0)
+    #[serde(default)]
+    pub start: String,
 }
 
 /// Sketch: plano + geometria livre com restrições (ver [`crate::sketch`]).

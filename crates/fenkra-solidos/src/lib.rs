@@ -3221,7 +3221,7 @@ impl Ctx<'_> {
                 self.apply(f.target, tool, pr.op, f.id)?;
                 Ok(None)
             }
-            FeatureKind::Shell(sh) if sh.faces.is_empty() => Ok(Some("escolha na viewport as faces a remover — até lá a casca não é aplicada".into())),
+            FeatureKind::Shell(sh) if sh.faces.is_empty() && !sh.closed => Ok(Some("escolha na viewport as faces a remover — até lá a casca não é aplicada".into())),
             FeatureKind::Draft(d) if d.faces.is_empty() => Ok(Some("escolha na viewport as faces que recebem a saída — até lá nada é aplicado".into())),
             FeatureKind::Thickness(t) if t.faces.is_empty() => Ok(Some("escolha na viewport as faces a engrossar — até lá nada é aplicado".into())),
             FeatureKind::Shell(sh) => {
@@ -3245,7 +3245,9 @@ impl Ctx<'_> {
                 Ok(None)
             }
             FeatureKind::Thickness(t) => {
+                // B07: o botão "remover" vale mais que o sinal; sinal negativo continua removendo (arquivos antigos)
                 let v = ev(&t.value, &self.vars, "espessura")?;
+                let v = if t.remove { -v.abs() } else { v };
                 if v.abs() < 1e-9 {
                     return Ok(Some("espessura zero: nada a fazer".into()));
                 }
@@ -4220,6 +4222,22 @@ impl Ctx<'_> {
                 }
                 let t = ev(&st.thickness, &self.vars, "espessura")?;
                 let depth = ev(&st.depth, &self.vars, "profundidade")?;
+                // B11: um lado só = a parede inteira deslocada meia espessura para o lado da normal da linha
+                let segs: Vec<([f64; 3], [f64; 3])> = match st.side {
+                    1 | 2 => {
+                        let sgn = if st.side == 1 { 1. } else { -1. };
+                        segs.iter()
+                            .map(|&(a, b)| {
+                                let d = geo3d::unit(geo3d::sub(b, a)).unwrap_or([1., 0., 0.]);
+                                let c = frame.normal;
+                                let n = geo3d::unit([c[1] * d[2] - c[2] * d[1], c[2] * d[0] - c[0] * d[2], c[0] * d[1] - c[1] * d[0]]).unwrap_or([0.; 3]);
+                                let m = [0, 1, 2].map(|i| n[i] * sgn * t / 2.);
+                                ([0, 1, 2].map(|i| a[i] + m[i]), [0, 1, 2].map(|i| b[i] + m[i]))
+                            })
+                            .collect()
+                    }
+                    _ => segs,
+                };
                 let face = Shape::thick_segments(&segs, frame.normal, t).map_err(k)?;
                 // entra no material como um furo (contra a normal); "inverter" troca o lado
                 let dir = if st.reverse { frame.normal } else { frame.normal.map(|x| -x) };
@@ -4236,7 +4254,12 @@ impl Ctx<'_> {
                 let spec = hardware::thread(&t.spec).ok_or_else(|| format!("rosca '{}' não encontrada na tabela de normas", t.spec))?;
                 let b = self.body(f.target).ok_or("não há corpo para roscar")?;
                 let cyl = b.cylinder_at(t.face).map_err(k)?;
-                let full = cyl.h1 - cyl.h0;
+                // B05: o início pode andar ao longo do eixo; o que sobra da face limita o comprimento
+                let start = if t.start.trim().is_empty() { 0. } else { ev(&t.start, &self.vars, "início da rosca")? };
+                if start < 0. || start >= cyl.h1 - cyl.h0 {
+                    return Err("o início da rosca precisa ficar dentro da face cilíndrica".into());
+                }
+                let full = cyl.h1 - cyl.h0 - start;
                 let len = match &t.end {
                     None => ev(&t.length, &self.vars, "comprimento")?.min(full),
                     Some(Extent::Blind(x)) => ev(x, &self.vars, "comprimento")?.min(full),
@@ -4253,7 +4276,7 @@ impl Ctx<'_> {
                 if len < spec.pitch {
                     return Err("comprimento menor que um passo".into());
                 }
-                let o = [0, 1, 2].map(|i| cyl.origin[i] + cyl.dir[i] * cyl.h0);
+                let o = [0, 1, 2].map(|i| cyl.origin[i] + cyl.dir[i] * (cyl.h0 + start));
                 let tool = if cyl.internal {
                     Shape::thread_tool(o, cyl.dir, spec.major, spec.pitch, len, spec.angle)
                 } else {
@@ -6749,7 +6772,7 @@ mod tests {
         let mut d = caixa();
         let top = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "20");
         d.add_feature(FeatureKind::Primitive(Primitive { kind: PrimKind::Cilindro, plane: PlaneRef::Datum(top), a: "5".into(), b: "10".into(), c: "0".into(), d: "0".into(), op: BoolOp::Add }));
-        let th = |end: Option<Extent>| Thread { face: [5., 0., 25.], spec: "M10x1.5".into(), length: "4".into(), modeled: true, end };
+        let th = |end: Option<Extent>| Thread { face: [5., 0., 25.], spec: "M10x1.5".into(), length: "4".into(), modeled: true, end, start: String::new() };
         let mut a = d.clone();
         a.add_feature(FeatureKind::Thread(th(None)));
         let mut b = d.clone();
@@ -6991,7 +7014,7 @@ mod tests {
 
         // casca abrindo o topo
         let mut d = caixa();
-        d.add_feature(FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![] }));
+        d.add_feature(FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![], closed: false }));
         let v = vol(&d);
         assert!(v < v0 * 0.5 && v > 0., "casca {v}");
 
@@ -7002,7 +7025,7 @@ mod tests {
 
         // espessura +5 no topo
         let mut d = caixa();
-        d.add_feature(FeatureKind::Thickness(Thickness { faces: vec![[0., 0., 20.]], value: "5".into(), face_keys: vec![] }));
+        d.add_feature(FeatureKind::Thickness(Thickness { faces: vec![[0., 0., 20.]], value: "5".into(), face_keys: vec![], remove: false }));
         assert!(near(vol(&d), v0 + 6000., 1e-6));
 
         // padrão linear de um bolso 4×4×5: 3 cópias ao longo de X
@@ -7033,7 +7056,7 @@ mod tests {
         assert!(near(vol(&d), v0 + std::f64::consts::PI * 250., 1e-3));
         // rosca externa modelada no cilindro (M10)
         let mut e = d.clone();
-        e.add_feature(FeatureKind::Thread(Thread { face: [5., 0., 25.], spec: "M10x1.5".into(), length: "8".into(), modeled: true, end: None }));
+        e.add_feature(FeatureKind::Thread(Thread { face: [5., 0., 25.], spec: "M10x1.5".into(), length: "8".into(), modeled: true, end: None, start: String::new() }));
         let vt = vol(&e);
         assert!(vt < vol(&d) - 1., "rosca externa {vt}");
 
@@ -7077,7 +7100,7 @@ mod tests {
         // reforço: linha de 20 mm, espessura 2, profundidade 10 (não precisa de corpo)
         let mut d = Document::new("t");
         let s = sk_lines(&mut d, PlaneRef::Origin(OriginPlane::XY), &[([-10., 0.], [10., 0.])]);
-        d.add_feature(FeatureKind::Stiffener(Stiffener { sketch: s, thickness: "2".into(), depth: "10".into(), reverse: true, to_body: false }));
+        d.add_feature(FeatureKind::Stiffener(Stiffener { sketch: s, thickness: "2".into(), depth: "10".into(), reverse: true, to_body: false, side: 0 }));
         let v = vol(&d);
         assert!(near(v, (20. * 2. + std::f64::consts::PI) * 10., 1e-3), "reforço {v}");
 
@@ -7316,7 +7339,7 @@ mod tests {
         // o mesmo vale para as faces de casca, ângulo de saída e espessura
         let (mut d, caixa, _, _) = caixa_com_bolso(5.);
         let falsa = FaceKey { owner: caixa, role: 77, kind: 0, normal_or_axis: [0., 0., 1.], area: 1. };
-        let sh = d.add_feature(FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![Some(falsa)] }));
+        let sh = d.add_feature(FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![Some(falsa)], closed: false }));
         let r = recompute(&d);
         assert!(matches!(&r.status[&sh], Status::Error(m) if m.starts_with("referência perdida:") && m.contains("casca")), "{:?}", r.status[&sh]);
     }
@@ -7368,7 +7391,7 @@ mod tests {
         let topo = (0..b.face_role.len()).find(|i| b.face_owner[*i] == caixa && b.face_role[*i] == 1).expect("tampa final");
         let key = b.face_key(topo).unwrap();
         assert_eq!(key.normal_or_axis, [0., 0., 1.]);
-        let sh = d.add_feature(FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![Some(key)] }));
+        let sh = d.add_feature(FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![Some(key)], closed: false }));
         let r = recompute(&d);
         assert_eq!(r.status[&sh], Status::Ok, "{:?}", r.status[&sh]);
         // a caixa fica mais alta: o ponto clicado (z = 20) já não está na face de cima, a chave sim
@@ -7383,7 +7406,7 @@ mod tests {
         let mut d = Document::new("t");
         let base = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [-20., -15.], [20., 15.]);
         d.add_feature(ext(base, BoolOp::Add, "20"));
-        let sh = d.add_feature(FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![] }));
+        let sh = d.add_feature(FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![], closed: false }));
         let r = recompute(&d);
         assert_eq!(r.status[&sh], Status::Ok);
         assert!(matches!(r.promoted.get(&sh), Some(Promoted::Faces(k)) if k.len() == 1 && k[0].is_some()));
