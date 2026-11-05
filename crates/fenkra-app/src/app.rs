@@ -7701,7 +7701,7 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
             ui.checkbox(&mut s.auto_update, tr("atualizar automaticamente a cada mudança"));
             ui.horizontal(|ui| {
                 ui.label(tr("Memória do histórico de desfazer (MB, 0 = sem limite)"));
-                ui.add(egui::DragValue::new(&mut s.historico_mb).range(0..=4096));
+                ui.add(crate::ui_ext::dv(&mut s.historico_mb).range(0..=4096));
             });
             ui.label(RichText::new(tr("Desligado: o que mudou fica em vermelho (⟳) na árvore até você atualizar (botão ⟳ ou F5). Ctrl+F5 reconstrói tudo do zero. Os botões ⏮ ◀ ▶ ⏭ da barra de status reconstroem passo a passo, comando a comando.")).weak().small());
         }

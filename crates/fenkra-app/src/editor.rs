@@ -1108,7 +1108,8 @@ fn params_table(ui: &mut egui::Ui, doc: &mut Document, vars: &Vars, _sink: &mut 
             if r.changed() {
                 rename = Some((p.id, n));
             }
-            ui.add(egui::TextEdit::singleline(&mut p.expr).desired_width(100.));
+            let re = ui.add(egui::TextEdit::singleline(&mut p.expr).desired_width(100.));
+            crate::ui_ext::wheel_text(ui, &re, &mut p.expr);
             egui::ComboBox::from_id_salt(("un", p.id.0)).width(40.).selected_text(match p.unit {
                 Unit::Comprimento => "mm",
                 Unit::Angulo => "°",

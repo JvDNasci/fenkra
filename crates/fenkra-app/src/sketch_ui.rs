@@ -3345,7 +3345,10 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     if !ok {
                         te = te.text_color(BAD);
                     }
-                    ui.add_enabled(driving, te);
+                    let rv = ui.add_enabled(driving, te);
+                    if driving {
+                        crate::ui_ext::wheel_text(ui, &rv, v);
+                    }
                     if ui.selectable_label(!driving, "( )").on_hover_text(tr("Cota de referência: só mede e não comanda a geometria")).clicked() {
                         flip_ref = Some(c.id);
                     }
