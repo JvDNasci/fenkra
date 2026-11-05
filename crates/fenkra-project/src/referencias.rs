@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Identidade de documento e resolução de referências entre arquivos (B66).
 //!
 //! Uma referência (componente de montagem, link entre peças, vista de desenho) guarda **uid +

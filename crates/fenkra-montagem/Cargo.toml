@@ -4,6 +4,7 @@ description = "Módulo Montagem: componentes, restrições e solucionador de pos
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish.workspace = true
 
 [dependencies]
 fenkra-core = { path = "../fenkra-core" }

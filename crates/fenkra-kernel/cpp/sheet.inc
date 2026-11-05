@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 // Chapa metálica: aba de aresta (dobra + parede reta) e sua versão planificada.
 // Incluído no fim de kernel.cpp, depois de hybrid.inc.
 

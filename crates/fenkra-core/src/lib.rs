@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Núcleo do Fenkra.
 //!
 //! - [`expr`]: avaliador de expressões dos parâmetros (RF-PAR-002/003).

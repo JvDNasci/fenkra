@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Plano de salvamento: o que o Salvar tudo vai gravar e por quê (B56).
 //!
 //! A interface junta os documentos abertos (peça, montagem, desenho) em [`Candidato`]s, o plano os

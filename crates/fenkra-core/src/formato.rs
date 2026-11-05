@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Versão de formato e cadeia de migração dos arquivos do Fenkra (B64).
 //!
 //! Cada tipo de arquivo (`.fkp`, `.fka`, `.fkd` e o índice do projeto) grava seu próprio

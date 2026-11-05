@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 // Features de forma, acabamento e transformação (incluído no fim de kernel.cpp: usa guard, wrap,
 // carry, fill, to_vec, unify e area_of de lá).
 

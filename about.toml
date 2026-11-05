@@ -1,0 +1,29 @@
+# cargo-about: textos de licença dos crates Rust (B201). Rodar:
+#   cargo about generate --workspace about.hbs --output-file licencas-crates.txt
+# As bibliotecas nativas e as fontes não são crates: seguem à mão em THIRD-PARTY-LICENSES.
+
+targets = [
+    "x86_64-pc-windows-msvc",
+    "x86_64-unknown-linux-gnu",
+    "aarch64-apple-darwin",
+]
+ignore-build-dependencies = false
+ignore-dev-dependencies = true
+accepted = [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "0BSD",
+    "ISC",
+    "Zlib",
+    "BSL-1.0",
+    "Unicode-3.0",
+    "Unlicense",
+    "CC0-1.0",
+    "OFL-1.1",
+    "Ubuntu-font-1.0",
+    "LGPL-2.1-or-later",
+]

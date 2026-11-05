@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Gravação segura, detecção de mudança externa, autorrecuperação e log de sessão (B65).
 //!
 //! Por que assim:

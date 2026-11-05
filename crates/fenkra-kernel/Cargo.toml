@@ -4,6 +4,7 @@ description = "Fachada do kernel geométrico (OpenCASCADE via cxx)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish.workspace = true
 build = "build.rs"
 
 [dependencies]

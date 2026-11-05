@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Documento de peça: árvore fixa + linha de tempo de comandos.
 //!
 //! ```text

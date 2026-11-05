@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Ponte Rust ⇄ C++ (cxx). Mantenha tipos simples: o C++ é só uma fachada sobre o OCCT.
 
 #[cxx::bridge(namespace = "fenkra")]

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Gestão de projeto simples (ADR 0009, RF-GPR).
 //!
 //! ```text

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 // Fachada C++ do Fenkra sobre o OpenCASCADE.
 // Regra: nenhuma exceção do OCCT atravessa a ponte; tudo vira std::runtime_error.
 #pragma once

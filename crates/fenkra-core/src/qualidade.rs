@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Qualidade da malha de exibição: um só lugar decide o quão fina é a tesselação das peças,
 //! montagens e referências (o modelo B-Rep não muda, só a malha que se desenha).
 

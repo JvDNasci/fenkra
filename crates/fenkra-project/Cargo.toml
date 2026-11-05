@@ -4,6 +4,7 @@ description = "Gestão de projeto: pasta, documentos, versões e revisões conge
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish.workspace = true
 
 [dependencies]
 fenkra-core = { path = "../fenkra-core" }

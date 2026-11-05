@@ -4,6 +4,7 @@ description = "Módulo Modelagem Sólida: recompute dos comandos sobre o kernel"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish.workspace = true
 
 [dependencies]
 fenkra-core = { path = "../fenkra-core" }

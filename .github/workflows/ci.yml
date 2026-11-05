@@ -69,3 +69,17 @@ jobs:
           C:/vcpkg-fenkra/vcpkg.exe install opencascade:x64-windows-release
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace
+
+  licencas:
+    name: Licenças
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny,cargo-about
+      - run: cargo deny check licenses bans sources
+      - name: Gerar a lista de licenças dos crates
+        # Ainda não rodou de verdade: tire o continue-on-error na primeira rodada verde.
+        continue-on-error: true
+        run: cargo about generate --workspace about.hbs --output-file "$RUNNER_TEMP/licencas-crates.txt"

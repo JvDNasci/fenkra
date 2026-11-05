@@ -1,5 +1,5 @@
 # cargo-deny: política de licenças do Fenkra (B151/B201). Rodar: cargo deny check licenses
-# Ferramenta não instalada neste ambiente; configuração escrita sem execução. Validar na primeira rodada.
+# A CI roda licenses, bans e sources em cada commit (.github/workflows/ci.yml).
 # Licença do projeto: LGPL-2.1-or-later (ADR 0003, ainda proposta).
 
 [graph]
@@ -37,6 +37,8 @@ allow = [
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
+# Os crates do workspace não são publicados: dependência por caminho não conta como curinga.
+allow-wildcard-paths = true
 
 [sources]
 unknown-registry = "deny"

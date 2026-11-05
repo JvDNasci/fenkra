@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Kernel geométrico do Fenkra (ADR 0001): OpenCASCADE atrás de uma API Rust segura.
 //! O resto do sistema só conhece este módulo, nunca o OCCT diretamente.
 

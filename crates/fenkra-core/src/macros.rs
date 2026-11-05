@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Automação: macros em texto que criam e editam a peça. Uma instrução por linha; `#` comenta.
 //! Os números aceitam expressões com os parâmetros da peça e as variáveis dos laços
 //! (escreva sem espaços ou entre parênteses: `(L/2)`). Palavras em português ou inglês.

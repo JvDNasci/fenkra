@@ -4,6 +4,7 @@ description = "Detalhamento 2D: folhas, vistas associativas (HLR), cortes, detal
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish.workspace = true
 
 [dependencies]
 fenkra-core = { path = "../fenkra-core" }

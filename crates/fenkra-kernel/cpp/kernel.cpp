@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 // Fachada C++ do Fenkra sobre o OpenCASCADE. Ver kernel.h.
 #include "kernel.h"
 #include "fenkra-kernel/src/ffi.rs.h"

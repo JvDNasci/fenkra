@@ -74,3 +74,9 @@ preferências do usuário.
 - Um commit por item de backlog, mensagem em português, citando o ID (`DR-20`, `BM-SKT-03`…).
 - Ícones novos: gerar com `scripts/gerar_icones.py` numa pasta temporária e copiar **só os nomes novos**.
 - Textos novos da interface sempre com tradução em `crates/fenkra-app/src/i18n.rs`.
+
+## CI e licenças
+
+`.github/workflows/ci.yml` roda em cada commit e não publica nada. Sem OpenCASCADE: clippy e testes. Com OpenCASCADE: testes e corpus. Licenças: `cargo deny check licenses bans sources` e a lista do cargo-about.
+
+Todo fonte abre com o cabeçalho SPDX. Aplique com `python scripts/spdx.py` e confira com `python scripts/spdx.py --verificar`; o teste `crates/fenkra-app/tests/spdx.rs` reprova arquivo sem cabeçalho.
