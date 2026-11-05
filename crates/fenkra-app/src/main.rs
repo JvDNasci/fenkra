@@ -96,7 +96,9 @@ fn wgpu_options() -> egui_wgpu::WgpuConfiguration {
             wgpu::DeviceDescriptor {
                 label: Some("fenkra wgpu device"),
                 required_features: adapter.features() & wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
-                required_limits: wgpu::Limits { max_texture_dimension_2d: 8192, ..base },
+                // a cena inteira vai num buffer só: com o limite padrão de 256 MiB, uma montagem grande
+                // derrubava o programa ao subir a malha. Vale o que a placa aceita
+                required_limits: wgpu::Limits { max_texture_dimension_2d: 8192, max_buffer_size: adapter.limits().max_buffer_size, ..base },
                 ..Default::default()
             }
         });

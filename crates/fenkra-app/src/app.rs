@@ -7840,6 +7840,7 @@ impl eframe::App for App {
                         let p = std::path::Path::new(&t.path);
                         let full = match (&root, p.is_relative()) {
                             (Some(r), true) => r.join(p),
+                let grande = vp.cena_grande;
                             _ => p.to_path_buf(),
                         };
                         (crate::render::load_texture(&full).unwrap_or_default(), t.scale as f32)
