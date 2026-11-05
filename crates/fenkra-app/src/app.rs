@@ -5795,9 +5795,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     ui.separator();
                     ui.label(RichText::new(format!("Parâmetros: {e}")).small().color(crate::theme::st_err()));
                 }
-                let passo_sk = self.sketch.as_ref().map(|e| e.tool.info().2).map(tr);
+                let passo_sk = self.sketch.as_ref().map(|e| e.dica_passo());
                 let ctx_ajuda = crate::ajuda_cmd::Contexto {
-                    sketch: passo_sk,
+                    sketch: passo_sk.as_deref(),
                     n_comandos: n,
                     ultimo_e_sketch: self.open.doc.features.last().is_some_and(|f| matches!(f.kind, FeatureKind::Sketch(_))),
                     n_selecionados: self.picks.len(),

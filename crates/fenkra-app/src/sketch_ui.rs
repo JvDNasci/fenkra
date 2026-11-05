@@ -124,7 +124,7 @@ impl Tool {
             },
         }
     }
-    fn clicks_needed(self) -> usize {
+    pub(crate) fn clicks_needed(self) -> usize {
         match self {
             Tool::Rect | Tool::RectCenter | Tool::Circle => 2,
             Tool::Circle3 | Tool::Arc3 | Tool::ArcCenter | Tool::Slot => 3,
@@ -352,9 +352,37 @@ impl SketchEdit {
         self.menu = None;
         self.entry = ValueEntry::default();
         self.typed.clear();
-        if !matches!(t, Tool::Constr(_) | Tool::Select | Tool::Move | Tool::Copy | Tool::Mirror | Tool::Offset) {
+        // seleção prévia: as ferramentas que a aproveitam (ver `sketch_fluxo::usa_selecao`) a mantêm
+        if !crate::sketch_fluxo::usa_selecao(t) {
             self.sel.clear();
+        } else if crate::sketch_fluxo::cota(t) && !self.sel.is_empty() {
+            self.pending = Some(Pending { sel: self.sel.clone(), forced: None });
         }
+    }
+    /// Índice do passo atual da ferramenta (0 a n-1), para a contagem "1 de 3".
+    pub fn indice_passo(&self) -> usize {
+        let curvas = self.sel.iter().any(|e| matches!(e, Ent::Cv(_)));
+        match self.tool {
+            Tool::Constr(_) => self.sel.len(),
+            Tool::Move | Tool::Copy => {
+                if !curvas {
+                    0
+                } else {
+                    1 + self.clicks.len().min(1)
+                }
+            }
+            Tool::Mirror | Tool::Offset => curvas as usize,
+            t if crate::sketch_fluxo::cota(t) => self.pending.is_some() as usize,
+            _ => self.clicks.len(),
+        }
+    }
+    /// Há um passo em curso que o Esc cancela (o mesmo critério de `cancel`).
+    pub fn em_passo(&self) -> bool {
+        self.in_step() || self.pending.is_some() || self.dim_edit.is_some()
+    }
+    /// Dica do passo atual, com contagem e o que o Esc faz: junto ao cursor e na barra de status.
+    pub fn dica_passo(&self) -> String {
+        crate::sketch_fluxo::dica(self.tool, self.indice_passo(), None, self.em_passo(), !self.sel.is_empty())
     }
     /// Cancela a operação em andamento; devolve false se não havia nada a cancelar.
     pub fn cancel(&mut self) -> bool {
@@ -1457,6 +1485,14 @@ fn corner_of(sk: &SketchData, e: Ent, cursor: [f64; 2]) -> Option<Result<Id, &'s
     Some(if lines_at(sk, p).len() == 2 { Ok(p) } else { Err("esse ponto não é um canto entre duas linhas") })
 }
 
+/// Canto formado por duas linhas selecionadas antes de escolher Filete ou Chanfro.
+fn corner_da_selecao(sk: &SketchData, sel: &[Ent]) -> Option<Id> {
+    let [Ent::Cv(c1), Ent::Cv(c2)] = sel else { return None };
+    let (a1, b1) = line_ends(sk, *c1)?;
+    let (a2, b2) = line_ends(sk, *c2)?;
+    [a1, b1].into_iter().find(|p| (*p == a2 || *p == b2) && lines_at(sk, *p).len() == 2)
+}
+
 /// Recuo do canto nas duas linhas. Limitado para sobrar linha: um valor repetido de um canto maior
 /// não pode consumir o lado inteiro.
 fn corner_setback(want: Option<f64>, l1: f64, l2: f64) -> f64 {
@@ -1804,7 +1840,7 @@ fn draw_fields(painter: &egui::Painter, at: Pos2, entry: &ValueEntry, fields: &[
 }
 
 /// Dica junto ao cursor das ferramentas de forma.
-fn shape_hint(tool: Tool, clicks: usize) -> &'static str {
+pub(crate) fn shape_hint(tool: Tool, clicks: usize) -> &'static str {
     match (tool, clicks) {
         (Tool::Rect, 0) => "1º canto",
         (Tool::Rect, _) => "canto oposto",
@@ -1824,7 +1860,7 @@ fn shape_hint(tool: Tool, clicks: usize) -> &'static str {
 }
 
 /// Dica junto ao cursor das ferramentas de edição.
-fn edit_hint(tool: Tool, no_curves: bool, nothing_selected: bool, clicks: usize) -> &'static str {
+pub(crate) fn edit_hint(tool: Tool, no_curves: bool, nothing_selected: bool, clicks: usize) -> &'static str {
     match (tool, no_curves, clicks) {
         (Tool::Move, true, _) => "clique nas curvas a mover",
         (Tool::Copy, true, _) => "clique nas curvas a copiar",
@@ -2619,9 +2655,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                 build_shape(&mut sk, &mut al, tool, &cl, &opts);
                 edit.report = sk.solve(&vars, &[]);
             }
-            let hint = shape_hint(tool, cl.len());
-            if let (Some(h), false) = (hover, hint.is_empty()) {
-                painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, tr(hint), egui::FontId::proportional(11.), FREE);
+            if let Some(h) = hover {
+                painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, edit.dica_passo(), egui::FontId::proportional(11.), FREE);
             }
         }
 
@@ -2656,7 +2691,19 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             }
         }
         Tool::Trim | Tool::Extend => {
-            let over = hover.and_then(|p| pick(p, &sk, &edit.hits));
+            let mut over = hover.and_then(|p| pick(p, &sk, &edit.hits));
+            // seleção prévia: só as curvas escolhidas antes valem; o resto é recusado com o motivo
+            let previa: Vec<Id> = edit.sel.iter().filter_map(|e| if let Ent::Cv(c) = e { Some(*c) } else { None }).collect();
+            let mut fora = false;
+            if let (Some(Ent::Cv(c)), false) = (over, previa.is_empty()) {
+                if !previa.contains(&c) {
+                    over = None;
+                    fora = true;
+                }
+            }
+            if fora && primary_click {
+                toast = Some((crate::sketch_fluxo::FORA_DA_SELECAO.to_string(), true));
+            }
             if let (Some(Ent::Cv(c)), Some(uv)) = (over, cursor_uv) {
                 if tool == Tool::Trim {
                     // o trecho que sai, tracejado em vermelho
@@ -2680,8 +2727,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                 }
             }
             if let Some(h) = hover {
-                let hint = if tool == Tool::Trim { tr("clique no trecho da linha a remover") } else { tr("clique perto da ponta a estender") };
-                painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, hint, egui::FontId::proportional(11.), FREE);
+                let (hint, col) = if fora { (tr(crate::sketch_fluxo::FORA_DA_SELECAO).to_string(), BAD) } else { (edit.dica_passo(), FREE) };
+                painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, hint, egui::FontId::proportional(11.), col);
             }
         }
 
@@ -2780,6 +2827,18 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                             fillet_corner(sk, &mut al, p, last)
                         }
                     };
+                    // seleção prévia: duas linhas que formam um canto viram o filete/chanfro de uma vez
+                    if let Some(p) = corner_da_selecao(&sk, &edit.sel) {
+                        edit.sel.clear();
+                        match run(&mut sk, &mut al, p) {
+                            Ok(id) => {
+                                edit.dim_edit = Some((id, String::new(), true));
+                                edit.round_dim = Some((id, chamfer));
+                                edit.report = sk.solve(&vars, &[]);
+                            }
+                            Err(m) => toast = Some((m.to_string(), true)),
+                        }
+                    }
                     match over.zip(cursor_uv).and_then(|(e, uv)| corner_of(&sk, e, uv)) {
                         Some(Ok(p)) => {
                             let mut g = sk.clone();
@@ -2819,7 +2878,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                     Some(m) => (m, BAD),
                     None => (edit_hint(tool, sel_curves.is_empty(), edit.sel.is_empty(), edit.clicks.len()), FREE),
                 };
-                painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, tr(hint), egui::FontId::proportional(11.), col);
+                let texto = if refusal.is_some() { tr(hint).to_string() } else { crate::sketch_fluxo::dica(tool, edit.indice_passo(), Some(hint), edit.em_passo(), !edit.sel.is_empty()) };
+                painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, texto, egui::FontId::proportional(11.), col);
             }
         }
 
@@ -2907,10 +2967,13 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
 
         Tool::Constr(k) => {
             if primary_click {
-                if let Some(e) = hover.and_then(|p| pick(p, &sk, &edit.hits)).filter(|e| !matches!(e, Ent::Cs(_))).map(|e| norm(e, &sk)) {
-                    if !edit.sel.contains(&e) {
-                        edit.sel.push(e);
+                match hover.and_then(|p| pick(p, &sk, &edit.hits)).filter(|e| !matches!(e, Ent::Cs(_))).map(|e| norm(e, &sk)) {
+                    Some(e) => {
+                        if !edit.sel.contains(&e) {
+                            edit.sel.push(e);
+                        }
                     }
+                    None => toast = Some((crate::sketch_fluxo::recusa_vazio(tool).to_string(), true)),
                 }
                 if edit.sel.len() >= k.needs() || (k == CKind::Fixed && !edit.sel.is_empty()) {
                     match apply_constraint(&mut sk, &mut al, k, &edit.sel) {
@@ -2922,6 +2985,9 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             }
             if secondary_click {
                 edit.sel.clear();
+            }
+            if let Some(h) = hover {
+                painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, edit.dica_passo(), egui::FontId::proportional(11.), FREE);
             }
         }
     }
@@ -3208,7 +3274,7 @@ pub fn keys(app: &mut App, ctx: &egui::Context) -> bool {
     if edit.entry.typing() {
         return false;
     }
-    for (a, t) in [(K::SkLine, Tool::Line), (K::SkRect, Tool::Rect), (K::SkCircle, Tool::Circle), (K::SkArc, Tool::Arc3), (K::SkPoint, Tool::Point), (K::SkDim, Tool::Dimension), (K::SkSelect, Tool::Select)] {
+    for (a, t) in [(K::SkLine, Tool::Line), (K::SkRect, Tool::Rect), (K::SkCircle, Tool::Circle), (K::SkArc, Tool::Arc3), (K::SkPoint, Tool::Point), (K::SkDim, Tool::Dimension), (K::SkSelect, Tool::Select), (K::SkTrim, Tool::Trim), (K::SkOffset, Tool::Offset), (K::SkFillet, Tool::Fillet), (K::SkMirror, Tool::Mirror), (K::SkSpline, Tool::Spline)] {
         if km.pressed(ctx, a) {
             edit.set_tool(t);
         }
@@ -3778,6 +3844,41 @@ mod tests {
         t.extend(["filete e chanfro funcionam entre duas linhas", "esse ponto não é um canto entre duas linhas", "as linhas são colineares", "offset funciona em linha, círculo e arco"]);
         let faltam: Vec<&&str> = t.iter().filter(|x| !x.is_empty() && !tem_traducao(x)).collect();
         assert!(faltam.is_empty(), "{faltam:?}");
+    }
+
+    #[test]
+    fn selecao_previa_sobrevive_a_troca_de_ferramenta() {
+        let mut e = SketchEdit::new(Id(1), false);
+        for t in crate::sketch_fluxo::todas() {
+            e.sel = vec![Ent::Cv(Id(5))];
+            e.set_tool(t);
+            assert_eq!(!e.sel.is_empty(), crate::sketch_fluxo::usa_selecao(t), "{t:?}");
+            assert_eq!(e.pending.is_some(), crate::sketch_fluxo::cota(t), "{t:?}: a cota começa com a seleção prévia");
+        }
+    }
+
+    #[test]
+    fn duas_linhas_selecionadas_dao_o_canto_do_filete() {
+        let (mut sk, l1) = line_sketch([0., 0.], [40., 0.]);
+        let (_, b) = line_ends(&sk, l1).unwrap();
+        let mut n = 100u64;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        let q = sk.add_point(&mut al, 40., 30.);
+        let l2 = sk.add_curve(&mut al, Curve::Line { a: b, b: q }, false);
+        assert_eq!(corner_da_selecao(&sk, &[Ent::Cv(l1), Ent::Cv(l2)]), Some(b));
+        assert_eq!(corner_da_selecao(&sk, &[Ent::Cv(l1)]), None);
+    }
+
+    #[test]
+    fn dica_de_restricao_conta_os_passos() {
+        let mut e = SketchEdit::new(Id(1), false);
+        e.set_tool(Tool::Constr(CKind::Symmetric));
+        assert!(e.dica_passo().starts_with("Simétrica: 1 de 3"), "{}", e.dica_passo());
+        e.sel = vec![Ent::Pt(Id(2)), Ent::Pt(Id(3))];
+        assert!(e.dica_passo().starts_with("Simétrica: 3 de 3"), "{}", e.dica_passo());
     }
 
     #[test]

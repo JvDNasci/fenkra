@@ -52,16 +52,21 @@ pub enum KeyAction {
     SkDim,
     SkConstruction,
     SkGrid,
+    SkTrim,
+    SkOffset,
+    SkFillet,
+    SkMirror,
+    SkSpline,
 }
 
 use KeyAction::*;
 use crate::i18n::tr;
 
 impl KeyAction {
-    pub const ALL: [KeyAction; 39] = [
+    pub const ALL: [KeyAction; 44] = [
         Fit, ViewMenu, Normal, Ortho, ViewFront, ViewBack, ViewTop, ViewBottom, ViewLeft, ViewRight, ViewIso, Hide, HiddenEnv, Undo, Redo, Delete, Save, SaveAll, ClipCopy, ClipCut,
         ClipPaste, ClipDup, Sketch,
-        Extrude, Cut, Revolve, Hole, Fillet, Chamfer, Plane, SkSelect, SkLine, SkRect, SkCircle, SkArc, SkPoint, SkDim, SkConstruction, SkGrid,
+        Extrude, Cut, Revolve, Hole, Fillet, Chamfer, Plane, SkSelect, SkLine, SkRect, SkCircle, SkArc, SkPoint, SkDim, SkConstruction, SkGrid, SkTrim, SkOffset, SkFillet, SkMirror, SkSpline,
     ];
 
     pub fn label(self) -> &'static str {
@@ -105,6 +110,11 @@ impl KeyAction {
             SkDim => tr("Sketch · cota"),
             SkConstruction => tr("Sketch · construção"),
             SkGrid => tr("Sketch · grade"),
+            SkTrim => tr("Sketch · aparar"),
+            SkOffset => tr("Sketch · offset"),
+            SkFillet => tr("Sketch · filete"),
+            SkMirror => tr("Sketch · espelhar"),
+            SkSpline => tr("Sketch · spline"),
         }
     }
 
@@ -275,6 +285,8 @@ impl Preset {
                 v.retain(|(a, k)| !(*a == SkSelect && *k == "Escape"));
             }
         }
+        // ferramentas de edição do sketch (B239): letras livres nos predefinidos, sem colidir com a vista
+        v.extend([(SkTrim, "T"), (SkOffset, "Shift+O"), (SkFillet, "Alt+F"), (SkMirror, "M"), (SkSpline, "B")]);
         v
     }
 }

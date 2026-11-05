@@ -40,6 +40,7 @@ mod paineis;
 mod partida;
 mod ajuda_cmd;
 mod textos_ajuda;
+mod sketch_fluxo;
 #[cfg(test)]
 mod padrao;
 
