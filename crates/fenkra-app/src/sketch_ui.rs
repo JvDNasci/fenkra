@@ -235,6 +235,8 @@ pub struct SketchEdit {
     pub(crate) campos: Vec<CampoVivo>,
     /// Enter num campo do painel confirma o passo, como na viewport
     pub(crate) confirmar_campo: bool,
+    /// prévia das restrições e opções da barra de seleção
+    barra: crate::sketch_barra::Memoria,
 }
 
 /// Campo de valor aberto agora: o painel lê daqui o rótulo e a medida atual.
@@ -412,6 +414,7 @@ impl SketchEdit {
             texto_canto: String::new(),
             campos: vec![],
             confirmar_campo: false,
+            barra: Default::default(),
         }
     }
     /// Troca o modo do comando sem recomeçar: os cliques dados continuam valendo, salvo se o modo novo
@@ -1065,7 +1068,7 @@ const ALL_CK: [CKind; 11] = [
 ];
 
 /// Restrições que se aplicam à seleção (testadas numa cópia do sketch).
-fn applicable(sk: &SketchData, sel: &[Ent]) -> Vec<CKind> {
+pub(crate) fn applicable(sk: &SketchData, sel: &[Ent]) -> Vec<CKind> {
     if sel.iter().all(|e| matches!(e, Ent::Cs(_))) {
         return vec![];
     }
@@ -1633,7 +1636,7 @@ fn offset_distance(before: &SketchData, after: &SketchData, curve: Id, dim: Id) 
 }
 
 /// Ids de um clone de prévia: longe dos do documento, e nunca gravados.
-fn ghost_ids() -> impl FnMut() -> Id {
+pub(crate) fn ghost_ids() -> impl FnMut() -> Id {
     let mut n = u64::MAX / 2;
     move || {
         n += 1;
@@ -1979,6 +1982,59 @@ fn draw_ghost(painter: &egui::Painter, v: &View, before: &SketchData, after: &Sk
     for (uv, construction) in changed_curves(before, after) {
         draw_ghost_uv(painter, v, &uv, construction);
     }
+}
+
+/// Traço forte sobre os elementos: o que a restrição vai mexer.
+fn destaca(painter: &egui::Painter, v: &View, sk: &SketchData, sel: &[Ent], cor: Color32) {
+    for e in sel {
+        match e {
+            Ent::Cv(c) => {
+                if let Some(c) = sk.curve(*c) {
+                    painter.add(egui::Shape::line(curve_uv(sk, c).into_iter().map(|q| v.to_screen(q)).collect(), Stroke::new(3.5, cor)));
+                }
+            }
+            Ent::Pt(p) => {
+                painter.circle_stroke(v.to_screen(sk.pos(*p)), 7., Stroke::new(2.2, cor));
+            }
+            Ent::Cs(_) => {}
+        }
+    }
+}
+
+/// Resultado da restrição antes de aplicar: fantasma resolvido, vermelho se conflitar; em sketch
+/// grande, só o destaque dos elementos.
+fn draw_previa(painter: &egui::Painter, v: &View, sk: &SketchData, sel: &[Ent], previa: &crate::sketch_barra::Previa, junto: Pos2, dark: bool) {
+    use crate::sketch_barra::Previa;
+    match previa {
+        Previa::Fantasma { depois, conflito } => {
+            let cor = if *conflito { BAD } else { FREE };
+            for (uv, _) in changed_curves(sk, depois) {
+                painter.add(egui::Shape::line(uv.into_iter().map(|q| v.to_screen(q)).collect(), Stroke::new(2., cor.gamma_multiply(0.85))));
+            }
+            if *conflito {
+                destaca(painter, v, sk, sel, BAD);
+                draw_tag(painter, junto, tr("conflita com as restrições do sketch").to_string(), dark);
+            }
+        }
+        Previa::Destaque => {
+            destaca(painter, v, sk, sel, SEL);
+            draw_tag(painter, junto, tr("sketch grande: a prévia só destaca").to_string(), dark);
+        }
+    }
+}
+
+/// Caixa da seleção na tela, para a barra abrir junto dela.
+fn caixa_da_selecao(sk: &SketchData, v: &View, sel: &[Ent]) -> Option<Rect> {
+    let mut pts: Vec<Pos2> = vec![];
+    for e in sel {
+        match e {
+            Ent::Pt(p) => pts.push(v.to_screen(sk.pos(*p))),
+            Ent::Cv(c) => pts.extend(sk.curve(*c).into_iter().flat_map(|c| curve_uv(sk, c)).map(|q| v.to_screen(q))),
+            Ent::Cs(_) => {}
+        }
+    }
+    let primeiro = *pts.first()?;
+    Some(pts.iter().fold(Rect::from_min_max(primeiro, primeiro), |r, p| r.union(Rect::from_min_max(*p, *p))))
 }
 
 /// Rótulo de medida preso à prévia.
@@ -3250,8 +3306,21 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         }
 
         Tool::Constr(k) => {
+            // no último elemento, o fantasma mostra o resultado antes do clique
+            let sob = hover.and_then(|p| pick(p, &sk, &edit.hits)).filter(|e| !matches!(e, Ent::Cs(_))).map(|e| norm(e, &sk));
+            if let (Some(e), Some(h)) = (sob, hover) {
+                let mut alvo = edit.sel.clone();
+                if !alvo.contains(&e) {
+                    alvo.push(e);
+                }
+                if alvo.len() >= k.needs() {
+                    if let Some(p) = edit.barra.previa(&sk, k, &alvo, &vars, report.redundant, crate::sketch_barra::ORCAMENTO) {
+                        draw_previa(&painter, &v, &sk, &alvo, p, h + egui::vec2(0., -18.), dark);
+                    }
+                }
+            }
             if primary_click {
-                match hover.and_then(|p| pick(p, &sk, &edit.hits)).filter(|e| !matches!(e, Ent::Cs(_))).map(|e| norm(e, &sk)) {
+                match sob {
                     Some(e) => {
                         if !edit.sel.contains(&e) {
                             edit.sel.push(e);
@@ -3295,6 +3364,30 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         edit.typed.clear();
     } else if edit.clicks.is_empty() && edit.chain_last.is_none() {
         edit.typed.clear();
+    }
+
+    // ---------- barra de restrições: abre ao selecionar e continua aberta depois de aplicar
+    if tool == Tool::Select && edit.menu.is_none() && edit.drag.is_none() && edit.janela.is_none() && edit.dim_edit.is_none() {
+        let sel = edit.sel.clone();
+        let opcoes = edit.barra.opcoes(&sk, &sel);
+        if let (Some(caixa), false) = (caixa_da_selecao(&sk, &v, &sel), opcoes.is_empty()) {
+            let lugar = crate::sketch_barra::lugar(caixa, rect, opcoes.len());
+            let (sobre, clicada) = crate::sketch_barra::mostrar(ui.ctx(), lugar, &opcoes);
+            if let Some(k) = sobre {
+                if let Some(p) = edit.barra.previa(&sk, k, &sel, &vars, report.redundant, crate::sketch_barra::ORCAMENTO) {
+                    draw_previa(&painter, &v, &sk, &sel, p, lugar + egui::vec2(60., 52.), dark);
+                }
+            }
+            if let Some(k) = clicada {
+                match crate::sketch_barra::aplicar(&mut sk, &mut al, k, &sel) {
+                    Ok(resta) => {
+                        edit.sel = resta;
+                        edit.report = sk.solve(&vars, &[]);
+                    }
+                    Err(m) => toast = Some((m.to_string(), true)),
+                }
+            }
+        }
     }
 
     // ---------- menu rápido (botão direito): cotas e restrições possíveis para a seleção

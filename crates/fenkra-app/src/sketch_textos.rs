@@ -81,6 +81,9 @@ pub static TEXTOS: &[(&str, &str)] = &[
     // arraste direto (B272)
     ("a cota usa expressão", "the dimension uses an expression"),
     ("Clique para selecionar (Shift soma). Arraste pontos, linhas, arcos, splines ou a borda de círculos: o solver mantém as restrições. Passe o mouse para ver as setas do que ainda pode se mover. Delete apaga a seleção.", "Click to select (Shift adds). Drag points, lines, arcs, splines or the edge of circles: the solver keeps the constraints. Hover to see arrows showing what can still move. Delete removes the selection."),
+    // barra de restrições (B273)
+    ("conflita com as restrições do sketch", "conflicts with the sketch constraints"),
+    ("sketch grande: a prévia só destaca", "large sketch: the preview only highlights"),
     // snaps (B96)
     ("origem", "origin"),
     ("ponta", "end"),
