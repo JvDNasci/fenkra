@@ -103,6 +103,16 @@ pub struct Joint {
     pub drive_len: Option<String>,
     #[serde(default)]
     pub suppressed: bool,
+    /// faixa de movimento: por enquanto só guia o Animar, o solucionador não a impõe
+    #[serde(default)]
+    pub limites: Limites,
+}
+
+/// Mínimo e máximo de cada grau de liberdade da junta (graus e mm, relativos à criação).
+#[derive(Clone, Copy, PartialEq, Debug, Default, Serialize, Deserialize)]
+pub struct Limites {
+    pub angulo: Option<(f64, f64)>,
+    pub curso: Option<(f64, f64)>,
 }
 
 /// Relação entre duas juntas: engrenagem (ângulo × ângulo), pinhão-cremalheira (ângulo → curso)
@@ -162,7 +172,7 @@ impl Assembly {
         let id = self.alloc();
         let name = self.unique_pub(kind.label());
         let pl = |c: Id| self.node(c).map(|n| n.placement).unwrap_or_default();
-        let mut j = Joint { id, name, kind, a, b, angle0: 0., len0: 0., drive_angle: None, drive_len: None, suppressed: false };
+        let mut j = Joint { id, name, kind, a, b, angle0: 0., len0: 0., drive_angle: None, drive_len: None, suppressed: false, limites: Limites::default() };
         j.angle0 = angle_of(&j, &pl(a.comp), &pl(b.comp));
         j.len0 = len_of(&j, &pl(a.comp), &pl(b.comp));
         self.joints.push(j);

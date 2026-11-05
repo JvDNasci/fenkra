@@ -10,6 +10,9 @@ use fenkra_kernel::{Loop2, Seg2};
 #[derive(Clone, Debug, PartialEq)]
 pub struct Family {
     pub name: String,
+    /// grupo da cascata de escolha (norma, tipo, tamanho): as de fábrica por tipo de produto, as do
+    /// usuário em "Minhas famílias"
+    pub norm: String,
     pub kind: SectionKind,
     pub sizes: Vec<(String, Vec<f64>)>,
 }
@@ -45,6 +48,17 @@ pub fn kind_label(k: SectionKind) -> &'static str {
     }
 }
 
+/// Grupo (norma) das famílias de fábrica de cada tipo de seção. É o agrupamento por produto usado na
+/// cascata de escolha; as medidas são as comerciais usuais, não uma tabela normativa completa.
+pub fn norm_of(k: SectionKind) -> &'static str {
+    match k {
+        SectionKind::TuboQuadrado | SectionKind::TuboRetangular | SectionKind::TuboRedondo => "Tubos de seção fechada",
+        SectionKind::PerfilI | SectionKind::PerfilU | SectionKind::PerfilT => "Perfis laminados",
+        SectionKind::Cantoneira => "Cantoneiras",
+        SectionKind::BarraChata | SectionKind::BarraRedonda | SectionKind::BarraQuadrada => "Barras",
+    }
+}
+
 pub const KINDS: [SectionKind; 10] = [
     SectionKind::TuboQuadrado,
     SectionKind::TuboRetangular,
@@ -60,7 +74,7 @@ pub const KINDS: [SectionKind; 10] = [
 
 /// Biblioteca de fábrica (medidas comerciais usuais, em mm).
 pub fn builtin() -> Vec<Family> {
-    let f = |name: &str, kind, sizes: &[(&str, &[f64])]| Family { name: name.into(), kind, sizes: sizes.iter().map(|(n, d)| (n.to_string(), d.to_vec())).collect() };
+    let f = |name: &str, kind, sizes: &[(&str, &[f64])]| Family { name: name.into(), norm: norm_of(kind).into(), kind, sizes: sizes.iter().map(|(n, d)| (n.to_string(), d.to_vec())).collect() };
     vec![
         f("Tubo quadrado", SectionKind::TuboQuadrado, &[("20x2", &[20., 2.]), ("30x2", &[30., 2.]), ("40x3", &[40., 3.]), ("50x3", &[50., 3.]), ("60x4", &[60., 4.]), ("80x4", &[80., 4.]), ("100x5", &[100., 5.])]),
         f("Tubo retangular", SectionKind::TuboRetangular, &[("40x20x2", &[40., 20., 2.]), ("50x30x3", &[50., 30., 3.]), ("80x40x3", &[80., 40., 3.]), ("100x50x4", &[100., 50., 4.])]),
@@ -173,11 +187,118 @@ pub fn shifted(loops: &[Loop2], by: [f64; 2]) -> Vec<Loop2> {
                     Seg2::Arc(a, b, c) => Seg2::Arc(m(*a), m(*b), m(*c)),
                     Seg2::Circle(c, r) => Seg2::Circle(m(*c), *r),
                     Seg2::Spline(p) => Seg2::Spline(p.iter().map(|q| m(*q)).collect()),
+                    // espelhar inverte o sentido do parâmetro
+                    Seg2::Ellipse(c, v, r, t0, t1) => Seg2::Ellipse(m(*c), m(*v), *r, -*t1, -*t0),
                     Seg2::Ellipse(c, a, r, t0, t1) => Seg2::Ellipse(m(*c), *a, *r, *t0, *t1),
                 })
                 .collect()
         })
         .collect()
+}
+
+/// Cota desenhada sobre a seção (B254): de `a` a `b`, em coordenadas da seção centrada na caixa.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Cota {
+    /// nome da dimensão (o mesmo de `dim_names`)
+    pub name: &'static str,
+    pub a: [f64; 2],
+    pub b: [f64; 2],
+    pub value: f64,
+    /// medida total da caixa (largura ou altura); as demais são espessuras sobre a peça
+    pub overall: bool,
+}
+
+/// Onde cada cota da seção fica no desenho, na ordem de `dim_names`. Uma cota total vai de lado a lado
+/// da caixa; uma espessura cruza a parede ou a aba que ela mede. Devolve vazio se a seção é inválida.
+pub fn dimension_marks(kind: SectionKind, d: &[f64]) -> Vec<Cota> {
+    let Ok((_, w, h, _)) = section(kind, d) else { return vec![] };
+    let names = dim_names(kind);
+    let (x, y) = (w / 2., h / 2.);
+    let horiz = |i: usize, v: f64| Cota { name: names[i], a: [-v / 2., y], b: [v / 2., y], value: v, overall: true };
+    let vert = |i: usize, v: f64| Cota { name: names[i], a: [-x, -v / 2.], b: [-x, v / 2.], value: v, overall: true };
+    let seg = |i: usize, a: [f64; 2], b: [f64; 2]| Cota { name: names[i], a, b, value: ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2)).sqrt(), overall: false };
+    match kind {
+        SectionKind::TuboQuadrado => vec![horiz(0, d[0]), seg(1, [x - d[1], 0.], [x, 0.])],
+        SectionKind::TuboRetangular => vec![horiz(0, d[0]), vert(1, d[1]), seg(2, [x - d[2], 0.], [x, 0.])],
+        SectionKind::TuboRedondo => vec![horiz(0, d[0]), seg(1, [x - d[1], 0.], [x, 0.])],
+        SectionKind::BarraRedonda | SectionKind::BarraQuadrada => vec![horiz(0, d[0])],
+        SectionKind::BarraChata => vec![horiz(0, d[0]), vert(1, d[1])],
+        SectionKind::PerfilI => vec![vert(0, d[0]), horiz(1, d[1]), seg(2, [-d[2] / 2., 0.], [d[2] / 2., 0.]), seg(3, [x, -y], [x, -y + d[3]])],
+        SectionKind::PerfilU => vec![vert(0, d[0]), horiz(1, d[1]), seg(2, [-x, 0.], [-x + d[2], 0.]), seg(3, [x, -y], [x, -y + d[3]])],
+        SectionKind::PerfilT => vec![vert(0, d[0]), horiz(1, d[1]), seg(2, [-d[2] / 2., 0.], [d[2] / 2., 0.]), seg(3, [x, y - d[3]], [x, y])],
+        SectionKind::Cantoneira => vec![vert(0, d[0]), horiz(1, d[1]), seg(2, [x, -y], [x, -y + d[2]])],
+    }
+}
+
+/// O laço fecha? Cada segmento começa onde o anterior termina e o último volta ao primeiro; um
+/// círculo sozinho já é fechado. Laço vazio não é fechado.
+pub fn loop_closed(l: &Loop2) -> bool {
+    let ends = |s: &Seg2| -> Option<([f64; 2], [f64; 2])> {
+        match s {
+            Seg2::Line(a, b) => Some((*a, *b)),
+            Seg2::Arc(a, _, c) => Some((*a, *c)),
+            Seg2::Circle(..) => None,
+            Seg2::Spline(p) => Some((*p.first()?, *p.last()?)),
+            Seg2::Ellipse(c, m, r, t0, t1) => {
+                if (t1 - t0).abs() >= std::f64::consts::TAU - 1e-9 {
+                    return None;
+                }
+                let g = m[0].hypot(m[1]).max(1e-12);
+                let (ux, uy) = (m[0] / g, m[1] / g);
+                let em = |t: f64| [c[0] + g * t.cos() * ux - r * t.sin() * uy, c[1] + g * t.cos() * uy + r * t.sin() * ux];
+                Some((em(*t0), em(*t1)))
+            }
+        }
+    };
+    if l.is_empty() {
+        return false;
+    }
+    let near = |p: [f64; 2], q: [f64; 2]| (p[0] - q[0]).abs() < 1e-9 && (p[1] - q[1]).abs() < 1e-9;
+    if l.len() == 1 {
+        return match ends(&l[0]) {
+            None => true,
+            Some((a, b)) => near(a, b),
+        };
+    }
+    (0..l.len()).all(|i| match (ends(&l[i]), ends(&l[(i + 1) % l.len()])) {
+        (Some((_, fim)), Some((ini, _))) => near(fim, ini),
+        _ => false,
+    })
+}
+
+/// Espelha os laços em torno do eixo Y da seção (x vira -x). A ordem dos pontos de cada laço fica
+/// como está: o sólido não depende do sentido do contorno.
+pub fn mirrored(loops: &[Loop2]) -> Vec<Loop2> {
+    let m = |p: [f64; 2]| [-p[0], p[1]];
+    loops
+        .iter()
+        .map(|l| {
+            l.iter()
+                .map(|s| match s {
+                    Seg2::Line(a, b) => Seg2::Line(m(*a), m(*b)),
+                    Seg2::Arc(a, b, c) => Seg2::Arc(m(*a), m(*b), m(*c)),
+                    Seg2::Circle(c, r) => Seg2::Circle(m(*c), *r),
+                    Seg2::Spline(p) => Seg2::Spline(p.iter().map(|q| m(*q)).collect()),
+                    // espelhar inverte o sentido do parâmetro
+                    Seg2::Ellipse(c, v, r, t0, t1) => Seg2::Ellipse(m(*c), m(*v), *r, -*t1, -*t0),
+                })
+                .collect()
+        })
+        .collect()
+}
+
+/// Espessura da parede do perfil (referência da sobra da placa em "razão da parede"): a parede dos
+/// tubos, a alma dos perfis I/U/T, a espessura da cantoneira e da barra chata; 0 nas barras maciças.
+pub fn wall(k: SectionKind, d: &[f64]) -> f64 {
+    let at = |i: usize| d.get(i).copied().unwrap_or(0.);
+    match k {
+        SectionKind::TuboQuadrado | SectionKind::TuboRedondo => at(1),
+        SectionKind::TuboRetangular => at(2),
+        SectionKind::PerfilI | SectionKind::PerfilU | SectionKind::PerfilT => at(2),
+        SectionKind::Cantoneira => at(2),
+        SectionKind::BarraChata => at(1),
+        SectionKind::BarraRedonda | SectionKind::BarraQuadrada => 0.,
+    }
 }
 
 /// Agrupa as linhas do esqueleto por contiguidade: duas linhas que dividem uma ponta (dentro de
@@ -234,6 +355,81 @@ mod tests {
         assert!(c[0] < 0. && c[1] < 0., "centróide da cantoneira puxado para o canto: {c:?}");
         assert_eq!(anchor_point(5, 40., 20., c), [20., -10.]);
         assert!(section(SectionKind::TuboQuadrado, &[20., 12.]).is_err());
+    }
+
+    #[test]
+    fn espelhar_inverte_o_lado_do_perfil_sem_mudar_a_caixa() {
+        let (l, w, h, c) = section(SectionKind::PerfilU, &[100., 50., 5., 8.]).unwrap();
+        let xs = |ls: &[Loop2]| {
+            let mut v = vec![];
+            for lp in ls {
+                for sg in lp {
+                    if let Seg2::Line(a, _) = sg {
+                        v.push(a[0]);
+                    }
+                }
+            }
+            (v.iter().cloned().fold(f64::MAX, f64::min), v.iter().cloned().fold(f64::MIN, f64::max))
+        };
+        let m = mirrored(&l);
+        assert_eq!(xs(&l), (-w / 2., w / 2.));
+        assert_eq!(xs(&m), (-w / 2., w / 2.));
+        // o centróide do U fica do lado da alma: espelhar troca de lado
+        assert!(c[0] < 0. && h == 100.);
+        let primeiro = |ls: &[Loop2]| if let Seg2::Line(a, _) = ls[0][0] { a } else { unreachable!() };
+        assert_eq!(primeiro(&m)[0], -primeiro(&l)[0]);
+    }
+
+    #[test]
+    fn toda_medida_valida_de_fabrica_gera_lacos_fechados_e_cotas_certas() {
+        for fam in builtin() {
+            for (n, d) in &fam.sizes {
+                let (loops, w, h, _) = section(fam.kind, d).unwrap();
+                assert!(!loops.is_empty());
+                for l in &loops {
+                    assert!(loop_closed(l), "{} {n}: laço aberto {l:?}", fam.name);
+                }
+                // as cotas desenhadas medem exatamente o valor da dimensão que nomeiam
+                let marcas = dimension_marks(fam.kind, d);
+                assert_eq!(marcas.len(), dim_names(fam.kind).len(), "{} {n}", fam.name);
+                for (i, c) in marcas.iter().enumerate() {
+                    assert_eq!(c.name, dim_names(fam.kind)[i]);
+                    let comp = ((c.b[0] - c.a[0]).powi(2) + (c.b[1] - c.a[1]).powi(2)).sqrt();
+                    assert!((comp - d[i]).abs() < 1e-9, "{} {n}: cota {} mede {comp}, esperado {}", fam.name, c.name, d[i]);
+                    // e as pontas ficam dentro da caixa da seção
+                    for p in [c.a, c.b] {
+                        assert!(p[0].abs() <= w / 2. + 1e-9 && p[1].abs() <= h / 2. + 1e-9, "{} {n}: {}", fam.name, c.name);
+                    }
+                }
+            }
+        }
+        // medida inválida: sem cotas
+        assert!(dimension_marks(SectionKind::TuboQuadrado, &[20., 12.]).is_empty());
+    }
+
+    #[test]
+    fn laco_aberto_e_detectado() {
+        let aberto = vec![Seg2::Line([0., 0.], [1., 0.]), Seg2::Line([1., 0.], [1., 1.]), Seg2::Line([1., 1.], [0., 1.])];
+        assert!(!loop_closed(&aberto));
+        assert!(!loop_closed(&vec![]));
+        assert!(loop_closed(&vec![Seg2::Circle([0., 0.], 3.)]));
+        assert!(loop_closed(&rect(0., 0., 2., 1.)));
+    }
+
+    #[test]
+    fn toda_familia_de_fabrica_tem_grupo() {
+        for f in builtin() {
+            assert_eq!(f.norm, norm_of(f.kind));
+            assert!(!f.norm.is_empty());
+        }
+    }
+
+    #[test]
+    fn parede_de_referencia_por_tipo() {
+        assert_eq!(wall(SectionKind::TuboQuadrado, &[40., 3.]), 3.);
+        assert_eq!(wall(SectionKind::TuboRetangular, &[40., 20., 2.]), 2.);
+        assert_eq!(wall(SectionKind::PerfilU, &[100., 50., 5., 8.]), 5.);
+        assert_eq!(wall(SectionKind::BarraRedonda, &[10.]), 0.);
     }
 
     #[test]
