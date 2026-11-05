@@ -563,10 +563,11 @@ impl App {
                 gap: s("0"),
                 joints: vec![],
                 material: String::new(),
+                mirror: false,
             };
             d.add_feature(FeatureKind::StructMember(mk(paths, CornerMode::MeiaEsquadria, 0)));
             d.add_feature(FeatureKind::StructMember(mk(legs, CornerMode::Nenhum, 0)));
-            d.add_feature(FeatureKind::StructPlate(StructPlate { at: [0., 0., 0.], thickness: s("8"), margin: s("15") }));
+            d.add_feature(FeatureKind::StructPlate(StructPlate::nova([0., 0., 0.], "8", "15")));
             for r in &mut d.references {
                 r.visible = false;
             }
@@ -1922,6 +1923,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                             gap: s("0"),
                             joints: vec![],
                             material: String::new(),
+                            mirror: false,
                         }))
                     })
                     .collect();
@@ -1935,14 +1937,16 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     PointRef::Fixed(q) => Some(*q),
                     _ => None,
                 });
+                // B255: a placa também nasce de uma face clicada (a da ponta) e o reforço de uma aresta
+                let at = at.or_else(|| if c == Cmd::StPlate { faces.first().copied() } else { edges.first().copied() });
                 let Some(at) = at else {
-                    self.toast("Selecione o vértice da ponta (placa) ou do encontro dos membros (reforço)", true);
+                    self.toast("Selecione a face da ponta (placa) ou a aresta de encontro dos membros (reforço)", true);
                     return;
                 };
                 Sel::Feature(d.add_feature(if c == Cmd::StPlate {
-                    FeatureKind::StructPlate(StructPlate { at, thickness: s("8"), margin: s("10") })
+                    FeatureKind::StructPlate(StructPlate::nova(at, "8", "10"))
                 } else {
-                    FeatureKind::StructGusset(StructGusset { at, leg: s("80"), thickness: s("6"), chamfer: s("10") })
+                    FeatureKind::StructGusset(StructGusset::novo(at, "80", "6", "10"))
                 }))
             }
             Cmd::SmParams => {
