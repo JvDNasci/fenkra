@@ -16,6 +16,7 @@
 pub mod diario;
 pub mod importacao;
 pub mod plano;
+pub mod pn;
 pub mod referencias;
 pub mod seguro;
 
@@ -135,6 +136,12 @@ pub struct Index {
     pub name: String,
     pub pn_prefix: String,
     pub next_pn: u32,
+    /// ambientes de numeração (B47); vazio = só o prefixo e o contador acima
+    #[serde(default)]
+    pub pn_ambientes: Vec<pn::AmbientePn>,
+    /// nome do ambiente em uso; vazio ou desconhecido = numeração simples
+    #[serde(default)]
+    pub pn_ambiente: String,
     next_id: u64,
     pub documents: Vec<DocEntry>,
 }
@@ -151,6 +158,19 @@ pub struct Project {
 /// Autor padrão: o usuário do sistema operacional.
 fn autor_do_sistema() -> String {
     std::env::var("USERNAME").or_else(|_| std::env::var("USER")).unwrap_or_default()
+}
+
+/// Código curto do tipo de peça para a máscara de PN.
+fn codigo_tipo(t: fenkra_core::PartType) -> &'static str {
+    use fenkra_core::PartType::*;
+    match t {
+        Fabricada => "FAB",
+        Comprada => "COM",
+        Hardware => "HW",
+        Chapa => "CHP",
+        MembroEstrutural => "EST",
+        Fantasma => "FAN",
+    }
 }
 
 fn now() -> u64 {
@@ -190,6 +210,8 @@ impl Project {
                 name: name.into(),
                 pn_prefix: "FK-".into(),
                 next_pn: 1,
+                pn_ambientes: vec![],
+                pn_ambiente: String::new(),
                 next_id: 1,
                 documents: vec![],
             },
@@ -232,17 +254,103 @@ impl Project {
     }
 
     /// Numeração automática de PN (RF-GPR-005). **Consome** o número na hora: use só quando o
-    /// chamador garante a gravação; `add_document` usa [`Project::pn_previsto`] e só avança o contador
-    /// depois que o documento foi gravado (B25).
+    /// chamador garante a gravação; `add_document` usa [`Project::pn_previsto_para`] e só avança o
+    /// contador depois que o documento foi gravado (B25).
     pub fn next_pn(&mut self) -> String {
-        let pn = self.pn_previsto();
-        self.index.next_pn += 1;
+        let (pn, seq) = self.pn_livre(&Document::new(""));
+        self.gravar_seq(seq);
         pn
     }
 
-    /// O próximo PN sem consumi-lo (prévia e reserva).
+    /// O próximo PN sem consumi-lo, para um documento padrão.
     pub fn pn_previsto(&self) -> String {
-        format!("{}{:04}", self.index.pn_prefix, self.index.next_pn)
+        self.pn_livre(&Document::new("")).0
+    }
+
+    /// O PN que `doc` receberia agora (sem consumir). Usa o ambiente ativo, a máscara dele e os campos
+    /// do documento (tipo, propriedades personalizadas) (B47).
+    pub fn pn_previsto_para(&self, doc: &Document) -> String {
+        self.pn_livre(doc).0
+    }
+
+    /// Prévia ao vivo em segmentos, para a interface pintar de cinza o que ainda falta preencher.
+    pub fn pn_previa(&self, doc: &Document) -> Result<Vec<pn::Segmento>, pn::ErroMascara> {
+        let (mascara, campos, seq) = self.regra_pn(doc);
+        pn::previa(&mascara, &campos, seq)
+    }
+
+    /// Máscara em uso (a do ambiente ativo ou a padrão).
+    pub fn pn_mascara_ativa(&self) -> String {
+        self.ambiente_ativo().map(|a| a.mascara.clone()).unwrap_or_else(|| pn::MASCARA_PADRAO.into())
+    }
+
+    fn ambiente_ativo(&self) -> Option<&pn::AmbientePn> {
+        self.index.pn_ambientes.iter().find(|a| a.nome == self.index.pn_ambiente)
+    }
+
+    /// Cria ou atualiza um ambiente de numeração. A máscara é validada; o contador de um ambiente que
+    /// já existe é preservado.
+    pub fn definir_ambiente_pn(&mut self, mut amb: pn::AmbientePn) -> PResult<()> {
+        self.pode_gravar()?;
+        pn::validar(&amb.mascara).map_err(|e| ProjectError::Recusado(e.to_string()))?;
+        if amb.nome.trim().is_empty() {
+            return Err(ProjectError::Recusado("o ambiente precisa de um nome".into()));
+        }
+        let antes = self.index.pn_ambientes.clone();
+        match self.index.pn_ambientes.iter_mut().find(|a| a.nome == amb.nome) {
+            Some(a) => {
+                amb.proximo = a.proximo;
+                *a = amb;
+            }
+            None => self.index.pn_ambientes.push(amb),
+        }
+        self.save_index().inspect_err(|_| self.index.pn_ambientes = antes)
+    }
+
+    /// Escolhe o ambiente em uso; nome vazio volta à numeração simples.
+    pub fn ativar_ambiente_pn(&mut self, nome: &str) -> PResult<()> {
+        self.pode_gravar()?;
+        if !nome.is_empty() && !self.index.pn_ambientes.iter().any(|a| a.nome == nome) {
+            return Err(ProjectError::Recusado(format!("não existe o ambiente {nome}")));
+        }
+        let antes = std::mem::replace(&mut self.index.pn_ambiente, nome.into());
+        self.save_index().inspect_err(|_| self.index.pn_ambiente = antes)
+    }
+
+    fn regra_pn(&self, doc: &Document) -> (String, pn::CamposPn, u32) {
+        let (mascara, prefixo, ambiente, seq) = match self.ambiente_ativo() {
+            Some(a) => (a.mascara.clone(), a.prefixo.clone(), a.nome.clone(), a.proximo),
+            None => (pn::MASCARA_PADRAO.to_string(), self.index.pn_prefix.clone(), String::new(), self.index.next_pn),
+        };
+        let campos = pn::CamposPn {
+            prefixo,
+            ambiente,
+            ano: Some(pn::ano_atual()),
+            tipo: codigo_tipo(doc.props.part_type).into(),
+            personalizados: doc.props.custom.clone(),
+        };
+        (mascara, campos, seq)
+    }
+
+    /// Primeiro PN livre a partir do contador, e o número de sequência que ele usou.
+    fn pn_livre(&self, doc: &Document) -> (String, u32) {
+        let (mascara, campos, mut seq) = self.regra_pn(doc);
+        loop {
+            let pn = pn::previa(&mascara, &campos, seq).map(|s| pn::texto(&s)).unwrap_or_else(|_| format!("{}{:04}", self.index.pn_prefix, seq));
+            if !self.index.documents.iter().any(|d| d.pn == pn) || seq == u32::MAX {
+                return (pn, seq);
+            }
+            seq += 1;
+        }
+    }
+
+    /// Marca `seq` como usada: o contador do ambiente ativo passa a `seq + 1`.
+    fn gravar_seq(&mut self, seq: u32) {
+        let ativo = self.index.pn_ambiente.clone();
+        match self.index.pn_ambientes.iter_mut().find(|a| a.nome == ativo) {
+            Some(a) => a.proximo = seq + 1,
+            None => self.index.next_pn = seq + 1,
+        }
     }
 
     fn registrar(&self, tipo: diario::TipoEvento, doc_id: u64, de: &str, para: &str, motivo: &str) -> PResult<()> {
@@ -259,15 +367,18 @@ impl Project {
     pub fn add_document(&mut self, mut doc: Document) -> PResult<u64> {
         self.pode_gravar()?;
         let consome_pn = doc.props.pn.is_empty();
+        let mut seq_usada = 0;
         if consome_pn {
-            doc.props.pn = self.pn_previsto();
+            let (pn, seq) = self.pn_livre(&doc);
+            doc.props.pn = pn;
+            seq_usada = seq;
         }
         self.check_pn(None, &doc.props.pn)?;
-        let (next_id_antes, next_pn_antes) = (self.index.next_id, self.index.next_pn);
+        let (next_id_antes, next_pn_antes, ambientes_antes) = (self.index.next_id, self.index.next_pn, self.index.pn_ambientes.clone());
         let id = self.index.next_id;
         self.index.next_id += 1;
         if consome_pn {
-            self.index.next_pn += 1;
+            self.gravar_seq(seq_usada);
         }
         self.index.documents.push(DocEntry {
             id,
@@ -286,6 +397,7 @@ impl Project {
             self.index.documents.retain(|d| d.id != id);
             self.index.next_id = next_id_antes;
             self.index.next_pn = next_pn_antes;
+            self.index.pn_ambientes = ambientes_antes;
             return Err(e);
         }
         Ok(id)
@@ -741,6 +853,84 @@ mod tests {
         d.props.pn = "MEU-1".into();
         p.add_document(d).unwrap();
         assert_eq!(p.pn_previsto(), "FK-0001");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn mascara_e_ambientes_numeram_separado_e_guardam_o_contador() {
+        let root = tmp("amb");
+        let mut p = Project::create(&root, "T").unwrap();
+        p.definir_ambiente_pn(pn::AmbientePn::novo("Produção", "FK", "{PREFIXO}-{TIPO}-{SEQ:4}")).unwrap();
+        p.definir_ambiente_pn(pn::AmbientePn::novo("Protótipo", "PR", "{PREFIXO}/{ANO}/{SEQ:3}")).unwrap();
+        assert!(p.definir_ambiente_pn(pn::AmbientePn::novo("Ruim", "X", "sem sequência")).is_err());
+        p.ativar_ambiente_pn("Produção").unwrap();
+        assert_eq!(p.pn_mascara_ativa(), "{PREFIXO}-{TIPO}-{SEQ:4}");
+        let a = p.add_document(Document::new("a")).unwrap();
+        let b = p.add_document(Document::new("b")).unwrap();
+        assert_eq!(p.entry(a).unwrap().pn, "FK-FAB-0001");
+        assert_eq!(p.entry(b).unwrap().pn, "FK-FAB-0002");
+        // o protótipo tem contador próprio
+        p.ativar_ambiente_pn("Protótipo").unwrap();
+        let c = p.add_document(Document::new("c")).unwrap();
+        assert_eq!(p.entry(c).unwrap().pn, format!("PR/{}/001", pn::ano_atual()));
+        // voltando à produção, a sequência continua de onde parou
+        p.ativar_ambiente_pn("Produção").unwrap();
+        assert_eq!(p.pn_previsto(), "FK-FAB-0003");
+        // o tipo da peça entra na máscara
+        let mut comprada = Document::new("parafuso");
+        comprada.props.part_type = fenkra_core::PartType::Comprada;
+        assert_eq!(p.pn_previsto_para(&comprada), "FK-COM-0003");
+        // reabrir preserva ambientes e contadores
+        let p2 = Project::open(&root).unwrap();
+        assert_eq!(p2.index.pn_ambiente, "Produção");
+        assert_eq!(p2.pn_previsto(), "FK-FAB-0003");
+        assert!(matches!(p.ativar_ambiente_pn("Inexistente"), Err(ProjectError::Recusado(_))));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn falha_de_gravacao_nao_avanca_a_sequencia_do_ambiente() {
+        let root = tmp("amb-falha");
+        let mut p = Project::create(&root, "T").unwrap();
+        p.definir_ambiente_pn(pn::AmbientePn::novo("Produção", "FK", "{PREFIXO}-{SEQ:4}")).unwrap();
+        p.ativar_ambiente_pn("Produção").unwrap();
+        p.add_document(Document::new("a")).unwrap();
+        std::fs::remove_dir_all(root.join(VERSIONS)).unwrap();
+        std::fs::write(root.join(VERSIONS), b"x").unwrap();
+        assert!(p.add_document(Document::new("b")).is_err());
+        assert_eq!(p.pn_previsto(), "FK-0002", "a sequência do ambiente não avançou");
+        assert_eq!(p.index.pn_ambientes[0].proximo, 2);
+        assert_eq!(Project::open(&root).unwrap().index.pn_ambientes[0].proximo, 2, "nem no disco");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn pn_ocupado_por_outro_documento_e_pulado_sem_erro() {
+        let root = tmp("pn-pula");
+        let mut p = Project::create(&root, "T").unwrap();
+        let mut manual = Document::new("manual");
+        manual.props.pn = "FK-0001".into();
+        p.add_document(manual).unwrap();
+        let id = p.add_document(Document::new("auto")).unwrap();
+        assert_eq!(p.entry(id).unwrap().pn, "FK-0002");
+        assert_eq!(p.pn_previsto(), "FK-0003");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn previa_ao_vivo_marca_o_que_falta() {
+        let root = tmp("previa");
+        let mut p = Project::create(&root, "T").unwrap();
+        p.definir_ambiente_pn(pn::AmbientePn::novo("Cliente", "FK", "{PREFIXO}-{CAMPO:cliente}-{SEQ:3}")).unwrap();
+        p.ativar_ambiente_pn("Cliente").unwrap();
+        let mut d = Document::new("x");
+        let s = p.pn_previa(&d).unwrap();
+        assert_eq!(pn::texto(&s), "FK-CLIENTE-001");
+        assert!(!pn::completo(&s), "falta preencher o cliente");
+        d.props.custom.push(("Cliente".into(), "ACME".into()));
+        let s = p.pn_previa(&d).unwrap();
+        assert_eq!(pn::texto(&s), "FK-ACME-001");
+        assert!(pn::completo(&s));
         let _ = std::fs::remove_dir_all(root);
     }
 }

@@ -21,6 +21,7 @@ use crate::i18n::tr;
 
 mod diag;
 mod importar;
+mod projeto;
 mod salvar;
 use salvar::Acao;
 
@@ -5867,6 +5868,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
         });
 
+        self.painel_pn(ui);
         let Some(sel) = self.project_sel else { return };
         let Ok(e) = self.project.as_ref().unwrap().entry(sel).cloned() else { return };
         ui.separator();

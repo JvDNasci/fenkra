@@ -3110,6 +3110,18 @@ static TABLE: &[(&str, &str)] = &[
     // PDM: versões, restauração (B25)
     ("↩ restaurar", "↩ restore"),
     ("Cria uma versão nova com o conteúdo desta; o histórico não é reescrito", "Creates a new version with this content; history is never rewritten"),
+    // PDM: PN por máscara e ambientes (B47)
+    ("Máscara", "Mask"),
+    ("Vazio = automático. A prévia em cinza vira definitiva ao salvar no projeto.", "Empty = automatic. The gray preview becomes final when saved in the project."),
+    ("falta preencher:", "still to fill:"),
+    ("Numeração de PN", "PN numbering"),
+    ("Próximo PN", "Next PN"),
+    ("Ambiente", "Environment"),
+    ("(simples)", "(simple)"),
+    ("Cada ambiente (produção, protótipo...) tem máscara e contador próprios", "Each environment (production, prototype...) has its own mask and counter"),
+    ("novo ambiente", "new environment"),
+    ("Campos: {PREFIXO} {ANO} {TIPO} {AMB} {CAMPO:nome} {SEQ:N}. Um {SEQ:N} é obrigatório.", "Fields: {PREFIXO} {ANO} {TIPO} {AMB} {CAMPO:name} {SEQ:N}. One {SEQ:N} is required."),
+    ("Salvar ambiente", "Save environment"),
 ];
 
 #[cfg(test)]
