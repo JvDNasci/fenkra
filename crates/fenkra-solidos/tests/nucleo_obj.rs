@@ -49,7 +49,7 @@ fn erro_estavel_aponta_o_primeiro_pai_que_falhou() {
     let mut d = Document::new("pai");
     let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [-20., -15.], [20., 15.]);
     // saída (ângulo) só vale com término cego: o kernel nem é chamado, o comando falha por si
-    let ruim = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Symmetric("10".into()), reverse: false, taper: "3".into(), thin: None, dir: None, thin_side: 0 }));
+    let ruim = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Symmetric("10".into()), reverse: false, taper: "3".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
     let filho = d.add_feature(FeatureKind::Fillet(EdgeOp { value: "1".into(), edges: EdgeSel::CreatedBy(ruim), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![] }));
     let r = recompute(&d);
     assert!(matches!(r.status[&ruim], Status::Error(_)));

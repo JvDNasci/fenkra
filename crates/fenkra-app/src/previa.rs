@@ -344,7 +344,7 @@ pub fn demo_preparar(doc: &mut Document) -> Option<DemoPrevia> {
         let sk = sketch(d, PlaneRef::Origin(OriginPlane::XY), &|data, al| {
             data.add_rect(&mut &mut *al, [-30., -20.], [30., 20.], false);
         });
-        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("30")), reverse: false, taper: s("0"), thin: None, thin_side: 0, dir: None }));
+        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("30")), reverse: false, taper: s("0"), thin: None, thin_side: 0, dir: None, ends: Default::default() }));
     };
     // os casos próprios partem do zero: a placa de exemplo faria a casca falhar
     if matches!(nome.as_str(), "casca" | "espessura" | "rosca" | "nervura") {
@@ -628,7 +628,7 @@ mod tests {
     fn caixa() -> Document {
         let mut d = Document::new("caixa");
         let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [-20., -20.], [20., 20.]);
-        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("20")), reverse: false, taper: s("0"), thin: None, thin_side: 0, dir: None }));
+        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("20")), reverse: false, taper: s("0"), thin: None, thin_side: 0, dir: None, ends: Default::default() }));
         d
     }
 

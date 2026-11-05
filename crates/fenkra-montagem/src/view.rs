@@ -129,7 +129,7 @@ pub fn compose(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, errors: 
             if let Ok(m) = fenkra_solidos::tesselar(&sh, &cache.qualidade()) {
                 let color = n.color.unwrap_or_else(|| comp_mesh(&n.kind, dir, cache, false, 0).map(|x| x.1).unwrap_or([180, 190, 200]));
                 let label = if n.number > 0 { format!("{} · {}", n.number, n.name) } else { n.name.clone() };
-                doc.collectors.push(BodyCollector { id: n.id, name: label, color, visible, finish: Finish::default(), texture: None, marker: None, published: false });
+                doc.collectors.push(BodyCollector { id: n.id, name: label, color, visible, finish: Finish::default(), texture: None, marker: None, published: false, material: String::new() });
                 let nf = m.face_ranges.len();
                 let vol = sh.mass().volume;
                 bodies.push(BodyResult { collector: n.id, color, mesh: m, mass: fenkra_kernel::MassProps { volume: vol, area: 0., center: n.placement.origin }, faces: nf as u32, face_owner: vec![n.id; nf], face_role: vec![-1; nf] });
@@ -140,7 +140,7 @@ pub fn compose(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, errors: 
             Ok((m, color, vol)) => {
                 let color = n.color.unwrap_or(color);
                 let label = if n.number > 0 { format!("{} · {}", n.number, n.name) } else { n.name.clone() };
-                doc.collectors.push(BodyCollector { id: n.id, name: label, color, visible, finish: Finish::default(), texture: None, marker: None, published: false });
+                doc.collectors.push(BodyCollector { id: n.id, name: label, color, visible, finish: Finish::default(), texture: None, marker: None, published: false, material: String::new() });
                 let nf = m.face_ranges.len();
                 bodies.push(BodyResult {
                     collector: n.id,

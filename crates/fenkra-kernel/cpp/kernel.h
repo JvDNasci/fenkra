@@ -124,6 +124,7 @@ int32_t mesh_algo();
 int32_t mesh_pool_threads();
 rust::Vec<double> bounding_box(const Shape& s);
 rust::Vec<double> mass_props(const Shape& s);
+rust::Vec<double> inertia_props(const Shape& s);
 uint32_t count_faces(const Shape& s);
 void export_step(const Shape& s, rust::Str path);
 void export_stl(const Shape& s, rust::Str path, double deflection, double angle);

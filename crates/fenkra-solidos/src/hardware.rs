@@ -40,6 +40,26 @@ pub fn metric(name: &str) -> Option<&'static MetricSize> {
     METRIC.iter().find(|m| m.name == name)
 }
 
+// ---------------------------------------------------------------- escareado (B48)
+
+/// Ângulos totais usuais do cone de escareado, em graus: 82 (parafusos em polegada), 90 (métricos),
+/// 100 e 120 (rebites e chapa fina).
+pub const ANGULOS_ESCAREADO: [f64; 4] = [82., 90., 100., 120.];
+
+/// Norma e o ângulo total do escareado da cabeça que ela descreve.
+pub const NORMAS_ESCAREADO: &[(&str, f64)] = &[
+    ("ISO 10642", 90.),
+    ("ASME B18.6.3", 82.),
+    ("Rebite escareado 100°", 100.),
+    ("Rebite escareado 120°", 120.),
+];
+
+/// Ângulo total do escareado para a norma (sem diferenciar maiúsculas); `None` se não consta.
+pub fn angulo_escareado_da_norma(norma: &str) -> Option<f64> {
+    let n = norma.trim().to_lowercase();
+    NORMAS_ESCAREADO.iter().find(|(nome, _)| nome.to_lowercase() == n).map(|(_, a)| *a)
+}
+
 // ---------------------------------------------------------------- roscas por norma
 
 /// Rosca: norma (grupo), designação, diâmetro maior (mm), passo (mm), broca de rosca (mm), ângulo do filete (°).

@@ -463,7 +463,7 @@ mod tests {
         let mut s = SketchData::default();
         s.add_rect(&mut al, [-5., -5.], [5., 5.], false);
         let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Datum(plano), data: s }));
-        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind("4".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0 }));
+        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind("4".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
     }
 
     /// Montagem com Mestre (fixo, em `z0`) e Filha (na origem). A filha tem um bloco de 10 × 10 × 4

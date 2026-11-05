@@ -45,7 +45,7 @@ fn saida_com_termino_nao_cego_e_erro_nomeado() {
         let (mut d, _) = caixa(40., 30., 10.);
         let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [-5., -5.], [5., 5.]);
         let nome = format!("{t:?}");
-        let id = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Cut, extent: t, reverse: false, taper: "3".into(), thin: None, dir: None, thin_side: 0 }));
+        let id = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Cut, extent: t, reverse: false, taper: "3".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
         let r = recompute(&d);
         let m = erro(&r, id);
         assert!(m.contains("ângulo de saída") && m.contains("cego"), "{nome}: {m}");
@@ -59,7 +59,7 @@ fn saida_com_termino_cego_continua_valendo() {
     }
     let mut d = Document::new("saida");
     let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [-10., -10.], [10., 10.]);
-    let id = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind("20".into()), reverse: false, taper: "5".into(), thin: None, dir: None, thin_side: 0 }));
+    let id = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind("20".into()), reverse: false, taper: "5".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
     let r = recompute(&d);
     assert_eq!(r.status[&id], Status::Ok);
     // tronco de pirâmide: a face de cima encolhe 20·tan(5°) por lado
@@ -70,7 +70,7 @@ fn saida_com_termino_cego_continua_valendo() {
 // ------------------------------------------------------------------ furo simétrico completo
 
 fn furo(sketch: Id, depth: Extent) -> FeatureKind {
-    FeatureKind::Hole(Hole { sketch, kind: HoleKind::Simples, diameter: "6".into(), depth, thread: None, thread_modeled: false, standard: None, points: vec![], dir: None, reverse: false, tip: None, taper: "0".into(), left_hand: false })
+    FeatureKind::Hole(Hole { sketch, kind: HoleKind::Simples, diameter: "6".into(), depth, thread: None, thread_modeled: false, standard: None, points: vec![], dir: None, reverse: false, tip: None, taper: "0".into(), left_hand: false, extra: Default::default() })
 }
 
 #[test]

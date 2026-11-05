@@ -26,7 +26,7 @@ fn s(x: &str) -> String {
 }
 
 fn ext(sketch: Id, d: &str) -> FeatureKind {
-    FeatureKind::Extrude(Extrude { sketch, op: BoolOp::Add, extent: Extent::Blind(d.into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0 })
+    FeatureKind::Extrude(Extrude { sketch, op: BoolOp::Add, extent: Extent::Blind(d.into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() })
 }
 
 fn flange() -> Document {

@@ -250,7 +250,7 @@ fn extrusao_invertida_vai_para_baixo_do_plano() {
     precisa_kernel!();
     let mut d = Document::new("invertida");
     let sk = sk_rect(&mut d, XY, [0., 0.], [40., 30.]);
-    d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("20")), reverse: true, taper: s("0"), thin: None, dir: None, thin_side: 0 }));
+    d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("20")), reverse: true, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
     confere("extrusão invertida", &d, &Esperado::prisma(24000., [40., 30., 20.], [0., 0., -20.]));
     valida("extrusão invertida", &d);
 }
@@ -261,7 +261,7 @@ fn extrusao_simetrica_divide_o_total_pelos_dois_lados() {
     let mut d = Document::new("simétrica");
     param(&mut d, "H", "20");
     let sk = sk_rect(&mut d, XY, [0., 0.], [40., 30.]);
-    d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Symmetric(s("H")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0 }));
+    d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Symmetric(s("H")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
     let a = Esperado::prisma(24000., [40., 30., 20.], [0., 0., -10.]);
     let b = Esperado::prisma(48000., [40., 30., 40.], [0., 0., -20.]);
     ciclo("extrusão simétrica", &mut d, "H", "40", &a, &b);
@@ -273,7 +273,7 @@ fn extrusao_em_dois_lados_com_distancias_diferentes() {
     let mut d = Document::new("dois lados");
     param(&mut d, "H1", "5");
     let sk = sk_rect(&mut d, XY, [0., 0.], [40., 30.]);
-    d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::TwoSides(s("H1"), s("15")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0 }));
+    d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::TwoSides(s("H1"), s("15")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
     let a = Esperado { vol: 1200. * 20., tol_vol: 1e-4, tam: [40., 30., 20.], tol_tam: 1e-3, minimo: None, via_malha: false };
     let b = Esperado { vol: 1200. * 25., tol_vol: 1e-4, tam: [40., 30., 25.], tol_tam: 1e-3, minimo: None, via_malha: false };
     ciclo("extrusão em dois lados", &mut d, "H1", "10", &a, &b);
@@ -286,7 +286,7 @@ fn extrusao_ate_um_plano_termina_exatamente_nele() {
     param(&mut d, "Z", "12");
     let plano = d.add_offset_plane(XY, "Z");
     let sk = sk_rect(&mut d, XY, [0., 0.], [40., 30.]);
-    d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::UpTo(PlaneRef::Datum(plano)), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0 }));
+    d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::UpTo(PlaneRef::Datum(plano)), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
     ciclo("extrusão até plano", &mut d, "Z", "30", &prisma(1200. * 12., [40., 30., 12.]), &prisma(1200. * 30., [40., 30., 30.]));
 }
 
@@ -296,7 +296,7 @@ fn extrusao_de_parede_fina_e_um_anel_centrado_no_contorno() {
     let mut d = Document::new("fina");
     param(&mut d, "esp", "2");
     let sk = sk_rect(&mut d, XY, [0., 0.], [40., 30.]);
-    d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: Some(s("esp")), dir: None, thin_side: 0 }));
+    d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: Some(s("esp")), dir: None, thin_side: 0, ends: Default::default() }));
     // perfil fechado: a parede fica centrada no contorno (metade h = e/2 para cada lado). O lado de
     // fora arredonda os cantos e o de dentro fica vivo: área = 2·P·h + (π − 4)·h², com P = 140
     let e = |esp: f64| {
@@ -312,7 +312,7 @@ fn extrusao_com_saida_vira_tronco_de_piramide() {
     let mut d = Document::new("saída");
     param(&mut d, "A", "5");
     let sk = sk_rect(&mut d, XY, [0., 0.], [20., 20.]);
-    d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("20")), reverse: false, taper: s("A"), thin: None, dir: None, thin_side: 0 }));
+    d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("20")), reverse: false, taper: s("A"), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
     let tronco = |ang: f64| {
         let l2 = 20. - 2. * 20. * ang.to_radians().tan();
         let (a1, a2) = (400., l2 * l2);
@@ -339,7 +339,7 @@ fn corte_passante_atravessa_o_corpo_inteiro() {
     let (mut d, _, _) = caixa_cotada();
     let furo = sk_circulos(&mut d, XY, &[([20., 15.], 5.)]);
     // o sketch está na base (z = 0): a passante tem de ser invertida para entrar no corpo
-    d.add_feature(FeatureKind::Extrude(Extrude { sketch: furo, op: BoolOp::Cut, extent: Extent::ThroughAll, reverse: true, taper: s("0"), thin: None, dir: None, thin_side: 0 }));
+    d.add_feature(FeatureKind::Extrude(Extrude { sketch: furo, op: BoolOp::Cut, extent: Extent::ThroughAll, reverse: true, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
     ciclo("corte passante", &mut d, "H", "30", &Esperado { vol: 24000. - PI * 25. * 20., tol_vol: 2e-3, tam: [40., 30., 20.], tol_tam: 0.01, minimo: None, via_malha: false }, &Esperado { vol: 36000. - PI * 25. * 30., tol_vol: 2e-3, tam: [40., 30., 30.], tol_tam: 0.01, minimo: None, via_malha: false });
 }
 
@@ -389,7 +389,7 @@ fn placa_para_furos(d: &mut Document) -> Id {
 }
 
 fn furo_de(sk: Id, kind: HoleKind, dia: &str, depth: Extent) -> FeatureKind {
-    FeatureKind::Hole(Hole { sketch: sk, kind, diameter: dia.into(), depth, thread: None, thread_modeled: false, standard: None, points: vec![], dir: None, reverse: false, tip: None, taper: s("0"), left_hand: false })
+    FeatureKind::Hole(Hole { sketch: sk, kind, diameter: dia.into(), depth, thread: None, thread_modeled: false, standard: None, points: vec![], dir: None, reverse: false, tip: None, taper: s("0"), left_hand: false, extra: Default::default() })
 }
 
 #[test]
@@ -539,7 +539,7 @@ fn padrao_linear_repete_o_comando_na_direcao() {
     let mut d = Document::new("padrão linear");
     param(&mut d, "n", "3");
     let b = bloco_pequeno(&mut d);
-    d.add_feature(FeatureKind::Pattern(Pattern { kind: PatternKind::Linear { dir: AxisRef::Origin(OriginAxis::X), count: s("n"), spacing: s("20"), dir2: None, count2: s("1"), spacing2: s("0"), total: false }, sources: vec![b] }));
+    d.add_feature(FeatureKind::Pattern(Pattern { kind: PatternKind::Linear { dir: AxisRef::Origin(OriginAxis::X), count: s("n"), spacing: s("20"), dir2: None, count2: s("1"), spacing2: s("0"), total: false }, sources: vec![b], skip: Default::default() }));
     let e = |n: f64| Esperado { vol: 500. * n, tol_vol: 1e-4, tam: [10. + 20. * (n - 1.), 10., 5.], tol_tam: 1e-3, minimo: None, via_malha: false };
     // as instâncias são disjuntas: o kernel guarda um corpo só, com n sólidos
     ciclo("padrão linear", &mut d, "n", "5", &e(3.), &e(5.));
@@ -552,7 +552,7 @@ fn padrao_circular_distribui_as_copias_em_volta_do_eixo() {
     param(&mut d, "n", "4");
     let sk = sk_rect(&mut d, XY, [20., -5.], [30., 5.]);
     let b = d.add_feature(ext(sk, BoolOp::Add, "5"));
-    d.add_feature(FeatureKind::Pattern(Pattern { kind: PatternKind::Circular { axis: AxisRef::Origin(OriginAxis::Z), count: s("n"), angle: s("360") }, sources: vec![b] }));
+    d.add_feature(FeatureKind::Pattern(Pattern { kind: PatternKind::Circular { axis: AxisRef::Origin(OriginAxis::Z), count: s("n"), angle: s("360") }, sources: vec![b], skip: Default::default() }));
     let e = |n: f64, ty: f64| Esperado { vol: 500. * n, tol_vol: 1e-4, tam: [60., ty, 5.], tol_tam: 0.05, minimo: None, via_malha: false };
     // 4 cópias a 90° ocupam −30..30 nos dois eixos; com 6 a 60° o eixo y vai de ±(30·sen60° + 5·cos60°)
     ciclo("padrão circular", &mut d, "n", "6", &e(4., 60.), &e(6., 2. * (30. * 60f64.to_radians().sin() + 5. * 60f64.to_radians().cos())));
@@ -946,7 +946,7 @@ fn invalido_padrao_com_zero_copias() {
     precisa_kernel!();
     let (r, id) = com(|d| {
         let b = d.features[1].id;
-        FeatureKind::Pattern(Pattern { kind: PatternKind::Linear { dir: AxisRef::Origin(OriginAxis::X), count: s("0"), spacing: s("10"), dir2: None, count2: s("1"), spacing2: s("0"), total: false }, sources: vec![b] })
+        FeatureKind::Pattern(Pattern { kind: PatternKind::Linear { dir: AxisRef::Origin(OriginAxis::X), count: s("0"), spacing: s("10"), dir2: None, count2: s("1"), spacing2: s("0"), total: false }, sources: vec![b], skip: Default::default() })
     });
     // zero cópias não é erro: o comando vira uma instância só e avisa
     match &r.status[&id] {
@@ -1004,7 +1004,7 @@ fn invalido_corte_que_nao_remove_nada_avisa() {
     precisa_kernel!();
     let (mut d, _, _) = caixa_cotada();
     let furo = sk_circulos(&mut d, XY, &[([20., 15.], 5.)]);
-    let id = d.add_feature(FeatureKind::Extrude(Extrude { sketch: furo, op: BoolOp::Cut, extent: Extent::ThroughAll, reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0 }));
+    let id = d.add_feature(FeatureKind::Extrude(Extrude { sketch: furo, op: BoolOp::Cut, extent: Extent::ThroughAll, reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
     let r = recompute(&d);
     assert!(!matches!(r.status[&id], Status::Ok), "o corte não removeu nada e o status é Ok (volume {})", volume_total(&r));
 }

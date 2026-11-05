@@ -80,7 +80,7 @@ pub fn sk_poligono(d: &mut Document, plane: PlaneRef, pts: &[[f64; 2]]) -> Id {
 }
 
 pub fn ext(sketch: Id, op: BoolOp, dist: &str) -> FeatureKind {
-    FeatureKind::Extrude(Extrude { sketch, op, extent: Extent::Blind(dist.into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0 })
+    FeatureKind::Extrude(Extrude { sketch, op, extent: Extent::Blind(dist.into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() })
 }
 
 pub fn furo_passante(sketch: Id, diametro: &str) -> FeatureKind {
@@ -97,7 +97,7 @@ pub fn furo_passante(sketch: Id, diametro: &str) -> FeatureKind {
         reverse: false,
         tip: None,
         taper: "0".into(),
-        left_hand: false,
+        left_hand: false, extra: Default::default(),
     })
 }
 

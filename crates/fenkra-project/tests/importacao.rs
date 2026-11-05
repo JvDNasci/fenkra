@@ -23,7 +23,7 @@ fn step_de_bloco(caminho: &Path, x: f64) {
     let mut al = || d.alloc();
     data.add_rect(&mut al, [0., 0.], [x, 30.], false);
     let s = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
-    d.add_feature(FeatureKind::Extrude(Extrude { sketch: s, op: BoolOp::Add, extent: Extent::Blind("20".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0 }));
+    d.add_feature(FeatureKind::Extrude(Extrude { sketch: s, op: BoolOp::Add, extent: Extent::Blind("20".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
     export(&d, None, caminho.to_str().unwrap()).unwrap();
 }
 

@@ -122,7 +122,7 @@ mod tests {
         let mut base = SketchData::default();
         base.add_rect(&mut al, [-30., -30.], [30., 30.], false);
         let sb = placa.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data: base }));
-        placa.add_feature(FeatureKind::Extrude(fenkra_core::Extrude { sketch: sb, op: fenkra_core::BoolOp::Add, extent: fenkra_core::Extent::Blind("10".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0 }));
+        placa.add_feature(FeatureKind::Extrude(fenkra_core::Extrude { sketch: sb, op: fenkra_core::BoolOp::Add, extent: fenkra_core::Extent::Blind("10".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
         std::fs::write(dir.join("p.fkp"), placa.to_json()).unwrap();
         let mut a = Assembly::new("A");
         let c = a.add_component("Placa", NodeKind::Part { path: "p.fkp".into() }, Placement::default(), None);
