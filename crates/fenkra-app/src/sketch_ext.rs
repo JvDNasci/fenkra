@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Geometria externa no sketch: converter arestas/vértices/curvas do 3D, interseção de faces e
 //! superfícies com o plano do sketch, projeção de outros sketches e de referências. O vínculo
 //! fica guardado no sketch (associativo): o cálculo reposiciona a geometria quando o 3D muda.

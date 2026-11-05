@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Edição no contexto da montagem (B54): as regras que não dependem da tela.
 //!
 //! Um componente fica ativo por vez, e o resto do conjunto continua à vista como referência. Para

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Geometria de referência: catálogo dos tipos de planos, pontos e curvas, criação a partir da
 //! seleção da viewport e painel de edição (cada entrada aceita a seleção atual ou a lista).
 

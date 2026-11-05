@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Árvore desenhada direto sobre o modelo: sem painel, com nós ligados por linhas, caixinha de abrir e
 //! fechar, ícone por tipo, zoom e deslocamento próprios.
 //!

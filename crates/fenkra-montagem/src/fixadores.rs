@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Fixadores inteligentes (B29): preenche os furos de uma montagem com parafuso, arruelas e porca
 //! da biblioteca pública (`fenkra_solidos::biblioteca`).
 //!

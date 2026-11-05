@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Histórico de desfazer/refazer com nome por entrada e teto de memória (B68).
 //!
 //! Cada entrada guarda o documento de *antes* da edição e um nome curto ("Criar Extrusão 1",

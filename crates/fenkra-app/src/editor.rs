@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Painel à direita: edição no lugar do objeto selecionado (RF-UI-002, RF-NUC-020).
 //! Toda alteração modifica o objeto existente; o recompute é disparado automaticamente.
 

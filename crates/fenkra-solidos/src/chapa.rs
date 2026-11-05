@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Chapa metálica: apoio puro (sem kernel) para as abas.
 //!
 //! - `chain_segs`: transforma a polilinha de uma cadeia de arestas (retas e curvas tangentes) em

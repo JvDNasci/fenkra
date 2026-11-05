@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Estrutura Pai → montagem: cada grupo de peças iguais da peça com membros estruturais vira uma
 //! peça `.fkp` (o corpo no referencial local, como link para o pai) e a montagem `.fka` leva uma
 //! instância fixa por membro, agrupadas por item.

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Substituir componente com religação (B55).
 //!
 //! Trocar o arquivo de um componente deixa as restrições apontando para geometria da peça velha.

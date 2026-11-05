@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! B01 e B78: abas em sequência (aba sobre a ponta de uma dobra), cadeia reta + curva como uma só
 //! feature, abas vizinhas com validação de colisão e lateral igual à espessura.
 //!

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Importar STEP (B229): com projeto aberto, o original vai para o cofre e reimportar o mesmo nome
 //! compara o hash; sem projeto, o documento só abre, já com o selo de origem.
 //!

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Cubo de vistas: gira junto com a peça; clicar numa face ou num canto leva àquela vista.
 //! A tecla Espaço abre o seletor grande com as vistas padrão e as vistas salvas (câmeras).
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! B64: arquivos de alphas anteriores continuam abrindo e recalculam com o mesmo volume.
 //!
 //! `fixtures/alpha28_caixa.fkp` é uma peça gravada pelo alpha.28 (sem `app_version`): caixa 40 x 30 x 20.

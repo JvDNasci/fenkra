@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Entradas do comando em edição mostradas no 3D: cada elemento escolhido brilha e recebe um
 //! rótulo com o papel dele ("Perfil", "Guia", "Eixo"…). Funciona para qualquer comando ou
 //! elemento de geometria lendo os campos (nome do campo = papel).

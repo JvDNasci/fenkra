@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Diálogos de gravação (B65 e B56): Salvar / Descartar / Cancelar, Sobrescrever / Salvar como /
 //! Recarregar diante de mudança externa, e a janela do plano de salvamento (Ctrl+Shift+S).
 //!

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Seleção na viewport: faces, arestas, vértices e planos (com filtro de seleção).
 //! Prioridade: vértice > aresta > face/plano, respeitando o que está na frente.
 

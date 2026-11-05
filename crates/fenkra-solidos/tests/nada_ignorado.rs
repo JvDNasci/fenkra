@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! B75: nada ignorado em silêncio nos comandos de sólido. Cada combinação que antes perdia parte do
 //! pedido (saída com término não cego, furo simétrico pela metade, filete "criado por" aplicado ao
 //! corpo todo, contornos descartados no loft e na varredura, revolução com eixo fora do plano ou

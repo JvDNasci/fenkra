@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Temas da interface: cores dos painéis, janelas, texto, destaque, faixas da barra e fundo da
 //! viewport. Sete temas prontos e os do usuário (arquivos .json em
 //! %APPDATA%\Fenkra\temas — uma extensão é só um arquivo desses).

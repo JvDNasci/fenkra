@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Avaliação de sketches: resolve as restrições com os parâmetros e extrai perfis fechados,
 //! pontos (centros de furo), linhas (eixos) e polilinhas para exibição.
 

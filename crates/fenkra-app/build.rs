@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Embute o ícone da fênix no executável (Windows).
 fn main() {
     println!("cargo:rerun-if-changed=../../assets/app/fenix.ico");

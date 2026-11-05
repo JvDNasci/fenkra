@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Detalhamento 2D (módulo separado): o desenho referencia peças e montagens por arquivo e gera
 //! as vistas por projeção com linhas ocultas — mudou o 3D, o desenho acompanha.
 //!

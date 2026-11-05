@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Partida que sempre explica (B221) e contador de quadros (B222).
 //!
 //! O aplicativo é de janela (sem console): um pânico ou uma falha de GPU antes da primeira tela

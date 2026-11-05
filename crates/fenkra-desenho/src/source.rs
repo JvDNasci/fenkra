@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Origem das vistas: lê peças/montagens do disco (com cache por data de modificação), monta a
 //! forma e calcula as projeções (HLR), cortes, detalhes e os dados das tabelas.
 

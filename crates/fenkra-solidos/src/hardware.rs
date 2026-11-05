@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Tabela do furo inteligente (RF-SOL-008) para roscas métricas ISO grossas.
 //!
 //! **Dados preliminares** para o protótipo: valores usuais de engenharia (passo, broca de rosca,

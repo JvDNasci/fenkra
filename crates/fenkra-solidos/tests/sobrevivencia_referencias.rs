@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! B306: teste de sobrevivência das referências (ADR 0010).
 //!
 //! Para cada cenário do corpus, a referência (aresta de filete/chanfro ou face de casca) é escolhida

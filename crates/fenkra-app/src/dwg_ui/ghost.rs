@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Fantasma de posicionamento (B224): ao armar uma ferramenta, o que ela vai criar aparece preso ao
 //! cursor, na escala real (contorno e projeção da vista, tabela com as colunas, cota viva com o valor
 //! medido, balão com o número do item), com linhas de alinhamento tracejadas. Nada entra no desenho

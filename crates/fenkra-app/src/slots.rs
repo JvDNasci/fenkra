@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Campos de referência vazios: um comando novo só recebe o que estava pré-selecionado; o resto
 //! nasce "a escolher" (um id sentinela por tipo) e é preenchido pela próxima seleção no 3D ou na
 //! árvore, na ordem dos campos.

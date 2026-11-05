@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Furo de montagem (B57): um eixo atravessa os componentes e cada peça do escopo recebe um furo
 //! real, cilíndrico e dela, com link para a montagem.
 //!

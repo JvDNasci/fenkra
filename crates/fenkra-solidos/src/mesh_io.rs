@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Leitura de malhas STL (texto ou binário) e OBJ como lista de triângulos (9 números cada).
 
 /// Lê o arquivo e devolve os triângulos achatados (x0 y0 z0 x1 … z2 por triângulo).

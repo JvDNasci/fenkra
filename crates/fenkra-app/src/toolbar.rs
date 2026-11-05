@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Barra de comandos em **blocos** (estilo faixa): cada grupo tem nome embaixo e linhas separadoras.
 //! Comandos parecidos formam **famílias**: o botão mostra a última variação usada e a setinha ▾
 //! abre as outras. Grupos podem ficar no topo, na lateral, flutuar ou ser ocultados (clique direito).

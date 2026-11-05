@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Ajudas comuns aos testes de integração do crate: montagem de documentos em código, conferência de
 //! status, volume e caixa envolvente, medida de memória do processo e gerador pseudoaleatório com
 //! semente fixa. Só usa a API pública; nada aqui toca `src/`.

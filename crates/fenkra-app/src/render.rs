@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Viewport 3D própria (wgpu): renderiza em textura offscreen (MSAA + profundidade) que o egui exibe.
 //! Só renderiza de novo quando câmera, cena, estilo ou tamanho mudam.
 

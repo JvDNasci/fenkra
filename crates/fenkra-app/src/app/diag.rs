@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Janelas de diagnóstico e de pais e filhos (B69) e o filtro da árvore.
 //!
 //! A lógica (quem falhou primeiro, quem é pai de quem, o que o filtro aceita) está em

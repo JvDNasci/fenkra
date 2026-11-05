@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Eixos escalonados e chavetas paralelas DIN 6885 forma A (B28, parte 2).
 //!
 //! **Convenção de eixos**: o eixo corre ao longo de **Z**, a partir de z = 0 (trechos em sequência,

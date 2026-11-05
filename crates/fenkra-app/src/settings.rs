@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Configurações do usuário (persistidas em %APPDATA%\Fenkra\config.json).
 
 use crate::render::{DisplayMode, Msaa, ViewStyle};

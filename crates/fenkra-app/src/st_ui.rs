@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Estrutural: painel do membro (família, medida, ancoragem, rotação, cantos), biblioteca de
 //! famílias de perfis (cadastro do usuário) e lista de corte.
 

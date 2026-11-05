@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Paleta de cores: tabela RAL clássica (cores com nome), cores salvas pelo usuário e a
 //! "área de transferência" de aparência (copiar/colar entre elementos).
 

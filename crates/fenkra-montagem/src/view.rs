@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Vista composta da montagem: as malhas de cada componente, já posicionadas, num resultado único
 //! (um "corpo" por componente) — a viewport, a seleção e a cena da peça funcionam sobre ele sem
 //! mudanças. Também verifica interferências entre componentes.

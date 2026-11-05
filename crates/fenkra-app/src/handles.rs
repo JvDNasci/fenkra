@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! "Fast 3D": alças na viewport para o comando aberto — seta arrastável e cota editável
 //! (extrusão/recorte, plano deslocado, altura das primitivas, profundidade do reforço).
 //! Arrastar muda o valor em passos de 1 mm (Shift: 0,1 mm); duplo clique na cota abre a edição,

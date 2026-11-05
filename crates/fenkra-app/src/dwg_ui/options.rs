@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Barra de opções da ferramenta (B225): ao armar uma ferramenta de vista, uma barra ancorada na
 //! folha traz direção (menu com miniaturas), escala (Auto, presets e livre), estilo e rótulo,
 //! editáveis enquanto o fantasma segue o cursor. O que falta (vista mãe, origem) aparece ali com o

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Regra do projeto (B310): nenhum software proprietário é citado em código, interface ou
 //! documentação, nem como compatibilidade. As fontes consultadas ficam só nos arquivos de fontes.
 //! Software livre confiável pode ser citado e não está na lista.

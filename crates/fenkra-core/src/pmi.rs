@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! PMI (detalhamento 3D): anotações no modelo — cotas, notas, rugosidade, solda, referências e
 //! tolerâncias geométricas. Cada nível (peça, montagem/submontagem) tem a própria árvore de PMI.
 //!

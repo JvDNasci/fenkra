@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Manipulador 3D (gizmo) do elemento em edição: setas lineares por eixo, quadrados planares
 //! (arrastam duas coordenadas), arco de rotação e alça de escala. Serve aos pontos por
 //! coordenadas e às transformações de geometria (mover, girar, escalar).

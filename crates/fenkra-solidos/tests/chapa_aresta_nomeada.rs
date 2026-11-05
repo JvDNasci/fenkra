@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! B78: SmFlange, SmCurveFlange e SmHem escolhem a aresta por dono + papel das duas faces vizinhas
 //! (ADR 0010). O ponto clicado fica só como reserva; aresta que some vira estado de erro explícito.
 

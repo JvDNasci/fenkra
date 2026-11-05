@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Exportação das folhas: PDF (uma página por folha, vetorial), SVG e DXF (R12, uma folha).
 
 use crate::layout::{Align, Item, Prim, Style};

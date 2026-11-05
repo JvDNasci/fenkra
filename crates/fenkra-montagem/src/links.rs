@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Links entre documentos vistos pela montagem (B70).
 //!
 //! Um link mora na peça que recebe a cópia (`ExternalRef` em `fenkra_core`): nome da origem, arquivo,

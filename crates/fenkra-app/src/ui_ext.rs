@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Pequenas extensões da interface usadas em todos os painéis.
 //!
 //! Campo numérico padrão (B227): todo número editável usa `dv` (arrasto e digitação) ou `slider`,

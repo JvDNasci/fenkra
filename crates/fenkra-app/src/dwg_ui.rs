@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Bancada Desenho (detalhamento 2D): folha com zoom/pan, vistas associativas (projeção HLR da
 //! peça ou montagem salva), cortes, detalhes, cotas com snap nos vértices, notas, símbolos,
 //! tabelas, legenda e exportação PDF/SVG/DXF.

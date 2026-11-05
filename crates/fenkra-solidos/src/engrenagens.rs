@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Gerador de engrenagens (estilo Design Accelerator): cálculo dos diâmetros e documento paramétrico
 //! de engrenagem reta, helicoidal, interna e cremalheira, com perfil de dente em evolvente.
 //!

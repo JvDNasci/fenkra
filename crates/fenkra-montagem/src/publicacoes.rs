@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Publicações (B55): o nome estável que uma peça ou montagem oferece às outras.
 //!
 //! O link guarda o nome, não a geometria de origem. Por isso as três operações que mexem numa

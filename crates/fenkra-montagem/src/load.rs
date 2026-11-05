@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Carregamento das peças da montagem: lê o arquivo, calcula (com cache por data de modificação)
 //! e entrega a malha e a forma para exibição, seleção e restrições.
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! B226: linhas contíguas do esqueleto formam grupos, e cada grupo vira um membro com perfil próprio.
 
 use fenkra_core::*;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Painéis das features de forma, acabamento e transformação: nervura/rasgo, multi-seções,
 //! primitivas, casca, ângulo de saída, espessura, padrões, espelho, escala, reforço e rosca,
 //! além das opções extras de extrusão, revolução, filete e chanfro.

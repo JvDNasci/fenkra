@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Português / inglês. A interface é escrita em português; `tr` devolve a tradução quando o
 //! inglês está ativo (Configurações → Interface → Idioma). Textos sem tradução ficam em português.
 

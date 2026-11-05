@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! B53: corpus de peças de referência e regressão.
 //!
 //! Dezesseis peças montadas só com a API pública (documento em código, recompute, status, volume e

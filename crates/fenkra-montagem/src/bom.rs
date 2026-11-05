@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Lista de peças por nível (só este nível, todas as peças, estruturada), com números de item
 //! guardados na montagem: um item mantém o número entre revisões, mesmo que saia e volte, e os
 //! novos recebem o próximo número livre.

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Estrutural: seções de perfis padronizados (com pontos de ancoragem), biblioteca de famílias e
 //! a geração dos membros ao longo do esqueleto (linhas/curvas 3D), com cantos em meia-esquadria,
 //! aparados ou com recorte de encaixe (folga de solda), placas de extremidade e reforços.

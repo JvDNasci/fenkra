@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Solucionador de posicionamento: cada corpo livre tem 6 graus de liberdade (translação e
 //! rotação em torno do próprio centro); as restrições viram resíduos e o Levenberg–Marquardt
 //! leva todos a zero. Componentes fixos não entram como incógnita; uma fixação conjunta põe

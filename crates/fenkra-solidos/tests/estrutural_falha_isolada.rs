@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! B79: a falha de uma linha de membro não derruba as outras e aparece com o motivo.
 
 use fenkra_core::*;

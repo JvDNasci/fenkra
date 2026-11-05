@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Editor de sketch interativo na viewport (alpha.3).
 //!
 //! Desenho livre com o mouse sobre o plano do sketch (a vista é alinhada ao entrar), snaps,

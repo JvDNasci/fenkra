@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Geometria 3D de referência: pontos, curvas (como polilinhas densas, com dados analíticos
 //! quando existem) e planos construídos a partir deles. Tudo em Rust, sem o kernel.
 

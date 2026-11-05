@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Desenho das anotações 3D com cara de desenho técnico: quadro de controle geométrico (ISO 1101)
 //! em casas, símbolo de referência com triângulo, cotas com tolerâncias empilhadas, chamadas com
 //! ponta escolhida, legenda em tabela. O estilo de cada anotação herda o estilo geral.

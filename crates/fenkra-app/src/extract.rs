@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Extrair com propagação: a partir de uma aresta ou face clicada, junta as vizinhas que
 //! continuam por ponto (G0), tangente (G1) ou curvatura (G2), olhando a malha do corpo.
 

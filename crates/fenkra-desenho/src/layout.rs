@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Folha → primitivas (mm, origem no canto inferior esquerdo, y para cima). A tela e as
 //! exportações (PDF, SVG, DXF) desenham a mesma lista.
 

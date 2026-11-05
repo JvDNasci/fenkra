@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Ícones SVG. A família nova fica em assets/icons2 (scripts/gerar_icones2.py): traço sem cor fixa, com os
 //! marcadores BASE e RES trocados aqui pelas cores do tema. A antiga, em assets/icons, é só a reserva de
 //! quem ainda não tem desenho novo.

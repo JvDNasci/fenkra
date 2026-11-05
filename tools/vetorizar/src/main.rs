@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Vetoriza a arte do ícone: separa fundo azul, traço preto e preenchimento branco,
 //! remove o selo do canto superior direito e traça os contornos como caminhos SVG.
 //!

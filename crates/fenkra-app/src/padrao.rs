@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Padrão de interface obrigatório (B319): o que todo comando novo precisa trazer. Falha quando um
 //! comando vem sem ícone da família nova, sem tradução ou sem dica, ou quando entra cor fixa nova.
 //!

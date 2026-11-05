@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Cinemática: juntas (graus de liberdade permitidos), comandos (ângulo/curso por valor ou lei
 //! no tempo `t`), acoplamentos (engrenagem, pinhão-cremalheira, cabo) e simulação por quadros
 //! com velocidade e aceleração.

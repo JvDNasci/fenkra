@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Reconhecimento geométrico do que foi clicado, para um campo aceitar o que faz sentido em vez
 //! de só o tipo exato: aresta circular → centro e eixo; face plana → normal; face cilíndrica ou
 //! cônica → eixo.

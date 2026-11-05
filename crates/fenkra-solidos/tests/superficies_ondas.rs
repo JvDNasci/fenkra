@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Superfícies e wireframe: preenchimento, junção e demais comandos, com o documento montado em
 //! código, recalculado e conferido por status e medidas.
 

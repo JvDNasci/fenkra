@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! B201: todo fonte (.rs, .cpp, .h, .inc) abre com o identificador da licença, e arquivo novo sem ele
 //! reprova. O cabeçalho é aplicado por `python scripts/spdx.py`.
 
@@ -8,14 +9,7 @@ const CABECALHO: &str = "// SPDX-License-Identifier: LGPL-2.1-or-later";
 
 /// Caminhos ainda sem o cabeçalho: outras frentes estavam editando quando a regra entrou. Depois de
 /// rodar o script nelas, esvazie esta lista.
-const PENDENTES: [&str; 6] = [
-    "crates/fenkra-app/",
-    "crates/fenkra-core/src/pmi.rs",
-    "crates/fenkra-desenho/",
-    "crates/fenkra-montagem/",
-    "crates/fenkra-solidos/",
-    "tools/",
-];
+const PENDENTES: [&str; 0] = [];
 
 fn raiz() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().expect("raiz do repositório")

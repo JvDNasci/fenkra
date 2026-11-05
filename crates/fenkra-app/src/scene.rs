@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Converte o resultado do recompute em uma cena para a viewport.
 //!
 //! Visibilidade: cada item tem oculto/visível; o **ambiente de ocultos** inverte a regra (mostra só o

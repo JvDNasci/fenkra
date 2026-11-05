@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! B80: a lista de corte lê comprimento, ângulos das pontas e material do próprio sólido.
 
 use fenkra_core::*;

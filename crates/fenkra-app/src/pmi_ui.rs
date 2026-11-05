@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Detalhamento 3D (PMI): criação pelas seleções da viewport, desenho sobre o modelo (linhas de
 //! cota com setas, chamadas, símbolos) e painel de edição. Peça e montagem têm a própria lista.
 

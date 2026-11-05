@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Medição da seleção da viewport (vértices, arestas, faces) e extração: cada medida pode virar
 //! parâmetro global; vértice, aresta e face podem virar ponto, curva e superfície de referência.
 

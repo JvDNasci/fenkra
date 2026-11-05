@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Diagnóstico guiado e pais/filhos (B69): lógica sem interface.
 //!
 //! Um comando falha por dois motivos: o próprio erro, ou porque algo de que ele depende falhou

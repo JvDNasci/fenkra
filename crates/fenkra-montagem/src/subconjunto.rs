@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Extrair componentes para um subconjunto novo e inserir de volta, sem perda (B73).
 //!
 //! O nó do subconjunto nasce na origem, então o sistema do subconjunto é o mesmo mundo da montagem

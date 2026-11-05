@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Referências v2 (ADR 0010): face e aresta escolhidas pelo usuário viram uma consulta em camadas,
 //! resolvida a cada recompute — dono (comando que gerou a face), papel (o que ela é para o dono),
 //! assinatura geométrica e, só como reserva, o ponto clicado.

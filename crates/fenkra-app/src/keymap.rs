@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Atalhos de teclado configuráveis, com predefinições inspiradas nos atalhos padrão de outros
 //! CADs (FreeCAD, Blender e layouts descritivos de atalhos). Cada predefinição também
 //! escolhe o estilo de navegação do mouse; qualquer atalho pode ser trocado individualmente.

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Geometria própria da montagem e peça esqueleto (B55).
 //!
 //! Sketch, ponto, eixo e plano no nível da montagem moram num documento embutido no `.fka`

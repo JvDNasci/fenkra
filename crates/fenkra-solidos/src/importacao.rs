@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Importação de STEP (B229). O corpo lido entra no documento como geometria isolada, seguido de um
 //! comando de corpo ligado; assim a árvore continua normal e aceita comandos depois dele. O selo de
 //! origem guarda de qual arquivo o documento nasceu.

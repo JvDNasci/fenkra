@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Painéis livres e encaixáveis sobre a viewport: arrastam para qualquer ponto, encaixam nas bordas com
 //! uma guia e guardam a posição por bancada nas preferências.
 //!

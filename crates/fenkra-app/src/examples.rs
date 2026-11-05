@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Peças de exemplo da tela inicial (com prévia 3D girando).
 
 use crate::settings::Bench;

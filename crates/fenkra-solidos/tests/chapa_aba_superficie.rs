@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! B04: aba por superfície com suporte curvo (nervura de asa) e estado de falha explícito quando o
 //! suporte some.
 

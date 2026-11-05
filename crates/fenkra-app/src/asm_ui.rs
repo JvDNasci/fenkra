@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Bancada de Montagem: árvore de componentes, painéis, restrições escolhidas na viewport,
 //! movimentação com manipulador e verificação de interferências.
 //!

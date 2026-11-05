@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Pares de engrenagens (B28): gera as duas peças da biblioteca de engrenagens
 //! (`fenkra_solidos::engrenagens`), insere na montagem engrenadas e cria a restrição de movimento.
 //!

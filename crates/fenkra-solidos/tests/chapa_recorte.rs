@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! B02: recorte desenhado no planificado vale no dobrado, inclusive no raio da dobra.
 
 mod common;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Biblioteca pública (ADR 0008): famílias de fixadores lidas de arquivos JSON abertos.
 //!
 //! Os arquivos ficam em `biblioteca/fixadores/` na raiz do repositório, um por família, e são

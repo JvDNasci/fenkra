@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Fenkra — CAD paramétrico open source.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 

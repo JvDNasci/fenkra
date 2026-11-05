@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! B84: exportação. A extensão decide o formato e as desconhecidas são recusadas; STEP e STL são
 //! gravados e relidos num caminho com acento e espaço, conferindo volume e caixa envolvente.
 

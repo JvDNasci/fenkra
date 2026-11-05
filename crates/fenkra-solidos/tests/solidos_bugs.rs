@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! B05, B06, B07 e B11: início da rosca, casca fechada, espessura com botão de remover e reforço
 //! com lado da parede.
 

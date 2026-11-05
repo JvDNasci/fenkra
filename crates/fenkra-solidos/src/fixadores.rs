@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Fixadores simplificados e paramétricos (parafusos, porcas e arruelas) gerados a partir das
 //! famílias da biblioteca pública ([`crate::biblioteca`]).
 //!

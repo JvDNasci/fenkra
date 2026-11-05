@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Montagem: árvore de componentes (grupos, peças, subconjuntos), posicionamento por restrições
 //! e solucionador de graus de liberdade.
 //!

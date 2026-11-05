@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! B223: cada comando de chapa devolve uma malha de prévia com os valores padrão, sem gravar nada
 //! no documento, e o que seria inválido volta com a causa em texto.
 

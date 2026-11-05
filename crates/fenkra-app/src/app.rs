@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Aplicativo: estado, layout e comandos.
 //!
 //! Layout (RF-UI-001): menu mínimo + abas de módulo + grupos de comandos (topo, lateral ou
