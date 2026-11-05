@@ -14,7 +14,7 @@ use fenkra_core::*;
 pub(crate) const AXIS_COL: [Color32; 3] = [Color32::from_rgb(235, 80, 80), Color32::from_rgb(90, 200, 90), Color32::from_rgb(80, 140, 255)];
 const HOT: Color32 = Color32::from_rgb(255, 190, 40);
 /// comprimento das setas na tela (px)
-const ARM: f32 = 70.;
+pub(crate) const ARM: f32 = 70.;
 
 fn v3(p: [f64; 3]) -> Vec3 {
     Vec3::new(p[0] as f32, p[1] as f32, p[2] as f32)
@@ -118,13 +118,20 @@ pub(crate) fn screen_axis(cam: &Camera, rect: Rect, o: Vec3, dir: Vec3) -> Optio
 /// Gizmo completo de translação: 3 setas e 3 quadrados planares. `vals` = x, y, z editáveis.
 /// Devolve os novos valores quando arrastado.
 pub(crate) fn translate_gizmo(ui: &mut egui::Ui, rect: Rect, cam: &Camera, salt: u64, o: Vec3, axes: [Vec3; 3], vals: [f64; 3], locked: [bool; 3]) -> Option<[f64; 3]> {
+    translate_alcas(ui, rect, cam, salt, o, axes, vals, locked, [true; 3])
+}
+
+/// O mesmo manipulador mostrando só as alças de `mostrar`: o quadrado de dois eixos aparece se os dois
+/// estiverem liberados.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn translate_alcas(ui: &mut egui::Ui, rect: Rect, cam: &Camera, salt: u64, o: Vec3, axes: [Vec3; 3], vals: [f64; 3], locked: [bool; 3], mostrar: [bool; 3]) -> Option<[f64; 3]> {
     let painter = ui.painter_at(rect);
     let sa: Vec<(Pos2, Vec2, f32)> = axes.iter().map(|d| screen_axis(cam, rect, o, *d)).collect::<Option<_>>()?;
     let c0 = sa[0].0;
     let mut out = None;
     // quadrados planares (no meio, entre dois eixos)
     for (k, (i, j)) in [(0usize, 1usize), (1, 2), (0, 2)].into_iter().enumerate() {
-        if locked[i] || locked[j] {
+        if locked[i] || locked[j] || !mostrar[i] || !mostrar[j] {
             continue;
         }
         let q = c0 + sa[i].1 * ARM * 0.3 + sa[j].1 * ARM * 0.3;
@@ -152,7 +159,7 @@ pub(crate) fn translate_gizmo(ui: &mut egui::Ui, rect: Rect, cam: &Camera, salt:
         }
     }
     // setas lineares
-    for i in 0..3 {
+    for i in (0..3).filter(|i| mostrar[*i]) {
         let tip = c0 + sa[i].1 * ARM;
         let hid = egui::Id::unique(("gizmo_seta", salt, i));
         let sense = if locked[i] { egui::Sense::hover() } else { egui::Sense::drag() };

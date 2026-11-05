@@ -230,8 +230,8 @@ pub struct AsmState {
     /// item em edição e o estado de antes (Cancelar volta para ele; item novo some)
     pub edit_snap: Option<(Id, Assembly)>,
     /// posição antes do arrasto do manipulador
-    drag_start: Option<Placement>,
-    snapshot: Option<Assembly>,
+    pub(crate) drag_start: Option<Placement>,
+    pub(crate) snapshot: Option<Assembly>,
     /// aviso de uma ação do painel, para mostrar no quadro seguinte
     aviso: Option<(String, bool)>,
     // ---- simulação
@@ -266,8 +266,10 @@ pub struct AsmState {
     /// graus de liberdade de cada componente (depois da última resolução)
     pub comp_dof: std::collections::HashMap<Id, usize>,
     /// anel de rotação em arraste (eixo, ângulo) e o centro do giro
-    rot_drag: Option<(usize, f64)>,
-    drag_center: Option<[f64; 3]>,
+    pub(crate) rot_drag: Option<(usize, f64)>,
+    pub(crate) drag_center: Option<[f64; 3]>,
+    /// opções e estado do manipulador
+    pub manip: crate::asm_manip::Manip,
     /// o arraste parou num contato
     pub contact: bool,
     /// restrições possíveis para as duas seleções atuais
@@ -350,6 +352,7 @@ impl AsmState {
             furos_publicos: None,
             comp_dof: Default::default(),
             rot_drag: None,
+            manip: Default::default(),
             drag_center: None,
             contact: false,
             quick: None,
@@ -444,6 +447,7 @@ impl AsmState {
         self.atualizar_links(Gatilho::Posicao);
         self.comp_dof = fenkra_montagem::solve::dof_per_comp(&self.asm);
         self.sub_rows.clear();
+        self.manip.esquecer();
         self.dirty = true;
     }
 
@@ -836,7 +840,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
 /// clique numa peça a seleciona na árvore.
 pub fn after_viewport(app: &mut App, ctx: &egui::Context) {
     after_view_quick(app);
-    if !crate::asm_cmd::apos_viewport(app) {
+    if !crate::asm_cmd::apos_viewport(app) && !crate::asm_manip::apos_viewport(app) {
         selecao_do_clique(app, ctx.input(|i| i.modifiers.alt));
     }
     // duplo clique numa peça: abre para editar
@@ -3533,102 +3537,7 @@ pub fn gizmo(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::re
             }
         }
     }
-    let Some(st) = app.asm.as_mut() else { return };
-    if st.view_only {
-        return;
-    }
-    let Some(id) = st.sel else { return };
-    let Some(n) = st.asm.node(id) else { return };
-    if matches!(n.kind, NodeKind::Group) || n.fixed {
-        return;
-    }
-    let p = n.placement;
-    let view = app.result.as_ref();
-    let center = |_: &AsmState| {
-        view
-            .and_then(|r| r.bodies.iter().find(|b| b.collector == id))
-            .map(|b| {
-                let k = (b.mesh.positions.len() / 3).max(1) as f32;
-                b.mesh.positions.chunks_exact(3).fold(glam::Vec3::ZERO, |a, q| a + glam::Vec3::new(q[0], q[1], q[2])) / k
-            })
-    };
-    if st.explode_mode {
-        let off = st.live.offset(id);
-        let c = center(st).unwrap_or(glam::Vec3::ZERO);
-        if let Some(v) = crate::gizmo::translate_gizmo(ui, rect, cam, id.0 ^ 0x5eed, c, [glam::Vec3::X, glam::Vec3::Y, glam::Vec3::Z], off, [false; 3]) {
-            st.live.set_offset(id, v);
-            st.dirty = true;
-        }
-        return;
-    }
-    // centro do componente na tela: centro da malha posicionada
-    let c = center(st).unwrap_or(glam::Vec3::new(p.origin[0] as f32, p.origin[1] as f32, p.origin[2] as f32));
-    let mut cand: Option<Placement> = None;
-    if let Some(v) = crate::gizmo::translate_gizmo(ui, rect, cam, id.0, c, [glam::Vec3::X, glam::Vec3::Y, glam::Vec3::Z], p.origin, [false; 3]) {
-        let base = st.drag_start.unwrap_or(p);
-        cand = Some(Placement { origin: v, rot: base.rot });
-    }
-    // anéis de rotação em volta dos eixos do mundo, pelo centro do componente
-    let ppm = {
-        let (r, _) = cam.basis();
-        match (cam.project(rect, c), cam.project(rect, c + r)) {
-            (Some(a), Some(b)) => (b - a).length().max(1e-3),
-            _ => 1.,
-        }
-    };
-    let rad = 95. / ppm;
-    let axes = [glam::Vec3::X, glam::Vec3::Y, glam::Vec3::Z];
-    // alças em diagonais diferentes (não caem umas sobre as outras nem sobre as setas)
-    let starts = [(glam::Vec3::Y + glam::Vec3::Z).normalize(), (glam::Vec3::Z + glam::Vec3::X).normalize(), (glam::Vec3::X + glam::Vec3::Y).normalize()];
-    for (k, ax) in axes.iter().enumerate() {
-        let src = c + starts[k] * rad;
-        let cur = st.rot_drag.filter(|r| r.0 == k).map(|r| r.1).unwrap_or(0.);
-        if let Some(v) = crate::gizmo::rotate_arc_col(ui, rect, cam, id.0.wrapping_mul(31).wrapping_add(k as u64 + 7), c, *ax, src, cur, false, crate::gizmo::AXIS_COL[k]) {
-            let start = st.drag_start.unwrap_or(p);
-            let about = *st.drag_center.get_or_insert([c.x as f64, c.y as f64, c.z as f64]);
-            st.rot_drag = Some((k, v));
-            let w = [0, 1, 2].map(|i| ax[i] as f64 * v.to_radians());
-            cand = Some(start.moved([0.; 3], w, about));
-        }
-    }
-    let released = ui.input(|i| i.pointer.any_released());
-    if let Some(q) = cand {
-        if st.drag_start.is_none() {
-            st.drag_start = Some(p);
-            st.snapshot = Some(st.asm.clone());
-        }
-        // tentativa: com restrições, o componente vai até onde elas deixam
-        let mut trial = st.asm.clone();
-        let constrained = st.respect && (!trial.mates.is_empty() || !trial.joints.is_empty());
-        if constrained {
-            fenkra_montagem::solve::solve_toward(&mut trial, id, q, 0.05);
-        } else if let Some(n) = trial.node_mut(id) {
-            n.placement = q;
-        }
-        let dir = st.dir();
-        st.contact = st.stop_collision && fenkra_montagem::view::collides(&trial, id, dir.as_deref(), &mut st.cache, 0.01);
-        if !st.contact {
-            st.asm = trial;
-            st.dirty = true;
-        }
-    } else if released {
-        st.rot_drag = None;
-        st.drag_center = None;
-        if let (Some(_), Some(snap)) = (st.drag_start.take(), st.snapshot.take()) {
-            st.undo.push(snap);
-            st.modified = true;
-            if st.respect && !st.asm.mates.is_empty() {
-                st.solve();
-            }
-            st.dirty = true;
-        }
-        st.contact = false;
-    }
-    if st.contact {
-        if let Some(s) = cam.project(rect, c) {
-            ui.painter_at(rect).text(s + egui::vec2(18., 18.), egui::Align2::LEFT_TOP, tr("⛔ contato — o movimento parou na colisão"), egui::FontId::proportional(13.), Color32::from_rgb(255, 120, 90));
-        }
-    }
+    crate::asm_manip::desenhar(app, ui, rect, cam);
 }
 
 // ============================================================== simulação

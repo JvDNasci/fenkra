@@ -603,6 +603,68 @@ fn alternar_animacao(app: &mut App, agora: f64) {
     }
 }
 
+/// `FENKRA_DEMO_ASM=cmd|junta|simbolos|manip|duzentas`: abre o comando ou os símbolos nas placas de exemplo.
+pub fn demo(st: &mut AsmState, nome: &str) {
+    let ids: Vec<fenkra_core::Id> = st.asm.nodes.iter().filter(|n| !matches!(n.kind, NodeKind::Group)).map(|n| n.id).collect();
+    let [base, tampa] = ids[..] else { return };
+    st.asm.node_mut(base).unwrap().fixed = true;
+    let plano = |comp, z: f64, n: f64| MateRef { comp, geom: Geom::Plane { p: [40., 20., z], n: [0., 0., n] }, pick: Some([40., 20., z]) };
+    if nome == "duzentas" {
+        // grade de peças fixas com 200 restrições: a conta da tela, sem peso no solucionador
+        let path = "placa.fkp".to_string();
+        let mut grade = vec![base];
+        for k in 1..40 {
+            let origem = [(k % 8) as f64 * 150., (k / 8) as f64 * 100., 0.];
+            grade.push(st.asm.add_component("Placa", NodeKind::Part { path: path.clone() }, Placement { origin: origem, ..Default::default() }, None));
+        }
+        st.asm.node_mut(tampa).unwrap().visible = false;
+        for id in &grade {
+            st.asm.node_mut(*id).unwrap().fixed = true;
+        }
+        let tipos = [MateKind::Parallel, MateKind::Contact, MateKind::Distance("12".into()), MateKind::Coincident { flip: false }];
+        for k in 0..200usize {
+            let (a, b) = (grade[k % 40], grade[(k * 7 + 1) % 40]);
+            if a != b {
+                st.asm.add_mate(tipos[k % 4].clone(), plano(a, 12., 1.), plano(b, 0., -1.));
+            }
+        }
+        st.dirty = true;
+    }
+    let eixo = |comp| Elemento::novo(MateRef { comp, geom: Geom::Axis { p: [48., 24., 0.], d: [0., 0., 1.] }, pick: None }, Classe::Face);
+    match nome {
+        "cmd" => {
+            let mut pen = Pendente::novo(Tipo::Restricao(MateKind::Contact));
+            pen.c.receber(Elemento::novo(plano(base, 12., 1.), Classe::Face));
+            pen.c.receber(Elemento::novo(plano(tampa, 0., -1.), Classe::Face));
+            pen.textos = [vec![tr("Face plana").to_string()], vec![tr("Face plana").to_string()]];
+            st.cmd = Some(pen);
+            atualizar(st);
+        }
+        "junta" => {
+            let mut pen = Pendente::novo(Tipo::JuntaAutomatica);
+            pen.c.receber(eixo(base));
+            pen.c.receber(eixo(tampa));
+            pen.textos = [vec![tr("Eixo").to_string()], vec![tr("Eixo").to_string()]];
+            st.cmd = Some(pen);
+            atualizar(st);
+        }
+        "simbolos" => {
+            st.asm.add_mate(MateKind::Distance("30".into()), plano(base, 12., 1.), plano(tampa, 0., -1.));
+            st.solve();
+            let fr = fenkra_montagem::kin::JFrame::from_axis([48., 24., 0.], [0., 0., 1.]);
+            st.asm.add_joint(JointKind::Revolute, fenkra_montagem::kin::JRef { comp: base, frame: fr }, fenkra_montagem::kin::JRef { comp: tampa, frame: fr });
+            st.solve();
+        }
+        "manip" => {
+            let fr = fenkra_montagem::kin::JFrame::from_axis([48., 24., 0.], [0., 0., 1.]);
+            st.asm.add_joint(JointKind::Revolute, fenkra_montagem::kin::JRef { comp: base, frame: fr }, fenkra_montagem::kin::JRef { comp: tampa, frame: fr });
+            st.solve();
+            st.sel = Some(tampa);
+        }
+        _ => {}
+    }
+}
+
 /// Peças da prévia como fantasma, na posição final. Em vermelho se a proposta não tem solução.
 pub fn na_cena(st: Option<&AsmState>, v: &egui::Visuals, t: f64, cena: &mut crate::render::Scene) {
     let Some(st) = st else { return };

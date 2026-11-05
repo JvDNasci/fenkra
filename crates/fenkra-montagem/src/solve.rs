@@ -595,6 +595,98 @@ pub fn dof_per_comp(a: &Assembly) -> HashMap<Id, usize> {
     out
 }
 
+/// O que as restrições deixam um componente fazer ao longo de três eixos.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Liberdade {
+    pub mover: [bool; 3],
+    /// gira em torno de uma reta paralela ao eixo (não necessariamente pelo centro da peça)
+    pub girar: [bool; 3],
+    /// ponto por onde passa a reta do giro, quando as restrições é que mandam nela
+    pub pivo: [Option<V3>; 3],
+}
+
+/// Acima disso o sistema do mecanismo inteiro pesa a cada seleção: olha-se só o próprio corpo.
+const MAX_INCOGNITAS: usize = 240;
+
+/// Movimentos permitidos ao componente `id`, ao longo de `eixos` (unitários, no mundo). `None` se o
+/// corpo dele não tem incógnitas, isto é, está fixo.
+///
+/// Um movimento vale se existe uma velocidade dos outros corpos que mantém todas as restrições: em
+/// termos do jacobiano J, a coluna do movimento está na imagem das demais colunas. Olhar só o corpo
+/// escolhido, com os vizinhos parados, travaria o elo do meio de qualquer mecanismo. No giro as
+/// translações do próprio corpo entram entre as demais colunas: uma dobradiça longe do centro da peça
+/// gira em torno dela mesma, e a velocidade que sai da conta diz onde ela está.
+pub fn liberdade(a: &Assembly, id: Id, eixos: [V3; 3], centro: V3) -> Option<Liberdade> {
+    let b = bodies(a);
+    let k = b.of.get(&id).copied().flatten()?;
+    let n = 6 * b.rel.len();
+    let mut vars = a.vars();
+    vars.entry("t".into()).or_insert(0.);
+    let mut per = vec![];
+    let res = |x: &[f64], per: &mut Vec<(Id, usize, usize)>| all_residuals(a, &place(&b, a, x), &vars, true, per);
+    let x = vec![0.; n];
+    let r = res(&x, &mut per);
+    if r.is_empty() {
+        return Some(Liberdade { mover: [true; 3], girar: [true; 3], pivo: [None; 3] });
+    }
+    let j = jacobian(&res, &x, &r);
+    let m = r.len();
+    let inicio = 6 * k;
+    // só o próprio corpo, se o sistema for grande demais
+    let outros: Vec<usize> = if n > MAX_INCOGNITAS { vec![] } else { (0..n).filter(|c| !(inicio..inicio + 6).contains(c)).collect() };
+    let coluna = |c: usize| (0..m).map(|row| j[row * n + c]).collect::<Vec<f64>>();
+    // melhor combinação das colunas `cols` para anular `alvo`: devolve (sobra, coeficientes)
+    let anular = |alvo: &[f64], cols: &[usize]| -> (f64, Vec<f64>) {
+        let q = cols.len();
+        if q == 0 {
+            return (alvo.iter().map(|v| v * v).sum::<f64>().sqrt(), vec![]);
+        }
+        let cs: Vec<Vec<f64>> = cols.iter().map(|c| coluna(*c)).collect();
+        let mut nrm = vec![0.; q * q];
+        let mut rhs = vec![0.; q];
+        for p in 0..q {
+            rhs[p] = -cs[p].iter().zip(alvo).map(|(u, v)| u * v).sum::<f64>();
+            for s in p..q {
+                let d: f64 = cs[p].iter().zip(&cs[s]).map(|(u, v)| u * v).sum();
+                nrm[p * q + s] = d;
+                nrm[s * q + p] = d;
+            }
+            // regularização: colunas livres (zeradas) não podem deixar o sistema singular
+            nrm[p * q + p] += 1e-9;
+        }
+        let Some(y) = solve_linear(nrm, rhs, q) else { return (f64::MAX, vec![]) };
+        let sobra = (0..m).map(|row| alvo[row] + cols.iter().zip(&y).map(|(c, v)| j[row * n + c] * v).sum::<f64>()).map(|v| v * v).sum::<f64>().sqrt();
+        (sobra, y)
+    };
+    let tol = |alvo: &[f64]| 1e-5 * (1. + alvo.iter().map(|v| v * v).sum::<f64>().sqrt());
+    let combinar = |base: usize, e: V3| (0..m).map(|row| (0..3).map(|i| j[row * n + base + i] * e[i]).sum::<f64>()).collect::<Vec<f64>>();
+    let mut out = Liberdade { mover: [false; 3], girar: [false; 3], pivo: [None; 3] };
+    let o = b.base[k].origin;
+    for (i, e) in eixos.iter().enumerate() {
+        let alvo = combinar(inicio, *e);
+        out.mover[i] = anular(&alvo, &outros).0 < tol(&alvo);
+        // girar em volta do centro: a origem do corpo anda v = e × (o − c)
+        let vc = cross(*e, sub(o, centro));
+        let giro = combinar(inicio + 3, *e);
+        let alvo: Vec<f64> = giro.iter().zip(combinar(inicio, vc)).map(|(u, v)| u + v).collect();
+        if anular(&alvo, &outros).0 < tol(&alvo) {
+            out.girar[i] = true;
+            continue;
+        }
+        // não dá no centro: procura a reta paralela que as restrições deixam
+        let cols: Vec<usize> = outros.iter().copied().chain(inicio..inicio + 3).collect();
+        let (sobra, y) = anular(&giro, &cols);
+        if sobra < tol(&giro) {
+            out.girar[i] = true;
+            // as três últimas incógnitas são a velocidade da origem do corpo, v = e × (o − p)
+            let v = [y[y.len() - 3], y[y.len() - 2], y[y.len() - 1]];
+            let c = cross(*e, v);
+            out.pivo[i] = Some([o[0] + c[0], o[1] + c[1], o[2] + c[2]]);
+        }
+    }
+    Some(out)
+}
+
 /// Graus de liberdade restantes sem mexer em nada.
 pub fn dof(a: &Assembly) -> usize {
     dof_with(a, true)

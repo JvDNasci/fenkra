@@ -254,11 +254,34 @@ fn serie_na_vista(a: &Assembly, s: &SerieFuros, mut sh: Shape, dir: Option<&Path
     sh
 }
 
+/// Centro da caixa envolvente das malhas. A média dos vértices puxa o centro para o lado com a malha
+/// mais fina: um furo cheio de triângulos o tiraria do meio da peça.
+pub fn centro_caixa<'a>(malhas: impl Iterator<Item = &'a Mesh>) -> Option<V3> {
+    let mut lo = [f32::MAX; 3];
+    let mut hi = [f32::MIN; 3];
+    let mut algum = false;
+    for m in malhas {
+        for p in m.positions.chunks_exact(3) {
+            algum = true;
+            for k in 0..3 {
+                lo[k] = lo[k].min(p[k]);
+                hi[k] = hi[k].max(p[k]);
+            }
+        }
+    }
+    algum.then(|| [0, 1, 2].map(|k| (lo[k] as f64 + hi[k] as f64) / 2.))
+}
+
 /// O componente encosta (volume comum) em algum outro visível?
 pub fn collides(a: &Assembly, id: Id, dir: Option<&Path>, cache: &mut PartCache, tol: f64) -> bool {
+    collides_com(a, id, dir, cache, tol, None)
+}
+
+/// Como `collides`, olhando só as peças de `alvos`, quando houver essa lista.
+pub fn collides_com(a: &Assembly, id: Id, dir: Option<&Path>, cache: &mut PartCache, tol: f64, alvos: Option<&[Id]>) -> bool {
     let Some(me) = placed_shape(a, id, dir, cache) else { return false };
     let Some((la, ha)) = me.bbox() else { return false };
-    let others: Vec<Id> = a.nodes.iter().filter(|n| n.id != id && matches!(n.kind, NodeKind::Part { .. }) && n.mode == LoadMode::Editavel && shown(a, n.id)).map(|n| n.id).collect();
+    let others: Vec<Id> = a.nodes.iter().filter(|n| n.id != id && matches!(n.kind, NodeKind::Part { .. }) && n.mode == LoadMode::Editavel && shown(a, n.id) && alvos.is_none_or(|l| l.contains(&n.id))).map(|n| n.id).collect();
     for o in others {
         let Some(sh) = placed_shape(a, o, dir, cache) else { continue };
         if let Some((lb, hb)) = sh.bbox() {
@@ -324,6 +347,18 @@ pub fn interferences(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, to
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn centro_e_o_da_caixa_e_nao_a_media_dos_vertices() {
+        // nove vértices amontoados perto de x = 0 e um só em x = 100
+        let mut m = Mesh::default();
+        for i in 0..9 {
+            m.positions.extend([i as f32 * 0.1, 0., 0.]);
+        }
+        m.positions.extend([100., 40., 10.]);
+        assert_eq!(centro_caixa([&m].into_iter()), Some([50., 20., 5.]));
+        assert_eq!(centro_caixa(std::iter::empty()), None);
+    }
 
     #[test]
     fn origem_aparece_mesmo_sem_geometria_e_oculta_pela_opcao() {

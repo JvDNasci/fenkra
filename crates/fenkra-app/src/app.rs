@@ -484,6 +484,7 @@ impl App {
             let _ = std::fs::write(&f, a.to_json());
             let mut stt = crate::asm_ui::AsmState::new(a, Some(f));
             stt.sim_open = stt.asm.joints.len() > 0;
+            crate::asm_cmd::demo(&mut stt, &std::env::var("FENKRA_DEMO_ASM").unwrap_or_default());
             app.asm = Some(stt);
             app.settings.bench = crate::settings::Bench::Montagem;
             app.started = true;
@@ -3136,6 +3137,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             tr("Sketch").to_string()
         } else if let Some(s) = &self.session {
             self.open.doc.name_of(s.id)
+        } else if let Some(p) = self.asm.as_ref().and_then(|s| s.cmd.as_ref()).filter(|_| self.in_asm()) {
+            tr(p.c.tipo.label()).to_string()
         } else {
             tr("Edição").to_string()
         };
@@ -7082,6 +7085,7 @@ fn setup_fonts(_ctx: &egui::Context) {
 
 impl eframe::App for App {
     fn ui(&mut self, root: &mut egui::Ui, frame: &mut eframe::Frame) {
+        crate::demo_foto::quadro(root.ctx());
         crate::partida::contar_quadro();
         let ctx = &root.ctx().clone();
         crate::i18n::set_english(self.settings.english);
