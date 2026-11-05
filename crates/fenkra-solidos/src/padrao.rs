@@ -62,6 +62,20 @@ pub fn instancias_do_padrao(doc: &Document, id: Id) -> Vec<InstanciaPadrao> {
     v
 }
 
+/// Bocas dos furos que o padrão `id` repete: as dos furos de origem e as de cada instância, com a
+/// marca de pulada. A tabela de furos só conhece os furos de origem, porque o padrão copia a forma da
+/// ferramenta sem rodar o comando de novo. Padrão que não repete furo devolve lista vazia.
+pub fn furos_do_padrao(doc: &Document, id: Id) -> Vec<InstanciaPadrao> {
+    let Some(Feature { kind: FeatureKind::Pattern(pt), .. }) = doc.feature(id) else { return vec![] };
+    let bocas: Vec<V3> = hole_table(doc).into_iter().filter(|r| pt.sources.contains(&r.feature)).map(|r| r.pos).collect();
+    let Some(chaves_xs) = transformacoes(doc, pt).filter(|_| !bocas.is_empty()) else { return vec![] };
+    let mut v: Vec<InstanciaPadrao> = bocas.iter().map(|p| InstanciaPadrao { chave: (0, 0), centro: *p, pulada: false }).collect();
+    for (k, x) in chaves_xs {
+        v.extend(bocas.iter().map(|p| InstanciaPadrao { chave: k, centro: aplica(&x, *p), pulada: pt.skip.contains(&k) }));
+    }
+    v
+}
+
 /// Centro de onde sai o padrão: o centro da caixa envolvente do corpo sem o padrão.
 fn origem_do_padrao(doc: &Document) -> Option<V3> {
     let mut lo = [f64::MAX; 3];

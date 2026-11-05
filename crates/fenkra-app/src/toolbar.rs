@@ -247,7 +247,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("asm_engrenagens", "Engrenagens", "Gerar engrenagens", "Gera engrenagem reta, helicoidal, interna ou cremalheira (módulo, dentes, ângulo de pressão, hélice, folga) com o cálculo ao vivo, e insere o par já engrenado na montagem — distância entre centros, dentes encaixados e restrição de engrenagem. Também salva uma engrenagem avulsa como peça.", Cmd(C::AsmGears))),
             One(it("asm_grupo", "Grupo", "Grupo de organização", "Elemento vazio só para organizar a árvore (não muda a geometria).", Cmd(C::AsmGroup))),
             One(it("asm_substituir", "Substituir", "Substituir componente", "Troca a peça mantendo a posição e as restrições (as faces são reencontradas pelo ponto clicado).", Cmd(C::AsmReplace))),
-            One(it("asm_repeticao", "Repetição", "Repetição inteligente de componente", "Copia o componente selecionado em padrão linear ou circular (ex.: parafusos); as cópias acompanham o original e mudam com a quantidade.", Cmd(C::AsmPattern))),
+            One(it("asm_repeticao", "Repetição", "Repetição inteligente de componente", "Copia componentes numa direção dada por aresta, eixo ou face, em volta de um eixo ou pelos furos de uma peça. Mostra as cópias antes de aceitar.", Cmd(C::AsmPattern))),
             One(it("asm_numerar", "Numerar", "Numeração automática", "Renumera os componentes em sequência, na ordem da árvore.", Cmd(C::AsmNumber))),
             One(it("asm_lista", "Lista de peças", "Lista de peças por nível", "Primeiro nível, só peças (todos os níveis) ou estruturada. Os números de item ficam fixos entre revisões e são os mesmos dos balões e da tabela do desenho.", Cmd(C::AsmBom))),
         ],

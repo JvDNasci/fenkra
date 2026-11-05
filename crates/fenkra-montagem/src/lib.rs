@@ -24,6 +24,7 @@ pub mod load;
 pub mod manipulador;
 pub mod proposta;
 pub mod publicacoes;
+pub mod repeticao;
 pub mod simbolos;
 pub mod substituicao;
 pub mod view;
@@ -383,17 +384,59 @@ pub struct CompPattern {
     pub name: String,
     pub source: Id,
     pub kind: PatternKind,
-    /// cópias geradas (nós da árvore, na ordem)
+    /// cópias geradas (nós da árvore, na ordem): por posição, uma de cada fonte
     #[serde(default)]
     pub instances: Vec<Id>,
+    /// outros componentes repetidos junto com `source`
+    #[serde(default)]
+    pub extras: Vec<Id>,
+    /// posições (i, j) sem cópia; ver [`repeticao`]
+    #[serde(default)]
+    pub pular: Vec<(u32, u32)>,
+    /// aresta, eixo ou face que dá a direção (ou o eixo, no circular): quando há, ela manda
+    #[serde(default)]
+    pub ref1: Option<MateRef>,
+    /// o mesmo para a segunda direção
+    #[serde(default)]
+    pub ref2: Option<MateRef>,
+    #[serde(default)]
+    pub inverter: bool,
+    #[serde(default)]
+    pub inverter2: bool,
+}
+
+impl PatternKind {
+    /// Linear de uma direção só.
+    pub fn linear(dir: V3, count: &str, spacing: &str) -> Self {
+        PatternKind::Linear { dir, count: count.into(), spacing: spacing.into(), dir2: None, count2: "1".into(), spacing2: "0".into() }
+    }
+}
+
+impl CompPattern {
+    /// Repetição ainda fora da montagem, com o que o comando vai preenchendo.
+    pub fn rascunho(source: Id, kind: PatternKind) -> Self {
+        CompPattern { id: Id(0), name: String::new(), source, kind, instances: vec![], extras: vec![], pular: vec![], ref1: None, ref2: None, inverter: false, inverter2: false }
+    }
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum PatternKind {
-    /// direção no mundo, quantidade total (com o original) e espaçamento
-    Linear { dir: V3, count: String, spacing: String },
+    /// direção no mundo, quantidade total (com o original) e espaçamento; segunda direção opcional
+    Linear {
+        dir: V3,
+        count: String,
+        spacing: String,
+        #[serde(default)]
+        dir2: Option<V3>,
+        #[serde(default)]
+        count2: String,
+        #[serde(default)]
+        spacing2: String,
+    },
     /// eixo no mundo, quantidade total e ângulo total (360 = volta completa)
     Circular { origin: V3, axis: V3, count: String, angle: String },
+    /// pelos furos: bocas do padrão `feature` da peça `comp`, no sistema dela
+    Furos { comp: Id, feature: Id, pontos: Vec<V3> },
 }
 
 /// Parâmetro da montagem (usável nas distâncias e ângulos).
@@ -441,6 +484,9 @@ pub struct Assembly {
     /// recursos entre peças (recortes, furos), refeitos com as posições
     #[serde(default)]
     pub features: Vec<AsmFeature>,
+    /// interferências ignoradas e o limite "ignorar menores que"
+    #[serde(default)]
+    pub interf: interferencia::RegrasInterf,
     /// projeto relacional (peças novas fixas, posicionadas por links entre peças) × por restrições
     #[serde(default)]
     pub relational: bool,
@@ -484,9 +530,6 @@ impl Assembly {
         let (ra, rb) = (self.mates[i].a, self.mates[i].b);
         let (Some(pa), Some(pb)) = (self.lugar(ra.comp), self.lugar(rb.comp)) else { return };
         let axis = |g: &Geom| match *g {
-    /// interferências ignoradas e o limite "ignorar menores que"
-    #[serde(default)]
-    pub interf: interferencia::RegrasInterf,
             Geom::Axis { p, d } => (p, d),
             Geom::Plane { p, n } => (p, n),
             Geom::Point(p) => (p, [0., 0., 1.]),
@@ -699,37 +742,29 @@ impl Assembly {
         let vars = self.vars();
         let pats = self.patterns.clone();
         for (k, p) in pats.iter().enumerate() {
-            let Some(src) = self.node(p.source).cloned() else { continue };
-            let num = |e: &String| expr::eval_str(e, &vars).unwrap_or(1.);
-            let (count, steps): (usize, Vec<Placement>) = match &p.kind {
-                PatternKind::Linear { dir, count, spacing } => {
-                    let n = num(count).round().max(1.) as usize;
-                    let d = unit(*dir);
-                    let s = num(spacing);
-                    (n, (1..n).map(|i| src.placement.moved(d.map(|v| v * s * i as f64), [0.; 3], src.placement.origin)).collect())
-                }
-                PatternKind::Circular { origin, axis, count, angle } => {
-                    let n = num(count).round().max(1.) as usize;
-                    let total = num(angle);
-                    let step = if (total - 360.).abs() < 1e-9 { total / n as f64 } else { total / (n.max(2) - 1) as f64 };
-                    let a = unit(*axis);
-                    (n, (1..n).map(|i| src.placement.moved([0.; 3], a.map(|v| v * (step * i as f64).to_radians()), *origin)).collect())
-                }
-            };
+            let fontes = self.fontes(p);
+            if !fontes.contains(&p.source) {
+                continue;
+            }
+            let passos: Vec<repeticao::Passo> = self.passos(p, &vars).into_iter().filter(|x| !x.pulada).collect();
+            let precisa = passos.len() * fontes.len();
             let mut inst = p.instances.clone();
             inst.retain(|i| self.node(*i).is_some());
-            while inst.len() + 1 < count {
+            while inst.len() < precisa {
+                let Some(src) = self.node(fontes[inst.len() % fontes.len()]).cloned() else { break };
                 let id = self.alloc();
                 let name = self.unique(&src.name);
                 self.nodes.push(Node { id, name, number: 0, fixed: true, ..src });
                 inst.push(id);
             }
-            while inst.len() + 1 > count {
+            while inst.len() > precisa {
                 let id = inst.pop().unwrap();
                 self.nodes.retain(|n| n.id != id);
                 self.mates.retain(|m| m.a.comp != id && m.b.comp != id);
             }
-            for (id, pl) in inst.iter().zip(steps) {
+            for (k, id) in inst.iter().enumerate() {
+                let Some(src) = self.node(fontes[k % fontes.len()]).cloned() else { continue };
+                let pl = passos[k / fontes.len()].aplicar(&src.placement);
                 if let Some(n) = self.node_mut(*id) {
                     n.placement = pl;
                     n.kind = src.kind.clone();
@@ -834,7 +869,7 @@ mod tests {
         let mut a = Assembly::new("P");
         let _base = a.add_component("Base", NodeKind::Part { path: "b.fkp".into() }, Placement::default(), None);
         let bolt = a.add_component("Parafuso", NodeKind::Part { path: "p.fkp".into() }, Placement { origin: [10., 0., 0.], ..Default::default() }, None);
-        let pat = a.add_pattern(bolt, PatternKind::Linear { dir: [1., 0., 0.], count: "3".into(), spacing: "20".into() });
+        let pat = a.add_pattern(bolt, PatternKind::linear([1., 0., 0.], "3", "20"));
         assert_eq!(a.patterns[0].instances.len(), 2);
         let last = *a.patterns[0].instances.last().unwrap();
         assert!(norm(sub(a.node(last).unwrap().placement.origin, [50., 0., 0.])) < 1e-9);

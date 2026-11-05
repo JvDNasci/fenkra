@@ -261,11 +261,11 @@ pub struct AsmState {
     pub fasteners_open: Option<FastenersUi>,
     /// painel Biblioteca (catálogo de normas) aberto, com a inserção em andamento
     pub catalogo: Option<crate::biblioteca_ui::Estado>,
-    /// janela do gerador de engrenagens (B28)
     /// comando Repetição aberto (B263)
     pub repeticao: Option<crate::asm_repeticao::Estado>,
     /// comando Inserir aberto, com a peça na mão (B262)
     pub inserir: Option<crate::asm_inserir::Estado>,
+    /// janela do gerador de engrenagens (B28)
     pub gears_open: Option<GearsUi>,
     pub anim_sel: usize,
     pub anim_t: f64,
@@ -351,9 +351,9 @@ impl AsmState {
             bom_open: None,
             fasteners_open: None,
             catalogo: None,
-            gears_open: None,
             inserir: None,
             repeticao: None,
+            gears_open: None,
             anim_sel: 0,
             anim_t: 0.,
             anim_play: false,
@@ -489,6 +489,10 @@ impl AsmState {
             Some(d) => fenkra_project::referencias::caminho_relativo(&d, p),
             None => p.to_string_lossy().to_string(),
         }
+    }
+
+    pub(crate) fn comp_de(&self, body: usize) -> Option<Id> {
+        self.comp_of_body(body)
     }
 
     fn comp_of_body(&self, body: usize) -> Option<Id> {
@@ -2142,6 +2146,7 @@ fn serie_ui(ui: &mut egui::Ui, s: &mut SerieFuros, alvos: &mut Vec<Id>, names: &
         None => 0,
         Some(PatternKind::Linear { .. }) => 1,
         Some(PatternKind::Circular { .. }) => 2,
+        Some(PatternKind::Furos { .. }) => 0,
     };
     let antes = tipo;
     ui.horizontal(|ui| {
@@ -2152,7 +2157,7 @@ fn serie_ui(ui: &mut egui::Ui, s: &mut SerieFuros, alvos: &mut Vec<Id>, names: &
     });
     if tipo != antes {
         s.padrao = match tipo {
-            1 => Some(PatternKind::Linear { dir: [1., 0., 0.], count: "2".into(), spacing: "20".into() }),
+            1 => Some(PatternKind::Linear { dir: [1., 0., 0.], count: "2".into(), spacing: "20".into(), dir2: None, count2: "2".into(), spacing2: "20".into() }),
             2 => Some(PatternKind::Circular { origin: [0.; 3], axis: [0., 0., 1.], count: "4".into(), angle: "360".into() }),
             _ => None,
         };
@@ -2166,7 +2171,7 @@ fn serie_ui(ui: &mut egui::Ui, s: &mut SerieFuros, alvos: &mut Vec<Id>, names: &
             crate::editor::expr(ui, "Quantidade", count, vars, "");
             crate::editor::expr(ui, "Ângulo", angle, vars, "°");
         }
-        None => {}
+        _ => {}
     }
 
     crate::editor::section(ui, "Verificação");
@@ -2235,6 +2240,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         return crate::asm_cmd::painel(app, ui);
     }
     let sel = st.sel;
+    let mut editar_repeticao = None;
     if let Some(s) = sel {
         if st.asm.pmi.iter().any(|p| p.id == s) {
             crate::pmi_ui::panel(app, ui, s);
@@ -2525,35 +2531,8 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     ui.text_edit_singleline(&mut p.name);
                 });
                 ui.label(RichText::new(format!("{} {src}", tr("Original:"))).weak());
-                let circ = matches!(p.kind, PatternKind::Circular { .. });
-                ui.horizontal(|ui| {
-                    if ui.radio(!circ, tr("linear")).clicked() && circ {
-                        p.kind = PatternKind::Linear { dir: [1., 0., 0.], count: "3".into(), spacing: "20".into() };
-                    }
-                    if ui.radio(circ, tr("circular")).clicked() && !circ {
-                        p.kind = PatternKind::Circular { origin: [0.; 3], axis: [0., 0., 1.], count: "4".into(), angle: "360".into() };
-                    }
-                });
-                let v3 = |ui: &mut egui::Ui, l: &str, v: &mut [f64; 3]| {
-                    ui.horizontal(|ui| {
-                        ui.label(tr(l));
-                        for x in v.iter_mut() {
-                            ui.add(crate::ui_ext::dv(x).speed(0.1).max_decimals(3));
-                        }
-                    });
-                };
-                match &mut p.kind {
-                    PatternKind::Linear { dir, count, spacing } => {
-                        v3(ui, "Direção", dir);
-                        crate::editor::expr(ui, "Quantidade", count, &Default::default(), "");
-                        crate::editor::expr(ui, "Espaçamento", spacing, &Default::default(), "mm");
-                    }
-                    PatternKind::Circular { origin, axis, count, angle } => {
-                        v3(ui, "Centro", origin);
-                        v3(ui, "Eixo", axis);
-                        crate::editor::expr(ui, "Quantidade", count, &Default::default(), "");
-                        crate::editor::expr(ui, "Ângulo total", angle, &Default::default(), "°");
-                    }
+                if ui.button(tr("Editar repetição")).on_hover_text(tr("Abre o comando com fantasmas e marcas na vista.")).clicked() {
+                    editar_repeticao = Some(p.id);
                 }
                 ui.label(RichText::new(tr("A quantidade inclui o original; as cópias se refazem quando ela muda.")).weak().small());
             } else {
@@ -2739,6 +2718,10 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         };
         let id = st.asm.add_coupling(kind, ja, jb, ratio);
         st.sel = Some(id);
+    }
+    if let Some(id) = editar_repeticao {
+        crate::asm_repeticao::editar(st, id);
+        return;
     }
     if st.asm != before {
         if st.asm.patterns != before.patterns {
@@ -3434,10 +3417,6 @@ pub fn fasteners_handles(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam
                                 novo = Some(*l);
                             }
                         }
-    // com a peça na mão o clique é da colocação
-    if st.inserir.is_some() || st.repeticao.is_some() {
-        return;
-    }
                     });
                 });
                 let fora = ctx.input(|i| i.pointer.any_pressed()) && !area.response.contains_pointer();
@@ -3475,6 +3454,10 @@ fn after_view_quick(app: &mut App) {
 
 pub fn gizmo(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::render::Camera) {
     let Some(st) = app.asm.as_mut() else { return };
+    // com a peça na mão o clique é da colocação
+    if st.inserir.is_some() || st.repeticao.is_some() {
+        return;
+    }
     eixos_da_serie(st, ui, rect, cam);
     // restrição rápida: dois elementos de peças diferentes escolhidos (opções calculadas depois
     // da viewport; o clique vira ação aplicada lá)

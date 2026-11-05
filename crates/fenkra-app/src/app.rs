@@ -6710,6 +6710,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 crate::asm_ui::fasteners_handles(self, ui, rect, &cam);
                 crate::biblioteca_ui::candidatos_overlay(self, ui, rect, &cam);
                 crate::biblioteca_ui::overlay(self, ui, rect, &cam);
+                crate::asm_inserir::overlay(self, ui, rect, &cam);
+                crate::asm_repeticao::overlay(self, ui, rect, &cam);
                 crate::feat_ui::bend_overlay(self, ui, rect, &cam);
                 crate::feat_ui::cut_overlay(self, ui, rect, &cam);
                 crate::previa::overlay(self, ui, rect, &cam);
@@ -6719,8 +6721,6 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 if self.settings.bench == crate::settings::Bench::Montagem && self.asm.is_some() {
                     crate::asm_simbolos::overlay(self, ui, rect, &cam);
                     crate::asm_ui::gizmo(self, ui, rect, &cam);
-                crate::asm_inserir::overlay(self, ui, rect, &cam);
-                crate::asm_repeticao::overlay(self, ui, rect, &cam);
                 } else {
                     crate::handles::overlay(self, ui, rect, cam);
                 }
@@ -7430,6 +7430,8 @@ impl eframe::App for App {
         if dwg_mode {
             crate::dwg_ui::keys(self, ctx, save, undo, redo, del);
         } else if asm_mode {
+            crate::asm_inserir::teclas(self, ctx);
+            crate::asm_repeticao::teclas(self, ctx);
             crate::asm_cmd::teclas(self, ctx);
             crate::asm_selecao::teclas(self, ctx);
             if save {
@@ -7439,8 +7441,6 @@ impl eframe::App for App {
                 if undo {
                     if let Some(prev) = st.undo.pop() {
                         st.redo.push(std::mem::replace(&mut st.asm, prev));
-            crate::asm_inserir::teclas(self, ctx);
-            crate::asm_repeticao::teclas(self, ctx);
                         st.dirty = true;
                     }
                 }
@@ -7840,7 +7840,11 @@ impl eframe::App for App {
                 crate::asm_interf::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
                 crate::asm_repeticao::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
                 vp.set_scene(rs, &s);
+                let grande = vp.cena_grande;
                 self.scene_dirty = false;
+                if grande {
+                    self.toast(tr("A cena passou do que a placa de vídeo aceita: as faces não aparecem. Oculte peças ou reduza a qualidade da malha."), true);
+                }
                 ctx.request_repaint();
             }
         }
@@ -7858,7 +7862,6 @@ impl eframe::App for App {
                         let p = std::path::Path::new(&t.path);
                         let full = match (&root, p.is_relative()) {
                             (Some(r), true) => r.join(p),
-                let grande = vp.cena_grande;
                             _ => p.to_path_buf(),
                         };
                         (crate::render::load_texture(&full).unwrap_or_default(), t.scale as f32)

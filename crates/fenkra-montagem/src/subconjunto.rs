@@ -130,6 +130,7 @@ fn parametros_usados(a: &Assembly, sub: &Assembly) -> Vec<AsmParam> {
         match &p.kind {
             PatternKind::Linear { count, spacing, .. } => [count, spacing].iter().for_each(|e| nomes(e, &mut quer)),
             PatternKind::Circular { count, angle, .. } => [count, angle].iter().for_each(|e| nomes(e, &mut quer)),
+            PatternKind::Furos { .. } => {}
         }
     }
     for f in &sub.features {
@@ -171,9 +172,13 @@ impl Assembly {
     fn fechar_selecao(&self, ids: &[Id]) -> HashSet<Id> {
         let mut dentro: HashSet<Id> = ids.iter().copied().filter(|c| self.node(*c).is_some_and(|n| !matches!(n.kind, NodeKind::Group))).collect();
         for p in &self.patterns {
-            if dentro.contains(&p.source) || p.instances.iter().any(|i| dentro.contains(i)) {
+            if dentro.contains(&p.source) || p.extras.iter().chain(&p.instances).any(|i| dentro.contains(i)) {
                 dentro.insert(p.source);
-                dentro.extend(p.instances.iter().copied());
+                dentro.extend(p.extras.iter().chain(&p.instances).copied());
+                // sem a peça dos furos a repetição não teria onde cair
+                if let PatternKind::Furos { comp, .. } = &p.kind {
+                    dentro.insert(*comp);
+                }
             }
         }
         dentro
@@ -284,9 +289,15 @@ impl Assembly {
         }
 
         // padrões: já vieram inteiros
-        for p in std::mem::take(&mut self.patterns) {
+        for mut p in std::mem::take(&mut self.patterns) {
             if dentro.contains(&p.source) {
                 rel.padroes += 1;
+                // referência que ficou de fora: vale a direção guardada na repetição
+                for r in [&mut p.ref1, &mut p.ref2] {
+                    if r.as_ref().is_some_and(|x| !dentro.contains(&x.comp)) {
+                        *r = None;
+                    }
+                }
                 sub.patterns.push(p);
             } else {
                 self.patterns.push(p);
@@ -425,6 +436,13 @@ impl Assembly {
             t(&mut p.id);
             t(&mut p.source);
             p.instances.iter_mut().for_each(t);
+            p.extras.iter_mut().for_each(t);
+            for r in [&mut p.ref1, &mut p.ref2].into_iter().flatten() {
+                t(&mut r.comp);
+            }
+            if let PatternKind::Furos { comp, .. } = &mut p.kind {
+                t(comp);
+            }
         }
         for f in &mut sub.features {
             f.targets.iter_mut().for_each(t);
@@ -463,6 +481,8 @@ impl Assembly {
                     *origin = p.point(*origin);
                     *axis = p.dir(*axis);
                 }
+                // os pontos são do sistema da peça dos furos: vão com ela
+                PatternKind::Furos { .. } => {}
             }
         }
         for f in &mut sub.features {
@@ -708,7 +728,7 @@ mod tests {
         let id = a.alloc();
         a.couplings.push(Coupling { id, name: "Acoplamento dentro".into(), kind: CouplingKind::Gear, a: jd, b: jd2, ratio: "folga".into() });
         a.add_feature(AsmFeatKind::Hole { p: [0., 0., 30.], d: [0., 0., -1.], dia: "folga".into(), depth: String::new() }, vec![ca, cb]);
-        a.add_pattern(cb, PatternKind::Linear { dir: [1., 0., 0.], count: "3".into(), spacing: "20".into() });
+        a.add_pattern(cb, PatternKind::linear([1., 0., 0.], "3", "20"));
 
         // com o exterior
         a.add_mate(MateKind::Contact, r(base_c, topo()), r(ca, base()));

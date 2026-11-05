@@ -238,7 +238,7 @@ pub fn eixos(a: &Assembly, s: &SerieFuros, dir: Option<&Path>, cache: &mut PartC
     let n = |e: &String| expr::eval_str(e, &vars).map_err(|_| format!("valor inválido no padrão: {e}"));
     let originais = base.clone();
     match padrao {
-        PatternKind::Linear { dir: v, count, spacing } => {
+        PatternKind::Linear { dir: v, count, spacing, .. } => {
             let (q, passo) = (n(count)?.round().max(1.) as usize, n(spacing)?);
             let v = unit(sistema.dir(*v));
             for i in 1..q {
@@ -257,6 +257,8 @@ pub fn eixos(a: &Assembly, s: &SerieFuros, dir: Option<&Path>, cache: &mut PartC
                 }));
             }
         }
+        // o modo Pelos furos é da repetição de componentes: a série não o oferece
+        PatternKind::Furos { .. } => {}
     }
     Ok(base)
 }
@@ -970,7 +972,7 @@ mod tests {
             return;
         }
         let (mut c, f) = Caso::novo("padrao");
-        c.serie(f).padrao = Some(PatternKind::Linear { dir: [1., 0., 0.], count: "3".into(), spacing: "10".into() });
+        c.serie(f).padrao = Some(PatternKind::linear([1., 0., 0.], "3", "10"));
         let r = c.sync();
         assert_eq!(r.gravados, 6, "{r:?}");
         let cima = c.cima;
