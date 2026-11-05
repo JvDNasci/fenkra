@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 // Superfícies de referência, consultas (medição) e término "até o próximo".
 // Incluído no fim de kernel.cpp, depois de features.inc (usa face_near, spine_wire, P3).
 

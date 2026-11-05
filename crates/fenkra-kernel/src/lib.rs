@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Kernel geométrico do Fenkra (ADR 0001): OpenCASCADE atrás de uma API Rust segura.
 //! O resto do sistema só conhece este módulo, nunca o OCCT diretamente.
 
@@ -31,6 +32,13 @@ impl Frame {
 
 pub fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
     [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+}
+
+/// O que um arquivo STEP declara sobre si: esquema do cabeçalho e unidade de comprimento.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct InfoStep {
+    pub esquema: String,
+    pub unidades: String,
 }
 
 /// Parâmetros de uma aba de chapa.
@@ -781,11 +789,20 @@ mod imp {
         pub fn export_step(&self, path: &str) -> KResult<()> {
             b::export_step(&self.0, path).map_err(err)
         }
-        pub fn export_stl(&self, path: &str) -> KResult<()> {
-            b::export_stl(&self.0, path).map_err(err)
+        /// STL binário com desvio linear (mm) e ângulo (radianos). A malha sai de uma cópia da forma:
+        /// não depende da malha de exibição nem a altera.
+        pub fn export_stl(&self, path: &str, deflection: f64, angle: f64) -> KResult<()> {
+            b::export_stl(&self.0, path, deflection, angle).map_err(err)
         }
         pub fn import_step(path: &str) -> KResult<Shape> {
-            b::import_step(path).map(Shape).map_err(err)
+            Self::import_step_info(path).map(|(s, _)| s)
+        }
+        /// Lê o STEP e devolve também o que o arquivo declara. A forma sai em milímetros.
+        pub fn import_step_info(path: &str) -> KResult<(Shape, crate::InfoStep)> {
+            let mut info = Vec::new();
+            let s = b::import_step(path, &mut info).map(Shape).map_err(err)?;
+            let mut campos = info.into_iter();
+            Ok((s, crate::InfoStep { esquema: campos.next().unwrap_or_default(), unidades: campos.next().unwrap_or_default() }))
         }
     }
 
@@ -1102,10 +1119,13 @@ mod imp {
         pub fn export_step(&self, _: &str) -> KResult<()> {
             no()
         }
-        pub fn export_stl(&self, _: &str) -> KResult<()> {
+        pub fn export_stl(&self, _: &str, _: f64, _: f64) -> KResult<()> {
             no()
         }
         pub fn import_step(_: &str) -> KResult<Shape> {
+            no()
+        }
+        pub fn import_step_info(_: &str) -> KResult<(Shape, crate::InfoStep)> {
             no()
         }
     }
@@ -1189,6 +1209,67 @@ mod tests {
         assert!((v - esperado).abs() < 1e-3, "{v} vs {esperado}");
         let m = s.mesh(0.1).unwrap();
         assert!(!m.indices.is_empty() && !m.edges.is_empty());
+    }
+
+    /// Pasta nova com acento e espaço, só deste teste.
+    fn pasta(teste: &str) -> std::path::PathBuf {
+        let p = std::env::temp_dir().join(format!("Fenkra açaí {} {teste}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&p);
+        std::fs::create_dir_all(&p).unwrap();
+        p
+    }
+
+    fn triangulos_stl(p: &std::path::Path) -> usize {
+        let b = std::fs::read(p).unwrap();
+        let n = u32::from_le_bytes(b[80..84].try_into().unwrap()) as usize;
+        assert_eq!(b.len(), 84 + 50 * n, "o tamanho é o de um STL binário");
+        n
+    }
+
+    #[test]
+    fn step_grava_e_le_com_acento_e_espaco() {
+        let dir = pasta("step");
+        let alvo = dir.join("peça com espaço.step");
+        let caixa = Shape::face(&XY, &[rect(40., 30.)]).unwrap().extrude([0., 0., 1.], 20., 0.).unwrap();
+        caixa.export_step(alvo.to_str().unwrap()).unwrap();
+        // o OCCT espera UTF-8: em outra codificação o arquivo sairia com outro nome
+        assert!(alvo.is_file());
+        let lida = Shape::import_step(alvo.to_str().unwrap()).unwrap();
+        assert!((lida.mass().volume - 24000.).abs() < 1e-3);
+        assert_eq!(lida.face_count(), 6);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn stl_e_binario_e_nao_depende_da_malha_da_tela() {
+        let dir = pasta("stl");
+        let alvo = dir.join("peça de impressão.stl");
+        let cil = Shape::face(&XY, &[vec![Seg2::Circle([0., 0.], 20.)]]).unwrap().extrude([0., 0., 1.], 30., 0.).unwrap();
+        let caminho = alvo.to_str().unwrap();
+
+        cil.export_stl(caminho, 0.5, 0.6).unwrap();
+        let limpa = triangulos_stl(&alvo);
+        // a tela malha mais fino que o arquivo pedido: o BRepMesh aceitaria essa malha pronta
+        let tela = cil.mesh_angle(0.005, 0.2).unwrap();
+        cil.export_stl(caminho, 0.5, 0.6).unwrap();
+        assert_eq!(triangulos_stl(&alvo), limpa);
+
+        // e a exportação não mexe no que a tela já tem
+        assert_eq!(cil.mesh_angle(0.005, 0.2).unwrap().indices, tela.indices);
+        cil.export_stl(caminho, 0.005, 0.2).unwrap();
+        assert!(triangulos_stl(&alvo) > limpa);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn exportar_para_pasta_inexistente_devolve_erro() {
+        let raiz = pasta("sem pasta");
+        let dir = raiz.join("não existe");
+        let caixa = Shape::face(&XY, &[rect(10., 10.)]).unwrap().extrude([0., 0., 1.], 5., 0.).unwrap();
+        assert!(caixa.export_step(dir.join("a.step").to_str().unwrap()).is_err());
+        assert!(caixa.export_stl(dir.join("a.stl").to_str().unwrap(), 0.1, 0.5).is_err());
+        assert!(Shape::import_step(dir.join("a.step").to_str().unwrap()).is_err());
+        std::fs::remove_dir_all(raiz).unwrap();
     }
 
     #[test]

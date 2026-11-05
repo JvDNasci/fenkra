@@ -19,6 +19,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use crate::i18n::tr;
 
 mod diag;
+mod importar;
 mod salvar;
 use salvar::Acao;
 
@@ -156,6 +157,8 @@ pub struct App {
     hist: crate::historico::Historico,
     /// diálogos de gravação (B65, B56)
     salvar: salvar::Estado,
+    /// arquivo reimportado que mudou, esperando a escolha entre atualizar e derivar
+    importacao_pendente: Option<importar::Pendente>,
     /// diagnóstico e pais/filhos (B69)
     diag: diag::Estado,
     last_edit: f64,
@@ -321,6 +324,7 @@ impl App {
             fit_pending: true,
             hist: crate::historico::Historico::new(settings.historico_mb),
             salvar: Default::default(),
+            importacao_pendente: None,
             diag: Default::default(),
             last_edit: -10.,
             toasts: vec![],
@@ -944,15 +948,16 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         }
     }
 
-    fn export(&mut self, ext: &str) {
+    fn export(&mut self, ext: &str, preset: fenkra_core::PresetStl) {
+        let filtro: &[&str] = if ext == "step" { &["step", "stp"] } else { &[ext] };
         let Some(path) = rfd::FileDialog::new()
-            .add_filter(ext.to_uppercase(), &[ext])
+            .add_filter(ext.to_uppercase(), filtro)
             .set_file_name(format!("{}.{ext}", self.open.doc.name))
             .save_file()
         else {
             return;
         };
-        match fenkra_solidos::export(&self.open.doc, None, &path.to_string_lossy()) {
+        match fenkra_solidos::export_com_preset(&self.open.doc, None, &path.to_string_lossy(), preset) {
             Ok(()) => self.toast(format!("Exportado: {}", path.display()), false),
             Err(e) => self.toast(format!("Falha ao exportar: {e}"), true),
         }
@@ -2780,14 +2785,22 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         ui.close();
                     }
                     ui.separator();
+                    if ui.button(tr("Importar STEP…")).clicked() {
+                        self.importar_step();
+                        ui.close();
+                    }
                     if ui.button(tr("Exportar STEP…")).clicked() {
-                        self.export("step");
+                        self.export("step", Default::default());
                         ui.close();
                     }
-                    if ui.button(tr("Exportar STL…")).clicked() {
-                        self.export("stl");
-                        ui.close();
-                    }
+                    ui.menu_button(tr("Exportar STL"), |ui| {
+                        for p in fenkra_core::PresetStl::TODOS {
+                            if ui.button(tr(p.nome())).clicked() {
+                                self.export("stl", p);
+                                ui.close();
+                            }
+                        }
+                    });
                     ui.separator();
                     if ui.button(tr("Novo projeto…")).clicked() {
                         self.new_project();
@@ -5594,7 +5607,15 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 if r.double_clicked() {
                     open = Some(d.id);
                 }
-                ui.label(&d.name);
+                match &d.origem {
+                    Some(o) => {
+                        let dica = format!("{}…\n{} · {}", &o.hash[..o.hash.len().min(12)], o.esquema, o.unidades);
+                        ui.label(format!("{} ({} {})", d.name, tr("derivado de"), o.nome)).on_hover_text(dica);
+                    }
+                    None => {
+                        ui.label(&d.name);
+                    }
+                }
                 let c = match d.state {
                     DocState::Liberado => Color32::from_rgb(120, 200, 120),
                     DocState::Obsoleto => Color32::GRAY,
@@ -7213,6 +7234,7 @@ impl eframe::App for App {
             }
         }
         self.link_window(ctx);
+        self.importacao_window(ctx);
         self.pub_window(ctx);
         crate::pmi_ui::style_window(self, ctx);
         self.repeat_window(ctx);

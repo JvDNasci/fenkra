@@ -1,16 +1,19 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Gestão de projeto simples (ADR 0009, RF-GPR).
 //!
 //! ```text
 //! MeuProjeto/
 //! ├── projeto.fenkra.json      índice: documentos, PN, revisões
 //! ├── pecas/<id>.fkp    documentos de trabalho
-//! └── .versoes/<hash>.fkp   versões imutáveis (endereçadas pelo conteúdo)
+//! ├── .versoes/<hash>.fkp   versões imutáveis (endereçadas pelo conteúdo)
+//! └── .originais/<hash>.*   arquivos importados e relatórios de conversão
 //! ```
 //!
 //! - Documentos são identificados por um ID estável, não pelo nome do arquivo (RF-GPR-021).
 //! - Cada salvamento cria uma **versão** (RF-GPR-010).
 //! - **Liberar revisão** marca a versão atual com uma letra e a congela (RF-GPR-011).
 
+pub mod importacao;
 pub mod plano;
 pub mod referencias;
 pub mod seguro;
@@ -40,6 +43,8 @@ pub enum ProjectError {
     NothingToRelease,
     #[error("projeto somente leitura: {0}")]
     SomenteLeitura(String),
+    #[error("importação: {0}")]
+    Importacao(String),
 }
 
 pub type PResult<T> = Result<T, ProjectError>;
@@ -89,6 +94,9 @@ pub struct DocEntry {
     pub state: DocState,
     pub versions: Vec<Version>,
     pub revisions: Vec<Revision>,
+    /// selo do documento importado, copiado aqui para o painel listar sem abrir cada peça
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origem: Option<fenkra_core::SeloOrigem>,
 }
 
 impl DocEntry {
@@ -227,6 +235,7 @@ impl Project {
             state: DocState::EmTrabalho,
             versions: vec![],
             revisions: vec![],
+            origem: doc.origem.clone(),
         });
         self.save(id, &doc, "criado")?;
         Ok(id)
@@ -275,6 +284,7 @@ impl Project {
         e.name = doc.name.clone();
         e.pn = doc.props.pn.clone();
         e.description = doc.props.description.clone();
+        e.origem = doc.origem.clone();
         if e.versions.last().map(|v| v.hash != hash).unwrap_or(true) {
             e.versions.push(Version { hash, time: now(), note: note.into() });
             if e.state == DocState::Liberado {

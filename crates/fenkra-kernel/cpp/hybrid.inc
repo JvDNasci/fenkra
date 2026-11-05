@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 // Bancada de Superfícies: superfícies primitivas, varredura/multi-seções abertas, operações
 // (juntar, curar, dividir, aparar, contorno, desmontar, desaparar, extrapolar) e híbridos
 // (engrossar, fechar, células de volume, malha → B-rep).

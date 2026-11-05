@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Núcleo do Fenkra.
 //!
 //! - [`expr`]: avaliador de expressões dos parâmetros (RF-PAR-002/003).
@@ -16,5 +17,5 @@ pub mod qualidade;
 pub mod sketch;
 
 pub use doc::*;
-pub use qualidade::{PresetMalha, QualidadeMalha};
+pub use qualidade::{PresetMalha, PresetStl, QualidadeMalha};
 pub use sketch::SketchData;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 // Fachada C++ do Fenkra sobre o OpenCASCADE.
 // Regra: nenhuma exceção do OCCT atravessa a ponte; tudo vira std::runtime_error.
 #pragma once
@@ -123,8 +124,8 @@ rust::Vec<double> bounding_box(const Shape& s);
 rust::Vec<double> mass_props(const Shape& s);
 uint32_t count_faces(const Shape& s);
 void export_step(const Shape& s, rust::Str path);
-void export_stl(const Shape& s, rust::Str path);
-std::unique_ptr<Shape> import_step(rust::Str path);
+void export_stl(const Shape& s, rust::Str path, double deflection, double angle);
+std::unique_ptr<Shape> import_step(rust::Str path, rust::Vec<rust::String>& info);
 rust::String occt_version();
 
 }  // namespace fenkra

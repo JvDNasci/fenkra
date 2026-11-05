@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 // Detalhamento 2D: projeção com linhas ocultas (HLR) e cortes para vistas de seção.
 // Incluído no fim de kernel.cpp.
 

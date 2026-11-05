@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Qualidade da malha de exibição: um só lugar decide o quão fina é a tesselação das peças,
 //! montagens e referências (o modelo B-Rep não muda, só a malha que se desenha).
 
@@ -83,9 +84,47 @@ impl PresetMalha {
     }
 }
 
+/// Ajuste pronto da malha do STL. É mais fino que a exibição porque o arquivo vai para fabricação:
+/// a faceta que a tela disfarça com normais suaves aparece na peça impressa.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PresetStl {
+    Rascunho,
+    #[default]
+    Normal,
+    Fino,
+}
+
+impl PresetStl {
+    pub const TODOS: [PresetStl; 3] = [PresetStl::Rascunho, PresetStl::Normal, PresetStl::Fino];
+
+    pub fn qualidade(self) -> QualidadeMalha {
+        match self {
+            PresetStl::Rascunho => QualidadeMalha { desvio_rel: 0.001, angulo_graus: 20. },
+            PresetStl::Normal => QualidadeMalha { desvio_rel: 0.0003, angulo_graus: 12. },
+            PresetStl::Fino => QualidadeMalha { desvio_rel: 0.0001, angulo_graus: 6. },
+        }
+    }
+
+    pub fn nome(self) -> &'static str {
+        match self {
+            PresetStl::Rascunho => "Rascunho",
+            PresetStl::Normal => "Normal",
+            PresetStl::Fino => "Fino",
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn presets_do_stl_ficam_do_grosso_ao_fino() {
+        let [r, n, f] = PresetStl::TODOS.map(|p| p.qualidade());
+        assert!(r.desvio(200.) > n.desvio(200.) && n.desvio(200.) > f.desvio(200.));
+        assert!(r.angulo_graus > n.angulo_graus && n.angulo_graus > f.angulo_graus);
+        assert!(n.desvio(200.) < QualidadeMalha::ALTA.desvio(200.), "o Normal do arquivo é mais fino que a tela");
+    }
 
     #[test]
     fn presets_ficam_do_grosso_ao_fino() {

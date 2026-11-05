@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Ponte Rust ⇄ C++ (cxx). Mantenha tipos simples: o C++ é só uma fachada sobre o OCCT.
 
 #[cxx::bridge(namespace = "fenkra")]
@@ -210,8 +211,8 @@ pub mod bridge {
         fn mass_props(s: &Shape) -> Vec<f64>;
         fn count_faces(s: &Shape) -> u32;
         fn export_step(s: &Shape, path: &str) -> Result<()>;
-        fn export_stl(s: &Shape, path: &str) -> Result<()>;
-        fn import_step(path: &str) -> Result<UniquePtr<Shape>>;
+        fn export_stl(s: &Shape, path: &str, deflection: f64, angle: f64) -> Result<()>;
+        fn import_step(path: &str, info: &mut Vec<String>) -> Result<UniquePtr<Shape>>;
         fn occt_version() -> String;
     }
 }

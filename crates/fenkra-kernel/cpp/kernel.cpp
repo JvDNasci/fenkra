@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 // Fachada C++ do Fenkra sobre o OpenCASCADE. Ver kernel.h.
 #include "kernel.h"
 #include "fenkra-kernel/src/ffi.rs.h"
@@ -7,6 +8,7 @@
 #include <map>
 #include <atomic>
 #include <cmath>
+#include <fstream>
 #include <limits>
 #include <mutex>
 #include <optional>
@@ -116,11 +118,17 @@
 #include <OSD_ThreadPool.hxx>
 #include <Poly_Triangulation.hxx>
 #include <Poly_TriangulationParameters.hxx>
+#include <HeaderSection_FileSchema.hxx>
+#include <NCollection_Sequence.hxx>
 #include <STEPControl_Reader.hxx>
+#include <StepData_StepModel.hxx>
+#include <TCollection_AsciiString.hxx>
+#include <TCollection_HAsciiString.hxx>
 #include <STEPControl_Writer.hxx>
 #include <ShapeUpgrade_UnifySameDomain.hxx>
 #include <Standard_Failure.hxx>
 #include <Standard_Version.hxx>
+#include <OSD_OpenFile.hxx>
 #include <StlAPI_Writer.hxx>
 #include <TopExp.hxx>
 #include <TopExp_Explorer.hxx>
@@ -1101,31 +1109,64 @@ uint32_t count_faces(const Shape& s) {
     return static_cast<uint32_t>(f.Extent());
 }
 
+// Leitor e gravador de STEP dividem as tabelas globais de `Interface_Static`, que não têm trava.
+// O acesso é um por vez: uma corrida ali derruba o processo, e o `guard` não pega isso.
+static std::mutex g_step_gate;
+
 void export_step(const Shape& s, rust::Str path) {
     guard("STEP", [&] {
+        std::lock_guard<std::mutex> gate(g_step_gate);
         STEPControl_Writer w;
         if (w.Transfer(s.s, STEPControl_AsIs) != IFSelect_RetDone) throw std::runtime_error("falha ao converter para STEP");
         if (w.Write(to_std(path).c_str()) != IFSelect_RetDone) throw std::runtime_error("falha ao gravar o arquivo STEP");
     });
 }
 
-void export_stl(const Shape& s, rust::Str path) {
+// A malha do STL é feita numa cópia sem triângulos: BRepMesh aproveita a malha que já está na forma
+// quando ela atende ao desvio pedido, então a saída dependeria do que a tela malhou antes (e a
+// exportação trocaria a malha de exibição, que é a mesma TShape). O StlAPI_Writer nasce em modo texto
+// e, com nome de arquivo, abre um std::ofstream com char*: no Windows isso lê o caminho no código de
+// página do sistema, e o UTF-8 que vem do Rust vira outro nome ou falha. Por isso o fluxo é aberto aqui.
+void export_stl(const Shape& s, rust::Str path, double deflection, double angle) {
     guard("STL", [&] {
+        TopoDS_Shape copy = BRepBuilderAPI_Copy(s.s, Standard_True, Standard_False).Shape();
         {
             auto gate = enter_mesher();
-            BRepMesh_IncrementalMesh(s.s, 0.05, Standard_False, 0.3, Standard_True);
+            BRepMesh_IncrementalMesh(copy, deflection, Standard_False, angle, Standard_True);
         }
+        std::ofstream out;
+        OSD_OpenStream(out, to_std(path).c_str(), std::ios::binary);
+        if (!out.is_open()) throw std::runtime_error("não foi possível criar o arquivo STL");
         StlAPI_Writer w;
-        if (!w.Write(s.s, to_std(path).c_str())) throw std::runtime_error("falha ao gravar o arquivo STL");
+        w.ASCIIMode() = false;
+        const bool ok = w.Write(copy, out);
+        out.close();
+        if (!ok || out.fail()) throw std::runtime_error("falha ao gravar o arquivo STL");
     });
 }
 
-std::unique_ptr<Shape> import_step(rust::Str path) {
+// `info` recebe o esquema do cabeçalho e a unidade de comprimento declarada no arquivo. A forma sai
+// sempre em milímetros: o leitor converte da unidade do arquivo para a do sistema.
+std::unique_ptr<Shape> import_step(rust::Str path, rust::Vec<rust::String>& info) {
     return guard("STEP", [&] {
+        std::lock_guard<std::mutex> gate(g_step_gate);
         STEPControl_Reader r;
         if (r.ReadFile(to_std(path).c_str()) != IFSelect_RetDone) throw std::runtime_error("não foi possível ler o STEP");
+        std::string schema;
+        Handle(StepData_StepModel) model = r.StepModel();
+        if (!model.IsNull()) {
+            Handle(HeaderSection_FileSchema) fs =
+                Handle(HeaderSection_FileSchema)::DownCast(model->HeaderEntity(STANDARD_TYPE(HeaderSection_FileSchema)));
+            if (!fs.IsNull() && fs->NbSchemaIdentifiers() > 0) schema = fs->SchemaIdentifiersValue(1)->ToCString();
+        }
+        NCollection_Sequence<TCollection_AsciiString> lengths, angles, solid_angles;
+        r.FileUnits(lengths, angles, solid_angles);
         r.TransferRoots();
-        return wrap(r.OneShape());
+        TopoDS_Shape shape = r.OneShape();
+        if (shape.IsNull()) throw std::runtime_error("o STEP não tem geometria");
+        info.push_back(rust::String(schema));
+        info.push_back(rust::String(lengths.IsEmpty() ? "" : lengths.First().ToCString()));
+        return wrap(shape);
     });
 }
 

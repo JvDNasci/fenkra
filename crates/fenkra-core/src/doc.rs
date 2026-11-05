@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Documento de peça: árvore fixa + linha de tempo de comandos.
 //!
 //! ```text
@@ -2925,6 +2926,22 @@ pub enum EdgeMode {
 
 // ---------------------------------------------------------------- Documento
 
+/// De qual arquivo o documento nasceu (B229). O original fica no cofre do projeto, pelo hash.
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub struct SeloOrigem {
+    /// nome do arquivo, sem a pasta: reimportar procura por ele
+    pub nome: String,
+    /// hash do conteúdo do arquivo original
+    pub hash: String,
+    /// segundos desde 1970
+    pub data: u64,
+    pub esquema: String,
+    pub unidades: String,
+    /// uid do documento do qual este derivou, quando a pessoa pediu um documento novo
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub derivado_de: Option<String>,
+}
+
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct Document {
     pub format_version: u32,
@@ -2936,6 +2953,9 @@ pub struct Document {
     pub uid: crate::formato::UidDoc,
     pub name: String,
     pub props: Properties,
+    /// origem do documento importado; fora do arquivo nos demais, para não mudar o hash das versões
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origem: Option<SeloOrigem>,
     /// Aparência da peça inteira (sobrepõe a cor dos coletores).
     #[serde(default)]
     pub appearance: Option<Appearance>,
@@ -3022,6 +3042,7 @@ impl Document {
             line_styles: vec![],
             features: vec![],
             rollback: 0,
+            origem: None,
         };
         let c = d.add_collector("Corpo principal");
         d.active_collector = c;

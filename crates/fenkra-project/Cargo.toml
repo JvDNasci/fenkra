@@ -4,6 +4,7 @@ description = "Gestão de projeto: pasta, documentos, versões e revisões conge
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish.workspace = true
 
 [dependencies]
 fenkra-core = { path = "../fenkra-core" }
@@ -11,3 +12,7 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 blake3 = "1"
+
+[dev-dependencies]
+fenkra-kernel = { path = "../fenkra-kernel" }
+fenkra-solidos = { path = "../fenkra-solidos" }

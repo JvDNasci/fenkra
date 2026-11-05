@@ -4,9 +4,11 @@ description = "Módulo Modelagem Sólida: recompute dos comandos sobre o kernel"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish.workspace = true
 
 [dependencies]
 fenkra-core = { path = "../fenkra-core" }
 fenkra-kernel = { path = "../fenkra-kernel" }
+blake3 = "1"
 serde.workspace = true
 serde_json.workspace = true

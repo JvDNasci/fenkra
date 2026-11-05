@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Compila a fachada C++ se o OpenCASCADE for encontrado.
 //! Procura em `OCCT_ROOT` ou no vcpkg (`C:\dev\vcpkg\installed\x64-windows-release`).
 //! Sem OCCT, o crate compila em modo "sem kernel" (as operações retornam erro).

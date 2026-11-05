@@ -1323,6 +1323,8 @@ version = "0.1.0-alpha.28"
 dependencies = [
  "blake3",
  "fenkra-core",
+ "fenkra-kernel",
+ "fenkra-solidos",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -1332,6 +1334,7 @@ dependencies = [
 name = "fenkra-solidos"
 version = "0.1.0-alpha.28"
 dependencies = [
+ "blake3",
  "fenkra-core",
  "fenkra-kernel",
  "serde",

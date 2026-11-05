@@ -4,6 +4,7 @@ description = "Núcleo do Fenkra: documento, árvore, linha de tempo, parâmetro
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish.workspace = true
 
 [dependencies]
 serde.workspace = true

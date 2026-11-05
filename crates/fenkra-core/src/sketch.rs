@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Sketch paramétrico: pontos, curvas e restrições, com solver próprio.
 //!
 //! - **Geometria livre:** as ferramentas criam pontos e curvas sem cotas obrigatórias.

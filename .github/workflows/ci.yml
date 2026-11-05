@@ -1,0 +1,85 @@
+# CI do Fenkra (B67, B201). Só confere: nada aqui publica, gera release ou grava no repositório.
+name: CI
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  # Mesmo commit do vcpkg usado no desenvolvimento: fixa o OpenCASCADE em 8.0.1.
+  VCPKG_COMMIT: 64a5b08569fc201d394a6b2b2f5697bbd6db9692
+
+jobs:
+  formato:
+    name: Formato (informativo)
+    runs-on: ubuntu-latest
+    # O código ainda não passou pelo rustfmt. Vira obrigatório depois de formatar tudo de uma vez.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup component add rustfmt
+      - run: cargo fmt --all --check
+
+  sem-occt:
+    name: Clippy e testes sem OpenCASCADE
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      OCCT_ROOT: C:\sem-occt
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup component add clippy
+      - uses: Swatinem/rust-cache@v2
+      # approx_constant: 1.5706 e 0.7071 são de propósito. absurd_extreme: limite de catraca que chegou a zero.
+      - run: cargo clippy --workspace --all-targets -- -A clippy::approx_constant -A clippy::absurd_extreme_comparisons
+      - run: cargo test --workspace
+
+  com-occt:
+    name: Testes e corpus com OpenCASCADE
+    runs-on: windows-latest
+    # A primeira compilação do OpenCASCADE é longa; depois o cache resolve.
+    timeout-minutes: 300
+    env:
+      OCCT_ROOT: C:\vcpkg-fenkra\installed\x64-windows-release
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache do OpenCASCADE
+        id: occt
+        uses: actions/cache@v4
+        with:
+          path: C:\vcpkg-fenkra\installed
+          key: occt-${{ env.VCPKG_COMMIT }}-x64-windows-release
+      - name: Compilar o OpenCASCADE
+        if: steps.occt.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git C:/vcpkg-fenkra
+          git -C C:/vcpkg-fenkra checkout "$VCPKG_COMMIT"
+          C:/vcpkg-fenkra/bootstrap-vcpkg.bat -disableMetrics
+          C:/vcpkg-fenkra/vcpkg.exe install opencascade:x64-windows-release
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace
+
+  licencas:
+    name: Licenças
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny,cargo-about
+      - run: cargo deny check licenses bans sources
+      - name: Gerar a lista de licenças dos crates
+        # Ainda não rodou de verdade: tire o continue-on-error na primeira rodada verde.
+        continue-on-error: true
+        run: cargo about generate --workspace about.hbs --output-file "$RUNNER_TEMP/licencas-crates.txt"

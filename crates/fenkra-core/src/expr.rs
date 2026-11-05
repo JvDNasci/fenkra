@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Avaliador de expressões: `+ - * / ^`, parênteses, constantes (`pi`), funções
 //! (`sin cos tan asin acos atan sqrt abs min max round floor ceil if`) e nomes de parâmetros.
 //! Ângulos das funções trigonométricas em graus, como no restante do CAD.
