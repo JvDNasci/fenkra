@@ -2316,9 +2316,22 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     /// Lê a peça de origem de um link (relativo à pasta do projeto ou absoluto).
     fn load_link_source(&self, path: &str) -> Result<Document, String> {
         let p = std::path::Path::new(path);
-        let full = match (&self.project, p.is_relative()) {
-            (Some(pr), true) => pr.root.join(p),
-            _ => p.to_path_buf(),
+        // caminho relativo vale a partir da pasta da peça que tem o link; só peça sem arquivo usa a do
+        // projeto. Antes era sempre a pasta do projeto, e o link quebrava ao mover o projeto (B66).
+        let full = if p.is_relative() {
+            match (self.open.file.as_ref().and_then(|f| f.parent()), &self.project) {
+                (Some(dir), _) => {
+                    let daqui = dir.join(p);
+                    match &self.project {
+                        Some(pr) if !daqui.is_file() && pr.root.join(p).is_file() => pr.root.join(p),
+                        _ => daqui,
+                    }
+                }
+                (None, Some(pr)) => pr.root.join(p),
+                (None, None) => p.to_path_buf(),
+            }
+        } else {
+            p.to_path_buf()
         };
         let s = std::fs::read_to_string(&full).map_err(|e| format!("{}: {e}", full.display()))?;
         Document::from_json(&s).map_err(|e| e.to_string())

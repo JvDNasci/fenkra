@@ -76,6 +76,59 @@ impl VersaoApp {
     }
 }
 
+/// Identidade estável do documento (B66): gravada no arquivo, sobrevive a renomear e mover.
+/// Como o `app_version`, **não conta na igualdade**: duas peças montadas do mesmo jeito continuam
+/// iguais (testes e assinatura de cache); a identidade vive no arquivo, não na geometria.
+/// Vazio = arquivo antigo, ainda sem uid; o primeiro salvamento atribui um com [`UidDoc::garantir`].
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+pub struct UidDoc(pub String);
+
+impl PartialEq for UidDoc {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl UidDoc {
+    pub fn novo() -> Self {
+        UidDoc(novo_uid())
+    }
+    pub fn garantir(&mut self) {
+        if self.0.is_empty() {
+            self.0 = novo_uid();
+        }
+    }
+    pub fn esta_vazio(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+/// uid de 128 bits em hexadecimal (32 caracteres). Sem dependência de aleatório: mistura o relógio,
+/// o processo, um contador e um endereço de pilha com splitmix64; basta para não colidir entre
+/// documentos de um mesmo usuário ou equipe.
+pub fn novo_uid() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static CONT: AtomicU64 = AtomicU64::new(0);
+    fn mix(mut z: u64) -> u64 {
+        z = z.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
+    }
+    let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    let c = CONT.fetch_add(1, Ordering::Relaxed);
+    let pilha = &c as *const u64 as u64;
+    let a = mix((t as u64) ^ mix(c) ^ mix(std::process::id() as u64));
+    let b = mix(((t >> 64) as u64) ^ a ^ mix(pilha) ^ c.rotate_left(32));
+    format!("{a:016x}{b:016x}")
+}
+
+/// Lê o `uid` gravado no topo do JSON de qualquer tipo de arquivo (vazio se não houver).
+pub fn uid_do_json(json: &str) -> String {
+    serde_json::from_str::<Value>(json).ok().and_then(|v| v.get("uid").and_then(Value::as_str).map(str::to_string)).unwrap_or_default()
+}
+
 /// Resultado de preparar um JSON para virar a estrutura tipada.
 #[derive(Debug)]
 pub struct Preparado {
@@ -172,6 +225,22 @@ mod tests {
         assert!(p.aviso(Tipo::Peca).unwrap().contains("v99"));
         let q = preparar(Tipo::Peca, "{}").unwrap();
         assert!(!q.futuro);
+    }
+
+    #[test]
+    fn uids_sao_unicos_e_nao_contam_na_igualdade() {
+        let v: std::collections::HashSet<String> = (0..2000).map(|_| novo_uid()).collect();
+        assert_eq!(v.len(), 2000);
+        assert!(v.iter().all(|u| u.len() == 32));
+        assert_eq!(UidDoc::novo(), UidDoc::novo());
+        let mut u = UidDoc::default();
+        assert!(u.esta_vazio());
+        u.garantir();
+        let antes = u.0.clone();
+        u.garantir();
+        assert_eq!(u.0, antes);
+        assert_eq!(uid_do_json(&format!(r#"{{"uid": "{antes}"}}"#)), antes);
+        assert_eq!(uid_do_json("{}"), "");
     }
 
     #[test]

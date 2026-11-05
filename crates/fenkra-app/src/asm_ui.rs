@@ -315,12 +315,12 @@ impl AsmState {
 
     /// Caminho guardado para uma peça: relativo à pasta da montagem quando possível.
     fn rel_path(&self, p: &std::path::Path) -> String {
-        if let Some(d) = self.dir() {
-            if let Ok(r) = p.strip_prefix(&d) {
-                return r.to_string_lossy().replace('\\', "/");
-            }
+        // relativo à pasta da montagem, subindo com `..` quando o componente está fora dela (B66);
+        // absoluto só entre drives diferentes
+        match self.dir() {
+            Some(d) => fenkra_project::referencias::caminho_relativo(&d, p),
+            None => p.to_string_lossy().to_string(),
         }
-        p.to_string_lossy().to_string()
     }
 
     fn comp_of_body(&self, body: usize) -> Option<Id> {

@@ -457,6 +457,9 @@ pub struct ExternalRef {
     /// arquivo da peça de origem (relativo à pasta do projeto, ou absoluto)
     #[serde(default)]
     pub path: String,
+    /// uid do documento de origem (B66): vale mais que o caminho ao resolver o link
+    #[serde(default)]
+    pub uid: String,
     /// geometria/valor copiado na última atualização
     #[serde(default)]
     pub snapshot: Option<LinkedGeo>,
@@ -2675,6 +2678,9 @@ pub struct Document {
     /// versão do programa que gravou o arquivo (informativo, fora da igualdade)
     #[serde(default)]
     pub app_version: crate::formato::VersaoApp,
+    /// identidade estável do documento (B66); referências guardam uid + caminho
+    #[serde(default)]
+    pub uid: crate::formato::UidDoc,
     pub name: String,
     pub props: Properties,
     /// Aparência da peça inteira (sobrepõe a cor dos coletores).
@@ -2739,6 +2745,7 @@ impl Document {
         let mut d = Document {
             format_version: FORMAT_VERSION,
             app_version: crate::formato::VersaoApp::atual(),
+            uid: crate::formato::UidDoc::novo(),
             name: name.into(),
             props: Properties::default(),
             appearance: None,
@@ -3081,6 +3088,7 @@ impl Document {
             publication: publication.into(),
             state: LinkState::Ativo,
             path: path.into(),
+            uid: String::new(),
             snapshot: Some(geo),
             target: Some(target),
             xform: None,

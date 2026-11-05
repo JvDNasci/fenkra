@@ -511,6 +511,9 @@ impl Default for TitleBlock {
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct Drawing {
     pub format_version: u32,
+    /// identidade estável do desenho (B66)
+    #[serde(default)]
+    pub uid: fenkra_core::formato::UidDoc,
     pub name: String,
     next_id: u64,
     pub sheets: Vec<Sheet>,
@@ -538,6 +541,7 @@ impl Drawing {
     pub fn new(name: &str, format: Format) -> Self {
         let mut d = Drawing {
             format_version: 1,
+            uid: fenkra_core::formato::UidDoc::novo(),
             name: name.into(),
             next_id: 1,
             sheets: vec![],

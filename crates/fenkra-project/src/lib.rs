@@ -11,6 +11,7 @@
 //! - Cada salvamento cria uma **versão** (RF-GPR-010).
 //! - **Liberar revisão** marca a versão atual com uma letra e a congela (RF-GPR-011).
 
+pub mod referencias;
 pub mod seguro;
 
 use fenkra_core::formato::{preparar, Tipo, APP_VERSION};
@@ -77,6 +78,9 @@ pub struct Revision {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DocEntry {
     pub id: u64,
+    /// identidade estável do documento (B66); o mesmo uid está gravado dentro do arquivo
+    #[serde(default)]
+    pub uid: String,
     pub file: String,
     pub name: String,
     pub pn: String,
@@ -214,6 +218,7 @@ impl Project {
         self.index.next_id += 1;
         self.index.documents.push(DocEntry {
             id,
+            uid: doc.uid.0.clone(),
             file: format!("{PARTS}/{id:05}.fkp"),
             name: doc.name.clone(),
             pn: doc.props.pn.clone(),
@@ -240,8 +245,24 @@ impl Project {
             return Err(ProjectError::SomenteLeitura(fenkra_core::formato::aviso_futuro(Tipo::Peca, doc.format_version)));
         }
         self.check_pn(Some(id), &doc.props.pn)?;
-        let json = doc.to_json();
-        let hash = blake3::hash(json.as_bytes()).to_hex()[..16].to_string();
+        // documento antigo sem uid: o uid fica estável pelo registro do projeto (B66)
+        let uid = if doc.uid.esta_vazio() {
+            let e = self.entry(id)?;
+            if e.uid.is_empty() { fenkra_core::formato::novo_uid() } else { e.uid.clone() }
+        } else {
+            doc.uid.0.clone()
+        };
+        let json = if doc.uid.esta_vazio() {
+            let mut c = doc.clone();
+            c.uid.0 = uid.clone();
+            c.to_json()
+        } else {
+            doc.to_json()
+        };
+        // a versão do programa não faz parte da identidade do conteúdo: atualizar o Fenkra e salvar
+        // sem editar não cria versão nova nem "suja" uma revisão liberada
+        let sem_app: String = json.lines().filter(|l| !l.trim_start().starts_with("\"app_version\"")).collect::<Vec<_>>().join("\n");
+        let hash = blake3::hash(sem_app.as_bytes()).to_hex()[..16].to_string();
         let vpath = self.root.join(VERSIONS).join(format!("{hash}.fkp"));
         if !vpath.exists() {
             gravar_atomico(&vpath, json.as_bytes())?;
@@ -249,6 +270,7 @@ impl Project {
         let file = self.root.join(&self.entry(id)?.file);
         gravar_atomico(&file, json.as_bytes())?;
         let e = self.entry_mut(id)?;
+        e.uid = uid;
         e.name = doc.name.clone();
         e.pn = doc.props.pn.clone();
         e.description = doc.props.description.clone();
@@ -262,8 +284,13 @@ impl Project {
     }
 
     pub fn load(&self, id: u64) -> PResult<Document> {
-        let s = std::fs::read_to_string(self.root.join(&self.entry(id)?.file))?;
-        Ok(Document::from_json(&s)?)
+        let e = self.entry(id)?;
+        let s = std::fs::read_to_string(self.root.join(&e.file))?;
+        let mut d = Document::from_json(&s)?;
+        if d.uid.esta_vazio() {
+            d.uid.0 = e.uid.clone();
+        }
+        Ok(d)
     }
 
     /// Abre uma versão imutável (ex.: revisão congelada).
@@ -296,6 +323,8 @@ impl Project {
         let mut d = self.load(id)?;
         d.name = format!("{} (cópia)", d.name);
         d.props.pn = String::new();
+        // cópia é outro documento: nunca herda a identidade do original
+        d.uid = fenkra_core::formato::UidDoc::novo();
         self.add_document(d)
     }
 
@@ -396,6 +425,45 @@ mod tests {
         assert!(p.aviso_formato.as_deref().unwrap().contains("v42"));
         assert!(matches!(p.save_index(), Err(ProjectError::SomenteLeitura(_))));
         assert_eq!(std::fs::read_to_string(root.join(INDEX)).unwrap(), futuro, "o arquivo do usuário não pode mudar");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn uid_do_documento_e_estavel_e_a_copia_ganha_outro() {
+        let root = tmp("uid");
+        let mut p = Project::create(&root, "T").unwrap();
+        let d = Document::new("Placa");
+        let uid = d.uid.0.clone();
+        assert_eq!(uid.len(), 32);
+        let id = p.add_document(d).unwrap();
+        assert_eq!(p.entry(id).unwrap().uid, uid);
+        assert_eq!(p.load(id).unwrap().uid.0, uid);
+        let copia = p.duplicate(id).unwrap();
+        assert_ne!(p.entry(copia).unwrap().uid, uid);
+
+        // arquivo de alpha antigo: sem uid no JSON. O registro do projeto fixa um uid que não muda.
+        let mut velho = Document::new("Velha");
+        velho.uid.0.clear();
+        let id2 = p.add_document(velho.clone()).unwrap();
+        let u2 = p.entry(id2).unwrap().uid.clone();
+        assert_eq!(u2.len(), 32, "o primeiro salvamento atribui o uid");
+        p.save(id2, &velho, "de novo").unwrap();
+        assert_eq!(p.entry(id2).unwrap().uid, u2, "salvar de novo não troca a identidade");
+        assert_eq!(p.load(id2).unwrap().uid.0, u2);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn atualizar_o_programa_e_salvar_sem_editar_nao_cria_versao() {
+        let root = tmp("appver");
+        let mut p = Project::create(&root, "T").unwrap();
+        let id = p.add_document(Document::new("Placa")).unwrap();
+        p.release(id, "A").unwrap();
+        let mut d = p.load(id).unwrap();
+        d.app_version.0 = "0.0.1-antigo".into();
+        p.save(id, &d, "regravado").unwrap();
+        assert_eq!(p.entry(id).unwrap().versions.len(), 1);
+        assert!(!p.entry(id).unwrap().dirty_since_release());
         let _ = std::fs::remove_dir_all(root);
     }
 
