@@ -8,10 +8,6 @@ use std::path::{Path, PathBuf};
 /// Únicos lugares onde nomes de terceiros podem aparecer (fontes consultadas e sua geração).
 const ARQUIVOS_DE_FONTES: [&str; 3] = ["docs/arquitetura/procedencia.md", "docs/benchmark/fontes.md", "scripts/benchmark/fontes.py"];
 
-/// Exceção temporária: arquivo gerado, em edição por outra bancada (PMI 3D). Sai da lista quando
-/// `scripts/benchmark/gerar.py` for rodado de novo, pois o gerador já escreve sem marcas.
-const EM_EDICAO: [&str; 1] = ["docs/benchmark/pmi-3d.md"];
-
 /// Termos sem distinção de maiúsculas (nomes que não são palavras comuns).
 const TERMOS: [&str; 22] = [
     "solidworks", "solid edge", "solidedge", "catia", "autodesk", "autocad", "onshape", "dassault", "siemens", "parasolid", "3dexperience",
@@ -74,7 +70,7 @@ fn nenhuma_marca_fora_dos_arquivos_de_fontes() {
     let mut achados = Vec::new();
     for p in arquivos {
         let rel = p.strip_prefix(&raiz).unwrap().to_string_lossy().replace(char::from(92), "/");
-        if ARQUIVOS_DE_FONTES.contains(&rel.as_str()) || EM_EDICAO.contains(&rel.as_str()) || p.file_name() == Some(&este) {
+        if ARQUIVOS_DE_FONTES.contains(&rel.as_str()) || p.file_name() == Some(&este) {
             continue;
         }
         let Ok(texto) = fs::read_to_string(&p) else { continue };

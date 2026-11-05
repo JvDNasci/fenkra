@@ -5,9 +5,9 @@
 
 ## Como cada ferramenta conduz o fluxo
 
-- **CATIA V5:** FT&A: planos de anotação, vistas e capturas; tolerâncias e datums ligados às faces.
-- **SOLIDWORKS:** MBD/DimXpert: esquema de cotas automático, vistas de anotação, vistas 3D com câmera e estado.
-- **Inventor:** Anotações 3D com Tolerance Advisor que verifica se a peça está totalmente definida.
+- **CAD avançado B:** FT&A: planos de anotação, vistas e capturas; tolerâncias e datums ligados às faces.
+- **CAD avançado A:** MBD/DimXpert: esquema de cotas automático, vistas de anotação, vistas 3D com câmera e estado.
+- **CAD avançado C:** Anotações 3D com Tolerance Advisor que verifica se a peça está totalmente definida.
 
 ## O que adotar no Fenkra
 
