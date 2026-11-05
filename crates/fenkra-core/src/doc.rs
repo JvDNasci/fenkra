@@ -293,7 +293,7 @@ impl Default for OnCurve {
 }
 
 impl OnCurve {
-    fn expr_mut(&mut self) -> &mut String {
+    pub fn expr_mut(&mut self) -> &mut String {
         match self {
             OnCurve::Distance(e) | OnCurve::Ratio(e) => e,
         }

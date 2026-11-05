@@ -422,6 +422,8 @@ pub struct RefNote {
     pub g1_deg: Option<f64>,
     /// o que a extração alcançou: faces (ou arestas, no contorno) e arestas
     pub count: Option<(u32, u32)>,
+    /// de onde sai a seta da distância: ponto sobre a superfície e a normal real ali
+    pub arrow: Option<(V3, V3)>,
 }
 
 /// Superfície de referência exibível (malha).
@@ -1703,6 +1705,10 @@ impl Ctx<'_> {
                     OffsetJoin::Plano => 2,
                 };
                 let v = e(dd, "distância")?;
+                // o kernel desloca pela normal orientada da face, e é essa normal que a seta mostra
+                let from = if let SurfRef::Face { point, .. } = surface { *point } else { sh.mass().center };
+                let arrow = sh.surface_near(from).map_err(|x| x.0)?;
+                self.notes.borrow_mut().insert(id, RefNote { arrow: Some(arrow), ..Default::default() });
                 let one = sh.offset_surface_join(v, j).map_err(|x| x.0)?;
                 if *both {
                     Geo::Surface(one.compound(&sh.offset_surface_join(-v, j).map_err(|x| x.0)?))
