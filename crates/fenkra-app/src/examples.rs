@@ -148,6 +148,7 @@ fn quadro() -> Document {
         gap: s("0"),
         joints: vec![],
         material: String::new(),
+        mirror: false,
     };
     d.add_feature(FeatureKind::StructMember(mk(paths, CornerMode::MeiaEsquadria)));
     d.add_feature(FeatureKind::StructMember(mk(legs, CornerMode::Nenhum)));
