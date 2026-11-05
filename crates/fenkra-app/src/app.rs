@@ -7156,6 +7156,7 @@ impl eframe::App for App {
             crate::dwg_ui::keys(self, ctx, save, undo, redo, del);
         } else if asm_mode {
             crate::asm_cmd::teclas(self, ctx);
+            crate::asm_selecao::teclas(self, ctx);
             if save {
                 crate::asm_ui::save(self);
             }
@@ -7177,14 +7178,10 @@ impl eframe::App for App {
                 }
             }
             if del && !ctx.egui_wants_keyboard_input() {
-                if let Some(id) = self.asm.as_ref().and_then(|s| s.sel) {
-                    crate::asm_ui::node_action(self, id, 0);
-                }
+                crate::asm_selecao::em_lote(self, 0);
             }
             if !typing && km.pressed(ctx, K::Hide) {
-                if let Some(id) = self.asm.as_ref().and_then(|s| s.sel) {
-                    crate::asm_ui::node_action(self, id, 1);
-                }
+                crate::asm_selecao::em_lote(self, 1);
             }
         } else {
             if save {
@@ -7381,7 +7378,7 @@ impl eframe::App for App {
             let st = self.asm.as_mut().unwrap();
             std::mem::swap(&mut self.result, &mut st.view);
             std::mem::swap(&mut self.open.doc, &mut st.view_doc);
-            crate::asm_ui::after_viewport(self);
+            crate::asm_ui::after_viewport(self, ctx);
             crate::pmi_ui::after_viewport(self);
             if self.asm.as_mut().is_some_and(|s| s.dirty || std::mem::take(&mut s.fantasma_novo)) {
                 self.scene_dirty = true;
@@ -7544,7 +7541,7 @@ impl eframe::App for App {
                     dark_edges: !matches!(self.settings.display, crate::render::DisplayMode::Arame) || lum(self.settings.bg_bottom) > 140.,
                     tangent_edges: self.settings.tangent_edges || matches!(self.settings.display, crate::render::DisplayMode::Arame),
                     hilite: self.hover_item.or(self.session.as_ref().map(|s| s.id)),
-                    hilite_extra: &self.st_cut_hi,
+                    hilite_extra: self.asm.as_ref().filter(|_| asm_view.is_some()).map_or(&self.st_cut_hi, |s| &s.multi),
                     line_w: self.settings.ref_line_width,
                     line_dash: self.settings.ref_line_dash,
                     point_style: self.settings.point_style,

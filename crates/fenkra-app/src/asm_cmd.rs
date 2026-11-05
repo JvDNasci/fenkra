@@ -65,9 +65,23 @@ pub fn abrir(app: &mut App, tipo: Tipo) {
     st.sel = None;
     st.props = false;
     st.cmd = Some(Pendente::novo(tipo));
+    if let Some(item) = st.origem_sel.take() {
+        receber_origem(st, item);
+    }
     for p in picks.into_iter().take(2) {
         receber(st, p);
     }
+    atualizar(st);
+}
+
+/// Item da origem da montagem como elemento do comando (clique na árvore).
+pub fn receber_origem(st: &mut AsmState, item: crate::asm_selecao::ItemOrigem) {
+    let Some(pen) = st.cmd.as_mut() else { return };
+    let k = pen.c.ativa;
+    pen.textos[k] = format!("{} · {}", item.nome(), tr("Origem"));
+    pen.picks[k] = None;
+    pen.c.receber(item.elemento());
+    pen.aviso = None;
     atualizar(st);
 }
 
@@ -507,9 +521,9 @@ pub fn overlay(app: &App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::rend
             crate::picking::draw(&painter, r, cam, rect, &p, true);
         }
         let Some(e) = &pen.c.caixas[k] else { continue };
-        let Some(n) = st.asm.node(e.r.comp) else { continue };
+        let Some(pl) = st.asm.lugar(e.r.comp) else { continue };
         let c = cor(&v, k);
-        alvo = seta(&painter, rect, cam, e, &n.placement, c, false).or(alvo);
+        alvo = seta(&painter, rect, cam, e, &pl, c, false).or(alvo);
         if let Some(mv) = previa.and_then(|p| p.movidos.iter().find(|m| m.comp == e.r.comp)) {
             seta(&painter, rect, cam, e, &mv.depois, c, true);
         }

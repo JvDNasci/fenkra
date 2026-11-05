@@ -53,6 +53,10 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Rotação e avanço ligados pelo passo.", "Rotation and advance tied by the pitch."),
     ("Sem graus de liberdade entre as duas peças.", "No degrees of freedom between the two parts."),
     ("suprimida", "suppressed"),
+    // origem e seleção (B22)
+    ("Origem", "Origin"),
+    ("Ponto de origem", "Origin point"),
+    ("Escolha e abra uma restrição, ou clique aqui com o comando aberto: vira o elemento dele", "Pick it and open a constraint, or click here with the command open: it becomes its element"),
     // símbolos no modelo (B245)
     ("Símbolos", "Symbols"),
     ("Mostrar no modelo", "Show on the model"),

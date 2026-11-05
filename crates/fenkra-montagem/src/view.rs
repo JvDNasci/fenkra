@@ -113,7 +113,7 @@ pub fn compose(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, errors: 
     let geometria = a.geometria.as_ref().map(fenkra_solidos::recompute);
     let mut doc = a.geometria.clone().unwrap_or_else(|| Document::new(&a.name));
     doc.collectors.clear();
-    doc.origin_visible = true;
+    doc.origin_visible = !a.origem_oculta;
     let mut bodies = vec![];
     let changed = featured(a);
     for n in a.nodes.iter().filter(|n| !matches!(n.kind, NodeKind::Group)) {
@@ -161,6 +161,9 @@ pub fn compose(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, errors: 
     let mut r = resultado_de(bodies);
     if let Some(g) = geometria {
         (r.sketches, r.planes, r.points, r.curves, r.surfaces) = (g.sketches, g.planes, g.points, g.curves, g.surfaces);
+    } else {
+        // a origem existe mesmo sem geometria própria da montagem
+        r.planes = fenkra_solidos::recompute(&Document::new("origem")).planes;
     }
     (doc, r)
 }
@@ -321,6 +324,17 @@ pub fn interferences(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, to
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn origem_aparece_mesmo_sem_geometria_e_oculta_pela_opcao() {
+        let mut a = Assembly::new("m");
+        let (d, r) = compose(&a, None, &mut PartCache::default(), &mut vec![]);
+        assert_eq!(r.planes.len(), 3, "XY, XZ e YZ");
+        assert!(r.planes.iter().all(|p| p.id.is_none()) && d.origin_visible);
+        a.origem_oculta = true;
+        let (d, _) = compose(&a, None, &mut PartCache::default(), &mut vec![]);
+        assert!(!d.origin_visible);
+    }
 
     #[test]
     fn montagem_de_duas_placas_com_interferencia() {

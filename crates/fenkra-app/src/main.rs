@@ -22,6 +22,7 @@ mod handles;
 mod gizmo;
 mod asm_ui;
 mod asm_cmd;
+mod asm_selecao;
 mod asm_simbolos;
 mod st_ui;
 mod pmi_ui;

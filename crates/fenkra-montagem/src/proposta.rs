@@ -208,7 +208,7 @@ impl Comando {
     }
 
     fn montar_restricao(&self, c: &mut Assembly, a: &Elemento, b: &Elemento) -> Result<(Id, Option<String>, bool, bool), String> {
-        let lugar = |id: Id| c.node(id).map(|n| n.placement).unwrap_or_default();
+        let lugar = |id: Id| c.lugar(id).unwrap_or_default();
         let kind = match &self.tipo {
             Tipo::Restricao(k) => k.clone(),
             _ => tipo_automatico(&a.r.geom, &b.r.geom, &lugar(a.r.comp), &lugar(b.r.comp)),
@@ -278,7 +278,7 @@ pub fn sistema(g: &Geom) -> JFrame {
 /// Acrescenta a junta na cópia. O x de B começa como o x de A projetado no plano de B, para o zero
 /// do ângulo ser comum às duas peças.
 fn montar_junta(c: &mut Assembly, k: &JointKind, a: &Elemento, b: &Elemento) -> Result<Id, String> {
-    let lugar = |id: Id| c.node(id).map(|n| n.placement).unwrap_or_default();
+    let lugar = |id: Id| c.lugar(id).unwrap_or_default();
     let (pa, pb) = (lugar(a.r.comp), lugar(b.r.comp));
     let fa = sistema(&a.r.geom);
     let mut fb = sistema(&b.r.geom);
@@ -494,6 +494,38 @@ mod tests {
         c.receber(eixo(f, [0.; 3], [0., 0., 1.]));
         c.receber(Elemento::novo(MateRef { comp: m, geom: Geom::Point([0.; 3]), pick: None }, Classe::Vertice));
         assert!(c.resolver(&a).is_err());
+    }
+
+    #[test]
+    fn peca_presa_na_origem_da_montagem() {
+        let (a, _, m) = par();
+        let mut c = Comando::novo(Tipo::Restricao(MateKind::Contact));
+        c.receber(face(ORIGEM, [0.; 3], [0., 0., 1.]));
+        c.receber(face(m, [0.; 3], [0., 0., -1.]));
+        let p = c.resolver(&a).unwrap();
+        assert!(p.copia.node(m).unwrap().placement.origin[2].abs() < 1e-6, "encosta no plano XY");
+        assert!(!p.falhou());
+        assert_eq!(p.movidos.len(), 1);
+        assert_eq!(p.copia.name_of(ORIGEM), "Origem");
+        // gravada e lida de volta, a referência continua na origem
+        let lida = Assembly::from_json(&p.copia.to_json()).unwrap();
+        assert_eq!(lida.mates[0].a.comp, ORIGEM);
+    }
+
+    #[test]
+    fn distancia_e_junta_medem_a_partir_da_origem() {
+        let (a, _, m) = par();
+        let mut c = Comando::novo(Tipo::Restricao(MateKind::Distance("0".into())));
+        c.receber(face(ORIGEM, [0.; 3], [0., 0., 1.]));
+        c.receber(face(m, [0.; 3], [0., 0., 1.]));
+        let p = c.resolver(&a).unwrap();
+        assert!(matches!(&p.copia.mates[0].kind, MateKind::Distance(v) if v == "30"));
+        let mut c = Comando::novo(Tipo::Junta(JointKind::Revolute));
+        c.receber(eixo(ORIGEM, [0.; 3], [0., 0., 1.]));
+        c.receber(eixo(m, [0.; 3], [0., 0., 1.]));
+        let p = c.resolver(&a).unwrap();
+        let o = p.copia.node(m).unwrap().placement.origin;
+        assert!(o[0].abs() < 1e-5 && o[1].abs() < 1e-5, "gira em volta do eixo Z da montagem: {o:?}");
     }
 
     #[test]

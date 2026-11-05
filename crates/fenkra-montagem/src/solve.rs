@@ -272,6 +272,7 @@ fn place(b: &Bodies, a: &Assembly, x: &[f64]) -> HashMap<Id, Placement> {
         };
         out.insert(n.id, p);
     }
+    out.insert(ORIGEM, Placement::default());
     out
 }
 

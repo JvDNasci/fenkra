@@ -188,6 +188,12 @@ pub struct AsmState {
     pub fantasma_novo: bool,
     /// símbolos de restrição e junta no modelo
     pub simbolos: crate::asm_simbolos::Exibicao,
+    /// peças escolhidas juntas (Ctrl, Shift ou caixa): ocultar e apagar valem para todas
+    pub multi: Vec<Id>,
+    /// item da origem escolhido na árvore: entra como primeiro elemento do próximo comando
+    pub origem_sel: Option<crate::asm_selecao::ItemOrigem>,
+    /// último elemento clicado no 3D e quantos havia: a seleção só reage quando isso muda
+    ultimo_pick: (Option<Pick>, usize),
     /// propriedades do componente escolhido (ou da montagem, sem escolha) abertas no painel
     pub props: bool,
     pub report: SolveReport,
@@ -294,6 +300,9 @@ impl AsmState {
             cmd: None,
             fantasma_novo: false,
             simbolos: Default::default(),
+            multi: vec![],
+            origem_sel: None,
+            ultimo_pick: (None, 0),
             report: SolveReport { converged: true, dof: report_dof, ..Default::default() },
             errors: vec![],
             undo: vec![],
@@ -411,9 +420,10 @@ impl AsmState {
         self.errors.clear();
         let mut shown = self.asm.with_state(&self.live);
         if self.isolate {
-            if let Some(s) = self.sel {
+            let manter: Vec<Id> = self.multi.iter().copied().chain(self.sel).collect();
+            if !manter.is_empty() {
                 for n in &mut shown.nodes {
-                    if n.id != s && !matches!(n.kind, NodeKind::Group) {
+                    if !manter.contains(&n.id) && !matches!(n.kind, NodeKind::Group) {
                         n.visible = false;
                     }
                 }
@@ -471,6 +481,14 @@ impl AsmState {
 
     /// Elemento da restrição a partir de uma seleção da viewport.
     pub(crate) fn mate_ref(&mut self, p: Pick) -> Result<MateRef, String> {
+        // plano da origem ou da geometria da montagem: referência no sistema da montagem
+        if let Pick::Plane(pr) = p {
+            let f = match pr {
+                fenkra_core::PlaneRef::Origin(o) => fenkra_solidos::origin_frame(o),
+                fenkra_core::PlaneRef::Datum(id) => self.view.as_ref().and_then(|r| r.planes.iter().find(|x| x.id == Some(id))).map(|x| x.frame).ok_or("plano não encontrado")?,
+            };
+            return Ok(MateRef { comp: ORIGEM, geom: Geom::Plane { p: f.origin, n: f.normal }, pick: None });
+        }
         let (body, world) = match p {
             Pick::Face { body, point, .. } => (body, point.map(|v| v as f64)),
             Pick::Vertex { body, pos } => (body, pos.map(|v| v as f64)),
@@ -816,20 +834,10 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
 
 /// Depois da viewport: com um comando aberto, cada clique vai para a caixa ativa; sem comando, um
 /// clique numa peça a seleciona na árvore.
-pub fn after_viewport(app: &mut App) {
+pub fn after_viewport(app: &mut App, ctx: &egui::Context) {
     after_view_quick(app);
     if !crate::asm_cmd::apos_viewport(app) {
-        if let Some(p) = app.picks.last().copied() {
-            if let Pick::Face { body, .. } | Pick::Edge { body, .. } | Pick::Vertex { body, .. } = p {
-                if let Some(st) = app.asm.as_mut() {
-                    if let Some(c) = st.comp_of_body(body) {
-                        if st.sel != Some(c) {
-                            st.sel = Some(c);
-                        }
-                    }
-                }
-            }
-        }
+        selecao_do_clique(app, ctx.input(|i| i.modifiers.alt));
     }
     // duplo clique numa peça: abre para editar
     if let Some(id) = app.take_open_pending() {
@@ -837,6 +845,37 @@ pub fn after_viewport(app: &mut App) {
             edit_part(app, id);
         }
     }
+}
+
+/// O clique no 3D escolhe o componente. Só reage quando a seleção muda: escolher outra linha da
+/// árvore não pode voltar para a peça clicada antes. Alt+clique fica no nível da peça e sobe para o
+/// grupo dela; com várias escolhidas (Ctrl ou caixa), a seleção de peças acompanha.
+fn selecao_do_clique(app: &mut App, alt: bool) {
+    let Some(st) = app.asm.as_mut() else { return };
+    let ultimo = app.picks.last().copied();
+    if (ultimo, app.picks.len()) == st.ultimo_pick {
+        return;
+    }
+    st.ultimo_pick = (ultimo, app.picks.len());
+    let Some(p) = ultimo else {
+        if !st.multi.is_empty() {
+            st.multi.clear();
+            st.fantasma_novo = true;
+        }
+        return;
+    };
+    let (Pick::Face { body, .. } | Pick::Edge { body, .. } | Pick::Vertex { body, .. }) = p else { return };
+    let Some(c) = st.comp_of_body(body) else { return };
+    if alt {
+        st.sel = Some(crate::asm_selecao::subir_nivel(&st.asm, st.sel, c));
+        st.multi.clear();
+        app.picks.clear();
+        st.ultimo_pick = (None, 0);
+    } else {
+        st.sel = Some(c);
+        st.multi = if app.picks.len() > 1 { st.comps_of(&app.picks) } else { vec![] };
+    }
+    st.fantasma_novo = true;
 }
 
 /// Eixo da série a partir do que foi clicado. Face plana: começa no ponto clicado, para dentro da
@@ -1243,6 +1282,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
         TreeInfo { feats, subs, inst }
     };
     ui.separator();
+    crate::asm_selecao::arvore(st, ui);
     // nós, com grupos aninhados (a ordem da árvore só muda a visualização)
     #[allow(clippy::too_many_arguments)]
     fn rows(ui: &mut egui::Ui, st: &AsmState, info: &TreeInfo, parent: Option<Id>, depth: usize, new_sel: &mut Option<Id>, act: &mut Option<(Id, u8)>, hover: &mut Option<Id>) {
@@ -1313,7 +1353,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                         r
                     } else {
                         let t = if err.is_some() { RichText::new(txt).color(crate::theme::st_err()) } else if n.visible { RichText::new(txt) } else { RichText::new(txt).weak() };
-                        let r = ui.selectable_label(st.sel == Some(n.id), t);
+                        let r = ui.selectable_label(st.sel == Some(n.id) || st.multi.contains(&n.id), t);
                         if st.sel == Some(n.id) {
                             crate::tree_ui::achar(r.rect);
                         }
@@ -1685,7 +1725,16 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
         if st.sel != Some(s) {
             st.props = false;
         }
-        st.sel = Some(s);
+        if st.asm.node(s).is_some() {
+            // peças: a seleção segue as teclas da árvore das peças
+            let (ctrl, shift) = ui.input(|i| (i.modifiers.command, i.modifiers.shift));
+            let ordem: Vec<Id> = st.asm.nodes.iter().map(|n| n.id).collect();
+            crate::asm_selecao::clique(&mut st.sel, &mut st.multi, &ordem, s, ctrl, shift);
+            st.fantasma_novo = true;
+        } else {
+            st.sel = Some(s);
+            st.multi.clear();
+        }
         if st.isolate {
             st.dirty = true;
         }
@@ -1726,6 +1775,10 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
 /// 6 substituir, 7 subir, 8 descer, 9 renomear, 10 isolar, 11 suprimir restrição.
 pub fn node_action(app: &mut App, id: Id, k: u8) {
     let Some(st) = app.asm.as_mut() else { return };
+    // na seleção de várias peças, ocultar e apagar valem para todas
+    if matches!(k, 0 | 1) && st.multi.len() > 1 && st.multi.contains(&id) {
+        return crate::asm_selecao::em_lote(app, k);
+    }
     match k {
         2 => return edit_part(app, id),
         16 => {
@@ -2750,7 +2803,7 @@ impl AsmState {
     }
 
     /// Componentes das seleções da viewport (sem repetir, na ordem do clique).
-    fn comps_of(&self, picks: &[Pick]) -> Vec<Id> {
+    pub(crate) fn comps_of(&self, picks: &[Pick]) -> Vec<Id> {
         let mut out = vec![];
         for p in picks {
             if let Pick::Face { body, .. } | Pick::Edge { body, .. } | Pick::Vertex { body, .. } = p {
