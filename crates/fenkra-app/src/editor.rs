@@ -10,7 +10,7 @@ use fenkra_solidos::Status;
 use std::collections::HashMap;
 use crate::i18n::tr;
 
-type Vars = HashMap<String, f64>;
+pub(crate) type Vars = HashMap<String, f64>;
 
 /// Ícone de um parâmetro pelo que ele mede (comprimento, ângulo, raio…), pelo nome.
 pub(crate) fn param_icon(label: &str) -> &'static str {
@@ -1256,6 +1256,10 @@ fn feature_ui(
             target_combo(ui, doc, target);
         }
 
+        FeatureKind::Hole(h) if fenkra_montagem::furos::editado_pela_montagem(doc, id) => {
+            ui.label(RichText::new(tr("Furo da montagem: edite pela série na montagem, ou isole o link para deixá-lo comum.")).color(crate::theme::st_warn()));
+            ui.add_enabled_ui(false, |ui| hole_ui(ui, doc, idx, h, vars, target, seed));
+        }
         FeatureKind::Hole(h) => hole_ui(ui, doc, idx, h, vars, target, seed),
 
         FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => {

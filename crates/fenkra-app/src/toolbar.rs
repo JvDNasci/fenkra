@@ -231,7 +231,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             ]),
             Family("asm_recorte_peca", vec![
                 it("asm_recorte_peca", "Recorte pela peça", "Recorte pela peça (entre peças)", "A peça escolhida na árvore (pino, aba, parafuso) recorta as peças clicadas: furo do pino, ranhura da aba. Segue as posições (associativo).", Cmd(C::AsmFeat(0))),
-                it("asm_furo_pecas", "Furo entre peças", "Furo atravessando peças", "Clique na face onde o furo começa (Ctrl+clique nas outras peças): o mesmo furo passa por todas, alinhado.", Cmd(C::AsmFeat(1))),
+                it("asm_furo_pecas", "Furo entre peças", "Furo atravessando peças", "Clique na face onde o furo começa, ou no eixo de um furo: a série atravessa as peças que o eixo cruza e grava um furo real em cada uma.", Cmd(C::AsmFeat(1))),
             ]),
             One(it("asm_link", "Copiar geometria", "Copiar geometria de outra peça (link)", "Escolha na árvore a peça que recebe e clique numa face plana de outra peça: a face é publicada automaticamente e entra por link (sem referência circular).", Cmd(C::AsmLink))),
             One(it("asm_fixadores", "Fixadores", "Preencher furos com fixadores", "Insere parafuso, arruela e porca da biblioteca nos furos passantes (com a folga de um tamanho métrico) e nos roscados da montagem. Furos de peças diferentes no mesmo eixo recebem um parafuso só, com o comprimento tirado da espessura atravessada. Rodar de novo não duplica.", Cmd(C::AsmFasteners))),

@@ -23,6 +23,8 @@ pub struct PartCache {
     parts: HashMap<PathBuf, LoadedPart>,
     /// qualidade das malhas das peças (a mesma da peça aberta)
     qualidade: QualidadeMalha,
+    /// peças criadas no contexto que ainda não têm arquivo (gravadas com a montagem)
+    pendentes: HashMap<PathBuf, Document>,
 }
 
 /// Caminho completo de um componente (relativo à pasta da montagem ou absoluto).
@@ -59,13 +61,62 @@ impl PartCache {
             None => true,
         };
         if fresh {
-            let txt = std::fs::read_to_string(full).map_err(|e| format!("{}: {e}", full.display()))?;
-            let doc = Document::from_json(&txt).map_err(|e| e.to_string())?;
+            let doc = match self.pendentes.get(full) {
+                Some(d) => d.clone(),
+                None => {
+                    let txt = std::fs::read_to_string(full).map_err(|e| format!("{}: {e}", full.display()))?;
+                    Document::from_json(&txt).map_err(|e| e.to_string())?
+                }
+            };
             let result = fenkra_solidos::recompute_cached(&doc, &mut fenkra_solidos::Cache::com_qualidade(self.qualidade));
             let shape = if with_shape { fenkra_solidos::final_shape(&doc) } else { None };
             self.parts.insert(full.to_path_buf(), LoadedPart { doc, result, shape, stamp });
         }
         Ok(self.parts.get(full).unwrap())
+    }
+
+    /// Peça nova só na memória: o cache a entrega como se o arquivo existisse.
+    pub fn definir_pendente(&mut self, full: &Path, doc: Document) {
+        self.pendentes.insert(full.to_path_buf(), doc);
+        self.parts.remove(full);
+    }
+
+    /// Devolve à leitura guardada o documento dado, sem recalcular: serve de "antes" na comparação.
+    pub fn lembrar(&mut self, full: &Path, doc: Document) {
+        let _ = self.get(full, false);
+        if let Some(p) = self.parts.get_mut(full) {
+            p.doc = doc;
+        }
+    }
+
+    pub fn e_pendente(&self, full: &Path) -> bool {
+        self.pendentes.contains_key(full)
+    }
+
+    /// Desiste da peça nova.
+    pub fn descartar_pendente(&mut self, full: &Path) {
+        self.pendentes.remove(full);
+        self.parts.remove(full);
+    }
+
+    /// Grava as peças novas que a montagem usa, e esquece as outras: quem apagou o componente antes
+    /// de salvar desistiu da peça, e ela não pode virar arquivo órfão. Devolve as gravadas. Se uma
+    /// falhar, as que faltam continuam pendentes.
+    pub fn gravar_pendentes(&mut self, a: &Assembly, dir: Option<&Path>) -> Result<Vec<PathBuf>, String> {
+        let usados: Vec<PathBuf> = a.nodes.iter().filter_map(|n| match &n.kind {
+            NodeKind::Part { path } => Some(full_path(dir, path)),
+            _ => None,
+        }).collect();
+        self.pendentes.retain(|f, _| usados.contains(f));
+        let mut feitos = vec![];
+        for f in self.pendentes.keys().cloned().collect::<Vec<_>>() {
+            let txt = self.pendentes[&f].to_json();
+            std::fs::write(&f, txt).map_err(|e| format!("{}: {e}", f.display()))?;
+            self.pendentes.remove(&f);
+            self.parts.remove(&f);
+            feitos.push(f);
+        }
+        Ok(feitos)
     }
 
     /// Esquece uma peça (para recarregar depois de editar).

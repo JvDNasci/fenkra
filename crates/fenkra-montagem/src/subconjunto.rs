@@ -135,6 +135,10 @@ fn parametros_usados(a: &Assembly, sub: &Assembly) -> Vec<AsmParam> {
         match &f.kind {
             AsmFeatKind::Cut { clearance, .. } => nomes(clearance, &mut quer),
             AsmFeatKind::Hole { dia, depth, .. } => [dia, depth].iter().for_each(|e| nomes(e, &mut quer)),
+            AsmFeatKind::Serie(s) => {
+                nomes(&s.dia, &mut quer);
+                nomes(&s.depth, &mut quer);
+            }
         }
     }
     let mut vistos: HashSet<String> = HashSet::new();
@@ -299,8 +303,17 @@ impl Assembly {
             let (vai, fica) = match f.kind {
                 AsmFeatKind::Cut { tool, .. } if dentro.contains(&tool) => (de_dentro.clone(), vec![]),
                 AsmFeatKind::Cut { .. } => (vec![], de_fora.clone()),
-                AsmFeatKind::Hole { .. } => (de_dentro.clone(), de_fora.clone()),
+                AsmFeatKind::Hole { .. } | AsmFeatKind::Serie(_) => (de_dentro.clone(), de_fora.clone()),
             };
+            // a série se divide e cada metade mora num arquivo: a âncora pode ter ficado do outro
+            // lado, então as duas passam a cotas. O eixo fica onde estava
+            let mut f = f;
+            if let AsmFeatKind::Serie(s) = &mut f.kind {
+                if let Some(pl) = s.eixo.ancora().and_then(|c| self.node(c).or(sub.node(c))).map(|n| n.placement) {
+                    s.eixo.congelar(&pl);
+                }
+                s.gravados.clear();
+            }
             if !vai.is_empty() {
                 rel.recursos += 1;
                 sub.features.push(AsmFeature { targets: vai.clone(), ..f.clone() });
@@ -452,9 +465,19 @@ impl Assembly {
             }
         }
         for f in &mut sub.features {
-            if let AsmFeatKind::Hole { p: o, d, .. } = &mut f.kind {
-                *o = p.point(*o);
-                *d = p.dir(*d);
+            match &mut f.kind {
+                AsmFeatKind::Hole { p: o, d, .. } => {
+                    *o = p.point(*o);
+                    *d = p.dir(*d);
+                }
+                AsmFeatKind::Serie(s) => {
+                    if let EixoFuro::Cotas { x, y, z, d } = &mut s.eixo {
+                        let num = |e: &str| expr::eval_str(e, &HashMap::new()).unwrap_or(0.);
+                        let [nx, ny, nz] = p.point([num(x), num(y), num(z)]).map(valor_cota);
+                        (*x, *y, *z, *d) = (nx, ny, nz, p.dir(*d));
+                    }
+                }
+                AsmFeatKind::Cut { .. } => {}
             }
         }
         for m in &mut sub.mates {

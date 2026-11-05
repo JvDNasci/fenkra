@@ -2727,6 +2727,9 @@ pub struct Document {
     /// referências externas (geometria de outras peças por link)
     #[serde(default)]
     pub external: Vec<ExternalRef>,
+    /// nomes antigos de publicações renomeadas (antigo, atual): quem ainda usa o antigo continua achando
+    #[serde(default)]
+    pub apelidos_publicacao: Vec<(String, String)>,
     /// vistas salvas (câmeras)
     #[serde(default)]
     pub views: Vec<NamedView>,
@@ -2788,6 +2791,7 @@ impl Document {
             active_collector: Id(0),
             folders: vec![],
             external: vec![],
+            apelidos_publicacao: vec![],
             views: vec![],
             textures: vec![],
             sheet: None,
