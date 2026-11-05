@@ -6,14 +6,20 @@ edition.workspace = true
 license.workspace = true
 publish.workspace = true
 build = "build.rs"
+default-run = "fenkra"
 
 [[bin]]
 name = "fenkra"
 path = "src/main.rs"
 
+[[bin]]
+name = "fenkra-conv"
+path = "src/bin/fenkra_conv.rs"
+
 [dependencies]
 fenkra-core = { path = "../fenkra-core" }
 fenkra-kernel = { path = "../fenkra-kernel" }
+fenkra-conversor = { path = "../fenkra-conversor" }
 fenkra-solidos = { path = "../fenkra-solidos" }
 fenkra-project = { path = "../fenkra-project" }
 fenkra-montagem = { path = "../fenkra-montagem" }
