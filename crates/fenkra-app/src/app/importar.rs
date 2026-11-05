@@ -148,6 +148,10 @@ impl Dialogo {
         }
     }
 
+    fn e_arvore(&self) -> bool {
+        self.caminho.extension().is_some_and(|e| e.eq_ignore_ascii_case("fkx"))
+    }
+
     fn pode_confirmar(&self) -> bool {
         self.mudou_em.is_none() && matches!(self.leitura, Leitura::Pronta(..))
     }
@@ -230,8 +234,11 @@ impl Dialogo {
         ui.label(RichText::new(self.nome()).strong());
         ui.add_space(4.);
         self.resultado_ui(ui);
-        ui.separator();
-        self.opcoes_ui(ui);
+        // a árvore não tem unidade a escolher nem forma a reparar: a geometria nasce do recálculo
+        if !self.e_arvore() {
+            ui.separator();
+            self.opcoes_ui(ui);
+        }
         ui.add_space(6.);
         let mut acao = Acao::Nada;
         ui.horizontal(|ui| {
@@ -265,7 +272,7 @@ fn relatorio_ui(ui: &mut egui::Ui, rel: &Relatorio) -> bool {
 
 impl App {
     pub(super) fn importar_arquivo(&mut self) {
-        let dialogo = rfd::FileDialog::new().add_filter("STEP, BREP", &["step", "stp", "brep"]).add_filter(tr("Todos os arquivos"), &["*"]);
+        let dialogo = rfd::FileDialog::new().add_filter("STEP, BREP", &["step", "stp", "brep"]).add_filter(tr("Árvore paramétrica"), &["fkx"]).add_filter(tr("Todos os arquivos"), &["*"]);
         let Some(caminho) = dialogo.pick_file() else { return };
         self.abrir_painel_importar(caminho);
     }
@@ -313,7 +320,12 @@ impl App {
         let Dialogo { caminho, opcoes, leitura, .. } = d;
         let Leitura::Pronta(i, _) = leitura else { return };
         self.settings.opcoes_importar = opcoes;
-        let Importado { doc, relatorio, .. } = *i;
+        let Importado { doc, relatorio, conjunto, .. } = *i;
+        if let Some(c) = conjunto {
+            self.importar_relatorio = Some(relatorio);
+            self.receber_conjunto(c);
+            return;
+        }
         let documento = Documento { doc, relatorio: relatorio.texto_pt() };
         self.importar_relatorio = Some(relatorio);
         self.receber_importacao(caminho, documento);

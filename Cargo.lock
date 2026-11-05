@@ -1284,6 +1284,7 @@ dependencies = [
  "blake3",
  "fenkra-core",
  "fenkra-kernel",
+ "fenkra-montagem",
  "fenkra-solidos",
  "serde",
  "serde_json",

@@ -19,6 +19,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use crate::i18n::tr;
 
+mod arvore;
 mod diag;
 mod importar;
 mod projeto;
@@ -3021,7 +3022,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         ui.close();
                     }
                     ui.separator();
-                    let importar = ui.add(egui::Button::image_and_text(crate::icons::get("importar_arquivo"), tr("Importar STEP ou BREP…")));
+                    let importar = ui.add(egui::Button::image_and_text(crate::icons::get("importar_arquivo"), tr("Importar STEP, BREP ou árvore…")));
                     let (nome, frase, passos) = crate::toolbar::TEXTO_IMPORTAR;
                     if crate::icons::hover_help(ui, importar, tr(nome), tr(frase), tr(passos)).clicked() {
                         self.com_confirmacao(Acao::Importar);
@@ -3029,6 +3030,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     }
                     if ui.button(tr("Exportar STEP…")).clicked() {
                         self.export("step", Default::default());
+                        ui.close();
+                    }
+                    if ui.button(tr("Exportar árvore paramétrica…")).on_hover_text(tr("Grava a receita da peça ou da montagem em JSON aberto: esboços, cotas, comandos, nomes e cores. Não leva a geometria pronta.")).clicked() {
+                        self.exportar_arvore();
                         ui.close();
                     }
                     ui.menu_button(tr("Exportar STL"), |ui| {
