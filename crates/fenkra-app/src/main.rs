@@ -42,6 +42,8 @@ mod partida;
 mod ajuda_cmd;
 mod textos_ajuda;
 mod sketch_fluxo;
+mod sketch_relimita;
+mod sketch_textos;
 mod perfil;
 mod relatorio;
 #[cfg(test)]

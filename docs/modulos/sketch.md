@@ -19,8 +19,8 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 - **Retângulo e variantes** (Retângulo, retângulo pelo centro) — Tool::Rect, RectCenter; sem 3 pontos (inclinado) nem paralelogramo. `BM-SKT-01`
 - **Spline** (Spline (alças Bézier)) — Tool::Spline com alças e inflexões (alpha.25). Não acha tangência com outros elementos do sketch (DR-02); sem modo por polígono de controle no sketch. `DR-02`
 - **Polígono e rasgo** (Polígono, rasgo) — Tool::Polygon e Slot (reto). Sem rasgo em arco no sketch (existe SmArcSlot só na chapa). `BM-SKT-03`
-- **Aparar (trim)** (Aparar) — Tool::Trim só em linhas (trim_line). `DR-50`
-- **Estender / aparar-estender** (Estender) — Tool::Extend (extend_line) só para linhas; sem modo combinado. `DR-51`
+- **Aparar (trim)** (Aparar) — Tool::Trim em linha, arco, círculo e spline (`sketch_relimita.rs`), com trecho vermelho tracejado e cortes marcados antes do clique; Shift alterna com Estender. `DR-50`
+- **Estender / aparar-estender** (Estender) — Tool::Extend em linha e arco, com prévia até o alvo; Shift alterna com Aparar. Spline não estende. `DR-51`
 - **Mover, copiar, girar, escalar** (Mover, copiar) — Tool::Move e Copy; sem girar/escalar/esticar dedicados. `BM-SKT-05`
 - **Interseção com o 3D** (Interseção) — Tool::Intersect; só 1 ponto por curva (crossing()); falha com perfis de outro plano (DR-06). `DR-06`
 - **Seleção por janela e cruzada** (só no 3D) — Existe no 3D (box_mode) mas não dentro do sketch (DR-05). `DR-05`
@@ -30,7 +30,6 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 ## ❌ Ainda não existe
 
 - **Elipse e cônicas** (—) — O sketch só tem Line/Circle/Arc/Point/Spline. Cônica existe no wireframe 3D (RefKind::Conic). `BM-SKT-02`
-- **Aparar rápido / borracha** (—) — Não existe para arcos/círculos/splines. `DR-50`
 - **Quebrar (break/split)** (—) —  `DR-51`
 - **Fechar arco e complemento** (—) —  `DR-52`
 - **Padrão no sketch** (—) —  `BM-SKT-06`

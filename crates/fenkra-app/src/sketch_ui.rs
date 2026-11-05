@@ -104,8 +104,8 @@ impl Tool {
             Tool::Fillet => ("sk_filete", "Filete", "Filete de canto", "Passe sobre um canto entre duas linhas, ou numa linha perto dele, e veja o arco em prévia. O clique insere o arco tangente e abre a cota do raio; o próximo filete repete o último raio."),
             Tool::Chamfer => ("sk_chanfro", "Chanfro", "Chanfro de canto", "Passe sobre um canto entre duas linhas, ou numa linha perto dele, e veja o corte em prévia. O clique corta o canto com uma linha reta (distâncias iguais) e abre a cota da distância."),
             Tool::Spline => ("sk_spline", "Spline", "Spline por pontos", "Cada clique adiciona um ponto por onde a curva passa. Enter, duplo clique ou botão direito termina. Os pontos continuam editáveis e podem receber cotas e restrições."),
-            Tool::Trim => ("sk_aparar", "Aparar", "Aparar linha", "Clique no trecho da linha a remover: ela é cortada nas interseções com as outras curvas (sem interseção, a linha some)."),
-            Tool::Extend => ("sk_estender", "Estender", "Estender linha", "Clique perto da ponta de uma linha: ela cresce até a próxima curva na mesma direção."),
+            Tool::Trim => ("sk_aparar", "Aparar", "Aparar", "Pare o cursor no trecho: ele fica vermelho tracejado e os cortes aparecem. Clique para remover. Vale para linha, arco, círculo e spline. Shift estende; clique no vazio, botão direito ou Esc encerra."),
+            Tool::Extend => ("sk_estender", "Estender", "Estender", "Pare o cursor perto da ponta de uma linha ou arco: a prévia vai até a próxima curva no caminho. Clique para estender. Shift apara; clique no vazio, botão direito ou Esc encerra."),
             Tool::Convert => ("sk_projetar", "Converter", "Converter / projetar 3D", "Clique em arestas, vértices, linhas ou curvas do modelo: viram geometria fixa do sketch, projetada no plano e ligada à origem — se o 3D mudar, o sketch acompanha."),
             Tool::Intersect => ("sk_intersecao", "Interseção", "Interseção com o plano", "Clique numa face do corpo, superfície ou aresta: a curva (ou ponto) onde ela corta o plano do sketch entra como geometria fixa e associativa."),
             Tool::Dimension => ("sk_cota", "Cota", "Cotagem inteligente  (D)", "Clique num elemento: a cota fica em prévia seguindo o mouse (acima/abaixo = horizontal, ao lado = vertical, na diagonal = alinhada) e o próximo clique no vazio a posiciona. Clique num segundo elemento para cotar entre os dois (distância, ângulo, centro a centro). Botão direito: todas as cotas e restrições possíveis. O valor aceita expressões e parâmetros (ex.: L/2)."),
@@ -960,125 +960,6 @@ fn applicable(sk: &SketchData, sel: &[Ent]) -> Vec<CKind> {
 }
 
 /// Parâmetros (ao longo da linha a→b, 0..1 = dentro) onde a linha cruza as outras curvas.
-fn line_hits(sk: &SketchData, line: Id, a: [f64; 2], b: [f64; 2]) -> Vec<f64> {
-    let d = [b[0] - a[0], b[1] - a[1]];
-    let mut ts = vec![];
-    for c in &sk.curves {
-        if c.id == line {
-            continue;
-        }
-        match c.geom {
-            Curve::Spline { .. } => {}
-            Curve::Line { a: p, b: q } => {
-                let (pp, qq) = (sk.pos(p), sk.pos(q));
-                let e = [qq[0] - pp[0], qq[1] - pp[1]];
-                let den = d[0] * e[1] - d[1] * e[0];
-                if den.abs() < 1e-12 {
-                    continue;
-                }
-                let w = [pp[0] - a[0], pp[1] - a[1]];
-                let t = (w[0] * e[1] - w[1] * e[0]) / den;
-                let u = (w[0] * d[1] - w[1] * d[0]) / den;
-                if (-1e-9..=1. + 1e-9).contains(&u) {
-                    ts.push(t);
-                }
-            }
-            Curve::Circle { c: ctr, r } => ts.extend(circle_hits(a, d, sk.pos(ctr), r, None)),
-            Curve::Arc { c: ctr, s, e } => {
-                let (pc, ps, pe) = (sk.pos(ctr), sk.pos(s), sk.pos(e));
-                ts.extend(circle_hits(a, d, pc, d2(ps, pc), Some((ps, pe))));
-            }
-            Curve::Point { .. } => {}
-        }
-    }
-    ts
-}
-
-fn circle_hits(a: [f64; 2], d: [f64; 2], c: [f64; 2], r: f64, arc: Option<([f64; 2], [f64; 2])>) -> Vec<f64> {
-    let f = [a[0] - c[0], a[1] - c[1]];
-    let (qa, qb, qc) = (d[0] * d[0] + d[1] * d[1], 2. * (f[0] * d[0] + f[1] * d[1]), f[0] * f[0] + f[1] * f[1] - r * r);
-    let disc = qb * qb - 4. * qa * qc;
-    if disc < 0. || qa < 1e-18 {
-        return vec![];
-    }
-    let sq = disc.sqrt();
-    let mut out = vec![];
-    for t in [(-qb - sq) / (2. * qa), (-qb + sq) / (2. * qa)] {
-        let p = [a[0] + d[0] * t, a[1] + d[1] * t];
-        let ok = match arc {
-            None => true,
-            Some((s, e)) => {
-                let ang = |q: [f64; 2]| (q[1] - c[1]).atan2(q[0] - c[0]);
-                let norm = |x: f64| x.rem_euclid(std::f64::consts::TAU);
-                norm(ang(p) - ang(s)) <= norm(ang(e) - ang(s)) + 1e-9
-            }
-        };
-        if ok {
-            out.push(t);
-        }
-    }
-    out
-}
-
-/// Trecho da linha que o clique apara: parâmetros (0..1) entre os cortes vizinhos.
-fn trim_span(sk: &SketchData, line: Id, click: [f64; 2]) -> Option<(f64, f64)> {
-    let (a, b) = line_ends(sk, line)?;
-    let (pa, pb) = (sk.pos(a), sk.pos(b));
-    let d = [pb[0] - pa[0], pb[1] - pa[1]];
-    let l2 = d[0] * d[0] + d[1] * d[1];
-    let tc = ((click[0] - pa[0]) * d[0] + (click[1] - pa[1]) * d[1]) / l2.max(1e-18);
-    let cuts: Vec<f64> = line_hits(sk, line, pa, pb).into_iter().filter(|t| *t > 1e-6 && *t < 1. - 1e-6).collect();
-    Some((cuts.iter().copied().filter(|t| *t < tc).fold(0., f64::max), cuts.iter().copied().filter(|t| *t > tc).fold(1., f64::min)))
-}
-
-/// Aparar: corta a linha nas interseções e remove o trecho clicado.
-fn trim_line(sk: &mut SketchData, al: &mut impl FnMut() -> Id, line: Id, click: [f64; 2]) -> Result<(), &'static str> {
-    let Some(Curve::Line { a, b }) = sk.curve(line).map(|c| c.geom.clone()) else {
-        return Err("aparar funciona em linhas");
-    };
-    let (pa, pb) = (sk.pos(a), sk.pos(b));
-    let d = [pb[0] - pa[0], pb[1] - pa[1]];
-    let Some((lo, hi)) = trim_span(sk, line, click) else { return Err("aparar funciona em linhas") };
-    let at = |t: f64| [pa[0] + d[0] * t, pa[1] + d[1] * t];
-    let construction = sk.curve(line).is_some_and(|c| c.construction);
-    match (lo <= 0., hi >= 1.) {
-        (true, true) => {
-            sk.remove_curve(line);
-            sk.prune_constraints();
-        }
-        (true, false) => {
-            let q = at(hi);
-            let np = sk.add_point(al, q[0], q[1]);
-            set_line(sk, line, np, b);
-        }
-        (false, true) => {
-            let q = at(lo);
-            let np = sk.add_point(al, q[0], q[1]);
-            set_line(sk, line, a, np);
-        }
-        (false, false) => {
-            let (q1, q2) = (at(lo), at(hi));
-            let n1 = sk.add_point(al, q1[0], q1[1]);
-            let n2 = sk.add_point(al, q2[0], q2[1]);
-            set_line(sk, line, a, n1);
-            sk.add_curve(al, Curve::Line { a: n2, b }, construction);
-        }
-    }
-    Ok(())
-}
-
-fn set_line(sk: &mut SketchData, line: Id, a: Id, b: Id) {
-    if let Some(c) = sk.curves.iter_mut().find(|c| c.id == line) {
-        c.geom = Curve::Line { a, b };
-    }
-    // cotas de comprimento da linha antiga não valem mais
-    sk.constraints.retain(|k| !matches!(k.kind, Kind::Length(l, _) if l == line));
-    // pontos que ficaram soltos somem (os fixos ficam)
-    let used: std::collections::HashSet<Id> = sk.curves.iter().flat_map(|c| SketchData::curve_points(&c.geom)).collect();
-    sk.points.retain(|p| p.fixed || used.contains(&p.id));
-    sk.prune_constraints();
-}
-
 /// Traz referências (pontos, curvas, superfícies — inclusive links de outras peças) e curvas de
 /// outros sketches para este sketch, associativas: a geometria acompanha a origem.
 fn project_ui(app: &mut App, ui: &mut egui::Ui) {
@@ -1148,29 +1029,6 @@ fn project_ui(app: &mut App, ui: &mut egui::Ui) {
         }
     }
     app.open.doc.reserve_ids(n);
-}
-
-/// Estender: a ponta mais perto do clique vai até a próxima curva na direção da linha.
-fn extend_line(sk: &mut SketchData, al: &mut impl FnMut() -> Id, line: Id, click: [f64; 2]) -> Result<(), &'static str> {
-    let Some(Curve::Line { a, b }) = sk.curve(line).map(|c| c.geom.clone()) else {
-        return Err("estender funciona em linhas");
-    };
-    let (pa, pb) = (sk.pos(a), sk.pos(b));
-    let at_b = d2(click, pb) < d2(click, pa);
-    let d = [pb[0] - pa[0], pb[1] - pa[1]];
-    let hits = line_hits(sk, line, pa, pb);
-    let t = if at_b { hits.into_iter().filter(|t| *t > 1. + 1e-6).fold(f64::MAX, f64::min) } else { hits.into_iter().filter(|t| *t < -1e-6).fold(f64::MIN, f64::max) };
-    if !t.is_finite() || t.abs() > 1e8 {
-        return Err("não há curva na direção da linha para estender até ela");
-    }
-    let q = [pa[0] + d[0] * t, pa[1] + d[1] * t];
-    let np = sk.add_point(al, q[0], q[1]);
-    if at_b {
-        set_line(sk, line, a, np);
-    } else {
-        set_line(sk, line, np, b);
-    }
-    Ok(())
 }
 
 /// Remove a seleção do sketch.
@@ -2223,6 +2081,31 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
     let hover = resp.hover_pos();
     let mut cursor_uv = hover.and_then(|p| v.to_uv(p));
 
+    // curva mais perto do cursor, sem olhar os pontos: relimitar age na curva mesmo junto à ponta
+    let pick_curve = |pos: Pos2, sk: &SketchData| -> Option<(f32, Id)> {
+        let mut best: Option<(f32, Id)> = None;
+        for c in &sk.curves {
+            let d = match c.geom {
+                Curve::Line { a, b } => seg_dist(pos, v.to_screen(sk.pos(a)), v.to_screen(sk.pos(b))),
+                Curve::Circle { c: ctr, r } => ((pos - v.to_screen(sk.pos(ctr))).length() - r as f32 * ppm).abs(),
+                // só o trecho que existe: o resto do círculo do arco é vazio
+                Curve::Arc { c: ctr, s, .. } => match v.to_uv(pos).zip(crate::sketch_relimita::traco(sk, c.id)) {
+                    Some((q, t)) if t.param(q) <= 1. => ((pos - v.to_screen(sk.pos(ctr))).length() - d2(sk.pos(s), sk.pos(ctr)) as f32 * ppm).abs(),
+                    _ => f32::MAX,
+                },
+                Curve::Point { .. } => f32::MAX,
+                Curve::Spline { .. } => {
+                    let s = fenkra_core::sketch::spline_samples(&sk.spline_uv(c.id), 10);
+                    s.windows(2).map(|w| seg_dist(pos, v.to_screen(w[0]), v.to_screen(w[1]))).fold(f32::MAX, f32::min)
+                }
+            };
+            if d < 7. && best.is_none_or(|(bd, _)| d < bd) {
+                best = Some((d, c.id));
+            }
+        }
+        best
+    };
+
     // pick: pontos > rótulos > curvas
     let pick = |pos: Pos2, sk: &SketchData, hits: &[(Rect, Ent)]| -> Option<Ent> {
         let mut best: Option<(f32, Ent)> = None;
@@ -2238,22 +2121,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         if let Some((_, e)) = hits.iter().rev().find(|(r, _)| r.contains(pos)) {
             return Some(*e);
         }
-        for c in &sk.curves {
-            let d = match c.geom {
-                Curve::Line { a, b } => seg_dist(pos, v.to_screen(sk.pos(a)), v.to_screen(sk.pos(b))),
-                Curve::Circle { c: ctr, r } => ((pos - v.to_screen(sk.pos(ctr))).length() - r as f32 * ppm).abs(),
-                Curve::Arc { c: ctr, s, .. } => ((pos - v.to_screen(sk.pos(ctr))).length() - d2(sk.pos(s), sk.pos(ctr)) as f32 * ppm).abs(),
-                Curve::Point { .. } => f32::MAX,
-                Curve::Spline { .. } => {
-                    let s = fenkra_core::sketch::spline_samples(&sk.spline_uv(c.id), 10);
-                    s.windows(2).map(|w| seg_dist(pos, v.to_screen(w[0]), v.to_screen(w[1]))).fold(f32::MAX, f32::min)
-                }
-            };
-            if d < 7. && best.is_none_or(|(bd, _)| d < bd) {
-                best = Some((d, Ent::Cv(c.id)));
-            }
-        }
-        best.map(|b| b.1)
+        pick_curve(pos, sk).map(|(_, c)| Ent::Cv(c))
     };
 
     let snap_at = |pos: Pos2, sk: &SketchData, exclude: &[Id]| -> Option<Snap> {
@@ -2691,43 +2559,69 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             }
         }
         Tool::Trim | Tool::Extend => {
-            let mut over = hover.and_then(|p| pick(p, &sk, &edit.hits));
+            use crate::sketch_relimita as rl;
+            // Shift segurado troca aparar e estender; a curva vale até junto da ponta
+            let modo = rl::efetiva(tool, shift);
+            let mut over = hover.and_then(|p| pick_curve(p, &sk)).map(|x| x.1);
             // seleção prévia: só as curvas escolhidas antes valem; o resto é recusado com o motivo
             let previa: Vec<Id> = edit.sel.iter().filter_map(|e| if let Ent::Cv(c) = e { Some(*c) } else { None }).collect();
             let mut fora = false;
-            if let (Some(Ent::Cv(c)), false) = (over, previa.is_empty()) {
+            if let (Some(c), false) = (over, previa.is_empty()) {
                 if !previa.contains(&c) {
                     over = None;
                     fora = true;
                 }
             }
+            let mut recusa: Option<&'static str> = None;
+            if let (Some(c), Some(uv)) = (over, cursor_uv) {
+                if modo == Tool::Trim {
+                    if let Some(plano) = rl::plano_aparar(&sk, c, uv) {
+                        // o que sai, tracejado em vermelho; os cortes da curva, e cheios os que limitam
+                        let linha: Vec<Pos2> = plano.sai.iter().map(|q| v.to_screen(*q)).collect();
+                        painter.extend(egui::Shape::dashed_line(&linha, Stroke::new(2.5, BAD), 6., 4.));
+                        for q in &plano.cortes {
+                            painter.circle_stroke(v.to_screen(*q), 5., Stroke::new(1.5, BAD));
+                        }
+                        for k in &plano.limites {
+                            painter.circle_filled(v.to_screen(k.p), 3.5, BAD);
+                        }
+                    }
+                } else {
+                    match rl::plano_estender(&sk, c, uv) {
+                        Ok(plano) => {
+                            draw_ghost_uv(&painter, &v, &plano.novo, false);
+                            painter.circle_stroke(v.to_screen(plano.destino), 5., Stroke::new(1.5, FREE));
+                            painter.circle_filled(v.to_screen(sk.pos(plano.ponta)), 3.5, FREE);
+                        }
+                        Err(m) => recusa = Some(m),
+                    }
+                }
+            }
+            if fora || recusa.is_some() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::NotAllowed);
+            }
+            match rl::gesto(over.is_some(), fora, primary_click, secondary_click) {
+                rl::Gesto::Encerrar => edit.set_tool(Tool::Select),
+                rl::Gesto::Agir => {
+                    if let (Some(c), Some(uv)) = (over, cursor_uv) {
+                        let r = if modo == Tool::Trim { rl::aparar(&mut sk, &mut al, c, uv) } else { rl::estender(&mut sk, &mut al, c, uv) };
+                        match r {
+                            Ok(()) => edit.report = sk.solve(&vars, &[]),
+                            Err(m) => toast = Some((m.to_string(), true)),
+                        }
+                    }
+                }
+                rl::Gesto::Nada => {}
+            }
             if fora && primary_click {
                 toast = Some((crate::sketch_fluxo::FORA_DA_SELECAO.to_string(), true));
             }
-            if let (Some(Ent::Cv(c)), Some(uv)) = (over, cursor_uv) {
-                if tool == Tool::Trim {
-                    // o trecho que sai, tracejado em vermelho
-                    if let (Some((lo, hi)), Some((a, b))) = (trim_span(&sk, c, uv), line_ends(&sk, c)) {
-                        let (pa, pb) = (sk.pos(a), sk.pos(b));
-                        let at = |t: f64| v.to_screen([pa[0] + (pb[0] - pa[0]) * t, pa[1] + (pb[1] - pa[1]) * t]);
-                        painter.extend(egui::Shape::dashed_line(&[at(lo), at(hi)], Stroke::new(2.5, BAD), 6., 4.));
-                    }
-                } else {
-                    let mut g = sk.clone();
-                    if extend_line(&mut g, &mut ghost_ids(), c, uv).is_ok() {
-                        draw_ghost(&painter, &v, &sk, &g);
-                    }
-                }
-                if primary_click {
-                    let r = if tool == Tool::Trim { trim_line(&mut sk, &mut al, c, uv) } else { extend_line(&mut sk, &mut al, c, uv) };
-                    match r {
-                        Ok(()) => edit.report = sk.solve(&vars, &[]),
-                        Err(m) => toast = Some((m.to_string(), true)),
-                    }
-                }
-            }
             if let Some(h) = hover {
-                let (hint, col) = if fora { (tr(crate::sketch_fluxo::FORA_DA_SELECAO).to_string(), BAD) } else { (edit.dica_passo(), FREE) };
+                let (hint, col) = match (fora, recusa) {
+                    (true, _) => (tr(crate::sketch_fluxo::FORA_DA_SELECAO).to_string(), BAD),
+                    (_, Some(m)) => (tr(m).to_string(), BAD),
+                    _ => (crate::sketch_fluxo::dica(modo, 0, None, false, !edit.sel.is_empty()), FREE),
+                };
                 painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, hint, egui::FontId::proportional(11.), col);
             }
         }
@@ -3539,11 +3433,11 @@ mod tests {
         let d = sk.add_point(&mut al, 20., 10.);
         sk.add_curve(&mut al, Curve::Line { a: c, b: d }, false);
         // tira o trecho da direita (x > 0) da horizontal
-        trim_line(&mut sk, &mut al, h, [5., 0.]).unwrap();
+        crate::sketch_relimita::aparar(&mut sk, &mut al, h, [5., 0.]).unwrap();
         let Some(Curve::Line { a: ha, b: hb }) = sk.curve(h).map(|c| c.geom.clone()) else { panic!() };
         assert!((sk.pos(hb)[0] - 0.).abs() < 1e-9 && (sk.pos(ha)[0] + 10.).abs() < 1e-9);
         // estende de volta até a vertical em x = 20 (passa pela de x = 0? não: a ponta está em 0, vai até 20)
-        extend_line(&mut sk, &mut al, h, [0., 0.]).unwrap();
+        crate::sketch_relimita::estender(&mut sk, &mut al, h, [0., 0.]).unwrap();
         let Some(Curve::Line { b: hb, .. }) = sk.curve(h).map(|c| c.geom.clone()) else { panic!() };
         assert!((sk.pos(hb)[0] - 20.).abs() < 1e-9);
     }
@@ -3695,7 +3589,8 @@ mod tests {
         let mut al = ghost_ids();
         let (a, b) = (sk.add_point(&mut al, 0., -10.), sk.add_point(&mut al, 0., 10.));
         sk.add_curve(&mut al, Curve::Line { a, b }, false);
-        assert_eq!(trim_span(&sk, h, [5., 0.]), Some((0.5, 1.)));
+        let p = crate::sketch_relimita::plano_aparar(&sk, h, [5., 0.]).unwrap();
+        assert_eq!((p.lo, p.hi), (0.5, 1.));
     }
 
     fn digita(e: &mut ValueEntry, texto: &str, n: usize, vars: &HashMap<String, f64>) -> bool {
