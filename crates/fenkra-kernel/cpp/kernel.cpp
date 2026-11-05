@@ -1213,3 +1213,4 @@ rust::String occt_version() { return rust::String(OCC_VERSION_COMPLETE); }
 #include "hybrid.inc"
 #include "sheet.inc"
 #include "drawing.inc"
+#include "xde.inc"

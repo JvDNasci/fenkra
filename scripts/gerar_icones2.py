@@ -229,6 +229,7 @@ def desenhos():
     ic("novo_projeto", B=PASTA, R=CUBO(24, 17, 9, 4.5, 8))
     ic("nova_peca", B=CUBO(20, 7, 14, 7, 14), R=MAIS(37, 37, 6))
     ic("salvar", B="M8 8h25l7 7v25H8z", R="M16 8v10h14V8M14 40V26h20v14")
+    ic("importar_arquivo", B=CUBO(24, 20, 12, 6, 10), R="M24 5v12M18 11l6 6 6-6")
     ic("config", B=ENGRENAGEM(24, 24, 18, 13.5, 8), R=C(24, 24, 6))
     ic("personalizar", B="M8 13h32M8 24h32M8 35h32", R=C(30, 13, 4) + C(16, 24, 4) + C(26, 35, 4))
     ic("parametro", B="M6 36h36M6 32v8M15 34v4M24 34v4M33 34v4M42 32v8", R="M30 28l-5-8h10zM30 20V9")
@@ -669,6 +670,7 @@ desenhos()
 
 
 SO_INTERFACE = {"asm_catalogo", "arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais"}
+SO_INTERFACE = {"arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais", "importar_arquivo"}
 
 
 # ---------- saída ----------

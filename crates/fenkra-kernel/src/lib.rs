@@ -255,6 +255,9 @@ pub const ANGULO_PADRAO: f64 = 0.35;
 #[cfg(occt)]
 mod ffi;
 
+pub mod xde;
+pub use xde::{EsquemaStep, InfoReparo, InstanciaXde, ModeloXde, OpcoesGravarXde, OpcoesLerXde, ProdutoXde, UnidadeStep, IDENTIDADE};
+
 #[cfg(occt)]
 mod imp {
     use super::*;
@@ -264,6 +267,15 @@ mod imp {
     pub const AVAILABLE: bool = true;
 
     pub struct Shape(UniquePtr<b::Shape>);
+
+    impl Shape {
+        pub(crate) fn ponte(&self) -> &b::Shape {
+            &self.0
+        }
+        pub(crate) fn da_ponte(s: UniquePtr<b::Shape>) -> Shape {
+            Shape(s)
+        }
+    }
 
     impl Clone for Shape {
         fn clone(&self) -> Self {

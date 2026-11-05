@@ -53,6 +53,54 @@ pub mod bridge {
         face_info: Vec<f64>,
     }
 
+    /// Ocorrência de um produto dentro de uma montagem.
+    struct XdeInst {
+        product: u32,
+        name: String,
+        /// matriz 3x4 por linhas; vazia na gravação vale identidade
+        m: Vec<f64>,
+        /// rgba da ocorrência; vazio = sem cor própria
+        rgba: Vec<f32>,
+    }
+
+    /// Definição de um produto: montagem (com `comps`) ou peça (com forma, lida à parte).
+    struct XdeProduct {
+        name: String,
+        is_assembly: bool,
+        rgba: Vec<f32>,
+        layers: Vec<String>,
+        /// faces com cor própria, na ordem de `TopExp::MapShapes`; `face_rgba` tem 4 valores por face
+        face_ids: Vec<u32>,
+        face_rgba: Vec<f32>,
+        comps: Vec<XdeInst>,
+    }
+
+    struct XdeInfo {
+        schema: String,
+        units: String,
+        roots: Vec<u32>,
+        dims: u32,
+        tols: u32,
+        datums: u32,
+    }
+
+    struct XdeReadOpts {
+        colors: bool,
+        names: bool,
+        layers: bool,
+        gdt: bool,
+    }
+
+    /// schema: 0 AP203, 1 AP214, 2 AP242. unit: 0 mm, 1 polegada, 2 metro.
+    struct XdeWriteOpts {
+        schema: u8,
+        unit: u8,
+        colors: bool,
+        names: bool,
+        layers: bool,
+        gdt: bool,
+    }
+
     unsafe extern "C++" {
         include!("kernel.h");
 
@@ -218,6 +266,21 @@ pub mod bridge {
         fn export_step(s: &Shape, path: &str) -> Result<()>;
         fn export_stl(s: &Shape, path: &str, deflection: f64, angle: f64) -> Result<()>;
         fn import_step(path: &str, info: &mut Vec<String>) -> Result<UniquePtr<Shape>>;
+        type XdeDoc;
+        fn xde_new() -> Result<UniquePtr<XdeDoc>>;
+        fn xde_read(path: &str, o: &XdeReadOpts) -> Result<UniquePtr<XdeDoc>>;
+        fn xde_info(d: &XdeDoc) -> XdeInfo;
+        fn xde_products(d: &XdeDoc) -> Result<Vec<XdeProduct>>;
+        fn xde_shape(d: &XdeDoc, i: u32) -> Result<UniquePtr<Shape>>;
+        fn xde_add(d: Pin<&mut XdeDoc>, p: &XdeProduct, s: &Shape) -> Result<u32>;
+        fn xde_add_component(d: Pin<&mut XdeDoc>, assembly: u32, c: &XdeInst) -> Result<()>;
+        fn xde_write(d: Pin<&mut XdeDoc>, path: &str, o: &XdeWriteOpts) -> Result<()>;
+        /// `m`: matriz 3x4 por linhas
+        fn xde_moved(s: &Shape, m: &[f64]) -> Result<UniquePtr<Shape>>;
+        fn xde_solid_count(s: &Shape) -> u32;
+        fn xde_solid_at(s: &Shape, i: u32) -> Result<UniquePtr<Shape>>;
+        /// `stats`: ver `xde_heal` em cpp/xde.inc
+        fn xde_heal(s: &Shape, level: u8, tol: f64, stats: &mut Vec<f64>) -> Result<UniquePtr<Shape>>;
         fn occt_version() -> String;
     }
 }

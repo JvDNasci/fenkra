@@ -400,6 +400,9 @@ impl Graficos {
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
+    /// últimas opções do painel de importação
+    #[serde(default)]
+    pub opcoes_importar: fenkra_conversor::OpcoesImportar,
     pub theme: Theme,
     /// escala da interface (fontes e controles)
     pub ui_scale: f32,
@@ -527,6 +530,7 @@ pub struct CustomGroup {
 impl Default for Settings {
     fn default() -> Self {
         Settings {
+            opcoes_importar: Default::default(),
             theme: Theme::Claro,
             ui_scale: 1.0,
             gradient: true,

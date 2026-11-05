@@ -161,6 +161,10 @@ pub struct App {
     salvar: salvar::Estado,
     /// arquivo reimportado que mudou, esperando a escolha entre atualizar e derivar
     importacao_pendente: Option<importar::Pendente>,
+    /// painel de importação, aberto só enquanto a pessoa decide
+    importar_dialogo: Option<importar::Dialogo>,
+    /// relatório da última importação, até a pessoa fechar
+    importar_relatorio: Option<fenkra_conversor::Relatorio>,
     /// diagnóstico e pais/filhos (B69)
     diag: diag::Estado,
     /// "Selecionar outro": ciclo de candidatos sob o ponteiro com Alt + roda (B95)
@@ -345,6 +349,8 @@ impl App {
             hist: crate::historico::Historico::new(settings.historico_mb),
             salvar: Default::default(),
             importacao_pendente: None,
+            importar_dialogo: None,
+            importar_relatorio: None,
             diag: Default::default(),
             selecao_ciclo: Default::default(),
             last_edit: -10.,
@@ -437,6 +443,11 @@ impl App {
         if std::env::var("FENKRA_DEMO_RELATORIO").is_ok() {
             app.relatorio_pendente = Some(crate::relatorio::montar("índice fora do limite", "crates/exemplo/src/x.rs:10", "main", "(pilha de exemplo)", crate::perfil::medido().as_ref(), "[1] inicio: Fenkra | args [\"arquivo-da-pessoa.fenkra\"] | WGPU_BACKEND None
 [2] adaptador: exemplo"));
+            app.started = true;
+        }
+        // desenvolvimento: FENKRA_DEMO_IMPORTAR=<arquivo> abre o painel de importação com esse arquivo
+        if let Ok(arquivo) = std::env::var("FENKRA_DEMO_IMPORTAR") {
+            app.abrir_painel_importar(arquivo.into());
             app.started = true;
         }
         // desenvolvimento: FENKRA_AJUSTES=1 abre as configurações ao iniciar
@@ -2134,6 +2145,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 self.extract = Some(self.extract_last);
                 return;
             }
+            Cmd::ImportarArquivo => {
+                self.com_confirmacao(Acao::Importar);
+                return;
+            }
             Cmd::MeshImport => {
                 let Some(p) = rfd::FileDialog::new().add_filter("Malha", &["stl", "obj"]).pick_file() else { return };
                 Sel::Feature(d.add_feature(FeatureKind::MeshImport(MeshImport { path: p.to_string_lossy().into(), solid: true })))
@@ -2957,8 +2972,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         ui.close();
                     }
                     ui.separator();
-                    if ui.button(tr("Importar STEP…")).clicked() {
-                        self.importar_step();
+                    let importar = ui.add(egui::Button::image_and_text(crate::icons::get("importar_arquivo"), tr("Importar STEP ou BREP…")));
+                    let (nome, frase, passos) = crate::toolbar::TEXTO_IMPORTAR;
+                    if crate::icons::hover_help(ui, importar, tr(nome), tr(frase), tr(passos)).clicked() {
+                        self.com_confirmacao(Acao::Importar);
                         ui.close();
                     }
                     if ui.button(tr("Exportar STEP…")).clicked() {
@@ -6810,6 +6827,7 @@ pub enum Cmd {
     SewSurface,
     BoundaryFill,
     MeshImport,
+    ImportarArquivo,
     Param,
     Folder,
     Collector,
@@ -7470,6 +7488,7 @@ impl eframe::App for App {
         if active {
             self.painel_comando(ctx, area);
         }
+        self.painel_importar(ctx, area);
         if let Some(id) = ctx.data(|m| m.get_temp::<Id>(egui::Id::unique("fenkra_props"))) {
             ctx.data_mut(|m| m.remove::<Id>(egui::Id::unique("fenkra_props")));
             self.props_target = Some(if self.open.doc.reference(id).is_some() { AppTarget::Ref(id) } else { AppTarget::Feature(id) });

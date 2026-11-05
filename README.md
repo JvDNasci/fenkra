@@ -23,6 +23,7 @@ Pré-requisitos (Rust, MSVC e OpenCASCADE via vcpkg) em [docs/prototipo.md](docs
 |---|---|
 | [fenkra-core](crates/fenkra-core) | Documento, árvore, linha de tempo, parâmetros, sketch e solver, referências, edição não destrutiva |
 | [fenkra-kernel](crates/fenkra-kernel) | Fachada C++ do OpenCASCADE ligada ao Rust via `cxx` |
+| [fenkra-conversor](crates/fenkra-conversor) | Importação e exportação de formatos neutros: provedores, relatório e processo filho `fenkra-conv` |
 | [fenkra-solidos](crates/fenkra-solidos) | Recompute dos comandos: sólidos, superfícies, chapa, estrutural, roscas e perfis |
 | [fenkra-montagem](crates/fenkra-montagem) | Montagem: restrições, solver, juntas, mecanismos, explodida, recursos de montagem |
 | [fenkra-desenho](crates/fenkra-desenho) | Desenho técnico: folhas, vistas, cortes, cotas, tabelas, exportação PDF/SVG/DXF |
