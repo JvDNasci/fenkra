@@ -7,6 +7,7 @@
 //!   uma fixação conjunta faz várias peças se moverem como um corpo só).
 //! - [`load`]: carrega e calcula as peças referenciadas (com cache por arquivo).
 
+pub mod avulso;
 pub mod bom;
 pub mod contexto;
 pub mod display;

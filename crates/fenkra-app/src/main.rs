@@ -43,6 +43,8 @@ mod paineis;
 mod partida;
 mod ajuda_cmd;
 mod textos_ajuda;
+mod textos_biblioteca;
+mod biblioteca_ui;
 mod sketch_fluxo;
 mod perfil;
 mod relatorio;
