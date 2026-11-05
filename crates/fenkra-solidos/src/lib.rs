@@ -26,6 +26,8 @@ pub mod chapa_linha;
 mod chapa_flat;
 pub mod planificada;
 pub use chapa_flat::{passos_planificados, PassoPlanificado};
+pub mod st_frames;
+mod st_placas;
 
 pub use engrenagens::{calculo as calculo_engrenagem, engrenagem_documento, CalculoEngrenagem, ParamEngrenagem, TipoEngrenagem};
 pub use eixos::{chaveta_documento, eixo_documento, ParamEixo, RasgoChaveta, TrechoEixo};
@@ -2504,6 +2506,9 @@ impl Ctx<'_> {
     fn members(&self, m: &StructMember) -> Result<Vec<MemberGeom>, String> {
         let dims: Vec<f64> = m.dims.iter().map(|e| ev(e, &self.vars, "cota da seção")).collect::<Result<_, _>>()?;
         let (loops, w, h, cen) = structural::section(m.kind, &dims)?;
+        // B253: espelhar a seção troca o lado dos perfis sem simetria (a caixa não muda)
+        let (loops, cen) = if m.mirror { (structural::mirrored(&loops), [-cen[0], cen[1]]) } else { (loops, cen) };
+        let wall = structural::wall(m.kind, &dims);
         let ang = ev(&m.angle, &self.vars, "rotação")?.to_radians();
         let off = [ev(&m.off_x, &self.vars, "deslocamento x")?, ev(&m.off_y, &self.vars, "deslocamento y")?];
         let a = structural::anchor_point(m.anchor, w, h, cen);
@@ -2541,7 +2546,7 @@ impl Ctx<'_> {
             let x0 = fenkra_kernel::cross(v, z);
             let x = geo3d::rotate(x0, z, ang);
             let y = fenkra_kernel::cross(z, x);
-            out.push(MemberGeom { start, end, z, x, y, w, h, shift, ext: (e1, e2), loops: loops.clone(), pts: c.pts.clone(), straight: c.is_straight() });
+            out.push(MemberGeom { start, end, z, x, x0, y, w, h, wall, shift, ext: (e1, e2), loops: loops.clone(), pts: c.pts.clone(), straight: c.is_straight() });
         }
         Ok(out)
     }
@@ -2928,14 +2933,20 @@ impl Ctx<'_> {
         Shape::loft_surface(&sections, false, false, None).map_err(|x| format!("varredura: {}", x.0))
     }
 
-    /// Membro (de comandos estruturais anteriores) com a ponta mais perto de `at`.
+    /// Membro (de comandos estruturais anteriores) com a ponta mais perto de `at`. Um ponto sobre a
+    /// face de uma ponta (face clicada, B255) escolhe essa ponta mesmo que outra esteja mais perto.
     fn member_end(&self, at: V3, me: &Feature) -> Result<(MemberGeom, bool), String> {
         let mut best: Option<(f64, MemberGeom, bool)> = None;
         for f in self.doc.features.iter().take_while(|g| g.id != me.id) {
             let FeatureKind::StructMember(m) = &f.kind else { continue };
             for g in self.members(m)? {
                 for (p, s) in [(g.start, true), (g.end, false)] {
-                    let dd = geo3d::dist(p, at);
+                    let d = geo3d::sub(at, p);
+                    let along = geo3d::dot(d, g.z);
+                    let lateral = geo3d::dist(d, geo3d::mul(g.z, along));
+                    // fora da face, vale a distância; sobre a face (plano da ponta e dentro da seção), vale o lateral
+                    let on_face = along.abs() < 1e-3 && lateral <= (g.w * g.w + g.h * g.h).sqrt() / 2. + 1e-3;
+                    let dd = if on_face { lateral * 1e-3 } else { geo3d::dist(p, at) + 1e-3 };
                     if best.as_ref().is_none_or(|b| dd < b.0) {
                         best = Some((dd, g.clone(), s));
                     }
@@ -5035,49 +5046,8 @@ impl Ctx<'_> {
                 self.add_separate(f, all);
                 Ok(warn)
             }
-            FeatureKind::StructPlate(pl) => {
-                let (g, end_at_start) = self.member_end(pl.at, f)?;
-                let t = ev(&pl.thickness, &self.vars, "espessura")?;
-                let mg = ev(&pl.margin, &self.vars, "sobra")?;
-                let (e, out) = if end_at_start { (geo3d::sub(g.start, geo3d::mul(g.z, g.ext.0)), geo3d::mul(g.z, -1.)) } else { (geo3d::add(g.end, geo3d::mul(g.z, g.ext.1)), g.z) };
-                let (w, h) = (g.w + 2. * mg, g.h + 2. * mg);
-                // centro da seção (a linha guia pode estar num canto, pela ancoragem)
-                let c = geo3d::add(geo3d::add(e, geo3d::mul(g.x, -g.shift[0])), geo3d::mul(g.y, -g.shift[1]));
-                let y = fenkra_kernel::cross(out, g.x);
-                let corner = geo3d::sub(geo3d::sub(c, geo3d::mul(g.x, w / 2.)), geo3d::mul(y, h / 2.));
-                let plate = Shape::box_tool(corner, g.x, out, [w, h, t]).map_err(k)?;
-                log_struct(f, 0, StructItem::Plate, "Placa", "Placa".into(), 0., Frame { origin: c, x: g.x, normal: out }, &plate, "");
-                self.add_separate(f, plate);
-                Ok(None)
-            }
-            FeatureKind::StructGusset(gs) => {
-                let (a, b, p) = self.member_pair(gs.at, f)?;
-                let leg = ev(&gs.leg, &self.vars, "aba")?;
-                let t = ev(&gs.thickness, &self.vars, "espessura")?;
-                let c = ev(&gs.chamfer, &self.vars, "chanfro")?;
-                let (da, db) = (a.1, b.1);
-                let n = geo3d::unit(fenkra_kernel::cross(da, db)).ok_or("membros colineares não levam reforço")?;
-                // canto do reforço junto às faces dos membros, no plano das linhas guia
-                let ha = a.0.w.max(a.0.h) / 2.;
-                let hb = b.0.w.max(b.0.h) / 2.;
-                let q = geo3d::add(geo3d::add(p, geo3d::mul(da, hb)), geo3d::mul(db, ha));
-                let q = geo3d::sub(q, geo3d::mul(n, t / 2.));
-                let mut pts = vec![];
-                if c > 1e-9 {
-                    pts.push(geo3d::add(q, geo3d::mul(da, c)));
-                } else {
-                    pts.push(q);
-                }
-                pts.push(geo3d::add(q, geo3d::mul(da, leg)));
-                pts.push(geo3d::add(q, geo3d::mul(db, leg)));
-                if c > 1e-9 {
-                    pts.push(geo3d::add(q, geo3d::mul(db, c)));
-                }
-                let plate = Shape::poly_prism(&pts, geo3d::mul(n, t)).map_err(k)?;
-                log_struct(f, 0, StructItem::Gusset, "Reforço", "Reforço".into(), 0., Frame { origin: q, x: da, normal: n }, &plate, "");
-                self.add_separate(f, plate);
-                Ok(None)
-            }
+            FeatureKind::StructPlate(pl) => self.struct_plate(f, pl),
+            FeatureKind::StructGusset(gs) => self.struct_gusset(f, gs),
             FeatureKind::MoveBody(m) => {
                 let (b, owners, roles) = self.body_owned(f.target).ok_or("não há corpo para mover")?;
                 let rigid = match &m.xf {
@@ -5895,9 +5865,13 @@ struct MemberGeom {
     /// eixo do membro e eixos da seção (x, y)
     z: V3,
     x: V3,
+    /// eixo X da seção sem a rotação do comando (referência do arco de rotação)
+    x0: V3,
     y: V3,
     w: f64,
     h: f64,
+    /// espessura da parede do perfil (0 nas barras maciças)
+    wall: f64,
     /// deslocamento da seção (ancoragem − deslocamentos)
     shift: [f64; 2],
     ext: (f64, f64),
@@ -6885,6 +6859,7 @@ mod tests {
                 gap: s("0"),
                 joints: vec![],
                 material: String::new(),
+                mirror: false,
             }));
             d
         };
@@ -6921,12 +6896,13 @@ mod tests {
             gap: s("0"),
             joints: vec![],
             material: String::new(),
+            mirror: false,
         }));
         let v0 = vol(&d);
-        d.add_feature(FeatureKind::StructPlate(StructPlate { at: [0., 0., 0.], thickness: s("8"), margin: s("5") }));
+        d.add_feature(FeatureKind::StructPlate(StructPlate::nova([0., 0., 0.], "8", "5")));
         let v1 = vol(&d);
         assert!(near(v1 - v0, 50. * 50. * 8., 1e-3), "placa {}", v1 - v0);
-        d.add_feature(FeatureKind::StructGusset(StructGusset { at: [0., 0., 500.], leg: s("60"), thickness: s("6"), chamfer: s("0") }));
+        d.add_feature(FeatureKind::StructGusset(StructGusset::novo([0., 0., 500.], "60", "6", "0")));
         let v2 = vol(&d);
         assert!(near(v2 - v1, 0.5 * 60. * 60. * 6., 1e-3), "reforço {}", v2 - v1);
     }
@@ -6960,6 +6936,7 @@ mod tests {
             gap: s("0"),
             joints: vec![],
             material: String::new(),
+            mirror: false,
         }));
         // um sólido por trecho, no referencial local (Z ao longo do membro, seção centrada)
         let ms = structural_members(&d);
@@ -7010,9 +6987,10 @@ mod tests {
             gap: s("0"),
             joints: vec![],
             material: String::new(),
+            mirror: false,
         }));
-        d.add_feature(FeatureKind::StructPlate(StructPlate { at: [0., 0., 0.], thickness: s("8"), margin: s("5") }));
-        d.add_feature(FeatureKind::StructGusset(StructGusset { at: [0., 0., 500.], leg: s("60"), thickness: s("6"), chamfer: s("0") }));
+        d.add_feature(FeatureKind::StructPlate(StructPlate::nova([0., 0., 0.], "8", "5")));
+        d.add_feature(FeatureKind::StructGusset(StructGusset::novo([0., 0., 500.], "60", "6", "0")));
         let gs = structural_groups(&d);
         let kinds: Vec<StructItem> = gs.iter().map(|g| g.signature.kind).collect();
         assert_eq!(kinds, vec![StructItem::Member, StructItem::Member, StructItem::Plate, StructItem::Gusset]);
@@ -7289,6 +7267,7 @@ mod tests {
             gap: s("0"),
             joints: vec![],
             material: String::new(),
+            mirror: false,
         }));
         let r = recompute(&d);
         assert!(matches!(r.status[&m], Status::Ok), "{:?}", r.status[&m]);
@@ -7595,6 +7574,7 @@ mod tests {
             gap: s("0"),
             joints: vec![],
             material: String::new(),
+            mirror: false,
         };
         let vol = |d: &Document| recompute(d).bodies.iter().map(|b| b.mass.volume).sum::<f64>();
         let lado = |d: &mut Document, a: [f64; 3], b: [f64; 3]| CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: s("0"), end: s("0") }));
