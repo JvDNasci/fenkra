@@ -2,10 +2,10 @@
 
 > **Nota de método e confiabilidade.**
 > - **[V]** marca o que li em fonte pública. **[C]** marca conhecimento geral que não confirmei nesta sessão.
-> - **CATIA V5.** Li o guia oficial de Part Design copiado no site da City University (Londres). O CSS é da era V5R5, então os rótulos podem diferir do V5-6R2024. A estrutura funcional é estável.
-> - **Inventor.** Li as páginas da ajuda Autodesk 2024–2026 diretamente.
-> - **SolidWorks.** O WebFetch só devolveu a navegação de `help.solidworks.com`. Os trechos de SW vêm de resumos de busca dessas páginas, de Hawk Ridge, Javelin, Engineers Rule e CATI. Onde a fonte não cobria um detalhe, marquei [C].
-> - **Outros CADs (Creo, NX, Solid Edge, Fusion, Onshape).** Cobertura rasa: Onshape e Fusion têm snippets [V], Creo e NX são quase só [C].
+> - **CAD avançado B.** Li o guia oficial de Part Design copiado no site da City University (Londres). O CSS é da era V5R5, então os rótulos podem diferir do V5-6R2024. A estrutura funcional é estável.
+> - **CAD avançado C.** Li as páginas da ajuda fornecedor de CAD avançado 2024–2026 diretamente.
+> - **CAD avançado A.** O WebFetch só devolveu a navegação de `help.CAD avançado A.com`. Os trechos de CAD avançado A vêm de resumos de busca dessas páginas, de Hawk Ridge, Javelin, Engineers Rule e CATI. Onde a fonte não cobria um detalhe, marquei [C].
+> - **Outros CADs (CAD avançado F, CAD avançado G, CAD avançado H, CAD avançado D, CAD avançado E).** Cobertura rasa: CAD avançado E e Fusion têm snippets [V], CAD avançado F e CAD avançado G são quase só [C].
 > - **Código do Fenkra.** Todas as referências `arquivo:linha` foram lidas nesta sessão.
 
 ---
@@ -19,7 +19,7 @@ A **filosofia robusta** está em construção:
 - `recompute_cached` (lib.rs:4198) reaproveita o que não mudou.
 - Existem marcador de rollback, marcador por coletor e `suppressed`.
 
-O que falta para chegar à filosofia do CATIA com a inteligência de SW e Inventor:
+O que falta para chegar à filosofia do CAD avançado B com a inteligência de CAD avançado A e CAD avançado C:
 
 1. **Limites de término incompletos.**
    - Não há deslocamento (offset) nos limites "até plano" e "até superfície".
@@ -29,7 +29,7 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
    - O "até o último" usa a caixa envolvente, não a última parede.
    - A saída (taper) é **ignorada em silêncio** quando o término é "até…".
 2. **Seleção de contornos e multi-pad.** `profile_face` usa todos os contornos do sketch. Não há comprimento por contorno nem contornos selecionados.
-3. **Furo sem "Hole Wizard".**
+3. **Furo sem "assistente de furos".**
    - `Hole.standard` é só informativo, e o diâmetro não deriva do tamanho.
    - Não há furo oblongo, escareado dos dois lados, nem tipo de rosca (NPT/BSP).
    - Não há profundidade até a ponta ou o ombro.
@@ -46,7 +46,7 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
    - Draft sem linha de partição, reflect line, ângulo variável, degrau ou análise.
    - Casca com uma espessura só, sem "ignorar faces com problema" e sem aproximação.
    - Nervura sem o modo "From Side" (a nervura clássica).
-6. **Padrões sem re-solução.** `replicate` (lib.rs:2644) copia a *ferramenta* já calculada. Não há "manter especificações" (CATIA), "Adjust" (Inventor) nem geometria vs. re-solução (SW). Também faltam:
+6. **Padrões sem re-solução.** `replicate` (lib.rs:2644) copia a *ferramenta* já calculada. Não há "manter especificações" (CAD avançado B), "Adjust" (CAD avançado C) nem geometria vs. re-solução (CAD avançado A). Também faltam:
    - pular instâncias;
    - espaçamento desigual;
    - padrão por curva e user pattern completo;
@@ -56,7 +56,7 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
    - "dividir mantendo os dois lados" gerando coletores;
    - escopo de features (participantes);
    - "mesclar resultado" por comando.
-8. **Contexto e diagnóstico.** Não existe Define In Work Object por feature (só `active_collector` + inserção no rollback). Não há modo de atualização manual nem estado "desatualizado". Também faltam Isolar/Extrair em falha, grafo pai/filho navegável e o diálogo de diagnóstico (B59).
+8. **Contexto e diagnóstico.** Não existe objeto de trabalho por feature (só `active_collector` + inserção no rollback). Não há modo de atualização manual nem estado "desatualizado". Também faltam Isolar/Extrair em falha, grafo pai/filho navegável e o diálogo de diagnóstico (B59).
 9. **Conhecimento paramétrico.** Há parâmetros com expressões, ciclos detectados e funções básicas (expr.rs:58-101). Faltam:
    - tabelas de projeto e configurações;
    - parâmetros de texto e booleanos, lista de valores;
@@ -68,11 +68,11 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ## 2. Fichas por comando/função
 
-### Extrusão / Pad — adicionar material (CATIA: Pad / SW: Extruded Boss/Base / Inventor: Extrude (Join/New Solid) / outros: Fusion Extrude, Onshape Extrude / Fenkra: `Extrude` com `BoolOp::Add`)
+### Extrusão / Pad — adicionar material (CAD avançado B: Pad / CAD avançado A: Extruded Boss/Base / CAD avançado C: Extrude (Join/New Solid) / outros: Fusion Extrude, CAD avançado E Extrude / Fenkra: `Extrude` com `BoolOp::Add`)
 
 **O que faz.** Dá volume a um perfil ao longo de uma direção.
 
-**CATIA V5 — no detalhe**
+**CAD avançado B — no detalhe**
 - **Entradas.** Um perfil de sketch ou geometria plana do Generative Shape Design (nunca uma linha). Pode ser sub-elemento do sketch, e superfícies ou faces não planas também valem. [V]
 - **Perfis.** Vários perfis não intersectantes no mesmo sketch são aceitos (um quadrado e um círculo geram cavidade). O perfil não pode ser tangente a si mesmo. [V]
 - **Perfil aberto.** É aceito se material existente puder aparar a extrusão. Um limite pode ser "Up to Next" e o outro não. [V]
@@ -85,7 +85,7 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 - **Update.** Editar o sketch recalcula. No Multi-Pad, um domínio novo entra com 0 mm e um removido exige atualização manual. [V]
 - **Referência perdida.** Aparece erro de definição e o update oferece Editar, Desativar ou Excluir (ver ficha de Update). [V]
 
-**SolidWorks — no detalhe**
+**CAD avançado A — no detalhe**
 - **"From".** Plano do sketch, superfície/face/plano, vértice ou deslocamento. [V]
 - **Término da direção 1.** Blind, Through All, Up to Next, Up to Vertex, Up to Surface, Offset from Surface, Up to Body, Mid Plane. [V]
 - **Direção 2.** Aceita as mesmas condições, exceto Mid Plane. [V]
@@ -97,7 +97,7 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
   - Feature scope limita os corpos afetados. [V]
 - **Inteligente.** Condições dinâmicas ("Up to Surface") re-resolvem quando a geometria muda. [V]
 
-**Inventor — no detalhe** [V]
+**CAD avançado C — no detalhe** [V]
 - **Perfil.** Fechado, regiões ou laços. Perfil aberto só em superfície, ou sólido com "Match Shape".
 - **Saída.** Sólido ou superfície. Booleana: Join, Cut, Intersect ou New Solid. Em multicorpo há um seletor de corpos participantes e "Predict Boolean".
 - **Início ("From").** Plano de trabalho, plano de sketch ou face. "Extend face to end feature" liga sozinho se o From não intersecta o perfil.
@@ -107,7 +107,7 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 - **Taper A.** De 0 a 180°. Positivo aumenta a seção.
 
 **Outros**
-- **Onshape.** Tipos de término Blind, Up to next/face/part/vertex e Through all, com Symmetric só em Blind e Through all. O resultado é New/Add/Remove/Intersect, com "merge scope". [V]
+- **CAD avançado E.** Tipos de término Blind, Up to next/face/part/vertex e Through all, com Symmetric só em Blind e Through all. O resultado é New/Add/Remove/Intersect, com "merge scope". [V]
 - **Fusion.** Operações New Body/Join/Cut/Intersect/New Component. Ao editar um corte, escolhe-se entre "Auto-select" dos corpos e "# Bodies" fixos. [V]
 
 **Fenkra hoje**
@@ -144,24 +144,24 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Recorte / Pocket (CATIA: Pocket / SW: Extruded Cut / Inventor: Extrude Cut / Fenkra: `Extrude` com `BoolOp::Cut`)
+### Recorte / Pocket (CAD avançado B: Pocket / CAD avançado A: Extruded Cut / CAD avançado C: Extrude Cut / Fenkra: `Extrude` com `BoolOp::Cut`)
 
 **O que faz.** Remove material extrudando um perfil.
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - As opções do Pad se repetem (limites, perfil de superfície, Multi-Pocket).
 - O Pocket de superfície remove material nos dois lados da superfície quando os limites são "plano" e "cota".
 - "Up to Next" no topo do furo/bolso sempre para na próxima face encontrada.
 - O Multi-Pocket cria uma feature com um bolso por domínio.
 - O Drafted Filleted Pocket tem saída e filetes, com o segundo limite obrigatório.
 
-**SolidWorks** [V]
+**CAD avançado A** [V]
 - Cut-Extrude tem as mesmas condições do boss.
 - "Flip side to cut" corta fora do perfil [C].
 - Feature scope escolhe os corpos cortados.
 - Cut-Extrude é permitido em corpos múltiplos.
 
-**Inventor** [V]
+**CAD avançado C** [V]
 - Cut usa o mesmo painel.
 - Through All tem Flip e não oferece Join.
 - Em multicorpo há seletor de participantes.
@@ -178,11 +178,11 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Limites de término: até próximo / último / plano / superfície / vértice / corpo, offset e espelhado (CATIA: Limit / SW: End Condition / Inventor: Extents / Fenkra: `Extent`)
+### Limites de término: até próximo / último / plano / superfície / vértice / corpo, offset e espelhado (CAD avançado B: Limit / CAD avançado A: End Condition / CAD avançado C: Extents / Fenkra: `Extent`)
 
 **O que faz.** Define onde a extrusão, o furo ou a rosca termina.
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - **Up to Next.** Para na primeira face detectada, que precisa interromper toda a extrusão, e o furo precisa atravessar material.
 - **Up to Last.** Termina na última face.
 - **Up to Plane.** O plano também define a direção.
@@ -191,16 +191,16 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 - **Restrição.** Merge Ends não vale com Up to Plane/Surface.
 - **Queixa de usuário.** Um relato diz que "Up to next" com offset escolheu a face errada em um degrau concêntrico. A saída sugerida foi Up to Surface/Plane. [V]
 
-**SolidWorks** [V]
+**CAD avançado A** [V]
 - Up To Vertex, Up To Surface, Offset From Surface, Up To Body, Up To Next.
 - A condição é dinâmica: o comprimento acompanha a geometria.
 
-**Inventor** [V]
+**CAD avançado C** [V]
 - To (ponto, vértice, face ou plano), To Next com terminador, Between.
 - "Extend face to end feature" estende a face-alvo além do plano quando necessário.
 - Alternate Solution escolhe perto ou longe.
 
-**Outros.** Onshape tem Up to face, Up to part e Up to vertex. Um relato de fórum diz que "Through all" ultrapassa o fim da peça. [V]
+**Outros.** CAD avançado E tem Up to face, Up to part e Up to vertex. Um relato de fórum diz que "Through all" ultrapassa o fim da peça. [V]
 
 **Fenkra hoje**
 - `end_cutter` (lib.rs:2554) devolve uma superfície de corte e se ela deve ser estendida. `UpTo(plano)`, `UpToSurface(Plane)` e `UpToNext` não estendem. `UpToSurface` de face/superfície estende.
@@ -222,20 +222,20 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Parede fina (CATIA: Thick / SW: Thin Feature / Inventor: Extrude com perfil aberto + Match Shape / Fenkra: `thin`, `thin_side`)
+### Parede fina (CAD avançado B: Thick / CAD avançado A: Thin Feature / CAD avançado C: Extrude com perfil aberto + Match Shape / Fenkra: `thin`, `thin_side`)
 
 **O que faz.** Gera uma parede a partir de um perfil aberto ou fechado.
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - Thickness1 e Thickness2 (um para cada lado) e Neutral Fiber (distribui o total igualmente).
 - Merge Ends apara contra o material existente e não está disponível com Up to Plane/Surface.
 - A opção de parede fina não vale para superfície.
 
-**SolidWorks** [V]
+**CAD avançado A** [V]
 - Perfil aberto ativa Thin Feature sozinho.
 - Os tipos (um lado, plano médio, dois lados), a tampa nas pontas e o auto-filete dos cantos são [C].
 
-**Inventor** [C]
+**CAD avançado C** [C]
 - O perfil aberto pode virar sólido com Match Shape.
 - A espessura da nervura vale em um lado ou nos dois.
 
@@ -253,19 +253,19 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Saída (taper) na extrusão (CATIA: Drafted Filleted Pad / SW: Draft on/off / Inventor: Taper A / Fenkra: `taper`)
+### Saída (taper) na extrusão (CAD avançado B: Drafted Filleted Pad / CAD avançado A: Draft on/off / CAD avançado C: Taper A / Fenkra: `taper`)
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - Pad drafted/filleted: ângulo, segundo limite como elemento neutro, três filetes opcionais.
 - Cria na árvore um Pad, um Draft e três Fillets, cada um editável.
 
-**SolidWorks** [V]
+**CAD avançado A** [V]
 - O draft se aplica a todas as faces menos a de cima e a de baixo.
 - "Draft outward" inverte.
 - O draft por direção pode ser definido nas duas direções.
 - Para saída seletiva, usar a feature Draft.
 
-**Inventor** [V]
+**CAD avançado C** [V]
 - Taper A mede-se normal ao plano do sketch, em ambas as direções.
 - Positivo aumenta a seção.
 
@@ -280,20 +280,20 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Multi-pad / contornos selecionados / direção não normal (CATIA: Multi-Pad, Pad not normal / SW: Selected Contours, Direction of Extrusion / Inventor: seleção de regiões / Fenkra: parcial)
+### Multi-pad / contornos selecionados / direção não normal (CAD avançado B: Multi-Pad, Pad not normal / CAD avançado A: Selected Contours, Direction of Extrusion / CAD avançado C: seleção de regiões / Fenkra: parcial)
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - Multi-Pad: todos os perfis fechados e não intersectantes.
   - A lista de domínios aceita comprimento por domínio ou comum (multisseleção).
   - O resultado é uma única feature com um pad por domínio.
   - Sketch alterado → aviso; editar a feature → erro de definição.
 - Pad não normal: desmarca "Normal to profile" e escolhe uma linha como referência.
 
-**SolidWorks** [V]
+**CAD avançado A** [V]
 - Contornos selecionados reutilizam um sketch em extrusões de alturas diferentes.
 - Direção por aresta/referência fica associada.
 
-**Inventor** [V]
+**CAD avançado C** [V]
 - Seleção de regiões por janela.
 - Sketch compartilhado entre features.
 
@@ -303,14 +303,14 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 **Melhor prática**
 - Contornos por **assinatura** (centroide + área), não por índice, para sobreviver a edição do sketch.
-- Contorno novo: estado "novo contorno sem comprimento" (como o domínio com 0 mm do CATIA), nunca extrudar com valor adivinhado.
+- Contorno novo: estado "novo contorno sem comprimento" (como o domínio com 0 mm do CAD avançado B), nunca extrudar com valor adivinhado.
 - **Teste:** sketch com 3 contornos, extrusões com alturas distintas; remover um contorno vira diagnóstico.
 
 ---
 
-### Revolução / Ranhura (CATIA: Shaft / Groove / SW: Revolved Boss/Cut / Inventor: Revolve / Fenkra: `Revolve`)
+### Revolução / Ranhura (CAD avançado B: Shaft / Groove / CAD avançado A: Revolved Boss/Cut / CAD avançado C: Revolve / Fenkra: `Revolve`)
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - O perfil pode ser aberto ou fechado.
 - Vários perfis não intersectantes ficam do mesmo lado do eixo.
 - Se perfil e eixo estão no mesmo sketch, não é preciso selecionar o eixo.
@@ -318,10 +318,10 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 - Reverse side vale para perfil aberto.
 - Sem material para aparar → aviso para editar os parâmetros padrão.
 
-**SolidWorks** [C]
+**CAD avançado A** [C]
 - Ângulo, direção 2, perfil fino, contornos selecionados.
 
-**Inventor** [V]
+**CAD avançado C** [V]
 - Angle A e Angle B (assimétrico).
 - Full revolve, To Next (indisponível em feature-base) e Between.
 - A booleana usa Join, Cut ou Intersect.
@@ -336,11 +336,11 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Furo — todos os tipos, normas e posicionamento (CATIA: Hole / SW: Hole Wizard, Hole, Advanced Hole / Inventor: Hole / outros: Fusion Hole, Onshape Hole / Fenkra: `Hole`)
+### Furo — todos os tipos, normas e posicionamento (CAD avançado B: Hole / CAD avançado A: assistente de furos, Hole, Advanced Hole / CAD avançado C: Hole / outros: Fusion Hole, CAD avançado E Hole / Fenkra: `Hole`)
 
 **O que faz.** Gera furos paramétricos (simples, rebaixados, escareados, roscados) em um ou mais pontos.
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - **Tipos.** Simple, Tapered, Counterbored, Countersunk e Counterdrilled.
 - **Restrições dos diâmetros.**
   - Rebaixo > furo, e furo mais fundo que o rebaixo.
@@ -353,16 +353,16 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 - **Rosca.** A aba Thread Definition tem No Standard, Metric Thin Pitch e Metric Thick Pitch (valores AFNOR). Aceita tabela própria (Excel/Lotus/texto). Há rosca à esquerda, e o diâmetro do furo não pode passar do diâmetro da rosca. A rosca é só um ícone na árvore, sem geometria.
 - **Subtleza.** O topo do furo para na próxima face. Com um filete acima da face escolhida, o topo sobe para o filete.
 
-**SolidWorks** [V]
-- **Hole Wizard.** Duas abas, Tipo e Posições. Os estilos incluem Counterbore, Countersink, Hole, Straight Tap, Tapered Tap e Legacy. Versões novas trazem os tipos em slot. [V]
-- **Tamanho e ajuste.** Size + Fit (Close/Normal/Loose) vêm do Toolbox, editáveis. O "Custom Sizing" é usado com parcimônia.
+**CAD avançado A** [V]
+- **assistente de furos.** Duas abas, Tipo e Posições. Os estilos incluem Counterbore, Countersink, Hole, Straight Tap, Tapered Tap e Legacy. Versões novas trazem os tipos em slot. [V]
+- **Tamanho e ajuste.** Size + Fit (Close/Normal/Loose) vêm do biblioteca de normas, editáveis. O "Custom Sizing" é usado com parcimônia.
 - **Posições.** Face plana ou sketch 3D para superfícies não planas. Pontos de sketch com relações e cotas. Cada tamanho exige uma feature.
-- **Smart Fasteners.** O estilo "Hole" é reconhecido pelos Smart Fasteners.
+- **fixadores inteligentes.** O estilo "Hole" é reconhecido pelos fixadores inteligentes.
 - **Valores calculados.** O contra-escareado do lado oposto tem valores calculados (broca + 0,05 mm ou 0,06 pol) que não podem ser alterados, mas há Favoritos. [V]
 - **Profundidade.** Desde a versão 2020 pode-se definir até a ponta ou até o ombro. [V]
 - **Advanced Hole.** Empilha elementos (rebaixo, escareado, reto, rosqueado) do lado próximo e do lado distante, e define profundidade a partir de uma superfície com offset. [V]
 
-**Inventor** [V]
+**CAD avançado C** [V]
 - **Posicionamento.** Pontos de sketch, face ou plano de trabalho, ponto + direção, Linear (cotas), Concentric (aresta ou face curva). "Allow Center Point Creation" restringe a pontos existentes.
 - **Tipo e assento.** Simple, Clearance, Tapped e Taper Tapped. O assento é Counterbore, Spotface ou Countersink.
 - **Ajuste.** Em Clearance: Normal/Close/Loose conforme o parafuso.
@@ -407,18 +407,18 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Rosca (CATIA: Thread/Tap / SW: Cosmetic Thread, Thread / Inventor: Thread, Coil / Fenkra: `Thread`, `Hole.thread`)
+### Rosca (CAD avançado B: Thread/Tap / CAD avançado A: Cosmetic Thread, Thread / CAD avançado C: Thread, Coil / Fenkra: `Thread`, `Hole.thread`)
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - Cria rosca em furo ou eixo a partir de uma face cilíndrica.
 - Existe análise de rosca.
 - O furo roscado não mostra a rosca na geometria, só um ícone.
 
-**SolidWorks** [V]
+**CAD avançado A** [V]
 - Cosmetic Thread (rosca cosmética).
 - A "Thread" modelada usa perfil próprio [C].
 
-**Inventor** [V]
+**CAD avançado C** [V]
 - **Faces.** Uma ou mais faces do mesmo diâmetro e contíguas. Na rosca parcial, escolhe-se a face perto da borda onde começa.
 - **Especificação.** Type, Size, Designation (passo) e Class.
 - **Profundidade.** O padrão "Depth" cobre a face inteira; desligado, usa-se um Offset.
@@ -438,9 +438,9 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Varredura — nervura e ranhura por curva (CATIA: Rib / Slot / SW: Swept Boss/Cut / Inventor: Sweep / Fenkra: `Sweep`)
+### Varredura — nervura e ranhura por curva (CAD avançado B: Rib / Slot / CAD avançado A: Swept Boss/Cut / CAD avançado C: Sweep / Fenkra: `Sweep`)
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - **Perfil e curva.** O perfil pode ser fechado ou aberto (aberto só se material existente o limitar). Vários contornos não intersectantes são aceitos.
 - **Curva-guia.** Aberta, fechada plana ou 3D fechada (3D precisa ser contínua em tangência).
 - **Controle do perfil.**
@@ -449,10 +449,10 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
   - Reference surface.
 - **Opções.** Merge Ends, Thick Profile (Thickness1/2) e Neutral Fiber.
 
-**SolidWorks** [C]
+**CAD avançado A** [C]
 - Perfil + caminho + curvas-guia, orientação, torção, "Twist along path", tangência.
 
-**Inventor** [V]
+**CAD avançado C** [V]
 - Orientação **Path** (fixa em relação ao caminho) ou **Parallel**.
 - **Taper.** Normal ao plano do sketch. Não existe em caminho fechado.
 - **Twist.** Só em sweep perpendicular.
@@ -478,18 +478,18 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Loft / Multi-seções (CATIA: Multi-Sections Solid / SW: Lofted Boss / Inventor: Loft / Fenkra: `Loft`)
+### Loft / Multi-seções (CAD avançado B: Multi-Sections Solid / CAD avançado A: Lofted Boss / CAD avançado C: Loft / Fenkra: `Loft`)
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - **Entradas.** Seções (não podem se intersectar), guias (precisam estar unidas) e espinha (calculada ou do usuário).
 - **Acoplamento (coupling).** Ratio, Tangência, Tangência-curvatura e Vértices.
 - **Relimitação.** Início, fim, ambos ou nenhum. Os limites dependem da espinha: do usuário → extremidades da espinha; calculada sem guias → seções; calculada com guias → extremidades das guias.
 - **Remove Lofted Material** é o equivalente de corte.
 
-**SolidWorks** [C]
+**CAD avançado A** [C]
 - Seções, curvas-guia, linha central, condições de início/fim e tensão.
 
-**Inventor** [C]
+**CAD avançado C** [C]
 - Trilhos, linha central, área, condições de contorno por seção (tangente/suave G2).
 
 **Fenkra hoje**
@@ -499,7 +499,7 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 - Ordem das seções = ordem da lista. A orientação e o ponto de partida das seções não são controlados, então o resultado pode torcer.
 
 **Melhor prática**
-- Mostrar no 3D os pontos de acoplamento (como o CATIA) e permitir mover o ponto de partida.
+- Mostrar no 3D os pontos de acoplamento (como o CAD avançado B) e permitir mover o ponto de partida.
 - Avisar quando uma seção tem mais de um contorno e o loft descarta o resto.
 - **Casos de teste.**
   - Círculo → quadrado.
@@ -509,18 +509,18 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Nervura / Stiffener (CATIA: Stiffener / SW: Rib / Inventor: Rib e Web / Fusion: Rib e Web / Fenkra: `Stiffener`)
+### Nervura / Stiffener (CAD avançado B: Stiffener / CAD avançado A: Rib / CAD avançado C: Rib e Web / Fusion: Rib e Web / Fenkra: `Stiffener`)
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - **From Side** (padrão): extrusão no plano do perfil, espessura normal a ele.
 - **From Top:** extrusão normal ao plano, espessura no plano. O resultado é sempre aparado pelo material existente e atende redes de linhas.
 - Perfil aberto precisa de material que o limite totalmente.
 - **Neutral Fiber** distribui a espessura nos dois lados. Desligada, aceita Thickness 1 e 2 diferentes.
 
-**SolidWorks** [C]
+**CAD avançado A** [C]
 - Rib com espessura num lado, nos dois ou simétrica; direção paralela ou normal ao sketch; "Next reference"; draft.
 
-**Inventor** [V]
+**CAD avançado C** [V]
 - Rib (paralela ao plano) e Web (normal ao plano).
 - Espessura num lado ou dividida; extensão To Next ou Finite.
 - "Extend Profile" quando as pontas não tocam a peça.
@@ -534,7 +534,7 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 - Sem extensão do perfil, saída ou bosses.
 
 **Melhor prática**
-- Dois modos explícitos, "Paralelo ao sketch" e "Normal ao sketch" (nomes do Inventor), com espessura por lado e saída.
+- Dois modos explícitos, "Paralelo ao sketch" e "Normal ao sketch" (nomes do CAD avançado C), com espessura por lado e saída.
 - Todo tipo de curva do sketch entra na nervura (ou avisa o que foi ignorado).
 - **Casos de teste.**
   - Nervura diagonal em canto, de ponta a ponta, até o corpo.
@@ -543,9 +543,9 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Filete de aresta — constante (CATIA: Edge Fillet / SW: Fillet Constant Size / Inventor: Fillet Constant / Fenkra: `Fillet` com `EdgeMode::Constant`)
+### Filete de aresta — constante (CAD avançado B: Edge Fillet / CAD avançado A: Fillet Constant Size / CAD avançado C: Fillet Constant / Fenkra: `Fillet` com `EdgeMode::Constant`)
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - **Propagação.**
   - *Minimal*: ignora tangências, filetea só parte da aresta.
   - *Tangency*: segue as arestas tangentes.
@@ -557,13 +557,13 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 - **Seleção por face.** Escolher uma face filetea suas arestas.
 - Preview e limiting element só no Part Design P2.
 
-**SolidWorks** [V]
+**CAD avançado A** [V]
 - **Tipos.** Constant Size, Variable Size, Face e Full Round.
 - **Opções.** Multiple radius, round corner e setback.
 - **FilletXpert.** Organiza e reordena filetes simétricos de raio constante.
 - **Perfil e overflow** (keep edge/keep surface) [C].
 
-**Inventor** [V]
+**CAD avançado C** [V]
 - **Tipos.** Edge, Face e Full Round, com os comportamentos Constant, Variable e Setback.
 - **Seleção.** Aresta, laço, feature ou sólido, e All Fillets/All Rounds.
 - **Continuidade.** Tangente (G1), Suave (G2) ou Invertida.
@@ -575,7 +575,7 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 - Trocar edge por face/full round exige apagar e refazer. Apagar a única aresta de um filete de uma aresta dá erro; num conjunto multi-aresta o filete atualiza enquanto sobrar uma.
 
 **Fenkra hoje**
-- `EdgeOp {value, edges: EdgeSel, mode, prop: EdgeProp, keys}` (doc.rs:2629). `EdgeProp::Tangente` e `Minima` espelham a propagação do CATIA. `Minima` pós-processa em `minimal_edges` (lib.rs:1923).
+- `EdgeOp {value, edges: EdgeSel, mode, prop: EdgeProp, keys}` (doc.rs:2629). `EdgeProp::Tangente` e `Minima` espelham a propagação do CAD avançado B. `Minima` pós-processa em `minimal_edges` (lib.rs:1923).
 - Arestas por ponto médio + chave v2 (`EdgeKey` = aresta entre duas faces). Aresta perdida ou ambígua dá erro "referência perdida" (ADR 0010).
 - `AllOfBody` (todas as arestas) e `Edges(vec)`. Com vetor vazio, avisa que nada foi aplicado.
 - **Bug conhecido.** `EdgeSel::CreatedBy(_)` aplica a **todas** as arestas e só emite aviso (lib.rs:4183-4185).
@@ -605,17 +605,17 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Filete variável (CATIA: Variable Radius Fillet / SW: Variable Size / Inventor: Variable / Fenkra: `EdgeMode::Variable`)
+### Filete variável (CAD avançado B: Variable Radius Fillet / CAD avançado A: Variable Size / CAD avançado C: Variable / Fenkra: `EdgeMode::Variable`)
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - Cada aresta tem dois vértices com raio. Pode-se adicionar pontos com raios próprios, vindos de cliques, planos (interseção com a aresta) ou pontos 3D.
 - **Variação.** Cúbica (padrão) ou linear. Raio zero é permitido.
 - **Spine.** Permite filetear arestas consecutivas sem tangência como uma só lógica (exige licença GSD).
 - **Restrições.** Em arestas fechadas, remove-se o vértice padrão. O modo linear não vale para aresta fechada nem contínua em tangência.
 
-**SolidWorks / Inventor** [V]
-- **Inventor.** Raios inicial e final e pontos intermediários (posição de 0 a 1), com transição suave ou linear. Avisos de sobreposição.
-- **SolidWorks.** Pontos de controle definem a variação [V].
+**CAD avançado A / CAD avançado C** [V]
+- **CAD avançado C.** Raios inicial e final e pontos intermediários (posição de 0 a 1), com transição suave ou linear. Avisos de sobreposição.
+- **CAD avançado A.** Pontos de controle definem a variação [V].
 
 **Fenkra hoje**
 - `Variable(String)`: raio no início = valor, no fim = o campo (doc.rs:2658).
@@ -628,17 +628,17 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Filete face-face, tritangente e completo (CATIA: Face-Face / Tritangent Fillet / SW: Face Fillet / Full Round / Inventor: Face Fillet / Full Round / Fenkra: `FaceFace`, `FullRound`)
+### Filete face-face, tritangente e completo (CAD avançado B: Face-Face / Tritangent Fillet / CAD avançado A: Face Fillet / Full Round / CAD avançado C: Face Fillet / Full Round / Fenkra: `FaceFace`, `FullRound`)
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - **Tritangente.** Precisa de três faces: duas de apoio e a face a ser removida (o filete é tangente a ela). Aceita elemento limitante (plano, face ou superfície).
 - **Face-Face.** Filete entre duas faces não adjacentes.
 
-**SolidWorks** [V]
+**CAD avançado A** [V]
 - Face Fillet junta faces não adjacentes e não contínuas.
 - Full Round dispensa o raio: o software o calcula pelas seleções.
 
-**Inventor** [V]
+**CAD avançado C** [V]
 - Face Fillet entre dois conjuntos de faces.
 - Full Round: variável, tangente a três conjuntos de faces e substitui o conjunto central.
 
@@ -657,15 +657,15 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Setback e cantos de filete (CATIA: Blend corner / SW: Setback, Round corner / Inventor: Corner setback / Fenkra: ausente)
+### Setback e cantos de filete (CAD avançado B: Blend corner / CAD avançado A: Setback, Round corner / CAD avançado C: Corner setback / Fenkra: ausente)
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - "Blend corner(s)" fica em More. Os detalhes estão em página própria (Reshaping Corners) e a página não menciona distância de setback.
 
-**SolidWorks** [V]
+**CAD avançado A** [V]
 - Setback e round corner na lista de tipos.
 
-**Inventor** [V]
+**CAD avançado C** [V]
 - Onde três ou mais arestas de raio constante se encontram num vértice, define-se uma distância de setback por aresta.
 - "Minimal" calcula o setback mínimo, que costuma dar a transição mais suave e maior taxa de sucesso.
 
@@ -675,17 +675,17 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Chanfro (CATIA: Chamfer / SW: Chamfer / Inventor: Chamfer / Fenkra: `Chamfer`)
+### Chanfro (CAD avançado B: Chamfer / CAD avançado A: Chamfer / CAD avançado C: Chamfer / Fenkra: `Chamfer`)
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - Padrão Length1/Angle; alternativa Length1/Length2.
 - Seleciona-se arestas ou uma face (chanfra suas arestas).
 - Pode adicionar ou remover material.
 - A página não detalha propagação, mas o modelo é o mesmo do filete.
 
-**SolidWorks e Inventor** [C]
+**CAD avançado A e CAD avançado C** [C]
 - Distância × ângulo, duas distâncias, distância igual, vértice.
-- Inventor tem Distance, Distance and Angle, e Two Distances.
+- CAD avançado C tem Distance, Distance and Angle, e Two Distances.
 
 **Fenkra hoje**
 - `Chamfer(EdgeOp)` com `Constant`, `TwoDist` e `DistAngle` (doc.rs:2660-2663).
@@ -696,10 +696,10 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Draft — neutro, partição, reflect line, variável (CATIA: Draft Angle / Draft with Parting Element / Reflect Line / Variable Angle / SW: Draft (Neutral Plane, Parting Line, Step Draft), DraftXpert / Inventor: Draft / Fenkra: `Draft`)
+### Draft — neutro, partição, reflect line, variável (CAD avançado B: Draft Angle / Draft with Parting Element / Reflect Line / Variable Angle / CAD avançado A: Draft (Neutral Plane, Parting Line, Step Draft), DraftXpert / CAD avançado C: Draft / Fenkra: `Draft`)
 
-**CATIA** [V]
-- **Faces a inclinar.** Por face neutra (CATIA descobre as faces, em vermelho) ou seleção explícita (em rosa).
+**CAD avançado B** [V]
+- **Faces a inclinar.** Por face neutra (CAD avançado B descobre as faces, em vermelho) ou seleção explícita (em rosa).
 - **Elemento neutro.** Define a curva neutra. A primeira face define a direção de extração, que por padrão é a normal da face neutra e fica "controlada por referência".
 - **Ângulo.** Pode valer por face. O padrão é 5°.
 - **Partição (parting element).** Plano, face ou superfície que divide a peça em duas. "Parting = Neutral" reaproveita o neutro. "Draft both sides" inclina nos dois sentidos. Ângulos negativos são permitidos.
@@ -708,16 +708,16 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 - **Forma "Square".** Resolve ângulo maior que o das faces vizinhas, sem garantir desmoldagem.
 - **Reflect line.** As linhas de reflexão da face (ex.: cilindro) servem de linha neutra. Funciona depois de filetes. Aceita partição e elementos limitantes.
 - **Ângulo variável.** Pontos na aresta (cliques, planos ou pontos 3D), cada um com seu ângulo. Mudar faces ou neutro apaga os pontos. Faces não contínuas em tangência não podem ser multisselecionadas.
-- **Falha.** Faces torcidas: o CATIA oferece Deactivate + Extract Geometry. O novo draft depois da primeira usa por padrão a mesma direção de extração.
+- **Falha.** Faces torcidas: o CAD avançado B oferece Deactivate + Extract Geometry. O novo draft depois da primeira usa por padrão a mesma direção de extração.
 
-**SolidWorks** [V]
+**CAD avançado A** [V]
 - **Neutral Plane.** A superfície gira em torno do plano neutro, mesmo sem cruzá-lo. Propagação: nenhuma, ao longo da tangente, todas as faces, faces internas ou externas.
 - **Parting Line.** Gira em torno de uma aresta (geralmente de uma Split Line). Cada lado pode ter ângulo próprio e não vale para faces cilíndricas. Desde 2022 permite draft através de linhas de partição numa só feature. "Allow reduced angle" é exclusivo desse tipo.
 - **Step Draft.** Cria um degrau na linha de partição, com opção de degraus afunilados.
 - **DraftXpert.** Só plano neutro; usa análise de draft dentro do comando para selecionar faces.
 - **Draft Analysis.** Verde = positivo, amarelo = precisa de draft, vermelho = negativo.
 
-**Inventor** [V]
+**CAD avançado C** [V]
 - **Tipos.** Fixed Edge, Fixed Plane e Parting Line.
 - **Direção e seleção.** A direção de extração vem de face, plano, aresta ou eixo, com Flip. Automatic Face Chain liga faces tangentes.
 - **Ângulos.** One Way, Symmetric ou Asymmetric (Draft Angle 2).
@@ -746,18 +746,18 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Casca (CATIA: Shell / SW: Shell / Inventor: Shell / Fenkra: `Shell`)
+### Casca (CAD avançado B: Shell / CAD avançado A: Shell / CAD avançado C: Shell / Fenkra: `Shell`)
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - Faces a remover (roxas), "Default inside thickness" e "Other thickness faces" com valor por face.
 - Cascas consecutivas pedem o segundo valor menor (metade).
 - Corpos multidomínio: uma só casca com uma face por domínio.
-- **Falha.** O CATIA oferece **ignorar as faces com problema**, com "Reset ignored faces" ao editar. Espessura externa pode exigir Extract.
+- **Falha.** O CAD avançado B oferece **ignorar as faces com problema**, com "Reset ignored faces" ao editar. Espessura externa pode exigir Extract.
 
-**SolidWorks** [C]
+**CAD avançado A** [C]
 - Múltiplas espessuras por face, casca para fora, casca sem face removida (peça oca fechada).
 
-**Inventor** [V]
+**CAD avançado C** [V]
 - Remove Faces com Automatic Face Chain.
 - Direção Inside, Outside ou Both Sides.
 - Espessura uniforme + Unique Face Thickness.
@@ -773,8 +773,8 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 **Melhor prática**
 - **Estratégia de falha em três degraus:**
   1. Tentar exato.
-  2. Oferecer "ignorar faces" listando quais (como o CATIA).
-  3. Oferecer aproximação com tolerância (como o Inventor).
+  2. Oferecer "ignorar faces" listando quais (como o CAD avançado B).
+  3. Oferecer aproximação com tolerância (como o CAD avançado C).
 
   Sempre mostrando o que mudou.
 - **Casos de teste.**
@@ -786,14 +786,14 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Espessura / Thickness (CATIA: Thickness / SW: Thicken, Offset Face / Inventor: Offset, Thicken / Fenkra: `Thickness`)
+### Espessura / Thickness (CAD avançado B: Thickness / CAD avançado A: Thicken, Offset Face / CAD avançado C: Offset, Thicken / Fenkra: `Thickness`)
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - Seleciona faces e dá um valor. Positivo é o padrão documentado.
 - "Other thickness faces" permite valor diferente por face.
-- Se uma face não pode ser deslocada, o CATIA oferece ignorá-la.
+- Se uma face não pode ser deslocada, o CAD avançado B oferece ignorá-la.
 
-**SolidWorks e Inventor** [C]
+**CAD avançado A e CAD avançado C** [C]
 - Move Face / Offset Face e Thicken de superfície.
 
 **Fenkra hoje**
@@ -804,17 +804,17 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Dividir / Split (CATIA: Split / SW: Split, Cut com superfície / Inventor: Split / Fenkra: `SplitBody`)
+### Dividir / Split (CAD avançado B: Split / CAD avançado A: Split, Cut com superfície / CAD avançado C: Split / Fenkra: `SplitBody`)
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - Seleciona o corpo e o elemento divisor, e fica com um lado.
 
-**SolidWorks e Inventor** [V]
-- **Inventor.**
+**CAD avançado A e CAD avançado C** [V]
+- **CAD avançado C.**
   - *Split Face*: divide faces com sketch 2D/3D, plano de trabalho ou superfície (o 3D precisa cruzar totalmente).
   - *Remove one side*: escolhe Keep Side Default ou Flip.
   - *Split Solid*: parte um sólido em dois, e "Make Part/Components" exporta cada um mantendo associatividade.
-- **SolidWorks.** Parte em vários corpos [C].
+- **CAD avançado A.** Parte em vários corpos [C].
 
 **Fenkra hoje**
 - `SplitBody {surface, flip}` mantém **um lado** (`split_side`, lib.rs:4034). Mantém `fresh_body`, sem papéis de face.
@@ -824,11 +824,11 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Booleanas e múltiplos corpos (CATIA: Insert Body, Add/Remove/Intersect/Assemble/Union Trim/Remove Lump / SW: Combine, Intersect, Move/Copy, Merge result, Feature scope / Inventor: Combine, Derive, Make Part / Fenkra: `Combine`, coletores)
+### Booleanas e múltiplos corpos (CAD avançado B: Insert Body, Add/Remove/Intersect/Assemble/Union Trim/Remove Lump / CAD avançado A: Combine, Intersect, Move/Copy, Merge result, Feature scope / CAD avançado C: Combine, Derive, Make Part / Fenkra: `Combine`, coletores)
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - **Insert Body.** O novo corpo fica sublinhado como corpo ativo. Part Body e Body.N são autônomos até serem combinados por Assemble, Add, Trim, Intersect, Remove ou Remove Lump.
-- **Define In Work Object** vem antes de uma booleana: a operação depende do objeto em trabalho no momento da criação.
+- **objeto de trabalho** vem antes de uma booleana: a operação depende do objeto em trabalho no momento da criação.
 - **Union Trim.**
   - Regra 1: só os corpos escolhidos são removidos.
   - Regra 2: o corpo mantido remove os demais.
@@ -838,22 +838,22 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 - **Limitação.** Assemble/Add/Trim/Intersect/Remove/Remove Lump não podem ser reaplicados a corpos já associados. Copiar e colar o resultado contorna.
 - **Alterar tipo.** "Change a Boolean Operation into Another One" é um comando contextual.
 - **Atenção.** Evitar elementos tangentes (instabilidade).
-- **Licenças e Define In Work Object.** Relatos IBM indicam que se um conjunto geométrico é o objeto em trabalho, a booleana volumétrica deixa de estar disponível.
+- **Licenças e objeto de trabalho.** Relatos IBM indicam que se um conjunto geométrico é o objeto em trabalho, a booleana volumétrica deixa de estar disponível.
 
-**SolidWorks** [V]
+**CAD avançado A** [V]
 - **Combine.** Add, Subtract (a ordem importa) e Common. Só dentro de um arquivo multicorpo.
 - **Merge result** é por feature. O Feature scope limita os corpos afetados.
 - **Intersect** e **Move/Copy Body** (este desliga o Merge result sozinho).
 - Intersect é usado para obter o volume interno (cavidade) e rodar Mass Properties sobre ele.
 
-**Inventor** [V]
+**CAD avançado C** [V]
 - **Combine.** Basebody, Toolbodies, Keep Toolbody, e Join/Cut/Intersect. Apagar o Combine restaura o corpo consumido.
 - **Derive e Move Bodies.** Derive traz componentes como corpos ou toolbodies.
 - **Make Part/Make Components.** Exportam corpos como peças associativas.
 
 **Fenkra hoje**
 - Um coletor = um corpo (`BodyCollector`, doc.rs:1260). `Feature.target` escolhe o coletor.
-- `Combine {tool, op, keep_tool}` (lib.rs:4023): une, subtrai ou intersecta, e remove o corpo da ferramenta salvo `keep_tool`. É o equivalente ao Combine do Inventor.
+- `Combine {tool, op, keep_tool}` (lib.rs:4023): une, subtrai ou intersecta, e remove o corpo da ferramenta salvo `keep_tool`. É o equivalente ao Combine do CAD avançado C.
 - `apply_roles` mantém papéis de face no corpo e `None` na ferramenta do Combine, que por isso tem papéis -1.
 - Faltam Union Trim, Remove Lump, Change Boolean e participantes por feature.
 - O `active_collector` é o "objeto em trabalho" implícito.
@@ -872,9 +872,9 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Padrão retangular, circular, por sketch/pontos, por curva e user pattern (CATIA: Rectangular/Circular/User Pattern / SW: Linear/Circular/Curve/Sketch/Table Driven, Fill / Inventor: Rectangular/Circular/Sketch Driven / Fenkra: `Pattern`)
+### Padrão retangular, circular, por sketch/pontos, por curva e user pattern (CAD avançado B: Rectangular/Circular/User Pattern / CAD avançado A: Linear/Circular/Curve/Sketch/Table Driven, Fill / CAD avançado C: Rectangular/Circular/Sketch Driven / Fenkra: `Pattern`)
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - **Retangular.** Quatro modos de parâmetro:
   - Instâncias e comprimento;
   - Instâncias e espaçamento;
@@ -893,13 +893,13 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
   - Aceita feature, lista ou corpo; "Keep specifications" não vale para lista.
   - A lista aceita acréscimos só se o padrão já for de lista.
 
-**SolidWorks** [V]
+**CAD avançado A** [V]
 - **Seed only** (somente o original na direção 2).
 - Pular instâncias (não vale para corpos).
 - **Vary sketch** vs. **Geometry pattern.** A geometry pattern copia exato, ignora condições de término e é mais rápida.
 - Curve driven, sketch driven e table driven [C].
 
-**Inventor** [V]
+**CAD avançado C** [V]
 - **Escopo.** Retangular em duas direções ou ao longo de um caminho, circular, e sketch driven. Padrão de features individuais **ou do sólido inteiro**, incluindo features que não podem ser repetidas isoladamente.
 - **Retangular.** Midplane, Flip, Start e Orientation (Identical ou ao longo da tangente).
 - **Circular.** Posicionamento Incremental (espaçamento) ou Fitted (ângulo total, melhor para projetos que mudam). Orientação Rotacional ou Fixa.
@@ -934,17 +934,17 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Espelho (CATIA: Mirror / SW: Mirror / Inventor: Mirror / Fenkra: `Mirror`)
+### Espelho (CAD avançado B: Mirror / CAD avançado A: Mirror / CAD avançado C: Mirror / Fenkra: `Mirror`)
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - Plano ou face de espelho; objeto = corpo ou lista de features.
 - Pode gerar duas porções independentes de material no mesmo corpo.
 
-**Inventor** [V]
+**CAD avançado C** [V]
 - Features, sólido ou novo corpo; "Remove Original" (peças esquerda/direita).
 - **Não espelháveis:** features aplicadas ao corpo inteiro (todos os filetes/arredondamentos, casca) e resultados de intersect.
 
-**SolidWorks** [C]
+**CAD avançado A** [C]
 - Espelha features, faces ou corpos, com opção de fundir.
 
 **Fenkra hoje**
@@ -955,16 +955,16 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Transformações — translação, rotação, simetria, afinidade (CATIA: Translation/Rotation/Symmetry/Axis to Axis / SW: Move/Copy Body / Inventor: Move Bodies / Fenkra: `MoveBody`)
+### Transformações — translação, rotação, simetria, afinidade (CAD avançado B: Translation/Rotation/Symmetry/Axis to Axis / CAD avançado A: Move/Copy Body / CAD avançado C: Move Bodies / Fenkra: `MoveBody`)
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - **Translação.** Direção por linha, normal de plano ou componentes X/Y/Z; distância arrastável. Aplica-se aos corpos correntes e cria "Translat.xxx" na árvore.
 - A página não cobre rotação, simetria nem axis-to-axis em detalhe.
 
-**SolidWorks** [V]
+**CAD avançado A** [V]
 - Move/Copy Body desliga o Merge result.
 
-**Inventor** [V]
+**CAD avançado C** [V]
 - Move Bodies posiciona um corpo dentro do documento da peça antes de combinar.
 
 **Fenkra hoje**
@@ -975,9 +975,9 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Escala (CATIA: Scaling / SW: Scale / Inventor: Scale / Fenkra: `Scale`)
+### Escala (CAD avançado B: Scaling / CAD avançado A: Scale / CAD avançado C: Scale / Fenkra: `Scale`)
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - Resolve o corpo selecionado com razão, em torno de um ponto, plano ou face. Em torno de plano/face com razão ≠ 1, o resultado é uma **afinidade**.
 
 **Fenkra hoje**
@@ -988,15 +988,15 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Elementos de referência — planos, eixos, pontos (CATIA: Plane/Line/Point, Axis System, Datum / SW: Reference Geometry / Inventor: Work Features / Fenkra: `RefElement`)
+### Elementos de referência — planos, eixos, pontos (CAD avançado B: Plane/Line/Point, Axis System, Datum / CAD avançado A: Reference Geometry / CAD avançado C: Work Features / Fenkra: `RefElement`)
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - Guia de Part Design aponta para as páginas genéricas de ponto, linha e plano.
 - **Publicar elemento.** Há comando Publication.
 - **Datum.** Cria datums (com nota para desligar o modo Histórico). Há também Axis System e Apply Material.
 - **Planos.** Offset, Angle/Normal, Through 3 points, 2 lines, Point+Line, Planar curve, Normal to curve, Tangent to surface, Equation, Mean through points [C].
 
-**SolidWorks e Inventor** [C]
+**CAD avançado A e CAD avançado C** [C]
 - Planos de trabalho, eixos de trabalho e pontos de trabalho. Plano médio entre dois planos, tangente a cilindro, entre outros.
 
 **Fenkra hoje** (doc.rs:472-706)
@@ -1016,13 +1016,13 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Define In Work Object, inserir no meio e rollback (CATIA: Define In Work Object, Scan / SW: Rollback Bar, Insert Feature / Inventor: End of Part marker / Fenkra: `rollback`, `marker`, `active_collector`)
+### objeto de trabalho, inserir no meio e rollback (CAD avançado B: objeto de trabalho, Scan / CAD avançado A: Rollback Bar, Insert Feature / CAD avançado C: End of Part marker / Fenkra: `rollback`, `marker`, `active_collector`)
 
-**CATIA** [V]
-- **Scan / Define in Work Object.** O Scan percorre as features para trás (sketches são ignorados) e "Exit" isola o objeto atual, sublinhado na árvore. Pode-se definir uma feature como local direto pelo menu contextual.
+**CAD avançado B** [V]
+- **Scan / objeto de trabalho.** O Scan percorre as features para trás (sketches são ignorados) e "Exit" isola o objeto atual, sublinhado na árvore. Pode-se definir uma feature como local direto pelo menu contextual.
 - O guia não detalha as consequências no rollback. Pelo uso, as features novas entram depois do objeto em trabalho [C].
 
-**SolidWorks** [V]
+**CAD avançado A** [V]
 - A barra de rollback não reduz o tempo de reconstrução (só esconde features do gráfico).
 - A **freeze bar** reduz o tempo, mas congela as features acima dela.
 - Se o rollback é puxado a uma posição, o modelo reconstrói até lá, com ou sem erros.
@@ -1040,21 +1040,21 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Stop / Deactivate / Isolate / Update e diagnóstico (CATIA: Update, Deactivate, Stop Update, Extract / SW: Rebuild, What's Wrong, Suppress / Inventor: Design Doctor, Suppress / Fenkra: `Status`, `suppressed`)
+### Stop / Deactivate / Isolate / Update e diagnóstico (CAD avançado B: Update, Deactivate, Stop Update, Extract / CAD avançado A: Rebuild, What's Wrong, Suppress / CAD avançado C: Design Doctor, Suppress / Fenkra: `Status`, `suppressed`)
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - **Update.** Automático (Tools → Options → Mechanical Design) ou manual (ícone, Edit → Update, contextual com barra de progresso). A peça que precisa de update mostra um símbolo e a geometria em vermelho.
 - **Falha.** A feature que causa a falha leva um símbolo amarelo. A face removida aparece em amarelo com o texto "Removed Face". A falha abre um diálogo com diagnóstico, e a feature falha oferece **Editar** (janela "Feature Definition Error" com a face removida destacada), **Desativar** ou **Excluir**.
 - **Stop update.** "Associate stop update" interrompe o update com uma nota; "Deactivate stop update" o desliga (parênteses vermelhos).
 - **Exclusão.** Opções "Delete exclusive parents" e "Children". Apagar uma feature usada por um acabamento recalcula o acabamento. Apagar uma instância de padrão apaga o padrão. Desfazer disponível.
 - **Reordenar.** Edit → Reorder escolhe "After:". As regras de pais e filhos não são detalhadas.
-- **Extract Geometry** (a página não usa o termo "Isolate"): numa falha de draft, o CATIA desativa o draft e cria um nó "Extracted Geometry" com as superfícies, para reconstruir com Thick Surface, Split e Add.
+- **Extract Geometry** (a página não usa o termo "Isolate"): numa falha de draft, o CAD avançado B desativa o draft e cria um nó "Extracted Geometry" com as superfícies, para reconstruir com Thick Surface, Split e Add.
 - **Replace.** Substituição de superfície, corpo e suporte de sketch ("Change Sketch Support") e mover sketches de um corpo.
 
-**SolidWorks** [V]
+**CAD avançado A** [V]
 - Rollback × freeze bar (acima). Em "What's Wrong" e dangling references faltou fonte confirmada [C].
 
-**Inventor** [V]
+**CAD avançado C** [V]
 - Avisos no painel quando há conflito. Apagar a única aresta de um filete de uma aresta causa erro.
 
 **Fenkra hoje**
@@ -1078,17 +1078,17 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Parâmetros, fórmulas, regras e tabelas de projeto (CATIA: Knowledgeware / SW: Equations, Global Variables, Design Tables / Inventor: Parameters, iLogic / Fenkra: `Parameter`, `expr`)
+### Parâmetros, fórmulas, regras e tabelas de projeto (CAD avançado B: Knowledgeware / CAD avançado A: Equations, Global Variables, Design Tables / CAD avançado C: Parameters, iLogic / Fenkra: `Parameter`, `expr`)
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - Knowledgeware incorpora conhecimento na modelagem por **fórmulas** (relacionam parâmetros), **regras** (lógica condicional), **verificações** (checks) e **reações** (disparam atualização por evento). As tabelas de projeto aplicam valores de uma planilha (criada dos parâmetros do documento ou de arquivo externo).
 - O espaçamento desigual de padrões usa fórmulas em i e j.
 - Um tutorial indica que isso está além do Part Design básico: é uma camada sobre ele.
 
-**SolidWorks** [V]
+**CAD avançado A** [V]
 - Variáveis globais no diálogo Equations dirigem cotas e podem variar por configuração. Tabelas de projeto entram no Equations. Valores vinculados (linked values) estão sendo substituídos por variáveis globais.
 
-**Inventor** [V]
+**CAD avançado C** [V]
 - **Tipos.** Parâmetros de modelo (criados ao cotar) e de usuário. Podem ser de texto ou verdadeiro/falso (sem expressões) e ter lista de valores.
 - **Integração.** Vínculo com planilha, XML, exportação para propriedades do componente, e uso em regras iLogic.
 - **Entre arquivos.** Qualquer arquivo de modelagem pode vincular parâmetros de outro.
@@ -1117,17 +1117,17 @@ O que falta para chegar à filosofia do CATIA com a inteligência de SW e Invent
 
 ---
 
-### Materiais e propriedades de massa (CATIA: Apply Material, Measure Inertia / SW: Mass Properties, Override / Inventor: iProperties físicas / Fenkra: `Properties.material`, `MassProps`)
+### Materiais e propriedades de massa (CAD avançado B: Apply Material, Measure Inertia / CAD avançado A: Mass Properties, Override / CAD avançado C: iProperties físicas / Fenkra: `Properties.material`, `MassProps`)
 
-**CATIA** [V]
+**CAD avançado B** [V]
 - Aplica-se material ao PartBody e roda Measure Inertia; a massa aparece também na aba Mass das propriedades da peça. A densidade vem do material aplicado.
 - A medição lista volume, área, massa e densidade; o objeto de inércia calcula massa, densidade, centro de gravidade, **matriz de inércia, eixos principais e momentos principais** (CAA).
 - Problemas conhecidos de versões antigas: densidade -1 em caso não uniforme, e massa errada em produtos com features desativadas (IBM).
 
-**SolidWorks** [V]
+**CAD avançado A** [V]
 - O "Mass Properties" aplicado a uma cavidade criada por Intersect dá o volume interno. Não obtive fonte sobre "Override Mass Properties" (marco [C]).
 
-**Inventor** [V parcial]
+**CAD avançado C** [V parcial]
 - A pesquisa não retornou as propriedades físicas; as regras iLogic e propriedades de componente existem, mas a parte de massa é [C].
 
 **Fenkra hoje**
@@ -1233,7 +1233,7 @@ Tamanho: P ≈ até 100 k tokens · M ≈ 100–250 k · G > 250 k. Os IDs `BS-x
 | BS-02 | Saída sem perda silenciosa e "até último" real | Taper com qualquer término ou erro; última parede em vez da caixa; papéis de face em todos os términos | P0 | M | BS-01 |
 | BS-03 | Auditoria "nada ignorado em silêncio" | Teste por combinação inválida (taper×término, furo simétrico, varredura aberta, nervura com arco…) + correções | P0 | M | B53 |
 | BS-04 | `CreatedBy` real e atalho de extrusão com saída e filete | Seleção por dono+papel; `ExtrudeDraftFillet` filetea só as arestas dele | P0 | M | B15 |
-| BS-05 | Furo guiado por norma (Hole Wizard do Fenkra) | Norma/tamanho/ajuste → diâmetros; tipos; spotface; oblongo; ponta/ombro; posição associativa | P0 | G | B48, B05 |
+| BS-05 | Furo guiado por norma (assistente de furos do Fenkra) | Norma/tamanho/ajuste → diâmetros; tipos; spotface; oblongo; ponta/ombro; posição associativa | P0 | G | B48, B05 |
 | BS-06 | Rosca: atributo da face, deslocamento, chanfro, preview | Rosca cosmética como atributo; parcial com offset; passo/perfil próprios | P1 | M | B05, BS-05 |
 | BS-07 | Contornos selecionados e multi-pad | Seleção por assinatura; comprimento por contorno; estado "novo contorno" | P1 | M | BS-01 |
 | BS-08 | Parede fina unificada | `Thin {t1, t2, neutral, merge_ends, cap}` em extrusão, revolução, varredura e nervura | P1 | M | — |
@@ -1264,69 +1264,69 @@ Tamanho: P ≈ até 100 k tokens · M ≈ 100–250 k · G > 250 k. Os IDs `BS-x
 
 ## 5. Fontes
 
-**CATIA V5 (guia oficial de Part Design copiado em staff.city.ac.uk)**
-- https://www.staff.city.ac.uk/~ra600/ME2105/Catia%20course/CATIA%20Tutorials/prtug_C2/prtugbt0500.htm (índice de features baseadas em sketch)
+**CAD avançado B (guia oficial de Part Design copiado em staff.city.ac.uk)**
+- (fonte em procedencia.md) (índice de features baseadas em sketch)
 - …/prtugbt0501.htm (Pad), …/prtugbt0513.htm (Up to Surface), …/prtugbt0527.htm (Pad/Pocket de superfície), …/prtugbt0514.htm (direção não normal), …/prtugbt0524.htm (Multi-Pad), …/prtugbt0520.htm (Drafted Filleted Pad), …/prtugbt0526.htm (parede fina), …/prtugbt0504.htm (Shaft/Groove), …/prtugbt0503.htm (Hole), …/prtugbt0522.htm (furo roscado), …/prtugbt0507.htm (Rib), …/prtugbt0506.htm (Stiffener), …/prtugbt0518.htm (Loft)
 - …/prtugbt0600.htm (índice de dress-up), …/prtugbt0606.htm (Edge Fillet), …/prtugbt0609.htm (raio variável), …/prtugbt0610.htm (Tritangent), …/prtugbt0602.htm (Chamfer), …/prtugbt0612.htm (Draft básico), …/prtugbt0603.htm (partição), …/prtugbt0613.htm (reflect lines), …/prtugbt0618.htm (ângulo variável), …/prtugbt0604.htm (Shell), …/prtugbt0605.htm (Thickness)
 - …/prtugbt0700.htm (índice de transformações), …/prtugbt0701.htm, …/prtugbt0702.htm, …/prtugbt0703.htm (padrões), …/prtugbt0704.htm (Mirror), …/prtugbt0707.htm (Scaling), …/prtugbt0713.htm (Translation)
 - …/prtugbt1000.htm, …/prtugbt1001.htm, …/prtugbt1002.htm, …/prtugbt1006.htm, …/prtugbt1008.htm (corpos e booleanas), …/prtugbt1200.htm (baseadas em superfície)
-- …/prtugbt0900.htm, …/prtugbt0904.htm, …/prtugbt0907.htm, …/prtugbt0911.htm (modificação, reordenar, excluir, atualizar), …/prtugbt0906.htm (Scan/Define in Work Object), …/prtugbt0913.htm e …/prtugbt1500.htm (substituir), …/prtugbt0800.htm (propriedades), …/prtugbt1400.htm (ferramentas), …/prtugbt1600.htm (elementos de referência), …/prtugat0500.htm (extrair geometria)
-- https://www.staff.city.ac.uk/~ra600/ME2105/Catia%20course/CATIA%20Tutorials/kwrug_C2/kwruggl.htm e https://public.dhe.ibm.com/software/plm/uk/catiav5_knowledgeware.pdf (Knowledgeware)
-- https://www.goengineer.com/training/catia-v5-knowledge-based-engineering
-- https://www.ibm.com/support/pages/node/5228157, https://www.ibm.com/support/pages/apar/HE04170 (Define In Work Object e booleanas)
-- https://workbench.grabcad.com/tutorials/mass-property-option-not-showing-in-catia-v5-r19 e https://www.ibm.com/support/pages/apar/HD75121 (Measure Inertia)
-- https://pycatia.readthedocs.io/en/0.93/api/pycatia/space_analyses_interfaces/inertia.html (inércia)
-- https://pycatia.readthedocs.io/en/latest/api/pycatia/mec_mod_interfaces/ordered_geometrical_sets.html
-- https://grabcad.com/questions/problem-with-up-to-next-extrusion-in-catia
+- …/prtugbt0900.htm, …/prtugbt0904.htm, …/prtugbt0907.htm, …/prtugbt0911.htm (modificação, reordenar, excluir, atualizar), …/prtugbt0906.htm (Scan/objeto de trabalho), …/prtugbt0913.htm e …/prtugbt1500.htm (substituir), …/prtugbt0800.htm (propriedades), …/prtugbt1400.htm (ferramentas), …/prtugbt1600.htm (elementos de referência), …/prtugat0500.htm (extrair geometria)
+- (fonte em procedencia.md) e (fonte em procedencia.md) (Knowledgeware)
+- (fonte em procedencia.md)
+- https://www.ibm.com/support/pages/node/5228157, https://www.ibm.com/support/pages/apar/HE04170 (objeto de trabalho e booleanas)
+- (fonte em procedencia.md) e https://www.ibm.com/support/pages/apar/HD75121 (Measure Inertia)
+- (fonte em procedencia.md) (inércia)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 
-**SolidWorks** (conteúdo por resumos de busca e blogs; `help.solidworks.com` não renderizou no WebFetch)
-- https://help.solidworks.com/2022/English/SolidWorks/Sldworks/c_Hole_Wizard_Overview.htm
-- https://help.solidworks.com/2019/English/SolidWorks/sldworks/HIDD_DVE_HW_HOLE_SPEC.htm
-- https://help.solidworks.com/2020/English/WhatsNew/t_define_hole_depth.htm
-- https://help.solidworks.com/2019/english/SolidWorks/sldworks/r_advanced_hole_type_pm.htm
-- https://help.solidworks.com/2019/english/SolidWorks/sldworks/c_Fillets_Folder.htm
-- https://help.solidworks.com/2019/English/SolidWorks/Sldworks/c_FilletXpert_Folder.htm
-- https://help.solidworks.com/2012/English/SolidWorks/Sldworks/HIDD_DVE_DRAFT.htm
-- https://help.solidworks.com/2012/English/solidworks/Sldworks/Neutral_Plane_Draft.htm
-- https://help.solidworks.com/2017/english/SolidWorks/Sldworks/t_draftxpert.htm
-- https://help.solidworks.com/2012/English/solidworks/Sldworks/HIDD_DVE_FEAT_COMBINE_BODIES.htm
-- https://help.solidworks.com/2022/English/SolidWorks/sldworks/c_global_variables.htm
-- https://help.solidworks.com/2014/English/SOLIDWORKS/Sldworks/c_equations_and_design_tables.htm
-- https://help.solidworks.com/2023/english/SolidWorks/Sldworks/r_curve_driven_comp_pattern_pm.htm e https://help.solidworks.com/2012/english/solidworks/sldworks/hidd_pattern_by_curve.htm
-- https://hawkridgesys.com/blog/deep-dive-solidworks-hole-wizard
-- https://hawkridgesys.com/blog/solidworks-draft-features-you-need-to-know
-- https://hawkridgesys.com/blog/combine-intersect-multibody-commands-in-solidworks
-- https://hawkridgesys.com/blog/solidworks-up-to-surface-end-condition
-- https://hawkridgesys.com/blog/solidworks-global-variables-and-equations
-- https://www.engineersrule.com/advanced-breakdown-solidworks-boss-extrude-tool/
-- https://www.javelin-tech.com/blog/2017/11/solidworks-rollback-bar/ e https://www.javelin-tech.com/blog/?p=30685 (freeze bar)
-- https://www.javelin-tech.com/blog/2026/06/how-to-use-patterns-in-solidworks/ (citado em resumo de busca; o WebFetch devolveu 403)
-- https://www.javelin-tech.com/blog/2023/05/how-to-use-fillet-tools-in-solidworks/ (idem)
+**CAD avançado A** (conteúdo por resumos de busca e blogs; `help.CAD avançado A.com` não renderizou no WebFetch)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md) e (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md) e https://www.javelin-tech.com/blog/?p=30685 (freeze bar)
+- (fonte em procedencia.md) (citado em resumo de busca; o WebFetch devolveu 403)
+- (fonte em procedencia.md) (idem)
 - https://www.cati.com/?p=133460 (draft através de linhas de partição, 2022)
 - https://www.cati.com/?p=118948
-- https://solidprofessor.com/blog/how-to-use-the-advanced-hole-tool-in-solidworks/
+- (fonte em procedencia.md)
 
-**Inventor** (leitura direta)
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-B0CFA8E7-D3F5-48A9-BE6F-C8DF668301BD.htm (Extrude)
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-590A8760-FFBB-41C8-8169-6B7002207884.htm (Fillet)
-- https://help.autodesk.com/cloudhelp/2025/ENU/Inventor-Help/files/GUID-94EB6947-0347-4888-870D-4BA22DB144D8.htm (Hole)
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-C0848D58-12CB-4605-8165-0836232927F0.htm (Thread)
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-236B12FC-DC32-4BCA-A53D-FCB17382EEB6.htm (Sketched features)
-- https://help.autodesk.com/cloudhelp/2025/ENU/Inventor-Help/files/GUID-D9BDDBFF-CCC3-46B9-921E-E30F3849D7DE.htm (Shell)
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-38133835-2EDB-414E-ACB1-2487A96900F7.htm (Draft)
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-BFE147D7-49FE-4DA8-9AC2-1A5ABC4F0C8D.htm (Rib)
-- https://help.autodesk.com/cloudhelp/2024/ENU/Inventor-Help/files/GUID-9B3D1B72-340A-4F3E-9AD1-80E6DDD91ED2.htm (Patterns e Mirror)
-- https://help.autodesk.com/cloudhelp/2022/ENU/Inventor-Help/files/GUID-349C84EE-2D24-4DFC-A239-AFD55E5441AD.htm (Combine/Split)
-- https://help.autodesk.com/cloudhelp/2020/ENU/Inventor-Help/files/GUID-72CA8251-F892-4DA1-9A5E-88FE3CB1257E.htm
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-401BABD2-8D5B-4300-BA8D-70037445044F.htm (Revolve)
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-FCC0126F-50ED-449B-A0EF-1DED0287170B.htm e https://help.autodesk.com/cloudhelp/2015/ENU/InventorLT-Help/files/GUID-EACB5058-46B3-4D5B-A76A-79663AFC73AD.htm (Sweep)
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-595F9D8E-9EEA-4446-91AB-830E5BAE548E.htm e https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-8E5C63EA-0540-4EBE-9B17-B8159C7FE40C.htm (Parâmetros)
+**CAD avançado C** (leitura direta)
+- (fonte em procedencia.md) (Extrude)
+- (fonte em procedencia.md) (Fillet)
+- (fonte em procedencia.md) (Hole)
+- (fonte em procedencia.md) (Thread)
+- (fonte em procedencia.md) (Sketched features)
+- (fonte em procedencia.md) (Shell)
+- (fonte em procedencia.md) (Draft)
+- (fonte em procedencia.md) (Rib)
+- (fonte em procedencia.md) (Patterns e Mirror)
+- (fonte em procedencia.md) (Combine/Split)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md) (Revolve)
+- (fonte em procedencia.md) e (fonte em procedencia.md) (Sweep)
+- (fonte em procedencia.md) e (fonte em procedencia.md) (Parâmetros)
 
 **Outros**
-- https://cad.onshape.com/help/Content/PartStudio/extrude.htm e https://cad.onshape.com/help/Content/extrude.htm (Onshape Extrude)
-- https://help.autodesk.com/cloudhelp/ENU/Fusion-Model/files/SLD-REF-EXTRUDE.htm e https://help.autodesk.com/cloudhelp/ENU/Fusion-Model/files/SLD-CREATE-SOLID-FROM-SKETCH.htm (Fusion)
-- https://help.autodesk.com/cloudhelp/ENU/Fusion-Model/files/SLD-REF-SHELL.htm (Fusion Shell)
-- https://www.ptc.com/en/support/article/CS25675 e https://support.ptc.com/help/wnc/r12.0.0.0/en/Windchill_Help_Center/ProEWCIntegAHFamTableStruct.html (Creo: tabelas de padrão e família; pouca cobertura)
+- (fonte em procedencia.md) e (fonte em procedencia.md) (CAD avançado E Extrude)
+- (fonte em procedencia.md) e (fonte em procedencia.md) (CAD avançado D)
+- (fonte em procedencia.md) (Fusion Shell)
+- (fonte em procedencia.md) e (fonte em procedencia.md) (CAD avançado F: tabelas de padrão e família; pouca cobertura)
 
 **Código e documentos do Fenkra lidos**
 - `crates/fenkra-core/src/doc.rs`, `crates/fenkra-core/src/expr.rs`, `crates/fenkra-solidos/src/lib.rs`, `crates/fenkra-solidos/src/hardware.rs`, `crates/fenkra-app/src/app.rs`, `crates/fenkra-kernel/src/lib.rs`
@@ -1338,8 +1338,8 @@ Tamanho: P ≈ até 100 k tokens · M ≈ 100–250 k · G > 250 k. Os IDs `BS-x
 
 - **Resultado.** O relatório inteiro está acima. Não criei nem alterei arquivos, e não executei build nem testes: foi só leitura e pesquisa.
 - **Limitações das fontes.**
-  - O WebFetch devolveu só a navegação de `help.solidworks.com`, e 403 em duas páginas do Javelin. SolidWorks, portanto, está menos aprofundado que CATIA e Inventor. Os itens SW sem URL específica estão marcados [C].
-  - O guia de CATIA é de uma versão antiga, e Creo, NX, Solid Edge e SolidWorks têm cobertura rasa.
+  - O WebFetch devolveu só a navegação de `help.CAD avançado A.com`, e 403 em duas páginas do Javelin. CAD avançado A, portanto, está menos aprofundado que CAD avançado B e CAD avançado C. Os itens CAD avançado A sem URL específica estão marcados [C].
+  - O guia de CAD avançado B é de uma versão antiga, e CAD avançado F, CAD avançado G, CAD avançado H e CAD avançado A têm cobertura rasa.
   - Não verifiquei o comportamento do kernel OCCT em casos de borda. Os "bugs prováveis" vêm da leitura do código, não de execução, e valem confirmar com testes antes de priorizar.
 - **Bugs prováveis levantados** (todos a confirmar por teste):
   1. Saída (taper) ignorada com término "até…" (lib.rs:2738-2768).
@@ -1352,4 +1352,4 @@ Tamanho: P ≈ até 100 k tokens · M ≈ 100–250 k · G > 250 k. Os IDs `BS-x
 - **Riscos.** Os tamanhos P/M/G do backlog são estimativas grosseiras. As dependências com B15, B53 e B59 são as mais críticas: sem as chaves v2 completas e o corpus, as melhorias de sólido ficam sem rede de segurança.
 
 STATUS: DONE_WITH_CONCERNS
-SUMMARY: Relatório completo de Part Design com 5 maiores lacunas — (1) términos e início da extrusão incompletos, com saída ignorada em silêncio e "até último" pela caixa; (2) furo sem assistente por norma e rosca sem atributo/preview; (3) filetes sem setback, raios múltiplos e `CreatedBy` que aplica a todas as arestas; (4) padrões que copiam a ferramenta pronta, sem re-solução do término, e multicorpo sem Union Trim, Remove Lump ou escopo; (5) sem diagnóstico de atualização, tabelas de projeto, regras nem materiais/massa/inércia; fontes de SolidWorks parciais.
+SUMMARY: Relatório completo de Part Design com 5 maiores lacunas — (1) términos e início da extrusão incompletos, com saída ignorada em silêncio e "até último" pela caixa; (2) furo sem assistente por norma e rosca sem atributo/preview; (3) filetes sem setback, raios múltiplos e `CreatedBy` que aplica a todas as arestas; (4) padrões que copiam a ferramenta pronta, sem re-solução do término, e multicorpo sem Union Trim, Remove Lump ou escopo; (5) sem diagnóstico de atualização, tabelas de projeto, regras nem materiais/massa/inércia; fontes de CAD avançado A parciais.

@@ -2,7 +2,7 @@
 
 **Escopo e honestidade das evidências.** Pesquisei na web (buscas e leitura de páginas) e li os 13 itens no `docs/backlog/backlog.md`. Nenhum arquivo foi criado ou alterado, e não rodei checagens de código. Limites que afetam a confiança:
 
-- Várias páginas-chave bloquearam a leitura: Lantek (404), The Fabricator (403), Autodesk Blog sobre face groups (403) e wiki Bambu (402). Nesses casos usei os resumos das buscas.
+- Várias páginas-chave bloquearam a leitura: Lantek (404), The Fabricator (403), fornecedor de CAD avançado Blog sobre face groups (403) e wiki Bambu (402). Nesses casos usei os resumos das buscas.
 - Preços públicos são raros e conflitantes. Onde não achei, escrevo "sob cotação".
 - Itens marcados *(conhecimento prévio, verificar)* não vieram de fonte lida nesta sessão e precisam de confirmação antes de virarem requisito.
 - Não achei nenhuma documentação pública do "parede que governa ponto a ponto" do B155. Isso pode ser diferencial, ou só falta de documentação pública dos concorrentes. Também não achei dado de mercado de corte de tubos, nem do Brasil.
@@ -11,9 +11,9 @@
 
 ## 0. Resumo executivo
 
-1. **Tubos (B155 e B163) são o melhor nicho de diferenciação.** SolidWorks Weldments, Inventor Frame Generator e SigmaTUBE têm cópia/entalhe, mas tratam a parede como um corte geométrico único ou delegam o chanfro à máquina. Em nenhuma fonte achei compensação automática interna/externa por ponto com um orçamento de folga. A forma mais defensável de entregar isso é um **orçamento de folga de raiz** (máxima abertura admissível) que escolhe a parede ponto a ponto e avisa quando só um chanfro resolve (seção B155).
-2. **Manufatura aditiva (B164–B166, B119, B120) disputa com ferramentas fortes de preparo (Fusion, Magics, Netfabb) e com slicers gratuitos.** O Fenkra ganha por partir do **B-rep paramétrico**: faces analíticas dão análise de balanço e furos exata, e a preparação vira objeto não destrutivo na árvore. Não deve virar fatiador. O fatiador externo entra por linha de comando (PrusaSlicer, Orca, Bambu, CuraEngine são AGPL, então só como processo).
-3. **Malha→STEP (B169, B158) é difícil e os líderes falham com frequência.** Os próprios fóruns da Autodesk chamam a conversão de "incrivelmente difícil". O MVP honesto é **facetado + fusão de coplanares + reconhecimento de primitivas com B-rep híbrido** (faces analíticas e faces triangulares onde não houver ajuste). NURBS automático por regiões (modo 3) deve virar item separado e arriscado.
+1. **Tubos (B155 e B163) são o melhor nicho de diferenciação.** CAD avançado A Weldments, CAD avançado C Frame Generator e SigmaTUBE têm cópia/entalhe, mas tratam a parede como um corte geométrico único ou delegam o chanfro à máquina. Em nenhuma fonte achei compensação automática interna/externa por ponto com um orçamento de folga. A forma mais defensável de entregar isso é um **orçamento de folga de raiz** (máxima abertura admissível) que escolhe a parede ponto a ponto e avisa quando só um chanfro resolve (seção B155).
+2. **Manufatura aditiva (B164–B166, B119, B120) disputa com ferramentas fortes de preparo (CAD avançado D, Magics, Netfabb) e com slicers gratuitos.** O Fenkra ganha por partir do **B-rep paramétrico**: faces analíticas dão análise de balanço e furos exata, e a preparação vira objeto não destrutivo na árvore. Não deve virar fatiador. O fatiador externo entra por linha de comando (PrusaSlicer, Orca, Bambu, CuraEngine são AGPL, então só como processo).
+3. **Malha→STEP (B169, B158) é difícil e os líderes falham com frequência.** Os próprios fóruns da fornecedor de CAD avançado chamam a conversão de "incrivelmente difícil". O MVP honesto é **facetado + fusão de coplanares + reconhecimento de primitivas com B-rep híbrido** (faces analíticas e faces triangulares onde não houver ajuste). NURBS automático por regiões (modo 3) deve virar item separado e arriscado.
 4. **Simulação de manufatura (B167 e B168) está grande demais.** Recomendo quebrar em dobra de chapa, acessibilidade de tocha e montagem. Dobra tem o mercado mais claro (HACO, Almacam, Radan e MachineWorks vendem só isso), e o manequim (B152) deve entrar depois.
 5. **Fundação comum que falta no backlog:** um *corpo de malha* de primeira classe na árvore, uma biblioteca JSON de processos/máquinas/ferramentas e o *corpo para impressão derivado*. Isso está em "novos" no JSON final.
 
@@ -38,31 +38,31 @@
 | PrusaSlicer, OrcaSlicer, Bambu Studio | AGPL-3.0 *(conhecimento prévio)* | Abrir 3MF por linha de comando | Só processo externo, instalação do usuário. |
 | FreeCAD | LGPL *(conhecimento prévio)* | Ideias e código do Part/Mesh | Código LGPL pode ser reaproveitado com atribuição. |
 
-**Padrões úteis:** 3MF (núcleo, Materials, Beam Lattice), DSTV NC1 para perfis estruturais (furos e recortes) e STEP/IGES/SAT como entrada de CAM de tubo *(os dois últimos de conhecimento prévio e das páginas da Lantek)*, ISO 9013 (qualidade de corte térmico) *(conhecimento prévio)*. **BTL é formato de madeira** (a Tekla o descreve como padrão do setor madeireiro), então não serve para tubos.
+**Padrões úteis:** 3MF (núcleo, Materials, Beam Lattice), DSTV NC1 para perfis estruturais (furos e recortes) e STEP/IGES/SAT como entrada de CAM de tubo *(os dois últimos de conhecimento prévio e das páginas da Lantek)*, ISO 9013 (qualidade de corte térmico) *(conhecimento prévio)*. **BTL é formato de madeira** (a CAD avançado o descreve como padrão do setor madeireiro), então não serve para tubos.
 
 ---
 
 ## 2. B155 — Corte de encaixe normal entre membros (laser/plasma em tubos)
 
 ### Quem oferece
-- **SOLIDWORKS Weldments, *Trim/Extend***. Tipos de canto: End Trim, End Miter, End Butt1 e End Butt2. Em mitras há Angle Bisector (perfis diferentes) e Full Flush (perfis iguais). A ordem de aparo é configurável (ex.: `1` para três vias). Tampas são outro recurso. Junta curva ou mitra não padrão exige superfície como ferramenta de aparo. O recurso corta pelo corpo vizinho. É incluído nas licenças Professional/Premium *(conhecimento prévio)*.
-- **Inventor Frame Generator.** Tratamentos de ponta são cumulativos: *Miter*, *Notch*, *Corner Joint*. O Notch tem opções "Extend Notch Profile" e "Perpendicular Cut" (para entalhe de tubo a laser). Limites documentados: membros curvos não são aparados por superfície curva. Fórum: entalhe prévio faz o Trim/Extend encurtar o lado errado.
+- **CAD avançado A Weldments, *Trim/Extend***. Tipos de canto: End Trim, End Miter, End Butt1 e End Butt2. Em mitras há Angle Bisector (perfis diferentes) e Full Flush (perfis iguais). A ordem de aparo é configurável (ex.: `1` para três vias). Tampas são outro recurso. Junta curva ou mitra não padrão exige superfície como ferramenta de aparo. O recurso corta pelo corpo vizinho. É incluído nas licenças Professional/Premium *(conhecimento prévio)*.
+- **CAD avançado C Frame Generator.** Tratamentos de ponta são cumulativos: *Miter*, *Notch*, *Corner Joint*. O Notch tem opções "Extend Notch Profile" e "Perpendicular Cut" (para entalhe de tubo a laser). Limites documentados: membros curvos não são aparados por superfície curva. Fórum: entalhe prévio faz o Trim/Extend encurtar o lado errado.
 - **Lantek Flex3d Tubes.** Chanfros completos ou parciais em qualquer ponto do tubo, simulação de máquina e sequência (avança/volta/pausa), pontes/microjuntas, qualidade de corte por parâmetro. Licenciamento não público.
-- **SigmaTUBE (SigmaNEST/SigmaTEK).** Dentro do SolidWorks. Varre a montagem, identifica tubos e agrupa por perfil/material. *4-Axis Compensation* gera caminho compensado que remove material para a solda encaixar **sem chanfro real** (máquinas sem cabeçote de chanfro). *Bevel Cutting* gera 5 eixos. *TrueShape* encaixa mitras/copes no aninhamento. Módulos: AutoNest, TrueShape, Techno e PowerPack (chanfro opcional nos dois primeiros, incluído nos outros).
-- **HGG ProCAM** (máquinas de perfil): editor DSTV, preparação de solda ao longo da linha de ajuste de bocal, plug-in com SDS/2/Tekla que detecta furos e entalhes de tubo. Os dados vêm de reprints de comunicado do fabricante.
+- **SigmaTUBE (SigmaNEST/SigmaTEK).** Dentro do CAD avançado A. Varre a montagem, identifica tubos e agrupa por perfil/material. *4-Axis Compensation* gera caminho compensado que remove material para a solda encaixar **sem chanfro real** (máquinas sem cabeçote de chanfro). *Bevel Cutting* gera 5 eixos. *TrueShape* encaixa mitras/copes no aninhamento. Módulos: AutoNest, TrueShape, Techno e PowerPack (chanfro opcional nos dois primeiros, incluído nos outros).
+- **HGG ProCAM** (máquinas de perfil): editor DSTV, preparação de solda ao longo da linha de ajuste de bocal, plug-in com SDS/2/CAD avançado que detecta furos e entalhes de tubo. Os dados vêm de reprints de comunicado do fabricante.
 - **Fabricantes de máquina:** TRUMPF (software de tubo "Programming Tube"), BLM, Messer (fábrica em Jundiaí), Bystronic *(não verificado)*.
 
 ### Como funciona no detalhe
 O fluxo dos melhores é: modelo 3D ou montagem → identificação do tubo e do corte → correção de colisão e qualidade → aninhamento → simulação → NC da máquina. O problema geométrico, segundo o fórum CADTutor, é que subtrair um tubo do outro dá uma parede que **afunila de t até zero** do lado interno ao externo, e ninguém resolve a "mitra com parede cheia" de forma automática nesses fóruns. A física do laser acrescenta o *foco mais negativo em tubo que em chapa* (cerca de −2,5 a −3 mm numa parede de 3 mm, contra −1,5 em chapa), crescente com diâmetro menor e parede maior, e o uso da parede mais grossa em retangular de parede desigual (guia de parâmetros GWEIKE).
 
 ### Elogios e reclamações
-Não achei avaliações independentes: o Capterra tem 1 avaliação de 5/5 para o Flex3d. O que há são limitações documentadas (Inventor com curvos; ordem de aparo) e a queixa recorrente de parede afunilada nas mitras.
+Não achei avaliações independentes: o Capterra tem 1 avaliação de 5/5 para o Flex3d. O que há são limitações documentadas (CAD avançado C com curvos; ordem de aparo) e a queixa recorrente de parede afunilada nas mitras.
 
 ### Bibliotecas e padrões
 OCCT (booleanas, `BRepAlgoAPI`, offset de curva), DSTV NC1 para perfis, STEP do tubo cortado como saída para CAM de tubo, DXF para o desenvolvimento.
 
 ### Recomendação para o Fenkra
-**Fluxo (CATIA V5):** o comando entra na árvore como *"Corte de encaixe"* sob o membro cortado, com publicações (curva de contato, face de referência, parede governante). Painéis em ordem **suporte → modo → parâmetros → avançado**:
+**Fluxo (CAD avançado B):** o comando entra na árvore como *"Corte de encaixe"* sob o membro cortado, com publicações (curva de contato, face de referência, parede governante). Painéis em ordem **suporte → modo → parâmetros → avançado**:
 1. *Suporte:* membro a cortar e membro(s) de referência (referência estável a faces, ADR 0010).
 2. *Modo:* **Automático por orçamento de folga** (padrão), *Parede interna*, *Parede externa*, *Média* (esses três como avançado).
 3. *Parâmetros:* abertura de raiz máxima (folga admissível), kerf, ângulo de chanfro desejado (0 = sem chanfro).
@@ -138,14 +138,14 @@ Sem reviews independentes. Os fabricantes insistem em redução de refugo (aninh
 ## 4. B164 — Bancada de Manufatura aditiva
 
 ### Quem oferece
-- **Fusion Additive Build Extension.** Define a impressora e os parâmetros, organiza as peças na plataforma (*Additive Arrange*), cria suportes. O estudo de **orientação automática** classifica por área de suporte, com "Smallest Rotation" configurável (15° no tutorial). **Não considera o volume de construção:** resultados fora da mesa ficam em vermelho. Exige assinatura do Fusion, mensal ou anual. Preços divulgados por revendas: US$ 1.120 de lista e US$ 1.327,20 como venda (conflitantes, datados).
-- **Autodesk Netfabb.** Premium: empacotamento 2D/3D, simulação PBF de escala de peça, reparo, suportes configuráveis. Ultimate: lattice interno (marcado "só Ultimate"), automação com fatiamento e relatórios. Simulação ilimitada é produto separado.
+- **Fusion Additive Build Extension.** Define a impressora e os parâmetros, organiza as peças na plataforma (*Additive Arrange*), cria suportes. O estudo de **orientação automática** classifica por área de suporte, com "Smallest Rotation" configurável (15° no tutorial). **Não considera o volume de construção:** resultados fora da mesa ficam em vermelho. Exige assinatura do CAD avançado D, mensal ou anual. Preços divulgados por revendas: US$ 1.120 de lista e US$ 1.327,20 como venda (conflitantes, datados).
+- **fornecedor de CAD avançado Netfabb.** Premium: empacotamento 2D/3D, simulação PBF de escala de peça, reparo, suportes configuráveis. Ultimate: lattice interno (marcado "só Ultimate"), automação com fatiamento e relatórios. Simulação ilimitada é produto separado.
 - **Materialise Magics.** Líder de preparo industrial. Módulos de suporte (manual, semi e automático por "scaffold"), Nester (posicionamento manual a totalmente automático), Lattice Module unificado (Magics 28), Analyze Build com análise de parede, colisão e interlocking. Valores soltos em revenda: US$ 199/mês e US$ 1.995/ano, sem edição identificada.
 - **Formware.** Reorientação mínimizando faces voltadas para baixo, estruturas de piso, verificação de erros de malha, lattice de infill. Licença pessoal € 129,95 (3DNatives) ou US$ 154,95 (site), comercial € 299,95; inconsistentes.
 - **Slicers:** OrcaSlicer orienta por área de balanço, contato de base, interface de suporte e complexidade de contorno. **Meshmixer** teve desenvolvimento encerrado em 2021, mas segue lembrado por suportes e reparo.
 - **nTop:** modelagem implícita por campos, licença proprietária, preço não público.
 
-### Como funciona no melhor (Fusion/Magics)
+### Como funciona no melhor (CAD avançado D/Magics)
 Máquina → material/parâmetros → posicionamento → orientação ranqueada → suportes → saída. A inteligência está no *ranking multicritério* e em suportes por física (Magics/Materialise na linha metal).
 
 ### Elogios e reclamações
@@ -183,7 +183,7 @@ Fusion: bom ponto de entrada, mas orientação ignora volume. Magics: considerad
 ### Quem oferece
 - **PrusaSlicer Cut.** Modos planar e *dovetail*. Conectores *plug*, *dowel* e *snap*, com estilo, forma, profundidade, tamanho e rotação. *Flip cut plane*. Resultado em dois objetos ou "partes" (não vale em dovetail). Regiões de corte escolhidas por clique. Limites: colocação só por clique e dovetail incompatível com partes.
 - **Bambu Studio.** Mesmos tipos de conector. A tolerância encolhe o pino em todos os lados (relato de usuário em fórum); usuários também reportam "Place on Cut" instável e booleanas problemáticas. O corte é um plano infinito.
-- **Fusion, Meshmixer.** Dividir corpo por plano/superfície; sem biblioteca de conectores *(conhecimento prévio, verificar)*.
+- **CAD avançado D, Meshmixer.** Dividir corpo por plano/superfície; sem biblioteca de conectores *(conhecimento prévio, verificar)*.
 - O comportamento da tolerância no PrusaSlicer é **contraditório entre relatos** (alarga o furo versus nenhum efeito).
 
 ### Recomendação
@@ -235,9 +235,9 @@ O ponto de arquitetura é o **corpo para impressão derivado**: a compensação 
 ## 7. B167 — Simulação de manufatura (máquinas, ferramentas e acesso)
 
 ### Quem oferece
-- **Siemens Process Simulate (Weld).** Projeção de soldas nas peças, assistente de busca de pinça, projeção de cordão de arco, alinhamento da tocha, validação de pinça e teste de alcance de robô. O foco é robótica industrial e licenças de alto valor (preço não público).
+- **fornecedor de CAD avançado Process Simulate (Weld).** Projeção de soldas nas peças, assistente de busca de pinça, projeção de cordão de arco, alinhamento da tocha, validação de pinça e teste de alcance de robô. O foco é robótica industrial e licenças de alto valor (preço não público).
 - **Process Simulate Human.** Postura, alcance, visão, folga de mão, OWAS, RULA, NIOSH e gasto energético. REBA não aparece nas listas do fornecedor. O Jack (Tecnomatix) foi descontinuado segundo uma revenda *(verificar)*.
-- **Dobra de chapa.** HACO hacobend pro 3D: simulação 3D com detecção de colisão e detecção automática de dobras de STEP/IGES. Almacam Bend: sequência e ferramentas com acessibilidade e risco de colisão a cada passo. Radan Radbend: sequência, ferramentas e batentes automáticos. MachineWorks: colisão em colocação, dobra e retirada, e simulação de retorno elástico. Pesquisa: o problema é combinatório, resolvido com busca best-first e colisão. Fabricantes (TRUMPF, Bystronic, Amada) têm software preso às suas máquinas. Não achei dobra de sequência nativa em SOLIDWORKS/Inventor nas buscas *(verificar)*.
+- **Dobra de chapa.** HACO hacobend pro 3D: simulação 3D com detecção de colisão e detecção automática de dobras de STEP/IGES. Almacam Bend: sequência e ferramentas com acessibilidade e risco de colisão a cada passo. Radan Radbend: sequência, ferramentas e batentes automáticos. MachineWorks: colisão em colocação, dobra e retirada, e simulação de retorno elástico. Pesquisa: o problema é combinatório, resolvido com busca best-first e colisão. Fabricantes (TRUMPF, Bystronic, Amada) têm software preso às suas máquinas. Não achei dobra de sequência nativa em CAD avançado A/CAD avançado C nas buscas *(verificar)*.
 - **DELMIA** (veja B168).
 
 ### Recomendação
@@ -263,7 +263,7 @@ O item de 450 k mistura cinco problemas diferentes. Proponho dividir:
 ## 8. B168 — Sequência de montagem e ferramentas de montagem
 
 ### Quem oferece
-**DELMIA Assembly Simulation Expert** gera trajetórias de montagem/desmontagem sem colisão a partir de ponto inicial, intermediário e final, folgas, ponto-guia, caixa delimitadora ou caminho-guia. Otimiza trajetórias irregulares e gera **volumes varridos** que atualizam quando o projeto muda. A tecnologia de planejamento de movimento (Kineo CAM) já foi integrada ao CATIA DMU Fitting Simulator (2007). A pesquisa acadêmica filtra componentes por visibilidade e depois por alcance; o resultado é uma sequência local, não ótima global.
+**DELMIA Assembly Simulation Expert** gera trajetórias de montagem/desmontagem sem colisão a partir de ponto inicial, intermediário e final, folgas, ponto-guia, caixa delimitadora ou caminho-guia. Otimiza trajetórias irregulares e gera **volumes varridos** que atualizam quando o projeto muda. A tecnologia de planejamento de movimento (Kineo CAM) já foi integrada ao CAD avançado B DMU Fitting Simulator (2007). A pesquisa acadêmica filtra componentes por visibilidade e depois por alcance; o resultado é uma sequência local, não ótima global.
 
 ### Recomendação
 **MVP:**
@@ -285,12 +285,12 @@ O item de 450 k mistura cinco problemas diferentes. Proponho dividir:
 ## 9. B169 — Converter malha (STL/OBJ/3MF) em STEP sólido
 
 ### Quem oferece
-- **Fusion, *Convert Mesh*:** Faceted (uma face por triângulo), Prismatic (funde grupos de faces; exige *Generate Face Groups*) e Organic (exige Design Extension; resolução por precisão baixa a *precise* ou por número de faces; pré-processa furos). Operação Parametric (mantém histórico) ou Base Feature. Malha estanque vira sólido, aberta vira superfície. **Reclamações:** Prismatic falha ou devolve superfície, Organic falha com malha suja ou muito densa (usuários reduzem para ~10 mil triângulos), opção "Base Feature" difícil de achar. Um diretor de engenharia disse que é "uma conversão incrivelmente difícil".
+- **CAD avançado D, *Convert Mesh*:** Faceted (uma face por triângulo), Prismatic (funde grupos de faces; exige *Generate Face Groups*) e Organic (exige Design Extension; resolução por precisão baixa a *precise* ou por número de faces; pré-processa furos). Operação Parametric (mantém histórico) ou Base Feature. Malha estanque vira sólido, aberta vira superfície. **Reclamações:** Prismatic falha ou devolve superfície, Organic falha com malha suja ou muito densa (usuários reduzem para ~10 mil triângulos), opção "Base Feature" difícil de achar. Um diretor de engenharia disse que é "uma conversão incrivelmente difícil".
 - **FreeCAD:** *Part → Create shape from mesh* com costura (tolerância padrão 0,1), depois *Convert to solid* e *Refine*; **sem validação**, então reparar antes. Há tutorial de STL→STEP no GrabCAD.
-- **SOLIDWORKS ScanTo3D:** *Mesh Prep Wizard* + *Surface Wizard* automático (por número de superfícies, para orgânico) ou guiado (regiões pintadas, para faces analíticas). Disponível nas edições Professional/Premium segundo fontes conflitantes.
-- **Geomagic Design X** (Oqton/Hexagon): planos Go (a partir de US$ 1.900/ano), Plus (US$ 3.990 em revenda), Pro (US$ 6.930 em revenda, sob consulta no site); Pro tem assistentes guiados e automação; transferência ao vivo para SW, NX, Creo, AutoCAD e Inventor; licença travada em computador, dongle ou rede.
-- **Mesh2Surface / QuickSurface:** plug-ins de Rhino e produto próprio, preço sob cotação. O relatório de mercado cita Oqton, QUICKSURFACE, Artec e Mesh2Surface entre os principais.
-- **CATIA** (Digitized Shape Editor, Quick Surface Reconstruction) como referência do backlog.
+- **CAD avançado A ScanTo3D:** *Mesh Prep Wizard* + *Surface Wizard* automático (por número de superfícies, para orgânico) ou guiado (regiões pintadas, para faces analíticas). Disponível nas edições Professional/Premium segundo fontes conflitantes.
+- **Geomagic Design X** (Oqton/Hexagon): planos Go (a partir de US$ 1.900/ano), Plus (US$ 3.990 em revenda), Pro (US$ 6.930 em revenda, sob consulta no site); Pro tem assistentes guiados e automação; transferência ao vivo para CAD avançado A, CAD avançado G, CAD avançado F, CAD avançado J e CAD avançado C; licença travada em computador, dongle ou rede.
+- **Mesh2Surface / QuickSurface:** plug-ins de CAD avançado I e produto próprio, preço sob cotação. O relatório de mercado cita Oqton, QUICKSURFACE, Artec e Mesh2Surface entre os principais.
+- **CAD avançado B** (Digitized Shape Editor, Quick Surface Reconstruction) como referência do backlog.
 
 ### Elogios e reclamações
 Elogio: fluxo guiado do Design X e do ScanTo3D para peças mecânicas. Reclamação dominante: conversões que falham ou produzem corpos que não aceitam operações; o usuário precisa de malha limpa e agrupada antes.
@@ -359,7 +359,7 @@ Campo implícito de uma célula (TPMS: giroide `sin x cos y + sin y cos z + sin 
 ## 12. B112 — Perfil de regras DFM (furo, bolso, chapa)
 
 ### Quem oferece
-**SOLIDWORKS DFMXpress** (versão reduzida do DFMPro da HCL, incluído em todas as licenças): regras de fresa/furo (bolso profundo, feição inacessível, canto interno vivo), torno, chapa (distância furo–borda, raio de dobra) e injeção (parede mínima e máxima); tolerâncias ajustáveis. **Protolabs** tem DFM instantâneo para usinagem, injeção e impressão 3D (lista de regras não pública). aPriori e Xometry fazem DFM com custo *(conhecimento prévio)*.
+**CAD avançado A DFMXpress** (versão reduzida do DFMPro da HCL, incluído em todas as licenças): regras de fresa/furo (bolso profundo, feição inacessível, canto interno vivo), torno, chapa (distância furo–borda, raio de dobra) e injeção (parede mínima e máxima); tolerâncias ajustáveis. **Protolabs** tem DFM instantâneo para usinagem, injeção e impressão 3D (lista de regras não pública). aPriori e Xometry fazem DFM com custo *(conhecimento prévio)*.
 
 ### Recomendação
 Motor de regras com **perfis JSON** por processo (furo, bolso, chapa, AM), cada regra com `id`, tipo de entidade (face, furo, aresta), limites, severidade e texto. Varredura devolve lista de violações com referência estável à face e realce 3D. É a base de B113, B166 (AM) e B167. **Aceite:** peça com furo a 0,5 mm da borda e parede de 0,3 mm gera duas violações com IDs corretos; editar o limite do perfil muda o resultado sem recompilar. **Tamanho:** 300 k mantido.
@@ -369,7 +369,7 @@ Motor de regras com **perfis JSON** por processo (furo, bolso, chapa, AM), cada 
 ## 13. B113 — Espessura, saliência e canto vivo
 
 ### Quem oferece
-**SOLIDWORKS Thickness Analysis** realça regiões grossas/finas a partir de uma espessura-alvo e gera relatório. DFMXpress cobre cantos vivos internos. Magics tem análise de parede.
+**CAD avançado A Thickness Analysis** realça regiões grossas/finas a partir de uma espessura-alvo e gera relatório. DFMXpress cobre cantos vivos internos. Magics tem análise de parede.
 
 ### Recomendação
 Espessura por **raio-bola máxima/ray casting** a partir de pontos sobre as faces (B-rep avaliável com tesselação adaptativa), mapa de cor com legenda e limite por processo (do perfil do B112). Saliência (*overhang*) vem da normal da face contra a direção de construção (B164). Canto vivo: arestas côncavas com raio abaixo do mínimo da ferramenta. **Aceite:** placa com degrau de 1 mm e 3 mm mostra duas faixas com erro ≤ 5%; o mapa só pinta o que viola o limite se o filtro estiver ativo. **Tamanho:** 200 k mantido.
@@ -379,7 +379,7 @@ Espessura por **raio-bola máxima/ray casting** a partir de pontos sobre as face
 ## 14. B158 — Engenharia reversa: nuvem de pontos e malha para CAD
 
 ### Quem oferece
-Geomagic Design X (preços na seção B169), SolidWorks ScanTo3D, CATIA Digitized Shape Editor/QSR, Fusion (Mesh workspace), Mesh2Surface/QuickSurface; códigos abertos: Open3D (MIT) e PCL (BSD), ambos com RANSAC de planos/cilindros *(conhecimento prévio)*.
+Geomagic Design X (preços na seção B169), CAD avançado A ScanTo3D, CAD avançado B Digitized Shape Editor/QSR, Fusion (Mesh workspace), Mesh2Surface/QuickSurface; códigos abertos: Open3D (MIT) e PCL (BSD), ambos com RANSAC de planos/cilindros *(conhecimento prévio)*.
 
 ### Recomendação
 Esta bancada é a **casa** da malha: importação (STL/OBJ/PLY/E57), limpeza, decimação, preenchimento de buracos, segmentação por curvatura, ajuste de primitivas, extração de seções e croquis, comparação de desvio com mapa de cores. O B169 consome o mesmo ajuste. Ordem sugerida: núcleo de malha → segmentação/ajuste → seções e croquis → desvio → NURBS. Nuvem de pontos crua (E57, milhões de pontos) é custo à parte: amostragem, octree, normais.
@@ -426,7 +426,7 @@ Riscos de mercado: o Fusion cobre bem o hobby/pro de AM por assinatura; Magics/N
 - **Resultado:** relatório com 13 itens, mercado e atualizações propostas ao backlog.
 - **Evidência:** buscas e leituras listadas abaixo; itens marcados *(verificar)* precisam de confirmação.
 - **Arquivos alterados:** nenhum. **Checagens executadas:** nenhuma (pesquisa).
-- **Falhas:** quatro páginas bloqueadas (Lantek 404, Fabricator 403, Autodesk Blog 403, wiki Bambu 402); sem dados de mercado de corte de tubos; sem preço oficial de Magics, Lantek, SigmaTUBE, nTop e Mesh2Surface.
+- **Falhas:** quatro páginas bloqueadas (Lantek 404, Fabricator 403, fornecedor de CAD avançado Blog 403, wiki Bambu 402); sem dados de mercado de corte de tubos; sem preço oficial de Magics, Lantek, SigmaTUBE, nTop e Mesh2Surface.
 - **Riscos:** números de contração, ângulos críticos e folgas são faixas de blog e precisam ser calibrados; o algoritmo de "orçamento de folga" do B155 é hipótese de projeto a validar com casos reais.
 
 ---
@@ -434,9 +434,9 @@ Riscos de mercado: o Fusion cobre bem o hobby/pro de AM por assinatura; Magics/N
 ## Fontes (URLs)
 
 - https://global.channelonline.com/acme/ccs/Products/overview/M023449367
-- https://top3dshop.com/product/autodesk-fusion-360-additive-build-extension
-- https://help.autodesk.com/cloudhelp/ENU/Fusion-CAM/files/MFG-TUT-ADDITIVE-SLA-A1-SETUP-ORIENT.htm
-- https://www-pt.autodesk.com/uk/products/netfabb/features
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://www.materialise.com/en/software/magics
 - https://static.helpjuice.com/helpjuice_production/uploads/upload/image/5908/4049616/Magics_28_Manual.pdf
 - https://help.prusa3d.com/article/cut-tool_1779
@@ -453,15 +453,15 @@ Riscos de mercado: o Fusion cobre bem o hobby/pro de AM por assinatura; Magics/N
 - https://www.sigmanest.com/en/supported-machine-types/tube
 - https://www.thefabricator.com/thefabricator/product/cadcamsoftware/software-designed-to-maximize-throughput-on-3d-profiling-machines
 - https://www.smacna.org/news/news-archive/article/2024/04/30/procam-software-developed-by-profilers-for-profilers
-- https://support.tekla.com/article/timber-nc-btl
+- (fonte em procedencia.md)
 - https://www.cadtutor.net/forum/topic/37391-creating-tube-miter-correctly/
 - https://www.gwklaser.com/fiber-laser-tube-cutting-parameters-guide.html
-- https://help.solidworks.com/2024/English/SolidWorks/sldworks/c_Weldments_Trim_and_Extend.htm
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-953F560A-C2D3-4031-8348-762054C7C779.htm
-- https://help.autodesk.com/cloudhelp/2025/ENU/Inventor-Help/files/GUID-BE98918A-2419-4432-AAE5-46A3E56552FE.htm
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://www.trumpf.com/en_US/products/software/programming-software/
-- https://media.plm.automation.siemens.com/tecnomatix/interactive/Siemens-PLM-Tecnomatix-Process-Simulate-fs-X7.pdf
-- https://www.emixa.com/hubfs/Emixa/Marketing/Content%20Dashboard/Sub%20Solution%20and%20Sub%20Services%20Content%20downloads/Siemens%20SW%20Process%20Simulate%20Human%20Fact%20Sheet.pdf
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://4dsysco.com/wp-content/uploads/2025/10/Tecnomatix-Jack.pdf
 - https://enterprise.trimech.com/uki/assembly-simulation-expert/
 - https://edstechnologies.com/blog/understanding-delmia-virtual-simulation/
@@ -470,17 +470,17 @@ Riscos de mercado: o Fusion cobre bem o hobby/pro de AM por assinatura; Magics/N
 - https://almacam.com/?p=2878
 - https://www.machineworks.com/sheet-metal-bending
 - https://www.iitm.ac.in/ta/node/1058
-- https://help.autodesk.com/cloudhelp/ENU/Fusion-Mesh/files/MESH-CONVERT-TO-SOLID.htm
-- https://www.autodesk.com/products/fusion-360/blog/mesh-into-solid-body-conversion/
-- https://forums.autodesk.com/t5/fusion-design-validate-document/parametric-mesh-conversion-fails/m-p/11302627/highlight/true
-- https://forums.autodesk.com/t5/fusion-support-forum/trouble-converting-mesh-to-organic-solid/td-p/12319559
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://wiki.freecad.org/Part_ShapeFromMesh/en
 - https://grabcad.com/tutorials/how-to-convert-stl-to-step-using-freecad
-- https://help.solidworks.com/2019/English/SolidWorks/scanto3d/t_running_the_mesh_prep_wizard.htm
-- https://help.solidworks.com/2020/english/SolidWorks/ScanTo3D/c_surface_wizard_propertymanager.htm
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://hexagon.com/products/geomagic-design-x/geomagic-design-x-plans
 - https://www.matterhackers.com/store/l/geomagic-design-x-software
-- https://novedge.com/products/buy-mesh2surface-for-rhinoceros
+- (fonte em procedencia.md)
 - https://www.futuremarketinsights.com/reports/3d-reverse-engineering-software-market
 - https://www.verifiedmarketresearch.com/product/reverse-engineering-software-market/
 - https://github.com/3MFConsortium/lib3mf
@@ -493,8 +493,8 @@ Riscos de mercado: o Fusion cobre bem o hobby/pro de AM por assinatura; Magics/N
 - https://www.cgal.org/license.html
 - https://docs.ros.org/en/jazzy/p/ompl/__LICENSE.html
 - https://dyn.manpages.debian.org/trixie/cura-engine/CuraEngine.1.en.html
-- https://blogs.solidworks.com/tech/2020/01/solidworks-tech-tip-using-dfmxpress.html
-- https://help.solidworks.com/2022/english/SolidWorks/dfmxpress/r_settings.htm
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://develop3d.com/3d-printing/dfm-analysis-for-3d-printed-parts-launched-by-protolabs/
 - https://www.wevolver.com/article/design-for-additive-manufacturing-a-dfam-guide-for-engineers
 - https://www.cadcrowd.com/blog/design-for-3d-printing-dfam-rules-for-fdm-sla-and-sls-parts-that-actually-work/

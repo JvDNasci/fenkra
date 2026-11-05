@@ -3,9 +3,9 @@
 Este relatório não alterou nenhum arquivo do projeto. Só li código e fontes, e extraí um PDF público para o scratchpad. Marquei cada afirmação como **[V]**, confirmada em fonte lida nesta rodada, ou **[C]**, conhecimento geral não confirmado.
 
 Limites da pesquisa, que afetam a confiança do que segue:
-- As páginas `help.solidworks.com` não renderizam sem JavaScript. O SolidWorks vem de blogs de revendas e de trechos de busca.
-- O guia oficial de FT&A do CATIA V5 (catiadoc.free.fr) recusou conexão. O CATIA vem do guia de Drafting (via espelho), de relatos da IBM e de ementas de curso.
-- Os docs do NX redirecionam para a página de suporte, e a wiki do FreeCAD bloqueia leitura automática (Anubis). O blog do Fusion deu 403. Para esses três uso resultados de busca.
+- As páginas `help.CAD avançado A.com` não renderizam sem JavaScript. O CAD avançado A vem de blogs de revendas e de trechos de busca.
+- O guia oficial de FT&A do CAD avançado B (CAD avançado Bdoc.free.fr) recusou conexão. O CAD avançado B vem do guia de Drafting (via espelho), de relatos da IBM e de ementas de curso.
+- Os docs do CAD avançado G redirecionam para a página de suporte, e a wiki do FreeCAD bloqueia leitura automática (Anubis). O blog do Fusion deu 403. Para esses três uso resultados de busca.
 - Fonte forte: o **CAx-IF Recommended Practices for PMI (AP242) v4.1, 20/06/2024**, baixado e lido em texto. Também li os enums do OCCT (`XCAFDimTolObjects_*`) direto do GitHub.
 
 ---
@@ -23,13 +23,13 @@ Limites da pesquisa, que afetam a confiança do que segue:
 7. **O lado de entrada, o dos dados, já existe no Fenkra.** `Hole` (`crates/fenkra-core/src/doc.rs:2552-2584`) tem diâmetro, profundidade, tipo (rebaixado, escareado, contrafurado), rosca, ponta em V, conicidade e mão. Uma cota de furo completa não exige novo reconhecimento de feature, só ler o que já está no modelo. Isso é uma vantagem sobre o DimXpert, que precisa reconhecer features em sólidos sem histórico.
 8. **Ordem recomendada:** alvos estáveis (B82, B83), depois tolerância tipada e tabelas normativas, depois o catálogo de cotas por par de alvos, depois cota de feature, depois FCF completo, datum targets e acabamento, e por fim AP242 semântico e esquema automático (seção 3).
 
-**Legenda da matriz:** ✅ confirmado nesta rodada · ☑ provável, [C] · ➖ parcial ou indireto · ❌ não tem ou não achei · ❔ não verificado · **Desenho** indica que existe só no desenho 2D, não no PMI 3D. Colunas: CAT = CATIA V5 FT&A, SW = SOLIDWORKS MBD/DimXpert, INV = Inventor 3D annotations, CREO = Creo MBD + GD&T Advisor, NX = NX PMI, FUS = Fusion, FC = FreeCAD TechDraw (2D, sem PMI 3D), FNK = Fenkra.
+**Legenda da matriz:** ✅ confirmado nesta rodada · ☑ provável, [C] · ➖ parcial ou indireto · ❌ não tem ou não achei · ❔ não verificado · **Desenho** indica que existe só no desenho 2D, não no PMI 3D. Colunas: CAT = CAD avançado B FT&A, CAD avançado A = CAD avançado A MBD/DimXpert, INV = CAD avançado C 3D annotations, CAD avançado F = CAD avançado F MBD + GD&T Advisor, CAD avançado G = CAD avançado G PMI, FUS = CAD avançado D, FC = FreeCAD TechDraw (2D, sem PMI 3D), FNK = Fenkra.
 
 ### 1.2 Matriz de cotas e anotações
 
 **Cotas lineares**
 
-| Tipo | CAT | SW | INV | CREO | NX | FUS | FC | AP242 / OCCT | FNK |
+| Tipo | CAT | CAD avançado A | INV | CAD avançado F | CAD avançado G | FUS | FC | AP242 / OCCT | FNK |
 |---|---|---|---|---|---|---|---|---|---|
 | Distância ponto–ponto | ✅ | ✅ | ✅ | ✅ | ☑ | ❔ | ✅ | `linear distance` | ✅ `pmi.rs:811` |
 | Distância face–face (plano paralelo) | ✅ | ✅ Location | ✅ | ✅ só planos | ☑ | ❌ | ➖ | `dimensional_location` + `shape_aspect` das faces | ❌ |
@@ -46,7 +46,7 @@ Limites da pesquisa, que afetam a confiança do que segue:
 
 **Angulares, radiais e diametrais**
 
-| Tipo | CAT | SW | INV | CREO | NX | FUS | FC | AP242 / OCCT | FNK |
+| Tipo | CAT | CAD avançado A | INV | CAD avançado F | CAD avançado G | FUS | FC | AP242 / OCCT | FNK |
 |---|---|---|---|---|---|---|---|---|---|
 | Ângulo entre faces/arestas | ✅ | ✅ | ✅ | ➖ não avalia | ☑ | ❌ | ✅ | `angular_location` + `angle_selection` | ➖ 3 pontos `pmi.rs:814` |
 | Complementar / suplementar / reflexo | ✅ | ✅ botão direito | ☑ | ❔ | ☑ | ❌ | ❌ | `.EQUAL./.LARGE./.SMALL.` | ❌ |
@@ -63,7 +63,7 @@ Limites da pesquisa, que afetam a confiança do que segue:
 
 **Cotas de feature (chamadas)**
 
-| Tipo | CAT | SW | INV | CREO | NX | FUS | FC | AP242 / OCCT | FNK |
+| Tipo | CAT | CAD avançado A | INV | CAD avançado F | CAD avançado G | FUS | FC | AP242 / OCCT | FNK |
 |---|---|---|---|---|---|---|---|---|---|
 | Furo simples (Ø e profundidade) | ✅ | ✅ Size | ✅ hole note | ✅ create | ☑ | ✅ | ➖ | 2 cotas (`diameter` + profundidade) | ❌ (existe `Hole` no modelo, não é lido) |
 | Rebaixo (counterbore) | ✅ | ✅ | ✅ | ❌ depth | ☑ | ✅ | ❌ | **várias cotas** (§5.1.9) | ❌ |
@@ -76,7 +76,7 @@ Limites da pesquisa, que afetam a confiança do que segue:
 
 **Espessura de parede, chapa, perfil**
 
-| Tipo | CAT | SW | INV | CREO | NX | FUS | FC | AP242 / OCCT | FNK |
+| Tipo | CAT | CAD avançado A | INV | CAD avançado F | CAD avançado G | FUS | FC | AP242 / OCCT | FNK |
 |---|---|---|---|---|---|---|---|---|---|
 | Espessura (parede, chapa) | ☑ | ☑ | ☑ | ➖ tube sem suporte | ☑ | ❌ | ❌ | `thickness` | ❌ |
 | Dobra / aba de chapa | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | N/A | ❌ (módulo Chapa não alimenta PMI) |
@@ -84,7 +84,7 @@ Limites da pesquisa, que afetam a confiança do que segue:
 
 **Tolerâncias dimensionais**
 
-| Tipo | CAT | SW | INV | CREO | NX | FUS | FC | AP242 / OCCT | FNK |
+| Tipo | CAT | CAD avançado A | INV | CAD avançado F | CAD avançado G | FUS | FC | AP242 / OCCT | FNK |
 |---|---|---|---|---|---|---|---|---|---|
 | ± simétrica | ✅ | ✅ | ✅ | ✅ | ☑ | ❔ | ❌ | `plus_minus_tolerance` | ➖ texto (`pmi.rs:847`) |
 | ± assimétrica / unilateral | ✅ | ✅ | ✅ | ✅ | ☑ | ❔ | ❌ | idem | ➖ texto (`pmi.rs:826`) |
@@ -100,7 +100,7 @@ Limites da pesquisa, que afetam a confiança do que segue:
 
 **GD&T, datums e alvos**
 
-| Tipo | CAT | SW | INV | CREO | NX | FUS | FC | AP242 / OCCT | FNK |
+| Tipo | CAT | CAD avançado A | INV | CAD avançado F | CAD avançado G | FUS | FC | AP242 / OCCT | FNK |
 |---|---|---|---|---|---|---|---|---|---|
 | 14 características ISO 1101 | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | 15 entidades de tolerância | ✅ `pmi.rs:11-26` |
 | 12 características ASME 2018 (sem concentricidade e simetria) | ☑ | ☑ | ☑ | ✅ | ☑ | ❌ | ❌ | tabela 12 ainda inclui as removidas | ❌ (o Fenkra oferece as 14 sempre) |
@@ -123,7 +123,7 @@ Limites da pesquisa, que afetam a confiança do que segue:
 
 **Acabamento, solda, notas e tabelas**
 
-| Tipo | CAT | SW | INV | CREO | NX | FUS | FC | AP242 / OCCT | FNK |
+| Tipo | CAT | CAD avançado A | INV | CAD avançado F | CAD avançado G | FUS | FC | AP242 / OCCT | FNK |
 |---|---|---|---|---|---|---|---|---|---|
 | Rugosidade (símbolo básico + Ra) | ✅ | ✅ | ✅ | ☑ | ✅ | ❌ | ☑ | sem entidade; apresentação | ✅ `pmi.rs:704` |
 | ISO 21920 / ISO 1302 / texturas | ☑ | ✅ ISO 21920 (2025 SP1) | ☑ | ☑ | ☑ | ❌ | ❌ | idem | ❌ |
@@ -138,7 +138,7 @@ Limites da pesquisa, que afetam a confiança do que segue:
 
 **Auto cotagem**
 
-| Tipo | CAT | SW | INV | CREO | NX | FUS | FC | AP242 / OCCT | FNK |
+| Tipo | CAT | CAD avançado A | INV | CAD avançado F | CAD avançado G | FUS | FC | AP242 / OCCT | FNK |
 |---|---|---|---|---|---|---|---|---|---|
 | Auto cotagem | ➖ | ✅ Auto Dimension Scheme | ❌ | ✅ Create Selected | ✅ MBD logical rules | ❌ | ❌ | N/A | ❌ |
 | Verificação sub/super restringido | ✅ Check Report | ✅ Show Tolerance Status | ✅ Advisor + Face Status | ✅ Constraint State | ✅ PMI Advisor | ❌ | ❌ | N/A | ❌ (B38) |
@@ -153,11 +153,11 @@ Cada ficha traz: **como funciona nos melhores**, **o que o Fenkra tem**, **regra
 ### G1. Cotas lineares por par de alvos
 
 **Como funciona no melhor.**
-- **SolidWorks:** o DimXpert tem duas famílias. O *Size* mede o tamanho de uma feature reconhecida (furo, rasgo, chanfro). O *Location* mede entre **duas features DimXpert**, em linear ou angular, e **exclui** superfície, filete, chanfro e bolsa [V]. O desvio é intencional: uma cota de localização só tem sentido entre elementos de posição bem definida.
-- **SolidWorks:** a *Reference dimension* (Smart Dimension na barra MBD) mede entre arestas, linhas e curvas sem reconhecer feature, e por isso é só informativa [V].
-- **CATIA:** a cota semântica nasce no *Tolerancing Advisor* com *Limit of Size Definition* e condição *Enveloping*. A cota **enquadrada** (framed) só é aceita se estiver ligada a referência parcial, área restrita ou tolerância [V, de `docs/pesquisa/pmi.md`].
-- **Creo:** a cota de tamanho só é avaliada **entre dois planos paralelos**; plano–cilindro e plano–esfera ficam sem suporte no Advisor, mas existem no Creo nativo [V].
-- **NX:** a API tem builders separados para `ChainDimension`, `BaselineDimension` e `OrdinateDimension` (esta com modo *single* e *multiple*) [V].
+- **CAD avançado A:** o DimXpert tem duas famílias. O *Size* mede o tamanho de uma feature reconhecida (furo, rasgo, chanfro). O *Location* mede entre **duas features DimXpert**, em linear ou angular, e **exclui** superfície, filete, chanfro e bolsa [V]. O desvio é intencional: uma cota de localização só tem sentido entre elementos de posição bem definida.
+- **CAD avançado A:** a *Reference dimension* (Smart Dimension na barra MBD) mede entre arestas, linhas e curvas sem reconhecer feature, e por isso é só informativa [V].
+- **CAD avançado B:** a cota semântica nasce no *Tolerancing Advisor* com *Limit of Size Definition* e condição *Enveloping*. A cota **enquadrada** (framed) só é aceita se estiver ligada a referência parcial, área restrita ou tolerância [V, de `docs/pesquisa/pmi.md`].
+- **CAD avançado F:** a cota de tamanho só é avaliada **entre dois planos paralelos**; plano–cilindro e plano–esfera ficam sem suporte no Advisor, mas existem no CAD avançado F nativo [V].
+- **CAD avançado G:** a API tem builders separados para `ChainDimension`, `BaselineDimension` e `OrdinateDimension` (esta com modo *single* e *multiple*) [V].
 - **FreeCAD TechDraw 1.0:** *chain* (horizontal, vertical e oblíqua), *coordinate* (cotas igualmente espaçadas partindo de uma base comum) e *extent* [V, resultado de busca].
 
 **Passos de criação (consenso):**
@@ -177,7 +177,7 @@ Cada ficha traz: **como funciona nos melhores**, **o que o Fenkra tem**, **regra
 - A medida vem do **par de alvos resolvido**, nunca de pontos clicados. Face–face plana paralela mede a distância perpendicular; se as faces deixarem de ser paralelas, a cota passa a status "Ambígua", não a um número diferente.
 - O modo "entre centros" usa o eixo da feature, não o centro de uma aresta.
 - Para círculos o AP242 distingue 11 variantes (centro/interior/exterior) [V]. A UI deve oferecer "de centro a exterior" etc. como seleção explícita; o padrão é centro a centro.
-- Cadeia, base e ordenada são **conjuntos** com origem comum. Mudar a origem recalcula todo o conjunto. O NX avisa quando o empilhamento de ordenada com cadeia não é permitido [V].
+- Cadeia, base e ordenada são **conjuntos** com origem comum. Mudar a origem recalcula todo o conjunto. O CAD avançado G avisa quando o empilhamento de ordenada com cadeia não é permitido [V].
 - Em cadeia, a soma dos parciais deve bater com a cota total, senão há sobrecota (aviso, não bloqueio).
 
 **Saída AP242.**
@@ -191,9 +191,9 @@ Cada ficha traz: **como funciona nos melhores**, **o que o Fenkra tem**, **regra
 ### G2. Cotas angulares, de arco e corda
 
 **Como funciona no melhor.**
-- **CATIA** (Drafting): cota angular com mudança de setor e opção "suplementar" [V]. Cota de comprimento curvilíneo é a mesma cota de distância, com o menu de contexto trocando *Overall* por *Curvilinear Length* e o símbolo de semi-arco sobre o valor [V].
-- **SolidWorks:** a cota de referência angular entre arestas pode mostrar o suplemento conforme a posição do cursor; botão direito trava o valor e alterna [V].
-- **Creo:** ângulo pode aparecer no esquema mas **não é avaliado** pelo Advisor; arc length e ordinate também não [V].
+- **CAD avançado B** (Drafting): cota angular com mudança de setor e opção "suplementar" [V]. Cota de comprimento curvilíneo é a mesma cota de distância, com o menu de contexto trocando *Overall* por *Curvilinear Length* e o símbolo de semi-arco sobre o valor [V].
+- **CAD avançado A:** a cota de referência angular entre arestas pode mostrar o suplemento conforme a posição do cursor; botão direito trava o valor e alterna [V].
+- **CAD avançado F:** ângulo pode aparecer no esquema mas **não é avaliado** pelo Advisor; arc length e ordinate também não [V].
 - **FreeCAD:** ângulo entre duas arestas retas; *3-point angle*; *arc length* para arestas selecionadas [V].
 - **Cone:** o DimXpert reconhece o cone e mostra o ângulo; para meio-ângulo precisa customizar [V].
 
@@ -215,7 +215,7 @@ Cada ficha traz: **como funciona nos melhores**, **o que o Fenkra tem**, **regra
 ### G3. Raio, diâmetro e variantes
 
 **Como funciona no melhor.**
-- O raio ou diâmetro vem da **superfície analítica** (cilindro, cone, esfera, toro), não de pontos. O CATIA mostra o fluxo: selecionar o furo, abrir o Advisor, escolher *Diameter*, informar tolerância e *Enveloping* [V, de `pmi.md`].
+- O raio ou diâmetro vem da **superfície analítica** (cilindro, cone, esfera, toro), não de pontos. O CAD avançado B mostra o fluxo: selecionar o furo, abrir o Advisor, escolher *Diameter*, informar tolerância e *Enveloping* [V, de `pmi.md`].
 - A esfera tem cota própria (`spherical diameter/radius`), e o toro tem 8 variantes (menor/maior, raio/diâmetro, e os limites alto/baixo) [V].
 - O modificador *controlled radius* (CR) é **prefixo**, ao contrário dos demais, que são sufixos [V].
 
@@ -232,11 +232,11 @@ Cada ficha traz: **como funciona nos melhores**, **o que o Fenkra tem**, **regra
 ### G4. Cotas de furo, rosca, chanfro e filete
 
 **Como funciona no melhor.**
-- **Inventor:** *Hole/Thread Note* e *Chamfer Note* são comandos separados. O 2019 mostra a **quantidade** do padrão, e `QTYNOTE` liga o realce cruzado aos furos do padrão [V]. O 2027 permite anexar o identificador de datum a notas de furo e de rosca [V].
+- **CAD avançado C:** *Hole/Thread Note* e *Chamfer Note* são comandos separados. O 2019 mostra a **quantidade** do padrão, e `QTYNOTE` liga o realce cruzado aos furos do padrão [V]. O 2027 permite anexar o identificador de datum a notas de furo e de rosca [V].
 - **Fusion:** *Hole/Thread Notes* e *Leader Notes* são o PMI nativo, com ASME e ISO [V, resultado de busca].
-- **SolidWorks:** o *Size* do DimXpert lê furo (Ø, profundidade), escareado (Ø e ângulo), rasgo (comprimento e largura), filete (raio) e chanfro. O chanfro tem dois esquemas: **distância × ângulo** e **distância × distância** [V]. Clicar na face do chanfro basta para reconhecê-lo [V].
-- **CATIA:** *Chamfer Dimension* oferece quatro formatos (comprimento × comprimento, comprimento × ângulo, ângulo × comprimento, só comprimento), por seleção ou detecção automática [V]. Uma ocorrência da IBM mostra a limitação em curvas: só funciona com plano/plano/plano, plano/cone/cilindro, plano/cone/cone e cilindro/cone/cilindro [V].
-- **Creo:** cria automaticamente as cotas de furos simples, eixos, rasgos, placas e furos oblongos. Chanfro, arredondamento e tubo **não são avaliados** [V]. Ao escolher um furo de padrão CAD, pergunta "padrão inteiro?" e mantém a ligação [V, de `pmi.md`].
+- **CAD avançado A:** o *Size* do DimXpert lê furo (Ø, profundidade), escareado (Ø e ângulo), rasgo (comprimento e largura), filete (raio) e chanfro. O chanfro tem dois esquemas: **distância × ângulo** e **distância × distância** [V]. Clicar na face do chanfro basta para reconhecê-lo [V].
+- **CAD avançado B:** *Chamfer Dimension* oferece quatro formatos (comprimento × comprimento, comprimento × ângulo, ângulo × comprimento, só comprimento), por seleção ou detecção automática [V]. Uma ocorrência da IBM mostra a limitação em curvas: só funciona com plano/plano/plano, plano/cone/cilindro, plano/cone/cone e cilindro/cone/cilindro [V].
+- **CAD avançado F:** cria automaticamente as cotas de furos simples, eixos, rasgos, placas e furos oblongos. Chanfro, arredondamento e tubo **não são avaliados** [V]. Ao escolher um furo de padrão CAD, pergunta "padrão inteiro?" e mantém a ligação [V, de `pmi.md`].
 - **FreeCAD:** chanfro horizontal/vertical (tamanho e ângulo) e prefixo `n×` [V].
 - **Caso composto:** a ambiguidade de qual diâmetro recebe a tolerância num furo com rebaixo só se resolve **quebrando a chamada** [V].
 
@@ -258,7 +258,7 @@ Chanfro e filete existem como features, mas o PMI não as lê. O backlog B107 pr
 
 ### G5. Espessura, chapa e perfil estrutural
 
-**Como funciona no melhor.** O AP242 tem `thickness` como `dimensional_size` [V], e o OCCT `Size_Thickness` [V]. O Creo cita a espessura de parede entre cilindros coaxiais como exemplo de caso que o Advisor **não** avalia (tubo) [V]. Dobra e aba de chapa, e perfil estrutural, não aparecem em nenhum dos softwares como tipo de cota nativo nas fontes lidas; chapa é cotada por raio, ângulo e comprimento planificado.
+**Como funciona no melhor.** O AP242 tem `thickness` como `dimensional_size` [V], e o OCCT `Size_Thickness` [V]. O CAD avançado F cita a espessura de parede entre cilindros coaxiais como exemplo de caso que o Advisor **não** avalia (tubo) [V]. Dobra e aba de chapa, e perfil estrutural, não aparecem em nenhum dos softwares como tipo de cota nativo nas fontes lidas; chapa é cotada por raio, ângulo e comprimento planificado.
 
 **Fenkra hoje.** Nada. Mas o Fenkra tem módulos de chapa e estrutural cuja geometria paramétrica sabe a espessura, o raio de dobra, o K-factor e o perfil. Esse é um espaço onde o Fenkra pode **superar** os concorrentes.
 
@@ -274,9 +274,9 @@ Chanfro e filete existem como features, mas o PMI não as lê. O backlog B107 pr
 **Como funciona no melhor.**
 - **AP242 define o contrato** [V]: valor nominal; nominal + qualificador (`min`/`max`/`avg`); nominal + limites ±; faixa de valores; **classe de tolerância** em `limits_and_fits`, com `form_variance` (A–ZC para furo, a–zc para eixo), `zone_variance` (`hole`/`shaft`) e `grade` (um dos 18 graus IT da ISO 286).
 - **Modificadores tipo 1:** `theoretical` (básica, ASME; teórica, ISO) e `auxiliary` (referência) são **mutuamente exclusivos** [V]. Tipo 2 são múltiplos: CR, quadrado, estatística, CF, tamanho por dois pontos, tamanho por esfera, critérios de associação (mínimos quadrados, inscrito máximo, circunscrito mínimo), diâmetros calculados (circunferência, área, volume), tamanhos por ordem (máx., mín., média, mediana, ponto médio, faixa), qualquer porção, qualquer seção, seção fixa, tolerância comum, estado livre, UF [V].
-- **SolidWorks:** tipos *Plus and Minus* e *Geometric*; o esquema geométrico troca ± por posição e cria cotas básicas; *Recreate basic dim* repara o esquema [V]. MBD 2023 adicionou símbolos ISO 14405-1; MBD 2024, separador decimal e cotas duplas [V].
-- **CATIA:** a cota enquadrada só vive ligada a referência parcial, área restrita ou tolerância [V]. A cota angular mostra limites superior e inferior em *Limit of Size* [V].
-- **Inventor:** inclui *Inspection dimension*, valor oculto e CF. A cota promovida do modelo permanece ligada ao parâmetro [V].
+- **CAD avançado A:** tipos *Plus and Minus* e *Geometric*; o esquema geométrico troca ± por posição e cria cotas básicas; *Recreate basic dim* repara o esquema [V]. MBD 2023 adicionou símbolos ISO 14405-1; MBD 2024, separador decimal e cotas duplas [V].
+- **CAD avançado B:** a cota enquadrada só vive ligada a referência parcial, área restrita ou tolerância [V]. A cota angular mostra limites superior e inferior em *Limit of Size* [V].
+- **CAD avançado C:** inclui *Inspection dimension*, valor oculto e CF. A cota promovida do modelo permanece ligada ao parâmetro [V].
 
 **Fenkra hoje.** `tol_plus` e `tol_minus` são `String` livres, e `display` monta `±x` quando iguais, ou `+a/−b` (`pmi.rs:845-851`); `display_parts` empilha as assimétricas (`pmi.rs:826-836`). Não valida número, não tem limites, ISO 286, básica, referência, nem precisão por norma. A vírgula decimal é fixa (`pmi.rs:842`). No desenho, `Dim.tol` também é `String` (`fenkra-desenho/src/lib.rs:333`). B108 já prevê o tipo e a tabela ISO 286, mas ainda sem dono para a **tabela normativa**.
 
@@ -293,10 +293,10 @@ Chanfro e filete existem como features, mas o PMI não as lê. O backlog B107 pr
 ### G7. Notas, balões, tabelas e flag notes
 
 **Como funciona no melhor.**
-- **NX:** a nota tem "manter paralela à tela" e "bloquear tamanho e posição" [V].
-- **Inventor:** nota com chamada 3D permite **várias** faces, arestas e vértices associados à mesma chamada (*Add/Remove Associated Geometry*), parâmetros no texto e borda retangular [V].
-- **CATIA:** *flag note* e texto com chamada fazem parte de FT&A; tabela de furos e de coordenadas de pontos vêm do Drafting [V].
-- **Nota de perfil geral** (Inventor, Creo): "superfícies não anotadas: perfil 0,3 em relação a A|B|C" [V].
+- **CAD avançado G:** a nota tem "manter paralela à tela" e "bloquear tamanho e posição" [V].
+- **CAD avançado C:** nota com chamada 3D permite **várias** faces, arestas e vértices associados à mesma chamada (*Add/Remove Associated Geometry*), parâmetros no texto e borda retangular [V].
+- **CAD avançado B:** *flag note* e texto com chamada fazem parte de FT&A; tabela de furos e de coordenadas de pontos vêm do Drafting [V].
+- **Nota de perfil geral** (CAD avançado C, CAD avançado F): "superfícies não anotadas: perfil 0,3 em relação a A|B|C" [V].
 
 **Fenkra hoje.** `Note`, `Balloon` e `TitleBlock` com `{campos}` (`pmi.rs:702`, `723`, `725`, `800`). Chamada de uma seta só (B23 prevê várias). Não há flag note como tipo (existe a moldura `BandeiraDir/Esq`, `pmi.rs:371-372`), nota numerada, tabela 3D nem nota de região.
 
@@ -310,9 +310,9 @@ Chanfro e filete existem como features, mas o PMI não as lê. O backlog B107 pr
 ### G8. GD&T completo: símbolos, modificadores e quadros
 
 **Como funciona no melhor.**
-- **Advisor:** CATIA mostra só as características válidas para o elemento selecionado, e a opção semântica é obrigatória para isso [V]. O Creo filtra símbolos pela feature e tem aba *Details* com modificadores para ISO 1101:2017 e ASME Y14.5-2018 [V]. O NX tem *PMI Advisor* com checagens personalizadas [V].
-- **Inventor 2027:** o painel de FCF tem quatro tipos de seleção (**Integral Feature, Derived Feature, All Around, All Over**), de 1 a 3 especificações por quadro (Forma, Orientação, Posição, Batimento), nós superior e inferior, e composição visual [V].
-- **SolidWorks:** arrasta o quadro sobre uma chamada de cota e os dois se fundem [V].
+- **Advisor:** CAD avançado B mostra só as características válidas para o elemento selecionado, e a opção semântica é obrigatória para isso [V]. O CAD avançado F filtra símbolos pela feature e tem aba *Details* com modificadores para ISO 1101:2017 e ASME Y14.5-2018 [V]. O CAD avançado G tem *PMI Advisor* com checagens personalizadas [V].
+- **CAD avançado C 2027:** o painel de FCF tem quatro tipos de seleção (**Integral Feature, Derived Feature, All Around, All Over**), de 1 a 3 especificações por quadro (Forma, Orientação, Posição, Batimento), nós superior e inferior, e composição visual [V].
+- **CAD avançado A:** arrasta o quadro sobre uma chamada de cota e os dois se fundem [V].
 - **ASME Y14.5-2018** removeu concentricidade e simetria; trouxe **perfil dinâmico**; renomeou "dual datum" para *Common Datum Features* e "datum feature simulator" para *True Geometric Counterpart*; CF dispensa o `nX` [V]. O ISO 1101 continua com 14.
 
 **Fenkra hoje.**
@@ -333,7 +333,7 @@ Chanfro e filete existem como features, mas o PMI não as lê. O backlog B107 pr
 8. Coaxialidade e concentricidade são entidades separadas no AP242 (Tabela 12 do RP) [V]. A distinção de uso entre as duas na ISO 1101 é [C].
 9. A dica do modificador Ⓢ ("independente", `pmi_ui.rs`, texto de ajuda) não corresponde a símbolo da ASME 2018 nem da ISO 1101 (independência da ISO 8015 usa Ⓘ) [C]. Revisar.
 
-**Regras que evitam erro** (mensagens do Inventor Advisor, que servem de lista de regras) [V]:
+**Regras que evitam erro** (mensagens do CAD avançado C Advisor, que servem de lista de regras) [V]:
 - "Tolerância de forma deve ser menor que a de tamanho."
 - "Tolerância no segundo nível deve ser menor que a do nível anterior" (composto).
 - "Zona projetada deve ser maior que zero."
@@ -353,10 +353,10 @@ Chanfro e filete existem como features, mas o PMI não as lê. O backlog B107 pr
 ### G9. Datums, DRF e alvos de referência
 
 **Como funciona no melhor.**
-- **CATIA:** o datum simples nasce selecionando a face e escolhendo o ícone no Advisor. O **sistema** (A|B|C) exige datums prévios; adiciona primário, secundário e terciário em ordem [V]. Datum comum (A-B) e **datum targets**/áreas restritas têm tópicos próprios [V].
-- **Inventor:** *DRF* com primário/secundário/terciário e modificadores, editável com *Edit DRF*; *Datum Target* com Ponto, Círculo e Retângulo (**tipo imutável depois de criado**), também em montagem e soldagem desde o 2027 [V]. Só **um** identificador por face plana [V]. Mensagens: "DRF não referenciado", "Especificação do DRF incompleta", "Orientação do datum secundário não permitida", "Referência do alvo ausente" [V].
-- **Creo:** monta o **DRF predominante**, sugere as primeiras features e exige restringir os 6 graus de liberdade (exceto peças simétricas). Co-datum com três features e datum PNT (esfera/soquete) **não** são suportados no Advisor [V].
-- **NX:** o Advisor só passou a aceitar datum target como referência na 2212 [V].
+- **CAD avançado B:** o datum simples nasce selecionando a face e escolhendo o ícone no Advisor. O **sistema** (A|B|C) exige datums prévios; adiciona primário, secundário e terciário em ordem [V]. Datum comum (A-B) e **datum targets**/áreas restritas têm tópicos próprios [V].
+- **CAD avançado C:** *DRF* com primário/secundário/terciário e modificadores, editável com *Edit DRF*; *Datum Target* com Ponto, Círculo e Retângulo (**tipo imutável depois de criado**), também em montagem e soldagem desde o 2027 [V]. Só **um** identificador por face plana [V]. Mensagens: "DRF não referenciado", "Especificação do DRF incompleta", "Orientação do datum secundário não permitida", "Referência do alvo ausente" [V].
+- **CAD avançado F:** monta o **DRF predominante**, sugere as primeiras features e exige restringir os 6 graus de liberdade (exceto peças simétricas). Co-datum com três features e datum PNT (esfera/soquete) **não** são suportados no Advisor [V].
+- **CAD avançado G:** o Advisor só passou a aceitar datum target como referência na 2212 [V].
 
 **Fenkra hoje.** `Datum { letter: String }` na âncora clicada (`pmi.rs:713`), símbolo em `pmi_draw.rs:518`. O quadro GD&T guarda os datums como texto ("A B C", `pmi.rs:865`), **sem vínculo** com a anotação `Datum`. Letras duplicadas são aceitas; apagar um `Datum` deixa o quadro apontando para uma letra inexistente. Sem datum target, DRF, datum comum nem tipo de datum.
 
@@ -372,7 +372,7 @@ Chanfro e filete existem como features, mas o PMI não as lê. O backlog B107 pr
 ### G10. Acabamento superficial e solda
 
 **Rugosidade.**
-- **Estado das normas:** a ISO 21920-1 (EN 2022) substitui a ISO 1302; traz novos elementos de especificação, e a regra de aceitação padrão passou a ser a do **máximo** [V]. O SolidWorks 2025 SP1 suporta ISO 21920 além de ISO 1302:2002 e 1992 [V]. O símbolo com barra para a nova norma [C, só citado em fonte secundária].
+- **Estado das normas:** a ISO 21920-1 (EN 2022) substitui a ISO 1302; traz novos elementos de especificação, e a regra de aceitação padrão passou a ser a do **máximo** [V]. O CAD avançado A 2025 SP1 suporta ISO 21920 além de ISO 1302:2002 e 1992 [V]. O símbolo com barra para a nova norma [C, só citado em fonte secundária].
 - **O que o AP242 faz:** não há entidade de textura no RP v4.1 [V por ausência]. Segundo `pmi.md`, o CAD Exchanger usa `SurfaceFinishComponent` com textura, método e sobremetal [V de pesquisa anterior]; o OCCT/XCAF não tem equivalente [V por ausência de enum].
 - **Fenkra:** `Roughness { ra, process }` (`pmi.rs:704`), desenhado como "√ Ra x (processo)". Faltam: símbolo "remoção obrigatória/proibida", outros parâmetros (Rz, Rmax, Rq), limite superior/inferior, comprimento de amostragem, direção de lay, sobremetal, "todo o contorno", norma e textura de área.
 - **Regra:** a rugosidade é **atributo da face**, não do ponto. A âncora referencia a face; o valor viaja como propriedade quando houver exportação.
@@ -387,19 +387,19 @@ Chanfro e filete existem como features, mas o PMI não as lê. O backlog B107 pr
 ### G11. Auto cotagem e verificação do esquema
 
 **Como funciona no melhor.**
-- **SolidWorks Auto Dimension Scheme:** escolher tipo de peça, tipo de tolerância (*Plus and Minus* ou *Geometric*), tipo de cota de padrão (linear, polar); definir os datums primário, secundário e terciário; selecionar as features; revisar. O esquema geométrico impõe: planeza no primário, perpendicularidade no secundário em relação a A, posição no terciário em relação a A e B [V].
-- **Show Tolerance Status (SW):** face verde = totalmente restringida, amarela = sub, vermelha = sobre, cor original = sem dado [V].
-- **Inventor:** *Tolerance Advisor* com 39 mensagens e *Face Status Coloring* desde 2019 [V].
-- **Creo:** *Advisor Tree* com graus de liberdade pendentes; verde/cinza/azul (coberta pela nota de perfil geral) [V]. *Create Selected* gera as cotas de furos, eixos, rasgos, placas e furos oblongos [V].
-- **NX:** *MBD logical rules* na biblioteca de reutilização, com pastas Dimensions, Datums e Feature Control Frames [V]. Duplo clique na regra e responder aos prompts aplica as anotações.
-- **CATIA:** *Generating Check Report* e o Advisor que bloqueia tolerâncias inválidas [V].
+- **CAD avançado A Auto Dimension Scheme:** escolher tipo de peça, tipo de tolerância (*Plus and Minus* ou *Geometric*), tipo de cota de padrão (linear, polar); definir os datums primário, secundário e terciário; selecionar as features; revisar. O esquema geométrico impõe: planeza no primário, perpendicularidade no secundário em relação a A, posição no terciário em relação a A e B [V].
+- **Show Tolerance Status (CAD avançado A):** face verde = totalmente restringida, amarela = sub, vermelha = sobre, cor original = sem dado [V].
+- **CAD avançado C:** *Tolerance Advisor* com 39 mensagens e *Face Status Coloring* desde 2019 [V].
+- **CAD avançado F:** *Advisor Tree* com graus de liberdade pendentes; verde/cinza/azul (coberta pela nota de perfil geral) [V]. *Create Selected* gera as cotas de furos, eixos, rasgos, placas e furos oblongos [V].
+- **CAD avançado G:** *MBD logical rules* na biblioteca de reutilização, com pastas Dimensions, Datums e Feature Control Frames [V]. Duplo clique na regra e responder aos prompts aplica as anotações.
+- **CAD avançado B:** *Generating Check Report* e o Advisor que bloqueia tolerâncias inválidas [V].
 
 **Fenkra hoje.** Nada além de balões automáticos em montagem (`auto_balloons`, `pmi_ui.rs:140`). B38 (P3) cobre o consultor, mas só em uma linha.
 
 **Regras que evitam erro:**
 - Dois níveis: (1) assistente de DRF + esquema por peça, tudo editável e marcado "gerado", regenerável sem apagar edições manuais; (2) regras de PMI reutilizáveis por tipo de feature ("furo passante → Ø com H12 + nota de rosca").
 - Verificação em três camadas: sintática (sempre ligada), de esquema (sob demanda; graus de liberdade, faces sem requisito) e de norma (símbolos removidos).
-- "Completo" é meta opcional: oferecer modo "tudo explícito" e "mínimo para fabricar" (princípio do SW).
+- "Completo" é meta opcional: oferecer modo "tudo explícito" e "mínimo para fabricar" (princípio do CAD avançado A).
 - Colorir faces (verde/amarelo/vermelho/cinza) com clique que realça a anotação.
 
 **Saída AP242.** Não aplicável (é fluxo de autoria), mas o resultado **gerado** sai como PMI comum. As propriedades de validação (RP §10) são geradas na exportação [V].
@@ -450,40 +450,40 @@ O critério é "o que dá resultado errado primeiro, depois o que destrava o res
 - [CAx-IF Recommended Practices for the Representation and Presentation of PMI (AP242) v4.1, 20/06/2024](https://www.mbx-if.org/home/wp-content/uploads/2024/06/rec_pracs_pmi_v41.pdf): seções 5.1 a 5.4, 6.3 a 6.9, 7, 8, 9.4.
 - [NIST STEP File Analyzer and Viewer](https://www.nist.gov/services-resources/software/step-file-analyzer-and-viewer)
 
-**CATIA V5** [V parcial]
-- [Dimensions (CATIA Drafting, lista de comandos)](https://www.staff.city.ac.uk/~ra600/ME2105/Catia%20course/CATIA%20Tutorials/driug_C2/driugbt0600.htm)
-- [Creating Curvilinear Length Dimensions](https://catiahelp.azurewebsites.net/English/GdrUserMap/id13dmaster-t-Dimensions-CurvilinearLengthDimension.htm)
-- [Creating Chamfer Dimensions](https://catiahelp.azurewebsites.net/English/Id1UserMap/id13dmaster-t-Dimensions-ChamferDimension.htm)
+**CAD avançado B** [V parcial]
+- Dimensions (CAD avançado B Drafting, lista de comandos)
+- Creating Curvilinear Length Dimensions
+- Creating Chamfer Dimensions
 - [IBM APAR HD51528 (chamfer dimension em superfícies curvas)](https://www.ibm.com/support/pages/apar/HD51528)
 - [IBM Support 5342649 (Linear Size via Semantic Tolerancing Advisor)](https://www.ibm.com/support/pages/node/5342649)
 - [3DCS: Using the Tolerance Advisor / Useful FT&A settings](https://community.3dcs.com/help_manual/v5ftacreation.htm)
-- [Ascent: CATIA V5-6R2023 Functional Tolerancing and Annotation](https://ascented.com/courseware/product/catia-v5-6r2023-functional-tolerancing-and-annotation)
+- Ascent: CAD avançado B-6R2023 Functional Tolerancing and Annotation
 
-**SOLIDWORKS MBD / DimXpert** [V parcial]
+**CAD avançado A MBD / DimXpert** [V parcial]
 - [Engineers Rule: chanfro, cone e cota de referência no MBD](https://www.engineersrule.com/?p=1241)
-- [DimXpert Size Dimension: features suportadas (resultado de busca; página não renderiza)](https://help.solidworks.com/2025/English/SolidWorks/sldworks/c_dimxpert_size_supported_features.htm)
-- [DimXpert Location Dimension](https://help.solidworks.com/2017/english/SolidWorks/sldworks/c_dimxpert_location_dimension.htm)
-- [SOLIDWORKS MBD 2023 (GoEngineer)](https://www.goengineer.com/solidworks-2023)
-- [SOLIDWORKS 2024 What's New: MBD](https://help.solidworks.com/2024/English/WhatsNew/c_wn_mbd.htm)
-- [SOLIDWORKS 2025: símbolos ISO 21920](https://help.solidworks.com/2025/English/WhatsNew/c_wn2025_drawings_iso_standard_surf_fin_symb.htm)
-- [Central Innovation: SOLIDWORKS MBD](https://centralinnovation.com/software/solidworks/solidworks-mbd/)
+- DimXpert Size Dimension: features suportadas (resultado de busca; página não renderiza)
+- DimXpert Location Dimension
+- CAD avançado A MBD 2023 (GoEngineer)
+- CAD avançado A 2024 What's New: MBD
+- CAD avançado A 2025: símbolos ISO 21920
+- Central Innovation: CAD avançado A MBD
 
-**Inventor / Fusion**
-- [Sobre anotação 3D e MBD](https://help.autodesk.com/cloudhelp/2020/ENU/Inventor-Help/files/GUID-B8779786-A71C-4A5C-B9A9-7EB1A9918946.htm)
-- [Inventor 2024: anotação 3D e MBD](https://help.autodesk.com/cloudhelp/2024/ENU/Inventor-WhatsNew/files/GUID-FB6DF8DA-9009-4DAD-9277-2CA2A6DF34EA.htm)
-- [Inventor 2027: melhorias de MBD](https://help.autodesk.com/cloudhelp/2027/ENU/Inventor-WhatsNew/files/INV2027-MDB.htm)
-- [Autodesk: Inventor 3D Annotations (blog)](https://forums.autodesk.com/t5/community-blog/inventor-3d-annotations/ba-p/11338528): só o resumo da busca; página deu 403.
-- [Fusion: PMI (blog Autodesk)](https://www.autodesk.com/products/fusion-360/blog/product-manufacturing-information-comes-to-fusion-keep-manufacturing-intent-with-the-model/): só o resumo da busca; página deu 403.
-- [Fusion API: PMIAnnotation](https://help.autodesk.com/cloudhelp/ENU/Fusion-360-API/files/PMIAnnotation.htm)
+**CAD avançado C / Fusion**
+- Sobre anotação 3D e MBD
+- CAD avançado C 2024: anotação 3D e MBD
+- CAD avançado C 2027: melhorias de MBD
+- fornecedor de CAD avançado: CAD avançado C 3D Annotations (blog): só o resumo da busca; página deu 403.
+- Fusion: PMI (blog fornecedor de CAD avançado): só o resumo da busca; página deu 403.
+- Fusion API: PMIAnnotation
 
-**Creo**
-- [Limitações do GD&T Advisor (R12)](https://support.ptc.com/help/creo/creo_pma/r12/usascii/model-based_definition/limitations.html)
-- [GD&T Advisor Enhancements (R9)](https://support.ptc.com/help/creo/creo_pma/r9.0/usascii/whats_new_pma/gdt_advisor_enhancements.html)
+**CAD avançado F**
+- Limitações do GD&T Advisor (R12)
+- GD&T Advisor Enhancements (R9)
 
-**NX**
-- [NX Tips and Tricks: PMI](https://blogs.sw.siemens.com/designcenter/nx-tips-and-tricks-pmi/)
-- [NXOpen OrdinateDimension](https://docs.plm.automation.siemens.com/data_services/resources/nx/10/nx_api/en_US/custom/nxopen_python_ref/NXOpen.Annotations.OrdinateDimension.html) e [ChainDimension](https://docs.plm.automation.siemens.com/data_services/resources/nx/12/nx_api/custom/en_US/nxopen_python_ref/NXOpen.Annotations.ChainDimension.html) (só o resumo da busca)
-- [TU Darmstadt: PMI no NX, anotações](https://www.iim.maschinenbau.tu-darmstadt.de/CAD-Tutorial/9_pmi/1_pmi_on_stangen_querverbinder/5_annotations/index.en.html)
+**CAD avançado G**
+- CAD avançado G Tips and Tricks: PMI
+- NXOpen OrdinateDimension e ChainDimension (só o resumo da busca)
+- [TU Darmstadt: PMI no CAD avançado G, anotações](https://www.iim.maschinenbau.tu-darmstadt.de/CAD-Tutorial/9_pmi/1_pmi_on_stangen_querverbinder/5_annotations/index.en.html)
 
 **FreeCAD**
 - [TechDraw Workbench](https://wiki.freecad.org/TechDraw_Workbench/id) e [TechDraw HorizontalExtentDimension](https://wiki.freecad.org/TechDraw_HorizontalExtentDimension): só resumo da busca; a página direta foi bloqueada. O workbench Assembly e o TechDraw não têm PMI 3D [C].
@@ -503,7 +503,7 @@ O critério é "o que dá resultado errado primeiro, depois o que destrava o res
 - **Arquivos alterados:** nenhum no projeto. O PDF do CAx-IF foi baixado pela ferramenta de leitura e extraído para texto no scratchpad.
 - **Checagens feitas:** leitura dos enums do OCCT direto do GitHub; leitura do texto do RP v4.1 (seções 5.1–5.4, 6.3–6.9); conferência das linhas citadas do Fenkra.
 - **Não conseguido:**
-  - leitura direta da ajuda do SolidWorks, do guia FT&A do CATIA, dos docs do NX e do FreeCAD;
+  - leitura direta da ajuda do CAD avançado A, do guia FT&A do CAD avançado B, dos docs do CAD avançado G e do FreeCAD;
   - lista oficial de cotas do Fusion;
   - significado dos códigos ISO 14405-1 (LP, GG, GX…).
   
@@ -514,4 +514,4 @@ O critério é "o que dá resultado errado primeiro, depois o que destrava o res
   - A afirmação sobre Ⓢ (item 9 da ficha G8) é [C] e precisa ser conferida na norma.
 
 STATUS: DONE_WITH_CONCERNS
-SUMMARY: Catálogo de ~90 tipos de cota e anotação 3D comparado entre CATIA, SolidWorks, Inventor, Creo, NX, Fusion e FreeCAD, com o gap do Fenkra (cotas só ponto a ponto, tolerância em texto, sem datum target nem AP242 semântico) e 8 itens novos; as células do CATIA, SolidWorks, NX, Fusion e FreeCAD vêm de fontes secundárias, porque as ajudas oficiais não abriram.
+SUMMARY: Catálogo de ~90 tipos de cota e anotação 3D comparado entre CAD avançado B, CAD avançado A, CAD avançado C, CAD avançado F, CAD avançado G, CAD avançado D e FreeCAD, com o gap do Fenkra (cotas só ponto a ponto, tolerância em texto, sem datum target nem AP242 semântico) e 8 itens novos; as células do CAD avançado B, CAD avançado A, CAD avançado G, CAD avançado D e FreeCAD vêm de fontes secundárias, porque as ajudas oficiais não abriram.

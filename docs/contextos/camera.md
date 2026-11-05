@@ -4,12 +4,12 @@
 COMO CADA SOFTWARE FAZ A MOVIMENTAÇÃO DE CÂMERA
 Abaixo está a análise detalhada que você pediu.
 
-🟦 CATIA V5 — O padrão que você quer copiar
+🟦 CAD avançado B — O padrão que você quer copiar
 🎯 Característica principal:
 Orbit sempre em torno do ponto selecionado ou do centro do modelo.
 
 🧠 Como funciona:
-CATIA define um Target Point fixo.
+CAD avançado B define um Target Point fixo.
 
 A câmera gira ao redor desse ponto usando:
 
@@ -36,14 +36,14 @@ Ideal para CAD mecânico
 Código
 camera.target = selected_point_or_center;
 camera.rotateAround(camera.target, deltaX, deltaY);
-🟨 SolidWorks — Orbit com foco no cursor
+🟨 CAD avançado A — Orbit com foco no cursor
 🎯 Característica:
 Orbit baseado no ponto sob o cursor.
 
 🧠 Como funciona:
 Quando o usuário segura o botão do mouse:
 
-SolidWorks faz um raycast
+CAD avançado A faz um raycast
 
 Encontra o ponto 3D sob o cursor
 
@@ -60,7 +60,7 @@ Pode “pular” se não houver geometria sob o cursor
 Código
 target = raycast(cursor_position);
 camera.rotateAround(target);
-🟧 Fusion 360 — Orbit livre + pivot inteligente
+🟧 CAD avançado D — Orbit livre + pivot inteligente
 🎯 Característica:
 Pivot automático baseado na geometria mais próxima.
 
@@ -117,7 +117,7 @@ Não ideal para CAD mecânico
 📌 Implementação no FEKRA:
 Código
 camera.rotateSelf(deltaX, deltaY);
-🟥 Inventor — Turntable + Orbit híbrido
+🟥 CAD avançado C — Turntable + Orbit híbrido
 🎯 Característica:
 Orbit com eixo fixo vertical.
 
@@ -134,9 +134,9 @@ Muito estável
 📌 Implementação no FEKRA:
 Código
 camera.rotateAround(target, yaw_globalZ, pitch_localX);
-🟫 Rhino — Orbit livre com foco no cursor
+🟫 CAD avançado I — Orbit livre com foco no cursor
 🎯 Característica:
-Orbit semelhante ao SolidWorks.
+Orbit semelhante ao CAD avançado A.
 
 🧠 Como funciona:
 Raycast no cursor
@@ -151,9 +151,9 @@ Bom para superfícies
 ⭐ COMO IMPLEMENTAR O SISTEMA DE CÂMERA NO FEKRA (O QUE VOCÊ REALMENTE QUER)
 Você quer que o FEKRA tenha:
 
-Orbit estilo CATIA V5 como padrão
+Orbit estilo CAD avançado B como padrão
 
-Opções de estilo SolidWorks, Fusion, Inventor, etc.
+Opções de estilo CAD avançado A, CAD avançado D, CAD avançado C, etc.
 
 Igual ao menu que você mostrou na imagem
 
@@ -171,29 +171,29 @@ Camera {
 2. Modos de orbit
 Código
 enum OrbitMode {
-    CATIA,
-    SOLIDWORKS,
+    CAD avançado B,
+    CAD avançado A,
     FUSION,
-    INVENTOR,
+    CAD avançado C,
     FREECAD,
     BLENDER,
-    RHINO,
-    ONSHAPE
+    CAD avançado I,
+    CAD avançado E
 }
 3. Função principal
 Código
 void orbit(deltaX, deltaY) {
     switch (orbitMode) {
-        case CATIA:
+        case CAD avançado B:
             orbitAroundFixedTarget(deltaX, deltaY);
             break;
-        case SOLIDWORKS:
+        case CAD avançado A:
             orbitAroundCursorRaycast(deltaX, deltaY);
             break;
         case FUSION:
             orbitAroundNearestGeometry(deltaX, deltaY);
             break;
-        case INVENTOR:
+        case CAD avançado C:
             orbitTurntable(deltaX, deltaY);
             break;
         case BLENDER:
@@ -202,7 +202,7 @@ void orbit(deltaX, deltaY) {
         ...
     }
 }
-🔥 POR QUE O ORBITA DO CATIA DEVE SER PADRÃO NO FEKRA
+🔥 POR QUE O ORBITA DO CAD avançado B DEVE SER PADRÃO NO FEKRA
 Porque:
 
 é o mais estável
@@ -215,15 +215,15 @@ nunca perde o modelo
 
 evita frustração de usuário iniciante
 
-SolidWorks e Fusion são ótimos, mas o CATIA é o mais profissional.
+CAD avançado A e Fusion são ótimos, mas o CAD avançado B é o mais profissional.
 
 
 mais rápido que o Shift + Scroll.
 
 Vamos destrinchar isso com precisão cirúrgica.
 
-🎯 CATIA V5 — Duplo clique no scroll = Recenter automático
-No CATIA V5, o gesto:
+🎯 CAD avançado B — Duplo clique no scroll = Recenter automático
+No CAD avançado B, o gesto:
 
 🖱️ Duplo clique no scroll (botão do meio)
 executa o comando:
@@ -231,7 +231,7 @@ executa o comando:
 🔵 Recenter View (redefinir o pivot da órbita)
 Ou seja:
 
-CATIA faz um raycast no ponto da geometria onde o cursor está
+CAD avançado B faz um raycast no ponto da geometria onde o cursor está
 
 Esse ponto vira o novo centro da órbita
 
@@ -239,8 +239,8 @@ A câmera passa a girar exatamente ao redor desse ponto
 
 É o mesmo efeito do Shift + Middle Mouse Button, só que mais rápido
 
-🧠 Como o CATIA interpreta esse gesto
-Quando você dá duplo clique no scroll, o CATIA faz:
+🧠 Como o CAD avançado B interpreta esse gesto
+Quando você dá duplo clique no scroll, o CAD avançado B faz:
 
 Verifica se o cursor está sobre geometria
 
@@ -254,10 +254,10 @@ Se não estiver:
 
 usa o centro da bounding box como fallback
 
-Isso é o que faz o CATIA ser tão estável e previsível.
+Isso é o que faz o CAD avançado B ser tão estável e previsível.
 
 🔥 Por que isso é importante para o FEKRA
-Se você quer que o FEKRA tenha navegação estilo CATIA como padrão, você precisa implementar exatamente esse comportamento:
+Se você quer que o FEKRA tenha navegação estilo CAD avançado B como padrão, você precisa implementar exatamente esse comportamento:
 
 ✔ Duplo clique no scroll → Recenter
 Raycast no cursor
@@ -269,7 +269,7 @@ Atualiza a órbita imediatamente
 ✔ Scroll + arrastar → Orbit
 ✔ Scroll + Shift → Pan
 ✔ Scroll + Ctrl → Zoom suave
-Esse conjunto é o que faz o CATIA ser tão “profissional” na navegação.
+Esse conjunto é o que faz o CAD avançado B ser tão “profissional” na navegação.
 
 🧩 Implementação no FEKRA (lógica exata)
 Evento:
@@ -285,7 +285,7 @@ Orbit gira ao redor do novo target
 
 Pan e zoom continuam relativos ao target
 
-Navegação fica idêntica ao CATIA
+Navegação fica idêntica ao CAD avançado B
 
 🎯 Resumo rápido
 Ação	Gesto	Efeito

@@ -5,7 +5,7 @@
   "nivel": "C",
   "licenca": "CC BY 4.0 (dados)",
   "fontes": [
-    "DIN 6885-1 / ISO R773: tabela de referência do contexto do projeto (fonte 1, todas as colunas)",
+    "DIN 6885-1 / ISO R773: origem não verificada (rótulo antigo: contexto do projeto). PENDENTE de fonte A ou B citável; ver docs/biblioteca/POLITICA-DE-DADOS.md",
     "J.W. Winco, DIN 6885 Parallel Keys Steel (faixas do eixo e b×h de 2×2 a 12×8): https://www.jwwinco.com/en-us/products/3.2-Mounting-Positioning-Leveling-with-Retaining-Cables-Screws-Clamping-and-Supporting-Elements/Positioning-elements-Clamping-pads/DIN-6885-Steel-Parallel-Keys",
     "Global Fastener, DIN 6885 (b×h de 8×7 a 22×14): https://www.globalfastener.com/standards/detail_20214.html",
     "TU Dortmund, prova exemplo TZ WS10/11 (t1 de 6×6 e 10×8): https://lkp.mb.tu-dortmund.de/storages/me-mb/r/dokumente/Klausuren/Beispielklausuren/Klausur_bspl_TZ_WS1011.pdf"

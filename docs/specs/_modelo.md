@@ -18,7 +18,7 @@ Descrição passo a passo, com nossas palavras.
 - O que acontece quando ...
 
 ## 5. Comparação com outros CADs (resumo próprio, sem copiar texto)
-| Aspecto | SolidWorks | Fusion | CATIA | FreeCAD |
+| Aspecto | CAD avançado A | CAD avançado D | CAD avançado B | FreeCAD |
 |---|---|---|---|---|
 
 ## 6. O que faremos diferente / melhor

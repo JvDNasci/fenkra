@@ -9,9 +9,9 @@
 > - Quando só tenho o resumo de uma busca (a página inteira deu 403 ou não carregou), escrevo "(resumo de busca)".
 >
 > **Limitações:**
-> - As páginas help.solidworks.com carregam por JavaScript e voltaram só com a navegação do site. Para o SolidWorks usei blogs de revendas, resumos de busca e o que já conheço.
+> - As páginas help.CAD avançado A.com carregam por JavaScript e voltaram só com a navegação do site. Para o CAD avançado A usei blogs de revendas, resumos de busca e o que já conheço.
 > - Vários blogs (Javelin, Hawk Ridge, 3DCS, PLM Group) devolveram 403.
-> - Não consegui nenhuma fonte pública detalhada sobre Creo/Windchill, NX/Teamcenter nem Solid Edge. Esses três ficam como [C] ou ausentes.
+> - Não consegui nenhuma fonte pública detalhada sobre CAD avançado F/PLM avançado, CAD avançado G/PLM avançado nem CAD avançado H. Esses três ficam como [C] ou ausentes.
 
 ---
 
@@ -19,13 +19,13 @@
 
 **Resumo (10 linhas)**
 
-1. O CATIA V5 separa "o que está na memória" de "o que está no disco" com o **Save Management**. Ele mostra cada documento (estado, nome, caminho, ação) e deixa decidir Salvar, Salvar como ou Salvar Auto antes de gravar qualquer coisa. [V]
-2. **Propagate Directory** e **Send To** existem porque, no CATIA, um link entre arquivos é nome mais caminho. Copiar um produto exige reapontar todos os links de uma vez. [V]
-3. O **Pack and Go** do SolidWorks e o do Inventor resolvem o mesmo problema com mais opções: layout plano ou hierárquico, prefixo/sufixo, zip, desenhos, bibliotecas, log. [V]
-4. As referências são frágeis em todos eles e todos têm uma ordem de busca. SolidWorks: memória, pastas de Referenced Documents, pasta da montagem, último caminho, caminho salvo, depois "Browse". Inventor: workspace, workgroup, bibliotecas, depois o diálogo Resolve Link. [V]
+1. O CAD avançado B separa "o que está na memória" de "o que está no disco" com o **Save Management**. Ele mostra cada documento (estado, nome, caminho, ação) e deixa decidir Salvar, Salvar como ou Salvar Auto antes de gravar qualquer coisa. [V]
+2. **Propagate Directory** e **Send To** existem porque, no CAD avançado B, um link entre arquivos é nome mais caminho. Copiar um produto exige reapontar todos os links de uma vez. [V]
+3. O **Pack and Go** do CAD avançado A e o do CAD avançado C resolvem o mesmo problema com mais opções: layout plano ou hierárquico, prefixo/sufixo, zip, desenhos, bibliotecas, log. [V]
+4. As referências são frágeis em todos eles e todos têm uma ordem de busca. CAD avançado A: memória, pastas de Referenced Documents, pasta da montagem, último caminho, caminho salvo, depois "Browse". CAD avançado C: workspace, workgroup, bibliotecas, depois o diálogo Resolve Link. [V]
 5. Renomear ou mover fora do CAD quebra links. A solução profissional é uma operação do gerenciador (Design Assistant, PDM Move Tree, Update References) que reescreve os dependentes. [V]
-6. PDM, Vault e ENOVIA tratam **versão** (automática a cada check-in) e **revisão** (rótulo deliberado que marca uma versão aprovada) como coisas diferentes. O Fenkra já tem essa ideia, com versão por hash e revisão A, B, C. [V]
-7. O ciclo de vida da 3DEXPERIENCE (Privado, Em trabalho, Congelado, Liberado, Obsoleto) permite transição em lote, incluindo filhos, com regra "filhos antes do pai". [V]
+6. PDM, Vault e PLM avançado tratam **versão** (automática a cada check-in) e **revisão** (rótulo deliberado que marca uma versão aprovada) como coisas diferentes. O Fenkra já tem essa ideia, com versão por hash e revisão A, B, C. [V]
+7. O ciclo de vida da plataforma PLM avançada (Privado, Em trabalho, Congelado, Liberado, Obsoleto) permite transição em lote, incluindo filhos, com regra "filhos antes do pai". [V]
 8. O Vault numera na hora do **Copy Design** e reserva o número só quando a cópia termina. Cada esquema tem no máximo uma sequência automática. [V]
 9. O Fenkra tem um índice JSON por pasta, versões endereçadas por hash e revisões congeladas, que são uma boa base. Faltam ID estável entre arquivos, Salvar tudo, Salvar como, empacotar, onde-usado, travamento, multiusuário seguro e derivados do conversor.
 10. O maior risco hoje é **perda silenciosa de dados**: abrir outro arquivo não pergunta, fechar a janela não pergunta, a escrita não é atômica e duas pessoas na mesma pasta se sobrescrevem.
@@ -73,30 +73,30 @@ Ordem das fichas:
 
 ---
 
-### Salvar e Salvar tudo (CATIA: Save / Save All / Save Management / SW: Save / Save All / Inventor: Save / Save All / outros: Fusion Save / Onshape salva sozinho / Fenkra: Ctrl+S por bancada)
+### Salvar e Salvar tudo (CAD avançado B: Save / Save All / Save Management / CAD avançado A: Save / Save All / CAD avançado C: Save / Save All / outros: Fusion Save / CAD avançado E salva sozinho / Fenkra: Ctrl+S por bancada)
 
 - **O que faz:** grava o documento ativo (Salvar) ou todos os modificados (Salvar tudo). No Fenkra, "Salvar" deveria agir sobre o documento ativo e "Salvar tudo" deveria listar cada arquivo modificado e o motivo (ADR 0011, princípio 5).
 
-- **CATIA V5 — no detalhe:**
+- **CAD avançado B — no detalhe:**
   - Save grava o documento corrente. Save All grava todos os documentos abertos e modificados. [V, EDS]
   - O guia da EDS diz que o Save Management grava só o que é novo ou modificado e deixa o resto, enquanto o Save comum reescreve o modelo todo, o que pesa em servidores. [V]
   - Em Tools ▸ Options ▸ General ▸ Data Save há três modos: sem backup automático, backup automático (padrão 30 min) e backup incremental. O incremental guarda os documentos abertos num diretório temporário, e nem toda bancada o suporta. [V]
-  - O documento só aparece como "modificado" se o CATIA detecta mudança. Documentos dependentes (componentes) ficam em Save Auto quando o pai é salvo com novo nome. [V]
+  - O documento só aparece como "modificado" se o CAD avançado B detecta mudança. Documentos dependentes (componentes) ficam em Save Auto quando o pai é salvo com novo nome. [V]
   - Um documento de só leitura não pode ser salvo no mesmo caminho. O botão Save fica indisponível para ele, e o usuário precisa de Save As. [V]
 
-- **SolidWorks — no detalhe:**
+- **CAD avançado A — no detalhe:**
   - Save grava o ativo. Save All grava todos os abertos e modificados e abre a lista de modificados com opções ("Save all", "Don't save", "Save modified"). [C]
-  - Ao salvar uma montagem, o SW grava o caminho e o nome de cada componente referenciado dentro dela. Por isso renomear fora do SW quebra o link. [V, resumo de busca de c_Saving_an_Assembly_and_Its_Components]
+  - Ao salvar uma montagem, o CAD avançado A grava o caminho e o nome de cada componente referenciado dentro dela. Por isso renomear fora do CAD avançado A quebra o link. [V, resumo de busca de c_Saving_an_Assembly_and_Its_Components]
   - Existe aviso de reconstrução e de componentes não salvos (Rebuild/Save prompt). [C]
 
-- **Inventor — no detalhe:**
+- **CAD avançado C — no detalhe:**
   - Save grava o documento ativo. Save All grava todos os abertos e modificados, e arquivos novos pedem nome e pasta. [C]
-  - Durante o Save All, o Inventor verifica as referências: um componente novo criado dentro da montagem exige destino antes. [C]
+  - Durante o Save All, o CAD avançado C verifica as referências: um componente novo criado dentro da montagem exige destino antes. [C]
   - Em projeto Vault, o arquivo só pode ser salvo se estiver em check-out. [C]
 
 - **Outros:**
-  - Fusion: o salvamento é contínuo na nuvem, e as versões só são numeradas quando criadas de propósito. [V, blog Autodesk, resumo de busca]
-  - Onshape: não há "salvar". Toda alteração entra no histórico, e a versão é um instantâneo nomeado e imutável. [V]
+  - Fusion: o salvamento é contínuo na nuvem, e as versões só são numeradas quando criadas de propósito. [V, blog fornecedor de CAD avançado, resumo de busca]
+  - CAD avançado E: não há "salvar". Toda alteração entra no histórico, e a versão é um instantâneo nomeado e imutável. [V]
 
 - **Fenkra hoje:**
   - `App::save` (`app.rs:795-829`) tem três caminhos. Revisão congelada bloqueia com aviso. Peça de projeto (`entry`) grava no projeto e cria versão por hash (`Project::save`, `lib.rs:205`). Peça avulsa grava com `std::fs::write` (`app.rs:819`) num arquivo escolhido por diálogo.
@@ -128,34 +128,34 @@ Ordem das fichas:
 
 ---
 
-### Gerenciamento de salvamento / plano de salvamento (CATIA: Save Management / SW: lista do Save All / Inventor: lista do Save All / Fenkra: inexistente)
+### Gerenciamento de salvamento / plano de salvamento (CAD avançado B: Save Management / CAD avançado A: lista do Save All / CAD avançado C: lista do Save All / Fenkra: inexistente)
 
 - **O que faz:** mostra, antes de gravar, cada documento com estado, nome, caminho e a ação que será feita, e deixa mudar nome e pasta de cada um. É o painel de controle do salvamento.
 
-- **CATIA V5 — no detalhe:**
+- **CAD avançado B — no detalhe:**
   - File ▸ Save Management abre a lista de arquivos abertos com quatro colunas. [V, tutor de montagem]
     - **State:** novo, modificado ou só leitura.
     - **Name:** nome atual, inclusive o novo depois de um Save As.
     - **Path:** local atual, inclusive o novo.
-    - **Action:** o que o CATIA fará ao clicar em OK.
+    - **Action:** o que o CAD avançado B fará ao clicar em OK.
   - Botões [V]:
     - **Save** mantém nome e local. Só vale para modificado e não somente leitura.
     - **Save As** abre diálogo para novo nome e local.
     - **Save Auto** é aplicado por padrão a dependentes modificados (componentes de uma montagem) e ao pai quando um componente é salvo com novo nome ou caminho.
     - **Propagate Directory** leva os dependentes do pai para o novo diretório depois de um Save As (ficha própria).
     - **Reset** limpa a ação só do selecionado.
-    - **Enable Independent Saves** impede que o CATIA atribua Save Auto aos dependentes. Vem desligado.
+    - **Enable Independent Saves** impede que o CAD avançado B atribua Save Auto aos dependentes. Vem desligado.
   - As ações só valem ao clicar OK. Cancel não altera nada. [V]
   - Cuidado documentado: expandir a coluna Location e conferir o caminho inteiro, senão o usuário pode sobrescrever os originais a cada gravação. [V, 3DCS, resumo de busca]
   - O tutor recomenda Save Management no lugar de Save, Save As e Save All, porque mostra o que será salvo e onde. [V]
   - Peças ligadas por link podem não aparecer com "Save" na ação após a propagação. [V, 3DCS, resumo de busca]
 
-- **SolidWorks — no detalhe:**
-  - Não há um painel único como o do CATIA. O fluxo é Save All, com a lista de modificados, e Save As com opção "Include all referenced components". [C]
+- **CAD avançado A — no detalhe:**
+  - Não há um painel único como o do CAD avançado B. O fluxo é Save All, com a lista de modificados, e Save As com opção "Include all referenced components". [C]
   - O botão Advanced do Save As abre o **Save As with References**, uma tabela editável por duplo clique. Células editadas ficam verdes, e o menu de contexto traz "Undo change". Dá para colocar prefixo ou sufixo em todos. [V, resumo de busca]
   - Se um componente é renomeado nessa tabela, as edições nele afetam só a cópia nova, não o original. [V, resumo de busca]
 
-- **Inventor — no detalhe:**
+- **CAD avançado C — no detalhe:**
   - Não há painel equivalente no Save. A lista de dependentes aparece no Save All. [C]
   - O Copy Design do Vault tem painel com o arquivo original e o novo nome, por esquema de numeração (ficha 19). [V]
 
@@ -168,7 +168,7 @@ Ordem das fichas:
     - *Suporte:* conjunto de documentos abertos (peça ativa, peças em edição, montagem, desenhos, derivados).
     - *Modo:* Salvar tudo (padrão), Salvar só selecionados, Salvar como.
     - *Parâmetros:* por linha, com colunas **Estado** (Novo, Editado, Dependência, Derivado desatualizado, Só leitura, Conflito no disco), **Nome**, **Pasta**, **Ação** (Salvar, Salvar como, Ignorar).
-    - *Avançado:* "Habilitar salvamentos independentes" (copiando o botão do CATIA), versão do projeto e comentário da versão.
+    - *Avançado:* "Habilitar salvamentos independentes" (copiando o botão do CAD avançado B), versão do projeto e comentário da versão.
   - **Regras:**
     - Novo documento exige nome e pasta (nunca grava em lugar adivinhado).
     - Pasta fora da pasta da montagem mostra aviso de caminho absoluto.
@@ -182,32 +182,32 @@ Ordem das fichas:
 
 ---
 
-### Salvar como e cópias (CATIA: Save As / Save As New / SW: Save As, Save as copy and continue / open / Inventor: Save As, Save Copy As / Fenkra: ausente)
+### Salvar como e cópias (CAD avançado B: Save As / Save As New / CAD avançado A: Save As, Save as copy and continue / open / CAD avançado C: Save As, Save Copy As / Fenkra: ausente)
 
 - **O que faz:** grava com outro nome ou local. Há duas intenções diferentes: **renomear o mesmo documento** (links acompanham) e **criar um documento novo a partir deste** (identidade nova).
 
-- **CATIA V5 — no detalhe:**
-  - Save As renomeia a peça mantendo o identificador (citação de documentação da Dassault em uma resposta do Eng-Tips). Já Send To / New From gera nome e UUID novos. [V, fórum]
+- **CAD avançado B — no detalhe:**
+  - Save As renomeia a peça mantendo o identificador (citação de documentação da fornecedor de CAD avançado em uma resposta do Eng-Tips). Já Send To / New From gera nome e UUID novos. [V, fórum]
   - A opção "Save as new document" não existe no Save Management (mesma discussão). [V, fórum]
   - Problema conhecido: Save As quando duas peças com o mesmo identificador estão no mesmo produto. [V, fórum]
   - Exportar para formato neutro (STEP, IGES) também é Save As. [V, EDS]
-  - Tools ▸ Downward Compatibility ▸ Save grava para uma versão anterior do CATIA. [V, EDS]
+  - Tools ▸ Downward Compatibility ▸ Save grava para uma versão anterior do CAD avançado B. [V, EDS]
 
-- **SolidWorks — no detalhe:** [V, resumo de busca de AFX_HIDD_FILESAVE]
+- **CAD avançado A — no detalhe:** [V, resumo de busca de AFX_HIDD_FILESAVE]
   - **Save as copy and continue:** grava a cópia com novo nome ou caminho sem trocar o documento ativo.
   - **Save as copy and open:** a cópia vira o documento ativo e o original continua aberto.
   - **Include all referenced components** (montagem): copia todos os componentes referenciados para o novo local, com prefixo ou sufixo.
   - **Advanced** abre o Save As with References (tabela editável, verde em edição, Undo change). Também há "Save all as copy".
   - Salvar com nome novo em Pack and Go é outro caminho (ficha 6).
 
-- **Inventor — no detalhe:**
+- **CAD avançado C — no detalhe:**
   - Save As muda o nome e o caminho e atualiza os links dos arquivos da sessão. Save Copy As não troca o documento aberto. [C]
-  - A API `FileSaveAs` (Apprentice) atualiza os links do arquivo salvo, mas só nos arquivos que também foram incluídos no mesmo salvamento. [V, blog Autodesk]
+  - A API `FileSaveAs` (Apprentice) atualiza os links do arquivo salvo, mas só nos arquivos que também foram incluídos no mesmo salvamento. [V, blog fornecedor de CAD avançado]
   - Design Assistant e Vault Copy Design são os caminhos "de verdade" para copiar um conjunto (fichas 8 e 19).
 
 - **Outros:**
-  - Fusion: o Save As gera uma cópia que ainda aponta, nas referências externas, para os projetos originais, e os contextos de montagem são quebrados. Ganhou depois a opção **Include Drawings**. [V, ajuda Autodesk e blog]
-  - Onshape: copiar documento ou criar **branch** dentro do mesmo documento. O blog da Onshape sugere branch quando o novo PN substitui o antigo, e documento novo quando os dois vivem por muito tempo com donos próprios. [V]
+  - Fusion: o Save As gera uma cópia que ainda aponta, nas referências externas, para os projetos originais, e os contextos de montagem são quebrados. Ganhou depois a opção **Include Drawings**. [V, ajuda fornecedor de CAD avançado e blog]
+  - CAD avançado E: copiar documento ou criar **branch** dentro do mesmo documento. O blog da CAD avançado E sugere branch quando o novo PN substitui o antigo, e documento novo quando os dois vivem por muito tempo com donos próprios. [V]
 
 - **Fenkra hoje:**
   - Não existe Salvar como em nenhuma bancada. Peça avulsa sem arquivo abre diálogo, depois grava no mesmo caminho para sempre (`app.rs:811-828`). Montagem idem (`asm_ui.rs:922-925`). Desenho tem `ask: bool` (`dwg_ui.rs:303-311`) e reescreve os caminhos das fontes quando a pasta muda (`dwg_ui.rs:312-336`). É o único trecho que faz isso.
@@ -225,7 +225,7 @@ Ordem das fichas:
   - **Regras:**
     - A cópia nunca herda revisão nem estado Liberado, e começa Em trabalho sem revisões (como `duplicate`).
     - Dois arquivos no destino com o mesmo nome bloqueiam, e a tabela marca o conflito.
-    - Referências para fora da árvore copiada ficam apontando para os originais, e a tabela avisa (comportamento do Fusion, mas visível).
+    - Referências para fora da árvore copiada ficam apontando para os originais, e a tabela avisa (comportamento do CAD avançado D, mas visível).
   - **Casos de teste:**
     - Salvar como numa montagem de 3 níveis com prefixo `B_`: todas as referências da cópia apontam para arquivos `B_*`.
     - Cópia e continuar não altera o título nem o `file` do documento ativo.
@@ -234,22 +234,22 @@ Ordem das fichas:
 
 ---
 
-### Propagar diretório e Enviar para (CATIA: Propagate Directory / Send To / SW: Pack and Go (parcial) / Inventor: Pack and Go (parcial) / Fenkra: ausente)
+### Propagar diretório e Enviar para (CAD avançado B: Propagate Directory / Send To / CAD avançado A: Pack and Go (parcial) / CAD avançado C: Pack and Go (parcial) / Fenkra: ausente)
 
 - **O que faz:** leva um produto inteiro, com todos os componentes, para outra pasta mantendo os links consistentes.
 
-- **CATIA V5 — no detalhe:**
+- **CAD avançado B — no detalhe:**
   - **Propagate Directory** (dentro do Save Management): selecionar o produto de topo, Save As para a nova pasta, depois Propagate Directory. Todos os CATPart e CATProduct passam a mostrar "Save" na coluna Ação. OK executa a cópia. Gravar de volta no local original pede confirmação de sobrescrita arquivo por arquivo. [V, 3DCS]
   - Propaga o diretório de **um** arquivo para todos os outros da árvore, em vez de repetir o Save As em cada um. [V, resumo de busca]
   - Aviso: manter o diretório antigo como backup. Peças ligadas por link podem não propagar sozinhas. [V, 3DCS]
   - Bug conhecido (APAR HD35827): com cache mode ligado, Propagate Directory aparecia cinza na R13SP08 e não reproduzia na R15. [V]
-  - Um guia de interoperabilidade ENOVIA/CATIA recomenda **não usar Propagate Directory** em salvamentos de rotina, só quando precisar copiar. [V, resumo de busca]
+  - Um guia de interoperabilidade PLM avançado/CAD avançado B recomenda **não usar Propagate Directory** em salvamentos de rotina, só quando precisar copiar. [V, resumo de busca]
   - **Send To ▸ Directory:** grava o conjunto numa pasta nova a partir do estado "sem arquivos carregados", gerando nomes e UUIDs novos conforme a documentação lida pelos usuários. Usuários o tratam como equivalente em efeito ao Propagate Directory para clonar (Eng-Tips). [V, fórum]
   - **Diferença prática:** Send To é pensado para transferir dados, e o Propagate Directory serve para mudar o local de trabalho do mesmo conjunto. [V, fórum, não confirmado oficialmente]
 
-- **SolidWorks — no detalhe:** não há comando com esse nome. O equivalente é **Pack and Go** (ficha 6), mais Save As com Include all referenced components. [V]
+- **CAD avançado A — no detalhe:** não há comando com esse nome. O equivalente é **Pack and Go** (ficha 6), mais Save As com Include all referenced components. [V]
 
-- **Inventor — no detalhe:** equivalente é **Pack and Go** (ficha 6) e o **Copy** do Design Assistant com Change Location. [V]
+- **CAD avançado C — no detalhe:** equivalente é **Pack and Go** (ficha 6) e o **Copy** do Design Assistant com Change Location. [V]
 
 - **Fenkra hoje:** ausente. `save_doc` (`asm_ui.rs:2847-2857`) grava uma peça avulsa gerada (engrenagem) em pasta escolhida, mas sem tocar em referências.
 
@@ -266,23 +266,23 @@ Ordem das fichas:
 
 ---
 
-### Mesa e gerenciador de relações (CATIA: Desk / Links / SW: Find References, File ▸ Open ▸ References / Inventor: Design Assistant / Fusion: Data Panel / Fenkra: ausente)
+### Mesa e gerenciador de relações (CAD avançado B: Desk / Links / CAD avançado A: Find References, File ▸ Open ▸ References / CAD avançado C: Design Assistant / Fusion: Data Panel / Fenkra: ausente)
 
 - **O que faz:** uma janela que mostra a árvore de arquivos de um documento e os links entre eles, independentemente da árvore de modelagem.
 
-- **CATIA V5 — no detalhe:** File ▸ Desk abre uma janela com a estrutura da montagem e as relações entre peças e produtos (resumo de busca da página 3DCS). É de onde se vê qual arquivo aponta para qual. Funciona sem abrir a geometria. [V, resumo de busca]
+- **CAD avançado B — no detalhe:** File ▸ Desk abre uma janela com a estrutura da montagem e as relações entre peças e produtos (resumo de busca da página 3DCS). É de onde se vê qual arquivo aponta para qual. Funciona sem abrir a geometria. [V, resumo de busca]
 
-- **SolidWorks — no detalhe:**
+- **CAD avançado A — no detalhe:**
   - File ▸ Find References, numa montagem, lista de onde cada componente foi carregado. No diálogo Open, o botão References mostra os caminhos dos arquivos referenciados. [V, resumo de busca e Visiativ]
   - O PDM tem a aba **Contains / Where Used** (ficha 16) e o assistente **Update References**. [V]
 
-- **Inventor — no detalhe:**
-  - O **Design Assistant** é um aplicativo à parte (clique direito no arquivo no Windows Explorer ▸ Design Assistant). Ele mostra os arquivos relacionados e permite renomear, copiar, substituir e reapontar. [V, ajuda Autodesk]
-  - Usa o projeto ativo do Inventor para saber onde procurar. [V]
+- **CAD avançado C — no detalhe:**
+  - O **Design Assistant** é um aplicativo à parte (clique direito no arquivo no Windows Explorer ▸ Design Assistant). Ele mostra os arquivos relacionados e permite renomear, copiar, substituir e reapontar. [V, ajuda fornecedor de CAD avançado]
+  - Usa o projeto ativo do CAD avançado C para saber onde procurar. [V]
   - Não pode alterar relações quando o projeto é semi-isolado, o arquivo está Liberado, não está em check-out ou o atributo é só leitura. [V]
-  - A Autodesk recomenda o Vault para gerenciar arquivos. [V, resumo de busca]
+  - A fornecedor de CAD avançado recomenda o Vault para gerenciar arquivos. [V, resumo de busca]
 
-- **Outros:** o Data Panel do Fusion mostra "onde é usado", "o que usa" e os desenhos relacionados. [V, ajuda Autodesk]
+- **Outros:** o Data Panel do Fusion mostra "onde é usado", "o que usa" e os desenhos relacionados. [V, ajuda fornecedor de CAD avançado]
 
 - **Fenkra hoje:**
   - `sub_listing` (`asm_ui.rs:993-1008`) lê os subconjuntos recursivamente só para exibir a árvore. A BOM faz `load_sub` (`bom.rs:58`).
@@ -299,26 +299,26 @@ Ordem das fichas:
 
 ---
 
-### Empacotar (CATIA: Send To / SW: Pack and Go / Inventor: Pack and Go / Fenkra: ausente, previsto no B56)
+### Empacotar (CAD avançado B: Send To / CAD avançado A: Pack and Go / CAD avançado C: Pack and Go / Fenkra: ausente, previsto no B56)
 
 - **O que faz:** reúne uma peça, montagem ou desenho com tudo que ele referencia em uma pasta ou zip que abre em outro computador sem links quebrados.
 
-- **CATIA V5 — no detalhe:** não há comando com esse nome. O vídeo do canal "Catia v5 Shorts #020" apresenta o Propagate Directory como "meio que um Pack and Go". [V, título de resultado de busca] Ver ficha 4.
+- **CAD avançado B — no detalhe:** não há comando com esse nome. O vídeo do canal "CAD avançado B Shorts #020" apresenta o Propagate Directory como "meio que um Pack and Go". [V, título de resultado de busca] Ver ficha 4.
 
-- **SolidWorks — no detalhe:** [V, resumo de busca, cadimensions e Hawk Ridge]
-  - Acesso por File ▸ Pack and Go, ou botão direito no arquivo no Windows Explorer ▸ SOLIDWORKS (esta via tem menos opções).
+- **CAD avançado A — no detalhe:** [V, resumo de busca, cadimensions e Hawk Ridge]
+  - Acesso por File ▸ Pack and Go, ou botão direito no arquivo no Windows Explorer ▸ CAD avançado A (esta via tem menos opções).
   - **Include drawings:** traz desenhos da pasta do modelo ou dos Search Paths definidos em File Locations.
   - **Include simulation results:** traz relatórios do Simulation, mesmo fora da pasta do modelo. Aumenta muito o tamanho.
-  - **Include Toolbox components:** por padrão o hardware do Toolbox **não** vai.
+  - **Include biblioteca de normas components:** por padrão o hardware do biblioteca de normas **não** vai.
   - **Add prefix / Add suffix:** vale para todos os arquivos. Muito usado para marcar revisão.
   - **Select / Replace:** renomeia em lote (coluna "New Filename"). Desmarcar arquivos aqui pode quebrar referências.
   - Duplo clique em "New Filename" renomeia um a um sem quebrar nada.
   - **Layout:** Flatten to single folder (o mais comum), Keep full folder structure (espelha o explorador) e opções mínimas que mantêm pastas isoladas, como a de um subconjunto.
   - **Saída:** Save to folder (caminho e nome da pasta) ou Save to Zip (caminho e nome). E-mail depois do pacote só com zip.
   - A cadimensions recomenda **sempre salvar em zip**: salvar em pasta costuma deixar referências sem atualizar e arquivos duplicados, e o zip congela o conjunto num ponto. [V]
-  - O que fica de fora se não marcado: Toolbox, resultados de simulação, desenhos, arquivos desmarcados, e a gravação para versão anterior só vale até duas versões atrás (2024 para 2022). [V]
+  - O que fica de fora se não marcado: biblioteca de normas, resultados de simulação, desenhos, arquivos desmarcados, e a gravação para versão anterior só vale até duas versões atrás (2024 para 2022). [V]
 
-- **Inventor — no detalhe:** [V, ajuda Autodesk, página lida]
+- **CAD avançado C — no detalhe:** [V, ajuda fornecedor de CAD avançado, página lida]
   - **Source File**, **Destination Folder** (cria se não existir, com pergunta), **Project File** (padrão o projeto ativo).
   - **Find referenced files:** busca nos locais do projeto (workspaces, workgroups e bibliotecas) ou numa pasta específica com ou sem subpastas. Acha também os arquivos que **referenciam** o selecionado (desenhos que apontam para a montagem), sem duplicar.
   - **Copy to Single Path:** tudo numa pasta só. **Keep Folder Hierarchy:** recria a hierarquia.
@@ -329,7 +329,7 @@ Ordem das fichas:
   - Mostra Total Files e espaço em disco necessário, e cria um **log** na pasta com nomes e caminhos de origem de todos os referenciados. O log é sobrescrito a cada empacotamento no mesmo destino. [V]
   - Cria um arquivo de projeto novo no destino. [V, parcialmente: a página não descreve opção dedicada]
 
-- **Outros:** Fusion usa o Archive/"Export" e o upload de arquivos; para copiar sem dependências, um funcionário da Autodesk sugere exportar o design e subir no novo local. [V, fórum]
+- **Outros:** Fusion usa o Archive/"Export" e o upload de arquivos; para copiar sem dependências, um funcionário da fornecedor de CAD avançado sugere exportar o design e subir no novo local. [V, fórum]
 
 - **Fenkra hoje:** ausente. A única ligação é que `PartCache::get` (`load.rs:38-52`) lê peça por caminho e a BOM (`bom.rs:81-97`) já percorre subconjuntos com limite de profundidade 16, o que dá a base para o fecho transitivo.
 
@@ -352,42 +352,42 @@ Ordem das fichas:
 
 ---
 
-### Referências entre arquivos: caminhos e busca (CATIA: Linked Document Localization / Search Order / SW: Referenced Documents / Inventor: Project / Fenkra: caminhos de texto)
+### Referências entre arquivos: caminhos e busca (CAD avançado B: Linked Document Localization / Search Order / CAD avançado A: Referenced Documents / CAD avançado C: Project / Fenkra: caminhos de texto)
 
 - **O que faz:** define como um arquivo guarda onde está seu componente e como o programa o encontra quando abre.
 
-- **CATIA V5 — no detalhe:**
-  - Na documentação antiga, o CATIA compara a opção **Search Order** com **Linked Document Localization**. Na segunda, a pasta do link é pesquisada primeiro. Na primeira, outras pastas vêm antes. O Search Order é a lista de diretórios onde os documentos ligados ficam, e aceita multisseleção. [V, resumo de busca de catiadoc.free.fr]
+- **CAD avançado B — no detalhe:**
+  - Na documentação antiga, o CAD avançado B compara a opção **Search Order** com **Linked Document Localization**. Na segunda, a pasta do link é pesquisada primeiro. Na primeira, outras pastas vêm antes. O Search Order é a lista de diretórios onde os documentos ligados ficam, e aceita multisseleção. [V, resumo de busca de CAD avançado Bdoc.free.fr]
   - A variável `CATReffilesPath` define o caminho de busca dos arquivos de referência. [V, resumo de busca]
   - Os documentos têm identificador interno (UUID). Save As mantém e Send To troca (ficha 3). [V, fórum]
-  - Quando o link não resolve, o CATIA abre o resto e avisa. [C]
+  - Quando o link não resolve, o CAD avançado B abre o resto e avisa. [C]
 
-- **SolidWorks — no detalhe:** ordem de busca [V, Visiativ, página lida]
+- **CAD avançado A — no detalhe:** ordem de busca [V, Visiativ, página lida]
   1. Memória: arquivo com o mesmo nome já aberto, **mesmo que seja outra versão**.
   2. Pastas de **Referenced Documents** (File Locations). Só valem se a opção "Search file locations for external references" estiver marcada. [V, resumo de busca]
   3. Pasta de onde a montagem foi aberta.
   4. Último caminho usado na sessão (pulado em sessão nova).
   5. Caminho salvo, na unidade atual.
   6. Caminho salvo, na unidade original.
-  7. Browse: pede para o usuário apontar. É assim que se atualiza após renomear fora do SW.
+  7. Browse: pede para o usuário apontar. É assim que se atualiza após renomear fora do CAD avançado A.
   - Erro típico: "Referenced document has non-matching internal ID". A causa mais comum é nome de arquivo duplicado. [V]
   - Correções recomendadas: nomes únicos, pasta do projeto em Referenced Documents, manter tudo junto ou usar Pack and Go, e usar Find References para ver de onde cada um veio. [V]
   - Fontes divergem um pouco na ordem exata (uma coloca a busca recursiva depois de Referenced Documents). [V, resumo de busca]
 
-- **Inventor — no detalhe:**
+- **CAD avançado C — no detalhe:**
   - Cada arquivo guarda os nomes dos arquivos que referencia. [V]
-  - O **projeto (.ipj)** define onde procurar. [V, ajuda Autodesk, página lida]
+  - O **projeto (.ipj)** define onde procurar. [V, ajuda fornecedor de CAD avançado, página lida]
     - **Workspace:** área pessoal de edição, normalmente na raiz do projeto, onde fica o .ipj.
     - **Workgroup:** local de rede mestre dos arquivos compartilhados (um por projeto; mais caminhos deixam a busca mais lenta).
     - **Bibliotecas:** somente leitura.
     - Tipos de projeto: single user, Vault, semi-isolated, shared.
   - Ordem de busca (2020): bibliotecas (só quando uma peça de biblioteca é carregada), workspace, caminhos do workgroup, pasta do arquivo de projeto. A de 2022 acrescenta o "work path" no começo e a pasta do arquivo no fim. [V, resumo de busca]
   - **Evitar caminhos aninhados** e definir um só workgroup/workspace. Caminhos aninhados aparecem em vermelho no editor porque costumam causar problemas de resolução. [V]
-  - Se o arquivo não é achado, abre o diálogo **Resolve Link**. O evento de API `OnFileResolution` dispara para todo arquivo que o Inventor precisa. [V]
+  - Se o arquivo não é achado, abre o diálogo **Resolve Link**. O evento de API `OnFileResolution` dispara para todo arquivo que o CAD avançado C precisa. [V]
 
 - **Outros:**
   - Fusion: referências por projeto e versão na nuvem, com "Get Latest". [V, resumo de busca]
-  - Onshape: ao atualizar referências entre documentos cria uma **versão automática**, que aparece no gráfico. [V]
+  - CAD avançado E: ao atualizar referências entre documentos cria uma **versão automática**, que aparece no gráfico. [V]
 
 - **Fenkra hoje:**
   - `NodeKind::Part { path }` guarda texto (`asm_ui.rs:435`). `full_path` (`load.rs:27-33`) junta com a pasta da montagem se o caminho é relativo.
@@ -399,7 +399,7 @@ Ordem das fichas:
 
 - **Melhor prática para o Fenkra:**
   - **Modelo de referência** em cada arquivo, com três campos: `uid` (identidade estável), `rel` (último caminho relativo à pasta do dono) e, opcionalmente, `hash`/`rev` (alvo: revisão de trabalho ou revisão congelada, como o ADR 0006 prevê).
-  - **Ordem de resolução** (inspirada no SW e no Inventor, com a diferença de que o `uid` vence o nome):
+  - **Ordem de resolução** (inspirada no CAD avançado A e no CAD avançado C, com a diferença de que o `uid` vence o nome):
     1. documento já aberto com o mesmo `uid`;
     2. `rel` relativo à pasta do dono;
     3. índice `uid → caminho` do projeto (varredura em cache);
@@ -408,7 +408,7 @@ Ordem das fichas:
     6. diálogo **Resolver**, que mostra candidatos por `uid` ou nome.
   - **Regras:**
     - Sempre gravar caminho relativo com `..` quando o alvo estiver no mesmo drive/raiz. Absoluto só se o alvo está em outro drive.
-    - Nunca resolver em silêncio para um arquivo de `uid` diferente (evita o "non-matching internal ID" do SW). Avisar e pedir confirmação.
+    - Nunca resolver em silêncio para um arquivo de `uid` diferente (evita o "non-matching internal ID" do CAD avançado A). Avisar e pedir confirmação.
     - Nomes de arquivo duplicados no mesmo projeto geram aviso de projeto.
     - Número de item de BOM guardado por `uid`, não por caminho.
   - **Casos de teste:**
@@ -419,26 +419,26 @@ Ordem das fichas:
 
 ---
 
-### Renomear e mover sem quebrar (CATIA: Save As + Propagate / SW: PDM Move Tree, rename pelo FeatureManager, Update References / Inventor: Design Assistant / Fenkra: ausente)
+### Renomear e mover sem quebrar (CAD avançado B: Save As + Propagate / CAD avançado A: PDM Move Tree, rename pelo FeatureManager, Update References / CAD avançado C: Design Assistant / Fenkra: ausente)
 
 - **O que faz:** muda nome ou pasta de um arquivo e atualiza todos os arquivos que o referenciam.
 
-- **CATIA V5 — no detalhe:** sem comando próprio. Renomeia-se com Save As (mantém identificador) dentro do Save Management, e os pais recebem Save Auto. Fora do CATIA, o link quebra. [V]
+- **CAD avançado B — no detalhe:** sem comando próprio. Renomeia-se com Save As (mantém identificador) dentro do Save Management, e os pais recebem Save Auto. Fora do CAD avançado B, o link quebra. [V]
 
-- **SolidWorks — no detalhe:**
+- **CAD avançado A — no detalhe:**
   - Fora do PDM, renomear no Explorer quebra o link, e se resolve com Browse na abertura. [V]
   - Dentro do PDM, **renomear** um componente pela árvore do FeatureManager atualiza as referências automaticamente, com o arquivo em check-out e uma opção de sistema ligada. [V, resumo de busca]
   - **Move Tree:** renomeia e move vários arquivos de uma vez, e as referências são atualizadas automaticamente se os dependentes entram na operação. [V, resumo de busca]
-  - **Update References (assistente):** é preciso fazer check-out do pai e dos subconjuntos antes de editar as referências. Pode reparar links quebrados **sem abrir o pai no SW**. [V, resumo de busca]
+  - **Update References (assistente):** é preciso fazer check-out do pai e dos subconjuntos antes de editar as referências. Pode reparar links quebrados **sem abrir o pai no CAD avançado A**. [V, resumo de busca]
   - Se um arquivo em cache aberto só leitura tem as referências movidas ou renomeadas por outro usuário, o add-in do PDM sinaliza os afetados, avisa e repontua para o local mais recente. [V, resumo de busca]
 
-- **Inventor — no detalhe:** [V, ajuda Autodesk]
+- **CAD avançado C — no detalhe:** [V, ajuda fornecedor de CAD avançado]
   - Design Assistant, quatro operações: **Renomear** (atualiza os links em todos os arquivos que referenciam, por exemplo trocar nome provisório por PN), **Revisar** (copia o liberado para nova revisão, relinka o pai à cópia e deixa o original), **Substituir** (atualiza todas as ocorrências na montagem; mesmo tipo de arquivo; desenhos e apresentações usam "update additional referencing files") e **Criar configurações** (copiar uma montagem compartilhando as peças inalteradas).
   - As mudanças só valem em Save.
   - Renomear fora do Design Assistant quebra o link da montagem (Arkance, resumo de busca). Problema reportado: peça usada por duas montagens dá "File not found" ao abrir a segunda. [V, fórum]
   - Não se deve usar Design Assistant em arquivos em check-out de projeto semi-isolado ou compartilhado. [V, resumo de busca]
 
-- **Outros:** Onshape/Fusion não têm o problema (nuvem, referência por ID). O Onshape guarda versão automática ao atualizar. [V]
+- **Outros:** CAD avançado E/Fusion não têm o problema (nuvem, referência por ID). O CAD avançado E guarda versão automática ao atualizar. [V]
 
 - **Fenkra hoje:** ausente. Nem a UI de projeto (`project_panel`, `app.rs:5147-5284`) tem Renomear. `DocEntry.name` e `pn` são alterados só pelo salvamento (`lib.rs:216-218`).
 
@@ -460,15 +460,15 @@ Ordem das fichas:
 
 ---
 
-### Substituir referência (CATIA: Replace Component / SW: Replace Components / Inventor: Replace / Design Assistant Replace / Fenkra: AsmReplace parcial)
+### Substituir referência (CAD avançado B: Replace Component / CAD avançado A: Replace Components / CAD avançado C: Replace / Design Assistant Replace / Fenkra: AsmReplace parcial)
 
 - **O que faz:** troca um componente por outro arquivo mantendo posição e, se possível, restrições.
 
-- **CATIA V5 — no detalhe:** Replace Component na montagem. Restrições que apontavam para a geometria antiga podem ficar quebradas e entram no diagnóstico de update. [C] No ENOVIA há "Replace by Revision" e "Replace by Version", com mudanças de interface na R2019x. [V, resumo de busca]
+- **CAD avançado B — no detalhe:** Replace Component na montagem. Restrições que apontavam para a geometria antiga podem ficar quebradas e entram no diagnóstico de update. [C] No PLM avançado há "Replace by Revision" e "Replace by Version", com mudanças de interface na R2019x. [V, resumo de busca]
 
-- **SolidWorks — no detalhe:** Replace Components troca em lote e pergunta como reaplicar mates, com opção de mapear por nome de face. Com o PDM também existe "Update References". [C]
+- **CAD avançado A — no detalhe:** Replace Components troca em lote e pergunta como reaplicar mates, com opção de mapear por nome de face. Com o PDM também existe "Update References". [C]
 
-- **Inventor — no detalhe:** Replace (uma ocorrência) ou Replace All no assembly. Só entre arquivos do mesmo tipo. Os desenhos não são substituídos diretamente. [V] A API `ReplaceReference` exige que o arquivo novo tenha a mesma ancestralidade (pode ser uma versão modificada). [V, blog]
+- **CAD avançado C — no detalhe:** Replace (uma ocorrência) ou Replace All no assembly. Só entre arquivos do mesmo tipo. Os desenhos não são substituídos diretamente. [V] A API `ReplaceReference` exige que o arquivo novo tenha a mesma ancestralidade (pode ser uma versão modificada). [V, blog]
 
 - **Fenkra hoje:**
   - `Cmd::AsmReplace` (`asm_ui.rs:479-491`) troca o componente selecionado por um arquivo escolhido e chama `asm.replace` (`fenkra-montagem/lib.rs:651-655`), que só troca o `kind`. O aviso diz que "as restrições reencontram as faces pelo ponto clicado" (`refresh_refs`, `load.rs:77-100`).
@@ -482,15 +482,15 @@ Ordem das fichas:
 
 ---
 
-### Recuperação e backup automático (CATIA: Automatic/Incremental Backup / SW: AutoRecover / Inventor: Autosave / Fenkra: ausente)
+### Recuperação e backup automático (CAD avançado B: Automatic/Incremental Backup / CAD avançado A: AutoRecover / CAD avançado C: Autosave / Fenkra: ausente)
 
 - **O que faz:** salva cópias de segurança fora do arquivo de trabalho para recuperar depois de queda.
 
-- **CATIA V5 — no detalhe:**
+- **CAD avançado B — no detalhe:**
   - Tools ▸ Options ▸ General ▸ Data Save: sem backup, backup automático (padrão 30 min, intervalo configurável) ou incremental. O incremental guarda os documentos abertos em diretório temporário e permite recuperar até a última interação. Não está em todas as bancadas. [V, EDS]
   - Há também gravação para versão anterior (Downward Compatibility). [V]
 
-- **SolidWorks e Inventor — no detalhe:** ambos têm intervalo configurável, pasta de recuperação e diálogo de recuperação na próxima abertura, que lista os documentos recuperáveis. [C]
+- **CAD avançado A e CAD avançado C — no detalhe:** ambos têm intervalo configurável, pasta de recuperação e diálogo de recuperação na próxima abertura, que lista os documentos recuperáveis. [C]
 
 - **Fenkra hoje:** ausente. O único "salvamento automático" é antes de trocar de documento de projeto (`app.rs:1153-1155`, RNF-007). Preferências são gravadas ao fechar a janela de configurações (`app.rs:2262`).
 
@@ -501,29 +501,29 @@ Ordem das fichas:
 
 ---
 
-### Check-in/check-out e travamento de arquivo (CATIA/ENOVIA: Lock / SW PDM: Check Out, Check In / Inventor-Vault: Check Out, Check In / Fenkra: ausente)
+### Check-in/check-out e travamento de arquivo (CAD avançado B/PLM avançado: Lock / CAD avançado A PDM: Check Out, Check In / CAD avançado C-Vault: Check Out, Check In / Fenkra: ausente)
 
 - **O que faz:** garante que uma só pessoa edita um documento por vez e registra cada entrega como nova versão.
 
-- **CATIA/ENOVIA V5 — no detalhe:**
-  - No VPM, o **lock** do item é pré-requisito para revisar e para salvar. Casos reportados em APAR: salvar do CATIA recusado com "Operation not authorized" até travar a referência no ENOVIA, e anexar documento exige travar a instância. [V, resumo de busca]
-  - New Reference e New Revision são comandos do ENOVIA, não só do CATIA. [V, resumo de busca]
-  - Na 3DEXPERIENCE, o lock é opcional e por permissão no estado Em trabalho, e bloqueia as alterações de outros. Congelado e Liberado impedem modificação. [V]
+- **CAD avançado B/PLM avançado V5 — no detalhe:**
+  - No VPM, o **lock** do item é pré-requisito para revisar e para salvar. Casos reportados em APAR: salvar do CAD avançado B recusado com "Operation not authorized" até travar a referência no PLM avançado, e anexar documento exige travar a instância. [V, resumo de busca]
+  - New Reference e New Revision são comandos do PLM avançado, não só do CAD avançado B. [V, resumo de busca]
+  - Na plataforma PLM avançada, o lock é opcional e por permissão no estado Em trabalho, e bloqueia as alterações de outros. Congelado e Liberado impedem modificação. [V]
 
-- **SolidWorks PDM — no detalhe:**
+- **CAD avançado A PDM — no detalhe:**
   - **Check Out** dá o direito exclusivo de editar. Outros podem abrir para ver e copiar, mas não alterar. **Undo Check Out** cancela sem salvar as mudanças. [V]
   - Os comentários de check-in e de mudança de estado podem ser obrigatórios por estado ou transição. [V]
   - A versão sobe a cada check-in com mudança. [V]
   - Arquivos fora de check-out ficam somente leitura no cache local (a "local view"). [C]
   - Renomear no FeatureManager exige o arquivo em check-out (ficha 8). [V]
 
-- **Inventor/Vault — no detalhe:**
+- **CAD avançado C/Vault — no detalhe:**
   - Check-in grava as alterações como **nova versão**. Undo Check Out descarta e libera o bloqueio. [V, resumo de busca]
   - Ao abrir ou posicionar um arquivo, o Vault primeiro traz a **última versão do arquivo e dos filhos** e depois faz o check-out do que precisa. [V]
   - Com **Model States**, o Vault baixa só os arquivos que aquele estado usa. Componentes suprimidos não são baixados nem entram em check-out ou check-in. [V]
   - Arquivo Liberado não pode ter relações mudadas pelo Design Assistant. [V]
 
-- **Outros:** NX/Teamcenter e Creo/Windchill usam check-out em workspace local e check-in. [C] Solid Edge tem o Revision Manager e Insight. [C] Fusion/Onshape: edição simultânea ou branch, sem trava. [V, parcialmente]
+- **Outros:** CAD avançado G/PLM avançado e CAD avançado F/PLM avançado usam check-out em workspace local e check-in. [C] CAD avançado H tem o Revision Manager e Insight. [C] CAD avançado D/CAD avançado E: edição simultânea ou branch, sem trava. [V, parcialmente]
 
 - **Fenkra hoje:** ausente (catálogo PLM-04 "não"). A propriedade `Liberado` não trava edição. `Project::save` apenas volta o estado para Em trabalho quando o conteúdo muda (`lib.rs:221-223`). Revisão congelada só protege a *versão aberta como congelada* (`app.rs:796-798`). O `plm-pn-engine.md` já propõe `lock.json`.
 
@@ -542,11 +542,11 @@ Ordem das fichas:
 
 ---
 
-### Pasta compartilhada e multiusuário (CATIA: servidor ENOVIA / SW: PDM server / Vault: servidor / Fenkra: modo pasta proposto)
+### Pasta compartilhada e multiusuário (CAD avançado B: servidor PLM avançado / CAD avançado A: PDM server / Vault: servidor / Fenkra: modo pasta proposto)
 
 - **O que faz:** permite trabalho em equipe sem servidor, em pasta de rede ou OneDrive, que é o cenário do `plm-pn-engine.md`.
 
-- **O que os três fazem:** exigem **servidor** (catálogo PLM-07: "os três exigem servidor"). O Inventor tem projetos *semi-isolated* e *shared* com workgroup em rede, mas a Autodesk recomenda o Vault. [V]
+- **O que os três fazem:** exigem **servidor** (catálogo PLM-07: "os três exigem servidor"). O CAD avançado C tem projetos *semi-isolated* e *shared* com workgroup em rede, mas a fornecedor de CAD avançado recomenda o Vault. [V]
 
 - **Riscos documentados do ambiente:**
   - **SQLite em pasta de rede:** a documentação do SQLite desaconselha, porque a rede pode perder, atrasar ou reordenar escritas e porque alguns sistemas de arquivos de rede implementam travas de forma incorreta. Dois clientes podem achar que têm a trava e corromper o banco. Recomenda cliente/servidor (PostgreSQL) para vários computadores. [V]
@@ -575,22 +575,22 @@ Ordem das fichas:
 
 ---
 
-### Versão × revisão (CATIA/ENOVIA: Version, Revision / SW PDM: Version, Revision / Inventor-Vault: Version, Revision / Onshape: Version, Revision / Fenkra: Version, Revision)
+### Versão × revisão (CAD avançado B/PLM avançado: Version, Revision / CAD avançado A PDM: Version, Revision / CAD avançado C-Vault: Version, Revision / CAD avançado E: Version, Revision / Fenkra: Version, Revision)
 
 - **O que faz:** separa o histórico contínuo (versões, automáticas) dos marcos aprovados (revisões, deliberadas).
 
-- **CATIA/ENOVIA — no detalhe:** a 3DEXPERIENCE cria revisões a partir do estado Liberado: **New Revision**, **New Revision From** (estrutura baseada em outra fonte) e **New Branch**. Revisões diferentes podem estar em estados de maturidade diferentes ao mesmo tempo. [V] Há um modo de "Engineering Revision" desacoplada do "Model Version" em estruturas configuradas. [V, resumo de busca] O formato pode ser Primary ou Primary.Secondary, o primário pula I, O, Q, S, X, Z (guia da TriMech), e ao salvar do SOLIDWORKS vem A.1, depois A.2. [V]
+- **CAD avançado B/PLM avançado — no detalhe:** a plataforma PLM avançada cria revisões a partir do estado Liberado: **New Revision**, **New Revision From** (estrutura baseada em outra fonte) e **New Branch**. Revisões diferentes podem estar em estados de maturidade diferentes ao mesmo tempo. [V] Há um modo de "Engineering Revision" desacoplada do "Model Version" em estruturas configuradas. [V, resumo de busca] O formato pode ser Primary ou Primary.Secondary, o primário pula I, O, Q, S, X, Z (guia da TriMech), e ao salvar do CAD avançado A vem A.1, depois A.2. [V]
 
-- **SolidWorks PDM — no detalhe:** [V, GoEngineer]
+- **CAD avançado A PDM — no detalhe:** [V, GoEngineer]
   - **Versões** automáticas: a cada check-in com mudança, número 1, 2, 3, com comentário do que mudou. Também surgem versões sem check-out, por ação de workflow em segundo plano.
   - **Revisões** são deliberadas: marcam uma versão que passou pela aprovação. O administrador define o esquema (letras, números, A.1, nomes como "Protótipo").
-  - **Esquemas de numeração de revisão** = texto fixo + um ou mais **contadores** que sobem a cada aplicação. Trocar o esquema faz o próximo recomeçar do valor inicial dos componentes do novo esquema. [V, resumo de busca de help.solidworks]
+  - **Esquemas de numeração de revisão** = texto fixo + um ou mais **contadores** que sobem a cada aplicação. Trocar o esquema faz o próximo recomeçar do valor inicial dos componentes do novo esquema. [V, resumo de busca de help.CAD avançado A]
   - Configurações de transição atualizam a revisão local do PDM, não a *variável* Revisão, então se combina com "Set variable". [V, GoEngineer]
   - Para ver o histórico: menu Ações ▸ Get Version, com a opção "Always work with latest versions" desligada. [V]
 
-- **Inventor/Vault — no detalhe:** check-in cria versão. Mudança de estado de ciclo de vida pode criar revisão. Mudar um Liberado de volta a Em andamento cria nova revisão, mas o check-out é um passo à parte (post de ideias da Autodesk). [V, resumo de busca]
+- **CAD avançado C/Vault — no detalhe:** check-in cria versão. Mudança de estado de ciclo de vida pode criar revisão. Mudar um Liberado de volta a Em andamento cria nova revisão, mas o check-out é um passo à parte (post de ideias da fornecedor de CAD avançado). [V, resumo de busca]
 
-- **Onshape — no detalhe:** a *versão* é um instantâneo nomeado e imutável. A *revisão* é um estado formalmente liberado de uma peça, montagem ou desenho, ligado a um PN e a um esquema (A, B, C ou 1, 2, 3). Toda revisão aponta para uma versão, mas a maioria das versões nunca vira revisão. [V]
+- **CAD avançado E — no detalhe:** a *versão* é um instantâneo nomeado e imutável. A *revisão* é um estado formalmente liberado de uma peça, montagem ou desenho, ligado a um PN e a um esquema (A, B, C ou 1, 2, 3). Toda revisão aponta para uma versão, mas a maioria das versões nunca vira revisão. [V]
 
 - **Fenkra hoje (acerto do modelo):**
   - `Version { hash, time, note }` e `Revision { label, hash, time, comment }` (`lib.rs:57-69`). Versão é conteúdo endereçado por hash em `.versoes/<hash>.fkp` e só nasce quando o hash muda (`lib.rs:219-224`).
@@ -611,25 +611,25 @@ Ordem das fichas:
 
 ---
 
-### Ciclo de vida e fluxo de aprovação (CATIA/3DEXPERIENCE: Maturity / SW PDM: Workflow states / Vault: Lifecycle / Fenkra: DocState)
+### Ciclo de vida e fluxo de aprovação (CAD avançado B/plataforma PLM avançada: Maturity / CAD avançado A PDM: Workflow states / Vault: Lifecycle / Fenkra: DocState)
 
 - **O que faz:** define em que fase o documento está (em trabalho, em revisão, liberado, obsoleto) e quem pode movê-lo.
 
-- **3DEXPERIENCE — no detalhe:** [V, Hawk Ridge, página lida]
+- **plataforma PLM avançada — no detalhe:** [V, Hawk Ridge, página lida]
   - Estados: **Private** (só o dono), **In Work** (padrão ao salvar na plataforma; visível; pode ser travado), **Frozen** (revisão; mudanças bloqueadas), **Released** (produção; "não pode ser modificado"), **Obsolete** (guardado só para consulta).
   - Transições: Private→In Work, In Work→Frozen, Frozen→In Work (rejeitado ou mais mudanças), Frozen→Released (aceito), Released→Obsolete.
   - Transições podem ser aplicadas a vários arquivos de uma vez, incluindo filhos estruturais. Regras podem exigir que todos os filhos transitem antes do pai, por exemplo liberar os filhos antes da montagem.
   - Quem pode agir depende de permissão. A fonte não detalha papéis.
-  - O ENOVIA tem uma discussão de impedir mudança de maturidade se a EIN não estiver preenchida (ligação com engenharia de mudança). [V, só título]
+  - O PLM avançado tem uma discussão de impedir mudança de maturidade se a EIN não estiver preenchida (ligação com engenharia de mudança). [V, só título]
 
-- **SolidWorks PDM — no detalhe:**
+- **CAD avançado A PDM — no detalhe:**
   - **Workflow** com estados e transições. O estado inicial pode ser escolhido. Estados representam "Em edição", "Aguardando aprovação", "Aprovado". [V]
   - Comentário obrigatório por estado e transição. [V]
   - O Standard tem um fluxo com até dez estados (fonte secundária). O Professional permite vários fluxos, aprovações paralelas e notificações. [V, resumo de busca; C]
   - Estado pode **definir permissões** de leitura/escrita/exclusão por grupo. [V, título de página de ajuda]
   - **Check Out durante a transição** é discutido nos fóruns como armadilha. [V, só título]
 
-- **Inventor/Vault — no detalhe:**
+- **CAD avançado C/Vault — no detalhe:**
   - Definições de ciclo de vida com transições. As **Lifecycle Transition settings** podem bloquear a liberação quando critérios não são atendidos (por exemplo, filhos não liberados). Um Get/Checkout pode falhar se os subcomponentes estão num ciclo de vida que só alguns usuários acessam. [V, resumo de busca ImaginIT]
   - Arquivos Liberados não aceitam mudança de relações no Design Assistant. [V]
   - Items (BOM) acompanham o estado. [C]
@@ -644,7 +644,7 @@ Ordem das fichas:
 - **Melhor prática para o Fenkra:**
   - **Fluxo:** o ambiente define o **grafo de estados**, e o padrão é Privado → Em trabalho → Congelado → Liberado → Obsoleto, com transições nomeadas e comentário obrigatório configurável.
   - **Regras:**
-    - Congelado e Liberado ficam só leitura no Fenkra, e para editar é preciso uma *nova revisão* (como o Inventor "Revisar").
+    - Congelado e Liberado ficam só leitura no Fenkra, e para editar é preciso uma *nova revisão* (como o CAD avançado C "Revisar").
     - Liberar uma montagem exige filhos Liberados (ou lista explícita de exceções).
     - Obsoleto não pode ser inserido em montagem nova (aviso, não bloqueio).
     - Transição em lote com preview da lista de afetados.
@@ -652,18 +652,18 @@ Ordem das fichas:
 
 ---
 
-### Estrutura de produto: produto, item, instância, BOM (ENOVIA: Product Reference / Instance / SW PDM: BOM / Vault: Items / Fenkra: BOM de montagem, sem estrutura no projeto)
+### Estrutura de produto: produto, item, instância, BOM (PLM avançado: Product Reference / Instance / CAD avançado A PDM: BOM / Vault: Items / Fenkra: BOM de montagem, sem estrutura no projeto)
 
 - **O que faz:** separa a *definição* (referência de produto, item) das *ocorrências* (instâncias) e liga ambas à lista de materiais.
 
-- **ENOVIA VPM / CATIA — no detalhe:**
+- **PLM avançado VPM / CAD avançado B — no detalhe:**
   - Conceitos: referência de produto (definição, com PN e revisões), instância (uso dentro de um pai, com posição) e documento (arquivo CATPart/CATProduct). [C, conhecimento geral; os APARs lidos confirmam que "instance" e "reference" existem e que New Reference duplica a referência. [V]]
-  - Os contextos de CATIA (links contextuais) precisam ser redefinidos depois de duplicar a instância. [V, resumo de busca]
+  - Os contextos de CAD avançado B (links contextuais) precisam ser redefinidos depois de duplicar a instância. [V, resumo de busca]
   - A estrutura de produto é configurada por *effectivity* (ficha 17). [V]
 
-- **SolidWorks PDM — no detalhe:** BOM calculada a partir das referências, com variáveis do cartão de dados (PN, descrição) como colunas. Aba Contains e Where Used. [C]
+- **CAD avançado A PDM — no detalhe:** BOM calculada a partir das referências, com variáveis do cartão de dados (PN, descrição) como colunas. Aba Contains e Where Used. [C]
 
-- **Vault/Inventor — no detalhe:** **Items** (itens de engenharia) agrupam o arquivo com propriedades de BOM. Model States com o mesmo PN compartilham BOM e item, e com PN diferente têm BOM e item separados. [V]
+- **Vault/CAD avançado C — no detalhe:** **Items** (itens de engenharia) agrupam o arquivo com propriedades de BOM. Model States com o mesmo PN compartilham BOM e item, e com PN diferente têm BOM e item separados. [V]
 
 - **Fenkra hoje:**
   - `bom()` (`bom.rs:139-174`) calcula a lista em três níveis (primeiro nível, só peças, estruturada), com **número de item fixo guardado na montagem** (`ItemNo`, `bom.rs:35`), que mantém o número entre revisões e nunca reaproveita o de itens que saíram. O teste cobre isso (`bom.rs:208-227`).
@@ -678,15 +678,15 @@ Ordem das fichas:
 
 ---
 
-### Onde é usado (CATIA/ENOVIA: Where-Used / SW PDM: Where Used / Inventor-Vault: Uses, Where Used / Fusion: Data Panel / Fenkra: ausente)
+### Onde é usado (CAD avançado B/PLM avançado: Where-Used / CAD avançado A PDM: Where Used / CAD avançado C-Vault: Uses, Where Used / Fusion: Data Panel / Fenkra: ausente)
 
 - **O que faz:** responde "quem usa esta peça?" (e o inverso, "o que esta montagem contém?"), com revisão e estado.
 
-- **CATIA/ENOVIA — no detalhe:** consulta de onde-usado na estrutura de produto, por nível, com filtro por maturidade. [C] No ENOVIA, as revisões diferentes de um mesmo item aparecem como usos diferentes. [C]
+- **CAD avançado B/PLM avançado — no detalhe:** consulta de onde-usado na estrutura de produto, por nível, com filtro por maturidade. [C] No PLM avançado, as revisões diferentes de um mesmo item aparecem como usos diferentes. [C]
 
-- **SolidWorks PDM — no detalhe:** aba **Where Used** (pais, em um nível ou todos) e **Contains** (filhos, com opção de mostrar a árvore de referências). Respeita a versão, e dá para ver "usado em revisão Liberada". [C]
+- **CAD avançado A PDM — no detalhe:** aba **Where Used** (pais, em um nível ou todos) e **Contains** (filhos, com opção de mostrar a árvore de referências). Respeita a versão, e dá para ver "usado em revisão Liberada". [C]
 
-- **Inventor/Vault — no detalhe:** **Uses** e **Where Used** por arquivo ou item, nos dois sentidos. [V, resumo de busca] Fusion: o Data Panel mostra "onde é usado", "o que usa" e desenhos relacionados. [V]
+- **CAD avançado C/Vault — no detalhe:** **Uses** e **Where Used** por arquivo ou item, nos dois sentidos. [V, resumo de busca] Fusion: o Data Panel mostra "onde é usado", "o que usa" e desenhos relacionados. [V]
 
 - **Fenkra hoje:** ausente (catálogo PLM-05). O ADR 0006 diz que "Onde é usado" e gerenciador de links ficam "triviais" se as publicações forem indexadas, mas nada foi indexado ainda.
 
@@ -698,16 +698,16 @@ Ordem das fichas:
 
 ---
 
-### Linha de base e efetividade (ENOVIA: Effectivity / PDM: revisão de montagem / Vault: Baseline (Change Order) / Fenkra: ausente)
+### Linha de base e efetividade (PLM avançado: Effectivity / PDM: revisão de montagem / Vault: Baseline (Change Order) / Fenkra: ausente)
 
 - **O que faz:** *Baseline* congela o conjunto exato de versões de uma estrutura num momento (o que foi liberado junto). *Efetividade* diz em que condições (data, lote, número de série, unidade) uma revisão vale.
 
-- **ENOVIA — no detalhe:** existe efetividade em instâncias de peça e **cortes configurados**, e erros reportados mostram que é preciso desanexar a efetividade para operar. [V, resumo de busca de APAR] A comunidade descreve revisão de engenharia "baseada em efetividade" e evolução por efetividade, em que a versão do modelo pode seguir Em trabalho enquanto a estrutura muda. [V, resumo de busca]
+- **PLM avançado — no detalhe:** existe efetividade em instâncias de peça e **cortes configurados**, e erros reportados mostram que é preciso desanexar a efetividade para operar. [V, resumo de busca de APAR] A comunidade descreve revisão de engenharia "baseada em efetividade" e evolução por efetividade, em que a versão do modelo pode seguir Em trabalho enquanto a estrutura muda. [V, resumo de busca]
 
-- **SolidWorks PDM / Vault — no detalhe:**
+- **CAD avançado A PDM / Vault — no detalhe:**
   - PDM: ao liberar uma montagem, a revisão do pai fixa as revisões dos filhos "como liberadas" (estado de referência). [C]
   - Vault Professional: *Change Orders* registram o que foi alterado e liberam em lote; *Items* têm efetividade por data. [C]
-  - Creo/Windchill: *configuration specifications* (por exemplo "latest", "as matured", "baseline") escolhem as versões da estrutura. Uma página da PTC trata "As Matured". [V, só título de resultado]
+  - CAD avançado F/PLM avançado: *configuration specifications* (por exemplo "latest", "as matured", "baseline") escolhem as versões da estrutura. Uma página da fornecedor de CAD avançado trata "As Matured". [V, só título de resultado]
 
 - **Fenkra hoje:** ausente. Existe a ideia do ADR 0006 de "revisão-alvo" por link (trabalho ou revisão congelada), sem implementação.
 
@@ -719,15 +719,15 @@ Ordem das fichas:
 
 ---
 
-### Regras de part number (ENOVIA: Numbering / SW PDM: Serial numbers / Vault: Numbering schemes / Fenkra: prefixo FK- + contador)
+### Regras de part number (PLM avançado: Numbering / CAD avançado A PDM: Serial numbers / Vault: Numbering schemes / Fenkra: prefixo FK- + contador)
 
 - **O que faz:** gera o código do item por regra, com campos fixos, listas, contadores e dados da peça.
 
-- **ENOVIA/CATIA — no detalhe:** regras de numeração configuradas no servidor, com contadores por tipo. O PN é atributo da referência de produto. [C] (O catálogo cita "Numbering rules (ENOVIA)".)
+- **PLM avançado/CAD avançado B — no detalhe:** regras de numeração configuradas no servidor, com contadores por tipo. O PN é atributo da referência de produto. [C] (O catálogo cita "Numbering rules (PLM avançado)".)
 
-- **SolidWorks PDM — no detalhe:** **números de série** (contadores) usados em variáveis do cartão de dados (data card) e no revisão. Contadores e texto compõem o número, e a troca de esquema reinicia contadores. [V, resumo de busca de help.solidworks] Cartão de dados com campos preenchidos pelo usuário, listas ou propriedades do arquivo. [C]
+- **CAD avançado A PDM — no detalhe:** **números de série** (contadores) usados em variáveis do cartão de dados (data card) e no revisão. Contadores e texto compõem o número, e a troca de esquema reinicia contadores. [V, resumo de busca de help.CAD avançado A] Cartão de dados com campos preenchidos pelo usuário, listas ou propriedades do arquivo. [C]
 
-- **Vault/Inventor — no detalhe:** [V]
+- **Vault/CAD avançado C — no detalhe:** [V]
   - O administrador define **esquemas de numeração** e escolhe quais aparecem no Copy Design (caixa **Shown**) e qual é o padrão (**Default**).
   - No painel de numeração, cada arquivo mostra o nome original e o novo. Conforme o esquema, o Vault pede prefixo/sufixo, localizar-e-substituir, escolha de lista ou texto livre.
   - **Os números automáticos só são reservados quando a cópia é executada**, e aplicados depois que ela termina com sucesso. O painel mostra uma prévia.
@@ -755,7 +755,7 @@ Ordem das fichas:
 
 ---
 
-### Copiar projeto / Copy Design (Vault: Copy Design / SW: Save As with References, Pack and Go / Inventor: Design Assistant Copy / CATIA: Send To / Fenkra: Duplicar peça)
+### Copiar projeto / Copy Design (Vault: Copy Design / CAD avançado A: Save As with References, Pack and Go / CAD avançado C: Design Assistant Copy / CAD avançado B: Send To / Fenkra: Duplicar peça)
 
 - **O que faz:** cria um novo conjunto de arquivos a partir de um existente, com novo PN e novos nomes, escolhendo o que reaproveitar e o que copiar.
 
@@ -764,9 +764,9 @@ Ordem das fichas:
   - O botão direito num arquivo permite **Change Scheme**. A tabela copia para o Excel e volta.
   - Os números automáticos são reservados só na execução.
 
-- **SolidWorks — no detalhe:** Save As with References e Pack and Go com prefixo/sufixo (fichas 3 e 6). [V]
+- **CAD avançado A — no detalhe:** Save As with References e Pack and Go com prefixo/sufixo (fichas 3 e 6). [V]
 
-- **Inventor — no detalhe:** Design Assistant ▸ Copy: marcar arquivos, Action = Copy, e **Change Location** escolhendo uma pasta ou biblioteca nomeada do projeto. Copiar uma montagem cria uma variante compartilhando as peças não alteradas. [V]
+- **CAD avançado C — no detalhe:** Design Assistant ▸ Copy: marcar arquivos, Action = Copy, e **Change Location** escolhendo uma pasta ou biblioteca nomeada do projeto. Copiar uma montagem cria uma variante compartilhando as peças não alteradas. [V]
 
 - **Fenkra hoje:** só `Project::duplicate` (`lib.rs:259-264`, botão "Duplicar", `app.rs:5253`), para uma peça: nome "(cópia)", PN novo, sem histórico. Não duplica montagens, não reapontando nada.
 
@@ -777,11 +777,11 @@ Ordem das fichas:
 
 ---
 
-### Documentos derivados e conversor (CATIA: STEP/IGES import, Associative export / SW: Import Diagnostics / Inventor: Import / Fusion: Upload / Fenkra: ausente)
+### Documentos derivados e conversor (CAD avançado B: STEP/IGES import, Associative export / CAD avançado A: Import Diagnostics / CAD avançado C: Import / Fusion: Upload / Fenkra: ausente)
 
 - **O que faz:** trata um arquivo importado (STEP, IGES, STL…) como um documento que **veio de outro** e que pode ficar desatualizado, em vez de um arquivo qualquer.
 
-- **CATIA V5, SolidWorks, Inventor — no detalhe:** todos importam para um documento nativo. Em geral esse documento *não mantém associação* com o arquivo de origem (é uma cópia, sem atualizar). [C] O Fusion guarda o arquivo original enviado como "Archive". [C] Nenhum desses detalhes foi confirmado em fonte nesta pesquisa. Marcar como [C].
+- **CAD avançado B, CAD avançado A, CAD avançado C — no detalhe:** todos importam para um documento nativo. Em geral esse documento *não mantém associação* com o arquivo de origem (é uma cópia, sem atualizar). [C] O Fusion guarda o arquivo original enviado como "Archive". [C] Nenhum desses detalhes foi confirmado em fonte nesta pesquisa. Marcar como [C].
 
 - **Fenkra hoje:**
   - Não há importador de STEP/IGES. Há **Exportar STEP/STL** (`app.rs:2528-2535`, `880-892`) e o comando **MeshImport**, que importa STL/OBJ como recurso e guarda o caminho absoluto do arquivo (`app.rs:1754-1756`).
@@ -799,15 +799,15 @@ Ordem das fichas:
 
 ---
 
-### Montagem: salvar contexto (CATIA: Define In Work Object, links contextuais / SW: Edit Part, referências externas / Inventor: Edit in place, Adaptive / Fenkra: edit_part e back_to_assembly)
+### Montagem: salvar contexto (CAD avançado B: objeto de trabalho, links contextuais / CAD avançado A: Edit Part, referências externas / CAD avançado C: Edit in place, Adaptive / Fenkra: edit_part e back_to_assembly)
 
 - **O que faz:** decide, ao editar uma peça dentro de uma montagem, o que é salvo, onde, e como os links entre peça e montagem se mantêm.
 
-- **CATIA V5 — no detalhe:** Define In Work Object define o objeto em trabalho. Os links contextuais ficam no produto e se atualizam. O Save Management lista pai e filhos modificados, e Save Auto cobre os dependentes. [V, em parte]
+- **CAD avançado B — no detalhe:** objeto de trabalho define o objeto em trabalho. Os links contextuais ficam no produto e se atualizam. O Save Management lista pai e filhos modificados, e Save Auto cobre os dependentes. [V, em parte]
 
-- **SolidWorks — no detalhe:** editar a peça no contexto cria **referências externas** (a peça guarda um link para a montagem). Salvar a peça sem a montagem aberta deixa o link fora de contexto. Os estados são `->` (em contexto), `->?` (fora), `->*` (travado) e `->x` (quebrado), e é possível Travar, Destravar e Quebrar (ADR 0011, princípio 3). [V, ADR; C, confirmação externa]
+- **CAD avançado A — no detalhe:** editar a peça no contexto cria **referências externas** (a peça guarda um link para a montagem). Salvar a peça sem a montagem aberta deixa o link fora de contexto. Os estados são `->` (em contexto), `->?` (fora), `->*` (travado) e `->x` (quebrado), e é possível Travar, Destravar e Quebrar (ADR 0011, princípio 3). [V, ADR; C, confirmação externa]
 
-- **Inventor — no detalhe:** edição no local (*edit in place*) e peças adaptativas. Ao salvar, o Inventor salva os arquivos editados e a montagem. [C]
+- **CAD avançado C — no detalhe:** edição no local (*edit in place*) e peças adaptativas. Ao salvar, o CAD avançado C salva os arquivos editados e a montagem. [C]
 
 - **Fenkra hoje:**
   - `edit_part` (`asm_ui.rs:890-906`) carrega a peça por cima do documento aberto (`load_doc_pub`) e muda de bancada. A montagem fica em `st.editing_part`. O botão "↩ Voltar à montagem" (`app.rs:2600-2603`) chama `back_to_assembly` (`asm_ui.rs:909-918`): `save_pub` salva a peça (sem pergunta), esquece o cache, resolve a montagem.
@@ -826,15 +826,15 @@ Ordem das fichas:
 
 ---
 
-### Histórico, comparação e auditoria (CATIA/ENOVIA: Compare / SW PDM: History, Compare / Vault: History / Onshape: Versions and history / Fenkra: lista de versões)
+### Histórico, comparação e auditoria (CAD avançado B/PLM avançado: Compare / CAD avançado A PDM: History, Compare / Vault: History / CAD avançado E: Versions and history / Fenkra: lista de versões)
 
 - **O que faz:** responde "quem mudou o quê e quando" e "o que mudou entre duas revisões".
 
-- **SolidWorks PDM — no detalhe:** o histórico do arquivo mostra versões, revisões, mudanças de estado e eventos como renomeação. [V, GoEngineer] Comentários obrigatórios dão um histórico confiável. [V] Os administradores podem pedir que também apareçam as operações de check-out no histórico (fórum). [V, só título]
+- **CAD avançado A PDM — no detalhe:** o histórico do arquivo mostra versões, revisões, mudanças de estado e eventos como renomeação. [V, GoEngineer] Comentários obrigatórios dão um histórico confiável. [V] Os administradores podem pedir que também apareçam as operações de check-out no histórico (fórum). [V, só título]
 
-- **Onshape — no detalhe:** o painel Versions and history mostra num gráfico toda mudança de todos os usuários, em versões e branches. Dá para buscar por palavra-chave e filtrar por aba, tipo de aba, autor e data. Há branch, merge, restauração e versões automáticas ao atualizar referências. [V, página lida]
+- **CAD avançado E — no detalhe:** o painel Versions and history mostra num gráfico toda mudança de todos os usuários, em versões e branches. Dá para buscar por palavra-chave e filtrar por aba, tipo de aba, autor e data. Há branch, merge, restauração e versões automáticas ao atualizar referências. [V, página lida]
 
-- **ENOVIA/Vault — no detalhe:** log de alterações (ENOVIA: `CHANGE_LOG` no contexto do usuário é proposta nossa, não do produto). Vault tem histórico por arquivo e por item. [C]
+- **PLM avançado/Vault — no detalhe:** log de alterações (PLM avançado: `CHANGE_LOG` no contexto do usuário é proposta nossa, não do produto). Vault tem histórico por arquivo e por item. [C]
 
 - **Fenkra hoje:** `Version` guarda hash, hora e uma nota fixa "salvo". O painel lista as 30 últimas (`app.rs:5273-5283`) com **abrir**. Não compara versões, não grava autor.
 
@@ -845,11 +845,11 @@ Ordem das fichas:
 
 ---
 
-### Propriedades e metadados (SW PDM: Data Card / Vault: propriedades e Item / CATIA: Properties / Fenkra: Properties)
+### Propriedades e metadados (CAD avançado A PDM: Data Card / Vault: propriedades e Item / CAD avançado B: Properties / Fenkra: Properties)
 
 - **O que faz:** mantém PN, descrição, material etc. consistentes entre o arquivo, o gerenciador, a BOM e o desenho.
 
-- **SolidWorks PDM — no detalhe:** o cartão de dados mapeia variáveis para propriedades do arquivo, e há um fórum com o clássico "renomeei o arquivo e o cartão não atualizou" (só título). [V] **Vault:** sincronização de propriedades arquivo ↔ banco, definida por mapeamentos, com "primary model state" para itens. [V]
+- **CAD avançado A PDM — no detalhe:** o cartão de dados mapeia variáveis para propriedades do arquivo, e há um fórum com o clássico "renomeei o arquivo e o cartão não atualizou" (só título). [V] **Vault:** sincronização de propriedades arquivo ↔ banco, definida por mapeamentos, com "primary model state" para itens. [V]
 
 - **Fenkra hoje:** `Properties { pn, description, material, part_type, custom, stock_length }` (`fenkra-core/doc.rs:1158-1168`). O índice **copia** pn, nome e descrição do documento ao salvar (`lib.rs:216-218`). A fonte da verdade é o documento, e o índice é cache. Se o JSON mudar por fora, o índice fica desatualizado. O desenho resolve campos da legenda por `resolve` (`fenkra-desenho/lib.rs:125`).
 
@@ -859,13 +859,13 @@ Ordem das fichas:
 
 ---
 
-### Permissões e papéis (SW PDM: grupos e permissões por estado / Vault: roles / ENOVIA: roles / Fenkra: ausente)
+### Permissões e papéis (CAD avançado A PDM: grupos e permissões por estado / Vault: roles / PLM avançado: roles / Fenkra: ausente)
 
 - **O que faz:** define quem lê, escreve, libera, exclui.
 
-- **SolidWorks PDM — no detalhe:** permissões por grupo, por estado e por pasta; o estado pode definir quem altera. [V, título de página de ajuda "IDD_USER_GROUP_STATEPERMISSION"]
-- **3DEXPERIENCE — no detalhe:** o proprietário controla Privado, e travar e tornar Obsoleto exigem permissão. [V]
-- **Inventor — no detalhe:** projetos single-user, Vault, semi-isolated e shared. [V]
+- **CAD avançado A PDM — no detalhe:** permissões por grupo, por estado e por pasta; o estado pode definir quem altera. [V, título de página de ajuda "IDD_USER_GROUP_STATEPERMISSION"]
+- **plataforma PLM avançada — no detalhe:** o proprietário controla Privado, e travar e tornar Obsoleto exigem permissão. [V]
+- **CAD avançado C — no detalhe:** projetos single-user, Vault, semi-isolated e shared. [V]
 - **Fenkra hoje:** ausente. O `plm-vpm.md` prevê `USER/ROLE/PERMISSION` para a fase 3.
 - **Melhor prática para o Fenkra:** na fase pasta, só **papéis simples** (Autor, Aprovador, Leitor) em `.fenkra/papeis.json`, aplicados pela interface (não é segurança de verdade em pasta compartilhada, e o programa deve dizer isso). Segurança real só com servidor (fase 2 do `plm-vpm.md`). **Caso de teste:** Leitor não vê o botão Liberar nem consegue pelo atalho; a tentativa vira evento no diário.
 
@@ -986,68 +986,68 @@ Dependências usam os IDs atuais do backlog: B25 (VPM fase 1), B47 (PNEngine), B
 ## 5. Fontes
 
 **Lidas na íntegra (WebFetch)**
-- https://edstechnologies.com/blog/save-options-in-catia-v5/
-- http://catiaassemblytutor.blogspot.com/2008/03/save-management.html
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://knowledge.cadimensions.com/knowledge/pack-and-go-tips-and-tricks
-- https://visiativ.co.uk/news-resources/solidworks-assembly-referenced-documents/
-- https://www.goengineer.com/en-us/blog/understanding-version-and-revisions-solidworks-pdm
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-1C613827-95EE-4DD5-A484-66BC1337B529.htm
-- https://help.autodesk.com/cloudhelp/2020/ENU/Inventor-Help/files/GUID-B2B198B3-B131-4CD6-B3C6-C8663BCDD60A.htm
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-0F34FEBE-4A2A-4494-A869-FC904F15F2BE.htm
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-B25088E2-AF91-4774-A168-C141F6147AD8.htm
-- https://blog.autodesk.io/replacereference-vs-filesaveas-vs-onfileresolution/
-- https://help.autodesk.com/cloudhelp/2026/ENU/Vault-General/files/GUID-02EB242B-3766-4CDC-91D9-6B04FF94F028.htm
-- https://help.autodesk.com/cloudhelp/2015/ENU/Vault/files/GUID-54272FDF-E145-4972-A900-2E197F8F9E71.htm
-- https://help.autodesk.com/cloudhelp/2026/ENU/Vault-General/files/GUID-A6C34246-4C97-4EC9-B3CD-79B4DCB68A52.htm
-- https://hawkridgesys.com/blog/maturity-states-in-solidworks-cloud-services-3dexperience
-- https://cad.onshape.com/help/Content/Document/versions_and_history.htm
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://www.sqlite.org/useovernet.html
 
 **Usadas só por resumo de busca (página completa deu 403, 404 ou não carregou)**
 - https://community.3dcs.com/help_manual/savemanagement_2.htm
 - https://community.3dcs.com/help_manual/savemanagement.htm
-- https://community.3dcs.com/help_manual/catiav5saving.htm
+- (fonte em procedencia.md)
 - https://community.3dcs.com/help_manual/savesendtofunction.htm
 - https://community.3dcs.com/help_manual/desk.htm
 - https://www.eng-tips.com/viewthread.cfm?qid=136848
 - https://www.eng-tips.com/threads/assembly-loosing-links.125258/
 - https://www.ibm.com/support/pages/apar/HD35827
-- https://grabcad.com/questions/catia-change-path-of-design-tables
-- http://catiadoc.free.fr/online/bascugen_C2/bascudocument0000.htm
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://www.youtube.com/shorts/qSb0u6pfGCs (só o título)
-- https://help.solidworks.com/2025/English/SolidWorks/sldworks/r_pack_go_db.htm
-- https://support.hawkridgesys.com/hc/en-us/articles/204608488-How-to-Create-a-Pack-and-Go-for-SOLIDWORKS
-- https://help.solidworks.com/2020/english/SolidWorks/Sldworks/AFX_HIDD_FILESAVE.htm
-- https://help.solidworks.com/2022/English/SolidWorks/Sldworks/c_Saving_an_Assembly_in_Various_Ways.htm
-- https://help.solidworks.com/2018/English/SolidWorks/sldworks/c_Saving_an_Assembly_and_Its_Components.htm
-- https://help.solidworks.com/2020/English/SolidWorks/sldworks/HIDD_SAVEAS_REFERENCES.htm
-- https://help.solidworks.com/2025/English/SolidWorks/Sldworks/c_Search_Routine_for_Referenced_Documents.htm
-- https://support.plmgroup.eu/hc/en-us/articles/4405543861649-How-SOLIDWORKS-handles-referenced-documents
-- https://help.solidworks.com/2021/English/EnterprisePDM/Admin/c_revision_numbers.htm
-- https://help.solidworks.com/2017/English/EnterprisePDM/Admin/c_workflow_states.htm
-- https://help.solidworks.com/2020/English/EnterprisePDM/FileExplorer/c_Reference_handling_for_Moved_or_Renamed_Files.htm
-- https://help.solidworks.com/2025/English/EnterprisePDM/FileExplorer/c_updating_file_references.htm
-- https://www.javelin-tech.com/blog/2016/06/solidworks-pdm-rename-file/
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://www.javelin-tech.com/blog/?p=70750
-- https://www.javelin-tech.com/blog/2023/04/the-power-of-solidworks-pdm-update-references/
-- https://www.javelin-tech.com/blog/2018/12/solidworks-pdm-revision-numbering-system/
-- https://www.goengineer.com/en-us/blog/differences-between-state-and-transition-revision-numbers-solidworks-pdm
-- https://help.autodesk.com/cloudhelp/2020/ENU/Inventor-Help/files/GUID-370D2EF8-A3F4-48A4-9DDA-9349BA031946.htm
-- https://forums.autodesk.com/t5/inventor-ideas/design-assistant-resolve-quot-file-not-found-quot/idi-p/10574403
-- https://forums.autodesk.com/t5/vault-forum/numbering-scheme/td-p/12813610
-- https://resources.imaginit.com/manufacturing/autodesk-inventor-apprentice-failed-to-load-on-get-checkout-from-vault
-- https://forums.autodesk.com/t5/vault-ideas/check-out-on-status-change/idi-p/9798143
-- https://3dswym.3dexperience.3ds.com/wiki/solidworks-news-info/revision-and-lifecycle_kZ9zb0cgSgWGGzUmxXZDyQ
-- https://trimech.com/how-to-manage-revisions-in-3dexperience/
-- https://3dswym.3dexperience.3ds.com/post/enovia-user-community/decoupling-engineering-revision-from-model-version_kLI_B93MT96vh82I6KKRfg
-- https://www.ibm.com/support/pages/apar/HD34075 e demais APARs ENOVIA citados nos resultados
-- https://www.onshape.com/en/features/release-management
-- https://www.onshape.com/es/blog/revisions-releases-custom-workflows-product-data-organization-cloud-native-cad
-- https://help.autodesk.com/cloudhelp/ENU/Fusion-Assemble/files/ASM-DESIGNS.htm
-- https://www.autodesk.com/products/fusion-360/blog/?p=82349
-- https://www.autodesk.com/products/fusion-360/blog/?p=87481
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- https://www.ibm.com/support/pages/apar/HD34075 e demais APARs PLM avançado citados nos resultados
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://uwindsor.teamdynamix.com/TDClient/KB/ArticleDet?ID=29832
-- https://support.ptc.com/help/wnc/r12.1.0.0/pt_BR/Windchill_Help_Center/prodstructure/PMConfigSpecAsMatured.html (só título)
+- (fonte em procedencia.md) (só título)
 
 **Código e documentos do Fenkra lidos**
 - `crates/fenkra-project/src/lib.rs`
@@ -1072,14 +1072,14 @@ Dependências usam os IDs atuais do backlog: B25 (VPM fase 1), B47 (PNEngine), B
 - **Resultado:** relatório completo, com 24 fichas, 48 RF-PLM, 15 RNF-PLM e 22 itens de backlog propostos.
 - **Evidência:**
   - Código lido: projeto, salvar da peça, montagem e desenho, BOM, cache de peças, links externos.
-  - Páginas lidas de CATIA (EDS, tutor de montagem), Inventor (Pack and Go, projeto, Design Assistant, Vault), Vault, 3DEXPERIENCE, Onshape, cadimensions, Visiativ, GoEngineer e SQLite.
+  - Páginas lidas de CAD avançado B (EDS, tutor de montagem), CAD avançado C (Pack and Go, projeto, Design Assistant, Vault), Vault, plataforma PLM avançada, CAD avançado E, cadimensions, Visiativ, GoEngineer e SQLite.
 - **Arquivos alterados:** nenhum. Todo o conteúdo está nesta resposta, para o lead gravar em `docs/pesquisa/plm-vpm-e-save.md`.
 - **Verificações:** só leitura de código e pesquisa web. Não rodei build nem testes.
 - **Falhas:**
-  - help.solidworks.com não carregou (só a navegação do site). Blogs Javelin, Hawk Ridge, 3DCS e PLM Group deram 403.
-  - catiadoc.free.fr recusou a conexão.
-  - Nada público útil sobre Creo/Windchill, NX/Teamcenter e Solid Edge, que ficam como [C].
-  - O comportamento exato de Save As do SolidWorks e do Inventor, e a distinção Propagate Directory × Send To, estão em fontes secundárias ou de fórum.
+  - help.CAD avançado A.com não carregou (só a navegação do site). Blogs Javelin, Hawk Ridge, 3DCS e PLM Group deram 403.
+  - CAD avançado Bdoc.free.fr recusou a conexão.
+  - Nada público útil sobre CAD avançado F/PLM avançado, CAD avançado G/PLM avançado e CAD avançado H, que ficam como [C].
+  - O comportamento exato de Save As do CAD avançado A e do CAD avançado C, e a distinção Propagate Directory × Send To, estão em fontes secundárias ou de fórum.
 - **Riscos:**
   - Os "bugs prováveis" vêm da leitura do código, não de execução. Convém confirmar com testes antes de priorizar: descarte silencioso ao abrir, `rel_path` só para descendentes, link externo relativo sem projeto e colisão de IDs em pasta compartilhada.
   - Os trechos marcados "(resumo de busca)" devem ser reconferidos nas ajudas oficiais antes de virarem regra.

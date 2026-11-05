@@ -5,14 +5,14 @@
 
 ## Como cada ferramenta conduz o fluxo
 
-- **CATIA V5:** Parâmetros globais (espessura, raio, tabela) → Wall → Wall On Edge / Swept Walls (Flange, Hem, Tear Drop, User Flange) → recortes e estampos → Fold/Unfold. A bancada aeroespacial adiciona abas apoiadas em superfície (OML/EOP).
-- **SOLIDWORKS:** Base Flange → Edge/Miter Flange com posição da dobra explícita (material dentro, material fora, dobra fora, virtual sharp) → Hem/Jog/Sketched Bend → Flatten. Unfold/Fold para editar entre dobras.
-- **Inventor:** Regras e estilos de chapa reaproveitáveis → Face → Flange/Contour Flange/Lofted Flange → Cut com "Cut Across Bend" → Flat Pattern com orientação e linhas de dobra.
+- **CAD avançado B:** Parâmetros globais (espessura, raio, tabela) → Wall → Wall On Edge / Swept Walls (Flange, Hem, Tear Drop, User Flange) → recortes e estampos → Fold/Unfold. A bancada aeroespacial adiciona abas apoiadas em superfície (OML/EOP).
+- **CAD avançado A:** Base Flange → Edge/Miter Flange com posição da dobra explícita (material dentro, material fora, dobra fora, virtual sharp) → Hem/Jog/Sketched Bend → Flatten. Unfold/Fold para editar entre dobras.
+- **CAD avançado C:** Regras e estilos de chapa reaproveitáveis → Face → Flange/Contour Flange/Lofted Flange → Cut com "Cut Across Bend" → Flat Pattern com orientação e linhas de dobra.
 
 ## O que adotar no Fenkra
 
 - Um comando de aba com tipo (aresta, cadeia, perfil, superfície, entre perfis) que abre as caixas do tipo (pedido DR-54).
-- Posição da dobra explícita como no SW e regras de chapa como no Inventor.
+- Posição da dobra explícita como no CAD avançado A e regras de chapa como no CAD avançado C.
 - Validação das abas vizinhas antes de gerar (DR-57).
 
 ## O que evitar

@@ -5,15 +5,15 @@
 
 ## Como cada ferramenta conduz o fluxo
 
-- **CATIA V5:** Folha com fundo (carimbo) separado do trabalho; vistas como snapshot paramétrico do 3D com estado (atualizada/desatualizada, links quebrados); propriedades herdadas norma → folha → vista → elemento.
-- **SOLIDWORKS:** Vistas de modelo/projetadas/seção/detalhe/quebra; Model Items importam cotas do 3D; tabelas (BOM, furos, dobras, revisões, lista de corte); AutoBalloon.
-- **Inventor:** Base/Projected/Section/Detail/Break Out; Retrieve traz anotações 3D; Parts List e balões automáticos; estilos e normas.
+- **CAD avançado B:** Folha com fundo (carimbo) separado do trabalho; vistas como snapshot paramétrico do 3D com estado (atualizada/desatualizada, links quebrados); propriedades herdadas norma → folha → vista → elemento.
+- **CAD avançado A:** Vistas de modelo/projetadas/seção/detalhe/quebra; Model Items importam cotas do 3D; tabelas (BOM, furos, dobras, revisões, lista de corte); AutoBalloon.
+- **CAD avançado C:** Base/Projected/Section/Detail/Break Out; Retrieve traz anotações 3D; Parts List e balões automáticos; estilos e normas.
 
 ## O que adotar no Fenkra
 
-- Estado de atualização visível por vista (CATIA).
-- Cadeia de herança de propriedades norma → folha → vista → elemento (CATIA).
-- Vistas por corpo para estrutura soldada (SW).
+- Estado de atualização visível por vista (CAD avançado B).
+- Cadeia de herança de propriedades norma → folha → vista → elemento (CAD avançado B).
+- Vistas por corpo para estrutura soldada (CAD avançado A).
 
 ## O que evitar
 

@@ -70,9 +70,9 @@ O Fenkra tem cerca de 58 mil linhas em Rust, 7 crates e uns 151 testes:
 | Prendedores | preencher furos métricos M3–M20 | sem polegada, grip nem pontos |
 | Importação → fabricação | só malha STL/OBJ; saída em DXF planificado, CSV, STEP/STL | `import_step` existe e nada o chama |
 
-### 1.2 O que muda com a filosofia CATIA V5 + funções inteligentes
+### 1.2 O que muda com a filosofia CAD avançado B + funções inteligentes
 
-A pesquisa confirma o diagnóstico do ADR 0011: **a lacuna principal é de modelo, não de tela.** O Fenkra já tem nomes de comandos de sobra (cerca de 50 tipos de elemento de superfície e 14 comandos de chapa). Faltam quatro estruturas que o CATIA trata como plataforma:
+A pesquisa confirma o diagnóstico do ADR 0011: **a lacuna principal é de modelo, não de tela.** O Fenkra já tem nomes de comandos de sobra (cerca de 50 tipos de elemento de superfície e 14 comandos de chapa). Faltam quatro estruturas que o CAD avançado B trata como plataforma:
 
 1. **Árvore de especificação com um só objeto em trabalho.** Hoje três mecanismos fazem esse papel: `active_collector`, o marcador de retrocesso e `Session`. A árvore também precisa de contêineres ordenado e não ordenado, estado por comando e update explícito com diagnóstico.
 2. **Contratos entre documentos.**
@@ -146,7 +146,7 @@ Os princípios estendem os 7 do ADR 0011. Os de número 2, 4, 5 e 7 são novos o
 - Na montagem, um componente ativo por vez: restrições e features só entre filhos do ativo. Editar não troca de bancada, e Voltar, Voltar ao pai e Voltar ao topo estão sempre à mão.
 - Voltar à montagem só depois de salvar a peça com sucesso ou descartar as mudanças.
 
-**P4. A árvore é especificação e o update é explícito** (CATIA, desmembrado do ADR 1)
+**P4. A árvore é especificação e o update é explícito** (CAD avançado B, desmembrado do ADR 1)
 - Contêiner ordenado (consome) × não ordenado (referencia), com regras de aninhamento. Soltar um item em lugar inválido mostra o motivo.
 - Estado por comando: ok, desatualizado, falhou ou suprimido. Modo manual ou automático por documento, com "Atualizar esta feature" e Cancelar real.
 - Toda falha tem `ErrorKind` estável e aponta o primeiro pai que falhou. O painel Diagnóstico oferece Realçar, Editar, Substituir, Isolar, Desativar, Reordenar e Apagar.
@@ -213,8 +213,8 @@ Cada bancada traz o estado atual, as cinco maiores lacunas, a melhor prática ad
 5. Sem origem nem orientação do sketch.
 
 **Melhor prática adotada:**
-- estados e reparo como Inventor e CATIA (Sketch Analysis);
-- inferência com glifo antes do clique (SW);
+- estados e reparo como CAD avançado C e CAD avançado B (Sketch Analysis);
+- inferência com glifo antes do clique (CAD avançado A);
 - conflito nunca aplica solução parcial.
 
 ### 3.2 Sólidos ([solidos.md](solidos.md))
@@ -231,7 +231,7 @@ Cada bancada traz o estado atual, as cinco maiores lacunas, a melhor prática ad
 4. Multicorpo raso.
 5. Sem massa nem inércia.
 
-**Melhor prática adotada:** limites por lado (CATIA LIM1/LIM2), Hole Wizard (SW) e padrão "reavaliar" (Inventor Adjust).
+**Melhor prática adotada:** limites por lado (CAD avançado B LIM1/LIM2), assistente de furos (CAD avançado A) e padrão "reavaliar" (CAD avançado C Adjust).
 
 ### 3.3 Superfícies e wireframe ([superficies.md](superficies.md))
 **Estado:**
@@ -249,10 +249,10 @@ Cada bancada traz o estado atual, as cinco maiores lacunas, a melhor prática ad
 5. Sem análises numéricas.
 
 **Melhor prática adotada:**
-- Join e Healing com relatório (CATIA);
-- Knit com folga visível (SW);
-- Fill sem exigir 4 lados (Onshape);
-- Boundary Patch misturando sketch e arestas (Inventor).
+- Join e Healing com relatório (CAD avançado B);
+- Knit com folga visível (CAD avançado A);
+- Fill sem exigir 4 lados (CAD avançado E);
+- Boundary Patch misturando sketch e arestas (CAD avançado C).
 
 ### 3.4 Chapa metálica ([chapa.md](chapa.md))
 **Estado:**
@@ -270,9 +270,9 @@ Cada bancada traz o estado atual, as cinco maiores lacunas, a melhor prática ad
 
 **Melhor prática adotada:**
 - mapa de dobras como fonte única de verdade;
-- regras e estilos (Inventor);
-- vértice virtual (SW);
-- visão dobrada e planificada concorrentes (CATIA).
+- regras e estilos (CAD avançado C);
+- vértice virtual (CAD avançado A);
+- visão dobrada e planificada concorrentes (CAD avançado B).
 
 ### 3.5 Estrutural e soldas ([estrutural.md](estrutural.md))
 **Estado:**
@@ -290,9 +290,9 @@ Cada bancada traz o estado atual, as cinco maiores lacunas, a melhor prática ad
 5. Sem aparar até limite nem janela de cantos.
 
 **Melhor prática adotada:**
-- falha por elemento e âncora nomeada (CATIA);
-- Corner Management e comprimento de corte (SW);
-- Frame Generator com troca de perfil (Inventor).
+- falha por elemento e âncora nomeada (CAD avançado B);
+- Corner Management e comprimento de corte (CAD avançado A);
+- Frame Generator com troca de perfil (CAD avançado C).
 
 ### 3.6 Montagem ([montagem.md](montagem.md))
 **Estado:**
@@ -311,9 +311,9 @@ Cada bancada traz o estado atual, as cinco maiores lacunas, a melhor prática ad
 5. Escala do solver e diagnóstico de conflito.
 
 **Melhor prática adotada:**
-- produto ativo e publicações (CATIA);
-- furo pela série e estados de link (SW);
-- assistente de fixação e iMates (Inventor).
+- produto ativo e publicações (CAD avançado B);
+- furo pela série e estados de link (CAD avançado A);
+- assistente de fixação e iMates (CAD avançado C).
 
 ### 3.7 Desenho técnico ([desenho.md](desenho.md))
 **Estado:**
@@ -329,9 +329,9 @@ Cada bancada traz o estado atual, as cinco maiores lacunas, a melhor prática ad
 5. Sem cotagem inteligente.
 
 **Melhor prática adotada:**
-- estado por vista e "update needed" (CATIA, Inventor);
-- importar cotas do modelo (SW Model Items);
-- herança norma → folha → vista (Solid Edge, Onshape).
+- estado por vista e "update needed" (CAD avançado B, CAD avançado C);
+- importar cotas do modelo (CAD avançado A Model Items);
+- herança norma → folha → vista (CAD avançado H, CAD avançado E).
 
 ### 3.8 PMI 3D ([pmi.md](pmi.md))
 **Estado:**
@@ -349,8 +349,8 @@ Cada bancada traz o estado atual, as cinco maiores lacunas, a melhor prática ad
 5. Sem planos nem vistas anotadas.
 
 **Melhor prática adotada:**
-- modelo semântico em camadas (FT&A do CATIA, MBD do Creo e do NX);
-- Advisor de GD&T (CATIA);
+- modelo semântico em camadas (FT&A do CAD avançado B, MBD do CAD avançado F e do CAD avançado G);
+- Advisor de GD&T (CAD avançado B);
 - exportação XDE com `XCAFDoc_DimTolTool`.
 
 ### 3.9 Interface e árvore ([interface-e-arvore.md](interface-e-arvore.md))
@@ -367,9 +367,9 @@ Cada bancada traz o estado atual, as cinco maiores lacunas, a melhor prática ad
 5. Qualidade gráfica e desempenho da árvore.
 
 **Melhor prática adotada:**
-- objeto em trabalho e Update Diagnosis (CATIA);
-- Design Doctor (Inventor);
-- Select Other e barra de retrocesso (SW).
+- objeto em trabalho e Update Diagnosis (CAD avançado B);
+- Design Doctor (CAD avançado C);
+- Select Other e barra de retrocesso (CAD avançado A).
 
 ### 3.10 Biblioteca e prendedores ([prendedores-aeronauticos.md](prendedores-aeronauticos.md), [prendedores-industriais.md](prendedores-industriais.md))
 **Estado:**
@@ -389,8 +389,8 @@ Cada bancada traz o estado atual, as cinco maiores lacunas, a melhor prática ad
 5. Dados aeronáuticos sem duas fontes abertas.
 
 **Melhor prática adotada:**
-- família como dado com gerador nomeado (Toolbox, Content Center);
-- Bolted Connection editável (Inventor);
+- família como dado com gerador nomeado (biblioteca de normas, Content Center);
+- Bolted Connection editável (CAD avançado C);
 - pontos coloridos por diâmetro como diferencial do Fenkra, já que nenhum dos três CADs faz isso nativamente.
 
 ### 3.11 Conversor de arquivos ([conversor-de-arquivos.md](conversor-de-arquivos.md))
@@ -410,8 +410,8 @@ Cada bancada traz o estado atual, as cinco maiores lacunas, a melhor prática ad
 
 **Melhor prática adotada:**
 - importar é operação com relatório, reparo e destino explícito;
-- modos Referência × Converter (Inventor AnyCAD, SW 3D Interconnect);
-- Import Diagnostics (SW).
+- modos Referência × Converter (CAD avançado C AnyCAD, CAD avançado A 3D Interconnect);
+- Import Diagnostics (CAD avançado A).
 
 ### 3.12 PLM e salvar ([plm-vpm-e-save.md](plm-vpm-e-save.md), [requisitos-macro.md](requisitos-macro.md))
 **Estado:**
@@ -430,10 +430,10 @@ Cada bancada traz o estado atual, as cinco maiores lacunas, a melhor prática ad
 5. Projeto só com peças, sem estrutura nem derivados.
 
 **Melhor prática adotada:**
-- Save Management (CATIA);
-- Pack and Go (SW, Inventor);
+- Save Management (CAD avançado B);
+- Pack and Go (CAD avançado A, CAD avançado C);
 - versão × revisão e Copy Design com reserva tardia de número (Vault);
-- ciclo de vida com filhos antes do pai (3DEXPERIENCE).
+- ciclo de vida com filhos antes do pai (plataforma PLM avançada).
 
 ---
 
@@ -908,12 +908,12 @@ Sem dependências externas. É o que torna as mudanças seguintes testáveis.
 ## 7. Pontos não confirmados [C] que precisam de validação
 
 **Comportamento dos CADs de referência** (antes de virar regra de interface):
-1. Cores do Edit Part do SW e tooltips do V5 (já citados no ADR 0011).
-2. Comprimento automático do Bolted Connection (Inventor).
-3. Comportamento exato do Salvar como do SW e do Inventor; Propagate Directory × Send To no CATIA. Hoje só há fontes de fórum.
-4. Memorando do Stop Update, Selection Traces e limite da pilha de desfazer no CATIA.
-5. Live Section do SW e do CATIA; Shift no Instant3D.
-6. Opções de origem e orientação do *positioned sketch* do CATIA além de "Reverse H".
+1. Cores do Edit Part do CAD avançado A e tooltips do V5 (já citados no ADR 0011).
+2. Comprimento automático do Bolted Connection (CAD avançado C).
+3. Comportamento exato do Salvar como do CAD avançado A e do CAD avançado C; Propagate Directory × Send To no CAD avançado B. Hoje só há fontes de fórum.
+4. Memorando do Stop Update, Selection Traces e limite da pilha de desfazer no CAD avançado B.
+5. Live Section do CAD avançado A e do CAD avançado B; Shift no Instant3D.
+6. Opções de origem e orientação do *positioned sketch* do CAD avançado B além de "Reverse H".
 
 **Normas e dados:**
 7. Letras I, O e Q proibidas em datum na ASME; lista de mudanças da ISO 1101:2017.

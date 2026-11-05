@@ -5,7 +5,7 @@
 
 ## Contexto
 Um kernel B-rep (sólidos com faces exatas, booleanas, filetes, offset, STEP) é a parte mais cara de um CAD.
-Os kernels comerciais (Parasolid, ACIS, CGM) são pagos e fechados. Escrever um do zero leva décadas.
+Os kernels comerciais (kernel geométrico proprietário, ACIS, CGM) são pagos e fechados. Escrever um do zero leva décadas.
 
 ## Decisão
 Usar **OpenCASCADE Technology (OCCT)** como kernel, isolado atrás de uma camada própria (`geom/`)
@@ -15,7 +15,7 @@ para que o resto do sistema não dependa diretamente da API do OCCT.
 - **Truck (Rust):** moderno e Apache-2.0, mas imaturo em filetes, offset e STEP.
 - **Fornjot (Rust):** experimental.
 - **Kernel próprio:** inviável no horizonte do projeto.
-- **Parasolid/ACIS:** licença incompatível com open source.
+- **kernel geométrico proprietário/ACIS:** licença incompatível com open source.
 
 ## Consequências
 - ✅ Booleanas, filetes, casca, STEP/IGES e HLR disponíveis desde o início.

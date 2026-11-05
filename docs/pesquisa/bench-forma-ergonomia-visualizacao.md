@@ -10,8 +10,8 @@
 Preços de lista são de revendas ou agregadores quando assim indicado. Muitos fornecedores não publicam preço.
 
 **Lacunas.**
-- A página do Creo Illustrate devolveu 403 e a do Cortona3D devolveu 404.
-- Não achei preço público do CATIA Human Builder, do Process Simulate Human nem do Imagine & Shape.
+- A página do CAD avançado F Illustrate devolveu 403 e a do Cortona3D devolveu 404.
+- Não achei preço público do CAD avançado B Human Builder, do Process Simulate Human nem do Imagine & Shape.
 - Não achei o produto "Prespective" (provável grafia errada). Em seu lugar apareceram Simumatik/Virtualware (VIROO).
 - Não achei avaliações de usuários do Composer em G2/Capterra.
 - Os números de tamanho de mercado variam muito entre consultorias. Trato-os como ordem de grandeza.
@@ -58,21 +58,21 @@ Preços de lista são de revendas ou agregadores quando assim indicado. Muitos f
 
 | Produto | Módulo/comando | Licenciamento |
 |---|---|---|
-| CATIA V5 / 3DEXPERIENCE | Human Builder (cria o manequim), Human Measurements Editor, Human Posture Analysis (limites de ângulo de junta), Human Activity Analysis (RULA, NIOSH 81/91, empurrar/puxar Snook & Ciriello, carregar, biomecânica) [V, artigos acadêmicos] | Preço não público [N]. Vendido como produtos/roles à parte. |
-| DELMIA Human (Dassault) | Simulação de tarefas humanas, Human Task Simulation [C] | Preço não público [N] |
-| Siemens Process Simulate Human | Manequins Jack/Jill, OWAS, RULA, NIOSH, força estática 3D, análise lombar, envelope de visão e de alcance, bases ANSUR, NHANES e Canadian Land Forces [V, ficha da revenda]. Add-on "Advanced Human" com modelo lombar detalhado [V]. | Preço não público [N]. Uma revenda afirma que o Jack foi descontinuado e substituído por este [V, fonte única, não confirmada pela Siemens]. |
+| CAD avançado B / plataforma PLM avançada | Human Builder (cria o manequim), Human Measurements Editor, Human Posture Analysis (limites de ângulo de junta), Human Activity Analysis (RULA, NIOSH 81/91, empurrar/puxar Snook & Ciriello, carregar, biomecânica) [V, artigos acadêmicos] | Preço não público [N]. Vendido como produtos/roles à parte. |
+| DELMIA Human (fornecedor de CAD avançado) | Simulação de tarefas humanas, Human Task Simulation [C] | Preço não público [N] |
+| fornecedor de CAD avançado Process Simulate Human | Manequins Jack/Jill, OWAS, RULA, NIOSH, força estática 3D, análise lombar, envelope de visão e de alcance, bases ANSUR, NHANES e Canadian Land Forces [V, ficha da revenda]. Add-on "Advanced Human" com modelo lombar detalhado [V]. | Preço não público [N]. Uma revenda afirma que o Jack foi descontinuado e substituído por este [V, fonte única, não confirmada pela fornecedor de CAD avançado]. |
 | IPS IMMA (Fraunhofer-Chalmers) | Manequim com 162 graus de liberdade [V]. Planejamento automático de trajetória do manequim e da peça (técnica de robótica), famílias de manequins, 56 variáveis anatômicas [V]. Caso de montagem de caminhão na Scania [V]. | Produto comercial pela IPS AB. Preço não público [N]. |
-| Fusion, SOLIDWORKS, Inventor, Onshape, Shapr3D | Nenhum manequim nativo [N]. Em SOLIDWORKS há "Human" apenas como figura simples [C]. | — |
+| CAD avançado D, CAD avançado A, CAD avançado C, CAD avançado E, Shapr3D | Nenhum manequim nativo [N]. Em CAD avançado A há "Human" apenas como figura simples [C]. | — |
 | Abertos | Não achei biblioteca aberta de RULA/REBA/NIOSH [V, negativo]. Há planilhas (NC State, USF), mas as da USF são protegidas por copyright [V]. MakeHuman: código AGPL, ativos e alvos CC0, saída sem restrição [V]. OpenSim (musculoesquelético, Apache-2.0 [C]) é pesado demais para o MVP. | — |
 
-### 1.2 Como funciona no melhor caso (CATIA/DELMIA e Process Simulate)
+### 1.2 Como funciona no melhor caso (CAD avançado B/DELMIA e Process Simulate)
 
 **Entradas.**
 - Base antropométrica e percentil (P5/P50/P95, masculino/feminino), ou medidas digitadas por segmento.
 - Posição inicial na montagem.
 - Alvos: mão, pé ou olhar apontando para pontos da montagem.
 
-**Fluxo típico** [V, estudos aplicados em CATIA]:
+**Fluxo típico** [V, estudos aplicados em CAD avançado B]:
 1. Cria-se o manequim com o Human Builder e escolhe-se a população.
 2. Posiciona-se no posto de trabalho (sentado, em pé).
 3. Edita-se a postura por juntas ou por cinemática inversa (a mão "pega" um ponto e o corpo acompanha, respeitando limites).
@@ -91,7 +91,7 @@ Preços de lista são de revendas ou agregadores quando assim indicado. Muitos f
 
 Não achei fóruns de usuários sobre isso [N]. Só literatura acadêmica. O que ela sugere:
 - O valor está em avaliar o projeto com postura realista antes de existir protótipo.
-- O custo e a curva de aprendizado do pacote Dassault/Siemens são a barreira, e quase nenhuma PME os compra.
+- O custo e a curva de aprendizado do pacote fornecedor de CAD avançado/fornecedor de CAD avançado são a barreira, e quase nenhuma PME os compra.
 - A base ANSUR II representa militares dos EUA e a própria documentação alerta que "pode não ser representativa de outras populações" [V]. Isso importa para o Brasil.
 
 ### 1.4 Bibliotecas e padrões
@@ -108,7 +108,7 @@ Não achei fóruns de usuários sobre isso [N]. Só literatura acadêmica. O que
 
 ### 1.5 Recomendação para o Fenkra
 
-**Fluxo na filosofia CATIA V5.**
+**Fluxo na filosofia CAD avançado B.**
 - O manequim é um **componente da montagem** com parâmetros publicados: percentil, população, estatura e demais medidas.
 - A postura é um **estado** (conjunto de ângulos de junta) salvo na árvore, e várias posturas por manequim podem coexistir.
 - Alvos de mão e olhar são **referências estáveis** a pontos, arestas ou conectores de componentes. Se o ponto muda de lugar, o manequim o acompanha.
@@ -122,7 +122,7 @@ Não achei fóruns de usuários sobre isso [N]. Só literatura acadêmica. O que
 - Posturas prontas: sentado, em pé, agachado, alcançando.
 - "Pegar/apontar" por IK.
 - Envelope de alcance: amostragem das cadeias cinemáticas dentro dos limites, nuvem de pontos e malha por voxel, com zonas coloridas.
-- Cone e campo de visão: uma segunda janela com a vista pelos olhos, no estilo da janela de visão do CATIA.
+- Cone e campo de visão: uma segunda janela com a vista pelos olhos, no estilo da janela de visão do CAD avançado B.
 - Folga de acesso para mão/ferramenta: volume varrido, interferência pelo kernel de colisão do Fenkra.
 
 **Análises (item novo, ~200 k).** RULA, REBA, OWAS, NIOSH (índice de levantamento), tabela por postura, relatório em português com campos para NR-17, exportando PDF/CSV.
@@ -167,16 +167,16 @@ Não achei fóruns de usuários sobre isso [N]. Só literatura acadêmica. O que
 
 | Produto | Módulo | Licenciamento |
 |---|---|---|
-| Autodesk Fusion | Ambiente **Form** (T-Splines) | US$ 680/ano comercial (várias fontes; a página multi-seat da Autodesk também mostra US$ 680) [V]. Existem também promoções e licença pessoal gratuita limitada [C]. |
-| CATIA | Imagine & Shape (IMA), role 3DEXPERIENCE [V] | Preço não público [N]. |
+| fornecedor de CAD avançado CAD avançado D | Ambiente **Form** (T-Splines) | US$ 680/ano comercial (várias fontes; a página multi-seat da fornecedor de CAD avançado também mostra US$ 680) [V]. Existem também promoções e licença pessoal gratuita limitada [C]. |
+| CAD avançado B | Imagine & Shape (IMA), role plataforma PLM avançada [V] | Preço não público [N]. |
 | Plasticity | Modelagem por NURBS e **PolySplines** (subdivisão → NURBS), xNURBS, Square | Perpétua, nó único. **Indie US$ 175**, **Studio US$ 299**, ambas com 12 meses de atualização e Blender Bridge. Studio inclui PolySplines, xNURBS, Square, Constraint Modeling [V]. |
-| Rhino | SubD + `ToNURBS` | Pago, perpétua [C] |
+| CAD avançado I | SubD + `ToNURBS` | Pago, perpétua [C] |
 | Blender | Subdivisão (Catmull-Clark) | Aberto (GPL) [C]. Não é CAD. |
 | Shapr3D | Não achei subdivisão [N] | Pro US$ 299/ano por editor, na página oficial [V]. |
 
 ### 2.2 Como funciona no melhor caso (Fusion Form)
 
-- A forma é uma **feature da linha do tempo**: cria-se uma Form vazia, edita-se o corpo T-Spline, vinca-se arestas e **finaliza-se**, o que converte para B-rep/NURBS [V, exemplo da API Autodesk].
+- A forma é uma **feature da linha do tempo**: cria-se uma Form vazia, edita-se o corpo T-Spline, vinca-se arestas e **finaliza-se**, o que converte para B-rep/NURBS [V, exemplo da API fornecedor de CAD avançado].
 - Primitivas: caixa, plano, cilindro, esfera, toro, quadball, tubo, com simetria já na criação [V].
 - Simetria: espelho interno, circular, espelho-duplicado, limpar e isolar [V].
 - Ferramentas de edição (lista oficial) [V]:
@@ -192,18 +192,18 @@ Não achei fóruns de usuários sobre isso [N]. Só literatura acadêmica. O que
 
 ### 2.3 O que usuários elogiam e reclamam
 
-- Elogio recorrente: esculpir formas orgânicas que depois viram corpo sólido, na mesma linha do tempo. Recomenda-se modelar metade e espelhar, e isolar malhas complexas [V, handout da Autodesk University].
-- Reclamação central: **a conversão falha** em malhas complexas, com estrela, T-junction e vinco; as mensagens de erro são vagas para iniciantes [V, fórum Autodesk].
+- Elogio recorrente: esculpir formas orgânicas que depois viram corpo sólido, na mesma linha do tempo. Recomenda-se modelar metade e espelhar, e isolar malhas complexas [V, handout da fornecedor de CAD avançado University].
+- Reclamação central: **a conversão falha** em malhas complexas, com estrela, T-junction e vinco; as mensagens de erro são vagas para iniciantes [V, fórum fornecedor de CAD avançado].
 - Um usuário cita limite de ~50.000 polígonos [V, afirmação de fórum não verificada].
-- Em Rhino, conversão SubD → NURBS de malha densa é lenta e pode travar. O PolySpline do Plasticity foi relatado como bem mais rápido [V, fóruns McNeel].
+- Em CAD avançado I, conversão SubD → NURBS de malha densa é lenta e pode travar. O PolySpline do Plasticity foi relatado como bem mais rápido [V, fóruns McNeel].
 - **Diferencial do líder.** O Form vive dentro do paramétrico e **associativo** (Match, Freeze). O Plasticity ganha em velocidade e em G2 declarado, ao custo de ficar fora de uma árvore paramétrica de engenharia.
 
 ### 2.4 Bibliotecas e padrões
 
 - **OpenSubdiv** (Pixar): Apache-2.0 com cláusula extra sobre marcas dos colaboradores [V]. Avalia a superfície-limite de Catmull-Clark em CPU e GPU [V]. **Não achei bindings em Rust** [V, negativo]: exigiria FFI C++ (`cxx`).
 - **Alternativa recomendada para o MVP:** Catmull-Clark próprio em Rust (malha half-edge). No caso regular, a superfície Catmull-Clark é exatamente uma B-spline bicúbica uniforme [C], o que dá conversão exata nas regiões regulares.
-- **Conversão em pontos extraordinários.** A referência é a opção do Rhino `ToNURBS`: G0, G1, G1x, G1xx, G2 nos vértices extraordinários, com o aviso de que "só podem ser aproximados" e de que forçar G2 gera calombos ou depressões [V]. Cada opção troca desvio por continuidade [V].
-- **Patente de T-splines.** A patente US 7,274,364 (BYU/Autodesk) consta como **expirada em 2024** (Wikipedia/Google Patents; o próprio Google avisa que o status é suposição, não conclusão jurídica) [V]. Patentes posteriores da Autodesk (ex.: US 8,310,481; US 10,832,471) existem [V] e **não** verifiquei se estão em vigor. Antes de implementar T-splines propriamente ditos, consultar parecer jurídico. **Subdivisão Catmull-Clark** é técnica pública antiga [C] e dispensa isso.
+- **Conversão em pontos extraordinários.** A referência é a opção do CAD avançado I `ToNURBS`: G0, G1, G1x, G1xx, G2 nos vértices extraordinários, com o aviso de que "só podem ser aproximados" e de que forçar G2 gera calombos ou depressões [V]. Cada opção troca desvio por continuidade [V].
+- **Patente de T-splines.** A patente US 7,274,364 (BYU/fornecedor de CAD avançado) consta como **expirada em 2024** (Wikipedia/Google Patents; o próprio Google avisa que o status é suposição, não conclusão jurídica) [V]. Patentes posteriores da fornecedor de CAD avançado (ex.: US 8,310,481; US 10,832,471) existem [V] e **não** verifiquei se estão em vigor. Antes de implementar T-splines propriamente ditos, consultar parecer jurídico. **Subdivisão Catmull-Clark** é técnica pública antiga [C] e dispensa isso.
 - **OCCT.** `Geom_BSplineSurface`, `BRepBuilderAPI_Sewing` e `ShapeFix` para costurar os remendos [C]. `truck-geometry` (Apache-2.0 na versão 0.4.0 [V]) como apoio matemático.
 
 ### 2.5 Recomendação para o Fenkra
@@ -212,7 +212,7 @@ Não achei fóruns de usuários sobre isso [N]. Só literatura acadêmica. O que
 - Nó **"Forma"** (feature, não corpo): contém a malha de controle como parâmetros (vértices, vincos, simetria).
 - Saída: um corpo B-rep que **entra como corpo da árvore**, aceita filete, casca e booleana, e se recalcula quando a malha muda.
 - Referências estáveis: faces da saída são nomeadas pela **face da malha de origem** (índice persistente), para que um filete aplicado continue válido ao editar a forma. Se a topologia da malha muda (inserir aresta), as faces afetadas ficam "órfãs" e o painel pede reatribuição, como o Fusion faz com "Match".
-- Painéis: **suporte** (primitiva ou corpo existente) → **modo** (face/aresta/vértice) → **parâmetros** (suavidade, vinco, simetria) → **avançado** (tolerância de conversão, opção G0/G1/G2 nos pontos extraordinários, como no Rhino).
+- Painéis: **suporte** (primitiva ou corpo existente) → **modo** (face/aresta/vértice) → **parâmetros** (suavidade, vinco, simetria) → **avançado** (tolerância de conversão, opção G0/G1/G2 nos pontos extraordinários, como no CAD avançado I).
 
 **MVP (~300 k).**
 - Malha half-edge.
@@ -262,12 +262,12 @@ Não achei fóruns de usuários sobre isso [N]. Só literatura acadêmica. O que
 
 | Produto | Módulo | Licenciamento |
 |---|---|---|
-| CATIA V5 | **FreeStyle Shaper 2 (FSS)**, **Optimizer (FSO)**, **Profiler (FSP)** | Preço não público [N] |
-| CATIA 3DEXPERIENCE | Roles de estilo (Natural Shape, etc.) [V] | Preço não público [N] |
-| Autodesk Alias | AutoStudio, Surface, Concept | Só assinatura; tabelas de revenda: AutoStudio 3 anos US$ 65.437,99 (listagem governamental), Concept renovação anual US$ 5.070 [V]. |
+| CAD avançado B | **FreeStyle Shaper 2 (FSS)**, **Optimizer (FSO)**, **Profiler (FSP)** | Preço não público [N] |
+| CAD avançado B plataforma PLM avançada | Roles de estilo (Natural Shape, etc.) [V] | Preço não público [N] |
+| fornecedor de CAD avançado Alias | AutoStudio, Surface, Concept | Só assinatura; tabelas de revenda: AutoStudio 3 anos US$ 65.437,99 (listagem governamental), Concept renovação anual US$ 5.070 [V]. |
 | Plasticity | Curvas e superfícies NURBS com medição de continuidade e curvatura | US$ 175/299 [V] |
-| Rhino, ICEM Surf | Superfícies por polos e Classe A [C] | Pago [C] |
-| SOLIDWORKS | Freeform, Surface [C] | Pago [C] |
+| CAD avançado I, ICEM Surf | Superfícies por polos e Classe A [C] | Pago [C] |
+| CAD avançado A | Freeform, Surface [C] | Pago [C] |
 
 ### 3.2 Como funciona no melhor caso (FreeStyle Shaper 2)
 
@@ -283,7 +283,7 @@ Não achei fóruns de usuários sobre isso [N]. Só literatura acadêmica. O que
 
 - Elogio: o diagnóstico ao vivo e a propagação de modificações sem refazer tudo.
 - Reclamação: curva de aprendizado e custo; o Classe A real exige especialistas e ferramentas dedicadas (Alias/ICEM) [C].
-- Na comparação de Rhino SubD e T-splines, usuários citam que NURBS gerado "difere visivelmente" do T-spline [V, fórum McNeel] — aviso para qualquer fluxo de conversão.
+- Na comparação de CAD avançado I SubD e T-splines, usuários citam que NURBS gerado "difere visivelmente" do T-spline [V, fórum McNeel] — aviso para qualquer fluxo de conversão.
 
 ### 3.4 Bibliotecas e padrões
 
@@ -293,7 +293,7 @@ Não achei fóruns de usuários sobre isso [N]. Só literatura acadêmica. O que
   - `GeomAPI_PointsToBSplineSurface` (ajuste) e `GeomConvert` (reparametrização).
   - `GeomAbs_Shape` já tem G0, G1, G2; **G3 não é nativo** nas rotinas de preenchimento.
 - **Rust.** `nalgebra` (Apache-2.0 [C]) para o sistema linear das restrições; `truck-geometry` (Apache-2.0 [V]) para B-splines; `curvo` oferece interpolação, loft, varredura e interseção de curvas [V], licença não confirmada [N] (olhar o repositório antes de adotar).
-- **Patentes.** A Dassault tem patente de superfícies paramétricas com continuidade Gᵢ requerida que trata vértices abertos [V]. Não é impedimento por si, mas um aviso para não copiar algoritmo descrito: implemente com álgebra linear padrão (mínimos quadrados restritos).
+- **Patentes.** A fornecedor de CAD avançado tem patente de superfícies paramétricas com continuidade Gᵢ requerida que trata vértices abertos [V]. Não é impedimento por si, mas um aviso para não copiar algoritmo descrito: implemente com álgebra linear padrão (mínimos quadrados restritos).
 
 ### 3.5 Recomendação para o Fenkra
 
@@ -351,18 +351,18 @@ Não achei fóruns de usuários sobre isso [N]. Só literatura acadêmica. O que
 
 | Produto | O que entrega | Licenciamento |
 |---|---|---|
-| CATIA Composer | Ilustrações técnicas associativas 2D/3D, animações, procedimentos interativos. **Composer Player** gratuito, **Player Pro** com API em tempo real, **Sync** e **Enterprise Sync** (XML, CLI) [V] | Pago, preço não público [N] |
-| SOLIDWORKS Composer | Mesmo núcleo. Um ponto de preço: US$ 5.765 (revenda CATI, tipo de licença não declarado) e ¥ 807.000 (Hitachi) [V, pontos isolados] | Pago |
-| Creo Illustrate / Creo View | Ilustrações interativas, PVZ para distribuição, integração Windchill [V] | Preço não publicado [V] |
+| CAD avançado B Composer | Ilustrações técnicas associativas 2D/3D, animações, procedimentos interativos. **Composer Player** gratuito, **Player Pro** com API em tempo real, **Sync** e **Enterprise Sync** (XML, CLI) [V] | Pago, preço não público [N] |
+| CAD avançado A Composer | Mesmo núcleo. Um ponto de preço: US$ 5.765 (revenda CATI, tipo de licença não declarado) e ¥ 807.000 (Hitachi) [V, pontos isolados] | Pago |
+| CAD avançado F Illustrate / CAD avançado F View | Ilustrações interativas, PVZ para distribuição, integração PLM avançado [V] | Preço não publicado [V] |
 | Cortona3D RapidAuthor/RapidManual | Manuais 3D interativos, S1000D, DITA, ATA2200 [V] | Modular, preço sob consulta; perfil aeroespacial/defesa [V] |
-| SOLIDWORKS eDrawings | Visualizador gratuito com medição e marcação; recursos Professional acima disso [V] | Gratuito + licença |
-| Onshape | Visualizador nativo no navegador [C] | Plano |
+| CAD avançado A eDrawings | Visualizador gratuito com medição e marcação; recursos Professional acima disso [V] | Gratuito + licença |
+| CAD avançado E | Visualizador nativo no navegador [C] | Plano |
 | Plasticity Share | Pré-visualização de malha na nuvem sem expor o CAD [V] | Incluído |
 | Shapr3D | Links seguros de revisão [V] | Incluído no Pro |
 
 ### 4.2 Como funciona no melhor caso
 
-O Composer separa **autoria** (cara) de **consumo** (Player gratuito), e o Sync mantém a associatividade com o CAD e com o BOM. O Creo Illustrate separa **sequência** de **animação**: uma figura é uma ou outra, não as duas [V]. Chamadas de BOM podem ser arrastadas do eBOM para um sBOM de serviço [V].
+O Composer separa **autoria** (cara) de **consumo** (Player gratuito), e o Sync mantém a associatividade com o CAD e com o BOM. O CAD avançado F Illustrate separa **sequência** de **animação**: uma figura é uma ou outra, não as duas [V]. Chamadas de BOM podem ser arrastadas do eBOM para um sBOM de serviço [V].
 
 ### 4.3 O que usuários elogiam e reclamam
 
@@ -428,15 +428,15 @@ O valor reconhecido é reaproveitar o CAD para documentação sem redesenhar [V]
 
 | Produto | Detalhe | Licenciamento |
 |---|---|---|
-| **KeyShot Studio** | Líder em render de produto. Planos Professional/Business/Enterprise com **todos os recursos**, diferindo só em suporte e gestão; **Studio VR** US$ 99/mês e **Studio Web** US$ 39/mês como complementos [V]. | **US$ 1.299/ano** (página oficial; G2 mostra US$ 1.188 em outra página) [V]. Perpétua descontinuada em 2023 segundo fonte de terceiros [V, não confirmado]. |
-| **SOLIDWORKS Visualize** | Iray (NVIDIA), físico-realista. **Standard** vem com SW Professional/Premium em assinatura ativa; **Professional** acrescenta animação, iluminação customizada, VR e 360 interativo; **Boost** distribui renders em outras máquinas (só Professional) [V]. | Standard avulso ~£170 + VAT; Professional ~£1.135/12 meses em uma revenda; sem lista pública [V]. |
+| **renderizador avançado Studio** | Líder em render de produto. Planos Professional/Business/Enterprise com **todos os recursos**, diferindo só em suporte e gestão; **Studio VR** US$ 99/mês e **Studio Web** US$ 39/mês como complementos [V]. | **US$ 1.299/ano** (página oficial; G2 mostra US$ 1.188 em outra página) [V]. Perpétua descontinuada em 2023 segundo fonte de terceiros [V, não confirmado]. |
+| **CAD avançado A Visualize** | Iray (NVIDIA), físico-realista. **Standard** vem com CAD avançado A Professional/Premium em assinatura ativa; **Professional** acrescenta animação, iluminação customizada, VR e 360 interativo; **Boost** distribui renders em outras máquinas (só Professional) [V]. | Standard avulso ~£170 + VAT; Professional ~£1.135/12 meses em uma revenda; sem lista pública [V]. |
 | **Fusion (workspace Render)** | Render local ou na nuvem com créditos; turntable e re-renders só na nuvem (forum antigo) [V]. | Incluído na assinatura US$ 680/ano [V] |
-| **Onshape Render Studio** | No navegador. Incluído nos planos Professional e Enterprise, 2 MP; 100 MP custa **US$ 1.000/usuário/ano** [V]. Câmera, luzes, ambientes e conjuntos de aparência; Iray na nuvem (página japonesa) [V]. | Incluído / adicional |
+| **CAD avançado E Render Studio** | No navegador. Incluído nos planos Professional e Enterprise, 2 MP; 100 MP custa **US$ 1.000/usuário/ano** [V]. Câmera, luzes, ambientes e conjuntos de aparência; Iray na nuvem (página japonesa) [V]. | Incluído / adicional |
 | **Twinmotion** (Epic) | Tempo real. **Grátis** para empresas com receita < US$ 1 milhão/ano, estudantes e hobby; **US$ 445/assento/ano** acima disso [V]. A partir de 27/05/2026 as assinaturas Unreal não incluem mais Twinmotion [V]. | Veja ao lado |
 | **Blender (Cycles)** | Cycles é **Apache-2.0** [V]. Blender em si é GPL [C]. | Gratuito |
 | **FreeCAD Render** | Usa renderizadores externos (Cycles standalone, LuxCore, Pov-Ray etc.); mantenedor parou em nov/2025 (pesquisa anterior) [V]. | Gratuito |
 
-### 5.2 Como funciona no melhor caso (KeyShot, Visualize)
+### 5.2 Como funciona no melhor caso (renderizador avançado, Visualize)
 
 - **Entradas.** Modelo importado, biblioteca de materiais, ambientes HDRI, câmera.
 - **Fluxo.** Arrastar material sobre peça → escolher ambiente HDRI → ajustar câmera (distância focal, profundidade de campo) → render progressivo que **refina até o usuário parar**.
@@ -445,10 +445,10 @@ O valor reconhecido é reaproveitar o CAD para documentação sem redesenhar [V]
 
 ### 5.3 O que usuários elogiam e reclamam
 
-- KeyShot: velocidade de render, interface, ampla biblioteca de materiais, bom controle de luz, curva de aprendizado curta [V, TrustRadius/Capterra].
+- renderizador avançado: velocidade de render, interface, ampla biblioteca de materiais, bom controle de luz, curva de aprendizado curta [V, TrustRadius/Capterra].
 - Reclamações: preço (caro, mas "vale a pena"), instalação de licença flutuante complicada, poucos materiais e erros em algumas avaliações isoladas [V].
 - Fusion: créditos de nuvem, limites de resolução em render local [V, fóruns antigos].
-- Onshape: limite de 2 MP e preço do pacote de 100 MP.
+- CAD avançado E: limite de 2 MP e preço do pacote de 100 MP.
 
 ### 5.4 Bibliotecas e padrões
 
@@ -507,9 +507,9 @@ O valor reconhecido é reaproveitar o CAD para documentação sem redesenhar [V]
 ### 6.1 Quem oferece
 
 Quase todo CAD tem um modo "realista" em tempo real [C]:
-- SOLIDWORKS: RealView e visual avançado.
+- CAD avançado A: RealView e visual avançado.
 - Fusion: sombreamento realista com ambiente.
-- Onshape: render no navegador, e Render Studio à parte [V].
+- CAD avançado E: render no navegador, e Render Studio à parte [V].
 - Shapr3D: renderizações em tempo real com 100+ materiais no plano Pro [V].
 
 O diferencial hoje é **PBR correto** (cor base, metálico, rugosidade) ligado ao material do CAD, de modo que o viewport e o glTF exportado coincidem.
@@ -565,7 +565,7 @@ Usuários valorizam que a peça "pareça o material" já no modelamento. Reclama
 ### 7.1 Quem oferece
 
 - Plasticity: **Blender Bridge** incluído nas duas licenças [V].
-- Fusion e SOLIDWORKS têm pontes para KeyShot/Visualize [C].
+- CAD avançado D e CAD avançado A têm pontes para renderizador avançado/Visualize [C].
 - Blender importa glTF e USD nativamente [C].
 
 ### 7.2 Como funciona
@@ -606,10 +606,10 @@ glTF; USD (Apache-2.0 modificada [C]), com escrita **USDA/USDZ** simples e próp
 
 | Produto | Detalhe | Licenciamento |
 |---|---|---|
-| **3DEXPERIENCE / CATIA VR Reviewer** | Revisão 1:1 estereoscópica **sem exportar**, dentro das roles CATIA; HMD e Immersive Desktop; sessões compartilhadas multiusuário [V]. | Parte das roles; preço não público [N] |
-| **Mindesk (Vection)** | Link ao vivo bidirecional com Rhino, Grasshopper, SOLIDWORKS e Revit; Suite 2024.0.1 (jul/2024) cita Quest 3 e Quest Pro [V]. Status da empresa incerto ("adquirida") [V]. | Assinatura (ex.: Suite Enterprise na NovEdge) [V, existência] |
+| **plataforma PLM avançada / CAD avançado B VR Reviewer** | Revisão 1:1 estereoscópica **sem exportar**, dentro das roles CAD avançado B; HMD e Immersive Desktop; sessões compartilhadas multiusuário [V]. | Parte das roles; preço não público [N] |
+| **Mindesk (Vection)** | Link ao vivo bidirecional com CAD avançado I, Grasshopper, CAD avançado A e software BIM avançado; Suite 2024.0.1 (jul/2024) cita Quest 3 e Quest Pro [V]. Status da empresa incerto ("adquirida") [V]. | Assinatura (ex.: Suite Enterprise na NovEdge) [V, existência] |
 | **Shapr3D** | Vision Pro com **todas as funções de modelagem**; visualizador AR no plano gratuito; AR integrado no iPad no Pro; **revisão imersiva Vision Pro só no Enterprise** [V]. | Pro US$ 299/editor/ano [V] |
-| **SOLIDWORKS eDrawings** | AR citada como recurso da camada Professional em uma comparação; fontes conflitam [V]. | Gratuito/Professional |
+| **CAD avançado A eDrawings** | AR citada como recurso da camada Professional em uma comparação; fontes conflitam [V]. | Gratuito/Professional |
 | **Unity Reflect** | **Descontinuado**; indisponível desde dez/2024 [V]. | — |
 | **Unity Pixyz Review, CAD Schroer i4** | Revisão VR com importação e compressão automática de STEP; mapa de visão geral para modelos grandes [V]. | Comerciais, preço não público [N] |
 | **Simumatik/Virtualware (VIROO)** | Comissionamento virtual e VR industrial [V]. "Prespective" não encontrado [N]. | — |
@@ -618,7 +618,7 @@ glTF; USD (Apache-2.0 modificada [C]), com escrita **USDA/USDZ** simples e próp
 
 ### 8.2 Como funciona no melhor caso
 
-No VR Reviewer do 3DEXPERIENCE, o modelo aparece em escala 1:1 diretamente da plataforma, com navegação, corte, medição e reunião multiusuário [V]. O Mindesk permite **editar no CAD e ver no capacete ao mesmo tempo** (link bidirecional) [V].
+No VR Reviewer do plataforma PLM avançada, o modelo aparece em escala 1:1 diretamente da plataforma, com navegação, corte, medição e reunião multiusuário [V]. O Mindesk permite **editar no CAD e ver no capacete ao mesmo tempo** (link bidirecional) [V].
 
 ### 8.3 O que usuários e estudos dizem
 
@@ -639,7 +639,7 @@ No VR Reviewer do 3DEXPERIENCE, o modelo aparece em escala 1:1 diretamente da pl
 
 ### 8.5 Recomendação para o Fenkra
 
-**Princípio.** Menos ambição que Dassault/Mindesk. Foco em **revisar o que já está publicado**, sem edição imersiva.
+**Princípio.** Menos ambição que fornecedor de CAD avançado/Mindesk. Foco em **revisar o que já está publicado**, sem edição imersiva.
 
 **Fluxo na árvore.** Nenhum nó novo. VR e AR leem a **Publicação** (pacote do B156) e o manequim do B152.
 
@@ -686,13 +686,13 @@ No VR Reviewer do 3DEXPERIENCE, o modelo aparece em escala 1:1 diretamente da pl
 
 ### 9.1 Quem oferece
 
-- Onshape: web nativo [C].
+- CAD avançado E: web nativo [C].
 - eDrawings: visualizador gratuito com medição e marcação [V].
 - Composer: publica para HTML e Player [C].
 - cadasio: ilustrações interativas (pesquisa anterior).
 - Plasticity Share: pré-visualização de malha na nuvem [V].
 - Shapr3D: links seguros de revisão [V].
-- Sketchfab, Creo View [C].
+- Sketchfab, CAD avançado F View [C].
 
 ### 9.2 Como funciona
 
@@ -751,8 +751,8 @@ Um único arquivo `.html` com JS inline e o modelo embutido (base64), abre offli
 
 | Produto | Detalhe | Licenciamento |
 |---|---|---|
-| CATIA / SOLIDWORKS Composer | Instruções animadas, ilustrações associativas, Player gratuito, Sync [V] | Pago; ~US$ 5.765 em um ponto de revenda [V] |
-| Creo Illustrate | Explodidas com linhas, **chamadas e lista de itens por figura** (renumerar/combinar), animação ou sequência, eBOM → sBOM por arrastar, PVZ [V] | Não publicado [V] |
+| CAD avançado B / CAD avançado A Composer | Instruções animadas, ilustrações associativas, Player gratuito, Sync [V] | Pago; ~US$ 5.765 em um ponto de revenda [V] |
+| CAD avançado F Illustrate | Explodidas com linhas, **chamadas e lista de itens por figura** (renumerar/combinar), animação ou sequência, eBOM → sBOM por arrastar, PVZ [V] | Não publicado [V] |
 | Cortona3D RapidManual/RapidAuthor | Procedimentos animados, S1000D, DITA, ATA2200 [V] | Modular, sob consulta [V] |
 | IsoDraw, Fusion Animation | Ilustração vetorial, storyboard [C] | Pago [C] |
 | Open source | Nenhum equivalente integrado ao CAD [N] | — |
@@ -823,8 +823,8 @@ Esses números são direcionais e vêm de relatórios pagos. **Não usá-los em 
 
 | Perfil | O que compra | Observações |
 |---|---|---|
-| OEM e fornecedores automotivos e aeroespaciais | CATIA/DELMIA Human, Process Simulate Human, IMMA, VR Reviewer | Já têm pacotes caros; o Fenkra não os substitui, mas pode atender fornecedores menores |
-| Máquinas, implementos, carrocerias, caldeiraria e estruturas | Documentação de montagem/manutenção, imagens para proposta, revisão de projeto | Sensíveis a preço; usam SOLIDWORKS/Inventor; Composer/KeyShot são caros para esse porte |
+| OEM e fornecedores automotivos e aeroespaciais | CAD avançado B/DELMIA Human, Process Simulate Human, IMMA, VR Reviewer | Já têm pacotes caros; o Fenkra não os substitui, mas pode atender fornecedores menores |
+| Máquinas, implementos, carrocerias, caldeiraria e estruturas | Documentação de montagem/manutenção, imagens para proposta, revisão de projeto | Sensíveis a preço; usam CAD avançado A/CAD avançado C; Composer/renderizador avançado são caros para esse porte |
 | Design de produto e impressão 3D | Forma livre, render, visualização | Plasticity e Fusion Form dominam o baixo custo |
 | Aeronáutico e defesa | Publicações técnicas S1000D/ATA (Cortona3D) | Barreira alta de normas; não é alvo do MVP |
 | Educação | Visualizadores gratuitos, manequim, forma livre | Shapr3D é grátis para estudantes [V]; Twinmotion grátis para estudantes [V]; o Fenkra aberto compete bem |
@@ -834,12 +834,12 @@ Esses números são direcionais e vêm de relatórios pagos. **Não usá-los em 
 
 1. **Cadeia integrada numa árvore com referências estáveis:** modelo → sequência automática → conferência com manequim → instruções com BOM por passo → arquivo para quem não tem o Fenkra. Os concorrentes dependem de produtos separados e de "Sync".
 2. **Figuras vetoriais de instrução** com balões e BOM por passo, a partir do desenho técnico: pouco comum fora do Illustrate/IsoDraw.
-3. **Visualizador gratuito e offline**, com medição exata via pontos de captura. Contrasta com as soluções em nuvem (Plasticity Share, Shapr3D, Onshape) e com o preço do Composer.
+3. **Visualizador gratuito e offline**, com medição exata via pontos de captura. Contrasta com as soluções em nuvem (Plasticity Share, Shapr3D, CAD avançado E) e com o preço do Composer.
 4. **Português e normas locais:** relatório ergonômico alinhado à NR-17, sem substituir o ergonomista.
-5. **Licença aberta e preço zero** diante de US$ 1.299/ano (KeyShot), US$ 680/ano (Fusion) ou US$ 299 (Plasticity Studio).
+5. **Licença aberta e preço zero** diante de US$ 1.299/ano (renderizador avançado), US$ 680/ano (CAD avançado D) ou US$ 299 (Plasticity Studio).
 6. **Janela de oportunidade em VR:** o Unity Reflect foi descontinuado [V]; Mindesk tem futuro incerto [V]. Uma revisão VR simples e aberta tem espaço.
 
-**Onde não competir (agora):** render fotorrealista (KeyShot, Visualize), Classe A real (Alias, ICEM, CATIA), fisiologia humana completa (Jack, IMMA), publicações S1000D.
+**Onde não competir (agora):** render fotorrealista (renderizador avançado, Visualize), Classe A real (Alias, ICEM, CAD avançado B), fisiologia humana completa (Jack, IMMA), publicações S1000D.
 
 ### 11.4 Sequência sugerida
 
@@ -857,24 +857,24 @@ Esses números são direcionais e vêm de relatórios pagos. **Não usá-los em 
 ## 12. Fontes (URLs)
 
 **Forma livre**
-- https://help.autodesk.com/cloudhelp/ENU/Fusion-Sculpt/files/FRM-MODIFY-TOOLS.htm
-- https://help.autodesk.com/cloudhelp/ENU/Fusion-Sculpt/files/FRM-SYMMETRY-TOOLS.htm
-- https://help.autodesk.com/cloudhelp/ENU/Fusion-Sculpt/files/FRM-UTILITIES.htm
-- https://help.autodesk.com/cloudhelp/ENU/Fusion-Sculpt/files/FRM-CREATE-FORM-PRIMITIVE.htm
-- https://help.autodesk.com/cloudhelp/ENU/Fusion-360-API/files/TSplineBodySample_Sample.htm
-- https://forums.autodesk.com/t5/fusion-design-validate-document/t-spline-model-failed-to-convert/m-p/12941798
-- https://static.au-uw2-stg.autodesk.com/PD20930_handout_20930_AU_202016_20Claas_20Kuhnen_20Class_20Handout.pdf
-- https://www.autodesk.com/campaigns/fusion-360/multi-seat-offer
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://doc.plasticity.xyz/getting-started/license-types-and-features
 - https://www.cgchannel.com/2025/12/plastic-software-releases-plasticity-2025-3/
 - https://discourse.mcneel.com/t/subd-vs-t-splines-surface-conversion/117916
-- https://docs.mcneel.com/rhino/8/help/en-us/commands/tonurbs.htm
+- (fonte em procedencia.md)
 - https://www.shapr3d.com/pricing
-- https://3dswym.3dexperience.3ds.com/wiki/catia-user-community/catia-freestyle-shaper-2-fss_lir3l79TSwCVSY6C61qf5g
-- https://3dswym.3dexperience.3ds.com/wiki/catia-user-community/catia-imagine-shape-2-ima_QxNAfthmSVe2EA3V2_gz8A
-- https://www.goengineer.com/training/catia-v5-freestyle-shaper-optimizer-profiler
-- https://www.autodesk.com/products/alias-products/subscribe
-- https://www.cdwg.com/product/autodesk-alias-autostudio-2026-new-subscription-3-years-1-seat/8372411
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://graphics.pixar.com/opensubdiv/docs/intro.html
 - https://patents.google.com/patent/US7274364
 - https://en.wikipedia.org/wiki/T-spline
@@ -885,8 +885,8 @@ Esses números são direcionais e vêm de relatórios pagos. **Não usá-los em 
 **Ergonomia**
 - https://www.prevencionintegral.com/node/17227
 - https://4dsysco.com/?p=1995
-- https://www.emixa.com/hubfs/Emixa/Marketing/Content%20Dashboard/Sub%20Solution%20and%20Sub%20Services%20Content%20downloads/Siemens%20SW%20Process%20Simulate%20Human%20Fact%20Sheet.pdf
-- https://blogs.sw.siemens.com/news/human-simulation-in-an-integrated-plm-environment/
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://pmcorp.com/simulation/jack/
 - https://fcc.chalmers.se/software/ips/ips-imma/
 - https://research.chalmers.se/publication/511515
@@ -900,28 +900,28 @@ Esses números são direcionais e vêm de relatórios pagos. **Não usá-los em 
 - https://www.rsdata.com.br/nr17-nova-redacao-como-sera/
 
 **Visualizador e instruções**
-- https://www.3ds.com/products/catia/catia-composer
-- https://help.solidworks.com/2025/English/DSSWXComposerDoc/Cps1UserMap/cps-r-wn.htm
-- https://store.cati.com/Catalog/Software/Detail/602-tcx0231-solidworks-composer
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://www.hitachi.co.jp/products/it/industry/solution/3dviacomposer/price.html
-- https://support.ptc.com/help/creo/creoillustrate/en/creo_illustrate/gxy1.html
-- https://www.g2.com/products/creo-illustrate/pricing
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://cortona3d.com/en/rapidauthor
 - https://www.cortona3d.com/rapidmanual
 - https://cortona3d.com/de/rapidauthor
-- https://help.solidworks.com/2018/English/eDrawings/c_Key_Features_of_eDrawings_Professional.htm
-- https://blogs.solidworks.com/tech/2018/11/solidworks-edrawings-viewer-2019-includes-previous-edrawings-professional-features.html
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 
 **Render**
-- https://www.keyshot.com/pricing/
-- https://www.capterra.com/p/173819/KeyShot/reviews
-- https://www.trustradius.com/products/keyshot
-- https://www.solidworks.com/product/solidworks-visualize.md
-- https://www.javelin-tech.com/blog/2019/03/solidworks-visualize-standard-vs-professional/
-- https://help.autodesk.com/cloudhelp/ENU/Fusion-Render/files/RND-RENDER-CLOUD-LOCAL.htm
-- https://forums.autodesk.com/t5/fusion-support/local-rerender-option-unavailable/m-p/8473810
-- https://onshape.com/en/features/render-studio
-- https://www.onshape.com/en/blog/onshape-launches-render-studio
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://www.twinmotion.com/en-US/license
 - https://www.unrealengine.com/en-US/blog/we-are-updating-unreal-engine-twinmotion-and-realitycapture-pricing-in-late-april
 - https://developer.blender.org/docs/features/cycles/standalone/
@@ -929,8 +929,8 @@ Esses números são direcionais e vêm de relatórios pagos. **Não usá-los em 
 - https://docs.rs/crate/renderling/latest
 
 **VR/AR**
-- https://3dswym.3dexperience.3ds.com/wiki/3dexperience-platform-user-s-community/catia-virtual-reality-reviewer_2kYJS9QLQTu1QtWRDgVslQ
-- https://events.3ds.com/catia-creative-design-and-icem-days/paradigm-shift-for-vr
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://www.vection-technologies.com/solutions/products/mindesk/overview
 - https://mindeskvr.com
 - https://vection-technologies.com/about-us/
@@ -961,7 +961,7 @@ Esses números são direcionais e vêm de relatórios pagos. **Não usá-los em 
 ---
 
 STATUS: DONE_WITH_CONCERNS
-SUMMARY: Relatório de benchmark dos 10 itens entregue, com 7 novos itens para quebrar B152, B153, B154, B156/B162 e B157, mas com lacunas de preço, fontes que não abriram (Creo Illustrate 403, Cortona3D 404), "Prespective" não localizado, tamanhos de mercado divergentes e licenças de `curvo`, OIDN e three.js só por conhecimento prévio.
+SUMMARY: Relatório de benchmark dos 10 itens entregue, com 7 novos itens para quebrar B152, B153, B154, B156/B162 e B157, mas com lacunas de preço, fontes que não abriram (CAD avançado F Illustrate 403, Cortona3D 404), "Prespective" não localizado, tamanhos de mercado divergentes e licenças de `curvo`, OIDN e three.js só por conhecimento prévio.
 
 **Handoff.**
 - **Resultado:** o relatório acima.

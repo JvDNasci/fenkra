@@ -2,7 +2,7 @@
 
 Consultadas em 29/10/2026. Nenhum texto foi copiado: tudo foi reescrito com palavras próprias.
 
-## SOLIDWORKS
+## CAD avançado A
 
 - `sw-feat` — [SOLIDWORKS Help — Features Overview](https://help.solidworks.com/2012/English/SolidWorks/sldworks/Features_Overview.htm)
 - `sw-trim` — [SOLIDWORKS Help — Trimming with Power Trim](https://help.solidworks.com/2017/english/solidworks/sldworks/t_Trimming_with_Power_Trim.htm)
@@ -27,7 +27,7 @@ Consultadas em 29/10/2026. Nenhum texto foi copiado: tudo foi reescrito com pala
 - `sw-packgo` — [SOLIDWORKS Help — Pack and Go](https://help.solidworks.com/2024/English/SolidWorks/Sldworks/r_pack_go_db.htm)
 - `sw-imgq` — [SOLIDWORKS Help — Image Quality](https://help.solidworks.com/2020/English/SolidWorks/sldworks/HIDD_OPTIONS_IMAGE_QUALITY.htm)
 
-## Inventor
+## CAD avançado C
 
 - `inv-sketched` — [Inventor Help — Sketched features](https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-236B12FC-DC32-4BCA-A53D-FCB17382EEB6.htm)
 - `inv-trim` — [Inventor Help — Split, Trim or Extend Curves](https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-DD00037F-6BBA-4B95-AA90-4F99DCEB667D.htm)
@@ -52,22 +52,22 @@ Consultadas em 29/10/2026. Nenhum texto foi copiado: tudo foi reescrito com pala
 - `inv-asmfeat` — [Inventor Help — Assembly features](https://help.autodesk.com/cloudhelp/2027/ENU/Inventor-Help/files/GUID-553D514F-2F41-419A-8696-063932991E67.htm)
 - `inv-display` — [Inventor Help — Application Options, Display](https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-760D1240-4E53-4509-90A5-40A66CCD96CD.htm)
 
-## CATIA V5
+## CAD avançado B
 
-- `catia-pd-niar` — [Wichita State NIAR — CATIA V5R30 Part Design & Sketcher (apostila)](https://www.wichita.edu/industry_and_defense/NIAR/Documents/Part-Design-R30.pdf)
-- `catia-smd-niar` — [Wichita State NIAR — CATIA V5R30 Sheet Metal Design (apostila)](https://wichita.edu/industry_and_defense/NIAR/Documents/Sheet-Metal-Design-R30.pdf)
-- `catia-asm-niar` — [Wichita State NIAR — CATIA V5R30 Assembly Design (apostila)](https://wichita.edu/industry_and_defense/NIAR/Documents/Assembly-Design-R30.pdf)
-- `catia-asm-city` — [City University London — CATIA Assembly Design: Constraints toolbar](https://www.staff.city.ac.uk/~ra600/ME2105/Catia%20course/CATIA%20Tutorials/asmug_C2/asmugwd0400.htm)
-- `catia-city` — [City University London — CATIA V5 Lectures](https://www.staff.city.ac.uk/~ra600/Presentations/CATIA%20V5%20Lectures.pdf)
-- `catia-skt-grabcad` — [GrabCAD — CATIA V5 tutorial: Trim, Break, Mirror…](https://grabcad.com/tutorials/7-catia-v5-complete-tutorial-for-beginners-trim-break-mirror-symmetry-translate-rotate-scale)
-- `catia-str-pycatia` — [pycatia — API de Structure Design (endcuts)](https://pycatia.readthedocs.io/en/latest/api/pycatia/cat_str_functional_interfaces/sfm_endcut.html)
-- `catia-nav-ptc` — [PTC Creo View — modo de navegação compatível com CATIA V5](https://support.ptc.com/help/creo/view/r6.0/en/creo_view/Using_the_Mouse_in_Catia_V5_Mode.html)
+- `cb-pd-niar` — [Wichita State NIAR — CATIA V5R30 Part Design & Sketcher (apostila)](https://www.wichita.edu/industry_and_defense/NIAR/Documents/Part-Design-R30.pdf)
+- `cb-smd-niar` — [Wichita State NIAR — CATIA V5R30 Sheet Metal Design (apostila)](https://wichita.edu/industry_and_defense/NIAR/Documents/Sheet-Metal-Design-R30.pdf)
+- `cb-asm-niar` — [Wichita State NIAR — CATIA V5R30 Assembly Design (apostila)](https://wichita.edu/industry_and_defense/NIAR/Documents/Assembly-Design-R30.pdf)
+- `cb-asm-city` — [City University London — CATIA Assembly Design: Constraints toolbar](https://www.staff.city.ac.uk/~ra600/ME2105/Catia%20course/CATIA%20Tutorials/asmug_C2/asmugwd0400.htm)
+- `cb-city` — [City University London — CATIA V5 Lectures](https://www.staff.city.ac.uk/~ra600/Presentations/CATIA%20V5%20Lectures.pdf)
+- `cb-skt-grabcad` — [GrabCAD — CATIA V5 tutorial: Trim, Break, Mirror…](https://grabcad.com/tutorials/7-catia-v5-complete-tutorial-for-beginners-trim-break-mirror-symmetry-translate-rotate-scale)
+- `cb-str-pycad` — [pycatia — API de Structure Design (endcuts)](https://pycatia.readthedocs.io/en/latest/api/pycatia/cat_str_functional_interfaces/sfm_endcut.html)
+- `cb-nav-ptc` — [PTC Creo View — modo de navegação compatível com CATIA V5](https://support.ptc.com/help/creo/view/r6.0/en/creo_view/Using_the_Mouse_in_Catia_V5_Mode.html)
 - `niar-courses` — [Wichita State NIAR — ementas de CATIA (Drafting, FT&A, GSD)](https://www.wichita.edu/research/NIAR/Laboratories/cad-cam/course-descriptions.php)
-- `catia-pub` — [EDS Technologies — Publications in CATIA V5](https://edstechnologies.com/blog/making-assemblies-easier-with-publications-in-catia-v5/)
-- `catia-tree` — [CATI — Managing the design tree in CATIA V5](https://www.cati.com/blog/managing-the-design-tree-in-catia-v5-6-and-3dexperience/)
-- `catia-perf` — [EDS Technologies — Performance settings in CATIA V5](https://edstechnologies.com/blog/performance-settings-in-catia-v5/)
-- `catia-save` — [EDS Technologies — Save options in CATIA V5](https://edstechnologies.com/blog/save-options-in-catia-v5/)
-- `catia-asmfeat` — [City University London — CATIA Assembly Features](https://www.staff.city.ac.uk/~ra600/ME2105/Catia%20course/CATIA%20Tutorials/asmug_C2/asmugat0500.htm)
+- `cb-pub` — [EDS Technologies — Publications in CATIA V5](https://edstechnologies.com/blog/making-assemblies-easier-with-publications-in-catia-v5/)
+- `cb-tree` — [CATI — Managing the design tree in CATIA V5](https://www.cati.com/blog/managing-the-design-tree-in-catia-v5-6-and-3dexperience/)
+- `cb-perf` — [EDS Technologies — Performance settings in CATIA V5](https://edstechnologies.com/blog/performance-settings-in-catia-v5/)
+- `cb-save` — [EDS Technologies — Save options in CATIA V5](https://edstechnologies.com/blog/save-options-in-catia-v5/)
+- `cb-asmfeat` — [City University London — CATIA Assembly Features](https://www.staff.city.ac.uk/~ra600/ME2105/Catia%20course/CATIA%20Tutorials/asmug_C2/asmugat0500.htm)
 
 ## PDM/PLM
 

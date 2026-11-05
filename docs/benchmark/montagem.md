@@ -5,14 +5,14 @@
 
 ## Como cada ferramenta conduz o fluxo
 
-- **CATIA V5:** Product com componentes; restrições (coincidência, contato, offset, ângulo, fix, fix together) e Quick Constraint; mecanismos ficam na bancada de cinemática.
-- **SOLIDWORKS:** Mates padrão, avançados (largura, simetria, caminho, limite) e mecânicos (engrenagem, cremalheira, came, parafuso); SmartMates ao arrastar; padrões guiados pela feature.
-- **Inventor:** Constraints para posicionar e Joints para movimento, com tipo automático pela geometria; Design Accelerator insere conexões parafusadas e engrenagens com restrições.
+- **CAD avançado B:** Product com componentes; restrições (coincidência, contato, offset, ângulo, fix, fix together) e Quick Constraint; mecanismos ficam na bancada de cinemática.
+- **CAD avançado A:** Mates padrão, avançados (largura, simetria, caminho, limite) e mecânicos (engrenagem, cremalheira, came, parafuso); SmartMates ao arrastar; padrões guiados pela feature.
+- **CAD avançado C:** Constraints para posicionar e Joints para movimento, com tipo automático pela geometria; Design Accelerator insere conexões parafusadas e engrenagens com restrições.
 
 ## O que adotar no Fenkra
 
-- Juntas com tipo automático pela geometria (Inventor) e restrição rápida (CATIA/SW).
-- Mates avançados de largura/simetria/caminho (SW).
+- Juntas com tipo automático pela geometria (CAD avançado C) e restrição rápida (CAD avançado B/CAD avançado A).
+- Mates avançados de largura/simetria/caminho (CAD avançado A).
 - Origem própria da montagem e seleção/ocultar iguais às peças (DR-31, DR-32).
 
 ## O que evitar

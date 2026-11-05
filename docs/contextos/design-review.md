@@ -5,8 +5,8 @@ Itens do backlog citam o slide de origem como `DR-NN`.
 
 ## DR-01
 
-Fazer um benchmarking com catia V5 e olhar as evoluções do solidworks
-Dinamismo do fusion 360
+Fazer um benchmarking com CAD avançado B e olhar as evoluções do CAD avançado A
+Dinamismo do CAD avançado D
 
 ## DR-02
 
@@ -139,7 +139,7 @@ Alguns comandos criam contextual extracts automaticamente, que ficam ocultos. Ex
 Se estiver ativado:
 Intersection edges activation
 Tangent intersection edges activation
-O CATIA automaticamente ativa:
+O CAD avançado B automaticamente ativa:
 Geometrical Element Filter
 E ajusta o tipo de propagação conforme o filtro. Ao confirmar o comando, o filtro volta ao estado normal.
 5.2 Complementary Mode
@@ -182,7 +182,7 @@ A seleção pode ser:
 Simples (um elemento)
 Múltipla (vários elementos) → via Multiple Extract
 2.2 Tipo de propagação
-Define como o CATIA continua a extração além do elemento selecionado:
+Define como o CAD avançado B continua a extração além do elemento selecionado:
 Point continuity Extrai elementos conectados por continuidade de ponto (C0).
 Tangent continuity Extrai elementos conectados por continuidade de tangência (C1).
 Curvature continuity Extrai elementos conectados por continuidade de curvatura (C2).
@@ -451,7 +451,7 @@ Direção de projeção
 Orientação da vista
 Escala da vista
 3.3 Um “snapshot” paramétrico do 3D
-O CATIA registra:
+O CAD avançado B registra:
 Faces
 Arestas
 Curvas
@@ -875,7 +875,7 @@ Estende uma linha até encontrar outra.
 Corta uma linha até o limite mais próximo.
 Funciona como “Trim + Extend” em uma única ferramenta.
 ✔ Funcionamento interno
-CATIA projeta a direção da entidade.
+CAD avançado B projeta a direção da entidade.
 Ele calcula a interseção com o limite mais próximo.
 Ele ajusta o comprimento da entidade até esse ponto.
 ✔ Quando usar
@@ -909,7 +909,7 @@ Fontes mostram que Relimitation inclui: ✔ Trim ✔ Break ✔ Quick Trim ✔ Cl
 É o grupo de ferramentas que altera limites de entidades no Sketcher.
 ✔ O que significa “paragem”?
 No contexto do, “paragem” refere-se a limitar ou interromper uma entidade em um ponto específico — exatamente o que Break, Trim e Trim Extend fazem.
-Com base nos vídeos analisados, o CATIA usa:
+Com base nos vídeos analisados, o CAD avançado B usa:
 1. Interseções detectadas
 Ele identifica automaticamente onde as entidades se cruzam.
 2. Segmentos virtuais

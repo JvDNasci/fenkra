@@ -1,10 +1,10 @@
-# Pesquisa avançada: comando a comando (CATIA V5 + SolidWorks + Inventor + outros)
+# Pesquisa avançada: comando a comando (CAD avançado B + CAD avançado A + CAD avançado C + outros)
 
-**Objetivo:** adotar a filosofia do CATIA V5 com as funções inteligentes do SolidWorks, do Inventor e de outros CADs, dentro das bancadas que o Fenkra já tem. A base é o [ADR 0011](../arquitetura/adr/0011-filosofia-de-modelagem.md).
+**Objetivo:** adotar a filosofia do CAD avançado B com as funções inteligentes do CAD avançado A, do CAD avançado C e de outros CADs, dentro das bancadas que o Fenkra já tem. A base é o [ADR 0011](../arquitetura/adr/0011-filosofia-de-modelagem.md).
 
 **Estrutura de cada relatório:**
 1. resumo e lacunas;
-2. uma ficha por comando: CATIA, SW, Inventor e outros no detalhe, **Fenkra hoje** (com arquivo:linha) e **melhor prática**;
+2. uma ficha por comando: CAD avançado B, CAD avançado A, CAD avançado C e outros no detalhe, **Fenkra hoje** (com arquivo:linha) e **melhor prática**;
 3. requisitos RF e RNF com critério de aceite;
 4. itens de backlog propostos;
 5. fontes.
@@ -18,7 +18,7 @@
 |---|---|---|
 | [sketch.md](sketch.md) | Sketcher | 47 |
 | [solidos.md](solidos.md) | Part Design / features de sólido | 48 |
-| [interface-e-arvore.md](interface-e-arvore.md) | Árvore, Define In Work Object, atualização, seleção, painéis, tooltips, gráficos | 36 |
+| [interface-e-arvore.md](interface-e-arvore.md) | Árvore, objeto de trabalho, atualização, seleção, painéis, tooltips, gráficos | 36 |
 | [montagem.md](montagem.md) | Montagem, edição em contexto, publicações, features de montagem | 42 |
 | [prendedores-aeronauticos.md](prendedores-aeronauticos.md) | NAS/MS/AN, Hi-Lok, Hi-Lite, lockbolts, cegos, rebites, porcas âncora, insertos; regra de pontos coloridos | 43 |
 | [prendedores-industriais.md](prendedores-industriais.md) | ISO/DIN/ASME, pinos, anéis, chavetas, insertos, rebites, PEM | 25 |
@@ -48,7 +48,7 @@ Ela gerou 37 alterações e 45 itens novos (B64–B108) no backlog. O custo em c
 ## Pesquisa final (01/11/2026)
 | Relatório | Tema |
 |---|---|
-| [modulos-novos.md](modulos-novos.md) | Módulos e recursos de CADs similares (FreeCAD, Onshape, Fusion, Solid Edge, SW, Inventor, CATIA, Creo, NX…), com licenças das bibliotecas abertas e 41 itens propostos (onda 4: B110–B150) |
+| [modulos-novos.md](modulos-novos.md) | Módulos e recursos de CADs similares (FreeCAD, CAD avançado E, CAD avançado D, CAD avançado H, CAD avançado A, CAD avançado C, CAD avançado B, CAD avançado F, CAD avançado G…), com licenças das bibliotecas abertas e 41 itens propostos (onda 4: B110–B150) |
 | [propriedade-intelectual.md](propriedade-intelectual.md) | Auditoria de propriedade intelectual: licenças, marcas, patentes, dados de normas, ícones; checklist e perguntas para o advogado (gerou o B151). **Não é parecer jurídico.** |
 
 ## Benchmarking 2: itens novos (01/11/2026)
@@ -59,6 +59,6 @@ Mercado e funcionalidades, item a item, com MVP, integrações e riscos:
 | [bench-forma-ergonomia-visualizacao.md](bench-forma-ergonomia-visualizacao.md) | forma livre (subdivisão e polos), ergonomia com manequim editável, Visualizador, Render, VR/AR |
 | [bench-fabricacao.md](bench-fabricacao.md) | corte de encaixe e caminho de corte em tubos, manufatura aditiva, simulação de manufatura (integrada à ergonomia), STL → STEP, engenharia reversa |
 | [bench-simulacao-sistemas.md](bench-simulacao-sistemas.md) | FEM e CFD no formato do FreeCAD, chicote, compósitos, plástico e moldes |
-| [bench-pmi-cotas.md](bench-pmi-cotas.md) | catálogo completo de tipos de cota e anotação do PMI × CATIA FT&A, SW MBD, Inventor, Creo, NX |
+| [bench-pmi-cotas.md](bench-pmi-cotas.md) | catálogo completo de tipos de cota e anotação do PMI × CAD avançado B FT&A, CAD avançado A MBD, CAD avançado C, CAD avançado F, CAD avançado G |
 
 Gerou 40 revisões e 31 itens novos (B170–B200). Os itens pedidos pelo usuário ficam com prioridade mínima P1.

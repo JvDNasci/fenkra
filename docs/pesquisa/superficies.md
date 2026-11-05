@@ -13,20 +13,20 @@
 
 1. O Fenkra já tem uma bancada ampla: cerca de 50 tipos de elemento em `RefKind` (`crates/fenkra-core/src/doc.rs:472-701`). Cobrem pontos, linhas, planos, curvas, superfícies e operações.
 2. O nome de cada função existe. O que falta é a **profundidade de cada comando**: continuidade real, "até elemento", relimitadores, acoplamento, propagação, diagnóstico por elemento.
-3. A pasta de geometria (`FolderKind::Geometria`, `doc.rs:1289-1296`) é um Geometrical Set **sem ordem**. A avaliação por dependência com memória (`lib.rs:921-927`) faz a ordem física não importar, como no Geoset do CATIA.
-4. Não existe Ordered Geometrical Set, nem Define In Work Object para geometria, nem inserção "depois de".
+3. A pasta de geometria (`FolderKind::Geometria`, `doc.rs:1289-1296`) é um Geometrical Set **sem ordem**. A avaliação por dependência com memória (`lib.rs:921-927`) faz a ordem física não importar, como no Geoset do CAD avançado B.
+4. Não existe Ordered Geometrical Set, nem objeto de trabalho para geometria, nem inserção "depois de".
 5. Toda curva do Fenkra é uma **polilinha densa** (`Curve3.pts`, `geo3d.rs:62-67`) com um círculo analítico opcional. Superfícies construídas a partir dela (extrusão, revolução, fill, loft, sweep) herdam essa aproximação. G1/G2/G3 são estimados por diferenças finitas (`geo3d.rs:143-170`).
 6. Referências a faces e arestas são **fixas por ponto ou polilinha** (`SurfRef::Face`, `SurfExtract{face}`, `CurveRef::Edge`). Isso viola o princípio 1 do ADR 0011 (estável ou erro visível) sempre que outra face passar pelo mesmo ponto.
 7. Há escolhas silenciosas no código: `which` de `CurveBoundary`/`CurveIntersect` cai em "a última" (`lib.rs:1395,1504`). O `Split` ignora elementos de corte que falham (`lib.rs:1351`). A projeção direcional descarta pontos que não acertam (`lib.rs:1426-1430`).
 8. As análises (zebra e curvatura) são só shader de tela (`render.rs:81-100`). Não há connect checker, draft, distância/desvio nem pente de curvatura.
-9. Os modos do CATIA que o Fenkra não tem e valem a pena: Join com verificações, Healing com diagnóstico, Extrapolate "até elemento" e com borda, Boundary/Extract com propagação gravada, Blend com acoplamento e tensão por lado, Fill com suporte e ponto de passagem.
-10. Diferenciais dos outros CADs que o Fenkra deve copiar: Knit com folga visível (SW), Stitch com "Find Remaining Free Edges" (Inventor), Fill sem exigir 4 lados (Onshape) e Boundary Patch misturando sketch e arestas (Inventor).
+9. Os modos do CAD avançado B que o Fenkra não tem e valem a pena: Join com verificações, Healing com diagnóstico, Extrapolate "até elemento" e com borda, Boundary/Extract com propagação gravada, Blend com acoplamento e tensão por lado, Fill com suporte e ponto de passagem.
+10. Diferenciais dos outros CADs que o Fenkra deve copiar: Knit com folga visível (CAD avançado A), Stitch com "Find Remaining Free Edges" (CAD avançado C), Fill sem exigir 4 lados (CAD avançado E) e Boundary Patch misturando sketch e arestas (CAD avançado C).
 
 **Principais lacunas** (detalhadas nas fichas):
 
 - (L1) Continuidade G1/G2 só aproximada em polilinhas, sem curva analítica ou NURBS exata.
 - (L2) Referências fixas por ponto (faces, arestas) sem nome topológico nem diagnóstico por elemento.
-- (L3) Fill, Join, Healing, Split e Trim sem os modos e verificações do CATIA e do SW.
+- (L3) Fill, Join, Healing, Split e Trim sem os modos e verificações do CAD avançado B e do CAD avançado A.
 - (L4) Falta "até elemento", relimitadores e propagação em Extrapolate, Extrude, Sweep, Boundary e Extract.
 - (L5) Sem Ordered Set, In Work Object de geometria, nem análises de continuidade, desvio e draft.
 
@@ -45,18 +45,18 @@ Organização:
 
 ### A. Wireframe
 
-### 1. Ponto de referência (CATIA: Point / SW: Reference Point + Sketch Point 3D / Inventor: Work Point / outros: Onshape Mate-connector, Creo: Datum Point / Fenkra: PointCoords, PointOnCurve, PointOnPlane, PointOnSurface, PointCenter, PointTangent, PointBetween, PointCurvePlane, PointCurveCurve, PointProject, PointProjectCurve, PointOffset)
+### 1. Ponto de referência (CAD avançado B: Point / CAD avançado A: Reference Point + Sketch Point 3D / CAD avançado C: Work Point / outros: CAD avançado E Mate-connector, CAD avançado F: Datum Point / Fenkra: PointCoords, PointOnCurve, PointOnPlane, PointOnSurface, PointCenter, PointTangent, PointBetween, PointCurvePlane, PointCurveCurve, PointProject, PointProjectCurve, PointOffset)
 
 - **O que faz:** cria uma posição 3D usada como entrada de linhas, planos, centros e relimitadores.
-- **CATIA V5:**
+- **CAD avançado B:**
   - Tipos: Coordinates, On curve, On plane, On surface, Circle/sphere center, Tangent on curve, Between. [C] A sequência dos tipos vem de conhecimento geral. O Point on curve tem o campo "Reference point" e referências por distância (comprimento real ou proporção) e permite "repeat object" (vários pontos). [C]
   - Em On surface há direção e distância medidas na superfície (geodésica). [C]
   - Saída: `Point.n` na árvore. Pontos "sem referência" ficam isolados e não se movem; pontos de curva dependem do suporte.
   - Quando a referência some: o ponto fica vermelho (update error). O Update Diagnosis oferece Edit/Replace/Isolate/Deactivate. [C]
   - O texto-base do usuário (`docs/contextos/superficies.md`) pede ponto paramétrico (associativo) por padrão, e coordenadas só como exceção. [V: texto do usuário]
-- **SolidWorks:** Reference Point (arco, centro de face, interseção, projeção, N pontos distribuídos numa aresta). Em sketch 3D há pontos livres e "Sketch Point". [C] Pontos dependem da geometria; se ela some, vira "Dangling"/erro na árvore.
-- **Inventor:** Work Point (vértice, interseção de arestas, três planos, centro de toro, ponto em superfície). Em sketch 3D, pontos incluem "Project to Surface". [C]
-- **Outros:** o Onshape usa Mate Connector e pontos de sketch; o Creo usa Datum Point on Curve/Surface com offset. [C]
+- **CAD avançado A:** Reference Point (arco, centro de face, interseção, projeção, N pontos distribuídos numa aresta). Em sketch 3D há pontos livres e "Sketch Point". [C] Pontos dependem da geometria; se ela some, vira "Dangling"/erro na árvore.
+- **CAD avançado C:** Work Point (vértice, interseção de arestas, três planos, centro de toro, ponto em superfície). Em sketch 3D, pontos incluem "Project to Surface". [C]
+- **Outros:** o CAD avançado E usa Mate Connector e pontos de sketch; o CAD avançado F usa Datum Point on Curve/Surface com offset. [C]
 - **Fenkra hoje:**
   - Nove modos de ponto em `RefKind` (`doc.rs:498-512,546-554`), todos com expressão (`String`) e portanto paramétricos. Avaliados em `lib.rs:1022-1060`.
   - `PointOnCurve` usa `OnCurve::{Distance, Ratio}` sobre a polilinha (`lib.rs:905-918`); erro visível se fora da curva (bom).
@@ -69,18 +69,18 @@ Organização:
   - `PointOnSurface` deve projetar de volta na superfície real (`surface_near`) e aceitar coordenada UV real quando houver.
   - Testes: ponto sobre cilindro curvo permanece a <1e-6 do cilindro; mudar o raio desloca o ponto; apagar a curva-suporte gera erro nomeado.
 
-### 2. Linha de referência (CATIA: Line / SW: Reference Axis, Sketch 3D line / Inventor: Work Axis, 3D line / Fenkra: LinePoints, LineDir, LineAngle, LineNormalSurface, LinePlanes, LineBisector, LineAxis)
+### 2. Linha de referência (CAD avançado B: Line / CAD avançado A: Reference Axis, Sketch 3D line / CAD avançado C: Work Axis, 3D line / Fenkra: LinePoints, LineDir, LineAngle, LineNormalSurface, LinePlanes, LineBisector, LineAxis)
 
 - **O que faz:** cria um segmento ou eixo, limitado ou infinito.
-- **CATIA V5:**
+- **CAD avançado B:**
   - Tipos: Point-Point, Point-Direction, Angle/Normal to curve, Tangent to curve, Normal to surface, Bisecting. [C]
   - Cada ponta aceita um comprimento ou **"Up-to"** (elemento limitante). [C]
   - Opção Mirrored extent (simétrico). [C]
   - Em Angle/Normal usa-se um suporte (plano ou superfície).
   - Várias soluções aparecem como "Next solution". [C]
   - O texto-base recomenda "linhas limitadas para evitar dependências infinitas". [V: texto do usuário]
-- **SolidWorks:** Reference Axis (uma linha/aresta, dois planos, dois pontos, cilindro, ponto+superfície) e Curve (Through XYZ, Through Reference Points). [C] Linhas de sketch 3D usam planos de apoio.
-- **Inventor:** Work Axis (aresta, duas faces, dois pontos, normal a plano por ponto). [C] A 3D line aceita "Bridge" e restrições.
+- **CAD avançado A:** Reference Axis (uma linha/aresta, dois planos, dois pontos, cilindro, ponto+superfície) e Curve (Through XYZ, Through Reference Points). [C] Linhas de sketch 3D usam planos de apoio.
+- **CAD avançado C:** Work Axis (aresta, duas faces, dois pontos, normal a plano por ponto). [C] A 3D line aceita "Bridge" e restrições.
 - **Fenkra hoje:**
   - `LinePoints{a,b,start,end}` com extensão nas pontas (`doc.rs:516`), `LineDir`, `LineAngle` (0° = tangente, 90° = normal, no plano de apoio), `LineNormalSurface`, `LinePlanes`, `LineBisector`, `LineAxis{face}` (por ponto clicado).
   - Falta "até elemento" nas pontas: `start`/`end` são só números.
@@ -90,35 +90,35 @@ Organização:
   - `LineAxis` deve ser reconhecido por `owner` + papel (ADR 0010), não por ponto.
   - Testes: linha normal numa esfera cruza o centro; linha "até plano" termina no plano ao mover o plano; ângulo 0°/90° em curva planar.
 
-### 3. Plano de referência (CATIA: Plane / SW: Reference Plane / Inventor: Work Plane / Fenkra: OffsetPlane, AnglePlane, FacePlane, PlaneParallelPoint, PlaneThreePoints, PlaneTwoLines, PlanePointLine, PlaneCurve, PlaneNormalCurve, PlaneTangentSurface, PlaneEquation, PlaneMeanPoints, PlanePointNormal, PlaneMid)
+### 3. Plano de referência (CAD avançado B: Plane / CAD avançado A: Reference Plane / CAD avançado C: Work Plane / Fenkra: OffsetPlane, AnglePlane, FacePlane, PlaneParallelPoint, PlaneThreePoints, PlaneTwoLines, PlanePointLine, PlaneCurve, PlaneNormalCurve, PlaneTangentSurface, PlaneEquation, PlaneMeanPoints, PlanePointNormal, PlaneMid)
 
 - **O que faz:** cria um plano de trabalho, apoio de sketch ou limite.
-- **CATIA V5:**
+- **CAD avançado B:**
   - Tipos: Offset from plane, Parallel through point, Angle/Normal to plane, Through 3 points, Through 2 lines, Through point and line, Through planar curve, Normal to curve, Tangent to surface, Equation, Mean through points. [C]
   - Offset aceita "Repeat object after OK". [V: padrão visto nas páginas de Translate/Scale/Rotate]
   - O plano é infinito na lógica, finito só na exibição.
   - Planos por três pontos colineares falham; o texto-base prefere "ponto + normal". [V: texto do usuário]
-- **SolidWorks:** Plane com até 3 referências e restrições (Coincident, Parallel, Perpendicular, Angle, Offset, Tangent, Mid-plane). A árvore mostra qual restrição está cumprida. [C]
-- **Inventor:** Work Plane (offset, ângulo, três pontos, tangente a superfície e ponto, normal a eixo em ponto, entre dois planos). [C]
-- **Outros:** o Creo tem Datum Plane com restrições Through/Normal/Parallel/Offset/Tangent. [C]
+- **CAD avançado A:** Plane com até 3 referências e restrições (Coincident, Parallel, Perpendicular, Angle, Offset, Tangent, Mid-plane). A árvore mostra qual restrição está cumprida. [C]
+- **CAD avançado C:** Work Plane (offset, ângulo, três pontos, tangente a superfície e ponto, normal a eixo em ponto, entre dois planos). [C]
+- **Outros:** o CAD avançado F tem Datum Plane com restrições Through/Normal/Parallel/Offset/Tangent. [C]
 - **Fenkra hoje:**
   - 14 modos (`doc.rs:473-496,560-564`), mais `Spine{planes}` (planos normais à curva).
   - Benchmark SUP-03: `FacePlane` continua vivo quando a face some (DR-21), e falta o plano na curva por ponto projetado (DR-04). `FacePlane{origin,x,normal,owner}` guarda cópia da face, não referência (`doc.rs:478`).
   - `PlaneTangentSurface` projeta o ponto na superfície (`doc.rs:492`).
 - **Melhor prática:** plano de face guarda `owner` + papel (ADR 0010) e, se a face some, o plano vira "falhou" (nunca fica "vivo" silenciosamente). Teste: apagar a face-pai produz erro nomeado e diagnóstico "Substituir/Isolar".
 
-### 4. Projeção (CATIA: Projection / SW: Projected Curve / Inventor: Project to Surface (3D sketch) / outros: Onshape Project curve / Fenkra: CurveProject, CurveProjectSurf, PointProject)
+### 4. Projeção (CAD avançado B: Projection / CAD avançado A: Projected Curve / CAD avançado C: Project to Surface (3D sketch) / outros: CAD avançado E Project curve / Fenkra: CurveProject, CurveProjectSurf, PointProject)
 
 - **O que faz:** leva ponto ou curva a um plano ou superfície, pela normal ou por uma direção.
-- **CATIA V5:**
+- **CAD avançado B:**
   - Entradas: um ou vários pontos/curvas (multi-seleção) e um suporte.
   - Direção: **Normal** ou **Along a direction** (linha ou plano; ou vetor X, Y, Z). [V]
   - Opção **Nearest solution**: quando há várias projeções, fica só a mais próxima. [V]
   - Aviso: a projeção "tem efeito derivativo", então perde continuidade. Entrada G2 gera saída ao menos G1; entrada G1 gera ao menos G0. [V]
   - Saída `Project.n`. Com multi-output, vira um conjunto editável (`Multi Output.n`). [V]
   - Texto-base: "prefira projeção direcional em superfícies complexas"; normal pode ter várias soluções. [V: texto do usuário]
-- **SolidWorks:** Projected Curve com duas formas: Sketch on Faces (esboço projetado ao longo da normal do sketch) e Sketch on Sketch (interseção de dois extrusos). Opção Reverse projection. [C]
-- **Inventor:** em sketch 3D há "Project to Surface" com duas opções: ao longo de um vetor ou ao ponto mais próximo (usando normais da superfície). [V: busca Autodesk]
+- **CAD avançado A:** Projected Curve com duas formas: Sketch on Faces (esboço projetado ao longo da normal do sketch) e Sketch on Sketch (interseção de dois extrusos). Opção Reverse projection. [C]
+- **CAD avançado C:** em sketch 3D há "Project to Surface" com duas opções: ao longo de um vetor ou ao ponto mais próximo (usando normais da superfície). [V: busca fornecedor de CAD avançado]
 - **Fenkra hoje:**
   - `CurveProjectSurf{curve,surface,dir}` (`lib.rs:1399-1438`): plano com ou sem direção; superfície sem direção usa `surface_near` ponto a ponto; com direção usa `ray_hit`.
   - **Risco:** na projeção direcional, pontos que não acertam são **descartados em silêncio** (`lib.rs:1426-1430`) e só falha se sobrarem menos de 2. A curva resultante pode ser só um trecho, sem aviso.
@@ -130,16 +130,16 @@ Organização:
   - Regra: se algum trecho não acertar, estado "parcial" com contagem de pontos perdidos. Nunca devolver uma curva mais curta sem aviso.
   - Testes: projetar círculo em plano inclinado; projetar linha sobre cilindro nas duas direções; direção paralela ao plano gera erro (já existe em `lib.rs:1413`); curva que sai do suporte mostra o trecho perdido.
 
-### 5. Interseção (CATIA: Intersection / SW: Intersection Curve, Face Curves / Inventor: Intersection Curve (3D sketch) / Fenkra: CurveIntersect, PointCurvePlane, PointCurveCurve, LinePlanes)
+### 5. Interseção (CAD avançado B: Intersection / CAD avançado A: Intersection Curve, Face Curves / CAD avançado C: Intersection Curve (3D sketch) / Fenkra: CurveIntersect, PointCurvePlane, PointCurveCurve, LinePlanes)
 
 - **O que faz:** gera a curva (ou ponto) comum a dois elementos.
-- **CATIA V5:**
+- **CAD avançado B:**
   - Combinações: superfície×superfície, plano×superfície, curva×superfície (ponto), curva×curva (ponto); lista de soluções. [V: kwrug constructors lista `intersect` para esses pares]
   - Opções: extensão linear dos suportes; resultado "Non-connex" vira multi-cell que se separa com Near/Disassemble. [C]
   - Texto-base: "use interseção aproximada para superfícies importadas". [V: texto do usuário]
   - Quando um suporte some, o elemento fica em erro de update e deixa de alimentar os filhos.
-- **SolidWorks:** Intersection Curve (sketch 3D) e Split Line. Em Surface Trim há "Intersection Curve" para pré-visualizar. [C]
-- **Inventor:** o Intersection Curve do sketch 3D aceita faces, superfícies, curvas 2D, planos e corpos; atualiza quando os corpos mudam. Os extremos dos fios não são restringidos e o deslocamento pode ser inconsistente. [V]
+- **CAD avançado A:** Intersection Curve (sketch 3D) e Split Line. Em Surface Trim há "Intersection Curve" para pré-visualizar. [C]
+- **CAD avançado C:** o Intersection Curve do sketch 3D aceita faces, superfícies, curvas 2D, planos e corpos; atualiza quando os corpos mudam. Os extremos dos fios não são restringidos e o deslocamento pode ser inconsistente. [V]
 - **Fenkra hoje:**
   - `CurveIntersect{a,b,which}` (`lib.rs:1393-1398`) usa `section()` do kernel (polilinhas). `which` indexa a lista de curvas.
   - **Bug provável:** `cs.get(*which).or(cs.last())` — se a topologia mudar e o índice não existir mais, o Fenkra pega **a última** curva sem erro. Viola o princípio 1 do ADR 0011.
@@ -148,10 +148,10 @@ Organização:
   - Solução escolhida por **ponto-âncora** (a curva mais próxima do ponto gravado), com erro se nenhuma estiver a menos de uma tolerância.
   - Testes: esfera×plano deslocado gera um círculo; mudar o raio mantém a mesma curva; esfera tangente ao plano gera "interseção vazia" nomeada.
 
-### 6. Curva paralela / offset de curva (CATIA: Parallel Curve / SW: Offset Entities (3D), Offset on Surface / Inventor: Offset (sketch) / Fenkra: CurveParallel)
+### 6. Curva paralela / offset de curva (CAD avançado B: Parallel Curve / CAD avançado A: Offset Entities (3D), Offset on Surface / CAD avançado C: Offset (sketch) / Fenkra: CurveParallel)
 
 - **O que faz:** desloca uma curva por distância constante ou variável sobre um suporte.
-- **CATIA V5:** [V pelas propriedades da API CAA, via pycatia]
+- **CAD avançado B:** [V pelas propriedades da API CAA, via pycatia]
   - Entradas: curva, suporte (plano ou superfície), ponto de passagem opcional, offset.
   - **Modo:** Euclidiano ou **Geodésico** (`geodesic`); direção invertida; **Both sides** (`keep_both_sides`) com lado oposto acessível.
   - **Tipo de canto:** agudo (0) ou arredondado (1).
@@ -161,8 +161,8 @@ Organização:
   - A direção vem de tangente × normal do suporte.
   - Texto-base: "aproximado/ajuste conforme a curvatura". [V: texto do usuário]
   - Quando o suporte some: update error; a lei é um feature separada que precisa existir.
-- **SolidWorks:** Offset Entities no sketch e Offset on Surface em sketch 3D (distância sobre a face). [C]
-- **Inventor:** Offset no sketch 2D, associativo, com "constrain offset". Em 3D usa projeção. [C]
+- **CAD avançado A:** Offset Entities no sketch e Offset on Surface em sketch 3D (distância sobre a face). [C]
+- **CAD avançado C:** Offset no sketch 2D, associativo, com "constrain offset". Em 3D usa projeção. [C]
 - **Fenkra hoje:**
   - `CurveParallel{curve,support,d1,d2,flip,more,both,d_other}` (`lib.rs:1439-1501`): d1→d2 linear (equivale à lei linear), `more` junta várias curvas, `both` cria contorno fechado, `d_other` distância do outro lado.
   - Offset por ponto: `side = normal × tangente` (tangente central entre vizinhos), deslocado `dd` e reprojetado com `surface_near`.
@@ -173,17 +173,17 @@ Organização:
   - Detectar auto-interseção do resultado e avisar (estado "degenerado").
   - Testes: offset de retângulo para fora e para dentro (cantos); offset de espiral em superfície cilíndrica (geodésico × euclidiano); lei linear d1=0→d2=10.
 
-### 7. Curva de conexão (CATIA: Connect Curve / SW: Fit Spline + Curve Through Points, Blend Curve (sketch 3D) / Inventor: Bridge Curve (3D sketch) / Fenkra: Connect)
+### 7. Curva de conexão (CAD avançado B: Connect Curve / CAD avançado A: Fit Spline + Curve Through Points, Blend Curve (sketch 3D) / CAD avançado C: Bridge Curve (3D sketch) / Fenkra: Connect)
 
 - **O que faz:** liga as pontas de duas curvas com continuidade escolhida.
-- **CATIA V5:** [V pela API via pycatia]
+- **CAD avançado B:** [V pela API via pycatia]
   - Conecta dois pares (curva, ponto); continuidade **por lado**: ponto, tangência ou curvatura. Tensão **por lado**.
   - Orientação por lado: igual, invertida ou terceira opção.
   - `connect_type`: normal ou com curva base.
   - **Trim**: se verdadeiro, as curvas conectadas são aparadas no ponto de conexão.
   - Texto-base: "C2 exige superfícies classe A; use C1 para superfícies técnicas". [V: texto do usuário]
-- **SolidWorks:** não há "Connect Curve" direto; usa-se Fit Spline com tangência ou Curve Through Points. O sketch 3D oferece "Spline" com relações de tangência/curvatura. [C]
-- **Inventor:** o Bridge Curve (sketch 3D) liga duas curvas com tangência ou continuidade suave. [C; a busca não detalhou]
+- **CAD avançado A:** não há "Connect Curve" direto; usa-se Fit Spline com tangência ou Curve Through Points. O sketch 3D oferece "Spline" com relações de tangência/curvatura. [C]
+- **CAD avançado C:** o Bridge Curve (sketch 3D) liga duas curvas com tangência ou continuidade suave. [C; a busca não detalhou]
 - **Fenkra hoje:**
   - `Connect{a,a_end,b,b_end,cont,tension}` (`lib.rs:1077-1103`): G0 reta, G1 Hermite cúbica, G2 quíntica com curvatura das pontas, G3 Hermite de grau 7 (`geo3d.rs:403`).
   - Teste citado no benchmark: `conector_g3_e_canto_entre_linha_e_spline`.
@@ -194,32 +194,32 @@ Organização:
   - Mostrar na árvore a continuidade realmente atingida (medida), não só a pedida.
   - Testes: linha→arco G1 tem ângulo <0,1° na junção; G2 tem diferença de curvatura <1%; ponta coincidente gera o erro já existente.
 
-### 8. Canto (CATIA: Corner / SW: Sketch Fillet, 3D / Inventor: Fillet (sketch) / Fenkra: Corner)
+### 8. Canto (CAD avançado B: Corner / CAD avançado A: Sketch Fillet, 3D / CAD avançado C: Fillet (sketch) / Fenkra: Corner)
 
 - **O que faz:** arredonda o encontro de duas curvas com um arco de raio dado.
-- **CATIA V5:** [V pela API via pycatia]
+- **CAD avançado B:** [V pela API via pycatia]
   - Dois elementos (o primeiro pode ser ponto, o segundo é sempre curva) e **suporte** (plano ou superfície), ou direção 3D.
   - Cada curva tem **orientação** (+1/−1 relativa a normal×tangente) e há índice de discriminação para várias soluções.
   - **Trim** com modo: nenhum, ambas, só a primeira, só a segunda. Opção **On vertex**.
   - Fórum: o Corner exige que as curvas se alcancem; estender a linha resolve. [V: busca Eng-Tips]
   - Texto-base: "curvas com ângulo muito agudo podem falhar; ajuste o raio". [V: texto do usuário]
-- **SolidWorks / Inventor:** Sketch Fillet/Chamfer no 2D (aparam automaticamente). [C]
+- **CAD avançado A / CAD avançado C:** Sketch Fillet/Chamfer no 2D (aparam automaticamente). [C]
 - **Fenkra hoje:**
   - `Corner{a,b,radius}` (`lib.rs:1104`, `geo3d.rs:524-573`): para duas linhas, calcula o vértice, o raio e devolve **só o arco**; para curvas quaisquer, `corner_curves` usa deslocamento por `r` e a solução mais próxima do encontro.
   - Falta: aparar as curvas originais, escolher a solução, canto 3D com direção, suporte superfície (só curvas coplanares).
 - **Melhor prática:** botão "aparar e juntar" que gera a polilinha final e reaproveita `join_curves` (`lib.rs:270`). Testes: linhas perpendiculares com r=5 (comprimento do arco = πr/2); linhas paralelas geram erro nomeado (já existe).
 
-### 9. Spline 3D (CATIA: Spline / SW: Spline (3D sketch), Curve Through XYZ / Inventor: Interpolation + Control Vertex Spline (3D) / Fenkra: Spline, SplineControl)
+### 9. Spline 3D (CAD avançado B: Spline / CAD avançado A: Spline (3D sketch), Curve Through XYZ / CAD avançado C: Interpolation + Control Vertex Spline (3D) / Fenkra: Spline, SplineControl)
 
 - **O que faz:** cria uma curva livre por pontos de passagem ou por polígono de controle.
-- **CATIA V5:** [V]
+- **CAD avançado B:** [V]
   - Pontos de passagem (lista editável: inserir antes/depois, remover, substituir).
   - **Geometry on support**: projeta a spline num plano/superfície (só funciona se as tangentes estiverem no suporte).
   - Por ponto: tangente (explícita por reta/plano, ou "de curva") com **tensão** (ex.: 2) e **curvatura** (direção + raio); ordem: Tangent Dir. → Tension → Curvature Dir. → Radius. Botões Remove/Reverse Tgt, Remove Cur.
   - **Close Spline** quando a geometria permite.
   - O texto-base recomenda grau 5 para classe A. [V: texto do usuário]
-- **SolidWorks:** spline com pontos de controle ou ajuste, manipuladores de tangente e peso, "Curvature combs" e "Show curvature". [C]
-- **Inventor:** dois tipos: Interpolation (2D, 3D e sobre superfície) e Control Vertex (quadro de controle). Converte entre os dois; insere vértices pelo botão direito. [V]
+- **CAD avançado A:** spline com pontos de controle ou ajuste, manipuladores de tangente e peso, "Curvature combs" e "Show curvature". [C]
+- **CAD avançado C:** dois tipos: Interpolation (2D, 3D e sobre superfície) e Control Vertex (quadro de controle). Converte entre os dois; insere vértices pelo botão direito. [V]
 - **Fenkra hoje:**
   - `Spline`: Catmull-Rom centrípeta (`geo3d.rs:331-373`), 24 passos por vão, extremos por reflexão. `SplineControl`: B-spline uniforme (`lib.rs:614`).
   - **Faltam:** tangência/curvatura por ponto, tensão, projeção em suporte, grau, conversão entre tipos, spline sobre superfície.
@@ -228,117 +228,117 @@ Organização:
   - Entregar curva NURBS verdadeira (OCC `Geom_BSplineCurve`) como "curva analítica" ao lado da polilinha de visualização, e decidir já se `Curve3` ganha um campo `nurbs`.
   - Testes: spline por 5 pontos passa por todos a <1e-6; spline fechada não tem salto de tangente; spline com tangente imposta respeita o ângulo.
 
-### 10. Hélice (CATIA: Helix / SW: Helix and Spiral / Inventor: Helical Curve / Fenkra: Helix)
+### 10. Hélice (CAD avançado B: Helix / CAD avançado A: Helix and Spiral / CAD avançado C: Helical Curve / Fenkra: Helix)
 
 - **O que faz:** gera hélice cilíndrica ou cônica, usada como guia de molas e roscas.
-- **CATIA V5:** [V pela API via pycatia]
+- **CAD avançado B:** [V pela API via pycatia]
   - Eixo (reta/aresta retilínea), **ponto inicial** (fora do eixo), passo, altura, número de revoluções, ângulo inicial.
   - Sentido horário/anti-horário; inverter o eixo; **conicidade** (ângulo) com sentido (raio diminui ou cresce); lei de passo (constante, em S...); `profile` (raio variável por perfil).
   - Limitação histórica: o eixo precisava ser linear. Há gambiarra para hélice sobre spline. [V: GrabCAD/Eng-Tips]
-- **SolidWorks:** Helix and Spiral: pitch & revolution, height & revolution, height & pitch, spiral; variable pitch; taper; start angle; clockwise/counterclockwise. [C]
-- **Inventor:** Helical Curve: constante ou passo variável; combinações pitch/revolutions/height; flat spiral; conicidade; sentido; **transições de início/fim** (natural ou plana). [V]
+- **CAD avançado A:** Helix and Spiral: pitch & revolution, height & revolution, height & pitch, spiral; variable pitch; taper; start angle; clockwise/counterclockwise. [C]
+- **CAD avançado C:** Helical Curve: constante ou passo variável; combinações pitch/revolutions/height; flat spiral; conicidade; sentido; **transições de início/fim** (natural ou plana). [V]
 - **Fenkra hoje:**
   - `Helix{origin,axis,radius,pitch,height,taper,left}` (`doc.rs:532`, `geo3d.rs:448-469`): 64 pontos por volta, cônica via `tan(taper)` aplicada ao **eixo** (raio = r + h·tan).
   - **Faltam:** ponto inicial/ângulo inicial (a partida é `any_perp(ax)`, arbitrária — a hélice não "começa" onde o usuário espera), número de voltas como entrada, passo variável, transições planas, eixo curvo.
   - **Bug provável:** `any_perp` pode mudar com a orientação do eixo, mudando o ponto de partida entre versões.
 - **Melhor prática:** aceitar ponto inicial (ângulo) e fixar a convenção "x do plano de apoio". Entradas: passo+altura, altura+voltas ou passo+voltas. Testes: 1 volta fecha o ângulo (ponto final acima do inicial); mola cônica; mão esquerda × direita.
 
-### 11. Espiral (CATIA: Spiral / SW: Spiral / Inventor: Flat Spiral (Helical Curve) / Fenkra: Spiral)
+### 11. Espiral (CAD avançado B: Spiral / CAD avançado A: Spiral / CAD avançado C: Flat Spiral (Helical Curve) / Fenkra: Spiral)
 
 - **O que faz:** curva plana que cresce com o ângulo.
-- **CATIA V5:** parâmetros de centro, plano de apoio, raio inicial, ângulo/revoluções e variação do raio; sentido. [C; a busca não achou página específica]
-- **SolidWorks:** spiral por passo e revoluções, ângulo inicial, sentido. [C]
-- **Inventor:** flat spiral no Helical Curve (só com tipo constante). [V]
+- **CAD avançado B:** parâmetros de centro, plano de apoio, raio inicial, ângulo/revoluções e variação do raio; sentido. [C; a busca não achou página específica]
+- **CAD avançado A:** spiral por passo e revoluções, ângulo inicial, sentido. [C]
+- **CAD avançado C:** flat spiral no Helical Curve (só com tipo constante). [V]
 - **Fenkra hoje:** `Spiral{center,plane,r0,r1,turns}` (`geo3d.rs:471-485`): Arquimediana, 96 pontos por volta. Sem ângulo inicial, sem passo, sem sentido, sem espiral logarítmica.
 - **Melhor prática:** entradas por passo+voltas e por r0→r1; ângulo inicial; sentido. Testes: r0=0, r1=10, 2 voltas → comprimento coerente; passo radial constante.
 
-### 12. Combine (CATIA: Combine Curve / SW: Projected Curve (Sketch on Sketch), Composite Curve distinct / Inventor: — / Fenkra: ausente)
+### 12. Combine (CAD avançado B: Combine Curve / CAD avançado A: Projected Curve (Sketch on Sketch), Composite Curve distinct / CAD avançado C: — / Fenkra: ausente)
 
 - **O que faz:** cria a curva 3D resultante da interseção das extrusões de duas curvas em direções dadas.
-- **CATIA V5:** duas curvas e duas direções (padrão: normais aos planos das curvas); o resultado só existe onde as extrusões se cruzam. [V pela descrição em guia terceiro; opções detalhadas [C]]
-- **SolidWorks:** é o "Sketch on Sketch" do Projected Curve: dois esboços em planos diferentes viram uma curva 3D (útil para formas de arame e hélices projetadas). [C]
+- **CAD avançado B:** duas curvas e duas direções (padrão: normais aos planos das curvas); o resultado só existe onde as extrusões se cruzam. [V pela descrição em guia terceiro; opções detalhadas [C]]
+- **CAD avançado A:** é o "Sketch on Sketch" do Projected Curve: dois esboços em planos diferentes viram uma curva 3D (útil para formas de arame e hélices projetadas). [C]
 - **Fenkra hoje:** não existe. Dá para obter com `SurfExtrude` das duas curvas + `CurveIntersect`, mas sem associação direta.
 - **Melhor prática:** implementar como atalho que cria duas extrusões ocultas e a interseção. Teste: vista frontal + vista lateral de um arco → curva 3D com projeções iguais às vistas.
 
-### 13. Reflect line / silhueta (CATIA: Reflect Line / SW: Split Line (Silhouette) / Inventor: Silhouette Curve (3D sketch) / Fenkra: ausente)
+### 13. Reflect line / silhueta (CAD avançado B: Reflect Line / CAD avançado A: Split Line (Silhouette) / CAD avançado C: Silhouette Curve (3D sketch) / Fenkra: ausente)
 
 - **O que faz:** curva onde a normal da superfície faz ângulo constante com uma direção (linha de partição, de reflexo ou de silhueta).
-- **CATIA V5:** [V pela API via pycatia]
+- **CAD avançado B:** [V pela API via pycatia]
   - Suporte (superfície), fonte **infinita** (cilíndrica, com direção) ou **pontual** (cônica, com origem), ângulo, medido a partir da normal ou do plano tangente.
   - Orientação do suporte e da direção.
-- **SolidWorks:** Split Line tipo Silhouette (direção de puxar) gera a linha de partição de molde. [C]
-- **Inventor:** Silhouette Curve (3D sketch) é associativa, com direção de puxada por plano, face, aresta ou eixo, excluindo faces retas/internas. [V]
+- **CAD avançado A:** Split Line tipo Silhouette (direção de puxar) gera a linha de partição de molde. [C]
+- **CAD avançado C:** Silhouette Curve (3D sketch) é associativa, com direção de puxada por plano, face, aresta ou eixo, excluindo faces retas/internas. [V]
 - **Fenkra hoje:** não existe. Uma função de "linha de partição" ligaria o módulo ao ângulo de saída (draft).
 - **Melhor prática:** `ReflectLine{support, direction, angle}` que amostra a normal na malha fina e extrai a curva de nível, depois refina com `surface_near`. Teste: esfera com direção Z e 90° → equador.
 
 ### B. Superfícies
 
-### 14. Extrusão de superfície (CATIA: Extrude / SW: Extruded Surface / Inventor: Extrude (Surface) / Fenkra: SurfExtrude)
+### 14. Extrusão de superfície (CAD avançado B: Extrude / CAD avançado A: Extruded Surface / CAD avançado C: Extrude (Surface) / Fenkra: SurfExtrude)
 
 - **O que faz:** arrasta uma curva numa direção e gera superfície.
-- **CATIA V5:** [V]
+- **CAD avançado B:** [V]
   - Entrada: perfil, direção (reta → sua orientação; plano → sua normal; ou vetor X, Y, Z).
   - Limites **início e fim** (valores ou manipuladores); botão Reverse Direction. [V]
   - Em Part Design e GSD há limite "Up-to element". [C]
   - Texto-base: curvas fechadas dão superfícies tubulares; prefira normal à curva. [V: texto do usuário]
-- **SolidWorks:** Extruded Surface com End Conditions (Blind, Up to Vertex, Up to Surface, Offset from Surface, Up to Body, Mid Plane) e direção 2. [C]
-- **Inventor:** Extrude com output Surface; extents Distance, To, To Next, Between, All. [C]
+- **CAD avançado A:** Extruded Surface com End Conditions (Blind, Up to Vertex, Up to Surface, Offset from Surface, Up to Body, Mid Plane) e direção 2. [C]
+- **CAD avançado C:** Extrude com output Surface; extents Distance, To, To Next, Between, All. [C]
 - **Fenkra hoje:**
   - `SurfExtrude{curve,dir,length,length2}` (`lib.rs:1265-1273`): `length2` recua a curva e soma ao comprimento (`MakePrism`, `surfaces.inc:70`). Só comprimentos; sem "até elemento" (benchmark SUP-09, B14).
   - Bug provável: com `length2` o prisma sai da curva recuada — correto, mas `length` e `length2` iguais a zero gera o erro "comprimento zero" sem dizer qual campo.
   - Manipulador existe (`handles.rs:134,234`).
 - **Melhor prática:** limite 1 e limite 2 com 3 tipos (valor, até plano/superfície, até ponto). Resolver "até" com `extended_faces` (já existe em `surfaces.inc:188`). Testes: extrudar até plano inclinado e mover o plano; limite 2 simétrico; curva fechada gera tubo aberto nas duas pontas.
 
-### 15. Revolução de superfície (CATIA: Revolve / SW: Revolved Surface / Inventor: Revolve (Surface) / Fenkra: SurfRevolve)
+### 15. Revolução de superfície (CAD avançado B: Revolve / CAD avançado A: Revolved Surface / CAD avançado C: Revolve (Surface) / Fenkra: SurfRevolve)
 
 - **O que faz:** gira uma curva em torno de um eixo.
-- **CATIA V5:** perfil, eixo, **ângulos 1 e 2** (cada lado); sentido. [C]
-- **SolidWorks:** Revolved Surface com ângulo, direção 2, simétrico. [C]
-- **Inventor:** Revolve com output Surface; ângulo; full, to, between. [C]
+- **CAD avançado B:** perfil, eixo, **ângulos 1 e 2** (cada lado); sentido. [C]
+- **CAD avançado A:** Revolved Surface com ângulo, direção 2, simétrico. [C]
+- **CAD avançado C:** Revolve com output Surface; ângulo; full, to, between. [C]
 - **Fenkra hoje:** `SurfRevolve{curve,axis,angle}` (`lib.rs:1274`, `surfaces.inc:79`). Só um ângulo; ângulo ≥360° usa revolução completa. Sem segundo ângulo, sem "até".
 - **Melhor prática:** ângulo 1 e 2, "completa", e erro nomeado quando a curva toca o eixo em ponto coincidente (superfície degenerada, citado no texto-base). Teste: semicírculo revolvido 360° gera esfera fechada (1 face, sem aresta livre).
 
-### 16. Esfera (CATIA: Sphere / SW: Dome, Revolved Surface / Inventor: — / Fenkra: SurfSphere)
+### 16. Esfera (CAD avançado B: Sphere / CAD avançado A: Dome, Revolved Surface / CAD avançado C: — / Fenkra: SurfSphere)
 
 - **O que faz:** superfície esférica por centro e raio, com limites angulares.
-- **CATIA V5:** centro, raio (ou ponto), limites de longitude e latitude (ângulos 1/2). [C]
+- **CAD avançado B:** centro, raio (ou ponto), limites de longitude e latitude (ângulos 1/2). [C]
 - **Fenkra hoje:** `SurfSphere{center,radius}` (`hybrid.inc:97`) devolve o casco completo. Sem limites angulares (para uma meia-esfera usa-se `SurfSplit`, como no teste de `lib.rs:6320-6322`).
 - **Melhor prática:** limites de latitude/longitude; eixo da esfera selecionável. Teste: metade superior com latitude 0°→90° fecha na borda circular exata.
 
-### 17. Cilindro (CATIA: Cylinder / SW: Extruded Surface de círculo / Inventor: — / Fenkra: SurfCylinder)
+### 17. Cilindro (CAD avançado B: Cylinder / CAD avançado A: Extruded Surface de círculo / CAD avançado C: — / Fenkra: SurfCylinder)
 
 - **O que faz:** só a face lateral de um cilindro.
-- **CATIA V5:** ponto, direção, raio, comprimentos 1 e 2. [C]
+- **CAD avançado B:** ponto, direção, raio, comprimentos 1 e 2. [C]
 - **Fenkra hoje:** `SurfCylinder{point,dir,radius,start,end}` (`lib.rs:1280`, `hybrid.inc:106`): face analítica real (`Geom_CylindricalSurface`), com alturas negativas permitidas (`-start`). É um bom padrão: **superfície analítica** em vez de aproximação.
 - **Melhor prática:** estender o padrão — círculo + `SurfExtrude` deveria reconhecer o círculo analítico (`Curve3.circle`) e devolver cilindro de verdade, e não prisma de polilinha. Teste: `SurfExtrude` de círculo gera face de tipo cilindro (`face_props.kind`).
 
-### 18. Offset de superfície (CATIA: Offset / SW: Offset Surface / Inventor: Thicken/Offset (Surface) / outros: Onshape Offset surface / Fenkra: SurfOffset)
+### 18. Offset de superfície (CAD avançado B: Offset / CAD avançado A: Offset Surface / CAD avançado C: Thicken/Offset (Surface) / outros: CAD avançado E Offset surface / Fenkra: SurfOffset)
 
 - **O que faz:** cria cópia paralela à superfície a uma distância.
-- **CATIA V5:** [V]
+- **CAD avançado B:** [V]
   - Seleciona a superfície, valor ou manipulador, setinha de direção, **Both sides** (uma de cada lado), **Repeat object after OK** (vários offsets, múltiplos do valor).
   - Avisos: geometria degenerada (valor grande demais) mostra sinal de alerta na geometria e trava o manipulador, exigindo corrigir no diálogo.
   - Saída `Offset.n`.
-- **SolidWorks:** Offset Surface; distância 0 = cópia no lugar. [V: Onshape confirma essa convenção no seu equivalente; SW [C]]
-- **Inventor:** o Thicken/Offset com saída Surface faz offset de faces ou superfícies; o resultado Solid é o espessamento. [V]
-- **Outros:** o Onshape também aceita distância 0 como cópia. [V]
+- **CAD avançado A:** Offset Surface; distância 0 = cópia no lugar. [V: CAD avançado E confirma essa convenção no seu equivalente; CAD avançado A [C]]
+- **CAD avançado C:** o Thicken/Offset com saída Surface faz offset de faces ou superfícies; o resultado Solid é o espessamento. [V]
+- **Outros:** o CAD avançado E também aceita distância 0 como cópia. [V]
 - **Fenkra hoje:** `SurfOffset{surface,dist,both,join}` (`lib.rs:1217-1231`): `BRepOffsetAPI_MakeOffsetShape` com junção Arco, Interseção ou Automático (`surfaces.inc:29-52`). `both` junta as duas faces num composto.
   - Faltam: repetição, distância 0 (cópia) — a OCC pode falhar com 0 —, e erro específico de "raio de curvatura menor que o offset".
-  - `surface_shape` recusa plano ("use 'Plano deslocado'", `lib.rs:783`) — correto, mas SW/Onshape aceitam offset de face plana.
+  - `surface_shape` recusa plano ("use 'Plano deslocado'", `lib.rs:783`) — correto, mas CAD avançado A/CAD avançado E aceitam offset de face plana.
 - **Melhor prática:** distância 0 vira cópia; aviso de degenerado com o **raio mínimo de curvatura**; repetir N vezes. Teste: offset de cilindro r=10 por +2 e −2; por −11 falha com a mensagem do raio mínimo.
 
-### 19. Sweep / varredura (CATIA: Sweep (Explicit, Line, Circle, Conic) / SW: Swept Surface / Inventor: Sweep (Surface) / Fenkra: SurfSweep, SurfSweepX)
+### 19. Sweep / varredura (CAD avançado B: Sweep (Explicit, Line, Circle, Conic) / CAD avançado A: Swept Surface / CAD avançado C: Sweep (Surface) / Fenkra: SurfSweep, SurfSweepX)
 
 - **O que faz:** gera superfície movendo um perfil (ou uma geratriz) ao longo de guias.
-- **CATIA V5 — sweep explícito:** [V]
+- **CAD avançado B — sweep explícito:** [V]
   - Modos: perfil + 1 guia (a guia é spine), perfil + 2 guias (a 1ª é spine), perfil + guia(s) + **spine separada** (perfil varre planos normais à spine).
   - Seleções (ordem): perfil planar → guia → spine (opcional) → 2ª guia → **superfície de referência** (opcional; controla a orientação do perfil; pode impor ângulo) → **relimitadores** (pontos ou planos que encurtam a varredura).
   - **Correção angular** suaviza desvios <0,5°; **posição do perfil** (ponto de posicionamento, eixo X, inversões, ponto âncora; só no P2).
   - Aviso: relimitador em curva fechada deve ser ponto, não plano (o plano cruza várias vezes). Continuidade cai um nível (spine G2 → superfície ≥G1).
   - API: `solution_no` (várias soluções), `canonical_detection`, `smooth_activity`, `guide_deviation`, `pulling_direction`, `angle_law`. [V]
-- **CATIA — tipos Line / Circle / Conic:** existem em famílias (Line: duas guias, guia+direção+ângulo, etc.; Circle: 3 guias, 2 guias+raio, centro+raio...; Conic: cinco condições) [C; a mesma lista aparece no Fenkra].
-- **SolidWorks:** Swept Surface com Profile and Path, Guide Curves, Orientation (Follow Path, Follow Path and First Guide Curve, Keep Normal Constant, Twist...), Start/End Tangency, Twist along path. [C]
-- **Inventor:** Sweep com Path, Path & Guide Rail, Path & Guide Surface (orientação perpendicular ao caminho, paralela, ou guiada por superfície), taper e twist. [C]
+- **CAD avançado B — tipos Line / Circle / Conic:** existem em famílias (Line: duas guias, guia+direção+ângulo, etc.; Circle: 3 guias, 2 guias+raio, centro+raio...; Conic: cinco condições) [C; a mesma lista aparece no Fenkra].
+- **CAD avançado A:** Swept Surface com Profile and Path, Guide Curves, Orientation (Follow Path, Follow Path and First Guide Curve, Keep Normal Constant, Twist...), Start/End Tangency, Twist along path. [C]
+- **CAD avançado C:** Sweep com Path, Path & Guide Rail, Path & Guide Surface (orientação perpendicular ao caminho, paralela, ou guiada por superfície), taper e twist. [C]
 - **Fenkra hoje:**
   - `SurfSweep{profile,spine,mode}` (`lib.rs:1286-1308`): `MakePipeShell`, modos Corrigido/Fixo/Frenet (`hybrid.inc:116-127`). `SweepProfile::Circle` gera um **polígono de 48 pontos** (`lib.rs:1294-1299`).
   - `SurfSweepX{kind,spine,solution,smooth,sections}` (`lib.rs:1238`, `sweep_x` em `lib.rs:1973-2100+`): sete tipos (`doc.rs:274-289`) — Explicit (1 ou 2 guias, transformação de semelhança), Linear, LinearDir, Circle3, CircleRadius, CircleCenter, Conic. Referencial por dupla reflexão, `sections` de 4 a 200 e loft entre seções amostradas.
@@ -353,23 +353,23 @@ Organização:
   - Perfil circular analítico; "até elemento" nas pontas; ocultar `sections` (automático por tolerância de desvio).
   - Testes: tubo r=2 por spine reta → face cilíndrica; spine em S sem torção (mínima rotação); duas guias com escala; relimitador por plano.
 
-### 20. Preenchimento / fill (CATIA: Fill / SW: Filled Surface / Inventor: Boundary Patch / outros: Onshape Fill, NX N-Sided / Fenkra: SurfFill)
+### 20. Preenchimento / fill (CAD avançado B: Fill / CAD avançado A: Filled Surface / CAD avançado C: Boundary Patch / outros: CAD avançado E Fill, CAD avançado G N-Sided / Fenkra: SurfFill)
 
 - **O que faz:** cria superfície dentro de um contorno fechado, opcionalmente tangente/curva às vizinhas.
-- **CATIA V5:** [V]
+- **CAD avançado B:** [V]
   - Contorno: curvas ou arestas formando laço fechado, lista editável (inserir antes/depois, remover, substituir).
   - **Suporte por curva/aresta** e continuidade **Point ou Tangent** por aresta (via API também curvatura, global ou por aresta).
   - **Ponto de passagem** (deve ficar dentro da área, senão resultado inconsistente).
   - API: modo tolerante (nenhum/automático/manual), desvio máximo de suavização, detecção canônica, "plane only".
-- **SolidWorks:** [V por snippets/Hawk Ridge]
+- **CAD avançado A:** [V por snippets/Hawk Ridge]
   - Boundary: arestas, sketch ou curvas; continuidade por aresta Contact/Tangent/Curvature; **Apply to all edges**; **Alternate face** para escolher a face-mãe.
   - Sketch só aceita Contact.
   - **Constraint curves** (controle de inclinação), **Optimize surface** (2 ou 4 lados, estilo loft), **Resolution control** (só sem optimize), **Fix up boundary** (constrói/apara partes), **Merge result**, **Create solid** se fechar.
-- **Inventor:** [V] Boundary Patch: sketch 2D fechado (plano), sketch 2D/3D (não plano), arestas do modelo (cadeias com Automatic Edge Chain), ou mistos.
+- **CAD avançado C:** [V] Boundary Patch: sketch 2D fechado (plano), sketch 2D/3D (não plano), arestas do modelo (cadeias com Automatic Edge Chain), ou mistos.
   - Condições por aresta: Contact, Tangent, Smooth com **Weight** (0–1) e **Guide Rails**.
   - Regras: arestas contínuas compartilham condição; múltiplos laços = ilhas; evitar patch em geometria de construção de um segmento (círculo/elipse/spline fechada).
-  - Dica da Autodesk: costurar o patch às vizinhas antes de sculpt/shell/thicken.
-- **Outros:** Onshape Fill não exige quatro lados; guias podem ser vértices ou curvas (precisas ou amostradas); continuidade por aresta (Position/Tangency/Curvature) com restrições de tipo de curva; New/Add (e Add fechando volume gera sólido). [V] NX: N-Sided com Constraint Faces G1 e Trim to Boundary. [V: fórum/tutorial]
+  - Dica da fornecedor de CAD avançado: costurar o patch às vizinhas antes de sculpt/shell/thicken.
+- **Outros:** CAD avançado E Fill não exige quatro lados; guias podem ser vértices ou curvas (precisas ou amostradas); continuidade por aresta (Position/Tangency/Curvature) com restrições de tipo de curva; New/Add (e Add fechando volume gera sólido). [V] CAD avançado G: N-Sided com Constraint Faces G1 e Trim to Boundary. [V: fórum/tutorial]
 - **Fenkra hoje:**
   - `SurfFill{curves}` (`lib.rs:1261`) → `BRepOffsetAPI_MakeFilling` com **`GeomAbs_C0` em todas as arestas** (`surfaces.inc:54-68`). Ignora suporte, tangência, ponto de passagem e guias.
   - `CurveRef` não aceita aresta de superfície com a face-mãe associada; sketch entra só como `SketchLine/SketchCurve` e a cadeia tem de ser montada à mão (DR-13, B09).
@@ -378,13 +378,13 @@ Organização:
 - **Melhor prática:**
   - Entrada: seleção em cadeia (sketch, curvas, arestas) com *Automatic chain*; condição por aresta (G0/G1/G2 + peso); ponto de passagem; "Fix up boundary"; "Merge/solid".
   - Para quatro lados, oferecer "otimizar" (loft).
-  - Mostrar as folgas do contorno (pontos vermelhos, como o Onshape).
+  - Mostrar as folgas do contorno (pontos vermelhos, como o CAD avançado E).
   - Testes: fill de quadrado planar vira face planar; fill de 4 linhas de sketch (o caso que falhou na revisão); fill tangente a duas faces tem desvio angular <1° na borda; ponto de passagem fora da área gera aviso.
 
-### 21. Multi-seções / loft de superfície (CATIA: Multi-sections Surface / SW: Lofted Surface, Boundary Surface / Inventor: Loft (Surface) / outros: NX Through Curves, Creo Boundary Blend / Fenkra: SurfLoft)
+### 21. Multi-seções / loft de superfície (CAD avançado B: Multi-sections Surface / CAD avançado A: Lofted Surface, Boundary Surface / CAD avançado C: Loft (Surface) / outros: CAD avançado G Through Curves, CAD avançado F Boundary Blend / Fenkra: SurfLoft)
 
 - **O que faz:** cria superfície passando por seções, com guias e/ou spine.
-- **CATIA V5:** [V]
+- **CAD avançado B:** [V]
   - Seleções: seções (as páginas do guia dizem 1 ou 2 como mínimo/máximo de seções planares ao listar tangências; a API aceita lista), **guias** opcionais (uma ou várias).
   - **Tangência** em seções e guias: direção do vetor tangente (ex.: normal de um plano) ou superfície/plano de apoio (as seções devem então ser tangentes ao suporte).
   - **Ponto de fechamento** (vértice ou extremo) em seções fechadas; por padrão ligam-se os pontos de fechamento; mudar evita torção.
@@ -394,10 +394,10 @@ Organização:
   - Guia composta de várias curvas gera várias superfícies.
   - **Detecção de planos** (canônicas), suavização por ângulo e desvio, lei de área, saída superfície ou volume.
   - Erros comuns: terceira guia dá "plano móvel e guias nem sempre se cruzam" (guias curtas, paralelas ao plano móvel, spine muito curva). [V: fórum 3DS]
-- **SolidWorks:** [V parcial]
+- **CAD avançado A:** [V parcial]
   - Lofted Surface: perfis, Start/End Constraints (None, Direction Vector, Normal to Profile, Tangency to Face, Curvature to Face), guide curves, centerline parameters.
   - Boundary Surface: direções 1 e 2, tipos de tangência (Tangency/Curvature to Face, Normal to Profile, Direction Vector, None), **comprimento e influência da tangência**, influência da curva (Global, To Next Curve, To Next Sharp, To Next Edge, Linear), Merge tangent faces, Close.
-- **Inventor:** Loft com rails, center line, area loft, condições de ponta (tangent, smooth, direction). [C]
+- **CAD avançado C:** Loft com rails, center line, area loft, condições de ponta (tangent, smooth, direction). [C]
 - **Fenkra hoje:**
   - `SurfLoft{sections,guide,ruled,closed}` (`lib.rs:1309`, `hybrid.inc:130-150`): sem guia usa `ThruSections` (`CheckCompatibility`); **com guia usa PipeShell onde a guia é a spine**, não uma guia de verdade.
   - **Faltam:** várias guias, acoplamento, ponto de fechamento (torção), tangência nas pontas, spine, relimitação, orientação por seção (reverter), ordem das seções editável.
@@ -409,10 +409,10 @@ Organização:
   - Regra para evitar torção: alinhar pontos de fechamento automaticamente pelo mínimo de distância.
   - Testes: loft círculo→círculo (cilindro); círculo→quadrado com pontos alinhados vs. desalinhados; loft com duas guias; seções em ordem trocada geram aviso de auto-interseção.
 
-### 22. Concordância / blend (CATIA: Blend / SW: Boundary Surface (2 curvas com tangência) / Inventor: Loft com rails + Bridge / Fenkra: SurfBlend, SurfConnect)
+### 22. Concordância / blend (CAD avançado B: Blend / CAD avançado A: Boundary Surface (2 curvas com tangência) / CAD avançado C: Loft com rails + Bridge / Fenkra: SurfBlend, SurfConnect)
 
 - **O que faz:** cria superfície entre duas curvas ou bordas com continuidade e tensão.
-- **CATIA V5:** [V]
+- **CAD avançado B:** [V]
   - Duas curvas (ou bordas), cada uma com **suporte** opcional.
   - **Continuidade** por limite: Ponto, Tangência, Curvatura.
   - **Trim do suporte**: aparar e juntar ao blend.
@@ -420,8 +420,8 @@ Organização:
   - **Tensão**: constante ou linear (por limite, independente); a API aceita tipos padrão, constante, linear e em S, com 2 valores no linear.
   - Pontos de fechamento e de acoplamento; acoplamento: razão, tangência, tangência-curvatura, vértices ou **spine**.
   - Modo "ruled developable surface" e suavização.
-- **SolidWorks:** em geral usa Boundary Surface com Tangency/Curvature to Face. [C]
-- **Inventor:** Loft com condições de ponta a partir das faces vizinhas. [C]
+- **CAD avançado A:** em geral usa Boundary Surface com Tangency/Curvature to Face. [C]
+- **CAD avançado C:** Loft com condições de ponta a partir das faces vizinhas. [C]
 - **Fenkra hoje:**
   - `SurfBlend{a,sa,b,sb,cont,tension}` (`lib.rs:1317`, `blend` em `lib.rs:830-878`): reamostra as duas curvas em 24 seções, Hermite cúbica (G1) ou quíntica (G2 com curvatura **nula** nas pontas), `loft_surface`.
   - `SurfConnect{a,b,cont,tension}` (`lib.rs:1232`) escolhe sozinho as bordas que "se olham" (`facing_edge`, `lib.rs:199`) pelo menor desvio médio. Há detecção de cantos por ângulo (<0,87 rad cosseno).
@@ -434,30 +434,30 @@ Organização:
   - Teste existente: `lib.rs:6339-6352` (loft + blend + join + boundary).
 - **Melhor prática:** tensão por lado, trim do suporte (opcional) com junção, acoplamento por razão/vértices, escolha de borda confirmada visualmente em `SurfConnect`. Testes: blend G1 entre dois planos com desvio angular medido <1°; G2 comparando curvatura; borda errada gera aviso quando duas candidatas têm distância média dentro de 10%.
 
-### 23. Superfície regrada (CATIA: Sweep Line / Ruled developable / SW: Ruled Surface / Inventor: Ruled Surface / Fenkra: SurfLoft `ruled`, SurfConnect G0, SweepKind::Linear)
+### 23. Superfície regrada (CAD avançado B: Sweep Line / Ruled developable / CAD avançado A: Ruled Surface / CAD avançado C: Ruled Surface / Fenkra: SurfLoft `ruled`, SurfConnect G0, SweepKind::Linear)
 
 - **O que faz:** superfície por retas entre bordas ou saindo de uma borda numa direção.
-- **SolidWorks:** [V parcial] Ruled Surface: Tangent to Surface, Normal to Surface, Tapered to Vector, Perpendicular to Vector, Sweep; estende a partir das arestas selecionadas. [V: snippet 2012]
-- **Inventor:** [V] Ruled Surface: tipos Normal, Tangent, Vector; arestas (sketch não vale); alternar faces de referência; distância e ângulo opcionais; usada em superfícies de partição de fundição.
-- **CATIA:** o blend tem modo "ruled developable" (`ruled_developable_surface`), e o Sweep Line cobre a regrada. [V pela API]
+- **CAD avançado A:** [V parcial] Ruled Surface: Tangent to Surface, Normal to Surface, Tapered to Vector, Perpendicular to Vector, Sweep; estende a partir das arestas selecionadas. [V: snippet 2012]
+- **CAD avançado C:** [V] Ruled Surface: tipos Normal, Tangent, Vector; arestas (sketch não vale); alternar faces de referência; distância e ângulo opcionais; usada em superfícies de partição de fundição.
+- **CAD avançado B:** o blend tem modo "ruled developable" (`ruled_developable_surface`), e o Sweep Line cobre a regrada. [V pela API]
 - **Fenkra hoje:** não há comando único. Há `ruled` no loft (`lib.rs:1309`), G0 no `SurfConnect` e `SweepKind::Linear/LinearDir` (`doc.rs:278-280`). Backlog BM-SUP-02 pede a regrada.
 - **Melhor prática:** um comando "Regrada" com tipos Normal/Tangente/Vetor/Entre arestas, reaproveitando `LinearDir` (comprimento + ângulo) que já existe. Teste: regrada normal a uma aresta de cilindro = plano da aba; tangente = continuidade G1 medida.
 
 ### C. Operações
 
-### 24. Juntar / join / knit / stitch (CATIA: Join / SW: Knit Surface / Inventor: Stitch / outros: Fusion Stitch, NX Sew, Onshape Add / Fenkra: SurfJoin, CurveJoin, `join_curves`)
+### 24. Juntar / join / knit / stitch (CAD avançado B: Join / CAD avançado A: Knit Surface / CAD avançado C: Stitch / outros: Fusion Stitch, CAD avançado G Sew, CAD avançado E Add / Fenkra: SurfJoin, CurveJoin, `join_curves`)
 
 - **O que faz:** une elementos que se tocam numa só entidade.
-- **CATIA V5:** [V]
+- **CAD avançado B:** [V]
   - Opções: **Check tangency** (erro se não tangentes), **Check connexity** (conta os domínios conexos; ao aplicar, destaca as bordas livres), **Check manifold** (só curvas; liga connexity), **Simplify**, **Ignore erroneous elements**, **Merging distance**, **Angle tolerance** (impede juntar sobrepostos; erros marcados na geometria).
   - Comandos de contexto: **Check Solution** (interseções entre elementos), **Propagate** (elementos de mesma dimensão; forquilhas param a propagação).
   - Aba **Sub-elements to remove** e "Create join with sub-elements" (cria um segundo join com o que foi excluído).
   - API: modo de federação (`propagation`: nenhum, todos, continuidade, tangência), healing de células fundidas, desvio.
   - IBM APAR: juntar todas as superfícies com Check Tangency pode falhar com "Tangency Error". [V]
   - Texto-base: "Curvas desconexas não podem ser unidas; use Join antes de operações de superfície". [V: texto do usuário]
-- **SolidWorks:** [V parcial] Knit Surface: junta faces e superfícies; **Merge entities**; **Try to form solid** (ajusta a tolerância para tentar fechar); **Gap control** mostra pares de arestas com folga e permite subir a tolerância acima da folga. Absorve os corpos de origem.
-- **Inventor:** [V] Stitch: seleção (ou Select All), aba Analyze (preto = costurada, vermelho = não; magenta = quase-tangente), **Maximum Tolerance**, **Maintain As Surface**, **Find Remaining Free Edges** (lista de pares com folga máxima; "Set as Tolerance" copia o valor), iteração até zerar. Consome os insumos por padrão.
-- **Outros:** o Fusion usa Stitch (surface→quilt→sólido ao fechar) e Unstitch. [V] O Onshape tem New/Add (merge scope) e converte em sólido ao fechar volume. [V]
+- **CAD avançado A:** [V parcial] Knit Surface: junta faces e superfícies; **Merge entities**; **Try to form solid** (ajusta a tolerância para tentar fechar); **Gap control** mostra pares de arestas com folga e permite subir a tolerância acima da folga. Absorve os corpos de origem.
+- **CAD avançado C:** [V] Stitch: seleção (ou Select All), aba Analyze (preto = costurada, vermelho = não; magenta = quase-tangente), **Maximum Tolerance**, **Maintain As Surface**, **Find Remaining Free Edges** (lista de pares com folga máxima; "Set as Tolerance" copia o valor), iteração até zerar. Consome os insumos por padrão.
+- **Outros:** o Fusion usa Stitch (surface→quilt→sólido ao fechar) e Unstitch. [V] O CAD avançado E tem New/Add (merge scope) e converte em sólido ao fechar volume. [V]
 - **Fenkra hoje:**
   - `SurfJoin{items,tol}` (`lib.rs:1318-1328`): compõe e `sewn(tol)` (`hybrid.inc:152`). `CurveJoin{curves}` (`lib.rs:1212`, `join_curves` em `lib.rs:270-325`) encadeia pelas pontas com tolerância `max(1e-4·tamanho, 1e-3)` e inverte as que vierem ao contrário (bom).
   - `items` aceita só `SurfRef`; **não junta curvas de sketch** a superfícies, e quatro linhas de sketch não unem (benchmark SUP-15, B09).
@@ -468,10 +468,10 @@ Organização:
   - Modo de entrada misto (sketch + curva + face).
   - Testes: 4 linhas de sketch → curva fechada; duas esferas a 15 mm com tol 0,01 → 2 domínios (teste atual em `lib.rs:6184`); folga 0,05 com tol 0,01 → erro com "folga máxima 0,05".
 
-### 25. Reparo / healing (CATIA: Healing / SW: Knit gap control, Import Diagnosis / Inventor: Repair Bodies (construção), Stitch / Fenkra: SurfHeal)
+### 25. Reparo / healing (CAD avançado B: Healing / CAD avançado A: Knit gap control, Import Diagnosis / CAD avançado C: Repair Bodies (construção), Stitch / Fenkra: SurfHeal)
 
 - **O que faz:** fecha frestas e descontinuidades pequenas entre superfícies.
-- **CATIA V5:** [V]
+- **CAD avançado B:** [V]
   - Seleção por lista (modos Add/Remove persistentes por duplo clique).
   - **Merging distance** (folga máxima tratada; ex.: 1 mm) e **Distance objective** (folga máxima aceita após curar; padrão 0,001, subindo a 0,1).
   - Aba **Sharpness**: bordas vivas mantidas (só no modo tangente) e ângulo de aresta viva (padrão 0,5°).
@@ -480,20 +480,20 @@ Organização:
   - Dica: ativar "Surfaces' boundaries" no display para ver as folgas.
   - Texto-base: "sempre analise a curvatura após healing". [V: texto do usuário]
   - IBM: a tolerância 0,15 mm pode revelar auto-interseção; 0,2 mm esconde a irregularidade sem corrigir. [V]
-- **SolidWorks / Inventor:** o reparo é feito por Knit com tolerância/Gap Control, Delete Face (Delete and Patch/Heal) e Fill; o Inventor tem Repair Bodies no ambiente de construção. [C]
+- **CAD avançado A / CAD avançado C:** o reparo é feito por Knit com tolerância/Gap Control, Delete Face (Delete and Patch/Heal) e Fill; o CAD avançado C tem Repair Bodies no ambiente de construção. [C]
 - **Fenkra hoje:** `SurfHeal{surface,tol}` (`lib.rs:1329`, `hybrid.inc:157-168`): costura com `tol`, `ShapeFix_Shape` (precisão `tol`, máx. `10·tol`) e `UnifySameDomain`.
   - Falta: dois parâmetros separados (distância de fusão × objetivo), tangência, bordas vivas, congelar, e **relatório do que mudou e do que restou**. Fica opaco ("curou" sem dizer o quê).
   - `max_tolerance = tol×10` pode fundir bordas legítimas — risco de alterar a geometria.
 - **Melhor prática:** relatório pós-cura (folgas fechadas, folgas restantes com posição, maior deslocamento aplicado) e limite duro de deslocamento. Teste: duas faces com folga 0,02 curam com tol 0,05; folga 0,5 permanece e é listada.
 
-### 26. Dividir / split (CATIA: Split / SW: Split Line (curva), Surface Split via Trim / Inventor: Split / Fenkra: SurfSplit, SplitBody)
+### 26. Dividir / split (CAD avançado B: Split / CAD avançado A: Split Line (curva), Surface Split via Trim / CAD avançado C: Split / Fenkra: SurfSplit, SplitBody)
 
 - **O que faz:** corta um elemento por outro e mantém um lado (ou os dois).
-- **CATIA V5:** [V pela API]
+- **CAD avançado B:** [V pela API]
   - Elemento a cortar, **elementos de corte** (superfície, curva ou ponto; sub-elementos como face/aresta/vértice) com **orientação** por corte; **both sides** (calcula os dois lados); **intersection computation**; **automatic extrapolation** (nenhuma, tangente, curvatura); suporte opcional; resultado superfície ou volume; listas "manter" e "remover" de sub-elementos.
   - Texto-base: "prefira curvas limpas; splits em superfícies degeneradas falham". [V: texto do usuário]
-- **SolidWorks:** o Trim Surface faz o papel (ver ficha 27); Split Line separa a face por uma curva projetada. [C]
-- **Inventor:** Split divide partes/faces por plano, superfície ou caminho. [C]
+- **CAD avançado A:** o Trim Surface faz o papel (ver ficha 27); Split Line separa a face por uma curva projetada. [C]
+- **CAD avançado C:** Split divide partes/faces por plano, superfície ou caminho. [C]
 - **Fenkra hoje:**
   - `SurfSplit{surface,tool,flip,more,curve}` (`lib.rs:1330-1356`): plano/superfície de corte aplicados em sequência com `split_side` (`hybrid.inc:172-…`); corte por curva vira uma faixa extrudada na normal.
   - **Riscos reais:**
@@ -508,42 +508,42 @@ Organização:
   - "Manter ambos" gera dois elementos.
   - Testes: esfera dividida por plano (metade); superfície curva cortada por curva projetada (borda dentro de 1e-3 da curva); plano que não cruza → erro nomeado.
 
-### 27. Aparar / trim (CATIA: Trim / SW: Trim Surface / Inventor: Trim / outros: Fusion Trim, Onshape Mutual Trim / Fenkra: SurfTrim)
+### 27. Aparar / trim (CAD avançado B: Trim / CAD avançado A: Trim Surface / CAD avançado C: Trim / outros: Fusion Trim, CAD avançado E Mutual Trim / Fenkra: SurfTrim)
 
 - **O que faz:** corta dois elementos um pelo outro, mantendo os lados escolhidos, e junta.
-- **CATIA V5:** dois elementos; **lado** de cada um (trocável com "Other side", "Next/Previous element" para escolher a célula); resultado montado (assemble) ou separado. [C; a página não abriu, o resumo vem da busca e da API do Split]
-- **SolidWorks:** [V parcial]
+- **CAD avançado B:** dois elementos; **lado** de cada um (trocável com "Other side", "Next/Previous element" para escolher a célula); resultado montado (assemble) ou separado. [C; a página não abriu, o resumo vem da busca e da API do Split]
+- **CAD avançado A:** [V parcial]
   - **Standard** (ferramenta: superfície, sketch, curva, plano) e **Mutual** (superfícies se cortam entre si).
   - **Keep selections** ou **Remove selections**: com Keep, o que não foi listado é descartado; com Remove, o que não foi listado fica.
   - Em **Surface Split Options**: **Natural** e **Linear** (só importam quando a ferramenta não atravessa a superfície; o Linear estende os limites a partir das pontas até a aresta mais próxima).
   - Pré-visualização dinâmica no Mutual. **Merge result.**
-- **Inventor:** [V] Trim: ferramenta pode ser quilt, face única, caminho de curvas 2D sem interseção ou plano de trabalho; seleciona as regiões a remover (a primeira define o corpo); Invert Selection. Cada trim age em um único corpo de superfície.
-- **Outros:** o Fusion usa uma superfície como ferramenta e escolhe o lado; aceita sólido como ferramenta. [V] O Onshape tem Mutual Trim e Move Boundary com distância negativa. [V]
+- **CAD avançado C:** [V] Trim: ferramenta pode ser quilt, face única, caminho de curvas 2D sem interseção ou plano de trabalho; seleciona as regiões a remover (a primeira define o corpo); Invert Selection. Cada trim age em um único corpo de superfície.
+- **Outros:** o Fusion usa uma superfície como ferramenta e escolhe o lado; aceita sólido como ferramenta. [V] O CAD avançado E tem Mutual Trim e Move Boundary com distância negativa. [V]
 - **Fenkra hoje:** `SurfTrim{a,b,flip_a,flip_b}` (`lib.rs:1357-1362`): divide A por B e B por A, mantém um lado de cada (`flip`) e costura com `sewn(1e-3)`.
   - Faltam: escolha por **célula** (quando há mais de duas regiões, `flip` é binário e não cobre), Keep/Remove, Natural/Linear (extensão), ferramenta curva ou sketch, resultado separado.
   - Tolerância de costura fixa `1e-3` (pode deixar bordas livres em modelos grandes).
 - **Melhor prática:** escolher regiões clicando (lista de células, com cor), "manter"/"remover", extensão natural/linear. Testes: dois planos que se cruzam (4 regiões, manter 1); corte mútuo de duas esferas; ferramenta que não atravessa → aviso de extensão.
 
-### 28. Contorno / boundary (CATIA: Boundary / SW: Split Line, Edge Curves / Inventor: Include Geometry / Fenkra: CurveBoundary)
+### 28. Contorno / boundary (CAD avançado B: Boundary / CAD avançado A: Split Line, Edge Curves / CAD avançado C: Include Geometry / Fenkra: CurveBoundary)
 
 - **O que faz:** cria a curva da borda livre de uma superfície.
-- **CATIA V5:** [V] Seleciona uma aresta e escolhe a **propagação**: Complete boundary, Point continuity, Tangent continuity ou No propagation. Opcionalmente limita a curva por dois elementos (ex.: pontos). Selecionando a superfície inteira gera o contorno completo e a propagação some. Só limita se o contorno gerado for contínuo; setas invertem o trecho. Não se copia o Boundary para outro documento (copie a superfície primeiro).
-- **SolidWorks / Inventor:** Convert Entities / Include Geometry no sketch 3D (associativo) copiam bordas. [C]
+- **CAD avançado B:** [V] Seleciona uma aresta e escolhe a **propagação**: Complete boundary, Point continuity, Tangent continuity ou No propagation. Opcionalmente limita a curva por dois elementos (ex.: pontos). Selecionando a superfície inteira gera o contorno completo e a propagação some. Só limita se o contorno gerado for contínuo; setas invertem o trecho. Não se copia o Boundary para outro documento (copie a superfície primeiro).
+- **CAD avançado A / CAD avançado C:** Convert Entities / Include Geometry no sketch 3D (associativo) copiam bordas. [C]
 - **Fenkra hoje:** `CurveBoundary{surface,which}` (`lib.rs:1502-1507`) devolve o laço de borda livre de índice `which`. **Mesma armadilha da Interseção:** `cs.get(*which).or(cs.last())` cai em "a última" se o índice não existir. Não há aresta específica nem propagação.
 - **Melhor prática:** escolher a aresta (âncora), propagação gravada (completo / ponto / tangente / nenhuma), limites. Teste: cilindro aberto tem 2 laços; trocar entre eles pela âncora; apagar o laço escolhido gera erro (não pega "o último").
 
-### 29. Extrair com propagação (CATIA: Extract / SW: Surface Offset=0, Copy Surface, Delete Face (Keep) / Inventor: Derive/Copy Object, "Select Other" / Fenkra: SurfExtract, SurfMulti, SurfPart, extract.rs)
+### 29. Extrair com propagação (CAD avançado B: Extract / CAD avançado A: Surface Offset=0, Copy Surface, Delete Face (Keep) / CAD avançado C: Derive/Copy Object, "Select Other" / Fenkra: SurfExtract, SurfMulti, SurfPart, extract.rs)
 
 - **O que faz:** copia uma face, aresta ou vértice de um corpo para o conjunto geométrico, mantendo ou não a associação.
-- **CATIA V5:** [V]
+- **CAD avançado B:** [V]
   - Seleciona aresta ou face; **Propagation type**: Point continuity, Tangent continuity ou No propagation.
   - **Complementary mode**: seleciona o que NÃO foi escolhido.
   - Campo **Support** aparece quando a propagação é ambígua (precisa escolher uma face).
   - Multi-seleção.
   - Limitação: extraídos não se copiam sozinhos entre documentos.
   - O Extract é usado dentro de outros comandos (ex.: via menu de contexto em qualquer campo) — o "Extract usável dentro de qualquer comando". [V pelo benchmark; menu de contexto [C]]
-- **SolidWorks:** Offset Surface com distância 0 ou "Copy Surface"; Delete Face com Keep. [V: padrão do zero no Onshape; SW [C]]
-- **Inventor:** o "Derive"/"Copy Object" de faces; Select Other para escolher entre sobrepostas. [C]
+- **CAD avançado A:** Offset Surface com distância 0 ou "Copy Surface"; Delete Face com Keep. [V: padrão do zero no CAD avançado E; CAD avançado A [C]]
+- **CAD avançado C:** o "Derive"/"Copy Object" de faces; Select Other para escolher entre sobrepostas. [C]
 - **Fenkra hoje:**
   - `SurfExtract{face:[f64;3], owner}` (`lib.rs:1216` → `face_of_bodies`, `lib.rs:881`): busca o corpo cuja superfície passa pelo ponto a <1e-3 e copia a face.
   - A propagação existe só na **interface** (`extract.rs:71-160`: `Prop::{Nenhuma, Ponto, Tangente, Curvatura}` sobre a malha) e o resultado é gravado como um `SurfMulti{faces:Vec<[f64;3]>}` (`app.rs:4910`). **Não é refeita no recompute**: se o corpo muda e uma face tangente nova aparece, ela não entra.
@@ -554,11 +554,11 @@ Organização:
   - "Complementar" e "Extract" em qualquer campo de seleção (menu de contexto).
   - Testes: extrair face + tangentes de um corpo com filete, aumentar o raio do filete e conferir que a contagem permanece; apagar a face-mãe gera "falhou".
 
-### 30. Filete de superfície (CATIA: Shape Fillet, Edge Fillet, Face-Face Fillet / SW: Fillet (em superfícies) / Inventor: Fillet em superfície/quilt / Fenkra: SurfFillet, SurfEdgeFillet)
+### 30. Filete de superfície (CAD avançado B: Shape Fillet, Edge Fillet, Face-Face Fillet / CAD avançado A: Fillet (em superfícies) / CAD avançado C: Fillet em superfície/quilt / Fenkra: SurfFillet, SurfEdgeFillet)
 
 - **O que faz:** arredonda a junta de duas superfícies ou uma aresta entre faces de superfície.
-- **CATIA V5:** Shape Fillet (aresta entre dois suportes), Edge Fillet, Variable Radius Fillet, Face-Face Fillet, Tritangent. Opções: raio, extremidades (liso, reto, máx., mín.), tangência, trim de suportes. [C; apostila mencionada, sem página aberta]
-- **SolidWorks / Inventor:** Fillet/Face Fillet com raio constante, variável ou por corda; opção "Trim and attach". [C]
+- **CAD avançado B:** Shape Fillet (aresta entre dois suportes), Edge Fillet, Variable Radius Fillet, Face-Face Fillet, Tritangent. Opções: raio, extremidades (liso, reto, máx., mín.), tangência, trim de suportes. [C; apostila mencionada, sem página aberta]
+- **CAD avançado A / CAD avançado C:** Fillet/Face Fillet com raio constante, variável ou por corda; opção "Trim and attach". [C]
 - **Fenkra hoje:**
   - `SurfFillet{a,b,flip_a,flip_b,radius,radius2}` (`lib.rs:1242-1253`): acha a maior curva de interseção, toma o ponto médio, apara cada superfície pela outra **estendida** (`split_side(..., extend=true)`), costura (`sewn(1e-3)`) e chama `edge_fillet` (`lib.rs:259-267`).
   - `SurfEdgeFillet` escolhe arestas por **pontos médios** (`edges: Vec<[f64;3]>`) — frágil se a malha muda.
@@ -567,10 +567,10 @@ Organização:
   - A tolerância das arestas `tol = 5% da diagonal` (mín. 1), usada na seleção.
 - **Melhor prática:** escolher arestas por âncora (owner + papel) e testar o raio máximo possível antes de falhar ("máx. viável ≈ X mm"). Testes: filete r=5 entre duas paredes perpendiculares (teste atual em `lib.rs:5662-5667`); raio variável 2→6; r maior que a parede → erro com o máximo estimado.
 
-### 31. Transformações: translate, rotate, symmetry, scale, affinity, axis-to-axis (CATIA: Transformations / SW: Move/Copy, Mirror, Scale / Inventor: Move, Mirror, Scale / Fenkra: GeoTransform, BodyXf)
+### 31. Transformações: translate, rotate, symmetry, scale, affinity, axis-to-axis (CAD avançado B: Transformations / CAD avançado A: Move/Copy, Mirror, Scale / CAD avançado C: Move, Mirror, Scale / Fenkra: GeoTransform, BodyXf)
 
 - **O que faz:** cria uma cópia transformada de um ou mais elementos, sem alterar o original.
-- **CATIA V5:** [V]
+- **CAD avançado B:** [V]
   - **Translate**: vetor por direção+distância, ponto a ponto ou coordenadas; **Repeat object after OK** (cópias a múltiplos do valor).
   - **Rotate**: eixo (linha), ângulo, repetição.
   - **Symmetry**: ponto, linha ou plano.
@@ -579,49 +579,49 @@ Organização:
   - **Axis to axis**: leva o elemento de um sistema de eixos para outro; opção de ocultar/mostrar o inicial.
   - Todos aceitam multi-seleção e multi-output (agrupamento editável); o original não muda.
   - Texto-base: "prefira transformações paramétricas". [V: texto do usuário]
-- **SolidWorks:** Move/Copy Bodies (translate/rotate), Mirror, Scale (ponto de origem; uniforme/não uniforme) com expressões. [C]
-- **Inventor:** Move Bodies, Mirror, Scale (Uniform / Non-Uniform), com eixos de trabalho. [C]
+- **CAD avançado A:** Move/Copy Bodies (translate/rotate), Mirror, Scale (ponto de origem; uniforme/não uniforme) com expressões. [C]
+- **CAD avançado C:** Move Bodies, Mirror, Scale (Uniform / Non-Uniform), com eixos de trabalho. [C]
 - **Fenkra hoje:**
   - `GeoTransform{source,class,xf}` (`doc.rs:671`, `lib.rs:1384-1392`): Translate, Rotate, Mirror, Scale sobre ponto, plano, curva (polilinha) ou superfície (`Shape::transformed`).
   - `BodyXf` inclui Translate/Rotate/Symmetry/**Affinity** (`doc.rs:1801-1807`), mas o wireframe **não tem Affinity** nem Axis-to-Axis.
   - Ponto ruim: `xform_dir` em planos transformados por mirror pode inverter a orientação de `normal`/`x` sem corrigir a mão — risco de um plano espelhado ter eixos de mão trocada (não testado).
   - Falta repetição (padrão de cópias).
-- **Melhor prática:** repetição N (como o CATIA), Affinity e Axis-to-Axis; ao espelhar planos, recompor `x` e `normal` para manter mão direita. Testes: espelhar um plano e sketchar nele (X não pode inverter); escala 2 por ponto fora da origem; rotação de superfície 90° (bbox coerente).
+- **Melhor prática:** repetição N (como o CAD avançado B), Affinity e Axis-to-Axis; ao espelhar planos, recompor `x` e `normal` para manter mão direita. Testes: espelhar um plano e sketchar nele (X não pode inverter); escala 2 por ponto fora da origem; rotação de superfície 90° (bbox coerente).
 
-### 32. Extrapolar / estender (CATIA: Extrapolate / SW: Extend Surface / Inventor: Extend / outros: Fusion Extend, Onshape Move Boundary / Fenkra: SurfExtrapolate)
+### 32. Extrapolar / estender (CAD avançado B: Extrapolate / CAD avançado A: Extend Surface / CAD avançado C: Extend / outros: Fusion Extend, CAD avançado E Move Boundary / Fenkra: SurfExtrapolate)
 
 - **O que faz:** prolonga a borda de uma curva ou superfície.
-- **CATIA V5:** [V pela API via pycatia]
+- **CAD avançado B:** [V pela API via pycatia]
   - Elemento, **borda(s)** (ponto para curvas, curva para superfícies), **limite**: comprimento ou **até elemento** (superfície/volume); **continuidade**: tangente ou curvatura (por borda).
   - **Border type** na superfície: normal à borda ou tangente às arestas vizinhas.
   - **Assemble** (junta com o original); **Extend edges** (para tangente/borda tangente/montado); **constant length mode**; vários extrapolamentos em lista, com opção de usar a mesma regra nos dois lados de fios; propagação em modo curvatura de casca.
   - IBM: bugs históricos ao alternar curvatura/tangente e extrapolar até um limite longo. [V]
-- **SolidWorks:** [V] bordas ou face; **Propagate to tangent faces** (só com arestas); condição final: Distance, Up to point, Up to surface; tipo: **Same surface** (segue a geometria) ou **Linear** (tangente). Dica Javelin: o Extend costuma falhar com modelos a que faltam arestas livres planares [conteúdo não lido; 403].
-- **Inventor:** [V] só bordas livres; Distance ou To (face/plano); **Extend** (continua a curva das arestas vizinhas) ou **Stretch** (reta a partir das vizinhas); faces de peça não podem ser estendidas.
-- **Outros:** Onshape Move Boundary com Blind/Up to face/part/vertex, **Tangent propagation**, **Maintain curvature**, distância negativa apara. [V] O Fusion Extend estima a continuação pela curvatura U/V. [V]
+- **CAD avançado A:** [V] bordas ou face; **Propagate to tangent faces** (só com arestas); condição final: Distance, Up to point, Up to surface; tipo: **Same surface** (segue a geometria) ou **Linear** (tangente). Dica Javelin: o Extend costuma falhar com modelos a que faltam arestas livres planares [conteúdo não lido; 403].
+- **CAD avançado C:** [V] só bordas livres; Distance ou To (face/plano); **Extend** (continua a curva das arestas vizinhas) ou **Stretch** (reta a partir das vizinhas); faces de peça não podem ser estendidas.
+- **Outros:** CAD avançado E Move Boundary com Blind/Up to face/part/vertex, **Tangent propagation**, **Maintain curvature**, distância negativa apara. [V] O Fusion Extend estima a continuação pela curvatura U/V. [V]
 - **Fenkra hoje:** `SurfExtrapolate{surface,near,length,curvature,more}` (`lib.rs:1376-1383`): borda mais próxima do ponto `near`, comprimento fixo, `curvature` (mesma superfície) ou tangente linear; `more` repete.
   - Faltam: **até elemento** (DR-24/B14), tipo de borda (normal × tangente às vizinhas), propagação de tangência, montar ou não, borda escolhida por âncora (não por ponto "perto").
   - O ponto `near` pode escolher a borda errada quando duas bordas estão à mesma distância.
 - **Melhor prática:** `Distância` / `Até elemento` / `Até ponto`; tipo `Mesma superfície` × `Linear`; propagação opcional. Testes: estender plano 20 mm; estender cilindro por curvatura mantém raio; até plano inclinado.
 
-### 33. Near, Disassemble, Untrim, Invert (CATIA: Near, Disassemble, Untrim/Restore, Invert / SW: Untrim Surface, Flip / Inventor: Untrim / Fenkra: SurfPart, SurfUntrim; faltam Near, Invert)
+### 33. Near, Disassemble, Untrim, Invert (CAD avançado B: Near, Disassemble, Untrim/Restore, Invert / CAD avançado A: Untrim Surface, Flip / CAD avançado C: Untrim / Fenkra: SurfPart, SurfUntrim; faltam Near, Invert)
 
 - **O que faz:** utilitários para escolher uma parte, separar células, desfazer aparagens e inverter a orientação.
-- **CATIA V5:** [V]
+- **CAD avançado B:** [V]
   - **Near:** cria o sub-elemento de um multi-elemento mais próximo de um elemento de referência; abre sozinho quando detecta não conexo.
   - **Disassemble:** modos **All Cells** (cada célula vira elemento) e **Domains Only** (células conexas ficam juntas).
   - **Restore (untrim):** devolve ao limite inicial da superfície, não a um estado intermediário (para parcial, usar Undo logo após o trim).
   - **Invert Orientation:** inverte a orientação de superfície ou curva; botão vira "Reset Initial".
-- **SolidWorks/Fusion/Inventor:** Untrim Surface (SW), Untrim (Fusion: todas as bordas, internas, externas ou manual). [V: Fusion; SW [C]]
+- **CAD avançado A/CAD avançado D/CAD avançado C:** Untrim Surface (CAD avançado A), Untrim (Fusion: todas as bordas, internas, externas ou manual). [V: Fusion; CAD avançado A [C]]
 - **Fenkra hoje:** `SurfPart{surface,index}` (por **índice**, `lib.rs:1374`) e `SurfUntrim` (`lib.rs:1375`). O índice é frágil se a ordem das faces mudar após editar o pai. Não existem Near e Invert.
 - **Melhor prática:** Near como padrão para escolher partes (âncora espacial) em vez de índice; Disassemble com os dois modos; orientação visível (setas) e Invert. Teste: desmontar um join de 3 elementos; extrair parte por Near ao mudar a ordem das faces.
 
 ### D. Sets, ordem e update
 
-### 34. Geometrical Set / Ordered Geometrical Set / Part Body / In Work Object / Update e diagnóstico (CATIA: Geometrical Set, Ordered Geometrical Set, Part Body, Define In Work Object, Update, Update Diagnosis, Isolate, Publication / SW: Surfaces folder, Rollback bar, What's Wrong / Inventor: Construction folder, End of Part, Design Doctor / Fenkra: `FolderKind::Geometria`, `RefElement.folder`, `published`, `Isolated`, `Linked`)
+### 34. Geometrical Set / Ordered Geometrical Set / Part Body / In Work Object / Update e diagnóstico (CAD avançado B: Geometrical Set, Ordered Geometrical Set, Part Body, objeto de trabalho, Update, Update Diagnosis, Isolate, Publication / CAD avançado A: Surfaces folder, Rollback bar, What's Wrong / CAD avançado C: Construction folder, End of Part, Design Doctor / Fenkra: `FolderKind::Geometria`, `RefElement.folder`, `published`, `Isolated`, `Linked`)
 
 - **O que faz:** organiza a geometria e define **onde entra o próximo comando**, em que ordem se recalcula e o que acontece quando algo falha.
-- **CATIA V5:** [V]
+- **CAD avançado B:** [V]
   - **In Work Object:** o item sublinhado define onde o próximo comando entra. Num Geoset, vai para o **fim**. Em Part Body e Ordered Geoset pode-se definir um comando como In Work Object, voltar o projeto àquele ponto e inserir no meio da pilha, o que muda toda a geometria posterior.
   - **Part Body:** geometria sólida em ordem de cima para baixo; reordenar pode mudar o resultado.
   - **Geoset (não ordenado):** geometria de superfície sem ordem fixa; os comandos são **referenciados, não consumidos**, então mudar a ordem dos filhos não muda o resultado. Só contém outros Geosets.
@@ -632,8 +632,8 @@ Organização:
   - **Diagnóstico e isolar:** o Update Diagnosis lista os elementos com erro; Edit>Links; **Isolate** quebra o link e deixa a geometria sem pai. O Isolate não pega todos os links (APARs). [V pela busca; opções do diálogo [C]]
   - **Multi-output:** agrupa as saídas de um comando que age em vários elementos; se não puder ser criado, é desativado automaticamente. [V]
   - **Copy/Paste:** boundaries e extracts não podem ser copiados sozinhos (copie o pai). [V]
-- **SolidWorks:** a barra de rollback e "What's Wrong" mostram o erro; superfícies e sólidos ficam na mesma árvore, em ordem de criação (Surface Bodies folder). Pastas organizam a árvore. [V parcial: dica GoEngineer sobre pastas] "Insert Part" e "Delete Bodies" como feature suprimível. [V]
-- **Inventor:** a barra "End of Part" marca o ponto de inserção; o Design Doctor lista falhas; as superfícies ficam em **Construction** e no ambiente de construção as análises são temporárias. [V parcial: análises no construction]
+- **CAD avançado A:** a barra de rollback e "What's Wrong" mostram o erro; superfícies e sólidos ficam na mesma árvore, em ordem de criação (Surface Bodies folder). Pastas organizam a árvore. [V parcial: dica GoEngineer sobre pastas] "Insert Part" e "Delete Bodies" como feature suprimível. [V]
+- **CAD avançado C:** a barra "End of Part" marca o ponto de inserção; o Design Doctor lista falhas; as superfícies ficam em **Construction** e no ambiente de construção as análises são temporárias. [V parcial: análises no construction]
 - **Fenkra hoje:**
   - Elementos de referência (`RefElement`, `doc.rs:384-398`) com `folder` (pasta de geometria) e `published`. Não há linha do tempo na pasta (`doc.rs:1281`): é um Geoset sem ordem.
   - Avaliação por demanda com **memória** (`lib.rs:921-927`) e profundidade; a ordem física é irrelevante (bom).
@@ -648,83 +648,83 @@ Organização:
 
 ### E. Análises
 
-### 35. Curvatura de superfície e pente de curvatura (CATIA: Surfacic Curvature Analysis, Porcupine Curvature Analysis / SW: Curvature display, Curvature Comb / Inventor: Surface Analysis (Gaussian/Mean/Max), Curvature Comb / Fenkra: modo Curvatura do shader)
+### 35. Curvatura de superfície e pente de curvatura (CAD avançado B: Surfacic Curvature Analysis, Porcupine Curvature Analysis / CAD avançado A: Curvature display, Curvature Comb / CAD avançado C: Surface Analysis (Gaussian/Mean/Max), Curvature Comb / Fenkra: modo Curvatura do shader)
 
 - **O que faz:** mostra a curvatura como mapa de cores (superfície) ou pente (curva).
-- **CATIA V5:** [V parcial] Surfacic Curvature mapeia a curvatura na superfície. Porcupine pode ser aplicado a curvas ou bordas de superfícies; mostra curvatura ou raio; parâmetros **Type, Density, Amplitude**. APARs: cores erradas quando a precisão 3D fixa é 0,02/0,01; amplitude muda após Undo.
-- **SolidWorks:** [V] Curvature Display (View>Display>Curvature) pinta pela curvatura local; gradiente suave na aresta indica C2, salto indica C0/C1; a faixa de cores é ajustável em Document Properties.
-- **Inventor:** [V] Surface Analysis com Gaussian, Mean ou Max; **Curvature Comb** com espinhos mais longos onde há mais curvatura; funciona em faces, superfícies, curvas de sketch e arestas; a densidade é ajustável; mudar a qualidade de exibição afeta todas as análises salvas.
+- **CAD avançado B:** [V parcial] Surfacic Curvature mapeia a curvatura na superfície. Porcupine pode ser aplicado a curvas ou bordas de superfícies; mostra curvatura ou raio; parâmetros **Type, Density, Amplitude**. APARs: cores erradas quando a precisão 3D fixa é 0,02/0,01; amplitude muda após Undo.
+- **CAD avançado A:** [V] Curvature Display (View>Display>Curvature) pinta pela curvatura local; gradiente suave na aresta indica C2, salto indica C0/C1; a faixa de cores é ajustável em Document Properties.
+- **CAD avançado C:** [V] Surface Analysis com Gaussian, Mean ou Max; **Curvature Comb** com espinhos mais longos onde há mais curvatura; funciona em faces, superfícies, curvas de sketch e arestas; a densidade é ajustável; mudar a qualidade de exibição afeta todas as análises salvas.
 - **Fenkra hoje:** `DisplayMode::Curvatura` (`render.rs:199-224`; shader em `render.rs:81-91`): usa `k = |fwidth(normal)| / |fwidth(pos)|` por pixel, escala logarítmica e rampa de 5 cores.
   - É uma **estimativa em espaço de tela**: depende da resolução e do zoom; sem legenda, sem tipo (Gaussiana/Média/Máx.), sem unidade. Sem pente em curvas.
   - Aviso do ADR 0011: "a qualidade gráfica nunca altera o modelo" — aqui o contrário: a qualidade da malha altera a análise.
 - **Melhor prática:** curvatura calculada no kernel por face (`BRepLProp`/`GeomLProp_SLProps`) e enviada como atributo por vértice; legenda com min/máx e unidade 1/mm; tipos Gaussiana/Média/Máx./Mín.; pente com densidade e escala. Testes: esfera r=10 → curvatura média 0,1 mm⁻¹ constante; cilindro → Gaussiana 0; plano → 0.
 
-### 36. Zebra (CATIA: Zebra via Shading with material / SW: Zebra Stripes / Inventor: Zebra (Smoothness) / Fenkra: modo Zebra)
+### 36. Zebra (CAD avançado B: Zebra via Shading with material / CAD avançado A: Zebra Stripes / CAD avançado C: Zebra (Smoothness) / Fenkra: modo Zebra)
 
 - **O que faz:** projeta listras refletidas para ver a continuidade de superfícies.
-- **CATIA V5:** [V parcial] as análises exigem "Shading with Material"; o texto-base manda usar zebra para validar continuidade. [V: texto do usuário]
-- **SolidWorks:** [V] View>Display>Zebra Stripes; as listras aparecem **uma ordem abaixo** da continuidade testada: C0 as listras não se alinham; C1 alinham com quina; C2 alinham e passam suaves.
-- **Inventor:** [V] Zebra (Smoothness): G0 visível, G1 mesma direção com mudança de curvatura notável, G2 liso (tangência e curvatura iguais).
+- **CAD avançado B:** [V parcial] as análises exigem "Shading with Material"; o texto-base manda usar zebra para validar continuidade. [V: texto do usuário]
+- **CAD avançado A:** [V] View>Display>Zebra Stripes; as listras aparecem **uma ordem abaixo** da continuidade testada: C0 as listras não se alinham; C1 alinham com quina; C2 alinham e passam suaves.
+- **CAD avançado C:** [V] Zebra (Smoothness): G0 visível, G1 mesma direção com mudança de curvatura notável, G2 liso (tangência e curvatura iguais).
 - **Fenkra hoje:** `DisplayMode::Zebra` (`render.rs:92-100`): faixas em `reflect(-v, n).z × 9`, suavizadas por `fwidth`. Número, direção e largura de listras fixos; o ambiente é "horizontal em Z".
 - **Melhor prática:** parâmetros de densidade, direção (X/Y/Z/radial), largura e opção de ambiente esférico; **ficar fixa ao modelo**, não à câmera (opção). Teste de captura visual (B53): duas faces G1 e G2 produzem listras com quina × contínuas na junção.
 
-### 37. Análise de ângulo de saída / draft (CATIA: Draft Analysis / SW: Draft Analysis / Inventor: Draft Analysis / Fenkra: ausente)
+### 37. Análise de ângulo de saída / draft (CAD avançado B: Draft Analysis / CAD avançado A: Draft Analysis / CAD avançado C: Draft Analysis / Fenkra: ausente)
 
 - **O que faz:** colore faces conforme o ângulo entre a normal e a direção de desmoldagem.
-- **CATIA V5:** [V parcial] exibe só em Shading with Material; resultado incorreto com ângulo ≤3° (APAR).
-- **SolidWorks:** [V] o ângulo mínimo aceitável vem de uma caixa; menores aparecem como "Requires Draft"; as cores são temporárias.
-- **Inventor:** [V] verifica a inclinação para fundição segundo a direção de puxada; espectro de cor; testa direções alternativas.
+- **CAD avançado B:** [V parcial] exibe só em Shading with Material; resultado incorreto com ângulo ≤3° (APAR).
+- **CAD avançado A:** [V] o ângulo mínimo aceitável vem de uma caixa; menores aparecem como "Requires Draft"; as cores são temporárias.
+- **CAD avançado C:** [V] verifica a inclinação para fundição segundo a direção de puxada; espectro de cor; testa direções alternativas.
 - **Fenkra hoje:** não existe; o draft de sólido existe (`draft_tagged`, `fenkra-kernel/src/lib.rs:412`) mas sem análise.
 - **Melhor prática:** análise por normal de face × direção (sem depender da malha), com limiar, "undercut" e escolha da direção por plano/aresta/eixo. Teste: cubo com faces laterais a 0° → todas "precisa de saída"; com 2° e limiar 1° → OK.
 
-### 38. Connect checker / verificação de continuidade (CATIA: Connect Checker / SW: Deviation Analysis, zebra / Inventor: Zebra / Fenkra: ausente)
+### 38. Connect checker / verificação de continuidade (CAD avançado B: Connect Checker / CAD avançado A: Deviation Analysis, zebra / CAD avançado C: Zebra / Fenkra: ausente)
 
 - **O que faz:** mede distância (G0), ângulo (G1) e diferença de curvatura (G2) entre superfícies ou curvas vizinhas.
-- **CATIA V5:** [V parcial] o Connect Checker mede a distância mínima entre vértices, o ângulo entre as superfícies e a diferença de curvatura; há versão para curvas; a curvatura aparece em % (máx. 200%, documentação pouco clara). O Healing Assistant tem limites em mm, graus e %. APARs mostram que o resultado depende de um limiar angular.
-- **SolidWorks:** [V] **Deviation Analysis**: seleciona as superfícies que se encontram numa aresta e calcula ângulo mín./médio/máx.; para C1 todos devem ser ≈0. Só dá número de tangência, não de curvatura (comentário externo).
-- **Inventor:** [V] a zebra classifica G0/G1/G2 visualmente; não há medidor numérico equivalente [C].
+- **CAD avançado B:** [V parcial] o Connect Checker mede a distância mínima entre vértices, o ângulo entre as superfícies e a diferença de curvatura; há versão para curvas; a curvatura aparece em % (máx. 200%, documentação pouco clara). O Healing Assistant tem limites em mm, graus e %. APARs mostram que o resultado depende de um limiar angular.
+- **CAD avançado A:** [V] **Deviation Analysis**: seleciona as superfícies que se encontram numa aresta e calcula ângulo mín./médio/máx.; para C1 todos devem ser ≈0. Só dá número de tangência, não de curvatura (comentário externo).
+- **CAD avançado C:** [V] a zebra classifica G0/G1/G2 visualmente; não há medidor numérico equivalente [C].
 - **Fenkra hoje:** não existe; a propagação de `extract.rs` (`end_props`, limiar de tangência cos > 0,9986 ≈ 3° e curvatura ±15%) é um embrião de métrica, mas só para propagar seleção.
 - **Melhor prática:** `analise_continuidade(aresta)` no kernel (amostra a borda, mede gap, ângulo e Δ curvatura), com limites configuráveis e legenda verde/amarelo/vermelho sobre a aresta. Testes: G0 (gap 0), G1 (ângulo <0,5°), G2 (Δk <5%); dois planos a 90° → ângulo 90°.
 
-### 39. Distância / desvio (CATIA: Distance Analysis / SW: Compare, Deviation / Fenkra: ausente; existe `measure.rs`)
+### 39. Distância / desvio (CAD avançado B: Distance Analysis / CAD avançado A: Compare, Deviation / Fenkra: ausente; existe `measure.rs`)
 
 - **O que faz:** mapa de cores com a distância entre dois conjuntos (superfície×superfície, ponto×superfície).
-- **CATIA V5:** o Distance Analysis aparece junto de connect checker e porcupine como ferramenta para otimizar curvatura e tolerância. [V parcial: apenas listagem de curso]
-- **SolidWorks:** o Deviation Analysis do SW é angular; a distância é feita por Measure/Check Entity [V parcial].
+- **CAD avançado B:** o Distance Analysis aparece junto de connect checker e porcupine como ferramenta para otimizar curvatura e tolerância. [V parcial: apenas listagem de curso]
+- **CAD avançado A:** o Deviation Analysis do CAD avançado A é angular; a distância é feita por Measure/Check Entity [V parcial].
 - **Fenkra hoje:** `measure.rs` mede distâncias pontuais; não há mapa de cores de distância. Requisito RF-SUP-021 de `docs/requisitos/superficies.md` pede o desvio com mapa de cores.
 - **Melhor prática:** grade de amostras na superfície A com distância à B (`BRepExtrema_DistShapeShape`), mapa de cores com legenda e máximo/mínimo/média. Teste: duas esferas concêntricas r=10 e r=12 → distância uniforme 2.
 
 ### F. Sólido e Classe A
 
-### 40. Espessamento (CATIA: Thick Surface (Part Design) / SW: Thicken / Inventor: Thicken/Offset (Solid) / outros: Onshape Thicken / Fenkra: FeatureKind::ThickSurface)
+### 40. Espessamento (CAD avançado B: Thick Surface (Part Design) / CAD avançado A: Thicken / CAD avançado C: Thicken/Offset (Solid) / outros: CAD avançado E Thicken / Fenkra: FeatureKind::ThickSurface)
 
 - **O que faz:** transforma uma superfície em sólido com espessura em um ou dois lados.
-- **SolidWorks:** [V] Thicken: lado 1, lado 2 ou ambos; **Direction of Thicken** (linear, planos, eixos, cilindros — desde a versão 2020); **Create solid from enclosed volume** só quando as superfícies fecham um volume; exige costurar antes se há várias peças; Thicken Cut. 
-- **Inventor:** [V] o resultado Solid do Thicken/Offset cria o espessamento; fóruns relatam que o espessamento falha por faces e que combinar com Patch/Stitch antes resolve.
-- **Outros:** Onshape Thicken converte em sólido e adiciona/remove material; o Fusion recomenda aparar/estender até o plano de partição antes do Thicken. [V]
+- **CAD avançado A:** [V] Thicken: lado 1, lado 2 ou ambos; **Direction of Thicken** (linear, planos, eixos, cilindros — desde a versão 2020); **Create solid from enclosed volume** só quando as superfícies fecham um volume; exige costurar antes se há várias peças; Thicken Cut. 
+- **CAD avançado C:** [V] o resultado Solid do Thicken/Offset cria o espessamento; fóruns relatam que o espessamento falha por faces e que combinar com Patch/Stitch antes resolve.
+- **Outros:** CAD avançado E Thicken converte em sólido e adiciona/remove material; o Fusion recomenda aparar/estender até o plano de partição antes do Thicken. [V]
 - **Fenkra hoje:** `ThickSurface{surface,t1,t2,op}` (`doc.rs:1822-1829`, `lib.rs:4041-4046`): `thicken(t1,t2)` e depois `apply(op)`. Erro específico se o raio de curvatura é menor que a espessura (`hybrid.inc:295`).
   - Faltam: direção diferente da normal, "espessar só células fechadas" e um teste de lado para superfície com normal invertida (relação `flip`).
 - **Melhor prática:** direção escolhida, soma opcional com sólido existente, aviso "raio mínimo = X". Testes: cilindro aberto t=2 (teste atual `lib.rs:6372`); t maior que o raio interno → erro com raio mínimo.
 
-### 41. Fechamento e costura em sólido (CATIA: Close Surface, Sew Surface / SW: Knit→Create solid, Cut With Surface / Inventor: Stitch→solid, Sculpt / outros: Fusion Stitch, Onshape Enclose / Fenkra: CloseSurface, SewSurface, BoundaryFill, LinkedBody)
+### 41. Fechamento e costura em sólido (CAD avançado B: Close Surface, Sew Surface / CAD avançado A: Knit→Create solid, Cut With Surface / CAD avançado C: Stitch→solid, Sculpt / outros: Fusion Stitch, CAD avançado E Enclose / Fenkra: CloseSurface, SewSurface, BoundaryFill, LinkedBody)
 
 - **O que faz:** converte um conjunto de superfícies que fecham um volume em sólido e o combina com o corpo.
-- **CATIA V5:** Close Surface (gera sólido de superfície fechada) e Sew Surface (costura ao corpo, adicionando ou removendo material). [C]
-- **SolidWorks:** Knit com "Create solid" / "Try to form solid"; Surface Cut. [V parcial]
-- **Inventor:** [V] Stitch converte para sólido ao fechar (a menos que "Maintain As Surface"); **Sculpt** com Add, Remove, New Solid, ladeamento por superfície, pré-visualização verde.
-- **Outros:** Onshape **Enclose**: seleciona todas as fronteiras ao redor de um espaço vazio para formar sólido; "Keep tools". Fusion: Stitch fecha e converte. [V]
-- **Fenkra hoje:** `CloseSurface{surface,tol,op}` (`lib.rs:4047`), `SewSurface{surface,remove,flip}` (`lib.rs:4053-4065`: remove usa `split_side`; adicionar usa `volume_cells` do composto corpo+superfície), `BoundaryFill{tools,exclude,op}` (`lib.rs:4066`: células de volume, com pontos de exclusão — equivale ao Enclose / Boundary Fill do CATIA), `LinkedBody` (costura casca fechada com tol fixa 0,01, `lib.rs:4098`).
+- **CAD avançado B:** Close Surface (gera sólido de superfície fechada) e Sew Surface (costura ao corpo, adicionando ou removendo material). [C]
+- **CAD avançado A:** Knit com "Create solid" / "Try to form solid"; Surface Cut. [V parcial]
+- **CAD avançado C:** [V] Stitch converte para sólido ao fechar (a menos que "Maintain As Surface"); **Sculpt** com Add, Remove, New Solid, ladeamento por superfície, pré-visualização verde.
+- **Outros:** CAD avançado E **Enclose**: seleciona todas as fronteiras ao redor de um espaço vazio para formar sólido; "Keep tools". Fusion: Stitch fecha e converte. [V]
+- **Fenkra hoje:** `CloseSurface{surface,tol,op}` (`lib.rs:4047`), `SewSurface{surface,remove,flip}` (`lib.rs:4053-4065`: remove usa `split_side`; adicionar usa `volume_cells` do composto corpo+superfície), `BoundaryFill{tools,exclude,op}` (`lib.rs:4066`: células de volume, com pontos de exclusão — equivale ao Enclose / Boundary Fill do CAD avançado B), `LinkedBody` (costura casca fechada com tol fixa 0,01, `lib.rs:4098`).
   - Ponto forte: `BoundaryFill` com **células excluídas por ponto**. Fraco: os pontos de exclusão são fixos e mudam de significado quando o modelo muda.
   - O Sew "adicionar" usa `volume_cells(&[])`; se houver mais de uma célula, todas entram.
 - **Melhor prática:** mostrar as células (cores) para escolher, gravar âncora e não coordenada, e relatar "volume fechado? sim/não, bordas livres restantes". Testes: caixa de 6 faces costurada vira sólido; faltando uma face → relatório de borda livre; exclusão de célula interna.
 
-### 42. Superfícies de classe A / FreeStyle (CATIA: FreeStyle, Imagine & Shape / Creo: ISDX Style, Freestyle / NX: Studio Surface / Fusion: Form / Fenkra: fora do escopo; só referência)
+### 42. Superfícies de classe A / FreeStyle (CAD avançado B: FreeStyle, Imagine & Shape / CAD avançado F: ISDX Style, Freestyle / CAD avançado G: Studio Surface / Fusion: Form / Fenkra: fora do escopo; só referência)
 
 - **O que faz:** modelagem de superfícies de estilo (carroceria, design industrial) por curvas e pontos de controle, com continuidade G2/G3 estrita e controle de curvatura.
 - **Referências:**
-  - O CATIA tem o FreeStyle Profiler 2 (FSP) como espaço de trabalho dedicado. [V: link na busca]
-  - O Creo tem Style (ISDX) e Freestyle, esta baseada em subdivisão e que "serve para formas conceituais, mas é mais difícil em superfícies analíticas e arestas vivas". [V: busca]
-  - O NX usa Through Curves Mesh com tangência, N-Sided e Studio Surface. [V parcial]
+  - O CAD avançado B tem o FreeStyle Profiler 2 (FSP) como espaço de trabalho dedicado. [V: link na busca]
+  - O CAD avançado F tem Style (ISDX) e Freestyle, esta baseada em subdivisão e que "serve para formas conceituais, mas é mais difícil em superfícies analíticas e arestas vivas". [V: busca]
+  - O CAD avançado G usa Through Curves Mesh com tangência, N-Sided e Studio Surface. [V parcial]
   - O Fusion tem Form (T-Splines), com "Top 5 Surfacing Tips for Class A". [V: título]
   - O texto-base recomenda grau 5 para classe A. [V: texto do usuário]
 - **Decisão sugerida:** manter fora do escopo agora. O futuro está em `RF-SUP-030..033` (gaiola de controle e verificação de patentes). Só garantir que a infraestrutura NURBS exata (RF-SUP-01) exista para não bloquear.
@@ -841,8 +841,8 @@ Tamanho: P = pequeno (≤1 dia), M = médio (2–4 dias), G = grande (>1 semana)
 
 Todas lidas nesta rodada, salvo onde indicado como "só trecho de busca".
 
-**CATIA V5 (guia da City University, espelho da ajuda oficial de Wireframe & Surface)**
-- https://www.staff.city.ac.uk/~ra600/ME2105/Catia%20course/CATIA%20Tutorials/wfsug_C2/wfsugbt0205.htm (Multi-sections)
+**CAD avançado B (guia da City University, espelho da ajuda oficial de Wireframe & Surface)**
+- (fonte em procedencia.md) (Multi-sections)
 - …/wfsug_C2/wfsugbt0403.htm (Join)
 - …/wfsug_C2/wfsugbt0204.htm (Offset), …/wfsugbt0206.htm (Fill), …/wfsugbt0203.htm (Sweep), …/wfsugbt0202.htm (Blend), …/wfsugbt0201.htm (Extrude)
 - …/wfsug_C2/wfsugbt0207.htm (Extract), …/wfsugbt0106.htm (Boundary), …/wfsugbt0101.htm (Projection), …/wfsugbt0102.htm (Spline)
@@ -852,31 +852,31 @@ Todas lidas nesta rodada, salvo onde indicado como "só trecho de busca".
 - …/wfsug_C2/wfsugbt0400.htm (índice de operações: Split, Trim, Extrapolate, Untrim)
 - …/kwrug_C2/kwrughlpWfConstructors.htm (assinaturas de intersect, curveparallel, corner, spline)
 
-**CATIA V5 (API CAA via pycatia, para opções avançadas)**
-- https://pycatia.readthedocs.io/en/latest/api/pycatia/hybrid_shape_interfaces/ com as páginas: `hybrid_shape_curve_par.html`, `hybrid_shape_extrapol.html`, `hybrid_shape_corner.html`, `hybrid_shape_connect.html`, `hybrid_shape_healing.html`, `hybrid_shape_loft.html`, `hybrid_shape_blend.html`, `hybrid_shape_fill.html`, `hybrid_shape_assemble.html`, `hybrid_shape_sweep_explicit.html`, `hybrid_shape_split.html`, `hybrid_shape_helix.html`, `hybrid_shape_reflect_line.html`
+**CAD avançado B (API CAA via pycatia, para opções avançadas)**
+- (fonte em procedencia.md) com as páginas: `hybrid_shape_curve_par.html`, `hybrid_shape_extrapol.html`, `hybrid_shape_corner.html`, `hybrid_shape_connect.html`, `hybrid_shape_healing.html`, `hybrid_shape_loft.html`, `hybrid_shape_blend.html`, `hybrid_shape_fill.html`, `hybrid_shape_assemble.html`, `hybrid_shape_sweep_explicit.html`, `hybrid_shape_split.html`, `hybrid_shape_helix.html`, `hybrid_shape_reflect_line.html`
 
-**CATIA V5 (outros)**
-- https://www.cati.com/blog/managing-the-design-tree-in-catia-v5-6-and-3dexperience/ (In Work Object, Geoset, Ordered Geoset)
-- Só trecho de busca: https://grabcad.com/questions/what-is-the-real-functional-difference-between-geometrical-set-and-ordered-geometrical-set-in-catia-v5 ; https://www.ibm.com/support/pages/apar/HD62498 ; …/HD78478 ; …/HD65362 ; …/HD45548 ; …/HD83718 ; …/HD76702 ; https://3dswym.3dexperience.3ds.com/question/catia-user-community/multi-section-surface-issues_5REeKh3_RJ6bE4OFPYy7_Q ; https://workbench.grabcad.com/questions/what-is-the-practical-use-of-surface-curvature-analysis-and-porcupine-curvature-analysis-in-catia ; https://www.lynda.com/CATIA-tutorials/Connect-checker/639061/681068-4.html ; https://www.eng-tips.com/threads/catia-gsd-corner.409593/post-8153006 ; https://grabcad.com/questions/tutorial-how-to-get-a-helix-on-a-spline-curve-polyline-in-catia-v5
+**CAD avançado B (outros)**
+- (fonte em procedencia.md) (In Work Object, Geoset, Ordered Geoset)
+- Só trecho de busca: (fonte em procedencia.md) ; https://www.ibm.com/support/pages/apar/HD62498 ; …/HD78478 ; …/HD65362 ; …/HD45548 ; …/HD83718 ; …/HD76702 ; (fonte em procedencia.md) ; (fonte em procedencia.md) ; (fonte em procedencia.md) ; (fonte em procedencia.md) ; (fonte em procedencia.md)
 
-**SolidWorks** (help.solidworks.com carrega por JavaScript e não pôde ser lido; usei os trechos das buscas e blogs)
-- Só trecho de busca: https://help.solidworks.com/2019/English/SolidWorks/Sldworks/r_boundary_pm.htm ; https://help.solidworks.com/2022/English/SolidWorks/sldworks/HIDD_FEAT_FILL_SURFACE.htm ; https://help.solidworks.com/2017/English/SolidWorks/Sldworks/HIDD_FEAT_TRIM_REF_SURFACE.htm ; https://help.solidworks.com/2024/english/SolidWorks/sldworks/HIDD_FEAT_TRIM_REF_SURFACE.htm ; https://help.solidworks.com/2017/english/solidworks/sldworks/hidd_feat_extend_ref_surface.htm ; https://help.solidworks.com/2024/english/SolidWorks/sldworks/HIDD_DVE_KNIT_SURFACE.htm ; https://help.solidworks.com/2020/English/SolidWorks/sldworks/t_thicken_feature.htm ; https://help.solidworks.com/2012/English/SolidWorks/Sldworks/HIDD_RULED_SRF_FROM_EDGE.htm ; https://www.javelin-tech.com/blog/2022/09/solidworks-trim-surfaces-types-standard-vs-mutual/ ; https://www.javelin-tech.com/blog/2023/05/using-zebra-stripes-in-solidworks/ ; https://www.cati.com/blog/solidworks-trim-surface/
-- https://www.goengineer.com/blog/investigating-continuity-and-curvature-in-solidworks (zebra, curvatura, Deviation Analysis)
-- https://www.goengineer.com/blog/solidworks-surfacing-insights-tips-tricks
-- https://hawkridgesys.com/blog/filled-surface-command-solidworks
+**CAD avançado A** (help.CAD avançado A.com carrega por JavaScript e não pôde ser lido; usei os trechos das buscas e blogs)
+- Só trecho de busca: (fonte em procedencia.md) ; (fonte em procedencia.md) ; (fonte em procedencia.md) ; (fonte em procedencia.md) ; (fonte em procedencia.md) ; (fonte em procedencia.md) ; (fonte em procedencia.md) ; (fonte em procedencia.md) ; (fonte em procedencia.md) ; (fonte em procedencia.md) ; (fonte em procedencia.md)
+- (fonte em procedencia.md) (zebra, curvatura, Deviation Analysis)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 
-**Inventor**
-- https://help.autodesk.com/cloudhelp/2020/ENU/Inventor-Help/files/GUID-C9BB978A-D25B-4820-912F-B39CBB6CC7C3.htm (Boundary Patch)
-- https://help.autodesk.com/cloudhelp/2020/ENU/Inventor-Help/files/GUID-5A8568DF-5BDA-47B9-97FC-2722B8A78A89.htm (Patch, Stitch, Ruled)
-- https://help.autodesk.com/cloudhelp/2022/ENU/Inventor-Help/files/GUID-7661F5F8-2C6C-42E9-8B7F-E7B62F2C7422.htm (Trim, Extend, Sculpt)
-- https://help.autodesk.com/cloudhelp/2020/ENU/Inventor-Help/files/GUID-37BA1DCE-6BC4-41CD-A36D-577F31B304FC.htm (curvas 3D)
-- https://help.autodesk.com/cloudhelp/2027/ENU/Inventor-Help/files/GUID-C67F8283-DFDF-498F-89BE-91E131CE6171.htm (análises)
-- Só trecho de busca: https://help.autodesk.com/cloudhelp/2027/ENU/Inventor-Help/files/GUID-D14D44FD-B920-4A42-BCC3-1CCA23C0CBA7.htm ; https://help.autodesk.com/cloudhelp/2020/ENU/Inventor-Help/files/GUID-DB15C479-66F2-456A-9E54-40A60F83DC92.htm
+**CAD avançado C**
+- (fonte em procedencia.md) (Boundary Patch)
+- (fonte em procedencia.md) (Patch, Stitch, Ruled)
+- (fonte em procedencia.md) (Trim, Extend, Sculpt)
+- (fonte em procedencia.md) (curvas 3D)
+- (fonte em procedencia.md) (análises)
+- Só trecho de busca: (fonte em procedencia.md) ; (fonte em procedencia.md)
 
 **Outros**
-- https://help.autodesk.com/cloudhelp/ENU/Fusion-Patch/files/SFC-MODIFY-SURFACE.htm (Fusion)
-- https://cad.onshape.com/help/Content/fill.htm ; https://cad.onshape.com/help/Content/PartStudio/move_boundary.htm (Onshape)
-- Só trecho de busca: https://cad.onshape.com/help/Content/PartStudio/enclose.htm ; https://cad.onshape.com/help/Content/PartStudio/offset_surface.htm ; https://support.ptc.com/help/creo/creo_pma/r7.0/usascii/surfacing/surface/About_Boundary_Blend.html ; https://mechanical-engineering.com/nx-tutorial-surface-n-sided-through-curves-commands/ ; https://blogs.sw.siemens.com/designcenter/freeform-modeling-walk-through/ ; https://www.autodesk.com/products/fusion-360/blog/our-top-5-surfacing-tips-and-tricks-for-class-a-geometry/
+- (fonte em procedencia.md) (CAD avançado D)
+- (fonte em procedencia.md) ; (fonte em procedencia.md) (CAD avançado E)
+- Só trecho de busca: (fonte em procedencia.md) ; (fonte em procedencia.md) ; (fonte em procedencia.md) ; https://mechanical-engineering.com/nx-tutorial-surface-n-sided-through-curves-commands/ ; (fonte em procedencia.md) ; (fonte em procedencia.md)
 
 **Código e documentos do repositório**
 - `crates/fenkra-solidos/src/lib.rs`, `geo3d.rs`; `crates/fenkra-core/src/doc.rs`; `crates/fenkra-kernel/cpp/surfaces.inc`, `hybrid.inc`, `kernel.cpp`; `crates/fenkra-app/src/render.rs`, `extract.rs`, `geo_ui.rs`
@@ -891,12 +891,12 @@ Todas lidas nesta rodada, salvo onde indicado como "só trecho de busca".
 - **Arquivos alterados:** nenhum. O plano de leitura pedia só consulta, e o relatório é a resposta.
 - **Checagens rodadas:** nenhuma de build ou teste (só leitura).
 - **Falhas e limites:**
-  - `help.solidworks.com` é renderizado por JavaScript e não abriu; usei trechos das buscas e blogs. Javelin e GrabCAD deram 403.
+  - `help.CAD avançado A.com` é renderizado por JavaScript e não abriu; usei trechos das buscas e blogs. Javelin e GrabCAD deram 403.
   - Os PDFs do NIAR (Wichita) deram 404.
   - As páginas de Split, Trim e Extrapolate da City University também deram 404; para elas usei a API CAA (pycatia) e as listagens.
   - `spine_wire` (kernel) não foi lido na íntegra; a afirmação de que o círculo do `Sweep` vira B-spline interpolada, e não cilindro, é **provável**, não confirmada.
-  - Itens sobre Creo e NX vêm só de resumos de busca, de fonte secundária.
+  - Itens sobre CAD avançado F e CAD avançado G vêm só de resumos de busca, de fonte secundária.
 - **Riscos:** os achados de "bug provável" (silêncios em `which`/Split/projeção, `PointOnSurface` no plano tangente, corte por curva com normal única, ponto inicial da hélice) foram deduzidos da leitura e **não reproduzidos**. Convém reproduzi-los com testes antes de priorizar.
 
 STATUS: DONE_WITH_CONCERNS
-SUMMARY: As 5 maiores lacunas do Fenkra em superfícies e wireframe são: (1) curvas só como polilinhas, sem representação analítica ou NURBS exata, então G1/G2 são aproximados; (2) referências de face e aresta fixas por ponto, sem nome topológico nem diagnóstico por elemento; (3) escolhas silenciosas no avaliador (`which` em Boundary/Interseção, Split que ignora falhas, projeção que descarta pontos); (4) Fill, Join, Healing, Trim, Extrapolate, Loft e Sweep sem os modos de CATIA/SW/Inventor (suporte e continuidade no Fill, "até elemento", relimitadores, guias, acoplamento, relatório de conectividade); (5) sem Ordered Set, In Work Object de geometria nem análises de continuidade, draft e desvio (zebra e curvatura são só shader de tela).
+SUMMARY: As 5 maiores lacunas do Fenkra em superfícies e wireframe são: (1) curvas só como polilinhas, sem representação analítica ou NURBS exata, então G1/G2 são aproximados; (2) referências de face e aresta fixas por ponto, sem nome topológico nem diagnóstico por elemento; (3) escolhas silenciosas no avaliador (`which` em Boundary/Interseção, Split que ignora falhas, projeção que descarta pontos); (4) Fill, Join, Healing, Trim, Extrapolate, Loft e Sweep sem os modos de CAD avançado B/CAD avançado A/CAD avançado C (suporte e continuidade no Fill, "até elemento", relimitadores, guias, acoplamento, relatório de conectividade); (5) sem Ordered Set, In Work Object de geometria nem análises de continuidade, draft e desvio (zebra e curvatura são só shader de tela).

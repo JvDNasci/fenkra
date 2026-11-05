@@ -150,7 +150,7 @@ Código
 [Furo central]        Ø10 / Rosca M10 / Cônico
 [Gerar]               [BOTÃO]
 5️⃣ Inserção automática na montagem
-Igual ao Fusion e Inventor:
+Igual ao CAD avançado D e CAD avançado C:
 
 cria mates automáticos
 
@@ -172,7 +172,7 @@ atualizável sem perder histórico
 compatível com o modelador sólido
 
 🧠 Como os outros softwares fazem (para você copiar a estratégia)
-Fusion 360
+CAD avançado D
 Add-in em Python
 
 Gera involuta via equações
@@ -183,7 +183,7 @@ Interface simples
 
 Não segue normas industriais (mais hobby)
 
-Inventor (Design Accelerator)
+CAD avançado C (Design Accelerator)
 Baseado em normas AGMA
 
 Gera engrenagens completas com tolerâncias
@@ -194,16 +194,16 @@ Atualiza parametricamente
 
 É o mais avançado
 
-SolidWorks Toolbox
+CAD avançado A biblioteca de normas
 Usa tabelas de normas
 
 Gera engrenagens simples
 
-Não é tão avançado quanto Inventor
+Não é tão avançado quanto CAD avançado C
 
 🛠️ Tecnologias que você precisa no FEKRA
 Obrigatório:
-Kernel paramétrico (tipo Parasolid, ACIS ou próprio)
+Kernel paramétrico (tipo kernel geométrico proprietário, ACIS ou próprio)
 
 Solver geométrico
 
@@ -239,7 +239,7 @@ Inserir na montagem com mates
 
 Atualizar tudo parametricamente
 
-Se você fizer isso, o FEKRA terá um dos melhores assistentes de geração de peças mecânicas do mercado, superior ao Fusion e comparável ao Inventor.
+Se você fizer isso, o FEKRA terá um dos melhores assistentes de geração de peças mecânicas do mercado, superior ao CAD avançado D e comparável ao CAD avançado C.
 
 ser mais proximo do inventor possível
 ```

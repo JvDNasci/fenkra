@@ -12,8 +12,8 @@ Tudo o que é **[C]** precisa de segunda fonte antes de entrar na biblioteca. A 
 **Limites da pesquisa (importante).**
 - O ASSIST quicksearch exige sessão e não foi aberto. Nenhuma norma NAS/MS/AN original foi lida. Os números vêm de distribuidores e apostilas.
 - As páginas de peça da Boeing Distribution, do LAS Aero e da Bombardier PPS devolveram 403 na segunda tentativa. Só os trechos que a busca exibiu entram como **[V~]**.
-- As páginas `help.solidworks.com` renderizam em branco para o leitor. O SolidWorks vem de dois artigos de revendas (Hawk Ridge e CATI) mais os resumos da busca sobre a ajuda.
-- Para o CATIA V5 não achei tutorial público de instalação de prendedores aeronáuticos. A parte "como o CATIA faz" combina o que é público (FASTJOINT, a API DNB/DELMIA, publicações) com prática de indústria marcada **[C]**.
+- As páginas `help.CAD avançado A.com` renderizam em branco para o leitor. O CAD avançado A vem de dois artigos de revendas (Hawk Ridge e CATI) mais os resumos da busca sobre a ajuda.
+- Para o CAD avançado B não achei tutorial público de instalação de prendedores aeronáuticos. A parte "como o CAD avançado B faz" combina o que é público (FASTJOINT, a API DNB/DELMIA, publicações) com prática de indústria marcada **[C]**.
 
 ---
 
@@ -32,7 +32,7 @@ Tudo o que é **[C]** precisa de segunda fonte antes de entrar na biblioteca. A 
 6. Faltam tolerâncias de furo (ajuste justo, ream, interferência), escareado de 100° e dimple, e o "hardware stack" aeronáutico (colar, arruela de pegada, porca âncora).
 7. Há um bug já registrado (B62): o parafuso inserido fica com 1 GDL de rotação. É pior com Hi-Lok, onde a orientação do sextavado do colar importa.
 8. Dados: os catálogos públicos são ricos para rebites AD/DD, AN960, MS21045 e MS21919. São fracos para colares HL70/HL86/HL94, Hi-Lite, lockbolts (Huck) e NAS1919/1921, e a norma original exige ASSIST (login). Quase nenhuma família tem duas fontes abertas já conferidas.
-9. Nenhum dos três CADs de referência faz instalação nativa de prendedores aeronáuticos em massa por pontos. O CATIA depende de add-ons (FASTJOINT/CENIT) ou de catálogos próprios do fabricante da aeronave. SolidWorks e Inventor cobrem o ISO/ANSI e deixam o aeronáutico para bibliotecas externas. Existe espaço para o Fenkra fazer isso de forma nativa.
+9. Nenhum dos três CADs de referência faz instalação nativa de prendedores aeronáuticos em massa por pontos. O CAD avançado B depende de add-ons (FASTJOINT/CENIT) ou de catálogos próprios do fabricante da aeronave. CAD avançado A e CAD avançado C cobrem o ISO/ANSI e deixam o aeronáutico para bibliotecas externas. Existe espaço para o Fenkra fazer isso de forma nativa.
 10. Proposta central: Conjunto de prendedores > Conjunto da junta > pasta Prendedores, alimentada por pontos publicados com cor = diâmetro, normal detectada, preenchimento automático por equivalência de cor e modo manual (seções 2.C e 3).
 
 **Principais lacunas (ver SUMMARY):** unidade polegada e família por grip; ponto/vetor publicado; furo aeronáutico com tolerância e escareado; estrutura de junta e substituição; dados aeronáuticos em duas fontes.
@@ -82,7 +82,7 @@ Tudo o que é **[C]** precisa de segunda fonte antes de entrar na biblioteca. A 
 
 Para cada uma: o que é, uso, convenção, tabela mínima e fontes. As tabelas de modelagem usam polegadas como na norma, com mm entre parênteses.
 
-#### B1. Parafusos AN3–AN20 (CATIA: peça de catálogo/FASTJOINT / SW: Toolbox não traz AN / Inventor: Content Center não traz AN / Fenkra: ❌)
+#### B1. Parafusos AN3–AN20 (CAD avançado B: peça de catálogo/FASTJOINT / CAD avançado A: biblioteca de normas não traz AN / CAD avançado C: Content Center não traz AN / Fenkra: ❌)
 
 - **O que é:** parafuso de cabeça hexagonal, aço liga cadmiado, rosca fina UNF-3A, usado em estrutura secundária e primária leve (tração e cisalhamento).
 - **Variantes [V]:**
@@ -360,16 +360,16 @@ Para cada uma: o que é, uso, convenção, tabela mínima e fontes. As tabelas d
 
 ### Parte C. Comandos e funções (fichas completas)
 
-#### C1. Biblioteca de prendedores aeronáuticos (CATIA: catálogo de prendedores / SW: Toolbox / Inventor: Content Center / outros: Creo e NX têm catálogos próprios [C] / Fenkra: 🟡 só ISO/DIN métricos)
+#### C1. Biblioteca de prendedores aeronáuticos (CAD avançado B: catálogo de prendedores / CAD avançado A: biblioteca de normas / CAD avançado C: Content Center / outros: CAD avançado F e CAD avançado G têm catálogos próprios [C] / Fenkra: 🟡 só ISO/DIN métricos)
 
 - **O que faz:** guarda as famílias com suas tabelas e gera a peça paramétrica sob demanda.
-- **CATIA V5 — no detalhe:**
-  - A base do V5 não traz catálogo de prendedores aeronáuticos. Um artigo da SAE diz que a falta de padronização de objetos de prendedor aeronáutico no CATIA obriga fabricantes e fornecedores a manter métodos próprios [V~].
+- **CAD avançado B — no detalhe:**
+  - A base do V5 não traz catálogo de prendedores aeronáuticos. Um artigo da SAE diz que a falta de padronização de objetos de prendedor aeronáutico no CAD avançado B obriga fabricantes e fornecedores a manter métodos próprios [V~].
   - A solução comercial é o **FASTJOINT (CENIT)**: bancada própria que lê dimensões e propriedades de bibliotecas ou bancos de dados externos, gera dados consistentes no modelo V5 e trata grandes volumes em montagens grandes [V].
   - Quando a referência some, a peça-modelo fica órfã; o tratamento depende da OEM **[C]**.
-- **SolidWorks — no detalhe:** o Toolbox cobre ISO, ANSI, DIN, JIS e PEM, entre outros [C]. Aeronáutico (AN/MS/NAS) não vem de fábrica **[C]**; usa-se TraceParts ou biblioteca própria. Cada fixador é uma configuração; mudar a configuração muda comprimento, diâmetro, tipo de rosca [V, texto de contexto do usuário].
-- **Inventor — no detalhe:** o Content Center guarda famílias de bolts, washers, nuts e sheet metal nuts [V]. Peças personalizadas entram publicando uma peça ou iPart numa biblioteca de leitura/escrita do projeto; elas aparecem filtradas por rosca e diâmetro [V].
-- **Outros:** Creo, NX e Solid Edge têm catálogos de prendedores com o conceito de "intent" **[C]**; Onshape tem componentes padrão **[C]**. Nenhum traz AN/MS/NAS pronto.
+- **CAD avançado A — no detalhe:** o biblioteca de normas cobre ISO, ANSI, DIN, JIS e PEM, entre outros [C]. Aeronáutico (AN/MS/NAS) não vem de fábrica **[C]**; usa-se TraceParts ou biblioteca própria. Cada fixador é uma configuração; mudar a configuração muda comprimento, diâmetro, tipo de rosca [V, texto de contexto do usuário].
+- **CAD avançado C — no detalhe:** o Content Center guarda famílias de bolts, washers, nuts e sheet metal nuts [V]. Peças personalizadas entram publicando uma peça ou iPart numa biblioteca de leitura/escrita do projeto; elas aparecem filtradas por rosca e diâmetro [V].
+- **Outros:** CAD avançado F, CAD avançado G e CAD avançado H têm catálogos de prendedores com o conceito de "intent" **[C]**; CAD avançado E tem componentes padrão **[C]**. Nenhum traz AN/MS/NAS pronto.
 - **Fenkra hoje:**
   - As seis famílias JSON são embutidas por `include_str!` (`biblioteca.rs:215`).
   - `Familia::validar` (`:115`) exige designação `M…` (`:139`), valores positivos e série de comprimentos (`:159-170`).
@@ -388,48 +388,48 @@ Para cada uma: o que é, uso, convenção, tabela mínima e fontes. As tabelas d
   - conversão pol↔mm;
   - designações duplicadas rejeitadas.
 
-#### C2. Pontos/vetores publicados com cor = diâmetro (regra proposta) (CATIA: Geometrical Set com pontos e eixos publicados / SW: pontos de croqui e Hole Series / Inventor: "On point" do Bolted Connection / Fenkra: ❌)
+#### C2. Pontos/vetores publicados com cor = diâmetro (regra proposta) (CAD avançado B: Geometrical Set com pontos e eixos publicados / CAD avançado A: pontos de croqui e Hole Series / CAD avançado C: "On point" do Bolted Connection / Fenkra: ❌)
 
 - **O que faz:** marca no modelo onde vai cada prendedor, sem criar o prendedor ainda.
-- **CATIA V5 — no detalhe:**
+- **CAD avançado B — no detalhe:**
   - **Publicações [V]:** `Tools > Publication` publica pontos, linhas, planos, curvas, croquis, corpos, features e sub-elementos (faces, arestas, vértices). Com a opção certa, só elementos publicados servem como referência externa. A opção de renomear tem três modos: Never, Always, Ask. Elementos com o mesmo nome religam-se sozinhos ao substituir um componente.
-  - **Define In Work Object** [V~, tutorial 3DS]: botão direito no corpo → torna o objeto em trabalho, sublinhado na árvore. Os pontos novos entram no Conjunto Geométrico em trabalho.
-  - **Prática aeronáutica [C]:** o engenheiro cria um *Geometrical Set* de pontos e vetores (um ponto na superfície e um eixo normal) e publica. O módulo de prendedores (FASTJOINT ou catálogo OEM) lê esses pontos. A cor do ponto no CATIA é só atributo gráfico, o que a OEM usa para separar diâmetros.
+  - **objeto de trabalho** [V~, tutorial 3DS]: botão direito no corpo → torna o objeto em trabalho, sublinhado na árvore. Os pontos novos entram no Conjunto Geométrico em trabalho.
+  - **Prática aeronáutica [C]:** o engenheiro cria um *Geometrical Set* de pontos e vetores (um ponto na superfície e um eixo normal) e publica. O módulo de prendedores (FASTJOINT ou catálogo OEM) lê esses pontos. A cor do ponto no CAD avançado B é só atributo gráfico, o que a OEM usa para separar diâmetros.
   - **API DNB/DELMIA [V]:** `create_point_fastener(nome, grupo-pai, lista de peças unidas, tipo de processo, contexto, posição de projeto)`, com posição de 6 valores XYZ + YPR em graus. `create_fastener_group` com peças unidas cria uma junta de montagem. `reset_position(0)` volta à posição de projeto e `(1)` à posição de manufatura salva. O fastener sabe quantas peças junta, suas peças, processos atribuídos e atributos de usuário.
   - **Atualização:** o ponto é uma feature; se a superfície-suporte é refeita, o ponto fica com erro no Update e a referência deve ser substituída **[C]**.
-- **SolidWorks — no detalhe:**
-  - Não há "ponto de prendedor" nativo. O recurso mais próximo é o **Smart Fasteners**, que lê features do Hole Wizard e do Toolbox [V]. Furos que não são do Hole Wizard recebem o tipo padrão configurado no Toolbox [V]. O **Hole Series** (assistente de furo em série) cobre furos entre peças **[C]**.
-  - Pontos de croqui podem posicionar furos do Hole Wizard (posição = ponto).
-- **Inventor — no detalhe:**
+- **CAD avançado A — no detalhe:**
+  - Não há "ponto de prendedor" nativo. O recurso mais próximo é o **fixadores inteligentes**, que lê features do assistente de furos e do biblioteca de normas [V]. Furos que não são do assistente de furos recebem o tipo padrão configurado no biblioteca de normas [V]. O **Hole Series** (assistente de furo em série) cobre furos entre peças **[C]**.
+  - Pontos de croqui podem posicionar furos do assistente de furos (posição = ponto).
+- **CAD avançado C — no detalhe:**
   - **On point** usa pontos de trabalho de um croqui de **peça**, não de montagem; Ctrl adiciona ou remove pontos; as conexões **seguem** o movimento dos pontos [V].
   - **By hole** com **Follow Pattern** põe uma conexão em cada furo de um padrão de vários centros [V].
-- **Outros:** Creo e NX usam pontos de referência ("datum points") para instalar fixadores em massa **[C]**.
+- **Outros:** CAD avançado F e CAD avançado G usam pontos de referência ("datum points") para instalar fixadores em massa **[C]**.
 - **Fenkra hoje:** não existe. A peça publica referências, parâmetros e corpos; a montagem não tem ponto, eixo, plano nem publicação (catálogo MON-17). Existe `AsmFeatKind::Hole { p, d, dia, depth }` (`montagem/lib.rs:278`) para furo entre peças, com ponto e direção no mundo. O app consegue ler ponto e normal de uma face clicada (`asm_ui.rs:643-644`, `Pick::Face { point, normal, .. }`).
 - **Melhor prática para o Fenkra (regra proposta):**
   1. **Objeto:** `PontoPrendedor` = ponto 3D + vetor normal unitário (sentido "de fora para dentro") + chave de diâmetro + referência da face de apoio (chave dono+papel do ADR 0010). Ponto e vetor são uma única entidade publicável; o vetor é desenhado como seta.
   2. **Cor = diâmetro.** A cor vem de uma tabela global editável `diâmetro → cor`, indexada por dash em 1/32 pol (série pol) ou por mm (série métrica). A chave é sempre o **diâmetro nominal**, nunca o part number. O ponto mostra a cor e o rótulo "-5" ou "M5" (acessível a daltonismo).
   3. **Normal detectada:** ao clicar na superfície (face plana ou curva), tomar o ponto e a normal da face naquele ponto. Se o clique é em curva dupla (pele de asa), a normal é a normal local da superfície. O usuário pode inverter (lado da cabeça).
   4. **Tolerância:** o ponto fora da superfície (> 0,05 mm) é projetado para ela; se a projeção falha, o ponto fica "quebrado" (`->x`) e vai para o diagnóstico (ADR 0011, princípio 1).
-  5. **Publicação:** o conjunto de pontos é publicado com nome (ex.: `PTS_HL10_5`), e a substituição de uma peça religa pelo nome (como o CATIA).
+  5. **Publicação:** o conjunto de pontos é publicado com nome (ex.: `PTS_HL10_5`), e a substituição de uma peça religa pelo nome (como o CAD avançado B).
   6. **Contexto único ativo:** os pontos novos entram no "Conjunto de prendedores" que está em trabalho (princípio 2 do ADR 0011).
 - **Casos de teste:** ponto sobre face plana → normal igual à da face; ponto sobre cilindro → normal radial; ponto fora da face → projetado e avisado; substituir a peça mantendo o nome publicado → pontos religam; face removida → ponto "quebrado" com diagnóstico; inverter vetor; cor muda quando o diâmetro muda.
 
-#### C3. Preenchimento automático de furos e pontos (CATIA: FASTJOINT/DNB / SW: Smart Fasteners / Inventor: Bolted Connection Generator / outros: Creo/NX/Solid Edge [C] / Fenkra: 🟡 só furos métricos)
+#### C3. Preenchimento automático de furos e pontos (CAD avançado B: FASTJOINT/DNB / CAD avançado A: fixadores inteligentes / CAD avançado C: Bolted Connection Generator / outros: CAD avançado F/CAD avançado G/CAD avançado H [C] / Fenkra: 🟡 só furos métricos)
 
 - **O que faz:** instala o prendedor correto em todos os furos ou pontos escolhidos.
-- **CATIA V5 — no detalhe:** o FASTJOINT lê os dados do prendedor de uma biblioteca ou banco de dados e gera o modelo [V]. A inserção é por ponto de projeto com 6 graus (XYZ + YPR) [V, DNB]. Grupos de prendedores e junta de montagem agrupam [V]. O prendedor é um objeto leve, não uma peça modelada à mão **[C]**.
-- **SolidWorks — no detalhe [V, Hawk Ridge/CATI]:**
-  - **Fluxo:** Assembly → Smart Fasteners → selecionar faces, componentes ou features do Hole Wizard → revisar a lista e remover os indesejados → **Add** ou **Populate All** (preenche o conjunto inteiro). Os prendedores entram dimensionados e com mates, agrupados por conjunto de furos.
-  - **Orientação:** hardware entra e é mateado à face onde nasceu o croqui original do Hole Wizard.
-  - **Furos que não são do Hole Wizard:** começam com o prendedor padrão do Toolbox.
+- **CAD avançado B — no detalhe:** o FASTJOINT lê os dados do prendedor de uma biblioteca ou banco de dados e gera o modelo [V]. A inserção é por ponto de projeto com 6 graus (XYZ + YPR) [V, DNB]. Grupos de prendedores e junta de montagem agrupam [V]. O prendedor é um objeto leve, não uma peça modelada à mão **[C]**.
+- **CAD avançado A — no detalhe [V, Hawk Ridge/CATI]:**
+  - **Fluxo:** Assembly → fixadores inteligentes → selecionar faces, componentes ou features do assistente de furos → revisar a lista e remover os indesejados → **Add** ou **Populate All** (preenche o conjunto inteiro). Os prendedores entram dimensionados e com mates, agrupados por conjunto de furos.
+  - **Orientação:** hardware entra e é mateado à face onde nasceu o croqui original do assistente de furos.
+  - **Furos que não são do assistente de furos:** começam com o prendedor padrão do biblioteca de normas.
   - **Pilhas:** *Add to Top Stack* (arruelas) e *Add to Bottom Stack* (arruelas e porcas), valem para todo o grupo; furo cego só aceita a pilha superior.
   - **Mates:** concêntrico ao furo e coincidente com a superfície de apoio [V].
   - **Pasta:** os componentes caem numa pasta Smart Fastener na árvore [V].
   - **Padrões:** todos os prendedores do padrão têm o mesmo tipo e tamanho, mas cada um pode ter outra configuração (por exemplo, comprimento maior) [V].
   - **Opção de arruela:** "Exact match" restringe as arruelas às de tamanho exato [V~].
   - **Edição:** botão direito → *Edit Smart Fastener* para mudar tipo, tamanho e comprimento, ou inverter [V~].
-  - **Limites:** só furos reconhecíveis (Hole Wizard ou cortes cilíndricos separados) [contexto do usuário]; nada em corpos importados sem feature de furo.
-- **Inventor — no detalhe [V]:**
+  - **Limites:** só furos reconhecíveis (assistente de furos ou cortes cilíndricos separados) [contexto do usuário]; nada em corpos importados sem feature de furo.
+- **CAD avançado C — no detalhe [V]:**
   - **Pré-requisitos:** a montagem tem ao menos um componente, e há conexão com o Content Center.
   - **Tipo:** *Through All* (atravessa tudo) ou *Blind Connection* (só o plano de início).
   - **Posicionamento:** *Linear* (duas arestas), *Concentric* (aresta circular, serve também para cortes de extrusão/revolução), *On Point* (pontos de croqui de peça, seguem o croqui), *By Hole* (limita o Ø máximo do parafuso ao furo; *Follow Pattern* preenche o padrão e substitui conexões já postas).
@@ -464,12 +464,12 @@ Para cada uma: o que é, uso, convenção, tabela mínima e fontes. As tabelas d
   6. Falhar alto: sem dash que cubra o grip → o ponto fica em "falhou" com diagnóstico "grip 7,9 mm fora de -4 a -6 (CR3213-4)"; nunca usar o último da série em silêncio.
 - **Casos de teste:** grip exato de fronteira (n/16); grip ligeiramente acima; pilha de três peças; ponto em face inclinada; pilha com peça virada; furo #10 reconhecido; dois pontos na mesma coluna; reexecutar não duplica; GDL = 0 em cada prendedor (B62).
 
-#### C4. Pilha de hardware e cálculo de grip (SW: hardware stacks / Inventor: lista de componentes da conexão / CATIA: FASTJOINT / Fenkra: 🟡)
+#### C4. Pilha de hardware e cálculo de grip (CAD avançado A: hardware stacks / CAD avançado C: lista de componentes da conexão / CAD avançado B: FASTJOINT / Fenkra: 🟡)
 
 - **O que faz:** monta a sequência cabeça → arruela → peças → arruela → porca/colar e calcula o comprimento.
-- **CATIA V5 — no detalhe:** a sequência é definida no objeto de prendedor do catálogo (peça composta) **[C]**.
-- **SolidWorks — no detalhe [V]:** pilha superior e inferior aplicam-se ao grupo todo; cada componente tem mate concêntrico com o parafuso e coincidente com a superfície; a ordem é a de seleção do usuário (ex.: arruela plana, arruela dentada, porca).
-- **Inventor — no detalhe [V]:** a conexão é uma lista ordenada de componentes na direita do diálogo, com editar/excluir/trocar conteúdo; a grip 3D ajusta o comprimento.
+- **CAD avançado B — no detalhe:** a sequência é definida no objeto de prendedor do catálogo (peça composta) **[C]**.
+- **CAD avançado A — no detalhe [V]:** pilha superior e inferior aplicam-se ao grupo todo; cada componente tem mate concêntrico com o parafuso e coincidente com a superfície; a ordem é a de seleção do usuário (ex.: arruela plana, arruela dentada, porca).
+- **CAD avançado C — no detalhe [V]:** a conexão é uma lista ordenada de componentes na direita do diálogo, com editar/excluir/trocar conteúdo; a grip 3D ajusta o comprimento.
 - **Fenkra hoje:** `:243-254` calcula `w1`, `w2`, `m`; a pilha tem no máximo uma arruela de cada lado e uma porca. Não há pilha editável.
 - **Melhor prática:**
   1. Regra aeronáutica para prendedor de rosca: pelo menos 1 fio completo além da porca **[C]**; no máximo 3 arruelas sob a porca [V].
@@ -478,13 +478,13 @@ Para cada uma: o que é, uso, convenção, tabela mínima e fontes. As tabelas d
   4. Cada componente da pilha guarda "papel" (cabeça, arruela-cabeça, arruela-porca, porca/colar), para permitir trocar um deles sem refazer a pilha.
 - **Casos de teste:** grip com chanfro de escareado (descontar profundidade da cabeça rebaixada); Hi-Lok com arruela sob o colar; troca de porca MS21042 → MS21045 mantém o eixo.
 
-#### C5. Preparação do furo para prendedor aeronáutico (CATIA: Hole/furo de projeto / SW: Hole Wizard / Inventor: Hole / Fenkra: 🟡 `Hole` + `HoleKind`)
+#### C5. Preparação do furo para prendedor aeronáutico (CAD avançado B: Hole/furo de projeto / CAD avançado A: assistente de furos / CAD avançado C: Hole / Fenkra: 🟡 `Hole` + `HoleKind`)
 
 - **O que faz:** cria o furo com Ø, tolerância, escareado e rebaixo corretos para o prendedor.
-- **CATIA / SW / Inventor:**
-  - o CATIA tem o *Hole* do Part Design com escareado e rebaixo [C];
-  - o SW Hole Wizard lê dados do Toolbox (diâmetro, folga, rosca, escareado) [V~];
-  - o Inventor Hole tem escareado/rebaixo [C]. O Bolted Connection cria os furos nas peças da pilha [V].
+- **CAD avançado B / CAD avançado A / CAD avançado C:**
+  - o CAD avançado B tem o *Hole* do Part Design com escareado e rebaixo [C];
+  - o CAD avançado A assistente de furos lê dados do biblioteca de normas (diâmetro, folga, rosca, escareado) [V~];
+  - o CAD avançado C Hole tem escareado/rebaixo [C]. O Bolted Connection cria os furos nas peças da pilha [V].
 - **Fenkra hoje:** `HoleKind` tem `Simples`, `Rebaixado`, `Escareado { diameter, angle }`, `Contrafurado` (`core/doc.rs:2543`). `Hole.standard: Option<String>` existe. A tolerância não é guardada, e o `hole_table` não devolve o tipo nem o escareado. O backlog B48 já cobre o ângulo do escareado (82/90/100/120°).
 - **Melhor prática:**
   1. O prendedor da biblioteca entrega `furo` = {Ø nominal, tolerância (mín/máx), tipo de cabeça, ângulo, profundidade de escareado}.
@@ -493,12 +493,12 @@ Para cada uma: o que é, uso, convenção, tabela mínima e fontes. As tabelas d
   4. Para tolerância justa: Ø do furo = faixa do parafuso + 0,0005–0,0025 pol [C]; gravar como par mín/máx.
 - **Casos de teste:** Ø e ângulo de escareado conferem com a cabeça; furo reconhecido pelo preenchimento tem o mesmo prendedor que o ponto; tolerância preservada ao salvar/abrir.
 
-#### C6. Estrutura na árvore e junta (CATIA: Geometrical Set / Product / SW: pasta Smart Fastener / Inventor: grupo de conexão e submontagem / Fenkra: 🟡 grupo "Fixadores" plano)
+#### C6. Estrutura na árvore e junta (CAD avançado B: Geometrical Set / Product / CAD avançado A: pasta Smart Fastener / CAD avançado C: grupo de conexão e submontagem / Fenkra: 🟡 grupo "Fixadores" plano)
 
 - **O que faz:** organiza prendedores por junta para editar, contar e substituir em bloco.
-- **CATIA:** Conjuntos Geométricos (ordenados e não ordenados) agrupam pontos e eixos; o DNB tem `create_fastener_group`, que, com peças unidas, cria uma junta [V].
-- **SolidWorks:** cria uma pasta "Smart Fastener" na árvore com o conjunto de prendedores [V]; os grupos podem ser reagrupados [V~].
-- **Inventor:** a conexão fica solta na raiz da montagem ou em submontagem (opção); a submontagem permite solver automático [V].
+- **CAD avançado B:** Conjuntos Geométricos (ordenados e não ordenados) agrupam pontos e eixos; o DNB tem `create_fastener_group`, que, com peças unidas, cria uma junta [V].
+- **CAD avançado A:** cria uma pasta "Smart Fastener" na árvore com o conjunto de prendedores [V]; os grupos podem ser reagrupados [V~].
+- **CAD avançado C:** a conexão fica solta na raiz da montagem ou em submontagem (opção); a submontagem permite solver automático [V].
 - **Fenkra hoje:** `asm.add_group("Fixadores", None)` único (`:177`, `:281`); sem subgrupo por junta nem referência de volta ao ponto.
 - **Melhor prática (estrutura proposta):**
 
@@ -517,12 +517,12 @@ Conjunto de prendedores          ← conjunto geométrico (pontos e vetores publ
   - A pasta Prendedores é a que entra na lista de materiais.
 - **Casos de teste:** mover um ponto move o prendedor; apagar a junta apaga seus prendedores; salvar/abrir preserva as ligações; BOM agrupa por part number.
 
-#### C7. Edição, substituição e diagnóstico (CATIA: Update Diagnosis / SW: Edit Smart Fastener / Inventor: Edit Using Design Accelerator + Design Doctor / Fenkra: ❌)
+#### C7. Edição, substituição e diagnóstico (CAD avançado B: Update Diagnosis / CAD avançado A: Edit Smart Fastener / CAD avançado C: Edit Using Design Accelerator + Design Doctor / Fenkra: ❌)
 
 - **O que faz:** troca família, dash ou arruelas depois da inserção e explica o que falhou.
-- **CATIA:** substituir um componente religa pelo nome publicado [V]; Update Diagnosis lista erros **[C]**.
-- **SolidWorks:** *Edit Smart Fastener* troca tipo, tamanho e comprimento, e inverte [V~]; grupos podem ser editados [V~].
-- **Inventor:** *Edit Using Design Accelerator*: adicionar/remover componentes e pontos de padrão; ícones para trocar conteúdo, editar, excluir [V].
+- **CAD avançado B:** substituir um componente religa pelo nome publicado [V]; Update Diagnosis lista erros **[C]**.
+- **CAD avançado A:** *Edit Smart Fastener* troca tipo, tamanho e comprimento, e inverte [V~]; grupos podem ser editados [V~].
+- **CAD avançado C:** *Edit Using Design Accelerator*: adicionar/remover componentes e pontos de padrão; ícones para trocar conteúdo, editar, excluir [V].
 - **Fenkra hoje:** nenhuma. MON-16 diz "sem editar/trocar a pilha depois".
 - **Melhor prática:**
   1. Assistente de edição em tabela: uma linha por ponto (cor, ponto, família atual, dash, grip calculado, estado).
@@ -531,7 +531,7 @@ Conjunto de prendedores          ← conjunto geométrico (pontos e vetores publ
   4. Diagnóstico por causa: ponto sem face, grip fora de faixa, Ø de furo incompatível, prendedor ausente da biblioteca, colisão.
 - **Casos de teste:** trocar HL18 por HL10 mantém ponto e furo; grip mudou por espessura nova → estado "grip fora da faixa" e botão recalcular; excluir peça da junta → pontos órfãos listados.
 
-#### C8. Modo manual (SW: Hole Wizard + inserir componente / Inventor: iMates e inserir da biblioteca / CATIA: insert existing component / Fenkra: parcial)
+#### C8. Modo manual (CAD avançado A: assistente de furos + inserir componente / CAD avançado C: iMates e inserir da biblioteca / CAD avançado B: insert existing component / Fenkra: parcial)
 
 - **O que faz:** instala um prendedor num ponto escolhido sem regra automática.
 - **Melhor prática:**
@@ -540,7 +540,7 @@ Conjunto de prendedores          ← conjunto geométrico (pontos e vetores publ
   3. O prendedor manual entra na mesma estrutura de junta (C6).
 - **Casos de teste:** prendedor manual não é substituído pelo preenchimento automático; o botão "voltar ao automático" restaura o valor.
 
-#### C9. Rebitagem por padrão de pontos (CATIA: padrão de pontos em Geometrical Set / SW: padrão linear de croqui / Inventor: Follow Pattern / Fenkra: ❌)
+#### C9. Rebitagem por padrão de pontos (CAD avançado B: padrão de pontos em Geometrical Set / CAD avançado A: padrão linear de croqui / CAD avançado C: Follow Pattern / Fenkra: ❌)
 
 - **O que faz:** gera linhas de rebites com passo, borda e fileiras.
 - **Regras [V]:** passo 3D–8D (padrão 4–6D); borda 2D–4D (universal) e 2,5D–4D (rebaixada); fileiras 2,5D–5D (padrão 3D).
@@ -550,7 +550,7 @@ Conjunto de prendedores          ← conjunto geométrico (pontos e vetores publ
   3. O rebite gerado é um ponto C2 normal, com a cor do seu D.
 - **Casos de teste:** passo menor que 3D → aviso; distância à borda menor que 2D → aviso; padrão sobre curva fechada fecha sem ponto duplicado.
 
-#### C10. Lista e relatório de prendedores (CATIA: BOM/FASTJOINT / SW: lista de materiais / Inventor: BOM / Fenkra: ✅ AsmBom, sem dados aeronáuticos)
+#### C10. Lista e relatório de prendedores (CAD avançado B: BOM/FASTJOINT / CAD avançado A: lista de materiais / CAD avançado C: BOM / Fenkra: ✅ AsmBom, sem dados aeronáuticos)
 
 - **O que faz:** conta prendedores por part number, diâmetro e junta.
 - **Melhor prática:** BOM agrupa por part number + acabamento; relatório de furação lista Ø, tolerância, quantidade por dash; exporta CSV.
@@ -721,21 +721,21 @@ Prioridades: P0 = bloqueia o tema; P1 = essencial; P2 = importante; P3 = desejá
 - https://www.military-fasteners.com/clamps/loop+clamps/MS21919WDG22
 
 **CAD de referência**
-- https://www.3ds.com/partners/products/200000000001731_PDT00000001402_FASTJOINT
+- (fonte em procedencia.md)
 - https://saemobilus.sae.org/content/2008-01-2303
-- https://pycatia.readthedocs.io/en/0.93/api/pycatia/dnb_fastener_interfaces/dnb_fastener_management.html
-- https://pycatia.readthedocs.io/en/0.93/api/pycatia/dnb_fastener_interfaces/point_fastener.html
-- https://pycatia.readthedocs.io/en/0.93/api/pycatia/dnb_fastener_interfaces/fastener.html
-- https://pycatia.readthedocs.io/en/0.93/api/pycatia/dnb_fastener_interfaces/dnb_fastener_item_services.html
-- https://edstechnologies.com/blog/making-assemblies-easier-with-publications-in-catia-v5/
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://www.scribd.com/document/19738625/Part-Design
-- https://hawkridgesys.com/blog/solidworks-toolbox-smart-fasteners
+- (fonte em procedencia.md)
 - https://www.cati.com/?p=130205
-- https://help.solidworks.com/2022/English/SolidWorks/toolbox/HIDD_TOOLBOX_SMART_FASTENERS.htm (só o resumo da busca; a página não renderizou)
-- https://help.solidworks.com/2014/English/SolidWorks/sldworks/t_Editing_Smart_Fasteners_1.htm (idem)
-- https://help.solidworks.com/2018/English/SolidWorks/Sldworks/c_Configuring_Bolt_Patterns_in_Smart_Fasteners.htm (idem)
-- https://help.autodesk.com/cloudhelp/2025/ENU/Inventor-Help/files/GUID-6E1D4624-B605-4AB1-9DBA-E981495B4933.htm
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-5DD94FE0-0842-4D8D-894D-FDFD029195CA.htm
+- (fonte em procedencia.md) (só o resumo da busca; a página não renderizou)
+- (fonte em procedencia.md) (idem)
+- (fonte em procedencia.md) (idem)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 
 **Código e documentos do Fenkra lidos:** `biblioteca/fixadores/iso4762.json`, `crates/fenkra-solidos/src/biblioteca.rs`, `crates/fenkra-solidos/src/fixadores.rs`, `crates/fenkra-solidos/src/hardware.rs`, `crates/fenkra-solidos/src/lib.rs:5057-5078`, `crates/fenkra-montagem/src/fixadores.rs`, `crates/fenkra-montagem/src/lib.rs:278`, `crates/fenkra-core/src/doc.rs:2543`, `crates/fenkra-app/src/asm_ui.rs:641`, `docs/contextos/{fixadores,hardwares,smart-fastener}.md`, `docs/arquitetura/adr/0011-filosofia-de-modelagem.md`, `docs/benchmark/catalogo.md` (MON-16/17/18, BIB-02/06/10) e `docs/backlog/backlog.md` (B28, B29, B43, B48, B51, B62, B63).
 
@@ -749,9 +749,9 @@ Prioridades: P0 = bloqueia o tema; P1 = essencial; P2 = importante; P3 = desejá
 - **Falhas:**
   - ASSIST e PDFs de normas não acessados.
   - Boeing, LAS Aero e DLA devolveram 403 em parte das tentativas.
-  - Páginas `help.solidworks.com` não renderizaram.
+  - Páginas `help.CAD avançado A.com` não renderizaram.
   - PDF do folheto Huck C50L veio comprimido e ilegível (copiado pelo fetch para a pasta de resultados da sessão).
-  - Não achei tutorial público de instalação de prendedores aeronáuticos no CATIA V5.
+  - Não achei tutorial público de instalação de prendedores aeronáuticos no CAD avançado B.
 - **Riscos:**
   - Tabelas marcadas [C] não podem virar dados da biblioteca sem segunda fonte.
   - Alguns significados de norma ficaram em aberto: NAS1291, NAS1919/1921, MS16555, NAS607, HST12, HL19/HL20, HL77/HL86/HL94, MS21140 como lockbolt.

@@ -9,15 +9,15 @@
 
 **Páginas que não consegui ler.** Isso reduz a confiança em alguns pontos:
 - O wiki.freecad.org bloqueou a leitura direta (proteção Anubis).
-- O site da Autodesk devolveu 403.
-- As páginas de ajuda do SOLIDWORKS vieram vazias.
-- Os dois PDFs da IBM sobre CATIA não abriram, porque não há leitor de PDF instalado. A descrição do CATIA Harness e do CPD vem de cursos de revendas e ajuda indireta.
+- O site da fornecedor de CAD avançado devolveu 403.
+- As páginas de ajuda do CAD avançado A vieram vazias.
+- Os dois PDFs da IBM sobre CAD avançado B não abriram, porque não há leitor de PDF instalado. A descrição do CAD avançado B Harness e do CPD vem de cursos de revendas e ajuda indireta.
 
 ---
 
 ## 0. Resumo executivo
 
-1. **FEM é o item de maior retorno.** Todo CAD concorrente tem análise estática embutida: Fusion, Onshape, SOLIDWORKS, Inventor, FreeCAD. É o recurso que mais separa "CAD de verdade" de "modelador" para um engenheiro de projeto.
+1. **FEM é o item de maior retorno.** Todo CAD concorrente tem análise estática embutida: CAD avançado D, CAD avançado E, CAD avançado A, CAD avançado C, FreeCAD. É o recurso que mais separa "CAD de verdade" de "modelador" para um engenheiro de projeto.
 2. **A arquitetura recomendada** é copiar a estrutura do FreeCAD FEM (contêiner na árvore, objetos de material, restrição, carga, malha, solver e resultado). A parte inteligente vem da filosofia do Fenkra:
    - condições de contorno presas a **referências estáveis (B15/ADR 0010)**;
    - resultados marcados como **desatualizados** quando o modelo muda;
@@ -35,7 +35,7 @@
 5. **CFD (B161) é bem mais arriscado que FEM.**
    - O maior obstáculo é instalar o OpenFOAM no Windows. O próprio CfdOF lista BlueCFD, MinGW (só a versão 2212 funciona) e Docker/Podman como opções, com várias ressalvas [V].
    - Recomendo P2, depois do FEM MVP.
-6. **Chicote (B138) e compósitos (B137) são nichos de alto valor.** São mercados pequenos, mas nos quais o Fenkra pode ser competitivo, porque as ferramentas líderes custam caro e ficam presas a ecossistemas (CATIA, NX, Creo). Ambos sofrem sem dados de entrada boas:
+6. **Chicote (B138) e compósitos (B137) são nichos de alto valor.** São mercados pequenos, mas nos quais o Fenkra pode ser competitivo, porque as ferramentas líderes custam caro e ficam presas a ecossistemas (CAD avançado B, CAD avançado G, CAD avançado F). Ambos sofrem sem dados de entrada boas:
    - chicote precisa da lista de fios (CSV/KBL);
    - compósito precisa de uma superfície de molde (OML) robusta.
 7. **Plástico e moldes são o melhor "custo-benefício" depois do FEM.**
@@ -87,17 +87,17 @@
 | Produto | Módulo / comando | Licenciamento |
 |---|---|---|
 | **FreeCAD FEM** | Workbench FEM. Solvers CalculiX (padrão), Elmer, Mystran e Z88 (desde 0.20). Malha por Gmsh e Netgen [V]. | Aberto e gratuito. |
-| **SOLIDWORKS Simulation** | Standard, Professional e Premium [V]. Premium acrescenta não linear e dinâmica [V]. | Pago por camada. Único preço público achado: US$ 2.146 por 3 meses (Premium, revenda) [V]. |
-| **Fusion Simulation** | Estático linear **grátis** com a assinatura base. A extensão (≈ US$ 1.465/ano em uma página Autodesk, £ 1.428 na página britânica) acrescenta não linear, flambagem, térmico, tensão térmica, modal, evento, resfriamento de eletrônicos e moldagem por injeção [V]. | Assinatura. Pagamento por uso em *tokens*: estudos básicos 3, avançados 6 [V]. |
-| **Inventor Nastran** | In-CAD. Só dentro da *Product Design & Manufacturing Collection* [V]. Coleção a ≈ US$ 3.375/ano segundo agregador [V, fonte fraca]. | O Inventor Professional traz só estático e modal [V]. |
-| **Onshape Simulation** | Estático linear e modal, na nuvem, assíncrono. Incluído no plano Professional [V]. | Preços de terceiros conflitam (≈ US$ 1.500 Standard e US$ 2.500 Professional por usuário/ano) [V, fonte fraca]. |
-| **Ansys Discovery** | Física em tempo real na GPU. A partir da 2025R1 virou Pro, Premium e Enterprise [V]. Alta fidelidade pede licença Mechanical/CFD Pro [V]. | Sem preço público. |
+| **CAD avançado A Simulation** | Standard, Professional e Premium [V]. Premium acrescenta não linear e dinâmica [V]. | Pago por camada. Único preço público achado: US$ 2.146 por 3 meses (Premium, revenda) [V]. |
+| **Fusion Simulation** | Estático linear **grátis** com a assinatura base. A extensão (≈ US$ 1.465/ano em uma página fornecedor de CAD avançado, £ 1.428 na página britânica) acrescenta não linear, flambagem, térmico, tensão térmica, modal, evento, resfriamento de eletrônicos e moldagem por injeção [V]. | Assinatura. Pagamento por uso em *tokens*: estudos básicos 3, avançados 6 [V]. |
+| **CAD avançado C Nastran** | In-CAD. Só dentro da *Product Design & Manufacturing Collection* [V]. Coleção a ≈ US$ 3.375/ano segundo agregador [V, fonte fraca]. | O CAD avançado C Professional traz só estático e modal [V]. |
+| **CAD avançado E Simulation** | Estático linear e modal, na nuvem, assíncrono. Incluído no plano Professional [V]. | Preços de terceiros conflitam (≈ US$ 1.500 Standard e US$ 2.500 Professional por usuário/ano) [V, fonte fraca]. |
+| **software de simulação avançado Discovery** | Física em tempo real na GPU. A partir da 2025R1 virou Pro, Premium e Enterprise [V]. Alta fidelidade pede licença Mechanical/CFD Pro [V]. | Sem preço público. |
 | **SimScale** | FEM e CFD na nuvem. Plano **Community grátis** (≈ 3.000 horas-núcleo, 10 simulações) [V]. | Mechanical, Professional e Enterprise sob cotação [V]. |
 | **Salome-Meca / Code_Aster** | Plataforma com geometria, malha, AsterStudy e ParaVis [V]. | Aberto. Curva de aprendizado alta e instalação difícil no Windows [V]. |
 
 ### 2.2 Como funciona no melhor de cada um
 
-**SOLIDWORKS Simulation (referência de CAD embutido) [V, parte via revisões].**
+**CAD avançado A Simulation (referência de CAD embutido) [V, parte via revisões].**
 - O estudo vive dentro do modelo. Reexecutar e remalhar é simples.
 - Malha e contatos entre componentes são automáticos na maioria dos casos. Isso é o que os iniciantes mais elogiam.
 
@@ -108,7 +108,7 @@
 - O *Safety Factor* é o resultado padrão. Ele pode passar enquanto outro critério falha.
 - Resolução na nuvem com notificação ao terminar.
 
-**Onshape.**
+**CAD avançado E.**
 - As **juntas da montagem** guiam a configuração (fixa, deslizante, revoluta).
 - Sem malha exposta e sem "defeaturing".
 - O modelo deve estar totalmente restrito, ou a simulação falha. Há técnica separada para corpos livres.
@@ -130,7 +130,7 @@ O 1.1 não resolveu tudo: o pós-processamento refatorado do CalculiX "não est�
 
 | Fonte | Elogios | Reclamações |
 |---|---|---|
-| SOLIDWORKS | Malha e contato automáticos. Fácil mudar restrições e reexecutar [V]. | Pouco controle da malha. Mais difícil conferir convergência que em outros FE. Pesado em recursos [V]. |
+| CAD avançado A | Malha e contato automáticos. Fácil mudar restrições e reexecutar [V]. | Pouco controle da malha. Mais difícil conferir convergência que em outros FE. Pesado em recursos [V]. |
 | SimScale (G2 ≈ 4,6/5, ≈ 280 avaliações) | Suporte rápido, acesso pela nuvem, preço [V]. | Malha lenta, solução lenta, falta de edição de geometria, interface "desajeitada" [V]. |
 | FreeCAD FEM | Aberto, vários solvers. | Falhas do Gmsh com VTK 9, malha "bogus" que o CalculiX recusa, objetos de malha sobrando após cancelar/erro, reparo de malha frágil [V, rastreador de bugs]. |
 | Code_Aster / Salome | Poder e custo zero. | Curva de aprendizado, instalação [V]. |
@@ -143,12 +143,12 @@ O 1.1 não resolveu tudo: o pós-processamento refatorado do CalculiX "não est�
 ### 2.4 Bibliotecas e padrões
 - **Malha:** Netgen embutido (LGPL-2.1). Alternativa: Gmsh como processo, para ter um segundo mesher.
 - **Solver:** CalculiX como processo (ver B132).
-- **Formatos:** `.inp` (Abaqus-like) para escrever. `.frd` e `.dat` para ler. Escrever também VTK/VTU para abrir no ParaView.
+- **Formatos:** `.inp` (software de simulação avançado-like) para escrever. `.frd` e `.dat` para ler. Escrever também VTK/VTU para abrir no ParaView.
 - **Leitura de resultados:** parser próprio em Rust (o `.frd` é texto de largura fixa). Para VTK, procurar crate MIT ou Apache (`vtkio`) [C].
 
 ### 2.5 Recomendação para o Fenkra
 
-**Fluxo ideal (estilo CATIA V5: árvore e publicações).**
+**Fluxo ideal (estilo CAD avançado B: árvore e publicações).**
 
 1. Criar **Análise** na árvore. Ela referencia um corpo ou montagem, não uma cópia da geometria.
 2. Objetos filhos:
@@ -163,7 +163,7 @@ O 1.1 não resolveu tudo: o pós-processamento refatorado do CalculiX "não est�
    - *Modo:* fixa, deslizante, cilíndrica, simetria, deslocamento prescrito; ou força, pressão, torque, gravidade, centrífuga, rolamento, térmica.
    - *Parâmetros:* valor, direção, sistema local, unidade.
    - *Avançado:* amplitude no tempo e referência local.
-4. **Publicações.** Uma peça publica "faces de apoio" e "faces de carga". A análise na montagem referencia a publicação, de modo que trocar a peça mantém as condições. Isso espelha a ideia de publicação do CATIA.
+4. **Publicações.** Uma peça publica "faces de apoio" e "faces de carga". A análise na montagem referencia a publicação, de modo que trocar a peça mantém as condições. Isso espelha a ideia de publicação do CAD avançado B.
 5. **Material.** Vem da tabela de materiais do B92 (E, ν, ρ, escoamento). Falta propriedade ⇒ erro explícito, nunca um valor padrão.
 6. **Verificador de modelo antes de rodar**, em lista clicável:
    - peça sem restrição (corpo livre);
@@ -220,8 +220,8 @@ B159 reduzido a ~250 k (contêiner, condições, verificador). Somados B132 (450
 ### 3.1 Concorrentes
 Os mesmos da seção 2. O que importa aqui é **como cada um fala com o solver**:
 - **FreeCAD** escreve o `.inp` por objeto e chama `ccx`. Depois lê o `.frd`. Há também conversão para VTK (`frdToVTK`) [V].
-- **Fusion, Onshape e SimScale** resolvem na nuvem. Resolvem sem o usuário ver o arquivo do solver [V].
-- **SOLIDWORKS** embute o solver (FFEPlus e Direct Sparse) [C].
+- **CAD avançado D, CAD avançado E e SimScale** resolvem na nuvem. Resolvem sem o usuário ver o arquivo do solver [V].
+- **CAD avançado A** embute o solver (FFEPlus e Direct Sparse) [C].
 
 ### 3.2 Detalhe do fluxo
 
@@ -294,14 +294,14 @@ B159 (contêiner), B92 (massa e densidade), B87 (processo isolado), B64 (formato
 
 | Capacidade | Quem |
 |---|---|
-| Contato em montagem | SOLIDWORKS (mais forte no Premium), Fusion (auto, colado por padrão), Inventor Nastran, FreeCAD 1.1 (*hard* e *tied*) [V] |
-| Não linear | SW Premium, Fusion (extensão), Nastran [V] |
+| Contato em montagem | CAD avançado A (mais forte no Premium), Fusion (auto, colado por padrão), CAD avançado C Nastran, FreeCAD 1.1 (*hard* e *tied*) [V] |
+| Não linear | CAD avançado A Premium, Fusion (extensão), Nastran [V] |
 | Flambagem | Fusion (extensão), Nastran [V], CalculiX `*BUCKLE` [C] |
-| Fadiga | SW Simulation [V; a camada que a inclui é incerta nas fontes]. |
-| Casos de carga e estudos paramétricos | SW Simulation, Ansys, Fusion [C] |
+| Fadiga | CAD avançado A Simulation [V; a camada que a inclui é incerta nas fontes]. |
+| Casos de carga e estudos paramétricos | CAD avançado A Simulation, software de simulação avançado, Fusion [C] |
 
 ### 4.2 Como funciona (melhor prática)
-- **Contato automático.** Detecta pares de faces próximas dentro de uma tolerância e cria união colada por padrão. O usuário só muda onde importa (Fusion) [V].
+- **Contato automático.** Detecta pares de faces próximas dentro de uma tolerância e cria união colada por padrão. O usuário só muda onde importa (CAD avançado D) [V].
 - **Tipos:** colado, sem penetração (*hard*), com atrito, e contato térmico (FreeCAD 1.1) [V].
 - **Não linear:** plasticidade (curva tensão-deformação), grandes deslocamentos (`*NLGEOM`) e passos incrementais [C].
 - **Flambagem linear:** autovalor do fator de carga crítico. Compare com Euler Pcr = π²EI/(KL)².
@@ -314,7 +314,7 @@ B159 (contêiner), B92 (massa e densidade), B87 (processo isolado), B64 (formato
 - **Estudo paramétrico:** variar parâmetros do modelo (B101/B102) e tabular os resultados.
 
 ### 4.3 Elogios e reclamações
-- Automatismo de contato é elogiado (Fusion, SW). Em contrapartida, "contato e convergência" são fonte comum de falha. A SOLIDWORKS vendeu o contato do 2021 como mais estável e rápido, com estabilização de início [V, texto de fornecedor].
+- Automatismo de contato é elogiado (CAD avançado D, CAD avançado A). Em contrapartida, "contato e convergência" são fonte comum de falha. A CAD avançado A vendeu o contato do 2021 como mais estável e rápido, com estabilização de início [V, texto de fornecedor].
 - Faltam tipos de contato avançados, segundo revisões [V].
 
 ### 4.4 Bibliotecas
@@ -355,14 +355,14 @@ B159, B132, B99 (interfaces de encaixe da montagem), B101/B102 (parâmetros e ta
 | Produto | Módulo | Licenciamento |
 |---|---|---|
 | **FreeCAD CfdOF** | Workbench. Escoamento incompressível laminar/turbulento (RANS, LES, DES; simpleFoam e pimpleFoam), superfície livre (interFoam), compressível, meios porosos, AMI [V]. | LGPL-3.0, gratuito [V]. |
-| **SOLIDWORKS Flow Simulation** | Assistente (*wizard*) com análise interna ou externa, domínio computacional, tampas (*lids*), metas (*goals*) [V]. | Módulo pago à parte [C]. |
+| **CAD avançado A Flow Simulation** | Assistente (*wizard*) com análise interna ou externa, domínio computacional, tampas (*lids*), metas (*goals*) [V]. | Módulo pago à parte [C]. |
 | **Fusion** | Resfriamento de eletrônicos na extensão; CFD geral não confirmado nesta pesquisa. | — |
 | **SimScale** | CFD e FEM na nuvem [V]. | Community grátis, Professional sob cotação [V]. |
-| **Ansys Discovery** | Fluidos em tempo real na GPU [V]. | Sem preço público [V]. |
+| **software de simulação avançado Discovery** | Fluidos em tempo real na GPU [V]. | Sem preço público [V]. |
 
 ### 5.2 Como funciona no detalhe
 
-**SOLIDWORKS Flow Simulation (referência de fluxo de CAD) [V, via revendas].**
+**CAD avançado A Flow Simulation (referência de fluxo de CAD) [V, via revendas].**
 1. **Assistente:** nome, configuração, unidades, **interno ou externo**, fluido.
 2. **Domínio computacional:** caixa em torno do modelo, redimensionável. Existe "RESET" quando a geometria muda.
 3. **Tampas (*lids*):** uma análise interna exige volume fechado. As aberturas são cobertas por corpos "tampa". O comando cria tampas sozinho, mas **só em faces planas** [V].
@@ -380,7 +380,7 @@ B159, B132, B99 (interfaces de encaixe da montagem), B101/B102 (parâmetros e ta
 - Pós-processamento no ParaView, com funções de força e sondas [V].
 
 ### 5.3 Elogios e reclamações
-- **SW Flow:** muito citado pela facilidade do assistente. As reclamações vêm da dificuldade das tampas fora de superfícies planas e de metas que continuam mudando a cada refino [V].
+- **CAD avançado A Flow:** muito citado pela facilidade do assistente. As reclamações vêm da dificuldade das tampas fora de superfícies planas e de metas que continuam mudando a cada refino [V].
 - **CfdOF:** a instalação é o problema. Exige OpenFOAM em versão específica, MPI, e no Windows há ressalvas [V]. A comunidade usa cfMesh para camadas-limite; o snappyHexMesh é visto como a escolha padrão [V, anedótico].
 - **SimScale:** malha lenta e interface "desajeitada" [V].
 
@@ -403,7 +403,7 @@ B159, B132, B99 (interfaces de encaixe da montagem), B101/B102 (parâmetros e ta
    - saída (pressão estática);
    - parede (sem escorregamento, rugosidade, deslizante);
    - simetria.
-4. **Metas** (estilo SW): perda de carga, vazão, força, temperatura média.
+4. **Metas** (estilo CAD avançado A): perda de carga, vazão, força, temperatura média.
 5. **Malha snappyHexMesh** com refinamentos por face e por região, e camadas-limite.
 6. **Execução** assíncrona do OpenFOAM, com resíduos e metas em gráfico ao vivo.
 7. **Pós:** planos de corte, linhas de corrente, vetores, isosuperfícies. Pressão e velocidade no viewport.
@@ -450,17 +450,17 @@ B159 (infraestrutura de execução, resultados, relatórios), B87 (exportar malh
 
 | Produto | Módulo | Notas |
 |---|---|---|
-| **CATIA V5** | *Electrical Harness Assembly* e *Installation* (segmentos, ramos e pontos de ramificação); *Electrical Harness Flattening* (extrair, achatar, sincronizar) [V, cursos]. | Pago. |
-| **SOLIDWORKS Electrical 3D** | *Route Harnesses* (spline ou linha, tangência) e *Flatten Route* (anotação ou fabricação). O desenho do achatado se atualiza com as edições [V]. | Pago. |
-| **Inventor Cable & Harness** | Ambiente *nailboard* (prancha de pregos) [V]. | Pago. |
-| **Zuken E3.series** | Ponte 3D para Solid Edge e outros MCAD. *Harness Builder* 2025 com copiloto de *formboard* [V]. | Sem preço público [V]. |
-| **Siemens Capital Harness** | Não confirmado nesta pesquisa. | — |
+| **CAD avançado B** | *Electrical Harness Assembly* e *Installation* (segmentos, ramos e pontos de ramificação); *Electrical Harness Flattening* (extrair, achatar, sincronizar) [V, cursos]. | Pago. |
+| **CAD avançado A Electrical 3D** | *Route Harnesses* (spline ou linha, tangência) e *Flatten Route* (anotação ou fabricação). O desenho do achatado se atualiza com as edições [V]. | Pago. |
+| **CAD avançado C Cable & Harness** | Ambiente *nailboard* (prancha de pregos) [V]. | Pago. |
+| **Zuken E3.series** | Ponte 3D para CAD avançado H e outros MCAD. *Harness Builder* 2025 com copiloto de *formboard* [V]. | Sem preço público [V]. |
+| **fornecedor de CAD avançado Capital Harness** | Não confirmado nesta pesquisa. | — |
 | **WireViz / Filare** | YAML → SVG + BOM. GPL-3 [V]. | Documentação, não projeto 3D. |
 | **KBL / VEC** | Padrões de troca (prostep ivip). Sem biblioteca aberta achada [V]. | — |
 
 ### 6.2 Como funciona no detalhe
 
-**CATIA V5 [V, cursos de revenda e artigos].**
+**CAD avançado B [V, cursos de revenda e artigos].**
 - Dois ambientes de projeto:
   - *Assembly* trabalha o feixe geométrico como um todo.
   - *Installation* define o segmento de feixe e o roteia.
@@ -471,20 +471,20 @@ B159 (infraestrutura de execução, resultados, relatórios), B87 (exportar malh
 - Convenção: feixe em linha simples; revestimento protetor em linha dupla.
 - Mudanças de projeto sincronizam do projeto para a manufatura.
 
-**SOLIDWORKS Electrical 3D [V].**
+**CAD avançado A Electrical 3D [V].**
 - O esquema elétrico (diagrama unifilar) vem do módulo de esquemático. O 3D roteia.
 - Saídas do *Flatten Route*: uma configuração achatada do modelo 3D e um desenho do harness achatado.
 - Cinco ferramentas editam a rota achatada, e o desenho acompanha.
 - Uma reclamação: o achatado padrão fica difícil de ler em chicotes com muitos ramos [V]; há patente específica sobre isso (tronco principal, *trunk line*) [V].
 
-**Inventor nailboard [V].**
+**CAD avançado C nailboard [V].**
 - O 3D pode ser rearranjado, mas o **comprimento é preservado**.
 - Cada ponta de fio gera um ponto separado. Pontas no mesmo pino são distribuídas sem sobreposição.
 - Cabos "em leque" saem da ponta do segmento (*Fan Out*). *Fan In* colapsa para reduzir ruído.
 - A prancha traz BOM, lista de fios, imagens de conectores, cotas e números de pino. Existe tabela de condutores (*net wire list*).
 
 ### 6.3 Elogios e reclamações
-Pouco material de usuário público. O que apareceu: legibilidade ruim do achatado padrão (SW) [V]. O gargalo clássico do setor, que as fontes confirmam indiretamente, é o **fluxo de dados** ECAD → MCAD, não a geometria (Zuken e Siemens vendem pontes dedicadas) [V].
+Pouco material de usuário público. O que apareceu: legibilidade ruim do achatado padrão (CAD avançado A) [V]. O gargalo clássico do setor, que as fontes confirmam indiretamente, é o **fluxo de dados** ECAD → MCAD, não a geometria (Zuken e fornecedor de CAD avançado vendem pontes dedicadas) [V].
 
 ### 6.4 Bibliotecas e padrões
 - **KBL** (prostep ivip PSI 19): XML. Versões 2.4 e 2.5, com esquema XSD no ecad-wiki. Pode haver "dialetos" por empresa, o que exige guias de implementação [V]. O Volkswagen documentou que o 2.5 ainda não é suportado em todo o grupo [V].
@@ -556,14 +556,14 @@ B32 (sketch 3D), B105 (DXF), B99 (interfaces), B15 (referências), B127 (rota de
 
 | Produto | Módulo | Notas |
 |---|---|---|
-| **CATIA** | *Composites Design* (CPD): método de grade (*grid*), ponto e curva-semente, análise de produzibilidade, *draping* dinâmico, ply book por desenho [V]. | Pago. |
-| **Siemens Fibersim** | Pro e Elite, dentro de NX, CATIA V5 e Creo: ply table, simulação de produzibilidade, divisão por *darts* e emendas, exportação de padrão plano para nesting [V]. | Sem preço público [V]. |
-| **Creo Composite Design** | *Draping* cinemático, padrão plano, export DXF/DWG, ply book [V]. | Pago. |
-| **Ansys ACP** | Pré e pós. Conjuntos de seleção orientados, rosetas, plies de modelagem, *draping*. Entrega ao Mechanical [V]. | Pago. |
+| **CAD avançado B** | *Composites Design* (CPD): método de grade (*grid*), ponto e curva-semente, análise de produzibilidade, *draping* dinâmico, ply book por desenho [V]. | Pago. |
+| **fornecedor de CAD avançado Fibersim** | Pro e Elite, dentro de CAD avançado G, CAD avançado B e CAD avançado F: ply table, simulação de produzibilidade, divisão por *darts* e emendas, exportação de padrão plano para nesting [V]. | Sem preço público [V]. |
+| **CAD avançado F Composite Design** | *Draping* cinemático, padrão plano, export DXF/DWG, ply book [V]. | Pago. |
+| **software de simulação avançado ACP** | Pré e pós. Conjuntos de seleção orientados, rosetas, plies de modelagem, *draping*. Entrega ao Mechanical [V]. | Pago. |
 
 ### 7.2 Como funciona no detalhe
 
-**Creo (algoritmo mais bem documentado) [V].**
+**CAD avançado F (algoritmo mais bem documentado) [V].**
 - **Entradas:** direção do rolo do ply, superfície do molde ou do ply abaixo, **ponto-semente**, fibras fixas de urdidura e trama (*warp/weft*).
 - **Algoritmo cinemático ("fishnet"):**
   - calcula pontos de *drape* (cruzamentos das fibras) que têm de estar sobre a superfície;
@@ -578,7 +578,7 @@ B32 (sketch 3D), B105 (DXF), B99 (interfaces), B15 (referências), B127 (rota de
 - **Semáforo** de cisalhamento contra os ângulos de aviso e limite do material.
 - Pré-visualização do padrão plano ply a ply e exportação DXF/DWG para nesting.
 
-**CATIA CPD [V, parcial].**
+**CAD avançado B CPD [V, parcial].**
 - Plies definidos por zona, na sequência de empilhamento.
 - A **posição da semente** muda o padrão plano.
 - Produzibilidade = análise de *draping*. Documentação de chão de fábrica via ply book em desenho.
@@ -587,7 +587,7 @@ B32 (sketch 3D), B105 (DXF), B99 (interfaces), B15 (referências), B127 (rota de
 - Produzibilidade → padrão plano com *darts* e emendas → exportação para nesting.
 - Dados não geométricos (nome, orientação, sequência, material, área do padrão plano, custo, massa do laminado) vão para outros sistemas.
 
-**Ansys ACP [V].**
+**software de simulação avançado ACP [V].**
 - Plies se aplicam a **conjuntos de seleção orientados** (OSS), não a conjuntos de elementos.
 - Cada OSS tem lado da casca e direção de referência (0°), dada por uma **roseta**.
 - Sem *draping*, a roseta é só projetada; com *draping*, as orientações cisalham pela forma.
@@ -643,19 +643,19 @@ A parte de plies, zonas e ply book fica em ~350 k. O total com *draping* e CLT/F
 | Produto | O que tem |
 |---|---|
 | **Fusion (Product Design Extension)** | **Regras plásticas**: espessura, ângulo de saída e raio nominal como parâmetros consumidos por Extrude, Rib, Web, Boss, Snap Fit, Emboss, Thicken, Shell e Draft. Boa prática: atribuir a regra antes de modelar. Regras base métricas e imperiais; criação local ou na nuvem [V]. Comando Boss com nervuras, furo e fixadores automáticos [V]. Snap-fit em balanço [V]. *Web* com filetes e saída automáticos [V]. **Lip & groove não existe** (pedido em fórum) [V]. |
-| **Inventor** | Painel de plástico **desligado por padrão**: Boss (cabeça e rosca, nervuras de fixação), Rest, Rule Fillet, Grille, Snap Fit, Lip [V]. |
-| **SOLIDWORKS** | Lip/Groove, Snap Hook, Vent, Mounting Boss [C]. |
+| **CAD avançado C** | Painel de plástico **desligado por padrão**: Boss (cabeça e rosca, nervuras de fixação), Rest, Rule Fillet, Grille, Snap Fit, Lip [V]. |
+| **CAD avançado A** | Lip/Groove, Snap Hook, Vent, Mounting Boss [C]. |
 
 ### 8.2 Como funciona (melhor prática)
 - **Regras de projeto** que viram parâmetros: nervura = 0,5 × a parede principal; filete na base da nervura > ¼ da espessura da nervura [V, apresentação de regras].
-- **Boss:** nervuras são úteis quando o comprimento do boss passa de 3 × o diâmetro [V, ajuda Autodesk].
+- **Boss:** nervuras são úteis quando o comprimento do boss passa de 3 × o diâmetro [V, ajuda fornecedor de CAD avançado].
 - **Snap-fit em balanço:** a deformação admissível é o critério central: ε ≈ 1,5·t·y/L² para seção constante [C].
 - **Grade/respiro:** padrão de ranhuras com nervuras, borda e saída.
 - **Lip & groove:** junta entre carcaças com folga.
 
 ### 8.3 Elogios e reclamações
-- A existência do painel escondido no Inventor mostra um problema de **descoberta** [V].
-- No Fusion, usuários pedem Lip & Groove [V].
+- A existência do painel escondido no CAD avançado C mostra um problema de **descoberta** [V].
+- No CAD avançado D, usuários pedem Lip & Groove [V].
 
 ### 8.4 Bibliotecas
 Nenhuma. É geometria paramétrica sobre o OCCT.
@@ -696,12 +696,12 @@ Interferência entre recursos (boss encostando na parede); saída aplicada a fac
 
 | Produto | O que tem |
 |---|---|
-| **SOLIDWORKS Mold Tools** | Análise de saída, de *undercut*, de linha de partição; linha de partição; **superfícies de fechamento (*shut-off*)** (sem preenchimento, tangente, contato); superfície de partição; **Tooling Split** com tamanho do bloco. Análises feitas na GPU [V]. |
-| **Creo EMX** | Projeto de base de molde a partir de montagem, bibliotecas de 17+ fornecedores, posicionamento automático de extratores e canais, interferência, abertura animada [V]. |
-| **NX Mold Wizard** | Fluxo passo a passo, partição, verificação de moldabilidade, resfriamento, BOM e desenho automáticos [V]. |
-| **Inventor Mold Design** | Mencionado no `modulos-novos.md` [C]. |
+| **CAD avançado A Mold Tools** | Análise de saída, de *undercut*, de linha de partição; linha de partição; **superfícies de fechamento (*shut-off*)** (sem preenchimento, tangente, contato); superfície de partição; **Tooling Split** com tamanho do bloco. Análises feitas na GPU [V]. |
+| **CAD avançado F EMX** | Projeto de base de molde a partir de montagem, bibliotecas de 17+ fornecedores, posicionamento automático de extratores e canais, interferência, abertura animada [V]. |
+| **CAD avançado G Mold Wizard** | Fluxo passo a passo, partição, verificação de moldabilidade, resfriamento, BOM e desenho automáticos [V]. |
+| **CAD avançado C Mold Design** | Mencionado no `modulos-novos.md` [C]. |
 
-### 9.2 Como funciona (SW, a referência) [V]
+### 9.2 Como funciona (CAD avançado A, a referência) [V]
 1. **Análise de saída:** marca faces sem saída suficiente.
 2. **Análise de *undercut*:** áreas presas que impedem a ejeção.
 3. **Linha de partição:** o contorno entre faces com saída positiva e negativa. Há análise de linhas candidatas.
@@ -761,11 +761,11 @@ As estimativas variam muito por definição:
 
 | Segmento | O que compra | Observações |
 |---|---|---|
-| **Projetistas de PME** (máquinas, produtos) | FEM linear embutido no CAD, validação rápida | O maior volume. É o público do SOLIDWORKS Simulation e do Fusion. |
-| **Aeronáutico e defesa** | Compósitos, chicote (EWIS), FEM, inspeção | Exigem rastreabilidade e muitas vezes **operação local, sem nuvem** [C]. Ferramentas líderes são CATIA, NX e Fibersim. Um CAD aberto não substitui ferramentas validadas, mas atende suprimentos e protótipos. |
+| **Projetistas de PME** (máquinas, produtos) | FEM linear embutido no CAD, validação rápida | O maior volume. É o público do CAD avançado A Simulation e do Fusion. |
+| **Aeronáutico e defesa** | Compósitos, chicote (EWIS), FEM, inspeção | Exigem rastreabilidade e muitas vezes **operação local, sem nuvem** [C]. Ferramentas líderes são CAD avançado B, CAD avançado G e Fibersim. Um CAD aberto não substitui ferramentas validadas, mas atende suprimentos e protótipos. |
 | **Caldeiraria e estruturas** | Pórtico (B114), FEM de suportes, corte de tubo | Casa com a bancada Estrutural. Vasos de pressão exigem linearização de tensões por norma [C]. |
 | **Impressão 3D** | Balanço, orientação, partição, otimização topológica | B164/B165. FEM ajuda em rigidez e deformação. |
-| **Plástico e ferramentarias** | Recursos plásticos, saída, partição | Há polos de ferramentaria no país (por exemplo, no Sul) [C, a confirmar]. Simulação de injeção (Moldflow, SW Plastics) é cara: SW Plastics a ≈ US$ 3 mil (Standard) a US$ 12 mil (Premium) por ano em revenda americana, e Moldflow Adviser a ≈ NZ$ 13 mil por ano [V]. |
+| **Plástico e ferramentarias** | Recursos plásticos, saída, partição | Há polos de ferramentaria no país (por exemplo, no Sul) [C, a confirmar]. Simulação de injeção (Moldflow, CAD avançado A Plastics) é cara: CAD avançado A Plastics a ≈ US$ 3 mil (Standard) a US$ 12 mil (Premium) por ano em revenda americana, e Moldflow Adviser a ≈ NZ$ 13 mil por ano [V]. |
 | **Educação** | CAD gratuito e aberto, simulação básica | O FreeCAD é a referência. **Equipes de competição** (Baja, Fórmula SAE, AeroDesign) precisam de FEM e CFD simples [C, mercado local]. |
 | **Makers** | FEM básico, 3MF | Preço zero. |
 
@@ -777,7 +777,7 @@ As estimativas variam muito por definição:
 5. **Português e normas brasileiras** (perfis Gerdau, NBR 8800).
 6. **Preço:** as extensões pagas custam de ≈ US$ 1,5 mil a vários milhares por ano; o Fenkra é LGPL.
 
-**Onde NÃO competir:** FEM de alta fidelidade (Ansys, Abaqus, Nastran), certificação aeronáutica, simulação de injeção completa, CFD multifísico. Declarar isso no produto.
+**Onde NÃO competir:** FEM de alta fidelidade (software de simulação avançado, software de simulação avançado, Nastran), certificação aeronáutica, simulação de injeção completa, CFD multifísico. Declarar isso no produto.
 
 ---
 
@@ -806,24 +806,24 @@ As estimativas variam muito por definição:
 - https://zoftwarehub.com/products/salome-meca/reviews
 
 **Produtos comerciais de simulação**
-- https://www.autodesk.com/products/fusion-360/simulation-extension
-- https://help.autodesk.com/cloudhelp/ENU/Fusion-Extensions/files/EXT-SIMULATION.htm
-- https://www.autodesk.com/products/fusion-360/blog/static-stress-simulations-autodesk-fusion/
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://www.hagerman.com/software/fusion-simulation-extension
-- https://www.cati.com/blog/comparing-solidworks-packages-standard-vs-professional-premium/
-- https://www.javelin-tech.com/blog/2022/12/solidworks-simulation-solutions-premium-vs-standard/
-- https://store.trimech.com/products/solidworks-simulation-premium-3-month-term-license/page/5
-- https://blogs.solidworks.com/products/solidworks/solidworks-simulation-2021-enhanced-contact-for-faster-more-stable-and-accurate-results/
-- https://g2.com/products/solidworks-solidworks-simulation/reviews
-- https://capterra.com/p/124171/SolidWorks-Simulation-Premium/reviews/
-- https://www.onshape.com/en/blog/fea-design-engineers-cad-integrated-linear-static-analysis
-- https://www.onshape.com/de/blog/introducing-modal-analysis-onshape-simulation
-- https://toolradar.com/tools/onshape/pricing
-- https://help.autodesk.com/cloudhelp/2026/ENU/NINCAD-UsersGuide/files/GUID-538CBCDD-C88A-460A-ABD1-1BA7319BF65D.htm
-- https://autodesk.com/products/inventor-nastran/overview
-- https://blogs.autodesk.com/simulation/2017/08/16/inventor_professional_or_nastran_in-cad
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://www.symetri.co.uk/insights/blog/nastran-vs-stress-analysis
-- https://us.fitgap.com/products/004967/ansys-discovery
+- (fonte em procedencia.md)
 - https://simutechgroup.com/?p=19132
 - https://www.simscale.com/?p=111634
 - https://capterra.com/p/145960/SimScale/pricing
@@ -840,23 +840,23 @@ As estimativas variam muito por definição:
 - https://en.wikipedia.org/wiki/OpenFOAM
 - https://cfd.direct/openfoam/about/
 - https://www.cati.com/?p=130349
-- https://www.goengineer.com/en-us/blog/creating-lids-solidworks-flow-simulation
-- https://www.goengineer.com/en-us/blog/solidworks-flow-simulation-solution-adaptive-mesh-refinement
-- https://solidsolutions.co.uk/blog/2019/05/finding-a-good-mesh-fast-in-SOLIDWORKS-flow-simulation
-- https://3dswym.3dexperience.3ds.com/question/solidworks-user-forum/is-having-more-cells-across-a-tight-restriction-better_7WNCF1KBQJO5UsNQERPe0A
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 
 **Chicote**
-- https://www.goengineer.com/en-us/training/catia-v5-electrical-harness-flattening
+- (fonte em procedencia.md)
 - https://wichita.edu/industry_and_defense/NIAR/Documents/Electrical-Harness-Design-R30.pdf
 - https://icas.org/ICAS_ARCHIVE/ICAS2012/PAPERS/800.PDF
-- https://public.dhe.ibm.com/software/plm/uk/catia_electrical_process.pdf (não consegui abrir)
-- https://3dswym.3dexperience.3ds.com/wiki/catia-user-community/catia-electrical-harness-installation-2-ehi_yhoHvpJrSDqzC-27gBlJHA
-- https://help.solidworks.com/2024/English/swelec/r_swelec_route_harness.htm (página vazia na leitura; usei os resultados de busca)
-- https://www.goengineer.com/en-us/blog/edit-flattened-harness-routes-solidworks-electrical-3d
+- (fonte em procedencia.md) (não consegui abrir)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md) (página vazia na leitura; usei os resultados de busca)
+- (fonte em procedencia.md)
 - https://patents.google.com/patent/US11755811
-- https://help.autodesk.com/cloudhelp/2020/ENU/Inventor-Help/files/GUID-3AF3D756-F600-404A-9E64-E2EB0B39333C.htm
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-C8729954-E17D-442F-9AC8-1956D4E49427.htm
-- https://blogs.sw.siemens.com/solidedge/e3-series-combined-with-solid-edge-ensures-seamless-wire-harness-design/
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://www.digitalengineering247.com/article/zuken-introduces-harness-builder-2025/zuken
 - https://zuken.com/en/product/e3series/wire-harness-design-and-manufacturing-ecosystem
 - https://ecad-wiki.prostep.org/specifications/kbl/
@@ -867,41 +867,41 @@ As estimativas variam muito por definição:
 - https://marketintelo.com/report/automotive-wire-harness-cad-software-market
 
 **Compósitos**
-- https://support.ptc.com/help/creo/creo_pma/r12/usascii/composite_design/about_draping_simulation.html
-- https://support.ptc.com/help/creo/creo_pma/r12/usascii/composite_design/draping_simulation.html
-- https://support.ptc.com/help/creo/creo_pma/r13/usascii/composite_design/create_flat_plies.html
-- https://support.ptc.com/help/creo/creo_pma/r11.0/usascii/whats_new_pma/composite_draping_algorithm.html
-- https://www.technia.com/en/training/catia-v5-composite-part-design/
-- https://www.goengineer.com/training/catia-v5-composites-design-manufacturing
-- https://3dswym.3dexperience.3ds.com/wiki/catia-user-community/catia-composites-manufacturing-engineer-for-transportation-mobility_G62Zw_avQGSBzbFUInzrWg
-- https://www.siemens.com/en-us/products/designcenter/cad-software/offerings/fibersim-composites/
-- https://ata-e.com/wp-content/uploads/2024/10/Siemens-PLM-Fibersim-Pro-and-Elite-Fact-Sheet.pdf
-- https://www.femto.eu/wp-content/uploads/2023/08/Siemens-SW-Fibersim-17-Fact-Sheet.pdf
-- https://ansyshelp.ansys.com/public/Views/Secured/corp/v251/en/acp_ug/acp_oes.html
-- https://ansyshelp.ansys.com/public/Views/Secured/corp/v261/en/acp_tut/acp_tut7_modeling.html
-- https://ansys.com/training-center/course-catalog/structures/draping-in-composites
-- https://innovationspace.ansys.com/forum/?p=138950
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 
 **Plástico e moldes**
-- https://www.autodesk.com/products/fusion-360/blog/plastic-rules-fusion-product-design-extension/ (403 na leitura; usei o resumo de busca)
-- https://www.autodesk.com/products/fusion-360/blog/how-to-manage-plastic-rules-fusion-360-product-design-extension/
-- https://www.symetri.co.uk/insights/blog/autodesk-fusion-360-product-design-extension
-- https://forums.autodesk.com/t5/fusion-360-feedback-hub/open-plastic-parts-discussion/m-p/10283415/highlight/true
-- https://help.autodesk.com/cloudhelp/2023/ENU/Inventor-Help/files/GUID-29104E83-91D9-4B20-A6C9-C19DA7AABD6E.htm
-- https://forums.autodesk.com/t5/inventor-forum/plastic-part-features/td-p/7633529
-- https://static.au-uw2-stg.autodesk.com/Class_Presentation_CP502618_ClassPresentationCP502618-Odugu-AU2022.pdf
-- https://help.solidworks.com/2023/English/solidworks/sldworks/c_Mold_Analysis_Tools.htm
-- https://www.goengineer.com/blog/solidworks-mold-tools-shut-off-surfaces-parting-surfaces-tooling-split
-- https://help.solidworks.com/2022/English/SolidWorks/sldworks/c_Mold_Design.htm
+- (fonte em procedencia.md) (403 na leitura; usei o resumo de busca)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://www.hitachi.co.jp/products/it/industry/solution/swplastics/price.html
-- https://store.trimech.com/products/solidworks-plastics-standard
-- https://visiativ.co.uk/solutions/solidworks-plastics-simulation/
-- https://www.autodesk.com/products/moldflow
-- https://www.ki-syndikat.de/tools/autodesk-moldflow/
-- https://www.cdwg.com/product/autodesk-moldflow-insight-premium-subscription-renewal-annual-1-seat/9116016
-- https://support.ptc.com/help/emx/r15.0.0.0/en/EMX/docu_workflow_the-principal-workflow.html
-- https://www.ptc.com/en/store/products/creo/creo-expert-moldbase-extension
-- https://blogs.sw.siemens.com/nx-manufacturing/webinar-improve-mold-design-productivity-through-digitalization-knowledge-driven-automation/
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 
 **Mercado**
 - https://www.globenewswire.com/fr/news-release/2025/11/19/3191125/0/en/Simulation-Software-Market-to-Reach-USD-56-13-Billion-by-2033-Driven-by-Rising-Demand-for-Cost-Efficient-Product-Design-and-Testing-Research-by-SNS-Insider.html
@@ -913,14 +913,14 @@ As estimativas variam muito por definição:
 
 **Handoff**
 - **Resultado:** relatório de benchmarking para os 8 itens, com a seção de mercado e o JSON de ajustes.
-- **Evidência:** ~45 buscas e leituras web. Os itens de maior confiança são licenças (Netgen, CfdOF, Gmsh, OpenFOAM, cfMesh, WireViz), preços da Fusion e dos planos de SW Plastics, e o algoritmo de *draping* da Creo.
+- **Evidência:** ~45 buscas e leituras web. Os itens de maior confiança são licenças (Netgen, CfdOF, Gmsh, OpenFOAM, cfMesh, WireViz), preços da CAD avançado D e dos planos de CAD avançado A Plastics, e o algoritmo de *draping* da CAD avançado F.
 - **Arquivos alterados:** nenhum.
 - **Verificações feitas:** leitura de `backlog.md`, `modulos-novos.md` e áreas do `backlog.json` (somente leitura).
 - **Falhas:**
-  - o wiki do FreeCAD e o site da Autodesk bloquearam a leitura direta;
-  - as páginas de ajuda do SOLIDWORKS vieram vazias;
+  - o wiki do FreeCAD e o site da fornecedor de CAD avançado bloquearam a leitura direta;
+  - as páginas de ajuda do CAD avançado A vieram vazias;
   - os PDFs da IBM não abriram (sem leitor de PDF);
-  - o conteúdo de CATIA Harness/CPD vem de cursos e resumos de busca.
+  - o conteúdo de CAD avançado B Harness/CPD vem de cursos e resumos de busca.
 - **Riscos:**
   - preços de revenda, que variam por região;
   - a licença exata do CalculiX (GPL-2 só ou 2+) e do fTetWild;

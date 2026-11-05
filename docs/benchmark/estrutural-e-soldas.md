@@ -5,18 +5,18 @@
 
 ## Como cada ferramenta conduz o fluxo
 
-- **CATIA V5:** Structure Design cria perfis sobre esqueleto e trata pontas por endcuts (snipe, trim, weld); Weld Design define os cordões. A organização em Product é manual.
-- **SOLIDWORKS:** Weldment: um part multicorpo com membros estruturais, Trim/Extend com folga de solda, gussets, end caps e cordões; a Cut List agrupa corpos iguais e alimenta os desenhos (vistas por corpo e balões ligados à lista).
-- **Inventor:** Frame Generator gera uma montagem com um arquivo por membro, a partir de um esqueleto; tratamentos de ponta (miter, notch, corner joint, trim/extend) e informações por membro.
+- **CAD avançado B:** Structure Design cria perfis sobre esqueleto e trata pontas por endcuts (snipe, trim, weld); Weld Design define os cordões. A organização em Product é manual.
+- **CAD avançado A:** Weldment: um part multicorpo com membros estruturais, Trim/Extend com folga de solda, gussets, end caps e cordões; a Cut List agrupa corpos iguais e alimenta os desenhos (vistas por corpo e balões ligados à lista).
+- **CAD avançado C:** Frame Generator gera uma montagem com um arquivo por membro, a partir de um esqueleto; tratamentos de ponta (miter, notch, corner joint, trim/extend) e informações por membro.
 
 ## O que adotar no Fenkra
 
-- O "Estrutura Pai" do contexto do usuário: um modelo mestre multicorpo (como o SW) que gera montagem com instâncias (como o Inventor) e reconhece corpos iguais.
-- Desenho por corpo com balões ligados à lista de corte (SW).
+- O "Estrutura Pai" do contexto do usuário: um modelo mestre multicorpo (como o CAD avançado A) que gera montagem com instâncias (como o CAD avançado C) e reconhece corpos iguais.
+- Desenho por corpo com balões ligados à lista de corte (CAD avançado A).
 
 ## O que evitar
 
-- Um arquivo por membro sem agrupamento de iguais (explosão de arquivos do Inventor).
+- Um arquivo por membro sem agrupamento de iguais (explosão de arquivos do CAD avançado C).
 
 ## Paridade
 

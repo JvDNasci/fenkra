@@ -25,7 +25,7 @@ Criar submontagens de solda selecionáveis como subgrupos, para gerar montagens 
 
 Permitir que placas e nervuras sejam criadas como outros Parts, integrados ao módulo estrutural.
 
-A ideia é superar limitações de sistemas atuais (como Weldment do SOLIDWORKS) e se aproximar da filosofia de sistemas de alto nível (CATIA V5, NX, CREO), com uma arquitetura moderna e dinâmica.
+A ideia é superar limitações de sistemas atuais (como Weldment do CAD avançado A) e se aproximar da filosofia de sistemas de alto nível (CAD avançado B, CAD avançado G, CAD avançado F), com uma arquitetura moderna e dinâmica.
 
 2. ESTRUTURA PAI – O MODELO MESTRE ESTRUTURAL
 
@@ -338,7 +338,7 @@ Gerar Drawings.
 
 Exportar DXF/DWG para corte.
 
-6. COMPORTAMENTO DINÂMICO – COMO NO CATIA V5
+6. COMPORTAMENTO DINÂMICO – COMO NO CAD avançado B
 
 6.1 Atualização automática
 

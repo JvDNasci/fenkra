@@ -3,9 +3,9 @@
 > Relatório de pesquisa para gravar em `docs/pesquisa/estrutural.md`. Nenhum arquivo foi criado ou alterado.
 > **[V]** = confirmado em fonte lida (lista na seção 5). **[C]** = conhecimento geral ou inferência minha, não confirmado em fonte.
 > Limitações da pesquisa:
-> - A ajuda online do SolidWorks (`help.solidworks.com`) só devolveu o menu do site, porque o texto é montado por JavaScript. Os detalhes do SW vêm de resumos de busca da própria ajuda, de blogs de revendas (CATI, GoEngineer) e de posts da comunidade.
-> - Para a CATIA V5 li o guia oficial *Structure Design* da R14 (PDF), as descrições de produto da 3DS (SR1, WD1, Frame Structure Designer) e a documentação da API (pycatia/CAA).
-> - Os espelhos `catiadoc.free.fr` estavam inacessíveis.
+> - A ajuda online do CAD avançado A (`help.CAD avançado A.com`) só devolveu o menu do site, porque o texto é montado por JavaScript. Os detalhes do CAD avançado A vêm de resumos de busca da própria ajuda, de blogs de revendas (CATI, GoEngineer) e de posts da comunidade.
+> - Para a CAD avançado B li o guia oficial *Structure Design* da R14 (PDF), as descrições de produto da 3DS (SR1, WD1, Frame Structure Designer) e a documentação da API (pycatia/CAA).
+> - Os espelhos `CAD avançado Bdoc.free.fr` estavam inacessíveis.
 > - O guia da R14 é antigo, mas os princípios (suporte, âncora, cutback recalculado, grade) seguem valendo.
 > - Onde um achado do código do Fenkra é inferência de leitura, está marcado como "provável" e vem com o teste que o confirma.
 
@@ -20,8 +20,8 @@
 3. Os cantos têm 4 modos: Nenhum, Meia-esquadria, Aparar e Encaixe. Há regra por par de linhas (`StructJoint`) e folga de solda.
 4. Placa de extremidade e reforço existem, mas são localizados por um ponto fixo no espaço, não por referência.
 5. `structural_groups` agrupa peças iguais por assinatura, numera os itens e alimenta a lista de corte, os balões e `estrutura_para_montagem` (peças `.fkp` + montagem `.fka`).
-6. O que o CATIA V5 dá de filosofia (grade, cutback recalculado, âncora nomeada, falha isolada por elemento) está só em parte no Fenkra.
-7. O que SW/Inventor dão de inteligência também está só em parte: gerenciador de cantos, aparar até face/corpo, comprimento de corte e ângulos automáticos, `CUTDETAIL`, sub-soldagens, cordões 3D e estado de falha por membro.
+6. O que o CAD avançado B dá de filosofia (grade, cutback recalculado, âncora nomeada, falha isolada por elemento) está só em parte no Fenkra.
+7. O que CAD avançado A/CAD avançado C dão de inteligência também está só em parte: gerenciador de cantos, aparar até face/corpo, comprimento de corte e ângulos automáticos, `CUTDETAIL`, sub-soldagens, cordões 3D e estado de falha por membro.
 8. O ponto mais frágil é a identidade. Placa e reforço apontam para um ponto cru, a assinatura de grupo não vê o formato das pontas, e a numeração dos itens muda quando um comprimento muda.
 9. A lista de corte usa o comprimento da linha de centro, não o comprimento de corte (ponta longa). Isso erra o número de barras e a ordem de compra.
 10. Soldagem é só símbolo ISO 2553 no desenho/PMI. Não há cordão 3D, preparação de junta, lista de soldas nem submontagem de solda.
@@ -58,17 +58,17 @@
 
 ## 2. Fichas por comando/função
 
-### 2.1 Esqueleto (linhas guia) e conjuntos geométricos (CATIA: Skeleton / Geometrical Set / "Select Support" / SW: croqui 3D + Structure System / Inventor: peça-esqueleto / outros: Solid Edge path segments, Onshape path sketch / Fenkra: `StructMember.paths: Vec<CurveRef>`)
+### 2.1 Esqueleto (linhas guia) e conjuntos geométricos (CAD avançado B: Skeleton / Geometrical Set / "Select Support" / CAD avançado A: croqui 3D + Structure System / CAD avançado C: peça-esqueleto / outros: CAD avançado H path segments, CAD avançado E path sketch / Fenkra: `StructMember.paths: Vec<CurveRef>`)
 
 - **O que faz:** define o "caminho" onde cada barra será colocada. É a fonte de verdade da geometria da estrutura. Mudar o esqueleto deve mudar as barras.
 
-- **CATIA V5 — no detalhe:**
+- **CAD avançado B — no detalhe:**
   - O Shape (membro) é criado de duas maneiras [V]: *Select Support* (linha, spline, arco etc.) ou *Point-to-point*. Nos dois casos o suporte pode vir de uma grade, de wireframe ou de outra estrutura.
   - A multisseleção de suportes cria vários membros de uma vez [V].
   - A opção de sessão "Keep link with selected object" mantém a associatividade com o suporte. "Synchronize all external references for update" sincroniza referências externas na atualização [V].
   - Com o vínculo desligado, o membro fica "não restringido". Só então o comando *Stretch* funciona [V].
   - A transição de ponto-a-ponto para suporte é permitida na edição. A inversa não [V].
-  - Na prática (boas práticas de CATIA [C]), o esqueleto mora num *Geometrical Set* dedicado, dentro da peça ou numa peça-esqueleto publicada. As barras referenciam elementos **publicados**. Se o esqueleto muda, o update propaga; se uma linha some, só aquele membro fica em erro no diagnóstico de update.
+  - Na prática (boas práticas de CAD avançado B [C]), o esqueleto mora num *Geometrical Set* dedicado, dentro da peça ou numa peça-esqueleto publicada. As barras referenciam elementos **publicados**. Se o esqueleto muda, o update propaga; se uma linha some, só aquele membro fica em erro no diagnóstico de update.
   - A API de CAA/pycatia mostra variantes de colocação [V]:
     - dois pontos;
     - ponto + ponto sobre curva (com razão ou comprimento);
@@ -79,21 +79,21 @@
     - interseção de duas superfícies;
     - entre dois membros com plano de referência.
 
-- **SolidWorks — no detalhe:**
+- **CAD avançado A — no detalhe:**
   - O esqueleto é um croqui 2D/3D (ou arestas) [V]. Cada segmento ganha um corpo.
   - O *Structure System* (2019+) é um ambiente de croqui 3D para pôr membros primários e secundários e gerenciar cantos [V].
   - Um grupo de membros precisa ser um caminho contínuo ou linhas paralelas [V] (GoEngineer). Pernas verticais soltas formam grupos separados para poderem ser giradas/espelhadas individualmente.
 
-- **Inventor — no detalhe:**
+- **CAD avançado C — no detalhe:**
   - Exige uma peça-esqueleto. "Cada membro precisa ter uma linha correspondente no esqueleto" [V]. O esqueleto pode vir de um modelo existente ou ser definido no contexto da montagem, juntando linhas e arestas de várias peças.
   - Duas formas de colocação [V]: sobre arestas (2D/3D, arcos, splines, com seleção em cadeia ou por croqui) ou entre dois pontos. Não se misturam arestas e pontos.
   - Opção *Merge*: várias arestas conectadas viram **um** membro (varredura). Nesse caso não há tratamento automático de pontas [V].
   - Diagnóstico de esqueleto [V]: a lista de erros distingue "esqueleto removido", "linhas de croqui colineares", "geometria de referência ausente" e "membros ausentes".
 
 - **Outros:**
-  - Solid Edge [V]: segmentos associativos (linear/curvo/dobrado) mais pontos 3D de conexão (OrientXpres), em ambiente "Frame Design" dentro da montagem.
-  - Onshape [V]: croqui de caminho + croqui de perfil, escolhendo qual ponto do perfil fica no caminho.
-  - Creo AFX [V]: perfis sobre curva reta, dois pontos ou croqui curvo.
+  - CAD avançado H [V]: segmentos associativos (linear/curvo/dobrado) mais pontos 3D de conexão (OrientXpres), em ambiente "Frame Design" dentro da montagem.
+  - CAD avançado E [V]: croqui de caminho + croqui de perfil, escolhendo qual ponto do perfil fica no caminho.
+  - CAD avançado F AFX [V]: perfis sobre curva reta, dois pontos ou croqui curvo.
 
 - **Fenkra hoje:**
   - `paths: Vec<CurveRef>` (`doc.rs:1430`) aceita referências geométricas e curvas do app.
@@ -104,7 +104,7 @@
   - Não existe conjunto geométrico "Esqueleto" ordenado/não ordenado, nem publicação do esqueleto, nem grade.
 
 - **Melhor prática para o Fenkra:**
-  - Fluxo: **suporte** (linhas/arestas/cadeia/croqui, ou dois pontos) → **modo** (uma barra por linha | cadeia em barras retas | cadeia em um corpo varrido, como o *Merge* do Inventor) → **parâmetros** (perfil, ancoragem, rotação) → **avançado** (grupos, prolongamentos, cantos).
+  - Fluxo: **suporte** (linhas/arestas/cadeia/croqui, ou dois pontos) → **modo** (uma barra por linha | cadeia em barras retas | cadeia em um corpo varrido, como o *Merge* do CAD avançado C) → **parâmetros** (perfil, ancoragem, rotação) → **avançado** (grupos, prolongamentos, cantos).
   - Regras:
     - A unidade de erro é a **linha**. Cada linha guarda seu estado (`ok` | `perdida` | `degenerada` | `colinear`) e o comando devolve os corpos que pôde, com aviso.
     - O ângulo de corte de polilinha vira parâmetro do documento (padrão 5°, não 11,5° fixo), e o vértice de fechamento entra no teste.
@@ -116,22 +116,22 @@
 
 ---
 
-### 2.2 Grade e pontos de referência (CATIA: Grid / SW: Planos e pontos de referência + croqui 3D / Inventor: pontos de trabalho / outros: Creo "datum points" / Fenkra: ausente)
+### 2.2 Grade e pontos de referência (CAD avançado B: Grid / CAD avançado A: Planos e pontos de referência + croqui 3D / CAD avançado C: pontos de trabalho / outros: CAD avançado F "datum points" / Fenkra: ausente)
 
 - **O que faz:** cria um reticulado de planos, linhas e pontos para ancorar o esqueleto em espaçamentos regulares (colunas, vãos, andares) e permitir alterar o projeto mexendo na grade.
 
-- **CATIA V5 — no detalhe** [V, guia R14]:
+- **CAD avançado B — no detalhe** [V, guia R14]:
   - Comando *Grid*. O diálogo pede um nome (aparece na árvore) e um sistema **cartesiano ou polar**.
   - **Modo relativo** (padrão): mover um plano desloca os planos que dependem dele. **Modo absoluto**: cada plano se posiciona em relação à origem e pode ser movido independentemente.
   - Entradas: origem (coordenadas ou ponto), espaçamento por eixo e **número de pontos** por eixo.
   - A grade é feita de elementos wireframe (linhas, pontos, planos). Os membros se apoiam em linhas da grade, e "mudanças de projeto entram modificando a grade e atualizando a estrutura".
   - O descritivo do produto fala em colocação por métodos *linear*, *direcional* e *ponto-a-ponto* [V].
 
-- **SolidWorks — no detalhe:** não há grade; usa-se croqui 3D com planos/pontos de referência. O Structure System aceita membros ligados por pontos [C].
+- **CAD avançado A — no detalhe:** não há grade; usa-se croqui 3D com planos/pontos de referência. O Structure System aceita membros ligados por pontos [C].
 
-- **Inventor — no detalhe:** não há comando de grade; o esqueleto é feito com croquis e pontos de trabalho [C].
+- **CAD avançado C — no detalhe:** não há comando de grade; o esqueleto é feito com croquis e pontos de trabalho [C].
 
-- **Outros:** o Creo AFX tem "projeto" com perfis e parâmetros de projeto [V, só títulos]. Nenhum outro CAD pesquisado tem equivalente direto da grade CATIA.
+- **Outros:** o CAD avançado F AFX tem "projeto" com perfis e parâmetros de projeto [V, só títulos]. Nenhum outro CAD pesquisado tem equivalente direto da grade CAD avançado B.
 
 - **Fenkra hoje:** não existe. Linhas do esqueleto vêm de `RefKind::LinePoints` com `PointRef::Fixed` ou de croquis. Não há elemento "Grade".
 
@@ -143,11 +143,11 @@
 
 ---
 
-### 2.3 Membro estrutural por perfil (CATIA: Shape / SW: Structural Member / Inventor: Insert Frame / outros: Solid Edge Frame, Onshape Frame, Creo AFX Profile / Fenkra: `StructMember`)
+### 2.3 Membro estrutural por perfil (CAD avançado B: Shape / CAD avançado A: Structural Member / CAD avançado C: Insert Frame / outros: CAD avançado H Frame, CAD avançado E Frame, CAD avançado F AFX Profile / Fenkra: `StructMember`)
 
 - **O que faz:** extruda (ou varre) um perfil padronizado ao longo de cada linha do esqueleto, produzindo um corpo por barra.
 
-- **CATIA V5 — no detalhe** [V]:
+- **CAD avançado B — no detalhe** [V]:
   - O Shape pede seção (do catálogo, ex.: AISC `L5x5x0.5`), material (par material-classe, recurso de projeto), ponto de ancoragem e orientação.
   - A seção escolhida é copiada para uma pasta "resolvida", que alimenta a lista de seções do diálogo.
   - As propriedades geométricas e mecânicas da seção podem ser consultadas pelo menu de contexto.
@@ -157,7 +157,7 @@
   - *Split* corta membros por wireframe e o original é redefinido, com um novo elemento que herda features. *Merge* une dois membros cujas especificações têm tangência; o segundo perde suas features.
   - O descritivo do produto lista mover, girar e espelhar, e trocar seção, limites, âncora, espessura, orientação e material [V].
 
-- **SolidWorks — no detalhe:**
+- **CAD avançado A — no detalhe:**
   - Diálogo *Structural Member* [V]: padrão (ISO, ANSI etc.) → tipo → tamanho.
   - *Apply corner treatment* pode ser desmarcado e o canto tratado depois (por exemplo no Trim/Extend).
   - **Grupos**: caminho contínuo ou linhas paralelas; cada grupo tem suas próprias configurações; "novo grupo" no mesmo comando.
@@ -166,7 +166,7 @@
   - Perfis personalizados são uma peça de biblioteca `.sldlfp`. A pasta onde ficam corresponde a *tipo*, a pasta acima a *padrão*; o ponto de perfuração padrão é a origem do croqui; desde 2014 uma biblioteca guarda várias configurações [V].
   - Em 2023 é possível mudar o tamanho de vários membros iguais por configuração [V]. Em 2025 há "favoritos" de perfis [V].
 
-- **Inventor — no detalhe** [V]:
+- **CAD avançado C — no detalhe** [V]:
   - Diálogo *Insert*: Padrão / Família / Tamanho / Material / Aparência (do Content Center). O conta-gotas copia tudo, só o membro ou só a orientação de outro membro.
   - Orientação: deslocamento vertical/horizontal, ângulo, *Align* (a face plana, aresta linear, eixo, plano ou linha de croqui) e *Mirror* (indisponível junto com Align).
   - *Custom Point*: ponto de inserção alternativo definido na criação da seção.
@@ -178,10 +178,10 @@
   - *Promote/Demote* reorganizam membros entre subconjuntos.
 
 - **Outros:**
-  - Solid Edge [V]: seção na barra de comando, depois o tratamento de canto; as opções de quadro incluem raio e *coping*.
-  - Onshape [V]: perfis ISO/ANSI/AS/AISC/8020 e perfis personalizados de croqui em outro documento; grupos trimados pela hierarquia estrutural (elementos "dominantes" primeiro).
-  - NX Structure Designer [V, resumo de busca]: assistente de desenho de quadro 2D, orientação 3D automática por regras do usuário e tratamentos de canto.
-  - Creo AFX [V]: perfis curvados sobre curvas, perfis de chapa, padrões de pontos nas extremidades.
+  - CAD avançado H [V]: seção na barra de comando, depois o tratamento de canto; as opções de quadro incluem raio e *coping*.
+  - CAD avançado E [V]: perfis ISO/ANSI/AS/AISC/8020 e perfis personalizados de croqui em outro documento; grupos trimados pela hierarquia estrutural (elementos "dominantes" primeiro).
+  - CAD avançado G Structure Designer [V, resumo de busca]: assistente de desenho de quadro 2D, orientação 3D automática por regras do usuário e tratamentos de canto.
+  - CAD avançado F AFX [V]: perfis curvados sobre curvas, perfis de chapa, padrões de pontos nas extremidades.
 
 - **Fenkra hoje:**
   - Painel em `st_ui.rs:21`. Criação em `app.rs:1516`: família padrão = a primeira, tamanho = índice 3.
@@ -194,10 +194,10 @@
 - **Melhor prática:**
   - Fluxo: **suporte** → **modo** → **parâmetros** (padrão/família/tamanho/material/aparência) → **avançado** (ancoragem, rotação, espelhar, alinhar a, grupos, atributos).
   - Regras:
-    - Orientação por regra pública e visível (a regra CATIA: "alma para Y se o suporte é vertical, senão para Z"), independente do sentido do desenho.
+    - Orientação por regra pública e visível (a regra CAD avançado B: "alma para Y se o suporte é vertical, senão para Z"), independente do sentido do desenho.
     - Botões *Inverter* e *Redefinir*.
     - Prévia 3D da seção sobre a linha antes de confirmar.
-    - Cada linha pode ter override de rotação/espelho (equivalente aos grupos do SW).
+    - Cada linha pode ter override de rotação/espelho (equivalente aos grupos do CAD avançado A).
     - Atributos de membro (tipo, número de marca) em campo próprio, propagados à lista de corte.
   - Testes:
     - quadro de cantoneiras desenhado horário e anti-horário dá a mesma orientação em relação ao interior;
@@ -206,23 +206,23 @@
 
 ---
 
-### 2.4 Catálogo de perfis (CATIA: Section Catalog / SW: Weldment Profiles / Inventor: Content Center + Structural Shape Authoring / outros: Onshape perfil de croqui, Creo AFX Profile Library / Fenkra: `structural::builtin` + `user_profiles`)
+### 2.4 Catálogo de perfis (CAD avançado B: Section Catalog / CAD avançado A: Weldment Profiles / CAD avançado C: Content Center + Structural Shape Authoring / outros: CAD avançado E perfil de croqui, CAD avançado F AFX Profile Library / Fenkra: `structural::builtin` + `user_profiles`)
 
 - **O que faz:** fornece famílias e tamanhos padronizados (tubos, I, U, L, barras…) com cotas, propriedades de seção e pontos de ancoragem.
 
-- **CATIA V5 — no detalhe** [V]:
+- **CAD avançado B — no detalhe** [V]:
   - O catálogo é paramétrico, baseado em tabelas de projeto (*design tables*). Há bibliotecas padrão (I, U, T, L, tubo retangular, tubo redondo etc.) e navegador de catálogo.
   - **Seção do usuário**: desenha-se um croqui no plano xy, em escala real, e salva-se como CATPart na pasta de seções.
   - **Nomear características da seção**: cada aresta recebe um nome padronizado (borda da alma, borda da mesa, face moldada…). Isso permite **trocar um perfil por outro** sem perder referências.
   - **Pontos de ancoragem** definidos por seção do usuário (pontos verdes no diálogo).
   - Catálogos paramétricos podem gerar "peças resolvidas".
-  - O Frame Structure Designer (3DEXPERIENCE) calcula comprimento, superfície, volume e peso e gera relatórios por modelo da empresa [V].
+  - O Frame Structure Designer (plataforma PLM avançada) calcula comprimento, superfície, volume e peso e gera relatórios por modelo da empresa [V].
 
-- **SolidWorks — no detalhe** [V]: `.sldlfp` com croqui, pontos de perfuração, pasta = padrão/tipo; configurações por tabela de projeto; pastas configuradas em *File Locations → Weldment Profiles*. Pacotes de perfis vêm do SOLIDWORKS Content (GoEngineer).
+- **CAD avançado A — no detalhe** [V]: `.sldlfp` com croqui, pontos de perfuração, pasta = padrão/tipo; configurações por tabela de projeto; pastas configuradas em *File Locations → Weldment Profiles*. Pacotes de perfis vêm do CAD avançado A Content (GoEngineer).
 
-- **Inventor — no detalhe** [V]: perfis estruturais publicados no Content Center (biblioteca leitura/escrita). O comando *Structural Shape Authoring* publica o perfil, e o entalhe (*notch*) é um perfil de corte desenhado no croqui-base com cotas **ligadas aos parâmetros da família** (ex.: entalhe = altura/3).
+- **CAD avançado C — no detalhe** [V]: perfis estruturais publicados no Content Center (biblioteca leitura/escrita). O comando *Structural Shape Authoring* publica o perfil, e o entalhe (*notch*) é um perfil de corte desenhado no croqui-base com cotas **ligadas aos parâmetros da família** (ex.: entalhe = altura/3).
 
-- **Outros:** Onshape [V]: perfis padrão ISO/ANSI/AS/AISC/8020, mais perfis personalizados de croqui em documento compartilhado ("biblioteca da empresa"). Creo AFX [V]: aço estrutural, alumínio com T-slot e perfis personalizados (seções de alumínio só a partir da 8.0.5.0).
+- **Outros:** CAD avançado E [V]: perfis padrão ISO/ANSI/AS/AISC/8020, mais perfis personalizados de croqui em documento compartilhado ("biblioteca da empresa"). CAD avançado F AFX [V]: aço estrutural, alumínio com T-slot e perfis personalizados (seções de alumínio só a partir da 8.0.5.0).
 
 - **Fenkra hoje:**
   - `builtin()` (`structural.rs:61`): 10 famílias, cada uma com 3 a 7 tamanhos. Os dados são em mm, de "medidas comerciais usuais", sem fonte registrada.
@@ -244,21 +244,21 @@
 
 ---
 
-### 2.5 Ancoragem e orientação (CATIA: Anchor point / Orientation / SW: Locate Profile + Mirror + Rotation / Inventor: Insert point + Offset + Angle + Align + Mirror / outros: Onshape profile-point-on-path / Fenkra: `anchor`, `angle`, `off_x/off_y`)
+### 2.5 Ancoragem e orientação (CAD avançado B: Anchor point / Orientation / CAD avançado A: Locate Profile + Mirror + Rotation / CAD avançado C: Insert point + Offset + Angle + Align + Mirror / outros: CAD avançado E profile-point-on-path / Fenkra: `anchor`, `angle`, `off_x/off_y`)
 
 - **O que faz:** define qual ponto da seção cai sobre a linha guia e como a seção gira em torno dela.
 
-- **CATIA V5 — no detalhe** [V]:
+- **CAD avançado B — no detalhe** [V]:
   - Âncora escolhida num menu ou clicando nos pontos verdes da prévia da seção (o ponto que "toca" a linha de suporte).
   - Orientação em passos de 90° (passo mudável para 1°), *Flip* (espelha em torno do eixo vertical da seção) e *Reset*.
   - Regra de orientação padrão: se a linha é vertical, a alma (eixo V local) aponta para o eixo Y do documento; se não, para o eixo Z.
   - A seção do usuário traz seus pontos de ancoragem definidos na preparação.
 
-- **SolidWorks — no detalhe** [V]: *Locate Profile* (ponto de perfuração sobre a seção), *espelhar* e *eixo vertical* para inverter o perfil, *ângulo de rotação*. O GoEngineer observa que pernas verticais precisam de grupo próprio para poderem ser giradas/espelhadas individualmente.
+- **CAD avançado A — no detalhe** [V]: *Locate Profile* (ponto de perfuração sobre a seção), *espelhar* e *eixo vertical* para inverter o perfil, *ângulo de rotação*. O GoEngineer observa que pernas verticais precisam de grupo próprio para poderem ser giradas/espelhadas individualmente.
 
-- **Inventor — no detalhe** [V]: pontos de inserção (nove, mais "ponto personalizado" se a seção define um), deslocamento vertical/horizontal com sinal (0 = encosta na aresta do modelo), ângulo (manipulador, passos de 45° com Shift), *Align* a face/aresta/eixo/plano/linha, *Mirror*.
+- **CAD avançado C — no detalhe** [V]: pontos de inserção (nove, mais "ponto personalizado" se a seção define um), deslocamento vertical/horizontal com sinal (0 = encosta na aresta do modelo), ângulo (manipulador, passos de 45° com Shift), *Align* a face/aresta/eixo/plano/linha, *Mirror*.
 
-- **Outros:** Onshape [V]: escolhe-se qual ponto do perfil fica sobre o caminho. Solid Edge [V]: a orientação do segmento pode ser travada paralela a um eixo/plano (OrientXpres).
+- **Outros:** CAD avançado E [V]: escolhe-se qual ponto do perfil fica sobre o caminho. CAD avançado H [V]: a orientação do segmento pode ser travada paralela a um eixo/plano (OrientXpres).
 
 - **Fenkra hoje:**
   - `anchor` 0–9 (centro, 8 pontos da caixa, centróide), `angle` em graus, `off_x/off_y` (`doc.rs:1436`–`1441`).
@@ -275,15 +275,15 @@
 
 ---
 
-### 2.6 Prolongar e encurtar (CATIA: Extend / Stretch / SW: Allow Extension, offset / Inventor: Lengthen/Shorten / Fenkra: `ext1`, `ext2`)
+### 2.6 Prolongar e encurtar (CAD avançado B: Extend / Stretch / CAD avançado A: Allow Extension, offset / CAD avançado C: Lengthen/Shorten / Fenkra: `ext1`, `ext2`)
 
 - **O que faz:** acrescenta ou retira comprimento numa ponta, sem mexer no esqueleto.
 
-- **CATIA V5** [V]: *Extend* na árvore abre "Limits Definition" (valores de deslocamento e/ou troca do limite). *Stretch* só vale para membros lineares não restringidos.
+- **CAD avançado B** [V]: *Extend* na árvore abre "Limits Definition" (valores de deslocamento e/ou troca do limite). *Stretch* só vale para membros lineares não restringidos.
 
-- **SolidWorks** [V]: o *Allow extension* do Trim/Extend permite que o segmento **alongue** até o limite. Desmarcado, só aparam.
+- **CAD avançado A** [V]: o *Allow extension* do Trim/Extend permite que o segmento **alongue** até o limite. Desmarcado, só aparam.
 
-- **Inventor** [V]: *Lengthen/Shorten* por uma ou duas pontas (positivo alonga, negativo encurta). Falha se há tratamentos de ponta prévios, que precisam ser suprimidos ou removidos. O fim recebe um nó na árvore.
+- **CAD avançado C** [V]: *Lengthen/Shorten* por uma ou duas pontas (positivo alonga, negativo encurta). Falha se há tratamentos de ponta prévios, que precisam ser suprimidos ou removidos. O fim recebe um nó na árvore.
 
 - **Fenkra hoje:** `ext1/ext2` aplicados a todo o comando. Veja o bug provável 4 (2.3). O comprimento de corte da lista soma o prolongamento explícito (`member_length`, `lib.rs:4945`).
 
@@ -295,20 +295,20 @@
 
 ---
 
-### 2.7 Canto em meia-esquadria (CATIA: Cutback "Miter cut" / SW: End Miter / Inventor: Miter / outros: Solid Edge Miter, Onshape mitered / Fenkra: `CornerMode::MeiaEsquadria`)
+### 2.7 Canto em meia-esquadria (CAD avançado B: Cutback "Miter cut" / CAD avançado A: End Miter / CAD avançado C: Miter / outros: CAD avançado H Miter, CAD avançado E mitered / Fenkra: `CornerMode::MeiaEsquadria`)
 
 - **O que faz:** corta as duas pontas pela bissetriz para encontrarem-se rentes.
 
-- **CATIA V5** [V]: o *Cutback* "Miter cut" corta o membro com um plano; a diferença de resultado depende de qual membro se seleciona primeiro. Não se aplica miter a um membro **já** mitrado: remove-se o corte ("None") e aplica-se a ambos. Normal/Weld cut podem ser aplicados a um membro já mitrado. Membros curvos não podem ser cortados. O offset vale para normal, weld e miter. O cutback é **recalculado** quando o membro muda.
+- **CAD avançado B** [V]: o *Cutback* "Miter cut" corta o membro com um plano; a diferença de resultado depende de qual membro se seleciona primeiro. Não se aplica miter a um membro **já** mitrado: remove-se o corte ("None") e aplica-se a ambos. Normal/Weld cut podem ser aplicados a um membro já mitrado. Membros curvos não podem ser cortados. O offset vale para normal, weld e miter. O cutback é **recalculado** quando o membro muda.
 
-- **SolidWorks** [V]: *End Miter* no Trim/Extend ou no tratamento de canto da criação. Para seções de tamanhos diferentes, *Angle Bisector*; para tamanhos iguais, *Full Flush*. Há folga de solda. A ordem de corte pode ser invertida. Para três membros num canto, ajusta-se a ordem de corte (ex.: um membro com ordem 2).
+- **CAD avançado A** [V]: *End Miter* no Trim/Extend ou no tratamento de canto da criação. Para seções de tamanhos diferentes, *Angle Bisector*; para tamanhos iguais, *Full Flush*. Há folga de solda. A ordem de corte pode ser invertida. Para três membros num canto, ajusta-se a ordem de corte (ex.: um membro com ordem 2).
 
-- **Inventor** [V]: *Miter* simétrico (dois membros no mesmo ângulo, folga total = *Miter Cut Extension*) ou de um lado (folga só no primeiro membro). *Bi-sect Miter* marcado faz um corte angular simples que **não** une as arestas; desmarcado (padrão) calcula o ângulo para um encontro aresta-a-aresta. Falha com membros paralelos ou colineares. Um membro mitrado fica assimétrico e erra quando reutilizado em espelho (aviso oficial). Com miter nas duas pontas, o comprimento é calculado sozinho.
+- **CAD avançado C** [V]: *Miter* simétrico (dois membros no mesmo ângulo, folga total = *Miter Cut Extension*) ou de um lado (folga só no primeiro membro). *Bi-sect Miter* marcado faz um corte angular simples que **não** une as arestas; desmarcado (padrão) calcula o ângulo para um encontro aresta-a-aresta. Falha com membros paralelos ou colineares. Um membro mitrado fica assimétrico e erra quando reutilizado em espelho (aviso oficial). Com miter nas duas pontas, o comprimento é calculado sozinho.
 
-- **Outros:** Solid Edge [V]: Miter, Butt1, Butt2, Extend/Trim, None. Onshape [V]: mitered/butt/coped, com *Corner Override* por junta.
+- **Outros:** CAD avançado H [V]: Miter, Butt1, Butt2, Extend/Trim, None. CAD avançado E [V]: mitered/butt/coped, com *Corner Override* por junta.
 
 - **Fenkra hoje:**
-  - `lib.rs:3820`: plano na bissetriz `n = unit(di − dj)`, deslocado `gap/2` para cada lado. Equivale ao "bisect" do Inventor/SW: só a linha de centro é bisseccionada.
+  - `lib.rs:3820`: plano na bissetriz `n = unit(di − dj)`, deslocado `gap/2` para cada lado. Equivale ao "bisect" do CAD avançado C/CAD avançado A: só a linha de centro é bisseccionada.
   - **Não há "rente" (full flush)** para seções diferentes (por exemplo tubo 60 com tubo 40): as faces externas não se encontram.
   - O teste `estrutural_quadro_cantos_placa_reforco` verifica a conservação do volume com meia-esquadria (volume = área × linha de centro).
   - **Bug provável 6:** o comprimento de corte mostrado é o da linha de centro (400 mm), mas o sólido vai de −20 a 420 mm no eixo local (o teste `lib.rs:5389` confirma o *bbox*). O serralheiro precisa de 440 mm de ponta longa (ver 2.15).
@@ -324,17 +324,17 @@
 
 ---
 
-### 2.8 Canto de topo (butt) (CATIA: Cutback "Normal cut" / "Weld cut" / SW: End Butt1, End Butt2 / Inventor: Corner Joint (antes Trim To Frame) / outros: Solid Edge Butt1/Butt2 / Fenkra: `CornerMode::Aparar`, `StructJoint.first`)
+### 2.8 Canto de topo (butt) (CAD avançado B: Cutback "Normal cut" / "Weld cut" / CAD avançado A: End Butt1, End Butt2 / CAD avançado C: Corner Joint (antes Trim To Frame) / outros: CAD avançado H Butt1/Butt2 / Fenkra: `CornerMode::Aparar`, `StructJoint.first`)
 
 - **O que faz:** um membro atravessa (ou vai até a face externa) e o outro para nele. O corte do segundo é plano ou acompanha a face do primeiro.
 
-- **CATIA V5** [V]: "Normal cut" é perpendicular ao eixo do suporte. "Weld cut" usa um plano de corte (que pode ser plano, face, superfície, placa ou outro membro) e deixa a ponta pronta para solda. Os dois vêm com *offset*. O item "Remove" retira do membro a parte que invade o outro. Num anel de 4 membros, o último par precisa escolher o membro 1 como aquele a ser cortado, senão o corte falha.
+- **CAD avançado B** [V]: "Normal cut" é perpendicular ao eixo do suporte. "Weld cut" usa um plano de corte (que pode ser plano, face, superfície, placa ou outro membro) e deixa a ponta pronta para solda. Os dois vêm com *offset*. O item "Remove" retira do membro a parte que invade o outro. Num anel de 4 membros, o último par precisa escolher o membro 1 como aquele a ser cortado, senão o corte falha.
 
-- **SolidWorks** [V]: *End Butt1* e *End Butt2*. O membro escolhido como "a trimar" para na face do outro. Com *End Trim*, vários corpos podem ser trimados contra um limite (plano/face ou corpos). A ordem de corte (1, 2…) decide quem prevalece no canto; mudar um membro para 2 funde os dois igualmente.
+- **CAD avançado A** [V]: *End Butt1* e *End Butt2*. O membro escolhido como "a trimar" para na face do outro. Com *End Trim*, vários corpos podem ser trimados contra um limite (plano/face ou corpos). A ordem de corte (1, 2…) decide quem prevalece no canto; mudar um membro para 2 funde os dois igualmente.
 
-- **Inventor** [V]: *Trim To Frame* (depois renomeado *Corner Joint*): apara ou estende dois membros nas pontas para se encontrarem; aceita perfil de entalhe publicado e deslocamentos vertical/horizontal. Falha se os membros são paralelos/colineares.
+- **CAD avançado C** [V]: *Trim To Frame* (depois renomeado *Corner Joint*): apara ou estende dois membros nas pontas para se encontrarem; aceita perfil de entalhe publicado e deslocamentos vertical/horizontal. Falha se os membros são paralelos/colineares.
 
-- **Outros:** Solid Edge [V]: Butt1 apara contra o **mais curto**, Butt2 contra o **mais longo**. Onshape [V]: escolhe-se o membro dominante e os demais são trimados contra ele numa só operação.
+- **Outros:** CAD avançado H [V]: Butt1 apara contra o **mais curto**, Butt2 contra o **mais longo**. CAD avançado E [V]: escolhe-se o membro dominante e os demais são trimados contra ele numa só operação.
 
 - **Fenkra hoje:**
   - `Aparar | Encaixe if *first*` (`lib.rs:3824`): o membro 1 vai até a face externa do membro 2 por meio de um plano em `p − di·hj` com `hj = max(w,h)/2`.
@@ -352,22 +352,22 @@
 
 ---
 
-### 2.9 Aparar e estender até limite (CATIA: Cutback to plane/surface / SW: Trim/Extend (End Trim) / Inventor: Trim/Extend To Face / outros: Solid Edge Extend/Trim, Creo planar trim / Fenkra: ausente)
+### 2.9 Aparar e estender até limite (CAD avançado B: Cutback to plane/surface / CAD avançado A: Trim/Extend (End Trim) / CAD avançado C: Trim/Extend To Face / outros: CAD avançado H Extend/Trim, CAD avançado F planar trim / Fenkra: ausente)
 
 - **O que faz:** corta ou alonga um membro contra um plano, uma face ou um corpo que não é outro membro de ponta coincidente (viga que termina numa parede, coluna sobre chapa de base, T no meio de outro tubo).
 
-- **CATIA V5** [V]: o suporte do corte pode ser plano, face, superfície, placa ou outro membro, com *offset*. O membro é redefinido e o cutback aparece na árvore. Membros curvos não podem ser cortados.
+- **CAD avançado B** [V]: o suporte do corte pode ser plano, face, superfície, placa ou outro membro, com *offset*. O membro é redefinido e o cutback aparece na árvore. Membros curvos não podem ser cortados.
 
-- **SolidWorks** [V]:
+- **CAD avançado A** [V]:
   - *End Trim* com limite **Face/Plano** (mais eficiente) ou **Corpos** (necessário para limites não planos como tubo redondo).
   - *Allow extension*: marcado, alonga ou apara; desmarcado, só apara.
   - Ao selecionar um plano/face, a prévia mostra os pedaços e um clique alterna **manter/descartar** cada um. Descartar funde os segmentos restantes adjacentes.
   - Dica da CATI: a superfície usada como ferramenta deve passar além de todos os lados da peça, senão estenda-a antes.
   - Para a lista de corte, os membros precisam estar trimados na própria peça [V].
 
-- **Inventor** [V]: *Trim/Extend To Face* leva o membro a uma face do modelo com deslocamento. Falha se a face é paralela ao membro. Nesse caso o estado "doente" aparece na árvore ("Trim face is parallel to the member").
+- **CAD avançado C** [V]: *Trim/Extend To Face* leva o membro a uma face do modelo com deslocamento. Falha se a face é paralela ao membro. Nesse caso o estado "doente" aparece na árvore ("Trim face is parallel to the member").
 
-- **Outros:** Creo AFX [V]: *planar trims* e cortes entre perfis.
+- **Outros:** CAD avançado F AFX [V]: *planar trims* e cortes entre perfis.
 
 - **Fenkra hoje:** não existe. O tratamento só ocorre onde as pontas de duas linhas **coincidem** a menos de 1e-4 (`shared_end`, `lib.rs:4651`). Um travessa que termina no meio de um montante não recebe tratamento nenhum.
   - Consequência provável (L4): o membro "T" simplesmente atravessa o montante. Como os membros são `compound` (não são fundidos), a massa e o volume do corpo contam a interseção duas vezes.
@@ -376,7 +376,7 @@
 - **Melhor prática:**
   - Fluxo: **suporte** (membro(s) + limite: plano/face/corpo/outro membro) → **modo** (aparar | aparar e estender | só estender) → **parâmetros** (deslocamento, lado a manter) → **avançado** (apagar tratamentos prévios).
   - Regras:
-    - Se o limite é paralelo ao eixo ou não intercepta, o comando fica "falhou" com o motivo (como o Inventor), nunca ignora.
+    - Se o limite é paralelo ao eixo ou não intercepta, o comando fica "falhou" com o motivo (como o CAD avançado C), nunca ignora.
     - Aviso quando o resultado ainda se sobrepõe a outro membro.
   - Testes:
     - travessa que termina no meio do montante, `Aparar` contra o corpo: volume do conjunto = soma − interseção removida;
@@ -384,22 +384,22 @@
 
 ---
 
-### 2.10 Entalhe e encaixe (cope/notch) (CATIA: Contextual End Cut / Coping / SW: — (via Trim bodies) / Inventor: Notch / outros: Onshape coped, Solid Edge coping / Fenkra: `CornerMode::Encaixe`)
+### 2.10 Entalhe e encaixe (cope/notch) (CAD avançado B: Contextual End Cut / Coping / CAD avançado A: — (via Trim bodies) / CAD avançado C: Notch / outros: CAD avançado E coped, CAD avançado H coping / Fenkra: `CornerMode::Encaixe`)
 
 - **O que faz:** recorta a ponta de um membro com o contorno do outro, para encaixe de tubos e para desviar de mesas de vigas.
 
-- **CATIA V5** [V]:
+- **CAD avançado B** [V]:
   - *End cut* é um objeto paramétrico do catálogo (exemplo: "gatormouth") que se dimensiona pelas fórmulas definidas na criação.
   - **Padrão**: um só insumo. **Contextual**: vários insumos (objeto ativo + objetos externos); o corte se coloca em um só dos objetos.
   - Serve para preparar as pontas "antes de aplicar uma conexão de solda".
   - *Slots* (rasgos para passagem de membros) e *cutouts* (aberturas) também vêm de catálogo.
   - *Coping* (não está na barra por padrão) apara placas e membros pela espessura de elementos que se cruzam, calculando sobre a superfície moldada (espessura ignorada). Estratégias: ponta curta e ponta longa (placas), *Remove* (membros).
 
-- **SolidWorks** [C]: não há comando de entalhe por perfil; usa-se *End Trim* com corpos ou *Combine*.
+- **CAD avançado A** [C]: não há comando de entalhe por perfil; usa-se *End Trim* com corpos ou *Combine*.
 
-- **Inventor** [V]: *Notch* corta o membro receptor com a forma do membro-entalhe, usando perfis de entalhe básicos ou personalizados. A geração do perfil é publicada junto da família, com cotas ligadas aos parâmetros. Dependências cíclicas entre tratamentos geram erro ("Cyclic dependency").
+- **CAD avançado C** [V]: *Notch* corta o membro receptor com a forma do membro-entalhe, usando perfis de entalhe básicos ou personalizados. A geração do perfil é publicada junto da família, com cotas ligadas aos parâmetros. Dependências cíclicas entre tratamentos geram erro ("Cyclic dependency").
 
-- **Outros:** Onshape [V]: corner = mitered, butt ou **coped**.
+- **Outros:** CAD avançado E [V]: corner = mitered, butt ou **coped**.
 
 - **Fenkra hoje:** `Encaixe` (`lib.rs:3824`–`3840`) já recorta a ponta do membro 2 com o contorno do membro 1 (sólido do outro, com folga). Isso equivale a *cope* para casos de pontas coincidentes. Falta:
   - entalhe de perfil nomeado (por exemplo, "boca de jacaré" para tubo redondo, recorte para mesa de viga I);
@@ -416,13 +416,13 @@
 
 ---
 
-### 2.11 Gerenciador de cantos e ordem de corte (CATIA: Cutback sequence / SW: Corner Management (Simple/Complex Corner) / Inventor: Miter + Corner Joint por par / outros: Onshape Corner Override, Creo "advanced joints" / Fenkra: `joints: Vec<StructJoint>`)
+### 2.11 Gerenciador de cantos e ordem de corte (CAD avançado B: Cutback sequence / CAD avançado A: Corner Management (Simple/Complex Corner) / CAD avançado C: Miter + Corner Joint por par / outros: CAD avançado E Corner Override, CAD avançado F "advanced joints" / Fenkra: `joints: Vec<StructJoint>`)
 
 - **O que faz:** mostra todos os cantos da estrutura, deixa agrupar cantos parecidos, escolher o tratamento e a **ordem** (quem prevalece) em nós de 3 ou mais membros.
 
-- **CATIA V5** [V]: as regras de sequência aparecem como restrições no manual (anel de 4 membros). Os tratamentos são feitos par a par, cada um é um nó na árvore e entra no update.
+- **CAD avançado B** [V]: as regras de sequência aparecem como restrições no manual (anel de 4 membros). Os tratamentos são feitos par a par, cada um é um nó na árvore e entra no update.
 
-- **SolidWorks** [V]:
+- **CAD avançado A** [V]:
   - *Corner Management* (Structure System, 2023+): os cantos semelhantes são **agrupados** e o tratamento vale para o grupo; é possível tirar um canto do grupo ou dissolver o grupo.
   - Duas famílias: *Simple Corner* (dois membros) e *Complex Corner* (três ou mais), com *Body Trim* e *Planar Trim* (primeiro contato ou contato total), folga, ignorar tratamento e permitir extensão.
   - O programa escolhe um **plano base** que determina a ordem de corte; o usuário altera o plano base, os grupos e o tratamento.
@@ -430,9 +430,9 @@
   - 2025: o painel foi reorganizado; os balões no gráfico definem tipo, folga e ordem.
   - No weldment clássico: tratar o canto editando a feature e selecionando o ponto magenta; a *Trim Order* define quem prevalece.
 
-- **Inventor** [V]: tratamentos por par de membros; *Delete existing end treatments* na maioria dos comandos; menu de contexto de cada tratamento: *Edit*, *Delete*, *Delete Half of the End Treatment*, *Isolate*. Cada tratamento é um filho do membro na árvore e gera `CUTDETAIL(n)`.
+- **CAD avançado C** [V]: tratamentos por par de membros; *Delete existing end treatments* na maioria dos comandos; menu de contexto de cada tratamento: *Edit*, *Delete*, *Delete Half of the End Treatment*, *Isolate*. Cada tratamento é um filho do membro na árvore e gera `CUTDETAIL(n)`.
 
-- **Outros:** Onshape [V]: override por junta. Creo AFX [V]: juntas básicas e avançadas.
+- **Outros:** CAD avançado E [V]: override por junta. CAD avançado F AFX [V]: juntas básicas e avançadas.
 
 - **Fenkra hoje:**
   - `st_ui.rs:106` (`joints_ui`) lista os cantos encontrados no último cálculo (`member_joints`, `lib.rs:5014`) e permite escolher o modo por par: padrão | Meia-esquadria | Aparar | Encaixe | Nenhum, com "membro 1" e folga.
@@ -448,27 +448,27 @@
     - Operação "aplicar a cantos semelhantes" (mesmo perfil, mesmo ângulo).
   - Testes:
     - nó em T com três membros: mudar o dominante troca quem atravessa;
-    - quadro de 4 cantos: aplicar `Aparar` a todos produz 4 cantos consistentes, sem o caso "anel de 4" que falha no CATIA.
+    - quadro de 4 cantos: aplicar `Aparar` a todos produz 4 cantos consistentes, sem o caso "anel de 4" que falha no CAD avançado B.
 
 ---
 
-### 2.12 Placa de extremidade e tampa (CATIA: End Plate / SW: End Cap / Inventor: Insert End Cap / outros: Creo "beam end plates" / Fenkra: `StructPlate`)
+### 2.12 Placa de extremidade e tampa (CAD avançado B: End Plate / CAD avançado A: End Cap / CAD avançado C: Insert End Cap / outros: CAD avançado F "beam end plates" / Fenkra: `StructPlate`)
 
 - **O que faz:** fecha ou apoia a ponta de um membro com uma chapa (tampa do tubo, placa de base, flange de ligação).
 
-- **CATIA V5** [V]:
+- **CAD avançado B** [V]:
   - *End-Plate*: material, comprimento/largura/espessura **no eixo local do perfil** (em uma viga I, largura ao longo da mesa e comprimento ao longo da alma), seleção da ponta, seta de direção de extrusão (inverter), prévia.
   - Seleção múltipla com Ctrl cria várias placas idênticas de uma vez, e a direção/características valem para todas.
 
-- **SolidWorks** [V]:
+- **CAD avançado A** [V]:
   - *End Cap*: seleciona-se a face aberta; espessura **para fora**, **para dentro** ou **interna** (dentro do tubo, com recuo).
   - *Offset* da borda do membro até a borda da tampa, com opção de **razão de espessura** (0 a 1) em vez de valor.
   - Chanfro ou filete nos cantos da tampa.
   - O tutorial da CATI diz: razão 0,5 = metade da espessura do material, 0 = tamanho exato.
 
-- **Inventor** [V]: *Insert End Cap* é comando separado; o ambiente de soldagem trata placas como peças normais. Cada tratamento gera `CUTDETAIL`.
+- **CAD avançado C** [V]: *Insert End Cap* é comando separado; o ambiente de soldagem trata placas como peças normais. Cada tratamento gera `CUTDETAIL`.
 
-- **Outros:** Creo AFX [V]: conectores, placas de ligação, placas de extremidade de viga e equipamentos (escadas, guarda-corpos).
+- **Outros:** CAD avançado F AFX [V]: conectores, placas de ligação, placas de extremidade de viga e equipamentos (escadas, guarda-corpos).
 
 - **Fenkra hoje:**
   - `StructPlate { at: [f64;3], thickness, margin }` (`doc.rs:1468`).
@@ -490,19 +490,19 @@
 
 ---
 
-### 2.13 Reforço (gusset / nervura) (CATIA: Stiffener / SW: Gusset / Inventor: peça normal (sem comando) / outros: Creo "bracing plates" / Fenkra: `StructGusset`)
+### 2.13 Reforço (gusset / nervura) (CAD avançado B: Stiffener / CAD avançado A: Gusset / CAD avançado C: peça normal (sem comando) / outros: CAD avançado F "bracing plates" / Fenkra: `StructGusset`)
 
 - **O que faz:** uma chapa triangular ou poligonal que reforça o encontro entre dois membros ou entre membro e placa.
 
-- **CATIA V5** [V]: o *stiffener* da família estrutural é um objeto próprio, com perfil de seção e *âncora*, em geral posto sobre uma placa (normal à placa) ou numa aresta livre. Os limites podem ser plano, placa, outro stiffener ou superfície; há ângulo da alma e deslocamento do ponto de ancoragem.
+- **CAD avançado B** [V]: o *stiffener* da família estrutural é um objeto próprio, com perfil de seção e *âncora*, em geral posto sobre uma placa (normal à placa) ou numa aresta livre. Os limites podem ser plano, placa, outro stiffener ou superfície; há ângulo da alma e deslocamento do ponto de ancoragem.
 
-- **SolidWorks** [V]:
+- **CAD avançado A** [V]:
   - *Gusset*: seleciona-se **duas faces planas**. Perfil triangular (distância 1, distância 2, ângulo) ou poligonal, **alívio em chanfro** (para dar passagem ao cordão de solda) com distância e (distância 2 ou ângulo).
   - Espessura **interna**, **ambos os lados** ou **externa**.
   - Posição **no início, no meio ou no fim** do perfil, ou com deslocamento.
   - O gusset **não entra na lista de corte** por padrão (não tem perfil). A solução da GoEngineer é criar uma *bounding box* na pasta e dar PARTNUMBER/DESCRIPTION [V]. O blog da Javelin trata exatamente da descrição de end caps e gussets na tabela [V, só título].
 
-- **Inventor** [V]: não há comando. Gussets e placas são peças comuns na montagem de soldagem.
+- **CAD avançado C** [V]: não há comando. Gussets e placas são peças comuns na montagem de soldagem.
 
 - **Fenkra hoje:**
   - `StructGusset { at, leg, thickness, chamfer }` (`doc.rs:1477`).
@@ -522,11 +522,11 @@
 
 ---
 
-### 2.14 Cordões de solda, símbolos e preparação (CATIA: Weld Design / SW: Weld Bead + Fillet Bead + Groove Bead / Inventor: Weld environment (Cosmetic/Fillet/Groove) / outros: Creo Welding, Solid Edge weldment assembly / Fenkra: símbolo ISO 2553)
+### 2.14 Cordões de solda, símbolos e preparação (CAD avançado B: Weld Design / CAD avançado A: Weld Bead + Fillet Bead + Groove Bead / CAD avançado C: Weld environment (Cosmetic/Fillet/Groove) / outros: CAD avançado F Welding, CAD avançado H weldment assembly / Fenkra: símbolo ISO 2553)
 
 - **O que faz:** representa a solda: cordão 3D (ou cosmético), símbolo no desenho, preparação (chanfro) das peças, massa e lista de soldas.
 
-- **CATIA V5 — no detalhe** [V]:
+- **CAD avançado B — no detalhe** [V]:
   - O produto *Weld Design 1 (WD1)* tem 15 tipos de solda do padrão ISO: 1 de filete, 7 de ranhura e 7 de duplo cordão. É possível declarar **qualquer peça** como representação de solda (para desenho, massa e material).
   - O diálogo é guiado: dependendo do tipo, o usuário escolhe de 2 a 4 geometrias; o mesmo diálogo modifica a solda depois.
   - **Preparação automática** (chanfros nas peças), com comprimento de preparação ajustável (várias peças soldadas na mesma aresta) e opção de limitar à zona de contato.
@@ -534,15 +534,15 @@
   - Massa e inércia da solda entram nos totais quando o material é informado; a solda participa de verificação de colisão; atributos podem alimentar o Knowledgeware.
   - Anotações 2D de solda aparecem automáticas nas vistas, cortes e seções.
 
-- **SolidWorks — no detalhe** [V]:
+- **CAD avançado A — no detalhe** [V]:
   - *Weld Bead* (cosmético) é o recomendado; o *Fillet Bead* antigo aceita tipos por lado: contínuo, intermitente, alternado, com tamanho (perna), passo e *propagação por tangência*.
   - O *Weld Bead* tem **geometria de solda** (propagação por tangência), intermitente por "comprimento + folga" ou "comprimento + passo" (passo = comprimento + folga), tamanho e **símbolo de solda** associado.
   - Os cordões ficam numa pasta *Weld* na árvore.
-  - SW 2025 traz o *Groove Bead*, para soldas entre faces que não se interceptam (opostas de uma abertura).
+  - CAD avançado A 2025 traz o *Groove Bead*, para soldas entre faces que não se interceptam (opostas de uma abertura).
   - Na lista de corte, o artigo da CATI diz que os cordões de filete **não são agrupados** e ficam listados individualmente no fim; outra descrição da mesma revenda diz que cordões são excluídos da lista. As fontes divergem; confirmar na versão.
   - No desenho, símbolos de solda entram por *Model Items* [V].
 
-- **Inventor — no detalhe** [V]:
+- **CAD avançado C — no detalhe** [V]:
   - O ambiente de soldagem tem três grupos de features: **preparação**, **cordão** e **usinagem pós-solda**.
   - Tipos: **cosmético** (selecionam-se arestas, sem geometria, massa aproximada), **filete sólido** e **ranhura sólida** (selecionam-se faces).
   - Filete: conjuntos de faces, cadeia, orientação, pernas, contorno (convexo/côncavo com deslocamento), intermitente conforme a norma ativa, extensões (Tudo | De-Até | Início-Comprimento).
@@ -551,7 +551,7 @@
   - Estratégia oficial: preferir cosméticos para desempenho; a massa aproximada entra com "Include Cosmetic Welds" nas iProperties. Filete sólido atualiza **símbolos e anotações** do desenho; cosmético só os símbolos.
   - **Vistas de estado de soldagem** (preparação, solda, usinagem) saem do agrupamento das features.
 
-- **Outros:** Solid Edge [V]: montagem de soldagem para preparação, cordões e pós-solda. Creo AFX [V]: *Weld Groups* com desenhos e BOM próprios. NX [V]: o Weld Assistant é comparado em fórum PTC, sem detalhes lidos.
+- **Outros:** CAD avançado H [V]: montagem de soldagem para preparação, cordões e pós-solda. CAD avançado F AFX [V]: *Weld Groups* com desenhos e BOM próprios. CAD avançado G [V]: o Weld Assistant é comparado em fórum fornecedor de CAD avançado, sem detalhes lidos.
 
 - **Fenkra hoje:**
   - O catálogo registra "símbolo ISO 2553 no desenho/PMI" (PMI-02/EST-05) como 🟡: **não há cordão 3D**, nem preparação, nem lista de soldas, nem vínculo entre símbolo e geometria.
@@ -571,15 +571,15 @@
 
 ---
 
-### 2.15 Lista de corte e propriedades (CATIA: BOM/relatórios da estrutura / SW: Cut List + propriedades customizadas / Inventor: Frame Member Info + Parts List (cut length) / outros: Creo "optimized cut list tables", Onshape Cut List, Solid Edge cut lengths list / Fenkra: `cut_list`, `CutRow`)
+### 2.15 Lista de corte e propriedades (CAD avançado B: BOM/relatórios da estrutura / CAD avançado A: Cut List + propriedades customizadas / CAD avançado C: Frame Member Info + Parts List (cut length) / outros: CAD avançado F "optimized cut list tables", CAD avançado E Cut List, CAD avançado H cut lengths list / Fenkra: `cut_list`, `CutRow`)
 
 - **O que faz:** agrupa os membros iguais e lista, por item, perfil, comprimento de corte, ângulos de ponta, quantidade, material, massa e outros atributos, para compra, corte e desenho.
 
-- **CATIA V5** [V]:
-  - O produto gera BOM customizável. O Frame Structure Designer (3DEXPERIENCE) calcula comprimento, superfície, volume e peso e gera relatórios por modelo da empresa.
+- **CAD avançado B** [V]:
+  - O produto gera BOM customizável. O Frame Structure Designer (plataforma PLM avançada) calcula comprimento, superfície, volume e peso e gera relatórios por modelo da empresa.
   - O atributo *tipo* (viga/coluna/travessa) vem do dicionário de features e pode ser editado no diálogo ou nas propriedades.
 
-- **SolidWorks — no detalhe** [V]:
+- **CAD avançado A — no detalhe** [V]:
   - A pasta *Cut List* é gerada na criação e **atualizada manualmente**; o usuário escolhe manual ou automático (menu de contexto).
   - Corpos idênticos ficam agrupados em uma pasta (item).
   - **Propriedades automáticas**: LENGTH, ANGLE1, ANGLE2, DESCRIPTION (herdada do perfil), MATERIAL (quando atribuído).
@@ -589,12 +589,12 @@
   - Falha conhecida: propriedades perdidas em configurações [V, fórum].
   - Sub-soldagens aparecem como subpastas.
 
-- **Inventor — no detalhe** [V]:
+- **CAD avançado C — no detalhe** [V]:
   - *Frame Member Info* mostra seção, propriedades físicas e de engenharia, posição de inserção e orientação.
   - O comprimento do membro com miter nas duas pontas é calculado automaticamente (*Driven Length*).
   - A lista de peças sai do *Drawing Manager Parts List*. Cada tratamento grava `CUTDETAIL(n)` — textos que viram notas de fabricação na lista.
 
-- **Outros:** Creo AFX [V]: tabelas de comprimento de estoque e tabelas de **corte otimizado**. Solid Edge [V]: lista de **comprimentos de corte** com balões, opção *Frame Rough-cut End Clearance* que soma folga de corte bruto. Onshape [V]: cut list embutida alimenta a BOM; um usuário reporta falha quando ambas as pontas foram editadas (comunidade, anedótico).
+- **Outros:** CAD avançado F AFX [V]: tabelas de comprimento de estoque e tabelas de **corte otimizado**. CAD avançado H [V]: lista de **comprimentos de corte** com balões, opção *Frame Rough-cut End Clearance* que soma folga de corte bruto. CAD avançado E [V]: cut list embutida alimenta a BOM; um usuário reporta falha quando ambas as pontas foram editadas (comunidade, anedótico).
 
 - **Fenkra hoje:**
   - `CutRow { feature, designation, length, count, bars, item, members }` (`lib.rs:4743`).
@@ -620,15 +620,15 @@
 
 ---
 
-### 2.16 Corpos iguais, itens e reutilização (CATIA: instâncias de Product / SW: pastas da Cut List / Inventor: Reuse / outros: — / Fenkra: `StructSignature`, `group_members`)
+### 2.16 Corpos iguais, itens e reutilização (CAD avançado B: instâncias de Product / CAD avançado A: pastas da Cut List / CAD avançado C: Reuse / outros: — / Fenkra: `StructSignature`, `group_members`)
 
 - **O que faz:** detecta membros idênticos para virarem **uma peça com N ocorrências**, com numeração de item estável.
 
-- **CATIA V5** [C]: não existe detecção; o usuário monta um `Product` e instancia a mesma peça. O guia fala em "caches" de estrutura e "peças resolvidas" para as seções [V].
+- **CAD avançado B** [C]: não existe detecção; o usuário monta um `Product` e instancia a mesma peça. O guia fala em "caches" de estrutura e "peças resolvidas" para as seções [V].
 
-- **SolidWorks** [V]: a pasta da lista de corte agrupa corpos de mesmo perfil/comprimento/ângulos. As propriedades vivem na pasta, não no corpo.
+- **CAD avançado A** [V]: a pasta da lista de corte agrupa corpos de mesmo perfil/comprimento/ângulos. As propriedades vivem na pasta, não no corpo.
 
-- **Inventor** [V]: *Reuse* só vale para membros **retos**, com a mesma geometria, e compartilha um único arquivo; *Break Reuse* torna independente. A ajuda não descreve o critério de identidade [V, explícito]. Há a nota de que um membro com miter fica assimétrico e erra se reutilizado em espelho [V].
+- **CAD avançado C** [V]: *Reuse* só vale para membros **retos**, com a mesma geometria, e compartilha um único arquivo; *Break Reuse* torna independente. A ajuda não descreve o critério de identidade [V, explícito]. Há a nota de que um membro com miter fica assimétrico e erra se reutilizado em espelho [V].
 
 - **Fenkra hoje:**
   - `StructSignature { kind, profile, length, volume, bbox }` (`lib.rs:4776`), calculada **no referencial local** do membro: Z ao longo do eixo, origem na ponta inicial (`log_struct`, `lib.rs:4871`). Comprimento, volume e *bbox* em décimos de mm (`q10`).
@@ -650,21 +650,21 @@
 
 ---
 
-### 2.17 Submontagem de solda / sub-soldagem (CATIA: Product/Weld Design assembly / SW: Sub-weldment / Inventor: Weldment assembly / outros: Creo Weld Group / Fenkra: ausente)
+### 2.17 Submontagem de solda / sub-soldagem (CAD avançado B: Product/Weld Design assembly / CAD avançado A: Sub-weldment / CAD avançado C: Weldment assembly / outros: CAD avançado F Weld Group / Fenkra: ausente)
 
 - **O que faz:** seleciona um subconjunto de membros/placas que formam um módulo soldado (painel, pé, cavalete) e o trata como submontagem: lista própria, desenho próprio, processo de solda, tratamento térmico.
 
-- **CATIA V5** [V]: WD1 trabalha em montagem: peças soldadas num *Product*, com features de preparação e soldas associativas.
+- **CAD avançado B** [V]: WD1 trabalha em montagem: peças soldadas num *Product*, com features de preparação e soldas associativas.
 
-- **SolidWorks — no detalhe** [V]:
+- **CAD avançado A — no detalhe** [V]:
   - Selecionam-se corpos na lista de corte e cria-se uma **sub-soldagem**; ela vira uma subpasta da lista de corte (e na tabela do desenho aparece uma linha por sub-soldagem).
   - *Insert into New Part* gera uma peça separada, **ligada** à original para atualizar; as propriedades de lista de corte acompanham.
   - Para mostrar os membros individuais no desenho principal, faz-se uma lista de corte da própria sub-soldagem depois de inserida em nova peça (blog Javelin).
   - A CATI recomenda atualizar a lista de corte novamente após criar a sub-soldagem. Há relato de perda de propriedades (fórum).
 
-- **Inventor** [V]: ambiente de soldagem de montagem (preparação, cordão, usinagem). Pode haver sub-montagens de quadro com *Promote/Demote*; os membros passados fora do subconjunto saem da solução do Frame Generator.
+- **CAD avançado C** [V]: ambiente de soldagem de montagem (preparação, cordão, usinagem). Pode haver sub-montagens de quadro com *Promote/Demote*; os membros passados fora do subconjunto saem da solução do Frame Generator.
 
-- **Outros:** Creo AFX [V]: *Weld Groups* com desenhos e BOM próprios.
+- **Outros:** CAD avançado F AFX [V]: *Weld Groups* com desenhos e BOM próprios.
 
 - **Fenkra hoje:** não existe. `docs/contextos/estrutural.md` (§4) pede submontagens de solda selecionáveis com nome, código, material, processo e tratamento térmico. A montagem gerada tem apenas grupos por item (`asm.add_group("Item NN · …")`, `estrutura.rs:93`). O catálogo (EST-08) e o B50 listam "sem submontagens de solda".
 
@@ -680,15 +680,15 @@
 
 ---
 
-### 2.18 Gerar montagem e subpeças a partir da estrutura (CATIA: Product a partir de Part / SW: Insert into New Part, Save Bodies / Inventor: Frame Generator assembly (um arquivo por membro) / Fenkra: `estrutura_para_montagem`)
+### 2.18 Gerar montagem e subpeças a partir da estrutura (CAD avançado B: Product a partir de Part / CAD avançado A: Insert into New Part, Save Bodies / CAD avançado C: Frame Generator assembly (um arquivo por membro) / Fenkra: `estrutura_para_montagem`)
 
 - **O que faz:** transforma a estrutura mestre (Pai) em montagem + peças individuais para detalhar, orçar e fabricar.
 
-- **CATIA V5** [C]: o fluxo é manual: `Product` com instâncias da peça e *publicações*; no modo de projeto em contexto (*Keep link*), as peças referenciam o pai.
+- **CAD avançado B** [C]: o fluxo é manual: `Product` com instâncias da peça e *publicações*; no modo de projeto em contexto (*Keep link*), as peças referenciam o pai.
 
-- **SolidWorks** [V]: *Save Bodies* e *Insert into New Part* geram peças ligadas; a lista de corte vira BOM no desenho.
+- **CAD avançado A** [V]: *Save Bodies* e *Insert into New Part* geram peças ligadas; a lista de corte vira BOM no desenho.
 
-- **Inventor** [V]: o Frame Generator é, por natureza, "montagem + peças por membro": cada membro é um arquivo, com nomes configuráveis (padrão + número de estoque + número único); o `Reuse` evita arquivos duplicados; `Refresh` e `Edit with Frame Generator` mantêm a ligação.
+- **CAD avançado C** [V]: o Frame Generator é, por natureza, "montagem + peças por membro": cada membro é um arquivo, com nomes configuráveis (padrão + número de estoque + número único); o `Reuse` evita arquivos duplicados; `Refresh` e `Edit with Frame Generator` mantêm a ligação.
 
 - **Fenkra hoje (`fenkra-montagem/src/estrutura.rs:49`):**
   - Lê o pai do disco, chama `structural_groups`, e para cada grupo gera uma `.fkp` (`LinkedBody` com o B-Rep do primeiro membro no referencial local, `estrutura.rs:72`–`88`) e uma instância fixa por membro com `Placement` do referencial (`estrutura.rs:95`).
@@ -717,22 +717,22 @@
 
 ---
 
-### 2.19 Desenho de estrutura soldada (CATIA: Drafting + Weld annotations / SW: Weldment drawing / Inventor: Frame drawings + weld state views / outros: Creo AFX component drawings / Fenkra: DES-11, balões B26)
+### 2.19 Desenho de estrutura soldada (CAD avançado B: Drafting + Weld annotations / CAD avançado A: Weldment drawing / CAD avançado C: Frame drawings + weld state views / outros: CAD avançado F AFX component drawings / Fenkra: DES-11, balões B26)
 
 - **O que faz:** gera vistas do conjunto soldado e dos itens, com tabela de corte, balões e símbolos de solda.
 
-- **CATIA V5** [V]: as anotações de solda 2D aparecem automáticas nas vistas, cortes e seções; WD1 gera as soldas no desenho. Há um caso conhecido (IBM APAR) em que stiffeners de estruturas não eram projetados no desenho, corrigido em V5R20 SP6/V5R21 SP1.
+- **CAD avançado B** [V]: as anotações de solda 2D aparecem automáticas nas vistas, cortes e seções; WD1 gera as soldas no desenho. Há um caso conhecido (IBM APAR) em que stiffeners de estruturas não eram projetados no desenho, corrigido em V5R20 SP6/V5R21 SP1.
 
-- **SolidWorks** [V]:
+- **CAD avançado A** [V]:
   - Desenho a partir da peça soldada, com vista isométrica e tabela *Weldment Cut List* (Inserir → Tabelas).
   - Vistas por corpo via *Relative View* com escopo "corpos selecionados" (escala personalizada).
   - Símbolos via *Model Items* (fonte = modelo inteiro, desmarcando "marked for drawing").
   - *Auto Balloon* na vista isométrica.
   - A tabela só mostra propriedades listadas em *Cut List Summary*.
 
-- **Inventor** [V]: desenho com lista de peças e balões; **vistas de estado de soldagem** (preparação, solda, usinagem) quando as features estão nos grupos corretos; cordão sólido atualiza símbolo e anotação.
+- **CAD avançado C** [V]: desenho com lista de peças e balões; **vistas de estado de soldagem** (preparação, solda, usinagem) quando as features estão nos grupos corretos; cordão sólido atualiza símbolo e anotação.
 
-- **Outros:** Creo AFX [V]: criação automática de desenhos de componentes, cotagem de perfis e chapas, tabelas de estoque e de corte otimizado, notas com número de item.
+- **Outros:** CAD avançado F AFX [V]: criação automática de desenhos de componentes, cotagem de perfis e chapas, tabelas de estoque e de corte otimizado, notas com número de item.
 
 - **Fenkra hoje:** balões automáticos ligados à lista de corte e a `item_centers` (✅ B26); DES-11 🟡. **Faltam:** vista própria por item/corpo, detalhe de ponta, cortes específicos, vistas de orientação do perfil (DR-45), tabela de soldas, estados de soldagem e **balões para placas e reforços** (ver 2.15).
 
@@ -743,18 +743,18 @@
 
 ---
 
-### 2.20 Atualização, diagnóstico e referência perdida (CATIA: Update/Diagnosis, árvore de especificação / SW: What's Wrong / Inventor: sick elements + Frame Generator errors / Fenkra: ADR 0010/0011)
+### 2.20 Atualização, diagnóstico e referência perdida (CAD avançado B: Update/Diagnosis, árvore de especificação / CAD avançado A: What's Wrong / CAD avançado C: sick elements + Frame Generator errors / Fenkra: ADR 0010/0011)
 
 - **O que faz:** quando algo no esqueleto muda ou some, mostra o que quebrou, onde e por quê, e oferece correção, sem destruir o resto.
 
-- **CATIA V5** [V]:
+- **CAD avançado B** [V]:
   - Cada membro e cada *cutback* é um nó da árvore, recalculado no update. O cutback "é recomputado automaticamente" se o membro muda.
   - O estado de update por feature e o diálogo de diagnóstico aparecem na árvore [C].
   - Regras de dependência explícitas: *Keep link with selected object*, *Synchronize external references*.
 
-- **SolidWorks** [V]: o canto só é trimado quando selecionado (2023); a lista de corte atualiza manualmente ou em automático.
+- **CAD avançado A** [V]: o canto só é trimado quando selecionado (2023); a lista de corte atualiza manualmente ou em automático.
 
-- **Inventor — no detalhe** [V]:
+- **CAD avançado C — no detalhe** [V]:
   - Elementos "doentes" ganham ícone com **motivo ao passar o mouse**. O manual lista, por comando, as causas:
     - esqueleto removido;
     - geometria de referência ausente;
@@ -897,68 +897,68 @@ IDs provisórios `BE-nn` (o lead renumera). Tamanho: P ≤ 100 k tokens, M ≤ 2
 - `docs/arquitetura/adr/0010-referencias-v2.md`, `0011-filosofia-de-modelagem.md`
 - `docs/benchmark/catalogo.md` (seção Estrutural e soldas), `docs/backlog/backlog.md`
 
-**CATIA V5 / 3DEXPERIENCE**
-- https://catiadesign.org/_doc/docv5r14/Structure%20Design.pdf (guia oficial V5R14; texto extraído localmente)
-- https://3dswym.3dexperience.3ds.com/wiki/catia-user-community/catia-structure-design-1-sr1_ik_lvG81Q0Whzkyg18dQBA
-- https://3dswym.3dexperience.3ds.com/wiki/catia-user-community/catia-weld-design-1-wd1_-AUYFGDhQ7ubVvuHzco8Bg
-- https://3dswym.3dexperience.3ds.com/wiki/catia-user-community/catia-frame-structure-designer_mF57L34-RHOJIkaqskVgnw
-- https://3dswym.3dexperience.3ds.com/wiki/catia-user-community/2023x-ga-catia-steel-structures-designer_MZKfv7LOQpSVP6vz3s22DA
-- https://3dswym.3dexperience.3ds.com/wiki/catia-user-community/catia-structure-functional-design-2-sfd_hG1VCg5cRF-N1WHmZXTteQ (resumo de busca)
-- https://pycatia.readthedocs.io/en/stable/api/pycatia/cat_str_functional_interfaces/sfm_factory.html
-- https://pycatia.readthedocs.io/en/latest/api/pycatia/cat_str_functional_interfaces/sfm_endcut.html
+**CAD avançado B / plataforma PLM avançada**
+- (fonte em procedencia.md) (guia oficial V5R14; texto extraído localmente)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md) (resumo de busca)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://maruf.ca/files/caadoc/CAAStrUseCases/CAAStrCreateStrObject.htm
-- https://www.eng-tips.com/threads/catia-frame.255305 (comentário anedótico; acesso bloqueado, usado só o resumo de busca)
+- (fonte em procedencia.md) (comentário anedótico; acesso bloqueado, usado só o resumo de busca)
 - https://www.ibm.com/support/pages/apar/HE05602 (caso de stiffeners no desenho; resumo de busca)
 
-**SolidWorks** (ajuda online só como resumo de busca; texto lido nos blogs)
-- https://help.solidworks.com/2017/english/solidworks/sldworks/hidd_dve_feat_weld_member.htm
-- https://help.solidworks.com/2017/english/SolidWorks/Sldworks/HIDD_DVE_FEAT_WELD_CORNER.htm
-- https://help.solidworks.com/2024/English/SolidWorks/Sldworks/t_applying_Corner_trtmnt.htm
-- https://help.solidworks.com/2021/English/SolidWorks/Sldworks/r_complex_corner_propertymanager.htm
-- https://help.solidworks.com/2024/English/SolidWorks/sldworks/r_simple_corner_propertymanager.htm
-- https://help.solidworks.com/2020/English/SolidWorks/sldworks/HIDD_DVE_FEAT_END_CAP.htm
-- https://help.solidworks.com/2017/english/Solidworks/sldworks/HIDD_DVE_FEAT_GUSSET.htm
-- https://help.solidworks.com/2017/English/SolidWorks/Sldworks/HIDD_DVE_FEAT_WELD_BEAD.htm
-- https://help.solidworks.com/2017/English/SolidWorks/sldworks/HIDD_DVE_COSMETIC_WELD_BEAD.htm
-- https://help.solidworks.com/2022/English/SolidWorks/Sldworks/c_Sub_weldments.htm
-- https://help.solidworks.com/2018/English/SolidWorks/Sldworks/c_Bounding_Boxes_in_Weldments.htm
-- https://help.solidworks.com/2023/english/SolidWorks/sldworks/t_custom_props_weldment_cut_lists_2.htm
-- https://help.solidworks.com/2023/english/solidworks/sldworks/t_Weldments_Creating_Custom_Profile.htm
+**CAD avançado A** (ajuda online só como resumo de busca; texto lido nos blogs)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://www.cati.com/?p=119988 · https://www.cati.com/?p=119989 · https://www.cati.com/?p=126879 · https://www.cati.com/?p=192040 · https://www.cati.com/?p=122657 · https://www.cati.com/?p=119524
-- https://www.goengineer.com/blog/solidworks-weldment-profiles-weldment-tools-guide
-- https://www.goengineer.com/blog/solidworks-weldments-corners-gussets-bounding-box
-- https://www.goengineer.com/en-us/blog/solidworks-2025-weldments-whats-new
-- https://www.goengineer.com/en-us/blog/solidworks-cut-list-properties (resumo de busca)
-- https://www.javelin-tech.com/blog/2023/01/solidworks-structure-system-corner-management/ (resumo de busca; acesso bloqueado)
-- https://www.javelin-tech.com/blog/2017/11/solidworks-sub-weldment-cut-list/ (resumo de busca)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md) (resumo de busca)
+- (fonte em procedencia.md) (resumo de busca; acesso bloqueado)
+- (fonte em procedencia.md) (resumo de busca)
 - https://www.javelin-tech.com/blog/2026/04/how-to-add-descriptions-for-end-caps-and-gussets-in-a-weldments-cut-list-table/ (só título)
-- https://store.trimech.com/?p=29241 · https://blogs.solidworks.com/tech/2017/09/create-custom-weldment-profiles-solidworks-2.html (resumos de busca)
-- https://3dswym.3dexperience.3ds.com/post/3dexperience-edu-students/weldment-feature_tTCJ6BJBTbyQa_wiAw0Tyg
+- https://store.trimech.com/?p=29241 · (fonte em procedencia.md) (resumos de busca)
+- (fonte em procedencia.md)
 
-**Inventor**
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-953F560A-C2D3-4031-8348-762054C7C779.htm (visão geral do Frame Generator)
-- https://help.autodesk.com/cloudhelp/2020/ENU/Inventor-Help/files/GUID-270DE367-680C-4144-9079-EB4F0B2BA091.htm (diálogo Insert)
-- https://help.autodesk.com/cloudhelp/2020/ENU/Inventor-Help/files/GUID-FAF2FFB2-8965-482C-9691-530954AF59E1.htm (criar quadros básicos)
-- https://help.autodesk.com/cloudhelp/2018/ENU/Inventor-Help/files/GUID-70C1E7D6-AE7D-4275-BC11-A9CB0325EC45.htm (Frame Member Info)
-- https://help.autodesk.com/cloudhelp/2017/ENU/Inventor-Help/files/GUID-BE98918A-2419-4432-AAE5-46A3E56552FE.htm (tratamentos de ponta)
-- https://help.autodesk.com/cloudhelp/2019/ENU/Inventor-Help/files/GUID-181E350C-A869-4A83-899F-7A0CD820D6D4.htm (Miter)
-- https://help.autodesk.com/cloudhelp/2021/ENU/Inventor-Help/files/GUID-A70296F0-7D19-47B4-908D-1D8F417ADC62.htm (Reuse)
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-62C5DC21-0741-4AB6-9866-00FD11C9926E.htm (entalhes de autoria)
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-36AE9264-912D-4D3C-BB24-7EC16FA8777E.htm (CUTDETAIL, Promote/Demote)
-- https://help.autodesk.com/cloudhelp/2023/ENU/Inventor-Help/files/GUID-4ADAC958-F42D-4E38-8114-01BD0E98257A.htm (mensagens de erro)
-- https://help.autodesk.com/cloudhelp/2019/ENU/Inventor-Help/files/GUID-E197235B-2A86-46FD-BD27-390135E72026.htm (migração)
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-019B1B74-A92A-4761-BA4B-58A4583B1FDC.htm (cordões)
-- https://help.autodesk.com/cloudhelp/2020/ENU/Inventor-Help/files/GUID-95347D85-B23B-40A8-9268-7E38BF2ACF9B.htm (estratégias de soldagem)
-- https://help.autodesk.com/cloudhelp/2024/ENU/Inventor-Help/files/GUID-5986183A-97D5-4E2D-AE00-C1AE0D1C53BB.htm (ambiente de soldagem, resumo de busca)
-- https://www.autodesk.com/learn/ondemand/module/introduction-to-inventor-frame-generator
-- https://forums.autodesk.com/t5/inventor-forum/custom-profile-for-the-frame-generator/m-p/7109064/highlight/true (fórum; resumo de busca)
+**CAD avançado C**
+- (fonte em procedencia.md) (visão geral do Frame Generator)
+- (fonte em procedencia.md) (diálogo Insert)
+- (fonte em procedencia.md) (criar quadros básicos)
+- (fonte em procedencia.md) (Frame Member Info)
+- (fonte em procedencia.md) (tratamentos de ponta)
+- (fonte em procedencia.md) (Miter)
+- (fonte em procedencia.md) (Reuse)
+- (fonte em procedencia.md) (entalhes de autoria)
+- (fonte em procedencia.md) (CUTDETAIL, Promote/Demote)
+- (fonte em procedencia.md) (mensagens de erro)
+- (fonte em procedencia.md) (migração)
+- (fonte em procedencia.md) (cordões)
+- (fonte em procedencia.md) (estratégias de soldagem)
+- (fonte em procedencia.md) (ambiente de soldagem, resumo de busca)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md) (fórum; resumo de busca)
 
 **Outros CADs**
-- Solid Edge: https://www.soliddna.com/SEHelp/ST5/EN/a_h/frames1a.htm
-- Onshape: https://www.onshape.com/en/features/frames · https://www.onshape.com/fr/blog/announcing-onshape-frames
-- Creo AFX: https://support.ptc.com/help/creo/creo_pma/r11.0/usascii/advanced_framework.html · https://support.ptc.com/help/creo/creo_pma/r8.0/usascii/whats_new_pma/afx_aluminum_sections_profile_lib.html
-- NX: https://blogs.sw.siemens.com/partners/how-do-i-improve-my-structural-steel-design-in-nx/ (descreve o add-in SolidSteel) e a menção ao NX Structure Designer em resumo de busca
-- Fusion: https://forums.autodesk.com/t5/fusion-360-ideastation-archived/fusion-360-frame-generator/idc-p/7596076/highlight/true (resumo de busca; sem frame generator nativo)
+- CAD avançado H: https://www.soliddna.com/SEHelp/ST5/EN/a_h/frames1a.htm
+- CAD avançado E: (fonte em procedencia.md) · (fonte em procedencia.md)
+- CAD avançado F AFX: (fonte em procedencia.md) · (fonte em procedencia.md)
+- CAD avançado G: (fonte em procedencia.md) (descreve o add-in SolidSteel) e a menção ao CAD avançado G Structure Designer em resumo de busca
+- Fusion: (fonte em procedencia.md) (resumo de busca; sem frame generator nativo)
 
 ---
 
@@ -968,17 +968,17 @@ IDs provisórios `BE-nn` (o lead renumera). Tamanho: P ≤ 100 k tokens, M ≤ 2
 - **Evidência:**
   - Código lido: `fenkra-solidos/src/lib.rs` (trechos `1690`–`2180`, `3775`–`3920`, `4620`–`5030`, `5279`–`5540`), `structural.rs` inteiro, `estrutura.rs` inteiro, `doc.rs:1385`–`1485`, `st_ui.rs:21`–`200`, `app.rs:1500`–`1575`.
   - Fontes web citadas na seção 5.
-  - O guia CATIA R14 foi lido do PDF extraído localmente (zlib). Isso gerou um arquivo temporário no diretório de resultados de ferramenta e `sd.txt`/`sd2.txt` no scratchpad. Nada foi criado no repositório.
+  - O guia CAD avançado B R14 foi lido do PDF extraído localmente (zlib). Isso gerou um arquivo temporário no diretório de resultados de ferramenta e `sd.txt`/`sd2.txt` no scratchpad. Nada foi criado no repositório.
 - **Arquivos alterados:** nenhum.
 - **Checagens feitas:** leitura de código e contagem do CSV (159 linhas com designação e dimensões vazias). Nenhum teste foi executado: o modo atual proíbe execução que altere o sistema.
 - **Falhas e limites:**
-  - A ajuda online do SolidWorks e os espelhos `catiadoc.free.fr` ficaram inacessíveis.
+  - A ajuda online do CAD avançado A e os espelhos `CAD avançado Bdoc.free.fr` ficaram inacessíveis.
   - As páginas `javelin-tech.com`, `eng-tips.com` e uma de comunidade bloquearam o acesso (403/404); usei só os resumos de busca delas.
   - Os "bugs prováveis" (4–10, 14, 15) são inferências de leitura de código. Cada um traz o teste que o confirma ou refuta. Os de agrupamento (14, 15) são argumentos geométricos, não reproduzidos.
   - O ponto 13 (recomputes duplicados) precisa de medição.
 - **Riscos:**
-  - O guia CATIA é da R14 (antigo) e o comportamento de versões recentes pode ter mudado.
-  - Há divergência entre fontes sobre se os cordões entram ou não na lista de corte do SolidWorks.
+  - O guia CAD avançado B é da R14 (antigo) e o comportamento de versões recentes pode ter mudado.
+  - Há divergência entre fontes sobre se os cordões entram ou não na lista de corte do CAD avançado A.
   - O ritmo dos tamanhos P/M/G é estimativa minha, na escala do backlog atual.
 
 STATUS: DONE_WITH_CONCERNS

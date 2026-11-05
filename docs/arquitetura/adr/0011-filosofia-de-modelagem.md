@@ -1,4 +1,4 @@
-# ADR 0011: Filosofia de modelagem robusta (CATIA, SolidWorks e Inventor)
+# ADR 0011: Filosofia de modelagem robusta (CAD avançado B, CAD avançado A e CAD avançado C)
 
 - **Status:** proposta (orienta a onda 0 do backlog)
 - **Data:** 2026-10-30
@@ -22,7 +22,7 @@ Os três CADs de referência evitam isso com regras de produto, não com comando
 1. **Referência estável ou erro visível.**
    - Referências entre comandos e entre peças usam elementos de referência (planos, eixos, pontos), **publicações com nome** ou chaves dono+papel (ADR 0010).
    - Se não resolver, o comando fica em estado "falhou" com diagnóstico. Nunca escolhe outra geometria em silêncio.
-   - O diagnóstico oferece: Editar, Substituir, Isolar, Desativar e Reordenar (CATIA Update Diagnosis, SW What's Wrong, Inventor Design Doctor).
+   - O diagnóstico oferece: Editar, Substituir, Isolar, Desativar e Reordenar (CAD avançado B Update Diagnosis, CAD avançado A What's Wrong, CAD avançado C Design Doctor).
 2. **Um contexto ativo, sempre visível.**
    - Há um só objeto em trabalho na árvore: onde entra o próximo comando, com barra de fim de peça.
    - Na montagem, há um só componente ativo por vez. Editar uma peça não sai da montagem: o resto fica esmaecido e continua selecionável.
@@ -73,13 +73,13 @@ O B22 perde a parte de "editar vendo as outras", que foi para o B54.
 
 ## Alternativas consideradas
 - **Seguir item por item do backlog antigo:** corrige sintomas, mas mantém as causas (contexto duplo, feature de montagem sem dono, salvar ambíguo).
-- **Copiar um único CAD:** o CATIA tem as melhores regras de referência (publicações, objeto em trabalho). O Inventor tem o melhor assistente de fixação. O SolidWorks tem o melhor furo entre peças e os estados de link. O Fenkra combina os três.
+- **Copiar um único CAD:** o CAD avançado B tem as melhores regras de referência (publicações, objeto em trabalho). O CAD avançado C tem o melhor assistente de fixação. O CAD avançado A tem o melhor furo entre peças e os estados de link. O Fenkra combina os três.
 
 ## Consequências
 - ✅ Bugs de referência e de contexto viram estados visíveis e testáveis.
 - ✅ O corpus pega regressões antes do usuário.
 - ⚠️ O B54 e o B55 mexem no modelo da montagem (`Assembly` ganha sketches, referências e publicações) e no app (viewport com peça ativa). É a maior mudança desde o B15.
 - ⚠️ Itens marcados como "não verificado" na pesquisa precisam ser validados antes de virar regra, entre eles:
-  - cores do Edit Part do SW;
+  - cores do Edit Part do CAD avançado A;
   - tooltips do V5;
   - comprimento automático do Bolted Connection.

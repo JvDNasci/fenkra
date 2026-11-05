@@ -2,7 +2,7 @@
 
 > Pesquisa para o Fenkra (Rust + OpenCascade 8.0.1, egui em português). Escrita com palavras próprias.
 > **[V]** = confirmado em fonte consultada (URL na seção 5, ou leitura do código). **[C]** = conhecimento geral, não confirmado nesta pesquisa.
-> Limite de leitura: as páginas de ajuda do SolidWorks (help.solidworks.com) devolvem só o esqueleto do site ao WebFetch. Para o SolidWorks usei resumos de busca, blogs de revendas e a documentação de PDM. Esses itens estão marcados [V] pela fonte citada, mas sem o texto integral da página oficial.
+> Limite de leitura: as páginas de ajuda do CAD avançado A (help.CAD avançado A.com) devolvem só o esqueleto do site ao WebFetch. Para o CAD avançado A usei resumos de busca, blogs de revendas e a documentação de PDM. Esses itens estão marcados [V] pela fonte citada, mas sem o texto integral da página oficial.
 
 ---
 
@@ -13,11 +13,11 @@
 1. Hoje o Fenkra grava **STEP e STL** de uma **peça** (todos os corpos em um compound, sem nomes, cores, PMI nem estrutura) e lê **STL/OBJ** como feature "Malha". O `import_step` existe no kernel e **nenhuma tela o chama**. O desenho exporta PDF, SVG e DXF R12.
 2. Não existe importação de STEP/IGES, de DXF em sketch, de montagem neutra nem módulo conversor. O menu Arquivo tem dois botões soltos "Exportar STEP…" e "Exportar STL…".
 3. O OpenCascade 8.0 (versão que o Fenkra usa) já lê e grava STEP, IGES, BREP, XBF, OBJ, STL, glTF e VRML, e grava PLY, pela camada `DE_Wrapper`. Com XDE ele leva cores, camadas, nomes, estrutura de montagem, propriedades de validação e GD&T/PMI semântico do AP242 [V]. O Fenkra usa só o `STEPControl_Writer` básico, que não carrega nada disso.
-4. Fora do OCCT ficam 3MF, DXF/DWG, JT, Parasolid, ACIS, IFC, PRC/U3D e todos os nativos (CATPart, SLDPRT, IPT, Creo, NX). Esses exigem bibliotecas abertas (zip+XML, crate `dxf`, IfcOpenShell), um processo externo (LibreDWG, GPL) ou licenças comerciais (HOOPS Exchange, CAD Exchanger, Spatial 3D InterOp, Datakit, ODA).
-5. A filosofia dos três CADs é a mesma: **importar é uma operação com relatório, reparo e destino explícito**, não um "abrir". Inventor e SolidWorks oferecem *Referência* (vínculo vivo com o original) contra *Converter* (cópia independente). CATIA concentra as opções em Tools > Options > Compatibility e tem o Batch Monitor para lote.
-6. O reparo na importação é parte do fluxo. O SolidWorks tem o Import Diagnostics (Atribuir "curar tudo", reparar faces/lacunas), o Inventor tem o ambiente Reparar (Find/Heal Errors com tolerância permitida) e o CATIA tem healing nas ferramentas de superfície [V]. O Fenkra já tem `close_surface`, `sewn` e `ShapeFix` no kernel, mas não os aplica depois de ler um STEP.
-7. O reconhecimento de features (FeatureWorks no SolidWorks, Synchronous Technology no NX/Solid Edge, Direct Edit no Inventor) devolve intenção de projeto ao corpo "burro". O Fenkra tem a base (furos, filetes, patamares no `fenkra-solidos`), mas nenhuma lógica de reconhecimento.
-8. A integração com PDM é o maior diferencial possível. SolidWorks PDM detecta referências de arquivos 3D Interconnect no check-in e tem a tarefa Convert (STEP/PDF/DXF na liberação) [V]. O Inventor com Vault gerencia a árvore AnyCAD [V]. O Fenkra tem armazém por hash (ADR 0009) e o modelo `CAD_LINK` do `plm-vpm.md`, mas nenhum tipo de vínculo "importado de" ou "derivado de".
+4. Fora do OCCT ficam 3MF, DXF/DWG, JT, kernel geométrico proprietário, ACIS, IFC, PRC/U3D e todos os nativos (CATPart, SLDPRT, IPT, CAD avançado F, CAD avançado G). Esses exigem bibliotecas abertas (zip+XML, crate `dxf`, IfcOpenShell), um processo externo (LibreDWG, GPL) ou licenças comerciais (HOOPS Exchange, CAD Exchanger, Spatial 3D InterOp, Datakit, ODA).
+5. A filosofia dos três CADs é a mesma: **importar é uma operação com relatório, reparo e destino explícito**, não um "abrir". CAD avançado C e CAD avançado A oferecem *Referência* (vínculo vivo com o original) contra *Converter* (cópia independente). CAD avançado B concentra as opções em Tools > Options > Compatibility e tem o Batch Monitor para lote.
+6. O reparo na importação é parte do fluxo. O CAD avançado A tem o Import Diagnostics (Atribuir "curar tudo", reparar faces/lacunas), o CAD avançado C tem o ambiente Reparar (Find/Heal Errors com tolerância permitida) e o CAD avançado B tem healing nas ferramentas de superfície [V]. O Fenkra já tem `close_surface`, `sewn` e `ShapeFix` no kernel, mas não os aplica depois de ler um STEP.
+7. O reconhecimento de features (FeatureWorks no CAD avançado A, Synchronous Technology no CAD avançado G/CAD avançado H, Direct Edit no CAD avançado C) devolve intenção de projeto ao corpo "burro". O Fenkra tem a base (furos, filetes, patamares no `fenkra-solidos`), mas nenhuma lógica de reconhecimento.
+8. A integração com PDM é o maior diferencial possível. CAD avançado A PDM detecta referências de arquivos 3D Interconnect no check-in e tem a tarefa Convert (STEP/PDF/DXF na liberação) [V]. O CAD avançado C com Vault gerencia a árvore AnyCAD [V]. O Fenkra tem armazém por hash (ADR 0009) e o modelo `CAD_LINK` do `plm-vpm.md`, mas nenhum tipo de vínculo "importado de" ou "derivado de".
 9. Proposta: um crate `fenkra-conversor` com interface por formato, opções serializáveis, relatório de conversão, fila de lote, execução em processo filho isolado e registro no projeto (original guardado por hash, vínculo, revisão). Na interface, um menu **Arquivo ▸ Importar** e outro **Arquivo ▸ Exportar** com diálogo único por formato, mais a janela "Conversão em lote".
 10. Ordem sugerida: (a) corrigir o export atual e abrir caminho de importação STEP via XDE; (b) relatório + reparo; (c) montagem/PMI/cores; (d) malhas 3MF/glTF e DXF 2D; (e) lote + PDM; (f) nativos por biblioteca comercial opcional.
 
@@ -36,28 +36,28 @@
 
 ## 2. Fichas por comando/função
 
-### Menu e diálogo Importar/Exportar (arquitetura da interface) (CATIA: File > Open / Insert > Existing Component / Save As + Tools > Options > Compatibility / SW: Abrir + Opções, Salvar como + Opções, Task Scheduler / Inventor: Abrir/Importar + Opções, Exportar / outros: Onshape Import/Translate / Fenkra: Arquivo ▸ Exportar STEP/STL)
+### Menu e diálogo Importar/Exportar (arquitetura da interface) (CAD avançado B: File > Open / Insert > Existing Component / Save As + Tools > Options > Compatibility / CAD avançado A: Abrir + Opções, Salvar como + Opções, Task Scheduler / CAD avançado C: Abrir/Importar + Opções, Exportar / outros: CAD avançado E Import/Translate / Fenkra: Arquivo ▸ Exportar STEP/STL)
 
 - **O que faz:** é a porta de entrada e saída de dados. Escolhe formato, escopo (peça, montagem, seleção) e opções, e mostra o resultado.
-- **CATIA V5 — no detalhe:**
+- **CAD avançado B — no detalhe:**
   - Não há menu "Importar": abre-se STEP/IGES por File > Open com o filtro de tipo, ou insere-se um componente existente na montagem. A gravação é por File > Save As com o tipo (stp, igs, wrl, stl, dxf, cgr, 3dxml…) [V parcial: "stp (*.stp)" no Save As].
   - As **opções ficam globais**, não por operação: Tools > Options > General > Compatibility, com abas STEP, IGES etc. [V]. Em STEP, uma seção de Import (o que importar) e outra de Export, onde se escolhe o **Application Protocol** (AP203, AP214, 242 ed1 etc.) [V].
   - Há uma opção "3D Annotations" na seção geral para levar PMI [V]. Uma opção de IGES se chama "Join" e define a tolerância de junção na importação [V, via registro IBM].
   - **Licenças gatilham recursos:** ST1 (STEP Core: geometria e estrutura de AP203/AP214) e SXT (STEP estendido: PMI/FTA, composites, exportação de montagens aninhadas) [V]. Em tela, o item depende da licença ativada em Tools > Options > General > Shareable Products [V].
   - O modo `Batch Monitor` (BATCH-DXF-IGES-STEP) existe para lote (ver ficha de lote).
-- **SolidWorks — no detalhe:**
+- **CAD avançado A — no detalhe:**
   - Abrir: o diálogo de abertura tem o botão **Opções**, que muda por tipo de arquivo (para STEP/IGES/ACIS abre as opções de importação) [V]. Opções gerais em Ferramentas > Opções > Importar, com "Importar múltiplos corpos como peças" (IGES, STEP, UG, ACIS), "ignorar estrutura de montagem" (criar peça multicorpo) e "rodar o Import Diagnostics automaticamente" [V].
   - Salvar como: escolher tipo e clicar **Opções** abre os parâmetros de exportação do formato [V]. No STEP há "saída como sólidos e superfícies" e AP203/AP214/242 [V parcial]; AP242 com PMI 3D exige o módulo MBD [V, CATI e fórum].
   - Há **Publish to STEP242** como comando dedicado [V].
   - **Task Scheduler**, aplicativo separado, tem a tarefa "Export Files" (DXF, DWG, IGES, PDF, STEP AP203/AP214, JPEG) [V].
-- **Inventor — no detalhe:**
-  - **Abrir** e **Importar** têm o botão Opções. A referência de opções STEP/IGES do Inventor lista: salvar componentes durante o carregamento, pasta de destino dos componentes, colocar a montagem de topo em pasta separada, **relatório de tradução** (embutido no documento ou salvo em disco), tipos de entidade (sólidos, superfícies, fios, pontos), organização (reparar, montagem como peça única, agrupamentos), unidades e pós-processos [V].
+- **CAD avançado C — no detalhe:**
+  - **Abrir** e **Importar** têm o botão Opções. A referência de opções STEP/IGES do CAD avançado C lista: salvar componentes durante o carregamento, pasta de destino dos componentes, colocar a montagem de topo em pasta separada, **relatório de tradução** (embutido no documento ou salvo em disco), tipos de entidade (sólidos, superfícies, fios, pontos), organização (reparar, montagem como peça única, agrupamentos), unidades e pós-processos [V].
   - Observação: o STEP só abre pelo comando Abrir, não pelo Importar [V]. Há relatos de o botão Opções ficar cinza em versões novas [V, fórum].
   - A exportação fica em Arquivo > Exportar > formato CAD, com opções de AP [C].
 - **Outros:**
-  - **Onshape** trata tudo como "Importar" no Documents ou no documento, com opção de traduzir; preserva a aba original para retraduzir [V]. Para nativos de montagem exige um .zip com o nome igual ao da montagem de topo [V].
+  - **CAD avançado E** trata tudo como "Importar" no Documents ou no documento, com opção de traduzir; preserva a aba original para retraduzir [V]. Para nativos de montagem exige um .zip com o nome igual ao da montagem de topo [V].
   - **Fusion** envia o arquivo para tradução na nuvem e devolve .f3d [V]; JT sem tradução anunciada [V, fórum].
-  - **Creo** tem diálogo próprio com protocolos AP203/AP214/AP242 [V, Creo PMA].
+  - **CAD avançado F** tem diálogo próprio com protocolos AP203/AP214/AP242 [V, CAD avançado F PMA].
 - **Fenkra hoje:**
   - `app.rs:2528-2535` — dois botões em Arquivo chamam `self.export("step")` e `self.export("stl")`.
   - `app.rs:880-892` abre `rfd::FileDialog` com filtro pelo `ext` e chama `fenkra_solidos::export(&doc, None, caminho)`.
@@ -68,31 +68,31 @@
   - **Importar…**: seletor único com filtro por categoria. O formato é detectado por conteúdo (cabeçalho `ISO-10303-21`, `AC1018`, `solid`, `glTF`, ZIP com `3D/3dmodel.model`), e a extensão serve de dica; ao divergir, avisar.
   - Depois do arquivo, um **painel de opções do formato** seguindo o padrão do ADR 0011 (suporte → modo → parâmetros → avançado): *Destino* (nova peça / nova montagem / inserir na peça ativa / inserir na montagem), *Modo* (Referência vinculada / Converter), *O que importar* (sólidos, superfícies, curvas, pontos, PMI, cores, camadas), *Unidades* (detectada / forçar), *Reparo* (nenhum / padrão / agressivo) e *Avançado* (tolerância, costura, unir faces).
   - **Exportar…**: escolhe o formato, depois o escopo (documento ativo, corpo, seleção, montagem inteira com ou sem estrutura) e as opções. Ao final, mostra o relatório (arquivos gravados, tamanho, o que foi omitido) e oferece "Registrar no projeto".
-  - **Regras que evitam bugs simples:** (1) nunca decidir o formato pela extensão sem validar (corrige o bug L2); (2) nome de arquivo com acento e espaço sempre testado (o caminho do usuário contém "João"); (3) sempre reportar o que NÃO foi levado; (4) lembrar as últimas opções por formato (como o CATIA, mas por perfil nomeado).
+  - **Regras que evitam bugs simples:** (1) nunca decidir o formato pela extensão sem validar (corrige o bug L2); (2) nome de arquivo com acento e espaço sempre testado (o caminho do usuário contém "João"); (3) sempre reportar o que NÃO foi levado; (4) lembrar as últimas opções por formato (como o CAD avançado B, mas por perfil nomeado).
   - **Testes:** `export_ext_desconhecida_erra`, `export_caminho_com_acento`, `detecta_formato_por_conteudo`, `opcoes_por_formato_persistem`, `dialogo_importar_lista_so_formatos_suportados`.
 
 ---
 
-### Importar STEP (AP203 / AP214 / AP242) (CATIA: File > Open stp, ST1 / SW: Abrir STEP + 3D Interconnect / Inventor: Abrir STEP (Reference ou Convert) / outros: Onshape Import, Creo Import STEP / Fenkra: `import_step`, sem UI)
+### Importar STEP (AP203 / AP214 / AP242) (CAD avançado B: File > Open stp, ST1 / CAD avançado A: Abrir STEP + 3D Interconnect / CAD avançado C: Abrir STEP (Reference ou Convert) / outros: CAD avançado E Import, CAD avançado F Import STEP / Fenkra: `import_step`, sem UI)
 
 - **O que faz:** lê um modelo B-rep (sólidos, cascas, superfícies, curvas), a estrutura de montagem, unidades, nomes e, conforme o protocolo, cores, camadas e PMI.
-- **CATIA V5 — no detalhe:**
+- **CAD avançado B — no detalhe:**
   - Abre-se pela caixa File > Open. O STEP traz o que o AP e a licença permitem: ST1 cobre geometria e estrutura de AP203/AP214 (casca e sólido); SXT acrescenta PMI/FTA e composites [V].
   - Os protocolos listados vão de AP203/AP203 ext/AP214 a AP203 ed2, AP214 ed3 e AP242 ed1–ed3; PMI semântico aparece nas edições mais novas [V parcial].
   - Há dois modos para anotações: *gráfico* (polilinhas importadas como "Result") e *autoral+gráfico* (linhas mais entidades semânticas; cria dois conjuntos de anotações; as semânticas viram FTA editáveis) [V]. Editar o resultado exige licença de Tolerancing e Annotation (V5-FT1/FTA) [V].
   - Um AP203 reimportado mostra só geometria, sem cor nem FT&A; AP214 ed3 com as opções certas preserva cor e FT&A [V, Technia].
   - **Na árvore:** a peça sai com Body/Geometrical Sets do que foi lido; cada produto vira Product/Part. O sólido costuma chegar sem histórico, como corpo isolado ("isolated solid") [V parcial: STEP não leva histórico].
   - **Quando falha:** alguns STEP chegam sem sólido ou com faces faltando e o sólido não se forma [V, IBM]; trata-se em Healing/Join de superfícies.
-- **SolidWorks — no detalhe:**
+- **CAD avançado A — no detalhe:**
   - O diálogo de abertura tem filtros e **Opções**. Há "Enable Filter" para aplicar filtros antes da importação e trazer só alguns componentes [V]. Um STEP com FACETED_BREP entra como *corpo gráfico* por padrão e "Load Geometry" o carrega como B-rep [V].
-  - Com o **3D Interconnect** ligado, a abertura mantém **vínculo associativo com o original** (Open) ou insere sem converter (Insert); é possível atualizar e quebrar o vínculo [V]. STEP, IGES, ACIS, IFC, Inventor, CATIA V5, Creo, NX, Solid Edge e xDesign usam a tecnologia nova mesmo com o 3D Interconnect desmarcado [V].
+  - Com o **3D Interconnect** ligado, a abertura mantém **vínculo associativo com o original** (Open) ou insere sem converter (Insert); é possível atualizar e quebrar o vínculo [V]. STEP, IGES, ACIS, IFC, CAD avançado C, CAD avançado B, CAD avançado F, CAD avançado G, CAD avançado H e xDesign usam a tecnologia nova mesmo com o 3D Interconnect desmarcado [V].
   - A primeira coisa depois de abrir é o **Import Diagnostics**, que roda automaticamente por padrão; se desmarcado, pergunta a cada importação [V].
   - **Na árvore:** a feature "Imported1" (corpo importado). Para curar, o Interconnect precisa estar desligado ou dissolvido, e a árvore só pode ter corpos importados [V, GoEngineer].
-- **Inventor — no detalhe:**
+- **CAD avançado C — no detalhe:**
   - Opções (ver ficha do menu) incluem *Importar para o ambiente de Reparo*, *Importar montagem como peça única* (compósito único ou peça de múltiplos sólidos), *Criar superfícies como* (corpos individuais, compósito único/múltiplos, grupos de construção), *Auto Stitch and Promote*, *Enable Advanced Healing* e *Check Parts during Load* [V].
-  - O **AnyCAD** oferece **Referência** (vínculo, sem arquivos novos) ou **Converter** (arquivos Inventor novos, sem vínculo). STEP é exceção: cada atualização é uma nova tradução, que pode deixar geometria sem resolver e quebrar edições; use Referência para STEP só se as atualizações forem pequenas [V].
+  - O **AnyCAD** oferece **Referência** (vínculo, sem arquivos novos) ou **Converter** (arquivos CAD avançado C novos, sem vínculo). STEP é exceção: cada atualização é uma nova tradução, que pode deixar geometria sem resolver e quebrar edições; use Referência para STEP só se as atualizações forem pequenas [V].
   - Na árvore, nó "3rd Party" com o relatório de tradução; seleção de corpos/componentes com visualização prévia antes de importar [V].
-- **Outros:** Onshape lê AP203/AP214/AP242 (geometria e cor de face na importação) e trata Parasolid como formato preferido [V]. NX e Solid Edge, sendo baseados em Parasolid, recebem dado neutro com a Synchronous Technology para edição direta [V parcial].
+- **Outros:** CAD avançado E lê AP203/AP214/AP242 (geometria e cor de face na importação) e trata kernel geométrico proprietário como formato preferido [V]. CAD avançado G e CAD avançado H, sendo baseados em kernel geométrico proprietário, recebem dado neutro com a Synchronous Technology para edição direta [V parcial].
 - **Fenkra hoje:**
   - `kernel.cpp:1004-1011`: `STEPControl_Reader r; r.ReadFile(...)` (checa só `IFSelect_RetDone`), `r.TransferRoots();`, `wrap(r.OneShape())`.
   - Problemas prováveis: (a) não confere o retorno de `TransferRoots` nem `NbShapes`, e `OneShape()` de zero raízes dá forma nula; (b) sem XDE, tudo vira um compound anônimo (sem árvore, nomes, cores); (c) sem unidade explícita (o padrão do OCCT converte para mm [V]); (d) sem healing depois da leitura; (e) caminho com acento sem teste.
@@ -105,13 +105,13 @@
 
 ---
 
-### Exportar STEP (AP203/214/242) (CATIA: Save As stp + Compatibility / SW: Salvar como STEP + Opções, Publish to STEP242 / Inventor: Exportar STEP / outros: Creo ap203_e2/ap214_is/ap242 / Fenkra: `export_step`)
+### Exportar STEP (AP203/214/242) (CAD avançado B: Save As stp + Compatibility / CAD avançado A: Salvar como STEP + Opções, Publish to STEP242 / CAD avançado C: Exportar STEP / outros: CAD avançado F ap203_e2/ap214_is/ap242 / Fenkra: `export_step`)
 
 - **O que faz:** grava geometria B-rep, e conforme o protocolo, estrutura, cores, camadas, nomes, propriedades e PMI.
-- **CATIA V5 — no detalhe:** configura-se em Tools > Options > General > Compatibility > STEP, seção Export, "Application Protocol" (ex.: "242 ed1" para levar PMI) e, na seção geral, "3D Annotations" marcado [V]. A exportação exige ST1 (e FTA para criar as anotações) [V]. Em Save As escolhe-se "stp (*.stp)" [V]. O modo "Authorable & Graphic" grava PMI semântico mais gráfico [V]. A exportação aninhada de montagens vem do SXT [V].
-- **SolidWorks — no detalhe:** Salvar como > tipo STEP > Opções: escolhe-se AP203/AP214/AP242, "sólidos e/ou superfícies" e [C] sistema de coordenadas de saída. AP242 com PMI 3D exige o MBD (usuário Professional relatou não exportar AP242) [V, CATI/fórum]; há também o comando Publish to STEP242 [V]. A tarefa agendada "Export Files" faz AP203/AP214 em lote [V].
-- **Inventor — no detalhe:** AP203, AP214 e AP242 em Exportar; o AP242 e o `.stpz` compactado são tratados desde o Inventor 2016 [V parcial, ARKANCE]. Detalhes das opções da caixa de exportação: [C].
-- **Outros:** o Creo grava assembly como arquivo único ou separado por componente, e leva anotações (GD&T, notas) nos protocolos ap214_is, ap203_e2, ap242 [V]. O OCCT escreve a montagem sempre na forma `representation_relationship_with_transformation` [V].
+- **CAD avançado B — no detalhe:** configura-se em Tools > Options > General > Compatibility > STEP, seção Export, "Application Protocol" (ex.: "242 ed1" para levar PMI) e, na seção geral, "3D Annotations" marcado [V]. A exportação exige ST1 (e FTA para criar as anotações) [V]. Em Save As escolhe-se "stp (*.stp)" [V]. O modo "Authorable & Graphic" grava PMI semântico mais gráfico [V]. A exportação aninhada de montagens vem do SXT [V].
+- **CAD avançado A — no detalhe:** Salvar como > tipo STEP > Opções: escolhe-se AP203/AP214/AP242, "sólidos e/ou superfícies" e [C] sistema de coordenadas de saída. AP242 com PMI 3D exige o MBD (usuário Professional relatou não exportar AP242) [V, CATI/fórum]; há também o comando Publish to STEP242 [V]. A tarefa agendada "Export Files" faz AP203/AP214 em lote [V].
+- **CAD avançado C — no detalhe:** AP203, AP214 e AP242 em Exportar; o AP242 e o `.stpz` compactado são tratados desde o CAD avançado C 2016 [V parcial, ARKANCE]. Detalhes das opções da caixa de exportação: [C].
+- **Outros:** o CAD avançado F grava assembly como arquivo único ou separado por componente, e leva anotações (GD&T, notas) nos protocolos ap214_is, ap203_e2, ap242 [V]. O OCCT escreve a montagem sempre na forma `representation_relationship_with_transformation` [V].
 - **Fenkra hoje:**
   - `kernel.cpp:988-994`: `STEPControl_Writer w; w.Transfer(s.s, STEPControl_AsIs); w.Write(path)`. Esquema padrão do OCCT (AP214CD) [V pelos parâmetros], nome de produto igual à versão do OCCT [V].
   - `fenkra-solidos/src/lib.rs:5144-5161`: roda todas as features, faz `compound` dos corpos de todos os coletores e grava; erro "nada para exportar" se vazio.
@@ -127,12 +127,12 @@
 
 ---
 
-### Dados carregados pelo STEP: PMI semântico, cores, camadas, estrutura e metadados (CATIA: ST1/SXT, FTA / SW: MBD, 3D Interconnect / Inventor: Translation report / outros: Onshape cor de face / Fenkra: `Document.pmi`, `appearance`, árvore da montagem)
+### Dados carregados pelo STEP: PMI semântico, cores, camadas, estrutura e metadados (CAD avançado B: ST1/SXT, FTA / CAD avançado A: MBD, 3D Interconnect / CAD avançado C: Translation report / outros: CAD avançado E cor de face / Fenkra: `Document.pmi`, `appearance`, árvore da montagem)
 
 - **O que faz:** define o que cada categoria de informação consegue atravessar o formato neutro.
-- **CATIA V5 — no detalhe:** geometria e estrutura (ST1); PMI/FTA, composites e aninhamento (SXT) [V]. PMI gráfico vira polilinha; semântico vira FTA editável. A cor e o FT&A só voltam com AP214 ed3+ e as opções certas [V]. Composites só levam a "engineering stacking"; planificados exportam como curvas [V].
-- **SolidWorks — no detalhe:** PMI 3D é exportado em STEP 242 com o MBD [V]; o 3D Interconnect importa PMI de nativos [C]. A cor de face e a estrutura de montagem são levadas; no Onshape a importação de STEP traz geometria e cor de face [V].
-- **Inventor — no detalhe:** a importação STEP lê sólidos, superfícies, fios e pontos [V]; PMI semântico limitado [C]. O nó 3rd Party guarda o relatório [V].
+- **CAD avançado B — no detalhe:** geometria e estrutura (ST1); PMI/FTA, composites e aninhamento (SXT) [V]. PMI gráfico vira polilinha; semântico vira FTA editável. A cor e o FT&A só voltam com AP214 ed3+ e as opções certas [V]. Composites só levam a "engineering stacking"; planificados exportam como curvas [V].
+- **CAD avançado A — no detalhe:** PMI 3D é exportado em STEP 242 com o MBD [V]; o 3D Interconnect importa PMI de nativos [C]. A cor de face e a estrutura de montagem são levadas; no CAD avançado E a importação de STEP traz geometria e cor de face [V].
+- **CAD avançado C — no detalhe:** a importação STEP lê sólidos, superfícies, fios e pontos [V]; PMI semântico limitado [C]. O nó 3rd Party guarda o relatório [V].
 - **Outros:** O OCCT 8 adicionou PMI scaling e coordenada de conexão na leitura [V]. O guia XDE descreve GD&T semântico e tesselado (apresentação), clipping planes, vistas salvas e notas; **planos de corte e vistas só são gravados em XBF, não em STEP** [V].
 - **Fenkra hoje:** nada atravessa. `Document` tem `appearance`, `pmi`, `pmi_captures`, `views` (doc.rs:2673-2712), mas o STEP gerado não leva nenhum deles. `docs/modulos/pmi-3d.md` existe como módulo, sem ponte para STEP.
 - **Melhor prática para o Fenkra:**
@@ -155,13 +155,13 @@
 
 ---
 
-### IGES (import/export) (CATIA: IGES nas opções de Compatibility / SW: Abrir/Salvar IGES, Import Diagnostics / Inventor: Abrir IGES, Convert / outros: Onshape IGES 5.3 / Fenkra: nenhum)
+### IGES (import/export) (CAD avançado B: IGES nas opções de Compatibility / CAD avançado A: Abrir/Salvar IGES, Import Diagnostics / CAD avançado C: Abrir IGES, Convert / outros: CAD avançado E IGES 5.3 / Fenkra: nenhum)
 
 - **O que faz:** formato mais antigo, forte em **superfícies e curvas**; fraco em sólidos e montagens.
-- **CATIA V5 — no detalhe:** há aba IGES em Compatibility; a opção "Join" define a tolerância de junção das superfícies importadas [V]. Lote pelo `BATCH-DXF-IGES-STEP` [V]. Na árvore, as superfícies entram em Geometrical Sets, a juntar/curar [V parcial].
-- **SolidWorks — no detalhe:** o diálogo "IGES-In Surfaces, Curves, and Levels" aparece se o arquivo traz curvas ou níveis diferentes [V]. Em IGES, "múltiplos corpos como peças" vale [V]. A saída IGES tem tipos de entidade configuráveis e a representação de superfície (a tarefa de conversão do PDM expõe 3D curves, entity types, surface representation) [V].
-- **Inventor — no detalhe:** as opções STEP/IGES são compartilhadas; "Criar superfícies como" e agrupamento por **nível/camada IGES** valem para IGES [V]; sem reparo, IGES de superfícies costuma precisar de Auto Stitch [V].
-- **Outros:** Onshape lê IGES até 5.3 [V].
+- **CAD avançado B — no detalhe:** há aba IGES em Compatibility; a opção "Join" define a tolerância de junção das superfícies importadas [V]. Lote pelo `BATCH-DXF-IGES-STEP` [V]. Na árvore, as superfícies entram em Geometrical Sets, a juntar/curar [V parcial].
+- **CAD avançado A — no detalhe:** o diálogo "IGES-In Surfaces, Curves, and Levels" aparece se o arquivo traz curvas ou níveis diferentes [V]. Em IGES, "múltiplos corpos como peças" vale [V]. A saída IGES tem tipos de entidade configuráveis e a representação de superfície (a tarefa de conversão do PDM expõe 3D curves, entity types, surface representation) [V].
+- **CAD avançado C — no detalhe:** as opções STEP/IGES são compartilhadas; "Criar superfícies como" e agrupamento por **nível/camada IGES** valem para IGES [V]; sem reparo, IGES de superfícies costuma precisar de Auto Stitch [V].
+- **Outros:** CAD avançado E lê IGES até 5.3 [V].
 - **Fenkra hoje:** não há leitor nem escritor IGES. O OCCT tem `IGESControl`/`IGESCAFControl` e `DEIGES` (leitura/gravação, **não thread-safe** [V]).
 - **Melhor prática para o Fenkra:**
   - **Importação:** IGES entra como **superfícies/curvas** em "Referências" do Fenkra (equivalente a Geometrical Set), nunca direto em sólido; depois, sequência *Costurar → Fechar → Sólido* já existente (`sewn`, `close_surface`). O OCCT traduz só geometria 3D, pula o resto e diz quais tipos pulou; comprimentos em outras unidades são convertidos para mm [V]. Transformações soltas não são traduzidas [V]. Registrar esses avisos.
@@ -172,49 +172,49 @@
 
 ---
 
-### Parasolid (x_t/x_b) e ACIS (sat) (CATIA: nenhum nativo / SW: Salvar/Abrir Parasolid, ACIS / Inventor: Convert SAT, Parasolid / outros: Onshape (Parasolid preferido) / Fenkra: nenhum)
+### kernel geométrico proprietário (x_t/x_b) e ACIS (sat) (CAD avançado B: nenhum nativo / CAD avançado A: Salvar/Abrir kernel geométrico proprietário, ACIS / CAD avançado C: Convert SAT, kernel geométrico proprietário / outros: CAD avançado E (kernel geométrico proprietário preferido) / Fenkra: nenhum)
 
-- **O que faz:** troca de B-rep exato entre kernels (Parasolid: SolidWorks/NX/Solid Edge/Onshape; ACIS: AutoCAD/SolidWorks/Inventor/Spatial).
-- **CATIA V5 — no detalhe:** não lê Parasolid/ACIS direto; usa STEP/IGES [C].
-- **SolidWorks — no detalhe:** abre e grava `.x_t/.x_b` e `.sat`; a tarefa Export Files lista Parasolid [V]; o PDM tem opções avançadas de conversão para ACIS e Parasolid [V].
-- **Inventor — no detalhe:** AnyCAD *Convert* aceita Parasolid e SAT [V]; Referência não lista Parasolid/SAT [V].
-- **Outros:** Onshape importa Parasolid v10.0–v38.1 (e malha 28–37) e ACIS até 2023 e grava Parasolid v25–37 e ACIS v5 [V]. Siemens recomenda `x_b` como formato estável [V]. O XT guarda **só B-rep exato**, sem facetas, com unidades **sempre em metros** [V, Pointwise]. A referência do formato XT é pública (PDF de 2006), mas a licença de redistribuição não ficou confirmada [V parcial]. Gravar/ler com fidelidade exige o kernel (Parasolid) ou a biblioteca comercial (HOOPS, Spatial) [C].
-- **Fenkra hoje:** nada. O OCCT **não** tem DE para Parasolid/ACIS [V: ausente da tabela do DE_Wrapper].
+- **O que faz:** troca de B-rep exato entre kernels (kernel geométrico proprietário: CAD avançado A/CAD avançado G/CAD avançado H/CAD avançado E; ACIS: CAD avançado J/CAD avançado A/CAD avançado C/Spatial).
+- **CAD avançado B — no detalhe:** não lê kernel geométrico proprietário/ACIS direto; usa STEP/IGES [C].
+- **CAD avançado A — no detalhe:** abre e grava `.x_t/.x_b` e `.sat`; a tarefa Export Files lista kernel geométrico proprietário [V]; o PDM tem opções avançadas de conversão para ACIS e kernel geométrico proprietário [V].
+- **CAD avançado C — no detalhe:** AnyCAD *Convert* aceita kernel geométrico proprietário e SAT [V]; Referência não lista kernel geométrico proprietário/SAT [V].
+- **Outros:** CAD avançado E importa kernel geométrico proprietário v10.0–v38.1 (e malha 28–37) e ACIS até 2023 e grava kernel geométrico proprietário v25–37 e ACIS v5 [V]. fornecedor de CAD avançado recomenda `x_b` como formato estável [V]. O XT guarda **só B-rep exato**, sem facetas, com unidades **sempre em metros** [V, Pointwise]. A referência do formato XT é pública (PDF de 2006), mas a licença de redistribuição não ficou confirmada [V parcial]. Gravar/ler com fidelidade exige o kernel (kernel geométrico proprietário) ou a biblioteca comercial (HOOPS, Spatial) [C].
+- **Fenkra hoje:** nada. O OCCT **não** tem DE para kernel geométrico proprietário/ACIS [V: ausente da tabela do DE_Wrapper].
 - **Melhor prática para o Fenkra:**
-  - Não prometer Parasolid/ACIS na primeira onda. **Via de menor custo:** STEP AP214/242 já resolve a troca entre esses kernels.
-  - Se o usuário pedir (fábricas que usam Parasolid), oferecer o formato como **plugin comercial opcional** (HOOPS Exchange/CAD Exchanger/Spatial) atrás da interface de provedor do módulo conversor. Nota: ACIS e Parasolid dependem de licença do kernel, e o licenciamento do HOOPS/CAD Exchanger não ficou verificado.
+  - Não prometer kernel geométrico proprietário/ACIS na primeira onda. **Via de menor custo:** STEP AP214/242 já resolve a troca entre esses kernels.
+  - Se o usuário pedir (fábricas que usam kernel geométrico proprietário), oferecer o formato como **plugin comercial opcional** (HOOPS Exchange/CAD Exchanger/Spatial) atrás da interface de provedor do módulo conversor. Nota: ACIS e kernel geométrico proprietário dependem de licença do kernel, e o licenciamento do HOOPS/CAD Exchanger não ficou verificado.
   - **Teste:** quando houver provedor, round-trip x_b ↔ B-rep com tolerância de volume.
 
 ---
 
-### JT (CATIA: via Datakit/HOOPS / SW: não nativo (exportação por add-in) / Inventor: Convert JT / outros: NX/Teamcenter, Onshape JT 11 / Fenkra: nenhum)
+### JT (CAD avançado B: via Datakit/HOOPS / CAD avançado A: não nativo (exportação por add-in) / CAD avançado C: Convert JT / outros: CAD avançado G/PLM avançado, CAD avançado E JT 11 / Fenkra: nenhum)
 
 - **O que faz:** formato leve de visualização (ISO 14306), com **LODs** de tesselação, estrutura de produto e PMI, mais B-rep opcional.
-- **CATIA V5 — no detalhe:** sem JT nativo; terceiros fazem a ponte [C].
-- **SolidWorks — no detalhe:** sem JT nativo [C].
-- **Inventor — no detalhe:** *Convert* aceita JT [V].
-- **Outros:** o JT é um padrão ISO 14306 com referência gratuita em jtopen.com [V]. Carrega múltiplas tesselações (LOD), PMI compatível com o esquema PLM XML e estrutura de produto, monolítica ou em arquivos ligados (PER_PART, com PMI de montagem no arquivo de topo e PMI de peça nos arquivos de componente) [V]. HOOPS Exchange grava JT 8.1/9.5/10 [V]. Onshape importa e exporta JT até 11.0 [V]. O Fusion não traduz JT [V, fórum Autodesk].
+- **CAD avançado B — no detalhe:** sem JT nativo; terceiros fazem a ponte [C].
+- **CAD avançado A — no detalhe:** sem JT nativo [C].
+- **CAD avançado C — no detalhe:** *Convert* aceita JT [V].
+- **Outros:** o JT é um padrão ISO 14306 com referência gratuita em jtopen.com [V]. Carrega múltiplas tesselações (LOD), PMI compatível com o esquema PLM XML e estrutura de produto, monolítica ou em arquivos ligados (PER_PART, com PMI de montagem no arquivo de topo e PMI de peça nos arquivos de componente) [V]. HOOPS Exchange grava JT 8.1/9.5/10 [V]. CAD avançado E importa e exporta JT até 11.0 [V]. O Fusion não traduz JT [V, fórum fornecedor de CAD avançado].
 - **Fenkra hoje:** nada; o OCCT não lê JT [V: ausente].
 - **Melhor prática para o Fenkra:** deixar JT para uma **onda comercial** (leitura via HOOPS/CAD Exchanger). Para visualização leve de montagens grandes, o Fenkra tem melhor retorno em **glTF** (aberto, RW no OCCT [V]) como formato de exportação leve. Registrar no relatório "JT não suportado, use STEP AP242".
 
 ---
 
-### Nativos de outros CADs: CATPart/CATProduct, SLDPRT/SLDASM, IPT/IAM, Creo, NX, Solid Edge (CATIA: leitura de SW via módulos/tradutores / SW: 3D Interconnect / Inventor: AnyCAD / outros: Onshape, HOOPS, CAD Exchanger, Datakit, Spatial / Fenkra: fora do escopo (visão.md §6))
+### Nativos de outros CADs: CATPart/CATProduct, SLDPRT/SLDASM, IPT/IAM, CAD avançado F, CAD avançado G, CAD avançado H (CAD avançado B: leitura de CAD avançado A via módulos/tradutores / CAD avançado A: 3D Interconnect / CAD avançado C: AnyCAD / outros: CAD avançado E, HOOPS, CAD Exchanger, Datakit, Spatial / Fenkra: fora do escopo (visão.md §6))
 
 - **O que faz:** abre arquivos nativos sem passar por formato neutro, com mais fidelidade (histórico opcional, PMI, cor, propriedades).
-- **CATIA V5 — no detalhe:** abre CATPart/CATProduct; para outros CADs depende de licenças e tradutores específicos; a troca habitual é STEP. [C]
-- **SolidWorks — no detalhe:**
-  - O **3D Interconnect** abre/insere nativos de CATIA V5 (V5 R8 a V5-6R2023), Creo (Pro/E 16 a Creo 10), NX (UG11 a NX 2406), Inventor (IPT/IAM), Solid Edge, entre outros [V, ajuda 2026 via busca]. O CATIA V5 exige SolidWorks Premium [V].
-  - **Abrir** mantém vínculo associativo com a peça original; **Inserir** põe o dado de terceiros na montagem sem converter; é possível atualizar, quebrar o vínculo, e as features SolidWorks seguintes se atualizam junto [V].
-  - O PDM reconhece essas referências no check-in e as lista como referências CAD, inclusive a submontagem Inventor com os filhos [V].
-- **Inventor — no detalhe:** o AnyCAD (Referência/Converter) suporta Fusion, CATIA, SolidWorks, Solid Edge, Creo, NX, JT, Alias, Rhino, IGES, Parasolid, STEP, SAT [V]; Referência vale para CATIA, SolidWorks, NX, STEP, Solid Edge, Creo etc. [V]. Em peça: edição de geometria importada, Direct Edit e "Copy to" funcionam; em montagem, restrições a geometria importada e BOM sim, mas não se modifica a estrutura importada nem espelha [V]. Arquivos Mechanical Desktop não mantêm vínculos [V].
+- **CAD avançado B — no detalhe:** abre CATPart/CATProduct; para outros CADs depende de licenças e tradutores específicos; a troca habitual é STEP. [C]
+- **CAD avançado A — no detalhe:**
+  - O **3D Interconnect** abre/insere nativos de CAD avançado B (V5 R8 a V5-6R2023), CAD avançado F (Pro/E 16 a CAD avançado F 10), CAD avançado G (UG11 a CAD avançado G 2406), CAD avançado C (IPT/IAM), CAD avançado H, entre outros [V, ajuda 2026 via busca]. O CAD avançado B exige CAD avançado A Premium [V].
+  - **Abrir** mantém vínculo associativo com a peça original; **Inserir** põe o dado de terceiros na montagem sem converter; é possível atualizar, quebrar o vínculo, e as features CAD avançado A seguintes se atualizam junto [V].
+  - O PDM reconhece essas referências no check-in e as lista como referências CAD, inclusive a submontagem CAD avançado C com os filhos [V].
+- **CAD avançado C — no detalhe:** o AnyCAD (Referência/Converter) suporta CAD avançado D, CAD avançado B, CAD avançado A, CAD avançado H, CAD avançado F, CAD avançado G, JT, Alias, CAD avançado I, IGES, kernel geométrico proprietário, STEP, SAT [V]; Referência vale para CAD avançado B, CAD avançado A, CAD avançado G, STEP, CAD avançado H, CAD avançado F etc. [V]. Em peça: edição de geometria importada, Direct Edit e "Copy to" funcionam; em montagem, restrições a geometria importada e BOM sim, mas não se modifica a estrutura importada nem espelha [V]. Arquivos Mechanical Desktop não mantêm vínculos [V].
 - **Outros:**
-  - **Onshape** importa nativos: CATIA v5 (R7–R33, V5-6R2026), SolidWorks (1999–2026), Inventor (9–2026), Creo (2000i–12), NX (UG15–NX 2512), Solid Edge (v10–2026). Montagem nativa vai em .zip com nome igual ao da montagem de topo [V].
+  - **CAD avançado E** importa nativos: CAD avançado B (R7–R33, V5-6R2026), CAD avançado A (1999–2026), CAD avançado C (9–2026), CAD avançado F (2000i–12), CAD avançado G (UG15–CAD avançado G 2512), CAD avançado H (v10–2026). Montagem nativa vai em .zip com nome igual ao da montagem de topo [V].
   - **Bibliotecas comerciais:**
-    - HOOPS Exchange: CATIA V5 até V5-6R2024, Creo até 11, NX até 2412, Parasolid até v37.1, SolidWorks 97–2025, JT até 10.9, STEP AP203/214/242, Inventor [V, lista da Communicator].
-    - CAD Exchanger SDK: SolidWorks, STEP, JT, STL e "30+" formatos, com PMI; C++/C#/Java/Python/JS [V, site].
-    - Spatial 3D InterOp: lê CATPart/CATProduct e SolidWorks sem licença do CAD de origem, mais NX/Solid Edge/SolidWorks via Parasolid embutido [V].
-    - Datakit CrossCad/Ware: SDK para editores de software, com CATIA V5 R/W, SolidWorks, Inventor, NX, Creo [V].
+    - HOOPS Exchange: CAD avançado B até V5-6R2024, CAD avançado F até 11, CAD avançado G até 2412, kernel geométrico proprietário até v37.1, CAD avançado A 97–2025, JT até 10.9, STEP AP203/214/242, CAD avançado C [V, lista da Communicator].
+    - CAD Exchanger SDK: CAD avançado A, STEP, JT, STL e "30+" formatos, com PMI; C++/C#/Java/Python/JS [V, site].
+    - Spatial 3D InterOp: lê CATPart/CATProduct e CAD avançado A sem licença do CAD de origem, mais CAD avançado G/CAD avançado H/CAD avançado A via kernel geométrico proprietário embutido [V].
+    - Datakit CrossCad/Ware: SDK para editores de software, com CAD avançado B R/W, CAD avançado A, CAD avançado C, CAD avançado G, CAD avançado F [V].
   - **Todas são pagas** e o preço não é público [V, Datakit/Spatial sem tabela].
 - **Fenkra hoje:** visão.md §6 declara a leitura de nativos fechados como **não-objetivo** ("A troca é feita por formatos neutros"). Nada implementado.
 - **Melhor prática para o Fenkra:**
@@ -225,13 +225,13 @@
 
 ---
 
-### DXF e DWG (2D) (CATIA: Save As dxf/dwg em Drafting / SW: Salvar como DXF/DWG; Importar DXF/DWG para sketch ou desenho / Inventor: DWG/DXF File Wizard, Export DWG / outros: Onshape DXF/DWG até 2018 / Fenkra: DXF R12 só gravação no desenho)
+### DXF e DWG (2D) (CAD avançado B: Save As dxf/dwg em Drafting / CAD avançado A: Salvar como DXF/DWG; Importar DXF/DWG para sketch ou desenho / CAD avançado C: DWG/DXF File Wizard, Export DWG / outros: CAD avançado E DXF/DWG até 2018 / Fenkra: DXF R12 só gravação no desenho)
 
 - **O que faz:** troca desenhos 2D e perfis de corte (chapa planificada, laser/plasma).
-- **CATIA V5 — no detalhe:** Save As dxf/dwg na Drafting; lote pelo BATCH-DXF-IGES-STEP [V]. Mapeamento de camadas/linhas por arquivo de configuração [C].
-- **SolidWorks — no detalhe:** Salvar como DXF/DWG de desenho e de chapa planificada; a tarefa Export Files faz DXF/DWG em lote (de desenhos) [V]. Importar: Assistente de Importação de DXF/DWG com destino (desenho, peça, sketch) e mapeamento de camadas [C].
-- **Inventor — no detalhe:** DWG/DXF File Wizard e abertura como **underlay DWG associativo**, que acompanha as mudanças no AutoCAD [V]; DXF, OBJ, STL, DWF Markup e IDF são não associativos e geram relatório de tradução [V].
-- **Outros:** Onshape importa DWG até 2018 e DXF até 2013/2018 e grava PDF, DWG, DXF, DWT, SVG, PNG, JPEG [V].
+- **CAD avançado B — no detalhe:** Save As dxf/dwg na Drafting; lote pelo BATCH-DXF-IGES-STEP [V]. Mapeamento de camadas/linhas por arquivo de configuração [C].
+- **CAD avançado A — no detalhe:** Salvar como DXF/DWG de desenho e de chapa planificada; a tarefa Export Files faz DXF/DWG em lote (de desenhos) [V]. Importar: Assistente de Importação de DXF/DWG com destino (desenho, peça, sketch) e mapeamento de camadas [C].
+- **CAD avançado C — no detalhe:** DWG/DXF File Wizard e abertura como **underlay DWG associativo**, que acompanha as mudanças no CAD avançado J [V]; DXF, OBJ, STL, DWF Markup e IDF são não associativos e geram relatório de tradução [V].
+- **Outros:** CAD avançado E importa DWG até 2018 e DXF até 2013/2018 e grava PDF, DWG, DXF, DWT, SVG, PNG, JPEG [V].
 - **Fenkra hoje:**
   - Gravação: `export.rs:51-150` gera **DXF R12 (ASCII)** com camadas por tipo de linha; `export.rs:265-283` exporta por sufixo; `dwg_ui.rs:242` liga o botão. Teste em `fenkra-desenho/src/lib.rs:821`.
   - R12 é de 1992: sem spline nativa, sem cor verdadeira, sem espessura de linha moderna e sem Unicode (usa `%%c %%d %%p`, `export.rs:153`) [C].
@@ -245,16 +245,16 @@
 
 ---
 
-### Malhas: STL, 3MF, OBJ, PLY, glTF, VRML (CATIA: Save As stl/wrl/cgr / SW: STL, 3MF, VRML / Inventor: STL, OBJ, 3MF / outros: Onshape glTF, 3MF, OBJ / Fenkra: STL (ex.), STL/OBJ (imp.))
+### Malhas: STL, 3MF, OBJ, PLY, glTF, VRML (CAD avançado B: Save As stl/wrl/cgr / CAD avançado A: STL, 3MF, VRML / CAD avançado C: STL, OBJ, 3MF / outros: CAD avançado E glTF, 3MF, OBJ / Fenkra: STL (ex.), STL/OBJ (imp.))
 
 - **O que faz:** troca facetada para impressão 3D, visualização e renderização.
-- **CATIA V5 — no detalhe:** grava STL e VRML (e CGR, formato leve próprio) pelo Save As; STL com tolerância/"sag" configurável [C].
-- **SolidWorks — no detalhe:** STL e 3MF com opções de resolução (grosseira, fina, personalizada: desvio e ângulo), unidades e "salvar todos os componentes em um arquivo" [C]; VRML com cor.
-- **Inventor — no detalhe:** STL com unidades, resolução e binário/ASCII; OBJ e 3MF na importação e exportação [C]; importação de OBJ/STL é não associativa e gera relatório [V].
+- **CAD avançado B — no detalhe:** grava STL e VRML (e CGR, formato leve próprio) pelo Save As; STL com tolerância/"sag" configurável [C].
+- **CAD avançado A — no detalhe:** STL e 3MF com opções de resolução (grosseira, fina, personalizada: desvio e ângulo), unidades e "salvar todos os componentes em um arquivo" [C]; VRML com cor.
+- **CAD avançado C — no detalhe:** STL com unidades, resolução e binário/ASCII; OBJ e 3MF na importação e exportação [C]; importação de OBJ/STL é não associativa e gera relatório [V].
 - **Outros:**
   - **OCCT:** STL RW (DESTL), OBJ RW (DEOBJ), glTF/GLB RW (DEGLTF), VRML RW (DEVRML), PLY só gravação (DEPLY) [V].
   - **3MF** não está no OCCT [V: ausente]. Especificação: Core v1.3.0, Materiais v1.2.1, Produção v1.1.2, Beam Lattice v1.2.0, e é a norma ISO/IEC 25422:2025 com patentes licenciadas royalty-free [V]. Um 3MF é ZIP + XML [C]; carrega **unidades, múltiplos objetos, transformações, cores/materiais** [C].
-  - Importar malha vira "corpo de malha" no CATIA/SW/Inventor, mas o Fenkra converte em B-rep facetado (feature Malha).
+  - Importar malha vira "corpo de malha" no CAD avançado B/CAD avançado A/CAD avançado C, mas o Fenkra converte em B-rep facetado (feature Malha).
 - **Fenkra hoje:**
   - Exportar STL: `kernel.cpp:996-1002` — `BRepMesh_IncrementalMesh(s, 0.05, False, 0.3, True)` (deflexão linear **absoluta fixa de 0,05**, angular 0,3 rad) e `StlAPI_Writer` com modo padrão (ASCII é o padrão do OCCT [C], gera arquivo grande). Qualidade fixa, ligada ao tema B61.
   - Importar: `mesh_io.rs` lê STL binário/texto e OBJ (leque de triângulos para polígonos); **teto de 200 mil triângulos** (`mesh_io.rs:11`); feature `MeshImport` (`doc.rs:1856`) guarda **caminho absoluto/relativo** e `solid`; `mesh_shape` (`hybrid.inc:370-401`) costura com tolerância 1e-6 e tenta virar sólido (`ShapeFix_Solid`).
@@ -268,39 +268,39 @@
 
 ---
 
-### PDF 3D (PRC / U3D) (CATIA: 3D PDF via 3DEXPERIENCE / SW: Publish to 3D PDF (MBD) / Inventor: Export 3D PDF / outros: HOOPS Publish / Fenkra: PDF 2D vetorial)
+### PDF 3D (PRC / U3D) (CAD avançado B: 3D PDF via plataforma PLM avançada / CAD avançado A: Publish to 3D PDF (MBD) / CAD avançado C: Export 3D PDF / outros: HOOPS Publish / Fenkra: PDF 2D vetorial)
 
 - **O que faz:** embute um modelo 3D (e PMI) dentro de um PDF para revisão sem CAD.
-- **CATIA/SW/Inventor:** o SW e o Inventor publicam 3D PDF a partir do MBD/templates [C]; detalhes de cada um não confirmados.
+- **CAD avançado B/CAD avançado A/CAD avançado C:** o CAD avançado A e o CAD avançado C publicam 3D PDF a partir do MBD/templates [C]; detalhes de cada um não confirmados.
 - **Outros:** **PRC** é o ISO 14739-1:2014 e foi incorporado ao PDF 2.0; **U3D** é o ECMA-363, do PDF 1.7 [V]. A diferença de conteúdo (B-rep exato × malha; PMI) não ficou confirmada nesta pesquisa [V parcial]. O HOOPS Publish grava 3D PDF [V parcial]. Extensões ISO acrescentaram STEP AP242 e glTF em PDF [V].
 - **Fenkra hoje:** PDF 2D vetorial gerado em `export.rs` (`pdf(&pages)`); sem 3D.
 - **Melhor prática para o Fenkra:** prioridade baixa (P3). Se feito, **U3D com malha + vistas de PMI do Fenkra** (as `pmi_captures`) embutido no PDF do desenho, gerado por código próprio (a estrutura PDF 3D é um *annotation* + stream U3D). Alternativa de custo mínimo: anexar o **glTF/STEP como arquivo anexo** do PDF. Teste: `pdf3d_abre_no_leitor_de_referencia` (manual).
 
 ---
 
-### VRML (CATIA: Save As wrl / SW: VRML / Inventor: — / outros: Onshape — / Fenkra: nenhum)
+### VRML (CAD avançado B: Save As wrl / CAD avançado A: VRML / CAD avançado C: — / outros: CAD avançado E — / Fenkra: nenhum)
 
 - **O que faz:** formato de malha colorida antigo, ainda usado em visualização e impressão colorida.
-- **Detalhe por CAD:** CATIA e SolidWorks gravam `.wrl` [C]. O PDM do SolidWorks tem opções avançadas de conversão VRML [V].
+- **Detalhe por CAD:** CAD avançado B e CAD avançado A gravam `.wrl` [C]. O PDM do CAD avançado A tem opções avançadas de conversão VRML [V].
 - **Fenkra hoje:** nada. O OCCT tem `DEVRML` RW (saída malha) [V].
 - **Melhor prática para o Fenkra:** P3. Reaproveitar o gerador de malha do STL/glTF; entrada VRML não é prioridade (usar glTF/3MF). Teste: `vrml_cor_por_corpo`.
 
 ---
 
-### IFC (BIM) (CATIA: — / SW: Abrir IFC (3D Interconnect) / Inventor: — / outros: HOOPS IFC XML, Revit / Fenkra: nenhum, "fase BIM" em reuso-opensource.md)
+### IFC (BIM) (CAD avançado B: — / CAD avançado A: Abrir IFC (3D Interconnect) / CAD avançado C: — / outros: HOOPS IFC XML, software BIM avançado / Fenkra: nenhum, "fase BIM" em reuso-opensource.md)
 
 - **O que faz:** troca de modelos de edificação (estrutura, instalações), com classes semânticas (IfcBeam, IfcWall) e geometria implícita.
-- **SolidWorks:** abre IFC pelo 3D Interconnect [V]. **HOOPS** lê/grava IFC [V parcial].
+- **CAD avançado A:** abre IFC pelo 3D Interconnect [V]. **HOOPS** lê/grava IFC [V parcial].
 - **Outros:** o **IfcOpenShell** usa o OCCT para converter geometria implícita em B-rep, inclusive para STEP/OBJ/DAE; o iterador entrega formas OCCT sem triangular (`DISABLE_TRIANGULATION` + `USE_BREP_DATA`) [V]. A conversão **STEP→IFC** não é automática, pois falta semântica; exige construir a hierarquia projeto/local/edificação [V]. O IfcOpenShell é LGPL-3.0 (`reuso-opensource.md`) [V no repositório do Fenkra].
 - **Fenkra hoje:** BIM é **não-objetivo** (visão.md §6), mas o módulo Estrutural (perfis, soldas) pode se beneficiar de IFC.
 - **Melhor prática para o Fenkra:** P3, fase posterior. Importação de IFC como **referência somente leitura** (geometria via IfcOpenShell → forma OCCT), e exportação de perfis estruturais como `IfcBeam/IfcMember` com perfil e material (valor para escritórios de estrutura metálica). Teste: `ifc_viga_i_ida_e_volta_conserva_perfil`.
 
 ---
 
-### Escolha das bibliotecas: OpenCascade × comerciais × abertas (CATIA/SW/Inventor: motores próprios + Datakit/Spatial/HOOPS / outros: Onshape (Parasolid), FreeCAD / Fenkra: OCCT)
+### Escolha das bibliotecas: OpenCascade × comerciais × abertas (CAD avançado B/CAD avançado A/CAD avançado C: motores próprios + Datakit/Spatial/HOOPS / outros: CAD avançado E (kernel geométrico proprietário), FreeCAD / Fenkra: OCCT)
 
 - **O que faz:** define quem lê e grava cada formato.
-- **Como os três fazem:** SolidWorks e Inventor combinam tradutores próprios, o kernel Parasolid/ACIS e componentes de terceiros [C]. O CATIA usa tradutores próprios (CGM) e o Datakit atua como parceiro em integrações [V parcial]. Onshape mostra que dá para ter um catálogo enorme de nativos com um motor central (Parasolid + tradutores) [V].
+- **Como os três fazem:** CAD avançado A e CAD avançado C combinam tradutores próprios, o kernel kernel geométrico proprietário/ACIS e componentes de terceiros [C]. O CAD avançado B usa tradutores próprios (CGM) e o Datakit atua como parceiro em integrações [V parcial]. CAD avançado E mostra que dá para ter um catálogo enorme de nativos com um motor central (kernel geométrico proprietário + tradutores) [V].
 - **Panorama:**
 
   | Camada | O que cobre | Licença/custo | Fenkra |
@@ -310,7 +310,7 @@
   | IfcOpenShell | IFC | LGPL-3.0 [V] | futuro |
   | LibreDWG | DWG | **GPL-3.0**; escrita limitada [V] | só processo externo |
   | ODA (Teigha) | DWG/DGN/IFC | associação paga [V parcial] | descartar no núcleo |
-  | HOOPS Exchange / CAD Exchanger / Spatial 3D InterOp / Datakit | nativos CATIA/SW/Inventor/Creo/NX/JT/Parasolid | comercial, preço não público [V] | plugin opcional |
+  | HOOPS Exchange / CAD Exchanger / Spatial 3D InterOp / Datakit | nativos CAD avançado B/CAD avançado A/CAD avançado C/CAD avançado F/CAD avançado G/JT/kernel geométrico proprietário | comercial, preço não público [V] | plugin opcional |
 
 - **Fenkra hoje:** `build.rs` liga todos os `TK*` do OCCT do vcpkg (`build.rs:38-44`), então os toolkits de DE já estão linkados. Só o `STEPControl_Reader/Writer` e o `StlAPI_Writer` são usados (`kernel.cpp:105-110`).
 - **Melhor prática para o Fenkra:**
@@ -321,55 +321,55 @@
 
 ---
 
-### Reparo na importação: healing, costura, tolerâncias e unidades (CATIA: Healing/Join, GSD / SW: Import Diagnostics, Check / Inventor: Repair, Heal Errors, Auto Stitch / outros: Creo Import DataDoctor [C], NX / Fenkra: ShapeFix e Sewing em superfícies)
+### Reparo na importação: healing, costura, tolerâncias e unidades (CAD avançado B: Healing/Join, GSD / CAD avançado A: Import Diagnostics, Check / CAD avançado C: Repair, Heal Errors, Auto Stitch / outros: CAD avançado F Import DataDoctor [C], CAD avançado G / Fenkra: ShapeFix e Sewing em superfícies)
 
 - **O que faz:** corrige lacunas, faces inválidas, tolerâncias incoerentes e conversão de unidades logo depois da leitura, para obter um sólido utilizável.
-- **CATIA V5 — no detalhe:** a opção "Join" do IGES define a tolerância de junção [V]; valores de tolerância do arquivo CATIA são frequentemente pequenos demais para outros sistemas (cerca de uma ordem de grandeza) [V, Altair]. O healing de superfícies é feito em Generative Shape Design (Healing / Join com tolerância e ângulo) [C]. Falhas de STEP sem sólido ou faltando faces ficam registradas pela IBM [V].
-- **SolidWorks — no detalhe:**
+- **CAD avançado B — no detalhe:** a opção "Join" do IGES define a tolerância de junção [V]; valores de tolerância do arquivo CAD avançado B são frequentemente pequenos demais para outros sistemas (cerca de uma ordem de grandeza) [V, Altair]. O healing de superfícies é feito em Generative Shape Design (Healing / Join com tolerância e ângulo) [C]. Falhas de STEP sem sólido ou faltando faces ficam registradas pela IBM [V].
+- **CAD avançado A — no detalhe:**
   - **Import Diagnostics** procura faces com defeito e **lacunas (gaps)**, e oferece: *Atribuir curar tudo*, reparar faces, **Heal Gap** (ajusta faces vizinhas, senão costura uma face nova), **Remove Gap** (remove as faces adjacentes) e **Delete Face** como último recurso [V]. A ordem influencia o resultado ("Attempt to Heal All é dependente da ordem") [V]. Sucesso = mensagem verde "nenhuma face com defeito ou lacuna" [V].
   - Só roda quando a árvore tem apenas corpos importados (sem features) e o 3D Interconnect desligado ou dissolvido [V]. Para montagens: Avaliar > Verificar, selecionando cada falha para localizar o componente [V].
-- **Inventor — no detalhe:** ambiente **Reparar**: *Find Errors* examina topologia, geometria e modelagem; *Heal Errors* usa uma **tolerância permitida** (e a ajuda recomenda *Analyze Selected Bodies* para prever quantos erros a tolerância corrige antes de aplicar) [V]. Na importação: *Check Parts during Load*, *Auto Stitch and Promote*, *Enable Advanced Healing* (permite pequenas alterações de superfície para costurar) e *Importar para ambiente de Reparo* [V]. Se Heal Errors falha, as ferramentas de superfície ou apagar e refazer a geometria [V].
+- **CAD avançado C — no detalhe:** ambiente **Reparar**: *Find Errors* examina topologia, geometria e modelagem; *Heal Errors* usa uma **tolerância permitida** (e a ajuda recomenda *Analyze Selected Bodies* para prever quantos erros a tolerância corrige antes de aplicar) [V]. Na importação: *Check Parts during Load*, *Auto Stitch and Promote*, *Enable Advanced Healing* (permite pequenas alterações de superfície para costurar) e *Importar para ambiente de Reparo* [V]. Se Heal Errors falha, as ferramentas de superfície ou apagar e refazer a geometria [V].
 - **Outros:** o guia STEP do OCCT afirma que o shape processing (ShapeFix) roda automaticamente depois da leitura e antes da gravação, usando `ShapeFix_Wire` (auto-interseção, conexões) e `ShapeFix_Edge::SameParameter`; as tolerâncias são ajustadas conforme a geometria local, podendo ficar maiores ou menores que a do arquivo; no modo Forced a forma pode sair inválida [V]. Um fórum do OCCT confirma que o *UnifySameDomain* só funcionou depois do round-trip STEP (por causa do shape processing) e que faces em cascas separadas sem aresta comum nunca se unem (precisa costurar antes) [V].
 - **Fenkra hoje:**
   - Há ingredientes no kernel: `sewn(...)` e `close_surface` (`hybrid.inc:43, 304-335`, costura + tampas planas/preenchimento + `ShapeFix_Solid`), `ShapeFix_Shape` + `UnifySameDomain` (`hybrid.inc:160-164`), `unify` (`kernel.cpp:147`).
   - **Não** são aplicados ao resultado de `import_step`, e não há relatório de erros (`BRepCheck_Analyzer`), nem tolerância configurável por importação, nem unidade.
 - **Melhor prática para o Fenkra:**
   - **Pipeline fixo, em estágios que gravam no relatório:** (1) unidades; (2) leitura com precisão do arquivo; (3) `ShapeAnalysis`/`BRepCheck_Analyzer` → lista de defeitos (faces, arestas, lacunas, cascas abertas, sólidos invertidos, volume < 0); (4) `ShapeFix_Shape` com tolerâncias; (5) costura (`BRepBuilderAPI_Sewing`) quando há cascas soltas; (6) fechamento em sólido (`ShapeFix_Solid`, como no Fenkra); (7) `UnifySameDomain` (opcional, "simplificar"); (8) reavaliação (mesma lista) e comparação de volume/área antes e depois.
-  - **Níveis:** *Nenhum* (somente leitura), *Padrão* (ShapeFix do leitor), *Agressivo* (aumenta a tolerância em passos e mostra o quanto subiu, como a tolerância permitida do Inventor).
+  - **Níveis:** *Nenhum* (somente leitura), *Padrão* (ShapeFix do leitor), *Agressivo* (aumenta a tolerância em passos e mostra o quanto subiu, como a tolerância permitida do CAD avançado C).
   - **Diagnóstico interativo:** lista de falhas (faces/lacunas) com realce na viewport e ações *Reparar / Remover / Costurar / Ignorar*, no padrão Editar/Substituir/Isolar/Desativar do ADR 0011 (princípio 1). Nunca "escolher outra geometria em silêncio".
   - **Unidades:** ler a unidade do arquivo; se for diferente da do Fenkra, **perguntar** (padrão: converter) e registrar. Aviso se o bounding box ficar absurdo (< 0,01 mm ou > 100 m).
   - **Testes:** `import_com_lacuna_aparece_no_diagnostico`, `heal_agressivo_nao_muda_volume_alem_de_1e-4`, `import_polegadas_converte_para_mm`, `cascas_soltas_costuram_em_um_solido`, `unir_faces_nao_remove_arestas_de_costura_da_peça_original`.
 
 ---
 
-### Relatório de conversão e diagnóstico (CATIA: Update Diagnosis/Analyze / SW: What's Wrong, Import Diagnostics / Inventor: Translation Report, Design Doctor / outros: Onshape aba original / Fenkra: toast de uma linha)
+### Relatório de conversão e diagnóstico (CAD avançado B: Update Diagnosis/Analyze / CAD avançado A: What's Wrong, Import Diagnostics / CAD avançado C: Translation Report, Design Doctor / outros: CAD avançado E aba original / Fenkra: toast de uma linha)
 
 - **O que faz:** explica o que foi lido, o que foi perdido e o que foi alterado.
-- **CATIA V5:** não há relatório gráfico padrão da tradução; o resultado aparece na árvore e nos Geometrical Sets, e o diagnóstico é manual [C].
-- **SolidWorks:** o Import Diagnostics lista falhas; a janela de resultado mostra "sem faces ou lacunas" [V]. Mensagens de entidades ignoradas na importação IGES [V].
-- **Inventor:** o **relatório de tradução** pode ser embutido (ícone sob o nó 3rd Party; duplo clique para ver) ou salvo em disco (HTML) [V].
+- **CAD avançado B:** não há relatório gráfico padrão da tradução; o resultado aparece na árvore e nos Geometrical Sets, e o diagnóstico é manual [C].
+- **CAD avançado A:** o Import Diagnostics lista falhas; a janela de resultado mostra "sem faces ou lacunas" [V]. Mensagens de entidades ignoradas na importação IGES [V].
+- **CAD avançado C:** o **relatório de tradução** pode ser embutido (ícone sob o nó 3rd Party; duplo clique para ver) ou salvo em disco (HTML) [V].
 - **Outros:** o OCCT informa as entidades não traduzidas do IGES [V] e permite checar o modelo antes da transferência no leitor STEP [V].
 - **Fenkra hoje:** `app.rs:889` mostra só "Exportado: caminho" ou "Falha ao exportar: …". A feature `MeshImport` devolve texto de status ("N triângulos → sólido", `lib.rs:4085, 4092`), que é o embrião de relatório.
 - **Melhor prática para o Fenkra:**
   - **Estrutura `Relatorio`:** cabeçalho (arquivo, hash, formato, AP/versão, tamanho, tempo, versão do Fenkra/OCCT), unidades detectadas e aplicadas, contagens (produtos, instâncias, corpos, faces, arestas, superfícies, curvas, pontos), **o que foi ignorado** por categoria com contagem e exemplo, avisos de reparo (antes/depois), tolerâncias, resultado final por corpo (sólido/casca/malha) e links "ir para o corpo". Mensagens em três níveis: info, aviso, erro.
-  - **Persistência:** embutido na peça (como o Inventor), em "Relatórios" na árvore do projeto, e exportável (HTML/JSON).
+  - **Persistência:** embutido na peça (como o CAD avançado C), em "Relatórios" na árvore do projeto, e exportável (HTML/JSON).
   - **Exportação também tem relatório:** o que foi levado/omitido, tamanho, hash do arquivo gerado, esquema usado.
   - **Teste:** `relatorio_lista_entidades_ignoradas`, `relatorio_serializa_e_reabre`, `relatorio_de_exportacao_traz_hash`.
 
 ---
 
-### Reconhecimento de features após importar e modelagem direta (CATIA: Power Copy / Healing + "extract history" [C] / SW: FeatureWorks / Inventor: Direct Edit, Copy to / outros: NX e Solid Edge Synchronous Technology, Fusion direct, Creo Flexible Modeling [C] / Fenkra: nenhuma)
+### Reconhecimento de features após importar e modelagem direta (CAD avançado B: Power Copy / Healing + "extract history" [C] / CAD avançado A: FeatureWorks / CAD avançado C: Direct Edit, Copy to / outros: CAD avançado G e CAD avançado H Synchronous Technology, Fusion direct, CAD avançado F Flexible Modeling [C] / Fenkra: nenhuma)
 
 - **O que faz:** devolve parametria (furos, filetes, extrusões) a um corpo importado ou permite editá-lo sem histórico.
-- **CATIA V5 — no detalhe:** o STEP chega sem histórico, o sólido fica como corpo isolado [V]. Um tutorial de comunidade descreve "extrair histórico" de peças importadas com ferramenta de reconhecimento de features, mas não pude ler os passos [V parcial]. Power Copy não instancia com sólido isolado como entrada [V, IBM].
-- **SolidWorks — no detalhe (FeatureWorks):**
+- **CAD avançado B — no detalhe:** o STEP chega sem histórico, o sólido fica como corpo isolado [V]. Um tutorial de comunidade descreve "extrair histórico" de peças importadas com ferramenta de reconhecimento de features, mas não pude ler os passos [V parcial]. Power Copy não instancia com sólido isolado como entrada [V, IBM].
+- **CAD avançado A — no detalhe (FeatureWorks):**
   - Reconhece features em corpos sólidos importados e os transforma em features nativas editáveis [V].
   - Modos: **automático**, **interativo** (escolhe faces, tipo de feature e marca "Recognize similar"/"Recognize pattern") e **passo a passo** (reconhece, salva e volta depois) [V].
   - Furos simples, cônicos, escareados, com rebaixo e contrafuro nos modos automático e interativo; lofts e varreduras só interativos; padrões de sketch só interativos [V]. Opção "Chain fillet faces" nos filetes [V].
   - Multicorpo: um corpo por vez, pelo menu do corpo importado [V].
   - Features não suportadas: apagar (com os dependentes) ou mapear como *Thicken* (mantém a geometria; só para certos lofts, varreduras e furos) [V]. Limites: imprints parciais e padrão de padrão não são reconhecidos [V].
-- **Inventor — no detalhe:** Direct Edit e "Copy to" funcionam em peça importada [V]; no AnyCAD em peça, a edição direta da geometria importada é permitida (mas não o Solid Edit nem o Reparo em Referência) [V]. Reconhecimento automático de histórico: [C] limitado (conversão para chapa metálica reconhece dobras [C]).
-- **Outros:** NX e Solid Edge usam a **Synchronous Technology** para extrair intenção de projeto de dado importado e editar sem histórico [V parcial]. Fusion edita corpos importados direto [C].
+- **CAD avançado C — no detalhe:** Direct Edit e "Copy to" funcionam em peça importada [V]; no AnyCAD em peça, a edição direta da geometria importada é permitida (mas não o Solid Edit nem o Reparo em Referência) [V]. Reconhecimento automático de histórico: [C] limitado (conversão para chapa metálica reconhece dobras [C]).
+- **Outros:** CAD avançado G e CAD avançado H usam a **Synchronous Technology** para extrair intenção de projeto de dado importado e editar sem histórico [V parcial]. Fusion edita corpos importados direto [C].
 - **Fenkra hoje:** nada. Existem features paramétricas próprias (furo, filete, chanfro, casca) e `smart-fastener.md` registra a limitação conhecida: *"não reconhece furos em corpos importados quando o cilindro não é um recurso separado"* [V no repositório].
 - **Melhor prática para o Fenkra:**
   - **Fase 1 — analisar, não reescrever:** varrer as faces do corpo importado (cilindros côncavos fechados = furos; planos paralelos = patamares; toroides tangentes = filetes; cones coaxiais = escareados) e **marcar** (anotação, não feature): "Furo Ø8 passante" selecionável pelo Assistente de fixação (corrige o gargalo de `smart-fastener.md`). Também alimenta DFM e a tabela de furos do desenho.
@@ -380,32 +380,32 @@
 
 ---
 
-### Destino da importação: peça, montagem, superfícies e estrutura (CATIA: Product/Part/Geometrical Set, Insert Existing Component / SW: peça multicorpo × montagem, Opções gerais / Inventor: "Importar montagem como peça única", destino dos arquivos / outros: Onshape zip / Fenkra: coletores de corpos, `fenkra-montagem`)
+### Destino da importação: peça, montagem, superfícies e estrutura (CAD avançado B: Product/Part/Geometrical Set, Insert Existing Component / CAD avançado A: peça multicorpo × montagem, Opções gerais / CAD avançado C: "Importar montagem como peça única", destino dos arquivos / outros: CAD avançado E zip / Fenkra: coletores de corpos, `fenkra-montagem`)
 
 - **O que faz:** decide em que estrutura de documento o conteúdo lido se transforma.
-- **CATIA V5:** STEP de montagem vira Product com Parts; superfícies de IGES vão para Geometrical Sets; sólidos para Part Bodies [V parcial]. Insert Existing Component traz o arquivo para uma montagem [C].
-- **SolidWorks:** a opção "ignorar estrutura de montagem" cria peça multicorpo; "múltiplos corpos como peças" divide [V]. O Enable Filter seleciona componentes [V].
-- **Inventor:**
+- **CAD avançado B:** STEP de montagem vira Product com Parts; superfícies de IGES vão para Geometrical Sets; sólidos para Part Bodies [V parcial]. Insert Existing Component traz o arquivo para uma montagem [C].
+- **CAD avançado A:** a opção "ignorar estrutura de montagem" cria peça multicorpo; "múltiplos corpos como peças" divide [V]. O Enable Filter seleciona componentes [V].
+- **CAD avançado C:**
   - *Importar montagem como peça única* (compósito único ou peça de múltiplos sólidos) [V].
   - *Salvar componentes durante o carregamento*, *Pasta de destino dos componentes* e *Montagem de topo em pasta separada* [V].
   - Reorganização dos nós de navegador (Rename Browser Nodes: arquivo × PN) [V].
-- **Outros:** Onshape cria Part Studios/Assemblies a partir do arquivo [V].
+- **Outros:** CAD avançado E cria Part Studios/Assemblies a partir do arquivo [V].
 - **Fenkra hoje:** `Document.collectors` (corpos) e `fenkra-montagem::Assembly::add_component(name, kind, placement, parent)` (`montagem/lib.rs:536`). ADR 0011 (princípio 5) manda: "componente novo exige nome e pasta".
 - **Melhor prática para o Fenkra:**
   - **Opções de destino** (padrão conforme o conteúdo): *Um corpo → peça nova*; *vários corpos, mesmo produto → peça multicorpo (coletores)*; *vários produtos → montagem + um arquivo de peça por produto, no projeto, com PN gerado pelo motor de PN*; *só superfícies/curvas → referências na peça*; *"montagem como uma peça só"* para simplificar.
-  - **Antes de gravar:** mostrar a lista "Será criado: N arquivos em <pasta>" e permitir renomear (como o Inventor); nunca gravar escondido.
+  - **Antes de gravar:** mostrar a lista "Será criado: N arquivos em <pasta>" e permitir renomear (como o CAD avançado C); nunca gravar escondido.
   - **Instâncias:** produtos repetidos viram uma peça + N posições (sem duplicar geometria).
   - **Testes:** `import_montagem_cria_n_pecas_e_posicoes`, `import_instancias_repetidas_compartilham_peca`, `import_exige_pasta_e_nome`, `import_como_peça_unica_gera_multicorpo`.
 
 ---
 
-### Conversão em lote (CATIA: Batch Monitor BATCH-DXF-IGES-STEP / SW: Task Scheduler (Export Files, Convert Files), PDM Convert task / Inventor: Task Scheduler + Vault / outros: Onshape API / Fenkra: nenhum)
+### Conversão em lote (CAD avançado B: Batch Monitor BATCH-DXF-IGES-STEP / CAD avançado A: Task Scheduler (Export Files, Convert Files), PDM Convert task / CAD avançado C: Task Scheduler + Vault / outros: CAD avançado E API / Fenkra: nenhum)
 
 - **O que faz:** converte muitos arquivos sem interação, com fila, registro e reexecução.
-- **CATIA V5 — no detalhe:** ferramenta `Batch Monitor` (pasta Tools do CATIA, ou `CATUTIL.exe`) com a opção BATCH-DXF-IGES-STEP; **escolhe-se o formato de saída antes de adicionar os arquivos** (não dá para mudar depois sem remover o arquivo) [V]. Restrições conhecidas: com o **cache ligado** o STEP em lote pode sair errado (desligar o cache) [V, IBM]; licenças STEP selecionadas ao mesmo tempo no lote e no interativo conflitam (usar a ST1 compartilhada no lote e deixar as opções interativas) [V, IBM]; relato de peças faltando em montagens grandes no lote [V, GrabCAD].
-- **SolidWorks — no detalhe:** o **Task Scheduler** (aplicativo separado) tem a tarefa *Export Files* (DXF, DWG, IGES, PDF, STEP AP203/AP214, JPEG; desenhos para DXF/DWG/PDF, peças e montagens para IGES/STEP), com arquivos ou pastas (com exclusão de subpastas), saída ao lado do original ou em outra pasta, agendamento único/diário/semanal/mensal, pasta de trabalho e tempo limite; cada arquivo vira uma subtarefa [V]. *Convert Files* atualiza arquivos de versões antigas (qualquer licença); as demais exigem Professional/Premium [V]. A tarefa **Convert do PDM** gera STEP/IGES/DWG/DXF/PDF/ACIS/Parasolid/STL/VRML/eDrawings com opções avançadas por formato [V].
-- **Inventor — no detalhe:** tarefas em lote por Task Scheduler/Vault [C].
-- **Outros:** Onshape expõe tradução por API [V parcial].
+- **CAD avançado B — no detalhe:** ferramenta `Batch Monitor` (pasta Tools do CAD avançado B, ou `CATUTIL.exe`) com a opção BATCH-DXF-IGES-STEP; **escolhe-se o formato de saída antes de adicionar os arquivos** (não dá para mudar depois sem remover o arquivo) [V]. Restrições conhecidas: com o **cache ligado** o STEP em lote pode sair errado (desligar o cache) [V, IBM]; licenças STEP selecionadas ao mesmo tempo no lote e no interativo conflitam (usar a ST1 compartilhada no lote e deixar as opções interativas) [V, IBM]; relato de peças faltando em montagens grandes no lote [V, GrabCAD].
+- **CAD avançado A — no detalhe:** o **Task Scheduler** (aplicativo separado) tem a tarefa *Export Files* (DXF, DWG, IGES, PDF, STEP AP203/AP214, JPEG; desenhos para DXF/DWG/PDF, peças e montagens para IGES/STEP), com arquivos ou pastas (com exclusão de subpastas), saída ao lado do original ou em outra pasta, agendamento único/diário/semanal/mensal, pasta de trabalho e tempo limite; cada arquivo vira uma subtarefa [V]. *Convert Files* atualiza arquivos de versões antigas (qualquer licença); as demais exigem Professional/Premium [V]. A tarefa **Convert do PDM** gera STEP/IGES/DWG/DXF/PDF/ACIS/kernel geométrico proprietário/STL/VRML/eDrawings com opções avançadas por formato [V].
+- **CAD avançado C — no detalhe:** tarefas em lote por Task Scheduler/Vault [C].
+- **Outros:** CAD avançado E expõe tradução por API [V parcial].
 - **Fenkra hoje:** nada. `RF-DES-045` pede "exportar várias folhas em lote" (`desenho.md:60`), e `RF-GPR-006` exportar estrutura para CSV (`gestao-projeto.md:15`); só o CSV existe (`fenkra-project/src/lib.rs:267`).
 - **Melhor prática para o Fenkra:**
   - **Entidade `Lote`:** entradas (arquivos/pastas/documentos do projeto/seleção da árvore), perfil de saída (formato + opções), regra de nome (`{PN}_{REV}.{ext}`), pasta de saída, política para existente (pular/sobrescrever/versionar), **simulação** (lista o que faria).
@@ -416,30 +416,30 @@
 
 ---
 
-### Vínculo com o original: Referência × Converter e atualização (CATIA: Insert Existing Component, links externos (->) / SW: 3D Interconnect Open/Insert, atualizar, quebrar vínculo / Inventor: AnyCAD Referência/Converter, ícone Atualizar / outros: Onshape retradução / Fenkra: ADR 0010 (links ->, ->?, ->*, ->x))
+### Vínculo com o original: Referência × Converter e atualização (CAD avançado B: Insert Existing Component, links externos (->) / CAD avançado A: 3D Interconnect Open/Insert, atualizar, quebrar vínculo / CAD avançado C: AnyCAD Referência/Converter, ícone Atualizar / outros: CAD avançado E retradução / Fenkra: ADR 0010 (links ->, ->?, ->*, ->x))
 
 - **O que faz:** mantém ou corta a ligação entre o modelo no CAD e o arquivo de origem.
-- **CATIA V5:** não há vínculo associativo com STEP; a importação cria uma cópia (isolada) [C]; para CATPart usa links entre documentos.
-- **SolidWorks — no detalhe:** com o 3D Interconnect, **Abrir** cria vínculo associativo; ao mudar o original, atualiza o modelo e as features seguintes; **quebrar vínculo** converte em peça comum; **Inserir** põe sem converter [V]. A coluna "Update Available?" da tabela de formatos diz quais nativos atualizam [V].
-- **Inventor — no detalhe:** **Referência** monitora o arquivo e mostra um ícone Atualizar na barra de acesso rápido; **Converter** não tem vínculo e é independente [V]. STEP referenciado: cada atualização é uma nova tradução — risco para as features construídas sobre ele [V]. Alterações no Inventor **não voltam** ao STEP, que deve ser reexportado [V, fórum].
-- **Outros:** o Onshape mantém a aba do arquivo original e permite retraduzir [V].
+- **CAD avançado B:** não há vínculo associativo com STEP; a importação cria uma cópia (isolada) [C]; para CATPart usa links entre documentos.
+- **CAD avançado A — no detalhe:** com o 3D Interconnect, **Abrir** cria vínculo associativo; ao mudar o original, atualiza o modelo e as features seguintes; **quebrar vínculo** converte em peça comum; **Inserir** põe sem converter [V]. A coluna "Update Available?" da tabela de formatos diz quais nativos atualizam [V].
+- **CAD avançado C — no detalhe:** **Referência** monitora o arquivo e mostra um ícone Atualizar na barra de acesso rápido; **Converter** não tem vínculo e é independente [V]. STEP referenciado: cada atualização é uma nova tradução — risco para as features construídas sobre ele [V]. Alterações no CAD avançado C **não voltam** ao STEP, que deve ser reexportado [V, fórum].
+- **Outros:** o CAD avançado E mantém a aba do arquivo original e permite retraduzir [V].
 - **Fenkra hoje:** o ADR 0010/0011 já define estados de link para referências externas entre peças (`->`, `->?`, `->*`, `->x`) e travar/destravar/quebrar [V]. A feature `MeshImport` guarda um `path` sem hash nem estado.
 - **Melhor prática para o Fenkra:**
   - **Reutilizar os estados do ADR 0011** para o arquivo de origem: `->` sincronizado, `->?` origem mudou (hash diferente), `->*` travado, `->x` origem ausente.
   - **Modelo de dados:** feature `CorpoImportado { origem: OrigemRef { documento_id, hash, formato, versão_AP, unidades, opções }, corpo_embutido: BREP }`. O corpo vive **dentro do documento** (já há `to_brep` no kernel), então o arquivo abre sem a origem; a origem é só para atualizar.
   - **Atualizar:** reimportar a origem, recalcular o relatório e **recompor as referências por correspondência** (nome do produto/ID STEP primeiro; assinatura geométrica das faces depois, ligada ao naming topológico do ADR 0004). Face sem par → estado "falhou" com diagnóstico e as ações do ADR 0011 (Editar/Substituir/Isolar/Desativar), nunca outra face em silêncio.
-  - **Padrão por formato:** STEP/IGES/neutros → *Converter* (como a ajuda do Inventor recomenda para STEP [V]); malha → *Converter* com origem embutida; *Referência* só para formatos com identidade estável.
+  - **Padrão por formato:** STEP/IGES/neutros → *Converter* (como a ajuda do CAD avançado C recomenda para STEP [V]); malha → *Converter* com origem embutida; *Referência* só para formatos com identidade estável.
   - **Quebrar vínculo:** vira corpo comum, mantém o selo "importado de X em data".
   - **Testes:** `origem_alterada_marca_arrow_interrogacao`, `atualizar_preserva_features_com_faces_estaveis`, `atualizar_face_removida_falha_com_diagnostico`, `quebrar_vinculo_mantem_geometria`, `abrir_sem_origem_funciona`.
 
 ---
 
-### Integração com save management, PDM e VPM (CATIA: Save Management, Propagate Directory / SW: PDM (referências de 3D Interconnect, tarefa Convert), Salvar tudo / Inventor: Vault + AnyCAD, Component Destination Folder / outros: Teamcenter, Onshape / Fenkra: `fenkra-project`, ADR 0009, `plm-vpm.md`)
+### Integração com save management, PDM e VPM (CAD avançado B: Save Management, Propagate Directory / CAD avançado A: PDM (referências de 3D Interconnect, tarefa Convert), Salvar tudo / CAD avançado C: Vault + AnyCAD, Component Destination Folder / outros: PLM avançado, CAD avançado E / Fenkra: `fenkra-project`, ADR 0009, `plm-vpm.md`)
 
 - **O que faz:** garante que o arquivo importado, seus derivados e as exportações entrem no controle de revisão, e que nada seja gravado às escondidas.
-- **CATIA V5:** o **Save Management** lista todos os documentos modificados/novos e permite escolher pasta e propagar o diretório; ao importar uma montagem, os componentes novos passam por essa janela [C]. No ENOVIA/VPM os documentos importados são carregados como novos objetos [C].
-- **SolidWorks — no detalhe:** o PDM detecta no **check-in** as referências a arquivos não-SolidWorks (CATIA V5, Creo e outros via 3D Interconnect) e as lista como referências CAD, inclusive a hierarquia (a submontagem Inventor liga ao pai e aos próprios filhos) [V]. A tarefa **Convert** gera STEP/PDF/DXF etc. a partir de documentos do cofre e guarda o derivado; as opções avançadas são por formato [V]. O vínculo fica no PDM; o nativo permanece como referência. (Execução exata da tarefa Convert: gatilho, nome, revisão — não confirmada nesta pesquisa.)
-- **Inventor — no detalhe:** o Vault gerencia terceiros "no contexto do modelo Inventor" via AnyCAD; o add-in faz check-in com referências e estrutura; não suporta todos os formatos [V]. Como o Vault versiona/revisa o arquivo original anexado **não ficou confirmado** [V parcial].
+- **CAD avançado B:** o **Save Management** lista todos os documentos modificados/novos e permite escolher pasta e propagar o diretório; ao importar uma montagem, os componentes novos passam por essa janela [C]. No PLM avançado/VPM os documentos importados são carregados como novos objetos [C].
+- **CAD avançado A — no detalhe:** o PDM detecta no **check-in** as referências a arquivos não-CAD avançado A (CAD avançado B, CAD avançado F e outros via 3D Interconnect) e as lista como referências CAD, inclusive a hierarquia (a submontagem CAD avançado C liga ao pai e aos próprios filhos) [V]. A tarefa **Convert** gera STEP/PDF/DXF etc. a partir de documentos do cofre e guarda o derivado; as opções avançadas são por formato [V]. O vínculo fica no PDM; o nativo permanece como referência. (Execução exata da tarefa Convert: gatilho, nome, revisão — não confirmada nesta pesquisa.)
+- **CAD avançado C — no detalhe:** o Vault gerencia terceiros "no contexto do modelo CAD avançado C" via AnyCAD; o add-in faz check-in com referências e estrutura; não suporta todos os formatos [V]. Como o Vault versiona/revisa o arquivo original anexado **não ficou confirmado** [V parcial].
 - **Outros:** na prática, sistemas PLM guardam o neutro importado como **documento de origem** (não editável) ligado ao item gerado [C].
 - **Fenkra hoje:**
   - `fenkra-project`: `add_document`, `save`, `release`, `duplicate`, versões imutáveis por hash `blake3` em `.versoes/<hash>.fkp` (`lib.rs:176-260`); `DocEntry` com `pn`, `state`, `versions`, `revisions`. **Só guarda documentos `.fkp`**.
@@ -456,10 +456,10 @@
 
 ---
 
-### Módulo conversor (crate) e execução isolada (CATIA: CAA tradutores / SW: add-ins de tradução / Inventor: Translators / outros: HOOPS, CAD Exchanger / Fenkra: proposta `fenkra-conversor`)
+### Módulo conversor (crate) e execução isolada (CAD avançado B: CAA tradutores / CAD avançado A: add-ins de tradução / CAD avançado C: Translators / outros: HOOPS, CAD Exchanger / Fenkra: proposta `fenkra-conversor`)
 
 - **O que faz:** concentra formatos, opções, relatórios, lote e a ponte com o projeto num único lugar testável, independente da interface.
-- **CATIA/SW/Inventor:** os tradutores são módulos separados do núcleo (o PDM/Task Scheduler os chamam por fora) [C]. O Task Scheduler do SW é aplicativo separado, que roda fora da janela do CAD [V].
+- **CAD avançado B/CAD avançado A/CAD avançado C:** os tradutores são módulos separados do núcleo (o PDM/Task Scheduler os chamam por fora) [C]. O Task Scheduler do CAD avançado A é aplicativo separado, que roda fora da janela do CAD [V].
 - **Outros:** HOOPS e CAD Exchanger oferecem API em C++/C#/Java/Python/JS e trabalham fora da interface do CAD [V parcial].
 - **Fenkra hoje:** funções soltas em `fenkra-kernel` (C++), `fenkra-solidos::export`, `fenkra-solidos::mesh_io`, `fenkra-desenho::export`, sem interface comum.
 - **Melhor prática para o Fenkra — arquitetura proposta:**
@@ -508,8 +508,8 @@ Prioridades: **P0** quebra o uso · **P1** importante · **P2** desejável · **
 | RF-CNV-17 | **OBJ / PLY / glTF(GLB) / VRML**: OBJ e glTF import/export, PLY só export, VRML export. | P2 | glTF reabre com nós e cores; PLY é aceito por visualizador de referência. |
 | RF-CNV-18 | **DXF**: ler para sketch (linha, arco, círculo, polilinha, spline, texto) com mapeamento de camadas e unidade; gravar R2000+ (R12 como opção). | P1 | DXF do corpus gera sketch com comprimentos ±1e-6; sem `$INSUNITS` o app pergunta. |
 | RF-CNV-19 | **DWG** apenas por **conversor externo opcional** (processo), nunca embutido. | P3 | Sem o executável configurado: mensagem de orientação; com ele: converte DWG→DXF e abre. |
-| RF-CNV-20 | **Nativos** (CATPart, SLDPRT, IPT, Creo, NX): interface de provedor pronta; sem provedor, orientação de exportação neutra por CAD. | P2 | `arquivo_nativo_sem_provedor_orienta`: mensagem cita STEP AP214/AP242 e as opções. |
-| RF-CNV-21 | **Parasolid / ACIS / JT / PRC-U3D / IFC / VRML**: mapeados na tabela de formatos como "não suportado", "plugin" ou "futuro", com mensagem clara. | P3 | Tabela de formatos testada; cada item aponta o caminho alternativo. |
+| RF-CNV-20 | **Nativos** (CATPart, SLDPRT, IPT, CAD avançado F, CAD avançado G): interface de provedor pronta; sem provedor, orientação de exportação neutra por CAD. | P2 | `arquivo_nativo_sem_provedor_orienta`: mensagem cita STEP AP214/AP242 e as opções. |
+| RF-CNV-21 | **kernel geométrico proprietário / ACIS / JT / PRC-U3D / IFC / VRML**: mapeados na tabela de formatos como "não suportado", "plugin" ou "futuro", com mensagem clara. | P3 | Tabela de formatos testada; cada item aponta o caminho alternativo. |
 | RF-CNV-22 | **Reconhecimento de furos/filetes** em corpos importados (anotação), alimentando o Assistente de fixação e a tabela de furos. | P2 | Furo Ø8 passante importado reconhecido; fixador entra com GDL = 0 (B62). |
 | RF-CNV-23 | **Reconhecer features** (a pedido, automático/interativo/passo a passo) com opção de apagar/mapear as não suportadas. | P3 | Furo reconhecido vira feature `Furo` editável; volume do corpo igual. |
 | RF-CNV-24 | **Edição direta** de corpo importado (mover/apagar face, offset). | P3 | Offset de face em corpo importado altera a medida esperada sem erro de topologia. |
@@ -524,7 +524,7 @@ Prioridades: **P0** quebra o uso · **P1** importante · **P2** desejável · **
 | RF-CNV-33 | **Exportação registrada** como documento ligado à revisão, marcada obsoleta se a revisão muda. | P2 | Liberar A, exportar STEP; alterar e liberar B → STEP de A continua; STEP "atual" marcado obsoleto até regerar. |
 | RF-CNV-34 | **Perfil de liberação** (conjunto de exportações) gerado ao liberar a revisão, nome `{PN}_{REV}`. | P2 | Liberar gera STEP+PDF+DXF no projeto e os liga à revisão. |
 | RF-CNV-35 | O módulo conversor é um **crate** com a interface `Provedor`, opções serializáveis e CLI/processo filho. | P1 | `cargo test -p fenkra-conversor` roda sem o app; o binário `fenkra-conv` processa um job JSON. |
-| RF-CNV-36 | Mensagem de **orientação** quando o formato não é suportado, com a rota alternativa (ex.: "exporte STEP AP214 do SolidWorks"). | P2 | Cada formato desconhecido tem texto de ajuda na tabela. |
+| RF-CNV-36 | Mensagem de **orientação** quando o formato não é suportado, com a rota alternativa (ex.: "exporte STEP AP214 do CAD avançado A"). | P2 | Cada formato desconhecido tem texto de ajuda na tabela. |
 | RF-CNV-37 | **Exportar DXF/PDF/SVG do desenho** passa a usar o mesmo diálogo e perfis do conversor, em lote por folhas (RF-DES-045). | P2 | Exportar 3 folhas → 3 arquivos (DXF/SVG) ou 1 PDF multipágina, por perfil. |
 | RF-CNV-38 | **Reabrir verificação** opcional após exportar (relê e compara volume/área/contagem). | P3 | Ativar: exportação com diferença de volume > tolerância acusa erro. |
 | RF-CNV-39 | **Textos e caminhos** com acentos e espaços funcionam em importação/exportação (incl. nomes como `C:\Users\João\…`). | **P0** | `export_caminho_com_acento` e `import_caminho_com_acento` passam no Windows. |
@@ -572,7 +572,7 @@ IDs provisórios `CNV-xx` (o lead numera). Tamanhos: P ≤ 80 k tokens · M ~100
 | **CNV-15 PMI e propriedades no STEP (AP242)** | Cotas/tolerâncias/datums semânticos + apresentação; metadados Fenkra; validação por reabertura. | P2 | G | CNV-03, `pmi-3d.md` |
 | **CNV-16 Reconhecimento de furos e filetes** | Análise de faces; anotações selecionáveis; integração com fixadores e tabela de furos. | P2 | M | CNV-04, B62 |
 | **CNV-17 Reconhecer features e edição direta** | Conversão a pedido em Furo/Filete; modos automático/interativo/passo a passo; offset/mover/apagar face. | P3 | G | CNV-16 |
-| **CNV-18 Provedores externos (plugin)** | Carregamento de DLL de HOOPS/CAD Exchanger (nativos, JT, Parasolid); DWG por processo externo; mensagens de orientação. | P3 | G | CNV-02, decisão de licença |
+| **CNV-18 Provedores externos (plugin)** | Carregamento de DLL de HOOPS/CAD Exchanger (nativos, JT, kernel geométrico proprietário); DWG por processo externo; mensagens de orientação. | P3 | G | CNV-02, decisão de licença |
 | **CNV-19 3D PDF e IFC** | U3D com vistas de PMI; IFC (IfcOpenShell) como referência e vigas estruturais. | P3 | G | CNV-14, módulo Estrutural |
 | **CNV-20 Corpus de arquivos neutros e testes de formato** | Corpus (STEP de 3 CADs, IGES, STL, DXF, 3MF, glTF) + testes de ida e volta no CI. | P0 | M | B53 |
 
@@ -594,35 +594,35 @@ Ordem sugerida: CNV-01 → CNV-20 (paralelo) → CNV-02 → CNV-03 → CNV-04/05
 - https://dev.opencascade.org/content/shapeupgradeunifysamedomain-do-good-after-save-step-and-reload-it-backwhy
 - https://dev.opencascade.org/doc/occt-8.0.0/refman/html/class_shape_upgrade___unify_same_domain.html
 
-**CATIA V5**
-- https://www.goengineer.com/blog/catia-step-exchange-3d-models-with-pmi-or-composites-data
-- https://www.cati.com/blog/export-catia-v5-parts-with-pmi-using-step-ap242/
+**CAD avançado B**
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://www.technia.com/step-file-stp-step-not-importing-all-the-data-wanted/ (via resumo de busca)
 - https://technia.com/blog/batch-convert-catpart-catproduct-catdrawing-to-3dxml-step-iges-dxf-dwg-or-reverse
 - https://ibm.com/support/pages/apar/HE08498 · https://www.ibm.com/support/pages/apar/HD92639 · https://www.ibm.com/support/pages/node/5254617 (resumos de busca)
-- https://2017.help.altair.com/2017/hm/to_import_geometry.htm · https://cad.grabcad.com/tutorials/extracting-part-history-from-imported-parts-in-catia-v5 (resumo de busca)
+- https://2017.help.altair.com/2017/hm/to_import_geometry.htm · (fonte em procedencia.md) (resumo de busca)
 
-**SolidWorks**
-- https://help.solidworks.com/2024/English/SolidWorks/Sldworks/t_reading_step_iges_acis_sw.htm (resumo de busca; página não renderizou)
-- https://help.solidworks.com/2017/English/SolidWorks/sldworks/HIDD_OPTIONS_IMPORT_GENERAL.htm (idem)
-- https://help.solidworks.com/2026/English/SolidWorks/Sldworks/c_sw_3d_interconnect.htm · https://help.solidworks.com/2024/English/SolidWorks/Sldworks/c_sw_3d_interconnect.htm (resumos)
-- https://help.solidworks.com/2018/English/EnterprisePDM/FileExplorer/c_3d_interconnect_PDM.htm · https://www.javelin-tech.com/blog/2018/01/solidworks-pdm-3d-interconnect/ (resumo)
-- https://help.solidworks.com/2021/English/SolidWorks/fworks/t_Recognizing_Features_Using_step_by_step.htm (FeatureWorks, resumo)
-- https://www.goengineer.com/blog/how-to-use-import-diagnostics-tool-solidworks
-- https://help.solidworks.com/2025/English/swconntutorial/t_reparinggaps_impexptut.htm (resumo)
-- https://help.solidworks.com/2026/English/SolidWorks/Sldworks/HIDD_EXPORT_OPTIONS_STEP.htm · https://help.solidworks.com/2025/English/SolidWorks/sldworks/r_publish_step242.htm (resumos)
-- http://blogs.solidworks.com/products/solidworks/automate-file-exports-solidworks-task-scheduler
-- https://help.solidworks.com/2024/English/SolidWorks/Sldworks/HIDD_TASK_FILE_EXPORT.htm (resumo)
-- https://help.solidworks.com/2016/English/EnterprisePDM/Admin/IDD_CONVOPSTEPDLG.htm · https://help.solidworks.com/2026/english/EnterprisePDM/admin/c_IGES_3D_curves.htm (resumos)
+**CAD avançado A**
+- (fonte em procedencia.md) (resumo de busca; página não renderizou)
+- (fonte em procedencia.md) (idem)
+- (fonte em procedencia.md) · (fonte em procedencia.md) (resumos)
+- (fonte em procedencia.md) · (fonte em procedencia.md) (resumo)
+- (fonte em procedencia.md) (FeatureWorks, resumo)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md) (resumo)
+- (fonte em procedencia.md) · (fonte em procedencia.md) (resumos)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md) (resumo)
+- (fonte em procedencia.md) · (fonte em procedencia.md) (resumos)
 
-**Inventor / Fusion / Onshape**
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-16C49D61-6796-4169-9A6B-64F588360813.htm (opções STEP/IGES)
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-7FACB50F-ED00-419D-8C23-F98283CCD8F8.htm (AnyCAD)
-- https://help.autodesk.com/cloudhelp/2014/ENU/Inventor/files/GUID-1B0D704D-44B8-4ACD-B854-00E2B08A22B9.htm (Repair, resumo)
-- https://forums.autodesk.com/t5/inventor-forum/update-step-files-from-original/td-p/7024470
-- https://www.cadforum.cz/cz/podpora-step-ap242-a-stpz-v-inventoru-2016-tip10494 (resumo)
-- https://www.autodesk.com/products/fusion-360/blog/data-exchange-in-fusion-360-part-1/ · https://forums.autodesk.com/t5/fusion-support-forum/import-jt-file/m-p/8544798 (resumos)
-- https://cad.onshape.com/help/Content/File/supported_file_formats.htm
+**CAD avançado C / CAD avançado D / CAD avançado E**
+- (fonte em procedencia.md) (opções STEP/IGES)
+- (fonte em procedencia.md) (AnyCAD)
+- (fonte em procedencia.md) (Repair, resumo)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md) (resumo)
+- (fonte em procedencia.md) · (fonte em procedencia.md) (resumos)
+- (fonte em procedencia.md)
 
 **Bibliotecas comerciais e abertas**
 - https://docs.techsoft3d.com/communicator/latest/overview/supported-formats.html · https://docs.techsoft3d.com/exchange/latest/start/supported-formats.html (resumos)
@@ -633,9 +633,9 @@ Ordem sugerida: CNV-01 → CNV-20 (paralelo) → CNV-02 → CNV-03 → CNV-04/05
 - https://docs.rs/crate/dxf/latest/source · https://lib.rs/crates/dxf
 - https://docs.ifcopenshell.org/ifcopenshell/geometry_iterator.html
 - https://pdfa.org/resource/3d-formats/ · https://www.3dmag.com/3d-wikipedia/prc-file-format-explained/ (resumos)
-- https://en.wikipedia.org/wiki/JT_(visualization_format) · https://support.sw.siemens.com/en-US/okba/PL8658242/What-are-the-differences-in-Parasolid-file-formats/index.html · https://pointwise.com/doc/user-manual/file/import/database/parasolid-xt.html (resumos)
-- https://support.ptc.com/help/creo/creo_pma/r12/usascii/data_exchange/interface/Exporting_Part_or_Assembly_to_STEP.html (resumo)
-- https://blogs.sw.siemens.com/solidedge/?p=7554 (Synchronous Technology, resumo)
+- https://en.wikipedia.org/wiki/JT_(visualization_format) · (fonte em procedencia.md) · (fonte em procedencia.md) (resumos)
+- (fonte em procedencia.md) (resumo)
+- (fonte em procedencia.md) (Synchronous Technology, resumo)
 
 **Código e documentos do Fenkra lidos**
 `crates/fenkra-kernel/cpp/kernel.cpp:988-1011, 147`; `hybrid.inc:43, 160-164, 304-335, 370-401`; `kernel/src/lib.rs:693-700`, `ffi.rs:195-197`, `build.rs`; `fenkra-solidos/src/lib.rs:4079-4094, 5144-5161`, `mesh_io.rs`; `fenkra-core/src/doc.rs:1856, 2673-2712`; `fenkra-app/src/app.rs:880-892, 2510-2545`, `toolbar.rs:479`, `dwg_ui.rs:242`; `fenkra-desenho/src/export.rs:51, 265-283`; `fenkra-project/src/lib.rs:1-260`; `fenkra-montagem/src/lib.rs:536`; `docs/contextos/plm-vpm.md`, `docs/arquitetura/adr/0009, 0011`, `docs/produto/visao.md`, `docs/arquitetura/reuso-opensource.md`, `docs/requisitos/nucleo.md`, `docs/desenvolvimento.md`, `docs/contextos/smart-fastener.md`.
@@ -649,7 +649,7 @@ Ordem sugerida: CNV-01 → CNV-20 (paralelo) → CNV-02 → CNV-03 → CNV-04/05
 - **Arquivos alterados:** nenhum. O plano de modo-planejamento não foi gravado, porque você pediu para não criar arquivos e a ferramenta de saída do plano não estava disponível.
 - **Verificações executadas:** nenhuma de compilação ou teste; foi pesquisa e leitura apenas.
 - **Falhas e limites:**
-  - As páginas help.solidworks.com não renderizaram no WebFetch, então os detalhes do SolidWorks vêm de resumos de busca e de blogs de revendas.
+  - As páginas help.CAD avançado A.com não renderizaram no WebFetch, então os detalhes do CAD avançado A vêm de resumos de busca e de blogs de revendas.
   - Algumas fontes deram 403/404 (Javelin PDM, Solid Solutions, Fusion blog).
   - Não confirmei: o gatilho exato da tarefa Convert do PDM; o tratamento de revisão do original no Vault; as diferenças PRC × U3D; a licença do crate `dxf`; o preço de HOOPS, CAD Exchanger, Spatial e Datakit; o comportamento do OCCT com caminhos com acento no Windows.
 - **Riscos:** o OCCT 8.0.1 é recente, então os nomes de classe e parâmetros da camada DE devem ser conferidos nos cabeçalhos instalados antes de implementar. Definir a licença do Fenkra quanto a plugins comerciais antes do CNV-18.

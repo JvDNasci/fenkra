@@ -512,5 +512,5 @@ O Sketcher é o núcleo paramétrico do. Ele alimenta todos os módulos e exige 
 
 FIM DO DOCUMENTO
 
-Este arquivo contém o manual técnico completo do Sketcher e sua interação com todos os módulos do CATIA V5.
+Este arquivo contém o manual técnico completo do Sketcher e sua interação com todos os módulos do CAD avançado B.
 ```

@@ -3,304 +3,304 @@
  "versao_fenkra": "0.1.0-alpha.26",
  "fontes": {
   "sw-feat": {
-   "rotulo": "SOLIDWORKS Help — Features Overview",
-   "url": "https://help.solidworks.com/2012/English/SolidWorks/sldworks/Features_Overview.htm"
+   "rotulo": "sw-feat",
+   "url": ""
   },
   "sw-trim": {
-   "rotulo": "SOLIDWORKS Help — Trimming with Power Trim",
-   "url": "https://help.solidworks.com/2017/english/solidworks/sldworks/t_Trimming_with_Power_Trim.htm"
+   "rotulo": "sw-trim",
+   "url": ""
   },
   "sw-holewiz": {
-   "rotulo": "SOLIDWORKS Help — Hole Wizard (Toolbox)",
-   "url": "https://help.solidworks.com/2022/English/SolidWorks/toolbox/HIDD_TOOLBOX_SELECT_HARDWARE.htm"
+   "rotulo": "sw-holewiz",
+   "url": ""
   },
   "sw-cthread": {
-   "rotulo": "SOLIDWORKS Help — Cosmetic Threads",
-   "url": "https://help.solidworks.com/2024/English/SolidWorks/Sldworks/c_cosmetic_threads.htm"
+   "rotulo": "sw-cthread",
+   "url": ""
   },
   "sw-surf": {
-   "rotulo": "SOLIDWORKS Help — Surfaces Toolbar",
-   "url": "https://help.solidworks.com/2021/english/SolidWorks/sldworks/r_surfaces_toolbar.htm"
+   "rotulo": "sw-surf",
+   "url": ""
   },
   "sw-filled": {
-   "rotulo": "SOLIDWORKS Help — Filled Surface",
-   "url": "https://help.solidworks.com/2024/english/SolidWorks/sldworks/c_Filled_Surface.htm"
+   "rotulo": "sw-filled",
+   "url": ""
   },
   "sw-sm": {
-   "rotulo": "SOLIDWORKS Help — Sheet Metal Toolbar",
-   "url": "https://help.solidworks.com/2022/English/SolidWorks/sldworks/r_Sheet_Metal_Toolbar.htm"
+   "rotulo": "sw-sm",
+   "url": ""
   },
   "sw-sm-bendpos": {
-   "rotulo": "SOLIDWORKS Help — Bend Positions",
-   "url": "https://help.solidworks.com/2021/english/SolidWorks/sldworks/c_Bend_Positions.htm"
+   "rotulo": "sw-sm-bendpos",
+   "url": ""
   },
   "sw-weld": {
-   "rotulo": "SOLIDWORKS Help — Weldments Toolbar",
-   "url": "https://help.solidworks.com/2021/english/solidworks/sldworks/r_weldments_toolbar.htm"
+   "rotulo": "sw-weld",
+   "url": ""
   },
   "sw-weld-trim": {
-   "rotulo": "SOLIDWORKS Help — Trimming Segments (weldments)",
-   "url": "https://help.solidworks.com/2025/English/SolidWorks/sldworks/t_Trimming_Segments.htm"
+   "rotulo": "sw-weld-trim",
+   "url": ""
   },
   "sw-weld-dwg": {
-   "rotulo": "SOLIDWORKS Help — Weldment Drawings",
-   "url": "https://help.solidworks.com/2017/English/SolidWorks/sldworks/c_Weldment_Drawings.htm"
+   "rotulo": "sw-weld-dwg",
+   "url": ""
   },
   "sw-mates": {
-   "rotulo": "SOLIDWORKS Help — Types of Mates",
-   "url": "https://help.solidworks.com/2021/english/SolidWorks/sldworks/r_Types_of_Mates_SWassy.htm"
+   "rotulo": "sw-mates",
+   "url": ""
   },
   "sw-mech-mates": {
-   "rotulo": "SOLIDWORKS Help — Mechanical Mates",
-   "url": "https://help.solidworks.com/2022/English/SolidWorks/sldworks/c_Mechanical_Mates.htm"
+   "rotulo": "sw-mech-mates",
+   "url": ""
   },
   "sw-mbd": {
-   "rotulo": "SOLIDWORKS Help — MBD annotations",
-   "url": "https://help.solidworks.com/2025/English/SolidWorks/Sldworks/t_mbd_hiding_showing_annot_parts_assemb.htm"
+   "rotulo": "sw-mbd",
+   "url": ""
   },
   "sw-smartfast": {
-   "rotulo": "SOLIDWORKS Help — Smart Fasteners Overview",
-   "url": "https://help.solidworks.com/2017/English/SolidWorks/sldworks/c_Smart_Fasteners_Overview.htm"
+   "rotulo": "sw-smartfast",
+   "url": ""
   },
   "sw-mmb": {
-   "rotulo": "SOLIDWORKS Help — Middle Mouse Button Functions",
-   "url": "https://help.solidworks.com/2021/English/SolidWorks/sldworks/r_Middle_Mouse_Button.htm"
+   "rotulo": "sw-mmb",
+   "url": ""
   },
   "inv-sketched": {
-   "rotulo": "Inventor Help — Sketched features",
-   "url": "https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-236B12FC-DC32-4BCA-A53D-FCB17382EEB6.htm"
+   "rotulo": "inv-sketched",
+   "url": ""
   },
   "inv-trim": {
-   "rotulo": "Inventor Help — Split, Trim or Extend Curves",
-   "url": "https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-DD00037F-6BBA-4B95-AA90-4F99DCEB667D.htm"
+   "rotulo": "inv-trim",
+   "url": ""
   },
   "inv-thread": {
-   "rotulo": "Inventor Help — To Create Threads",
-   "url": "https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-C0848D58-12CB-4605-8165-0836232927F0.htm"
+   "rotulo": "inv-thread",
+   "url": ""
   },
   "inv-patch": {
-   "rotulo": "Inventor Help — Patch, Stitch, Ruled Surfaces",
-   "url": "https://help.autodesk.com/cloudhelp/2020/ENU/Inventor-Help/files/GUID-5A8568DF-5BDA-47B9-97FC-2722B8A78A89.htm"
+   "rotulo": "inv-patch",
+   "url": ""
   },
   "inv-bpatch": {
-   "rotulo": "Inventor Help — About Boundary Patches",
-   "url": "https://help.autodesk.com/cloudhelp/2020/ENU/Inventor-Help/files/GUID-C9BB978A-D25B-4820-912F-B39CBB6CC7C3.htm"
+   "rotulo": "inv-bpatch",
+   "url": ""
   },
   "inv-trimsurf": {
-   "rotulo": "Inventor Help — Trim, Extend or Sculpt Surfaces",
-   "url": "https://help.autodesk.com/cloudhelp/2022/ENU/Inventor-Help/files/GUID-7661F5F8-2C6C-42E9-8B7F-E7B62F2C7422.htm"
+   "rotulo": "inv-trimsurf",
+   "url": ""
   },
   "inv-contourflange": {
-   "rotulo": "Inventor Help — Contour Flange Property Panel",
-   "url": "https://help.autodesk.com/cloudhelp/2027/ENU/Inventor-Help/files/Contour-Flange-Property-Panel-Reference.htm"
+   "rotulo": "inv-contourflange",
+   "url": ""
   },
   "inv-loftflange": {
-   "rotulo": "Inventor Help — Lofted Flange Features",
-   "url": "https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-B6271A15-FD68-4672-9461-C86F8D55DA87.htm"
+   "rotulo": "inv-loftflange",
+   "url": ""
   },
   "inv-frame": {
-   "rotulo": "Inventor Help — Frame Generator overview",
-   "url": "https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-953F560A-C2D3-4031-8348-762054C7C779.htm"
+   "rotulo": "inv-frame",
+   "url": ""
   },
   "inv-frame-end": {
-   "rotulo": "Inventor Help — End treatments to frames",
-   "url": "https://help.autodesk.com/cloudhelp/2017/ENU/Inventor-Help/files/GUID-BE98918A-2419-4432-AAE5-46A3E56552FE.htm"
+   "rotulo": "inv-frame-end",
+   "url": ""
   },
   "inv-joints": {
-   "rotulo": "Inventor Help — Create Joints Reference",
-   "url": "https://help.autodesk.com/cloudhelp/2023/ENU/Inventor-Help/files/GUID-6AA68E8F-7C97-4806-8483-3941DE915E70.htm"
+   "rotulo": "inv-joints",
+   "url": ""
   },
   "inv-joints-manage": {
-   "rotulo": "Inventor Help — Define and Manage Joint Relationships",
-   "url": "https://help.autodesk.com/cloudhelp/2020/ENU/Inventor-Help/files/GUID-21DC3336-5C51-42C1-90FB-4299CD66E0C6.htm"
+   "rotulo": "inv-joints-manage",
+   "url": ""
   },
   "inv-balloons": {
-   "rotulo": "Inventor Help — Add balloons to drawing views",
-   "url": "https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-491D178A-5C7A-485F-902A-46B1A02D1D09.htm"
+   "rotulo": "inv-balloons",
+   "url": ""
   },
   "inv-mbd": {
-   "rotulo": "Autodesk — GD&T and Model-Based Definition",
-   "url": "https://www.autodesk.com/blogs/design-and-manufacturing/gdt-guide-how-geometric-dimensioning-and-tolerancing-supports-model-based-definition/"
+   "rotulo": "inv-mbd",
+   "url": ""
   },
   "inv-da": {
-   "rotulo": "Inventor Help — Design Accelerator",
-   "url": "https://help.autodesk.com/cloudhelp/2015/ENU/Inventor-Help/files/GUID-24104648-BE41-49C7-9DD0-1AF2BAFC102E.htm"
+   "rotulo": "inv-da",
+   "url": ""
   },
   "inv-orbit": {
-   "rotulo": "Inventor Help — More about Orbit",
-   "url": "https://help.autodesk.com/cloudhelp/2014/ENU/Inventor/files/GUID-5E6B1A06-1043-45C4-A3C3-F0959939EB3B.htm"
+   "rotulo": "inv-orbit",
+   "url": ""
   },
   "inv-steering": {
-   "rotulo": "Inventor Help — SteeringWheels Reference",
-   "url": "https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-5D371AC3-EBC4-4B8D-9A9B-4B9B2B290D8B.htm"
+   "rotulo": "inv-steering",
+   "url": ""
   },
-  "catia-pd-niar": {
-   "rotulo": "Wichita State NIAR — CATIA V5R30 Part Design & Sketcher (apostila)",
-   "url": "https://www.wichita.edu/industry_and_defense/NIAR/Documents/Part-Design-R30.pdf"
+  "cb-pd-niar": {
+   "rotulo": "cb-pd-niar",
+   "url": ""
   },
-  "catia-smd-niar": {
-   "rotulo": "Wichita State NIAR — CATIA V5R30 Sheet Metal Design (apostila)",
-   "url": "https://wichita.edu/industry_and_defense/NIAR/Documents/Sheet-Metal-Design-R30.pdf"
+  "cb-smd-niar": {
+   "rotulo": "cb-smd-niar",
+   "url": ""
   },
-  "catia-asm-niar": {
-   "rotulo": "Wichita State NIAR — CATIA V5R30 Assembly Design (apostila)",
-   "url": "https://wichita.edu/industry_and_defense/NIAR/Documents/Assembly-Design-R30.pdf"
+  "cb-asm-niar": {
+   "rotulo": "cb-asm-niar",
+   "url": ""
   },
-  "catia-asm-city": {
-   "rotulo": "City University London — CATIA Assembly Design: Constraints toolbar",
-   "url": "https://www.staff.city.ac.uk/~ra600/ME2105/Catia%20course/CATIA%20Tutorials/asmug_C2/asmugwd0400.htm"
+  "cb-asm-city": {
+   "rotulo": "cb-asm-city",
+   "url": ""
   },
-  "catia-city": {
-   "rotulo": "City University London — CATIA V5 Lectures",
-   "url": "https://www.staff.city.ac.uk/~ra600/Presentations/CATIA%20V5%20Lectures.pdf"
+  "cb-city": {
+   "rotulo": "cb-city",
+   "url": ""
   },
-  "catia-skt-grabcad": {
-   "rotulo": "GrabCAD — CATIA V5 tutorial: Trim, Break, Mirror…",
-   "url": "https://grabcad.com/tutorials/7-catia-v5-complete-tutorial-for-beginners-trim-break-mirror-symmetry-translate-rotate-scale"
+  "cb-skt-grabcad": {
+   "rotulo": "cb-skt-grabcad",
+   "url": ""
   },
-  "catia-str-pycatia": {
-   "rotulo": "pycatia — API de Structure Design (endcuts)",
-   "url": "https://pycatia.readthedocs.io/en/latest/api/pycatia/cat_str_functional_interfaces/sfm_endcut.html"
+  "cb-str-pycad": {
+   "rotulo": "cb-str-pycad",
+   "url": ""
   },
-  "catia-nav-ptc": {
-   "rotulo": "PTC Creo View — modo de navegação compatível com CATIA V5",
-   "url": "https://support.ptc.com/help/creo/view/r6.0/en/creo_view/Using_the_Mouse_in_Catia_V5_Mode.html"
+  "cb-nav-ptc": {
+   "rotulo": "cb-nav-ptc",
+   "url": ""
   },
   "niar-courses": {
-   "rotulo": "Wichita State NIAR — ementas de CATIA (Drafting, FT&A, GSD)",
-   "url": "https://www.wichita.edu/research/NIAR/Laboratories/cad-cam/course-descriptions.php"
+   "rotulo": "niar-courses",
+   "url": ""
   },
   "plm-g2": {
-   "rotulo": "G2 — Autodesk Vault vs SOLIDWORKS PDM",
-   "url": "https://www.g2.com/compare/autodesk-vault-vs-solidworks-pdm"
+   "rotulo": "plm-g2",
+   "url": ""
   },
   "dr": {
-   "rotulo": "Design review do usuário (DR-01…DR-58)",
-   "url": "../contextos/design-review.md"
+   "rotulo": "dr",
+   "url": ""
   },
   "ctx-cam": {
-   "rotulo": "Contexto: câmera",
-   "url": "../contextos/camera.md"
+   "rotulo": "ctx-cam",
+   "url": ""
   },
   "ctx-skt": {
-   "rotulo": "Contexto: sketcher",
-   "url": "../contextos/sketcher.md"
+   "rotulo": "ctx-skt",
+   "url": ""
   },
   "ctx-sup": {
-   "rotulo": "Contexto: superfícies",
-   "url": "../contextos/superficies.md"
+   "rotulo": "ctx-sup",
+   "url": ""
   },
   "ctx-est": {
-   "rotulo": "Contexto: estrutural",
-   "url": "../contextos/estrutural.md"
+   "rotulo": "ctx-est",
+   "url": ""
   },
   "ctx-chp": {
-   "rotulo": "Contexto: aba por superfície (pedido M8 do backlog)",
-   "url": "../backlog/historico/backlog-alpha14.md"
+   "rotulo": "ctx-chp",
+   "url": ""
   },
   "ctx-eng": {
-   "rotulo": "Contexto: engrenagens",
-   "url": "../contextos/engrenagens.md"
+   "rotulo": "ctx-eng",
+   "url": ""
   },
   "ctx-fix": {
-   "rotulo": "Contexto: smart fastener",
-   "url": "../contextos/smart-fastener.md"
+   "rotulo": "ctx-fix",
+   "url": ""
   },
   "ctx-fxl": {
-   "rotulo": "Contexto: lista de fixadores",
-   "url": "../contextos/fixadores.md"
+   "rotulo": "ctx-fxl",
+   "url": ""
   },
   "ctx-plm": {
-   "rotulo": "Contexto: PLM/VPM",
-   "url": "../contextos/plm-vpm.md"
+   "rotulo": "ctx-plm",
+   "url": ""
   },
   "ctx-pn": {
-   "rotulo": "Contexto: VPM em pasta e regras de PN",
-   "url": "../contextos/plm-pn-engine.md"
+   "rotulo": "ctx-pn",
+   "url": ""
   },
   "ctx-hw": {
-   "rotulo": "Contexto: fontes de perfis e hardware",
-   "url": "../contextos/hardwares.md"
+   "rotulo": "ctx-hw",
+   "url": ""
   },
   "sw-holeseries": {
-   "rotulo": "SOLIDWORKS Help — Creating Holes as Assembly Features",
-   "url": "https://help.solidworks.com/2023/English/SolidWorks/Sldworks/t_Creating_Assembly_Feature_Holes.htm"
+   "rotulo": "sw-holeseries",
+   "url": ""
   },
   "sw-propagate": {
-   "rotulo": "Javelin — Propagate feature to parts (SOLIDWORKS)",
-   "url": "https://www.javelin-tech.com/blog/2016/03/propagate-feature-to-parts-solidworks/"
+   "rotulo": "sw-propagate",
+   "url": ""
   },
   "sw-extref": {
-   "rotulo": "SOLIDWORKS Help — Locking and Breaking External References",
-   "url": "https://help.solidworks.com/2025/English/SolidWorks/Sldworks/t_Locking_and_Breaking_External_References.htm"
+   "rotulo": "sw-extref",
+   "url": ""
   },
   "sw-stacks": {
-   "rotulo": "SOLIDWORKS Help — Smart Fasteners Hardware Stacks",
-   "url": "https://help.solidworks.com/2015/English/SOLIDWORKS/sldworks/c_Smart_Fasteners_Hardware_Stacks.htm"
+   "rotulo": "sw-stacks",
+   "url": ""
   },
   "sw-packgo": {
-   "rotulo": "SOLIDWORKS Help — Pack and Go",
-   "url": "https://help.solidworks.com/2024/English/SolidWorks/Sldworks/r_pack_go_db.htm"
+   "rotulo": "sw-packgo",
+   "url": ""
   },
   "sw-imgq": {
-   "rotulo": "SOLIDWORKS Help — Image Quality",
-   "url": "https://help.solidworks.com/2020/English/SolidWorks/sldworks/HIDD_OPTIONS_IMAGE_QUALITY.htm"
+   "rotulo": "sw-imgq",
+   "url": ""
   },
   "inv-bolted": {
-   "rotulo": "Inventor Help — Bolted Connection",
-   "url": "https://help.autodesk.com/cloudhelp/2025/ENU/Inventor-Help/files/GUID-6E1D4624-B605-4AB1-9DBA-E981495B4933.htm"
+   "rotulo": "inv-bolted",
+   "url": ""
   },
   "inv-inplace": {
-   "rotulo": "Inventor Help — Edit in place",
-   "url": "https://help.autodesk.com/cloudhelp/2020/ENU/Inventor-Help/files/GUID-C79C36C9-A6DB-46C5-8864-41F66C750231.htm"
+   "rotulo": "inv-inplace",
+   "url": ""
   },
   "inv-skeleton": {
-   "rotulo": "Inventor Help — Skeletal modeling",
-   "url": "https://help.autodesk.com/cloudhelp/2023/ENU/Inventor-Help/files/GUID-0435FE9D-6283-4CE0-813B-BD9B0BE5778C.htm"
+   "rotulo": "inv-skeleton",
+   "url": ""
   },
   "inv-asmfeat": {
-   "rotulo": "Inventor Help — Assembly features",
-   "url": "https://help.autodesk.com/cloudhelp/2027/ENU/Inventor-Help/files/GUID-553D514F-2F41-419A-8696-063932991E67.htm"
+   "rotulo": "inv-asmfeat",
+   "url": ""
   },
   "inv-display": {
-   "rotulo": "Inventor Help — Application Options, Display",
-   "url": "https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-760D1240-4E53-4509-90A5-40A66CCD96CD.htm"
+   "rotulo": "inv-display",
+   "url": ""
   },
-  "catia-pub": {
-   "rotulo": "EDS Technologies — Publications in CATIA V5",
-   "url": "https://edstechnologies.com/blog/making-assemblies-easier-with-publications-in-catia-v5/"
+  "cb-pub": {
+   "rotulo": "cb-pub",
+   "url": ""
   },
-  "catia-tree": {
-   "rotulo": "CATI — Managing the design tree in CATIA V5",
-   "url": "https://www.cati.com/blog/managing-the-design-tree-in-catia-v5-6-and-3dexperience/"
+  "cb-tree": {
+   "rotulo": "cb-tree",
+   "url": ""
   },
-  "catia-perf": {
-   "rotulo": "EDS Technologies — Performance settings in CATIA V5",
-   "url": "https://edstechnologies.com/blog/performance-settings-in-catia-v5/"
+  "cb-perf": {
+   "rotulo": "cb-perf",
+   "url": ""
   },
-  "catia-save": {
-   "rotulo": "EDS Technologies — Save options in CATIA V5",
-   "url": "https://edstechnologies.com/blog/save-options-in-catia-v5/"
+  "cb-save": {
+   "rotulo": "cb-save",
+   "url": ""
   },
-  "catia-asmfeat": {
-   "rotulo": "City University London — CATIA Assembly Features",
-   "url": "https://www.staff.city.ac.uk/~ra600/ME2105/Catia%20course/CATIA%20Tutorials/asmug_C2/asmugat0500.htm"
+  "cb-asmfeat": {
+   "rotulo": "cb-asmfeat",
+   "url": ""
   },
   "occt-mesh": {
-   "rotulo": "OCCT — Mesh user guide (BRepMesh)",
-   "url": "https://dev.opencascade.org/doc/overview/html/occt_user_guides__mesh.html"
+   "rotulo": "occt-mesh",
+   "url": ""
   },
   "rebite-ms20470": {
-   "rotulo": "Boeing Distribution — MS20470AD4",
-   "url": "https://shop.boeing.com/cpd/bdi_ms20470ad4-20=28"
+   "rotulo": "rebite-ms20470",
+   "url": ""
   },
   "rebite-iso15983": {
-   "rotulo": "Würth — rebite cego ISO 15983",
-   "url": "https://eshop.wuerth.de/Blind-rivet-open-with-break-mandrel-and-flat-head-ISO-15983-dome-head-A2-A2-stainless-steel-RIV-ISO15983-A2-A2-45-65-40X100/514614010.sku/en/US/EUR"
+   "rotulo": "rebite-iso15983",
+   "url": ""
   },
   "pesq-filosofia": {
-   "rotulo": "Pesquisa: filosofia de modelagem (ADR 0011)",
-   "url": "../arquitetura/adr/0011-filosofia-de-modelagem.md"
+   "rotulo": "pesq-filosofia",
+   "url": ""
   }
  },
  "features": [
@@ -310,15 +310,15 @@
    "nome": "Linha e perfil encadeado",
    "faz": "Desenha segmentos retos, isolados ou em sequência, com arcos tangentes no meio.",
    "como": "Suporte: plano do sketch → modo: dois pontos, encadeado (profile), horizontal/vertical → parâmetros: comprimento, ângulo → avançado: restrições automáticas ao desenhar.",
-   "catia": "Line / Profile",
+   "cb": "Line / Profile",
    "sw": "Line",
    "inv": "Line",
    "fenkra": "Linha",
    "status": "ok",
    "nota": "Tool::Line; restrições automáticas ao desenhar.",
-   "diferencas": "CATIA separa Line de Profile (polilinha com arcos tangentes). SW e Inventor fazem a transição para arco tangente arrastando de volta no último ponto.",
+   "diferencas": "CAD avançado B separa Line de Profile (polilinha com arcos tangentes). CAD avançado A e CAD avançado C fazem a transição para arco tangente arrastando de volta no último ponto.",
    "fontes": [
-    "catia-pd-niar",
+    "cb-pd-niar",
     "sw-trim",
     "inv-trim"
    ],
@@ -330,7 +330,7 @@
    "nome": "Retângulo e variantes",
    "faz": "Cria retângulos por canto, centro, 3 pontos (inclinado) e paralelogramo.",
    "como": "Suporte: plano → modo: 2 cantos, centro, 3 pontos, paralelogramo → parâmetros: largura, altura, ângulo → avançado: linhas de construção diagonais.",
-   "catia": "Rectangle / Centered / Oriented / Parallelogram",
+   "cb": "Rectangle / Centered / Oriented / Parallelogram",
    "sw": "Corner/Center/3 Point Rectangle, Parallelogram",
    "inv": "Two Point / Three Point / Center Rectangle",
    "fenkra": "Retângulo, retângulo pelo centro",
@@ -338,7 +338,7 @@
    "nota": "Tool::Rect, RectCenter; sem 3 pontos (inclinado) nem paralelogramo.",
    "diferencas": "Os três oferecem a versão inclinada por 3 pontos.",
    "fontes": [
-    "catia-pd-niar",
+    "cb-pd-niar",
     "sw-trim"
    ],
    "backlog": "BM-SKT-01"
@@ -349,15 +349,15 @@
    "nome": "Círculo e arco",
    "faz": "Círculos e arcos por centro+raio, 3 pontos, tangentes.",
    "como": "Suporte: plano → modo: centro, 3 pontos, tangente a 3 elementos → parâmetros: raio/diâmetro, ângulos → avançado: arco tangente ao fim de linha.",
-   "catia": "Circle / Three Point Circle / Arc / Three Point Arc",
+   "cb": "Circle / Three Point Circle / Arc / Three Point Arc",
    "sw": "Circle / Perimeter Circle / Arcs",
    "inv": "Circle / Arc (3 pontos, tangente, centro)",
    "fenkra": "Círculo, círculo 3 pontos, arco 3 pontos, arco pelo centro",
    "status": "ok",
    "nota": "Tool::Circle, Circle3, Arc3, ArcCenter.",
-   "diferencas": "Círculo tangente a 3 elementos existe no CATIA e no Inventor.",
+   "diferencas": "Círculo tangente a 3 elementos existe no CAD avançado B e no CAD avançado C.",
    "fontes": [
-    "catia-pd-niar",
+    "cb-pd-niar",
     "inv-trim"
    ],
    "backlog": null
@@ -368,13 +368,13 @@
    "nome": "Spline",
    "faz": "Curva livre por pontos de passagem ou polígono de controle, com tangências.",
    "como": "Suporte: plano → modo: interpolada (passa pelos pontos) ou por controle → parâmetros: tangente/curvatura em pontos → avançado: tensão, grau, análise de curvatura (pente).",
-   "catia": "Spline",
+   "cb": "Spline",
    "sw": "Spline / Style Spline",
    "inv": "Spline (interpolação / controle)",
    "fenkra": "Spline (alças Bézier)",
    "status": "parcial",
    "nota": "Tool::Spline com alças e inflexões (alpha.25). Não acha tangência com outros elementos do sketch (DR-02); sem modo por polígono de controle no sketch.",
-   "diferencas": "SW tem Style Spline (Bézier de grau definido); Inventor tem os dois modos; CATIA tem tensão por ponto.",
+   "diferencas": "CAD avançado A tem Style Spline (Bézier de grau definido); CAD avançado C tem os dois modos; CAD avançado B tem tensão por ponto.",
    "fontes": [
     "ctx-skt",
     "dr"
@@ -387,15 +387,15 @@
    "nome": "Elipse e cônicas",
    "faz": "Elipse, parábola, hipérbole e cônica geral.",
    "como": "Suporte: plano → modo: centro+eixos, por pontos → parâmetros: semieixos, rho (cônica).",
-   "catia": "Ellipse / Parabola / Hyperbola / Conic",
+   "cb": "Ellipse / Parabola / Hyperbola / Conic",
    "sw": "Ellipse / Partial Ellipse / Parabola / Conic",
    "inv": "Ellipse",
    "fenkra": "—",
    "status": "nao",
    "nota": "O sketch só tem Line/Circle/Arc/Point/Spline. Cônica existe no wireframe 3D (RefKind::Conic).",
-   "diferencas": "CATIA é o mais completo; Inventor só elipse.",
+   "diferencas": "CAD avançado B é o mais completo; CAD avançado C só elipse.",
    "fontes": [
-    "catia-pd-niar"
+    "cb-pd-niar"
    ],
    "backlog": "BM-SKT-02"
   },
@@ -405,7 +405,7 @@
    "nome": "Polígono e rasgo",
    "faz": "Polígono regular e rasgo (oblongo) reto ou em arco.",
    "como": "Suporte: plano → modo: inscrito/circunscrito; rasgo reto, pelo centro, em arco → parâmetros: lados, largura.",
-   "catia": "Hexagon / Elongated Hole / Cylindrical Elongated Hole",
+   "cb": "Hexagon / Elongated Hole / Cylindrical Elongated Hole",
    "sw": "Polygon / Straight & Arc Slot",
    "inv": "Polygon / Slot (5 tipos)",
    "fenkra": "Polígono, rasgo",
@@ -423,15 +423,15 @@
    "nome": "Restrições geométricas",
    "faz": "Relações entre elementos: coincidente, paralelo, tangente, simétrico etc.",
    "como": "Seleção de 1–3 elementos → o sistema propõe as restrições possíveis → aplicar; ícones na tela; ocultar/mostrar.",
-   "catia": "Constraints Defined in Dialog Box",
+   "cb": "Constraints Defined in Dialog Box",
    "sw": "Add Relations",
    "inv": "Geometric Constraints",
    "fenkra": "Restrições",
    "status": "ok",
    "nota": "Kind: Coincident, Horizontal, Vertical, Parallel, Perpendicular, Equal, Tangent, Concentric, Midpoint, PointOnCurve, Fixed, Symmetric…",
-   "diferencas": "CATIA lista as restrições possíveis numa caixa para a seleção; SW propõe no PropertyManager; Inventor por ícones.",
+   "diferencas": "CAD avançado B lista as restrições possíveis numa caixa para a seleção; CAD avançado A propõe no PropertyManager; CAD avançado C por ícones.",
    "fontes": [
-    "catia-pd-niar",
+    "cb-pd-niar",
     "sw-trim"
    ],
    "backlog": null
@@ -442,7 +442,7 @@
    "nome": "Cotas (restrições dimensionais)",
    "faz": "Cotas que dirigem a geometria: distância, ângulo, raio, diâmetro.",
    "como": "Seleção → tipo deduzido pela seleção (cota inteligente) → valor ou expressão → avançado: cota de referência (só leitura).",
-   "catia": "Constraint",
+   "cb": "Constraint",
    "sw": "Smart Dimension",
    "inv": "Dimension",
    "fenkra": "Cota (smart)",
@@ -460,13 +460,13 @@
    "nome": "Solver e estado do sketch",
    "faz": "Resolve as restrições e mostra sub/total/sobre-restrito.",
    "como": "Cores por estado; diagnóstico de conflitos; arrastar pontos livres respeitando restrições.",
-   "catia": "Sketch Solving Status / Sketch Analysis",
+   "cb": "Sketch Solving Status / Sketch Analysis",
    "sw": "Fully/Under/Over Defined",
    "inv": "Fully constrained / DOF",
    "fenkra": "Solver com estado",
    "status": "ok",
    "nota": "Teste sub_restrito_e_conflito; arrastar_ponto_preso_mantem_restricoes.",
-   "diferencas": "CATIA tem Sketch Analysis (perfis abertos, sobrepostos, isolados).",
+   "diferencas": "CAD avançado B tem Sketch Analysis (perfis abertos, sobrepostos, isolados).",
    "fontes": [
     "ctx-skt"
    ],
@@ -478,13 +478,13 @@
    "nome": "Aparar (trim)",
    "faz": "Corta elementos até interseções.",
    "como": "Seleção do trecho → corta até a interseção mais próxima; modos: dois elementos, canto, dentro/fora.",
-   "catia": "Trim",
+   "cb": "Trim",
    "sw": "Trim Entities (corner, inside, outside, closest)",
    "inv": "Trim",
    "fenkra": "Aparar",
    "status": "parcial",
    "nota": "Tool::Trim só em linhas (trim_line).",
-   "diferencas": "SW tem 5 modos; Inventor alterna Trim/Extend com Shift.",
+   "diferencas": "CAD avançado A tem 5 modos; CAD avançado C alterna Trim/Extend com Shift.",
    "fontes": [
     "sw-trim",
     "inv-trim"
@@ -497,16 +497,16 @@
    "nome": "Aparar rápido / borracha",
    "faz": "Apaga só o trecho clicado entre interseções; arrastar cruzando apaga vários.",
    "como": "Detecta interseções → segmentos virtuais → apaga o clicado → mantém restrições possíveis.",
-   "catia": "Quick Trim",
+   "cb": "Quick Trim",
    "sw": "Power Trim",
    "inv": "Trim (clique/arrasto)",
    "fenkra": "—",
    "status": "nao",
    "nota": "Não existe para arcos/círculos/splines.",
-   "diferencas": "Power Trim do SW também estende ao arrastar.",
+   "diferencas": "Power Trim do CAD avançado A também estende ao arrastar.",
    "fontes": [
     "sw-trim",
-    "catia-skt-grabcad",
+    "cb-skt-grabcad",
     "dr"
    ],
    "backlog": "DR-50"
@@ -517,7 +517,7 @@
    "nome": "Quebrar (break/split)",
    "faz": "Divide um elemento num ponto, criando dois independentes.",
    "como": "Seleção do elemento → ponto de quebra (ou elemento cortante) → dois segmentos com coincidência.",
-   "catia": "Break",
+   "cb": "Break",
    "sw": "Split Entities",
    "inv": "Split",
    "fenkra": "—",
@@ -525,7 +525,7 @@
    "nota": "",
    "diferencas": "",
    "fontes": [
-    "catia-skt-grabcad",
+    "cb-skt-grabcad",
     "inv-trim"
    ],
    "backlog": "DR-51"
@@ -536,7 +536,7 @@
    "nome": "Estender / aparar-estender",
    "faz": "Leva o elemento até o limite mais próximo, estendendo ou cortando.",
    "como": "Seleção do lado → projeção da direção → interseção com o limite → ajusta o comprimento.",
-   "catia": "Trim (estende) / Relimitation",
+   "cb": "Trim (estende) / Relimitation",
    "sw": "Extend Entities / Power Trim",
    "inv": "Extend",
    "fenkra": "Estender",
@@ -555,15 +555,15 @@
    "nome": "Fechar arco e complemento",
    "faz": "Transforma arco em círculo ou cria o arco complementar.",
    "como": "Seleção do arco → mesmo centro e raio → círculo completo / arco oposto.",
-   "catia": "Close / Complement",
+   "cb": "Close / Complement",
    "sw": "— (via edição)",
    "inv": "—",
    "fenkra": "—",
    "status": "nao",
    "nota": "",
-   "diferencas": "Exclusivo do CATIA.",
+   "diferencas": "Exclusivo do CAD avançado B.",
    "fontes": [
-    "catia-skt-grabcad",
+    "cb-skt-grabcad",
     "dr"
    ],
    "backlog": "DR-52"
@@ -574,13 +574,13 @@
    "nome": "Offset de curvas",
    "faz": "Cópia paralela de curvas a uma distância.",
    "como": "Seleção (com propagação por cadeia) → distância → lado/ambos → avançado: tampas, cópias múltiplas.",
-   "catia": "Offset",
+   "cb": "Offset",
    "sw": "Offset Entities",
    "inv": "Offset",
    "fenkra": "Offset",
    "status": "ok",
    "nota": "Tool::Offset.",
-   "diferencas": "CATIA/SW têm propagação por tangência e várias cópias.",
+   "diferencas": "CAD avançado B/CAD avançado A têm propagação por tangência e várias cópias.",
    "fontes": [
     "ctx-skt"
    ],
@@ -592,7 +592,7 @@
    "nome": "Espelhar e simetria",
    "faz": "Espelha geometria por uma linha, com restrição de simetria.",
    "como": "Seleção → eixo → cópia com restrição; avançado: copiar ou não as restrições.",
-   "catia": "Mirror / Symmetry",
+   "cb": "Mirror / Symmetry",
    "sw": "Mirror Entities / Dynamic Mirror",
    "inv": "Mirror",
    "fenkra": "Espelhar",
@@ -600,7 +600,7 @@
    "nota": "Tool::Mirror.",
    "diferencas": "",
    "fontes": [
-    "catia-skt-grabcad"
+    "cb-skt-grabcad"
    ],
    "backlog": null
   },
@@ -610,7 +610,7 @@
    "nome": "Mover, copiar, girar, escalar",
    "faz": "Transformações no sketch.",
    "como": "Seleção → vetor/ângulo/fator → cópias e restrições.",
-   "catia": "Translate / Rotate / Scale",
+   "cb": "Translate / Rotate / Scale",
    "sw": "Move / Copy / Rotate / Scale / Stretch",
    "inv": "Move / Copy / Rotate / Scale / Stretch",
    "fenkra": "Mover, copiar",
@@ -618,7 +618,7 @@
    "nota": "Tool::Move e Copy; sem girar/escalar/esticar dedicados.",
    "diferencas": "",
    "fontes": [
-    "catia-skt-grabcad"
+    "cb-skt-grabcad"
    ],
    "backlog": "BM-SKT-05"
   },
@@ -628,13 +628,13 @@
    "nome": "Filete e chanfro de sketch",
    "faz": "Arredonda ou chanfra o canto entre dois elementos.",
    "como": "Seleção de 2 elementos → raio ou distâncias → modo de corte dos originais.",
-   "catia": "Corner / Chamfer",
+   "cb": "Corner / Chamfer",
    "sw": "Sketch Fillet / Sketch Chamfer",
    "inv": "Fillet / Chamfer",
    "fenkra": "Filete, chanfro",
    "status": "ok",
    "nota": "Tool::Fillet, Chamfer.",
-   "diferencas": "CATIA tem 6 modos de corte para o Corner.",
+   "diferencas": "CAD avançado B tem 6 modos de corte para o Corner.",
    "fontes": [
     "ctx-skt"
    ],
@@ -646,7 +646,7 @@
    "nome": "Padrão no sketch",
    "faz": "Repete geometria em linha ou círculo dentro do sketch.",
    "como": "Seleção → direção/eixo → número e espaçamento.",
-   "catia": "— (via Translate/Rotate com cópias)",
+   "cb": "— (via Translate/Rotate com cópias)",
    "sw": "Linear / Circular Sketch Pattern",
    "inv": "Rectangular / Circular Pattern",
    "fenkra": "—",
@@ -664,7 +664,7 @@
    "nome": "Projetar / converter arestas 3D",
    "faz": "Traz arestas e contornos do modelo para o sketch, associativos.",
    "como": "Seleção de arestas/faces → projeção no plano → vínculo mantido.",
-   "catia": "Project 3D Elements",
+   "cb": "Project 3D Elements",
    "sw": "Convert Entities",
    "inv": "Project Geometry",
    "fenkra": "Converter",
@@ -682,7 +682,7 @@
    "nome": "Interseção com o 3D",
    "faz": "Cria no sketch as curvas onde o plano corta faces, sólidos ou curvas de outro plano.",
    "como": "Seleção do elemento 3D → interseção com o plano do sketch → curvas associativas.",
-   "catia": "Intersect 3D Elements",
+   "cb": "Intersect 3D Elements",
    "sw": "Intersection Curve",
    "inv": "Project Cut Edges / Intersection Curve",
    "fenkra": "Interseção",
@@ -701,7 +701,7 @@
    "nome": "Seleção por janela e cruzada",
    "faz": "Seleciona arrastando: da esquerda (dentro) ou da direita (cruzando).",
    "como": "Arrasto → sentido define janela/cruzada → filtro de tipo.",
-   "catia": "Selection trap (dentro/intersecta)",
+   "cb": "Selection trap (dentro/intersecta)",
    "sw": "Box / Cross Select",
    "inv": "Window / Crossing",
    "fenkra": "só no 3D",
@@ -719,7 +719,7 @@
    "nome": "Geometria externa no sketch",
    "faz": "Usar arestas/pontos de fora como referência, com política: só publicados ou livre.",
    "como": "Ao selecionar fora do plano → cria vínculo (ou publicação automática) ou bloqueia.",
-   "catia": "Project / Use Edge com associatividade",
+   "cb": "Project / Use Edge com associatividade",
    "sw": "Convert Entities / relações externas",
    "inv": "Project Geometry",
    "fenkra": "Converter",
@@ -737,7 +737,7 @@
    "nome": "Texto no sketch",
    "faz": "Contornos de texto para gravação/relevo.",
    "como": "Texto, fonte, altura → curvas fechadas.",
-   "catia": "— (Text via Drafting)",
+   "cb": "— (Text via Drafting)",
    "sw": "Sketch Text",
    "inv": "Text / Geometry Text",
    "fenkra": "—",
@@ -755,7 +755,7 @@
    "nome": "Sketch 3D",
    "faz": "Linhas e splines livres no espaço, com restrições 3D.",
    "como": "Pontos 3D → planos de trabalho dinâmicos → restrições.",
-   "catia": "— (wireframe do GSD)",
+   "cb": "— (wireframe do GSD)",
    "sw": "3D Sketch",
    "inv": "3D Sketch",
    "fenkra": "Wireframe 3D",
@@ -773,15 +773,15 @@
    "nome": "Extrusão (adicionar)",
    "faz": "Dá espessura a um perfil ao longo de uma direção.",
    "como": "Suporte: perfil fechado (sketch, faces) → modo: cego, simétrico, dois lados, até o próximo/último/plano/superfície → parâmetros: comprimento(s), saída (draft) → avançado: parede fina, direção não normal, filetes no topo.",
-   "catia": "Pad",
+   "cb": "Pad",
    "sw": "Extruded Boss/Base",
    "inv": "Extrude",
    "fenkra": "Extrusão",
    "status": "ok",
    "nota": "FeatureKind::Extrude com Extent (incl. UpToSurface), taper, thin, dir; ExtrudeDraftFillet.",
-   "diferencas": "CATIA separa Pad/Pocket e tem Drafted Filleted Pad; SW/Inventor juntam adicionar/remover num comando.",
+   "diferencas": "CAD avançado B separa Pad/Pocket e tem Drafted Filleted Pad; CAD avançado A/CAD avançado C juntam adicionar/remover num comando.",
    "fontes": [
-    "catia-pd-niar",
+    "cb-pd-niar",
     "sw-feat",
     "inv-sketched"
    ],
@@ -793,7 +793,7 @@
    "nome": "Recorte por extrusão",
    "faz": "Remove material extrudando um perfil.",
    "como": "Igual à extrusão, com operação remover; até passante.",
-   "catia": "Pocket",
+   "cb": "Pocket",
    "sw": "Extruded Cut",
    "inv": "Extrude (Cut)",
    "fenkra": "Recorte",
@@ -801,7 +801,7 @@
    "nota": "Cut, CutBlind, CutUpTo.",
    "diferencas": "",
    "fontes": [
-    "catia-pd-niar",
+    "cb-pd-niar",
     "sw-feat"
    ],
    "backlog": null
@@ -812,7 +812,7 @@
    "nome": "Revolução",
    "faz": "Gira um perfil em torno de um eixo.",
    "como": "Suporte: perfil + eixo (linha de sketch, aresta, eixo) → modo: ângulo, simétrico, até elemento → parâmetros: ângulos → avançado: parede fina.",
-   "catia": "Shaft / Groove",
+   "cb": "Shaft / Groove",
    "sw": "Revolved Boss / Cut",
    "inv": "Revolve",
    "fenkra": "Revolução / Ranhura",
@@ -820,7 +820,7 @@
    "nota": "Revolve, Groove; teste revolucao_com_comando_de_angulo.",
    "diferencas": "",
    "fontes": [
-    "catia-pd-niar",
+    "cb-pd-niar",
     "inv-sketched"
    ],
    "backlog": null
@@ -831,15 +831,15 @@
    "nome": "Varredura",
    "faz": "Move um perfil ao longo de um caminho.",
    "como": "Suporte: perfil + caminho (+ guias) → modo: orientação seguindo o caminho, fixa, por guia/spine → parâmetros: torção, escala → avançado: alinhamento, faces tangentes.",
-   "catia": "Rib / Slot",
+   "cb": "Rib / Slot",
    "sw": "Swept Boss / Cut",
    "inv": "Sweep",
    "fenkra": "Varredura",
    "status": "ok",
    "nota": "FeatureKind::Sweep.",
-   "diferencas": "CATIA chama de Rib/Slot (não confundir com nervura); SW/Inventor têm torção e guias.",
+   "diferencas": "CAD avançado B chama de Rib/Slot (não confundir com nervura); CAD avançado A/CAD avançado C têm torção e guias.",
    "fontes": [
-    "catia-pd-niar",
+    "cb-pd-niar",
     "inv-sketched"
    ],
    "backlog": null
@@ -850,15 +850,15 @@
    "nome": "Loft (multi-seções)",
    "faz": "Sólido de transição entre várias seções.",
    "como": "Suporte: seções ordenadas (+ guias, spine) → modo: acoplamento por pontos/vértices → parâmetros: tangência/curvatura inicial e final, tensão → avançado: fechado, regrado.",
-   "catia": "Multi-Sections Solid",
+   "cb": "Multi-Sections Solid",
    "sw": "Lofted Boss/Base",
    "inv": "Loft",
    "fenkra": "Loft",
    "status": "parcial",
    "nota": "Loft tem sections, ruled, closed, op; faltam restrição inicial/final, tensão, guias e coletor interativo (DR-07).",
-   "diferencas": "Inventor e SW têm condições de início/fim por seção; CATIA tem couplings.",
+   "diferencas": "CAD avançado C e CAD avançado A têm condições de início/fim por seção; CAD avançado B tem couplings.",
    "fontes": [
-    "catia-pd-niar",
+    "cb-pd-niar",
     "inv-sketched",
     "dr"
    ],
@@ -870,13 +870,13 @@
    "nome": "Furo",
    "faz": "Furo paramétrico simples, rebaixado, escareado, roscado.",
    "como": "Suporte: face + ponto(s) (ou sketch) → modo: tipo de furo, término (cego, passante, até) → parâmetros: diâmetro, profundidade, ângulo da ponta, rosca → avançado: norma/tamanho, folga.",
-   "catia": "Hole",
-   "sw": "Hole Wizard / Advanced Hole",
+   "cb": "Hole",
+   "sw": "assistente de furos / Advanced Hole",
    "inv": "Hole",
    "fenkra": "Furo",
    "status": "parcial",
    "nota": "HoleKind: Simples, Rebaixado, Escareado, Contrafurado; escareado nasce com 90° fixo; casca falha com furo escareado (DR-02).",
-   "diferencas": "SW Advanced Hole empilha elementos; Hole Wizard ligado à Toolbox.",
+   "diferencas": "CAD avançado A Advanced Hole empilha elementos; assistente de furos ligado à biblioteca de normas.",
    "fontes": [
     "sw-holewiz",
     "inv-thread",
@@ -890,13 +890,13 @@
    "nome": "Rosca",
    "faz": "Rosca cosmética ou modelada em furo/eixo.",
    "como": "Suporte: face cilíndrica → modo: cosmética/modelada, comprimento total ou parcial → parâmetros: norma, tamanho, passo, classe, deslocamento inicial → avançado: sentido, chanfro de entrada.",
-   "catia": "Thread/Tap",
+   "cb": "Thread/Tap",
    "sw": "Cosmetic Thread / Thread",
    "inv": "Thread",
    "fenkra": "Rosca",
    "status": "parcial",
    "nota": "Thread com modeled e end; sem passo/perfil personalizados, deslocamento inicial nem chanfro; tap com bugs; sem preview (DR-02, DR-03).",
-   "diferencas": "Inventor/SW: comprimento parcial com offset; SW Thread modela com perfil próprio.",
+   "diferencas": "CAD avançado C/CAD avançado A: comprimento parcial com offset; CAD avançado A Thread modela com perfil próprio.",
    "fontes": [
     "inv-thread",
     "sw-cthread",
@@ -910,7 +910,7 @@
    "nome": "Filete de aresta",
    "faz": "Arredonda arestas com raio constante.",
    "como": "Suporte: arestas (ou faces/feature) → modo: propagação por tangência → parâmetros: raio → avançado: setback, conservar arestas, overflow.",
-   "catia": "Edge Fillet",
+   "cb": "Edge Fillet",
    "sw": "Fillet (constant)",
    "inv": "Fillet (edge)",
    "fenkra": "Filete",
@@ -918,7 +918,7 @@
    "nota": "Fillet, FilletAll, FilletFull, FilletFaceFace.",
    "diferencas": "",
    "fontes": [
-    "catia-pd-niar",
+    "cb-pd-niar",
     "sw-feat"
    ],
    "backlog": null
@@ -929,7 +929,7 @@
    "nome": "Filete variável",
    "faz": "Raio que varia ao longo da aresta.",
    "como": "Arestas → pontos de controle com raios → transição linear/suave.",
-   "catia": "Variable Radius Fillet",
+   "cb": "Variable Radius Fillet",
    "sw": "Variable Size Fillet",
    "inv": "Fillet (variable)",
    "fenkra": "Filete variável",
@@ -937,7 +937,7 @@
    "nota": "FilletVar existe; sem pontos de controle intermediários editáveis.",
    "diferencas": "",
    "fontes": [
-    "catia-pd-niar"
+    "cb-pd-niar"
    ],
    "backlog": "B49"
   },
@@ -947,7 +947,7 @@
    "nome": "Chanfro",
    "faz": "Corta a aresta com distância×ângulo ou duas distâncias.",
    "como": "Arestas → modo (d×ang, d1×d2, igual) → valores.",
-   "catia": "Chamfer",
+   "cb": "Chamfer",
    "sw": "Chamfer",
    "inv": "Chamfer",
    "fenkra": "Chanfro",
@@ -955,7 +955,7 @@
    "nota": "Chamfer, ChamferAll, ChamferDistAngle, ChamferTwoDist.",
    "diferencas": "",
    "fontes": [
-    "catia-pd-niar"
+    "cb-pd-niar"
    ],
    "backlog": null
   },
@@ -965,7 +965,7 @@
    "nome": "Casca",
    "faz": "Esvazia o sólido com espessura, removendo faces.",
    "como": "Suporte: faces a remover → parâmetros: espessura interna/externa → avançado: espessura por face.",
-   "catia": "Shell",
+   "cb": "Shell",
    "sw": "Shell",
    "inv": "Shell",
    "fenkra": "Casca",
@@ -973,7 +973,7 @@
    "nota": "Shell só com espessura única; falha com spline e furo escareado; para fora gera raio sem opção reta (DR-02, DR-07).",
    "diferencas": "Todos têm espessura diferente por face.",
    "fontes": [
-    "catia-pd-niar",
+    "cb-pd-niar",
     "dr"
    ],
    "backlog": "DR-07"
@@ -984,7 +984,7 @@
    "nome": "Ângulo de saída (draft)",
    "faz": "Inclina faces em relação a uma direção de desmoldagem.",
    "como": "Faces + elemento neutro + direção → ângulo → avançado: linha de partição, propagação.",
-   "catia": "Draft Angle / Variable Draft",
+   "cb": "Draft Angle / Variable Draft",
    "sw": "Draft",
    "inv": "Face Draft",
    "fenkra": "Draft",
@@ -992,7 +992,7 @@
    "nota": "FeatureKind::Draft.",
    "diferencas": "",
    "fontes": [
-    "catia-pd-niar"
+    "cb-pd-niar"
    ],
    "backlog": null
   },
@@ -1002,15 +1002,15 @@
    "nome": "Nervura de reforço",
    "faz": "Parede fina a partir de um perfil aberto até o corpo.",
    "como": "Perfil aberto → direção (no plano/normal) → espessura (um lado, dois lados, simétrica) → avançado: até o próximo, saída.",
-   "catia": "Stiffener",
+   "cb": "Stiffener",
    "sw": "Rib",
    "inv": "Rib / Web",
    "fenkra": "Nervura",
    "status": "parcial",
    "nota": "Stiffener: thickness, depth, reverse, to_body; sem lado/ambos os lados (DR-05).",
-   "diferencas": "CATIA tem modo From Side / From Top.",
+   "diferencas": "CAD avançado B tem modo From Side / From Top.",
    "fontes": [
-    "catia-pd-niar",
+    "cb-pd-niar",
     "inv-sketched",
     "dr"
    ],
@@ -1022,7 +1022,7 @@
    "nome": "Engrossar / espessura",
    "faz": "Adiciona espessura a faces de sólido ou a superfícies.",
    "como": "Faces/superfície → espessura e lado(s) → novo corpo ou junta.",
-   "catia": "Thickness / Thick Surface",
+   "cb": "Thickness / Thick Surface",
    "sw": "Thicken",
    "inv": "Thicken/Offset",
    "fenkra": "Espessura / Engrossar superfície",
@@ -1041,15 +1041,15 @@
    "nome": "Padrões e espelhar",
    "faz": "Repete features ou corpos em linha, círculo, curva ou pontos; espelha.",
    "como": "Seleção → direção(ões)/eixo/curva/pontos → quantidade e espaçamento → avançado: pular instâncias, variar.",
-   "catia": "Rectangular / Circular / User Pattern / Mirror",
+   "cb": "Rectangular / Circular / User Pattern / Mirror",
    "sw": "Linear / Circular / Curve / Sketch-driven Pattern, Mirror",
    "inv": "Rectangular / Circular / Sketch Pattern, Mirror",
    "fenkra": "Padrão linear/circular/por pontos, espelhar",
    "status": "ok",
    "nota": "Pattern, Mirror; PatternPoints.",
-   "diferencas": "SW tem padrão por tabela e por curva.",
+   "diferencas": "CAD avançado A tem padrão por tabela e por curva.",
    "fontes": [
-    "catia-pd-niar",
+    "cb-pd-niar",
     "sw-feat"
    ],
    "backlog": null
@@ -1060,15 +1060,15 @@
    "nome": "Booleanas entre corpos",
    "faz": "União, subtração e interseção de corpos.",
    "como": "Corpos alvo e ferramenta → operação → manter ferramenta.",
-   "catia": "Add / Remove / Intersect / Assemble",
+   "cb": "Add / Remove / Intersect / Assemble",
    "sw": "Combine",
    "inv": "Combine",
    "fenkra": "Combinar",
    "status": "ok",
    "nota": "Combine(Add/Cut/Intersect).",
-   "diferencas": "CATIA usa Bodies inseridos com operação (Assemble).",
+   "diferencas": "CAD avançado B usa Bodies inseridos com operação (Assemble).",
    "fontes": [
-    "catia-pd-niar"
+    "cb-pd-niar"
    ],
    "backlog": null
   },
@@ -1078,7 +1078,7 @@
    "nome": "Dividir corpo",
    "faz": "Corta um corpo por plano ou superfície.",
    "como": "Corpo + elemento de corte → lado(s) a manter.",
-   "catia": "Split",
+   "cb": "Split",
    "sw": "Split / Split Body",
    "inv": "Split",
    "fenkra": "Dividir corpo",
@@ -1086,7 +1086,7 @@
    "nota": "SplitBody.",
    "diferencas": "",
    "fontes": [
-    "catia-pd-niar"
+    "cb-pd-niar"
    ],
    "backlog": null
   },
@@ -1096,7 +1096,7 @@
    "nome": "Primitivas",
    "faz": "Caixa, cilindro, esfera, cone, toro, cunha.",
    "como": "Ponto/plano de origem → dimensões.",
-   "catia": "— (via sketch)",
+   "cb": "— (via sketch)",
    "sw": "— (via sketch)",
    "inv": "Primitives (Box, Cylinder…)",
    "fenkra": "Primitivas",
@@ -1114,7 +1114,7 @@
    "nome": "Mover / copiar corpo",
    "faz": "Translada, gira, espelha ou aplica afinidade a um corpo.",
    "como": "Corpo → transformação → copiar ou mover.",
-   "catia": "Translation / Rotation / Symmetry / Affinity",
+   "cb": "Translation / Rotation / Symmetry / Affinity",
    "sw": "Move/Copy Body",
    "inv": "Move Bodies",
    "fenkra": "Mover corpo",
@@ -1122,7 +1122,7 @@
    "nota": "MoveBody (Translate, Rotate, Symmetry, Affinity).",
    "diferencas": "",
    "fontes": [
-    "catia-pd-niar"
+    "cb-pd-niar"
    ],
    "backlog": null
   },
@@ -1132,7 +1132,7 @@
    "nome": "Escala",
    "faz": "Escala um corpo uniforme ou por eixo.",
    "como": "Corpo → ponto de referência → fator(es).",
-   "catia": "Scaling / Affinity",
+   "cb": "Scaling / Affinity",
    "sw": "Scale",
    "inv": "Scale",
    "fenkra": "Escala",
@@ -1150,7 +1150,7 @@
    "nome": "Relevo e gravação",
    "faz": "Texto ou perfil em relevo/rebaixo sobre a face.",
    "como": "Perfil/texto → face → profundidade, envolver ou projetar.",
-   "catia": "— (Pad/Pocket de texto)",
+   "cb": "— (Pad/Pocket de texto)",
    "sw": "Wrap",
    "inv": "Emboss",
    "fenkra": "—",
@@ -1168,13 +1168,13 @@
    "nome": "Hélice / mola (coil)",
    "faz": "Sólido helicoidal (mola, rosca modelada).",
    "como": "Perfil + eixo → passo, voltas, altura → extremidades.",
-   "catia": "Helix + Rib",
+   "cb": "Helix + Rib",
    "sw": "Helix + Sweep",
    "inv": "Coil",
    "fenkra": "Hélice (wireframe) + varredura",
    "status": "parcial",
    "nota": "Hélice no wireframe (RefKind::Helix) + Sweep; sem comando direto de mola.",
-   "diferencas": "Inventor tem Coil com extremidades planas.",
+   "diferencas": "CAD avançado C tem Coil com extremidades planas.",
    "fontes": [
     "inv-sketched"
    ],
@@ -1186,7 +1186,7 @@
    "nome": "Modelagem direta",
    "faz": "Mover/deslocar faces sem histórico.",
    "como": "Faces → mover, deslocar, apagar, substituir.",
-   "catia": "— (Functional / Part Design limitado)",
+   "cb": "— (Functional / Part Design limitado)",
    "sw": "Move Face / Delete Face",
    "inv": "Direct Edit",
    "fenkra": "—",
@@ -1204,7 +1204,7 @@
    "nome": "Referências persistentes",
    "faz": "Features continuam ligadas às arestas/faces mesmo após mudanças anteriores.",
    "como": "Cada referência guarda origem/papel; ao mudar, re-anexa ou mostra erro com reparo.",
-   "catia": "Naming por BRep (com reconexão)",
+   "cb": "Naming por BRep (com reconexão)",
    "sw": "Rebuild com referências perdidas",
    "inv": "Reattach / Repair",
    "fenkra": "Ponto clicado + face_owner",
@@ -1222,13 +1222,13 @@
    "nome": "Pontos de referência",
    "faz": "Pontos por coordenadas, em curva, em superfície, entre pontos, centro, tangente.",
    "como": "Suporte: elemento → modo (coordenadas, na curva, na superfície, entre…) → parâmetros: distância/razão → avançado: referencial.",
-   "catia": "Point",
+   "cb": "Point",
    "sw": "Reference Point",
    "inv": "Work Point",
    "fenkra": "Ponto",
    "status": "ok",
    "nota": "PointCoords, PointOnCurve, PointOnSurface, PointBetween, PointCenter, PointTangent…",
-   "diferencas": "CATIA é o mais completo; o review pede setas 3D do referencial (DR-49).",
+   "diferencas": "CAD avançado B é o mais completo; o review pede setas 3D do referencial (DR-49).",
    "fontes": [
     "ctx-sup",
     "dr"
@@ -1241,7 +1241,7 @@
    "nome": "Linhas de referência",
    "faz": "Linha por 2 pontos, ponto+direção, ângulo, normal à superfície, bissetriz.",
    "como": "Suporte → modo → comprimento/limites → avançado: infinita ou limitada.",
-   "catia": "Line",
+   "cb": "Line",
    "sw": "Reference Axis / 3D Sketch line",
    "inv": "Work Axis",
    "fenkra": "Linha",
@@ -1259,7 +1259,7 @@
    "nome": "Planos de referência",
    "faz": "Plano offset, ângulo, 3 pontos, 2 linhas, normal à curva, tangente, equação.",
    "como": "Suporte → modo → offset/ângulo → avançado: inverter normal.",
-   "catia": "Plane",
+   "cb": "Plane",
    "sw": "Reference Plane",
    "inv": "Work Plane",
    "fenkra": "Plano",
@@ -1278,7 +1278,7 @@
    "nome": "Projeção",
    "faz": "Projeta curva/ponto numa superfície, normal ou por direção.",
    "como": "Elemento + suporte → normal/direção → solução mais próxima.",
-   "catia": "Projection",
+   "cb": "Projection",
    "sw": "Projected Curve",
    "inv": "Project to Surface",
    "fenkra": "Projeção",
@@ -1296,7 +1296,7 @@
    "nome": "Interseção",
    "faz": "Curva/ponto de interseção entre elementos.",
    "como": "Dois elementos → curva → avançado: estender, manter tudo.",
-   "catia": "Intersection",
+   "cb": "Intersection",
    "sw": "Intersection Curve",
    "inv": "Intersection Curve",
    "fenkra": "Interseção",
@@ -1314,7 +1314,7 @@
    "nome": "Curvas de conexão e canto",
    "faz": "Conecta duas curvas com continuidade G0–G3; canto com raio.",
    "como": "Duas curvas + pontos → continuidade e tensão; canto → raio, aparar.",
-   "catia": "Connect Curve / Corner",
+   "cb": "Connect Curve / Corner",
    "sw": "— / Fillet 3D sketch",
    "inv": "— / Bridge Curve",
    "fenkra": "Conectar, canto",
@@ -1332,7 +1332,7 @@
    "nome": "Spline 3D, hélice, espiral",
    "faz": "Curvas livres e paramétricas no espaço.",
    "como": "Pontos/eixo → passo, voltas, raio, tangências.",
-   "catia": "Spline / Helix / Spiral",
+   "cb": "Spline / Helix / Spiral",
    "sw": "3D Spline / Helix and Spiral",
    "inv": "3D Sketch / Helical Curve",
    "fenkra": "Spline, hélice, espiral",
@@ -1350,13 +1350,13 @@
    "nome": "Extrair / extrair múltiplo",
    "faz": "Extrai faces, arestas ou curvas como novo elemento, com propagação.",
    "como": "Seleção → propagação (nenhuma, ponto, tangência, curvatura) → limiares de distância/ângulo → avançado: complementar, federação.",
-   "catia": "Extract / Multiple Extract",
+   "cb": "Extract / Multiple Extract",
    "sw": "Offset 0 / Delete Face (indireto)",
    "inv": "Copy Object / Extract",
    "fenkra": "Extrair",
    "status": "parcial",
    "nota": "SurfExtract/SurfMulti; a propagação fica só na interface (extract.rs) e não é refeita no recompute; falta no menu de outros comandos (DR-13, DR-14).",
-   "diferencas": "Recurso central do CATIA; SW/Inventor usam cópia de faces.",
+   "diferencas": "Recurso central do CAD avançado B; CAD avançado A/CAD avançado C usam cópia de faces.",
    "fontes": [
     "ctx-sup",
     "dr"
@@ -1369,13 +1369,13 @@
    "nome": "Superfície extrudada e de revolução",
    "faz": "Superfícies por extrusão e revolução de curvas.",
    "como": "Curva + direção/eixo → limites: comprimento ou até elemento.",
-   "catia": "Extrude / Revolve",
+   "cb": "Extrude / Revolve",
    "sw": "Extruded / Revolved Surface",
    "inv": "Extrude / Revolve (surface)",
    "fenkra": "Extrusão / revolução de superfície",
    "status": "parcial",
    "nota": "SurfExtrude só com comprimentos: falta \"até elemento\" (DR-24).",
-   "diferencas": "CATIA e SW oferecem até superfície/vértice.",
+   "diferencas": "CAD avançado B e CAD avançado A oferecem até superfície/vértice.",
    "fontes": [
     "ctx-sup",
     "sw-surf",
@@ -1389,13 +1389,13 @@
    "nome": "Superfície varrida",
    "faz": "Varre perfil por guias/spine.",
    "como": "Seção + guia(s) + spine → modo (explícito, linha, círculo, cônica) → torção, escala.",
-   "catia": "Sweep",
+   "cb": "Sweep",
    "sw": "Swept Surface",
    "inv": "Sweep (surface)",
    "fenkra": "Varredura de superfície",
    "status": "ok",
    "nota": "SurfSweep, SurfSweepX (avançada).",
-   "diferencas": "CATIA tem modos por seção implícita (linha, círculo, cônica).",
+   "diferencas": "CAD avançado B tem modos por seção implícita (linha, círculo, cônica).",
    "fontes": [
     "ctx-sup"
    ],
@@ -1407,13 +1407,13 @@
    "nome": "Superfície por seções (loft)",
    "faz": "Superfície entre seções com guias.",
    "como": "Seções + guias + continuidade nas bordas.",
-   "catia": "Multi-Sections Surface",
+   "cb": "Multi-Sections Surface",
    "sw": "Lofted Surface / Boundary Surface",
    "inv": "Loft (surface)",
    "fenkra": "Loft de superfície",
    "status": "parcial",
    "nota": "SurfLoft com uma guia.",
-   "diferencas": "SW Boundary trata as duas direções igualmente.",
+   "diferencas": "CAD avançado A Boundary trata as duas direções igualmente.",
    "fontes": [
     "sw-surf",
     "ctx-sup"
@@ -1426,7 +1426,7 @@
    "nome": "Preenchimento (fill)",
    "faz": "Fecha um contorno com superfície.",
    "como": "Contorno de curvas/arestas (encadeado) → continuidade G0/G1/G2 com faces vizinhas → avançado: ponto de passagem.",
-   "catia": "Fill",
+   "cb": "Fill",
    "sw": "Filled Surface",
    "inv": "Boundary Patch",
    "fenkra": "Preencher / Preencher fronteiras",
@@ -1446,7 +1446,7 @@
    "nome": "Concordância (blend)",
    "faz": "Superfície de transição entre duas curvas/bordas.",
    "como": "Duas bordas + suportes → continuidade e tensão.",
-   "catia": "Blend",
+   "cb": "Blend",
    "sw": "Boundary / Lofted com tangência",
    "inv": "Loft / Boundary Patch",
    "fenkra": "Blend",
@@ -1464,7 +1464,7 @@
    "nome": "Offset de superfície",
    "faz": "Cópia paralela de superfície.",
    "como": "Superfície → distância → lado → avançado: remover subelementos que falham.",
-   "catia": "Offset / Variable Offset",
+   "cb": "Offset / Variable Offset",
    "sw": "Offset Surface",
    "inv": "Thicken/Offset",
    "fenkra": "Offset",
@@ -1482,7 +1482,7 @@
    "nome": "Juntar (join/knit/stitch)",
    "faz": "Une curvas ou superfícies num elemento só.",
    "como": "Elementos → tolerância de fusão → verificar tangência/conexidade → avançado: simplificar, criar sólido.",
-   "catia": "Join",
+   "cb": "Join",
    "sw": "Knit Surface / Composite Curve",
    "inv": "Stitch",
    "fenkra": "Juntar",
@@ -1502,7 +1502,7 @@
    "nome": "Dividir e aparar",
    "faz": "Corta superfícies/curvas por outro elemento; apara duas mutuamente.",
    "como": "Elemento + ferramenta → lado a manter → avançado: manter os dois lados.",
-   "catia": "Split / Trim",
+   "cb": "Split / Trim",
    "sw": "Trim Surface",
    "inv": "Trim / Split",
    "fenkra": "Dividir, aparar",
@@ -1521,7 +1521,7 @@
    "nome": "Estender / extrapolar",
    "faz": "Prolonga a borda de uma superfície.",
    "como": "Borda → comprimento ou até elemento → tangente/curvatura.",
-   "catia": "Extrapolate",
+   "cb": "Extrapolate",
    "sw": "Extend Surface",
    "inv": "Extend",
    "fenkra": "Extrapolar",
@@ -1539,7 +1539,7 @@
    "nome": "Superfície regrada",
    "faz": "Superfície a partir de arestas numa direção (normal, tangente, vetor).",
    "como": "Arestas → tipo e distância.",
-   "catia": "— (Sweep linha)",
+   "cb": "— (Sweep linha)",
    "sw": "Ruled Surface",
    "inv": "Ruled Surface",
    "fenkra": "Conectar superfícies",
@@ -1557,7 +1557,7 @@
    "nome": "Filete de superfície",
    "faz": "Filete entre superfícies e em arestas de superfície.",
    "como": "Duas superfícies → raio → aparar suportes.",
-   "catia": "Shape Fillet / Edge Fillet",
+   "cb": "Shape Fillet / Edge Fillet",
    "sw": "Fillet (face)",
    "inv": "Fillet (face)",
    "fenkra": "Filete de superfície",
@@ -1576,13 +1576,13 @@
    "nome": "Fechar superfície / costurar ao corpo",
    "faz": "Transforma volume fechado em sólido ou costura superfície num corpo.",
    "como": "Superfície fechada → sólido; ou superfície + corpo → substituir faces.",
-   "catia": "Close Surface / Sew Surface",
+   "cb": "Close Surface / Sew Surface",
    "sw": "Thicken (create solid) / Replace Face",
    "inv": "Sculpt",
    "fenkra": "Fechar superfície, costurar",
    "status": "ok",
    "nota": "CloseSurface, SewSurface.",
-   "diferencas": "Inventor Sculpt adiciona e remove material ao mesmo tempo.",
+   "diferencas": "CAD avançado C Sculpt adiciona e remove material ao mesmo tempo.",
    "fontes": [
     "inv-trimsurf"
    ],
@@ -1594,7 +1594,7 @@
    "nome": "Reparo (healing)",
    "faz": "Corrige folgas e bordas de superfícies importadas.",
    "como": "Superfícies → tolerâncias → fechar folgas.",
-   "catia": "Healing",
+   "cb": "Healing",
    "sw": "Import Diagnostics",
    "inv": "Repair Bodies",
    "fenkra": "Reparar",
@@ -1612,7 +1612,7 @@
    "nome": "Análises (zebra, curvatura, desvio)",
    "faz": "Verifica continuidade e qualidade.",
    "como": "Superfície → tipo de análise → escala de cores.",
-   "catia": "Connect Checker / Curvature / Distance Analysis",
+   "cb": "Connect Checker / Curvature / Distance Analysis",
    "sw": "Zebra / Curvature / Deviation",
    "inv": "Zebra / Curvature / Surface Analysis",
    "fenkra": "Zebra, curvatura",
@@ -1630,7 +1630,7 @@
    "nome": "Elementos de cada comando",
    "faz": "Filosofia: suporte → modo → parâmetros → avançado; extensões com \"até elemento\".",
    "como": "Todo comando pergunta primeiro o onde, depois o como, o quanto e o refinamento.",
-   "catia": "Padrão do GSD",
+   "cb": "Padrão do GSD",
    "sw": "PropertyManager por grupos",
    "inv": "Property panel",
    "fenkra": "Painel com abas",
@@ -1648,15 +1648,15 @@
    "nome": "Parâmetros de chapa",
    "faz": "Espessura, raio, fator K/tabela de dobra, alívio padrão, material.",
    "como": "Definidos uma vez por peça (regra/estilo) → herdados pelas features → sobrescrita por feature.",
-   "catia": "Sheet Metal Parameters",
+   "cb": "Sheet Metal Parameters",
    "sw": "Sheet Metal (gauge table, K-factor, bend allowance)",
    "inv": "Sheet Metal Defaults / Rules",
    "fenkra": "Parâmetros de chapa",
    "status": "ok",
    "nota": "SheetParams: material, bitolas, método/fator K, sugestão por tabela.",
-   "diferencas": "Inventor usa Regras e Estilos reaproveitáveis entre peças.",
+   "diferencas": "CAD avançado C usa Regras e Estilos reaproveitáveis entre peças.",
    "fontes": [
-    "catia-smd-niar",
+    "cb-smd-niar",
     "sw-sm",
     "inv-contourflange"
    ],
@@ -1668,7 +1668,7 @@
    "nome": "Parede base",
    "faz": "Primeira parede a partir de um perfil fechado (ou aberto com espessura).",
    "como": "Perfil → lado da espessura → avançado: offset, plano médio.",
-   "catia": "Wall",
+   "cb": "Wall",
    "sw": "Base Flange/Tab",
    "inv": "Face",
    "fenkra": "Parede base",
@@ -1676,7 +1676,7 @@
    "nota": "SmWall (sketch ou superfície, offset, mid).",
    "diferencas": "",
    "fontes": [
-    "catia-smd-niar",
+    "cb-smd-niar",
     "sw-sm"
    ],
    "backlog": null
@@ -1687,16 +1687,16 @@
    "nome": "Aba em aresta",
    "faz": "Dobra uma parede a partir de uma aresta reta.",
    "como": "Aresta(s) → modo de comprimento (externo/interno) e posição da dobra → ângulo, raio → avançado: recuos laterais, alívio, inverter, meia-esquadria com vizinha.",
-   "catia": "Wall On Edge / Flange",
+   "cb": "Wall On Edge / Flange",
    "sw": "Edge Flange",
    "inv": "Flange",
    "fenkra": "Aba",
    "status": "parcial",
    "nota": "SmFlange com lado, meia-esquadria, recuo mínimo; bugs em dobras em sequência, múltiplas dobras e abas vizinhas compostas (DR-55..57).",
-   "diferencas": "SW define a posição da dobra (material dentro/fora, dobra fora, virtual sharp); Inventor aceita cadeia de arestas.",
+   "diferencas": "CAD avançado A define a posição da dobra (material dentro/fora, dobra fora, virtual sharp); CAD avançado C aceita cadeia de arestas.",
    "fontes": [
     "sw-sm-bendpos",
-    "catia-smd-niar",
+    "cb-smd-niar",
     "dr"
    ],
    "backlog": "DR-55"
@@ -1707,15 +1707,15 @@
    "nome": "Aba em cadeia (reta + curva)",
    "faz": "Aba que acompanha arestas tangentes, retas e curvas.",
    "como": "Cadeia por tangência → raio, ângulo → planifica pelo comprimento desenvolvido.",
-   "catia": "Flange (sweep walls)",
+   "cb": "Flange (sweep walls)",
    "sw": "Miter Flange / Swept Flange",
    "inv": "Contour Flange / Flange em loop",
    "fenkra": "Aba curva",
    "status": "parcial",
    "nota": "SmCurveFlange (alpha.24–26); bug ao gerar em aresta com curva e reta (DR-54).",
-   "diferencas": "CATIA tem Swept Walls: Flange, Hem, Tear Drop, User Flange.",
+   "diferencas": "CAD avançado B tem Swept Walls: Flange, Hem, Tear Drop, User Flange.",
    "fontes": [
-    "catia-smd-niar",
+    "cb-smd-niar",
     "dr"
    ],
    "backlog": "DR-54"
@@ -1726,7 +1726,7 @@
    "nome": "Aba por perfil (contorno)",
    "faz": "Parede de perfil aberto ao longo de aresta(s).",
    "como": "Perfil aberto + arestas → raios automáticos → comprimento/extensão.",
-   "catia": "User Flange",
+   "cb": "User Flange",
    "sw": "Miter Flange",
    "inv": "Contour Flange",
    "fenkra": "Aba por perfil",
@@ -1735,7 +1735,7 @@
    "diferencas": "",
    "fontes": [
     "inv-contourflange",
-    "catia-smd-niar"
+    "cb-smd-niar"
    ],
    "backlog": null
   },
@@ -1745,13 +1745,13 @@
    "nome": "Aba por superfície (suporte)",
    "faz": "Aba que se apoia numa superfície de suporte; relimita a base.",
    "como": "Suporte + web → modo exato/aproximação/ângulo → EOP (comprimento), raio, lado do material.",
-   "catia": "Surfacic Flange (Aerospace SM)",
+   "cb": "Surfacic Flange (Aerospace SM)",
    "sw": "—",
    "inv": "—",
    "fenkra": "Aba por superfície",
    "status": "parcial",
    "nota": "SmSurfFlange com 3 modos (alpha.26); falhou nos testes do usuário, inclusive nervura de asa (DR-19, DR-23).",
-   "diferencas": "Exclusivo do CATIA Aerospace Sheet Metal.",
+   "diferencas": "Exclusivo do CAD avançado B Aerospace Sheet Metal.",
    "fontes": [
     "dr",
     "ctx-chp"
@@ -1764,7 +1764,7 @@
    "nome": "Aba entre perfis (lofted)",
    "faz": "Transição de chapa entre dois perfis (funis, adaptadores).",
    "como": "Dois perfis → saída por dobradeira (facetada) ou estampada (lisa).",
-   "catia": "— (Hopper / Generative)",
+   "cb": "— (Hopper / Generative)",
    "sw": "Lofted Bend",
    "inv": "Lofted Flange",
    "fenkra": "—",
@@ -1782,7 +1782,7 @@
    "nome": "Bainha e gota",
    "faz": "Dobra a borda sobre si (fechada, aberta, gota, rolada).",
    "como": "Aresta → tipo → comprimento, folga, raio.",
-   "catia": "Hem / Tear Drop",
+   "cb": "Hem / Tear Drop",
    "sw": "Hem",
    "inv": "Hem",
    "fenkra": "Bainha",
@@ -1790,7 +1790,7 @@
    "nota": "SmHem (tipos).",
    "diferencas": "",
    "fontes": [
-    "catia-smd-niar",
+    "cb-smd-niar",
     "sw-sm"
    ],
    "backlog": null
@@ -1801,7 +1801,7 @@
    "nome": "Joggle",
    "faz": "Desvio em Z por duas dobras.",
    "como": "Linha no sketch → altura, ângulo → manter comprimento.",
-   "catia": "Jog",
+   "cb": "Jog",
    "sw": "Jog",
    "inv": "— (Flange duplo)",
    "fenkra": "Joggle",
@@ -1819,7 +1819,7 @@
    "nome": "Dobra por linha",
    "faz": "Dobra uma face plana ao longo de uma linha de sketch.",
    "como": "Linha → lado fixo → ângulo, raio, posição da linha.",
-   "catia": "Bend From Flat",
+   "cb": "Bend From Flat",
    "sw": "Sketched Bend",
    "inv": "Fold",
    "fenkra": "Dobra por linha",
@@ -1838,15 +1838,15 @@
    "nome": "Recorte na chapa",
    "faz": "Corte normal à chapa, válido dobrado e planificado.",
    "como": "Perfil → feito no dobrado ou no planificado → profundidade.",
-   "catia": "Cut Out",
+   "cb": "Cut Out",
    "sw": "Extruded Cut (Normal cut)",
    "inv": "Cut (Cut Across Bend)",
    "fenkra": "Recorte",
    "status": "parcial",
    "nota": "SmCut; planificado→dobrado falha quando atravessa o raio (DR-20).",
-   "diferencas": "Inventor tem \"Cut Across Bend\".",
+   "diferencas": "CAD avançado C tem \"Cut Across Bend\".",
    "fontes": [
-    "catia-smd-niar",
+    "cb-smd-niar",
     "dr"
    ],
    "backlog": "DR-20"
@@ -1857,13 +1857,13 @@
    "nome": "Alívios de canto e dobra",
    "faz": "Alívio no encontro de abas e na ponta das dobras.",
    "como": "Canto/dobra → forma (redondo, quadrado, gota, rasgo) → tamanho.",
-   "catia": "Corner Relief",
+   "cb": "Corner Relief",
    "sw": "Corner Relief / Closed Corner",
    "inv": "Corner Round / Corner Seam",
    "fenkra": "Alívio de canto",
    "status": "ok",
    "nota": "SmCornerRelief; relief_kind na aba.",
-   "diferencas": "SW tem Closed Corner; Inventor tem Corner Seam.",
+   "diferencas": "CAD avançado A tem Closed Corner; CAD avançado C tem Corner Seam.",
    "fontes": [
     "sw-sm"
    ],
@@ -1875,7 +1875,7 @@
    "nome": "Estampos, veneziana e furo flangeado",
    "faz": "Formas de estampagem.",
    "como": "Ponto/face → ferramenta → dimensões.",
-   "catia": "Stamping (Louver, Bead, Bridge, Flanged Hole…)",
+   "cb": "Stamping (Louver, Bead, Bridge, Flanged Hole…)",
    "sw": "Forming Tools",
    "inv": "Punch Tool",
    "fenkra": "Estampo, veneziana, furo flangeado",
@@ -1883,7 +1883,7 @@
    "nota": "SmStamp, SmLouver, SmFlangedHole.",
    "diferencas": "",
    "fontes": [
-    "catia-smd-niar",
+    "cb-smd-niar",
     "sw-sm"
    ],
    "backlog": null
@@ -1894,7 +1894,7 @@
    "nome": "Planificação e DXF",
    "faz": "Estado planificado com linhas de dobra e exportação.",
    "como": "Alternar dobrado/planificado → tabela de dobras → DXF.",
-   "catia": "Fold/Unfold / Save As DXF",
+   "cb": "Fold/Unfold / Save As DXF",
    "sw": "Flatten / Flat Pattern",
    "inv": "Flat Pattern",
    "fenkra": "Dobrar/Desdobrar",
@@ -1912,7 +1912,7 @@
    "nome": "Desdobrar parcial",
    "faz": "Desdobra só algumas dobras para editar e redobra.",
    "como": "Dobras escolhidas → editar → redobrar.",
-   "catia": "Unfold / Fold",
+   "cb": "Unfold / Fold",
    "sw": "Unfold / Fold",
    "inv": "Unfold / Refold",
    "fenkra": "—",
@@ -1930,7 +1930,7 @@
    "nome": "Converter sólido em chapa",
    "faz": "Reconhece dobras num sólido de espessura constante.",
    "como": "Face fixa → espessura → arestas de dobra.",
-   "catia": "Recognize",
+   "cb": "Recognize",
    "sw": "Convert to Sheet Metal / Insert Bends",
    "inv": "Convert to Sheet Metal",
    "fenkra": "—",
@@ -1948,7 +1948,7 @@
    "nome": "Comando de aba unificado",
    "faz": "Um comando com tipo (aresta, cadeia, perfil, superfície) que abre os campos do tipo.",
    "como": "Escolha do tipo → caixas do tipo se abrem abaixo.",
-   "catia": "Wall On Edge (tipos)",
+   "cb": "Wall On Edge (tipos)",
    "sw": "Edge/Miter/Swept separados",
    "inv": "Flange/Contour separados",
    "fenkra": "vários comandos",
@@ -1966,7 +1966,7 @@
    "nome": "Membro estrutural",
    "faz": "Perfil aplicado a linhas/arestas de um esqueleto.",
    "como": "Esqueleto (sketch 3D, arestas) → família/tamanho → ancoragem, rotação, espelhar → avançado: grupos, ponto de inserção.",
-   "catia": "Structure Design: Profile",
+   "cb": "Structure Design: Profile",
    "sw": "Structural Member",
    "inv": "Frame Generator: Insert Frame",
    "fenkra": "Membro",
@@ -1976,7 +1976,7 @@
    "fontes": [
     "sw-weld",
     "inv-frame",
-    "catia-str-pycatia"
+    "cb-str-pycad"
    ],
    "backlog": null
   },
@@ -1986,13 +1986,13 @@
    "nome": "Tratamento de cantos e uniões",
    "faz": "Meia-esquadria, topo, aparar/estender, entalhe (notch).",
    "como": "Par de membros → tipo de canto → folga de solda → ordem.",
-   "catia": "Endcut (Snipe, Trim, Weld)",
+   "cb": "Endcut (Snipe, Trim, Weld)",
    "sw": "Trim/Extend (End Miter, Butt1/2)",
    "inv": "Miter / Notch / Corner Joint / Trim-Extend",
    "fenkra": "Cantos e uniões",
    "status": "parcial",
    "nota": "CornerMode e joints; sem entalhe (notch) por perfil.",
-   "diferencas": "Inventor separa Notch e Corner Joint; SW tem folga de solda.",
+   "diferencas": "CAD avançado C separa Notch e Corner Joint; CAD avançado A tem folga de solda.",
    "fontes": [
     "sw-weld-trim",
     "inv-frame-end"
@@ -2005,7 +2005,7 @@
    "nome": "Biblioteca de perfis",
    "faz": "Famílias por norma com dimensões e peso/m.",
    "como": "Norma → família → designação → dados.",
-   "catia": "Catálogos de seções",
+   "cb": "Catálogos de seções",
    "sw": "Weldment Profiles",
    "inv": "Content Center (estrutural)",
    "fenkra": "Biblioteca de perfis",
@@ -2024,7 +2024,7 @@
    "nome": "Chapas, reforços e tampas",
    "faz": "Gussets, tampas de ponta e placas de base.",
    "como": "Membros/faces → forma → espessura, chanfro.",
-   "catia": "Plate / Stiffener",
+   "cb": "Plate / Stiffener",
    "sw": "Gusset / End Cap",
    "inv": "— (peças normais)",
    "fenkra": "Placa, reforço",
@@ -2042,7 +2042,7 @@
    "nome": "Cordões de solda",
    "faz": "Cordões 3D e símbolos de solda.",
    "como": "Arestas/faces → tipo e tamanho → símbolo.",
-   "catia": "Weld Design",
+   "cb": "Weld Design",
    "sw": "Weld Bead / Fillet Bead",
    "inv": "Weldment: Welds",
    "fenkra": "Símbolo de solda",
@@ -2060,7 +2060,7 @@
    "nome": "Lista de corte",
    "faz": "Agrupa membros iguais com comprimento, ângulos e peso.",
    "como": "Agrupamento automático → propriedades por item → tabela no desenho.",
-   "catia": "BOM de estrutura",
+   "cb": "BOM de estrutura",
    "sw": "Cut List",
    "inv": "Frame Member Info / Parts List",
    "fenkra": "Lista de corte por item",
@@ -2079,13 +2079,13 @@
    "nome": "Corpos iguais → peça + instâncias",
    "faz": "Detecta corpos idênticos e gera uma peça com várias instâncias.",
    "como": "Comparação (perfil, comprimento, cortes, material) → grupos → peça base + ocorrências ligadas.",
-   "catia": "— (via Product)",
+   "cb": "— (via Product)",
    "sw": "Cut List folders",
    "inv": "Frame Generator (peças por membro)",
    "fenkra": "Gerar montagem (itens)",
    "status": "ok",
    "nota": "Corpos iguais viram uma peça com quantidade (estrutura_para_montagem, B26).",
-   "diferencas": "Inventor gera arquivos por membro; SW agrupa só na lista.",
+   "diferencas": "CAD avançado C gera arquivos por membro; CAD avançado A agrupa só na lista.",
    "fontes": [
     "ctx-est",
     "dr"
@@ -2098,7 +2098,7 @@
    "nome": "Estrutura Pai → montagem dinâmica",
    "faz": "Gera montagem, subpeças linkadas e submontagens de solda a partir do estrutural.",
    "como": "Estrutura Pai → grupos/submontagens → subparts linkados → PMI e desenho por peça.",
-   "catia": "Product a partir de Part (manual)",
+   "cb": "Product a partir de Part (manual)",
    "sw": "Insert into New Part / Save Bodies",
    "inv": "Frame Generator assembly",
    "fenkra": "Gerar montagem",
@@ -2117,7 +2117,7 @@
    "nome": "Otimização de barras",
    "faz": "Distribui cortes em barras comerciais.",
    "como": "Lista de corte + barra padrão → plano de corte.",
-   "catia": "—",
+   "cb": "—",
    "sw": "— (add-ins)",
    "inv": "—",
    "fenkra": "Barras (cálculo)",
@@ -2135,7 +2135,7 @@
    "nome": "Inserir componente e fixar",
    "faz": "Insere peças/submontagens; fixa a primeira.",
    "como": "Arquivo → posição → fixo/flutuante → modo leve.",
-   "catia": "Existing Component / Fix",
+   "cb": "Existing Component / Fix",
    "sw": "Insert Component / Fix",
    "inv": "Place / Ground",
    "fenkra": "Inserir, fixar",
@@ -2144,7 +2144,7 @@
    "diferencas": "",
    "fontes": [
     "sw-mates",
-    "catia-asm-niar"
+    "cb-asm-niar"
    ],
    "backlog": null
   },
@@ -2154,16 +2154,16 @@
    "nome": "Restrições padrão",
    "faz": "Coincidente, contato, distância, ângulo, paralelo, perpendicular, concêntrico.",
    "como": "Duas entidades → tipo (ou automático) → valor → inverter alinhamento.",
-   "catia": "Coincidence / Contact / Offset / Angle",
+   "cb": "Coincidence / Contact / Offset / Angle",
    "sw": "Standard Mates",
    "inv": "Constraints (Mate, Flush, Angle, Tangent, Insert)",
    "fenkra": "Restrições",
    "status": "ok",
    "nota": "MateCmd: Coincident, Contact, Distance, Angle, Parallel, Perpendicular, Auto, AlignOnce.",
-   "diferencas": "Inventor tem Insert (concêntrico + plano numa só).",
+   "diferencas": "CAD avançado C tem Insert (concêntrico + plano numa só).",
    "fontes": [
     "sw-mates",
-    "catia-asm-city"
+    "cb-asm-city"
    ],
    "backlog": null
   },
@@ -2173,7 +2173,7 @@
    "nome": "Restrição rápida / inteligente",
    "faz": "Deduz a restrição pela seleção ou ao arrastar.",
    "como": "Seleção de 2 entidades → proposta → confirmar.",
-   "catia": "Quick Constraint",
+   "cb": "Quick Constraint",
    "sw": "SmartMates",
    "inv": "Assemble / Auto",
    "fenkra": "Restrição rápida",
@@ -2181,7 +2181,7 @@
    "nota": "quick_options, after_view_quick.",
    "diferencas": "",
    "fontes": [
-    "catia-asm-city",
+    "cb-asm-city",
     "sw-mates"
    ],
    "backlog": null
@@ -2192,13 +2192,13 @@
    "nome": "Juntas cinemáticas",
    "faz": "Rígida, rotação, deslizante, cilíndrica, planar, esférica.",
    "como": "Duas origens (frames) → tipo → limites → drive.",
-   "catia": "Kinematics: Joints",
+   "cb": "Kinematics: Joints",
    "sw": "Mechanical mates / Hinge",
    "inv": "Joints",
    "fenkra": "Juntas",
    "status": "ok",
    "nota": "AsmJoint, kin.rs; limites e drives.",
-   "diferencas": "Inventor escolhe a junta pela geometria (automático).",
+   "diferencas": "CAD avançado C escolhe a junta pela geometria (automático).",
    "fontes": [
     "inv-joints",
     "inv-joints-manage"
@@ -2211,7 +2211,7 @@
    "nome": "Acoplamentos mecânicos",
    "faz": "Engrenagem, cremalheira, polia, came, parafuso.",
    "como": "Duas juntas/eixos → razão.",
-   "catia": "Gear / Rack / Cable joints",
+   "cb": "Gear / Rack / Cable joints",
    "sw": "Gear / Rack and Pinion / Cam / Screw mates",
    "inv": "Motion: Rotation / Rotation-Translation",
    "fenkra": "Engrenagem, cremalheira, polia, came",
@@ -2229,7 +2229,7 @@
    "nome": "Restrições avançadas",
    "faz": "Largura (centrar), simetria, caminho, limite.",
    "como": "Pares de faces/curva → regra.",
-   "catia": "— (Offset + parâmetros)",
+   "cb": "— (Offset + parâmetros)",
    "sw": "Width / Symmetric / Path / Limit",
    "inv": "Symmetry / Transitional",
    "fenkra": "—",
@@ -2247,7 +2247,7 @@
    "nome": "Graus de liberdade",
    "faz": "Mostra o que falta restringir em cada componente.",
    "como": "Solver → GDL por peça → ícones na árvore.",
-   "catia": "Degrees of Freedom",
+   "cb": "Degrees of Freedom",
    "sw": "Under defined (-)",
    "inv": "Degrees of Freedom",
    "fenkra": "GDL na árvore",
@@ -2255,7 +2255,7 @@
    "nota": "dof_per_comp; selos na árvore.",
    "diferencas": "",
    "fontes": [
-    "catia-asm-niar"
+    "cb-asm-niar"
    ],
    "backlog": null
   },
@@ -2265,7 +2265,7 @@
    "nome": "Padrão de componentes",
    "faz": "Repete componentes por padrão da feature ou linear/circular.",
    "como": "Componente → padrão → associado ao padrão de furos.",
-   "catia": "Reuse Pattern",
+   "cb": "Reuse Pattern",
    "sw": "Component Pattern (feature-driven)",
    "inv": "Pattern Component",
    "fenkra": "Padrão",
@@ -2283,7 +2283,7 @@
    "nome": "Interferência e colisão",
    "faz": "Detecta volumes sobrepostos; colisão ao mover.",
    "como": "Componentes → análise → lista.",
-   "catia": "Clash",
+   "cb": "Clash",
    "sw": "Interference / Collision Detection",
    "inv": "Analyze Interference",
    "fenkra": "Interferência",
@@ -2301,7 +2301,7 @@
    "nome": "Vista explodida",
    "faz": "Passos de explosão e animação.",
    "como": "Componentes → direção/distância → passos.",
-   "catia": "Explode",
+   "cb": "Explode",
    "sw": "Exploded View",
    "inv": "Presentation",
    "fenkra": "Explodida",
@@ -2319,7 +2319,7 @@
    "nome": "Peça no contexto e links",
    "faz": "Cria/edita peça dentro da montagem referenciando outras.",
    "como": "Editar no lugar → referências externas → controle de links.",
-   "catia": "Contextual design / Publications",
+   "cb": "Contextual design / Publications",
    "sw": "In-context (external refs)",
    "inv": "Adaptive / Derived",
    "fenkra": "Peça no contexto, copiar geometria",
@@ -2337,18 +2337,18 @@
    "nome": "Recursos de montagem",
    "faz": "Furo e corte que atravessam várias peças.",
    "como": "Feature na montagem → peças afetadas.",
-   "catia": "Assembly Features",
+   "cb": "Assembly Features",
    "sw": "Assembly Feature (Hole/Cut)",
    "inv": "Assembly Features",
    "fenkra": "Recorte pela peça, furo entre peças",
    "status": "parcial",
    "nota": "AsmFeat(0/1) corta só a forma exibida na montagem: não grava furo nas peças, não entra no hole_table nem nos Fixadores; posição só pelo clique, Ø padrão 6.",
-   "diferencas": "SW: Série de furos atravessa as peças do eixo e grava feature em cada peça (->). Inventor: feature fica na montagem com participantes. CATIA: Assembly Features com peças afetadas.",
+   "diferencas": "CAD avançado A: Série de furos atravessa as peças do eixo e grava feature em cada peça (->). CAD avançado C: feature fica na montagem com participantes. CAD avançado B: Assembly Features com peças afetadas.",
    "fontes": [
     "sw-holeseries",
     "sw-propagate",
     "inv-asmfeat",
-    "catia-asmfeat"
+    "cb-asmfeat"
    ],
    "backlog": "B57"
   },
@@ -2358,7 +2358,7 @@
    "nome": "Origem da montagem",
    "faz": "Planos/eixos de referência próprios da montagem.",
    "como": "Sempre presentes; usados para fixar e restringir.",
-   "catia": "— (produto sem origem; usa peças)",
+   "cb": "— (produto sem origem; usa peças)",
    "sw": "Origin + reference planes",
    "inv": "Origin",
    "fenkra": "—",
@@ -2376,7 +2376,7 @@
    "nome": "Seleção e edição na árvore",
    "faz": "Ctrl/Shift/Alt, ocultar, apagar, isolar seguindo a mesma lógica das peças.",
    "como": "Seleção múltipla → ações em lote → isolar.",
-   "catia": "Product tree",
+   "cb": "Product tree",
    "sw": "FeatureManager",
    "inv": "Model browser",
    "fenkra": "Árvore da montagem",
@@ -2394,7 +2394,7 @@
    "nome": "Lista de materiais (BOM)",
    "faz": "Estrutura e lista de peças com quantidades e propriedades.",
    "como": "Montagem → níveis → colunas.",
-   "catia": "Bill of Material",
+   "cb": "Bill of Material",
    "sw": "BOM",
    "inv": "Bill of Materials",
    "fenkra": "BOM",
@@ -2412,8 +2412,8 @@
    "nome": "Fixadores automáticos",
    "faz": "Insere parafusos/porcas/arruelas nos furos com restrições.",
    "como": "Furos reconhecidos → norma/tamanho → pilha → restrições.",
-   "catia": "— (Catalog)",
-   "sw": "Smart Fasteners",
+   "cb": "— (Catalog)",
+   "sw": "fixadores inteligentes",
    "inv": "Bolted Connection Generator",
    "fenkra": "Fixadores (preencher furos)",
    "status": "parcial",
@@ -2432,15 +2432,15 @@
    "nome": "Publicações e referências na montagem",
    "faz": "Pontos, eixos, planos e sketches nomeados na peça e na montagem, usados como referência estável.",
    "como": "Elemento → publicar com nome → selecionar em contexto só publicados → substituir componente religa por nome.",
-   "catia": "Publication / Skeleton",
+   "cb": "Publication / Skeleton",
    "sw": "Layout sketch / Mate References",
    "inv": "Work features / iMates / Skeleton (Make Part)",
    "fenkra": "Publicação em peça (sem montagem)",
    "status": "parcial",
    "nota": "Peça publica ref/parâmetro/corpo; montagem não tem sketch, ponto, eixo, plano nem publicação.",
-   "diferencas": "CATIA religa componentes substituídos pelo nome publicado.",
+   "diferencas": "CAD avançado B religa componentes substituídos pelo nome publicado.",
    "fontes": [
-    "catia-pub",
+    "cb-pub",
     "inv-skeleton"
    ],
    "backlog": "B55"
@@ -2451,13 +2451,13 @@
    "nome": "Conexão parafusada",
    "faz": "Assistente que cria furos em todas as peças da pilha e insere parafuso, arruelas e porca.",
    "como": "Planos início/fim → posição (linear, concêntrica, por furo, por ponto) → furo/rosca → fixadores do catálogo → comprimento.",
-   "catia": "— (FASTJOINT add-on)",
-   "sw": "Hole Series + Smart Fasteners",
+   "cb": "— (FASTJOINT add-on)",
+   "sw": "Hole Series + fixadores inteligentes",
    "inv": "Bolted Connection",
    "fenkra": "—",
    "status": "nao",
    "nota": "Fixadores só preenchem furos já existentes.",
-   "diferencas": "Inventor edita depois pelo mesmo assistente; SW tem pilhas superior/inferior.",
+   "diferencas": "CAD avançado C edita depois pelo mesmo assistente; CAD avançado A tem pilhas superior/inferior.",
    "fontes": [
     "inv-bolted",
     "sw-stacks"
@@ -2470,13 +2470,13 @@
    "nome": "Editar peça no contexto",
    "faz": "Edita a peça dentro da montagem, vendo e referenciando as outras.",
    "como": "Duplo clique → peça ativa, resto esmaecido → editar → Voltar.",
-   "catia": "Design in Context (ativar peça)",
+   "cb": "Design in Context (ativar peça)",
    "sw": "Edit Part (Top-down)",
    "inv": "Edit in place / Create Component",
    "fenkra": "Editar peça (troca de bancada)",
    "status": "parcial",
    "nota": "edit_part troca para a bancada Sólidos; outras peças só como arestas; Voltar salva sempre; links sem estado.",
-   "diferencas": "SW: estados ->, ->?, ->*, ->x com Lock/Break.",
+   "diferencas": "CAD avançado A: estados ->, ->?, ->*, ->x com Lock/Break.",
    "fontes": [
     "inv-inplace",
     "sw-extref"
@@ -2489,7 +2489,7 @@
    "nome": "Folhas, formatos e carimbo",
    "faz": "Várias folhas, formato, norma, carimbo e fundo.",
    "como": "Folha → formato/norma → carimbo (fundo separado do trabalho).",
-   "catia": "Sheet / Background View",
+   "cb": "Sheet / Background View",
    "sw": "Sheet Format",
    "inv": "Sheet / Border / Title Block",
    "fenkra": "Folhas, carimbo",
@@ -2507,7 +2507,7 @@
    "nome": "Vistas base e projetadas",
    "faz": "Vistas ortográficas a partir do 3D.",
    "como": "Modelo → vista base → projetadas → escala/estilo.",
-   "catia": "Front / Projection View",
+   "cb": "Front / Projection View",
    "sw": "Model / Projected View",
    "inv": "Base / Projected View",
    "fenkra": "Vistas",
@@ -2525,7 +2525,7 @@
    "nome": "Cortes e seções",
    "faz": "Vista em corte (total, meio, alinhado) e seção removida.",
    "como": "Linha de corte → tipo → hachura.",
-   "catia": "Section View / Cut",
+   "cb": "Section View / Cut",
    "sw": "Section View",
    "inv": "Section View",
    "fenkra": "Corte",
@@ -2543,7 +2543,7 @@
    "nome": "Detalhe, auxiliar, quebrada, corte parcial",
    "faz": "Ampliação, vista auxiliar, vista interrompida e break-out.",
    "como": "Região/aresta → tipo → escala.",
-   "catia": "Detail / Auxiliary / Broken / Breakout",
+   "cb": "Detail / Auxiliary / Broken / Breakout",
    "sw": "Detail / Auxiliary / Break / Broken-out Section",
    "inv": "Detail / Auxiliary / Break / Break Out",
    "fenkra": "Detalhe, auxiliar",
@@ -2561,7 +2561,7 @@
    "nome": "Cotas associativas",
    "faz": "Cotas ligadas à geometria do 3D.",
    "como": "Seleção → tipo → estilo → tolerância.",
-   "catia": "Dimensions",
+   "cb": "Dimensions",
    "sw": "Smart Dimension / Model Items",
    "inv": "Dimension / Retrieve",
    "fenkra": "Cotas",
@@ -2579,7 +2579,7 @@
    "nome": "Hachuras",
    "faz": "Padrão, ângulo, espaçamento por material.",
    "como": "Região de corte → padrão do material → sobrescrita.",
-   "catia": "Area Fill / Pattern",
+   "cb": "Area Fill / Pattern",
    "sw": "Area Hatch",
    "inv": "Hatch",
    "fenkra": "Hachura",
@@ -2597,7 +2597,7 @@
    "nome": "Atualização e estado da vista",
    "faz": "Vista desatualizada, links quebrados, atualizar manual/automático.",
    "como": "Mudança no 3D → marca vistas → Update.",
-   "catia": "Update / Update Status",
+   "cb": "Update / Update Status",
    "sw": "Rebuild / Out of date",
    "inv": "Update",
    "fenkra": "Recarrega silencioso",
@@ -2615,7 +2615,7 @@
    "nome": "Balões e lista de peças",
    "faz": "Balões automáticos ligados à BOM/lista de corte.",
    "como": "Vista → balões automáticos → tabela.",
-   "catia": "Balloon / BOM",
+   "cb": "Balloon / BOM",
    "sw": "AutoBalloon / BOM / Cut List",
    "inv": "Auto Balloon / Parts List",
    "fenkra": "Balões, BOM",
@@ -2635,7 +2635,7 @@
    "nome": "Tabelas",
    "faz": "Furos, dobras, revisões, lista de corte.",
    "como": "Vista/modelo → tabela → colunas.",
-   "catia": "Tables",
+   "cb": "Tables",
    "sw": "Hole / Bend / Revision / Cut List Table",
    "inv": "Hole / Revision / General Table",
    "fenkra": "Tabelas",
@@ -2653,7 +2653,7 @@
    "nome": "Propriedades por norma e herança",
    "faz": "Norma → folha → vista → elemento, com sobrescrita.",
    "como": "Propriedade definida no nível mais alto e herdada.",
-   "catia": "Standards + Properties",
+   "cb": "Standards + Properties",
    "sw": "Document Properties (Drafting Standard)",
    "inv": "Styles and Standards",
    "fenkra": "Estilos",
@@ -2671,7 +2671,7 @@
    "nome": "Desenho de estrutura soldada",
    "faz": "Vistas por corpo, lista de corte, detalhes de ponta.",
    "como": "Corpo → vista própria → item da lista.",
-   "catia": "—",
+   "cb": "—",
    "sw": "Weldment drawings (body views)",
    "inv": "Frame drawings",
    "fenkra": "—",
@@ -2690,7 +2690,7 @@
    "nome": "Exportação",
    "faz": "PDF, DXF/DWG, SVG, imagens.",
    "como": "Folha(s) → formato → escala/camadas.",
-   "catia": "Save As (PDF, DXF, DWG)",
+   "cb": "Save As (PDF, DXF, DWG)",
    "sw": "Save As",
    "inv": "Export",
    "fenkra": "PDF, SVG, DXF",
@@ -2708,7 +2708,7 @@
    "nome": "Cotas e notas 3D",
    "faz": "Cotas, notas e textos no modelo.",
    "como": "Entidades → tipo → plano de anotação → vista.",
-   "catia": "FT&A: Dimensions / Text",
+   "cb": "FT&A: Dimensions / Text",
    "sw": "DimXpert / MBD Dimension",
    "inv": "3D Annotations",
    "fenkra": "Cota, nota",
@@ -2727,7 +2727,7 @@
    "nome": "GD&T, referências e rugosidade",
    "faz": "Quadros de tolerância, datums, acabamento, solda.",
    "como": "Face/feature → quadro → datum.",
-   "catia": "Geometrical Tolerance / Datum / Roughness",
+   "cb": "Geometrical Tolerance / Datum / Roughness",
    "sw": "Geometric Tolerance / Datum / Surface Finish",
    "inv": "Tolerance Feature / Datum",
    "fenkra": "GD&T, datum, rugosidade, solda",
@@ -2745,7 +2745,7 @@
    "nome": "Vistas e capturas",
    "faz": "Vistas 3D com conjunto de anotações, câmera e estado.",
    "como": "Plano de anotação → captura → câmera.",
-   "catia": "Annotation Planes / Captures",
+   "cb": "Annotation Planes / Captures",
    "sw": "Annotation Views / 3D Views",
    "inv": "Model States / Views",
    "fenkra": "Capturas",
@@ -2763,7 +2763,7 @@
    "nome": "Realce e chamadas inteligentes",
    "faz": "Realçar as entidades da anotação e várias chamadas (leaders).",
    "como": "Selecionar entidades → realce → adicionar setas.",
-   "catia": "Leaders / Highlight",
+   "cb": "Leaders / Highlight",
    "sw": "Leaders",
    "inv": "Leaders",
    "fenkra": "Seta",
@@ -2781,7 +2781,7 @@
    "nome": "Consultor de tolerância",
    "faz": "Verifica se a peça está totalmente cotada/tolerada.",
    "como": "Análise das features → avisos.",
-   "catia": "—",
+   "cb": "—",
    "sw": "DimXpert (auto dimension scheme)",
    "inv": "Tolerance Advisor",
    "fenkra": "—",
@@ -2799,7 +2799,7 @@
    "nome": "Órbita em torno de alvo",
    "faz": "Gira a vista em torno de um ponto alvo fixo.",
    "como": "Botão/combinação → alvo → arrasto.",
-   "catia": "Rotate (target fixo)",
+   "cb": "Rotate (target fixo)",
    "sw": "Rotate View",
    "inv": "Free Orbit",
    "fenkra": "Órbita",
@@ -2818,7 +2818,7 @@
    "nome": "Recentrar no ponto sob o cursor",
    "faz": "Define o centro da órbita no ponto 3D apontado.",
    "como": "Gesto (duplo clique do meio, ou clique durante a órbita) → raycast → novo alvo.",
-   "catia": "Clique do meio no ponto / Center Graph",
+   "cb": "Clique do meio no ponto / Center Graph",
    "sw": "Middle-click vertex/edge/face",
    "inv": "Clique durante o Orbit / Center (SteeringWheels)",
    "fenkra": "Menu \"Centro de órbita aqui\"",
@@ -2838,7 +2838,7 @@
    "nome": "Órbita com eixo vertical (turntable)",
    "faz": "Gira em torno do eixo vertical do modelo.",
    "como": "Modo restrito → eixo Up.",
-   "catia": "—",
+   "cb": "—",
    "sw": "— (Rotate about Up)",
    "inv": "Constrained Orbit",
    "fenkra": "—",
@@ -2856,7 +2856,7 @@
    "nome": "Zoom no cursor e zoom por área",
    "faz": "Aproxima em direção ao ponteiro; janela de zoom.",
    "como": "Roda/arrasto → ponto sob o cursor.",
-   "catia": "Zoom (CTRL+meio)",
+   "cb": "Zoom (CTRL+meio)",
    "sw": "Zoom to pointer / Zoom to Area",
    "inv": "Zoom at cursor / Zoom Window",
    "fenkra": "Zoom (distância)",
@@ -2865,7 +2865,7 @@
    "diferencas": "",
    "fontes": [
     "sw-mmb",
-    "catia-nav-ptc"
+    "cb-nav-ptc"
    ],
    "backlog": "CTX-CAM"
   },
@@ -2875,10 +2875,10 @@
    "nome": "Estilos de navegação",
    "faz": "Mapeamento de botões imitando outros CADs.",
    "como": "Preferência → estilo.",
-   "catia": "—",
+   "cb": "—",
    "sw": "—",
    "inv": "—",
-   "fenkra": "Estilos: Fenkra, SolidWorks, Fusion, CATIA, Blender, Onshape, FreeCAD, Inventor, Rhino",
+   "fenkra": "Estilos: Fenkra, CAD avançado A, CAD avançado D, CAD avançado B, Blender, CAD avançado E, FreeCAD, CAD avançado C, CAD avançado I",
    "status": "ok",
    "nota": "NavStyle (settings.rs).",
    "diferencas": "",
@@ -2893,7 +2893,7 @@
    "nome": "Cubo de vistas e vistas nomeadas",
    "faz": "Orientações padrão e salvas.",
    "como": "Clique no cubo → vista; salvar vista.",
-   "catia": "Quick view / Named views",
+   "cb": "Quick view / Named views",
    "sw": "View Orientation / View Selector",
    "inv": "ViewCube",
    "fenkra": "Cubo de vistas, estados de exibição",
@@ -2911,8 +2911,8 @@
    "nome": "Tabelas de furos e roscas",
    "faz": "Dimensões de furação, folga, rebaixo, escareado, rosca por norma.",
    "como": "Norma → tamanho → dados.",
-   "catia": "Hole standards",
-   "sw": "Hole Wizard data (Toolbox)",
+   "cb": "Hole standards",
+   "sw": "assistente de furos data (biblioteca de normas)",
    "inv": "Thread.xls / Hole table",
    "fenkra": "hardware.rs",
    "status": "parcial",
@@ -2930,8 +2930,8 @@
    "nome": "Fixadores padrão",
    "faz": "Parafusos, porcas, arruelas, pinos por norma (ISO/DIN/ASTM).",
    "como": "Norma → tipo → tamanho/comprimento → peça.",
-   "catia": "Catalog (standard parts)",
-   "sw": "Toolbox",
+   "cb": "Catalog (standard parts)",
+   "sw": "biblioteca de normas",
    "inv": "Content Center",
    "fenkra": "—",
    "status": "parcial",
@@ -2950,13 +2950,13 @@
    "nome": "Gerador de engrenagens",
    "faz": "Engrenagens reta, helicoidal, cônica, coroa/sem-fim, cremalheira com cálculo.",
    "como": "Tipo → módulo, dentes, ângulo de pressão, largura → cálculo → peças + restrições.",
-   "catia": "— (Gear add-ons)",
-   "sw": "Toolbox Gears",
+   "cb": "— (Gear add-ons)",
+   "sw": "biblioteca de normas Gears",
    "inv": "Spur/Helical/Bevel/Worm Gear Generator",
    "fenkra": "Engrenagens",
    "status": "parcial",
    "nota": "Reta, helicoidal (loft), interna e cremalheira com cálculo e par na montagem (B28); perfil fixo no documento, sem filete de raiz, sem cônica e sem coroa/sem-fim.",
-   "diferencas": "Inventor calcula e insere com restrições de movimento.",
+   "diferencas": "CAD avançado C calcula e insere com restrições de movimento.",
    "fontes": [
     "inv-da",
     "ctx-eng"
@@ -2969,7 +2969,7 @@
    "nome": "Gerador de eixos e chavetas",
    "faz": "Eixo com seções, chavetas (DIN 6885), ranhuras.",
    "como": "Seções → elementos → cálculo.",
-   "catia": "—",
+   "cb": "—",
    "sw": "—",
    "inv": "Shaft Generator / Key Connection",
    "fenkra": "Eixo e chaveta",
@@ -2988,7 +2988,7 @@
    "nome": "Materiais e bitolas",
    "faz": "Densidade, propriedades e bitolas de chapa.",
    "como": "Material → propriedades.",
-   "catia": "Material Library",
+   "cb": "Material Library",
    "sw": "Materials / Gauge Tables",
    "inv": "Material / Sheet Metal Styles",
    "fenkra": "Materiais, bitolas",
@@ -3006,8 +3006,8 @@
    "nome": "Fixadores aeronáuticos e militares",
    "faz": "Parafusos, porcas, arruelas, pinos e rebites AN/MS/NAS/MIL.",
    "como": "Norma → tipo → código de tamanho/comprimento → peça.",
-   "catia": "Catalog (aero)",
-   "sw": "Toolbox (normas ANSI; aero por add-in)",
+   "cb": "Catalog (aero)",
+   "sw": "biblioteca de normas (normas ANSI; aero por add-in)",
    "inv": "Content Center (ANSI/aero limitado)",
    "fenkra": "—",
    "status": "nao",
@@ -3024,13 +3024,13 @@
    "nome": "Rolamentos",
    "faz": "Rolamentos de esferas e rolos pelas medidas de contorno ISO 15.",
    "como": "Série → diâmetro interno → d, D, B, r → peça simplificada.",
-   "catia": "Catalog",
-   "sw": "Toolbox Bearings",
+   "cb": "Catalog",
+   "sw": "biblioteca de normas Bearings",
    "inv": "Content Center Bearings / Bearing Generator",
    "fenkra": "—",
    "status": "nao",
    "nota": "",
-   "diferencas": "Inventor calcula vida útil no Bearing Generator.",
+   "diferencas": "CAD avançado C calcula vida útil no Bearing Generator.",
    "fontes": [
     "inv-da",
     "ctx-hw"
@@ -3043,7 +3043,7 @@
    "nome": "Cilindros pneumáticos",
    "faz": "Cilindros ISO 15552/6432 com curso e fixações.",
    "como": "Diâmetro → curso → fixações → peça/montagem.",
-   "catia": "— (catálogos de fabricante)",
+   "cb": "— (catálogos de fabricante)",
    "sw": "— (catálogos de fabricante)",
    "inv": "— (catálogos de fabricante)",
    "fenkra": "—",
@@ -3061,7 +3061,7 @@
    "nome": "Guias lineares e fusos",
    "faz": "Trilhos, patins e fusos de esferas por série de fabricante.",
    "como": "Série → tamanho → comprimento do trilho.",
-   "catia": "— (catálogos de fabricante)",
+   "cb": "— (catálogos de fabricante)",
    "sw": "— (catálogos de fabricante)",
    "inv": "— (catálogos de fabricante)",
    "fenkra": "—",
@@ -3079,8 +3079,8 @@
    "nome": "Rebites",
    "faz": "Rebites sólidos e cegos por norma, inseridos em massa.",
    "como": "Norma → diâmetro → comprimento pela espessura → por pontos/furos/padrão.",
-   "catia": "— (FASTJOINT add-on)",
-   "sw": "Toolbox (limitado)",
+   "cb": "— (FASTJOINT add-on)",
+   "sw": "biblioteca de normas (limitado)",
    "inv": "Content Center (família de rebites)",
    "fenkra": "—",
    "status": "nao",
@@ -3098,8 +3098,8 @@
    "nome": "Versões e revisões",
    "faz": "Versões automáticas e revisões congeladas (A, B, C).",
    "como": "Salvar → versão; liberar → revisão.",
-   "catia": "ENOVIA / VPM",
-   "sw": "SOLIDWORKS PDM",
+   "cb": "PLM avançado / VPM",
+   "sw": "CAD avançado A PDM",
    "inv": "Vault",
    "fenkra": "Projeto em pasta",
    "status": "ok",
@@ -3116,7 +3116,7 @@
    "nome": "Estados de ciclo de vida",
    "faz": "Em trabalho, liberado, obsoleto, com fluxo.",
    "como": "Transição → aprovação.",
-   "catia": "Maturity",
+   "cb": "Maturity",
    "sw": "Workflow states",
    "inv": "Lifecycle states",
    "fenkra": "Estados",
@@ -3134,7 +3134,7 @@
    "nome": "Banco de produtos e estrutura (BOM)",
    "faz": "Produtos, revisões, documentos e estrutura num banco.",
    "como": "Banco local (SQLite) → servidor.",
-   "catia": "VPM",
+   "cb": "VPM",
    "sw": "PDM vault (SQL)",
    "inv": "Vault (SQL)",
    "fenkra": "Índice JSON",
@@ -3152,7 +3152,7 @@
    "nome": "Check-in/out e multiusuário",
    "faz": "Bloqueio para edição e trabalho em equipe.",
    "como": "Check-out → editar → check-in.",
-   "catia": "VPM sessions",
+   "cb": "VPM sessions",
    "sw": "Check Out / Check In",
    "inv": "Check Out / Check In",
    "fenkra": "—",
@@ -3171,7 +3171,7 @@
    "nome": "Onde é usado e comparação",
    "faz": "Onde a peça é usada e o que mudou entre revisões.",
    "como": "Consulta → árvore de uso / diferenças.",
-   "catia": "Where-used / Compare",
+   "cb": "Where-used / Compare",
    "sw": "Where Used / Compare",
    "inv": "Uses / Where Used",
    "fenkra": "—",
@@ -3190,7 +3190,7 @@
    "nome": "Regras de part-number e ambientes",
    "faz": "Gera o PN por regra com campos (norma, categoria, material, dimensão, serial, revisão), por ambiente.",
    "como": "Ambiente → regra → campos preenchidos pela peça → código único.",
-   "catia": "Numbering rules (ENOVIA)",
+   "cb": "Numbering rules (PLM avançado)",
    "sw": "Serial numbers / Data cards (PDM)",
    "inv": "Numbering schemes (Vault)",
    "fenkra": "PN com prefixo fixo",
@@ -3209,7 +3209,7 @@
    "nome": "Cofre em pasta compartilhada",
    "faz": "Trabalho em equipe numa pasta de rede ou sincronizada (OneDrive), sem servidor.",
    "como": "Pasta → trava por arquivo (lock) → detectar conflito.",
-   "catia": "— (servidor)",
+   "cb": "— (servidor)",
    "sw": "— (servidor PDM)",
    "inv": "Vault Basic (servidor)",
    "fenkra": "Projeto em pasta (sem trava)",
@@ -3227,7 +3227,7 @@
    "nome": "Ocultar hierárquico",
    "faz": "Ocultar o pai esconde os filhos sem perder o estado de cada um.",
    "como": "Estado próprio + estado herdado.",
-   "catia": "Hide/Show hierárquico",
+   "cb": "Hide/Show hierárquico",
    "sw": "Hide/Show (com pastas)",
    "inv": "Visibility",
    "fenkra": "Olho por item",
@@ -3245,7 +3245,7 @@
    "nome": "Pré-visualização ao vivo",
    "faz": "Mostra o resultado enquanto edita o comando.",
    "como": "Edição → preview → OK gera.",
-   "catia": "Preview",
+   "cb": "Preview",
    "sw": "Preview",
    "inv": "Preview",
    "fenkra": "Recompute ao vivo",
@@ -3263,7 +3263,7 @@
    "nome": "Direção normal a plano/superfície",
    "faz": "Qualquer comando com direção aceita normal a plano ou superfície.",
    "como": "Campo direção → escolher plano/face.",
-   "catia": "Direction (normal to)",
+   "cb": "Direction (normal to)",
    "sw": "Direction (normal)",
    "inv": "Direction",
    "fenkra": "Direção",
@@ -3281,7 +3281,7 @@
    "nome": "Pastas e organização da árvore",
    "faz": "Mover selecionados para nova pasta escolhendo o pai.",
    "como": "Seleção → nova pasta → pai.",
-   "catia": "Geometrical Set (Insert in new)",
+   "cb": "Geometrical Set (Insert in new)",
    "sw": "Add to New Folder",
    "inv": "Create Folder",
    "fenkra": "Pastas de geometria",
@@ -3299,7 +3299,7 @@
    "nome": "Assistente de reparo",
    "faz": "Mostra referências perdidas e permite reatribuir.",
    "como": "Erro → candidatos → escolher.",
-   "catia": "Update diagnosis / Replace",
+   "cb": "Update diagnosis / Replace",
    "sw": "What's Wrong / Repair",
    "inv": "Design Doctor",
    "fenkra": "Assistente de reparo",
@@ -3317,7 +3317,7 @@
    "nome": "Renderização de arestas",
    "faz": "Arestas vivas visíveis, tangências ocultas, sem riscos indevidos.",
    "como": "Estilo de exibição → arestas.",
-   "catia": "Shading with edges",
+   "cb": "Shading with edges",
    "sw": "Shaded with edges / tangent edges",
    "inv": "Shaded with edges",
    "fenkra": "Arestas vivas",
@@ -3335,7 +3335,7 @@
    "nome": "API de automação",
    "faz": "Scripts para criar e alterar modelos.",
    "como": "Linguagem → objetos do modelo.",
-   "catia": "VBA / CAA",
+   "cb": "VBA / CAA",
    "sw": "VBA / C# API",
    "inv": "iLogic / VBA / .NET",
    "fenkra": "Macros",
@@ -3353,7 +3353,7 @@
    "nome": "Salvar tudo e arquivos modificados",
    "faz": "Salvar o documento ativo ou tudo, listando o que mudou.",
    "como": "Salvar tudo → lista (editado, novo, dependência) → nomes/pastas dos novos.",
-   "catia": "Save Management",
+   "cb": "Save Management",
    "sw": "Save All / Pack and Go",
    "inv": "Save All (lista de modificados)",
    "fenkra": "Salvar por bancada",
@@ -3361,7 +3361,7 @@
    "nota": "Três botões Salvar, Ctrl+S muda de efeito; montagem não salva peças; sem Salvar tudo nem Salvar como.",
    "diferencas": "",
    "fontes": [
-    "catia-save",
+    "cb-save",
     "sw-packgo"
    ],
    "backlog": "B56"
@@ -3372,7 +3372,7 @@
    "nome": "Qualidade gráfica",
    "faz": "Define a qualidade da tesselação e da imagem.",
    "como": "Preset/slider → desvio e ângulo → aplicar às peças → simplificar ao navegar.",
-   "catia": "Display > Performance (3D accuracy)",
+   "cb": "Display > Performance (3D accuracy)",
    "sw": "Image Quality",
    "inv": "Display (qualidade, taxa mínima)",
    "fenkra": "—",
@@ -3380,7 +3380,7 @@
    "nota": "Desvio fixo espalhado em 7 lugares, ângulo 0,35 rad fixo, MSAA 4× fixo.",
    "diferencas": "",
    "fontes": [
-    "catia-perf",
+    "cb-perf",
     "sw-imgq",
     "inv-display",
     "occt-mesh"
@@ -3393,7 +3393,7 @@
    "nome": "Ícones e tooltips explicativos",
    "faz": "Ícone que mostra o resultado e dica que explica o comando.",
    "como": "Passar o mouse → nome e atalho → mini fluxo entrada → operação → resultado.",
-   "catia": "Ícone + barra de status",
+   "cb": "Ícone + barra de status",
    "sw": "Tooltip rico",
    "inv": "Tooltip progressivo",
    "fenkra": "Tooltip com texto (avançado após 5 s)",
@@ -3411,7 +3411,7 @@
    "nome": "Diagnóstico de atualização",
    "faz": "Mostra por que um comando falhou e oferece saídas.",
    "como": "Falha → editar, substituir, isolar, desativar, reordenar.",
-   "catia": "Update Diagnosis",
+   "cb": "Update Diagnosis",
    "sw": "What's Wrong",
    "inv": "Design Doctor",
    "fenkra": "Assistente de reparo",
@@ -3419,7 +3419,7 @@
    "nota": "Só editar; sem isolar, desativar, reordenar, objeto em trabalho ou fim de peça.",
    "diferencas": "",
    "fontes": [
-    "catia-tree",
+    "cb-tree",
     "pesq-filosofia"
    ],
    "backlog": "B59"

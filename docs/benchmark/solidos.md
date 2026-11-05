@@ -5,15 +5,15 @@
 
 ## Como cada ferramenta conduz o fluxo
 
-- **CATIA V5:** Separação clara: features por sketch (Pad, Pocket, Shaft, Groove, Rib, Slot, Multi-sections) e de acabamento (fillet, chamfer, draft, shell, thickness). Cada uma pede suporte → tipo de limite (Dimension, Up to next/last/plane/surface) → valores → "More" com opções avançadas. Corpos (Bodies) são combinados por operações booleanas explícitas.
-- **SOLIDWORKS:** PropertyManager único por feature com grupos recolhíveis: From (início) → Direction 1/2 (fim) → Thin feature → Selected contours. Adicionar e remover são variantes do mesmo comando. Hole Wizard guiado por norma.
-- **Inventor:** Painel de propriedades com entradas, comportamento (distância, até, entre) e saída (unir, cortar, interseção, novo corpo). Thread com comprimento total ou parcial com offset. Coil e Emboss dedicados.
+- **CAD avançado B:** Separação clara: features por sketch (Pad, Pocket, Shaft, Groove, Rib, Slot, Multi-sections) e de acabamento (fillet, chamfer, draft, shell, thickness). Cada uma pede suporte → tipo de limite (Dimension, Up to next/last/plane/surface) → valores → "More" com opções avançadas. Corpos (Bodies) são combinados por operações booleanas explícitas.
+- **CAD avançado A:** PropertyManager único por feature com grupos recolhíveis: From (início) → Direction 1/2 (fim) → Thin feature → Selected contours. Adicionar e remover são variantes do mesmo comando. assistente de furos guiado por norma.
+- **CAD avançado C:** Painel de propriedades com entradas, comportamento (distância, até, entre) e saída (unir, cortar, interseção, novo corpo). Thread com comprimento total ou parcial com offset. Coil e Emboss dedicados.
 
 ## O que adotar no Fenkra
 
-- O modelo de limites do CATIA (até próximo/último/plano/superfície) disponível em todos os comandos com extensão.
-- Grupo "Início" do SW (offset/de superfície) e "parede fina" como opção de qualquer extrusão/revolução.
-- Thread do Inventor: comprimento parcial com offset e cosmético/modelado na mesma feature.
+- O modelo de limites do CAD avançado B (até próximo/último/plano/superfície) disponível em todos os comandos com extensão.
+- Grupo "Início" do CAD avançado A (offset/de superfície) e "parede fina" como opção de qualquer extrusão/revolução.
+- Thread do CAD avançado C: comprimento parcial com offset e cosmético/modelado na mesma feature.
 - Espessura diferente por face na casca (os três).
 
 ## O que evitar

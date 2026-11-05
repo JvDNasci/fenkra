@@ -5,18 +5,18 @@
 
 ## Como cada ferramenta conduz o fluxo
 
-- **CATIA V5:** Catálogos de peças padrão; sem gerador de engrenagens nativo.
-- **SOLIDWORKS:** Toolbox: fixadores por norma, Hole Wizard ligado aos mesmos dados, Smart Fasteners preenchendo furos com pilhas de porca/arruela.
-- **Inventor:** Content Center (biblioteca) + Design Accelerator: geradores de engrenagem, eixo, chaveta e conexão parafusada com cálculo e restrições de movimento.
+- **CAD avançado B:** Catálogos de peças padrão; sem gerador de engrenagens nativo.
+- **CAD avançado A:** biblioteca de normas: fixadores por norma, assistente de furos ligado aos mesmos dados, fixadores inteligentes preenchendo furos com pilhas de porca/arruela.
+- **CAD avançado C:** Content Center (biblioteca) + Design Accelerator: geradores de engrenagem, eixo, chaveta e conexão parafusada com cálculo e restrições de movimento.
 
 ## O que adotar no Fenkra
 
-- Uma base de dados única para furo, rosca e fixador (SW), em formato aberto (ADR 0008).
-- Geradores com cálculo e inserção restrita (Inventor) — o usuário pediu "o mais próximo do Inventor".
+- Uma base de dados única para furo, rosca e fixador (CAD avançado A), em formato aberto (ADR 0008).
+- Geradores com cálculo e inserção restrita (CAD avançado C) — o usuário pediu "o mais próximo do CAD avançado C".
 
 ## O que evitar
 
-- Editar peças da biblioteca por sketch/feature sem atualizar a base (alerta do próprio SW).
+- Editar peças da biblioteca por sketch/feature sem atualizar a base (alerta do próprio CAD avançado A).
 
 ## Paridade
 

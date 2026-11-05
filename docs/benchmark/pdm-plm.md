@@ -5,9 +5,9 @@
 
 ## Como cada ferramenta conduz o fluxo
 
-- **CATIA V5:** ENOVIA/VPM: produto, revisões, maturidade e estrutura num banco central.
-- **SOLIDWORKS:** SOLIDWORKS PDM: cofre com check-in/out, fluxos e estados, busca por metadados.
-- **Inventor:** Vault: check-in/out, esquemas de revisão e estados de ciclo de vida.
+- **CAD avançado B:** PLM avançado/VPM: produto, revisões, maturidade e estrutura num banco central.
+- **CAD avançado A:** CAD avançado A PDM: cofre com check-in/out, fluxos e estados, busca por metadados.
+- **CAD avançado C:** Vault: check-in/out, esquemas de revisão e estados de ciclo de vida.
 
 ## O que adotar no Fenkra
 

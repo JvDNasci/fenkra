@@ -1,6 +1,6 @@
 # Benchmark
 
-Comparação do Fenkra com CATIA V5, SOLIDWORKS e Inventor usando **só material público**.
+Comparação do Fenkra com CAD avançado B, CAD avançado A e CAD avançado C usando **só material público**.
 
 - [Catálogo de features](catalogo.md): 168 features, nome em cada ferramenta, como funcionam, status no Fenkra.
 - Dados em [catalogo.json](catalogo.json) (alimenta o comparador interativo).
@@ -27,4 +27,4 @@ Comparação do Fenkra com CATIA V5, SOLIDWORKS e Inventor usando **só material
 2. Cada entrada descreve o funcionamento comum na ordem **suporte → modo → parâmetros → avançado → saída** (filosofia do design review, DR-25..29).
 3. Status no Fenkra lido no código (`FeatureKind`, `RefKind`, ferramentas do sketch, comandos da barra) e nos testes, na versão 0.1.0-alpha.26.
 4. Lacunas viram IDs de backlog: `DR-NN` (design review), `CTX-*` (contextos) ou `BM-<módulo>-NN` (achadas aqui).
-5. **Limitação:** a documentação oficial do CATIA V5 exige login; usamos apostilas universitárias abertas, documentação de API pública e tutoriais. As fontes de PDM/PLM são fracas (comparativos).
+5. **Limitação:** a documentação oficial do CAD avançado B exige login; usamos apostilas universitárias abertas, documentação de API pública e tutoriais. As fontes de PDM/PLM são fracas (comparativos).

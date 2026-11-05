@@ -5,14 +5,14 @@
 
 ## Como cada ferramenta conduz o fluxo
 
-- **CATIA V5:** Workbench dedicada (GSD): wireframe (pontos, linhas, planos, projeções, interseções), superfícies (extrude, revolve, sweep, fill, multi-sections, blend), operações (join, split, trim, extract, healing, extrapolate) e análises. Todo comando segue suporte → modo → parâmetros → avançado, com propagação e tolerâncias explícitas.
-- **SOLIDWORKS:** Ferramentas de superfície no mesmo ambiente das peças: Boundary/Lofted/Filled/Knit/Trim/Extend/Ruled/Offset/Thicken; sólidos e superfícies se misturam livremente.
-- **Inventor:** Patch, Stitch, Ruled, Trim, Extend e Sculpt; Boundary Patch aceita sketch fechado ou bordas. Stitch com tolerância cria sólido quando fecha.
+- **CAD avançado B:** Workbench dedicada (GSD): wireframe (pontos, linhas, planos, projeções, interseções), superfícies (extrude, revolve, sweep, fill, multi-sections, blend), operações (join, split, trim, extract, healing, extrapolate) e análises. Todo comando segue suporte → modo → parâmetros → avançado, com propagação e tolerâncias explícitas.
+- **CAD avançado A:** Ferramentas de superfície no mesmo ambiente das peças: Boundary/Lofted/Filled/Knit/Trim/Extend/Ruled/Offset/Thicken; sólidos e superfícies se misturam livremente.
+- **CAD avançado C:** Patch, Stitch, Ruled, Trim, Extend e Sculpt; Boundary Patch aceita sketch fechado ou bordas. Stitch com tolerância cria sólido quando fecha.
 
 ## O que adotar no Fenkra
 
-- Propagação gravada (ponto/tangência/curvatura) e Extract usável dentro de qualquer comando (CATIA).
-- Fill/Boundary Patch aceitando sketch, curvas e arestas misturados (SW/Inventor).
+- Propagação gravada (ponto/tangência/curvatura) e Extract usável dentro de qualquer comando (CAD avançado B).
+- Fill/Boundary Patch aceitando sketch, curvas e arestas misturados (CAD avançado A/CAD avançado C).
 - "Até elemento" em toda extensão de superfície.
 
 ## O que evitar

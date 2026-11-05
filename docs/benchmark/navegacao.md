@@ -5,14 +5,14 @@
 
 ## Como cada ferramenta conduz o fluxo
 
-- **CATIA V5:** Botão do meio arrasta (pan); meio + outro botão gira; clique do meio num ponto recentra a órbita. Alvo estável: nunca "foge" do modelo.
-- **SOLIDWORKS:** Meio gira; clique do meio num vértice/aresta/face gira em torno dele; Ctrl+meio = pan; Shift+meio = zoom; roda aproxima no ponteiro.
-- **Inventor:** Free Orbit (eixos da tela) e Constrained Orbit (eixo vertical, turntable); o centro pode ser escolhido clicando durante a órbita ou pelo SteeringWheels; ViewCube.
+- **CAD avançado B:** Botão do meio arrasta (pan); meio + outro botão gira; clique do meio num ponto recentra a órbita. Alvo estável: nunca "foge" do modelo.
+- **CAD avançado A:** Meio gira; clique do meio num vértice/aresta/face gira em torno dele; Ctrl+meio = pan; Shift+meio = zoom; roda aproxima no ponteiro.
+- **CAD avançado C:** Free Orbit (eixos da tela) e Constrained Orbit (eixo vertical, turntable); o centro pode ser escolhido clicando durante a órbita ou pelo SteeringWheels; ViewCube.
 
 ## O que adotar no Fenkra
 
-- CATIA como padrão: alvo fixo + duplo clique do meio recentra por raycast (contexto da câmera).
-- Zoom no ponteiro (SW) e turntable opcional (Inventor).
+- CAD avançado B como padrão: alvo fixo + duplo clique do meio recentra por raycast (contexto da câmera).
+- Zoom no ponteiro (CAD avançado A) e turntable opcional (CAD avançado C).
 
 ## O que evitar
 

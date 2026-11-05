@@ -344,7 +344,7 @@
    "id": "B17",
    "onda": 2,
    "prio": "P1",
-   "titulo": "Câmera no estilo CATIA",
+   "titulo": "Câmera com alvo fixo e passo adaptativo",
    "oque": "Acrescentar ao aceite da câmera: passo adaptativo ao zoom compartilhado com as alças 3D (potência 1-2-5 equivalente a 4 a 8 px), pivô sob o cursor também enquanto uma alça é arrastada, e rótulos 3D que acompanham a escala da interface. Teste visual: arrastar a seta de extrusão em peça de 5 mm e de 5 m produz saltos proporcionais ao tamanho na tela.",
    "origem": [
     "CTX-CAM"
@@ -599,7 +599,7 @@
    "onda": 3,
    "prio": "P2",
    "titulo": "Gerador de engrenagens, eixos e chavetas",
-   "oque": "Reta, helicoidal, interna e cremalheira (involuta), eixos e chaveta DIN 6885, com cálculo e inserção com restrições, no estilo do Inventor.",
+   "oque": "Reta, helicoidal, interna e cremalheira (involuta), eixos e chaveta DIN 6885, com cálculo e inserção com restrições, no estilo do CAD avançado C.",
    "origem": [
     "CTX-ENG"
    ],
@@ -617,7 +617,7 @@
    "id": "B29",
    "onda": 3,
    "prio": "P1",
-   "titulo": "Fixadores industriais e smart fasteners",
+   "titulo": "Fixadores industriais e fixadores inteligentes",
    "oque": "Parafusos, porcas e arruelas ISO/DIN/ABNT (medidas pelos catálogos Ciser, Brasfixo, Vonder, Belzer) e preenchimento automático de furos com pilhas e restrições.",
    "origem": [
     "CTX-FIX",
@@ -1101,7 +1101,7 @@
    "oque": "Duplo clique ativa a peça SEM sair da montagem: resto sombreado e esmaecido, selecionável para referência; um componente ativo por vez e restrições só entre filhos do ativo; Voltar / Voltar ao pai / Voltar ao topo; voltar só depois de salvar com sucesso ou descartar; peça modificada marca a montagem; criar componente no contexto exige nome e pasta e só grava no Salvar tudo (cancelar não deixa .fkp órfão); aviso quando a peça tem várias instâncias. Estados e ações dos links ficam no item de links entre documentos.",
    "origem": [
     "PESQ-CAT",
-    "PESQ-SW",
+    "PESQ-CAD avançado A",
     "PESQ-INV",
     "DR-32"
    ],
@@ -1141,7 +1141,7 @@
    "titulo": "Salvar unificado e Salvar tudo",
    "oque": "Um só grupo Salvar / Salvar tudo / Salvar como, igual em peça, montagem e desenho; Ctrl+S salva o documento ativo e Ctrl+Shift+S abre o plano de salvamento com cada arquivo e o motivo (Novo, Editado, Dependência, Derivado desatualizado, Só leitura, Conflito); Cancelar não grava nada; nome e pasta obrigatórios para os novos; peças modificadas marcadas na árvore da montagem. Salvar como com referências e Empacotar ficam em item próprio.",
    "origem": [
-    "PESQ-SW",
+    "PESQ-CAD avançado A",
     "PESQ-INV",
     "AUD-FNK"
    ],
@@ -1161,7 +1161,7 @@
    "titulo": "Furo entre peças como nos CADs de referência",
    "oque": "Furo de montagem pelo eixo (Série de furos): atravessa os componentes que o eixo cruza (escopo editável), tipo por peça (folga na de cima, roscado/cego na de baixo), posição por ponto publicado, sketch da montagem ou cotas, padrão; grava um furo real e cilíndrico exato (não prisma) em cada peça com link -> editável só pela montagem, com Isolar para editar na peça; mover uma peça mantém o furo no eixo; opção 'só na montagem' com participantes; hole_table e Fixadores enxergam esses furos; verificação de que toda peça do escopo recebeu o furo.",
    "origem": [
-    "PESQ-SW",
+    "PESQ-CAD avançado A",
     "PESQ-INV",
     "AUD-FNK"
    ],
@@ -1241,7 +1241,7 @@
    "oque": "Um único objeto em trabalho por peça (unifica corpo ativo, marcador de retrocesso e sessão), sublinhado na árvore e citado na barra de status; o próximo comando entra depois dele; Definir como objeto em trabalho, barra de fim de peça, modo Scan e aviso ao salvar retrocedido; contêineres ordenado (consome) e não ordenado (referencia) com regras de aninhamento e reordenar validado por pais/filhos; atualização manual/automática por documento com estado desatualizado/falhou por comando, Atualizar esta feature e Cancelar real; planos/eixos/pontos oferecidos antes de faces ao criar sketch. O painel de diagnóstico fica em item próprio.",
    "origem": [
     "PESQ-CAT",
-    "PESQ-SW",
+    "PESQ-CAD avançado A",
     "PESQ-INV"
    ],
    "catalogo": [
@@ -1281,7 +1281,7 @@
    "oque": "Presets rascunho/normal/alta + controle deslizante (desvio relativo à peça com piso na tolerância e ângulo 30°/20°/12°) e modo de desvio fixo; padrão da aplicação com sobreposição por documento; malha de exibição separada da malha de pick, medida e exportação; aplicar às peças da montagem; MSAA desligado/2×/4×/8×; simplificar só durante a navegação; referências nunca somem por culling; constante única de tesselação; cache de malha invalidado ao trocar a qualidade; teste de propriedade: volume, área e medidas idênticos em todos os níveis.",
    "origem": [
     "PESQ-CAT",
-    "PESQ-SW",
+    "PESQ-CAD avançado A",
     "PESQ-INV",
     "PESQ-UX",
     "AUD-FNK"
@@ -2107,7 +2107,7 @@
    "onda": 4,
    "prio": "P1",
    "titulo": "Perfil de regras DFM (furo, bolso, chapa)",
-   "oque": "Motor de regras DFM com perfis JSON por processo (furo, bolso, chapa, injeção, aditivo), cada regra com identificador, tipo de entidade, limites, severidade e texto; varredura devolve violações com referência estável à face e realce 3D; limites editáveis sem recompilar. É a base de B113, B166 e B167. Referências: SOLIDWORKS DFMXpress, Protolabs, DFMPro.",
+   "oque": "Motor de regras DFM com perfis JSON por processo (furo, bolso, chapa, injeção, aditivo), cada regra com identificador, tipo de entidade, limites, severidade e texto; varredura devolve violações com referência estável à face e realce 3D; limites editáveis sem recompilar. É a base de B113, B166 e B167. Referências: CAD avançado A DFMXpress, Protolabs, DFMPro.",
    "origem": [
     "PESQ-MOD"
    ],
@@ -2379,7 +2379,7 @@
    "onda": 4,
    "prio": "P2",
    "titulo": "Análise de moldagem (saída, undercut, partição)",
-   "oque": "Moldes em fluxo suporte→modo→parâmetros→avançado, na ordem do SW Mold Tools: direção de abertura, linha de partição por silhueta com divisão das faces curvas, fechamento automático de furos passantes com Fill (B09), superfície de partição reta, tangente ou com raio e Tooling Split em núcleo e cavidade com folga de bloco. A análise de saída e undercut sai em item próprio, reutilizável no B164 e no B148. Base de molde e catálogos (HASCO, DME, direitos autorais) ficam para depois como dados de nível B/C. Tamanho de ~250 k. Testes: caixa com saída de 2° toda aprovada, furo lateral detectado como undercut, volume núcleo+cavidade+peça=bloco a 1e-6.",
+   "oque": "Moldes em fluxo suporte→modo→parâmetros→avançado, na ordem do CAD avançado A Mold Tools: direção de abertura, linha de partição por silhueta com divisão das faces curvas, fechamento automático de furos passantes com Fill (B09), superfície de partição reta, tangente ou com raio e Tooling Split em núcleo e cavidade com folga de bloco. A análise de saída e undercut sai em item próprio, reutilizável no B164 e no B148. Base de molde e catálogos (HASCO, DME, direitos autorais) ficam para depois como dados de nível B/C. Tamanho de ~250 k. Testes: caixa com saída de 2° toda aprovada, furo lateral detectado como undercut, volume núcleo+cavidade+peça=bloco a 1e-6.",
    "origem": [
     "PESQ-MOD"
    ],
@@ -2699,7 +2699,7 @@
    "id": "B149",
    "onda": 4,
    "prio": "P2",
-   "titulo": "Recursos de desenho do Onshape",
+   "titulo": "Recursos de desenho do CAD avançado E",
    "oque": "Balões com forma, tamanho do texto, texto acima e abaixo, símbolo e largura; nós de chamada (adicionar, remover, nova chamada a partir de um nó); alinhar vários balões na horizontal ou na vertical; renumerar pela ordem da lista com um comando Atualizar; automáticos com seleção por janela, Shift remove e escolha de lado e distância antes de confirmar. Meia cota, arco e acabamento multilinha continuam no escopo.",
    "origem": [
     "PESQ-MOD"
@@ -2747,8 +2747,8 @@
    "id": "B152",
    "onda": 4,
    "prio": "P2",
-   "titulo": "Bancada Ergonomia: manequim editável (estilo CATIA Human)",
-   "oque": "Núcleo da bancada Ergonomia, reduzido a cerca de 300 k: manequim como componente da montagem com percentis P5/P50/P95 M/F do ANSUR II (base militar dos EUA, por isso com importação de CSV de qualquer outra base), esqueleto com limites articulares e cores de conforto, posturas prontas, pegar/apontar por cinemática inversa para referências estáveis, envelope de alcance, cone e janela de visão e folga de acesso mão/ferramenta. As análises RULA, REBA, OWAS, NIOSH e o relatório em português com campos da NR-17 saem para o item novo de análises ergonômicas. Controle do manequim com mapa de conforto em B208 e animação em B209. Integra com B168, B124, B156 e B162. Diferencial: conferir o posto por passo de montagem, o que hoje só DELMIA e Process Simulate Human fazem.",
+   "titulo": "Bancada Ergonomia: manequim editável (com percentis e conforto)",
+   "oque": "Núcleo da bancada Ergonomia, reduzido a cerca de 300 k: manequim como componente da montagem com percentis P5/P50/P95 M/F do ANSUR II (base militar dos EUA, por isso com importação de CSV de qualquer outra base), esqueleto com limites articulares e cores de conforto, posturas prontas, pegar/apontar por cinemática inversa para referências estáveis, envelope de alcance, cone e janela de visão e folga de acesso mão/ferramenta. As análises RULA, REBA, OWAS, NIOSH e o relatório em português com campos da NR-17 saem para o item novo de análises ergonômicas. Controle do manequim com mapa de conforto em B208 e animação em B209. Integra com B168, B124, B156 e B162. Diferencial: conferir o posto por passo de montagem, o que hoje só softwares avançados de simulação de fábrica fazem.",
    "origem": [
     "USR-ERGO"
    ],
@@ -2763,7 +2763,7 @@
    "id": "B153",
    "onda": 3,
    "prio": "P1",
-   "titulo": "Bancada Forma livre: modelagem orgânica por subdivisão (estilo Fusion Form)",
+   "titulo": "Bancada Forma livre: modelagem orgânica por subdivisão (malha de controle)",
    "oque": "Editor de forma por subdivisão reduzido a cerca de 300 k: malha half-edge com Catmull-Clark próprio em Rust, primitivas, edição por vértice/aresta/face com manipulador, inserir aresta, extrudar, vinco, simetria por plano e congelar. A forma é uma feature da árvore com faces nomeadas por índice persistente da malha. OpenSubdiv (Apache-2.0, sem bindings Rust) fica como opção posterior. A conversão para B-rep sai para item próprio. Fluxo obrigatório: criar caixa arrastando no plano; passar o mouse acende nó, aresta ou face sem trocar de ferramenta; clique abre o manipulador de gizmo.rs com setas, quadrados e arcos e chip de espaço Mundo, Vista, Normal e Local; rótulo aceita digitar; Tab alterna gaiola, liso e ambos; Alt ao arrastar face extruda; corte em laço com deslize; chip Suave, Vinco e Canto no nó ou aresta, com peso de vinco de 0 a 1; suavizar borda com raio e segmentos. Colocar tangência: alça de disco no nó define o plano tangente e o anel vizinho é ajustado por mínimos quadrados, com a seta valendo a tensão. Toda tecla tem botão visível. Aceite: da caixa até uma cúpula com vinco e simetria em menos de 10 ações, sem abrir painel. Patentes da área ainda precisam de verificação antes do lançamento: a patente-base de malhas com junções em T consta como expirada em 2024, mas as posteriores não foram verificadas.",
    "origem": [
     "USR-ORG"
@@ -2779,7 +2779,7 @@
    "id": "B154",
    "onda": 4,
    "prio": "P2",
-   "titulo": "Forma livre: curvas e superfícies por polos (estilo FreeStyle)",
+   "titulo": "Forma livre: curvas e superfícies por polos (controle por polos)",
    "oque": "Edição de curvas e superfícies NURBS por polos reduzida a cerca de 300 k: grau e número de polos como parâmetros, inserção de nó, simetria, Match de borda G0 a G2 por mínimos quadrados restritos entre duas arestas referenciadas e conector de continuidade (lacuna, ângulo e diferença de curvatura). G3, morphing e Classe A ficam como referência de qualidade, não como promessa. As análises de zebra, curvatura e porco-espinho saem para item próprio, por servirem a qualquer face. Reaproveita OCCT (GeomLProp, GeomFill, GeomPlate) e nalgebra. Polos aparecem como grade no 3D, com seleção de fileira, o mesmo manipulador da forma por subdivisão e aviso de que inserir um polo cria uma fileira inteira. O casamento de borda oferece preservar a ponta oposta, média entre as duas superfícies, refino até a tolerância e direção das isocurvas, com etiqueta de continuidade na junção e zebra ao vivo. Pesos de polo ficam no avançado, com alerta sobre troca de arquivos.",
    "origem": [
     "USR-ORG"
@@ -2940,7 +2940,7 @@
    "onda": 4,
    "prio": "P1",
    "titulo": "Bancada Manufatura aditiva (impressão 3D completa)",
-   "oque": "Bancada de manufatura aditiva a partir do B-rep: biblioteca JSON de máquinas e processos (volume, camada, ângulo crítico, parede e furo mínimos, folga), análise de balanço por faces analíticas com mapa de cor, orientação por amostragem que pontua área de suporte, contato com a mesa, altura e cabimento no volume (diferente do Fusion, que ignora o volume), parede fina, estimativa de massa e material, tempo e material reais lidos de fatiador externo por linha de comando (PrusaSlicer, Orca, Bambu, CuraEngine são AGPL, só como processo), exportação 3MF via B119. Geometria de suportes (árvore e linear) e resistência por eixo ficam em item separado.",
+   "oque": "Bancada de manufatura aditiva a partir do B-rep: biblioteca JSON de máquinas e processos (volume, camada, ângulo crítico, parede e furo mínimos, folga), análise de balanço por faces analíticas com mapa de cor, orientação por amostragem que pontua área de suporte, contato com a mesa, altura e cabimento no volume (diferente do CAD avançado D, que ignora o volume), parede fina, estimativa de massa e material, tempo e material reais lidos de fatiador externo por linha de comando (PrusaSlicer, Orca, Bambu, CuraEngine são AGPL, só como processo), exportação 3MF via B119. Geometria de suportes (árvore e linear) e resistência por eixo ficam em item separado.",
    "origem": [
     "USR-AM"
    ],
@@ -3100,7 +3100,7 @@
    "onda": 4,
    "prio": "P2",
    "titulo": "Acessibilidade de tocha de solda (cone de direções viáveis)",
-   "oque": "Para cada ponto de cordão MIG/TIG, amostra direções da tocha (ângulo de trabalho e de deslocamento) e testa o cone do bico contra a geometria com BVH (parry3d, Apache-2.0), mostrando no 3D o cone de direções viáveis colorido e marcando pontos inviáveis, com sugestão de mudar a ordem de soldagem ou o ângulo. Referências: Siemens Process Simulate Weld.",
+   "oque": "Para cada ponto de cordão MIG/TIG, amostra direções da tocha (ângulo de trabalho e de deslocamento) e testa o cone do bico contra a geometria com BVH (parry3d, Apache-2.0), mostrando no 3D o cone de direções viáveis colorido e marcando pontos inviáveis, com sugestão de mudar a ordem de soldagem ou o ângulo. Referências: fornecedor de CAD avançado Process Simulate Weld.",
    "origem": [
     "PESQ-BENCH2"
    ],
@@ -3388,7 +3388,7 @@
    "onda": 4,
    "prio": "P2",
    "titulo": "PMI: esquema de cotagem automático (estilo DimXpert/Auto Dimension Scheme)",
-   "oque": "Assistente que escolhe o DRF primário, secundário e terciário e gera cotas, tolerâncias e datums sobre as features do modelo (furos, padrões, rasgos, chanfros), no modo Mais/Menos ou Geométrico (planeza no primário, perpendicularidade no secundário, posição no terciário). Tudo marcado como 'gerado' e regenerável sem apagar edições manuais; regras reutilizáveis por tipo de feature como as MBD logical rules do NX. Depende de B38, B108 e dos itens de cotas.",
+   "oque": "Assistente que escolhe o DRF primário, secundário e terciário e gera cotas, tolerâncias e datums sobre as features do modelo (furos, padrões, rasgos, chanfros), no modo Mais/Menos ou Geométrico (planeza no primário, perpendicularidade no secundário, posição no terciário). Tudo marcado como 'gerado' e regenerável sem apagar edições manuais; regras reutilizáveis por tipo de feature como as MBD logical rules do CAD avançado G. Depende de B38, B108 e dos itens de cotas.",
    "origem": [
     "PESQ-PMI"
    ],
@@ -3484,7 +3484,7 @@
    "onda": 4,
    "prio": "P1",
    "titulo": "Regras plásticas do documento",
-   "oque": "Objeto do documento com espessura nominal, ângulo de saída, raio nominal e limites, vindo de uma biblioteca editável e versionada (como as regras plásticas do Fusion). Consumido por casca, nervura, boss, snap-fit, grelha, lip e saída, com diagnóstico na árvore quando um recurso viola a regra e sobrescrita só em modo avançado.",
+   "oque": "Objeto do documento com espessura nominal, ângulo de saída, raio nominal e limites, vindo de uma biblioteca editável e versionada (como as regras plásticas do CAD avançado D). Consumido por casca, nervura, boss, snap-fit, grelha, lip e saída, com diagnóstico na árvore quando um recurso viola a regra e sobrescrita só em modo avançado.",
    "origem": [
     "PESQ-BENCH2"
    ],
@@ -3548,7 +3548,7 @@
    "onda": 0,
    "prio": "P0",
    "titulo": "Aviso de marcas e nomes neutros na interface",
-   "oque": "TRADEMARKS.md (SOLIDWORKS e CATIA da Dassault, Inventor e AutoCAD da Autodesk, Fusion, Onshape, Rhino, FreeCAD, Blender: sem afiliação, nomes só para compatibilidade e comparação) replicado na tela Sobre (nova, com versão, licença e créditos) e em docs/README.md; presets como \"Atalhos no estilo de [marca]\", sem ™/®, logos ou \"oficial\"; trocar \"como no AutoCAD\" por descrição neutra; renomear AsmComposer/composer.svg para nome neutro; nenhum comando com nome de marca (Hole Wizard, Smart Fasteners, Toolbox, Define In Work Object…); \"DWG\" só como extensão. Ícone e PT/EN para a tela Sobre.",
+   "oque": "Um único aviso de marcas, em docs/README.md e na tela Sobre (nova, com versão, licença e créditos, ícone e PT/EN): nomes de produtos de terceiros não aparecem no software, no código nem na documentação, nem como compatibilidade; só software livre confiável pode ser citado. Predefinições de atalhos e estilos de navegação têm nomes neutros que descrevem o comportamento (\"Vistas por Ctrl+número\", \"Meio gira, Ctrl+meio move\"), sem ™/®, logos ou \"oficial\"; o config.json salvo com nomes antigos migra para o equivalente sem erro. Nenhum comando leva nome de marca; \"DWG\" só como extensão; renomear AsmComposer e composer.svg para nome neutro (fora da bancada Interface). Feito: predefinições e navegação renomeadas com migração e teste. Falta: tela Sobre e renome do composer.",
    "origem": [
     "PESQ-PI"
    ],
@@ -3556,7 +3556,7 @@
    "tokens_k": 100,
    "teste": "Auto + Visual",
    "area": "Geral",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.1
   },
   {
@@ -3693,7 +3693,7 @@
    "onda": 3,
    "prio": "P1",
    "titulo": "Conversor: formatos CAD e 2D abertos (3DM, IFC, PDF 3D, DWG, SVG)",
-   "oque": "Rhino 3DM por openNURBS (licença permissiva) com NURBS exatas, camadas e cores; IFC leitura e gravação (estende o B134); PDF 3D (PRC) para revisão; DWG por ODA (licença comercial) ou LibreDWG (GPL, só como processo externo); SVG e DXF 2D de sketch e desenho; STEP AP242 em XML quando o OCCT suportar. Relatório e testes de ida e volta por formato.",
+   "oque": "3DM por openNURBS (licença permissiva) com NURBS exatas, camadas e cores; IFC leitura e gravação (estende o B134); PDF 3D (PRC) para revisão; DWG por ODA (licença comercial) ou LibreDWG (GPL, só como processo externo); SVG e DXF 2D de sketch e desenho; STEP AP242 em XML quando o OCCT suportar. Relatório e testes de ida e volta por formato.",
    "origem": [
     "USR-FMT",
     "PESQ-CNV"
@@ -3709,8 +3709,8 @@
    "id": "B212",
    "onda": 4,
    "prio": "P1",
-   "titulo": "Conversor: formatos proprietários por provedores opcionais (CATIA, SolidWorks, Inventor, Creo, NX, Parasolid, ACIS, JT)",
-   "oque": "Leitura de CATPart/CATProduct, SLDPRT/SLDASM, IPT/IAM, Creo e NX PRT, Solid Edge, Parasolid x_t/x_b, ACIS SAT e JT, e gravação de Parasolid, ACIS e JT onde o SDK permitir, por provedores comerciais (CAD Exchanger, HOOPS, Spatial) carregados como DLL em tempo de execução atrás da interface Provedor, nunca no binário principal. Sem provedor: detectar o formato e orientar a exportar STEP AP242 no CAD de origem. Avaliar custo e termos de licença de cada SDK antes (ver propriedade-intelectual.md) e registrar em ADR. Gravar nos nativos fechados (CATIA, SolidWorks, Inventor) não é possível legalmente sem SDK do fabricante; documentar.",
+   "titulo": "Conversor: formatos proprietários por provedores opcionais (CADs avançados, kernels geométricos proprietários, JT)",
+   "oque": "Leitura dos formatos nativos de peça e montagem de softwares de modelagem CAD avançados, dos formatos de kernel geométrico proprietário (x_t/x_b e SAT) e de JT, e gravação dos de kernel e de JT onde o SDK permitir, por provedores comerciais (kits comerciais de conversão) carregados como DLL em tempo de execução atrás da interface Provedor, nunca no binário principal. Sem provedor: detectar o formato e orientar a exportar STEP AP242 no CAD de origem. Avaliar custo e termos de licença de cada SDK antes (ver propriedade-intelectual.md) e registrar em ADR. Gravar nos nativos fechados dos CADs avançados não é possível legalmente sem SDK do fabricante; documentar.",
    "origem": [
     "USR-FMT",
     "PESQ-CNV"
@@ -4048,7 +4048,7 @@
    "onda": 1,
    "prio": "P1",
    "titulo": "Nomes sem marca em temas e estilos de navegação; teste de contraste",
-   "oque": "Renomear temas embutidos e as variantes de estilo de navegação e de predefinição de atalhos que levam nome de produtos de terceiros, preservando migração do config.json. Incluir teste automático de contraste mínimo de 4,5:1 em todos os temas e três densidades (compacta, padrão, confortável). Aceite: busca por marcas na interface e no código de i18n retorna zero e todos os temas passam no contraste.",
+   "oque": "Temas embutidos, estilos de navegação e predefinições de atalhos usam nomes neutros e descritivos, com migração do config.json (nomes antigos viram o equivalente). Teste automático de contraste mínimo de 4,5:1 em todos os temas e nas três densidades (compacta, padrão, confortável). Aceite: busca por marcas no código e na documentação retorna zero fora de procedencia.md e fontes.md, e todos os temas passam no contraste.",
    "origem": [
     "PESQ-DETALHE"
    ],
@@ -4056,7 +4056,7 @@
    "tokens_k": 120,
    "teste": "Auto",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -5280,7 +5280,7 @@
    "onda": 0,
    "prio": "P0",
    "titulo": "Limpeza de marcas no backlog e na documentação",
-   "oque": "Aplica a regra do projeto: nenhum software proprietário citado em código, interface ou documentação, nem como compatibilidade. Revê títulos e textos do backlog (B17, B152, B153, B154, B212 e outros), refaz o B202 (sem TRADEMARKS.md com nomes nem atalhos \"no estilo de\" uma marca), e limpa docs/pesquisa e docs/benchmark; as fontes ficam só em procedencia.md. Teste que falha se aparecer marca fora desse arquivo.",
+   "oque": "Aplica a regra do projeto: nenhum software proprietário citado em código, interface ou documentação, nem como compatibilidade. Backlog, docs/pesquisa, docs/benchmark, docs/contextos, geradores e README reescritos com rótulos neutros (\"CAD avançado A, B, C…\", com a legenda só em procedencia.md); fontes e endereços ficam apenas em procedencia.md e fontes.md. B202 refeito sem arquivo de marcas com nomes e sem atalhos \"no estilo de\" uma marca. Teste (crates/fenkra-app/tests/sem_marcas.rs) varre código e documentos e falha se aparecer marca fora desses dois arquivos.",
    "origem": [
     "USR-MARCAS"
    ],
@@ -5288,7 +5288,7 @@
    "tokens_k": 100,
    "teste": "Auto",
    "area": "Geral",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.1
   },
   {

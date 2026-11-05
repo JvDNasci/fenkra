@@ -1,7 +1,7 @@
 # Funções inteligentes de outros CADs aplicáveis às bancadas do Fenkra
 
 > Pesquisa de 30/10/2026. Marcação: **[V]** = confirmado em fonte pública consultada nesta pesquisa; **[C]** = conhecimento geral não confirmado.
-> Limite da coleta: as páginas de ajuda do SolidWorks (help.solidworks.com) não renderizam no WebFetch (só devolvem o cabeçalho do site). Para SW, usei os resumos dos resultados de busca sobre essas páginas e blogs de revendas. Alguns blogs (Javelin, TriMech) devolveram HTTP 403.
+> Limite da coleta: as páginas de ajuda do CAD avançado A (help.CAD avançado A.com) não renderizam no WebFetch (só devolvem o cabeçalho do site). Para CAD avançado A, usei os resumos dos resultados de busca sobre essas páginas e blogs de revendas. Alguns blogs (Javelin, TriMech) devolveram HTTP 403.
 > O que as pesquisas [sketch.md](sketch.md) e [montagem.md](montagem.md) já cobrem não é repetido por inteiro. Cada ficha aponta a seção e acrescenta o que é específico deste tema.
 
 ---
@@ -12,9 +12,9 @@
    - **inferir** a intenção (snaps, relações automáticas, SmartMates, Live Rules);
    - **declarar** a intenção (mate references, iMates, mate connectors, publicações, regras de chapa);
    - **reusar** a intenção (Power Copy, UDF, iFeature, configurações, famílias);
-   - **automatizar** a intenção (Smart Fasteners, Bolted Connection, Frame Generator, Design Accelerator, iLogic, Knowledge).
-2. O CATIA V5 é forte em declarar e reusar (publicações, Power Copy, UDF, Design Table, Knowledge Advisor). É fraco em inferir: tem Smart Pick e Quick Constraint, mas pouca "mágica" ao arrastar. O Fenkra deve copiar a disciplina do CATIA e a conveniência do SW/Inventor.
-3. **Princípio de encaixe:** toda função inteligente deve produzir (a) um objeto visível na árvore (restrição, conjunto de fixadores, recurso de montagem), (b) com referências v2 ou publicadas (ADR 0010), (c) editável pelo mesmo assistente que o criou ("Editar com assistente", como no Inventor), e (d) com estado de diagnóstico (ADR 0011, princípio 1). Inferência sem objeto persistente é aceitável só como pré-visualização.
+   - **automatizar** a intenção (fixadores inteligentes, Bolted Connection, Frame Generator, Design Accelerator, iLogic, Knowledge).
+2. O CAD avançado B é forte em declarar e reusar (publicações, Power Copy, UDF, Design Table, Knowledge Advisor). É fraco em inferir: tem Smart Pick e Quick Constraint, mas pouca "mágica" ao arrastar. O Fenkra deve copiar a disciplina do CAD avançado B e a conveniência do CAD avançado A/CAD avançado C.
+3. **Princípio de encaixe:** toda função inteligente deve produzir (a) um objeto visível na árvore (restrição, conjunto de fixadores, recurso de montagem), (b) com referências v2 ou publicadas (ADR 0010), (c) editável pelo mesmo assistente que o criou ("Editar com assistente", como no CAD avançado C), e (d) com estado de diagnóstico (ADR 0011, princípio 1). Inferência sem objeto persistente é aceitável só como pré-visualização.
 4. **O que o Fenkra já tem de inteligente:**
    - cota inteligente com prévia (`Tool::Dimension`);
    - restrição rápida na montagem (`quick_options`);
@@ -43,20 +43,20 @@
 
 ## 2. Fichas por comando/função
 
-### 2.1 Cota inteligente e "Completar sketch" (CATIA: Constraint / Quick Constraint, Auto Constraint / SW: Smart Dimension, Fully Define Sketch / Inventor: General Dimension, Automatic Dimensions and Constraints / outros: Onshape/Fusion Dimension / Fenkra: `Tool::Dimension`)
+### 2.1 Cota inteligente e "Completar sketch" (CAD avançado B: Constraint / Quick Constraint, Auto Constraint / CAD avançado A: Smart Dimension, Fully Define Sketch / CAD avançado C: General Dimension, Automatic Dimensions and Constraints / outros: CAD avançado E/Fusion Dimension / Fenkra: `Tool::Dimension`)
 
 - **O que faz:** deduz o tipo de cota pela seleção e pelo movimento do mouse. Um segundo comando acrescenta as cotas e relações que faltam para chegar a DOF = 0.
-- **CATIA V5 — no detalhe:**
+- **CAD avançado B — no detalhe:**
   - A restrição rápida cria a primeira dimensão possível pela seleção. As demais saem do menu de contexto. O valor aceita fórmula [V, ver sketch.md 2.15].
   - O *Auto Constraint* examina a seleção e propõe restrições com referências H/V num diálogo [V parcial: tutorial GrabCAD].
   - A cota pode ser desativada e vira referência.
   - A saída fica na árvore como restrição editável, com ícone no sketch.
-- **SolidWorks — no detalhe:**
+- **CAD avançado A — no detalhe:**
   - *Smart Dimension* escolhe o tipo pela seleção e pela posição do mouse.
   - *Fully Define Sketch* (Hawk Ridge) escolhe entre todas as entidades ou as selecionadas e tem esquemas de cotagem por cadeia, linha de base e ordenada. Tem *datum* externo (origem/aresta) ou interno, e o botão *Calculate* dá a prévia [V, sketch.md 2.20].
   - Funciona melhor com linhas e pontos; elipses saem mal.
-- **Inventor — no detalhe:** *Automatic Dimensions and Constraints* mostra o contador do que falta. Tem caixas separadas para cotas e restrições, aplica a seleção ou o sketch todo e o *Remove* apaga só o que foi automático [V].
-- **Outros:** no Onshape e no Fusion a ferramenta de cota também é única e deduz o tipo [C]. O destaque deles é o solver que "tenta mover o mínimo" [V, sketch.md 2.17].
+- **CAD avançado C — no detalhe:** *Automatic Dimensions and Constraints* mostra o contador do que falta. Tem caixas separadas para cotas e restrições, aplica a seleção ou o sketch todo e o *Remove* apaga só o que foi automático [V].
+- **Outros:** no CAD avançado E e no Fusion a ferramenta de cota também é única e deduz o tipo [C]. O destaque deles é o solver que "tenta mover o mínimo" [V, sketch.md 2.17].
 - **Fenkra hoje:**
   - Existe a cota inteligente com prévia (acima/abaixo = horizontal, lado = vertical) [`sketch_ui.rs:586–607`].
   - `auto_dims` cria uma cota a cada elemento desenhado [`sketch_ui.rs:1566`, `settings.rs:323`] e está desligado por padrão.
@@ -65,23 +65,23 @@
 - **Melhor prática para o Fenkra:**
   - Fluxo em dois comandos separados: "Cota" (suporte → modo → valor/nome → avançado) e "Completar" (escopo → esquemas → datum → prévia → aplicar).
   - Tudo que o Completar criar entra como **grupo desfazível num passo** e fica marcado como automático. O "Remover automáticas" apaga só o grupo.
-  - Regras: nunca cotar onde uma relação geométrica já fecha o DOF. Priorizar relações antes de cotas (Inventor). Parar sem aplicar se houver conflito.
+  - Regras: nunca cotar onde uma relação geométrica já fecha o DOF. Priorizar relações antes de cotas (CAD avançado C). Parar sem aplicar se houver conflito.
   - Testes: perfil em L sem cotas chega a DOF = 0 com número de cotas igual ao contador prévio; remover automáticas devolve o DOF anterior; elipse isolada não é cotada.
 
-### 2.2 Inferências, snaps e relações automáticas (CATIA: Smart Pick, Create Detected Constraints / SW: relações automáticas, Quick Snaps / Inventor: inferência + persistência / outros: Fusion/Onshape snaps / Fenkra: `snap_at`, `settings.auto_constraints`)
+### 2.2 Inferências, snaps e relações automáticas (CAD avançado B: Smart Pick, Create Detected Constraints / CAD avançado A: relações automáticas, Quick Snaps / CAD avançado C: inferência + persistência / outros: CAD avançado D/CAD avançado E snaps / Fenkra: `snap_at`, `settings.auto_constraints`)
 
 - **O que faz:** enquanto o usuário desenha, o sistema mostra guias e cria relações (coincidente, ponto sobre curva, tangente, perpendicular, H/V, concêntrico) sem comando explícito.
-- **CATIA V5 — no detalhe:**
+- **CAD avançado B — no detalhe:**
   - O *Smart Pick* referencia automaticamente extremos, cria linhas paralelas/perpendiculares e aplica tangente e ponto médio. Pode ser desligado em Options > Mechanical > Sketcher > Smartpick [V parcial: cursos City University e fórum].
   - O comando *Create Detected Constraints* (barra Tools) cria as restrições detectadas ao gerar geometria 2D, e *Show Constraints* as exibe [V, nota IBM].
   - Não achei fonte sobre linhas pontilhadas.
-- **SolidWorks — no detalhe:** relações automáticas durante o desenho (horizontal, vertical, coincidente, ponto sobre curva, tangente, concêntrico) mais linhas de inferência. Dá para desligar [C].
-- **Inventor — no detalhe:**
+- **CAD avançado A — no detalhe:** relações automáticas durante o desenho (horizontal, vertical, coincidente, ponto sobre curva, tangente, concêntrico) mais linhas de inferência. Dá para desligar [C].
+- **CAD avançado C — no detalhe:**
   - A **inferência** decide o que é detectado e mostra o símbolo e as linhas pontilhadas de alinhamento.
   - A **persistência** decide se a restrição fica após o sketch. Coincidente em extremos de linha é sempre inferida e persistente, a menos que o usuário a desligue.
   - Em sketches complexos, persistir demais gera conflitos; o conselho é desligar nesses casos [V].
   - O objeto `SketchConstraintSettings` expõe isso na API [V].
-- **Outros:** Solid Edge tem as **Live Rules** (ver 2.6), que são a mesma ideia aplicada à edição de 3D.
+- **Outros:** CAD avançado H tem as **Live Rules** (ver 2.6), que são a mesma ideia aplicada à edição de 3D.
 - **Fenkra hoje:**
   - `snap_at` acha ponto existente, origem e grade [`sketch_ui.rs:1327–1354`].
   - Ao criar uma linha, só H/V a 2,5° vira restrição [`sketch_ui.rs:1559–1565`].
@@ -94,17 +94,17 @@
   - Regras contra bugs: não inferir duas relações que se contradizem (H e perpendicular a V); não criar `PointOnCurve` em arco sem checar o limite angular (bug conhecido em `sketch.rs:924`); nunca inferir quando o ponto já está fixo.
   - Testes: clique sobre uma linha gera `PointOnCurve`; linha a 90° de outra, com guia, gera `Perpendicular`; com a inferência desligada nenhuma restrição é criada; desenhar duas vezes o mesmo traço dá o mesmo conjunto de relações.
 
-### 2.3 Reparo e diagnóstico do sketch (CATIA: Sketch Analysis, Sketch Solving Status / SW: Check Sketch for Feature, Repair Sketch, SketchXpert / Inventor: Design Doctor, contador de cotas / outros: Onshape Profile inspector / Fenkra: `Act::SkCheck`)
+### 2.3 Reparo e diagnóstico do sketch (CAD avançado B: Sketch Analysis, Sketch Solving Status / CAD avançado A: Check Sketch for Feature, Repair Sketch, SketchXpert / CAD avançado C: Design Doctor, contador de cotas / outros: CAD avançado E Profile inspector / Fenkra: `Act::SkCheck`)
 
 - **O que faz:** acha perfil aberto, sobreposto, autocruzado ou referência perdida, e oferece correção.
-- **CATIA V5 — no detalhe:** a janela *Sketch Analysis* tem páginas de geometria, de projeções/interseções (as arestas externas precisam estar "valid") e de diagnóstico, com mensagens como "perfil autocruzado" [V parcial, ver sketch.md 2.19]. O estado é recalculado em cada atualização e aparece nas cores verde/branco/roxo [V].
-- **SolidWorks — no detalhe:**
+- **CAD avançado B — no detalhe:** a janela *Sketch Analysis* tem páginas de geometria, de projeções/interseções (as arestas externas precisam estar "valid") e de diagnóstico, com mensagens como "perfil autocruzado" [V parcial, ver sketch.md 2.19]. O estado é recalculado em cada atualização e aparece nas cores verde/branco/roxo [V].
+- **CAD avançado A — no detalhe:**
   - *Check Sketch for Feature* escolhe o tipo de feature (extrusão base, corte…) e relata se o contorno serve.
   - *Repair Sketch* lista os erros com lupa, funde sobrepostas e remove entidades muito pequenas. Só trata lacunas menores que o valor máximo; maiores ficam como intencionais [V].
   - *SketchXpert* percorre soluções candidatas e deixa o usuário escolher qual relação remover [V].
   - A relação perdida fica amarela (*dangling*) [V, sketch.md 2.17].
-- **Inventor — no detalhe:** contador de cotas necessárias, glifos de DOF e aceitar cota redundante como dirigida [V]. Perfil aberto é acusado na feature [C].
-- **Outros:** o Onshape lista os problemas de laço aberto, navega Anterior/Próximo e cada item resolvido sai da lista [V].
+- **CAD avançado C — no detalhe:** contador de cotas necessárias, glifos de DOF e aceitar cota redundante como dirigida [V]. Perfil aberto é acusado na feature [C].
+- **Outros:** o CAD avançado E lista os problemas de laço aberto, navega Anterior/Próximo e cada item resolvido sai da lista [V].
 - **Fenkra hoje:**
   - `Act::SkCheck` desenha círculos nos extremos livres e nos pontos sobrepostos e conta laços [`toolbar.rs:547`, `app.rs:1919`; ver `sketch_ui.rs:1258–1290`].
   - Não há lupa nem lista, nem correção.
@@ -116,19 +116,19 @@
   - O reparo por SketchXpert (escolher qual restrição remover) vira lista de candidatos com prévia.
   - Testes: gap de 0,0005 mm é reparado; duas linhas sobrepostas são fundidas; laço em oito é acusado; cota redundante vira dirigida; corrigir e voltar à tolerância original não deixa resíduo.
 
-### 2.4 Alças diretas na viewport (CATIA: manipuladores de limite / SW: Instant3D, Instant2D / Inventor: grips e Edit Using Design Accelerator / outros: Fusion/Onshape manipuladores / Fenkra: `handles.rs` "Fast 3D")
+### 2.4 Alças diretas na viewport (CAD avançado B: manipuladores de limite / CAD avançado A: Instant3D, Instant2D / CAD avançado C: grips e Edit Using Design Accelerator / outros: CAD avançado D/CAD avançado E manipuladores / Fenkra: `handles.rs` "Fast 3D")
 
 - **O que faz:** arrastar uma seta ou ponto no 3D muda o valor do recurso (extrusão, deslocamento, raio) sem abrir o diálogo.
-- **CATIA V5 — no detalhe:** os comandos de Part Design mostram setas de limite que se arrastam, com o valor atualizado no diálogo [C]. Não é o centro da filosofia: o CATIA prefere o diálogo com a árvore.
-- **SolidWorks — no detalhe:**
+- **CAD avançado B — no detalhe:** os comandos de Part Design mostram setas de limite que se arrastam, com o valor atualizado no diálogo [C]. Não é o centro da filosofia: o CAD avançado B prefere o diálogo com a árvore.
+- **CAD avançado A — no detalhe:**
   - Com **Instant3D** ligado, um clique no recurso expõe as cotas e as alças; com ele desligado exige duplo clique (Modify) [V].
   - **Réguas:** fora da régua o arraste é livre; sobre ela, o valor encaixa nos incrementos [V].
   - **Alt** encaixa a face arrastada na face-alvo [V].
   - A régua aparece também em Edit Feature de extrusão, revolução e aba base [V].
   - **Instant2D** (desde 2016) leva o mesmo comportamento ao sketch [V].
   - Não achei fonte sobre o comportamento de Shift [C].
-- **Inventor — no detalhe:** os assistentes (Design Accelerator, Bolted Connection) mostram grips na viewport. O grip de comprimento do parafuso se arrasta ou se clica duas vezes para abrir a lista de comprimentos [V].
-- **Outros:** Onshape/Fusion usam manipuladores semelhantes, com campo numérico flutuante [C].
+- **CAD avançado C — no detalhe:** os assistentes (Design Accelerator, Bolted Connection) mostram grips na viewport. O grip de comprimento do parafuso se arrasta ou se clica duas vezes para abrir a lista de comprimentos [V].
+- **Outros:** CAD avançado E/Fusion usam manipuladores semelhantes, com campo numérico flutuante [C].
 - **Fenkra hoje:**
   - `handles.rs` cobre extrusão/recorte, plano deslocado, altura das primitivas e profundidade do reforço.
   - O arraste vai em passos de 1 mm (Shift: 0,1 mm) e o duplo clique abre a expressão.
@@ -141,15 +141,15 @@
   - Snap Alt para faces.
   - Testes: arrastar e voltar ao valor original restitui o modelo bit a bit; alça de valor com parâmetro não perde o vínculo; alça não aparece em recurso suprimido.
 
-### 2.5 Furo inteligente (CATIA: Hole / SW: Hole Wizard + Hole Series / Inventor: Hole + Thread.xls + Bolted Connection / outros: Fusion Hole, Creo Hole / Fenkra: `Hole`, tabelas em `hardware.rs`)
+### 2.5 Furo inteligente (CAD avançado B: Hole / CAD avançado A: assistente de furos + Hole Series / CAD avançado C: Hole + Thread.xls + Bolted Connection / outros: Fusion Hole, CAD avançado F Hole / Fenkra: `Hole`, tabelas em `hardware.rs`)
 
 - **O que faz:** escolhe diâmetros de folga, roscas, escareados e rebaixos por norma e posiciona o furo por sketch ou pontos.
-- **CATIA V5 — no detalhe:** o diálogo do Hole tem abas de extensão (cego, até o último, até plano/superfície), tipo (simples, cônico, rebaixado, escareado, contra-furo), definição de rosca e o fundo em V com ângulo. A posição vem de um sketch de posicionamento com restrições [V parcial: tutoriais e API]. Cada furo é um recurso paramétrico. Uma nota IBM relata que a rosca pode voltar a "No Standard" ao copiar o furo com PowerCopy [V].
-- **SolidWorks — no detalhe:**
-  - O Hole Wizard liga os dados do Toolbox (rebaixos, folgas, passo, broca de rosca) ao recurso. Por isso, na tabela de projeto os furos do Wizard têm tamanho controlável [V].
-  - Os Smart Fasteners dimensionam os parafusos a partir desses furos; furos sem Wizard recebem o tipo padrão e podem precisar de ajuste [V, ver 2.16].
-- **Inventor — no detalhe:** o furo lê a tabela de rosca (Thread.xls). Furos e roscas ficam como recursos editáveis e o assistente de conexão parafusada pode criá-los [V, ver 2.16].
-- **Outros:** o Creo guarda furos e padrões como recursos de família, com dimensões na tabela [C].
+- **CAD avançado B — no detalhe:** o diálogo do Hole tem abas de extensão (cego, até o último, até plano/superfície), tipo (simples, cônico, rebaixado, escareado, contra-furo), definição de rosca e o fundo em V com ângulo. A posição vem de um sketch de posicionamento com restrições [V parcial: tutoriais e API]. Cada furo é um recurso paramétrico. Uma nota IBM relata que a rosca pode voltar a "No Standard" ao copiar o furo com PowerCopy [V].
+- **CAD avançado A — no detalhe:**
+  - O assistente de furos liga os dados do biblioteca de normas (rebaixos, folgas, passo, broca de rosca) ao recurso. Por isso, na tabela de projeto os furos do Wizard têm tamanho controlável [V].
+  - Os fixadores inteligentes dimensionam os parafusos a partir desses furos; furos sem Wizard recebem o tipo padrão e podem precisar de ajuste [V, ver 2.16].
+- **CAD avançado C — no detalhe:** o furo lê a tabela de rosca (Thread.xls). Furos e roscas ficam como recursos editáveis e o assistente de conexão parafusada pode criá-los [V, ver 2.16].
+- **Outros:** o CAD avançado F guarda furos e padrões como recursos de família, com dimensões na tabela [C].
 - **Fenkra hoje:**
   - `Hole` tem `standard` (informativo), rosca cosmética ou modelada, direção, fundo em V, cônico, rosca à esquerda [`doc.rs:2552–2584`].
   - O catálogo marca SOL-06 como completo; o B48 trata do ângulo do escareado.
@@ -161,67 +161,67 @@
   - Os mesmos dados alimentam Fixadores, `hole_table` do desenho e a pilha da Conexão parafusada.
   - Testes: mudar a norma de M8 para M10 atualiza diâmetro, rebaixo e tabela de furos; o fixador acompanha; furo personalizado não é sobrescrito.
 
-### 2.6 Edição direta e regras vivas (CATIA: Remove Face, Replace Face [C] / SW: Move Face, Delete Face (Delete and Patch), Offset / Inventor: Direct (Edit Solid) [C] / outros: Solid Edge Synchronous + Live Rules, NX Synchronous Technology [C] / Fenkra: ausente, SOL-23)
+### 2.6 Edição direta e regras vivas (CAD avançado B: Remove Face, Replace Face [C] / CAD avançado A: Move Face, Delete Face (Delete and Patch), Offset / CAD avançado C: Direct (Edit Solid) [C] / outros: CAD avançado H Synchronous + Live Rules, CAD avançado G Synchronous Technology [C] / Fenkra: ausente, SOL-23)
 
 - **O que faz:** edita faces sem depender do histórico: mover, girar, deslocar, apagar e remendar. É a ferramenta para geometria importada.
-- **CATIA V5 — no detalhe:** não é o foco do V5. Há *Remove Face* e *Replace Face* em Part Design [C]. Os módulos de modelagem direta (por exemplo, Imagine & Shape) são separados [C].
-- **SolidWorks — no detalhe:**
+- **CAD avançado B — no detalhe:** não é o foco do V5. Há *Remove Face* e *Replace Face* em Part Design [C]. Os módulos de modelagem direta (por exemplo, Imagine & Shape) são separados [C].
+- **CAD avançado A — no detalhe:**
   - *Move Face* faz deslocamento (offset), translação e rotação de faces, inclusive em corpos importados, e cria uma feature editável na árvore [V].
   - O offset normal serve para crescer/encolher um furo e tem opção de inverter [V].
   - *Delete Face* tem a variante **Delete and Patch**, útil para remover features de geometria importada e como passo intermediário para o Move Face funcionar [V].
-- **Inventor — no detalhe:** a edição direta atua em faces de sólidos sem histórico [C]. Catálogo do Fenkra aponta a página de "sketched features" como referência; não a li.
+- **CAD avançado C — no detalhe:** a edição direta atua em faces de sólidos sem histórico [C]. Catálogo do Fenkra aponta a página de "sketched features" como referência; não a li.
 - **Outros:**
-  - **Solid Edge (Live Rules):** a inteligência está nas regras de relação mantidas durante a edição: perpendicular, concêntrico, paralelo, coplanar, tangente, ortogonal, "canted coplanar axes". O painel mostra verde = ligada e em uso, vermelho = desligada mas afetaria o resultado, laranja = ligada sem efeito agora. O usuário liga e desliga cada regra [V].
+  - **CAD avançado H (Live Rules):** a inteligência está nas regras de relação mantidas durante a edição: perpendicular, concêntrico, paralelo, coplanar, tangente, ortogonal, "canted coplanar axes". O painel mostra verde = ligada e em uso, vermelho = desligada mas afetaria o resultado, laranja = ligada sem efeito agora. O usuário liga e desliga cada regra [V].
   - Com "Maintain Concentric Faces" ligada, selecionar uma face seleciona suas concêntricas [V].
   - O conselho do blog é fazer arredondamentos no fim da árvore como recursos ordenados, porque eles mudam o comportamento síncrono [V].
 - **Fenkra hoje:** não existe. O catálogo registra SOL-23 como inexistente (B33). O `geom_fit` já reconhece plano/eixo de faces, base útil para o conjunto de faces.
 - **Melhor prática para o Fenkra:**
-  - Encaixe CATIA: a edição direta entra como **recurso ordenado** na árvore ("Mover face", "Apagar face e remendar") com faces escolhidas por referência v2. Não é modo sem histórico. Isso mantém recompute e diagnóstico.
+  - Encaixe CAD avançado B: a edição direta entra como **recurso ordenado** na árvore ("Mover face", "Apagar face e remendar") com faces escolhidas por referência v2. Não é modo sem histórico. Isso mantém recompute e diagnóstico.
   - Conjunto de faces inteligente com regras ligáveis (concêntricas, coplanares, tangentes), semelhante às Live Rules.
   - Fluxo: faces → modo (mover, girar, deslocar, apagar/remendar) → valor → regras mantidas.
   - Testes: mover a face de um furo concêntrico leva o furo junto se a regra estiver ligada; apagar a face de um filete restaura a aresta viva; mover e voltar restitui volume e área; falha mostra diagnóstico, não resultado silencioso.
 
-### 2.7 Reconhecimento de features (SW: FeatureWorks, Convert to Sheet Metal / Solid Edge: reconhecimento síncrono / CATIA: Recognize (Chapa) [C] / Inventor: converter em chapa / Fenkra: `geom_fit.rs`, CHP-16 e B35)
+### 2.7 Reconhecimento de features (CAD avançado A: FeatureWorks, Convert to Sheet Metal / CAD avançado H: reconhecimento síncrono / CAD avançado B: Recognize (Chapa) [C] / CAD avançado C: converter em chapa / Fenkra: `geom_fit.rs`, CHP-16 e B35)
 
 - **O que faz:** transforma geometria sem histórico (STEP, IGES, malha) em recursos editáveis (furos, filetes, extrusões, abas).
-- **CATIA V5 — no detalhe:** o Sheet Metal Design tem comandos de reconhecimento para converter sólido em chapa [C, catálogo CHP-16 marca "Recognize"].
-- **SolidWorks — no detalhe:**
+- **CAD avançado B — no detalhe:** o Sheet Metal Design tem comandos de reconhecimento para converter sólido em chapa [C, catálogo CHP-16 marca "Recognize"].
+- **CAD avançado A — no detalhe:**
   - O FeatureWorks tem modos **automático** e **interativo**, que podem rodar em sequência. Cobre furos, ângulos de saída, padrões de sketch, lofts, varreduras, cascas e features de volume. Em chapa, abas base, abas de aresta, dobras e bainhas [V].
   - Opções interativas: encadear faces de filete/chanfro, fim "até a face" e "reconhecer similares" (cada ocorrência vira uma feature) [V].
   - Adiciona cotas e permite editar a definição depois [V].
   - Limitação: se as faces necessárias forem apagadas depois, a feature reconhecida não é refeita [V].
-- **Inventor/Solid Edge:** o Inventor converte em chapa com regras; Solid Edge reconhece relações ao selecionar (ver 2.6) [C].
+- **CAD avançado C/CAD avançado H:** o CAD avançado C converte em chapa com regras; CAD avançado H reconhece relações ao selecionar (ver 2.6) [C].
 - **Fenkra hoje:** `geom_fit` só reconhece círculo, plano e eixo para preencher campos de seleção (`geom_fit.rs:1–3`, usado em `app.rs:4754`). Não há reconhecimento de feature. B35 prevê converter sólido em chapa.
 - **Melhor prática para o Fenkra:**
   - Começar pelos reconhecimentos que dão retorno imediato: **furos cilíndricos** (diâmetro, profundidade, direção, rosca provável) e **filetes constantes**. Cada um vira `Hole`/`Fillet` com referências v2.
   - Sempre **dois modos**: prévia (lista de candidatos a confirmar) e aplicar. O reconhecimento nunca altera o sólido original; cria recursos e suprime a geometria de origem.
   - Testes: um bloco com 4 furos importados devolve 4 recursos Hole com Ø correto; o volume final é igual ao original (tolerância); apagar uma face necessária mostra "referência perdida" e não um sólido errado.
 
-### 2.8 Seleção por intenção (CATIA: Selection Traps, Search / SW: Select Other, Select Loop, Select Tangency, Select Chain, F5 / Solid Edge: QuickPick, Live Rules / Fenkra: `Filter`, `SelMode`)
+### 2.8 Seleção por intenção (CAD avançado B: Selection Traps, Search / CAD avançado A: Select Other, Select Loop, Select Tangency, Select Chain, F5 / CAD avançado H: QuickPick, Live Rules / Fenkra: `Filter`, `SelMode`)
 
 - **O que faz:** escolhe muitos elementos com um gesto: o laço de uma face, as arestas tangentes, a cadeia de segmentos do sketch, o item escondido sob o cursor.
-- **CATIA V5 — no detalhe:** traps de seleção (dentro/intersecta) e a Search por nome/tipo/cor no menu Editar [C]. O comando *Isolate* e o contexto de seleção em montagem vivem em outras fichas.
-- **SolidWorks — no detalhe:**
+- **CAD avançado B — no detalhe:** traps de seleção (dentro/intersecta) e a Search por nome/tipo/cor no menu Editar [C]. O comando *Isolate* e o contexto de seleção em montagem vivem em outras fichas.
+- **CAD avançado A — no detalhe:**
   - **Select Other** percorre o que está sob o cursor, escondendo a face escolhida [V].
   - **Select Tangency** propaga por faces ou arestas tangentes e para na primeira não tangente. Não existe para segmentos de sketch [V].
   - **Select Loop** pega as arestas ao redor de uma face, sem exigir tangência, e o puxador inverte o lado [V].
   - **Select Chain** (só sketch) seleciona segmentos conectados e ajuda a achar lacunas [V].
   - **F5** abre o filtro de seleção; o Selection Manager tem laço fechado, aberto e região, com Auto-OK [V].
   - Truque do laço interno: selecionar a face, Ctrl + uma aresta do laço, depois Convert Entities [V].
-- **Inventor — no detalhe:** seleção por prioridade (Part, Feature, Face, Edge) e cadeia de arestas tangentes [C].
-- **Outros:** Solid Edge **QuickPick** lista o que há sob o cursor em áreas densas e a Live Rule concêntrica amplia a seleção de faces [V].
+- **CAD avançado C — no detalhe:** seleção por prioridade (Part, Feature, Face, Edge) e cadeia de arestas tangentes [C].
+- **Outros:** CAD avançado H **QuickPick** lista o que há sob o cursor em áreas densas e a Live Rule concêntrica amplia a seleção de faces [V].
 - **Fenkra hoje:** `Filter` liga/desliga tipos (corpos, sketches, pontos, planos, eixos, rótulos) [`settings.rs:265–275`]. `Act::SelMode` escolhe Ctrl+arrastar, janela, cruzada ou pela direção [`toolbar.rs:18`]. Não há laço, tangência, cadeia nem "selecionar outro".
 - **Melhor prática para o Fenkra:**
   - Fluxo: clique → menu "Ampliar seleção" (laço, tangente, cadeia, concêntricas, mesma superfície, mesmo raio) → seleção marcada com a regra usada.
   - Para recursos com referência v2, a seleção ampliada grava a **regra** ("tangentes a esta aresta") e não só a lista. Isso a refaz no recompute (alinhado ao B21).
   - Testes: Tangência a partir de uma aresta de filete seleciona toda a cadeia; Laço pega as arestas de uma face de furo; Selecionar outro percorre 3 candidatos sob o cursor; o filtro F5 impede selecionar tipo oculto.
 
-### 2.9 Corte vivo / Live Section (CATIA: Sectioning / SW: Section View 3D [C] / Inventor: Section View no modelo / outros: Fusion Section Analysis / Fenkra: ausente)
+### 2.9 Corte vivo / Live Section (CAD avançado B: Sectioning / CAD avançado A: Section View 3D [C] / CAD avançado C: Section View no modelo / outros: Fusion Section Analysis / Fenkra: ausente)
 
 - **O que faz:** corta o modelo na viewport com um plano arrastável para ver o interior, sem alterar o modelo.
-- **CATIA V5 — no detalhe:** o comando Sectioning cria planos de corte com manipulador e dá um perfil/medida da seção [C].
-- **SolidWorks — no detalhe:** a Section View 3D mostra o corte com plano ajustável [C]. Não confirmei por fonte.
-- **Inventor — no detalhe:** a vista de seção do modelo guarda os parâmetros numa representação de vista de projeto (design view), então cada seção exige a sua. A mini-barra inverte a direção e troca o tipo, inclusive três quartos [V].
+- **CAD avançado B — no detalhe:** o comando Sectioning cria planos de corte com manipulador e dá um perfil/medida da seção [C].
+- **CAD avançado A — no detalhe:** a Section View 3D mostra o corte com plano ajustável [C]. Não confirmei por fonte.
+- **CAD avançado C — no detalhe:** a vista de seção do modelo guarda os parâmetros numa representação de vista de projeto (design view), então cada seção exige a sua. A mini-barra inverte a direção e troca o tipo, inclusive três quartos [V].
 - **Outros:** o Fusion tem controle de profundidade em Section View (anunciado em fórum) e análise de seção [V parcial].
 - **Fenkra hoje:** não há corte vivo na viewport. As seções existem só no desenho (`ViewKind::Section`, `app.rs:563`).
 - **Melhor prática para o Fenkra:**
@@ -230,33 +230,33 @@
   - Reaproveita o plano para o desenho (cria a vista de corte a partir dele).
   - Testes: o corte não altera o recompute nem os volumes medidos; a vista salva reabre igual; a tampa fecha a seção sem buraco em sólido válido.
 
-### 2.10 Regras de chapa (CATIA: Sheet Metal Parameters, tabelas de empresa / SW: Sheet Metal Gauge Table, Bend Table / Inventor: Sheet Metal Rule + Unfold Rule / Fenkra: `SheetParams`, `sheet_suggest`)
+### 2.10 Regras de chapa (CAD avançado B: Sheet Metal Parameters, tabelas de empresa / CAD avançado A: Sheet Metal Gauge Table, Bend Table / CAD avançado C: Sheet Metal Rule + Unfold Rule / Fenkra: `SheetParams`, `sheet_suggest`)
 
 - **O que faz:** define de uma vez espessura, raio, fator K e alívios por material. Os recursos novos herdam os valores.
-- **CATIA V5 — no detalhe:** a aba de parâmetros define espessura, raio e K; o K padrão pode ser calculado por fórmula DIN, que se pode desativar ou editar no Knowledge Advisor. Empresas usam tabelas próprias de tolerância de dobra [V parcial].
-- **SolidWorks — no detalhe:**
+- **CAD avançado B — no detalhe:** a aba de parâmetros define espessura, raio e K; o K padrão pode ser calculado por fórmula DIN, que se pode desativar ou editar no Knowledge Advisor. Empresas usam tabelas próprias de tolerância de dobra [V parcial].
+- **CAD avançado A — no detalhe:**
   - A **tabela de bitola** junta espessura, raio padrão e K; a tabela de dobra controla só tolerância/dedução/K e deixa espessura e raio livres.
   - Na aba base, "Usar tabela de bitola" escolhe a tabela; é possível desmarcar o raio padrão. As bitolas devem ser listadas da menor para a maior espessura.
   - Cuidados: K em branco na tabela mantém os valores da última dobra; há relato de o K da tabela não ser aplicado [V].
-- **Inventor — no detalhe:** a **Sheet Metal Rule** reúne material, espessura, raio, alívio e a regra de planificação padrão. A **Unfold Rule** pode ser por K, tabela de dobra ou equação. Erro comum: peças novas voltam ao K padrão em vez do K da regra, e a correção é ajustar o modelo-base (template) [V].
+- **CAD avançado C — no detalhe:** a **Sheet Metal Rule** reúne material, espessura, raio, alívio e a regra de planificação padrão. A **Unfold Rule** pode ser por K, tabela de dobra ou equação. Erro comum: peças novas voltam ao K padrão em vez do K da regra, e a correção é ajustar o modelo-base (template) [V].
 - **Fenkra hoje:**
   - `SheetParams` tem espessura, raio, K, material, método (K, dedução, tolerância) e `allowance` [`doc.rs:1694–1712`].
   - `sheet_suggest(material, t)` devolve raio e K de uma tabela [`doc.rs:1731`]. A seção "Tabela de dobras" existe na UI (`app.rs:3165`).
   - Falta: regras nomeadas por empresa/processo, alívios padrão na regra, e regra por **bitola** como entidade reutilizável.
 - **Melhor prática para o Fenkra:**
-  - Fluxo: regra (nome) → material + espessura → raio, K/dedução, alívio → avançado (tabela por ângulo). Os recursos da peça **referenciam a regra por nome** (princípio CATIA: referência estável). Trocar a regra recalcula tudo.
+  - Fluxo: regra (nome) → material + espessura → raio, K/dedução, alívio → avançado (tabela por ângulo). Os recursos da peça **referenciam a regra por nome** (princípio CAD avançado B: referência estável). Trocar a regra recalcula tudo.
   - Mudança de regra em peça com bainhas/estampos mostra diagnóstico por recurso (por exemplo, raio menor que a espessura).
   - Teste: trocar de "Aço 1020 / 2 mm" para "Inox / 3 mm" atualiza a planificação conforme a tabela; o comprimento planificado confere com o cálculo manual; arquivos antigos migram sem mudar a geometria.
 
-### 2.11 Estampos e ferramentas de forma (CATIA: Stamping / SW: Forming Tools / Inventor: Punch Tool (iFeature) / Fenkra: `SmStamp`, `SmLouver`, `SmFlangedHole`)
+### 2.11 Estampos e ferramentas de forma (CAD avançado B: Stamping / CAD avançado A: Forming Tools / CAD avançado C: Punch Tool (iFeature) / Fenkra: `SmStamp`, `SmLouver`, `SmFlangedHole`)
 
 - **O que faz:** aplica, na chapa, formas prontas (veneziana, gota, nervura, saliência) posicionadas por pontos ou centros.
-- **CATIA V5 — no detalhe:** o Stamping reúne Louver, Bead, Bridge, Flanged Hole e outros, cada um com seu diálogo [catálogo CHP-13].
-- **SolidWorks — no detalhe:**
+- **CAD avançado B — no detalhe:** o Stamping reúne Louver, Bead, Bridge, Flanged Hole e outros, cada um com seu diálogo [catálogo CHP-13].
+- **CAD avançado A — no detalhe:**
   - As ferramentas de forma ficam em pastas marcadas como *Forming Tools Folder* na Design Library; se não, são tratadas como peça comum e dão aviso.
   - O usuário escolhe a **face de colocação**: face única coloca uma instância; sketch com pontos coloca uma por ponto. Há Flip, ângulo de rotação e opção de mostrar punção e perfil na planificação.
   - Falhas típicas: raio côncavo menor que a espessura e ferramenta que cruza uma dobra [V].
-- **Inventor — no detalhe:** o **Punch Tool** é uma iFeature de chapa. O sketch da ferramenta deve ter **exatamente um centro**; os parâmetros de tamanho que podem variar ficam numa tabela (o resto fica fixo); pode virar tabela de família; na peça a face precisa ter marcas de centro livres [V].
+- **CAD avançado C — no detalhe:** o **Punch Tool** é uma iFeature de chapa. O sketch da ferramenta deve ter **exatamente um centro**; os parâmetros de tamanho que podem variar ficam numa tabela (o resto fica fixo); pode virar tabela de família; na peça a face precisa ter marcas de centro livres [V].
 - **Fenkra hoje:** existem os comandos fixos de estampo, veneziana e furo flangeado, e o furo flangeado tem tabela de série com linhas do usuário (`feat_ui.rs:669–700`). Não há biblioteca de ferramentas de forma do usuário.
 - **Melhor prática para o Fenkra:**
   - Fluxo: ferramenta (biblioteca) → pontos de colocação (sketch/face) → parâmetros expostos → avançado (inverter, girar, mostrar na planificação).
@@ -264,16 +264,16 @@
   - Validar antes de aplicar: raio côncavo ≥ espessura, longe das dobras, dentro da face.
   - Testes: ferramenta em 3 pontos cria 3 instâncias; fora da face falha com mensagem; planificação mostra o furo da punção.
 
-### 2.12 Gerador de estrutura e tratamentos de ponta (CATIA: Structure Design (Profile, Endcut) / SW: Structural Member + Trim/Extend / Inventor: Frame Generator / Fenkra: `StMember`, `CornerMode`)
+### 2.12 Gerador de estrutura e tratamentos de ponta (CAD avançado B: Structure Design (Profile, Endcut) / CAD avançado A: Structural Member + Trim/Extend / CAD avançado C: Frame Generator / Fenkra: `StMember`, `CornerMode`)
 
 - **O que faz:** aplica perfis de catálogo a linhas ou arestas de um esqueleto e resolve os cantos (esquadria, topo, entalhe).
-- **CATIA V5 — no detalhe:** o Structure Design usa perfis de catálogo e "endcuts" (snipe, trim, weld) nos membros [catálogo EST-02, pycatia].
-- **SolidWorks — no detalhe:**
+- **CAD avançado B — no detalhe:** o Structure Design usa perfis de catálogo e "endcuts" (snipe, trim, weld) nos membros [catálogo EST-02, pycatia].
+- **CAD avançado A — no detalhe:**
   - Os tipos de canto são End Trim, End Miter, End Butt1 e End Butt2.
   - A **ordem de trim** decide quem corta quem: grupo de número menor apara o maior; números iguais fazem esquadria entre si.
   - Para três membros no mesmo vértice é preciso ajustar a ordem para obter a esquadria tripla.
   - Antes da lista de corte, todos os cantos devem estar aparados; há *Simple cut* e *Merge miter trimmed bodies* para o comprimento sair certo. O espaço de solda encurta os segmentos [V].
-- **Inventor — no detalhe:**
+- **CAD avançado C — no detalhe:**
   - É preciso uma peça **esqueleto**; os membros recebem a linha correspondente. A seleção aceita linhas, arcos, elipses, splines e arestas de várias peças [V].
   - Tratamentos: Miter, Notch, Corner Joint e Trim/Extend. Eles **se acumulam e se misturam**; o comprimento se recalcula sozinho (Driven Length) [V].
   - Miter não suporta dois membros curvos ou mesclados; para esses, usar os comandos normais [V].
@@ -286,17 +286,17 @@
   - Tratamentos viram objetos na árvore, por canto, com diagnóstico (paralelos/colineares → mensagem clara em vez de erro opaco).
   - Teste: 3 membros em um vértice com ordem 1-2-2 dão esquadria tripla; trocar a ordem muda quem corta; o comprimento da lista de corte soma a geometria real; remover tratamento restaura o corte reto.
 
-### 2.13 Restrição inteligente na montagem (CATIA: Quick Constraint, Smart Move / SW: SmartMates, Magnetic Mates, Mate pop-up / Inventor: Assemble, Predict Offset / Solid Edge: FlashFit / Fenkra: `quick_options`, `auto_kind`)
+### 2.13 Restrição inteligente na montagem (CAD avançado B: Quick Constraint, Smart Move / CAD avançado A: SmartMates, Magnetic Mates, Mate pop-up / CAD avançado C: Assemble, Predict Offset / CAD avançado H: FlashFit / Fenkra: `quick_options`, `auto_kind`)
 
 - **O que faz:** deduz uma ou mais restrições a partir da seleção ou do arraste, para posicionar a peça sem abrir o diálogo.
-- **CATIA V5 — no detalhe:** ver montagem.md 2.9 (lista de prioridade editável, modos cadeia/pilha, Smart Move com criação automática ao soltar) [V].
-- **SolidWorks — no detalhe:**
+- **CAD avançado B — no detalhe:** ver montagem.md 2.9 (lista de prioridade editável, modos cadeia/pilha, Smart Move com criação automática ao soltar) [V].
+- **CAD avançado A — no detalhe:**
   - **SmartMates:** Alt + arrastar uma entidade até a parceira. O cursor mostra qual mate será criado. Tab alterna alinhado/anti-alinhado (soltar o Alt antes), e o pop-up confirma. Entidades válidas: arestas lineares/circulares, eixos temporários, vértices, faces planas, cilíndricas e cônicas, origens e sistemas de coordenadas [V].
   - Em sessões remotas, Alt/Tab podem não chegar; o CATI sugere iniciar pelo Move Component [V].
   - **Magnetic Mates** (desde 2017): arrastar o componente até um ponto de conexão publicado o encaixa. O Asset Publisher cria as referências. Em 2018 vieram ciclar entre pontos ativos, Tab para girar 90° e ícone de trava. Em 2019, uso no modo Large Design Review. A sensibilidade do encaixe é ajustável por distância de proximidade [V].
   - Mate References (ver 2.14) ativam-se também com Alt+arrastar [V].
-- **Inventor — no detalhe:** *Predict Offset and Orientation* preenche o deslocamento pela posição atual, e o *Preview* mostra o resultado. Desmarcar o Predict devolve offset zero, mas exige escolher a orientação correta [V].
-- **Outros:** Solid Edge **FlashFit** escolhe Mate, Planar Align ou Axial Align pela geometria clicada; ponto sugere Connect, aresta linear sugere Axial. Aresta circular é recusada por ambiguidade. **Capture Fit** guarda as relações usadas e reaplica na próxima colocação, mas não captura ângulo [V].
+- **CAD avançado C — no detalhe:** *Predict Offset and Orientation* preenche o deslocamento pela posição atual, e o *Preview* mostra o resultado. Desmarcar o Predict devolve offset zero, mas exige escolher a orientação correta [V].
+- **Outros:** CAD avançado H **FlashFit** escolhe Mate, Planar Align ou Axial Align pela geometria clicada; ponto sugere Connect, aresta linear sugere Axial. Aresta circular é recusada por ambiguidade. **Capture Fit** guarda as relações usadas e reaplica na próxima colocação, mas não captura ângulo [V].
 - **Fenkra hoje:**
   - Duas seleções abrem `quick_options` por par de geometria [`asm_ui.rs:97–105`].
   - `auto_kind` só distingue plano×plano (normais opostas = Contato, senão Coincidente); qualquer outro par cai em Coincidente [`asm_ui.rs:375–387`].
@@ -309,19 +309,19 @@
   - Regras: o arraste só cria a restrição ao soltar; se o solver não convergir, **reverter a posição** e avisar.
   - Testes: eixo+eixo → Coincidência; face+face de frente → Contato; cilindro+face anelar → par Inserir; Tab inverte sem criar restrição duplicada; conflito reverte a posição.
 
-### 2.14 Referências de encaixe: interfaces nomeadas (CATIA: Publications / SW: Mate References, Asset Publisher / Inventor: iMates / Onshape: Mate Connectors / Fusion: Joint Origins / Fenkra: ausente)
+### 2.14 Referências de encaixe: interfaces nomeadas (CAD avançado B: Publications / CAD avançado A: Mate References, Asset Publisher / CAD avançado C: iMates / CAD avançado E: Mate Connectors / Fusion: Joint Origins / Fenkra: ausente)
 
 - **O que faz:** a peça declara "como se encaixa". Ao inserir ou substituir, o sistema casa as referências e cria as restrições.
-- **CATIA V5 — no detalhe:** a publicação nomeada faz esse papel. A restrição aponta para o nome e sobrevive à substituição do componente (ver montagem.md 2.22) [V].
-- **SolidWorks — no detalhe:** uma mate reference guarda geometria primária/secundária/terciária e o tipo. As duas peças precisam do **mesmo nome e da mesma ordem de entidades**. Só admite mates simples (coincidente, concêntrico, paralelo, tangente), não Largura [V].
-- **Inventor — no detalhe:**
+- **CAD avançado B — no detalhe:** a publicação nomeada faz esse papel. A restrição aponta para o nome e sobrevive à substituição do componente (ver montagem.md 2.22) [V].
+- **CAD avançado A — no detalhe:** uma mate reference guarda geometria primária/secundária/terciária e o tipo. As duas peças precisam do **mesmo nome e da mesma ordem de entidades**. Só admite mates simples (coincidente, concêntrico, paralelo, tangente), não Largura [V].
+- **CAD avançado C — no detalhe:**
   - O iMate é metade de um par de restrições na peça. Tipos de restrição: Mate, Angle, Tangent, Insert; com offset ou ângulo, limites (máximo, mínimo, posição de repouso) e supressão [V].
   - O casamento usa o **nome primeiro** e depois as propriedades. Uma lista de nomes de matching define a ordem de consumo [V].
   - **Composto:** vários iMates agrupados; casa com outro composto de mesmo nome e mesmo número de membros e resolve tudo de uma vez. Trocar peças que usam o composto as posiciona sozinha [V].
-  - **Inferir iMates** de um componente, de uma restrição ou de features (furo, revolução, extrusão circular, só laços fechados). O Inventor escolhe a aresta que julga mais útil; para outra, apagar e criar à mão [V].
+  - **Inferir iMates** de um componente, de uma restrição ou de features (furo, revolução, extrusão circular, só laços fechados). O CAD avançado C escolhe a aresta que julga mais útil; para outra, apagar e criar à mão [V].
   - Na colocação: *Interactively place with iMates* mantém o comando ativo; *Automatically generate iMates on place* aplica todas as soluções. A peça fica transparente até aceitar o primeiro par; Ctrl+I liga/desliga, Espaço pula o resto, Ctrl+Enter gera o restante e as setas ciclam [V].
 - **Outros:**
-  - **Onshape:** o *mate connector* é um sistema de coordenadas local. O **implícito** nasce no momento do mate e fica sob ele. O **explícito** é criado antes (Ctrl+M), aparece no topo da lista de features e pode estar na Part Studio, sendo reaproveitado em todas as montagens. Tem eixo Z primário, "Reorient" do secundário, "Flip primary axis", dono (peça/sketch/curva) e Move com expressões [V].
+  - **CAD avançado E:** o *mate connector* é um sistema de coordenadas local. O **implícito** nasce no momento do mate e fica sob ele. O **explícito** é criado antes (Ctrl+M), aparece no topo da lista de features e pode estar na Part Studio, sendo reaproveitado em todas as montagens. Tem eixo Z primário, "Reorient" do secundário, "Flip primary axis", dono (peça/sketch/curva) e Move com expressões [V].
   - **Fusion:** *Joint Origin* e *As-Built Joint* (modo simples com ponto de snap, entre duas faces, interseção de arestas) [V].
 - **Fenkra hoje:** `MateRef` tem componente, geometria e `pick` (ponto clicado) [`fenkra-montagem/src/lib.rs:174–179`]. Não há nome, ordem ou tipo.
 - **Melhor prática para o Fenkra:**
@@ -331,34 +331,34 @@
   - Regras: um conector consumido não é reutilizado; se faltar uma interface na peça substituta, listar "não casada" em vez de escolher outra; inferir só de laços fechados.
   - Testes: peças A e B com "FuroM6"; inserir B cria 2 restrições; substituir B por B′ (mesmas interfaces) mantém 0 quebradas; interface ausente em B′ é listada; mover a geometria na peça mantém o conector.
 
-### 2.15 Furo de montagem e Série de furos (CATIA: Assembly Hole / SW: Hole Series, Assembly Feature / Inventor: assembly features + Bolted Connection / Fenkra: `AsmFeat(1)`, B57)
+### 2.15 Furo de montagem e Série de furos (CAD avançado B: Assembly Hole / CAD avançado A: Hole Series, Assembly Feature / CAD avançado C: assembly features + Bolted Connection / Fenkra: `AsmFeat(1)`, B57)
 
 - **O que faz:** um furo único atravessa as peças do eixo, com tipo por peça e propagação.
-- **CATIA V5 — no detalhe:** o *Assembly Hole* (Assembly Features) parte de uma face. O diálogo lista as peças candidatas (nome e caminho) e a lista "Affected parts" é editável, com realce. Limites: valor, cego, até o último, até plano, até superfície. Diâmetro, direção normal à face ou por linha, fundo em V, abas de tipo (simples, cônico, rebaixado, escareado, contra-furo) e de rosca. **Na árvore:** surge "Assembly features" com "Assembly Hole.1" e cada peça afetada ganha o furo com seta de vínculo. *Isolate* quebra o vínculo e deixa um furo comum. Pode reaproveitar um furo de Part Design (herda as especificações) ou um furo de montagem existente (só escolhe as peças) [V].
-- **SolidWorks — no detalhe:**
+- **CAD avançado B — no detalhe:** o *Assembly Hole* (Assembly Features) parte de uma face. O diálogo lista as peças candidatas (nome e caminho) e a lista "Affected parts" é editável, com realce. Limites: valor, cego, até o último, até plano, até superfície. Diâmetro, direção normal à face ou por linha, fundo em V, abas de tipo (simples, cônico, rebaixado, escareado, contra-furo) e de rosca. **Na árvore:** surge "Assembly features" com "Assembly Hole.1" e cada peça afetada ganha o furo com seta de vínculo. *Isolate* quebra o vínculo e deixa um furo comum. Pode reaproveitar um furo de Part Design (herda as especificações) ou um furo de montagem existente (só escolhe as peças) [V].
+- **CAD avançado A — no detalhe:**
   - A *Hole Series* atravessa cada componente **não suprimido** cuja geometria cruza o eixo, mesmo sem tocar. Quem não deve ser furado precisa ser suprimido. A primeira peça, as do meio e a última têm papéis distintos; a última contém a rosca ou o fundo do furo cego [V].
-  - Editar o furo só no nível da montagem; "underive" numa peça o transforma em Hole Wizard sem referência à montagem [V].
-  - Um Hole Wizard existente pode servir de semente [V].
-  - A aba Smart Fasteners só existe com o Toolbox ativo; com "auto size" o fixador acompanha o furo inicial [V].
-- **Inventor — no detalhe:** a feature fica na montagem com participantes (não grava furo nas peças) [catálogo MON-12]; a Bolted Connection é o caminho que cria os furos nas peças (ver 2.16).
+  - Editar o furo só no nível da montagem; "underive" numa peça o transforma em assistente de furos sem referência à montagem [V].
+  - Um assistente de furos existente pode servir de semente [V].
+  - A aba fixadores inteligentes só existe com o biblioteca de normas ativo; com "auto size" o fixador acompanha o furo inicial [V].
+- **CAD avançado C — no detalhe:** a feature fica na montagem com participantes (não grava furo nas peças) [catálogo MON-12]; a Bolted Connection é o caminho que cria os furos nas peças (ver 2.16).
 - **Fenkra hoje:** `AsmFeatKind::Hole {p, d, dia, depth}` corta a **forma exibida** na montagem. Não grava furo nas peças, não entra no `hole_table` nem nos Fixadores. Posição só por clique e Ø padrão 6 [`fenkra-montagem/src/lib.rs:274–279`; catálogo MON-12]. É o B57.
 - **Melhor prática para o Fenkra:**
-  - Seguir o CATIA para a árvore: **recurso de montagem + furo real em cada peça com seta (link)** e *Isolar*. Seguir o SW para o escopo por eixo e os papéis primeira/meio/última.
+  - Seguir o CAD avançado B para a árvore: **recurso de montagem + furo real em cada peça com seta (link)** e *Isolar*. Seguir o CAD avançado A para o escopo por eixo e os papéis primeira/meio/última.
   - Fluxo: posição (ponto publicado, sketch da montagem, cotas) → escopo (peças atravessadas, editável, com realce) → tipo por peça (folga na de cima, rosca na de baixo) → avançado (padrão, só na montagem).
   - Regras: toda peça do escopo precisa receber o furo ou aparecer na lista de falhas; se a peça está suprimida ou "fora do eixo", avisar; mudar a posição move os furos em todas as peças.
   - Testes: eixo atravessando 3 chapas → 3 furos reais; `hole_table` e Fixadores os enxergam; Isolar deixa 1 furo editável; mover o ponto atualiza os três.
 
-### 2.16 Fixadores inteligentes e Conexão parafusada (CATIA: catálogo de peças padrão / SW: Smart Fasteners, Toolbox / Inventor: Bolted Connection (Design Accelerator) / Fenkra: `preencher_furos`, B58)
+### 2.16 Fixadores inteligentes e Conexão parafusada (CAD avançado B: catálogo de peças padrão / CAD avançado A: fixadores inteligentes, biblioteca de normas / CAD avançado C: Bolted Connection (Design Accelerator) / Fenkra: `preencher_furos`, B58)
 
 - **O que faz:** acha furos, escolhe o parafuso e monta a pilha (arruelas, porcas), com restrições.
-- **CATIA V5 — no detalhe:** não há automação nativa; usa-se catálogo e restrições manuais (FASTJOINT é add-on) [catálogo MON-16/18].
-- **SolidWorks — no detalhe:**
+- **CAD avançado B — no detalhe:** não há automação nativa; usa-se catálogo e restrições manuais (FASTJOINT é add-on) [catálogo MON-16/18].
+- **CAD avançado A — no detalhe:**
   - O comando fica na aba Assembly. Seleciona-se **face** (pega os furos dela), **componente** ou furos do Wizard. Revisa-se a lista, remove-se o que não se quer e usa-se *Add* (selecionados) ou *Populate All* (todos). Os fixadores saem agrupados por conjunto de furos e a janela fica aberta para edição [V].
-  - Dimensionamento: os dados do Toolbox (rebaixo, folga, passo, broca) ligam o fixador ao Hole Wizard. Furos fora do Wizard recebem o tipo padrão das configurações [V].
+  - Dimensionamento: os dados do biblioteca de normas (rebaixo, folga, passo, broca) ligam o fixador ao assistente de furos. Furos fora do Wizard recebem o tipo padrão das configurações [V].
   - Pilhas: *Top Stack* aceita arruelas; *Bottom Stack* arruelas e porcas; furo cego só tem pilha superior. A pilha vale para o grupo inteiro [V].
   - Mates concêntrico e coincidente são criados sozinhos [V].
   - Limites: não reconhece furos em corpos derivados ou importados; o furo deve atravessar pelo menos dois componentes; furos desalinhados não são reconhecidos (há *Hole Alignment* para achar o desalinhamento) [V].
-- **Inventor — no detalhe:** a Bolted Connection tem quatro modos de posição: *Linear* (plano inicial, duas arestas, plano final), *Concêntrica*, *Em ponto* (pontos de sketch; Ctrl adiciona/remove) e *Por furo* (com *Follow Pattern* para furos em padrão). Cria os furos e escolhe fixadores do Content Center filtrados por rosca e diâmetro. O comprimento é ajustado pelo grip ou pela lista, **sem escolha automática descrita**. *Edit Using Design Accelerator* reabre; apagar o parafuso apaga todos os seus fixadores; mover o ponto do sketch move a conexão. Por padrão as peças ficam na raiz e exigem solução manual; a opção de subconjunto permite solução automática. Limitações: padrões só no ambiente de peça e pontos de sketch criados na montagem não servem [V].
+- **CAD avançado C — no detalhe:** a Bolted Connection tem quatro modos de posição: *Linear* (plano inicial, duas arestas, plano final), *Concêntrica*, *Em ponto* (pontos de sketch; Ctrl adiciona/remove) e *Por furo* (com *Follow Pattern* para furos em padrão). Cria os furos e escolhe fixadores do Content Center filtrados por rosca e diâmetro. O comprimento é ajustado pelo grip ou pela lista, **sem escolha automática descrita**. *Edit Using Design Accelerator* reabre; apagar o parafuso apaga todos os seus fixadores; mover o ponto do sketch move a conexão. Por padrão as peças ficam na raiz e exigem solução manual; a opção de subconjunto permite solução automática. Limitações: padrões só no ambiente de peça e pontos de sketch criados na montagem não servem [V].
 - **Fenkra hoje:** `preencher_furos` monta pilha parafuso/arruela/porca com restrições. A pega é medida por sondas laterais; não se edita a pilha depois (catálogo MON-16). Há o bug do B62 (1 GDL de rotação no parafuso).
 - **Melhor prática para o Fenkra:**
   - Fluxo: escopo (face/componente/furo) → modo de posição → família + tamanho (herdado do furo, 2.5) → pilha superior/inferior → comprimento pela pega → avançado.
@@ -366,81 +366,81 @@
   - Regras: toda pilha inserida com GDL = 0 (B62); comprimento = pega + arruelas + porca + saliência de rosca, arredondado ao comprimento comercial; furo desalinhado dá aviso com a distância.
   - Testes: furo M8 passante em 2 chapas → parafuso + 2 arruelas + porca com GDL 0; trocar o comprimento recalcula; furo desalinhado de 0,2 mm lista o motivo; apagar o conjunto não apaga os furos.
 
-### 2.17 Geradores e calculadores de componentes (Inventor: Design Accelerator / SW: Toolbox (engrenagens, rolamentos) / CATIA: catálogos / Fenkra: `engrenagens.rs`, `eixos.rs`, `AsmGears`)
+### 2.17 Geradores e calculadores de componentes (CAD avançado C: Design Accelerator / CAD avançado A: biblioteca de normas (engrenagens, rolamentos) / CAD avançado B: catálogos / Fenkra: `engrenagens.rs`, `eixos.rs`, `AsmGears`)
 
 - **O que faz:** gera peças de máquina por parâmetros e verifica o projeto por cálculo.
-- **Inventor — no detalhe:** **geradores** (conexão parafusada, eixo, estrias, chavetas, cames, engrenagens cilíndricas/cônicas/sem-fim, rolamentos, correias V e sincronizadas, correntes, pinos, anéis O) e **calculadores** (soldas, juntas soldadas e de solda mole, cubos, ajustes e tolerâncias, prensagem, mancal, fuso de potência, viga/coluna, placa, freios). Só um gerador ou calculador aberto por vez. Campos aceitam fórmulas e unidades; a prévia tem grips; "Calculate" roda; campos com erro ficam em vermelho e resultados esmaecem até recalcular. A mensagem de resumo usa azul (informação), vermelho (falha) e fundo vermelho (estado crítico). OK insere os componentes na montagem; o comando Update funciona; os componentes vêm do Content Center; o Component Authoring define iMates e parâmetros para peças próprias [V].
-- **SolidWorks/CATIA:** o Toolbox traz engrenagens e rolamentos por norma [catálogo BIB-03/07]; o CATIA usa catálogos [C].
+- **CAD avançado C — no detalhe:** **geradores** (conexão parafusada, eixo, estrias, chavetas, cames, engrenagens cilíndricas/cônicas/sem-fim, rolamentos, correias V e sincronizadas, correntes, pinos, anéis O) e **calculadores** (soldas, juntas soldadas e de solda mole, cubos, ajustes e tolerâncias, prensagem, mancal, fuso de potência, viga/coluna, placa, freios). Só um gerador ou calculador aberto por vez. Campos aceitam fórmulas e unidades; a prévia tem grips; "Calculate" roda; campos com erro ficam em vermelho e resultados esmaecem até recalcular. A mensagem de resumo usa azul (informação), vermelho (falha) e fundo vermelho (estado crítico). OK insere os componentes na montagem; o comando Update funciona; os componentes vêm do Content Center; o Component Authoring define iMates e parâmetros para peças próprias [V].
+- **CAD avançado A/CAD avançado B:** o biblioteca de normas traz engrenagens e rolamentos por norma [catálogo BIB-03/07]; o CAD avançado B usa catálogos [C].
 - **Fenkra hoje:** a janela de engrenagens gera pares e peças avulsas com cálculo ao vivo, e há eixo escalonado e chaveta DIN 6885 (B28 feito). B52 prevê paramétrico completo. Não há calculadores de ajuste, viga, solda nem rolamento (B44).
 - **Melhor prática para o Fenkra:**
-  - Padronizar o ciclo do Inventor: **entradas → Calcular → resultados → OK insere** e "Editar com assistente" depois. Isso vale para engrenagens, eixos e futuros geradores.
+  - Padronizar o ciclo do CAD avançado C: **entradas → Calcular → resultados → OK insere** e "Editar com assistente" depois. Isso vale para engrenagens, eixos e futuros geradores.
   - Resultado = recurso na árvore com os parâmetros guardados (ver 2.19 e 2.20: um gerador é um tipo de Power Copy com cálculo).
   - Regras: nunca inserir com campo em erro; resultados "obsoletos" visíveis até recalcular; unidades explícitas.
   - Testes: mudar o módulo recalcula o diâmetro primitivo e a distância entre centros; reabrir "Editar com assistente" restaura as entradas; par com dentes insuficientes bloqueia o OK.
 
-### 2.18 Diagnóstico e substituição de restrições (CATIA: Update Diagnosis, Reconnect / SW: MateXpert, Replace Mate Entities / Inventor: Design Doctor, substituição por iMate / Fenkra: solver + janela de reparo)
+### 2.18 Diagnóstico e substituição de restrições (CAD avançado B: Update Diagnosis, Reconnect / CAD avançado A: MateXpert, Replace Mate Entities / CAD avançado C: Design Doctor, substituição por iMate / Fenkra: solver + janela de reparo)
 
 - **O que faz:** quando a geometria muda e a restrição fica sem alvo, o sistema explica e propõe saídas.
-- **CATIA V5 — no detalhe:** semáforo de status da restrição (verificada, impossível, a atualizar, quebrada) e *Reconnect* [V, montagem.md 2.13–2.14].
-- **SolidWorks — no detalhe:** o mate fica pendente (*dangling*) quando a geometria do componente muda e ele não pode ser satisfeito. O MateXpert (*Diagnose*) lista o mate e a geometria que falta; as saídas são apagar, editar com outras entidades ou *Replace Mate Entities*. A causa típica é o componente referenciado ter sido suprimido, apagado ou alterado, e a correção usual é escolher outra referência [V].
-- **Inventor — no detalhe:** a substituição de componente mantém as relações se houver iMates com os mesmos nomes (2.14) [V].
+- **CAD avançado B — no detalhe:** semáforo de status da restrição (verificada, impossível, a atualizar, quebrada) e *Reconnect* [V, montagem.md 2.13–2.14].
+- **CAD avançado A — no detalhe:** o mate fica pendente (*dangling*) quando a geometria do componente muda e ele não pode ser satisfeito. O MateXpert (*Diagnose*) lista o mate e a geometria que falta; as saídas são apagar, editar com outras entidades ou *Replace Mate Entities*. A causa típica é o componente referenciado ter sido suprimido, apagado ou alterado, e a correção usual é escolher outra referência [V].
+- **CAD avançado C — no detalhe:** a substituição de componente mantém as relações se houver iMates com os mesmos nomes (2.14) [V].
 - **Fenkra hoje:** o solver devolve `failed` por restrição e há janela de reparo para comandos de peça, sem candidatos no 3D (GER-05, GER-11).
 - **Melhor prática para o Fenkra:**
   - Todo estado de restrição é um enum visível (`ok`, `redundante`, `conflito`, `sem alvo`, `suprimida`) e a lista de diagnóstico oferece **Substituir entidade, Editar, Suprimir, Isolar**, com candidatos destacados no 3D.
   - O conserto fica registrado (quem foi trocado por quem) para poder desfazer.
   - Testes: apagar a face usada → restrição "sem alvo" (não some); substituir por outra face a restaura; substituir componente por outro com mesmas interfaces mantém 0 quebradas.
 
-### 2.19 Configurações e tabelas de projeto (CATIA: Design Table, Part Family / SW: Configurations, Design Table / Inventor: iPart, iAssembly / outros: Creo Family Table, Onshape Configurations / Fenkra: ausente)
+### 2.19 Configurações e tabelas de projeto (CAD avançado B: Design Table, Part Family / CAD avançado A: Configurations, Design Table / CAD avançado C: iPart, iAssembly / outros: CAD avançado F Family Table, CAD avançado E Configurations / Fenkra: ausente)
 
 - **O que faz:** uma peça ou montagem gera variantes (tamanhos, suprimidos, propriedades) a partir de uma tabela.
-- **CATIA V5 — no detalhe:** a *Design Table* é um arquivo texto/CSV ou planilha com conjuntos de valores de parâmetros (as configurações) e fica sob o nó Relations da árvore. Pode ser criada a partir dos parâmetros atuais e exportada para o Excel. Catálogos de família referenciam as variantes (capítulos e descrições) [V].
-- **SolidWorks — no detalhe:** a tabela de projeto da peça controla **dimensões, supressão de recursos e tamanho de furos do Hole Wizard**, além de propriedades de configuração (número de peça para BOM, material, propriedades personalizadas, equações, relações de sketch, comentários, configurações derivadas). Exige o Excel; a tabela fica **embutida no modelo** (pode ser ligada a um arquivo externo). Cada linha é uma configuração; nas colunas de recursos, "S" suprime e "U" reativa [V].
-- **Inventor — no detalhe:** *Create iPart* e *iAssembly Author*: cada linha é um membro, cada coluna um atributo (limite de 256 colunas em iAssembly). Edição via planilha: não renomear cabeçalhos (quebra todos os membros); novo membro = copiar uma linha e mudar. A fábrica ligada a Excel externo é desaconselhada pela comunidade (pouco confiável; usar iLogic) [V].
+- **CAD avançado B — no detalhe:** a *Design Table* é um arquivo texto/CSV ou planilha com conjuntos de valores de parâmetros (as configurações) e fica sob o nó Relations da árvore. Pode ser criada a partir dos parâmetros atuais e exportada para o Excel. Catálogos de família referenciam as variantes (capítulos e descrições) [V].
+- **CAD avançado A — no detalhe:** a tabela de projeto da peça controla **dimensões, supressão de recursos e tamanho de furos do assistente de furos**, além de propriedades de configuração (número de peça para BOM, material, propriedades personalizadas, equações, relações de sketch, comentários, configurações derivadas). Exige o Excel; a tabela fica **embutida no modelo** (pode ser ligada a um arquivo externo). Cada linha é uma configuração; nas colunas de recursos, "S" suprime e "U" reativa [V].
+- **CAD avançado C — no detalhe:** *Create iPart* e *iAssembly Author*: cada linha é um membro, cada coluna um atributo (limite de 256 colunas em iAssembly). Edição via planilha: não renomear cabeçalhos (quebra todos os membros); novo membro = copiar uma linha e mudar. A fábrica ligada a Excel externo é desaconselhada pela comunidade (pouco confiável; usar iLogic) [V].
 - **Outros:**
-  - **Onshape:** entradas de configuração como tabela (cada linha é uma opção), variável de configuração, caixa de seleção e lista de entradas de feature. Regras de visibilidade entre entradas. Valem também para FeatureScript, números de peça, cor e material [V].
-  - **Creo:** a tabela de família tem objeto-base genérico, itens controlados (inclusive UDFs e padrões) e linhas-instância, podendo ser aninhada. Cada instância tem os seus valores [V].
+  - **CAD avançado E:** entradas de configuração como tabela (cada linha é uma opção), variável de configuração, caixa de seleção e lista de entradas de feature. Regras de visibilidade entre entradas. Valem também para FeatureScript, números de peça, cor e material [V].
+  - **CAD avançado F:** a tabela de família tem objeto-base genérico, itens controlados (inclusive UDFs e padrões) e linhas-instância, podendo ser aninhada. Cada instância tem os seus valores [V].
 - **Fenkra hoje:** `Document.params` guarda parâmetros e expressões [`doc.rs:1114`, `2673`]. A montagem tem `AsmParam` [`fenkra-montagem/src/lib.rs:321`]. **Não existem configurações nem tabelas.**
 - **Melhor prática para o Fenkra:**
-  - Encaixe CATIA: uma **Tabela de projeto** como objeto na árvore sob Parâmetros, com colunas = parâmetros, supressões, material e propriedades; linhas = configurações nomeadas. A configuração ativa é parte do estado do documento.
+  - Encaixe CAD avançado B: uma **Tabela de projeto** como objeto na árvore sob Parâmetros, com colunas = parâmetros, supressões, material e propriedades; linhas = configurações nomeadas. A configuração ativa é parte do estado do documento.
   - Fluxo: criar a partir dos parâmetros atuais → escolher colunas → editar linhas → ativar configuração → (avançado) derivar, ligar a CSV externo.
   - Na montagem, o componente aponta para (arquivo, **configuração por nome**). Configuração inexistente = erro visível, nunca a "primeira".
   - Regras: nomes de coluna estáveis (renomear atualiza a tabela); valor inválido não aplica a linha inteira; BOM e PN (PLM-06) lêem a configuração.
   - Testes: 3 linhas geram 3 variantes com volumes diferentes e corretos; trocar a configuração na montagem muda a peça e mantém as restrições; apagar uma configuração usada gera diagnóstico.
 
-### 2.20 Reuso de recursos: Power Copy, UDF, iFeature, modelos de documento (CATIA: PowerCopy, UDF, Document Template / SW: Library Features / Inventor: iFeature / Creo: UDF / Onshape: Custom Features (FeatureScript) / Fenkra: ausente; só copiar/colar e macros)
+### 2.20 Reuso de recursos: Power Copy, UDF, iFeature, modelos de documento (CAD avançado B: PowerCopy, UDF, Document Template / CAD avançado A: Library Features / CAD avançado C: iFeature / CAD avançado F: UDF / CAD avançado E: Custom Features (FeatureScript) / Fenkra: ausente; só copiar/colar e macros)
 
 - **O que faz:** salva um grupo de recursos com entradas e parâmetros e o instancia em outro lugar.
-- **CATIA V5 — no detalhe:**
+- **CAD avançado B — no detalhe:**
   - A **PowerCopy** se cria em Insert > Advanced Replication Tools: escolhe-se os elementos na árvore, dá-se nome, definem-se as referências (entradas) e um ícone [V].
   - A instanciação vai por *Instantiate From Document* (arquivo ou catálogo) ou pelo menu de contexto da PowerCopy. Escolhe-se a PowerCopy na lista, **seleciona-se a geometria de cada entrada**, e há "Usar nomes idênticos" para entradas repetidas, edição de parâmetros e "Criar fórmulas" para ligar os de mesmo nome. O botão Documentos lista arquivos ligados (por exemplo, design tables) e permite trocá-los. O resultado nasce **em contexto**, com limites redefinidos pelos elementos de entrada [V].
   - O *Replace Viewer* mapeia arestas quando o elemento substituto tem subelementos diferentes; a ordem proposta importa, senão o Update Diagnosis aparece [V].
-  - A **UDF** (User Defined Feature) tem parâmetros publicados que dirigem o resultado; há restrição permanente: um parâmetro publicado não pode comandar uma regra que desativa uma saída da UDF (usar PowerCopy). Saídas extras podem ganhar sufixo ao instanciar em outra versão do CATIA, quebrando scripts que dependem do nome [V].
+  - A **UDF** (User Defined Feature) tem parâmetros publicados que dirigem o resultado; há restrição permanente: um parâmetro publicado não pode comandar uma regra que desativa uma saída da UDF (usar PowerCopy). Saídas extras podem ganhar sufixo ao instanciar em outra versão do CAD avançado B, quebrando scripts que dependem do nome [V].
   - Há falhas conhecidas: PowerCopy de filete/chanfro de aresta não instancia em outra aresta [V].
   - O **Document Template** e o *Product Knowledge Template* aparecem em cursos como assunto à parte da PowerCopy [V parcial: ementa GoEngineer].
-- **SolidWorks — no detalhe:** *Library Features* guardam recursos na Design Library; as ferramentas de forma de chapa são um caso especial (2.11) [C].
-- **Inventor — no detalhe:** *Extract iFeature* (aba Manage > Author) com tipos como Sheet Metal Punch. Os parâmetros da tabela de tamanho podem variar na colocação; o resto fica fixo; pode virar tabela de família e depois não aceita acrescentar ou remover parâmetros [V].
+- **CAD avançado A — no detalhe:** *Library Features* guardam recursos na Design Library; as ferramentas de forma de chapa são um caso especial (2.11) [C].
+- **CAD avançado C — no detalhe:** *Extract iFeature* (aba Manage > Author) com tipos como Sheet Metal Punch. Os parâmetros da tabela de tamanho podem variar na colocação; o resto fica fixo; pode virar tabela de família e depois não aceita acrescentar ou remover parâmetros [V].
 - **Outros:**
-  - **Creo UDF:** recursos selecionados com suas cotas, relações entre eles e lista de referências para colocação. Relações no nível do recurso/sketch vão para a peça destino; relações e parâmetros de nível da peça não vão. Parâmetros não usados em relações não são copiados [V].
-  - **Onshape:** custom features em FeatureScript (linguagem tipo JavaScript, escritas num Feature Studio). Comportam-se como recursos normais (editar, suprimir, ocultar, apagar) e só existem em Part Studio [V].
+  - **CAD avançado F UDF:** recursos selecionados com suas cotas, relações entre eles e lista de referências para colocação. Relações no nível do recurso/sketch vão para a peça destino; relações e parâmetros de nível da peça não vão. Parâmetros não usados em relações não são copiados [V].
+  - **CAD avançado E:** custom features em FeatureScript (linguagem tipo JavaScript, escritas num Feature Studio). Comportam-se como recursos normais (editar, suprimir, ocultar, apagar) e só existem em Part Studio [V].
 - **Fenkra hoje:** copiar/colar/duplicar na árvore (`clip_menu`, `app.rs:6253`) e **macros em texto** que criam parâmetros, planos, sketches, extrusões, furos, padrões e laços (`macros.rs:1–30`, `run` em `:32`). Não há entradas nomeadas nem instanciação em contexto.
 - **Melhor prática para o Fenkra:**
-  - Encaixe CATIA: **Modelo de recurso (PowerCopy)** = lista de recursos + **entradas** (referências v2 ou publicadas) + **parâmetros publicados** + ícone. Pode ser salvo em arquivo/biblioteca. Usa a mesma sintaxe de `macros.rs` para ser legível e versionável.
+  - Encaixe CAD avançado B: **Modelo de recurso (PowerCopy)** = lista de recursos + **entradas** (referências v2 ou publicadas) + **parâmetros publicados** + ícone. Pode ser salvo em arquivo/biblioteca. Usa a mesma sintaxe de `macros.rs` para ser legível e versionável.
   - Fluxo de criação: selecionar recursos → o sistema calcula as entradas automáticas (tudo que o grupo referencia e não contém) → nomear entradas e parâmetros → ícone → salvar.
   - Fluxo de instanciação: escolher o modelo → apontar cada entrada (nomes idênticos) → editar parâmetros → instanciar em contexto. Resultado na árvore como **grupo**, com "Isolar" para quebrar o vínculo e "Editar modelo".
   - Regras: entrada faltante = erro de instanciação listando o nome; modelo que não instancia numa aresta (caso do filete) falha com mensagem, sem criar lixo; versionar o modelo (instâncias antigas avisam que o modelo mudou).
   - Testes: modelo "furo com rebaixo" instanciado em 3 faces dá 3 grupos independentes; mudar um parâmetro publicado muda só aquele; apagar a face de uma entrada marca o grupo como sem alvo.
 
-### 2.21 Parâmetros, fórmulas e regras (CATIA: Parameters/Formulas, Knowledge Advisor (Rules, Checks, Reactions, Design Tables) / SW: Equations / Inventor: Parameters + iLogic / Creo: Relations / Fenkra: `Parameter`, `AsmParam`, macros)
+### 2.21 Parâmetros, fórmulas e regras (CAD avançado B: Parameters/Formulas, Knowledge Advisor (Rules, Checks, Reactions, Design Tables) / CAD avançado A: Equations / CAD avançado C: Parameters + iLogic / CAD avançado F: Relations / Fenkra: `Parameter`, `AsmParam`, macros)
 
 - **O que faz:** liga valores por fórmula e, no nível seguinte, executa regras condicionais que mudam o modelo.
-- **CATIA V5 — no detalhe:** relações são fórmulas, regras (instruções condicionais), checagens (*checks*, alertas) e tabelas de projeto. As **reações** respondem a eventos e podem chamar macros. O *Knowledge Inspector* tem "What if" (como os parâmetros interagem) e "How to" (como obter um resultado desejado) [V].
-- **SolidWorks — no detalhe:** equações com variáveis globais ligam cotas. Também aparecem nas configurações (2.19) [C].
-- **Inventor — no detalhe:**
+- **CAD avançado B — no detalhe:** relações são fórmulas, regras (instruções condicionais), checagens (*checks*, alertas) e tabelas de projeto. As **reações** respondem a eventos e podem chamar macros. O *Knowledge Inspector* tem "What if" (como os parâmetros interagem) e "How to" (como obter um resultado desejado) [V].
+- **CAD avançado A — no detalhe:** equações com variáveis globais ligam cotas. Também aparecem nas configurações (2.19) [C].
+- **CAD avançado C — no detalhe:**
   - Uma **regra iLogic** é um pequeno programa VB.NET que monitora e controla parâmetros, features e componentes. É guardada dentro do documento; as externas ficam em arquivos de texto/VB.
-  - Dispara quando os parâmetros usados mudam e por **eventos** (novo documento, depois de abrir, antes/depois de salvar, fechar, mudança de supressão de feature ou componente, mudança de geometria da peça). Mudanças de iProperty feitas fora do Inventor não disparam.
+  - Dispara quando os parâmetros usados mudam e por **eventos** (novo documento, depois de abrir, antes/depois de salvar, fechar, mudança de supressão de feature ou componente, mudança de geometria da peça). Mudanças de iProperty feitas fora do CAD avançado C não disparam.
   - **Formulários** (formulários) são interfaces personalizadas ligadas a parâmetros, propriedades e regras, montadas por arrastar e soltar, sem código.
   - **Assistentes** sem código: regra para diálogo, capturar vista atual, caixa de mensagem e **limites de parâmetro** (mínimo/máximo) [V].
-- **Creo:** Relations em texto por feature e por peça (ver 2.20) [V].
+- **CAD avançado F:** Relations em texto por feature e por peça (ver 2.20) [V].
 - **Fenkra hoje:**
   - `Parameter {name, expr, unit, comment, published}` [`doc.rs:1114`] com avaliador de expressões (`fenkra-core/src/expr.rs`).
   - `AsmParam {name, expr}` na montagem.
@@ -452,25 +452,25 @@
   - Regras: ciclo entre parâmetros dá erro com o laço apontado; a regra não toca um parâmetro travado por tabela de projeto; efeito de regra é desfeito junto com o undo.
   - Testes: limite mínimo bloqueia valor fora; checagem falha mostra mensagem e não impede recompute; regra "furos = f(largura)" muda a quantidade ao editar a largura; ciclo detectado.
 
-### 2.22 Desenho: itens do modelo, chamadas de furo e tabelas automáticas (CATIA: Generate Dimensions [C] / SW: Model Items, Auto Balloon, Hole Table / Inventor: Retrieve Dimensions, Auto Balloon / Fenkra: `dwg_ui.rs`, `hole_table`)
+### 2.22 Desenho: itens do modelo, chamadas de furo e tabelas automáticas (CAD avançado B: Generate Dimensions [C] / CAD avançado A: Model Items, Auto Balloon, Hole Table / CAD avançado C: Retrieve Dimensions, Auto Balloon / Fenkra: `dwg_ui.rs`, `hole_table`)
 
 - **O que faz:** traz as cotas, chamadas de furo e tabelas do modelo para o desenho com um comando, mantendo o vínculo.
-- **SolidWorks — no detalhe:** *Model Items* importa cotas de features selecionadas ou do modelo todo, filtradas por "marcadas para desenho" ou não. Importa também a localização e a chamada de furos do Hole Wizard. A colocação sai desalinhada, então há "usar a posição da cota do sketch". As cotas importadas continuam **ligadas ao modelo**: relatos de que alterar a cota no desenho altera o modelo [V].
-- **CATIA/Inventor:** o CATIA tem geração de cotas a partir do 3D e o Inventor tem *Retrieve Dimensions* [C].
+- **CAD avançado A — no detalhe:** *Model Items* importa cotas de features selecionadas ou do modelo todo, filtradas por "marcadas para desenho" ou não. Importa também a localização e a chamada de furos do assistente de furos. A colocação sai desalinhada, então há "usar a posição da cota do sketch". As cotas importadas continuam **ligadas ao modelo**: relatos de que alterar a cota no desenho altera o modelo [V].
+- **CAD avançado B/CAD avançado C:** o CAD avançado B tem geração de cotas a partir do 3D e o CAD avançado C tem *Retrieve Dimensions* [C].
 - **Fenkra hoje:** a tabela de furos existe (`fenkra_solidos::hole_table`, usada em `fenkra-desenho/src/source.rs:461`). DES-05 está completo (cotas associativas) e DES-08 (balões, BOM) também (catálogo). Importar cotas do modelo como comando de lote não foi encontrado nas fichas.
 - **Melhor prática para o Fenkra:**
   - Fluxo: vista → fonte (recursos selecionados/modelo) → filtro (cotas marcadas, furos, roscas) → alinhamento automático → importar.
-  - Cotas importadas são **dirigidas pelo modelo (somente leitura)**, a menos que o usuário opte por "cota condutora". Esse é o cuidado contra o bug relatado no SW.
+  - Cotas importadas são **dirigidas pelo modelo (somente leitura)**, a menos que o usuário opte por "cota condutora". Esse é o cuidado contra o bug relatado no CAD avançado A.
   - Chamada de furo lê a norma do furo (2.5): "4× Ø6,6 ▽ 12 / M8" e atualiza com o modelo.
   - Testes: importar do recurso de furo traz a chamada correta; mudar o furo atualiza o desenho; editar a cota no desenho não altera o modelo.
 
-### 2.23 PMI automático e consultor de tolerância (SW: DimXpert, Auto Dimension Scheme / CATIA: FTA / Inventor: 3D annotation / Fenkra: `Pmi(u8)`, B38)
+### 2.23 PMI automático e consultor de tolerância (CAD avançado A: DimXpert, Auto Dimension Scheme / CAD avançado B: FTA / CAD avançado C: 3D annotation / Fenkra: `Pmi(u8)`, B38)
 
 - **O que faz:** reconhece features de fabricação e aplica cotas e tolerâncias de forma sistemática.
-- **SolidWorks — no detalhe:**
+- **CAD avançado A — no detalhe:**
   - O *Auto Dimension Scheme* aplica cotas/tolerâncias às features de fabricação, no escopo da peça inteira ou das features escolhidas (útil com vários esquemas de datum).
   - Tipo de peça: prismática ou torneada. Tolerância geométrica dá posição para furos/bossas (prismática) e batimento circular (torneada); o modo mais/menos usa cotas lineares.
-  - Passos: reconhece features (as de modelagem, como Hole Wizard, têm prioridade sobre as de topologia; as complexas como rasgos, sobre as simples), gera o esquema e aplica. Compound holes, largura e geometria de interseção não são reconhecidos e exigem definição prévia.
+  - Passos: reconhece features (as de modelagem, como assistente de furos, têm prioridade sobre as de topologia; as complexas como rasgos, sobre as simples), gera o esquema e aplica. Compound holes, largura e geometria de interseção não são reconhecidos e exigem definição prévia.
   - Reconhecimento por modelo acompanha edições posteriores; o de topologia é o reserva, acha rasgos, entalhes e bolsos mas não acrescenta instâncias novas a padrões; corpos importados só usam topologia.
   - Datums: primário = feature de contato, secundário = de localização, terciário = de alinhamento [V].
   - O blog de MBD avisa que gera muito PMI, então recomenda uso seletivo [V].
@@ -478,26 +478,26 @@
 - **Melhor prática para o Fenkra:**
   - Depende do reconhecimento (2.7): primeiro furos e rasgos, depois cotagem por esquema.
   - Fluxo: escopo → tipo de peça → esquema (datums A/B/C) → prévia → aplicar como grupo "PMI automático" desfazível e removível.
-  - Consultor: contador de features sem cota/tolerância (como o contador do Inventor para sketches).
+  - Consultor: contador de features sem cota/tolerância (como o contador do CAD avançado C para sketches).
   - Testes: peça prismática com 4 furos recebe 1 cota de localização por furo mais 1 posição; reaplicar não duplica; remover o grupo restaura o PMI manual.
 
-### 2.24 Catálogos e famílias de peças (CATIA: Catalog, Part Family / SW: Toolbox / Inventor: Content Center / Fenkra: biblioteca, B42)
+### 2.24 Catálogos e famílias de peças (CAD avançado B: Catalog, Part Family / CAD avançado A: biblioteca de normas / CAD avançado C: Content Center / Fenkra: biblioteca, B42)
 
 - **O que faz:** busca uma peça normalizada por família e tamanho e a insere já configurada.
-- **CATIA V5 — no detalhe:** o catálogo é um documento em árvore (capítulos e descrições) que referencia peças e recursos, inclusive famílias paramétricas geradas de uma Design Table. Instanciar pelo navegador de catálogo [V].
-- **SolidWorks — no detalhe:** o Toolbox liga os Smart Fasteners e o Hole Wizard (2.5, 2.16). Exige ativar o suplemento [V].
-- **Inventor — no detalhe:** o Content Center é pré-requisito para Bolted Connection e geradores (sem conexão, a área de fixadores fica esmaecida). Peças próprias podem ser publicadas com iMates via Component Authoring [V].
+- **CAD avançado B — no detalhe:** o catálogo é um documento em árvore (capítulos e descrições) que referencia peças e recursos, inclusive famílias paramétricas geradas de uma Design Table. Instanciar pelo navegador de catálogo [V].
+- **CAD avançado A — no detalhe:** o biblioteca de normas liga os fixadores inteligentes e o assistente de furos (2.5, 2.16). Exige ativar o suplemento [V].
+- **CAD avançado C — no detalhe:** o Content Center é pré-requisito para Bolted Connection e geradores (sem conexão, a área de fixadores fica esmaecida). Peças próprias podem ser publicadas com iMates via Component Authoring [V].
 - **Fenkra hoje:** biblioteca com camadas pública/empresa/usuário em construção (B42), `hardware.rs`, fixadores industriais e engrenagens. Aeronáuticos no B63.
 - **Melhor prática para o Fenkra:**
   - Cada item da biblioteca traz **interfaces** (2.14) e **parâmetros publicados** (2.20/2.21), para inserir já posicionado. Isso substitui a dependência do Content Center por dados abertos.
   - Sem a biblioteca, os assistentes (2.16/2.17) **não ficam esmaecidos em silêncio**: dizem "falta a família X" e oferecem o cadastro local.
   - Testes: família sem tamanho exato mostra o vizinho e não escolhe sozinha; inserir um parafuso M8 traz interfaces "eixo" e "face de apoio".
 
-### 2.25 Busca de comandos e atalhos (SW: Search Commands (tecla W, atalhos de busca) / Onshape: Search tools [C] / Fusion: busca de comandos [C] / Solid Edge e NX: Command Finder [C] / CATIA: Search / Fenkra: ausente)
+### 2.25 Busca de comandos e atalhos (CAD avançado A: Search Commands (tecla W, atalhos de busca) / CAD avançado E: Search tools [C] / Fusion: busca de comandos [C] / CAD avançado H e CAD avançado G: Command Finder [C] / CAD avançado B: Search / Fenkra: ausente)
 
 - **O que faz:** digitar parte do nome e executar o comando, sem procurar nos menus.
-- **SolidWorks — no detalhe:** a tecla **W** ativa a busca de comandos (ou a lista de busca no canto superior com a opção Comandos); a tecla **S** abre a barra de atalho, que também aciona a busca. Enter ou clique executa. O usuário define **atalhos de busca** (por exemplo, "pat" para Linear Pattern) em Tools > Customize > Keyboard. O comando executado a partir de uma consulta é lembrado e sobe ao topo na próxima vez [V].
-- **Outros:** Onshape, Fusion, Solid Edge e NX têm busca equivalente [C]. Não consegui confirmar teclas de Onshape/Fusion.
+- **CAD avançado A — no detalhe:** a tecla **W** ativa a busca de comandos (ou a lista de busca no canto superior com a opção Comandos); a tecla **S** abre a barra de atalho, que também aciona a busca. Enter ou clique executa. O usuário define **atalhos de busca** (por exemplo, "pat" para Linear Pattern) em Tools > Customize > Keyboard. O comando executado a partir de uma consulta é lembrado e sobe ao topo na próxima vez [V].
+- **Outros:** CAD avançado E, CAD avançado D, CAD avançado H e CAD avançado G têm busca equivalente [C]. Não consegui confirmar teclas de CAD avançado E/Fusion.
 - **Fenkra hoje:** não há paleta de comandos. Há atalhos configuráveis (`keymap.rs`, `ViewMenu` em Espaço) e a barra por grupos (`toolbar.rs`). O enum `Cmd` (`app.rs:5911`) já lista todos os comandos, e `toolbar::entry_title` dá nome e descrição.
 - **Melhor prática para o Fenkra:**
   - Paleta única (Ctrl+K ou `/`) alimentada pelo registro de comandos do B60 (nome, sinônimos EN/PT, descrição e bancada). Busca tolerante a acento e a idioma.
@@ -611,99 +611,99 @@ Tamanho: P ≤ 80 k tokens · M ≤ 250 k · G acima disso. Os itens B-nn existe
 
 ## 5. Fontes
 
-CATIA V5:
-- https://staff.city.ac.uk/~ra600/ME2105/Catia%20course/CATIA%20Tutorials/wfsug_C2/wfsugat0200.htm (PowerCopy: criação)
-- https://staff.city.ac.uk/~ra600/ME2105/Catia%20course/CATIA%20Tutorials/wfsug_C2/wfsugat0202.htm (PowerCopy: instanciação, Replace Viewer)
-- https://www.staff.city.ac.uk/~ra600/ME2105/Catia%20course/CATIA%20Tutorials/asmug_C2/asmugat0502.htm (Assembly Hole)
-- https://www.staff.city.ac.uk/~ra600/ME2105/Catia%20course/CATIA%20Tutorials/driug_C2/driugbt1103.htm (restrições via SmartPick)
-- https://www.staff.city.ac.uk/~ra600/ME2105/Catia%20course/CATIA%20Tutorials/kwrug_C2/kwruggl.htm (Knowledgeware)
-- https://technia.us/webinars/catia-v5-powercopy-and-udf-functions
-- https://technia.com/webinars/design-tables-in-catia-v5
+CAD avançado B:
+- (fonte em procedencia.md) (PowerCopy: criação)
+- (fonte em procedencia.md) (PowerCopy: instanciação, Replace Viewer)
+- (fonte em procedencia.md) (Assembly Hole)
+- (fonte em procedencia.md) (restrições via SmartPick)
+- (fonte em procedencia.md) (Knowledgeware)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://www.ibm.com/support/pages/apar/HD06015 (restrição de UDF)
 - https://www.ibm.com/support/pages/apar/HD93258 (nomes de saída de UDF)
 - https://www.ibm.com/support/pages/apar/HD93518 (PowerCopy de filete/chanfro)
 - https://www.ibm.com/support/pages/apar/HC95142 (restrições detectadas)
-- https://www.goengineer.com/en-us/training/catia-v5-knowledge-based-engineering
-- https://pycatia.readthedocs.io/en/latest/api/pycatia/part_interfaces/hole.html
-- https://pycatia.readthedocs.io/en/0.93/api/pycatia/components_catalogs_interfaces/catalog_document.html
-- https://grabcad.com/tutorials/how-do-i-quickly-add-constraints-in-the-catia-sketcher
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://eng-tips.com/threads/incorrect-k-factor.126032
 - https://www.ibm.com/support/pages/apar/HD77386
 
-SolidWorks:
-- https://hawkridgesys.com/blog/solidworks-toolbox-smart-fasteners
-- https://help.solidworks.com/2025/English/SolidWorks/Sldworks/c_Hole_Series_Folder.htm
-- https://www.javelin-tech.com/blog/2017/07/solidworks-hole-series/
-- https://help.solidworks.com/2017/English/SolidWorks/sldworks/c_Smart_Fasteners_Overview.htm
-- https://help.solidworks.com/2018/english/SolidWorks/toolbox/t_tbox_repoint_hole_fasteners.htm
-- https://help.solidworks.com/2020/english/SolidWorks/Sldworks/t_snapping_with_instant3D.htm
-- https://help.solidworks.com/2017/English/SolidWorks/sldworks/c_instant3d_rulers.htm
-- https://hawkridgesys.com/blog/solidworks-instant3d-instant2d
+CAD avançado A:
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://www.javelin-tech.com/blog/2020/09/adjusting-a-sketch-without-having-to-use-edit-sketch/
-- https://help.solidworks.com/2018/English/SolidWorks/fworks/c_Overview_of_FeatureWorks.htm
-- https://help.solidworks.com/2017/English/SolidWorks/fworks/t_Recognizing_Features_Interactively.htm
-- https://www.goengineer.com/blog/solidworks-direct-editing-tools-move-face-delete-face
-- https://blogs.solidworks.com/products/solidworks/direct-editing-move-face
-- https://help.solidworks.com/2025/English/SolidWorks/sldworks/t_Creatiing_SmartMates_SWassy.htm
-- https://help.solidworks.com/2011/english/SolidWorks/sldworks/LegacyHelp/Sldworks/Assem_1/Types_of_SmartMates.htm
-- https://hawkridgesys.com/blog/3-ways-to-mate-in-solidworks-assemblies
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://www.cati.com/?p=152896 (SmartMates sem Alt)
-- https://store.trimech.com/blog/no-assembly-required-solidworks-mate-references
-- https://blogs.solidworks.com/tech/2017/01/use-magnetic-mates-quick-layout-conveyors-tracks-solidworks-2017.html
-- https://blogs.solidworks.com/tech/2018/02/solidworks-2018-making-magnetic-mates-even-snappier.html
-- https://www.solidsolutions.co.uk/solidworks-magnetic-mates/
-- https://help.solidworks.com/2024/English/SolidWorks/sldworks/c_Example_Mates_to_Dangling_Geometry.htm
-- https://help.solidworks.com/2025/English/SolidWorks/Sldworks/c_Design_Table_Configurations.htm
-- https://hawkridgesys.com/blog/how-to-utilize-design-tables-in-solidworks
-- https://help.solidworks.com/2018/English/SolidWorks/sldworks/c_Sheet_Metal_Gauge_Tables.htm
-- https://www.javelin-tech.com/blog/2017/06/solidworks-sheet-metal-bend-table/
-- https://help.solidworks.com/2014/English/SOLIDWORKS/Sldworks/t_Applying_Forming_Tools_to_Sheet_Metal_Parts.htm
-- https://www.javelin-tech.com/blog/2018/01/solidworks-forming-tools/
-- https://help.solidworks.com/2017/english/Solidworks/sldworks/t_Changing_Corner_Treatments.htm
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://hawkridgesys.com/blog/adjusting-trim-order-weldments
-- https://www.goengineer.com/blog/solidworks-selection-tips
-- https://help.solidworks.com/2019/English/SolidWorks/Sldworks/t_Select_Loop.htm
-- https://help.solidworks.com/2017/English/SolidWorks/sldworks/c_tangent_selection.htm
-- https://help.solidworks.com/2022/English/SolidWorks/Sldworks/t_searching_commands.htm
-- https://www.solidsolutions.co.uk/how-to-search-for-commands-in-solidworks/
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://www.javelin-tech.com/blog/2012/02/command-search/
-- https://help.solidworks.com/2017/English/SolidWorks/sldworks/HIDD_SWIFT_GTS.htm (Auto Dimension Scheme)
-- https://help.solidworks.com/2017/English/SolidWorks/sldworks/t_how_auto_dimension_scheme_works.htm
-- https://help.solidworks.com/2017/English/SolidWorks/Sldworks/HIDD_DVE_INSERT_MODEL_ITEMS.htm
-- https://www.goengineer.com/blog/inserting-model-dimensions-into-solidworks-drawing
-- https://help.solidworks.com/2025/English/swconntutorial/t_tut_lesson3_adddimstodrawing.htm
+- (fonte em procedencia.md) (Auto Dimension Scheme)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 
-Inventor:
-- https://help.autodesk.com/cloudhelp/2015/ENU/Inventor-Help/files/GUID-24104648-BE41-49C7-9DD0-1AF2BAFC102E.htm (Design Accelerator)
-- https://help.autodesk.com/cloudhelp/2025/ENU/Inventor-Help/files/GUID-6E1D4624-B605-4AB1-9DBA-E981495B4933.htm (Bolted Connection)
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-953F560A-C2D3-4031-8348-762054C7C779.htm (Frame Generator)
-- https://help.autodesk.com/cloudhelp/2017/ENU/Inventor-Help/files/GUID-1A415D70-CD73-4887-B181-2A782827DF99.htm (tratamentos de ponta)
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-75EE3A42-396D-4CD8-81B7-CB49CD5E834D.htm (Create iMates)
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-DFA62F53-BFED-4802-926E-03D355A485AE.htm (colocar com iMates)
-- https://help.autodesk.com/cloudhelp/2022/ENU/Inventor-iLogic/files/GUID-EF53484C-D750-41F8-9AB1-032B73BB071F.htm (iLogic: regras e formulários)
-- https://help.autodesk.com/cloudhelp/2022/ENU/Inventor-iLogic/files/GUID-A5262025-BB42-4707-8BA0-C0ED830FF3BD.htm
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/INV2026-CREATING-A-PUNCH-TOOL.htm
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-1A5F9CD1-80A8-4462-894A-4D8C9DFCDB51.htm
-- https://help.autodesk.com/cloudhelp/2024/ENU/Inventor-Help/files/GUID-7B2525E4-8191-46F2-8CC3-FF422114EAE5.htm (regra de planificação)
-- https://help.autodesk.com/cloudhelp/2020/ENU/Inventor-Help/files/GUID-A9F9FB7F-D181-49C3-89FC-01EA17D80AAC.htm (iPart)
-- https://help.autodesk.com/cloudhelp/2023/ENU/Inventor-Help/files/GUID-761DE09F-32B3-4A2B-9AAC-B4EA6F25C21B.htm (iAssembly Author)
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-FAF69614-E8F2-4763-975C-552E0BEA1DD1.htm (restrições de sketch)
-- https://help.autodesk.com/cloudhelp/2014/ENU/Inventor/files/GUID-6A730833-27D3-4183-988C-3DD48D153946.htm (Automatic Dimensions and Constraints)
-- https://help.autodesk.com/cloudhelp/2020/ENU/Inventor-Help/files/GUID-653A9867-4F4F-48AE-B5DE-9DED76BD6DF2.htm
-- https://cadsetterout.com/inventor-tutorials/inventor-constraint-persistence-my-best-friend-my-worst-enemy
-- https://help.autodesk.com/cloudhelp/2025/ENU/Inventor-Help/files/GUID-9A47D4FC-30CE-422D-86EC-5E4AFC624C2D.htm (vistas de seção)
-- https://forums.autodesk.com/t5/inventor-forum/assembly-constraint-automatic-0-offset/m-p/9878391 (Predict Offset)
+CAD avançado C:
+- (fonte em procedencia.md) (Design Accelerator)
+- (fonte em procedencia.md) (Bolted Connection)
+- (fonte em procedencia.md) (Frame Generator)
+- (fonte em procedencia.md) (tratamentos de ponta)
+- (fonte em procedencia.md) (Create iMates)
+- (fonte em procedencia.md) (colocar com iMates)
+- (fonte em procedencia.md) (iLogic: regras e formulários)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md) (regra de planificação)
+- (fonte em procedencia.md) (iPart)
+- (fonte em procedencia.md) (iAssembly Author)
+- (fonte em procedencia.md) (restrições de sketch)
+- (fonte em procedencia.md) (Automatic Dimensions and Constraints)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md) (vistas de seção)
+- (fonte em procedencia.md) (Predict Offset)
 
 Outros:
-- https://cad.onshape.com/help/Content/Assembly/assembly_mate_connector.htm
-- https://cad.onshape.com/help/Content/PartStudio/configurations.htm
-- https://cad.onshape.com/help/Content/PartStudio/add_custom_features.htm
-- https://help.autodesk.com/cloudhelp/ENU/Fusion-Assemble/files/ASM-CREATE-AS-BUILT-JOINT.htm
-- https://blogs.sw.siemens.com/solidedge/synchronous-technology-and-live-rules/
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://soliddna.com/SEHelp/ST6/EN/assemble_parts/const1a.htm (FlashFit)
-- https://support.sw.siemens.com/en-US/okba/PL8008639/Cannot-select-circular-sketch-when-defining-FlashFit-relation/index.html
-- https://support.ptc.com/help/creo/creo_plus/usascii/part_modeling/part_modeling/About_User_Defined_Features_part.html
-- https://support.ptc.com/help/creo/creo_lcd/r7.0/usascii/lcd/baggage/About_Family_Tables_1.dita
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 
 Código e documentos do Fenkra lidos: `crates/fenkra-app/src/{app.rs, handles.rs, geom_fit.rs, sketch_ui.rs, asm_ui.rs, feat_ui.rs, toolbar.rs, settings.rs, keymap.rs}`, `crates/fenkra-core/src/{doc.rs, macros.rs}`, `crates/fenkra-montagem/src/{lib.rs, fixadores.rs}`, `crates/fenkra-solidos/src/lib.rs`, `crates/fenkra-desenho/src/source.rs`, `docs/arquitetura/adr/{0010,0011}`, `docs/benchmark/catalogo.md`, `docs/backlog/backlog.md`, `docs/pesquisa/{sketch,montagem}.md`.
 
@@ -712,12 +712,12 @@ Código e documentos do Fenkra lidos: `crates/fenkra-app/src/{app.rs, handles.rs
 ## Passagem de bastão
 
 - **Resultado:** relatório completo, com 25 fichas, 40 RF, 10 RNF e 27 itens de backlog propostos.
-- **Evidência:** fontes públicas lidas por WebFetch (Autodesk Inventor, Onshape, City University London) e por resultados de busca (SolidWorks e outras). Código do Fenkra lido nos arquivos citados.
+- **Evidência:** fontes públicas lidas por WebFetch (fornecedor de CAD avançado CAD avançado C, CAD avançado E, City University London) e por resultados de busca (CAD avançado A e outras). Código do Fenkra lido nos arquivos citados.
 - **Arquivos alterados:** nenhum. Não escrevi `docs/pesquisa/funcoes-inteligentes.md`; o lead grava.
 - **Verificações:** nenhum teste ou build rodado, porque a tarefa era só de pesquisa.
 - **Falhas e lacunas:**
-  - `help.solidworks.com` só devolveu o cabeçalho do site no WebFetch. Para SolidWorks usei resumos de busca sobre essas páginas e blogs de revendas. Javelin (Hole Series) e TriMech (Mate References) deram 403.
-  - Sem fonte confirmada: Shift no Instant3D; Live Section do SW e do CATIA; dados do CATIA Hole (abas de posicionamento e extensão); NX Synchronous e Command Finder; Fusion/Onshape para busca de comandos; Document Template do CATIA além da ementa de curso. Todos estão marcados [C] no texto.
+  - `help.CAD avançado A.com` só devolveu o cabeçalho do site no WebFetch. Para CAD avançado A usei resumos de busca sobre essas páginas e blogs de revendas. Javelin (Hole Series) e TriMech (Mate References) deram 403.
+  - Sem fonte confirmada: Shift no Instant3D; Live Section do CAD avançado A e do CAD avançado B; dados do CAD avançado B Hole (abas de posicionamento e extensão); CAD avançado G Synchronous e Command Finder; CAD avançado D/CAD avançado E para busca de comandos; Document Template do CAD avançado B além da ementa de curso. Todos estão marcados [C] no texto.
   - Não vi vídeos.
 - **Riscos:**
   - O `auto_kind` e o `AlignOnce` (ficha 2.13) podem produzir restrições erradas ou meio-caminho hoje, antes de qualquer função nova.
@@ -725,4 +725,4 @@ Código e documentos do Fenkra lidos: `crates/fenkra-app/src/{app.rs, handles.rs
   - O item N11 (furo de montagem com furo real) e o N1 (interfaces) são grandes e dependem do modelo de montagem do B55.
 
 STATUS: DONE_WITH_CONCERNS
-SUMMARY: Maiores lacunas: (1) sem interfaces/mate references nomeadas nem restrição por arraste-e-encaixe; (2) sem inferência de sketch nem "Completar sketch"/reparo; (3) sem configurações/tabelas de projeto nem Power Copy/UDF/regras reativas; (4) sem edição direta, reconhecimento de features, Live Section, seleção por intenção e busca de comandos; (5) furo de montagem sem furo real nas peças e fixadores sem conjunto editável. Parte das fontes do SolidWorks ficou só em resumos de busca, porque help.solidworks.com não renderiza no WebFetch.
+SUMMARY: Maiores lacunas: (1) sem interfaces/mate references nomeadas nem restrição por arraste-e-encaixe; (2) sem inferência de sketch nem "Completar sketch"/reparo; (3) sem configurações/tabelas de projeto nem Power Copy/UDF/regras reativas; (4) sem edição direta, reconhecimento de features, Live Section, seleção por intenção e busca de comandos; (5) furo de montagem sem furo real nas peças e fixadores sem conjunto editável. Parte das fontes do CAD avançado A ficou só em resumos de busca, porque help.CAD avançado A.com não renderiza no WebFetch.

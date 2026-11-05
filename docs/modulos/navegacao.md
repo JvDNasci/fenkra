@@ -5,7 +5,7 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 ## ✅ Pronto
 
 - **Órbita em torno de alvo** (Órbita) — camera.target; estilos de botões por NavStyle.
-- **Estilos de navegação** (Estilos: Fenkra, SolidWorks, Fusion, CATIA, Blender, Onshape, FreeCAD, Inventor, Rhino) — NavStyle (settings.rs).
+- **Estilos de navegação** (Estilos: Fenkra, CAD avançado A, CAD avançado D, CAD avançado B, Blender, CAD avançado E, FreeCAD, CAD avançado C, CAD avançado I) — NavStyle (settings.rs).
 - **Cubo de vistas e vistas nomeadas** (Cubo de vistas, estados de exibição) — Cubo e estados de exibição.
 
 ## 🟡 Parcial

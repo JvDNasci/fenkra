@@ -6,9 +6,9 @@
 
 **Lacunas de evidência:**
 - `wiki.freecad.org` bloqueou o acesso (Anubis). Usei resumos secundários do FreeCAD 1.0 e 1.1.
-- Não achei detalhes de Mold Wizard e Routing do NX, nem de Mold Tooling e Human Builder do CATIA.
-- Não achei detalhes do ZW3D nem do Solid Edge Frame/Piping/Harness em 2026.
-- Não verifiquei Creo 12 e 13 (os resultados eram de versões antigas).
+- Não achei detalhes de Mold Wizard e Routing do CAD avançado G, nem de Mold Tooling e Human Builder do CAD avançado B.
+- Não achei detalhes do ZW3D nem do CAD avançado H Frame/Piping/Harness em 2026.
+- Não verifiquei CAD avançado F 12 e 13 (os resultados eram de versões antigas).
 - Não verifiquei SU2. Não verifiquei a licença do OIDN (marcada `[C]`).
 
 ---
@@ -19,11 +19,11 @@
 
 O Fenkra já cobre bem a **geometria**: sketch, sólidos, superfícies, chapa, estrutural e soldas, montagem, desenho e PMI. Os softwares comparados diferenciam-se hoje em cinco áreas, quase todas ausentes do catálogo (168 features) e do backlog (B01–B109):
 
-1. **Engenharia a jusante do modelo.** O CAD passa a avaliar o que desenhou: fabricabilidade (DFMXpress, Costing), simulação (Fusion, Onshape Simulation, Inventor Nastran) e inspeção (SOLIDWORKS Inspection).
-2. **Fabricação e saída.** Nesting associativo (Fusion), impressão 3D com orientação e suportes (Fusion, Shapr3D), CAM embutido (Onshape CAM Studio, FreeCAD CAM) e moldes (SOLIDWORKS Mold Tools, NX Progressive Die Wizard).
-3. **Sistemas além da peça.** Tubulação e tubos dobrados (Inventor Tube & Pipe, SOLIDWORKS Routing), chicotes (CATIA, Inventor, VEC/KBL), compósitos (Creo e CATIA).
-4. **Colaboração, versão e automação.** Branch/merge (Onshape), scripts que criam features (FeatureScript), integração CAD–ERP (OpenBOM–Odoo, Onshape–Arena) e desenho automático por IA (SOLIDWORKS 2026 e Solid Edge 2026).
-5. **Comunicação.** Render, animação e instruções ilustradas (Creo Illustrate, IsoDraw, Render Studio).
+1. **Engenharia a jusante do modelo.** O CAD passa a avaliar o que desenhou: fabricabilidade (DFMXpress, Costing), simulação (CAD avançado D, CAD avançado E Simulation, CAD avançado C Nastran) e inspeção (CAD avançado A Inspection).
+2. **Fabricação e saída.** Nesting associativo (CAD avançado D), impressão 3D com orientação e suportes (CAD avançado D, Shapr3D), CAM embutido (CAD avançado E CAM Studio, FreeCAD CAM) e moldes (CAD avançado A Mold Tools, CAD avançado G Progressive Die Wizard).
+3. **Sistemas além da peça.** Tubulação e tubos dobrados (CAD avançado C Tube & Pipe, CAD avançado A Routing), chicotes (CAD avançado B, CAD avançado C, VEC/KBL), compósitos (CAD avançado F e CAD avançado B).
+4. **Colaboração, versão e automação.** Branch/merge (CAD avançado E), scripts que criam features (FeatureScript), integração CAD–ERP (OpenBOM–Odoo, CAD avançado E–Arena) e desenho automático por IA (CAD avançado A 2026 e CAD avançado H 2026).
+5. **Comunicação.** Render, animação e instruções ilustradas (CAD avançado F Illustrate, IsoDraw, Render Studio).
 
 **Restrição de escopo do Fenkra.** A `visao.md` (seção 6) lista como **não-objetivos "por enquanto"**:
 - CAM e G-code;
@@ -45,21 +45,21 @@ Ordenadas por valor para projetista mecânico/civil/aeronáutico dividido pelo e
 
 | # | Oportunidade | Quem tem | Valor | Esforço | Por quê |
 |---|---|---|---|---|---|
-| 1 | **Calculadoras de projeto mecânico** (parafuso, ajuste forçado, mola, viga, rolamento, eixo, engrenagem) ligadas ao modelo (BN01) | Inventor Design Accelerator, Toolbox `[C]` | Alto | M | Rust puro, sem risco de licença. Reaproveita B52, B28, B90, B42. |
-| 2 | **Verificador de fabricação (DFM)** (BN02) | SOLIDWORKS DFMXpress `[V]`, Costing `[V]` | Alto | M | Regras sobre features que o Fenkra já conhece (furo, bolso, dobra, parede). Evita retrabalho. |
-| 3 | **Análise de pórtico/barras 1D** (BN03) | Inventor Frame Analysis `[C]`, Fusion `[C]` | Alto (civil, estrutural) | M | O Fenkra já tem membros, nós, perfis e massa linear. Matriz de rigidez própria, sem GPL. |
+| 1 | **Calculadoras de projeto mecânico** (parafuso, ajuste forçado, mola, viga, rolamento, eixo, engrenagem) ligadas ao modelo (BN01) | CAD avançado C Design Accelerator, biblioteca de normas `[C]` | Alto | M | Rust puro, sem risco de licença. Reaproveita B52, B28, B90, B42. |
+| 2 | **Verificador de fabricação (DFM)** (BN02) | CAD avançado A DFMXpress `[V]`, Costing `[V]` | Alto | M | Regras sobre features que o Fenkra já conhece (furo, bolso, dobra, parede). Evita retrabalho. |
+| 3 | **Análise de pórtico/barras 1D** (BN03) | CAD avançado C Frame Analysis `[C]`, Fusion `[C]` | Alto (civil, estrutural) | M | O Fenkra já tem membros, nós, perfis e massa linear. Matriz de rigidez própria, sem GPL. |
 | 4 | **Nesting de chapa** com lista de corte (BN04) | Fusion Manufacturing Extension `[V]` | Alto | M | Há motor Rust MPL-2.0 e MIT (jagua-rs, sparrow). Usa a planificada e o DXF (B86). |
-| 5 | **Plano de inspeção e FAI (AS9102)** (BN05) | SOLIDWORKS Inspection `[V]` | Alto (aeronáutico) | M | Balões de PMI e desenho (B81/B82) viram tabela e formulário. |
-| 6 | **Custeio e orçamento** (BN06) | SOLIDWORKS Costing `[V]`, Fusion `[V]` | Alto | M | Soma massa (B92), planificada (B86), lista de corte (B80) e comprimento de solda. |
+| 5 | **Plano de inspeção e FAI (AS9102)** (BN05) | CAD avançado A Inspection `[V]` | Alto (aeronáutico) | M | Balões de PMI e desenho (B81/B82) viram tabela e formulário. |
+| 6 | **Custeio e orçamento** (BN06) | CAD avançado A Costing `[V]`, Fusion `[V]` | Alto | M | Soma massa (B92), planificada (B86), lista de corte (B80) e comprimento de solda. |
 | 7 | **Impressão 3D / DfAM**: 3MF, orientação, balanço, estimativa (BN07) | Fusion `[V]`, Shapr3D (Prusa direto) `[V]`, nTop `[V]` | Médio-alto | M | lib3mf BSD-2. Slicer externo por CLI, sem AGPL no binário. |
-| 8 | **Estudo de movimento cinemático**: gráficos, trajetória, envelope varrido, animação (BN08) | SW Motion/Inventor Studio `[C]`, FreeCAD 1.1 anima Assembly `[V]` | Alto (mecanismos, flaps) | M | O solver cinemático já existe. Respeita o não-objetivo "forças". |
-| 9 | **Instruções de montagem animadas** (BN09) | Creo Illustrate `[V]`, IsoDraw `[V]`, Composer `[C]` | Médio-alto | M | Usa explodida, BOM e vistas. Saída HTML/PDF/vídeo. |
-| 10 | **Grandes montagens**: carga leve, simplificado/envelope, LOD (BN10) | SW Large Design Review, Inventor Shrinkwrap `[C]` | Alto (escala) | M-G | Sem isso o app trava com milhares de peças. Interage com B68. |
-| 11 | **Tolerância empilhada 1D** a partir do PMI (BN11) | SOLIDWORKS TolAnalyst `[C]` | Médio-alto | M | Só existem libs Python pequenas `[V]`. Implementação própria em Rust. |
-| 12 | **Tubos dobrados e tubulação** (rota 3D, tabela de dobra, isométrico) (BN12) | Inventor Tube & Pipe `[V]`, SW Routing `[V]` | Alto (aeronáutico, hidráulico) | G | Reaproveita varredura, wireframe 3D e biblioteca. |
-| 13 | **Branch, merge e comparação de documentos** (BN13) | Onshape `[V]` | Médio-alto | M-G | Árvore de features em JSON permite merge de 3 vias por uid. Coerente com o VPM em pasta. |
-| 14 | **Features por script** (tipo FeatureScript) (BN14) | Onshape FeatureScript `[V]` | Alto, a longo prazo | G | Rhai (MIT/Apache) ou WASM. Complementa B39 (API Python). |
-| 15 | **Simulação estática linear via solver externo** (CalculiX + Netgen) (BN15) | FreeCAD FEM `[V]`, Fusion `[V]`, Onshape Simulation `[V]` | Muito alto | G | **Reabre um não-objetivo.** Só como ponte opcional e GPL isolado em processo. |
+| 8 | **Estudo de movimento cinemático**: gráficos, trajetória, envelope varrido, animação (BN08) | CAD avançado A Motion/CAD avançado C Studio `[C]`, FreeCAD 1.1 anima Assembly `[V]` | Alto (mecanismos, flaps) | M | O solver cinemático já existe. Respeita o não-objetivo "forças". |
+| 9 | **Instruções de montagem animadas** (BN09) | CAD avançado F Illustrate `[V]`, IsoDraw `[V]`, Composer `[C]` | Médio-alto | M | Usa explodida, BOM e vistas. Saída HTML/PDF/vídeo. |
+| 10 | **Grandes montagens**: carga leve, simplificado/envelope, LOD (BN10) | CAD avançado A Large Design Review, CAD avançado C Shrinkwrap `[C]` | Alto (escala) | M-G | Sem isso o app trava com milhares de peças. Interage com B68. |
+| 11 | **Tolerância empilhada 1D** a partir do PMI (BN11) | CAD avançado A TolAnalyst `[C]` | Médio-alto | M | Só existem libs Python pequenas `[V]`. Implementação própria em Rust. |
+| 12 | **Tubos dobrados e tubulação** (rota 3D, tabela de dobra, isométrico) (BN12) | CAD avançado C Tube & Pipe `[V]`, CAD avançado A Routing `[V]` | Alto (aeronáutico, hidráulico) | G | Reaproveita varredura, wireframe 3D e biblioteca. |
+| 13 | **Branch, merge e comparação de documentos** (BN13) | CAD avançado E `[V]` | Médio-alto | M-G | Árvore de features em JSON permite merge de 3 vias por uid. Coerente com o VPM em pasta. |
+| 14 | **Features por script** (tipo FeatureScript) (BN14) | CAD avançado E FeatureScript `[V]` | Alto, a longo prazo | G | Rhai (MIT/Apache) ou WASM. Complementa B39 (API Python). |
+| 15 | **Simulação estática linear via solver externo** (CalculiX + Netgen) (BN15) | FreeCAD FEM `[V]`, Fusion `[V]`, CAD avançado E Simulation `[V]` | Muito alto | G | **Reabre um não-objetivo.** Só como ponte opcional e GPL isolado em processo. |
 
 **Fora do top 15, mas relevantes:**
 - **Moldes** (núcleo/cavidade, linha de partição, undercut). Sobre Draft, Split e Fill existentes.
@@ -118,7 +118,7 @@ O projeto tem Rust + egui. As libs C++ (Netgen, OpenCAMLib, OpenVDB) exigem FFI 
 ### 2.1 Calculadoras de projeto mecânico (BN01)
 
 - **O que é:** assistentes de cálculo ligados ao modelo. Parafuso (pré-carga, VDI 2230 `[C]`), ajuste forçado e interferência, mola helicoidal, viga, vida de rolamento (ISO 281 `[C]`), resistência de eixo, engrenagem (ISO 6336 / AGMA `[C]`), estriados.
-- **Quem tem:** Inventor Design Accelerator, que ganhou o *Involute Splines Calculator* na versão 2026 `[V]`. SOLIDWORKS Toolbox `[C]`.
+- **Quem tem:** CAD avançado C Design Accelerator, que ganhou o *Involute Splines Calculator* na versão 2026 `[V]`. CAD avançado A biblioteca de normas `[C]`.
 - **Como funciona:** o usuário escolhe geometria e carga, o módulo calcula, aponta fatores de segurança e insere ou ajusta o componente (como o gerador de engrenagens do B28).
 - **Libs abertas:** nenhuma necessária. Aritmética própria.
 - **Viabilidade:** M. Cada calculadora é pequena e testável com exemplos de norma.
@@ -127,7 +127,7 @@ O projeto tem Rust + egui. As libs C++ (Netgen, OpenCAMLib, OpenVDB) exigem FFI 
 ### 2.2 Verificador de fabricação (DFM) (BN02)
 
 - **O que é:** conjunto de regras que varre o modelo e lista violações com realce no 3D.
-- **Quem tem:** SOLIDWORKS DFMXpress. Cobre fresa/furo, torneamento, chapa e injeção. Checa razão diâmetro/profundidade de furo, fundo plano, bolso profundo, canto interno vivo, raio de dobra e distância furo-borda `[V]`. Os valores são personalizáveis `[V]`. Fusion e outros têm análise de espessura e saliência `[C]`.
+- **Quem tem:** CAD avançado A DFMXpress. Cobre fresa/furo, torneamento, chapa e injeção. Checa razão diâmetro/profundidade de furo, fundo plano, bolso profundo, canto interno vivo, raio de dobra e distância furo-borda `[V]`. Os valores são personalizáveis `[V]`. CAD avançado D e outros têm análise de espessura e saliência `[C]`.
 - **Como funciona:** o usuário escolhe o processo e um perfil de regras (JSON). Cada regra devolve elemento, valor medido, limite e sugestão.
 - **Libs abertas:** não precisa. Usa a B-rep do OCCT (normais, distância mínima, `BRepExtrema`).
 - **Viabilidade:** M. Começar por chapa e furo, que o Fenkra já modela por feature.
@@ -136,7 +136,7 @@ O projeto tem Rust + egui. As libs C++ (Netgen, OpenCAMLib, OpenVDB) exigem FFI 
 ### 2.3 Análise de pórtico/barras 1D (BN03)
 
 - **O que é:** transforma uma estrutura de membros em um modelo de vigas (nós, seções, apoios, cargas). Resolve deslocamentos, esforços e reações. Mostra diagramas M/V/N e verifica tensão e flecha.
-- **Quem tem:** Inventor Frame Analysis `[C]`. Fusion/Onshape para modelos de barras `[C]`. O Fenkra já tem "Barras (cálculo)" parcial (EST-09).
+- **Quem tem:** CAD avançado C Frame Analysis `[C]`. CAD avançado D/CAD avançado E para modelos de barras `[C]`. O Fenkra já tem "Barras (cálculo)" parcial (EST-09).
 - **Como funciona:** matriz de rigidez de elemento de viga 3D (Euler-Bernoulli ou Timoshenko), montagem global, solução esparsa. As propriedades de seção vêm da biblioteca de perfis (B27).
 - **Libs abertas:** faer (MIT) para a solução esparsa `[V]`. Dispensa solver externo.
 - **Viabilidade:** M. É o primeiro passo seguro de "simulação" e não reabre o não-objetivo FEA.
@@ -157,7 +157,7 @@ O projeto tem Rust + egui. As libs C++ (Netgen, OpenCAMLib, OpenVDB) exigem FFI 
 ### 2.5 Plano de inspeção e FAI (AS9102) (BN05)
 
 - **O que é:** balonar cada cota, tolerância, nota e GD&T do desenho ou do PMI e gerar a tabela de características. Opcionalmente, o formulário FAI e a importação de valores medidos.
-- **Quem tem:** SOLIDWORKS Inspection. Balonagem automática de cotas, furos, acabamento e GD&T. Relatório em Excel com modelos AS9102/PPAP. Importa resultados de CMM (PC-DMIS, Calypso) `[V]`. QIF não foi confirmado nas fontes `[C: ISO 23952]`.
+- **Quem tem:** CAD avançado A Inspection. Balonagem automática de cotas, furos, acabamento e GD&T. Relatório em Excel com modelos AS9102/PPAP. Importa resultados de CMM (PC-DMIS, Calypso) `[V]`. QIF não foi confirmado nas fontes `[C: ISO 23952]`.
 - **Como funciona:** cada anotação ancorada (B81/B82) recebe número. A tabela exporta CSV/XLSX. Colunas "medido" e "aprovado" são editáveis.
 - **Libs abertas:** gravação de XLSX por crate Rust (verificar licença) `[C]`. Sem dependências de licença complexas.
 - **Viabilidade:** M.
@@ -166,7 +166,7 @@ O projeto tem Rust + egui. As libs C++ (Netgen, OpenCAMLib, OpenVDB) exigem FFI 
 ### 2.6 Custeio e orçamento (BN06)
 
 - **O que é:** estima custo por peça e por montagem a partir de matéria-prima, processos e quantidades.
-- **Quem tem:** SOLIDWORKS Costing. Reconhece chapa e usinagem pela geometria. Usa modelos de custo editáveis (preço de material, máquinas, custos fixos por dobra). Também faz peças soldadas, impressas e montagens `[V]`.
+- **Quem tem:** CAD avançado A Costing. Reconhece chapa e usinagem pela geometria. Usa modelos de custo editáveis (preço de material, máquinas, custos fixos por dobra). Também faz peças soldadas, impressas e montagens `[V]`.
 - **Como funciona:** modelo de custo em arquivo. Corte (perímetro × velocidade + número de furações), dobra (nº × tempo), solda (comprimento × velocidade), usinagem (volume removido do bloco bruto × taxa de remoção), tratamento (área × preço). Resultado na BOM.
 - **Libs abertas:** nenhuma necessária.
 - **Viabilidade:** M. Quase tudo já é calculado pelo Fenkra.
@@ -195,7 +195,7 @@ O projeto tem Rust + egui. As libs C++ (Netgen, OpenCAMLib, OpenVDB) exigem FFI 
 ### 2.8 Estudo de movimento cinemático, envelope e animação (BN08)
 
 - **O que é:** conduzir um mecanismo por um driver (ângulo ou deslocamento), gravar posições, gerar gráficos de posição/velocidade/aceleração de pontos, traçar trajetória e criar o **volume varrido** (envelope) para verificar folgas.
-- **Quem tem:** FreeCAD 1.1 adicionou ferramenta de animação de movimento no Assembly `[V]`. SOLIDWORKS Motion Study, Inventor Dynamic Simulation e CATIA DMU Kinematics `[C]`; a última foi descrita como simulação de mecanismos a partir de juntas `[V]`.
+- **Quem tem:** FreeCAD 1.1 adicionou ferramenta de animação de movimento no Assembly `[V]`. CAD avançado A Motion Study, CAD avançado C Dynamic Simulation e CAD avançado B DMU Kinematics `[C]`; a última foi descrita como simulação de mecanismos a partir de juntas `[V]`.
 - **Como funciona:** o solver de montagem (juntas e acoplamentos, MON-04/05) avança por passos. Cada passo grava poses. Interferência (MON-09) roda ao longo do curso.
 - **Libs abertas:** nenhuma obrigatória. rapier (Apache-2.0) `[V]` é motor de jogo, não de engenharia. Só faria sentido para dinâmica, hoje não-objetivo.
 - **Viabilidade:** M. Cinemática pura, sem forças, respeita o não-objetivo.
@@ -204,7 +204,7 @@ O projeto tem Rust + egui. As libs C++ (Netgen, OpenCAMLib, OpenVDB) exigem FFI 
 ### 2.9 Instruções de montagem e ilustração técnica (BN09)
 
 - **O que é:** sequência de passos (qual peça entra, em qual posição) com explodida animada, BOM por passo, chamadas e exportação para HTML, PDF ou vídeo.
-- **Quem tem:** Creo Illustrate (passos, chamadas e animações 3D, associativo ao CAD) `[V]`. Arbortext IsoDraw `[V]`. cadasio (web) `[V]`. SOLIDWORKS Composer `[C]`. Inventor Studio `[C]`.
+- **Quem tem:** CAD avançado F Illustrate (passos, chamadas e animações 3D, associativo ao CAD) `[V]`. Arbortext IsoDraw `[V]`. cadasio (web) `[V]`. CAD avançado A Composer `[C]`. CAD avançado C Studio `[C]`.
 - **Como funciona:** cada passo guarda estado de visibilidade e posição de componentes (estende a explodida). O player interpola. Exporta quadros e glTF.
 - **Libs abertas:** `ffmpeg` externo (LGPL/GPL conforme build, verificar) `[C]`. HTML autocontido com visualizador próprio dispensa.
 - **Viabilidade:** M.
@@ -213,7 +213,7 @@ O projeto tem Rust + egui. As libs C++ (Netgen, OpenCAMLib, OpenVDB) exigem FFI 
 ### 2.10 Grandes montagens (BN10)
 
 - **O que é:** abrir e navegar montagens com milhares de peças: carga leve (só malha), representações simplificadas, envelope, LOD, abrir só um subconjunto.
-- **Quem tem:** SOLIDWORKS Large Design Review, Inventor Shrinkwrap/Level of Detail `[C]`. O Fenkra tem qualidade gráfica ajustável (B61).
+- **Quem tem:** CAD avançado A Large Design Review, CAD avançado C Shrinkwrap/Level of Detail `[C]`. O Fenkra tem qualidade gráfica ajustável (B61).
 - **Como funciona:** cada peça guarda malhas em vários níveis de detalhe e uma versão simplificada (casca externa ou caixa). A montagem escolhe a representação por componente ou por distância.
 - **Libs abertas:** Manifold (Apache-2.0) `[V]` ou OCCT para casca externa.
 - **Viabilidade:** M-G.
@@ -222,7 +222,7 @@ O projeto tem Rust + egui. As libs C++ (Netgen, OpenCAMLib, OpenVDB) exigem FFI 
 ### 2.11 Tolerância empilhada (BN11)
 
 - **O que é:** análise de pior caso, RSS e Monte Carlo sobre uma cadeia dimensional definida no PMI.
-- **Quem tem:** SOLIDWORKS TolAnalyst `[C]`. Em código aberto só há bibliotecas Python pequenas: `pytolerance` (distribuição gaussiana, v0.0.2), `stackcore`, `Tol Ninja` (cadeias 1D e coaxiais) `[V]`.
+- **Quem tem:** CAD avançado A TolAnalyst `[C]`. Em código aberto só há bibliotecas Python pequenas: `pytolerance` (distribuição gaussiana, v0.0.2), `stackcore`, `Tol Ninja` (cadeias 1D e coaxiais) `[V]`.
 - **Como funciona:** o usuário seleciona cotas e tolerâncias (B108) em ordem, define sinais e distribuições. O módulo calcula pior caso, RSS e histograma Monte Carlo, e a contribuição de cada cota.
 - **Libs abertas:** nenhuma necessária (crate `rand`, MIT/Apache `[C]`). As libs Python servem como referência, não como dependência.
 - **Viabilidade:** M para 1D. 3D por GD&T com datums é G e P3.
@@ -231,7 +231,7 @@ O projeto tem Rust + egui. As libs C++ (Netgen, OpenCAMLib, OpenVDB) exigem FFI 
 ### 2.12 Tubos dobrados e tubulação (BN12)
 
 - **O que é:** rota 3D de tubo rígido ou dobrado com diâmetro, espessura e raio de dobra. Valida trechos retos mínimos e colisões. Gera tabela de dobra para máquina, lista de corte e isométrico.
-- **Quem tem:** Inventor Tube & Pipe. Roteia tubo rígido, tubo dobrado e mangueira na montagem. Escolhe conexões por regra de norma e fornece dados de dobra para máquinas de CNC `[V]`. SOLIDWORKS Routing (2026: roteamento por diretriz para elétrica, tubo e tubulação) `[V]`. Solid Edge tem piping `[V, fonte fraca]`.
+- **Quem tem:** CAD avançado C Tube & Pipe. Roteia tubo rígido, tubo dobrado e mangueira na montagem. Escolhe conexões por regra de norma e fornece dados de dobra para máquinas de CNC `[V]`. CAD avançado A Routing (2026: roteamento por diretriz para elétrica, tubo e tubulação) `[V]`. CAD avançado H tem piping `[V, fonte fraca]`.
 - **Como funciona:** polilinha 3D (existe no wireframe) → arcos de dobra → varredura do perfil (existe). Dados de dobra (comprimento, rotação, ângulo `[C]`) saem por tabela. Conexões vêm da biblioteca.
 - **Libs abertas:** nenhuma. Normas dimensionais (ISO 1127, ASME B36.10, AN/MS de flange `[C]`) seguem a regra de dados por nível (A/B/C) do B42.
 - **Viabilidade:** G.
@@ -240,7 +240,7 @@ O projeto tem Rust + egui. As libs C++ (Netgen, OpenCAMLib, OpenVDB) exigem FFI 
 ### 2.13 Moldes e matrizes (BN13)
 
 - **O que é:** análise de saída e undercut, linha de partição, superfícies de fechamento (shut-off) e de partição, divisão em núcleo e cavidade.
-- **Quem tem:** SOLIDWORKS Mold Tools: análise de saída, linha de partição, undercut, shut-off, superfície de partição e Tooling Split `[V]`. NX Progressive Die Wizard: layout de tira, bibliotecas de base e insertos `[V]`. Inventor Mold Design e Mold Wizard `[C]`.
+- **Quem tem:** CAD avançado A Mold Tools: análise de saída, linha de partição, undercut, shut-off, superfície de partição e Tooling Split `[V]`. CAD avançado G Progressive Die Wizard: layout de tira, bibliotecas de base e insertos `[V]`. CAD avançado C Mold Design e Mold Wizard `[C]`.
 - **Como funciona:** classifica faces por normal contra a direção de abertura, extrai a silhueta como linha de partição, fecha furos com Fill (existe) e divide o bloco com Split (existe).
 - **Libs abertas:** nenhuma específica.
 - **Viabilidade:** M para análise e divisão. G para base de molde com biblioteca.
@@ -249,7 +249,7 @@ O projeto tem Rust + egui. As libs C++ (Netgen, OpenCAMLib, OpenVDB) exigem FFI 
 ### 2.14 Branch, merge e comparação de documentos (BN14)
 
 - **O que é:** ramificar um projeto para experimentar, comparar e mesclar de volta com resolução de conflito.
-- **Quem tem:** Onshape: branches são espaços de trabalho. O merge pode substituir, mesclar tudo ou manter o alvo, por aba, e compara contra o ponto de ramificação. Em Part Studio e montagem, itens novos ou apagados persistem. Desenhos e formatos não nativos são substituídos por inteiro `[V]`.
+- **Quem tem:** CAD avançado E: branches são espaços de trabalho. O merge pode substituir, mesclar tudo ou manter o alvo, por aba, e compara contra o ponto de ramificação. Em Part Studio e montagem, itens novos ou apagados persistem. Desenhos e formatos não nativos são substituídos por inteiro `[V]`.
 - **Como funciona (proposta):** ao salvar, cada feature tem uid e hash. O merge de 3 vias compara base × ramo A × ramo B por uid. Conflitos aparecem por feature, com parâmetros lado a lado.
 - **Libs abertas:** `similar`/`diffy` (MIT) `[C]`. A lógica é própria.
 - **Viabilidade:** M-G.
@@ -258,7 +258,7 @@ O projeto tem Rust + egui. As libs C++ (Netgen, OpenCAMLib, OpenVDB) exigem FFI 
 ### 2.15 Features por script (BN15)
 
 - **O que é:** o usuário escreve um recurso novo (com parâmetros tipados e ícone) que entra na árvore e recalcula como qualquer feature.
-- **Quem tem:** Onshape FeatureScript. A versão 2026 melhorou navegação no Feature Studio, busca na biblioteca padrão e símbolos `[V]`. SOLIDWORKS e Inventor oferecem API/iLogic `[V parcial]`.
+- **Quem tem:** CAD avançado E FeatureScript. A versão 2026 melhorou navegação no Feature Studio, busca na biblioteca padrão e símbolos `[V]`. CAD avançado A e CAD avançado C oferecem API/iLogic `[V parcial]`.
 - **Como funciona:** o script recebe contexto (faces selecionadas, parâmetros) e devolve operações do núcleo. O Fenkra grava o script no documento com versão.
 - **Libs abertas:** Rhai (MIT/Apache) é fácil de embutir, mas o sandbox é limitado `[V]`. WASM (wasmtime, Apache-2.0 `[C]`) dá isolamento real. As duas dão determinismo desde que sem I/O.
 - **Viabilidade:** G.
@@ -270,8 +270,8 @@ O projeto tem Rust + egui. As libs C++ (Netgen, OpenCAMLib, OpenVDB) exigem FFI 
 - **Quem tem:**
   - FreeCAD FEM: CalculiX (padrão), Elmer, Mystran e Z88 como solvers; malhas por Netgen e Gmsh `[V]`. A versão 1.1 trouxe eletromagnetismo, filtros de pós-processamento, membrana/treliça e contato *tied/hard* `[V]`.
   - Fusion: estático, modal, flambagem, térmico, tensão térmica, otimização de forma, não linear e evento `[V]`.
-  - Onshape: simulação estática linear na nuvem, agora assíncrona `[V]`.
-  - Inventor Nastran `[V]`.
+  - CAD avançado E: simulação estática linear na nuvem, agora assíncrona `[V]`.
+  - CAD avançado C Nastran `[V]`.
 - **Como funciona:** gerar malha → escrever o arquivo de entrada do solver → rodar o executável → ler resultados → colorir no viewport.
 - **Libs abertas:**
   - **Malha:** Netgen (LGPL-2.1, embutível) `[V]`. Gmsh é GPL e fica fora `[V]`.
@@ -287,7 +287,7 @@ O projeto tem Rust + egui. As libs C++ (Netgen, OpenCAMLib, OpenVDB) exigem FFI 
 ### 2.17 Otimização topológica (BN17)
 
 - **O que é:** remover material de baixa tensão sob cargas e restrições. Gera forma orgânica para impressão ou fundição.
-- **Quem tem:** Fusion generative design, que gera e testa centenas de alternativas `[V]`. Creo Generative Topology Optimization e Generative Design (nuvem) `[V]`.
+- **Quem tem:** Fusion generative design, que gera e testa centenas de alternativas `[V]`. CAD avançado F Generative Topology Optimization e Generative Design (nuvem) `[V]`.
 - **Libs abertas:** `topopt` (Rust, MIT) é só 2D `[V]`. Kratos tem módulo SIMP `[V]`, licença não confirmada.
 - **Viabilidade:** G. Depende de BN16 em 3D.
 - **Riscos e deps:** pós-processamento (suavizar, voltar a B-rep) é difícil. P3.
@@ -295,7 +295,7 @@ O projeto tem Rust + egui. As libs C++ (Netgen, OpenCAMLib, OpenVDB) exigem FFI 
 ### 2.18 Exportação IFC e ligações de aço (civil) (BN18) — reabre BIM
 
 - **O que é:** (a) exportar estrutura soldada como IFC (`IfcMember`, `IfcPlate`) para coordenar com projeto civil; (b) verificar ligações parafusadas e soldadas (chapa de ligação, pernos, filetes) com cálculo à mão.
-- **Quem tem:** FreeCAD BIM/Arch e o addon Reinforcement (armaduras) `[V]`. BricsCAD BIM `[V, fonte de revenda]`.
+- **Quem tem:** FreeCAD BIM/Arch e o addon Reinforcement (armaduras) `[V]`. CAD avançado BIM `[V, fonte de revenda]`.
 - **Libs abertas:** IfcOpenShell: núcleo LGPL-3.0+, com IFC4x3 e API C++/Python `[V]`. Bonsai é GPL-3 `[V]`, só estudar.
 - **Viabilidade:** M para export IFC. M-G para verificação de ligação.
 - **Riscos e deps:** BIM é não-objetivo. Limitar a export de estrutura. Normas NBR 8800 e NBR 6118 exigem revisão técnica `[C]`. Deps: B27, B26, B87.
@@ -303,7 +303,7 @@ O projeto tem Rust + egui. As libs C++ (Netgen, OpenCAMLib, OpenVDB) exigem FFI 
 ### 2.19 Compósitos (laminados) (BN19)
 
 - **O que é:** camadas (plies) por zona, direção de fibra e espessura variável. Simula *draping* para detectar cisalhamento excessivo, gera o padrão plano de cada camada e o ply book.
-- **Quem tem:** Creo Composite Design: draping, plano de corte, DXF e ply book automático `[V]`. CATIA Composites `[V parcial]`. Fibersim e FEMPLY `[V]`.
+- **Quem tem:** CAD avançado F Composite Design: draping, plano de corte, DXF e ply book automático `[V]`. CAD avançado B Composites `[V parcial]`. Fibersim e FEMPLY `[V]`.
 - **Libs abertas:** não achei biblioteca aberta madura. O algoritmo clássico (fishnet) é implementável `[C]`.
 - **Viabilidade:** G. Nicho aeronáutico.
 - **Riscos e deps:** exige superfície de molde (OML) robusta. Deps: B04, B34, B86. P3.
@@ -311,7 +311,7 @@ O projeto tem Rust + egui. As libs C++ (Netgen, OpenCAMLib, OpenVDB) exigem FFI 
 ### 2.20 Chicotes e cabos (BN20)
 
 - **O que é:** rota de fios e feixes em 3D, lista de fios, achatamento (formboard) e desenho de chicote.
-- **Quem tem:** SOLIDWORKS Routing elétrico `[V]`. Inventor Cable & Harness `[V catálogo]`. CATIA Electrical Harness (montagem, instalação, achatamento) `[V, fonte não oficial]`. Troca de dados padrão: VEC (VDA 4968 / PSI 21) e KBL `[V]`.
+- **Quem tem:** CAD avançado A Routing elétrico `[V]`. CAD avançado C Cable & Harness `[V catálogo]`. CAD avançado B Electrical Harness (montagem, instalação, achatamento) `[V, fonte não oficial]`. Troca de dados padrão: VEC (VDA 4968 / PSI 21) e KBL `[V]`.
 - **Libs abertas:** o esquema VEC é público. A licença do esquema não foi verificada.
 - **Viabilidade:** G. Sem ECAD embutido, a lista de fios entra manual ou por CSV.
 - **Riscos e deps:** nicho. P3.
@@ -319,7 +319,7 @@ O projeto tem Rust + egui. As libs C++ (Netgen, OpenCAMLib, OpenVDB) exigem FFI 
 ### 2.21 Render e comunicação visual (BN21) — toca um não-objetivo
 
 - **O que é:** imagem de qualidade com materiais, luzes e sombras.
-- **Quem tem:** Onshape Render Studio: câmera, luz, conjuntos de aparência, render em lote `[V]`. SOLIDWORKS Visualize `[V]`. FreeCAD Render usa renderizadores externos (Cycles standalone, LuxCore, Pov-Ray, Appleseed, OSPRay). O mantenedor parou de manter em nov/2025 `[V]`.
+- **Quem tem:** CAD avançado E Render Studio: câmera, luz, conjuntos de aparência, render em lote `[V]`. CAD avançado A Visualize `[V]`. FreeCAD Render usa renderizadores externos (Cycles standalone, LuxCore, Pov-Ray, Appleseed, OSPRay). O mantenedor parou de manter em nov/2025 `[V]`.
 - **Libs abertas:** Cycles (Apache-2.0) `[V]`, Embree (Apache-2.0) `[V]`, OIDN `[C]`.
 - **Recomendação:** não perseguir fotorrealismo. Melhorar o viewport em tempo real (sombra suave, oclusão de ambiente, PBR por material da biblioteca). Exportar glTF para Blender/Cycles.
 - **Viabilidade:** M (viewport) / G (renderizador próprio).
@@ -327,16 +327,16 @@ O projeto tem Rust + egui. As libs C++ (Netgen, OpenCAMLib, OpenVDB) exigem FFI 
 
 ### 2.22 ERP, liberação e ECAD (BN22–BN23)
 
-- **ERP/ECO:** OpenBOM entrega EBOM ao Odoo (itens e BOMs, com anexos STEP/PDF) e valida o EBOM antes do ERP `[V]`. A integração Onshape–Arena executa o fluxo de liberação e mudança com PN sincronizado e PDFs sem marca-d'água `[V]`. O Fenkra não terá servidor (não-objetivo), mas pode exportar **pacote de liberação** (STEP + PDF + DXF + BOM em CSV/JSON/XML) e um registro de ECR/ECN em arquivo. Deps: B25, B47, B93. Viabilidade M.
+- **ERP/ECO:** OpenBOM entrega EBOM ao Odoo (itens e BOMs, com anexos STEP/PDF) e valida o EBOM antes do ERP `[V]`. A integração CAD avançado E–Arena executa o fluxo de liberação e mudança com PN sincronizado e PDFs sem marca-d'água `[V]`. O Fenkra não terá servidor (não-objetivo), mas pode exportar **pacote de liberação** (STEP + PDF + DXF + BOM em CSV/JSON/XML) e um registro de ECR/ECN em arquivo. Deps: B25, B47, B93. Viabilidade M.
 - **ECAD–MCAD:** IDX é o protocolo moderno (leva intenção de projeto, não só geometria). O suporte no KiCad ainda é um merge request aberto, só recebendo, com possível release em 2027 `[V]`. Hoje o fluxo é STEP, como o KiCad StepUp `[V]`. O Fenkra pode importar STEP de PCB (B88), extrair contorno e furos para sketch e checar interferência. Viabilidade P-M. P3.
 
 ### 2.23 Camada de IA (BN24–BN25)
 
 Panorama `[V, fontes agregadoras e de fornecedor]`:
-- **Assistentes dentro do CAD ajudam a usar o software.** SOLIDWORKS AURA, Onshape AI Advisor (ajuda), Solid Edge Copilot, Autodesk Assistant (preview com extrusões e filetes), BricsCAD Assist e PARAMETRIZE.
+- **Assistentes dentro do CAD ajudam a usar o software.** CAD avançado A AURA, CAD avançado E AI Advisor (ajuda), CAD avançado H Copilot, fornecedor de CAD avançado Assistant (preview com extrusões e filetes), CAD avançado Assist e PARAMETRIZE.
 - **Geração de geometria por texto** vem de ferramentas dedicadas, como a Zoo, que gera STEP editável. O app e a linguagem KCL são MIT, mas o **motor geométrico é hospedado e fechado** `[V]`.
-- **Desenhos automáticos:** SOLIDWORKS 2026 e Solid Edge 2026 geram desenhos 2D completos de peças e montagens `[V]`.
-- **Reconhecimento de features:** o BricsCAD melhorou o reconhecimento de chapa e reparo local em 2026 `[V]`.
+- **Desenhos automáticos:** CAD avançado A 2026 e CAD avançado H 2026 geram desenhos 2D completos de peças e montagens `[V]`.
+- **Reconhecimento de features:** o CAD avançado melhorou o reconhecimento de chapa e reparo local em 2026 `[V]`.
 
 Proposta realista para o Fenkra, sem depender de nuvem:
 1. **Interfaces estáveis para agentes.** CLI/JSON (B39) com esquema versionado e opcionalmente um servidor de ferramentas. Qualquer LLM do usuário passa a dirigir o Fenkra.
@@ -348,7 +348,7 @@ Viabilidade: M para cada item. O ganho de IA generativa de geometria é incerto 
 ### 2.24 Visualizador web autocontido (BN26)
 
 - **O que é:** exportar um HTML com modelo, árvore de montagem, medição e seção, para revisão por quem não tem o Fenkra.
-- **Quem tem:** Onshape é nativo web. cadasio publica ilustrações interativas `[V]`.
+- **Quem tem:** CAD avançado E é nativo web. cadasio publica ilustrações interativas `[V]`.
 - **Libs abertas:** glTF + visualizador em JS. Compilar o OCCT para WASM exige cuidado: um mantenedor do OCCT respondeu que a LGPL **não tem exceção para WASM**; a saída é módulo separado carregado dinamicamente ou licença comercial `[V]`.
 - **Recomendação:** só o visualizador de malha (sem kernel) é seguro. Edição na web fica fora.
 - **Viabilidade:** M. P2–P3.
@@ -356,15 +356,15 @@ Viabilidade: M para cada item. O ganho de IA generativa de geometria é incerto 
 ### 2.25 Sustentabilidade (BN27)
 
 - **O que é:** pegada de carbono e energia por material e processo.
-- **Quem tem:** SOLIDWORKS Sustainability, baseado na base GaBi (proprietária) com métodos CML/TRACI `[V]`.
+- **Quem tem:** CAD avançado A Sustainability, baseado na base GaBi (proprietária) com métodos CML/TRACI `[V]`.
 - **Libs abertas:** não confirmei base aberta equivalente.
 - **Recomendação:** campo "kg CO₂e/kg" na tabela de materiais (B92), preenchido pelo usuário, somado na BOM. P3, P.
 
 ### 2.26 Módulos não recomendados agora
 
-- **Ergonomia/humano** (CATIA Human Builder `[C]`): nicho e dependente de bibliotecas antropométricas.
+- **Ergonomia/humano** (CAD avançado B Human Builder `[C]`): nicho e dependente de bibliotecas antropométricas.
 - **Navio** (FreeCAD Ship `[V]`): fora do perfil.
-- **CAM** (FreeCAD CAM com OpenCAMLib LGPL-2.1+ `[V]`; Onshape CAM Studio `[V]`; Fusion Manufacturing `[V]`): não-objetivo. Se um dia reabrir, `cavalier_contours` (MIT/Apache) cobre offset 2D com arcos e ilhas, mas só com junta arredondada e booleanas entre duas polilinhas fechadas `[V]`. OpenCAMLib cobre 3D. Pós-processadores e simulação de remoção são o grosso do trabalho.
+- **CAM** (FreeCAD CAM com OpenCAMLib LGPL-2.1+ `[V]`; CAD avançado E CAM Studio `[V]`; Fusion Manufacturing `[V]`): não-objetivo. Se um dia reabrir, `cavalier_contours` (MIT/Apache) cobre offset 2D com arcos e ilhas, mas só com junta arredondada e booleanas entre duas polilinhas fechadas `[V]`. OpenCAMLib cobre 3D. Pós-processadores e simulação de remoção são o grosso do trabalho.
 
 ---
 
@@ -374,7 +374,7 @@ Itens ausentes do catálogo (alpha.26) e do backlog, por bancada. O que veio de 
 
 ### Sketch
 - **Auto-escala ao colocar a primeira cota** e **detecção automática de contornos com faces selecionáveis** ao sair do sketch (opções do FreeCAD 1.1) `[V]`. Reduzem cliques.
-- **Restrição de fluxo (Flow constraint)** no sketch (Onshape 1.223) `[V]`.
+- **Restrição de fluxo (Flow constraint)** no sketch (CAD avançado E 1.223) `[V]`.
 - **Imagem de referência calibrada** no plano do sketch (escala por duas pontos) `[C]`.
 - **Curvas por equação e ajuste de spline a pontos** `[C]`.
 - **Blocos de sketch reutilizáveis** com pontos de conexão `[C]`.
@@ -390,13 +390,13 @@ Itens ausentes do catálogo (alpha.26) e do backlog, por bancada. O que veio de 
 - **Mapa de desvio e curvatura** já está em B34. Falta **ferramenta de seleção por proximidade** (lista objetos sob o cursor e deixa os obstrutivos transparentes, FreeCAD 1.1 *Clarify Selection*) `[V]`, que se soma ao B95.
 
 ### Chapa
-- **Loft de chapa (aba entre perfis) e jog** foram lançados no Onshape em 2026 (1.210 e 1.220) `[V]`. Confirmam B35.
+- **Loft de chapa (aba entre perfis) e jog** foram lançados no CAD avançado E em 2026 (1.210 e 1.220) `[V]`. Confirmam B35.
 - **Tabelas de fator K como arquivo** (CSV/planilha, normas ANSI/DIN) e **modo de engenharia** que exige K explícito (FreeCAD SheetMetal) `[V]`. Entra em B77.
 - **Perfuração de dobra (bend perforation)**, **auto-esquadro (miter)** e **hem** (FreeCAD SheetMetal) `[V]`.
-- **Reparo local de chapa e reconhecimento melhorado** (BricsCAD V26.2: SMREPAIR) `[V]`.
-- **Decomposição de dobras em loft** importadas em abas múltiplas (BricsCAD) `[V]`.
+- **Reparo local de chapa e reconhecimento melhorado** (CAD avançado V26.2: SMREPAIR) `[V]`.
+- **Decomposição de dobras em loft** importadas em abas múltiplas (CAD avançado) `[V]`.
 - **Abas e rasgos de encaixe (tab and slot)**, **corte normal** e **desdobramento com notas de dobra** `[C]`.
-- **Matriz progressiva e layout de tira** para chapa estampada (NX PDW) `[V]`. P3.
+- **Matriz progressiva e layout de tira** para chapa estampada (CAD avançado G PDW) `[V]`. P3.
 
 ### Estrutural e soldas
 - **Corrimão, escada e guarda-corpo paramétricos** (NR-12, NBR 14718 `[C]`): alto valor industrial no Brasil.
@@ -404,24 +404,24 @@ Itens ausentes do catálogo (alpha.26) e do backlog, por bancada. O que veio de 
 - **Mapa de soldas com comprimento por processo** (alimenta BN06).
 
 ### Montagem
-- **Posições nomeadas** de montagem, com associação ao contexto (Onshape 1.209) `[V]`. Útil para configurações de mecanismo (flap recolhido/estendido).
-- **Designador de referência** como propriedade de instância (Onshape 1.218) `[V]`.
-- **Supressão de instância por expressão** (Onshape 1.221) `[V]`.
-- **Travar subconjuntos com peças defeituosas** (Onshape 1.222) `[V]`.
-- **Indicador persistente de centro de massa** (Onshape 1.219/1.222) `[V]`.
-- **Encaixe magnético** (Solid Edge 2026, inferência por IA) `[V]`. Já coberto em intenção por B99.
+- **Posições nomeadas** de montagem, com associação ao contexto (CAD avançado E 1.209) `[V]`. Útil para configurações de mecanismo (flap recolhido/estendido).
+- **Designador de referência** como propriedade de instância (CAD avançado E 1.218) `[V]`.
+- **Supressão de instância por expressão** (CAD avançado E 1.221) `[V]`.
+- **Travar subconjuntos com peças defeituosas** (CAD avançado E 1.222) `[V]`.
+- **Indicador persistente de centro de massa** (CAD avançado E 1.219/1.222) `[V]`.
+- **Encaixe magnético** (CAD avançado H 2026, inferência por IA) `[V]`. Já coberto em intenção por B99.
 - **Distância mínima/folga entre conjuntos selecionados** e **volume varrido** `[C]`.
-- **Percurso imersivo (Walkthrough)** do Solid Edge 2026 `[V]`. Baixa prioridade.
+- **Percurso imersivo (Walkthrough)** do CAD avançado H 2026 `[V]`. Baixa prioridade.
 
 ### Desenho técnico
-- **Replicar anotações entre vistas** (Onshape 1.213, beta) e **replicar chamadas de furo e rosca** (1.218) `[V]`.
-- **Cota de comprimento de arco, meia cota de diâmetro e vista auxiliar por eixo** (Onshape 1.216/1.222) `[V]`.
-- **Símbolos de condição de borda ISO 13715** (Onshape 1.223) `[V]`.
-- **Símbolos de acabamento com até 7 linhas** (Onshape 1.220) `[V]`.
-- **Vistas sugeridas que posicionam as anotações MBD sozinhas** (Onshape 1.220) `[V]`.
-- **Controles de tolerância +/+ e −/−** (Onshape 1.213) `[V]`. Complementa B108.
-- **Copiar folhas entre desenhos** (Onshape 1.218) `[V]`.
-- **Desenho automático completo** (SOLIDWORKS 2026, Solid Edge 2026) `[V]`. Ver BN25.
+- **Replicar anotações entre vistas** (CAD avançado E 1.213, beta) e **replicar chamadas de furo e rosca** (1.218) `[V]`.
+- **Cota de comprimento de arco, meia cota de diâmetro e vista auxiliar por eixo** (CAD avançado E 1.216/1.222) `[V]`.
+- **Símbolos de condição de borda ISO 13715** (CAD avançado E 1.223) `[V]`.
+- **Símbolos de acabamento com até 7 linhas** (CAD avançado E 1.220) `[V]`.
+- **Vistas sugeridas que posicionam as anotações MBD sozinhas** (CAD avançado E 1.220) `[V]`.
+- **Controles de tolerância +/+ e −/−** (CAD avançado E 1.213) `[V]`. Complementa B108.
+- **Copiar folhas entre desenhos** (CAD avançado E 1.218) `[V]`.
+- **Desenho automático completo** (CAD avançado A 2026, CAD avançado H 2026) `[V]`. Ver BN25.
 - **Explodida e BOM em páginas de desenho** (FreeCAD TechDraw 1.0) `[V]`. O Fenkra já tem explodida e BOM; falta o encaixe no desenho.
 - **Exportar linha oculta para desenho técnico** (Plasticity 2026.1) `[V]`.
 
@@ -429,17 +429,17 @@ Itens ausentes do catálogo (alpha.26) e do backlog, por bancada. O que veio de 
 - **Exportação STEP AP242 com PMI semântico** e **plano de inspeção a partir do PMI** (BN05). O B87 prepara a ponte XDE.
 
 ### Biblioteca de normas
-- **Motores elétricos** (carcaças IEC/NEMA) `[C]`, **correntes e rodas dentadas** (ISO 606) `[C]`, **correias e polias** (síncronas e trapezoidais) `[C]`, **molas** (gerador), **O-rings e canais** (ISO 3601) `[C]`, **perfis de alumínio** com ranhura em T `[C]`, **parafusos de potência trapezoidais**, **flanges** (ASME B16.5, EN 1092) `[C]`, **estriados** (calculadora no Inventor 2026 `[V]`).
+- **Motores elétricos** (carcaças IEC/NEMA) `[C]`, **correntes e rodas dentadas** (ISO 606) `[C]`, **correias e polias** (síncronas e trapezoidais) `[C]`, **molas** (gerador), **O-rings e canais** (ISO 3601) `[C]`, **perfis de alumínio** com ranhura em T `[C]`, **parafusos de potência trapezoidais**, **flanges** (ASME B16.5, EN 1092) `[C]`, **estriados** (calculadora no CAD avançado C 2026 `[V]`).
 - **Inserts de chapa (PEM) e insertos de rosca para impressão** (FreeCAD Fasteners) `[V]`.
 - **Compensação de rosca para impressão 3D, busca de fixadores, simplificar fixador para troca de arquivos e geração de BOM** (FreeCAD Fasteners) `[V]`.
-- **Fixadores reconhecidos e associados automaticamente mesmo sem biblioteca** (SOLIDWORKS 2026) `[V]`. O Fenkra tem B29/B58/B98.
+- **Fixadores reconhecidos e associados automaticamente mesmo sem biblioteca** (CAD avançado A 2026) `[V]`. O Fenkra tem B29/B58/B98.
 
 ### Navegação, interface e geral
 - **Versionamento e migração de arquivos de configuração** (FreeCAD 1.1) `[V]`. Já coberto por B64/B100.
 - **Iluminação em três pontos** no viewport (FreeCAD 1.1) `[V]`.
-- **Tabelas de variáveis lidas de CSV** (Onshape 1.209) `[V]`. Casa com B101 e B102.
-- **Comentários ancorados na geometria e em vistas de desenho** (Onshape 1.222) `[V]`. Para revisão de projeto sem servidor, via arquivo anexo.
-- **Notificação e fila de tarefas assíncronas** (Onshape Simulation assíncrono) `[V]`. Útil para BN04 e BN16.
+- **Tabelas de variáveis lidas de CSV** (CAD avançado E 1.209) `[V]`. Casa com B101 e B102.
+- **Comentários ancorados na geometria e em vistas de desenho** (CAD avançado E 1.222) `[V]`. Para revisão de projeto sem servidor, via arquivo anexo.
+- **Notificação e fila de tarefas assíncronas** (CAD avançado E Simulation assíncrono) `[V]`. Útil para BN04 e BN16.
 
 ---
 
@@ -488,7 +488,7 @@ IDs "BN" para não colidir com B01–B109. Prioridades: P0 quebra o uso, P1 impo
 | BN26 | Visualizador HTML autocontido | Comunicação | glTF + visualizador JS, árvore, medição, seção. Sem kernel. | P2 | 250 | B87, BN21 |
 | BN27 | Pegada de carbono por material | Sustentabilidade | Campo kg CO₂e/kg em materiais e soma na BOM. | P3 | 80 | B92 |
 | BN28 | Recursos de plástico (boss, snap, grelha, lip) | Sólidos | Features compostas parametrizadas. | P2 | 250 | B06, B11, B48 |
-| BN29 | Recursos de desenho do Onshape | Desenho | Replicar anotações, meia cota, arco, ISO 13715, acabamento multilinha. | P2 | 250 | B107, B81 |
+| BN29 | Recursos de desenho do CAD avançado E | Desenho | Replicar anotações, meia cota, arco, ISO 13715, acabamento multilinha. | P2 | 250 | B107, B81 |
 | BN30 | Bibliotecas de máquinas (correntes, correias, motores, O-rings, perfis T) | Biblioteca | Novas famílias sobre o modelo genérico, com nível de dado A/B/C. | P2 | 400 | B42 |
 
 **Soma aproximada:** cerca de 10 milhões de tokens, equivalente a um terço do backlog atual (≈25,8 M). Como ordem de entrega, recomendo BN03, BN02, BN04, BN01, BN06 e BN05. Esses entregam o maior valor com o menor risco de licença e sem reabrir não-objetivo.
@@ -512,47 +512,47 @@ IDs "BN" para não colidir com B01–B109. Prioridades: P0 quebra o uso, P1 impo
 - https://github.com/shaise/FreeCAD_SheetMetal
 - https://github.com/shaise/FreeCAD_FastenersWB
 
-### Onshape
-- https://www.onshape.com/en/changelog/
-- https://cad.onshape.com/help/Content/Document/merging.htm
-- https://onshape.com/en/features/onshape-arena-connection
-- https://forum.onshape.com/discussion/comment/132178/
-- https://www.digitalengineering247.com/article/ptc-adds-designer-targeted-simulation-to-cloud-cad-onshape/simulate
+### CAD avançado E
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 
 ### Fusion
-- https://www.autodesk.com/products/fusion-360/blog/fusion-roadmap-2026/
-- https://www.autodesk.com/products/fusion-360/simulation-extension
-- https://www.autodesk.com/products/fusion-360/manufacturing-extension.html
-- https://www.themanufacturer.com/articles/autodesk-expands-fusion-capabilities-leveraging-ai-to-unlock-automation-and-creativity-across-design-and-make/
-- https://static.au-uw2-stg.autodesk.com/Class_Handout_IM463460.pdf
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 
-### SOLIDWORKS
-- https://discover.solidworks.com/whats-new-in-solidworks-2026
-- https://www.technia.com/en/resources/solidworks-latest-version/
-- https://www.solidsolutions.co.uk/the-top-10-best-new-features-solidworks-2026-whats-new/
-- https://help.solidworks.com/2023/English/SolidWorks/Sldworks/c_costing_overview.htm
-- https://help.solidworks.com/2020/English/SolidWorks/sldworks/c_Mold_Design_Tools_Overview.htm
-- https://www.javelin-tech.com/blog/2015/12/dfmxpress-solidworks-design-for-manufacturability/
-- https://www.javelin-tech.com/3d/technology/solidworks-sustainability/
-- https://www.cati.com/?p=124333 (SOLIDWORKS Inspection)
+### CAD avançado A
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- https://www.cati.com/?p=124333 (CAD avançado A Inspection)
 
-### Solid Edge, Inventor, CATIA, Creo, NX, outros CAD
-- https://blogs.sw.siemens.com/solidedge/designcenter-solid-edge-2026/
+### CAD avançado H, CAD avançado C, CAD avançado B, CAD avançado F, CAD avançado G, outros CAD
+- (fonte em procedencia.md)
 - https://www.designworldonline.com/solid-edge-st3-delivers-new-ways-to-produce-better-designs-faster/
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-WhatsNew/files/INV2026-WHATS-NEW-ASSEMBLIES.htm
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-DA656EDC-7762-45F7-815F-75A8D80062E0.htm
-- https://arkance.world/gb-en/resources/read/blogs/autodesk-inventor-2026-performance-modelling-and-interoperability-improvements
-- https://plm-service.web.cern.ch/how-to/catia-workbenches
-- https://www.scribd.com/document/259636122/Workbench-Inventory
-- https://support.ptc.com/help/creo/creo_pma/r13/usascii/composite_design/draping_simulation.html
-- https://www.4cadgroup.com/en-ca/products/creo-generative-design-extension
-- https://www.plm.automation.siemens.com/en_us/Images/wp_nx_prog_die_wizard_tcm1023-4504.pdf
-- https://blog.cadsoftwaredirect.com/?p=9983 (BricsCAD V26)
-- https://www.digitalengineering247.com/article/octave-bricscad-v26.2-release-unveiled-ntroduces-30-new-and-enhanced-features
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- https://blog.cadsoftwaredirect.com/?p=9983 (CAD avançado V26)
+- (fonte em procedencia.md)
 - https://digitalproduction.com/2026/10/21/plasticity-2026-2
 - https://en.wikipedia.org/wiki/Shapr3D
-- https://www.ptc.com/en/products/arbortext/isodraw
-- https://support.ptc.com/help/creo/creoillustrate/en/creo_illustrate/gxy1.html
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 - https://www.fabbaloo.com/2020/08/cadasio-interactive-technical-illustrations-of-cad-data
 
 ### IA, nuvem, ERP, ECAD, impressão 3D
@@ -607,12 +607,12 @@ IDs "BN" para não colidir com B01–B109. Prioridades: P0 quebra o uso, P1 impo
 - **Verificações:** cada item de backlog foi cruzado com B01–B109 e com o catálogo para evitar repetição.
 - **Falhas e limites:**
   - A wiki do FreeCAD ficou bloqueada.
-  - Faltaram fontes para NX Mold Wizard e Routing, CATIA Mold e Human, ZW3D, Solid Edge Frame/Piping/Harness 2026, Creo 12/13 e SU2.
-  - Parte dos recursos de SOLIDWORKS, Inventor, CATIA e Composer vem de conhecimento prévio e está marcada `[C]`.
+  - Faltaram fontes para CAD avançado G Mold Wizard e Routing, CAD avançado B Mold e Human, ZW3D, CAD avançado H Frame/Piping/Harness 2026, CAD avançado F 12/13 e SU2.
+  - Parte dos recursos de CAD avançado A, CAD avançado C, CAD avançado B e Composer vem de conhecimento prévio e está marcada `[C]`.
 - **Riscos:**
   - BN16 (FEM), BN18 (IFC) e BN21 (render) tocam não-objetivos da `visao.md` e precisam de decisão do mantenedor.
   - Toda leitura de licença exige validação jurídica, principalmente a execução de GPL/AGPL como processo separado.
   - A documentação do Fenkra ainda cita C++/Qt (ADR 0002), enquanto o projeto usa Rust/egui. Conferi as propostas contra a stack Rust, mas o ADR pode estar desatualizado.
 
 STATUS: DONE_WITH_CONCERNS
-SUMMARY: Relatório entregue com 15 oportunidades, 27 módulos novos com licenças verificadas, recursos por bancada e 38 itens de backlog; ressalvas: wiki do FreeCAD bloqueada, fontes ausentes para NX Mold, CATIA Mold e ZW3D, e três propostas (FEM, IFC, render) reabrem não-objetivos que o mantenedor precisa decidir.
+SUMMARY: Relatório entregue com 15 oportunidades, 27 módulos novos com licenças verificadas, recursos por bancada e 38 itens de backlog; ressalvas: wiki do FreeCAD bloqueada, fontes ausentes para CAD avançado G Mold, CAD avançado B Mold e ZW3D, e três propostas (FEM, IFC, render) reabrem não-objetivos que o mantenedor precisa decidir.

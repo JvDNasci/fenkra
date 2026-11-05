@@ -10,7 +10,7 @@
 **Resumo**
 
 1. O Fenkra tem 6 famílias de fixadores (Allen ISO 4762, sextavado ISO 4017/DIN 933, porca ISO 4032/DIN 934, arruela ISO 7089), todas M3–M20, mais a chaveta DIN 6885 A. O tipo é um `enum` fechado de 4 valores (`biblioteca.rs:24-29`). Cada tipo tem um gerador escrito à mão (`fixadores.rs:50-55`).
-2. Isso é o oposto do que SolidWorks Toolbox, Inventor Content Center e catálogos CATIA fazem. Nesses três, a família é dado (tabela + chaves + propriedades) e o gerador é um modelo paramétrico reaproveitado. Para o Fenkra passar de 6 para 100+ famílias sem escrever uma função Rust por norma, é preciso um modelo de dados **genérico**. Ele deve ter famílias com campos livres, geradores nomeados, designações não métricas, propriedades (PN, descrição, material, classe de resistência) e publicações do fixador.
+2. Isso é o oposto do que CAD avançado A biblioteca de normas, CAD avançado C Content Center e catálogos CAD avançado B fazem. Nesses três, a família é dado (tabela + chaves + propriedades) e o gerador é um modelo paramétrico reaproveitado. Para o Fenkra passar de 6 para 100+ famílias sem escrever uma função Rust por norma, é preciso um modelo de dados **genérico**. Ele deve ter famílias com campos livres, geradores nomeados, designações não métricas, propriedades (PN, descrição, material, classe de resistência) e publicações do fixador.
 3. O preenchedor de furos (`preencher_furos`) é bom em pilha, pega, comprimento e restrições. Mas só entende rosca métrica M3–M20. Não vê rebaixo nem escareado (`HoleRow` não traz esses dados, `lib.rs:5059`). Sempre põe Allen + arruela, e não deixa trocar a pilha depois.
 4. A tabela de comprimentos aceita só `2·d ≤ L ≤ 10·d`. Isso corta comprimentos reais de catálogo (M6 vai até 100 mm ou mais; 10·d = 60) e não serve a parafusos curtos de cabeça baixa.
 5. Não existem: pinos, anéis elásticos, chaveta Woodruff/cônica, prisioneiros, autotravantes, flangeados, Belleville/dentada/pressão, insertos, rebites, clinch PEM, nem polegada ASME/UNC.
@@ -28,7 +28,7 @@
 
 ### 2.0 Modelo de dados nos CADs de referência
 
-**SolidWorks Toolbox [V]:**
+**CAD avançado A biblioteca de normas [V]:**
 - O conteúdo é agrupado por **norma** e, dentro dela, por **pastas/tipos** (ex.: ISO › parafusos de cabeça sextavada).
 - Cada componente tem lista de **tamanhos** e **comprimentos**. O administrador pode desligar opções ou acrescentar customizadas.
 - Os dados de rosca são geridos à parte: um tamanho novo de parafuso costuma exigir entrada nova de rosca.
@@ -41,10 +41,10 @@
 - **Propriedades personalizadas** podem ser texto ou lista, específicas da configuração ou não. Podem aparecer no PropertyManager e como colunas da BOM.
 - O **material** é uma propriedade em lista ligada à biblioteca de materiais.
 - Há "hardware definido pelo usuário": copia-se um componente e acrescentam-se features abaixo da árvore existente.
-- O **Hole Wizard** usa os mesmos dados do Toolbox (diâmetro de furo, rebaixo, rosca, broca).
-- O Smart Fasteners lê esses furos. Seus ajustes cobrem três coisas: dimensionamento de arruela no empilhamento superior, regras de cálculo de comprimento, e o fixador padrão usado em furos que não vêm do Hole Wizard.
+- O **assistente de furos** usa os mesmos dados do biblioteca de normas (diâmetro de furo, rebaixo, rosca, broca).
+- O fixadores inteligentes lê esses furos. Seus ajustes cobrem três coisas: dimensionamento de arruela no empilhamento superior, regras de cálculo de comprimento, e o fixador padrão usado em furos que não vêm do assistente de furos.
 
-**Inventor Content Center [V]:**
+**CAD avançado C Content Center [V]:**
 - A hierarquia é biblioteca (somente leitura ou leitura/escrita), **categoria**, **família**.
 - A caixa **Família** (ao inserir, ou "Mudar tamanho" no clique direito) tem:
   - aba Seleção, com os valores de cada parâmetro e miniatura;
@@ -63,23 +63,23 @@
   5. dados da família: nome, descrição, pasta onde os membros são salvos ao entrar na montagem, norma e revisão;
   6. miniatura;
   7. publicar.
-- Numa coluna de expressão da tabela de família, `{PARTNUMBER}` pode alimentar a Descrição (relatado em apostila da Autodesk) [V, fonte secundária].
-- A família pode ter o **modelo** substituído ("Replace Family Template"). O Inventor verifica se a peça serve de molde; se houver erro no mapeamento, mantém o modelo original.
+- Numa coluna de expressão da tabela de família, `{PARTNUMBER}` pode alimentar a Descrição (relatado em apostila da fornecedor de CAD avançado) [V, fonte secundária].
+- A família pode ter o **modelo** substituído ("Replace Family Template"). O CAD avançado C verifica se a peça serve de molde; se houver erro no mapeamento, mantém o modelo original.
 
-**CATIA V5 [V parcial, fontes de comunidade e universidade; resto C]:**
+**CAD avançado B [V parcial, fontes de comunidade e universidade; resto C]:**
 - Peça padrão = uma **CATPart paramétrica + tabela de projeto** (Excel/CSV) cujas primeiras colunas costumam ser `PartNumber` e `PartName` (City University, ainda do V5R5).
 - A tabela vira uma **família de componentes** dentro de um **catálogo** (capítulos → famílias → componentes). O catálogo é "resolvido" e os componentes são instanciados pelo Catalog Browser.
-- Um fórum relata um problema típico. Ao instanciar um membro de família de tabela de projeto, o CATIA cria uma CATPart nova a salvar, em vez de manter vínculo com o catálogo.
+- Um fórum relata um problema típico. Ao instanciar um membro de família de tabela de projeto, o CAD avançado B cria uma CATPart nova a salvar, em vez de manter vínculo com o catálogo.
 - O V5 não traz "fixador inteligente" de série. O catálogo anterior do projeto cita um complemento FASTJOINT [C].
 - Os recursos de referência de que o fixador precisa são **elementos de referência publicados** (eixo, plano de apoio, ponto), que a montagem usa em vez de geometria solta. O ADR 0010 do Fenkra já segue essa direção.
 - No Part Design, o **Hole** do V5 define diâmetro, rosca, escareado/rebaixo e profundidade, e é a fonte de dados para o fixador [C].
 
 **Outros:**
-- **Solid Edge [V]:** o comando *Fastener System* escolhe o furo de cima e o de baixo (eles dão diâmetro e direção). Filtra o banco por norma (ANSI/DIN/JIS) e monta o parafuso, o empilhamento de cima e o de baixo. O comprimento pode ser por extensão mínima (passante), engajamento mínimo (cego roscado) ou valor do usuário. Os dois primeiros se atualizam sozinhos. O fixador é uma feature no PathFinder, com Error Assistant se o comprimento deixar de servir. Permite exclusão por membro de família de montagem alternativa. Exige o banco Standard Parts configurado.
-- **Creo [V]:** a Intelligent Fastener Extension (IFX) trata parafusos, arruelas, porcas, **insertos** (prensado e roscado) e pinos. Cria os furos junto com a instalação e tem biblioteca customizável. Por padrão referencia geometria externa, e dá para desligar. Uma versão limitada e gratuita vem com o Creo.
-- **NX [V parcial]:** existe `FastenerAssy` com posição, direção, diâmetro, extensão e flag de cego. Em base de fórum, a biblioteca de máquinas precisa ser registrada.
+- **CAD avançado H [V]:** o comando *Fastener System* escolhe o furo de cima e o de baixo (eles dão diâmetro e direção). Filtra o banco por norma (ANSI/DIN/JIS) e monta o parafuso, o empilhamento de cima e o de baixo. O comprimento pode ser por extensão mínima (passante), engajamento mínimo (cego roscado) ou valor do usuário. Os dois primeiros se atualizam sozinhos. O fixador é uma feature no PathFinder, com Error Assistant se o comprimento deixar de servir. Permite exclusão por membro de família de montagem alternativa. Exige o banco Standard Parts configurado.
+- **CAD avançado F [V]:** a Intelligent Fastener Extension (IFX) trata parafusos, arruelas, porcas, **insertos** (prensado e roscado) e pinos. Cria os furos junto com a instalação e tem biblioteca customizável. Por padrão referencia geometria externa, e dá para desligar. Uma versão limitada e gratuita vem com o CAD avançado F.
+- **CAD avançado G [V parcial]:** existe `FastenerAssy` com posição, direção, diâmetro, extensão e flag de cego. Em base de fórum, a biblioteca de máquinas precisa ser registrada.
 - **Fusion [V]:** insere componentes do site McMaster-Carr e tem uma biblioteca nativa de fixadores.
-- **Onshape [V]:** o conteúdo padrão é nativo. Cada item traz um *mate connector* embutido, dá para inserir vários selecionando uma face, e editar PN/Descrição vale para toda a empresa na hora.
+- **CAD avançado E [V]:** o conteúdo padrão é nativo. Cada item traz um *mate connector* embutido, dá para inserir vários selecionando uma face, e editar PN/Descrição vale para toda a empresa na hora.
 
 ### 2.0b O que o Fenkra faz HOJE (resumo técnico)
 
@@ -103,11 +103,11 @@
 
 ## 3. Fichas por família / função
 
-Convenção de cada ficha: **Dados** = designação, campos mínimos e fontes. **CATIA/SW/Inv.** abreviam o comportamento descrito em 2.0 e dizem só o que é específico da família. **Hoje** cita arquivo:linha.
+Convenção de cada ficha: **Dados** = designação, campos mínimos e fontes. **CAD avançado B/CAD avançado A/Inv.** abreviam o comportamento descrito em 2.0 e dizem só o que é específico da família. **Hoje** cita arquivo:linha.
 
 ### 3.1 Parafusos
 
-### Parafuso sextavado, rosca parcial (CATIA: catálogo/CATPart / SW: Toolbox ISO 4014 / Inventor: CC ISO 4014 / Fenkra: ❌)
+### Parafuso sextavado, rosca parcial (CAD avançado B: catálogo/CATPart / CAD avançado A: biblioteca de normas ISO 4014 / CAD avançado C: CC ISO 4014 / Fenkra: ❌)
 - **O que faz:** parafuso de cabeça hexagonal com haste lisa e rosca no fim. É o "bolt" estrutural e de máquina geral. Normas: ISO 4014 / DIN 931 (e ABNT NBR 5580/6323 como referência [C]).
 - **Dados** [V, fasten.it, DIN EN ISO 4014]. Campos: d, P, s, e (min A/B), k, b (três faixas por L), faixa de L.
 
@@ -118,14 +118,14 @@ Convenção de cada ficha: **Dados** = designação, campos mínimos e fontes. *
   | M10 | 16 | 17,77 | 6,4 | 26 | 32 | 45 |
 
   O 2º conferente ainda deve ser aberto (wermac.org, torqbolt, Ciser, Würth).
-- **CATIA:** uma CATPart paramétrica com tabela de projeto (L, d como colunas). **SW:** configuração por tamanho e comprimento, com rosca cosmética. **Inventor:** família com colunas-chave (d, L), a rosca vem da categoria. Nos três, a rosca é opção de exibição, não geometria.
+- **CAD avançado B:** uma CATPart paramétrica com tabela de projeto (L, d como colunas). **CAD avançado A:** configuração por tamanho e comprimento, com rosca cosmética. **CAD avançado C:** família com colunas-chave (d, L), a rosca vem da categoria. Nos três, a rosca é opção de exibição, não geometria.
 - **Fenkra hoje:** não há família. `b` varia com L (o `b` fixo de `iso4762.json` só vale para L≤125).
 - **Melhor prática:** acrescentar `b1/b2/b3` como campos opcionais e escolher conforme L. Usar o mesmo gerador "hex_head" de ISO 4017 com um parâmetro `comprimento_rosca`. Teste: M10×30 tem rosca de 26 mm; M10×150 tem 32 mm.
 
-### Parafuso sextavado, rosca total (CATIA: catálogo / SW: Toolbox ISO 4017 / Inventor: CC / Fenkra: ✅ parcial)
+### Parafuso sextavado, rosca total (CAD avançado B: catálogo / CAD avançado A: biblioteca de normas ISO 4017 / CAD avançado C: CC / Fenkra: ✅ parcial)
 - **O que faz:** igual ao anterior, mas rosca até a cabeça. ISO 4017 / DIN 933.
 - **Dados:** campos hoje: P, s, k. A diferença DIN × ISO em M10 e M12 (s=17 contra 16) já está nos testes (`biblioteca.rs:386-387`) e bate com o ISO 4014 [V].
-- **CATIA/SW/Inv.:** igual à ficha anterior; a série de comprimentos vem da família.
+- **CAD avançado B/CAD avançado A/Inv.:** igual à ficha anterior; a série de comprimentos vem da família.
 - **Fenkra hoje:** `sextavado` (`fixadores.rs:82-93`) gera cabeça `cc=s/cos(30)` e haste. Faltam: o chanfro da cabeça (o canto de uma peça real é menor que s/cos30, por exemplo e min 11,05 para s=10, enquanto o prisma dá 11,55, o que superestima o volume da cabeça e a interferência) e o filete sob a cabeça.
 - **Melhor prática:** chanfro cônico 30° do topo (parâmetro `e_min` do catálogo) e comparar a massa com a tabela do catálogo (tolerância 5%).
 
@@ -140,14 +140,14 @@ Convenção de cada ficha: **Dados** = designação, campos mínimos e fontes. *
   | M10 | 1,5 | 16 | 10 | 8 | 5 | 32 |
 
   Todos batem com `iso4762.json`. Ainda faltam t (profundidade mínima do soquete) e dk com recartilha. Fontes no arquivo: fasten.it, tspi.at, opac.net.
-- **CATIA/SW/Inv.:** como em 2.0. O Inventor guarda a coluna "comprimento" como chave; o SW tem a rosca cosmética da configuração.
+- **CAD avançado B/CAD avançado A/Inv.:** como em 2.0. O CAD avançado C guarda a coluna "comprimento" como chave; o CAD avançado A tem a rosca cosmética da configuração.
 - **Fenkra hoje:** `allen` (`fixadores.rs:60-79`). A profundidade do soquete é `k/2` fixa, enquanto o catálogo dá `t min` real (M6: 3 = k/2, M10: 5 = k/2, mas M3/M4/M5 e M16/M20 não seguem exatamente [C]). `b` de M16/M20 vem de regra + 1 fonte (`confirmado_por: 1`).
 - **Melhor prática:** trocar `prof=k/2` por campo `t`. Teste de volume contra massa de catálogo. O sextavado interno acima do topo (`prof+1`) deve virar corte passante para evitar sólido residual.
 
 ### Parafuso Allen abaulado (botão) — ISO 7380-1/-2 (❌)
 - **Dados** [C, a conferir]: M6 dk≈10,5 / k≈3,3 / s=4; M8 dk≈14 / k≈4,4 / s=5; M10 dk≈17,5 / k≈5,5 / s=6. A página fasten.it ISO 7380 não abriu por endereço direto; buscar o slug correto e Würth/Bossard.
 - **O que faz:** cabeça em calota baixa, sextavado interno. Uso em carenagens e acabamento.
-- **CATIA/SW/Inv.:** a cabeça é perfil revolucionado (arco + base). O SW/Inventor tratam como outro tipo de cabeça da mesma família de comprimentos.
+- **CAD avançado B/CAD avançado A/Inv.:** a cabeça é perfil revolucionado (arco + base). O CAD avançado A/CAD avançado C tratam como outro tipo de cabeça da mesma família de comprimentos.
 - **Fenkra hoje:** não existe; só há prisma e cilindro. O gerador "calota" depende de uma primitiva esférica/revolução.
 - **Melhor prática:** gerador `cabeca_calota` com `dk`, `k`, raio calculado (`r=(dk²/4+k²)/(2k)`). Teste: altura k e diâmetro dk no bounding box.
 
@@ -162,49 +162,49 @@ Convenção de cada ficha: **Dados** = designação, campos mínimos e fontes. *
   | M10 | 1,5 | 32 | 22,4 | 6,2 | 90° | 3,5 | 6 |
 
   A página também lista as edições antigas (04/2013 e 06/2004), em que o `t min` de M5, M8 e M10 era um pouco diferente (1,9; 3; 3,6). **Atenção:** a edição vigente muda o dado, então a família deve guardar a **revisão** (ver RNF-PRD-03).
-- **CATIA/SW/Inv.:** o furo escareado vem do Hole Wizard (SW), do Hole (CATIA) ou da categoria (Inventor); o parafuso se apoia no cone. O Inventor trata a face de apoio como o cone, não como plano.
+- **CAD avançado B/CAD avançado A/Inv.:** o furo escareado vem do assistente de furos (CAD avançado A), do Hole (CAD avançado B) ou da categoria (CAD avançado C); o parafuso se apoia no cone. O CAD avançado C trata a face de apoio como o cone, não como plano.
 - **Fenkra hoje:** não existe. `hardware::METRIC` tem `csink_diameter` (M6: 13,7), mas `HoleRow` não carrega tipo de furo, e `preencher_furos` sempre assenta a cabeça sobre a face.
 - **Melhor prática:** `HoleRow` precisa de `kind` (reto/rebaixo/escareado), `cbore_d`, `cbore_depth`, `csk_d`, `csk_angle`. A família diz qual apoio usa (`plano`, `cone`). O parafuso escareado publica o plano de topo (rente) e o ponto do cone. Teste: cabeça rente à face ±0,05 mm.
 
 ### Parafusos de cabeça panela, escareada e abaulada com fenda/Phillips/Pozidriv (ISO 7045/7046/1580/2010 — ❌)
 - **Dados** [V parcial]. ISO 7045 (M4: dk 8, k 3,1, recesso 2; M5: 10 / 3,8 / 2; M6: 12 / 4,6 / 3; M8: 16 / 6 / 4). **Cuidado:** o título da página fasten.it diz "countersunk flat head", mas os valores são de cabeça panela; o dado está certo, o rótulo do site é que parece trocado. Conferir em segunda fonte. ISO 7046 (escareada), 1580 (fenda panela), 2010 (escareada abaulada): [C].
 - **O que faz:** parafusos de máquina de baixa carga.
-- **Inventor/SW:** o recesso (cruz) é perfil extrudado; muitos catálogos usam um símbolo simplificado. No CATIA costuma ser o mesmo perfil de revolução da calota.
+- **CAD avançado C/CAD avançado A:** o recesso (cruz) é perfil extrudado; muitos catálogos usam um símbolo simplificado. No CAD avançado B costuma ser o mesmo perfil de revolução da calota.
 - **Fenkra hoje:** não existe.
 - **Melhor prática:** o recesso cruciforme é desenho (perfil fixo por número do recesso: 1, 2, 3, 4), não tabela. Gerar um corte simples e guardar o número do recesso como propriedade. Teste: a massa não pode variar mais de 3% pelo recesso.
 
 ### Parafusos Torx / hexalobular (ISO 14583 panela, 14584 escareado, 14579 cilíndrico — ❌)
 - **Dados:** [C] designações T10, T20, T25, T30, T40 por tamanho; tabela A/Ai de abertura. Fonte a abrir: fasten.it, ISO 10664 (tamanhos de recesso).
 - **O que faz:** soquete de seis lóbulos; mais torque, menos desgaste.
-- **SW/Inventor:** é tipo de cabeça + tamanho de drive. Em ambos aparece como propriedade, o desenho do lóbulo é simplificado.
+- **CAD avançado A/CAD avançado C:** é tipo de cabeça + tamanho de drive. Em ambos aparece como propriedade, o desenho do lóbulo é simplificado.
 - **Fenkra hoje:** não existe.
 - **Melhor prática:** o drive vira **campo textual** (`drive: "T25"`) na tabela, sem geometria própria (hexágono aproximado). Isso exige permitir valores texto em `valores{}` (hoje só `f64`, `Tamanho.valores: BTreeMap<String,f64>` em `biblioteca.rs:67`).
 
 ### Parafuso flangeado (ISO 4162 / DIN 6921 — ❌)
 - **Dados** [C]. M6: s=10, dc≈14,2, k≈6,6 (DIN 6921). O flange do parafuso segue o da porca DIN 6923 [V]: M6 dc 14,2; M8 17,9; M10 21,8; M12 26. Conferir cabeça DIN 6921 em fasten.it.
 - **O que faz:** cabeça sextavada com flange integrado; dispensa arruela.
-- **Inventor/SW:** o flange é cone mais cilindro sob a cabeça; as configurações carregam `dc`.
+- **CAD avançado C/CAD avançado A:** o flange é cone mais cilindro sob a cabeça; as configurações carregam `dc`.
 - **Fenkra hoje:** a pilha sempre põe arruela sob a cabeça (`preencher_furos`, `op.arruela`).
 - **Melhor prática:** o campo da família `inclui_arruela: true` desliga a arruela automática. Teste: pilha M8 flangeado não leva ISO 7089.
 
 ### Prisioneiro (DIN 938/939/835, ISO 15) (❌)
 - **Dados** [C]. Comprimento de rosca no lado fixo: DIN 938 ≈ 1·d (aço), DIN 939 ≈ 1,25·d (ferro fundido), DIN 835 ≈ 2·d. Duas extremidades rosqueadas, sem cabeça. Rosca do lado da porca b e do lado fixo bm.
 - **O que faz:** haste rosqueada nas duas pontas; fixa em furo roscado e recebe porca.
-- **Inventor/SW:** o SW trata como parafuso sem cabeça com configurações bm. O Inventor tem categoria própria.
+- **CAD avançado C/CAD avançado A:** o CAD avançado A trata como parafuso sem cabeça com configurações bm. O CAD avançado C tem categoria própria.
 - **Fenkra hoje:** `preencher_furos` trata furo roscado como "parafuso sem porca" (`com_porca = op.porca && !roscada`). Com prisioneiro, o furo roscado recebe **também** porca.
 - **Melhor prática:** `bm` define o engajamento no furo cego; o preenchedor calcula L = bm + pega + arruela + porca + 2P. O prisioneiro publica **dois** planos de apoio (lado fixo e lado livre).
 
 ### Parafuso de ombro (ISO 7379 — ❌)
 - **Dados:** [C] diâmetro do ombro d1 (6, 8, 10, 12, 16, 20), rosca menor (M5, M6, M8, M10, M12, M16), cabeça Allen. Fonte: fasten.it, Misumi, McMaster. Página `din_en_iso_7379` retornou 404; achar o slug certo.
 - **O que faz:** ombro retificado como eixo de articulação ou guia, com rosca menor que o ombro.
-- **Inventor/SW:** o ombro é a referência de concêntrico; o comprimento é o do ombro, não o total.
+- **CAD avançado C/CAD avançado A:** o ombro é a referência de concêntrico; o comprimento é o do ombro, não o total.
 - **Fenkra hoje:** o parafuso tem `L` único. Não há "comprimento do ombro" nem "rosca menor".
 - **Melhor prática:** parâmetros `d1`, `L1` (ombro), `d_rosca`, `L_rosca`; o fixador publica **eixo** e **plano do ombro** para o contato.
 
 ### Parafusos autoatarraxantes, para chapa e autobrocantes (ISO 1481/7049/7050, DIN 7976, DIN 7504 — ❌)
 - **Dados:** [C]. Diâmetros ST2,2 a ST6,3 (ex.: ST4,2; ST4,8). Ponta A/B/C, cabeça panela/sextavada/escareada, tabela de pré-furo na chapa por espessura.
 - **O que faz:** formam a própria rosca na chapa; os autobrocantes (DIN 7504) fazem também o furo.
-- **SW/Inventor:** o furo de pré-furação é o dado mais importante (tabela por material). O SW inclui no Toolbox o furo de chapa recomendado.
+- **CAD avançado A/CAD avançado C:** o furo de pré-furação é o dado mais importante (tabela por material). O CAD avançado A inclui no biblioteca de normas o furo de chapa recomendado.
 - **Fenkra hoje:** rosca "ST" não passa em `diametro_nominal` (só "M…", `biblioteca.rs:81`).
 - **Melhor prática:** designação genérica + `diametro_nominal` como campo, não derivado da string. Associar o furo recomendado como propriedade da família.
 
@@ -216,7 +216,7 @@ Convenção de cada ficha: **Dados** = designação, campos mínimos e fontes. *
 
 ### Parafusos especiais: carroceria (DIN 603), olhal (DIN 444), em U (DIN 3570), sextavado de madeira (DIN 571), estrutural (ASTM A325/A490) (❌)
 - **Dados:** [C], uma ficha própria cada. A325/A490 usam cabeça "heavy hex" e arruela estrutural (ASTM F436), tabelas ASME B18.2.6.
-- **SW/Inventor:** estão no Toolbox/CC como famílias comuns. O CATIA costuma usar a biblioteca de estrutura própria.
+- **CAD avançado A/CAD avançado C:** estão no biblioteca de normas/CC como famílias comuns. O CAD avançado B costuma usar a biblioteca de estrutura própria.
 - **Fenkra hoje:** não existe.
 - **Melhor prática:** priorizar P2/P3; entram quando houver o gerador genérico.
 
@@ -238,7 +238,7 @@ Convenção de cada ficha: **Dados** = designação, campos mínimos e fontes. *
   | M10 | 1 / 1,25 / 1,75 | 18,90 | 17 | 6 | 10 / 9,64 |
 
   Note que a altura total h inclui o anel de nylon: a tabela tem duas alturas (de rosca m e total h). O campo `m` único do tipo `Porca` não basta. A ISO 7040 (tipo alto) tem alturas diferentes, [C].
-- **CATIA/SW/Inv.:** em todos, o anel é um cilindro simplificado ou nem aparece.
+- **CAD avançado B/CAD avançado A/Inv.:** em todos, o anel é um cilindro simplificado ou nem aparece.
 - **Fenkra hoje:** não existe; `Porca` exige só `s`, `m`.
 - **Melhor prática:** campos `h` e `m` separados, nylon como segundo corpo (cor/material próprio) para BOM. Teste: altura total = h.
 
@@ -258,14 +258,14 @@ Convenção de cada ficha: **Dados** = designação, campos mínimos e fontes. *
 
 ### Porca flangeada (DIN 6923 / ISO 4161)
 - **Dados** [V, fasten.it DIN 6923 (retirada, 06/1983)]: M6 m 5,7–6, dc 14,2, s 10; M8 m 7,6–8, dc 17,9, s 13; M10 m 9,6–10, dc 21,8, s 15; M12 m 11,6–12, dc 26, s 18.
-- **SW/Inventor:** o flange é um disco sob o sextavado.
+- **CAD avançado A/CAD avançado C:** o flange é um disco sob o sextavado.
 - **Fenkra hoje:** não existe. Com porca flangeada a arruela sob a porca é supérflua (`h2` em `preencher_furos`).
 - **Melhor prática:** flag `inclui_arruela`, como no parafuso flangeado.
 
 ### Porca castelo (DIN 935 / ISO 7035) e cupilha
 - **Dados:** campos s, m, largura da fenda n, diâmetro do furo da cupilha. Os valores numéricos não foram abertos (fasten.it `din_935` deu 404); buscar DIN 935-1 (Würth/Bossard).
 - **O que faz:** porca com ranhuras que recebe cupilha (DIN 94) para travamento positivo.
-- **Inventor/SW:** a cupilha é peça separada no stack inferior, não é automática.
+- **CAD avançado C/CAD avançado A:** a cupilha é peça separada no stack inferior, não é automática.
 - **Fenkra hoje:** não existe.
 - **Melhor prática:** o parafuso para castelo tem **furo transversal** (campo `d_furo_cupilha`). A pilha automática não deve oferecer castelo se o parafuso não tiver o furo.
 
@@ -276,7 +276,7 @@ Convenção de cada ficha: **Dados** = designação, campos mínimos e fontes. *
 ### Rebite-porca (blind rivet nut / "rivnut")
 - **Dados** [V, só fabricantes, sem a norma aberta]. M6, formato redondo, cabeça plana: corpo Ø9,0; furo na chapa Ø9,1; flange Ø12–14 conforme modelo; faixa de aperto 0,5–3,5 (Gesipa) ou 0,7–4,2 (RivetKing); cabeça avulsa de 10 a 12,7. **Os valores variam entre fabricantes**, então a família pede designação do fabricante, não uma tabela só.
   - **Rótulo:** `docs/contextos/fixadores.md` chama de "ISO 15977", mas essa série é de rebites cegos [V: a ISO 15983 é rebite cego]. A norma de rebite-porca é outra (provável ISO 16583) [C].
-- **CATIA/SW/Inv.:** costuma ser peça de fabricante (McMaster/TraceParts). O Inventor tem categoria de porcas de chapa.
+- **CAD avançado B/CAD avançado A/Inv.:** costuma ser peça de fabricante (McMaster/TraceParts). O CAD avançado C tem categoria de porcas de chapa.
 - **Fenkra hoje:** não existe.
 - **Melhor prática:** parâmetro-chave = **faixa de aperto** (espessura de chapa), o que o preenchedor já tem como `pega`. Escolher a variante cujo intervalo contém a pega.
 
@@ -296,7 +296,7 @@ Convenção de cada ficha: **Dados** = designação, campos mínimos e fontes. *
 - **Dados** [V, fasten.it DIN 127]: M6 d1 6,1 / d2 11,8 / b 2,5 / s 1,6; M8 8,1 / 14,8 / 3 / 2; M10 10,2 / 18,1 / 3,5 / 2,2; M12 12,2 / 21,1 / 4 / 2,5; altura livre h (tipo A) 3,6–4,2 / 4,6–5,4 / 5–5,9 / 5,8–6,6. A página mistura colunas k/r, então a leitura exige conferência.
   - Inch [V parcial]: a ASME B18.21.1-2009 consolidou as normas de arruela de pressão e lisa; um catálogo dá #2: ID 0,094", OD 0,172", espessura 0,020", e 3/8: ID 0,385", OD 0,680".
 - **O que faz:** anel aberto helicoidal; o efeito "trava" é discutido, mas é padrão de BOM.
-- **CATIA/SW/Inv.:** o SW/Inventor modelam como anel plano com fenda; algumas bibliotecas deixam hélice real.
+- **CAD avançado B/CAD avançado A/Inv.:** o CAD avançado A/CAD avançado C modelam como anel plano com fenda; algumas bibliotecas deixam hélice real.
 - **Fenkra hoje:** não existe. O preenchedor tem só uma arruela por lado.
 - **Melhor prática:** o empilhamento precisa de lista ordenada de peças (`[lisa, pressão]`), editável por grupo.
 
@@ -307,7 +307,7 @@ Convenção de cada ficha: **Dados** = designação, campos mínimos e fontes. *
 ### Arruela Belleville / cônica (DIN 6796 de fixação; DIN 2093 de mola)
 - **Dados** [V, fasten.it DIN 6796]: M6 d 6,4 / d1 14 / s 1,5 / h 1,7–2 / carga a plano 8590 N; M8 8,4 / 18 / 2 / 2,24–2,6 / 14900; M10 10,5 / 23 / 2,5 / 2,8–3,2 / 22100; M12 13 / 29 / 3 / 3,43–3,95 / 34100.
 - **O que faz:** mola em prato: DIN 6796 é para apertos de alta carga; DIN 2093 é mola mecânica com séries A/B/C e empilhamento em série e paralelo.
-- **SW/Inventor:** a Belleville é cone por revolução. **Atenção:** a pilha tem lado (convexo para cima ou para baixo), que importa para o contato.
+- **CAD avançado A/CAD avançado C:** a Belleville é cone por revolução. **Atenção:** a pilha tem lado (convexo para cima ou para baixo), que importa para o contato.
 - **Fenkra hoje:** não existe. O contato do preenchedor supõe arruela plana de duas faces paralelas.
 - **Melhor prática:** gerador `cone` com `d`, `d1`, `s`, `h`. Publicar o plano de apoio do **anel externo** e do **interno** como duas referências distintas. A carga a plano é propriedade (para o futuro cálculo de pré-carga).
 
@@ -325,7 +325,7 @@ Convenção de cada ficha: **Dados** = designação, campos mínimos e fontes. *
 
 ### Pino cilíndrico (ISO 2338 / 8734, DIN 7 / 6325)
 - **Dados** [V, fasten.it]. DIN 7 (retirado): d 4/6/8/10 → chanfro c máx 0,6/0,9/1,2/1,5. ISO 8734 (temperado): c 0,63/1,2/1,6/2 para os mesmos d. Comprimentos de 3 a 100 mm; a grade por diâmetro estava ilegível na extração. Tolerâncias (m6 e h8) pesam: o pino é **ajustado**.
-- **CATIA/SW/Inv.:** em todos há ajuste (m6) como propriedade, e o Hole Wizard do SW tem furo de pino.
+- **CAD avançado B/CAD avançado A/Inv.:** em todos há ajuste (m6) como propriedade, e o assistente de furos do CAD avançado A tem furo de pino.
 - **Fenkra hoje:** não existe; a designação "Ø6×20" não passa em `diametro_nominal` (`:81`).
 - **Melhor prática:** a designação passa a ser texto livre + campo numérico `d`. O ajuste (h8/m6) vira campo textual. Teste: o furo do pino na montagem usa a tolerância do furo.
 
@@ -337,7 +337,7 @@ Convenção de cada ficha: **Dados** = designação, campos mínimos e fontes. *
 ### Pino elástico (ISO 8752 ranhurado, ISO 8750/8748 espiral, DIN 1481)
 - **Dados** [V, fasten.it DIN 1481, substituído pela ISO 8752]: d 4/6/8/10 → chanfro A 0,65/1,2/2/2, parede S 0,8/1,2/1,5/2, cisalhamento duplo 11,24/26,04/42,76/70,16 kN.
 - **O que faz:** tubo fendido que se comprime no furo.
-- **SW/Inventor:** modelado como tubo com fenda longitudinal ou cilindro maciço simplificado.
+- **CAD avançado A/CAD avançado C:** modelado como tubo com fenda longitudinal ou cilindro maciço simplificado.
 - **Melhor prática:** gerar com fenda real apenas em nível de detalhe alto; senão, cilindro maciço de mesma massa efetiva.
 
 ### Cupilha (ISO 1234 / DIN 94)
@@ -367,7 +367,7 @@ Convenção de cada ficha: **Dados** = designação, campos mínimos e fontes. *
   - DIN 472, tipo normal: furo 10 → s 1 / d3 10,8 / d2 10,4 / m 1,1 / n 0,6; furo 20 → 1 / 21,5 / 21 / 1,1 / 1,5; furo 30 → 1,2 / 32,1 / 31,4 / 1,3 / 2,1; furo 40 → 1,75 / 43,5 / 42,5 / 1,85 / 3,8.
   - Existe também o tipo pesado (heavy).
 - **O que faz:** anel aberto que trava peças axialmente num canal de eixo ou furo.
-- **CATIA/SW/Inv.:** o SW Toolbox tem ranhura de anel como recurso de torneamento; o Inventor Shaft Generator cria ranhura DIN 471 com o anel. O anel é um perfil aberto extrudado com olhais.
+- **CAD avançado B/CAD avançado A/Inv.:** o CAD avançado A biblioteca de normas tem ranhura de anel como recurso de torneamento; o CAD avançado C Shaft Generator cria ranhura DIN 471 com o anel. O anel é um perfil aberto extrudado com olhais.
 - **Fenkra hoje:** não existe. O backlog B52 já cita "eixo com ranhuras de anel" (`biblioteca-de-normas.md`, BIB-04).
 - **Melhor prática:**
   - Fluxo: eixo → ranhura (usa `d2`, `m`) → anel (usa `d3`, `s`).
@@ -386,7 +386,7 @@ Convenção de cada ficha: **Dados** = designação, campos mínimos e fontes. *
 - **Dados:** `biblioteca/chavetas/din6885a.json`: 13 faixas de Ø 6–85, 28 comprimentos, nível C. O código marca **t2 sem segunda fonte** (nota em BIB-04). A página fasten.it DIN 6885 abriu sem tabela; usar tabelas de eixos (tspi.at, roymech sem URL fixo).
 - **Fenkra hoje:** `Chaveta` (`biblioteca.rs:247-258`) com `b,h,t1,t2`; `chaveta_para_eixo(d)` busca faixa onde `d_acima < d ≤ d_ate` (`:323-325`), com testes de limite. Usada em eixos e engrenagens (`eixos.rs:119,308`; `engrenagens.rs:352,396`).
   - Falta: formas B, C (cantos arredondados), DIN 6885-2/-3, comprimentos por faixa (a série única de 28 comprimentos permite 4×4 em Ø6, o que é inválido) e tolerâncias do rasgo (P9/N9/JS9).
-- **CATIA/SW/Inv.:** o Inventor (Design Accelerator) cria chaveta + rasgo de eixo e de cubo juntos e faz o cálculo de pressão. O SW usa o Toolbox para o rasgo.
+- **CAD avançado B/CAD avançado A/Inv.:** o CAD avançado C (Design Accelerator) cria chaveta + rasgo de eixo e de cubo juntos e faz o cálculo de pressão. O CAD avançado A usa o biblioteca de normas para o rasgo.
 - **Melhor prática:** o comprimento mínimo/máximo deve depender da seção (b×h). Teste: nenhuma chaveta do catálogo sai com L < 2,5·b nem acima do limite da série.
 
 ### Chaveta Woodruff (DIN 6888)
@@ -408,7 +408,7 @@ Convenção de cada ficha: **Dados** = designação, campos mínimos e fontes. *
   - Atenção: a **Helicoil Plus** (ferramenta combinada) usa outro furo (7,3 / 9,7 / 12,0 mm). Não misturar.
   - A norma DIN 8140-2 define a classe 5H para a rosca final.
 - **O que faz:** mola de aço inox que restaura ou reforça rosca em material mole.
-- **CATIA/SW/Inv.:** em geral o inserto é um recurso do furo (SW: tipo "Helicoil" em algumas bibliotecas de fabricante). Creo IFX trata inserto como tipo de fixador (prensado e roscado) [V].
+- **CAD avançado B/CAD avançado A/Inv.:** em geral o inserto é um recurso do furo (CAD avançado A: tipo "Helicoil" em algumas bibliotecas de fabricante). CAD avançado F IFX trata inserto como tipo de fixador (prensado e roscado) [V].
 - **Fenkra hoje:** `HoleRow.thread` guarda a rosca como texto; sem inserto. O preenchedor mede a profundidade útil do furo roscado.
 - **Melhor prática:** o furo ganha atributo `inserto: {tipo, comprimento}`, que muda a **broca** e o diâmetro nominal da rosca vista pelo parafuso. Teste: M8 com Helicoil 1,5D → furo Ø8,4 e rosca interna M8.
 
@@ -431,7 +431,7 @@ Convenção de cada ficha: **Dados** = designação, campos mínimos e fontes. *
 
   DIN 661 (escareada): só massas por comprimento foram extraídas [V]; dimensões da cabeça [C].
 - **O que faz:** une chapas permanentemente; a cabeça "de fechamento" é formada no assentamento.
-- **CATIA/SW/Inv.:** o catálogo traz o rebite **antes** da fixação. Nenhum dos três insere rebite por ponto de forma nativa e simples (como já registrado em BIB-10, `catalogo.md`).
+- **CAD avançado B/CAD avançado A/Inv.:** o catálogo traz o rebite **antes** da fixação. Nenhum dos três insere rebite por ponto de forma nativa e simples (como já registrado em BIB-10, `catalogo.md`).
 - **Fenkra hoje:** não existe (B58 prevê).
 - **Melhor prática:** o rebite é um fixador com **dois estados**: antes e depois da cravação. A cabeça de fechamento cresce a partir de `e` (ou `1,5·d`). Teste: comprimento = pega + 1,5·d.
 
@@ -445,7 +445,7 @@ Convenção de cada ficha: **Dados** = designação, campos mínimos e fontes. *
   | 4,8 | 10,1 / 8,3 | 2 | 2,95 | 27 | l máx + 5 |
 
   A coluna `d1` pode ser o mandril, mas a página não rotula. Diâmetros: 3, 3,2, 4, 4,8 e 5; não há 6,4 nesta norma. Fontes: Würth (ISO 15983, já citada no catálogo).
-- **Inventor/SW:** o rebite cego costuma ser um corpo tubular + mandril, o mandril some após a cravação.
+- **CAD avançado C/CAD avançado A:** o rebite cego costuma ser um corpo tubular + mandril, o mandril some após a cravação.
 - **Fenkra hoje:** não existe.
 - **Melhor prática:** gerar no estado **cravado**: tubo com cabeça + cabeça cega + resto do mandril. Campos: faixa de aperto, furo recomendado. Escolher L pela pega (como o preenchedor faz).
 
@@ -471,7 +471,7 @@ Convenção de cada ficha: **Dados** = designação, campos mínimos e fontes. *
   - A designação segue o padrão `CLS-<rosca>-<código de espessura>`.
   - Fonte: pemnet.com. Segunda fonte: revendas autorizadas (Swaco) e o catálogo PEM.
 - **O que faz:** é pressionada na chapa e se deforma em torno do furo, formando rosca fixa sem solda.
-- **CATIA/SW/Inv.:** em SW/Inventor o clinch é peça de fabricante (TraceParts/PEM). O Inventor mantém "porcas de chapa" como único fixador de chapa do Bolted Connection [V].
+- **CAD avançado B/CAD avançado A/Inv.:** em CAD avançado A/CAD avançado C o clinch é peça de fabricante (TraceParts/PEM). O CAD avançado C mantém "porcas de chapa" como único fixador de chapa do Bolted Connection [V].
 - **Fenkra hoje:** não existe. O módulo de chapa existe, mas sem fixadores de chapa.
 - **Melhor prática:**
   - O fixador **cria o furo** na chapa (diâmetro, tolerância +0,08/–0) e valida distância ao bordo e dureza.
@@ -487,7 +487,7 @@ Convenção de cada ficha: **Dados** = designação, campos mínimos e fontes. *
   - B18.3 socket cap: ¼-20 → dk 0,375", k 0,25", hex 3/16"; 5/16-18 → 0,469" / 0,312"; 3/8-16 → 0,562" / 0,375" / 5/16". Valores de uma revenda, a conferir.
   - Porca hex ¼: AF 0,428–0,438", espessura 0,212–0,226", jam 0,150–0,163". Heavy hex ¼: AF 0,488–0,500", espessura 0,218–0,250".
   - A tabela completa B18.2.2 não apareceu em fonte única; amesweb.info e engineersedge.com têm tabelas completas por tamanho a abrir.
-- **CATIA/SW/Inv.:** as três têm normas ANSI/inch como categorias separadas. O Toolbox separa "ANSI Inch" e "ANSI Metric".
+- **CAD avançado B/CAD avançado A/Inv.:** as três têm normas ANSI/inch como categorias separadas. O biblioteca de normas separa "ANSI Inch" e "ANSI Metric".
 - **Fenkra hoje:** `diametro_nominal` só entende "M…" (`biblioteca.rs:81`); `fixador_documento` converte `d` para número. UNC "1/4-20" e "#10-24" não passam. O preenchedor só olha `hardware::METRIC`.
 - **Melhor prática:**
   - Campos `d_mm` e `unidade_origem` (pol), com medidas guardadas em mm e o **valor original em pol** para exibir.
@@ -497,11 +497,11 @@ Convenção de cada ficha: **Dados** = designação, campos mínimos e fontes. *
 ### 3.11 Funções inteligentes
 
 ### Família parametrizada genérica (modelo de dados)
-- **O que faz:** é o equivalente à família do Content Center / ao catálogo CATIA / à configuração do Toolbox.
-- **CATIA/SW/Inv.:** ver 2.0. O que há de inteligente:
-  - SW: configurações com nomes gerados; PN/descrição/comentário e propriedades em lista.
-  - Inventor: coluna-chave + mapeamento de parâmetros + revisão da norma.
-  - CATIA: tabela de projeto com PartNumber e PartName.
+- **O que faz:** é o equivalente à família do Content Center / ao catálogo CAD avançado B / à configuração do biblioteca de normas.
+- **CAD avançado B/CAD avançado A/Inv.:** ver 2.0. O que há de inteligente:
+  - CAD avançado A: configurações com nomes gerados; PN/descrição/comentário e propriedades em lista.
+  - CAD avançado C: coluna-chave + mapeamento de parâmetros + revisão da norma.
+  - CAD avançado B: tabela de projeto com PartNumber e PartName.
 - **Fenkra hoje:** família com `tipo` fechado, `campos` de `f64`, tamanhos "M…" e comprimentos globais (`biblioteca.rs:56-101`).
 - **Melhor prática (esquema proposto):**
   - `id`, `norma`, `revisao`, `equivalentes[]` (DIN↔ISO), `gerador` (nome: `cabeca_sextavada`, `cabeca_calota`, `anel`, `pino`…).
@@ -513,16 +513,16 @@ Convenção de cada ficha: **Dados** = designação, campos mínimos e fontes. *
   - `camada` (pública/empresa/usuário) e `fontes[]` por tamanho.
   - Teste: carregar todos os JSON e gerar **todos** os tamanhos (já existe em `fixadores.rs:276`; manter).
 
-### Preenchimento automático de furos (Smart Fasteners)
-- **CATIA:** não tem de série [C]; usar Power Copy de furo+fixador com publicações.
-- **SolidWorks [V]:**
+### Preenchimento automático de furos (fixadores inteligentes)
+- **CAD avançado B:** não tem de série [C]; usar Power Copy de furo+fixador com publicações.
+- **CAD avançado A [V]:**
   - Seleciona um furo, uma série de furos, um componente ou a montagem toda ("Adicionar" / "Populate All").
   - Agrupa por conjuntos de furos iguais; cada grupo pode ter outro tipo, tamanho e comprimento.
   - Top stack = arruelas sob a cabeça; bottom stack = arruelas e porcas na ponta. Furo cego só recebe top stack.
   - Regra de comprimento padrão: próximo menor da série para furo cego e próximo maior para passante; se o furo for mais fundo que o maior fixador, usa o maior. Opção de atualizar o comprimento ao mudar o empilhamento. Há ajustes de engajamento mínimo e de roscas além da porca.
-  - Furos que não vêm do Hole Wizard recebem o fixador padrão do Toolbox e pedem conferência.
-- **Inventor [V]:** Bolted Connection (ver abaixo).
-- **Solid Edge [V]:** ver 2.0 (extensão mínima / engajamento).
+  - Furos que não vêm do assistente de furos recebem o fixador padrão do biblioteca de normas e pedem conferência.
+- **CAD avançado C [V]:** Bolted Connection (ver abaixo).
+- **CAD avançado H [V]:** ver 2.0 (extensão mínima / engajamento).
 - **Fenkra hoje:** `preencher_furos`. Acertos: pilha por colinearidade com tolerância, pega por raios laterais e mediana, comprimento = pega + arruelas + porca + 2P, pula eixos que já têm hardware, relatório com avisos. Limites:
   - `HoleRow` sem tipo de furo (`lib.rs:5059`), então cabeça sempre assenta na face.
   - Só métrico M3–M20; `tamanho_da_rosca` ignora o passo (M8x1 e M8x1,25 viram "M8").
@@ -533,7 +533,7 @@ Convenção de cada ficha: **Dados** = designação, campos mínimos e fontes. *
   - Dedupe "um membro por componente" (`:181-187`) descarta o segundo furo do mesmo componente no mesmo eixo (por exemplo, rebaixo + passante modelados como dois cortes).
 - **Melhor prática:** fluxo suporte → modo → parâmetros → avançado:
   1. escolher o **escopo** (furo / série / componente / montagem);
-  2. mostrar a lista de grupos antes de inserir (como o SW);
+  2. mostrar a lista de grupos antes de inserir (como o CAD avançado A);
   3. cada grupo: família de parafuso, empilhamento superior e inferior (lista ordenada), regra de comprimento (próximo maior, engajamento, saliência);
   4. avançado: folga, arruela larga, travamento.
   - Casos de teste:
@@ -547,7 +547,7 @@ Convenção de cada ficha: **Dados** = designação, campos mínimos e fontes. *
 
 ### Conexão parafusada assistida (Bolted Connection, Hole Series)
 - **O que faz:** cria furos nas peças e insere os fixadores num só passo.
-- **Inventor [V]:**
+- **CAD avançado C [V]:**
   - Tipo: passante ou cego.
   - Método de posição: linear (2 arestas), concêntrico (aresta circular), sobre ponto, por furo existente (com "seguir padrão").
   - O filtro de rosca restringe os fixadores da lista.
@@ -555,23 +555,23 @@ Convenção de cada ficha: **Dados** = designação, campos mínimos e fontes. *
   - Opção de criar subconjunto (permite solução automática).
   - Modelos de conexão salvos.
   - Excluir o parafuso apaga os fixadores associados.
-- **SW:** Hole Series e Smart Fasteners: planos de início e fim, furos nas peças, fixadores [V no catálogo].
-- **CATIA:** não tem [C].
+- **CAD avançado A:** Hole Series e fixadores inteligentes: planos de início e fim, furos nas peças, fixadores [V no catálogo].
+- **CAD avançado B:** não tem [C].
 - **Fenkra hoje:** ❌ (B57/B58 previstos). O "furo de montagem" só existe na montagem (`catalogo.md` linha 985).
 - **Melhor prática:** depende do B57 (furo entre peças com link). Começar pelo modo "por furo existente".
 
 ### Fixador por ponto / padrão (rebites por pontos, parafusos em padrão)
 - **O que faz:** insere um fixador em cada ponto de uma lista ou padrão.
-- **Inventor [V]:** o modo "sobre ponto" aceita pontos de esboço da peça (não os criados na montagem); "seguir padrão" copia o padrão do furo. Se inserir em um padrão, substitui as conexões que já havia.
-- **SW:** o fixador acompanha o padrão de furos; permite configuração diferente para um membro [V no contexto].
+- **CAD avançado C [V]:** o modo "sobre ponto" aceita pontos de esboço da peça (não os criados na montagem); "seguir padrão" copia o padrão do furo. Se inserir em um padrão, substitui as conexões que já havia.
+- **CAD avançado A:** o fixador acompanha o padrão de furos; permite configuração diferente para um membro [V no contexto].
 - **Fenkra hoje:** não há; o preenchedor trata cada furo/eixo isoladamente.
 - **Melhor prática:** fixador **derivado do padrão** (herda quantidade e posições, com exceções por instância). Teste: apagar 1 instância do padrão remove 1 fixador.
 
 ### Propriedades, PN, material e BOM dos fixadores
 - **Hoje:** `doc.props.pn = ""`; descrição = "ISO 4762 M6x20"; material = "Aço 1020" (`fixadores.rs:128-132`).
-- **SW:** PN/descrição/comentário por configuração; material em lista [V].
-- **Inventor:** PN pela expressão `{PARTNUMBER}`; manufacturer, norma e revisão em iProperties [V].
-- **CATIA:** PartNumber e PartName na tabela de projeto [V].
+- **CAD avançado A:** PN/descrição/comentário por configuração; material em lista [V].
+- **CAD avançado C:** PN pela expressão `{PARTNUMBER}`; manufacturer, norma e revisão em iProperties [V].
+- **CAD avançado B:** PartNumber e PartName na tabela de projeto [V].
 - **Melhor prática:**
   - PN gerado: `<norma>-<designação>-<L>-<classe>-<acabamento>`.
   - Descrição legível ("Parafuso Allen ISO 4762 M6×20 – 12.9").
@@ -580,10 +580,10 @@ Convenção de cada ficha: **Dados** = designação, campos mínimos e fontes. *
   - Teste: massa do modelo dentro de 5% do peso de catálogo.
 
 ### Trocar / atualizar / diagnosticar uma pilha
-- **SW [V]:** "Editar Smart Fasteners" troca tipo, comprimento, empilhamento. Aviso do SW: não edite o fixador do Toolbox por esboço/feature direto, pois a base não atualiza.
-- **Solid Edge [V]:** fixador vira feature; ao mudar o projeto e o comprimento deixar de servir, o PathFinder sinaliza e o Error Assistant atua.
-- **Inventor [V]:** Substituir todos / Mudar tamanho.
-- **CATIA:** o diagnóstico de atualização lista a referência quebrada [C]; o catálogo vincula por referência.
+- **CAD avançado A [V]:** "Editar fixadores inteligentes" troca tipo, comprimento, empilhamento. Aviso do CAD avançado A: não edite o fixador do biblioteca de normas por esboço/feature direto, pois a base não atualiza.
+- **CAD avançado H [V]:** fixador vira feature; ao mudar o projeto e o comprimento deixar de servir, o PathFinder sinaliza e o Error Assistant atua.
+- **CAD avançado C [V]:** Substituir todos / Mudar tamanho.
+- **CAD avançado B:** o diagnóstico de atualização lista a referência quebrada [C]; o catálogo vincula por referência.
 - **Fenkra hoje:** B51 prevê "trocar norma/comprimento de uma pilha". Hoje o fixador é só um componente + restrições, sem marca de que pertence a uma pilha.
 - **Melhor prática:** gravar no grupo "Fixadores" uma **pilha** como objeto (furos de origem, família, empilhamento) para poder recalcular quando a espessura mudar. Quando a pega não cabe, o estado é "falhou" com sugestão (princípio 1).
 
@@ -719,38 +719,38 @@ Em tempo: corrigir os rótulos de `docs/contextos/fixadores.md` ("Rivet Nut = IS
 - https://ns1.engineersedge.com/heavy_nut.htm
 - https://mail.torqbolt.com/asme-b18-3-hexagon-socket-and-spline-socket-button-head-cap-screws-dimensions-standards-specifications
 
-**SolidWorks:**
-- https://www.goengineer.com/en-us/blog/solidworks-toolbox-library-setup-utilization
-- https://hawkridgesys.com/blog/solidworks-toolbox-smart-fasteners
-- https://help.solidworks.com/2017/English/SolidWorks/sldworks/c_Smart_Fasteners_Hardware_Stacks.htm
-- https://help.solidworks.com/2022/English/SolidWorks/sldworks/c_Smart_Fasteners_Hardware_Stacks.htm
-- https://help.solidworks.com/2017/English/SolidWorks/Sldworks/HIDD_NEW_SMARTFASTENER_DLG.htm
-- https://help.solidworks.com/2025/English/SolidWorks/Sldworks/r_hole_series_smart_fastener_pm.htm
-- https://help.solidworks.com/2024/English/Solidworks/sldworks/HIDD_DVE_TOOLBOXSIZER.htm
+**CAD avançado A:**
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 
-As páginas help.solidworks.com só entregaram o menu do site no `WebFetch`. O detalhe veio dos resumos de busca e dos blogs GoEngineer e Hawk Ridge.
+As páginas help.CAD avançado A.com só entregaram o menu do site no `WebFetch`. O detalhe veio dos resumos de busca e dos blogs GoEngineer e Hawk Ridge.
 
-**Inventor:**
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-8EDD3824-5497-43D9-9808-D184EF43D413.htm (Família)
-- https://help.autodesk.com/cloudhelp/2026/ENU/Inventor-Help/files/GUID-2AEEA750-E526-42C9-87B6-ADDD7B7B941E.htm (Publish Guide)
-- https://help.autodesk.com/cloudhelp/2025/ENU/Inventor-Help/files/GUID-6E1D4624-B605-4AB1-9DBA-E981495B4933.htm (Bolted Connection)
-- https://static.au-uw2-stg.autodesk.com/handout_1904_MA1904_Inventor_20Content_20Center_20Library_20Advanced_20Management.pdf (apostila AU; o PDF não foi lido direto, só o resumo da busca)
-- https://emea.support.arkance.world/hc/es/articles/36469577683730-Inventor-Content-Centre-Replace-Family-Template
+**CAD avançado C:**
+- (fonte em procedencia.md) (Família)
+- (fonte em procedencia.md) (Publish Guide)
+- (fonte em procedencia.md) (Bolted Connection)
+- (fonte em procedencia.md) (apostila AU; o PDF não foi lido direto, só o resumo da busca)
+- (fonte em procedencia.md)
 
-**CATIA:**
-- https://www.staff.city.ac.uk/~ra600/ME2105/Catia%20course/CATIA%20Tutorials/asmug_C2/asmugbt0805.htm
-- https://forum.mycad.visiativ.com/t/enregistrement-dune-famille-de-piece-sur-catia-v5/96672
-- https://eng-tips.com/threads/catia-v5r17-catalog.324272 (bloqueada, só o trecho da busca)
-- https://print.grabcad.com/tutorials/video-create-a-catalog-using-component-family-catia-3dxp
-- https://pycatia.readthedocs.io/en/latest/api/pycatia/components_catalogs_interfaces/catalog_document.html
-- https://support.ptc.com/help/windchill/r13.0.0.0/es/Windchill_Help_Center/WWGMforCatiaV5/WGMCATIAV5AdvTechCatalog.html
+**CAD avançado B:**
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md) (bloqueada, só o trecho da busca)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
+- (fonte em procedencia.md)
 
 **Outros CADs:**
-- Solid Edge: https://www.soliddna.com/SEHelp/ST5/EN/a_h/fastener1c.htm · https://www.soliddna.com/SEHelp/ST5/EN/a_h/fastener1h.htm
-- Creo: https://support.ptc.com/help/creo/creo_pma/usascii/assembly/intelligent_fastener/IFX_Insert_Types.html (a página de IFX redirecionou para 404; o conteúdo veio do resumo da busca) · https://pdsvision.com/cad/creo/intelligent-fastener-ifx/
-- NX: https://docs.plm.automation.siemens.com/data_services/resources/nx/12/nx_api/custom/en_US/nxopen_net/class_n_x_open_1_1_tooling_1_1_fastener_assy.html
-- Fusion: https://www.autodesk.com/products/fusion-360/blog/autodesk-fusion-fasteners-library/ (403; só o trecho da busca) · https://autodesk.com/de/support/technical/article/How-to-insert-a-standard-part-into-a-Fusion-360-design
-- Onshape: https://www.onshape.com/de/blog/a-modern-approach-to-standard-content
+- CAD avançado H: https://www.soliddna.com/SEHelp/ST5/EN/a_h/fastener1c.htm · https://www.soliddna.com/SEHelp/ST5/EN/a_h/fastener1h.htm
+- CAD avançado F: (fonte em procedencia.md) (a página de IFX redirecionou para 404; o conteúdo veio do resumo da busca) · (fonte em procedencia.md)
+- CAD avançado G: (fonte em procedencia.md)
+- Fusion: (fonte em procedencia.md) (403; só o trecho da busca) · (fonte em procedencia.md)
+- CAD avançado E: (fonte em procedencia.md)
 
 ---
 
@@ -761,16 +761,16 @@ As páginas help.solidworks.com só entregaram o menu do site no `WebFetch`. O d
 - **Arquivos alterados:** nenhum. Não criei o arquivo do plano nem usei ExitPlanMode, porque a entrega pedida é o texto da resposta e não há ferramenta de saída do modo plano nesta sessão.
 - **Verificações feitas:** só leitura e web. Não rodei `cargo`.
 - **Falhas e limites:**
-  - As páginas help.solidworks.com não abriram no `WebFetch`, só deram o menu do site. O detalhe do SW veio de resumos de busca e dos blogs GoEngineer e Hawk Ridge.
+  - As páginas help.CAD avançado A.com não abriram no `WebFetch`, só deram o menu do site. O detalhe do CAD avançado A veio de resumos de busca e dos blogs GoEngineer e Hawk Ridge.
   - fasten.it deu 404 em ISO 7380, DIN 935, ISO 7379 e ISO 2339.
   - A DIN 6885 abriu sem tabela. Não encontrei t1 da Woodruff nem as medidas de castelo/cega/borboleta.
   - Os dados de polegada são de revendas.
-  - As páginas de Fusion, Creo e eng-tips foram bloqueadas, 403 ou 404.
+  - As páginas de CAD avançado D, CAD avançado F e eng-tips foram bloqueadas, 403 ou 404.
 - **Riscos:**
   - Quase todas as medidas têm uma só fonte; a 2ª conferência exigida pelo nível C não foi feita.
   - As normas DIN 7, DIN 1, DIN 94, DIN 980, DIN 6798, DIN 6888 e DIN 6923 constam como retiradas no fasten.it. A família precisa citar a norma vigente.
   - Os rótulos de norma do arquivo de contexto precisam de conferência.
-  - Algumas afirmações sobre o CATIA V5 são [C].
+  - Algumas afirmações sobre o CAD avançado B são [C].
 
 STATUS: DONE_WITH_CONCERNS
 SUMMARY: As 5 maiores lacunas do Fenkra em prendedores são: (1) modelo de família fechado (`enum` de 4 tipos, só "M…", `f64`); (2) fixadores sem PN, classe, material próprio e massa verificada; (3) preenchedor cego a rebaixo/escareado/polegada, com regra de comprimento 2d–10d e cache de arquivo sem versão; (4) ausência de pinos, anéis DIN 471/472, Woodruff/cônica, insertos, rebites, PEM e ASME; (5) pilha não editável nem recalculável após inserida.

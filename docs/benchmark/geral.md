@@ -5,9 +5,9 @@
 
 ## Como cada ferramenta conduz o fluxo
 
-- **CATIA V5:** Ocultar é hierárquico e local ao mesmo tempo; toda feature tem preview e diagnóstico de atualização.
-- **SOLIDWORKS:** Pastas na árvore, "What's wrong" com reparo de referências, cores de estado.
-- **Inventor:** Design Doctor para reparar; pastas e visibilidade por objeto.
+- **CAD avançado B:** Ocultar é hierárquico e local ao mesmo tempo; toda feature tem preview e diagnóstico de atualização.
+- **CAD avançado A:** Pastas na árvore, "What's wrong" com reparo de referências, cores de estado.
+- **CAD avançado C:** Design Doctor para reparar; pastas e visibilidade por objeto.
 
 ## O que adotar no Fenkra
 

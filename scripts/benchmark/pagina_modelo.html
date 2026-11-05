@@ -118,15 +118,15 @@ tr.det td{background:var(--soft);font-size:14px}
     <div class="filters">
       <label for="c-mod">Módulo</label><select id="c-mod"></select>
       <label for="c-st">Fenkra</label><select id="c-st"><option value="">todos</option><option value="ok">completo</option><option value="parcial">parcial</option><option value="nao">não existe</option></select>
-      <input type="search" id="c-busca" placeholder="Buscar feature ou nome em qualquer CAD (ex.: Pad, Hole Wizard, Frame)" aria-label="Buscar feature">
+      <input type="search" id="c-busca" placeholder="Buscar feature ou nome em qualquer CAD (ex.: Pad, assistente de furos, Frame)" aria-label="Buscar feature">
     </div>
     <div class="tablebox">
       <table>
-        <thead><tr><th>ID</th><th>Feature</th><th>CATIA V5</th><th>SOLIDWORKS</th><th>Inventor</th><th>Fenkra</th><th>Backlog</th></tr></thead>
+        <thead><tr><th>ID</th><th>Feature</th><th>CAD avançado B</th><th>CAD avançado A</th><th>CAD avançado C</th><th>Fenkra</th><th>Backlog</th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
     </div>
-    <p class="note">Nomes de outros produtos aparecem só para comparação e pertencem aos seus donos. Textos próprios, a partir de documentação pública (ajuda do SOLIDWORKS e do Inventor; apostilas abertas para o CATIA V5, cuja documentação oficial exige login). Clique numa linha para ver como a feature funciona, as diferenças e as fontes.</p>
+    <p class="note">Nomes de outros produtos aparecem só para comparação e pertencem aos seus donos. Textos próprios, a partir de documentação pública (ajuda do CAD avançado A e do CAD avançado C; apostilas abertas para o CAD avançado B, cuja documentação oficial exige login). Clique numa linha para ver como a feature funciona, as diferenças e as fontes.</p>
   </section>
 </div>
 
@@ -193,12 +193,12 @@ function fonteLink(k){
 function renderRows(){
   const mod = $('#c-mod').value, st = $('#c-st').value, q = $('#c-busca').value.trim().toLowerCase();
   const fs = CATALOGO.features.filter(f => (!mod || f.modulo === mod) && (!st || f.status === st) &&
-    (!q || [f.id, f.nome, f.catia, f.sw, f.inv, f.fenkra, f.faz, f.backlog].join(' ').toLowerCase().includes(q)));
+    (!q || [f.id, f.nome, f.cb, f.sw, f.inv, f.fenkra, f.faz, f.backlog].join(' ').toLowerCase().includes(q)));
   $('#rows').innerHTML = fs.map(f => {
     const cards = (cardsByFeat[f.id] || []);
     const row = `<tr class="feat${destaque === f.id ? ' hit' : ''}" data-id="${f.id}" tabindex="0" aria-expanded="${aberto === f.id}">
       <td class="idc">${f.id}</td><td><div class="nm">${esc(f.nome)}</div><div style="color:var(--muted);font-size:13px">${esc(f.modulo)}</div></td>
-      <td>${esc(f.catia)}</td><td>${esc(f.sw)}</td><td>${esc(f.inv)}</td>
+      <td>${esc(f.cb)}</td><td>${esc(f.sw)}</td><td>${esc(f.inv)}</td>
       <td><span class="st ${f.status}">${ST_TXT[f.status]}</span><div style="font-size:13px">${esc(f.fenkra)}</div></td>
       <td>${cards.map(c => `<button class="chip" data-card="${c}">${c}</button>`).join(' ') || `<span class="chip">${esc(f.backlog || '—')}</span>`}</td></tr>`;
     const det = aberto === f.id ? `<tr class="det"><td></td><td colspan="6"><div class="det-grid">

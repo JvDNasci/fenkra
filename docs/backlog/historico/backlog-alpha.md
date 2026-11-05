@@ -37,7 +37,7 @@ Versionamento flexível enquanto o projeto for local (sem distribuição).
 - [x] Ícones no estilo da referência e ícone em cada opção/variação (término, operação, furo, arestas, planos, cotas)
 - [x] Barra em blocos com nome do grupo; famílias com setinha ▾; grupos destacáveis/encaixáveis
 - [x] Dica breve + descrição avançada após 5 s
-- [x] Estilos de navegação (Fenkra, SolidWorks, Fusion, CATIA, Blender, Onshape)
+- [x] Estilos de navegação (Fenkra, CAD avançado A, CAD avançado D, CAD avançado B, Blender, CAD avançado E)
 - [x] Seleção de faces, arestas, vértices e planos na viewport + filtro de seleção; sketch no plano/face clicado
 - [x] Sketch com menus: Criação, Transformar (mover, copiar, espelhar, offset, filete), Cotagem (6 tipos), Restrições, Ferramentas (checar contornos, construção, grade, snaps, auto)
 - [x] Painel do sketch limpo: restrições do elemento clicado; símbolos discretos no desenho
@@ -80,7 +80,7 @@ Versionamento flexível enquanto o projeto for local (sem distribuição).
 
 - [x] Rosca modelada aparece no 3D (sentido do material e início abaixo do rebaixo); filete "todas" ignora arestas de rosca
 - [x] Tela de carregamento com logo e barra; tela inicial com fundo em degradê, brilho e grade; logo PNG voltou a aparecer dentro do app
-- [x] Atalhos configuráveis com predefinições SolidWorks, CATIA, FreeCAD, Fusion 360, Blender, Onshape e Inventor (teclado + mouse); navegação FreeCAD, Inventor e Rhino
+- [x] Atalhos configuráveis com predefinições CAD avançado A, CAD avançado B, FreeCAD, CAD avançado D, Blender, CAD avançado E e CAD avançado C (teclado + mouse); navegação FreeCAD, CAD avançado C e CAD avançado I
 - [x] Câmera animada (vistas, ajustar, normal, câmeras salvas, alinhar sketch) e reenquadramento suave ao abrir comandos
 - [x] **Sólidos**: extrusão com ângulo de saída e parede fina; revolução fina; Ranhura (groove); Nervura e Rasgo por varredura (orientação acompanha/fixa/Frenet); Multi-seções e Multi-seções removida (regrada/fechada); primitivas (caixa, cilindro, esfera, cone, toro, cunha, prisma); Reforço
 - [x] **Acabamento**: filete variável; chanfro por 2 distâncias e por distância + ângulo; Casca; Ângulo de saída; Espessura de faces; Rosca externa/interna em face cilíndrica

@@ -5,19 +5,19 @@
 
 ## Como cada ferramenta conduz o fluxo
 
-- **CATIA V5:** Sketch num plano/face → perfil desenhado com restrições automáticas → restrições pela caixa de diálogo (lista as possíveis para a seleção) → ferramentas de relimitação (Trim, Quick Trim, Break, Close, Complement) → Sketch Analysis antes de sair. O sketch é visto como sistema de equações e o objetivo é ficar totalmente restrito.
-- **SOLIDWORKS:** Sketch → entidades com relações automáticas → Smart Dimension deduz o tipo de cota → Power Trim (arrastar cruzando) para limpar → cores indicam sub/totalmente/sobre-definido → Convert/Offset trazem geometria do modelo.
-- **Inventor:** Sketch com restrições automáticas por inferência → Dimension → Trim/Extend/Split alternáveis com Shift ou menu → Project Geometry / Project Cut Edges trazem o 3D → contador de graus de liberdade.
+- **CAD avançado B:** Sketch num plano/face → perfil desenhado com restrições automáticas → restrições pela caixa de diálogo (lista as possíveis para a seleção) → ferramentas de relimitação (Trim, Quick Trim, Break, Close, Complement) → Sketch Analysis antes de sair. O sketch é visto como sistema de equações e o objetivo é ficar totalmente restrito.
+- **CAD avançado A:** Sketch → entidades com relações automáticas → Smart Dimension deduz o tipo de cota → Power Trim (arrastar cruzando) para limpar → cores indicam sub/totalmente/sobre-definido → Convert/Offset trazem geometria do modelo.
+- **CAD avançado C:** Sketch com restrições automáticas por inferência → Dimension → Trim/Extend/Split alternáveis com Shift ou menu → Project Geometry / Project Cut Edges trazem o 3D → contador de graus de liberdade.
 
 ## O que adotar no Fenkra
 
-- Relimitação completa do CATIA (Quick Trim, Break, Close, Complement) com o arrasto do Power Trim do SW.
-- Caixa de restrições possíveis para a seleção (CATIA) junto com a cota inteligente (SW/Inventor).
+- Relimitação completa do CAD avançado B (Quick Trim, Break, Close, Complement) com o arrasto do Power Trim do CAD avançado A.
+- Caixa de restrições possíveis para a seleção (CAD avançado B) junto com a cota inteligente (CAD avançado A/CAD avançado C).
 - Análise de sketch antes de sair: perfis abertos, sobrepostos e isolados.
 
 ## O que evitar
 
-- Projeções sem associatividade (o Inventor não deixa aparar o projetado sem quebrar o vínculo).
+- Projeções sem associatividade (o CAD avançado C não deixa aparar o projetado sem quebrar o vínculo).
 - Perfis automáticos que criam restrições demais (alerta do contexto do sketcher).
 
 ## Paridade

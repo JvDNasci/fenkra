@@ -4,7 +4,7 @@
 
 ## 1. Problema
 
-Os CADs paramétricos comerciais (CATIA, SolidWorks, Fusion) são caros, fechados e cada vez mais
+Os CADs paramétricos comerciais (CAD avançado B, CAD avançado A, CAD avançado D) são caros, fechados e cada vez mais
 dependentes de assinatura e nuvem. A principal alternativa aberta, o FreeCAD, é funcional, mas:
 
 - é **pesado**: a interface trava durante recompute e montagens grandes ficam lentas;
