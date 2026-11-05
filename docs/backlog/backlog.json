@@ -1090,7 +1090,7 @@
    "tokens_k": 250,
    "teste": "Auto + Visual",
    "area": "Geral",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -2740,7 +2740,7 @@
    "tokens_k": 80,
    "teste": "Auto + Manual",
    "area": "Geral",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -3604,7 +3604,7 @@
    "tokens_k": 100,
    "teste": "Auto",
    "area": "Geral",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -3620,7 +3620,7 @@
    "tokens_k": 60,
    "teste": "Auto + Manual",
    "area": "Geral",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -3832,7 +3832,7 @@
    "tokens_k": 140,
    "teste": "Auto + Visual",
    "area": "Geral",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -3848,7 +3848,7 @@
    "tokens_k": 80,
    "teste": "Auto",
    "area": "Geral",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -3864,7 +3864,7 @@
    "tokens_k": 150,
    "teste": "Auto + Visual",
    "area": "Geral",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -3880,7 +3880,7 @@
    "tokens_k": 80,
    "teste": "Auto + Visual",
    "area": "Navegação",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -4072,7 +4072,7 @@
    "tokens_k": 80,
    "teste": "Auto",
    "area": "Geral",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -4456,7 +4456,7 @@
    "tokens_k": 260,
    "teste": "Visual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -5224,7 +5224,7 @@
    "tokens_k": 250,
    "teste": "Auto",
    "area": "Sólidos",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -5320,7 +5320,7 @@
    "tokens_k": 250,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -5336,7 +5336,7 @@
    "tokens_k": 300,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.4
   },
   {
@@ -5368,7 +5368,7 @@
    "tokens_k": 150,
    "teste": "Visual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -5400,7 +5400,7 @@
    "tokens_k": 250,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -5416,7 +5416,7 @@
    "tokens_k": 180,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -5432,7 +5432,7 @@
    "tokens_k": 120,
    "teste": "Auto",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.1
   },
   {

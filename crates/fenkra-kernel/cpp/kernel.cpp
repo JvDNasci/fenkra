@@ -3,9 +3,12 @@
 #include "fenkra-kernel/src/ffi.rs.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <limits>
+#include <mutex>
 #include <optional>
+#include <shared_mutex>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -102,7 +105,13 @@
 #include <GC_MakeArcOfCircle.hxx>
 #include <GProp_GProps.hxx>
 #include <IFSelect_ReturnStatus.hxx>
+#include <Geom_Plane.hxx>
+#include <Geom2d_Curve.hxx>
+#include <IMeshTools_Parameters.hxx>
+#include <OSD_Parallel.hxx>
+#include <OSD_ThreadPool.hxx>
 #include <Poly_Triangulation.hxx>
+#include <Poly_TriangulationParameters.hxx>
 #include <STEPControl_Reader.hxx>
 #include <STEPControl_Writer.hxx>
 #include <ShapeUpgrade_UnifySameDomain.hxx>
@@ -721,18 +730,26 @@ void face_signature(const TopoDS_Face& f, double out[8]) {
         if (!ok) {
             double u1, u2, v1, v2;
             BRepTools::UVBounds(f, u1, u2, v1, v2);
-            double bd = 1e300;
+            // do mais perto ao mais longe: o primeiro dentro da face é o escolhido. Em furo e filete o
+            // centroide cai no eixo e a projeção falha, então este caminho é comum, e classificar a
+            // grade inteira era a maior parte do custo da assinatura
+            struct Cell {
+                double dist, u, v;
+            };
+            std::vector<Cell> grid;
+            grid.reserve(81);
             for (int i = 1; i < 10; ++i)
                 for (int j = 1; j < 10; ++j) {
                     const double u = u1 + (u2 - u1) * i / 10, v = v1 + (v2 - v1) * j / 10;
-                    if (BRepClass_FaceClassifier(f, gp_Pnt2d(u, v), 1e-6).State() != TopAbs_IN) continue;
-                    const gp_Pnt q = gs->Value(u, v);
-                    if (q.Distance(c) < bd) {
-                        bd = q.Distance(c);
-                        p = q;
-                        ok = true;
-                    }
+                    grid.push_back({gs->Value(u, v).Distance(c), u, v});
                 }
+            std::stable_sort(grid.begin(), grid.end(), [](const Cell& a, const Cell& b) { return a.dist < b.dist; });
+            for (const Cell& g2 : grid) {
+                if (BRepClass_FaceClassifier(f, gp_Pnt2d(g2.u, g2.v), 1e-6).State() != TopAbs_IN) continue;
+                p = gs->Value(g2.u, g2.v);
+                ok = true;
+                break;
+            }
         }
     } catch (...) {
     }
@@ -827,17 +844,109 @@ int32_t face_index(const Shape& s, double px, double py, double pz, double limit
     });
 }
 
+// Teto de fios do malhador: 0 = padrão (metade dos processadores lógicos, no mínimo 2).
+static std::atomic<int32_t> g_mesh_threads{0};
+
+int32_t mesh_threads() {
+    const int32_t logical = std::max(1, OSD_Parallel::NbLogicalProcessors());
+    const int32_t asked = g_mesh_threads.load();
+    return std::min(logical, asked > 0 ? asked : std::max(2, logical / 2));
+}
+
+void set_mesh_threads(int32_t n) { g_mesh_threads.store(std::max(0, n)); }
+
+int32_t mesh_pool_threads() { return OSD_ThreadPool::DefaultPool()->NbThreads(); }
+
+// Malhas em andamento seguram esta trava em modo compartilhado.
+static std::shared_mutex g_mesh_gate;
+
+// Entrada do malhador: aplica o teto e devolve a trava que dura até o fim da malha. O teto precisa
+// mudar o tamanho do pool, porque `OSD_Parallel::For` pede um fio por item e ignora
+// `SetNbDefaultThreadsToLaunch`. Só que `OSD_ThreadPool::Init` não aceita tarefa ativa, e a interface
+// também malha; por isso espera as malhas em andamento terminarem.
+static std::shared_lock<std::shared_mutex> enter_mesher() {
+    const int32_t want = mesh_threads();
+    {
+        std::shared_lock<std::shared_mutex> running(g_mesh_gate);
+        if (mesh_pool_threads() == want) return running;
+    }
+    {
+        std::unique_lock<std::shared_mutex> alone(g_mesh_gate);
+        OSD_ThreadPool::DefaultPool()->Init(want);
+    }
+    return std::shared_lock<std::shared_mutex>(g_mesh_gate);
+}
+
+// O malhador só confere o desvio linear de uma malha pronta, nunca o ângulo. Sem esta conferência,
+// quem pede outro ângulo herdaria a malha de outro pedido.
+static bool mesh_angle_differs(const TopTools_IndexedMapOfShape& fmap, double angle) {
+    for (int i = 1; i <= fmap.Extent(); ++i) {
+        TopLoc_Location loc;
+        const Handle(Poly_Triangulation)& tri = BRep_Tool::Triangulation(TopoDS::Face(fmap(i)), loc);
+        if (tri.IsNull() || tri->Parameters().IsNull() || !tri->Parameters()->HasAngle()) continue;
+        if (std::abs(tri->Parameters()->Angle() - angle) > 1e-9) return true;
+    }
+    return false;
+}
+
+void discard_mesh(const Shape& s) {
+    guard("tesselação", [&] {
+        if (!s.s.IsNull()) BRepTools::Clean(s.s);
+    });
+}
+
+// Normal da face no meio da aresta. Lê (u, v) pela curva da aresta na face e usa a superfície direto:
+// `BRepAdaptor_Surface` varre todas as arestas da face para achar os limites, o que aqui, por aresta,
+// daria custo quadrático nas faces com muitos contornos.
+static gp_Dir face_normal_at_edge(const TopoDS_Edge& e, const TopoDS_Face& f, const gp_Pnt& mid) {
+    TopLoc_Location loc;
+    const Handle(Geom_Surface)& su = BRep_Tool::Surface(f, loc);
+    double u = 0, v = 0;
+    // no plano a normal é a mesma em todo ponto, e a curva da aresta teria de ser calculada
+    if (!su->IsKind(STANDARD_TYPE(Geom_Plane))) {
+        double t0 = 0, t1 = 0;
+        Handle(Geom2d_Curve) pc = BRep_Tool::CurveOnSurface(e, f, t0, t1);
+        if (!pc.IsNull()) {
+            const gp_Pnt2d uv = pc->Value((t0 + t1) / 2);
+            u = uv.X();
+            v = uv.Y();
+        } else {
+            GeomAPI_ProjectPointOnSurf pr(mid, BRep_Tool::Surface(f));
+            if (pr.NbPoints() > 0) pr.LowerDistanceParameters(u, v);
+        }
+    }
+    gp_Pnt q;
+    gp_Vec du, dv;
+    su->D1(u, v, q, du, dv);
+    gp_Vec n = du.Crossed(dv);
+    if (n.Magnitude() < 1e-12) return gp_Dir(0, 0, 1);
+    n.Transform(loc.Transformation());
+    gp_Dir d(n);
+    if (f.Orientation() == TopAbs_REVERSED) d.Reverse();
+    return d;
+}
+
 MeshData tessellate(const Shape& s, double deflection, double angle) {
     return guard("tesselação", [&] {
         MeshData m;
         if (s.s.IsNull()) return m;
-        // o OCCT não afina nem engrossa uma malha já feita; limpa para valer a qualidade pedida
-        BRepTools::Clean(s.s);
-        BRepMesh_IncrementalMesh(s.s, deflection, Standard_False, angle, Standard_True);
-
         // mesma ordem de faces usada pelas etiquetas (IndexedMap)
         TopTools_IndexedMapOfShape fmap;
         TopExp::MapShapes(s.s, TopAbs_FACE, fmap);
+        // sem limpar: a forma nova divide faces intactas com a versão anterior, e o malhador só refaz
+        // a face cujo desvio passa de 10% do pedido, para mais ou para menos. A folga absorve a caixa
+        // envolvente que muda um pouco na edição; quem precisa de mudança menor usa `discard_mesh`
+        if (mesh_angle_differs(fmap, angle)) BRepTools::Clean(s.s);
+        IMeshTools_Parameters mp;
+        mp.Deflection = deflection;
+        mp.Angle = angle;
+        mp.InParallel = true;
+        mp.AllowQualityDecrease = true;
+        {
+            auto gate = enter_mesher();
+            BRepMesh_IncrementalMesh(s.s, mp);
+        }
+
         for (int fi = 1; fi <= fmap.Extent(); ++fi) {
             m.face_ranges.push_back(static_cast<uint32_t>(m.indices.size()));
             const TopoDS_Face& face = TopoDS::Face(fmap(fi));
@@ -922,20 +1031,7 @@ MeshData tessellate(const Shape& s, double deflection, double angle) {
                             BRepAdaptor_Curve cc(e);
                             const double tm = (cc.FirstParameter() + cc.LastParameter()) / 2;
                             gp_Pnt pm = cc.Value(tm);
-                            auto nrm_at = [&](const TopoDS_Face& f) -> gp_Dir {
-                                BRepAdaptor_Surface sf(f);
-                                GeomAPI_ProjectPointOnSurf pr(pm, BRep_Tool::Surface(f));
-                                double u = 0, v = 0;
-                                if (pr.NbPoints() > 0) pr.LowerDistanceParameters(u, v);
-                                gp_Pnt q; gp_Vec du, dv;
-                                sf.D1(u, v, q, du, dv);
-                                gp_Vec n = du.Crossed(dv);
-                                if (n.Magnitude() < 1e-12) return gp_Dir(0, 0, 1);
-                                gp_Dir d(n);
-                                if (f.Orientation() == TopAbs_REVERSED) d.Reverse();
-                                return d;
-                            };
-                            if (nrm_at(f1).Angle(nrm_at(f2)) < 2.0 * M_PI / 180.0) smooth = 1;
+                            if (face_normal_at_edge(e, f1, pm).Angle(face_normal_at_edge(e, f2, pm)) < 2.0 * M_PI / 180.0) smooth = 1;
                         }
                     } catch (...) {}
                 }
@@ -1010,7 +1106,10 @@ void export_step(const Shape& s, rust::Str path) {
 
 void export_stl(const Shape& s, rust::Str path) {
     guard("STL", [&] {
-        BRepMesh_IncrementalMesh(s.s, 0.05, Standard_False, 0.3, Standard_True);
+        {
+            auto gate = enter_mesher();
+            BRepMesh_IncrementalMesh(s.s, 0.05, Standard_False, 0.3, Standard_True);
+        }
         StlAPI_Writer w;
         if (!w.Write(s.s, to_std(path).c_str())) throw std::runtime_error("falha ao gravar o arquivo STL");
     });

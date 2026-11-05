@@ -71,6 +71,7 @@ impl Worker {
         std::thread::Builder::new()
             .name("recompute".into())
             .spawn(move || {
+                fenkra_kernel::reduzir_prioridade_da_thread();
                 // cache entre cálculos: só refaz a partir do primeiro comando que mudou
                 let mut cache = fenkra_solidos::Cache::default();
                 while let Ok(mut job) = jobs.recv() {

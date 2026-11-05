@@ -199,6 +199,17 @@ pub struct Mesh {
     pub face_info: Vec<FaceInfo>,
 }
 
+impl Mesh {
+    /// Memória ocupada pelos dados da malha, em bytes.
+    pub fn bytes(&self) -> usize {
+        4 * (self.positions.len() + self.normals.len() + self.indices.len() + self.edges.len())
+            + 4 * (self.face_ranges.len() + self.edge_ranges.len() + self.edge_mids.len() + self.vertices.len())
+            + self.edge_smooth.len()
+            + std::mem::size_of::<[u32; 2]>() * self.edge_faces.len()
+            + std::mem::size_of::<FaceInfo>() * self.face_info.len()
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MassProps {
     pub volume: f64,
@@ -655,7 +666,13 @@ mod imp {
         pub fn mesh(&self, deflection: f64) -> KResult<Mesh> {
             self.mesh_angle(deflection, ANGULO_PADRAO)
         }
-        /// Malha com desvio linear (mm) e ângulo máximo entre normais vizinhas (radianos).
+        /// Apaga a malha guardada na forma. `mesh_angle` aceita a malha pronta com até 10% de
+        /// diferença no desvio, então a troca de qualidade chama isto antes; a edição comum não chama.
+        pub fn discard_mesh(&self) -> KResult<()> {
+            b::discard_mesh(&self.0).map_err(err)
+        }
+        /// Malha com desvio linear (mm) e ângulo máximo entre normais vizinhas (radianos). Faces com
+        /// malha pronta de mesmo ângulo e desvio a até 10% do pedido são reaproveitadas.
         pub fn mesh_angle(&self, deflection: f64, angle: f64) -> KResult<Mesh> {
             let m = b::tessellate(&self.0, deflection, angle).map_err(err)?;
             Ok(Mesh {
@@ -706,6 +723,22 @@ mod imp {
         pub fn import_step(path: &str) -> KResult<Shape> {
             b::import_step(path).map(Shape).map_err(err)
         }
+    }
+
+    /// Limita os fios do malhador. `None` volta ao padrão: metade dos processadores lógicos, no
+    /// mínimo 2. Vale a partir da próxima malha, que espera as malhas em andamento terminarem.
+    pub fn definir_fios_malhador(fios: Option<usize>) {
+        b::set_mesh_threads(fios.map_or(0, |n| n.clamp(1, i32::MAX as usize) as i32));
+    }
+
+    /// Teto de fios do malhador em vigor, já limitado aos processadores da máquina.
+    pub fn fios_malhador() -> usize {
+        b::mesh_threads() as usize
+    }
+
+    /// Fios que o malhador usou na última malha.
+    pub fn fios_aplicados() -> usize {
+        b::mesh_pool_threads() as usize
     }
 
     pub fn version() -> String {
@@ -963,6 +996,9 @@ mod imp {
         pub fn mesh(&self, _: f64) -> KResult<Mesh> {
             no()
         }
+        pub fn discard_mesh(&self) -> KResult<()> {
+            no()
+        }
         pub fn mesh_angle(&self, _: f64, _: f64) -> KResult<Mesh> {
             no()
         }
@@ -989,9 +1025,40 @@ mod imp {
     pub fn version() -> String {
         "sem kernel".into()
     }
+
+    pub fn definir_fios_malhador(_: Option<usize>) {}
+
+    pub fn fios_malhador() -> usize {
+        1
+    }
+
+    pub fn fios_aplicados() -> usize {
+        1
+    }
 }
 
-pub use imp::{version, Shape, AVAILABLE};
+pub use imp::{definir_fios_malhador, fios_aplicados, fios_malhador, version, Shape, AVAILABLE};
+
+/// Põe a thread atual abaixo da prioridade normal, para o cálculo não disputar processador com a
+/// interface. Chame uma vez, dentro da thread de cálculo. Devolve se a prioridade mudou.
+#[cfg(windows)]
+pub fn reduzir_prioridade_da_thread() -> bool {
+    use std::ffi::c_void;
+    const THREAD_PRIORITY_BELOW_NORMAL: i32 = -1;
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetCurrentThread() -> *mut c_void;
+        fn SetThreadPriority(thread: *mut c_void, priority: i32) -> i32;
+    }
+    // SAFETY: GetCurrentThread devolve um pseudo-identificador sempre válido na própria thread.
+    unsafe { SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL) != 0 }
+}
+
+/// Fora do Windows a prioridade fica como está.
+#[cfg(not(windows))]
+pub fn reduzir_prioridade_da_thread() -> bool {
+    false
+}
 
 #[cfg(all(test, occt))]
 mod tests {
@@ -1178,5 +1245,121 @@ mod tests {
         let s = f.revolve([0.; 3], [0., 1., 0.], 360., 0.).unwrap();
         let esperado = std::f64::consts::PI * 100. * 20.;
         assert!((s.mass().volume - esperado).abs() < 1e-2);
+    }
+
+    /// placa com grade de furos filetados, o pior caso do malhador
+    fn placa(n: usize) -> Shape {
+        let w = n as f64 * 20.;
+        let mut l = vec![rect(w, w)];
+        for i in 0..n {
+            for j in 0..n {
+                l.push(vec![Seg2::Circle([-w / 2. + 20. * (i as f64 + 0.5), -w / 2. + 20. * (j as f64 + 0.5)], 5.)]);
+            }
+        }
+        Shape::face(&XY, &l).unwrap().extrude([0., 0., 1.], 10., 0.).unwrap().fillet_all(1.).unwrap()
+    }
+
+    /// arestas de triângulo, soldadas por posição, que não têm par: cada uma é borda de um furo na malha
+    fn bordas_abertas(m: &Mesh) -> usize {
+        let q = |i: u32| {
+            let k = i as usize * 3;
+            [0, 1, 2].map(|c| (m.positions[k + c] * 2000.).round() as i32)
+        };
+        let mut n = std::collections::HashMap::new();
+        for t in m.indices.chunks_exact(3) {
+            for (a, b) in [(t[0], t[1]), (t[1], t[2]), (t[2], t[0])] {
+                let (a, b) = (q(a), q(b));
+                if a != b {
+                    *n.entry(if a < b { (a, b) } else { (b, a) }).or_insert(0) += 1;
+                }
+            }
+        }
+        n.values().filter(|c| **c % 2 != 0).count()
+    }
+
+    #[test]
+    fn edicao_reaproveita_faces_intactas_sem_abrir_a_malha() {
+        let s = placa(3);
+        let antes = s.mesh_angle(0.3, 0.35).unwrap();
+        assert_eq!(bordas_abertas(&antes), 0);
+        // entalhe numa lateral: as faces de cima e de baixo não mudam e vêm com a malha pronta
+        let entalhe = Shape::box_tool([27., -5., 3.], [1., 0., 0.], [0., 0., 1.], [6., 10., 4.]).unwrap();
+        let e = s.boolean(&entalhe, Bool::Cut).unwrap();
+        let m = e.mesh_angle(0.3, 0.35).unwrap();
+        assert_eq!(bordas_abertas(&m), 0);
+        assert_eq!(m.face_ranges.len(), antes.face_ranges.len() + 5);
+        assert!((s.mass().volume - e.mass().volume - 3. * 10. * 4.).abs() < 1e-6);
+        let (a, b) = (s.bbox().unwrap(), e.bbox().unwrap());
+        assert!(a.0.iter().chain(&a.1).zip(b.0.iter().chain(&b.1)).all(|(x, y)| (x - y).abs() < 1e-3));
+        // a malha reaproveitada é a mesma de uma forma que nunca foi malhada
+        let limpa = placa(3).boolean(&entalhe, Bool::Cut).unwrap();
+        assert_eq!(limpa.mesh_angle(0.3, 0.35).unwrap().indices.len(), m.indices.len());
+    }
+
+    #[test]
+    fn malha_pronta_vale_com_folga_de_dez_por_cento_no_desvio() {
+        let s = Shape::cylinder_surface([0., 0., 0.], [0., 0., 1.], 10., 0., 30.).unwrap();
+        let tris = |d, a| s.mesh_angle(d, a).unwrap().indices.len() / 3;
+        let base = tris(0.02, 0.6);
+        let perto = Shape::cylinder_surface([0., 0., 0.], [0., 0., 1.], 10., 0., 30.).unwrap().mesh_angle(0.0185, 0.6).unwrap().indices.len() / 3;
+        assert!(perto != base, "o caso precisa distinguir as duas malhas: {perto}");
+        assert_eq!(tris(0.0185, 0.6), base, "desvio a menos de 10% reaproveita, como na caixa que muda um pouco");
+        s.discard_mesh().unwrap();
+        assert_eq!(tris(0.0185, 0.6), perto, "descartar faz valer o pedido exato");
+        // o malhador não confere o ângulo: quem confere é a fachada, nos dois sentidos
+        let fino = tris(0.0185, 0.1);
+        assert!(fino > perto, "ângulo menor refaz: {perto} -> {fino}");
+        assert_eq!(tris(0.0185, 0.6), perto, "ângulo maior refaz");
+    }
+
+    #[test]
+    fn suavidade_das_arestas_nao_depende_da_posicao() {
+        let s = placa(2);
+        let a = s.mesh_angle(0.3, 0.35).unwrap();
+        // filete: tangente às duas faces; sobram vivas só as arestas sem filete (nenhuma aqui)
+        assert!(a.edge_smooth.iter().any(|x| *x != 0));
+        let lado = Shape::face(&XY, &[rect(20., 20.)]).unwrap().extrude([0., 0., 1.], 10., 0.).unwrap();
+        assert!(lado.mesh(0.3).unwrap().edge_smooth.iter().all(|x| *x == 0), "cubo só tem aresta viva");
+        let movida = s.transformed(Xform::Translate([100., 50., 7.])).unwrap();
+        assert_eq!(movida.mesh_angle(0.3, 0.35).unwrap().edge_smooth, a.edge_smooth);
+        let girada = s.transformed(Xform::Rotate([0.; 3], [1., 0., 0.], 33.)).unwrap();
+        assert_eq!(girada.mesh_angle(0.3, 0.35).unwrap().edge_smooth, a.edge_smooth);
+    }
+
+    #[test]
+    fn ponto_da_assinatura_cai_na_face_do_furo() {
+        // centroide no eixo do furo: a projeção falha e o ponto sai da grade UV
+        let s = Shape::face(&XY, &[rect(40., 40.), vec![Seg2::Circle([3., 4.], 5.)]]).unwrap().extrude([0., 0., 1.], 10., 0.).unwrap();
+        let m = s.mesh(0.2).unwrap();
+        let furo = m.face_info.iter().find(|f| f.kind == 1).unwrap();
+        let [x, y, z] = furo.point;
+        assert!((((x - 3.).powi(2) + (y - 4.).powi(2)).sqrt() - 5.).abs() < 1e-6, "{:?}", furo.point);
+        assert!((z - 5.).abs() < 1.1, "perto do centroide: {z}");
+    }
+
+    #[test]
+    fn fios_do_malhador_limitam_sem_mudar_a_malha() {
+        let padrao = fios_malhador();
+        assert!(padrao >= 1);
+        definir_fios_malhador(Some(1));
+        assert_eq!(fios_malhador(), 1);
+        let um = placa(3).mesh_angle(0.3, 0.35).unwrap();
+        assert_eq!(fios_aplicados(), 1, "o limite chega ao pool do OpenCASCADE");
+        definir_fios_malhador(Some(usize::MAX));
+        let todos = fios_malhador();
+        assert!(todos >= padrao, "limitado aos processadores da máquina: {todos}");
+        let muitos = placa(3).mesh_angle(0.3, 0.35).unwrap();
+        assert_eq!(fios_aplicados(), todos);
+        definir_fios_malhador(None);
+        assert_eq!(fios_malhador(), padrao);
+        assert!(padrao == todos || padrao >= 2 && padrao <= todos / 2 + 1, "padrão {padrao} de {todos}");
+        assert_eq!(um.indices, muitos.indices);
+        assert_eq!(um.positions, muitos.positions);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn thread_de_calculo_fica_abaixo_da_normal() {
+        assert!(std::thread::spawn(reduzir_prioridade_da_thread).join().unwrap());
     }
 }

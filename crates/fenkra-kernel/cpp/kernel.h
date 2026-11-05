@@ -106,6 +106,10 @@ std::unique_ptr<Shape> face_face_fillet_t(const Shape& s, double ax, double ay, 
 int32_t face_index(const Shape& s, double px, double py, double pz, double limit);
 void topology(const Shape& s, rust::Vec<double>& face_info, rust::Vec<double>& edge_mids, rust::Vec<uint32_t>& edge_faces);
 MeshData tessellate(const Shape& s, double deflection, double angle);
+void discard_mesh(const Shape& s);
+void set_mesh_threads(int32_t n);
+int32_t mesh_threads();
+int32_t mesh_pool_threads();
 rust::Vec<double> bounding_box(const Shape& s);
 rust::Vec<double> mass_props(const Shape& s);
 uint32_t count_faces(const Shape& s);

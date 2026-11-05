@@ -188,6 +188,14 @@ pub mod bridge {
         fn topology(s: &Shape, face_info: &mut Vec<f64>, edge_mids: &mut Vec<f64>, edge_faces: &mut Vec<u32>) -> Result<()>;
         /// `angle`: desvio angular máximo entre normais vizinhas, em radianos.
         fn tessellate(s: &Shape, deflection: f64, angle: f64) -> Result<MeshData>;
+        /// Apaga a malha guardada nas faces da forma, inclusive as divididas com outras versões.
+        fn discard_mesh(s: &Shape) -> Result<()>;
+        /// Teto de fios do malhador; 0 volta ao padrão.
+        fn set_mesh_threads(n: i32);
+        /// Teto de fios em vigor.
+        fn mesh_threads() -> i32;
+        /// Fios que o pool do OpenCASCADE tem agora; acompanha o teto na malha seguinte.
+        fn mesh_pool_threads() -> i32;
         /// [xmin, ymin, zmin, xmax, ymax, zmax]
         fn bounding_box(s: &Shape) -> Vec<f64>;
         /// [volume, área, cx, cy, cz]

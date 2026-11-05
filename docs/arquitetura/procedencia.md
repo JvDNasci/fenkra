@@ -45,3 +45,4 @@ Fora deste arquivo e de `docs/benchmark/fontes.md`, os documentos não citam pro
 
 As chaves de fonte (`sw-…`, `inv-…`, `cb-…`) estão detalhadas em `docs/benchmark/fontes.md`.
 O teste `crates/fenkra-app/tests/sem_marcas.rs` falha se um nome de produto aparecer fora desses arquivos.
+| 2026-11-05 | Malha e cache (B219, B220, B234) | Documentação e fontes do OpenCASCADE 8.0.1 (dev.opencascade.org) | referência | LGPL-2.1 com exceção | Parâmetros do malhador e pool de fios, usados com nossas palavras |

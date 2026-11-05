@@ -519,7 +519,10 @@ struct FeatEntry {
 #[derive(Default)]
 pub struct Cache {
     feats: HashMap<Id, FeatEntry>,
-    meshes: HashMap<(Id, u64), (Mesh, MassProps, u32)>,
+    /// malhas dos corpos, só das assinaturas do último cálculo (`limitar`)
+    meshes: HashMap<(Id, u64), Mesh>,
+    /// massa e faces de cada corpo: vêm da forma exata, então sobrevivem à troca de qualidade
+    props: HashMap<(Id, u64), (MassProps, u32)>,
     fills: HashMap<(Id, u64), Vec<[f32; 3]>>,
     /// geometria de referência já avaliada: (assinatura, resultado) — só refaz o que mudou
     refs: HashMap<Id, (u64, Result<RefViz, String>)>,
@@ -535,7 +538,36 @@ impl Cache {
     pub fn com_qualidade(qualidade: QualidadeMalha) -> Self {
         Cache { qualidade, ..Default::default() }
     }
+
+    /// Esquece as versões que o último cálculo não usou e, se o que ficou passar de `teto` bytes,
+    /// solta as malhas maiores. Solta só reaproveitamento: o corpo volta a ser tesselado.
+    fn limitar(&mut self, vivas: &std::collections::HashSet<(Id, u64)>, fills_vivos: &std::collections::HashSet<(Id, u64)>, teto: usize) {
+        self.meshes.retain(|k, _| vivas.contains(k));
+        self.props.retain(|k, _| vivas.contains(k));
+        self.fills.retain(|k, _| fills_vivos.contains(k));
+        let fills: usize = self.fills.values().map(|f| std::mem::size_of_val(f.as_slice())).sum();
+        let mut total = fills + self.meshes.values().map(Mesh::bytes).sum::<usize>();
+        if total <= teto {
+            return;
+        }
+        let mut por_tamanho: Vec<_> = self.meshes.iter().map(|(k, m)| (m.bytes(), *k)).collect();
+        por_tamanho.sort_unstable_by_key(|(b, _)| std::cmp::Reverse(*b));
+        for (bytes, k) in por_tamanho {
+            if total <= teto {
+                return;
+            }
+            self.meshes.remove(&k);
+            total -= bytes;
+        }
+        if total > teto {
+            self.fills.clear();
+        }
+    }
 }
+
+/// Teto de memória das malhas guardadas entre cálculos. Só as versões vivas ficam no cache, então
+/// ele age em documentos muito grandes, trocando memória por tesselar de novo.
+const TETO_CACHE_MALHAS: usize = 512 * 1024 * 1024;
 
 /// Valor exibível de uma referência (guardado no cache).
 #[derive(Clone)]
@@ -4218,7 +4250,8 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         Err(e) => (HashMap::new(), Some(e.to_string())),
     };
     // outra qualidade: as malhas guardadas não servem mais (os comandos continuam valendo)
-    if cache.meshes_q != Some(cache.qualidade) {
+    let qualidade_mudou = cache.meshes_q != Some(cache.qualidade);
+    if qualidade_mudou {
         cache.meshes.clear();
         cache.fills.clear();
         cache.refs.clear();
@@ -4474,6 +4507,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
     }
 
     // sketches para exibição
+    let mut fills_vivos = std::collections::HashSet::new();
     let mut sketches = vec![];
     for (id, (fr, es)) in &cx.sketches {
         let mut v = SketchViz {
@@ -4493,6 +4527,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         // sombra: a face real (com furos internos) tesselada pelo kernel (com cache)
         if !es.loops.is_empty() {
             let key = (*id, hash_of(&[&format!("{:?}{:?}", es.loops, (fr.origin, fr.x, fr.normal))], 0));
+            fills_vivos.insert(key);
             if let Some(f) = cache.fills.get(&key) {
                 v.fill = f.clone();
             } else if let Ok(m) = Shape::face(fr, &es.loops).and_then(|f| tesselar(&f, &cx.qualidade)) {
@@ -4517,36 +4552,43 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
     }
 
     // malhas dos corpos
+    let mut vivas = std::collections::HashSet::new();
     let mut bodies = vec![];
     for c in &doc.collectors {
         let Some((s, owners, roles)) = cx.body_owned(c.id) else { continue };
         let key = (c.id, cx.body_sig.get(&c.id).copied().unwrap_or(0));
-        let cached = cache.meshes.get(&key).cloned();
-        let r = match cached {
-            Some(x) => Ok(x),
+        vivas.insert(key);
+        let r = match cache.meshes.get(&key) {
+            Some(m) => Ok(m.clone()),
             None => {
-                tesselar(&s, &cx.qualidade).map(|m| {
-                    let x = (m, s.mass(), s.face_count());
-                    cache.meshes.insert(key, x.clone());
-                    x
+                // a forma guarda a malha da qualidade antiga, e o malhador a aceitaria com 10% de folga
+                if qualidade_mudou {
+                    s.discard_mesh().ok();
+                }
+                tesselar(&s, &cx.qualidade).inspect(|m| {
+                    cache.meshes.insert(key, m.clone());
                 })
             }
         };
         match r {
-            Ok((mesh, mass, faces)) => bodies.push(BodyResult {
-                collector: c.id,
-                color: c.color,
-                mass,
-                faces,
-                face_owner: owners.clone(),
-                face_role: roles.clone(),
-                mesh,
-            }),
+            Ok(mesh) => {
+                let (mass, faces) = *cache.props.entry(key).or_insert_with(|| (s.mass(), s.face_count()));
+                bodies.push(BodyResult {
+                    collector: c.id,
+                    color: c.color,
+                    mass,
+                    faces,
+                    face_owner: owners.clone(),
+                    face_role: roles.clone(),
+                    mesh,
+                });
+            }
             Err(e) => {
                 cx.status.insert(c.id, Status::Error(e.0));
             }
         }
     }
+    cache.limitar(&vivas, &fills_vivos, TETO_CACHE_MALHAS);
 
     RecomputeResult {
         bodies,
