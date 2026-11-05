@@ -2432,6 +2432,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         self.toast("Tipo diferente: escolha uma publicação do mesmo tipo (plano, ponto, curva, superfície ou valor)", true);
                     }
                 }
+                None if self.open.file.as_deref().is_some_and(|f| fenkra_montagem::links::fecha_ciclo(f, &path, self.project.as_ref().map(|p| p.root.as_path()))) => {
+                    self.toast(tr("Referência circular: a peça de origem já usa geometria desta"), true);
+                }
                 None => {
                     let id = self.open.doc.add_link(src, &path, publ, g);
                     self.toast(format!("Link criado: {}", self.open.doc.name_of(id)), false);

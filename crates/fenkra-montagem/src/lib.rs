@@ -12,6 +12,7 @@ pub mod engrenagens;
 pub mod estrutura;
 pub mod fixadores;
 pub mod kin;
+pub mod links;
 pub mod load;
 pub mod view;
 pub mod solve;
@@ -420,6 +421,9 @@ pub struct Assembly {
     /// projeto relacional (peças novas fixas, posicionadas por links entre peças) × por restrições
     #[serde(default)]
     pub relational: bool,
+    /// quando cada link das peças atualiza (só os que fogem do automático)
+    #[serde(default)]
+    pub politicas_link: Vec<links::PoliticaLink>,
 }
 
 impl Assembly {
@@ -595,7 +599,7 @@ impl Assembly {
     }
 
     pub fn new(name: &str) -> Self {
-        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], relational: false }
+        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], relational: false, politicas_link: vec![] }
     }
 
     pub fn alloc(&mut self) -> Id {
