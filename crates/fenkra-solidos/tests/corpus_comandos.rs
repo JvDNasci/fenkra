@@ -1013,7 +1013,6 @@ fn invalido_corte_que_nao_remove_nada_avisa() {
 /// constante de Euler (2,718...) e o valor do usuário é ignorado em silêncio (a parede fina de `e = 2`
 /// saiu com 2,718). Ou `add_param` recusa nomes de constante, ou o parâmetro tem de vencer a constante.
 #[test]
-#[ignore = "bug: parâmetro chamado 'e' perde para a constante de Euler em silêncio (expr.rs)"]
 fn parametro_com_nome_de_constante_nao_e_ignorado_em_silencio() {
     let mut d = Document::new("nome de constante");
     match d.add_param("e", "2", Unit::Comprimento) {
