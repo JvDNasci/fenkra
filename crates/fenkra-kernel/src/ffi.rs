@@ -170,6 +170,7 @@ pub mod bridge {
             body: &Shape, px: f64, py: f64, pz: f64, t: f64, r: f64, angle_deg: f64, length: f64,
             off1: f64, off2: f64, flip: bool, flat: bool, k: f64, info: &mut Vec<f64>,
         ) -> Result<UniquePtr<Shape>>;
+        fn sm_chain_sweep(face: &Shape, pts: &[f64], nx: f64, ny: f64, nz: f64) -> Result<UniquePtr<Shape>>;
         fn from_brep(text: &str) -> Result<UniquePtr<Shape>>;
         fn hole_tool_ext(
             ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64, diameter: f64, depth: f64,

@@ -13,6 +13,7 @@ pub mod engrenagens;
 pub mod eixos;
 pub mod profile;
 pub mod refs;
+pub mod chapa;
 
 pub use engrenagens::{calculo as calculo_engrenagem, engrenagem_documento, CalculoEngrenagem, ParamEngrenagem, TipoEngrenagem};
 pub use eixos::{chaveta_documento, eixo_documento, ParamEixo, RasgoChaveta, TrechoEixo};
@@ -2237,7 +2238,7 @@ impl Ctx<'_> {
 
     /// Aba/bainha: no estado planificado, a aresta clicada precisa existir na chapa plana — senão
     /// avisa que o planificado não é exato (aba sobre aba) em vez de inventar a geometria.
-    fn sheet_tool(&mut self, f: &Feature, edge: V3, p: fenkra_kernel::SheetFlange) -> Result<Option<String>, String> {
+    fn sheet_tool(&mut self, f: &Feature, edge: V3, p: fenkra_kernel::SheetFlange, colide: bool) -> Result<Option<String>, String> {
         let k = |e: KernelError| e.0;
         let b = self.body(f.target).ok_or("a aba precisa de uma parede de chapa antes")?.clone();
         // a aresta foi escolhida num estado (dobrado ou planificado): leva ao estado atual
@@ -2255,6 +2256,13 @@ impl Ctx<'_> {
             for (end, s) in [(info.ends[0], -1.), (info.ends[1], 1.)] {
                 let m = geo3d::unit(geo3d::add(geo3d::mul(e, s), d)).ok_or("meia-esquadria")?;
                 tool = tool.boolean(&half_space(end, m, big)?, Bool::Cut).map_err(k)?;
+            }
+        }
+        // bainha (colide = false) aperta a chapa de propósito: só a aba comum é validada
+        if colide && !p.flat {
+            // abas vizinhas: a aba nova só encosta na chapa pela aresta; volume comum é colisão
+            if let Some(msg) = chapa::colisao(&b, &tool, info.ends, p.off1, p.off2)? {
+                return Err(msg);
             }
         }
         // registra a dobra no espaço dobrado (no planificado, volta pelas dobras anteriores)
@@ -2280,9 +2288,9 @@ impl Ctx<'_> {
             ba: a * (p.r + p.k * p.t),
             length: p.length,
         });
-        if (info.thickness - p.t).abs() > 1e-3 && !p.flat {
-            // a face lateral não tem a espessura da chapa: a aresta não é de parede de chapa
-            let _ = info;
+        // a lateral da aresta escolhida precisa ser a espessura da chapa (senão não é parede de chapa)
+        if let Some(msg) = chapa::valida_lateral(info.thickness, p.t) {
+            return Err(msg);
         }
         self.apply(f.target, tool, BoolOp::Add, f.id)?;
         Ok(None)
@@ -2424,8 +2432,7 @@ impl Ctx<'_> {
             let a2: Vec<[f64; 2]> = back.iter().map(|p| loc(*p)).collect();
             let mut b2: Vec<[f64; 2]> = edge.iter().map(|p| loc(*p)).collect();
             b2.reverse();
-            let seg = |v: &[[f64; 2]]| if v.len() >= 3 { fenkra_kernel::Seg2::Spline(v.to_vec()) } else { fenkra_kernel::Seg2::Line(v[0], v[v.len() - 1]) };
-            let lp = vec![seg(&a2), fenkra_kernel::Seg2::Line(a2[a2.len() - 1], b2[0]), seg(&b2), fenkra_kernel::Seg2::Line(b2[b2.len() - 1], a2[0])];
+            let lp = [chapa::chain_segs(&a2), vec![fenkra_kernel::Seg2::Line(a2[a2.len() - 1], b2[0])], chapa::chain_segs(&b2), vec![fenkra_kernel::Seg2::Line(b2[b2.len() - 1], a2[0])]].concat();
             let strip = Shape::face(&fr, &[lp]).map_err(k)?.extrude(n, sp.t * 2. + 1., sp.t * 2. + 1.).map_err(k)?;
             self.apply(f.target, strip, BoolOp::Cut, f.id)?;
             back
@@ -2449,8 +2456,7 @@ impl Ctx<'_> {
             let p2: Vec<[f64; 2]> = inner.iter().zip(&outs).map(|(p, o)| loc(geo3d::sub(*p, geo3d::mul(*o, 0.05)))).collect();
             let mut q2: Vec<[f64; 2]> = inner.iter().zip(&outs).map(|(p, o)| loc(geo3d::add(*p, geo3d::mul(*o, dev)))).collect();
             q2.reverse();
-            let seg = |v: &[[f64; 2]]| if v.len() >= 3 { fenkra_kernel::Seg2::Spline(v.to_vec()) } else { fenkra_kernel::Seg2::Line(v[0], v[v.len() - 1]) };
-            let lp = vec![seg(&p2), fenkra_kernel::Seg2::Line(p2[p2.len() - 1], q2[0]), seg(&q2), fenkra_kernel::Seg2::Line(q2[q2.len() - 1], p2[0])];
+            let lp = [chapa::chain_segs(&p2), vec![fenkra_kernel::Seg2::Line(p2[p2.len() - 1], q2[0])], chapa::chain_segs(&q2), vec![fenkra_kernel::Seg2::Line(q2[q2.len() - 1], p2[0])]].concat();
             let face = Shape::face(&fr, &[lp]).map_err(k)?;
             let tool = face.extrude(geo3d::mul(d, -1.), sp.t, 0.).map_err(k)?;
             self.apply(f.target, tool, BoolOp::Add, f.id)?;
@@ -2505,7 +2511,7 @@ impl Ctx<'_> {
                 geo3d::norm(geo3d::sub(q, geo3d::mul(e, geo3d::dot(q, e)))) < 1e-3
             })
         });
-        let tool = if straight { face.extrude(geo3d::unit(axis).unwrap_or([1., 0., 0.]), geo3d::norm(axis), 0.).map_err(k)? } else { face.sweep(&inner, 0).map_err(k)? };
+        let tool = if straight { face.extrude(geo3d::unit(axis).unwrap_or([1., 0., 0.]), geo3d::norm(axis), 0.).map_err(k)? } else { face.sm_chain_sweep(&inner, n).map_err(k)? };
         self.apply(f.target, tool, BoolOp::Add, f.id)?;
         Ok(None)
             
@@ -3184,7 +3190,7 @@ impl Ctx<'_> {
                     }
                 }
                 self.miter_next = fl.miter;
-                let out = self.sheet_tool(f, edge, p)?;
+                let out = self.sheet_tool(f, edge, p, true)?;
                 if let (Some(w), Some(info)) = (relief, self.last_sheet) {
                     // alívio de canto: corte retangular atrás da dobra em cada ponta recuada
                     let depth = p.r + p.t;
@@ -3828,7 +3834,7 @@ impl Ctx<'_> {
                     flat: sp.flat,
                     k: sp.k,
                 };
-                self.sheet_tool(f, h.edge, p)
+                self.sheet_tool(f, h.edge, p, false)
             }
             FeatureKind::StructMember(m) => {
                 let mut geo = self.members(m)?;
