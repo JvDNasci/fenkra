@@ -78,12 +78,9 @@ fn drag_state(ui: &egui::Ui, hid: egui::Id, r: &egui::Response, values: &[f64]) 
     Some((st, ui.input(|i| i.pointer.interact_pos())?))
 }
 
-fn step(ui: &egui::Ui, coarse: f64, fine: f64) -> f64 {
-    if ui.input(|i| i.modifiers.shift) {
-        fine
-    } else {
-        coarse
-    }
+/// Passo fixo (ângulo, fator) vezes as teclas do painel: Shift ×10, Ctrl ×0,1, Alt ×0,01.
+fn step(ui: &egui::Ui, base: f64) -> f64 {
+    base * ui.input(|i| crate::ui_ext::mult_teclas(i.modifiers))
 }
 
 fn snap(v: f64, s: f64) -> f64 {
@@ -140,7 +137,7 @@ pub(crate) fn translate_gizmo(ui: &mut egui::Ui, rect: Rect, cam: &Camera, salt:
             if det.abs() > 1e-6 {
                 let u = (d.x * b.y - d.y * b.x) / det;
                 let w = (a.x * d.y - a.y * d.x) / det;
-                let s = step(ui, 1., 0.1);
+                let s = crate::ui_ext::passo_3d(ui, sa[i].2.min(sa[j].2));
                 let mut v = [st.values[0], st.values[1], st.values[2]];
                 v[i] = snap(st.values[i] + u as f64, s);
                 v[j] = snap(st.values[j] + w as f64, s);
@@ -161,7 +158,7 @@ pub(crate) fn translate_gizmo(ui: &mut egui::Ui, rect: Rect, cam: &Camera, salt:
         if let Some((st, m)) = drag_state(ui, hid, &r, &vals) {
             let t = (m - st.start).dot(sa[i].1) / sa[i].2;
             let mut v = [st.values[0], st.values[1], st.values[2]];
-            v[i] = snap(st.values[i] + t as f64, step(ui, 1., 0.1));
+            v[i] = snap(st.values[i] + t as f64, crate::ui_ext::passo_3d(ui, sa[i].2));
             out = Some(v);
             label(&painter, tip + egui::vec2(12., -8.), format!("{} mm", fmt(v[i])), col);
             ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
@@ -213,7 +210,7 @@ pub(crate) fn rotate_arc_col(ui: &mut egui::Ui, rect: Rect, cam: &Camera, salt: 
                 }
             }
         }
-        let v = snap(best.1, step(ui, 1., 5.));
+        let v = snap(best.1, step(ui, 1.));
         out = Some(v);
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
     }
@@ -239,7 +236,7 @@ fn scale_handle(ui: &mut egui::Ui, rect: Rect, cam: &Camera, salt: u64, center: 
     if let Some((st, m)) = drag_state(ui, hid, &r, &[factor]) {
         let d0 = (st.start - c).length().max(1.);
         let k = (m - c).length() / d0;
-        out = Some(snap((st.values[0] * k as f64).max(0.01), step(ui, 0.1, 0.01)));
+        out = Some(snap((st.values[0] * k as f64).max(0.01), step(ui, 0.1)));
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
     }
     if hot || out.is_some() {
@@ -290,7 +287,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: I
                     arrow(&painter, tip, tip + sd * 40., col);
                     painter.circle_filled(tip, 5., col);
                     if let Some((st, m)) = drag_state(ui, hid, &resp, &[val]) {
-                        let v = snap(st.values[0] + ((m - st.start).dot(sd) / ppm) as f64, step(ui, 1., 0.1));
+                        let v = snap(st.values[0] + ((m - st.start).dot(sd) / ppm) as f64, crate::ui_ext::passo_3d(ui, ppm));
                         set_xf(app, id, |x| {
                             if let GeoXform::Translate { dist, .. } = x {
                                 *dist = fmt(v)

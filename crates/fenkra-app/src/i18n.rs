@@ -849,6 +849,7 @@ static TABLE: &[(&str, &str)] = &[
     ("essa peça não publica nada — na peça de origem, marque 📤 publicar no elemento ou parâmetro", "this part publishes nothing — in the source part, tick 📤 publish on the element or parameter"),
     ("esta variação usa as arestas escolhidas (não 'Todas')", "this variant uses the picked edges (not 'All')"),
     ("expressão inválida", "invalid expression"),
+    ("arraste a seta ou este rótulo, gire a roda, ou clique para digitar (aceita expressão). Shift ×10, Ctrl ×0,1, Alt ×0,01", "drag the arrow or this label, turn the wheel, or click to type (expressions allowed). Shift x10, Ctrl x0.1, Alt x0.01"),
     ("faces retas entre perfis (regrada)", "straight faces between profiles (ruled)"),
     ("fechada (volta ao primeiro perfil)", "closed (back to the first profile)"),
     ("fim do arco", "arc end"),

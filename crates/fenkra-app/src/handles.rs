@@ -361,8 +361,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: Camera) {
     if hr.dragged() {
         if let Some(m) = ui.input(|i| i.pointer.interact_pos()) {
             let t = (m - sb).dot(axis) / ppm;
-            let fine = ui.input(|i| i.modifiers.shift);
-            let step = if fine { 0.1 } else { 1. };
+            // passo segue o zoom (potência de 10 de ~8 px) e as teclas do painel
+            let step = (crate::ui_ext::passo_3d(ui, ppm) * h.k as f64) as f32;
             let mut v = ((t * h.k) / step).round() * step;
             if v.abs() < step {
                 v = step * v.signum().max(1.);
@@ -384,9 +384,26 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: Camera) {
     painter.rect_filled(lr, 4., Color32::from_rgba_unmultiplied(20, 60, 110, 220));
     painter.rect_stroke(lr, 4., Stroke::new(1., c), egui::StrokeKind::Inside);
     painter.galley(lr.min + egui::vec2(5., 3.), galley, Color32::WHITE);
-    let lresp = ui.interact(lr, egui::Id::unique(("alca_cota", id.0)), egui::Sense::click());
-    let lresp = lresp.on_hover_text(format!("{} · arraste a seta (Shift = 0,1 mm) ou dê duplo clique para digitar (aceita expressão)", h.label));
-    if lresp.double_clicked() || lresp.clicked() {
+    let lresp = ui.interact(lr, egui::Id::unique(("alca_cota", id.0)), if numeric { egui::Sense::click_and_drag() } else { egui::Sense::click() });
+    let lresp = lresp.on_hover_text(format!("{} · {}", h.label, tr("arraste a seta ou este rótulo, gire a roda, ou clique para digitar (aceita expressão). Shift ×10, Ctrl ×0,1, Alt ×0,01")));
+    if numeric {
+        // rótulo arrastável (horizontal, na escala da tela) e com roda; mesmo passo adaptativo da seta
+        let passo = crate::ui_ext::passo_3d(ui, ppm) * h.k as f64;
+        let dx = if lresp.dragged() { lresp.drag_delta().x as f64 } else { 0. };
+        let dentes = crate::ui_ext::dentes_3d(ui, &lresp);
+        if dx != 0. || dentes != 0. {
+            let bruto = val * h.k as f64 + dx / ppm as f64 * h.k as f64 + dentes * passo;
+            let mut v = (bruto / passo).round() * passo;
+            if v.abs() < passo {
+                v = passo * v.signum().max(1.);
+            }
+            write_value(app, id, fmt(v));
+        }
+        if lresp.dragged() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+        }
+    }
+    if lresp.double_clicked() || (lresp.clicked() && !lresp.dragged()) {
         editing = Some(h.expr.clone());
     }
     if let Some(mut text) = editing.take() {
