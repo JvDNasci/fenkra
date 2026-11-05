@@ -183,6 +183,8 @@ pub(crate) fn resultado_de(bodies: Vec<BodyResult>) -> RecomputeResult {
         kernel: String::new(),
         bend_lines: vec![],
         cut_outlines: vec![],
+        desatualizados: vec![],
+        cancelado: false,
     }
 }
 

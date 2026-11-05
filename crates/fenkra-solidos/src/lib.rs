@@ -4,6 +4,7 @@
 //! Regras (RF-NUC-008, RF-NUC-024): um comando com erro **não** é apagado nem invalida o resto;
 //! o corpo continua do estado anterior e o comando fica marcado com a mensagem do erro.
 
+pub mod erro;
 pub mod geo3d;
 pub mod importacao;
 pub mod mesh_io;
@@ -500,6 +501,19 @@ pub struct RecomputeResult {
     pub bend_lines: Vec<BendLine>,
     /// contorno de cada recorte de chapa nos dois estados, para a prévia simultânea
     pub cut_outlines: Vec<CutOutline>,
+    /// comandos que não foram refeitos porque o cálculo parou antes (Atualizar esta feature ou
+    /// Cancelar); a árvore os mostra como desatualizados
+    pub desatualizados: Vec<Id>,
+    /// o cálculo foi interrompido por Cancelar: o resultado é parcial e a interface deve
+    /// descartá-lo e manter o último completo
+    pub cancelado: bool,
+}
+
+impl RecomputeResult {
+    /// Causa estável de cada comando que falhou (B69), a partir do documento calculado.
+    pub fn tipos_de_erro(&self, doc: &Document) -> HashMap<Id, erro::ErrorKind> {
+        erro::classificar(doc, &self.status, self.param_error.as_deref())
+    }
 }
 
 pub fn origin_frame(p: OriginPlane) -> Frame {
@@ -724,6 +738,12 @@ pub struct Cache {
     pub qualidade: QualidadeMalha,
     /// qualidade com que as malhas guardadas (`meshes`, `fills`, `refs`) foram feitas
     meshes_q: Option<QualidadeMalha>,
+    /// Cancelar real (B59): quando a interface liga esta bandeira, o cálculo para antes do próximo
+    /// comando. O que já foi feito fica no cache, então calcular de novo continua de onde parou.
+    pub cancelar: Option<Arc<std::sync::atomic::AtomicBool>>,
+    /// Atualizar esta feature (B59): calcula só até este comando (inclusive); os de depois ficam
+    /// listados em `desatualizados`. Vale para o próximo cálculo e é limpo ao terminar.
+    pub ate: Option<Id>,
 }
 
 impl Cache {
@@ -5219,9 +5239,29 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
     let mut seen: std::collections::HashSet<Id> = Default::default();
     let mut promoted: HashMap<Id, Promoted> = HashMap::new();
     cache.reused = 0;
-    for i in order {
+    let ate_pos = cache.ate.take().and_then(|a| order.iter().position(|i| doc.features[*i].id == a));
+    let cancelar = cache.cancelar.clone();
+    let mut parou = false;
+    let mut cancelado = false;
+    let mut desatualizados: Vec<Id> = vec![];
+    for (pos, i) in order.into_iter().enumerate() {
         let f = &doc.features[i];
         seen.insert(f.id);
+        if !parou {
+            if cancelar.as_ref().is_some_and(|c| c.load(std::sync::atomic::Ordering::Relaxed)) {
+                parou = true;
+                cancelado = true;
+            } else if ate_pos.is_some_and(|a| pos > a) {
+                parou = true;
+            }
+        }
+        if parou {
+            if doc.is_active(i) {
+                desatualizados.push(f.id);
+            }
+            cx.status.insert(f.id, Status::Inactive);
+            continue;
+        }
         if !doc.is_active(i) {
             cx.status.insert(f.id, Status::Inactive);
             continue;
@@ -5534,6 +5574,8 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         kernel: fenkra_kernel::version(),
         bend_lines,
         cut_outlines: cx.cut_outlines,
+        desatualizados,
+        cancelado,
     }
 }
 

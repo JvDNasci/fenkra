@@ -1499,6 +1499,44 @@ pub struct Folder {
     /// pasta-mãe (subpastas de geometria)
     #[serde(default)]
     pub parent: Option<Id>,
+    /// regra do contêiner (B59); `Livre` é só organização, como as pastas dos arquivos antigos
+    #[serde(default, skip_serializing_if = "OrdemConteiner::e_livre")]
+    pub ordem: OrdemConteiner,
+}
+
+/// Como os membros de um contêiner se relacionam (B59).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum OrdemConteiner {
+    /// só organização: não muda a ordem nem as regras (pastas de arquivos antigos)
+    #[default]
+    Livre,
+    /// os membros se **consomem** em sequência: cada um pode usar o resultado do anterior
+    Ordenado,
+    /// os membros só **referenciam** o que está fora do contêiner: nenhum usa outro membro,
+    /// então podem ser reordenados à vontade
+    NaoOrdenado,
+}
+
+impl OrdemConteiner {
+    pub fn e_livre(&self) -> bool {
+        *self == OrdemConteiner::Livre
+    }
+}
+
+/// Quando a árvore é recalculada (B59).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum ModoAtualizacao {
+    /// a cada mudança (padrão)
+    #[default]
+    Automatica,
+    /// só quando a pessoa pede: o que mudou fica desatualizado até Atualizar
+    Manual,
+}
+
+impl ModoAtualizacao {
+    pub fn e_automatica(&self) -> bool {
+        *self == ModoAtualizacao::Automatica
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
@@ -2994,6 +3032,9 @@ pub struct Document {
     pub features: Vec<Feature>,
     /// Quantidade de comandos ativos (marcador de rollback, RF-ARV-051).
     pub rollback: usize,
+    /// atualização automática ou manual da árvore (B59); fora do arquivo quando é o padrão
+    #[serde(default, skip_serializing_if = "ModoAtualizacao::e_automatica")]
+    pub atualizacao: ModoAtualizacao,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -3042,6 +3083,7 @@ impl Document {
             line_styles: vec![],
             features: vec![],
             rollback: 0,
+            atualizacao: ModoAtualizacao::Automatica,
             origem: None,
         };
         let c = d.add_collector("Corpo principal");
@@ -3106,7 +3148,7 @@ impl Document {
     /// Pasta de geometria livre (sem linha do tempo).
     pub fn add_geometry_folder(&mut self, name: &str) -> Id {
         let id = self.alloc();
-        self.folders.push(Folder { id, name: name.into(), kind: FolderKind::Geometria, parent: None });
+        self.folders.push(Folder { id, name: name.into(), kind: FolderKind::Geometria, parent: None, ordem: OrdemConteiner::Livre });
         id
     }
 
@@ -3148,7 +3190,7 @@ impl Document {
 
     pub fn add_folder(&mut self, name: &str) -> Id {
         let id = self.alloc();
-        self.folders.push(Folder { id, name: name.into(), kind: FolderKind::Comandos, parent: None });
+        self.folders.push(Folder { id, name: name.into(), kind: FolderKind::Comandos, parent: None, ordem: OrdemConteiner::Livre });
         id
     }
 
@@ -3889,6 +3931,129 @@ impl Document {
         Ok(())
     }
 
+    // ------------------------------------------------ objeto em trabalho (B59)
+
+    /// O objeto em trabalho: o último comando antes da barra de fim de peça. É onde entra o próximo
+    /// comando. Unifica o marcador de retrocesso e o corpo ativo: não há outro "ativo" guardado.
+    pub fn objeto_em_trabalho(&self) -> Option<Id> {
+        let n = self.rollback.min(self.features.len());
+        self.features[..n].iter().rev().find(|f| !self.is_free(f)).map(|f| f.id)
+    }
+
+    /// Definir como objeto em trabalho: põe a barra de fim de peça logo depois do comando e torna
+    /// ativo o corpo dele. Os comandos de depois ficam inativos (retrocedido), mas continuam lá.
+    pub fn definir_objeto_em_trabalho(&mut self, id: Id) -> Result<(), DocError> {
+        let idx = self.feature_index(id).ok_or(DocError::NotFound)?;
+        if self.is_free(&self.features[idx]) {
+            return Err(DocError::Incompatible);
+        }
+        let alvo = self.features[idx].target;
+        self.rollback = idx + 1;
+        if self.collectors.iter().any(|c| c.id == alvo) {
+            self.active_collector = alvo;
+            if let Some(c) = self.collectors.iter_mut().find(|c| c.id == alvo) {
+                c.marker = None;
+            }
+        }
+        Ok(())
+    }
+
+    /// Volta a barra de fim de peça para o fim: o último comando passa a ser o objeto em trabalho.
+    pub fn voltar_ao_fim_da_peca(&mut self) {
+        self.rollback = self.features.len();
+    }
+
+    /// A peça está retrocedida? (comandos depois da barra de fim de peça; avisa ao salvar)
+    pub fn retrocedida(&self) -> bool {
+        self.features.iter().enumerate().any(|(i, f)| i >= self.rollback && !self.is_free(f))
+    }
+
+    // ------------------------------------------------ contêineres ordenado e não ordenado (B59)
+
+    /// Cria um contêiner de comandos. Aninhar um **ordenado** dentro de um **não ordenado** é
+    /// recusado: a ordem de dentro não teria sentido, pois quem está fora pode reordenar o todo.
+    pub fn add_conteiner(&mut self, name: &str, ordem: OrdemConteiner, pai: Option<Id>) -> Result<Id, DocError> {
+        if let Some(p) = pai {
+            let fo = self.folder(p).ok_or(DocError::NotFound)?;
+            if fo.kind != FolderKind::Comandos {
+                return Err(DocError::Incompatible);
+            }
+            if ordem == OrdemConteiner::Ordenado && self.conteiner_nao_ordenado_em_volta(p) {
+                return Err(DocError::Order(fo.name.clone()));
+            }
+        }
+        let id = self.add_folder(name);
+        if let Some(f) = self.folders.iter_mut().find(|f| f.id == id) {
+            f.ordem = ordem;
+            f.parent = pai;
+        }
+        Ok(id)
+    }
+
+    /// `pasta` ou algum contêiner acima dela é não ordenado?
+    fn conteiner_nao_ordenado_em_volta(&self, pasta: Id) -> bool {
+        let mut cur = Some(pasta);
+        let mut guarda = 0;
+        while let Some(c) = cur {
+            let Some(f) = self.folder(c) else { break };
+            if f.ordem == OrdemConteiner::NaoOrdenado {
+                return true;
+            }
+            cur = f.parent;
+            guarda += 1;
+            if guarda > 64 {
+                break;
+            }
+        }
+        false
+    }
+
+    /// Comandos dentro do contêiner, incluindo os das subpastas.
+    pub fn membros_do_conteiner(&self, pasta: Id) -> Vec<Id> {
+        self.features.iter().filter(|f| f.folder.is_some_and(|fo| self.folder_within(fo, pasta))).map(|f| f.id).collect()
+    }
+
+    /// Coloca um comando num contêiner. Num **não ordenado**, o comando não pode usar nem ser usado
+    /// por outro membro; se pudesse, reordenar quebraria a peça. Falha com o nome do vizinho.
+    pub fn mover_comando_para_conteiner(&mut self, id: Id, pasta: Id) -> Result<(), DocError> {
+        let fo = self.folder(pasta).ok_or(DocError::NotFound)?;
+        if fo.kind != FolderKind::Comandos {
+            return Err(DocError::Incompatible);
+        }
+        let f = self.feature(id).ok_or(DocError::NotFound)?;
+        if self.conteiner_nao_ordenado_em_volta(pasta) {
+            let outros = self.membros_do_conteiner(pasta);
+            let usa = Self::refs_of(&f.kind);
+            let usado_por = self.dependents(id);
+            if let Some(v) = outros.into_iter().find(|o| *o != id && (usa.contains(o) || usado_por.contains(o))) {
+                return Err(DocError::Order(self.name_of(v)));
+            }
+        }
+        if let Some(f) = self.feature_mut(id) {
+            f.folder = Some(pasta);
+        }
+        Ok(())
+    }
+
+    /// Reordena um comando validando pais e filhos (como [`Self::move_feature`]) e, quando ele está
+    /// num contêiner ordenado, também que os membros continuem juntos, em bloco.
+    pub fn reordenar_comando(&mut self, id: Id, para: usize) -> Result<(), DocError> {
+        let antes = self.features.clone();
+        self.move_feature(id, para)?;
+        let ordenado = self.feature(id).and_then(|f| f.folder).filter(|p| self.folder(*p).is_some_and(|fo| fo.ordem == OrdemConteiner::Ordenado));
+        if let Some(p) = ordenado {
+            let membros = self.membros_do_conteiner(p);
+            let pos: Vec<usize> = membros.iter().filter_map(|m| self.feature_index(*m)).collect();
+            let (min, max) = (pos.iter().min().copied().unwrap_or(0), pos.iter().max().copied().unwrap_or(0));
+            if max - min + 1 != pos.len() {
+                let nome = self.folder(p).map(|f| f.name.clone()).unwrap_or_default();
+                self.features = antes;
+                return Err(DocError::Order(nome));
+            }
+        }
+        Ok(())
+    }
+
     /// Comandos ativos (antes do marcador e não suprimidos).
     pub fn active_features(&self) -> impl Iterator<Item = (usize, &Feature)> {
         self.features.iter().enumerate().filter(|(i, _)| self.is_active(*i))
@@ -4005,6 +4170,88 @@ mod tests {
         let c = sketch_rect(&mut d);
         assert_eq!(d.features.iter().map(|f| f.id).collect::<Vec<_>>(), vec![a, c, b]);
         assert_eq!(d.rollback, 2);
+    }
+
+    fn extrusao_de(d: &mut Document, sk: Id) -> Id {
+        d.add_feature(FeatureKind::Extrude(Extrude { thin_side: 0, sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None }))
+    }
+
+    #[test]
+    fn objeto_em_trabalho_e_unico_e_segue_o_marcador() {
+        let mut d = Document::new("p");
+        let sk = sketch_rect(&mut d);
+        let ex = extrusao_de(&mut d, sk);
+        assert_eq!(d.objeto_em_trabalho(), Some(ex));
+        assert!(!d.retrocedida());
+        d.definir_objeto_em_trabalho(sk).unwrap();
+        assert_eq!(d.objeto_em_trabalho(), Some(sk));
+        assert!(d.retrocedida(), "o comando depois da barra deve avisar ao salvar");
+        // o próximo comando entra logo depois do objeto em trabalho
+        let sk2 = sketch_rect(&mut d);
+        assert_eq!(d.features.iter().map(|f| f.id).collect::<Vec<_>>(), vec![sk, sk2, ex]);
+        assert_eq!(d.objeto_em_trabalho(), Some(sk2));
+        d.voltar_ao_fim_da_peca();
+        assert_eq!(d.objeto_em_trabalho(), Some(ex));
+        assert!(!d.retrocedida());
+        assert!(matches!(d.definir_objeto_em_trabalho(Id(9999)), Err(DocError::NotFound)));
+    }
+
+    #[test]
+    fn conteiner_nao_ordenado_recusa_membros_ligados_e_aninhamento_ordenado() {
+        let mut d = Document::new("p");
+        let sk = sketch_rect(&mut d);
+        let ex = extrusao_de(&mut d, sk);
+        let solto = sketch_rect(&mut d);
+        let livre = d.add_conteiner("Livres", OrdemConteiner::NaoOrdenado, None).unwrap();
+        d.mover_comando_para_conteiner(sk, livre).unwrap();
+        // a extrusão usa o sketch que já está no contêiner: não pode entrar junto
+        assert!(matches!(d.mover_comando_para_conteiner(ex, livre), Err(DocError::Order(_))));
+        // o sketch solto não se liga a ninguém
+        d.mover_comando_para_conteiner(solto, livre).unwrap();
+        // ordenado dentro de não ordenado é recusado; o inverso vale
+        assert!(matches!(d.add_conteiner("Seq", OrdemConteiner::Ordenado, Some(livre)), Err(DocError::Order(_))));
+        let seq = d.add_conteiner("Seq", OrdemConteiner::Ordenado, None).unwrap();
+        d.add_conteiner("Dentro", OrdemConteiner::NaoOrdenado, Some(seq)).unwrap();
+    }
+
+    #[test]
+    fn conteiner_ordenado_mantem_membros_em_bloco_e_respeita_pais() {
+        let mut d = Document::new("p");
+        let a = sketch_rect(&mut d);
+        let ex = extrusao_de(&mut d, a);
+        let b = sketch_rect(&mut d);
+        let seq = d.add_conteiner("Seq", OrdemConteiner::Ordenado, None).unwrap();
+        d.mover_comando_para_conteiner(a, seq).unwrap();
+        d.mover_comando_para_conteiner(ex, seq).unwrap();
+        // a extrusão depende de a: não pode ficar antes dele
+        assert!(d.reordenar_comando(a, 2).is_err(), "a extrusão depende de a");
+        d.mover_comando_para_conteiner(b, seq).unwrap();
+        d.move_feature(b, 0).unwrap();
+        d.move_feature(b, 2).unwrap();
+        assert_eq!(d.features.iter().map(|f| f.id).collect::<Vec<_>>(), vec![a, ex, b]);
+        let r = d.reordenar_comando(b, 0);
+        assert!(r.is_ok());
+    }
+
+    #[test]
+    fn arquivo_antigo_sem_os_campos_novos_abre_com_padroes() {
+        let d = Document::new("antigo");
+        let mut v = serde_json::to_value(&d).unwrap();
+        let o = v.as_object_mut().unwrap();
+        assert!(!o.contains_key("atualizacao"), "o padrão não entra no arquivo (hash das versões)");
+        o.remove("atualizacao");
+        let lido: Document = serde_json::from_value(v).unwrap();
+        assert_eq!(lido.atualizacao, ModoAtualizacao::Automatica);
+        let mut d2 = Document::new("novo");
+        d2.atualizacao = ModoAtualizacao::Manual;
+        let volta: Document = serde_json::from_str(&serde_json::to_string(&d2).unwrap()).unwrap();
+        assert_eq!(volta.atualizacao, ModoAtualizacao::Manual);
+        let f = d2.add_conteiner("C", OrdemConteiner::Ordenado, None).unwrap();
+        let volta: Document = serde_json::from_str(&serde_json::to_string(&d2).unwrap()).unwrap();
+        assert_eq!(volta.folder(f).unwrap().ordem, OrdemConteiner::Ordenado);
+        // pasta antiga sem o campo
+        let fo: Folder = serde_json::from_str(r#"{"id":5,"name":"P","kind":"Comandos","parent":null}"#).unwrap();
+        assert_eq!(fo.ordem, OrdemConteiner::Livre);
     }
 
     #[test]
