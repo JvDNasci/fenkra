@@ -55,6 +55,10 @@ fn shows(hidden: bool, env: bool) -> bool {
     hidden == env
 }
 
+fn f3(v: [f64; 3]) -> [f32; 3] {
+    v.map(|x| x as f32)
+}
+
 fn rgb(c: [u8; 3]) -> [f32; 3] {
     c.map(|x| x as f32 / 255.)
 }
@@ -248,9 +252,14 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
         );
         let h = size * if p.id.is_some() { 0.45 } else { 0.5 };
         let c = [o3 + (x + yv) * h, o3 + (x - yv) * h, o3 + (-x - yv) * h, o3 + (-x + yv) * h];
-        let dst = if selected { &mut s.overlay } else { &mut s.lines };
+        // B228: o plano do comando aberto é um retângulo translúcido com borda, não só um contorno
+        let previa = o.fantasma.as_ref().filter(|f| Some(f.id) == p.id);
+        if let Some(f) = previa {
+            crate::previa::retangulo_fantasma(&mut s.ghost, c, Vec3::from(f3(p.frame.normal)), f.cor);
+        }
+        let dst = if selected || previa.is_some() { &mut s.overlay } else { &mut s.lines };
         for i in 0..4 {
-            let colr = if selected { HILITE } else { col };
+            let colr = previa.map(|f| crate::previa::cor_linha(f.cor)).unwrap_or(if selected { HILITE } else { col });
             dst.push(lv(c[i].into(), colr));
             dst.push(lv(c[(i + 1) % 4].into(), colr));
         }

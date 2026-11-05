@@ -63,6 +63,14 @@ pub fn cor_linha(c: [u8; 3]) -> [f32; 4] {
     [f[0], f[1], f[2], 1.]
 }
 
+/// Retângulo translúcido (quatro cantos em ordem) na camada de fantasma.
+pub fn retangulo_fantasma(dst: &mut Vec<MeshVertex>, c: [Vec3; 4], n: Vec3, cor: [u8; 3]) {
+    let f = cor_f(cor);
+    for i in [0, 1, 2, 0, 2, 3] {
+        dst.push(MeshVertex { pos: c[i].into(), nrm: n.into(), col: [f[0], f[1], f[2], ALFA], mat: [1., 0., 1., 0.] });
+    }
+}
+
 /// Malha onde as faces escolhidas pelo comando moram: a de antes, porque a de agora pode já não ter
 /// a face (a casca abre, a espessura desloca).
 fn malha_de_entrada<'a>(r: &'a RecomputeResult, f: &'a Fantasma, alvo: Id) -> Option<&'a Mesh> {
@@ -661,6 +669,17 @@ mod tests {
         assert!(c.indices.is_empty() && !c.ghost.is_empty(), "antes de confirmar o membro é só fantasma");
         let (lo, hi) = c.bounds.expect("caixa");
         assert!(hi.x - lo.x > 390. && hi.y - lo.y > 290., "o fantasma cobre as duas linhas: {lo} {hi}");
+    }
+
+    /// B228: o plano do comando aberto é um retângulo translúcido, fora dos corpos.
+    #[test]
+    fn plano_deslocado_vira_retangulo_translucido() {
+        let mut d = Document::new("plano");
+        let p = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "15");
+        let r = recompute(&d);
+        let c = cena(&d, &r, p, &[]);
+        assert_eq!(c.ghost.len(), 6);
+        assert!(c.ghost.iter().all(|v| (v.pos[2] - 15.).abs() < 1e-4 && v.col[3] < 1.));
     }
 
     /// O fantasma não é selecionável: o raio passa pela aba e acerta o que está atrás, ou nada.
