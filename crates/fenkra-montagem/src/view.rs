@@ -341,11 +341,13 @@ mod tests {
         assert!((v0 - v2 - cyl).abs() < cyl * 0.05, "furo na placa 2: {v2}");
         let (_, r2) = compose(&a, Some(&dir), &mut cache, &mut errs);
         assert_eq!(r2.bodies.len(), 2);
-        // subconjunto com a placa 2: a restrição que ligava à placa 1 cai
-        let (sub, dropped) = a.extract_subassembly(&[p2], "Sub");
+        // subconjunto com a placa 2: a restrição com a placa 1 passa para o nó, e o furo se divide
+        let (sub, no, rel) = a.extract_subassembly(&[p2], "Sub", "sub.fka");
         assert_eq!(sub.nodes.len(), 1);
-        assert_eq!(dropped, 1);
-        assert!(a.mates.is_empty() && a.features.iter().all(|f| !f.targets.contains(&p2)));
+        assert_eq!(rel.religadas.len(), 1);
+        assert!(a.mates.iter().all(|m| m.b.comp == no || m.a.comp == no));
+        assert!(a.features.iter().all(|f| !f.targets.contains(&p2)));
+        assert_eq!(sub.features[0].targets, vec![p2]);
         let _ = p1;
     }
 }

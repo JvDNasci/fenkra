@@ -16,10 +16,12 @@ pub mod links;
 pub mod load;
 pub mod view;
 pub mod solve;
+pub mod subconjunto;
 
 pub use engrenagens::{calculo_par, inserir_par_engrenagens, CalculoPar, RelatorioEngrenagens};
 pub use estrutura::{estrutura_para_montagem, Gerado, GrupoGerado};
 pub use fixadores::{preencher_furos, OpcoesFixadores, RelatorioFixadores};
+pub use subconjunto::{Religacao, RelatorioExtracao};
 
 use fenkra_core::{expr, Id, Properties};
 use serde::{Deserialize, Serialize};
@@ -424,6 +426,9 @@ pub struct Assembly {
     /// quando cada link das peças atualiza (só os que fogem do automático)
     #[serde(default)]
     pub politicas_link: Vec<links::PoliticaLink>,
+    /// originais dos itens ligados ao nó de um subconjunto, para inserir de volta
+    #[serde(default)]
+    pub religacoes: Vec<Religacao>,
 }
 
 impl Assembly {
@@ -539,67 +544,8 @@ impl Assembly {
         id
     }
 
-    /// Tira os componentes `ids` desta montagem para um subconjunto novo (mesmas posições no
-    /// mundo; o nó do subconjunto fica na origem). Leva as restrições, juntas e fixações entre
-    /// eles; as que ligavam a componentes de fora são apagadas (devolve quantas).
-    pub fn extract_subassembly(&mut self, ids: &[Id], name: &str) -> (Assembly, usize) {
-        let mut sub = Assembly::new(name);
-        let inside = |c: Id| ids.contains(&c);
-        let mut map: HashMap<Id, Id> = HashMap::new();
-        for n in self.nodes.iter().filter(|n| inside(n.id) && !matches!(n.kind, NodeKind::Group)) {
-            let nid = sub.add_component(&n.name, n.kind.clone(), n.placement, None);
-            if let Some(x) = sub.node_mut(nid) {
-                x.fixed = n.fixed;
-                x.color = n.color;
-                x.mode = n.mode;
-                x.visible = n.visible;
-            }
-            map.insert(n.id, nid);
-        }
-        let mut dropped = 0;
-        for m in &self.mates {
-            match (map.get(&m.a.comp), map.get(&m.b.comp)) {
-                (Some(a), Some(b)) => {
-                    let id = sub.alloc();
-                    sub.mates.push(Mate { id, name: m.name.clone(), kind: m.kind.clone(), a: MateRef { comp: *a, ..m.a }, b: MateRef { comp: *b, ..m.b }, suppressed: m.suppressed, sentido: m.sentido, lado_invertido: m.lado_invertido });
-                }
-                (None, None) => {}
-                _ => dropped += 1,
-            }
-        }
-        for j in &self.joints {
-            if let (Some(a), Some(b)) = (map.get(&j.a.comp), map.get(&j.b.comp)) {
-                let mut nj = j.clone();
-                nj.id = sub.alloc();
-                nj.a.comp = *a;
-                nj.b.comp = *b;
-                sub.joints.push(nj);
-            } else if inside(j.a.comp) || inside(j.b.comp) {
-                dropped += 1;
-            }
-        }
-        for g in &self.rigid {
-            let comps: Vec<Id> = g.comps.iter().filter_map(|c| map.get(c).copied()).collect();
-            if comps.len() >= 2 {
-                sub.add_rigid(comps);
-            }
-        }
-        // a montagem perde os componentes e o que os ligava
-        self.mates.retain(|m| !inside(m.a.comp) && !inside(m.b.comp));
-        self.joints.retain(|j| !inside(j.a.comp) && !inside(j.b.comp));
-        let jids: Vec<Id> = self.joints.iter().map(|j| j.id).collect();
-        self.couplings.retain(|c| jids.contains(&c.a) && jids.contains(&c.b));
-        for g in &mut self.rigid {
-            g.comps.retain(|c| !inside(*c));
-        }
-        self.rigid.retain(|g| g.comps.len() >= 2);
-        self.features.retain(|f| !f.targets.iter().any(|t| inside(*t)));
-        self.nodes.retain(|n| !inside(n.id));
-        (sub, dropped)
-    }
-
     pub fn new(name: &str) -> Self {
-        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], relational: false, politicas_link: vec![] }
+        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], relational: false, politicas_link: vec![], religacoes: vec![] }
     }
 
     pub fn alloc(&mut self) -> Id {

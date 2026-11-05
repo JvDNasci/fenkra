@@ -646,29 +646,22 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                     let name = f.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "Subconjunto".into());
                     st.push_undo();
                     let old_dir = st.dir();
-                    let (mut sub, dropped) = st.asm.extract_subassembly(&comps, &name);
+                    let path = st.rel_path(&f);
+                    let (mut sub, id, rel) = st.asm.extract_subassembly(&comps, &name, &path);
                     // caminhos das peças passam a ser relativos ao arquivo novo
                     let new_dir = f.parent().map(|p| p.to_path_buf());
-                    for n in &mut sub.nodes {
-                        if let NodeKind::Part { path } | NodeKind::SubAssembly { path } = &mut n.kind {
-                            let full = full_path(old_dir.as_deref(), path);
-                            *path = match new_dir.as_ref().and_then(|d| full.strip_prefix(d).ok()) {
-                                Some(r) => r.to_string_lossy().replace('\\', "/"),
-                                None => full.to_string_lossy().to_string(),
-                            };
-                        }
-                    }
+                    sub.trocar_caminhos(|p| caminho_relativo(old_dir.as_deref(), new_dir.as_deref(), p));
                     if let Err(e) = std::fs::write(&f, sub.to_json()) {
+                        if let Some(antes) = st.undo.pop() {
+                            st.asm = antes;
+                        }
                         app.toast(format!("{}: {e}", tr("Erro ao gravar o subconjunto")), true);
                         return true;
                     }
-                    let path = st.rel_path(&f);
-                    let id = st.asm.add_component(&name, NodeKind::SubAssembly { path }, Placement::default(), None);
                     st.sel = Some(id);
                     app.picks.clear();
                     st.solve();
-                    let extra = if dropped > 0 { format!(" · {dropped} {}", tr("restrição(ões) com peças de fora apagada(s)")) } else { String::new() };
-                    app.toast(format!("{} {name}: {} {}{extra}", tr("Subconjunto"), comps.len(), tr("componente(s)")), dropped > 0);
+                    app.toast(resumo_extracao(&name, &rel), !rel.perdidas.is_empty());
                 }
                 Cmd::AsmFeat(k) => {
                     let comps = st.comps_of(&app.picks);
@@ -1275,6 +1268,10 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                         *act = Some((n.id, 6));
                         ui.close();
                     }
+                    if matches!(n.kind, NodeKind::SubAssembly { .. }) && ui.button(tr("Inserir de volta")).on_hover_text(tr("Desfaz o subconjunto: as peças voltam para esta montagem, e o que foi religado volta às peças de origem.")).clicked() {
+                        *act = Some((n.id, 16));
+                        ui.close();
+                    }
                 }
                 ui.menu_button(tr("📁 Organizar"), |ui| {
                     if ui.button(tr("▲ Subir")).clicked() {
@@ -1623,6 +1620,11 @@ pub fn node_action(app: &mut App, id: Id, k: u8) {
     let Some(st) = app.asm.as_mut() else { return };
     match k {
         2 => return edit_part(app, id),
+        16 => {
+            let msg = inserir_de_volta(st, id);
+            app.toast(msg.0, msg.1);
+            return;
+        }
         12 => {
             st.sel = Some(id);
             st.props = true;
@@ -1700,6 +1702,54 @@ pub fn node_action(app: &mut App, id: Id, k: u8) {
         _ => {}
     }
     st.dirty = true;
+}
+
+/// Caminho `p` (relativo a `de`) visto da pasta `para`: relativo se estiver dentro dela.
+fn caminho_relativo(de: Option<&std::path::Path>, para: Option<&std::path::Path>, p: &str) -> String {
+    let full = full_path(de, p);
+    match para.and_then(|d| full.strip_prefix(d).ok()) {
+        Some(r) => r.to_string_lossy().replace('\\', "/"),
+        None => full.to_string_lossy().to_string(),
+    }
+}
+
+/// Uma linha com o que a extração fez; o que ficou de fora vem por nome.
+fn resumo_extracao(nome: &str, r: &RelatorioExtracao) -> String {
+    let mut s = format!("{} {nome}: {} {} · {} {} · {} {}", tr("Subconjunto"), r.componentes, tr("componente(s)"), r.restricoes + r.juntas, tr("ligação(ões) levada(s)"), r.religadas.len(), tr("religada(s) ao nó"));
+    if !r.perdidas.is_empty() {
+        s.push_str(&format!(" · {}: {}", tr("não atravessaram (voltam ao inserir de volta)"), r.perdidas.join("; ")));
+    }
+    s
+}
+
+/// Lê o `.fka` do subconjunto `id` e devolve as peças dele à montagem.
+fn inserir_de_volta(st: &mut AsmState, id: Id) -> (String, bool) {
+    let Some(NodeKind::SubAssembly { path }) = st.asm.node(id).map(|n| n.kind.clone()) else { return (tr("O componente não é um subconjunto").to_string(), true) };
+    let dir = st.dir();
+    let full = full_path(dir.as_deref(), &path);
+    let lido = std::fs::read_to_string(&full).map_err(|e| format!("{}: {e}", full.display())).and_then(|t| Assembly::from_json(&t));
+    let mut sub = match lido {
+        Ok(s) => s,
+        Err(e) => return (e, true),
+    };
+    let pasta = full.parent().map(|p| p.to_path_buf());
+    sub.trocar_caminhos(|p| caminho_relativo(pasta.as_deref(), dir.as_deref(), p));
+    st.push_undo();
+    match st.asm.inserir_de_volta(id, &sub) {
+        Ok(rel) => {
+            st.sel = None;
+            st.solve();
+            let mut s = format!("{}: {} {}", tr("Subconjunto desfeito"), rel.componentes, tr("componente(s)"));
+            if !rel.perdidas.is_empty() {
+                s.push_str(&format!(" · {}", rel.perdidas.join("; ")));
+            }
+            (s, !rel.perdidas.is_empty())
+        }
+        Err(e) => {
+            st.undo.pop();
+            (e, true)
+        }
+    }
 }
 
 /// Lista de links da peça, com o estado de cada um e as ações. Devolve o aviso a mostrar.
