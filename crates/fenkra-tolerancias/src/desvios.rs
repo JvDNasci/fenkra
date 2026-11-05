@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Desvios fundamentais e limites de furos (A–ZC) e eixos (a–zc), ISO 286-1.
 //!
 //! O eixo é a referência: a tabela guarda `es` para a–h (acima da linha zero) e `ei` para k–zc.

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Classes de tolerância ("H7", "g6"), ajustes ("H7/g6") e seus limites.
 
 use crate::desvios::{limites_eixo, limites_furo, Desvios, Letra};

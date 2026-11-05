@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Tolerâncias normativas como dados e funções puras, sem dependência do resto do Fenkra.
 //!
 //! * `it`: graus de tolerância padrão IT01–IT18 por faixa de diâmetro nominal (ISO 286-1);

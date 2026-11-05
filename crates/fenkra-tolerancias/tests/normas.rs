@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Conferência dos dados contra valores publicados e contra as fórmulas da própria norma.
 
 use fenkra_tolerancias::ajustes::{formatar_desvio_mm, textos_desvios};

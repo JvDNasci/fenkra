@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Tolerâncias gerais: ISO 2768-1 (dimensões lineares e angulares) e ISO 2768-2 (forma e posição).
 
 use serde::{Deserialize, Serialize};

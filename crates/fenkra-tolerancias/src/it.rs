@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Graus de tolerância padrão IT01–IT18 (ISO 286-1).
 
 use serde::{Deserialize, Serialize};
