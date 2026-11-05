@@ -537,7 +537,7 @@ impl App {
             let d = &mut app.open.doc;
             let mk = |d: &mut Document, kind, a: Vec<[f64; 3]>, off, text: &str| {
                 let id = d.alloc();
-                d.pmi.push(Pmi { id, name: format!("PMI {}", id.0), kind, anchors: a, offset: off, text: text.into(), tol_plus: s(""), tol_minus: s(""), visible: true, plane: None, style: Default::default(), folder: String::new() });
+                d.pmi.push(Pmi { id, name: format!("PMI {}", id.0), kind, anchors: a, offset: off, text: text.into(), tol_plus: s(""), tol_minus: s(""), visible: true, plane: None, style: Default::default(), folder: String::new(), targets: vec![] });
             };
             mk(d, PmiKind::Linear, vec![[-60., -35., 8.], [60., -35., 8.]], [0., -25., 0.], "");
             mk(d, PmiKind::Note, vec![[0., 0., 8.]], [40., 30., 30.], "Rebarbar arestas vivas");
@@ -5757,6 +5757,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     ui.separator();
                     ui.label(RichText::new(format!("⚙ {} GDL livres · {} restrição(ões) com erro", r.dof, r.failed.len())).small().color(col));
                 }
+                crate::pmi_ui::status(self, ui);
                 let errs = self.errors_prev;
                 if errs > 0 && ui.small_button(RichText::new(format!("✖ {errs} com erro — reparar")).color(crate::theme::st_err())).clicked() {
                     self.wizard_open = true;

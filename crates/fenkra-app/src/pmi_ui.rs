@@ -47,7 +47,7 @@ pub fn list_mut(app: &mut App) -> &mut Vec<Pmi> {
 
 /// Âncoras a partir das seleções: vértice → posição; aresta → ponto médio (raio/diâmetro: centro
 /// e um ponto do arco); face → ponto clicado.
-fn anchors(app: &App, kind: &PmiKind, picks: &[Pick]) -> Option<Vec<[f64; 3]>> {
+fn anchors(app: &App, kind: &PmiKind, picks: &[Pick]) -> Option<(Vec<[f64; 3]>, Vec<Option<PmiTarget>>)> {
     let r = app.result.as_ref();
     let pt = |p: &Pick| -> Option<[f64; 3]> {
         Some(match *p {
@@ -59,16 +59,133 @@ fn anchors(app: &App, kind: &PmiKind, picks: &[Pick]) -> Option<Vec<[f64; 3]>> {
     };
     match kind {
         PmiKind::Radius | PmiKind::Diameter => {
-            let Pick::Edge { body, edge, mid } = *picks.first()? else { return None };
-            let pts = crate::picking::edge_polyline(r?, body, edge);
-            let c = fenkra_solidos::geo3d::Curve3::poly(pts, false).ok()?;
-            let (ctr, _, _) = fenkra_solidos::geo3d::fit_circle(&c).ok()?;
-            Some(vec![ctr, mid.map(|v| v as f64)])
+            // aresta circular, ou face cilíndrica (furo ou eixo): a âncora grava a chave do alvo
+            let t = pick_target(r?, picks.first()?)?;
+            let on = matches!(t.class, TargetClass::ArestaCircular | TargetClass::FaceCilindrica);
+            if !on {
+                return None;
+            }
+            let hit = pt(picks.first()?)?;
+            let surf = match picks.first()? {
+                Pick::Edge { mid, .. } => mid.map(|v| v as f64),
+                _ => t.carry(&t, hit, false),
+            };
+            Some((vec![t.carry(&t, hit, true), surf], vec![Some(t), None]))
         }
         k => {
-            let v: Vec<[f64; 3]> = picks.iter().filter_map(pt).collect();
-            (v.len() >= k.anchors()).then(|| v[..k.anchors()].to_vec())
+            let v: Vec<([f64; 3], Option<PmiTarget>)> = picks.iter().filter_map(|p| Some((pt(p)?, r.and_then(|r| pick_target(r, p))))).collect();
+            if v.len() < k.anchors() {
+                return None;
+            }
+            let (mut a, t): (Vec<_>, Vec<_>) = v[..k.anchors()].iter().cloned().unzip();
+            fix_pair(kind, &mut a, &t);
+            Some((a, t))
         }
+    }
+}
+
+/// Cota entre duas faces planas paralelas: a segunda âncora vai para o pé da perpendicular da
+/// primeira, para a linha de cota medir exatamente a distância entre os planos.
+fn fix_pair(kind: &PmiKind, a: &mut [[f64; 3]], t: &[Option<PmiTarget>]) {
+    if *kind != PmiKind::Linear || a.len() < 2 {
+        return;
+    }
+    if let (Some(Some(t0)), Some(Some(t1))) = (t.first(), t.get(1)) {
+        let n = t1.dir;
+        let par = n.iter().zip(t0.dir).map(|(x, y)| x * y).sum::<f64>().abs() > 0.99995;
+        if t0.class == TargetClass::FacePlana && t1.class == TargetClass::FacePlana && par {
+            a[1] = t1.carry(t1, a[0], false);
+        }
+    }
+}
+
+/// Alvo (chave geométrica) do que o cursor ou a seleção apontam.
+fn pick_target(r: &RecomputeResult, p: &Pick) -> Option<PmiTarget> {
+    match *p {
+        Pick::Face { body, face, .. } => face_target(crate::picking::mesh_of(r, body)?, face),
+        Pick::Edge { body, edge, mid } => {
+            let pts = crate::picking::edge_polyline(r, body, edge);
+            let circ = fenkra_solidos::geo3d::Curve3::poly(pts, false).ok().and_then(|c| fenkra_solidos::geo3d::fit_circle(&c).ok());
+            Some(match circ {
+                Some((ctr, n, rad)) => PmiTarget { class: TargetClass::ArestaCircular, point: ctr, dir: n, radius: rad, concave: false },
+                None => PmiTarget { class: TargetClass::Aresta, point: mid.map(|v| v as f64), dir: [0.; 3], radius: 0., concave: false },
+            })
+        }
+        Pick::Vertex { pos, .. } => Some(PmiTarget { class: TargetClass::Vertice, point: pos.map(|v| v as f64), dir: [0.; 3], radius: 0., concave: false }),
+        _ => None,
+    }
+}
+
+/// Chave de uma face da malha: plano (normal externa), cilindro (eixo, raio ajustado pelos
+/// vértices e sentido: furo quando a normal aponta para o eixo) ou outra superfície.
+fn face_target(m: &fenkra_kernel::Mesh, face: usize) -> Option<PmiTarget> {
+    let fi = m.face_info.get(face)?;
+    let mk = |class, point, dir, radius, concave| Some(PmiTarget { class, point, dir, radius, concave });
+    match fi.kind {
+        0 => mk(TargetClass::FacePlana, fi.point, fi.dir, 0., false),
+        1 => {
+            let a = *m.face_ranges.get(face)? as usize;
+            let b = m.face_ranges.get(face + 1).map(|&x| x as usize).unwrap_or(m.indices.len());
+            let idx = &m.indices[a.min(m.indices.len())..b.min(m.indices.len())];
+            let p = |i: u32| {
+                let k = i as usize * 3;
+                [m.positions[k] as f64, m.positions[k + 1] as f64, m.positions[k + 2] as f64]
+            };
+            let pts: Vec<[f64; 3]> = idx.iter().step_by(2).map(|&i| p(i)).collect();
+            let (ctr, rad) = fit_axis_circle(&pts, fi.dir)?;
+            let i0 = *idx.first()? as usize * 3;
+            let n = [m.normals[i0] as f64, m.normals[i0 + 1] as f64, m.normals[i0 + 2] as f64];
+            let to_axis = [ctr[0] - m.positions[i0] as f64, ctr[1] - m.positions[i0 + 1] as f64, ctr[2] - m.positions[i0 + 2] as f64];
+            let concave = n.iter().zip(to_axis).map(|(x, y)| x * y).sum::<f64>() > 0.;
+            mk(TargetClass::FaceCilindrica, ctr, fi.dir, rad, concave)
+        }
+        _ => mk(TargetClass::FaceOutra, fi.point, fi.dir, 0., false),
+    }
+}
+
+/// Todos os alvos da geometria atual (faces, arestas circulares, meios de aresta e vértices)
+/// para reencontrar os alvos das anotações. Guardado por resultado de recálculo.
+fn candidates(ctx: &egui::Context, r: &RecomputeResult) -> std::sync::Arc<Vec<PmiTarget>> {
+    let key = (r as *const RecomputeResult as usize, r.bodies.iter().map(|b| b.mesh.positions.len() + b.mesh.edges.len()).sum::<usize>(), r.elapsed_ms.to_bits());
+    let id = egui::Id::new("pmi_candidatos");
+    if let Some((k, v)) = ctx.data(|d| d.get_temp::<((usize, usize, u64), std::sync::Arc<Vec<PmiTarget>>)>(id)) {
+        if k == key {
+            return v;
+        }
+    }
+    let mut out = vec![];
+    for (bi, b) in r.bodies.iter().enumerate() {
+        for f in 0..b.mesh.face_info.len() {
+            out.extend(face_target(&b.mesh, f));
+        }
+        for e in 0..b.mesh.edge_mids.len() / 3 {
+            let pts = crate::picking::edge_polyline(r, bi, e);
+            if let Some(c) = fenkra_solidos::geo3d::Curve3::poly(pts, false).ok().and_then(|c| fenkra_solidos::geo3d::fit_circle(&c).ok()) {
+                out.push(PmiTarget { class: TargetClass::ArestaCircular, point: c.0, dir: c.1, radius: c.2, concave: false });
+            } else {
+                let m = &b.mesh.edge_mids[e * 3..e * 3 + 3];
+                out.push(PmiTarget { class: TargetClass::Aresta, point: [m[0] as f64, m[1] as f64, m[2] as f64], dir: [0.; 3], radius: 0., concave: false });
+            }
+        }
+        for v in b.mesh.vertices.chunks_exact(3) {
+            out.push(PmiTarget { class: TargetClass::Vertice, point: [v[0] as f64, v[1] as f64, v[2] as f64], dir: [0.; 3], radius: 0., concave: false });
+        }
+    }
+    let v = std::sync::Arc::new(out);
+    ctx.data_mut(|d| d.insert_temp(id, (key, v.clone())));
+    v
+}
+
+/// Nome do alvo na interface ('furo Ø6,5'), traduzido.
+fn target_label(t: &PmiTarget) -> String {
+    let d = || num(t.radius * 2.);
+    match t.class {
+        TargetClass::FacePlana => tr("face plana").to_string(),
+        TargetClass::FaceCilindrica => format!("{} Ø{}", tr(if t.concave { "furo" } else { "cilindro" }), d()),
+        TargetClass::FaceOutra => tr("face curva").to_string(),
+        TargetClass::ArestaCircular => format!("{} Ø{}", tr("aresta circular"), d()),
+        TargetClass::Aresta => tr("aresta").to_string(),
+        TargetClass::Vertice => tr("vértice").to_string(),
     }
 }
 
@@ -97,16 +214,16 @@ pub fn command(app: &mut App, i: u8) {
                 hi
             })
             .unwrap_or([0.; 3]);
-        create(app, kind, vec![corner]);
+        create(app, kind, vec![corner], vec![], &[]);
         return;
     }
     let picks = app.picks.clone();
     match anchors(app, &kind, &picks) {
-        Some(a) => create(app, kind, a),
+        Some((a, t)) => create(app, kind, a, t, &picks),
         None => {
             app.pmi_pending = Some(i);
             let need = match &kind {
-                PmiKind::Radius | PmiKind::Diameter => tr("uma aresta circular").to_string(),
+                PmiKind::Radius | PmiKind::Diameter => tr("uma aresta circular ou face cilíndrica").to_string(),
                 k => format!("{} {}", k.anchors(), tr("elemento(s): vértice, aresta ou face")),
             };
             app.toast(format!("{}: {} {need}", tr(kind.label()), tr("escolha")), false);
@@ -114,7 +231,8 @@ pub fn command(app: &mut App, i: u8) {
     }
 }
 
-fn create(app: &mut App, kind: PmiKind, a: Vec<[f64; 3]>) {
+fn create(app: &mut App, kind: PmiKind, a: Vec<[f64; 3]>, targets: Vec<Option<PmiTarget>>, picks: &[Pick]) {
+    let plane = chosen_plane(app, picks, &a);
     let id = Id(app.next_pmi_id());
     let n = list(app).iter().filter(|p| p.kind.label() == kind.label()).count() + 1;
     let name = format!("{} {n}", tr(kind.label()));
@@ -123,7 +241,7 @@ fn create(app: &mut App, kind: PmiKind, a: Vec<[f64; 3]>) {
         PmiKind::TitleBlock { .. } => [20., 0., 20.],
         _ => [15., 0., 15.],
     };
-    list_mut(app).push(Pmi { id, name, kind, anchors: a, offset: off, text: String::new(), tol_plus: String::new(), tol_minus: String::new(), visible: true, plane: None, style: Default::default(), folder: String::new() });
+    list_mut(app).push(Pmi { id, name, kind, anchors: a, offset: off, text: String::new(), tol_plus: String::new(), tol_minus: String::new(), visible: true, plane, style: Default::default(), folder: String::new(), targets });
     app.picks.clear();
     app.pmi_pending = None;
     if app.in_asm() {
@@ -223,6 +341,7 @@ fn auto_balloons(app: &mut App) {
             plane: None,
             style: Default::default(),
             folder: tr("Balões").to_string(),
+            targets: vec![],
         };
         app.asm.as_mut().unwrap().asm.pmi.push(pm);
     }
@@ -234,8 +353,8 @@ pub fn after_viewport(app: &mut App) {
     let Some(i) = app.pmi_pending else { return };
     let kind = kind_of(i);
     let picks = app.picks.clone();
-    if let Some(a) = anchors(app, &kind, &picks) {
-        create(app, kind, a);
+    if let Some((a, t)) = anchors(app, &kind, &picks) {
+        create(app, kind, a, t, &picks);
     }
 }
 
@@ -256,6 +375,146 @@ fn snap(r: &RecomputeResult, p: [f64; 3]) -> [f64; 3] {
 
 fn v3(p: [f64; 3]) -> Vec3 {
     Vec3::new(p[0] as f32, p[1] as f32, p[2] as f32)
+}
+
+// ---- plano de anotação da sessão ----------------------------------------------------------
+
+/// Escolha do plano do texto, válida até fechar o programa: vira o padrão das próximas anotações.
+#[derive(Clone)]
+struct PlanePref {
+    /// 0 = de frente para a tela; n = n-ésimo candidato da lista
+    sel: usize,
+    /// quantas vezes a face base foi trocada
+    shift: usize,
+    /// texto alinhado à geometria (direção entre as âncoras) em vez da direção do plano
+    align: bool,
+    /// nome do plano ativo, mostrado na barra de status
+    name: String,
+}
+
+static PREF: std::sync::Mutex<PlanePref> = std::sync::Mutex::new(PlanePref { sel: 0, shift: 0, align: false, name: String::new() });
+
+fn pref() -> PlanePref {
+    PREF.lock().unwrap_or_else(|e| e.into_inner()).clone()
+}
+
+fn set_pref(f: impl FnOnce(&mut PlanePref)) {
+    f(&mut PREF.lock().unwrap_or_else(|e| e.into_inner()));
+}
+
+struct PlaneCand {
+    name: String,
+    n: [f64; 3],
+    x: [f64; 3],
+    origin: [f64; 3],
+}
+
+fn frame_x(n: [f64; 3]) -> [f64; 3] {
+    let n = v3(n).normalize_or_zero();
+    let h = if n.z.abs() < 0.9 { Vec3::Z } else { Vec3::X };
+    let x = h.cross(n).normalize_or_zero();
+    [x.x as f64, x.y as f64, x.z as f64]
+}
+
+/// Face base do comando: a primeira face escolhida ou, sem escolha, a que está sob o cursor.
+fn base_face(app: &App, picks: &[Pick]) -> Option<(usize, usize)> {
+    picks.iter().chain(app.hover_pick.iter()).find_map(|p| match *p {
+        Pick::Face { body, face, .. } => Some((body, face)),
+        _ => None,
+    })
+}
+
+/// Planos candidatos: a face base, as faces planas vizinhas dela e os planos principais.
+fn plane_cands(r: &RecomputeResult, base: Option<(usize, usize)>, shift: usize, at: [f64; 3]) -> Vec<PlaneCand> {
+    let mut out = vec![];
+    if let Some((b, f)) = base {
+        if let Some(m) = crate::picking::mesh_of(r, b) {
+            let mut ring = vec![f];
+            for ef in &m.edge_faces {
+                for (me, other) in [(ef[0], ef[1]), (ef[1], ef[0])] {
+                    let g = other as usize;
+                    if me as usize == f && other != fenkra_kernel::NO_FACE && !ring.contains(&g) && m.face_info.get(g).is_some_and(|i| i.kind == 0) && ring.len() < 6 {
+                        ring.push(g);
+                    }
+                }
+            }
+            if m.face_info.get(f).is_some_and(|i| i.kind == 0) {
+                let k = shift % ring.len();
+                ring.rotate_left(k);
+                for (i, g) in ring.iter().enumerate() {
+                    let fi = &m.face_info[*g];
+                    out.push(PlaneCand { name: tr(if i == 0 { "face base" } else { "face vizinha" }).to_string(), n: fi.dir, x: frame_x(fi.dir), origin: fi.point });
+                }
+            }
+        }
+    }
+    for (name, n, x) in [("XY", [0., 0., 1.], [1., 0., 0.]), ("XZ", [0., -1., 0.], [1., 0., 0.]), ("YZ", [1., 0., 0.], [0., 1., 0.])] {
+        out.push(PlaneCand { name: format!("{} {name}", tr("Plano")), n, x, origin: at });
+    }
+    out
+}
+
+/// Direção do texto alinhada à geometria: a linha entre as duas primeiras âncoras, no plano.
+fn align_x(n: [f64; 3], a: &[[f64; 3]]) -> Option<[f64; 3]> {
+    let d = v3(*a.get(1)?) - v3(*a.first()?);
+    let n = v3(n).normalize_or_zero();
+    let x = (d - n * d.dot(n)).normalize_or_zero();
+    (x.length() > 0.5).then(|| [x.x as f64, x.y as f64, x.z as f64])
+}
+
+/// Plano (normal, x) que a nova anotação recebe pela escolha da sessão; `None` = de frente.
+fn chosen_plane(app: &App, picks: &[Pick], anchors: &[[f64; 3]]) -> Option<([f64; 3], [f64; 3])> {
+    let pf = pref();
+    if pf.sel == 0 {
+        return None;
+    }
+    let c = plane_cands(app.result.as_ref()?, base_face(app, picks), pf.shift, anchors.first().copied().unwrap_or([0.; 3]));
+    let c = c.get((pf.sel - 1) % c.len().max(1))?;
+    let x = if pf.align { align_x(c.n, anchors).unwrap_or(c.x) } else { c.x };
+    Some((c.n, x))
+}
+
+/// Cota vista de lado: a direção entre as âncoras é (quase) a normal do plano do texto.
+fn plane_hides(n: [f64; 3], a: &[[f64; 3]]) -> bool {
+    let (Some(p), Some(q)) = (a.first(), a.get(1)) else { return false };
+    let d = v3(*q) - v3(*p);
+    d.length() > 1e-6 && d.normalize().dot(v3(n).normalize_or_zero()).abs() > 0.9
+}
+
+/// Nome do plano do texto de uma anotação, igual ao mostrado na barra de status.
+fn plane_name(pl: Option<([f64; 3], [f64; 3])>) -> String {
+    let Some((n, _)) = pl else { return tr("de frente para a tela").to_string() };
+    let n = v3(n).normalize_or_zero();
+    for (name, v) in [("XY", Vec3::Z), ("XZ", -Vec3::Y), ("YZ", Vec3::X)] {
+        if n.dot(v).abs() > 0.999 {
+            return format!("{} {name}", tr("Plano"));
+        }
+    }
+    tr("face / plano da seleção").to_string()
+}
+
+/// Plano de anotação escolhido, na barra de status, enquanto o comando de PMI está aberto.
+pub fn status(app: &App, ui: &mut egui::Ui) {
+    let pf = pref();
+    if app.pmi_pending.is_some() || pf.sel > 0 {
+        ui.separator();
+        let nome = if pf.name.is_empty() { tr("de frente para a tela").to_string() } else { pf.name };
+        ui.label(RichText::new(format!("▱ {}: {nome}", tr("plano de anotação"))).small());
+    }
+}
+
+/// Caixa de dica junto ao cursor: linhas (texto, cor) sobre fundo da janela.
+fn tip(p: &egui::Painter, at: Pos2, lines: &[(String, Color32)], bg: Color32) {
+    let gs: Vec<_> = lines.iter().map(|(t, c)| p.layout_no_wrap(t.clone(), egui::FontId::proportional(12.), *c)).collect();
+    let w = gs.iter().map(|g| g.size().x).fold(0., f32::max) + 12.;
+    let h = gs.iter().map(|g| g.size().y).sum::<f32>() + 8.;
+    p.rect_filled(Rect::from_min_size(at, egui::vec2(w, h)), 4., bg);
+    let mut y = at.y + 4.;
+    for g in gs {
+        let hh = g.size().y;
+        p.galley(egui::pos2(at.x + 6., y), g, Color32::WHITE);
+        y += hh;
+    }
 }
 
 /// Símbolo de solda ISO 2553 na tela: a junção da seta fica em `at`; `h` = altura do texto (px).
@@ -443,6 +702,116 @@ fn draw_kind(cv: &Cv, pen: &Pen, pm: &Pmi, st: Pos2, s0: Pos2, s1: Option<Pos2>,
 }
 
 /// Desenha as anotações sobre a viewport (o clique num rótulo seleciona a anotação).
+/// O alvo serve para o comando? Raio e diâmetro pedem aresta circular ou face cilíndrica.
+fn target_fits(kind: &PmiKind, t: &PmiTarget) -> bool {
+    match kind {
+        PmiKind::Radius | PmiKind::Diameter => matches!(t.class, TargetClass::ArestaCircular | TargetClass::FaceCilindrica),
+        _ => true,
+    }
+}
+
+/// Estados do comando de anotação aberto: o cursor realça e nomeia o alvo, a anotação fantasma
+/// segue o cursor com o valor, o plano de anotação aparece como moldura e as teclas valem
+/// (Esc cancela sem criar nada, Backspace retira o último elemento, Espaço/F/Tab escolhem o plano).
+/// Devolve o fantasma, desenhado junto com as anotações.
+fn pending_preview(app: &App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, r: &RecomputeResult) -> (Option<Pmi>, bool, bool) {
+    let Some(i) = app.pmi_pending else { return (None, false, false) };
+    let kind = kind_of(i);
+    let need = kind.anchors();
+    let painter = ui.painter_at(rect);
+    let hover_pos = ui.input(|s| s.pointer.hover_pos()).filter(|q| rect.contains(*q));
+    let hover = app.hover_pick.filter(|_| hover_pos.is_some());
+    let hover_t = hover.as_ref().and_then(|h| pick_target(r, h));
+    // lista fixa de elementos já escolhidos + o que está sob o cursor
+    let mut ps = app.picks.clone();
+    let fits = hover_t.as_ref().is_some_and(|t| target_fits(&kind, t));
+    if let (Some(h), true) = (hover, fits) {
+        if !ps.contains(&h) {
+            ps.push(h);
+        }
+    }
+    let at: Option<[f64; 3]> = ps.first().and_then(|p| match *p {
+        Pick::Vertex { pos, .. } => Some(pos.map(|v| v as f64)),
+        Pick::Edge { mid, .. } => Some(mid.map(|v| v as f64)),
+        Pick::Face { point, .. } => Some(point.map(|v| v as f64)),
+        _ => None,
+    });
+    // plano de anotação: candidatos e teclas
+    let base = base_face(app, &app.picks);
+    let cands = plane_cands(r, base, pref().shift, at.unwrap_or([0.; 3]));
+    let typing = ui.ctx().egui_wants_keyboard_input();
+    let (mut cancel, mut pop) = (false, false);
+    if !typing {
+        use egui::{Key, Modifiers};
+        let (space, f, tab, esc, back) = ui.input_mut(|s| (s.consume_key(Modifiers::NONE, Key::Space), s.consume_key(Modifiers::NONE, Key::F), s.consume_key(Modifiers::NONE, Key::Tab), s.consume_key(Modifiers::NONE, Key::Escape), s.consume_key(Modifiers::NONE, Key::Backspace)));
+        if space {
+            set_pref(|p| p.sel = (p.sel + 1) % (cands.len() + 1));
+        }
+        if f {
+            set_pref(|p| p.shift += 1);
+        }
+        if tab {
+            set_pref(|p| p.align = !p.align);
+        }
+        cancel = esc;
+        pop = back;
+    }
+    let pf = pref();
+    let cur = (pf.sel > 0).then(|| cands.get((pf.sel - 1) % cands.len().max(1))).flatten();
+    let name = cur.map(|c| c.name.clone()).unwrap_or_else(|| tr("de frente para a tela").to_string());
+    set_pref(|p| p.name = name.clone());
+    // moldura translúcida do plano ativo, centrada no ponto de trabalho
+    if let (Some(c), Some(at)) = (cur, at.or_else(|| hover.and_then(|h| match h {
+        Pick::Face { point, .. } => Some(point.map(|v| v as f64)),
+        Pick::Edge { mid, .. } => Some(mid.map(|v| v as f64)),
+        Pick::Vertex { pos, .. } => Some(pos.map(|v| v as f64)),
+        _ => None,
+    }))) {
+        let n = v3(c.n).normalize_or_zero();
+        let o = v3(at) - n * (v3(at) - v3(c.origin)).dot(n);
+        let x = v3(c.x).normalize_or_zero();
+        let y = n.cross(x);
+        let s = (crate::picking::plane_size(r) * 0.35).max(8.);
+        let pts: Vec<Pos2> = [(-1., -1.), (1., -1.), (1., 1.), (-1., 1.)].iter().filter_map(|(u, v)| cam.project(rect, o + x * (u * s) + y * (v * s))).collect();
+        if pts.len() == 4 {
+            painter.add(egui::Shape::convex_polygon(pts, HL.gamma_multiply(0.14), Stroke::new(1.5, HL)));
+        }
+    }
+    // fantasma: a anotação com o elemento sob o cursor como último ponto
+    let ghost = anchors(app, &kind, &ps).map(|(a, t)| {
+        let off = match kind {
+            PmiKind::Linear | PmiKind::Angle => [0., 0., 12.],
+            _ => [15., 0., 15.],
+        };
+        let plane = chosen_plane(app, &ps, &a);
+        Pmi { id: Id(u64::MAX), name: String::new(), kind: kind.clone(), anchors: a, offset: off, text: String::new(), tol_plus: String::new(), tol_minus: String::new(), visible: true, plane, style: Default::default(), folder: String::new(), targets: t }
+    });
+    // texto junto ao cursor: passo do comando, o que foi reconhecido e o plano
+    if let Some(q) = hover_pos {
+        let step = app.picks.len().min(need.saturating_sub(1)) + 1;
+        let mut lines = vec![(format!("{} — {} {step}/{need}", tr(kind.label()), tr("passo")), Color32::WHITE)];
+        match &hover_t {
+            Some(t) if fits => lines.push((target_label(t), crate::theme::st_ok())),
+            Some(t) => lines.push((format!("{} ({})", tr("não serve para esta anotação"), target_label(t)), crate::theme::st_err())),
+            None => lines.push((tr("aponte para uma face, aresta ou vértice").to_string(), crate::theme::st_warn())),
+        }
+        if let (Some(g), Some(pl)) = (&ghost, &ghost.as_ref().and_then(|g| g.plane)) {
+            if g.kind == PmiKind::Linear && plane_hides(pl.0, &g.anchors) {
+                lines.push((tr("este plano não mostra a cota").to_string(), crate::theme::st_err()));
+            }
+        }
+        tip(&painter, q + egui::vec2(16., 18.), &lines, ui.visuals().window_fill().gamma_multiply(0.92));
+    }
+    painter.text(
+        rect.center_bottom() + egui::vec2(0., -52.),
+        egui::Align2::CENTER_BOTTOM,
+        format!("{}: {}{}  ·  {}", tr("Plano"), name, if pf.align { format!(" ({})", tr("texto alinhado")) } else { String::new() }, tr("Espaço troca o plano · F troca a face base · Tab alinha o texto · Backspace volta · Esc cancela")),
+        egui::FontId::proportional(12.),
+        crate::theme::st_warn(),
+    );
+    (ghost, cancel, pop)
+}
+
 pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     let mut action: Option<(Id, u8)> = None;
     let mut drag: Option<(Id, [f64; 3])> = None;
@@ -451,15 +820,47 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     let focus = app.pmi_focus;
     let painter = ui.painter_at(rect);
     let mut edit_req: Option<Id> = None;
-    let mut anchor_req: Option<(Id, usize, [f64; 3])> = None;
+    let mut anchor_req: Option<(Id, usize, [f64; 3], Option<PmiTarget>)> = None;
+    let mut refresh: Vec<(Id, Vec<[f64; 3]>, Vec<Option<PmiTarget>>)> = vec![];
     let pick_filter = crate::picking::Filter { faces: true, edges: true, vertices: true, planes: false, hidden_env: false, exclude_sketch: None };
     let mut clicked = None;
     let fields = title_fields(app);
     let gstyle = app.settings.pmi_style.clone();
-    for pm in list(app).iter().filter(|p| p.visible) {
-        let a: Vec<[f64; 3]> = pm.anchors.iter().map(|p| snap(r, *p)).collect();
+    let ctx = ui.ctx().clone();
+    // comando de anotação aberto: hover tipado, fantasma, plano de anotação e teclas
+    let (ghost, cancel, pop) = pending_preview(app, ui, rect, cam, r);
+    let cands = if ghost.is_some() || list(app).iter().any(|p| p.targets.iter().any(Option::is_some)) { candidates(&ctx, r) } else { Default::default() };
+    let all: Vec<&Pmi> = list(app).iter().filter(|p| p.visible).chain(ghost.iter()).collect();
+    for pm in all {
+        let is_ghost = ghost.as_ref().is_some_and(|g| std::ptr::eq(g, pm));
+        let diag: Option<PmiDiag> = if is_ghost {
+            Some(PmiDiag { state: PmiState::Ok, failed: None, message: String::new(), resolved: pm.targets.clone() })
+        } else {
+            pm.targets.iter().any(Option::is_some).then(|| pm.diagnose(&cands))
+        };
+        let bad = diag.as_ref().is_some_and(|d| !d.ok());
+        // as âncoras acompanham o alvo reencontrado; sem alvo, reencaixam no vértice mais próximo
+        let mut a: Vec<[f64; 3]> = pm
+            .anchors
+            .iter()
+            .enumerate()
+            .map(|(k, p)| {
+                let on_axis = matches!(pm.kind, PmiKind::Radius | PmiKind::Diameter) && k == 0;
+                match (pm.targets.get(k).copied().flatten(), diag.as_ref().and_then(|d| d.resolved.get(k).copied().flatten())) {
+                    (Some(old), Some(new)) => old.carry(&new, *p, on_axis),
+                    _ => snap(r, *p),
+                }
+            })
+            .collect();
+        if let Some(d) = &diag {
+            fix_pair(&pm.kind, &mut a, &d.resolved);
+            let moved = a.len() != pm.anchors.len() || a.iter().zip(&pm.anchors).any(|(x, y)| (0..3).any(|i| (x[i] - y[i]).abs() > 1e-6));
+            if !is_ghost && d.ok() && (moved || d.resolved != pm.targets) && d.resolved.iter().any(Option::is_some) {
+                refresh.push((pm.id, a.clone(), d.resolved.clone()));
+            }
+        }
         let Some(first) = a.first().copied() else { continue };
-        let val = pm.measure(&a);
+        let val = diag.as_ref().and_then(|d| pm.measure_targets(&d.resolved)).or_else(|| pm.measure(&a));
         let is_sel = editing == Some(pm.id) || focus == Some(pm.id);
         let mut pen = Pen::new(&pm.style, &gstyle, is_sel);
         if pen.apply_scale {
@@ -472,8 +873,16 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                 }
             }
         }
+        // anotação com problema: vermelha (e com aviso escrito); fantasma: translúcida
+        if bad {
+            pen.line = crate::theme::st_err();
+            pen.text = crate::theme::st_err();
+        } else if is_ghost {
+            pen.line = pen.line.gamma_multiply(0.6);
+            pen.text = pen.text.gamma_multiply(0.7);
+        }
         let (stroke, thin) = (pen.stroke(), pen.thin());
-        let wrap = |t: String| format!("{}{}{}", pm.style.prefix, t, pm.style.suffix);
+        let wrap =|t: String| format!("{}{}{}", pm.style.prefix, t, pm.style.suffix);
         let (main, stack) = pm.display_parts(val);
         let main = wrap(main);
         let off = v3(pm.offset);
@@ -611,10 +1020,24 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                 }
             }
         };
+        // o fantasma só se mostra: não recebe clique nem alças
+        if is_ghost {
+            continue;
+        }
+        // estado com problema: explicação curta junto ao rótulo e anel na âncora que falhou
+        if let Some(d) = diag.as_ref().filter(|d| !d.ok()) {
+            let txt = format!("⚠ {} · {}", tr(d.state.label()), tr(&d.message));
+            painter.text(rect_lbl.left_bottom() + egui::vec2(0., 3.), egui::Align2::LEFT_TOP, txt, egui::FontId::proportional(11.), crate::theme::st_err());
+            if let Some(sp) = d.failed.and_then(|k| a.get(k)).and_then(|q| cam.project(rect, v3(*q))) {
+                painter.circle_stroke(sp, 10., Stroke::new(2.5, crate::theme::st_err()));
+                painter.line_segment([sp + egui::vec2(-6., -6.), sp + egui::vec2(6., 6.)], Stroke::new(2., crate::theme::st_err()));
+                painter.line_segment([sp + egui::vec2(-6., 6.), sp + egui::vec2(6., -6.)], Stroke::new(2., crate::theme::st_err()));
+            }
+        }
         // rótulo girado na tela: a área de clique envolve o rótulo girado
         let rect_lbl = if plane.is_none() && !matches!(pm.kind, PmiKind::Datum { .. } | PmiKind::Balloon { .. } | PmiKind::Weld { .. } | PmiKind::Roughness { .. }) { pen.outer(rect_lbl) } else { rect_lbl };
         // anotação realçada/em edição: as âncoras viram alças (arraste e solte numa face, aresta ou vértice)
-        if is_sel && !matches!(pm.kind, PmiKind::TitleBlock { .. }) {
+        if (is_sel || bad) && !matches!(pm.kind, PmiKind::TitleBlock { .. }) {
             for (k, q) in a.iter().enumerate() {
                 let Some(sp) = cam.project(rect, v3(*q)) else { continue };
                 let h = ui.interact(Rect::from_center_size(sp, egui::vec2(16., 16.)), egui::Id::unique(("pmi_ancora", pm.id.0, k)), egui::Sense::drag());
@@ -626,19 +1049,28 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                 let h = h.on_hover_text(tr("arraste o ponto de ancoragem para outra face, aresta ou vértice"));
                 if let (true, Some(m)) = (h.dragged(), h.interact_pointer_pos()) {
                     painter.extend(egui::Shape::dashed_line(&[sp, m], Stroke::new(1.5, HL), 5., 3.));
-                    let ok = crate::picking::pick(r, &app.open.doc, cam, rect, m, &pick_filter).is_some();
-                    painter.circle_stroke(m, 7., Stroke::new(2., if ok { crate::theme::st_ok() } else { Color32::from_rgb(230, 90, 80) }));
+                    // candidato sob o cursor: realçado, com o tipo reconhecido
+                    let pk = crate::picking::pick(r, &app.open.doc, cam, rect, m, &pick_filter);
+                    let tg = pk.as_ref().and_then(|p| pick_target(r, p));
+                    if let Some(p) = &pk {
+                        crate::picking::draw(&painter, r, cam, rect, p, false);
+                    }
+                    painter.circle_stroke(m, 7., Stroke::new(2., if tg.is_some() { crate::theme::st_ok() } else { crate::theme::st_err() }));
+                    if let Some(t) = &tg {
+                        painter.text(m + egui::vec2(12., 12.), egui::Align2::LEFT_TOP, target_label(t), egui::FontId::proportional(12.), crate::theme::st_ok());
+                    }
                 }
                 if h.drag_stopped() {
                     if let Some(m) = h.interact_pointer_pos() {
-                        let hit = crate::picking::pick(r, &app.open.doc, cam, rect, m, &pick_filter).and_then(|p| match p {
+                        let pk = crate::picking::pick(r, &app.open.doc, cam, rect, m, &pick_filter);
+                        let hit = pk.as_ref().and_then(|p| match *p {
                             Pick::Vertex { pos, .. } => Some(pos.map(|v| v as f64)),
                             Pick::Edge { mid, .. } => Some(mid.map(|v| v as f64)),
                             Pick::Face { point, .. } => Some(point.map(|v| v as f64)),
                             _ => None,
                         });
                         if let Some(p) = hit {
-                            anchor_req = Some((pm.id, k, p));
+                            anchor_req = Some((pm.id, k, p, pk.as_ref().and_then(|p| pick_target(r, p))));
                         }
                     }
                 }
@@ -692,8 +1124,35 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
         });
         resp.on_hover_text(&pm.name);
     }
-    if let Some((id, k, p)) = anchor_req {
+    // Esc cancela sem criar nada; Backspace retira o último elemento escolhido
+    if cancel {
+        app.pmi_pending = None;
+        app.picks.clear();
+    } else if pop {
+        app.picks.pop();
+    }
+    for (id, a, t) in refresh {
         if let Some(pm) = list_mut(app).iter_mut().find(|x| x.id == id) {
+            pm.anchors = a;
+            pm.targets = t;
+        }
+        if app.in_asm() {
+            app.asm.as_mut().unwrap().modified = true;
+        }
+    }
+    if let Some((id, k, hit, tg)) = anchor_req {
+        if let Some(pm) = list_mut(app).iter_mut().find(|x| x.id == id) {
+            // alvo novo (a face substituta, por exemplo): a âncora vai para ele e o estado se refaz
+            let p = match tg {
+                Some(t) => t.carry(&t, hit, matches!(pm.kind, PmiKind::Radius | PmiKind::Diameter) && k == 0),
+                None => hit,
+            };
+            if pm.targets.len() < pm.anchors.len() {
+                pm.targets.resize(pm.anchors.len(), None);
+            }
+            if let Some(slot) = pm.targets.get_mut(k) {
+                *slot = tg;
+            }
             if k == 0 {
                 // o rótulo fica no mesmo lugar: o deslocamento compensa a âncora nova
                 let old = pm.anchors[0];
@@ -1206,10 +1665,31 @@ fn panel_inner(app: &mut App, ui: &mut egui::Ui, id: Id, style_req: &mut bool) -
         }).map(|v| (v.frame.normal, v.frame.x)),
         _ => None,
     });
+    // estado da anotação frente à geometria atual e novos alvos pela seleção
+    let (diag, reseed) = {
+        let Some(pm) = list(app).iter().find(|p| p.id == id) else { return false };
+        let diag = match (&app.result, pm.targets.iter().any(Option::is_some)) {
+            (Some(r), true) => Some(pm.diagnose(&candidates(ui.ctx(), r))),
+            _ => None,
+        };
+        (diag, anchors(app, &pm.kind, &app.picks))
+    };
     let l = list_mut(app);
     let Some(p) = l.iter_mut().find(|p| p.id == id) else { return false };
     ui.heading(format!("📐 {}", p.name));
     ui.label(RichText::new(tr(p.kind.label())).weak());
+    if let Some(d) = diag.as_ref().filter(|d| !d.ok()) {
+        ui.label(RichText::new(format!("⚠ {} · {}", tr(d.state.label()), tr(&d.message))).color(crate::theme::st_err()));
+        ui.label(RichText::new(tr("Arraste a âncora marcada para um elemento realçado, ou use «Reancorar na seleção atual».")).weak().small());
+    } else if diag.is_some() {
+        ui.label(RichText::new(format!("✔ {}", tr("OK"))).color(crate::theme::st_ok()).small());
+    }
+    ui.label(RichText::new(format!("{}: {}", tr("Plano do texto"), plane_name(p.plane))).small());
+    if let (Some(pl), PmiKind::Linear) = (p.plane, &p.kind) {
+        if plane_hides(pl.0, &p.anchors) {
+            ui.label(RichText::new(tr("este plano não mostra a cota")).color(crate::theme::st_err()).small());
+        }
+    }
     ui.horizontal(|ui| {
         ui.label(tr("Nome"));
         ui.text_edit_singleline(&mut p.name);
@@ -1325,7 +1805,98 @@ fn panel_inner(app: &mut App, ui: &mut egui::Ui, id: Id, style_req: &mut bool) -
     ui.label(RichText::new(tr("Arraste o rótulo na viewport para mudar a posição.")).weak().small());
     crate::editor::check(ui, &mut p.visible, "visível");
     if seed_pts.len() >= p.kind.anchors() && ui.button(tr("⊙ Reancorar na seleção atual")).clicked() {
-        p.anchors = seed_pts[..p.kind.anchors()].to_vec();
+        match reseed {
+            Some((a, t)) => {
+                p.anchors = a;
+                p.targets = t;
+            }
+            None => {
+                p.anchors = seed_pts[..p.kind.anchors()].to_vec();
+                p.targets = vec![];
+            }
+        }
     }
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn exemplo(nome: &str) -> RecomputeResult {
+        let e = crate::examples::all().into_iter().find(|e| e.name == nome).unwrap();
+        fenkra_solidos::recompute(&e.doc)
+    }
+
+    fn alvos(r: &RecomputeResult) -> Vec<PmiTarget> {
+        r.bodies.iter().flat_map(|b| (0..b.mesh.face_info.len()).filter_map(|f| face_target(&b.mesh, f))).collect()
+    }
+
+    fn pmi(kind: PmiKind, targets: Vec<Option<PmiTarget>>) -> Pmi {
+        Pmi { id: Id(1), name: "t".into(), kind, anchors: vec![], offset: [0.; 3], text: String::new(), tol_plus: String::new(), tol_minus: String::new(), visible: true, plane: None, style: Default::default(), folder: String::new(), targets }
+    }
+
+    #[test]
+    fn cursor_reconhece_furo_e_cilindro() {
+        let r = exemplo("Flange");
+        let t = alvos(&r);
+        let nomes: Vec<String> = t.iter().map(PmiTarget::label).collect();
+        assert!(nomes.iter().any(|n| n == "furo Ø8"), "{nomes:?}");
+        assert!(nomes.iter().any(|n| n == "furo Ø32"), "{nomes:?}");
+        assert!(nomes.iter().any(|n| n == "cilindro Ø90"), "{nomes:?}");
+        // a cota de diâmetro ligada ao furo mede pela superfície, não por um ponto clicado
+        let furo = *t.iter().find(|t| t.label() == "furo Ø8").unwrap();
+        let mut pm = pmi(PmiKind::Diameter, vec![Some(furo), None]);
+        let d = pm.diagnose(&t);
+        assert!(d.ok(), "{d:?}");
+        let v = pm.measure_targets(&d.resolved).unwrap();
+        assert!((v - 8.).abs() < 0.05, "{v}");
+        assert_eq!(pm.display(Some(v)), "Ø8");
+        pm.targets[0] = None;
+        assert!(pm.measure_targets(&pm.diagnose(&t).resolved).is_none());
+    }
+
+    #[test]
+    fn cota_entre_faces_da_placa_mede_a_espessura() {
+        let r = exemplo("Placa simples");
+        let t = alvos(&r);
+        let topo = *t.iter().find(|t| t.class == TargetClass::FacePlana && t.dir[2] > 0.99).unwrap();
+        let base = *t.iter().find(|t| t.class == TargetClass::FacePlana && t.dir[2] < -0.99).unwrap();
+        let pm = pmi(PmiKind::Linear, vec![Some(base), Some(topo)]);
+        let d = pm.diagnose(&t);
+        assert!(d.ok(), "{d:?}");
+        let (mut lo, mut hi) = (f64::MAX, f64::MIN);
+        for b in &r.bodies {
+            for p in b.mesh.positions.chunks_exact(3) {
+                lo = lo.min(p[2] as f64);
+                hi = hi.max(p[2] as f64);
+            }
+        }
+        let v = pm.measure_targets(&d.resolved).unwrap();
+        assert!((v - (hi - lo)).abs() < 1e-3, "{v} x {}", hi - lo);
+        // as âncoras da cota ficam alinhadas: a linha mede exatamente a distância entre os planos
+        let mut a = vec![[3., 4., lo], [30., 40., hi]];
+        fix_pair(&PmiKind::Linear, &mut a, &d.resolved);
+        assert_eq!((a[1][0], a[1][1]), (3., 4.));
+    }
+
+    #[test]
+    fn plano_de_anotacao_e_cota_de_lado() {
+        // a cota que corre ao longo da normal do plano não aparece nele
+        assert!(plane_hides([0., 0., 1.], &[[0., 0., 0.], [0., 0., 20.]]));
+        assert!(!plane_hides([0., 0., 1.], &[[0., 0., 0.], [20., 0., 0.]]));
+        assert_eq!(plane_name(Some(([0., 0., 1.], [1., 0., 0.]))), "Plano XY");
+        // texto alinhado à geometria: x segue a linha entre as âncoras projetada no plano
+        let x = align_x([0., 0., 1.], &[[0., 0., 0.], [3., 4., 9.]]).unwrap();
+        assert!((x[0] - 0.6).abs() < 1e-6 && (x[1] - 0.8).abs() < 1e-6 && x[2].abs() < 1e-6);
+        // planos candidatos: a face base, as vizinhas e os três principais
+        let r = exemplo("Placa simples");
+        let (body, face) = r.bodies.iter().enumerate().find_map(|(b, bd)| bd.mesh.face_info.iter().position(|f| f.kind == 0).map(|f| (b, f))).unwrap();
+        let c = plane_cands(&r, Some((body, face)), 0, [0.; 3]);
+        assert!(c.len() >= 4 && c[0].name == "face base", "{}", c.len());
+        assert_eq!(c.iter().filter(|p| p.name.starts_with("Plano")).count(), 3);
+        // trocar a face base muda o primeiro candidato
+        let c2 = plane_cands(&r, Some((body, face)), 1, [0.; 3]);
+        assert_ne!(c[0].n, c2[0].n);
+    }
 }

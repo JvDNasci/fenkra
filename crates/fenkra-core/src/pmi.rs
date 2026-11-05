@@ -777,6 +777,9 @@ pub struct Pmi {
     /// pasta de anotações na árvore (vazio = raiz)
     #[serde(default)]
     pub folder: String,
+    /// alvo topológico de cada âncora (mesma ordem de `anchors`); `None` = âncora solta no espaço
+    #[serde(default)]
+    pub targets: Vec<Option<PmiTarget>>,
 }
 
 /// Captura: uma vista (câmera) com as anotações que aparecem nela.
@@ -837,11 +840,6 @@ impl Pmi {
 
     /// Texto exibido (com prefixo e tolerância).
     pub fn display(&self, value: Option<f64>) -> String {
-        let num = |v: f64| {
-            let s = format!("{:.2}", v);
-            let s = s.trim_end_matches('0').trim_end_matches('.').replace('.', ",");
-            if s.is_empty() { "0".into() } else { s }
-        };
         let tol = if self.tol_plus.trim().is_empty() && self.tol_minus.trim().is_empty() {
             String::new()
         } else if self.tol_plus.trim() == self.tol_minus.trim() {
@@ -878,13 +876,276 @@ impl Pmi {
     }
 }
 
+
+/// Tipo de alvo reconhecido na geometria.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub enum TargetClass {
+    FacePlana,
+    FaceCilindrica,
+    /// cone, esfera, toro ou superfície livre
+    FaceOutra,
+    ArestaCircular,
+    Aresta,
+    Vertice,
+}
+
+/// Alvo escolhido na viewport: a chave geométrica do elemento (tipo, direção, posição e raio),
+/// não o ponto clicado. Com ela a anotação reencontra o elemento depois que o modelo muda.
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
+pub struct PmiTarget {
+    pub class: TargetClass,
+    /// ponto sobre o elemento (face, aresta ou vértice) ou centro do círculo/eixo
+    pub point: [f64; 3],
+    /// normal externa (plano) ou eixo (cilindro, aresta circular); zeros nos demais
+    pub dir: [f64; 3],
+    /// raio do cilindro ou da aresta circular; 0 nos demais
+    pub radius: f64,
+    /// cilindro cuja superfície encara o eixo (furo)
+    pub concave: bool,
+}
+
+/// Número no formato do Fenkra: até 2 casas, vírgula decimal, sem zeros sobrando.
+pub fn num(v: f64) -> String {
+    let s = format!("{:.2}", v);
+    let s = s.trim_end_matches('0').trim_end_matches('.').replace('.', ",");
+    if s.is_empty() { "0".into() } else { s }
+}
+
+fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+fn sub(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
+    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+}
+fn len(a: [f64; 3]) -> f64 {
+    dot(a, a).sqrt()
+}
+fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
+    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+}
+
+/// Círculo no plano perpendicular a `axis` que passa pelos pontos (mínimos quadrados algébricos):
+/// devolve (centro 3D, raio). Serve para achar o raio de uma face cilíndrica pela malha.
+pub fn fit_axis_circle(pts: &[[f64; 3]], axis: [f64; 3]) -> Option<([f64; 3], f64)> {
+    let l = len(axis);
+    if pts.len() < 3 || l < 1e-9 {
+        return None;
+    }
+    let w = [axis[0] / l, axis[1] / l, axis[2] / l];
+    let h = if w[0].abs() < 0.9 { [1., 0., 0.] } else { [0., 1., 0.] };
+    let u = cross(w, h);
+    let k = len(u);
+    let u = [u[0] / k, u[1] / k, u[2] / k];
+    let v = cross(w, u);
+    let o = pts[0];
+    // x²+y² + a·x + b·y + c = 0, resolvido pelas equações normais 3×3
+    let (mut sxx, mut sxy, mut syy, mut sx, mut sy, mut n) = (0., 0., 0., 0., 0., 0.);
+    let (mut bx, mut by, mut bc) = (0., 0., 0.);
+    for p in pts {
+        let d = sub(*p, o);
+        let (x, y) = (dot(d, u), dot(d, v));
+        let z = x * x + y * y;
+        sxx += x * x;
+        sxy += x * y;
+        syy += y * y;
+        sx += x;
+        sy += y;
+        n += 1.;
+        bx -= z * x;
+        by -= z * y;
+        bc -= z;
+    }
+    let m = [[sxx, sxy, sx], [sxy, syy, sy], [sx, sy, n]];
+    let det = |m: [[f64; 3]; 3]| m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+    let d = det(m);
+    if d.abs() < 1e-12 {
+        return None;
+    }
+    let b = [bx, by, bc];
+    let solve = |col: usize| {
+        let mut t = m;
+        for r in 0..3 {
+            t[r][col] = b[r];
+        }
+        det(t) / d
+    };
+    let (a, bb, c) = (solve(0), solve(1), solve(2));
+    let (cx, cy) = (-a / 2., -bb / 2.);
+    let r2 = cx * cx + cy * cy - c;
+    if r2 <= 0. {
+        return None;
+    }
+    let ctr = [o[0] + u[0] * cx + v[0] * cy, o[1] + u[1] * cx + v[1] * cy, o[2] + u[2] * cx + v[2] * cy];
+    Some((ctr, r2.sqrt()))
+}
+
+impl PmiTarget {
+    /// Nome curto do que o cursor reconheceu, com as medidas ('furo Ø6,5').
+    pub fn label(&self) -> String {
+        match self.class {
+            TargetClass::FacePlana => "face plana".into(),
+            TargetClass::FaceCilindrica => format!("{} Ø{}", if self.concave { "furo" } else { "cilindro" }, num(self.radius * 2.)),
+            TargetClass::FaceOutra => "face curva".into(),
+            TargetClass::ArestaCircular => format!("aresta circular Ø{}", num(self.radius * 2.)),
+            TargetClass::Aresta => "aresta".into(),
+            TargetClass::Vertice => "vértice".into(),
+        }
+    }
+
+    /// Distância entre este alvo (guardado) e um candidato; `None` se não servem como o mesmo.
+    fn score(&self, c: &PmiTarget) -> Option<f64> {
+        if self.class != c.class {
+            return None;
+        }
+        let cosd = if len(self.dir) > 0.5 && len(c.dir) > 0.5 { dot(self.dir, c.dir) } else { 1. };
+        let d = sub(c.point, self.point);
+        match self.class {
+            // 35° de tolerância na orientação; o resto é a distância entre os planos + deslocamento
+            TargetClass::FacePlana => (cosd > 0.82).then(|| dot(d, self.dir).abs() + 0.05 * len(d) + (1. - cosd) * 50.),
+            TargetClass::FaceCilindrica | TargetClass::ArestaCircular => {
+                (cosd.abs() > 0.9 && self.concave == c.concave).then(|| len(cross(d, self.dir)) + (c.radius - self.radius).abs() * 2. + (1. - cosd.abs()) * 50.)
+            }
+            _ => Some(len(d)),
+        }
+    }
+}
+
+/// Estado de uma anotação ligada à geometria.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum PmiState {
+    Ok,
+    /// o elemento ainda existe, mas a anotação deixou de ter um único sentido
+    Ambigua,
+    /// o elemento sumiu
+    Quebrada,
+}
+
+impl PmiState {
+    pub fn label(self) -> &'static str {
+        match self {
+            PmiState::Ok => "OK",
+            PmiState::Ambigua => "Ambígua",
+            PmiState::Quebrada => "Quebrada",
+        }
+    }
+}
+
+/// Resultado do diagnóstico: estado, índice da âncora que falhou e a explicação curta.
+#[derive(Clone, PartialEq, Debug)]
+pub struct PmiDiag {
+    pub state: PmiState,
+    pub failed: Option<usize>,
+    pub message: String,
+    /// alvos reencontrados na geometria atual, na ordem das âncoras
+    pub resolved: Vec<Option<PmiTarget>>,
+}
+
+impl PmiDiag {
+    pub fn ok(&self) -> bool {
+        self.state == PmiState::Ok
+    }
+}
+
+/// Reencontra `t` entre os candidatos da geometria atual: o de menor distância; se o segundo
+/// colocado chega muito perto, o resultado é ambíguo.
+pub fn rematch(t: &PmiTarget, cands: &[PmiTarget]) -> Result<PmiTarget, PmiState> {
+    let mut sc: Vec<(f64, &PmiTarget)> = cands.iter().filter_map(|c| t.score(c).map(|s| (s, c))).collect();
+    sc.sort_by(|a, b| a.0.total_cmp(&b.0));
+    match sc.as_slice() {
+        [] => Err(PmiState::Quebrada),
+        [(_, c)] => Ok(**c),
+        [(a, c), (b, _), ..] => {
+            // empate técnico entre dois candidatos distintos
+            if *a > 1e-6 && *b < *a * 1.15 + 1e-6 { Err(PmiState::Ambigua) } else { Ok(**c) }
+        }
+    }
+}
+
+impl PmiTarget {
+    /// Leva o ponto `p`, que estava preso a este alvo, para o alvo `new` (o mesmo elemento depois
+    /// da mudança do modelo, ou o substituto escolhido): plano → projeção no plano; cilindro ou
+    /// aresta circular → sobre o eixo (`on_axis`) ou sobre a superfície; demais → o ponto do alvo.
+    pub fn carry(&self, new: &PmiTarget, p: [f64; 3], on_axis: bool) -> [f64; 3] {
+        let n = new.dir;
+        match new.class {
+            TargetClass::FacePlana => {
+                let k = dot(sub(p, new.point), n);
+                [p[0] - n[0] * k, p[1] - n[1] * k, p[2] - n[2] * k]
+            }
+            TargetClass::FaceCilindrica | TargetClass::ArestaCircular if len(n) > 0.5 => {
+                let l = len(n);
+                let ax = [n[0] / l, n[1] / l, n[2] / l];
+                let k = dot(sub(p, new.point), ax);
+                let foot = [new.point[0] + ax[0] * k, new.point[1] + ax[1] * k, new.point[2] + ax[2] * k];
+                if on_axis {
+                    return foot;
+                }
+                let mut rad = sub(p, foot);
+                if len(rad) < 1e-9 {
+                    let h = if ax[0].abs() < 0.9 { [1., 0., 0.] } else { [0., 1., 0.] };
+                    rad = cross(ax, h);
+                }
+                let s = new.radius / len(rad);
+                [foot[0] + rad[0] * s, foot[1] + rad[1] * s, foot[2] + rad[2] * s]
+            }
+            TargetClass::FaceOutra => p,
+            _ => new.point,
+        }
+    }
+}
+
+impl Pmi {
+    /// Confere os alvos da anotação contra os candidatos da geometria atual.
+    /// Âncoras sem alvo não são conferidas (anotações antigas continuam valendo).
+    pub fn diagnose(&self, cands: &[PmiTarget]) -> PmiDiag {
+        let mut resolved = vec![];
+        for (i, t) in self.targets.iter().enumerate() {
+            let Some(t) = t else {
+                resolved.push(None);
+                continue;
+            };
+            match rematch(t, cands) {
+                Ok(r) => resolved.push(Some(r)),
+                Err(state) => {
+                    let message = if state == PmiState::Quebrada { "o elemento marcado não existe mais" } else { "há mais de um elemento que poderia ser o marcado" };
+                    return PmiDiag { state, failed: Some(i), message: message.into(), resolved };
+                }
+            }
+        }
+        // cota entre duas faces que eram paralelas
+        if self.kind == PmiKind::Linear {
+            if let (Some(Some(a0)), Some(Some(b0)), Some(Some(a)), Some(Some(b))) = (self.targets.first(), self.targets.get(1), resolved.first(), resolved.get(1)) {
+                if a0.class == TargetClass::FacePlana && b0.class == TargetClass::FacePlana {
+                    let par = |x: &PmiTarget, y: &PmiTarget| len(cross(x.dir, y.dir)) < 0.005;
+                    if par(a0, b0) && !par(a, b) {
+                        return PmiDiag { state: PmiState::Ambigua, failed: Some(1), message: "as faces deixaram de ser paralelas".into(), resolved };
+                    }
+                }
+            }
+        }
+        PmiDiag { state: PmiState::Ok, failed: None, message: String::new(), resolved }
+    }
+
+    /// Valor medido pela geometria dos alvos (distância entre planos paralelos, raio e diâmetro
+    /// do cilindro); `None` quando as âncoras bastam.
+    pub fn measure_targets(&self, r: &[Option<PmiTarget>]) -> Option<f64> {
+        let circ = |a: &PmiTarget| matches!(a.class, TargetClass::FaceCilindrica | TargetClass::ArestaCircular);
+        match (&self.kind, r.first().copied().flatten(), r.get(1).copied().flatten()) {
+            (PmiKind::Linear, Some(a), Some(b)) if a.class == TargetClass::FacePlana && b.class == TargetClass::FacePlana && len(cross(a.dir, b.dir)) < 0.005 => Some(dot(sub(b.point, a.point), a.dir).abs()),
+            (PmiKind::Diameter, Some(a), _) if circ(&a) => Some(a.radius * 2.),
+            (PmiKind::Radius, Some(a), _) if circ(&a) => Some(a.radius),
+            _ => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn medidas_e_textos() {
-        let mut p = Pmi { id: Id(1), name: "c".into(), kind: PmiKind::Linear, anchors: vec![], offset: [0.; 3], text: String::new(), tol_plus: "0,1".into(), tol_minus: "0,1".into(), visible: true, plane: None, style: Default::default(), folder: String::new() };
+        let mut p = Pmi { id: Id(1), name: "c".into(), kind: PmiKind::Linear, anchors: vec![], offset: [0.; 3], text: String::new(), tol_plus: "0,1".into(), tol_minus: "0,1".into(), visible: true, plane: None, style: Default::default(), folder: String::new(), targets: vec![] };
         let v = p.measure(&[[0., 0., 0.], [30., 40., 0.]]);
         assert_eq!(v, Some(50.));
         assert_eq!(p.display(v), "50 ±0,1");
@@ -936,5 +1197,71 @@ mod tests {
         let s = weld_symbol(WeldKind::Filete, "a3", false, &WeldExtra { other_side: true, ..Default::default() }, 3.5);
         let tri = s.iter().find_map(|p| if let WeldPrim::Line(v) = p { (v.len() == 3).then_some(v.clone()) } else { None }).unwrap();
         assert!(tri.iter().all(|q| q[1] <= -0.8 * 3.5 + 1e-9), "{tri:?}");
+    }
+
+    fn plano(z: f64, n: [f64; 3]) -> PmiTarget {
+        PmiTarget { class: TargetClass::FacePlana, point: [0., 0., z], dir: n, radius: 0., concave: false }
+    }
+
+    fn pmi_de(kind: PmiKind, targets: Vec<Option<PmiTarget>>) -> Pmi {
+        Pmi { id: Id(1), name: "t".into(), kind, anchors: vec![], offset: [0.; 3], text: String::new(), tol_plus: String::new(), tol_minus: String::new(), visible: true, plane: None, style: Default::default(), folder: String::new(), targets }
+    }
+
+    #[test]
+    fn circulo_e_rotulo_do_furo() {
+        // oito pontos de um furo de raio 3,25 com eixo Z centrado em (10, 5)
+        let pts: Vec<[f64; 3]> = (0..8).map(|k| { let t = k as f64 * std::f64::consts::TAU / 8.; [10. + 3.25 * t.cos(), 5. + 3.25 * t.sin(), (k % 3) as f64] }).collect();
+        let (c, r) = fit_axis_circle(&pts, [0., 0., 1.]).unwrap();
+        assert!((r - 3.25).abs() < 1e-9 && (c[0] - 10.).abs() < 1e-9 && (c[1] - 5.).abs() < 1e-9);
+        let t = PmiTarget { class: TargetClass::FaceCilindrica, point: c, dir: [0., 0., 1.], radius: r, concave: true };
+        assert_eq!(t.label(), "furo Ø6,5");
+        let p = pmi_de(PmiKind::Diameter, vec![Some(t)]);
+        assert!((p.measure_targets(&[Some(t)]).unwrap() - 6.5).abs() < 1e-9);
+        assert!(p.diagnose(&[t]).ok());
+        // o furo cresce: ainda é o mesmo alvo e o diâmetro acompanha
+        let maior = PmiTarget { radius: 4., ..t };
+        let d = p.diagnose(&[maior]);
+        assert!(d.ok());
+        assert!((p.measure_targets(&d.resolved).unwrap() - 8.).abs() < 1e-9);
+        // sem furo nenhum: quebrada
+        assert_eq!(p.diagnose(&[plano(0., [0., 0., 1.])]).state, PmiState::Quebrada);
+    }
+
+    #[test]
+    fn cota_entre_faces_perde_o_paralelismo() {
+        let (a, b) = (plano(0., [0., 0., -1.]), plano(20., [0., 0., 1.]));
+        let p = pmi_de(PmiKind::Linear, vec![Some(a), Some(b)]);
+        let d = p.diagnose(&[a, b]);
+        assert!(d.ok());
+        assert_eq!(p.measure_targets(&d.resolved), Some(20.));
+        // a face de cima inclina 10 graus
+        let t = 10f64.to_radians();
+        let b2 = plano(20., [t.sin(), 0., t.cos()]);
+        let d = p.diagnose(&[a, b2]);
+        assert_eq!(d.state, PmiState::Ambigua);
+        assert_eq!(d.failed, Some(1));
+        assert_eq!(d.message, "as faces deixaram de ser paralelas");
+        // arrastar a âncora para uma face substituta paralela restaura o estado
+        let sub = plano(18., [0., 0., 1.]);
+        let mut p2 = p.clone();
+        p2.targets[1] = Some(sub);
+        let d = p2.diagnose(&[a, b2, sub]);
+        assert!(d.ok(), "{d:?}");
+        assert_eq!(p2.measure_targets(&d.resolved), Some(18.));
+    }
+
+    #[test]
+    fn ancora_acompanha_o_alvo() {
+        let furo = PmiTarget { class: TargetClass::FaceCilindrica, point: [10., 5., 0.], dir: [0., 0., 1.], radius: 3., concave: true };
+        let maior = PmiTarget { radius: 5., point: [12., 5., 0.], ..furo };
+        // o centro vai para o eixo novo e o ponto da superfície para o raio novo
+        let c = furo.carry(&maior, [10., 5., 2.], true);
+        assert!((c[0] - 12.).abs() < 1e-9 && (c[1] - 5.).abs() < 1e-9 && (c[2] - 2.).abs() < 1e-9);
+        let s = furo.carry(&maior, [13., 5., 2.], false);
+        assert!((s[0] - 17.).abs() < 1e-9, "{s:?}");
+        // plano: o ponto desliza para o plano novo
+        let a = plano(0., [0., 0., 1.]);
+        let b = plano(7., [0., 0., 1.]);
+        assert_eq!(a.carry(&b, [3., 4., 0.], false), [3., 4., 7.]);
     }
 }
