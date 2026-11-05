@@ -42,6 +42,7 @@ mod partida;
 mod ajuda_cmd;
 mod textos_ajuda;
 mod sketch_fluxo;
+mod sketch_cadeia;
 mod sketch_relimita;
 mod sketch_textos;
 mod perfil;

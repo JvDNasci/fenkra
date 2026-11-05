@@ -23,7 +23,7 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 - **Estender / aparar-estender** (Estender) — Tool::Extend em linha e arco, com prévia até o alvo; Shift alterna com Aparar. Spline não estende. `DR-51`
 - **Mover, copiar, girar, escalar** (Mover, copiar) — Tool::Move e Copy; sem girar/escalar/esticar dedicados. `BM-SKT-05`
 - **Interseção com o 3D** (Interseção) — Tool::Intersect; só 1 ponto por curva (crossing()); falha com perfis de outro plano (DR-06). `DR-06`
-- **Seleção por janela e cruzada** (só no 3D) — Existe no 3D (box_mode) mas não dentro do sketch (DR-05). `DR-05`
+- **Seleção por janela e cruzada** (Selecionar) — Arrastar no vazio: para a direita pega o que está dentro, para a esquerda também o que toca. Duplo clique pega a cadeia conectada, usada por Offset, Filete e Chanfro (`sketch_cadeia.rs`). `DR-05`
 - **Geometria externa no sketch** (Converter) — Converter cria vínculo; falta a opção de política por sketch (DR-18). `DR-18`
 - **Sketch 3D** (Wireframe 3D) — Sem sketch 3D com restrições; há polilinha/spline/hélice 3D no wireframe (RefKind). `BM-SKT-08`
 

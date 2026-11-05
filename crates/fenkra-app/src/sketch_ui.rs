@@ -164,6 +164,8 @@ pub struct SketchEdit {
     chain_first: Option<Id>,
     pub sel: Vec<Ent>,
     drag: Option<Drag>,
+    /// canto em que começou o arrasto da seleção por janela
+    janela: Option<Pos2>,
     pub dim_edit: Option<(Id, String, bool)>,
     pub report: SolveReport,
     pub construction: bool,
@@ -337,6 +339,7 @@ impl SketchEdit {
             last_uv: None,
             keyboard_busy: false,
             tab_guard: 0,
+            janela: None,
         }
     }
     /// Há um passo de desenho em andamento, com campos de valor à espera.
@@ -1351,6 +1354,50 @@ fn corner_da_selecao(sk: &SketchData, sel: &[Ent]) -> Option<Id> {
     [a1, b1].into_iter().find(|p| (*p == a2 || *p == b2) && lines_at(sk, *p).len() == 2)
 }
 
+/// Filete ou chanfro em vários cantos, com o mesmo valor. O primeiro leva a cota; os outros ficam
+/// iguais a ele por restrição, então editar uma cota muda a cadeia toda. `base`: a cota que já existe
+/// e comanda os novos. Canto em que o valor não cabe fica como estava. Devolve a cota e os que sobraram.
+fn corners_em_lote(sk: &mut SketchData, al: &mut impl FnMut() -> Id, cantos: &[Id], chamfer: bool, valor: Option<f64>, base: Option<Id>) -> Result<(Id, usize), &'static str> {
+    let faz = |sk: &mut SketchData, al: &mut dyn FnMut() -> Id, p: Id, v: Option<f64>| {
+        let mut al = al;
+        if chamfer {
+            chamfer_corner(sk, &mut al, p, v)
+        } else {
+            fillet_corner(sk, &mut al, p, v)
+        }
+    };
+    let (dim, resto) = match base {
+        Some(d) => (d, cantos),
+        None => {
+            let (p, r) = cantos.split_first().ok_or("não há canto entre duas linhas na seleção")?;
+            (faz(sk, al, *p, valor)?, r)
+        }
+    };
+    let cota = |sk: &SketchData, id: Id| sk.constraints.iter().find(|x| x.id == id).map(|x| x.kind.clone());
+    let curva_da = |k: &Kind| match k {
+        Kind::Radius(c, _) | Kind::Length(c, _) => Some(*c),
+        _ => None,
+    };
+    let k0 = cota(sk, dim).ok_or("a cota do canto sumiu")?;
+    let (Some(medida), Some(mestre)) = (sk.measure(&k0), curva_da(&k0)) else { return Err("a cota do canto sumiu") };
+    let mut sobra = 0;
+    for p in resto {
+        // tenta numa cópia: `corner_setback` encolhe o valor que não cabe, e aqui ele tem de ser igual
+        let mut g = sk.clone();
+        let feito = faz(&mut g, al, *p, Some(medida)).ok().and_then(|id| Some((id, cota(&g, id)?)));
+        match feito {
+            Some((id, k)) if g.measure(&k).is_some_and(|m| (m - medida).abs() < 1e-6) => {
+                let Some(c) = curva_da(&k) else { continue };
+                g.constraints.retain(|x| x.id != id);
+                g.add_constraint(al, Kind::Equal(mestre, c));
+                *sk = g;
+            }
+            _ => sobra += 1,
+        }
+    }
+    Ok((dim, sobra))
+}
+
 /// Recuo do canto nas duas linhas. Limitado para sobrar linha: um valor repetido de um canto maior
 /// não pode consumir o lado inteiro.
 fn corner_setback(want: Option<f64>, l1: f64, l2: f64) -> f64 {
@@ -1726,15 +1773,15 @@ pub(crate) fn edit_hint(tool: Tool, no_curves: bool, nothing_selected: bool, cli
         (Tool::Move | Tool::Copy, false, _) => "destino",
         (Tool::Mirror, true, _) => "selecione as curvas a espelhar",
         (Tool::Mirror, false, _) => "clique na linha de simetria",
-        (Tool::Offset, _, _) if nothing_selected => "clique na curva",
+        (Tool::Offset, _, _) if nothing_selected => "clique na curva; duplo clique pega a cadeia",
         (Tool::Offset, _, _) => "clique onde a paralela deve passar",
-        (Tool::Fillet | Tool::Chamfer, _, _) => "clique no canto, ou numa linha perto dele",
+        (Tool::Fillet | Tool::Chamfer, _, _) => "clique no canto, ou numa linha perto dele; duplo clique faz a cadeia",
         _ => "",
     }
 }
 
 /// Pontos da curva no plano do sketch, para desenhar.
-fn curve_uv(sk: &SketchData, c: &fenkra_core::sketch::SkCurve) -> Vec<[f64; 2]> {
+pub(crate) fn curve_uv(sk: &SketchData, c: &fenkra_core::sketch::SkCurve) -> Vec<[f64; 2]> {
     match c.geom {
         Curve::Spline { .. } => fenkra_core::sketch::spline_samples(&sk.spline_uv(c.id), 12),
         Curve::Line { a, b } => vec![sk.pos(a), sk.pos(b)],
@@ -2240,14 +2287,19 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         Tool::Line => edit.chain_last.map(|p| vec![sk.pos(p)]).unwrap_or_default(),
         _ => edit.clicks.iter().map(|c| c.uv).collect(),
     };
-    let offset_of = match edit.sel.as_slice() {
-        [Ent::Cv(c)] if tool == Tool::Offset => Some(*c),
-        _ => None,
-    };
     if let Some(s) = cur_snap {
         edit.last_uv = Some(s.uv);
     }
     let raw = cur_snap.map(|s| s.uv).or(edit.last_uv);
+    // na cadeia, o campo mede a distância até a curva mais perto do cursor
+    let offset_of = match edit.sel.as_slice() {
+        [Ent::Cv(c)] if tool == Tool::Offset => Some(*c),
+        s if tool == Tool::Offset && s.len() > 1 => {
+            let curvas: Vec<Id> = s.iter().filter_map(|e| if let Ent::Cv(c) = e { Some(*c) } else { None }).collect();
+            raw.and_then(|m| crate::sketch_cadeia::mais_perto(&sk, &curvas, m))
+        }
+        _ => None,
+    };
     let fields_at = |uv: [f64; 2], sk: &SketchData| -> Vec<Measure> {
         match offset_of {
             Some(c) => offset_field(sk, c, uv).map(|value| Measure { label: "distância", angle: false, value, at: uv }).into_iter().collect(),
@@ -2325,8 +2377,35 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                         Some(Curve::Circle { .. }) => edit.drag = Some(Drag { pts: vec![], start, circle: Some(c) }),
                         _ => {}
                     },
+                    None => edit.janela = Some(origin),
                     _ => {}
                 }
+            }
+            // janela para a direita pega o que está dentro; para a esquerda, também o que ela toca
+            if let (Some(ini), Some(fim)) = (edit.janela, hover.or(ui.input(|i| i.pointer.latest_pos()))) {
+                let r = Rect::from_two_pos(ini, fim);
+                let cruzada = crate::sketch_cadeia::e_cruzada(ini, fim);
+                painter.rect_filled(r, 0., SEL.gamma_multiply(0.08));
+                let borda: Vec<Pos2> = vec![r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom(), r.left_top()];
+                if cruzada {
+                    painter.extend(egui::Shape::dashed_line(&borda, Stroke::new(1., SEL), 6., 4.));
+                } else {
+                    painter.add(egui::Shape::line(borda, Stroke::new(1., SEL)));
+                }
+                if resp.drag_stopped() {
+                    let achados = crate::sketch_cadeia::na_janela(&sk, &|q| v.to_screen(q), r, cruzada);
+                    if !shift {
+                        edit.sel.clear();
+                    }
+                    for e in achados {
+                        if !edit.sel.contains(&e) {
+                            edit.sel.push(e);
+                        }
+                    }
+                    edit.janela = None;
+                }
+            } else if resp.drag_stopped() {
+                edit.janela = None;
             }
             if let (Some(d), true, Some(uv)) = (&edit.drag, resp.dragged_by(egui::PointerButton::Primary), cursor_uv) {
                 let delta = [uv[0] - d.start[0], uv[1] - d.start[1]];
@@ -2393,6 +2472,17 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                             }
                         } else {
                             edit.sel = vec![e];
+                        }
+                        if let (true, Ent::Cv(c)) = (double, e) {
+                            // duplo clique: a cadeia inteira; com Shift, soma à seleção
+                            if !shift {
+                                edit.sel.clear();
+                            }
+                            for k in crate::sketch_cadeia::cadeia(&sk, c).curvas() {
+                                if !edit.sel.contains(&Ent::Cv(k)) {
+                                    edit.sel.push(Ent::Cv(k));
+                                }
+                            }
                         }
                         if double {
                             if let Ent::Cs(c) = e {
@@ -2685,9 +2775,34 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                     }
                 }
                 Tool::Offset => {
-                    if edit.sel.is_empty() {
+                    if let (true, Some(Ent::Cv(c))) = (double, over) {
+                        // duplo clique: a cadeia inteira vira o alvo do offset
+                        edit.sel = crate::sketch_cadeia::cadeia(&sk, c).curvas().into_iter().map(Ent::Cv).collect();
+                    } else if edit.sel.is_empty() {
                         if let Some(Ent::Cv(c)) = picked {
                             edit.sel = vec![Ent::Cv(c)];
+                        }
+                    } else if let (Some(uv), true) = (cursor_uv, sel_curves.len() > 1) {
+                        use crate::sketch_cadeia as ca;
+                        match ca::caminho_das(&sk, &sel_curves) {
+                            None => refusal = Some("a seleção não forma uma cadeia"),
+                            Some(cam) => {
+                                let d = ca::lado_e_distancia(&sk, &cam, uv).unwrap_or(0.);
+                                let mut g = sk.clone();
+                                match ca::offset_caminho(&mut g, &mut ghost_ids(), &cam, d, edit.construction) {
+                                    Ok(_) => {
+                                        draw_ghost(&painter, &v, &sk, &g);
+                                        if let Some(h) = hover {
+                                            draw_tag(&painter, h + egui::vec2(0., -14.), format!("{} {}", tr("distância"), fmt(d.abs())), dark);
+                                        }
+                                        if primary_click && ca::offset_caminho(&mut sk, &mut al, &cam, d, edit.construction).is_ok() {
+                                            edit.sel.clear();
+                                            edit.report = sk.solve(&vars, &[]);
+                                        }
+                                    }
+                                    Err(m) => refusal = Some(m),
+                                }
+                            }
                         }
                     } else if let (Some(uv), [Ent::Cv(c)]) = (cursor_uv, edit.sel.clone().as_slice()) {
                         let mut g = sk.clone();
@@ -2722,15 +2837,43 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                         }
                     };
                     // seleção prévia: duas linhas que formam um canto viram o filete/chanfro de uma vez
-                    if let Some(p) = corner_da_selecao(&sk, &edit.sel) {
+                    // e a cadeia selecionada, todos os seus cantos de uma vez, com o mesmo valor
+                    let lote = match corner_da_selecao(&sk, &edit.sel) {
+                        Some(p) => vec![p],
+                        None => crate::sketch_cadeia::cantos(&sk, &sel_curves),
+                    };
+                    if !lote.is_empty() {
                         edit.sel.clear();
-                        match run(&mut sk, &mut al, p) {
-                            Ok(id) => {
+                        match corners_em_lote(&mut sk, &mut al, &lote, chamfer, last, None) {
+                            Ok((id, sobra)) => {
                                 edit.dim_edit = Some((id, String::new(), true));
                                 edit.round_dim = Some((id, chamfer));
                                 edit.report = sk.solve(&vars, &[]);
+                                if sobra > 0 {
+                                    toast = Some(("alguns cantos não comportam esse valor e ficaram como estavam".to_string(), true));
+                                }
                             }
                             Err(m) => toast = Some((m.to_string(), true)),
+                        }
+                    }
+                    // duplo clique: o 1º clique fez um canto; o 2º leva o mesmo valor ao resto da cadeia
+                    if let (true, Some(Ent::Cv(c))) = (double, over) {
+                        let resto = crate::sketch_cadeia::cantos(&sk, &crate::sketch_cadeia::cadeia(&sk, c).curvas());
+                        let base = edit.round_dim.filter(|x| x.1 == chamfer).map(|x| x.0);
+                        if !resto.is_empty() {
+                            match corners_em_lote(&mut sk, &mut al, &resto, chamfer, last, base) {
+                                Ok((id, sobra)) => {
+                                    if base.is_none() {
+                                        edit.dim_edit = Some((id, String::new(), true));
+                                        edit.round_dim = Some((id, chamfer));
+                                    }
+                                    edit.report = sk.solve(&vars, &[]);
+                                    if sobra > 0 {
+                                        toast = Some(("alguns cantos não comportam esse valor e ficaram como estavam".to_string(), true));
+                                    }
+                                }
+                                Err(m) => toast = Some((m.to_string(), true)),
+                            }
                         }
                     }
                     match over.zip(cursor_uv).and_then(|(e, uv)| corner_of(&sk, e, uv)) {
@@ -2743,7 +2886,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                                     if let (Some(d), Some(h)) = (k.and_then(|k| g.measure(&k)), hover) {
                                         draw_tag(&painter, h + egui::vec2(0., -14.), format!("{} {}", tr(if chamfer { "distância" } else { "raio" }), fmt(d)), dark);
                                     }
-                                    if primary_click {
+                                    if primary_click && !double {
                                         if let Ok(id) = run(&mut sk, &mut al, p) {
                                             edit.dim_edit = Some((id, String::new(), true));
                                             edit.round_dim = Some((id, chamfer));
@@ -3750,6 +3893,42 @@ mod tests {
             assert_eq!(!e.sel.is_empty(), crate::sketch_fluxo::usa_selecao(t), "{t:?}");
             assert_eq!(e.pending.is_some(), crate::sketch_fluxo::cota(t), "{t:?}: a cota começa com a seleção prévia");
         }
+    }
+
+    #[test]
+    fn filete_e_chanfro_percorrem_a_cadeia_com_um_valor_so() {
+        for chamfer in [false, true] {
+            let mut al = ids();
+            let mut sk = SketchData::default();
+            let (_, rect) = sk.add_rect(&mut al, [0., 0.], [40., 30.], false);
+            let cantos = crate::sketch_cadeia::cantos(&sk, &rect);
+            assert_eq!(cantos.len(), 4);
+            let (dim, sobra) = corners_em_lote(&mut sk, &mut al, &cantos, chamfer, Some(5.), None).unwrap();
+            assert_eq!(sobra, 0);
+            let iguais = sk.constraints.iter().filter(|k| matches!(k.kind, Kind::Equal(..))).count();
+            assert!(iguais >= 3, "{iguais}");
+            assert_eq!(sk.constraints.iter().filter(|k| matches!(k.kind, Kind::Radius(..))).count(), usize::from(!chamfer));
+            let (loops, _) = sk.loops();
+            assert_eq!(loops.len(), 1, "o contorno segue fechado");
+            // uma cota só comanda os quatro cantos
+            let k = sk.constraints.iter_mut().find(|x| x.id == dim).unwrap();
+            *k.kind.value_mut().unwrap() = "3".into();
+            assert!(sk.solve(&HashMap::new(), &[]).converged);
+            for c in sk.curves.iter().filter(|c| matches!(c.geom, Curve::Arc { .. })) {
+                assert!((sk.radius_of(c.id).unwrap() - 3.).abs() < 1e-6);
+            }
+        }
+    }
+
+    #[test]
+    fn canto_em_que_o_valor_nao_cabe_fica_como_estava() {
+        let mut al = ids();
+        let mut sk = SketchData::default();
+        let (_, rect) = sk.add_rect(&mut al, [0., 0.], [40., 10.], false);
+        let cantos = crate::sketch_cadeia::cantos(&sk, &rect);
+        // 8 de recuo em cada ponta do lado de 10 não cabem: o segundo canto desse lado é recusado
+        let (_, sobra) = corners_em_lote(&mut sk, &mut al, &cantos, false, Some(8.), None).unwrap();
+        assert!(sobra >= 1, "{sobra}");
     }
 
     #[test]
