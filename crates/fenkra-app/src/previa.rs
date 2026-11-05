@@ -624,6 +624,45 @@ mod tests {
         assert_eq!(sentidos_da_parede(0).len(), 2);
     }
 
+    fn membro(paths: Vec<CurveRef>) -> StructMember {
+        StructMember {
+            paths,
+            family: s("Tubo quadrado"),
+            designation: s("40x3"),
+            kind: SectionKind::TuboQuadrado,
+            dims: vec![s("40"), s("3")],
+            anchor: 0,
+            angle: s("0"),
+            off_x: s("0"),
+            off_y: s("0"),
+            ext1: s("0"),
+            ext2: s("0"),
+            corner: CornerMode::MeiaEsquadria,
+            gap: s("0"),
+            joints: vec![],
+            material: String::new(),
+        }
+    }
+
+    /// B226: membro sobre um esqueleto em L: o perfil aparece translúcido sobre as duas linhas.
+    #[test]
+    fn membro_mostra_o_perfil_sobre_cada_linha() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let mut d = Document::new("quadro");
+        let mut linha = |a: [f64; 3], b: [f64; 3]| CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: s("0"), end: s("0") }));
+        let paths = vec![linha([0., 0., 0.], [400., 0., 0.]), linha([400., 0., 0.], [400., 300., 0.])];
+        let m = d.add_feature(FeatureKind::StructMember(membro(paths)));
+        let r = recompute(&d);
+        assert!(valido(r.status.get(&m)), "{:?}", r.status.get(&m));
+        assert!(r.bodies[0].mass.volume > 0.);
+        let c = cena(&d, &r, m, &[]);
+        assert!(c.indices.is_empty() && !c.ghost.is_empty(), "antes de confirmar o membro é só fantasma");
+        let (lo, hi) = c.bounds.expect("caixa");
+        assert!(hi.x - lo.x > 390. && hi.y - lo.y > 290., "o fantasma cobre as duas linhas: {lo} {hi}");
+    }
+
     /// O fantasma não é selecionável: o raio passa pela aba e acerta o que está atrás, ou nada.
     #[test]
     fn fantasma_nao_entra_na_selecao() {
