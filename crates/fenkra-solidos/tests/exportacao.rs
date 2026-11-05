@@ -111,6 +111,19 @@ fn stl_ida_e_volta_com_acento_e_espaco() {
 }
 
 #[test]
+fn stl_sai_igual_byte_a_byte_em_duas_exportacoes() {
+    if !kernel_disponivel() {
+        return;
+    }
+    let dir = pasta("repete");
+    let (a, b) = (dir.join("a.stl"), dir.join("b.stl"));
+    export(&cilindro(), None, a.to_str().unwrap()).unwrap();
+    export(&cilindro(), None, b.to_str().unwrap()).unwrap();
+    assert!(fs::read(a).unwrap() == fs::read(b).unwrap());
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
 fn presets_do_stl_mudam_a_malha_e_nao_a_medida() {
     if !kernel_disponivel() {
         return;

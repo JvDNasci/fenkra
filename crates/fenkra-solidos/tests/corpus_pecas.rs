@@ -14,7 +14,7 @@ use fenkra_core::*;
 use fenkra_solidos::engrenagens::{engrenagem_documento, ParamEngrenagem};
 use fenkra_solidos::eixos::{chaveta_documento, eixo_documento, ParamEixo, TrechoEixo};
 use fenkra_solidos::fixadores::fixador_documento;
-use fenkra_solidos::{final_shape, recompute, recompute_cached, tesselar, Cache};
+use fenkra_solidos::{final_shape, recompute, recompute_cached, tesselar, BodyResult, Cache};
 use std::f64::consts::PI;
 use std::time::Instant;
 
@@ -259,9 +259,8 @@ fn peca_16_bloco_em_l() {
     confere("bloco L", &bloco_l(), &Esperado::prisma(900. * 10., [40., 30., 10.], [0., 0., 0.]));
 }
 
-#[test]
-fn corpus_tem_as_dezesseis_pecas_e_todas_serializam() {
-    let pecas = [
+fn pecas() -> [Document; 16] {
+    [
         caixa(),
         cilindro(),
         esfera(),
@@ -278,7 +277,12 @@ fn corpus_tem_as_dezesseis_pecas_e_todas_serializam() {
         fixador_documento("iso4032", "M8", None).unwrap(),
         chaveta_documento(25., 40.).unwrap(),
         bloco_l(),
-    ];
+    ]
+}
+
+#[test]
+fn corpus_tem_as_dezesseis_pecas_e_todas_serializam() {
+    let pecas = pecas();
     assert_eq!(pecas.len(), 16);
     if !kernel_disponivel() {
         return;
@@ -414,10 +418,23 @@ fn desempenho_memoria_depois_de_300_edicoes() {
 #[test]
 fn recompute_do_corpus_e_deterministico() {
     precisa_kernel!();
-    // duas rodadas independentes dão o mesmo volume e a mesma contagem de faces (base da regressão)
-    for d in [engrenagem_40_dentes(), placa_com_grade(), caixa_arredondada()] {
+    // Duas rodadas independentes têm de bater bit a bit, na mesma ordem de faces: as referências
+    // guardam o índice e o papel da face, e o OCCT varre mapas por endereço, que muda entre rodadas.
+    for d in pecas() {
         let (a, b) = (recompute(&d), recompute(&d));
-        assert_eq!(a.bodies[0].faces, b.bodies[0].faces, "{}", d.name);
-        assert!((volume_total(&a) - volume_total(&b)).abs() < 1e-9, "{}", d.name);
+        assert_eq!(a.bodies.len(), b.bodies.len(), "{}", d.name);
+        for (x, y) in a.bodies.iter().zip(&b.bodies) {
+            let nome = &d.name;
+            let medidas = |c: &BodyResult| [c.mass.volume, c.mass.area, c.mass.center[0], c.mass.center[1], c.mass.center[2]].map(f64::to_bits);
+            assert_eq!(medidas(x), medidas(y), "{nome}: medidas");
+            assert_eq!(x.faces, y.faces, "{nome}: faces");
+            assert_eq!(x.face_owner, y.face_owner, "{nome}: dono de cada face");
+            assert_eq!(x.face_role, y.face_role, "{nome}: papel de cada face");
+            assert_eq!(x.mesh.face_info, y.mesh.face_info, "{nome}: ordem das faces");
+            assert_eq!(x.mesh.face_ranges, y.mesh.face_ranges, "{nome}: triângulos por face");
+            assert_eq!(x.mesh.edge_faces, y.mesh.edge_faces, "{nome}: vizinhança das arestas");
+            assert_eq!(x.mesh.indices, y.mesh.indices, "{nome}: índices");
+            assert_eq!(x.mesh.positions, y.mesh.positions, "{nome}: posições");
+        }
     }
 }

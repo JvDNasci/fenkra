@@ -161,7 +161,7 @@ fn amostra_bolso(b: &Bolso, chanfrar: bool, s: &mut Sorteio) -> Amostra {
         let na_aresta_certa = |f: &fenkra_kernel::FaceInfo| f.point[0] >= mx - 0.02 && f.point[0] <= mx + r + 0.02 && f.point[2] >= h - r - 0.02 && f.point[2] <= h + 0.02;
         let achadas: Vec<_> = faces
             .iter()
-            .filter(|f| if chanfrar { f.kind == 0 && (f.dir[0].abs() - 0.7071).abs() < 0.02 && (f.dir[2].abs() - 0.7071).abs() < 0.02 } else { f.kind == 1 && f.dir[1].abs() > 0.99 })
+            .filter(|f| if chanfrar { f.kind == 0 && (f.dir[0].abs() - std::f64::consts::FRAC_1_SQRT_2).abs() < 0.02 && (f.dir[2].abs() - std::f64::consts::FRAC_1_SQRT_2).abs() < 0.02 } else { f.kind == 1 && f.dir[1].abs() > 0.99 })
             .collect();
         match achadas.as_slice() {
             [f] if na_aresta_certa(f) => Ok(()),

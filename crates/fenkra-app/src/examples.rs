@@ -361,6 +361,9 @@ impl PreviewCache {
 mod tests {
     #[test]
     fn exemplos_recalculam_sem_erro() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
         for e in super::all() {
             let r = fenkra_solidos::recompute(&e.doc);
             for f in &e.doc.features {
