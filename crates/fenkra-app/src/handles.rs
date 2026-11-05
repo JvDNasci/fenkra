@@ -457,7 +457,7 @@ fn arc_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id
         }
     }
     let txt = if numeric { format!("{}°", fmt(ang)) } else { format!("🔒 {} = {}°", expr.trim(), fmt(ang)) };
-    let galley = painter.layout_no_wrap(txt, egui::FontId::proportional(estado.fonte()), Color32::WHITE);
+    let galley = painter.layout_no_wrap(txt, egui::FontId::proportional(crate::acessibilidade::fonte_3d(estado.fonte())), Color32::WHITE);
     let lr = Rect::from_min_size(tip + egui::vec2(14., -10.), galley.size() + egui::vec2(10., 6.));
     painter.rect_filled(lr, 4., Color32::from_rgba_unmultiplied(20, 60, 110, 220));
     painter.galley(lr.min + egui::vec2(5., 3.), galley, Color32::WHITE);
@@ -467,7 +467,7 @@ fn arc_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id
 /// Etiqueta pequena na tela; a resposta traz o clique.
 pub(crate) fn tag(ui: &mut egui::Ui, rect: Rect, at: egui::Pos2, text: String, fg: Color32, salt: impl std::hash::Hash + std::fmt::Debug) -> egui::Response {
     let painter = ui.painter_at(rect);
-    let g = painter.layout_no_wrap(text, egui::FontId::proportional(12.), fg);
+    let g = painter.layout_no_wrap(text, egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), fg);
     let r = Rect::from_center_size(at, g.size() + egui::vec2(8., 4.));
     painter.rect_filled(r, 3., ui.visuals().extreme_bg_color);
     painter.rect_stroke(r, 3., Stroke::new(1., fg), egui::StrokeKind::Inside);
@@ -659,7 +659,7 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
     let mut editing: Option<String> = ui.ctx().data(|m| m.get_temp(key));
     let txt = if numeric { format!("{} {} mm", tr(h.label), fmt(val)) } else { format!("🔒 {} = {}", h.expr.trim(), fmt(val)) };
     let lp = st + n * 22. + d * 10.;
-    let galley = painter.layout_no_wrap(txt, egui::FontId::proportional(estado.fonte()), Color32::WHITE);
+    let galley = painter.layout_no_wrap(txt, egui::FontId::proportional(crate::acessibilidade::fonte_3d(estado.fonte())), Color32::WHITE);
     let lr = Rect::from_min_size(lp, galley.size() + egui::vec2(10., 6.));
     painter.rect_filled(lr, 4., Color32::from_rgba_unmultiplied(20, 60, 110, 220));
     painter.rect_stroke(lr, 4., Stroke::new(1., c), egui::StrokeKind::Inside);

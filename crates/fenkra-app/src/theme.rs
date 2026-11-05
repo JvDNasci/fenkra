@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Temas da interface: cores dos painéis, janelas, texto, destaque, faixas da barra e fundo da
-//! viewport. Sete temas prontos e os do usuário (arquivos .json em
+//! viewport. Oito temas prontos e os do usuário (arquivos .json em
 //! %APPDATA%\Fenkra\temas — uma extensão é só um arquivo desses).
 
 use eframe::egui::{self, Color32, Stroke};
@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::RwLock;
+use crate::acessibilidade::{cor_estado, cor_papel, paleta_segura, Estado, Papel};
 
 /// Contorno dos painéis e janelas: fino ou nenhum.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
@@ -90,6 +91,9 @@ pub struct ThemeDef {
     /// conjunto de fontes (corpo, títulos e valores)
     #[serde(default)]
     pub fonte: Fonte,
+    /// fios de arabesco nos separadores da tela inicial e nos estados vazios (B314)
+    #[serde(default)]
+    pub arabesco: bool,
 }
 
 fn hex(v: u32) -> [u8; 3] {
@@ -131,7 +135,16 @@ fn tema(name: &str, dark: bool, fundo: u32, painel: u32, texto: u32, destaque: u
         icone_base: Some(texto),
         icone_resultado: Some(destaque),
         fonte: if dark && canto > 0 { Fonte::Cianotipia } else if canto == 0 { Fonte::Prancheta } else { Fonte::Padrao },
+        arabesco: false,
     }
+}
+
+/// Nome do tema Fênix, o único que liga o arabesco.
+pub const FENIX: &str = "Fênix";
+
+/// O tema em uso liga o arabesco?
+pub fn arabesco_ativo() -> bool {
+    current().is_some_and(|d| d.arabesco)
 }
 
 /// Nome do tema padrão (e do que recebe quem tinha um tema removido).
@@ -162,6 +175,7 @@ pub fn builtin() -> Vec<ThemeDef> {
         icone_base: None,
         icone_resultado: None,
         fonte: Fonte::Padrao,
+        arabesco: false,
     };
     vec![
         // fundo da viewport, painel, texto, destaque, linha, peça, canto, sombra, densidade
@@ -174,6 +188,9 @@ pub fn builtin() -> Vec<ThemeDef> {
         tema("Cianotipia Petróleo", true, 0x10474A, 0x0B3538, 0xE9F5F1, 0xFFB86B, 0x2B6F70, 0x7FA39C, 2, true, 1.0),
         tema("Cianotipia Noturna", true, 0x1A2330, 0x131A24, 0xDDE5EE, 0x7FD1E8, 0x3A4A5E, 0x8593A4, 2, true, 1.0),
         tema("Cianotipia Sépia", true, 0x3B2A22, 0x2C1F19, 0xF3E9DC, 0xEDB26F, 0x6B5245, 0xB39C84, 2, true, 1.0),
+        // B314: fundo calmo de papel quente, texto grafite e um só acento (brasa); o arabesco fica
+        // nos separadores e nos estados vazios, nunca na área de trabalho
+        ThemeDef { arabesco: true, icone_base: Some(hex(0x7A6E66)), ..tema(FENIX, false, 0xE9E3DB, 0xEFEAE3, 0x2A2321, 0xB4461E, 0xCDC3B8, 0xA39384, 4, false, 1.0) },
         neutro("Escuro", true, [27, 29, 33], [32, 34, 39], [14, 15, 18], [225, 228, 234], [70, 140, 230], [30, 32, 37], [40, 43, 50], [74, 84, 100], [26, 29, 34]),
         ThemeDef { peca: Some([118, 122, 170]), ..neutro("Claro", false, [238, 240, 243], [248, 249, 251], [255, 255, 255], [24, 28, 34], [30, 110, 220], [228, 231, 236], [240, 242, 246], [214, 222, 232], [158, 170, 186]) },
     ]
@@ -352,7 +369,8 @@ pub fn apply(ctx: &egui::Context, def: &ThemeDef) {
     v.override_text_color = Some(c(def.text));
     v.hyperlink_color = c(def.texto_destaque.unwrap_or(def.accent));
     v.selection.bg_fill = mix(def.panel, def.accent, if def.dark { 0.55 } else { 0.35 });
-    v.selection.stroke = Stroke::new(1., c(def.accent));
+    // foco do teclado: o egui o desenha com este traço; 2 px cumprem os 3:1 de componente (B321)
+    v.selection.stroke = Stroke::new(2., c(def.accent));
     v.window_stroke = if fino { Stroke::new(1., c(linha)) } else { Stroke::NONE };
     v.window_corner_radius = egui::CornerRadius::same(r_janela);
     v.menu_corner_radius = egui::CornerRadius::same(r_menu);
@@ -459,27 +477,31 @@ fn dark_now() -> bool {
     current().is_none_or(|d| d.dark)
 }
 
-/// Cores de estado legíveis no tema em uso (ok, aviso, erro).
+/// Cores de estado legíveis no tema em uso (ok, aviso, erro). Com a paleta segura (B321) saem do
+/// par azul x laranja, que as três deficiências de cor separam; o símbolo do estado acompanha a cor.
 pub fn st_ok() -> Color32 {
-    if dark_now() { Color32::from_rgb(110, 210, 120) } else { Color32::from_rgb(30, 130, 50) }
+    estado(Estado::Ok)
 }
 pub fn st_warn() -> Color32 {
-    if dark_now() { Color32::from_rgb(240, 200, 90) } else { Color32::from_rgb(170, 110, 0) }
+    estado(Estado::Aviso)
 }
 pub fn st_err() -> Color32 {
-    if dark_now() { Color32::from_rgb(255, 120, 100) } else { Color32::from_rgb(200, 40, 30) }
+    estado(Estado::Erro)
+}
+fn estado(e: Estado) -> Color32 {
+    c(cor_estado(e, dark_now(), paleta_segura()))
 }
 
 /// Cores por papel na seleção do comando e na prévia (B246, B247). Ficam longe do azul da peça, do
 /// aviso e do erro, para o volume que sai, a ferramenta e o plano neutro nunca se confundirem.
 pub fn papel_retirada() -> Color32 {
-    if dark_now() { Color32::from_rgb(240, 110, 170) } else { Color32::from_rgb(185, 30, 110) }
+    c(cor_papel(Papel::Retirada, dark_now(), paleta_segura()))
 }
 pub fn papel_ferramenta() -> Color32 {
-    if dark_now() { Color32::from_rgb(175, 140, 255) } else { Color32::from_rgb(100, 60, 190) }
+    c(cor_papel(Papel::Ferramenta, dark_now(), paleta_segura()))
 }
 pub fn papel_neutro() -> Color32 {
-    if dark_now() { Color32::from_rgb(130, 215, 195) } else { Color32::from_rgb(20, 120, 105) }
+    c(cor_papel(Papel::Neutro, dark_now(), paleta_segura()))
 }
 
 #[cfg(test)]
@@ -501,7 +523,7 @@ mod tests {
     #[test]
     fn temas_prontos_tem_contraste_e_peca_distinta() {
         let b = builtin();
-        assert_eq!(b.len(), 9);
+        assert_eq!(b.len(), 10);
         for t in &b {
             for (nome, fundo) in [("painel", t.panel), ("janela", t.window), ("campo", t.field)] {
                 let r = contraste(t.text, fundo);

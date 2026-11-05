@@ -28,6 +28,8 @@ fn map() -> &'static HashMap<&'static str, &'static str> {
             .chain(crate::textos_montagem::TEXTOS.iter())
             .chain(crate::textos_pmi::TEXTOS.iter())
             .chain(crate::textos_config::TEXTOS.iter())
+            .chain(crate::textos_acessibilidade::TEXTOS.iter())
+            .chain(crate::textos_mouse3d::TEXTOS.iter())
             .chain(crate::selecao_regras::TEXTOS.iter())
             .chain(crate::alca_estado::TEXTOS.iter())
             .chain(crate::textos_superficies::TEXTOS.iter())

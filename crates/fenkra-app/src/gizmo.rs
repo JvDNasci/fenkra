@@ -100,7 +100,7 @@ pub(crate) fn arrow(p: &egui::Painter, a: Pos2, b: Pos2, c: Color32) {
 }
 
 fn label(p: &egui::Painter, at: Pos2, txt: String, c: Color32) {
-    let g = p.layout_no_wrap(txt, egui::FontId::proportional(12.5), Color32::WHITE);
+    let g = p.layout_no_wrap(txt, egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.5)), Color32::WHITE);
     let r = Rect::from_min_size(at, g.size() + egui::vec2(10., 6.));
     p.rect_filled(r, 4., Color32::from_rgba_unmultiplied(20, 40, 70, 225));
     p.rect_stroke(r, 4., Stroke::new(1., c), egui::StrokeKind::Inside);

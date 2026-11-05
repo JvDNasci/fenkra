@@ -156,7 +156,7 @@ fn escrever(app: &mut App, id: Id, c: Campo, v: f64) {
 /// Rótulo com a leitura do valor, junto da alça.
 fn leitura(ui: &egui::Ui, rect: Rect, at: egui::Pos2, texto: String, cor: Color32) {
     let painter = ui.painter_at(rect);
-    let g = painter.layout_no_wrap(texto, egui::FontId::proportional(12.), ui.visuals().strong_text_color());
+    let g = painter.layout_no_wrap(texto, egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), ui.visuals().strong_text_color());
     let r = Rect::from_min_size(at, g.size() + egui::vec2(10., 6.));
     painter.rect_filled(r, 4., ui.visuals().extreme_bg_color);
     painter.rect_stroke(r, 4., Stroke::new(1., cor), egui::StrokeKind::Inside);

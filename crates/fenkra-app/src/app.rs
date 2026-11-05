@@ -184,6 +184,8 @@ pub struct App {
     selecao_ciclo: crate::selecao::Estado,
     /// laço, espelho do conjunto na cena e avanço pelo menu (B95)
     selecao_extra: crate::selecao::Extra,
+    /// mouse 3D (B322): estado do aparelho; vazio e inerte sem aparelho
+    mouse3d: crate::mouse3d::Mouse3d,
     last_edit: f64,
     toasts: Vec<(String, f64, bool)>,
     /// motivos pelos quais o modo leve é sugerido, até a pessoa responder (B236)
@@ -369,6 +371,7 @@ impl App {
             diag: Default::default(),
             selecao_ciclo: Default::default(),
             selecao_extra: Default::default(),
+            mouse3d: Default::default(),
             last_edit: -10.,
             toasts: vec![],
             sugestao_leve: None,
@@ -807,7 +810,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             fenkra_kernel::definir_fios_malhador(fios);
         }
         if let Some(v) = self.viewport.as_mut() {
-            v.animar = self.settings.animacoes;
+            v.animar = self.settings.animacoes && !self.settings.acessibilidade.reduzir_movimento;
         }
         let q = self.settings.graficos.qualidade();
         if let Some(a) = self.asm.as_mut() {
@@ -1273,7 +1276,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     wordmark(ui.painter(), wr.center(), 32., ui.visuals().strong_text_color(), accent);
                     ui.label(RichText::new(tr(BRAND_TAGLINE)).weak());
                     ui.label(RichText::new(concat!("CAD paramétrico open source · v", env!("CARGO_PKG_VERSION"))).weak().small());
-                    ui.add_space(18.);
+                    ui.add_space(6.);
+                    crate::arabesco::fio_da_marca(ui);
+                    ui.add_space(12.);
                 });
                 let w = 1080.0f32.min(ui.available_width() - 24.);
                 ui.horizontal(|ui| {
@@ -1307,13 +1312,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                             }
                         });
                         ui.add_space(14.);
+                        crate::arabesco::separador(ui);
                         let narrow = w < 820.;
                         let left_w = if narrow { w } else { 330. };
                         let mut recents = |ui: &mut egui::Ui| {
                             ui.set_width(left_w);
                             section_title(ui, "Recentes", accent);
                             if self.settings.recent_files.is_empty() && self.settings.recent.is_empty() {
-                                ui.label(RichText::new(tr("nenhum ainda — abra um exemplo ao lado")).weak());
+                                crate::arabesco::vazio_com_texto(ui, RichText::new(tr("nenhum ainda — abra um exemplo ao lado")).weak());
                             }
                             for f in self.settings.recent_files.clone() {
                                 let path = std::path::Path::new(&f);
@@ -6290,10 +6296,35 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 vp.camera.yaw -= delta.x * 0.008;
                 vp.camera.pitch = (vp.camera.pitch + delta.y * 0.008).clamp(-1.5706, 1.5706);
             }
-            if resp.hovered() && scroll != 0. {
+            // B17: a roda também vale enquanto uma alça 3D é arrastada (o passo do arrasto segue o zoom)
+            let ponteiro_na_vista = ctx.input(|i| i.pointer.latest_pos()).filter(|p| rect.contains(*p));
+            let arrastando_alca = ctx.dragged_id().is_some_and(|id| id != resp.id) && ponteiro_na_vista.is_some();
+            if (resp.hovered() || arrastando_alca) && scroll != 0. {
                 let inv = self.settings.invert_zoom != (self.settings.nav == N::MeioGira);
                 let sc = if inv { scroll } else { -scroll };
-                vp.camera.dist = (vp.camera.dist * (sc * 0.0015).exp()).clamp(0.5, 1e6);
+                let nova = (vp.camera.dist * (sc * 0.0015).exp()).clamp(0.5, 1e6);
+                match ponteiro_na_vista {
+                    // pivô sob o cursor: o ponto apontado fica parado enquanto a vista aproxima
+                    Some(p) if self.settings.zoom_no_cursor => vp.camera.zoom_em_ponto(rect, p, nova),
+                    _ => vp.camera.dist = nova,
+                }
+            }
+            // B322: mouse 3D. Sem aparelho nada chega e a câmera não muda.
+            if self.settings.mouse3d.ativo {
+                self.mouse3d.iniciar(&ctx);
+                self.mouse3d.drenar();
+                let mov = self.settings.mouse3d.processar(self.mouse3d.bruto());
+                if !mov.parado() {
+                    vp.stop_anim();
+                    vp.navegou();
+                    crate::mouse3d::aplicar_na_camera(&mut vp.camera, &mov, ctx.input(|i| i.stable_dt));
+                    ctx.request_repaint();
+                }
+                for b in self.mouse3d.botoes_novos() {
+                    if !self.settings.mouse3d.acao_do_botao(b).aplicar(&mut vp.camera) {
+                        self.fit_pending = true;
+                    }
+                }
             }
             if (resp.double_clicked() && self.sketch.is_none() && self.hover_pick.is_none()) || self.fit_pending {
                 if let Some(b) = vp.bounds {
@@ -7783,7 +7814,7 @@ impl eframe::App for App {
             self.scene_dirty = true;
         }
         if self.settings != settings_before {
-            if self.settings.theme != settings_before.theme || self.settings.theme_name != settings_before.theme_name || self.settings.ui_scale != settings_before.ui_scale || self.settings.animacoes != settings_before.animacoes {
+            if self.settings.theme != settings_before.theme || self.settings.theme_name != settings_before.theme_name || self.settings.ui_scale != settings_before.ui_scale || self.settings.animacoes != settings_before.animacoes || self.settings.acessibilidade != settings_before.acessibilidade {
                 self.settings.apply(ctx);
             }
             if let Some(v) = self.viewport.as_mut() {
@@ -8225,6 +8256,9 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
                     ui.radio_value(&mut s.english, true, "English");
                 });
                 ui.add(crate::ui_ext::slider(&mut s.ui_scale, 0.75..=1.75).text("escala (fontes e controles)"));
+                ui.add(crate::ui_ext::slider(&mut s.acessibilidade.escala_fonte, 0.8..=1.6).text(tr("escala só da fonte"))).on_hover_text(tr("Aumenta ou diminui só o texto, além da escala da interface."));
+                ui.checkbox(&mut s.acessibilidade.paleta_segura, tr("cores seguras para daltonismo")).on_hover_text(tr("Troca verde e vermelho por azul e laranja em ok, aviso, erro e na prévia. Todo estado também tem símbolo."));
+                ui.checkbox(&mut s.acessibilidade.reduzir_movimento, tr("reduzir movimento")).on_hover_text(tr("A câmera salta em vez de deslizar e a interface não anima transições."));
                 ui.add(crate::ui_ext::slider(&mut s.icon_size, 20.0..=48.0).text("tamanho dos ícones"));
                 ui.checkbox(&mut s.show_labels, tr("mostrar o nome embaixo dos ícones"));
                 ui.separator();
@@ -8345,8 +8379,11 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
                 });
                 ui.label(RichText::new(s.nav.help()).weak().small());
                 ui.checkbox(&mut s.invert_zoom, tr("inverter o sentido do zoom"));
+                ui.checkbox(&mut s.zoom_no_cursor, tr("zoom em direção ao cursor")).on_hover_text(tr("A roda aproxima o ponto sob o cursor, também enquanto uma alça 3D é arrastada. Desligado, o zoom fecha sobre o centro da vista."));
                 ui.separator();
                 crate::ui_ext::modo_roda_ui(ui, &mut s.wheel_mode);
+                ui.separator();
+                crate::mouse3d::painel(ui, &mut s.mouse3d);
                 ui.separator();
                 ui.horizontal(|ui| {
                     ui.label(tr("Selecionar:"));
