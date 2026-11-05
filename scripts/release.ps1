@@ -20,12 +20,19 @@ $dist = Join-Path $root "dist"
 $out = Join-Path $dist $name
 Write-Host "== Fenkra $version =="
 
+# arquivos de licença obrigatórios (B151): sem eles o release não sai
+$licencas = @("LICENSE", "NOTICE", "THIRD-PARTY-LICENSES")
+$faltam = @($licencas | Where-Object { -not (Test-Path (Join-Path $root $_)) })
+if ($faltam.Count -gt 0) { throw "arquivos de licença ausentes na raiz: $($faltam -join ', ')" }
+
+$env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
 if (-not $SkipBuild) {
-    $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
     cargo build --release -p fenkra-app
     if ($LASTEXITCODE -ne 0) { throw "falha na compilação" }
 }
-$exe = Join-Path $root "target\release\fenkra.exe"
+# a pasta de build pode estar fora do projeto (.cargo\config.toml)
+$targetDir = (cargo metadata --no-deps --format-version 1 | ConvertFrom-Json).target_directory
+$exe = Join-Path $targetDir "release\fenkra.exe"
 if (-not (Test-Path $exe)) { throw "executável não encontrado: $exe" }
 
 # dumpbin do Visual Studio
@@ -61,18 +68,45 @@ New-Item -ItemType Directory -Force $out | Out-Null
 Copy-Item $exe $out
 foreach ($p in $needed.Values) { Copy-Item $p $out }
 
+# licenças obrigatórias (LGPL-2.1: texto, aviso do OCCT e oferta de código-fonte)
+foreach ($doc in $licencas) {
+    $p = Join-Path $root $doc
+    if (-not (Test-Path $p)) { throw "arquivo de licença ausente: $doc" }
+    Copy-Item $p $out
+}
+
 # documentos opcionais que acompanham o pacote
 foreach ($doc in @("CHANGELOG.md", "packaging\LEIA-ME.txt", "packaging\TERCEIROS.txt")) {
     $p = Join-Path $root $doc
     if (Test-Path $p) { Copy-Item $p $out }
 }
 
+# versões exatas do OCCT e das bibliotecas do vcpkg (a oferta de código-fonte do NOTICE aponta para este arquivo)
+$build = @("Versões das bibliotecas nativas deste pacote (vcpkg.spdx.json)", "")
+foreach ($lib in @("opencascade", "freetype", "libpng", "zlib", "bzip2", "brotli")) {
+    $spdx = Join-Path $OcctRoot "share\$lib\vcpkg.spdx.json"
+    if (-not (Test-Path $spdx)) { throw "vcpkg.spdx.json não encontrado para ${lib}: $spdx" }
+    $pkg = (Get-Content $spdx -Raw | ConvertFrom-Json).packages | Select-Object -First 1
+    $build += "$($pkg.name) $($pkg.versionInfo)  origem: $($pkg.downloadLocation)"
+}
+$build | Set-Content -Path (Join-Path $out "NOTICE-BUILD.txt") -Encoding utf8
+
+# o pacote precisa conter os três arquivos de licença
+foreach ($doc in $licencas) {
+    if (-not (Test-Path (Join-Path $out $doc))) { throw "pacote sem $doc" }
+}
+
 $zip = Join-Path $dist "$name.zip"
 if (Test-Path $zip) { Remove-Item -Force $zip }
 Compress-Archive -Path "$out\*" -DestinationPath $zip
+
+# SHA256SUMS do zip
+$hash = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
+"$hash  $name.zip" | Set-Content -Path (Join-Path $dist "SHA256SUMS") -Encoding ascii
 
 $size = [math]::Round(((Get-ChildItem $out | Measure-Object Length -Sum).Sum / 1MB), 1)
 $zsize = [math]::Round(((Get-Item $zip).Length / 1MB), 1)
 Write-Host "DLLs incluídas: $($needed.Count)"
 Write-Host "Pasta: $out ($size MB)"
 Write-Host "Zip:   $zip ($zsize MB)"
+Write-Host "SHA256: $hash"

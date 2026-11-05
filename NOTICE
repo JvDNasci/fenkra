@@ -1,0 +1,66 @@
+Fenkra
+Copyright (c) 2026 João Vitor Dias Nascimento e colaboradores do Fenkra
+
+[DECISÃO HUMANA] Titular e ano do copyright acima assumidos a partir do usuário do git; confirmar.
+[DECISÃO HUMANA] A licença LGPL-2.1-or-later segue a ADR 0003, ainda em estado "proposta". Este
+arquivo não encerra a decisão jurídica; ver docs/pesquisa/propriedade-intelectual.md.
+
+O Fenkra é software livre, distribuído sob a GNU Lesser General Public License, versão 2.1 ou, a seu
+critério, qualquer versão posterior (LGPL-2.1-or-later). O texto está em LICENSE.
+
+Fenkra não é afiliado, patrocinado nem endossado por nenhum fabricante de software de CAD. Nomes de
+terceiros pertencem aos respectivos titulares.
+
+--------------------------------------------------------------------------------
+Aviso sobre o OpenCASCADE Technology
+--------------------------------------------------------------------------------
+
+Este software usa facilidades fornecidas pelo Open CASCADE Technology (OCCT), versão 8.0.1,
+distribuído sob a GNU LGPL versão 2.1 com a exceção Open CASCADE versão 1.0. O OCCT é ligado
+dinamicamente: as bibliotecas TK*.dll que acompanham o pacote podem ser substituídas por uma versão
+modificada e compatível, e o Fenkra continuará a funcionar com elas. O texto completo da licença e da
+exceção está em THIRD-PARTY-LICENSES (seção 1).
+
+--------------------------------------------------------------------------------
+Oferta escrita de código-fonte (LGPL-2.1, seção 6, item c)
+--------------------------------------------------------------------------------
+
+Por no mínimo três anos a partir da data de cada distribuição binária, qualquer pessoa que receba este
+pacote pode obter, por um valor que não exceda o custo de realizar a distribuição física, uma cópia
+completa do código-fonte correspondente do OpenCASCADE Technology 8.0.1 e das demais bibliotecas
+LGPL incluídas, e do código-fonte do Fenkra da mesma versão. Peça pelos canais de contato do
+repositório do Fenkra [DECISÃO HUMANA: informar o endereço do repositório público e um e-mail de
+contato antes do primeiro release].
+
+Versão exata e origem:
+  - OpenCASCADE Technology 8.0.1: https://github.com/Open-Cascade-SAS/OCCT (tag da versão 8.0.1) e
+    https://dev.opencascade.org/
+  - Porta de build usada: vcpkg, ports/opencascade, versão 8.0.1 (https://github.com/microsoft/vcpkg).
+    A versão e o hash de cada biblioteca do pacote constam em NOTICE-BUILD.txt, gravado pelo
+    scripts/release.ps1 a partir dos vcpkg.spdx.json.
+  - Fenkra: o código-fonte da mesma versão do pacote, na tag correspondente do repositório.
+
+Como reconstruir:
+  1. Instale o vcpkg e a versão do OCCT indicada: vcpkg install opencascade:x64-windows-release
+  2. Aponte OCCT_ROOT para vcpkg\installed\x64-windows-release (ver docs/desenvolvimento.md).
+  3. Compile o Fenkra com: cargo build --release -p fenkra-app
+  4. Para trocar o OCCT sem recompilar o Fenkra, substitua as TK*.dll ao lado de fenkra.exe por
+     DLLs compiladas da mesma série de versão e com a mesma interface binária.
+
+--------------------------------------------------------------------------------
+Outros créditos
+--------------------------------------------------------------------------------
+
+FreeType: Portions of this software are copyright (c) <ano> The FreeType Project (www.freetype.org).
+All rights reserved. [DECISÃO HUMANA: o ano é um campo do modelo da própria FTL; preencher conforme
+o arquivo de licença da versão distribuída, ver THIRD-PARTY-LICENSES, seção 1.] Do FreeType, que é de
+licença dupla, o Fenkra adota a FreeType License (FTL).
+
+self_cell: crate de licença dupla (Apache-2.0 ou GPL-2.0-only); o Fenkra o usa sob a Apache-2.0.
+
+libpng, zlib, bzip2 e Brotli acompanham o pacote; os avisos estão em THIRD-PARTY-LICENSES.
+
+As fontes do Fenkra (Barlow, IBM Plex, JetBrains Mono) e as fontes embutidas do egui são distribuídas
+sob as licenças listadas em THIRD-PARTY-LICENSES, seção 2.
+
+Os crates Rust e seus avisos de copyright estão em THIRD-PARTY-LICENSES, seções 3 e 4.
