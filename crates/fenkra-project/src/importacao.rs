@@ -8,7 +8,7 @@
 
 use crate::seguro::gravar_atomico;
 use crate::{PResult, Project};
-use fenkra_core::{Document, FeatureKind, RefKind};
+use fenkra_core::{Document, RefKind};
 use std::path::{Path, PathBuf};
 
 const ORIGINAIS: &str = ".originais";
@@ -84,12 +84,20 @@ impl Project {
     /// pessoa fez depois da importação, e grava o selo do arquivo novo.
     pub fn atualizar_importado(&mut self, id: u64, original: &Path, novo: &Document, relatorio: &str) -> PResult<()> {
         let mut doc = self.load(id)?;
-        let (Some(atual), Some(trocada)) = (corpo_importado(&doc), corpo_importado(novo)) else {
+        let (atuais, trocadas) = (geometria_importada(&doc), geometria_importada(novo));
+        if atuais.is_empty() {
             return Err(crate::ProjectError::Importacao("o documento não tem corpo importado".into()));
-        };
-        let kind = novo.references.iter().find(|r| r.id == trocada).map(|r| r.kind.clone());
-        if let (Some(r), Some(kind)) = (doc.references.iter_mut().find(|r| r.id == atual), kind) {
-            r.kind = kind;
+        }
+        // sem a mesma contagem não há como saber qual corpo virou qual: os comandos feitos depois
+        // iriam parar em outra geometria sem ninguém ver
+        if atuais.len() != trocadas.len() {
+            return Err(crate::ProjectError::Importacao(format!("o arquivo tinha {} corpos e agora tem {}: crie um derivado", atuais.len(), trocadas.len())));
+        }
+        for (atual, trocada) in atuais.into_iter().zip(trocadas) {
+            let kind = novo.references.iter().find(|r| r.id == trocada).map(|r| r.kind.clone());
+            if let (Some(r), Some(kind)) = (doc.references.iter_mut().find(|r| r.id == atual), kind) {
+                r.kind = kind;
+            }
         }
         doc.origem = novo.origem.clone();
         let hash = doc.origem.as_ref().map(|o| o.hash.clone()).unwrap_or_default();
@@ -98,11 +106,8 @@ impl Project {
     }
 }
 
-/// Elemento de referência que guarda o corpo importado (o primeiro comando de corpo ligado).
-fn corpo_importado(doc: &Document) -> Option<fenkra_core::Id> {
-    let geo = doc.features.iter().find_map(|f| match &f.kind {
-        FeatureKind::LinkedBody(b) => Some(b.geo),
-        _ => None,
-    })?;
-    doc.references.iter().find(|r| r.id == geo && matches!(r.kind, RefKind::Isolated { .. })).map(|r| r.id)
+/// Elementos de referência com a geometria importada, na ordem do arquivo. Todo corpo e toda
+/// superfície aberta nascem como geometria isolada.
+fn geometria_importada(doc: &Document) -> Vec<fenkra_core::Id> {
+    doc.references.iter().filter(|r| matches!(r.kind, RefKind::Isolated { .. })).map(|r| r.id).collect()
 }

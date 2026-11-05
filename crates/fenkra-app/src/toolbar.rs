@@ -56,6 +56,13 @@ pub struct Item {
     pub act: Act,
 }
 
+/// Nome, frase e passo a passo de Importar, que aparece na barra e no menu Arquivo.
+pub const TEXTO_IMPORTAR: (&str, &str, &str) = (
+    "Importar",
+    "Importar arquivo STEP ou BREP",
+    "Escolha o arquivo. Confira a miniatura, a caixa envolvente e os avisos. Ajuste a unidade e o reparo. Confirme e leia o relatório.",
+);
+
 #[derive(Clone)]
 pub enum Entry {
     One(Item),
@@ -478,6 +485,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("hib_costurar", "Costurar", "Costurar superfície no corpo (Sew Surface)", "Acrescenta o volume entre a superfície e o corpo, ou remove o lado escolhido.", Cmd(C::SewSurface))),
             One(it("hib_preencher", "Preencher", "Preencher fronteiras (Boundary Fill)", "Sólido dos volumes fechados por superfícies, faces e planos; escolha as células que ficam de fora.", Cmd(C::BoundaryFill))),
             One(it("hib_malha", "Malha", "Importar malha STL/OBJ como B-rep", "Converte triângulos em faces costuradas; se fechar, vira sólido.", Cmd(C::MeshImport))),
+            One(it("importar_arquivo", TEXTO_IMPORTAR.0, TEXTO_IMPORTAR.1, TEXTO_IMPORTAR.2, Cmd(C::ImportarArquivo))),
         ],
         Group::Analise => vec![
             One(it("an_zebra", "Zebra", "Listras zebra (reflexo)", "Faixas de reflexo: onde elas quebram há só posição (G0); dobram = tangência (G1); contínuas = curvatura (G2).", Display(DisplayMode::Zebra))),

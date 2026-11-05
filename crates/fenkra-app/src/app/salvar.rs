@@ -22,6 +22,7 @@ pub enum Acao {
     NovaPeca,
     Exemplo,
     AbrirDialogo,
+    Importar,
     AbrirCaminho(PathBuf),
     Sair,
 }
@@ -124,6 +125,10 @@ impl App {
                 self.started = true;
             }
             Acao::Exemplo => self.load_doc(fenkra_solidos::example_document(), None, None),
+            Acao::Importar => {
+                self.importar_arquivo();
+                self.started = true;
+            }
             Acao::AbrirDialogo => {
                 self.open_file();
                 self.started = true;
