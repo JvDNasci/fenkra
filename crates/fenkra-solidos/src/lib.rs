@@ -5945,6 +5945,7 @@ pub fn member_joints(doc: &Document) -> Vec<((Id, usize), (Id, usize), [f64; 3])
 pub fn skeleton_groups(doc: &Document, paths: &[CurveRef]) -> Vec<Vec<usize>> {
     let vars = doc.eval_params().unwrap_or_default();
     let cx = Ctx {
+        notes: Default::default(),
         doc,
         vars,
         qualidade: Default::default(),
