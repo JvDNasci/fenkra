@@ -437,6 +437,8 @@ pub struct Settings {
     pub snaps: bool,
     pub auto_constraints: bool,
     pub auto_dims: bool,
+    /// valor digitado no campo do cursor vira cota
+    pub dim_on_type: bool,
     /// atalhos de teclado (predefinição + trocas)
     pub keys: crate::keymap::Keymap,
     /// interface em inglês
@@ -542,6 +544,7 @@ impl Default for Settings {
             snaps: true,
             auto_constraints: true,
             auto_dims: false,
+            dim_on_type: true,
             keys: Default::default(),
             english: false,
             custom: Default::default(),

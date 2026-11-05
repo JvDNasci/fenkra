@@ -6668,7 +6668,7 @@ impl eframe::App for App {
         // atalhos (mapa configurável em Configurações → Atalhos e navegação)
         use crate::keymap::KeyAction as K;
         let km = self.settings.keys.clone();
-        let typing = ctx.egui_wants_keyboard_input();
+        let typing = ctx.egui_wants_keyboard_input() || self.sketch.as_ref().is_some_and(|e| e.entry.typing());
         let (save, undo, redo) = (km.pressed(ctx, K::Save), !typing && km.pressed(ctx, K::Undo), !typing && km.pressed(ctx, K::Redo));
         let del = km.pressed(ctx, K::Delete);
         let asm_mode = self.in_asm();
@@ -6755,7 +6755,9 @@ impl eframe::App for App {
                 (K::ViewRight, dir(1., 0., 0.)),
                 (K::ViewIso, dir(1., -1., 1.)),
             ] {
-                if km.pressed(ctx, k) {
+                // no meio de um desenho o dígito é do campo de valor, mesmo no perfil com vistas em 1, 2, 3
+                let to_field = self.sketch.as_ref().is_some_and(|e| e.in_step()) && !ctx.input(|i| i.modifiers.any());
+                if km.pressed(ctx, k) && !to_field {
                     self.view_choice = d;
                 }
             }

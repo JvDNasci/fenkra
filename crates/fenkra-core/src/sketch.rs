@@ -66,6 +66,8 @@ pub enum Kind {
     Diameter(Id, String),
     Angle(Id, Id, String),
     PointLineDistance(Id, Id, String),
+    /// ângulo da linha, de `a` para `b`, com a horizontal do sketch (com sinal)
+    LineAngle(Id, String),
 }
 
 impl Kind {
@@ -91,6 +93,7 @@ impl Kind {
             Kind::Diameter(..) => "Diâmetro",
             Kind::Angle(..) => "Ângulo",
             Kind::PointLineDistance(..) => "Distância ponto-linha",
+            Kind::LineAngle(..) => "Ângulo com a horizontal",
         }
     }
     /// Valor (expressão) se for cota.
@@ -103,17 +106,22 @@ impl Kind {
             | Kind::Radius(_, v)
             | Kind::Diameter(_, v)
             | Kind::Angle(_, _, v)
-            | Kind::PointLineDistance(_, _, v) => Some(v),
+            | Kind::PointLineDistance(_, _, v)
+            | Kind::LineAngle(_, v) => Some(v),
             _ => None,
         }
     }
     pub fn is_dimension(&self) -> bool {
         self.clone().value_mut().is_some()
     }
+    /// Cotas em que um valor negativo significa "do outro lado".
+    fn has_side(&self) -> bool {
+        matches!(self, Kind::Distance(..) | Kind::DistanceX(..) | Kind::DistanceY(..) | Kind::Length(..) | Kind::Angle(..) | Kind::PointLineDistance(..))
+    }
     /// Ids referenciados (pontos ou curvas).
     pub fn refs(&self) -> Vec<Id> {
         match self {
-            Kind::Horizontal(a) | Kind::Vertical(a) | Kind::Fixed(a) | Kind::Length(a, _) | Kind::Radius(a, _) | Kind::Diameter(a, _) => vec![*a],
+            Kind::Horizontal(a) | Kind::Vertical(a) | Kind::Fixed(a) | Kind::Length(a, _) | Kind::Radius(a, _) | Kind::Diameter(a, _) | Kind::LineAngle(a, _) => vec![*a],
             Kind::Coincident(a, b)
             | Kind::Parallel(a, b)
             | Kind::Perpendicular(a, b)
@@ -141,6 +149,12 @@ pub struct Constraint {
     /// posição do texto da cota em relação à âncora (meio, centro ou vértice), no plano do sketch
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<[f64; 2]>,
+    /// cota de referência: mostra a medida e não comanda a geometria
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub reference: bool,
+    /// a expressão da cota vale menos que zero e a geometria já está do outro lado
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub flipped: bool,
 }
 
 /// Estado do sketch após resolver.
@@ -163,6 +177,8 @@ impl SolveReport {
     pub fn status(&self) -> &'static str {
         if !self.converged {
             "Conflito entre restrições"
+        } else if self.redundant > 0 {
+            "Redundante"
         } else if self.dof == 0 {
             "Totalmente restrito"
         } else {
@@ -322,6 +338,64 @@ pub fn spline_eval(p: &[[f64; 2]], own: &[Option<[f64; 2]>], per_seg: usize) -> 
     out
 }
 
+/// Ponto da curva de Hermite no parâmetro `u` (0 no primeiro ponto, 1 no segundo, e assim por diante).
+fn hermite_at(p: &[[f64; 2]], m: &[[f64; 2]], u: f64) -> [f64; 2] {
+    let i = (u.max(0.) as usize).min(p.len() - 2);
+    let t = u - i as f64;
+    let (t2, t3) = (t * t, t * t * t);
+    let (h00, h10, h01, h11) = (2. * t3 - 3. * t2 + 1., t3 - 2. * t2 + t, -2. * t3 + 3. * t2, t3 - t2);
+    [0, 1].map(|j| h00 * p[i][j] + h10 * m[i][j] + h01 * p[i + 1][j] + h11 * m[i + 1][j])
+}
+
+/// Máximo de `f` em `[a, b]` por seção áurea. Refinar assim mantém o resíduo suave para o Jacobiano
+/// numérico: a amostra mais próxima daria saltos do tamanho do passo da amostragem.
+fn golden_max(f: impl Fn(f64) -> f64, mut a: f64, mut b: f64) -> f64 {
+    const R: f64 = 0.618_033_988_749_895;
+    let (mut c, mut d) = (b - R * (b - a), a + R * (b - a));
+    let (mut fc, mut fd) = (f(c), f(d));
+    for _ in 0..48 {
+        if fc > fd {
+            b = d;
+            (d, fd) = (c, fc);
+            c = b - R * (b - a);
+            fc = f(c);
+        } else {
+            a = c;
+            (c, fc) = (d, fd);
+            d = a + R * (b - a);
+            fd = f(d);
+        }
+    }
+    (a + b) / 2.
+}
+
+/// Pontos em que uma polilinha 3D encontra um plano (`normal` unitária): todas as travessias, os
+/// vértices que caem sobre o plano e as duas pontas de um trecho deitado nele. Um perfil de outro
+/// plano costuma ter vértices exatamente no plano do sketch, por isso a tolerância: comparar só o
+/// sinal perderia a ponta que termina ali.
+pub fn plane_crossings(pts: &[[f64; 3]], origin: [f64; 3], normal: [f64; 3]) -> Vec<[f64; 3]> {
+    const TOL: f64 = 1e-7;
+    let d: Vec<f64> = pts.iter().map(|p| (0..3).map(|k| (p[k] - origin[k]) * normal[k]).sum()).collect();
+    let mut out: Vec<[f64; 3]> = vec![];
+    let mut push = |q: [f64; 3]| {
+        if !out.iter().any(|o| (0..3).all(|k| (o[k] - q[k]).abs() < 1e-6)) {
+            out.push(q);
+        }
+    };
+    for i in 0..pts.len() {
+        let on = d[i].abs() <= TOL;
+        let (before, after) = (i > 0 && d[i - 1].abs() <= TOL, i + 1 < pts.len() && d[i + 1].abs() <= TOL);
+        if on && !(before && after) {
+            push(pts[i]);
+        }
+        if i + 1 < pts.len() && !on && d[i + 1].abs() > TOL && d[i] * d[i + 1] < 0. {
+            let t = d[i] / (d[i] - d[i + 1]);
+            push([0, 1, 2].map(|k| pts[i][k] + (pts[i + 1][k] - pts[i][k]) * t));
+        }
+    }
+    out
+}
+
 /// Pontos de inflexão (troca do lado da curvatura) de uma polilinha amostrada.
 pub fn inflections(s: &[[f64; 2]]) -> Vec<[f64; 2]> {
     let cross = |i: usize| {
@@ -363,7 +437,9 @@ impl SketchData {
     pub fn spline_uv(&self, curve: Id) -> Vec<[f64; 2]> {
         let Some(Curve::Spline { pts }) = self.curves.iter().find(|c| c.id == curve).map(|c| &c.geom) else { return vec![] };
         let p: Vec<[f64; 2]> = pts.iter().map(|q| self.pos(*q)).collect();
-        if !self.spline_tan.iter().any(|t| t.curve == curve) {
+        // com tangência, o perfil precisa ser a mesma curva que o solver enxerga
+        let tangent = self.constraints.iter().any(|c| matches!(c.kind, Kind::Tangent(a, b) if a == curve || b == curve));
+        if !tangent && !self.spline_tan.iter().any(|t| t.curve == curve) {
             return p;
         }
         spline_eval(&p, &self.own_tangents(curve), 16)
@@ -445,8 +521,14 @@ pub enum LinkSrc {
 /// Como a geometria externa vira geometria do sketch.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum LinkShape {
-    /// polilinha de pontos fixos (na ordem)
-    Poly { points: Vec<Id>, closed: bool },
+    /// polilinha de pontos fixos (na ordem); `isolated`: pontos soltos, sem linhas entre eles
+    /// (as várias travessias de uma curva pelo plano do sketch)
+    Poly {
+        points: Vec<Id>,
+        closed: bool,
+        #[serde(default)]
+        isolated: bool,
+    },
     /// círculo: centro fixo e raio da curva acompanhando
     Circle { center: Id, curve: Id },
 }
@@ -548,10 +630,31 @@ impl SketchData {
                     }
                 }
             }
-            LinkShape::Poly { points: ids, closed }
+            LinkShape::Poly { points: ids, closed, isolated: false }
         };
         let id = al();
         self.links.push(SkLink { id, source, intersect, shape });
+        Some(id)
+    }
+
+    /// Põe no sketch os pontos soltos em que uma curva externa corta o plano.
+    pub fn add_link_points(&mut self, al: &mut impl FnMut() -> Id, source: LinkSrc, uv: &[[f64; 2]], construction: bool) -> Option<Id> {
+        if uv.is_empty() {
+            return None;
+        }
+        let points: Vec<Id> = uv
+            .iter()
+            .map(|q| {
+                let id = self.add_point(al, q[0], q[1]);
+                if let Some(p) = self.point_mut(id) {
+                    p.fixed = true;
+                }
+                self.add_curve(al, Curve::Point { p: id }, construction);
+                id
+            })
+            .collect();
+        let id = al();
+        self.links.push(SkLink { id, source, intersect: true, shape: LinkShape::Poly { points, closed: false, isolated: true } });
         Some(id)
     }
 
@@ -575,7 +678,15 @@ impl SketchData {
                     }
                 }
             }
-            LinkShape::Poly { points, closed } => {
+            LinkShape::Poly { points, isolated: true, .. } => {
+                // cada ponto segue a travessia correspondente; se o 3D mudou e sobraram pontos, eles ficam
+                for (id, p) in points.iter().zip(uv) {
+                    if let Some(pt) = self.point_mut(*id) {
+                        (pt.x, pt.y) = (p[0], p[1]);
+                    }
+                }
+            }
+            LinkShape::Poly { points, closed, .. } => {
                 let n = points.len() + usize::from(closed);
                 let q = resample(uv, n);
                 for (id, p) in points.iter().zip(q) {
@@ -640,7 +751,7 @@ impl SketchData {
     }
     pub fn add_constraint(&mut self, alloc: &mut impl FnMut() -> Id, kind: Kind) -> Id {
         let id = alloc();
-        self.constraints.push(Constraint { id, kind, label: None });
+        self.constraints.push(Constraint { id, kind, label: None, reference: false, flipped: false });
         id
     }
 
@@ -683,14 +794,14 @@ impl SketchData {
         (pc1, pc2, arc1)
     }
 
-    /// Polígono regular inscrito em círculo de construção.
-    pub fn add_polygon(&mut self, al: &mut impl FnMut() -> Id, c: [f64; 2], r: f64, n: usize) -> Id {
+    /// Polígono regular inscrito em círculo de construção, com um vértice no ângulo `a0` (radianos).
+    pub fn add_polygon(&mut self, al: &mut impl FnMut() -> Id, c: [f64; 2], r: f64, n: usize, a0: f64) -> Id {
         let n = n.max(3);
         let pc = self.add_point(al, c[0], c[1]);
         let circ = self.add_curve(al, Curve::Circle { c: pc, r }, true);
         let pts: Vec<Id> = (0..n)
             .map(|i| {
-                let a = std::f64::consts::FRAC_PI_2 + 2. * std::f64::consts::PI * i as f64 / n as f64;
+                let a = a0 + 2. * std::f64::consts::PI * i as f64 / n as f64;
                 self.add_point(al, c[0] + r * a.cos(), c[1] + r * a.sin())
             })
             .collect();
@@ -780,6 +891,133 @@ impl SketchData {
     pub fn exprs_mut(&mut self) -> impl Iterator<Item = &mut String> {
         self.constraints.iter_mut().filter_map(|c| c.kind.value_mut())
     }
+
+    /// Cota recém-criada: se ela sobre-restringe o sketch (nada acrescenta ou entra em conflito), vira
+    /// referência. Medir antes e depois é o que separa a cota nova da redundância que já existia.
+    pub fn settle_dimension(&mut self, id: Id, vars: &Vars) -> bool {
+        let Some(i) = self.constraints.iter().position(|c| c.id == id) else { return false };
+        let mut without = self.clone();
+        without.constraints[i].reference = true;
+        let before = without.solve(vars, &[]);
+        let after = self.clone().solve(vars, &[]);
+        let over = (before.converged && !after.converged) || after.redundant > before.redundant;
+        if over {
+            self.constraints[i].reference = true;
+        }
+        over
+    }
+
+    /// Alterna a cota entre comandar e referência. Devolve false se ela não pode comandar, porque
+    /// sobre-restringiria o sketch. Ao voltar a comandar, parte da medida atual: nada salta.
+    pub fn toggle_reference(&mut self, id: Id, vars: &Vars) -> bool {
+        let Some(i) = self.constraints.iter().position(|c| c.id == id) else { return false };
+        if !self.constraints[i].reference {
+            self.constraints[i].reference = true;
+            self.constraints[i].flipped = false;
+            return true;
+        }
+        let m = self.measure(&self.constraints[i].kind).unwrap_or(0.);
+        self.constraints[i].reference = false;
+        if let Some(v) = self.constraints[i].kind.value_mut() {
+            *v = ((m * 1e6).round() / 1e6).to_string();
+        }
+        !self.settle_dimension(id, vars)
+    }
+
+    /// Valor negativo inverte o lado. O solver só enxerga o módulo, que tem solução nos dois lados e
+    /// fica no mais próximo; então a virada acontece aqui, uma vez, na troca de sinal. Número digitado
+    /// fica positivo depois de virar; expressão guarda o estado para voltar quando o sinal voltar.
+    fn apply_sides(&mut self, vals: &HashMap<Id, f64>, fixed: &HashSet<Id>) {
+        for i in 0..self.constraints.len() {
+            let c = &self.constraints[i];
+            let Some(&v) = vals.get(&c.id) else { continue };
+            if !c.kind.has_side() {
+                continue;
+            }
+            if (v < 0.) != c.flipped {
+                let kind = c.kind.clone();
+                self.flip_side(&kind, fixed);
+                self.constraints[i].flipped = v < 0.;
+            }
+            let c = &mut self.constraints[i];
+            if let (true, Some(t)) = (v < 0., c.kind.value_mut()) {
+                if t.trim().replace(',', ".").parse::<f64>().is_ok() {
+                    *t = t.trim().trim_start_matches('-').to_string();
+                    c.flipped = false;
+                }
+            }
+        }
+    }
+
+    fn move_to(&mut self, id: Id, q: [f64; 2], fixed: &HashSet<Id>) -> bool {
+        if fixed.contains(&id) {
+            return false;
+        }
+        if let Some(p) = self.point_mut(id) {
+            (p.x, p.y) = (q[0], q[1]);
+        }
+        true
+    }
+
+    /// Passa a geometria para o outro lado da cota, mexendo no que estiver livre.
+    fn flip_side(&mut self, k: &Kind, fixed: &HashSet<Id>) {
+        let through = |p: [f64; 2], c: [f64; 2]| [2. * c[0] - p[0], 2. * c[1] - p[1]];
+        let ends = |s: &Self, l: Id| match s.curve(l).map(|c| &c.geom) {
+            Some(Curve::Line { a, b }) => Some((*a, *b)),
+            _ => None,
+        };
+        // espelha `p` na reta que passa por `o` com direção `d`
+        let across = |p: [f64; 2], o: [f64; 2], d: [f64; 2]| {
+            let t = dot(sub(p, o), d) / dot(d, d).max(1e-18);
+            through(p, [o[0] + d[0] * t, o[1] + d[1] * t])
+        };
+        match *k {
+            Kind::Length(l, _) => {
+                if let Some((a, b)) = ends(self, l) {
+                    self.flip_side(&Kind::Distance(a, b, String::new()), fixed);
+                }
+            }
+            Kind::Distance(a, b, _) => {
+                let (pa, pb) = (self.pos(a), self.pos(b));
+                if !self.move_to(b, through(pb, pa), fixed) {
+                    self.move_to(a, through(pa, pb), fixed);
+                }
+            }
+            Kind::DistanceX(a, b, _) | Kind::DistanceY(a, b, _) => {
+                let i = usize::from(matches!(k, Kind::DistanceY(..)));
+                let (pa, pb) = (self.pos(a), self.pos(b));
+                let (mut qa, mut qb) = (pa, pb);
+                qb[i] = 2. * pa[i] - pb[i];
+                qa[i] = 2. * pb[i] - pa[i];
+                if !self.move_to(b, qb, fixed) {
+                    self.move_to(a, qa, fixed);
+                }
+            }
+            Kind::PointLineDistance(p, l, _) => {
+                let Some((a, b)) = ends(self, l) else { return };
+                let (pp, pa, pb) = (self.pos(p), self.pos(a), self.pos(b));
+                let q = across(pp, pa, sub(pb, pa));
+                if !self.move_to(p, q, fixed) {
+                    // ponto preso: a linha é que passa para o outro lado dele
+                    let d = sub(pp, q);
+                    self.move_to(a, [pa[0] + d[0], pa[1] + d[1]], fixed);
+                    self.move_to(b, [pb[0] + d[0], pb[1] + d[1]], fixed);
+                }
+            }
+            Kind::Angle(l1, l2, _) => {
+                let (Some((a, b)), Some((c, d))) = (ends(self, l1), ends(self, l2)) else { return };
+                // gira a segunda linha em torno da ponta comum; se ela estiver presa, gira a primeira
+                let (pa, pb, pc, pd) = (self.pos(a), self.pos(b), self.pos(c), self.pos(d));
+                let (pivot2, far2) = if c == a || c == b { (c, d) } else { (d, c) };
+                let (pivot1, far1) = if a == c || a == d { (a, b) } else { (b, a) };
+                let (o2, o1) = (self.pos(pivot2), self.pos(pivot1));
+                if !self.move_to(far2, across(self.pos(far2), o2, sub(pb, pa)), fixed) {
+                    self.move_to(far1, across(self.pos(far1), o1, sub(pd, pc)), fixed);
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 // ---------------------------------------------------------------- solver
@@ -842,6 +1080,39 @@ impl Sys<'_> {
         }
     }
 
+    /// Folga entre a spline e a curva `other` no extremo local da distância. Tangência sem ponto
+    /// comum é isso: a distância com sinal tem um extremo que vale zero. Sem extremo interno, só pode
+    /// tocar numa ponta, e aí a inclinação entra na conta para encostar sem estar tangente não contar.
+    fn spline_gap(&self, x: &[f64], spline: Id, other: Id) -> f64 {
+        let Some(Curve::Spline { pts }) = self.sk.curve(spline).map(|c| &c.geom) else { return 0. };
+        if pts.len() < 2 {
+            return 0.;
+        }
+        let p: Vec<[f64; 2]> = pts.iter().map(|q| self.p(x, *q)).collect();
+        let m = spline_tangents(&p, &self.sk.own_tangents(spline));
+        let (line, center) = (self.line(x, other), self.center(x, other));
+        let r = self.radius(x, other);
+        let gap = |u: f64| {
+            let q = hermite_at(&p, &m, u);
+            match (line, center) {
+                (Some((a, b)), _) => cross(sub(b, a), sub(q, a)) / len2(sub(b, a)).max(1e-12),
+                (_, Some(c)) => len2(sub(q, c)) - r,
+                _ => 0.,
+            }
+        };
+        let last = (p.len() - 1) as f64;
+        let n = 16 * (p.len() - 1);
+        let u = |k: usize| last * k as f64 / n as f64;
+        let g: Vec<f64> = (0..=n).map(|k| gap(u(k))).collect();
+        let best = (1..n).filter(|k| (g[*k] - g[k - 1]) * (g[k + 1] - g[*k]) <= 0.).min_by(|a, b| g[*a].abs().total_cmp(&g[*b].abs()));
+        if let Some(k) = best {
+            let side = if g[k] >= g[k - 1] { 1. } else { -1. };
+            return gap(golden_max(|t| side * gap(t), u(k - 1), u(k + 1)));
+        }
+        let (e, inner) = if g[0].abs() <= g[n].abs() { (0., u(1)) } else { (last, u(n - 1)) };
+        gap(e).abs() + (gap(inner) - gap(e)).abs()
+    }
+
     fn residual(&self, x: &[f64], e: &Eq, out: &mut Vec<f64>) {
         let ln = |c| self.line(x, c);
         match e {
@@ -882,6 +1153,16 @@ impl Sys<'_> {
                     _ => out.push(self.radius(x, *c1) - self.radius(x, *c2)),
                 },
                 Kind::Tangent(c1, c2) => {
+                    let spline = |c: Id| matches!(self.sk.curve(c).map(|k| &k.geom), Some(Curve::Spline { .. }));
+                    if spline(*c1) || spline(*c2) {
+                        // com ponto comum, a tangente própria resolve depois (`apply_spline_tangency`)
+                        // e nenhum ponto precisa se mexer: não há equação
+                        let (s, o) = if spline(*c1) { (*c1, *c2) } else { (*c2, *c1) };
+                        if self.sk.spline_contact(s, o).is_none() {
+                            out.push(self.spline_gap(x, s, o));
+                        }
+                        return;
+                    }
                     let (l, c) = if ln(*c1).is_some() { (*c1, *c2) } else { (*c2, *c1) };
                     // extremo compartilhado entre a linha e o arco: direção da linha ⟂ raio nesse ponto
                     // (forma bem condicionada; a distância centro-linha fica degenerada no ponto de tangência)
@@ -959,6 +1240,12 @@ impl Sys<'_> {
                     if let Some((a, b)) = ln(*l) {
                         let d = sub(b, a);
                         out.push(cross(d, sub(self.p(x, *p), a)).abs() / len2(d).max(1e-12) - v);
+                    }
+                }
+                Kind::LineAngle(l, _) => {
+                    if let Some((a, b)) = ln(*l) {
+                        let (d, t) = (sub(b, a), v.to_radians());
+                        out.push((d[1] * t.cos() - d[0] * t.sin()) / len2(d).max(1e-12));
                     }
                 }
             },
@@ -1058,7 +1345,7 @@ impl SketchData {
     /// Avalia as cotas (expressões) com os parâmetros.
     fn values(&self, vars: &Vars, errors: &mut Vec<String>) -> HashMap<Id, f64> {
         let mut out = HashMap::new();
-        for c in &self.constraints {
+        for c in self.constraints.iter().filter(|c| !c.reference) {
             if let Some(v) = c.kind.clone().value_mut() {
                 match expr::eval_str(v, vars) {
                     Ok(x) => {
@@ -1084,6 +1371,7 @@ impl SketchData {
             .chain(self.constraints.iter().filter_map(|c| if let Kind::Fixed(p) = &c.kind { Some(*p) } else { None }))
             .chain(pinned.iter().copied())
             .collect();
+        self.apply_sides(&vals, &fixed);
 
         let mut x0 = vec![];
         let mut pvar = HashMap::new();
@@ -1104,9 +1392,10 @@ impl SketchData {
         let mut eqs: Vec<(Id, Eq)> = vec![];
         for c in &self.constraints {
             if c.kind.is_dimension() && !vals.contains_key(&c.id) {
-                continue; // cota com expressão inválida
+                continue; // cota de referência ou com expressão inválida
             }
-            eqs.push((c.id, Eq::K(c.kind.clone(), vals.get(&c.id).copied().unwrap_or(0.))));
+            let v = vals.get(&c.id).copied().unwrap_or(0.);
+            eqs.push((c.id, Eq::K(c.kind.clone(), if c.kind.has_side() { v.abs() } else { v })));
         }
         for c in &self.curves {
             if let Curve::Arc { c: ctr, s, e } = c.geom {
@@ -1198,7 +1487,9 @@ impl SketchData {
                 }
             }
         } else {
+            // nada livre: toda equação que sobrou é redundante
             rep.dof = 0;
+            rep.redundant = m;
         }
         rep.fixed_points.extend(fixed.iter().copied());
 
@@ -1216,7 +1507,65 @@ impl SketchData {
                 *r = x[i].abs();
             }
         }
+        self.apply_spline_tangency();
         rep
+    }
+
+    /// Ponto em que a spline toca a outra curva por construção: ponto compartilhado, coincidência ou
+    /// ponto da spline preso à curva.
+    pub fn spline_contact(&self, spline: Id, other: Id) -> Option<Id> {
+        let Some(Curve::Spline { pts }) = self.curve(spline).map(|c| &c.geom) else { return None };
+        let ends = match &self.curve(other)?.geom {
+            Curve::Line { a, b } => vec![*a, *b],
+            Curve::Arc { s, e, .. } => vec![*s, *e],
+            Curve::Spline { pts } => pts.clone(),
+            _ => vec![],
+        };
+        pts.iter().copied().find(|p| {
+            ends.contains(p)
+                || self.constraints.iter().any(|k| match k.kind {
+                    Kind::Coincident(a, b) => (a == *p && ends.contains(&b)) || (b == *p && ends.contains(&a)),
+                    Kind::PointOnCurve(q, c) => q == *p && c == other,
+                    _ => false,
+                })
+        })
+    }
+
+    /// Direção da curva no ponto dado (linha, tangente do círculo ou do arco, tangente da spline).
+    fn direction_at(&self, curve: Id, at: Id) -> Option<[f64; 2]> {
+        match &self.curve(curve)?.geom {
+            Curve::Line { a, b } => Some(sub(self.pos(*b), self.pos(*a))),
+            Curve::Circle { c, .. } | Curve::Arc { c, .. } => {
+                let r = sub(self.pos(at), self.pos(*c));
+                Some([-r[1], r[0]])
+            }
+            Curve::Spline { pts } => {
+                let i = pts.iter().position(|p| *p == at)?;
+                let p: Vec<[f64; 2]> = pts.iter().map(|q| self.pos(*q)).collect();
+                spline_tangents(&p, &self.own_tangents(curve)).get(i).copied()
+            }
+            Curve::Point { .. } => None,
+        }
+    }
+
+    /// Tangência da spline num ponto de contato: a tangente própria dela passa a seguir a outra curva,
+    /// mantendo o sentido e a intensidade atuais. A tangente própria não é variável do solver, então
+    /// isso acontece depois de resolver os pontos; a direção da outra curva não depende dela.
+    fn apply_spline_tangency(&mut self) {
+        let pairs: Vec<(Id, Id)> = self.constraints.iter().filter_map(|c| if let Kind::Tangent(a, b) = c.kind { Some((a, b)) } else { None }).collect();
+        for (a, b) in pairs {
+            let spline = |s: &Self, c: Id| matches!(s.curve(c).map(|k| &k.geom), Some(Curve::Spline { .. }));
+            // entre duas splines, a segunda acompanha a primeira
+            let (sp, other) = if spline(self, b) { (b, a) } else { (a, b) };
+            let Some(at) = self.spline_contact(sp, other) else { continue };
+            let (Some(d), Some(now)) = (self.direction_at(other, at), self.direction_at(sp, at)) else { continue };
+            let (ld, ln) = (len2(d), len2(now));
+            if ld < 1e-12 || ln < 1e-12 {
+                continue;
+            }
+            let k = ln / ld * if dot(d, now) < 0. { -1. } else { 1. };
+            self.set_spline_tangent(sp, at, Some([d[0] * k, d[1] * k]));
+        }
     }
 
     // ------------------------------------------------------------ perfis
@@ -1378,6 +1727,11 @@ impl SketchData {
             Kind::Radius(c, _) => Kind::Radius(*c, String::new()),
             Kind::Diameter(c, _) => Kind::Diameter(*c, String::new()),
             Kind::PointLineDistance(p, l, _) => Kind::PointLineDistance(*p, *l, String::new()),
+            Kind::LineAngle(l, _) => {
+                let (a, b) = sys.line(&x, *l)?;
+                let d = sub(b, a);
+                return Some(d[1].atan2(d[0]).to_degrees());
+            }
             Kind::Angle(l1, l2, _) => {
                 let (a, b) = sys.line(&x, *l1)?;
                 let (c, d) = sys.line(&x, *l2)?;
@@ -1451,6 +1805,7 @@ mod tests {
         assert!(r.converged, "{r:?}");
         assert!((s.pos(c2)[0].abs() - 40.).abs() < 1e-6);
         assert_eq!(r.dof, 0, "rasgo cotado deve ficar totalmente restrito");
+        assert_eq!(r.redundant, 0, "o rasgo novo não pode nascer redundante");
         let (loops, open) = s.loops();
         assert_eq!((loops.len(), open), (1, 0));
         assert_eq!(loops[0].len(), 4);
@@ -1510,6 +1865,325 @@ mod tests {
         s.merge_points(a2, a);
         assert_eq!(s.loops(), (s.loops().0.clone(), 0));
         assert_eq!(s.loops().0.len(), 1);
+    }
+
+    fn duas_linhas(al: &mut impl FnMut() -> Id, s: &mut SketchData, graus: f64) -> (Id, Id, Id) {
+        let o = s.add_point(al, 0., 0.);
+        s.point_mut(o).unwrap().fixed = true;
+        let a = s.add_point(al, 20., 0.);
+        s.point_mut(a).unwrap().fixed = true;
+        let t = graus.to_radians();
+        let b = s.add_point(al, 20. * t.cos(), 20. * t.sin());
+        let l1 = s.add_curve(al, Curve::Line { a: o, b: a }, false);
+        let l2 = s.add_curve(al, Curve::Line { a: o, b }, false);
+        (l1, l2, b)
+    }
+
+    #[test]
+    fn cota_que_sobre_restringe_vira_referencia() {
+        let mut al = alloc();
+        let mut s = SketchData::default();
+        let (p, l) = s.add_rect(&mut al, [0., 0.], [30., 20.], false);
+        s.add_constraint(&mut al, Kind::Fixed(p[0]));
+        let w = s.add_constraint(&mut al, Kind::Length(l[0], "30".into()));
+        assert!(!s.settle_dimension(w, &Vars::new()), "a primeira largura comanda");
+        s.add_constraint(&mut al, Kind::Length(l[1], "20".into()));
+        // o lado oposto já está definido: com a mesma medida é redundante; com outra, conflito
+        for v in ["30", "45"] {
+            let d = s.add_constraint(&mut al, Kind::Length(l[2], v.into()));
+            assert!(s.settle_dimension(d, &Vars::new()), "{v}");
+            let r = s.solve(&Vars::new(), &[]);
+            assert!(r.converged && r.redundant == 0 && r.dof == 0, "{r:?}");
+            assert_eq!(r.status(), "Totalmente restrito");
+            // a referência não comanda: mostra a medida, seja qual for o texto
+            let k = s.constraints.iter().find(|c| c.id == d).unwrap().kind.clone();
+            assert!((s.measure(&k).unwrap() - 30.).abs() < 1e-9);
+            assert!(!s.toggle_reference(d, &Vars::new()), "não pode comandar sobre-restringindo");
+            assert!(s.constraints.iter().find(|c| c.id == d).unwrap().reference);
+            s.constraints.retain(|c| c.id != d);
+        }
+    }
+
+    #[test]
+    fn menu_alterna_comandar_e_referencia() {
+        let mut al = alloc();
+        let mut s = SketchData::default();
+        let (p, l) = s.add_rect(&mut al, [0., 0.], [30., 20.], false);
+        s.add_constraint(&mut al, Kind::Fixed(p[0]));
+        let w = s.add_constraint(&mut al, Kind::Length(l[0], "50".into()));
+        s.solve(&Vars::new(), &[]);
+        assert!((s.pos(p[1])[0] - 50.).abs() < 1e-6);
+        assert!(s.toggle_reference(w, &Vars::new()));
+        s.point_mut(p[1]).unwrap().x = 35.;
+        s.point_mut(p[2]).unwrap().x = 35.;
+        let r = s.solve(&Vars::new(), &[]);
+        assert!(r.converged && r.dof == 2, "{r:?}");
+        // volta a comandar com a medida de agora, sem saltar
+        assert!(s.toggle_reference(w, &Vars::new()));
+        s.solve(&Vars::new(), &[]);
+        assert!((s.pos(p[1])[0] - 35.).abs() < 1e-6, "{:?}", s.pos(p[1]));
+        assert!(matches!(&s.constraints.iter().find(|c| c.id == w).unwrap().kind, Kind::Length(_, v) if v == "35"));
+    }
+
+    #[test]
+    fn referencia_ignora_expressao_invalida_e_le_arquivo_antigo() {
+        let mut al = alloc();
+        let mut s = SketchData::default();
+        let (_, l) = s.add_rect(&mut al, [0., 0.], [30., 20.], false);
+        let d = s.add_constraint(&mut al, Kind::Length(l[0], "naoexiste + 1".into()));
+        assert!(!s.solve(&Vars::new(), &[]).errors.is_empty());
+        s.constraints.iter_mut().find(|c| c.id == d).unwrap().reference = true;
+        assert!(s.solve(&Vars::new(), &[]).errors.is_empty());
+        let velho = r#"{"id":7,"kind":{"Horizontal":3}}"#;
+        let c: Constraint = serde_json::from_str(velho).unwrap();
+        assert!(!c.reference && !c.flipped);
+        let txt = serde_json::to_string(&c).unwrap();
+        assert!(!txt.contains("reference") && !txt.contains("flipped"), "{txt}");
+    }
+
+    #[test]
+    fn negativo_inverte_comprimento_e_fica_positivo() {
+        let mut al = alloc();
+        let mut s = SketchData::default();
+        let (p, l) = s.add_rect(&mut al, [0., 0.], [30., 20.], false);
+        s.add_constraint(&mut al, Kind::Fixed(p[0]));
+        let c = s.add_constraint(&mut al, Kind::Length(l[0], "-30".into()));
+        let r = s.solve(&Vars::new(), &[]);
+        assert!(r.converged, "{r:?}");
+        assert!((s.pos(p[1])[0] + 30.).abs() < 1e-6 && (s.pos(p[2])[0] + 30.).abs() < 1e-6, "{:?}", s.pos(p[1]));
+        let k = s.constraints.iter().find(|x| x.id == c).unwrap();
+        assert!(matches!(&k.kind, Kind::Length(_, v) if v == "30") && !k.flipped);
+        // resolver de novo não vira outra vez
+        s.solve(&Vars::new(), &[]);
+        assert!((s.pos(p[1])[0] + 30.).abs() < 1e-6);
+    }
+
+    #[test]
+    fn negativo_inverte_distancias() {
+        let mut al = alloc();
+        let mut s = SketchData::default();
+        let a = s.add_point(&mut al, 0., 0.);
+        s.point_mut(a).unwrap().fixed = true;
+        let b = s.add_point(&mut al, 10., 5.);
+        s.add_constraint(&mut al, Kind::DistanceX(a, b, "-10".into()));
+        s.add_constraint(&mut al, Kind::DistanceY(a, b, "-5".into()));
+        assert!(s.solve(&Vars::new(), &[]).converged);
+        assert!((s.pos(b)[0] + 10.).abs() < 1e-6 && (s.pos(b)[1] + 5.).abs() < 1e-6, "{:?}", s.pos(b));
+        // ponta presa: quem vira é a outra
+        let mut s = SketchData::default();
+        let a = s.add_point(&mut al, 0., 0.);
+        let b = s.add_point(&mut al, 10., 0.);
+        s.point_mut(b).unwrap().fixed = true;
+        s.add_constraint(&mut al, Kind::Distance(a, b, "-10".into()));
+        assert!(s.solve(&Vars::new(), &[]).converged);
+        assert!((s.pos(a)[0] - 20.).abs() < 1e-6);
+        // ponto e linha
+        let mut s = SketchData::default();
+        let (l1, _, _) = duas_linhas(&mut al, &mut s, 90.);
+        let p = s.add_point(&mut al, 5., 7.);
+        s.add_constraint(&mut al, Kind::PointLineDistance(p, l1, "-7".into()));
+        assert!(s.solve(&Vars::new(), &[]).converged);
+        assert!((s.pos(p)[1] + 7.).abs() < 1e-6, "{:?}", s.pos(p));
+    }
+
+    #[test]
+    fn negativo_inverte_angulo() {
+        let mut al = alloc();
+        let mut s = SketchData::default();
+        let (l1, l2, b) = duas_linhas(&mut al, &mut s, 30.);
+        s.add_constraint(&mut al, Kind::Length(l2, "20".into()));
+        s.add_constraint(&mut al, Kind::Angle(l1, l2, "-30".into()));
+        let r = s.solve(&Vars::new(), &[]);
+        assert!(r.converged, "{r:?}");
+        let q = s.pos(b);
+        assert!((q[1] + 10.).abs() < 1e-6 && (q[0] - 17.320508).abs() < 1e-5, "{q:?}");
+    }
+
+    #[test]
+    fn expressao_negativa_vira_e_volta_com_o_sinal() {
+        let mut al = alloc();
+        let mut s = SketchData::default();
+        let a = s.add_point(&mut al, 0., 0.);
+        s.point_mut(a).unwrap().fixed = true;
+        let b = s.add_point(&mut al, 10., 0.);
+        let c = s.add_constraint(&mut al, Kind::DistanceX(a, b, "L".into()));
+        let mut v = Vars::new();
+        for (l, x, virada) in [(10., 10., false), (-12., -12., true), (-14., -14., true), (9., 9., false)] {
+            v.insert("L".into(), l);
+            assert!(s.solve(&v, &[]).converged);
+            assert!((s.pos(b)[0] - x).abs() < 1e-6, "{l}: {:?}", s.pos(b));
+            let k = s.constraints.iter().find(|x| x.id == c).unwrap();
+            assert!(k.flipped == virada && matches!(&k.kind, Kind::DistanceX(_, _, t) if t == "L"));
+        }
+    }
+
+    #[test]
+    fn angulo_com_a_horizontal_tem_sinal() {
+        let mut al = alloc();
+        let mut s = SketchData::default();
+        let a = s.add_point(&mut al, 0., 0.);
+        s.point_mut(a).unwrap().fixed = true;
+        let b = s.add_point(&mut al, 30., 10.);
+        let l = s.add_curve(&mut al, Curve::Line { a, b }, false);
+        s.add_constraint(&mut al, Kind::Length(l, "20".into()));
+        let c = s.add_constraint(&mut al, Kind::LineAngle(l, "30".into()));
+        let r = s.solve(&Vars::new(), &[]);
+        assert!(r.converged && r.dof == 0, "{r:?}");
+        assert!((s.pos(b)[1] - 10.).abs() < 1e-6);
+        let k = s.constraints.iter().find(|x| x.id == c).unwrap().kind.clone();
+        assert!((s.measure(&k).unwrap() - 30.).abs() < 1e-6);
+        *s.constraints.iter_mut().find(|x| x.id == c).unwrap().kind.value_mut().unwrap() = "-30".into();
+        assert!(s.solve(&Vars::new(), &[]).converged);
+        assert!((s.pos(b)[1] + 10.).abs() < 1e-6, "{:?}", s.pos(b));
+    }
+
+    #[test]
+    fn nada_livre_conta_redundancia() {
+        let mut al = alloc();
+        let mut s = SketchData::default();
+        let a = s.add_point(&mut al, 0., 0.);
+        let b = s.add_point(&mut al, 10., 0.);
+        s.point_mut(a).unwrap().fixed = true;
+        s.point_mut(b).unwrap().fixed = true;
+        let d = s.add_constraint(&mut al, Kind::Distance(a, b, "10".into()));
+        assert!(s.settle_dimension(d, &Vars::new()));
+    }
+
+    fn spline_arco(al: &mut impl FnMut() -> Id, s: &mut SketchData) -> (Id, [Id; 3]) {
+        let a = s.add_point(al, 0., 0.);
+        let b = s.add_point(al, 10., 5.);
+        let c = s.add_point(al, 20., 0.);
+        (s.add_curve(al, Curve::Spline { pts: vec![a, b, c] }, false), [a, b, c])
+    }
+
+    #[test]
+    fn spline_tangente_a_linha_no_ponto_comum() {
+        let mut al = alloc();
+        let mut s = SketchData::default();
+        let (sp, p) = spline_arco(&mut al, &mut s);
+        let q = s.add_point(&mut al, -10., -10.);
+        let l = s.add_curve(&mut al, Curve::Line { a: q, b: p[0] }, false);
+        let dof = s.solve(&Vars::new(), &[]).dof;
+        s.add_constraint(&mut al, Kind::Tangent(sp, l));
+        let r = s.solve(&Vars::new(), &[]);
+        assert!(r.converged, "{r:?}");
+        assert_eq!(r.dof, dof, "a tangência no ponto comum não prende nenhum ponto");
+        // a curva sai da ponta na direção da linha (45°), e o perfil usa essa mesma curva
+        let u = s.spline_uv(sp);
+        let d = [u[1][0] - u[0][0], u[1][1] - u[0][1]];
+        assert!(u.len() > 10 && (d[1] / d[0] - 1.).abs() < 0.08, "{d:?}");
+        // a linha gira e a spline acompanha
+        s.point_mut(q).unwrap().x = -10.;
+        s.point_mut(q).unwrap().y = 0.;
+        s.solve(&Vars::new(), &[]);
+        let t = s.own_tangents(sp)[0].unwrap();
+        assert!(t[1].abs() < 1e-9 && t[0] > 0., "{t:?}");
+    }
+
+    #[test]
+    fn spline_tangente_a_arco_e_a_outra_spline() {
+        let mut al = alloc();
+        let mut s = SketchData::default();
+        let (sp, p) = spline_arco(&mut al, &mut s);
+        // arco de centro (0, -10) que termina em (0, 0): tangente horizontal ali
+        let c = s.add_point(&mut al, 0., -10.);
+        let i = s.add_point(&mut al, 10., -10.);
+        let arc = s.add_curve(&mut al, Curve::Arc { c, s: i, e: p[0] }, false);
+        s.add_constraint(&mut al, Kind::Tangent(arc, sp));
+        let e = s.add_point(&mut al, 30., 8.);
+        let f = s.add_point(&mut al, 40., 0.);
+        let sp2 = s.add_curve(&mut al, Curve::Spline { pts: vec![p[2], e, f] }, false);
+        s.add_constraint(&mut al, Kind::Tangent(sp, sp2));
+        assert!(s.solve(&Vars::new(), &[]).converged);
+        let t = s.own_tangents(sp)[0].unwrap();
+        assert!(t[1].abs() < 1e-9 && t[0] > 0., "{t:?}");
+        let (t1, t2) = (s.direction_at(sp, p[2]).unwrap(), s.own_tangents(sp2)[0].unwrap());
+        assert!(cross(t1, t2).abs() < 1e-9 && dot(t1, t2) > 0., "{t1:?} {t2:?}");
+    }
+
+    #[test]
+    fn spline_encosta_tangente_sem_ponto_comum() {
+        let mut al = alloc();
+        let mut s = SketchData::default();
+        let (sp, p) = spline_arco(&mut al, &mut s);
+        s.point_mut(p[0]).unwrap().fixed = true;
+        s.point_mut(p[2]).unwrap().fixed = true;
+        let a = s.add_point(&mut al, -5., 8.);
+        let b = s.add_point(&mut al, 25., 8.);
+        s.point_mut(a).unwrap().fixed = true;
+        s.point_mut(b).unwrap().fixed = true;
+        let l = s.add_curve(&mut al, Curve::Line { a, b }, false);
+        let dof = s.solve(&Vars::new(), &[]).dof;
+        s.add_constraint(&mut al, Kind::Tangent(l, sp));
+        let r = s.solve(&Vars::new(), &[]);
+        assert!(r.converged, "{r:?}");
+        assert_eq!(r.dof, dof - 1);
+        let top = s.spline_uv(sp).iter().map(|q| q[1]).fold(f64::MIN, f64::max);
+        assert!((top - 8.).abs() < 1e-2, "topo {top}");
+
+        // círculo acima da spline: ela sobe até encostar nele
+        let mut s = SketchData::default();
+        let (sp, p) = spline_arco(&mut al, &mut s);
+        s.point_mut(p[0]).unwrap().fixed = true;
+        s.point_mut(p[2]).unwrap().fixed = true;
+        let c = s.add_point(&mut al, 10., 20.);
+        s.point_mut(c).unwrap().fixed = true;
+        let ci = s.add_curve(&mut al, Curve::Circle { c, r: 9. }, false);
+        s.add_constraint(&mut al, Kind::Radius(ci, "9".into()));
+        s.add_constraint(&mut al, Kind::Tangent(sp, ci));
+        let r = s.solve(&Vars::new(), &[]);
+        assert!(r.converged, "{r:?}");
+        let near = s.spline_uv(sp).iter().map(|q| len2(sub(*q, [10., 20.]))).fold(f64::MAX, f64::min);
+        assert!((near - 9.).abs() < 1e-2, "{near}");
+    }
+
+    #[test]
+    fn spline_cruzando_sem_tangenciar_nao_passa_por_tangente() {
+        // sobe sem parar e as pontas são fixas: não há como ficar tangente à linha que ela cruza
+        let mut al = alloc();
+        let mut s = SketchData::default();
+        let a = s.add_point(&mut al, 0., 0.);
+        let b = s.add_point(&mut al, 10., 10.);
+        s.point_mut(a).unwrap().fixed = true;
+        s.point_mut(b).unwrap().fixed = true;
+        let sp = s.add_curve(&mut al, Curve::Spline { pts: vec![a, b] }, false);
+        let (c, d) = (s.add_point(&mut al, -5., 5.), s.add_point(&mut al, 15., 5.));
+        s.point_mut(c).unwrap().fixed = true;
+        s.point_mut(d).unwrap().fixed = true;
+        let l = s.add_curve(&mut al, Curve::Line { a: c, b: d }, false);
+        s.add_constraint(&mut al, Kind::Tangent(sp, l));
+        assert!(!s.solve(&Vars::new(), &[]).converged);
+    }
+
+    #[test]
+    fn plano_acha_todos_os_pontos() {
+        let (o, n) = ([0., 0., 0.], [0., 0., 1.]);
+        // círculo de outro plano: duas travessias
+        let c: Vec<[f64; 3]> = (0..=48).map(|i| {
+            let t = i as f64 / 48. * std::f64::consts::TAU + 0.1;
+            [10. * t.cos(), 0., 10. * t.sin()]
+        }).collect();
+        assert_eq!(plane_crossings(&c, o, n).len(), 2);
+        // retângulo em pé com um lado deitado no plano: as duas pontas do lado
+        let r = [[0., 0., 0.], [10., 0., 0.], [10., 0., 10.], [0., 0., 10.], [0., 0., 0.]];
+        let q = plane_crossings(&r, o, n);
+        assert_eq!(q.len(), 2, "{q:?}");
+        // polilinha que termina exatamente no plano
+        assert_eq!(plane_crossings(&[[0., 0., -5.], [0., 0., 0.]], o, n), [[0., 0., 0.]]);
+        // zigue-zague: três travessias
+        assert_eq!(plane_crossings(&[[0., 0., -1.], [1., 0., 1.], [2., 0., -1.], [3., 0., 1.]], o, n).len(), 3);
+        assert!(plane_crossings(&[[0., 0., 1.], [1., 0., 2.]], o, n).is_empty());
+    }
+
+    #[test]
+    fn pontos_de_intersecao_ficam_soltos_e_acompanham() {
+        let mut al = alloc();
+        let mut s = SketchData::default();
+        let id = s.add_link_points(&mut al, LinkSrc::Ref(Id(1)), &[[1., 2.], [5., 6.]], false).unwrap();
+        assert_eq!(s.hole_points().len(), 2);
+        assert!(!s.curves.iter().any(|c| matches!(c.geom, Curve::Line { .. })), "sem linha entre os pontos");
+        s.update_link(id, &[[3., 3.], [7., 7.]]);
+        assert_eq!(s.hole_points(), [[3., 3.], [7., 7.]]);
     }
 
     #[test]

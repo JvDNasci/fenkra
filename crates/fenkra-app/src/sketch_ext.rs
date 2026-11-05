@@ -35,12 +35,9 @@ fn lerp(a: V3, b: V3, t: f64) -> V3 {
     [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
 }
 
-/// Primeiro ponto em que a polilinha atravessa o plano.
-fn crossing(f: &Frame, pts: &[V3]) -> Option<V3> {
-    pts.windows(2).find_map(|w| {
-        let (a, b) = (sd(f, w[0]), sd(f, w[1]));
-        ((a <= 0. && b > 0.) || (a > 0. && b <= 0.)).then(|| lerp(w[0], w[1], a / (a - b)))
-    })
+/// Todos os pontos em que a polilinha encontra o plano do sketch.
+fn crossings(f: &Frame, pts: &[V3]) -> Vec<V3> {
+    fenkra_core::sketch::plane_crossings(pts, f.origin, f.normal)
 }
 
 /// Triângulos (posições, índices) cortados pelo plano → maior polilinha encadeada.
@@ -91,21 +88,49 @@ fn chain(mut segs: Vec<(V3, V3)>) -> Vec<V3> {
     best
 }
 
-/// Origem e polilinha 3D do item clicado (converter = projetar; interseção = corte pelo plano).
-pub fn world(r: &RecomputeResult, p: &Pick, intersect: bool, f: &Frame) -> Option<(LinkSrc, Vec<V3>)> {
+/// O que o item clicado vira no sketch.
+pub struct External {
+    pub src: LinkSrc,
+    pub pts: Vec<V3>,
+    /// pontos soltos (travessias de uma curva pelo plano), não uma polilinha
+    pub isolated: bool,
+}
+
+impl External {
+    fn line(src: LinkSrc, pts: Vec<V3>) -> Self {
+        External { src, pts, isolated: false }
+    }
+    /// Travessias da curva pelo plano; nenhuma, nada a trazer.
+    fn cut(src: LinkSrc, f: &Frame, curve: &[V3]) -> Option<Self> {
+        let pts = crossings(f, curve);
+        (!pts.is_empty()).then_some(External { src, pts, isolated: true })
+    }
+    /// Grava no sketch como geometria externa.
+    pub fn add_to(self, sk: &mut SketchData, al: &mut impl FnMut() -> Id, f: &Frame, intersect: bool, construction: bool) -> Option<Id> {
+        let uv = to_uv(f, &self.pts);
+        if self.isolated {
+            sk.add_link_points(al, self.src, &uv, construction)
+        } else {
+            sk.add_link(al, self.src, intersect, &uv, construction)
+        }
+    }
+}
+
+/// Origem e geometria 3D do item clicado (converter = projetar; interseção = corte pelo plano).
+pub fn world(r: &RecomputeResult, p: &Pick, intersect: bool, f: &Frame) -> Option<External> {
     match *p {
         Pick::Edge { body, edge, mid } => {
             let pts = crate::picking::edge_polyline(r, body, edge);
             let src = LinkSrc::Edge { mid: mid.map(|v| v as f64) };
             if intersect {
-                crossing(f, &pts).map(|q| (src, vec![q]))
+                External::cut(src, f, &pts)
             } else {
-                Some((src, pts))
+                Some(External::line(src, pts))
             }
         }
         Pick::Vertex { pos, .. } | Pick::SkPoint { pos, .. } | Pick::CurveVtx { pos, .. } => {
             let q = pos.map(|v| v as f64);
-            Some((LinkSrc::Vertex { pos: q }, vec![q]))
+            Some(External::line(LinkSrc::Vertex { pos: q }, vec![q]))
         }
         // curva de outro sketch: projeção (ou interseção) associativa
         Pick::SkCurve { sketch, curve, .. } => {
@@ -114,9 +139,9 @@ pub fn world(r: &RecomputeResult, p: &Pick, intersect: bool, f: &Frame) -> Optio
             let p3: Vec<V3> = pts.iter().map(|q| q.map(|v| v as f64)).collect();
             let src = LinkSrc::SketchCurve { sketch, curve };
             if intersect {
-                crossing(f, &p3).map(|q| (src, vec![q]))
+                External::cut(src, f, &p3)
             } else {
-                Some((src, p3))
+                Some(External::line(src, p3))
             }
         }
         Pick::Face { body, face, point, .. } if intersect => {
@@ -124,18 +149,18 @@ pub fn world(r: &RecomputeResult, p: &Pick, intersect: bool, f: &Frame) -> Optio
             let s0 = *m.face_ranges.get(face)? as usize;
             let s1 = m.face_ranges.get(face + 1).map(|x| *x as usize).unwrap_or(m.indices.len());
             let pts = mesh_cut(f, &m.positions, &m.indices[s0..s1]);
-            (pts.len() >= 2).then(|| (LinkSrc::Face { point: point.map(|v| v as f64) }, pts))
+            (pts.len() >= 2).then(|| External::line(LinkSrc::Face { point: point.map(|v| v as f64) }, pts))
         }
         Pick::Geo(id) => {
             if let Some(pt) = r.points.iter().find(|x| x.id == id) {
-                return Some((LinkSrc::Ref(id), vec![pt.p]));
+                return Some(External::line(LinkSrc::Ref(id), vec![pt.p]));
             }
             if let Some(c) = r.curves.iter().find(|x| x.id == id) {
-                return if intersect { crossing(f, &c.pts).map(|q| (LinkSrc::Ref(id), vec![q])) } else { Some((LinkSrc::Ref(id), c.pts.clone())) };
+                return if intersect { External::cut(LinkSrc::Ref(id), f, &c.pts) } else { Some(External::line(LinkSrc::Ref(id), c.pts.clone())) };
             }
             if let Some(s) = r.surfaces.iter().find(|x| x.id == id) {
                 let pts = mesh_cut(f, &s.mesh.positions, &s.mesh.indices);
-                return (pts.len() >= 2).then(|| (LinkSrc::Ref(id), pts));
+                return (pts.len() >= 2).then(|| External::line(LinkSrc::Ref(id), pts));
             }
             None
         }
