@@ -89,6 +89,7 @@
 #include <BRepFilletAPI_MakeFillet.hxx>
 #include <BRepGProp.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
+#include <IMeshTools_MeshAlgoType.hxx>
 #include <BRepPrimAPI_MakeCone.hxx>
 #include <BRepPrimAPI_MakeCylinder.hxx>
 #include <BRepPrimAPI_MakeHalfSpace.hxx>
@@ -867,6 +868,11 @@ int32_t mesh_threads() {
 
 void set_mesh_threads(int32_t n) { g_mesh_threads.store(std::max(0, n)); }
 
+// Algoritmo do malhador (B235, só medição): 0 = padrão do OpenCASCADE, 1 = Delabella.
+static std::atomic<int32_t> g_mesh_algo{0};
+void set_mesh_algo(int32_t a) { g_mesh_algo.store(a == 1 ? 1 : 0); }
+int32_t mesh_algo() { return g_mesh_algo.load(); }
+
 int32_t mesh_pool_threads() { return OSD_ThreadPool::DefaultPool()->NbThreads(); }
 
 // Malhas em andamento seguram esta trava em modo compartilhado.
@@ -954,6 +960,7 @@ MeshData tessellate(const Shape& s, double deflection, double angle) {
         mp.Angle = angle;
         mp.InParallel = true;
         mp.AllowQualityDecrease = true;
+        if (g_mesh_algo.load() == 1) mp.MeshAlgo = IMeshTools_MeshAlgoType_Delabella;
         {
             auto gate = enter_mesher();
             BRepMesh_IncrementalMesh(s.s, mp);
@@ -1039,11 +1046,16 @@ MeshData tessellate(const Shape& s, double deflection, double angle) {
                     try {
                         if (BRep_Tool::HasContinuity(e, f1, f2) && BRep_Tool::Continuity(e, f1, f2) != GeomAbs_C0) smooth = 1;
                         else {
-                            // sem a informação gravada: compara as normais no meio da aresta
+                            // sem informação (ou só C0 gravado, comum em filetes e superfícies): compara as
+                            // normais em cinco pontos da aresta. Só é suave se for tangente em todos; um
+                            // ponto no meio aceitava aresta que só se encosta ali e escondia aresta viva
                             BRepAdaptor_Curve cc(e);
-                            const double tm = (cc.FirstParameter() + cc.LastParameter()) / 2;
-                            gp_Pnt pm = cc.Value(tm);
-                            if (face_normal_at_edge(e, f1, pm).Angle(face_normal_at_edge(e, f2, pm)) < 2.0 * M_PI / 180.0) smooth = 1;
+                            const double t0 = cc.FirstParameter(), t1 = cc.LastParameter();
+                            smooth = 1;
+                            for (int j = 0; j < 5 && smooth; ++j) {
+                                const gp_Pnt pm = cc.Value(t0 + (t1 - t0) * (0.1 + 0.2 * j));
+                                if (face_normal_at_edge(e, f1, pm).Angle(face_normal_at_edge(e, f2, pm)) >= 2.0 * M_PI / 180.0) smooth = 0;
+                            }
                         }
                     } catch (...) {}
                 }

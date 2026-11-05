@@ -812,6 +812,16 @@ mod imp {
         b::set_mesh_threads(fios.map_or(0, |n| n.clamp(1, i32::MAX as usize) as i32));
     }
 
+    /// Escolhe o algoritmo do malhador: `true` usa o Delabella. Existe só para medir (B235); o padrão
+    /// do programa continua o do OpenCASCADE. Quem troca deve chamar `discard_mesh` antes de comparar.
+    pub fn definir_malhador_delabella(ligar: bool) {
+        b::set_mesh_algo(ligar as i32);
+    }
+
+    pub fn malhador_delabella() -> bool {
+        b::mesh_algo() == 1
+    }
+
     /// Teto de fios do malhador em vigor, já limitado aos processadores da máquina.
     pub fn fios_malhador() -> usize {
         b::mesh_threads() as usize
@@ -1136,6 +1146,12 @@ mod imp {
 
     pub fn definir_fios_malhador(_: Option<usize>) {}
 
+    pub fn definir_malhador_delabella(_: bool) {}
+
+    pub fn malhador_delabella() -> bool {
+        false
+    }
+
     pub fn fios_malhador() -> usize {
         1
     }
@@ -1145,7 +1161,7 @@ mod imp {
     }
 }
 
-pub use imp::{definir_fios_malhador, fios_aplicados, fios_malhador, version, Shape, AVAILABLE};
+pub use imp::{definir_fios_malhador, definir_malhador_delabella, malhador_delabella, fios_aplicados, fios_malhador, version, Shape, AVAILABLE};
 
 /// Põe a thread atual abaixo da prioridade normal, para o cálculo não disputar processador com a
 /// interface. Chame uma vez, dentro da thread de cálculo. Devolve se a prioridade mudou.

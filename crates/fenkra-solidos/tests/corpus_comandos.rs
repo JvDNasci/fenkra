@@ -601,7 +601,7 @@ fn loft_reto_entre_dois_quadrados_e_um_tronco() {
     let alto = d.add_offset_plane(XY, "h");
     let a = sk_rect(&mut d, XY, [-10., -10.], [10., 10.]);
     let b = sk_rect(&mut d, PlaneRef::Datum(alto), [-5., -5.], [5., 5.]);
-    d.add_feature(FeatureKind::Loft(Loft { sections: vec![a, b], ruled: true, closed: false, op: BoolOp::Add }));
+    d.add_feature(FeatureKind::Loft(Loft { sections: vec![a, b], ruled: true, closed: false, op: BoolOp::Add, torcao: vec![], inicio: Default::default(), fim: Default::default() }));
     let tronco = |h: f64| h / 3. * (400. + 100. + 200.);
     let e = |h: f64| Esperado { vol: tronco(h), tol_vol: 2e-3, tam: [20., 20., h], tol_tam: 0.01, minimo: None, via_malha: false };
     ciclo("loft reto", &mut d, "h", "16", &e(10.), &e(16.));
@@ -921,7 +921,7 @@ fn invalido_loft_com_uma_secao_so() {
     precisa_kernel!();
     let mut d = Document::new("loft de uma seção");
     let a = sk_rect(&mut d, XY, [0., 0.], [10., 10.]);
-    let id = d.add_feature(FeatureKind::Loft(Loft { sections: vec![a], ruled: true, closed: false, op: BoolOp::Add }));
+    let id = d.add_feature(FeatureKind::Loft(Loft { sections: vec![a], ruled: true, closed: false, op: BoolOp::Add, torcao: vec![], inicio: Default::default(), fim: Default::default() }));
     erro(&recompute(&d), id);
 }
 

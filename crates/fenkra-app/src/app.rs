@@ -164,6 +164,12 @@ pub struct App {
     diag: diag::Estado,
     last_edit: f64,
     toasts: Vec<(String, f64, bool)>,
+    /// motivos pelos quais o modo leve é sugerido, até a pessoa responder (B236)
+    sugestao_leve: Option<Vec<crate::perfil::Motivo>>,
+    /// relatório de falha da sessão anterior esperando a decisão da pessoa (B309)
+    relatorio_pendente: Option<String>,
+    /// último teto de fios do malhador entregue ao kernel
+    fios_malhador: Option<Option<usize>>,
     left: LeftTab,
     pub settings: Settings,
     settings_open: bool,
@@ -333,6 +339,9 @@ impl App {
             diag: Default::default(),
             last_edit: -10.,
             toasts: vec![],
+            sugestao_leve: None,
+            relatorio_pendente: if std::env::vars().any(|(k, _)| k.starts_with("FENKRA_DEMO")) { None } else { crate::relatorio::ler_pendente() },
+            fios_malhador: None,
             left: LeftTab::Peca,
             settings,
             settings_open: false,
@@ -408,6 +417,16 @@ impl App {
         // desenvolvimento: FENKRA_EN=1 mostra a interface em inglês (sem gravar a configuração)
         if std::env::var("FENKRA_EN").is_ok() {
             app.settings.english = true;
+        }
+        // desenvolvimento: FENKRA_DEMO_LEVE=1 mostra a sugestão do modo leve; FENKRA_DEMO_RELATORIO=1, um relatório de exemplo
+        if std::env::var("FENKRA_DEMO_LEVE").is_ok() {
+            app.sugestao_leve = Some(vec![crate::perfil::Motivo::Software, crate::perfil::Motivo::Memoria]);
+            app.started = true;
+        }
+        if std::env::var("FENKRA_DEMO_RELATORIO").is_ok() {
+            app.relatorio_pendente = Some(crate::relatorio::montar("índice fora do limite", "crates/exemplo/src/x.rs:10", "main", "(pilha de exemplo)", crate::perfil::medido().as_ref(), "[1] inicio: Fenkra | args [\"arquivo-da-pessoa.fenkra\"] | WGPU_BACKEND None
+[2] adaptador: exemplo"));
+            app.started = true;
         }
         // desenvolvimento: FENKRA_AJUSTES=1 abre as configurações ao iniciar
         if std::env::var("FENKRA_AJUSTES").is_ok() {
@@ -737,6 +756,15 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     /// A qualidade da malha mudou nas configurações: re-tessela a peça aberta e a montagem sem
     /// recalcular o modelo (o último documento enviado volta ao worker, cujo cache guarda os comandos).
     fn sincronizar_qualidade(&mut self) {
+        // modo leve (B236): fios do malhador e transições da câmera acompanham as configurações
+        let fios = self.settings.fios_malhador();
+        if self.fios_malhador != Some(fios) {
+            self.fios_malhador = Some(fios);
+            fenkra_kernel::definir_fios_malhador(fios);
+        }
+        if let Some(v) = self.viewport.as_mut() {
+            v.animar = self.settings.animacoes;
+        }
         let q = self.settings.graficos.qualidade();
         if let Some(a) = self.asm.as_mut() {
             if a.cache.set_qualidade(q) {
@@ -835,6 +863,111 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let stale = *all || self.open.doc.features.get(i).is_some_and(|f| set.contains(&f.id));
         let swept = (now - self.sweep_t0) / 0.035 < i as f64 + 1.;
         (stale, swept && !stale)
+    }
+
+    /// Depois de medir o hardware (uma vez, na partida): se a máquina parece fraca e a pessoa ainda
+    /// não viu a sugestão, guarda os motivos para o diálogo. Nunca liga nada sozinho.
+    pub fn avaliar_perfil(&mut self, h: &crate::perfil::Hardware) {
+        if self.settings.sugestao_leve_vista || self.settings.modo_leve {
+            return;
+        }
+        let m = crate::perfil::motivos(h);
+        if !m.is_empty() {
+            self.sugestao_leve = Some(m);
+        }
+    }
+
+    /// Caixa única de sugestão do modo leve. Responder de qualquer jeito encerra a sugestão para sempre;
+    /// o interruptor continua em Configurações > Exibição > Gráficos.
+    fn sugestao_leve_ui(&mut self, ctx: &egui::Context) {
+        let Some(motivos) = self.sugestao_leve.clone() else { return };
+        if !self.started {
+            return;
+        }
+        let mut resposta: Option<bool> = None;
+        egui::Window::new(tr("Modo leve")).collapsible(false).resizable(false).anchor(egui::Align2::CENTER_CENTER, [0., 0.]).show(ctx, |ui| {
+            ui.set_max_width(420.);
+            ui.label(tr("Este computador parece limitado para modelagem 3D:"));
+            for m in &motivos {
+                ui.label(format!("• {}", tr(m.texto())));
+            }
+            ui.add_space(4.);
+            ui.label(tr("O modo leve usa malha de rascunho, sem anti-serrilhamento, iluminação simples e sem animações. Volume e medidas não mudam. Você pode ligar e desligar quando quiser em Configurações, Exibição, Gráficos."));
+            ui.add_space(6.);
+            ui.horizontal(|ui| {
+                if ui.button(tr("Ligar o modo leve")).clicked() {
+                    resposta = Some(true);
+                }
+                if ui.button(tr("Manter como está")).clicked() {
+                    resposta = Some(false);
+                }
+            });
+        });
+        if let Some(ligar) = resposta {
+            self.sugestao_leve = None;
+            self.settings.sugestao_leve_vista = true;
+            self.settings.definir_modo_leve(ligar);
+            self.settings.apply(ctx);
+            self.settings.save();
+        }
+    }
+
+    /// Mostra o relatório da falha anterior, com o conteúdo inteiro, antes de qualquer decisão. Nada é
+    /// enviado pelo programa: copiar ou abrir a pasta é um gesto da pessoa.
+    fn relatorio_ui(&mut self, ctx: &egui::Context) {
+        let Some(texto) = self.relatorio_pendente.clone() else { return };
+        if !self.started {
+            return;
+        }
+        enum Acao {
+            Copiar,
+            Pasta,
+            Guardar,
+            Descartar,
+        }
+        let mut acao: Option<Acao> = None;
+        egui::Window::new(tr("O Fenkra fechou de forma inesperada")).collapsible(false).resizable(true).default_width(560.).anchor(egui::Align2::CENTER_CENTER, [0., 0.]).show(ctx, |ui| {
+            ui.label(tr("Este é o relatório que ficou gravado só neste computador. Leia antes de decidir: o programa não envia nada, e o modelo nunca faz parte dele."));
+            ui.add_space(4.);
+            egui::ScrollArea::vertical().max_height(260.).show(ui, |ui| {
+                let mut t = texto.as_str();
+                ui.add(egui::TextEdit::multiline(&mut t).font(egui::TextStyle::Monospace).desired_width(f32::INFINITY));
+            });
+            ui.add_space(6.);
+            ui.horizontal_wrapped(|ui| {
+                if ui.button(tr("Copiar relatório")).on_hover_text(tr("copia o texto para você colar onde quiser, por sua conta")).clicked() {
+                    acao = Some(Acao::Copiar);
+                }
+                if ui.button(tr("Guardar e abrir a pasta")).on_hover_text(tr("guarda o arquivo com a data e mostra a pasta, para você anexar se quiser")).clicked() {
+                    acao = Some(Acao::Pasta);
+                }
+                if ui.button(tr("Guardar sem abrir")).clicked() {
+                    acao = Some(Acao::Guardar);
+                }
+                if ui.button(tr("Descartar")).clicked() {
+                    acao = Some(Acao::Descartar);
+                }
+            });
+        });
+        match acao {
+            Some(Acao::Copiar) => ctx.copy_text(texto),
+            Some(Acao::Pasta) => {
+                crate::relatorio::arquivar_pendente();
+                self.relatorio_pendente = None;
+                if let Some(d) = crate::relatorio::pasta_dos_relatorios() {
+                    let _ = std::process::Command::new("explorer").arg(d).spawn();
+                }
+            }
+            Some(Acao::Guardar) => {
+                crate::relatorio::arquivar_pendente();
+                self.relatorio_pendente = None;
+            }
+            Some(Acao::Descartar) => {
+                crate::relatorio::descartar_pendente();
+                self.relatorio_pendente = None;
+            }
+            None => {}
+        }
     }
 
     pub fn toast(&mut self, msg: impl Into<String>, error: bool) {
@@ -7247,6 +7380,8 @@ impl eframe::App for App {
             ctx.request_repaint();
         }
         self.toasts(ctx);
+        self.sugestao_leve_ui(ctx);
+        self.relatorio_ui(ctx);
 
         // edição não destrutiva + desfazer + bloqueio de revisão congelada
         if self.open.doc != before {
@@ -7348,7 +7483,7 @@ impl eframe::App for App {
             self.scene_dirty = true;
         }
         if self.settings != settings_before {
-            if self.settings.theme != settings_before.theme || self.settings.theme_name != settings_before.theme_name || self.settings.ui_scale != settings_before.ui_scale {
+            if self.settings.theme != settings_before.theme || self.settings.theme_name != settings_before.theme_name || self.settings.ui_scale != settings_before.ui_scale || self.settings.animacoes != settings_before.animacoes {
                 self.settings.apply(ctx);
             }
             if let Some(v) = self.viewport.as_mut() {
@@ -7686,11 +7821,17 @@ pub fn line_style_ui(ui: &mut egui::Ui, st: &mut fenkra_core::LineStyle, lines: 
 }
 
 /// Seção "Gráficos" (página Exibição): qualidade da malha, anti-serrilhamento e iluminação.
-fn graficos_ui(ui: &mut egui::Ui, g: &mut crate::settings::Graficos) {
+fn graficos_ui(ui: &mut egui::Ui, s: &mut Settings) {
     use fenkra_core::PresetMalha as P;
     ui.add_space(10.);
     ui.separator();
     ui.label(RichText::new(tr("Gráficos")).strong());
+    let mut leve = s.modo_leve;
+    if ui.checkbox(&mut leve, tr("Modo leve (computador fraco)")).on_hover_text(tr("Malha de rascunho, sem anti-serrilhamento, simplificar ao girar, iluminação simples, 2 fios no malhador e sem animações. Volume e medidas não mudam.")).changed() {
+        s.definir_modo_leve(leve);
+    }
+    ui.label(RichText::new(tr("Combina os ajustes abaixo. Desligar devolve cada um ao que estava antes.")).weak().small());
+    let g = &mut s.graficos;
     let nome = |p: P| match p {
         P::Rascunho => tr("Rascunho"),
         P::Normal => tr("Normal"),
@@ -7916,7 +8057,7 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
                 ui.checkbox(&mut s.edges_in_render, tr("arestas no semi-renderizado"));
                 ui.checkbox(&mut s.tangent_edges, tr("arestas de tangência (fim dos raios)"));
                 ui.checkbox(&mut s.ortho, tr("projeção ortogonal"));
-                graficos_ui(ui, &mut s.graficos);
+                graficos_ui(ui, s);
             }
         5 => {
                 for g in crate::settings::Group::ALL {
