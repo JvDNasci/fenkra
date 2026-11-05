@@ -810,7 +810,6 @@ fn invalido_expressao_com_parametro_inexistente() {
 /// leva o infinito ao kernel, que estoura a pilha do processo (STATUS_STACK_OVERFLOW) em vez de
 /// devolver erro. Corrigir: expressão não finita é erro de parâmetro/expressão.
 #[test]
-#[ignore = "bug: divisão por zero em expressão gera infinito e estoura a pilha no kernel (expr.rs:75)"]
 fn invalido_expressao_com_divisao_por_zero() {
     precisa_kernel!();
     let (r, id) = com(|d| {

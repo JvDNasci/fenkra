@@ -17,6 +17,13 @@ pub enum ExprError {
     Arity(String),
     #[error("dependência circular: {0}")]
     Cycle(String),
+    #[error("a expressão não tem valor finito (divisão por zero ou resultado fora do domínio)")]
+    NotFinite,
+}
+
+/// Nomes de constante da linguagem de expressões; um parâmetro novo não pode usá-los.
+pub fn is_constant(n: &str) -> bool {
+    CONSTS.iter().any(|(c, _)| *c == n)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -68,7 +75,7 @@ pub fn eval(ast: &Ast, vars: &HashMap<String, f64>) -> Result<f64, ExprError> {
         Ast::Neg(a) => -eval(a, vars)?,
         Ast::Bin(op, a, b) => {
             let (a, b) = (eval(a, vars)?, eval(b, vars)?);
-            match op {
+            let r = match op {
                 '+' => a + b,
                 '-' => a - b,
                 '*' => a * b,
@@ -77,14 +84,19 @@ pub fn eval(ast: &Ast, vars: &HashMap<String, f64>) -> Result<f64, ExprError> {
                 '<' => (a < b) as i32 as f64,
                 '>' => (a > b) as i32 as f64,
                 _ => unreachable!(),
+            };
+            // `10/0`, `sqrt(-1)`, `0^-1`: infinito ou NaN nunca segue para o kernel
+            if !r.is_finite() {
+                return Err(ExprError::NotFinite);
             }
+            r
         }
         Ast::Call(f, args) => {
             let v: Vec<f64> = args.iter().map(|a| eval(a, vars)).collect::<Result<_, _>>()?;
             let one = |g: fn(f64) -> f64| -> Result<f64, ExprError> {
                 if v.len() == 1 { Ok(g(v[0])) } else { Err(ExprError::Arity(f.clone())) }
             };
-            match f.as_str() {
+            let r = match f.as_str() {
                 "sin" => one(|x| x.to_radians().sin())?,
                 "cos" => one(|x| x.to_radians().cos())?,
                 "tan" => one(|x| x.to_radians().tan())?,
@@ -101,7 +113,11 @@ pub fn eval(ast: &Ast, vars: &HashMap<String, f64>) -> Result<f64, ExprError> {
                 "if" if v.len() == 3 => if v[0] != 0.0 { v[1] } else { v[2] },
                 "min" | "max" | "if" => return Err(ExprError::Arity(f.clone())),
                 _ => return Err(ExprError::UnknownFunction(f.clone())),
+            };
+            if !r.is_finite() {
+                return Err(ExprError::NotFinite);
             }
+            r
         }
     })
 }
@@ -206,7 +222,7 @@ impl Parser<'_> {
                     self.i += 1;
                 }
                 let t = std::str::from_utf8(&self.s[st..self.i]).unwrap().replace(',', ".");
-                t.parse().map(Ast::Num).or_else(|_| self.err("número inválido"))
+                t.parse::<f64>().ok().filter(|v| v.is_finite()).map(Ast::Num).ok_or(()).or_else(|_| self.err("número inválido"))
             }
             Some(c) if c.is_ascii_alphabetic() || c == b'_' => {
                 let st = self.i;
@@ -267,6 +283,15 @@ mod tests {
         assert_eq!(eval_str("if(L > 50, 10, 20)", &v).unwrap(), 10.0);
         assert_eq!(eval_str("max(1, L, 3)", &v).unwrap(), 100.0);
         assert_eq!(eval_str("1e-3*1000", &v).unwrap(), 1.0);
+    }
+
+    #[test]
+    fn nao_finito_vira_erro() {
+        let v = HashMap::new();
+        for e in ["10/0", "0/0", "sqrt(-1)", "0^(-1)", "asin(2)", "1e308*10"] {
+            assert_eq!(eval_str(e, &v), Err(ExprError::NotFinite), "{e}");
+        }
+        assert_eq!(eval_str("10/4", &v).unwrap(), 2.5);
     }
 
     #[test]
