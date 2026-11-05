@@ -16,6 +16,8 @@ pub mod estrutura;
 pub mod fixadores;
 pub mod furos;
 pub mod geometria;
+pub mod insercao;
+pub mod interferencia;
 pub mod kin;
 pub mod links;
 pub mod load;

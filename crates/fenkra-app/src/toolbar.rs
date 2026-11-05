@@ -232,8 +232,8 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("salvar", "Salvar", "Salvar montagem  (Ctrl+S)", "Grava a montagem; as peças ficam nos arquivos delas.", Cmd(C::AsmSave)),
             ]),
             Family("asm_inserir", vec![
-                it("asm_inserir", "Inserir peça", "Inserir peça existente", "Escolha um ou mais arquivos .fkp; o primeiro componente entra fixo.", Cmd(C::AsmInsert)),
-                it("asm_subconjunto", "Subconjunto", "Inserir subconjunto", "Insere outra montagem (.fka) como um componente.", Cmd(C::AsmSubAsm)),
+                it("asm_inserir", "Inserir peça", "Inserir peça existente", "Abre a lista de peças com miniatura; a peça escolhida segue o cursor e cada clique coloca uma cópia.", Cmd(C::AsmInsert)),
+                it("asm_subconjunto", "Subconjunto", "Inserir subconjunto", "Insere outra montagem (.fka) como um componente: escolha na lista e clique na vista para colocar.", Cmd(C::AsmSubAsm)),
                 it("asm_peca_nova", "Peça nova", "Peça nova no contexto", "Cria o arquivo da peça ao lado da montagem e abre para modelar.", Cmd(C::AsmNewPart)),
                 it("asm_sub_selecao", "Subconjunto da seleção", "Subconjunto dos selecionados", "Os componentes escolhidos viram uma montagem nova (.fka), inserida no lugar deles; as restrições entre eles vão junto.", Cmd(C::AsmSubFromSel)),
             ]),

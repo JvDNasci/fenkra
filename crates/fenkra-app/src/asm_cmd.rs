@@ -605,6 +605,26 @@ fn alternar_animacao(app: &mut App, agora: f64) {
 
 /// `FENKRA_DEMO_ASM=cmd|junta|simbolos|manip|duzentas`: abre o comando ou os símbolos nas placas de exemplo.
 pub fn demo(st: &mut AsmState, nome: &str) {
+    if nome == "repeticao" {
+        crate::asm_repeticao::demo(st);
+        return;
+    }
+    if let Some(n) = nome.strip_prefix("grade").and_then(|x| x.parse::<usize>().ok()) {
+        // grade de peças iguais: `grade100` para olhar a cena com muitos corpos
+        for k in 2..n {
+            st.asm.add_component("Placa", NodeKind::Part { path: "placa.fkp".into() }, Placement { origin: [(k % 10) as f64 * 150., (k / 10) as f64 * 100., 0.], ..Default::default() }, None);
+        }
+        st.dirty = true;
+        return;
+    }
+    if nome.starts_with("interf") {
+        crate::asm_interf::demo(st, nome);
+        return;
+    }
+    if nome.starts_with("inserir") {
+        crate::asm_inserir::demo(st, nome == "inserir_vazia");
+        return;
+    }
     let ids: Vec<fenkra_core::Id> = st.asm.nodes.iter().filter(|n| !matches!(n.kind, NodeKind::Group)).map(|n| n.id).collect();
     let [base, tampa] = ids[..] else { return };
     st.asm.node_mut(base).unwrap().fixed = true;

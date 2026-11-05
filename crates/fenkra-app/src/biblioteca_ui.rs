@@ -147,7 +147,7 @@ fn no_mundo(pl: fenkra_montagem::Placement) -> (impl Fn(Vec3) -> Vec3, impl Fn(V
 
 /// Fantasma translúcido de um item na viewport.
 #[allow(clippy::too_many_arguments)]
-fn fantasma(painter: &egui::Painter, rect: Rect, cam: &Camera, m: &Malha, pl: fenkra_montagem::Placement, cor: Color32, alfa: f32) {
+pub(crate) fn fantasma(painter: &egui::Painter, rect: Rect, cam: &Camera, m: &Malha, pl: fenkra_montagem::Placement, cor: Color32, alfa: f32) {
     let (ponto, dir) = no_mundo(pl);
     let olho = cam.ray(rect, rect.center()).1;
     let proj = |p: Vec3| cam.project(rect, p);

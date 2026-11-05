@@ -261,6 +261,10 @@ pub struct AsmState {
     /// painel Biblioteca (catálogo de normas) aberto, com a inserção em andamento
     pub catalogo: Option<crate::biblioteca_ui::Estado>,
     /// janela do gerador de engrenagens (B28)
+    /// comando Repetição aberto (B263)
+    pub repeticao: Option<crate::asm_repeticao::Estado>,
+    /// comando Inserir aberto, com a peça na mão (B262)
+    pub inserir: Option<crate::asm_inserir::Estado>,
     pub gears_open: Option<GearsUi>,
     pub anim_sel: usize,
     pub anim_t: f64,
@@ -347,6 +351,8 @@ impl AsmState {
             fasteners_open: None,
             catalogo: None,
             gears_open: None,
+            inserir: None,
+            repeticao: None,
             anim_sel: 0,
             anim_t: 0.,
             anim_play: false,
@@ -475,7 +481,7 @@ impl AsmState {
     }
 
     /// Caminho guardado para uma peça: relativo à pasta da montagem quando possível.
-    fn rel_path(&self, p: &std::path::Path) -> String {
+    pub(crate) fn rel_path(&self, p: &std::path::Path) -> String {
         // relativo à pasta da montagem, subindo com `..` quando o componente está fora dela (B66);
         // absoluto só entre drives diferentes
         match self.dir() {
@@ -583,42 +589,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                 return is_asm;
             };
             match c {
-                Cmd::AsmInsert | Cmd::AsmSubAsm => {
-                    let sub = c == Cmd::AsmSubAsm;
-                    let (filter, ext) = if sub { ("Montagem", "fka") } else { ("Peça", "fkp") };
-                    let Some(files) = rfd::FileDialog::new().add_filter(filter, &[ext]).pick_files() else { return true };
-                    st.push_undo();
-                    let parent = st.sel.filter(|s| st.asm.node(*s).is_some_and(|n| matches!(n.kind, NodeKind::Group)));
-                    // peças novas entram um pouco ao lado da última, para não ficarem sobrepostas
-                    let mut x = st.view.as_ref().map(|r| r.bodies.iter().flat_map(|b| b.mesh.positions.chunks_exact(3).map(|p| p[0] as f64)).fold(0f64, f64::max)).unwrap_or(0.);
-                    let atual = st.file.clone();
-                    let mut circular = false;
-                    for f in files {
-                        // a montagem não pode conter a si mesma, nem por outro subconjunto
-                        if atual.as_ref().is_some_and(|a| links::depende_de(&f, a, None)) {
-                            circular = true;
-                            continue;
-                        }
-                        let name = f.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "Peça".into());
-                        let path = st.rel_path(&f);
-                        let kind = if sub { NodeKind::SubAssembly { path } } else { NodeKind::Part { path } };
-                        let first = st.asm.nodes.iter().all(|n| matches!(n.kind, NodeKind::Group));
-                        let at = if first { [0.; 3] } else { [x + 20., 0., 0.] };
-                        let id = st.asm.add_component(&name, kind, Placement { origin: if st.asm.relational { [0.; 3] } else { at }, ..Default::default() }, parent);
-                        if st.asm.relational {
-                            // projeto relacional: a peça fica na origem da montagem, a forma vem dos links
-                            st.asm.node_mut(id).unwrap().fixed = true;
-                        }
-                        st.sel = Some(id);
-                        st.dirty = true;
-                        st.refresh();
-                        x = st.view.as_ref().map(|r| r.bodies.iter().flat_map(|b| b.mesh.positions.chunks_exact(3).map(|p| p[0] as f64)).fold(0f64, f64::max)).unwrap_or(x);
-                    }
-                    app.fit_now();
-                    if circular {
-                        app.toast(tr("Referência circular: o subconjunto já contém esta montagem"), true);
-                    }
-                }
+                Cmd::AsmInsert | Cmd::AsmSubAsm => crate::asm_inserir::abrir(st, c == Cmd::AsmSubAsm),
                 Cmd::AsmNewPart => {
                     // peça nova no contexto: pede nome e pasta; o arquivo só nasce no Salvar
                     let pasta = st.dir().map(|d| d.to_string_lossy().to_string()).unwrap_or_default();
@@ -849,7 +820,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
 /// clique numa peça a seleciona na árvore.
 pub fn after_viewport(app: &mut App, ctx: &egui::Context) {
     after_view_quick(app);
-    if !crate::asm_cmd::apos_viewport(app) && !crate::asm_manip::apos_viewport(app) {
+    if !crate::asm_inserir::apos_viewport(app) && !crate::asm_repeticao::apos_viewport(app) && !crate::asm_cmd::apos_viewport(app) && !crate::asm_manip::apos_viewport(app) {
         selecao_do_clique(app, ctx.input(|i| i.modifiers.alt));
     }
     // duplo clique numa peça: abre para editar
@@ -3483,6 +3454,10 @@ pub fn fasteners_handles(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam
                                 novo = Some(*l);
                             }
                         }
+    // com a peça na mão o clique é da colocação
+    if st.inserir.is_some() || st.repeticao.is_some() {
+        return;
+    }
                     });
                 });
                 let fora = ctx.input(|i| i.pointer.any_pressed()) && !area.response.contains_pointer();

@@ -159,7 +159,7 @@ pub struct App {
     start_t0: Option<f64>,
     card_spin: std::collections::HashMap<String, f32>,
     /// prévias 3D da tela inicial (exemplos e peças recentes)
-    previews: crate::examples::PreviewCache,
+    pub(crate) previews: crate::examples::PreviewCache,
     /// comando a abrir como ambiente (duplo clique na face)
     open_pending: Option<Id>,
     release_dialog: Option<(u64, String)>,
@@ -6710,6 +6710,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 if self.settings.bench == crate::settings::Bench::Montagem && self.asm.is_some() {
                     crate::asm_simbolos::overlay(self, ui, rect, &cam);
                     crate::asm_ui::gizmo(self, ui, rect, &cam);
+                crate::asm_inserir::overlay(self, ui, rect, &cam);
+                crate::asm_repeticao::overlay(self, ui, rect, &cam);
                 } else {
                     crate::handles::overlay(self, ui, rect, cam);
                 }
@@ -7428,6 +7430,8 @@ impl eframe::App for App {
                 if undo {
                     if let Some(prev) = st.undo.pop() {
                         st.redo.push(std::mem::replace(&mut st.asm, prev));
+            crate::asm_inserir::teclas(self, ctx);
+            crate::asm_repeticao::teclas(self, ctx);
                         st.dirty = true;
                     }
                 }
@@ -7628,6 +7632,9 @@ impl eframe::App for App {
         self.about_window(ctx);
         if let Some(a) = self.busca_cmd.ui(ctx) {
             self.act(a);
+        crate::asm_inserir::painel(self, ctx, area);
+        crate::asm_interf::painel(self, ctx, area);
+        crate::asm_repeticao::painel(self, ctx, area);
         }
         self.view_menu_window(ctx);
         self.dialogs(ctx);
