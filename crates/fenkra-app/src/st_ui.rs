@@ -408,3 +408,64 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
         app.st_cut_open = false;
     }
 }
+
+/// B79: algum membro avisou que perdeu linhas (a interface então pede o contorno vermelho).
+pub fn tem_falha_de_membro(status: &HashMap<Id, fenkra_solidos::Status>) -> bool {
+    status.values().any(|s| matches!(s, fenkra_solidos::Status::Warning(m) if m.starts_with(fenkra_solidos::MEMBRO_FALHOU)))
+}
+
+/// B79: contorno vermelho da linha que não gerou sólido e o motivo ao lado, sobre o 3D.
+pub fn draw_falhas(ui: &egui::Ui, rect: egui::Rect, vp: &crate::render::Viewport, falhas: &[fenkra_solidos::MemberFailure]) {
+    let cor = crate::theme::st_err();
+    for f in falhas {
+        let pts: Vec<egui::Pos2> = f.pts.iter().filter_map(|p| vp.project(rect, glam::Vec3::from(p.map(|v| v as f32)))).collect();
+        if pts.len() < 2 {
+            continue;
+        }
+        ui.painter().add(egui::Shape::line(pts.clone(), egui::Stroke::new(5., cor)));
+        let meio = pts[pts.len() / 2];
+        let texto = format!("{} {}: {}", tr("linha"), f.line + 1, f.reason);
+        let galley = ui.painter().layout_no_wrap(texto, egui::FontId::proportional(12.), egui::Color32::WHITE);
+        let caixa = egui::Rect::from_min_size(meio + egui::vec2(8., -8.), galley.size()).expand2(egui::vec2(4., 2.));
+        ui.painter().rect_filled(caixa, 3., cor);
+        ui.painter().galley(caixa.min + egui::vec2(4., 2.), galley, egui::Color32::WHITE);
+    }
+}
+
+/// B79: o comando Membro nunca deixa um recurso vazio: ao concluir, um membro sem nenhuma linha
+/// guia (ainda a escolher) é descartado e o documento volta ao estado de antes do comando.
+pub fn membro_sem_linhas(doc: &Document, id: Id) -> bool {
+    matches!(doc.feature(id).map(|f| &f.kind), Some(FeatureKind::StructMember(m)) if m.paths.is_empty())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn membro_sem_linhas_e_detectado() {
+        let s = |x: &str| x.to_string();
+        let mut d = Document::new("t");
+        let id = d.add_feature(FeatureKind::StructMember(StructMember {
+            paths: vec![],
+            family: s("Tubo quadrado"),
+            designation: s("40x3"),
+            kind: SectionKind::TuboQuadrado,
+            dims: vec![s("40"), s("3")],
+            anchor: 0,
+            angle: s("0"),
+            off_x: s("0"),
+            off_y: s("0"),
+            ext1: s("0"),
+            ext2: s("0"),
+            corner: CornerMode::MeiaEsquadria,
+            gap: s("0"),
+            joints: vec![],
+        }));
+        assert!(membro_sem_linhas(&d, id));
+        if let Some(FeatureKind::StructMember(m)) = d.feature_mut(id).map(|f| &mut f.kind) {
+            m.paths.push(crate::slots::curve());
+        }
+        assert!(!membro_sem_linhas(&d, id));
+    }
+}

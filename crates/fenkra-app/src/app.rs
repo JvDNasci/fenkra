@@ -234,6 +234,8 @@ pub struct App {
     pub st_lib_open: bool,
     pub st_cut_open: bool,
     pub st_lib_sel: usize,
+    /// B79: linhas de membro que não geraram sólido (contorno vermelho e motivo no 3D)
+    pub st_falhas: Vec<fenkra_solidos::MemberFailure>,
 }
 
 /// Edição de um comando como "ambiente": só termina com Concluir (mantém) ou Cancelar (desfaz).
@@ -357,6 +359,7 @@ impl App {
             dwg: None,
             st_lib_open: false,
             st_cut_open: false,
+            st_falhas: vec![],
             st_lib_sel: 0,
         };
         app.started = !app.settings.show_start;
@@ -1573,7 +1576,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 let (des, dims) = fam.sizes[3.min(fam.sizes.len() - 1)].clone();
                 let rule = self.settings.user_profiles.iter().find(|u| u.name == fam.name).map(|u| (u.anchor, u.angle)).unwrap_or((0, 0.));
                 if paths.is_empty() {
-                    self.toast("Selecione as linhas do esqueleto (arestas, linhas ou curvas de referência) e depois Membro", true);
+                    // o comando abre pedindo o esqueleto: cada clique em linha entra no membro; sem linhas, ao concluir, nada é criado
+                    self.toast(crate::i18n::tr("Clique nas linhas do esqueleto no 3D (arestas, linhas ou curvas de referência); sem linhas o membro não é criado"), false);
                 }
                 let d = &mut self.open.doc;
                 Sel::Feature(d.add_feature(FeatureKind::StructMember(StructMember {
@@ -2009,6 +2013,15 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     /// Concluir: mantém as alterações.
     pub fn conclude_session(&mut self) {
         if let Some(s) = self.session.take() {
+            // B79: membro novo sem nenhuma linha guia não vira recurso vazio
+            if s.is_new && crate::st_ui::membro_sem_linhas(&self.open.doc, s.id) {
+                self.open.doc = s.snapshot;
+                self.sel = Sel::None;
+                self.toast(crate::i18n::tr("Membro descartado: nenhuma linha do esqueleto foi escolhida"), true);
+                self.request_recompute();
+                self.scene_dirty = true;
+                return;
+            }
             self.open.doc.hide_consumed(s.id);
             // membro com várias linhas: um comando por linha (cantos preservados entre eles)
             let parts = self.open.doc.split_struct_member(s.id);
@@ -5700,6 +5713,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 }
             }
 
+            crate::st_ui::draw_falhas(ui, rect, &vp, &self.st_falhas);
+
             // rótulos de pontos e curvas de referência
             if let (Some(r), true) = (&self.result, self.settings.filter.rotulos) {
                 let d = &self.open.doc;
@@ -6657,6 +6672,10 @@ impl eframe::App for App {
                     self.wizard_open = true;
                 }
                 self.errors_prev = errs;
+                self.st_falhas = match &self.sent_doc {
+                    Some(d) if g == self.gen_sent && crate::st_ui::tem_falha_de_membro(&r.status) => fenkra_solidos::member_failures(d),
+                    _ => vec![],
+                };
                 self.result = Some(r);
                 if g == self.gen_sent {
                     self.result_doc = self.sent_doc.clone();

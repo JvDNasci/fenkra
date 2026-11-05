@@ -4063,7 +4063,11 @@ impl Ctx<'_> {
                 }
                 let mid = |g: &MemberGeom| geo3d::lerp(g.start, g.end, 0.5);
                 let mut shapes: Vec<Shape> = vec![];
+                // B79: a falha de uma linha não derruba as outras; cada uma vira um aviso com o motivo
+                let mut kept: Vec<usize> = vec![];
+                let mut falhas: Vec<(usize, String)> = vec![];
                 for (i, g) in geo.iter().enumerate() {
+                    let built: Result<Shape, String> = (|| {
                     let mut sh = self.member_shape(g)?;
                     for (p, di, dj, og, mode, first, gap) in &joints[i] {
                         match mode {
@@ -4092,7 +4096,21 @@ impl Ctx<'_> {
                             }
                         }
                     }
-                    shapes.push(sh);
+                    Ok(sh)
+                    })();
+                    match built {
+                        Ok(sh) => {
+                            shapes.push(sh);
+                            kept.push(i);
+                        }
+                        Err(e) => falhas.push((i, e)),
+                    }
+                }
+                if !falhas.is_empty() {
+                    log_member_failures(f.id, &geo, &falhas);
+                }
+                if shapes.is_empty() && !falhas.is_empty() {
+                    return Err(falhas.iter().map(|(i, e)| format!("linha {}: {e}", i + 1)).collect::<Vec<_>>().join("; "));
                 }
                 // emenda: barra maior que a matéria-prima
                 let stock = self.doc.props.stock_length.trim();
@@ -4109,11 +4127,22 @@ impl Ctx<'_> {
                         .collect();
                     (!long.is_empty() && lim > 0.).then(|| format!("⚠ emenda: barra maior que a matéria-prima de {lim:.0} mm — {}", long.join(", ")))
                 };
+                let warn = if falhas.is_empty() {
+                    warn
+                } else {
+                    let motivos = falhas.iter().map(|(i, e)| format!("linha {}: {e}", i + 1)).collect::<Vec<_>>().join("; ");
+                    let base = format!("{MEMBRO_FALHOU} {} de {} linhas não geraram sólido — {motivos}", falhas.len(), geo.len());
+                    Some(match warn {
+                        Some(w) => format!("{base} | {w}"),
+                        None => base,
+                    })
+                };
                 if logging_members() {
                     let explicit = (ev(&m.ext1, &self.vars, "")?, ev(&m.ext2, &self.vars, "")?);
                     let profile = member_profile(m, &self.vars)?;
                     let name = format!("{} {}", m.family, m.designation);
-                    for (i, (g, sh)) in geo.iter().zip(&shapes).enumerate() {
+                    for (&i, sh) in kept.iter().zip(&shapes) {
+                        let g = &geo[i];
                         let frame = Frame { origin: g.start, x: g.x, normal: g.z };
                         log_struct(f, i, StructItem::Member, &name, profile.clone(), member_length(g, explicit), frame, sh);
                     }
@@ -5034,6 +5063,39 @@ thread_local! {
 
 fn logging_members() -> bool {
     MEMBER_LOG.with(|l| l.borrow().is_some())
+}
+
+/// Prefixo do aviso de um membro que perdeu linhas (a interface o usa para pedir o contorno vermelho).
+pub const MEMBRO_FALHOU: &str = "⚠ membro:";
+
+/// Linha de membro que não gerou sólido: onde fica e por quê (B79).
+#[derive(Clone, Debug, PartialEq)]
+pub struct MemberFailure {
+    pub feature: Id,
+    /// índice da linha dentro do comando (a mesma numeração da lista de corte)
+    pub line: usize,
+    pub pts: Vec<V3>,
+    pub reason: String,
+}
+
+thread_local! {
+    static FAIL_LOG: RefCell<Option<Vec<MemberFailure>>> = const { RefCell::new(None) };
+}
+
+fn log_member_failures(f: Id, geo: &[MemberGeom], falhas: &[(usize, String)]) {
+    FAIL_LOG.with(|l| {
+        if let Some(v) = l.borrow_mut().as_mut() {
+            v.extend(falhas.iter().map(|(i, e)| MemberFailure { feature: f, line: *i, pts: geo[*i].pts.clone(), reason: e.clone() }));
+        }
+    });
+}
+
+/// Linhas de membro que falharam no cálculo atual, para o contorno vermelho e o motivo no 3D.
+/// Refaz os comandos estruturais; a interface só chama quando algum deles avisou a falha.
+pub fn member_failures(doc: &Document) -> Vec<MemberFailure> {
+    FAIL_LOG.with(|l| *l.borrow_mut() = Some(vec![]));
+    let _ = final_shape(doc);
+    FAIL_LOG.with(|l| l.borrow_mut().take()).unwrap_or_default()
 }
 
 /// Tipo de item da estrutura.
