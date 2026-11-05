@@ -293,11 +293,10 @@ fn corpus_tem_as_dezesseis_pecas_e_todas_serializam() {
     }
 }
 
-/// BUG registrado: salvar e abrir não devolve o mesmo documento. O JSON perde o último dígito de alguns
-/// `f64` (o `serde_json` do workspace está sem `float_roundtrip`), então coordenadas de sketch voltam
-/// com 1 ulp de diferença: `==` falha e a assinatura do cache muda depois de reabrir o arquivo.
+/// Salvar e abrir devolve o mesmo documento. Sem a feature `float_roundtrip` do `serde_json` (ligada no
+/// `Cargo.toml` do workspace) o JSON lia alguns `f64` com 1 ulp de erro: `==` falhava e a assinatura do
+/// cache mudava depois de reabrir o arquivo.
 #[test]
-#[ignore = "bug: serde_json sem float_roundtrip; coordenadas do sketch da engrenagem voltam com 1 ulp de erro (corrigir em Cargo.toml do workspace)"]
 fn salvar_e_abrir_devolve_documento_identico() {
     let d = engrenagem_40_dentes();
     let volta = Document::from_json(&d.to_json()).unwrap();
