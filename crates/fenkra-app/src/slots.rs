@@ -154,7 +154,7 @@ fn walk_fill(v: &mut Value, c: &mut Cands, changed: &mut bool) {
 
 /// Aresta fechada (círculo) usada como eixo: o eixo do círculo (centro e normal), não a corda.
 fn circle_axis(c: &CurveRef) -> Option<AxisRef> {
-    let CurveRef::Edge(p) = c else { return None };
+    let p = c.edge_pts()?;
     let (ctr, n, _) = crate::geom_fit::circle(p)?;
     Some(AxisRef::Fixed { origin: ctr, dir: n })
 }

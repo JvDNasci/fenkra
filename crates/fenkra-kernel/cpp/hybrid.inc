@@ -220,7 +220,7 @@ std::unique_ptr<Shape> untrim_face(const Shape& s) {
 // Extrapolar: prolonga a face pelo lado (borda u/v) mais próximo do ponto, com continuidade de tangência.
 std::unique_ptr<Shape> extrapolate_face(const Shape& s, double px, double py, double pz, double len, int32_t cont) {
     return guard("extrapolar", [&] {
-        if (len <= 0) throw std::runtime_error("o comprimento precisa ser positivo");
+        if (std::abs(len) < 1e-9) throw std::runtime_error("o comprimento não pode ser zero");
         gp_Pnt p(px, py, pz);
         TopoDS_Face f = face_near(s.s, p);
         double u1, u2, v1, v2;
@@ -238,10 +238,42 @@ std::unique_ptr<Shape> extrapolate_face(const Shape& s, double px, double py, do
             if (d < bd) bd = d, best = i;
         }
         Handle(Geom_BoundedSurface) ext = bs;
-        GeomLib::ExtendSurfByLength(ext, len, std::clamp(cont, 1, 2), sides[best].inU, sides[best].after);
-        BRepBuilderAPI_MakeFace mf(Handle(Geom_Surface)::DownCast(ext), Precision::Confusion());
-        if (!mf.IsDone()) throw std::runtime_error("não foi possível extrapolar");
-        return wrap(mf.Face());
+        TopoDS_Face made;
+        if (len > 0) {
+            GeomLib::ExtendSurfByLength(ext, len, std::clamp(cont, 1, 2), sides[best].inU, sides[best].after);
+            BRepBuilderAPI_MakeFace mf(Handle(Geom_Surface)::DownCast(ext), Precision::Confusion());
+            if (!mf.IsDone()) throw std::runtime_error("não foi possível extrapolar");
+            made = mf.Face();
+        } else {
+            // distância negativa apara: anda o comprimento pedido sobre a isolinha do meio, a partir
+            // da borda, e fecha o domínio nesse parâmetro
+            const Side& sd = sides[best];
+            Handle(Geom_Curve) iso = sd.inU ? g->VIso(vm) : g->UIso(um);
+            GeomAdaptor_Curve ac(iso);
+            const double from = sd.inU ? sd.u : sd.v, sign = sd.after ? -1.0 : 1.0;
+            GCPnts_AbscissaPoint ap(ac, sign * std::abs(len), from);
+            if (!ap.IsDone()) throw std::runtime_error("a distância de aparo é maior que a superfície");
+            const double t = ap.Parameter();
+            double a1 = u1, a2 = u2, b1 = v1, b2 = v2;
+            (sd.inU ? (sd.after ? a2 : a1) : (sd.after ? b2 : b1)) = t;
+            if (a2 - a1 < 1e-9 || b2 - b1 < 1e-9) throw std::runtime_error("a distância de aparo é maior que a superfície");
+            BRepBuilderAPI_MakeFace mf(g, a1, a2, b1, b2, Precision::Confusion());
+            if (!mf.IsDone()) throw std::runtime_error("não foi possível aparar a borda");
+            made = mf.Face();
+        }
+        // as outras faces da superfície continuam como estavam
+        TopoDS_Compound c;
+        BRep_Builder bb;
+        bb.MakeCompound(c);
+        int others = 0;
+        for (TopExp_Explorer x(s.s, TopAbs_FACE); x.More(); x.Next())
+            if (!x.Current().IsSame(f)) {
+                bb.Add(c, x.Current());
+                ++others;
+            }
+        if (others == 0) return wrap(made);
+        bb.Add(c, made);
+        return wrap(c);
     });
 }
 
@@ -253,6 +285,159 @@ rust::Vec<double> boundary_pts(const Shape& s, rust::Vec<uint32_t>& ends) {
         wires_to_pts(c, out, ends);
         if (ends.empty()) throw std::runtime_error("a superfície não tem bordas livres (é fechada)");
         return out;
+    });
+}
+
+// Bordas livres aresta por aresta: é a aresta, e não o fio inteiro, que a propagação escolhe.
+rust::Vec<double> free_edge_pts(const Shape& s, rust::Vec<uint32_t>& ends) {
+    return guard("contorno", [&] {
+        rust::Vec<double> out;
+        uint32_t n = 0;
+        TopoDS_Compound c = free_wires(s.s);
+        for (TopExp_Explorer x(c, TopAbs_EDGE); x.More(); x.Next()) {
+            BRepAdaptor_Curve bc(TopoDS::Edge(x.Current()));
+            GCPnts_TangentialDeflection td(bc, 0.05, 0.1, 2);
+            for (int i = 1; i <= td.NbPoints(); ++i) {
+                gp_Pnt p = td.Value(i);
+                for (double v : {p.X(), p.Y(), p.Z()}) out.push_back(v);
+                ++n;
+            }
+            ends.push_back(n);
+        }
+        if (ends.empty()) throw std::runtime_error("a superfície não tem bordas livres (é fechada)");
+        return out;
+    });
+}
+
+// Corta a superfície por outra (estendida se `extend`) e fica com as faces que passam mais perto do
+// ponto: é o término "até elemento" das superfícies, em que quem decide o lado é o ponto de partida.
+std::unique_ptr<Shape> clip_surface(const Shape& s, const Shape& cutter, double px, double py, double pz, bool extend) {
+    return guard("até elemento", [&] {
+        const double L = size_of(s.s, cutter.s);
+        TopoDS_Shape cut = extend ? extended_faces(cutter.s, L) : cutter.s;
+        BRepAlgoAPI_Splitter sp;
+        TopTools_ListOfShape args, tools;
+        args.Append(s.s);
+        tools.Append(cut);
+        sp.SetArguments(args);
+        sp.SetTools(tools);
+        sp.Build();
+        if (!sp.IsDone()) throw std::runtime_error("não foi possível cortar pelo elemento");
+        TopoDS_Vertex v = BRepBuilderAPI_MakeVertex(gp_Pnt(px, py, pz));
+        std::vector<std::pair<double, TopoDS_Shape>> parts;
+        for (TopExp_Explorer e(sp.Shape(), TopAbs_FACE); e.More(); e.Next()) {
+            BRepExtrema_DistShapeShape d(e.Current(), v);
+            parts.push_back({d.IsDone() ? d.Value() : 1e30, e.Current()});
+        }
+        if (parts.size() < 2) throw std::runtime_error("o elemento limite não atravessa a superfície");
+        double best = 1e30;
+        for (auto& p : parts) best = std::min(best, p.first);
+        TopoDS_Compound c;
+        BRep_Builder bb;
+        bb.MakeCompound(c);
+        int n = 0;
+        TopoDS_Shape one;
+        for (auto& p : parts)
+            if (p.first < best + 1e-4) {
+                bb.Add(c, p.second);
+                one = p.second;
+                ++n;
+            }
+        return wrap(n == 1 ? one : TopoDS_Shape(c));
+    });
+}
+
+// Polilinha da aresta da forma mais perto do ponto.
+rust::Vec<double> edge_pts_at(const Shape& s, double px, double py, double pz) {
+    return guard("aresta", [&] {
+        TopoDS_Vertex v = BRepBuilderAPI_MakeVertex(gp_Pnt(px, py, pz));
+        TopoDS_Edge best;
+        double bd = 1e300;
+        for (TopExp_Explorer x(s.s, TopAbs_EDGE); x.More(); x.Next()) {
+            if (BRep_Tool::Degenerated(TopoDS::Edge(x.Current()))) continue;
+            BRepExtrema_DistShapeShape d(x.Current(), v);
+            if (d.IsDone() && d.Value() < bd) bd = d.Value(), best = TopoDS::Edge(x.Current());
+        }
+        if (best.IsNull()) throw std::runtime_error("a forma não tem arestas");
+        BRepAdaptor_Curve c(best);
+        GCPnts_TangentialDeflection td(c, 0.05, 0.05, 2);
+        rust::Vec<double> out;
+        for (int i = 1; i <= td.NbPoints(); ++i) {
+            gp_Pnt p = td.Value(i);
+            for (double w : {p.X(), p.Y(), p.Z()}) out.push_back(w);
+        }
+        return out;
+    });
+}
+
+// A aresta é lisa entre as duas faces? Normais comparadas em três pontos, com 1 grau de folga.
+static bool smooth_across(const TopoDS_Edge& e, const TopoDS_Face& f, const TopoDS_Face& g) {
+    double a1, b1, a2, b2;
+    Handle(Geom2d_Curve) c1 = BRep_Tool::CurveOnSurface(e, f, a1, b1), c2 = BRep_Tool::CurveOnSurface(e, g, a2, b2);
+    if (c1.IsNull() || c2.IsNull()) return false;
+    for (double t : {0.25, 0.5, 0.75}) {
+        gp_Pnt2d p = c1->Value(a1 + (b1 - a1) * t), q = c2->Value(a2 + (b2 - a2) * t);
+        gp_Pnt x, y;
+        gp_Vec n, m;
+        BRepGProp_Face(f).Normal(p.X(), p.Y(), x, n);
+        BRepGProp_Face(g).Normal(q.X(), q.Y(), y, m);
+        if (n.Magnitude() < 1e-12 || m.Magnitude() < 1e-12 || n.Angle(m) > 1.0 * M_PI / 180.0) return false;
+    }
+    return true;
+}
+
+// Extração com propagação, refeita a cada recálculo a partir da face clicada. prop: 0 nenhuma,
+// 1 ponto (faces que tocam por vértice), 2 tangente (faces lisas entre si), 3 completo (a forma
+// inteira). `complement` devolve o resto. `counts` = [faces, arestas].
+std::unique_ptr<Shape> face_propagate(const Shape& s, double px, double py, double pz, int32_t prop, bool complement, rust::Vec<uint32_t>& counts) {
+    return guard("extrair", [&] {
+        TopoDS_Face start = face_near(s.s, gp_Pnt(px, py, pz), kFaceLimit);
+        TopTools_IndexedMapOfShape faces;
+        TopExp::MapShapes(s.s, TopAbs_FACE, faces);
+        TopTools_IndexedDataMapOfShapeListOfShape e2f, v2f;
+        TopExp::MapShapesAndAncestors(s.s, TopAbs_EDGE, TopAbs_FACE, e2f);
+        TopExp::MapShapesAndAncestors(s.s, TopAbs_VERTEX, TopAbs_FACE, v2f);
+        std::vector<char> in(faces.Extent() + 1, prop == 3 ? 1 : 0);
+        std::vector<int> todo{faces.FindIndex(start)};
+        in[todo[0]] = 1;
+        while (!todo.empty() && (prop == 1 || prop == 2)) {
+            TopoDS_Face f = TopoDS::Face(faces(todo.back()));
+            todo.pop_back();
+            auto visit = [&](const TopoDS_Shape& g) {
+                int k = faces.FindIndex(g);
+                if (k > 0 && !in[k]) {
+                    in[k] = 1;
+                    todo.push_back(k);
+                }
+            };
+            if (prop == 1) {
+                for (TopExp_Explorer x(f, TopAbs_VERTEX); x.More(); x.Next())
+                    for (TopTools_ListIteratorOfListOfShape it(v2f.FindFromKey(x.Current())); it.More(); it.Next()) visit(it.Value());
+            } else {
+                for (TopExp_Explorer x(f, TopAbs_EDGE); x.More(); x.Next()) {
+                    const TopoDS_Edge& e = TopoDS::Edge(x.Current());
+                    if (BRep_Tool::Degenerated(e)) continue;
+                    for (TopTools_ListIteratorOfListOfShape it(e2f.FindFromKey(e)); it.More(); it.Next())
+                        if (!it.Value().IsSame(f) && smooth_across(e, f, TopoDS::Face(it.Value()))) visit(it.Value());
+                }
+            }
+        }
+        TopoDS_Compound c;
+        BRep_Builder bb;
+        bb.MakeCompound(c);
+        TopTools_IndexedMapOfShape edges;
+        uint32_t nf = 0;
+        for (int i = 1; i <= faces.Extent(); ++i) {
+            if (bool(in[i]) == complement) continue;
+            bb.Add(c, BRepBuilderAPI_Copy(faces(i)).Shape());
+            TopExp::MapShapes(faces(i), TopAbs_EDGE, edges);
+            ++nf;
+        }
+        if (nf == 0) throw std::runtime_error("a propagação pegou a forma inteira: não sobra complemento");
+        counts.push_back(nf);
+        counts.push_back(edges.Extent());
+        if (nf == 1) return wrap(TopoDS_Iterator(c).Value());
+        return wrap(c);
     });
 }
 

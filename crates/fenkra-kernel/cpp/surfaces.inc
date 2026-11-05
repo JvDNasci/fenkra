@@ -67,6 +67,169 @@ std::unique_ptr<Shape> fill_surface(rust::Slice<const double> flat, rust::Slice<
     });
 }
 
+// Distância de um ponto à polilinha (n pontos achatados).
+static double dist_to_polyline(const gp_Pnt& p, const double* v, size_t n) {
+    double best = 1e300;
+    for (size_t i = 0; i + 1 < n; ++i) {
+        gp_Pnt a(v[3 * i], v[3 * i + 1], v[3 * i + 2]), b(v[3 * i + 3], v[3 * i + 4], v[3 * i + 5]);
+        gp_Vec ab(a, b);
+        double l2 = ab.SquareMagnitude();
+        double t = l2 > 1e-24 ? std::clamp(gp_Vec(a, p).Dot(ab) / l2, 0.0, 1.0) : 0.0;
+        best = std::min(best, a.Translated(ab * t).Distance(p));
+    }
+    return best;
+}
+
+// Arestas de `support` que ficam sobre a polilinha, cada uma com a face vizinha. Só vale se elas
+// cobrirem a curva inteira: pedaço de aresta não é contorno, e o MakeFilling precisa da aresta real
+// (é nela que está a curva paramétrica sobre a face, de onde sai a tangente da condição G1/G2).
+static std::vector<std::pair<TopoDS_Edge, TopoDS_Face>> support_edges(const TopoDS_Shape& support, const double* v, size_t n, double tol) {
+    std::vector<std::pair<TopoDS_Edge, TopoDS_Face>> out;
+    if (support.IsNull()) return out;
+    TopTools_IndexedDataMapOfShapeListOfShape e2f;
+    TopExp::MapShapesAndAncestors(support, TopAbs_EDGE, TopAbs_FACE, e2f);
+    double covered = 0, len = 0;
+    for (size_t i = 0; i + 1 < n; ++i)
+        len += gp_Pnt(v[3 * i], v[3 * i + 1], v[3 * i + 2]).Distance(gp_Pnt(v[3 * i + 3], v[3 * i + 4], v[3 * i + 5]));
+    for (int i = 1; i <= e2f.Extent(); ++i) {
+        const TopoDS_Edge& e = TopoDS::Edge(e2f.FindKey(i));
+        if (BRep_Tool::Degenerated(e) || e2f(i).IsEmpty()) continue;
+        BRepAdaptor_Curve c(e);
+        const double a = c.FirstParameter(), b = c.LastParameter();
+        bool on = true;
+        for (double t : {0.0, 0.25, 0.5, 0.75, 1.0}) on = on && dist_to_polyline(c.Value(a + (b - a) * t), v, n) < tol;
+        if (!on) continue;
+        GProp_GProps g;
+        BRepGProp::LinearProperties(e, g);
+        covered += g.Mass();
+        out.push_back({e, TopoDS::Face(e2f(i).First())});
+    }
+    if (covered < 0.98 * len) out.clear();
+    return out;
+}
+
+// Preenchimento com condição por aresta. `orders[i]` é a continuidade da curva i (0 G0, 1 G1, 2 G2),
+// `weights[i]` o alcance da tangente (1 = neutro) e `support` as faces de apoio. `pts` são pontos de
+// passagem. `errs` devolve o erro medido pelo construtor: [G0 em mm, G1 em rad].
+std::unique_ptr<Shape> fill_surface_x(rust::Slice<const double> flat, rust::Slice<const uint32_t> ends, rust::Slice<const int32_t> orders, rust::Slice<const double> weights,
+                                      const Shape& support, rust::Slice<const double> pts, rust::Vec<double>& errs) {
+    return guard("preenchimento", [&] {
+        bool tangent = false;
+        for (int32_t o : orders) tangent = tangent || o > 0;
+        // a tolerância angular padrão (0,01 rad) deixa passar 0,57 grau; G1 de verdade pede menos
+        BRepOffsetAPI_MakeFilling mk(3, tangent ? 30 : 15, tangent ? 4 : 2, Standard_False, 1e-5, 1e-4, tangent ? 2e-3 : 1e-2, 0.1, 8, tangent ? 20 : 9);
+        gp_XYZ sum(0, 0, 0);
+        for (size_t i = 0; i + 2 < flat.size(); i += 3) sum += gp_XYZ(flat[i], flat[i + 1], flat[i + 2]);
+        const gp_Pnt centre(sum / std::max<double>(1.0, flat.size() / 3.0));
+        std::vector<gp_Pnt> reach;
+        size_t start = 0;
+        int n = 0;
+        for (size_t k = 0; k < ends.size(); ++k) {
+            const size_t e = ends[k];
+            const double* v = flat.data() + 3 * start;
+            const int order = k < orders.size() ? orders[k] : 0;
+            const double w = k < weights.size() ? weights[k] : 1.0;
+            if (order > 0) {
+                // a polilinha da curva vem da malha ou de amostragem com flecha de até 0,1 mm
+                auto edges = support_edges(support.s, v, e - start, 0.15);
+                if (edges.empty()) throw std::runtime_error("a curva " + std::to_string(k + 1) + " não é borda da face de apoio: G1 e G2 precisam de uma face vizinha");
+                for (auto& [ed, face] : edges) {
+                    mk.Add(ed, face, order >= 2 ? GeomAbs_G2 : GeomAbs_G1);
+                    ++n;
+                    if (w <= 1.0 + 1e-9) continue;
+                    // peso: a superfície passa por pontos no plano tangente da vizinha, dentro do
+                    // buraco, o que obriga a tangente a valer por mais tempo antes de curvar
+                    BRepAdaptor_Curve c(ed);
+                    double f2, l2;
+                    Handle(Geom2d_Curve) pc = BRep_Tool::CurveOnSurface(ed, face, f2, l2);
+                    if (pc.IsNull()) continue;
+                    for (double t : {0.2, 0.5, 0.8}) {
+                        gp_Pnt p, q;
+                        gp_Vec d, nr;
+                        c.D1(c.FirstParameter() + (c.LastParameter() - c.FirstParameter()) * t, p, d);
+                        gp_Pnt2d uv = pc->Value(f2 + (l2 - f2) * t);
+                        BRepGProp_Face(face).Normal(uv.X(), uv.Y(), q, nr);
+                        gp_Vec in = nr.Crossed(d);
+                        if (in.Magnitude() < 1e-12) continue;
+                        in.Normalize();
+                        if (in.Dot(gp_Vec(p, centre)) < 0) in.Reverse();
+                        reach.push_back(p.Translated(in * (w - 1.0) * 0.1 * p.Distance(centre)));
+                    }
+                }
+            } else {
+                std::vector<double> part(v, v + 3 * (e - start));
+                for (TopExp_Explorer x(spine_wire(rust::Slice<const double>(part.data(), part.size())), TopAbs_EDGE); x.More(); x.Next()) {
+                    mk.Add(TopoDS::Edge(x.Current()), GeomAbs_C0);
+                    ++n;
+                }
+            }
+            start = e;
+        }
+        if (n == 0) throw std::runtime_error("escolha as curvas do contorno");
+        for (auto& p : reach) mk.Add(p);
+        for (size_t i = 0; i + 2 < pts.size(); i += 3) mk.Add(gp_Pnt(pts[i], pts[i + 1], pts[i + 2]));
+        mk.Build();
+        if (!mk.IsDone()) throw std::runtime_error("as curvas não formam um contorno fechado ou as condições não têm solução");
+        errs.push_back(mk.G0Error());
+        errs.push_back(tangent ? mk.G1Error() : 0.0);
+        return wrap(mk.Shape());
+    });
+}
+
+// Curva solta como forma (entra numa junção com faces).
+std::unique_ptr<Shape> curve_shape(rust::Slice<const double> pts) {
+    return guard("curva", [&] { return wrap(curve_wire(pts)); });
+}
+
+// Relatório da junção: [domínios conexos, arestas livres, maior folga fechada, maior folga aberta].
+// A folga fechada vem da tolerância que a costura deu às arestas; a aberta é a distância de cada
+// domínio ao vizinho mais perto (o pior caso é o que impede de virar uma peça só).
+rust::Vec<double> sew_report(const Shape& s) {
+    return guard("juntar", [&] {
+        TopTools_IndexedMapOfShape faces;
+        TopExp::MapShapes(s.s, TopAbs_FACE, faces);
+        const int nf = faces.Extent();
+        std::vector<int> up(nf + 1);
+        for (int i = 0; i <= nf; ++i) up[i] = i;
+        std::function<int(int)> root = [&](int x) { return up[x] == x ? x : up[x] = root(up[x]); };
+        TopTools_IndexedDataMapOfShapeListOfShape e2f;
+        TopExp::MapShapesAndAncestors(s.s, TopAbs_EDGE, TopAbs_FACE, e2f);
+        double free_edges = 0, closed = 0;
+        for (int i = 1; i <= e2f.Extent(); ++i) {
+            const TopoDS_Edge& e = TopoDS::Edge(e2f.FindKey(i));
+            if (BRep_Tool::Degenerated(e)) continue;
+            TopTools_IndexedMapOfShape own;
+            for (TopTools_ListIteratorOfListOfShape it(e2f(i)); it.More(); it.Next()) own.Add(it.Value());
+            if (own.Extent() == 1 && !BRep_Tool::IsClosed(e, TopoDS::Face(own(1)))) free_edges += 1;
+            if (own.Extent() >= 2) closed = std::max(closed, 2 * BRep_Tool::Tolerance(e));
+            for (int k = 2; k <= own.Extent(); ++k) up[root(faces.FindIndex(own(1)))] = root(faces.FindIndex(own(k)));
+        }
+        std::map<int, TopoDS_Compound> dom;
+        BRep_Builder bb;
+        for (int i = 1; i <= nf; ++i) {
+            int r = root(i);
+            if (!dom.count(r)) bb.MakeCompound(dom[r]);
+            bb.Add(dom[r], faces(i));
+        }
+        std::vector<TopoDS_Shape> parts;
+        for (auto& d : dom) parts.push_back(d.second);
+        for (TopExp_Explorer w(s.s, TopAbs_WIRE, TopAbs_FACE); w.More(); w.Next()) parts.push_back(w.Current());
+        double open = 0;
+        for (size_t i = 0; i < parts.size() && parts.size() > 1; ++i) {
+            double closest = 1e300;
+            for (size_t j = 0; j < parts.size(); ++j) {
+                if (i == j) continue;
+                BRepExtrema_DistShapeShape d(parts[i], parts[j]);
+                if (d.IsDone()) closest = std::min(closest, d.Value());
+            }
+            if (closest < 1e299) open = std::max(open, closest);
+        }
+        rust::Vec<double> out;
+        for (double x : {double(parts.size()), free_edges, closed, open}) out.push_back(x);
+        return out;
+    });
+}
+
 std::unique_ptr<Shape> extrude_curve(rust::Slice<const double> pts, double dx, double dy, double dz, double len) {
     return guard("superfície extrudada", [&] {
         if (std::abs(len) < 1e-9) throw std::runtime_error("comprimento zero");

@@ -55,3 +55,9 @@ promovida para v2 no primeiro recompute bem-sucedido.
   geometria que não mudou casa a ~1e-9), o ponto exato da aresta achada é o que vai ao kernel, e fora
   disso o comando fica em "referência perdida" com sugestão. O mesmo vale para a face sem chave (1 mm).
   Exceção até as chaves de chapa saírem: documentos com parede de chapa mantêm a tolerância antiga.
+- **Superfícies (B76, 05/11/2026):** `SurfRef::Face`, `SurfExtract`, `SurfMulti`, `FacePlane`, `AxisRef::Face` e `AxisRef::Edge`
+  guardam a chave ao lado do ponto; `CurveRef::BodyEdge` e `PointRef::Vertex` são a aresta e o vértice por dono e papel. A
+  polilinha gravada em `BodyEdge` é só a última forma: a curva vem do corpo a cada recompute. Arquivos antigos seguem pelo ponto,
+  sem promoção. `SurfEdgeFillet` fica fora da chave porque superfície de referência não tem dono por face; ali vale o ponto a até
+  0,1 mm e fora disso é referência perdida. `which` de Interseção e Contorno vira âncora espacial no primeiro cálculo, e número
+  fora da lista é erro, nunca "a última".

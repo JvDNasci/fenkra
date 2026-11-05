@@ -167,6 +167,7 @@ pub fn compose(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, errors: 
 /// Resultado só com malhas: a forma como a montagem entrega as vistas compostas.
 pub(crate) fn resultado_de(bodies: Vec<BodyResult>) -> RecomputeResult {
     RecomputeResult {
+        notes: Default::default(),
         bodies,
         promoted: Default::default(),
         sketches: vec![],

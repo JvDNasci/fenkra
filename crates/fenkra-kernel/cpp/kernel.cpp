@@ -3,6 +3,8 @@
 #include "fenkra-kernel/src/ffi.rs.h"
 
 #include <algorithm>
+#include <functional>
+#include <map>
 #include <atomic>
 #include <cmath>
 #include <limits>
@@ -102,6 +104,8 @@
 #include <BRep_Tool.hxx>
 #include <Bnd_Box.hxx>
 #include <GCPnts_TangentialDeflection.hxx>
+#include <GCPnts_AbscissaPoint.hxx>
+#include <GeomAdaptor_Curve.hxx>
 #include <GC_MakeArcOfCircle.hxx>
 #include <GProp_GProps.hxx>
 #include <IFSelect_ReturnStatus.hxx>
@@ -1085,7 +1089,8 @@ rust::Vec<double> mass_props(const Shape& s) {
     GProp_GProps vp, sp;
     BRepGProp::VolumeProperties(s.s, vp);
     BRepGProp::SurfaceProperties(s.s, sp);
-    gp_Pnt c = vp.CentreOfMass();
+    // superfície aberta não tem volume: o centro de massa do volume seria zero, longe da peça
+    gp_Pnt c = TopExp_Explorer(s.s, TopAbs_SOLID).More() ? vp.CentreOfMass() : sp.CentreOfMass();
     for (double x : {vp.Mass(), sp.Mass(), c.X(), c.Y(), c.Z()}) v.push_back(x);
     return v;
 }

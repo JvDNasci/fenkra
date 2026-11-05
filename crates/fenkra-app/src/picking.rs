@@ -69,6 +69,7 @@ pub fn point_pos(r: &RecomputeResult, p: &fenkra_core::PointRef) -> Option<[f64;
     match *p {
         P::Origin => Some([0.; 3]),
         P::Fixed(q) => Some(q),
+        P::Vertex { point, .. } => Some(point),
         P::Ref(id) => r.points.iter().find(|x| x.id == id).map(|x| x.p),
         P::SketchPoint { sketch, point } => {
             let s = r.sketches.iter().find(|s| s.feature == sketch)?;
@@ -90,7 +91,7 @@ pub fn curve_pts(r: &RecomputeResult, c: &fenkra_core::CurveRef) -> Option<Vec<[
             Some(vec![d.map(|x| -100. * x), d.map(|x| 100. * x)])
         }
         C::Ref(id) => r.curves.iter().find(|x| x.id == *id).map(|x| x.pts.clone()),
-        C::Edge(p) => Some(p.clone()),
+        C::Edge(p) | C::BodyEdge { pts: p, .. } => Some(p.clone()),
         C::SketchLine { sketch, entity } | C::SketchCurve { sketch, curve: entity } => {
             let s = r.sketches.iter().find(|s| s.feature == *sketch)?;
             s.ents.iter().find(|(i, ..)| i == entity).map(|(_, _, p)| p.iter().map(|q| q.map(|v| v as f64)).collect())
@@ -649,5 +650,56 @@ pub fn draw(painter: &egui::Painter, r: &RecomputeResult, cam: &Camera, rect: Re
                 }
             }
         }
+    }
+}
+
+/// Posição atual dos eixos que seguem o modelo (face, aresta, planos), para alças e gizmo. A conta
+/// de verdade é do recálculo; aqui basta o que a malha mostra.
+pub fn live_axis(r: &RecomputeResult, a: &fenkra_core::AxisRef) -> Option<([f64; 3], [f64; 3])> {
+    use fenkra_core::AxisRef as A;
+    let dist2 = |p: [f64; 3], q: [f64; 3]| (0..3).map(|i| (p[i] - q[i]).powi(2)).sum::<f64>();
+    match *a {
+        A::Edge { mid, .. } => {
+            let (mut best, mut at) = (f64::MAX, None);
+            for (b, x) in r.bodies.iter().enumerate() {
+                for e in 0..x.mesh.edge_mids.len() / 3 {
+                    let m = &x.mesh.edge_mids[3 * e..3 * e + 3];
+                    let d = dist2(mid, [m[0] as f64, m[1] as f64, m[2] as f64]);
+                    if d < best {
+                        (best, at) = (d, Some((b, e)));
+                    }
+                }
+            }
+            let (b, e) = at?;
+            let l = edge_polyline(r, b, e);
+            let (p, q) = (*l.first()?, *l.last()?);
+            Some((p, [q[0] - p[0], q[1] - p[1], q[2] - p[2]]))
+        }
+        A::Face { point, .. } => {
+            // a face cilíndrica mais perto do ponto; o centro da malha dela fica sobre o eixo
+            let f = r.bodies.iter().flat_map(|x| x.mesh.face_info.iter().enumerate().map(move |(j, i)| (x, j, i))).filter(|(_, _, i)| i.kind == 1 || i.kind == 2);
+            let (x, j, i) = f.min_by(|a, b| dist2(a.2.point, point).total_cmp(&dist2(b.2.point, point)))?;
+            let m = &x.mesh;
+            let s1 = m.face_ranges.get(j + 1).map(|v| *v as usize).unwrap_or(m.indices.len()).min(m.indices.len());
+            let s0 = (m.face_ranges.get(j).copied().unwrap_or(0) as usize).min(s1);
+            let n = (s1 - s0).max(1) as f64;
+            let mut c = [0.; 3];
+            for v in &m.indices[s0..s1] {
+                (0..3).for_each(|k| c[k] += m.positions[*v as usize * 3 + k] as f64 / n);
+            }
+            Some((c, i.dir))
+        }
+        A::Planes { a, b } => {
+            let f = |p: fenkra_core::PlaneRef| match p {
+                fenkra_core::PlaneRef::Origin(o) => Some(fenkra_solidos::origin_frame(o)),
+                fenkra_core::PlaneRef::Datum(id) => r.planes.iter().find(|x| x.id == Some(id)).map(|x| x.frame),
+            };
+            use fenkra_solidos::geo3d::{add, cross, dot, mul};
+            let (fa, fb) = (f(a)?, f(b)?);
+            let u = cross(fa.normal, fb.normal);
+            let uu = dot(u, u);
+            (uu > 1e-12).then(|| (mul(add(mul(cross(fb.normal, u), dot(fa.normal, fa.origin)), mul(cross(u, fa.normal), dot(fb.normal, fb.origin))), 1. / uu), u))
+        }
+        _ => None,
     }
 }

@@ -409,6 +409,25 @@ pub enum Geo {
     Surface(Shape),
 }
 
+/// O que o cálculo apurou sobre uma referência. `text` vira aviso quando `warn`.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct RefNote {
+    pub text: String,
+    pub warn: bool,
+    /// como as curvas se fecham (preenchimento)
+    pub contour: Option<geo3d::ContourReport>,
+    /// resultado da costura (juntar)
+    pub join: Option<fenkra_kernel::SewReport>,
+    /// erro de tangência medido no contorno, em graus
+    pub g1_deg: Option<f64>,
+    /// o que a extração alcançou: faces (ou arestas, no contorno) e arestas
+    pub count: Option<(u32, u32)>,
+    /// de onde sai a seta da distância: ponto sobre a superfície e a normal real ali
+    pub arrow: Option<(V3, V3)>,
+    /// ponto da curva escolhida pelo número: vira a âncora espacial dela
+    pub anchor: Option<V3>,
+}
+
 /// Superfície de referência exibível (malha).
 pub struct SurfaceViz {
     pub id: Id,
@@ -451,6 +470,8 @@ pub enum Promoted {
 }
 
 pub struct RecomputeResult {
+    /// o que o cálculo apurou sobre cada referência, além do status
+    pub notes: HashMap<Id, RefNote>,
     pub bodies: Vec<BodyResult>,
     /// comando → chaves v2 promovidas neste cálculo (pontos antigos que resolveram)
     pub promoted: HashMap<Id, Promoted>,
@@ -505,6 +526,8 @@ struct Ctx<'a> {
     tools: HashMap<Id, (Shape, BoolOp)>,
     /// geometria de referência já avaliada neste cálculo (cadeias de referências não recalculam)
     memo: RefCell<HashMap<Id, Geo>>,
+    /// o que cada referência tem a dizer além do resultado
+    notes: RefCell<HashMap<Id, RefNote>>,
     /// assinatura do último passo que mudou o corpo de cada coletor (cache de malha)
     body_sig: HashMap<Id, u64>,
     /// medidas da última aba de chapa (para os alívios)
@@ -637,6 +660,8 @@ pub struct Cache {
     fills: HashMap<(Id, u64), Vec<[f32; 3]>>,
     /// geometria de referência já avaliada: (assinatura, resultado) — só refaz o que mudou
     refs: HashMap<Id, (u64, Result<RefViz, String>)>,
+    /// notas das referências guardadas em `refs`
+    notes: HashMap<Id, RefNote>,
     /// quantos comandos foram reaproveitados no último cálculo (diagnóstico)
     pub reused: usize,
     /// qualidade pedida para as malhas; trocar re-tessela sem refazer nenhum comando
@@ -705,7 +730,7 @@ fn ref_reads_bodies(doc: &Document, id: Id, depth: u32) -> bool {
         return true;
     }
     let js = serde_json::to_string(&r.kind).unwrap_or_default();
-    if ["\"Face\"", "SurfExtract", "SurfMulti", "LineAxis", "\"Plane\""].iter().any(|k| js.contains(k)) {
+    if ["\"Face\"", "SurfExtract", "SurfMulti", "LineAxis", "\"Plane\"", "FacePlane", "\"Edge\"", "BodyEdge", "\"Vertex\""].iter().any(|k| js.contains(k)) {
         return true;
     }
     let mut ids = vec![];
@@ -837,7 +862,119 @@ impl Ctx<'_> {
                 Ok((c.start(), geo3d::unit(d).ok_or("eixo de comprimento zero")?))
             }
             AxisRef::Fixed { origin, dir } => Ok((origin, geo3d::unit(dir).ok_or("eixo de comprimento zero")?)),
+            AxisRef::Face { point, key } => self.face_axis(point, key.as_ref()).map(|(o, v, _)| (o, v)),
+            AxisRef::Edge { mid, key } => {
+                let c = Curve3::poly(self.live_edge(mid, key.as_ref())?, false)?;
+                if !c.is_straight() {
+                    return Err("a aresta do eixo não é reta".into());
+                }
+                Ok((c.start(), geo3d::unit(geo3d::sub(c.end(), c.start())).ok_or("eixo de comprimento zero")?))
+            }
+            AxisRef::Planes { a, b } => {
+                use geo3d::*;
+                let (fa, fb) = (self.plane(&a, depth + 1)?, self.plane(&b, depth + 1)?);
+                let u = cross(fa.normal, fb.normal);
+                let uu = dot(u, u);
+                if uu < 1e-12 {
+                    return Err("os planos são paralelos".into());
+                }
+                let (da, db) = (dot(fa.normal, fa.origin), dot(fb.normal, fb.origin));
+                Ok((mul(add(mul(cross(fb.normal, u), da), mul(cross(u, fa.normal), db)), 1. / uu), geo3d::unit(u).unwrap()))
+            }
         }
+    }
+
+    /// Ponto da face viva: pela chave (dono + papel), ou pelo ponto, que tem de estar sobre a face.
+    fn live_face(&self, p: V3, key: Option<&FaceKey>) -> Result<V3, String> {
+        let Some(k) = key else {
+            let on = self.bodies.values().any(|(b, _, _)| b.surface_near(p).is_ok_and(|(q, _)| geo3d::dist(q, p) < 1e-3));
+            return if on { Ok(p) } else { Err("a face não existe mais no modelo — reedite".into()) };
+        };
+        let mut lost = refs::Lost::None;
+        for (b, owners, roles) in self.bodies.values() {
+            let topo = b.topology().map_err(|e| e.0)?;
+            match refs::find_face(&refs::View { topo: &topo, owners, roles }, k, Some(p)) {
+                Ok(j) => return Ok(topo.faces[j].point),
+                Err(refs::Lost::None) => {}
+                Err(l) => lost = l,
+            }
+        }
+        let who = format!("a face de '{}' ({})", self.doc.name_of(k.owner), refs::role_name(k.role));
+        Err(match lost {
+            refs::Lost::Ambiguous(n) => format!("referência perdida: {who} tem {n} candidatas; escolha de novo"),
+            refs::Lost::None => format!("referência perdida: {who} não existe mais; escolha de novo"),
+        })
+    }
+
+    /// Polilinha atual da aresta: pela chave, ou pelo ponto médio.
+    fn live_edge(&self, mid: V3, key: Option<&EdgeKey>) -> Result<Vec<V3>, String> {
+        let mut lost = refs::Lost::None;
+        for (b, owners, roles) in self.bodies.values() {
+            let topo = b.topology().map_err(|e| e.0)?;
+            let v = refs::View { topo: &topo, owners, roles };
+            let found = match key {
+                Some(k) => refs::find_edge(&v, k, Some(mid)),
+                None => refs::edge_near(&v, mid, 0.1).ok_or(refs::Lost::None),
+            };
+            match found {
+                Ok(e) => return b.edge_at(topo.edge_mids[e]).map_err(|e| e.0),
+                Err(refs::Lost::None) => {}
+                Err(l) => lost = l,
+            }
+        }
+        Err(match lost {
+            refs::Lost::Ambiguous(n) => format!("referência perdida: a aresta tem {n} candidatas; escolha de novo"),
+            refs::Lost::None => match key {
+                Some(k) => format!("referência perdida: a aresta entre '{}' ({}) e '{}' ({}) não existe mais; escolha de novo", self.doc.name_of(k.a.owner), refs::role_name(k.a.role), self.doc.name_of(k.b.owner), refs::role_name(k.b.role)),
+                None => "referência perdida: a aresta não existe mais; escolha de novo".into(),
+            },
+        })
+    }
+
+    /// Eixo da face em `p`: origem, direção e altura.
+    fn face_axis(&self, p: V3, key: Option<&FaceKey>) -> Result<(V3, V3, f64), String> {
+        use geo3d::*;
+        let q = self.live_face(p, key)?;
+        for (b, _, _) in self.bodies.values() {
+            if let Ok(cy) = b.cylinder_at(q) {
+                return Ok((add(cy.origin, mul(cy.dir, cy.h0)), cy.dir, (cy.h1 - cy.h0).max(1.)));
+            }
+            if let Ok(fp) = b.face_props(q) {
+                if fp.kind == 2 {
+                    return Ok((fp.origin, fp.dir, 2. * fp.radius.max(5.)));
+                }
+            }
+        }
+        Err("a face escolhida não é cilíndrica nem cônica".into())
+    }
+
+    /// Origem do plano de face. O plano segue a face; a face que sumiu vira erro. Sem chave vale
+    /// qualquer face do dono no mesmo plano: a face pode ter sido dividida ou coberta no ponto
+    /// clicado por um comando depois do sketch, e isso não a faz sumir.
+    fn face_plane_origin(&self, origin: V3, n: V3, owner: Option<Id>, key: Option<&FaceKey>) -> Result<V3, String> {
+        use geo3d::*;
+        let Some(who) = owner.or(key.map(|k| k.owner)) else { return Ok(origin) };
+        for (b, owners, roles) in self.bodies.values() {
+            let topo = b.topology().map_err(|e| e.0)?;
+            for (j, f) in topo.faces.iter().enumerate() {
+                let same = match key {
+                    Some(k) => owners.get(j) == Some(&k.owner) && roles.get(j) == Some(&k.role),
+                    None => owners.get(j) == Some(&who),
+                };
+                if !same {
+                    continue;
+                }
+                if f.kind == 0 {
+                    let h = dot(sub(f.point, origin), n);
+                    if dot(f.dir, n).abs() > 0.99 && (key.is_some() || h.abs() < 1e-3) {
+                        return Ok(add(origin, mul(n, h)));
+                    }
+                } else if key.is_some() || b.surface_near(origin).is_ok_and(|(q, _)| dist(q, origin) < 1e-3) {
+                    return Ok(origin);
+                }
+            }
+        }
+        Err(format!("referência perdida: o plano ficava numa face de '{}' que não existe mais; escolha outra face", self.doc.name_of(who)))
     }
 
     fn point(&self, p: &PointRef, depth: u32) -> Result<V3, String> {
@@ -852,6 +989,11 @@ impl Ctx<'_> {
                 let (fr, es) = &self.sketch(sketch)?;
                 let q = es.pts.get(&point).ok_or("o ponto do sketch não existe mais — reedite")?;
                 Ok(fr.point(q[0], q[1]))
+            }
+            PointRef::Vertex { point, edge } => {
+                let c = self.live_edge(point, Some(&edge))?;
+                let (a, b) = (c[0], *c.last().unwrap());
+                Ok(if geo3d::dist(a, point) <= geo3d::dist(b, point) { a } else { b })
             }
             PointRef::CurveVertex { curve, index } => {
                 if depth > 32 {
@@ -888,6 +1030,11 @@ impl Ctx<'_> {
                 let closed = pts.len() > 2 && geo3d::dist(pts[0], *pts.last().unwrap()) < 1e-6;
                 Curve3::poly(pts.clone(), closed)
             }
+            CurveRef::BodyEdge { pts, key } => {
+                let p = self.live_edge(pts[pts.len() / 2], Some(key))?;
+                let closed = p.len() > 2 && geo3d::dist(p[0], *p.last().unwrap()) < 1e-6;
+                Curve3::poly(p, closed)
+            }
             CurveRef::SketchLine { sketch, entity } => {
                 let (af, ask) = &self.sketch(*sketch)?;
                 let (a, b) = ask.lines.get(entity).ok_or("a linha do sketch não existe mais — reedite")?;
@@ -923,6 +1070,7 @@ impl Ctx<'_> {
                 let f = self.plane(pr, depth)?;
                 (f.origin, f.normal)
             }
+            SurfRef::Face { key: Some(_), .. } => return self.surface_shape(sf, depth)?.surface_near(p).map_err(|e| e.0),
             SurfRef::Face { point, normal, .. } => (*point, geo3d::unit(*normal).ok_or("normal da face nula")?),
             SurfRef::Ref(id) => return self.surface(*id, depth)?.surface_near(p).map_err(|e| e.0),
         };
@@ -940,7 +1088,7 @@ impl Ctx<'_> {
     fn surface_shape(&self, sf: &SurfRef, depth: u32) -> Result<Shape, String> {
         match sf {
             SurfRef::Ref(id) => self.surface(*id, depth),
-            SurfRef::Face { point, .. } => self.face_of_bodies(*point),
+            SurfRef::Face { point, key, .. } => self.face_of_bodies(self.live_face(*point, key.as_ref())?),
             SurfRef::Plane(_) => Err("use 'Plano deslocado' para deslocar um plano".into()),
         }
     }
@@ -1038,6 +1186,173 @@ impl Ctx<'_> {
         Shape::loft_surface(&sections, cont == Continuity::G0, false, None).map_err(|x| x.0)
     }
 
+    /// Prolonga a borda em `p` com uma faixa regrada na normal à borda, no plano tangente da superfície.
+    fn extend_normal(&self, sh: &Shape, p: V3, len: f64) -> Result<Shape, String> {
+        use geo3d::*;
+        if len <= 0. {
+            return Err("na normal à borda o comprimento precisa ser positivo".into());
+        }
+        let b = Curve3::poly(sh.edge_at(p).map_err(|x| x.0)?, false)?;
+        let inner = sh.mass().center;
+        let out: Vec<V3> = (0..b.pts.len())
+            .map(|i| {
+                let (q, t) = (b.pts[i], b.at_dist(b.nearest(b.pts[i]).0).1);
+                let (_, n) = sh.surface_near(q).map_err(|x| x.0)?;
+                let mut w = unit(cross(n, t)).ok_or("borda tangente à normal")?;
+                if dot(w, sub(q, inner)) < 0. {
+                    w = mul(w, -1.);
+                }
+                Ok(add(q, mul(w, len)))
+            })
+            .collect::<Result<_, String>>()?;
+        let strip = Shape::loft_surface(&[b.pts.clone(), out], true, false, None).map_err(|x| x.0)?;
+        sh.compound(&strip).sewn(1e-3).map_err(|x| x.0)
+    }
+
+    /// Curva entre as soluções: a mais perto da âncora ou a do número. O número fora da lista é erro,
+    /// nunca "a última". Quem foi pelo número deixa o ponto da curva para virar âncora: a ordem das
+    /// soluções é do kernel e muda quando o modelo muda.
+    fn pick_curve(&self, id: Id, mut cs: Vec<Vec<V3>>, which: usize, near: Option<V3>) -> Result<Vec<V3>, String> {
+        let n = cs.len();
+        if let Some(p) = near {
+            let gap = |c: &Vec<V3>| Curve3::poly(c.clone(), false).map_or(f64::MAX, |k| geo3d::dist(k.nearest(p).1, p));
+            let i = (0..n).min_by(|a, b| gap(&cs[*a]).total_cmp(&gap(&cs[*b]))).ok_or("sem soluções")?;
+            return Ok(cs.swap_remove(i));
+        }
+        if which >= n {
+            return Err(format!("a solução {which} não existe: há {n} (de 0 a {})", n - 1));
+        }
+        let c = cs.swap_remove(which);
+        if n > 1 {
+            self.notes.borrow_mut().entry(id).or_default().anchor = Some(c[c.len() / 2]);
+        }
+        Ok(c)
+    }
+
+    /// Extração refeita a partir do ponto clicado, com a propagação gravada.
+    fn extract_faces(&self, p: V3, prop: Propagation, complement: bool) -> Result<(Shape, u32, u32), String> {
+        let code = match prop {
+            Propagation::Nenhuma => 0,
+            Propagation::Ponto => 1,
+            Propagation::Tangente => 2,
+            Propagation::Completo => 3,
+        };
+        for (b, _, _) in self.bodies.values() {
+            if b.surface_near(p).is_ok_and(|(q, _)| geo3d::dist(q, p) < 1e-3) {
+                return b.face_propagate(p, code, complement).map_err(|e| e.0);
+            }
+        }
+        Err("a face não existe mais no modelo — reedite".into())
+    }
+
+    /// Contorno a partir da aresta mais perto do ponto: nenhuma = só ela; ponto = o laço dela;
+    /// tangente = o trecho sem canto vivo; completo = a borda inteira, que precisa ser um laço só.
+    fn boundary_from(&self, sh: &Shape, p: V3, prop: Propagation) -> Result<(Curve3, u32), String> {
+        const TOL: f64 = 1e-3;
+        let es = sh.free_edges().map_err(|x| x.0)?;
+        let cs: Vec<Curve3> = es.into_iter().map(|e| Curve3::poly(e, false)).collect::<Result<_, _>>()?;
+        let gap = |c: &Curve3| geo3d::dist(c.nearest(p).1, p);
+        let start = (0..cs.len()).min_by(|a, b| gap(&cs[*a]).total_cmp(&gap(&cs[*b]))).ok_or("sem bordas")?;
+        let set = match prop {
+            Propagation::Nenhuma => vec![start],
+            Propagation::Ponto => geo3d::chain_indices(&cs, start, TOL),
+            Propagation::Tangente => geo3d::tangent_chain(&cs, start, TOL),
+            Propagation::Completo => {
+                let laco = geo3d::chain_indices(&cs, start, TOL);
+                if laco.len() != cs.len() {
+                    return Err(format!("a borda tem {} arestas fora do laço clicado: uma curva só não cobre a borda inteira, use 'ponto'", cs.len() - laco.len()));
+                }
+                laco
+            }
+        };
+        let n = set.len() as u32;
+        Ok((join_curves(set.into_iter().map(|i| cs[i].clone()).collect())?, n))
+    }
+
+    /// Guarda o que a extração alcançou; se mudou desde que foi feita, vira aviso.
+    fn count_note(&self, id: Id, n: u32, edges: u32, expected: Option<u32>, what: &str) {
+        let mut note = RefNote { count: Some((n, edges)), ..Default::default() };
+        if let Some(e) = expected.filter(|e| *e != n) {
+            note.warn = true;
+            note.text = format!("a extração tinha {e} {what} e agora tem {n}: confira a propagação");
+        }
+        self.notes.borrow_mut().insert(id, note);
+    }
+
+    /// Preenchimento: confere o contorno, fecha as folgas dentro da tolerância e monta as condições.
+    fn fill(&self, me: Id, curves: &[CurveRef], conds: &[FillCond], points: &[PointRef], tol: f64, d: u32, e: &dyn Fn(&String, &str) -> Result<f64, String>) -> Result<Shape, String> {
+        let mut cs: Vec<Curve3> = curves.iter().map(|c| self.curve(c, d)).collect::<Result<_, _>>()?;
+        let rep = geo3d::contour_report(&cs, tol);
+        self.notes.borrow_mut().insert(me, RefNote { contour: Some(rep.clone()), ..Default::default() });
+        if !rep.open_ends.is_empty() {
+            return Err(format!("contorno aberto: {} ponta(s) solta(s), maior folga {:.3} mm (tolerância {:.3} mm)", rep.open_ends.len(), rep.max_gap, tol));
+        }
+        if rep.loops > 1 {
+            return Err(format!("as curvas formam {} contornos separados: o preenchimento fecha um só", rep.loops));
+        }
+        geo3d::snap_contour(&mut cs, &rep);
+        let (mut orders, mut weights, mut support) = (vec![], vec![], Shape::empty());
+        for (i, c) in cs.iter().enumerate() {
+            let cond = conds.get(i).cloned().unwrap_or_default();
+            let order = match cond.cont {
+                Continuity::G0 => 0,
+                Continuity::G1 => 1,
+                Continuity::G2 | Continuity::G3 => 2,
+            };
+            let w = e(&cond.weight, "peso")?;
+            if w < 1. {
+                return Err(format!("o peso da curva {} precisa ser 1 ou mais", i + 1));
+            }
+            orders.push(order);
+            weights.push(w);
+            if order > 0 {
+                let s = match &cond.support {
+                    Some(s) => self.cut_shape(s, d)?,
+                    None => self.fill_support(me, c, i, d)?,
+                };
+                support = if support.is_null() { s } else { support.compound(&s) };
+            }
+        }
+        let pts: Vec<Vec<V3>> = cs.into_iter().map(|c| c.pts).collect();
+        let (sh, _, g1) = Shape::fill_surface_x(&pts, &orders, &weights, &support, &self.points(points, d)?).map_err(|x| x.0)?;
+        if orders.iter().any(|o| *o > 0) {
+            let deg = g1.to_degrees();
+            let mut n = self.notes.borrow_mut();
+            let note = n.entry(me).or_default();
+            note.g1_deg = Some(deg);
+            if deg > 0.5 {
+                note.warn = true;
+                note.text = format!("tangência no contorno com erro de {deg:.2} graus (limite 0,5)");
+            }
+        }
+        Ok(sh)
+    }
+
+    /// Face vizinha de uma curva sem apoio escolhido: a superfície de referência em que ela está. Se
+    /// houver mais de uma, quem decide é a pessoa.
+    fn fill_support(&self, me: Id, c: &Curve3, i: usize, d: u32) -> Result<Shape, String> {
+        let deps = self.doc.dependents(me);
+        let on = |sh: &Shape| {
+            [0., 0.5, 1.].iter().all(|t| {
+                let p = c.at_ratio(*t).0;
+                sh.surface_near(p).is_ok_and(|(q, _)| geo3d::dist(p, q) < 0.15)
+            })
+        };
+        let mut found: Vec<Shape> = self
+            .doc
+            .references
+            .iter()
+            .filter(|r| r.id != me && !deps.contains(&r.id) && r.kind.class() == RefClass::Surface)
+            .filter_map(|r| self.surface(r.id, d).ok())
+            .filter(on)
+            .collect();
+        match found.len() {
+            0 => Err(format!("a curva {} pede uma face de apoio: escolha a face vizinha", i + 1)),
+            1 => Ok(found.remove(0)),
+            n => Err(format!("a curva {} encosta em {n} superfícies: escolha a face de apoio", i + 1)),
+        }
+    }
+
     /// Cópia da face de algum corpo que passa pelo ponto.
     fn face_of_bodies(&self, p: V3) -> Result<Shape, String> {
         for (b, _, _) in self.bodies.values() {
@@ -1053,7 +1368,11 @@ impl Ctx<'_> {
     fn surf_frame(&self, sf: &SurfRef, depth: u32) -> Result<Frame, String> {
         match sf {
             SurfRef::Plane(pr) => self.plane(pr, depth),
-            SurfRef::Face { point, normal, .. } => geo3d::frame_from(*point, *normal, None),
+            SurfRef::Face { point, normal, key: None, .. } => geo3d::frame_from(*point, *normal, None),
+            SurfRef::Face { point, key: Some(_), .. } => {
+                let (q, n) = self.surface_shape(sf, depth)?.surface_near(*point).map_err(|e| e.0)?;
+                geo3d::frame_from(q, n, None)
+            }
             SurfRef::Ref(id) => {
                 let sh = self.surface(*id, depth)?;
                 let (q, n) = sh.surface_near(sh.mass().center).map_err(|e| e.0)?;
@@ -1105,7 +1424,7 @@ impl Ctx<'_> {
         };
         Ok(match &r.kind {
             OffsetPlane { base, offset } => Geo::Plane(self.plane(base, d)?.offset(e(offset, "deslocamento")?)),
-            FacePlane { origin, x, normal, .. } => Geo::Plane(Frame { origin: *origin, x: *x, normal: *normal }),
+            FacePlane { origin, x, normal, owner, key } => Geo::Plane(Frame { origin: self.face_plane_origin(*origin, *normal, *owner, key.as_ref())?, x: *x, normal: *normal }),
             AnglePlane { base, axis, angle } => {
                 let b = self.plane(base, d)?;
                 let (o, dd) = self.axis_d(axis, d)?;
@@ -1151,9 +1470,20 @@ impl Ctx<'_> {
                 Geo::Plane(frame_from(o, n, Some(dd))?)
             }
             PlaneCurve { curve } => Geo::Plane(self.curve(curve, d)?.plane()?),
-            PlaneNormalCurve { curve, at, reverse } => {
+            PlaneNormalCurve { curve, at, reverse, point, project } => {
                 let c = self.curve(curve, d)?;
-                let (p, t) = self.on_curve(&c, at, *reverse, &r.name)?;
+                let (p, t) = match point {
+                    Some(q) => {
+                        let q = self.point(q, d)?;
+                        let (s0, foot) = c.nearest(q);
+                        let off = dist(q, foot);
+                        if !*project && off > 1e-3 {
+                            return Err(format!("o ponto está a {off:.3} mm da curva: use 'projetado' ou escolha um ponto dela"));
+                        }
+                        (foot, c.at_dist(s0).1)
+                    }
+                    None => self.on_curve(&c, at, *reverse, &r.name)?,
+                };
                 Geo::Plane(frame_from(p, t, None)?)
             }
             PlaneTangentSurface { surface, point } => {
@@ -1348,6 +1678,16 @@ impl Ctx<'_> {
                 }
                 return Err("a face escolhida não é cilíndrica nem cônica".into());
             }
+            AxisLine { axis, length } => {
+                let (o, v) = self.axis_d(axis, d)?;
+                let natural = match axis {
+                    AxisRef::Face { point, key } => self.face_axis(*point, key.as_ref())?.2,
+                    AxisRef::Edge { mid, key } => Curve3::poly(self.live_edge(*mid, key.as_ref())?, false)?.length(),
+                    _ => 100.,
+                };
+                let l = if length.trim().is_empty() { natural } else { e(length, "comprimento")? };
+                Geo::Curve(Curve3::line(o, add(o, mul(v, l)))?)
+            }
             PlanePointNormal { point, line } => {
                 let c = self.curve(line, d)?;
                 let p = self.point(point, d)?;
@@ -1374,7 +1714,11 @@ impl Ctx<'_> {
                 let cs: Vec<Curve3> = curves.iter().map(|c| self.curve(c, d)).collect::<Result<_, _>>()?;
                 Geo::Curve(join_curves(cs)?)
             }
-            SurfExtract { face, .. } => Geo::Surface(self.face_of_bodies(*face)?),
+            SurfExtract { face, prop, complement, expected, key, .. } => {
+                let (sh, nf, ne) = self.extract_faces(self.live_face(*face, key.as_ref())?, *prop, *complement)?;
+                self.count_note(id, nf, ne, *expected, "faces");
+                Geo::Surface(sh)
+            }
             SurfOffset { surface, dist: dd, both, join } => {
                 let sh = self.surface_shape(surface, d)?;
                 let j = match join {
@@ -1383,6 +1727,10 @@ impl Ctx<'_> {
                     OffsetJoin::Plano => 2,
                 };
                 let v = e(dd, "distância")?;
+                // o kernel desloca pela normal orientada da face, e é essa normal que a seta mostra
+                let from = if let SurfRef::Face { point, .. } = surface { *point } else { sh.mass().center };
+                let arrow = sh.surface_near(from).map_err(|x| x.0)?;
+                self.notes.borrow_mut().insert(id, RefNote { arrow: Some(arrow), ..Default::default() });
                 let one = sh.offset_surface_join(v, j).map_err(|x| x.0)?;
                 if *both {
                     Geo::Surface(one.compound(&sh.offset_surface_join(-v, j).map_err(|x| x.0)?))
@@ -1417,25 +1765,57 @@ impl Ctx<'_> {
                     return Err("clique nas arestas da superfície (entre faces juntadas) e use 'Usar seleção'".into());
                 }
                 let sh = self.cut_shape(surface, d)?;
-                Geo::Surface(edge_fillet(&sh, edges, e(radius, "raio")?, radius2.as_ref().map(|r| e(r, "raio final")).transpose()?)?)
+                // superfície de referência não tem dono por face: a aresta tem de estar onde foi
+                // clicada, e o ponto exato dela é o que vai ao kernel, que aceitaria a vizinha
+                let topo = sh.topology().map_err(|x| x.0)?;
+                let mut mids = vec![];
+                for p in edges {
+                    let q = topo.edge_mids.iter().min_by(|a, b| dist(**a, *p).total_cmp(&dist(**b, *p))).filter(|q| dist(**q, *p) < 0.1);
+                    mids.push(*q.ok_or_else(|| format!("referência perdida: a aresta em ({:.2}, {:.2}, {:.2}) não existe mais; escolha de novo", p[0], p[1], p[2]))?);
+                }
+                Geo::Surface(edge_fillet(&sh, &mids, e(radius, "raio")?, radius2.as_ref().map(|r| e(r, "raio final")).transpose()?)?)
             }
-            SurfFill { curves } => {
-                let cs: Vec<Vec<V3>> = curves.iter().map(|c| self.curve(c, d).map(|c| c.pts)).collect::<Result<_, _>>()?;
-                Geo::Surface(Shape::fill_surface(&cs).map_err(|x| x.0)?)
-            }
-            SurfExtrude { curve, dir, length, length2 } => {
+            SurfFill { curves, conds, points, tol } => Geo::Surface(self.fill(id, curves, conds, points, e(tol, "tolerância")?, d, &|s: &String, w: &str| e(s, w))?),
+            SurfExtrude { curve, dir, length, length2, until, until2 } => {
                 let c = self.curve(curve, d)?;
                 let (_, v) = self.axis_d(dir, d)?;
                 let v = unit(v).ok_or("direção nula")?;
                 let (l1, l2) = (e(length, "comprimento")?, e(length2, "comprimento 2")?);
-                // limite 2: a curva recua para o outro lado antes de extrudar
-                let pts: Vec<V3> = c.pts.iter().map(|p| sub(*p, mul(v, l2))).collect();
-                Geo::Surface(Shape::extrude_curve(&pts, v, l1 + l2).map_err(|x| x.0)?)
+                if until.is_none() && until2.is_none() {
+                    // limite 2: a curva recua para o outro lado antes de extrudar
+                    let pts: Vec<V3> = c.pts.iter().map(|p| sub(*p, mul(v, l2))).collect();
+                    Geo::Surface(Shape::extrude_curve(&pts, v, l1 + l2).map_err(|x| x.0)?)
+                } else {
+                    // cada lado sai da curva: até o elemento, ou pelo comprimento
+                    let side = |dir: V3, len: f64, to: &Option<SurfRef>| -> Result<Option<Shape>, String> {
+                        match to {
+                            Some(t) => {
+                                let long = Shape::extrude_curve(&c.pts, dir, self.model_size()).map_err(|x| x.0)?;
+                                Ok(Some(long.clip_surface(&self.cut_shape(t, d)?, c.pts[c.pts.len() / 2], true).map_err(|x| x.0)?))
+                            }
+                            None if len.abs() < 1e-9 => Ok(None),
+                            None => Ok(Some(Shape::extrude_curve(&c.pts, dir, len).map_err(|x| x.0)?)),
+                        }
+                    };
+                    let (a, b) = (side(v, l1, until)?, side(mul(v, -1.), l2, until2)?);
+                    Geo::Surface(match (a, b) {
+                        (Some(a), Some(b)) => a.compound(&b).sewn(1e-3).map_err(|x| x.0)?,
+                        (Some(x), None) | (None, Some(x)) => x,
+                        (None, None) => return Err("os dois limites são zero".into()),
+                    })
+                }
             }
-            SurfRevolve { curve, axis, angle } => {
+            SurfRevolve { curve, axis, angle, angle2 } => {
                 let c = self.curve(curve, d)?;
                 let (o, v) = self.axis_d(axis, d)?;
-                Geo::Surface(Shape::revolve_curve(&c.pts, o, v, e(angle, "ângulo")?).map_err(|x| x.0)?)
+                let (a1, a2) = (e(angle, "ângulo")?, e(angle2, "ângulo 2")?);
+                if (a1 + a2).abs() > 360. + 1e-9 {
+                    return Err("os dois ângulos somam mais de uma volta".into());
+                }
+                // ângulo 2: a curva gira para trás antes de revolver
+                let k = unit(v).ok_or("eixo nulo")?;
+                let pts: Vec<V3> = c.pts.iter().map(|p| add(o, geo3d::rotate(sub(*p, o), k, -a2.to_radians()))).collect();
+                Geo::Surface(Shape::revolve_curve(&pts, o, v, a1 + a2).map_err(|x| x.0)?)
             }
             SurfSphere { center, radius } => Geo::Surface(Shape::sphere_surface(self.point(center, d)?, e(radius, "raio")?).map_err(|x| x.0)?),
             SurfCylinder { point, dir, radius, start, end } => {
@@ -1476,19 +1856,33 @@ impl Ctx<'_> {
                 Geo::Surface(Shape::loft_surface(&cs, *ruled, *closed, g.as_deref()).map_err(|x| x.0)?)
             }
             SurfBlend { a, sa, b, sb, cont, tension } => Geo::Surface(self.blend(a, sa.as_ref(), b, sb.as_ref(), *cont, e(tension, "tensão")?, d)?),
-            SurfJoin { items, tol } => {
+            SurfJoin { items, tol, curves } => {
+                let t = e(tol, "tolerância")?;
                 let mut acc = Shape::empty();
                 for it in items {
                     let x = self.cut_shape(it, d)?;
                     acc = if acc.is_null() { x } else { acc.compound(&x) };
                 }
+                if !acc.is_null() {
+                    acc = acc.sewn(t).map_err(|x| x.0)?;
+                }
+                // as curvas entram encadeadas: cada cadeia vira um fio ao lado das faces
+                let mut rest: Vec<Curve3> = curves.iter().map(|c| self.curve(c, d)).collect::<Result<_, _>>()?;
+                while !rest.is_empty() {
+                    let group = chain_indices(&rest, 0, t.max(1e-3));
+                    let cs: Vec<Curve3> = group.iter().rev().map(|i| rest.remove(*i)).rev().collect();
+                    let w = Shape::curve_shape(&join_curves(cs)?.pts).map_err(|x| x.0)?;
+                    acc = if acc.is_null() { w } else { acc.compound(&w) };
+                }
                 if acc.is_null() {
                     return Err("escolha as superfícies a juntar".into());
                 }
-                Geo::Surface(acc.sewn(e(tol, "tolerância")?).map_err(|x| x.0)?)
+                let rep = acc.sew_report().map_err(|x| x.0)?;
+                self.notes.borrow_mut().insert(id, RefNote { join: Some(rep), ..Default::default() });
+                Geo::Surface(acc)
             }
             SurfHeal { surface, tol } => Geo::Surface(self.cut_shape(surface, d)?.healed(e(tol, "tolerância")?).map_err(|x| x.0)?),
-            SurfSplit { surface, tool, flip, more, curve } => {
+            SurfSplit { surface, tool, flip, more, curve, more_flip } => {
                 let mut sh = self.cut_shape(surface, d)?;
                 let mut cut_any = false;
                 if let Some(c) = curve {
@@ -1502,16 +1896,21 @@ impl Ctx<'_> {
                     sh = sh.split_side(&cutter, !*flip, false).map_err(|x| x.0)?;
                     cut_any = true;
                 }
-                for t in std::iter::once(tool).chain(more.iter()) {
-                    match self.cut_shape(t, d).and_then(|x| sh.split_side(&x, !*flip, false).map_err(|x| x.0)) {
+                let mut missed = vec![];
+                for (i, t) in std::iter::once(tool).chain(more.iter()).enumerate() {
+                    let side = if i == 0 { *flip } else { more_flip.get(i - 1).copied().unwrap_or(*flip) };
+                    match self.cut_shape(t, d).and_then(|x| sh.split_side(&x, !side, false).map_err(|x| x.0)) {
                         Ok(x) => {
                             sh = x;
                             cut_any = true;
                         }
-                        // com a curva (ou outro corte) já feito, um plano que não cruza só é ignorado
-                        Err(_) if cut_any => {}
+                        // com outro corte já feito o resultado existe, mas quem não cortou é dito
+                        Err(_) if cut_any => missed.push((i + 1).to_string()),
                         Err(e) => return Err(e),
                     }
+                }
+                if !missed.is_empty() {
+                    self.notes.borrow_mut().insert(id, RefNote { warn: true, text: format!("o elemento de corte {} não cruza a superfície e não cortou nada", missed.join(", ")), ..Default::default() });
                 }
                 Geo::Surface(sh)
             }
@@ -1521,10 +1920,10 @@ impl Ctx<'_> {
                 let pb = sb.split_side(&sa, !*flip_b, false).map_err(|x| x.0)?;
                 Geo::Surface(pa.compound(&pb).sewn(1e-3).map_err(|x| x.0)?)
             }
-            SurfMulti { faces } => {
+            SurfMulti { faces, keys } => {
                 let mut acc = Shape::empty();
-                for p in faces {
-                    let x = self.face_of_bodies(*p)?;
+                for (i, p) in faces.iter().enumerate() {
+                    let x = self.face_of_bodies(self.live_face(*p, keys.get(i).and_then(|k| k.as_ref()))?)?;
                     acc = if acc.is_null() { x } else { acc.compound(&x) };
                 }
                 if acc.is_null() {
@@ -1534,11 +1933,40 @@ impl Ctx<'_> {
             }
             SurfPart { surface, index } => Geo::Surface(self.cut_shape(surface, d)?.nth_face(*index as u32).map_err(|x| x.0)?),
             SurfUntrim { surface } => Geo::Surface(self.cut_shape(surface, d)?.untrimmed().map_err(|x| x.0)?),
-            SurfExtrapolate { surface, near, length, curvature, more } => {
+            SurfExtrapolate { surface, near, length, curvature, more, edges, until, normal_edge, tangent_prop } => {
                 let mut sh = self.cut_shape(surface, d)?;
                 let len = e(length, "comprimento")?;
-                for p in std::iter::once(near).chain(more.iter()) {
-                    sh = sh.extrapolated(self.point(p, d)?, len, *curvature).map_err(|x| x.0)?;
+                let mut at: Vec<V3> = vec![];
+                if edges.is_empty() {
+                    for p in std::iter::once(near).chain(more.iter()) {
+                        at.push(self.point(p, d)?);
+                    }
+                } else {
+                    let free: Vec<Curve3> = sh.free_edges().map_err(|x| x.0)?.into_iter().map(|p| Curve3::poly(p, false)).collect::<Result<_, _>>()?;
+                    for c in edges {
+                        let mid = self.curve(c, d)?.at_ratio(0.5).0;
+                        let gap = |c: &Curve3| dist(c.nearest(mid).1, mid);
+                        let i = (0..free.len()).min_by(|a, b| gap(&free[*a]).total_cmp(&gap(&free[*b]))).ok_or("a superfície não tem bordas livres")?;
+                        if gap(&free[i]) > 0.15 {
+                            return Err("a curva escolhida não é borda da superfície".into());
+                        }
+                        let set = if *tangent_prop { tangent_chain(&free, i, 1e-3) } else { vec![i] };
+                        for j in set {
+                            let m = free[j].at_ratio(0.5).0;
+                            if !at.iter().any(|q| dist(*q, m) < 1e-6) {
+                                at.push(m);
+                            }
+                        }
+                    }
+                }
+                // a parte original fica como âncora do lado que continua depois do corte
+                let keep = sh.mass().center;
+                let reach = if until.is_some() { self.model_size() } else { len };
+                for p in at {
+                    sh = if *normal_edge { self.extend_normal(&sh, p, reach)? } else { sh.extrapolated(p, reach, *curvature).map_err(|x| x.0)? };
+                }
+                if let Some(t) = until {
+                    sh = sh.clip_surface(&self.cut_shape(t, d)?, keep, true).map_err(|x| x.0)?;
                 }
                 Geo::Surface(sh)
             }
@@ -1551,9 +1979,12 @@ impl Ctx<'_> {
                     Geo::Surface(sh) => Geo::Surface(sh.transformed(x).map_err(|x| x.0)?),
                 }
             }
-            CurveIntersect { a, b, which } => {
+            CurveIntersect { a, b, which, near } => {
                 let cs = self.cut_shape(a, d)?.section(&self.cut_shape(b, d)?).map_err(|x| x.0)?;
-                let c = cs.get(*which).or(cs.last()).ok_or("os elementos não se cruzam")?.clone();
+                if cs.is_empty() {
+                    return Err("os elementos não se cruzam".into());
+                }
+                let c = self.pick_curve(id, cs, *which, *near)?;
                 let closed = c.len() > 2 && dist(c[0], c[c.len() - 1]) < 1e-4;
                 Geo::Curve(Curve3::poly(c, closed)?)
             }
@@ -1591,6 +2022,11 @@ impl Ctx<'_> {
                         }
                         if out.len() < 2 {
                             return Err("a curva não atinge a superfície nessa direção".into());
+                        }
+                        if out.len() < c.pts.len() {
+                            self.notes.borrow_mut().insert(id, RefNote { warn: true, text: format!("projeção parcial: {} de {} pontos atingem a superfície", out.len(), c.pts.len()), ..Default::default() });
+                            // a curva parcial não fecha, mesmo que a original feche
+                            return Ok(Geo::Curve(Curve3::poly(out, false)?));
                         }
                         out
                     }
@@ -1660,9 +2096,18 @@ impl Ctx<'_> {
                     Geo::Curve(Curve3::poly(one, c.closed)?)
                 }
             }
-            CurveBoundary { surface, which } => {
+            CurveBoundary { surface, which, prop, near: Some(p), expected } => {
+                let _ = which;
+                let (c, n) = self.boundary_from(&self.cut_shape(surface, d)?, *p, *prop)?;
+                self.count_note(id, n, n, *expected, "arestas");
+                Geo::Curve(c)
+            }
+            CurveBoundary { surface, which, .. } => {
                 let cs = self.cut_shape(surface, d)?.boundary().map_err(|x| x.0)?;
-                let c = cs.get(*which).or(cs.last()).ok_or("sem bordas")?.clone();
+                if cs.is_empty() {
+                    return Err("sem bordas".into());
+                }
+                let c = self.pick_curve(id, cs, *which, None)?;
                 let closed = c.len() > 2 && dist(c[0], c[c.len() - 1]) < 1e-4;
                 Geo::Curve(Curve3::poly(c, closed)?)
             }
@@ -4536,6 +4981,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         status: HashMap::new(),
         tools: HashMap::new(),
         memo: RefCell::new(HashMap::new()),
+        notes: Default::default(),
         body_sig: HashMap::new(),
         last_sheet: None,
         sheet_maps: vec![],
@@ -4735,11 +5181,17 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
     let tail = h;
     let (mut points, mut curves, mut surfaces) = (vec![], vec![], vec![]);
     cache.refs.retain(|id, _| doc.reference(*id).is_some());
+    cache.notes.retain(|id, _| doc.reference(*id).is_some());
     for r in &doc.references {
         let key = hash_of(&[&ref_sig(doc, r.id, &cx.vars, 0)], if ref_reads_bodies(doc, r.id, 0) { tail } else { global });
         let v = match cache.refs.get(&r.id).filter(|(k, _)| *k == key) {
             Some((_, v)) => v.clone(),
             None => {
+                // o plano de face vale para o fim da linha do tempo: a face pode ter sumido depois
+                // de quem o usou, e o valor guardado por esse uso não diz isso
+                if matches!(r.kind, RefKind::FacePlane { .. }) {
+                    cx.memo.borrow_mut().remove(&r.id);
+                }
                 let v = cx.geo(r.id, 0).and_then(|g| {
                     Ok(match g {
                         Geo::Plane(fr) => RefViz::Plane(fr),
@@ -4751,12 +5203,16 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                     })
                 });
                 cache.refs.insert(r.id, (key, v.clone()));
+                match cx.notes.borrow().get(&r.id) {
+                    Some(n) => cache.notes.insert(r.id, n.clone()),
+                    None => cache.notes.remove(&r.id),
+                };
                 v
             }
         };
         match v {
             Ok(g) => {
-                cx.status.insert(r.id, Status::Ok);
+                cx.status.insert(r.id, cache.notes.get(&r.id).filter(|n| n.warn).map_or(Status::Ok, |n| Status::Warning(n.text.clone())));
                 match g {
                     RefViz::Plane(fr) => planes.push(PlaneViz { id: Some(r.id), name: r.name.clone(), frame: fr }),
                     RefViz::Point(p) => points.push(PointViz { id: r.id, name: r.name.clone(), p }),
@@ -4861,6 +5317,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
     cache.limitar(&vivas, &fills_vivos, TETO_CACHE_MALHAS);
 
     RecomputeResult {
+        notes: cache.notes.clone(),
         bodies,
         promoted,
         sketches,
@@ -4913,6 +5370,7 @@ pub fn publications(doc: &Document) -> Vec<(String, LinkedGeo)> {
                 status: HashMap::new(),
                 tools: HashMap::new(),
                 memo: RefCell::new(HashMap::new()),
+                notes: Default::default(),
                 body_sig: HashMap::new(),
                 last_sheet: None,
                 sheet_maps: vec![],
@@ -4934,7 +5392,7 @@ pub fn publications(doc: &Document) -> Vec<(String, LinkedGeo)> {
 }
 
 /// Superfície de referência avaliada no fim da linha do tempo, em texto B-rep.
-fn surface_brep(doc: &Document, id: Id) -> Option<String> {
+pub fn surface_brep(doc: &Document, id: Id) -> Option<String> {
     let vars = doc.eval_params().ok()?;
     let mut cx = Ctx {
         doc,
@@ -4945,6 +5403,7 @@ fn surface_brep(doc: &Document, id: Id) -> Option<String> {
         status: HashMap::new(),
         tools: HashMap::new(),
         memo: RefCell::new(HashMap::new()),
+        notes: Default::default(),
         body_sig: HashMap::new(),
         last_sheet: None,
         sheet_maps: vec![],
@@ -5383,6 +5842,7 @@ pub fn cut_list(doc: &Document) -> Vec<CutRow> {
         status: HashMap::new(),
         tools: HashMap::new(),
         memo: RefCell::new(HashMap::new()),
+        notes: Default::default(),
         body_sig: HashMap::new(),
         last_sheet: None,
         sheet_maps: vec![],
@@ -5460,6 +5920,7 @@ pub fn member_joints(doc: &Document) -> Vec<((Id, usize), (Id, usize), [f64; 3])
         status: HashMap::new(),
         tools: HashMap::new(),
         memo: RefCell::new(HashMap::new()),
+        notes: Default::default(),
         body_sig: HashMap::new(),
         last_sheet: None,
         sheet_maps: vec![],
@@ -5642,6 +6103,7 @@ pub fn export(doc: &Document, collector: Option<Id>, path: &str) -> Result<(), S
         status: HashMap::new(),
         tools: HashMap::new(),
         memo: RefCell::new(HashMap::new()),
+        notes: Default::default(),
         body_sig: HashMap::new(),
         last_sheet: None,
         sheet_maps: vec![],
@@ -5682,6 +6144,7 @@ pub fn final_shape(doc: &Document) -> Option<Shape> {
         status: HashMap::new(),
         tools: HashMap::new(),
         memo: RefCell::new(HashMap::new()),
+        notes: Default::default(),
         body_sig: HashMap::new(),
         last_sheet: None,
         sheet_maps: vec![],
@@ -6173,23 +6636,23 @@ mod tests {
         // deslocada dos dois lados = duas cópias; filete entre duas superfícies que se cruzam
         let c_base = line(&mut d, [0., -50., 0.], [100., -50., 0.]);
 
-        let base = d.add_geometry(RefKind::SurfExtrude { curve: c_base, dir: AxisRef::Origin(OriginAxis::Y), length: s("60"), length2: s("0") });
+        let base = d.add_geometry(RefKind::SurfExtrude { curve: c_base, dir: AxisRef::Origin(OriginAxis::Y), length: s("60"), length2: s("0"), until: None, until2: None });
         let c_wall = line(&mut d, [50., -60., -20.], [50., 20., -20.]);
 
-        let wall = d.add_geometry(RefKind::SurfExtrude { curve: c_wall, dir: AxisRef::Origin(OriginAxis::Z), length: s("50"), length2: s("0") });
+        let wall = d.add_geometry(RefKind::SurfExtrude { curve: c_wall, dir: AxisRef::Origin(OriginAxis::Z), length: s("50"), length2: s("0"), until: None, until2: None });
         let off = d.add_geometry(RefKind::SurfOffset { surface: SurfRef::Ref(base), dist: s("5"), both: true, join: OffsetJoin::Automatico });
         let fil = d.add_geometry(RefKind::SurfFillet { a: SurfRef::Ref(base), b: SurfRef::Ref(wall), flip_a: false, flip_b: false, radius: s("5"), radius2: None });
         // conectar duas faixas coplanares separadas (bordas que se olham ficam ligadas)
         let c_s1 = line(&mut d, [0., 200., 0.], [40., 200., 0.]);
 
-        let s1 = d.add_geometry(RefKind::SurfExtrude { curve: c_s1, dir: AxisRef::Origin(OriginAxis::Y), length: s("20"), length2: s("0") });
+        let s1 = d.add_geometry(RefKind::SurfExtrude { curve: c_s1, dir: AxisRef::Origin(OriginAxis::Y), length: s("20"), length2: s("0"), until: None, until2: None });
         let c_s2 = line(&mut d, [0., 250., 0.], [40., 250., 0.]);
 
-        let s2 = d.add_geometry(RefKind::SurfExtrude { curve: c_s2, dir: AxisRef::Origin(OriginAxis::Y), length: s("20"), length2: s("0") });
+        let s2 = d.add_geometry(RefKind::SurfExtrude { curve: c_s2, dir: AxisRef::Origin(OriginAxis::Y), length: s("20"), length2: s("0"), until: None, until2: None });
         let con = d.add_geometry(RefKind::SurfConnect { a: SurfRef::Ref(s1), b: SurfRef::Ref(s2), cont: Continuity::G0, tension: s("1") });
         // dividir pela curva que corta a faixa ao meio
         let cutc = line(&mut d, [20., 190., 0.], [20., 230., 0.]);
-        let spl = d.add_geometry(RefKind::SurfSplit { surface: SurfRef::Ref(s1), tool: SurfRef::Plane(PlaneRef::Origin(OriginPlane::YZ)), flip: true, more: vec![], curve: Some(cutc) });
+        let spl = d.add_geometry(RefKind::SurfSplit { surface: SurfRef::Ref(s1), tool: SurfRef::Plane(PlaneRef::Origin(OriginPlane::YZ)), flip: true, more: vec![], curve: Some(cutc), more_flip: vec![] });
         let r = recompute(&d);
         assert!(near(area(&r, off), 2. * 6000., 0.02), "offset dos dois lados {}", area(&r, off));
         let af = area(&r, fil);
@@ -6744,7 +7207,7 @@ mod tests {
         let s = |x: &str| x.to_string();
         let a = d.add_geometry(RefKind::SurfSphere { center: PointRef::Origin, radius: s("10") });
         let b = d.add_geometry(RefKind::SurfSphere { center: PointRef::Fixed([15., 0., 0.]), radius: s("10") });
-        let j = d.add_geometry(RefKind::SurfJoin { items: vec![SurfRef::Ref(a), SurfRef::Ref(b)], tol: s("0.01") });
+        let j = d.add_geometry(RefKind::SurfJoin { items: vec![SurfRef::Ref(a), SurfRef::Ref(b)], tol: s("0.01"), curves: vec![] });
         d.hide_consumed(j);
         assert!(!d.reference(a).unwrap().visible && !d.reference(b).unwrap().visible);
         d.delete(j, false);
@@ -6879,10 +7342,10 @@ mod tests {
         let s = |x: &str| x.to_string();
         let mut d = Document::new("s");
         let sph = d.add_geometry(RefKind::SurfSphere { center: PointRef::Origin, radius: s("10") });
-        let half = d.add_geometry(RefKind::SurfSplit { surface: SurfRef::Ref(sph), tool: xy(), flip: false, more: vec![], curve: None });
-        let circ = d.add_geometry(RefKind::CurveIntersect { a: SurfRef::Ref(sph), b: xy(), which: 0 });
+        let half = d.add_geometry(RefKind::SurfSplit { surface: SurfRef::Ref(sph), tool: xy(), flip: false, more: vec![], curve: None, more_flip: vec![] });
+        let circ = d.add_geometry(RefKind::CurveIntersect { a: SurfRef::Ref(sph), b: xy(), which: 0, near: None });
         let cyl = d.add_geometry(RefKind::SurfCylinder { point: PointRef::Origin, dir: AxisRef::Origin(OriginAxis::Z), radius: s("10"), start: s("0"), end: s("20") });
-        let bnd = d.add_geometry(RefKind::CurveBoundary { surface: SurfRef::Ref(cyl), which: 0 });
+        let bnd = d.add_geometry(RefKind::CurveBoundary { surface: SurfRef::Ref(cyl), which: 0, prop: Propagation::Nenhuma, near: None, expected: None });
         let moved = d.add_geometry(RefKind::GeoTransform {
             source: sph,
             class: RefClass::Surface,
@@ -6899,8 +7362,8 @@ mod tests {
         let lb = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([20., 0., 10.]), b: PointRef::Fixed([20., 30., 10.]), start: s("0"), end: s("0") });
         let tube = d.add_geometry(RefKind::SurfSweep { profile: SweepProfile::Circle(s("2")), spine: CurveRef::Ref(la), mode: SweepMode::Corrigido });
         let loft = d.add_geometry(RefKind::SurfLoft { sections: vec![CurveRef::Ref(la), CurveRef::Ref(lb)], guide: None, ruled: false, closed: false });
-        let fa = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(la), dir: AxisRef::Origin(OriginAxis::X), length: s("-10"), length2: "0".into() });
-        let fb = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(lb), dir: AxisRef::Origin(OriginAxis::X), length: s("10"), length2: "0".into() });
+        let fa = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(la), dir: AxisRef::Origin(OriginAxis::X), length: s("-10"), length2: "0".into(), until: None, until2: None });
+        let fb = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(lb), dir: AxisRef::Origin(OriginAxis::X), length: s("10"), length2: "0".into(), until: None, until2: None });
         let blend = d.add_geometry(RefKind::SurfBlend {
             a: CurveRef::Ref(la),
             sa: Some(SurfRef::Ref(fa)),
@@ -6909,8 +7372,8 @@ mod tests {
             cont: Continuity::G1,
             tension: s("1"),
         });
-        let join = d.add_geometry(RefKind::SurfJoin { items: vec![SurfRef::Ref(fa), SurfRef::Ref(blend), SurfRef::Ref(fb)], tol: s("0.01") });
-        let bounds = d.add_geometry(RefKind::CurveBoundary { surface: SurfRef::Ref(join), which: 0 });
+        let join = d.add_geometry(RefKind::SurfJoin { items: vec![SurfRef::Ref(fa), SurfRef::Ref(blend), SurfRef::Ref(fb)], tol: s("0.01"), curves: vec![] });
+        let bounds = d.add_geometry(RefKind::CurveBoundary { surface: SurfRef::Ref(join), which: 0, prop: Propagation::Nenhuma, near: None, expected: None });
         let r = recompute(&d);
         for id in [sph, half, circ, cyl, bnd, moved, pmov, tube, loft, fa, fb, blend, join, bounds] {
             assert_eq!(r.status[&id], Status::Ok, "{}: {:?}", d.name_of(id), r.status[&id]);
@@ -6981,7 +7444,7 @@ mod tests {
         d.add_feature(FeatureKind::Extrude(Extrude { thin_side: 0,
             sketch: s,
             op: BoolOp::Add,
-            extent: Extent::UpToSurface(SurfRef::Face { point: [0., 0., 20.], normal: [0., 0., 1.], owner: None }),
+            extent: Extent::UpToSurface(SurfRef::Face { point: [0., 0., 20.], normal: [0., 0., 1.], owner: None, key: None }),
             reverse: true,
             taper: "0".into(),
             thin: None, dir: None,
@@ -7157,10 +7620,10 @@ mod tests {
             return;
         }
         // superfícies: extrusão de curva, preenchimento, deslocamento
-        let se = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(sp), dir: AxisRef::Origin(OriginAxis::Z), length: s_("10"), length2: "0".into() });
+        let se = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(sp), dir: AxisRef::Origin(OriginAxis::Z), length: s_("10"), length2: "0".into(), until: None, until2: None });
         let so = d.add_geometry(RefKind::SurfOffset { surface: SurfRef::Ref(se), dist: s_("2"), both: false, join: OffsetJoin::Automatico });
         let sq = d.add_geometry(RefKind::Polyline { points: vec![PointRef::Origin, PointRef::Fixed([10., 0., 0.]), PointRef::Fixed([10., 10., 3.]), PointRef::Fixed([0., 10., 0.])], closed: true });
-        let sf = d.add_geometry(RefKind::SurfFill { curves: vec![CurveRef::Ref(sq)] });
+        let sf = d.add_geometry(RefKind::SurfFill { curves: vec![CurveRef::Ref(sq)], conds: vec![], points: vec![], tol: "0.01".into() });
         let pp = d.add_geometry(RefKind::PointProject { point: PointRef::Fixed([5., 5., 20.]), surface: SurfRef::Ref(sf) });
         let r = recompute(&d);
         for id in [se, so, sq, sf, pp] {
@@ -7401,7 +7864,7 @@ mod tests {
         let pl = d.add_geometry(RefKind::PlaneThreePoints { a: PointRef::Ref(p1), b: PointRef::Ref(p2), c: PointRef::Ref(p3) });
         let ln = d.add_geometry(RefKind::LinePoints { a: PointRef::Ref(p1), b: PointRef::Ref(p2), start: "0".into(), end: "0".into() });
         let mid = d.add_geometry(RefKind::PointOnCurve { curve: CurveRef::Ref(ln), at: OnCurve::Ratio("0.5".into()), reverse: false });
-        let nc = d.add_geometry(RefKind::PlaneNormalCurve { curve: CurveRef::Ref(ln), at: OnCurve::Ratio("0.5".into()), reverse: false });
+        let nc = d.add_geometry(RefKind::PlaneNormalCurve { curve: CurveRef::Ref(ln), at: OnCurve::Ratio("0.5".into()), reverse: false, point: None, project: false });
         let ci = d.add_geometry(RefKind::Circle3 { a: PointRef::Ref(p1), b: PointRef::Ref(p2), c: PointRef::Ref(p3), full: true });
         let ce = d.add_geometry(RefKind::PointCenter { curve: CurveRef::Ref(ci) });
         let eq = d.add_geometry(RefKind::PlaneEquation { a: "0".into(), b: "0".into(), c: "2".into(), d: "10".into() });

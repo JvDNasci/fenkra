@@ -60,6 +60,14 @@ std::unique_ptr<Shape> face_copy(const Shape& s, double px, double py, double pz
 std::unique_ptr<Shape> offset_surface(const Shape& s, double d);
 std::unique_ptr<Shape> offset_surface_j(const Shape& s, double d, uint8_t join);
 std::unique_ptr<Shape> fill_surface(rust::Slice<const double> flat, rust::Slice<const uint32_t> ends);
+std::unique_ptr<Shape> fill_surface_x(rust::Slice<const double> flat, rust::Slice<const uint32_t> ends, rust::Slice<const int32_t> orders, rust::Slice<const double> weights,
+                                      const Shape& support, rust::Slice<const double> pts, rust::Vec<double>& errs);
+std::unique_ptr<Shape> curve_shape(rust::Slice<const double> pts);
+rust::Vec<double> sew_report(const Shape& s);
+std::unique_ptr<Shape> clip_surface(const Shape& s, const Shape& cutter, double px, double py, double pz, bool extend);
+rust::Vec<double> edge_pts_at(const Shape& s, double px, double py, double pz);
+rust::Vec<double> free_edge_pts(const Shape& s, rust::Vec<uint32_t>& ends);
+std::unique_ptr<Shape> face_propagate(const Shape& s, double px, double py, double pz, int32_t prop, bool complement, rust::Vec<uint32_t>& counts);
 std::unique_ptr<Shape> extrude_curve(rust::Slice<const double> pts, double dx, double dy, double dz, double len);
 std::unique_ptr<Shape> revolve_curve(rust::Slice<const double> pts, double ox, double oy, double oz, double dx, double dy, double dz, double angle_deg);
 rust::Vec<double> surface_near(const Shape& s, double px, double py, double pz);
