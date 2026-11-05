@@ -1000,7 +1000,6 @@ fn invalido_superficie_deslocada_de_superficie_que_nao_existe() {
 /// BUG achado (B72): corte passante cujo sentido não alcança o corpo (sketch na base, sem inverter)
 /// volta `Ok` com o volume intacto; um corte que não remove nada devia avisar.
 #[test]
-#[ignore = "bug: corte passante que não toca o corpo devolve Ok em silêncio"]
 fn invalido_corte_que_nao_remove_nada_avisa() {
     precisa_kernel!();
     let (mut d, _, _) = caixa_cotada();

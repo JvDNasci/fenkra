@@ -3589,7 +3589,15 @@ impl Ctx<'_> {
                     roles = Some(r);
                     t
                 };
+                // corte que não alcança o corpo (sentido errado, ferramenta fora dele) não remove nada
+                let vol0 = if e.op == BoolOp::Cut { self.body(f.target).map(|b| b.mass().volume) } else { None };
                 self.apply_roles(f.target, tool, e.op, f.id, roles)?;
+                if let Some(v0) = vol0 {
+                    let v1 = self.body(f.target).map_or(0., |b| b.mass().volume);
+                    if (v0 - v1).abs() <= 1e-9 * v0.abs().max(1.) {
+                        return Ok(Some("o corte não removeu material: a ferramenta não alcança o corpo — confira o sentido ('inverter') e a distância".into()));
+                    }
+                }
                 Ok(warn_open)
             }
             FeatureKind::Revolve(r) => {
