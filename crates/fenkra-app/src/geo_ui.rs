@@ -270,7 +270,7 @@ impl GeoKind {
             R::PointOffset { .. } => PtOffset,
             R::LinePlanes { .. } => LinePlanes,
             R::LineBisector { .. } => LineBisector,
-            R::LineAxis { .. } => LineAxis,
+            R::LineAxis { .. } | R::AxisLine { .. } => LineAxis,
             R::CurveProject { .. } => CurveProject,
             R::SplineControl { .. } => SplineControl,
             R::CurveCopy { .. } => CurveCopy,
@@ -337,7 +337,7 @@ impl GeoKind {
             Plane2L => R::PlaneTwoLines { a: c(0), b: c(1) },
             PlanePL => R::PlanePointLine { point: p(0), line: c(0) },
             PlaneCurve => R::PlaneCurve { curve: c(0) },
-            PlaneNormalCurve => R::PlaneNormalCurve { curve: c(0), at: OnCurve::Ratio(t("0.5")), reverse: false },
+            PlaneNormalCurve => R::PlaneNormalCurve { curve: c(0), at: OnCurve::Ratio(t("0.5")), reverse: false, point: s.points.first().copied(), project: true },
             PlaneTangent => R::PlaneTangentSurface { surface: sf, point: p(0) },
             PlaneEquation => R::PlaneEquation { a: t("0"), b: t("0"), c: t("1"), d: t("10") },
             PlaneMean => R::PlaneMeanPoints { points: pts(3) },
@@ -372,7 +372,7 @@ impl GeoKind {
             PtOffset => R::PointOffset { point: p(0), dir: ax(OriginAxis::Z), dist: t("10") },
             LinePlanes => R::LinePlanes { a: pl, b: s.planes.get(1).copied().unwrap_or_else(crate::slots::plane), length: t("100") },
             LineBisector => R::LineBisector { a: c(0), b: c(1), length: t("50") },
-            LineAxis => R::LineAxis { face: face_pt(s) },
+            LineAxis => R::AxisLine { axis: seed_axis(s), length: String::new() },
             CurveProject => R::CurveProject { curve: c(0), plane: pl },
             SplineControl => R::SplineControl { points: pts(4), closed: false },
             CurveCopy => R::CurveCopy { curve: c(0) },
@@ -448,6 +448,18 @@ fn face_pt(s: &Seed) -> [f64; 3] {
     }
 }
 
+/// Eixo tirado da seleção: face, aresta ou dois planos.
+fn seed_axis(s: &Seed) -> AxisRef {
+    if let [a, b, ..] = s.planes[..] {
+        return AxisRef::Planes { a, b };
+    }
+    if let Some(c) = s.curves.first() {
+        return axis_of(c);
+    }
+    let key = if let Some(SurfRef::Face { key, .. }) = s.surface { key } else { None };
+    AxisRef::Face { point: face_pt(s), key }
+}
+
 /// Curva usada como eixo.
 pub fn axis_of(c: &CurveRef) -> AxisRef {
     match c {
@@ -455,6 +467,7 @@ pub fn axis_of(c: &CurveRef) -> AxisRef {
         CurveRef::Ref(id) => AxisRef::Ref(*id),
         CurveRef::SketchLine { sketch, entity } | CurveRef::SketchCurve { sketch, curve: entity } => AxisRef::SketchLine { sketch: *sketch, entity: *entity },
         CurveRef::Segment { curve, .. } => AxisRef::Ref(*curve),
+        CurveRef::BodyEdge { pts, key } => AxisRef::Edge { mid: pts[pts.len() / 2], key: Some(*key) },
         CurveRef::Edge(p) => {
             let (a, b) = (p[0], *p.last().unwrap_or(&p[0]));
             AxisRef::Fixed { origin: a, dir: [b[0] - a[0], b[1] - a[1], b[2] - a[2]] }
@@ -574,6 +587,7 @@ pub fn point_name(doc: &Document, p: &PointRef) -> String {
         PointRef::Origin => "Origem".into(),
         PointRef::Ref(id) => doc.reference(*id).map(|r| r.name.clone()).or_else(|| crate::slots::label(*id)).unwrap_or_else(|| format!("⚠ perdido #{}", id.0)),
         PointRef::Fixed(q) => format!("({}, {}, {})", fmt(q[0]), fmt(q[1]), fmt(q[2])),
+        PointRef::Vertex { .. } => tr("Vértice do modelo").into(),
         PointRef::SketchPoint { sketch, point } => format!("{} · ponto #{}", doc.name_of(*sketch), point.0),
         PointRef::CurveVertex { curve, index } => format!("{} · {}", doc.name_of(*curve), match index {
             0 => "início".to_string(),
@@ -589,6 +603,7 @@ pub fn curve_name(doc: &Document, c: &CurveRef) -> String {
         CurveRef::Ref(id) => doc.reference(*id).map(|r| r.name.clone()).or_else(|| crate::slots::label(*id)).unwrap_or_else(|| format!("⚠ perdida #{}", id.0)),
         CurveRef::SketchLine { sketch, entity } => format!("{} · linha #{}", doc.name_of(*sketch), entity.0),
         CurveRef::Edge(p) => format!("Aresta ({} pontos)", p.len()),
+        CurveRef::BodyEdge { .. } => tr("Aresta do modelo").into(),
         CurveRef::SketchCurve { sketch, curve } => format!("{} · curva #{}", doc.name_of(*sketch), curve.0),
         CurveRef::Segment { curve, index } => format!("{} · trecho {}", doc.name_of(*curve), index + 1),
     }
@@ -676,6 +691,9 @@ pub(crate) fn axis_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docume
         AxisRef::SketchLine { sketch, entity } => format!("{} · linha #{}", doc.name_of(*sketch), entity.0),
         AxisRef::Ref(id) => crate::slots::label(*id).unwrap_or_else(|| doc.name_of(*id)),
         AxisRef::Fixed { .. } => "Aresta (direção fixa)".into(),
+        AxisRef::Face { .. } => tr("Eixo da face").into(),
+        AxisRef::Edge { .. } => tr("Aresta do modelo").into(),
+        AxisRef::Planes { .. } => tr("Interseção de planos").into(),
     };
     row(ui, label, |ui| {
         egui::ComboBox::from_id_salt(salt).selected_text(name).width(150.).show_ui(ui, |ui| {
@@ -1140,9 +1158,37 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             curve_slot(ui, "g_l", "Linha", doc, me, line, seed);
         }
         R::PlaneCurve { curve } => curve_slot(ui, "g_c", "Curva planar", doc, me, curve, seed),
-        R::PlaneNormalCurve { curve, at, reverse } => {
+        R::PlaneNormalCurve { curve, at, reverse, point, project } => {
             curve_slot(ui, "g_c", "Curva", doc, me, curve, seed);
-            on_curve(ui, at, reverse, vars);
+            let mut by_point = point.is_some();
+            if ui.checkbox(&mut by_point, tr("Por um ponto")).changed() {
+                *point = by_point.then(|| seed.points.first().copied().unwrap_or_default());
+            }
+            match point {
+                Some(p) => {
+                    point_slot(ui, "g_pc", "Ponto", doc, me, p, seed);
+                    ui.horizontal(|ui| {
+                        ui.radio_value(project, false, tr("contido"));
+                        ui.radio_value(project, true, tr("projetado"));
+                    });
+                }
+                None => on_curve(ui, at, reverse, vars),
+            }
+        }
+        R::AxisLine { axis, length } => {
+            axis_slot(ui, "g_ax", "Eixo", doc, me, axis, seed);
+            if let Some(SurfRef::Face { point, key, .. }) = seed.surface {
+                if ui.button(tr("⊙ Usar a face selecionada")).clicked() {
+                    *axis = AxisRef::Face { point, key };
+                }
+            }
+            if let [a, b, ..] = seed.planes[..] {
+                if ui.button(tr("Usar os dois planos selecionados")).clicked() {
+                    *axis = AxisRef::Planes { a, b };
+                }
+            }
+            expr(ui, "Comprimento", length, vars, "mm");
+            ui.label(RichText::new(tr("Vazio: o comprimento natural da face ou da aresta.")).weak().small());
         }
         R::PlaneTangentSurface { surface, point } => {
             surf_slot(ui, "g_s", "Superfície", doc, me, surface, seed);

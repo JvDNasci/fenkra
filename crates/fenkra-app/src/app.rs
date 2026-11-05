@@ -1315,6 +1315,30 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
 
     /// Plano a usar para um novo sketch/plano: o selecionado, ou XY.
     /// Plano para um novo sketch/plano: o plano ou a face clicada na viewport, senão o da árvore.
+    /// Chave v2 da face escolhida, se ela for de um corpo e tiver papel conhecido.
+    fn face_key_of(&self, p: Option<&crate::picking::Pick>) -> Option<FaceKey> {
+        let crate::picking::Pick::Face { body, face, .. } = *p? else { return None };
+        self.result.as_ref()?.bodies.get(body)?.face_key(face)
+    }
+
+    /// Chave v2 da aresta escolhida.
+    fn edge_key_of(&self, body: usize, edge: usize) -> Option<EdgeKey> {
+        self.result.as_ref()?.bodies.get(body)?.edge_key(edge)
+    }
+
+    /// Ponta de aresta com chave no vértice clicado: o ponto passa a seguir a aresta.
+    fn vertex_ref(&self, body: usize, pos: [f64; 3]) -> PointRef {
+        let found = self.result.as_ref().and_then(|r| {
+            let m = &r.bodies.get(body)?.mesh;
+            (0..m.edge_ranges.len()).find_map(|e| {
+                let l = crate::picking::edge_polyline(r, body, e);
+                let near = |q: &[f64; 3]| (0..3).map(|i| (q[i] - pos[i]).powi(2)).sum::<f64>() < 1e-4;
+                (l.first().is_some_and(near) || l.last().is_some_and(near)).then(|| r.bodies[body].edge_key(e)).flatten()
+            })
+        });
+        found.map_or(PointRef::Fixed(pos), |edge| PointRef::Vertex { point: pos, edge })
+    }
+
     fn plane_for_new(&mut self) -> PlaneRef {
         use crate::picking::Pick;
         match self.picks.first().copied() {
@@ -1327,6 +1351,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 let l = (x[0] * x[0] + x[1] * x[1] + x[2] * x[2]).sqrt().max(1e-12);
                 let x = x.map(|v| v / l);
                 let id = self.open.doc.add_face_plane(point.map(|v| v as f64), x, n, Some(owner));
+                let k = self.face_key_of(self.picks.first());
+                if let Some(RefKind::FacePlane { key, .. }) = self.open.doc.references.iter_mut().find(|r| r.id == id).map(|r| &mut r.kind) {
+                    *key = k;
+                }
                 PlaneRef::Datum(id)
             }
             _ => self.selected_plane(),
@@ -1389,7 +1417,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 }
             }
             CurveRef::Ref(_) => all.extend(r.curves.iter().map(|c| (CurveRef::Ref(c.id), c.pts.clone()))),
-            CurveRef::Edge(_) => {
+            CurveRef::Edge(_) | CurveRef::BodyEdge { .. } => {
                 for p in &self.picks {
                     if let Pick::Edge { body, .. } = *p {
                         if body >= SURF_BASE {
@@ -1402,7 +1430,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             _ => {}
         }
         let same = |c: &CurveRef| match (c, one) {
-            (CurveRef::Edge(a), CurveRef::Edge(b)) => a.first() == b.first() && a.last() == b.last(),
+            (CurveRef::Edge(a), _) if one.edge_pts().is_some() => one.edge_pts().is_some_and(|b| a.first() == b.first() && a.last() == b.last()),
             _ => c == one,
         };
         let Some(start) = all.iter().position(|(c, _)| same(c)) else { return picked };
@@ -1430,12 +1458,15 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         }
         for p in &self.picks {
             match *p {
-                Pick::Vertex { pos, .. } => s.points.push(PointRef::Fixed(pos.map(|v| v as f64))),
+                Pick::Vertex { pos, body } => s.points.push(self.vertex_ref(body, pos.map(|v| v as f64))),
                 Pick::Edge { body, edge, .. } => {
                     if let Some(r) = &self.result {
                         let pts = crate::picking::edge_polyline(r, body, edge);
                         if pts.len() >= 2 {
-                            s.curves.push(CurveRef::Edge(pts));
+                            s.curves.push(match self.edge_key_of(body, edge) {
+                                Some(key) => CurveRef::BodyEdge { pts, key },
+                                None => CurveRef::Edge(pts),
+                            });
                         }
                     }
                 }
@@ -1445,7 +1476,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     }
                 }
                 Pick::Face { point, normal, owner, .. } => {
-                    s.surface = Some(SurfRef::Face { point: point.map(|v| v as f64), normal: normal.map(|v| v as f64), owner: Some(owner) })
+                    s.surface = Some(SurfRef::Face { point: point.map(|v| v as f64), normal: normal.map(|v| v as f64), owner: Some(owner), key: self.face_key_of(Some(p)) })
                 }
                 Pick::Plane(pr) => s.planes.push(pr),
                 Pick::Geo(id) => add_ref(&mut s, id),
@@ -5058,7 +5089,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         let s0 = (m.face_ranges.get(face).copied().unwrap_or(0) as usize).min(s1);
                         match geom_fit::face(&m.positions, &m.normals, &m.indices[s0..s1]) {
                             FaceKind::Plane(n) => c.alt_axes.push_back(AxisRef::Fixed { origin: pt, dir: n }),
-                            FaceKind::Axis(o, d) => c.alt_axes.push_back(AxisRef::Fixed { origin: o, dir: d }),
+                            FaceKind::Axis(o, d) => c.alt_axes.push_back(match self.face_key_of(Some(p)) {
+                                Some(k) => AxisRef::Face { point: pt, key: Some(k) },
+                                None => AxisRef::Fixed { origin: o, dir: d },
+                            }),
                             FaceKind::Other => {}
                         }
                     }
@@ -5275,7 +5309,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 r.folder = Some(folder);
             }
             if rp.planes {
-                let pl = d.add_geometry(RefKind::PlaneNormalCurve { curve: rp.curve.clone(), at, reverse: false });
+                let pl = d.add_geometry(RefKind::PlaneNormalCurve { curve: rp.curve.clone(), at, reverse: false, point: None, project: false });
                 if let Some(r) = d.references.iter_mut().find(|r| r.id == pl) {
                     r.folder = Some(folder);
                 }

@@ -1237,6 +1237,9 @@ fn feature_ui(
                 AxisRef::SketchLine { sketch, entity } => format!("{} · linha #{}", doc.name_of(*sketch), entity.0),
                 AxisRef::Ref(id) => doc.name_of(*id),
                 AxisRef::Fixed { .. } => "Aresta (direção fixa)".to_string(),
+                AxisRef::Face { .. } => tr("Eixo da face").to_string(),
+                AxisRef::Edge { .. } => tr("Aresta do modelo").to_string(),
+                AxisRef::Planes { .. } => tr("Interseção de planos").to_string(),
             };
             egui::ComboBox::from_id_salt("eixo").selected_text(axis_name(&r.axis)).width(200.).show_ui(ui, |ui| {
                 for a in [OriginAxis::X, OriginAxis::Y, OriginAxis::Z] {

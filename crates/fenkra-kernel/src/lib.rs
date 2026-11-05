@@ -599,6 +599,11 @@ mod imp {
             }
             out
         }
+        /// Polilinha da aresta mais perto do ponto.
+        pub fn edge_at(&self, p: [f64; 3]) -> KResult<Vec<[f64; 3]>> {
+            let v = b::edge_pts_at(&self.0, p[0], p[1], p[2]).map_err(err)?;
+            Ok(v.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect())
+        }
         /// Bordas livres, uma polilinha por aresta.
         pub fn free_edges(&self) -> KResult<Vec<Vec<[f64; 3]>>> {
             let mut ends = vec![];
@@ -1000,6 +1005,9 @@ mod imp {
             no()
         }
         pub fn affinity(&self, _: Frame, _: [f64; 3]) -> KResult<Shape> {
+            no()
+        }
+        pub fn edge_at(&self, _: [f64; 3]) -> KResult<Vec<[f64; 3]>> {
             no()
         }
         pub fn free_edges(&self) -> KResult<Vec<Vec<[f64; 3]>>> {

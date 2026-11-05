@@ -264,3 +264,116 @@ fn contorno_propaga_por_aresta_tangente_e_laco() {
     let compr = |x: Id| fenkra_solidos::geo3d::Curve3::poly(r.curves.iter().find(|c| c.id == x).unwrap().pts.clone(), false).unwrap().length();
     assert!((compr(a) - 10.).abs() < 1e-6 && (compr(c) - 40.).abs() < 1e-6);
 }
+
+/// Extrusão de um sketch: é ela que dá papel às faces (tampas e laterais).
+fn extrusao(d: &mut Document, sketch: Id, altura: &str) -> Id {
+    d.add_feature(FeatureKind::Extrude(Extrude { sketch, op: BoolOp::Add, extent: Extent::Blind(s(altura)), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0 }))
+}
+
+fn caixa(d: &mut Document, altura: &str) -> Id {
+    let (sk, _) = sketch_quadrado(d);
+    extrusao(d, sk, altura)
+}
+
+fn muda_altura(d: &mut Document, id: Id, altura: &str) {
+    let FeatureKind::Extrude(e) = &mut d.feature_mut(id).unwrap().kind else { panic!() };
+    e.extent = Extent::Blind(s(altura));
+}
+
+#[test]
+fn plano_de_face_acompanha_e_cai_em_erro_quando_a_face_some() {
+    let mut d = Document::new("t");
+    let cx = caixa(&mut d, "30");
+    let r = recompute(&d);
+    let topo = topo_de(&r);
+    let b = &r.bodies[0];
+    let f = (0..b.mesh.face_info.len()).find(|j| b.mesh.face_info[*j].dir[2] > 0.99).unwrap();
+    let key = b.face_key(f).expect("papel da tampa");
+    assert_eq!(key.owner, cx);
+    let com = d.add_geometry(RefKind::FacePlane { origin: topo, x: [1., 0., 0.], normal: [0., 0., 1.], owner: Some(cx), key: Some(key) });
+    let sem = d.add_geometry(RefKind::FacePlane { origin: topo, x: [1., 0., 0.], normal: [0., 0., 1.], owner: Some(cx), key: None });
+    let r = recompute(&d);
+    ok(&r, com);
+    ok(&r, sem);
+    // a caixa cresce: o plano com chave vai junto; o sem chave perdeu a face e diz isso
+    muda_altura(&mut d, cx, "50");
+    let r = recompute(&d);
+    ok(&r, com);
+    let z = r.planes.iter().find(|p| p.id == Some(com)).unwrap().frame.origin[2];
+    assert!((z - (topo[2] + 20.)).abs() < 1e-6, "{z}");
+    assert!(matches!(&r.status[&sem], Status::Error(m) if m.starts_with("referência perdida")), "{:?}", r.status[&sem]);
+    // a tampa some de vez: chanfro em toda a caixa não mata a tampa, mas apagar a caixa sim
+    d.delete(cx, false);
+    let r = recompute(&d);
+    assert!(matches!(&r.status[&com], Status::Error(m) if m.starts_with("referência perdida")), "{:?}", r.status[&com]);
+}
+
+#[test]
+fn plano_na_curva_por_ponto_contido_ou_projetado() {
+    let mut d = Document::new("t");
+    let l = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([0., 0., 0.]), b: PointRef::Fixed([100., 0., 0.]), start: s("0"), end: s("0") });
+    let pl = |d: &mut Document, q: [f64; 3], project| d.add_geometry(RefKind::PlaneNormalCurve { curve: CurveRef::Ref(l), at: OnCurve::Ratio(s("0.5")), reverse: false, point: Some(PointRef::Fixed(q)), project });
+    let (a, b, c) = (pl(&mut d, [30., 0., 0.], false), pl(&mut d, [30., 7., 0.], true), pl(&mut d, [30., 7., 0.], false));
+    let r = recompute(&d);
+    let f = |x: Id| r.planes.iter().find(|p| p.id == Some(x)).unwrap().frame;
+    assert!((f(a).origin[0] - 30.).abs() < 1e-9 && f(a).normal[0].abs() > 0.999);
+    assert!((f(b).origin[0] - 30.).abs() < 1e-9 && f(b).origin[1].abs() < 1e-9);
+    assert!(matches!(&r.status[&c], Status::Error(m) if m.contains("projetado")));
+}
+
+#[test]
+fn eixo_de_cilindro_aresta_e_planos_acompanha_o_modelo() {
+    let mut d = Document::new("t");
+    let mut data = SketchData::default();
+    let mut al = || d.alloc();
+    let c = data.add_point(&mut al, 0., 0.);
+    data.add_curve(&mut al, sketch::Curve::Circle { c, r: 10. }, false);
+    let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
+    let cil = extrusao(&mut d, sk, "30");
+    let r = recompute(&d);
+    let b = &r.bodies[0];
+    let lat = (0..b.mesh.face_info.len()).find(|j| b.mesh.face_info[*j].kind == 1).unwrap();
+    let key = b.face_key(lat).expect("papel da lateral");
+    let ponto = b.mesh.face_info[lat].point;
+    let e1 = d.add_geometry(RefKind::AxisLine { axis: AxisRef::Face { point: ponto, key: Some(key) }, length: String::new() });
+    let e2 = d.add_geometry(RefKind::AxisLine { axis: AxisRef::Planes { a: PlaneRef::Origin(OriginPlane::XZ), b: PlaneRef::Origin(OriginPlane::YZ) }, length: s("10") });
+    let r = recompute(&d);
+    ok(&r, e1);
+    ok(&r, e2);
+    let c = |r: &RecomputeResult, x: Id| r.curves.iter().find(|c| c.id == x).unwrap().pts.clone();
+    let p = c(&r, e1);
+    assert!((fenkra_solidos::geo3d::dist(p[0], p[1]) - 30.).abs() < 1e-6, "{p:?}");
+    assert!(p[0][0].abs() < 1e-6 && p[0][1].abs() < 1e-6);
+    let q = c(&r, e2);
+    assert!(q[0][0].abs() < 1e-9 && q[0][1].abs() < 1e-9 && (q[1][2] - q[0][2]).abs() > 9.99);
+    // a altura muda: o eixo acompanha, sem nada fixo
+    muda_altura(&mut d, cil, "45");
+    let r = recompute(&d);
+    ok(&r, e1);
+    let p = c(&r, e1);
+    assert!((fenkra_solidos::geo3d::dist(p[0], p[1]) - 45.).abs() < 1e-6, "{p:?}");
+}
+
+#[test]
+fn ponto_em_vertice_e_aresta_seguem_a_chave() {
+    let mut d = Document::new("t");
+    let cx = caixa(&mut d, "30");
+    let r = recompute(&d);
+    let b = &r.bodies[0];
+    // aresta de cima, entre a tampa e uma lateral
+    let e = (0..b.mesh.edge_faces.len()).find(|e| b.edge_key(*e).is_some_and(|k| k.a.role == 1 || k.b.role == 1)).unwrap();
+    let key = b.edge_key(e).unwrap();
+    let m = &b.mesh.edge_mids;
+    let mid = [m[3 * e] as f64, m[3 * e + 1] as f64, m[3 * e + 2] as f64];
+    let linha = d.add_geometry(RefKind::CurveCopy { curve: CurveRef::BodyEdge { pts: vec![mid, mid], key } });
+    let ponto = d.add_geometry(RefKind::PointBetween { a: PointRef::Vertex { point: mid, edge: key }, b: PointRef::Origin, ratio: s("0") });
+    let r = recompute(&d);
+    ok(&r, linha);
+    ok(&r, ponto);
+    muda_altura(&mut d, cx, "50");
+    let r = recompute(&d);
+    ok(&r, linha);
+    let c = r.curves.iter().find(|c| c.id == linha).unwrap();
+    assert!(c.pts.iter().all(|q| (q[2] - (mid[2] + 20.)).abs() < 1e-6), "{:?}", c.pts);
+    assert!((r.points.iter().find(|p| p.id == ponto).unwrap().p[2] - (mid[2] + 20.)).abs() < 1e-6);
+}

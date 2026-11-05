@@ -277,6 +277,29 @@ rust::Vec<double> free_edge_pts(const Shape& s, rust::Vec<uint32_t>& ends) {
     });
 }
 
+// Polilinha da aresta da forma mais perto do ponto.
+rust::Vec<double> edge_pts_at(const Shape& s, double px, double py, double pz) {
+    return guard("aresta", [&] {
+        TopoDS_Vertex v = BRepBuilderAPI_MakeVertex(gp_Pnt(px, py, pz));
+        TopoDS_Edge best;
+        double bd = 1e300;
+        for (TopExp_Explorer x(s.s, TopAbs_EDGE); x.More(); x.Next()) {
+            if (BRep_Tool::Degenerated(TopoDS::Edge(x.Current()))) continue;
+            BRepExtrema_DistShapeShape d(x.Current(), v);
+            if (d.IsDone() && d.Value() < bd) bd = d.Value(), best = TopoDS::Edge(x.Current());
+        }
+        if (best.IsNull()) throw std::runtime_error("a forma não tem arestas");
+        BRepAdaptor_Curve c(best);
+        GCPnts_TangentialDeflection td(c, 0.05, 0.05, 2);
+        rust::Vec<double> out;
+        for (int i = 1; i <= td.NbPoints(); ++i) {
+            gp_Pnt p = td.Value(i);
+            for (double w : {p.X(), p.Y(), p.Z()}) out.push_back(w);
+        }
+        return out;
+    });
+}
+
 // A aresta é lisa entre as duas faces? Normais comparadas em três pontos, com 1 grau de folga.
 static bool smooth_across(const TopoDS_Edge& e, const TopoDS_Face& f, const TopoDS_Face& g) {
     double a1, b1, a2, b2;

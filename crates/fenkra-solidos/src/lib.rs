@@ -726,7 +726,7 @@ fn ref_reads_bodies(doc: &Document, id: Id, depth: u32) -> bool {
         return true;
     }
     let js = serde_json::to_string(&r.kind).unwrap_or_default();
-    if ["\"Face\"", "SurfExtract", "SurfMulti", "LineAxis", "\"Plane\""].iter().any(|k| js.contains(k)) {
+    if ["\"Face\"", "SurfExtract", "SurfMulti", "LineAxis", "\"Plane\"", "FacePlane", "\"Edge\"", "BodyEdge", "\"Vertex\""].iter().any(|k| js.contains(k)) {
         return true;
     }
     let mut ids = vec![];
@@ -858,7 +858,119 @@ impl Ctx<'_> {
                 Ok((c.start(), geo3d::unit(d).ok_or("eixo de comprimento zero")?))
             }
             AxisRef::Fixed { origin, dir } => Ok((origin, geo3d::unit(dir).ok_or("eixo de comprimento zero")?)),
+            AxisRef::Face { point, key } => self.face_axis(point, key.as_ref()).map(|(o, v, _)| (o, v)),
+            AxisRef::Edge { mid, key } => {
+                let c = Curve3::poly(self.live_edge(mid, key.as_ref())?, false)?;
+                if !c.is_straight() {
+                    return Err("a aresta do eixo não é reta".into());
+                }
+                Ok((c.start(), geo3d::unit(geo3d::sub(c.end(), c.start())).ok_or("eixo de comprimento zero")?))
+            }
+            AxisRef::Planes { a, b } => {
+                use geo3d::*;
+                let (fa, fb) = (self.plane(&a, depth + 1)?, self.plane(&b, depth + 1)?);
+                let u = cross(fa.normal, fb.normal);
+                let uu = dot(u, u);
+                if uu < 1e-12 {
+                    return Err("os planos são paralelos".into());
+                }
+                let (da, db) = (dot(fa.normal, fa.origin), dot(fb.normal, fb.origin));
+                Ok((mul(add(mul(cross(fb.normal, u), da), mul(cross(u, fa.normal), db)), 1. / uu), geo3d::unit(u).unwrap()))
+            }
         }
+    }
+
+    /// Ponto da face viva: pela chave (dono + papel), ou pelo ponto, que tem de estar sobre a face.
+    fn live_face(&self, p: V3, key: Option<&FaceKey>) -> Result<V3, String> {
+        let Some(k) = key else {
+            let on = self.bodies.values().any(|(b, _, _)| b.surface_near(p).is_ok_and(|(q, _)| geo3d::dist(q, p) < 1e-3));
+            return if on { Ok(p) } else { Err("a face não existe mais no modelo — reedite".into()) };
+        };
+        let mut lost = refs::Lost::None;
+        for (b, owners, roles) in self.bodies.values() {
+            let topo = b.topology().map_err(|e| e.0)?;
+            match refs::find_face(&refs::View { topo: &topo, owners, roles }, k, Some(p)) {
+                Ok(j) => return Ok(topo.faces[j].point),
+                Err(refs::Lost::None) => {}
+                Err(l) => lost = l,
+            }
+        }
+        let who = format!("a face de '{}' ({})", self.doc.name_of(k.owner), refs::role_name(k.role));
+        Err(match lost {
+            refs::Lost::Ambiguous(n) => format!("referência perdida: {who} tem {n} candidatas; escolha de novo"),
+            refs::Lost::None => format!("referência perdida: {who} não existe mais; escolha de novo"),
+        })
+    }
+
+    /// Polilinha atual da aresta: pela chave, ou pelo ponto médio.
+    fn live_edge(&self, mid: V3, key: Option<&EdgeKey>) -> Result<Vec<V3>, String> {
+        let mut lost = refs::Lost::None;
+        for (b, owners, roles) in self.bodies.values() {
+            let topo = b.topology().map_err(|e| e.0)?;
+            let v = refs::View { topo: &topo, owners, roles };
+            let found = match key {
+                Some(k) => refs::find_edge(&v, k, Some(mid)),
+                None => refs::edge_near(&v, mid, 0.1).ok_or(refs::Lost::None),
+            };
+            match found {
+                Ok(e) => return b.edge_at(topo.edge_mids[e]).map_err(|e| e.0),
+                Err(refs::Lost::None) => {}
+                Err(l) => lost = l,
+            }
+        }
+        Err(match lost {
+            refs::Lost::Ambiguous(n) => format!("referência perdida: a aresta tem {n} candidatas; escolha de novo"),
+            refs::Lost::None => match key {
+                Some(k) => format!("referência perdida: a aresta entre '{}' ({}) e '{}' ({}) não existe mais; escolha de novo", self.doc.name_of(k.a.owner), refs::role_name(k.a.role), self.doc.name_of(k.b.owner), refs::role_name(k.b.role)),
+                None => "referência perdida: a aresta não existe mais; escolha de novo".into(),
+            },
+        })
+    }
+
+    /// Eixo da face em `p`: origem, direção e altura.
+    fn face_axis(&self, p: V3, key: Option<&FaceKey>) -> Result<(V3, V3, f64), String> {
+        use geo3d::*;
+        let q = self.live_face(p, key)?;
+        for (b, _, _) in self.bodies.values() {
+            if let Ok(cy) = b.cylinder_at(q) {
+                return Ok((add(cy.origin, mul(cy.dir, cy.h0)), cy.dir, (cy.h1 - cy.h0).max(1.)));
+            }
+            if let Ok(fp) = b.face_props(q) {
+                if fp.kind == 2 {
+                    return Ok((fp.origin, fp.dir, 2. * fp.radius.max(5.)));
+                }
+            }
+        }
+        Err("a face escolhida não é cilíndrica nem cônica".into())
+    }
+
+    /// Origem do plano de face. O plano segue a face; a face que sumiu vira erro. Sem chave vale
+    /// qualquer face do dono no mesmo plano: a face pode ter sido dividida ou coberta no ponto
+    /// clicado por um comando depois do sketch, e isso não a faz sumir.
+    fn face_plane_origin(&self, origin: V3, n: V3, owner: Option<Id>, key: Option<&FaceKey>) -> Result<V3, String> {
+        use geo3d::*;
+        let Some(who) = owner.or(key.map(|k| k.owner)) else { return Ok(origin) };
+        for (b, owners, roles) in self.bodies.values() {
+            let topo = b.topology().map_err(|e| e.0)?;
+            for (j, f) in topo.faces.iter().enumerate() {
+                let same = match key {
+                    Some(k) => owners.get(j) == Some(&k.owner) && roles.get(j) == Some(&k.role),
+                    None => owners.get(j) == Some(&who),
+                };
+                if !same {
+                    continue;
+                }
+                if f.kind == 0 {
+                    let h = dot(sub(f.point, origin), n);
+                    if dot(f.dir, n).abs() > 0.99 && (key.is_some() || h.abs() < 1e-3) {
+                        return Ok(add(origin, mul(n, h)));
+                    }
+                } else if key.is_some() || b.surface_near(origin).is_ok_and(|(q, _)| dist(q, origin) < 1e-3) {
+                    return Ok(origin);
+                }
+            }
+        }
+        Err(format!("referência perdida: o plano ficava numa face de '{}' que não existe mais; escolha outra face", self.doc.name_of(who)))
     }
 
     fn point(&self, p: &PointRef, depth: u32) -> Result<V3, String> {
@@ -873,6 +985,11 @@ impl Ctx<'_> {
                 let (fr, es) = &self.sketch(sketch)?;
                 let q = es.pts.get(&point).ok_or("o ponto do sketch não existe mais — reedite")?;
                 Ok(fr.point(q[0], q[1]))
+            }
+            PointRef::Vertex { point, edge } => {
+                let c = self.live_edge(point, Some(&edge))?;
+                let (a, b) = (c[0], *c.last().unwrap());
+                Ok(if geo3d::dist(a, point) <= geo3d::dist(b, point) { a } else { b })
             }
             PointRef::CurveVertex { curve, index } => {
                 if depth > 32 {
@@ -909,6 +1026,11 @@ impl Ctx<'_> {
                 let closed = pts.len() > 2 && geo3d::dist(pts[0], *pts.last().unwrap()) < 1e-6;
                 Curve3::poly(pts.clone(), closed)
             }
+            CurveRef::BodyEdge { pts, key } => {
+                let p = self.live_edge(pts[pts.len() / 2], Some(key))?;
+                let closed = p.len() > 2 && geo3d::dist(p[0], *p.last().unwrap()) < 1e-6;
+                Curve3::poly(p, closed)
+            }
             CurveRef::SketchLine { sketch, entity } => {
                 let (af, ask) = &self.sketch(*sketch)?;
                 let (a, b) = ask.lines.get(entity).ok_or("a linha do sketch não existe mais — reedite")?;
@@ -944,6 +1066,7 @@ impl Ctx<'_> {
                 let f = self.plane(pr, depth)?;
                 (f.origin, f.normal)
             }
+            SurfRef::Face { key: Some(_), .. } => return self.surface_shape(sf, depth)?.surface_near(p).map_err(|e| e.0),
             SurfRef::Face { point, normal, .. } => (*point, geo3d::unit(*normal).ok_or("normal da face nula")?),
             SurfRef::Ref(id) => return self.surface(*id, depth)?.surface_near(p).map_err(|e| e.0),
         };
@@ -961,7 +1084,7 @@ impl Ctx<'_> {
     fn surface_shape(&self, sf: &SurfRef, depth: u32) -> Result<Shape, String> {
         match sf {
             SurfRef::Ref(id) => self.surface(*id, depth),
-            SurfRef::Face { point, .. } => self.face_of_bodies(*point),
+            SurfRef::Face { point, key, .. } => self.face_of_bodies(self.live_face(*point, key.as_ref())?),
             SurfRef::Plane(_) => Err("use 'Plano deslocado' para deslocar um plano".into()),
         }
     }
@@ -1198,7 +1321,11 @@ impl Ctx<'_> {
     fn surf_frame(&self, sf: &SurfRef, depth: u32) -> Result<Frame, String> {
         match sf {
             SurfRef::Plane(pr) => self.plane(pr, depth),
-            SurfRef::Face { point, normal, .. } => geo3d::frame_from(*point, *normal, None),
+            SurfRef::Face { point, normal, key: None, .. } => geo3d::frame_from(*point, *normal, None),
+            SurfRef::Face { point, key: Some(_), .. } => {
+                let (q, n) = self.surface_shape(sf, depth)?.surface_near(*point).map_err(|e| e.0)?;
+                geo3d::frame_from(q, n, None)
+            }
             SurfRef::Ref(id) => {
                 let sh = self.surface(*id, depth)?;
                 let (q, n) = sh.surface_near(sh.mass().center).map_err(|e| e.0)?;
@@ -1250,7 +1377,7 @@ impl Ctx<'_> {
         };
         Ok(match &r.kind {
             OffsetPlane { base, offset } => Geo::Plane(self.plane(base, d)?.offset(e(offset, "deslocamento")?)),
-            FacePlane { origin, x, normal, .. } => Geo::Plane(Frame { origin: *origin, x: *x, normal: *normal }),
+            FacePlane { origin, x, normal, owner, key } => Geo::Plane(Frame { origin: self.face_plane_origin(*origin, *normal, *owner, key.as_ref())?, x: *x, normal: *normal }),
             AnglePlane { base, axis, angle } => {
                 let b = self.plane(base, d)?;
                 let (o, dd) = self.axis_d(axis, d)?;
@@ -1296,9 +1423,20 @@ impl Ctx<'_> {
                 Geo::Plane(frame_from(o, n, Some(dd))?)
             }
             PlaneCurve { curve } => Geo::Plane(self.curve(curve, d)?.plane()?),
-            PlaneNormalCurve { curve, at, reverse } => {
+            PlaneNormalCurve { curve, at, reverse, point, project } => {
                 let c = self.curve(curve, d)?;
-                let (p, t) = self.on_curve(&c, at, *reverse, &r.name)?;
+                let (p, t) = match point {
+                    Some(q) => {
+                        let q = self.point(q, d)?;
+                        let (s0, foot) = c.nearest(q);
+                        let off = dist(q, foot);
+                        if !*project && off > 1e-3 {
+                            return Err(format!("o ponto está a {off:.3} mm da curva: use 'projetado' ou escolha um ponto dela"));
+                        }
+                        (foot, c.at_dist(s0).1)
+                    }
+                    None => self.on_curve(&c, at, *reverse, &r.name)?,
+                };
                 Geo::Plane(frame_from(p, t, None)?)
             }
             PlaneTangentSurface { surface, point } => {
@@ -1492,6 +1630,16 @@ impl Ctx<'_> {
                     }
                 }
                 return Err("a face escolhida não é cilíndrica nem cônica".into());
+            }
+            AxisLine { axis, length } => {
+                let (o, v) = self.axis_d(axis, d)?;
+                let natural = match axis {
+                    AxisRef::Face { point, key } => self.face_axis(*point, key.as_ref())?.2,
+                    AxisRef::Edge { mid, key } => Curve3::poly(self.live_edge(*mid, key.as_ref())?, false)?.length(),
+                    _ => 100.,
+                };
+                let l = if length.trim().is_empty() { natural } else { e(length, "comprimento")? };
+                Geo::Curve(Curve3::line(o, add(o, mul(v, l)))?)
             }
             PlanePointNormal { point, line } => {
                 let c = self.curve(line, d)?;
@@ -4849,6 +4997,11 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         let v = match cache.refs.get(&r.id).filter(|(k, _)| *k == key) {
             Some((_, v)) => v.clone(),
             None => {
+                // o plano de face vale para o fim da linha do tempo: a face pode ter sumido depois
+                // de quem o usou, e o valor guardado por esse uso não diz isso
+                if matches!(r.kind, RefKind::FacePlane { .. }) {
+                    cx.memo.borrow_mut().remove(&r.id);
+                }
                 let v = cx.geo(r.id, 0).and_then(|g| {
                     Ok(match g {
                         Geo::Plane(fr) => RefViz::Plane(fr),
@@ -6880,7 +7033,7 @@ mod tests {
         d.add_feature(FeatureKind::Extrude(Extrude { thin_side: 0,
             sketch: s,
             op: BoolOp::Add,
-            extent: Extent::UpToSurface(SurfRef::Face { point: [0., 0., 20.], normal: [0., 0., 1.], owner: None }),
+            extent: Extent::UpToSurface(SurfRef::Face { point: [0., 0., 20.], normal: [0., 0., 1.], owner: None, key: None }),
             reverse: true,
             taper: "0".into(),
             thin: None, dir: None,
@@ -7300,7 +7453,7 @@ mod tests {
         let pl = d.add_geometry(RefKind::PlaneThreePoints { a: PointRef::Ref(p1), b: PointRef::Ref(p2), c: PointRef::Ref(p3) });
         let ln = d.add_geometry(RefKind::LinePoints { a: PointRef::Ref(p1), b: PointRef::Ref(p2), start: "0".into(), end: "0".into() });
         let mid = d.add_geometry(RefKind::PointOnCurve { curve: CurveRef::Ref(ln), at: OnCurve::Ratio("0.5".into()), reverse: false });
-        let nc = d.add_geometry(RefKind::PlaneNormalCurve { curve: CurveRef::Ref(ln), at: OnCurve::Ratio("0.5".into()), reverse: false });
+        let nc = d.add_geometry(RefKind::PlaneNormalCurve { curve: CurveRef::Ref(ln), at: OnCurve::Ratio("0.5".into()), reverse: false, point: None, project: false });
         let ci = d.add_geometry(RefKind::Circle3 { a: PointRef::Ref(p1), b: PointRef::Ref(p2), c: PointRef::Ref(p3), full: true });
         let ce = d.add_geometry(RefKind::PointCenter { curve: CurveRef::Ref(ci) });
         let eq = d.add_geometry(RefKind::PlaneEquation { a: "0".into(), b: "0".into(), c: "2".into(), d: "10".into() });

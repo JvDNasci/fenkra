@@ -253,6 +253,10 @@ fn revolve_axis(app: &App, a: &AxisRef) -> Option<(Vec3, Vec3)> {
     match a {
         AxisRef::Origin(x) => Some((Vec3::ZERO, v3(fenkra_solidos::origin_axis(*x)))),
         AxisRef::Fixed { origin, dir } => Some((v3(*origin), v3(*dir).try_normalize()?)),
+        AxisRef::Face { .. } | AxisRef::Edge { .. } | AxisRef::Planes { .. } => {
+            let (o, d) = crate::picking::live_axis(r, a)?;
+            Some((v3(o), v3(d).try_normalize()?))
+        }
         AxisRef::Ref(id) => {
             let c = r.curves.iter().find(|c| c.id == *id)?;
             let (p, q) = (v3(c.pts[0]), v3(*c.pts.last()?));

@@ -59,6 +59,12 @@ pub enum AxisRef {
     Ref(Id),
     /// eixo fixo tirado de uma aresta clicada (fixo nesta versão)
     Fixed { origin: [f64; 3], dir: [f64; 3] },
+    /// eixo de uma face cilíndrica ou cônica: segue a face
+    Face { point: [f64; 3], key: Option<FaceKey> },
+    /// aresta reta do modelo: segue a aresta
+    Edge { mid: [f64; 3], key: Option<EdgeKey> },
+    /// interseção de dois planos
+    Planes { a: PlaneRef, b: PlaneRef },
 }
 
 impl AxisRef {
@@ -66,7 +72,11 @@ impl AxisRef {
         match self {
             AxisRef::SketchLine { sketch, .. } => ids(sketch),
             AxisRef::Ref(x) => ids(x),
-            AxisRef::Origin(_) | AxisRef::Fixed { .. } => {}
+            AxisRef::Planes { a, b } => {
+                a.walk(ids);
+                b.walk(ids)
+            }
+            AxisRef::Origin(_) | AxisRef::Fixed { .. } | AxisRef::Face { .. } | AxisRef::Edge { .. } => {}
         }
     }
 }
@@ -92,6 +102,8 @@ pub enum PointRef {
     /// vértice de uma linha/polilinha/spline de referência (0 = início; nas polilinhas e
     /// splines, o índice do ponto de definição; nas demais, 1 = fim e 2 = meio)
     CurveVertex { curve: Id, index: usize },
+    /// ponta de uma aresta do modelo: segue a aresta; `point` escolhe a ponta e serve de reserva
+    Vertex { point: [f64; 3], edge: EdgeKey },
 }
 
 impl Default for PointRef {
@@ -106,7 +118,7 @@ impl PointRef {
             PointRef::Ref(x) => ids(x),
             PointRef::SketchPoint { sketch, .. } => ids(sketch),
             PointRef::CurveVertex { curve, .. } => ids(curve),
-            PointRef::Origin | PointRef::Fixed(_) => {}
+            PointRef::Origin | PointRef::Fixed(_) | PointRef::Vertex { .. } => {}
         }
     }
 }
@@ -121,6 +133,8 @@ pub enum CurveRef {
     SketchLine { sketch: Id, entity: Id },
     /// aresta clicada no modelo, como polilinha (fixa nesta versão)
     Edge(Vec<[f64; 3]>),
+    /// aresta do modelo por dono e papel (ADR 0010): segue a aresta; `pts` é a última forma dela
+    BodyEdge { pts: Vec<[f64; 3]>, key: EdgeKey },
     /// qualquer curva de um sketch (linha, arco, círculo), associativa
     SketchCurve { sketch: Id, curve: Id },
     /// um trecho (segmento i → i+1) de uma polilinha de referência
@@ -139,7 +153,15 @@ impl CurveRef {
             CurveRef::Ref(x) => ids(x),
             CurveRef::SketchLine { sketch, .. } | CurveRef::SketchCurve { sketch, .. } => ids(sketch),
             CurveRef::Segment { curve, .. } => ids(curve),
-            CurveRef::Axis(_) | CurveRef::Edge(_) => {}
+            CurveRef::Axis(_) | CurveRef::Edge(_) | CurveRef::BodyEdge { .. } => {}
+        }
+    }
+
+    /// Polilinha da aresta do modelo, se a curva for uma.
+    pub fn edge_pts(&self) -> Option<&Vec<[f64; 3]>> {
+        match self {
+            CurveRef::Edge(p) | CurveRef::BodyEdge { pts: p, .. } => Some(p),
+            _ => None,
         }
     }
 }
@@ -188,7 +210,14 @@ fn tol_fill() -> String {
 #[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
 pub enum SurfRef {
     Plane(PlaneRef),
-    Face { point: [f64; 3], normal: [f64; 3], owner: Option<Id> },
+    Face {
+        point: [f64; 3],
+        normal: [f64; 3],
+        owner: Option<Id>,
+        /// chave v2 (ADR 0010): com ela a referência segue a face; sem ela vale o ponto
+        #[serde(default)]
+        key: Option<FaceKey>,
+    },
     /// superfície de referência (pasta de geometria)
     Ref(Id),
 }
@@ -518,7 +547,15 @@ pub enum RefKind {
     /// Plano que passa por um eixo, girado de um ângulo a partir do plano base.
     AnglePlane { base: PlaneRef, axis: AxisRef, angle: String },
     /// Plano de uma face plana clicada na viewport (origem, direção X e normal).
-    FacePlane { origin: [f64; 3], x: [f64; 3], normal: [f64; 3], owner: Option<Id> },
+    FacePlane {
+        origin: [f64; 3],
+        x: [f64; 3],
+        normal: [f64; 3],
+        owner: Option<Id>,
+        /// chave v2 da face: com ela o plano acompanha a face; sem ela vale o dono e o ponto
+        #[serde(default)]
+        key: Option<FaceKey>,
+    },
     /// Paralelo a um plano, passando por um ponto.
     PlaneParallelPoint { base: PlaneRef, point: PointRef },
     /// Por três pontos não colineares.
@@ -530,7 +567,17 @@ pub enum RefKind {
     /// Plano que contém uma curva planar.
     PlaneCurve { curve: CurveRef },
     /// Normal a uma curva num ponto dela (distância ou proporção).
-    PlaneNormalCurve { curve: CurveRef, at: OnCurve, reverse: bool },
+    PlaneNormalCurve {
+        curve: CurveRef,
+        at: OnCurve,
+        reverse: bool,
+        /// em vez de `at`: o ponto da curva dado por um ponto
+        #[serde(default)]
+        point: Option<PointRef>,
+        /// `point` fora da curva vale pelo pé da projeção; sem isso, é erro
+        #[serde(default)]
+        project: bool,
+    },
     /// Tangente a uma superfície no ponto (projetado na superfície).
     PlaneTangentSurface { surface: SurfRef, point: PointRef },
     /// Ax + By + Cz = D
@@ -601,6 +648,9 @@ pub enum RefKind {
     LineBisector { a: CurveRef, b: CurveRef, length: String },
     /// Eixo de uma face cilíndrica ou cônica (ponto clicado na face).
     LineAxis { face: [f64; 3] },
+    /// Eixo como elemento: de face cilíndrica ou cônica, de aresta ou da interseção de dois planos.
+    /// `length` vazio usa o comprimento natural (altura da face, aresta inteira).
+    AxisLine { axis: AxisRef, length: String },
     /// Plano por um ponto, normal a uma linha.
     PlanePointNormal { point: PointRef, line: CurveRef },
     /// Plano médio entre dois planos.
@@ -855,9 +905,20 @@ impl RefKind {
                 line.walk(ids)
             }
             PlaneCurve { curve } | PointCenter { curve } => curve.walk(ids),
-            PlaneNormalCurve { curve, at, .. } | PointOnCurve { curve, at, .. } => {
+            PlaneNormalCurve { curve, at, point, .. } => {
+                curve.walk(ids);
+                if let Some(p) = point {
+                    p.walk(ids)
+                }
+                exprs(at.expr_mut())
+            }
+            PointOnCurve { curve, at, .. } => {
                 curve.walk(ids);
                 exprs(at.expr_mut())
+            }
+            AxisLine { axis, length } => {
+                axis.walk(ids);
+                exprs(length)
             }
             PlaneTangentSurface { surface, point } => {
                 surface.walk(ids);
@@ -2700,7 +2761,7 @@ pub struct Hole {
 
 /// Referência v2 a uma face (ADR 0010): dono + papel + assinatura geométrica. O ponto clicado
 /// continua guardado ao lado, como reserva e para arquivos antigos.
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
 pub struct FaceKey {
     /// comando que gerou a face
     pub owner: Id,
@@ -2715,7 +2776,7 @@ pub struct FaceKey {
 }
 
 /// Referência v2 a uma aresta: a aresta entre duas faces.
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
 pub struct EdgeKey {
     pub a: FaceKey,
     pub b: FaceKey,
@@ -3135,7 +3196,7 @@ impl Document {
     pub fn add_face_plane(&mut self, origin: [f64; 3], x: [f64; 3], normal: [f64; 3], owner: Option<Id>) -> Id {
         let id = self.alloc();
         let name = self.unique_name("PlanoFace");
-        self.references.push(RefElement { id, name, kind: RefKind::FacePlane { origin, x, normal, owner }, visible: true, folder: None, published: false, appearance: None });
+        self.references.push(RefElement { id, name, kind: RefKind::FacePlane { origin, x, normal, owner, key: None }, visible: true, folder: None, published: false, appearance: None });
         self.file_last_reference();
         id
     }
