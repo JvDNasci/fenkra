@@ -57,6 +57,7 @@ preferências do usuário.
 | `FENKRA_DEMO_INICIO=1` | mostra a tela inicial |
 | `FENKRA_DEMO_TEMA=<nome>` | usa o tema (Escuro, Claro, NeoTech Minimalista…) |
 | `FENKRA_DEMO_CHAPA`, `_EST`, `_SUP`, `_ASM`, `_PMI`, `_DWG` | abre o exemplo de cada bancada |
+| `FENKRA_DEMO_PREVIA=ultimo` | reabre o último comando da peça de exemplo como comando novo, para ver a prévia fantasma |
 | `FENKRA_ABRIR=<arquivo>`, `FENKRA_BANCADA=<bancada>` | abre um arquivo / uma bancada |
 | `FENKRA_EN=1` | interface em inglês |
 

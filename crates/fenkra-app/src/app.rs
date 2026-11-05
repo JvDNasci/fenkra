@@ -183,6 +183,8 @@ pub struct App {
     inicio_pelo_menu: bool,
     /// comando aberto em edição (ambiente com Concluir/Cancelar)
     pub session: Option<Session>,
+    /// desenvolvimento: comando a abrir como novo quando a peça terminar de calcular
+    demo_previa: Option<FeatureKind>,
     /// novo sketch esperando o clique no plano/face
     pub sketch_wait_plane: bool,
     /// árvore aberta ao lado do painel do comando
@@ -256,6 +258,8 @@ pub struct Session {
     pub id: Id,
     pub snapshot: Document,
     pub is_new: bool,
+    /// corpos como estavam ao abrir o comando: ficam por baixo da prévia que refaz o corpo inteiro
+    pub corpos_antes: Vec<crate::previa::CorpoBase>,
 }
 
 pub const MATERIALS: [(&str, f64); 8] = [
@@ -341,6 +345,7 @@ impl App {
             started: false,
             inicio_pelo_menu: false,
             session: None,
+            demo_previa: None,
             view_menu: false,
             new_view_name: String::new(),
             view_choice: None,
@@ -645,6 +650,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 app.sel = Sel::Pmi(p.id);
             }
         }
+        app.demo_previa = crate::previa::demo_preparar(&mut app.open.doc);
         app.request_recompute();
         app
     }
@@ -812,6 +818,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
         }
         (false, set)
+    }
+
+    /// O cálculo pedido por último ainda não voltou?
+    pub fn calculando(&self) -> bool {
+        self.gen_done < self.gen_sent
     }
 
     /// A geometria mudou desde o último pedido de cálculo?
@@ -2172,7 +2183,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             return;
         }
         let snapshot = snapshot.unwrap_or_else(|| self.open.doc.clone());
-        self.session = Some(Session { id, snapshot, is_new });
+        let corpos_antes = crate::previa::corpos_base(self.result.as_ref());
+        self.session = Some(Session { id, snapshot, is_new, corpos_antes });
         self.reframe_pending = true;
         self.sel = if self.open.doc.reference(id).is_some() { Sel::Ref(id) } else { Sel::Feature(id) };
     }
@@ -2211,6 +2223,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 self.sel = Sel::None;
             }
             self.request_recompute();
+            self.scene_dirty = true;
         }
     }
 
@@ -6029,6 +6042,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             if self.sketch.is_some() {
                 crate::sketch_ui::overlay(self, ui, rect, &resp, cam);
             } else if let Some(r) = &self.result {
+                // comandos que escolhem faces da própria peça continuam clicando no que veem
+                let aberto = self.session.as_ref().map(|x| x.id);
+                let escolhe_faces = aberto.and_then(|id| self.open.doc.feature(id)).is_some_and(|f| crate::feat_ui::wants_faces(&f.kind));
                 let filt = crate::picking::Filter {
                     faces: self.settings.sel_faces,
                     edges: self.settings.sel_edges,
@@ -6036,6 +6052,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     planes: true,
                     hidden_env: self.hidden_env,
                     exclude_sketch: None,
+                    fantasma: aberto.filter(|_| !escolhe_faces),
                 };
                 let dragging = resp.dragged();
                 self.hover_pick = match (resp.hover_pos(), dragging) {
@@ -6243,6 +6260,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 crate::asm_ui::fasteners_handles(self, ui, rect, &cam);
                 crate::feat_ui::bend_overlay(self, ui, rect, &cam);
                 crate::feat_ui::cut_overlay(self, ui, rect, &cam);
+                crate::previa::overlay(self, ui, rect);
             }
             // seta e cota 3D do comando aberto (fast 3D)
             if self.sketch.is_none() {
@@ -7205,7 +7223,9 @@ impl eframe::App for App {
         self.hist.definir_limite_mb(self.settings.historico_mb);
         // atualização automática: compara com o último documento enviado (pega também mudanças
         // feitas fora deste trecho, como Del, desfazer, assistentes e janelas)
-        if self.settings.auto_update && self.open.frozen.is_none() && self.needs_recompute() {
+        // com um comando aberto calcula sempre: a prévia é o motivo de ele estar aberto, e o cálculo
+        // fica no fio de trás, então o modo manual não ganha nada em segurar
+        if (self.settings.auto_update || self.session.is_some()) && self.open.frozen.is_none() && self.needs_recompute() {
             self.request_recompute();
         }
         let link_key = egui::Id::unique("fenkra_link_acao");
@@ -7247,6 +7267,13 @@ impl eframe::App for App {
         self.macro_window(ctx);
         if let Some(id) = self.open_pending.take() {
             self.start_session(id, false, None);
+        }
+        if self.result.is_some() && !self.calculando() {
+            if let Some(k) = self.demo_previa.take() {
+                let snapshot = self.open.doc.clone();
+                let id = self.open.doc.add_feature(k);
+                self.start_session(id, true, Some(snapshot));
+            }
         }
         if let Some(id) = self.begin_sketch_pending.take() {
             self.begin_sketch(id);
@@ -7312,6 +7339,7 @@ impl eframe::App for App {
                     line_w: self.settings.ref_line_width,
                     line_dash: self.settings.ref_line_dash,
                     point_style: self.settings.point_style,
+                    fantasma: crate::previa::da_sessao(self.session.as_ref().filter(|_| asm_view.is_none()), &ctx.global_style().visuals),
                 };
                 let mut s = scene::build(scene_doc, r, &opts);
                 crate::asm_ui::contexto_na_cena(self.asm.as_ref(), &mut s);

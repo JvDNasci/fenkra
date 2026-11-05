@@ -2586,6 +2586,8 @@ static TABLE: &[(&str, &str)] = &[
     ("tracejada", "dashed"),
     ("pontilhada", "dotted"),
     ("fantasma", "phantom"),
+    ("Prévia inválida", "Invalid preview"),
+    ("Atualizando a prévia…", "Updating the preview…"),
     ("traço-ponto", "dash-dot"),
     ("contínua", "continuous"),
     ("Chamada", "Leader"),
