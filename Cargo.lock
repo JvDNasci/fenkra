@@ -1334,6 +1334,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fenkra-mcp"
+version = "0.1.0-alpha.28"
+dependencies = [
+ "fenkra-cli",
+ "fenkra-core",
+ "fenkra-kernel",
+ "fenkra-solidos",
+ "serde_json",
+]
+
+[[package]]
 name = "fenkra-montagem"
 version = "0.1.0-alpha.28"
 dependencies = [

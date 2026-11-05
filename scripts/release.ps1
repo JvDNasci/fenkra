@@ -27,7 +27,7 @@ if ($faltam.Count -gt 0) { throw "arquivos de licença ausentes na raiz: $($falt
 
 $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
 if (-not $SkipBuild) {
-    cargo build --release -p fenkra-app
+    cargo build --release -p fenkra-app -p fenkra-cli -p fenkra-mcp
     if ($LASTEXITCODE -ne 0) { throw "falha na compilação" }
 }
 # a pasta de build pode estar fora do projeto (.cargo\config.toml)
@@ -36,6 +36,9 @@ $exe = Join-Path $targetDir "release\fenkra.exe"
 if (-not (Test-Path $exe)) { throw "executável não encontrado: $exe" }
 $conv = Join-Path $targetDir "release\fenkra-conv.exe"
 if (-not (Test-Path $conv)) { throw "conversor não encontrado: $conv" }
+# automação sem interface: linha de comando e servidor MCP, ao lado do programa para achar as DLLs
+$automacao = @("fenkra-cli.exe", "fenkra-mcp.exe") | ForEach-Object { Join-Path $targetDir "release\$_" }
+foreach ($a in $automacao) { if (-not (Test-Path $a)) { throw "programa não encontrado: $a" } }
 
 # dumpbin do Visual Studio
 $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
@@ -56,6 +59,7 @@ $queue = New-Object System.Collections.Queue
 $queue.Enqueue($exe)
 # o XCAF só é usado pelo processo filho: o fechamento precisa partir dos dois executáveis
 $queue.Enqueue($conv)
+foreach ($a in $automacao) { $queue.Enqueue($a) }
 while ($queue.Count -gt 0) {
     $f = $queue.Dequeue()
     foreach ($d in Get-Deps $f) {
@@ -71,6 +75,8 @@ if (Test-Path $out) { Remove-Item -Recurse -Force $out }
 New-Item -ItemType Directory -Force $out | Out-Null
 Copy-Item $exe $out
 Copy-Item $conv $out
+foreach ($a in $automacao) { Copy-Item $a $out }
+Copy-Item (Join-Path $root "python\fenkra") (Join-Path $out "python\fenkra") -Recurse -Exclude "__pycache__"
 foreach ($p in $needed.Values) { Copy-Item $p $out }
 
 # runtime C++: sem ele o app nem abre em PC que não tenha o redistribuível instalado

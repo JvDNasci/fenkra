@@ -5,6 +5,7 @@ members = [
     "crates/fenkra-kernel",
     "crates/fenkra-conversor",
     "crates/fenkra-cli",
+    "crates/fenkra-mcp",
     "crates/fenkra-solidos",
     "crates/fenkra-project",
     "crates/fenkra-montagem",
