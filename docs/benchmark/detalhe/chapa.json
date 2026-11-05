@@ -1,0 +1,114 @@
+{
+ "alterar": [
+  {
+   "id": "B60",
+   "oque": "Acrescentar o aceite por comando de chapa: cada comando da bancada (18 entradas da barra) tem ícone que mostra o resultado, tooltip de dois estágios com GIF de laço de 5 a 10 s (roteiro em docs/benchmark/detalhe/chapa.md) e dica própria por campo, e o teste de cobertura falha se faltar qualquer um. O raio, a bainha e o chanfro da chapa reusam ícones de sólidos que não explicam o uso."
+  },
+  {
+   "id": "B31",
+   "oque": "No comando de aba unificado, adotar o painel Suporte -> Modo -> Parâmetros -> Avançado, com miniaturas por tipo, campos que somem quando não valem para o tipo, um único botão padrão de inverter direção (hoje cada comando tem uma caixa com nome diferente) e campos que ficam vermelhos com o limite válido escrito. O raio próprio deve nascer da regra de chapa, não de um valor fixo."
+  },
+  {
+   "id": "B02",
+   "oque": "Além do mapeamento pelo arco, o recorte deve mostrar a prévia do contorno nas duas vistas (planificada e dobrada) ao mesmo tempo e oferecer o modo normal à face e o modo através da dobra como escolha visível, com botão para projetar a planificada dentro do sketch para cotar contra ela."
+  }
+ ],
+ "novos": [
+  {
+   "titulo": "Chapa: prévia 3D viva em todos os comandos",
+   "onda": 1,
+   "prio": "P0",
+   "oque": "Ao escolher a aresta, a face ou a linha, o comando mostra o resultado translúcido com valores padrão e atualiza a cada mudança de campo, sem confirmar. Vale para os 16 comandos Sm* da barra, com aviso em vermelho e causa textual quando o resultado seria inválido (colisão com a aba vizinha, raio abaixo do mínimo). Aceite: teste automático de que cada comando devolve uma malha de prévia e captura visual de ao menos aba, bainha, dobra por linha e estampo.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 420,
+   "teste": "Auto + Visual",
+   "area": "Chapa metálica"
+  },
+  {
+   "titulo": "Chapa: manipuladores 3D de ângulo, raio, largura e posição da dobra",
+   "onda": 2,
+   "prio": "P1",
+   "oque": "Além da seta de comprimento que já existe em cinco comandos, incluir arco arrastável de ângulo, marca de raio, seta de largura e recuos laterais, cada um com rótulo do valor e clique para digitar no próprio 3D. Aceite: arrastar muda a expressão do campo preservando variáveis, desfazer volta um passo, e o teste cobre aba, bainha, dobra por linha, joggle e veneziana.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Chapa metálica"
+  },
+  {
+   "titulo": "Chapa: dica por campo com figura e limite",
+   "onda": 2,
+   "prio": "P1",
+   "oque": "Cada campo de chapa (comprimento, ângulo, raio, fator K, folga, recuo, posição da dobra) tem dica em dois estágios: frase sobre o que muda, valor padrão e limite válido; e, no segundo estágio, figura ou GIF curto. Substitui o texto genérico de expressão usado hoje em todos os campos. Aceite: lista de campos de chapa gerada do código, com teste que falha se algum não tiver dica nem tradução.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Chapa metálica"
+  },
+  {
+   "titulo": "Chapa: linha de dobra desenhada no 3D com face fixa",
+   "onda": 2,
+   "prio": "P0",
+   "oque": "Dobra por linha, joggle e veneziana passam a pedir a face fixa e uma linha desenhada na face com snap, mostrada tracejada com setas de sentido e as duas metades coloridas (fixa e móvel), em lugar de dois vértices e do botão de usar vértices. Aceite: linha editável por arraste das pontas, posição da dobra (centro, material dentro, fora, dobra fora) e ângulo por arco; teste monta as três features e confere volume e caixa envolvente.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 350,
+   "teste": "Auto + Visual",
+   "area": "Chapa metálica"
+  },
+  {
+   "titulo": "Chapa: estilos nomeados com raio por fórmula e sobrescrita marcada",
+   "onda": 3,
+   "prio": "P1",
+   "oque": "Estilo de chapa salvo com nome (material, espessura, raio como fórmula da espessura, método de compensação, alívios e tamanho padrão de canto), selecionável no topo da janela de parâmetros. Cada feature herda o estilo e mostra um cadeado quando sobrescreve um campo. Aceite: trocar o estilo recalcula a peça e a tabela de dobras; salvar e abrir preserva o estilo; teste cobre herança e sobrescrita.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 280,
+   "teste": "Auto",
+   "area": "Chapa metálica"
+  },
+  {
+   "titulo": "Chapa: extensão lateral da aba e laço de arestas",
+   "onda": 3,
+   "prio": "P1",
+   "oque": "Aba com extensão pela aresta inteira, por largura centrada ou deslocada e entre duas referências, e seleção de laço para criar várias abas em um só comando. Complementa a posição da dobra e o vértice virtual do B31. Aceite: cada modo gera a largura esperada e o laço retangular gera quatro abas com mitra; testes de volume e caixa envolvente.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 260,
+   "teste": "Auto + Visual",
+   "area": "Chapa metálica"
+  },
+  {
+   "titulo": "Chapa: fechamento de canto com tipo, folga e razão",
+   "onda": 3,
+   "prio": "P2",
+   "oque": "Comando que fecha o canto entre duas abas com tipo topo, sobreposto ou sob, folga entre as faces e razão de sobreposição, com opções de canto estreito e propagação automática. Hoje só existe alívio de canto. Aceite: três tipos geram geometria válida, a planificada não sobrepõe material e o teste confere volume e folga mínima.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 240,
+   "teste": "Auto + Visual",
+   "area": "Chapa metálica"
+  },
+  {
+   "titulo": "Chapa: dobrar e desdobrar animado com ordem de dobra editável",
+   "onda": 4,
+   "prio": "P2",
+   "oque": "Controle deslizante de 0 a 100% que anima a peça entre dobrada e planificada, e glifos numerados nas linhas de dobra que se reordenam por arraste, com número repetido permitido, alimentando a tabela de dobras do desenho. Complementa B86 e B173. Aceite: o controle em 0% e 100% reproduz exatamente os dois estados atuais, e a ordem editada aparece na tabela e na vista planificada.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 220,
+   "teste": "Auto + Visual",
+   "area": "Chapa metálica"
+  }
+ ]
+}

@@ -1,0 +1,102 @@
+{
+  "alterar": [
+    {
+      "id": "B53",
+      "oque": "Somar ao corpus um orçamento de desempenho que falha o teste quando passa do limite: tesselação por etapa (malha, suavidade de arestas, polilinhas), recompute sem mudança, recompute com edição local e memória depois de 300 edições, com a engrenagem de 40 dentes e a placa com grade de furos como peças de referência."
+    },
+    {
+      "id": "B68",
+      "oque": "Medido: clone de documento com 300 comandos custa 0,23 ms e a comparação 0,015 ms, abaixo da meta de 2 ms por quadro. A remoção do clone por quadro perde prioridade como ganho de CPU; o valor do item passa a ser o desfazer nomeado e o limite em MB do histórico, hoje sem teto em app.rs."
+    },
+    {
+      "id": "B125",
+      "oque": "Depende antes da tesselação linear e do cache de malhas com limite. A carga e a composição da montagem precisam sair da thread da interface (view::compose e tesselar rodam nela hoje). Malha mais grossa por componente reaproveita os presets do B61 e o modo leve."
+    },
+    {
+      "id": "B139",
+      "oque": "Efeitos nascem desligados no modo leve e em adaptador de software, com o nível Rápido sem sombra nem oclusão. Nenhum efeito pode exigir recurso que impeça abrir em OpenGL ou em adaptador antigo; sem o recurso, o nível cai sozinho e avisa uma vez."
+    }
+  ],
+  "novos": [
+    {
+      "titulo": "Tesselação sem custo quadrático e sem refazer faces intactas",
+      "onda": 0,
+      "prio": "P0",
+      "oque": "Tirar o BRepAdaptor_Surface criado por aresta na suavidade (guardar por face ou usar a curva da aresta na face) e mover o BRepTools::Clean para a troca de qualidade, reaproveitando as faces já malhadas; massa não é refeita quando só a qualidade muda. Aceite: engrenagem de 40 dentes com a etapa de suavidade abaixo de 5 ms (hoje 350 ms); edição numa face lateral da placa 20x20 abaixo de 150 ms (hoje 1.034 ms); edge_smooth, volume e caixa envolvente iguais no corpus, sem furo na malha.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 140,
+      "teste": "Auto + Visual",
+      "area": "Geral"
+    },
+    {
+      "titulo": "Cache de malhas com limite de memória",
+      "onda": 0,
+      "prio": "P0",
+      "oque": "Cache.meshes e Cache.fills guardam uma entrada por versão e nunca descartam; passam a manter só as assinaturas vivas no último cálculo, com teto em MB. Medido hoje: 300 edições da peça de exemplo levam o processo de 31 MB a 160 MB. Aceite: mesmas 300 edições com crescimento abaixo de 10%, sem perder o reaproveitamento do corpo que não mudou.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 80,
+      "teste": "Auto",
+      "area": "Geral"
+    },
+    {
+      "titulo": "Partida que sempre explica: runtime C++, erro de GPU e registro",
+      "onda": 0,
+      "prio": "P0",
+      "oque": "O pacote passa a levar vcruntime140.dll, vcruntime140_1.dll e msvcp140.dll, e o erro de run_native vira nova tentativa (padrão, Vulkan, OpenGL) e caixa de mensagem traduzida, em vez de fechar em silêncio. Registro partida.log por etapa com adaptador, backend e tipo, mais fenkra.exe --seguro e --diagnostico. Aceite: abre em Windows limpo sem o Redistributable; backend inválido forçado por WGPU_BACKEND mostra a mensagem e grava o motivo; adaptador de software abre e avisa uma vez.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 150,
+      "teste": "Auto + Visual",
+      "area": "Geral"
+    },
+    {
+      "titulo": "Repouso sem repintura",
+      "onda": 0,
+      "prio": "P0",
+      "oque": "A tela inicial (request_repaint incondicional) e a barra de abas dos painéis (repintura a cada 50 ms) só agendam quadro enquanto há animação de verdade. Um contador de quadros de diagnóstico mede o resultado e registra o consumo antes e depois. Aceite: zero quadros em 5 s parado na tela inicial, com peça aberta e com painel de abas aberto; animações e dicas continuam funcionando.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 80,
+      "teste": "Auto + Visual",
+      "area": "Navegação"
+    },
+    {
+      "titulo": "Orçamento de CPU do kernel: limite de fios do malhador",
+      "onda": 1,
+      "prio": "P1",
+      "oque": "Teto de fios configurável pelo pool do OpenCASCADE, ajustado só entre cálculos, com padrão de metade dos processadores lógicos e mínimo de 2; a thread de recompute roda abaixo da prioridade da interface. Medido na placa 20x20: 4 fios custam 11% mais tempo e 32% menos CPU que 16. Aceite: teste confere o limite aplicado, resultado de malha igual em qualquer número de fios e interface responsiva durante o cálculo.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 80,
+      "teste": "Auto",
+      "area": "Geral"
+    },
+    {
+      "titulo": "Avaliar o malhador Delabella como alternativa",
+      "onda": 1,
+      "prio": "P1",
+      "oque": "Comparar IMeshTools_MeshAlgoType_Delabella com o padrão em todo o corpus, medindo tempo, desvio real, triângulos e falhas. Medido: 2.032 ms contra 237 ms na placa 20x20 com a mesma contagem, mas 1.916 contra 4.224 triângulos na engrenagem, diferença ainda não explicada. Aceite: decisão registrada em ADR, com adoção total, só para faces planas ou rejeição, e nenhuma peça do corpus com desvio acima do pedido.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 90,
+      "teste": "Auto + Visual",
+      "area": "Geral"
+    },
+    {
+      "titulo": "Modo leve e perfil automático de hardware",
+      "onda": 1,
+      "prio": "P1",
+      "oque": "Um interruptor que combina ajustes existentes: malha Rascunho, sem anti-serrilhamento, simplificar ao girar, iluminação simples, 2 fios e animações desligadas, sugerido na primeira execução quando o adaptador é de software ou OpenGL, ou com menos de 8 GB ou até 4 processadores lógicos. Publica os requisitos mínimos depois de teste em máquina real. Aceite: volume e medidas idênticos com o modo ligado; a sugestão aparece uma vez e nunca é imposta; roteiro de abrir, modelar, girar e salvar passa em Dx12, Vulkan e OpenGL.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 200,
+      "teste": "Auto + Visual",
+      "area": "Navegação"
+    },
+    {
+      "titulo": "Trabalho pesado fora da interface, com cancelamento",
+      "onda": 2,
+      "prio": "P1",
+      "oque": "Composição e tesselação da montagem e atualização de vistas do desenho saem da thread da interface para uma fila de trabalho com progresso; operações longas do OpenCASCADE recebem Message_ProgressRange para abandonar cálculo já superado. Coordenar com as bancadas de Montagem e Desenho. Aceite: nenhum quadro acima de 100 ms ao carregar a montagem de referência; mudar uma cota durante um cálculo longo cancela o anterior e o resultado final é igual ao de um cálculo do zero.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 350,
+      "teste": "Auto",
+      "area": "Geral"
+    }
+  ]
+}

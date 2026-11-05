@@ -1,0 +1,102 @@
+{
+ "alterar": [
+  {
+   "id": "B17",
+   "oque": "Acrescentar ao aceite da câmera: passo adaptativo ao zoom compartilhado com as alças 3D (potência 1-2-5 equivalente a 4 a 8 px), pivô sob o cursor também enquanto uma alça é arrastada, e rótulos 3D que acompanham a escala da interface. Teste visual: arrastar a seta de extrusão em peça de 5 mm e de 5 m produz saltos proporcionais ao tamanho na tela."
+  },
+  {
+   "id": "B20",
+   "oque": "Ampliar com o contrato de comando de docs/benchmark/detalhe/interface.md: prévia viva desde o primeiro suporte válido, manipulador por tipo de grandeza (seta, anel, plano, losango), rótulo 3D editável que arrasta e aceita roda e expressão, estados visuais (repouso, pairando, ativo, travado, erro), Enter/Esc e 'aplicar e continuar'. Aceite: o checklist padrão (Intuitivo, Prévia 3D, Manipulação 3D, Ícone claro, Tooltip com GIF, Dica por campo, Fluxo) pontuado por comando, com meta de 'ok' em todos os comandos de sólidos antes dos demais."
+  },
+  {
+   "id": "B60",
+   "oque": "Ampliar: tooltip em três camadas (500 ms nome, atalho do mapa e frase; ~1,2 s mini-GIF de 4 a 8 s; F1 abre a ajuda do comando), mídia gerada pelo próprio app a partir de roteiros e guardada em pacote externo ao executável, regras de ícone com selo por variante e paleta semântica, 30 ícones piores redesenhados, busca Ctrl+K com sinônimos PT/EN que alimenta o editor da roda de comandos, e teste que falha se faltar ícone, tooltip, mídia, dica por campo ou tradução. Atraso configurável e modo 'reduzir movimento'."
+  }
+ ],
+ "novos": [
+  {
+   "titulo": "Campo numérico padrão único (roda, arrasto, expressão, unidade, dica)",
+   "onda": 1,
+   "prio": "P0",
+   "oque": "Criar o componente campo_num que todos os painéis usam no lugar de DragValue, TextEdit numérico e Slider, com roda configurável (sempre sobre o campo, só com Ctrl ou só com foco), arrasto no rótulo, expressão com valor resolvido, unidades digitadas, restaurar padrão e dica de três linhas. Corrige a roda que funciona só onde a chamada foi escrita à mão (ui_ext.rs:46-66; ausente em sketch_ui.rs:2620, editor.rs:1098, sliders). Aceite: teste de CI proíbe campo numérico fora do componente, e o mesmo comando abre idêntico nos painéis esquerdo e direito.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "Interface"
+  },
+  {
+   "titulo": "Contrato de manipulação 3D: rótulo arrastável e passo adaptativo",
+   "onda": 1,
+   "prio": "P0",
+   "oque": "Reescrever handles.rs e gizmo.rs sob um vocabulário único: seta de distância, anel de ângulo, plano arrastável, esfera de posição, alça de raio e losango de quantidade, com pega de 28 px. O rótulo de valor arrasta, aceita roda e expressão e mostra o nome do parâmetro com opção de desvincular; o passo segue o zoom e Shift tem o mesmo sentido do painel. Aceite: offset de plano mostra retângulo translúcido, rótulo e inversão; teste visual em peças de 5 mm e 5 m.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 420,
+   "teste": "Auto + Visual",
+   "area": "Interface"
+  },
+  {
+   "titulo": "Roda de comandos (menu radial configurável)",
+   "onda": 2,
+   "prio": "P1",
+   "oque": "Menu radial de 8 setores aberto por tecla configurável (padrão Shift+W): segurar e soltar executa, toque curto fixa, carrossel de páginas pela roda, teclas 1 a 8. Conteúdo por bancada, modo e seleção, com dois setores preenchidos pelo uso local; editor em Configurações com arrastar do catálogo, restaurar, exportar e importar. Aceite: abre em menos de 80 ms, gesto de 60 px executa sem desenhar o menu e a tecla some do mapa sem conflito (keymap.rs:301).",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 380,
+   "teste": "Auto + Visual",
+   "area": "Interface"
+  },
+  {
+   "titulo": "Esteira de mídia de ajuda gerada pelo app (roteiros e GIF)",
+   "onda": 2,
+   "prio": "P1",
+   "oque": "Formato de roteiro JSON por comando e modo FENKRA_DEMO_GRAVAR que executa com passo de tempo fixo, captura quadros pelo eframe e um script monta GIF ou WebP de 360x220, 12 fps, 64 cores, até 150 KB. Mídias vão num pacote externo carregado sob demanda com cache LRU, sem aumentar o binário. Aceite: gerar a mídia de dez comandos de forma reproduzível e teste de cobertura com manifesto por hash.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Interface"
+  },
+  {
+   "titulo": "Redesenho dos ícones: paleta semântica, base mais selo e teste de 1 segundo",
+   "onda": 2,
+   "prio": "P1",
+   "oque": "Definir a gramática de ícones (grade 48, traço 2,5 px, versões de 16 e 32 px, cores com significado, selo de variante) e redesenhar os 30 piores listados em docs/benchmark/detalhe/interface.md, começando por furos, chanfros, filetes e extensão 'até'. Aceite: 4 de 5 pessoas acertam o verbo em 1 s, nenhum comando usa o ícone de fallback e nenhuma família repete o mesmo desenho.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 260,
+   "teste": "Visual",
+   "area": "Interface"
+  },
+  {
+   "titulo": "Lições interativas dentro do programa",
+   "onda": 3,
+   "prio": "P2",
+   "oque": "Lições baseadas nos mesmos roteiros da esteira de mídia, com verificação do documento, destaque sobre o botão ou alça esperada e botão 'mostre-me'. Lições iniciais: câmera e seleção, primeiro sketch cotado, extrusão, furo e padrão, primeira montagem. Progresso nas preferências e primeira execução que escolhe navegação e densidade com prévia. Aceite: cada lição conclui por teste automático que simula os passos.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 330,
+   "teste": "Auto + Visual",
+   "area": "Interface"
+  },
+  {
+   "titulo": "Nomes sem marca em temas e estilos de navegação; teste de contraste",
+   "onda": 1,
+   "prio": "P1",
+   "oque": "Renomear temas embutidos e as variantes de estilo de navegação e de predefinição de atalhos que levam nome de produtos de terceiros, preservando migração do config.json. Incluir teste automático de contraste mínimo de 4,5:1 em todos os temas e três densidades (compacta, padrão, confortável). Aceite: busca por marcas na interface e no código de i18n retorna zero e todos os temas passam no contraste.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 120,
+   "teste": "Auto",
+   "area": "Interface"
+  }
+ ]
+}

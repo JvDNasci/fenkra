@@ -1,0 +1,82 @@
+{
+  "alterar": [
+    {"id": "B18", "oque": "Acrescentar a experiência: ao parar o cursor, o trecho a sair fica em vermelho tracejado e os pontos de corte aparecem marcados; a ponta a estender mostra a prévia até o alvo; Shift segurado alterna aparar e estender; a ferramenta segue ativa até clique no vazio, botão direito ou Esc."},
+    {"id": "B19", "oque": "Acrescentar duplo clique para selecionar a cadeia conectada, usada também por Offset e Filete."},
+    {"id": "B32", "oque": "Acrescentar: polígono com 3 a 40 lados, inscrito ou circunscrito; rasgo com largura total medida na perpendicular (hoje a dica diz largura e o valor é raio); copiar repete até Esc e leva as restrições internas; chanfro com duas distâncias ou distância e ângulo; filetes seguidos com o mesmo raio ficam iguais ao primeiro, com uma só cota, e opção de manter o canto."},
+    {"id": "B60", "oque": "Acrescentar para o Sketch: GIF de 5 a 10 s por comando, com os roteiros de docs/benchmark/detalhe/sketch.md; parte longa do tooltip antes dos 5 s de hoje; separar os ícones de Converter e Construção (sk_converter está no comando errado), diferenciar Grade de Snaps e Auto cotas de Cota, e dar marca de restrição ao ícone de Paralela; remover ou usar sk_linha e sk_girar."},
+    {"id": "B74", "oque": "Acrescentar: cota que sobre-restringe vira referência sozinha, em cinza, e o menu de contexto alterna entre comandar e referência; valor negativo inverte o lado em comprimentos, distâncias e ângulos."},
+    {"id": "B96", "oque": "Acrescentar: cada snap mostra glifo do tipo antes do clique, também ao arrastar com Selecionar; linhas de inferência tracejadas enquanto se desenha; arrastar para dentro ou para fora do círculo troca raio e diâmetro, e arrastar para o quadrante escolhe o ângulo da cota."}
+  ],
+  "novos": [
+    {
+      "titulo": "Sketch: campos de valor na viewport ao desenhar",
+      "onda": 1,
+      "prio": "P0",
+      "oque": "Campos flutuantes ao lado do cursor em Linha, Retângulo, Círculo, Arco, Polígono, Rasgo, Offset, Mover e Copiar: comprimento e ângulo, largura e altura, raio ou diâmetro. Tab avança e trava o valor com cadeado visível, Enter confirma, e o valor aceita expressão. Aceite: linha de 40 mm a 30° criada só com teclado gera a geometria e as cotas, e a opção de criar cota ao digitar pode ser desligada.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 300,
+      "teste": "Auto + Visual",
+      "area": "Sketch"
+    },
+    {
+      "titulo": "Sketch: prévia fiel em todos os comandos",
+      "onda": 1,
+      "prio": "P0",
+      "oque": "A prévia mostra o resultado real: polígono com lados, só o arco que será criado, contorno do rasgo, Mover e Copiar com todas as curvas, e fantasma em Espelhar, Offset, Filete, Chanfro, Interseção e Converter. Os rótulos mostram largura, altura, raio e ângulo. Aceite: nenhum comando de criação ou edição altera o sketch sem ter mostrado antes o que vai acontecer, conferido por captura de cada comando.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 220,
+      "teste": "Visual",
+      "area": "Sketch"
+    },
+    {
+      "titulo": "Sketch: painel do comando com modos e opções",
+      "onda": 2,
+      "prio": "P1",
+      "oque": "Cada ferramenta ganha painel na ordem estado do passo, modo, parâmetros e avançado, ligado aos campos da viewport, e a tecla M percorre os modos. Retângulo e Ret. centro, Círculo e Círculo 3P, Arco 3P e Arco centro, Filete e Chanfro viram um comando com modo. Aceite: todo campo tem dica ao passar o mouse e os botões antigos continuam levando ao modo certo. Aplica o B20 ao sketch.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 200,
+      "teste": "Auto + Visual",
+      "area": "Sketch"
+    },
+    {
+      "titulo": "Sketch: fluxo comum das ferramentas",
+      "onda": 1,
+      "prio": "P1",
+      "oque": "Regras iguais para todas as ferramentas: seleção prévia aceita em Offset, Filete, Aparar e cotas; a ferramenta repete até Esc; dica no cursor com passo e contagem, inclusive nas restrições (Simétrica: 1 de 3); clique recusado explica o motivo; Esc coerente com o texto da tela. Todas as dicas passam por tr e Aparar, Offset, Filete, Espelhar e Spline ganham atalho no mapa de teclas. Aceite: teste percorre as ferramentas e falha se faltar dica, tradução ou tratamento de seleção prévia.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 150,
+      "teste": "Auto + Visual",
+      "area": "Sketch"
+    },
+    {
+      "titulo": "Sketch: arraste direto e setas de grau de liberdade",
+      "onda": 2,
+      "prio": "P1",
+      "oque": "Arrastar arco por qualquer ponto e spline pela curva, mantendo restrições pelo solver. Ao passar o mouse sobre geometria sub-restrita, setas mostram como ela ainda pode se mover. Filete e offset selecionados mostram pega para arrastar o valor. Aceite: arrastar arco tangente não quebra a tangência e a seta some quando o elemento fica totalmente restrito.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 180,
+      "teste": "Auto + Visual",
+      "area": "Sketch"
+    },
+    {
+      "titulo": "Sketch: barra de restrições ao selecionar e fantasma do resultado",
+      "onda": 2,
+      "prio": "P1",
+      "oque": "Selecionar elementos abre, sem botão direito, uma barra com as restrições aplicáveis, que continua aberta depois de aplicar uma. Passar sobre uma opção mostra a geometria já resolvida em fantasma, em vermelho se conflitar, sem gravar no documento. Aceite: a prévia não altera o sketch e, em sketch grande, cai para só destacar quando passar do orçamento de tempo.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 160,
+      "teste": "Auto + Visual",
+      "area": "Sketch"
+    },
+    {
+      "titulo": "Sketch: perfil sombreado, fatiar no plano e mostrar/ocultar",
+      "onda": 2,
+      "prio": "P1",
+      "oque": "Contorno fechado ganha sombreamento em tempo real, usando sk.loops. Opção de cortar temporariamente os corpos no plano do sketch e caixas para mostrar ou ocultar perfil, pontos, cotas, restrições, construção e projetadas. Aceite: fechar o último segmento sombreia o perfil sem recalcular a peça, e fatiar não altera o modelo nem o arquivo.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 200,
+      "teste": "Visual",
+      "area": "Sketch"
+    }
+  ]
+}

@@ -1,0 +1,122 @@
+{
+ "alterar": [
+  {
+   "id": "B30",
+   "oque": "Acrescentar ao estado por vista um indicador visível no canto da vista (selo Atualizada, Desatualizada, Erro) e a mensagem de bloqueio ao ativar uma ferramenta (por exemplo, 'selecione uma vista mãe') em vez de aviso depois do clique. Hachura passa a ter padrão, ângulo e passo editáveis por vista, com alternância automática de ângulo entre peças vizinhas num corte de montagem. Aceite: painel da vista mostra o valor padrão em cinza e um botão para voltar ao padrão do estilo."
+  },
+  {
+   "id": "B81",
+   "oque": "Cota com âncora quebrada fica em vermelho na folha com alça 'Reatribuir' que acende os candidatos na vista, e o duplo clique na cota abre a caixa de edição (texto com marcador do valor medido, precisão, tolerância tipada, símbolos). Aceite: o teste do corpus altera a peça, a cota quebra, a reatribuição por clique devolve o valor correto."
+  },
+  {
+   "id": "B106",
+   "oque": "Linha de corte com alças nas pontas e nas setas na própria folha (arrastar muda a posição, clicar na seta inverte o lado), vários segmentos concluídos por Enter, profundidade total ou por distância, fatia, peças que não são cortadas e acabamento da borda. Fantasma da vista em corte durante o traçado, restrito ao alinhamento com a mãe e liberável com Ctrl. Detalhe ganha alça de raio, contorno em perfil livre e escala escolhida na criação."
+  },
+  {
+   "id": "B107",
+   "oque": "Ferramenta de cota única e contextual: o que foi clicado propõe o tipo, Tab ou o menu trocam entre linear, alinhada, raio, diâmetro e ângulo, a cota viva (fantasma) segue o mouse até o clique de afastamento e a ferramenta continua ativa até Esc ou clique direito. Duplo clique abre caixa flutuante com símbolos Ø ± ° e o marcador <>, precisão separada para o valor e a tolerância, e opções como diâmetro, entre parênteses e inspeção. Sem âncora válida sob o cursor, o cursor mostra o motivo."
+  },
+  {
+   "id": "B149",
+   "oque": "Balões com forma, tamanho do texto, texto acima e abaixo, símbolo e largura; nós de chamada (adicionar, remover, nova chamada a partir de um nó); alinhar vários balões na horizontal ou na vertical; renumerar pela ordem da lista com um comando Atualizar; automáticos com seleção por janela, Shift remove e escolha de lado e distância antes de confirmar. Meia cota, arco e acabamento multilinha continuam no escopo."
+  }
+ ],
+ "novos": [
+  {
+   "titulo": "Desenho: fantasma de posicionamento (vistas, tabelas, cotas, balões)",
+   "onda": 1,
+   "prio": "P0",
+   "oque": "Ao armar uma ferramenta de vista, tabela, cota ou balão, o resultado aparece preso ao cursor na escala real: contorno ou projeção da vista, tabela com as colunas, cota viva com o valor medido, balão com o número do item. Linhas de alinhamento tracejadas com a vista mãe e com balões vizinhos; Enter ou clique confirma. Aceite: captura visual de cada ferramenta com o fantasma e teste que garante que nada é criado antes da confirmação.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Desenho técnico"
+  },
+  {
+   "titulo": "Desenho: barra de opções da ferramenta (antes do clique)",
+   "onda": 1,
+   "prio": "P0",
+   "oque": "Ao ativar uma ferramenta de vista, abre uma barra ancorada na folha com direção (menu com miniaturas), escala (Auto, presets e livre), estilo (sombreada, arestas, com ocultas) e rótulo, editáveis enquanto o fantasma está no cursor. Pré-requisitos faltando (vista mãe, origem) aparecem ali com o motivo e um atalho para resolver, no lugar do aviso depois do clique. Aceite: criar uma vista em 1:2 sem abrir o painel lateral e sem trocar de aba.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 220,
+   "teste": "Auto + Visual",
+   "area": "Desenho técnico"
+  },
+  {
+   "titulo": "Desenho: tooltip em três camadas, dica por campo e nomes sem ambiguidade",
+   "onda": 1,
+   "prio": "P1",
+   "oque": "Cada comando da bancada ganha nome completo com atalho, uma frase com o pré-requisito e um GIF de 5 a 10 s em laço gerado por FENKRA_DEMO*. Todo campo do painel do desenho ganha rótulo, unidade e uma frase de efeito em hover, com tradução em i18n.rs. Renomear 'Corte' da lista para 'Lista de corte' e revisar ícones das cotas lineares. Aceite: teste que falha se um campo do painel ficar sem dica nos dois idiomas.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 180,
+   "teste": "Auto + Visual",
+   "area": "Desenho técnico"
+  },
+  {
+   "titulo": "Desenho: alças diretas na folha (vista, corte, detalhe, escala)",
+   "onda": 2,
+   "prio": "P1",
+   "oque": "Vista selecionada mostra alça de mover com indicação de alinhamento à mãe (cadeado), alça de escala por passos e, quando for corte, setas gordas nas pontas da linha (clique inverte o lado) e, quando for detalhe, alça de raio no círculo. Arrastar mostra a linha de alinhamento e a cota de distância ao vizinho. Aceite: inverter o lado do corte e mudar o raio do detalhe sem abrir o painel, com desfazer em um passo.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 320,
+   "teste": "Auto + Visual",
+   "area": "Desenho técnico"
+  },
+  {
+   "titulo": "Desenho: símbolos guiados de rugosidade e solda",
+   "onda": 2,
+   "prio": "P1",
+   "oque": "Rugosidade e solda deixam de ser um campo de texto: construtor com os campos nas posições do símbolo (valor, método, sobremedida, direção, amostragem; lado da seta e outro lado, tipo de cordão em botões, medida, comprimento, passo, contorno, solda em campo) e prévia grande do símbolo. Valores comuns em botões. Aceite: símbolo montado só com cliques sai igual ao texto antigo e exporta em PDF, SVG e DXF.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 240,
+   "teste": "Auto + Visual",
+   "area": "Desenho técnico"
+  },
+  {
+   "titulo": "Desenho: assistente de Novo desenho e opções de exportação",
+   "onda": 2,
+   "prio": "P1",
+   "oque": "Novo desenho abre um diálogo curto com formato, orientação, norma, método de projeção, escala geral e origem (a peça aberta como padrão), com miniatura da folha. Exportar PDF, SVG e DXF ganha diálogo com folhas, cor ou preto e branco, mapeamento de espessura e prévia. Aceite: criar um desenho de peça com as três vistas sugeridas em menos de cinco cliques.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Desenho técnico"
+  },
+  {
+   "titulo": "Desenho: marcas de centro modo simples, circular e linear",
+   "onda": 3,
+   "prio": "P2",
+   "oque": "Marca de centro com três modos: simples, circular (seleciona os furos de um círculo de furos e traça o círculo e as cruzes) e linear (eixo entre dois furos), associativas à vista e visíveis ou ocultas por vista. Também funcionam a partir de arestas ocultas por corte automático pelo centro. Aceite: teste com flange de 6 furos gera uma marca circular e atualiza ao mudar o diâmetro do círculo.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 150,
+   "teste": "Auto + Visual",
+   "area": "Desenho técnico"
+  },
+  {
+   "titulo": "Desenho: tabelas com colunas configuráveis e etiquetas de furo",
+   "onda": 3,
+   "prio": "P2",
+   "oque": "Lista de materiais, furos, dobras e lista de corte com seleção e ordem de colunas, ordenação clicando no cabeçalho, divisão em colunas ou folhas e renumeração. A tabela de furos escolhe a vista de origem e põe etiquetas A1, A2 nas vistas ligadas às linhas da tabela. Aceite: tirar uma coluna refluir a tabela e a etiqueta de um furo selecionar a linha correspondente.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 260,
+   "teste": "Auto + Visual",
+   "area": "Desenho técnico"
+  }
+ ]
+}

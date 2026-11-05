@@ -1,0 +1,106 @@
+{
+  "alterar": [
+    {
+      "id": "B09",
+      "oque": "Aceitar linhas de sketch e seleção em cadeia em Fill, Join e Preencher fronteiras; condição por aresta G0/G1/G2 com peso e ponto de passagem no Fill; Join aceita curvas de sketch e faces misturadas e relata domínios conexos, bordas livres e folga máxima. A fachada do preenchimento hoje passa toda aresta como C0, sem face de apoio: ela deve usar a face vizinha e a ordem de continuidade que o BRepOffsetAPI_MakeFilling já aceita, além de receber curvas e não polilinhas. No 3D: bola vermelha em cada ponta aberta com contagem, etiqueta clicável de continuidade em cada aresta, botão aplicar a todas, ponto de passagem arrastável e folgas com rótulo em mm que ficam verdes quando a tolerância as fecha. Aceite: preenchimento entre quatro faces curvas com G1 mostra zebra contínua na junção e desvio angular abaixo de 0,5 grau."
+    },
+    {
+      "id": "B14",
+      "oque": "Extensões de superfície com até elemento; distâncias inicial e final juntas; extrusão/revolução de superfície com limites e ângulos 1 e 2; extrapolar até elemento com tipo de borda (normal ou tangente às vizinhas). Extrapolar passa a receber a borda clicada, sem o ponto 'perto da borda', aceita distância negativa para aparar e tem propagação por tangência. Passar a seta sobre um elemento o propõe como limite."
+    },
+    {
+      "id": "B153",
+      "oque": "Editor de forma por subdivisão reduzido a cerca de 300 k: malha half-edge com Catmull-Clark próprio em Rust, primitivas, edição por vértice/aresta/face com manipulador, inserir aresta, extrudar, vinco, simetria por plano e congelar. A forma é uma feature da árvore com faces nomeadas por índice persistente da malha. OpenSubdiv (Apache-2.0, sem bindings Rust) fica como opção posterior. A conversão para B-rep sai para item próprio. Fluxo obrigatório: criar caixa arrastando no plano; passar o mouse acende nó, aresta ou face sem trocar de ferramenta; clique abre o manipulador de gizmo.rs com setas, quadrados e arcos e chip de espaço Mundo, Vista, Normal e Local; rótulo aceita digitar; Tab alterna gaiola, liso e ambos; Alt ao arrastar face extruda; corte em laço com deslize; chip Suave, Vinco e Canto no nó ou aresta, com peso de vinco de 0 a 1; suavizar borda com raio e segmentos. Colocar tangência: alça de disco no nó define o plano tangente e o anel vizinho é ajustado por mínimos quadrados, com a seta valendo a tensão. Toda tecla tem botão visível. Aceite: da caixa até uma cúpula com vinco e simetria em menos de 10 ações, sem abrir painel. Patentes da área ainda precisam de verificação antes do lançamento: a patente-base de malhas com junções em T consta como expirada em 2024, mas as posteriores não foram verificadas."
+    },
+    {
+      "id": "B154",
+      "oque": "Edição de curvas e superfícies NURBS por polos reduzida a cerca de 300 k: grau e número de polos como parâmetros, inserção de nó, simetria, Match de borda G0 a G2 por mínimos quadrados restritos entre duas arestas referenciadas e conector de continuidade (lacuna, ângulo e diferença de curvatura). G3, morphing e Classe A ficam como referência de qualidade, não como promessa. As análises de zebra, curvatura e porco-espinho saem para item próprio, por servirem a qualquer face. Reaproveita OCCT (GeomLProp, GeomFill, GeomPlate) e nalgebra. Polos aparecem como grade no 3D, com seleção de fileira, o mesmo manipulador da forma por subdivisão e aviso de que inserir um polo cria uma fileira inteira. O casamento de borda oferece preservar a ponta oposta, média entre as duas superfícies, refino até a tolerância e direção das isocurvas, com etiqueta de continuidade na junção e zebra ao vivo. Pesos de polo ficam no avançado, com alerta sobre troca de arquivos."
+    },
+    {
+      "id": "B179",
+      "oque": "Converte a malha de subdivisão do B153 em B-rep: regiões regulares viram remendos bicúbicos exatos, pontos extraordinários são aproximados com G0, G1 ou G2 à escolha, com relatório de desvio máximo. Costura com tolerância em corpo sólido ou aberto que aceita filete, casca e booleana, e diagnóstico claro de onde e por que falhou. Reaproveitável pelo B158 para ajuste de superfícies a malha. Antes de aceitar, o 3D mostra mapa de desvio e marca os nós irregulares; clicar num nó volta à gaiola naquele ponto. A forma segue editável: mudar um nó ou parâmetro refaz a conversão e os filhos, com aviso quando faces nomeadas mudam. Malha densa gera alerta de tempo antes de converter."
+    }
+  ],
+  "novos": [
+    {
+      "titulo": "Superfícies: seta do offset correta e alças em todos os valores principais",
+      "onda": 1,
+      "prio": "P1",
+      "oque": "Corrigir a seta da Superfície deslocada, que usa a diferença entre centros de malha: passa a sair do ponto clicado pela normal real, acerta o lado com distância negativa e mostra duas setas em dois lados. Acrescentar alças em Limite 2, ângulo da revolução, raio do cilindro e do tubo, Extrapolar, Filete de superfície, Engrossar e Ponto na curva. Aceite: teste de handle_for com distância positiva, negativa e dois lados em superfície plana e curva; captura visual de cada alça.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 120,
+      "teste": "Auto + Visual",
+      "area": "Superfícies e wireframe"
+    },
+    {
+      "titulo": "Superfícies: suportes realçados, normal visível e lado por seta",
+      "onda": 2,
+      "prio": "P1",
+      "oque": "Com um comando de superfície aberto, entradas são realçadas com cor por papel, curvas mostram seta de sentido, superfícies mostram a normal e toda escolha de lado vira seta clicável. Solução vira bolinha clicável no 3D. Usa a prévia fantasma comum aos comandos, sem duplicá-la. Aceite: nenhum painel de superfície mantém caixa 'outro lado' nem campo numérico de solução; captura visual por comando.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 200,
+      "teste": "Auto + Visual",
+      "area": "Superfícies e wireframe"
+    },
+    {
+      "titulo": "Aparar e Dividir por região clicada",
+      "onda": 2,
+      "prio": "P1",
+      "oque": "Unir Dividir e Aparar em um comando com modos Por ferramenta e Mútuo e ação manter ou remover. Pedaços ficam em duas cores e clicar alterna; a escolha é gravada por âncora espacial e sobrevive ao recálculo. Aceite: duas folhas cruzadas geram quatro regiões, a escolha persiste ao mudar uma cota e área e caixa envolvente conferem.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 200,
+      "teste": "Auto + Visual",
+      "area": "Superfícies e wireframe"
+    },
+    {
+      "titulo": "Conectores de loft e tensão arrastáveis",
+      "onda": 3,
+      "prio": "P1",
+      "oque": "Multi-seções ganha número e sentido por seção, conectores arrastáveis ao longo das curvas para controlar torção, seta de tangência por ponta e isocurvas com densidade. Concordância e Conectar aceitam aresta clicada, deduzem o apoio e têm seta de tensão por lado; Conectar mostra as bordas deduzidas e aceita troca. Aceite: seção circular e quadrada sem torção após mover um conector, com área conferida; Concordância criada sem passar por Contorno.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 240,
+      "teste": "Auto + Visual",
+      "area": "Superfícies e wireframe"
+    },
+    {
+      "titulo": "Spline 3D editável na viewport",
+      "onda": 3,
+      "prio": "P1",
+      "oque": "Spline, Spline controle e Polilinha são criadas por cliques em sequência e têm pontos arrastáveis com o gizmo, alça de tangente por ponto, polígono de controle visível e pente de curvatura. Ponto vindo de referência fica preso com ícone de vínculo. Aceite: arrastar um ponto, fixar tangência e voltar reproduz a curva original; salvar e abrir preserva tangentes.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 180,
+      "teste": "Auto + Visual",
+      "area": "Superfícies e wireframe"
+    },
+    {
+      "titulo": "Forma livre: edição suave e seleção por laço e anel",
+      "onda": 3,
+      "prio": "P2",
+      "oque": "Influência proporcional no arraste: roda muda o raio, círculo com gradiente mostra o alcance, curvas de queda e opção só conectados. Seleção com crescer, encolher, laço, anel, próximo e faixa entre duas faces. Aceite: puxar um nó com raio move os vizinhos pela curva escolhida em teste numérico, e só conectados não afeta malha vizinha desconectada.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 150,
+      "teste": "Auto + Visual",
+      "area": "Superfícies e wireframe"
+    },
+    {
+      "titulo": "Forma livre: vínculos de nós e bordas com a peça",
+      "onda": 3,
+      "prio": "P2",
+      "oque": "Nó vinculado a ponto, curva, plano ou face segue a referência e desliza restrito a ela; distância de nó a plano vira cota ligada a parâmetro; aresta da forma casa com aresta B-rep em G0, G1 ou G2. Simetria com nós presos ao plano e fusão por distância. Vínculo perdido aparece com estado na árvore e nunca altera a forma calado. Aceite: mudar um parâmetro da peça move os nós vinculados e o sólido convertido; apagar o pai gera estado de erro.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 280,
+      "teste": "Auto + Visual",
+      "area": "Superfícies e wireframe"
+    },
+    {
+      "titulo": "Superfícies: dicas por campo, nomes simples e roteiros de GIF",
+      "onda": 3,
+      "prio": "P2",
+      "oque": "Escrever dica própria para cada campo da bancada, trocar jargão por efeito (Frenet corrigido, Spine, Tensão, G0 a G2), com o termo técnico na dica, e separar os ícones hoje iguais listados em docs/benchmark/detalhe/superficies.md. Entregar os roteiros de GIF desse arquivo no formato da esteira de mídia, com tradução em i18n.rs. Aceite: teste falha se um campo da bancada não tiver dica própria; todo comando mais usado tem mídia.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 120,
+      "teste": "Auto + Visual",
+      "area": "Superfícies e wireframe"
+    }
+  ]
+}

@@ -1,36 +1,36 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 56400,
+ "tokens_total_k": 84480,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
    "versao": "0.1.0-alpha.28 a .30",
-   "tokens_k": 6530,
-   "pct": 11.6
+   "tokens_k": 7180,
+   "pct": 8.5
   },
   "1": {
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
-   "tokens_k": 5460,
-   "pct": 9.7
+   "tokens_k": 11610,
+   "pct": 13.7
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
-   "tokens_k": 7040,
-   "pct": 12.5
+   "tokens_k": 18470,
+   "pct": 21.9
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
-   "tokens_k": 10070,
-   "pct": 17.9
+   "tokens_k": 19350,
+   "pct": 22.9
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
-   "tokens_k": 27300,
-   "pct": 48.4
+   "tokens_k": 27870,
+   "pct": 33.0
   }
  },
  "itens": [
@@ -54,14 +54,14 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.2
   },
   {
    "id": "B02",
    "onda": 1,
    "prio": "P0",
    "titulo": "Chapa: recorte planificado → dobrado no raio",
-   "oque": "Recorte através da dobra por mapeamento do perfil pelo arco (não por movimento rígido), nos dois sentidos planificado ↔ dobrado; mesma área plana nos dois caminhos.",
+   "oque": "Além do mapeamento pelo arco, o recorte deve mostrar a prévia do contorno nas duas vistas (planificada e dobrada) ao mesmo tempo e oferecer o modo normal à face e o modo através da dobra como escolha visível, com botão para projetar a planificada dentro do sketch para cotar contra ela.",
    "origem": [
     "DR-20"
    ],
@@ -110,14 +110,14 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B05",
    "onda": 1,
    "prio": "P0",
    "titulo": "Rosca: preview, personalização e início",
-   "oque": "Preview ao vivo; passo, perfil e tamanho personalizados; deslocamento inicial e chanfro de entrada; corrigir o tap.",
+   "oque": "Acrescentar ao aceite: a face cilíndrica é escolhida por clique com realce (não por coordenadas em texto); a rosca aparece em prévia simplificada (hélice) com início e fim visíveis e aviso quando o diâmetro da face não coincide com o da rosca.",
    "origem": [
     "DR-02",
     "DR-03"
@@ -137,7 +137,7 @@
    "onda": 1,
    "prio": "P0",
    "titulo": "Casca: spline, furo escareado, opção reta",
-   "oque": "Casca funcionando com spline e furo escareado; para fora com opção reta/raio editável; espessura por face; fallback em degraus (exato → ignorar faces problemáticas → aproximar) com a lista de faces ignoradas; casca fechada sem face aberta.",
+   "oque": "Acrescentar ao aceite: faces abertas em cor própria translúcida, espessura por face em lista, opção de esvaziar sem abrir faces e corte de seção na prévia para ver a parede; quando falha, mostrar a região problemática em vez de voltar ao estado anterior.",
    "origem": [
     "DR-02",
     "DR-07"
@@ -149,7 +149,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B07",
@@ -167,7 +167,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.1
+   "pct": 0.0
   },
   {
    "id": "B08",
@@ -187,14 +187,14 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B09",
    "onda": 1,
    "prio": "P0",
    "titulo": "Fill, Join e Preencher com sketch",
-   "oque": "Aceitar linhas de sketch e seleção em cadeia em Fill, Join e Preencher fronteiras; condição por aresta G0/G1/G2 com peso e ponto de passagem no Fill; Join aceita curvas de sketch e faces misturadas e relata domínios conexos, bordas livres e folga máxima.",
+   "oque": "Aceitar linhas de sketch e seleção em cadeia em Fill, Join e Preencher fronteiras; condição por aresta G0/G1/G2 com peso e ponto de passagem no Fill; Join aceita curvas de sketch e faces misturadas e relata domínios conexos, bordas livres e folga máxima. A fachada do preenchimento hoje passa toda aresta como C0, sem face de apoio: ela deve usar a face vizinha e a ordem de continuidade que o BRepOffsetAPI_MakeFilling já aceita, além de receber curvas e não polilinhas. No 3D: bola vermelha em cada ponta aberta com contagem, etiqueta clicável de continuidade em cada aresta, botão aplicar a todas, ponto de passagem arrastável e folgas com rótulo em mm que ficam verdes quando a tolerância as fecha. Aceite: preenchimento entre quatro faces curvas com G1 mostra zebra contínua na junção e desvio angular abaixo de 0,5 grau.",
    "origem": [
     "DR-13"
    ],
@@ -233,7 +233,7 @@
    "onda": 1,
    "prio": "P1",
    "titulo": "Nervura com parede dos dois lados",
-   "oque": "Nervura com modos paralelo e normal ao sketch; espessura para um lado, para o outro ou simétrica; arcos do perfil nunca ignorados; extensão do perfil até as paredes.",
+   "oque": "Acrescentar ao aceite: a nervura mostra no 3D o lado da parede (um lado, outro, dois) com seta de espessura e a extensão até o corpo em prévia.",
    "origem": [
     "DR-05"
    ],
@@ -244,14 +244,14 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.1
+   "pct": 0.0
   },
   {
    "id": "B12",
    "onda": 1,
    "prio": "P1",
    "titulo": "Loft com restrições e tensão",
-   "oque": "Restrição inicial/final por elemento, tensão de concordância, coletor com seleção múltipla.",
+   "oque": "Acrescentar ao aceite: perfis escolhidos por clique no 3D e numerados na ordem; linhas de conexão entre perfis com alças nos vértices para remover torção; condição inicial e final por ponta com seta de intensidade no 3D.",
    "origem": [
     "DR-07"
    ],
@@ -262,7 +262,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B13",
@@ -288,7 +288,7 @@
    "onda": 1,
    "prio": "P1",
    "titulo": "Superfícies: \"até elemento\" e dois limites",
-   "oque": "Extensões de superfície com até elemento; distâncias inicial e final juntas; extrusão/revolução de superfície com limites e ângulos 1 e 2; extrapolar até elemento com tipo de borda (normal ou tangente às vizinhas).",
+   "oque": "Extensões de superfície com até elemento; distâncias inicial e final juntas; extrusão/revolução de superfície com limites e ângulos 1 e 2; extrapolar até elemento com tipo de borda (normal ou tangente às vizinhas). Extrapolar passa a receber a borda clicada, sem o ponto 'perto da borda', aceita distância negativa para aparar e tem propagação por tangência. Passar a seta sobre um elemento o propõe como limite.",
    "origem": [
     "DR-24",
     "DR-16"
@@ -319,7 +319,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "em andamento",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B16",
@@ -345,7 +345,7 @@
    "onda": 2,
    "prio": "P1",
    "titulo": "Câmera no estilo CATIA",
-   "oque": "Duplo clique do meio recentra por raycast; pivô sob o cursor; zoom no cursor; turntable; pan proporcional; Ajustar à seleção e vista anterior.",
+   "oque": "Acrescentar ao aceite da câmera: passo adaptativo ao zoom compartilhado com as alças 3D (potência 1-2-5 equivalente a 4 a 8 px), pivô sob o cursor também enquanto uma alça é arrastada, e rótulos 3D que acompanham a escala da interface. Teste visual: arrastar a seta de extrusão em peça de 5 mm e de 5 m produz saltos proporcionais ao tamanho na tela.",
    "origem": [
     "CTX-CAM"
    ],
@@ -358,14 +358,14 @@
    "teste": "Visual",
    "area": "Navegação",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B18",
    "onda": 2,
    "prio": "P1",
    "titulo": "Relimitação do sketch",
-   "oque": "Quick trim (borracha por arrasto) em linha, arco, círculo e spline; canto, dentro/fora; break e dividir/refundir preservando restrições; trim-extend com a ponta presa à curva alvo; estender arco e spline; close arc e complement.",
+   "oque": "Acrescentar a experiência: ao parar o cursor, o trecho a sair fica em vermelho tracejado e os pontos de corte aparecem marcados; a ponta a estender mostra a prévia até o alvo; Shift segurado alterna aparar e estender; a ferramenta segue ativa até clique no vazio, botão direito ou Esc.",
    "origem": [
     "DR-50",
     "DR-51",
@@ -383,14 +383,14 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B19",
    "onda": 2,
    "prio": "P1",
    "titulo": "Seleção por janela e geometria externa no sketch",
-   "oque": "Janela/cruzada pelo sentido do arrasto dentro do sketch; política de seleção externa (publicar ou bloquear).",
+   "oque": "Acrescentar duplo clique para selecionar a cadeia conectada, usada também por Offset e Filete.",
    "origem": [
     "DR-05",
     "DR-18"
@@ -410,7 +410,7 @@
    "onda": 2,
    "prio": "P1",
    "titulo": "Filosofia dos painéis de comando",
-   "oque": "Ordem suporte → modo → parâmetros → avançado em todos os comandos; caixas quando o menu é curto e abas quando é longo; direção normal a plano/superfície; campo ativo destacado com avanço automático e 'o que falta' na barra de status.",
+   "oque": "Ampliar com o contrato de comando de docs/benchmark/detalhe/interface.md: prévia viva desde o primeiro suporte válido, manipulador por tipo de grandeza (seta, anel, plano, losango), rótulo 3D editável que arrasta e aceita roda e expressão, estados visuais (repouso, pairando, ativo, travado, erro), Enter/Esc e 'aplicar e continuar'. Aceite: o checklist padrão (Intuitivo, Prévia 3D, Manipulação 3D, Ícone claro, Tooltip com GIF, Dica por campo, Fluxo) pontuado por comando, com meta de 'ok' em todos os comandos de sólidos antes dos demais.",
    "origem": [
     "DR-09",
     "DR-25",
@@ -427,7 +427,7 @@
    "teste": "Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B21",
@@ -467,14 +467,14 @@
    "teste": "Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B23",
    "onda": 2,
    "prio": "P1",
    "titulo": "PMI: realce e chamadas",
-   "oque": "Realce das entidades da anotação, várias setas por anotação (várias faces, arestas e vértices associados à mesma chamada, como o 3D Leader do Inventor) e seta que não atravessa o quadro. Realce funcionando em montagem.",
+   "oque": "A chamada com várias pontas ganha edição de vértices intermediários por menu de contexto (adicionar, remover, arrastar) e o realce passa a existir já no hover antes da criação. Aceite: uma nota com três pontas e dois vértices intermediários que continua legível ao girar o modelo, e o realce funcionando em montagem.",
    "origem": [
     "DR-31",
     "DR-47",
@@ -514,7 +514,7 @@
    "onda": 2,
    "prio": "P0",
    "titulo": "VPM fase 1 (local e em pasta)",
-   "oque": "SQLite só como cache local reconstruível (nunca na pasta compartilhada) + cofre por hash; modo pasta seguro com um arquivo por registro e índice agregado como cache; contadores de ID e PN por reserva com trava curta; diário só-acréscimo por usuário; check-out/check-in com trava por batimento e TTL, banner de só leitura e verificação de hash base; projeto registra peça, montagem, desenho e derivado, com estrutura (BOM) derivada das montagens e item por uid; reindexar quando hash/mtime difere; migração do índice JSON; painel lateral.",
+   "oque": "Acrescentar ao aceite: cada transição de estado grava autor, data e motivo no diário só-acréscimo; versão ganha campo de comentário e autor; restaurar versão cria uma versão nova apontando para o conteúdo antigo (nunca reescreve o histórico); contador de PN só avança quando o documento é gravado com sucesso.",
    "origem": [
     "CTX-PLM",
     "CTX-PN"
@@ -530,14 +530,14 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B47",
    "onda": 2,
    "prio": "P1",
    "titulo": "PNEngine: regras de part-number e ambientes",
-   "oque": "Editor de regras com campos ([NORMA], [CATEGORIA], [MATERIAL], [DIM], [SERIAL:n], [REV]), interpretador que preenche pela peça, uma sequência automática por regra, ambientes em JSON; prévia do PN sem consumir contador e reserva só ao gravar com sucesso; unicidade normalizada (trim, maiúsculas) e global no ambiente; PN imutável após a primeira revisão.",
+   "oque": "Acrescentar ao aceite de interação: campo de PN com prévia ao vivo em cinza enquanto os campos são preenchidos, tooltip por máscara com exemplo e teste de falha (se a gravação falhar, a sequência não avança).",
    "origem": [
     "CTX-PN"
    ],
@@ -548,7 +548,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B26",
@@ -573,7 +573,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "feito",
-   "pct": 0.9
+   "pct": 0.6
   },
   {
    "id": "B27",
@@ -592,7 +592,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B28",
@@ -611,7 +611,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "feito",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B29",
@@ -633,7 +633,7 @@
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
    "status": "feito",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B42",
@@ -653,7 +653,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "em andamento",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B43",
@@ -672,7 +672,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.2
   },
   {
    "id": "B44",
@@ -690,7 +690,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B45",
@@ -708,7 +708,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B46",
@@ -726,14 +726,14 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.2
   },
   {
    "id": "B30",
    "onda": 1,
    "prio": "P0",
    "titulo": "Desenho: atualização, hachura e normas",
-   "oque": "Estado por vista e elemento (Atualizado, Desatualizado, Erro, Quebrado, Travado, Isolado); comando Atualizar (folha/todas) e atualização automática por desenho; projeção fora da thread e cancelável; Travar e Isolar vista; painel de diagnóstico do desenho; desfazer cobre Atualizar; método de projeção 1º/3º diedro por folha com símbolo e vistas filhas derivadas dos eixos da mãe (inclusive corte, câmera e planificada). Hachura, herança de norma e vistas especiais passam para itens próprios.",
+   "oque": "Acrescentar ao estado por vista um indicador visível no canto da vista (selo Atualizada, Desatualizada, Erro) e a mensagem de bloqueio ao ativar uma ferramenta (por exemplo, 'selecione uma vista mãe') em vez de aviso depois do clique. Hachura passa a ter padrão, ângulo e passo editáveis por vista, com alternância automática de ângulo entre peças vizinhas num corte de montagem. Aceite: painel da vista mostra o valor padrão em cinza e um botão para voltar ao padrão do estilo.",
    "origem": [
     "DR-34",
     "DR-35",
@@ -757,14 +757,14 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B31",
    "onda": 3,
    "prio": "P2",
    "titulo": "Comando de aba unificado",
-   "oque": "Um comando de aba com tipo (aresta, cadeia, perfil, superfície, entre perfis) que abre as caixas do tipo; posição da dobra e referência de comprimento (vértice virtual, interno/externo); extensão lateral (inteira, centrada, deslocada, entre limites).",
+   "oque": "No comando de aba unificado, adotar o painel Suporte -> Modo -> Parâmetros -> Avançado, com miniaturas por tipo, campos que somem quando não valem para o tipo, um único botão padrão de inverter direção (hoje cada comando tem uma caixa com nome diferente) e campos que ficam vermelhos com o limite válido escrito. O raio próprio deve nascer da regra de chapa, não de um valor fixo.",
    "origem": [
     "DR-54"
    ],
@@ -775,14 +775,14 @@
    "teste": "Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B32",
    "onda": 3,
    "prio": "P1",
    "titulo": "Sketch: entidades e ferramentas que faltam",
-   "oque": "Retângulo por 3 pontos e paralelogramo, elipse/cônicas, rasgo em arco, padrão, texto, sketch 3D; offset de cadeia com relação viva à base; mover/copiar/girar/escalar/esticar com entrada numérica e opção manter restrições.",
+   "oque": "Acrescentar: polígono com 3 a 40 lados, inscrito ou circunscrito; rasgo com largura total medida na perpendicular (hoje a dica diz largura e o valor é raio); copiar repete até Esc e leva as restrições internas; chanfro com duas distâncias ou distância e ângulo; filetes seguidos com o mesmo raio ficam iguais ao primeiro, com uma só cota, e opção de manter o canto.",
    "origem": [
     "BM-SKT-01",
     "BM-SKT-02",
@@ -805,14 +805,14 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B33",
    "onda": 3,
-   "prio": "P2",
+   "prio": "P1",
    "titulo": "Sólidos: relevo, mola, modelagem direta",
-   "oque": "Relevo/gravação, comando de mola (coil) e edição direta de faces.",
+   "oque": "Declarar a edição direta de faces (mover, apagar com cura do vizinho, deslocar face, trocar raio de filete) como pré-requisito da migração: sem ela o corpo importado é inútil mesmo sem reconhecimento. Cada operação com prévia ao vivo, manipulação por alça no 3D e verificação de sólido válido; aceite com teste de volume e caixa envolvente em corpo vindo de STEP.",
    "origem": [
     "BM-SOL-01",
     "BM-SOL-02",
@@ -827,7 +827,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.2
   },
   {
    "id": "B34",
@@ -849,7 +849,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B35",
@@ -871,14 +871,14 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B36",
    "onda": 3,
    "prio": "P1",
    "titulo": "Montagem: restrições avançadas",
-   "oque": "Largura, simetria, caminho; limites mín/máx em restrições e juntas com posição de repouso e estado 'no limite'; tangente e travar rotação.",
+   "oque": "Acrescentar: o modelo de juntas ainda não tem limites. Cada grau de liberdade ganha Mínimo, Atual e Máximo, com caixa que liga cada limite sem perder o valor, marca na árvore para item com limite e marcas arrastáveis no 3D (arco ou trilho). Corrigir docs/modulos/montagem.md, que declara limites como prontos.",
    "origem": [
     "BM-MON-01"
    ],
@@ -889,14 +889,14 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B37",
    "onda": 3,
    "prio": "P1",
    "titulo": "Estrutural: entalhe, cordões, barras",
-   "oque": "Aparar/estender membro até plano, face, corpo ou outro membro (T no meio do membro), meia-esquadria rente para seções diferentes, distância de topo calculada pelo sólido, tolerância de canto configurável e janela 'Cantos da estrutura' com lote, dominância e ignorar. Entalhe por perfil, cordões 3D e plano de corte 1D vão para a fila seguinte.",
+   "oque": "Acrescentar a interação: janela 'Cantos da estrutura' com realce dos cantos no 3D por cor (dois membros, três ou mais, tratado, ignorado), clique no canto abre cartão com tratamento, seta para trocar quem continua, folga e ângulo lido do sólido; prévia do corte (membro que continua em amarelo, o que para em azul); aparar/estender com limite destacado, seta do lado que sobra, trecho removido em vermelho translúcido e opção de prolongar quando não alcança; modo automático que agrupa cantos iguais e botão Limpar tudo.",
    "origem": [
     "BM-EST-01",
     "BM-EST-02",
@@ -911,14 +911,14 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B38",
    "onda": 3,
    "prio": "P2",
    "titulo": "PMI: consultor de tolerância",
-   "oque": "Consultor de tolerância em três camadas (sintática sempre ligada, de esquema sob demanda, de norma) com mensagens clicáveis que realçam o alvo e coloração de faces verde/amarelo/vermelho/cinza (sub e super restringida), no estilo Show Tolerance Status do SolidWorks e Face Status do Inventor. Modos 'tudo explícito' e 'mínimo para fabricar'. Regras iniciais copiadas das mensagens do Tolerance Advisor: forma menor que tamanho, nível composto menor que o anterior, valor zero, quadros que compartilham faces, DRF incompleto.",
+   "oque": "As mensagens do consultor aparecem também como etiqueta junto à anotação afetada, com realce do alvo ao passar o cursor e botão de correção de um clique quando houver (por exemplo, trocar o modificador inválido). Aceite: cada regra tem texto de ação ('o que fazer'), não só de diagnóstico, e o clique na etiqueta enquadra a anotação.",
    "origem": [
     "BM-PMI-01"
    ],
@@ -929,14 +929,14 @@
    "teste": "Auto",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B39",
    "onda": 3,
    "prio": "P1",
    "titulo": "API Python",
-   "oque": "CLI headless estável (abrir, recomputar, parâmetros, BOM, macro, exportar) com saída JSON e SemVer, usada também pelo corpus; API Python por cima dela.",
+   "oque": "Incluir, como consumidor desta CLI, o servidor MCP do Fenkra (item novo): a CLI precisa de comandos de consulta de topologia (listar faces, cilindros, planos, caixa envolvente) e de saída JSON estável para o agente. Sem execução de código arbitrário.",
    "origem": [
     "BM-GER-01"
    ],
@@ -947,7 +947,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B40",
@@ -963,7 +963,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.2
   },
   {
    "id": "B41",
@@ -1005,7 +1005,7 @@
    "onda": 3,
    "prio": "P2",
    "titulo": "Filete variável com pontos de controle",
-   "oque": "Pontos intermediários ao longo da aresta com raio próprio, transição linear ou suave, edição pelos pontos na viewport.",
+   "oque": "Acrescentar ao aceite: pontos de controle também sobre a aresta (não só nos vértices), cada um com raio próprio editável por seta e cota no 3D, e opção de transição suave.",
    "origem": [
     "BM-SOL"
    ],
@@ -1016,14 +1016,14 @@
    "teste": "Auto + Visual",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B50",
    "onda": 3,
    "prio": "P1",
    "titulo": "Estrutura → montagem viva e desenho por item",
-   "oque": "Links vivos (atualizar sem gerar de novo), sub-soldagem com nome, código e processo gerando submontagem e lista própria, nomes de arquivo estáveis entre regerações e limpeza de órfãos com confirmação; desenho com vista própria por item/corpo e detalhe de ponta.",
+   "oque": "Acrescentar que Gerar montagem abre antes um resumo (peças, instâncias, pasta de destino, nomes) com Confirmar e Cancelar, em vez de mensagens curtas de erro por arquivo não salvo.",
    "origem": [
     "DR-44",
     "DR-45"
@@ -1036,14 +1036,14 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B51",
    "onda": 3,
    "prio": "P2",
    "titulo": "Fixadores: mais famílias e edição da pilha",
-   "oque": "Famílias industriais adicionais sobre o modelo genérico (B42): cabeças e porcas (ISO 4014, 7380, 10642, 7045, 4035, 985, 6923), arruelas e travamentos (127, 6798, Nord-Lock), prisioneiros e parafusos de ombro, polegada ASME; dados gratuitos em duas fontes. A edição da pilha passou para o assistente de prendedores.",
+   "oque": "Famílias industriais adicionais sobre o modelo genérico (B42): cabeças e porcas (ISO 4014, 7380, 10642, 7045, 4035, 985, 6923), arruelas e travamentos (127, 6798, Nord-Lock), prisioneiros e parafusos de ombro, polegada ASME; dados gratuitos em duas fontes. A edição da pilha passou para o assistente de prendedores. Cada família nova nasce com a ficha para o navegador de catálogo (esquema com as letras das cotas, tabela de tamanhos e série de comprimentos) e com os campos obrigatórios descritos em português simples. Aceite: todas as famílias aparecem no navegador com ficha completa.",
    "origem": [
     "CTX-FIX",
     "CTX-HW"
@@ -1056,14 +1056,14 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.2
   },
   {
    "id": "B52",
    "onda": 3,
    "prio": "P2",
    "titulo": "Engrenagens e eixos totalmente paramétricos",
-   "oque": "Perfil involuto recalculado ao mudar m/z/α/β no documento; filete de raiz (trocoide); engrenagem cônica e coroa/sem-fim; eixo com ranhuras de anel, roscas e cálculo de resistência; t2 da DIN 6885 em segunda fonte.",
+   "oque": "Engrenagens e eixos totalmente paramétricos: perfil involuto recalculado ao mudar m/z/α/β no documento; filete de raiz (trocoide); engrenagem cônica e coroa/sem-fim; eixo com ranhuras de anel, roscas e cálculo de resistência; t2 da DIN 6885 em segunda fonte. Detalhe de experiência: aba Verificar separada da aba Projeto, com método de resistência por norma escolhido e relatório exportável; correção x com o mínimo que evita rebaixo calculado e mostrado; recursos de eixo (anel, rosca, furo transversal, rasgo) com posição medida da borda esquerda ou direita. Aceite: cada parâmetro tem dica com esquema e a janela não passa de uma rolagem por aba.",
    "origem": [
     "CTX-ENG"
    ],
@@ -1075,14 +1075,14 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B53",
    "onda": 0,
    "prio": "P0",
    "titulo": "Corpus de peças de referência e regressão",
-   "oque": "16 peças típicas (suporte usinado, flange, carcaça com casca, eixo, chapa, quadro soldado, garrafa, superfícies, engrenagem, mola, montagens com fixadores e mecanismo, PMI+desenho) com valores esperados; cada uma: recompute sem erro e igual ao cache, volume/área/bbox/nº de faces, BRepCheck e malha fechada, mudar cada cota e voltar (referências seguem, nada some calado), salvar/abrir idêntico, duas execuções com as mesmas medidas; fixtures de arquivos de cada alpha (migração), caminhos com acento e espaço; script de cobertura feature → teste que falha o CI; captura visual FENKRA_DEMO_CAPTURA comparada por pixels. Toda feature nova entra com peça no corpus.",
+   "oque": "Somar ao corpus um orçamento de desempenho que falha o teste quando passa do limite: tesselação por etapa (malha, suavidade de arestas, polilinhas), recompute sem mudança, recompute com edição local e memória depois de 300 edições, com a engrenagem de 40 dentes e a placa com grade de furos como peças de referência.",
    "origem": [
     "PESQ-TST"
    ],
@@ -1091,7 +1091,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B54",
@@ -1113,7 +1113,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B55",
@@ -1132,7 +1132,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B56",
@@ -1152,7 +1152,7 @@
    "teste": "Auto + Visual",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B57",
@@ -1172,14 +1172,14 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B58",
    "onda": 0,
    "prio": "P0",
    "titulo": "Prendedores por pontos coloridos, conexão parafusada e assistente",
-   "oque": "Ponto de prendedor publicado = ponto + vetor normal lido da superfície (inversível) + chave de diâmetro + face de apoio; cor por tabela editável Ø → cor com rótulo textual (dash em polegada ou mm); ponto fora da face é projetado (0,05 mm) ou fica ->x. Estrutura Conjunto de prendedores > Conjunto da junta > Prendedores. Preencher por cor com regra por junta, grip medido pelas faces extremas ao longo do vetor e dash pela faixa de grip (fora dela: estado falhou, nunca o último da série); também por furo, linear e concêntrico com planos início/fim; reexecutar é idempotente; salvar/abrir preserva pontos, cores, junta e ligações. Assistente, modo manual e pilha editável ficam em item próprio.",
+   "oque": "Acrescentar: na prévia, uma alça 3D estica o comprimento do parafuso e só para nos comprimentos existentes na família; dois cliques abrem a lista de comprimentos. Ordem guiada: primeiro a posição e o plano inicial, depois a pilha, com linhas Clique para adicionar. Marcas por furo no 3D: entra, já tem, sem tamanho.",
    "origem": [
     "PESQ-INV",
     "PESQ-REB",
@@ -1194,7 +1194,7 @@
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B62",
@@ -1212,7 +1212,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.1
+   "pct": 0.0
   },
   {
    "id": "B63",
@@ -1231,7 +1231,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B59",
@@ -1252,14 +1252,14 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B60",
    "onda": 0,
    "prio": "P1",
    "titulo": "Ícones que mostram o resultado e tooltips com mini fluxo",
-   "oque": "Revisar todos os ícones para mostrar o resultado do comando; tooltip em dois estágios (500 ms: nome, atalho e frase; ~1,2 s ou Shift: mini fluxograma entrada → operação → resultado) com atraso configurável; linha na barra de status com o próximo passo; id estável por comando com migração do config.json; todo atalho no mapa de teclas e dicas lendo o atalho atual; busca de comandos (Ctrl+K) com sinônimos PT/EN que executa e troca de bancada; teste que falha se um comando não tiver ícone, tooltip ou tradução.",
+   "oque": "Ampliar: tooltip em três camadas (500 ms nome, atalho do mapa e frase; ~1,2 s mini-GIF de 4 a 8 s; F1 abre a ajuda do comando), mídia gerada pelo próprio app a partir de roteiros e guardada em pacote externo ao executável, regras de ícone com selo por variante e paleta semântica, 30 ícones piores redesenhados, busca Ctrl+K com sinônimos PT/EN que alimenta o editor da roda de comandos, e teste que falha se faltar ícone, tooltip, mídia, dica por campo ou tradução. Atraso configurável e modo 'reduzir movimento'.",
    "origem": [
     "PESQ-UX",
     "AUD-FNK"
@@ -1271,7 +1271,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B61",
@@ -1293,7 +1293,7 @@
    "teste": "Auto + Visual",
    "area": "Navegação",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.2
   },
   {
    "id": "B64",
@@ -1310,7 +1310,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B65",
@@ -1328,7 +1328,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.2
   },
   {
    "id": "B66",
@@ -1345,7 +1345,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B67",
@@ -1362,14 +1362,14 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B68",
    "onda": 0,
    "prio": "P0",
    "titulo": "Documento sem clone por quadro e desfazer nomeado",
-   "oque": "Remove doc.clone() e a serialização JSON por quadro na árvore e no cálculo de desatualizado (dirty flag e índice de mudança por feature; menos de 2 ms/quadro com 300 comandos). Desfazer/refazer nomeados com histórico: um comando = um passo, sessão cancelada não cria passo, arraste contínuo = um passo, limite em MB.",
+   "oque": "Medido: clone de documento com 300 comandos custa 0,23 ms e a comparação 0,015 ms, abaixo da meta de 2 ms por quadro. A remoção do clone por quadro perde prioridade como ganho de CPU; o valor do item passa a ser o desfazer nomeado e o limite em MB do histórico, hoje sem teto em app.rs.",
    "origem": [
     "PESQ-UI",
     "PESQ-MAC"
@@ -1379,7 +1379,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B69",
@@ -1398,7 +1398,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B70",
@@ -1416,14 +1416,14 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B71",
    "onda": 0,
    "prio": "P0",
    "titulo": "Montagem: estado das restrições, orientação e pares válidos",
-   "oque": "Restrição com estado Verificada/A atualizar/Impossível/Quebrada/Suprimida/Medida na árvore; face perdida não move a peça nem usa geometria antiga; Reconectar sem recriar. Distância e Ângulo com orientação e setor, distância 0 vira coincidência, tabela de pares válidos; auto_kind por par completo e AlignOnce que reverte e avisa se o solver não convergir.",
+   "oque": "Acrescentar: Distância e Ângulo nascem com a medida atual entre os elementos, e nunca com 0 ou 90 fixos, para a peça não saltar. Separar Inverter alinhamento (sentido das normais) de Inverter lado (sentido da cota), acessíveis no painel e no menu da restrição na árvore. Valor com unidade e validação de fórmula, no lugar do texto livre.",
    "origem": [
     "PESQ-MON",
     "PESQ-FI"
@@ -1433,7 +1433,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B72",
@@ -1452,7 +1452,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B73",
@@ -1468,14 +1468,14 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B74",
    "onda": 1,
    "prio": "P0",
    "titulo": "Sketch: estados do solver, cota de referência e correções",
-   "oque": "Estados Sub/Total/Redundante/Conflito/Vínculo perdido com cor e texto; cota de referência entre parênteses; conflito mantém a última geometria válida. Filete/chanfro preservam medidas externas, aparar/estender prendem a ponta, espelhar leva restrições e raios, merge_points limpa tangentes e vínculos, PointOnCurve com spline e arco; tolerância única de 0,001 mm e remoções listadas com desfazer.",
+   "oque": "Acrescentar: cota que sobre-restringe vira referência sozinha, em cinza, e o menu de contexto alterna entre comandar e referência; valor negativo inverte o lado em comprimentos, distâncias e ângulos.",
    "origem": [
     "PESQ-SKT",
     "PESQ-FI"
@@ -1485,7 +1485,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B75",
@@ -1501,7 +1501,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B76",
@@ -1517,7 +1517,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B77",
@@ -1533,7 +1533,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B78",
@@ -1549,14 +1549,14 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B79",
    "onda": 1,
    "prio": "P0",
    "titulo": "Estrutural: falha isolada por linha e placa/reforço por referência",
-   "oque": "members() devolve estado por linha: o comando entrega os corpos válidos e marca só o membro ruim com motivo (colinear, linha perdida, face paralela, ciclo). StructPlate/StructGusset guardam membro+extremidade (e A+B+nó) em vez de ponto, sem member_end por proximidade, com migração dos arquivos antigos.",
+   "oque": "Acrescentar que o comando Membro nunca cria recurso vazio: sem linhas, ele abre pedindo o esqueleto dentro do comando (hoje cria o recurso e só avisa, em app.rs, Cmd::StMember), e a falha de um membro aparece no 3D com o contorno vermelho da linha e o motivo ao lado.",
    "origem": [
     "PESQ-EST"
    ],
@@ -1565,14 +1565,14 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B80",
    "onda": 1,
    "prio": "P0",
    "titulo": "Estrutural: comprimento de corte, congruência e item estável",
-   "oque": "Lista de corte com ponta longa, linha de centro e ângulos de ponta; assinatura por congruência (geometria das pontas, sentido normalizado); numeração de item guardada no documento e nomes de arquivo estáveis. Placas e reforços entram na lista e nos balões, com propriedades por item.",
+   "oque": "Acrescentar à lista de corte: colunas Ângulo 1 (ponta mais perto do esqueleto) e Ângulo 2 (ponta oposta), ordenação por coluna, filtro por material, clique na linha realça os corpos no 3D e clique no corpo seleciona a linha; itens iguais de materiais diferentes em grupos separados; comprimento e ângulos somente leitura, vindos do sólido.",
    "origem": [
     "PESQ-EST"
    ],
@@ -1581,14 +1581,14 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B81",
    "onda": 1,
    "prio": "P0",
    "titulo": "Desenho: âncoras estáveis em cotas e balões",
-   "oque": "Tipo Anchor (chave de vértice/aresta/face + reserva), compartilhado com o PMI; a cota resolve no update e fica ReferênciaQuebrada em vermelho com Reatribuir; raio/Ø lidos da superfície analítica. Balão referencia a chave do componente e a ponta cai em ponto visível; cotas do corpus conferem com o kernel (menos de 1e-6).",
+   "oque": "Cota com âncora quebrada fica em vermelho na folha com alça 'Reatribuir' que acende os candidatos na vista, e o duplo clique na cota abre a caixa de edição (texto com marcador do valor medido, precisão, tolerância tipada, símbolos). Aceite: o teste do corpus altera a peça, a cota quebra, a reatribuição por clique devolve o valor correto.",
    "origem": [
     "PESQ-DES"
    ],
@@ -1597,14 +1597,14 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B82",
    "onda": 1,
    "prio": "P0",
    "titulo": "PMI: âncoras topológicas e medida por alvo",
-   "oque": "Pmi.targets com chaves da ADR 0010 sobre o Anchor do desenho; cotas face-face, eixo-eixo, ao centro de furo e ao longo de eixo medidas pelo alvo (não por pontos clicados). Valor de raio e diâmetro lido da superfície analítica (cilindro, cone, esfera, toro). Sai o snap de 2 mm; âncoras antigas promovidas no primeiro recompute. É pré-requisito de todos os tipos novos de cota.",
+   "oque": "Além das chaves topológicas, o alvo escolhido na viewport passa a ser realçado ao passar o cursor, com o tipo reconhecido (face plana, cilíndrica, aresta circular, vértice) no cursor, e o clique grava a chave do alvo e não o ponto. Aceite: hover sobre um furo mostra 'furo Ø6,5' e um clique cria a cota ligada à superfície cilíndrica.",
    "origem": [
     "PESQ-PMI"
    ],
@@ -1613,14 +1613,14 @@
    "teste": "Auto",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B83",
    "onda": 1,
    "prio": "P0",
    "titulo": "PMI: estado, diagnóstico e componente-dono",
-   "oque": "status OK/Isolada/Ambígua com ícone e texto; cota face-face que deixa de ser paralela vira Ambígua em vez de mudar o número calado. Painel Editar/Substituir/Isolar/Desativar com candidatos realçados no 3D. Em montagem o alvo é (componente, chave) e a anotação segue os mates; apagar pede confirmação e é desfazível.",
+   "oque": "O painel Editar/Substituir/Isolar/Desativar também mostra o elemento que falhou em vermelho no 3D e a explicação curta do estado (por exemplo, 'as faces deixaram de ser paralelas'), e aceita arrastar a âncora para um candidato realçado. Aceite: ao quebrar o paralelismo de duas faces cotadas, a cota fica Ambígua, vermelha, com a mensagem, e o arraste para a face substituta restaura o estado OK.",
    "origem": [
     "PESQ-PMI"
    ],
@@ -1629,7 +1629,7 @@
    "teste": "Auto + Visual",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B84",
@@ -1652,7 +1652,7 @@
    "onda": 1,
    "prio": "P0",
    "titulo": "Fixadores: HoleRow completo e assento da cabeça",
-   "oque": "HoleRow com tipo (reto, rebaixo, escareado), diâmetros, ângulo e tolerância; o preenchedor assenta a cabeça no fundo do rebaixo ou no cone. Furos aeronáuticos reconhecidos pela faixa furo_min..furo_max do prendedor (furo de 4,9 mm deixa de dar 'sem tamanho').",
+   "oque": "HoleRow com tipo (reto, rebaixo, escareado), diâmetros, ângulo e tolerância; o preenchedor assenta a cabeça no fundo do rebaixo ou no cone. Furos aeronáuticos reconhecidos pela faixa furo_min..furo_max do prendedor (furo de 4,9 mm deixa de dar 'sem tamanho'). Detalhe: o motivo de cada furo não reconhecido aparece no 3D, em âmbar sobre o furo, e não só como lista de avisos; furo cujo centro não coincide com o rebaixo é avisado em vez de inserido deslocado.",
    "origem": [
     "PESQ-PRI",
     "PESQ-PRA"
@@ -1662,7 +1662,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B86",
@@ -1679,7 +1679,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B87",
@@ -1696,14 +1696,14 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B88",
    "onda": 2,
    "prio": "P0",
    "titulo": "Conversor: importar STEP e BREP na interface",
-   "oque": "Arquivo ▸ Importar… e Exportar… separados; diálogo com destino (peça, multicorpo, referências), unidades lidas e convertidas com aviso de tamanho absurdo, e relatório. O corpo importado fica embutido como BREP e o documento abre sem a origem; documentos novos passam pelo Salvar tudo.",
+   "oque": "Acrescentar ao aceite: antes de confirmar, o diálogo mostra miniatura 3D, caixa envolvente em mm, contagem de corpos e faces e aviso de unidade suspeita (peça com mais de 10 000 mm ou menos de 0,1 mm); depois da importação, relatório copiável com faces reparadas, sólidos que não fecharam e o que o formato não carrega. Dica por campo em cada opção, ícone do conjunto e tooltip em dois estágios. O documento recebe o selo de origem (item novo de selo e vínculo).",
    "origem": [
     "PESQ-CNV",
     "PESQ-MAC"
@@ -1713,14 +1713,14 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B89",
    "onda": 2,
    "prio": "P0",
    "titulo": "Sólidos: términos por lado, offset e início deslocado",
-   "oque": "Extent independente por lado (cego, até próximo/último/plano/superfície/vértice/corpo), offset em até plano/superfície, início em plano/face/deslocamento e 'até o último' pela última parede real. Unifica extent() e end_cutter() e mantém papéis de face em todos os términos.",
+   "oque": "Acrescentar ao aceite: o término 'até' encaixa na face sob o cursor ao arrastar a seta 3D e o rótulo muda de 'Distância' para 'Até face'; setas nas duas pontas no plano médio e uma segunda seta no modo de dois lados; o painel mostra só os campos que valem para o término escolhido (comprimento só em dimensão, deslocamento só em passante, até o próximo e até face).",
    "origem": [
     "PESQ-SOL"
    ],
@@ -1729,14 +1729,14 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B90",
    "onda": 2,
    "prio": "P0",
    "titulo": "Sólidos: furo guiado por norma",
-   "oque": "Norma, tamanho e ajuste preenchem os diâmetros (M8 roscado → broca 6,8) e gravam o vínculo; edição manual marca 'personalizado'. Tipos simples/folga/roscado/cônico, spotface, contrafuro e oblongo; rosca cosmética como atributo da face; posição por vértice associativa; alimenta hole_table, fixadores e chamadas no desenho.",
+   "oque": "Acrescentar ao aceite: posicionar o furo clicando na face, com furo-guia que segue o cursor alinhado à normal; profundidade de rosca separada da profundidade do furo e folga no fundo em passos de rosca; deslocamento da ponta da broca; nome da feature atualizado com os valores (ex.: Furo M8 roscado x 20).",
    "origem": [
     "PESQ-SOL",
     "PESQ-FI"
@@ -1746,14 +1746,14 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B91",
    "onda": 2,
    "prio": "P0",
    "titulo": "Sólidos: padrões com re-solução",
-   "oque": "Política por padrão: cópia exata × reavaliar término por instância. Suprimir instâncias, espaçamento desigual, limite de contagem com erro e cancelamento; padrão de features de acabamento sobre o resultado reavaliado.",
+   "oque": "Acrescentar ao aceite: cada instância do padrão aparece como ponto clicável na prévia; clicar pula a instância e ela entra numa lista com X para restaurar; setas de espaçamento e arco de ângulo no 3D; plano de espelho desenhado de forma translúcida com rótulo.",
    "origem": [
     "PESQ-SOL"
    ],
@@ -1762,7 +1762,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B92",
@@ -1779,7 +1779,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B93",
@@ -1796,14 +1796,14 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B94",
    "onda": 2,
    "prio": "P1",
    "titulo": "Relações, onde é usado e reparar links",
-   "oque": "Painel Contém/Onde é usado com o estado de cada link, lendo só cabeçalhos; assistente Reparar links por uid. Renomear/Mover como transação com prévia dos dependentes e desfazer; detecção de ciclo entre documentos.",
+   "oque": "Acrescentar ao aceite: ao tornar obsoleto ou liberar, a lista de quem usa a peça aparece antes de confirmar; clicar numa linha seleciona o componente na árvore da montagem; cabeçalhos lidos sem abrir o documento inteiro.",
    "origem": [
     "PESQ-PLM",
     "PESQ-MAC"
@@ -1813,7 +1813,7 @@
    "teste": "Auto + Visual",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B95",
@@ -1830,14 +1830,14 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B96",
    "onda": 2,
    "prio": "P1",
    "titulo": "Sketch: inferência, snaps, analisar e reparar",
-   "oque": "Snaps priorizados (ponto > médio > interseção > centro > quadrante > curva) com glifo antes do clique e restrições inferidas por tipo, desligáveis e sem contradições. Painel Analisar sketch com perfis abertos/fechados, sobreposições, autocruzamentos e reparo por tolerância; verificação 'sketch válido para a feature'.",
+   "oque": "Acrescentar: cada snap mostra glifo do tipo antes do clique, também ao arrastar com Selecionar; linhas de inferência tracejadas enquanto se desenha; arrastar para dentro ou para fora do círculo troca raio e diâmetro, e arrastar para o quadrante escolhe o ângulo da cota.",
    "origem": [
     "PESQ-SKT",
     "PESQ-FI"
@@ -1847,7 +1847,7 @@
    "teste": "Auto + Visual",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B97",
@@ -1863,14 +1863,14 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B98",
    "onda": 2,
    "prio": "P1",
    "titulo": "Prendedores: assistente, modo manual e pilha editável",
-   "oque": "Pilha como objeto recalculável ligado aos furos, com falha visível quando a pega não cabe. Assistente em tabela para trocar família, tamanho, comprimento e pilha, com equivalentes por cor e um desfazer; modo manual por ponto que o automático não toca; diagnóstico por ponto; mover/apagar o ponto move/remove o prendedor.",
+   "oque": "Pilha como objeto recalculável ligado aos furos, com falha visível quando a pega não cabe. Assistente em tabela para trocar família, tamanho, comprimento e pilha, com equivalentes por cor e um desfazer; modo manual por ponto que o automático não toca; diagnóstico por ponto; mover/apagar o ponto move/remove o prendedor. Detalhe de experiência: reabrir o assistente a partir do fixador na árvore; opções de seguir o diâmetro do furo, atualizar o comprimento quando a pilha muda e trocar arruela e porca junto com o tamanho; comprimento padrão pela série (acima da pega em furo passante, abaixo em furo cego) com engajamento mínimo de rosca em múltiplos do diâmetro. Aceite: mudar o furo de M6 para M8 atualiza parafuso, arruela e porca com um desfazer.",
    "origem": [
     "PESQ-PRA",
     "PESQ-PRI",
@@ -1881,14 +1881,14 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B99",
    "onda": 2,
    "prio": "P1",
    "titulo": "Interfaces de encaixe e restrição por arraste",
-   "oque": "Entidade Interface (nome, tipo, geometria v2, offset, composta, inferida de furo/eixo/face) na peça e na montagem; inserir e substituir casam por nome → tipo → ordem e listam as faltantes. Arrastar com tipo previsto, Tab para inverter, pares compostos 'Inserir' e reversão se o solver falhar.",
+   "oque": "Acrescentar: ao passar o mouse, mostrar pontos candidatos de encaixe (centro de face, meio de aresta, canto, eixo de cilindro, centro de furo) com sistema de eixos visível; tecla para travar um ponto; inverter eixo principal e girar eixo secundário de 90 em 90 graus; deslocamento em X, Y e Z com fórmula.",
    "origem": [
     "PESQ-FI",
     "PESQ-MON"
@@ -1898,7 +1898,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B100",
@@ -1915,7 +1915,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B101",
@@ -1933,7 +1933,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.2
   },
   {
    "id": "B102",
@@ -1951,14 +1951,14 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B103",
    "onda": 3,
    "prio": "P1",
    "titulo": "Montagem: solver por aglomerados e diagnóstico de conflito",
-   "oque": "Decomposição em aglomerados conectados com jacobiano esparso ou analítico, reaproveitando a solução anterior; update manual e parcial por aglomerado. Ao não convergir, lista a restrição culpada e o conjunto mínimo envolvido e marca redundantes; modos de GDL livres desenhados na viewport.",
+   "oque": "Acrescentar: quando a prévia de uma restrição ou junta não convergir, ficar em vermelho e apontar a restrição em conflito antes de aceitar, sem alterar a montagem. A contagem de GDL que restam aparece no painel durante a prévia.",
    "origem": [
     "PESQ-MON"
    ],
@@ -1967,7 +1967,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B104",
@@ -1984,7 +1984,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B105",
@@ -2001,14 +2001,14 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B106",
    "onda": 3,
    "prio": "P1",
    "titulo": "Desenho: cortes completos e vistas especiais",
-   "oque": "Linha de corte como polilinha com meio corte, desvio e alinhado, Flip e vista alinhada ao traço; componentes não cortados. Vista auxiliar associativa, corte parcial com profundidade por referência, vista interrompida com cota de valor real e detalhe poligonal com geometria refinada.",
+   "oque": "Linha de corte com alças nas pontas e nas setas na própria folha (arrastar muda a posição, clicar na seta inverte o lado), vários segmentos concluídos por Enter, profundidade total ou por distância, fatia, peças que não são cortadas e acabamento da borda. Fantasma da vista em corte durante o traçado, restrito ao alinhamento com a mãe e liberável com Ctrl. Detalhe ganha alça de raio, contorno em perfil livre e escala escolhida na criação.",
    "origem": [
     "PESQ-DES"
    ],
@@ -2017,14 +2017,14 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B107",
    "onda": 3,
    "prio": "P1",
    "titulo": "Desenho: cotagem inteligente, chamadas e centros",
-   "oque": "Cota pelo contexto da seleção; conjuntos ordenada, linha de base e cadeia; importar cotas do modelo (croqui, feature, PMI) sem duplicatas. Chamadas de furo, rosca, chanfro e filete lidas da feature com contagem 4×, usando o MESMO gerador de texto de chamada do PMI 3D (item de cotas de feature) para 3D e 2D mostrarem a mesma nota. Marcas e eixos de centro associativos.",
+   "oque": "Ferramenta de cota única e contextual: o que foi clicado propõe o tipo, Tab ou o menu trocam entre linear, alinhada, raio, diâmetro e ângulo, a cota viva (fantasma) segue o mouse até o clique de afastamento e a ferramenta continua ativa até Esc ou clique direito. Duplo clique abre caixa flutuante com símbolos Ø ± ° e o marcador <>, precisão separada para o valor e a tolerância, e opções como diâmetro, entre parênteses e inspeção. Sem âncora válida sob o cursor, o cursor mostra o motivo.",
    "origem": [
     "PESQ-DES",
     "PESQ-FI"
@@ -2034,14 +2034,14 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B108",
    "onda": 3,
    "prio": "P1",
    "titulo": "PMI semântico: tolerância, datum/DRF e advisor por norma",
-   "oque": "Tolerância tipada (Nenhuma, Simétrica, Bilateral, Limites, Classe ISO 286 furo/eixo) mais estado ortogonal básica/referência/inspecionável, usando o crate de tabelas normativas; precisão e separador decimal por norma ativa. Datum e DRF como objetos com letra única (sem I, O, Q), datum comum A-B e verificação de ordem e graus de liberdade. Advisor que só oferece características válidas para o elemento, norma ativa ISO/ASME (ASME 2018 sem concentricidade e simetria) e validação sintática em tempo real. Modificadores, zonas, quadro composto e símbolos vetoriais passam para o item de FCF completo.",
+   "oque": "A edição do quadro e do datum acontece no próprio 3D: o datum recebe automaticamente a próxima letra livre (nunca I, O ou Q), e cada casa do quadro é um campo clicável com lista (característica, valor, modificador, datums existentes), com validação na hora e mensagem curta. Aceite: criar uma planeza e uma perpendicularidade com A sem abrir o painel, e a tentativa de usar a letra I é recusada com explicação.",
    "origem": [
     "PESQ-PMI"
    ],
@@ -2050,7 +2050,7 @@
    "teste": "Auto + Visual",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B109",
@@ -2084,7 +2084,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B111",
@@ -2100,7 +2100,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B112",
@@ -2116,7 +2116,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B113",
@@ -2132,7 +2132,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.2
   },
   {
    "id": "B114",
@@ -2148,7 +2148,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B115",
@@ -2164,7 +2164,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B116",
@@ -2180,7 +2180,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B117",
@@ -2196,7 +2196,7 @@
    "teste": "Auto",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B118",
@@ -2212,7 +2212,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B119",
@@ -2228,7 +2228,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B120",
@@ -2244,14 +2244,14 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B121",
    "onda": 4,
    "prio": "P1",
    "titulo": "Estudo de movimento cinemático",
-   "oque": "Driver, gráficos de posição/velocidade/aceleração, trajetória, animação. (BN08; módulo Montagem; depende de B103, B36, B71).",
+   "oque": "Acrescentar: cursor direto por junta, que move o mecanismo sem calcular quadros; o cálculo fica para a reprodução no tempo. Gráficos com eixos, unidades e cursor de tempo; trajetória de um ponto desenhada no 3D; lista no 3D do grau de liberdade que ainda falta comandar.",
    "origem": [
     "PESQ-MOD"
    ],
@@ -2260,7 +2260,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B122",
@@ -2276,14 +2276,14 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B123",
    "onda": 4,
    "prio": "P2",
    "titulo": "Posições nomeadas de montagem",
-   "oque": "Salva e restaura configurações de mecanismo. (BN08c; módulo Montagem; depende de B71, B102).",
+   "oque": "Acrescentar: cada posição guarda valores de juntas e restrições e tem tempo de transição, ordem na lista, atualizar e reordenar; tocar entre posições e arrastar um cursor para percorrê-las; exportar a animação.",
    "origem": [
     "PESQ-MOD"
    ],
@@ -2292,7 +2292,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B124",
@@ -2308,14 +2308,14 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B125",
-   "onda": 4,
+   "onda": 3,
    "prio": "P1",
    "titulo": "Grandes montagens: carga leve e LOD",
-   "oque": "Representações simplificadas, envelope, carga parcial. (BN10; módulo Montagem; depende de B61, B68, B64).",
+   "oque": "Depende antes da tesselação linear e do cache de malhas com limite. A carga e a composição da montagem precisam sair da thread da interface (view::compose e tesselar rodam nela hoje). Malha mais grossa por componente reaproveita os presets do B61 e o modo leve.",
    "origem": [
     "PESQ-MOD"
    ],
@@ -2324,7 +2324,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B126",
@@ -2340,7 +2340,7 @@
    "teste": "Auto",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B127",
@@ -2356,7 +2356,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B128",
@@ -2372,7 +2372,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B129",
@@ -2388,23 +2388,24 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B130",
-   "onda": 4,
-   "prio": "P2",
-   "titulo": "Branch e merge de documento",
-   "oque": "Ramificação e merge de 3 vias por uid de feature. Comparação lado a lado. (BN14; módulo Gestão; depende de B15, B64, B66, B25, B94).",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Ramos e mesclagem de documento, sem trava de peça",
+   "oque": "Git para CAD: em vez de travar a peça, cada pessoa abre um ramo ou uma cópia derivada (fork) do projeto e continua vendo a linha principal e o trabalho dos outros. Mesclagem de 3 vias por uid de feature: mudanças em features diferentes entram sozinhas; conflito só quando o mesmo parâmetro ou a mesma feature mudou nos dois lados, resolvido lado a lado no 3D antes de aceitar. Linha principal protegida por papel do PLM, com pedido de mesclagem revisado e, depois, aprovado pelo checador de qualidade. Depois de mesclar, recalcula e confere status, volume e referências; nada entra quebrado. Depende de B15, B64, B66, B25, B94 e B214. Testes: duas edições em features diferentes mesclam sem conflito, edição do mesmo parâmetro gera conflito, resultado igual nas duas ordens de mesclagem.",
    "origem": [
-    "PESQ-MOD"
+    "PESQ-MOD",
+    "USR-GIT"
    ],
    "catalogo": [],
    "tokens_k": 450,
-   "teste": "Auto",
+   "teste": "Auto + Visual",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B131",
@@ -2420,7 +2421,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B132",
@@ -2436,7 +2437,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B133",
@@ -2452,7 +2453,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B134",
@@ -2468,7 +2469,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B135",
@@ -2484,7 +2485,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B136",
@@ -2500,7 +2501,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B137",
@@ -2516,7 +2517,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B138",
@@ -2532,14 +2533,14 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B139",
    "onda": 4,
    "prio": "P1",
    "titulo": "Viewport com sombra suave, oclusão e PBR",
-   "oque": "Viewport PBR com GGX metálico-rugoso e IBL com HDRI embutido, sombra com PCF e GTAO em meia resolução, em três níveis de qualidade (Rápido, Padrão, Qualidade) por documento e por vista. O material do B92 carrega aparência PBR editável (cor base, metálico, rugosidade, clearcoat opcional) e a exportação glTF usa os mesmos valores, validada com o glTF-Validator. Base do B157, B146 e B156. Aceite: golden images por adaptador wgpu por software e 30 FPS em montagem de 5.000 componentes.",
+   "oque": "Efeitos nascem desligados no modo leve e em adaptador de software, com o nível Rápido sem sombra nem oclusão. Nenhum efeito pode exigir recurso que impeça abrir em OpenGL ou em adaptador antigo; sem o recurso, o nível cai sozinho e avisa uma vez.",
    "origem": [
     "PESQ-MOD"
    ],
@@ -2548,7 +2549,7 @@
    "teste": "Auto",
    "area": "Navegação",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.2
   },
   {
    "id": "B140",
@@ -2564,7 +2565,7 @@
    "teste": "Auto",
    "area": "Navegação",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B141",
@@ -2580,7 +2581,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B142",
@@ -2596,14 +2597,14 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.2
   },
   {
    "id": "B143",
-   "onda": 4,
-   "prio": "P2",
+   "onda": 3,
+   "prio": "P1",
    "titulo": "Reconhecimento de features",
-   "oque": "Furos, bolsos, filetes e chapa em corpos importados. (BN24; módulo IA / automação; depende de B87, B35, BN02).",
+   "oque": "Dividir em fases com aceite próprio. Fase 1 analisa e marca sem alterar o corpo: grafo de faces com convexidade das arestas, painel Features encontradas (furo cego e passante com Ø e profundidade, escareado, filete de raio constante, bolso) que seleciona no 3D. Fase 2 converte a pedido em feature do Fenkra só se o checador de similaridade confirmar volume, área e centroide dentro de 1e-6 relativo; senão o corpo permanece. Só superfícies analíticas; B-splines ficam como corpo e são relatadas. Textos da interface dizem estrutura inferida, nunca histórico restaurado. Aceite no corpus: exportar para STEP e reimportar reconhece 90% dos furos e filetes de raio constante.",
    "origem": [
     "PESQ-MOD"
    ],
@@ -2612,7 +2613,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B144",
@@ -2628,7 +2629,7 @@
    "teste": "Auto",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B145",
@@ -2644,7 +2645,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.2
   },
   {
    "id": "B146",
@@ -2660,7 +2661,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B147",
@@ -2692,14 +2693,14 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B149",
    "onda": 4,
    "prio": "P2",
    "titulo": "Recursos de desenho do Onshape",
-   "oque": "Replicar anotações, meia cota, arco, ISO 13715, acabamento multilinha. (BN29; módulo Desenho; depende de B107, B81).",
+   "oque": "Balões com forma, tamanho do texto, texto acima e abaixo, símbolo e largura; nós de chamada (adicionar, remover, nova chamada a partir de um nó); alinhar vários balões na horizontal ou na vertical; renumerar pela ordem da lista com um comando Atualizar; automáticos com seleção por janela, Shift remove e escolha de lado e distância antes de confirmar. Meia cota, arco e acabamento multilinha continuam no escopo.",
    "origem": [
     "PESQ-MOD"
    ],
@@ -2708,7 +2709,7 @@
    "teste": "Auto",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B150",
@@ -2724,7 +2725,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B151",
@@ -2756,14 +2757,14 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B153",
-   "onda": 4,
-   "prio": "P2",
+   "onda": 3,
+   "prio": "P1",
    "titulo": "Bancada Forma livre: modelagem orgânica por subdivisão (estilo Fusion Form)",
-   "oque": "Editor de forma por subdivisão reduzido a cerca de 300 k: malha half-edge com Catmull-Clark próprio em Rust, primitivas, edição por vértice/aresta/face com manipulador, inserir aresta, extrudar, vinco, simetria por plano e congelar. A forma é uma feature da árvore com faces nomeadas por índice persistente da malha. OpenSubdiv (Apache-2.0, sem bindings Rust) fica como opção posterior. A conversão para B-rep sai para item próprio. A patente de T-splines US 7,274,364 consta como expirada em 2024, mas patentes posteriores da Autodesk não foram verificadas.",
+   "oque": "Editor de forma por subdivisão reduzido a cerca de 300 k: malha half-edge com Catmull-Clark próprio em Rust, primitivas, edição por vértice/aresta/face com manipulador, inserir aresta, extrudar, vinco, simetria por plano e congelar. A forma é uma feature da árvore com faces nomeadas por índice persistente da malha. OpenSubdiv (Apache-2.0, sem bindings Rust) fica como opção posterior. A conversão para B-rep sai para item próprio. Fluxo obrigatório: criar caixa arrastando no plano; passar o mouse acende nó, aresta ou face sem trocar de ferramenta; clique abre o manipulador de gizmo.rs com setas, quadrados e arcos e chip de espaço Mundo, Vista, Normal e Local; rótulo aceita digitar; Tab alterna gaiola, liso e ambos; Alt ao arrastar face extruda; corte em laço com deslize; chip Suave, Vinco e Canto no nó ou aresta, com peso de vinco de 0 a 1; suavizar borda com raio e segmentos. Colocar tangência: alça de disco no nó define o plano tangente e o anel vizinho é ajustado por mínimos quadrados, com a seta valendo a tensão. Toda tecla tem botão visível. Aceite: da caixa até uma cúpula com vinco e simetria em menos de 10 ações, sem abrir painel. Patentes da área ainda precisam de verificação antes do lançamento: a patente-base de malhas com junções em T consta como expirada em 2024, mas as posteriores não foram verificadas.",
    "origem": [
     "USR-ORG"
    ],
@@ -2772,14 +2773,14 @@
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B154",
    "onda": 4,
    "prio": "P2",
    "titulo": "Forma livre: curvas e superfícies por polos (estilo FreeStyle)",
-   "oque": "Edição de curvas e superfícies NURBS por polos reduzida a cerca de 300 k: grau e número de polos como parâmetros, inserção de nó, simetria, Match de borda G0 a G2 por mínimos quadrados restritos entre duas arestas referenciadas e conector de continuidade (lacuna, ângulo e diferença de curvatura). G3, morphing e Classe A ficam como referência de qualidade, não como promessa. As análises de zebra, curvatura e porco-espinho saem para item próprio, por servirem a qualquer face. Reaproveita OCCT (GeomLProp, GeomFill, GeomPlate) e nalgebra.",
+   "oque": "Edição de curvas e superfícies NURBS por polos reduzida a cerca de 300 k: grau e número de polos como parâmetros, inserção de nó, simetria, Match de borda G0 a G2 por mínimos quadrados restritos entre duas arestas referenciadas e conector de continuidade (lacuna, ângulo e diferença de curvatura). G3, morphing e Classe A ficam como referência de qualidade, não como promessa. As análises de zebra, curvatura e porco-espinho saem para item próprio, por servirem a qualquer face. Reaproveita OCCT (GeomLProp, GeomFill, GeomPlate) e nalgebra. Polos aparecem como grade no 3D, com seleção de fileira, o mesmo manipulador da forma por subdivisão e aviso de que inserir um polo cria uma fileira inteira. O casamento de borda oferece preservar a ponta oposta, média entre as duas superfícies, refino até a tolerância e direção das isocurvas, com etiqueta de continuidade na junção e zebra ao vivo. Pesos de polo ficam no avançado, com alerta sobre troca de arquivos.",
    "origem": [
     "USR-ORG"
    ],
@@ -2788,14 +2789,14 @@
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B155",
    "onda": 4,
    "prio": "P0",
    "titulo": "Estrutural: corte de encaixe normal entre membros (laser/plasma em tubos)",
-   "oque": "Na bancada Estrutural, comando de corte de encaixe normal entre membros (boca de lobo em tubos redondos, entalhes em retangulares e perfis) com seleção automática da parede que governa ponto a ponto por um ORÇAMENTO DE FOLGA de raiz: em cada ponto escolhe parede interna ou externa mantendo a abertura dentro do limite configurado, com histerese e transição suave, mostra a parede em vigor por cor no 3D e sinaliza trechos em que só um chanfro resolve. Modos manuais (interna, externa, média) ficam como avançado; parâmetros de kerf, chanfro e tolerâncias reais do tubo (diâmetro, parede, raio de canto). O corte acompanha o esqueleto, entra na lista de corte e gera o desenvolvimento do tubo em DXF. MVP: redondo×redondo, retangular×retangular e perfil sobre chapa; perfis abertos e excêntricos depois. Aceite por interferência zero e folga máxima dentro do orçamento.",
+   "oque": "Acrescentar a interação: o corte de encaixe mostra prévia fantasma, a parede em vigor por cor ao passar o mouse no ponto da curva e opção de corte perpendicular para laser em tubo; ao editar a folga, rótulo flutuante com o valor em mm.",
    "origem": [
     "USR-CORTE"
    ],
@@ -2804,7 +2805,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B156",
@@ -2820,7 +2821,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B157",
@@ -2836,7 +2837,7 @@
    "teste": "Visual",
    "area": "Navegação",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B158",
@@ -2852,7 +2853,7 @@
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B159",
@@ -2868,7 +2869,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B160",
@@ -2884,7 +2885,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B161",
@@ -2900,7 +2901,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B162",
@@ -2916,7 +2917,7 @@
    "teste": "Visual",
    "area": "Navegação",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B163",
@@ -2932,7 +2933,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B164",
@@ -2948,7 +2949,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B165",
@@ -2964,7 +2965,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B166",
@@ -2980,7 +2981,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B167",
@@ -2996,7 +2997,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.8
+   "pct": 0.5
   },
   {
    "id": "B168",
@@ -3012,7 +3013,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B169",
@@ -3028,7 +3029,7 @@
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B170",
@@ -3044,7 +3045,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B171",
@@ -3060,7 +3061,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.2
   },
   {
    "id": "B172",
@@ -3076,7 +3077,7 @@
    "teste": "Auto + Visual",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B173",
@@ -3092,7 +3093,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B174",
@@ -3108,7 +3109,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B175",
@@ -3124,7 +3125,7 @@
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B176",
@@ -3140,7 +3141,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.2
   },
   {
    "id": "B177",
@@ -3156,7 +3157,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B178",
@@ -3172,14 +3173,14 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.2
   },
   {
    "id": "B179",
-   "onda": 4,
-   "prio": "P2",
+   "onda": 3,
+   "prio": "P1",
    "titulo": "Conversão de subdivisão para B-rep com continuidade configurável",
-   "oque": "Converte a malha de subdivisão do B153 em B-rep: regiões regulares viram remendos bicúbicos exatos, pontos extraordinários são aproximados com G0, G1 ou G2 à escolha, como a opção do ToNURBS do Rhino, com relatório de desvio máximo. Costura com tolerância em corpo sólido ou aberto que aceita filete, casca e booleana, e diagnóstico claro de onde e por que falhou. Reaproveitável pelo B158 para ajuste de superfícies a malha.",
+   "oque": "Converte a malha de subdivisão do B153 em B-rep: regiões regulares viram remendos bicúbicos exatos, pontos extraordinários são aproximados com G0, G1 ou G2 à escolha, com relatório de desvio máximo. Costura com tolerância em corpo sólido ou aberto que aceita filete, casca e booleana, e diagnóstico claro de onde e por que falhou. Reaproveitável pelo B158 para ajuste de superfícies a malha. Antes de aceitar, o 3D mostra mapa de desvio e marca os nós irregulares; clicar num nó volta à gaiola naquele ponto. A forma segue editável: mudar um nó ou parâmetro refaz a conversão e os filhos, com aviso quando faces nomeadas mudam. Malha densa gera alerta de tempo antes de converter.",
    "origem": [
     "PESQ-BENCH2"
    ],
@@ -3188,7 +3189,7 @@
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B180",
@@ -3204,7 +3205,7 @@
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B181",
@@ -3220,7 +3221,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B182",
@@ -3236,7 +3237,7 @@
    "teste": "Auto + Visual",
    "area": "Navegação",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B183",
@@ -3252,7 +3253,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B184",
@@ -3268,14 +3269,14 @@
    "teste": "Manual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B185",
    "onda": 2,
    "prio": "P1",
    "titulo": "PMI: cotas por par de alvos (linear, ordenada, base, cadeia, arco, ângulo)",
-   "oque": "Catálogo de cotas 3D sobre alvos resolvidos (B82): distância face-face, eixo-eixo, aresta-aresta, ponto-ponto, ao longo de eixo X/Y/Z e projetada no plano de anotação; variantes centro/interior/exterior para círculos (11 do AP242); conjuntos ordenada, linha de base, cadeia e simétrica com origem comum; comprimento de arco e corda; raio e diâmetro de esfera; ângulo entre faces ou arestas com modos interno, externo, complementar e reflexo. Cada cota sai como dimensional_location/size do AP242.",
+   "oque": "Cada tipo de cota nova nasce com o mesmo fluxo de criação: prévia fantasma com valor, Tab alternando a variante de medida (centro, interior, exterior; raio e diâmetro; ao longo de X, Y, Z), cursor com cor de validade e Esc/Backspace para cancelar ou retirar o último elemento. Aceite: todos os tipos do catálogo compartilham o estado de comando do item de prévia e têm GIF de tooltip.",
    "origem": [
     "PESQ-PMI"
    ],
@@ -3284,7 +3285,7 @@
    "teste": "Auto + Visual",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B186",
@@ -3300,7 +3301,7 @@
    "teste": "Auto + Visual",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B187",
@@ -3316,7 +3317,7 @@
    "teste": "Auto",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B188",
@@ -3332,7 +3333,7 @@
    "teste": "Auto + Visual",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B189",
@@ -3348,7 +3349,7 @@
    "teste": "Auto + Visual",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B190",
@@ -3364,7 +3365,7 @@
    "teste": "Auto + Visual",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.4
   },
   {
    "id": "B191",
@@ -3380,7 +3381,7 @@
    "teste": "Auto",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B192",
@@ -3396,7 +3397,7 @@
    "teste": "Auto + Visual",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.7
+   "pct": 0.5
   },
   {
    "id": "B193",
@@ -3412,7 +3413,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B194",
@@ -3428,7 +3429,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.2
   },
   {
    "id": "B195",
@@ -3444,7 +3445,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B196",
@@ -3460,7 +3461,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B197",
@@ -3476,7 +3477,7 @@
    "teste": "Auto + Visual",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B198",
@@ -3492,7 +3493,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B199",
@@ -3508,7 +3509,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B200",
@@ -3524,7 +3525,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.2
   },
   {
    "id": "B201",
@@ -3540,7 +3541,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B202",
@@ -3556,7 +3557,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B203",
@@ -3588,7 +3589,7 @@
    "teste": "Auto + Manual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B205",
@@ -3604,7 +3605,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B206",
@@ -3636,7 +3637,7 @@
    "teste": "Manual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.1
+   "pct": 0.0
   },
   {
    "id": "B208",
@@ -3652,7 +3653,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B209",
@@ -3668,7 +3669,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B210",
@@ -3685,7 +3686,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B211",
@@ -3702,7 +3703,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B212",
@@ -3719,7 +3720,7 @@
    "teste": "Auto + Manual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.6
+   "pct": 0.4
   },
   {
    "id": "B213",
@@ -3736,7 +3737,1799 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B214",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Comparação de versões por feature (diff do modelo)",
+   "oque": "Acrescentar a lista de metadados na comparação (quem, quando, comentário, estado) além da geometria, o menu da linha do histórico (Abrir somente leitura, Restaurar como nova versão, Comparar com a atual, Comparar com outra) e o uso do mesmo comparador pelo checador de migração, que compara o resultado importado ou reconstruído com o alvo.",
+   "origem": [
+    "USR-GIT"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "PDM / PLM",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B215",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Serviço de colaboração Fenkra (auto-hospedável)",
+   "oque": "Servidor aberto que a empresa instala por conta própria, sobre o VPM do B25: identidade de usuários, papéis e permissões por projeto, repositório de ramos, convites, canal seguro (TLS) e trilha de auditoria só-acréscimo. Conexão direta entre as máquinas quando der, com retransmissão pelo servidor como reserva. Funciona sem ele em modo local: nenhum recurso de modelagem depende de rede. Decisão de arquitetura em ADR.",
+   "origem": [
+    "USR-COLAB"
+   ],
+   "catalogo": [],
+   "tokens_k": 450,
+   "teste": "Auto",
+   "area": "PDM / PLM",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B216",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Presença: quem está trabalhando em quê, sem travar",
+   "oque": "Na árvore e no painel do projeto, mostra quem está com cada peça aberta, em qual ramo e desde quando, sem bloquear ninguém. Quem tem permissão de leitura abre o último estado publicado do ramo do colega em somente leitura; a pessoa escolhe quando publicar, então trabalho em andamento não vaza sem ela querer. Aviso quando dois ramos mexem na mesma feature, antes do conflito. Depende de B215 e B130. Ícone e PT/EN.",
+   "origem": [
+    "USR-COLAB"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "PDM / PLM",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B217",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Sessão ao vivo consentida: convidar para assistir a modelagem",
+   "oque": "Sessão nativa em vez de compartilhar tela: quem modela convida pessoas por nome ou link de uso único, e ninguém entra sem aceite do dono da sessão, nem administrador. Transmite as operações do modelo, não vídeo, então é leve e cada convidado vê no próprio 3D, seguindo a câmera do dono ou girando livre, com cursor e apontador 3D. Aviso sempre visível de sessão ativa e de quem está dentro, expulsar e encerrar a qualquer momento, registro na auditoria. O convidado não fica com cópia do modelo ao sair e precisa também ter permissão no PLM. Testes: entrada sem aceite é recusada, encerrar corta o acesso na hora, nada do modelo fica em disco no convidado. Depende de B215. Ícone e PT/EN.",
+   "origem": [
+    "USR-COLAB"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto + Visual",
+   "area": "PDM / PLM",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B218",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Sessão ao vivo: passar o controle, voz, chat e gravação para ensino",
+   "oque": "Controle único: uma pessoa edita por vez, e o convidado pede o controle, que o dono concede e retoma a qualquer momento (edição simultânea na mesma peça não entra, porque a ordem do recálculo vira uma disputa; para trabalho paralelo use ramos). Tudo feito pelo convidado fica no desfazer e na auditoria com o nome dele, em um ramo da sessão que o dono aceita ou descarta no fim. Voz e chat nativos (WebRTC por biblioteca aberta), e gravação da sessão como passos reproduzíveis para ensinar a modelar, só com aceite de todos. Estende B217. Ícone e PT/EN.",
+   "origem": [
+    "USR-COLAB"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "PDM / PLM",
+   "status": "a fazer",
    "pct": 0.4
+  },
+  {
+   "id": "B219",
+   "onda": 0,
+   "prio": "P0",
+   "titulo": "Tesselação sem custo quadrático e sem refazer faces intactas",
+   "oque": "Tirar o BRepAdaptor_Surface criado por aresta na suavidade (guardar por face ou usar a curva da aresta na face) e mover o BRepTools::Clean para a troca de qualidade, reaproveitando as faces já malhadas; massa não é refeita quando só a qualidade muda. Aceite: engrenagem de 40 dentes com a etapa de suavidade abaixo de 5 ms (hoje 350 ms); edição numa face lateral da placa 20x20 abaixo de 150 ms (hoje 1.034 ms); edge_smooth, volume e caixa envolvente iguais no corpus, sem furo na malha.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 140,
+   "teste": "Auto + Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B220",
+   "onda": 0,
+   "prio": "P0",
+   "titulo": "Cache de malhas com limite de memória",
+   "oque": "Cache.meshes e Cache.fills guardam uma entrada por versão e nunca descartam; passam a manter só as assinaturas vivas no último cálculo, com teto em MB. Medido hoje: 300 edições da peça de exemplo levam o processo de 31 MB a 160 MB. Aceite: mesmas 300 edições com crescimento abaixo de 10%, sem perder o reaproveitamento do corpo que não mudou.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 80,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B221",
+   "onda": 0,
+   "prio": "P0",
+   "titulo": "Partida que sempre explica: runtime C++, erro de GPU e registro",
+   "oque": "O pacote passa a levar vcruntime140.dll, vcruntime140_1.dll e msvcp140.dll, e o erro de run_native vira nova tentativa (padrão, Vulkan, OpenGL) e caixa de mensagem traduzida, em vez de fechar em silêncio. Registro partida.log por etapa com adaptador, backend e tipo, mais fenkra.exe --seguro e --diagnostico. Aceite: abre em Windows limpo sem o Redistributable; backend inválido forçado por WGPU_BACKEND mostra a mensagem e grava o motivo; adaptador de software abre e avisa uma vez.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Auto + Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B222",
+   "onda": 0,
+   "prio": "P0",
+   "titulo": "Repouso sem repintura",
+   "oque": "A tela inicial (request_repaint incondicional) e a barra de abas dos painéis (repintura a cada 50 ms) só agendam quadro enquanto há animação de verdade. Um contador de quadros de diagnóstico mede o resultado e registra o consumo antes e depois. Aceite: zero quadros em 5 s parado na tela inicial, com peça aberta e com painel de abas aberto; animações e dicas continuam funcionando.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 80,
+   "teste": "Auto + Visual",
+   "area": "Navegação",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B223",
+   "onda": 1,
+   "prio": "P0",
+   "titulo": "Chapa: prévia 3D viva em todos os comandos",
+   "oque": "Ao escolher a aresta, a face ou a linha, o comando mostra o resultado translúcido com valores padrão e atualiza a cada mudança de campo, sem confirmar. Vale para os 16 comandos Sm* da barra, com aviso em vermelho e causa textual quando o resultado seria inválido (colisão com a aba vizinha, raio abaixo do mínimo). Aceite: teste automático de que cada comando devolve uma malha de prévia e captura visual de ao menos aba, bainha, dobra por linha e estampo.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 420,
+   "teste": "Auto + Visual",
+   "area": "Chapa metálica",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B224",
+   "onda": 1,
+   "prio": "P0",
+   "titulo": "Desenho: fantasma de posicionamento (vistas, tabelas, cotas, balões)",
+   "oque": "Ao armar uma ferramenta de vista, tabela, cota ou balão, o resultado aparece preso ao cursor na escala real: contorno ou projeção da vista, tabela com as colunas, cota viva com o valor medido, balão com o número do item. Linhas de alinhamento tracejadas com a vista mãe e com balões vizinhos; Enter ou clique confirma. Aceite: captura visual de cada ferramenta com o fantasma e teste que garante que nada é criado antes da confirmação.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Desenho técnico",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B225",
+   "onda": 1,
+   "prio": "P0",
+   "titulo": "Desenho: barra de opções da ferramenta (antes do clique)",
+   "oque": "Ao ativar uma ferramenta de vista, abre uma barra ancorada na folha com direção (menu com miniaturas), escala (Auto, presets e livre), estilo (sombreada, arestas, com ocultas) e rótulo, editáveis enquanto o fantasma está no cursor. Pré-requisitos faltando (vista mãe, origem) aparecem ali com o motivo e um atalho para resolver, no lugar do aviso depois do clique. Aceite: criar uma vista em 1:2 sem abrir o painel lateral e sem trocar de aba.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 220,
+   "teste": "Auto + Visual",
+   "area": "Desenho técnico",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B226",
+   "onda": 1,
+   "prio": "P0",
+   "titulo": "Estrutural: seleção do esqueleto dentro do comando, grupos contíguos e prévia fantasma do perfil",
+   "oque": "O comando Membro abre já pedindo as linhas (arestas, linhas de referência, curvas), realça cada clique, numera segmentos e agrupa linhas contíguas em grupos com perfil, rotação e folgas próprios; antes de confirmar mostra o perfil translúcido sobre cada linha e a seção ampliada junto ao cursor. Aceite: teste monta esqueleto em L com dois grupos e confere status, volume e caixa; sem seleção o recurso não é criado; captura visual do fantasma.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 380,
+   "teste": "Auto + Visual",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B227",
+   "onda": 1,
+   "prio": "P0",
+   "titulo": "Campo numérico padrão único (roda, arrasto, expressão, unidade, dica)",
+   "oque": "Criar o componente campo_num que todos os painéis usam no lugar de DragValue, TextEdit numérico e Slider, com roda configurável (sempre sobre o campo, só com Ctrl ou só com foco), arrasto no rótulo, expressão com valor resolvido, unidades digitadas, restaurar padrão e dica de três linhas. Corrige a roda que funciona só onde a chamada foi escrita à mão (ui_ext.rs:46-66; ausente em sketch_ui.rs:2620, editor.rs:1098, sliders). Aceite: teste de CI proíbe campo numérico fora do componente, e o mesmo comando abre idêntico nos painéis esquerdo e direito.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B228",
+   "onda": 1,
+   "prio": "P0",
+   "titulo": "Contrato de manipulação 3D: rótulo arrastável e passo adaptativo",
+   "oque": "Reescrever handles.rs e gizmo.rs sob um vocabulário único: seta de distância, anel de ângulo, plano arrastável, esfera de posição, alça de raio e losango de quantidade, com pega de 28 px. O rótulo de valor arrasta, aceita roda e expressão e mostra o nome do parâmetro com opção de desvincular; o passo segue o zoom e Shift tem o mesmo sentido do painel. Aceite: offset de plano mostra retângulo translúcido, rótulo e inversão; teste visual em peças de 5 mm e 5 m.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 420,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B229",
+   "onda": 1,
+   "prio": "P0",
+   "titulo": "Selo de origem e vínculo com o arquivo importado",
+   "oque": "O documento criado a partir de uma importação grava o selo de origem (nome, hash do original, data, esquema e unidades lidas) e o original fica no cofre por hash, junto com o relatório de conversão. Reimportar o mesmo arquivo detecta o hash, avisa se mudou e oferece atualizar ou criar derivado. Aceite: teste monta documento importado, fecha, reabre e confere selo, hash e volume; o painel do projeto mostra o documento como derivado.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B230",
+   "onda": 1,
+   "prio": "P0",
+   "titulo": "PMI: prévia fantasma 3D e criação em estados (hover, prévia, confirmação)",
+   "oque": "Todos os comandos de anotação passam a ter quatro estados: comando ativo com a mensagem do próximo passo, hover que realça o candidato e o tipo, anotação fantasma com o valor seguindo o cursor, e clique que confirma. Esc cancela sem criar nada e Backspace retira o último elemento escolhido. Aceite: no teste visual, cota, raio, diâmetro, ângulo, nota, rugosidade, solda, referência e tolerância mostram o fantasma antes do clique final; nenhuma anotação é criada com menos elementos que o necessário.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto + Visual",
+   "area": "PMI 3D",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B231",
+   "onda": 1,
+   "prio": "P0",
+   "titulo": "Sketch: campos de valor na viewport ao desenhar",
+   "oque": "Campos flutuantes ao lado do cursor em Linha, Retângulo, Círculo, Arco, Polígono, Rasgo, Offset, Mover e Copiar: comprimento e ângulo, largura e altura, raio ou diâmetro. Tab avança e trava o valor com cadeado visível, Enter confirma, e o valor aceita expressão. Aceite: linha de 40 mm a 30° criada só com teclado gera a geometria e as cotas, e a opção de criar cota ao digitar pode ser desligada.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Sketch",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B232",
+   "onda": 1,
+   "prio": "P0",
+   "titulo": "Sketch: prévia fiel em todos os comandos",
+   "oque": "A prévia mostra o resultado real: polígono com lados, só o arco que será criado, contorno do rasgo, Mover e Copiar com todas as curvas, e fantasma em Espelhar, Offset, Filete, Chanfro, Interseção e Converter. Os rótulos mostram largura, altura, raio e ângulo. Aceite: nenhum comando de criação ou edição altera o sketch sem ter mostrado antes o que vai acontecer, conferido por captura de cada comando.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 220,
+   "teste": "Visual",
+   "area": "Sketch",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B233",
+   "onda": 1,
+   "prio": "P1",
+   "titulo": "Nomes sem marca em temas e estilos de navegação; teste de contraste",
+   "oque": "Renomear temas embutidos e as variantes de estilo de navegação e de predefinição de atalhos que levam nome de produtos de terceiros, preservando migração do config.json. Incluir teste automático de contraste mínimo de 4,5:1 em todos os temas e três densidades (compacta, padrão, confortável). Aceite: busca por marcas na interface e no código de i18n retorna zero e todos os temas passam no contraste.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 120,
+   "teste": "Auto",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B234",
+   "onda": 1,
+   "prio": "P1",
+   "titulo": "Orçamento de CPU do kernel: limite de fios do malhador",
+   "oque": "Teto de fios configurável pelo pool do OpenCASCADE, ajustado só entre cálculos, com padrão de metade dos processadores lógicos e mínimo de 2; a thread de recompute roda abaixo da prioridade da interface. Medido na placa 20x20: 4 fios custam 11% mais tempo e 32% menos CPU que 16. Aceite: teste confere o limite aplicado, resultado de malha igual em qualquer número de fios e interface responsiva durante o cálculo.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 80,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B235",
+   "onda": 1,
+   "prio": "P1",
+   "titulo": "Avaliar o malhador Delabella como alternativa",
+   "oque": "Comparar IMeshTools_MeshAlgoType_Delabella com o padrão em todo o corpus, medindo tempo, desvio real, triângulos e falhas. Medido: 2.032 ms contra 237 ms na placa 20x20 com a mesma contagem, mas 1.916 contra 4.224 triângulos na engrenagem, diferença ainda não explicada. Aceite: decisão registrada em ADR, com adoção total, só para faces planas ou rejeição, e nenhuma peça do corpus com desvio acima do pedido.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 90,
+   "teste": "Auto + Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B236",
+   "onda": 1,
+   "prio": "P1",
+   "titulo": "Modo leve e perfil automático de hardware",
+   "oque": "Um interruptor que combina ajustes existentes: malha Rascunho, sem anti-serrilhamento, simplificar ao girar, iluminação simples, 2 fios e animações desligadas, sugerido na primeira execução quando o adaptador é de software ou OpenGL, ou com menos de 8 GB ou até 4 processadores lógicos. Publica os requisitos mínimos depois de teste em máquina real. Aceite: volume e medidas idênticos com o modo ligado; a sugestão aparece uma vez e nunca é imposta; roteiro de abrir, modelar, girar e salvar passa em Dx12, Vulkan e OpenGL.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Navegação",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B237",
+   "onda": 1,
+   "prio": "P1",
+   "titulo": "Checador de similaridade geométrica para migração",
+   "oque": "Compara dois corpos (importado, reconstruído ou o alvo) por volume, área, centroide, caixa envolvente, momentos de inércia, contagem de furos por diâmetro e distância amostrada entre superfícies, com tolerância configurável. Reporta onde diverge com mapa de cor no 3D e devolve resultado em JSON para a CLI. Aceite: peças do corpus iguais passam em 1e-6 relativo; uma peça com furo deslocado 0,5 mm falha apontando o furo.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B238",
+   "onda": 1,
+   "prio": "P1",
+   "titulo": "PMI: plano de anotação escolhido durante o comando",
+   "oque": "Durante a prévia, a barra de espaço percorre os planos candidatos (faces vizinhas e planos principais) mostrados como moldura translúcida, outra tecla troca a face base e uma terceira alinha o texto à geometria. A escolha vira o padrão da sessão e aparece na barra de status. Aceite: o plano ativo é visível antes do clique, a mensagem 'este plano não mostra a cota' aparece quando a cota é perpendicular ao plano, e o painel mostra o mesmo plano escolhido.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "PMI 3D",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B239",
+   "onda": 1,
+   "prio": "P1",
+   "titulo": "Sketch: fluxo comum das ferramentas",
+   "oque": "Regras iguais para todas as ferramentas: seleção prévia aceita em Offset, Filete, Aparar e cotas; a ferramenta repete até Esc; dica no cursor com passo e contagem, inclusive nas restrições (Simétrica: 1 de 3); clique recusado explica o motivo; Esc coerente com o texto da tela. Todas as dicas passam por tr e Aparar, Offset, Filete, Espelhar e Spline ganham atalho no mapa de teclas. Aceite: teste percorre as ferramentas e falha se faltar dica, tradução ou tratamento de seleção prévia.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Auto + Visual",
+   "area": "Sketch",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B240",
+   "onda": 1,
+   "prio": "P1",
+   "titulo": "Superfícies: seta do offset correta e alças em todos os valores principais",
+   "oque": "Corrigir a seta da Superfície deslocada, que usa a diferença entre centros de malha: passa a sair do ponto clicado pela normal real, acerta o lado com distância negativa e mostra duas setas em dois lados. Acrescentar alças em Limite 2, ângulo da revolução, raio do cilindro e do tubo, Extrapolar, Filete de superfície, Engrossar e Ponto na curva. Aceite: teste de handle_for com distância positiva, negativa e dois lados em superfície plana e curva; captura visual de cada alça.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 120,
+   "teste": "Auto + Visual",
+   "area": "Superfícies e wireframe",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B241",
+   "onda": 2,
+   "prio": "P0",
+   "titulo": "Navegador de catálogo de normas com filtros, ficha e prévia 3D",
+   "oque": "Painel lateral Biblioteca com busca, árvore Norma > Tipo, chips de filtro (métrico, polegada, tipo de cabeça, material), ficha da família com esquema das cotas e tabela de tamanhos (uma linha por tamanho), e prévia 3D girável do item escolhido. Favoritos e histórico por usuário. Aceite: achar e ver M8 sextavado em até 3 cliques, ficha com todas as cotas da norma e fonte, teste que toda família da biblioteca abre a ficha sem erro.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B242",
+   "onda": 2,
+   "prio": "P0",
+   "titulo": "Inserir item normalizado avulso com fantasma e encaixe em furo",
+   "oque": "Arrastar um item do catálogo para o viewport: o fantasma segue o cursor e salta para o furo, aresta circular ou ponto publicado cujo diâmetro casa, com Tab para inverter o sentido e a alça de comprimento que para nos valores da série. Alt alterna entre inserção direta e abertura da ficha; modos padrão (peça compartilhada) e personalizado (cópia). Aceite: parafuso avulso entra restrito (GDL zero) em um furo, desfazer remove peça e restrições, teste de montagem confere posição e eixo.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 350,
+   "teste": "Auto + Visual",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B243",
+   "onda": 2,
+   "prio": "P0",
+   "titulo": "Chapa: linha de dobra desenhada no 3D com face fixa",
+   "oque": "Dobra por linha, joggle e veneziana passam a pedir a face fixa e uma linha desenhada na face com snap, mostrada tracejada com setas de sentido e as duas metades coloridas (fixa e móvel), em lugar de dois vértices e do botão de usar vértices. Aceite: linha editável por arraste das pontas, posição da dobra (centro, material dentro, fora, dobra fora) e ângulo por arco; teste monta as três features e confere volume e caixa envolvente.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 350,
+   "teste": "Auto + Visual",
+   "area": "Chapa metálica",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B244",
+   "onda": 2,
+   "prio": "P0",
+   "titulo": "Montagem: prévia fantasma e confirmar em restrições e juntas",
+   "oque": "Restrição e junta deixam de nascer no segundo clique: abrem painel suporte, modo, parâmetros e avançado, com duas caixas de elemento coloridas, e resolvem em uma cópia da montagem. A peça móvel aparece como fantasma na posição final, com setas de normal; Enter aceita e continua no comando, Tab inverte e Esc cancela o comando pendente. Aceite: cancelar deixa a montagem idêntica, trocar o tipo não repete a seleção, nenhum texto mostra nome interno em inglês e junta pendente tem aviso de etapa fixo no painel.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 420,
+   "teste": "Auto + Visual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B245",
+   "onda": 2,
+   "prio": "P0",
+   "titulo": "Montagem: símbolos de restrição e junta no 3D com cota arrastável",
+   "oque": "Cada restrição e junta ganha um símbolo no modelo, ancorado na geometria, que acompanha a peça e pode ser ocultado por tipo. Distância e Ângulo mostram cota e arco arrastáveis com rótulo editável; junta mostra eixos e seta reta ou curva do movimento. Aceite: passar o mouse realça as duas referências e a linha da árvore, dois cliques abrem a edição, e o desenho se mantém legível em uma montagem de 200 restrições.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 320,
+   "teste": "Auto + Visual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B246",
+   "onda": 2,
+   "prio": "P0",
+   "titulo": "Sólidos: prévia fantasma translúcida em todo comando",
+   "oque": "Enquanto o painel do comando está aberto, o volume que entra aparece translúcido em uma cor e o que sai em outra, sobre o corpo atual, atualizado durante o arraste da seta. Se o valor deixa a geometria inválida, a última prévia válida fica visível com o erro nomeado ao lado, em vez de a viewport voltar ao estado anterior. Aceite: extrusão, recorte, revolução, furo, filete, chanfro, casca e padrão têm teste com documento em código que confere que a prévia é gerada e que a falha mantém a anterior; captura visual com FENKRA_DEMO.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 450,
+   "teste": "Auto + Visual",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B247",
+   "onda": 2,
+   "prio": "P0",
+   "titulo": "Sólidos: campo ativo, realce de perfil, face e aresta e clique que preenche",
+   "oque": "O painel destaca o campo que espera seleção (perfil, eixo, face, aresta, corpo) e o clique no 3D o preenche e avança para o próximo. Perfis, faces e arestas escolhidos são realçados inteiros (não por bolinha), com cor por papel (face aberta, plano neutro, ferramenta), contador e lista com remover item. Aceite: casca, saída, espessura, filete face-face, rosca, revolução (eixo) e booleanas funcionam sem tocar em combos; captura visual comprova o realce.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto + Visual",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B248",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Preencher furos: prévia dos candidatos antes de gravar",
+   "oque": "Ao abrir o comando, cada pilha candidata mostra um fantasma translúcido do parafuso com o rótulo (M6x35); clique no fantasma o tira da lista; pilha sem tamanho fica em âmbar com o motivo; o comprimento escolhido e o diâmetro de folga do exemplo aparecem ao vivo ao mudar Fina/Normal/Folgada. Aceite: nada é gravado em disco até Preencher; teste confere a lista de candidatos e a contagem igual ao relatório final.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B249",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Chapa: manipuladores 3D de ângulo, raio, largura e posição da dobra",
+   "oque": "Além da seta de comprimento que já existe em cinco comandos, incluir arco arrastável de ângulo, marca de raio, seta de largura e recuos laterais, cada um com rótulo do valor e clique para digitar no próprio 3D. Aceite: arrastar muda a expressão do campo preservando variáveis, desfazer volta um passo, e o teste cobre aba, bainha, dobra por linha, joggle e veneziana.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Chapa metálica",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B250",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Desenho: alças diretas na folha (vista, corte, detalhe, escala)",
+   "oque": "Vista selecionada mostra alça de mover com indicação de alinhamento à mãe (cadeado), alça de escala por passos e, quando for corte, setas gordas nas pontas da linha (clique inverte o lado) e, quando for detalhe, alça de raio no círculo. Arrastar mostra a linha de alinhamento e a cota de distância ao vizinho. Aceite: inverter o lado do corte e mudar o raio do detalhe sem abrir o painel, com desfazer em um passo.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 320,
+   "teste": "Auto + Visual",
+   "area": "Desenho técnico",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B251",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Desenho: símbolos guiados de rugosidade e solda",
+   "oque": "Rugosidade e solda deixam de ser um campo de texto: construtor com os campos nas posições do símbolo (valor, método, sobremedida, direção, amostragem; lado da seta e outro lado, tipo de cordão em botões, medida, comprimento, passo, contorno, solda em campo) e prévia grande do símbolo. Valores comuns em botões. Aceite: símbolo montado só com cliques sai igual ao texto antigo e exporta em PDF, SVG e DXF.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 240,
+   "teste": "Auto + Visual",
+   "area": "Desenho técnico",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B252",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Desenho: assistente de Novo desenho e opções de exportação",
+   "oque": "Novo desenho abre um diálogo curto com formato, orientação, norma, método de projeção, escala geral e origem (a peça aberta como padrão), com miniatura da folha. Exportar PDF, SVG e DXF ganha diálogo com folhas, cor ou preto e branco, mapeamento de espessura e prévia. Aceite: criar um desenho de peça com as três vistas sugeridas em menos de cinco cliques.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Desenho técnico",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B253",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Estrutural: alças 3D do Membro (deslocamento, rotação com ímã de 45 graus, prolongar, espelhar)",
+   "oque": "No 3D do Membro em edição aparecem setas duplas de deslocamento X/Y, arco de rotação que gruda a cada 45 graus, alças de prolongar início e fim com leitura em mm, botões de espelhar a seção e alinhar a uma aresta; arrastar altera o mesmo campo do painel e respeita expressões e parâmetros. Aceite: arrastar e digitar dão o mesmo valor; desfazer volta em um passo; teste automático do valor aplicado e captura visual.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 320,
+   "teste": "Auto + Visual",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B254",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Estrutural: seletor visual de perfil com miniatura da seção, cotas anotadas e ancoragem clicável",
+   "oque": "Família e medida passam a cascata (norma, tipo, tamanho) com busca e miniatura desenhada em escala por tamanho; as cotas da seção mostram o nome da dimensão sobre o desenho; a ancoragem é escolhida clicando os nove pontos e o centróide sobre a própria seção, com o perfil deslizando na prévia. A biblioteca do usuário ganha o mesmo desenho ao editar medidas e marca a medida inválida na linha. Aceite: toda família de fábrica tem miniatura; teste de que cada medida válida gera laço fechado; captura visual.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 260,
+   "teste": "Auto + Visual",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B255",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Estrutural: placa e reforço com face/aresta por clique, lado da espessura, posição e perfil poligonal",
+   "oque": "A placa escolhe a face da ponta, tem sentido externo ou interno com recuo, sobra como valor ou razão da parede e furos de fixação opcionais; o reforço escolhe a aresta de encontro, tem abas D1 e D2 com inversão, perfil triangular, chanfrado ou poligonal, lado da espessura (interno, dois lados, externo), posição (início, meio, fim) com afastamento e repetição por quantidade ou espaçamento. Aceite: testes conferem volume e caixa de cada variante e a migração dos arquivos que guardam só o ponto.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 350,
+   "teste": "Auto + Visual",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B256",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Roda de comandos (menu radial configurável)",
+   "oque": "Menu radial de 8 setores aberto por tecla configurável (padrão Shift+W): segurar e soltar executa, toque curto fixa, carrossel de páginas pela roda, teclas 1 a 8. Conteúdo por bancada, modo e seleção, com dois setores preenchidos pelo uso local; editor em Configurações com arrastar do catálogo, restaurar, exportar e importar. Aceite: abre em menos de 80 ms, gesto de 60 px executa sem desenhar o menu e a tecla some do mapa sem conflito (keymap.rs:301).",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 380,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B257",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Esteira de mídia de ajuda gerada pelo app (roteiros e GIF)",
+   "oque": "Formato de roteiro JSON por comando e modo FENKRA_DEMO_GRAVAR que executa com passo de tempo fixo, captura quadros pelo eframe e um script monta GIF ou WebP de 360x220, 12 fps, 64 cores, até 150 KB. Mídias vão num pacote externo carregado sob demanda com cache LRU, sem aumentar o binário. Aceite: gerar a mídia de dez comandos de forma reproduzível e teste de cobertura com manifesto por hash.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B258",
+   "onda": 1,
+   "prio": "P0",
+   "titulo": "Redesenho dos ícones: paleta semântica, base mais selo e teste de 1 segundo",
+   "oque": "Definir a gramática de ícones (grade 48, traço 2,5 px, versões de 16 e 32 px, cores com significado, selo de variante) e redesenhar os 30 piores listados em docs/benchmark/detalhe/interface.md, começando por furos, chanfros, filetes e extensão 'até'. Aceite: 4 de 5 pessoas acertam o verbo em 1 s, nenhum comando usa o ícone de fallback e nenhuma família repete o mesmo desenho.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 260,
+   "teste": "Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B259",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Trabalho pesado fora da interface, com cancelamento",
+   "oque": "Composição e tesselação da montagem e atualização de vistas do desenho saem da thread da interface para uma fila de trabalho com progresso; operações longas do OpenCASCADE recebem Message_ProgressRange para abandonar cálculo já superado. Coordenar com as bancadas de Montagem e Desenho. Aceite: nenhum quadro acima de 100 ms ao carregar a montagem de referência; mudar uma cota durante um cálculo longo cancela o anterior e o resultado final é igual ao de um cálculo do zero.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 350,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B260",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Montagem: painel de junta com origem, alinhamento e Animar",
+   "oque": "Criação de junta com tipo Automático pela geometria e modos de origem: em um ponto, entre duas faces e na interseção de duas arestas. Alinhamento com ângulo, deslocamentos em X, Y e Z e inverter; botão Animar faz a peça ir e voltar no 3D antes de aceitar, com opção de incluir os limites. Ponto em curva e Came usam caixas Trajetória e Seguidor, aceitando clique em qualquer ordem. Aceite: revolução entre dois furos sai com o tipo certo e anima sem abrir a janela Simular.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 350,
+   "teste": "Auto + Visual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B261",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Montagem: manipulador com referência, pivô e valor digitado",
+   "oque": "Barrinha junto do manipulador com referência mundo, peça ou face, pivô escolhido, passo, colisão com escopo e respeitar restrições. Rótulo aceita deslocamento e giro digitados, e o centro passa a ser o da caixa envolvente, não a média dos vértices. Aceite: só aparecem as alças que as restrições permitem, peça presa mostra cadeado com o motivo, e girar 37 graus em um eixo da peça funciona sem usar o painel.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 220,
+   "teste": "Auto + Visual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B262",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Montagem: inserir com miniatura e peça no cursor",
+   "oque": "Inserir abre painel com recentes e miniaturas, mantendo o diálogo do sistema como opção; a peça escolhida acompanha o cursor como fantasma, clique posiciona, clique seguinte cria outra cópia e Esc encerra. A primeira peça mostra selo fixa na origem. Aceite: posicionar três cópias com três cliques, cancelar não deixa nada na árvore, e desfazer remove uma cópia por vez.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 160,
+   "teste": "Auto + Visual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B263",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Montagem: repetição por aresta e por furos, com fantasmas e pular",
+   "oque": "Repetição deixa de nascer em X com 3 cópias e 20 mm: direção ou eixo vêm de clique em aresta, eixo ou face, com Inverter, e o painel aceita vários componentes e segunda direção. Modo Pelos furos segue um padrão de furos da peça e respeita o que ele pulou. Aceite: fantasmas das cópias antes de aceitar, seta arrastável para o espaçamento, marca clicável para pular uma cópia, e mudar a peça de referência atualiza a direção.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 240,
+   "teste": "Auto + Visual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B264",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Montagem: painel de interferências com realce e ignorar",
+   "oque": "Interferências ganham painel próprio, sempre visível: escopo, tratar coincidência como interferência, subconjunto como peça única, tolerância, e lista ordenada por volume. Clicar em um item enquadra a câmera, deixa as peças transparentes e mostra o volume comum em vermelho; as demais ficam em arame, ocultas ou transparentes. Aceite: ignorar e ignorar menores que ficam salvos na montagem e são listados à parte, e abrir o resultado não depende do painel de edição.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 240,
+   "teste": "Auto + Visual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B265",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Estados com tabela de transições e lista de conferência na liberação",
+   "oque": "Ciclo de vida definido em JSON (de, para, papel, exige motivo), com modelo padrão de três estados e um modelo com aprovação opcional; a troca livre atual deixa de existir. Liberar revisão roda uma lista de conferência (recalcula sem erro, referências resolvidas, PN definido, desenho atualizado) e só então cria a letra. Esquema de revisão configurável (letras, números, prévia 0.x). Aceite: transição fora da tabela é recusada com motivo; liberação com referência quebrada é bloqueada.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "PDM / PLM",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B266",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Esquema aberto de árvore paramétrica de intercâmbio e leitor",
+   "oque": "Formato JSON versionado e documentado (pelo mecanismo do B64) para esboços com geometria, restrições e cotas, features com parâmetros, nomes, cores e estrutura de montagem, validável por esquema. O Fenkra lê o arquivo e remonta a árvore com histórico, reancorando referências por geometria (ADR 0010), e também exporta nele. Aceite: ida e volta de peças do corpus preserva volume, área e centroide em 1e-6 e os graus de liberdade do esboço.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B267",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "ADR: termos das APIs públicas dos CADs de origem e exportadores por script",
+   "oque": "Registrar em ADR, após ler o contrato vigente de cada fabricante, o que é permitido ao usuário rodar na própria licença, o que não pode ser distribuído e a política do projeto: script como código-fonte aberto lido e executado pelo usuário, nunca binário que ligue à API, sem engenharia reversa de formato fechado. Aceite: ADR com uma tabela por CAD de origem (API usada, termos lidos com data, decisão) revisada antes do primeiro script.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 80,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B268",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "PMI: seleção inteligente e tipo de cota inferido pela seleção",
+   "oque": "O comando 'Cota' infere o tipo pelos elementos escolhidos (aresta circular, diâmetro; duas faces paralelas, distância; duas arestas, ângulo) e Tab alterna a variante (raio e diâmetro, centro, interior, exterior). O cursor mostra o tipo reconhecido e uma cor de validade; uma ordem inválida (por exemplo, três pontos fora de ordem no ângulo) diz qual clique é o vértice. Aceite: teste monta seleções típicas e confere o tipo inferido; o ângulo exibe 'vértice' e 'ponto 1/2' no cursor.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "PMI 3D",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B269",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "PMI: manipuladores 3D da anotação (linha de cota, extensões, texto, chamada)",
+   "oque": "A anotação selecionada mostra alças próprias: afastamento da linha de cota, extensão das linhas de apoio, posição do texto e vértices da chamada, com encaixe em eixos e distâncias redondas (Shift desliga). O cursor muda por alça e uma dica curta explica a ação. Aceite: cada alça é arrastável e desfazível, o encaixe respeita 1 mm e 15°, e a posição em montagem segue o componente.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "PMI 3D",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B270",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "PMI: mini barra flutuante e edição no lugar",
+   "oque": "Ao criar ou clicar duas vezes numa anotação, uma mini barra sobre ela mostra os campos principais (valor, precisão, tolerância, estilo, plano) e o texto passa a ser editado no próprio 3D; o painel lateral fica para o avançado. O texto da nota é digitado no ponto do clique e Enter fecha. Aceite: criar e finalizar uma cota com tolerância sem tocar no painel lateral, com Esc revertendo a edição.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "PMI 3D",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B271",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Sketch: painel do comando com modos e opções",
+   "oque": "Cada ferramenta ganha painel na ordem estado do passo, modo, parâmetros e avançado, ligado aos campos da viewport, e a tecla M percorre os modos. Retângulo e Ret. centro, Círculo e Círculo 3P, Arco 3P e Arco centro, Filete e Chanfro viram um comando com modo. Aceite: todo campo tem dica ao passar o mouse e os botões antigos continuam levando ao modo certo. Aplica o B20 ao sketch.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Sketch",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B272",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Sketch: arraste direto e setas de grau de liberdade",
+   "oque": "Arrastar arco por qualquer ponto e spline pela curva, mantendo restrições pelo solver. Ao passar o mouse sobre geometria sub-restrita, setas mostram como ela ainda pode se mover. Filete e offset selecionados mostram pega para arrastar o valor. Aceite: arrastar arco tangente não quebra a tangência e a seta some quando o elemento fica totalmente restrito.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 180,
+   "teste": "Auto + Visual",
+   "area": "Sketch",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B273",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Sketch: barra de restrições ao selecionar e fantasma do resultado",
+   "oque": "Selecionar elementos abre, sem botão direito, uma barra com as restrições aplicáveis, que continua aberta depois de aplicar uma. Passar sobre uma opção mostra a geometria já resolvida em fantasma, em vermelho se conflitar, sem gravar no documento. Aceite: a prévia não altera o sketch e, em sketch grande, cai para só destacar quando passar do orçamento de tempo.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 160,
+   "teste": "Auto + Visual",
+   "area": "Sketch",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B274",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Sketch: perfil sombreado, fatiar no plano e mostrar/ocultar",
+   "oque": "Contorno fechado ganha sombreamento em tempo real, usando sk.loops. Opção de cortar temporariamente os corpos no plano do sketch e caixas para mostrar ou ocultar perfil, pontos, cotas, restrições, construção e projetadas. Aceite: fechar o último segmento sombreia o perfil sem recalcular a peça, e fatiar não altera o modelo nem o arquivo.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Visual",
+   "area": "Sketch",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B275",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Sólidos: plano de referência translúcido com rótulo e seta arrastável",
+   "oque": "O plano deslocado, o plano neutro da saída e o plano do espelho são desenhados como retângulo translúcido com rótulo (nome e distância) e seta arrastável, e o mesmo desenho é usado pelas primitivas e padrões. Aceite: captura visual do plano deslocado a 20 mm com rótulo 'Deslocamento 20 mm'; arrastar a seta muda o valor.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 120,
+   "teste": "Visual",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B276",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Superfícies: suportes realçados, normal visível e lado por seta",
+   "oque": "Com um comando de superfície aberto, entradas são realçadas com cor por papel, curvas mostram seta de sentido, superfícies mostram a normal e toda escolha de lado vira seta clicável. Solução vira bolinha clicável no 3D. Usa a prévia fantasma comum aos comandos, sem duplicá-la. Aceite: nenhum painel de superfície mantém caixa 'outro lado' nem campo numérico de solução; captura visual por comando.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Superfícies e wireframe",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B277",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Aparar e Dividir por região clicada",
+   "oque": "Unir Dividir e Aparar em um comando com modos Por ferramenta e Mútuo e ação manter ou remover. Pedaços ficam em duas cores e clicar alterna; a escolha é gravada por âncora espacial e sobrevive ao recálculo. Aceite: duas folhas cruzadas geram quatro regiões, a escolha persiste ao mudar uma cota e área e caixa envolvente conferem.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Superfícies e wireframe",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B278",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Dicas por campo e tooltips em todas as bancadas",
+   "oque": "Aplica o campo numérico padrão e a esteira de mídia em todas as bancadas: cada campo ganha dica própria com unidade, limite e figura das cotas quando couber, e cada comando ganha tooltip em camadas com GIF curto. Substitui a dica genérica de expressão repetida hoje. Aceite: teste que falha se um campo ou comando novo vier sem dica e sem tradução.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 350,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B279",
+   "onda": 2,
+   "prio": "P2",
+   "titulo": "Barra de estado do documento e ícones do painel de projeto",
+   "oque": "Barra mostra sempre o estado do documento (Rev B liberada, Editado desde a Rev B, Somente leitura, Em conflito) usando dirty_since_release, com a mesma linguagem na fase local e na colaborativa. Botões do painel (Salvar versão, Liberar, Importar, Exportar, Onde é usado, Comparar) trocam emoji por ícones do conjunto, com tooltip em dois estágios e PT/EN. Aceite: captura visual por estado e teste de i18n.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 120,
+   "teste": "Auto + Visual",
+   "area": "PDM / PLM",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B280",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Gerador de engrenagens: prévia 3D do par e esquema do dente",
+   "oque": "As duas engrenagens aparecem translúcidas na posição final com dentes encaixados, círculos primitivos tracejados anotados com d e a, e alça na face que muda a largura. Esquema do perfil do dente com as letras (da, df, db, passo, espessura) ao passar o mouse nos rótulos do cálculo. Modo Dimensionar por distância entre centros e razão, que sugere módulo e dentes. Aceite: sem gravar arquivos até Inserir; teste confere distância entre centros e razão com a prévia.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B281",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Eixo gráfico: perfil lateral, alças 3D e recursos de seção",
+   "oque": "Desenho lateral 2D ao lado da grade, ligado a ela (selecionar um trecho destaca a linha); alças 3D nas arestas dos trechos; menu Adicionar recurso na seção (rasgo, anel elástico, rosca, furo transversal, ranhura) com posição a partir da borda esquerda ou direita e mais de um rasgo com rotação. Aceite: arrastar a alça muda Ø ou L e a grade acompanha; teste de volume confere cada recurso.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 350,
+   "teste": "Auto + Visual",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B282",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Comprimento do fixador por alça com paradas na série e engajamento",
+   "oque": "Alça na ponta do parafuso que arrasta o comprimento e para só nos valores da série da norma, com a cota ao lado. Regra de engajamento mínimo de rosca em múltiplos do diâmetro e rosca além da porca, configuráveis; aviso quando a pega não cabe. Aceite: arrastar nunca resulta em comprimento fora da série; teste confere o comprimento escolhido para furo passante (próximo acima) e cego (próximo abaixo).",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B283",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Chapa: estilos nomeados com raio por fórmula e sobrescrita marcada",
+   "oque": "Estilo de chapa salvo com nome (material, espessura, raio como fórmula da espessura, método de compensação, alívios e tamanho padrão de canto), selecionável no topo da janela de parâmetros. Cada feature herda o estilo e mostra um cadeado quando sobrescreve um campo. Aceite: trocar o estilo recalcula a peça e a tabela de dobras; salvar e abrir preserva o estilo; teste cobre herança e sobrescrita.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 280,
+   "teste": "Auto",
+   "area": "Chapa metálica",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B284",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Chapa: extensão lateral da aba e laço de arestas",
+   "oque": "Aba com extensão pela aresta inteira, por largura centrada ou deslocada e entre duas referências, e seleção de laço para criar várias abas em um só comando. Complementa a posição da dobra e o vértice virtual do B31. Aceite: cada modo gera a largura esperada e o laço retangular gera quatro abas com mitra; testes de volume e caixa envolvente.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 260,
+   "teste": "Auto + Visual",
+   "area": "Chapa metálica",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B285",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Estrutural: cordão de solda por conjuntos de faces, cosmético e sólido, contínuo ou intermitente",
+   "oque": "Comando de cordão com seleção em dois conjuntos de faces (Shift tira, propagar tangentes, comprimento total), lista de caminhos com realce, perna do filete, formato, intermitente por comprimento e vão ou por passo, alternado, término em plano. Cosmético é o padrão e alimenta o símbolo do desenho; sólido gera material, massa e entra na lista de corte. Aceite: teste de volume do cordão sólido e de contagem de trechos intermitentes; símbolo no desenho preenchido a partir do cordão.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 450,
+   "teste": "Auto + Visual",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B286",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Montagem: explosão por passos com linhas automáticas",
+   "oque": "Explosão vira lista de passos reordenável: arrastar a seta do manipulador cria o passo, com modos linear, radial e espaçamento automático para grupos, e passo suprimível. Linhas de explosão pontilhadas são geradas sozinhas e seguem para o desenho. Separar Exibição em Estados, Explosão e Animação, com quadros-chave arrastáveis na linha do tempo. Aceite: passos salvos sobrevivem a abrir e fechar, e são a entrada de B124 e B168.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B287",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Servidor MCP do Fenkra para reconstruir peças por comandos",
+   "oque": "Servidor MCP com ferramentas (consultar STEP, criar esboço com cotas, extrudar, furar, filetar, recalcular, medir, comparar com o alvo) e recursos (árvore, relatório), sobre a CLI do B39, sem execução de código arbitrário nem acesso fora do projeto. Guarda a sequência de comandos gerada como artefato e usa o checador de similaridade; funciona com modelo local e nunca envia o STEP sem aceite explícito. Aceite: agente reconstrói 5 peças prismáticas do corpus a partir do STEP em até 10 iterações, volume dentro de 0,5% e furos no diâmetro certo.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 350,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B288",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Sólidos: manipuladores 3D de saída, dois lados, base e escala",
+   "oque": "Estender handles.rs: seta curva de ângulo de saída na aresta do perfil, seta por lado no término de dois lados, alças da base nas primitivas, alça de escala e setas de translação e arco de rotação no Mover corpo e no Escala dos sólidos, todos com cota editável e travados quando o valor é um parâmetro. Aceite: arrastar em cada alça grava o valor esperado (teste de handle_for) e o Shift refina o passo.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B289",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Sólidos: filete e chanfro com propagação tangente, parcial, assimétrico e erro visível",
+   "oque": "Propagação tangente ligada por padrão e desligável; realce da aresta inteira; filete parcial com posição inicial por seta; raio assimétrico com inversão por seta; chanfro com inverter por aresta; quando o raio não cabe, mostrar a superfície tentada e nomear o motivo; lembrar o último valor usado. Aceite: um teste por modo conferindo volume e caixa envolvente, mais um caso de raio grande demais com erro nomeado.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 320,
+   "teste": "Auto + Visual",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B290",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Conectores de loft e tensão arrastáveis",
+   "oque": "Multi-seções ganha número e sentido por seção, conectores arrastáveis ao longo das curvas para controlar torção, seta de tangência por ponta e isocurvas com densidade. Concordância e Conectar aceitam aresta clicada, deduzem o apoio e têm seta de tensão por lado; Conectar mostra as bordas deduzidas e aceita troca. Aceite: seção circular e quadrada sem torção após mover um conector, com área conferida; Concordância criada sem passar por Contorno.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 240,
+   "teste": "Auto + Visual",
+   "area": "Superfícies e wireframe",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B291",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Spline 3D editável na viewport",
+   "oque": "Spline, Spline controle e Polilinha são criadas por cliques em sequência e têm pontos arrastáveis com o gizmo, alça de tangente por ponto, polígono de controle visível e pente de curvatura. Ponto vindo de referência fica preso com ícone de vínculo. Aceite: arrastar um ponto, fixar tangência e voltar reproduz a curva original; salvar e abrir preserva tangentes.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 180,
+   "teste": "Auto + Visual",
+   "area": "Superfícies e wireframe",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B292",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Comando Chaveta: pareia eixo e cubo e insere a peça restrita",
+   "oque": "Selecionar eixo e cubo, achar os dois rasgos, escolher o comprimento na série e inserir a chaveta restrita aos rasgos, com fantasma no 3D. Avisa quando b, t1 ou t2 não casam entre eixo e cubo ou o diâmetro está fora da tabela. Aceite: chaveta entra com GDL zero e o conjunto passa na verificação de interferência.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B293",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Chapa: fechamento de canto com tipo, folga e razão",
+   "oque": "Comando que fecha o canto entre duas abas com tipo topo, sobreposto ou sob, folga entre as faces e razão de sobreposição, com opções de canto estreito e propagação automática. Hoje só existe alívio de canto. Aceite: três tipos geram geometria válida, a planificada não sobrepõe material e o teste confere volume e folga mínima.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 240,
+   "teste": "Auto + Visual",
+   "area": "Chapa metálica",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B294",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Desenho: marcas de centro modo simples, circular e linear",
+   "oque": "Marca de centro com três modos: simples, circular (seleciona os furos de um círculo de furos e traça o círculo e as cruzes) e linear (eixo entre dois furos), associativas à vista e visíveis ou ocultas por vista. Também funcionam a partir de arestas ocultas por corte automático pelo centro. Aceite: teste com flange de 6 furos gera uma marca circular e atualiza ao mudar o diâmetro do círculo.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Auto + Visual",
+   "area": "Desenho técnico",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B295",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Desenho: tabelas com colunas configuráveis e etiquetas de furo",
+   "oque": "Lista de materiais, furos, dobras e lista de corte com seleção e ordem de colunas, ordenação clicando no cabeçalho, divisão em colunas ou folhas e renumeração. A tabela de furos escolhe a vista de origem e põe etiquetas A1, A2 nas vistas ligadas às linhas da tabela. Aceite: tirar uma coluna refluir a tabela e a etiqueta de um furo selecionar a linha correspondente.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 260,
+   "teste": "Auto + Visual",
+   "area": "Desenho técnico",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B296",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Estrutural: lista de corte interativa com realce no 3D e resumo antes de gerar a montagem",
+   "oque": "Clicar uma linha da lista de corte acende no modelo os corpos daquele item, e clicar um corpo seleciona a linha; o botão Gerar montagem abre um resumo com peças, instâncias, pasta e nomes antes de confirmar. Aceite: teste da correspondência entre linha e corpos; captura visual do realce.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 160,
+   "teste": "Auto + Visual",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B297",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Lições interativas dentro do programa",
+   "oque": "Lições baseadas nos mesmos roteiros da esteira de mídia, com verificação do documento, destaque sobre o botão ou alça esperada e botão 'mostre-me'. Lições iniciais: câmera e seleção, primeiro sketch cotado, extrusão, furo e padrão, primeira montagem. Progresso nas preferências e primeira execução que escolhe navegação e densidade com prévia. Aceite: cada lição conclui por teste automático que simula os passos.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 330,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B298",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Script exportador de referência para um CAD de origem",
+   "oque": "Primeiro script aberto que percorre o modelo de objetos de um CAD de origem escolhido por demanda e grava o esquema de intercâmbio: esboço com restrições e cotas, extrusão, revolução, furo, filete, chanfro e padrão. Documentado como roda com a licença do próprio usuário. Aceite: três peças do corpus montadas nos dois lados voltam com volume em 1e-6 relativo e relatório do que o script não suporta.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B299",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "PMI: balões e legenda com prévia, contagem e confirmação",
+   "oque": "Balões automáticos mostram, antes de aplicar, quantos serão criados e quantos antigos serão trocados, com a opção de preservar os criados à mão; a legenda 3D oferece escolher o canto ou o ponto onde nasce. Aceite: o diálogo informa 'N criados, M trocados', a opção de preservar mantém os manuais, e desfazer volta ao estado anterior em uma ação.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 120,
+   "teste": "Auto + Visual",
+   "area": "PMI 3D",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B300",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Sólidos: escolha de corpos e perfis por clique, com cores de alvo e ferramenta",
+   "oque": "Unir, Subtrair, Interseção, Dividir corpo e Mover corpo aceitam escolher alvo e ferramenta clicando nos corpos, que ganham cor distinta (alvo e ferramenta) enquanto o comando está aberto, com prévia do resultado e opção de manter ferramentas. Aceite: sem abrir o combo, duas seleções produzem a booleana esperada; teste confere volume e caixa envolvente.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B301",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Sólidos: varredura e rasgo com trajetória e perfil visíveis",
+   "oque": "Ao abrir Nervura (varredura) e Rasgo, a trajetória é realçada, o perfil aparece posicionado no ponto inicial e a orientação (acompanha, fixa, torção) é demonstrada por setas ao longo do caminho; o nome do rasgo ganha descrição clara na barra para não se confundir com o rasgo de chapa. Aceite: captura visual com e sem torção; aviso inline quando o perfil não está normal à curva.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 160,
+   "teste": "Visual",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B302",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Forma livre: edição suave e seleção por laço e anel",
+   "oque": "Influência proporcional no arraste: roda muda o raio, círculo com gradiente mostra o alcance, curvas de queda e opção só conectados. Seleção com crescer, encolher, laço, anel, próximo e faixa entre duas faces. Aceite: puxar um nó com raio move os vizinhos pela curva escolhida em teste numérico, e só conectados não afeta malha vizinha desconectada.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Auto + Visual",
+   "area": "Superfícies e wireframe",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B303",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Forma livre: vínculos de nós e bordas com a peça",
+   "oque": "Nó vinculado a ponto, curva, plano ou face segue a referência e desliza restrito a ela; distância de nó a plano vira cota ligada a parâmetro; aresta da forma casa com aresta B-rep em G0, G1 ou G2. Simetria com nós presos ao plano e fusão por distância. Vínculo perdido aparece com estado na árvore e nunca altera a forma calado. Aceite: mudar um parâmetro da peça move os nós vinculados e o sólido convertido; apagar o pai gera estado de erro.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 280,
+   "teste": "Auto + Visual",
+   "area": "Superfícies e wireframe",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B304",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Chapa: dobrar e desdobrar animado com ordem de dobra editável",
+   "oque": "Controle deslizante de 0 a 100% que anima a peça entre dobrada e planificada, e glifos numerados nas linhas de dobra que se reordenam por arraste, com número repetido permitido, alimentando a tabela de dobras do desenho. Complementa B86 e B173. Aceite: o controle em 0% e 100% reproduz exatamente os dois estados atuais, e a ordem editada aparece na tabela e na vista planificada.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "catalogo": [],
+   "tokens_k": 220,
+   "teste": "Auto + Visual",
+   "area": "Chapa metálica",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B305",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Checador de qualidade do modelo com perfis por acesso",
+   "oque": "Mede peso e saúde da peça: faces, triângulos, tamanho do arquivo, tempo de recálculo, faces e arestas minúsculas, geometria inválida, rosca modelada, malha importada e referências em erro. Roda ao inserir na montagem, ao mudar de estado ou revisão e antes de subir ao servidor, e avisa antes de inserir quanto a peça soma e se passa do limite, oferecendo a versão simplificada (B125). Cada regra informa, avisa ou bloqueia; o administrador trava um perfil, o usuário local só pode deixá-lo mais rígido, conforme o acesso no PLM, e exceção fica registrada com nome e motivo. Testes: peça acima do limite é barrada no perfil travado, exceção entra na auditoria. Ícone e PT/EN.",
+   "origem": [
+    "USR-QUALIDADE"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "PDM / PLM",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B306",
+   "onda": 1,
+   "prio": "P0",
+   "titulo": "Teste de sobrevivência das referências",
+   "oque": "Teste em massa que muda cotas ao acaso em milhares de combinações sobre o corpus (B53, B72) e classifica cada referência: mantida, em erro com sugestão ou trocada em silêncio, que precisa ser sempre zero. Semente fixa para repetir a falha, relatório por comando e número publicado a cada versão. Regra para o usuário: quem liga peças usa pontos, planos e publicações, nunca face gerada. Depende de B15.",
+   "origem": [
+    "USR-REF"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B307",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Assistente de IA que cria features editáveis",
+   "oque": "Assistente que transforma um pedido em features reais na árvore, nunca em sólido solto: propõe os comandos, mostra a prévia e só aplica com aceite. O resultado passa pelo checador de qualidade e pelo de similaridade (migração), e tudo fica no desfazer. Provedor de IA opcional e configurável; sem ele o Fenkra funciona igual. Usa o servidor MCP (B287). Teste: peça prismática pedida em texto vira árvore editável e muda ao alterar uma cota.",
+   "origem": [
+    "USR-IA"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto + Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B308",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Bancada CAM 2.5D: fresa e corte",
+   "oque": "Operações de faceamento, contorno, bolsão e furação a partir das faces do modelo, com ferramentas e velocidades em biblioteca (B171), simulação do caminho com remoção de material e pós-processador G-code editável. Caminho associativo: muda a peça, marca a operação como desatualizada. Primeira versão para fresa de 3 eixos e corte 2D. Teste: G-code de peça de referência bate com o caminho esperado. Ícone e PT/EN.",
+   "origem": [
+    "USR-CAM"
+   ],
+   "catalogo": [],
+   "tokens_k": 450,
+   "teste": "Auto + Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B309",
+   "onda": 1,
+   "prio": "P1",
+   "titulo": "Relatório de falhas com consentimento e requisitos mínimos",
+   "oque": "Ao falhar, o Fenkra grava um relatório local e pergunta se a pessoa quer enviar, mostrando o conteúdo antes; nada sai sem aceite e o modelo nunca vai junto. Publica os requisitos mínimos de PC e placa de vídeo, medidos em máquina fraca de referência. Complementa o B221.",
+   "origem": [
+    "USR-FALHAS"
+   ],
+   "catalogo": [],
+   "tokens_k": 120,
+   "teste": "Auto + Manual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B310",
+   "onda": 0,
+   "prio": "P0",
+   "titulo": "Limpeza de marcas no backlog e na documentação",
+   "oque": "Aplica a regra do projeto: nenhum software proprietário citado em código, interface ou documentação, nem como compatibilidade. Revê títulos e textos do backlog (B17, B152, B153, B154, B212 e outros), refaz o B202 (sem TRADEMARKS.md com nomes nem atalhos \"no estilo de\" uma marca), e limpa docs/pesquisa e docs/benchmark; as fontes ficam só em procedencia.md. Teste que falha se aparecer marca fora desse arquivo.",
+   "origem": [
+    "USR-MARCAS"
+   ],
+   "catalogo": [],
+   "tokens_k": 100,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B311",
+   "onda": 0,
+   "prio": "P1",
+   "titulo": "Benchmark de estilo visual de softwares CAD e técnicos",
+   "oque": "Pesquisa pública de linguagens visuais de softwares CAD, de criação 3D e de engenharia, buscando o que é diferente e descansa o olho: densidade, hierarquia, cor, tipografia, ícones e como cada um esconde o que não é usado. Mede o que hoje causa cansaço na tela do Fenkra, propõe 3 a 4 direções de estilo com pranchas originais e alimenta os itens de tema.",
+   "origem": [
+    "USR-ESTILO"
+   ],
+   "catalogo": [],
+   "tokens_k": 100,
+   "teste": "Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B312",
+   "onda": 1,
+   "prio": "P0",
+   "titulo": "Interface mais limpa: menos informação na tela ao mesmo tempo",
+   "oque": "Reduz a carga visual: tira textos explicativos fixos da árvore, recolhe o que está vazio (Referências, Publicações, PMI, Capturas, Parâmetros), mostra na faixa só os comandos do contexto atual, unifica contornos e sombras e dá respiro. O que sumiu continua a um clique e nas dicas. O painel de comando não é fixo: abre só durante um comando, e a árvore fica transparente, sem painel opaco cobrindo o fundo. Aceite por capturas antes e depois em peça, sketch e montagem, com contagem de elementos visíveis por tela.",
+   "origem": [
+    "USR-ESTILO"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B313",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Temas de verdade: estilo completo, não só paleta",
+   "oque": "Hoje o tema muda basicamente cores. Passa a definir também cantos, contornos, densidade, tipografia, sombras, cor e traço dos ícones, fundo e estilo do 3D, de modo que cada tema tenha cara própria. Refaz os temas genéricos com base no B311, sem aparência de modelo pronto, e valida contraste. Temas aprovados pelo usuário: as 7 variações de Prancheta e Cianotipia do artefato de direções visuais (B1 a B3, D1 a D4). Em todo tema a peça tem cor própria, sempre distinta do fundo. Teste: trocar o tema muda todos esses tokens e nenhum componente usa cor fixa.",
+   "origem": [
+    "USR-ESTILO"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B314",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Tema Fênix: arabesco contemporâneo e limpo",
+   "oque": "Tema autoral que nasce das curvas do ícone da fênix: linhas finas e orgânicas em detalhes discretos, como separadores, tela inicial e estados vazios, sem ornamento na área de trabalho. Fundo calmo, poucos acentos e ícones com o mesmo traço. Depende da decisão de procedência do logo (B203).",
+   "origem": [
+    "USR-ESTILO"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B315",
+   "onda": 1,
+   "prio": "P1",
+   "titulo": "Ícones e temas juntos: família própria por tema",
+   "oque": "O redesenho do B258 gera os ícones a partir de tokens de traço e cor, para o tema trocar a aparência sem refazer arquivos, sempre gerados em pasta temporária e copiando só os nomes novos. Aceite: prancha com todos os ícones em cada tema, legíveis em 24 px.",
+   "origem": [
+    "USR-ESTILO"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B316",
+   "onda": 1,
+   "prio": "P1",
+   "titulo": "Estratégia de fluxo de trabalho do Fenkra",
+   "oque": "Define em ADR o fluxo que vale para todo o programa, parecido com o dos softwares de modelagem CAD avançados e melhor que eles: as jornadas principais (peça, sketch, montagem, desenho, liberação), o próximo passo sempre visível, um mesmo jeito de iniciar, confirmar e cancelar, menos cliques medidos por jornada e a roda de comandos (B256) sugerindo o próximo comando. Cada bancada passa a ser conferida contra esse fluxo e contra o checklist de docs/benchmark/detalhe/interface.md.",
+   "origem": [
+    "USR-FLUXO"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Manual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B317",
+   "onda": 1,
+   "prio": "P1",
+   "titulo": "Painéis livres e encaixáveis",
+   "oque": "Painel de comando e os demais menus viram janelas livres: arrastar para qualquer ponto sobre o modelo ou encaixar nas bordas, com guias de encaixe, flutuando também em outro monitor. A posição fica salva por bancada, com opção de restaurar o padrão, e o painel de comando abre onde foi deixado. A árvore é a única parte fixa. Teste: fechar e reabrir mantém a disposição; painel fora da tela volta para área visível. Ícone e PT/EN.",
+   "origem": [
+    "USR-LAYOUT"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B318",
+   "onda": 1,
+   "prio": "P1",
+   "titulo": "Árvore com zoom e movimento",
+   "oque": "A árvore fica fixa no canto, transparente sobre o modelo, desenhada como árvore de verdade: nós com linhas de ligação entre pai e filhos, caixinha de expandir e recolher e ícone por tipo de item. Tem zoom e deslocamento próprios: aproximar e afastar por atalho e roda do mouse, arrastar para mover, recolher ramos e voltar ao enquadramento. Árvores longas continuam legíveis sem ocupar a tela, e o item ativo sempre pode ser localizado. Teste: zoom e deslocamento não mudam seleção nem ordem; localizar o item ativo o traz à vista. PT/EN.",
+   "origem": [
+    "USR-LAYOUT"
+   ],
+   "catalogo": [],
+   "tokens_k": 180,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B319",
+   "onda": 1,
+   "prio": "P0",
+   "titulo": "Padrão de interface obrigatório em toda implementação nova",
+   "oque": "Todo comando ou bancada nova nasce no padrão: tokens de tema (nenhuma cor fixa, peça sempre distinta do fundo), ícone da família nova, painel de comando livre e encaixável que só abre durante o comando, árvore transparente, prévia e manipulação no 3D, dica por campo e tooltip com GIF. Vale também para os itens já no backlog. Checagem automática que falha se um comando novo vier sem ícone, tradução, dica ou com cor fixa, e o checklist de docs/benchmark/detalhe/interface.md passa a ser critério de pronto.",
+   "origem": [
+    "USR-PADRAO"
+   ],
+   "catalogo": [],
+   "tokens_k": 120,
+   "teste": "Auto",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B320",
+   "onda": 1,
+   "prio": "P1",
+   "titulo": "Pesquisa: modo daltônico e acessibilidade básica",
+   "oque": "Pesquisa o que um CAD precisa para atender quem tem daltonismo e outras limitações: paletas seguras para protanopia, deuteranopia e tritanopia, informação que não depende só de cor (estado, erro, seleção, mapas de análise), contraste WCAG AA, tamanho de fonte e escala da interface, navegação por teclado, foco visível, redução de movimento e leitor de tela no egui (AccessKit). Entrega relatório, lista do que falta no Fenkra e itens de implementação, com fontes em procedencia.md.",
+   "origem": [
+    "USR-ACESSO"
+   ],
+   "catalogo": [],
+   "tokens_k": 100,
+   "teste": "Manual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B321",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Modo daltônico e acessibilidade básica",
+   "oque": "Aplica a pesquisa: variante daltônica de cada tema, ícones e marcas além da cor em erro, aviso, seleção e mapa de conforto (vermelho nunca sozinho), escala da interface e da fonte, uso completo por teclado com foco visível e opção de reduzir animações. Vira parte do padrão B319. Teste: simulação das três deficiências nas capturas, contraste AA verificado por tema e nenhum estado distinguido só por cor. Ícone e PT/EN.",
+   "origem": [
+    "USR-ACESSO"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B322",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Pesquisa e compatibilidade com mouses 3D",
+   "oque": "Pesquisa os mouses 3D do mercado e como se integram (drivers dos fabricantes, HID e projetos livres como spacenavd e libspnav), e implementa navegação de câmera em 6 eixos no viewport, com velocidade e inversão por eixo, eixo dominante, teclas do aparelho mapeadas a comandos e movimento de peça na montagem. Funciona em Windows primeiro, sem exigir driver proprietário para abrir o app; sem aparelho, nada muda. Teste: leitura simulada de eixos move a câmera e a sensibilidade fica salva. Ícone e PT/EN.",
+   "origem": [
+    "USR-MOUSE3D"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Manual",
+   "area": "Navegação",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B323",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Curso dentro do programa: trilhas, peças de exemplo e áudio opcional",
+   "oque": "Tutorial com estrutura de curso: trilhas por nível e bancada, módulos curtos e peças de exemplo prontas para abrir. Cada aula pode ser feita pela própria pessoa, passo a passo no modelo real, ou pulada a qualquer momento, com progresso salvo. A narração é opcional, com texto sempre disponível, e o curso não atrapalha quem já sabe usar. Usa as lições do B297 e os GIFs do B257. Teste: pular e retomar mantém o progresso; cada passo reconhece o comando feito; roda sem áudio. Ícone e PT/EN.",
+   "origem": [
+    "USR-CURSO"
+   ],
+   "catalogo": [],
+   "tokens_k": 350,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B324",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Modo de compatibilidade: de onde você vem?",
+   "oque": "Na primeira abertura, e depois em Ajuda, a pessoa diz com que tipo de software trabalha, e o Fenkra mostra de forma bem visual como é o fluxo dele comparado ao que ela conhece: comando equivalente, onde fica e o que muda, em cartões e animações lado a lado. Ajusta atalhos, navegação e o caminho do curso conforme a escolha. As opções são perfis neutros de fluxo, com ilustração de cada um, sem nome de software proprietário (decisão do usuário em 05/11/2026). Usa o glossário e o B323. Teste: cada perfil aplica atalhos e abre a trilha certa, e pode ser trocado depois. Ícone e PT/EN.",
+   "origem": [
+    "USR-CURSO"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B325",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Mapa de macroprocessos por bancada",
+   "oque": "Cada bancada ganha um mapa visual dos seus macroprocessos de modelagem e das possibilidades em cada etapa, como a grade de um curso: por exemplo, em Chapa, chapa base, abas e dobras, recortes, planificação e desenho; em Montagem, inserir, restringir, verificar e documentar. Cada etapa mostra o que dá para fazer, os comandos envolvidos e um exemplo, e abre a aula correspondente do B323 ou o próprio comando. É a porta de entrada do curso e do modo de compatibilidade (B324). Teste: toda bancada tem mapa, e toda etapa leva a uma aula e a um comando existentes. Ícone e PT/EN.",
+   "origem": [
+    "USR-CURSO"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.2
   }
  ]
 }

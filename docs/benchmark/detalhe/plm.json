@@ -1,0 +1,134 @@
+{
+ "alterar": [
+  {
+   "id": "B88",
+   "oque": "Acrescentar ao aceite: antes de confirmar, o diálogo mostra miniatura 3D, caixa envolvente em mm, contagem de corpos e faces e aviso de unidade suspeita (peça com mais de 10 000 mm ou menos de 0,1 mm); depois da importação, relatório copiável com faces reparadas, sólidos que não fecharam e o que o formato não carrega. Dica por campo em cada opção, ícone do conjunto e tooltip em dois estágios. O documento recebe o selo de origem (item novo de selo e vínculo)."
+  },
+  {
+   "id": "B143",
+   "oque": "Dividir em fases com aceite próprio. Fase 1 analisa e marca sem alterar o corpo: grafo de faces com convexidade das arestas, painel Features encontradas (furo cego e passante com Ø e profundidade, escareado, filete de raio constante, bolso) que seleciona no 3D. Fase 2 converte a pedido em feature do Fenkra só se o checador de similaridade confirmar volume, área e centroide dentro de 1e-6 relativo; senão o corpo permanece. Só superfícies analíticas; B-splines ficam como corpo e são relatadas. Textos da interface dizem estrutura inferida, nunca histórico restaurado. Aceite no corpus: exportar para STEP e reimportar reconhece 90% dos furos e filetes de raio constante."
+  },
+  {
+   "id": "B33",
+   "oque": "Declarar a edição direta de faces (mover, apagar com cura do vizinho, deslocar face, trocar raio de filete) como pré-requisito da migração: sem ela o corpo importado é inútil mesmo sem reconhecimento. Cada operação com prévia ao vivo, manipulação por alça no 3D e verificação de sólido válido; aceite com teste de volume e caixa envolvente em corpo vindo de STEP."
+  },
+  {
+   "id": "B39",
+   "oque": "Incluir, como consumidor desta CLI, o servidor MCP do Fenkra (item novo): a CLI precisa de comandos de consulta de topologia (listar faces, cilindros, planos, caixa envolvente) e de saída JSON estável para o agente. Sem execução de código arbitrário."
+  },
+  {
+   "id": "B25",
+   "oque": "Acrescentar ao aceite: cada transição de estado grava autor, data e motivo no diário só-acréscimo; versão ganha campo de comentário e autor; restaurar versão cria uma versão nova apontando para o conteúdo antigo (nunca reescreve o histórico); contador de PN só avança quando o documento é gravado com sucesso."
+  },
+  {
+   "id": "B214",
+   "oque": "Acrescentar a lista de metadados na comparação (quem, quando, comentário, estado) além da geometria, o menu da linha do histórico (Abrir somente leitura, Restaurar como nova versão, Comparar com a atual, Comparar com outra) e o uso do mesmo comparador pelo checador de migração, que compara o resultado importado ou reconstruído com o alvo."
+  },
+  {
+   "id": "B47",
+   "oque": "Acrescentar ao aceite de interação: campo de PN com prévia ao vivo em cinza enquanto os campos são preenchidos, tooltip por máscara com exemplo e teste de falha (se a gravação falhar, a sequência não avança)."
+  },
+  {
+   "id": "B94",
+   "oque": "Acrescentar ao aceite: ao tornar obsoleto ou liberar, a lista de quem usa a peça aparece antes de confirmar; clicar numa linha seleciona o componente na árvore da montagem; cabeçalhos lidos sem abrir o documento inteiro."
+  }
+ ],
+ "novos": [
+  {
+   "titulo": "Selo de origem e vínculo com o arquivo importado",
+   "onda": 1,
+   "prio": "P0",
+   "oque": "O documento criado a partir de uma importação grava o selo de origem (nome, hash do original, data, esquema e unidades lidas) e o original fica no cofre por hash, junto com o relatório de conversão. Reimportar o mesmo arquivo detecta o hash, avisa se mudou e oferece atualizar ou criar derivado. Aceite: teste monta documento importado, fecha, reabre e confere selo, hash e volume; o painel do projeto mostra o documento como derivado.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Geral"
+  },
+  {
+   "titulo": "Checador de similaridade geométrica para migração",
+   "onda": 1,
+   "prio": "P1",
+   "oque": "Compara dois corpos (importado, reconstruído ou o alvo) por volume, área, centroide, caixa envolvente, momentos de inércia, contagem de furos por diâmetro e distância amostrada entre superfícies, com tolerância configurável. Reporta onde diverge com mapa de cor no 3D e devolve resultado em JSON para a CLI. Aceite: peças do corpus iguais passam em 1e-6 relativo; uma peça com furo deslocado 0,5 mm falha apontando o furo.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Geral"
+  },
+  {
+   "titulo": "Estados com tabela de transições e lista de conferência na liberação",
+   "onda": 2,
+   "prio": "P1",
+   "oque": "Ciclo de vida definido em JSON (de, para, papel, exige motivo), com modelo padrão de três estados e um modelo com aprovação opcional; a troca livre atual deixa de existir. Liberar revisão roda uma lista de conferência (recalcula sem erro, referências resolvidas, PN definido, desenho atualizado) e só então cria a letra. Esquema de revisão configurável (letras, números, prévia 0.x). Aceite: transição fora da tabela é recusada com motivo; liberação com referência quebrada é bloqueada.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "PDM / PLM"
+  },
+  {
+   "titulo": "Barra de estado do documento e ícones do painel de projeto",
+   "onda": 2,
+   "prio": "P2",
+   "oque": "Barra mostra sempre o estado do documento (Rev B liberada, Editado desde a Rev B, Somente leitura, Em conflito) usando dirty_since_release, com a mesma linguagem na fase local e na colaborativa. Botões do painel (Salvar versão, Liberar, Importar, Exportar, Onde é usado, Comparar) trocam emoji por ícones do conjunto, com tooltip em dois estágios e PT/EN. Aceite: captura visual por estado e teste de i18n.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 120,
+   "teste": "Auto + Visual",
+   "area": "PDM / PLM"
+  },
+  {
+   "titulo": "Esquema aberto de árvore paramétrica de intercâmbio e leitor",
+   "onda": 2,
+   "prio": "P1",
+   "oque": "Formato JSON versionado e documentado (pelo mecanismo do B64) para esboços com geometria, restrições e cotas, features com parâmetros, nomes, cores e estrutura de montagem, validável por esquema. O Fenkra lê o arquivo e remonta a árvore com histórico, reancorando referências por geometria (ADR 0010), e também exporta nele. Aceite: ida e volta de peças do corpus preserva volume, área e centroide em 1e-6 e os graus de liberdade do esboço.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 400,
+   "teste": "Auto",
+   "area": "Geral"
+  },
+  {
+   "titulo": "ADR: termos das APIs públicas dos CADs de origem e exportadores por script",
+   "onda": 2,
+   "prio": "P1",
+   "oque": "Registrar em ADR, após ler o contrato vigente de cada fabricante, o que é permitido ao usuário rodar na própria licença, o que não pode ser distribuído e a política do projeto: script como código-fonte aberto lido e executado pelo usuário, nunca binário que ligue à API, sem engenharia reversa de formato fechado. Aceite: ADR com uma tabela por CAD de origem (API usada, termos lidos com data, decisão) revisada antes do primeiro script.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 80,
+   "teste": "Auto",
+   "area": "Geral"
+  },
+  {
+   "titulo": "Script exportador de referência para um CAD de origem",
+   "onda": 3,
+   "prio": "P2",
+   "oque": "Primeiro script aberto que percorre o modelo de objetos de um CAD de origem escolhido por demanda e grava o esquema de intercâmbio: esboço com restrições e cotas, extrusão, revolução, furo, filete, chanfro e padrão. Documentado como roda com a licença do próprio usuário. Aceite: três peças do corpus montadas nos dois lados voltam com volume em 1e-6 relativo e relatório do que o script não suporta.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "Geral"
+  },
+  {
+   "titulo": "Servidor MCP do Fenkra para reconstruir peças por comandos",
+   "onda": 3,
+   "prio": "P1",
+   "oque": "Servidor MCP com ferramentas (consultar STEP, criar esboço com cotas, extrudar, furar, filetar, recalcular, medir, comparar com o alvo) e recursos (árvore, relatório), sobre a CLI do B39, sem execução de código arbitrário nem acesso fora do projeto. Guarda a sequência de comandos gerada como artefato e usa o checador de similaridade; funciona com modelo local e nunca envia o STEP sem aceite explícito. Aceite: agente reconstrói 5 peças prismáticas do corpus a partir do STEP em até 10 iterações, volume dentro de 0,5% e furos no diâmetro certo.",
+   "origem": [
+    "PESQ-DETALHE"
+   ],
+   "tokens_k": 350,
+   "teste": "Auto",
+   "area": "Geral"
+  }
+ ]
+}

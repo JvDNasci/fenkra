@@ -1,0 +1,114 @@
+{
+  "alterar": [
+    {
+      "id": "B71",
+      "oque": "Acrescentar: Distância e Ângulo nascem com a medida atual entre os elementos, e nunca com 0 ou 90 fixos, para a peça não saltar. Separar Inverter alinhamento (sentido das normais) de Inverter lado (sentido da cota), acessíveis no painel e no menu da restrição na árvore. Valor com unidade e validação de fórmula, no lugar do texto livre."
+    },
+    {
+      "id": "B36",
+      "oque": "Acrescentar: o modelo de juntas ainda não tem limites. Cada grau de liberdade ganha Mínimo, Atual e Máximo, com caixa que liga cada limite sem perder o valor, marca na árvore para item com limite e marcas arrastáveis no 3D (arco ou trilho). Corrigir docs/modulos/montagem.md, que declara limites como prontos."
+    },
+    {
+      "id": "B99",
+      "oque": "Acrescentar: ao passar o mouse, mostrar pontos candidatos de encaixe (centro de face, meio de aresta, canto, eixo de cilindro, centro de furo) com sistema de eixos visível; tecla para travar um ponto; inverter eixo principal e girar eixo secundário de 90 em 90 graus; deslocamento em X, Y e Z com fórmula."
+    },
+    {
+      "id": "B103",
+      "oque": "Acrescentar: quando a prévia de uma restrição ou junta não convergir, ficar em vermelho e apontar a restrição em conflito antes de aceitar, sem alterar a montagem. A contagem de GDL que restam aparece no painel durante a prévia."
+    },
+    {
+      "id": "B58",
+      "oque": "Acrescentar: na prévia, uma alça 3D estica o comprimento do parafuso e só para nos comprimentos existentes na família; dois cliques abrem a lista de comprimentos. Ordem guiada: primeiro a posição e o plano inicial, depois a pilha, com linhas Clique para adicionar. Marcas por furo no 3D: entra, já tem, sem tamanho."
+    },
+    {
+      "id": "B121",
+      "oque": "Acrescentar: cursor direto por junta, que move o mecanismo sem calcular quadros; o cálculo fica para a reprodução no tempo. Gráficos com eixos, unidades e cursor de tempo; trajetória de um ponto desenhada no 3D; lista no 3D do grau de liberdade que ainda falta comandar."
+    },
+    {
+      "id": "B123",
+      "oque": "Acrescentar: cada posição guarda valores de juntas e restrições e tem tempo de transição, ordem na lista, atualizar e reordenar; tocar entre posições e arrastar um cursor para percorrê-las; exportar a animação."
+    }
+  ],
+  "novos": [
+    {
+      "titulo": "Montagem: prévia fantasma e confirmar em restrições e juntas",
+      "onda": 2,
+      "prio": "P0",
+      "oque": "Restrição e junta deixam de nascer no segundo clique: abrem painel suporte, modo, parâmetros e avançado, com duas caixas de elemento coloridas, e resolvem em uma cópia da montagem. A peça móvel aparece como fantasma na posição final, com setas de normal; Enter aceita e continua no comando, Tab inverte e Esc cancela o comando pendente. Aceite: cancelar deixa a montagem idêntica, trocar o tipo não repete a seleção, nenhum texto mostra nome interno em inglês e junta pendente tem aviso de etapa fixo no painel.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 420,
+      "teste": "Auto + Visual",
+      "area": "Montagem"
+    },
+    {
+      "titulo": "Montagem: símbolos de restrição e junta no 3D com cota arrastável",
+      "onda": 2,
+      "prio": "P0",
+      "oque": "Cada restrição e junta ganha um símbolo no modelo, ancorado na geometria, que acompanha a peça e pode ser ocultado por tipo. Distância e Ângulo mostram cota e arco arrastáveis com rótulo editável; junta mostra eixos e seta reta ou curva do movimento. Aceite: passar o mouse realça as duas referências e a linha da árvore, dois cliques abrem a edição, e o desenho se mantém legível em uma montagem de 200 restrições.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 320,
+      "teste": "Auto + Visual",
+      "area": "Montagem"
+    },
+    {
+      "titulo": "Montagem: painel de junta com origem, alinhamento e Animar",
+      "onda": 2,
+      "prio": "P1",
+      "oque": "Criação de junta com tipo Automático pela geometria e modos de origem: em um ponto, entre duas faces e na interseção de duas arestas. Alinhamento com ângulo, deslocamentos em X, Y e Z e inverter; botão Animar faz a peça ir e voltar no 3D antes de aceitar, com opção de incluir os limites. Ponto em curva e Came usam caixas Trajetória e Seguidor, aceitando clique em qualquer ordem. Aceite: revolução entre dois furos sai com o tipo certo e anima sem abrir a janela Simular.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 350,
+      "teste": "Auto + Visual",
+      "area": "Montagem"
+    },
+    {
+      "titulo": "Montagem: manipulador com referência, pivô e valor digitado",
+      "onda": 2,
+      "prio": "P1",
+      "oque": "Barrinha junto do manipulador com referência mundo, peça ou face, pivô escolhido, passo, colisão com escopo e respeitar restrições. Rótulo aceita deslocamento e giro digitados, e o centro passa a ser o da caixa envolvente, não a média dos vértices. Aceite: só aparecem as alças que as restrições permitem, peça presa mostra cadeado com o motivo, e girar 37 graus em um eixo da peça funciona sem usar o painel.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 220,
+      "teste": "Auto + Visual",
+      "area": "Montagem"
+    },
+    {
+      "titulo": "Montagem: inserir com miniatura e peça no cursor",
+      "onda": 2,
+      "prio": "P1",
+      "oque": "Inserir abre painel com recentes e miniaturas, mantendo o diálogo do sistema como opção; a peça escolhida acompanha o cursor como fantasma, clique posiciona, clique seguinte cria outra cópia e Esc encerra. A primeira peça mostra selo fixa na origem. Aceite: posicionar três cópias com três cliques, cancelar não deixa nada na árvore, e desfazer remove uma cópia por vez.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 160,
+      "teste": "Auto + Visual",
+      "area": "Montagem"
+    },
+    {
+      "titulo": "Montagem: repetição por aresta e por furos, com fantasmas e pular",
+      "onda": 2,
+      "prio": "P1",
+      "oque": "Repetição deixa de nascer em X com 3 cópias e 20 mm: direção ou eixo vêm de clique em aresta, eixo ou face, com Inverter, e o painel aceita vários componentes e segunda direção. Modo Pelos furos segue um padrão de furos da peça e respeita o que ele pulou. Aceite: fantasmas das cópias antes de aceitar, seta arrastável para o espaçamento, marca clicável para pular uma cópia, e mudar a peça de referência atualiza a direção.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 240,
+      "teste": "Auto + Visual",
+      "area": "Montagem"
+    },
+    {
+      "titulo": "Montagem: painel de interferências com realce e ignorar",
+      "onda": 2,
+      "prio": "P1",
+      "oque": "Interferências ganham painel próprio, sempre visível: escopo, tratar coincidência como interferência, subconjunto como peça única, tolerância, e lista ordenada por volume. Clicar em um item enquadra a câmera, deixa as peças transparentes e mostra o volume comum em vermelho; as demais ficam em arame, ocultas ou transparentes. Aceite: ignorar e ignorar menores que ficam salvos na montagem e são listados à parte, e abrir o resultado não depende do painel de edição.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 240,
+      "teste": "Auto + Visual",
+      "area": "Montagem"
+    },
+    {
+      "titulo": "Montagem: explosão por passos com linhas automáticas",
+      "onda": 3,
+      "prio": "P1",
+      "oque": "Explosão vira lista de passos reordenável: arrastar a seta do manipulador cria o passo, com modos linear, radial e espaçamento automático para grupos, e passo suprimível. Linhas de explosão pontilhadas são geradas sozinhas e seguem para o desenho. Separar Exibição em Estados, Explosão e Animação, com quadros-chave arrastáveis na linha do tempo. Aceite: passos salvos sobrevivem a abrir e fechar, e são a entrada de B124 e B168.",
+      "origem": ["PESQ-DETALHE"],
+      "tokens_k": 300,
+      "teste": "Auto + Visual",
+      "area": "Montagem"
+    }
+  ]
+}
