@@ -556,6 +556,8 @@ pub struct Viewport {
     pub bounds: Option<(Vec3, Vec3)>,
     /// último movimento de câmera (órbita, pan, zoom, animação) para "Simplificar ao girar"
     ultimo_giro: Option<std::time::Instant>,
+    /// transições de câmera ligadas (desligadas no modo leve: a vista salta direto)
+    pub animar: bool,
 }
 
 const FMT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
@@ -662,6 +664,9 @@ impl Viewport {
             || (to.pitch - before.pitch).abs() > 1e-3
             || (to.dist / before.dist.max(1e-6) - 1.).abs() > 1e-3;
         if !moved {
+            return;
+        }
+        if !self.animar {
             return;
         }
         let from = Camera { ortho: to.ortho, ..before };
@@ -777,6 +782,7 @@ impl Viewport {
             targets: None,
             camera: Camera::default(),
             anim: None,
+            animar: true,
             last: None,
             scene_gen: 0,
             bounds: None,

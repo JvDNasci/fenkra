@@ -487,6 +487,14 @@ pub struct Settings {
     pub macro_src: String,
     /// qualidade gráfica (malha, anti-serrilhamento, iluminação)
     pub graficos: Graficos,
+    /// modo leve (B236): combina os ajustes de gráficos para PC fraco
+    pub modo_leve: bool,
+    /// ajustes de antes de ligar o modo leve
+    pub leve_anterior: Option<crate::perfil::Anterior>,
+    /// transições da interface e da câmera (desligadas no modo leve)
+    pub animacoes: bool,
+    /// a sugestão do modo leve já foi mostrada (uma vez só)
+    pub sugestao_leve_vista: bool,
     /// posição dos painéis livres, por bancada
     pub paineis: Vec<crate::paineis::PainelSalvo>,
     /// grupos fora do contexto que o usuário deixou sempre na faixa
@@ -571,6 +579,10 @@ impl Default for Settings {
             pmi_style: Default::default(),
             flanged_holes: vec![],
             graficos: Default::default(),
+            modo_leve: false,
+            leve_anterior: None,
+            animacoes: true,
+            sugestao_leve_vista: false,
             paineis: vec![],
             barra_fixos: vec![],
         }
@@ -676,6 +688,8 @@ impl Settings {
         let def = crate::theme::find(&self.theme_name).unwrap_or_else(crate::theme::default_def);
         crate::theme::apply(ctx, &def);
         ctx.set_zoom_factor(self.ui_scale.clamp(0.7, 2.0));
+        // sem animações (modo leve) as transições do egui terminam no mesmo quadro
+        ctx.global_style_mut(|s| s.animation_time = if self.animacoes { egui::Style::default().animation_time } else { 0.0 });
     }
 }
 

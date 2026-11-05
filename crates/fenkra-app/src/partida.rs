@@ -95,12 +95,16 @@ pub fn instalar_gancho() {
         registrar("panico", &format!("{msg} em {onde} (fio {fio})\n{}", std::backtrace::Backtrace::force_capture()));
         // pânico em fio auxiliar (recálculo, miniaturas) não derruba a interface: só o principal avisa
         if fio == "main" {
+            // B309: relatório só no disco local; a pessoa decide na próxima abertura, vendo o conteúdo
+            let registro = caminho_log().and_then(|p| std::fs::read_to_string(p).ok()).unwrap_or_default();
+            let pilha = std::backtrace::Backtrace::force_capture().to_string();
+            crate::relatorio::gravar_pendente(&crate::relatorio::montar(&msg, &onde, &fio, &pilha, crate::perfil::medido().as_ref(), &registro));
             let en = ingles();
             let titulo = if en { "Fenkra stopped unexpectedly" } else { "O Fenkra parou de forma inesperada" };
             let corpo = if en {
-                format!("An internal error occurred and the program must close.\n\n{msg}\n({onde})\n\nThe technical details were saved in:\n{}", texto_log())
+                format!("An internal error occurred and the program must close.\n\n{msg}\n({onde})\n\nThe technical details were saved in:\n{}\n\nNothing was sent. On the next start you can review the report before deciding anything.", texto_log())
             } else {
-                format!("Ocorreu um erro interno e o programa precisa fechar.\n\n{msg}\n({onde})\n\nOs detalhes técnicos foram gravados em:\n{}", texto_log())
+                format!("Ocorreu um erro interno e o programa precisa fechar.\n\n{msg}\n({onde})\n\nOs detalhes técnicos foram gravados em:\n{}\n\nNada foi enviado. Na próxima abertura você poderá revisar o relatório antes de decidir qualquer coisa.", texto_log())
             };
             caixa(titulo, &corpo);
         }

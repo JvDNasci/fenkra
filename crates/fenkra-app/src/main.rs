@@ -38,6 +38,8 @@ mod historico;
 mod diagnostico;
 mod paineis;
 mod partida;
+mod perfil;
+mod relatorio;
 #[cfg(test)]
 mod padrao;
 
@@ -94,6 +96,8 @@ fn main() -> eframe::Result {
             Box::new(move |cc| {
                 let mut app = app::App::new(cc);
                 if let Some(rs) = &cc.wgpu_render_state {
+                    let hw = perfil::detectar(rs);
+                    app.avaliar_perfil(&hw);
                     if partida::registrar_adaptador(rs, modo) {
                         crate::i18n::set_english(app.settings.english);
                         app.toast(crate::i18n::tr("Adaptador gráfico por software: o Fenkra abre, mas fica lento. Atualize o driver da placa de vídeo."), true);
