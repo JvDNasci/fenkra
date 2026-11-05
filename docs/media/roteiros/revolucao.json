@@ -1,0 +1,35 @@
+{
+  "versao": 1,
+  "comando": "revolucao",
+  "caso": "revolucao",
+  "tema": "Escuro",
+  "camera": [
+    -40,
+    25,
+    200,
+    -34.8,
+    -23.9,
+    0
+  ],
+  "janela": [
+    1180,
+    700
+  ],
+  "recorte": [
+    690,
+    305,
+    360,
+    220
+  ],
+  "fps": 12,
+  "duracao": 2.0,
+  "animacoes": [
+    {
+      "campo": "/Revolve/angle",
+      "de": 30,
+      "ate": 360,
+      "t0": 0.3,
+      "t1": 1.7
+    }
+  ]
+}

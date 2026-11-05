@@ -1,0 +1,110 @@
+{
+  "versao": 1,
+  "fps": 12,
+  "largura": 360,
+  "altura": 220,
+  "cores": 64,
+  "limite_bytes": 153600,
+  "midias": [
+    {
+      "id": "casca",
+      "hash_roteiro": "cbf1dda3907c455f",
+      "gif": "saida/casca.gif",
+      "bytes_gif": 58184,
+      "hash_gif": "a1609608ab4b3f31",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "espessura",
+      "hash_roteiro": "ca2918cccaa27cc9",
+      "gif": "saida/espessura.gif",
+      "bytes_gif": 76043,
+      "hash_gif": "c38715f05d52088b",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "extrusao",
+      "hash_roteiro": "71cfbdf38dec4381",
+      "gif": "saida/extrusao.gif",
+      "bytes_gif": 100980,
+      "hash_gif": "d8d881be96257cd0",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "prim_caixa",
+      "hash_roteiro": "7054d27f8e7beff6",
+      "gif": "saida/prim_caixa.gif",
+      "bytes_gif": 135110,
+      "hash_gif": "2df7c38fda4ba0ec",
+      "quadros": 24,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "prim_cilindro",
+      "hash_roteiro": "3b954d7e9ba31053",
+      "gif": "saida/prim_cilindro.gif",
+      "bytes_gif": 123171,
+      "hash_gif": "2b557e527cedaee9",
+      "quadros": 24,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "prim_cone",
+      "hash_roteiro": "20100d04070dee4e",
+      "gif": "saida/prim_cone.gif",
+      "bytes_gif": 32264,
+      "hash_gif": "0ee086434efc0d95",
+      "quadros": 24,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "prim_esfera",
+      "hash_roteiro": "40b2a9289caaf4bc",
+      "gif": "saida/prim_esfera.gif",
+      "bytes_gif": 77108,
+      "hash_gif": "17ed335ecf9b3606",
+      "quadros": 24,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "reforco",
+      "hash_roteiro": "869356d02550625b",
+      "gif": "saida/reforco.gif",
+      "bytes_gif": 44521,
+      "hash_gif": "8ddb15e38ca7dc74",
+      "quadros": 24,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "revolucao",
+      "hash_roteiro": "51b124cc7016f823",
+      "gif": "saida/revolucao.gif",
+      "bytes_gif": 65645,
+      "hash_gif": "832058a31809d8d1",
+      "quadros": 24,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "rosca",
+      "hash_roteiro": "3d841fb11f537d8b",
+      "gif": "saida/rosca.gif",
+      "bytes_gif": 29705,
+      "hash_gif": "ad5f047adaabe6b1",
+      "quadros": 24,
+      "largura": 360,
+      "altura": 220
+    }
+  ]
+}
