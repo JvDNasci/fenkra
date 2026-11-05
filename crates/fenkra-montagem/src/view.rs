@@ -22,6 +22,8 @@ pub fn transformed(m: &Mesh, p: &Placement) -> Mesh {
         face_ranges: m.face_ranges.clone(),
         edge_ranges: m.edge_ranges.clone(),
         edge_mids: m.edge_mids.chunks_exact(3).flat_map(pt).collect(),
+        // a fórmula serve ao sketch da peça, que não usa a malha posicionada na montagem
+        edge_geom: vec![],
         edge_smooth: m.edge_smooth.clone(),
         vertices: m.vertices.chunks_exact(3).flat_map(pt).collect(),
         edge_faces: m.edge_faces.clone(),

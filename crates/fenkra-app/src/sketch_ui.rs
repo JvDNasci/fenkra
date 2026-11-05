@@ -455,10 +455,11 @@ pub fn frame(app: &App) -> Option<Frame> {
     if let Some(f) = r.and_then(|r| r.sketches.iter().find(|s| s.feature == id)).map(|s| s.frame) {
         return Some(f);
     }
-    match plane_of(app)? {
-        PlaneRef::Origin(o) => Some(fenkra_solidos::origin_frame(o)),
-        PlaneRef::Datum(d) => r?.planes.iter().find(|p| p.id == Some(d)).map(|p| p.frame),
-    }
+    let base = match plane_of(app)? {
+        PlaneRef::Origin(o) => fenkra_solidos::origin_frame(o),
+        PlaneRef::Datum(d) => r?.planes.iter().find(|p| p.id == Some(d)).map(|p| p.frame)?,
+    };
+    Some(fenkra_solidos::profile::posiciona(base, &data(app)?.pos))
 }
 
 struct View {
@@ -1022,7 +1023,7 @@ fn project_ui(app: &mut App, ui: &mut egui::Ui) {
         }
         for (id, n, inter) in &refs {
             if ui.button(n).clicked() {
-                chosen = crate::sketch_ext::world(r, &crate::picking::Pick::Geo(*id), *inter, &f).map(|x| (x, *inter));
+                chosen = crate::sketch_ext::world(&app.open.doc, r, &crate::picking::Pick::Geo(*id), *inter, &f).map(|x| (x, *inter));
             }
         }
         if !others.is_empty() {
@@ -1041,7 +1042,7 @@ fn project_ui(app: &mut App, ui: &mut egui::Ui) {
     let mut items: Vec<(crate::sketch_ext::External, bool)> = chosen.into_iter().collect();
     if let Some(s) = chosen_sketch {
         for (cid, pts) in crate::sketch_ext::sketch_curves(&app.open.doc, r, s) {
-            items.push((crate::sketch_ext::External { src: LinkSrc::SketchCurve { sketch: s, curve: cid }, pts, isolated: false }, false));
+            items.push((crate::sketch_ext::External::line(LinkSrc::SketchCurve { sketch: s, curve: cid }, pts), false));
         }
     }
     if items.is_empty() {
@@ -1069,6 +1070,8 @@ pub fn delete_selection(sk: &mut SketchData, sel: &[Ent]) {
     sk.links.retain(|l| match &l.shape {
         fenkra_core::sketch::LinkShape::Poly { points, .. } => points.iter().all(|p| ids.contains(p)),
         fenkra_core::sketch::LinkShape::Circle { center, .. } => ids.contains(center),
+        fenkra_core::sketch::LinkShape::Line { a, b, .. } => ids.contains(a) && ids.contains(b),
+        fenkra_core::sketch::LinkShape::Arc { center, s, e, .. } | fenkra_core::sketch::LinkShape::Ellipse { center, s, e, .. } => [center, s, e].iter().all(|p| ids.contains(p)),
     });
 }
 
@@ -1273,6 +1276,9 @@ fn clone_curves(sk: &mut SketchData, al: &mut impl FnMut() -> Id, curves: &[Id],
                 Curve::Arc { c, s, e } => Curve::Arc { c: m(c), s: m(s), e: m(e) },
                 Curve::Point { p } => Curve::Point { p: m(p) },
                 Curve::Spline { ref pts } => Curve::Spline { pts: pts.iter().map(|x| m(*x)).collect() },
+                // o eixo da elipse é um vetor, que os pontos não levam: espelhar pede a origem dela
+                Curve::Ellipse { .. } if flip => continue,
+                Curve::Ellipse { c, s, e, major, minor, t0, t1 } => Curve::Ellipse { c: m(c), s: m(s), e: m(e), major, minor, t0, t1 },
             };
             sk.add_curve(al, g, cv.construction);
         }
@@ -1811,6 +1817,7 @@ pub(crate) fn edit_hint(tool: Tool, no_curves: bool, nothing_selected: bool, cli
 pub(crate) fn curve_uv(sk: &SketchData, c: &fenkra_core::sketch::SkCurve) -> Vec<[f64; 2]> {
     match c.geom {
         Curve::Spline { .. } => fenkra_core::sketch::spline_samples(&sk.spline_uv(c.id), 12),
+        Curve::Ellipse { c: ctr, major, minor, t0, t1, .. } => fenkra_core::projecao::elipse_amostras(sk.pos(ctr), major, minor, t0, t1),
         Curve::Line { a, b } => vec![sk.pos(a), sk.pos(b)],
         Curve::Circle { c: ctr, r } => {
             let cc = sk.pos(ctr);
@@ -2071,6 +2078,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             Some(Curve::Arc { c, s, e }) => SketchData::arc_mid(sk.pos(*c), sk.pos(*s), sk.pos(*e)),
             Some(Curve::Point { p }) => sk.pos(*p),
             Some(Curve::Spline { pts }) => pts.get(pts.len() / 2).map(|p| sk.pos(*p)).unwrap_or([0., 0.]),
+            Some(Curve::Ellipse { c, major, minor, t0, t1, .. }) => fenkra_core::projecao::elipse_em(sk.pos(*c), *major, *minor, (t0 + t1) / 2.),
             None => [0., 0.],
         }
     };
@@ -2168,8 +2176,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                     _ => f32::MAX,
                 },
                 Curve::Point { .. } => f32::MAX,
-                Curve::Spline { .. } => {
-                    let s = fenkra_core::sketch::spline_samples(&sk.spline_uv(c.id), 10);
+                Curve::Spline { .. } | Curve::Ellipse { .. } => {
+                    let s = curve_uv(sk, c);
                     s.windows(2).map(|w| seg_dist(pos, v.to_screen(w[0]), v.to_screen(w[1]))).fold(f32::MAX, f32::min)
                 }
             };
@@ -2687,8 +2695,10 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                 let filt = crate::picking::Filter { faces: intersect, edges: true, vertices: !intersect, planes: true, hidden_env: false, exclude_sketch: Some(edit.feature), fantasma: None };
                 if let Some(p) = crate::picking::pick(r, &app.open.doc, &v.cam, rect, h, &filt) {
                     crate::picking::draw(&painter, r, &v.cam, rect, &p, false);
-                    painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, p.label(&app.open.doc), egui::FontId::proportional(11.), FREE);
-                    let made = crate::sketch_ext::world(r, &p, intersect, &v.f);
+                    let made = crate::sketch_ext::world(&app.open.doc, r, &p, intersect, &v.f);
+                    // a dica diz a forma exata que vai nascer
+                    let forma = made.as_ref().and_then(|x| x.forma(&v.f)).map_or(String::new(), |n| format!(" → {}", tr(n)));
+                    painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, format!("{}{forma}", p.label(&app.open.doc)), egui::FontId::proportional(11.), FREE);
                     // fantasma do que vai nascer no plano, não só da origem
                     if let Some(x) = &made {
                         let uv = crate::sketch_ext::to_uv(&v.f, &x.pts);
@@ -2738,6 +2748,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                         for k in &plano.limites {
                             painter.circle_filled(v.to_screen(k.p), 3.5, BAD);
                         }
+                    } else {
+                        recusa = Some("esse elemento não tem trecho para aparar");
                     }
                 } else {
                     match rl::plano_estender(&sk, c, uv) {
@@ -3401,6 +3413,9 @@ pub fn keys(app: &mut App, ctx: &egui::Context) -> bool {
 /// Painel lateral do sketch em edição: limpo, mostra só o necessário para o passo atual.
 pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     let vars = app.vars();
+    if let Some(id) = app.sketch.as_ref().map(|e| e.feature) {
+        crate::sketch_vinculos::sincroniza(app, id);
+    }
     let Some(edit) = app.sketch.as_mut() else { return };
     let id = edit.feature;
     let name = app.open.doc.feature(id).map(|f| f.name.clone()).unwrap_or_default();
@@ -3433,6 +3448,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         return;
     }
     project_ui(app, ui);
+    crate::sketch_vinculos::painel(app, ui);
     let Some(edit) = app.sketch.as_mut() else { return };
     ui.separator();
     let sel = edit.sel.clone();
@@ -3478,6 +3494,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                             Curve::Arc { .. } => "Arco",
                             Curve::Point { .. } => "Ponto",
                             Curve::Spline { .. } => "Spline",
+                            Curve::Ellipse { .. } => "Elipse",
                         };
                         ui.horizontal(|ui| {
                             ui.label(RichText::new(kind).strong());
@@ -3578,28 +3595,9 @@ pub fn begin(app: &mut App, id: Id) {
     let prev = app.settings.ortho;
     let mut e = SketchEdit::new(id, prev);
     let vars = app.vars();
-    let (lp, lr) = app
-        .result
-        .as_ref()
-        .and_then(|r| r.sketches.iter().find(|v| v.feature == id))
-        .map(|v| (v.link_pts.clone(), v.link_r.clone()))
-        .unwrap_or_default();
-    if let Some(FeatureKind::Sketch(s)) = app.open.doc.feature_mut(id).map(|f| &mut f.kind) {
-        // a geometria externa vem na posição atual do 3D
-        for (p, q) in lp {
-            if let Some(pt) = s.data.point_mut(p) {
-                if (pt.x - q[0]).abs() > 1e-9 || (pt.y - q[1]).abs() > 1e-9 {
-                    (pt.x, pt.y) = (q[0], q[1]);
-                }
-            }
-        }
-        for (c, rr) in lr {
-            if let Some(Curve::Circle { r, .. }) = s.data.curves.iter_mut().find(|x| x.id == c).map(|x| &mut x.geom) {
-                if (*r - rr).abs() > 1e-9 {
-                    *r = rr;
-                }
-            }
-        }
+    // a geometria externa vem na posição atual do 3D
+    crate::sketch_vinculos::sincroniza(app, id);
+    if let Some(FeatureKind::Sketch(s)) = app.open.doc.feature(id).map(|f| &f.kind) {
         e.report = s.data.clone().solve(&vars, &[]);
     }
     app.sketch = Some(e);

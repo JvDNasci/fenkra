@@ -15,6 +15,7 @@ mod previa;
 mod picking;
 mod viewcube;
 mod sketch_ui;
+mod sketch_vinculos;
 mod geo_ui;
 mod keymap;
 mod feat_ui;

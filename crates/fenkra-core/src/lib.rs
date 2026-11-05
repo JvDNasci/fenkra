@@ -13,6 +13,7 @@ pub mod expr;
 pub mod formato;
 pub mod macros;
 pub mod pmi;
+pub mod projecao;
 pub mod qualidade;
 pub mod sketch;
 

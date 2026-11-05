@@ -162,6 +162,7 @@ pub fn traco(sk: &SketchData, id: Id) -> Option<Traco> {
             Traco::Arco { c: pc, r: dist(ps, pc), a0, varre: if v < 1e-12 { TAU } else { v } }
         }
         Curve::Spline { .. } => Traco::poli(spline_eval(&sk.spline_uv(id), &sk.own_tangents(id), POR_TRECHO)),
+        Curve::Ellipse { c, major, minor, t0, t1, .. } => Traco::poli(fenkra_core::projecao::elipse_amostras(sk.pos(*c), *major, *minor, *t0, *t1)),
         Curve::Point { .. } => return None,
     })
 }
@@ -300,6 +301,10 @@ pub struct PlanoAparar {
 
 /// O trecho entre os cortes vizinhos do cursor.
 pub fn plano_aparar(sk: &SketchData, curva: Id, cursor: P) -> Option<PlanoAparar> {
+    // a elipse vem de fora com a forma da origem: não há trecho para tirar dela
+    if matches!(sk.curve(curva).map(|c| &c.geom), Some(Curve::Ellipse { .. })) {
+        return None;
+    }
     let t = traco(sk, curva)?;
     let cs = cortes(sk, curva);
     let pontos: Vec<P> = cs.iter().map(|c| c.p).collect();
@@ -409,7 +414,7 @@ pub fn aparar(sk: &mut SketchData, al: &mut impl FnMut() -> Id, curva: Id, curso
             troca_geom(sk, curva, Curve::Arc { c, s: n2, e: n1 });
         }
         (Curve::Spline { pts }, antes, depois) => aparar_spline(sk, al, curva, &pts, construction, antes, depois),
-        (Curve::Circle { .. }, ..) | (Curve::Point { .. }, ..) => return Err("esse elemento não tem trecho para aparar"),
+        (Curve::Circle { .. } | Curve::Point { .. } | Curve::Ellipse { .. }, ..) => return Err("esse elemento não tem trecho para aparar"),
     }
     limpa_soltos(sk);
     Ok(())
@@ -784,6 +789,20 @@ mod testes {
         // a vertical para a um fio da horizontal, como depois do solver
         linha(&mut sk, &mut al, [0., 1e-8], [0., 10.]);
         assert_eq!(cortes(&sk, h).len(), 1);
+    }
+
+    #[test]
+    fn elipse_externa_recusa_aparar_antes_do_clique() {
+        let (mut sk, mut al) = (SketchData::default(), ids());
+        let forma = fenkra_core::projecao::Exata::Elipse { c: [0., 0.], maior: [10., 0.], menor: 5., t0: 0., t1: TAU };
+        sk.add_link_exata(&mut al, fenkra_core::sketch::LinkSrc::Edge { mid: [0.; 3] }, false, &forma, false);
+        let e = sk.curves[0].id;
+        // corta outras curvas, mas ela mesma não apara
+        let h = linha(&mut sk, &mut al, [-20., 0.], [20., 0.]);
+        assert_eq!(cortes(&sk, h).len(), 2);
+        assert!(plano_aparar(&sk, e, [0., 5.]).is_none());
+        assert!(aparar(&mut sk, &mut al, e, [0., 5.]).is_err());
+        assert!(sk.curve(e).is_some());
     }
 
     #[test]

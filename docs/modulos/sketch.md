@@ -13,7 +13,7 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 - **Offset de curvas** (Offset) — Tool::Offset.
 - **Espelhar e simetria** (Espelhar) — Tool::Mirror.
 - **Filete e chanfro de sketch** (Filete, chanfro) — Tool::Fillet, Chamfer.
-- **Projetar / converter arestas 3D** (Converter) — Tool::Convert; teste sketch_com_geometria_externa_associativa.
+- **Projetar / converter arestas 3D** (Converter) — Tool::Convert reconhece linha, arco, círculo e elipse exatos pela fórmula da aresta (`projecao.rs`, ADR 0018); política associativa, isolada ou instantânea e estado do vínculo no painel.
 
 ## 🟡 Parcial
 
@@ -23,14 +23,14 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 - **Aparar (trim)** (Aparar) — Tool::Trim em linha, arco, círculo e spline (`sketch_relimita.rs`), com trecho vermelho tracejado e cortes marcados antes do clique; Shift alterna com Estender. `DR-50`
 - **Estender / aparar-estender** (Estender) — Tool::Extend em linha e arco, com prévia até o alvo; Shift alterna com Aparar. Spline não estende. `DR-51`
 - **Mover, copiar, girar, escalar** (Mover, copiar) — Tool::Move e Copy; sem girar/escalar/esticar dedicados. `BM-SKT-05`
-- **Interseção com o 3D** (Interseção) — Tool::Intersect; só 1 ponto por curva (crossing()); falha com perfis de outro plano (DR-06). `DR-06`
+- **Interseção com o 3D** (Interseção) — Tool::Intersect acha todos os pontos, exatos pela fórmula ou pelo kernel; a quantidade de pontos é fixada ao criar. `DR-06`
 - **Seleção por janela e cruzada** (Selecionar) — Arrastar no vazio: para a direita pega o que está dentro, para a esquerda também o que toca. Duplo clique pega a cadeia conectada, usada por Offset, Filete e Chanfro (`sketch_cadeia.rs`). `DR-05`
-- **Geometria externa no sketch** (Converter) — Converter cria vínculo; falta a opção de política por sketch (DR-18). `DR-18`
+- **Geometria externa no sketch** (Converter) — Converter cria vínculo com política por sketch e por vínculo; o sketch tem origem e orientação próprias. Sem filtro de só publicados. `DR-18`
 - **Sketch 3D** (Wireframe 3D) — Sem sketch 3D com restrições; há polilinha/spline/hélice 3D no wireframe (RefKind). `BM-SKT-08`
 
 ## ❌ Ainda não existe
 
-- **Elipse e cônicas** (—) — O sketch só tem Line/Circle/Arc/Point/Spline. Cônica existe no wireframe 3D (RefKind::Conic). `BM-SKT-02`
+- **Elipse e cônicas** (—) — Elipse entra só como geometria externa (Curve::Ellipse), sem ferramenta de desenho. Cônica existe no wireframe 3D (RefKind::Conic). `BM-SKT-02`
 - **Quebrar (break/split)** (—) —  `DR-51`
 - **Fechar arco e complemento** (—) —  `DR-52`
 - **Padrão no sketch** (—) —  `BM-SKT-06`

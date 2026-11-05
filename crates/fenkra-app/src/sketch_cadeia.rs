@@ -24,6 +24,7 @@ fn pontas(sk: &SketchData, c: Id) -> Option<(Id, Id)> {
         Curve::Line { a, b } => Some((*a, *b)),
         Curve::Arc { s, e, .. } => Some((*s, *e)),
         Curve::Spline { pts } => Some((*pts.first()?, *pts.last()?)),
+        Curve::Ellipse { c, s, e, .. } if s != c => Some((*s, *e)),
         _ => None,
     }
 }

@@ -43,6 +43,7 @@ pub mod bridge {
         edge_ranges: Vec<u32>,
         /// ponto médio (xyz) de cada aresta — assinatura para referência persistente
         edge_mids: Vec<f32>,
+        edge_geom: Vec<f64>,
         /// 1 = aresta suave (tangência entre faces, ex.: fim de um raio); 0 = aresta viva
         edge_smooth: Vec<u8>,
         /// posição (xyz) de cada vértice
@@ -133,6 +134,7 @@ pub mod bridge {
         fn sew_report(s: &Shape) -> Result<Vec<f64>>;
         fn clip_surface(s: &Shape, cutter: &Shape, px: f64, py: f64, pz: f64, extend: bool) -> Result<UniquePtr<Shape>>;
         fn edge_pts_at(s: &Shape, px: f64, py: f64, pz: f64) -> Result<Vec<f64>>;
+        fn edge_plane_pts(s: &Shape, px: f64, py: f64, pz: f64, ox: f64, oy: f64, oz: f64, nx: f64, ny: f64, nz: f64) -> Result<Vec<f64>>;
         fn free_edge_pts(s: &Shape, ends: &mut Vec<u32>) -> Result<Vec<f64>>;
         fn face_propagate(s: &Shape, px: f64, py: f64, pz: f64, prop: i32, complement: bool, counts: &mut Vec<u32>) -> Result<UniquePtr<Shape>>;
         fn extrude_curve(pts: &[f64], dx: f64, dy: f64, dz: f64, len: f64) -> Result<UniquePtr<Shape>>;

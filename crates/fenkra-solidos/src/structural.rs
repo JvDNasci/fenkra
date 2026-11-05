@@ -173,6 +173,7 @@ pub fn shifted(loops: &[Loop2], by: [f64; 2]) -> Vec<Loop2> {
                     Seg2::Arc(a, b, c) => Seg2::Arc(m(*a), m(*b), m(*c)),
                     Seg2::Circle(c, r) => Seg2::Circle(m(*c), *r),
                     Seg2::Spline(p) => Seg2::Spline(p.iter().map(|q| m(*q)).collect()),
+                    Seg2::Ellipse(c, a, r, t0, t1) => Seg2::Ellipse(m(*c), *a, *r, *t0, *t1),
                 })
                 .collect()
         })

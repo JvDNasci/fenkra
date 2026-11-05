@@ -120,6 +120,8 @@ pub enum Seg2 {
     Circle([f64; 2], f64),
     /// Spline que passa pelos pontos (B-spline interpolada).
     Spline(Vec<[f64; 2]>),
+    /// Elipse: centro, vetor do semieixo maior, semieixo menor, parâmetros inicial e final.
+    Ellipse([f64; 2], [f64; 2], f64, f64, f64),
 }
 
 /// Laço fechado de segmentos.
@@ -197,6 +199,9 @@ pub struct Mesh {
     pub edge_ranges: Vec<u32>,
     /// ponto médio (xyz) de cada aresta
     pub edge_mids: Vec<f32>,
+    /// fórmula de cada aresta, em `EDGE_GEOM` números (ver `Mesh::edge_formula`); em precisão dupla,
+    /// porque serve para projetar no sketch, não para desenhar
+    pub edge_geom: Vec<f64>,
     /// 1 por aresta suave (tangente entre as faces vizinhas), 0 por aresta viva
     pub edge_smooth: Vec<u8>,
     /// posição (xyz) de cada vértice
@@ -207,7 +212,28 @@ pub struct Mesh {
     pub face_info: Vec<FaceInfo>,
 }
 
+/// Números por aresta em `Mesh::edge_geom`.
+pub const EDGE_GEOM: usize = 12;
+
+/// Fórmula de uma aresta. Cônica: `P(t) = c + u cos t + v sin t`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum EdgeFormula {
+    Line { a: [f64; 3], b: [f64; 3] },
+    Conic { c: [f64; 3], u: [f64; 3], v: [f64; 3], t0: f64, t1: f64 },
+}
+
 impl Mesh {
+    /// Fórmula da aresta `e`, se ela for reta, círculo ou elipse.
+    pub fn edge_formula(&self, e: usize) -> Option<EdgeFormula> {
+        let g = self.edge_geom.get(e * EDGE_GEOM..(e + 1) * EDGE_GEOM)?;
+        let v3 = |i: usize| [g[i], g[i + 1], g[i + 2]];
+        match g[0] as i32 {
+            1 => Some(EdgeFormula::Line { a: v3(1), b: v3(4) }),
+            2 => Some(EdgeFormula::Conic { c: v3(1), u: v3(4), v: v3(7), t0: g[10], t1: g[11] }),
+            _ => None,
+        }
+    }
+
     /// Memória ocupada pelos dados da malha, em bytes.
     pub fn bytes(&self) -> usize {
         4 * (self.positions.len() + self.normals.len() + self.indices.len() + self.edges.len())
@@ -295,6 +321,11 @@ mod imp {
                         Seg2::Line(a, c) => segs.push(b::Seg { kind: 0, x1: a[0], y1: a[1], x2: c[0], y2: c[1], ..z }),
                         Seg2::Arc(a, m, c) => segs.push(b::Seg { kind: 1, x1: a[0], y1: a[1], x2: m[0], y2: m[1], x3: c[0], y3: c[1] }),
                         Seg2::Circle(c, r) => segs.push(b::Seg { kind: 2, x1: c[0], y1: c[1], x2: *r, ..z }),
+                        // elipse: dois registros, porque são sete números
+                        Seg2::Ellipse(c, m, r, t0, t1) => {
+                            segs.push(b::Seg { kind: 4, x1: c[0], y1: c[1], x2: m[0], y2: m[1], x3: *r, ..z });
+                            segs.push(b::Seg { kind: 5, x1: t0.min(*t1), x2: t0.max(*t1), ..z });
+                        }
                         // spline: um registro por ponto (tipo 3); x2 = 1 marca o último ponto
                         Seg2::Spline(pts) => {
                             for (i, p) in pts.iter().enumerate() {
@@ -612,6 +643,12 @@ mod imp {
             b::clip_surface(&self.0, &cutter.0, keep[0], keep[1], keep[2], extend).map(Shape).map_err(err)
         }
         /// Polilinha da aresta mais perto do ponto.
+        /// Pontos exatos em que a aresta mais perto de `p` atravessa o plano.
+        pub fn edge_plane(&self, p: [f64; 3], origem: [f64; 3], normal: [f64; 3]) -> KResult<Vec<[f64; 3]>> {
+            let v = b::edge_plane_pts(&self.0, p[0], p[1], p[2], origem[0], origem[1], origem[2], normal[0], normal[1], normal[2]).map_err(err)?;
+            Ok(v.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect())
+        }
+
         pub fn edge_at(&self, p: [f64; 3]) -> KResult<Vec<[f64; 3]>> {
             let v = b::edge_pts_at(&self.0, p[0], p[1], p[2]).map_err(err)?;
             Ok(v.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect())
@@ -754,6 +791,7 @@ mod imp {
                 edges: m.edges,
                 face_ranges: m.face_ranges,
                 edge_ranges: m.edge_ranges,
+                edge_geom: m.edge_geom,
                 edge_mids: m.edge_mids,
                 edge_smooth: m.edge_smooth,
                 vertices: m.vertices,
@@ -1039,6 +1077,9 @@ mod imp {
             no()
         }
         pub fn clip_surface(&self, _: &Shape, _: [f64; 3], _: bool) -> KResult<Shape> {
+            no()
+        }
+        pub fn edge_plane(&self, _: [f64; 3], _: [f64; 3], _: [f64; 3]) -> KResult<Vec<[f64; 3]>> {
             no()
         }
         pub fn edge_at(&self, _: [f64; 3]) -> KResult<Vec<[f64; 3]>> {
