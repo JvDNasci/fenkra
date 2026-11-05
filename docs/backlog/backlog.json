@@ -53,7 +53,7 @@
    "tokens_k": 200,
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -71,7 +71,7 @@
    "tokens_k": 60,
    "teste": "Auto",
    "area": "Chapa metálica",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.1
   },
   {
@@ -109,7 +109,7 @@
    "tokens_k": 90,
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -186,7 +186,7 @@
    "tokens_k": 120,
    "teste": "Auto",
    "area": "Sketch",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -1151,7 +1151,7 @@
    "tokens_k": 150,
    "teste": "Auto + Visual",
    "area": "PDM / PLM",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.2
   },
   {
@@ -1211,7 +1211,7 @@
    "tokens_k": 40,
    "teste": "Auto",
    "area": "Montagem",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.0
   },
   {
@@ -1309,7 +1309,7 @@
    "tokens_k": 150,
    "teste": "Auto",
    "area": "Geral",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -1327,7 +1327,7 @@
    "tokens_k": 200,
    "teste": "Auto",
    "area": "PDM / PLM",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.2
   },
   {
@@ -1344,7 +1344,7 @@
    "tokens_k": 300,
    "teste": "Auto",
    "area": "PDM / PLM",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.4
   },
   {
@@ -1415,7 +1415,7 @@
    "tokens_k": 300,
    "teste": "Auto + Visual",
    "area": "Montagem",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.4
   },
   {
@@ -1432,7 +1432,7 @@
    "tokens_k": 400,
    "teste": "Auto",
    "area": "Montagem",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.5
   },
   {
@@ -1467,7 +1467,7 @@
    "tokens_k": 150,
    "teste": "Auto",
    "area": "Montagem",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -1484,7 +1484,7 @@
    "tokens_k": 400,
    "teste": "Auto",
    "area": "Sketch",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.5
   },
   {
@@ -1500,7 +1500,7 @@
    "tokens_k": 250,
    "teste": "Auto",
    "area": "Sólidos",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -1548,7 +1548,7 @@
    "tokens_k": 300,
    "teste": "Auto",
    "area": "Chapa metálica",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.4
   },
   {
@@ -4024,7 +4024,7 @@
    "tokens_k": 300,
    "teste": "Auto + Visual",
    "area": "Sketch",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.4
   },
   {
@@ -4040,7 +4040,7 @@
    "tokens_k": 220,
    "teste": "Visual",
    "area": "Sketch",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.3
   },
   {

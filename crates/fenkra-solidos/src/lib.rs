@@ -2365,8 +2365,13 @@ impl Ctx<'_> {
             return Ok((p, f.flat_space));
         }
         let Some((b, owners, roles)) = self.body_owned(f.target) else { return Ok((p, f.flat_space)) };
-        let pts = self.resolve_edges(what, f, b, owners, roles, &[p], &[key.cloned()])?;
-        Ok((pts[0], flat_now))
+        // sem chave, o clique pode estar longe do meio da aresta que uma aba vizinha esticou: o kernel
+        // acha a aresta que passa pelo ponto e recusa se não houver nenhuma
+        match self.resolve_edges(what, f, b, owners, roles, &[p], &[key.cloned()]) {
+            Ok(pts) => Ok((pts[0], flat_now)),
+            Err(_) if key.is_none() => Ok((p, flat_now)),
+            Err(e) => Err(e),
+        }
     }
 
     /// Aba/bainha: no estado planificado, a aresta clicada precisa existir na chapa plana — senão
