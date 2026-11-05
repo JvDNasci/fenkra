@@ -556,8 +556,9 @@ mod imp {
             b::fill_surface(&flat, &ends).map(Shape).map_err(err)
         }
         /// Preenchimento com condição por curva: ordem 0 (G0), 1 (G1) ou 2 (G2), alcance da tangente
-        /// (`weights`, 1 = neutro), faces de apoio e pontos de passagem. Devolve o erro G0 (mm) e G1 (rad).
-        pub fn fill_surface_x(curves: &[Vec<[f64; 3]>], orders: &[i32], weights: &[f64], support: &Shape, pts: &[[f64; 3]]) -> KResult<(Shape, f64, f64)> {
+        /// (`weights`, 1 = neutro), faces de apoio e pontos de passagem. Devolve o erro G0 (mm), G1 (rad)
+        /// e G2 (diferença de curvatura, zero sem condição G2).
+        pub fn fill_surface_x(curves: &[Vec<[f64; 3]>], orders: &[i32], weights: &[f64], support: &Shape, pts: &[[f64; 3]]) -> KResult<(Shape, f64, f64, f64)> {
             let mut flat = vec![];
             let mut ends = vec![];
             for c in curves {
@@ -567,7 +568,11 @@ mod imp {
             let p: Vec<f64> = pts.iter().flatten().copied().collect();
             let mut errs = vec![];
             let s = b::fill_surface_x(&flat, &ends, orders, weights, &support.0, &p, &mut errs).map(Shape).map_err(err)?;
-            Ok((s, errs.first().copied().unwrap_or(0.), errs.get(1).copied().unwrap_or(0.)))
+            Ok((s, errs.first().copied().unwrap_or(0.), errs.get(1).copied().unwrap_or(0.), errs.get(2).copied().unwrap_or(0.)))
+        }
+        /// Remendos bicúbicos soltos: 48 números por remendo (16 polos).
+        pub fn bezier_faces(poles: &[f64]) -> KResult<Shape> {
+            b::bezier_faces(poles).map(Shape).map_err(err)
         }
         /// Curva solta como forma (fio).
         pub fn curve_shape(pts: &[[f64; 3]]) -> KResult<Shape> {
@@ -1075,7 +1080,10 @@ mod imp {
         pub fn fill_surface(_: &[Vec<[f64; 3]>]) -> KResult<Shape> {
             no()
         }
-        pub fn fill_surface_x(_: &[Vec<[f64; 3]>], _: &[i32], _: &[f64], _: &Shape, _: &[[f64; 3]]) -> KResult<(Shape, f64, f64)> {
+        pub fn fill_surface_x(_: &[Vec<[f64; 3]>], _: &[i32], _: &[f64], _: &Shape, _: &[[f64; 3]]) -> KResult<(Shape, f64, f64, f64)> {
+            no()
+        }
+        pub fn bezier_faces(_: &[f64]) -> KResult<Shape> {
             no()
         }
         pub fn curve_shape(_: &[[f64; 3]]) -> KResult<Shape> {

@@ -1744,6 +1744,21 @@ pub struct Forma {
     /// congelada: a gaiola fica guardada, mas não aceita edição
     #[serde(default)]
     pub congelada: bool,
+    /// com isto a forma vira corpo B-rep; sem isto, é só superfície de desenho
+    #[serde(default)]
+    pub conversao: Option<ConversaoForma>,
+}
+
+/// Como a forma vira B-rep (B179).
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct ConversaoForma {
+    /// continuidade nas regiões dos nós irregulares: 0 G0, 1 G1, 2 G2
+    pub continuidade: u8,
+    /// tolerância de costura (mm)
+    pub tol: String,
+    /// gaiola aberta para editar: não converte e o cálculo para aqui até voltar
+    #[serde(default)]
+    pub pausada: bool,
 }
 
 /// Tipo de seção de perfil estrutural.

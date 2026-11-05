@@ -504,6 +504,15 @@ impl Gaiola {
         id
     }
 
+    /// Para montar gaiola fora deste crate (testes e importação).
+    pub fn novo_para_teste(&mut self, p: V3) -> u32 {
+        self.novo_no(p)
+    }
+
+    pub fn face_para_teste(&mut self, nos: Vec<u32>) -> u32 {
+        self.nova_face(nos)
+    }
+
     pub fn pos(&self, id: u32) -> Option<V3> {
         self.no(id).map(|n| n.p)
     }

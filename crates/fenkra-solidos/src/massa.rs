@@ -187,6 +187,7 @@ pub fn relatorio_massa(doc: &Document) -> RelatorioMassa {
         sheet_maps: vec![],
         cut_outlines: vec![],
         roscas: vec![],
+        relatorios_forma: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),

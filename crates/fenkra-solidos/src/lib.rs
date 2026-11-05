@@ -5,6 +5,7 @@
 //! o corpo continua do estado anterior e o comando fica marcado com a mensagem do erro.
 
 pub mod erro;
+pub mod forma_brep;
 pub mod geo3d;
 pub mod regioes;
 pub mod importacao;
@@ -563,6 +564,8 @@ pub struct RecomputeResult {
     pub surfaces: Vec<SurfaceViz>,
     /// formas livres ainda sem B-rep
     pub formas: Vec<FormaViz>,
+    /// relatório de cada forma convertida
+    pub relatorios_forma: Vec<(Id, forma_brep::RelatorioForma)>,
     pub status: HashMap<Id, Status>,
     pub params: HashMap<String, f64>,
     pub param_error: Option<String>,
@@ -642,6 +645,7 @@ struct Ctx<'a> {
     /// contorno de cada recorte de chapa nos dois estados (dobrado e planificado)
     cut_outlines: Vec<CutOutline>,
     roscas: Vec<RoscaViz>,
+    relatorios_forma: Vec<(Id, forma_brep::RelatorioForma)>,
 }
 
 /// Uma dobra: referencial da aresta (no dobrado) e o giro que leva a aba do dobrado ao plano.
@@ -792,6 +796,7 @@ struct FeatEntry {
     sheet_maps: Vec<SheetMap>,
     outlines: Vec<CutOutline>,
     roscas: Vec<RoscaViz>,
+    relatorios_forma: Vec<(Id, forma_brep::RelatorioForma)>,
     steps: Vec<(Shape, BoolOp)>,
 }
 
@@ -1483,7 +1488,7 @@ impl Ctx<'_> {
             }
         }
         let pts: Vec<Vec<V3>> = cs.into_iter().map(|c| c.pts).collect();
-        let (sh, _, g1) = Shape::fill_surface_x(&pts, &orders, &weights, &support, &self.points(points, d)?).map_err(|x| x.0)?;
+        let (sh, _, g1, _) = Shape::fill_surface_x(&pts, &orders, &weights, &support, &self.points(points, d)?).map_err(|x| x.0)?;
         if orders.iter().any(|o| *o > 0) {
             let deg = g1.to_degrees();
             let mut n = self.notes.borrow_mut();
@@ -5268,7 +5273,22 @@ impl Ctx<'_> {
             }
             FeatureKind::Forma(fm) => {
                 fm.gaiola.inteira().topologia()?;
-                Ok(None)
+                let Some(c) = fm.conversao.as_ref().filter(|c| !c.pausada) else { return Ok(None) };
+                let tol = ev(&c.tol, &self.vars, "tolerância")?;
+                let (sh, nomes, rel) = forma_brep::converter(&fm.gaiola, c.continuidade, tol)?;
+                let aviso = forma_brep::resumo(&rel);
+                self.relatorios_forma.push((f.id, rel));
+                if sh.is_solid() {
+                    self.apply_roles(f.target, sh, BoolOp::Add, f.id, Some(nomes))?;
+                } else {
+                    let n = sh.face_count() as usize;
+                    let corpo = match self.body(f.target) {
+                        Some(b) => fresh_body(b.compound(&sh), f.id),
+                        None => (sh, vec![f.id; n], nomes),
+                    };
+                    self.bodies.insert(f.target, corpo);
+                }
+                Ok(aviso)
             }
             FeatureKind::BoundaryFill(bf) => {
                 let mut acc = Shape::empty();
@@ -5411,7 +5431,7 @@ fn formas_visiveis(doc: &Document, status: &HashMap<Id, Status>) -> Vec<FormaViz
         .iter()
         .filter(|f| matches!(status.get(&f.id), Some(Status::Ok | Status::Warning(_))))
         .filter_map(|f| match &f.kind {
-            FeatureKind::Forma(fm) => fm.gaiola.lisa(fm.niveis as u32).ok().map(|malha| FormaViz { id: f.id, malha }),
+            FeatureKind::Forma(fm) if fm.conversao.as_ref().is_none_or(|c| c.pausada) => fm.gaiola.lisa(fm.niveis as u32).ok().map(|malha| FormaViz { id: f.id, malha }),
             _ => None,
         })
         .collect()
@@ -5451,6 +5471,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         sheet_maps: vec![],
         cut_outlines: vec![],
         roscas: vec![],
+        relatorios_forma: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -5485,6 +5506,12 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
     let mut promoted: HashMap<Id, Promoted> = HashMap::new();
     cache.reused = 0;
     let ate_pos = cache.ate.take().and_then(|a| order.iter().position(|i| doc.features[*i].id == a));
+    // forma com a gaiola aberta: os filhos esperam a conversão voltar
+    let pausa = order.iter().position(|i| matches!(&doc.features[*i].kind, FeatureKind::Forma(f) if f.conversao.as_ref().is_some_and(|c| c.pausada)));
+    let ate_pos = match (ate_pos, pausa) {
+        (Some(a), Some(p)) => Some(a.min(p)),
+        (a, p) => a.or(p),
+    };
     let cancelar = cache.cancelar.clone();
     // as booleanas e a malha longas do OpenCASCADE também abandonam o cálculo quando a bandeira sobe
     let _guarda_kernel = cancelar.clone().map(fenkra_kernel::ligar_cancelamento);
@@ -5600,6 +5627,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                 cx.sheet_maps.extend(e.sheet_maps.iter().copied());
                 cx.cut_outlines.extend(e.outlines.iter().cloned());
                 cx.roscas.extend(e.roscas.iter().cloned());
+                cx.relatorios_forma.extend(e.relatorios_forma.iter().cloned());
                 if e.steps.is_empty() {
                     cx.steps.remove(&f.id);
                 } else {
@@ -5610,6 +5638,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                 let maps_before = cx.sheet_maps.len();
                 let outlines_before = cx.cut_outlines.len();
                 let roscas_before = cx.roscas.len();
+                let relatorios_before = cx.relatorios_forma.len();
                 *cx.promoted.borrow_mut() = None;
                 let st = match cx.run(f) {
                     Ok(None) => Status::Ok,
@@ -5644,6 +5673,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                         sheet_maps: cx.sheet_maps[maps_before.min(cx.sheet_maps.len())..].to_vec(),
                         outlines: cx.cut_outlines[outlines_before.min(cx.cut_outlines.len())..].to_vec(),
                         roscas: cx.roscas[roscas_before.min(cx.roscas.len())..].to_vec(),
+                        relatorios_forma: cx.relatorios_forma[relatorios_before.min(cx.relatorios_forma.len())..].to_vec(),
                         steps: cx.steps.get(&f.id).cloned().unwrap_or_default(),
                     },
                 );
@@ -5853,6 +5883,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         desatualizados,
         cancelado,
         roscas: cx.roscas,
+        relatorios_forma: cx.relatorios_forma,
     }
 }
 
@@ -5898,6 +5929,7 @@ pub fn publications(doc: &Document) -> Vec<(String, LinkedGeo)> {
                 sheet_maps: vec![],
         cut_outlines: vec![],
         roscas: vec![],
+        relatorios_forma: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -5933,6 +5965,7 @@ pub fn surface_brep(doc: &Document, id: Id) -> Option<String> {
         sheet_maps: vec![],
         cut_outlines: vec![],
         roscas: vec![],
+        relatorios_forma: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -6379,6 +6412,7 @@ pub fn cut_list(doc: &Document) -> Vec<CutRow> {
         sheet_maps: vec![],
         cut_outlines: vec![],
         roscas: vec![],
+        relatorios_forma: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -6459,6 +6493,7 @@ pub fn member_joints(doc: &Document) -> Vec<((Id, usize), (Id, usize), [f64; 3])
         sheet_maps: vec![],
         cut_outlines: vec![],
         roscas: vec![],
+        relatorios_forma: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -6494,6 +6529,7 @@ pub fn skeleton_groups(doc: &Document, paths: &[CurveRef]) -> Vec<Vec<usize>> {
         sheet_maps: vec![],
         cut_outlines: vec![],
         roscas: vec![],
+        relatorios_forma: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -6769,6 +6805,7 @@ pub fn export_com_preset(doc: &Document, collector: Option<Id>, path: &str, pres
         sheet_maps: vec![],
         cut_outlines: vec![],
         roscas: vec![],
+        relatorios_forma: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -6818,6 +6855,7 @@ pub fn final_shape(doc: &Document) -> Option<Shape> {
         sheet_maps: vec![],
         cut_outlines: vec![],
         roscas: vec![],
+        relatorios_forma: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),

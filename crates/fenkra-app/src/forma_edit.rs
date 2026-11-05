@@ -362,6 +362,24 @@ pub fn alternar_simetria(g: &mut Gaiola, eixo: u8) -> Result<(), String> {
     g.ligar_simetria(Simetria { eixo, pos: c })
 }
 
+/// Acima disto a conversão merece aviso antes de começar.
+pub const SEGUNDOS_DE_ALERTA: f64 = 10.;
+
+/// Remendos, regiões e o tempo esperado da conversão, medidos numa caixa de 384 remendos e 8 regiões:
+/// cada remendo custa perto de 1,5 ms e cada região a preencher, 200 ms em G1 e 1,2 s em G2.
+pub fn custo_da_conversao(g: &Gaiola, continuidade: u8) -> (usize, usize, f64) {
+    let inteira = g.inteira();
+    let remendos = fenkra_core::subd_brep::remendos_estimados(&inteira);
+    let regioes = inteira.nos_irregulares().len() + inteira.faces.iter().filter(|f| f.nos.len() != 4).count();
+    let por_regiao = [0.002, 0.2, 1.2][continuidade.min(2) as usize];
+    (remendos, regioes, remendos as f64 * 0.0015 + regioes as f64 * por_regiao)
+}
+
+/// Nomes de face que existiam e sumiram: quem apontava para eles perdeu a referência.
+pub fn nomes_perdidos(antes: &[i32], agora: &[i32]) -> usize {
+    antes.iter().filter(|n| agora.binary_search(n).is_err()).count()
+}
+
 /// Fração da aresta sob o mouse: é o deslize do corte em laço.
 pub fn fracao_na_aresta(sa: [f32; 2], sb: [f32; 2], m: [f32; 2]) -> f64 {
     dist_seg(m, sa, sb).1 as f64
@@ -536,6 +554,23 @@ mod testes {
         for i in 0..4 {
             assert_eq!(s[i][1], s[(i + 1) % 4][0]);
         }
+    }
+
+    #[test]
+    fn malha_densa_avisa_e_caixa_pequena_nao() {
+        let pequena = Gaiola::caixa([0.; 3], [10.; 3], [2, 2, 2]);
+        assert!(custo_da_conversao(&pequena, 1).2 < SEGUNDOS_DE_ALERTA);
+        let densa = Gaiola::caixa([0.; 3], [10.; 3], [20, 20, 20]);
+        let (remendos, regioes, tempo) = custo_da_conversao(&densa, 1);
+        assert_eq!(regioes, 8);
+        assert_eq!(remendos, 2400 * 16);
+        assert!(tempo > SEGUNDOS_DE_ALERTA, "{tempo}");
+    }
+
+    #[test]
+    fn nomes_perdidos_conta_so_o_que_sumiu() {
+        assert_eq!(nomes_perdidos(&[1, 2, 3], &[1, 3, 4]), 1);
+        assert_eq!(nomes_perdidos(&[], &[1]), 0);
     }
 
     #[test]

@@ -2412,6 +2412,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
 
     /// Concluir: mantém as alterações.
     pub fn conclude_session(&mut self) {
+        if let Some(id) = self.session.as_ref().map(|s| s.id) {
+            crate::forma_ui::ao_concluir(self, id);
+        }
         if let Some(s) = self.session.take() {
             // B79: membro novo sem nenhuma linha guia não vira recurso vazio
             if s.is_new && crate::st_ui::membro_sem_linhas(&self.open.doc, s.id) {

@@ -68,6 +68,10 @@ pub struct Estado {
     /// Alt pressionado no botão Extrudar: o próximo arraste abre a face
     extrudar: bool,
     tangente_base: Option<(V3, f64)>,
+    /// conversão pedida esperando o sim do aviso de malha densa
+    alerta: Option<u8>,
+    /// nomes das faces antes de voltar à gaiola, para avisar quando mudam
+    nomes_antes: Vec<i32>,
 }
 
 /// Feature de forma aberta.
@@ -92,6 +96,59 @@ fn gaiola_mut(app: &mut App, id: Id) -> Option<&mut Gaiola> {
 
 fn congelada(app: &App, id: Id) -> bool {
     matches!(app.open.doc.feature(id).map(|f| &f.kind), Some(FeatureKind::Forma(f)) if f.congelada)
+}
+
+fn forma(app: &App, id: Id) -> Option<&Forma> {
+    match &app.open.doc.feature(id)?.kind {
+        FeatureKind::Forma(f) => Some(f),
+        _ => None,
+    }
+}
+
+fn forma_mut(app: &mut App, id: Id) -> Option<&mut Forma> {
+    match &mut app.open.doc.feature_mut(id)?.kind {
+        FeatureKind::Forma(f) => Some(f),
+        _ => None,
+    }
+}
+
+/// A forma já é B-rep: o 3D mostra o relatório em vez da gaiola.
+fn convertida(app: &App, id: Id) -> bool {
+    forma(app, id).and_then(|f| f.conversao.as_ref()).is_some_and(|c| !c.pausada)
+}
+
+fn relatorio(app: &App, id: Id) -> Option<&fenkra_solidos::forma_brep::RelatorioForma> {
+    app.result.as_ref()?.relatorios_forma.iter().find(|x| x.0 == id).map(|x| &x.1)
+}
+
+/// Converte agora, com a continuidade pedida.
+fn converter(app: &mut App, id: Id, continuidade: u8) {
+    app.forma.alerta = None;
+    app.forma.sel.clear();
+    app.forma.ferramenta = Ferramenta::Selecionar;
+    if let Some(f) = forma_mut(app, id) {
+        let tol = f.conversao.as_ref().map_or_else(|| "0.01".to_string(), |c| c.tol.clone());
+        f.conversao = Some(ConversaoForma { continuidade, tol, pausada: false });
+    }
+    app.scene_dirty = true;
+}
+
+/// Volta à gaiola, opcionalmente no nó clicado. Os filhos esperam até converter de novo.
+fn voltar_a_gaiola(app: &mut App, id: Id, no: Option<u32>) {
+    app.forma.nomes_antes = relatorio(app, id).map_or(vec![], |r| r.nomes.clone());
+    if let Some(c) = forma_mut(app, id).and_then(|f| f.conversao.as_mut()) {
+        c.pausada = true;
+    }
+    app.forma.modo = ModoVista::Ambos;
+    app.forma.sel = no.filter(|n| n & fenkra_core::subd::ESPELHO == 0).map(Elem::No).into_iter().collect();
+    app.scene_dirty = true;
+}
+
+/// Concluir com a gaiola aberta refaz a conversão: é assim que a edição chega aos filhos.
+pub fn ao_concluir(app: &mut App, id: Id) {
+    if let Some(c) = forma_mut(app, id).and_then(|f| f.conversao.as_mut()) {
+        c.pausada = false;
+    }
 }
 
 /// Aplica a mudança e avisa o erro sem perder o que havia.
@@ -243,6 +300,11 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, fundo
     if !ui.input(|i| i.pointer.any_down()) {
         soltar(&mut app.forma);
     }
+    if convertida(app, id) {
+        mapa_de_desvio(app, ui, rect, cam, id);
+        barra_do_relatorio(app, ui, rect, id);
+        return;
+    }
     let Some(g) = gaiola(app, id).cloned() else { return };
     let inteira = g.inteira();
     let so_leitura = congelada(app, id);
@@ -282,6 +344,101 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, fundo
         }
     }
     barra(app, ui, rect, id, so_leitura);
+}
+
+/// Cor do desvio: dentro da tolerância, até dez vezes ela, e além disso.
+fn cor_do_desvio(d: f64, tol: f64) -> Color32 {
+    if d <= tol {
+        crate::theme::st_ok()
+    } else if d <= 10. * tol {
+        crate::theme::st_warn()
+    } else {
+        crate::theme::st_err()
+    }
+}
+
+fn tolerancia(app: &App, id: Id) -> f64 {
+    let t = forma(app, id).and_then(|f| f.conversao.as_ref()).map(|c| c.tol.clone()).unwrap_or_default();
+    fenkra_core::expr::eval_str(&t, &app.vars()).unwrap_or(0.01).max(1e-6)
+}
+
+/// Mapa de desvio sobre o corpo e os nós irregulares: clicar num nó volta à gaiola naquele ponto.
+fn mapa_de_desvio(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id) {
+    let Some(rel) = relatorio(app, id).cloned() else { return };
+    let tol = tolerancia(app, id);
+    let p = ui.painter_at(rect);
+    let olho = cam.eye();
+    // a amostra do lado de trás da peça fica de fora: a normal aproximada é a saída do centro
+    let n = rel.amostras.len().max(1) as f64;
+    let c = v3(rel.amostras.iter().fold([0.; 3], |a, x| [a[0] + x.0[0] / n, a[1] + x.0[1] / n, a[2] + x.0[2] / n]));
+    let de_frente = |q: Vec3| (q - c).dot(olho - q) > 0.;
+    for (q, d) in &rel.amostras {
+        let w = v3(*q);
+        if !de_frente(w) {
+            continue;
+        }
+        if let Some(s) = cam.project(rect, w) {
+            p.circle_filled(s, 3., cor_do_desvio(*d, tol));
+        }
+    }
+    let mut ir = None;
+    for (k, r) in rel.regioes.iter().enumerate() {
+        let w = v3(r.ponto);
+        let Some(s) = cam.project(rect, w).filter(|_| de_frente(w)) else { continue };
+        let cor = if r.continuidade < rel.pedida { crate::theme::st_err() } else { cor_do_desvio(r.desvio, tol) };
+        let dica = format!("{} {} · G{} · {} {} mm{}", tr("Nó irregular, valência"), r.valencia, r.continuidade, tr("desvio"), fmt(r.desvio), r.motivo.as_ref().map_or(String::new(), |m| format!("\n{m}")));
+        let alvo = ui.interact(Rect::from_center_size(s, Vec2::splat(18.)), egui::Id::unique(("forma_irregular", k)), egui::Sense::click()).on_hover_text(dica);
+        p.circle_stroke(s, if alvo.hovered() { 10. } else { 7. }, Stroke::new(2.5, cor));
+        if alvo.clicked() {
+            ir = Some(r.no);
+        }
+    }
+    if let Some(no) = ir {
+        voltar_a_gaiola(app, id, no);
+    }
+}
+
+/// Barra da forma convertida: o relatório e a escolha de continuidade.
+fn barra_do_relatorio(app: &mut App, ui: &mut egui::Ui, rect: Rect, id: Id) {
+    let mut acao: Option<Box<dyn FnOnce(&mut App)>> = None;
+    let rel = relatorio(app, id).cloned();
+    let pedida = forma(app, id).and_then(|f| f.conversao.as_ref()).map_or(1, |c| c.continuidade);
+    let status = app.result.as_ref().and_then(|r| r.status.get(&id)).cloned();
+    let perdidos = rel.as_ref().map_or(0, |r| fe::nomes_perdidos(&app.forma.nomes_antes, &r.nomes));
+    let area = egui::Area::new(egui::Id::unique("forma_barra")).order(egui::Order::Middle).fixed_pos(rect.center_bottom() - egui::vec2(0., 34.)).pivot(egui::Align2::CENTER_BOTTOM);
+    area.show(ui.ctx(), |ui| {
+        crate::paineis::quadro(ui.style()).show(ui, |ui| {
+            ui.spacing_mut().item_spacing.x = 4.;
+            if let Some(m) = status.as_ref().and_then(|s| s.message()) {
+                ui.label(RichText::new(m).color(crate::theme::st_warn()));
+            }
+            if let Some(r) = &rel {
+                let tipo = if r.solido { tr("sólido") } else { tr("superfície aberta") };
+                ui.label(format!("{} {} mm · {} {} ({} {}) · {} {} · {tipo} · {:.1} s", tr("Desvio máximo"), fmt(r.desvio_max), r.faces, tr("faces"), r.exatos, tr("remendos exatos"), r.regioes.len(), tr("regiões"), r.tempo_ms / 1000.));
+                if perdidos > 0 {
+                    ui.label(RichText::new(format!("{perdidos} {}", tr("faces nomeadas mudaram: confira o que apontava para elas"))).color(crate::theme::st_warn()));
+                }
+            }
+            ui.horizontal(|ui| {
+                for (k, nome, dica) in [
+                    (0u8, "G0", "Nós irregulares em remendos: as faces se tocam, com uma quebra leve de tangente"),
+                    (1, "G1", "Uma face lisa por nó irregular, tangente às vizinhas"),
+                    (2, "G2", "Como G1, com a curvatura casada nas vizinhas: pode desviar mais da gaiola"),
+                ] {
+                    if chip(ui, pedida == k, None, nome, dica) && pedida != k {
+                        acao = Some(Box::new(move |a: &mut App| converter(a, id, k)));
+                    }
+                }
+                ui.separator();
+                if chip(ui, false, Some("forma"), "Voltar à gaiola", "Reabre a gaiola; ao concluir, a conversão e os filhos são refeitos") {
+                    acao = Some(Box::new(move |a: &mut App| voltar_a_gaiola(a, id, None)));
+                }
+            });
+        });
+    });
+    if let Some(f) = acao {
+        f(app);
+    }
 }
 
 fn sobre_a_barra(ui: &egui::Ui) -> bool {
@@ -652,9 +809,11 @@ fn barra(app: &mut App, ui: &mut egui::Ui, rect: Rect, id: Id, so_leitura: bool)
     let sel = st.sel.clone();
     let Some(g) = gaiola(app, id) else { return };
     let tipo = fe::tipo_da_selecao(g, &sel);
+    let gaiola_custo = fe::custo_da_conversao(g, st.alerta.unwrap_or(1));
     let simetria = g.simetria;
     let tem_face = !fe::faces_de(&sel).is_empty();
     let extrudar = st.extrudar;
+    let alerta = st.alerta;
     let area = egui::Area::new(egui::Id::unique("forma_barra")).order(egui::Order::Middle).fixed_pos(rect.center_bottom() - egui::vec2(0., 34.)).pivot(egui::Align2::CENTER_BOTTOM);
     area.show(ui.ctx(), |ui| {
         crate::paineis::quadro(ui.style()).show(ui, |ui| {
@@ -693,8 +852,32 @@ fn barra(app: &mut App, ui: &mut egui::Ui, rect: Rect, id: Id, so_leitura: bool)
                             a.forma.sel.clear();
                         }));
                     }
+                    ui.separator();
+                    if chip(ui, false, Some("forma_converter"), "Converter", "Vira B-rep: mostra o desvio e os nós irregulares antes de aceitar") {
+                        acao = Some(Box::new(move |a: &mut App| {
+                            let pedida = forma(a, id).and_then(|f| f.conversao.as_ref()).map_or(1, |c| c.continuidade);
+                            let custo = gaiola(a, id).map_or(0., |g| fe::custo_da_conversao(g, pedida).2);
+                            if custo > fe::SEGUNDOS_DE_ALERTA {
+                                a.forma.alerta = Some(pedida);
+                            } else {
+                                converter(a, id, pedida);
+                            }
+                        }));
+                    }
                 }
             });
+            if let Some(pedida) = alerta {
+                let (remendos, regioes, tempo) = gaiola_custo;
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(format!("{}: {remendos} {}, {regioes} {}, {} {tempo:.0} s", tr("Malha densa"), tr("remendos"), tr("regiões"), tr("perto de"))).color(crate::theme::st_warn()));
+                    if chip(ui, false, None, "Converter assim mesmo", "A conversão roda em segundo plano e pode ser cancelada") {
+                        acao = Some(Box::new(move |a: &mut App| converter(a, id, pedida)));
+                    }
+                    if chip(ui, false, None, "Desistir", "Volta à gaiola sem converter") {
+                        acao = Some(Box::new(|a: &mut App| a.forma.alerta = None));
+                    }
+                });
+            }
             if let (Some((t, w)), false) = (tipo, so_leitura) {
                 ui.horizontal(|ui| {
                     for (tp, nome, dica) in [
@@ -806,7 +989,7 @@ fn criar(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
 /// Põe a forma na árvore e abre a edição.
 pub fn criar_feature(app: &mut App, gaiola: Gaiola) -> Id {
     let snapshot = app.open.doc.clone();
-    let id = app.open.doc.add_feature(FeatureKind::Forma(Forma { gaiola, niveis: 3, congelada: false }));
+    let id = app.open.doc.add_feature(FeatureKind::Forma(Forma { gaiola, niveis: 3, congelada: false, conversao: None }));
     app.start_session(id, true, Some(snapshot));
     app.forma.sel.clear();
     app.forma.ferramenta = Ferramenta::Selecionar;
@@ -827,7 +1010,8 @@ pub fn demo(app: &mut App, modo: &str) {
         g.definir_vinco(a, b, 1.);
     }
     app.settings.bench = Bench::FormaLivre;
-    criar_feature(app, g);
+    let id = criar_feature(app, g);
+    debug_assert!(aberta(app) == Some(id));
     if let Some(t) = topo {
         app.forma.sel = vec![Elem::No(t)];
     }
@@ -836,6 +1020,16 @@ pub fn demo(app: &mut App, modo: &str) {
         "liso" => app.forma.modo = ModoVista::Liso,
         "laco" => app.forma.ferramenta = Ferramenta::Laco,
         "tangencia" => app.forma.ferramenta = Ferramenta::Tangencia,
+        "converter" | "g2" | "g0" => {
+            let k = match modo {
+                "g2" => 2,
+                "g0" => 0,
+                _ => 1,
+            };
+            if let Some(id) = aberta(app) {
+                converter(app, id, k);
+            }
+        }
         _ => {}
     }
 }

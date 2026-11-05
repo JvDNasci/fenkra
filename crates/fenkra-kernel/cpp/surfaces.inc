@@ -2,6 +2,11 @@
 // Superfícies de referência, consultas (medição) e término "até o próximo".
 // Incluído no fim de kernel.cpp, depois de features.inc (usa face_near, spine_wire, P3).
 
+#include <TColStd_Array1OfInteger.hxx>
+#include <TColStd_Array1OfReal.hxx>
+#include <TColgp_Array2OfPnt.hxx>
+#include <BRepTopAdaptor_FClass2d.hxx>
+
 namespace fenkra {
 
 namespace {
@@ -135,7 +140,9 @@ std::unique_ptr<Shape> fill_surface_x(rust::Slice<const double> flat, rust::Slic
                 auto edges = support_edges(support.s, v, e - start, 0.15);
                 if (edges.empty()) throw std::runtime_error("a curva " + std::to_string(k + 1) + " não é borda da face de apoio: G1 e G2 precisam de uma face vizinha");
                 for (auto& [ed, face] : edges) {
-                    mk.Add(ed, face, order >= 2 ? GeomAbs_G2 : GeomAbs_G1);
+                    // o preenchimento converte o enum em número de derivadas: GeomAbs_G2 vale 3 e é
+                    // recusado, e quem vale 2 é GeomAbs_C1. A condição aplicada é a de curvatura.
+                    mk.Add(ed, face, order >= 2 ? GeomAbs_C1 : GeomAbs_G1);
                     ++n;
                     if (w <= 1.0 + 1e-9) continue;
                     // peso: a superfície passa por pontos no plano tangente da vizinha, dentro do
@@ -173,7 +180,54 @@ std::unique_ptr<Shape> fill_surface_x(rust::Slice<const double> flat, rust::Slic
         if (!mk.IsDone()) throw std::runtime_error("as curvas não formam um contorno fechado ou as condições não têm solução");
         errs.push_back(mk.G0Error());
         errs.push_back(tangent ? mk.G1Error() : 0.0);
-        return wrap(mk.Shape());
+        bool curvatura = false;
+        for (int32_t o : orders) curvatura = curvatura || o > 1;
+        errs.push_back(curvatura ? mk.G2Error() : 0.0);
+        // o plano médio do preenchimento sai de autovetores, com sinal arbitrário; com aresta de apoio
+        // o fio pode ficar ao contrário da superfície, e a face fica sem interior: o infinito cai
+        // dentro dela e o malhador não gera nada
+        TopoDS_Shape r = mk.Shape();
+        if (r.ShapeType() == TopAbs_FACE) {
+            TopoDS_Face f = TopoDS::Face(r.Oriented(TopAbs_FORWARD));
+            BRepTopAdaptor_FClass2d dentro(f, Precision::PConfusion());
+            if (dentro.PerformInfinitePoint() == TopAbs_IN) {
+                TopoDS_Face g = TopoDS::Face(f.EmptyCopied());
+                BRep_Builder b;
+                for (TopoDS_Iterator w(f); w.More(); w.Next()) b.Add(g, w.Value().Reversed());
+                r = g;
+            }
+        }
+        return wrap(r);
+    });
+}
+
+// Remendos bicúbicos: 48 números por remendo, 16 polos com o primeiro índice por fora. Cada um vira
+// uma face inteira, em B-spline de um vão só, que é a forma que filete e casca tratam melhor.
+std::unique_ptr<Shape> bezier_faces(rust::Slice<const double> poles) {
+    return guard("remendos", [&] {
+        TopoDS_Compound c;
+        BRep_Builder b;
+        b.MakeCompound(c);
+        TColStd_Array1OfReal knots(1, 2);
+        knots(1) = 0.;
+        knots(2) = 1.;
+        TColStd_Array1OfInteger mult(1, 2);
+        mult(1) = 4;
+        mult(2) = 4;
+        const size_t n = poles.size() / 48;
+        for (size_t k = 0; k < n; ++k) {
+            TColgp_Array2OfPnt p(1, 4, 1, 4);
+            for (int i = 0; i < 4; ++i)
+                for (int j = 0; j < 4; ++j) {
+                    const double* q = poles.data() + 48 * k + 3 * (4 * i + j);
+                    p(i + 1, j + 1) = gp_Pnt(q[0], q[1], q[2]);
+                }
+            Handle(Geom_BSplineSurface) s = new Geom_BSplineSurface(p, knots, knots, mult, mult, 3, 3);
+            BRepBuilderAPI_MakeFace mk(s, 1e-7);
+            if (!mk.IsDone()) throw std::runtime_error("remendo " + std::to_string(k + 1) + " degenerado");
+            b.Add(c, mk.Face());
+        }
+        return wrap(c);
     });
 }
 

@@ -191,7 +191,13 @@ fn sketch_pick(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, befor
 #[allow(clippy::too_many_arguments)]
 pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut FeatureKind, vars: &Vars, picked_faces: &[[f64; 3]], seed: &Seed) -> bool {
     match kind {
-        FeatureKind::Forma(fm) => crate::forma_ui::painel(ui, fm),
+        FeatureKind::Forma(fm) => {
+            crate::forma_ui::painel(ui, fm);
+            if let Some(c) = &mut fm.conversao {
+                section(ui, "Conversão");
+                expr(ui, "Tolerância", &mut c.tol, vars, "mm");
+            }
+        }
         FeatureKind::Sweep(w) => {
             section(ui, "Tipo");
             op_choice(ui, &mut w.op, ("nervura", "Nervura"), ("rasgo_varrido", "Rasgo"));
