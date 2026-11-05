@@ -669,8 +669,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
 
     /// Guarda o estado de antes de uma mudança feita de fora do documento e pede o recálculo.
     pub fn push_undo_pub(&mut self, antes: Document) {
-        self.undo.push(antes);
-        self.redo.clear();
+        let depois = self.open.doc.clone();
+        self.hist.registrar(antes, &depois);
         self.open.modified = true;
         self.request_recompute();
     }

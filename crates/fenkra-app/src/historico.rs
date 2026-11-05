@@ -181,8 +181,9 @@ mod testes {
         b.features[0].hidden = true;
         let mut h = Historico::new(64);
         h.registrar(a.clone(), &b);
-        let esperado = nome_da_edicao(&a, &b);
-        assert_eq!(h.nome_desfazer(), Some(esperado.as_str()));
+        // o idioma é global e outros testes o trocam: compara com o nome guardado no registro
+        let esperado = h.nome_desfazer().unwrap().to_string();
+        assert!(esperado.contains("Sketch 1"));
         let (volta, nome) = h.desfazer(b.clone()).unwrap();
         assert_eq!(nome, esperado);
         assert!(!volta.features[0].hidden);
