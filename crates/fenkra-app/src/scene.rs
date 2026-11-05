@@ -35,6 +35,8 @@ pub struct SceneOpts<'a> {
     pub line_dash: u8,
     /// símbolo dos pontos: 0 = cruz 3D na cena; outros são desenhados na tela pela viewport
     pub point_style: u8,
+    /// prévia do comando aberto
+    pub fantasma: Option<crate::previa::Fantasma<'a>>,
 }
 
 fn lv(p: [f32; 3], col: [f32; 4]) -> LineVertex {
@@ -51,6 +53,10 @@ fn grow(b: &mut Option<(Vec3, Vec3)>, p: Vec3) {
 /// Regra de exibição: no ambiente normal mostra os visíveis; no de ocultos, só os ocultos.
 fn shows(hidden: bool, env: bool) -> bool {
     hidden == env
+}
+
+fn f3(v: [f64; 3]) -> [f32; 3] {
+    v.map(|x| x as f32)
 }
 
 fn rgb(c: [u8; 3]) -> [f32; 3] {
@@ -81,16 +87,27 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
     let edge_col = if o.dark_edges { aresta_tema.map(|a| { let f = rgb(a); [f[0], f[1], f[2], 1.0] }).unwrap_or([0.06, 0.07, 0.09, 1.0]) } else { [0.85, 0.88, 0.92, 1.0] };
 
     if o.filter.corpos {
-        for b in &r.bodies {
-            let Some(col) = doc.collectors.iter().find(|c| c.id == b.collector) else { continue };
-            let body_sel = hi(b.collector);
+        // o comando refez o corpo inteiro (dobra, joggle…): por baixo do fantasma fica a peça de
+        // antes, senão a pessoa perde a referência do que vai mudar
+        let fid = o.fantasma.as_ref().map(|f| f.id);
+        let camadas = r.bodies.iter().flat_map(|b| {
+            let antes = o.fantasma.as_ref().and_then(|f| f.antes_de(b)).map(|c| (c.collector, &c.mesh, c.face_owner.as_slice()));
+            antes.into_iter().chain(std::iter::once((b.collector, &b.mesh, b.face_owner.as_slice())))
+        });
+        for (collector, m, face_owner) in camadas {
+            let Some(col) = doc.collectors.iter().find(|c| c.id == collector) else { continue };
+            let body_sel = hi(collector);
             let base = doc.appearance.unwrap_or(Appearance { color: col.color, finish: col.finish, texture: col.texture });
-            let m = &b.mesh;
             let nfaces = m.face_ranges.len();
             for fi in 0..nfaces {
-                let owner = b.face_owner.get(fi).copied();
+                let owner = face_owner.get(fi).copied();
                 let face_hidden = !col.visible || owner.is_some_and(|w| feat_hidden.contains(&w));
                 if !shows(face_hidden, env) {
+                    continue;
+                }
+                if let (Some(f), true) = (&o.fantasma, owner.is_some() && owner == fid) {
+                    crate::previa::face_fantasma(&mut s.ghost, m, fi, f.cor);
+                    crate::previa::crescer_com_face(m, fi, &mut |p| grow(&mut bounds, p));
                     continue;
                 }
                 let app = owner.and_then(|w| feat_app.get(&w).copied()).unwrap_or(base);
@@ -121,7 +138,11 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
                 }
             }
             if shows(!col.visible, env) {
-                push_edges(&mut s.edges, m, o.tangent_edges, edge_col);
+                let cor = o.fantasma.as_ref().map(|f| f.cor);
+                match (fid, cor) {
+                    (Some(id), Some(c)) if face_owner.contains(&id) => crate::previa::arestas_com_fantasma(&mut s.edges, &mut s.lines, m, o.tangent_edges, edge_col, c, face_owner, id),
+                    _ => push_edges(&mut s.edges, m, o.tangent_edges, edge_col),
+                }
             }
         }
     }
@@ -199,6 +220,10 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
         }
     }
 
+    if let Some(f) = &o.fantasma {
+        crate::previa::decorar(doc, r, f, &mut s);
+    }
+
     // planos da Origem e das Referências
     for p in &r.planes {
         let (visible_flag, allowed) = match p.id {
@@ -227,9 +252,14 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
         );
         let h = size * if p.id.is_some() { 0.45 } else { 0.5 };
         let c = [o3 + (x + yv) * h, o3 + (x - yv) * h, o3 + (-x - yv) * h, o3 + (-x + yv) * h];
-        let dst = if selected { &mut s.overlay } else { &mut s.lines };
+        // B228: o plano do comando aberto é um retângulo translúcido com borda, não só um contorno
+        let previa = o.fantasma.as_ref().filter(|f| Some(f.id) == p.id);
+        if let Some(f) = previa {
+            crate::previa::retangulo_fantasma(&mut s.ghost, c, Vec3::from(f3(p.frame.normal)), f.cor);
+        }
+        let dst = if selected || previa.is_some() { &mut s.overlay } else { &mut s.lines };
         for i in 0..4 {
-            let colr = if selected { HILITE } else { col };
+            let colr = previa.map(|f| crate::previa::cor_linha(f.cor)).unwrap_or(if selected { HILITE } else { col });
             dst.push(lv(c[i].into(), colr));
             dst.push(lv(c[(i + 1) % 4].into(), colr));
         }
@@ -242,6 +272,13 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
             let rf = doc.reference(sf.id);
             let vis = rf.is_some_and(|x| x.visible);
             if !selected && !shows(!vis, env) {
+                continue;
+            }
+            if let Some(f) = o.fantasma.as_ref().filter(|f| f.id == sf.id) {
+                for fi in 0..sf.mesh.face_ranges.len() {
+                    crate::previa::face_fantasma(&mut s.ghost, &sf.mesh, fi, f.cor);
+                    crate::previa::crescer_com_face(&sf.mesh, fi, &mut |p| grow(&mut bounds, p));
+                }
                 continue;
             }
             let app = rf.and_then(|x| x.appearance).unwrap_or(Appearance { color: [222, 170, 110], finish: fenkra_core::Finish::Acetinado, texture: None });
@@ -413,7 +450,7 @@ pub fn draw_points(painter: &egui::Painter, doc: &Document, r: &RecomputeResult,
 }
 
 /// Arestas da malha; as de tangência (suaves) só se pedidas — o raio fica limpo como na peça real.
-fn push_edges(dst: &mut Vec<LineVertex>, m: &fenkra_kernel::Mesh, tangent: bool, col: [f32; 4]) {
+pub(crate) fn push_edges(dst: &mut Vec<LineVertex>, m: &fenkra_kernel::Mesh, tangent: bool, col: [f32; 4]) {
     let nseg = m.edges.len() / 6;
     if tangent || m.edge_smooth.len() != m.edge_ranges.len() {
         for p in m.edges.chunks_exact(3) {

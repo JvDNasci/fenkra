@@ -11,6 +11,7 @@ mod toolbar;
 mod editor;
 mod render;
 mod scene;
+mod previa;
 mod picking;
 mod viewcube;
 mod sketch_ui;

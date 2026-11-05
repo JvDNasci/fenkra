@@ -11,6 +11,9 @@ use glam::Vec3;
 use fenkra_core::*;
 use crate::i18n::tr;
 
+/// Tamanho da pega das alças na tela, igual em toda seta (B228): um alvo que o mouse acerta sem mira.
+pub(crate) const PEGA: f32 = 28.;
+
 /// Alça linear: valor = distância ao longo de `dir` a partir de `base` (vezes `k`).
 struct Linear {
     base: Vec3,
@@ -93,6 +96,14 @@ fn handle_for(app: &App, id: Id) -> Option<Linear> {
             FeatureKind::ThickSurface(t) => {
                 let (base, n) = surface_anchor(r, &t.surface)?;
                 Some(Linear { base, dir: n, k: 1., expr: t.t1.clone(), label: "Espessura" })
+            }
+            // B07: a seta sai da face escolhida, pela normal dela na peça de antes do comando
+            FeatureKind::Thickness(t) => {
+                let p = *t.faces.first()?;
+                let antes = app.session.as_ref()?.corpos_antes.iter().find(|c| c.collector == f.target)?;
+                let info = antes.mesh.face_info.get(crate::picking::face_da_malha(&antes.mesh, p)?)?;
+                let n = v3(info.dir);
+                (info.kind == 0).then_some(Linear { base: v3(p), dir: if t.remove { -n } else { n }, k: 1., expr: t.value.clone(), label: "Espessura" })
             }
             FeatureKind::Stiffener(s) => {
                 let (c, n) = sketch_center(r, s.sketch)?;
@@ -310,6 +321,7 @@ fn write_value(app: &mut App, id: Id, value: String) {
                 _ => {}
             },
             FeatureKind::Stiffener(s) => s.depth = value,
+            FeatureKind::Thickness(t) => t.value = value,
             FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => o.value = value,
             FeatureKind::Shell(sh) => sh.thickness = value,
             FeatureKind::ThickSurface(t) => t.t1 = value,
@@ -417,7 +429,7 @@ fn arc_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id
     let Some(tip) = cam.project(rect, at(start + ang)) else { return };
     let painter = ui.painter_at(rect);
     let hid = egui::Id::unique(("alca_rev", id.0));
-    let hr = ui.interact(Rect::from_center_size(tip, egui::vec2(22., 22.)), hid, if numeric { egui::Sense::drag() } else { egui::Sense::hover() });
+    let hr = ui.interact(Rect::from_center_size(tip, egui::vec2(PEGA, PEGA)), hid, if numeric { egui::Sense::drag() } else { egui::Sense::hover() });
     let col = if hr.hovered() || hr.dragged() { Color32::from_rgb(255, 190, 40) } else { Color32::from_rgb(90, 200, 255) };
     painter.add(egui::Shape::line(pts, Stroke::new(2.5, col)));
     painter.circle_stroke(tip, 9., Stroke::new(1.5, col));
@@ -581,7 +593,7 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
     let col = Color32::from_rgb(90, 200, 255);
     let hot = Color32::from_rgb(255, 190, 40);
     let hid = egui::Id::unique(("alca_3d", id.0, nth));
-    let hr = ui.interact(Rect::from_center_size(st, egui::vec2(22., 22.)), hid, if numeric { egui::Sense::click_and_drag() } else { egui::Sense::hover() });
+    let hr = ui.interact(Rect::from_center_size(st, egui::vec2(PEGA, PEGA)), hid, if numeric { egui::Sense::click_and_drag() } else { egui::Sense::hover() });
     let active = hr.hovered() || hr.dragged();
     let c = if active { hot } else { col };
 
@@ -591,7 +603,7 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
     let n = egui::vec2(-d.y, d.x);
     painter.add(egui::Shape::convex_polygon(vec![st + d * 14., st + n * 7., st - n * 7.], c, Stroke::new(1., Color32::from_black_alpha(120))));
     painter.circle_filled(sb, 3.5, c);
-    painter.circle_stroke(st, 9., Stroke::new(1.5, c));
+    painter.circle_stroke(st, PEGA / 2., Stroke::new(1.5, c));
 
     // arrastar ao longo do eixo
     if hr.dragged() {

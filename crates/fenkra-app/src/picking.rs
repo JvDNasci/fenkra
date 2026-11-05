@@ -49,6 +49,51 @@ pub struct Filter {
     pub hidden_env: bool,
     /// sketch em edição (as curvas dele não entram como subelementos)
     pub exclude_sketch: Option<Id>,
+    /// comando aberto: o que só existe na prévia dele não entra na seleção
+    pub fantasma: Option<Id>,
+}
+
+/// O que sai da seleção em um corpo com prévia: faces do comando aberto, arestas que só tocam
+/// nelas e vértices que só essas arestas usam. Aresta entre fantasma e peça continua valendo,
+/// porque ela já era da peça.
+struct Mascara {
+    faces: Vec<bool>,
+    arestas: Vec<bool>,
+    vertices: Vec<bool>,
+}
+
+impl Mascara {
+    fn de(m: &fenkra_kernel::Mesh, owners: &[Id], id: Id) -> Option<Self> {
+        let faces: Vec<bool> = (0..m.face_ranges.len()).map(|i| owners.get(i) == Some(&id)).collect();
+        if !faces.iter().any(|x| *x) {
+            return None;
+        }
+        let fant = |k: u32| faces.get(k as usize).copied();
+        let arestas: Vec<bool> = m.edge_faces.iter().map(|[a, b]| fant(*a).unwrap_or(true) && fant(*b).unwrap_or(true)).collect();
+        // ponta de aresta que fica: o vértice dela fica também
+        let grade = |p: &[f32]| [(p[0] * 1000.).round() as i64, (p[1] * 1000.).round() as i64, (p[2] * 1000.).round() as i64];
+        let nseg = m.edges.len() / 6;
+        let mut ficam = std::collections::HashSet::new();
+        for e in (0..m.edge_ranges.len()).filter(|e| !arestas.get(*e).copied().unwrap_or(false)) {
+            let s0 = m.edge_ranges[e] as usize;
+            let s1 = m.edge_ranges.get(e + 1).map(|x| *x as usize).unwrap_or(nseg);
+            if s1 > s0 {
+                ficam.insert(grade(&m.edges[s0 * 6..s0 * 6 + 3]));
+                ficam.insert(grade(&m.edges[(s1 - 1) * 6 + 3..s1 * 6]));
+            }
+        }
+        let vertices = m.vertices.chunks_exact(3).map(|p| !ficam.contains(&grade(p))).collect();
+        Some(Mascara { faces, arestas, vertices })
+    }
+    fn tri(&self, m: &fenkra_kernel::Mesh, ti: usize) -> bool {
+        self.faces[m.face_ranges.partition_point(|&x| x as usize <= ti * 3).saturating_sub(1)]
+    }
+}
+
+/// Máscara de cada corpo em parte fantasma (o corpo todo fantasma nem chega em `pickable`).
+fn mascaras(r: &RecomputeResult, f: &Filter) -> std::collections::HashMap<usize, Mascara> {
+    let Some(id) = f.fantasma else { return Default::default() };
+    r.bodies.iter().enumerate().filter_map(|(bi, b)| Mascara::de(&b.mesh, &b.face_owner, id).map(|x| (bi, x))).collect()
 }
 
 /// Índice de "corpo" das superfícies de referência nas seleções (faces/arestas/vértices de
@@ -169,14 +214,15 @@ fn pickable<'a>(r: &'a RecomputeResult, doc: &Document, f: &Filter) -> Vec<(usiz
     let mut out = vec![];
     for (bi, b) in r.bodies.iter().enumerate() {
         let vis = doc.collectors.iter().find(|c| c.id == b.collector).is_none_or(|c| c.visible);
-        if vis != f.hidden_env {
+        let todo_fantasma = f.fantasma.is_some_and(|id| !b.face_owner.is_empty() && b.face_owner.iter().all(|w| *w == id));
+        if vis != f.hidden_env && !todo_fantasma {
             out.push((bi, &b.mesh, None));
         }
     }
     if f.planes {
         for (si, sf) in r.surfaces.iter().enumerate() {
             let vis = doc.reference(sf.id).is_some_and(|x| x.visible);
-            if vis != f.hidden_env {
+            if vis != f.hidden_env && f.fantasma != Some(sf.id) {
                 out.push((SURF_BASE + si, &sf.mesh, Some(sf.id)));
             }
         }
@@ -187,15 +233,20 @@ fn pickable<'a>(r: &'a RecomputeResult, doc: &Document, f: &Filter) -> Vec<(usiz
 pub fn pick(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, pos: Pos2, f: &Filter) -> Option<Pick> {
     let (o, d) = cam.ray(rect, pos);
     let meshes = pickable(r, doc, f);
+    let masc = mascaras(r, f);
     // referência visível agora? (o resultado traz também as ocultas)
     let ref_ok = |id: Id| doc.reference(id).is_some_and(|x| x.visible != f.hidden_env);
 
     // faces (também dão a profundidade para esconder o que está atrás)
     let mut best_face: Option<(f32, usize, usize)> = None;
-    for (k, (_, m, _)) in meshes.iter().enumerate() {
+    for (k, (code, m, _)) in meshes.iter().enumerate() {
+        let mk = masc.get(code);
         for (ti, t) in m.indices.chunks_exact(3).enumerate() {
             let p = |i: u32| v3(&m.positions[i as usize * 3..i as usize * 3 + 3]);
             if let Some(dist) = ray_tri(o, d, p(t[0]), p(t[1]), p(t[2])) {
+                if mk.is_some_and(|x| x.tri(m, ti)) {
+                    continue;
+                }
                 if best_face.is_none_or(|(bd, _, _)| dist < bd) {
                     best_face = Some((dist, k, ti));
                 }
@@ -208,11 +259,12 @@ pub fn pick(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, pos: 
     if f.vertices {
         let mut best: Option<(f32, Pick)> = None;
         for (code, m, _) in &meshes {
-            for p in m.vertices.chunks_exact(3) {
+            let mk = masc.get(code);
+            for (vi, p) in m.vertices.chunks_exact(3).enumerate() {
                 let w = v3(p);
                 let Some(s) = cam.project(rect, w) else { continue };
                 let dd = (s - pos).length();
-                if dd < 8. && depth(w) <= depth_limit && best.is_none_or(|(bd, _)| dd < bd) {
+                if dd < 8. && depth(w) <= depth_limit && best.is_none_or(|(bd, _)| dd < bd) && !mk.is_some_and(|x| x.vertices[vi]) {
                     best = Some((dd, Pick::Vertex { body: *code, pos: [p[0], p[1], p[2]] }));
                 }
             }
@@ -299,6 +351,9 @@ pub fn pick(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, pos: 
                 let (dd, t) = seg_dist(pos, sa, sc);
                 if dd < 6. && depth(a.lerp(c, t)) <= depth_limit && best.is_none_or(|(bd, _)| dd < bd) {
                     let e = m.edge_ranges.partition_point(|&x| x as usize <= si).saturating_sub(1);
+                    if masc.get(code).is_some_and(|x| x.arestas.get(e).copied().unwrap_or(false)) {
+                        continue;
+                    }
                     let mid = m.edge_mids.get(e * 3..e * 3 + 3).map(|x| [x[0], x[1], x[2]]).unwrap_or([0.; 3]);
                     best = Some((dd, Pick::Edge { body: *code, edge: e, mid }));
                 }
@@ -484,7 +539,16 @@ fn closest_on_tri(p: Vec3, a: Vec3, b: Vec3, c: Vec3) -> Vec3 {
 
 /// Face (índice na malha do corpo) que contém o ponto.
 pub fn face_at(r: &RecomputeResult, body: usize, p: [f64; 3]) -> Option<usize> {
-    let m = mesh_of(r, body)?;
+    face_da_malha(mesh_of(r, body)?, p)
+}
+
+/// Face da malha mais perto do ponto.
+pub fn face_da_malha(m: &fenkra_kernel::Mesh, p: [f64; 3]) -> Option<usize> {
+    face_e_distancia(m, p).map(|x| x.0)
+}
+
+/// Face da malha mais perto do ponto e a distância até ela.
+pub fn face_e_distancia(m: &fenkra_kernel::Mesh, p: [f64; 3]) -> Option<(usize, f32)> {
     let q = Vec3::new(p[0] as f32, p[1] as f32, p[2] as f32);
     let mut best: Option<(f32, usize)> = None;
     for (ti, t) in m.indices.chunks_exact(3).enumerate() {
@@ -494,8 +558,8 @@ pub fn face_at(r: &RecomputeResult, body: usize, p: [f64; 3]) -> Option<usize> {
             best = Some((d, ti));
         }
     }
-    let (_, ti) = best?;
-    Some(m.face_ranges.partition_point(|&x| x as usize <= ti * 3).saturating_sub(1))
+    let (d, ti) = best?;
+    Some((m.face_ranges.partition_point(|&x| x as usize <= ti * 3).saturating_sub(1), d))
 }
 
 /// Os dois pontos estão na mesma face do corpo?

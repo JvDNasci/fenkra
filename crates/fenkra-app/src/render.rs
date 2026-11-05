@@ -19,6 +19,7 @@ struct U {
     paper: vec4<f32>,      // cor das faces no estilo "linhas ocultas"
     tex_scale: array<vec4<f32>, 2>,  // tamanho (mm) de uma repetição de cada textura
     qual: vec4<f32>,       // x = 1 → iluminação realista (três pontos, ambiente hemisférico, gama)
+    secao: vec4<f32>,      // plano de corte da prévia: xyz = normal (zero = sem corte), w = distância
 };
 @group(0) @binding(0) var<uniform> u: U;
 @group(0) @binding(1) var tex: texture_2d_array<f32>;
@@ -33,6 +34,11 @@ fn triplanar(layer: i32, p: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
     let b = textureSampleLevel(tex, samp, p.xz / s, layer, 0.0).rgb;
     let c = textureSampleLevel(tex, samp, p.xy / s, layer, 0.0).rgb;
     return a * w.x + b * w.y + c * w.z;
+}
+
+// o ponto fica do lado cortado do plano de seção da prévia?
+fn cortado(p: vec3<f32>) -> bool {
+    return dot(u.secao.xyz, u.secao.xyz) > 0.5 && dot(u.secao.xyz, p) > u.secao.w;
 }
 
 // A textura da viewport é exibida pelo egui sem reconversão: as cores do tema são valores de tela (sRGB).
@@ -99,6 +105,11 @@ struct MOut {
     return o;
 }
 @fragment fn fs_mesh(i: MOut) -> @location(0) vec4<f32> {
+    // derivadas antes de qualquer desvio dependente do pixel (exigência de uniformidade do WGSL)
+    let nraw = normalize(i.n);
+    let dn = length(fwidth(nraw));
+    let dp = max(length(fwidth(i.wp)), 1e-6);
+    if (cortado(i.wp)) { discard; }
     let mode = u.params.x;
     let v = normalize(u.eye.xyz - i.wp);
     var n = normalize(i.n);
@@ -112,10 +123,6 @@ struct MOut {
     var alpha = i.mat.z * i.col.a;
 
     var c: vec3<f32>;
-    // derivadas fora de desvios dependentes do pixel (exigência de uniformidade do WGSL)
-    let nraw = normalize(i.n);
-    let dn = length(fwidth(nraw));
-    let dp = max(length(fwidth(i.wp)), 1e-6);
     if (mode > 6.5) {
         // curvatura ≈ variação da normal / variação da posição na tela (1/mm)
         let k = dn / dp;
@@ -170,17 +177,30 @@ struct MOut {
     return vec4<f32>(c, alpha);
 }
 
+// ---------- fantasma: prévia do comando, na cor que a cena mandou. A borda sai mais densa para o
+// contorno aparecer mesmo com a malha quase transparente de frente.
+@fragment fn fs_ghost(i: MOut) -> @location(0) vec4<f32> {
+    if (cortado(i.wp)) { discard; }
+    let v = normalize(u.eye.xyz - i.wp);
+    let d = abs(dot(normalize(i.n), v));
+    let a = i.col.a * (1.0 + 1.2 * pow(1.0 - d, 2.0));
+    return vec4<f32>(i.col.rgb * (0.72 + 0.28 * d), clamp(a, 0.0, 0.9));
+}
+
 // ---------- linhas
 struct LIn { @location(0) pos: vec3<f32>, @location(1) col: vec4<f32> };
-struct LOut { @builtin(position) clip: vec4<f32>, @location(0) col: vec4<f32> };
+struct LOut { @builtin(position) clip: vec4<f32>, @location(0) col: vec4<f32>, @location(1) wp: vec3<f32> };
 @vertex fn vs_line(v: LIn) -> LOut {
     var o: LOut;
     var p = u.view_proj * vec4<f32>(v.pos, 1.0);
     p.z = p.z - u.params.w;  // arestas ≈ 1 px à frente das faces coincidentes, em qualquer distância
-    o.clip = p; o.col = v.col;
+    o.clip = p; o.col = v.col; o.wp = v.pos;
     return o;
 }
-@fragment fn fs_line(i: LOut) -> @location(0) vec4<f32> { return i.col; }
+@fragment fn fs_line(i: LOut) -> @location(0) vec4<f32> {
+    if (cortado(i.wp)) { discard; }
+    return i.col;
+}
 
 // ---------- linhas grossas e com tipo de linha (cada segmento = 2 triângulos expandidos na tela)
 // p: x = lado (-1/+1), y = ponta (0 = a, 1 = b), z = espessura (px), w = tipo (0 contínua, 1 tracejada,
@@ -323,6 +343,8 @@ pub struct ViewStyle {
     pub navegando: bool,
     /// iluminação realista no sombreado (três pontos, ambiente hemisférico, gama)
     pub realista: bool,
+    /// plano de corte da prévia: normal (unitária) e distância; o lado positivo some
+    pub secao: Option<[f32; 4]>,
 }
 
 #[repr(C)]
@@ -377,6 +399,7 @@ struct Uniforms {
     paper: [f32; 4],
     tex_scale: [[f32; 4]; 2],
     qual: [f32; 4],
+    secao: [f32; 4],
 }
 
 /// Camadas do array de texturas (cada imagem é reduzida para TEX × TEX).
@@ -398,6 +421,8 @@ pub struct Scene {
     pub wide: Vec<WideVertex>,
     /// sombra translúcida dos perfis fechados de sketch (triângulos sem índice)
     pub fill: Vec<MeshVertex>,
+    /// prévia do comando aberto (triângulos sem índice): translúcida, nunca entra na seleção
+    pub ghost: Vec<MeshVertex>,
     pub bounds: Option<(Vec3, Vec3)>,
 }
 
@@ -526,6 +551,10 @@ struct Pipes {
     line: wgpu::RenderPipeline,
     overlay: wgpu::RenderPipeline,
     wide: wgpu::RenderPipeline,
+    /// fantasma em dois passos: só profundidade, depois a cor. Assim cada pixel mistura uma camada
+    /// só, a mais próxima, sem depender da ordem dos triângulos.
+    ghost_z: wgpu::RenderPipeline,
+    ghost: wgpu::RenderPipeline,
 }
 
 type Buf = Option<(wgpu::Buffer, u32)>;
@@ -545,6 +574,7 @@ pub struct Viewport {
     lb: Buf,
     fb: Option<(wgpu::Buffer, u32)>,
     ob: Buf,
+    gb: Buf,
     targets: Option<Targets>,
     pub camera: Camera,
     textures: wgpu::Texture,
@@ -622,6 +652,22 @@ fn make_pipes(dev: &wgpu::Device, module: &wgpu::ShaderModule, layout: &wgpu::Pi
     };
     let ms = std::mem::size_of::<MeshVertex>();
     let ls = std::mem::size_of::<LineVertex>();
+    // sem o recuo das faces: o fantasma coincidente com a peça fica sempre por cima dela
+    let fantasma = |writes: wgpu::ColorWrites, cmp, write| {
+        let buffers = [Some(wgpu::VertexBufferLayout { array_stride: ms as u64, step_mode: wgpu::VertexStepMode::Vertex, attributes: &mesh_attrs })];
+        let alvo = [Some(wgpu::ColorTargetState { format: FMT, blend: Some(wgpu::BlendState::ALPHA_BLENDING), write_mask: writes })];
+        dev.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("fantasma"),
+            layout: Some(layout),
+            vertex: wgpu::VertexState { module, entry_point: Some("vs_mesh"), buffers: &buffers, compilation_options: Default::default() },
+            fragment: Some(wgpu::FragmentState { module, entry_point: Some("fs_ghost"), targets: &alvo, compilation_options: Default::default() }),
+            primitive: wgpu::PrimitiveState { topology: T::TriangleList, ..Default::default() },
+            depth_stencil: Some(wgpu::DepthStencilState { format: DEPTH, depth_write_enabled: Some(write), depth_compare: Some(cmp), stencil: Default::default(), bias: Default::default() }),
+            multisample: wgpu::MultisampleState { count: samples, ..Default::default() },
+            multiview_mask: None,
+            cache: None,
+        })
+    };
     Pipes {
         samples,
         bg: pipe("vs_bg", "fs_bg", &[], 0, T::TriangleList, C::Always, false),
@@ -630,6 +676,8 @@ fn make_pipes(dev: &wgpu::Device, module: &wgpu::ShaderModule, layout: &wgpu::Pi
         line: pipe("vs_line", "fs_line", &line_attrs, ls, T::LineList, C::LessEqual, false),
         overlay: pipe("vs_line", "fs_line", &line_attrs, ls, T::LineList, C::Always, false),
         wide: pipe("vs_wide", "fs_wide", &wide_attrs, std::mem::size_of::<WideVertex>(), T::LineStrip, C::LessEqual, false),
+        ghost_z: fantasma(wgpu::ColorWrites::empty(), C::Less, true),
+        ghost: fantasma(wgpu::ColorWrites::ALL, C::LessEqual, false),
     }
 }
 
@@ -779,6 +827,7 @@ impl Viewport {
             lb: None,
             fb: None,
             ob: None,
+            gb: None,
             targets: None,
             camera: Camera::default(),
             anim: None,
@@ -816,6 +865,7 @@ impl Viewport {
         self.fb = (!s.fill.is_empty()).then(|| (mk(bytemuck::cast_slice(&s.fill), wgpu::BufferUsages::VERTEX), s.fill.len() as u32));
         self.lb = lines(&s.lines);
         self.ob = lines(&s.overlay);
+        self.gb = (!s.ghost.is_empty()).then(|| (mk(bytemuck::cast_slice(&s.ghost), wgpu::BufferUsages::VERTEX), s.ghost.len() as u32));
         self.wb = (!s.wide.is_empty()).then(|| (mk(bytemuck::cast_slice(&s.wide), wgpu::BufferUsages::VERTEX), s.wide.len() as u32));
         self.bounds = s.bounds;
         self.scene_gen += 1;
@@ -900,6 +950,7 @@ impl Viewport {
             paper: [0.96, 0.96, 0.95, 1.],
             tex_scale: self.tex_scale,
             qual: [if style.realista { 1. } else { 0. }, 0., 0., 0.],
+            secao: style.secao.unwrap_or([0.; 4]),
         };
         rs.queue.write_buffer(&self.ubuf, 0, bytemuck::bytes_of(&u));
 
@@ -963,7 +1014,19 @@ impl Viewport {
             }
             lines(&self.lb, &p.line);
             lines(&self.wb, &p.wide);
-            lines(&self.ob, &p.overlay);
+            // o fantasma vem depois de tudo que é opaco e antes das marcas sempre visíveis
+            if let Some((gb, n)) = &self.gb {
+                pass.set_vertex_buffer(0, gb.slice(..));
+                pass.set_pipeline(&p.ghost_z);
+                pass.draw(0..*n, 0..1);
+                pass.set_pipeline(&p.ghost);
+                pass.draw(0..*n, 0..1);
+            }
+            if let Some((ob, n)) = &self.ob {
+                pass.set_pipeline(&p.overlay);
+                pass.set_vertex_buffer(0, ob.slice(..));
+                pass.draw(0..*n, 0..1);
+            }
         }
         rs.queue.submit([enc.finish()]);
         self.last = Some(key);

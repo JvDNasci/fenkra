@@ -156,7 +156,7 @@ pub(crate) fn translate_gizmo(ui: &mut egui::Ui, rect: Rect, cam: &Camera, salt:
         let tip = c0 + sa[i].1 * ARM;
         let hid = egui::Id::unique(("gizmo_seta", salt, i));
         let sense = if locked[i] { egui::Sense::hover() } else { egui::Sense::drag() };
-        let r = ui.interact(Rect::from_center_size(tip, egui::vec2(22., 22.)), hid, sense);
+        let r = ui.interact(Rect::from_center_size(tip, egui::vec2(crate::handles::PEGA, crate::handles::PEGA)), hid, sense);
         let hot = r.hovered() || r.dragged();
         let col = if locked[i] { Color32::GRAY } else if hot { HOT } else { AXIS_COL[i] };
         arrow(&painter, c0, tip, col);
@@ -197,7 +197,7 @@ pub(crate) fn rotate_arc_col(ui: &mut egui::Ui, rect: Rect, cam: &Camera, salt: 
     let ring: Vec<Pos2> = (0..=64).filter_map(|i| cam.project(rect, at(i as f64 * 360. / 64.))).collect();
     let tip = cam.project(rect, at(angle))?;
     let hid = egui::Id::unique(("gizmo_arco", salt));
-    let r = ui.interact(Rect::from_center_size(tip, egui::vec2(22., 22.)), hid, if locked { egui::Sense::hover() } else { egui::Sense::drag() });
+    let r = ui.interact(Rect::from_center_size(tip, egui::vec2(crate::handles::PEGA, crate::handles::PEGA)), hid, if locked { egui::Sense::hover() } else { egui::Sense::drag() });
     let hot = r.hovered() || r.dragged();
     let col = if locked { Color32::GRAY } else if hot { HOT } else { base };
     painter.add(egui::Shape::line(ring, Stroke::new(if hot { 2.4 } else { 1.6 }, col.gamma_multiply(if hot { 0.9 } else { 0.65 }))));
@@ -285,7 +285,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: I
                     let painter = ui.painter_at(rect);
                     let hid = egui::Id::unique(("gizmo_mover", id.0));
                     let locked = num(dist).is_none();
-                    let resp = ui.interact(Rect::from_center_size(tip, egui::vec2(22., 22.)), hid, if locked { egui::Sense::hover() } else { egui::Sense::drag() });
+                    let resp = ui.interact(Rect::from_center_size(tip, egui::vec2(crate::handles::PEGA, crate::handles::PEGA)), hid, if locked { egui::Sense::hover() } else { egui::Sense::drag() });
                     let hot = resp.hovered() || resp.dragged();
                     let col = if locked { Color32::GRAY } else if hot { HOT } else { AXIS_COL[0] };
                     painter.line_segment([sb, tip], Stroke::new(1., col.gamma_multiply(0.6)));

@@ -447,6 +447,18 @@ pub struct CutOutline {
     pub flat: Vec<Vec<V3>>,
 }
 
+/// Onde a rosca fica, com o eixo e o sentido que a ferramenta usa, para a prévia desenhar a hélice.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RoscaViz {
+    pub feature: Id,
+    /// início da rosca, sobre o eixo
+    pub origin: V3,
+    pub dir: V3,
+    pub radius: f64,
+    pub len: f64,
+    pub pitch: f64,
+}
+
 /// Linha de dobra na chapa planificada: começo, centro e fim do arco desenvolvido.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BendLine {
@@ -507,6 +519,8 @@ pub struct RecomputeResult {
     /// o cálculo foi interrompido por Cancelar: o resultado é parcial e a interface deve
     /// descartá-lo e manter o último completo
     pub cancelado: bool,
+    /// posição de cada rosca, para a prévia
+    pub roscas: Vec<RoscaViz>,
 }
 
 impl RecomputeResult {
@@ -568,6 +582,7 @@ struct Ctx<'a> {
     miter_next: bool,
     /// contorno de cada recorte de chapa nos dois estados (dobrado e planificado)
     cut_outlines: Vec<CutOutline>,
+    roscas: Vec<RoscaViz>,
 }
 
 /// Uma dobra: referencial da aresta (no dobrado) e o giro que leva a aba do dobrado ao plano.
@@ -715,6 +730,7 @@ struct FeatEntry {
     /// dobras que o comando registrou (uma aba registra uma; dobra por linha, várias)
     sheet_maps: Vec<SheetMap>,
     outlines: Vec<CutOutline>,
+    roscas: Vec<RoscaViz>,
     steps: Vec<(Shape, BoolOp)>,
 }
 
@@ -5038,13 +5054,14 @@ impl Ctx<'_> {
                 let d = 2. * cyl.radius;
                 let nominal = if cyl.internal { spec.tap_drill } else { spec.major };
                 let note = ((d - nominal).abs() > 0.3 * spec.pitch).then(|| format!("Ø da face {d:.2} ≠ {nominal:.2} da rosca {}", spec.name));
+                let o = [0, 1, 2].map(|i| cyl.origin[i] + cyl.dir[i] * (cyl.h0 + start));
+                self.roscas.push(RoscaViz { feature: f.id, origin: o, dir: cyl.dir, radius: cyl.radius, len, pitch: spec.pitch });
                 if !t.modeled {
                     return Ok(Some(note.unwrap_or_else(|| format!("rosca cosmética {}", spec.name))));
                 }
                 if len < spec.pitch {
                     return Err("comprimento menor que um passo".into());
                 }
-                let o = [0, 1, 2].map(|i| cyl.origin[i] + cyl.dir[i] * (cyl.h0 + start));
                 let tool = if cyl.internal {
                     Shape::thread_tool(o, cyl.dir, spec.major, spec.pitch, len, spec.angle)
                 } else {
@@ -5273,6 +5290,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         last_sheet: None,
         sheet_maps: vec![],
         cut_outlines: vec![],
+        roscas: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -5410,6 +5428,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                 cx.last_sheet = e.last_sheet;
                 cx.sheet_maps.extend(e.sheet_maps.iter().copied());
                 cx.cut_outlines.extend(e.outlines.iter().cloned());
+                cx.roscas.extend(e.roscas.iter().cloned());
                 if e.steps.is_empty() {
                     cx.steps.remove(&f.id);
                 } else {
@@ -5419,6 +5438,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
             None => {
                 let maps_before = cx.sheet_maps.len();
                 let outlines_before = cx.cut_outlines.len();
+                let roscas_before = cx.roscas.len();
                 *cx.promoted.borrow_mut() = None;
                 let st = match cx.run(f) {
                     Ok(None) => Status::Ok,
@@ -5443,6 +5463,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                         last_sheet: cx.last_sheet,
                         sheet_maps: cx.sheet_maps[maps_before.min(cx.sheet_maps.len())..].to_vec(),
                         outlines: cx.cut_outlines[outlines_before.min(cx.cut_outlines.len())..].to_vec(),
+                        roscas: cx.roscas[roscas_before.min(cx.roscas.len())..].to_vec(),
                         steps: cx.steps.get(&f.id).cloned().unwrap_or_default(),
                     },
                 );
@@ -5643,6 +5664,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         cut_outlines: cx.cut_outlines,
         desatualizados,
         cancelado,
+        roscas: cx.roscas,
     }
 }
 
@@ -5687,6 +5709,7 @@ pub fn publications(doc: &Document) -> Vec<(String, LinkedGeo)> {
                 last_sheet: None,
                 sheet_maps: vec![],
         cut_outlines: vec![],
+        roscas: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -5721,6 +5744,7 @@ pub fn surface_brep(doc: &Document, id: Id) -> Option<String> {
         last_sheet: None,
         sheet_maps: vec![],
         cut_outlines: vec![],
+        roscas: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -6161,6 +6185,7 @@ pub fn cut_list(doc: &Document) -> Vec<CutRow> {
         last_sheet: None,
         sheet_maps: vec![],
         cut_outlines: vec![],
+        roscas: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -6240,6 +6265,7 @@ pub fn member_joints(doc: &Document) -> Vec<((Id, usize), (Id, usize), [f64; 3])
         last_sheet: None,
         sheet_maps: vec![],
         cut_outlines: vec![],
+        roscas: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -6274,6 +6300,7 @@ pub fn skeleton_groups(doc: &Document, paths: &[CurveRef]) -> Vec<Vec<usize>> {
         last_sheet: None,
         sheet_maps: vec![],
         cut_outlines: vec![],
+        roscas: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -6519,6 +6546,7 @@ pub fn export_com_preset(doc: &Document, collector: Option<Id>, path: &str, pres
         last_sheet: None,
         sheet_maps: vec![],
         cut_outlines: vec![],
+        roscas: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -6567,6 +6595,7 @@ pub fn final_shape(doc: &Document) -> Option<Shape> {
         last_sheet: None,
         sheet_maps: vec![],
         cut_outlines: vec![],
+        roscas: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),

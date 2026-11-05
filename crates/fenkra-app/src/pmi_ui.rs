@@ -823,7 +823,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     let mut edit_req: Option<Id> = None;
     let mut anchor_req: Option<(Id, usize, [f64; 3], Option<PmiTarget>)> = None;
     let mut refresh: Vec<(Id, Vec<[f64; 3]>, Vec<Option<PmiTarget>>)> = vec![];
-    let pick_filter = crate::picking::Filter { faces: true, edges: true, vertices: true, planes: false, hidden_env: false, exclude_sketch: None };
+    let pick_filter = crate::picking::Filter { faces: true, edges: true, vertices: true, planes: false, hidden_env: false, exclude_sketch: None, fantasma: None };
     let mut clicked = None;
     let fields = title_fields(app);
     let gstyle = app.settings.pmi_style.clone();

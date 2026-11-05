@@ -3201,7 +3201,7 @@ pub fn context_overlay(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: 
     }
     // clique no que está em volta: escolhe a referência. A peça ativa tem a vez, pois está na frente
     let hover_ativo = app.hover_pick.is_some();
-    let filtro = crate::picking::Filter { faces: true, edges: false, vertices: false, planes: false, hidden_env: false, exclude_sketch: None };
+    let filtro = crate::picking::Filter { faces: true, edges: false, vertices: false, planes: false, hidden_env: false, exclude_sketch: None, fantasma: None };
     let Some(st) = app.asm.as_mut() else { return };
     if st.editing_part.is_none() {
         return;

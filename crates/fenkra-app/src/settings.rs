@@ -684,6 +684,7 @@ impl Settings {
             simplificar: self.graficos.simplificar_ao_girar,
             navegando: false,
             realista: self.graficos.iluminacao_realista,
+            secao: None,
         }
     }
 
