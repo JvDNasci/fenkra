@@ -1206,7 +1206,7 @@ pub fn cut_overlay(app: &crate::app::App, ui: &mut egui::Ui, rect: egui::Rect, c
         }
     };
     let (cur, other, cur_name, other_name) = if flat_now { (&o.flat, &o.folded, tr("planificada"), tr("dobrada")) } else { (&o.folded, &o.flat, tr("dobrada"), tr("planificada")) };
-    let cor = Color32::from_rgb(70, 160, 255);
+    let cor = crate::theme::accent(ui.visuals());
     draw(other, cor.gamma_multiply(0.7), true, &other_name);
     draw(cur, cor, false, &cur_name);
 }
