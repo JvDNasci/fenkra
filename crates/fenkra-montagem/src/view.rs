@@ -108,7 +108,9 @@ fn comp_mesh(kind: &NodeKind, dir: Option<&Path>, cache: &mut PartCache, with_sh
 /// Vista composta: documento "sombra" (um coletor por componente, com cor e visibilidade) e o
 /// resultado com as malhas posicionadas. Erros de carregamento vão para `errors`.
 pub fn compose(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, errors: &mut Vec<(Id, String)>) -> (Document, RecomputeResult) {
-    let mut doc = Document::new(&a.name);
+    // a geometria da montagem entra como está: planos, pontos e sketches na cena, sem corpos
+    let geometria = a.geometria.as_ref().map(fenkra_solidos::recompute);
+    let mut doc = a.geometria.clone().unwrap_or_else(|| Document::new(&a.name));
     doc.collectors.clear();
     doc.origin_visible = true;
     let mut bodies = vec![];
@@ -155,7 +157,11 @@ pub fn compose(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, errors: 
     if let Some(c) = doc.collectors.first() {
         doc.active_collector = c.id;
     }
-    (doc, resultado_de(bodies))
+    let mut r = resultado_de(bodies);
+    if let Some(g) = geometria {
+        (r.sketches, r.planes, r.points, r.curves, r.surfaces) = (g.sketches, g.planes, g.points, g.curves, g.surfaces);
+    }
+    (doc, r)
 }
 
 /// Resultado só com malhas: a forma como a montagem entrega as vistas compostas.

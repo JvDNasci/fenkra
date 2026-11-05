@@ -46,6 +46,10 @@ pub enum EixoFuro {
     Publicado { comp: Id, nome: String, d: V3, #[serde(default)] p: V3 },
     /// cotas da montagem (expressões em mm) e direção no sistema da montagem
     Cotas { x: String, y: String, z: String, d: V3 },
+    /// pontos de um sketch da montagem; a direção é a normal do plano dele, para dentro
+    Sketch { sketch: Id, #[serde(default)] inverter: bool },
+    /// ponto publicado pela geometria da montagem
+    PontoDaMontagem { nome: String, d: V3 },
 }
 
 impl EixoFuro {
@@ -216,6 +220,18 @@ pub fn eixos(a: &Assembly, s: &SerieFuros, dir: Option<&Path>, cache: &mut PartC
             let v = |e: &String| expr::eval_str(e, &vars).map_err(|_| format!("cota inválida: {e}"));
             (vec![([v(x)?, v(y)?, v(z)?], unit(*d))], Placement::default())
         }
+        EixoFuro::Sketch { sketch, inverter } => {
+            let (pontos, n) = a.pontos_de_sketch(*sketch).ok_or_else(|| format!("o sketch da montagem #{} sumiu", sketch.0))?;
+            if pontos.is_empty() {
+                return Err("o sketch da montagem não tem pontos".into());
+            }
+            let d = if *inverter { n } else { n.map(|x| -x) };
+            (pontos.into_iter().map(|p| (p, d)).collect(), Placement::default())
+        }
+        EixoFuro::PontoDaMontagem { nome, d } => match a.publicacao_da_montagem(nome) {
+            Some(fenkra_core::LinkedGeo::Point(p)) => (vec![(p, unit(*d))], Placement::default()),
+            _ => return Err(format!("o ponto publicado {nome} sumiu da montagem")),
+        },
     };
     let Some(padrao) = &s.padrao else { return Ok(base) };
     let n = |e: &String| expr::eval_str(e, &vars).map_err(|_| format!("valor inválido no padrão: {e}"));
@@ -519,7 +535,7 @@ pub fn sincronizar(a: &mut Assembly, dir: Option<&Path>, arquivo: Option<&Path>,
                         }
                         None => {
                             let ext = doc.alloc();
-                            let alvo = caminho_da_montagem(&full, arquivo.unwrap());
+                            let alvo = caminho_de(&full, arquivo.unwrap());
                             doc.external.push(ExternalRef { id: ext, name: format!("{}.{}", a.name, ped.nome), source: a.name.clone(), publication: ped.chave.clone(), state: LinkState::Ativo, path: alvo, uid: String::new(), snapshot: None, target: Some(feature), xform: None });
                             ext
                         }
@@ -583,7 +599,7 @@ pub fn adotar(sub: &Assembly, de: &str, dir: Option<&Path>, arquivo: &Path, cach
         let mut mudou = false;
         for e in doc.external.iter_mut().filter(|e| e_recurso(e) && e.source == de && chaves.iter().any(|c| e.publication.starts_with(c.as_str()))) {
             e.source = sub.name.clone();
-            e.path = caminho_da_montagem(&full, arquivo);
+            e.path = caminho_de(&full, arquivo);
             mudou = true;
         }
         if mudou {
@@ -592,11 +608,11 @@ pub fn adotar(sub: &Assembly, de: &str, dir: Option<&Path>, arquivo: &Path, cach
     }
 }
 
-/// Caminho da montagem a partir da pasta da peça.
-fn caminho_da_montagem(peca: &Path, montagem: &Path) -> String {
-    match peca.parent().and_then(|d| montagem.strip_prefix(d).ok()) {
+/// Caminho de `alvo` como um link da peça o guarda: relativo à pasta dela, quando dá.
+pub(crate) fn caminho_de(peca: &Path, alvo: &Path) -> String {
+    match peca.parent().and_then(|d| alvo.strip_prefix(d).ok()) {
         Some(r) => r.to_string_lossy().replace('\\', "/"),
-        None => montagem.to_string_lossy().to_string(),
+        None => alvo.to_string_lossy().to_string(),
     }
 }
 
@@ -636,7 +652,8 @@ pub fn verificar(a: &Assembly, feat: Id, dir: Option<&Path>, cache: &mut PartCac
                 let (lp_, ld) = (n.placement.to_local(*p), n.placement.dir_to_local(*d));
                 linhas.iter().any(|r| {
                     let v = sub(r.pos, lp_);
-                    norm(cross(v, unit(ld))) < 1e-4 && dot(unit(r.dir), unit(ld)).abs() > 1. - 1e-6
+                    // os pontos de sketch vêm da vista, em precisão simples
+                    norm(cross(v, unit(ld))) < 1e-3 && dot(unit(r.dir), unit(ld)).abs() > 1. - 1e-6
                 })
             })
             .count();

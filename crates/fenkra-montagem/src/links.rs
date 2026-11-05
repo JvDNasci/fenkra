@@ -249,6 +249,11 @@ fn estado(a: &Assembly, dir: Option<&Path>, peca: &Path, e: &ExternalRef) -> Est
     }
 }
 
+/// O link `e`, da peça `peca`, aponta para o arquivo `origem`?
+pub(crate) fn usa_origem(peca: &Path, e: &ExternalRef, origem: &Path, dir: Option<&Path>) -> bool {
+    !e.path.is_empty() && !crate::furos::e_recurso(e) && canonico(&resolver(peca, &e.path, dir)) == canonico(origem)
+}
+
 /// Publicação como a pessoa lê: o furo de série tem nome interno.
 pub fn rotulo_publicacao(p: &str) -> &str {
     if p.starts_with(crate::furos::PREFIXO) {
@@ -268,6 +273,11 @@ pub fn links_da_peca(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, co
         .iter()
         .map(|e| LinhaLink { ext: e.id, nome: e.name.clone(), origem: e.source.clone(), publicacao: e.publication.clone(), estado: estado(a, dir, &full, e), politica: a.politica_link(path, e.id) })
         .collect()
+}
+
+/// Grava a peça pelo cache: o arquivo, ou a memória se ela ainda não tem arquivo.
+pub fn gravar_peca(full: &Path, doc: &Document, cache: &mut PartCache) -> Result<(), String> {
+    gravar(full, doc, cache)
 }
 
 pub(crate) fn gravar(full: &Path, doc: &Document, cache: &mut PartCache) -> Result<(), String> {
@@ -398,7 +408,15 @@ fn atualizar_link(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, gatil
     if !forca && !xf_mudou && !origem_nova {
         return;
     }
-    let geo = cache.get(&src, false).ok().and_then(|p| fenkra_solidos::publications(&p.doc).into_iter().find(|(n, _)| *n == e.publication)).map(|(_, g)| g);
+    // pelo nome de agora ou por um apelido, e o link passa a guardar o nome de agora
+    let achada = cache.get(&src, false).ok().and_then(|p| {
+        let atual = crate::publicacoes::nome_atual(&p.doc, &e.publication).to_string();
+        crate::publicacoes::com_apelidos(&p.doc).into_iter().find(|(n, _)| *n == e.publication).map(|(_, g)| (atual, g))
+    });
+    let geo = achada.as_ref().map(|(_, g)| g.clone());
+    if let (Some((atual, _)), Some(d)) = (&achada, doc.external.iter_mut().find(|d| d.id == e.id)) {
+        d.publication = atual.clone();
+    }
     // publicação que trocou de tipo não serve: a peça usa a cópia como plano, curva...
     let geo: Option<LinkedGeo> = geo.filter(|g| e.snapshot.as_ref().is_none_or(|s| std::mem::discriminant(s) == std::mem::discriminant(g)));
     let sumiu = geo.is_none();

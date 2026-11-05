@@ -13,9 +13,12 @@ pub mod engrenagens;
 pub mod estrutura;
 pub mod fixadores;
 pub mod furos;
+pub mod geometria;
 pub mod kin;
 pub mod links;
 pub mod load;
+pub mod publicacoes;
+pub mod substituicao;
 pub mod view;
 pub mod solve;
 pub mod subconjunto;
@@ -435,6 +438,15 @@ pub struct Assembly {
     /// originais dos itens ligados ao nó de um subconjunto, para inserir de volta
     #[serde(default)]
     pub religacoes: Vec<Religacao>,
+    /// sketches, pontos, eixos e planos da própria montagem: ver [`geometria`]
+    #[serde(default)]
+    pub geometria: Option<fenkra_core::Document>,
+    /// componente que é a peça esqueleto (fica fora da lista de materiais)
+    #[serde(default)]
+    pub esqueleto: Option<Id>,
+    /// a seleção em contexto aceita geometria não publicada (o padrão é só publicada)
+    #[serde(default)]
+    pub contexto_livre: bool,
 }
 
 impl Assembly {
@@ -551,7 +563,7 @@ impl Assembly {
     }
 
     pub fn new(name: &str) -> Self {
-        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], relational: false, politicas_link: vec![], religacoes: vec![] }
+        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], relational: false, politicas_link: vec![], religacoes: vec![], geometria: None, esqueleto: None, contexto_livre: false }
     }
 
     pub fn alloc(&mut self) -> Id {
@@ -713,6 +725,9 @@ impl Assembly {
     pub fn delete(&mut self, id: Id) {
         self.features.retain(|f| f.id != id && !matches!(f.kind, AsmFeatKind::Cut { tool, .. } if tool == id));
         let posicao = self.node(id).map(|n| n.placement);
+        if self.esqueleto == Some(id) {
+            self.esqueleto = None;
+        }
         for f in &mut self.features {
             f.targets.retain(|t| *t != id);
             if let AsmFeatKind::Serie(s) = &mut f.kind {

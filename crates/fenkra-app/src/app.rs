@@ -2359,7 +2359,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let mut cache: std::collections::HashMap<String, Option<Vec<(String, LinkedGeo)>>> = Default::default();
         let (mut ok, mut broken) = (0, 0);
         for (id, path, publ) in exts {
-            let pubs = cache.entry(path.clone()).or_insert_with(|| self.load_link_source(&path).ok().map(|d| fenkra_solidos::publications(&d)));
+            let pubs = cache.entry(path.clone()).or_insert_with(|| self.load_link_source(&path).ok().map(|d| fenkra_montagem::publicacoes::com_apelidos(&d)));
             let geo = pubs.as_ref().and_then(|v| v.iter().find(|(n, _)| *n == publ).map(|(_, g)| g.clone()));
             if geo.is_some() {
                 ok += 1;

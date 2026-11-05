@@ -62,7 +62,7 @@ fn load_sub(p: &Path) -> Option<Assembly> {
 /// Componentes diretos: (arquivo, é subconjunto, quantidade, nome), na ordem da árvore.
 fn direct(a: &Assembly, dir: Option<&Path>) -> Vec<(PathBuf, bool, u32, String)> {
     let mut out: Vec<(PathBuf, bool, u32, String)> = vec![];
-    for n in &a.nodes {
+    for n in a.nodes.iter().filter(|n| a.esqueleto != Some(n.id)) {
         let (p, sub) = match &n.kind {
             NodeKind::Part { path } => (path, false),
             NodeKind::SubAssembly { path } => (path, true),
