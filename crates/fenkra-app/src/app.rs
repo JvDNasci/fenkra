@@ -169,6 +169,8 @@ pub struct App {
     settings_open: bool,
     /// tela Sobre (versão, licença e créditos)
     about_open: bool,
+    /// busca de comandos (Ctrl+K, B60)
+    busca_cmd: crate::ajuda_cmd::Busca,
     /// ambiente de ocultos: mostra só o que está oculto (para reexibir)
     pub hidden_env: bool,
     /// sketch cuja vista deve ser alinhada quando o resultado chegar
@@ -335,6 +337,7 @@ impl App {
             settings,
             settings_open: false,
             about_open: false,
+            busca_cmd: Default::default(),
             hidden_env: false,
             align_pending: None,
             sketch: None,
@@ -5836,6 +5839,17 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     ui.separator();
                     ui.label(RichText::new(format!("Parâmetros: {e}")).small().color(crate::theme::st_err()));
                 }
+                let passo_sk = self.sketch.as_ref().map(|e| e.dica_passo());
+                let ctx_ajuda = crate::ajuda_cmd::Contexto {
+                    sketch: passo_sk.as_deref(),
+                    n_comandos: n,
+                    ultimo_e_sketch: self.open.doc.features.last().is_some_and(|f| matches!(f.kind, FeatureKind::Sketch(_))),
+                    n_selecionados: self.picks.len(),
+                };
+                if let Some(t) = crate::ajuda_cmd::proximo_passo(&ctx_ajuda) {
+                    ui.separator();
+                    ui.label(RichText::new(t).small().color(crate::theme::accent(ui.visuals())));
+                }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.label(RichText::new(format!("{} · duplo clique: ajustar", self.settings.nav.help())).small().weak());
                 });
@@ -6919,6 +6933,7 @@ impl eframe::App for App {
         crate::partida::contar_quadro();
         let ctx = &root.ctx().clone();
         crate::i18n::set_english(self.settings.english);
+        crate::ui_ext::definir_modo_roda(crate::ui_ext::ModoRoda::de_u8(self.settings.wheel_mode));
         // cores salvas: preferências ↔ paleta usada pelos painéis
         {
             let mut dirty = crate::palette::DIRTY.lock().unwrap();
@@ -6968,6 +6983,9 @@ impl eframe::App for App {
 
         // atalhos (mapa configurável em Configurações → Atalhos e navegação)
         use crate::keymap::KeyAction as K;
+        if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::K)) {
+            self.busca_cmd.alternar();
+        }
         let km = self.settings.keys.clone();
         let typing = ctx.egui_wants_keyboard_input() || self.sketch.as_ref().is_some_and(|e| e.entry.typing());
         let (save, undo, redo) = (km.pressed(ctx, K::Save), !typing && km.pressed(ctx, K::Undo), !typing && km.pressed(ctx, K::Redo));
@@ -7191,6 +7209,9 @@ impl eframe::App for App {
         self.side_toolbars(ctx, area);
         self.settings_window(ctx);
         self.about_window(ctx);
+        if let Some(a) = self.busca_cmd.ui(ctx) {
+            self.act(a);
+        }
         self.view_menu_window(ctx);
         self.dialogs(ctx);
         if self.settings.bench == crate::settings::Bench::Desenho {
@@ -7878,6 +7899,9 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
                 });
                 ui.label(RichText::new(s.nav.help()).weak().small());
                 ui.checkbox(&mut s.invert_zoom, tr("inverter o sentido do zoom"));
+                ui.separator();
+                crate::ui_ext::modo_roda_ui(ui, &mut s.wheel_mode);
+                ui.separator();
                 ui.horizontal(|ui| {
                     ui.label(tr("Selecionar:"));
                     ui.checkbox(&mut s.sel_faces, tr("faces"));

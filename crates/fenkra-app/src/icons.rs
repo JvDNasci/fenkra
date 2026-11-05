@@ -545,7 +545,8 @@ pub fn tool_button(ui: &mut egui::Ui, icon: &str, label: &str, size: f32, show_l
     resp
 }
 
-/// Dica em dois níveis: breve imediatamente; avançada depois de 5 s com o mouse parado em cima.
+/// Dica em dois estágios: nome e frase depois do atraso de dicas (500 ms); parado ~1,2 s, entra
+/// o mini fluxo numerado com o passo a passo do comando (B60).
 pub fn hover_help(ui: &egui::Ui, resp: egui::Response, title: &str, brief: &str, advanced: &str) -> egui::Response {
     let key = resp.id.with("hover_inicio");
     let now = ui.input(|i| i.time);
@@ -554,8 +555,8 @@ pub fn hover_help(ui: &egui::Ui, resp: egui::Response, title: &str, brief: &str,
         return resp;
     }
     let start = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(key, || now));
-    let long = now - start >= 5.0 && !advanced.is_empty();
-    if !advanced.is_empty() && !long {
+    let estagio2 = now - start >= crate::ajuda_cmd::ESTAGIO_2 && !advanced.is_empty();
+    if !advanced.is_empty() && !estagio2 {
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(250));
     }
     resp.on_hover_ui(|ui| {
@@ -564,11 +565,11 @@ pub fn hover_help(ui: &egui::Ui, resp: egui::Response, title: &str, brief: &str,
         if !brief.is_empty() && brief != title {
             ui.label(brief);
         }
-        if long {
+        if estagio2 {
             ui.separator();
-            ui.label(egui::RichText::new(advanced).small());
+            crate::ajuda_cmd::mini_fluxo(ui, advanced);
         } else if !advanced.is_empty() {
-            ui.label(egui::RichText::new(tr("(mantenha o mouse para mais detalhes)")).small().weak());
+            ui.label(egui::RichText::new(tr("(mantenha o mouse para ver o passo a passo)")).small().weak());
         }
     })
 }

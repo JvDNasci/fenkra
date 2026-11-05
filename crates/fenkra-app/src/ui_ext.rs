@@ -18,6 +18,53 @@ pub enum ModoRoda {
     Sempre,
 }
 
+impl ModoRoda {
+    pub const TODOS: [ModoRoda; 3] = [ModoRoda::Foco, ModoRoda::Ctrl, ModoRoda::Sempre];
+
+    pub fn de_u8(n: u8) -> ModoRoda {
+        match n {
+            1 => ModoRoda::Ctrl,
+            2 => ModoRoda::Sempre,
+            _ => ModoRoda::Foco,
+        }
+    }
+
+    fn nome(self) -> &'static str {
+        match self {
+            ModoRoda::Foco => "Só depois de clicar no campo (padrão)",
+            ModoRoda::Ctrl => "Só com Ctrl pressionado",
+            ModoRoda::Sempre => "Sempre que o mouse estiver sobre o campo",
+        }
+    }
+
+    fn explicacao(self) -> &'static str {
+        match self {
+            ModoRoda::Foco => "Rolar o painel com o mouse por cima de um campo não altera valores; clique no campo para liberar a roda.",
+            ModoRoda::Ctrl => "A roda só altera o campo com Ctrl pressionado; sem Ctrl o painel rola normalmente.",
+            ModoRoda::Sempre => "A roda altera o campo sob o mouse, sem clicar. Rápido, mas rolar o painel pode mudar valores sem querer.",
+        }
+    }
+}
+
+/// Página de Configurações do modo da roda. Aplica na hora e traz um campo de teste para sentir a regra.
+pub fn modo_roda_ui(ui: &mut egui::Ui, modo: &mut u8) {
+    use crate::i18n::tr;
+    ui.label(egui::RichText::new(tr("Roda do mouse nos campos numéricos")).strong());
+    for m in ModoRoda::TODOS {
+        ui.radio_value(modo, m as u8, tr(m.nome()));
+    }
+    let atual = ModoRoda::de_u8(*modo);
+    ui.label(egui::RichText::new(tr(atual.explicacao())).weak().small());
+    definir_modo_roda(atual);
+    let chave = egui::Id::new("teste_roda_campo");
+    let mut x: f64 = ui.ctx().data(|d| d.get_temp(chave)).unwrap_or(10.);
+    ui.horizontal(|ui| {
+        ui.label(tr("Campo de teste:"));
+        ui.add(dv(&mut x).speed(1.).range(0.0..=1000.0).suffix(" mm"));
+    });
+    ui.ctx().data_mut(|d| d.insert_temp(chave, x));
+}
+
 static MODO: AtomicU8 = AtomicU8::new(0);
 
 pub fn modo_roda() -> ModoRoda {
@@ -149,6 +196,8 @@ pub struct Campo<'a, N: egui::emath::Numeric> {
     speed: f64,
     faixa: Option<(f64, f64)>,
     dica: Option<&'a str>,
+    padrao: Option<f64>,
+    rotulo: Option<egui::WidgetText>,
 }
 
 impl<'a, N: egui::emath::Numeric> Campo<'a, N> {
@@ -165,7 +214,23 @@ impl<'a, N: egui::emath::Numeric> Campo<'a, N> {
         self
     }
     pub fn suffix(mut self, s: impl Into<egui::WidgetText>) -> Self {
+        let s = s.into();
+        // campo em graus lê `90°` e `1,57 rad`; os demais leem comprimentos
+        if s.text().contains('°') {
+            self.dv = self.dv.custom_parser(|t| parse_com_unidade(t, true));
+        }
         self.dv = self.dv.suffix(s);
+        self
+    }
+    /// Valor padrão: o menu de contexto do campo (botão direito) oferece restaurá-lo.
+    pub fn padrao(mut self, v: impl Into<f64>) -> Self {
+        self.padrao = Some(v.into());
+        self
+    }
+    /// Rótulo à esquerda do campo; arrastá-lo na horizontal muda o valor (Shift ×10, Ctrl ×0,1,
+    /// Alt ×0,01) e duplo clique restaura o padrão, se houver.
+    pub fn rotulo(mut self, t: impl Into<egui::WidgetText>) -> Self {
+        self.rotulo = Some(t.into());
         self
     }
     pub fn prefix(mut self, s: impl Into<egui::WidgetText>) -> Self {
@@ -191,20 +256,63 @@ impl<'a, N: egui::emath::Numeric> Campo<'a, N> {
     }
 }
 
+/// Muda o valor pelo arrasto horizontal de `dx` pixels: `speed` unidades por pixel vezes as teclas.
+pub fn arrastar_valor(v: f64, dx: f64, speed: f64, mult: f64, faixa: Option<(f64, f64)>) -> f64 {
+    let x = v + dx * speed * mult;
+    let x = faixa.map_or(x, |(lo, hi)| x.clamp(lo, hi));
+    (x * 1e6).round() / 1e6
+}
+
+fn arredondar<N: egui::emath::Numeric>(x: f64) -> N {
+    N::from_f64(if N::INTEGRAL { x.round() } else { x })
+}
+
 impl<N: egui::emath::Numeric> egui::Widget for Campo<'_, N> {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
-        let Campo { dv, ptr, speed, faixa, dica } = self;
-        let mut r = ui.add(dv);
-        // SAFETY: `ptr` vem do `&mut N` que o `DragValue` emprestava; o widget já foi consumido por
-        // `ui.add`, então nada mais usa esse empréstimo aqui.
-        let v = unsafe { &mut *ptr };
-        if aplicar(ui, &r, v, passo_base(speed), faixa) {
-            r.mark_changed();
+        let Campo { dv, ptr, speed, faixa, dica, padrao, rotulo } = self;
+        let corpo = |ui: &mut egui::Ui, rot: Option<egui::Response>| {
+            let mut r = ui.add(dv);
+            // SAFETY: `ptr` vem do `&mut N` que o `DragValue` emprestava; o widget já foi consumido
+            // por `ui.add`, então nada mais usa esse empréstimo aqui.
+            let v = unsafe { &mut *ptr };
+            if aplicar(ui, &r, v, passo_base(speed), faixa) {
+                r.mark_changed();
+            }
+            if let Some(l) = rot {
+                if l.dragged() {
+                    let m = ui.input(|i| mult_teclas(i.modifiers));
+                    let novo = arrastar_valor(v.to_f64(), l.drag_delta().x as f64, speed, m, faixa);
+                    *v = arredondar(novo);
+                    r.mark_changed();
+                }
+                if let (true, Some(p)) = (l.double_clicked(), padrao) {
+                    *v = arredondar(p);
+                    r.mark_changed();
+                }
+            }
+            if let Some(p) = padrao {
+                r.context_menu(|ui| {
+                    if ui.button(format!("{} ({})", crate::i18n::tr("Restaurar padrão"), crate::app::fmt(p))).clicked() {
+                        *v = arredondar(p);
+                        ui.close();
+                    }
+                });
+            }
+            if let Some(d) = dica {
+                r = r.on_hover_text(d);
+            }
+            r
+        };
+        match rotulo {
+            Some(t) => {
+                ui.horizontal(|ui| {
+                    let l = ui.add(egui::Label::new(t).sense(egui::Sense::click_and_drag())).on_hover_cursor(egui::CursorIcon::ResizeHorizontal);
+                    corpo(ui, Some(l))
+                })
+                .inner
+            }
+            None => corpo(ui, None),
         }
-        if let Some(d) = dica {
-            r = r.on_hover_text(d);
-        }
-        r
     }
 }
 
@@ -245,16 +353,57 @@ fn dec(s: String) -> String {
     if crate::i18n::english() { s } else { s.replace('.', ",") }
 }
 
-/// Lê número com vírgula ou ponto.
+/// Lê número com vírgula ou ponto, com unidade opcional (`10 cm`, `2in`, `90°`, `1,5 rad`).
 fn parse_dec(s: &str) -> Option<f64> {
-    s.trim().replace(',', ".").parse().ok()
+    parse_com_unidade(s, false)
+}
+
+/// Fator de conversão da unidade digitada: comprimentos para mm, ângulos para graus.
+fn fator_unidade(u: &str, angulo: bool) -> Option<f64> {
+    let u = u.trim().to_lowercase();
+    if angulo {
+        return match u.as_str() {
+            "°" | "deg" | "graus" | "grau" => Some(1.),
+            "rad" => Some(180. / std::f64::consts::PI),
+            "grad" | "gon" => Some(0.9),
+            _ => None,
+        };
+    }
+    match u.as_str() {
+        "mm" => Some(1.),
+        "cm" => Some(10.),
+        "m" => Some(1000.),
+        "km" => Some(1e6),
+        "um" | "µm" | "μm" => Some(0.001),
+        "in" | "pol" | "\"" => Some(25.4),
+        "ft" | "pé" | "pe" => Some(304.8),
+        "mil" => Some(0.0254),
+        _ => None,
+    }
+}
+
+/// Número com unidade opcional. Comprimentos viram milímetros; com `angulo`, os ângulos viram graus
+/// (a unidade ausente vale o padrão do campo). Texto que não é número com unidade conhecida dá `None`.
+pub fn parse_com_unidade(s: &str, angulo: bool) -> Option<f64> {
+    let t = s.trim().replace(',', ".");
+    if let Ok(v) = t.parse::<f64>() {
+        return Some(v);
+    }
+    // corta onde o número termina: o maior prefixo que lê como número, com o resto como unidade
+    let marcas: Vec<usize> = t.char_indices().map(|(i, _)| i).skip(1).collect();
+    for i in marcas.into_iter().rev() {
+        if let (Ok(n), Some(f)) = (t[..i].trim().parse::<f64>(), fator_unidade(&t[i..], angulo)) {
+            return Some(n * f);
+        }
+    }
+    None
 }
 
 /// Campo numérico padrão com o separador decimal do idioma (ver `Campo`).
 pub fn dv<Num: egui::emath::Numeric>(v: &mut Num) -> Campo<'_, Num> {
     let ptr: *mut Num = v;
     let dv = egui::DragValue::new(v).custom_formatter(|n, r| dec(egui::emath::format_with_decimals_in_range(n, r))).custom_parser(parse_dec);
-    Campo { dv, ptr, speed: 1., faixa: None, dica: None }
+    Campo { dv, ptr, speed: 1., faixa: None, dica: None, padrao: None, rotulo: None }
 }
 
 /// Slider com o separador decimal do idioma e a roda padrão.
@@ -296,6 +445,40 @@ mod testes {
             }
         }
         assert!(ruins.is_empty(), "use ui_ext::dv/slider: {ruins:?}");
+    }
+
+    #[test]
+    fn unidade_digitada_vira_milimetro_ou_grau() {
+        let mm = |s| parse_com_unidade(s, false);
+        assert_eq!(mm("10"), Some(10.));
+        assert_eq!(mm("10 mm"), Some(10.));
+        assert_eq!(mm("2,5cm"), Some(25.));
+        assert_eq!(mm("1 m"), Some(1000.));
+        assert_eq!(mm("1in"), Some(25.4));
+        assert_eq!(mm("1e3"), Some(1000.));
+        assert_eq!(mm("abc"), None);
+        assert_eq!(mm("10 xx"), None);
+        assert_eq!(mm("90°"), None, "grau não vale em campo de comprimento");
+        assert_eq!(parse_com_unidade("90°", true), Some(90.));
+        let rad = parse_com_unidade("3,14159265 rad", true).unwrap();
+        assert!((rad - 180.).abs() < 1e-4, "{rad}");
+        assert_eq!(parse_com_unidade("5 cm", true), None, "comprimento não vale em campo de ângulo");
+    }
+
+    #[test]
+    fn arrasto_no_rotulo_respeita_teclas_e_faixa() {
+        assert_eq!(arrastar_valor(10., 4., 0.5, 1., None), 12.);
+        assert_eq!(arrastar_valor(10., 4., 0.5, 10., None), 30.);
+        assert_eq!(arrastar_valor(10., 4., 0.5, 0.1, None), 10.2);
+        assert_eq!(arrastar_valor(10., -100., 1., 1., Some((0., 50.))), 0.);
+    }
+
+    #[test]
+    fn modo_da_roda_tem_nome_e_explicacao_traduzidos() {
+        for m in ModoRoda::TODOS {
+            assert!(crate::i18n::tem_traducao(m.nome()) && crate::i18n::tem_traducao(m.explicacao()), "{m:?}");
+            assert_eq!(ModoRoda::de_u8(m as u8), m);
+        }
     }
 
     #[test]

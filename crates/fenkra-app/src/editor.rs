@@ -148,15 +148,35 @@ pub(crate) fn expr(ui: &mut egui::Ui, label: &str, s: &mut String, vars: &Vars, 
     let label = tr(label);
     ui.horizontal(|ui| {
         let icon = param_icon(label);
-        let lr = ui.add_sized([118., 18.], egui::Label::new(RichText::new(format!("{icon} {label}"))).truncate().sense(egui::Sense::hover()));
+        let lr = ui.add_sized([118., 18.], egui::Label::new(RichText::new(format!("{icon} {label}"))).truncate().sense(egui::Sense::click_and_drag()));
+        // valor ao abrir o campo: o duplo clique no rótulo e o menu do campo voltam a ele
+        let ini_id = lr.id.with("valor_inicial");
+        let inicial: String = ui.ctx().data_mut(|d| d.get_temp_mut_or_insert_with(ini_id, || s.clone()).clone());
+        // arrasto horizontal no rótulo soma/subtrai quando o texto é um número (mesmas teclas da roda)
+        if lr.dragged() {
+            if let Some(v) = crate::ui_ext::parse_com_unidade(s, unit == "°") {
+                let m = ui.input(|i| crate::ui_ext::mult_teclas(i.modifiers));
+                *s = fmt(crate::ui_ext::arrastar_valor(v, lr.drag_delta().x as f64, 0.5, m, None));
+            }
+        }
+        if lr.double_clicked() {
+            *s = inicial.clone();
+        }
+        let lr = lr.on_hover_cursor(egui::CursorIcon::ResizeHorizontal);
         lr.on_hover_ui(|ui| {
             ui.label(RichText::new(format!("{icon} {label}")).strong());
             if let Ok(v) = fenkra_core::expr::eval_str(s, vars) {
                 ui.label(format!("= {} {unit}", fmt(v)));
             }
             ui.label(RichText::new(tr(EXPR_HINT)).weak().small());
+            ui.label(RichText::new(tr("arraste o nome para mudar o valor; duplo clique restaura o valor inicial")).weak().small());
         });
-        let r = fenkra_core::expr::eval_str(s, vars);
+        // número com unidade (10 cm, 2 in, 90°) vale como o valor convertido para mm ou graus
+        let unid = crate::ui_ext::parse_com_unidade(s, unit == "°");
+        let r = match (fenkra_core::expr::eval_str(s, vars), unid) {
+            (Err(_), Some(v)) => Ok(v),
+            (r, _) => r,
+        };
         let bad = r.is_err();
         let mut te = egui::TextEdit::singleline(s).desired_width(110.);
         if bad {
@@ -165,6 +185,18 @@ pub(crate) fn expr(ui: &mut egui::Ui, label: &str, s: &mut String, vars: &Vars, 
         let resp = ui.add(te);
         // roda do mouse sobre o campo soma/subtrai (Shift ×10, Ctrl ×0,1)
         crate::ui_ext::wheel_text(ui, &resp, s);
+        // ao sair do campo, a unidade digitada vira o número convertido
+        if let (true, Some(v)) = (resp.lost_focus(), unid) {
+            if s.trim().replace(',', ".").parse::<f64>().is_err() && fenkra_core::expr::eval_str(s, vars).is_err() {
+                *s = fmt(v);
+            }
+        }
+        resp.context_menu(|ui| {
+            if ui.button(format!("{} ({inicial})", tr("Restaurar valor inicial"))).clicked() {
+                *s = inicial.clone();
+                ui.close();
+            }
+        });
         let resp = if bad { resp } else { resp.on_hover_text(tr(EXPR_HINT)) };
         match r {
             Ok(v) if s.trim().replace(',', ".").parse::<f64>().is_err() => {
