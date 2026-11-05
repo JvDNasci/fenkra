@@ -159,7 +159,7 @@ pub fn pares() -> impl Iterator<Item = (&'static str, &'static str)> {
 }
 
 /// Rótulos que são símbolos e valem igual nos dois idiomas, ou ainda não tinham tradução.
-const SIMBOLOS: &[(&str, &str)] = &[("Início do trecho", "Segment start"), ("Fim do trecho", "Segment end"), ("Raio da 2ª face", "2nd face radius"), ("A", "A"), ("B", "B"), ("C", "C"), ("D", "D"), ("X", "X"), ("Y", "Y"), ("Z", "Z"), ("a", "a"), ("b", "b"), ("u", "u"), ("v", "v"), ("ρ", "ρ"), ("Total", "Total"), ("Foco (a)", "Focus (a)")];
+const SIMBOLOS: &[(&str, &str)] = &[("Alívio padrão", "Default relief"), ("Início da aba", "Flange start"), ("Largura da aba", "Flange width"), ("Tamanho do canto", "Corner size"), ("Início do trecho", "Segment start"), ("Fim do trecho", "Segment end"), ("Raio da 2ª face", "2nd face radius"), ("A", "A"), ("B", "B"), ("C", "C"), ("D", "D"), ("X", "X"), ("Y", "Y"), ("Z", "Z"), ("a", "a"), ("b", "b"), ("u", "u"), ("v", "v"), ("ρ", "ρ"), ("Total", "Total"), ("Foco (a)", "Focus (a)")];
 
 #[cfg(test)]
 mod testes {
