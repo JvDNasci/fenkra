@@ -202,6 +202,7 @@ enum MenuAct {
     SplTan(Id, Id, u8),
     SplRemove(Id, Id),
     Dim(Kind),
+    DimRef(Id),
     Constr(CKind),
     Construction,
     Delete,
@@ -627,7 +628,7 @@ fn dim_anchor(sk: &SketchData, k: &Kind) -> Option<[f64; 2]> {
 }
 
 /// Texto da cota: valor medido, com a expressão quando não for número puro.
-fn dim_text(sk: &SketchData, k: &Kind) -> String {
+fn dim_text(sk: &SketchData, k: &Kind, reference: bool) -> String {
     let val = sk.measure(k).unwrap_or(0.);
     let expr = k.clone().value_mut().cloned().unwrap_or_default();
     let base = match k {
@@ -636,6 +637,10 @@ fn dim_text(sk: &SketchData, k: &Kind) -> String {
         Kind::Angle(..) => format!("{}°", fmt(val)),
         _ => fmt(val),
     };
+    // cota de referência entre parênteses, como nos desenhos: só informa
+    if reference {
+        return format!("({base})");
+    }
     let e = expr.trim();
     if e.is_empty() || e.replace(',', ".").parse::<f64>().is_ok() {
         base
@@ -646,7 +651,7 @@ fn dim_text(sk: &SketchData, k: &Kind) -> String {
 
 /// Desenha uma cota (linhas, setas e texto). `label`: posição do texto relativa à âncora.
 /// Devolve o retângulo do texto (para clique e arraste).
-fn draw_dim(painter: &egui::Painter, v: &View, sk: &SketchData, k: &Kind, label: Option<[f64; 2]>, col: Color32, dark: bool) -> Option<Rect> {
+fn draw_dim(painter: &egui::Painter, v: &View, sk: &SketchData, k: &Kind, label: Option<[f64; 2]>, col: Color32, dark: bool, reference: bool) -> Option<Rect> {
     let anchor = dim_anchor(sk, k)?;
     let lpos = label.map(|o| v.to_screen([anchor[0] + o[0], anchor[1] + o[1]]));
     let st = Stroke::new(1., col);
@@ -750,7 +755,7 @@ fn draw_dim(painter: &egui::Painter, v: &View, sk: &SketchData, k: &Kind, label:
         }
         _ => return None,
     };
-    let galley = painter.layout_no_wrap(dim_text(sk, k), egui::FontId::proportional(12.), col);
+    let galley = painter.layout_no_wrap(dim_text(sk, k, reference), egui::FontId::proportional(12.), col);
     let r = Rect::from_center_size(tpos, galley.size() + egui::vec2(8., 4.));
     painter.rect_filled(r, 3., if dark { Color32::from_black_alpha(170) } else { Color32::from_white_alpha(220) });
     painter.galley(r.min + egui::vec2(4., 2.), galley, col);
@@ -1054,6 +1059,19 @@ fn glyph(k: &Kind) -> &'static str {
     }
 }
 
+/// Estado do solver em palavras, com a cor que o acompanha.
+fn status_line(st: &SolveReport) -> (String, Color32) {
+    if !st.converged {
+        (format!("⚠ {}: {}", tr("Conflito entre restrições"), st.failing.len()), BAD)
+    } else if st.redundant > 0 {
+        (format!("{}: {}", tr("Redundante"), st.redundant), SEL)
+    } else if st.dof == 0 {
+        (format!("✔ {}", tr("Totalmente restrito")), Color32::from_rgb(120, 210, 130))
+    } else {
+        (format!("{} · {} {}", tr("Sub-restrito"), st.dof, tr("grau(s) de liberdade")), FREE)
+    }
+}
+
 /// Desenha o sketch em edição e trata a interação. Chamado pela viewport.
 pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Response, cam: Camera) {
     let Some(f) = frame(app) else { return };
@@ -1252,8 +1270,19 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             continue;
         }
         // ---- cotas
-        let col = if bad { BAD } else if sel { SEL } else if dark { Color32::from_rgb(255, 215, 120) } else { Color32::from_rgb(150, 70, 0) };
-        if let Some(r) = draw_dim(&painter, &v, &sk, &c.kind, c.label, col, dark) {
+        let col = if bad {
+            BAD
+        } else if sel {
+            SEL
+        } else if c.reference {
+            // referência em cinza: informa, não comanda
+            if dark { Color32::from_white_alpha(120) } else { Color32::from_black_alpha(120) }
+        } else if dark {
+            Color32::from_rgb(255, 215, 120)
+        } else {
+            Color32::from_rgb(150, 70, 0)
+        };
+        if let Some(r) = draw_dim(&painter, &v, &sk, &c.kind, c.label, col, dark, c.reference) {
             edit.hits.push((r, Ent::Cs(c.id)));
         }
     }
@@ -1524,9 +1553,9 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                         }
                         if double {
                             if let Ent::Cs(c) = e {
-                                if let Some(k) = sk.constraints.iter_mut().find(|x| x.id == c).and_then(|x| x.kind.value_mut()) {
+                                // cota de referência não tem valor a editar: ela só mede
+                                if sk.constraints.iter().any(|x| x.id == c && x.kind.is_dimension() && !x.reference) {
                                     edit.dim_edit = Some((c, String::new(), false));
-                                    let _ = k;
                                 }
                             }
                         }
@@ -2159,7 +2188,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             // prévia seguindo o mouse
             if let (Some(k), Some(uv)) = (&chosen, cursor_uv) {
                 if let Some(a) = dim_anchor(&sk, k) {
-                    draw_dim(&painter, &v, &sk, k, Some([uv[0] - a[0], uv[1] - a[1]]), FREE, dark);
+                    draw_dim(&painter, &v, &sk, k, Some([uv[0] - a[0], uv[1] - a[1]]), FREE, dark, false);
                 }
             }
             if primary_click {
@@ -2191,7 +2220,11 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                             if let (Some(a), Some(c)) = (anchor, sk.constraints.iter_mut().find(|c| c.id == id)) {
                                 c.label = Some([uv[0] - a[0], uv[1] - a[1]]);
                             }
-                            edit.dim_edit = Some((id, String::new(), true));
+                            if sk.settle_dimension(id, &vars) {
+                                toast = Some(("a cota sobre-restringe o sketch e ficou como referência".into(), false));
+                            } else {
+                                edit.dim_edit = Some((id, String::new(), true));
+                            }
                             edit.report = sk.solve(&vars, &[]);
                         }
                         edit.pending = None;
@@ -2334,6 +2367,15 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                     if has_cv && item(ui, "sk_construcao", "Construção ⇄ normal") {
                         act = Some(MenuAct::Construction);
                     }
+                    // cota selecionada: alterna entre comandar a geometria e só medir
+                    if let [Ent::Cs(c)] = msel.as_slice() {
+                        if let Some(k) = sk.constraints.iter().find(|x| x.id == *c && x.kind.is_dimension()) {
+                            let txt = if k.reference { "Comandar a geometria" } else { "Tornar referência" };
+                            if ui.add(egui::Button::new(tr(txt)).frame(false)).clicked() {
+                                act = Some(MenuAct::DimRef(*c));
+                            }
+                        }
+                    }
                     if ui.add(egui::Button::new(tr("✖  Excluir")).frame(false)).clicked() {
                         act = Some(MenuAct::Delete);
                     }
@@ -2355,6 +2397,12 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                 edit.tool = if tool_accepts(edit.tool, &k) { edit.tool } else { Tool::Dimension };
                 edit.sel = msel.clone();
                 edit.pending = Some(Pending { sel: msel, forced: Some(k) });
+            }
+            MenuAct::DimRef(c) => {
+                if !sk.toggle_reference(c, &vars) {
+                    toast = Some(("essa cota sobre-restringe o sketch e continua como referência".into(), true));
+                }
+                edit.report = sk.solve(&vars, &[]);
             }
             MenuAct::Constr(k) => {
                 match apply_constraint(&mut sk, &mut al, k, &msel) {
@@ -2449,17 +2497,10 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
     }
 
     // ---------- status
-    let st = &edit.report;
-    let (txt, col) = if !st.converged {
-        (format!("⚠ Conflito: {} restrição(ões) não satisfeita(s)", st.failing.len()), BAD)
-    } else if st.dof == 0 {
-        ("✔ Totalmente restrito".to_string(), Color32::from_rgb(120, 210, 130))
-    } else {
-        (format!("Sub-restrito · {} grau(s) de liberdade", st.dof), FREE)
-    };
-    painter.text(rect.center_top() + egui::vec2(0., 26.), egui::Align2::CENTER_TOP, format!("✏ Editando sketch · {txt}"), egui::FontId::proportional(13.), col);
-    let tool_name = tool.info().2;
-    painter.text(rect.center_top() + egui::vec2(0., 44.), egui::Align2::CENTER_TOP, format!("Ferramenta: {tool_name} · Esc cancela · Esc de novo sai do sketch"), egui::FontId::proportional(11.), col.gamma_multiply(0.8));
+    let (txt, col) = status_line(&edit.report);
+    painter.text(rect.center_top() + egui::vec2(0., 26.), egui::Align2::CENTER_TOP, format!("✏ {} · {txt}", tr("Editando sketch")), egui::FontId::proportional(13.), col);
+    let tool_name = tr(tool.info().2);
+    painter.text(rect.center_top() + egui::vec2(0., 44.), egui::Align2::CENTER_TOP, format!("{}: {tool_name} · {}", tr("Ferramenta"), tr("Esc cancela o passo atual")), egui::FontId::proportional(11.), col.gamma_multiply(0.8));
 
     // ---------- grava no documento (ids alocados aqui são reservados no documento)
     let _ = &mut al_ids;
@@ -2516,19 +2557,12 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     let id = edit.feature;
     let name = app.open.doc.feature(id).map(|f| f.name.clone()).unwrap_or_default();
     ui.heading(format!("✏ {name}"));
-    let st = &edit.report;
-    let (txt, col) = if !st.converged {
-        ("Conflito entre restrições".to_string(), BAD)
-    } else if st.dof == 0 {
-        ("Totalmente restrito".to_string(), Color32::from_rgb(120, 210, 130))
-    } else {
-        (format!("Sub-restrito · {} grau(s) de liberdade", st.dof), FREE)
-    };
+    let (txt, col) = status_line(&edit.report);
     ui.label(RichText::new(txt).color(col).strong());
     let tool = edit.tool;
-    ui.label(RichText::new(tool.info().3).weak().small());
+    ui.label(RichText::new(tr(tool.info().3)).weak().small());
     if tool == Tool::Polygon {
-        ui.add(crate::ui_ext::slider(&mut edit.polygon_sides, 3..=24).text("lados"));
+        ui.add(crate::ui_ext::slider(&mut edit.polygon_sides, 3..=24).text(tr("lados")));
     }
     ui.add_space(4.);
     let mut finish = false;
@@ -2560,6 +2594,8 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     }
     let Some(edit) = app.sketch.as_mut() else { return };
     let mut del: Option<Id> = None;
+    let mut flip_ref: Option<Id> = None;
+    let mut stays_reference = false;
     let mut new_sel: Option<Vec<Ent>> = None;
     let failing = edit.report.failing.clone();
     if let Some(FeatureKind::Sketch(s)) = app.open.doc.feature_mut(id).map(|f| &mut f.kind) {
@@ -2618,13 +2654,17 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                 let g = glyph(&c.kind);
                 let label = format!("{} {}", if g.is_empty() { "↔" } else { g }, c.kind.label());
                 ui.label(if bad { RichText::new(label).color(BAD) } else { RichText::new(label) });
+                let driving = !c.reference;
                 if let Some(v) = c.kind.value_mut() {
-                    let ok = fenkra_core::expr::eval_str(v, &vars).is_ok();
+                    let ok = !driving || fenkra_core::expr::eval_str(v, &vars).is_ok();
                     let mut te = egui::TextEdit::singleline(v).desired_width(80.);
                     if !ok {
                         te = te.text_color(BAD);
                     }
-                    ui.add(te);
+                    ui.add_enabled(driving, te);
+                    if ui.selectable_label(!driving, "( )").on_hover_text(tr("Cota de referência: só mede e não comanda a geometria")).clicked() {
+                        flip_ref = Some(c.id);
+                    }
                 }
                 if ui.small_button(tr("✖")).on_hover_text(tr("remover restrição")).clicked() {
                     del = Some(c.id);
@@ -2641,8 +2681,9 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     if ui.selectable_label(sel.contains(&Ent::Cs(c.id)), label).clicked() {
                         new_sel = Some(vec![Ent::Cs(c.id)]);
                     }
+                    let driving = !c.reference;
                     if let Some(v) = c.kind.value_mut() {
-                        ui.add(egui::TextEdit::singleline(v).desired_width(80.));
+                        ui.add_enabled(driving, egui::TextEdit::singleline(v).desired_width(80.));
                     }
                     if ui.small_button(tr("✖")).clicked() {
                         del = Some(c.id);
@@ -2653,8 +2694,14 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         if let Some(x) = del {
             d.constraints.retain(|c| c.id != x);
         }
+        if let Some(x) = flip_ref {
+            stays_reference = !d.toggle_reference(x, &vars);
+        }
         let rep = d.solve(&vars, &[]);
         edit_report_set(app, rep);
+    }
+    if stays_reference {
+        app.toast(tr("essa cota sobre-restringe o sketch e continua como referência").to_string(), true);
     }
     if let Some(ns) = new_sel {
         if let Some(e) = app.sketch.as_mut() {
