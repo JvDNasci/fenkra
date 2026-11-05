@@ -247,7 +247,14 @@ fn tab_bar(ui: &mut egui::Ui, run: &mut TabRun) {
     let cols = if n <= 3 { n.max(1) } else if w < 250. { 2 } else { 3 };
     let gap = 4.;
     let cell_w = ((w - gap * (cols as f32 - 1.)) / cols as f32).floor();
-    let t = ui.input(|i| i.time) as f32;
+    let agora = ui.input(|i| i.time);
+    // B222: o brilho só corre por 1,4 s depois que a aba ativa muda; parado, a barra não pede quadros
+    let marca_id = run.key.with("brilho");
+    let (marcada, desde): (usize, f64) = ui.ctx().data(|d| d.get_temp(marca_id)).unwrap_or((usize::MAX, agora - 10.));
+    let desde = if marcada != run.active { agora } else { desde };
+    ui.ctx().data_mut(|d| d.insert_temp(marca_id, (run.active, desde)));
+    let corrida = ((agora - desde) / 1.4) as f32;
+    let t = corrida; // posição 0..1 do brilho na aba
     let rows: Vec<(usize, Vec<String>)> = run.prev.chunks(cols).enumerate().map(|(r, c)| (r * cols, c.to_vec())).collect();
     for (first, row) in rows {
         ui.horizontal(|ui| {
@@ -264,7 +271,7 @@ fn tab_bar(ui: &mut egui::Ui, run: &mut TabRun) {
                     ui.painter().rect_stroke(r, 8., egui::Stroke::new(1., v.widgets.inactive.bg_stroke.color.gamma_multiply(0.7)), egui::StrokeKind::Inside);
                 } else {
                     // brilho suave correndo na aba ativa
-                    let x = r.left() + ((t * 0.35).fract()) * (r.width() + 40.) - 20.;
+                    let x = r.left() + t.clamp(0., 1.) * (r.width() + 40.) - 20.;
                     let sh = egui::Rect::from_min_max(egui::pos2(x.max(r.left() + 4.), r.top() + 2.), egui::pos2((x + 20.).min(r.right() - 4.), r.bottom() - 2.));
                     if sh.width() > 0. {
                         ui.painter().rect_filled(sh, 6., Color32::from_white_alpha(14));
@@ -283,7 +290,9 @@ fn tab_bar(ui: &mut egui::Ui, run: &mut TabRun) {
             }
         });
     }
-    ui.ctx().request_repaint_after(std::time::Duration::from_millis(50));
+    if corrida < 1. {
+        ui.ctx().request_repaint();
+    }
     ui.add_space(8.);
 }
 
@@ -1539,4 +1548,28 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
         }
     });
     target_combo(ui, doc, target);
+}
+
+#[cfg(test)]
+mod testes_repouso {
+    use super::*;
+
+    /// B222: com o painel de abas aberto e nada mudando, a barra não agenda mais quadros.
+    #[test]
+    fn barra_de_abas_em_repouso_nao_pede_quadro() {
+        let ctx = egui::Context::default();
+        let mut atraso = std::time::Duration::ZERO;
+        for k in 0..6 {
+            let entrada = egui::RawInput { time: Some(k as f64 * 2.0), screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400., 600.))), ..Default::default() };
+            let mut saida = ctx.run_ui(entrada, |ui| {
+                tabs_begin(ui, "teste");
+                section(ui, "Primeira");
+                section(ui, "Segunda");
+                tabs_end(ui);
+            });
+            saida.textures_delta.clear();
+            atraso = saida.viewport_output.values().map(|v| v.repaint_delay).min().unwrap_or(std::time::Duration::MAX);
+        }
+        assert!(atraso > std::time::Duration::from_secs(3600), "a barra ainda pede quadros: {atraso:?}");
+    }
 }

@@ -465,7 +465,7 @@ fn style_px(s: Style, z: f32) -> f32 {
 /// Folha na tela.
 pub fn canvas(app: &mut App, root: &mut egui::Ui) {
     ensure(app);
-    let dark = app.settings.theme == crate::settings::Theme::Escuro;
+    let dark = root.ctx().global_style().visuals.dark_mode;
     egui::CentralPanel::no_frame().show(root, |ui| {
         let rect = ui.max_rect();
         let resp = ui.allocate_rect(rect, egui::Sense::click_and_drag());
@@ -519,7 +519,7 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
         let to_scr = |p: V2| Pos2::new(o.x + p[0] as f32 * z, o.y + (h - p[1] as f32) * z);
         let to_mm = |s: Pos2| [((s.x - o.x) / z) as f64, (h - (s.y - o.y) / z) as f64];
         let painter = ui.painter_at(rect);
-        painter.rect_filled(rect, 0., if dark { Color32::from_rgb(52, 56, 64) } else { Color32::from_rgb(170, 176, 186) });
+        painter.rect_filled(rect, 0., ui.visuals().panel_fill);
         let sheet_r = Rect::from_min_max(to_scr([0., size[1]]), to_scr([size[0], 0.]));
         painter.rect_filled(sheet_r.translate(Vec2::new(4., 4.)), 0., Color32::from_black_alpha(70));
         painter.rect_filled(sheet_r, 0., Color32::WHITE);
@@ -652,7 +652,7 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
             st.boxes.iter().filter(|(id, lo, hi)| st.d.view(*id).is_some() && p[0] >= lo[0] && p[0] <= hi[0] && p[1] >= lo[1] && p[1] <= hi[1]).map(|x| x.0).next()
         };
         if let Some(tool) = st.tool {
-            painter.text(rect.left_top() + Vec2::new(12., 10.), egui::Align2::LEFT_TOP, format!("{}   (Esc {})", tr(hint(tool, st.clicks.len())), tr("cancela")), egui::FontId::proportional(14.), if dark { Color32::from_rgb(255, 210, 120) } else { Color32::from_rgb(120, 60, 0) });
+            painter.text(rect.center_top() + Vec2::new(0., 10.), egui::Align2::CENTER_TOP, format!("{}   (Esc {})", tr(hint(tool, st.clicks.len())), tr("cancela")), egui::FontId::proportional(14.), if dark { Color32::from_rgb(255, 210, 120) } else { Color32::from_rgb(120, 60, 0) });
             let dim_tool = (c::DIM_H..=c::DIM_ANG).contains(&tool);
             // marcador do snap sob o mouse
             if let Some(m) = mouse_mm {
@@ -770,13 +770,13 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
         }
         // folha e escala no rodapé
         let info = format!("{} — {} {}   ·   {}: {:.0}%", st.d.name, st.d.sheet(st.sheet).map(|s| s.name.clone()).unwrap_or_default(), st.d.sheet(st.sheet).map(|s| s.format.label()).unwrap_or(""), tr("zoom"), z / 3.78 * 100.);
-        painter.text(rect.left_bottom() + Vec2::new(12., -10.), egui::Align2::LEFT_BOTTOM, info, egui::FontId::proportional(12.), if dark { Color32::from_gray(200) } else { Color32::from_gray(40) });
+        painter.text(rect.center_bottom() + Vec2::new(0., -30.), egui::Align2::CENTER_BOTTOM, info, egui::FontId::proportional(12.), ui.visuals().weak_text_color());
         // folhas: abas no rodapé à direita
         let sheets: Vec<(Id, String)> = st.d.sheets.iter().map(|s| (s.id, s.name.clone())).collect();
         let mut x = rect.right() - 12.;
         for (id, name) in sheets.iter().rev() {
             let g = painter.layout_no_wrap(name.clone(), egui::FontId::proportional(12.), Color32::BLACK);
-            let r = Rect::from_min_size(Pos2::new(x - g.size().x - 14., rect.bottom() - 26.), Vec2::new(g.size().x + 14., 20.));
+            let r = Rect::from_min_size(Pos2::new(x - g.size().x - 14., rect.bottom() - 50.), Vec2::new(g.size().x + 14., 20.));
             let active = *id == st.sheet;
             painter.rect_filled(r, 4., if active { Color32::WHITE } else { Color32::from_gray(200) });
             painter.galley(r.min + Vec2::new(7., 3.), g, Color32::BLACK);
@@ -1208,6 +1208,7 @@ fn ctx_menu(ui: &mut egui::Ui, st: &mut DwgState, id: Option<Id>) {
 
 /// Linha da árvore: 1 clique realça, 2 cliques editam, botão direito = opções.
 fn tree_row(ui: &mut egui::Ui, st: &mut DwgState, sid: Id, id: Id, text: String, depth: usize) {
+    crate::tree_ui::marca_em(ui, depth as f32 * 14.);
     ui.horizontal(|ui| {
         ui.add_space(depth as f32 * 14.);
         if st.renaming == Some(id) {
@@ -1224,6 +1225,9 @@ fn tree_row(ui: &mut egui::Ui, st: &mut DwgState, sid: Id, id: Id, text: String,
         let on = st.sel == Some(id) || st.focus == Some(id);
         let txt = if st.sel == Some(id) { RichText::new(text).strong() } else { RichText::new(text) };
         let r = ui.selectable_label(on, txt);
+        if on {
+            crate::tree_ui::achar(r.rect);
+        }
         if r.double_clicked() {
             st.sel = Some(id);
             st.focus = Some(id);
@@ -1304,7 +1308,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
     let mut kill = None;
     for (sid, name, fmt) in sheets {
         let open = sid == st.sheet;
-        let r = egui::CollapsingHeader::new(RichText::new(format!("🗋 {name} ({fmt})")).strong()).id_salt(("folha", sid.0)).default_open(open).show(ui, |ui| {
+        let r = crate::tree_ui::grupo(ui, ("folha", sid.0), Some("des_folha"), RichText::new(format!("{name} ({fmt})")).strong(), open).corpo(ui, |ui| {
             // vistas em árvore (filhas abaixo da mãe), cada uma com as cotas e anotações dela
             fn kids(d: &Drawing, sheet: Id, parent: Option<Id>) -> Vec<Id> {
                 d.views
@@ -1353,14 +1357,14 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                 tree_row(ui, st, sid, id, t, 0);
             }
         });
-        if r.header_response.clicked() {
+        if r.clicked() {
             st.sheet = sid;
             st.origin = None;
             st.invalidate();
             st.props_open = true;
             st.sel = None;
         }
-        r.header_response.context_menu(|ui| {
+        r.context_menu(|ui| {
             if st.d.sheets.len() > 1 && ui.button(tr("Apagar folha")).clicked() {
                 kill = Some(sid);
                 ui.close();

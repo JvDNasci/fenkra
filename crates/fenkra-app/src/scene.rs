@@ -73,7 +73,8 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
     let feat_app: HashMap<Id, Appearance> = doc.features.iter().filter_map(|f| f.appearance.map(|a| (f.id, a))).collect();
     // só sketches se ocultam um a um; sólidos aparecem pelo corpo (a última feature junta tudo)
     let feat_hidden: HashSet<Id> = doc.features.iter().filter(|f| f.hidden && matches!(f.kind, fenkra_core::FeatureKind::Sketch(_))).map(|f| f.id).collect();
-    let edge_col = if o.dark_edges { [0.06, 0.07, 0.09, 1.0] } else { [0.85, 0.88, 0.92, 1.0] };
+    let (peca_tema, aresta_tema) = crate::theme::piece_colors();
+    let edge_col = if o.dark_edges { aresta_tema.map(|a| { let f = rgb(a); [f[0], f[1], f[2], 1.0] }).unwrap_or([0.06, 0.07, 0.09, 1.0]) } else { [0.85, 0.88, 0.92, 1.0] };
 
     if o.filter.corpos {
         for b in &r.bodies {
@@ -90,7 +91,8 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
                 }
                 let app = owner.and_then(|w| feat_app.get(&w).copied()).unwrap_or(base);
                 let (rough, metal, alpha) = app.finish.params();
-                let mut c = rgb(app.color);
+                // corpo na cor padrão do documento ganha a cor de peça do tema
+                let mut c = rgb(if app.color == crate::theme::PECA_PADRAO { peca_tema.unwrap_or(app.color) } else { app.color });
                 if body_sel || owner.is_some_and(|w| hi_features.contains(&w)) {
                     c = [c[0] * 0.55 + 0.45, c[1] * 0.55 + 0.38, c[2] * 0.55 + 0.08];
                 }

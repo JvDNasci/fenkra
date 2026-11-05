@@ -32,6 +32,11 @@ mod sketch_ext;
 mod dwg_ui;
 mod measure;
 mod i18n;
+mod tree_ui;
+mod paineis;
+mod partida;
+#[cfg(test)]
+mod padrao;
 
 use eframe::egui;
 use eframe::egui_wgpu::{self, wgpu};
@@ -54,13 +59,57 @@ fn wgpu_options() -> egui_wgpu::WgpuConfiguration {
     cfg
 }
 
-fn main() -> eframe::Result {
-    let opts = eframe::NativeOptions {
+fn opcoes(modo: partida::Modo) -> eframe::NativeOptions {
+    let mut wgpu_options = wgpu_options();
+    partida::aplicar_modo(&mut wgpu_options, modo);
+    eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([1360., 780.]).with_maximized(true).with_min_inner_size([900., 600.]).with_title(concat!("Fenkra CAD ", env!("CARGO_PKG_VERSION")))
             .with_icon(eframe::icon_data::from_png_bytes(include_bytes!("../../../assets/app/fenix-256.png")).unwrap_or_default()),
         renderer: eframe::Renderer::Wgpu,
-        wgpu_options: wgpu_options(),
+        wgpu_options,
         ..Default::default()
-    };
-    eframe::run_native("Fenkra", opts, Box::new(|cc| Ok(Box::new(app::App::new(cc)))))
+    }
+}
+
+/// Abre a janela tentando, na ordem, o adaptador padrão, Vulkan, OpenGL e o modo seguro. Cada falha
+/// vai para o `partida.log`; se nenhuma funcionar, uma caixa de mensagem explica o que aconteceu.
+fn main() -> eframe::Result {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    partida::iniciar();
+    if args.iter().any(|a| a == "--diagnostico") {
+        partida::diagnostico();
+        return Ok(());
+    }
+    let seguro = args.iter().any(|a| a == "--seguro");
+    let forcado = std::env::var("WGPU_BACKEND").ok().filter(|v| !v.is_empty());
+    let mut erros: Vec<(partida::Modo, String)> = Vec::new();
+    for modo in partida::Modo::tentativas(seguro, forcado.is_some()) {
+        partida::registrar("tentativa", modo.nome());
+        let r = eframe::run_native(
+            "Fenkra",
+            opcoes(modo),
+            Box::new(move |cc| {
+                let mut app = app::App::new(cc);
+                if let Some(rs) = &cc.wgpu_render_state {
+                    if partida::registrar_adaptador(rs, modo) {
+                        crate::i18n::set_english(app.settings.english);
+                        app.toast(crate::i18n::tr("Adaptador gráfico por software: o Fenkra abre, mas fica lento. Atualize o driver da placa de vídeo."), true);
+                    }
+                }
+                Ok(Box::new(app))
+            }),
+        );
+        match r {
+            Ok(()) => {
+                partida::registrar("fim", "encerrado normalmente");
+                return Ok(());
+            }
+            Err(e) => erros.push((modo, e.to_string())),
+        }
+    }
+    partida::falha_de_gpu(&erros, forcado);
+    match erros.pop() {
+        Some((_, e)) => Err(eframe::Error::AppCreation(e.into())),
+        None => Ok(()),
+    }
 }

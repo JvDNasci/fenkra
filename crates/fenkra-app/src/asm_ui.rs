@@ -1115,6 +1115,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
             let open_key = egui::Id::unique(("asm_expandir", n.id.0));
             let has_kids = info.feats.get(&n.id).is_some_and(|v| !v.is_empty()) || info.subs.get(&n.id).is_some_and(|v| !v.is_empty()) || matches!(n.kind, NodeKind::Group);
             let mut open = ui.ctx().data(|m| m.get_temp::<bool>(open_key)).unwrap_or(false);
+            crate::tree_ui::marca_em(ui, depth as f32 * 14.);
             let r = ui
                 .horizontal(|ui| {
                     ui.add_space(depth as f32 * 14.);
@@ -1122,7 +1123,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                     // grupos começam abertos (o valor guardado é "fechado"); peças começam fechadas
                     let shown = if matches!(n.kind, NodeKind::Group) { !open } else { open };
                     if has_kids {
-                        if ui.add(egui::Button::new(RichText::new(if shown { "⏷" } else { "⏵" }).size(10.)).frame(false)).on_hover_text(tr("recursos da peça / componentes do subconjunto")).clicked() {
+                        if crate::tree_ui::caixa(ui, shown).on_hover_text(tr("recursos da peça / componentes do subconjunto")).clicked() {
                             open = !open;
                             ui.ctx().data_mut(|m| m.insert_temp(open_key, open));
                         }
@@ -1160,7 +1161,11 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                         r
                     } else {
                         let t = if err.is_some() { RichText::new(txt).color(crate::theme::st_err()) } else if n.visible { RichText::new(txt) } else { RichText::new(txt).weak() };
-                        ui.selectable_label(st.sel == Some(n.id), t)
+                        let r = ui.selectable_label(st.sel == Some(n.id), t);
+                        if st.sel == Some(n.id) {
+                            crate::tree_ui::achar(r.rect);
+                        }
+                        r
                     }
                 })
                 .inner;
@@ -1262,7 +1267,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                         let mut copen = ui.ctx().data(|m| m.get_temp::<bool>(key)).unwrap_or(true);
                         ui.horizontal(|ui| {
                             line(ui, 0.);
-                            if ui.add(egui::Button::new(RichText::new(if copen { "⏷" } else { "⏵" }).size(10.)).frame(false)).clicked() {
+                            if crate::tree_ui::caixa(ui, copen).clicked() {
                                 copen = !copen;
                                 ui.ctx().data_mut(|m| m.insert_temp(key, copen));
                             }
@@ -1301,7 +1306,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                         let mut sopen = ui.ctx().data(|m| m.get_temp::<bool>(key)).unwrap_or(false);
                         ui.horizontal(|ui| {
                             line(ui, 0.);
-                            if ui.add(egui::Button::new(RichText::new(if sopen { "⏷" } else { "⏵" }).size(10.)).frame(false)).clicked() {
+                            if crate::tree_ui::caixa(ui, sopen).clicked() {
                                 sopen = !sopen;
                                 ui.ctx().data_mut(|m| m.insert_temp(key, sopen));
                             }
@@ -1330,7 +1335,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
             }
         }
     }
-    rows(ui, st, &info, None, 0, &mut new_sel, &mut act, &mut hover);
+    crate::tree_ui::filhos(ui, |ui| rows(ui, st, &info, None, 0, &mut new_sel, &mut act, &mut hover));
     // 2 cliques num recurso da peça: abre a peça e o recurso
     if let Some((comp, fid)) = ui.ctx().data(|m| m.get_temp::<(Id, Id)>(egui::Id::unique("asm_recurso_editar"))) {
         ui.ctx().data_mut(|m| m.remove::<(Id, Id)>(egui::Id::unique("asm_recurso_editar")));
@@ -1344,11 +1349,28 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
     if st.asm.nodes.is_empty() {
         ui.label(RichText::new(tr("vazia — 🧩 Inserir peça ou ✚ Peça nova no contexto")).weak().italics().small());
     }
-    crate::pmi_ui::tree_section(app, ui);
+    let (n_pmi, n_cap) = crate::pmi_ui::contagem(app);
+    if n_pmi > 0 {
+        crate::pmi_ui::tree_section(app, ui, true, false);
+    }
+    if n_cap > 0 {
+        crate::pmi_ui::tree_section(app, ui, false, true);
+    }
+    if n_pmi == 0 || n_cap == 0 {
+        let titulo = RichText::new(format!("{} ({})", tr("Grupos vazios"), (n_pmi == 0) as u8 + (n_cap == 0) as u8)).weak();
+        let _ = crate::tree_ui::grupo(ui, "arvore_vazios", None, titulo, false).corpo(ui, |ui| {
+            if n_pmi == 0 {
+                crate::pmi_ui::tree_section(app, ui, true, false);
+            }
+            if n_cap == 0 {
+                crate::pmi_ui::tree_section(app, ui, false, true);
+            }
+        });
+    }
     let st = app.asm.as_mut().unwrap();
     // restrições
     ui.add_space(6.);
-    egui::CollapsingHeader::new(format!("🔗 {} ({})", tr("Restrições e juntas"), st.asm.mates.len() + st.asm.rigid.len() + st.asm.joints.len() + st.asm.couplings.len() + st.asm.patterns.len())).default_open(true).show(ui, |ui| {
+    let _ = crate::tree_ui::grupo(ui, "arvore_restricoes", Some("rest_contato"), format!("{} ({})", tr("Restrições e juntas"), st.asm.mates.len() + st.asm.rigid.len() + st.asm.joints.len() + st.asm.couplings.len() + st.asm.patterns.len()), true).corpo(ui, |ui| {
         for m in &st.asm.mates {
             let failed = st.report.failed.contains(&m.id);
             let txt = format!("{} {}  ({} ↔ {}){}", m.kind.icon(), m.name, st.asm.name_of(m.a.comp), st.asm.name_of(m.b.comp), if failed { " ✖" } else { "" });
@@ -1359,7 +1381,11 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
             if m.suppressed {
                 t = t.strikethrough().weak();
             }
+            crate::tree_ui::marca(ui);
             let r = ui.selectable_label(st.sel == Some(m.id), t);
+            if st.sel == Some(m.id) {
+                crate::tree_ui::achar(r.rect);
+            }
             if r.clicked() {
                 new_sel = Some(m.id);
             }
@@ -1391,7 +1417,11 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
             if j.suppressed {
                 t = t.strikethrough().weak();
             }
+            crate::tree_ui::marca(ui);
             let r = ui.selectable_label(st.sel == Some(j.id), t);
+            if st.sel == Some(j.id) {
+                crate::tree_ui::achar(r.rect);
+            }
             if r.clicked() {
                 new_sel = Some(j.id);
             }
@@ -1406,7 +1436,11 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
             });
         }
         for c in &st.asm.couplings {
+            crate::tree_ui::marca(ui);
             let r = ui.selectable_label(st.sel == Some(c.id), RichText::new(format!("⚭ {}  ({} → {}, {})", c.name, st.asm.name_of(c.a), st.asm.name_of(c.b), c.ratio)).small());
+            if st.sel == Some(c.id) {
+                crate::tree_ui::achar(r.rect);
+            }
             if r.clicked() {
                 new_sel = Some(c.id);
             }
@@ -1418,7 +1452,11 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
             });
         }
         for p in &st.asm.patterns {
+            crate::tree_ui::marca(ui);
             let r = ui.selectable_label(st.sel == Some(p.id), RichText::new(format!("⁂ {}  ({} × {})", p.name, st.asm.name_of(p.source), p.instances.len() + 1)).small());
+            if st.sel == Some(p.id) {
+                crate::tree_ui::achar(r.rect);
+            }
             if r.clicked() {
                 new_sel = Some(p.id);
             }
@@ -1438,7 +1476,11 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
             if f.suppressed {
                 t = t.strikethrough().weak();
             }
+            crate::tree_ui::marca(ui);
             let r = ui.selectable_label(st.sel == Some(f.id), t);
+            if st.sel == Some(f.id) {
+                crate::tree_ui::achar(r.rect);
+            }
             if r.clicked() {
                 new_sel = Some(f.id);
             }
@@ -1458,7 +1500,11 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
         }
         for g in &st.asm.rigid {
             let names: Vec<String> = g.comps.iter().map(|c| st.asm.name_of(*c)).collect();
+            crate::tree_ui::marca(ui);
             let r = ui.selectable_label(st.sel == Some(g.id), RichText::new(format!("🔒 {}  ({})", g.name, names.join(", "))).small());
+            if st.sel == Some(g.id) {
+                crate::tree_ui::achar(r.rect);
+            }
             if r.clicked() {
                 new_sel = Some(g.id);
             }
@@ -2472,6 +2518,8 @@ pub fn sim_window(app: &mut App, ctx: &egui::Context) {
         open = false;
     }
     egui::Window::new(tr("▶ Simulação cinemática"))
+        .default_pos(crate::paineis::ao_lado_da_arvore(app.area_util))
+        .constrain_to(app.area_util)
         .id(egui::Id::unique("janela_simulacao"))
         .open(&mut open)
         .default_width(460.)

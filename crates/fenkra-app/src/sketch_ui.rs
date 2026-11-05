@@ -2454,9 +2454,9 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
     } else {
         (format!("Sub-restrito · {} grau(s) de liberdade", st.dof), FREE)
     };
-    painter.text(rect.left_top() + egui::vec2(10., 26.), egui::Align2::LEFT_TOP, format!("✏ Editando sketch · {txt}"), egui::FontId::proportional(13.), col);
+    painter.text(rect.center_top() + egui::vec2(0., 26.), egui::Align2::CENTER_TOP, format!("✏ Editando sketch · {txt}"), egui::FontId::proportional(13.), col);
     let tool_name = tool.info().2;
-    painter.text(rect.left_top() + egui::vec2(10., 44.), egui::Align2::LEFT_TOP, format!("Ferramenta: {tool_name} · Esc cancela · Esc de novo sai do sketch"), egui::FontId::proportional(11.), col.gamma_multiply(0.8));
+    painter.text(rect.center_top() + egui::vec2(0., 44.), egui::Align2::CENTER_TOP, format!("Ferramenta: {tool_name} · Esc cancela · Esc de novo sai do sketch"), egui::FontId::proportional(11.), col.gamma_multiply(0.8));
 
     // ---------- grava no documento (ids alocados aqui são reservados no documento)
     let _ = &mut al_ids;

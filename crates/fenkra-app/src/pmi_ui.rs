@@ -839,8 +839,13 @@ fn item_row(ui: &mut egui::Ui, p: &Pmi, sel: Option<Id>, folders: &[String], sel
     });
 }
 
+/// Quantas anotações e capturas há, para a árvore decidir o que está vazio.
+pub fn contagem(app: &App) -> (usize, usize) {
+    (list(app).len(), captures(app).len())
+}
+
 /// Seção "PMI" na árvore (peça ou montagem): anotações (com pastas) e, à parte, as capturas.
-pub fn tree_section(app: &mut App, ui: &mut egui::Ui) {
+pub fn tree_section(app: &mut App, ui: &mut egui::Ui, com_pmi: bool, com_capturas: bool) {
     let n = list(app).len();
     let mut select = None;
     let mut action: Option<(Id, u8)> = None;
@@ -852,17 +857,15 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui) {
     let mut folders: Vec<String> = list(app).iter().map(|p| p.folder.clone()).filter(|f| !f.is_empty()).collect();
     folders.sort();
     folders.dedup();
-    let h = egui::CollapsingHeader::new(format!("📐 {} ({n})", tr("PMI — detalhamento 3D"))).id_salt("arvore_pmi").default_open(n > 0).show(ui, |ui| {
-        if n == 0 {
-            ui.label(RichText::new(tr("Cotas, notas, rugosidade, solda e tolerâncias no modelo 3D (grupo Detalhamento 3D).")).weak().small());
-        }
+    if com_pmi {
+    let h = crate::tree_ui::grupo(ui, "arvore_pmi", Some("pmi_nota"), format!("{} ({n})", tr("PMI — detalhamento 3D")), n > 0).corpo(ui, |ui| {
         for f in &folders {
-            let r = egui::CollapsingHeader::new(format!("📁 {f}")).id_salt(("pmi_pasta", f.as_str())).default_open(true).show(ui, |ui| {
+            let r = crate::tree_ui::grupo(ui, ("pmi_pasta", f.as_str()), Some("pasta"), f.as_str(), true).corpo(ui, |ui| {
                 for p in list(app).iter().filter(|p| p.folder == *f) {
                     item_row(ui, p, sel, &folders, &mut select, &mut action, &mut move_to);
                 }
             });
-            r.header_response.context_menu(|ui| {
+            r.context_menu(|ui| {
                 if ui.button(tr("👁 Mostrar a pasta")).clicked() {
                     folder_act = Some((f.clone(), 2));
                     ui.close();
@@ -881,7 +884,8 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui) {
             item_row(ui, p, sel, &folders, &mut select, &mut action, &mut move_to);
         }
     });
-    h.header_response.context_menu(|ui| {
+    let h = h.on_hover_text(tr("Cotas, notas, rugosidade, solda e tolerâncias no modelo 3D (grupo Detalhamento 3D)."));
+    h.context_menu(|ui| {
         ui.label(RichText::new(tr("Nova anotação 3D")).strong());
         for (i, n) in [(0u8, "↔ Cota linear"), (1, "R Raio"), (2, "Ø Diâmetro"), (3, "∠ Ângulo"), (4, "✎ Nota"), (5, "√ Rugosidade"), (6, "⌒ Solda"), (7, "▭ Referência (datum)"), (8, "⊞ Tolerância geométrica"), (9, "▤ Legenda 3D")] {
             if ui.button(tr(n)).clicked() {
@@ -907,14 +911,14 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui) {
             ui.close();
         }
     });
+    }
     // capturas: vista (câmera e zoom) + anotações visíveis (+ visibilidade do modelo, se pedida)
     let mut cap_act: Option<(usize, u8)> = None;
     let caps: Vec<(String, bool)> = captures(app).iter().map(|c| (c.name.clone(), c.with_model)).collect();
-    let hc = egui::CollapsingHeader::new(format!("📷 {} ({})", tr("Capturas"), caps.len())).id_salt("arvore_capturas").default_open(!caps.is_empty()).show(ui, |ui| {
-        if caps.is_empty() {
-            ui.label(RichText::new(tr("Botão direito aqui: capturar a vista atual com as anotações visíveis (e, se quiser, o que está oculto no modelo).")).weak().small());
-        }
+    if com_capturas {
+    let hc = crate::tree_ui::grupo(ui, "arvore_capturas", Some("vista_iso"), format!("{} ({})", tr("Capturas"), caps.len()), !caps.is_empty()).corpo(ui, |ui| {
         for (i, (n, wm)) in caps.iter().enumerate() {
+            crate::tree_ui::marca(ui);
             let r = ui.selectable_label(false, format!("📷 {n}{}", if *wm { " ◐" } else { "" })).on_hover_text(if *wm { tr("aplicar: câmera, anotações e visibilidade do modelo") } else { tr("aplicar: câmera e anotações desta captura") });
             if r.clicked() {
                 cap_act = Some((i, 0));
@@ -935,7 +939,8 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui) {
             });
         }
     });
-    hc.header_response.context_menu(|ui| {
+    let hc = hc.on_hover_text(tr("Botão direito aqui: capturar a vista atual com as anotações visíveis (e, se quiser, o que está oculto no modelo)."));
+    hc.context_menu(|ui| {
         if ui.button(tr("📷 Capturar: câmera + anotações")).clicked() {
             cap_act = Some((usize::MAX, 1));
             ui.close();
@@ -945,6 +950,7 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui) {
             ui.close();
         }
     });
+    }
     if let Some(f) = ui.ctx().data_mut(|d| d.remove_temp::<u64>(egui::Id::unique("pmi_foco_arvore"))) {
         app.pmi_focus = Some(Id(f));
     }

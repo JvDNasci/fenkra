@@ -1,10 +1,155 @@
-//! Ícones SVG (assets/icons, gerados por scripts/gerar_icones.py e editáveis no VectorCraft/Inkscape).
+//! Ícones SVG. A família nova fica em assets/icons2 (scripts/gerar_icones2.py): traço sem cor fixa, com os
+//! marcadores BASE e RES trocados aqui pelas cores do tema. A antiga, em assets/icons, é só a reserva de
+//! quem ainda não tem desenho novo.
 
 use eframe::egui::{self, ImageSource};
+use std::borrow::Cow;
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::sync::Arc;
 use crate::i18n::tr;
+use crate::theme;
+
+/// Ícones já pintados com a paleta do tema atual, por nome.
+///
+/// O egui guarda bytes, imagem e textura pela URI. Por isso a URI carrega as duas cores: ao mudar a
+/// paleta, a URI muda e o ícone é refeito; ao voltar a uma paleta já vista, o egui reaproveita o que
+/// tem. Entre uma troca e outra `get` só clona a entrada daqui, sem refazer SVG a cada quadro.
+struct Pintados {
+    rev: u64,
+    base: [u8; 3],
+    res: [u8; 3],
+    prontos: HashMap<String, ImageSource<'static>>,
+}
+
+impl Pintados {
+    fn novo(rev: u64, (base, res): ([u8; 3], [u8; 3])) -> Self {
+        Self { rev, base, res, prontos: HashMap::new() }
+    }
+
+    fn fonte(&mut self, nome: &str) -> Option<ImageSource<'static>> {
+        if let Some(pronto) = self.prontos.get(nome) {
+            return Some(pronto.clone());
+        }
+        let svg = pintar(modelo(nome)?, self.base, self.res);
+        let fonte = ImageSource::Bytes {
+            uri: Cow::Owned(uri(nome, self.base, self.res)),
+            bytes: egui::load::Bytes::Shared(Arc::from(svg.into_bytes())),
+        };
+        self.prontos.insert(nome.to_owned(), fonte.clone());
+        Some(fonte)
+    }
+}
+
+thread_local! {
+    // A interface desenha numa thread só; assim a consulta de cada ícone dispensa trava.
+    static PINTADOS: RefCell<Pintados> = RefCell::new(Pintados::novo(0, ([0; 3], [0; 3])));
+}
+
+fn hex([r, g, b]: [u8; 3]) -> String {
+    format!("{r:02x}{g:02x}{b:02x}")
+}
+
+/// Troca os marcadores do modelo pelas cores.
+fn pintar(modelo: &str, base: [u8; 3], res: [u8; 3]) -> String {
+    modelo.replace("BASE", &format!("#{}", hex(base))).replace("RES", &format!("#{}", hex(res)))
+}
+
+/// Sem `#` na URI: o egui corta nele ao procurar a extensão, e o carregador de SVG recusaria o ícone.
+fn uri(nome: &str, base: [u8; 3], res: [u8; 3]) -> String {
+    format!("bytes://icons2/{}-{}/{nome}.svg", hex(base), hex(res))
+}
+
+/// O nome tem desenho na família nova.
+#[cfg(test)]
+pub fn existe(nome: &str) -> bool {
+    modelo(nome).is_some()
+}
+
+/// Ícone pelo nome, nas cores do tema atual. Sem desenho novo, cai no ícone antigo.
+pub fn get(name: &str) -> ImageSource<'static> {
+    PINTADOS.with_borrow_mut(|p| {
+        let rev = theme::theme_rev();
+        if p.rev != rev {
+            *p = Pintados::novo(rev, theme::icon_colors());
+        }
+        p.fonte(name)
+    }).unwrap_or_else(|| antigo(name))
+}
+
+macro_rules! modelos {
+    ($($nome:literal),* $(,)?) => {
+        /// Modelo do ícone novo, com os marcadores.
+        fn modelo(nome: &str) -> Option<&'static str> {
+            match nome {
+                $($nome => Some(include_str!(concat!("../../../assets/icons2/", $nome, ".svg"))),)*
+                _ => None,
+            }
+        }
+    };
+}
+
+// Lista gerada a partir de assets/icons2 (scripts/gerar_icones2.py).
+modelos!(
+    "abrir_projeto", "ajustar", "an_curvatura", "an_sombreado", "an_zebra", "aparencia", "arestas_comando",
+    "arestas_selecionar", "arestas_todas", "asm_engrenagens", "asm_fixadores", "asm_furo_pecas", "asm_grupo",
+    "asm_inserir", "asm_link", "asm_lista", "asm_nova", "asm_numerar", "asm_peca_nova", "asm_recorte_peca",
+    "asm_repeticao", "asm_sub_selecao", "asm_subconjunto", "asm_substituir", "bool_intersecao", "bool_subtrair",
+    "bool_unir", "canto", "casca", "chanfro", "chanfro_dist", "chanfro_dist_angulo", "chanfro_dist_dist",
+    "circulo3d", "circulo3p", "coletor", "composer", "conexao", "config", "conica", "cont_g0", "cont_g1",
+    "cont_g2", "cota_angulo", "cota_diametro", "cota_horizontal", "cota_raio", "cota_vertical",
+    "curva_extraida", "curva_intersecao", "curva_juntar", "curva_paralela", "curva_proj_sup", "curva_projetada",
+    "des_abrir", "des_balao", "des_baloes_auto", "des_bom", "des_centro", "des_corte", "des_cota_al",
+    "des_cota_ang", "des_cota_d", "des_cota_h", "des_cota_r", "des_cota_v", "des_datum", "des_detalhe",
+    "des_dxf", "des_esquema", "des_folha", "des_gdt", "des_iso", "des_nota", "des_novo", "des_pdf",
+    "des_planificada", "des_projetada", "des_rugosidade", "des_salvar", "des_solda", "des_svg", "des_tab_corte",
+    "des_tab_dobras", "des_tab_furos", "des_tres_vistas", "des_vista", "des_vista_camera", "escala", "espelho",
+    "espessura", "espiral", "estilo", "exemplo", "ext_ate_face", "ext_ate_plano", "ext_ate_superficie",
+    "ext_ate_ultimo", "ext_cego", "ext_dois_sentidos", "ext_passante", "ext_saida_filete", "ext_simetrico",
+    "extrair", "extrusao", "filete", "filete_completo", "filete_face_face", "filete_variavel", "filtro", "furo",
+    "furo_cego", "furo_contrafurado", "furo_escareado", "furo_passante", "furo_rebaixado", "furo_roscado",
+    "furo_simples", "helice", "hib_costurar", "hib_dividir", "hib_engrossar", "hib_fechar", "hib_malha",
+    "hib_preencher", "idioma", "junta_came", "junta_cilindrica", "junta_esferica", "junta_parafuso",
+    "junta_planar", "junta_ponto_curva", "junta_prismatica", "junta_revolucao", "junta_rigida", "linha_angulo",
+    "linha_bissetriz", "linha_direcao", "linha_eixo", "linha_normal", "linha_planos", "linha_pontos",
+    "linha_tangente", "macro", "mec_auto", "mec_simular", "mostrar", "multisecoes", "multisecoes_remover",
+    "navegacao", "nervura", "nova_peca", "novo_projeto", "ocultar", "ocultos", "op_adicionar", "op_aparar",
+    "op_contorno", "op_curar", "op_desaparar", "op_desmontar", "op_dividir", "op_extrapolar", "op_intersecao",
+    "op_juntar", "op_multi_extrair", "op_remover", "op_unir", "ortho", "padrao_circular", "padrao_linear",
+    "padrao_pontos", "parametro", "pasta", "personalizar", "plano", "plano_2linhas", "plano_3pontos",
+    "plano_angulo", "plano_curva", "plano_deslocado", "plano_equacao", "plano_medio", "plano_meio",
+    "plano_normal_curva", "plano_paralelo_ponto", "plano_ponto_linha", "plano_ponto_normal", "plano_tangente",
+    "pmi_angulo", "pmi_baloes", "pmi_diametro", "pmi_legenda", "pmi_linear", "pmi_nota", "pmi_raio",
+    "pmi_referencia", "pmi_rugosidade", "pmi_solda", "pmi_tolerancia", "polilinha3d", "ponto_centro",
+    "ponto_coord", "ponto_curva", "ponto_deslocado", "ponto_entre", "ponto_intersecao",
+    "ponto_intersecao_curvas", "ponto_plano", "ponto_proj_curva", "ponto_projetado", "ponto_superficie",
+    "ponto_tangente", "prim_caixa", "prim_cilindro", "prim_cone", "prim_cunha", "prim_esfera", "prim_prisma",
+    "prim_toro", "prop_minima", "prop_tangente", "r_coincidente", "r_concentrica", "r_fixa", "r_horizontal",
+    "r_igual", "r_paralela", "r_perpendicular", "r_ponto_medio", "r_simetrica", "r_tangente", "r_vertical",
+    "ranhura", "rasgo_varrido", "recorte", "reforco", "rest_alinhar", "rest_angulo", "rest_atualizar",
+    "rest_auto", "rest_coincidencia", "rest_conjunta", "rest_contato", "rest_cremalheira", "rest_distancia",
+    "rest_engrenagem", "rest_fixar", "rest_interferencia", "rest_paralelo", "rest_perpendicular", "rest_polia",
+    "revolucao", "rosca", "saida", "salvar", "sel_aresta", "sel_caixa_auto", "sel_caixa_cruzada",
+    "sel_caixa_janela", "sel_clique", "sel_corpo", "sel_face", "sel_filtro", "sel_vertice", "sk_aparar",
+    "sk_arco3", "sk_arco_centro", "sk_auto_cota", "sk_auto_restricao", "sk_chanfro", "sk_checar", "sk_circulo",
+    "sk_circulo3", "sk_concluir", "sk_construcao", "sk_converter", "sk_copiar", "sk_cota", "sk_espelhar",
+    "sk_estender", "sk_filete", "sk_girar", "sk_grade", "sk_intersecao", "sk_linha", "sk_mover", "sk_offset",
+    "sk_poligono", "sk_polilinha", "sk_ponto", "sk_projetar", "sk_rasgo", "sk_retangulo", "sk_retangulo_centro",
+    "sk_selecionar", "sk_snap", "sk_spline", "sketch", "sm_aba", "sm_aba_curva", "sm_aba_perfil",
+    "sm_aba_superficie", "sm_alivio_canto", "sm_bainha", "sm_desdobrar", "sm_dobra_linha", "sm_estampo",
+    "sm_furo_flangeado", "sm_joggle", "sm_parametros", "sm_parede", "sm_rasgo_circular", "sm_recorte",
+    "sm_veneziana", "spine", "spline", "spline_controle", "st_biblioteca", "st_canto_aparar",
+    "st_canto_encaixe", "st_canto_meia", "st_canto_nenhum", "st_corte", "st_membro", "st_montagem", "st_placa",
+    "st_reforco", "sup_cilindro", "sup_concordancia", "sup_conectar", "sup_deslocada", "sup_esfera",
+    "sup_extraida", "sup_extrudada", "sup_filete", "sup_filete_aresta", "sup_multisecoes", "sup_preenchida",
+    "sup_revolucao", "sup_tubo", "sup_varredura", "sup_varredura_av", "sweep_corrigido", "sweep_fixo",
+    "sweep_frenet", "vista_direita", "vista_frente", "vista_iso", "vista_topo", "wf_repetir", "xf_afinidade",
+    "xf_escala", "xf_girar", "xf_mover", "xf_simetria", "arvore_zoom_mais", "arvore_zoom_menos",
+    "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais"
+);
 
 // Lista gerada a partir de assets/icons (scripts/gerar_icones.py).
-pub fn get(name: &str) -> ImageSource<'static> {
+fn antigo(name: &str) -> ImageSource<'static> {
     match name {
         "abrir_projeto" => egui::include_image!("../../../assets/icons/abrir_projeto.svg"),
         "ajustar" => egui::include_image!("../../../assets/icons/ajustar.svg"),
@@ -425,4 +570,70 @@ pub fn hover_help(ui: &egui::Ui, resp: egui::Response, title: &str, brief: &str,
             ui.label(egui::RichText::new(tr("(mantenha o mouse para mais detalhes)")).small().weak());
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use egui::load::{ImagePoll, SizeHint};
+
+    /// Nomes do `match` de `antigo`, que é a lista de tudo que `get` conhece.
+    fn nomes() -> Vec<&'static str> {
+        let linha = |l: &&'static str| l.trim_start().starts_with('"') && l.contains("=> egui::include_image!");
+        include_str!("icons.rs").lines().filter(linha).filter_map(|l| l.split('"').nth(1)).collect()
+    }
+
+    fn tem_cor(img: &egui::ColorImage, [r, g, b]: [u8; 3]) -> bool {
+        let perto = |a: u8, b: u8| a.abs_diff(b) <= 3;
+        img.pixels.iter().any(|p| p.a() == 255 && perto(p.r(), r) && perto(p.g(), g) && perto(p.b(), b))
+    }
+
+    #[test]
+    fn todo_nome_tem_svg_novo_com_os_dois_marcadores_e_desenha_as_duas_cores() {
+        let ctx = egui::Context::default();
+        egui_extras::install_image_loaders(&ctx);
+        let (base, res) = ([10, 200, 30], [200, 20, 220]);
+        let lista = nomes();
+        assert_eq!(lista.len(), 356);
+        for nome in lista {
+            let svg = modelo(nome).unwrap_or_else(|| panic!("{nome} sem desenho novo"));
+            assert!(svg.contains(r#"stroke="BASE""#) && svg.contains(r#"stroke="RES""#), "{nome} sem marcador");
+            assert!(!svg.contains('#'), "{nome} com cor fixa");
+            let endereco = uri(nome, base, res);
+            ctx.include_bytes(endereco.clone(), pintar(svg, base, res).into_bytes());
+            let tamanho = SizeHint::Size { width: 96, height: 96, maintain_aspect_ratio: true };
+            match ctx.try_load_image(&endereco, tamanho) {
+                Ok(ImagePoll::Ready { image }) => {
+                    assert!(tem_cor(&image, base), "{nome} não desenha a cor base");
+                    assert!(tem_cor(&image, res), "{nome} não desenha a cor de resultado");
+                }
+                _ => panic!("{nome}: SVG inválido"),
+            }
+        }
+    }
+
+    #[test]
+    fn pintado_fica_guardado_e_a_uri_muda_com_a_paleta() {
+        let bytes = |f: &ImageSource<'static>| match f {
+            ImageSource::Bytes { uri, bytes: egui::load::Bytes::Shared(b) } => (uri.to_string(), b.clone()),
+            _ => panic!("fonte inesperada"),
+        };
+        let mut claro = Pintados::novo(1, ([1, 2, 3], [4, 5, 6]));
+        let (uri_a, a) = bytes(&claro.fonte("filete").expect("filete"));
+        let (uri_b, b) = bytes(&claro.fonte("filete").expect("filete"));
+        assert!(Arc::ptr_eq(&a, &b), "o segundo pedido refez o SVG");
+        assert_eq!(uri_a, uri_b);
+        assert!(uri_a.ends_with(".svg") && !uri_a.contains('#'));
+        assert!(std::str::from_utf8(&a).expect("utf-8").contains("#010203"));
+
+        let mut escuro = Pintados::novo(2, ([9, 9, 9], [4, 5, 6]));
+        let (uri_c, _) = bytes(&escuro.fonte("filete").expect("filete"));
+        assert_ne!(uri_a, uri_c);
+    }
+
+    #[test]
+    fn nome_desconhecido_cai_na_reserva() {
+        let mut p = Pintados::novo(1, ([0; 3], [0; 3]));
+        assert!(p.fonte("nao_existe").is_none());
+    }
 }

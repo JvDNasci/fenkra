@@ -397,7 +397,7 @@ pub struct RefElement {
     pub appearance: Option<Appearance>,
 }
 
-/// Estilo de exibição de linhas, curvas e pontos (como os tipos de linha do AutoCAD).
+/// Estilo de exibição de linhas, curvas e pontos (contínua, tracejada, pontilhada etc.).
 #[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
 pub struct LineStyle {
     /// espessura em pixels

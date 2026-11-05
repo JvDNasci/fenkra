@@ -495,16 +495,16 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("sel_clique", "Clique", "Seleção por clique (Ctrl + arrastar = caixa)", "Clique seleciona; Shift/Ctrl somam. Ctrl + arrastar faz caixa: da esquerda para a direita só o que está inteiro dentro, da direita para a esquerda o que toca.", SelMode(0)),
                 it("sel_caixa_janela", "Janela", "Caixa janela (inteiro dentro)", "Arrastar com o esquerdo faz a caixa: entra só o que está inteiramente dentro. Shift soma à seleção.", SelMode(1)),
                 it("sel_caixa_cruzada", "Cruzada", "Caixa cruzada (parcialmente dentro)", "Arrastar com o esquerdo faz a caixa: entra tudo o que toca a caixa. Shift soma à seleção.", SelMode(2)),
-                it("sel_caixa_auto", "Automática", "Caixa pela direção", "Arrastar com o esquerdo faz a caixa: para a direita = janela, para a esquerda = cruzada (como no AutoCAD).", SelMode(3)),
+                it("sel_caixa_auto", "Automática", "Caixa pela direção", "Arrastar com o esquerdo faz a caixa: para a direita = janela, para a esquerda = cruzada.", SelMode(3)),
             ]),
         ],
         Group::Vista => vec![
             One(it("ajustar", "Ajustar", "Ajustar à tela  (F)", "Enquadra todo o modelo.", Fit)),
             Family("vistas", vec![
-                it("vista_iso", "Iso", "Vista isométrica  (Ctrl+7)", "", View(-0.785, 0.6)),
-                it("vista_frente", "Frente", "Vista frontal  (Ctrl+1)", "", View(-1.5708, 0.0)),
-                it("vista_topo", "Topo", "Vista superior  (Ctrl+5)", "", View(-1.5708, 1.5706)),
-                it("vista_direita", "Direita", "Vista lateral direita  (Ctrl+3)", "", View(0.0, 0.0)),
+                it("vista_iso", "Iso", "Vista isométrica  (Ctrl+7)", "Leva a câmera à vista isométrica, que mostra três lados da peça de uma vez.", View(-0.785, 0.6)),
+                it("vista_frente", "Frente", "Vista frontal  (Ctrl+1)", "Leva a câmera a olhar a peça de frente.", View(-1.5708, 0.0)),
+                it("vista_topo", "Topo", "Vista superior  (Ctrl+5)", "Leva a câmera a olhar a peça de cima.", View(-1.5708, 1.5706)),
+                it("vista_direita", "Direita", "Vista lateral direita  (Ctrl+3)", "Leva a câmera a olhar a peça pelo lado direito.", View(0.0, 0.0)),
             ]),
             One(it("ortho", "Ortogonal", "Projeção ortogonal  (O)", "Perspectiva ou projeção ortogonal (ideal para sketches).", Ortho)),
         ],
@@ -581,7 +581,6 @@ fn is_selected(a: Act, s: &Settings, st: &ToolState) -> bool {
 
 /// Mostra um grupo; devolve as ações clicadas.
 /// Índice do bloco desenhado nesta passada (alterna as cores do tema); zerado a cada quadro.
-pub static BLOCK_IDX: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 /// Cores do tema dos menus: (fundo par, fundo ímpar, destaque do nome do grupo).
 pub fn theme_colors(theme: u8, dark: bool) -> Option<(egui::Color32, egui::Color32, egui::Color32)> {
@@ -691,11 +690,7 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, title: String, list: Vec<Entr
     // tema: blocos com fundos alternados e o nome do grupo numa faixa de destaque
     let dark = ui.visuals().dark_mode;
     let theme = theme_colors(menu_theme, dark);
-    let k = BLOCK_IDX.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let frame = match theme {
-        Some((a, b, _)) => egui::Frame::new().fill(if k % 2 == 0 { a } else { b }).corner_radius(6.).inner_margin(egui::Margin::symmetric(5, 3)),
-        None => egui::Frame::new(),
-    };
+    let frame = egui::Frame::new().inner_margin(egui::Margin::symmetric(2, 1));
     let accent = theme.map(|t| t.2);
     let inner = if vertical {
         frame.show(ui, |ui| ui.vertical_centered(|ui| {
@@ -727,12 +722,7 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, title: String, list: Vec<Entr
             let row = ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| body(ui)).response;
             // nome do grupo centralizado sob os botões, com a largura do próprio bloco
             let (r, resp) = ui.allocate_exact_size(egui::vec2(row.rect.width(), 14.), egui::Sense::drag());
-            if let Some(c) = accent {
-                ui.painter().rect_filled(r.shrink2(egui::vec2(2., 1.)), 3., c.gamma_multiply(0.22));
-                ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, &title, egui::FontId::proportional(10.5), c);
-            } else {
-                ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, &title, egui::FontId::proportional(10.5), ui.visuals().weak_text_color());
-            }
+            ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, &title, egui::FontId::proportional(10.5), ui.visuals().weak_text_color());
             // arrastar o nome do grupo solta o bloco (vira flutuante; encaixa de novo ao soltar perto de uma borda)
             if let Some(g) = g {
                 let resp = resp.on_hover_text(tr("arraste para soltar o grupo; solte perto do topo ou das laterais para encaixar"));
@@ -761,9 +751,38 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, title: String, list: Vec<Entr
             }
             ui.separator();
         }
+        if let Some(g) = g.filter(|g| s.barra_fixos.contains(g)) {
+            if ui.button(tr("tirar da faixa")).clicked() {
+                s.barra_fixos.retain(|x| *x != g);
+                ui.close();
+            }
+        }
         if ui.button(tr("⚙ Personalizar comandos…")).clicked() {
             acts.push(Act::Customize);
             ui.close();
+        }
+    });
+    acts
+}
+
+/// Separa os grupos da faixa: os do trabalho atual ficam à vista e o resto vai para o botão "Mais".
+/// O que o usuário fixou continua na faixa. Grupo nenhum some: `mais` é tudo que não ficou em `faixa`.
+pub fn contexto(s: &Settings, grupos: Vec<Group>, sketching: bool) -> (Vec<Group>, Vec<Group>) {
+    grupos.into_iter().partition(|g| s.barra_fixos.contains(g) || g.do_contexto(s.bench, sketching))
+}
+
+/// Botão "Mais": abre os grupos fora do contexto, cada um com a opção de ficar fixo na faixa.
+pub fn mais(ui: &mut egui::Ui, grupos: &[Group], s: &mut Settings, st: &ToolState) -> Vec<Act> {
+    let mut acts = vec![];
+    let r = tool_button(ui, "barra_mais", "Mais", s.icon_size, s.show_labels, false, "Mais comandos", "Grupos que não são do trabalho atual. Marque um grupo para deixá-lo sempre na faixa.");
+    egui::Popup::menu(&r).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
+        for g in grupos {
+            let mut fixo = s.barra_fixos.contains(g);
+            if ui.checkbox(&mut fixo, RichText::new(g.label()).small().strong()).on_hover_text(tr("deixar sempre na faixa")).changed() {
+                s.barra_fixos.push(*g);
+            }
+            acts.extend(show_group(ui, *g, s, st, false));
+            ui.add_space(4.);
         }
     });
     acts

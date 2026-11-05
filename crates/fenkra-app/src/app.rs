@@ -174,7 +174,12 @@ pub struct App {
     /// novo sketch esperando o clique no plano/face
     pub sketch_wait_plane: bool,
     /// árvore aberta ao lado do painel do comando
-    pub tree_peek: bool,
+    /// área sob a barra superior, onde a viewport e os painéis ficam
+    pub area_util: Rect,
+    /// zoom, deslocamento e localizar da árvore
+    pub arvore: crate::tree_ui::VistaArvore,
+    /// a roda do mouse rola a árvore neste quadro, não o modelo
+    pub arvore_com_roda: bool,
     /// início da seleção em caixa (Ctrl + arrastar) na viewport
     box_start: Option<egui::Pos2>,
     /// elemento sob o mouse no clique direito da viewport (menu de contexto do 3D)
@@ -341,7 +346,9 @@ impl App {
             pmi_pending: None,
             pmi_focus: None,
             sketch_wait_plane: false,
-            tree_peek: false,
+            area_util: Rect::NOTHING,
+            arvore: crate::tree_ui::VistaArvore::default(),
+            arvore_com_roda: false,
             box_start: None,
             ctx_pick: None,
             ctx_actions: vec![],
@@ -1013,7 +1020,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let accent = brand_accent();
         let (now, dt) = root.ctx().input(|i| (i.time, i.stable_dt.min(0.1)));
         let t0 = *self.start_t0.get_or_insert(now);
-        let el = (now - t0) as f32;
+        let el_real = (now - t0) as f32;
+        // B222: a entrada anima por um tempo limitado e depois congela; parada, a tela não pede mais quadros
+        let entrada = 0.25 + 0.07 * crate::examples::all().len() as f32 + 0.8;
+        let el = el_real.min(entrada);
         let ex_meta: Vec<(&'static str, &'static str, crate::settings::Bench)> = crate::examples::all().into_iter().map(|e| (e.name, e.desc, e.bench)).collect();
         egui::CentralPanel::default().frame(egui::Frame::NONE.inner_margin(12.)).show(root, |ui| {
             paint_backdrop(ui.painter(), ui.max_rect().expand(12.), dark, el, accent);
@@ -1116,7 +1126,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                                     let appear = ease_out(((el - delay) / 0.5).clamp(0., 1.));
                                     let r = example_card(ui, &key, name, desc, *bench, pv.as_deref(), *spin, appear, accent);
                                     let hot = ui.ctx().animate_bool(egui::Id::unique(("card_hot", &key)), r.hovered());
-                                    *spin += dt * (0.35 + 1.6 * hot);
+                                    // a miniatura só gira com o mouse em cima (B222: parada, não gasta quadros)
+                                    if hot > 0.001 {
+                                        *spin += dt * (0.35 + 1.6 * hot);
+                                        ui.ctx().request_repaint();
+                                    }
                                     if r.clicked() {
                                         example = Some(i);
                                     }
@@ -1139,7 +1153,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 ui.add_space(24.);
             });
         });
-        root.ctx().request_repaint();
+        if el_real < entrada {
+            root.ctx().request_repaint();
+        }
         if let Some(r) = recent_open {
             self.open_project_at(std::path::Path::new(&r));
         }
@@ -1976,7 +1992,6 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         }
         let snapshot = snapshot.unwrap_or_else(|| self.open.doc.clone());
         self.session = Some(Session { id, snapshot, is_new });
-        self.tree_peek = false;
         self.reframe_pending = true;
         self.sel = if self.open.doc.reference(id).is_some() { Sel::Ref(id) } else { Sel::Feature(id) };
     }
@@ -2520,11 +2535,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     // ------------------------------------------------------------ painéis
 
     fn top(&mut self, root: &mut egui::Ui) {
-        let dark = root.ctx().global_style().visuals.dark_mode;
         egui::Panel::top("menu").frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(8, 4))).show(root, |ui| {
             // faixa do topo em degradê suave
             let r = ui.max_rect().expand2(egui::vec2(8., 4.));
-            let (a, b) = if dark { (Color32::from_rgb(30, 40, 58), Color32::from_rgb(20, 24, 32)) } else { (Color32::from_rgb(236, 242, 250), Color32::from_rgb(214, 224, 238)) };
+            let (a, b) = (ui.visuals().panel_fill, ui.visuals().faint_bg_color);
             let mut m = egui::Mesh::default();
             m.colored_vertex(r.left_top(), a);
             m.colored_vertex(r.right_top(), a);
@@ -2534,7 +2548,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             m.add_triangle(0, 2, 3);
             ui.painter().add(egui::Shape::mesh(m));
             ui.horizontal(|ui| {
-                ui.label(RichText::new(tr("◆ Fenkra")).strong().color(Color32::from_rgb(120, 180, 255)));
+                ui.label(RichText::new(tr("◆ Fenkra")).strong().color(crate::theme::accent(ui.visuals())));
                 ui.separator();
                 ui.menu_button(tr("Arquivo"), |ui| {
                     if ui.button(tr("Tela inicial")).clicked() {
@@ -2580,6 +2594,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     }
                 });
                 ui.menu_button(tr("Exibir"), |ui| {
+                    if ui.button(tr("Restaurar a posição dos painéis")).on_hover_text(tr("Volta painéis e barras desta bancada ao lugar padrão")).clicked() {
+                        self.settings.restaurar_paineis();
+                        ui.close();
+                    }
                     ui.menu_button(tr("Estilo de exibição"), |ui| {
                         for m in crate::render::DisplayMode::ALL {
                             ui.radio_value(&mut self.settings.display, m, m.label());
@@ -2667,12 +2685,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
 
         let sketching = self.sketch.is_some();
         let ts = self.tool_state();
-        let top = toolbar::groups_at(&self.settings, Dock::Topo, sketching);
-        if !top.is_empty() {
+        let (top, mais) = toolbar::contexto(&self.settings, toolbar::groups_at(&self.settings, Dock::Topo, sketching), sketching);
+        if !top.is_empty() || !mais.is_empty() {
             let mut acts = vec![];
-            let fill = if dark { Color32::from_rgb(24, 27, 34) } else { Color32::from_rgb(244, 247, 251) };
+            let fill = root.visuals().panel_fill;
             egui::Panel::top("comandos").frame(egui::Frame::new().fill(fill).inner_margin(egui::Margin { left: 8, right: 8, top: 4, bottom: 2 })).show(root, |ui| {
-                // uma linha só, com barra de rolagem horizontal fixa embaixo (não quebra linha);
+                // uma linha só, sem barra de rolagem à vista (não quebra linha);
                 // a roda do mouse (vertical) rola a barra para os lados
                 if ui.rect_contains_pointer(ui.max_rect()) {
                     ui.ctx().input_mut(|i| {
@@ -2684,14 +2702,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 }
                 egui::ScrollArea::horizontal()
                     .id_salt("rolagem_comandos")
-                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
-                            let gap = |ui: &mut egui::Ui| {
-                                ui.add_space(8.);
-                                ui.separator();
-                                ui.add_space(8.);
-                            };
+                            let gap = |ui: &mut egui::Ui| ui.add_space(14.);
                             for (i, g) in top.iter().enumerate() {
                                 if i > 0 {
                                     gap(ui);
@@ -2704,8 +2718,13 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                                 gap(ui);
                                 acts.extend(toolbar::show_custom(ui, cg, &mut self.settings, &ts, false));
                             }
+                            // o que não é do contexto continua a um clique
+                            if !mais.is_empty() {
+                                gap(ui);
+                                acts.extend(toolbar::mais(ui, &mais, &mut self.settings, &ts));
+                            }
                         });
-                        ui.add_space(4.);
+                        ui.add_space(2.);
                     });
             });
             for a in acts {
@@ -2714,46 +2733,85 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         }
     }
 
-    /// Grupos fixos na lateral e grupos flutuantes.
-    fn side_toolbars(&mut self, root: &mut egui::Ui) {
+    /// Painel de comando: existe só durante um comando, livre sobre o modelo ou encaixado numa borda.
+    fn painel_comando(&mut self, ctx: &egui::Context, area: Rect) {
+        use crate::paineis::{self, Encaixe, Painel};
+        const LARGURA: f32 = 300.;
+        // quem preferia o painel à direita continua abrindo nela enquanto não mover
+        let direita = !self.settings.editor_left;
+        let padrao = if direita { paineis::abaixo_do_cubo(area, LARGURA) } else { paineis::ao_lado_da_arvore(area) };
+        let posicao = self.settings.painel("comando", if direita { Encaixe::Direita } else { Encaixe::Livre });
+        let titulo = if self.sketch.is_some() {
+            tr("Sketch").to_string()
+        } else if let Some(s) = &self.session {
+            self.open.doc.name_of(s.id)
+        } else {
+            tr("Edição").to_string()
+        };
+        let cfg = Painel { nome: "comando".into(), titulo, padrao, largura: LARGURA, redimensiona: true };
+        let saida = paineis::mostrar(ctx, area, &cfg, posicao, |ui| {
+            self.conclude_bar(ui);
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                if self.settings.bench == crate::settings::Bench::Desenho {
+                    crate::dwg_ui::panel(self, ui)
+                } else if self.settings.bench == crate::settings::Bench::Montagem {
+                    crate::asm_ui::panel(self, ui)
+                } else if self.sketch.is_some() {
+                    crate::sketch_ui::panel(self, ui)
+                } else {
+                    editor::show(self, ui);
+                    crate::measure::panel(self, ui);
+                }
+            });
+        });
+        if let Some(p) = saida.movido {
+            self.settings.guardar_painel("comando", p);
+        }
+    }
+
+    /// Barra de comandos numa lateral: painel livre com os grupos daquela doca.
+    #[allow(clippy::too_many_arguments)]
+    fn barra_livre(&mut self, ctx: &egui::Context, area: Rect, nome: &str, grupos: &[crate::settings::Group], encaixe: crate::paineis::Encaixe, padrao: egui::Pos2, acts: &mut Vec<Act>) {
+        use crate::paineis::{self, Painel};
+        let ts = self.tool_state();
+        let cfg = Painel { nome: nome.to_string(), titulo: "···".to_string(), padrao, largura: 62., redimensiona: true };
+        let posicao = self.settings.painel(nome, encaixe);
+        let saida = paineis::mostrar(ctx, area, &cfg, posicao, |ui| {
+            egui::ScrollArea::vertical().id_salt(nome).show(ui, |ui| {
+                for (i, g) in grupos.iter().enumerate() {
+                    if i > 0 {
+                        ui.separator();
+                    }
+                    acts.extend(toolbar::show_group(ui, *g, &mut self.settings, &ts, true));
+                }
+            });
+        });
+        if let Some(p) = saida.movido {
+            self.settings.guardar_painel(nome, p);
+        }
+    }
+
+    /// Barras laterais e grupos soltos: todos flutuam sobre o modelo.
+    fn side_toolbars(&mut self, ctx: &egui::Context, area: Rect) {
+        use crate::paineis::{self, Encaixe, Painel, Posicao};
         let mut acts = vec![];
         let sketching = self.sketch.is_some();
         let ts = self.tool_state();
         let side = toolbar::groups_at(&self.settings, Dock::Lateral, sketching);
         if !side.is_empty() {
-            egui::Panel::left("barra_lateral").resizable(true).default_size(62.).size_range(48.0..=420.).show(root, |ui| {
-                egui::ScrollArea::vertical().id_salt("barra_lat").show(ui, |ui| {
-                    for (i, g) in side.iter().enumerate() {
-                        if i > 0 {
-                            ui.separator();
-                        }
-                        acts.extend(toolbar::show_group(ui, *g, &mut self.settings, &ts, true));
-                    }
-                });
-            });
+            self.barra_livre(ctx, area, "barra_lateral", &side, Encaixe::Esquerda, paineis::ao_lado_da_arvore(area), &mut acts);
         }
         let right = toolbar::groups_at(&self.settings, Dock::Direita, sketching);
         if !right.is_empty() {
-            egui::Panel::right("barra_direita").resizable(true).default_size(62.).size_range(48.0..=420.).show(root, |ui| {
-                egui::ScrollArea::vertical().id_salt("barra_dir").show(ui, |ui| {
-                    for (i, g) in right.iter().enumerate() {
-                        if i > 0 {
-                            ui.separator();
-                        }
-                        acts.extend(toolbar::show_group(ui, *g, &mut self.settings, &ts, true));
-                    }
-                });
-            });
+            self.barra_livre(ctx, area, "barra_direita", &right, Encaixe::Direita, paineis::abaixo_do_cubo(area, 62.), &mut acts);
         }
-        let ctx = root.ctx().clone();
-        let area = ctx.content_rect();
-        let dragging = ctx.input(|i| i.pointer.primary_down());
         self.ctx_pointer = ctx.input(|i| i.pointer.interact_pos().or(i.pointer.latest_pos()));
         // zonas de encaixe: faixa do topo e as duas laterais
+        let lado = Rect::from_min_max(egui::pos2(area.left() + paineis::FAIXA_ARVORE, area.top()), egui::pos2(area.left() + paineis::FAIXA_ARVORE + 70., area.bottom()));
         let zones = [
-            (Dock::Topo, Rect::from_min_size(area.left_top() + egui::vec2(0., 50.), egui::vec2(area.width(), 70.))),
-            (Dock::Lateral, Rect::from_min_size(area.left_top() + egui::vec2(0., 130.), egui::vec2(70., area.height() - 160.))),
-            (Dock::Direita, Rect::from_min_size(area.right_top() + egui::vec2(-70., 130.), egui::vec2(70., area.height() - 160.))),
+            (Dock::Topo, Rect::from_min_size(area.left_top() - egui::vec2(0., 70.), egui::vec2(area.width(), 70.))),
+            (Dock::Lateral, lado),
+            (Dock::Direita, Rect::from_min_max(egui::pos2(area.right() - 70., area.top()), area.right_bottom())),
         ];
         // grupo arrastado pela alça: fantasma segue o cursor e desliza até a doca de destino
         if let Some(mut dd) = self.dock_drag {
@@ -2776,15 +2834,16 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             // animação: aproxima uma fração a cada quadro
             let k = 0.3;
             dd.ghost = Rect::from_min_max(dd.ghost.min + (to.min - dd.ghost.min) * k, dd.ghost.max + (to.max - dd.ghost.max) * k);
+            let destaque = crate::theme::accent(&ctx.global_style().visuals);
             let pt = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("fantasma_doca")));
             for (d, z) in zones {
                 let on = target.is_some_and(|t| t.0 == d);
-                pt.rect_filled(z, 8., Color32::from_rgba_unmultiplied(90, 170, 255, if on { 46 } else { 16 }));
-                pt.rect_stroke(z, 8., egui::Stroke::new(if on { 2. } else { 1. }, Color32::from_rgba_unmultiplied(90, 170, 255, if on { 200 } else { 80 })), egui::StrokeKind::Inside);
+                pt.rect_filled(z, 8., destaque.gamma_multiply(if on { 0.18 } else { 0.06 }));
+                pt.rect_stroke(z, 8., egui::Stroke::new(if on { 2. } else { 1. }, destaque.gamma_multiply(if on { 0.8 } else { 0.3 })), egui::StrokeKind::Inside);
             }
-            pt.rect_filled(dd.ghost, 8., Color32::from_rgba_unmultiplied(60, 120, 220, 110));
-            pt.rect_stroke(dd.ghost, 8., egui::Stroke::new(2., Color32::from_rgb(140, 195, 255)), egui::StrokeKind::Inside);
-            pt.text(dd.ghost.center(), egui::Align2::CENTER_CENTER, dd.group.label(), egui::FontId::proportional(13.), Color32::WHITE);
+            pt.rect_filled(dd.ghost, 8., destaque.gamma_multiply(0.4));
+            pt.rect_stroke(dd.ghost, 8., egui::Stroke::new(2., destaque), egui::StrokeKind::Inside);
+            pt.text(dd.ghost.center(), egui::Align2::CENTER_CENTER, dd.group.label(), egui::FontId::proportional(13.), ctx.global_style().visuals.strong_text_color());
             ctx.set_cursor_icon(egui::CursorIcon::Grabbing);
             ctx.request_repaint();
             if ctx.input(|i| i.pointer.any_released() || !i.pointer.primary_down()) {
@@ -2792,7 +2851,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     Some((d, _)) => acts.push(Act::Dock(dd.group, d)),
                     None => {
                         // flutuante exatamente onde soltou
-                        ctx.data_mut(|m| m.insert_temp(egui::Id::unique(("pos_flutuante", dd.group.label())), p - dd.grab));
+                        let q = p - dd.grab;
+                        self.settings.guardar_painel(&nome_do_grupo(dd.group), Posicao { encaixe: Encaixe::Livre, pos: Some([q.x, q.y]) });
                         acts.push(Act::Dock(dd.group, Dock::Flutuante));
                     }
                 }
@@ -2802,86 +2862,112 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
         }
         for (i, g) in toolbar::groups_at(&self.settings, Dock::Flutuante, sketching).into_iter().enumerate() {
-            let pos_key = egui::Id::unique(("pos_flutuante", g.label()));
-            let place = ctx.data_mut(|m| m.remove_temp::<egui::Pos2>(pos_key));
-            let w0 = egui::Window::new(g.label())
-                .id(egui::Id::unique(("flutuante", g.label())))
-                // empilhados na borda esquerda da viewport, sem cobrir uns aos outros
-                .default_pos(egui::pos2(290., 140. + 120. * i as f32))
-                .resizable(false)
-                .collapsible(true);
-            // recém-solto: aparece onde o grupo foi largado
-            let w0 = match place {
-                Some(p) => w0.current_pos(p),
-                None => w0,
-            };
-            let w = w0.show(&ctx, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new(tr("📌 fixar em:")).small().weak());
-                        for (d, n) in [(Dock::Topo, "topo"), (Dock::Lateral, "lateral"), (Dock::Direita, "direita")] {
-                            if ui.small_button(tr(n)).clicked() {
-                                acts.push(Act::Dock(g, d));
-                            }
-                        }
-                    });
-                    acts.extend(toolbar::show_group(ui, g, &mut self.settings, &ts, false));
-                });
-            // encaixe por proximidade: soltar perto do topo ou de uma lateral fixa o grupo ali
-            if let Some(w) = w {
-                let r = w.response.rect;
-                let snap = 36.;
-                if w.response.dragged() {
-                    let p = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("docas_possiveis")));
-                    for (zone, name) in [
-                        (Rect::from_min_size(area.left_top() + egui::vec2(0., 50.), egui::vec2(area.width(), 70.)), "⬆ topo"),
-                        (Rect::from_min_size(area.left_top() + egui::vec2(0., 130.), egui::vec2(60., area.height() - 160.)), "⬅ lateral"),
-                        (Rect::from_min_size(area.right_top() + egui::vec2(-60., 130.), egui::vec2(60., area.height() - 160.)), "➡ direita"),
-                    ] {
-                        p.rect_filled(zone, 6., Color32::from_rgba_unmultiplied(90, 170, 255, 28));
-                        p.rect_stroke(zone, 6., egui::Stroke::new(1.5, Color32::from_rgba_unmultiplied(90, 170, 255, 120)), egui::StrokeKind::Inside);
-                        p.text(zone.center(), egui::Align2::CENTER_CENTER, tr(name), egui::FontId::proportional(13.), Color32::from_rgba_unmultiplied(160, 205, 255, 220));
-                    }
-                }
-                let to = if r.top() < area.top() + 60. + snap {
-                    Some(Dock::Topo)
-                } else if r.left() < area.left() + snap {
-                    Some(Dock::Lateral)
-                } else if r.right() > area.right() - snap {
-                    Some(Dock::Direita)
-                } else {
-                    None
-                };
-                if let Some(d) = to {
-                    if dragging && w.response.dragged() {
-                        // prévia animada: um fantasma desliza da janela até a doca
-                        let z = zones.iter().find(|(x, _)| *x == d).map(|(_, z)| *z).unwrap_or(r);
-                        let goal = match d {
-                            Dock::Topo => Rect::from_center_size(egui::pos2(r.center().x.clamp(z.left() + r.width() / 2., z.right() - r.width() / 2.), z.center().y), egui::vec2(r.width(), 64.)),
-                            _ => Rect::from_center_size(egui::pos2(z.center().x, r.center().y.clamp(z.top() + r.height() / 2., z.bottom() - r.height() / 2.)), egui::vec2(64., r.height().min(z.height()))),
-                        };
-                        let key = egui::Id::unique(("fantasma_janela", g.label()));
-                        let prev = ctx.data(|m| m.get_temp::<Rect>(key)).unwrap_or(r);
-                        let ghost = Rect::from_min_max(prev.min + (goal.min - prev.min) * 0.3, prev.max + (goal.max - prev.max) * 0.3);
-                        ctx.data_mut(|m| m.insert_temp(key, ghost));
-                        let p = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("guia_encaixe")));
-                        p.rect_filled(ghost, 8., Color32::from_rgba_unmultiplied(60, 120, 220, 90));
-                        p.rect_stroke(ghost, 8., egui::Stroke::new(2., Color32::from_rgb(140, 195, 255)), egui::StrokeKind::Inside);
-                        ctx.request_repaint();
-                    }
-                    // só encaixa ao terminar de arrastar a janela (clique em botão não conta)
-                    let key = egui::Id::unique(("arrastando_grupo", g.label()));
-                    if w.response.dragged() {
-                        ctx.data_mut(|m| m.insert_temp(key, true));
-                    }
-                    if ctx.input(|i| i.pointer.any_released()) && ctx.data(|m| m.get_temp::<bool>(key)).unwrap_or(false) {
-                        ctx.data_mut(|m| m.remove::<bool>(key));
-                        acts.push(Act::Dock(g, d));
+            let nome = nome_do_grupo(g);
+            let padrao = paineis::ao_lado_da_arvore(area) + egui::vec2(0., 120. * i as f32);
+            let cfg = Painel { nome: nome.clone(), titulo: g.label().to_string(), padrao, largura: 220., redimensiona: false };
+            let posicao = self.settings.painel(&nome, Encaixe::Livre);
+            let saida = paineis::mostrar(ctx, area, &cfg, posicao, |ui| {
+                acts.extend(toolbar::show_group(ui, g, &mut self.settings, &ts, false));
+            });
+            // soltar perto do topo ou de uma lateral devolve o grupo à barra daquela borda
+            match saida.solto_em {
+                Some(Encaixe::Topo) => acts.push(Act::Dock(g, Dock::Topo)),
+                Some(Encaixe::Esquerda) => acts.push(Act::Dock(g, Dock::Lateral)),
+                Some(Encaixe::Direita) => acts.push(Act::Dock(g, Dock::Direita)),
+                _ => {
+                    if let Some(p) = saida.movido {
+                        self.settings.guardar_painel(&nome, Posicao { encaixe: Encaixe::Livre, ..p });
                     }
                 }
             }
         }
         for a in acts {
             self.act(a);
+        }
+    }
+
+    /// Árvore fixa no canto, transparente sobre o modelo, com zoom e deslocamento próprios.
+    fn arvore_sobre_modelo(&mut self, root: &mut egui::Ui, area: Rect) {
+        use crate::tree_ui::{self, Contorno, Localizar};
+        let ctx = root.ctx().clone();
+        let largura = tree_ui::LARGURA.min(area.width() * 0.5);
+        let topo = Rect::from_min_size(area.min + egui::vec2(6., 4.), egui::vec2(largura, 22.));
+        let regiao = Rect::from_min_max(topo.left_bottom() + egui::vec2(0., 2.), egui::pos2(topo.right(), area.bottom() - 28.));
+        self.arvore.regiao = regiao;
+        let (ponteiro, roda, pinca) = ctx.input(|i| (i.pointer.latest_pos(), i.smooth_scroll_delta.y, i.zoom_delta()));
+        let zona = self.arvore.conteudo.intersect(regiao);
+        let sobre = ponteiro.is_some_and(|p| zona.contains(p));
+        let centro = ponteiro.filter(|_| sobre).unwrap_or(regiao.min);
+        if sobre && pinca != 1. {
+            self.arvore.zoom_em(centro, pinca);
+        }
+        if self.arvore_com_roda {
+            self.arvore.pan.y += roda;
+        }
+        // atalhos: Alt + mais, menos, 0 (enquadrar) e L (localizar)
+        let tecla = |k: egui::Key| ctx.input_mut(|i| i.consume_key(egui::Modifiers::ALT, k));
+        if tecla(egui::Key::Plus) || tecla(egui::Key::Equals) {
+            self.arvore.zoom_em(centro, 1.15);
+        }
+        if tecla(egui::Key::Minus) {
+            self.arvore.zoom_em(centro, 1. / 1.15);
+        }
+        if tecla(egui::Key::Num0) {
+            self.arvore.enquadrar();
+        }
+        if tecla(egui::Key::L) {
+            self.arvore.localizar = Localizar::Abrir;
+        }
+
+        // controles: fracos até o mouse chegar perto, para não pesar sobre o modelo
+        let mut barra = root.new_child(egui::UiBuilder::new().id_salt("arvore_controles").max_rect(topo).layout(egui::Layout::left_to_right(egui::Align::Center)));
+        let perto = ponteiro.is_some_and(|p| topo.expand(6.).contains(p) || zona.contains(p));
+        barra.set_opacity(if perto { 1. } else { 0.6 });
+        let contorno = Contorno::reservar(&barra, topo);
+        tree_ui::estilo(&mut barra, 1.);
+        barra.selectable_value(&mut self.left, LeftTab::Peca, tr("Peça"));
+        barra.selectable_value(&mut self.left, LeftTab::Projeto, tr("Projeto"));
+        barra.add_space(6.);
+        if tree_ui::controle(&mut barra, "arvore_zoom_menos", tr("Diminuir a árvore (Alt + menos, ou Ctrl + roda)")) {
+            self.arvore.zoom_em(regiao.min, 1. / 1.15);
+        }
+        if tree_ui::controle(&mut barra, "arvore_zoom_mais", tr("Aumentar a árvore (Alt + mais, ou Ctrl + roda)")) {
+            self.arvore.zoom_em(regiao.min, 1.15);
+        }
+        if tree_ui::controle(&mut barra, "arvore_localizar", tr("Localizar o item ativo (Alt + L)")) {
+            self.arvore.localizar = Localizar::Abrir;
+        }
+        if tree_ui::controle(&mut barra, "arvore_enquadrar", tr("Voltar ao enquadramento (Alt + 0)")) {
+            self.arvore.enquadrar();
+        }
+        if tree_ui::controle(&mut barra, "arvore_recolher", tr("Recolher todos os ramos")) {
+            self.arvore.recolher = true;
+        }
+        contorno.aplicar(&barra);
+
+        tree_ui::comecar(&self.arvore);
+        let zoom = self.arvore.zoom;
+        let caixa = Rect::from_min_size(regiao.min + self.arvore.pan, egui::vec2(largura * zoom, 1e5));
+        let mut ui = root.new_child(egui::UiBuilder::new().id_salt("arvore").max_rect(caixa));
+        ui.set_clip_rect(regiao);
+        tree_ui::estilo(&mut ui, zoom);
+        // arrastar a árvore: fica atrás das linhas, que continuam com o clique
+        if zona.is_positive() {
+            let arrasto = ui.interact(zona, egui::Id::unique("arvore_mover"), egui::Sense::drag());
+            self.arvore.pan += arrasto.drag_delta();
+        }
+        let contorno = Contorno::reservar(&ui, regiao);
+        match self.left {
+            LeftTab::Peca if self.settings.bench == crate::settings::Bench::Desenho => crate::dwg_ui::tree(self, &mut ui),
+            LeftTab::Peca if self.settings.bench == crate::settings::Bench::Montagem => crate::asm_ui::tree(self, &mut ui),
+            LeftTab::Peca => self.tree(&mut ui),
+            LeftTab::Projeto => self.project_panel(&mut ui),
+        }
+        contorno.aplicar(&ui);
+        self.arvore.conteudo = ui.min_rect();
+        self.arvore.pan = tree_ui::limitar_pan(self.arvore.pan, ui.min_rect().size(), regiao.size());
+        if !tree_ui::terminar(&ctx, &mut self.arvore) {
+            self.toast(tr("Nenhum item ativo para localizar").to_string(), false);
         }
     }
 
@@ -3354,13 +3440,24 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let mut new_sel = None;
         let mut actions: Vec<TreeAction> = vec![];
 
-        let pick = |ui: &mut egui::Ui, s: Sel, text: RichText| -> egui::Response { ui.selectable_label(sel == s, text) };
+        let pick = |ui: &mut egui::Ui, s: Sel, text: RichText| -> egui::Response {
+            let r = ui.selectable_label(sel == s, text);
+            if sel == s {
+                crate::tree_ui::achar(r.rect);
+            }
+            r
+        };
         // seções que o usuário ocultou (botão direito na peça → Seções da árvore)
         let hidden_secs = self.settings.tree_hidden.clone();
         let hide = |k: &str| hidden_secs.iter().any(|x| x == k);
 
         // ---------- peça
-        let r = pick(ui, Sel::Part, RichText::new(format!("🧊 {}", doc.name)).strong());
+        let r = ui
+            .horizontal(|ui| {
+                crate::tree_ui::icone(ui, "nova_peca");
+                pick(ui, Sel::Part, RichText::new(doc.name.as_str()).strong())
+            })
+            .inner;
         if r.clicked() {
             new_sel = Some(Sel::Part);
         }
@@ -3387,15 +3484,15 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 }
             });
         });
-        if !doc.props.pn.is_empty() {
-            ui.label(RichText::new(format!("   PN {} · {}", doc.props.pn, doc.props.part_type.label())).weak().small());
-        }
+        let r = if doc.props.pn.is_empty() { r } else { r.on_hover_text(format!("PN {} · {}", doc.props.pn, doc.props.part_type.label())) };
+        let _ = r;
 
+        crate::tree_ui::filhos(ui, |ui| {
         if !hide("origem") {
         // ---------- Origem (fixa)
-        egui::CollapsingHeader::new(tr("📍 Origem")).default_open(false).show(ui, |ui| {
+        let _ = crate::tree_ui::grupo(ui, "arvore_origem", Some("ortho"), tr("Origem"), false).corpo(ui, |ui| {
             for o in [OriginPlane::XY, OriginPlane::XZ, OriginPlane::YZ] {
-                let r = pick(ui, Sel::Origin(o), RichText::new(format!("▱ Plano {}", scene::plane_name(o))));
+                let r = crate::tree_ui::linha(ui, "plano", sel == Sel::Origin(o), format!("{} {}", tr("Plano"), scene::plane_name(o)));
                 if r.clicked() {
                     new_sel = Some(Sel::Origin(o));
                 }
@@ -3406,198 +3503,36 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     }
                 });
             }
-            ui.label(RichText::new(tr("↗ Eixos X, Y, Z · ponto de origem")).weak());
             let mut v = doc.origin_visible;
+            crate::tree_ui::marca(ui);
             if ui.checkbox(&mut v, tr("mostrar origem")).changed() {
                 actions.push(TreeAction::OriginVisible(v));
             }
         });
         }
 
-        if !hide("externas") {
-        // ---------- referências externas (sempre separadas)
-        let h = egui::CollapsingHeader::new(format!("🔗 {} ({})", tr("Referências externas"), doc.external.len())).default_open(false).show(ui, |ui| {
-            if doc.external.is_empty() {
-                ui.label(RichText::new(tr("Geometria importada de outras peças por link (planos, curvas, pontos e parâmetros publicados). Fica sempre separada da geometria própria.")).weak().small());
-            }
-            // filtro (texto e só os quebrados)
-            let fkey = egui::Id::unique("filtro_externas");
-            let mut filt: (String, bool) = ui.ctx().data(|m| m.get_temp(fkey)).unwrap_or_default();
-            if doc.external.len() > 2 {
-                ui.horizontal(|ui| {
-                    ui.label("🔎");
-                    ui.add(egui::TextEdit::singleline(&mut filt.0).desired_width(110.).hint_text(tr("filtrar")));
-                    ui.checkbox(&mut filt.1, tr("só quebrados"));
-                });
-                ui.ctx().data_mut(|m| m.insert_temp(fkey, filt.clone()));
-            }
-            let needle = filt.0.to_lowercase();
-            for e in &doc.external {
-                if !needle.is_empty() && !format!("{} {} {}", e.name, e.source, e.publication).to_lowercase().contains(&needle) {
-                    continue;
-                }
-                if filt.1 && e.state != LinkState::Quebrado {
-                    continue;
-                }
-                let st = match e.state {
-                    LinkState::Ativo => "●",
-                    LinkState::Congelado => "❄",
-                    LinkState::Quebrado => "⚠",
-                    LinkState::Desativado => "⏸",
-                };
-                let ctx = if e.xform.is_some() { " ⚙" } else { "" };
-                let txt = format!("🔗 {st} {} ← {}.{}{ctx}", e.target.map(|t| doc.name_of(t)).unwrap_or_default(), e.source, e.publication);
-                let r = ui.selectable_label(e.target.is_some_and(|t| self.sel == Sel::Ref(t)), txt).on_hover_text(format!("caminho: {}", e.path));
-                if r.clicked() {
-                    if let Some(t) = e.target {
-                        new_sel = Some(if doc.reference(t).is_some() { Sel::Ref(t) } else { Sel::Params });
-                    }
-                }
-                let (ext, state, path) = (e.id, e.state, e.path.clone());
-                r.context_menu(|ui| {
-                    ui.label(RichText::new(crate::geo_ui::link_state_label(state).0).weak());
-                    ui.label(RichText::new(format!("📂 {path}")).weak().small());
-                    ui.separator();
-                    crate::geo_ui::link_actions(ui, ext, state);
-                });
-            }
-            ui.horizontal(|ui| {
-                if ui.small_button(tr("➕ Importar publicação…")).clicked() {
-                    actions.push(TreeAction::ImportLink);
-                }
-                if !doc.external.is_empty() && ui.small_button(tr("⟳ Atualizar")).clicked() {
-                    actions.push(TreeAction::RefreshLinks);
-                }
-            });
-        });
-        h.header_response.context_menu(|ui| {
-            if ui.button(tr("➕ Importar publicação de outra peça…")).clicked() {
-                actions.push(TreeAction::ImportLink);
-                ui.close();
-            }
-            if ui.add_enabled(!doc.external.is_empty(), egui::Button::new(tr("⟳ Atualizar todos os links"))).clicked() {
-                actions.push(TreeAction::RefreshLinks);
-                ui.close();
-            }
-            ui.separator();
-            if ui.button(tr("📤 Publicações desta peça…")).clicked() {
-                actions.push(TreeAction::OpenPublications);
-                ui.close();
-            }
-        });
-        }
-
-        if !hide("publicacoes") {
-        // ---------- publicações desta peça (o que outras peças podem importar)
-        let n_pub = doc.references.iter().filter(|r| r.published).count() + doc.params.iter().filter(|p| p.published).count() + doc.collectors.iter().filter(|c| c.published).count();
-        let h = egui::CollapsingHeader::new(format!("📤 {} ({n_pub})", tr("Publicações"))).id_salt("arvore_pub").default_open(false).show(ui, |ui| {
-            if n_pub == 0 {
-                ui.label(RichText::new(tr("Nada publicado. Clique direito → Nova publicação para escolher planos, pontos, curvas, superfícies, corpos e parâmetros que outras peças podem usar por link.")).weak().small());
-            }
-            for r in doc.references.iter().filter(|r| r.published) {
-                let resp = ui.selectable_label(self.sel == Sel::Ref(r.id), format!("📤 {}", r.name));
-                if resp.clicked() {
-                    new_sel = Some(Sel::Ref(r.id));
-                }
-                resp.context_menu(|ui| {
-                    if ui.button(tr("✎ Renomear (o nome é a publicação)")).clicked() {
-                        actions.push(TreeAction::StartRename(r.id));
-                        ui.close();
-                    }
-                    if ui.button(tr("Despublicar")).clicked() {
-                        actions.push(TreeAction::Publish(r.id, false));
-                        ui.close();
-                    }
-                });
-            }
-            for c in doc.collectors.iter().filter(|c| c.published) {
-                let resp = ui.selectable_label(self.sel == Sel::Collector(c.id), format!("📤 ▣ {}", c.name));
-                if resp.clicked() {
-                    new_sel = Some(Sel::Collector(c.id));
-                }
-                resp.context_menu(|ui| {
-                    if ui.button(tr("Despublicar")).clicked() {
-                        actions.push(TreeAction::CollectorPublish(c.id, false));
-                        ui.close();
-                    }
-                });
-            }
-            for p in doc.params.iter().filter(|p| p.published) {
-                let resp = ui.selectable_label(false, format!("📤 ƒ {}", p.name));
-                if resp.clicked() {
-                    new_sel = Some(Sel::Params);
-                }
-                resp.context_menu(|ui| {
-                    if ui.button(tr("Despublicar")).clicked() {
-                        actions.push(TreeAction::ParamPublish(p.id, false));
-                        ui.close();
-                    }
-                });
-            }
-        });
-        h.header_response.context_menu(|ui| {
-            if ui.button(tr("➕ Nova publicação…")).clicked() {
-                actions.push(TreeAction::OpenPublications);
-                ui.close();
-            }
-        });
-        }
-
-        if !hide("pmi") {
-        // ---------- PMI (detalhamento 3D)
-        crate::pmi_ui::tree_section(self, ui);
-        }
-
-        if !hide("parametros") {
-        // ---------- parâmetros
-        let h = egui::CollapsingHeader::new(format!("ƒ {} ({})", tr("Parâmetros"), doc.params.len())).default_open(false).show(ui, |ui| {
-            let vars = self.vars();
-            for p in &doc.params {
-                let v = vars.get(&p.name).map(|v| format!("{} {}", fmt(*v), p.unit.symbol())).unwrap_or("⚠".into());
-                let r = pick(ui, Sel::Params, RichText::new(format!("{}{} = {v}", if p.published { "📤 " } else { "" }, p.name)));
-                if r.clicked() {
-                    new_sel = Some(Sel::Params);
-                }
-                r.context_menu(|ui| {
-                    ui.label(RichText::new(&p.name).strong());
-                    if ui.button(tr("✏ Editar na tabela")).clicked() {
-                        new_sel = Some(Sel::Params);
-                        ui.close();
-                    }
-                    let lbl = if p.published { tr("Despublicar") } else { tr("📤 Publicar para outras peças") };
-                    if ui.button(lbl).clicked() {
-                        actions.push(TreeAction::ParamPublish(p.id, !p.published));
-                        ui.close();
-                    }
-                    ui.separator();
-                    if ui.button(tr("🗑 Apagar parâmetro")).clicked() {
-                        actions.push(TreeAction::ParamDelete(p.id));
-                        ui.close();
-                    }
-                });
-            }
-            if doc.params.is_empty() && pick(ui, Sel::Params, RichText::new(tr("vazio — clique para editar")).weak().italics()).clicked() {
-                new_sel = Some(Sel::Params);
-            }
-        });
-        h.header_response.context_menu(|ui| {
-            if ui.button(tr("➕ Novo parâmetro")).clicked() {
-                actions.push(TreeAction::Run(Cmd::Param));
-                ui.close();
-            }
-            if ui.button(tr("✏ Editar tabela de parâmetros")).clicked() {
-                new_sel = Some(Sel::Params);
-                ui.close();
-            }
-        });
+        // grupos com conteúdo aparecem; os vazios ficam num nó recolhido no fim
+        let (n_pmi, n_cap) = crate::pmi_ui::contagem(self);
+        let cheio = |k: &str| match k {
+            "externas" => !doc.external.is_empty(),
+            "publicacoes" => Self::publicados(&doc) > 0,
+            "pmi" => n_pmi > 0,
+            "capturas" => n_cap > 0,
+            _ => !doc.params.is_empty(),
+        };
+        const GRUPOS: [&str; 5] = ["externas", "publicacoes", "pmi", "capturas", "parametros"];
+        let visivel = |k: &&&str| !hide(if **k == "capturas" { "pmi" } else { **k });
+        for k in GRUPOS.iter().filter(visivel).filter(|k| cheio(k)) {
+            self.secao_da_arvore(ui, k, &doc, sel, &mut new_sel, &mut actions);
         }
 
         if !hide("vistas") {
         // ---------- vistas salvas (câmeras)
         if !doc.views.is_empty() {
-            egui::CollapsingHeader::new(format!("📷 Vistas ({})", doc.views.len())).default_open(false).show(ui, |ui| {
+            let _ = crate::tree_ui::grupo(ui, "arvore_vistas", Some("vista_iso"), format!("{} ({})", tr("Vistas"), doc.views.len()), false).corpo(ui, |ui| {
                 for (i, v) in doc.views.iter().enumerate() {
-                    if ui.selectable_label(false, format!("📷 {}", v.name)).on_hover_text(tr("aplicar esta vista")).clicked() {
+                    crate::tree_ui::marca(ui);
+                    if ui.selectable_label(false, v.name.as_str()).on_hover_text(tr("aplicar esta vista")).clicked() {
                         actions.push(TreeAction::ApplyView(i));
                     }
                 }
@@ -3613,40 +3548,33 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         }
         // planos antigos sem pasta, quando ainda não existe pasta de geometria
         if first_geo.is_none() && !doc.references.is_empty() {
-            let h = egui::CollapsingHeader::new(tr("📁 Geometria")).default_open(true).show(ui, |ui| {
+            let h = crate::tree_ui::grupo(ui, "arvore_geometria", Some("pasta"), tr("Geometria"), true).corpo(ui, |ui| {
                 for r in &doc.references {
                     self.ref_row(ui, &doc, r, &mut new_sel, &mut actions);
                 }
             });
-            h.header_response.context_menu(|ui| {
+            h.context_menu(|ui| {
                 if ui.button(tr("📁 Nova pasta de geometria")).clicked() {
                     actions.push(TreeAction::NewGeometryFolder);
                     ui.close();
                 }
             });
         }
-        if ui.small_button(tr("➕ Pasta de geometria")).on_hover_text(tr("Planos, pontos, curvas e sketches livres, organizados como você quiser (sem linha do tempo)")).clicked() {
-            actions.push(TreeAction::NewGeometryFolder);
         }
-        }
-
-        ui.separator();
 
         // ---------- coletores de corpos, cada um com a sua linha do tempo
         for c in &doc.collectors {
             let feats: Vec<(usize, &Feature)> = doc.features.iter().enumerate().filter(|(_, f)| f.target == c.id && !doc.is_free(f)).collect();
             let n = feats.len();
             let marker_at = c.marker.unwrap_or(n).min(n);
-            let id = ui.make_persistent_id(("col", c.id.0));
-            egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true)
-                .show_header(ui, |ui| {
-                    let mut v = c.visible;
-                    if ui.checkbox(&mut v, tr("")).on_hover_text(tr("visível")).changed() {
-                        actions.push(TreeAction::CollectorVisible(c.id, v));
+            crate::tree_ui::no(ui, ("col", c.id.0), true, |ui| {
+                    if eye(ui, !c.visible) {
+                        actions.push(TreeAction::CollectorVisible(c.id, !c.visible));
                     }
                     let (rect, _) = ui.allocate_exact_size(egui::vec2(10., 10.), egui::Sense::hover());
                     ui.painter().rect_filled(rect, 2., Color32::from_rgb(c.color[0], c.color[1], c.color[2]));
                     let active = doc.active_collector == c.id;
+                    crate::tree_ui::icone(ui, "coletor");
                     let txt = if active { RichText::new(format!("{} {}", c.name, tr("(ativo)"))).strong() } else { RichText::new(&c.name) };
                     let resp = self.row_label(ui, c.id, &c.name, sel == Sel::Collector(c.id), txt, &mut actions);
                     if resp.clicked() {
@@ -3696,10 +3624,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         }
                     });
                 })
-                .body(|ui| {
-                    if feats.is_empty() {
-                        ui.label(RichText::new(tr("sem comandos — crie um sketch e uma extrusão")).weak().italics().small());
-                    }
+                .corpo(ui, |ui| {
                     let mut drawn_folders = vec![];
                     for (k, (i, f)) in feats.iter().enumerate() {
                         if k == marker_at {
@@ -3710,15 +3635,15 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                             Some(fid) => {
                                 drawn_folders.push(fid);
                                 let name = doc.folder(fid).map(|x| x.name.clone()).unwrap_or_default();
-                                let h = egui::CollapsingHeader::new(format!("🗀 {name}")).id_salt(("pasta", fid.0)).default_open(true).show(ui, |ui| {
+                                let h = crate::tree_ui::grupo(ui, ("pasta", fid.0), Some("pasta"), name.as_str(), true).corpo(ui, |ui| {
                                     for (j, g) in feats.iter().filter(|(_, g)| g.folder == Some(fid)) {
                                         self.feature_row(ui, &doc, *j, g, &mut new_sel, &mut actions);
                                     }
                                 });
-                                if h.header_response.clicked() {
+                                if h.clicked() {
                                     new_sel = Some(Sel::Folder(fid));
                                 }
-                                h.header_response.context_menu(|ui| {
+                                h.context_menu(|ui| {
                                     ui.label(RichText::new(&name).strong());
                                     if ui.button(tr("✎ Renomear   F2")).clicked() {
                                         actions.push(TreeAction::StartRename(fid));
@@ -3741,6 +3666,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         }
         // pastas de comandos vazias
         for fo in doc.folders.iter().filter(|fo| fo.kind == FolderKind::Comandos && !doc.features.iter().any(|f| f.folder == Some(fo.id))) {
+            crate::tree_ui::marca(ui);
             let r = pick(ui, Sel::Folder(fo.id), RichText::new(format!("🗀 {} (vazia)", fo.name)).weak());
             if r.clicked() {
                 new_sel = Some(Sel::Folder(fo.id));
@@ -3757,12 +3683,219 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             });
         }
 
+
+        let vazios: Vec<&str> = GRUPOS.iter().filter(visivel).filter(|k| !cheio(k)).copied().collect();
+        if !vazios.is_empty() {
+            let titulo = RichText::new(format!("{} ({})", tr("Grupos vazios"), vazios.len())).weak();
+            let _ = crate::tree_ui::grupo(ui, "arvore_vazios", None, titulo, false).corpo(ui, |ui| {
+                for k in vazios {
+                    self.secao_da_arvore(ui, k, &doc, sel, &mut new_sel, &mut actions);
+                }
+            });
+        }
+        });
+
         if let Some(s) = new_sel {
             self.sel = s;
         }
         for a in actions {
             self.tree_action(a);
         }
+    }
+
+    /// Itens desta peça que outras podem importar.
+    fn publicados(doc: &Document) -> usize {
+        doc.references.iter().filter(|r| r.published).count() + doc.params.iter().filter(|p| p.published).count() + doc.collectors.iter().filter(|c| c.published).count()
+    }
+
+    /// Uma seção que pode estar vazia: a mesma, com conteúdo ou dentro de "Grupos vazios".
+    fn secao_da_arvore(&mut self, ui: &mut egui::Ui, k: &str, doc: &Document, sel: Sel, new_sel: &mut Option<Sel>, actions: &mut Vec<TreeAction>) {
+        match k {
+            "externas" => self.secao_externas(ui, doc, new_sel, actions),
+            "publicacoes" => self.secao_publicacoes(ui, doc, new_sel, actions),
+            "pmi" => crate::pmi_ui::tree_section(self, ui, true, false),
+            "capturas" => crate::pmi_ui::tree_section(self, ui, false, true),
+            _ => self.secao_parametros(ui, doc, sel, new_sel, actions),
+        }
+    }
+
+    /// Referências externas: sempre separadas da geometria própria.
+    fn secao_externas(&self, ui: &mut egui::Ui, doc: &Document, new_sel: &mut Option<Sel>, actions: &mut Vec<TreeAction>) {
+        // ---------- referências externas (sempre separadas)
+        let h = crate::tree_ui::grupo(ui, "arvore_externas", Some("asm_link"), format!("{} ({})", tr("Referências externas"), doc.external.len()), false).corpo(ui, |ui| {
+            // filtro (texto e só os quebrados)
+            let fkey = egui::Id::unique("filtro_externas");
+            let mut filt: (String, bool) = ui.ctx().data(|m| m.get_temp(fkey)).unwrap_or_default();
+            if doc.external.len() > 2 {
+                ui.horizontal(|ui| {
+                    ui.label("🔎");
+                    ui.add(egui::TextEdit::singleline(&mut filt.0).desired_width(110.).hint_text(tr("filtrar")));
+                    ui.checkbox(&mut filt.1, tr("só quebrados"));
+                });
+                ui.ctx().data_mut(|m| m.insert_temp(fkey, filt.clone()));
+            }
+            let needle = filt.0.to_lowercase();
+            for e in &doc.external {
+                if !needle.is_empty() && !format!("{} {} {}", e.name, e.source, e.publication).to_lowercase().contains(&needle) {
+                    continue;
+                }
+                if filt.1 && e.state != LinkState::Quebrado {
+                    continue;
+                }
+                let st = match e.state {
+                    LinkState::Ativo => "●",
+                    LinkState::Congelado => "❄",
+                    LinkState::Quebrado => "⚠",
+                    LinkState::Desativado => "⏸",
+                };
+                let ctx = if e.xform.is_some() { " ⚙" } else { "" };
+                let txt = format!("🔗 {st} {} ← {}.{}{ctx}", e.target.map(|t| doc.name_of(t)).unwrap_or_default(), e.source, e.publication);
+                crate::tree_ui::marca(ui);
+                let r = ui.selectable_label(e.target.is_some_and(|t| self.sel == Sel::Ref(t)), txt).on_hover_text(format!("caminho: {}", e.path));
+                if r.clicked() {
+                    if let Some(t) = e.target {
+                        *new_sel = Some(if doc.reference(t).is_some() { Sel::Ref(t) } else { Sel::Params });
+                    }
+                }
+                let (ext, state, path) = (e.id, e.state, e.path.clone());
+                r.context_menu(|ui| {
+                    ui.label(RichText::new(crate::geo_ui::link_state_label(state).0).weak());
+                    ui.label(RichText::new(format!("📂 {path}")).weak().small());
+                    ui.separator();
+                    crate::geo_ui::link_actions(ui, ext, state);
+                });
+            }
+            crate::tree_ui::marca(ui);
+            ui.horizontal(|ui| {
+                if ui.small_button(tr("➕ Importar publicação…")).clicked() {
+                    actions.push(TreeAction::ImportLink);
+                }
+                if !doc.external.is_empty() && ui.small_button(tr("⟳ Atualizar")).clicked() {
+                    actions.push(TreeAction::RefreshLinks);
+                }
+            });
+        });
+        let h = h.on_hover_text(tr("Geometria importada de outras peças por link (planos, curvas, pontos e parâmetros publicados). Fica sempre separada da geometria própria."));
+        h.context_menu(|ui| {
+            if ui.button(tr("➕ Importar publicação de outra peça…")).clicked() {
+                actions.push(TreeAction::ImportLink);
+                ui.close();
+            }
+            if ui.add_enabled(!doc.external.is_empty(), egui::Button::new(tr("⟳ Atualizar todos os links"))).clicked() {
+                actions.push(TreeAction::RefreshLinks);
+                ui.close();
+            }
+            ui.separator();
+            if ui.button(tr("📤 Publicações desta peça…")).clicked() {
+                actions.push(TreeAction::OpenPublications);
+                ui.close();
+            }
+        });
+    }
+
+    /// Publicações desta peça: o que outras peças podem importar.
+    fn secao_publicacoes(&self, ui: &mut egui::Ui, doc: &Document, new_sel: &mut Option<Sel>, actions: &mut Vec<TreeAction>) {
+        // ---------- publicações desta peça (o que outras peças podem importar)
+        let n_pub = Self::publicados(doc);
+        let h = crate::tree_ui::grupo(ui, "arvore_pub", Some("asm_link"), format!("{} ({n_pub})", tr("Publicações")), false).corpo(ui, |ui| {
+            for r in doc.references.iter().filter(|r| r.published) {
+                crate::tree_ui::marca(ui);
+                let resp = ui.selectable_label(self.sel == Sel::Ref(r.id), format!("📤 {}", r.name));
+                if resp.clicked() {
+                    *new_sel = Some(Sel::Ref(r.id));
+                }
+                resp.context_menu(|ui| {
+                    if ui.button(tr("✎ Renomear (o nome é a publicação)")).clicked() {
+                        actions.push(TreeAction::StartRename(r.id));
+                        ui.close();
+                    }
+                    if ui.button(tr("Despublicar")).clicked() {
+                        actions.push(TreeAction::Publish(r.id, false));
+                        ui.close();
+                    }
+                });
+            }
+            for c in doc.collectors.iter().filter(|c| c.published) {
+                crate::tree_ui::marca(ui);
+                let resp = ui.selectable_label(self.sel == Sel::Collector(c.id), format!("📤 ▣ {}", c.name));
+                if resp.clicked() {
+                    *new_sel = Some(Sel::Collector(c.id));
+                }
+                resp.context_menu(|ui| {
+                    if ui.button(tr("Despublicar")).clicked() {
+                        actions.push(TreeAction::CollectorPublish(c.id, false));
+                        ui.close();
+                    }
+                });
+            }
+            for p in doc.params.iter().filter(|p| p.published) {
+                crate::tree_ui::marca(ui);
+                let resp = ui.selectable_label(false, format!("📤 ƒ {}", p.name));
+                if resp.clicked() {
+                    *new_sel = Some(Sel::Params);
+                }
+                resp.context_menu(|ui| {
+                    if ui.button(tr("Despublicar")).clicked() {
+                        actions.push(TreeAction::ParamPublish(p.id, false));
+                        ui.close();
+                    }
+                });
+            }
+        });
+        let h = h.on_hover_text(tr("Nada publicado. Clique direito → Nova publicação para escolher planos, pontos, curvas, superfícies, corpos e parâmetros que outras peças podem usar por link."));
+        h.context_menu(|ui| {
+            if ui.button(tr("➕ Nova publicação…")).clicked() {
+                actions.push(TreeAction::OpenPublications);
+                ui.close();
+            }
+        });
+    }
+
+    fn secao_parametros(&self, ui: &mut egui::Ui, doc: &Document, sel: Sel, new_sel: &mut Option<Sel>, actions: &mut Vec<TreeAction>) {
+        let pick = |ui: &mut egui::Ui, s: Sel, text: RichText| -> egui::Response { ui.selectable_label(sel == s, text) };
+        // ---------- parâmetros
+        let h = crate::tree_ui::grupo(ui, "arvore_parametros", Some("parametro"), format!("{} ({})", tr("Parâmetros"), doc.params.len()), false).corpo(ui, |ui| {
+            let vars = self.vars();
+            for p in &doc.params {
+                let v = vars.get(&p.name).map(|v| format!("{} {}", fmt(*v), p.unit.symbol())).unwrap_or("⚠".into());
+                crate::tree_ui::marca(ui);
+                let r = pick(ui, Sel::Params, RichText::new(format!("{}{} = {v}", if p.published { "📤 " } else { "" }, p.name)));
+                if r.clicked() {
+                    *new_sel = Some(Sel::Params);
+                }
+                r.context_menu(|ui| {
+                    ui.label(RichText::new(&p.name).strong());
+                    if ui.button(tr("✏ Editar na tabela")).clicked() {
+                        *new_sel = Some(Sel::Params);
+                        ui.close();
+                    }
+                    let lbl = if p.published { tr("Despublicar") } else { tr("📤 Publicar para outras peças") };
+                    if ui.button(lbl).clicked() {
+                        actions.push(TreeAction::ParamPublish(p.id, !p.published));
+                        ui.close();
+                    }
+                    ui.separator();
+                    if ui.button(tr("🗑 Apagar parâmetro")).clicked() {
+                        actions.push(TreeAction::ParamDelete(p.id));
+                        ui.close();
+                    }
+                });
+            }
+            crate::tree_ui::marca(ui);
+            if doc.params.is_empty() && pick(ui, Sel::Params, RichText::new(tr("vazio — clique para editar")).weak().italics()).clicked() {
+                *new_sel = Some(Sel::Params);
+            }
+        });
+        h.context_menu(|ui| {
+            if ui.button(tr("➕ Novo parâmetro")).clicked() {
+                actions.push(TreeAction::Run(Cmd::Param));
+                ui.close();
+            }
+            if ui.button(tr("✏ Editar tabela de parâmetros")).clicked() {
+                *new_sel = Some(Sel::Params);
+                ui.close();
+            }
+        });
     }
 
     /// Pasta de geometria (recursiva): subpastas, elementos de referência e sketches livres.
@@ -3775,16 +3908,16 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             .collect();
         let sketches: Vec<(usize, &Feature)> = doc.features.iter().enumerate().filter(|(_, f)| f.folder == Some(fo.id) && doc.is_free(f)).collect();
         let subs: Vec<&Folder> = doc.folders.iter().filter(|f| f.parent == Some(fo.id) && f.kind == FolderKind::Geometria).collect();
-        let id = ui.make_persistent_id(("geo", fo.id.0));
         let has_clip = self.clip.is_some();
-        egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true)
-            .show_header(ui, |ui| {
-                let n = refs.len() + sketches.len() + subs.len();
+        let n = refs.len() + sketches.len() + subs.len();
+        crate::tree_ui::no(ui, ("geo", fo.id.0), n > 0, |ui| {
                 let all_hidden = n > 0 && refs.iter().all(|r| !r.visible) && sketches.iter().all(|(_, f)| f.hidden);
                 if eye(ui, all_hidden) {
                     actions.push(TreeAction::FolderShown(fo.id, all_hidden));
                 }
-                let r = self.row_label(ui, fo.id, &fo.name, self.sel == Sel::Folder(fo.id), RichText::new(format!("📁 {}  ({n})", fo.name)).strong(), actions);
+                crate::tree_ui::icone(ui, "pasta");
+                let r = self.row_label(ui, fo.id, &fo.name, self.sel == Sel::Folder(fo.id), RichText::new(format!("{}  ({n})", fo.name)).strong(), actions);
+                let r = if n == 0 { r.on_hover_text(tr("vazia — clique direito para criar, ou arraste itens para cá")) } else { r };
                 let r = drag_item(ui, r, fo.id, self.renaming != Some(fo.id));
                 if r.double_clicked() {
                     actions.push(TreeAction::StartRename(fo.id));
@@ -3794,7 +3927,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     actions.push(TreeAction::MoveTo(p.0, fo.id));
                 }
                 if r.dnd_hover_payload::<DragItem>().is_some() {
-                    ui.painter().rect_stroke(r.rect.expand(2.), 3., egui::Stroke::new(1.5, Color32::from_rgb(90, 170, 255)), egui::StrokeKind::Outside);
+                    ui.painter().rect_stroke(r.rect.expand(2.), 3., egui::Stroke::new(1.5, crate::theme::accent(ui.visuals())), egui::StrokeKind::Outside);
                 }
                 if r.clicked() {
                     *new_sel = Some(Sel::Folder(fo.id));
@@ -3860,10 +3993,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     }
                 });
             })
-            .body(|ui| {
-                if refs.is_empty() && sketches.is_empty() && subs.is_empty() {
-                    ui.label(RichText::new(tr("vazia — clique direito para criar, ou arraste itens para cá")).weak().italics().small());
-                }
+            .corpo(ui, |ui| {
                 for s in &subs {
                     self.geo_folder(ui, doc, s, first_geo, new_sel, actions);
                 }
@@ -3900,6 +4030,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         self.tree_order.borrow_mut().push(id);
         let in_multi = self.multi.borrow().contains(&id) && self.multi.borrow().len() > 1;
         let r = ui.selectable_label(selected || in_multi, text);
+        if selected {
+            crate::tree_ui::achar(r.rect);
+        }
         if r.hovered() {
             self.hover_now.set(Some(id));
         }
@@ -3939,13 +4072,13 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let users = doc.dependents(r.id).len();
         let class = r.kind.class();
         let icon = match (&r.kind, class) {
-            (RefKind::AnglePlane { .. }, _) => "◩",
-            (RefKind::FacePlane { .. }, _) => "▣",
-            (_, RefClass::Point) => "•",
-            (_, RefClass::Surface) => "◫",
-            (RefKind::LinePoints { .. } | RefKind::LineDir { .. } | RefKind::LineAngle { .. } | RefKind::LineNormalSurface { .. }, _) => "╱",
-            (_, RefClass::Curve) => "∿",
-            _ => "▱",
+            (RefKind::AnglePlane { .. }, _) => "plano_angulo",
+            (RefKind::FacePlane { .. }, _) => "plano_tangente",
+            (_, RefClass::Point) => "ponto_coord",
+            (_, RefClass::Surface) => "sup_extraida",
+            (RefKind::LinePoints { .. } | RefKind::LineDir { .. } | RefKind::LineAngle { .. } | RefKind::LineNormalSurface { .. }, _) => "linha_pontos",
+            (_, RefClass::Curve) => "spline",
+            _ => "plano",
         };
         let err = matches!(self.status_of(r.id), Some(Status::Error(_)));
         let stale = {
@@ -3953,17 +4086,19 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             *all || set.contains(&r.id)
         };
         let txt = format!(
-            "{icon} {}{}{}{}",
+            "{}{}{}{}",
             r.name,
             if r.published { " 📤" } else { "" },
             if users > 0 { format!("  ·{users}") } else { String::new() },
             if err { " ✖" } else if stale { " ⟳" } else { "" }
         );
+        crate::tree_ui::marca(ui);
         let resp = ui
             .horizontal(|ui| {
                 if eye(ui, !r.visible) {
                     actions.push(TreeAction::RefVisible(r.id, !r.visible));
                 }
+                crate::tree_ui::icone(ui, icon);
                 if let Some(a) = r.appearance {
                     let (rr, _) = ui.allocate_exact_size(egui::vec2(8., 8.), egui::Sense::hover());
                     ui.painter().circle_filled(rr.center(), 4., Color32::from_rgb(a.color[0], a.color[1], a.color[2]));
@@ -4044,7 +4179,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             _ => ("", ui.visuals().text_color()),
         };
         let is_sketch = matches!(f.kind, FeatureKind::Sketch(_));
-        let mut text = RichText::new(format!("{} {}{badge}", f.kind.icon(), f.name)).color(color);
+        let mut text = RichText::new(format!("{}{badge}", f.name)).color(color);
         if f.suppressed {
             text = text.strikethrough();
         }
@@ -4055,15 +4190,17 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let inputs: Vec<Id> = if is_sketch { vec![] } else { Document::refs_of(&f.kind).into_iter().filter(|x| doc.reference(*x).is_some() || doc.feature(*x).is_some_and(|g| matches!(g.kind, FeatureKind::Sketch(_)))).collect() };
         let open_key = ui.make_persistent_id(("entradas", f.id.0));
         let mut open: bool = ui.ctx().data(|m| m.get_temp(open_key)).unwrap_or(false);
+        crate::tree_ui::marca(ui);
+        let mut tronco = 0.;
         let resp = ui
             .horizontal(|ui| {
                 if !inputs.is_empty() {
-                    if ui.add(egui::Button::new(RichText::new(if open { "⏷" } else { "⏵" }).size(10.)).frame(false)).on_hover_text(tr("entradas do comando")).clicked() {
+                    let c = crate::tree_ui::caixa(ui, open).on_hover_text(tr("entradas do comando"));
+                    tronco = c.rect.center().x;
+                    if c.clicked() {
                         open = !open;
                         ui.ctx().data_mut(|m| m.insert_temp(open_key, open));
                     }
-                } else {
-                    ui.add_space(12.);
                 }
                 // só sketches têm olho: os sólidos aparecem pelo corpo (a última feature junta tudo)
                 if is_sketch && eye(ui, f.hidden) {
@@ -4073,6 +4210,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     let (r, _) = ui.allocate_exact_size(egui::vec2(8., 8.), egui::Sense::hover());
                     ui.painter().circle_filled(r.center(), 4., Color32::from_rgb(a.color[0], a.color[1], a.color[2]));
                 }
+                crate::tree_ui::icone(ui, crate::tree_ui::icone_comando(&f.kind));
                 self.row_label(ui, f.id, &f.name, self.sel == Sel::Feature(f.id), text, actions)
             })
             .inner;
@@ -4172,10 +4310,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
         });
         if open {
-            ui.indent(("entradas_ind", f.id.0), |ui| {
+            crate::tree_ui::sublista(ui, tronco, |ui| {
                 for x in &inputs {
                     let name = doc.name_of(*x);
-                    let r = ui.selectable_label(false, RichText::new(format!("↳ {name}")).small().weak());
+                    crate::tree_ui::marca(ui);
+                    let r = ui.selectable_label(false, RichText::new(name).small().weak());
                     if r.hovered() {
                         self.hover_now.set(Some(*x));
                     }
@@ -5319,8 +5458,13 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         });
     }
 
-    fn timeline(&mut self, root: &mut egui::Ui) {
-        egui::Panel::bottom("status").show(root, |ui| {
+    /// Status em uma linha sobre o modelo, sem painel.
+    fn barra_status(&mut self, root: &mut egui::Ui, area: Rect) {
+        let faixa = Rect::from_min_max(egui::pos2(area.left() + 8., area.bottom() - 24.), area.right_bottom() - egui::vec2(8., 2.));
+        let mut ui = root.new_child(egui::UiBuilder::new().id_salt("status").max_rect(faixa).layout(egui::Layout::left_to_right(egui::Align::Center)));
+        let contorno = crate::tree_ui::Contorno::reservar(&ui, faixa);
+        {
+            let ui = &mut ui;
             ui.horizontal(|ui| {
                 let (k, ms) = self.result.as_ref().map(|r| (r.kernel.clone(), r.elapsed_ms)).unwrap_or_default();
                 let busy = self.gen_done < self.gen_sent;
@@ -5333,7 +5477,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 } else if stale {
                     (tr("⟳ desatualizado — F5 atualiza").to_string(), crate::theme::st_err())
                 } else if swept < n {
-                    (format!("▶ atualizando {swept}/{n}"), Color32::from_rgb(140, 200, 255))
+                    (format!("▶ atualizando {swept}/{n}"), crate::theme::accent(ui.visuals()))
                 } else {
                     (format!("✔ recalculado em {ms:.0} ms"), ui.visuals().text_color())
                 };
@@ -5389,14 +5533,17 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     ui.label(RichText::new(format!("{} · duplo clique: ajustar", self.settings.nav.help())).small().weak());
                 });
             });
-        });
+        }
+        contorno.aplicar(&ui);
     }
 
     fn viewport(&mut self, root: &mut egui::Ui, frame: &eframe::Frame) {
         let ctx = root.ctx().clone();
+        self.arvore_com_roda = ctx.input(|i| i.pointer.latest_pos()).is_some_and(|p| self.arvore.conteudo.contains(p)) && self.arvore.transborda();
         egui::CentralPanel::no_frame().show(root, |ui| {
             let rect = ui.max_rect();
             let resp = ui.allocate_rect(rect, egui::Sense::click_and_drag());
+            let arvore_com_roda = self.arvore_com_roda;
             let Some(vp) = self.viewport.as_mut() else {
                 ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "Viewport requer wgpu", egui::FontId::proportional(16.), Color32::WHITE);
                 return;
@@ -5406,6 +5553,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             let (shift, ctrl, scroll, ppp, right_down, left_down) = ctx.input(|i| {
                 (i.modifiers.shift, i.modifiers.command, i.smooth_scroll_delta.y, i.pixels_per_point, i.pointer.secondary_down(), i.pointer.primary_down())
             });
+            let scroll = if arvore_com_roda { 0. } else { scroll };
             let delta = resp.drag_delta();
             let (left, mid, right) = (
                 resp.dragged_by(egui::PointerButton::Primary),
@@ -5423,14 +5571,13 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             let left = left && !boxing;
             let (orbit, pan, zoom_drag) = match self.settings.nav {
                 N::Fenkra => ((left && !shift && !sketching) || mid, right || (shift && left), false),
-                N::SolidWorks => (mid && !ctrl, mid && ctrl, false),
-                N::Fusion => (mid && shift, mid && !shift, false),
-                N::Catia => (mid && right_down, mid && !right_down, false),
+                N::MeioGira => (mid && !ctrl, mid && ctrl, false),
+                N::ShiftMeioGira => (mid && shift, mid && !shift, false),
+                N::MeioMove => (mid && right_down, mid && !right_down, false),
                 N::Blender => (mid && !shift && !ctrl, mid && shift, mid && ctrl),
-                N::Onshape => (right && !ctrl, (right && ctrl) || mid, false),
+                N::DireitoGira => (right && !ctrl, (right && ctrl) || mid, false),
                 N::FreeCad => (mid && (left_down || right_down), mid && !left_down && !right_down, false),
-                N::Inventor => (mid && shift, mid && !shift, false),
-                N::Rhino => (right && !shift && !ctrl, right && shift, right && ctrl),
+                N::DireitoGiraShift => (right && !shift && !ctrl, right && shift, right && ctrl),
             };
             if pan || orbit || zoom_drag || (resp.hovered() && scroll != 0.) {
                 vp.stop_anim();
@@ -5449,7 +5596,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 vp.camera.pitch = (vp.camera.pitch + delta.y * 0.008).clamp(-1.5706, 1.5706);
             }
             if resp.hovered() && scroll != 0. {
-                let inv = self.settings.invert_zoom != (self.settings.nav == N::SolidWorks);
+                let inv = self.settings.invert_zoom != (self.settings.nav == N::MeioGira);
                 let sc = if inv { scroll } else { -scroll };
                 vp.camera.dist = (vp.camera.dist * (sc * 0.0015).exp()).clamp(0.5, 1e6);
             }
@@ -5579,7 +5726,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 self.settings.display.label()
             );
             let color = if self.hidden_env { Color32::from_rgb(255, 190, 80) } else { ink };
-            ui.painter().text(rect.left_top() + egui::vec2(10., 8.), egui::Align2::LEFT_TOP, info, egui::FontId::proportional(12.), color);
+            ui.painter().text(rect.center_top() + egui::vec2(0., 8.), egui::Align2::CENTER_TOP, info, egui::FontId::proportional(12.), color);
             if self.hidden_env {
                 ui.painter().rect_stroke(rect.shrink(2.), 0., egui::Stroke::new(3., Color32::from_rgb(255, 170, 60)), egui::StrokeKind::Inside);
             }
@@ -5602,7 +5749,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         format!("{name}: {:.0} mm³ · {} faces", b.mass.volume, b.faces)
                     })
                     .collect();
-                ui.painter().text(rect.right_bottom() - egui::vec2(10., 8.), egui::Align2::RIGHT_BOTTOM, mass.join("\n"), egui::FontId::proportional(11.), ink);
+                ui.painter().text(rect.right_bottom() - egui::vec2(10., 30.), egui::Align2::RIGHT_BOTTOM, mass.join("\n"), egui::FontId::proportional(11.), ink);
             }
             // cubo de vistas no canto superior direito
             let cube_area = Rect::from_min_size(egui::pos2(rect.right() - 120., rect.top() + 8.), egui::vec2(112., 112.));
@@ -5821,7 +5968,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 if !self.picks.is_empty() {
                     let n = self.picks.len();
                     let txt = if n == 1 { self.picks[0].label(&self.open.doc) } else { format!("{n} itens selecionados") };
-                    ui.painter().text(rect.left_bottom() + egui::vec2(10., -10.), egui::Align2::LEFT_BOTTOM, format!("Seleção: {txt}  ·  Esc limpa"), egui::FontId::proportional(12.), Color32::from_rgb(255, 190, 40));
+                    ui.painter().text(rect.center_bottom() + egui::vec2(0., -32.), egui::Align2::CENTER_BOTTOM, format!("Seleção: {txt}  ·  Esc limpa"), egui::FontId::proportional(12.), crate::theme::st_warn());
                 }
             }
             if self.sketch.is_none() {
@@ -6145,6 +6292,11 @@ pub fn eye_button(ui: &mut egui::Ui, hidden: bool) -> bool {
     eye(ui, hidden)
 }
 
+/// Chave do grupo solto nas preferências.
+fn nome_do_grupo(g: crate::settings::Group) -> String {
+    format!("grupo_{g:?}")
+}
+
 fn eye(ui: &mut egui::Ui, hidden: bool) -> bool {
     let img = egui::Image::new(crate::icons::get(if hidden { "ocultar" } else { "mostrar" })).fit_to_exact_size(egui::vec2(15., 15.));
     let img = if hidden { img.tint(Color32::from_white_alpha(120)) } else { img };
@@ -6334,9 +6486,10 @@ enum DelAction {
 
 /// Marcador da linha do tempo de um coletor: os comandos abaixo dele ficam desativados.
 fn marker(ui: &mut egui::Ui, collector: Id, at: usize, n: usize, actions: &mut Vec<TreeAction>) {
+    crate::tree_ui::marca(ui);
     ui.horizontal(|ui| {
-        let blue = Color32::from_rgb(90, 160, 255);
-        ui.label(RichText::new(tr("━━ marcador ━━")).small().color(blue))
+        let destaque = crate::theme::accent(ui.visuals());
+        ui.label(RichText::new(tr("━━ marcador ━━")).small().color(destaque))
             .on_hover_text(tr("Comandos abaixo do marcador ficam desativados; novos comandos deste coletor entram aqui"));
         if at > 0 && ui.small_button(tr("▲")).on_hover_text(tr("subir o marcador")).clicked() {
             actions.push(TreeAction::CollectorMarker(collector, Some(at - 1)));
@@ -6402,7 +6555,7 @@ pub fn loc(s: String) -> String {
 /// Fontes das anotações 3D (as que existem no Windows), com os símbolos (GD&T) de reserva.
 pub static PMI_FONTS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
 
-fn setup_fonts(ctx: &egui::Context) {
+fn setup_fonts(_ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
     let mut names = vec![];
     for (name, file) in [
@@ -6442,14 +6595,15 @@ fn setup_fonts(ctx: &egui::Context) {
             fonts.families.entry(egui::FontFamily::Monospace).or_default().push(name.into());
         }
     }
-    ctx.set_fonts(fonts);
+    // as fontes de cada tema entram por cima destas, só ao trocar de tema (theme::apply)
+    crate::theme::set_base_fonts(fonts);
 }
 
 impl eframe::App for App {
     fn ui(&mut self, root: &mut egui::Ui, frame: &mut eframe::Frame) {
+        crate::partida::contar_quadro();
         let ctx = &root.ctx().clone();
         crate::i18n::set_english(self.settings.english);
-        crate::toolbar::BLOCK_IDX.store(0, std::sync::atomic::Ordering::Relaxed);
         // cores salvas: preferências ↔ paleta usada pelos painéis
         {
             let mut dirty = crate::palette::DIRTY.lock().unwrap();
@@ -6672,14 +6826,11 @@ impl eframe::App for App {
         let hidden_env_before = self.hidden_env;
 
         self.top(root);
-        self.timeline(root);
+        // a viewport ocupa tudo sob a barra; árvore, painéis e status ficam por cima dela
+        let area = root.available_rect_before_wrap();
+        self.area_util = area;
         self.hover_now.set(None);
-        // comando aberto: o painel de edição fica no lugar da árvore (a seta ⯈ abre a árvore ao lado
-        // quando for preciso escolher algo nela; escolhendo no 3D, ela nem precisa aparecer)
-        // sem comando aberto, o painel de edição some e a árvore fica sozinha à esquerda
-        // (montagem continua com árvore e painel lado a lado)
-        // a montagem segue a mesma filosofia: escolher só seleciona; editar troca a árvore pelo painel
-        let part_bench = true;
+        // o painel de comando só existe com um comando aberto
         let active = if self.settings.bench == crate::settings::Bench::Desenho {
             self.dwg.as_ref().is_some_and(|s| s.active())
         } else if self.in_asm() {
@@ -6687,78 +6838,8 @@ impl eframe::App for App {
         } else {
             self.session.is_some() || self.sketch.is_some() || self.sketch_wait_plane || self.pmi_pending.is_some() || matches!(self.sel, Sel::Params | Sel::Pmi(_))
         };
-        let overlay = active && self.settings.editor_left && part_bench;
-        let hide_editor = !active && self.settings.editor_left && part_bench;
-        let tree_panel = |app: &mut App, root: &mut egui::Ui| egui::Panel::left("arvore").default_size(270.).resizable(true).show(root, |ui| {
-            ui.horizontal(|ui| {
-                ui.selectable_value(&mut app.left, LeftTab::Peca, tr("Peça"));
-                ui.selectable_value(&mut app.left, LeftTab::Projeto, tr("Projeto"));
-            });
-            ui.separator();
-            egui::ScrollArea::vertical().show(ui, |ui| match app.left {
-                LeftTab::Peca if app.settings.bench == crate::settings::Bench::Desenho => crate::dwg_ui::tree(app, ui),
-                LeftTab::Peca if app.settings.bench == crate::settings::Bench::Montagem => crate::asm_ui::tree(app, ui),
-                LeftTab::Peca => app.tree(ui),
-                LeftTab::Projeto => app.project_panel(ui),
-            });
-        });
-        if !overlay {
-            tree_panel(self, root);
-        }
-        // painel de edição: junto da árvore (padrão) ou à direita
-        let editor_panel = |app: &mut App, ui: &mut egui::Ui| {
-            ui.horizontal(|ui| {
-                ui.label(RichText::new(tr("Edição")).weak().small());
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-
-                    let (txt, tip) = if app.settings.editor_left { ("⇥", "levar o painel de edição para a direita") } else { ("⇤", "trazer o painel de edição para a esquerda") };
-                    if ui.small_button(txt).on_hover_text(tr(tip)).clicked() {
-                        app.settings.editor_left = !app.settings.editor_left;
-                    }
-                });
-            });
-            app.conclude_bar(ui);
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                if app.settings.bench == crate::settings::Bench::Desenho {
-                    crate::dwg_ui::panel(app, ui)
-                } else if app.settings.bench == crate::settings::Bench::Montagem {
-                    crate::asm_ui::panel(app, ui)
-                } else if app.sketch.is_some() {
-                    crate::sketch_ui::panel(app, ui)
-                } else {
-                    editor::show(app, ui);
-                    crate::measure::panel(app, ui);
-                }
-            });
-        };
-        if self.settings.editor_left {
-            if !hide_editor {
-                egui::Panel::left("editor_esq").default_size(300.).size_range(220.0..=440.0).resizable(true).show(root, |ui| editor_panel(self, ui));
-            }
-            if overlay {
-                // seta na lateral do painel: abre/fecha a árvore à direita dele
-                egui::Panel::left("seta_arvore").exact_size(26.).resizable(false).show(root, |ui| {
-                    let r = ui.max_rect();
-                    let (txt, tip) = if self.tree_peek { ("⯇
-🌳", "fechar a árvore") } else { ("⯈
-🌳", "abrir a árvore ao lado para escolher itens nela") };
-                    let b = egui::Rect::from_center_size(r.center(), egui::vec2(22., 96.));
-                    let btn = egui::Button::new(RichText::new(txt).size(15.).color(Color32::WHITE)).fill(Color32::from_rgb(40, 96, 170));
-                    if ui.put(b, btn).on_hover_text(tr(tip)).clicked() {
-                        self.tree_peek = !self.tree_peek;
-                    }
-                });
-                if self.tree_peek {
-                    tree_panel(self, root);
-                }
-            }
-        } else {
-            egui::Panel::right("editor").default_size(300.).size_range(220.0..=440.0).resizable(true).show(root, |ui| editor_panel(self, ui));
-        }
-        // realce dinâmico do item sob o mouse
-        if self.hover_now.get() != self.hover_item {
-            self.hover_item = self.hover_now.get();
-            self.scene_dirty = true;
+        if active {
+            self.painel_comando(ctx, area);
         }
         if let Some(id) = ctx.data(|m| m.get_temp::<Id>(egui::Id::unique("fenkra_props"))) {
             ctx.data_mut(|m| m.remove::<Id>(egui::Id::unique("fenkra_props")));
@@ -6773,7 +6854,7 @@ impl eframe::App for App {
         crate::asm_ui::gears_window(self, ctx);
         self.sheet_window(ctx);
         crate::st_ui::windows(self, ctx);
-        self.side_toolbars(root);
+        self.side_toolbars(ctx, area);
         self.settings_window(ctx);
         self.view_menu_window(ctx);
         self.dialogs(ctx);
@@ -6799,6 +6880,15 @@ impl eframe::App for App {
         } else {
             self.viewport(root, frame);
             crate::pmi_ui::after_viewport(self);
+        }
+        // depois da viewport e na mesma camada: só as linhas capturam o mouse, o vazio continua sendo o modelo
+        self.arvore_sobre_modelo(root, area);
+        self.barra_status(root, area);
+        // realce dinâmico do item sob o mouse
+        if self.hover_now.get() != self.hover_item {
+            self.hover_item = self.hover_now.get();
+            self.scene_dirty = true;
+            ctx.request_repaint();
         }
         self.toasts(ctx);
 
@@ -7196,7 +7286,7 @@ fn paint_backdrop(p: &egui::Painter, rect: Rect, dark: bool, t: f32, accent: Col
 }
 
 /// Conteúdo de cada página da janela de configurações.
-/// Estilo de linha/ponto (como os tipos de linha do AutoCAD).
+/// Estilo de linha/ponto (contínua, tracejada, pontilhada etc.).
 pub fn line_style_ui(ui: &mut egui::Ui, st: &mut fenkra_core::LineStyle, lines: bool, points: bool) {
     if lines {
         ui.horizontal(|ui| {
@@ -7471,7 +7561,9 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
             
             ui.add_space(8.);
             ui.label(RichText::new(tr("Painéis")).strong());
-            ui.checkbox(&mut s.editor_left, tr("painel de edição à esquerda, junto da árvore"));
+            if ui.button(tr("Restaurar a posição dos painéis")).on_hover_text(tr("Volta painéis e barras desta bancada ao lugar padrão")).clicked() {
+                s.restaurar_paineis();
+            }
             ui.label(RichText::new(tr("Grupos flutuantes encaixam sozinhos quando soltos perto do topo ou das laterais; arraste o nome de um grupo encaixado para soltá-lo. Posições de janelas e painéis ficam salvas.")).weak().small());
         }
         6 => {

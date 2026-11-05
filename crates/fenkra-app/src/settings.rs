@@ -118,6 +118,20 @@ impl Group {
             _ => true,
         }
     }
+    /// O grupo é do trabalho atual e fica à vista na faixa; os demais vão para o botão "Mais".
+    pub fn do_contexto(self, b: Bench, sketching: bool) -> bool {
+        if sketching {
+            return self.sketch_only();
+        }
+        match b {
+            Bench::Solidos => matches!(self, Group::Sketch | Group::Solidos | Group::Acabamento | Group::Padroes),
+            Bench::Superficies => matches!(self, Group::Sketch | Group::Wireframe | Group::Superficies | Group::Operacoes),
+            Bench::Montagem => matches!(self, Group::Montagem | Group::Restricoes),
+            Bench::Chapa => matches!(self, Group::Sketch | Group::Chapa),
+            Bench::Estrutural => matches!(self, Group::Sketch | Group::Estrutural),
+            Bench::Desenho => matches!(self, Group::DesVistas | Group::DesCotas | Group::DesAnotacoes),
+        }
+    }
     /// Grupos que só aparecem com um sketch em edição.
     pub fn sketch_only(self) -> bool {
         matches!(self, Group::SkCriacao | Group::SkTransformar | Group::SkCotagem | Group::SkRestricoes | Group::SkFerramentas)
@@ -184,58 +198,117 @@ pub struct UserFamily {
 }
 
 /// Estilo de navegação da câmera (botões do mouse).
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum NavStyle {
     #[default]
-    #[serde(alias = "SolidCadCraft")]
     Fenkra,
-    SolidWorks,
-    Fusion,
-    Catia,
+    /// Meio gira, Ctrl+meio move, zoom invertido
+    MeioGira,
+    /// Shift+meio gira, meio move (absorve dois nomes antigos)
+    ShiftMeioGira,
+    /// Meio move, meio+direito gira
+    MeioMove,
     Blender,
-    Onshape,
+    /// Direito gira, Ctrl+direito ou meio move
+    DireitoGira,
     FreeCad,
-    Inventor,
-    Rhino,
+    /// Direito gira, Shift+direito move, Ctrl+direito dá zoom
+    DireitoGiraShift,
 }
 
 impl NavStyle {
-    pub const ALL: [NavStyle; 9] = [
+    pub const ALL: [NavStyle; 8] = [
         NavStyle::Fenkra,
-        NavStyle::SolidWorks,
-        NavStyle::Fusion,
-        NavStyle::Catia,
+        NavStyle::MeioGira,
+        NavStyle::ShiftMeioGira,
+        NavStyle::MeioMove,
         NavStyle::FreeCad,
         NavStyle::Blender,
-        NavStyle::Onshape,
-        NavStyle::Inventor,
-        NavStyle::Rhino,
+        NavStyle::DireitoGira,
+        NavStyle::DireitoGiraShift,
     ];
     pub fn label(self) -> &'static str {
         match self {
             NavStyle::Fenkra => tr("Fenkra"),
-            NavStyle::SolidWorks => tr("Estilo SolidWorks"),
-            NavStyle::Fusion => tr("Estilo Fusion"),
-            NavStyle::Catia => tr("Estilo CATIA"),
+            NavStyle::MeioGira => tr("Meio gira, Ctrl+meio move"),
+            NavStyle::ShiftMeioGira => tr("Shift+meio gira, meio move"),
+            NavStyle::MeioMove => tr("Meio move, meio+direito gira"),
             NavStyle::Blender => tr("Estilo Blender"),
-            NavStyle::Onshape => tr("Estilo Onshape"),
+            NavStyle::DireitoGira => tr("Direito gira, Ctrl+direito move"),
             NavStyle::FreeCad => tr("Estilo FreeCAD (CAD)"),
-            NavStyle::Inventor => tr("Estilo Inventor"),
-            NavStyle::Rhino => tr("Estilo Rhino"),
+            NavStyle::DireitoGiraShift => tr("Direito gira, Shift+direito move"),
         }
     }
     pub fn help(self) -> &'static str {
         match self {
             NavStyle::Fenkra => tr("Girar: botão esquerdo ou do meio · Mover: direito ou Shift+arrastar · Zoom: roda"),
-            NavStyle::SolidWorks => tr("Girar: botão do meio · Mover: Ctrl+meio · Zoom: roda (invertida)"),
-            NavStyle::Fusion => tr("Girar: Shift+meio · Mover: botão do meio · Zoom: roda"),
-            NavStyle::Catia => tr("Mover: botão do meio · Girar: meio+direito · Zoom: roda"),
+            NavStyle::MeioGira => tr("Girar: botão do meio · Mover: Ctrl+meio · Zoom: roda (invertida)"),
+            NavStyle::ShiftMeioGira => tr("Girar: Shift+meio · Mover: botão do meio · Zoom: roda"),
+            NavStyle::MeioMove => tr("Mover: botão do meio · Girar: meio+direito · Zoom: roda"),
             NavStyle::Blender => tr("Girar: botão do meio · Mover: Shift+meio · Zoom: roda ou Ctrl+meio"),
-            NavStyle::Onshape => tr("Girar: botão direito · Mover: Ctrl+direito ou meio · Zoom: roda"),
+            NavStyle::DireitoGira => tr("Girar: botão direito · Mover: Ctrl+direito ou meio · Zoom: roda"),
             NavStyle::FreeCad => tr("Mover: botão do meio · Girar: meio + esquerdo ou direito · Zoom: roda"),
-            NavStyle::Inventor => tr("Girar: Shift+meio · Mover: botão do meio · Zoom: roda"),
-            NavStyle::Rhino => tr("Girar: botão direito · Mover: Shift+direito · Zoom: roda ou Ctrl+direito"),
+            NavStyle::DireitoGiraShift => tr("Girar: botão direito · Mover: Shift+direito · Zoom: roda ou Ctrl+direito"),
         }
+    }
+}
+
+/// Hash FNV-1a 64 do nome em minúsculas. Os nomes antigos de estilos e predefinições, que citavam
+/// produtos de terceiros, ficam só como hash: o `config.json` salvo ainda é lido e a regra do projeto
+/// (nenhuma marca no código) vale. Ver B202 e B310.
+pub(crate) fn hash_nome(n: &str) -> u64 {
+    let mut x: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in n.to_lowercase().bytes() {
+        x = (x ^ b as u64).wrapping_mul(0x0100_0000_01b3);
+    }
+    x
+}
+
+impl NavStyle {
+    /// Nome gravado no config.json.
+    pub fn nome(self) -> &'static str {
+        match self {
+            NavStyle::Fenkra => "Fenkra",
+            NavStyle::MeioGira => "MeioGira",
+            NavStyle::ShiftMeioGira => "ShiftMeioGira",
+            NavStyle::MeioMove => "MeioMove",
+            NavStyle::Blender => "Blender",
+            NavStyle::DireitoGira => "DireitoGira",
+            NavStyle::FreeCad => "FreeCad",
+            NavStyle::DireitoGiraShift => "DireitoGiraShift",
+        }
+    }
+
+    /// Lê um nome gravado, novo ou antigo; nome desconhecido cai no padrão, sem erro.
+    pub fn de_nome(n: &str) -> NavStyle {
+        if let Some(v) = NavStyle::ALL.into_iter().find(|v| v.nome() == n) {
+            return v;
+        }
+        if n == "SolidCadCraft" {
+            return NavStyle::Fenkra;
+        }
+        const LEGADO: [(u64, NavStyle); 6] = [
+            (0x8c735c72d6e7e616, NavStyle::MeioGira),
+            (0x557ec50bf0c4fc1d, NavStyle::ShiftMeioGira),
+            (0x1e2cf6bab7d7815c, NavStyle::ShiftMeioGira),
+            (0xc1d4e83b1408f651, NavStyle::MeioMove),
+            (0x4f20146f6028e905, NavStyle::DireitoGira),
+            (0xb267bd5e49fff919, NavStyle::DireitoGiraShift),
+        ];
+        let h = hash_nome(n);
+        LEGADO.iter().find(|(k, _)| *k == h).map(|(_, v)| *v).unwrap_or_default()
+    }
+}
+
+impl Serialize for NavStyle {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(self.nome())
+    }
+}
+
+impl<'de> Deserialize<'de> for NavStyle {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        Ok(NavStyle::de_nome(&String::deserialize(d)?))
     }
 }
 
@@ -409,6 +482,10 @@ pub struct Settings {
     pub macro_src: String,
     /// qualidade gráfica (malha, anti-serrilhamento, iluminação)
     pub graficos: Graficos,
+    /// posição dos painéis livres, por bancada
+    pub paineis: Vec<crate::paineis::PainelSalvo>,
+    /// grupos fora do contexto que o usuário deixou sempre na faixa
+    pub barra_fixos: Vec<Group>,
 }
 
 /// Comandos ocultos, ordem própria em cada grupo e grupos criados pelo usuário.
@@ -435,11 +512,11 @@ pub struct CustomGroup {
 impl Default for Settings {
     fn default() -> Self {
         Settings {
-            theme: Theme::Escuro,
+            theme: Theme::Claro,
             ui_scale: 1.0,
             gradient: true,
-            bg_top: [74, 84, 100],
-            bg_bottom: [26, 29, 34],
+            bg_top: crate::theme::default_def().bg_top,
+            bg_bottom: crate::theme::default_def().bg_bottom,
             display: DisplayMode::SombreadoArestas,
             edges_in_render: false,
             tangent_edges: false,
@@ -483,10 +560,12 @@ impl Default for Settings {
             box_mode: 0,
             user_colors: vec![],
             menu_theme: 4,
-            theme_name: "Escuro".into(),
+            theme_name: crate::theme::PADRAO.into(),
             pmi_style: Default::default(),
             flanged_holes: vec![],
             graficos: Default::default(),
+            paineis: vec![],
+            barra_fixos: vec![],
         }
     }
 }
@@ -509,8 +588,22 @@ impl Settings {
     pub fn load() -> Self {
         Self::path()
             .and_then(|p| std::fs::read_to_string(p).ok())
-            .and_then(|s| serde_json::from_str(&s).ok())
+            .and_then(|s| serde_json::from_str::<Settings>(&s).ok())
             .unwrap_or_default()
+            .migrar_tema()
+    }
+
+    /// Quem tinha um tema que não existe mais (removido) cai no padrão, com o fundo da viewport dele.
+    pub fn migrar_tema(mut self) -> Self {
+        crate::theme::reload_user();
+        if crate::theme::find(&self.theme_name).is_none() {
+            let d = crate::theme::default_def();
+            self.theme_name = d.name.clone();
+            self.theme = if d.dark { Theme::Escuro } else { Theme::Claro };
+            self.bg_top = d.bg_top;
+            self.bg_bottom = d.bg_bottom;
+        }
+        self
     }
 
     pub fn save(&self) {
@@ -573,10 +666,7 @@ impl Settings {
     }
 
     pub fn apply(&self, ctx: &egui::Context) {
-        let def = crate::theme::find(&self.theme_name).unwrap_or_else(|| {
-            let b = crate::theme::builtin();
-            if self.theme == Theme::Claro { b[1].clone() } else { b[0].clone() }
-        });
+        let def = crate::theme::find(&self.theme_name).unwrap_or_else(crate::theme::default_def);
         crate::theme::apply(ctx, &def);
         ctx.set_zoom_factor(self.ui_scale.clamp(0.7, 2.0));
     }
@@ -597,6 +687,42 @@ mod tests {
         let g: Settings = serde_json::from_str(r#"{"graficos": {"preset": "Alta"}}"#).unwrap();
         assert_eq!(g.graficos.qualidade(), QualidadeMalha::ALTA);
         assert_eq!(g.graficos.msaa, Msaa::X4);
+    }
+
+    /// Nomes antigos (montados em pedaços para o código não citar marca) migram para o equivalente.
+    #[test]
+    fn config_com_estilo_e_predefinicao_antigos_migra_sem_erro() {
+        let nome = |a: &str, b: &str| [a, b].concat();
+        let casos = [
+            (nome("Solid", "Works"), NavStyle::MeioGira, crate::keymap::Preset::VistasCtrl),
+            (nome("Cat", "ia"), NavStyle::MeioMove, crate::keymap::Preset::PoucosAtalhos),
+            (nome("Fus", "ion"), NavStyle::ShiftMeioGira, crate::keymap::Preset::LetraF6),
+            (nome("Onsh", "ape"), NavStyle::DireitoGira, crate::keymap::Preset::VistasShift),
+            (nome("Inven", "tor"), NavStyle::ShiftMeioGira, crate::keymap::Preset::LetraHome),
+        ];
+        for (antigo, nav, preset) in casos {
+            let j = format!(r#"{{"nav": "{antigo}", "keys": {{"preset": "{antigo}"}}}}"#);
+            let s: Settings = serde_json::from_str(&j).unwrap();
+            assert_eq!(s.nav, nav, "{antigo}");
+            assert_eq!(s.keys.preset, preset, "{antigo}");
+        }
+        let rhino: Settings = serde_json::from_str(&format!(r#"{{"nav": "{}"}}"#, nome("Rhi", "no"))).unwrap();
+        assert_eq!(rhino.nav, NavStyle::DireitoGiraShift);
+        // nome desconhecido não derruba a leitura
+        let x: Settings = serde_json::from_str(r#"{"nav": "Qualquer", "keys": {"preset": "Outro"}}"#).unwrap();
+        assert_eq!((x.nav, x.keys.preset), (NavStyle::Fenkra, crate::keymap::Preset::Fenkra));
+    }
+
+    #[test]
+    fn nomes_novos_de_estilo_e_predefinicao_vao_e_voltam() {
+        for n in NavStyle::ALL {
+            let j = serde_json::to_string(&n).unwrap();
+            assert_eq!(serde_json::from_str::<NavStyle>(&j).unwrap(), n);
+        }
+        for p in crate::keymap::Preset::ALL {
+            let j = serde_json::to_string(&p).unwrap();
+            assert_eq!(serde_json::from_str::<crate::keymap::Preset>(&j).unwrap(), p);
+        }
     }
 
     #[test]

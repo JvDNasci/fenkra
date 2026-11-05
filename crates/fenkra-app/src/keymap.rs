@@ -1,5 +1,5 @@
 //! Atalhos de teclado configuráveis, com predefinições inspiradas nos atalhos padrão de outros
-//! CADs (SolidWorks, CATIA, FreeCAD, Fusion, Blender, Onshape, Inventor). Cada predefinição também
+//! CADs (FreeCAD, Blender e layouts descritivos de atalhos). Cada predefinição também
 //! escolhe o estilo de navegação do mouse; qualquer atalho pode ser trocado individualmente.
 
 use crate::settings::NavStyle;
@@ -164,33 +164,37 @@ impl Binding {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum Preset {
     #[default]
-    #[serde(alias = "SolidCadCraft")]
     Fenkra,
-    SolidWorks,
-    Catia,
+    /// Vistas por Ctrl+número, Tab oculta
+    VistasCtrl,
+    /// Poucos atalhos de comando
+    PoucosAtalhos,
     FreeCad,
-    Fusion,
+    /// Comandos de uma letra, F6 ajusta
+    LetraF6,
     Blender,
-    Onshape,
-    Inventor,
+    /// Vistas por Shift+número
+    VistasShift,
+    /// Comandos de uma letra, Home ajusta
+    LetraHome,
 }
 
 impl Preset {
-    pub const ALL: [Preset; 8] = [Preset::Fenkra, Preset::SolidWorks, Preset::Catia, Preset::FreeCad, Preset::Fusion, Preset::Blender, Preset::Onshape, Preset::Inventor];
+    pub const ALL: [Preset; 8] = [Preset::Fenkra, Preset::VistasCtrl, Preset::PoucosAtalhos, Preset::FreeCad, Preset::LetraF6, Preset::Blender, Preset::VistasShift, Preset::LetraHome];
 
     pub fn label(self) -> &'static str {
         match self {
             Preset::Fenkra => tr("Fenkra"),
-            Preset::SolidWorks => tr("SolidWorks"),
-            Preset::Catia => tr("CATIA V5"),
+            Preset::VistasCtrl => tr("Vistas por Ctrl+número"),
+            Preset::PoucosAtalhos => tr("Poucos atalhos"),
             Preset::FreeCad => tr("FreeCAD"),
-            Preset::Fusion => tr("Fusion 360"),
+            Preset::LetraF6 => tr("Letra única, F6 ajusta"),
             Preset::Blender => tr("Blender"),
-            Preset::Onshape => tr("Onshape"),
-            Preset::Inventor => tr("Inventor"),
+            Preset::VistasShift => tr("Vistas por Shift+número"),
+            Preset::LetraHome => tr("Letra única, Home ajusta"),
         }
     }
 
@@ -198,13 +202,13 @@ impl Preset {
     pub fn nav(self) -> NavStyle {
         match self {
             Preset::Fenkra => NavStyle::Fenkra,
-            Preset::SolidWorks => NavStyle::SolidWorks,
-            Preset::Catia => NavStyle::Catia,
+            Preset::VistasCtrl => NavStyle::MeioGira,
+            Preset::PoucosAtalhos => NavStyle::MeioMove,
             Preset::FreeCad => NavStyle::FreeCad,
-            Preset::Fusion => NavStyle::Fusion,
+            Preset::LetraF6 => NavStyle::ShiftMeioGira,
             Preset::Blender => NavStyle::Blender,
-            Preset::Onshape => NavStyle::Onshape,
-            Preset::Inventor => NavStyle::Inventor,
+            Preset::VistasShift => NavStyle::DireitoGira,
+            Preset::LetraHome => NavStyle::ShiftMeioGira,
         }
     }
 
@@ -228,13 +232,13 @@ impl Preset {
                 v.extend([(Fit, "F"), (Normal, "N"), (Ortho, "O"), (ViewFront, "Ctrl+1"), (ViewBack, "Ctrl+2"), (ViewRight, "Ctrl+3"), (ViewLeft, "Ctrl+4"), (ViewTop, "Ctrl+5"), (ViewBottom, "Ctrl+6"), (ViewIso, "Ctrl+7"), (Hide, "H"), (HiddenEnv, "Shift+H"), (Extrude, "E"), (Revolve, "Shift+R"), (Fillet, "Shift+F"), (Chamfer, "Shift+C"), (Sketch, "Shift+S"), (Plane, "Shift+P")]);
                 v.extend(sk);
             }
-            Preset::SolidWorks => {
+            Preset::VistasCtrl => {
                 // Ctrl+1..8 = frente, trás, esquerda, direita, topo, base, iso, normal a
                 v.extend([(Fit, "F"), (ViewFront, "Ctrl+1"), (ViewBack, "Ctrl+2"), (ViewLeft, "Ctrl+3"), (ViewRight, "Ctrl+4"), (ViewTop, "Ctrl+5"), (ViewBottom, "Ctrl+6"), (ViewIso, "Ctrl+7"), (Normal, "Ctrl+8"), (Hide, "Tab"), (HiddenEnv, "Shift+Tab"), (Ortho, "O")]);
                 v.extend([(SkSelect, "S"), (SkLine, "L"), (SkDim, "D"), (SkRect, "R"), (SkCircle, "C"), (SkArc, "A"), (SkPoint, "P"), (SkConstruction, "X"), (SkGrid, "G")]);
             }
-            Preset::Catia => {
-                // CATIA quase não tem atalhos de fábrica: vistas pelos números e o resto como no Fenkra
+            Preset::PoucosAtalhos => {
+                // poucos atalhos de comando: vistas pelos números e o resto como no Fenkra
                 v.extend([(Fit, "F"), (Normal, "N"), (ViewFront, "Ctrl+1"), (ViewBack, "Ctrl+2"), (ViewRight, "Ctrl+3"), (ViewLeft, "Ctrl+4"), (ViewTop, "Ctrl+5"), (ViewBottom, "Ctrl+6"), (ViewIso, "Ctrl+7"), (Hide, "H"), (HiddenEnv, "Shift+H"), (Ortho, "O")]);
                 v.extend(sk);
             }
@@ -244,7 +248,7 @@ impl Preset {
                 v.extend([(ViewIso, "0"), (ViewFront, "1"), (ViewTop, "2"), (ViewRight, "3"), (ViewBack, "4"), (ViewBottom, "5"), (ViewLeft, "6"), (Fit, "V"), (Ortho, "O"), (Hide, "Space"), (ViewMenu, "Shift+Space"), (HiddenEnv, "Shift+H"), (Normal, "N")]);
                 v.extend(sk);
             }
-            Preset::Fusion => {
+            Preset::LetraF6 => {
                 // F6 ajusta; atalhos de comando de uma letra
                 v.extend([(Fit, "F6"), (ViewIso, "Home"), (Hide, "V"), (HiddenEnv, "Shift+V"), (Normal, "N"), (Ortho, "O"), (Extrude, "E"), (Fillet, "F"), (Hole, "H"), (Sketch, "Shift+S")]);
                 v.extend([(SkLine, "L"), (SkRect, "R"), (SkCircle, "C"), (SkArc, "A"), (SkPoint, "P"), (SkDim, "D"), (SkConstruction, "X"), (SkSelect, "S"), (SkGrid, "G")]);
@@ -255,12 +259,12 @@ impl Preset {
                 v.extend([(Redo, "Ctrl+Shift+Z"), (ViewMenu, "`"), (ViewFront, "1"), (ViewBack, "Ctrl+1"), (ViewRight, "3"), (ViewLeft, "Ctrl+3"), (ViewTop, "7"), (ViewBottom, "Ctrl+7"), (ViewIso, "9"), (Ortho, "5"), (Fit, "Home"), (Hide, "H"), (HiddenEnv, "Alt+H"), (Normal, "N"), (Extrude, "E")]);
                 v.extend(sk);
             }
-            Preset::Onshape => {
+            Preset::VistasShift => {
                 // Shift+1..7 vistas; F ajusta; N normal
                 v.extend([(Fit, "F"), (Normal, "N"), (ViewFront, "Shift+1"), (ViewBack, "Shift+2"), (ViewLeft, "Shift+3"), (ViewRight, "Shift+4"), (ViewTop, "Shift+5"), (ViewBottom, "Shift+6"), (ViewIso, "Shift+7"), (Hide, "Y"), (HiddenEnv, "Shift+Y"), (Ortho, "O"), (Extrude, "Shift+E"), (Sketch, "Shift+S")]);
                 v.extend([(SkLine, "L"), (SkRect, "R"), (SkCircle, "C"), (SkArc, "A"), (SkPoint, "P"), (SkDim, "D"), (SkConstruction, "Q"), (SkSelect, "S"), (SkGrid, "G")]);
             }
-            Preset::Inventor => {
+            Preset::LetraHome => {
                 // F6 casa (iso), Home ajusta; E extrusão, R revolução, H furo, S sketch
                 v.extend([(ViewIso, "F6"), (Fit, "Home"), (Normal, "N"), (Ortho, "O"), (Hide, "Alt+V"), (HiddenEnv, "Shift+H"), (Extrude, "E"), (Revolve, "R"), (Hole, "H"), (Sketch, "S"), (Fillet, "Shift+F"), (Chamfer, "Ctrl+Shift+K")]);
                 v.extend([(SkLine, "L"), (SkCircle, "C"), (SkArc, "A"), (SkPoint, "P"), (SkDim, "D"), (SkRect, "R"), (SkConstruction, "X"), (SkSelect, "Escape"), (SkGrid, "G")]);
@@ -268,6 +272,53 @@ impl Preset {
             }
         }
         v
+    }
+}
+
+impl Preset {
+    /// Nome gravado no config.json.
+    pub fn nome(self) -> &'static str {
+        match self {
+            Preset::Fenkra => "Fenkra",
+            Preset::VistasCtrl => "VistasCtrl",
+            Preset::PoucosAtalhos => "PoucosAtalhos",
+            Preset::FreeCad => "FreeCad",
+            Preset::LetraF6 => "LetraF6",
+            Preset::Blender => "Blender",
+            Preset::VistasShift => "VistasShift",
+            Preset::LetraHome => "LetraHome",
+        }
+    }
+
+    /// Lê um nome gravado, novo ou antigo (por hash, ver `settings::hash_nome`); desconhecido cai no padrão.
+    pub fn de_nome(n: &str) -> Preset {
+        if let Some(v) = Preset::ALL.into_iter().find(|v| v.nome() == n) {
+            return v;
+        }
+        if n == "SolidCadCraft" {
+            return Preset::Fenkra;
+        }
+        const LEGADO: [(u64, Preset); 5] = [
+            (0x8c735c72d6e7e616, Preset::VistasCtrl),
+            (0xc1d4e83b1408f651, Preset::PoucosAtalhos),
+            (0x557ec50bf0c4fc1d, Preset::LetraF6),
+            (0x4f20146f6028e905, Preset::VistasShift),
+            (0x1e2cf6bab7d7815c, Preset::LetraHome),
+        ];
+        let h = crate::settings::hash_nome(n);
+        LEGADO.iter().find(|(k, _)| *k == h).map(|(_, v)| *v).unwrap_or_default()
+    }
+}
+
+impl Serialize for Preset {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(self.nome())
+    }
+}
+
+impl<'de> Deserialize<'de> for Preset {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        Ok(Preset::de_nome(&String::deserialize(d)?))
     }
 }
 
