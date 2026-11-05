@@ -1,0 +1,24 @@
+[package]
+name = "fenkra-mcp"
+description = "Servidor MCP local do Fenkra, por stdio: reconstruir peças por comandos, sem rede"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "fenkra_mcp"
+path = "src/lib.rs"
+
+[[bin]]
+name = "fenkra-mcp"
+path = "src/main.rs"
+
+[dependencies]
+fenkra-cli = { path = "../fenkra-cli" }
+serde_json.workspace = true
+
+[dev-dependencies]
+fenkra-core = { path = "../fenkra-core" }
+fenkra-kernel = { path = "../fenkra-kernel" }
+fenkra-solidos = { path = "../fenkra-solidos" }

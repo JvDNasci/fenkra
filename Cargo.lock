@@ -1279,6 +1279,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fenkra-cli"
+version = "0.1.0-alpha.28"
+dependencies = [
+ "fenkra-conversor",
+ "fenkra-core",
+ "fenkra-kernel",
+ "fenkra-solidos",
+ "serde_json",
+]
+
+[[package]]
 name = "fenkra-conversor"
 version = "0.1.0-alpha.28"
 dependencies = [
@@ -1320,6 +1331,17 @@ dependencies = [
  "cxx",
  "cxx-build",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "fenkra-mcp"
+version = "0.1.0-alpha.28"
+dependencies = [
+ "fenkra-cli",
+ "fenkra-core",
+ "fenkra-kernel",
+ "fenkra-solidos",
+ "serde_json",
 ]
 
 [[package]]

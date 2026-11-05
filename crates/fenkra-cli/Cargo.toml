@@ -1,0 +1,22 @@
+[package]
+name = "fenkra-cli"
+description = "Automação sem interface: comandos de peça, consulta de topologia e checador, com saída JSON estável"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "fenkra_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "fenkra-cli"
+path = "src/main.rs"
+
+[dependencies]
+fenkra-core = { path = "../fenkra-core" }
+fenkra-kernel = { path = "../fenkra-kernel" }
+fenkra-conversor = { path = "../fenkra-conversor" }
+fenkra-solidos = { path = "../fenkra-solidos" }
+serde_json.workspace = true

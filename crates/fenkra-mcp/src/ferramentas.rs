@@ -1,0 +1,314 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
+//! A lista fechada de ferramentas. Cada uma aponta para um comando de [`fenkra_cli::Sessao`]; o que
+//! não está aqui o agente não alcança, mesmo que a sessão tenha o comando (`topologia` com caminho
+//! livre, `reproduzir`).
+
+use fenkra_cli::topologia::SECOES;
+use fenkra_cli::ErroApi;
+use serde_json::{json, Value};
+
+pub struct Ferramenta {
+    pub nome: &'static str,
+    titulo: &'static str,
+    descricao: &'static str,
+    pub comando: &'static str,
+    /// devolve dado lido de um STEP: exige o aceite da pessoa
+    pub le_step: bool,
+    /// não muda modelo nem arquivo
+    somente_leitura: bool,
+    esquema: fn() -> Value,
+    pub traduzir: fn(&Value) -> Result<Value, ErroApi>,
+}
+
+impl Ferramenta {
+    pub fn json(&self) -> Value {
+        json!({
+            "name": self.nome, "title": self.titulo, "description": self.descricao, "inputSchema": (self.esquema)(),
+            "annotations": { "readOnlyHint": self.somente_leitura, "destructiveHint": false, "openWorldHint": false },
+        })
+    }
+}
+
+fn igual(a: &Value) -> Result<Value, ErroApi> {
+    Ok(a.clone())
+}
+
+fn sem_args() -> Value {
+    json!({ "type": "object", "additionalProperties": false, "properties": {} })
+}
+
+fn objeto(propriedades: Value, exigidos: &[&str]) -> Value {
+    json!({ "type": "object", "properties": propriedades, "required": exigidos })
+}
+
+/// Valor de cota: número em mm ou expressão com parâmetros.
+fn valor(descricao: &str) -> Value {
+    json!({ "type": ["string", "number"], "description": descricao })
+}
+
+fn identificacao() -> Value {
+    json!({ "id": { "type": "string", "description": "id do item; ausente, o servidor cria" }, "nome": { "type": "string" } })
+}
+
+fn juntar(mut a: Value, b: Value) -> Value {
+    if let (Some(x), Some(y)) = (a.as_object_mut(), b.as_object()) {
+        x.extend(y.iter().map(|(k, v)| (k.clone(), v.clone())));
+    }
+    a
+}
+
+fn termino() -> Value {
+    json!({ "type": "object", "description": "tipo: cego e simetrico (distancia), dois_lados (a, b), atravessar, ate_plano (plano), ate_proxima, ate_ultima" })
+}
+
+fn plano() -> Value {
+    json!({ "description": "\"XY\", \"XZ\", \"YZ\" ou {\"referencia\": id de criar_plano}. Eixos do esboço: XY usa x=X, y=Y, normal +Z; XZ usa x=X, y=Z, normal -Y; YZ usa x=Y, y=Z, normal +X" })
+}
+
+fn arestas() -> Value {
+    json!({ "description": "\"todas\", {\"geradas_por\": id} ou lista de pontos [x, y, z], um sobre cada aresta (o meio, nunca um vértice)" })
+}
+
+fn arquivo_e_sobrescrever(descricao: &str) -> Value {
+    objeto(
+        json!({ "arquivo": { "type": "string", "description": descricao }, "sobrescrever": { "type": "boolean", "description": "true troca um arquivo que já existe; sem isto, ele é recusado" } }),
+        &["arquivo"],
+    )
+}
+
+fn e_salvar() -> Value {
+    arquivo_e_sobrescrever("caminho .fkx ou .fkp relativo à pasta do projeto")
+}
+
+fn e_exportar() -> Value {
+    arquivo_e_sobrescrever("caminho .step ou .stp relativo à pasta do projeto")
+}
+
+fn e_consultar() -> Value {
+    objeto(
+        json!({
+            "arquivo": { "type": "string", "description": "STEP dentro da pasta do projeto" },
+            "secoes": { "type": "array", "items": { "enum": SECOES }, "description": "ausente, vêm todas" },
+            "limite": { "type": "integer", "description": "máximo de faces e arestas devolvidas" },
+        }),
+        &["arquivo"],
+    )
+}
+
+fn e_topologia() -> Value {
+    objeto(
+        json!({ "secoes": { "type": "array", "items": { "enum": SECOES } }, "limite": { "type": "integer" } }),
+        &[],
+    )
+}
+
+fn e_nova() -> Value {
+    objeto(json!({ "nome": { "type": "string" } }), &[])
+}
+
+fn e_abrir() -> Value {
+    objeto(
+        json!({ "arquivo": { "type": "string", "description": "peça .fkx ou .fkp dentro da pasta do projeto" } }),
+        &["arquivo"],
+    )
+}
+
+fn e_parametro() -> Value {
+    objeto(
+        json!({ "nome": { "type": "string" }, "expressao": valor("número ou expressão"), "grandeza": { "enum": ["comprimento", "angulo", "numero"] } }),
+        &["nome", "expressao"],
+    )
+}
+
+fn e_plano() -> Value {
+    objeto(
+        juntar(
+            identificacao(),
+            json!({ "base": plano(), "deslocamento": valor("distância ao longo da normal da base") }),
+        ),
+        &["deslocamento"],
+    )
+}
+
+fn e_esboco() -> Value {
+    let propriedades = json!({
+        "plano": plano(),
+        "pontos": { "type": "array", "description": "{id, x, y, fixo?}. Curvas que dividem um ponto usam o mesmo id: é assim que o perfil fecha" },
+        "curvas": { "type": "array", "description": "{id, construcao?, geometria}, com geometria.tipo reta (a, b), circulo (centro, raio), arco (centro, inicio, fim, anti-horário), ponto (ponto), spline (pontos)" },
+        "restricoes": { "type": "array", "description": "{tipo, entidades, valor?}. Cotas: comprimento, raio, diametro, distancia, distancia_x, distancia_y, angulo. Geométricas: horizontal, vertical, coincidente, paralela, perpendicular, igual, tangente, concentrica" },
+    });
+    objeto(
+        juntar(identificacao(), propriedades),
+        &["plano", "pontos", "curvas"],
+    )
+}
+
+fn e_extrudar() -> Value {
+    let propriedades = json!({
+        "esboco": { "type": "string" }, "operacao": { "enum": ["unir", "cortar", "intersectar"] }, "termino": termino(),
+        "inverter": { "type": "boolean", "description": "vai contra a normal do plano do esboço" },
+    });
+    objeto(
+        juntar(identificacao(), propriedades),
+        &["esboco", "operacao", "termino"],
+    )
+}
+
+fn e_furar() -> Value {
+    let propriedades = json!({
+        "esboco": { "type": "string", "description": "esboço com um ponto em cada centro; o furo entra contra a normal do plano" },
+        "diametro": valor("diâmetro em mm"), "termino": termino(), "inverter": { "type": "boolean" },
+        "forma": { "type": "object", "description": "tipo: simples (padrão), rebaixado (diametro, profundidade), escareado (diametro, angulo), contrafurado (diametro, profundidade, angulo)" },
+    });
+    objeto(
+        juntar(identificacao(), propriedades),
+        &["esboco", "diametro", "termino"],
+    )
+}
+
+fn e_filetar() -> Value {
+    objeto(
+        juntar(
+            identificacao(),
+            json!({ "raio": valor("raio em mm"), "arestas": arestas() }),
+        ),
+        &["raio", "arestas"],
+    )
+}
+
+fn e_chanfrar() -> Value {
+    objeto(
+        juntar(
+            identificacao(),
+            json!({ "distancia": valor("distância em mm"), "arestas": arestas() }),
+        ),
+        &["distancia", "arestas"],
+    )
+}
+
+fn e_comparar() -> Value {
+    objeto(
+        json!({
+            "alvo": { "type": "string", "description": "STEP alvo dentro da pasta do projeto" },
+            "tolerancias": { "type": "object", "description": "opcional: volume, area, centroide, caixa, inercia, distancia, furo_diametro, furo_posicao" },
+        }),
+        &["alvo"],
+    )
+}
+
+/// Argumentos de cota podem vir como número: o `.fkx` só aceita texto.
+fn cotas_em_texto(a: &Value, chaves: &[&str]) -> Result<Value, ErroApi> {
+    let mut v = a.clone();
+    for c in chaves {
+        if let Some(n) = v[*c].as_f64() {
+            v[*c] = json!(n.to_string());
+        }
+    }
+    Ok(v)
+}
+
+fn t_furo(a: &Value) -> Result<Value, ErroApi> {
+    cotas_em_texto(a, &["diametro"])
+}
+
+fn t_filete(a: &Value) -> Result<Value, ErroApi> {
+    cotas_em_texto(a, &["raio"])
+}
+
+fn t_chanfro(a: &Value) -> Result<Value, ErroApi> {
+    cotas_em_texto(a, &["distancia"])
+}
+
+/// A consulta recebe só STEP: esta porta não vira leitor de outro arquivo do projeto.
+fn t_consultar(a: &Value) -> Result<Value, ErroApi> {
+    so_step(a["arquivo"].as_str().unwrap_or_default())?;
+    Ok(a.clone())
+}
+
+fn t_comparar(a: &Value) -> Result<Value, ErroApi> {
+    so_step(a["alvo"].as_str().unwrap_or_default())?;
+    let mut v = json!({ "alvo": a["alvo"] });
+    if !a["tolerancias"].is_null() {
+        v["tolerancias"] = a["tolerancias"].clone();
+    }
+    Ok(v)
+}
+
+fn t_topologia(a: &Value) -> Result<Value, ErroApi> {
+    if !a["arquivo"].is_null() {
+        return Err(ErroApi::argumento(
+            "topologia_modelo só consulta a peça em edição; para um STEP, use consultar_step",
+        ));
+    }
+    Ok(a.clone())
+}
+
+fn so_step(arquivo: &str) -> Result<(), ErroApi> {
+    let a = arquivo.to_ascii_lowercase();
+    if a.ends_with(".step") || a.ends_with(".stp") {
+        Ok(())
+    } else {
+        Err(ErroApi::novo("formato", "informe um arquivo .step ou .stp"))
+    }
+}
+
+const fn leitura(
+    nome: &'static str,
+    titulo: &'static str,
+    descricao: &'static str,
+    comando: &'static str,
+    esquema: fn() -> Value,
+    traduzir: fn(&Value) -> Result<Value, ErroApi>,
+) -> Ferramenta {
+    Ferramenta {
+        nome,
+        titulo,
+        descricao,
+        comando,
+        le_step: false,
+        somente_leitura: true,
+        esquema,
+        traduzir,
+    }
+}
+
+const fn edicao(
+    nome: &'static str,
+    titulo: &'static str,
+    descricao: &'static str,
+    comando: &'static str,
+    esquema: fn() -> Value,
+    traduzir: fn(&Value) -> Result<Value, ErroApi>,
+) -> Ferramenta {
+    Ferramenta {
+        nome,
+        titulo,
+        descricao,
+        comando,
+        le_step: false,
+        somente_leitura: false,
+        esquema,
+        traduzir,
+    }
+}
+
+pub const FERRAMENTAS: [Ferramenta; 18] = [
+    Ferramenta { nome: "consultar_step", titulo: "Consultar STEP", descricao: "Lista caixa envolvente, massa, faces, arestas, planos, cilindros e furos de um STEP do projeto. Os planos trazem a normal para fora, as arestas trazem a fórmula, e os furos já vêm agrupados. Exige o aceite --liberar-step.", comando: "topologia", le_step: true, somente_leitura: true, esquema: e_consultar, traduzir: t_consultar },
+    edicao("nova_peca", "Nova peça", "Começa uma peça vazia.", "nova_peca", e_nova, igual),
+    edicao("abrir_peca", "Abrir peça", "Abre uma peça .fkx ou .fkp do projeto.", "abrir", e_abrir, igual),
+    leitura("listar_parametros", "Listar parâmetros", "Parâmetros da peça, com expressão e valor.", "parametros", sem_args, igual),
+    edicao("definir_parametro", "Definir parâmetro", "Cria ou muda um parâmetro. Use o nome nas cotas e comandos para a peça continuar editável.", "definir_parametro", e_parametro, igual),
+    edicao("criar_plano", "Criar plano", "Plano deslocado de outro, para esboçar fora da origem.", "criar_plano", e_plano, igual),
+    edicao("criar_esboco", "Criar esboço", "Esboço com geometria, restrições e cotas, no formato de esboço do .fkx. Devolve os graus de liberdade restantes.", "criar_esboco", e_esboco, igual),
+    edicao("extrudar", "Extrudar", "Extrusão de um esboço: une, corta ou intersecta.", "extrudar", e_extrudar, igual),
+    edicao("furar", "Furar", "Furo em cada ponto de um esboço.", "furar", e_furar, t_furo),
+    edicao("filetar", "Filetar", "Filete nas arestas indicadas.", "filetar", e_filetar, t_filete),
+    edicao("chanfrar", "Chanfrar", "Chanfro nas arestas indicadas.", "chanfrar", e_chanfrar, t_chanfro),
+    edicao("desfazer", "Desfazer", "Volta o último comando que mudou a peça.", "desfazer", sem_args, igual),
+    leitura("recalcular", "Recalcular", "Recalcula e devolve o status de cada item, volume, área e caixa.", "recalcular", sem_args, igual),
+    leitura("medir", "Medir", "Volume, área, centroide, inércia e caixa da peça.", "medir", sem_args, igual),
+    leitura("topologia_modelo", "Topologia da peça", "Faces, arestas, planos, cilindros e furos da peça em edição. Use os meios das arestas para filetar.", "topologia", e_topologia, t_topologia),
+    Ferramenta { nome: "comparar_alvo", titulo: "Comparar com o alvo", descricao: "Checador de similaridade: compara a peça com o STEP alvo por volume, área, centroide, caixa, inércia, furos por diâmetro e distância entre superfícies, e diz onde diverge. Exige o aceite --liberar-step.", comando: "comparar", le_step: true, somente_leitura: true, esquema: e_comparar, traduzir: t_comparar },
+    edicao("salvar_peca", "Salvar peça", "Grava a peça em .fkx ou .fkp. Nunca troca um arquivo que existe sem `sobrescrever`.", "salvar", e_salvar, igual),
+    edicao("exportar_step", "Exportar STEP", "Grava o sólido em STEP. Nunca troca um arquivo que existe sem `sobrescrever`.", "exportar", e_exportar, igual),
+];

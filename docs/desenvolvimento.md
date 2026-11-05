@@ -45,6 +45,17 @@ cargo test --workspace
 - Rodar um grupo: `cargo test -p fenkra-solidos aba_`.
 - A tela inicial tem exemplos que também são testados (`exemplos_recalculam_sem_erro`).
 
+## Automação sem interface
+
+`fenkra-cli` roda comandos de peça com saída JSON, e `fenkra-mcp` é o servidor local para agentes. O contrato está em
+[formatos/api-json.md](formatos/api-json.md), e o guia do servidor, em [automacao/mcp.md](automacao/mcp.md).
+
+```bash
+cargo test -p fenkra-cli -p fenkra-mcp
+```
+
+O teste da API Python roda junto, se houver `python` no `PATH`.
+
 ## Variáveis de ambiente para testar o app
 
 Qualquer variável `FENKRA_DEMO*` (e `FENKRA_ABRIR`, `FENKRA_BANCADA`) faz o app **não gravar** as
