@@ -255,7 +255,9 @@ mod testes {
                 assert!(!matches!(res.status.get(&id), Some(fenkra_solidos::Status::Error(_)) | None), "{}: erro em t={t}: {:?}", r.comando, res.status.get(&id));
                 vol.push(res.bodies.iter().map(|b| b.mass.volume).sum::<f64>());
             }
-            assert!((vol[0] - vol[1]).abs() > 1e-6 * vol[0].abs().max(1.), "{}: volume não muda ({vol:?})", r.comando);
+            // a rosca cosmética não altera o sólido: o comprimento aparece na prévia, não no volume
+            let so_cosmetico = r.comando == "rosca";
+            assert!(so_cosmetico || (vol[0] - vol[1]).abs() > 1e-6 * vol[0].abs().max(1.), "{}: volume não muda ({vol:?})", r.comando);
         }
     }
 }

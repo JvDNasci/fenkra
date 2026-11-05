@@ -8,6 +8,13 @@
 /// (rótulo, dica em português, dica em inglês)
 pub static CAMPOS: &[(&str, &str, &str)] = &[
     // medidas gerais
+    ("Aba D1", "Comprimento da aba no lado 1 da dobra. Maior que zero; mede-se na face externa.", "Flange length on side 1 of the bend. Above zero; measured on the outer face."),
+    ("Aba D2", "Comprimento da aba no lado 2 da dobra. Maior que zero; mede-se na face externa.", "Flange length on side 2 of the bend. Above zero; measured on the outer face."),
+    ("Afastamento", "Distância de afastamento a partir da referência. Zero encosta; positivo afasta; típico 0,1 a 5.", "Standoff distance from the reference. Zero touches; positive moves away; typically 0.1 to 5."),
+    ("Desvio", "Desvio lateral em relação à linha de referência. Zero mantém alinhado; negativo vai para o outro lado.", "Sideways deviation from the reference line. Zero stays aligned; negative goes the other way."),
+    ("Diâmetro do furo", "Diâmetro do furo na peça. Maior que zero; costuma seguir a tabela do fixador mais a folga.", "Hole diameter in the part. Above zero; usually follows the fastener table plus clearance."),
+    ("Furo até a borda", "Distância do centro do furo até a borda. Em geral pelo menos 1,5 vez o diâmetro.", "Distance from the hole center to the edge. Usually at least 1.5 times the diameter."),
+    ("Recuo da face", "Quanto o elemento recua a partir da face escolhida. Zero fica rente; positivo afunda.", "How far the element sets back from the chosen face. Zero is flush; positive sinks it."),
     ("A", "Primeira medida do comando. A prévia no 3D destaca qual dimensão ela é. Positiva.", "First measure of the command. The 3D preview highlights which dimension it is. Positive."),
     ("B", "Segunda medida do comando. A prévia no 3D destaca qual dimensão ela é. Positiva.", "Second measure of the command. The 3D preview highlights which dimension it is. Positive."),
     ("C", "Terceira medida do comando. A prévia no 3D destaca qual dimensão ela é. Positiva.", "Third measure of the command. The 3D preview highlights which dimension it is. Positive."),
@@ -140,8 +147,11 @@ pub fn dica(rotulo: &str) -> Option<&'static str> {
 
 /// Pares português → inglês para o mapa de tradução (`i18n.rs` os incorpora).
 pub fn pares() -> impl Iterator<Item = (&'static str, &'static str)> {
-    CAMPOS.iter().map(|(_, pt, en)| (*pt, *en))
+    CAMPOS.iter().map(|(_, pt, en)| (*pt, *en)).chain(SIMBOLOS.iter().copied())
 }
+
+/// Rótulos que são símbolos e valem igual nos dois idiomas, ou ainda não tinham tradução.
+const SIMBOLOS: &[(&str, &str)] = &[("A", "A"), ("B", "B"), ("C", "C"), ("D", "D"), ("X", "X"), ("Y", "Y"), ("Z", "Z"), ("a", "a"), ("b", "b"), ("u", "u"), ("v", "v"), ("ρ", "ρ"), ("Total", "Total"), ("Foco (a)", "Focus (a)")];
 
 #[cfg(test)]
 mod testes {

@@ -155,7 +155,8 @@ pub fn editor(ctx: &egui::Context, cfg: &mut Config) {
                 atual.remove(i);
             }
             if let Some((pos, ic)) = soltou {
-                inserir(&mut atual, &ic, pos.min(atual.len()));
+                let n = atual.len();
+                inserir(&mut atual, &ic, pos.min(n));
             }
             // catálogo
             cols[1].label(RichText::new(tr("Catálogo de comandos")).strong());

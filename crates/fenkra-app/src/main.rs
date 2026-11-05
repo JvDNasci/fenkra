@@ -50,6 +50,7 @@ mod diagnostico;
 mod paineis;
 mod partida;
 mod ajuda_cmd;
+mod roda;
 mod textos_campos;
 mod midia;
 mod textos_ajuda;

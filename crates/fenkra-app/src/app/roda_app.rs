@@ -58,7 +58,7 @@ impl App {
         } else {
             let (solta, clique, esc, rolagem, numero) = ctx.input(|i| {
                 let numero = [egui::Key::Num1, egui::Key::Num2, egui::Key::Num3, egui::Key::Num4, egui::Key::Num5, egui::Key::Num6, egui::Key::Num7, egui::Key::Num8].iter().position(|k| i.key_pressed(*k)).map(|n| n + 1);
-                (i.key_released(tecla), i.pointer.primary_clicked(), i.key_pressed(egui::Key::Escape), i.raw_scroll_delta.y, numero)
+                (i.key_released(tecla), i.pointer.primary_clicked(), i.key_pressed(egui::Key::Escape), i.smooth_scroll_delta.y, numero)
             });
             if esc {
                 saida = self.roda.passo(Evento::Esc, np, oc);

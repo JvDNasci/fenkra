@@ -445,6 +445,8 @@ pub struct Settings {
     pub dim_on_type: bool,
     /// atalhos de teclado (predefinição + trocas)
     pub keys: crate::keymap::Keymap,
+    /// roda de comandos: conteúdo trocado pelo usuário e uso aprendido (B256)
+    pub roda: crate::roda::Config,
     /// interface em inglês
     pub english: bool,
     /// personalização dos grupos de comandos
@@ -563,6 +565,7 @@ impl Default for Settings {
             auto_dims: false,
             dim_on_type: true,
             keys: Default::default(),
+            roda: Default::default(),
             english: false,
             custom: Default::default(),
             user_profiles: vec![],

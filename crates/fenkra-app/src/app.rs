@@ -21,6 +21,7 @@ use crate::i18n::tr;
 
 mod diag;
 mod gravar;
+mod roda_app;
 mod importar;
 mod projeto;
 mod salvar;
@@ -206,6 +207,8 @@ pub struct App {
     /// desenvolvimento: gravação de roteiro de mídia de ajuda (B257)
     gravador: Option<gravar::Gravador>,
     gravar_caso: Option<FeatureKind>,
+    /// roda de comandos (B256)
+    roda: crate::roda::Roda,
     /// novo sketch esperando o clique no plano/face
     pub sketch_wait_plane: bool,
     /// árvore aberta ao lado do painel do comando
@@ -379,6 +382,7 @@ impl App {
             demo_previa: None,
             gravador: gravar::Gravador::de_ambiente(),
             gravar_caso: None,
+            roda: Default::default(),
             view_menu: false,
             new_view_name: String::new(),
             view_choice: None,
@@ -2270,6 +2274,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
 
     /// Executa uma ação da barra de ferramentas.
     fn act(&mut self, a: Act) {
+        self.roda_registrar(a);
         match a {
             Act::Cmd(c) => self.command(c),
             Act::Fit => self.fit_pending = true,
@@ -7295,6 +7300,7 @@ impl eframe::App for App {
         }
         let km = self.settings.keys.clone();
         let typing = ctx.egui_wants_keyboard_input() || self.sketch.as_ref().is_some_and(|e| e.entry.typing());
+        self.roda_passo(ctx, typing);
         let (save, undo, redo) = (km.pressed(ctx, K::Save), !typing && km.pressed(ctx, K::Undo), !typing && km.pressed(ctx, K::Redo));
         let del = km.pressed(ctx, K::Delete);
         // Ctrl+S salva o documento ativo (com a checagem de mudança externa); Ctrl+Shift+S abre o plano
@@ -8181,6 +8187,9 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
                         }
                     });
                 });
+                if ui.button(tr("Editar a roda de comandos…")).clicked() {
+                    crate::roda::ui::pedir_abrir(ui.ctx());
+                }
                 ui.label(RichText::new(tr("Troca o teclado e o mouse juntos, com base nos atalhos de fábrica de cada software. Clique num atalho para gravar outro (Esc cancela, Delete remove).")).weak().small());
                 let capturing: Option<KeyAction> = ui.ctx().data(|d| d.get_temp(egui::Id::unique("captura_atalho")));
                 egui::ScrollArea::vertical().max_height(260.).id_salt("atalhos").show(ui, |ui| {

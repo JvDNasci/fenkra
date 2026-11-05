@@ -64,7 +64,7 @@ pub fn montar(caso: &str) -> Option<(Document, FeatureKind)> {
         "prim_caixa" => primitivo(PrimKind::Caixa, "20", "20", "10"),
         "prim_cilindro" => primitivo(PrimKind::Cilindro, "6", "40", "0"),
         "prim_esfera" => primitivo(PrimKind::Esfera, "5", "0", "0"),
-        "prim_cone" => primitivo(PrimKind::Cone, "25", "25", "40"),
+        "prim_cone" => primitivo(PrimKind::Cone, "25", "24", "40"),
         "reforco" => {
             caixa(&mut d);
             let topo = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "30");
