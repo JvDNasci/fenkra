@@ -897,7 +897,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         FeatureKind::SplitBody(sp) => {
             section(ui, "Dividir o corpo");
             geo_ui::surf_slot(ui, "hb_s", "Superfície", doc, me, &mut sp.surface, seed);
-            crate::editor::check(ui, &mut sp.flip, "manter o outro lado");
+            crate::sup3d::dica_de_lado(ui);
             ui.label(RichText::new(tr("Face do corpo é estendida para cortar a peça inteira; superfícies de referência cortam como estão.")).weak().small());
         }
         FeatureKind::ThickSurface(t) => {
@@ -906,6 +906,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             expr(ui, "Espessura 1", &mut t.t1, vars, "mm");
             expr(ui, "Espessura 2", &mut t.t2, vars, "mm");
             ui.label(RichText::new(tr("1 = lado da normal; 2 = lado oposto (0 = só um lado).")).weak().small());
+            crate::sup3d::dica_de_lado(ui);
             hyb_op(ui, &mut t.op);
         }
         FeatureKind::CloseSurface(c) => {
@@ -926,7 +927,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 sw.remove = i == 1;
             }
             if sw.remove {
-                crate::editor::check(ui, &mut sw.flip, "tirar o outro lado");
+                crate::sup3d::dica_de_lado(ui);
             }
         }
         FeatureKind::BoundaryFill(bf) => {

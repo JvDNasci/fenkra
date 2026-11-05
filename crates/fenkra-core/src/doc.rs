@@ -770,6 +770,25 @@ pub enum RefKind {
     },
     /// Aparar duas superfícies uma pela outra e juntar os lados escolhidos.
     SurfTrim { a: SurfRef, b: SurfRef, flip_a: bool, flip_b: bool },
+    /// Aparar e dividir por região: corta e fica com os pedaços escolhidos por clique.
+    SurfRegions {
+        surface: SurfRef,
+        /// elementos de corte; no modo mútuo as superfícies daqui também são cortadas
+        tools: Vec<SurfRef>,
+        /// corte por uma curva (wireframe) sobre a superfície
+        #[serde(default)]
+        curve: Option<CurveRef>,
+        /// cada superfície corta as outras e todas dão pedaços
+        mutual: bool,
+        /// os pedaços marcados saem (senão, só eles ficam)
+        remove: bool,
+        /// prolonga a ferramenta até atravessar a superfície
+        #[serde(default)]
+        extend: bool,
+        /// pedaços clicados
+        #[serde(default)]
+        marks: Vec<RegionMark>,
+    },
     /// Extrair várias faces de uma vez (multi-extração).
     SurfMulti {
         faces: Vec<[f64; 3]>,
@@ -909,7 +928,7 @@ impl RefKind {
             | PointOffset { .. } => RefClass::Point,
             SurfExtract { .. } | SurfOffset { .. } | SurfFill { .. } | SurfExtrude { .. } | SurfRevolve { .. } => RefClass::Surface,
             SurfSphere { .. } | SurfCylinder { .. } | SurfSweep { .. } | SurfLoft { .. } | SurfBlend { .. } | SurfJoin { .. } | SurfHeal { .. }
-            | SurfSplit { .. } | SurfTrim { .. } | SurfMulti { .. } | SurfPart { .. } | SurfUntrim { .. } | SurfExtrapolate { .. } => RefClass::Surface,
+            | SurfSplit { .. } | SurfTrim { .. } | SurfRegions { .. } | SurfMulti { .. } | SurfPart { .. } | SurfUntrim { .. } | SurfExtrapolate { .. } => RefClass::Surface,
             SurfConnect { .. } | SurfSweepX { .. } | SurfFillet { .. } | SurfEdgeFillet { .. } => RefClass::Surface,
             GeoTransform { class, .. } => *class,
             Linked { class, .. } => *class,
@@ -1252,6 +1271,15 @@ impl RefKind {
             SurfTrim { a, b, .. } | CurveIntersect { a, b, .. } => {
                 a.walk(ids);
                 b.walk(ids)
+            }
+            SurfRegions { surface, tools, curve, .. } => {
+                surface.walk(ids);
+                for t in tools {
+                    t.walk(ids)
+                }
+                if let Some(c) = curve {
+                    c.walk(ids)
+                }
             }
             SurfMulti { .. } => {}
             SurfPart { surface, .. } | SurfUntrim { surface } | CurveBoundary { surface, .. } => surface.walk(ids),
@@ -2275,6 +2303,18 @@ pub enum BodyXf {
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct MoveBody {
     pub xf: BodyXf,
+}
+
+/// Âncora espacial de um pedaço escolhido (B277). A ordem dos pedaços é do kernel e muda com o
+/// modelo: a marca guarda de qual superfície ele veio, um ponto dele e de que lado de cada corte o
+/// ponto estava.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct RegionMark {
+    /// 0 = a superfície; `i + 1` = a ferramenta `i`
+    pub source: u32,
+    pub point: [f64; 3],
+    /// sinal do ponto em relação à normal de cada corte; 0 = sobre ele
+    pub sides: Vec<i8>,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -4071,6 +4111,10 @@ impl Document {
                 SurfEdgeFillet { surface, .. } => sref(surface).into_iter().collect(),
                 SurfHeal { surface, .. } | SurfSplit { surface, .. } | SurfUntrim { surface } | SurfExtrapolate { surface, .. } => sref(surface).into_iter().collect(),
                 SurfTrim { a, b, .. } => [sref(a), sref(b)].into_iter().flatten().collect(),
+                SurfRegions { surface, tools, mutual, .. } => {
+                    let cortadas = tools.iter().filter(|_| *mutual);
+                    std::iter::once(surface).chain(cortadas).filter_map(sref).collect()
+                }
                 GeoTransform { source, .. } => vec![*source],
                 _ => vec![],
             };

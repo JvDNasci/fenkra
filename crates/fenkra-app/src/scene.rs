@@ -303,6 +303,10 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
     // superfícies: objetos opacos (como os corpos), com cor própria e contorno
     if o.filter.planos_ref {
         for sf in &r.surfaces {
+            // o corte por região desenha os pedaços; a superfície inteira ficaria na frente deles
+            if o.fantasma.as_ref().is_some_and(|f| crate::sup3d::entrada_das_regioes(doc, f.id, sf.id)) {
+                continue;
+            }
             let selected = hi(sf.id);
             let rf = doc.reference(sf.id);
             let vis = rf.is_some_and(|x| doc.ref_shown(x));
@@ -311,7 +315,9 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
             }
             if let Some(f) = o.fantasma.as_ref().filter(|f| f.id == sf.id) {
                 for fi in 0..sf.mesh.face_ranges.len() {
-                    crate::previa::face_fantasma(&mut s.ghost, &sf.mesh, fi, f.cor);
+                    if crate::sup3d::regioes(r, f.id).is_empty() {
+                        crate::previa::face_fantasma(&mut s.ghost, &sf.mesh, fi, f.cor);
+                    }
                     crate::previa::crescer_com_face(&sf.mesh, fi, &mut |p| grow(&mut bounds, p));
                 }
                 continue;

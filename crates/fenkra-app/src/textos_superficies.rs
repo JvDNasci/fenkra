@@ -1,0 +1,35 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
+//! Traduções dos textos da bancada Superfícies e wireframe, à parte de `i18n.rs` para esse arquivo não
+//! virar gargalo.
+
+pub static TEXTOS: &[(&str, &str)] = &[
+    ("A seta do 3D aponta o lado que fica. Clique nela para inverter.", "The 3D arrow points to the side that stays. Click it to flip."),
+    ("Clique para inverter o lado.", "Click to flip the side."),
+    ("Aparar e dividir", "Trim and split"),
+    ("Aparar e dividir por região", "Trim and split by region"),
+    ("Corta a superfície por ferramentas, ou duas superfícies uma pela outra, e você clica nos pedaços que ficam ou saem. A escolha sobrevive quando o modelo muda.", "Cuts the surface with tools, or two surfaces by each other, and you click the pieces that stay or go. The choice survives model changes."),
+    ("Por ferramenta", "By tool"),
+    ("Só a superfície é cortada; as ferramentas não mudam", "Only the surface is cut; tools stay unchanged"),
+    ("Mútuo", "Mutual"),
+    ("Cada superfície corta as outras, e todas dão pedaços", "Each surface cuts the others, and all give pieces"),
+    ("Ação", "Action"),
+    ("O pedaço clicado sai; o resto fica", "The clicked piece goes; the rest stays"),
+    ("Manter", "Keep"),
+    ("Só os pedaços clicados ficam", "Only the clicked pieces stay"),
+    ("pedaços", "pieces"),
+    ("ficam", "stay"),
+    ("Fica", "Stays"),
+    ("Sai", "Goes"),
+    ("Clique nos pedaços no 3D. O que fica sai cheio; o que sai, translúcido.", "Click the pieces in 3D. What stays is solid; what goes is translucent."),
+    ("Limpar escolhas", "Clear choices"),
+    ("prolongar a ferramenta até atravessar", "extend the tool until it goes through"),
+    ("A ferramenta curta demais cresce pelo próprio suporte até cortar a superfície inteira.", "A tool that is too short grows along its own support until it cuts the whole surface."),
+    ("Clique para trocar entre ficar e sair.", "Click to switch between staying and going."),
+    ("Clique para ficar com esta solução.", "Click to keep this solution."),
+    ("Clique na bolinha do 3D para trocar.", "Click a 3D dot to change it."),
+    ("Fica deste lado", "This side stays"),
+    ("Fica da superfície 1", "Surface 1 side that stays"),
+    ("Fica da superfície 2", "Surface 2 side that stays"),
+    ("Lado da paralela", "Parallel side"),
+    ("de", "of"),
+];

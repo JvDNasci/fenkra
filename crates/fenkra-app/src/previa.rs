@@ -119,6 +119,7 @@ const SOBRE_A_FACE: f32 = 0.05;
 /// O que cada comando mostra além do resultado: as faces escolhidas, em cor própria, e a hélice da
 /// rosca. Com erro, as faces escolhidas ficam na cor de erro: mostra onde falhou em vez de só sumir.
 pub fn decorar(doc: &Document, r: &RecomputeResult, f: &Fantasma, s: &mut crate::render::Scene) {
+    crate::sup3d::decorar(doc, r, f, s);
     let Some(feat) = doc.feature(f.id) else { return };
     let falhou = matches!(r.status.get(&f.id), Some(Status::Error(_)));
     if let Some(m) = malha_de_entrada(r, f, feat.target) {
@@ -170,6 +171,10 @@ pub fn plano_referenciado(doc: &Document, r: &RecomputeResult, f: &Fantasma, s: 
     let Some((p, papel)) = doc.feature(f.id).and_then(|x| plano_do_comando(&x.kind).map(|(p, n)| (p.clone(), n))) else { return };
     let Some([o, x, y, n]) = quadro_do_plano(r, &p) else { return };
     let cor = if papel == "Plano neutro" { f.neutro } else { f.cor };
+    desenhar_plano(r, [o, x, y, n], cor, s);
+}
+
+fn desenhar_plano(r: &RecomputeResult, [o, x, y, n]: [Vec3; 4], cor: [u8; 3], s: &mut crate::render::Scene) {
     let h = meia_largura(r);
     let c = [o + (x + y) * h, o + (x - y) * h, o + (-x - y) * h, o + (-x + y) * h];
     retangulo_fantasma(&mut s.ghost, c, n, cor);
@@ -177,6 +182,13 @@ pub fn plano_referenciado(doc: &Document, r: &RecomputeResult, f: &Fantasma, s: 
     for i in 0..4 {
         s.overlay.push(LineVertex { pos: c[i].into(), col });
         s.overlay.push(LineVertex { pos: c[(i + 1) % 4].into(), col });
+    }
+}
+
+/// Plano de entrada de um comando de superfície: o mesmo retângulo, na cor do papel.
+pub fn retangulo_do_plano(r: &RecomputeResult, p: &PlaneRef, cor: [u8; 3], s: &mut crate::render::Scene) {
+    if let Some(q) = quadro_do_plano(r, p) {
+        desenhar_plano(r, q, cor, s);
     }
 }
 
@@ -269,6 +281,20 @@ pub fn face_fantasma(dst: &mut Vec<MeshVertex>, m: &Mesh, fi: usize, cor: [u8; 3
     }
 }
 
+/// Malha inteira na camada de fantasma, com opacidade própria.
+pub fn malha_fantasma(dst: &mut Vec<MeshVertex>, m: &Mesh, cor: [u8; 3], alfa: f32) {
+    let c = cor_f(cor);
+    for &vi in &m.indices {
+        let k = vi as usize * 3;
+        dst.push(MeshVertex {
+            pos: [m.positions[k], m.positions[k + 1], m.positions[k + 2]],
+            nrm: [m.normals[k], m.normals[k + 1], m.normals[k + 2]],
+            col: [c[0], c[1], c[2], alfa],
+            mat: [1., 0., 1., 0.],
+        });
+    }
+}
+
 /// B246: com o comando falhando, a viewport não volta ao corpo de antes: a última prévia válida
 /// continua desenhada e a causa aparece na etiqueta. Guarda a prévia de cada cálculo bom e a repõe
 /// enquanto o cálculo erra. Devolve se repôs.
@@ -320,6 +346,8 @@ pub fn arestas_com_fantasma(edges: &mut Vec<LineVertex>, lines: &mut Vec<LineVer
 /// Comando que o modo de demonstração abre quando a peça terminar de calcular.
 pub enum DemoPrevia {
     Comando(FeatureKind),
+    /// comando de geometria (superfícies e wireframe)
+    Ref(fenkra_core::RefKind),
     /// plano deslocado 30 mm do plano XY
     Plano,
 }
@@ -329,6 +357,9 @@ pub enum DemoPrevia {
 pub fn demo_preparar(doc: &mut Document) -> Option<DemoPrevia> {
     use fenkra_core::*;
     let nome = std::env::var("FENKRA_DEMO_PREVIA").ok()?;
+    if let Some(d) = crate::sup3d::demo(&nome, doc) {
+        return Some(d);
+    }
     let s = |x: &str| x.to_string();
     let sketch = |d: &mut Document, plane: PlaneRef, monta: &dyn Fn(&mut SketchData, &mut dyn FnMut() -> Id)| {
         let mut data = SketchData::default();

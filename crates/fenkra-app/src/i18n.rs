@@ -30,6 +30,7 @@ fn map() -> &'static HashMap<&'static str, &'static str> {
             .chain(crate::textos_config::TEXTOS.iter())
             .chain(crate::selecao_regras::TEXTOS.iter())
             .chain(crate::alca_estado::TEXTOS.iter())
+            .chain(crate::textos_superficies::TEXTOS.iter())
             .copied()
             .collect()
     })
@@ -1590,9 +1591,6 @@ static TABLE: &[(&str, &str)] = &[
     ("com curva guia", "with guide curve"),
     ("fechar (volta à primeira seção)", "close (back to the first section)"),
     ("fechar em sólido quando a malha for fechada", "close into a solid when the mesh is closed"),
-    ("manter o outro lado", "keep the other side"),
-    ("outro lado da 1", "other side of 1"),
-    ("outro lado da 2", "other side of 2"),
     ("para na primeira parede do corpo encontrada", "stops at the first body wall it meets"),
     ("regrada (faces retas entre seções)", "ruled (straight faces between sections)"),
     ("rosca em toda a face cilíndrica", "thread along the whole cylindrical face"),
