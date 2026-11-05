@@ -27,6 +27,7 @@ pub enum KeyAction {
     Redo,
     Delete,
     Save,
+    SaveAll,
     ClipCopy,
     ClipCut,
     ClipPaste,
@@ -56,8 +57,8 @@ use KeyAction::*;
 use crate::i18n::tr;
 
 impl KeyAction {
-    pub const ALL: [KeyAction; 38] = [
-        Fit, ViewMenu, Normal, Ortho, ViewFront, ViewBack, ViewTop, ViewBottom, ViewLeft, ViewRight, ViewIso, Hide, HiddenEnv, Undo, Redo, Delete, Save, ClipCopy, ClipCut,
+    pub const ALL: [KeyAction; 39] = [
+        Fit, ViewMenu, Normal, Ortho, ViewFront, ViewBack, ViewTop, ViewBottom, ViewLeft, ViewRight, ViewIso, Hide, HiddenEnv, Undo, Redo, Delete, Save, SaveAll, ClipCopy, ClipCut,
         ClipPaste, ClipDup, Sketch,
         Extrude, Cut, Revolve, Hole, Fillet, Chamfer, Plane, SkSelect, SkLine, SkRect, SkCircle, SkArc, SkPoint, SkDim, SkConstruction, SkGrid,
     ];
@@ -81,6 +82,7 @@ impl KeyAction {
             Redo => tr("Refazer"),
             Delete => tr("Apagar"),
             Save => tr("Salvar"),
+            SaveAll => tr("Salvar tudo (plano de salvamento)"),
             ClipCopy => tr("Copiar (árvore)"),
             ClipCut => tr("Recortar (árvore)"),
             ClipPaste => tr("Colar (árvore)"),
@@ -108,7 +110,7 @@ impl KeyAction {
     pub fn group(self) -> &'static str {
         match self {
             Fit | ViewMenu | Normal | Ortho | ViewFront | ViewBack | ViewTop | ViewBottom | ViewLeft | ViewRight | ViewIso | Hide | HiddenEnv => "Vista",
-            Undo | Redo | Delete | Save | ClipCopy | ClipCut | ClipPaste | ClipDup => "Edição",
+            Undo | Redo | Delete | Save | SaveAll | ClipCopy | ClipCut | ClipPaste | ClipDup => "Edição",
             Sketch | Extrude | Cut | Revolve | Hole | Fillet | Chamfer | Plane => "Modelagem",
             _ => "Sketch",
         }
@@ -220,6 +222,7 @@ impl Preset {
             (Redo, "Ctrl+Y"),
             (Delete, "Delete"),
             (Save, "Ctrl+S"),
+            (SaveAll, "Ctrl+Shift+S"),
             (ViewMenu, "Space"),
             (ClipCopy, "Ctrl+C"),
             (ClipCut, "Ctrl+X"),

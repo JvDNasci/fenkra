@@ -18,6 +18,10 @@ use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use crate::i18n::tr;
 
+mod diag;
+mod salvar;
+use salvar::Acao;
+
 /// Seleção na árvore / linha de tempo.
 #[derive(Clone, Copy, PartialEq, Debug, Default)]
 pub enum Sel {
@@ -149,8 +153,11 @@ pub struct App {
     pub viewport: Option<Viewport>,
     pub scene_dirty: bool,
     fit_pending: bool,
-    undo: Vec<Document>,
-    redo: Vec<Document>,
+    hist: crate::historico::Historico,
+    /// diálogos de gravação (B65, B56)
+    salvar: salvar::Estado,
+    /// diagnóstico e pais/filhos (B69)
+    diag: diag::Estado,
     last_edit: f64,
     toasts: Vec<(String, f64, bool)>,
     left: LeftTab,
@@ -308,8 +315,9 @@ impl App {
             viewport,
             scene_dirty: true,
             fit_pending: true,
-            undo: vec![],
-            redo: vec![],
+            hist: crate::historico::Historico::new(settings.historico_mb),
+            salvar: Default::default(),
+            diag: Default::default(),
             last_edit: -10.,
             toasts: vec![],
             left: LeftTab::Peca,
@@ -818,8 +826,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     fn load_doc(&mut self, doc: Document, entry: Option<u64>, frozen: Option<String>) {
         self.open = OpenDoc { doc, entry, frozen, file: None, modified: false };
         self.sel = Sel::None;
-        self.undo.clear();
-        self.redo.clear();
+        self.hist.limpar();
+        self.salvar.esquecer();
         self.fit_pending = true;
         self.request_recompute();
     }
@@ -871,6 +879,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     pub fn open_path(&mut self, path: &std::path::Path) {
         let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
         if ext == "fka" {
+            self.salvar.esquecer();
             match std::fs::read_to_string(path).map_err(|e| e.to_string()).and_then(|s| fenkra_montagem::Assembly::from_json(&s)) {
                 Ok(a) => {
                     self.asm = Some(crate::asm_ui::AsmState::new(a, Some(path.to_path_buf())));
@@ -884,6 +893,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             return;
         }
         if ext == "fkd" {
+            self.salvar.esquecer();
             match std::fs::read_to_string(path).map_err(|e| e.to_string()).and_then(|t| fenkra_desenho::Drawing::from_json(&t)) {
                 Ok(d) => {
                     self.dwg = Some(crate::dwg_ui::DwgState::new(d, Some(path.to_path_buf())));
@@ -1166,7 +1176,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             self.open_project_at(std::path::Path::new(&r));
         }
         if let Some(f) = file_open {
-            self.open_path(std::path::Path::new(&f));
+            self.com_confirmacao(Acao::AbrirCaminho(PathBuf::from(&f)));
         }
         if let Some(i) = example {
             if let Some(e) = crate::examples::all().into_iter().nth(i) {
@@ -1178,14 +1188,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         match action {
             Some(0) => self.new_project(),
             Some(1) => self.open_project(),
-            Some(2) => {
-                self.load_doc(Document::new("Peça"), None, None);
-                self.started = true;
-            }
-            Some(3) => {
-                self.open_file();
-                self.started = true;
-            }
+            Some(2) => self.com_confirmacao(Acao::NovaPeca),
+            Some(3) => self.com_confirmacao(Acao::AbrirDialogo),
             Some(5) => {
                 self.started = true;
                 self.command(Cmd::AsmNew);
@@ -1261,17 +1265,21 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     }
 
     fn undo(&mut self) {
-        if let Some(d) = self.undo.pop() {
-            self.redo.push(std::mem::replace(&mut self.open.doc, d));
+        let atual = self.open.doc.clone();
+        if let Some((d, nome)) = self.hist.desfazer(atual) {
+            self.open.doc = d;
             self.open.modified = true;
+            self.toast(format!("{}: {nome}", tr("Desfeito")), false);
             self.request_recompute();
         }
     }
 
     fn redo(&mut self) {
-        if let Some(d) = self.redo.pop() {
-            self.undo.push(std::mem::replace(&mut self.open.doc, d));
+        let atual = self.open.doc.clone();
+        if let Some((d, nome)) = self.hist.refazer(atual) {
+            self.open.doc = d;
             self.open.modified = true;
+            self.toast(format!("{}: {nome}", tr("Refeito")), false);
             self.request_recompute();
         }
     }
@@ -2585,19 +2593,23 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     }
                     ui.separator();
                     if ui.button(tr("Nova peça")).clicked() {
-                        self.load_doc(Document::new("Peça"), None, None);
+                        self.com_confirmacao(Acao::NovaPeca);
                         ui.close();
                     }
                     if ui.button(tr("Nova peça de exemplo")).clicked() {
-                        self.load_doc(fenkra_solidos::example_document(), None, None);
+                        self.com_confirmacao(Acao::Exemplo);
                         ui.close();
                     }
                     if ui.button(tr("Abrir peça…")).clicked() {
-                        self.open_file();
+                        self.com_confirmacao(Acao::AbrirDialogo);
                         ui.close();
                     }
                     if ui.button(tr("Salvar   Ctrl+S")).clicked() {
-                        self.save();
+                        self.salvar_ativo();
+                        ui.close();
+                    }
+                    if ui.button(tr("Salvar tudo…   Ctrl+Shift+S")).clicked() {
+                        self.abrir_plano();
                         ui.close();
                     }
                     ui.separator();
@@ -2659,12 +2671,25 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     }
                 });
                 ui.menu_button(tr("Editar"), |ui| {
-                    if ui.add_enabled(!self.undo.is_empty(), egui::Button::new(tr("Desfazer   Ctrl+Z"))).clicked() {
+                    let rot_desf = match self.hist.nome_desfazer() {
+                        Some(n) => format!("{} {n}   Ctrl+Z", tr("Desfazer")),
+                        None => tr("Desfazer   Ctrl+Z").to_string(),
+                    };
+                    if ui.add_enabled(self.hist.pode_desfazer(), egui::Button::new(rot_desf)).clicked() {
                         self.undo();
                         ui.close();
                     }
-                    if ui.add_enabled(!self.redo.is_empty(), egui::Button::new(tr("Refazer   Ctrl+Y"))).clicked() {
+                    let rot_ref = match self.hist.nome_refazer() {
+                        Some(n) => format!("{} {n}   Ctrl+Y", tr("Refazer")),
+                        None => tr("Refazer   Ctrl+Y").to_string(),
+                    };
+                    if ui.add_enabled(self.hist.pode_refazer(), egui::Button::new(rot_ref)).clicked() {
                         self.redo();
+                        ui.close();
+                    }
+                    ui.separator();
+                    if ui.button(tr("Diagnóstico…")).clicked() {
+                        self.abrir_diagnostico();
                         ui.close();
                     }
                 });
@@ -3513,6 +3538,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let r = if doc.props.pn.is_empty() { r } else { r.on_hover_text(format!("PN {} · {}", doc.props.pn, doc.props.part_type.label())) };
         let _ = r;
 
+        diag::caixa_de_filtro(ui);
         crate::tree_ui::filhos(ui, |ui| {
         if !hide("origem") {
         // ---------- Origem (fixa)
@@ -4194,6 +4220,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
 
     fn feature_row(&self, ui: &mut egui::Ui, doc: &Document, i: usize, f: &Feature, new_sel: &mut Option<Sel>, actions: &mut Vec<TreeAction>) {
         let st = self.status_of(f.id);
+        let filtro = diag::filtro_atual(ui.ctx());
+        if !filtro.vazio() && !filtro.passa(f, st) {
+            return;
+        }
         let now = ui.input(|x| x.time);
         let (stale, sweeping) = self.row_pending(i, now);
         let (badge, color) = match st {
@@ -4260,6 +4290,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
             if ui.button(tr("✎ Renomear   F2")).clicked() {
                 actions.push(TreeAction::StartRename(f.id));
+                ui.close();
+            }
+            if ui.button(tr("Pais e filhos…")).clicked() {
+                actions.push(TreeAction::ParentsChildren(f.id));
                 ui.close();
             }
             ui.menu_button(tr("👁 Exibição"), |ui| {
@@ -4381,6 +4415,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 }
             }
             TreeAction::Delete(id) => self.ask_delete(id),
+            TreeAction::ParentsChildren(id) => self.abrir_pais_filhos(id),
             TreeAction::SketchOn(p) => {
                 self.sel = match p {
                     PlaneRef::Datum(id) => Sel::Ref(id),
@@ -6014,6 +6049,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     }
 
     fn dialogs(&mut self, ctx: &egui::Context) {
+        self.dialogos_de_gravacao(ctx);
+        self.janelas_de_diagnostico(ctx);
         if let Some(dd) = &mut self.delete_dialog {
             let doc = &self.open.doc;
             let mut close = false;
@@ -6330,6 +6367,7 @@ fn eye(ui: &mut egui::Ui, hidden: bool) -> bool {
 }
 
 enum TreeAction {
+    ParentsChildren(Id),
     ApplyView(usize),
     NewGeometryFolder,
     NewCommandFolder,
@@ -6675,6 +6713,14 @@ impl eframe::App for App {
         let typing = ctx.egui_wants_keyboard_input() || self.sketch.as_ref().is_some_and(|e| e.entry.typing());
         let (save, undo, redo) = (km.pressed(ctx, K::Save), !typing && km.pressed(ctx, K::Undo), !typing && km.pressed(ctx, K::Redo));
         let del = km.pressed(ctx, K::Delete);
+        // Ctrl+S salva o documento ativo (com a checagem de mudança externa); Ctrl+Shift+S abre o plano
+        if save {
+            self.salvar_ativo();
+        }
+        if km.pressed(ctx, K::SaveAll) {
+            self.abrir_plano();
+        }
+        let save = false;
         let asm_mode = self.in_asm();
         let dwg_mode = self.settings.bench == crate::settings::Bench::Desenho;
         if dwg_mode {
@@ -6741,8 +6787,8 @@ impl eframe::App for App {
             let before_del = self.open.doc.clone();
             self.delete_selected();
             if self.open.doc != before_del {
-                self.undo.push(before_del);
-                self.redo.clear();
+                let depois = self.open.doc.clone();
+                self.hist.registrar(before_del, &depois);
                 self.open.modified = true;
                 self.scene_dirty = true;
             }
@@ -6929,18 +6975,18 @@ impl eframe::App for App {
             } else {
                 let now = ctx.input(|i| i.time);
                 if now - self.last_edit > 0.8 {
-                    self.undo.push(before);
-                    if self.undo.len() > 200 {
-                        self.undo.remove(0);
-                    }
+                    let depois = self.open.doc.clone();
+                    self.hist.registrar(before, &depois);
+                } else {
+                    self.hist.invalidar_refazer();
                 }
                 self.last_edit = now;
-                self.redo.clear();
                 self.open.modified = true;
                 self.scene_dirty = true;
             }
         }
         self.sincronizar_qualidade();
+        self.hist.definir_limite_mb(self.settings.historico_mb);
         // atualização automática: compara com o último documento enviado (pega também mudanças
         // feitas fora deste trecho, como Del, desfazer, assistentes e janelas)
         if self.settings.auto_update && self.open.frozen.is_none() && self.needs_recompute() {
@@ -7596,6 +7642,10 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
         }
         6 => {
             ui.checkbox(&mut s.auto_update, tr("atualizar automaticamente a cada mudança"));
+            ui.horizontal(|ui| {
+                ui.label(tr("Memória do histórico de desfazer (MB, 0 = sem limite)"));
+                ui.add(egui::DragValue::new(&mut s.historico_mb).range(0..=4096));
+            });
             ui.label(RichText::new(tr("Desligado: o que mudou fica em vermelho (⟳) na árvore até você atualizar (botão ⟳ ou F5). Ctrl+F5 reconstrói tudo do zero. Os botões ⏮ ◀ ▶ ⏭ da barra de status reconstroem passo a passo, comando a comando.")).weak().small());
         }
         7 => {
