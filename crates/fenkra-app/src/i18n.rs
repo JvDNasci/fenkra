@@ -2661,6 +2661,10 @@ static TABLE: &[(&str, &str)] = &[
     ("Adaptador gráfico por software: o Fenkra abre, mas fica lento. Atualize o driver da placa de vídeo.", "Software graphics adapter: Fenkra opens, but runs slowly. Update the graphics card driver."),
     ("Iluminação realista", "Realistic lighting"),
     ("Sombreado com luz de três pontos, ambiente de céu e chão e brilho suave. Desligado usa o sombreado simples.", "Shading with three-point light, sky and ground ambient and a soft highlight. Off uses the simple shading."),
+    // sketch: restrições e geometria externa
+    ("Linha e círculo/arco, dois círculos, ou spline e outra curva. Com ponto comum, a spline sai na direção da curva; sem ponto comum, ela se move até encostar.", "Line and circle/arc, two circles, or a spline and another curve. With a shared point the spline leaves in the curve's direction; without one it moves until it touches."),
+    ("duas splines só ficam tangentes num ponto comum", "two splines can only be tangent at a shared point"),
+    ("selecione linha + círculo/arco, dois círculos, ou spline + outra curva", "select line + circle/arc, two circles, or spline + another curve"),
 ];
 
 #[cfg(test)]

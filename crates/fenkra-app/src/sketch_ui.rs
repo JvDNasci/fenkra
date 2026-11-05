@@ -114,7 +114,7 @@ impl Tool {
                 CKind::Vertical => ("r_vertical", "Vertical", "Vertical", "Linha vertical, ou dois pontos alinhados na vertical."),
                 CKind::Parallel => ("r_paralela", "Paralela", "Paralela", "Duas linhas paralelas."),
                 CKind::Perpendicular => ("r_perpendicular", "Perpend.", "Perpendicular", "Duas linhas a 90°."),
-                CKind::Tangent => ("r_tangente", "Tangente", "Tangente", "Linha e círculo/arco, ou dois círculos tangentes."),
+                CKind::Tangent => ("r_tangente", "Tangente", "Tangente", "Linha e círculo/arco, dois círculos, ou spline e outra curva. Com ponto comum, a spline sai na direção da curva; sem ponto comum, ela se move até encostar."),
                 CKind::Equal => ("r_igual", "Igual", "Igual", "Duas linhas de mesmo comprimento, ou dois círculos/arcos de mesmo raio."),
                 CKind::Concentric => ("r_concentrica", "Concêntrica", "Concêntrica", "Círculos/arcos com o mesmo centro."),
                 CKind::Midpoint => ("r_ponto_medio", "Ponto médio", "Ponto médio", "Um ponto no meio de uma linha."),
@@ -401,11 +401,18 @@ pub fn apply_constraint(sk: &mut SketchData, al: &mut impl FnMut() -> Id, k: CKi
             }
             add(sk, if k == CKind::Parallel { Kind::Parallel(lines[0], lines[1]) } else { Kind::Perpendicular(lines[0], lines[1]) });
         }
-        CKind::Tangent => match (lines.len(), rounds.len()) {
-            (1, 1) => add(sk, Kind::Tangent(lines[0], rounds[0])),
-            (0, 2) => add(sk, Kind::Tangent(rounds[0], rounds[1])),
-            _ => return Err("selecione linha + círculo/arco, ou dois círculos"),
-        },
+        CKind::Tangent => {
+            let splines: Vec<Id> = cvs.iter().copied().filter(|c| matches!(sk.curve(*c).map(|x| &x.geom), Some(Curve::Spline { .. }))).collect();
+            match (lines.len(), rounds.len(), splines.len()) {
+                (1, 1, 0) => add(sk, Kind::Tangent(lines[0], rounds[0])),
+                (0, 2, 0) => add(sk, Kind::Tangent(rounds[0], rounds[1])),
+                (1, 0, 1) => add(sk, Kind::Tangent(splines[0], lines[0])),
+                (0, 1, 1) => add(sk, Kind::Tangent(splines[0], rounds[0])),
+                (0, 0, 2) if sk.spline_contact(splines[1], splines[0]).is_some() => add(sk, Kind::Tangent(splines[0], splines[1])),
+                (0, 0, 2) => return Err("duas splines só ficam tangentes num ponto comum"),
+                _ => return Err("selecione linha + círculo/arco, dois círculos, ou spline + outra curva"),
+            }
+        }
         CKind::Equal => {
             if lines.len() == 2 {
                 add(sk, Kind::Equal(lines[0], lines[1]))
@@ -918,7 +925,7 @@ fn project_ui(app: &mut App, ui: &mut egui::Ui) {
         .filter(|g| g.id != me && matches!(g.kind, FeatureKind::Sketch(_)))
         .map(|g| (g.id, g.name.clone()))
         .collect();
-    let mut chosen: Option<(LinkSrc, Vec<[f64; 3]>, bool)> = None;
+    let mut chosen: Option<(crate::sketch_ext::External, bool)> = None;
     let mut chosen_sketch: Option<Id> = None;
     let key = egui::Id::unique("proj_constr");
     let mut constr = ui.ctx().data(|m| m.get_temp::<bool>(key)).unwrap_or(true);
@@ -930,9 +937,7 @@ fn project_ui(app: &mut App, ui: &mut egui::Ui) {
         }
         for (id, n, inter) in &refs {
             if ui.button(n).clicked() {
-                if let Some((src, pts)) = crate::sketch_ext::world(r, &crate::picking::Pick::Geo(*id), *inter, &f) {
-                    chosen = Some((src, pts, *inter));
-                }
+                chosen = crate::sketch_ext::world(r, &crate::picking::Pick::Geo(*id), *inter, &f).map(|x| (x, *inter));
             }
         }
         if !others.is_empty() {
@@ -948,10 +953,10 @@ fn project_ui(app: &mut App, ui: &mut egui::Ui) {
         }
     });
     ui.ctx().data_mut(|m| m.insert_temp(key, constr));
-    let mut items: Vec<(LinkSrc, Vec<[f64; 3]>, bool)> = chosen.into_iter().collect();
+    let mut items: Vec<(crate::sketch_ext::External, bool)> = chosen.into_iter().collect();
     if let Some(s) = chosen_sketch {
         for (cid, pts) in crate::sketch_ext::sketch_curves(&app.open.doc, r, s) {
-            items.push((LinkSrc::SketchCurve { sketch: s, curve: cid }, pts, false));
+            items.push((crate::sketch_ext::External { src: LinkSrc::SketchCurve { sketch: s, curve: cid }, pts, isolated: false }, false));
         }
     }
     if items.is_empty() {
@@ -964,9 +969,8 @@ fn project_ui(app: &mut App, ui: &mut egui::Ui) {
         Id(base + n - 1)
     };
     if let Some(FeatureKind::Sketch(s)) = app.open.doc.feature_mut(me).map(|g| &mut g.kind) {
-        for (src, pts, inter) in items {
-            let uv = crate::sketch_ext::to_uv(&f, &pts);
-            s.data.add_link(&mut al, src, inter, &uv, constr);
+        for (x, inter) in items {
+            x.add_to(&mut s.data, &mut al, &f, inter, constr);
         }
     }
     app.open.doc.reserve_ids(n);
@@ -1824,9 +1828,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                     painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, p.label(&app.open.doc), egui::FontId::proportional(11.), FREE);
                     if primary_click {
                         match crate::sketch_ext::world(r, &p, intersect, &v.f) {
-                            Some((src, pts)) => {
-                                let uv = crate::sketch_ext::to_uv(&v.f, &pts);
-                                if sk.add_link(&mut al, src, intersect, &uv, edit.construction).is_some() {
+                            Some(x) => {
+                                if x.add_to(&mut sk, &mut al, &v.f, intersect, edit.construction).is_some() {
                                     edit.report = sk.solve(&vars, &[]);
                                 }
                             }
@@ -2467,7 +2470,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         }
     }
     if let Some((m, e)) = toast {
-        app.toast(m, e);
+        app.toast(tr(&m).to_string(), e);
     }
 }
 

@@ -1663,15 +1663,7 @@ impl Ctx<'_> {
             Ok(loops.into_iter().max_by(|a, b| len(a).total_cmp(&len(b))).unwrap_or_default())
         };
         // pontos onde a polilinha atravessa o plano
-        let crossings = |pts: &[V3]| -> Vec<V3> {
-            let sd = |p: V3| geo3d::dot(geo3d::sub(p, frame.origin), frame.normal);
-            pts.windows(2)
-                .filter_map(|w| {
-                    let (a, b) = (sd(w[0]), sd(w[1]));
-                    ((a <= 0. && b > 0.) || (a > 0. && b <= 0.)).then(|| geo3d::lerp(w[0], w[1], a / (a - b)))
-                })
-                .collect()
-        };
+        let crossings = |pts: &[V3]| -> Vec<V3> { fenkra_core::sketch::plane_crossings(pts, frame.origin, frame.normal) };
         match &l.source {
             LinkSrc::Ref(id) => match self.geo(*id, 0)? {
                 Geo::Point(p) => Ok(vec![p]),
