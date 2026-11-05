@@ -6,6 +6,7 @@
 //! testes, [`Registro`] escolhe o [`Provedor`] do formato e [`Registro::importar`] monta o documento.
 //! O que atravessa os processos é só dado (documento, relatório, prévia), nunca uma forma do kernel.
 
+pub mod arvore;
 mod documento;
 mod formato;
 mod importar;

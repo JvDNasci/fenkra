@@ -1,0 +1,35 @@
+{
+  "versao": 1,
+  "comando": "casca",
+  "caso": "casca",
+  "tema": "Escuro",
+  "camera": [
+    -40,
+    28,
+    240,
+    -41.7,
+    -49.0,
+    15
+  ],
+  "janela": [
+    1180,
+    700
+  ],
+  "recorte": [
+    690,
+    305,
+    360,
+    220
+  ],
+  "fps": 12,
+  "duracao": 3.0,
+  "animacoes": [
+    {
+      "campo": "/Shell/thickness",
+      "de": 1,
+      "ate": 8,
+      "t0": 0.4,
+      "t1": 2.6
+    }
+  ]
+}

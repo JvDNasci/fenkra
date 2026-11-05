@@ -45,6 +45,69 @@ fn caminho_relativo(de: &Path, para: &Path) -> String {
     partes.join("/")
 }
 
+/// Nome do arquivo `.fkp` e descrição de cada grupo (os mesmos usados ao gerar e no resumo).
+fn nome_do_grupo(g: &fenkra_solidos::StructGroup) -> (String, String) {
+    let comp = if g.signature.kind == StructItem::Member { format!(" L={} mm", g.signature.length_mm()) } else { String::new() };
+    let desc = format!("{}{comp}", g.name);
+    let nome = format!("item{:02}_{}{}", g.item, limpo(&g.name), if comp.is_empty() { String::new() } else { format!("_L{}", g.signature.length_mm()) });
+    (format!("{nome}.fkp"), desc)
+}
+
+/// Uma peça que será gerada.
+#[derive(Clone, Debug, PartialEq)]
+pub struct GrupoPlano {
+    pub item: usize,
+    /// nome do arquivo `.fkp`
+    pub arquivo: String,
+    pub descricao: String,
+    pub quantidade: usize,
+    /// já existe na pasta de destino (será sobrescrito)
+    pub existe: bool,
+}
+
+/// O que `estrutura_para_montagem` vai fazer, sem gravar nada: base do resumo de confirmação.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Plano {
+    pub pasta: PathBuf,
+    pub montagem: PathBuf,
+    pub grupos: Vec<GrupoPlano>,
+    /// a pasta de destino já existe (gerar de novo atualiza)
+    pub pasta_existe: bool,
+}
+
+impl Plano {
+    pub fn instancias(&self) -> usize {
+        self.grupos.iter().map(|g| g.quantidade).sum()
+    }
+}
+
+/// Nome do arquivo da montagem: o nome da peça (ou "estrutura").
+fn nome_da_montagem(doc: &Document) -> String {
+    let stem = limpo(&doc.name);
+    if stem.is_empty() { "estrutura".to_string() } else { stem }
+}
+
+/// Resume o que será gerado para o documento `doc` em `saida` (peças, instâncias, destino, nomes),
+/// sem tocar no disco. Falha se a peça não tem membros estruturais calculados.
+pub fn plano_do_documento(doc: &Document, saida: &Path) -> Result<Plano, String> {
+    let grupos = fenkra_solidos::structural_groups(doc);
+    if grupos.is_empty() {
+        return Err("a peça não tem membros estruturais calculados".into());
+    }
+    Ok(Plano {
+        pasta: saida.to_path_buf(),
+        montagem: saida.join(format!("{}.fka", nome_da_montagem(doc))),
+        pasta_existe: saida.is_dir(),
+        grupos: grupos
+            .iter()
+            .map(|g| {
+                let (arquivo, descricao) = nome_do_grupo(g);
+                GrupoPlano { item: g.item, existe: saida.join(&arquivo).is_file(), arquivo, descricao, quantidade: g.members.len() }
+            })
+            .collect(),
+    })
+}
+
 /// Gera, em `saida`, uma peça por grupo de peças iguais da peça `pai` e a montagem com uma
 /// instância fixa por membro (posicionada pelo referencial do membro).
 pub fn estrutura_para_montagem(pai: &Path, saida: &Path) -> Result<Gerado, String> {
@@ -57,17 +120,14 @@ pub fn estrutura_para_montagem(pai: &Path, saida: &Path) -> Result<Gerado, Strin
     std::fs::create_dir_all(saida).map_err(|e| format!("{}: {e}", saida.display()))?;
     let rel = caminho_relativo(saida, pai);
     // nome da montagem = nome da peça (no projeto o arquivo se chama só pelo número)
-    let stem = limpo(&doc.name);
-    let stem = if stem.is_empty() { "estrutura".to_string() } else { stem };
+    let stem = nome_da_montagem(&doc);
     let mut asm = Assembly::new(&doc.name);
     asm.props.description = doc.props.description.clone();
     let mut gerado = Gerado { montagem: saida.join(format!("{stem}.fka")), grupos: vec![] };
 
     for g in &grupos {
-        let comp = if g.signature.kind == StructItem::Member { format!(" L={} mm", g.signature.length_mm()) } else { String::new() };
-        let desc = format!("{}{comp}", g.name);
-        let nome = format!("item{:02}_{}{}", g.item, limpo(&g.name), if comp.is_empty() { String::new() } else { format!("_L{}", g.signature.length_mm()) });
-        let arquivo = format!("{nome}.fkp");
+        let (arquivo, desc) = nome_do_grupo(g);
+        let nome = arquivo.trim_end_matches(".fkp").to_string();
 
         // peça: o corpo do membro no referencial local, como cópia ligada ao pai
         let brep = g.shape.to_brep().map_err(|e| e.0)?;
@@ -155,8 +215,26 @@ mod tests {
         let doc = quadro();
         std::fs::write(&pai, doc.to_json()).unwrap();
 
+        // o resumo vem antes de gravar: nada existe ainda e os nomes são os que serão gerados
+        let plano = plano_do_documento(&doc, &saida).unwrap();
+        assert!(!plano.pasta_existe && !saida.exists(), "o resumo não grava nada");
+        assert_eq!(plano.grupos.len(), 2);
+        assert_eq!(plano.instancias(), 4);
+        assert!(plano.grupos.iter().all(|x| !x.existe));
+        assert!(plano.grupos[0].descricao.contains("L=300"), "{}", plano.grupos[0].descricao);
+
         let g = estrutura_para_montagem(&pai, &saida).unwrap();
         assert_eq!(g.grupos.len(), 2);
+        // o que o resumo mostrou é o que foi gerado: mesmos arquivos, quantidades e montagem
+        assert_eq!(plano.montagem, g.montagem);
+        for (p, x) in plano.grupos.iter().zip(&g.grupos) {
+            assert_eq!(saida.join(&p.arquivo), x.arquivo);
+            assert_eq!((p.item, p.quantidade), (x.item, x.quantidade));
+        }
+        // depois de gerar, o resumo avisa o que será sobrescrito
+        let de_novo_plano = plano_do_documento(&doc, &saida).unwrap();
+        assert!(de_novo_plano.pasta_existe && de_novo_plano.grupos.iter().all(|x| x.existe));
+        assert!(plano_do_documento(&Document::new("vazio"), &saida).is_err());
         assert_eq!(g.grupos.iter().map(|x| x.quantidade).collect::<Vec<_>>(), vec![2, 2]);
         assert!(g.grupos.iter().all(|x| x.arquivo.exists()));
 

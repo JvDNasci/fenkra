@@ -277,6 +277,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("sm_parede", "Parede base", "Parede base", "Primeira parede a partir de um perfil fechado do sketch selecionado (lê a espessura global).", Cmd(C::SmWall))),
             Family("sm_aba", vec![
                 it("sm_aba", "Aba", "Aba de aresta", "Dobra a partir da aresta selecionada: comprimento, ângulo, raio, recuos laterais e alívio de canto.", Cmd(C::SmFlange)),
+                it("sm_aba", "Aba por laço", "Aba por laço e extensão lateral", "Escolha uma aresta (laço da face inteira) ou várias: uma aba por aresta em um comando só, com mitra nos cantos. A extensão pode ser a aresta inteira, uma largura centrada ou deslocada, ou o trecho entre duas referências.", Cmd(C::SmFlangeLoop)),
                 it("sm_bainha", "Bainha", "Bainha", "Dobra de 180° na borda: esmagada (folga 0) ou aberta/circular.", Cmd(C::SmHem)),
             ]),
             Family("sm_linha", vec![
@@ -405,6 +406,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("st_reforco", "Reforço", "Reforço (gusset)", "Chapa triangular ou com chanfro de alívio no encontro de dois membros.", Cmd(C::StGusset)),
             ]),
             One(it("st_biblioteca", "Biblioteca", "Biblioteca de perfis", "Cadastre famílias de perfis padronizados (tamanhos, ancoragem e rotação padrão).", Cmd(C::StLibrary))),
+            One(it("st_canto_meia", "Cantos", "Cantos da estrutura", "Lista os cantos onde os membros se encontram, realça cada um no 3D, troca o tratamento e quem continua, e agrupa cantos iguais.", Cmd(C::StCorners))),
             One(it("st_corte", "Lista de corte", "Lista de corte", "Comprimento, quantidade e barras de matéria-prima (emendas) de cada perfil.", Cmd(C::StCutList))),
             One(it("st_montagem", "Gerar montagem", "Gerar montagem da estrutura", "Uma peça por grupo de peças iguais e uma montagem com as instâncias posicionadas, na pasta da peça (gerar de novo atualiza).", Cmd(C::StAssembly))),
             ]

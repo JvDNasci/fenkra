@@ -64,7 +64,7 @@ std::unique_ptr<Shape> faces_offset_tool(const Shape& s, rust::Slice<const doubl
 std::unique_ptr<Shape> extrude_taper(const Shape& face, double dx, double dy, double dz, double len, double angle_deg);
 std::unique_ptr<Shape> thin_profile(const Shape& face, double t);
 std::unique_ptr<Shape> thick_segments(rust::Slice<const double> segs, double nx, double ny, double nz, double t);
-std::unique_ptr<Shape> edges_mode_t(const Shape& s, uint8_t mode, double v1, double v2, rust::Slice<const double> mids, double tol, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
+std::unique_ptr<Shape> edges_mode_t(const Shape& s, uint8_t mode, double v1, double v2, rust::Slice<const double> mids, rust::Slice<const uint8_t> flips, double tol, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
 rust::Vec<double> cylinder_at(const Shape& s, double px, double py, double pz);
 std::unique_ptr<Shape> thread_tool_ext(double ox, double oy, double oz, double dx, double dy, double dz, double major_d, double pitch, double length, double angle_deg);
 

@@ -19,8 +19,13 @@ use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use crate::i18n::tr;
 
+mod arvore;
 mod diag;
+mod gravar;
+mod roda_app;
+mod estado_doc;
 mod importar;
+mod plm;
 mod projeto;
 mod salvar;
 use salvar::Acao;
@@ -178,12 +183,16 @@ pub struct App {
     importar_dialogo: Option<importar::Dialogo>,
     /// relatório da última importação, até a pessoa fechar
     importar_relatorio: Option<fenkra_conversor::Relatorio>,
+    /// documento comparado, rótulo da revisão e o que mudou desde ela (B279)
+    comparacao: Option<(u64, String, fenkra_project::estado_doc::Diferencas)>,
     /// diagnóstico e pais/filhos (B69)
     diag: diag::Estado,
     /// "Selecionar outro": ciclo de candidatos sob o ponteiro com Alt + roda (B95)
     selecao_ciclo: crate::selecao::Estado,
     /// laço, espelho do conjunto na cena e avanço pelo menu (B95)
     selecao_extra: crate::selecao::Extra,
+    /// mouse 3D (B322): estado do aparelho; vazio e inerte sem aparelho
+    mouse3d: crate::mouse3d::Mouse3d,
     last_edit: f64,
     toasts: Vec<(String, f64, bool)>,
     /// motivos pelos quais o modo leve é sugerido, até a pessoa responder (B236)
@@ -217,6 +226,11 @@ pub struct App {
     pub session: Option<Session>,
     /// desenvolvimento: comando a abrir como novo quando a peça terminar de calcular
     demo_previa: Option<crate::previa::DemoPrevia>,
+    /// desenvolvimento: gravação de roteiro de mídia de ajuda (B257)
+    gravador: Option<gravar::Gravador>,
+    gravar_caso: Option<FeatureKind>,
+    /// roda de comandos (B256)
+    roda: crate::roda::Roda,
     /// novo sketch esperando o clique no plano/face
     pub sketch_wait_plane: bool,
     /// árvore aberta ao lado do painel do comando
@@ -278,6 +292,12 @@ pub struct App {
     /// janelas do estrutural: biblioteca de perfis e lista de corte
     pub st_lib_open: bool,
     pub st_cut_open: bool,
+    /// B37: janela dos cantos da estrutura, canto escolhido (ponto) e cantos lidos no último quadro
+    pub st_cantos_open: bool,
+    /// B50: resumo de confirmação do Gerar montagem (aberto até Confirmar ou Cancelar)
+    pub st_asm_resumo: Option<crate::st_montagem_ui::Resumo>,
+    pub st_cantos_sel: Option<[f64; 3]>,
+    pub st_cantos: Vec<fenkra_solidos::st_cantos::Canto>,
     pub st_lib_sel: usize,
     /// B79: linhas de membro que não geraram sólido (contorno vermelho e motivo no 3D)
     pub st_falhas: Vec<fenkra_solidos::MemberFailure>,
@@ -314,7 +334,7 @@ impl App {
         let mut settings = Settings::load();
         crate::theme::reload_user();
         // desenvolvimento: FENKRA_DEMO_TEMA=<nome> usa esse tema (sem gravar)
-        if let Some(t) = std::env::var("FENKRA_DEMO_TEMA").ok().and_then(|n| crate::theme::find(&n)) {
+        if let Some(t) = std::env::var("FENKRA_DEMO_TEMA").ok().or_else(gravar::tema).and_then(|n| crate::theme::find(&n)) {
             settings.theme_name = t.name.clone();
             settings.bg_top = t.bg_top;
             settings.bg_bottom = t.bg_bottom;
@@ -366,9 +386,11 @@ impl App {
             importacao_pendente: None,
             importar_dialogo: None,
             importar_relatorio: None,
+            comparacao: None,
             diag: Default::default(),
             selecao_ciclo: Default::default(),
             selecao_extra: Default::default(),
+            mouse3d: Default::default(),
             last_edit: -10.,
             toasts: vec![],
             sugestao_leve: None,
@@ -389,6 +411,9 @@ impl App {
             inicio_pelo_menu: false,
             session: None,
             demo_previa: None,
+            gravador: gravar::Gravador::de_ambiente(),
+            gravar_caso: None,
+            roda: Default::default(),
             view_menu: false,
             new_view_name: String::new(),
             view_choice: None,
@@ -422,6 +447,10 @@ impl App {
             dwg: None,
             st_lib_open: false,
             st_cut_open: false,
+            st_cantos_open: false,
+            st_asm_resumo: None,
+            st_cantos_sel: None,
+            st_cantos: vec![],
             st_falhas: vec![],
             st_cut_hi: vec![],
             st_lib_sel: 0,
@@ -465,6 +494,10 @@ impl App {
         if let Ok(arquivo) = std::env::var("FENKRA_DEMO_IMPORTAR") {
             app.abrir_painel_importar(arquivo.into());
             app.started = true;
+        }
+        // desenvolvimento: FENKRA_DEMO_PROJETO=1 abre um projeto de exemplo; =comparar já mostra a comparação
+        if let Ok(modo) = std::env::var("FENKRA_DEMO_PROJETO") {
+            app.demo_projeto(modo == "comparar");
         }
         // desenvolvimento: FENKRA_AJUSTES=1 abre as configurações ao iniciar
         if std::env::var("FENKRA_AJUSTES").is_ok() {
@@ -526,7 +559,7 @@ impl App {
         if std::env::var("FENKRA_DEMO_CHAPA").is_ok() {
             let s = |x: &str| x.to_string();
             let mut d = Document::new("Suporte de chapa");
-            d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), material: String::new(), method: 0, allowance: String::new(), flat: std::env::var("FENKRA_DEMO_CHAPA").is_ok_and(|v| v == "plana") });
+            d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), flat: std::env::var("FENKRA_DEMO_CHAPA").is_ok_and(|v| v == "plana"), ..Default::default() });
             let mut data = SketchData::default();
             {
                 let mut n = 9_000_000u64;
@@ -591,6 +624,7 @@ impl App {
             app.load_doc(d, None, None);
             app.settings.bench = crate::settings::Bench::Estrutural;
             app.st_cut_open = true;
+            app.st_cantos_open = std::env::var("FENKRA_DEMO_CANTOS").is_ok();
             app.started = true;
         }
         // desenvolvimento: FENKRA_EDITAR=<nome> abre esse comando como ambiente ao iniciar (depois das peças de demonstração)
@@ -713,7 +747,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
         }
         app.demo_previa = crate::previa::demo_preparar(&mut app.open.doc);
+        if let Some(id) = crate::sketch_demo::preparar(&mut app.open.doc) {
+            app.begin_sketch_pending = Some(id);
+            app.started = true;
+        }
         app.started |= app.demo_previa.is_some();
+        app.gravar_preparar();
         app.request_recompute();
         app
     }
@@ -816,7 +855,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             fenkra_kernel::definir_fios_malhador(fios);
         }
         if let Some(v) = self.viewport.as_mut() {
-            v.animar = self.settings.animacoes;
+            v.animar = self.settings.animacoes && !self.settings.acessibilidade.reduzir_movimento;
         }
         let q = self.settings.graficos.qualidade();
         if let Some(a) = self.asm.as_mut() {
@@ -1282,7 +1321,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     wordmark(ui.painter(), wr.center(), 32., ui.visuals().strong_text_color(), accent);
                     ui.label(RichText::new(tr(BRAND_TAGLINE)).weak());
                     ui.label(RichText::new(concat!("CAD paramétrico open source · v", env!("CARGO_PKG_VERSION"))).weak().small());
-                    ui.add_space(18.);
+                    ui.add_space(6.);
+                    crate::arabesco::fio_da_marca(ui);
+                    ui.add_space(12.);
                 });
                 let w = 1080.0f32.min(ui.available_width() - 24.);
                 ui.horizontal(|ui| {
@@ -1316,13 +1357,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                             }
                         });
                         ui.add_space(14.);
+                        crate::arabesco::separador(ui);
                         let narrow = w < 820.;
                         let left_w = if narrow { w } else { 330. };
                         let mut recents = |ui: &mut egui::Ui| {
                             ui.set_width(left_w);
                             section_title(ui, "Recentes", accent);
                             if self.settings.recent_files.is_empty() && self.settings.recent.is_empty() {
-                                ui.label(RichText::new(tr("nenhum ainda — abra um exemplo ao lado")).weak());
+                                crate::arabesco::vazio_com_texto(ui, RichText::new(tr("nenhum ainda — abra um exemplo ao lado")).weak());
                             }
                             for f in self.settings.recent_files.clone() {
                                 let path = std::path::Path::new(&f);
@@ -1911,8 +1953,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 self.st_cut_open = true;
                 return;
             }
+            Cmd::StCorners => {
+                self.st_cantos_open = true;
+                return;
+            }
             Cmd::StAssembly => {
-                crate::st_ui::generate_assembly(self);
+                crate::st_montagem_ui::abrir(self);
                 return;
             }
             Cmd::StMember => {
@@ -2053,10 +2099,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 Sel::Feature(d.add_feature(match c {
                     Cmd::SmCurveFlange => FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("15"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None }),
                     Cmd::SmArcSlot => FeatureKind::SmArcSlot(SmArcSlot { center: at.unwrap_or([0.; 3]), radius: s("20"), width: s("6"), start: s("0"), sweep: s("90") }),
-                    _ => FeatureKind::SmCornerRelief(SmCornerRelief { at: at.unwrap_or([0.; 3]), size: s("4"), kind: 0 }),
+                    // o tamanho padrão do canto vem do estilo da chapa, quando ele define um
+                    _ => {
+                        let tam = d.sheet_efetivo().map(|e| e.corner).filter(|c| !c.trim().is_empty()).unwrap_or_else(|| s("4"));
+                        FeatureKind::SmCornerRelief(SmCornerRelief { at: at.unwrap_or([0.; 3]), size: tam, kind: 0 })
+                    }
                 }))
             }
-            Cmd::SmFlange | Cmd::SmHem | Cmd::SmJoggle | Cmd::SmBend | Cmd::SmLouver => {
+            Cmd::SmFlange | Cmd::SmFlangeLoop | Cmd::SmHem | Cmd::SmJoggle | Cmd::SmBend | Cmd::SmLouver => {
                 if d.sheet.is_none() {
                     d.sheet = Some(SheetParams::default());
                 }
@@ -2065,6 +2115,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     Pick::Edge { mid, .. } => Some(mid.map(|v| v as f64)),
                     _ => None,
                 });
+                let edges: Vec<[f64; 3]> = self.picks.iter().filter_map(|p| match p {
+                    Pick::Edge { mid, .. } => Some(mid.map(|v| v as f64)),
+                    _ => None,
+                }).collect();
                 let verts: Vec<[f64; 3]> = self.picks.iter().filter_map(|p| match p {
                     Pick::Vertex { pos, .. } => Some(pos.map(|v| v as f64)),
                     _ => None,
@@ -2085,6 +2139,22 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         miter: false,
                         min_gap: true,
                         edge_key: None,
+                    }),
+                    // uma aresta escolhida vira o laço da face; várias arestas valem como estão
+                    Cmd::SmFlangeLoop => FeatureKind::SmFlangeLoop(SmFlangeLoop {
+                        loop_all: edges.len() <= 1,
+                        edges: if edges.is_empty() { vec![[0.; 3]] } else { edges },
+                        edge_keys: vec![],
+                        extent: ExtensaoAba::Inteira,
+                        invert: false,
+                        length: s("20"),
+                        angle: s("90"),
+                        radius: None,
+                        flip: false,
+                        side: 0,
+                        miter: true,
+                        relief: None,
+                        relief_kind: 0,
                     }),
                     Cmd::SmHem => FeatureKind::SmHem(SmHem { edge: edge.unwrap_or([0.; 3]), length: s("8"), gap: s("0"), flip: false, kind: 0, edge_key: None }),
                     Cmd::SmBend => FeatureKind::SmBend(SmBend {
@@ -2147,7 +2217,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 // atalho de manufatura: extrusão com saída + filete nas arestas criadas por ela
                 let sk = sk_or_unset;
                 let ex = d.add_feature(FeatureKind::Extrude(Extrude { thin_side: 0, sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("20")), reverse: false, taper: s("3"), thin: None, dir: None, ends: Default::default() }));
-                d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::CreatedBy(ex), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![] }));
+                d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::CreatedBy(ex), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: Default::default() }));
                 Sel::Feature(ex)
             }
             Cmd::SplitBody | Cmd::ThickSurface | Cmd::CloseSurface | Cmd::SewSurface | Cmd::BoundaryFill => {
@@ -2196,7 +2266,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             Cmd::FilletFaceFace | Cmd::FilletFull => {
                 let f = |k: usize| faces.get(k).copied().unwrap_or([0.; 3]);
                 let mode = if c == Cmd::FilletFull { EdgeMode::FullRound { mid: f(0), a: f(1), b: f(2) } } else { EdgeMode::FaceFace(f(0), f(1)) };
-                Sel::Feature(d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("2"), edges: EdgeSel::AllOfBody, mode, prop: Default::default(), keys: vec![] })))
+                Sel::Feature(d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("2"), edges: EdgeSel::AllOfBody, mode, prop: Default::default(), keys: vec![], extra: Default::default() })))
             }
             Cmd::Hole | Cmd::HoleCounterbore | Cmd::HoleCountersink | Cmd::HoleTapped => {
                 // vértices / pontos selecionados: um furo em cada, normal à superfície (sem sketch)
@@ -2244,7 +2314,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     self.toast("Clique nas arestas na viewport para pô-las no comando (clique de novo tira)", false);
                 }
                 let keys = if all { vec![] } else { edge_keys.clone() };
-                let op = EdgeOp { value: s("1"), edges: sel, mode, prop: Default::default(), keys };
+                // B289: o comando novo começa com o último valor usado (raio ou distância)
+                let fillet = matches!(c, Cmd::Fillet | Cmd::FilletAll | Cmd::FilletVar);
+                let ultimo = crate::arestas_ui::ultimo_valor_aresta(&self.open.doc, fillet);
+                let op = EdgeOp { value: ultimo, edges: sel, mode, prop: Default::default(), keys, extra: Default::default() };
                 let d = &mut self.open.doc;
                 Sel::Feature(d.add_feature(if matches!(c, Cmd::Fillet | Cmd::FilletAll | Cmd::FilletVar) { FeatureKind::Fillet(op) } else { FeatureKind::Chamfer(op) }))
             }
@@ -2290,6 +2363,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
 
     /// Executa uma ação da barra de ferramentas.
     fn act(&mut self, a: Act) {
+        self.roda_registrar(a);
         match a {
             Act::Cmd(c) => self.command(c),
             Act::Fit => self.fit_pending = true,
@@ -2332,7 +2406,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
             Act::SkTool(t) => {
                 if let Some(e) = self.sketch.as_mut() {
-                    e.set_tool(t)
+                    e.escolher(t)
                 }
             }
             Act::SkConstruction => {
@@ -3030,7 +3104,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         ui.close();
                     }
                     ui.separator();
-                    let importar = ui.add(egui::Button::image_and_text(crate::icons::get("importar_arquivo"), tr("Importar STEP ou BREP…")));
+                    let importar = ui.add(egui::Button::image_and_text(crate::icons::get("importar_arquivo"), tr("Importar STEP, BREP ou árvore…")));
                     let (nome, frase, passos) = crate::toolbar::TEXTO_IMPORTAR;
                     if crate::icons::hover_help(ui, importar, tr(nome), tr(frase), tr(passos)).clicked() {
                         self.com_confirmacao(Acao::Importar);
@@ -3038,6 +3112,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     }
                     if ui.button(tr("Exportar STEP…")).clicked() {
                         self.export("step", Default::default());
+                        ui.close();
+                    }
+                    if ui.button(tr("Exportar árvore paramétrica…")).on_hover_text(tr("Grava a receita da peça ou da montagem em JSON aberto: esboços, cotas, comandos, nomes e cores. Não leva a geometria pronta.")).clicked() {
+                        self.exportar_arvore();
                         ui.close();
                     }
                     ui.menu_button(tr("Exportar STL"), |ui| {
@@ -3163,6 +3241,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         }
                     });
                     ui.label(RichText::new(title).weak());
+                    self.estado_na_barra(ui);
                 });
             });
         });
@@ -3710,7 +3789,17 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let k_blank = egui::Id::new("planificada_resultado");
         let blank: Option<Result<fenkra_solidos::planificada::Planificada, String>> = ctx.data(|m| m.get_temp(k_blank));
         let d = &mut self.open.doc;
-        let sp = d.sheet.get_or_insert_with(SheetParams::default);
+        let sp_real = d.sheet.get_or_insert_with(SheetParams::default);
+        // a janela edita a cópia efetiva (estilo aplicado); `aplica_edicao` grava só o que mudou,
+        // marcando como sobrescrita (cadeado) o que difere do estilo
+        let estilos = d.sheet_styles.clone();
+        let antes = sp_real.efetivo(&estilos);
+        let mut editado = antes.clone();
+        let sp = &mut editado;
+        let vars = antes.vars_com_espessura(&vars);
+        let estilo_atual = sp_real.style.clone();
+        let sobrescritas = sp_real.overrides.clone();
+        let mut acoes = crate::chapa_estilo_ui::Acoes::default();
         let fechar = egui::Id::unique(("concluir_janela", "app.rs1"));
         if ctx.data_mut(|m| m.remove_temp::<bool>(fechar)).unwrap_or(false) {
             open = false;
@@ -3724,6 +3813,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             if crate::app::done_bar(ui) {
                 ui.ctx().data_mut(|m| m.insert_temp(fechar, true));
             }
+                crate::chapa_estilo_ui::topo(ui, &estilos, &estilo_atual, &mut acoes);
                 editor::section(ui, "Material");
                 ui.horizontal(|ui| {
                     egui::ComboBox::from_id_salt("chapa_material").selected_text(if sp.material.is_empty() { tr("(à mão)").to_string() } else { sp.material.clone() }).width(220.).show_ui(ui, |ui| {
@@ -3732,9 +3822,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                             ui.selectable_value(&mut sp.material, m.0.to_string(), m.0);
                         }
                     });
+                    crate::chapa_estilo_ui::cadeado(ui, &estilo_atual, &sobrescritas, "material", &mut acoes);
                 });
                 ui.horizontal(|ui| {
                     editor::expr(ui, "Espessura", &mut sp.thickness, &vars, "mm");
+                    crate::chapa_estilo_ui::cadeado(ui, &estilo_atual, &sobrescritas, "espessura", &mut acoes);
                     egui::ComboBox::from_id_salt("chapa_bitola").selected_text(tr("comercial")).width(80.).show_ui(ui, |ui| {
                         for g in fenkra_core::SHEET_GAUGES {
                             if ui.selectable_label(false, format!("{} mm", fmt(g))).clicked() {
@@ -3752,25 +3844,64 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         sp.k = fmt(k);
                     }
                 }
-                editor::expr(ui, "Raio de dobra", &mut sp.radius, &vars, "mm");
+                ui.horizontal(|ui| {
+                    editor::expr(ui, "Raio de dobra", &mut sp.radius, &vars, "mm");
+                    crate::chapa_estilo_ui::cadeado(ui, &estilo_atual, &sobrescritas, "raio", &mut acoes);
+                });
+                ui.label(RichText::new(tr("O raio aceita fórmula da espessura, por exemplo 1.15*espessura.")).weak().small());
                 editor::section(ui, "Compensação de dobra");
                 ui.horizontal(|ui| {
                     ui.radio_value(&mut sp.method, 0, tr("fator K"));
                     ui.radio_value(&mut sp.method, 1, tr("dedução (BD)"));
                     ui.radio_value(&mut sp.method, 2, tr("tolerância (BA)"));
+                    crate::chapa_estilo_ui::cadeado(ui, &estilo_atual, &sobrescritas, "metodo", &mut acoes);
                 });
                 if sp.method == 0 {
-                    editor::expr(ui, "Fator K", &mut sp.k, &vars, "");
+                    ui.horizontal(|ui| {
+                        editor::expr(ui, "Fator K", &mut sp.k, &vars, "");
+                        crate::chapa_estilo_ui::cadeado(ui, &estilo_atual, &sobrescritas, "k", &mut acoes);
+                    });
                     ui.label(RichText::new(tr("Fator K: posição da linha neutra (0 = face interna, 0,5 = meio). Comprimento desenvolvido de cada dobra = ângulo × (R + K·t).")).weak().small());
                 } else {
                     if sp.allowance.trim().is_empty() {
                         sp.allowance = "0".into();
                     }
-                    editor::expr(ui, if sp.method == 1 { "Dedução a 90°" } else { "Tolerância a 90°" }, &mut sp.allowance, &vars, "mm");
+                    ui.horizontal(|ui| {
+                        editor::expr(ui, if sp.method == 1 { "Dedução a 90°" } else { "Tolerância a 90°" }, &mut sp.allowance, &vars, "mm");
+                        crate::chapa_estilo_ui::cadeado(ui, &estilo_atual, &sobrescritas, "tolerancia", &mut acoes);
+                    });
                     let r = fenkra_core::expr::eval_str(&sp.radius, &vars).unwrap_or(0.);
                     let al = fenkra_core::expr::eval_str(&sp.allowance, &vars).unwrap_or(0.);
                     let k = fenkra_core::sheet_k(sp.method, 0.44, t_now, r, al);
                     ui.label(RichText::new(format!("{} {}", tr("convertido em fator K equivalente:"), fmt((k * 1000.).round() / 1000.))).small());
+                }
+                editor::section(ui, "Alívios padrão");
+                ui.horizontal(|ui| {
+                    let mut tem = !sp.relief.trim().is_empty();
+                    if editor::check(ui, &mut tem, "Alívio padrão nas abas").changed() {
+                        sp.relief = if tem { "2".into() } else { String::new() };
+                    }
+                    crate::chapa_estilo_ui::cadeado(ui, &estilo_atual, &sobrescritas, "alivio", &mut acoes);
+                });
+                if !sp.relief.trim().is_empty() {
+                    editor::expr(ui, "Alívio padrão", &mut sp.relief, &vars, "mm");
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(tr("Tipo"));
+                        for (k, n) in [(0u8, "retangular"), (1, "redondo"), (2, "rasgo")] {
+                            ui.selectable_value(&mut sp.relief_kind, k, tr(n));
+                        }
+                        crate::chapa_estilo_ui::cadeado(ui, &estilo_atual, &sobrescritas, "alivio_forma", &mut acoes);
+                    });
+                }
+                ui.horizontal(|ui| {
+                    let mut tem = !sp.corner.trim().is_empty();
+                    if editor::check(ui, &mut tem, "Tamanho padrão do canto").changed() {
+                        sp.corner = if tem { "4".into() } else { String::new() };
+                    }
+                    crate::chapa_estilo_ui::cadeado(ui, &estilo_atual, &sobrescritas, "canto", &mut acoes);
+                });
+                if !sp.corner.trim().is_empty() {
+                    editor::expr(ui, "Tamanho do canto", &mut sp.corner, &vars, "mm");
                 }
                 ui.horizontal(|ui| {
                     ui.radio_value(&mut sp.flat, false, tr("dobrada"));
@@ -3825,6 +3956,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     None => {}
                 }
             });
+        // grava as edições (cadeado nas mudanças) e depois as ações do seletor de estilo
+        let sp_real = d.sheet.get_or_insert_with(SheetParams::default);
+        sp_real.aplica_edicao(&antes, &editado, &estilos);
+        crate::chapa_estilo_ui::aplica(d, acoes);
         // pedidos dos botões da planificada
         let k_pedido = egui::Id::new("planificada_pedido");
         match ctx.data_mut(|m| m.remove_temp::<u8>(k_pedido)).unwrap_or(0) {
@@ -4507,6 +4642,20 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             crate::tree_ui::marca(ui);
             if doc.params.is_empty() && pick(ui, Sel::Params, RichText::new(tr("vazio — clique para editar")).weak().italics()).clicked() {
                 *new_sel = Some(Sel::Params);
+            }
+            // B102: a tabela de projeto é um objeto da árvore, com a configuração ativa à vista
+            if !doc.tabela.vazia() {
+                crate::tree_ui::marca(ui);
+                let ativa = if doc.tabela.ativa.is_empty() { tr("valores base").to_string() } else { doc.tabela.ativa.clone() };
+                let erro = !doc.tabela.ativa.is_empty() && doc.tabela.linha(&doc.tabela.ativa).is_none();
+                let txt = format!("▦ {} — {}: {ativa}{}", tr("Tabela de projeto"), tr("ativa"), if erro { " ⚠" } else { "" });
+                let mut r = pick(ui, Sel::Params, RichText::new(txt));
+                if erro {
+                    r = r.on_hover_text(doc.com_configuracao(&doc.tabela.ativa).err().map(|e| e.to_string()).unwrap_or_default());
+                }
+                if r.clicked() {
+                    *new_sel = Some(Sel::Params);
+                }
             }
         });
         h.context_menu(|ui| {
@@ -6058,8 +6207,17 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     Err(e) => self.toast(e.to_string(), true),
                 }
             }
-            if ui.button(tr("💾 Salvar versão")).clicked() {
+            let (rotulo, frase, passos) = estado_doc::SALVAR_VERSAO;
+            if estado_doc::botao(ui, true, "salvar", rotulo, frase, passos).clicked() {
                 self.save();
+            }
+            let (rotulo, frase, passos) = estado_doc::IMPORTAR;
+            if estado_doc::botao(ui, true, "importar_arquivo", rotulo, frase, passos).clicked() {
+                self.com_confirmacao(Acao::Importar);
+            }
+            let (rotulo, frase, passos) = estado_doc::EXPORTAR;
+            if estado_doc::botao(ui, true, "exportar_arquivo", rotulo, frase, passos).clicked() {
+                self.export("step", Default::default());
             }
             if ui.button(tr("📄 Estrutura CSV")).clicked() {
                 if let Some(path) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name("estrutura.csv").save_file() {
@@ -6083,8 +6241,13 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             if ui.button(tr("Abrir")).clicked() {
                 self.open_entry(sel, None);
             }
-            if ui.add_enabled(e.dirty_since_release(), egui::Button::new(tr("🔒 Liberar revisão…"))).clicked() {
+            let (rotulo, frase, passos) = estado_doc::LIBERAR;
+            if estado_doc::botao(ui, e.dirty_since_release(), "liberar_revisao", rotulo, frase, passos).clicked() {
                 self.release_dialog = Some((sel, String::new()));
+            }
+            let (rotulo, frase, passos) = estado_doc::COMPARAR;
+            if estado_doc::botao(ui, !e.revisions.is_empty(), "comparar", rotulo, frase, passos).clicked() {
+                self.comparar_com_revisao(sel);
             }
             if ui.button(tr("Duplicar")).clicked() {
                 if let Err(err) = self.project.as_mut().unwrap().duplicate(sel) {
@@ -6093,6 +6256,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
             self.botoes_de_transicao(ui, sel);
         });
+        self.comparacao_ui(ui, sel);
         egui::CollapsingHeader::new(format!("Revisões ({})", e.revisions.len())).default_open(true).show(ui, |ui| {
             for r in e.revisions.iter().rev() {
                 ui.horizontal(|ui| {
@@ -6117,17 +6281,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     if !v.comment.is_empty() {
                         r.on_hover_text(&v.comment);
                     }
-                    if ui.small_button(tr("abrir")).clicked() {
-                        self.open_entry(sel, Some((v.hash.clone(), format!("v{}", i + 1))));
-                    }
-                    if i + 1 != e.versions.len()
-                        && ui.small_button(tr("↩ restaurar")).on_hover_text(tr("Cria uma versão nova com o conteúdo desta; o histórico não é reescrito")).clicked()
-                    {
-                        restaurar = Some(i + 1);
-                    }
+                    self.menu_versao(ui, sel, i + 1, e.versions.len(), &mut restaurar);
                 });
             }
         });
+        self.secao_qualidade(ui, sel);
         if let Some(n) = restaurar {
             let reabrir = self.open.entry == Some(sel);
             match self.project.as_mut().unwrap().restaurar_versao(sel, n, "") {
@@ -6299,10 +6457,35 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 vp.camera.yaw -= delta.x * 0.008;
                 vp.camera.pitch = (vp.camera.pitch + delta.y * 0.008).clamp(-1.5706, 1.5706);
             }
-            if resp.hovered() && scroll != 0. {
+            // B17: a roda também vale enquanto uma alça 3D é arrastada (o passo do arrasto segue o zoom)
+            let ponteiro_na_vista = ctx.input(|i| i.pointer.latest_pos()).filter(|p| rect.contains(*p));
+            let arrastando_alca = ctx.dragged_id().is_some_and(|id| id != resp.id) && ponteiro_na_vista.is_some();
+            if (resp.hovered() || arrastando_alca) && scroll != 0. {
                 let inv = self.settings.invert_zoom != (self.settings.nav == N::MeioGira);
                 let sc = if inv { scroll } else { -scroll };
-                vp.camera.dist = (vp.camera.dist * (sc * 0.0015).exp()).clamp(0.5, 1e6);
+                let nova = (vp.camera.dist * (sc * 0.0015).exp()).clamp(0.5, 1e6);
+                match ponteiro_na_vista {
+                    // pivô sob o cursor: o ponto apontado fica parado enquanto a vista aproxima
+                    Some(p) if self.settings.zoom_no_cursor => vp.camera.zoom_em_ponto(rect, p, nova),
+                    _ => vp.camera.dist = nova,
+                }
+            }
+            // B322: mouse 3D. Sem aparelho nada chega e a câmera não muda.
+            if self.settings.mouse3d.ativo {
+                self.mouse3d.iniciar(&ctx);
+                self.mouse3d.drenar();
+                let mov = self.settings.mouse3d.processar(self.mouse3d.bruto());
+                if !mov.parado() {
+                    vp.stop_anim();
+                    vp.navegou();
+                    crate::mouse3d::aplicar_na_camera(&mut vp.camera, &mov, ctx.input(|i| i.stable_dt));
+                    ctx.request_repaint();
+                }
+                for b in self.mouse3d.botoes_novos() {
+                    if !self.settings.mouse3d.acao_do_botao(b).aplicar(&mut vp.camera) {
+                        self.fit_pending = true;
+                    }
+                }
             }
             if (resp.double_clicked() && self.sketch.is_none() && self.hover_pick.is_none()) || self.fit_pending {
                 if let Some(b) = vp.bounds {
@@ -6341,6 +6524,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 let casca = self.session.as_ref().and_then(|s| self.open.doc.feature(s.id)).is_some_and(|f| matches!(f.kind, FeatureKind::Shell(_)));
                 if casca && ctx.data(|d| d.get_temp::<bool>(crate::previa::chave_secao())).unwrap_or(false) {
                     style.secao = vp.bounds.map(|b| crate::previa::plano_de_secao(b, vp.camera.eye()));
+                }
+                // B274: corte no plano do sketch em edição, só para ver
+                if let Some(p) = self.sketch.as_ref().and_then(|e| e.plano_de_corte(vp.camera.eye())) {
+                    style.secao = Some(p);
                 }
                 if style.simplificar && style.navegando {
                     // volta à qualidade total quando a câmera para: um redesenho logo depois da pausa
@@ -6384,6 +6571,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
 
             crate::st_ui::draw_falhas(ui, rect, &vp, &self.st_falhas);
+            crate::st_cantos_ui::draw(ui, rect, &vp, &self.st_cantos, &mut self.st_cantos_sel);
 
             // rótulos de pontos e curvas de referência
             if let (Some(r), true) = (&self.result, self.settings.filter.rotulos) {
@@ -6586,6 +6774,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                                         }
                                     }
                                     o.keys = carried;
+                                    o.extra.carry_flips(&before, list);
                                 }
                             }
                         }
@@ -6920,6 +7109,8 @@ pub enum Cmd {
     SmProfileFlange,
     /// aba numa aresta curva
     SmCurveFlange,
+    /// abas por extensão lateral e por laço de arestas
+    SmFlangeLoop,
     /// alívio de canto
     SmCornerRelief,
     /// rasgo circular
@@ -6932,6 +7123,7 @@ pub enum Cmd {
     StGusset,
     StLibrary,
     StCutList,
+    StCorners,
     StAssembly,
     /// anotação 3D: 0 linear … 8 tolerância geométrica
     Pmi(u8),
@@ -7362,6 +7554,7 @@ impl eframe::App for App {
         for aviso in crate::config_camadas::tirar_avisos() {
             self.toast(aviso, true);
         }
+        crate::ajuda_cmd::publicar_atalhos(ctx, &self.settings.keys);
         crate::ui_ext::definir_modo_roda(crate::ui_ext::ModoRoda::de_u8(self.settings.wheel_mode));
         // cores salvas: preferências ↔ paleta usada pelos painéis
         {
@@ -7417,6 +7610,7 @@ impl eframe::App for App {
         }
         let km = self.settings.keys.clone();
         let typing = ctx.egui_wants_keyboard_input() || self.sketch.as_ref().is_some_and(|e| e.entry.typing());
+        self.roda_passo(ctx, typing);
         let (save, undo, redo) = (km.pressed(ctx, K::Save), !typing && km.pressed(ctx, K::Undo), !typing && km.pressed(ctx, K::Redo));
         let del = km.pressed(ctx, K::Delete);
         // Ctrl+S salva o documento ativo (com a checagem de mudança externa); Ctrl+Shift+S abre o plano
@@ -7755,6 +7949,7 @@ impl eframe::App for App {
         if let Some(id) = self.open_pending.take() {
             self.start_session(id, false, None);
         }
+        self.gravar_passo(ctx);
         if self.result.is_some() && !self.calculando() {
             if let Some(k) = self.demo_previa.take() {
                 let snapshot = self.open.doc.clone();
@@ -7803,7 +7998,7 @@ impl eframe::App for App {
             self.scene_dirty = true;
         }
         if self.settings != settings_before {
-            if self.settings.theme != settings_before.theme || self.settings.theme_name != settings_before.theme_name || self.settings.ui_scale != settings_before.ui_scale || self.settings.animacoes != settings_before.animacoes {
+            if self.settings.theme != settings_before.theme || self.settings.theme_name != settings_before.theme_name || self.settings.ui_scale != settings_before.ui_scale || self.settings.animacoes != settings_before.animacoes || self.settings.acessibilidade != settings_before.acessibilidade {
                 self.settings.apply(ctx);
             }
             if let Some(v) = self.viewport.as_mut() {
@@ -8251,6 +8446,9 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
                     ui.radio_value(&mut s.english, true, "English");
                 });
                 ui.add(crate::ui_ext::slider(&mut s.ui_scale, 0.75..=1.75).text("escala (fontes e controles)"));
+                ui.add(crate::ui_ext::slider(&mut s.acessibilidade.escala_fonte, 0.8..=1.6).text(tr("escala só da fonte"))).on_hover_text(tr("Aumenta ou diminui só o texto, além da escala da interface."));
+                ui.checkbox(&mut s.acessibilidade.paleta_segura, tr("cores seguras para daltonismo")).on_hover_text(tr("Troca verde e vermelho por azul e laranja em ok, aviso, erro e na prévia. Todo estado também tem símbolo."));
+                ui.checkbox(&mut s.acessibilidade.reduzir_movimento, tr("reduzir movimento")).on_hover_text(tr("A câmera salta em vez de deslizar e a interface não anima transições."));
                 ui.add(crate::ui_ext::slider(&mut s.icon_size, 20.0..=48.0).text("tamanho dos ícones"));
                 ui.checkbox(&mut s.show_labels, tr("mostrar o nome embaixo dos ícones"));
                 ui.separator();
@@ -8317,6 +8515,9 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
                         }
                     });
                 });
+                if ui.button(tr("Editar a roda de comandos…")).clicked() {
+                    crate::roda::ui::pedir_abrir(ui.ctx());
+                }
                 ui.label(RichText::new(tr("Troca o teclado e o mouse juntos, com base nos atalhos de fábrica de cada software. Clique num atalho para gravar outro (Esc cancela, Delete remove).")).weak().small());
                 let capturing: Option<KeyAction> = ui.ctx().data(|d| d.get_temp(egui::Id::unique("captura_atalho")));
                 egui::ScrollArea::vertical().max_height(260.).id_salt("atalhos").show(ui, |ui| {
@@ -8371,8 +8572,11 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
                 });
                 ui.label(RichText::new(s.nav.help()).weak().small());
                 ui.checkbox(&mut s.invert_zoom, tr("inverter o sentido do zoom"));
+                ui.checkbox(&mut s.zoom_no_cursor, tr("zoom em direção ao cursor")).on_hover_text(tr("A roda aproxima o ponto sob o cursor, também enquanto uma alça 3D é arrastada. Desligado, o zoom fecha sobre o centro da vista."));
                 ui.separator();
                 crate::ui_ext::modo_roda_ui(ui, &mut s.wheel_mode);
+                ui.separator();
+                crate::mouse3d::painel(ui, &mut s.mouse3d);
                 ui.separator();
                 ui.horizontal(|ui| {
                     ui.label(tr("Selecionar:"));

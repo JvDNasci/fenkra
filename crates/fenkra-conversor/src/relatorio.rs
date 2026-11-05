@@ -30,6 +30,9 @@ pub(crate) const AV_GRANDE: &str = "Peça com {0} mm: a unidade do arquivo pode 
 pub(crate) const AV_PEQUENA: &str = "Peça com {0} mm: a unidade do arquivo pode estar errada.";
 pub(crate) const AV_ESCALA: &str = "Unidade trocada na importação: tudo multiplicado por {0}.";
 pub(crate) const AV_CORES_REPARO: &str = "O reparo mudou as faces de {0}: as cores por face dessa peça foram perdidas.";
+pub(crate) const AV_COMANDO: &str = "O comando {0} não calculou: {1}";
+pub(crate) const AV_REANCORADAS: &str = "Referências ajustadas pela geometria: {0}.";
+pub(crate) const FORA_ARVORE: &str = "Ficou de fora quando o arquivo foi gravado: {0}";
 pub(crate) const FORA_BREP: &str = "Nomes, cores, camadas e estrutura: o BREP guarda só a forma.";
 pub(crate) const FORA_BREP_UNIDADE: &str = "Unidade: o BREP não declara; os números foram lidos como milímetros.";
 pub(crate) const FORA_AP203: &str = "Cores e camadas: o AP203 não prevê; arquivos desse esquema costumam vir sem elas.";
@@ -45,6 +48,9 @@ pub const NOTAS: &[&str] = &[
     AV_PEQUENA,
     AV_ESCALA,
     AV_CORES_REPARO,
+    AV_COMANDO,
+    AV_REANCORADAS,
+    FORA_ARVORE,
     FORA_BREP,
     FORA_BREP_UNIDADE,
     FORA_AP203,

@@ -230,6 +230,15 @@ def desenhos():
     ic("nova_peca", B=CUBO(20, 7, 14, 7, 14), R=MAIS(37, 37, 6))
     ic("salvar", B="M8 8h25l7 7v25H8z", R="M16 8v10h14V8M14 40V26h20v14")
     ic("importar_arquivo", B=CUBO(24, 20, 12, 6, 10), R="M24 5v12M18 11l6 6 6-6")
+    ic("exportar_arquivo", B=CUBO(24, 20, 12, 6, 10), R="M24 17V5M18 11l6-6 6 6")
+    ic("liberar_revisao", B=Q(8, 6, 24, 34), R=CADEADO(34, 34))
+    ic("onde_usado", B=CUBO(20, 6, 12, 6, 12), R=C(32, 32, 7) + "M37 37l6 6")
+    ic("comparar", B=Q(6, 10, 15, 28) + Q(27, 10, 15, 28), R=S2(15, 24, 33, 24, 4))
+    ic("estado_sem_revisao", B=Q(8, 6, 24, 34), R="M28 36h14")
+    ic("estado_liberada", B=Q(8, 6, 24, 34), R=CHECK(34, 34, 8))
+    ic("estado_editado", B=Q(8, 6, 24, 34), R="M26 42l2-7 11-11 5 5-11 11z")
+    ic("estado_leitura", B=Q(8, 6, 24, 34), R=E(33, 34, 10, 6) + C(33, 34, 2))
+    ic("estado_conflito", B=Q(8, 6, 24, 34), R="M33 22l11 20H22zM33 30v6M33 39v1")
     ic("config", B=ENGRENAGEM(24, 24, 18, 13.5, 8), R=C(24, 24, 6))
     ic("personalizar", B="M8 13h32M8 24h32M8 35h32", R=C(30, 13, 4) + C(16, 24, 4) + C(26, 35, 4))
     ic("parametro", B="M6 36h36M6 32v8M15 34v4M24 34v4M33 34v4M42 32v8", R="M30 28l-5-8h10zM30 20V9")
@@ -353,6 +362,7 @@ def desenhos():
     ic("filete_completo", B="M12 42V20M36 42V20M4 42h40", R="M12 20a12 12 0 0 1 24 0")
     ic("filete_face_face", B="M6 8l14 22M42 8L28 30", R="M20 30a7 7 0 0 0 8 0")
     ic("filete_variavel", B="M6 14h28", R="M6 14l28 20M34 14a10 10 0 0 1 0 20")
+    ic("filete_assimetrico", B="M6 40V8M6 40h38", R="M6 14a16 26 0 0 0 16 26")
     ic("arestas_selecionar", B=CUBO(), R=L((8, 14), (24, 22)))
     ic("arestas_todas", b=CUBO_OCULTO(), R=CUBO())
     ic("arestas_comando", B=CUBO(21, 8, 15, 7.5, 16), R=L((6, 15.5), (21, 23)) + CURSOR(30, 22, .85))
@@ -669,7 +679,7 @@ def desenhos():
 desenhos()
 
 
-SO_INTERFACE = {"importar_arquivo", "asm_catalogo", "arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais"}
+SO_INTERFACE = {"importar_arquivo", "asm_catalogo", "arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais", "exportar_arquivo", "liberar_revisao", "onde_usado", "comparar", "estado_sem_revisao", "estado_liberada", "estado_editado", "estado_leitura", "estado_conflito"}
 
 
 # ---------- saída ----------

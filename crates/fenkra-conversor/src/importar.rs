@@ -11,7 +11,7 @@ use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Teto da miniatura: ela é reordenada e desenhada na CPU a cada quadro em que gira.
-const TRIANGULOS_DA_PREVIA: usize = 60_000;
+pub(crate) const TRIANGULOS_DA_PREVIA: usize = 60_000;
 /// Limites do aviso de unidade: maior medida da peça, em mm.
 const MAIOR_PLAUSIVEL: f64 = 10_000.;
 const MENOR_PLAUSIVEL: f64 = 0.1;
@@ -35,6 +35,9 @@ pub struct Importado {
     pub doc: Document,
     pub relatorio: Relatorio,
     pub previa: Previa,
+    /// arquivo de árvore com várias peças ou montagem: `doc` é a primeira, e o resto vem aqui
+    #[serde(default)]
+    pub conjunto: Option<crate::arvore::Conjunto>,
 }
 
 /// Por que a unidade do arquivo parece errada.
@@ -209,6 +212,9 @@ impl Registro {
         let texto = texto_do_caminho(caminho)?;
         let bytes = std::fs::read(caminho).map_err(|e| ErroConv::Leitura(format!("não foi possível ler '{texto}': {e}")))?;
         let (formato, extensao_diverge) = detectar(caminho, &bytes)?;
+        if formato == Formato::Arvore {
+            return crate::arvore::importar(caminho, &bytes, extensao_diverge);
+        }
         let provedor = self.provedor(formato)?;
         let mut modelo = provedor.ler(formato, caminho, o)?;
 
@@ -264,7 +270,7 @@ impl Registro {
         let (doc, corpos) = montar_documento(&modelo, &nome_doc, texto, selo)?;
         r.corpos = corpos;
         let previa = previa(&modelo, &r)?;
-        Ok(Importado { doc, relatorio: r, previa })
+        Ok(Importado { doc, relatorio: r, previa, conjunto: None })
     }
 
     /// Lê e grava noutro formato, sem passar por documento.

@@ -1,36 +1,36 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 84480,
+ "tokens_total_k": 86470,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
    "versao": "0.1.0-alpha.28 a .30",
    "tokens_k": 7180,
-   "pct": 8.5
+   "pct": 8.3
   },
   "1": {
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 11610,
-   "pct": 13.7
+   "pct": 13.4
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
    "tokens_k": 18470,
-   "pct": 21.9
+   "pct": 21.4
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
-   "tokens_k": 19350,
-   "pct": 22.9
+   "tokens_k": 21340,
+   "pct": 24.7
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
    "tokens_k": 27870,
-   "pct": 33.0
+   "pct": 32.2
   }
  },
  "itens": [
@@ -357,7 +357,7 @@
    "tokens_k": 100,
    "teste": "Visual",
    "area": "Navegação",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.1
   },
   {
@@ -426,7 +426,7 @@
    "tokens_k": 120,
    "teste": "Visual",
    "area": "Geral",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.1
   },
   {
@@ -757,7 +757,7 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B31",
@@ -1075,7 +1075,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B53",
@@ -1252,7 +1252,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "em andamento",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B60",
@@ -1271,7 +1271,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "em andamento",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B61",
@@ -1345,7 +1345,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "em andamento",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B67",
@@ -1416,7 +1416,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B71",
@@ -1549,7 +1549,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "em andamento",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B79",
@@ -1565,7 +1565,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B80",
@@ -1581,7 +1581,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B81",
@@ -1679,7 +1679,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "em andamento",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B87",
@@ -1696,7 +1696,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B88",
@@ -1713,7 +1713,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B89",
@@ -1729,7 +1729,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "em andamento",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B90",
@@ -1746,7 +1746,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "em andamento",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B91",
@@ -1762,7 +1762,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "em andamento",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B92",
@@ -1796,7 +1796,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B94",
@@ -1914,7 +1914,7 @@
    "tokens_k": 250,
    "teste": "Auto",
    "area": "Geral",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.3
   },
   {
@@ -1932,7 +1932,7 @@
    "tokens_k": 200,
    "teste": "Auto",
    "area": "Geral",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.2
   },
   {
@@ -2084,7 +2084,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B111",
@@ -2116,7 +2116,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B113",
@@ -2164,7 +2164,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B116",
@@ -2196,7 +2196,7 @@
    "teste": "Auto",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B118",
@@ -2212,7 +2212,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B119",
@@ -2260,7 +2260,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B122",
@@ -2308,7 +2308,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B125",
@@ -2501,7 +2501,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B137",
@@ -2613,7 +2613,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B144",
@@ -3045,7 +3045,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B171",
@@ -3109,7 +3109,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B175",
@@ -3301,7 +3301,7 @@
    "teste": "Auto + Visual",
    "area": "PMI 3D",
    "status": "em andamento",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B187",
@@ -3413,7 +3413,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B194",
@@ -3461,7 +3461,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B197",
@@ -3509,7 +3509,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B200",
@@ -3653,7 +3653,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B209",
@@ -3669,7 +3669,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B210",
@@ -3686,7 +3686,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B211",
@@ -3703,7 +3703,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B212",
@@ -3817,7 +3817,7 @@
    "teste": "Auto + Visual",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B219",
@@ -3913,7 +3913,7 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B225",
@@ -4025,7 +4025,7 @@
    "teste": "Auto + Visual",
    "area": "Sketch",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B232",
@@ -4185,7 +4185,7 @@
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
    "status": "em andamento",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B242",
@@ -4313,7 +4313,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "em andamento",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B250",
@@ -4328,7 +4328,7 @@
    "tokens_k": 320,
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.4
   },
   {
@@ -4344,7 +4344,7 @@
    "tokens_k": 240,
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.3
   },
   {
@@ -4360,7 +4360,7 @@
    "tokens_k": 200,
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.2
   },
   {
@@ -4424,7 +4424,7 @@
    "tokens_k": 380,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.4
   },
   {
@@ -4440,8 +4440,8 @@
    "tokens_k": 300,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "a fazer",
-   "pct": 0.4
+   "status": "em andamento",
+   "pct": 0.3
   },
   {
    "id": "B258",
@@ -4472,7 +4472,7 @@
    "tokens_k": 350,
    "teste": "Auto",
    "area": "Geral",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.4
   },
   {
@@ -4616,7 +4616,7 @@
    "tokens_k": 250,
    "teste": "Auto + Visual",
    "area": "PMI 3D",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.3
   },
   {
@@ -4632,8 +4632,8 @@
    "tokens_k": 300,
    "teste": "Auto + Visual",
    "area": "PMI 3D",
-   "status": "a fazer",
-   "pct": 0.4
+   "status": "em andamento",
+   "pct": 0.3
   },
   {
    "id": "B270",
@@ -4648,8 +4648,8 @@
    "tokens_k": 300,
    "teste": "Auto + Visual",
    "area": "PMI 3D",
-   "status": "a fazer",
-   "pct": 0.4
+   "status": "em andamento",
+   "pct": 0.3
   },
   {
    "id": "B271",
@@ -4664,7 +4664,7 @@
    "tokens_k": 200,
    "teste": "Auto + Visual",
    "area": "Sketch",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -4680,7 +4680,7 @@
    "tokens_k": 180,
    "teste": "Auto + Visual",
    "area": "Sketch",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -4696,7 +4696,7 @@
    "tokens_k": 160,
    "teste": "Auto + Visual",
    "area": "Sketch",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -4712,7 +4712,7 @@
    "tokens_k": 200,
    "teste": "Visual",
    "area": "Sketch",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -4744,7 +4744,7 @@
    "tokens_k": 200,
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.2
   },
   {
@@ -4760,7 +4760,7 @@
    "tokens_k": 200,
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -4776,7 +4776,7 @@
    "tokens_k": 350,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.4
   },
   {
@@ -4809,7 +4809,7 @@
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B281",
@@ -4905,7 +4905,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B287",
@@ -4937,7 +4937,7 @@
    "teste": "Auto + Visual",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B289",
@@ -5209,7 +5209,7 @@
    "teste": "Auto + Visual",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B306",
@@ -5337,7 +5337,7 @@
    "teste": "Auto + Visual",
    "area": "Interface",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B314",
@@ -5352,7 +5352,7 @@
    "tokens_k": 200,
    "teste": "Visual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.2
   },
   {
@@ -5464,8 +5464,8 @@
    "tokens_k": 300,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "a fazer",
-   "pct": 0.4
+   "status": "em andamento",
+   "pct": 0.3
   },
   {
    "id": "B322",
@@ -5480,7 +5480,7 @@
    "tokens_k": 250,
    "teste": "Auto + Manual",
    "area": "Navegação",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.3
   },
   {
@@ -5513,7 +5513,7 @@
    "teste": "Auto + Visual",
    "area": "Interface",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B325",
@@ -5530,6 +5530,150 @@
    "area": "Interface",
    "status": "a fazer",
    "pct": 0.2
+  },
+  {
+   "id": "B326",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Estrutural: tubo único com dobra no nó, com modos",
+   "oque": "Ao escolher o encaixe de um nó do esqueleto, além de topo e meia esquadria, o usuário pode dizer que é um tubo único dobrado, com os modos dobra por dobradeira, V comum (canto vivo, rasgo em V com a parede externa de dobradiça), V com raio (canto curvo pelo gabarito de serralheria, parede interna removida e parede externa curvada), corte mais dobradeira e corte simples. Em tubo redondo, quadrado e retangular, puxa o tubo no 3D e aplica o raio do nó, com prévia e aviso quando o raio não cabe. Pesquisa em docs/pesquisa/dobra-de-tubos.md. A lista final de modos segue os cinco casos M1 a M5 da pesquisa, com gomos para tubo redondo; no tubo retangular, pergunta qual dimensão fica no plano da dobra.",
+   "origem": [
+    "USR-TUBO"
+   ],
+   "catalogo": [],
+   "tokens_k": 350,
+   "teste": "Auto + Visual",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B327",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Estrutural: desenvolvido, alongamento e retorno elástico da dobra de tubo",
+   "oque": "Calcula por dobra o comprimento desenvolvido pelo eixo, a dedução de dobra, a linha neutra deslocada, o quanto a parede externa estica e afina e o retorno elástico por material. Mostra o resultado no painel do nó e na ficha do membro. As fórmulas de alongamento e afinamento ficaram sem confirmação em fonte lida: conferir antes de publicar como valor de engenharia. Usa linha neutra da pesquisa ou K cadastrado, comprimento de corte por modo e aviso quando o raio passa do alongamento admissível.",
+   "origem": [
+    "USR-TUBO"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B328",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Estrutural: corte em V paramétrico para dobrar tubo quadrado",
+   "oque": "Dobra por rasgos em metalon, nas duas variantes do B326: V comum, um ou vários entalhes com a parede externa como dobradiça, e V com raio, em que os arcos do gabarito definem o corte das paredes laterais. Calcula número de rasgos, ângulo, passo e abertura a partir do raio e do ângulo total, e mostra o tubo aberto e o fechado. A geometria da pesquisa é derivada, não vem de fonte: validar com protótipo real antes de marcar pronto. Vale a condição do V múltiplo: o raio mínimo depende da altura, da parede e do ângulo do entalhe, e canto vivo não sai por V múltiplo.",
+   "origem": [
+    "USR-TUBO"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B329",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Estrutural: gabarito de marcação imprimível do corte em V",
+   "oque": "Gera em escala 1:1 uma régua de marcação com a posição e o ângulo de cada rasgo, para colar ou riscar no tubo na serralheria, em PDF e SVG, com aviso da escala de impressão. Cobre também o canto com raio: arcos nas pontas, V da bissetriz e escala pela altura lateral.",
+   "origem": [
+    "USR-TUBO"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Auto + Visual",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B330",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Estrutural: regras e tabelas de dobra de tubo cadastráveis",
+   "oque": "Como as tabelas de chapa: cadastro por material, seção e ferramenta de raio mínimo, fator de dobra, retorno elástico e folga, com valores guiados por parâmetros. A dobra consulta a regra, avisa quando viola e mostra de onde veio o valor. Serve para regras internas de setores como aeronáutico e automotivo; valores de normas pagas não entram sem fonte aberta. Campos incluem alongamento admissível, K da placa, folga de raiz e raio mínimo do V múltiplo.",
+   "origem": [
+    "USR-TUBO"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B331",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Estrutural: lista de corte e desenho com o tubo desenvolvido",
+   "oque": "A lista de corte mostra comprimento desenvolvido, dobras, raios e modo de cada tubo, e o desenho ganha a tabela de dobras e a vista do tubo reto com as marcas de início de dobra e dos rasgos.",
+   "origem": [
+    "USR-TUBO"
+   ],
+   "catalogo": [],
+   "tokens_k": 120,
+   "teste": "Auto + Visual",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B332",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Estrutural: dados de dobra para máquina (LRA, YBC e XYZ)",
+   "oque": "Exporta e importa a rota do tubo nos formatos abertos de dobradeira: comprimento, rotação e ângulo de cada dobra, e pontos XYZ, com ida e volta testada.",
+   "origem": [
+    "USR-TUBO"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B333",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Estrutural: canto com gabarito (V com raio)",
+   "oque": "Canto de tubo quadrado com a parede externa curvada e a interna cortada: gera o contorno do corte em cada lateral, a placa curva, a prévia aberta e fechada e o comprimento de solda. Teste do caso 30x30x1,2 a 90°: placa 46,17, dedução 13,83, folga 5,44 e solda 148,1, valores derivados na pesquisa, a confirmar com protótipo. O modo só existe para raios próximos da altura do tubo: fora da faixa, avisa.",
+   "origem": [
+    "USR-TUBO"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B334",
+   "onda": 3,
+   "prio": "P2",
+   "titulo": "Estrutural: contorno plano do corte de tubo em DXF e SVG para laser",
+   "oque": "Exporta o contorno aberto dos cortes do tubo (V comum, V múltiplo e canto com raio) em escala real, com camadas de corte e marcação, para laser de tubo e para riscar à mão.",
+   "origem": [
+    "USR-TUBO"
+   ],
+   "catalogo": [],
+   "tokens_k": 120,
+   "teste": "Auto",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 0.1
   }
  ]
 }

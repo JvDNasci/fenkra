@@ -73,11 +73,11 @@ pub fn shown(a: &Assembly, id: Id) -> bool {
 }
 
 /// Malha de um componente (peça, ou subconjunto inteiro) no sistema dele.
-fn comp_mesh(kind: &NodeKind, dir: Option<&Path>, cache: &mut PartCache, with_shape: bool, depth: u32) -> Result<(Mesh, [u8; 3], f64), String> {
+fn comp_mesh(kind: &NodeKind, cfg: &str, dir: Option<&Path>, cache: &mut PartCache, with_shape: bool, depth: u32) -> Result<(Mesh, [u8; 3], f64), String> {
     match kind {
         NodeKind::Group => Err("grupo".into()),
         NodeKind::Part { path } => {
-            let p = cache.get(&full_path(dir, path), with_shape)?;
+            let p = cache.get_config(&full_path(dir, path), with_shape, cfg)?;
             let mut m = Mesh::default();
             let mut vol = 0.;
             for b in &p.result.bodies {
@@ -98,7 +98,7 @@ fn comp_mesh(kind: &NodeKind, dir: Option<&Path>, cache: &mut PartCache, with_sh
             let mut m = Mesh::default();
             let mut vol = 0.;
             for n in sub.nodes.iter().filter(|n| !matches!(n.kind, NodeKind::Group) && shown(&sub, n.id)) {
-                if let Ok((cm, _, v)) = comp_mesh(&n.kind, sub_dir.as_deref(), cache, false, depth + 1) {
+                if let Ok((cm, _, v)) = comp_mesh(&n.kind, sub.config_de(n.id), sub_dir.as_deref(), cache, false, depth + 1) {
                     append(&mut m, &transformed(&cm, &n.placement));
                     vol += v;
                 }
@@ -129,7 +129,7 @@ pub fn compose(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, errors: 
         if let Some(sh) = cut {
             // já no mundo: a malha da forma recortada não leva a posição de novo
             if let Ok(m) = fenkra_solidos::tesselar(&sh, &cache.qualidade()) {
-                let color = n.color.unwrap_or_else(|| comp_mesh(&n.kind, dir, cache, false, 0).map(|x| x.1).unwrap_or([180, 190, 200]));
+                let color = n.color.unwrap_or_else(|| comp_mesh(&n.kind, a.config_de(n.id), dir, cache, false, 0).map(|x| x.1).unwrap_or([180, 190, 200]));
                 let label = if n.number > 0 { format!("{} · {}", n.number, n.name) } else { n.name.clone() };
                 doc.collectors.push(BodyCollector { id: n.id, name: label, color, visible, finish: Finish::default(), texture: None, marker: None, published: false, material: String::new() });
                 let nf = m.face_ranges.len();
@@ -138,7 +138,7 @@ pub fn compose(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, errors: 
                 continue;
             }
         }
-        match comp_mesh(&n.kind, dir, cache, with_shape, 0) {
+        match comp_mesh(&n.kind, a.config_de(n.id), dir, cache, with_shape, 0) {
             Ok((m, color, vol)) => {
                 let color = n.color.unwrap_or(color);
                 let label = if n.number > 0 { format!("{} · {}", n.number, n.name) } else { n.name.clone() };

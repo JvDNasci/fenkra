@@ -24,6 +24,8 @@ pub enum Tipo {
     Montagem,
     Desenho,
     Indice,
+    /// árvore paramétrica de intercâmbio (B266)
+    Arvore,
 }
 
 /// Passos de migração por tipo. O passo `i` leva da versão `i + 1` para a `i + 2`.
@@ -46,6 +48,7 @@ fn peca_v1_para_v2(v: &mut Value) {
 const PASSOS_MONTAGEM: &[Passo] = &[];
 const PASSOS_DESENHO: &[Passo] = &[];
 const PASSOS_INDICE: &[Passo] = &[];
+const PASSOS_ARVORE: &[Passo] = &[];
 
 impl Tipo {
     pub fn passos(self) -> &'static [Passo] {
@@ -54,6 +57,7 @@ impl Tipo {
             Tipo::Montagem => PASSOS_MONTAGEM,
             Tipo::Desenho => PASSOS_DESENHO,
             Tipo::Indice => PASSOS_INDICE,
+            Tipo::Arvore => PASSOS_ARVORE,
         }
     }
     /// Versão de formato que este programa grava.
@@ -66,6 +70,7 @@ impl Tipo {
             Tipo::Montagem => "montagem",
             Tipo::Desenho => "desenho",
             Tipo::Indice => "índice do projeto",
+            Tipo::Arvore => "árvore paramétrica",
         }
     }
 }

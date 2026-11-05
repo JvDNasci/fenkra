@@ -42,6 +42,8 @@ pub enum KeyAction {
     Fillet,
     Chamfer,
     Plane,
+    /// roda de comandos (B256): menu radial por tecla
+    RodaComandos,
     // sketch
     SkSelect,
     SkLine,
@@ -57,16 +59,17 @@ pub enum KeyAction {
     SkFillet,
     SkMirror,
     SkSpline,
+    SkModo,
 }
 
 use KeyAction::*;
 use crate::i18n::tr;
 
 impl KeyAction {
-    pub const ALL: [KeyAction; 44] = [
+    pub const ALL: [KeyAction; 46] = [
         Fit, ViewMenu, Normal, Ortho, ViewFront, ViewBack, ViewTop, ViewBottom, ViewLeft, ViewRight, ViewIso, Hide, HiddenEnv, Undo, Redo, Delete, Save, SaveAll, ClipCopy, ClipCut,
         ClipPaste, ClipDup, Sketch,
-        Extrude, Cut, Revolve, Hole, Fillet, Chamfer, Plane, SkSelect, SkLine, SkRect, SkCircle, SkArc, SkPoint, SkDim, SkConstruction, SkGrid, SkTrim, SkOffset, SkFillet, SkMirror, SkSpline,
+        Extrude, Cut, Revolve, Hole, Fillet, Chamfer, Plane, RodaComandos, SkSelect, SkLine, SkRect, SkCircle, SkArc, SkPoint, SkDim, SkConstruction, SkGrid, SkTrim, SkOffset, SkFillet, SkMirror, SkSpline, SkModo,
     ];
 
     pub fn label(self) -> &'static str {
@@ -101,6 +104,7 @@ impl KeyAction {
             Fillet => tr("Filete"),
             Chamfer => tr("Chanfro"),
             Plane => tr("Plano"),
+            RodaComandos => tr("Roda de comandos"),
             SkSelect => tr("Sketch · selecionar"),
             SkLine => tr("Sketch · linha"),
             SkRect => tr("Sketch · retângulo"),
@@ -115,6 +119,7 @@ impl KeyAction {
             SkFillet => tr("Sketch · filete"),
             SkMirror => tr("Sketch · espelhar"),
             SkSpline => tr("Sketch · spline"),
+            SkModo => tr("Sketch · percorrer os modos"),
         }
     }
 
@@ -122,7 +127,7 @@ impl KeyAction {
         match self {
             Fit | ViewMenu | Normal | Ortho | ViewFront | ViewBack | ViewTop | ViewBottom | ViewLeft | ViewRight | ViewIso | Hide | HiddenEnv => "Vista",
             Undo | Redo | Delete | Save | SaveAll | ClipCopy | ClipCut | ClipPaste | ClipDup => "Edição",
-            Sketch | Extrude | Cut | Revolve | Hole | Fillet | Chamfer | Plane => "Modelagem",
+            Sketch | Extrude | Cut | Revolve | Hole | Fillet | Chamfer | Plane | RodaComandos => "Modelagem",
             _ => "Sketch",
         }
     }
@@ -286,7 +291,9 @@ impl Preset {
             }
         }
         // ferramentas de edição do sketch (B239): letras livres nos predefinidos, sem colidir com a vista
-        v.extend([(SkTrim, "T"), (SkOffset, "Shift+O"), (SkFillet, "Alt+F"), (SkMirror, "M"), (SkSpline, "B")]);
+        v.extend([(SkTrim, "T"), (SkOffset, "Shift+O"), (SkFillet, "Alt+F"), (SkMirror, "Shift+M"), (SkSpline, "B"), (SkModo, "M")]);
+        // roda de comandos (B256): Shift+W não é usada em nenhuma predefinição
+        v.push((RodaComandos, "Shift+W"));
         v
     }
 }

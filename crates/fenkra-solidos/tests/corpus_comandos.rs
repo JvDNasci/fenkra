@@ -453,7 +453,7 @@ fn filete_em_todas_as_arestas_segue_a_formula_fechada() {
     precisa_kernel!();
     let (mut d, _, _) = caixa_cotada();
     param(&mut d, "r", "2");
-    d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("r"), edges: EdgeSel::AllOfBody, mode: EdgeMode::Constant, prop: Default::default(), keys: vec![] }));
+    d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("r"), edges: EdgeSel::AllOfBody, mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: Default::default() }));
     let e = |r: f64| Esperado { vol: vol_caixa_arredondada(40., 30., 20., r), tol_vol: 2e-3, tam: [40., 30., 20.], tol_tam: 0.01, minimo: None, via_malha: true };
     ciclo("filete (todas)", &mut d, "r", "4", &e(2.), &e(4.));
 }

@@ -420,6 +420,8 @@ pub struct Settings {
     pub families: Vec<(String, usize)>,
     pub nav: NavStyle,
     pub invert_zoom: bool,
+    /// a roda dá zoom em direção ao ponto sob o cursor (desligado: o alvo da câmera fica parado)
+    pub zoom_no_cursor: bool,
     /// filtro de seleção na viewport
     pub sel_faces: bool,
     pub sel_edges: bool,
@@ -445,6 +447,8 @@ pub struct Settings {
     pub dim_on_type: bool,
     /// atalhos de teclado (predefinição + trocas)
     pub keys: crate::keymap::Keymap,
+    /// roda de comandos: conteúdo trocado pelo usuário e uso aprendido (B256)
+    pub roda: crate::roda::Config,
     /// interface em inglês
     pub english: bool,
     /// personalização dos grupos de comandos
@@ -498,6 +502,10 @@ pub struct Settings {
     pub leve_anterior: Option<crate::perfil::Anterior>,
     /// transições da interface e da câmera (desligadas no modo leve)
     pub animacoes: bool,
+    /// acessibilidade básica (B321): paleta segura, reduzir movimento e escala da fonte
+    pub acessibilidade: crate::acessibilidade::Acessibilidade,
+    /// mouse 3D (B322): sensibilidade, inversão por eixo, eixo dominante e ação dos botões
+    pub mouse3d: crate::mouse3d::Mouse3dConfig,
     /// a sugestão do modo leve já foi mostrada (uma vez só)
     pub sugestao_leve_vista: bool,
     /// posição dos painéis livres, por bancada
@@ -545,6 +553,7 @@ impl Default for Settings {
             families: vec![],
             nav: NavStyle::Fenkra,
             invert_zoom: false,
+            zoom_no_cursor: true,
             sel_faces: true,
             sel_edges: true,
             sel_vertices: true,
@@ -563,6 +572,7 @@ impl Default for Settings {
             auto_dims: false,
             dim_on_type: true,
             keys: Default::default(),
+            roda: Default::default(),
             english: false,
             custom: Default::default(),
             user_profiles: vec![],
@@ -589,6 +599,8 @@ impl Default for Settings {
             modo_leve: false,
             leve_anterior: None,
             animacoes: true,
+            acessibilidade: Default::default(),
+            mouse3d: Default::default(),
             sugestao_leve_vista: false,
             paineis: vec![],
             barra_fixos: vec![],
@@ -691,8 +703,10 @@ impl Settings {
         let def = crate::theme::find(&self.theme_name).unwrap_or_else(crate::theme::default_def);
         crate::theme::apply(ctx, &def);
         ctx.set_zoom_factor(self.ui_scale.clamp(0.7, 2.0));
+        crate::acessibilidade::definir(&self.acessibilidade);
+        crate::acessibilidade::aplicar_fonte(ctx, &self.acessibilidade);
         // sem animações (modo leve) as transições do egui terminam no mesmo quadro
-        ctx.global_style_mut(|s| s.animation_time = if self.animacoes { egui::Style::default().animation_time } else { 0.0 });
+        ctx.global_style_mut(|s| s.animation_time = if self.animacoes && !self.acessibilidade.reduzir_movimento { egui::Style::default().animation_time } else { 0.0 });
     }
 }
 

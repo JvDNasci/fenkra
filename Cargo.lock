@@ -1274,6 +1274,7 @@ dependencies = [
  "rfd",
  "serde",
  "serde_json",
+ "windows-sys 0.61.2",
  "winresource",
 ]
 
@@ -1284,6 +1285,7 @@ dependencies = [
  "blake3",
  "fenkra-core",
  "fenkra-kernel",
+ "fenkra-montagem",
  "fenkra-solidos",
  "serde",
  "serde_json",

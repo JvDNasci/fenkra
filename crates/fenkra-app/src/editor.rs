@@ -144,7 +144,19 @@ pub(crate) fn check(ui: &mut egui::Ui, v: &mut bool, label: &str) -> egui::Respo
 pub(crate) const EXPR_HINT: &str = "Aceita número (vírgula ou ponto), parâmetro ou expressão: L/2 + 5, 2*pi*r, sqrt(a; b). Roda do mouse soma/subtrai (Shift ×10, Ctrl ×0,1).";
 
 /// Campo de expressão: mostra o valor avaliado ou o erro.
+/// Dica própria do campo (B278): o que faz, faixa e efeito, e a unidade do campo. A dica genérica de
+/// expressão fica como última linha, depois desta.
+fn dica_do_campo(ui: &mut egui::Ui, rotulo_pt: &str, unit: &str) {
+    if let Some(d) = crate::textos_campos::dica(rotulo_pt) {
+        ui.label(tr(d));
+        if !unit.is_empty() {
+            ui.label(RichText::new(format!("{}: {unit}", tr("Unidade"))).small());
+        }
+    }
+}
+
 pub(crate) fn expr(ui: &mut egui::Ui, label: &str, s: &mut String, vars: &Vars, unit: &str) {
+    let rotulo_pt = label;
     let label = tr(label);
     ui.horizontal(|ui| {
         let icon = param_icon(label);
@@ -168,6 +180,7 @@ pub(crate) fn expr(ui: &mut egui::Ui, label: &str, s: &mut String, vars: &Vars, 
             if let Ok(v) = fenkra_core::expr::eval_str(s, vars) {
                 ui.label(format!("= {} {unit}", fmt(v)));
             }
+            dica_do_campo(ui, rotulo_pt, unit);
             ui.label(RichText::new(tr(EXPR_HINT)).weak().small());
             ui.label(RichText::new(tr("arraste o nome para mudar o valor; duplo clique restaura o valor inicial")).weak().small());
         });
@@ -197,7 +210,17 @@ pub(crate) fn expr(ui: &mut egui::Ui, label: &str, s: &mut String, vars: &Vars, 
                 ui.close();
             }
         });
-        let resp = if bad { resp } else { resp.on_hover_text(tr(EXPR_HINT)) };
+        let resp = if bad {
+            resp
+        } else {
+            match crate::textos_campos::dica(rotulo_pt) {
+                Some(_) => resp.on_hover_ui(|ui| {
+                    dica_do_campo(ui, rotulo_pt, unit);
+                    ui.label(RichText::new(tr(EXPR_HINT)).weak().small());
+                }),
+                None => resp.on_hover_text(tr(EXPR_HINT)),
+            }
+        };
         match r {
             Ok(v) if s.trim().replace(',', ".").parse::<f64>().is_err() => {
                 ui.label(RichText::new(format!("= {} {unit}", fmt(v))).weak());
@@ -779,7 +802,10 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             tabs_end(ui);
         }
 
-        Sel::Params => params_table(ui, doc, &vars, &mut app_toast_sink()),
+        Sel::Params => {
+            params_table(ui, doc, &vars, &mut app_toast_sink());
+            crate::tabela_projeto_ui::tabela_projeto(ui, doc);
+        }
         Sel::Pmi(id) => {
             crate::pmi_ui::panel(app, ui, id);
         }
@@ -1455,11 +1481,34 @@ fn feature_ui(
                     Some(1) => o.prop = EdgeProp::Minima,
                     _ => {}
                 }
+                // inverter por aresta: a 1ª medida passa para a outra face (só vale com duas medidas)
+                if matches!(o.mode, EdgeMode::TwoDist(_) | EdgeMode::DistAngle(_) | EdgeMode::Asym(_)) && !m.is_empty() {
+                    o.extra.flips.resize(m.len(), false);
+                    ui.label(RichText::new(tr("Inverter por aresta")).weak());
+                    for (i, f) in o.extra.flips.iter_mut().enumerate() {
+                        check(ui, f, &format!("{} {}", tr("Inverter aresta"), i + 1)).on_hover_text(tr("Troca a face que recebe a primeira medida nesta aresta. A seta na viewport faz o mesmo."));
+                    }
+                }
+                // trecho parcial: o filete vale só entre duas posições da aresta
+                let mut parcial = o.extra.partial.is_some();
+                if check(ui, &mut parcial, "Trecho parcial da aresta").on_hover_text(tr("Aplica só num trecho, medido em mm desde o começo da aresta; nas pontas termina reto. A seta na viewport move o início.")).changed() {
+                    o.extra.partial = parcial.then(|| ["0".to_string(), "10".to_string()]);
+                }
+                if let Some([a, c]) = &mut o.extra.partial {
+                    expr(ui, "Início do trecho", a, vars, "mm");
+                    expr(ui, "Fim do trecho", c, vars, "mm");
+                }
             }
             // ponto novo fica sem chave (o recompute a calcula); "Todas" não usa chaves
             match &o.edges {
-                EdgeSel::Edges(m) => o.keys = carry_keys(&before, &o.keys, m),
-                _ => o.keys.clear(),
+                EdgeSel::Edges(m) => {
+                    o.keys = carry_keys(&before, &o.keys, m);
+                    o.extra.carry_flips(&before, m);
+                }
+                _ => {
+                    o.keys.clear();
+                    o.extra = Default::default();
+                }
             }
             target_combo(ui, doc, target);
         }

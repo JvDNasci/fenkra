@@ -1,0 +1,32 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
+//! Traduções da bancada Sólidos (filete, chanfro e alças 3D), à parte de `i18n.rs`.
+
+pub static TEXTOS: &[(&str, &str)] = &[
+    ("Assimétrico", "Asymmetric"),
+    ("Um raio em cada face da aresta (reta, entre planos); a seta inverte o lado", "One radius on each face of the edge (straight, between planes); the arrow flips the side"),
+    ("Inverter por aresta", "Flip per edge"),
+    ("Inverter aresta", "Flip edge"),
+    ("Troca a face que recebe a primeira medida nesta aresta. A seta na viewport faz o mesmo.", "Swaps which face gets the first measure on this edge. The arrow in the viewport does the same."),
+    ("Trecho parcial da aresta", "Partial span of the edge"),
+    ("Aplica só num trecho, medido em mm desde o começo da aresta; nas pontas termina reto. A seta na viewport move o início.", "Applies to one span only, measured in mm from the start of the edge; it ends flat at the ends. The arrow in the viewport moves the start."),
+    ("Tabela de projeto", "Design table"),
+    ("Cada linha é uma variante da peça. Célula vazia usa o valor base. A montagem escolhe a variante pelo nome.", "Each row is a variant of the part. An empty cell uses the base value. The assembly picks the variant by name."),
+    ("Ativa", "Active"),
+    ("ativa", "active"),
+    ("(valores base)", "(base values)"),
+    ("valores base", "base values"),
+    ("Configuração", "Configuration"),
+    ("suprimir", "suppress"),
+    ("Tirar esta coluna", "Remove this column"),
+    ("Apagar esta configuração", "Delete this configuration"),
+    ("nome da nova configuração", "name of the new configuration"),
+    ("➕ Configuração", "➕ Configuration"),
+    ("Cria a linha com os valores atuais da peça para você mudar só o que varia.", "Creates the row with the part's current values so you change only what varies."),
+    ("➕ Coluna", "➕ Column"),
+    ("⬆ Exportar CSV", "⬆ Export CSV"),
+    ("Grava a tabela em CSV (separador ;), que qualquer planilha abre.", "Saves the table as CSV (; separator), which any spreadsheet opens."),
+    ("⬇ Importar CSV", "⬇ Import CSV"),
+    ("Troca a tabela pelo CSV. Cabeçalho: Configuração; PN; nome de parâmetro; suprimir:<nome do comando>.", "Replaces the table with the CSV. Header: Configuration; PN; parameter name; suprimir:<command name>."),
+    ("Gravado em", "Saved to"),
+    ("Importado de", "Imported from"),
+];

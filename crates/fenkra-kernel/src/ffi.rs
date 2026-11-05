@@ -166,7 +166,7 @@ pub mod bridge {
         /// Face engrossada a partir de segmentos (pares de pontos xyz) no plano de normal n.
         fn thick_segments(segs: &[f64], nx: f64, ny: f64, nz: f64, t: f64) -> Result<UniquePtr<Shape>>;
         /// modo 0 filete variável (r1→r2), 1 chanfro duas distâncias, 2 chanfro distância + ângulo
-        fn edges_mode_t(s: &Shape, mode: u8, v1: f64, v2: f64, mids: &[f64], tol: f64, tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
+        fn edges_mode_t(s: &Shape, mode: u8, v1: f64, v2: f64, mids: &[f64], flips: &[u8], tol: f64, tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
         /// [ox, oy, oz, dx, dy, dz, raio, h0, h1, interna]
         fn cylinder_at(s: &Shape, px: f64, py: f64, pz: f64) -> Result<Vec<f64>>;
         fn thread_tool_ext(ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64, major_d: f64, pitch: f64, length: f64, angle_deg: f64)

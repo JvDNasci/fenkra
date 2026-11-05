@@ -26,6 +26,8 @@ pub struct PartCache {
     qualidade: QualidadeMalha,
     /// peças criadas no contexto que ainda não têm arquivo (gravadas com a montagem)
     pendentes: HashMap<PathBuf, Document>,
+    /// peças calculadas numa configuração da tabela de projeto, por caminho e nome (B102)
+    configs: HashMap<(PathBuf, String), LoadedPart>,
 }
 
 /// Caminho completo de um componente (relativo à pasta da montagem ou absoluto).
@@ -50,6 +52,7 @@ impl PartCache {
         }
         self.qualidade = q;
         self.parts.clear();
+        self.configs.clear();
         true
     }
 
@@ -74,6 +77,29 @@ impl PartCache {
             self.parts.insert(full.to_path_buf(), LoadedPart { doc, result, shape, stamp });
         }
         Ok(self.parts.get(full).unwrap())
+    }
+
+    /// Como `get`, na configuração `cfg` da tabela de projeto da peça. `cfg` vazio = a ativa da própria
+    /// peça (o caminho normal). Nome que a peça não tem é erro com o motivo e os nomes que existem: a
+    /// montagem nunca cai em "a primeira" configuração.
+    pub fn get_config(&mut self, full: &Path, with_shape: bool, cfg: &str) -> Result<&LoadedPart, String> {
+        if cfg.is_empty() {
+            return self.get(full, with_shape);
+        }
+        let stamp = std::fs::metadata(full).and_then(|m| m.modified()).ok();
+        let chave = (full.to_path_buf(), cfg.to_string());
+        let fresh = match self.configs.get(&chave) {
+            Some(p) => p.stamp != stamp || (with_shape && p.shape.is_none()),
+            None => true,
+        };
+        if fresh {
+            let base = self.get(full, false)?.doc.clone();
+            let doc = base.com_configuracao(cfg).map_err(|e| e.to_string())?;
+            let result = fenkra_solidos::recompute_cached(&doc, &mut fenkra_solidos::Cache::com_qualidade(self.qualidade));
+            let shape = if with_shape { fenkra_solidos::final_shape(&doc) } else { None };
+            self.configs.insert(chave.clone(), LoadedPart { doc, result, shape, stamp });
+        }
+        Ok(self.configs.get(&chave).unwrap())
     }
 
     /// Peça nova só na memória: o cache a entrega como se o arquivo existisse.
@@ -123,6 +149,7 @@ impl PartCache {
     /// Esquece uma peça (para recarregar depois de editar).
     pub fn forget(&mut self, full: &Path) {
         self.parts.remove(full);
+        self.configs.retain(|(p, _), _| p != full);
     }
 
     /// Peça já carregada (sem ler o disco).

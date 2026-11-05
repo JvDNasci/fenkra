@@ -16,6 +16,7 @@ use std::collections::HashMap;
 pub fn families(s: &Settings) -> Vec<Family> {
     let mut v: Vec<Family> = s.user_profiles.iter().map(|u| Family { name: u.name.clone(), norm: crate::st_painel::norma_do_usuario().into(), kind: u.kind, sizes: u.sizes.clone() }).collect();
     v.extend(structural::builtin());
+    v.extend(fenkra_solidos::perfis_catalogo::familias());
     v
 }
 
@@ -165,6 +166,8 @@ pub fn windows(app: &mut App, ctx: &egui::Context) {
     }
     library(app, ctx);
     cut_list(app, ctx);
+    crate::st_cantos_ui::window(app, ctx);
+    crate::st_montagem_ui::window(app, ctx);
 }
 
 /// Gerar montagem: uma peça por grupo de peças iguais e a montagem, em `<nome>_montagem` ao lado

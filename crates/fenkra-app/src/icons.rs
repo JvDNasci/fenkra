@@ -92,6 +92,8 @@ macro_rules! modelos {
 
 // Lista gerada a partir de assets/icons2 (scripts/gerar_icones2.py).
 modelos!(
+    "comparar", "estado_conflito", "estado_editado", "estado_leitura", "estado_liberada", "estado_sem_revisao",
+    "exportar_arquivo", "liberar_revisao", "onde_usado",
     "abrir_projeto", "ajustar", "an_curvatura", "an_sombreado", "an_zebra", "aparencia", "arestas_comando",
     "arestas_selecionar", "arestas_todas", "asm_catalogo", "asm_engrenagens", "asm_fixadores", "asm_furo_pecas", "asm_grupo",
     "asm_inserir", "asm_link", "asm_lista", "asm_nova", "asm_numerar", "asm_peca_nova", "asm_recorte_peca",
@@ -107,7 +109,7 @@ modelos!(
     "des_tab_dobras", "des_tab_furos", "des_tres_vistas", "des_vista", "des_vista_camera", "escala", "espelho",
     "espessura", "espiral", "estilo", "exemplo", "ext_ate_face", "ext_ate_plano", "ext_ate_superficie",
     "ext_ate_ultimo", "ext_cego", "ext_dois_sentidos", "ext_passante", "ext_saida_filete", "ext_simetrico",
-    "extrair", "extrusao", "filete", "filete_completo", "filete_face_face", "filete_variavel", "filtro", "furo",
+    "extrair", "extrusao", "filete", "filete_assimetrico", "filete_completo", "filete_face_face", "filete_variavel", "filtro", "furo",
     "furo_cego", "furo_contrafurado", "furo_escareado", "furo_passante", "furo_rebaixado", "furo_roscado",
     "furo_simples", "helice", "hib_costurar", "hib_dividir", "hib_engrossar", "hib_fechar", "hib_malha",
     "hib_preencher", "idioma", "importar_arquivo", "junta_came", "junta_cilindrica", "junta_esferica", "junta_parafuso",
@@ -146,10 +148,17 @@ modelos!(
     "sup_revolucao", "sup_tubo", "sup_varredura", "sup_varredura_av", "sweep_corrigido", "sweep_fixo",
     "sweep_frenet", "vista_direita", "vista_frente", "vista_iso", "vista_topo", "wf_repetir", "xf_afinidade",
     "xf_escala", "xf_girar", "xf_mover", "xf_simetria", "arvore_zoom_mais", "arvore_zoom_menos",
-    "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais"
+    "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais",
+    "qualidade_modelo", "comparar_versoes"
 );
 
 // Lista gerada a partir de assets/icons (scripts/gerar_icones.py).
+/// O nome tem desenho na família nova?
+#[cfg(test)]
+pub fn tem_modelo(nome: &str) -> bool {
+    modelo(nome).is_some()
+}
+
 fn antigo(name: &str) -> ImageSource<'static> {
     match name {
         "abrir_projeto" => egui::include_image!("../../../assets/icons/abrir_projeto.svg"),
@@ -524,7 +533,7 @@ pub fn tool_button(ui: &mut egui::Ui, icon: &str, label: &str, size: f32, show_l
     let w = (size + 10.).max(text_w + 10.);
     let h = size + 8. + text_h;
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(w, h), egui::Sense::click());
-    let resp = hover_help(ui, resp, label, brief, advanced);
+    let resp = hover_help_cmd(ui, resp, icon, label, brief, advanced);
     if ui.is_rect_visible(rect) {
         let v = ui.visuals();
         let fill = if selected {
@@ -545,28 +554,48 @@ pub fn tool_button(ui: &mut egui::Ui, icon: &str, label: &str, size: f32, show_l
     resp
 }
 
-/// Dica em dois estágios: nome e frase depois do atraso de dicas (500 ms); parado ~1,2 s, entra
-/// o mini fluxo numerado com o passo a passo do comando (B60).
+/// Dica em camadas (B60, B278). Camada 1, depois do atraso de dicas (500 ms): nome, atalho atual do
+/// mapa e frase. Camada 2, parado ~1,2 s ou com Shift: o GIF curto do comando (quando o pacote de
+/// mídia existe) e o mini fluxo numerado com o passo a passo.
 pub fn hover_help(ui: &egui::Ui, resp: egui::Response, title: &str, brief: &str, advanced: &str) -> egui::Response {
+    hover_help_cmd(ui, resp, "", title, brief, advanced)
+}
+
+/// Igual a `hover_help`, para um botão de comando: `icon` identifica a mídia e o atalho.
+pub fn hover_help_cmd(ui: &egui::Ui, resp: egui::Response, icon: &str, title: &str, brief: &str, advanced: &str) -> egui::Response {
     let key = resp.id.with("hover_inicio");
     let now = ui.input(|i| i.time);
     if !resp.hovered() {
         ui.ctx().data_mut(|d| d.remove::<f64>(key));
+        if !icon.is_empty() {
+            crate::midia::exibir::soltar(icon);
+        }
         return resp;
     }
     let start = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(key, || now));
-    let estagio2 = now - start >= crate::ajuda_cmd::ESTAGIO_2 && !advanced.is_empty();
+    let shift = ui.input(|i| i.modifiers.shift);
+    let estagio2 = (now - start >= crate::ajuda_cmd::ESTAGIO_2 || shift) && !advanced.is_empty();
     if !advanced.is_empty() && !estagio2 {
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(250));
     }
+    let atalho = crate::ajuda_cmd::atalho_do_comando(ui.ctx(), icon);
     resp.on_hover_ui(|ui| {
         ui.set_max_width(320.);
-        ui.label(egui::RichText::new(title).strong());
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new(title).strong());
+            if let Some(a) = &atalho {
+                ui.label(egui::RichText::new(format!("[{a}]")).weak().small());
+            }
+        });
         if !brief.is_empty() && brief != title {
             ui.label(brief);
         }
         if estagio2 {
             ui.separator();
+            if !icon.is_empty() && crate::midia::exibir::tem(icon) {
+                let t = if shift { now - start } else { now - start - crate::ajuda_cmd::ESTAGIO_2 };
+                crate::midia::exibir::desenhar(ui, icon, t.max(0.), 300.);
+            }
             crate::ajuda_cmd::mini_fluxo(ui, advanced);
         } else if !advanced.is_empty() {
             ui.label(egui::RichText::new(tr("(mantenha o mouse para ver o passo a passo)")).small().weak());

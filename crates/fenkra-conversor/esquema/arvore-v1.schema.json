@@ -1,0 +1,386 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Árvore paramétrica de intercâmbio do Fenkra, versão 1",
+  "description": "Especificação completa em docs/formatos/arvore.md. Medidas em milímetros e ângulos em graus.",
+  "type": "object",
+  "required": ["formato", "format_version", "unidades", "pecas"],
+  "additionalProperties": false,
+  "properties": {
+    "formato": { "const": "fenkra-arvore" },
+    "format_version": { "type": "integer", "minimum": 1 },
+    "gerador": { "type": "string" },
+    "unidades": { "const": "mm" },
+    "pecas": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/peca" } },
+    "montagem": { "$ref": "#/$defs/montagem" },
+    "fora": { "type": "array", "items": { "type": "string" } }
+  },
+  "$defs": {
+    "id": { "type": "string", "minLength": 1 },
+    "expressao": { "type": "string", "minLength": 1 },
+    "cor": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "integer", "minimum": 0, "maximum": 255 } },
+    "xyz": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number" } },
+    "uv": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number" } },
+    "operacao": { "enum": ["unir", "cortar", "intersectar"] },
+    "peca": {
+      "type": "object",
+      "required": ["id", "nome", "arvore"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "nome": { "type": "string" },
+        "parametros": { "type": "array", "items": { "$ref": "#/$defs/parametro" } },
+        "corpos": { "type": "array", "items": { "$ref": "#/$defs/corpo" } },
+        "referencias": { "type": "array", "items": { "$ref": "#/$defs/referencia" } },
+        "arvore": { "type": "array", "items": { "$ref": "#/$defs/item" } },
+        "ativos": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "parametro": {
+      "type": "object",
+      "required": ["nome", "expressao", "grandeza"],
+      "additionalProperties": false,
+      "properties": {
+        "nome": { "type": "string", "minLength": 1 },
+        "expressao": { "$ref": "#/$defs/expressao" },
+        "grandeza": { "enum": ["comprimento", "angulo", "numero"] },
+        "comentario": { "type": "string" }
+      }
+    },
+    "corpo": {
+      "type": "object",
+      "required": ["id", "nome"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "nome": { "type": "string" },
+        "cor": { "$ref": "#/$defs/cor" }
+      }
+    },
+    "plano": {
+      "oneOf": [
+        { "enum": ["XY", "XZ", "YZ"] },
+        {
+          "type": "object",
+          "required": ["referencia"],
+          "additionalProperties": false,
+          "properties": { "referencia": { "$ref": "#/$defs/id" } }
+        }
+      ]
+    },
+    "eixo": {
+      "oneOf": [
+        { "enum": ["X", "Y", "Z"] },
+        { "type": "object", "required": ["esboco", "curva"], "additionalProperties": false, "properties": { "esboco": { "$ref": "#/$defs/id" }, "curva": { "$ref": "#/$defs/id" } } },
+        { "type": "object", "required": ["referencia"], "additionalProperties": false, "properties": { "referencia": { "$ref": "#/$defs/id" } } },
+        { "type": "object", "required": ["origem", "direcao"], "additionalProperties": false, "properties": { "origem": { "$ref": "#/$defs/xyz" }, "direcao": { "$ref": "#/$defs/xyz" } } },
+        { "type": "object", "required": ["face"], "additionalProperties": false, "properties": { "face": { "$ref": "#/$defs/xyz" } } },
+        { "type": "object", "required": ["aresta"], "additionalProperties": false, "properties": { "aresta": { "$ref": "#/$defs/xyz" } } },
+        { "type": "object", "required": ["planos"], "additionalProperties": false, "properties": { "planos": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "$ref": "#/$defs/plano" } } } }
+      ]
+    },
+    "ponto": {
+      "oneOf": [
+        { "$ref": "#/$defs/xyz" },
+        { "type": "object", "required": ["referencia"], "additionalProperties": false, "properties": { "referencia": { "$ref": "#/$defs/id" } } },
+        { "type": "object", "required": ["esboco", "ponto"], "additionalProperties": false, "properties": { "esboco": { "$ref": "#/$defs/id" }, "ponto": { "$ref": "#/$defs/id" } } }
+      ]
+    },
+    "referencia": {
+      "type": "object",
+      "required": ["id", "nome", "definicao"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "nome": { "type": "string" },
+        "definicao": {
+          "oneOf": [
+            { "type": "object", "required": ["tipo", "base", "deslocamento"], "additionalProperties": false, "properties": { "tipo": { "const": "plano_deslocado" }, "base": { "$ref": "#/$defs/plano" }, "deslocamento": { "$ref": "#/$defs/expressao" } } },
+            { "type": "object", "required": ["tipo", "origem", "x", "normal"], "additionalProperties": false, "properties": { "tipo": { "const": "plano_fixo" }, "origem": { "$ref": "#/$defs/xyz" }, "x": { "$ref": "#/$defs/xyz" }, "normal": { "$ref": "#/$defs/xyz" } } },
+            { "type": "object", "required": ["tipo", "x", "y", "z"], "additionalProperties": false, "properties": { "tipo": { "const": "ponto" }, "x": { "$ref": "#/$defs/expressao" }, "y": { "$ref": "#/$defs/expressao" }, "z": { "$ref": "#/$defs/expressao" }, "sistema": { "$ref": "#/$defs/plano" } } },
+            { "type": "object", "required": ["tipo", "ponto", "direcao", "inicio", "fim"], "additionalProperties": false, "properties": { "tipo": { "const": "reta" }, "ponto": { "$ref": "#/$defs/ponto" }, "direcao": { "$ref": "#/$defs/eixo" }, "inicio": { "$ref": "#/$defs/expressao" }, "fim": { "$ref": "#/$defs/expressao" } } }
+          ]
+        }
+      }
+    },
+    "item": {
+      "type": "object",
+      "required": ["id", "nome", "comando"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "nome": { "type": "string" },
+        "corpo": { "$ref": "#/$defs/id" },
+        "suprimido": { "type": "boolean" },
+        "suprimir_se": { "type": "string" },
+        "oculto": { "type": "boolean" },
+        "cor": { "$ref": "#/$defs/cor" },
+        "comando": { "$ref": "#/$defs/comando" }
+      }
+    },
+    "termino": {
+      "oneOf": [
+        { "type": "object", "required": ["tipo", "distancia"], "additionalProperties": false, "properties": { "tipo": { "const": "cego" }, "distancia": { "$ref": "#/$defs/expressao" } } },
+        { "type": "object", "required": ["tipo", "distancia"], "additionalProperties": false, "properties": { "tipo": { "const": "simetrico" }, "distancia": { "$ref": "#/$defs/expressao" } } },
+        { "type": "object", "required": ["tipo", "a", "b"], "additionalProperties": false, "properties": { "tipo": { "const": "dois_lados" }, "a": { "$ref": "#/$defs/expressao" }, "b": { "$ref": "#/$defs/expressao" } } },
+        { "type": "object", "required": ["tipo"], "additionalProperties": false, "properties": { "tipo": { "const": "atravessar" } } },
+        { "type": "object", "required": ["tipo", "plano"], "additionalProperties": false, "properties": { "tipo": { "const": "ate_plano" }, "plano": { "$ref": "#/$defs/plano" } } },
+        { "type": "object", "required": ["tipo"], "additionalProperties": false, "properties": { "tipo": { "const": "ate_proxima" } } },
+        { "type": "object", "required": ["tipo"], "additionalProperties": false, "properties": { "tipo": { "const": "ate_ultima" } } }
+      ]
+    },
+    "fina": {
+      "type": "object",
+      "required": ["espessura"],
+      "additionalProperties": false,
+      "properties": { "espessura": { "$ref": "#/$defs/expressao" }, "lado": { "enum": [0, 1, 2] } }
+    },
+    "forma_furo": {
+      "oneOf": [
+        { "type": "object", "required": ["tipo"], "additionalProperties": false, "properties": { "tipo": { "const": "simples" } } },
+        { "type": "object", "required": ["tipo", "diametro", "profundidade"], "additionalProperties": false, "properties": { "tipo": { "const": "rebaixado" }, "diametro": { "$ref": "#/$defs/expressao" }, "profundidade": { "$ref": "#/$defs/expressao" } } },
+        { "type": "object", "required": ["tipo", "diametro", "angulo"], "additionalProperties": false, "properties": { "tipo": { "const": "escareado" }, "diametro": { "$ref": "#/$defs/expressao" }, "angulo": { "$ref": "#/$defs/expressao" } } },
+        { "type": "object", "required": ["tipo", "diametro", "profundidade", "angulo"], "additionalProperties": false, "properties": { "tipo": { "const": "contrafurado" }, "diametro": { "$ref": "#/$defs/expressao" }, "profundidade": { "$ref": "#/$defs/expressao" }, "angulo": { "$ref": "#/$defs/expressao" } } }
+      ]
+    },
+    "arestas": {
+      "oneOf": [
+        { "const": "todas" },
+        { "type": "object", "required": ["geradas_por"], "additionalProperties": false, "properties": { "geradas_por": { "$ref": "#/$defs/id" } } },
+        { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/xyz" } }
+      ]
+    },
+    "ids": { "type": "array", "items": { "$ref": "#/$defs/id" } },
+    "forma_padrao": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["tipo", "direcao", "quantidade", "espacamento"],
+          "additionalProperties": false,
+          "properties": {
+            "tipo": { "const": "linear" },
+            "direcao": { "$ref": "#/$defs/eixo" },
+            "quantidade": { "$ref": "#/$defs/expressao" },
+            "espacamento": { "$ref": "#/$defs/expressao" },
+            "direcao2": { "$ref": "#/$defs/eixo" },
+            "quantidade2": { "type": "string" },
+            "espacamento2": { "type": "string" },
+            "total": { "type": "boolean" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["tipo", "eixo", "quantidade", "angulo"],
+          "additionalProperties": false,
+          "properties": {
+            "tipo": { "const": "circular" },
+            "eixo": { "$ref": "#/$defs/eixo" },
+            "quantidade": { "$ref": "#/$defs/expressao" },
+            "angulo": { "$ref": "#/$defs/expressao" }
+          }
+        }
+      ]
+    },
+    "comando": {
+      "oneOf": [
+        { "$ref": "#/$defs/esboco" },
+        {
+          "type": "object",
+          "required": ["tipo", "esboco", "operacao", "termino"],
+          "additionalProperties": false,
+          "properties": {
+            "tipo": { "const": "extrusao" },
+            "esboco": { "$ref": "#/$defs/id" },
+            "operacao": { "$ref": "#/$defs/operacao" },
+            "termino": { "$ref": "#/$defs/termino" },
+            "inverter": { "type": "boolean" },
+            "saida": { "$ref": "#/$defs/expressao" },
+            "fina": { "$ref": "#/$defs/fina" },
+            "direcao": { "$ref": "#/$defs/eixo" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["tipo", "esboco", "eixo", "angulo", "operacao"],
+          "additionalProperties": false,
+          "properties": {
+            "tipo": { "const": "revolucao" },
+            "esboco": { "$ref": "#/$defs/id" },
+            "eixo": { "$ref": "#/$defs/eixo" },
+            "angulo": { "$ref": "#/$defs/expressao" },
+            "angulo2": { "$ref": "#/$defs/expressao" },
+            "simetrico": { "type": "boolean" },
+            "operacao": { "$ref": "#/$defs/operacao" },
+            "fina": { "$ref": "#/$defs/fina" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["tipo", "esboco", "forma", "diametro", "termino"],
+          "additionalProperties": false,
+          "properties": {
+            "tipo": { "const": "furo" },
+            "esboco": { "$ref": "#/$defs/id" },
+            "forma": { "$ref": "#/$defs/forma_furo" },
+            "diametro": { "$ref": "#/$defs/expressao" },
+            "termino": { "$ref": "#/$defs/termino" },
+            "inverter": { "type": "boolean" },
+            "rosca": { "type": "string" },
+            "ponta": { "$ref": "#/$defs/expressao" }
+          }
+        },
+        { "type": "object", "required": ["tipo", "raio", "arestas"], "additionalProperties": false, "properties": { "tipo": { "const": "filete" }, "raio": { "$ref": "#/$defs/expressao" }, "arestas": { "$ref": "#/$defs/arestas" } } },
+        { "type": "object", "required": ["tipo", "distancia", "arestas"], "additionalProperties": false, "properties": { "tipo": { "const": "chanfro" }, "distancia": { "$ref": "#/$defs/expressao" }, "arestas": { "$ref": "#/$defs/arestas" } } },
+        {
+          "type": "object",
+          "required": ["tipo", "faces", "espessura"],
+          "additionalProperties": false,
+          "properties": {
+            "tipo": { "const": "casca" },
+            "faces": { "type": "array", "items": { "$ref": "#/$defs/xyz" } },
+            "espessura": { "$ref": "#/$defs/expressao" },
+            "para_fora": { "type": "boolean" },
+            "fechada": { "type": "boolean" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["tipo", "forma", "plano", "a", "b", "c", "d", "operacao"],
+          "additionalProperties": false,
+          "properties": {
+            "tipo": { "const": "primitiva" },
+            "forma": { "enum": ["caixa", "cilindro", "esfera", "cone", "toro", "cunha", "prisma"] },
+            "plano": { "$ref": "#/$defs/plano" },
+            "a": { "$ref": "#/$defs/expressao" },
+            "b": { "$ref": "#/$defs/expressao" },
+            "c": { "$ref": "#/$defs/expressao" },
+            "d": { "$ref": "#/$defs/expressao" },
+            "operacao": { "$ref": "#/$defs/operacao" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["tipo", "forma"],
+          "additionalProperties": false,
+          "properties": {
+            "tipo": { "const": "padrao" },
+            "forma": { "$ref": "#/$defs/forma_padrao" },
+            "fontes": { "$ref": "#/$defs/ids" },
+            "pular": { "type": "array", "items": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0 } } }
+          }
+        },
+        { "type": "object", "required": ["tipo", "plano"], "additionalProperties": false, "properties": { "tipo": { "const": "espelho" }, "plano": { "$ref": "#/$defs/plano" }, "fontes": { "$ref": "#/$defs/ids" } } }
+      ]
+    },
+    "esboco": {
+      "type": "object",
+      "required": ["tipo", "plano", "pontos", "curvas"],
+      "additionalProperties": false,
+      "properties": {
+        "tipo": { "const": "esboco" },
+        "plano": { "$ref": "#/$defs/plano" },
+        "posicao": {
+          "type": "object",
+          "required": ["origem"],
+          "additionalProperties": false,
+          "properties": { "origem": { "$ref": "#/$defs/uv" }, "trocar": { "type": "boolean" }, "inverter_h": { "type": "boolean" }, "inverter_v": { "type": "boolean" } }
+        },
+        "pontos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "x", "y"],
+            "additionalProperties": false,
+            "properties": { "id": { "$ref": "#/$defs/id" }, "x": { "type": "number" }, "y": { "type": "number" }, "fixo": { "type": "boolean" } }
+          }
+        },
+        "curvas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "geometria"],
+            "additionalProperties": false,
+            "properties": { "id": { "$ref": "#/$defs/id" }, "construcao": { "type": "boolean" }, "geometria": { "$ref": "#/$defs/geometria" } }
+          }
+        },
+        "restricoes": { "type": "array", "items": { "$ref": "#/$defs/restricao" } },
+        "tangentes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["curva", "ponto", "direcao"],
+            "additionalProperties": false,
+            "properties": { "curva": { "$ref": "#/$defs/id" }, "ponto": { "$ref": "#/$defs/id" }, "direcao": { "$ref": "#/$defs/uv" } }
+          }
+        }
+      }
+    },
+    "geometria": {
+      "oneOf": [
+        { "type": "object", "required": ["tipo", "a", "b"], "additionalProperties": false, "properties": { "tipo": { "const": "reta" }, "a": { "$ref": "#/$defs/id" }, "b": { "$ref": "#/$defs/id" } } },
+        { "type": "object", "required": ["tipo", "centro", "raio"], "additionalProperties": false, "properties": { "tipo": { "const": "circulo" }, "centro": { "$ref": "#/$defs/id" }, "raio": { "type": "number" } } },
+        { "type": "object", "required": ["tipo", "centro", "inicio", "fim"], "additionalProperties": false, "properties": { "tipo": { "const": "arco" }, "centro": { "$ref": "#/$defs/id" }, "inicio": { "$ref": "#/$defs/id" }, "fim": { "$ref": "#/$defs/id" } } },
+        { "type": "object", "required": ["tipo", "ponto"], "additionalProperties": false, "properties": { "tipo": { "const": "ponto" }, "ponto": { "$ref": "#/$defs/id" } } },
+        { "type": "object", "required": ["tipo", "pontos"], "additionalProperties": false, "properties": { "tipo": { "const": "spline" }, "pontos": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/id" } } } },
+        {
+          "type": "object",
+          "required": ["tipo", "centro", "inicio", "fim", "maior", "menor", "t0", "t1"],
+          "additionalProperties": false,
+          "properties": {
+            "tipo": { "const": "elipse" },
+            "centro": { "$ref": "#/$defs/id" },
+            "inicio": { "$ref": "#/$defs/id" },
+            "fim": { "$ref": "#/$defs/id" },
+            "maior": { "$ref": "#/$defs/uv" },
+            "menor": { "type": "number" },
+            "t0": { "type": "number" },
+            "t1": { "type": "number" }
+          }
+        }
+      ]
+    },
+    "restricao": {
+      "type": "object",
+      "required": ["tipo", "entidades"],
+      "additionalProperties": false,
+      "properties": {
+        "tipo": {
+          "enum": [
+            "coincidente", "horizontal", "vertical", "paralela", "perpendicular", "igual", "tangente", "concentrica", "ponto_medio", "sobre_curva",
+            "fixa", "simetrica", "horizontal_pontos", "vertical_pontos", "distancia", "distancia_x", "distancia_y", "comprimento", "raio", "diametro",
+            "angulo", "angulo_suplementar", "distancia_ponto_reta", "angulo_reta"
+          ]
+        },
+        "entidades": { "type": "array", "minItems": 1, "maxItems": 3, "items": { "$ref": "#/$defs/id" } },
+        "valor": { "$ref": "#/$defs/expressao" },
+        "referencia": { "type": "boolean" },
+        "invertida": { "type": "boolean" }
+      }
+    },
+    "montagem": {
+      "type": "object",
+      "required": ["nome", "componentes"],
+      "additionalProperties": false,
+      "properties": {
+        "nome": { "type": "string" },
+        "componentes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "nome", "origem", "rotacao"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "$ref": "#/$defs/id" },
+              "nome": { "type": "string" },
+              "peca": { "$ref": "#/$defs/id" },
+              "pai": { "$ref": "#/$defs/id" },
+              "origem": { "$ref": "#/$defs/xyz" },
+              "rotacao": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "$ref": "#/$defs/xyz" } },
+              "fixo": { "type": "boolean" },
+              "cor": { "$ref": "#/$defs/cor" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -63,6 +63,9 @@ preferências do usuário.
 | `FENKRA_DEMO_FOTO=<arquivo.png>` | grava a janela depois de 9 s e fecha o programa |
 | `FENKRA_DEMO_PREVIA=<nome>` | abre um comando como novo, para ver a prévia fantasma: `ultimo` (último comando da peça de exemplo), `membro` (com `FENKRA_DEMO_EST`), `casca`, `espessura`, `rosca`, `nervura`, `plano`; os comandos de superfície têm `sup_dividir`, `sup_aparar`, `sup_filete`, `sup_paralela`, `sup_tangente`, `sup_intersecao`, `sup_varredura`, `sup_engrossar`, `sup_corpo`, `sup_regioes`, `sup_regioes_manter` |
 | `FENKRA_DEMO_IMPORTAR=<arquivo>` | abre o painel de importação com o arquivo, sem o seletor; o `fenkra-conv` precisa estar ao lado do executável; com `FENKRA_DEMO_IMPORTAR_OK=1`, confirma sozinho e mostra o relatório |
+| `FENKRA_DEMO_SKETCH=<caso>` | abre um sketch pronto com o estado que só o mouse daria: `retangulo`, `canto` (painel do comando), `setas`, `pegas`, `barra`, `conflito`, `sombra`, `oculto`, `fatia` |
+| `FENKRA_DEMO_ESTADO=<nome>` | força o estado na barra: `sem`, `liberada`, `editado`, `leitura` ou `conflito` |
+| `FENKRA_DEMO_PROJETO=1` | abre um projeto de exemplo com o painel à vista; `comparar` já mostra a comparação com a revisão |
 | `FENKRA_DEMO_SECAO=1` | liga o corte de seção na prévia da casca |
 | `FENKRA_ABRIR=<arquivo>`, `FENKRA_BANCADA=<bancada>` | abre um arquivo / uma bancada |
 | `FENKRA_EN=1` | interface em inglês |

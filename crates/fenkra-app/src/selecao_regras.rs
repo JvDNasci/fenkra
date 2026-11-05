@@ -346,7 +346,7 @@ mod testes {
         let sk2 = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data: furo }));
         d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk2, op: BoolOp::Cut, extent: Extent::ThroughAll, reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
         // canto (40, 40) arredondado: a aresta vertical em z = 10
-        d.add_feature(FeatureKind::Fillet(EdgeOp { value: "5".into(), edges: EdgeSel::Edges(vec![[40., 40., 10.]]), mode: Default::default(), prop: Default::default(), keys: vec![] }));
+        d.add_feature(FeatureKind::Fillet(EdgeOp { value: "5".into(), edges: EdgeSel::Edges(vec![[40., 40., 10.]]), mode: Default::default(), prop: Default::default(), keys: vec![], extra: Default::default() }));
         let r = fenkra_solidos::recompute(&d);
         Some((d, r))
     }

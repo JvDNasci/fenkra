@@ -519,11 +519,13 @@ mod imp {
             let flat: Vec<f64> = segs.iter().flat_map(|(a, c)| a.iter().chain(c.iter()).copied().collect::<Vec<_>>()).collect();
             b::thick_segments(&flat, normal[0], normal[1], normal[2], t).map(Shape).map_err(err)
         }
-        /// modo 0 filete variável, 1 chanfro 2 distâncias, 2 chanfro distância + ângulo
-        pub fn edges_mode_tagged(&self, mode: u8, v1: f64, v2: f64, mids: &[[f64; 3]], tol: f64, tags: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+        /// modo 0 filete variável, 1 chanfro 2 distâncias, 2 chanfro distância + ângulo, 3 filete
+        /// assimétrico (aresta reta entre planos). `flips[i]` troca a face que recebe a 1ª medida.
+        pub fn edges_mode_tagged(&self, mode: u8, v1: f64, v2: f64, mids: &[[f64; 3]], flips: &[bool], tol: f64, tags: &[i32]) -> KResult<(Shape, Vec<i32>)> {
             let flat: Vec<f64> = mids.iter().flatten().copied().collect();
             let mut out = vec![];
-            let s = b::edges_mode_t(&self.0, mode, v1, v2, &flat, tol, tags, &mut out).map_err(err)?;
+            let fl: Vec<u8> = flips.iter().map(|x| *x as u8).collect();
+            let s = b::edges_mode_t(&self.0, mode, v1, v2, &flat, &fl, tol, tags, &mut out).map_err(err)?;
             Ok((Shape(s), out))
         }
         pub fn cylinder_at(&self, p: [f64; 3]) -> KResult<Cylinder> {
@@ -1054,7 +1056,7 @@ mod imp {
         pub fn thick_segments(_: &[([f64; 3], [f64; 3])], _: [f64; 3], _: f64) -> KResult<Shape> {
             no()
         }
-        pub fn edges_mode_tagged(&self, _: u8, _: f64, _: f64, _: &[[f64; 3]], _: f64, _: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+        pub fn edges_mode_tagged(&self, _: u8, _: f64, _: f64, _: &[[f64; 3]], _: &[bool], _: f64, _: &[i32]) -> KResult<(Shape, Vec<i32>)> {
             no()
         }
         pub fn cylinder_at(&self, _: [f64; 3]) -> KResult<Cylinder> {

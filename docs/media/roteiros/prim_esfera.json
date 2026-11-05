@@ -1,0 +1,35 @@
+{
+  "versao": 1,
+  "comando": "prim_esfera",
+  "caso": "prim_esfera",
+  "tema": "Escuro",
+  "camera": [
+    -40,
+    25,
+    200,
+    -34.8,
+    -40.9,
+    0
+  ],
+  "janela": [
+    1180,
+    700
+  ],
+  "recorte": [
+    690,
+    305,
+    360,
+    220
+  ],
+  "fps": 12,
+  "duracao": 2.0,
+  "animacoes": [
+    {
+      "campo": "/Primitive/a",
+      "de": 5,
+      "ate": 30,
+      "t0": 0.3,
+      "t1": 1.7
+    }
+  ]
+}

@@ -34,7 +34,7 @@ pub mod solve;
 pub mod subconjunto;
 
 pub use engrenagens::{calculo_par, inserir_par_engrenagens, CalculoPar, RelatorioEngrenagens};
-pub use estrutura::{estrutura_para_montagem, Gerado, GrupoGerado};
+pub use estrutura::{estrutura_para_montagem, plano_do_documento, Gerado, GrupoGerado, GrupoPlano, Plano};
 pub use fixadores::{preencher_com, preencher_furos, EstadoFuro, MarcaFuro, OpcoesFixadores, RelatorioFixadores};
 pub use furos::{EixoFuro, FuroPeca, SerieFuros};
 pub use subconjunto::{Religacao, RelatorioExtracao};
@@ -513,6 +513,17 @@ pub struct Assembly {
     /// planos e eixos da origem fora da vista
     #[serde(default)]
     pub origem_oculta: bool,
+    /// configuração (da tabela de projeto da peça) escolhida por componente, pelo nome (B102)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub configs: Vec<ConfigComp>,
+}
+
+/// Qual configuração da peça um componente usa. O nome precisa existir na tabela da peça: se não
+/// existir, o componente aparece com erro, nunca com "a primeira" configuração.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct ConfigComp {
+    pub comp: Id,
+    pub nome: String,
 }
 
 impl Assembly {
@@ -629,7 +640,20 @@ impl Assembly {
     }
 
     pub fn new(name: &str) -> Self {
-        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], pilhas: vec![], interf: Default::default(), relational: false, politicas_link: vec![], religacoes: vec![], geometria: None, esqueleto: None, contexto_livre: false, origem_oculta: false }
+        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], pilhas: vec![], interf: Default::default(), relational: false, politicas_link: vec![], religacoes: vec![], geometria: None, esqueleto: None, contexto_livre: false, origem_oculta: false, configs: vec![] }
+    }
+
+    /// Configuração escolhida para o componente (vazio = a ativa da própria peça).
+    pub fn config_de(&self, comp: Id) -> &str {
+        self.configs.iter().find(|c| c.comp == comp).map(|c| c.nome.as_str()).unwrap_or("")
+    }
+
+    /// Escolhe a configuração do componente pelo nome; nome vazio volta ao padrão da peça.
+    pub fn definir_config(&mut self, comp: Id, nome: &str) {
+        self.configs.retain(|c| c.comp != comp);
+        if !nome.trim().is_empty() {
+            self.configs.push(ConfigComp { comp, nome: nome.trim().to_string() });
+        }
     }
 
     pub fn alloc(&mut self) -> Id {
