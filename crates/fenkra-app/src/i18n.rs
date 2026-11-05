@@ -37,6 +37,15 @@ pub fn tem_traducao(s: &str) -> bool {
 }
 
 static TABLE: &[(&str, &str)] = &[
+    ("Criar", "Create"),
+    ("Reordenar comandos", "Reorder commands"),
+    ("Renomear", "Rename"),
+    ("Mover o marcador de retrocesso", "Move the rollback marker"),
+    ("Editar parâmetros", "Edit parameters"),
+    ("Editar o documento", "Edit the document"),
+    ("Desfeito", "Undone"),
+    ("Refeito", "Redone"),
+    ("Memória do histórico de desfazer (MB, 0 = sem limite)", "Undo history memory (MB, 0 = no limit)"),
     ("Leva a câmera à vista isométrica, que mostra três lados da peça de uma vez.", "Moves the camera to the isometric view, which shows three sides of the part at once."),
     ("Leva a câmera a olhar a peça de frente.", "Moves the camera to look at the part from the front."),
     ("Leva a câmera a olhar a peça de cima.", "Moves the camera to look at the part from above."),

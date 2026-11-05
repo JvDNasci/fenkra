@@ -149,8 +149,7 @@ pub struct App {
     pub viewport: Option<Viewport>,
     pub scene_dirty: bool,
     fit_pending: bool,
-    undo: Vec<Document>,
-    redo: Vec<Document>,
+    hist: crate::historico::Historico,
     last_edit: f64,
     toasts: Vec<(String, f64, bool)>,
     left: LeftTab,
@@ -308,8 +307,7 @@ impl App {
             viewport,
             scene_dirty: true,
             fit_pending: true,
-            undo: vec![],
-            redo: vec![],
+            hist: crate::historico::Historico::new(settings.historico_mb),
             last_edit: -10.,
             toasts: vec![],
             left: LeftTab::Peca,
@@ -818,8 +816,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     fn load_doc(&mut self, doc: Document, entry: Option<u64>, frozen: Option<String>) {
         self.open = OpenDoc { doc, entry, frozen, file: None, modified: false };
         self.sel = Sel::None;
-        self.undo.clear();
-        self.redo.clear();
+        self.hist.limpar();
         self.fit_pending = true;
         self.request_recompute();
     }
@@ -1261,17 +1258,21 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     }
 
     fn undo(&mut self) {
-        if let Some(d) = self.undo.pop() {
-            self.redo.push(std::mem::replace(&mut self.open.doc, d));
+        let atual = self.open.doc.clone();
+        if let Some((d, nome)) = self.hist.desfazer(atual) {
+            self.open.doc = d;
             self.open.modified = true;
+            self.toast(format!("{}: {nome}", tr("Desfeito")), false);
             self.request_recompute();
         }
     }
 
     fn redo(&mut self) {
-        if let Some(d) = self.redo.pop() {
-            self.undo.push(std::mem::replace(&mut self.open.doc, d));
+        let atual = self.open.doc.clone();
+        if let Some((d, nome)) = self.hist.refazer(atual) {
+            self.open.doc = d;
             self.open.modified = true;
+            self.toast(format!("{}: {nome}", tr("Refeito")), false);
             self.request_recompute();
         }
     }
@@ -2659,11 +2660,19 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     }
                 });
                 ui.menu_button(tr("Editar"), |ui| {
-                    if ui.add_enabled(!self.undo.is_empty(), egui::Button::new(tr("Desfazer   Ctrl+Z"))).clicked() {
+                    let rot_desf = match self.hist.nome_desfazer() {
+                        Some(n) => format!("{} {n}   Ctrl+Z", tr("Desfazer")),
+                        None => tr("Desfazer   Ctrl+Z").to_string(),
+                    };
+                    if ui.add_enabled(self.hist.pode_desfazer(), egui::Button::new(rot_desf)).clicked() {
                         self.undo();
                         ui.close();
                     }
-                    if ui.add_enabled(!self.redo.is_empty(), egui::Button::new(tr("Refazer   Ctrl+Y"))).clicked() {
+                    let rot_ref = match self.hist.nome_refazer() {
+                        Some(n) => format!("{} {n}   Ctrl+Y", tr("Refazer")),
+                        None => tr("Refazer   Ctrl+Y").to_string(),
+                    };
+                    if ui.add_enabled(self.hist.pode_refazer(), egui::Button::new(rot_ref)).clicked() {
                         self.redo();
                         ui.close();
                     }
@@ -6741,8 +6750,8 @@ impl eframe::App for App {
             let before_del = self.open.doc.clone();
             self.delete_selected();
             if self.open.doc != before_del {
-                self.undo.push(before_del);
-                self.redo.clear();
+                let depois = self.open.doc.clone();
+                self.hist.registrar(before_del, &depois);
                 self.open.modified = true;
                 self.scene_dirty = true;
             }
@@ -6929,18 +6938,18 @@ impl eframe::App for App {
             } else {
                 let now = ctx.input(|i| i.time);
                 if now - self.last_edit > 0.8 {
-                    self.undo.push(before);
-                    if self.undo.len() > 200 {
-                        self.undo.remove(0);
-                    }
+                    let depois = self.open.doc.clone();
+                    self.hist.registrar(before, &depois);
+                } else {
+                    self.hist.invalidar_refazer();
                 }
                 self.last_edit = now;
-                self.redo.clear();
                 self.open.modified = true;
                 self.scene_dirty = true;
             }
         }
         self.sincronizar_qualidade();
+        self.hist.definir_limite_mb(self.settings.historico_mb);
         // atualização automática: compara com o último documento enviado (pega também mudanças
         // feitas fora deste trecho, como Del, desfazer, assistentes e janelas)
         if self.settings.auto_update && self.open.frozen.is_none() && self.needs_recompute() {
@@ -7596,6 +7605,10 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
         }
         6 => {
             ui.checkbox(&mut s.auto_update, tr("atualizar automaticamente a cada mudança"));
+            ui.horizontal(|ui| {
+                ui.label(tr("Memória do histórico de desfazer (MB, 0 = sem limite)"));
+                ui.add(egui::DragValue::new(&mut s.historico_mb).range(0..=4096));
+            });
             ui.label(RichText::new(tr("Desligado: o que mudou fica em vermelho (⟳) na árvore até você atualizar (botão ⟳ ou F5). Ctrl+F5 reconstrói tudo do zero. Os botões ⏮ ◀ ▶ ⏭ da barra de status reconstroem passo a passo, comando a comando.")).weak().small());
         }
         7 => {

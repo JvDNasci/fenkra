@@ -453,6 +453,8 @@ pub struct Settings {
     pub bench: Bench,
     /// recálculo automático a cada mudança (desligado: só com "Atualizar")
     pub auto_update: bool,
+    /// teto de memória do histórico de desfazer, em MB (0 = sem teto)
+    pub historico_mb: u32,
     /// painel de edição à esquerda (junto da árvore) em vez da direita
     pub editor_left: bool,
     /// sketch novo num plano (não numa face do corpo) vai para a pasta de geometria
@@ -552,6 +554,7 @@ impl Default for Settings {
             macro_src: String::new(),
             bench: Default::default(),
             auto_update: true,
+            historico_mb: 128,
             editor_left: true,
             sketch_in_geometry: true,
             point_style: 1,

@@ -33,6 +33,7 @@ mod dwg_ui;
 mod measure;
 mod i18n;
 mod tree_ui;
+mod historico;
 mod paineis;
 mod partida;
 #[cfg(test)]
