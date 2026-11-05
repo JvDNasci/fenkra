@@ -1911,8 +1911,13 @@ impl Ctx<'_> {
                     }
                 },
                 None => {
+                    // sem chave, o ponto só vale a até 1 mm da face; fora disso é referência perdida
+                    let Some(j) = b.face_index(*p, 1.0).map_err(k)? else {
+                        let who = format!("a face que passava perto de ({:.2}, {:.2}, {:.2})", p[0], p[1], p[2]);
+                        return Err(self.lost(what, f, refs::Lost::None, who));
+                    };
                     out.push(*p);
-                    let key = b.face_index(*p, 1.0).map_err(k)?.and_then(|j| refs::promote_face(&v, j));
+                    let key = refs::promote_face(&v, j);
                     gained |= key.is_some();
                     all.push(key);
                 }
@@ -1934,8 +1939,14 @@ impl Ctx<'_> {
         let k = |e: KernelError| e.0;
         let topo = b.topology().map_err(k)?;
         let v = refs::View { topo: &topo, owners, roles };
-        // a mesma tolerância com que o kernel casa o ponto com a aresta
-        let tol = b.bbox().map(|(a, c)| geo3d::dist(a, c) * 0.05).unwrap_or(1.).max(1.);
+        // ADR 0010: sem chave, o ponto só vale se a aresta continua onde estava. Antes a tolerância era
+        // 5% da diagonal e o ponto antigo caía em outra aresta sem aviso (a 0,8 mm, por exemplo, o
+        // encontro piso-parede do bolso). O ponto guardado é o médio exato da aresta no clique, então
+        // geometria que não mudou casa a ~1e-9; 0,1 mm (bem abaixo do teto de 1 mm da ADR) só absorve
+        // o arredondamento da gravação em texto. Qualquer deslocamento maior é referência perdida.
+        // Exceção temporária: em chapa as faces ainda não têm papel (fase 2 da ADR 0010), e o filete
+        // dobrado precisa seguir o ponto até a planificação, então vale a tolerância antiga.
+        let tol = if self.doc.features.iter().any(|g| matches!(g.kind, FeatureKind::SmWall(_))) { b.bbox().map(|(a, c)| geo3d::dist(a, c) * 0.05).unwrap_or(1.).max(1.) } else { 0.1 };
         let (mut out, mut all, mut gained) = (Vec::with_capacity(mids.len()), Vec::with_capacity(mids.len()), false);
         for (i, p) in mids.iter().enumerate() {
             match keys.get(i).and_then(|x| x.as_ref()) {
@@ -1951,8 +1962,14 @@ impl Ctx<'_> {
                     }
                 },
                 None => {
-                    out.push(*p);
-                    let key = refs::edge_near(&v, *p, tol).and_then(|e| refs::promote_edge(&v, e));
+                    // sem chave e sem aresta a 1 mm do ponto: erro com sugestão, nunca a mais próxima
+                    let Some(e) = refs::edge_near(&v, *p, tol) else {
+                        let who = format!("a aresta que passava perto de ({:.2}, {:.2}, {:.2})", p[0], p[1], p[2]);
+                        return Err(self.lost(what, f, refs::Lost::None, who));
+                    };
+                    // o ponto exato da aresta achada vai para o kernel, não o antigo
+                    out.push(topo.edge_mids[e]);
+                    let key = refs::promote_edge(&v, e);
                     gained |= key.is_some();
                     all.push(key);
                 }
@@ -6970,10 +6987,21 @@ mod tests {
         let r = recompute(&d);
         let placa = &d.features[1];
         assert_eq!(r.status[&placa.id], Status::Ok, "{:?}", r.status[&placa.id]);
-        // filete só em uma aresta escolhida (aresta inferior frontal: y = -36, z = 0)
+        // filete só em uma aresta escolhida (aresta inferior frontal: y = -36, z = 0), pelo ponto
+        // médio exato dela, como o picking entrega (sem chave o ponto tem que cair na aresta)
+        let mut sem_filete = d.clone();
+        sem_filete.features.retain(|f| !matches!(f.kind, FeatureKind::Fillet(_)));
+        let r_sem = recompute(&sem_filete);
+        let mid = r_sem.bodies[0]
+            .mesh
+            .edge_mids
+            .chunks_exact(3)
+            .map(|q| [q[0] as f64, q[1] as f64, q[2] as f64])
+            .min_by(|a, b| geo3d::dist(*a, [0., -36., 0.]).total_cmp(&geo3d::dist(*b, [0., -36., 0.])))
+            .unwrap();
         let fil = d.features.iter().find(|f| matches!(f.kind, FeatureKind::Fillet(_))).unwrap().id;
         if let Some(FeatureKind::Fillet(o)) = d.feature_mut(fil).map(|f| &mut f.kind) {
-            o.edges = EdgeSel::Edges(vec![[0., -36., 0.]]);
+            o.edges = EdgeSel::Edges(vec![mid]);
         }
         let r = recompute(&d);
         assert_eq!(r.status[&fil], Status::Ok, "{:?}", r.status[&fil]);
