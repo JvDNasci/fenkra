@@ -287,6 +287,12 @@ pub struct App {
     /// janelas do estrutural: biblioteca de perfis e lista de corte
     pub st_lib_open: bool,
     pub st_cut_open: bool,
+    /// B37: janela dos cantos da estrutura, canto escolhido (ponto) e cantos lidos no último quadro
+    pub st_cantos_open: bool,
+    /// B50: resumo de confirmação do Gerar montagem (aberto até Confirmar ou Cancelar)
+    pub st_asm_resumo: Option<crate::st_montagem_ui::Resumo>,
+    pub st_cantos_sel: Option<[f64; 3]>,
+    pub st_cantos: Vec<fenkra_solidos::st_cantos::Canto>,
     pub st_lib_sel: usize,
     /// B79: linhas de membro que não geraram sólido (contorno vermelho e motivo no 3D)
     pub st_falhas: Vec<fenkra_solidos::MemberFailure>,
@@ -435,6 +441,10 @@ impl App {
             dwg: None,
             st_lib_open: false,
             st_cut_open: false,
+            st_cantos_open: false,
+            st_asm_resumo: None,
+            st_cantos_sel: None,
+            st_cantos: vec![],
             st_falhas: vec![],
             st_cut_hi: vec![],
             st_lib_sel: 0,
@@ -604,6 +614,7 @@ impl App {
             app.load_doc(d, None, None);
             app.settings.bench = crate::settings::Bench::Estrutural;
             app.st_cut_open = true;
+            app.st_cantos_open = std::env::var("FENKRA_DEMO_CANTOS").is_ok();
             app.started = true;
         }
         // desenvolvimento: FENKRA_EDITAR=<nome> abre esse comando como ambiente ao iniciar (depois das peças de demonstração)
@@ -1923,8 +1934,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 self.st_cut_open = true;
                 return;
             }
+            Cmd::StCorners => {
+                self.st_cantos_open = true;
+                return;
+            }
             Cmd::StAssembly => {
-                crate::st_ui::generate_assembly(self);
+                crate::st_montagem_ui::abrir(self);
                 return;
             }
             Cmd::StMember => {
@@ -6426,6 +6441,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
 
             crate::st_ui::draw_falhas(ui, rect, &vp, &self.st_falhas);
+            crate::st_cantos_ui::draw(ui, rect, &vp, &self.st_cantos, &mut self.st_cantos_sel);
 
             // rótulos de pontos e curvas de referência
             if let (Some(r), true) = (&self.result, self.settings.filter.rotulos) {
@@ -6970,6 +6986,7 @@ pub enum Cmd {
     StGusset,
     StLibrary,
     StCutList,
+    StCorners,
     StAssembly,
     /// anotação 3D: 0 linear … 8 tolerância geométrica
     Pmi(u8),

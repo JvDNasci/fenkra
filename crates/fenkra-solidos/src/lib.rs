@@ -10,6 +10,8 @@ pub mod regioes;
 pub mod importacao;
 pub mod mesh_io;
 pub mod structural;
+pub mod perfis_catalogo;
+pub mod st_cantos;
 pub mod hardware;
 pub mod biblioteca;
 pub mod catalogo;
@@ -6446,6 +6448,62 @@ pub fn member_joints(doc: &Document) -> Vec<((Id, usize), (Id, usize), [f64; 3])
         }
     }
     out
+}
+
+/// Cantos da estrutura (B37): cada ponto onde linhas de membros se encontram, com o tratamento que o
+/// recompute aplica (regra própria ou padrão do comando), o membro que continua e o ângulo.
+pub fn member_corners(doc: &Document) -> Vec<st_cantos::Canto> {
+    let Ok(vars) = doc.eval_params() else { return vec![] };
+    let cx = Ctx {
+        doc,
+        vars,
+        qualidade: Default::default(),
+        bodies: HashMap::new(),
+        sketches: HashMap::new(),
+        status: HashMap::new(),
+        tools: HashMap::new(),
+        memo: RefCell::new(HashMap::new()),
+        notes: Default::default(),
+        body_sig: HashMap::new(),
+        last_sheet: None,
+        sheet_maps: vec![],
+        cut_outlines: vec![],
+        roscas: vec![],
+        steps: HashMap::new(),
+        miter_next: false,
+        promoted: RefCell::new(None),
+    };
+    let lines = cx.all_member_lines();
+    let perfil = |id: Id| match doc.feature(id).map(|f| &f.kind) {
+        Some(FeatureKind::StructMember(m)) => format!("{} {}", m.family, m.designation),
+        _ => String::new(),
+    };
+    let mut entradas = vec![];
+    for a in 0..lines.len() {
+        for b in a + 1..lines.len() {
+            let Some((p, da, db)) = shared_end(&lines[a].3, &lines[b].3) else { continue };
+            let (la, lb) = (&lines[a], &lines[b]);
+            let Ok((modo, a_continua, folga)) = cx.joint_rule((la.0, la.1, la.2), (lb.0, lb.1, lb.2)) else { continue };
+            // a outra ponta de cada linha é a que não está no canto
+            let outra = |g: &MemberGeom| if geo3d::dist(g.start, p) < 1e-4 { g.end } else { g.start };
+            entradas.push(st_cantos::EntradaCanto {
+                a: (la.0, la.1),
+                b: (lb.0, lb.1),
+                ponto: p,
+                dir_a: da,
+                dir_b: db,
+                fim_a: outra(&la.3),
+                fim_b: outra(&lb.3),
+                modo,
+                a_continua,
+                folga,
+                explicito: st_cantos::tem_regra(doc, (la.0, la.1), (lb.0, lb.1)),
+                perfil_a: perfil(la.0),
+                perfil_b: perfil(lb.0),
+            });
+        }
+    }
+    st_cantos::montar_cantos(entradas)
 }
 
 /// Grupos de linhas contíguas do esqueleto (B226): índices em `paths`, cada grupo com as linhas que

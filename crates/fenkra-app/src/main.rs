@@ -63,6 +63,8 @@ mod textos_ajuda;
 mod textos_biblioteca;
 mod textos_desenho;
 mod textos_estrutural;
+mod st_cantos_ui;
+mod st_montagem_ui;
 mod st_alcas;
 mod st_secao;
 mod st_painel;

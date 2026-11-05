@@ -29,7 +29,7 @@ pub mod solve;
 pub mod subconjunto;
 
 pub use engrenagens::{calculo_par, inserir_par_engrenagens, CalculoPar, RelatorioEngrenagens};
-pub use estrutura::{estrutura_para_montagem, Gerado, GrupoGerado};
+pub use estrutura::{estrutura_para_montagem, plano_do_documento, Gerado, GrupoGerado, GrupoPlano, Plano};
 pub use fixadores::{preencher_com, preencher_furos, EstadoFuro, MarcaFuro, OpcoesFixadores, RelatorioFixadores};
 pub use furos::{EixoFuro, FuroPeca, SerieFuros};
 pub use subconjunto::{Religacao, RelatorioExtracao};
