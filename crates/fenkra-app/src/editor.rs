@@ -144,7 +144,19 @@ pub(crate) fn check(ui: &mut egui::Ui, v: &mut bool, label: &str) -> egui::Respo
 pub(crate) const EXPR_HINT: &str = "Aceita número (vírgula ou ponto), parâmetro ou expressão: L/2 + 5, 2*pi*r, sqrt(a; b). Roda do mouse soma/subtrai (Shift ×10, Ctrl ×0,1).";
 
 /// Campo de expressão: mostra o valor avaliado ou o erro.
+/// Dica própria do campo (B278): o que faz, faixa e efeito, e a unidade do campo. A dica genérica de
+/// expressão fica como última linha, depois desta.
+fn dica_do_campo(ui: &mut egui::Ui, rotulo_pt: &str, unit: &str) {
+    if let Some(d) = crate::textos_campos::dica(rotulo_pt) {
+        ui.label(tr(d));
+        if !unit.is_empty() {
+            ui.label(RichText::new(format!("{}: {unit}", tr("Unidade"))).small());
+        }
+    }
+}
+
 pub(crate) fn expr(ui: &mut egui::Ui, label: &str, s: &mut String, vars: &Vars, unit: &str) {
+    let rotulo_pt = label;
     let label = tr(label);
     ui.horizontal(|ui| {
         let icon = param_icon(label);
@@ -168,6 +180,7 @@ pub(crate) fn expr(ui: &mut egui::Ui, label: &str, s: &mut String, vars: &Vars, 
             if let Ok(v) = fenkra_core::expr::eval_str(s, vars) {
                 ui.label(format!("= {} {unit}", fmt(v)));
             }
+            dica_do_campo(ui, rotulo_pt, unit);
             ui.label(RichText::new(tr(EXPR_HINT)).weak().small());
             ui.label(RichText::new(tr("arraste o nome para mudar o valor; duplo clique restaura o valor inicial")).weak().small());
         });
@@ -197,7 +210,17 @@ pub(crate) fn expr(ui: &mut egui::Ui, label: &str, s: &mut String, vars: &Vars, 
                 ui.close();
             }
         });
-        let resp = if bad { resp } else { resp.on_hover_text(tr(EXPR_HINT)) };
+        let resp = if bad {
+            resp
+        } else {
+            match crate::textos_campos::dica(rotulo_pt) {
+                Some(_) => resp.on_hover_ui(|ui| {
+                    dica_do_campo(ui, rotulo_pt, unit);
+                    ui.label(RichText::new(tr(EXPR_HINT)).weak().small());
+                }),
+                None => resp.on_hover_text(tr(EXPR_HINT)),
+            }
+        };
         match r {
             Ok(v) if s.trim().replace(',', ".").parse::<f64>().is_err() => {
                 ui.label(RichText::new(format!("= {} {unit}", fmt(v))).weak());

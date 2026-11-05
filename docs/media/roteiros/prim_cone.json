@@ -1,0 +1,35 @@
+{
+  "versao": 1,
+  "comando": "prim_cone",
+  "caso": "prim_cone",
+  "tema": "Escuro",
+  "camera": [
+    -40,
+    25,
+    150,
+    0,
+    0,
+    20
+  ],
+  "janela": [
+    1180,
+    700
+  ],
+  "recorte": [
+    230,
+    110,
+    720,
+    440
+  ],
+  "fps": 12,
+  "duracao": 3.0,
+  "animacoes": [
+    {
+      "campo": "/Primitive/b",
+      "de": 25,
+      "ate": 3,
+      "t0": 0.4,
+      "t1": 2.6
+    }
+  ]
+}

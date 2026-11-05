@@ -1,0 +1,42 @@
+{
+  "versao": 1,
+  "comando": "prim_caixa",
+  "caso": "prim_caixa",
+  "tema": "Escuro",
+  "camera": [
+    -40,
+    28,
+    170,
+    0,
+    0,
+    15
+  ],
+  "janela": [
+    1180,
+    700
+  ],
+  "recorte": [
+    230,
+    110,
+    720,
+    440
+  ],
+  "fps": 12,
+  "duracao": 3.0,
+  "animacoes": [
+    {
+      "campo": "/Primitive/a",
+      "de": 20,
+      "ate": 60,
+      "t0": 0.4,
+      "t1": 2.6
+    },
+    {
+      "campo": "/Primitive/c",
+      "de": 10,
+      "ate": 40,
+      "t0": 0.4,
+      "t1": 2.6
+    }
+  ]
+}

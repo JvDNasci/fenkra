@@ -1,0 +1,42 @@
+{
+  "versao": 1,
+  "comando": "prim_cilindro",
+  "caso": "prim_cilindro",
+  "tema": "Escuro",
+  "camera": [
+    -40,
+    25,
+    150,
+    0,
+    0,
+    20
+  ],
+  "janela": [
+    1180,
+    700
+  ],
+  "recorte": [
+    230,
+    110,
+    720,
+    440
+  ],
+  "fps": 12,
+  "duracao": 3.0,
+  "animacoes": [
+    {
+      "campo": "/Primitive/a",
+      "de": 6,
+      "ate": 25,
+      "t0": 0.4,
+      "t1": 2.6
+    },
+    {
+      "campo": "/Primitive/b",
+      "de": 40,
+      "ate": 20,
+      "t0": 0.4,
+      "t1": 2.6
+    }
+  ]
+}

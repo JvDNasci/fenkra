@@ -8,6 +8,7 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Buscar comando (ex.: extrude, filete, cota)", "Search command (e.g. extrude, fillet, dimension)"),
     ("Nenhum comando encontrado.", "No command found."),
     ("Próximo passo", "Next step"),
+    ("Unidade", "Unit"),
     ("crie um Sketch num plano da Origem", "create a Sketch on an Origin plane"),
     ("transforme o sketch em sólido: Extrusão ou Revolução", "turn the sketch into a solid: Extrude or Revolve"),
     ("escolha um comando para a seleção (Ctrl+K busca)", "pick a command for the selection (Ctrl+K searches)"),

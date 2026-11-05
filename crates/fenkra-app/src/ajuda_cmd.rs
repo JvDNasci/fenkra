@@ -73,6 +73,58 @@ const SINONIMOS: &[(&str, &str)] = &[
     ("sk_concluir", "concluir finish sair fechar exit sketch"),
 ];
 
+/// Comando da barra (pelo ícone) e a ação do mapa de atalhos que o dispara. A dica mostra a tecla
+/// que está valendo agora, não a de fábrica (camada 1 do tooltip, B278).
+pub const ATALHOS: &[(&str, crate::keymap::KeyAction)] = {
+    use crate::keymap::KeyAction as K;
+    &[
+        ("sketch", K::Sketch),
+        ("extrusao", K::Extrude),
+        ("recorte", K::Cut),
+        ("revolucao", K::Revolve),
+        ("furo_simples", K::Hole),
+        ("arestas_selecionar", K::Fillet),
+        ("chanfro", K::Chamfer),
+        ("ajustar", K::Fit),
+        ("ortho", K::Ortho),
+        ("salvar", K::Save),
+        ("sk_selecionar", K::SkSelect),
+        ("sk_polilinha", K::SkLine),
+        ("sk_retangulo", K::SkRect),
+        ("sk_circulo", K::SkCircle),
+        ("sk_arco3", K::SkArc),
+        ("sk_ponto", K::SkPoint),
+        ("sk_cota", K::SkDim),
+        ("sk_construcao", K::SkConstruction),
+        ("sk_grade", K::SkGrid),
+        ("sk_aparar", K::SkTrim),
+        ("sk_offset", K::SkOffset),
+        ("sk_filete", K::SkFillet),
+        ("sk_espelhar", K::SkMirror),
+        ("sk_spline", K::SkSpline),
+    ]
+};
+
+fn chave_atalhos() -> egui::Id {
+    egui::Id::new("atalhos_dos_comandos")
+}
+
+/// Texto do atalho de cada comando no mapa atual, por ícone.
+pub fn atalhos_do_mapa(km: &crate::keymap::Keymap) -> std::collections::HashMap<String, String> {
+    ATALHOS.iter().filter_map(|(icone, a)| km.binding(*a).map(|b| ((*icone).to_owned(), b.text()))).collect()
+}
+
+/// A aplicação publica o mapa a cada quadro; o tooltip lê sem precisar das configurações.
+pub fn publicar_atalhos(ctx: &egui::Context, km: &crate::keymap::Keymap) {
+    let mapa = atalhos_do_mapa(km);
+    ctx.data_mut(|d| d.insert_temp(chave_atalhos(), mapa));
+}
+
+/// Atalho atual do comando (vazio se não tem).
+pub fn atalho_do_comando(ctx: &egui::Context, icone: &str) -> Option<String> {
+    ctx.data(|d| d.get_temp::<std::collections::HashMap<String, String>>(chave_atalhos())).and_then(|m| m.get(icone).cloned())
+}
+
 /// Minúsculas e sem acento: a busca ignora os dois.
 pub fn normalizar(s: &str) -> String {
     s.chars()
@@ -286,6 +338,22 @@ mod testes {
 
     fn acha(q: &str) -> Vec<&'static str> {
         buscar(q, 5).into_iter().map(|i| i.name).collect()
+    }
+
+    #[test]
+    fn todo_atalho_de_comando_aponta_para_botao_da_barra_e_aparece_no_mapa() {
+        let icones: Vec<&str> = comandos().iter().map(|i| i.icon).collect();
+        let sem: Vec<&&str> = ATALHOS.iter().map(|(i, _)| i).filter(|i| !icones.contains(i)).collect();
+        assert!(sem.is_empty(), "atalho para ícone que não existe na barra: {sem:?}");
+        let km = crate::keymap::Keymap::default();
+        let m = atalhos_do_mapa(&km);
+        assert_eq!(m.get("extrusao").map(String::as_str), Some("E"));
+        // trocar a tecla no mapa muda o que a dica mostra
+        let mut km = km;
+        km.set(crate::keymap::KeyAction::Extrude, crate::keymap::Binding::parse("Ctrl+Shift+E"));
+        assert_eq!(atalhos_do_mapa(&km).get("extrusao").map(String::as_str), Some("Ctrl+Shift+E"));
+        km.set(crate::keymap::KeyAction::Extrude, None);
+        assert!(!atalhos_do_mapa(&km).contains_key("extrusao"));
     }
 
     #[test]

@@ -1,0 +1,42 @@
+{
+  "versao": 1,
+  "comando": "reforco",
+  "caso": "reforco",
+  "tema": "Escuro",
+  "camera": [
+    -40,
+    28,
+    170,
+    0,
+    0,
+    18
+  ],
+  "janela": [
+    1180,
+    700
+  ],
+  "recorte": [
+    230,
+    110,
+    720,
+    440
+  ],
+  "fps": 12,
+  "duracao": 3.0,
+  "animacoes": [
+    {
+      "campo": "/Stiffener/thickness",
+      "de": 2,
+      "ate": 8,
+      "t0": 0.4,
+      "t1": 2.6
+    },
+    {
+      "campo": "/Stiffener/depth",
+      "de": 5,
+      "ate": 25,
+      "t0": 0.4,
+      "t1": 2.6
+    }
+  ]
+}

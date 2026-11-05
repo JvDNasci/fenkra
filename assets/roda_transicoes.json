@@ -1,0 +1,21 @@
+[
+  ["sketch", "extrusao", 4],
+  ["sketch", "revolucao", 2],
+  ["sketch", "recorte", 2],
+  ["sk_polilinha", "sk_cota", 3],
+  ["sk_retangulo", "sk_cota", 3],
+  ["sk_circulo", "sk_cota", 3],
+  ["sk_cota", "sk_concluir", 2],
+  ["extrusao", "arestas_selecionar", 3],
+  ["extrusao", "recorte", 2],
+  ["extrusao", "furo_simples", 2],
+  ["recorte", "arestas_selecionar", 2],
+  ["furo_simples", "padrao_linear", 2],
+  ["arestas_selecionar", "chanfro", 2],
+  ["chanfro", "casca", 1],
+  ["casca", "arestas_selecionar", 1],
+  ["asm_inserir", "rest_coincidencia", 4],
+  ["rest_coincidencia", "rest_fixar", 2],
+  ["sm_parede", "sm_aba", 4],
+  ["sm_aba", "sm_desdobrar", 2]
+]

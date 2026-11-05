@@ -20,6 +20,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use crate::i18n::tr;
 
 mod diag;
+mod gravar;
 mod importar;
 mod projeto;
 mod salvar;
@@ -202,6 +203,9 @@ pub struct App {
     pub session: Option<Session>,
     /// desenvolvimento: comando a abrir como novo quando a peça terminar de calcular
     demo_previa: Option<crate::previa::DemoPrevia>,
+    /// desenvolvimento: gravação de roteiro de mídia de ajuda (B257)
+    gravador: Option<gravar::Gravador>,
+    gravar_caso: Option<FeatureKind>,
     /// novo sketch esperando o clique no plano/face
     pub sketch_wait_plane: bool,
     /// árvore aberta ao lado do painel do comando
@@ -299,7 +303,7 @@ impl App {
         let mut settings = Settings::load();
         crate::theme::reload_user();
         // desenvolvimento: FENKRA_DEMO_TEMA=<nome> usa esse tema (sem gravar)
-        if let Some(t) = std::env::var("FENKRA_DEMO_TEMA").ok().and_then(|n| crate::theme::find(&n)) {
+        if let Some(t) = std::env::var("FENKRA_DEMO_TEMA").ok().or_else(gravar::tema).and_then(|n| crate::theme::find(&n)) {
             settings.theme_name = t.name.clone();
             settings.bg_top = t.bg_top;
             settings.bg_bottom = t.bg_bottom;
@@ -373,6 +377,8 @@ impl App {
             inicio_pelo_menu: false,
             session: None,
             demo_previa: None,
+            gravador: gravar::Gravador::de_ambiente(),
+            gravar_caso: None,
             view_menu: false,
             new_view_name: String::new(),
             view_choice: None,
@@ -694,6 +700,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         }
         app.demo_previa = crate::previa::demo_preparar(&mut app.open.doc);
         app.started |= app.demo_previa.is_some();
+        app.gravar_preparar();
         app.request_recompute();
         app
     }
@@ -7229,6 +7236,7 @@ impl eframe::App for App {
         crate::partida::contar_quadro();
         let ctx = &root.ctx().clone();
         crate::i18n::set_english(self.settings.english);
+        crate::ajuda_cmd::publicar_atalhos(ctx, &self.settings.keys);
         crate::ui_ext::definir_modo_roda(crate::ui_ext::ModoRoda::de_u8(self.settings.wheel_mode));
         // cores salvas: preferências ↔ paleta usada pelos painéis
         {
@@ -7616,6 +7624,7 @@ impl eframe::App for App {
         if let Some(id) = self.open_pending.take() {
             self.start_session(id, false, None);
         }
+        self.gravar_passo(ctx);
         if self.result.is_some() && !self.calculando() {
             if let Some(k) = self.demo_previa.take() {
                 let snapshot = self.open.doc.clone();

@@ -45,6 +45,8 @@ mod diagnostico;
 mod paineis;
 mod partida;
 mod ajuda_cmd;
+mod textos_campos;
+mod midia;
 mod textos_ajuda;
 mod textos_biblioteca;
 mod biblioteca_ui;
