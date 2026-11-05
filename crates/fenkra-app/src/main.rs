@@ -71,6 +71,10 @@ mod sketch_snap;
 mod sketch_textos;
 mod perfil;
 mod relatorio;
+mod param_ui;
+mod config_camadas;
+mod config_ui;
+mod textos_config;
 #[cfg(test)]
 mod padrao;
 

@@ -130,6 +130,8 @@ void topology(const Shape& s, rust::Vec<double>& face_info, rust::Vec<double>& e
 MeshData tessellate(const Shape& s, double deflection, double angle);
 void discard_mesh(const Shape& s);
 void set_mesh_threads(int32_t n);
+/// Registra (endereço de uma bandeira atômica, ou 0) o cancelamento da thread atual.
+void set_cancel_flag(size_t p);
 int32_t mesh_threads();
 void set_mesh_algo(int32_t a);
 int32_t mesh_algo();

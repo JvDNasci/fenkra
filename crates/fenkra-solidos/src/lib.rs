@@ -802,6 +802,9 @@ pub struct Cache {
     /// Cancelar real (B59): quando a interface liga esta bandeira, o cálculo para antes do próximo
     /// comando. O que já foi feito fica no cache, então calcular de novo continua de onde parou.
     pub cancelar: Option<Arc<std::sync::atomic::AtomicBool>>,
+    /// Progresso do cálculo (B259): o total de comandos ativos e quantos já terminaram, para a
+    /// interface mostrar a barra enquanto a thread de cálculo trabalha.
+    pub progresso: Option<fenkra_core::trabalho::Controle>,
     /// Atualizar esta feature (B59): calcula só até este comando (inclusive); os de depois ficam
     /// listados em `desatualizados`. Vale para o próximo cálculo e é limpo ao terminar.
     pub ate: Option<Id>,
@@ -5419,12 +5422,23 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
     cache.reused = 0;
     let ate_pos = cache.ate.take().and_then(|a| order.iter().position(|i| doc.features[*i].id == a));
     let cancelar = cache.cancelar.clone();
+    // as booleanas e a malha longas do OpenCASCADE também abandonam o cálculo quando a bandeira sobe
+    let _guarda_kernel = cancelar.clone().map(fenkra_kernel::ligar_cancelamento);
+    let progresso = cache.progresso.clone();
+    if let Some(p) = &progresso {
+        p.definir_total(order.iter().filter(|i| doc.is_active(**i)).count() as u32);
+    }
     let mut parou = false;
     let mut cancelado = false;
     let mut desatualizados: Vec<Id> = vec![];
     for (pos, i) in order.into_iter().enumerate() {
         let f = &doc.features[i];
         seen.insert(f.id);
+        if let Some(p) = &progresso {
+            if pos > 0 {
+                p.avancar();
+            }
+        }
         if !parou {
             if cancelar.as_ref().is_some_and(|c| c.load(std::sync::atomic::Ordering::Relaxed)) {
                 parou = true;
@@ -5538,6 +5552,15 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                     Ok(Some(w)) => Status::Warning(w),
                     Err(e) => Status::Error(e),
                 };
+                // cancelado no meio do kernel: o que veio é lixo (erro "cancelado" ou resultado parcial).
+                // Não vai para o cache, para o próximo cálculo refazer este comando do zero.
+                if matches!(st, Status::Error(_)) && cancelar.as_ref().is_some_and(|c| c.load(std::sync::atomic::Ordering::Relaxed)) {
+                    parou = true;
+                    cancelado = true;
+                    desatualizados.push(f.id);
+                    cx.status.insert(f.id, Status::Inactive);
+                    continue;
+                }
                 cx.status.insert(f.id, st.clone());
                 // chaves v2 calculadas para pontos antigos só valem se o comando deu certo
                 let new_keys = cx.promoted.borrow_mut().take().filter(|_| !matches!(st, Status::Error(_)));

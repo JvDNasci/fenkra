@@ -16,7 +16,8 @@ use crate::sketch::SketchData;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
-pub const FORMAT_VERSION: u32 = 1;
+/// Versão de formato que o programa grava; vem da cadeia de migração em [`crate::formato`].
+pub const FORMAT_VERSION: u32 = 2;
 
 /// Identidade estável de qualquer objeto do documento (RF-NUC-020).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize, PartialOrd, Ord)]
@@ -1335,6 +1336,43 @@ pub struct Parameter {
     /// publicado para outras peças usarem por link
     #[serde(default)]
     pub published: bool,
+    /// tipo do valor (B101): número com unidade, texto, booleano ou escolha numa lista
+    #[serde(default)]
+    pub tipo: crate::parametros::ParamTipo,
+    /// unidade de exibição e edição; o valor interno segue em mm, então mudar isto não move geometria
+    #[serde(default)]
+    pub exibir: crate::parametros::UnidadeComp,
+    /// limites como expressões (vazio = sem limite); fora deles vira aviso na árvore, não erro
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub min: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub max: String,
+    /// checagem: expressão que deve dar verdadeiro (diferente de zero), ex.: `Largura > Espessura*2`
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub verificacao: String,
+    /// opções da lista (cada uma uma expressão); `expr` guarda a opção escolhida
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub opcoes: Vec<String>,
+}
+
+impl Parameter {
+    /// Parâmetro numérico simples; o resto dos campos de B101 fica no padrão.
+    pub fn novo(id: Id, name: &str, expr: &str, unit: Unit) -> Self {
+        Parameter {
+            id,
+            name: name.into(),
+            expr: expr.into(),
+            unit,
+            comment: String::new(),
+            published: false,
+            tipo: Default::default(),
+            exibir: Default::default(),
+            min: String::new(),
+            max: String::new(),
+            verificacao: String::new(),
+            opcoes: vec![],
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -1563,6 +1601,10 @@ pub struct Feature {
     pub name: String,
     pub kind: FeatureKind,
     pub suppressed: bool,
+    /// Supressão por expressão (B101): suprime enquanto o resultado for diferente de zero, ex.:
+    /// `Furos < 2` ou `ComChanfro`. Vazio = só vale o `suppressed` manual.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub suppress_if: String,
     /// Pasta personalizada (apenas organização; não altera a ordem, RF-ARV-032).
     pub folder: Option<Id>,
     /// Coletor de corpos de destino (RF-ARV-042).
@@ -3238,6 +3280,10 @@ pub struct Document {
     /// Aparência da peça inteira (sobrepõe a cor dos coletores).
     #[serde(default)]
     pub appearance: Option<Appearance>,
+    /// Opções que pertencem ao documento (cotagem, grade, anotações 3D, qualidade da malha), por
+    /// chave da configuração (B100). Vazio = o documento segue as camadas de configuração.
+    #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
+    pub config: crate::config::Mapa,
     next_id: u64,
     pub origin_visible: bool,
     pub references: Vec<RefElement>,
@@ -3309,6 +3355,7 @@ impl Document {
             name: name.into(),
             props: Properties::default(),
             appearance: None,
+            config: Default::default(),
             next_id: 1,
             origin_visible: true,
             references: vec![],
@@ -3415,7 +3462,7 @@ impl Document {
     /// O comando está ativo? (não suprimido e antes do marcador do seu coletor e do marcador geral)
     pub fn is_active(&self, idx: usize) -> bool {
         let Some(f) = self.features.get(idx) else { return false };
-        if f.suppressed {
+        if f.suppressed || self.suprimido_por_expressao(f) {
             return false;
         }
         if self.is_free(f) {
@@ -3683,7 +3730,7 @@ impl Document {
             LinkedGeo::Value(v) => {
                 let name = self.unique_name(&base);
                 let id = self.alloc();
-                self.params.push(Parameter { id, name, expr: format!("{v}"), unit: Unit::Comprimento, comment: format!("link: {source}.{publication}"), published: false });
+                self.params.push(Parameter { comment: format!("link: {source}.{publication}"), ..Parameter::novo(id, &name, &format!("{v}"), Unit::Comprimento) });
                 id
             }
             g => {
@@ -3779,7 +3826,7 @@ impl Document {
             return Err(DocError::DuplicateName(name.into()));
         }
         let id = self.alloc();
-        self.params.push(Parameter { id, name: name.into(), expr: expr.into(), unit, comment: String::new(), published: false });
+        self.params.push(Parameter::novo(id, name, expr, unit));
         Ok(id)
     }
 
@@ -3814,15 +3861,17 @@ impl Document {
     /// Avalia todos os parâmetros respeitando dependências; detecta ciclos (RF-PAR-006).
     pub fn eval_params(&self) -> Result<HashMap<String, f64>, DocError> {
         let mut asts = HashMap::new();
-        for p in &self.params {
+        for p in self.params.iter().filter(|p| p.tipo.numerico()) {
             let ast = expr::parse(&p.expr).map_err(|e| DocError::Param(p.name.clone(), e))?;
             asts.insert(p.name.as_str(), ast);
         }
+        let bools: HashSet<&str> = self.params.iter().filter(|p| p.tipo == crate::parametros::ParamTipo::Booleano).map(|p| p.name.as_str()).collect();
         let mut vals = HashMap::new();
         let mut visiting = Vec::<&str>::new();
         fn visit<'a>(
             n: &'a str,
             asts: &'a HashMap<&'a str, expr::Ast>,
+            bools: &HashSet<&str>,
             vals: &mut HashMap<String, f64>,
             visiting: &mut Vec<&'a str>,
         ) -> Result<(), DocError> {
@@ -3840,16 +3889,20 @@ impl Document {
             expr::names(ast, &mut deps);
             for d in &deps {
                 if let Some((k, _)) = asts.get_key_value(d.as_str()) {
-                    visit(k, asts, vals, visiting)?;
+                    visit(k, asts, bools, vals, visiting)?;
                 }
             }
             visiting.pop();
-            let v = expr::eval(ast, vals).map_err(|e| DocError::Param(n.into(), e))?;
+            let mut v = expr::eval(ast, vals).map_err(|e| DocError::Param(n.into(), e))?;
+            if bools.contains(n) {
+                // booleano é sempre 0 ou 1: qualquer valor diferente de zero é verdadeiro
+                v = (v != 0.0) as i32 as f64;
+            }
             vals.insert(n.into(), v);
             Ok(())
         }
-        for p in &self.params {
-            visit(&p.name, &asts, &mut vals, &mut visiting)?;
+        for p in self.params.iter().filter(|p| p.tipo.numerico()) {
+            visit(&p.name, &asts, &bools, &mut vals, &mut visiting)?;
         }
         Ok(vals)
     }
@@ -3937,7 +3990,7 @@ impl Document {
             None => self.rollback.min(len),
         };
         let flat_space = self.sheet.as_ref().is_some_and(|s| s.flat);
-        self.features.insert(at, Feature { id, name, kind, suppressed: false, folder: None, target, hidden: false, appearance: None, flat_space });
+        self.features.insert(at, Feature { id, name, kind, suppressed: false, suppress_if: String::new(), folder: None, target, hidden: false, appearance: None, flat_space });
         if at < self.rollback {
             self.rollback += 1;
         } else {
@@ -3957,7 +4010,7 @@ impl Document {
         let name = self.unique_name("Sketch");
         let target = self.active_collector;
         let kind = FeatureKind::Sketch(Sketch { plane, data: Default::default() });
-        self.features.push(Feature { id, name, kind, suppressed: false, folder: Some(folder), target, hidden: false, appearance: None, flat_space: false });
+        self.features.push(Feature { id, name, kind, suppressed: false, suppress_if: String::new(), folder: Some(folder), target, hidden: false, appearance: None, flat_space: false });
         if self.rollback == self.features.len() - 1 {
             self.rollback += 1;
         }

@@ -251,6 +251,8 @@ pub mod bridge {
         fn discard_mesh(s: &Shape) -> Result<()>;
         /// Teto de fios do malhador; 0 volta ao padrão.
         fn set_mesh_threads(n: i32);
+        /// Registra o endereço de uma bandeira de cancelamento (0 limpa) para a thread atual (B259).
+        fn set_cancel_flag(p: usize);
         /// Teto de fios em vigor.
         fn mesh_threads() -> i32;
         /// Algoritmo do malhador (só medição, B235): 0 padrão, 1 Delabella.

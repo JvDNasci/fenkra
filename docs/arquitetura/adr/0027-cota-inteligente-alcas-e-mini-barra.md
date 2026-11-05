@@ -1,4 +1,4 @@
-# ADR 0024 — Cota inteligente, alças de anotação e mini barra
+# ADR 0027 — Cota inteligente, alças de anotação e mini barra
 
 ## Contexto
 

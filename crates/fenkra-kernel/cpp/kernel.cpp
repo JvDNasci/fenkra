@@ -147,10 +147,37 @@
 #include <gp_Circ.hxx>
 #include <gp_Pln.hxx>
 #include <gp_Trsf.hxx>
+#include <Message_ProgressIndicator.hxx>
+#include <Message_ProgressRange.hxx>
 
 namespace fenkra {
 
 namespace {
+
+// Cancelamento (B259): a thread de cálculo registra a bandeira do pedido em andamento; as operações
+// longas do OpenCASCADE recebem uma Message_ProgressRange ligada a ela e abandonam o cálculo quando
+// a bandeira sobe. Fora de uma thread registrada nada muda (a faixa é vazia).
+thread_local const std::atomic<bool>* g_cancelar = nullptr;
+
+bool cancelado_agora() { return g_cancelar && g_cancelar->load(std::memory_order_relaxed); }
+
+class IndicadorCancelavel : public Message_ProgressIndicator {
+public:
+    bool UserBreak() override { return cancelado_agora(); }
+    void Show(const Message_ProgressScope&, const bool) override {}
+};
+
+Message_ProgressRange faixa_cancelavel() {
+    if (!g_cancelar) return Message_ProgressRange();
+    thread_local Handle(Message_ProgressIndicator) ind;
+    if (ind.IsNull()) ind = new IndicadorCancelavel();
+    return ind->Start();
+}
+
+// Depois de uma operação com faixa: se foi interrompida, o resultado (parcial) não pode seguir.
+void falhar_se_cancelado() {
+    if (cancelado_agora()) throw std::runtime_error("cancelado");
+}
 
 // Converte exceções do OCCT em std::runtime_error (que o cxx transforma em Err no Rust).
 template <class F>
@@ -427,18 +454,19 @@ std::unique_ptr<Shape> boolean(const Shape& a, const Shape& b, uint8_t op) {
         TopoDS_Shape r;
         bool err = false;
         if (op == 0) {
-            BRepAlgoAPI_Fuse m(a.s, b.s);
+            BRepAlgoAPI_Fuse m(a.s, b.s, faixa_cancelavel());
             err = m.HasErrors();
             r = m.Shape();
         } else if (op == 1) {
-            BRepAlgoAPI_Cut m(a.s, b.s);
+            BRepAlgoAPI_Cut m(a.s, b.s, faixa_cancelavel());
             err = m.HasErrors();
             r = m.Shape();
         } else {
-            BRepAlgoAPI_Common m(a.s, b.s);
+            BRepAlgoAPI_Common m(a.s, b.s, faixa_cancelavel());
             err = m.HasErrors();
             r = m.Shape();
         }
+        falhar_se_cancelado();
         if (err || r.IsNull()) throw std::runtime_error("a operação booleana falhou");
         return wrap(unify(r));
     });
@@ -591,9 +619,10 @@ std::unique_ptr<Shape> boolean_t(const Shape& a, const Shape& b, uint8_t op, rus
                                  rust::Vec<int32_t>& out_b) {
     return guard("booleana", [&] {
         std::unique_ptr<BRepAlgoAPI_BooleanOperation> m;
-        if (op == 0) m.reset(new BRepAlgoAPI_Fuse(a.s, b.s));
-        else if (op == 1) m.reset(new BRepAlgoAPI_Cut(a.s, b.s));
-        else m.reset(new BRepAlgoAPI_Common(a.s, b.s));
+        if (op == 0) m.reset(new BRepAlgoAPI_Fuse(a.s, b.s, faixa_cancelavel()));
+        else if (op == 1) m.reset(new BRepAlgoAPI_Cut(a.s, b.s, faixa_cancelavel()));
+        else m.reset(new BRepAlgoAPI_Common(a.s, b.s, faixa_cancelavel()));
+        falhar_se_cancelado();
         if (m->HasErrors() || m->Shape().IsNull()) throw std::runtime_error("a operação booleana falhou");
         const TopoDS_Shape r = m->Shape();
         auto modified = [&](const TopoDS_Shape& f) -> const TopTools_ListOfShape& { return m->Modified(f); };
@@ -925,6 +954,7 @@ int32_t mesh_threads() {
 }
 
 void set_mesh_threads(int32_t n) { g_mesh_threads.store(std::max(0, n)); }
+void set_cancel_flag(size_t p) { g_cancelar = reinterpret_cast<const std::atomic<bool>*>(p); }
 
 // Algoritmo do malhador (B235, só medição): 0 = padrão do OpenCASCADE, 1 = Delabella.
 static std::atomic<int32_t> g_mesh_algo{0};
@@ -1021,8 +1051,10 @@ MeshData tessellate(const Shape& s, double deflection, double angle) {
         if (g_mesh_algo.load() == 1) mp.MeshAlgo = IMeshTools_MeshAlgoType_Delabella;
         {
             auto gate = enter_mesher();
-            BRepMesh_IncrementalMesh(s.s, mp);
+            BRepMesh_IncrementalMesh(s.s, mp, faixa_cancelavel());
         }
+        // malha pela metade não pode ir para o cache nem para a tela
+        falhar_se_cancelado();
 
         for (int fi = 1; fi <= fmap.Extent(); ++fi) {
             m.face_ranges.push_back(static_cast<uint32_t>(m.indices.size()));

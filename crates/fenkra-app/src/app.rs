@@ -64,43 +64,56 @@ enum LeftTab {
     Projeto,
 }
 
+/// Pedido de cálculo: (geração, documento, reconstruir do zero, qualidade da malha).
+type PedidoCalculo = (u64, Document, bool, fenkra_core::QualidadeMalha);
+
 struct Worker {
-    /// (geração, documento, reconstruir do zero, qualidade da malha)
-    tx: Sender<(u64, Document, bool, fenkra_core::QualidadeMalha)>,
-    rx: Receiver<(u64, RecomputeResult)>,
+    fila: fenkra_core::trabalho::Fila<PedidoCalculo, (u64, RecomputeResult)>,
 }
 
 impl Worker {
-    /// Recompute fora da thread da interface (RNF-001); só o pedido mais recente é processado.
+    /// Recompute fora da thread da interface (RNF-001, B259). Um pedido novo cancela o que está em
+    /// andamento (o kernel abandona a booleana ou a malha longa) e o resultado superado é descartado;
+    /// o cache guarda só os comandos que terminaram, então o resultado final é o de um cálculo do zero.
     fn spawn(ctx: egui::Context) -> Self {
-        let (tx, jobs) = channel::<(u64, Document, bool, fenkra_core::QualidadeMalha)>();
-        let (out, rx) = channel();
-        std::thread::Builder::new()
-            .name("recompute".into())
-            .spawn(move || {
+        let fila = fenkra_core::trabalho::Fila::nova(
+            "recompute",
+            // pedidos pulados passam adiante o "reconstruir do zero"
+            |antes: PedidoCalculo, novo: PedidoCalculo| (novo.0, novo.1, novo.2 | antes.2, novo.3),
+            || {
                 fenkra_kernel::reduzir_prioridade_da_thread();
                 // cache entre cálculos: só refaz a partir do primeiro comando que mudou
                 let mut cache = fenkra_solidos::Cache::default();
-                while let Ok(mut job) = jobs.recv() {
-                    let mut fresh = job.2;
-                    while let Ok(newer) = jobs.try_recv() {
-                        fresh |= newer.2;
-                        job = newer;
-                    }
-                    if fresh {
+                Box::new(move |job: PedidoCalculo, ctl: &fenkra_core::trabalho::Controle| {
+                    if job.2 {
                         cache = fenkra_solidos::Cache::default();
                     }
                     // outra qualidade só re-tessela: os comandos continuam no cache
                     cache.qualidade = job.3;
+                    cache.cancelar = Some(ctl.bandeira());
+                    cache.progresso = Some(ctl.clone());
                     let r = fenkra_solidos::recompute_cached(&job.1, &mut cache);
-                    if out.send((job.0, r)).is_err() {
-                        break;
-                    }
-                    ctx.request_repaint();
-                }
-            })
-            .expect("thread de recompute");
-        Worker { tx, rx }
+                    cache.cancelar = None;
+                    cache.progresso = None;
+                    Some((job.0, r))
+                })
+            },
+            move || ctx.request_repaint(),
+        );
+        Worker { fila }
+    }
+
+    fn enviar(&self, pedido: PedidoCalculo) {
+        self.fila.enviar(pedido);
+    }
+
+    fn receber(&self) -> Option<(u64, RecomputeResult)> {
+        self.fila.receber()
+    }
+
+    /// (comandos feitos, total) do cálculo em andamento.
+    fn progresso(&self) -> Option<(u32, u32)> {
+        self.fila.progresso()
     }
 }
 
@@ -776,7 +789,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     fn send_recompute(&mut self, fresh: bool) {
         self.gen_sent += 1;
         self.sent_doc = Some(self.open.doc.clone());
-        let _ = self.worker.tx.send((self.gen_sent, self.open.doc.clone(), fresh, self.qualidade_malha));
+        self.worker.enviar((self.gen_sent, self.open.doc.clone(), fresh, self.qualidade_malha));
     }
 
     /// A qualidade da malha mudou nas configurações: re-tessela a peça aberta e a montagem sem
@@ -802,7 +815,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             let doc = self.sent_doc.clone().unwrap_or_else(|| self.open.doc.clone());
             self.gen_sent += 1;
             self.sent_doc = Some(doc.clone());
-            let _ = self.worker.tx.send((self.gen_sent, doc, false, q));
+            self.worker.enviar((self.gen_sent, doc, false, q));
         }
     }
 
@@ -826,7 +839,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             return (true, set);
         }
         // parâmetros mudados (pelo nome) e referências mudadas: marcam só quem os usa
-        let mut names: Vec<String> = d.params.iter().filter(|p| rd.params.iter().find(|q| q.name == p.name).is_none_or(|q| q.expr != p.expr || q.unit != p.unit)).map(|p| p.name.clone()).collect();
+        let mut names: Vec<String> = d.params.iter().filter(|p| rd.params.iter().find(|q| q.name == p.name).is_none_or(|q| q.expr != p.expr || q.unit != p.unit || q.tipo != p.tipo)).map(|p| p.name.clone()).collect();
         names.extend(rd.params.iter().filter(|q| !d.params.iter().any(|p| p.name == q.name)).map(|q| q.name.clone()));
         let cites = |js: &str| names.iter().any(|n| js.match_indices(n.as_str()).any(|(i, _)| {
             let w = |c: char| c.is_alphanumeric() || c == '_';
@@ -842,7 +855,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 }
             }
         }
-        let same = |a: &Feature, b: &Feature| a.kind == b.kind && a.suppressed == b.suppressed && a.target == b.target && a.folder == b.folder;
+        let same = |a: &Feature, b: &Feature| a.kind == b.kind && a.suppressed == b.suppressed && a.suppress_if == b.suppress_if && a.target == b.target && a.folder == b.folder;
         for f in &d.features {
             if cites(&serde_json::to_string(&f.kind).unwrap_or_default()) {
                 set.insert(f.id);
@@ -3869,7 +3882,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         if !self.settings_open {
             return;
         }
-        const PAGES: [(&str, &str); 9] = [
+        const PAGES: [(&str, &str); 10] = [
             ("🖥", "Interface"),
             ("🎨", "Fundo da viewport"),
             ("⌨", "Atalhos"),
@@ -3879,10 +3892,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             ("⟳", "Recálculo"),
             ("📐", "Cotagem"),
             ("✏", "Sketch"),
+            ("🗂", "Camadas e perfil"),
         ];
         let mut open = true;
         let page = &mut self.settings_page;
         let s = &mut self.settings;
+        let doc_cfg = &mut self.open.doc;
         egui::Window::new(tr("⚙ Configurações"))
             .id(egui::Id::unique("janela_config"))
             .open(&mut open)
@@ -3909,7 +3924,13 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     ui.vertical(|ui| {
                         ui.heading(format!("{}  {}", PAGES[*page].0, tr(PAGES[*page].1)));
                         ui.separator();
-                        egui::ScrollArea::vertical().id_salt("pagina_config").auto_shrink([false, false]).show(ui, |ui| settings_page(ui, *page, s));
+                        egui::ScrollArea::vertical().id_salt("pagina_config").auto_shrink([false, false]).show(ui, |ui| {
+                            if *page == 9 {
+                                crate::config_ui::pagina(ui, s, doc_cfg);
+                            } else {
+                                settings_page(ui, *page, s);
+                            }
+                        });
                     });
                 });
             });
@@ -4397,10 +4418,15 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         // ---------- parâmetros
         let h = crate::tree_ui::grupo(ui, "arvore_parametros", Some("parametro"), format!("{} ({})", tr("Parâmetros"), doc.params.len()), false).corpo(ui, |ui| {
             let vars = self.vars();
+            let avisos = doc.avisos_param();
             for p in &doc.params {
-                let v = vars.get(&p.name).map(|v| format!("{} {}", fmt(*v), p.unit.symbol())).unwrap_or("⚠".into());
+                let v = crate::param_ui::valor_texto(p, &vars).unwrap_or("⚠".into());
+                let aviso = crate::param_ui::avisos_do_param_texto(&avisos, p.id);
                 crate::tree_ui::marca(ui);
-                let r = pick(ui, Sel::Params, RichText::new(format!("{}{} = {v}", if p.published { "📤 " } else { "" }, p.name)));
+                let mut r = pick(ui, Sel::Params, RichText::new(format!("{}{} = {v}{}", if p.published { "📤 " } else { "" }, p.name, if aviso.is_some() { " ⚠" } else { "" })));
+                if let Some(m) = aviso {
+                    r = r.on_hover_text(m);
+                }
                 if r.clicked() {
                     *new_sel = Some(Sel::Params);
                 }
@@ -4725,7 +4751,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         };
         let is_sketch = matches!(f.kind, FeatureKind::Sketch(_));
         let mut text = RichText::new(format!("{}{badge}", f.name)).color(color);
-        if f.suppressed {
+        if f.suppressed || doc.suprimido_por_expressao(f) {
             text = text.strikethrough();
         }
         if is_sketch && doc.sketch_hidden(f) {
@@ -6056,7 +6082,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 let swept = (((now - self.sweep_t0) / 0.035) as usize).min(n);
                 let stale = self.stale_from().is_some() && !busy;
                 let (txt, col) = if busy {
-                    ("⏳ recalculando…".to_string(), crate::theme::st_warn())
+                    let t = match self.worker.progresso() {
+                        Some((f, t)) => format!("⏳ recalculando… {}/{t}", f.min(t)),
+                        None => "⏳ recalculando…".to_string(),
+                    };
+                    (t, crate::theme::st_warn())
                 } else if stale {
                     (tr("⟳ desatualizado — F5 atualiza").to_string(), crate::theme::st_err())
                 } else if swept < n {
@@ -7027,11 +7057,11 @@ pub const TREE_SECTIONS: [(&str, &str); 7] = [
 /// referências, links, chapa, marcadores); `None` = mesma geometria.
 fn geo_stale_from(d: &Document, rd: &Document) -> Option<usize> {
     let refs_eq = d.references.len() == rd.references.len() && d.references.iter().zip(&rd.references).all(|(a, b)| a.id == b.id && a.kind == b.kind);
-    let params_eq = d.params.len() == rd.params.len() && d.params.iter().zip(&rd.params).all(|(a, b)| a.name == b.name && a.expr == b.expr && a.unit == b.unit);
+    let params_eq = d.params.len() == rd.params.len() && d.params.iter().zip(&rd.params).all(|(a, b)| a.name == b.name && a.expr == b.expr && a.unit == b.unit && a.tipo == b.tipo);
     if geo_global_changed(d, rd) || !refs_eq || !params_eq {
         return Some(0);
     }
-    let same = |a: &Feature, b: &Feature| a.id == b.id && a.kind == b.kind && a.suppressed == b.suppressed && a.target == b.target && a.folder == b.folder;
+    let same = |a: &Feature, b: &Feature| a.id == b.id && a.kind == b.kind && a.suppressed == b.suppressed && a.suppress_if == b.suppress_if && a.target == b.target && a.folder == b.folder;
     (0..d.features.len())
         .find(|i| rd.features.get(*i).is_none_or(|g| !same(g, &d.features[*i])))
         .or_else(|| (rd.features.len() != d.features.len()).then_some(d.features.len()))
@@ -7232,6 +7262,12 @@ impl eframe::App for App {
         crate::partida::contar_quadro();
         let ctx = &root.ctx().clone();
         crate::i18n::set_english(self.settings.english);
+        // camadas de configuração (B100): projeto aberto, travas, opções do documento e avisos
+        crate::config_camadas::definir_projeto(self.project.as_ref().map(|p| p.root.as_path()));
+        crate::config_camadas::sincronizar(&mut self.settings, &mut self.open.doc);
+        for aviso in crate::config_camadas::tirar_avisos() {
+            self.toast(aviso, true);
+        }
         crate::ui_ext::definir_modo_roda(crate::ui_ext::ModoRoda::de_u8(self.settings.wheel_mode));
         // cores salvas: preferências ↔ paleta usada pelos painéis
         {
@@ -7245,7 +7281,7 @@ impl eframe::App for App {
             }
         }
         // resultados do recompute
-        while let Ok((g, mut r)) = self.worker.rx.try_recv() {
+        while let Some((g, mut r)) = self.worker.receber() {
             if g >= self.gen_done {
                 self.gen_done = g;
                 // referências antigas (só o ponto) que resolveram ganham a chave v2 no documento
