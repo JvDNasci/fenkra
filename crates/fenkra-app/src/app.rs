@@ -3612,7 +3612,13 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         }
         let vars = self.vars();
         let mut open = true;
-        let table = fenkra_solidos::bend_table(&self.open.doc);
+        // tabela do mapa: mesma ordem e etiqueta das linhas de dobra da vista
+        let table = match &self.result {
+            Some(r) => fenkra_solidos::tabela_dobras(&self.open.doc, &r.bend_lines),
+            None => fenkra_solidos::bend_table(&self.open.doc),
+        };
+        let k_blank = egui::Id::new("planificada_resultado");
+        let blank: Option<Result<fenkra_solidos::planificada::Planificada, String>> = ctx.data(|m| m.get_temp(k_blank));
         let d = &mut self.open.doc;
         let sp = d.sheet.get_or_insert_with(SheetParams::default);
         let fechar = egui::Id::unique(("concluir_janela", "app.rs1"));
@@ -3684,12 +3690,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 if table.is_empty() {
                     ui.label(RichText::new(tr("nenhuma dobra ainda")).weak());
                 }
-                egui::Grid::new("tab_dobras").striped(true).num_columns(5).show(ui, |ui| {
-                    for h in ["Dobra", "Ângulo", "Raio", "Desenvolvido", "Dedução"] {
+                egui::Grid::new("tab_dobras").striped(true).num_columns(7).show(ui, |ui| {
+                    for h in ["Nº", "Etiqueta", "Dobra", "Ângulo", "Raio", "Desenvolvido", "Dedução"] {
                         ui.label(RichText::new(tr(h)).strong().small());
                     }
                     ui.end_row();
                     for r in &table {
+                        ui.label(RichText::new(r.ordem.to_string()).small());
+                        ui.label(RichText::new(&r.rotulo).small());
                         ui.label(RichText::new(&r.name).small());
                         ui.label(RichText::new(format!("{}°", fmt(r.angle))).small());
                         ui.label(RichText::new(fmt(r.radius)).small());
@@ -3698,7 +3706,54 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         ui.end_row();
                     }
                 });
+                editor::section(ui, "Planificada");
+                ui.horizontal(|ui| {
+                    if ui.button(tr("Verificar planificada")).on_hover_text(tr("Recalcula a chapa plana, confere se algum comando some ou se sobrepõe e mostra as propriedades do blank.")).clicked() {
+                        ui.ctx().data_mut(|m| m.insert_temp(egui::Id::new("planificada_pedido"), 1u8));
+                    }
+                    if ui.button(tr("Exportar DXF…")).on_hover_text(tr("DXF 1:1 em milímetros, com camadas fixas: contorno, furos, dobra para cima, dobra para baixo e ferramenta.")).clicked() {
+                        ui.ctx().data_mut(|m| m.insert_temp(egui::Id::new("planificada_pedido"), 2u8));
+                    }
+                });
+                match &blank {
+                    Some(Ok(p)) => {
+                        let pr = &p.propriedades;
+                        ui.label(RichText::new(format!("{} × {} mm · {} {} mm² · {} {}", fmt(pr.largura), fmt(pr.altura), tr("área"), fmt(pr.area), pr.dobras, tr("dobras"))).small());
+                        if let Some(m) = pr.massa {
+                            ui.label(RichText::new(format!("{} {} kg", tr("massa"), fmt((m * 1000.).round() / 1000.))).small());
+                        }
+                        for msg in p.problemas() {
+                            ui.label(RichText::new(msg).small().color(ui.visuals().error_fg_color));
+                        }
+                        if p.valida() {
+                            ui.label(RichText::new(tr("Nenhum comando some e nada se sobrepõe.")).small().weak());
+                        }
+                    }
+                    Some(Err(e)) => {
+                        ui.label(RichText::new(e).small().color(ui.visuals().error_fg_color));
+                    }
+                    None => {}
+                }
             });
+        // pedidos dos botões da planificada
+        let k_pedido = egui::Id::new("planificada_pedido");
+        match ctx.data_mut(|m| m.remove_temp::<u8>(k_pedido)).unwrap_or(0) {
+            1 => {
+                let r = fenkra_solidos::planificada::planificar(&self.open.doc);
+                ctx.data_mut(|m| m.insert_temp(k_blank, r));
+            }
+            2 => {
+                if let Some(path) = rfd::FileDialog::new().add_filter("DXF", &["dxf"]).set_file_name(format!("{}-planificada.dxf", self.open.doc.name)).save_file() {
+                    let r = fenkra_solidos::planificada::exportar_dxf(&self.open.doc, &path.to_string_lossy(), true);
+                    match &r {
+                        Ok(_) => self.toast(format!("Exportado: {}", path.display()), false),
+                        Err(e) => self.toast(format!("Falha ao exportar a planificada: {e}"), true),
+                    }
+                    ctx.data_mut(|m| m.insert_temp(k_blank, r));
+                }
+            }
+            _ => {}
+        }
         if !open {
             self.sheet_open = false;
         }

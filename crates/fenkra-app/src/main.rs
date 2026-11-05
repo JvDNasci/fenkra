@@ -21,6 +21,8 @@ mod geo_ui;
 mod keymap;
 mod feat_ui;
 mod handles;
+mod chapa_manip;
+mod chapa_manip_ui;
 mod gizmo;
 mod asm_ui;
 mod st_ui;
