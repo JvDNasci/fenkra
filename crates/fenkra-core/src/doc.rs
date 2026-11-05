@@ -1586,6 +1586,11 @@ pub struct SmCut {
     /// altura do colar (modo 2)
     pub height: String,
     pub flip: bool,
+    /// recorte "normal à face": o perfil corta reto a partir do plano do sketch, sem acompanhar a
+    /// chapa pelas dobras. Falso (padrão) = "através da dobra": o contorno desenhado no outro estado
+    /// (dobrado ou planificado) é levado ao estado atual, inclusive pelo raio da dobra.
+    #[serde(default)]
+    pub normal_face: bool,
 }
 
 /// Aba por perfil (aba complexa): cadeia aberta de um sketch, com cantos no raio da chapa, puxada

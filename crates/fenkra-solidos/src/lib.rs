@@ -484,17 +484,52 @@ impl SheetMap {
     fn to_folded(&self, p: V3) -> V3 {
         self.rot(geo3d::sub(p, geo3d::mul(self.u, self.ba)), self.a)
     }
-    /// Região da aba como sólido (prisma em volta da chapa), no dobrado ou no planificado.
-    fn region(&self, flat: bool) -> Result<Shape, String> {
+    /// Laje plana da chapa entre `u0` e `u1` (distância desenvolvida a partir da aresta), larga
+    /// o bastante para conter a aba nas duas direções.
+    fn slab(&self, u0: f64, u1: f64, up: Option<f64>) -> Result<Shape, String> {
         let m = 2. * self.t + 1.;
-        let (u0, u1) = if flat { (0., self.ba + self.length) } else { (0., self.length) };
+        // acima da face de referência (lado de dentro da dobra) a laje só pode ir até perto do eixo:
+        // além dele, o giro da fatia jogaria a ferramenta para o outro lado da dobra
+        let up = up.unwrap_or(m);
         let c = |uu: f64, ee: f64| geo3d::add(geo3d::add(self.c0, geo3d::mul(self.u, uu)), geo3d::add(geo3d::mul(self.ev, ee), geo3d::mul(self.n, -self.t - m)));
         let pts = [c(u0, -m), c(u1, -m), c(u1, self.l + m), c(u0, self.l + m)];
-        let prism = Shape::poly_prism(&pts, geo3d::mul(self.n, self.t + 2. * m)).map_err(|e| e.0)?;
+        Shape::poly_prism(&pts, geo3d::mul(self.n, self.t + m + up)).map_err(|e| e.0)
+    }
+    /// Região da perna reta da aba (depois da dobra) como sólido, no dobrado ou no planificado.
+    fn region(&self, flat: bool) -> Result<Shape, String> {
         if flat {
-            Ok(prism)
+            self.slab(self.ba, self.ba + self.length, None)
         } else {
-            prism.transformed(Xform::Rotate(self.o, self.axis, self.a.to_degrees())).map_err(|e| e.0)
+            self.slab(0., self.length, None)?.transformed(Xform::Rotate(self.o, self.axis, self.a.to_degrees())).map_err(|e| e.0)
+        }
+    }
+    /// Zona da dobra em fatias: (u médio no planificado, ângulo médio, laje planificada da fatia).
+    /// A fibra neutra mantém o comprimento: u = ρ·φ, com ρ = ba/a. As lajes são mais largas que a
+    /// cunha da fatia na face externa, então fatias vizinhas se sobrepõem (sem frestas).
+    fn bend_slices(&self) -> Result<Vec<(f64, f64, Shape)>, String> {
+        if self.ba <= 1e-9 || self.a <= 1e-9 {
+            return Ok(vec![]);
+        }
+        let rho = self.ba / self.a;
+        let r_in = geo3d::dist(self.o, self.c0);
+        let n = ((self.a.to_degrees() / 3.).ceil() as usize).clamp(1, 60);
+        let du = self.ba / n as f64;
+        let hw = du / 2. * (r_in + self.t) / rho.max(1e-6) + 1e-3;
+        (0..n)
+            .map(|i| {
+                let um = (i as f64 + 0.5) * du;
+                Ok((um, um / rho, self.slab((um - hw).max(0.), (um + hw).min(self.ba), Some(r_in * 0.5))?))
+            })
+            .collect()
+    }
+    /// Leva um pedaço da ferramenta que está na fatia (`um`, `phi`) entre os estados da chapa: o
+    /// planificado desliza até o eixo e gira o ângulo da fatia em torno do eixo da dobra.
+    fn move_slice(&self, part: Shape, um: f64, phi: f64, to_flat: bool) -> Result<Shape, String> {
+        let k = |e: KernelError| e.0;
+        if to_flat {
+            part.transformed(Xform::Rotate(self.o, self.axis, -phi.to_degrees())).map_err(k)?.transformed(Xform::Translate(geo3d::mul(self.u, um))).map_err(k)
+        } else {
+            part.transformed(Xform::Translate(geo3d::mul(self.u, -um))).map_err(k)?.transformed(Xform::Rotate(self.o, self.axis, phi.to_degrees())).map_err(k)
         }
     }
 }
@@ -2548,19 +2583,48 @@ impl Ctx<'_> {
         let k = |e: KernelError| e.0;
         let order: Vec<&SheetMap> = if to_flat { self.sheet_maps.iter().rev().collect() } else { self.sheet_maps.iter().collect() };
         let mut tool = tool;
+        let live = |s: &Shape| !s.is_null() && s.face_count() > 0;
         for m in order {
+            // perna reta da aba: gira junto com ela
             let reg = m.region(from_flat)?;
-            let part = tool.boolean(&reg, Bool::Common).map_err(k)?;
-            if part.is_null() || part.face_count() == 0 {
-                continue;
+            let leg = tool.boolean(&reg, Bool::Common).map_err(k)?;
+            let mut moved_leg = None;
+            let mut rest = tool.clone();
+            if live(&leg) {
+                rest = tool.boolean(&reg, Bool::Cut).map_err(k)?;
+                moved_leg = Some(if to_flat {
+                    leg.transformed(Xform::Rotate(m.o, m.axis, -m.a.to_degrees())).map_err(k)?.transformed(Xform::Translate(geo3d::mul(m.u, m.ba))).map_err(k)?
+                } else {
+                    leg.transformed(Xform::Translate(geo3d::mul(m.u, -m.ba))).map_err(k)?.transformed(Xform::Rotate(m.o, m.axis, m.a.to_degrees())).map_err(k)?
+                });
             }
-            let rest = tool.boolean(&reg, Bool::Cut).map_err(k)?;
-            let moved = if to_flat {
-                part.transformed(Xform::Rotate(m.o, m.axis, -m.a.to_degrees())).map_err(k)?.transformed(Xform::Translate(geo3d::mul(m.u, m.ba))).map_err(k)?
-            } else {
-                part.transformed(Xform::Translate(geo3d::mul(m.u, -m.ba))).map_err(k)?.transformed(Xform::Rotate(m.o, m.axis, m.a.to_degrees())).map_err(k)?
+            // zona da dobra (planificado -> dobrado): cada fatia vai pelo arco, e o contorno atravessa
+            // o raio da dobra. O que a ferramenta tem sobre a zona fora das lajes é descartado: é ar
+            // dentro da dobra no planificado e cairia sobre a aba no dobrado.
+            if from_flat && !to_flat && live(&rest) {
+                let mut moved: Vec<Shape> = vec![];
+                for (um, phi, slab) in m.bend_slices()? {
+                    let part = rest.boolean(&slab, Bool::Common).map_err(k)?;
+                    if live(&part) {
+                        moved.push(m.move_slice(part, um, phi, false)?);
+                    }
+                }
+                if !moved.is_empty() {
+                    let outside = rest.boolean(&m.slab(0., m.ba, Some(1e4))?, Bool::Cut).map_err(k)?;
+                    // as fatias se sobrepõem de propósito (sem frestas na face externa): funde tudo
+                    // numa peça só, senão a ferramenta teria sólidos que se cruzam
+                    let mut zone = moved[0].clone();
+                    for p in moved.iter().skip(1).chain(live(&outside).then_some(&outside)) {
+                        zone = zone.boolean(p, Bool::Fuse).map_err(k)?;
+                    }
+                    rest = zone;
+                }
+            }
+            tool = match moved_leg {
+                Some(l) if live(&rest) => rest.compound(&l),
+                Some(l) => l,
+                None => rest,
             };
-            tool = if rest.is_null() || rest.face_count() == 0 { moved } else { rest.compound(&moved) };
         }
         Ok(tool)
     }
@@ -2584,7 +2648,9 @@ impl Ctx<'_> {
                 | FeatureKind::SmProfileFlange(_)
                 | FeatureKind::SmCurveFlange(_)
         );
-        (!own && f.flat_space != sh.flat && !self.sheet_maps.is_empty()).then_some((f.flat_space, sh.flat))
+        // recorte "normal à face" não acompanha a chapa pelas dobras: corta reto do plano do sketch
+        let normal = matches!(&f.kind, FeatureKind::SmCut(c) if c.normal_face);
+        (!own && !normal && f.flat_space != sh.flat && !self.sheet_maps.is_empty()).then_some((f.flat_space, sh.flat))
     }
 
     /// "Até o último": distância de `o` até o ponto do corpo mais distante na direção `dir`.
@@ -6101,7 +6167,7 @@ mod tests {
         let mut d = base();
         let top = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "2");
         let sq = sk_rect(&mut d, PlaneRef::Datum(top), [20., 20.], [40., 30.]);
-        let cut = d.add_feature(FeatureKind::SmCut(SmCut { sketch: sq, mode: 0, offset: String::new(), draft: s("0"), height: s("0"), flip: false }));
+        let cut = d.add_feature(FeatureKind::SmCut(SmCut { sketch: sq, mode: 0, offset: String::new(), draft: s("0"), height: s("0"), flip: false, normal_face: false }));
         let r = check(&d);
         assert!(near(vol(&r), 10000. - 400., 1e-3), "recorte {}", vol(&r));
         // folga de 1 mm: 22×12

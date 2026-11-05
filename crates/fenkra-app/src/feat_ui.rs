@@ -713,6 +713,14 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 _ => {}
             }
             crate::editor::check(ui, &mut c.flip, "cortar para o outro lado");
+            ui.horizontal_wrapped(|ui| {
+                for (normal, n, tip) in [
+                    (false, "através da dobra", "O contorno desenhado num estado (dobrado ou planificado) é levado ao outro, inclusive pelo raio da dobra."),
+                    (true, "normal à face", "O contorno corta reto a partir do plano do sketch, sem acompanhar a chapa pelas dobras."),
+                ] {
+                    ui.selectable_value(&mut c.normal_face, normal, tr(n)).on_hover_text(tr(tip));
+                }
+            });
             ui.label(RichText::new(tr("Desenhe o perfil num sketch na face da chapa. Vale no dobrado e no planificado.")).weak().small());
         }
         FeatureKind::SmProfileFlange(p) => {

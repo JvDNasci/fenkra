@@ -1628,7 +1628,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 Sel::Feature(d.add_feature(match c {
                     Cmd::SmWall => FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }),
                     Cmd::SmStamp => FeatureKind::SmStamp(SmStamp { sketch: sk, depth: s("3"), flip: false, kind: 0, width: String::new(), punch: None }),
-                    Cmd::SmCut => FeatureKind::SmCut(SmCut { sketch: sk, mode: 0, offset: String::new(), draft: s("5"), height: s("4"), flip: false }),
+                    Cmd::SmCut => FeatureKind::SmCut(SmCut { sketch: sk, mode: 0, offset: String::new(), draft: s("5"), height: s("4"), flip: false, normal_face: false }),
                     Cmd::SmProfileFlange => FeatureKind::SmProfileFlange(SmProfileFlange { sketch: sk, l1: s("0"), l2: s("40"), radius: None, flip: false }),
                     _ => FeatureKind::SmFlangedHole(SmFlangedHole {
                         sketch: sk,
