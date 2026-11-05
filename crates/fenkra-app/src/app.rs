@@ -182,6 +182,8 @@ pub struct App {
     diag: diag::Estado,
     /// "Selecionar outro": ciclo de candidatos sob o ponteiro com Alt + roda (B95)
     selecao_ciclo: crate::selecao::Estado,
+    /// laço, espelho do conjunto na cena e avanço pelo menu (B95)
+    selecao_extra: crate::selecao::Extra,
     last_edit: f64,
     toasts: Vec<(String, f64, bool)>,
     /// motivos pelos quais o modo leve é sugerido, até a pessoa responder (B236)
@@ -366,6 +368,7 @@ impl App {
             importar_relatorio: None,
             diag: Default::default(),
             selecao_ciclo: Default::default(),
+            selecao_extra: Default::default(),
             last_edit: -10.,
             toasts: vec![],
             sugestao_leve: None,
@@ -2448,6 +2451,32 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     }
 
     /// Olha de frente para o plano do item selecionado (sketch, plano da Origem ou referência).
+    /// B95: o conjunto único. Reúne a seleção da árvore e o dono de cada escolha do 3D; quando muda,
+    /// a cena é refeita para mostrar no 3D o que a árvore selecionou (e a árvore realça o que o 3D escolheu).
+    fn atualizar_conjunto(&mut self) {
+        let r = self.result.as_ref();
+        let coletor = |b: usize| r.and_then(|r| r.bodies.get(b)).map(|x| x.collector);
+        let do_3d = self.picks.iter().filter_map(|p| crate::selecao::dono_na_arvore(p, coletor));
+        let unico = match self.sel {
+            Sel::Ref(i) | Sel::Folder(i) | Sel::Feature(i) | Sel::Collector(i) | Sel::Pmi(i) => Some(i),
+            _ => None,
+        };
+        let ids = crate::selecao::ids_do_conjunto(&self.multi.borrow(), unico, do_3d);
+        if ids != self.selecao_extra.visto {
+            self.selecao_extra.visto = ids;
+            self.scene_dirty = true;
+        }
+    }
+
+    /// B95: cresce a seleção a partir de uma face ou aresta pela regra escolhida no menu.
+    fn selecionar_por_regra(&mut self, p: crate::picking::Pick, regra: crate::selecao_regras::Regra) {
+        let Some(r) = self.result.as_ref() else { return };
+        let novos = crate::selecao_regras::por_regra(r, &p, regra);
+        let n = novos.len();
+        self.picks = novos;
+        self.toasts.push((format!("{n} {}", tr("elemento(s) na seleção")), 0., false));
+    }
+
     fn align_to_selection(&mut self) {
         let Some(r) = &self.result else { return };
         let frame = match self.sel {
@@ -4056,11 +4085,20 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         });
         let _ = aberto_origem.corpo(ui, |ui| {
             for o in [OriginPlane::XY, OriginPlane::XZ, OriginPlane::YZ] {
-                let r = crate::tree_ui::linha(ui, "plano", sel == Sel::Origin(o), format!("{} {}", tr("Plano"), scene::plane_name(o)));
+                let r = crate::tree_ui::linha(ui, "plano", sel == Sel::Origin(o), {
+                    let nome = RichText::new(format!("{} {}", tr("Plano"), scene::plane_name(o)));
+                    if origem_oculta { nome.weak() } else { nome }
+                });
                 if r.clicked() {
                     new_sel = Some(Sel::Origin(o));
                 }
+                // B16: os três planos seguem o estado da origem (o pai); o menu deles também alterna
+                let r = if origem_oculta { r.on_hover_text(tr("a origem está oculta: os planos voltam com ela")) } else { r };
                 r.context_menu(|ui| {
+                    if ui.button(if origem_oculta { tr("Mostrar origem") } else { tr("Ocultar origem") }).clicked() {
+                        actions.push(TreeAction::OriginVisible(origem_oculta));
+                        ui.close();
+                    }
                     if ui.button(tr("✏ Novo sketch neste plano")).clicked() {
                         actions.push(TreeAction::SketchOn(PlaneRef::Origin(o)));
                         ui.close();
@@ -4322,7 +4360,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     }
                 }
                 let (ext, state, path) = (e.id, e.state, e.path.clone());
+                let alvo = e.target.and_then(|t| doc.reference(t));
                 r.context_menu(|ui| {
+                    if let Some(rf) = alvo {
+                        if ui.button(if rf.visible { tr("Ocultar   H") } else { tr("Mostrar   H") }).clicked() {
+                            actions.push(TreeAction::RefVisible(rf.id, !rf.visible));
+                            ui.close();
+                        }
+                    }
                     ui.label(RichText::new(crate::geo_ui::link_state_label(state).0).weak());
                     ui.label(RichText::new(format!("📂 {path}")).weak().small());
                     ui.separator();
@@ -4485,7 +4530,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     actions.push(TreeAction::FolderShown(fo.id, all_hidden));
                 }
                 crate::tree_ui::icone(ui, "pasta");
-                let r = self.row_label(ui, fo.id, &fo.name, self.sel == Sel::Folder(fo.id), RichText::new(format!("{}  ({n})", fo.name)).strong(), actions);
+                let r = self.row_label(ui, fo.id, &fo.name, self.sel == Sel::Folder(fo.id), {
+                    // B16: pasta oculta, ou dentro de uma oculta, fica esmaecida (o estado de cada item é dele)
+                    let t = RichText::new(format!("{}  ({n})", fo.name)).strong();
+                    if doc.folder_hidden(Some(fo.id)) { t.weak() } else { t }
+                }, actions);
                 let r = if n == 0 { r.on_hover_text(tr("vazia — clique direito para criar, ou arraste itens para cá")) } else { r };
                 let r = drag_item(ui, r, fo.id, self.renaming != Some(fo.id));
                 if r.double_clicked() {
@@ -4598,7 +4647,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         }
         self.tree_order.borrow_mut().push(id);
         let in_multi = self.multi.borrow().contains(&id) && self.multi.borrow().len() > 1;
-        let r = ui.selectable_label(selected || in_multi, text);
+        let r = ui.selectable_label(selected || in_multi || self.selecao_extra.visto.contains(&id), text);
         if selected {
             crate::tree_ui::achar(r.rect);
         }
@@ -4610,11 +4659,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             let (ctrl, shift) = ui.input(|i| (i.modifiers.command, i.modifiers.shift));
             let mut m = self.multi.borrow_mut();
             if ctrl {
-                if let Some(k) = m.iter().position(|x| *x == id) {
-                    m.remove(k);
-                } else {
-                    m.push(id);
-                }
+                crate::selecao::aplicar(&mut m, Some(id), crate::selecao::Modo::Alternar);
                 self.multi_anchor.set(Some(id));
             } else if shift {
                 let order = self.tree_order.borrow();
@@ -4630,7 +4675,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     *m = vec![id];
                 }
             } else {
-                *m = vec![id];
+                crate::selecao::aplicar(&mut m, Some(id), crate::selecao::Modo::Trocar);
                 self.multi_anchor.set(Some(id));
             }
         }
@@ -4757,7 +4802,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             text = text.strikethrough();
         }
         if is_sketch && doc.sketch_hidden(f) {
-            text = text.italics();
+            text = text.italics().weak();
         }
         // entradas do comando (sketch, pontos, curvas, superfícies) como subitens
         let inputs: Vec<Id> = if is_sketch { vec![] } else { Document::refs_of(&f.kind).into_iter().filter(|x| doc.reference(*x).is_some() || doc.feature(*x).is_some_and(|g| matches!(g.kind, FeatureKind::Sketch(_)))).collect() };
@@ -5140,6 +5185,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 }
             }
             TreeAction::OpenPublications => self.pub_open = true,
+            TreeAction::SelRegra(p, regra) => self.selecionar_por_regra(p, regra),
+            TreeAction::SelOutro => self.selecao_extra.avancar += 1,
+            TreeAction::SelLaco => {
+                self.selecao_extra.laco_ligado = !self.selecao_extra.laco_ligado;
+                self.selecao_extra.laco.clear();
+                let msg = if self.selecao_extra.laco_ligado { "Laço: arraste no 3D para circundar o que quer selecionar" } else { "Laço desligado" };
+                self.toast(tr(msg).to_string(), false);
+            }
             TreeAction::WithPicks(p, c) => {
                 self.picks = p;
                 self.sel = Sel::None;
@@ -5227,6 +5280,16 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 }
                 .filter(|o| doc.feature(*o).is_some());
                 ui.label(RichText::new(p.label(doc)).strong());
+                // B95: seleção por intenção a partir do que está sob o ponteiro
+                item(ui, "Selecionar outro   Alt + roda", TreeAction::SelOutro, acts);
+                for regra in crate::selecao_regras::Regra::TODAS {
+                    if matches!(p, Pick::Face { .. }) && regra == crate::selecao_regras::Regra::Cadeia || matches!(p, Pick::Vertex { .. }) {
+                        continue;
+                    }
+                    item(ui, regra.rotulo(), TreeAction::SelRegra(p, regra), acts);
+                }
+                item(ui, "Seleção por laço", TreeAction::SelLaco, acts);
+                ui.separator();
                 if let Some(o) = owner {
                     ui.label(RichText::new(format!("{} {}", tr("criada por"), doc.name_of(o))).weak().small());
                     item(ui, "✏ Editar o comando que criou", TreeAction::EditSketch(o), acts);
@@ -5307,6 +5370,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
             _ => {
                 ui.label(RichText::new(tr("Vista")).strong());
+                item(ui, "Seleção por laço", TreeAction::SelLaco, acts);
                 item(ui, "⤢ Ajustar tudo   F", TreeAction::Act(Act::Fit), acts);
                 item(ui, "⟂ Normal à seleção   N", TreeAction::Act(Act::Normal), acts);
                 item(ui, if self.settings.ortho { "Perspectiva" } else { "Ortogonal" }, TreeAction::Act(Act::Ortho), acts);
@@ -6183,7 +6247,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             let scroll = if arvore_com_roda { 0. } else { scroll };
             // B95: Alt + roda percorre o que está sob o ponteiro em vez de dar zoom
             let alt_roda = ctx.input(|i| i.modifiers.alt) && resp.hovered() && !ctrl;
-            let passo_ciclo = if alt_roda { self.selecao_ciclo.roda(scroll) } else { 0 };
+            let passo_ciclo = if alt_roda { self.selecao_ciclo.roda(scroll) } else { 0 } + std::mem::take(&mut self.selecao_extra.avancar);
             let scroll = if alt_roda { 0. } else { scroll };
             let delta = resp.drag_delta();
             let (left, mid, right) = (
@@ -6195,7 +6259,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             use crate::settings::NavStyle as N;
             // (girar, mover, zoom arrastando) conforme o estilo de navegação escolhido
             // Ctrl + arrastar com o esquerdo = seleção em caixa (fora do sketch)
-            if resp.drag_started_by(egui::PointerButton::Primary) && (ctrl || self.settings.box_mode > 0) && !sketching {
+            if resp.drag_started_by(egui::PointerButton::Primary) && (ctrl || self.settings.box_mode > 0 || self.selecao_extra.laco_ligado) && !sketching {
                 self.box_start = ctx.input(|i| i.pointer.press_origin());
             }
             let boxing = self.box_start.is_some();
@@ -6405,10 +6469,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 // comandos que escolhem faces da própria peça continuam clicando no que veem
                 let aberto = self.session.as_ref().map(|x| x.id);
                 let escolhe_faces = aberto.and_then(|id| self.open.doc.feature(id)).is_some_and(|f| crate::feat_ui::wants_faces(&f.kind));
+                // B95: o comando aberto manda no filtro enquanto durar; a barra volta sozinha ao fechar
+                let temp = aberto.and_then(|id| self.open.doc.feature(id)).and_then(|f| crate::selecao::tipos_do_comando(&f.kind));
                 let filt = crate::picking::Filter {
-                    faces: self.settings.sel_faces,
-                    edges: self.settings.sel_edges,
-                    vertices: self.settings.sel_vertices,
+                    faces: temp.map_or(self.settings.sel_faces, |t| t.faces),
+                    edges: temp.map_or(self.settings.sel_edges, |t| t.arestas),
+                    vertices: temp.map_or(self.settings.sel_vertices, |t| t.vertices),
                     planes: true,
                     hidden_env: self.hidden_env,
                     exclude_sketch: None,
@@ -6508,27 +6574,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                             }
                         }
                         (_, Some(p)) => {
-                            // Ctrl+clique soma/tira; Shift soma; clique simples troca a seleção
-                            // (no único escolhido, desmarca)
+                            // mesmas regras da árvore (B95): Ctrl soma/tira, Shift soma, simples troca
                             let ctrl = ctx.input(|i| i.modifiers.command);
-                            let pos = self.picks.iter().position(|x| *x == p);
-                            if ctrl {
-                                match pos {
-                                    Some(i) => {
-                                        self.picks.remove(i);
-                                    }
-                                    None => self.picks.push(p),
-                                }
-                            } else if add {
-                                if pos.is_none() {
-                                    self.picks.push(p);
-                                }
-                            } else if self.picks.len() == 1 && pos.is_some() {
-                                self.picks.clear();
-                            } else {
-                                self.picks.clear();
-                                self.picks.push(p);
-                            }
+                            crate::selecao::aplicar(&mut self.picks, Some(p), crate::selecao::Modo::das_teclas(ctrl, add));
                         }
                         (_, None) => {
                             if !add {
@@ -6550,8 +6598,21 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     } else {
                         (Color32::from_rgba_unmultiplied(80, 150, 255, 40), egui::Stroke::new(1.2, Color32::from_rgb(80, 150, 255)))
                     };
-                    ui.painter().rect_filled(b, 0., fill);
-                    if crossing {
+                    let laco = self.selecao_extra.laco_ligado;
+                    if laco {
+                        // B95: laço à mão livre; fecha sozinho entre o último ponto e o primeiro
+                        if self.selecao_extra.laco.is_empty() {
+                            self.selecao_extra.laco.push(a0);
+                        }
+                        self.selecao_extra.ponto(now);
+                        let mut linha = self.selecao_extra.laco.clone();
+                        linha.push(a0);
+                        ui.painter().add(egui::Shape::line(linha, stroke));
+                    } else {
+                        ui.painter().rect_filled(b, 0., fill);
+                    }
+                    if laco {
+                    } else if crossing {
                         let pts = [b.left_top(), b.right_top(), b.right_bottom(), b.left_bottom(), b.left_top()];
                         for w in pts.windows(2) {
                             ui.painter().extend(egui::Shape::dashed_line(&[w[0], w[1]], stroke, 6., 4.));
@@ -6561,7 +6622,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     }
                     ui.painter().text(now + egui::vec2(10., 10.), egui::Align2::LEFT_TOP, if crossing { "cruzada (toca)" } else { "janela (inteiro dentro)" }, egui::FontId::proportional(11.), stroke.color);
                     if !ctx.input(|i| i.pointer.primary_down()) {
-                        let mut got = crate::picking::box_select(r, &self.open.doc, &cam, rect, b, crossing, &filt);
+                        let mut got = if laco {
+                            crate::picking::laco_select(r, &self.open.doc, &cam, rect, &self.selecao_extra.laco, crossing, &filt)
+                        } else {
+                            crate::picking::box_select(r, &self.open.doc, &cam, rect, b, crossing, &filt)
+                        };
+                        self.selecao_extra.laco.clear();
                         if !ctx.input(|i| i.modifiers.shift) {
                             self.picks.clear();
                         }
@@ -6996,6 +7062,12 @@ enum TreeAction {
     ToggleSection(String),
     /// usa estes elementos do 3D como seleção e executa o comando
     WithPicks(Vec<crate::picking::Pick>, Cmd),
+    /// seleção por intenção a partir de uma face ou aresta (B95)
+    SelRegra(crate::picking::Pick, crate::selecao_regras::Regra),
+    /// "Selecionar outro" pelo menu: avança um candidato sob o ponteiro (B95)
+    SelOutro,
+    /// liga/desliga o laço no arrasto (B95)
+    SelLaco,
     /// ação da barra (vistas, ajustar…)
     Act(Act),
     /// a câmera passa a orbitar em volta deste ponto
@@ -7516,6 +7588,7 @@ impl eframe::App for App {
         let area = root.available_rect_before_wrap();
         self.area_util = area;
         self.hover_now.set(None);
+        self.atualizar_conjunto();
         // o painel de comando só existe com um comando aberto
         let active = if self.settings.bench == crate::settings::Bench::Desenho {
             self.dwg.as_ref().is_some_and(|s| s.active())
@@ -7728,7 +7801,7 @@ impl eframe::App for App {
                     dark_edges: !matches!(self.settings.display, crate::render::DisplayMode::Arame) || lum(self.settings.bg_bottom) > 140.,
                     tangent_edges: self.settings.tangent_edges || matches!(self.settings.display, crate::render::DisplayMode::Arame),
                     hilite: self.hover_item.or(self.session.as_ref().map(|s| s.id)),
-                    hilite_extra: self.asm.as_ref().filter(|_| asm_view.is_some()).map_or(&self.st_cut_hi, |s| &s.multi),
+                    hilite_extra: &self.asm.as_ref().filter(|_| asm_view.is_some()).map_or(&self.st_cut_hi, |s| &s.multi).iter().chain(if asm_view.is_some() { &[][..] } else { &self.selecao_extra.visto[..] }).copied().collect::<Vec<Id>>(),
                     line_w: self.settings.ref_line_width,
                     line_dash: self.settings.ref_line_dash,
                     point_style: self.settings.point_style,

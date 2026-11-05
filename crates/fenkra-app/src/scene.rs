@@ -112,7 +112,8 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
         }
     }
     hi_features.extend(o.hilite_extra.iter().copied());
-    let hi = |id: Id| o.hilite == Some(id);
+    // o conjunto único (B95) acende no 3D o que a árvore tem selecionado, além do item sob o mouse
+    let hi = |id: Id| o.hilite == Some(id) || o.hilite_extra.contains(&id);
 
     let feat_app: HashMap<Id, Appearance> = doc.features.iter().filter_map(|f| f.appearance.map(|a| (f.id, a))).collect();
     // só sketches se ocultam um a um; sólidos aparecem pelo corpo (a última feature junta tudo)

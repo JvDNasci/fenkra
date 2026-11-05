@@ -15,6 +15,8 @@ mod entradas;
 mod previa;
 mod picking;
 mod selecao;
+mod selecao_regras;
+mod alca_estado;
 mod viewcube;
 mod sketch_ui;
 mod sketch_vinculos;
