@@ -95,6 +95,7 @@ std::unique_ptr<Shape> box_tool(double ox, double oy, double oz, double xx, doub
 std::unique_ptr<Shape> poly_prism(rust::Slice<const double> pts, double dx, double dy, double dz);
 std::unique_ptr<Shape> sm_flange(const Shape& body, double px, double py, double pz, double t, double r, double angle_deg, double length,
                                  double off1, double off2, bool flip, bool flat, double k, rust::Vec<double>& info);
+std::unique_ptr<Shape> sm_chain_sweep(const Shape& face, rust::Slice<const double> pts, double nx, double ny, double nz);
 std::unique_ptr<Shape> from_brep(rust::Str text);
 std::unique_ptr<Shape> hole_tool_ext(double ox, double oy, double oz, double dx, double dy, double dz, double diameter, double depth,
                                      uint8_t kind, double d2, double p2, double a3, double tip, double taper);

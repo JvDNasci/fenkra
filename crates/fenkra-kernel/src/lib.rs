@@ -632,6 +632,12 @@ mod imp {
             };
             Ok((Shape(s), i))
         }
+        /// Varre esta seção ao longo de uma cadeia plana de pontos (retas e curvas tangentes) com a
+        /// normal da chapa como binormal fixa.
+        pub fn sm_chain_sweep(&self, pts: &[[f64; 3]], normal: [f64; 3]) -> KResult<Shape> {
+            let flat: Vec<f64> = pts.iter().flatten().copied().collect();
+            b::sm_chain_sweep(&self.0, &flat, normal[0], normal[1], normal[2]).map(Shape).map_err(err)
+        }
         /// Perfil plano deslocado para fora (d > 0) ou para dentro.
         pub fn offset_face(&self, d: f64) -> KResult<Shape> {
             b::offset_face(&self.0, d).map(Shape).map_err(err)
@@ -837,6 +843,9 @@ mod imp {
             no()
         }
         pub fn sweep(&self, _: &[[f64; 3]], _: u8) -> KResult<Shape> {
+            no()
+        }
+        pub fn sm_chain_sweep(&self, _: &[[f64; 3]], _: [f64; 3]) -> KResult<Shape> {
             no()
         }
         pub fn loft(&self, _: bool, _: bool) -> KResult<Shape> {

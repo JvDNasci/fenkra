@@ -455,8 +455,8 @@ impl App {
             }
             let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
             d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
-            d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 30., 2.], length: s("25"), angle: s("90"), radius: None, off1: s("8"), off2: s("8"), flip: false, relief: Some(s("3")), relief_kind: 0, side: 0, miter: false, min_gap: true }));
-            d.add_feature(FeatureKind::SmHem(SmHem { edge: [0., 30., 2.], length: s("8"), gap: s("0"), flip: false, kind: 0 }));
+            d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 30., 2.], length: s("25"), angle: s("90"), radius: None, off1: s("8"), off2: s("8"), flip: false, relief: Some(s("3")), relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None }));
+            d.add_feature(FeatureKind::SmHem(SmHem { edge: [0., 30., 2.], length: s("8"), gap: s("0"), flip: false, kind: 0, edge_key: None }));
             if std::env::var("FENKRA_DEMO_CHAPA").is_ok_and(|v| v == "linha") {
                 d.add_feature(FeatureKind::SmLouver(SmLouver { a: [60., 15., 2.], b: [60., 45., 2.], width: s("12"), height: s("5"), flip: false, down: false }));
                 d.add_feature(FeatureKind::SmBend(SmBend { a: [20., 0., 2.], b: [20., 60., 2.], angle: s("45"), radius: None, flip: false, down: false }));
@@ -1230,6 +1230,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         o.keys = k.clone();
                     }
                 }
+                (FeatureKind::SmFlange(a), Promoted::Edges(k)) if k.len() == 1 => a.edge_key = k[0].clone(),
+                (FeatureKind::SmHem(a), Promoted::Edges(k)) if k.len() == 1 => a.edge_key = k[0].clone(),
+                (FeatureKind::SmCurveFlange(a), Promoted::Edges(k)) if k.len() == 1 => a.edge_key = k[0].clone(),
                 (FeatureKind::Shell(s), Promoted::Faces(k)) if s.faces.len() == k.len() => s.face_keys = k.clone(),
                 (FeatureKind::Draft(d), Promoted::Faces(k)) if d.faces.len() == k.len() => d.face_keys = k.clone(),
                 (FeatureKind::Thickness(t), Promoted::Faces(k)) if t.faces.len() == k.len() => t.face_keys = k.clone(),
@@ -1633,7 +1636,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 Sel::Feature(d.add_feature(match c {
                     Cmd::SmWall => FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }),
                     Cmd::SmStamp => FeatureKind::SmStamp(SmStamp { sketch: sk, depth: s("3"), flip: false, kind: 0, width: String::new(), punch: None }),
-                    Cmd::SmCut => FeatureKind::SmCut(SmCut { sketch: sk, mode: 0, offset: String::new(), draft: s("5"), height: s("4"), flip: false }),
+                    Cmd::SmCut => FeatureKind::SmCut(SmCut { sketch: sk, mode: 0, offset: String::new(), draft: s("5"), height: s("4"), flip: false, normal_face: false }),
                     Cmd::SmProfileFlange => FeatureKind::SmProfileFlange(SmProfileFlange { sketch: sk, l1: s("0"), l2: s("40"), radius: None, flip: false }),
                     _ => FeatureKind::SmFlangedHole(SmFlangedHole {
                         sketch: sk,
@@ -1679,7 +1682,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 });
                 let d = &mut self.open.doc;
                 Sel::Feature(d.add_feature(match c {
-                    Cmd::SmCurveFlange => FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("15"), flip: false, angle: s("90"), radius: None, side: 0 }),
+                    Cmd::SmCurveFlange => FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("15"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None }),
                     Cmd::SmArcSlot => FeatureKind::SmArcSlot(SmArcSlot { center: at.unwrap_or([0.; 3]), radius: s("20"), width: s("6"), start: s("0"), sweep: s("90") }),
                     _ => FeatureKind::SmCornerRelief(SmCornerRelief { at: at.unwrap_or([0.; 3]), size: s("4"), kind: 0 }),
                 }))
@@ -1712,8 +1715,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         side: 0,
                         miter: false,
                         min_gap: true,
+                        edge_key: None,
                     }),
-                    Cmd::SmHem => FeatureKind::SmHem(SmHem { edge: edge.unwrap_or([0.; 3]), length: s("8"), gap: s("0"), flip: false, kind: 0 }),
+                    Cmd::SmHem => FeatureKind::SmHem(SmHem { edge: edge.unwrap_or([0.; 3]), length: s("8"), gap: s("0"), flip: false, kind: 0, edge_key: None }),
                     Cmd::SmBend => FeatureKind::SmBend(SmBend {
                         a: verts.first().copied().unwrap_or([0.; 3]),
                         b: verts.get(1).copied().unwrap_or([0., 10., 0.]),

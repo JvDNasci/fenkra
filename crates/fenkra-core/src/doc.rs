@@ -1589,6 +1589,11 @@ pub struct SmCut {
     /// altura do colar (modo 2)
     pub height: String,
     pub flip: bool,
+    /// recorte "normal à face": o perfil corta reto a partir do plano do sketch, sem acompanhar a
+    /// chapa pelas dobras. Falso (padrão) = "através da dobra": o contorno desenhado no outro estado
+    /// (dobrado ou planificado) é levado ao estado atual, inclusive pelo raio da dobra.
+    #[serde(default)]
+    pub normal_face: bool,
 }
 
 /// Aba por perfil (aba complexa): cadeia aberta de um sketch, com cantos no raio da chapa, puxada
@@ -1622,6 +1627,9 @@ pub struct SmCurveFlange {
     /// aba alinhada à aresta), 2 material por dentro (face externa alinhada à aresta)
     #[serde(default)]
     pub side: u8,
+    /// uma aresta da cadeia por dono + papel; a polilinha `edge` é só cache da cadeia tangente
+    #[serde(default)]
+    pub edge_key: Option<EdgeKey>,
 }
 
 /// Rasgo circular (arco) atravessando a chapa: centro na face, raio do arco, largura,
@@ -1781,6 +1789,10 @@ pub struct SmFlange {
     /// recuo mínimo (0,0001) nas pontas: abas vizinhas sem recuo planificam certo
     #[serde(default = "yes_bool")]
     pub min_gap: bool,
+    /// aresta por dono + papel das duas faces vizinhas (ADR 0010); o ponto `edge` fica só como
+    /// reserva. Calculada no recompute e gravada pelo app (promoção).
+    #[serde(default)]
+    pub edge_key: Option<EdgeKey>,
 }
 
 fn yes_bool() -> bool {
@@ -1797,6 +1809,9 @@ pub struct SmHem {
     /// 0 fechada/aberta (pela folga), 1 gota (lágrima), 2 enrolada
     #[serde(default)]
     pub kind: u8,
+    /// aresta por dono + papel (o ponto `edge` é só reserva)
+    #[serde(default)]
+    pub edge_key: Option<EdgeKey>,
 }
 
 /// Transformação do corpo (o original deixa de existir na posição antiga).
