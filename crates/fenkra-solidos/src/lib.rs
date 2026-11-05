@@ -3118,7 +3118,14 @@ impl Ctx<'_> {
                     depths.push(depth);
                     HOLE_LOG.with(|l| {
                         if let Some(v) = l.borrow_mut().as_mut() {
-                            v.push(HoleRow { feature: f.id, pos: *o, dir: *dir, diameter: d, depth, through: matches!(h.depth, Extent::ThroughAll | Extent::UpToLast), thread: h.thread.clone().unwrap_or_default() });
+                            let (forma, d_boca, prof_boca, angulo) = match shape {
+                                HoleShape::Simple => (FormaFuro::Reto, 0., 0., 0.),
+                                HoleShape::Counterbore { diameter, depth } => (FormaFuro::Rebaixo, diameter, depth, 0.),
+                                HoleShape::Countersink { diameter, angle } => (FormaFuro::Escareado, diameter, prof_escareado(diameter, d, angle), angle),
+                                HoleShape::Counterdrill { diameter, depth, angle } => (FormaFuro::Contrafuro, diameter, depth, angle),
+                            };
+                            let tolerancia = h.standard.as_deref().map(tolerancia_do_texto).unwrap_or_default();
+                            v.push(HoleRow { feature: f.id, pos: *o, dir: *dir, diameter: d, depth, through: matches!(h.depth, Extent::ThroughAll | Extent::UpToLast), thread: h.thread.clone().unwrap_or_default(), forma, d_boca, prof_boca, angulo, tolerancia });
                         }
                     });
                     let mut t = Shape::hole_tool_ext(*o, *dir, d, depth, shape, tip, taper).map_err(k)?;
@@ -5330,7 +5337,19 @@ thread_local! {
     static HOLE_LOG: RefCell<Option<Vec<HoleRow>>> = const { RefCell::new(None) };
 }
 
-/// Linha da tabela de furos: centro da boca, direção, diâmetro, profundidade e rosca.
+/// Como a boca do furo é: reta, com rebaixo de fundo plano, escareada (cone) ou com rebaixo de
+/// fundo cônico.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FormaFuro {
+    #[default]
+    Reto,
+    Rebaixo,
+    Escareado,
+    Contrafuro,
+}
+
+/// Linha da tabela de furos: centro da boca, direção, diâmetro, profundidade, rosca e a forma da
+/// boca (B85). A boca é do lado de `pos`, voltada para fora do material (a cabeça assenta nela).
 #[derive(Clone, Debug, PartialEq)]
 pub struct HoleRow {
     pub feature: Id,
@@ -5341,6 +5360,34 @@ pub struct HoleRow {
     /// passante (atravessa tudo / até a última face)
     pub through: bool,
     pub thread: String,
+    pub forma: FormaFuro,
+    /// diâmetro do rebaixo ou da boca do cone (0 no furo reto)
+    pub d_boca: f64,
+    /// profundidade da boca contada da face: do rebaixo, do cone inteiro ou do contrafuro (0 no reto)
+    pub prof_boca: f64,
+    /// ângulo total do cone, em graus (0 quando não há cone)
+    pub angulo: f64,
+    /// classe de tolerância escrita na especificação do furo ("H7"); vazia quando não há
+    pub tolerancia: String,
+}
+
+/// Classe de tolerância ISO ("H7", "h6", "JS9") dentro de um texto de especificação: uma ou duas
+/// letras seguidas de um ou dois algarismos. Palavras que começam em M (rosca métrica) não contam.
+pub fn tolerancia_do_texto(texto: &str) -> String {
+    let e_classe = |w: &str| {
+        let letras = w.chars().take_while(|c| c.is_ascii_alphabetic()).count();
+        let resto = &w[letras..];
+        (1..=2).contains(&letras) && (1..=2).contains(&resto.len()) && resto.chars().all(|c| c.is_ascii_digit()) && !w.starts_with(['M', 'm'])
+    };
+    texto.split(|c: char| !c.is_ascii_alphanumeric()).find(|w| e_classe(w)).map(str::to_string).unwrap_or_default()
+}
+
+/// Profundidade do cone de um escareado de diâmetro `boca`, ângulo total `angulo` e furo `d`.
+pub fn prof_escareado(boca: f64, d: f64, angulo: f64) -> f64 {
+    if angulo <= 0. || angulo >= 180. || boca <= d {
+        return 0.;
+    }
+    (boca - d) / 2. / (angulo.to_radians() / 2.).tan()
 }
 
 /// Todos os furos da peça (um por centro), na ordem da árvore.
@@ -5964,6 +6011,52 @@ mod tests {
         assert!(near(area(&r, con), 40. * 30., 0.05), "conexão entre as bordas que se olham {}", area(&r, con));
         let asp = area(&r, spl);
         assert!(asp > 300. && asp < 700., "dividida pela curva: metade de 800 = {asp}");
+    }
+
+    #[test]
+    fn tabela_de_furos_traz_forma_da_boca_e_tolerancia() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let s = |x: &str| x.to_string();
+        let mut linhas = vec![];
+        for (kind, standard) in [
+            (HoleKind::Simples, Some(s("Ø6 H7"))),
+            (HoleKind::Rebaixado { diameter: s("11"), depth: s("6.4") }, Some(s("M6 normal"))),
+            (HoleKind::Escareado { diameter: s("12"), angle: s("90") }, None),
+            (HoleKind::Contrafurado { diameter: s("11"), depth: s("5"), angle: s("118") }, None),
+        ] {
+            let mut d = Document::new("tf");
+            let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [40., 40.]);
+            d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0 }));
+            d.add_feature(FeatureKind::Hole(Hole {
+                sketch: Id(0),
+                kind,
+                diameter: s("6.6"),
+                depth: Extent::ThroughAll,
+                thread: None,
+                thread_modeled: false,
+                standard,
+                points: vec![PointRef::Fixed([20., 20., 10.])],
+                dir: None,
+                reverse: false,
+                tip: None,
+                taper: s("0"),
+                left_hand: false,
+            }));
+            let t = hole_table(&d);
+            assert_eq!(t.len(), 1);
+            linhas.push(t[0].clone());
+        }
+        assert_eq!((linhas[0].forma, linhas[0].d_boca, linhas[0].prof_boca, linhas[0].tolerancia.as_str()), (FormaFuro::Reto, 0., 0., "H7"));
+        assert_eq!((linhas[1].forma, linhas[1].d_boca, linhas[1].prof_boca, linhas[1].tolerancia.as_str()), (FormaFuro::Rebaixo, 11., 6.4, ""));
+        // cone de 90 graus de Ø12 até Ø6,6: profundidade (12 - 6,6) / 2
+        assert_eq!((linhas[2].forma, linhas[2].angulo), (FormaFuro::Escareado, 90.));
+        assert!((linhas[2].prof_boca - 2.7).abs() < 1e-9, "{}", linhas[2].prof_boca);
+        assert_eq!((linhas[3].forma, linhas[3].d_boca, linhas[3].prof_boca, linhas[3].angulo), (FormaFuro::Contrafuro, 11., 5., 118.));
+        assert_eq!(tolerancia_do_texto("M8x1.25"), "");
+        assert_eq!(tolerancia_do_texto("furo Ø10 JS9 liso"), "JS9");
+        assert_eq!(tolerancia_do_texto("M6 normal"), "");
     }
 
     #[test]

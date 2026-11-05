@@ -112,6 +112,12 @@ pub struct FastenersUi {
     /// só nos componentes escolhidos (árvore ou viewport)
     pub only_selected: bool,
     pub warnings: Vec<String>,
+    /// estado de cada furo na última prévia, desenhado sobre os furos na viewport (B85)
+    pub marcas: Vec<MarcaFuro>,
+    /// opções da prévia que gerou `marcas`; mudou, a prévia é refeita
+    pub previa_de: Option<OpcoesFixadores>,
+    /// alça de comprimento cuja lista de valores está aberta (dois cliques na alça)
+    pub lista_alca: Option<usize>,
 }
 
 /// Janela "Engrenagens": parâmetros do par (o `tipo` é o do par), dentes da coroa e a última mensagem.
@@ -2589,6 +2595,113 @@ pub fn context_overlay(app: &App, ui: &mut egui::Ui, rect: egui::Rect, cam: &cra
     painter.text(rect.right_bottom() + egui::vec2(-12., -30.), egui::Align2::RIGHT_BOTTOM, format!("{} — {}", tr("contexto da montagem"), st.asm.name), egui::FontId::proportional(12.), col.gamma_multiply(2.));
 }
 
+/// Marca cada furo analisado pela janela de fixadores (B85): verde entra, cinza já tem fixador e
+/// âmbar sem tamanho, com o motivo escrito ao lado do furo.
+pub fn fasteners_overlay(app: &App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::render::Camera) {
+    let Some(f) = app.asm.as_ref().and_then(|st| st.fasteners_open.as_ref()) else { return };
+    if app.settings.bench != crate::settings::Bench::Montagem {
+        return;
+    }
+    let painter = ui.painter_at(rect);
+    let v3 = |p: [f64; 3]| glam::Vec3::new(p[0] as f32, p[1] as f32, p[2] as f32);
+    for m in &f.marcas {
+        let Some(c) = cam.project(rect, v3(m.pos)) else { continue };
+        // raio na tela: o do furo, com um mínimo para furos pequenos ficarem visíveis
+        let lado = any_perp(m.dir);
+        let borda = [0, 1, 2].map(|i| m.pos[i] + lado[i] * m.diametro / 2.);
+        let r = cam.project(rect, v3(borda)).map(|b| b.distance(c)).unwrap_or(6.).max(6.);
+        let (cor, texto) = match &m.estado {
+            EstadoFuro::Entra { tamanho, comprimento, .. } => (crate::theme::st_ok(), format!("{tamanho}x{}", fmt(*comprimento))),
+            EstadoFuro::JaTem => (Color32::GRAY, tr("já tem fixador").to_string()),
+            EstadoFuro::SemTamanho(motivo) => (crate::theme::st_warn(), motivo.split_once(": ").map(|(_, r)| r).unwrap_or(motivo).to_string()),
+        };
+        painter.circle_stroke(c, r + 2., egui::Stroke::new(2.5, cor));
+        painter.circle_filled(c, r + 2., cor.gamma_multiply(0.18));
+        let font = egui::FontId::proportional(11.);
+        let galeria = painter.layout_no_wrap(texto, font, cor);
+        let canto = c + egui::vec2(r + 6., -galeria.size().y / 2.);
+        painter.rect_filled(egui::Rect::from_min_size(canto, galeria.size()).expand(2.), 3., Color32::from_black_alpha(150));
+        painter.galley(canto, galeria, cor);
+    }
+}
+
+/// Alça de comprimento na ponta de cada parafuso da prévia (B58). Arrastar ao longo do eixo muda o
+/// comprimento pedido e ele só para em valores da série do tamanho; dois cliques abrem a lista.
+pub fn fasteners_handles(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::render::Camera) {
+    if app.settings.bench != crate::settings::Bench::Montagem {
+        return;
+    }
+    let Some(f) = app.asm.as_mut().and_then(|st| st.fasteners_open.as_mut()) else { return };
+    let v3 = |p: [f64; 3]| glam::Vec3::new(p[0] as f32, p[1] as f32, p[2] as f32);
+    // uma alça por parafuso: ponta, eixo, comprimento atual e série
+    let mut alcas: Vec<([f64; 3], [f64; 3], f64, Vec<f64>)> = vec![];
+    for m in &f.marcas {
+        if let EstadoFuro::Entra { ponta, eixo, comprimento, serie, .. } = &m.estado {
+            if !alcas.iter().any(|a| norm(sub(a.0, *ponta)) < 1e-6) {
+                alcas.push((*ponta, *eixo, *comprimento, serie.clone()));
+            }
+        }
+    }
+    let ctx = ui.ctx().clone();
+    let mut novo: Option<f64> = None;
+    for (i, (ponta, eixo, atual, serie)) in alcas.iter().enumerate() {
+        let Some(c) = cam.project(rect, v3(*ponta)) else { continue };
+        let mais = [0, 1, 2].map(|k| ponta[k] + eixo[k] * 10.);
+        let Some(c2) = cam.project(rect, v3(mais)) else { continue };
+        let na_tela = c2 - c;
+        let px_por_mm = na_tela.length() / 10.;
+        let id = egui::Id::unique(("alca_fixador", i));
+        let resp = ui.interact(egui::Rect::from_center_size(c, egui::vec2(18., 18.)), id, egui::Sense::click_and_drag());
+        let cor = if resp.hovered() || resp.dragged() { crate::theme::st_warn() } else { crate::theme::st_ok() };
+        let p = ui.painter_at(rect);
+        p.circle_filled(c, 6.5, cor);
+        p.circle_stroke(c, 6.5, egui::Stroke::new(1.5, Color32::from_black_alpha(160)));
+        if resp.hovered() || resp.dragged() {
+            p.text(c + egui::vec2(12., -12.), egui::Align2::LEFT_BOTTOM, format!("L {}", fmt(*atual)), egui::FontId::proportional(12.), cor);
+        }
+        if resp.drag_started() {
+            ctx.data_mut(|d| d.insert_temp(id, *atual));
+        }
+        if resp.dragged() && px_por_mm > 1e-3 {
+            let delta = resp.drag_delta().dot(na_tela / na_tela.length()) / px_por_mm;
+            let alvo = ctx.data(|d| d.get_temp::<f64>(id)).unwrap_or(*atual) + delta as f64;
+            ctx.data_mut(|d| d.insert_temp(id, alvo));
+            if let Some(v) = fenkra_montagem::fixadores::mais_proximo(serie, alvo) {
+                if (v - *atual).abs() > 1e-9 {
+                    novo = Some(v);
+                }
+            }
+        }
+        if resp.double_clicked() {
+            f.lista_alca = Some(i);
+        }
+    }
+    if let Some(i) = f.lista_alca {
+        match alcas.get(i).and_then(|a| cam.project(rect, v3(a.0)).map(|c| (c, a))) {
+            Some((c, (_, _, atual, serie))) => {
+                let area = egui::Area::new(egui::Id::unique("lista_alca_fixador")).order(egui::Order::Foreground).fixed_pos(c + egui::vec2(14., -10.)).show(&ctx, |ui| {
+                    egui::Frame::popup(ui.style()).show(ui, |ui| {
+                        ui.label(RichText::new(tr("Comprimento")).small().weak());
+                        for l in serie {
+                            if ui.selectable_label((*l - *atual).abs() < 1e-9, fmt(*l)).clicked() {
+                                novo = Some(*l);
+                            }
+                        }
+                    });
+                });
+                let fora = ctx.input(|i| i.pointer.any_pressed()) && !area.response.contains_pointer();
+                if novo.is_some() || fora || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                    f.lista_alca = None;
+                }
+            }
+            None => f.lista_alca = None,
+        }
+    }
+    if let Some(v) = novo {
+        f.op.comprimento = Some(v);
+    }
+}
+
 /// Manipulador do componente selecionado: setas e quadrados (mover), anéis (girar). Com
 /// "respeitar restrições" o componente segue o mouse só no que as restrições deixam; com a parada
 /// por colisão ele não entra em outra peça. Também mostra a restrição rápida para duas seleções.
@@ -3032,6 +3145,21 @@ pub fn fasteners_window(app: &mut App, ctx: &egui::Context) {
             }
         });
         ui.label(RichText::new(tr("M6: fina 6,4 · normal 6,6 · folgada 7,0 mm. Furos roscados não dependem da folga.")).weak().small());
+        // comprimento: automático (pela pilha) ou um valor da série do tamanho da prévia
+        let serie: Vec<f64> = f.marcas.iter().find_map(|m| if let EstadoFuro::Entra { serie, .. } = &m.estado { Some(serie.clone()) } else { None }).unwrap_or_default();
+        ui.horizontal(|ui| {
+            ui.label(tr("Comprimento"));
+            let atual = f.op.comprimento.map(fmt).unwrap_or_else(|| tr("Automático").to_string());
+            egui::ComboBox::from_id_salt("fix_comprimento").selected_text(atual).show_ui(ui, |ui| {
+                ui.selectable_value(&mut f.op.comprimento, None, tr("Automático"));
+                for l in &serie {
+                    ui.selectable_value(&mut f.op.comprimento, Some(*l), fmt(*l));
+                }
+            });
+        });
+        if !serie.is_empty() {
+            ui.label(RichText::new(tr("Na viewport, arraste a alça na ponta do parafuso (ou dê dois cliques nela) para escolher o comprimento: só aparecem valores que existem na família.")).weak().small());
+        }
         crate::editor::section(ui, "Arruela e porca");
         crate::editor::check(ui, &mut f.op.arruela, "arruela sob a cabeça (e sob a porca)");
         if f.op.arruela {
@@ -3051,6 +3179,15 @@ pub fn fasteners_window(app: &mut App, ctx: &egui::Context) {
         crate::editor::check(ui, &mut f.op.travar_giro, "travar o giro em torno do eixo (fixador sem graus de liberdade)");
         crate::editor::section(ui, "Onde");
         crate::editor::check(ui, &mut f.only_selected, "só nos componentes selecionados (árvore ou viewport)");
+        if !f.marcas.is_empty() {
+            let conta = |pred: fn(&EstadoFuro) -> bool| f.marcas.iter().filter(|m| pred(&m.estado)).count();
+            ui.horizontal_wrapped(|ui| {
+                ui.label(RichText::new(format!("● {} {}", conta(|e| matches!(e, EstadoFuro::Entra { .. })), tr("entram"))).small().color(crate::theme::st_ok()));
+                ui.label(RichText::new(format!("● {} {}", conta(|e| matches!(e, EstadoFuro::JaTem)), tr("já têm"))).small().weak());
+                ui.label(RichText::new(format!("● {} {}", conta(|e| matches!(e, EstadoFuro::SemTamanho(_))), tr("sem tamanho"))).small().color(crate::theme::st_warn()));
+            });
+            ui.label(RichText::new(tr("Os furos estão marcados na viewport; o motivo de cada furo sem tamanho aparece em âmbar ao lado dele.")).weak().small());
+        }
         ui.add_space(4.);
         apply = ui.add(egui::Button::new(RichText::new(tr("Preencher furos")).strong()).min_size(egui::vec2(140., 28.))).on_hover_text(tr("Insere os fixadores já na posição, com restrições de eixo, de contato e trava de giro, e resolve a montagem. Rodar de novo não duplica.")).clicked();
         if !f.warnings.is_empty() {
@@ -3065,6 +3202,31 @@ pub fn fasteners_window(app: &mut App, ctx: &egui::Context) {
     if !open || close {
         st.fasteners_open = None;
         return;
+    }
+    // prévia: refeita quando as opções mudam; não insere nem grava nada
+    if !apply && st.dir().is_some() {
+        let mut op = f.op.clone();
+        op.so_previa = true;
+        if f.only_selected {
+            let mut comps = st.comps_of(&app.picks);
+            if let Some(s) = st.sel.filter(|s| st.asm.node(*s).is_some_and(|n| matches!(n.kind, NodeKind::Part { .. }))) {
+                if !comps.contains(&s) {
+                    comps.push(s);
+                }
+            }
+            op.componentes = comps;
+        }
+        if f.previa_de.as_ref() != Some(&op) {
+            let dir = st.dir();
+            match preencher_furos(&mut st.asm, dir.as_deref(), &mut st.cache, &op) {
+                Ok(rel) => {
+                    f.marcas = rel.marcas;
+                    f.warnings = rel.avisos;
+                }
+                Err(_) => f.marcas.clear(),
+            }
+            f.previa_de = Some(op);
+        }
     }
     // aviso na tela, dado só depois do último uso de `st` (o aviso empresta o app inteiro)
     let mut aviso: Option<(String, bool)> = None;
@@ -3101,6 +3263,7 @@ pub fn fasteners_window(app: &mut App, ctx: &egui::Context) {
                         aviso = Some((msg.to_string(), true));
                     }
                     f.warnings = rel.avisos;
+                    f.previa_de = None;
                 }
                 Err(e) => {
                     if let Some(antes) = st.undo.pop() {
