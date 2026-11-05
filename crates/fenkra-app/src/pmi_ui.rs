@@ -26,8 +26,36 @@ pub fn kind_of(i: u8) -> PmiKind {
         6 => PmiKind::Weld { kind: WeldKind::Filete, size: "a4".into(), all_around: false, extra: Default::default() },
         7 => PmiKind::Datum { letter: "A".into() },
         9 => PmiKind::TitleBlock { template: TITLE_TEMPLATE.into() },
+        11 => PmiKind::Ordinate { axis: 0 },
+        12 => PmiKind::ArcLength,
+        13 | 14 => PmiKind::Linear,
+        15 => PmiKind::FeatureNote { feature: Id(0) },
+        16 => PmiKind::Note,
         _ => PmiKind::Gdt { ch: GdtChar::Planeza, tol: "0,05".into(), datums: String::new(), extra: Default::default() },
     }
+}
+
+/// Variante de medida escolhida com Tab no comando aberto (B185): vale até criar ou cancelar.
+static VARIANTE: std::sync::Mutex<Option<(u8, PmiKind)>> = std::sync::Mutex::new(None);
+
+fn set_variant(v: Option<(u8, PmiKind)>) {
+    *VARIANTE.lock().unwrap_or_else(|e| e.into_inner()) = v;
+}
+
+/// Tipo do comando `i` com a variante escolhida na sessão.
+fn kind_now(i: u8) -> PmiKind {
+    match VARIANTE.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        Some((j, k)) if *j == i => k.clone(),
+        _ => kind_of(i),
+    }
+}
+
+/// Anotação que está ganhando uma ponta nova (comando 16): o próximo elemento escolhido vira a ponta.
+static PONTA_PARA: std::sync::Mutex<Option<Id>> = std::sync::Mutex::new(None);
+
+/// Cadeia (13) e base (14) pedem vários pontos e terminam com Enter.
+fn is_multi(i: u8) -> bool {
+    matches!(i, 13 | 14)
 }
 
 /// Lista de PMI do nível atual (montagem aberta na bancada Montagem, senão a peça).
@@ -46,10 +74,21 @@ pub fn list_mut(app: &mut App) -> &mut Vec<Pmi> {
     }
 }
 
+/// Malha onde as anotações se apoiam: a vista da montagem quando ela está aberta, senão a peça.
+/// Na montagem usar a malha da peça aberta comparava as âncoras com a geometria errada (realce e
+/// reencaixe falhavam).
+fn model(app: &App) -> Option<&RecomputeResult> {
+    if app.in_asm() {
+        app.asm.as_ref().and_then(|s| s.view.as_ref())
+    } else {
+        app.result.as_ref()
+    }
+}
+
 /// Âncoras a partir das seleções: vértice → posição; aresta → ponto médio (raio/diâmetro: centro
 /// e um ponto do arco); face → ponto clicado.
 fn anchors(app: &App, kind: &PmiKind, picks: &[Pick]) -> Option<(Vec<[f64; 3]>, Vec<Option<PmiTarget>>)> {
-    let r = app.result.as_ref();
+    let r = model(app);
     let pt = |p: &Pick| -> Option<[f64; 3]> {
         Some(match *p {
             Pick::Vertex { pos, .. } => pos.map(|v| v as f64),
@@ -73,13 +112,43 @@ fn anchors(app: &App, kind: &PmiKind, picks: &[Pick]) -> Option<(Vec<[f64; 3]>, 
             };
             Some((vec![t.carry(&t, hit, true), surf], vec![Some(t), None]))
         }
+        PmiKind::FeatureNote { .. } => {
+            // uma face gerada por furo, rosca, chanfro, filete ou dobra: a âncora é o ponto clicado
+            let Some(p @ Pick::Face { owner, .. }) = picks.first() else { return None };
+            if app.in_asm() || fenkra_core::pmi_feature::callout(&app.open.doc, *owner, true).is_none() {
+                return None;
+            }
+            Some((vec![pt(p)?], vec![r.and_then(|r| pick_target(r, p))]))
+        }
+        PmiKind::Gap { .. } => {
+            // dois furos, cilindros ou arestas circulares: a cota vai de eixo a eixo
+            let r = r?;
+            let v: Vec<([f64; 3], PmiTarget)> = picks
+                .iter()
+                .filter_map(|p| {
+                    let t = pick_target(r, p)?;
+                    matches!(t.class, TargetClass::ArestaCircular | TargetClass::FaceCilindrica).then_some((t.carry(&t, pt(p)?, true), t))
+                })
+                .collect();
+            if v.len() < 2 {
+                return None;
+            }
+            Some((vec![v[0].0, v[1].0], vec![Some(v[0].1), Some(v[1].1)]))
+        }
         k => {
             let v: Vec<([f64; 3], Option<PmiTarget>)> = picks.iter().filter_map(|p| Some((pt(p)?, r.and_then(|r| pick_target(r, p))))).collect();
             if v.len() < k.anchors() {
                 return None;
             }
             let (mut a, t): (Vec<_>, Vec<_>) = v[..k.anchors()].iter().cloned().unzip();
+            // arco: se o primeiro elemento é uma aresta circular, o centro dela é o centro do arco
+            if let (PmiKind::ArcLength, Some(Some(t0))) = (k, t.first()) {
+                if t0.class == TargetClass::ArestaCircular {
+                    a[0] = t0.point;
+                }
+            }
             fix_pair(kind, &mut a, &t);
+            fenkra_core::pmi_cotas::project_to_axis(kind, &mut a);
             Some((a, t))
         }
     }
@@ -196,7 +265,13 @@ pub fn command(app: &mut App, i: u8) {
         auto_balloons(app);
         return;
     }
+    set_variant(None);
     let kind = kind_of(i);
+    if is_multi(i) {
+        app.pmi_pending = Some(i);
+        app.toast(format!("{}: {}", tr(if i == 13 { "Cadeia de cotas" } else { "Cotas a partir de uma base" }), tr("clique os pontos em ordem e conclua com Enter")), false);
+        return;
+    }
     // legenda 3D: não precisa de seleção (fica no canto do modelo)
     if let PmiKind::TitleBlock { .. } = kind {
         let corner = app
@@ -225,6 +300,7 @@ pub fn command(app: &mut App, i: u8) {
             app.pmi_pending = Some(i);
             let need = match &kind {
                 PmiKind::Radius | PmiKind::Diameter => tr("uma aresta circular ou face cilíndrica").to_string(),
+                PmiKind::Gap { .. } => tr("dois furos ou cilindros").to_string(),
                 k => format!("{} {}", k.anchors(), tr("elemento(s): vértice, aresta ou face")),
             };
             app.toast(format!("{}: {} {need}", tr(kind.label()), tr("escolha")), false);
@@ -233,16 +309,27 @@ pub fn command(app: &mut App, i: u8) {
 }
 
 fn create(app: &mut App, kind: PmiKind, a: Vec<[f64; 3]>, targets: Vec<Option<PmiTarget>>, picks: &[Pick]) {
+    set_variant(None);
+    // chamada de feature: amarra a feature dona da face e grava o texto gerado
+    let (kind, gen_text) = match (&kind, picks.first()) {
+        (PmiKind::FeatureNote { .. }, Some(Pick::Face { owner, .. })) => {
+            let internal = targets.first().copied().flatten().is_none_or(|t| t.concave);
+            let text = fenkra_core::pmi_feature::callout(&app.open.doc, *owner, internal).map(|c| c.text).unwrap_or_default();
+            (PmiKind::FeatureNote { feature: *owner }, text)
+        }
+        _ => (kind, String::new()),
+    };
     let plane = chosen_plane(app, picks, &a);
     let id = Id(app.next_pmi_id());
     let n = list(app).iter().filter(|p| p.kind.label() == kind.label()).count() + 1;
     let name = format!("{} {n}", tr(kind.label()));
     let off = match kind {
-        PmiKind::Linear | PmiKind::Angle => [0., 0., 12.],
+        ref k if k.is_linear_like() => [0., 0., 12.],
+        PmiKind::Angle | PmiKind::ArcLength => [0., 0., 12.],
         PmiKind::TitleBlock { .. } => [20., 0., 20.],
         _ => [15., 0., 15.],
     };
-    list_mut(app).push(Pmi { id, name, kind, anchors: a, offset: off, text: String::new(), tol_plus: String::new(), tol_minus: String::new(), visible: true, plane, style: Default::default(), folder: String::new(), targets });
+    list_mut(app).push(Pmi { id, name, kind, anchors: a, offset: off, text: gen_text, tol_plus: String::new(), tol_minus: String::new(), visible: true, plane, style: Default::default(), folder: String::new(), targets });
     app.picks.clear();
     app.pmi_pending = None;
     if app.in_asm() {
@@ -352,10 +439,141 @@ fn auto_balloons(app: &mut App) {
 /// Seleções feitas com uma anotação pendente.
 pub fn after_viewport(app: &mut App) {
     let Some(i) = app.pmi_pending else { return };
-    let kind = kind_of(i);
+    if is_multi(i) {
+        return;
+    }
+    let kind = kind_now(i);
     let picks = app.picks.clone();
+    if i == 16 {
+        // nova ponta numa nota que já existe
+        if let Some((a, t)) = anchors(app, &kind, &picks) {
+            let alvo = PONTA_PARA.lock().unwrap_or_else(|e| e.into_inner()).take();
+            if let (Some(id), Some(&p)) = (alvo, a.first()) {
+                if let Some(pm) = list_mut(app).iter_mut().find(|x| x.id == id) {
+                    fenkra_core::pmi_leader::add_tip(pm, p, t.first().copied().flatten());
+                }
+                if app.in_asm() {
+                    app.asm.as_mut().unwrap().modified = true;
+                }
+            }
+            app.picks.clear();
+            app.pmi_pending = None;
+        }
+        return;
+    }
     if let Some((a, t)) = anchors(app, &kind, &picks) {
         create(app, kind, a, t, &picks);
+    }
+}
+
+/// Furos que a geometria tem com o diâmetro dado entre as faces geradas pela feature `owner`
+/// (um por eixo, mesmo que o kernel parta o cilindro em duas faces).
+fn holes_found(r: &RecomputeResult, owner: Id, dia: f64) -> usize {
+    let mut eixos: Vec<[i64; 3]> = vec![];
+    for b in &r.bodies {
+        for (f, o) in b.face_owner.iter().enumerate() {
+            if *o != owner {
+                continue;
+            }
+            let Some(t) = face_target(&b.mesh, f).filter(|t| t.class == TargetClass::FaceCilindrica && t.concave && (t.radius * 2. - dia).abs() < 1e-3) else { continue };
+            let l = (t.dir[0] * t.dir[0] + t.dir[1] * t.dir[1] + t.dir[2] * t.dir[2]).sqrt().max(1e-12);
+            let n = [t.dir[0] / l, t.dir[1] / l, t.dir[2] / l];
+            let k = t.point[0] * n[0] + t.point[1] * n[1] + t.point[2] * n[2];
+            // posição do eixo no plano perpendicular a ele, em centésimos de mm
+            let key = [0, 1, 2].map(|i| ((t.point[i] - n[i] * k) * 100.).round() as i64);
+            if !eixos.contains(&key) {
+                eixos.push(key);
+            }
+        }
+    }
+    eixos.len()
+}
+
+/// Quebra a chamada de feature em cotas simples: o diâmetro vira uma cota de diâmetro viva, com
+/// tolerância própria; contagem, profundidade, rosca, rebaixo e escareado viram notas com o texto
+/// de cada parte (forma que o AP242 exige). As novas ficam numa pasta e a chamada composta sai.
+fn split_feature(app: &mut App, id: Id) {
+    let Some(pm) = list(app).iter().find(|p| p.id == id).cloned() else { return };
+    let PmiKind::FeatureNote { feature } = pm.kind else { return };
+    let Some(&a0) = pm.anchors.first() else { return };
+    let tgt = pm.targets.first().copied().flatten();
+    let internal = tgt.is_none_or(|t| t.concave);
+    let Some(c) = fenkra_core::pmi_feature::callout(&app.open.doc, feature, internal) else { return };
+    let folder = format!("{} ({})", pm.name, tr("cotas simples"));
+    let mut novas: Vec<Pmi> = vec![];
+    for (k, part) in c.parts.iter().enumerate() {
+        let off = [pm.offset[0], pm.offset[1], pm.offset[2] - 6. * k as f64];
+        let cilindro = tgt.filter(|t| t.class == TargetClass::FaceCilindrica);
+        let (kind, anchors, targets, text) = match (part.label, cilindro) {
+            ("diâmetro", Some(t)) => (PmiKind::Diameter, vec![t.carry(&t, a0, true), t.carry(&t, a0, false)], vec![Some(t), None], String::new()),
+            _ => (PmiKind::Note, vec![a0], vec![], part.text.clone()),
+        };
+        novas.push(Pmi { id: Id(0), name: format!("{} {}", tr(kind.label()), tr(part.label)), kind, anchors, offset: off, text, tol_plus: String::new(), tol_minus: String::new(), visible: true, plane: pm.plane, style: pm.style.clone(), folder: folder.clone(), targets });
+    }
+    for n in novas.iter_mut() {
+        n.id = Id(app.next_pmi_id());
+    }
+    let l = list_mut(app);
+    l.retain(|p| p.id != id);
+    l.extend(novas);
+    if app.sel == Sel::Pmi(id) {
+        app.sel = Sel::None;
+    }
+}
+
+/// Conclui a cadeia ou a base: cada elemento escolhido vira um ponto e o conjunto gera uma cota
+/// por trecho, todas numa pasta da árvore (apagam e movem juntas).
+fn finish_multi(app: &mut App) {
+    let Some(i) = app.pmi_pending else { return };
+    let kind = kind_now(i);
+    let picks = app.picks.clone();
+    let pts: Vec<([f64; 3], Option<PmiTarget>)> = picks
+        .iter()
+        .filter_map(|p| {
+            let pos = match *p {
+                Pick::Vertex { pos, .. } => pos.map(|v| v as f64),
+                Pick::Edge { mid, .. } => mid.map(|v| v as f64),
+                Pick::Face { point, .. } => point.map(|v| v as f64),
+                _ => return None,
+            };
+            let t = app.result.as_ref().and_then(|r| pick_target(r, p));
+            let circ = matches!(kind, PmiKind::Gap { .. });
+            Some(match t {
+                Some(t) if circ && matches!(t.class, TargetClass::ArestaCircular | TargetClass::FaceCilindrica) => (t.carry(&t, pos, true), Some(t)),
+                t => (pos, t),
+            })
+        })
+        .collect();
+    if pts.len() < 2 {
+        app.toast(tr("Escolha ao menos dois pontos").to_string(), false);
+        return;
+    }
+    let (parts, name) = if i == 13 {
+        (fenkra_core::pmi_cotas::chain(&pts, [0., 0., 12.]), tr("Cadeia"))
+    } else {
+        (fenkra_core::pmi_cotas::baseline(&pts, [0., 0., 1.], 10.), tr("Base"))
+    };
+    let n = list(app).iter().filter(|p| p.folder.starts_with(name)).map(|p| p.folder.clone()).collect::<std::collections::BTreeSet<_>>().len() + 1;
+    let folder = format!("{name} {n}");
+    let mut novas = fenkra_core::pmi_cotas::build(&kind, &parts, 0, &tr(kind.label()).to_string(), &folder);
+    let mut last = None;
+    for pm in novas.iter_mut() {
+        pm.id = Id(app.next_pmi_id());
+        pm.plane = chosen_plane(app, &picks, &pm.anchors);
+        last = Some(pm.id);
+    }
+    list_mut(app).extend(novas);
+    app.picks.clear();
+    app.pmi_pending = None;
+    set_variant(None);
+    if let Some(id) = last {
+        if app.in_asm() {
+            let st = app.asm.as_mut().unwrap();
+            st.sel = Some(id);
+            st.modified = true;
+        } else {
+            app.sel = Sel::Pmi(id);
+        }
     }
 }
 
@@ -635,7 +853,7 @@ fn highlight(p: &egui::Painter, r: &RecomputeResult, cam: &Camera, rect: Rect, p
 /// Desenha o rótulo (e a chamada até `s0`) de uma anotação: `st` é o ponto do rótulo e `s1` a
 /// segunda âncora (borda no raio/diâmetro). Serve para a tela e para o plano (coordenadas locais).
 #[allow(clippy::too_many_arguments)]
-fn draw_kind(cv: &Cv, pen: &Pen, pm: &Pmi, st: Pos2, s0: Pos2, s1: Option<Pos2>, main: &str, stack: Option<&(String, String)>, fields: &std::collections::HashMap<String, String>) -> Rect {
+fn draw_kind(cv: &Cv, pen: &Pen, pm: &Pmi, st: Pos2, s0: Pos2, s1: Option<Pos2>, routes: &[Vec<Pos2>], main: &str, stack: Option<&(String, String)>, fields: &std::collections::HashMap<String, String>) -> Rect {
     let (stroke, thin) = (pen.stroke(), pen.thin());
     match &pm.kind {
         PmiKind::Radius | PmiKind::Diameter => {
@@ -694,9 +912,16 @@ fn draw_kind(cv: &Cv, pen: &Pen, pm: &Pmi, st: Pos2, s0: Pos2, s1: Option<Pos2>,
         _ => {
             // nota: chamada com seta até a peça e patamar no texto
             let txt = format!("{}{}{}", pm.style.prefix, pm.text, pm.style.suffix);
-            let slot = Pen::reserve(cv);
+            // uma chamada por ponta; cada uma pode passar por vértices intermediários (B23)
+            let slots: Vec<usize> = (0..routes.len().max(1)).map(|_| Pen::reserve(cv)).collect();
             let lr = pen.text_block(cv, st, &txt, PmiFrame::Nenhuma, PmiBg::Nenhum);
-            pen.leader(cv, slot, lr, s0);
+            if routes.is_empty() {
+                pen.leader(cv, slots[0], lr, s0);
+            } else {
+                for (slot, rt) in slots.iter().zip(routes) {
+                    pen.leader_route(cv, *slot, lr, rt);
+                }
+            }
             lr
         }
     }
@@ -706,7 +931,7 @@ fn draw_kind(cv: &Cv, pen: &Pen, pm: &Pmi, st: Pos2, s0: Pos2, s1: Option<Pos2>,
 /// O alvo serve para o comando? Raio e diâmetro pedem aresta circular ou face cilíndrica.
 fn target_fits(kind: &PmiKind, t: &PmiTarget) -> bool {
     match kind {
-        PmiKind::Radius | PmiKind::Diameter => matches!(t.class, TargetClass::ArestaCircular | TargetClass::FaceCilindrica),
+        PmiKind::Radius | PmiKind::Diameter | PmiKind::Gap { .. } => matches!(t.class, TargetClass::ArestaCircular | TargetClass::FaceCilindrica),
         _ => true,
     }
 }
@@ -715,16 +940,26 @@ fn target_fits(kind: &PmiKind, t: &PmiTarget) -> bool {
 /// segue o cursor com o valor, o plano de anotação aparece como moldura e as teclas valem
 /// (Esc cancela sem criar nada, Backspace retira o último elemento, Espaço/F/Tab escolhem o plano).
 /// Devolve o fantasma, desenhado junto com as anotações.
-fn pending_preview(app: &App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, r: &RecomputeResult) -> (Option<Pmi>, bool, bool) {
-    let Some(i) = app.pmi_pending else { return (None, false, false) };
-    let kind = kind_of(i);
+fn pending_preview(app: &App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, r: &RecomputeResult) -> (Option<Pmi>, bool, bool, bool) {
+    let Some(i) = app.pmi_pending else { return (None, false, false, false) };
+    // Tab alterna a variante de medida (linear/ao longo de X, Y, Z/entre círculos; raio/diâmetro)
+    let typing = ui.ctx().egui_wants_keyboard_input();
+    if !typing && kind_now(i).has_variants() && ui.input_mut(|s| s.consume_key(egui::Modifiers::NONE, egui::Key::Tab)) {
+        set_variant(Some((i, kind_now(i).next_variant())));
+    }
+    let kind = kind_now(i);
     let need = kind.anchors();
     let painter = ui.painter_at(rect);
     let hover_pos = ui.input(|s| s.pointer.hover_pos()).filter(|q| rect.contains(*q));
     let hover = app.hover_pick.filter(|_| hover_pos.is_some());
     let hover_t = hover.as_ref().and_then(|h| pick_target(r, h));
-    // lista fixa de elementos já escolhidos + o que está sob o cursor
-    let mut ps = app.picks.clone();
+    // lista fixa de elementos já escolhidos + o que está sob o cursor; na cadeia o fantasma parte
+    // do último ponto e na base, da origem
+    let mut ps: Vec<Pick> = if is_multi(i) {
+        (if i == 13 { app.picks.last() } else { app.picks.first() }).into_iter().cloned().collect()
+    } else {
+        app.picks.clone()
+    };
     let fits = hover_t.as_ref().is_some_and(|t| target_fits(&kind, t));
     if let (Some(h), true) = (hover, fits) {
         if !ps.contains(&h) {
@@ -740,11 +975,15 @@ fn pending_preview(app: &App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, r: &R
     // plano de anotação: candidatos e teclas
     let base = base_face(app, &app.picks);
     let cands = plane_cands(r, base, pref().shift, at.unwrap_or([0.; 3]));
-    let typing = ui.ctx().egui_wants_keyboard_input();
-    let (mut cancel, mut pop) = (false, false);
+    let (mut cancel, mut pop, mut finish) = (false, false, false);
     if !typing {
         use egui::{Key, Modifiers};
-        let (space, f, tab, esc, back) = ui.input_mut(|s| (s.consume_key(Modifiers::NONE, Key::Space), s.consume_key(Modifiers::NONE, Key::F), s.consume_key(Modifiers::NONE, Key::Tab), s.consume_key(Modifiers::NONE, Key::Escape), s.consume_key(Modifiers::NONE, Key::Backspace)));
+        let (space, f, tab, esc, back, enter) = ui.input_mut(|s| {
+            // com variantes o Tab já foi para a medida: o texto alinhado passa para a tecla T
+            let align_key = if kind.has_variants() { Key::T } else { Key::Tab };
+            (s.consume_key(Modifiers::NONE, Key::Space), s.consume_key(Modifiers::NONE, Key::F), s.consume_key(Modifiers::NONE, align_key), s.consume_key(Modifiers::NONE, Key::Escape), s.consume_key(Modifiers::NONE, Key::Backspace), s.consume_key(Modifiers::NONE, Key::Enter))
+        });
+        finish = enter && is_multi(i);
         if space {
             set_pref(|p| p.sel = (p.sel + 1) % (cands.len() + 1));
         }
@@ -781,23 +1020,38 @@ fn pending_preview(app: &App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, r: &R
     // fantasma: a anotação com o elemento sob o cursor como último ponto
     let ghost = anchors(app, &kind, &ps).map(|(a, t)| {
         let off = match kind {
-            PmiKind::Linear | PmiKind::Angle => [0., 0., 12.],
+            ref k if k.is_linear_like() => [0., 0., 12.],
+            PmiKind::Angle | PmiKind::ArcLength => [0., 0., 12.],
             _ => [15., 0., 15.],
         };
         let plane = chosen_plane(app, &ps, &a);
-        Pmi { id: Id(u64::MAX), name: String::new(), kind: kind.clone(), anchors: a, offset: off, text: String::new(), tol_plus: String::new(), tol_minus: String::new(), visible: true, plane, style: Default::default(), folder: String::new(), targets: t }
+        let (kind, text) = match (&kind, ps.first()) {
+            (PmiKind::FeatureNote { .. }, Some(Pick::Face { owner, .. })) => {
+                let internal = t.first().copied().flatten().is_none_or(|x| x.concave);
+                (PmiKind::FeatureNote { feature: *owner }, fenkra_core::pmi_feature::callout(&app.open.doc, *owner, internal).map(|c| c.text).unwrap_or_default())
+            }
+            _ => (kind.clone(), String::new()),
+        };
+        Pmi { id: Id(u64::MAX), name: String::new(), kind, anchors: a, offset: off, text, tol_plus: String::new(), tol_minus: String::new(), visible: true, plane, style: Default::default(), folder: String::new(), targets: t }
     });
     // texto junto ao cursor: passo do comando, o que foi reconhecido e o plano
     if let Some(q) = hover_pos {
         let step = app.picks.len().min(need.saturating_sub(1)) + 1;
-        let mut lines = vec![(format!("{} — {} {step}/{need}", tr(kind.label()), tr("passo")), Color32::WHITE)];
+        let mut lines = if is_multi(i) {
+            vec![(format!("{} — {} {}  ·  {}", tr(if i == 13 { "Cadeia de cotas" } else { "Cotas a partir de uma base" }), tr("pontos"), app.picks.len(), tr("Enter conclui")), Color32::WHITE)]
+        } else {
+            vec![(format!("{} — {} {step}/{need}", tr(kind.label()), tr("passo")), Color32::WHITE)]
+        };
+        if kind.has_variants() {
+            lines.push((format!("{}: {}  ·  {}", tr("Medida"), tr(&kind.variant_label()), tr("Tab alterna")), crate::theme::st_warn()));
+        }
         match &hover_t {
             Some(t) if fits => lines.push((target_label(t), crate::theme::st_ok())),
             Some(t) => lines.push((format!("{} ({})", tr("não serve para esta anotação"), target_label(t)), crate::theme::st_err())),
             None => lines.push((tr("aponte para uma face, aresta ou vértice").to_string(), crate::theme::st_warn())),
         }
         if let (Some(g), Some(pl)) = (&ghost, &ghost.as_ref().and_then(|g| g.plane)) {
-            if g.kind == PmiKind::Linear && plane_hides(pl.0, &g.anchors) {
+            if g.kind.is_linear_like() && plane_hides(pl.0, &g.anchors) {
                 lines.push((tr("este plano não mostra a cota").to_string(), crate::theme::st_err()));
             }
         }
@@ -806,17 +1060,21 @@ fn pending_preview(app: &App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, r: &R
     painter.text(
         rect.center_bottom() + egui::vec2(0., -52.),
         egui::Align2::CENTER_BOTTOM,
-        format!("{}: {}{}  ·  {}", tr("Plano"), name, if pf.align { format!(" ({})", tr("texto alinhado")) } else { String::new() }, tr("Espaço troca o plano · F troca a face base · Tab alinha o texto · Backspace volta · Esc cancela")),
+        format!("{}: {}{}  ·  {}", tr("Plano"), name, if pf.align { format!(" ({})", tr("texto alinhado")) } else { String::new() }, tr(if kind.has_variants() { "Espaço troca o plano · F troca a face base · Tab troca a medida · T alinha o texto · Backspace volta · Esc cancela" } else { "Espaço troca o plano · F troca a face base · Tab alinha o texto · Backspace volta · Esc cancela" })),
         egui::FontId::proportional(12.),
         crate::theme::st_warn(),
     );
-    (ghost, cancel, pop)
+    (ghost, cancel, pop, finish)
 }
 
 pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     let mut action: Option<(Id, u8)> = None;
+    let mut via_req: Option<(Id, usize, usize, [f64; 3])> = None;
+    let mut via_rm: Option<(Id, usize, usize)> = None;
+    let mut via_add: Option<(Id, usize)> = None;
+    let mut tip_rm: Option<(Id, usize)> = None;
     let mut drag: Option<(Id, [f64; 3])> = None;
-    let Some(r) = app.result.as_ref() else { return };
+    let Some(r) = model(app) else { return };
     let editing = if app.in_asm() { app.asm.as_ref().and_then(|s| s.sel) } else if let Sel::Pmi(i) = app.sel { Some(i) } else { None };
     let focus = app.pmi_focus;
     let painter = ui.painter_at(rect);
@@ -829,15 +1087,36 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     let gstyle = app.settings.pmi_style.clone();
     let ctx = ui.ctx().clone();
     // comando de anotação aberto: hover tipado, fantasma, plano de anotação e teclas
-    let (ghost, cancel, pop) = pending_preview(app, ui, rect, cam, r);
+    let (ghost, cancel, pop, finish) = pending_preview(app, ui, rect, cam, r);
     let cands = if ghost.is_some() || list(app).iter().any(|p| p.targets.iter().any(Option::is_some)) { candidates(&ctx, r) } else { Default::default() };
     let all: Vec<&Pmi> = list(app).iter().filter(|p| p.visible).chain(ghost.iter()).collect();
     for pm in all {
         let is_ghost = ghost.as_ref().is_some_and(|g| std::ptr::eq(g, pm));
+        // chamada de feature: o texto é regerado dos parâmetros a cada quadro (muda o furo, muda a nota)
+        let live = match (&pm.kind, is_ghost || app.in_asm()) {
+            (PmiKind::FeatureNote { feature }, false) => {
+                let internal = pm.targets.first().copied().flatten().is_none_or(|t| t.concave);
+                fenkra_core::pmi_feature::callout(&app.open.doc, *feature, internal)
+            }
+            _ => None,
+        };
+        let pm_vivo: Option<Pmi> = live.as_ref().map(|c| Pmi { text: c.text.clone(), ..pm.clone() });
+        let pm: &Pmi = pm_vivo.as_ref().unwrap_or(pm);
         let diag: Option<PmiDiag> = if is_ghost {
             Some(PmiDiag { state: PmiState::Ok, failed: None, message: String::new(), resolved: pm.targets.clone() })
         } else {
             pm.targets.iter().any(Option::is_some).then(|| pm.diagnose(&cands))
+        };
+        // a contagem n× vem do padrão: se a geometria tem outra quantidade, a chamada fica ambígua
+        let diag = match (&pm.kind, &live) {
+            (PmiKind::FeatureNote { feature }, Some(c)) => match (c.count, c.hole_diameter) {
+                (Some(n), Some(d)) => {
+                    let (state, message) = fenkra_core::pmi_feature::count_state(n, holes_found(r, *feature, d));
+                    if state == PmiState::Ok { diag } else { Some(PmiDiag { state, failed: Some(0), message, resolved: diag.map(|x| x.resolved).unwrap_or_default() }) }
+                }
+                _ => diag,
+            },
+            _ => diag,
         };
         let bad = diag.as_ref().is_some_and(|d| !d.ok());
         // as âncoras acompanham o alvo reencontrado; sem alvo, reencaixam no vértice mais próximo
@@ -846,13 +1125,14 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
             .iter()
             .enumerate()
             .map(|(k, p)| {
-                let on_axis = matches!(pm.kind, PmiKind::Radius | PmiKind::Diameter) && k == 0;
+                let on_axis = (matches!(pm.kind, PmiKind::Radius | PmiKind::Diameter) && k == 0) || matches!(pm.kind, PmiKind::Gap { .. });
                 match (pm.targets.get(k).copied().flatten(), diag.as_ref().and_then(|d| d.resolved.get(k).copied().flatten())) {
                     (Some(old), Some(new)) => old.carry(&new, *p, on_axis),
                     _ => snap(r, *p),
                 }
             })
             .collect();
+        fenkra_core::pmi_cotas::project_to_axis(&pm.kind, &mut a);
         if let Some(d) = &diag {
             fix_pair(&pm.kind, &mut a, &d.resolved);
             let moved = a.len() != pm.anchors.len() || a.iter().zip(&pm.anchors).any(|(x, y)| (0..3).any(|i| (x[i] - y[i]).abs() > 1e-6));
@@ -888,7 +1168,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
         let main = wrap(main);
         let off = v3(pm.offset);
         // a geometria que a anotação marca fica realçada enquanto ela está selecionada
-        if is_sel && !matches!(pm.kind, PmiKind::TitleBlock { .. }) {
+        if (is_sel || is_ghost) && !matches!(pm.kind, PmiKind::TitleBlock { .. }) {
             highlight(&painter, r, cam, rect, &a);
         }
         // deitado num plano: referencial (normal, x, y) do plano; tudo é desenhado em 0,1 mm nele
@@ -905,7 +1185,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
             cv.flush_mapped(|q| cam.project(rect, o + x * (q.x / 10.) - y * (q.y / 10.)))
         };
         let rect_lbl = match &pm.kind {
-            PmiKind::Linear if a.len() >= 2 => {
+            k if k.is_linear_like() && a.len() >= 2 => {
                 // linhas de chamada e linha de cota afastadas pelo deslocamento
                 let (p0, p1) = (v3(a[0]), v3(a[1]));
                 let (q0, q1) = (p0 + off, p1 + off);
@@ -959,7 +1239,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                     }
                 }
             }
-            PmiKind::Angle if a.len() >= 3 => {
+            PmiKind::Angle | PmiKind::ArcLength if a.len() >= 3 => {
                 let (Some(sv), Some(s1), Some(s2)) = (cam.project(rect, v3(a[0])), cam.project(rect, v3(a[1])), cam.project(rect, v3(a[2]))) else { continue };
                 painter.line_segment([sv, s1], thin);
                 painter.line_segment([sv, s2], thin);
@@ -992,6 +1272,19 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                 let lab = v3(first) + off;
                 let anchor = v3(first);
                 let second = a.get(1).map(|q| v3(*q));
+                // nota com várias pontas e/ou vértices intermediários: caminho de cada ponta no modelo
+                let multi = matches!(pm.kind, PmiKind::Note | PmiKind::FeatureNote { .. }) && (a.len() > 1 || pm.style.leader_via.iter().any(|v| !v.is_empty()));
+                let routes3: Vec<Vec<Vec3>> = if multi {
+                    (0..a.len())
+                        .map(|k| {
+                            let mut v: Vec<Vec3> = pm.style.leader_via.get(k).map(|w| w.iter().map(|q| v3(*q)).collect()).unwrap_or_default();
+                            v.push(v3(a[k]));
+                            v
+                        })
+                        .collect()
+                } else {
+                    vec![]
+                };
                 match plane {
                     Some((n, x, y)) => {
                         // âncoras levadas ao plano do rótulo; fora dele, um traço liga ao ponto real
@@ -1001,7 +1294,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                             egui::pos2(d.dot(x) * 10., -d.dot(y) * 10.)
                         };
                         let (s0l, s1l) = (loc(anchor), second.map(loc));
-                        let draw = |cv: &Cv, pp: &Pen| draw_kind(cv, pp, pm, egui::pos2(0., 0.), s0l, s1l, &main, stack.as_ref(), &fields);
+                        let routes_l: Vec<Vec<Pos2>> = routes3.iter().map(|r| r.iter().map(|q| loc(*q)).collect()).collect();
+                        let draw = |cv: &Cv, pp: &Pen| draw_kind(cv, pp, pm, egui::pos2(0., 0.), s0l, s1l, &routes_l, &main, stack.as_ref(), &fields);
                         let Some(bb) = on_plane(lab, x, y, &draw) else { continue };
                         if (anchor - flat(anchor)).length() > 0.3 {
                             if let (Some(a0), Some(a1)) = (cam.project(rect, flat(anchor)), cam.project(rect, anchor)) {
@@ -1013,8 +1307,9 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                     None => {
                         let (Some(s0), Some(st)) = (cam.project(rect, anchor), cam.project(rect, lab)) else { continue };
                         let s1 = second.and_then(|q| cam.project(rect, q));
+                        let routes_s: Vec<Vec<Pos2>> = routes3.iter().filter_map(|r| r.iter().map(|q| cam.project(rect, *q)).collect::<Option<Vec<_>>>()).collect();
                         let cv = Cv::new(&painter);
-                        let r = draw_kind(&cv, &pen, pm, st, s0, s1, &main, stack.as_ref(), &fields);
+                        let r = draw_kind(&cv, &pen, pm, st, s0, s1, &routes_s, &main, stack.as_ref(), &fields);
                         cv.flush();
                         r
                     }
@@ -1048,6 +1343,14 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                     ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
                 }
                 let h = h.on_hover_text(tr("arraste o ponto de ancoragem para outra face, aresta ou vértice"));
+                if a.len() > 1 {
+                    h.context_menu(|ui| {
+                        if ui.button(tr("Remover esta ponta")).clicked() {
+                            tip_rm = Some((pm.id, k));
+                            ui.close();
+                        }
+                    });
+                }
                 if let (true, Some(m)) = (h.dragged(), h.interact_pointer_pos()) {
                     painter.extend(egui::Shape::dashed_line(&[sp, m], Stroke::new(1.5, HL), 5., 3.));
                     // candidato sob o cursor: realçado, com o tipo reconhecido
@@ -1074,6 +1377,35 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                             anchor_req = Some((pm.id, k, p, pk.as_ref().and_then(|p| pick_target(r, p))));
                         }
                     }
+                }
+            }
+        }
+        // vértices intermediários da chamada: alças arrastáveis no plano da tela; botão direito remove
+        if is_sel && matches!(pm.kind, PmiKind::Note | PmiKind::FeatureNote { .. }) {
+            for (k, via) in pm.style.leader_via.iter().enumerate() {
+                for (i, q) in via.iter().enumerate() {
+                    let Some(sp) = cam.project(rect, v3(*q)) else { continue };
+                    let h = ui.interact(Rect::from_center_size(sp, egui::vec2(14., 14.)), egui::Id::unique(("pmi_via", pm.id.0, k, i)), egui::Sense::drag());
+                    painter.rect_filled(Rect::from_center_size(sp, egui::vec2(8., 8.)), 1., HL);
+                    if h.hovered() {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+                    }
+                    let h = h.on_hover_text(tr("vértice da chamada: arraste para mudar o caminho; botão direito remove"));
+                    if let (true, Some(m)) = (h.dragged(), h.interact_pointer_pos()) {
+                        let n = -cam.ray(rect, rect.center()).1;
+                        let (o, dir) = cam.ray(rect, m);
+                        let den = dir.dot(n);
+                        if den.abs() > 1e-6 {
+                            let hit = o + dir * ((v3(*q) - o).dot(n) / den);
+                            via_req = Some((pm.id, k, i, [hit.x as f64, hit.y as f64, hit.z as f64]));
+                        }
+                    }
+                    h.context_menu(|ui| {
+                        if ui.button(tr("Remover vértice")).clicked() {
+                            via_rm = Some((pm.id, k, i));
+                            ui.close();
+                        }
+                    });
                 }
             }
         }
@@ -1117,6 +1449,23 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                 action = Some((pm.id, 3));
                 ui.close();
             }
+            if matches!(pm.kind, PmiKind::Note | PmiKind::FeatureNote { .. }) {
+                if ui.button(tr("Adicionar ponta…")).on_hover_text(tr("Clique noutro elemento do modelo: a nota ganha mais uma chamada")).clicked() {
+                    action = Some((pm.id, 5));
+                    ui.close();
+                }
+                for k in 0..pm.anchors.len() {
+                    let t = if pm.anchors.len() > 1 { format!("{} {}", tr("Adicionar vértice na chamada"), k + 1) } else { tr("Adicionar vértice intermediário").to_string() };
+                    if ui.button(t).clicked() {
+                        via_add = Some((pm.id, k));
+                        ui.close();
+                    }
+                }
+            }
+            if matches!(pm.kind, PmiKind::FeatureNote { .. }) && ui.button(tr("Quebrar em cotas simples")).on_hover_text(tr("Cada parte da chamada vira uma cota com tolerância própria")).clicked() {
+                action = Some((pm.id, 4));
+                ui.close();
+            }
             ui.separator();
             if ui.button(tr("🗑 Apagar   Del")).clicked() {
                 action = Some((pm.id, 0));
@@ -1129,8 +1478,37 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     if cancel {
         app.pmi_pending = None;
         app.picks.clear();
+        set_variant(None);
     } else if pop {
         app.picks.pop();
+    } else if finish {
+        finish_multi(app);
+    }
+    // edição dos vértices e pontas da chamada (B23)
+    let mut mexeu = false;
+    if let Some((id, k, i, p)) = via_req {
+        if let Some(pm) = list_mut(app).iter_mut().find(|x| x.id == id) {
+            mexeu |= fenkra_core::pmi_leader::move_vertex(pm, k, i, p);
+        }
+    }
+    if let Some((id, k, i)) = via_rm {
+        if let Some(pm) = list_mut(app).iter_mut().find(|x| x.id == id) {
+            mexeu |= fenkra_core::pmi_leader::remove_vertex(pm, k, i);
+        }
+    }
+    if let Some((id, k)) = via_add {
+        if let Some(pm) = list_mut(app).iter_mut().find(|x| x.id == id) {
+            let label = [0, 1, 2].map(|j| pm.anchors.first().map(|q| q[j]).unwrap_or(0.) + pm.offset[j]);
+            mexeu |= fenkra_core::pmi_leader::add_vertex_mid(pm, label, k).is_some();
+        }
+    }
+    if let Some((id, k)) = tip_rm {
+        if let Some(pm) = list_mut(app).iter_mut().find(|x| x.id == id) {
+            mexeu |= fenkra_core::pmi_leader::remove_tip(pm, k);
+        }
+    }
+    if mexeu && app.in_asm() {
+        app.asm.as_mut().unwrap().modified = true;
     }
     for (id, a, t) in refresh {
         if let Some(pm) = list_mut(app).iter_mut().find(|x| x.id == id) {
@@ -1145,7 +1523,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
         if let Some(pm) = list_mut(app).iter_mut().find(|x| x.id == id) {
             // alvo novo (a face substituta, por exemplo): a âncora vai para ele e o estado se refaz
             let p = match tg {
-                Some(t) => t.carry(&t, hit, matches!(pm.kind, PmiKind::Radius | PmiKind::Diameter) && k == 0),
+                Some(t) => t.carry(&t, hit, (matches!(pm.kind, PmiKind::Radius | PmiKind::Diameter) && k == 0) || matches!(pm.kind, PmiKind::Gap { .. })),
                 None => hit,
             };
             if pm.targets.len() < pm.anchors.len() {
@@ -1190,6 +1568,15 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                 if let Some(p) = list_mut(app).iter_mut().find(|p| p.id == id) {
                     p.visible = false;
                 }
+            }
+            4 => split_feature(app, id),
+            5 => {
+                // nova ponta: o próximo elemento escolhido no 3D vira mais uma chamada da nota
+                *PONTA_PARA.lock().unwrap_or_else(|e| e.into_inner()) = Some(id);
+                set_variant(None);
+                app.picks.clear();
+                app.pmi_pending = Some(16);
+                app.toast(format!("{}: {}", tr("Adicionar ponta…"), tr("clique no elemento que a nova chamada deve marcar")), false);
             }
             3 => {
                 // alterna: de frente ↔ deitado no plano da tela atual (fica fixo nele ao girar)
@@ -1347,7 +1734,7 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui, com_pmi: bool, com_captura
     let h = h.on_hover_text(tr("Cotas, notas, rugosidade, solda e tolerâncias no modelo 3D (grupo Detalhamento 3D)."));
     h.context_menu(|ui| {
         ui.label(RichText::new(tr("Nova anotação 3D")).strong());
-        for (i, n) in [(0u8, "↔ Cota linear"), (1, "R Raio"), (2, "Ø Diâmetro"), (3, "∠ Ângulo"), (4, "✎ Nota"), (5, "√ Rugosidade"), (6, "⌒ Solda"), (7, "▭ Referência (datum)"), (8, "⊞ Tolerância geométrica"), (9, "▤ Legenda 3D")] {
+        for (i, n) in [(0u8, "↔ Cota linear"), (1, "R Raio"), (2, "Ø Diâmetro"), (3, "∠ Ângulo"), (4, "✎ Nota"), (5, "√ Rugosidade"), (6, "⌒ Solda"), (7, "▭ Referência (datum)"), (8, "⊞ Tolerância geométrica"), (9, "▤ Legenda 3D"), (11, "⊢ Cota ordenada"), (12, "⌒ Comprimento de arco"), (13, "⇔ Cadeia de cotas"), (14, "⇥ Cotas a partir de uma base"), (15, "ƒ Chamada de feature")] {
             if ui.button(tr(n)).clicked() {
                 create = Some(i);
                 ui.close();
@@ -1686,7 +2073,7 @@ fn panel_inner(app: &mut App, ui: &mut egui::Ui, id: Id, style_req: &mut bool) -
         ui.label(RichText::new(format!("✔ {}", tr("OK"))).color(crate::theme::st_ok()).small());
     }
     ui.label(RichText::new(format!("{}: {}", tr("Plano do texto"), plane_name(p.plane))).small());
-    if let (Some(pl), PmiKind::Linear) = (p.plane, &p.kind) {
+    if let (Some(pl), true) = (p.plane, p.kind.is_linear_like()) {
         if plane_hides(pl.0, &p.anchors) {
             ui.label(RichText::new(tr("este plano não mostra a cota")).color(crate::theme::st_err()).small());
         }
@@ -1695,10 +2082,22 @@ fn panel_inner(app: &mut App, ui: &mut egui::Ui, id: Id, style_req: &mut bool) -
         ui.label(tr("Nome"));
         ui.text_edit_singleline(&mut p.name);
     });
+    if p.kind.has_variants() {
+        ui.horizontal(|ui| {
+            ui.label(tr("Medida"));
+            if ui.button(tr(&p.kind.variant_label())).on_hover_text(tr("Alterna entre as variantes de medida desta cota")).clicked() {
+                p.kind = p.kind.next_variant();
+            }
+        });
+    }
     match &mut p.kind {
         PmiKind::Note => {
             ui.label(tr("Texto"));
             ui.text_edit_multiline(&mut p.text);
+        }
+        PmiKind::FeatureNote { .. } => {
+            ui.label(RichText::new(tr("O texto vem dos parâmetros da feature e se atualiza sozinho.")).weak().small());
+            ui.label(RichText::new(&p.text).strong());
         }
         PmiKind::Roughness { ra, process } => {
             ui.horizontal(|ui| {
@@ -1899,5 +2298,46 @@ mod tests {
         // trocar a face base muda o primeiro candidato
         let c2 = plane_cands(&r, Some((body, face)), 1, [0.; 3]);
         assert_ne!(c[0].n, c2[0].n);
+    }
+}
+
+#[cfg(test)]
+mod tests_b185_b186 {
+    use super::*;
+    use fenkra_core::doc::FeatureKind;
+
+    #[test]
+    fn tab_percorre_as_variantes_e_o_comando_novo_nasce_do_indice() {
+        // índice fora da barra para não pisar nos outros testes (o estado é da sessão)
+        set_variant(Some((200, PmiKind::Linear.next_variant())));
+        assert_eq!(kind_now(200), PmiKind::Ordinate { axis: 0 });
+        assert_eq!(kind_now(0), PmiKind::Linear, "outro comando não herda a variante");
+        set_variant(None);
+        assert_eq!(kind_now(200), kind_of(200));
+        assert_eq!(kind_of(11), PmiKind::Ordinate { axis: 0 });
+        assert_eq!(kind_of(12), PmiKind::ArcLength);
+        assert!(is_multi(13) && is_multi(14) && !is_multi(0));
+        assert!(matches!(kind_of(15), PmiKind::FeatureNote { .. }));
+    }
+
+    #[test]
+    fn contagem_da_chamada_dos_furos_confere_com_a_geometria() {
+        let e = crate::examples::all().into_iter().find(|e| e.name == "Placa paramétrica").unwrap();
+        let r = fenkra_solidos::recompute(&e.doc);
+        let mut conferidos = 0;
+        for (_, f) in e.doc.active_features() {
+            if !matches!(f.kind, FeatureKind::Hole(_)) {
+                continue;
+            }
+            let c = fenkra_core::pmi_feature::callout(&e.doc, f.id, true).expect("o furo tem chamada");
+            let (Some(d), n) = (c.hole_diameter, c.count.unwrap_or(1)) else { continue };
+            let achados = holes_found(&r, f.id, d);
+            assert_eq!(achados, n, "{}: chamada «{}» declara {n}× e a geometria tem {achados}", f.name, c.text);
+            assert_eq!(fenkra_core::pmi_feature::count_state(n, achados).0, PmiState::Ok);
+            // um furo a menos na geometria deixa a chamada ambígua
+            assert_eq!(fenkra_core::pmi_feature::count_state(n + 1, achados).0, PmiState::Ambigua);
+            conferidos += 1;
+        }
+        assert!(conferidos > 0, "a placa paramétrica tem furos");
     }
 }

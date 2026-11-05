@@ -1342,6 +1342,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "fenkra-tolerancias"
+version = "0.1.0-alpha.28"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -120,7 +120,7 @@ modelos!(
     "padrao_pontos", "parametro", "pasta", "personalizar", "plano", "plano_2linhas", "plano_3pontos",
     "plano_angulo", "plano_curva", "plano_deslocado", "plano_equacao", "plano_medio", "plano_meio",
     "plano_normal_curva", "plano_paralelo_ponto", "plano_ponto_linha", "plano_ponto_normal", "plano_tangente",
-    "pmi_angulo", "pmi_baloes", "pmi_diametro", "pmi_legenda", "pmi_linear", "pmi_nota", "pmi_raio",
+    "pmi_angulo", "pmi_arco", "pmi_baloes", "pmi_base", "pmi_cadeia", "pmi_diametro", "pmi_feature", "pmi_legenda", "pmi_linear", "pmi_nota", "pmi_ordenada", "pmi_raio",
     "pmi_referencia", "pmi_rugosidade", "pmi_solda", "pmi_tolerancia", "polilinha3d", "ponto_centro",
     "ponto_coord", "ponto_curva", "ponto_deslocado", "ponto_entre", "ponto_intersecao",
     "ponto_intersecao_curvas", "ponto_plano", "ponto_proj_curva", "ponto_projetado", "ponto_superficie",
