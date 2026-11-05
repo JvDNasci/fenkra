@@ -17,6 +17,10 @@ pub mod eixos;
 pub mod profile;
 pub mod refs;
 pub mod chapa;
+pub mod chapa_linha;
+mod chapa_flat;
+pub mod planificada;
+pub use chapa_flat::{passos_planificados, PassoPlanificado};
 
 pub use engrenagens::{calculo as calculo_engrenagem, engrenagem_documento, CalculoEngrenagem, ParamEngrenagem, TipoEngrenagem};
 pub use eixos::{chaveta_documento, eixo_documento, ParamEixo, RasgoChaveta, TrechoEixo};
@@ -445,6 +449,10 @@ pub struct CutOutline {
     pub feature: Id,
     pub folded: Vec<Vec<V3>>,
     pub flat: Vec<Vec<V3>>,
+    /// Na planificada, o que o comando faz além de cortar também passa por aqui: veneziana e
+    /// estampo guardam o contorno da ferramenta em `flat` (`folded` vazio), e cada canto da aba por
+    /// perfil guarda a linha de dobra em `dobra` (as dobras do mapa vêm de `sheet_maps`).
+    pub dobra: Option<BendLine>,
 }
 
 /// Onde a rosca fica, com o eixo e o sentido que a ferramenta usa, para a prévia desenhar a hélice.
@@ -469,6 +477,28 @@ pub struct BendLine {
     pub angle: f64,
     pub radius: f64,
     pub up: bool,
+    /// comando que fez a dobra
+    pub feature: Id,
+    /// comprimento desenvolvido (linha neutra) e dedução de dobra: os mesmos da geometria
+    pub allowance: f64,
+    pub deduction: f64,
+    /// eixo da dobra no espaço dobrado (as alças 3D e a linha de dobra desenhada leem daqui);
+    /// `None` nas dobras que só existem na planificada (cantos da aba por perfil)
+    pub eixo: Option<EixoDobra>,
+}
+
+/// Eixo de uma dobra no espaço dobrado.
+#[derive(Clone, Debug, PartialEq)]
+pub struct EixoDobra {
+    /// pontas do eixo, na face interna, no começo do arco
+    pub a: V3,
+    pub b: V3,
+    /// centro de curvatura na ponta `a`
+    pub centro: V3,
+    /// normal da chapa apontando para o centro de curvatura
+    pub normal: V3,
+    /// direção em que a aba sai (antes de dobrar)
+    pub saida: V3,
 }
 
 impl BendLine {
@@ -603,6 +633,8 @@ struct SheetMap {
     length: f64,
     /// a dobra vai para o lado de dentro do material (para baixo da face de referência)
     down: bool,
+    /// comando que fez a dobra (preenchido por `Ctx::run`; vale `Id(0)` enquanto o comando roda)
+    feature: Id,
 }
 
 impl SheetMap {
@@ -2955,9 +2987,9 @@ impl Ctx<'_> {
         let smax = corners(&moving).iter().map(|q| geo3d::dot(geo3d::sub(*q, p0), side)).fold(ba, f64::max);
         let c0 = geo3d::add(p0, geo3d::mul(e, e0));
         let map = if down {
-            SheetMap { c0: geo3d::sub(c0, geo3d::mul(n, t)), ev: e, l: e1 - e0, n: geo3d::mul(n, -1.), u: side, t, o: geo3d::sub(c0, geo3d::mul(n, t + r)), axis: fenkra_kernel::cross(n, side), a: ang.to_radians(), ba, length: smax - ba, down: true }
+            SheetMap { c0: geo3d::sub(c0, geo3d::mul(n, t)), ev: e, l: e1 - e0, n: geo3d::mul(n, -1.), u: side, t, o: geo3d::sub(c0, geo3d::mul(n, t + r)), axis: fenkra_kernel::cross(n, side), a: ang.to_radians(), ba, length: smax - ba, down: true, feature: Id(0) }
         } else {
-            SheetMap { c0, ev: e, l: e1 - e0, n, u: side, t, o: geo3d::add(c0, geo3d::mul(n, r)), axis: fenkra_kernel::cross(side, n), a: ang.to_radians(), ba, length: smax - ba, down: false }
+            SheetMap { c0, ev: e, l: e1 - e0, n, u: side, t, o: geo3d::add(c0, geo3d::mul(n, r)), axis: fenkra_kernel::cross(side, n), a: ang.to_radians(), ba, length: smax - ba, down: false, feature: Id(0) }
         };
         if !build {
             return Ok((None, map));
@@ -3023,6 +3055,7 @@ impl Ctx<'_> {
             ba: chapa::compensacao(p.t, p.r, p.angle, p.k).ba,
             length: p.length,
             down: false,
+            feature: Id(0),
         });
         // a lateral da aresta escolhida precisa ser a espessura da chapa (senão não é parede de chapa)
         if let Some(msg) = chapa::valida_lateral(info.thickness, p.t) {
@@ -3519,7 +3552,18 @@ impl Ctx<'_> {
         Ok(())
     }
 
+    /// Roda o comando e marca com ele as dobras que ele registrou (a tabela e as linhas de dobra
+    /// dizem de qual comando cada dobra veio).
     fn run(&mut self, f: &Feature) -> Result<Option<String>, String> {
+        let n0 = self.sheet_maps.len();
+        let r = self.run_feature(f);
+        for m in self.sheet_maps.iter_mut().skip(n0) {
+            m.feature = f.id;
+        }
+        r
+    }
+
+    fn run_feature(&mut self, f: &Feature) -> Result<Option<String>, String> {
         let k = |e: KernelError| e.0;
         match &f.kind {
             FeatureKind::Sketch(s) => {
@@ -4245,12 +4289,7 @@ impl Ctx<'_> {
                 let kloc = sp.k_for(r);
                 let cmp = chapa::compensacao(sp.t, r, ang, kloc);
                 // a linha marca o centro, o começo ou o fim da zona, ou o vértice de fora
-                let delta = match bd.position {
-                    1 => cmp.ba / 2.,
-                    2 => -cmp.ba / 2.,
-                    3 => cmp.ba / 2. - cmp.ossb,
-                    _ => 0.,
-                };
+                let delta = chapa_linha::deslocamento_posicao(bd.position, &cmp);
                 for w in lines.windows(2) {
                     let gap = geo3d::dot(geo3d::sub(geo3d::lerp(w[1].0, w[1].1, 0.5), geo3d::lerp(w[0].0, w[0].1, 0.5)), side_ref);
                     if gap < cmp.ba - 1e-6 {
@@ -4304,7 +4343,7 @@ impl Ctx<'_> {
             FeatureKind::SmLouver(lv) => {
                 let sp = self.sheet()?;
                 if sp.flat {
-                    return Ok(Some("planificada: veneziana mostrada só pelo corte".into()));
+                    return self.veneziana_planificada(f, lv);
                 }
                 let w = ev(&lv.width, &self.vars, "largura")?;
                 let h = ev(&lv.height, &self.vars, "altura")?;
@@ -4356,6 +4395,10 @@ impl Ctx<'_> {
                 let (frame, sk) = &self.sketch(st.sketch)?;
                 let frame = *frame;
                 let p = if st.flip { frame.normal } else { frame.normal.map(|x| -x) };
+                // planificada: a chapa plana não leva o copo; o contorno da ferramenta fica marcado
+                if sp.flat {
+                    return self.estampo_planificado(f, st, &frame, sk, sp.t, width);
+                }
                 match st.kind {
                     // nervura ao longo das curvas do sketch: seção trapezoidal varrida
                     1 => {
@@ -4520,7 +4563,7 @@ impl Ctx<'_> {
                         here.iter().map(|l| l.iter().map(|q| self.map_outline_point(*q, from_flat, !from_flat)).collect()).collect()
                     };
                     let (folded, flat) = if f.flat_space { (other(true), here.clone()) } else { (here.clone(), other(false)) };
-                    self.cut_outlines.push(CutOutline { feature: f.id, folded, flat });
+                    self.cut_outlines.push(CutOutline { feature: f.id, folded, flat, dobra: None });
                 }
                 let mut face = Shape::face(&frame, &sk.loops).map_err(k)?;
                 let off = if c.offset.trim().is_empty() { 0. } else { ev(&c.offset, &self.vars, "folga")? };
@@ -4558,9 +4601,6 @@ impl Ctx<'_> {
             }
             FeatureKind::SmProfileFlange(pf) => {
                 let sp = self.sheet()?;
-                if sp.flat {
-                    return Ok(Some("planificada: a aba por perfil aparece só dobrada".into()));
-                }
                 let (frame, sk) = &self.sketch(pf.sketch)?;
                 let frame = *frame;
                 if sk.open.is_empty() {
@@ -4570,6 +4610,11 @@ impl Ctx<'_> {
                     Some(e) => ev(e, &self.vars, "raio")?,
                     None => sp.r,
                 };
+                if sp.flat {
+                    let l1 = ev(&pf.l1, &self.vars, "comprimento 1")?;
+                    let l2 = if pf.l2.trim().is_empty() { 0. } else { ev(&pf.l2, &self.vars, "comprimento 2")? };
+                    return self.aba_perfil_planificada(f, &frame, sk, sp, r, l1, l2, !pf.flip);
+                }
                 // cantos arredondados no raio de dobra (linha média da chapa)
                 let mut sk2 = (**sk).clone();
                 sk2.loops.clear();
@@ -5480,7 +5525,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
     }
     cache.feats.retain(|id, _| seen.contains(id));
     // linhas de dobra no planificado: cada dobra leva as linhas pelas dobras anteriores
-    let bend_lines: Vec<BendLine> = (0..cx.sheet_maps.len())
+    let mut bend_lines: Vec<BendLine> = (0..cx.sheet_maps.len())
         .map(|i| {
             let m = cx.sheet_maps[i];
             let up_to = |q: V3| {
@@ -5496,9 +5541,13 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                 let a = geo3d::add(m.c0, geo3d::mul(m.u, du));
                 [up_to(a), up_to(geo3d::add(a, geo3d::mul(m.ev, m.l)))]
             };
-            BendLine { start: line(0.), center: line(m.ba / 2.), end: line(m.ba), angle: m.a.to_degrees().abs(), radius: geo3d::dist(m.o, m.c0), up: m.a > 0. && !m.down }
+            BendLine { start: line(0.), center: line(m.ba / 2.), end: line(m.ba), angle: m.a.to_degrees().abs(), radius: geo3d::dist(m.o, m.c0), up: m.a > 0. && !m.down, feature: m.feature, eixo: Some(EixoDobra { a: m.c0, b: geo3d::add(m.c0, geo3d::mul(m.ev, m.l)), centro: m.o, normal: m.n, saida: m.u }), allowance: m.ba, deduction: 2. * (if m.a.abs() < 179.9_f64.to_radians() { (m.a.abs() / 2.).tan() * (geo3d::dist(m.o, m.c0) + m.t) } else { geo3d::dist(m.o, m.c0) + m.t }) - m.ba }
         })
         .collect();
+    // cantos da aba por perfil (linhas soltas) entram no mapa; a ordem segue a dos comandos
+    bend_lines.extend(cx.cut_outlines.iter().filter_map(|o| o.dobra.clone()));
+    let ordem_cmd: HashMap<Id, usize> = doc.features.iter().enumerate().map(|(i, f)| (f.id, i)).collect();
+    bend_lines.sort_by_key(|b| ordem_cmd.get(&b.feature).copied().unwrap_or(usize::MAX));
     let h = hash_of(&[&all_bodies(&cx.body_sig)], global);
 
     // planos: Origem + Referências. Todas entram no resultado (ocultas também: a cena filtra pela
@@ -6409,6 +6458,10 @@ pub struct BendRow {
     pub allowance: f64,
     /// dedução de dobra (2 × recuo externo − allowance), para quem cota por fora
     pub deduction: f64,
+    /// posição da dobra no mapa (1, 2, 3...): a mesma ordem das linhas de dobra da vista
+    pub ordem: usize,
+    /// etiqueta da vista ("↑ 90° R2"), igual à que a planificada mostra sobre a linha
+    pub rotulo: String,
 }
 
 /// Prévia de um comando de chapa: o resultado que ele daria agora, sem gravar nada no documento.
@@ -6485,10 +6538,33 @@ pub fn bend_table(doc: &Document) -> Vec<BendRow> {
         let c = chapa::compensacao(t, r, ang, fenkra_core::sheet_k(s.method, k0, t, r, allowance));
         for i in 0..n {
             let name = if n > 1 { format!("{} ({}/{n})", f.name, i + 1) } else { f.name.clone() };
-            out.push(BendRow { feature: f.id, name, angle: ang, radius: r, allowance: c.ba, deduction: c.deducao });
+            out.push(BendRow { feature: f.id, name, angle: ang, radius: r, allowance: c.ba, deduction: c.deducao, ordem: out.len() + 1, rotulo: String::new() });
         }
     }
     out
+}
+
+/// Tabela de dobras do mapa: uma linha por linha de dobra da vista, na mesma ordem e com a mesma
+/// etiqueta (`BendLine::label`). Os números vêm da própria dobra feita na geometria, então a
+/// tabela, a vista e o DXF nunca discordam. `linhas` é `RecomputeResult::bend_lines`.
+pub fn tabela_dobras(doc: &Document, linhas: &[BendLine]) -> Vec<BendRow> {
+    let mut por_comando: HashMap<Id, usize> = HashMap::new();
+    for l in linhas {
+        *por_comando.entry(l.feature).or_default() += 1;
+    }
+    let mut visto: HashMap<Id, usize> = HashMap::new();
+    linhas
+        .iter()
+        .enumerate()
+        .map(|(i, l)| {
+            let nome = doc.feature(l.feature).map(|f| f.name.clone()).unwrap_or_else(|| "dobra".into());
+            let total = por_comando[&l.feature];
+            let k = visto.entry(l.feature).or_default();
+            *k += 1;
+            let name = if total > 1 { format!("{nome} ({k}/{total})") } else { nome };
+            BendRow { feature: l.feature, name, angle: l.angle, radius: l.radius, allowance: l.allowance, deduction: l.deduction, ordem: i + 1, rotulo: l.label() }
+        })
+        .collect()
 }
 
 /// Geometria guardada de um link (ou cópia isolada).

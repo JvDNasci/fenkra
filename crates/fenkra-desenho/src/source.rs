@@ -513,13 +513,17 @@ impl Models {
                     .map(|(i, h)| vec![format!("A{}", i + 1), num(h.pos[0]), num(h.pos[1]), num(h.pos[2]), num(h.diameter), if h.through { "passante".into() } else { num(h.depth) }, h.thread.clone()])
                     .collect(),
             },
-            (TableKind::Bends, Model::Part(doc)) => TableData {
-                headers: ["Dobra", "Ângulo", "Raio", "Desenvolvido", "Dedução"].map(String::from).to_vec(),
-                rows: fenkra_solidos::bend_table(doc)
-                    .iter()
-                    .map(|b| vec![b.name.clone(), format!("{}°", num(b.angle)), num(b.radius), num(b.allowance), num(b.deduction)])
-                    .collect(),
-            },
+            (TableKind::Bends, Model::Part(doc)) => {
+                // tabela do mapa: mesma ordem e etiqueta das linhas de dobra da planificada
+                let linhas = fenkra_solidos::recompute(doc).bend_lines;
+                TableData {
+                    headers: ["Nº", "Etiqueta", "Dobra", "Ângulo", "Raio", "Desenvolvido", "Dedução"].map(String::from).to_vec(),
+                    rows: fenkra_solidos::tabela_dobras(doc, &linhas)
+                        .iter()
+                        .map(|b| vec![b.ordem.to_string(), b.rotulo.clone(), b.name.clone(), format!("{}°", num(b.angle)), num(b.radius), num(b.allowance), num(b.deduction)])
+                        .collect(),
+                }
+            }
             (TableKind::CutList, Model::Part(doc)) => TableData {
                 headers: ["Item", "Perfil", "Comprimento", "Qtd.", "Barras"].map(String::from).to_vec(),
                 rows: fenkra_solidos::cut_list(doc)

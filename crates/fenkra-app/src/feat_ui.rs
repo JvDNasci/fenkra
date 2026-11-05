@@ -556,10 +556,6 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         }
         FeatureKind::SmJoggle(j) => {
             section(ui, "Joggle");
-            let pts: Vec<[f64; 3]> = seed.points.iter().filter_map(|p| match p {
-                PointRef::Fixed(q) => Some(*q),
-                _ => None,
-            }).collect();
             let mut by_plane = j.plane.is_some();
             ui.horizontal_wrapped(|ui| {
                 if ui.selectable_label(!by_plane, tr("por dois pontos")).clicked() {
@@ -573,10 +569,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 j.plane = by_plane.then(|| seed.planes.last().copied().unwrap_or(PlaneRef::Origin(OriginPlane::YZ)));
             }
             ui.label(RichText::new(format!("linha de {} a {}", crate::app::p3(j.a, 1), crate::app::p3(j.b, 1))).small());
-            if ui.add_enabled(pts.len() >= 2, egui::Button::new(tr("⊙ Usar os dois vértices selecionados"))).clicked() {
-                j.a = pts[0];
-                j.b = pts[1];
-            }
+            ui.label(RichText::new(tr("Clique na face fixa e desenhe a linha na face, direto no 3D: o lado oposto ao da face fixa desce.")).weak().small());
             if let Some(p) = &mut j.plane {
                 crate::editor::plane_combo(ui, "jog_plano", doc, p, Some(me));
                 ui.label(RichText::new(tr("A linha é a interseção do plano com a face (o primeiro ponto marca a face).")).weak().small());
@@ -595,10 +588,6 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         }
         FeatureKind::SmBend(b) => {
             section(ui, "Dobra por linha");
-            let pts: Vec<[f64; 3]> = seed.points.iter().filter_map(|p| match p {
-                PointRef::Fixed(q) => Some(*q),
-                _ => None,
-            }).collect();
             let mut from_sketch = b.sketch.is_some();
             if crate::editor::check(ui, &mut from_sketch, "linhas de um sketch (várias; curva quase reta)").changed() {
                 b.sketch = from_sketch.then_some(Id(0));
@@ -610,10 +599,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 }
                 None => {
                     ui.label(RichText::new(format!("linha de {} a {}", crate::app::p3(b.a, 1), crate::app::p3(b.b, 1))).small());
-                    if ui.add_enabled(pts.len() >= 2, egui::Button::new(tr("⊙ Usar os dois vértices selecionados"))).clicked() {
-                        b.a = pts[0];
-                        b.b = pts[1];
-                    }
+                    ui.label(RichText::new(tr("Clique na face fixa e desenhe a linha na face, direto no 3D: o lado oposto ao da face fixa gira.")).weak().small());
                 }
             }
             ui.horizontal(|ui| {
@@ -638,15 +624,8 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         }
         FeatureKind::SmLouver(l) => {
             section(ui, "Veneziana");
-            let pts: Vec<[f64; 3]> = seed.points.iter().filter_map(|p| match p {
-                PointRef::Fixed(q) => Some(*q),
-                _ => None,
-            }).collect();
             ui.label(RichText::new(format!("abertura de {} a {}", crate::app::p3(l.a, 1), crate::app::p3(l.b, 1))).small());
-            if ui.add_enabled(pts.len() >= 2, egui::Button::new(tr("⊙ Usar os dois vértices selecionados"))).clicked() {
-                l.a = pts[0];
-                l.b = pts[1];
-            }
+            ui.label(RichText::new(tr("Clique na face fixa e desenhe a linha na face, direto no 3D: a rampa sai do lado oposto ao da face fixa.")).weak().small());
             expr(ui, "Largura da rampa", &mut l.width, vars, "mm");
             expr(ui, "Altura da abertura", &mut l.height, vars, "mm");
             crate::editor::check(ui, &mut l.flip, "rampa do outro lado da linha");

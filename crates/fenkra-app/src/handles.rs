@@ -551,6 +551,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: Camera) {
     if crate::gizmo::overlay(app, ui, rect, &cam, id) {
         return;
     }
+    // chapa: linha de dobra na face e alças de ângulo, raio, largura e recuos (B243 e B249)
+    crate::chapa_manip_ui::overlay(app, ui, rect, &cam, id);
     if matches!(app.open.doc.reference(id).map(|r| &r.kind), Some(RefKind::SurfFill { .. })) {
         contour_overlay(app, ui, rect, &cam, id);
         return;
