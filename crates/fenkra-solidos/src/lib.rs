@@ -5811,6 +5811,33 @@ pub struct BendRow {
     pub deduction: f64,
 }
 
+/// Prévia de um comando de chapa: o resultado que ele daria agora, sem gravar nada no documento.
+#[derive(Clone, Debug)]
+pub struct PreviaComando {
+    /// malha do corpo com o comando aplicado (`None` quando o comando falha)
+    pub malha: Option<Mesh>,
+    /// `Ok`/`Warning` quando vale; `Error` traz a causa em texto (colisão com a aba vizinha, raio
+    /// abaixo do mínimo...) para o painel mostrar em vermelho
+    pub status: Status,
+    pub volume: f64,
+}
+
+/// Aplica `kind` (com os valores padrão ou os que o painel tem agora) a uma cópia do documento e
+/// devolve a malha resultante. O painel chama a cada mudança de campo: o documento real só ganha o
+/// comando quando a pessoa confirma. Só mexe na cópia, então vale para qualquer comando.
+pub fn previa_comando(doc: &Document, kind: FeatureKind) -> PreviaComando {
+    let mut d = doc.clone();
+    let id = d.add_feature(kind);
+    let alvo = d.feature(id).map(|f| f.target);
+    let r = recompute(&d);
+    let status = r.status.get(&id).cloned().unwrap_or(Status::Inactive);
+    let corpo = r.bodies.iter().find(|b| Some(b.collector) == alvo).or_else(|| r.bodies.first());
+    match (&status, corpo) {
+        (Status::Ok | Status::Warning(_), Some(b)) if !b.mesh.positions.is_empty() => PreviaComando { malha: Some(b.mesh.clone()), volume: b.mass.volume, status },
+        _ => PreviaComando { malha: None, volume: 0., status },
+    }
+}
+
 /// Contorno planificado de um recorte de chapa projetado (ortogonalmente) no plano do sketch dele,
 /// em coordenadas do plano: serve a "projetar a planificada no sketch" para cotar contra ela.
 pub fn contorno_planificado_no_sketch(doc: &Document, cut: Id) -> Result<Vec<Vec<[f64; 2]>>, String> {
