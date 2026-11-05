@@ -268,7 +268,7 @@ fn contorno_propaga_por_aresta_tangente_e_laco() {
 
 /// Extrusão de um sketch: é ela que dá papel às faces (tampas e laterais).
 fn extrusao(d: &mut Document, sketch: Id, altura: &str) -> Id {
-    d.add_feature(FeatureKind::Extrude(Extrude { sketch, op: BoolOp::Add, extent: Extent::Blind(s(altura)), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0 }))
+    d.add_feature(FeatureKind::Extrude(Extrude { sketch, op: BoolOp::Add, extent: Extent::Blind(s(altura)), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() }))
 }
 
 fn caixa(d: &mut Document, altura: &str) -> Id {

@@ -1289,7 +1289,7 @@ fn feature_ui(
             if let Some(a) = &mut e.dir {
                 crate::geo_ui::axis_slot(ui, "ex_dir", "Direção", doc, Id(u64::MAX), a, seed);
             }
-            crate::feat_ui::extrude_extras(ui, e, vars);
+            crate::feat_ui::extrude_extras(ui, e, vars, doc, seed);
             if e.op == BoolOp::Cut {
                 ui.label(RichText::new(tr("O recorte entra no material (contra a normal do plano). Use 'inverter' se necessário.")).weak().small());
             }
@@ -1603,6 +1603,21 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
     }
     expr(ui, "Conicidade", &mut h.taper, vars, "°");
     ui.label(RichText::new(tr("Conicidade ≠ 0 faz um furo cônico (meio-ângulo); 0 = cilíndrico.")).weak().small());
+    // B90: ponta, rosca e folga
+    egui::CollapsingHeader::new(tr("Ponta, rosca e folga")).default_open(false).show(ui, |ui| {
+        if h.tip.is_some() {
+            expr(ui, "Deslocamento da ponta", &mut h.extra.tip_offset, vars, "mm");
+            ui.label(RichText::new(tr("Soma à profundidade do cilindro; negativo faz a ponta em V caber na profundidade pedida.")).weak().small());
+        }
+        if h.thread.is_some() {
+            expr(ui, "Profundidade da rosca", &mut h.extra.thread_depth, vars, "mm");
+            expr(ui, "Folga no fundo", &mut h.extra.thread_relief, vars, "passos");
+            ui.label(RichText::new(tr("Vazio na profundidade da rosca = a do furo menos a folga em passos de rosca.")).weak().small());
+        }
+        if h.tip.is_none() && h.thread.is_none() {
+            ui.label(RichText::new(tr("Ative o fundo em V ou a rosca para ajustar a ponta e a folga.")).weak().small());
+        }
+    });
 
     egui::CollapsingHeader::new(tr("Ajuste fino das dimensões")).default_open(false).show(ui, |ui| {
         expr(ui, "Diâmetro", &mut h.diameter, vars, "mm");
@@ -1615,6 +1630,22 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
             HoleKind::Escareado { diameter, angle } => {
                 expr(ui, "Ø escareado", diameter, vars, "mm");
                 expr(ui, "Ângulo", angle, vars, "°");
+                // B48: ângulos usuais e por norma
+                ui.horizontal_wrapped(|ui| {
+                    for a in fenkra_solidos::hardware::ANGULOS_ESCAREADO {
+                        let atual = angle.trim().parse::<f64>().is_ok_and(|v| (v - a).abs() < 1e-9);
+                        if ui.selectable_label(atual, format!("{a}°")).clicked() {
+                            *angle = format!("{a}");
+                        }
+                    }
+                });
+                egui::ComboBox::from_id_salt("esc_norma").selected_text(tr("Ângulo por norma")).show_ui(ui, |ui| {
+                    for (nome, a) in fenkra_solidos::hardware::NORMAS_ESCAREADO {
+                        if ui.selectable_label(false, format!("{nome} ({a}°)")).clicked() {
+                            *angle = format!("{a}");
+                        }
+                    }
+                });
             }
             HoleKind::Contrafurado { diameter, depth, angle } => {
                 expr(ui, "Ø contrafuro", diameter, vars, "mm");

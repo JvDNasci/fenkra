@@ -174,6 +174,30 @@ pub fn bom(a: &Assembly, dir: Option<&Path>, level: BomLevel) -> Vec<BomRow> {
     }
 }
 
+/// B92: massa de uma unidade do item da lista, em kg, lida do modelo (volume de cada corpo vezes a
+/// densidade do material dele, ver `fenkra_solidos::massa`). Subconjunto soma as peças dele vezes a
+/// quantidade. `None` quando o arquivo não abre ou não tem sólido.
+pub fn massa_do_item(row: &BomRow) -> Option<f64> {
+    massa_do_arquivo(&row.path, row.sub, 0)
+}
+
+fn massa_do_arquivo(path: &Path, sub: bool, depth: usize) -> Option<f64> {
+    if depth > 16 {
+        return None;
+    }
+    if !sub {
+        let doc = fenkra_core::Document::from_json(&std::fs::read_to_string(path).ok()?).ok()?;
+        let m = fenkra_solidos::massa::massa_do_modelo_kg(&doc);
+        return (m > 0.).then_some(m);
+    }
+    let asm = load_sub(path)?;
+    let mut total = 0.;
+    for (fp, is_sub, qty, _) in direct(&asm, path.parent()) {
+        total += massa_do_arquivo(&fp, is_sub, depth + 1).unwrap_or(0.) * qty as f64;
+    }
+    (total > 0.).then_some(total)
+}
+
 fn structured(a: &Assembly, dir: Option<&Path>, top: Option<&Path>, prefix: &str, depth: usize, out: &mut Vec<BomRow>) {
     if depth > 16 {
         return;
@@ -204,6 +228,25 @@ mod tests {
     fn part(a: &mut Assembly, path: &str) {
         let id = a.alloc();
         a.nodes.push(Node { id, name: path.into(), number: 0, kind: NodeKind::Part { path: path.into() }, parent: None, placement: Default::default(), fixed: false, visible: true, mode: Default::default(), color: None });
+    }
+
+    #[test]
+    fn massa_do_item_vem_do_modelo_e_do_material_da_peca() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let dir = std::env::temp_dir().join("fenkra_bom_massa");
+        let _ = std::fs::create_dir_all(&dir);
+        let mut doc = fenkra_solidos::example_document();
+        doc.props.material = "Alumínio 6061".into();
+        let arq = dir.join("peca.fkp");
+        std::fs::write(&arq, doc.to_json()).unwrap();
+        let vol: f64 = fenkra_solidos::recompute(&doc).bodies.iter().map(|b| b.mass.volume).sum();
+        let row = BomRow { item: "1".into(), depth: 0, key: "peca.fkp".into(), path: arq.clone(), sub: false, qty: 1, name: "peca".into() };
+        let m = massa_do_item(&row).expect("massa");
+        // não é mais o aço fixo de 7,85: vale a densidade do alumínio da tabela
+        assert!((m - vol * 2.7e-6).abs() < 1e-6 * vol.max(1.), "massa {m} volume {vol}");
+        assert!(massa_do_item(&BomRow { path: dir.join("nao_existe.fkp"), ..row }).is_none());
     }
 
     #[test]

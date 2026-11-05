@@ -225,6 +225,18 @@ pub struct MassProps {
     pub center: [f64; 3],
 }
 
+/// Inércia do volume com densidade 1, em torno do centro de massa (unidades de mm^5; multiplique
+/// pela densidade em g/mm^3 para obter g·mm^2).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct InertiaProps {
+    /// matriz simétrica [xx, yy, zz, xy, xz, yz]
+    pub matrix: [f64; 6],
+    /// momentos principais, em ordem crescente do kernel
+    pub principal: [f64; 3],
+    /// eixo principal de cada momento (vetor unitário)
+    pub axes: [[f64; 3]; 3],
+}
+
 /// Relatório de uma junção costurada.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct SewReport {
@@ -783,6 +795,18 @@ mod imp {
             }
             MassProps { volume: v[0], area: v[1], center: [v[2], v[3], v[4]] }
         }
+        /// Inércia do volume (densidade 1) no centro de massa; `None` sem sólido.
+        pub fn inertia(&self) -> Option<InertiaProps> {
+            let v = b::inertia_props(&self.0);
+            if v.len() < 18 {
+                return None;
+            }
+            Some(InertiaProps {
+                matrix: [v[0], v[1], v[2], v[3], v[4], v[5]],
+                principal: [v[6], v[7], v[8]],
+                axes: [[v[9], v[10], v[11]], [v[12], v[13], v[14]], [v[15], v[16], v[17]]],
+            })
+        }
         pub fn face_count(&self) -> u32 {
             b::count_faces(&self.0)
         }
@@ -1122,6 +1146,9 @@ mod imp {
         }
         pub fn mass(&self) -> MassProps {
             MassProps::default()
+        }
+        pub fn inertia(&self) -> Option<InertiaProps> {
+            None
         }
         pub fn face_count(&self) -> u32 {
             0

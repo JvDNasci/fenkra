@@ -325,6 +325,7 @@ fn furo(p: V3, d: V3, dia: f64, rosca: &str, depth: Extent) -> Hole {
         tip: None,
         taper: "0".into(),
         left_hand: false,
+        extra: Default::default(),
     }
 }
 
@@ -697,7 +698,7 @@ mod tests {
         let mut base = SketchData::default();
         base.add_rect(&mut al, [-30., -30.], [30., 30.], false);
         let sb = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data: base }));
-        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sb, op: BoolOp::Add, extent: Extent::Blind("10".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0 }));
+        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sb, op: BoolOp::Add, extent: Extent::Blind("10".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
         d
     }
 

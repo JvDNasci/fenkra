@@ -352,6 +352,24 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 }
             }
             sources_ui(ui, doc, idx, &mut p.sources);
+            // B91: instâncias puladas, com X para restaurar
+            section(ui, "Instâncias puladas");
+            let mut volta = None;
+            for (i, (a, b)) in p.skip.iter().enumerate() {
+                ui.horizontal(|ui| {
+                    let nome = if *b == 0 { format!("{}", a + 1) } else { format!("{} × {}", a + 1, b + 1) };
+                    ui.label(format!("{} {}", tr("Instância"), nome));
+                    if ui.small_button("✖").on_hover_text(tr("Restaurar esta instância")).clicked() {
+                        volta = Some(i);
+                    }
+                });
+            }
+            if let Some(i) = volta {
+                p.skip.remove(i);
+            }
+            if p.skip.is_empty() {
+                ui.label(RichText::new(tr("Nenhuma. Clique no ponto de uma instância na prévia para pulá-la.")).weak().small());
+            }
         }
         FeatureKind::Mirror(m) => {
             ui.horizontal(|ui| {
@@ -1028,7 +1046,30 @@ pub fn default_pattern(i: usize, seed: &Seed) -> PatternKind {
 }
 
 /// Opções extras da extrusão: ângulo de saída e parede fina.
-pub fn extrude_extras(ui: &mut egui::Ui, e: &mut Extrude, vars: &Vars) {
+pub fn extrude_extras(ui: &mut egui::Ui, e: &mut Extrude, vars: &Vars, doc: &Document, seed: &Seed) {
+    // B89: só os campos que valem para o término escolhido
+    egui::CollapsingHeader::new(tr("Início e términos por lado")).default_open(false).show(ui, |ui| {
+        let campos = fenkra_solidos::termino::campos_do_termino(&e.extent);
+        expr(ui, "Início deslocado", &mut e.ends.start, vars, "mm");
+        ui.label(RichText::new(tr("Distância do plano do sketch até onde a extrusão começa, na direção dela (vazio = 0).")).weak().small());
+        if campos.deslocamento {
+            expr(ui, "Deslocamento do término", &mut e.ends.offset, vars, "mm");
+            ui.label(RichText::new(tr("Positivo passa do alvo; negativo para antes dele.")).weak().small());
+        }
+        let um_lado = !matches!(e.extent, Extent::Symmetric(_) | Extent::TwoSides(..));
+        if um_lado {
+            let mut dois = e.ends.extent2.is_some();
+            if crate::editor::check(ui, &mut dois, "término próprio no outro lado").changed() {
+                e.ends.extent2 = dois.then(|| Extent::Blind("5".into()));
+            }
+            if let Some(x2) = &mut e.ends.extent2 {
+                crate::editor::extent_ui(ui, "ext_ex2", x2, vars, &["Cego", "Passante", "Até o próximo", "Até o último", "Até plano", "Até a superfície"], doc, seed);
+                if fenkra_solidos::termino::campos_do_termino(x2).deslocamento {
+                    expr(ui, "Deslocamento do término 2", &mut e.ends.offset2, vars, "mm");
+                }
+            }
+        }
+    });
     egui::CollapsingHeader::new(tr("Ângulo de saída e parede fina")).default_open(true).show(ui, |ui| {
         expr(ui, "Ângulo de saída", &mut e.taper, vars, "°");
         if e.taper.trim() != "0" && !matches!(e.extent, Extent::Blind(_)) {

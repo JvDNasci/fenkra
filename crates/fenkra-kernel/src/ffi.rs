@@ -212,6 +212,8 @@ pub mod bridge {
         fn bounding_box(s: &Shape) -> Vec<f64>;
         /// [volume, área, cx, cy, cz]
         fn mass_props(s: &Shape) -> Vec<f64>;
+        /// [xx, yy, zz, xy, xz, yz, I1, I2, I3, eixo1 (3), eixo2 (3), eixo3 (3)]; vazio sem volume
+        fn inertia_props(s: &Shape) -> Vec<f64>;
         fn count_faces(s: &Shape) -> u32;
         fn export_step(s: &Shape, path: &str) -> Result<()>;
         fn export_stl(s: &Shape, path: &str, deflection: f64, angle: f64) -> Result<()>;

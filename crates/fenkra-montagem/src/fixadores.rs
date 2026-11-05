@@ -720,7 +720,7 @@ mod tests {
         let mut base = SketchData::default();
         base.add_rect(&mut al, [-30., -30.], [30., 30.], false);
         let sb = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data: base }));
-        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sb, op: BoolOp::Add, extent: Extent::Blind(num(esp)), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0 }));
+        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sb, op: BoolOp::Add, extent: Extent::Blind(num(esp)), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
         let topo = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), &num(esp));
         let mut centro = SketchData::default();
         let p = centro.add_point(&mut al, 0., 0.);
@@ -730,7 +730,7 @@ mod tests {
             Some(prof) => (Extent::Blind(num(prof)), Some("M6".to_string())),
             None => (Extent::ThroughAll, None),
         };
-        d.add_feature(FeatureKind::Hole(Hole { sketch: sc, kind: kind, diameter: num(diametro), depth, thread, thread_modeled: false, standard: None, points: vec![], dir: None, reverse: false, tip: None, taper: "0".into(), left_hand: false }));
+        d.add_feature(FeatureKind::Hole(Hole { sketch: sc, kind: kind, diameter: num(diametro), depth, thread, thread_modeled: false, standard: None, points: vec![], dir: None, reverse: false, tip: None, taper: "0".into(), left_hand: false, extra: Default::default() }));
         d
     }
 

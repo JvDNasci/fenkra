@@ -111,6 +111,7 @@
 #include <GeomAdaptor_Curve.hxx>
 #include <GC_MakeArcOfCircle.hxx>
 #include <GProp_GProps.hxx>
+#include <GProp_PrincipalProps.hxx>
 #include <IFSelect_ReturnStatus.hxx>
 #include <Geom_Plane.hxx>
 #include <Geom2d_Curve.hxx>
@@ -1112,6 +1113,27 @@ rust::Vec<double> mass_props(const Shape& s) {
     // superfície aberta não tem volume: o centro de massa do volume seria zero, longe da peça
     gp_Pnt c = TopExp_Explorer(s.s, TopAbs_SOLID).More() ? vp.CentreOfMass() : sp.CentreOfMass();
     for (double x : {vp.Mass(), sp.Mass(), c.X(), c.Y(), c.Z()}) v.push_back(x);
+    return v;
+}
+
+// B92: inércia do volume (densidade 1) em torno do centro de massa: matriz simétrica [xx,yy,zz,xy,xz,yz],
+// momentos principais [I1,I2,I3] e os três eixos principais (um vetor unitário por momento).
+rust::Vec<double> inertia_props(const Shape& s) {
+    rust::Vec<double> v;
+    if (s.s.IsNull() || !TopExp_Explorer(s.s, TopAbs_SOLID).More()) return v;
+    GProp_GProps vp;
+    BRepGProp::VolumeProperties(s.s, vp);
+    gp_Mat m = vp.MatrixOfInertia();
+    for (double x : {m(1, 1), m(2, 2), m(3, 3), m(1, 2), m(1, 3), m(2, 3)}) v.push_back(x);
+    GProp_PrincipalProps pp = vp.PrincipalProperties();
+    double i1, i2, i3;
+    pp.Moments(i1, i2, i3);
+    for (double x : {i1, i2, i3}) v.push_back(x);
+    for (const gp_Vec& a : {pp.FirstAxisOfInertia(), pp.SecondAxisOfInertia(), pp.ThirdAxisOfInertia()}) {
+        v.push_back(a.X());
+        v.push_back(a.Y());
+        v.push_back(a.Z());
+    }
     return v;
 }
 

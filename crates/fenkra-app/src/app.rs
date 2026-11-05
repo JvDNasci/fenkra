@@ -1812,7 +1812,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     Cmd::ExtrudeUpTo | Cmd::CutUpTo => Extent::UpTo(up_to),
                     _ => Extent::ThroughAll,
                 };
-                Sel::Feature(d.add_feature(FeatureKind::Extrude(Extrude { thin_side: 0, sketch: sk, op: if cut { BoolOp::Cut } else { BoolOp::Add }, extent, reverse: false, taper: s("0"), thin: None, dir: None })))
+                Sel::Feature(d.add_feature(FeatureKind::Extrude(Extrude { thin_side: 0, sketch: sk, op: if cut { BoolOp::Cut } else { BoolOp::Add }, extent, reverse: false, taper: s("0"), thin: None, dir: None, ends: Default::default() })))
             }
             Cmd::Revolve | Cmd::Groove => {
                 let sk = sk_or_unset;
@@ -2088,7 +2088,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     _ => None,
                 };
                 Sel::Feature(d.add_feature(match kind {
-                    Some(i) => FeatureKind::Pattern(Pattern { kind: crate::feat_ui::default_pattern(i, &seed), sources }),
+                    Some(i) => FeatureKind::Pattern(Pattern { kind: crate::feat_ui::default_pattern(i, &seed), sources, skip: Default::default() }),
                     None => FeatureKind::Mirror(Mirror { plane: opt_plane, sources }),
                 }))
             }
@@ -2097,7 +2097,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             Cmd::ExtrudeDraftFillet => {
                 // atalho de manufatura: extrusão com saída + filete nas arestas criadas por ela
                 let sk = sk_or_unset;
-                let ex = d.add_feature(FeatureKind::Extrude(Extrude { thin_side: 0, sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("20")), reverse: false, taper: s("3"), thin: None, dir: None }));
+                let ex = d.add_feature(FeatureKind::Extrude(Extrude { thin_side: 0, sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("20")), reverse: false, taper: s("3"), thin: None, dir: None, ends: Default::default() }));
                 d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::CreatedBy(ex), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![] }));
                 Sel::Feature(ex)
             }
@@ -2175,7 +2175,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     thread,
                     thread_modeled: false,
                     standard: Some(s(std)),
-                    points: if sk == Id(0) { pts3 } else { vec![] }, dir: None, reverse: false, tip: None, taper: "0".into(), left_hand: false,
+                    points: if sk == Id(0) { pts3 } else { vec![] }, dir: None, reverse: false, tip: None, taper: "0".into(), left_hand: false, extra: Default::default(),
                 })))
             }
             Cmd::Fillet | Cmd::FilletAll | Cmd::Chamfer | Cmd::ChamferAll | Cmd::FilletVar | Cmd::ChamferTwoDist | Cmd::ChamferDistAngle => {

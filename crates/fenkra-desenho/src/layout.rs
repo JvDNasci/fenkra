@@ -503,9 +503,12 @@ pub fn sheet_fields(d: &Drawing, sh: &Sheet, m: &mut Models) -> std::collections
     let vol = first.and_then(|v| m.load(&v.source).shape.as_ref().map(|s| s.mass().volume)).unwrap_or(0.);
     f.insert("codigo".into(), pn);
     f.insert("descricao".into(), if desc.is_empty() { d.name.clone() } else { desc });
-    f.insert("material".into(), mat);
+    f.insert("material".into(), mat.clone());
     f.insert("volume".into(), if vol > 0. { d.num(vol / 1000.) } else { String::new() });
-    f.insert("massa".into(), if vol > 0. { format!("{} kg", d.num(vol / 1000. * d.title.density / 1000.)) } else { String::new() });
+    // B92: a massa vem da densidade do material da peça (tabela de materiais); a densidade do carimbo
+    // só vale quando o material não está na tabela
+    let dens = fenkra_core::materiais::material(&mat).map_or(d.title.density, |m| m.densidade);
+    f.insert("massa".into(), if vol > 0. { format!("{} kg", d.num(vol / 1000. * dens / 1000.)) } else { String::new() });
     f.insert("escala".into(), first.map(|v| scale_text(v.scale)).unwrap_or_else(|| "1:1".into()));
     f.insert("folha".into(), idx.to_string());
     f.insert("folhas".into(), d.sheets.len().to_string());

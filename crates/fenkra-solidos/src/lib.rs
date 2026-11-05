@@ -17,6 +17,10 @@ pub mod eixos;
 pub mod profile;
 pub mod refs;
 pub mod chapa;
+pub mod massa;
+pub mod termino;
+pub mod padrao;
+pub mod furo_norma;
 
 pub use engrenagens::{calculo as calculo_engrenagem, engrenagem_documento, CalculoEngrenagem, ParamEngrenagem, TipoEngrenagem};
 pub use eixos::{chaveta_documento, eixo_documento, ParamEixo, RasgoChaveta, TrechoEixo};
@@ -3586,45 +3590,10 @@ impl Ctx<'_> {
                 };
                 let dir = if into { n.map(|x| -x) } else { n };
                 let _ = &warn_open;
-                // papel de cada face da ferramenta (só nas extrusões simples; nas demais fica desconhecido)
-                let mut roles = None;
-                let tool = if let Extent::UpTo(p) = &e.extent {
-                    let target = self.plane(p, 0)?;
-                    let n = target.normal;
-                    let den = dot(dir, n);
-                    if den.abs() < 1e-9 {
-                        return Err("o plano de término é paralelo à direção da extrusão".into());
-                    }
-                    let t = dot(sub(target.origin, frame.origin), n) / den;
-                    if t <= 1e-9 {
-                        return Err("o plano de término está do outro lado — use 'inverter sentido'".into());
-                    }
-                    let size = loops_size(&sk.loops);
-                    face.extrude_until(dir, t * 4. + size * 10. + 100., target.origin, n).map_err(k)?
-                } else if e.extent == Extent::UpToLast {
-                    let len = self.last_dist(f.target, frame.origin, dir)?;
-                    let (t, r) = face.extrude_roles(dir, len, 0.).map_err(k)?;
-                    roles = Some(r);
-                    t
-                } else if e.extent == Extent::UpToNext && e.op == BoolOp::Add {
-                    let body = self.body(f.target).ok_or("'até o próximo' precisa de um corpo no coletor")?;
-                    face.extrude_to_next(dir, self.through(f.target)?, body).map_err(k)?
-                } else if let Some((cut, ext)) = self.end_cutter(&e.extent, f.target)? {
-                    // até a superfície/face (ou recorte até o próximo): ferramenta longa dividida pela superfície
-                    let start = face.surface_near(frame.origin).map_err(k)?.0;
-                    let len = self.reach(&cut, frame.origin, f.target) + loops_size(&sk.loops);
-                    face.extrude(dir, len, 0.).map_err(k)?.clip_until(&cut, start, ext).map_err(k)?
-                } else if taper.abs() > 1e-9 {
-                    let Extent::Blind(d) = &e.extent else {
-                        return Err("o ângulo de saída vale só com término 'cego'".into());
-                    };
-                    face.extrude_taper(dir, ev(d, &self.vars, "distância")?, taper).map_err(k)?
-                } else {
-                    let (front, back) = self.extent(&e.extent, f.target)?;
-                    let (t, r) = face.extrude_roles(dir, front, back).map_err(k)?;
-                    roles = Some(r);
-                    t
-                };
+                // ferramenta de cada lado (término, deslocamento e início deslocado: ver `termino.rs`);
+                // papel de cada face só nas extrusões simples, nas demais fica desconhecido
+                let _ = &sk.loops;
+                let (tool, roles) = self.tool_extrusao(e, &face, frame, dir, loops_size(&sk.loops), taper, f.target)?;
                 // corte que não alcança o corpo (sentido errado, ferramenta fora dele) não remove nada
                 let vol0 = if e.op == BoolOp::Cut { self.body(f.target).map(|b| b.mass().volume) } else { None };
                 self.apply_roles(f.target, tool, e.op, f.id, roles)?;
@@ -3734,6 +3703,13 @@ impl Ctx<'_> {
                     None => 0.,
                 };
                 let taper = ev(&h.taper, &self.vars, "conicidade")?;
+                // B90: deslocamento da ponta, profundidade de rosca e folga no fundo
+                let tip_off = self.mm_opcional(&h.extra.tip_offset, "deslocamento da ponta")?;
+                let rosca_prof = if h.extra.thread_depth.trim().is_empty() { None } else { Some(ev(&h.extra.thread_depth, &self.vars, "profundidade da rosca")?) };
+                let rosca_folga = self.mm_opcional(&h.extra.thread_relief, "folga no fundo da rosca")?;
+                if rosca_prof.is_some_and(|p| p <= 0.) || rosca_folga < 0. {
+                    return Err("a profundidade da rosca precisa ser positiva e a folga no fundo não pode ser negativa".into());
+                }
                 let cut = self.end_cutter(&h.depth, f.target)?;
                 let mut tool = Shape::empty();
                 let mut depths = vec![];
@@ -3759,10 +3735,15 @@ impl Ctx<'_> {
                                 HoleShape::Counterdrill { diameter, depth, angle } => (FormaFuro::Contrafuro, diameter, depth, angle),
                             };
                             let tolerancia = h.standard.as_deref().map(tolerancia_do_texto).unwrap_or_default();
-                            v.push(HoleRow { feature: f.id, pos: *o, dir: *dir, diameter: d, depth, through: matches!(h.depth, Extent::ThroughAll | Extent::UpToLast), thread: h.thread.clone().unwrap_or_default(), forma, d_boca, prof_boca, angulo, tolerancia });
+                            let prof_rosca = h.thread.as_deref().and_then(hardware::thread).map_or(0., |sp| furo_norma::comprimento_de_rosca(depth, rosca_prof, rosca_folga, sp.pitch).max(0.));
+                            v.push(HoleRow { feature: f.id, prof_rosca, pos: *o, dir: *dir, diameter: d, depth, through: matches!(h.depth, Extent::ThroughAll | Extent::UpToLast), thread: h.thread.clone().unwrap_or_default(), forma, d_boca, prof_boca, angulo, tolerancia });
                         }
                     });
-                    let mut t = Shape::hole_tool_ext(*o, *dir, d, depth, shape, tip, taper).map_err(k)?;
+                    let depth_broca = furo_norma::profundidade_com_ponta(depth, tip_off);
+                    if depth_broca <= 1e-9 {
+                        return Err("o deslocamento da ponta anula a profundidade do furo".into());
+                    }
+                    let mut t = Shape::hole_tool_ext(*o, *dir, d, depth_broca, shape, tip, taper).map_err(k)?;
                     if let Some((c, ext)) = &cut {
                         t = t.clip_until(c, *o, *ext).map_err(k)?;
                     }
@@ -3795,7 +3776,11 @@ impl Ctx<'_> {
                     let (tdir, ext) = if fwd >= back { (dir, fwd) } else { (dir.map(|x| -x), back) };
                     // a rosca começa abaixo do rebaixo/escareado (começar no vazio faz a booleana falhar)
                     let s0 = if fwd >= back { shape.head_depth(d) } else { 0. };
-                    let len = depth.min(ext) - s0;
+                    let lim = depth.min(ext);
+                    if rosca_prof.is_some_and(|p| p > lim + 1e-9) {
+                        return Err(format!("a profundidade da rosca ({}) passa da profundidade do furo ({})", rosca_prof.unwrap_or(0.), lim));
+                    }
+                    let len = furo_norma::comprimento_de_rosca(lim, rosca_prof, rosca_folga, spec.pitch) - s0;
                     if len < spec.pitch {
                         continue;
                     }
@@ -3959,6 +3944,8 @@ impl Ctx<'_> {
             }
             FeatureKind::Pattern(pt) => {
                 let mut xs: Vec<Xform> = vec![];
+                // B91: posição (i, j) de cada instância, para pular por posição e não por ordem
+                let mut keys: Vec<(u32, u32)> = vec![];
                 match &pt.kind {
                     PatternKind::Linear { dir, count, spacing, dir2, count2, spacing2, total } => {
                         let n1 = ev(count, &self.vars, "quantidade")?.round().max(1.) as usize;
@@ -3978,6 +3965,7 @@ impl Ctx<'_> {
                                     continue;
                                 }
                                 xs.push(Xform::Translate([0, 1, 2].map(|c| u1[c] * d1 * i as f64 + u2[c] * d2 * j as f64)));
+                                keys.push((i as u32, j as u32));
                             }
                         }
                     }
@@ -3989,21 +3977,28 @@ impl Ctx<'_> {
                         let step = if (total.abs() - 360.).abs() < 1e-6 { total / n as f64 } else { total / (n.max(2) - 1) as f64 };
                         for i in 1..n {
                             xs.push(Xform::Rotate(o, d, step * i as f64));
+                            keys.push((i as u32, 0));
                         }
                     }
                     PatternKind::Points { points, base } => {
                         let b0 = self.point(base, 0)?;
-                        for q in points {
+                        for (i, q) in points.iter().enumerate() {
                             let p = self.point(q, 0)?;
                             xs.push(Xform::Translate([p[0] - b0[0], p[1] - b0[1], p[2] - b0[2]]));
+                            keys.push((i as u32, 0));
                         }
                     }
                 }
                 if xs.is_empty() {
                     return Ok(Some("padrão com uma só instância".into()));
                 }
+                // B91: instâncias puladas saem da lista; posição que não existe mais é avisada
+                let (xs, aviso) = padrao::sem_puladas(xs, &keys, &pt.skip);
+                if xs.is_empty() {
+                    return Ok(Some("todas as instâncias do padrão estão puladas".into()));
+                }
                 self.replicate(f, &pt.sources, &xs)?;
-                Ok(None)
+                Ok(aviso)
             }
             FeatureKind::Mirror(m) => {
                 let pl = self.plane(&m.plane, 0)?;
@@ -6367,6 +6362,8 @@ pub struct HoleRow {
     pub angulo: f64,
     /// classe de tolerância escrita na especificação do furo ("H7"); vazia quando não há
     pub tolerancia: String,
+    /// comprimento da rosca medido da boca (0 quando o furo não é roscado)
+    pub prof_rosca: f64,
 }
 
 /// Classe de tolerância ISO ("H7", "h6", "JS9") dentro de um texto de especificação: uma ou duas
@@ -6651,7 +6648,7 @@ pub fn example_document() -> Document {
     }
     let base = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data: sk }));
     d.feature_mut(base).unwrap().name = s("Sketch base");
-    let ex = d.add_feature(FeatureKind::Extrude(Extrude { sketch: base, op: BoolOp::Add, extent: Extent::Blind(s("esp")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0 }));
+    let ex = d.add_feature(FeatureKind::Extrude(Extrude { sketch: base, op: BoolOp::Add, extent: Extent::Blind(s("esp")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
     d.feature_mut(ex).unwrap().name = s("Placa");
 
     let topo = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "esp");
@@ -6682,7 +6679,7 @@ pub fn example_document() -> Document {
         thread: None,
         thread_modeled: false,
         standard: Some(s("M6 passagem normal")),
-        points: vec![], dir: None, reverse: false, tip: None, taper: "0".into(), left_hand: false,
+        points: vec![], dir: None, reverse: false, tip: None, taper: "0".into(), left_hand: false, extra: Default::default(),
     }));
     d.feature_mut(furo).unwrap().name = s("Furos M6");
     let fol = d.add_folder("Acabamentos");
@@ -6920,7 +6917,7 @@ mod tests {
         }
         // furo retangular na aba do lado y = 0 (feito no dobrado: a aba sobe em z)
         let cut = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XZ), [40., 15.], [60., 25.]);
-        ids.push(d.add_feature(FeatureKind::Extrude(Extrude { sketch: cut, op: BoolOp::Cut, extent: Extent::ThroughAll, reverse: true, taper: s("0"), thin: None, dir: None, thin_side: 0 })));
+        ids.push(d.add_feature(FeatureKind::Extrude(Extrude { sketch: cut, op: BoolOp::Cut, extent: Extent::ThroughAll, reverse: true, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() })));
         if let Some(sh) = d.sheet.as_mut() {
             sh.flat = flat;
         }
@@ -6980,7 +6977,7 @@ mod tests {
                 };
                 sk.data.add_constraint(&mut al, fenkra_core::sketch::Kind::Coincident(ids[1], ids[2]));
             }
-            let e = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: thin.map(s), dir: None, thin_side: side }));
+            let e = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: thin.map(s), dir: None, thin_side: side, ends: Default::default() }));
             let r = recompute(&d);
             (r.status[&e].clone(), r.bodies.iter().map(|b| b.mass.volume).sum::<f64>())
         };
@@ -7030,7 +7027,7 @@ mod tests {
         let c4 = ids4.pop().unwrap();
         d4.features.retain(|f| f.id != c4);
         let sk = sk_rect(&mut d4, PlaneRef::Origin(OriginPlane::XY), [40., -25.], [60., -15.]);
-        ids4.push(d4.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Cut, extent: Extent::ThroughAll, reverse: true, taper: "0".into(), thin: None, dir: None, thin_side: 0 })));
+        ids4.push(d4.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Cut, extent: Extent::ThroughAll, reverse: true, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() })));
         assert!(d4.features.last().unwrap().flat_space);
         let v4_flat = vol(&d4, &ids4);
         assert!((v2 - v4_flat - 400.).abs() < 1., "recorte no planificado: {v2} − {v4_flat}");
@@ -7125,7 +7122,7 @@ mod tests {
         ] {
             let mut d = Document::new("tf");
             let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [40., 40.]);
-            d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0 }));
+            d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
             d.add_feature(FeatureKind::Hole(Hole {
                 sketch: Id(0),
                 kind,
@@ -7139,7 +7136,7 @@ mod tests {
                 reverse: false,
                 tip: None,
                 taper: s("0"),
-                left_hand: false,
+                left_hand: false, extra: Default::default(),
             }));
             let t = hole_table(&d);
             assert_eq!(t.len(), 1);
@@ -7165,7 +7162,7 @@ mod tests {
         let base = || {
             let mut d = Document::new("fp");
             let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [40., 40.]);
-            d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0 }));
+            d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
             d
         };
         let hole = |pts: Vec<PointRef>| Hole {
@@ -7181,7 +7178,7 @@ mod tests {
             reverse: false,
             tip: None,
             taper: s("0"),
-            left_hand: false,
+            left_hand: false, extra: Default::default(),
         };
         let vol = |d: &Document| {
             let r = recompute(d);
@@ -7216,7 +7213,7 @@ mod tests {
         let mk = |prop: EdgeProp| {
             let mut d = Document::new("fm");
             let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [40., 20.]);
-            d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0 }));
+            d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
             d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("5"), edges: EdgeSel::Edges(vec![[40., 20., 5.]]), mode: EdgeMode::Constant, prop: EdgeProp::Tangente, keys: vec![] }));
             // filete de 1 na aresta de cima do lado y = 20 (que continua tangente pelo arco do canto)
             d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("1"), edges: EdgeSel::Edges(vec![[17.5, 20., 10.]]), mode: EdgeMode::Constant, prop, keys: vec![] }));
@@ -7324,7 +7321,7 @@ mod tests {
         }
         let s = |x: &str| x.to_string();
         let ext = |d: &mut Document, prof: Id, h: &str| {
-            d.add_feature(FeatureKind::Extrude(Extrude { sketch: prof, op: BoolOp::Add, extent: Extent::Blind(s(h)), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0 }))
+            d.add_feature(FeatureKind::Extrude(Extrude { sketch: prof, op: BoolOp::Add, extent: Extent::Blind(s(h)), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() }))
         };
         let vol = |d: &Document, f: Id| {
             let r = recompute(d);
@@ -7385,7 +7382,7 @@ mod tests {
         data.add_curve(&mut al, Curve::Spline { pts: vec![p[1], p[2], p[3], p[4]] }, false);
         data.add_curve(&mut al, Curve::Line { a: p[4], b: p[0] }, false);
         let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
-        let ex = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0 }));
+        let ex = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
         let r = recompute(&d);
         assert!(matches!(r.status[&ex], Status::Ok | Status::Warning(_)), "{:?}", r.status[&ex]);
         let v = r.bodies.iter().map(|b| b.mass.volume).sum::<f64>();
@@ -7534,7 +7531,7 @@ mod tests {
         assert!(v1 > 10000., "estampo circular {v1}");
         d.add_feature(FeatureKind::Pattern(Pattern {
             kind: PatternKind::Linear { dir: AxisRef::Origin(OriginAxis::X), count: s("3"), spacing: s("25"), dir2: None, count2: s("1"), spacing2: s("0"), total: false },
-            sources: vec![st],
+            sources: vec![st], skip: Default::default(),
         }));
         let v3 = vol(&check(&d));
         assert!(near(v3 - 10000., 3. * (v1 - 10000.), 2e-2), "padrão do estampo {v3} {v1}");
@@ -7687,7 +7684,7 @@ mod tests {
             reverse: false,
             tip,
             taper: s("0"),
-            left_hand: false,
+            left_hand: false, extra: Default::default(),
         };
         // dois furos Ø6 × 5 por pontos 3D no topo (normal à superfície, para baixo)
         let topo = vec![PointRef::Fixed([-10., 0., 20.]), PointRef::Fixed([10., 0., 20.])];
@@ -7713,14 +7710,14 @@ mod tests {
         let mut d = caixa();
         let alto = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "30");
         let sk = sk_rect(&mut d, PlaneRef::Datum(alto), [-5., -5.], [5., 5.]);
-        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::UpToLast, reverse: true, taper: s("0"), thin: None, dir: None, thin_side: 0 }));
+        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::UpToLast, reverse: true, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
         assert!(near(vol(&d), v0 + 100. * 10., 1e-6), "até o último {}", vol(&d));
 
         // extrusão inclinada por uma direção: o volume do prisma oblíquo é área × altura
         let mut d = Document::new("e");
         let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [10., 10.]);
         let l = d.add_geometry(RefKind::LinePoints { a: PointRef::Origin, b: PointRef::Fixed([10., 0., 10.]), start: s("0"), end: s("0") });
-        d.add_feature(FeatureKind::Extrude(Extrude { thin_side: 0, sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: Some(AxisRef::Ref(l)) }));
+        d.add_feature(FeatureKind::Extrude(Extrude { thin_side: 0, sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: Some(AxisRef::Ref(l)), ends: Default::default() }));
         assert!(near(vol(&d), 100. * 10. / 2f64.sqrt(), 1e-6), "oblíqua {}", vol(&d));
 
         // padrão linear por comprimento total: 3 bolsos em 20 mm = espaçamento 10
@@ -7730,7 +7727,7 @@ mod tests {
         let pocket = d.add_feature(ext(sp, BoolOp::Cut, "5"));
         d.add_feature(FeatureKind::Pattern(Pattern {
             kind: PatternKind::Linear { dir: AxisRef::Origin(OriginAxis::X), count: s("3"), spacing: s("20"), dir2: None, count2: s("1"), spacing2: s("0"), total: true },
-            sources: vec![pocket],
+            sources: vec![pocket], skip: Default::default(),
         }));
         assert!(near(vol(&d), v0 - 240., 1e-6), "padrão por total {}", vol(&d));
 
@@ -7895,7 +7892,7 @@ mod tests {
             extent: Extent::UpToSurface(SurfRef::Face { point: [0., 0., 20.], normal: [0., 0., 1.], owner: None, key: None }),
             reverse: true,
             taper: "0".into(),
-            thin: None, dir: None,
+            thin: None, dir: None, ends: Default::default(),
         }));
         assert!(near(vol(&d), v0 + 2000., 1e-6), "até a face {}", vol(&d));
 
@@ -7910,7 +7907,7 @@ mod tests {
             extent: Extent::UpToSurface(SurfRef::Plane(PlaneRef::Datum(fundo))),
             reverse: false,
             taper: "0".into(),
-            thin: None, dir: None,
+            thin: None, dir: None, ends: Default::default(),
         }));
         assert!(near(vol(&d), v0 - 800., 1e-6), "recorte até plano {}", vol(&d));
 
@@ -7927,7 +7924,7 @@ mod tests {
         let p0 = data.add_point(&mut al, 0., 0.);
         data.add_curve(&mut al, fenkra_core::sketch::Curve::Point { p: p0 }, false);
         let sp = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Datum(topo), data }));
-        let furo = Hole { sketch: sp, kind: HoleKind::Simples, diameter: "6".into(), depth: Extent::UpTo(PlaneRef::Datum(fundo)), thread: None, thread_modeled: false, standard: None, points: vec![], dir: None, reverse: false, tip: None, taper: "0".into(), left_hand: false };
+        let furo = Hole { sketch: sp, kind: HoleKind::Simples, diameter: "6".into(), depth: Extent::UpTo(PlaneRef::Datum(fundo)), thread: None, thread_modeled: false, standard: None, points: vec![], dir: None, reverse: false, tip: None, taper: "0".into(), left_hand: false, extra: Default::default() };
         let mut e = d.clone();
         e.add_feature(FeatureKind::Hole(furo.clone()));
         assert!(near(vol(&e), v0 - std::f64::consts::PI * 9. * 8., 1e-3), "furo até plano {}", vol(&e));
@@ -8000,12 +7997,12 @@ mod tests {
         let mut d = Document::new("dois corpos");
         let a_col = d.active_collector;
         let ska = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [20., 20.]);
-        let exa = d.add_feature(FeatureKind::Extrude(Extrude { sketch: ska, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0 }));
+        let exa = d.add_feature(FeatureKind::Extrude(Extrude { sketch: ska, op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
         let b_col = d.add_collector("B");
         d.active_collector = b_col;
         let skb = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [50., 0.], [70., 20.]);
         d.add_param("HB", "5", Unit::Comprimento).unwrap();
-        d.add_feature(FeatureKind::Extrude(Extrude { sketch: skb, op: BoolOp::Add, extent: Extent::Blind(s("HB")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0 }));
+        d.add_feature(FeatureKind::Extrude(Extrude { sketch: skb, op: BoolOp::Add, extent: Extent::Blind(s("HB")), reverse: false, taper: s("0"), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
         let _ = a_col;
         let mut cache = Cache::default();
         recompute_cached(&d, &mut cache);
@@ -8150,7 +8147,7 @@ mod tests {
     }
 
     fn ext(sketch: Id, op: BoolOp, d: &str) -> FeatureKind {
-        FeatureKind::Extrude(Extrude { sketch, op, extent: Extent::Blind(d.into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0 })
+        FeatureKind::Extrude(Extrude { sketch, op, extent: Extent::Blind(d.into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() })
     }
 
     /// Caixa 40 × 30 × 20 centrada na origem (base em z = 0).
@@ -8205,7 +8202,7 @@ mod tests {
         assert!(near(v1, v0 - 80., 1e-6));
         d.add_feature(FeatureKind::Pattern(Pattern {
             kind: PatternKind::Linear { dir: AxisRef::Origin(OriginAxis::X), count: "3".into(), spacing: "8".into(), dir2: None, count2: "1".into(), spacing2: "0".into(), total: false },
-            sources: vec![pocket],
+            sources: vec![pocket], skip: Default::default(),
         }));
         assert!(near(vol(&d), v0 - 240., 1e-6));
         // espelho do bolso pelo YZ e padrão circular de 4 em volta de Z
@@ -8214,7 +8211,7 @@ mod tests {
         assert!(near(vol(&e), v0 - 320., 1e-6));
         let mut e = d.clone();
         e.features.pop();
-        e.add_feature(FeatureKind::Pattern(Pattern { kind: PatternKind::Circular { axis: AxisRef::Origin(OriginAxis::Z), count: "2".into(), angle: "360".into() }, sources: vec![pocket] }));
+        e.add_feature(FeatureKind::Pattern(Pattern { kind: PatternKind::Circular { axis: AxisRef::Origin(OriginAxis::Z), count: "2".into(), angle: "360".into() }, sources: vec![pocket], skip: Default::default() }));
         assert!(near(vol(&e), v0 - 160., 1e-6));
 
         // primitiva: cilindro r5 h10 sobre o topo
@@ -8631,7 +8628,7 @@ mod tests_spline_perfil {
             data.add_curve(&mut al, Curve::Spline { pts: vec![q1, p2, p3, q4] }, false);
         }
         let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
-        let e = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind("10".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0 }));
+        let e = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind("10".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
         (d, e)
     }
 

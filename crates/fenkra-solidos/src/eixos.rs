@@ -168,7 +168,7 @@ pub(crate) fn extrusao_cega(m: &mut Montador, nome: &str, sketch: Id, prof: &str
         taper: "0".into(),
         thin: None,
         thin_side: 0,
-        dir: None,
+        dir: None, ends: Default::default(),
     }));
     nomear(m, id, nome);
 }

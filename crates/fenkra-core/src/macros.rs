@@ -118,7 +118,7 @@ fn exec(doc: &mut Document, lines: &[(usize, Vec<String>)], loops: &mut HashMap<
                     extent,
                     reverse: false,
                     taper: "0".into(),
-                    thin: None, dir: None,
+                    thin: None, dir: None, ends: Default::default(),
                 }));
                 rename_feature(doc, id, &t[1]);
                 log.push(format!("{} {}", if cut { "⬇" } else { "⬆" }, t[1]));
@@ -129,7 +129,7 @@ fn exec(doc: &mut Document, lines: &[(usize, Vec<String>)], loops: &mut HashMap<
                 num(&t[3])?;
                 num_or_through(&t[4], &num)?;
                 let depth = if kw(&t[4], &["passante", "through"]) { Extent::ThroughAll } else { Extent::Blind(t[4].clone()) };
-                let id = doc.add_feature(FeatureKind::Hole(Hole { sketch: sk, kind: HoleKind::Simples, diameter: t[3].clone(), depth, thread: None, thread_modeled: false, standard: None, points: vec![], dir: None, reverse: false, tip: None, taper: "0".into(), left_hand: false }));
+                let id = doc.add_feature(FeatureKind::Hole(Hole { sketch: sk, kind: HoleKind::Simples, diameter: t[3].clone(), depth, thread: None, thread_modeled: false, standard: None, points: vec![], dir: None, reverse: false, tip: None, taper: "0".into(), left_hand: false, extra: Default::default() }));
                 rename_feature(doc, id, &t[1]);
                 log.push(format!("◎ {}", t[1]));
             }
@@ -152,7 +152,7 @@ fn exec(doc: &mut Document, lines: &[(usize, Vec<String>)], loops: &mut HashMap<
                 } else {
                     PatternKind::Linear { dir: axis, count: t[5].clone(), spacing: t[6].clone(), dir2: None, count2: "1".into(), spacing2: "0".into(), total: false }
                 };
-                let id = doc.add_feature(FeatureKind::Pattern(Pattern { kind, sources: vec![src] }));
+                let id = doc.add_feature(FeatureKind::Pattern(Pattern { kind, sources: vec![src], skip: Default::default() }));
                 rename_feature(doc, id, &t[2]);
                 log.push(format!("⁂ {}", t[2]));
             }
