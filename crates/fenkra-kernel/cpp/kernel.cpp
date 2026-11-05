@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <fstream>
 #include <limits>
 #include <mutex>
 #include <optional>
@@ -117,6 +118,7 @@
 #include <ShapeUpgrade_UnifySameDomain.hxx>
 #include <Standard_Failure.hxx>
 #include <Standard_Version.hxx>
+#include <OSD_OpenFile.hxx>
 #include <StlAPI_Writer.hxx>
 #include <TopExp.hxx>
 #include <TopExp_Explorer.hxx>
@@ -1104,14 +1106,26 @@ void export_step(const Shape& s, rust::Str path) {
     });
 }
 
-void export_stl(const Shape& s, rust::Str path) {
+// A malha do STL é feita numa cópia sem triângulos: BRepMesh aproveita a malha que já está na forma
+// quando ela atende ao desvio pedido, então a saída dependeria do que a tela malhou antes (e a
+// exportação trocaria a malha de exibição, que é a mesma TShape). O StlAPI_Writer nasce em modo texto
+// e, com nome de arquivo, abre um std::ofstream com char*: no Windows isso lê o caminho no código de
+// página do sistema, e o UTF-8 que vem do Rust vira outro nome ou falha. Por isso o fluxo é aberto aqui.
+void export_stl(const Shape& s, rust::Str path, double deflection, double angle) {
     guard("STL", [&] {
+        TopoDS_Shape copy = BRepBuilderAPI_Copy(s.s, Standard_True, Standard_False).Shape();
         {
             auto gate = enter_mesher();
-            BRepMesh_IncrementalMesh(s.s, 0.05, Standard_False, 0.3, Standard_True);
+            BRepMesh_IncrementalMesh(copy, deflection, Standard_False, angle, Standard_True);
         }
+        std::ofstream out;
+        OSD_OpenStream(out, to_std(path).c_str(), std::ios::binary);
+        if (!out.is_open()) throw std::runtime_error("não foi possível criar o arquivo STL");
         StlAPI_Writer w;
-        if (!w.Write(s.s, to_std(path).c_str())) throw std::runtime_error("falha ao gravar o arquivo STL");
+        w.ASCIIMode() = false;
+        const bool ok = w.Write(copy, out);
+        out.close();
+        if (!ok || out.fail()) throw std::runtime_error("falha ao gravar o arquivo STL");
     });
 }
 

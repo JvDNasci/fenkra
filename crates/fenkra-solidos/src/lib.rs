@@ -5630,8 +5630,35 @@ fn linked_geo(g: &LinkedGeo) -> Result<Geo, String> {
     })
 }
 
-/// Exporta o corpo de um coletor (ou de todos) após recalcular.
+/// Formato de arquivo que a exportação sabe gravar.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FormatoExport {
+    Step,
+    Stl,
+}
+
+impl FormatoExport {
+    /// Formato pela extensão, sem diferenciar maiúsculas. Recusa o resto: gravar STEP num arquivo
+    /// `.obj` deixa um arquivo que nenhum programa abre, sem aviso.
+    pub fn do_caminho(path: &str) -> Result<Self, String> {
+        let ext = std::path::Path::new(path).extension().map(|e| e.to_string_lossy().to_lowercase());
+        match ext.as_deref() {
+            Some("step" | "stp") => Ok(Self::Step),
+            Some("stl") => Ok(Self::Stl),
+            Some(e) => Err(format!("formato de exportação não reconhecido: .{e} (use .step, .stp ou .stl)")),
+            None => Err("o arquivo de exportação precisa de extensão: .step, .stp ou .stl".into()),
+        }
+    }
+}
+
+/// Exporta o corpo de um coletor (ou de todos) após recalcular; STL no preset normal.
 pub fn export(doc: &Document, collector: Option<Id>, path: &str) -> Result<(), String> {
+    export_com_preset(doc, collector, path, PresetStl::default())
+}
+
+/// Como `export`, escolhendo a malha do STL (o preset não muda o STEP, que guarda a forma exata).
+pub fn export_com_preset(doc: &Document, collector: Option<Id>, path: &str, preset: PresetStl) -> Result<(), String> {
+    let formato = FormatoExport::do_caminho(path)?;
     let vars = doc.eval_params().map_err(|e| e.to_string())?;
     let mut cx = Ctx {
         doc,
@@ -5664,8 +5691,14 @@ pub fn export(doc: &Document, collector: Option<Id>, path: &str) -> Result<(), S
     if all.is_null() {
         return Err("nada para exportar".into());
     }
-    let lower = path.to_lowercase();
-    let r = if lower.ends_with(".stl") { all.export_stl(path) } else { all.export_step(path) };
+    let r = match formato {
+        FormatoExport::Step => all.export_step(path),
+        FormatoExport::Stl => {
+            let q = preset.qualidade();
+            let diagonal = all.bbox().map(|(a, b)| geo3d::dist(a, b)).unwrap_or(100.);
+            all.export_stl(path, q.desvio(diagonal), q.angulo_rad())
+        }
+    };
     r.map_err(|e| e.0)
 }
 

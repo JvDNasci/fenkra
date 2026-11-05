@@ -203,7 +203,7 @@ pub mod bridge {
         fn mass_props(s: &Shape) -> Vec<f64>;
         fn count_faces(s: &Shape) -> u32;
         fn export_step(s: &Shape, path: &str) -> Result<()>;
-        fn export_stl(s: &Shape, path: &str) -> Result<()>;
+        fn export_stl(s: &Shape, path: &str, deflection: f64, angle: f64) -> Result<()>;
         fn import_step(path: &str) -> Result<UniquePtr<Shape>>;
         fn occt_version() -> String;
     }

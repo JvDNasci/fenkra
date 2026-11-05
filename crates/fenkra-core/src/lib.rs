@@ -16,5 +16,5 @@ pub mod qualidade;
 pub mod sketch;
 
 pub use doc::*;
-pub use qualidade::{PresetMalha, QualidadeMalha};
+pub use qualidade::{PresetMalha, PresetStl, QualidadeMalha};
 pub use sketch::SketchData;

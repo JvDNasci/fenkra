@@ -115,7 +115,7 @@ rust::Vec<double> bounding_box(const Shape& s);
 rust::Vec<double> mass_props(const Shape& s);
 uint32_t count_faces(const Shape& s);
 void export_step(const Shape& s, rust::Str path);
-void export_stl(const Shape& s, rust::Str path);
+void export_stl(const Shape& s, rust::Str path, double deflection, double angle);
 std::unique_ptr<Shape> import_step(rust::Str path);
 rust::String occt_version();
 
