@@ -404,7 +404,6 @@ fn referencias_com_chave_v2_nunca_sao_trocadas_em_silencio() {
 /// ponto antigo cai perto de outra aresta (ex.: o encontro piso-parede do bolso, a 4 mm) e o filete
 /// segue ok na aresta errada. Rode com `--ignored` para ver os números.
 #[test]
-#[ignore = "bug: referência só com ponto troca de aresta em silêncio (tolerância de 5% da diagonal em vez de 1 mm); sem conserto neste item"]
 fn referencias_antigas_so_com_ponto_nunca_sao_trocadas_em_silencio() {
     if !kernel_disponivel() {
         return;

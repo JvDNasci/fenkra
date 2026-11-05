@@ -99,6 +99,81 @@ fn unit(v: [f64; 3]) -> [f64; 3] {
     v.map(|x| x / l)
 }
 /// Diagonal aproximada dos perfis (para dimensionar ferramentas).
+/// Pontos que representam o segmento (arcos e círculos amostrados) para testes de posição do perfil.
+fn seg_points(sgm: &fenkra_kernel::Seg2) -> Vec<[f64; 2]> {
+    use fenkra_kernel::Seg2;
+    let circle = |c: [f64; 2], r: f64, a0: f64, sweep: f64| -> Vec<[f64; 2]> { (0..=48).map(|i| a0 + sweep * i as f64 / 48.).map(|t| [c[0] + r * t.cos(), c[1] + r * t.sin()]).collect() };
+    match sgm {
+        Seg2::Line(a, b) => vec![*a, *b],
+        Seg2::Circle(c, r) => circle(*c, *r, 0., std::f64::consts::TAU),
+        Seg2::Spline(p) => p.clone(),
+        Seg2::Arc(a, m, b) => {
+            // círculo pelos três pontos
+            let (d, a2, m2, b2) = (2. * (a[0] * (m[1] - b[1]) + m[0] * (b[1] - a[1]) + b[0] * (a[1] - m[1])), a[0] * a[0] + a[1] * a[1], m[0] * m[0] + m[1] * m[1], b[0] * b[0] + b[1] * b[1]);
+            if d.abs() < 1e-12 {
+                return vec![*a, *m, *b];
+            }
+            let c = [(a2 * (m[1] - b[1]) + m2 * (b[1] - a[1]) + b2 * (a[1] - m[1])) / d, (a2 * (b[0] - m[0]) + m2 * (a[0] - b[0]) + b2 * (m[0] - a[0])) / d];
+            let r = ((a[0] - c[0]).powi(2) + (a[1] - c[1]).powi(2)).sqrt();
+            let ang = |p: &[f64; 2]| (p[1] - c[1]).atan2(p[0] - c[0]);
+            let (ta, tm, tb) = (ang(a), ang(m), ang(b));
+            let up = |x: f64| x.rem_euclid(std::f64::consts::TAU);
+            // sentido anti-horário se o meio é alcançado antes do fim
+            let sweep = if up(tm - ta) <= up(tb - ta) { up(tb - ta) } else { up(tb - ta) - std::f64::consts::TAU };
+            circle(c, r, ta, sweep)
+        }
+    }
+}
+
+/// Revolução: o eixo precisa estar no plano do perfil e o perfil não pode cruzá-lo (o sólido se
+/// autointerceptaria); antes o kernel recebia o pedido e devolvia lixo ou uma falha sem explicação.
+fn check_revolve_profile(frame: &Frame, sk: &EvalSketch, origin: V3, dir: V3) -> Result<(), String> {
+    let d = geo3d::unit(dir).ok_or("o eixo de revolução é nulo")?;
+    let off = geo3d::sub(origin, frame.origin);
+    if geo3d::dot(d, frame.normal).abs() > 1e-6 || geo3d::dot(off, frame.normal).abs() > 1e-4 {
+        return Err("o eixo de revolução não está no plano do sketch do perfil — use um eixo desenhado no mesmo sketch ou contido no plano dele".into());
+    }
+    let (y, o2) = (frame.y(), [geo3d::dot(off, frame.x), geo3d::dot(off, frame.y())]);
+    let d2 = [geo3d::dot(d, frame.x), geo3d::dot(d, y)];
+    let side = |p: [f64; 2]| d2[0] * (p[1] - o2[1]) - d2[1] * (p[0] - o2[0]);
+    let size = loops_size(&sk.loops).max(1.);
+    let tol = 1e-6 * size;
+    let (mut lo, mut hi) = (0f64, 0f64);
+    for l in &sk.loops {
+        for sgm in l {
+            for p in seg_points(sgm) {
+                let t = side(p);
+                lo = lo.min(t);
+                hi = hi.max(t);
+            }
+        }
+    }
+    for ch in &sk.open {
+        for p in ch {
+            let t = side(*p);
+            lo = lo.min(t);
+            hi = hi.max(t);
+        }
+    }
+    if lo < -tol && hi > tol {
+        return Err("o perfil cruza o eixo de revolução — deixe o perfil inteiro de um lado do eixo".into());
+    }
+    Ok(())
+}
+
+fn extent_name(e: &Extent) -> &'static str {
+    match e {
+        Extent::Blind(_) => "cego",
+        Extent::Symmetric(_) => "simétrico",
+        Extent::TwoSides(..) => "dois lados",
+        Extent::ThroughAll => "através de tudo",
+        Extent::UpTo(_) => "até plano",
+        Extent::UpToNext => "até o próximo",
+        Extent::UpToLast => "até o último",
+        Extent::UpToSurface(_) => "até a superfície",
+    }
+}
+
 fn loops_size(loops: &[fenkra_kernel::Loop2]) -> f64 {
     let (mut lo, mut hi) = ([f64::MAX; 2], [f64::MIN; 2]);
     let mut add = |p: [f64; 2], r: f64| {
@@ -1911,8 +1986,13 @@ impl Ctx<'_> {
                     }
                 },
                 None => {
+                    // sem chave, o ponto só vale a até 1 mm da face; fora disso é referência perdida
+                    let Some(j) = b.face_index(*p, 1.0).map_err(k)? else {
+                        let who = format!("a face que passava perto de ({:.2}, {:.2}, {:.2})", p[0], p[1], p[2]);
+                        return Err(self.lost(what, f, refs::Lost::None, who));
+                    };
                     out.push(*p);
-                    let key = b.face_index(*p, 1.0).map_err(k)?.and_then(|j| refs::promote_face(&v, j));
+                    let key = refs::promote_face(&v, j);
                     gained |= key.is_some();
                     all.push(key);
                 }
@@ -1934,8 +2014,14 @@ impl Ctx<'_> {
         let k = |e: KernelError| e.0;
         let topo = b.topology().map_err(k)?;
         let v = refs::View { topo: &topo, owners, roles };
-        // a mesma tolerância com que o kernel casa o ponto com a aresta
-        let tol = b.bbox().map(|(a, c)| geo3d::dist(a, c) * 0.05).unwrap_or(1.).max(1.);
+        // ADR 0010: sem chave, o ponto só vale se a aresta continua onde estava. Antes a tolerância era
+        // 5% da diagonal e o ponto antigo caía em outra aresta sem aviso (a 0,8 mm, por exemplo, o
+        // encontro piso-parede do bolso). O ponto guardado é o médio exato da aresta no clique, então
+        // geometria que não mudou casa a ~1e-9; 0,1 mm (bem abaixo do teto de 1 mm da ADR) só absorve
+        // o arredondamento da gravação em texto. Qualquer deslocamento maior é referência perdida.
+        // Exceção temporária: em chapa as faces ainda não têm papel (fase 2 da ADR 0010), e o filete
+        // dobrado precisa seguir o ponto até a planificação, então vale a tolerância antiga.
+        let tol = if self.doc.features.iter().any(|g| matches!(g.kind, FeatureKind::SmWall(_))) { b.bbox().map(|(a, c)| geo3d::dist(a, c) * 0.05).unwrap_or(1.).max(1.) } else { 0.1 };
         let (mut out, mut all, mut gained) = (Vec::with_capacity(mids.len()), Vec::with_capacity(mids.len()), false);
         for (i, p) in mids.iter().enumerate() {
             match keys.get(i).and_then(|x| x.as_ref()) {
@@ -1951,8 +2037,14 @@ impl Ctx<'_> {
                     }
                 },
                 None => {
-                    out.push(*p);
-                    let key = refs::edge_near(&v, *p, tol).and_then(|e| refs::promote_edge(&v, e));
+                    // sem chave e sem aresta a 1 mm do ponto: erro com sugestão, nunca a mais próxima
+                    let Some(e) = refs::edge_near(&v, *p, tol) else {
+                        let who = format!("a aresta que passava perto de ({:.2}, {:.2}, {:.2})", p[0], p[1], p[2]);
+                        return Err(self.lost(what, f, refs::Lost::None, who));
+                    };
+                    // o ponto exato da aresta achada vai para o kernel, não o antigo
+                    out.push(topo.edge_mids[e]);
+                    let key = refs::promote_edge(&v, e);
                     gained |= key.is_some();
                     all.push(key);
                 }
@@ -2769,6 +2861,10 @@ impl Ctx<'_> {
                 let (frame, sk) = &self.sketch(e.sketch)?;
                 let (face, warn_open) = self.profile_face(frame, sk, e.thin.as_ref(), e.thin_side)?;
                 let taper = ev(&e.taper, &self.vars, "ângulo de saída")?;
+                // a saída só existe no término cego: com qualquer outro, o ângulo seria descartado
+                if taper.abs() > 1e-9 && !matches!(e.extent, Extent::Blind(_)) {
+                    return Err(format!("o ângulo de saída vale só com término 'cego' (este comando usa {}) — zere o ângulo ou mude o término", extent_name(&e.extent)));
+                }
                 // recorte entra no material (contra a normal); "inverter" troca o sentido
                 let into = (e.op == BoolOp::Cut) != e.reverse;
                 let n = match &e.dir {
@@ -2827,6 +2923,7 @@ impl Ctx<'_> {
                 let (frame, sk) = &self.sketch(r.sketch)?;
                 let (origin, dir) = self.axis(&r.axis)?;
                 let (face, _) = self.profile_face(frame, sk, r.thin.as_ref(), r.thin_side)?;
+                check_revolve_profile(frame, sk, origin, dir)?;
                 let ang = ev(&r.angle, &self.vars, "ângulo")?;
                 // dois ângulos: o segundo vai para o outro lado do plano do sketch
                 let (ang, start) = match &r.angle2 {
@@ -2924,10 +3021,16 @@ impl Ctx<'_> {
                 let mut tool = Shape::empty();
                 let mut depths = vec![];
                 for (o, dir) in &seats {
+                    // simétrico e dois lados: o furo vai dos dois lados da boca (antes só a primeira metade existia)
+                    let mut back = 0.;
                     let depth = match (&cut, &h.depth) {
                         (Some((c, _)), _) => self.reach(c, *o, f.target),
                         (None, Extent::UpToLast) => self.last_dist(f.target, *o, *dir)?,
-                        (None, x) => self.extent(x, f.target)?.0,
+                        (None, x) => {
+                            let (a, b) = self.extent(x, f.target)?;
+                            back = b;
+                            a
+                        }
                     };
                     depths.push(depth);
                     HOLE_LOG.with(|l| {
@@ -2940,6 +3043,11 @@ impl Ctx<'_> {
                         t = t.clip_until(c, *o, *ext).map_err(k)?;
                     }
                     tool = if tool.is_null() { t } else { tool.compound(&t) };
+                    if back > 0. {
+                        let rev = dir.map(|x| -x);
+                        let t2 = Shape::hole_tool_ext(*o, rev, d, back, HoleShape::Simple, 0., taper).map_err(k)?;
+                        tool = tool.compound(&t2);
+                    }
                 }
                 self.apply(f.target, tool, BoolOp::Cut, f.id)?;
                 let Some(t) = &h.thread else { return Ok(None) };
@@ -2998,21 +3106,25 @@ impl Ctx<'_> {
                 };
                 let tool = face.sweep(&spine.pts, mode).map_err(k)?;
                 self.apply(f.target, tool, w.op, f.id)?;
-                Ok(None)
+                Ok((!sk.open.is_empty()).then(|| format!("{} perfil(is) aberto(s) do sketch foram descartados: só contornos fechados varrem", sk.open.len())))
             }
             FeatureKind::Loft(l) => {
                 let mut comp = Shape::empty();
+                let mut dropped: Vec<String> = vec![];
                 for id in &l.sections {
                     let (frame, sk) = &self.sketch(*id)?;
                     if sk.loops.is_empty() {
                         return Err(format!("o sketch '{}' não tem contorno fechado", self.doc.name_of(*id)));
+                    }
+                    if sk.loops.len() > 1 {
+                        dropped.push(format!("a seção '{}' tem {} contornos e só o primeiro entra", self.doc.name_of(*id), sk.loops.len()));
                     }
                     let face = Shape::face(frame, &sk.loops[..1]).map_err(k)?;
                     comp = if comp.is_null() { face } else { comp.compound(&face) };
                 }
                 let tool = comp.loft(l.ruled, l.closed).map_err(k)?;
                 self.apply(f.target, tool, l.op, f.id)?;
-                Ok(None)
+                Ok((!dropped.is_empty()).then(|| format!("contornos descartados: {}", dropped.join("; "))))
             }
             FeatureKind::Primitive(pr) => {
                 let fr = self.plane(&pr.plane, 0)?;
@@ -4192,6 +4304,17 @@ impl Ctx<'_> {
                 // só tem o ponto segue o ponto (e é promovida). Aresta perdida ou ambígua = erro.
                 let picked = match &o.edges {
                     EdgeSel::Edges(m) if !m.is_empty() => Some(self.resolve_edges(if chamfer { "chanfro" } else { "filete" }, f, b, owners, roles, m, &o.keys)?),
+                    // arestas criadas pelo comando: as que ficam entre duas faces que ele gerou (a aresta
+                    // entre uma face dele e uma de outro comando já existia na peça)
+                    EdgeSel::CreatedBy(id) => {
+                        let topo = b.topology().map_err(k)?;
+                        let mine = |fc: u32| fc != fenkra_kernel::NO_FACE && owners.get(fc as usize) == Some(id);
+                        let mids: Vec<[f64; 3]> = (0..topo.edge_faces.len().min(topo.edge_mids.len())).filter(|e| mine(topo.edge_faces[*e][0]) && mine(topo.edge_faces[*e][1])).map(|e| topo.edge_mids[e]).collect();
+                        if mids.is_empty() {
+                            return Err(format!("'{}' não criou nenhuma aresta que sobre no corpo — escolha as arestas na viewport", self.doc.name_of(*id)));
+                        }
+                        Some(mids)
+                    }
                     _ => None,
                 };
                 if o.mode != EdgeMode::Constant {
@@ -4228,10 +4351,7 @@ impl Ctx<'_> {
                     role = role2;
                 }
                 self.bodies.insert(f.target, (s, own, role));
-                Ok(match &o.edges {
-                    EdgeSel::CreatedBy(_) => Some("seleção por comando ainda não implementada: aplicado a todas as arestas".into()),
-                    _ => None,
-                })
+                Ok(None)
             }
         }
     }
@@ -6970,10 +7090,21 @@ mod tests {
         let r = recompute(&d);
         let placa = &d.features[1];
         assert_eq!(r.status[&placa.id], Status::Ok, "{:?}", r.status[&placa.id]);
-        // filete só em uma aresta escolhida (aresta inferior frontal: y = -36, z = 0)
+        // filete só em uma aresta escolhida (aresta inferior frontal: y = -36, z = 0), pelo ponto
+        // médio exato dela, como o picking entrega (sem chave o ponto tem que cair na aresta)
+        let mut sem_filete = d.clone();
+        sem_filete.features.retain(|f| !matches!(f.kind, FeatureKind::Fillet(_)));
+        let r_sem = recompute(&sem_filete);
+        let mid = r_sem.bodies[0]
+            .mesh
+            .edge_mids
+            .chunks_exact(3)
+            .map(|q| [q[0] as f64, q[1] as f64, q[2] as f64])
+            .min_by(|a, b| geo3d::dist(*a, [0., -36., 0.]).total_cmp(&geo3d::dist(*b, [0., -36., 0.])))
+            .unwrap();
         let fil = d.features.iter().find(|f| matches!(f.kind, FeatureKind::Fillet(_))).unwrap().id;
         if let Some(FeatureKind::Fillet(o)) = d.feature_mut(fil).map(|f| &mut f.kind) {
-            o.edges = EdgeSel::Edges(vec![[0., -36., 0.]]);
+            o.edges = EdgeSel::Edges(vec![mid]);
         }
         let r = recompute(&d);
         assert_eq!(r.status[&fil], Status::Ok, "{:?}", r.status[&fil]);

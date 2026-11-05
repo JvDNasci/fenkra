@@ -49,3 +49,9 @@ promovida para v2 no primeiro recompute bem-sucedido.
   escolher em silêncio (faces a mais de 1 mm e arestas não achadas viram erro); promoção de arquivos antigos.
 - **Fase 2:** chaves para rosca, filete face-face, arredondamento completo e chapa; papéis para extrusão até
   plano, varredura, loft, furos e padrões; candidatos no 3D no assistente de reparo; `EdgeSel::CreatedBy`.
+- **Correção (B15, 05/11/2026):** a referência de aresta sem chave (arquivo antigo) casava o ponto com a
+  aresta mais próxima dentro de 5% da diagonal, não de 1 mm, e trocava de aresta em silêncio (1,07% das
+  amostras do B306). Agora o ponto só vale a até 0,1 mm (o ponto guardado é o médio exato da aresta;
+  geometria que não mudou casa a ~1e-9), o ponto exato da aresta achada é o que vai ao kernel, e fora
+  disso o comando fica em "referência perdida" com sugestão. O mesmo vale para a face sem chave (1 mm).
+  Exceção até as chaves de chapa saírem: documentos com parede de chapa mantêm a tolerância antiga.
