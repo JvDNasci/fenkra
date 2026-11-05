@@ -371,6 +371,9 @@ impl AsmState {
     }
 }
 
+const DICA_ALINHAMENTO: &str = "Troca o sentido das normais: a peça vira, e a cota continua do mesmo lado.";
+const DICA_LADO: &str = "Passa a cota para o outro lado da referência: a peça muda de lado sem virar.";
+
 /// Restrição automática: o tipo mais lógico para o par escolhido.
 fn auto_kind(a: &Geom, b: &Geom, wa: &Placement, wb: &Placement) -> MateKind {
     match (a, b) {
@@ -705,10 +708,16 @@ fn create_mate(app: &mut App, m: MateCmd, a: Pick, b: Pick) {
     }
     let (pa, pb) = (st.asm.node(ra.comp).unwrap().placement, st.asm.node(rb.comp).unwrap().placement);
     let kind = m.kind().unwrap_or_else(|| auto_kind(&ra.geom, &rb.geom, &pa, &pb));
+    if !fenkra_montagem::par_valido(&kind, &ra.geom, &rb.geom) {
+        app.toast(format!("{}: {}", tr(kind.label()), tr("este par de elementos não define a restrição (escolha planos ou eixos)")), true);
+        return;
+    }
     st.push_undo();
     let id = st.asm.add_mate(kind, ra, rb);
     // engrenagem/cremalheira: o giro de agora é o zero
     st.asm.init_motion(id);
+    // distância e ângulo: a medida de agora, para a peça não saltar
+    st.asm.iniciar_medida(id);
     st.solve();
     if m == MateCmd::AlignOnce {
         // alinhamento instantâneo: posiciona e não deixa histórico
@@ -1393,6 +1402,14 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                 hover = Some(m.a.comp);
             }
             r.context_menu(|ui| {
+                if m.aceita_alinhamento() && ui.button(tr("Inverter alinhamento")).on_hover_text(tr(DICA_ALINHAMENTO)).clicked() {
+                    act = Some((m.id, 14));
+                    ui.close();
+                }
+                if m.aceita_lado() && ui.button(tr("Inverter lado")).on_hover_text(tr(DICA_LADO)).clicked() {
+                    act = Some((m.id, 15));
+                    ui.close();
+                }
                 if ui.button(if m.suppressed { tr("Reativar") } else { tr("Suprimir") }).clicked() {
                     act = Some((m.id, 11));
                     ui.close();
@@ -1629,6 +1646,15 @@ pub fn node_action(app: &mut App, id: Id, k: u8) {
             }
             st.solve();
         }
+        14 | 15 => {
+            st.push_undo();
+            if k == 14 {
+                st.asm.inverter_alinhamento(id);
+            } else {
+                st.asm.inverter_lado(id);
+            }
+            st.solve();
+        }
         _ => {}
     }
     st.dirty = true;
@@ -1761,6 +1787,10 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     let before = st.asm.clone();
     let mut resolve = false;
     let mut reinit: Option<Id> = None;
+    // tipo trocado no painel que precisa medir de novo (id, tipo anterior) e inversão pedida
+    let mut remedir: Option<(Id, MateKind)> = None;
+    let mut inverter: Option<(Id, bool)> = None;
+    let vars_asm = st.asm.vars();
     let picked_comps = st.comps_of(&app.picks);
     match sel.and_then(|s| st.asm.nodes.iter().position(|n| n.id == s)) {
         Some(i) => {
@@ -2018,20 +2048,19 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                                 if k.is_motion() {
                                     reinit = Some(m.id);
                                 }
+                                remedir = Some((m.id, m.kind.clone()));
                                 m.kind = k;
                             }
                         }
                     });
                     match &mut m.kind {
-                        MateKind::Coincident { flip } => {
-                            ui.checkbox(flip, tr("invertida"));
-                        }
-                        MateKind::Distance(e) | MateKind::Angle(e) => {
-                            ui.horizontal(|ui| {
-                                ui.label(tr("Valor"));
-                                ui.text_edit_singleline(e);
-                            });
+                        MateKind::Distance(e) => {
+                            crate::editor::expr(ui, "Valor", e, &vars_asm, "mm");
                             ui.label(RichText::new(tr("Aceita fórmulas com os parâmetros da montagem; distância negativa troca o lado.")).weak().small());
+                        }
+                        MateKind::Angle(e) => {
+                            crate::editor::expr(ui, "Valor", e, &vars_asm, "°");
+                            ui.label(RichText::new(tr("Aceita fórmulas com os parâmetros da montagem.")).weak().small());
                         }
                         MateKind::Gear { ratio, belt, .. } => {
                             crate::editor::expr(ui, "Razão", ratio, &Default::default(), "");
@@ -2043,6 +2072,16 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                             ui.label(RichText::new(tr("π × diâmetro primitivo do pinhão")).weak().small());
                         }
                         _ => {}
+                    }
+                    if m.aceita_alinhamento() || m.aceita_lado() {
+                        ui.horizontal(|ui| {
+                            if m.aceita_alinhamento() && ui.button(tr("Inverter alinhamento")).on_hover_text(tr(DICA_ALINHAMENTO)).clicked() {
+                                inverter = Some((m.id, true));
+                            }
+                            if m.aceita_lado() && ui.button(tr("Inverter lado")).on_hover_text(tr(DICA_LADO)).clicked() {
+                                inverter = Some((m.id, false));
+                            }
+                        });
                     }
                     if m.kind.is_motion() && ui.button(tr("⟲ Posição atual = giro zero")).clicked() {
                         reinit = Some(m.id);
@@ -2086,6 +2125,23 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     }
     if let Some(id) = reinit {
         st.asm.init_motion(id);
+    }
+    if let Some((id, antes)) = remedir {
+        // tipo que o par não aceita: volta ao anterior em vez de nascer sem efeito
+        let valido = st.asm.mates.iter().find(|m| m.id == id).is_some_and(|m| fenkra_montagem::par_valido(&m.kind, &m.a.geom, &m.b.geom));
+        if !valido || !st.asm.iniciar_medida(id) {
+            if let Some(m) = st.asm.mates.iter_mut().find(|m| m.id == id) {
+                m.kind = antes;
+            }
+        }
+    }
+    if let Some((id, alinhamento)) = inverter {
+        if alinhamento {
+            st.asm.inverter_alinhamento(id);
+        } else {
+            st.asm.inverter_lado(id);
+        }
+        st.solve();
     }
     // interferências
     if !st.interf.is_empty() {
