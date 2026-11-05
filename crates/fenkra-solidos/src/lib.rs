@@ -3744,7 +3744,8 @@ impl Ctx<'_> {
                 let b = self.body(f.target).ok_or("a aba precisa de uma web (parede base)")?.clone();
                 let fp = self.map_point(sf.face, f.flat_space, sp.flat);
                 let (on, n) = b.surface_near(fp).map_err(k)?;
-                let support = self.cut_shape(&sf.support, 0)?;
+                // suporte que some (apagado, suprimido ou fora do alcance): falha explícita no comando
+                let support = self.cut_shape(&sf.support, 0).map_err(|e| format!("o suporte da aba por superfície não está disponível ({e}): escolha o suporte de novo"))?;
                 let (lo, hi) = b.bbox().ok_or("web sem dimensões")?;
                 let big = geo3d::dist(lo, hi) * 2. + 10.;
                 // OML: suporte ∩ plano da face base, só o trecho perto da web
@@ -5260,6 +5261,9 @@ pub fn bend_table(doc: &Document) -> Vec<BendRow> {
             FeatureKind::SmFlange(fl) => (num(&fl.angle), fl.radius.as_ref().map(num).unwrap_or(r0)),
             FeatureKind::SmHem(h) => (180., (num(&h.gap) / 2.).max(0.01)),
             FeatureKind::SmBend(b) => (num(&b.angle), b.radius.as_ref().map(num).unwrap_or(r0)),
+            // abas por cadeia e por superfície também entram no mapa de dobras (ângulo e raio)
+            FeatureKind::SmCurveFlange(c) => (if c.angle.trim().is_empty() { 90. } else { num(&c.angle) }, c.radius.as_ref().map(num).unwrap_or(r0)),
+            FeatureKind::SmSurfFlange(sf) => (if sf.mode == 2 { num(&sf.angle) } else { 90. }, sf.radius.as_ref().map(num).unwrap_or(r0)),
             _ => continue,
         };
         let a = ang.to_radians();
