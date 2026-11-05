@@ -7549,7 +7549,7 @@ impl eframe::App for App {
                 };
                 let mut s = scene::build(scene_doc, r, &opts);
                 crate::asm_ui::contexto_na_cena(self.asm.as_ref(), &mut s);
-                crate::asm_cmd::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
+                crate::asm_cmd::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, ctx.input(|i| i.time), &mut s);
                 vp.set_scene(rs, &s);
                 self.scene_dirty = false;
                 ctx.request_repaint();

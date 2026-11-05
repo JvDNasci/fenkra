@@ -10,30 +10,57 @@ use crate::i18n::tr;
 use crate::picking::Pick;
 use eframe::egui::{self, Color32, RichText};
 use fenkra_montagem::kin::{self, JointKind};
-use fenkra_montagem::proposta::{Classe, Comando, Elemento, Previa, Tipo};
+use fenkra_montagem::proposta::{animar, Classe, Comando, Elemento, ModoOrigem, Movido, OpcoesAnimar, Previa, Tipo};
 use fenkra_montagem::*;
 
 /// Comando aberto: a proposta, o que foi clicado e o último resultado.
 pub struct Pendente {
     pub c: Comando,
-    pub picks: [Option<Pick>; 2],
-    pub textos: [String; 2],
+    pub picks: [Vec<Pick>; 2],
+    pub textos: [Vec<String>; 2],
     pub resultado: Option<Result<Previa, String>>,
     /// proposta que gerou `resultado`
     resolvida: Option<Comando>,
     /// o último clique não serviu
     pub aviso: Option<String>,
+    /// quadros do Animar e a hora em que começou
+    animacao: Option<(Vec<Vec<Movido>>, f64)>,
+    opcoes_animar: OpcoesAnimar,
 }
+
+/// Quadros por segundo do Animar.
+const QUADROS_POR_SEGUNDO: f64 = 24.;
 
 impl Pendente {
     fn novo(tipo: Tipo) -> Self {
-        Pendente { c: Comando::novo(tipo), picks: [None; 2], textos: Default::default(), resultado: None, resolvida: None, aviso: None }
+        Pendente { c: Comando::novo(tipo), picks: Default::default(), textos: Default::default(), resultado: None, resolvida: None, aviso: None, animacao: None, opcoes_animar: Default::default() }
+    }
+
+    /// Peças fora do lugar agora: as da prévia ou as do quadro do Animar.
+    fn movidos_em(&self, t: f64) -> &[Movido] {
+        match &self.animacao {
+            Some((q, t0)) if !q.is_empty() => &q[((t - t0).max(0.) * QUADROS_POR_SEGUNDO) as usize % q.len()],
+            _ => self.previa().map_or(&[], |p| p.movidos.as_slice()),
+        }
+    }
+
+    /// Guarda o que entrou na caixa `k`: a segunda referência da origem soma, a primeira troca.
+    fn anotar(&mut self, k: usize, texto: String, pick: Option<Pick>) {
+        if self.c.segundos[k].is_none() {
+            self.textos[k].clear();
+            self.picks[k].clear();
+        }
+        self.textos[k].push(texto);
+        self.picks[k].extend(pick);
     }
 
     pub fn previa(&self) -> Option<&Previa> {
         self.resultado.as_ref().and_then(|r| r.as_ref().ok())
     }
 }
+
+/// Junta pelo tipo que a geometria pedir.
+const AUTOMATICA: u8 = 255;
 
 /// Modo do comando pedido pela barra.
 pub fn tipo_da_restricao(m: MateCmd) -> Tipo {
@@ -45,6 +72,9 @@ pub fn tipo_da_restricao(m: MateCmd) -> Tipo {
 }
 
 pub fn tipo_da_junta(k: u8) -> Tipo {
+    if k == AUTOMATICA {
+        return Tipo::JuntaAutomatica;
+    }
     Tipo::Junta(match k {
         0 => JointKind::Revolute,
         1 => JointKind::Prismatic,
@@ -77,10 +107,8 @@ pub fn abrir(app: &mut App, tipo: Tipo) {
 /// Item da origem da montagem como elemento do comando (clique na árvore).
 pub fn receber_origem(st: &mut AsmState, item: crate::asm_selecao::ItemOrigem) {
     let Some(pen) = st.cmd.as_mut() else { return };
-    let k = pen.c.ativa;
-    pen.textos[k] = format!("{} · {}", item.nome(), tr("Origem"));
-    pen.picks[k] = None;
-    pen.c.receber(item.elemento());
+    let k = pen.c.receber(item.elemento());
+    pen.anotar(k, format!("{} · {}", item.nome(), tr("Origem")), None);
     pen.aviso = None;
     atualizar(st);
 }
@@ -155,10 +183,9 @@ fn receber(st: &mut AsmState, p: Pick) {
     let Some(pen) = st.cmd.as_mut() else { return };
     match achado {
         Ok(e) => {
-            let k = pen.c.ativa;
-            pen.textos[k] = descrever(&e, &nome);
-            pen.picks[k] = Some(p);
-            pen.c.receber(e);
+            let texto = descrever(&e, &nome);
+            let k = pen.c.receber(e);
+            pen.anotar(k, texto, Some(p));
             pen.aviso = None;
         }
         Err(e) => pen.aviso = Some(e),
@@ -173,6 +200,8 @@ pub fn atualizar(st: &mut AsmState) {
     }
     pen.resultado = pen.c.completo().then(|| pen.c.resolver(&st.asm));
     pen.resolvida = Some(pen.c.clone());
+    // o que estava animando era a proposta de antes
+    pen.animacao = None;
     st.fantasma_novo = true;
 }
 
@@ -273,8 +302,11 @@ fn cor(v: &egui::Visuals, k: usize) -> Color32 {
 
 /// Aviso fixo da etapa, para a instrução não sumir como um aviso temporário.
 fn etapa_texto(c: &Comando) -> &'static str {
+    let trajetoria = c.rotulos()[0] == "Trajetória";
     match c.etapa() {
         2 => "Etapa 3 de 3: confira o fantasma; Enter aceita, Tab inverte, Esc cancela",
+        _ if c.pede_segundo(c.ativa) => "Falta a segunda referência da origem nesta caixa",
+        _ if trajetoria => "Clique na trajetória e no seguidor, em qualquer ordem",
         _ if c.ativa == 0 => "Etapa 1 de 3: clique no primeiro elemento",
         _ => "Etapa 2 de 3: clique no segundo elemento",
     }
@@ -351,14 +383,15 @@ pub fn painel(app: &mut App, ui: &mut egui::Ui) {
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new(format!("{} {}", tr("Elemento"), k + 1)).strong().color(crate::theme::readable(c, &visuais)));
-                    let t = if cheia { RichText::new(&pen.textos[k]) } else { RichText::new(tr("vazio: clique no 3D")).weak() };
+                    ui.label(RichText::new(tr(pen.c.rotulos()[k])).strong().color(crate::theme::readable(c, &visuais)));
+                    let t = if cheia { RichText::new(pen.textos[k].join(" + ")) } else { RichText::new(tr("vazio: clique no 3D")).weak() };
                     ui.label(t);
                     if cheia {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             if ui.small_button("✖").on_hover_text(tr("Esvazia esta caixa e volta a ela")).clicked() {
                                 pen.c.limpar_caixa(k);
-                                pen.picks[k] = None;
+                                pen.picks[k].clear();
+                                pen.textos[k].clear();
                             }
                         });
                     }
@@ -370,7 +403,29 @@ pub fn painel(app: &mut App, ui: &mut egui::Ui) {
         if r.clicked() {
             pen.c.ativa = k;
         }
+        // origem da junta nesta peça
+        if pen.c.tipo.e_junta() && pen.c.rotulos()[0] != "Trajetória" {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(RichText::new(tr("Origem")).small());
+                for (m, nome, dica) in [
+                    (ModoOrigem::EmPonto, "No elemento", "A origem da junta fica no elemento clicado."),
+                    (ModoOrigem::EntreFaces, "Entre duas faces", "Clique em duas faces paralelas: a origem fica no meio."),
+                    (ModoOrigem::IntersecaoArestas, "Interseção de arestas", "Clique em duas arestas retas: a origem fica no cruzamento."),
+                ] {
+                    if ui.selectable_label(pen.c.modos[k] == m, RichText::new(tr(nome)).small()).on_hover_text(tr(dica)).clicked() {
+                        pen.c.trocar_modo_origem(k, m);
+                        pen.textos[k].truncate(1);
+                        pen.picks[k].truncate(1);
+                    }
+                }
+            });
+        }
         ui.add_space(2.);
+    }
+    if pen.c.rotulos()[0] == "Trajetória" && completo && ui.small_button(tr("⇄ Trocar trajetória e seguidor")).on_hover_text(tr("Para um came redondo clicado na ordem contrária")).clicked() {
+        pen.c.trocar_caixas();
+        pen.textos.swap(0, 1);
+        pen.picks.swap(0, 1);
     }
     if let Some(a) = &pen.aviso {
         ui.label(RichText::new(tr(a)).color(crate::theme::st_warn()).small());
@@ -381,6 +436,9 @@ pub fn painel(app: &mut App, ui: &mut egui::Ui) {
     let mut novo = None;
     ui.horizontal_wrapped(|ui| {
         if junta {
+            if botao_modo(ui, "rest_auto", "Automática", "Reconhece a junta pela geometria: dois furos giram, duas arestas retas deslizam.", pen.c.tipo == Tipo::JuntaAutomatica) {
+                novo = Some(Tipo::JuntaAutomatica);
+            }
             for (k, (icone, dica)) in JUNTAS.iter().enumerate() {
                 let t = tipo_da_junta(k as u8);
                 if botao_modo(ui, icone, t.label(), dica, t.label() == pen.c.tipo.label()) {
@@ -428,6 +486,60 @@ pub fn painel(app: &mut App, ui: &mut egui::Ui) {
         crate::editor::expr(ui, "Raio do rolete", radius, &vars, "mm");
         ui.label(RichText::new(tr("Vem da aresta circular do seguidor; zero é seguidor de ponta.")).weak().small());
     }
+    if junta {
+        let reconhecida = pen.previa().and_then(|p| p.id.and_then(|id| p.copia.joints.iter().find(|j| j.id == id)));
+        let (giro, curso) = reconhecida.map_or((false, false), |j| j.kind.drives());
+        if let (Tipo::JuntaAutomatica, Some(j)) = (&pen.c.tipo, reconhecida) {
+            ui.label(RichText::new(format!("{} {}", tr("Reconhecida:"), tr(j.kind.label()))).strong());
+        }
+        let al = &mut pen.c.alinhamento;
+        ui.horizontal(|ui| {
+            ui.label(tr("Ângulo inicial"));
+            ui.add(crate::ui_ext::dv(&mut al.angulo).speed(1.).suffix("°").dica("Gira a peça em volta do eixo da junta antes de aceitar"));
+        });
+        ui.horizontal(|ui| {
+            ui.label(tr("Deslocamento"));
+            for (k, (l, dica)) in [("X", "Desloca a origem da peça no X da junta"), ("Y", "Desloca a origem da peça no Y da junta"), ("Z", "Desloca a origem da peça ao longo do eixo da junta")].into_iter().enumerate() {
+                ui.add(crate::ui_ext::dv(&mut al.desloc[k]).speed(0.5).prefix(format!("{l} ")).dica(dica));
+            }
+        });
+        if ui.selectable_label(al.inverter, tr("Inverter")).on_hover_text(tr("Tab: a peça vira, e o eixo dela passa a apontar ao contrário")).clicked() {
+            al.inverter = !al.inverter;
+        }
+        // ---- animar: ir e voltar no 3D, sem a janela de simulação
+        ui.add_space(4.);
+        ui.horizontal(|ui| {
+            let ligado = pen.animacao.is_some();
+            let texto = if ligado { tr("⏹ Parar") } else { tr("▶ Animar") };
+            if ui.add_enabled(pode, egui::Button::new(RichText::new(texto).strong())).on_hover_text(tr("A peça vai e volta no 3D, antes de aceitar")).clicked() {
+                acao = Some(3);
+            }
+            if ui.checkbox(&mut pen.opcoes_animar.limites, tr("incluir os limites")).on_hover_text(tr("Vai até os limites da junta, em vez da faixa padrão")).changed() {
+                pen.animacao = None;
+            }
+        });
+        // limites guardados na junta (o solucionador ainda não os impõe)
+        egui::CollapsingHeader::new(tr("Limites")).id_salt("asm_cmd_limites").show(ui, |ui| {
+            for (rotulo, ligado, faixa, unidade, padrao) in [("Ângulo", giro, &mut pen.c.limites.angulo, "°", (-90., 90.)), ("Curso", curso, &mut pen.c.limites.curso, " mm", (-50., 50.))] {
+                if !ligado {
+                    continue;
+                }
+                ui.horizontal(|ui| {
+                    let mut on = faixa.is_some();
+                    if ui.checkbox(&mut on, tr(rotulo)).on_hover_text(tr("Liga a faixa de movimento deste grau de liberdade")).changed() {
+                        *faixa = on.then_some(padrao);
+                    }
+                    if let Some((lo, hi)) = faixa {
+                        ui.add(crate::ui_ext::dv(lo).speed(1.).suffix(unidade).dica("Mínimo"));
+                        ui.add(crate::ui_ext::dv(hi).speed(1.).suffix(unidade).dica("Máximo"));
+                    }
+                });
+            }
+            if !giro && !curso {
+                ui.label(RichText::new(tr("Esta junta não tem curso nem ângulo para limitar.")).weak().small());
+            }
+        });
+    }
     if aceita_alin || aceita_lado {
         ui.horizontal(|ui| {
             if aceita_alin && ui.selectable_label(pen.c.inv_alinhamento, tr("Inverter alinhamento")).on_hover_text(tr(crate::asm_ui::DICA_ALINHAMENTO)).clicked() {
@@ -464,16 +576,40 @@ pub fn painel(app: &mut App, ui: &mut egui::Ui) {
         Some(0) => aceitar(app, true),
         Some(1) => aceitar(app, false),
         Some(2) => cancelar(app),
+        Some(3) => {
+            let agora = ui.input(|i| i.time);
+            alternar_animacao(app, agora);
+        }
         _ => {}
     }
 }
 
+/// Liga ou desliga o Animar. O cálculo sai da cópia da prévia: a montagem não muda.
+fn alternar_animacao(app: &mut App, agora: f64) {
+    let Some(st) = app.asm.as_mut() else { return };
+    let base = st.asm.clone();
+    let Some(pen) = st.cmd.as_mut() else { return };
+    if pen.animacao.take().is_some() {
+        st.fantasma_novo = true;
+        return;
+    }
+    let Some(p) = pen.previa() else { return };
+    match animar(&base, p, &pen.opcoes_animar) {
+        Ok(q) => {
+            pen.animacao = Some((q, agora));
+            st.fantasma_novo = true;
+        }
+        Err(e) => app.toast(tr(&e).to_string(), true),
+    }
+}
+
 /// Peças da prévia como fantasma, na posição final. Em vermelho se a proposta não tem solução.
-pub fn na_cena(st: Option<&AsmState>, v: &egui::Visuals, cena: &mut crate::render::Scene) {
+pub fn na_cena(st: Option<&AsmState>, v: &egui::Visuals, t: f64, cena: &mut crate::render::Scene) {
     let Some(st) = st else { return };
-    let (Some(p), Some(vista)) = (st.cmd.as_ref().and_then(|c| c.previa()), st.view.as_ref()) else { return };
+    let (Some(pen), Some(vista)) = (st.cmd.as_ref(), st.view.as_ref()) else { return };
+    let Some(p) = pen.previa() else { return };
     let c = if p.falhou() { crate::theme::st_err() } else { crate::theme::accent(v) };
-    for mv in &p.movidos {
+    for mv in pen.movidos_em(t) {
         for b in vista.bodies.iter().filter(|b| b.collector == mv.comp) {
             let m = fenkra_montagem::view::transformed(&b.mesh, &mv.delta());
             for fi in 0..m.face_ranges.len() {
@@ -509,7 +645,12 @@ fn seta(painter: &egui::Painter, rect: egui::Rect, cam: &crate::render::Camera, 
 
 /// Seleção e setas de normal do comando aberto: a de cada elemento na posição de agora e, na peça
 /// que se move, também na posição final.
-pub fn overlay(app: &App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::render::Camera) {
+pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::render::Camera) {
+    if let Some(st) = app.asm.as_mut().filter(|s| s.cmd.as_ref().is_some_and(|c| c.animacao.is_some())) {
+        // cada quadro do Animar é um fantasma novo
+        st.fantasma_novo = true;
+        ui.ctx().request_repaint();
+    }
     let Some(st) = app.asm.as_ref() else { return };
     let Some(pen) = st.cmd.as_ref() else { return };
     let painter = ui.painter_at(rect);
@@ -517,8 +658,10 @@ pub fn overlay(app: &App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::rend
     let previa = pen.previa();
     let mut alvo = None;
     for k in 0..2 {
-        if let (Some(p), Some(r)) = (pen.picks[k], app.result.as_ref()) {
-            crate::picking::draw(&painter, r, cam, rect, &p, true);
+        if let Some(r) = app.result.as_ref() {
+            for p in &pen.picks[k] {
+                crate::picking::draw(&painter, r, cam, rect, p, true);
+            }
         }
         let Some(e) = &pen.c.caixas[k] else { continue };
         let Some(pl) = st.asm.lugar(e.r.comp) else { continue };
@@ -591,7 +734,7 @@ mod tests {
         assert!(st.fantasma_novo, "a cena precisa saber da prévia");
         let v = egui::Visuals::dark();
         let mut cena = crate::render::Scene::default();
-        na_cena(Some(&st), &v, &mut cena);
+        na_cena(Some(&st), &v, 0., &mut cena);
         assert!(!cena.ghost.is_empty());
         let topo = |pos: &mut dyn Iterator<Item = f32>| pos.fold(f32::MIN, f32::max);
         let malha = &st.view.as_ref().unwrap().bodies[0].mesh;
@@ -617,9 +760,48 @@ mod tests {
         atualizar(&mut st);
         assert!(st.cmd.as_ref().unwrap().previa().unwrap().falhou());
         let mut cena = crate::render::Scene::default();
-        na_cena(Some(&st), &egui::Visuals::dark(), &mut cena);
+        na_cena(Some(&st), &egui::Visuals::dark(), 0., &mut cena);
         let erro = crate::theme::st_err();
         assert!(cena.ghost.iter().all(|g| (g.col[0] - erro.r() as f32 / 255.).abs() < 1e-6));
+    }
+
+    #[test]
+    fn animar_troca_o_fantasma_a_cada_quadro_sem_tocar_a_montagem() {
+        let (mut st, tampa) = estado_com_contato();
+        let base = st.asm.nodes[0].id;
+        let eixo = |comp| Elemento::novo(MateRef { comp, geom: Geom::Axis { p: [20., 0., 0.], d: [0., 0., 1.] }, pick: None }, Classe::Face);
+        let mut pen = Pendente::novo(Tipo::JuntaAutomatica);
+        pen.c.receber(eixo(base));
+        pen.c.receber(eixo(tampa));
+        st.cmd = Some(pen);
+        atualizar(&mut st);
+        let antes = st.asm.clone();
+        let quadros = {
+            let pen = st.cmd.as_ref().unwrap();
+            let p = pen.previa().unwrap();
+            assert!(matches!(p.copia.joints[0].kind, JointKind::Revolute), "dois furos: revolução");
+            animar(&st.asm, p, &pen.opcoes_animar).unwrap()
+        };
+        st.cmd.as_mut().unwrap().animacao = Some((quadros, 0.));
+        let quadro = |t: f64| {
+            let mut cena = crate::render::Scene::default();
+            na_cena(Some(&st), &egui::Visuals::dark(), t, &mut cena);
+            cena.ghost.iter().map(|g| g.pos[1]).fold(f32::MIN, f32::max)
+        };
+        let (y0, y1) = (quadro(1. / QUADROS_POR_SEGUNDO), quadro(18. / QUADROS_POR_SEGUNDO));
+        assert!((y0 - y1).abs() > 1., "a peça anda entre os quadros: {y0} {y1}");
+        assert_eq!(st.asm, antes);
+    }
+
+    #[test]
+    fn trocar_a_proposta_para_a_animacao() {
+        let (mut st, _) = estado_com_contato();
+        atualizar(&mut st);
+        let pen = st.cmd.as_mut().unwrap();
+        pen.animacao = Some((vec![vec![]], 0.));
+        pen.c.valor = Some("3".into());
+        atualizar(&mut st);
+        assert!(st.cmd.as_ref().unwrap().animacao.is_none());
     }
 
     #[test]
@@ -628,5 +810,6 @@ mod tests {
         assert_eq!(tipo_da_restricao(MateCmd::AlignOnce), Tipo::Alinhar);
         assert!(matches!(tipo_da_restricao(MateCmd::Contact), Tipo::Restricao(MateKind::Contact)));
         assert!(matches!(tipo_da_junta(7), Tipo::Junta(JointKind::PointCurve { .. })));
+        assert_eq!(tipo_da_junta(AUTOMATICA), Tipo::JuntaAutomatica);
     }
 }
