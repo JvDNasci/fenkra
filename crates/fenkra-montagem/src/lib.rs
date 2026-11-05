@@ -20,7 +20,7 @@ pub mod subconjunto;
 
 pub use engrenagens::{calculo_par, inserir_par_engrenagens, CalculoPar, RelatorioEngrenagens};
 pub use estrutura::{estrutura_para_montagem, Gerado, GrupoGerado};
-pub use fixadores::{preencher_furos, OpcoesFixadores, RelatorioFixadores};
+pub use fixadores::{preencher_com, preencher_furos, EstadoFuro, MarcaFuro, OpcoesFixadores, RelatorioFixadores};
 pub use subconjunto::{Religacao, RelatorioExtracao};
 
 use fenkra_core::{expr, Id, Properties};

@@ -24,10 +24,11 @@
 
 use crate::load::{full_path, PartCache};
 use crate::*;
-use fenkra_core::PartType;
+use fenkra_core::{Document, PartType};
 use fenkra_kernel::Shape;
-use fenkra_solidos::biblioteca::{self, Familia, Tamanho};
-use fenkra_solidos::fixadores::fixador_documento;
+use fenkra_solidos::biblioteca::{self, Biblioteca, Familia, Tamanho};
+use fenkra_solidos::fixadores::{gerar, situacao_do_selo, SituacaoSelo};
+use fenkra_solidos::{prof_escareado, FormaFuro};
 use fenkra_solidos::hardware;
 use std::collections::HashMap;
 use std::path::Path;
@@ -58,11 +59,16 @@ pub struct OpcoesFixadores {
     pub componentes: Vec<Id>,
     /// tira o giro em torno do eixo: cada peça da pilha nasce com 0 graus de liberdade
     pub travar_giro: bool,
+    /// só analisa: devolve o relatório e as marcas dos furos sem inserir nem gravar nada
+    pub so_previa: bool,
+    /// comprimento pedido (mm) no lugar do automático; cada pilha usa o valor da série do tamanho
+    /// dela mais próximo do pedido (a alça 3D e a lista só oferecem valores existentes)
+    pub comprimento: Option<f64>,
 }
 
 impl Default for OpcoesFixadores {
     fn default() -> Self {
-        OpcoesFixadores { familia_parafuso: "iso4762".into(), arruela: true, porca: true, familia_porca: "iso4032".into(), familia_arruela: "iso7089".into(), folga: 1, componentes: vec![], travar_giro: true }
+        OpcoesFixadores { familia_parafuso: "iso4762".into(), arruela: true, porca: true, familia_porca: "iso4032".into(), familia_arruela: "iso7089".into(), folga: 1, componentes: vec![], travar_giro: true, so_previa: false, comprimento: None }
     }
 }
 
@@ -78,6 +84,38 @@ pub struct RelatorioFixadores {
     pub pulados: usize,
     /// furos sem tamanho compatível e outros problemas, uma frase cada
     pub avisos: Vec<String>,
+    /// uma marca por furo analisado, para a viewport mostrar o estado de cada um
+    pub marcas: Vec<MarcaFuro>,
+}
+
+/// O que acontece com um furo no preenchimento.
+#[derive(Clone, Debug, PartialEq)]
+pub enum EstadoFuro {
+    /// recebe fixador (ou receberia, na prévia)
+    Entra {
+        tamanho: String,
+        comprimento: f64,
+        /// ponta do parafuso no mundo e sentido da cabeça para a ponta (a alça de comprimento fica aí)
+        ponta: V3,
+        eixo: V3,
+        /// comprimentos que existem na família para o tamanho
+        serie: Vec<f64>,
+    },
+    /// o eixo já tem fixador
+    JaTem,
+    /// não recebe; o texto diz o motivo
+    SemTamanho(String),
+}
+
+/// Estado de um furo, na posição dele no mundo.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MarcaFuro {
+    pub componente: String,
+    /// centro da boca e sentido para dentro do material, no mundo
+    pub pos: V3,
+    pub dir: V3,
+    pub diametro: f64,
+    pub estado: EstadoFuro,
 }
 
 impl RelatorioFixadores {
@@ -107,15 +145,31 @@ struct Furo {
     tamanho: Option<String>,
     /// casa com a folga escolhida (ou é roscado): serve de âncora da pilha
     ancora: bool,
+    /// forma da boca (rebaixo, cone) e suas medidas, como na tabela de furos
+    forma: FormaFuro,
+    d_boca: f64,
+    prof_boca: f64,
+    angulo: f64,
+}
+
+impl Furo {
+    fn marca(&self, estado: EstadoFuro) -> MarcaFuro {
+        MarcaFuro { componente: self.nome.clone(), pos: self.boca, dir: self.dir, diametro: self.diametro, estado }
+    }
 }
 
 /// Preenche os furos da montagem com fixadores. `dir` é a pasta da montagem (onde nasce
 /// `fixadores/`); sem ela não há onde gravar as peças.
 pub fn preencher_furos(asm: &mut Assembly, dir: Option<&Path>, cache: &mut PartCache, op: &OpcoesFixadores) -> Result<RelatorioFixadores, String> {
+    preencher_com(asm, dir, cache, op, biblioteca::publica())
+}
+
+/// Como [`preencher_furos`], com as famílias de `lib` (a pública mesclada com empresa e usuário).
+pub fn preencher_com(asm: &mut Assembly, dir: Option<&Path>, cache: &mut PartCache, op: &OpcoesFixadores, lib: &Biblioteca) -> Result<RelatorioFixadores, String> {
     let dir = dir.ok_or("salve a montagem antes: as peças dos fixadores são gravadas na pasta dela")?;
-    let fam_p = biblioteca::familia(&op.familia_parafuso).filter(|f| f.tipo.e_parafuso()).ok_or_else(|| format!("família de parafuso desconhecida: {}", op.familia_parafuso))?;
-    let fam_arr = biblioteca::familia(&op.familia_arruela);
-    let fam_porca = biblioteca::familia(&op.familia_porca);
+    let fam_p = lib.familia(&op.familia_parafuso).filter(|f| f.tipo.e_parafuso()).ok_or_else(|| format!("família de parafuso desconhecida: {}", op.familia_parafuso))?;
+    let fam_arr = lib.familia(&op.familia_arruela);
+    let fam_porca = lib.familia(&op.familia_porca);
     let mut rel = RelatorioFixadores::default();
 
     // 1) furos candidatos de todos os componentes
@@ -139,35 +193,43 @@ pub fn preencher_furos(asm: &mut Assembly, dir: Option<&Path>, cache: &mut PartC
         };
         for r in fenkra_solidos::hole_table(&lp.doc) {
             let roscado = !r.thread.trim().is_empty();
+            let dir_w = unit(pl.dir(r.dir));
+            let boca = pl.point(r.pos);
             let (tamanho, ancora) = if roscado {
-                match tamanho_da_rosca(&r.thread) {
+                match tamanho_da_rosca(fam_p, &r.thread) {
                     Some(t) => (Some(t), true),
                     None => {
-                        rel.avisos.push(format!("{nome}: rosca {} sem tamanho métrico na biblioteca", r.thread.trim()));
+                        let m = format!("{nome}: rosca {} sem tamanho na família {}", r.thread.trim(), fam_p.norma);
+                        rel.marcas.push(MarcaFuro { componente: nome.clone(), pos: boca, dir: dir_w, diametro: r.diameter, estado: EstadoFuro::SemTamanho(m.clone()) });
+                        rel.avisos.push(m);
                         continue;
                     }
                 }
             } else if r.through {
-                match casa_folga(r.diameter, op.folga) {
-                    Some(t) => (Some(t.to_string()), true),
-                    None => (casa_outra_folga(r.diameter).map(str::to_string), false),
-                }
+                reconhecer(fam_p, r.diameter, op.folga)
             } else {
                 // furo cego liso: não recebe fixador
                 continue;
             };
-            let dir_w = unit(pl.dir(r.dir));
-            let boca = pl.point(r.pos);
             let espessura = if roscado && !r.through {
                 Some(r.depth)
             } else {
                 lp.shape.as_ref().and_then(|s| espessura_ao_longo(s, r.pos, r.dir, r.diameter))
             };
             let Some(espessura) = espessura.filter(|e| *e > 1e-6) else {
-                rel.avisos.push(format!("{nome}: não foi possível medir a espessura do furo Ø{}", num(r.diameter)));
+                let m = format!("{nome}: não foi possível medir a espessura do furo Ø{}", num(r.diameter));
+                rel.marcas.push(MarcaFuro { componente: nome.clone(), pos: boca, dir: dir_w, diametro: r.diameter, estado: EstadoFuro::SemTamanho(m.clone()) });
+                rel.avisos.push(m);
                 continue;
             };
-            furos.push(Furo { comp: id, nome: nome.clone(), boca, dir: dir_w, diametro: r.diameter, espessura, roscado, tamanho, ancora });
+            // o rebaixo ou o cone tem de estar centrado no furo; se o centro não bate, não se insere deslocado
+            if matches!(r.forma, FormaFuro::Rebaixo | FormaFuro::Escareado) && lp.shape.as_ref().is_some_and(|s| !boca_concentrica(s, &r)) {
+                let m = format!("{nome}: a boca do furo Ø{} não é concêntrica com o furo; fixador não inserido", num(r.diameter));
+                rel.marcas.push(MarcaFuro { componente: nome.clone(), pos: boca, dir: dir_w, diametro: r.diameter, estado: EstadoFuro::SemTamanho(m.clone()) });
+                rel.avisos.push(m);
+                continue;
+            }
+            furos.push(Furo { comp: id, nome: nome.clone(), boca, dir: dir_w, diametro: r.diameter, espessura, roscado, tamanho, ancora, forma: r.forma, d_boca: r.d_boca, prof_boca: r.prof_boca, angulo: r.angulo });
         }
     }
 
@@ -198,17 +260,20 @@ pub fn preencher_furos(asm: &mut Assembly, dir: Option<&Path>, cache: &mut PartC
         pilha.sort_by_key(|f| ordem(f.comp));
 
         if let Some(f) = pilha.iter().find(|f| f.tamanho.is_none()) {
-            rel.avisos.push(format!("{}: furo Ø{} sem tamanho métrico compatível (folga {})", f.nome, num(f.diametro), nome_folga(op.folga)));
+            let m = format!("{}: furo Ø{} sem tamanho compatível na família {} (folga {})", f.nome, num(f.diametro), fam_p.norma, nome_folga(op.folga));
+            recusa(&mut rel, &pilha, m);
             continue;
         }
         let Some(ancora) = pilha.iter().find(|f| f.ancora) else {
             let f = &pilha[0];
-            rel.avisos.push(format!("{}: furo Ø{} não casa com a folga {} (é outra folga de {})", f.nome, num(f.diametro), nome_folga(op.folga), f.tamanho.as_deref().unwrap_or("?")));
+            let m = format!("{}: furo Ø{} não casa com a folga {} (é outra folga de {})", f.nome, num(f.diametro), nome_folga(op.folga), f.tamanho.as_deref().unwrap_or("?"));
+            recusa(&mut rel, &pilha, m);
             continue;
         };
         let desig = ancora.tamanho.clone().unwrap_or_default();
         if pilha.iter().any(|f| f.tamanho.as_deref() != Some(desig.as_str())) {
-            rel.avisos.push(format!("{}: furos coaxiais de tamanhos diferentes ({})", ancora.nome, pilha.iter().map(|f| f.tamanho.clone().unwrap_or_default()).collect::<Vec<_>>().join(", ")));
+            let m = format!("{}: furos coaxiais de tamanhos diferentes ({})", ancora.nome, pilha.iter().map(|f| f.tamanho.clone().unwrap_or_default()).collect::<Vec<_>>().join(", "));
+            recusa(&mut rel, &pilha, m);
             continue;
         }
         let ids: Vec<Id> = pilha.iter().map(|f| f.comp).collect();
@@ -218,11 +283,13 @@ pub fn preencher_furos(asm: &mut Assembly, dir: Option<&Path>, cache: &mut PartC
         let ocupado = eixos_existentes.iter().any(|(c, p, d)| !ids.contains(c) && colineares(p0, u, *p, *d) && e_hardware(asm, cache, dir, *c));
         if ocupado {
             rel.pulados += 1;
+            rel.marcas.extend(pilha.iter().map(|f| f.marca(EstadoFuro::JaTem)));
             continue;
         }
 
         let Some(t_p) = fam_p.tamanho(&desig) else {
-            rel.avisos.push(format!("{}: {} não tem o tamanho {desig}", ancora.nome, fam_p.norma));
+            let m = format!("{}: {} não tem o tamanho {desig}", ancora.nome, fam_p.norma);
+            recusa(&mut rel, &pilha, m);
             continue;
         };
         let passo = t_p.valor("P").unwrap_or(0.);
@@ -261,13 +328,39 @@ pub fn preencher_furos(asm: &mut Assembly, dir: Option<&Path>, cache: &mut PartC
         let com_porca = com_porca && altura_porca.is_some();
         let (w1, w2, m) = (h1.unwrap_or(0.), if com_porca { h2.unwrap_or(0.) } else { 0. }, if com_porca { altura_porca.unwrap_or(0.) } else { 0. });
 
+        // assento: a cabeça (ou a arruela sob ela) desce até o fundo do rebaixo ou do cone da boca de
+        // entrada; o mesmo vale para a porca (ou a arruela dela) na boca de saída
+        let cos30 = 30_f64.to_radians().cos();
+        let d_cabeca = t_p.valor("dk").or_else(|| t_p.valor("s").map(|s| s / cos30)).unwrap_or(0.);
+        let d_arruela = fam_arr.and_then(|f| f.tamanho(&desig)).and_then(|t| t.valor("d2"));
+        let d_porca = fam_porca.and_then(|f| f.tamanho(&desig)).and_then(|t| t.valor("s")).map(|s| s / cos30);
+        let item_ent = if h1.is_some() { d_arruela.unwrap_or(d_cabeca) } else { d_cabeca };
+        let item_sai = if com_porca { if h2.is_some() { d_arruela.or(d_porca) } else { d_porca } } else { None };
+        let mut recuos = [0.; 2];
+        for (k, (f, ponto, item)) in [(&pilha[ini.1], entrada, Some(item_ent)), (&pilha[fim.1], saida, item_sai)].into_iter().enumerate() {
+            let Some(item) = item else { continue };
+            match assento(f, ponto, item) {
+                Ok(z) => recuos[k] = z,
+                Err(e) => rel.avisos.push(e),
+            }
+        }
+        let desloca = |o: V3, k: f64| [0, 1, 2].map(|i| o[i] + u[i] * k);
+        let (entrada, saida) = (desloca(entrada, recuos[0]), desloca(saida, -recuos[1]));
+        let pega = pega - recuos[0] - recuos[1];
+        if pega <= 1e-6 {
+            let m = format!("{}: o rebaixo come toda a espessura da pilha; nada para o fixador prender", ancora.nome);
+            recusa(&mut rel, &pilha, m);
+            continue;
+        }
+
         let serie = fam_p.comprimentos_de(t_p);
         let comprimento = if roscada {
             // profundidade útil arredondada para baixo
             match serie.iter().copied().filter(|l| *l <= pega + w1 + 1e-9).last() {
                 Some(l) => l,
                 None => {
-                    rel.avisos.push(format!("{}: profundidade útil de {} mm é menor que o menor {} {desig} da série", ancora.nome, num(pega), fam_p.norma));
+                    let m = format!("{}: profundidade útil de {} mm é menor que o menor {} {desig} da série", ancora.nome, num(pega), fam_p.norma);
+                    recusa(&mut rel, &pilha, m);
                     continue;
                 }
             }
@@ -283,8 +376,27 @@ pub fn preencher_furos(asm: &mut Assembly, dir: Option<&Path>, cache: &mut PartC
             }
         };
 
+        let comprimento = match op.comprimento.and_then(|l| mais_proximo(&serie, l)) {
+            Some(l) => {
+                if (l - comprimento).abs() > 1e-9 && !roscada && l < pega + w1 + w2 + m {
+                    rel.avisos.push(format!("{}: L{} não atravessa a pilha (pega + arruelas + porca = {} mm)", ancora.nome, num(l), num(((pega + w1 + w2 + m) * 10.).round() / 10.)));
+                }
+                l
+            }
+            None => comprimento,
+        };
+        // ponta do parafuso: a cabeça apoia w1 para fora da face de entrada e o corpo segue para dentro
+        let ponta = [0, 1, 2].map(|i| entrada[i] + u[i] * (comprimento - w1));
+        let entra = EstadoFuro::Entra { tamanho: desig.clone(), comprimento, ponta, eixo: u, serie: serie.clone() };
+        if op.so_previa {
+            rel.marcas.extend(pilha.iter().map(|f| f.marca(entra.clone())));
+            rel.conta(format!("{desig}x{}", num(comprimento)));
+            continue;
+        }
+
         // 4) peças e restrições
-        let mut peca = |fam: &Familia, t: &Tamanho, l: Option<f64>| -> Result<(String, String), String> { arquivo_fixador(dir, fam, t, l, &mut arquivos) };
+        let mut velhos: Vec<String> = vec![];
+        let mut peca = |fam: &Familia, t: &Tamanho, l: Option<f64>| -> Result<(String, String), String> { arquivo_fixador(dir, fam, t, l, &mut arquivos, &mut velhos) };
         let (arq_parafuso, nome_parafuso) = peca(fam_p, t_p, Some(comprimento))?;
         let pasta = *grupo.get_or_insert_with(|| asm.add_group(GRUPO, None));
 
@@ -343,6 +455,8 @@ pub fn preencher_furos(asm: &mut Assembly, dir: Option<&Path>, cache: &mut PartC
                 rel.porcas += 1;
             }
         }
+        rel.avisos.extend(velhos);
+        rel.marcas.extend(pilha.iter().map(|f| f.marca(entra.clone())));
         rel.conta(format!("{desig}x{}", num(comprimento)));
     }
     Ok(rel)
@@ -392,7 +506,9 @@ fn trava_de_giro(asm: &mut Assembly, a: Id, b: Id, eixo: (V3, V3)) {
 }
 
 /// Grava a peça do fixador (se ainda não existe) e devolve (caminho relativo à montagem, nome).
-fn arquivo_fixador(dir: &Path, fam: &Familia, t: &Tamanho, l: Option<f64>, memo: &mut HashMap<String, (String, String)>) -> Result<(String, String), String> {
+/// Peça já gravada que a biblioteca atual superou entra em `velhos` (o arquivo não é regravado:
+/// a montagem pode ter restrições apoiadas nele).
+fn arquivo_fixador(dir: &Path, fam: &Familia, t: &Tamanho, l: Option<f64>, memo: &mut HashMap<String, (String, String)>, velhos: &mut Vec<String>) -> Result<(String, String), String> {
     let base = match l {
         Some(l) => format!("{}_{}x{}", fam.id, t.designacao, num(l)),
         None => format!("{}_{}", fam.id, t.designacao),
@@ -400,10 +516,15 @@ fn arquivo_fixador(dir: &Path, fam: &Familia, t: &Tamanho, l: Option<f64>, memo:
     if let Some(r) = memo.get(&base) {
         return Ok(r.clone());
     }
-    let doc = fixador_documento(&fam.id, &t.designacao, l)?;
+    let doc = gerar(fam, &t.designacao, l)?;
     let rel = format!("fixadores/{base}.fkp");
     let destino = dir.join("fixadores").join(format!("{base}.fkp"));
-    if !destino.exists() {
+    if destino.exists() {
+        let lida = std::fs::read_to_string(&destino).ok().and_then(|j| Document::from_json(&j).ok());
+        if let Some(SituacaoSelo::Desatualizada(porque)) = lida.as_ref().map(situacao_do_selo) {
+            velhos.push(format!("{rel}: peça desatualizada ({porque}); apague o arquivo para gerar de novo"));
+        }
+    } else {
         std::fs::create_dir_all(dir.join("fixadores")).map_err(|e| format!("{}: {e}", dir.join("fixadores").display()))?;
         std::fs::write(&destino, doc.to_json()).map_err(|e| format!("{}: {e}", destino.display()))?;
     }
@@ -441,6 +562,71 @@ fn colineares(pa: V3, da: V3, pb: V3, db: V3) -> bool {
     norm([0, 1, 2].map(|i| d[i] - da[i] * k)) <= TOL_EIXO
 }
 
+/// Valor da série mais próximo de `l` (o maior, em empate). `None` com a série vazia.
+pub fn mais_proximo(serie: &[f64], l: f64) -> Option<f64> {
+    serie.iter().copied().min_by(|a, b| (a - l).abs().total_cmp(&(b - l).abs()).then(b.total_cmp(a)))
+}
+
+/// Recusa uma pilha: o aviso vai para a lista e cada furo dela ganha a marca com o motivo.
+fn recusa(rel: &mut RelatorioFixadores, pilha: &[Furo], motivo: String) {
+    rel.marcas.extend(pilha.iter().map(|f| f.marca(EstadoFuro::SemTamanho(motivo.clone()))));
+    rel.avisos.push(motivo);
+}
+
+/// Tamanho do furo passante e se ele é âncora da pilha. Primeiro vale a faixa `furo_min..furo_max`
+/// declarada pela família (prendedores sem folga de tabela); depois a folga escolhida dos métricos;
+/// por fim as outras folgas, que reconhecem o tamanho mas não ancoram.
+fn reconhecer(fam: &Familia, diametro: f64, folga: u8) -> (Option<String>, bool) {
+    let declarado = fam.tamanhos.iter().find(|t| t.furo_min.is_some() && fam.faixa_furo(t).is_some_and(|(a, b)| diametro >= a - TOL_DIAMETRO && diametro <= b + TOL_DIAMETRO));
+    if let Some(t) = declarado {
+        return (Some(t.designacao.clone()), true);
+    }
+    match casa_folga(diametro, folga) {
+        Some(t) => (Some(t.to_string()), true),
+        None => (casa_outra_folga(diametro).map(str::to_string), false),
+    }
+}
+
+/// Profundidade em que um item de diâmetro `item` assenta na boca do furo `f` quando a boca da pilha
+/// é a dele: no fundo do rebaixo, ou no cone onde o diâmetro dele é igual ao do item. Zero: na face.
+/// `Err` quando o item não cabe (assenta na face e o aviso explica).
+fn assento(f: &Furo, ponto: V3, item: f64) -> Result<f64, String> {
+    if f.forma == FormaFuro::Reto || norm(sub(f.boca, ponto)) > 1e-3 || item <= 0. {
+        return Ok(0.);
+    }
+    match f.forma {
+        // contrafuro: o fundo é cônico e a cabeça apoia no ombro do rebaixo
+        FormaFuro::Rebaixo | FormaFuro::Contrafuro if item <= f.d_boca + 1e-6 => Ok(f.prof_boca),
+        FormaFuro::Escareado if item < f.d_boca - 1e-6 => Ok(prof_escareado(f.d_boca, item.max(f.diametro), f.angulo)),
+        _ => Err(format!("{}: o item de Ø{} não cabe na boca de Ø{}; assenta na face", f.nome, num(item), num(f.d_boca))),
+    }
+}
+
+/// O rebaixo (ou cone) é concêntrico com o furo? Quatro retas paralelas ao eixo descem a meia
+/// distância entre a parede do furo e a do rebaixo; todas têm de achar o fundo na profundidade
+/// esperada. Rebaixo deslocado deixa algumas retas na face (profundidade zero).
+fn boca_concentrica(forma: &Shape, r: &fenkra_solidos::HoleRow) -> bool {
+    let dir = unit(r.dir);
+    let (e1, e2) = (any_perp(dir), cross(dir, any_perp(dir)));
+    let raio = (r.d_boca / 2. + r.diameter / 2.) / 2.;
+    let esperado = match r.forma {
+        FormaFuro::Rebaixo => r.prof_boca,
+        FormaFuro::Escareado => prof_escareado(r.d_boca, 2. * raio, r.angulo),
+        _ => return true,
+    };
+    let fora = 1.;
+    for v in [e1, e2, e1.map(|x| -x), e2.map(|x| -x)] {
+        let q: V3 = [0, 1, 2].map(|i| r.pos[i] + v[i] * raio - dir[i] * fora);
+        // sem acerto: a reta passou direto (peça fina demais ao redor); não prova nada
+        if let Ok(Some((pt, _))) = forma.ray_hit(q, dir) {
+            if (dot(sub(pt, r.pos), dir) - esperado).abs() > 0.2 {
+                return false;
+            }
+        }
+    }
+    true
+}
+
 /// Tamanho cuja folga escolhida casa com o diâmetro do furo.
 fn casa_folga(diametro: f64, folga: u8) -> Option<&'static str> {
     hardware::METRIC.iter().find(|m| (m.clearance[folga.min(2) as usize] - diametro).abs() <= TOL_DIAMETRO).map(|m| m.name)
@@ -451,8 +637,12 @@ fn casa_outra_folga(diametro: f64) -> Option<&'static str> {
     hardware::METRIC.iter().find(|m| m.clearance.iter().any(|c| (c - diametro).abs() <= TOL_DIAMETRO)).map(|m| m.name)
 }
 
-/// "M6x1", "M8" → "M6", "M8" (só se o tamanho existe na tabela métrica).
-fn tamanho_da_rosca(rosca: &str) -> Option<String> {
+/// Designação do tamanho da família para a rosca do furo: a própria designação livre ("1/4-28 UNF")
+/// quando a família a tem; senão o métrico ("M6x1", "M8" → "M6", "M8") da tabela de roscas.
+fn tamanho_da_rosca(fam: &Familia, rosca: &str) -> Option<String> {
+    if let Some(t) = fam.tamanho(rosca) {
+        return Some(t.designacao.clone());
+    }
     let r = rosca.trim().strip_prefix(['M', 'm'])?;
     let d: f64 = r.chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect::<String>().parse().ok()?;
     hardware::METRIC.iter().find(|m| m.name[1..].parse::<f64>().is_ok_and(|x| (x - d).abs() < 1e-6)).map(|m| m.name.to_string())
@@ -515,6 +705,11 @@ mod tests {
     /// Placa de 60 × 60 com `esp` mm de espessura (z de 0 a esp) e um furo de Ø`diametro` no centro,
     /// aberto pelo topo. `roscado`: furo cego com rosca "M6" de `prof` mm; sem ele, passante.
     fn placa(esp: f64, diametro: f64, roscado: Option<f64>) -> Document {
+        placa_com_boca(esp, diametro, roscado, HoleKind::Simples)
+    }
+
+    /// Como `placa`, com a boca do furo escolhida (rebaixo, escareado).
+    fn placa_com_boca(esp: f64, diametro: f64, roscado: Option<f64>, kind: HoleKind) -> Document {
         let mut d = Document::new("Placa");
         let mut n = 7_000_000u64;
         let mut al = || {
@@ -534,7 +729,7 @@ mod tests {
             Some(prof) => (Extent::Blind(num(prof)), Some("M6".to_string())),
             None => (Extent::ThroughAll, None),
         };
-        d.add_feature(FeatureKind::Hole(Hole { sketch: sc, kind: HoleKind::Simples, diameter: num(diametro), depth, thread, thread_modeled: false, standard: None, points: vec![], dir: None, reverse: false, tip: None, taper: "0".into(), left_hand: false }));
+        d.add_feature(FeatureKind::Hole(Hole { sketch: sc, kind: kind, diameter: num(diametro), depth, thread, thread_modeled: false, standard: None, points: vec![], dir: None, reverse: false, tip: None, taper: "0".into(), left_hand: false }));
         d
     }
 
@@ -753,6 +948,26 @@ mod tests {
     }
 
     #[test]
+    fn peca_gravada_com_biblioteca_antiga_avisa_sem_regravar() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let dir = pasta("selo_velho");
+        let (mut a, _, _) = pilha_de_placas(&dir, &placa(10., 6.6, None));
+        // um M6x35 de uma geração antiga já está na pasta
+        std::fs::create_dir_all(dir.join("fixadores")).unwrap();
+        let mut velho = fenkra_solidos::fixadores::fixador_documento("iso4762", "M6", Some(35.)).unwrap();
+        velho.props.custom.iter_mut().find(|(k, _)| k.starts_with("Biblioteca: geração")).unwrap().1 = "1".into();
+        let arq = dir.join("fixadores").join("iso4762_M6x35.fkp");
+        std::fs::write(&arq, velho.to_json()).unwrap();
+        let antes = std::fs::read_to_string(&arq).unwrap();
+        let rel = preencher_furos(&mut a, Some(&dir), &mut PartCache::default(), &OpcoesFixadores::default()).unwrap();
+        assert_eq!(rel.por_tamanho, vec![("M6x35".to_string(), 1)], "{rel:?}");
+        assert!(rel.avisos.iter().any(|m| m.contains("iso4762_M6x35.fkp") && m.contains("desatualizada")), "{:?}", rel.avisos);
+        assert_eq!(std::fs::read_to_string(&arq).unwrap(), antes, "não regrava");
+    }
+
+    #[test]
     fn furo_sem_tamanho_compativel_avisa() {
         if !fenkra_kernel::AVAILABLE {
             return;
@@ -767,6 +982,192 @@ mod tests {
         assert!(preencher_furos(&mut a, None, &mut cache, &OpcoesFixadores::default()).is_err(), "sem pasta não grava");
     }
 
+    /// Família de teste (dados inventados): parafuso com faixa de furo própria, sem folga de tabela.
+    const AERO_TESTE: &str = r#"{
+      "id": "teste_pol", "nome": "Parafuso de teste", "norma": "TESTE 1", "revisao": "2020",
+      "gerador": "parafuso_sextavado", "nivel": "A", "licenca": "teste",
+      "fontes": [{ "rotulo": "teste", "url": "https://exemplo.invalid/t" }],
+      "campos": ["P", "s", "k"],
+      "tamanhos": [
+        { "designacao": "-06", "d_nominal": 4.8, "valores": { "P": 0.8, "s": 8, "k": 3.5 }, "confirmado_por": 1,
+          "comprimentos": [8, 10, 12], "furo_min": 4.8, "furo_max": 4.95 }
+      ]
+    }"#;
+
+    fn biblioteca_de_teste() -> Biblioteca {
+        let usuario = Biblioteca::de_jsons(biblioteca::Camada::Usuario, &[("teste.json", AERO_TESTE)]).unwrap();
+        Biblioteca::mesclar(&[biblioteca::publica().clone(), usuario])
+    }
+
+    #[test]
+    fn furo_de_49_mm_e_reconhecido_pela_faixa_do_prendedor() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let dir = pasta("faixa_furo");
+        std::fs::write(dir.join("placa.fkp"), placa(5., 4.9, None).to_json()).unwrap();
+        let monta = || {
+            let mut a = Assembly::new("Faixa");
+            a.add_component("Placa", NodeKind::Part { path: "placa.fkp".into() }, Placement::default(), None);
+            a
+        };
+        let lib = biblioteca_de_teste();
+        let op = OpcoesFixadores { familia_parafuso: "teste_pol".into(), arruela: false, porca: false, ..Default::default() };
+        // com a família que declara furo_min..furo_max, o Ø4,9 vira "-06"; pega 5 + 2 passos = 6,6 → L8
+        let rel = preencher_com(&mut monta(), Some(&dir), &mut PartCache::default(), &op, &lib).unwrap();
+        assert_eq!(rel.por_tamanho, vec![("-06x8".to_string(), 1)], "{rel:?}");
+        assert!(matches!(&rel.marcas[..], [MarcaFuro { estado: EstadoFuro::Entra { tamanho, comprimento, .. }, .. }] if tamanho == "-06" && *comprimento == 8.), "{:?}", rel.marcas);
+        // com a família métrica o mesmo furo fica sem tamanho, e o motivo vai para a marca do furo
+        let rel = preencher_furos(&mut monta(), Some(&dir), &mut PartCache::default(), &OpcoesFixadores::default()).unwrap();
+        assert_eq!(rel.fixadores, 0);
+        let [m] = &rel.marcas[..] else { panic!("{:?}", rel.marcas) };
+        assert!(matches!(&m.estado, EstadoFuro::SemTamanho(t) if t.contains("4.9")), "{m:?}");
+        assert_eq!(m.diametro, 4.9);
+        assert!(m.pos[2] > 4.9 && m.dir[2] < -0.99, "boca em cima, sentido para dentro: {:?} {:?}", m.pos, m.dir);
+    }
+
+    #[test]
+    fn previa_marca_os_furos_sem_inserir_nem_gravar() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let dir = pasta("previa");
+        let (mut a, _, _) = pilha_de_placas(&dir, &placa(10., 6.6, None));
+        let antes = a.nodes.len();
+        let op = OpcoesFixadores { so_previa: true, ..Default::default() };
+        let rel = preencher_furos(&mut a, Some(&dir), &mut PartCache::default(), &op).unwrap();
+        assert_eq!((a.nodes.len(), a.mates.len()), (antes, 0));
+        assert!(!dir.join("fixadores").exists(), "a prévia não grava peças");
+        assert_eq!(rel.por_tamanho, vec![("M6x35".to_string(), 1)], "{rel:?}");
+        // um furo por placa, os dois entram
+        assert_eq!(rel.marcas.len(), 2);
+        assert!(rel.marcas.iter().all(|m| matches!(&m.estado, EstadoFuro::Entra { tamanho, comprimento, .. } if tamanho == "M6" && *comprimento == 35.)));
+        // aplicar e prever de novo: os dois furos já têm fixador
+        let real = preencher_furos(&mut a, Some(&dir), &mut PartCache::default(), &OpcoesFixadores::default()).unwrap();
+        assert_eq!(real.fixadores, 1);
+        let de_novo = preencher_furos(&mut a, Some(&dir), &mut PartCache::default(), &op).unwrap();
+        assert_eq!(de_novo.marcas.len(), 2);
+        assert!(de_novo.marcas.iter().all(|m| m.estado == EstadoFuro::JaTem), "{:?}", de_novo.marcas);
+    }
+
+    #[test]
+    fn cabeca_assenta_no_fundo_do_rebaixo() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let dir = pasta("rebaixo");
+        std::fs::write(dir.join("placa.fkp"), placa_com_boca(10., 6.6, None, HoleKind::Rebaixado { diameter: "11".into(), depth: "6.4".into() }).to_json()).unwrap();
+        let mut a = Assembly::new("Rebaixo");
+        a.add_component("Placa", NodeKind::Part { path: "placa.fkp".into() }, Placement::default(), None);
+        // sem arruela a cabeça (Ø10) cabe no rebaixo (Ø11) e desce até z = 10 - 6,4 = 3,6
+        let op = OpcoesFixadores { arruela: false, ..Default::default() };
+        let rel = preencher_furos(&mut a, Some(&dir), &mut PartCache::default(), &op).unwrap();
+        // pega 10 - 6,4 = 3,6 + porca 5,2 + 2 passos = 10,8 → L12
+        assert_eq!(rel.por_tamanho, vec![("M6x12".to_string(), 1)], "{rel:?}");
+        assert!(rel.avisos.is_empty(), "{:?}", rel.avisos);
+        assert!(solve::solve(&mut a).converged);
+        let p = pos(&a, "iso4762_M6x12.fkp");
+        assert!((p.origin[2] - 3.6).abs() < 0.01, "cabeça no fundo do rebaixo: {:?}", p.origin);
+        // a porca fica sob a placa (z = 0)
+        assert!(pos(&a, "iso4032_M6.fkp").origin[2].abs() < 0.01);
+
+        // com arruela (Ø12 > Ø11) o item não cabe: assenta na face e avisa
+        let mut b = Assembly::new("Rebaixo 2");
+        b.add_component("Placa", NodeKind::Part { path: "placa.fkp".into() }, Placement::default(), None);
+        let rel = preencher_furos(&mut b, Some(&dir), &mut PartCache::default(), &OpcoesFixadores::default()).unwrap();
+        assert!(rel.avisos.iter().any(|m| m.contains("não cabe na boca")), "{:?}", rel.avisos);
+        assert!(solve::solve(&mut b).converged);
+        assert!((pos(&b, "iso4762_M6x25.fkp").origin[2] - 11.6).abs() < 0.01, "{:?}", pos(&b, "iso4762_M6x25.fkp").origin);
+    }
+
+    #[test]
+    fn cabeca_assenta_no_cone_do_escareado() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let dir = pasta("escareado");
+        // cone de 90° de Ø12 em Ø6,6; a cabeça de Ø10 apoia onde o cone tem Ø10: (12 - 10) / 2 = 1 mm abaixo da face
+        std::fs::write(dir.join("placa.fkp"), placa_com_boca(10., 6.6, None, HoleKind::Escareado { diameter: "12".into(), angle: "90".into() }).to_json()).unwrap();
+        let mut a = Assembly::new("Cone");
+        a.add_component("Placa", NodeKind::Part { path: "placa.fkp".into() }, Placement::default(), None);
+        let op = OpcoesFixadores { arruela: false, ..Default::default() };
+        let rel = preencher_furos(&mut a, Some(&dir), &mut PartCache::default(), &op).unwrap();
+        assert_eq!(rel.fixadores, 1, "{rel:?}");
+        assert!(solve::solve(&mut a).converged);
+        let p = a.nodes.iter().find(|n| matches!(&n.kind, NodeKind::Part { path } if path.contains("iso4762"))).unwrap().placement;
+        assert!((p.origin[2] - 9.).abs() < 0.01, "{:?}", p.origin);
+    }
+
+    #[test]
+    fn rebaixo_fora_do_centro_e_recusado() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let dir = pasta("fora_do_centro");
+        std::fs::write(dir.join("placa.fkp"), placa_com_boca(10., 6.6, None, HoleKind::Rebaixado { diameter: "11".into(), depth: "6.4".into() }).to_json()).unwrap();
+        let mut cache = PartCache::default();
+        let lp = cache.get(&full_path(Some(&dir), "placa.fkp"), true).unwrap();
+        let linha = fenkra_solidos::hole_table(&lp.doc).remove(0);
+        let forma = lp.shape.as_ref().unwrap();
+        assert!(boca_concentrica(forma, &linha));
+        // centro do furo 2 mm fora do centro do rebaixo: algumas retas caem na face
+        let mut torto = linha.clone();
+        torto.pos[0] += 2.;
+        assert!(!boca_concentrica(forma, &torto));
+        // escareado concêntrico passa no mesmo teste
+        std::fs::write(dir.join("cone.fkp"), placa_com_boca(10., 6.6, None, HoleKind::Escareado { diameter: "12".into(), angle: "90".into() }).to_json()).unwrap();
+        let lp = cache.get(&full_path(Some(&dir), "cone.fkp"), true).unwrap();
+        let linha = fenkra_solidos::hole_table(&lp.doc).remove(0);
+        assert!(boca_concentrica(lp.shape.as_ref().unwrap(), &linha));
+    }
+
+    #[test]
+    fn comprimento_pedido_para_na_serie_e_a_ponta_acompanha() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let dir = pasta("alca");
+        let (mut a, _, _) = pilha_de_placas(&dir, &placa(10., 6.6, None));
+        let previa = |a: &mut Assembly, l: Option<f64>| {
+            let op = OpcoesFixadores { so_previa: true, comprimento: l, ..Default::default() };
+            preencher_furos(a, Some(&dir), &mut PartCache::default(), &op).unwrap()
+        };
+        let ponta_e_l = |rel: &RelatorioFixadores| match &rel.marcas[0].estado {
+            EstadoFuro::Entra { comprimento, ponta, serie, .. } => (*comprimento, *ponta, serie.clone()),
+            e => panic!("{e:?}"),
+        };
+        // automático: M6x35, e a série do M6 chega à ponta pelos dois lados
+        let (l, ponta, serie) = ponta_e_l(&previa(&mut a, None));
+        assert_eq!(l, 35.);
+        assert_eq!((serie.first(), serie.last()), (Some(&12.), Some(&60.)));
+        // a ponta fica L abaixo da cabeça: a cabeça apoia 1,6 acima da face de cima (z = 20)
+        assert!((ponta[2] - (21.6 - 35.)).abs() < 1e-6 && ponta[0].hypot(ponta[1]) < 1e-6, "{ponta:?}");
+        // pedido fora da série cai no valor mais próximo existente
+        assert_eq!(ponta_e_l(&previa(&mut a, Some(37.))).0, 35.);
+        assert_eq!(ponta_e_l(&previa(&mut a, Some(38.))).0, 40.);
+        assert_eq!(ponta_e_l(&previa(&mut a, Some(1000.))).0, 60.);
+        let (_, p40, _) = ponta_e_l(&previa(&mut a, Some(40.)));
+        assert!((p40[2] - (21.6 - 40.)).abs() < 1e-6);
+        // curto demais para atravessar a pilha avisa, mas obedece
+        let rel = previa(&mut a, Some(20.));
+        assert_eq!(ponta_e_l(&rel).0, 20.);
+        assert!(rel.avisos.iter().any(|m| m.contains("não atravessa")), "{:?}", rel.avisos);
+        // e vale na aplicação de verdade
+        let op = OpcoesFixadores { comprimento: Some(40.), ..Default::default() };
+        let real = preencher_furos(&mut a, Some(&dir), &mut PartCache::default(), &op).unwrap();
+        assert_eq!(real.por_tamanho, vec![("M6x40".to_string(), 1)], "{real:?}");
+    }
+
+    #[test]
+    fn mais_proximo_da_serie() {
+        let s = [12., 16., 20.];
+        assert_eq!(mais_proximo(&s, 14.), Some(16.), "empate vai para o maior");
+        assert_eq!(mais_proximo(&s, 13.), Some(12.));
+        assert_eq!(mais_proximo(&s, 0.), Some(12.));
+        assert_eq!(mais_proximo(&s, 99.), Some(20.));
+        assert_eq!(mais_proximo(&[], 5.), None);
+    }
+
     #[test]
     fn auxiliares_de_tamanho_e_eixo() {
         assert_eq!(casa_folga(6.6, 1), Some("M6"));
@@ -774,10 +1175,11 @@ mod tests {
         assert_eq!(casa_folga(6.64, 1), Some("M6"));
         assert_eq!(casa_outra_folga(7.0), Some("M6"));
         assert_eq!(casa_outra_folga(7.3), None);
-        assert_eq!(tamanho_da_rosca("M8x1.25").as_deref(), Some("M8"));
-        assert_eq!(tamanho_da_rosca("M6").as_deref(), Some("M6"));
-        assert_eq!(tamanho_da_rosca("M7"), None);
-        assert_eq!(tamanho_da_rosca("G1/4"), None);
+        let iso = biblioteca::familia("iso4762").unwrap();
+        assert_eq!(tamanho_da_rosca(iso, "M8x1.25").as_deref(), Some("M8"));
+        assert_eq!(tamanho_da_rosca(iso, "M6").as_deref(), Some("M6"));
+        assert_eq!(tamanho_da_rosca(iso, "M7"), None);
+        assert_eq!(tamanho_da_rosca(iso, "G1/4"), None);
         // colinear: sentido contrário também vale; 0,1 mm de desvio ou 1° não
         assert!(colineares([0., 0., 0.], [0., 0., 1.], [0., 0., 30.], [0., 0., -1.]));
         assert!(!colineares([0., 0., 0.], [0., 0., 1.], [0.1, 0., 5.], [0., 0., 1.]));
