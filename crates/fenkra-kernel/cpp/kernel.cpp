@@ -1089,7 +1089,8 @@ rust::Vec<double> mass_props(const Shape& s) {
     GProp_GProps vp, sp;
     BRepGProp::VolumeProperties(s.s, vp);
     BRepGProp::SurfaceProperties(s.s, sp);
-    gp_Pnt c = vp.CentreOfMass();
+    // superfície aberta não tem volume: o centro de massa do volume seria zero, longe da peça
+    gp_Pnt c = TopExp_Explorer(s.s, TopAbs_SOLID).More() ? vp.CentreOfMass() : sp.CentreOfMass();
     for (double x : {vp.Mass(), sp.Mass(), c.X(), c.Y(), c.Z()}) v.push_back(x);
     return v;
 }

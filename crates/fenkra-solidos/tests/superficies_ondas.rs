@@ -34,16 +34,16 @@ fn plano_y(d: &mut Document, y: &str) -> SurfRef {
 fn buraco_em_esfera(d: &mut Document) -> (Vec<Id>, Vec<Id>) {
     let esfera = d.add_geometry(RefKind::SurfSphere { center: PointRef::Origin, radius: s("100") });
     let xy = SurfRef::Plane(PlaneRef::Origin(OriginPlane::XY));
-    let topo = d.add_geometry(RefKind::SurfSplit { surface: SurfRef::Ref(esfera), tool: xy, flip: false, more: vec![], curve: None });
+    let topo = d.add_geometry(RefKind::SurfSplit { surface: SurfRef::Ref(esfera), tool: xy, flip: false, more: vec![], curve: None, more_flip: vec![] });
     let (xp, xm) = (plano_x(d, "30"), plano_x(d, "-30"));
     let (yp, ym) = (plano_y(d, "-30"), plano_y(d, "30"));
     let (mut faces, mut arcos) = (vec![], vec![]);
     // (plano do lado, lado que fica; planos vizinhos, lados que ficam)
     for (corte, f, a, fa, b, fb) in [(xp, false, yp, false, ym, true), (xm, true, yp, false, ym, true), (yp, true, xp, true, xm, false), (ym, false, xp, true, xm, false)] {
-        let lado = d.add_geometry(RefKind::SurfSplit { surface: SurfRef::Ref(topo), tool: corte, flip: f, more: vec![], curve: None });
-        let m1 = d.add_geometry(RefKind::SurfSplit { surface: SurfRef::Ref(lado), tool: a, flip: fa, more: vec![], curve: None });
-        let m2 = d.add_geometry(RefKind::SurfSplit { surface: SurfRef::Ref(m1), tool: b, flip: fb, more: vec![], curve: None });
-        let arco = d.add_geometry(RefKind::CurveIntersect { a: SurfRef::Ref(m2), b: corte, which: 0 });
+        let lado = d.add_geometry(RefKind::SurfSplit { surface: SurfRef::Ref(topo), tool: corte, flip: f, more: vec![], curve: None, more_flip: vec![] });
+        let m1 = d.add_geometry(RefKind::SurfSplit { surface: SurfRef::Ref(lado), tool: a, flip: fa, more: vec![], curve: None, more_flip: vec![] });
+        let m2 = d.add_geometry(RefKind::SurfSplit { surface: SurfRef::Ref(m1), tool: b, flip: fb, more: vec![], curve: None, more_flip: vec![] });
+        let arco = d.add_geometry(RefKind::CurveIntersect { a: SurfRef::Ref(m2), b: corte, which: 0, near: None });
         faces.push(m2);
         arcos.push(arco);
     }
@@ -208,7 +208,7 @@ fn topo_de(r: &RecomputeResult) -> [f64; 3] {
 }
 
 fn extrair(d: &mut Document, face: [f64; 3], prop: Propagation, complement: bool, expected: Option<u32>) -> Id {
-    d.add_geometry(RefKind::SurfExtract { face, owner: None, prop, complement, expected })
+    d.add_geometry(RefKind::SurfExtract { face, owner: None, prop, complement, expected, key: None })
 }
 
 #[test]
@@ -454,4 +454,97 @@ fn extrapolar_pela_borda_clicada_estende_apara_e_vai_ate_elemento() {
     assert!((topo(normal) - 40.).abs() < 1e-3, "{}", topo(normal));
     assert!((forma(&d, menos).mass().area - 400.).abs() < 1e-3);
     assert!(matches!(&r.status[&longe], Status::Error(m) if m.contains("não é borda")));
+}
+
+/// Tampa de cima de uma extrusão: ponto e chave dela.
+fn tampa(r: &RecomputeResult) -> ([f64; 3], FaceKey) {
+    let b = &r.bodies[0];
+    let f = (0..b.mesh.face_info.len()).find(|j| b.mesh.face_info[*j].dir[2] > 0.99).unwrap();
+    (b.mesh.face_info[f].point, b.face_key(f).unwrap())
+}
+
+#[test]
+fn extrair_e_face_de_entrada_seguem_dono_e_papel() {
+    let mut d = Document::new("t");
+    let cx = caixa(&mut d, "30");
+    let r = recompute(&d);
+    let (p, key) = tampa(&r);
+    let ex = d.add_geometry(RefKind::SurfExtract { face: p, owner: Some(cx), prop: Propagation::Nenhuma, complement: false, expected: None, key: Some(key) });
+    let multi = d.add_geometry(RefKind::SurfMulti { faces: vec![p], keys: vec![Some(key)] });
+    let of = d.add_geometry(RefKind::SurfOffset { surface: SurfRef::Face { point: p, normal: [0., 0., 1.], owner: Some(cx), key: Some(key) }, dist: s("3"), both: false, join: OffsetJoin::Automatico });
+    let sem = d.add_geometry(RefKind::SurfExtract { face: p, owner: Some(cx), prop: Propagation::Nenhuma, complement: false, expected: None, key: None });
+    let r = recompute(&d);
+    for x in [ex, multi, of, sem] {
+        ok(&r, x);
+    }
+    muda_altura(&mut d, cx, "50");
+    let r = recompute(&d);
+    for x in [ex, multi, of] {
+        ok(&r, x);
+    }
+    let z = |x: Id| forma(&d, x).mass().center[2];
+    assert!((z(ex) - 50.).abs() < 1e-6 && (z(multi) - 50.).abs() < 1e-6, "{}", z(ex));
+    assert!((z(of) - 53.).abs() < 1e-6, "{}", z(of));
+    // sem chave, o ponto ficou no ar: diz que perdeu, não pega outra face
+    assert!(matches!(&r.status[&sem], Status::Error(m) if m.contains("não existe mais")), "{:?}", r.status[&sem]);
+    d.delete(cx, false);
+    let r = recompute(&d);
+    assert!(matches!(&r.status[&ex], Status::Error(m) if m.starts_with("referência perdida")), "{:?}", r.status[&ex]);
+}
+
+#[test]
+fn intersecao_escolhe_por_ancora_e_numero_fora_da_lista_e_erro() {
+    let mut d = Document::new("t");
+    // o cilindro cortado pelo plano do eixo dá duas retas, em x = 10 e x = −10
+    let cil = d.add_geometry(RefKind::SurfCylinder { point: PointRef::Origin, dir: AxisRef::Origin(OriginAxis::Z), radius: s("10"), start: s("0"), end: s("30") });
+    let xz = SurfRef::Plane(PlaneRef::Origin(OriginPlane::XZ));
+    let cruza = |d: &mut Document, which, near| d.add_geometry(RefKind::CurveIntersect { a: SurfRef::Ref(cil), b: xz, which, near });
+    let (dir, esq, fora, solta) = (cruza(&mut d, 0, Some([10., 0., 5.])), cruza(&mut d, 0, Some([-10., 0., 5.])), cruza(&mut d, 7, None), cruza(&mut d, 0, None));
+    let r = recompute(&d);
+    let x = |i: Id| r.curves.iter().find(|c| c.id == i).unwrap().pts[0][0];
+    assert!((x(dir) - 10.).abs() < 1e-6 && (x(esq) + 10.).abs() < 1e-6, "{} {}", x(dir), x(esq));
+    assert!(matches!(&r.status[&fora], Status::Error(m) if m.contains("não existe")), "{:?}", r.status[&fora]);
+    assert!(r.notes[&solta].anchor.is_some(), "o número vira âncora");
+}
+
+#[test]
+fn dividir_tem_lado_por_elemento_e_avisa_quem_nao_cortou() {
+    let mut d = Document::new("t");
+    let f = faixa(&mut d);
+    let (z1, z2, longe) = (plano_z(&mut d, "10"), plano_z(&mut d, "20"), plano_z(&mut d, "500"));
+    // a normal aponta para +Z: flip = fica abaixo; o segundo corte guarda o lado dele
+    let meio = d.add_geometry(RefKind::SurfSplit { surface: SurfRef::Ref(f), tool: z2, flip: true, more: vec![z1], curve: None, more_flip: vec![false] });
+    let aviso = d.add_geometry(RefKind::SurfSplit { surface: SurfRef::Ref(f), tool: z2, flip: true, more: vec![longe], curve: None, more_flip: vec![false] });
+    let r = recompute(&d);
+    ok(&r, meio);
+    assert!(matches!(r.status[&meio], Status::Ok));
+    assert!((forma(&d, meio).mass().area - 200.).abs() < 1e-3, "{}", forma(&d, meio).mass().area);
+    assert!(matches!(&r.status[&aviso], Status::Warning(m) if m.contains("corte 2")), "{:?}", r.status[&aviso]);
+}
+
+#[test]
+fn projecao_parcial_informa_n_de_m_pontos() {
+    let mut d = Document::new("t");
+    let f = faixa(&mut d);
+    // a curva vai além da faixa: parte dos pontos segue reto sem encontrar nada
+    let pts = (0..=10).map(|i| PointRef::Fixed([i as f64 * 4., -5., 10.])).collect();
+    let c = d.add_geometry(RefKind::Polyline { points: pts, closed: false });
+    let p = d.add_geometry(RefKind::CurveProjectSurf { curve: CurveRef::Ref(c), surface: SurfRef::Ref(f), dir: Some(AxisRef::Origin(OriginAxis::Y)) });
+    let r = recompute(&d);
+    assert!(matches!(&r.status[&p], Status::Warning(m) if m.contains("parcial") && m.contains("6 de 11")), "{:?}", r.status[&p]);
+    assert_eq!(r.curves.iter().find(|x| x.id == p).unwrap().pts.len(), 6);
+}
+
+#[test]
+fn filete_de_aresta_de_superficie_nao_troca_de_aresta() {
+    let mut d = Document::new("t");
+    let a = faixa(&mut d);
+    let l = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([20., 0., 0.]), b: PointRef::Fixed([20., 20., 0.]), start: s("0"), end: s("0") });
+    let b = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(l), dir: AxisRef::Origin(OriginAxis::Z), length: s("30"), length2: s("0"), until: None, until2: None });
+    let j = d.add_geometry(RefKind::SurfJoin { items: vec![SurfRef::Ref(a), SurfRef::Ref(b)], tol: s("0.01"), curves: vec![] });
+    let bom = d.add_geometry(RefKind::SurfEdgeFillet { surface: SurfRef::Ref(j), edges: vec![[20., 0., 15.]], radius: s("3"), radius2: None });
+    let ruim = d.add_geometry(RefKind::SurfEdgeFillet { surface: SurfRef::Ref(j), edges: vec![[20., 0., 15.5], [20.5, 0., 15.]], radius: s("3"), radius2: None });
+    let r = recompute(&d);
+    ok(&r, bom);
+    assert!(matches!(&r.status[&ruim], Status::Error(m) if m.starts_with("referência perdida")), "{:?}", r.status[&ruim]);
 }

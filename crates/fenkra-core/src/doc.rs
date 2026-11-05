@@ -677,6 +677,9 @@ pub enum RefKind {
         /// faces que a extração tinha quando foi feita; mudou, vira aviso
         #[serde(default)]
         expected: Option<u32>,
+        /// chave v2 (ADR 0010): com ela a extração segue a face; sem ela vale o ponto
+        #[serde(default)]
+        key: Option<FaceKey>,
     },
     /// Superfície deslocada.
     SurfOffset {
@@ -759,11 +762,19 @@ pub enum RefKind {
         /// corte por uma curva (wireframe) sobre a superfície
         #[serde(default)]
         curve: Option<CurveRef>,
+        /// lado que fica em cada elemento de `more` (faltando, vale `flip`)
+        #[serde(default)]
+        more_flip: Vec<bool>,
     },
     /// Aparar duas superfícies uma pela outra e juntar os lados escolhidos.
     SurfTrim { a: SurfRef, b: SurfRef, flip_a: bool, flip_b: bool },
     /// Extrair várias faces de uma vez (multi-extração).
-    SurfMulti { faces: Vec<[f64; 3]> },
+    SurfMulti {
+        faces: Vec<[f64; 3]>,
+        /// chave v2 de cada face (paralelo a `faces`; `None` = só o ponto)
+        #[serde(default)]
+        keys: Vec<Option<FaceKey>>,
+    },
     /// Uma face de uma superfície composta (desmontar).
     SurfPart { surface: SurfRef, index: usize },
     /// Desaparar: devolve a face aos limites naturais do suporte.
@@ -816,7 +827,14 @@ pub enum RefKind {
     /// Translação, rotação, simetria ou escala de qualquer elemento (ponto, curva, plano, superfície).
     GeoTransform { source: Id, class: RefClass, xf: GeoXform },
     /// Curva de interseção entre duas superfícies (ou planos).
-    CurveIntersect { a: SurfRef, b: SurfRef, which: usize },
+    CurveIntersect {
+        a: SurfRef,
+        b: SurfRef,
+        which: usize,
+        /// âncora espacial: fica a curva mais perto dela, seja qual for a ordem do kernel
+        #[serde(default)]
+        near: Option<[f64; 3]>,
+    },
     /// Curva projetada (na normal) sobre uma superfície.
     CurveProjectSurf {
         curve: CurveRef,

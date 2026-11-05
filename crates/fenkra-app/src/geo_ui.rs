@@ -377,7 +377,7 @@ impl GeoKind {
             SplineControl => R::SplineControl { points: pts(4), closed: false },
             CurveCopy => R::CurveCopy { curve: c(0) },
             CurveJoin => R::CurveJoin { curves: if s.curves.len() >= 2 { s.curves.clone() } else { vec![c(0), c(1)] } },
-            SurfExtract => R::SurfExtract { prop: Propagation::Nenhuma, complement: false, expected: None, face: face_pt(s), owner: match s.surface {
+            SurfExtract => R::SurfExtract { prop: Propagation::Nenhuma, complement: false, expected: None, key: if let Some(SurfRef::Face { key, .. }) = s.surface { key } else { None }, face: face_pt(s), owner: match s.surface {
                 Some(SurfRef::Face { owner, .. }) => owner,
                 _ => None,
             } },
@@ -399,10 +399,10 @@ impl GeoKind {
             OpJoin if s.surface.is_none() && !s.curves.is_empty() => R::CurveJoin { curves: s.curves.clone() },
             OpJoin => R::SurfJoin { items: vec![sf], tol: t("0.01"), curves: s.curves.clone() },
             OpHeal => R::SurfHeal { surface: sf, tol: t("0.1") },
-            OpSplit => R::SurfSplit { surface: sf, tool: crate::slots::surf(), flip: false, more: vec![], curve: None },
+            OpSplit => R::SurfSplit { surface: sf, tool: crate::slots::surf(), flip: false, more: vec![], curve: None, more_flip: vec![] },
             OpTrim => R::SurfTrim { a: sf, b: crate::slots::surf(), flip_a: false, flip_b: false },
             OpBoundary => R::CurveBoundary { surface: sf, which: 0, prop: Propagation::Nenhuma, near: None, expected: None },
-            OpMulti => R::SurfMulti { faces: vec![face_pt(s)] },
+            OpMulti => R::SurfMulti { faces: vec![face_pt(s)], keys: vec![if let Some(SurfRef::Face { key, .. }) = s.surface { key } else { None }] },
             OpPart => R::SurfPart { surface: sf, index: 0 },
             OpUntrim => R::SurfUntrim { surface: sf },
             OpExtrapolate => R::SurfExtrapolate { surface: sf, near: p(0), length: t("10"), curvature: false, more: s.points.iter().skip(1).copied().collect(), edges: s.curves.clone(), until: None, normal_edge: false, tangent_prop: false },
@@ -416,7 +416,7 @@ impl GeoKind {
                 };
                 R::GeoTransform { source, class, xf }
             }
-            CurveIntersect => R::CurveIntersect { a: sf, b: crate::slots::surf(), which: 0 },
+            CurveIntersect => R::CurveIntersect { a: sf, b: crate::slots::surf(), which: 0, near: None },
             CurveProjSurf => R::CurveProjectSurf { curve: c(0), surface: sf, dir: None },
             CurveParallel => R::CurveParallel { curve: c(0), support: sf, d1: t("5"), d2: t("5"), flip: false, more: s.curves.iter().skip(1).cloned().collect(), both: false, d_other: String::new() },
         }
@@ -1435,11 +1435,12 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             curve_slot(ui, "g_b", "Linha 2", doc, me, b, seed);
             expr(ui, "Comprimento", length, vars, "mm");
         }
-        R::SurfExtract { face, prop, complement, expected, .. } => {
+        R::SurfExtract { face, prop, complement, expected, key, .. } => {
             ui.label(RichText::new(format!("{} ({}, {}, {})", tr("Face em"), fmt(face[0]), fmt(face[1]), fmt(face[2]))).small());
-            if let Some(SurfRef::Face { point, .. }) = seed.surface {
+            if let Some(SurfRef::Face { point, key: k, .. }) = seed.surface {
                 if ui.button(tr("⊙ Usar a face selecionada")).clicked() {
                     *face = point;
+                    *key = k;
                     *expected = None;
                 }
             }
@@ -1759,13 +1760,17 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             expr(ui, "Tolerância", tol, vars, "mm");
             ui.label(RichText::new(tr("Frestas menores que a tolerância são fechadas.")).weak().small());
         }
-        R::SurfSplit { surface, tool, flip, more, curve } => {
+        R::SurfSplit { surface, tool, flip, more, curve, more_flip } => {
+            more_flip.resize(more.len(), *flip);
             surf_slot(ui, "g_s", "Superfície", doc, me, surface, seed);
             surf_slot(ui, "g_t", "Cortar com", doc, me, tool, seed);
             let mut del = None;
             for (i, m) in more.iter_mut().enumerate() {
                 ui.horizontal(|ui| {
-                    ui.vertical(|ui| surf_slot(ui, &format!("g_tm{i}"), &format!("{} {}", tr("Cortar com"), i + 2), doc, me, m, seed));
+                    ui.vertical(|ui| {
+                        surf_slot(ui, &format!("g_tm{i}"), &format!("{} {}", tr("Cortar com"), i + 2), doc, me, m, seed);
+                        ui.checkbox(&mut more_flip[i], tr("Outro lado deste corte"));
+                    });
                     if ui.small_button(tr("✖")).clicked() {
                         del = Some(i);
                     }
@@ -1773,6 +1778,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             }
             if let Some(i) = del {
                 more.remove(i);
+                more_flip.remove(i);
             }
             if ui.button(tr("+ plano/superfície de corte")).clicked() {
                 more.push(crate::slots::surf());
@@ -1800,7 +1806,8 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             });
             ui.label(RichText::new(tr("Quando há várias bordas/faces, escolha qual pelo número (0, 1, 2…).")).weak().small());
         }
-        R::SurfMulti { faces } => {
+        R::SurfMulti { faces, keys } => {
+            keys.resize(faces.len(), None);
             let mut del = None;
             for (i, f) in faces.iter().enumerate() {
                 ui.horizontal(|ui| {
@@ -1813,11 +1820,13 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             if let Some(i) = del {
                 if faces.len() > 1 {
                     faces.remove(i);
+                    keys.remove(i);
                 }
             }
-            if let Some(SurfRef::Face { point, .. }) = seed.surface {
+            if let Some(SurfRef::Face { point, key, .. }) = seed.surface {
                 if ui.button(tr("+ face selecionada")).clicked() && !faces.contains(&point) {
                     faces.push(point);
+                    keys.push(key);
                 }
             }
             ui.label(RichText::new(tr("Clique numa face na viewport e use '+ face selecionada'.")).weak().small());
@@ -1876,13 +1885,19 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             }
             ui.label(RichText::new(tr("Arraste as setas, arcos e quadrados do manipulador na viewport.")).weak().small());
         }
-        R::CurveIntersect { a, b, which } => {
+        R::CurveIntersect { a, b, which, near } => {
             surf_slot(ui, "g_a", "Elemento 1", doc, me, a, seed);
             surf_slot(ui, "g_b", "Elemento 2", doc, me, b, seed);
             ui.horizontal(|ui| {
                 ui.add_sized([96., 18.], egui::Label::new(tr("Solução")));
-                ui.add(crate::ui_ext::dv(which).range(0..=99));
+                // trocar o número troca a escolha: a âncora é refeita no próximo cálculo
+                if ui.add(crate::ui_ext::dv(which).range(0..=99)).changed() {
+                    *near = None;
+                }
             });
+            if near.is_some() {
+                ui.label(RichText::new(tr("A solução fica presa à posição no espaço.")).weak().small());
+            }
         }
         R::CurveProjectSurf { curve, surface, dir } => {
             curve_slot(ui, "g_c", "Curva", doc, me, curve, seed);

@@ -1232,6 +1232,16 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         *expected = Some(n);
                     }
                 }
+                // a solução escolhida pelo número ganha âncora no primeiro cálculo
+                let anchor = notes.get(&r.id).and_then(|x| x.anchor);
+                match (&mut r.kind, anchor) {
+                    (RefKind::CurveIntersect { near, .. }, Some(p)) if near.is_none() => *near = Some(p),
+                    (RefKind::CurveBoundary { near, prop, .. }, Some(p)) if near.is_none() => {
+                        *near = Some(p);
+                        *prop = Propagation::Ponto;
+                    }
+                    _ => {}
+                }
             }
         };
         put(&mut self.open.doc);
@@ -1252,7 +1262,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         };
         let target = self.session.as_ref().map(|s| s.id).or(if let Sel::Ref(id) = self.sel { Some(id) } else { None });
         let d = &mut self.open.doc;
-        let id = d.add_geometry(RefKind::SurfExtract { face: q.face, owner: q.owner, prop: Propagation::Nenhuma, complement: q.complement, expected: None });
+        let key = if let SurfRef::Face { key, .. } = q.old { key } else { None };
+        let id = d.add_geometry(RefKind::SurfExtract { face: q.face, owner: q.owner, prop: Propagation::Nenhuma, complement: q.complement, expected: None, key });
         if let Some(r) = d.references.iter_mut().find(|r| Some(r.id) == target) {
             swap_surface(&mut r.kind, q.old, SurfRef::Ref(id));
         }
@@ -5147,7 +5158,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
 
     fn run_extract(&mut self, o: ExtractOpts) {
         use crate::extract::{edge_pts, edge_set, face_point, face_set};
-        let mut gravadas: Vec<([f64; 3], Id)> = vec![];
+        let mut gravadas: Vec<([f64; 3], Id, Option<FaceKey>)> = vec![];
         use crate::picking::Pick;
         // o resultado sai emprestado durante a coleta e volta logo depois
         let Some(r) = self.result.take() else { return };
@@ -5159,7 +5170,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 Pick::Face { body, face, point, owner, .. } => {
                     // face de corpo: a propagação fica gravada e o recálculo a refaz
                     if !o.multi && body < crate::picking::SURF_BASE {
-                        gravadas.push((point.map(|v| v as f64), owner));
+                        gravadas.push((point.map(|v| v as f64), owner, r.bodies.get(body).and_then(|b| b.face_key(face))));
                         continue;
                     }
                     let Some(m) = crate::picking::mesh_of(&r, body) else { continue };
@@ -5225,10 +5236,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             });
         }
         for set in faces {
-            made.push(if set.len() == 1 { d.add_geometry(RefKind::SurfExtract { face: set[0], owner: None, prop: Propagation::Nenhuma, complement: false, expected: None }) } else { d.add_geometry(RefKind::SurfMulti { faces: set }) });
+            made.push(if set.len() == 1 { d.add_geometry(RefKind::SurfExtract { face: set[0], owner: None, prop: Propagation::Nenhuma, complement: false, expected: None, key: None }) } else { d.add_geometry(RefKind::SurfMulti { faces: set, keys: vec![] }) });
         }
-        for (face, owner) in gravadas {
-            made.push(d.add_geometry(RefKind::SurfExtract { face, owner: Some(owner), prop: o.prop.gravada(), complement: false, expected: None }));
+        for (face, owner, key) in gravadas {
+            made.push(d.add_geometry(RefKind::SurfExtract { face, owner: Some(owner), prop: o.prop.gravada(), complement: false, expected: None, key }));
         }
         if made.is_empty() {
             self.toast("Selecione faces, arestas ou vértices na viewport e conclua a extração", true);
