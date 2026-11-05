@@ -7483,7 +7483,7 @@ impl eframe::App for App {
         } else if self.in_asm() {
             self.asm.as_ref().is_some_and(|s| s.editing())
         } else {
-            self.session.is_some() || self.sketch.is_some() || self.sketch_wait_plane || self.pmi_pending.is_some() || matches!(self.sel, Sel::Params | Sel::Pmi(_))
+            self.session.is_some() || self.sketch.is_some() || self.sketch_wait_plane || self.pmi_pending.is_some() || matches!(self.sel, Sel::Params) || (matches!(self.sel, Sel::Pmi(_)) && !crate::pmi_minibar::open())
         };
         if active {
             self.painel_comando(ctx, area);

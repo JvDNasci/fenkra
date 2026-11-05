@@ -2973,7 +2973,7 @@ impl AsmState {
     /// Há algo em edição (o painel de edição toma o lugar da árvore, como nos outros módulos)?
     /// Escolher um componente só o seleciona; restrições, juntas e recursos abrem a edição.
     pub fn editing(&self) -> bool {
-        self.pending.is_some() || self.pending_joint.is_some() || self.props || self.sel.is_some_and(|s| !self.asm.nodes.iter().any(|n| n.id == s))
+        self.pending.is_some() || self.pending_joint.is_some() || self.props || self.sel.is_some_and(|s| !self.asm.nodes.iter().any(|n| n.id == s) && !(crate::pmi_minibar::open() && self.asm.pmi.iter().any(|p| p.id == s)))
     }
 
     /// Componentes das seleções da viewport (sem repetir, na ordem do clique).
