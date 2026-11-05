@@ -484,6 +484,9 @@ impl Assembly {
         let (ra, rb) = (self.mates[i].a, self.mates[i].b);
         let (Some(pa), Some(pb)) = (self.lugar(ra.comp), self.lugar(rb.comp)) else { return };
         let axis = |g: &Geom| match *g {
+    /// interferências ignoradas e o limite "ignorar menores que"
+    #[serde(default)]
+    pub interf: interferencia::RegrasInterf,
             Geom::Axis { p, d } => (p, d),
             Geom::Plane { p, n } => (p, n),
             Geom::Point(p) => (p, [0., 0., 1.]),
@@ -578,7 +581,7 @@ impl Assembly {
     }
 
     pub fn new(name: &str) -> Self {
-        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], relational: false, politicas_link: vec![], religacoes: vec![], geometria: None, esqueleto: None, contexto_livre: false, origem_oculta: false }
+        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], interf: Default::default(), relational: false, politicas_link: vec![], religacoes: vec![], geometria: None, esqueleto: None, contexto_livre: false, origem_oculta: false }
     }
 
     pub fn alloc(&mut self) -> Id {
@@ -685,7 +688,7 @@ impl Assembly {
     pub fn add_pattern(&mut self, source: Id, kind: PatternKind) -> Id {
         let id = self.alloc();
         let name = self.unique("Repetição");
-        self.patterns.push(CompPattern { id, name, source, kind, instances: vec![] });
+        self.patterns.push(CompPattern { id, name, ..CompPattern::rascunho(source, kind) });
         self.update_patterns();
         id
     }
@@ -718,7 +721,7 @@ impl Assembly {
             while inst.len() + 1 < count {
                 let id = self.alloc();
                 let name = self.unique(&src.name);
-                self.nodes.push(Node { id, name, number: 0, fixed: true, ..src.clone() });
+                self.nodes.push(Node { id, name, number: 0, fixed: true, ..src });
                 inst.push(id);
             }
             while inst.len() + 1 > count {

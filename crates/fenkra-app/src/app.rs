@@ -727,6 +727,15 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         self.settings.bench == crate::settings::Bench::Montagem && self.asm.is_some()
     }
 
+    /// Leva a câmera até a caixa, com a mesma animação do enquadrar.
+    pub fn enquadrar_caixa(&mut self, b: (glam::Vec3, glam::Vec3)) {
+        if let Some(vp) = self.viewport.as_mut() {
+            let antes = vp.camera;
+            vp.camera.fit(b);
+            vp.animate_from(antes);
+        }
+    }
+
     pub fn fit_now(&mut self) {
         self.fit_pending = true;
         self.scene_dirty = true;
@@ -7623,6 +7632,9 @@ impl eframe::App for App {
         crate::asm_ui::bom_window(self, ctx);
         crate::asm_ui::fasteners_window(self, ctx);
         crate::biblioteca_ui::painel(self, ctx, area);
+        crate::asm_inserir::painel(self, ctx, area);
+        crate::asm_interf::painel(self, ctx, area);
+        crate::asm_repeticao::painel(self, ctx, area);
         crate::asm_ui::contexto_window(self, ctx);
         crate::asm_ui::gears_window(self, ctx);
         self.sheet_window(ctx);
@@ -7632,9 +7644,6 @@ impl eframe::App for App {
         self.about_window(ctx);
         if let Some(a) = self.busca_cmd.ui(ctx) {
             self.act(a);
-        crate::asm_inserir::painel(self, ctx, area);
-        crate::asm_interf::painel(self, ctx, area);
-        crate::asm_repeticao::painel(self, ctx, area);
         }
         self.view_menu_window(ctx);
         self.dialogs(ctx);
@@ -7828,6 +7837,8 @@ impl eframe::App for App {
                 }
                 crate::asm_ui::contexto_na_cena(self.asm.as_ref(), &mut s);
                 crate::asm_cmd::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, ctx.input(|i| i.time), &mut s);
+                crate::asm_interf::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
+                crate::asm_repeticao::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
                 vp.set_scene(rs, &s);
                 self.scene_dirty = false;
                 ctx.request_repaint();

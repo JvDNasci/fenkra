@@ -203,7 +203,8 @@ pub struct AsmState {
     pub undo: Vec<Assembly>,
     pub redo: Vec<Assembly>,
     pub modified: bool,
-    pub interf: Vec<(Id, Id, f64)>,
+    /// painel de interferências aberto, com a última análise (B264)
+    pub interf: Option<crate::asm_interf::Estado>,
     /// mostrar só o componente selecionado
     pub isolate: bool,
     /// mover respeitando as restrições (resolve ao soltar)
@@ -318,7 +319,7 @@ impl AsmState {
             undo: vec![],
             redo: vec![],
             modified: false,
-            interf: vec![],
+            interf: None,
             isolate: false,
             respect: true,
             stop_collision: false,
@@ -655,16 +656,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                     st.asm.renumber();
                     st.dirty = true;
                 }
-                Cmd::AsmPattern => {
-                    let Some(src) = st.sel.filter(|s| st.asm.node(*s).is_some_and(|n| !matches!(n.kind, NodeKind::Group))) else {
-                        app.toast(tr("Selecione o componente a repetir"), true);
-                        return true;
-                    };
-                    st.push_undo();
-                    let id = st.asm.add_pattern(src, PatternKind::Linear { dir: [1., 0., 0.], count: "3".into(), spacing: "20".into() });
-                    st.sel = Some(id);
-                    st.dirty = true;
-                }
+                Cmd::AsmPattern => crate::asm_repeticao::abrir(st),
                 Cmd::AsmJoint(k) => crate::asm_cmd::abrir(app, crate::asm_cmd::tipo_da_junta(k)),
                 Cmd::AsmAutoJoints => {
                     st.push_undo();
@@ -803,12 +795,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                         Err(e) => app.toast(e, true),
                     }
                 }
-                Cmd::AsmInterf => {
-                    let dir = st.dir();
-                    st.interf = fenkra_montagem::view::interferences(&st.asm, dir.as_deref(), &mut st.cache, 0.01);
-                    let n = st.interf.len();
-                    app.toast(if n == 0 { tr("Nenhuma interferência entre os componentes").to_string() } else { format!("{n} interferência(s) — veja no painel") }, n > 0);
-                }
+                Cmd::AsmInterf => crate::asm_interf::abrir(st),
                 _ => return false,
             }
         }
@@ -2696,13 +2683,6 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             st.asm.inverter_lado(id);
         }
         st.solve();
-    }
-    // interferências
-    if !st.interf.is_empty() {
-        crate::editor::section(ui, "Interferências");
-        for (a, b, v) in &st.interf {
-            ui.label(RichText::new(format!("✖ {} × {} — {} mm³", st.asm.name_of(*a), st.asm.name_of(*b), fmt(*v))).color(crate::theme::st_err()));
-        }
     }
     let acao_refs = if sel.is_none() && st.props { referencias_panel(st, ui) } else { None };
     crate::editor::tabs_end(ui);
