@@ -230,6 +230,15 @@ def desenhos():
     ic("nova_peca", B=CUBO(20, 7, 14, 7, 14), R=MAIS(37, 37, 6))
     ic("salvar", B="M8 8h25l7 7v25H8z", R="M16 8v10h14V8M14 40V26h20v14")
     ic("importar_arquivo", B=CUBO(24, 20, 12, 6, 10), R="M24 5v12M18 11l6 6 6-6")
+    ic("exportar_arquivo", B=CUBO(24, 20, 12, 6, 10), R="M24 17V5M18 11l6-6 6 6")
+    ic("liberar_revisao", B=Q(8, 6, 24, 34), R=CADEADO(34, 34))
+    ic("onde_usado", B=CUBO(20, 6, 12, 6, 12), R=C(32, 32, 7) + "M37 37l6 6")
+    ic("comparar", B=Q(6, 10, 15, 28) + Q(27, 10, 15, 28), R=S2(15, 24, 33, 24, 4))
+    ic("estado_sem_revisao", B=Q(8, 6, 24, 34), R="M28 36h14")
+    ic("estado_liberada", B=Q(8, 6, 24, 34), R=CHECK(34, 34, 8))
+    ic("estado_editado", B=Q(8, 6, 24, 34), R="M26 42l2-7 11-11 5 5-11 11z")
+    ic("estado_leitura", B=Q(8, 6, 24, 34), R=E(33, 34, 10, 6) + C(33, 34, 2))
+    ic("estado_conflito", B=Q(8, 6, 24, 34), R="M33 22l11 20H22zM33 30v6M33 39v1")
     ic("config", B=ENGRENAGEM(24, 24, 18, 13.5, 8), R=C(24, 24, 6))
     ic("personalizar", B="M8 13h32M8 24h32M8 35h32", R=C(30, 13, 4) + C(16, 24, 4) + C(26, 35, 4))
     ic("parametro", B="M6 36h36M6 32v8M15 34v4M24 34v4M33 34v4M42 32v8", R="M30 28l-5-8h10zM30 20V9")
@@ -669,7 +678,7 @@ def desenhos():
 desenhos()
 
 
-SO_INTERFACE = {"importar_arquivo", "asm_catalogo", "arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais"}
+SO_INTERFACE = {"importar_arquivo", "asm_catalogo", "arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais", "exportar_arquivo", "liberar_revisao", "onde_usado", "comparar", "estado_sem_revisao", "estado_liberada", "estado_editado", "estado_leitura", "estado_conflito"}
 
 
 # ---------- saída ----------

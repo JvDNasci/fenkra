@@ -21,6 +21,7 @@ use crate::i18n::tr;
 
 mod arvore;
 mod diag;
+mod estado_doc;
 mod importar;
 mod projeto;
 mod salvar;
@@ -179,6 +180,8 @@ pub struct App {
     importar_dialogo: Option<importar::Dialogo>,
     /// relatório da última importação, até a pessoa fechar
     importar_relatorio: Option<fenkra_conversor::Relatorio>,
+    /// documento comparado, rótulo da revisão e o que mudou desde ela (B279)
+    comparacao: Option<(u64, String, fenkra_project::estado_doc::Diferencas)>,
     /// diagnóstico e pais/filhos (B69)
     diag: diag::Estado,
     /// "Selecionar outro": ciclo de candidatos sob o ponteiro com Alt + roda (B95)
@@ -367,6 +370,7 @@ impl App {
             importacao_pendente: None,
             importar_dialogo: None,
             importar_relatorio: None,
+            comparacao: None,
             diag: Default::default(),
             selecao_ciclo: Default::default(),
             selecao_extra: Default::default(),
@@ -466,6 +470,10 @@ impl App {
         if let Ok(arquivo) = std::env::var("FENKRA_DEMO_IMPORTAR") {
             app.abrir_painel_importar(arquivo.into());
             app.started = true;
+        }
+        // desenvolvimento: FENKRA_DEMO_PROJETO=1 abre um projeto de exemplo; =comparar já mostra a comparação
+        if let Ok(modo) = std::env::var("FENKRA_DEMO_PROJETO") {
+            app.demo_projeto(modo == "comparar");
         }
         // desenvolvimento: FENKRA_AJUSTES=1 abre as configurações ao iniciar
         if std::env::var("FENKRA_AJUSTES").is_ok() {
@@ -3159,6 +3167,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         }
                     });
                     ui.label(RichText::new(title).weak());
+                    self.estado_na_barra(ui);
                 });
             });
         });
@@ -6054,8 +6063,17 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     Err(e) => self.toast(e.to_string(), true),
                 }
             }
-            if ui.button(tr("💾 Salvar versão")).clicked() {
+            let (rotulo, frase, passos) = estado_doc::SALVAR_VERSAO;
+            if estado_doc::botao(ui, true, "salvar", rotulo, frase, passos).clicked() {
                 self.save();
+            }
+            let (rotulo, frase, passos) = estado_doc::IMPORTAR;
+            if estado_doc::botao(ui, true, "importar_arquivo", rotulo, frase, passos).clicked() {
+                self.com_confirmacao(Acao::Importar);
+            }
+            let (rotulo, frase, passos) = estado_doc::EXPORTAR;
+            if estado_doc::botao(ui, true, "exportar_arquivo", rotulo, frase, passos).clicked() {
+                self.export("step", Default::default());
             }
             if ui.button(tr("📄 Estrutura CSV")).clicked() {
                 if let Some(path) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name("estrutura.csv").save_file() {
@@ -6079,8 +6097,13 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             if ui.button(tr("Abrir")).clicked() {
                 self.open_entry(sel, None);
             }
-            if ui.add_enabled(e.dirty_since_release(), egui::Button::new(tr("🔒 Liberar revisão…"))).clicked() {
+            let (rotulo, frase, passos) = estado_doc::LIBERAR;
+            if estado_doc::botao(ui, e.dirty_since_release(), "liberar_revisao", rotulo, frase, passos).clicked() {
                 self.release_dialog = Some((sel, String::new()));
+            }
+            let (rotulo, frase, passos) = estado_doc::COMPARAR;
+            if estado_doc::botao(ui, !e.revisions.is_empty(), "comparar", rotulo, frase, passos).clicked() {
+                self.comparar_com_revisao(sel);
             }
             if ui.button(tr("Duplicar")).clicked() {
                 if let Err(err) = self.project.as_mut().unwrap().duplicate(sel) {
@@ -6089,6 +6112,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
             self.botoes_de_transicao(ui, sel);
         });
+        self.comparacao_ui(ui, sel);
         egui::CollapsingHeader::new(format!("Revisões ({})", e.revisions.len())).default_open(true).show(ui, |ui| {
             for r in e.revisions.iter().rev() {
                 ui.horizontal(|ui| {
