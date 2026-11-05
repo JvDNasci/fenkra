@@ -59,6 +59,7 @@ pub enum KeyAction {
     SkFillet,
     SkMirror,
     SkSpline,
+    SkModo,
 }
 
 use KeyAction::*;
@@ -68,7 +69,7 @@ impl KeyAction {
     pub const ALL: [KeyAction; 45] = [
         Fit, ViewMenu, Normal, Ortho, ViewFront, ViewBack, ViewTop, ViewBottom, ViewLeft, ViewRight, ViewIso, Hide, HiddenEnv, Undo, Redo, Delete, Save, SaveAll, ClipCopy, ClipCut,
         ClipPaste, ClipDup, Sketch,
-        Extrude, Cut, Revolve, Hole, Fillet, Chamfer, Plane, RodaComandos, SkSelect, SkLine, SkRect, SkCircle, SkArc, SkPoint, SkDim, SkConstruction, SkGrid, SkTrim, SkOffset, SkFillet, SkMirror, SkSpline,
+        Extrude, Cut, Revolve, Hole, Fillet, Chamfer, Plane, RodaComandos, SkSelect, SkLine, SkRect, SkCircle, SkArc, SkPoint, SkDim, SkConstruction, SkGrid, SkTrim, SkOffset, SkFillet, SkMirror, SkSpline, SkModo,
     ];
 
     pub fn label(self) -> &'static str {
@@ -118,6 +119,7 @@ impl KeyAction {
             SkFillet => tr("Sketch · filete"),
             SkMirror => tr("Sketch · espelhar"),
             SkSpline => tr("Sketch · spline"),
+            SkModo => tr("Sketch · percorrer os modos"),
         }
     }
 
@@ -289,7 +291,7 @@ impl Preset {
             }
         }
         // ferramentas de edição do sketch (B239): letras livres nos predefinidos, sem colidir com a vista
-        v.extend([(SkTrim, "T"), (SkOffset, "Shift+O"), (SkFillet, "Alt+F"), (SkMirror, "M"), (SkSpline, "B")]);
+        v.extend([(SkTrim, "T"), (SkOffset, "Shift+O"), (SkFillet, "Alt+F"), (SkMirror, "Shift+M"), (SkSpline, "B"), (SkModo, "M")]);
         // roda de comandos (B256): Shift+W não é usada em nenhuma predefinição
         v.push((RodaComandos, "Shift+W"));
         v
