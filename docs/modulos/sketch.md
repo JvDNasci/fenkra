@@ -9,6 +9,7 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 - **Restrições geométricas** (Restrições) — Kind: Coincident, Horizontal, Vertical, Parallel, Perpendicular, Equal, Tangent, Concentric, Midpoint, PointOnCurve, Fixed, Symmetric…
 - **Cotas (restrições dimensionais)** (Cota (smart)) — Tool::Dimension (+H, V, ângulo, raio, diâmetro); expressões com parâmetros e vírgula decimal.
 - **Solver e estado do sketch** (Solver com estado) — Teste sub_restrito_e_conflito; arrastar_ponto_preso_mantem_restricoes. `BM-SKT-04`
+- **Snaps e inferência** (todas as ferramentas de desenho) — Glifo por tipo de snap, também ao arrastar; linhas de inferência H, V, ⊥, ∥ e alinhamento; cota troca raio e diâmetro e ângulo e suplemento pela posição (`sketch_snap.rs`, `sketch_cota.rs`).
 - **Offset de curvas** (Offset) — Tool::Offset.
 - **Espelhar e simetria** (Espelhar) — Tool::Mirror.
 - **Filete e chanfro de sketch** (Filete, chanfro) — Tool::Fillet, Chamfer.

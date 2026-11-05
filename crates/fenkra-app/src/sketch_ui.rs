@@ -14,6 +14,7 @@ use fenkra_core::{FeatureKind, Id, PlaneRef, SketchData};
 use fenkra_kernel::Frame;
 use std::collections::HashMap;
 use crate::i18n::tr;
+use crate::sketch_snap::TipoSnap;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Tool {
@@ -148,6 +149,17 @@ struct Snap {
     uv: [f64; 2],
     point: Option<Id>,
     origin: bool,
+    /// o que o glifo mostra e em que curvas o ponto novo se apoia
+    tipo: TipoSnap,
+    apoio: [Option<Id>; 2],
+    /// o apoio vira restrição no ponto novo (restrições automáticas ligadas)
+    vincula: bool,
+}
+
+impl Snap {
+    fn livre(uv: [f64; 2]) -> Self {
+        Snap { uv, point: None, origin: false, tipo: TipoSnap::Livre, apoio: [None; 2], vincula: false }
+    }
 }
 
 struct Drag {
@@ -513,7 +525,11 @@ fn point_for(sk: &mut SketchData, al: &mut impl FnMut() -> Id, s: Snap) -> Id {
         }
         return fenkra_solidos::origin_point(sk, al);
     }
-    sk.add_point(al, s.uv[0], s.uv[1])
+    let p = sk.add_point(al, s.uv[0], s.uv[1]);
+    if s.vincula {
+        crate::sketch_snap::vincula(sk, al, p, s.tipo, s.apoio);
+    }
+    p
 }
 
 fn is_line(sk: &SketchData, id: Id) -> bool {
@@ -636,7 +652,7 @@ fn foot(sk: &SketchData, p: Id, l: Id) -> Option<[f64; 2]> {
 }
 
 /// Vértice do ângulo entre duas linhas (extremo comum ou interseção) e o extremo mais distante de cada uma.
-fn angle_vertex(sk: &SketchData, l1: Id, l2: Id) -> Option<([f64; 2], [f64; 2], [f64; 2])> {
+pub(crate) fn angle_vertex(sk: &SketchData, l1: Id, l2: Id) -> Option<([f64; 2], [f64; 2], [f64; 2])> {
     let (a, b) = line_ends(sk, l1)?;
     let (c, d) = line_ends(sk, l2)?;
     let (pa, pb, pc, pd) = (sk.pos(a), sk.pos(b), sk.pos(c), sk.pos(d));
@@ -730,7 +746,7 @@ fn tool_accepts(tool: Tool, k: &Kind) -> bool {
     match tool {
         Tool::DimH => matches!(k, Kind::DistanceX(..)),
         Tool::DimV => matches!(k, Kind::DistanceY(..)),
-        Tool::DimAngle => matches!(k, Kind::Angle(..)),
+        Tool::DimAngle => matches!(k, Kind::Angle(..) | Kind::AngleSupp(..)),
         Tool::DimRadius => matches!(k, Kind::Radius(..)),
         Tool::DimDiameter => matches!(k, Kind::Diameter(..)),
         _ => true,
@@ -741,6 +757,13 @@ fn tool_accepts(tool: Tool, k: &Kind) -> bool {
 /// na diagonal ou entre eles → a sugestão (alinhada). `mods` (Ctrl, Alt) forçam horizontal/vertical.
 fn choose_dim(sk: &SketchData, opts: &[(&str, &str, Kind)], cur: Option<[f64; 2]>, mods: (bool, bool)) -> Option<Kind> {
     let first = opts.first()?.2.clone();
+    // círculo e arco: dentro é raio, fora é diâmetro; duas linhas: o quadrante escolhe o ângulo.
+    // Com a ferramenta de raio ou de diâmetro só há uma opção, e ela não troca.
+    let tem = |f: fn(&Kind) -> bool| opts.iter().any(|o| f(&o.2));
+    let raio_e_diametro = tem(|k| matches!(k, Kind::Radius(..))) && tem(|k| matches!(k, Kind::Diameter(..)));
+    if let (true, Some(c)) = (raio_e_diametro || matches!(first, Kind::Angle(..)), cur) {
+        return Some(crate::sketch_cota::pelo_cursor(sk, &first, c).unwrap_or(first));
+    }
     let x = opts.iter().find(|o| matches!(o.2, Kind::DistanceX(..))).map(|o| o.2.clone());
     let y = opts.iter().find(|o| matches!(o.2, Kind::DistanceY(..))).map(|o| o.2.clone());
     match mods {
@@ -770,7 +793,7 @@ fn dim_anchor(sk: &SketchData, k: &Kind) -> Option<[f64; 2]> {
         Kind::Distance(a, b, _) | Kind::DistanceX(a, b, _) | Kind::DistanceY(a, b, _) => Some(mid(sk.pos(*a), sk.pos(*b))),
         Kind::PointLineDistance(p, l, _) => Some(mid(sk.pos(*p), foot(sk, *p, *l)?)),
         Kind::Radius(c, _) | Kind::Diameter(c, _) => center_of(sk, *c).map(|(c, _)| sk.pos(c)),
-        Kind::Angle(a, b, _) => angle_vertex(sk, *a, *b).map(|v| v.0),
+        Kind::Angle(a, b, _) | Kind::AngleSupp(a, b, _) => angle_vertex(sk, *a, *b).map(|v| v.0),
         Kind::LineAngle(l, _) => line_ends(sk, *l).map(|(a, _)| sk.pos(a)),
         _ => None,
     }
@@ -783,7 +806,7 @@ fn dim_text(sk: &SketchData, k: &Kind, reference: bool) -> String {
     let base = match k {
         Kind::Radius(..) => format!("R{}", fmt(val)),
         Kind::Diameter(..) => format!("Ø{}", fmt(val)),
-        Kind::Angle(..) | Kind::LineAngle(..) => format!("{}°", fmt(val)),
+        Kind::Angle(..) | Kind::AngleSupp(..) | Kind::LineAngle(..) => format!("{}°", fmt(val)),
         _ => fmt(val),
     };
     // cota de referência entre parênteses, como nos desenhos: só informa
@@ -886,16 +909,20 @@ fn draw_dim(painter: &egui::Painter, v: &View, sk: &SketchData, k: &Kind, label:
             arrow(sc, se);
             lpos.unwrap_or(out + d * 4.)
         }
-        Kind::Angle(l1, l2, _) => {
+        Kind::Angle(l1, l2, _) | Kind::AngleSupp(l1, l2, _) => {
             let (vtx, e1, e2) = angle_vertex(sk, *l1, *l2)?;
             let sv = v.to_screen(vtx);
-            let (a1, a2) = ((v.to_screen(e1) - sv).angle(), (v.to_screen(e2) - sv).angle());
+            let (mut a1, a2) = ((v.to_screen(e1) - sv).angle(), (v.to_screen(e2) - sv).angle());
             let mut da = a2 - a1;
             while da > std::f32::consts::PI {
                 da -= std::f32::consts::TAU;
             }
             while da < -std::f32::consts::PI {
                 da += std::f32::consts::TAU;
+            }
+            // com o texto posicionado, o arco fica no quadrante dele
+            if let Some(l) = lpos {
+                (a1, da) = crate::sketch_cota::setor(a1, a2, (l - sv).angle());
             }
             let ar = lpos.map(|l| (l - sv).length()).unwrap_or(34.).max(14.);
             let pts: Vec<Pos2> = (0..=24).map(|i| sv + egui::Vec2::angled(a1 + da * i as f32 / 24.) * ar).collect();
@@ -1163,7 +1190,7 @@ fn build_shape(sk: &mut SketchData, al: &mut impl FnMut() -> Id, tool: Tool, cl:
                     let r = d2(c[0], c[1]);
                     let e = c[2];
                     let de = d2(e, c[0]).max(1e-9);
-                    ends[1] = Snap { uv: [c[0][0] + (e[0] - c[0][0]) * r / de, c[0][1] + (e[1] - c[0][1]) * r / de], point: None, origin: false };
+                    ends[1] = Snap::livre([c[0][0] + (e[0] - c[0][0]) * r / de, c[0][1] + (e[1] - c[0][1]) * r / de]);
                 }
                 let ps = point_for(sk, al, ends[0]);
                 let pe = point_for(sk, al, ends[1]);
@@ -2171,18 +2198,19 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         pick_curve(pos, sk).map(|(_, c)| Ent::Cv(c))
     };
 
-    let snap_at = |pos: Pos2, sk: &SketchData, exclude: &[Id]| -> Option<Snap> {
+    let snap_at = |pos: Pos2, sk: &SketchData, exclude: &[Id], sem_curvas: &[Id]| -> Option<Snap> {
         let uv = v.to_uv(pos)?;
-        for p in &sk.points {
-            if exclude.contains(&p.id) {
-                continue;
-            }
-            if (v.to_screen([p.x, p.y]) - pos).length() < 10. {
-                return Some(Snap { uv: [p.x, p.y], point: Some(p.id), origin: false });
-            }
+        let achado = crate::sketch_snap::achar(sk, pos, uv, &|q| v.to_screen(q), exclude, sem_curvas, settings.snaps);
+        let de = |a: crate::sketch_snap::Achado| Snap { uv: a.uv, point: a.ponto, origin: false, tipo: a.tipo, apoio: a.curvas, vincula: settings.auto_constraints };
+        // ponto que já existe vence; a origem vence o que seria um ponto novo
+        if let Some(a) = achado.filter(|a| a.ponto.is_some()) {
+            return Some(de(a));
         }
         if settings.snaps && (v.to_screen([0., 0.]) - pos).length() < 10. {
-            return Some(Snap { uv: [0., 0.], point: None, origin: true });
+            return Some(Snap { origin: true, tipo: TipoSnap::Origem, ..Snap::livre([0., 0.]) });
+        }
+        if let Some(a) = achado {
+            return Some(de(a));
         }
         if settings.snaps && settings.grid {
             let step = {
@@ -2194,10 +2222,10 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             };
             let g = [(uv[0] / step).round() * step, (uv[1] / step).round() * step];
             if (v.to_screen(g) - pos).length() < 7. {
-                return Some(Snap { uv: g, point: None, origin: false });
+                return Some(Snap { tipo: TipoSnap::Grade, ..Snap::livre(g) });
             }
         }
-        Some(Snap { uv, point: None, origin: false })
+        Some(Snap::livre(uv))
     };
 
     let mut al_ids: Vec<Id> = vec![];
@@ -2211,19 +2239,34 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
     };
 
     let tool = edit.tool;
-    let mut cur_snap = hover.and_then(|p| {
-        let excl: Vec<Id> = edit.drag.as_ref().map(|d| d.pts.iter().map(|x| x.0).collect()).unwrap_or_default();
-        snap_at(p, &sk, &excl)
+    // o que se arrasta não se apoia em si mesmo: nem nas suas curvas, nem nas outras pontas delas
+    let (sem_pontos, sem_curvas) = edit.drag.as_ref().map_or((vec![], vec![]), |d| {
+        let movidos: Vec<Id> = d.pts.iter().map(|x| x.0).collect();
+        let curvas: Vec<&fenkra_core::sketch::SkCurve> = sk.curves.iter().filter(|c| d.circle == Some(c.id) || SketchData::curve_points(&c.geom).iter().any(|p| movidos.contains(p))).collect();
+        (curvas.iter().flat_map(|c| SketchData::curve_points(&c.geom)).chain(movidos.iter().copied()).collect(), curvas.iter().map(|c| c.id).collect())
     });
+    let mut cur_snap = hover.and_then(|p| snap_at(p, &sk, &sem_pontos, &sem_curvas));
 
-    // destaque do snap
-    if let (Some(s), true) = (cur_snap, tool != Tool::Select) {
-        let sp = v.to_screen(s.uv);
-        if s.point.is_some() || s.origin {
-            painter.circle_stroke(sp, 7., Stroke::new(1.6, SEL));
-        } else {
-            painter.circle_filled(sp, 2.5, SEL);
+    // ---------- inferência: enquanto se desenha, sem apoio mais forte, o cursor procura alinhamentos
+    let desenha = matches!(tool, Tool::Line | Tool::Rect | Tool::RectCenter | Tool::Circle | Tool::Circle3 | Tool::Arc3 | Tool::ArcCenter | Tool::Slot | Tool::Polygon | Tool::Point | Tool::Spline);
+    let mut direcao_inferida = None;
+    if let (true, false, true, Some(uv)) = (desenha, ctrl, settings.snaps, hover.and_then(|p| v.to_uv(p))) {
+        if cur_snap.is_some_and(|s| matches!(s.tipo, TipoSnap::Livre | TipoSnap::Grade)) {
+            let ancora = if tool == Tool::Line { edit.chain_last.map(|p| sk.pos(p)) } else { edit.clicks.last().map(|c| c.uv) };
+            let anterior = edit.chain_last.filter(|_| tool == Tool::Line).and_then(|p| if let [l] = lines_at(&sk, p)[..] { Some(l.0) } else { None });
+            let inf = crate::sketch_snap::inferir(&sk, uv, ancora, anterior, 6. / ppm as f64, &[]);
+            if !inf.linhas.is_empty() {
+                crate::sketch_snap::desenha_inferencia(&painter, &|q| v.to_screen(q), &inf, FREE);
+                cur_snap = Some(Snap::livre(inf.uv));
+                cursor_uv = Some(inf.uv);
+                direcao_inferida = inf.direcao;
+            }
         }
+    }
+
+    // glifo do snap, antes do clique e também ao arrastar com Selecionar
+    if let (Some(s), true) = (cur_snap, desenha || matches!(tool, Tool::Move | Tool::Copy) || edit.drag.is_some()) {
+        crate::sketch_snap::desenha_glifo(&painter, v.to_screen(s.uv), s.tipo, SEL);
     }
 
     // ---------- spline: pontos de inflexão e alças de tangência (Bézier)
@@ -2347,8 +2390,9 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                 (Some(c), Some(d)) => offset_lock(&sk, c, m, d),
                 _ => lock_cursor(tool, &stage, m, &locks),
             };
-            cur_snap = Some(Snap { uv: at, point: None, origin: false });
+            cur_snap = Some(Snap::livre(at));
             cursor_uv = Some(at);
+            direcao_inferida = None;
         }
         let pos = hover.unwrap_or(v.to_screen(at)) + egui::vec2(14., 30.);
         draw_fields(&painter, pos, &edit.entry, &fields_at(at, &sk), &vars, ui.visuals());
@@ -2411,7 +2455,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                 let delta = [uv[0] - d.start[0], uv[1] - d.start[1]];
                 let mut pins = vec![];
                 if d.pts.len() == 1 {
-                    let target = cur_snap.filter(|s| s.point.is_none()).map(|s| s.uv).unwrap_or(uv);
+                    let target = cur_snap.map(|s| s.uv).unwrap_or(uv);
                     if let Some(p) = sk.point_mut(d.pts[0].0) {
                         p.x = target[0];
                         p.y = target[1];
@@ -2441,13 +2485,26 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             }
             if let (Some(cid), true, Some(uv)) = (edit.drag_label, resp.dragged_by(egui::PointerButton::Primary), cursor_uv) {
                 let anchor = sk.constraints.iter().find(|x| x.id == cid).and_then(|x| dim_anchor(&sk, &x.kind));
+                // arrastar para outro lado troca o que a cota mede: raio e diâmetro, ângulo e suplemento
+                let outra = sk.constraints.iter().find(|x| x.id == cid).and_then(|x| crate::sketch_cota::pelo_cursor(&sk, &x.kind, uv));
                 if let (Some(a), Some(c)) = (anchor, sk.constraints.iter_mut().find(|x| x.id == cid)) {
                     c.label = Some([uv[0] - a[0], uv[1] - a[1]]);
+                    if let Some(k) = outra {
+                        c.kind = k;
+                    }
                 }
             }
             if resp.drag_stopped() {
                 edit.drag_label = None;
-                if edit.drag.take().is_some() {
+                if let Some(d) = edit.drag.take() {
+                    // o que o glifo prometeu: juntar ao ponto, ou guardar o apoio como restrição
+                    if let ([(p, _)], Some(s)) = (d.pts.as_slice(), cur_snap) {
+                        match s.point {
+                            Some(q) => sk.merge_points(*p, q),
+                            None if s.vincula => crate::sketch_snap::vincula(&mut sk, &mut al, *p, s.tipo, s.apoio),
+                            None => {}
+                        }
+                    }
                     edit.report = sk.solve(&vars, &[]);
                 }
             }
@@ -2520,7 +2577,13 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                             edit.chain_last = Some(p);
                         }
                         Some(last) if last != p => {
-                            add_segment(&mut sk, &mut al, last, p, edit.construction, settings.auto_constraints, settings.auto_dims);
+                            let nova = add_segment(&mut sk, &mut al, last, p, edit.construction, settings.auto_constraints, settings.auto_dims);
+                            // a inferência escolhida vira restrição, se a linha não ficou horizontal ou vertical
+                            let reta = sk.constraints.iter().any(|k| matches!(k.kind, Kind::Horizontal(l) | Kind::Vertical(l) if l == nova));
+                            if let (true, false, Some((base, m))) = (settings.auto_constraints, reta, direcao_inferida) {
+                                let k = if m == crate::sketch_snap::Motivo::Perpendicular { Kind::Perpendicular(base, nova) } else { Kind::Parallel(base, nova) };
+                                sk.add_constraint(&mut al, k);
+                            }
                             if Some(p) == edit.chain_first {
                                 edit.chain_last = None;
                                 edit.chain_first = None;
@@ -3595,7 +3658,7 @@ mod tests {
     }
 
     fn snap(uv: [f64; 2]) -> Snap {
-        Snap { uv, point: None, origin: false }
+        Snap::livre(uv)
     }
 
     fn opts() -> Build {
@@ -3893,6 +3956,27 @@ mod tests {
             assert_eq!(!e.sel.is_empty(), crate::sketch_fluxo::usa_selecao(t), "{t:?}");
             assert_eq!(e.pending.is_some(), crate::sketch_fluxo::cota(t), "{t:?}: a cota começa com a seleção prévia");
         }
+    }
+
+    #[test]
+    fn cota_de_circulo_e_de_angulo_seguem_o_cursor() {
+        let mut al = ids();
+        let mut sk = SketchData::default();
+        let c = sk.add_point(&mut al, 0., 0.);
+        let k = sk.add_curve(&mut al, Curve::Circle { c, r: 10. }, false);
+        let opts = dim_options(&sk, &[Ent::Cv(k)]);
+        assert!(matches!(choose_dim(&sk, &opts, Some([2., 0.]), (false, false)), Some(Kind::Radius(..))));
+        assert!(matches!(choose_dim(&sk, &opts, Some([20., 0.]), (false, false)), Some(Kind::Diameter(..))));
+        // a ferramenta de raio só tem o raio: fora do círculo ele continua raio
+        let so_raio: Vec<_> = opts.iter().filter(|o| tool_accepts(Tool::DimRadius, &o.2)).cloned().collect();
+        assert!(matches!(choose_dim(&sk, &so_raio, Some([20., 0.]), (false, false)), Some(Kind::Radius(..))));
+        let o = sk.add_point(&mut al, 0., 0.);
+        let (p, q) = (sk.add_point(&mut al, 10., 0.), sk.add_point(&mut al, 5., 8.));
+        let l1 = sk.add_curve(&mut al, Curve::Line { a: o, b: p }, false);
+        let l2 = sk.add_curve(&mut al, Curve::Line { a: o, b: q }, false);
+        let opts = dim_options(&sk, &[Ent::Cv(l1), Ent::Cv(l2)]);
+        assert!(matches!(choose_dim(&sk, &opts, Some([3., 1.5]), (false, false)), Some(Kind::Angle(..))));
+        assert!(matches!(choose_dim(&sk, &opts, Some([-3., 3.]), (false, false)), Some(Kind::AngleSupp(..))));
     }
 
     #[test]

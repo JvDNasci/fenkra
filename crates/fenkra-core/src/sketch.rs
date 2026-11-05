@@ -66,6 +66,8 @@ pub enum Kind {
     Radius(Id, String),
     Diameter(Id, String),
     Angle(Id, Id, String),
+    /// o suplemento do ângulo entre as direções: o outro quadrante formado pelas duas linhas
+    AngleSupp(Id, Id, String),
     PointLineDistance(Id, Id, String),
     /// ângulo da linha, de `a` para `b`, com a horizontal do sketch (com sinal)
     LineAngle(Id, String),
@@ -92,7 +94,7 @@ impl Kind {
             Kind::Length(..) => "Comprimento",
             Kind::Radius(..) => "Raio",
             Kind::Diameter(..) => "Diâmetro",
-            Kind::Angle(..) => "Ângulo",
+            Kind::Angle(..) | Kind::AngleSupp(..) => "Ângulo",
             Kind::PointLineDistance(..) => "Distância ponto-linha",
             Kind::LineAngle(..) => "Ângulo com a horizontal",
         }
@@ -107,6 +109,7 @@ impl Kind {
             | Kind::Radius(_, v)
             | Kind::Diameter(_, v)
             | Kind::Angle(_, _, v)
+            | Kind::AngleSupp(_, _, v)
             | Kind::PointLineDistance(_, _, v)
             | Kind::LineAngle(_, v) => Some(v),
             _ => None,
@@ -117,7 +120,7 @@ impl Kind {
     }
     /// Cotas em que um valor negativo significa "do outro lado".
     fn has_side(&self) -> bool {
-        matches!(self, Kind::Distance(..) | Kind::DistanceX(..) | Kind::DistanceY(..) | Kind::Length(..) | Kind::Angle(..) | Kind::PointLineDistance(..))
+        matches!(self, Kind::Distance(..) | Kind::DistanceX(..) | Kind::DistanceY(..) | Kind::Length(..) | Kind::Angle(..) | Kind::AngleSupp(..) | Kind::PointLineDistance(..))
     }
     /// Ids referenciados (pontos ou curvas).
     pub fn refs(&self) -> Vec<Id> {
@@ -137,6 +140,7 @@ impl Kind {
             | Kind::DistanceX(a, b, _)
             | Kind::DistanceY(a, b, _)
             | Kind::Angle(a, b, _)
+            | Kind::AngleSupp(a, b, _)
             | Kind::PointLineDistance(a, b, _) => vec![*a, *b],
             Kind::Symmetric(a, b, c) => vec![*a, *b, *c],
         }
@@ -1005,7 +1009,7 @@ impl SketchData {
                     self.move_to(b, [pb[0] + d[0], pb[1] + d[1]], fixed);
                 }
             }
-            Kind::Angle(l1, l2, _) => {
+            Kind::Angle(l1, l2, _) | Kind::AngleSupp(l1, l2, _) => {
                 let (Some((a, b)), Some((c, d))) = (ends(self, l1), ends(self, l2)) else { return };
                 // gira a segunda linha em torno da ponta comum; se ela estiver presa, gira a primeira
                 let (pa, pb, pc, pd) = (self.pos(a), self.pos(b), self.pos(c), self.pos(d));
@@ -1228,9 +1232,13 @@ impl Sys<'_> {
                 }
                 Kind::Radius(c, _) => out.push(self.radius(x, *c) - v),
                 Kind::Diameter(c, _) => out.push(2. * self.radius(x, *c) - v),
-                Kind::Angle(l1, l2, _) => {
+                Kind::Angle(l1, l2, _) | Kind::AngleSupp(l1, l2, _) => {
                     if let (Some((a, b)), Some((c, d))) = (ln(*l1), ln(*l2)) {
-                        let (u, w) = (sub(b, a), sub(d, c));
+                        let (u, mut w) = (sub(b, a), sub(d, c));
+                        // o suplemento é o ângulo com a segunda direção invertida
+                        if matches!(k, Kind::AngleSupp(..)) {
+                            w = [-w[0], -w[1]];
+                        }
                         let n = (len2(u) * len2(w)).max(1e-12);
                         let t = v.to_radians();
                         // zero quando o ângulo (sem sinal) entre as direções vale v
@@ -1733,11 +1741,12 @@ impl SketchData {
                 let d = sub(b, a);
                 return Some(d[1].atan2(d[0]).to_degrees());
             }
-            Kind::Angle(l1, l2, _) => {
+            Kind::Angle(l1, l2, _) | Kind::AngleSupp(l1, l2, _) => {
                 let (a, b) = sys.line(&x, *l1)?;
                 let (c, d) = sys.line(&x, *l2)?;
                 let (u, w) = (sub(b, a), sub(d, c));
-                return Some(cross(u, w).abs().atan2(dot(u, w)).to_degrees());
+                let m = cross(u, w).abs().atan2(dot(u, w)).to_degrees();
+                return Some(if matches!(k, Kind::AngleSupp(..)) { 180. - m } else { m });
             }
             _ => return None,
         };

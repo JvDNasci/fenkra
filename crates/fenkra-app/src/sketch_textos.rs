@@ -23,4 +23,11 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("não há canto entre duas linhas na seleção", "there is no corner between two lines in the selection"),
     ("a cota do canto sumiu", "the corner dimension is gone"),
     ("alguns cantos não comportam esse valor e ficaram como estavam", "some corners cannot take this value and were left as they were"),
+    // snaps (B96)
+    ("origem", "origin"),
+    ("ponta", "end"),
+    ("ponto médio", "midpoint"),
+    ("quadrante", "quadrant"),
+    ("interseção", "intersection"),
+    ("sobre a curva", "on curve"),
 ];
