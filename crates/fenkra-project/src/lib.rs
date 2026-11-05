@@ -145,6 +145,10 @@ pub struct Index {
     /// nome do ambiente em uso; vazio ou desconhecido = numeração simples
     #[serde(default)]
     pub pn_ambiente: String,
+    /// pastas extras onde procurar quem usa os documentos do projeto (relativas à raiz ou absolutas);
+    /// a própria pasta do projeto sempre entra (B94)
+    #[serde(default)]
+    pub pastas_busca: Vec<String>,
     next_id: u64,
     pub documents: Vec<DocEntry>,
 }
@@ -215,6 +219,7 @@ impl Project {
                 next_pn: 1,
                 pn_ambientes: vec![],
                 pn_ambiente: String::new(),
+                pastas_busca: vec![],
                 next_id: 1,
                 documents: vec![],
             },
@@ -579,6 +584,29 @@ impl Project {
         self.registrar(diario::TipoEvento::Transicao, id, antes.label(), st.label(), motivo)
     }
 
+    /// Pastas varridas para achar montagens e desenhos que usam os documentos do projeto.
+    pub fn pastas_de_busca(&self) -> Vec<PathBuf> {
+        let mut v = vec![self.root.clone()];
+        for p in &self.index.pastas_busca {
+            let c = PathBuf::from(p);
+            v.push(if c.is_absolute() { c } else { self.root.join(c) });
+        }
+        v
+    }
+
+    /// Quem usa o documento `id`: montagens (com o nó) e desenhos (com a vista). A lista vem dos
+    /// cabeçalhos e das referências gravadas, sem abrir nem recalcular nenhum documento (B94).
+    pub fn onde_usado(&self, id: u64) -> PResult<Vec<relacoes::Uso>> {
+        let e = self.entry(id)?;
+        Ok(relacoes::onde_usado(&self.pastas_de_busca(), &self.root.join(&e.file), &e.uid))
+    }
+
+    /// Cabeçalho (uid, nome, PN) de cada documento do projeto lido do arquivo de trabalho, sem abrir
+    /// o documento inteiro. Serve para conferir se o índice e os arquivos ainda concordam.
+    pub fn cabecalhos(&self) -> Vec<(u64, Option<relacoes::Cabecalho>)> {
+        self.index.documents.iter().map(|d| (d.id, relacoes::ler_cabecalho(&self.root.join(&d.file)))).collect()
+    }
+
     /// Cópia de um documento como novo item (novo ID e PN), sem histórico.
     pub fn duplicate(&mut self, id: u64) -> PResult<u64> {
         let mut d = self.load(id)?;
@@ -934,6 +962,57 @@ mod tests {
         let s = p.pn_previa(&d).unwrap();
         assert_eq!(pn::texto(&s), "FK-ACME-001");
         assert!(pn::completo(&s));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn onde_usado_lista_montagem_no_e_desenho_do_documento_do_projeto() {
+        let root = tmp("usado-proj");
+        let mut p = Project::create(&root, "T").unwrap();
+        let id = p.add_document(Document::new("Eixo")).unwrap();
+        let outro = p.add_document(Document::new("Mancal")).unwrap();
+        let caminho = p.entry(id).unwrap().file.clone();
+        std::fs::write(
+            root.join("conj.fka"),
+            format!(r#"{{"format_version": 1, "name": "Conjunto", "nodes": [{{"id": 4, "name": "Eixo 1", "kind": {{"Part": {{"path": "{caminho}"}}}}}}]}}"#),
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join("desenhos")).unwrap();
+        std::fs::write(
+            root.join("desenhos").join("d.fkd"),
+            format!(r#"{{"name": "Des", "views": [{{"id": 1, "name": "Frente", "source": {{"path": "../{caminho}"}}}}]}}"#),
+        )
+        .unwrap();
+        let usos = p.onde_usado(id).unwrap();
+        assert_eq!(usos.len(), 2);
+        let m = usos.iter().find(|u| u.tipo == relacoes::TipoRef::Peca).unwrap();
+        assert_eq!((m.no, m.nome_no.as_str(), m.nome.as_str()), (Some(4), "Eixo 1", "Conjunto"));
+        assert!(usos.iter().any(|u| u.tipo == relacoes::TipoRef::Vista));
+        assert!(p.onde_usado(outro).unwrap().is_empty(), "o outro documento não é usado por ninguém");
+        // pasta fora do projeto só entra se for cadastrada
+        let fora = tmp("usado-fora");
+        std::fs::create_dir_all(&fora).unwrap();
+        std::fs::write(
+            fora.join("externa.fka"),
+            format!(r#"{{"name": "Externa", "nodes": [{{"id": 1, "name": "E", "kind": {{"Part": {{"path": {}}}}}}}]}}"#, serde_json::to_string(&root.join(&caminho).display().to_string()).unwrap()),
+        )
+        .unwrap();
+        assert_eq!(p.onde_usado(id).unwrap().len(), 2);
+        p.index.pastas_busca.push(fora.display().to_string());
+        assert_eq!(p.onde_usado(id).unwrap().len(), 3);
+        let _ = std::fs::remove_dir_all(root);
+        let _ = std::fs::remove_dir_all(fora);
+    }
+
+    #[test]
+    fn cabecalhos_do_projeto_concordam_com_o_indice_sem_abrir_os_documentos() {
+        let root = tmp("cabec");
+        let mut p = Project::create(&root, "T").unwrap();
+        let id = p.add_document(Document::new("Placa")).unwrap();
+        let cabs = p.cabecalhos();
+        let c = cabs.iter().find(|(i, _)| *i == id).unwrap().1.clone().unwrap();
+        assert_eq!((c.nome.as_str(), c.pn.as_str()), ("Placa", p.entry(id).unwrap().pn.as_str()));
+        assert_eq!(c.uid, p.entry(id).unwrap().uid);
         let _ = std::fs::remove_dir_all(root);
     }
 }

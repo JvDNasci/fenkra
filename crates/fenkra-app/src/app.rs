@@ -2947,6 +2947,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         self.abrir_empacotar(ui.ctx());
                         ui.close();
                     }
+                    if ui.button(tr("Reparar links…")).clicked() {
+                        self.abrir_reparar_links(ui.ctx());
+                        ui.close();
+                    }
                     ui.separator();
                     if ui.button(tr("Importar STEP…")).clicked() {
                         self.importar_step();
@@ -5881,6 +5885,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let Ok(e) = self.project.as_ref().unwrap().entry(sel).cloned() else { return };
         ui.separator();
         ui.label(RichText::new(format!("{} — {}", e.pn, e.name)).strong());
+        self.painel_onde_usado(ui, sel);
         if !e.description.is_empty() {
             ui.label(&e.description);
         }

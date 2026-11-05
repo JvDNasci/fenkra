@@ -3172,6 +3172,22 @@ static TABLE: &[(&str, &str)] = &[
     ("Pacote reaberto e verificado: tudo confere.", "Package reopened and verified: everything checks out."),
     ("arquivo(s) com problema", "file(s) with a problem"),
     ("referência(s) quebrada(s)", "broken reference(s)"),
+    // PDM: relações, onde é usado e reparar links (B94)
+    ("Nenhum documento usa esta peça.", "No document uses this part."),
+    ("Abre o documento e seleciona o componente na árvore", "Opens the document and selects the component in the tree"),
+    ("Onde é usado", "Where used"),
+    ("Salve o documento uma vez antes de reparar links", "Save the document once before repairing links"),
+    ("Reparar links", "Repair links"),
+    ("Reparar links…", "Repair links…"),
+    ("Todas as referências resolvem.", "All references resolve."),
+    ("Reparar", "Repair"),
+    ("usar", "use"),
+    ("outro documento ocupa este caminho", "another document occupies this path"),
+    ("usar o original", "use the original"),
+    ("não encontrado", "not found"),
+    ("Localizar…", "Locate…"),
+    ("Reparar os encontrados", "Repair the ones found"),
+    ("Referências gravadas no arquivo. Salve ou descarte as alterações e reabra para vê-las.", "References written to the file. Save or discard your changes and reopen to see them."),
 ];
 
 #[cfg(test)]

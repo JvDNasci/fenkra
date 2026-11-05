@@ -8,6 +8,7 @@
 use super::*;
 use fenkra_project::pacote::{self, Estrutura, OpcoesPacote, ResultadoPacote};
 use fenkra_project::pn::{self, AmbientePn};
+use fenkra_project::relacoes::{self, Diagnostico, Uso, Veredito};
 use fenkra_project::salvar_como::{AcaoRef, Conflito, ModoSalvarComo, PlanoSalvarComo, ResolucaoConflito};
 
 /// Campos em edição do ambiente de numeração.
@@ -193,6 +194,7 @@ impl App {
     pub(super) fn janelas_projeto(&mut self, ctx: &egui::Context) {
         self.janela_salvar_como(ctx);
         self.janela_empacotar(ctx);
+        self.janela_reparar_links(ctx);
     }
 
     fn janela_salvar_como(&mut self, ctx: &egui::Context) {
@@ -413,5 +415,176 @@ impl App {
             st.resultado = Some(pacote::empacotar(&st.raiz, &PathBuf::from(st.destino_txt.trim()), &o).map_err(|e| e.to_string()));
         }
         ctx.data_mut(|d| d.insert_temp(id_pacote(), if fechar { None } else { Some(st) }));
+    }
+}
+
+// ----------------------------------------------------------------------------- B94
+
+/// Janela "Reparar links": diagnóstico das referências do arquivo aberto.
+#[derive(Clone)]
+struct ReparoUi {
+    arquivo: PathBuf,
+    diag: Vec<Diagnostico>,
+}
+
+fn id_reparo() -> egui::Id {
+    egui::Id::new("fenkra_reparar_links")
+}
+
+impl App {
+    /// Abre o documento que usa a peça e, se for montagem, seleciona o componente na árvore.
+    pub(super) fn ir_para_uso(&mut self, u: &Uso) {
+        if self.algo_modificado() {
+            // há alterações por salvar: a pergunta de sempre decide; a seleção do nó não é aplicada
+            self.com_confirmacao(Acao::AbrirCaminho(u.arquivo.clone()));
+            return;
+        }
+        self.open_path(&u.arquivo);
+        if let (Some(no), Some(st)) = (u.no, self.asm.as_mut()) {
+            st.sel = Some(fenkra_core::Id(no));
+        }
+    }
+
+    /// Lista de "quem usa" com uma linha clicável por uso. Devolve o uso clicado.
+    pub(super) fn lista_de_usos(&self, ui: &mut egui::Ui, usos: &[Uso]) -> Option<Uso> {
+        let mut clicado = None;
+        if usos.is_empty() {
+            ui.label(RichText::new(tr("Nenhum documento usa esta peça.")).weak());
+        }
+        for u in usos {
+            let arq = u.arquivo.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let nome = if u.nome.is_empty() { arq.clone() } else { format!("{} ({arq})", u.nome) };
+            let detalhe = if u.nome_no.is_empty() { tr(u.tipo.rotulo()).to_string() } else { format!("{} · {}", tr(u.tipo.rotulo()), u.nome_no) };
+            let r = ui.selectable_label(false, format!("{nome} — {detalhe}"));
+            if r.on_hover_text(tr("Abre o documento e seleciona o componente na árvore")).clicked() {
+                clicado = Some(u.clone());
+            }
+        }
+        clicado
+    }
+
+    /// Seção "Onde é usado" do painel do projeto para o documento selecionado.
+    pub(super) fn painel_onde_usado(&mut self, ui: &mut egui::Ui, id: u64) {
+        let Some(p) = self.project.as_ref() else { return };
+        let usos = p.onde_usado(id).unwrap_or_default();
+        let mut ir = None;
+        egui::CollapsingHeader::new(format!("{} ({})", tr("Onde é usado"), usos.len())).id_salt(("onde_usado", id)).show(ui, |ui| {
+            ir = self.lista_de_usos(ui, &usos);
+        });
+        if let Some(u) = ir {
+            self.ir_para_uso(&u);
+        }
+    }
+
+    pub(super) fn abrir_reparar_links(&mut self, ctx: &egui::Context) {
+        let Some((arquivo, _)) = self.arquivo_do_documento_ativo() else {
+            self.toast(tr("Salve o documento uma vez antes de reparar links"), true);
+            return;
+        };
+        let diag = self.diagnosticar_links(&arquivo);
+        ctx.data_mut(|d| d.insert_temp(id_reparo(), Some(ReparoUi { arquivo, diag })));
+    }
+
+    fn diagnosticar_links(&self, arquivo: &std::path::Path) -> Vec<Diagnostico> {
+        let mut busca: Vec<PathBuf> = arquivo.parent().map(|p| vec![p.to_path_buf()]).unwrap_or_default();
+        if let Some(p) = &self.project {
+            busca.extend(p.pastas_de_busca());
+        }
+        relacoes::diagnosticar(arquivo, &busca)
+    }
+
+    pub(super) fn janela_reparar_links(&mut self, ctx: &egui::Context) {
+        let Some(mut st) = ctx.data(|d| d.get_temp::<Option<ReparoUi>>(id_reparo())).flatten() else { return };
+        let (mut fechar, mut todos) = (false, false);
+        let mut aplicar: Option<(String, PathBuf)> = None;
+        egui::Window::new(tr("Reparar links")).collapsible(false).resizable(true).default_width(600.).show(ctx, |ui| {
+            ui.label(RichText::new(st.arquivo.display().to_string()).weak().small());
+            let quebradas = st.diag.iter().filter(|d| d.veredito != Veredito::Ok).count();
+            if quebradas == 0 {
+                ui.label(tr("Todas as referências resolvem."));
+            }
+            egui::ScrollArea::vertical().max_height(300.).show(ui, |ui| {
+                for d in &st.diag {
+                    ui.horizontal(|ui| {
+                        let rot = if d.referencia.nome.is_empty() { tr(d.referencia.tipo.rotulo()).to_string() } else { d.referencia.nome.clone() };
+                        ui.label(RichText::new(format!("{rot}: {}", d.referencia.caminho)).small());
+                        match &d.veredito {
+                            Veredito::Ok => {
+                                ui.label(RichText::new("✔").color(ui.visuals().hyperlink_color));
+                            }
+                            Veredito::Movido(p) => {
+                                if ui.small_button(tr("Reparar")).on_hover_text(p.display().to_string()).clicked() {
+                                    aplicar = Some((d.referencia.caminho.clone(), p.clone()));
+                                }
+                            }
+                            Veredito::Varios(v) => {
+                                for p in v {
+                                    let nome = p.parent().and_then(|x| x.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                                    if ui.small_button(format!("{} {nome}", tr("usar"))).on_hover_text(p.display().to_string()).clicked() {
+                                        aplicar = Some((d.referencia.caminho.clone(), p.clone()));
+                                    }
+                                }
+                            }
+                            Veredito::UidDiferente { alternativa } => {
+                                ui.label(RichText::new(tr("outro documento ocupa este caminho")).color(ui.visuals().warn_fg_color).small());
+                                if let Some(p) = alternativa {
+                                    if ui.small_button(tr("usar o original")).on_hover_text(p.display().to_string()).clicked() {
+                                        aplicar = Some((d.referencia.caminho.clone(), p.clone()));
+                                    }
+                                }
+                            }
+                            Veredito::Perdido => {
+                                ui.label(RichText::new(tr("não encontrado")).color(ui.visuals().error_fg_color).small());
+                                if ui.small_button(tr("Localizar…")).clicked() {
+                                    if let Some(p) = rfd::FileDialog::new().pick_file() {
+                                        aplicar = Some((d.referencia.caminho.clone(), p));
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            });
+            ui.horizontal(|ui| {
+                let achaveis = st.diag.iter().any(|d| matches!(d.veredito, Veredito::Movido(_)));
+                if ui.add_enabled(achaveis, egui::Button::new(tr("Reparar os encontrados"))).clicked() {
+                    todos = true;
+                }
+                if ui.button(tr("Fechar")).clicked() {
+                    fechar = true;
+                }
+            });
+        });
+        let mut mudou = false;
+        if todos {
+            let busca: Vec<PathBuf> = st.arquivo.parent().map(|p| vec![p.to_path_buf()]).unwrap_or_default().into_iter().chain(self.project.iter().flat_map(|p| p.pastas_de_busca())).collect();
+            match relacoes::reparar_automatico(&st.arquivo, &busca) {
+                Ok(v) => {
+                    self.toast(format!("{} referência(s) reparada(s)", v.len()), false);
+                    mudou = !v.is_empty();
+                }
+                Err(e) => self.toast(e.to_string(), true),
+            }
+        } else if let Some((velho, novo)) = aplicar {
+            match relacoes::aplicar_reparos(&st.arquivo, &[(velho, novo)]) {
+                Ok(n) => {
+                    self.toast(format!("{n} referência(s) reparada(s)"), false);
+                    mudou = n > 0;
+                }
+                Err(e) => self.toast(e.to_string(), true),
+            }
+        }
+        if mudou {
+            st.diag = self.diagnosticar_links(&st.arquivo);
+            // o arquivo do disco mudou: reabrir mostra as referências novas (se há edição por salvar, a
+            // pergunta de sempre decide)
+            let arq = st.arquivo.clone();
+            if self.algo_modificado() {
+                self.toast(tr("Referências gravadas no arquivo. Salve ou descarte as alterações e reabra para vê-las."), false);
+            } else {
+                self.open_path(&arq);
+            }
+        }
+        ctx.data_mut(|d| d.insert_temp(id_reparo(), if fechar { None } else { Some(st) }));
     }
 }
