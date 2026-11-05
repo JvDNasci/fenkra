@@ -141,6 +141,11 @@ pub static CAMPOS: &[(&str, &str, &str)] = &[
     ("Passo (mm/volta)", "Avanço por volta completa da hélice. Maior que zero; passos grandes deixam a hélice mais esticada.", "Advance per full turn of the helix. Above zero; large pitches stretch the helix."),
     ("mm por volta", "Avanço da hélice a cada volta completa. Maior que zero; é o passo da rosca ou da mola.", "Helix advance per full turn. Above zero; it is the thread or spring pitch."),
     ("Voltas", "Número de voltas da hélice. Aceita frações (2,5); maior que zero.", "Number of helix turns. Accepts fractions (2.5); above zero."),
+    // chapa: estilos (B283)
+    ("Alívio padrão", "Largura do alívio que toda aba herda nas pontas recuadas. Zero desliga; típico 1 a 1,5 vez a espessura.", "Relief width every flange inherits at recessed ends. Zero turns it off; typically 1 to 1.5 times the thickness."),
+    ("Largura da aba", "Largura do trecho da aresta que recebe a aba. Maior que zero e até o comprimento da aresta; vale em cada aresta do laço.", "Width of the edge stretch that receives the flange. Above zero and up to the edge length; applies to each edge in the loop."),
+    ("Início da aba", "Distância da ponta de referência da aresta até onde a aba começa. Zero encosta na ponta; início mais a largura não passa do fim da aresta.", "Distance from the edge's reference end to where the flange starts. Zero touches the end; start plus width cannot pass the edge end."),
+    ("Tamanho do canto", "Tamanho do alívio de canto sugerido ao criar o comando. Maior que zero; costuma ser 1 a 2 vezes a espessura.", "Corner relief size suggested when the command is created. Above zero; usually 1 to 2 times the thickness."),
 ];
 
 /// Dica do campo pelo rótulo em português.

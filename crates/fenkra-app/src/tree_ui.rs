@@ -469,6 +469,7 @@ pub fn icone_comando(k: &FeatureKind) -> &'static str {
         SmCut(_) => "sm_recorte",
         SmProfileFlange(_) => "sm_aba_perfil",
         SmCurveFlange(_) => "sm_aba_curva",
+        SmFlangeLoop(_) => "sm_aba",
         SmCornerRelief(_) => "sm_alivio_canto",
         SmArcSlot(_) => "sm_rasgo_circular",
         SmSurfFlange(_) => "sm_aba_superficie",

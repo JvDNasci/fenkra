@@ -28,6 +28,8 @@ pub mod furo_norma;
 pub mod chapa_linha;
 mod chapa_flat;
 mod arestas;
+mod chapa_laco;
+pub use chapa_laco::{laco_de_malha, recuos_extensao};
 pub mod planificada;
 pub use chapa_flat::{passos_planificados, PassoPlanificado};
 pub mod st_frames;
@@ -3023,12 +3025,14 @@ impl Ctx<'_> {
 
     /// Parâmetros de chapa avaliados.
     fn sheet(&self) -> Result<SheetValues, String> {
-        let s = self.doc.sheet.as_ref().ok_or("defina a chapa (espessura, raio, fator K) em Chapa › Parâmetros")?;
+        // com estilo escolhido (B283), cada campo vem do estilo ou da sobrescrita da peça
+        let s = &self.doc.sheet_efetivo().ok_or("defina a chapa (espessura, raio, fator K) em Chapa › Parâmetros")?;
         let t = ev(&s.thickness, &self.vars, "espessura da chapa")?;
         let r = ev(&s.radius, &self.vars, "raio de dobra")?;
         let k0 = if s.method == 0 { ev(&s.k, &self.vars, "fator K")? } else { 0.44 };
         let allowance = if s.method == 0 { 0. } else { ev(&s.allowance, &self.vars, "dedução/tolerância de dobra")? };
-        Ok(SheetValues { t, r, flat: s.flat, method: s.method, k0, allowance })
+        let relief = if s.relief.trim().is_empty() { None } else { Some(ev(&s.relief, &self.vars, "alívio padrão da chapa")?) };
+        Ok(SheetValues { t, r, flat: s.flat, method: s.method, k0, allowance, relief, relief_kind: s.relief_kind })
     }
 
     /// Aresta da aba/bainha por dono + papel (ADR 0010): com chave v2, o ponto vira o ponto médio
@@ -3506,6 +3510,7 @@ impl Ctx<'_> {
             f.kind,
             FeatureKind::SmWall(_)
                 | FeatureKind::SmFlange(_)
+                | FeatureKind::SmFlangeLoop(_)
                 | FeatureKind::SmHem(_)
                 | FeatureKind::SmJoggle(_)
                 | FeatureKind::SmLouver(_)
@@ -4217,91 +4222,8 @@ impl Ctx<'_> {
                 self.apply_roles(f.target, tool, BoolOp::Add, f.id, Some(roles))?;
                 Ok(None)
             }
-            FeatureKind::SmFlange(fl) => {
-                let sp = self.sheet()?;
-                let (fl_edge, from) = self.chapa_aresta("aba", f, fl.edge, fl.edge_key.as_ref(), sp.flat)?;
-                let r = match &fl.radius {
-                    Some(e) => ev(e, &self.vars, "raio")?,
-                    None => sp.r,
-                };
-                let p = fenkra_kernel::SheetFlange {
-                    t: sp.t,
-                    r,
-                    angle: ev(&fl.angle, &self.vars, "ângulo")?,
-                    length: ev(&fl.length, &self.vars, "comprimento")?,
-                    off1: ev(&fl.off1, &self.vars, "recuo 1")?.max(if fl.min_gap { 1e-4 } else { 0. }),
-                    off2: ev(&fl.off2, &self.vars, "recuo 2")?.max(if fl.min_gap { 1e-4 } else { 0. }),
-                    flip: fl.flip,
-                    flat: sp.flat,
-                    k: sp.k_for(r),
-                };
-                let relief = match &fl.relief {
-                    Some(w) => Some(ev(w, &self.vars, "largura do alívio")?),
-                    None => None,
-                };
-                // lado do material: recua a parede e a aba começa mais para dentro
-                let trim = match fl.side {
-                    1 => p.t,
-                    2 => p.t + p.r,
-                    _ => 0.,
-                };
-                let mut edge = fl_edge;
-                if trim > 1e-9 {
-                    let b = self.body(f.target).ok_or("a aba precisa de uma parede de chapa antes")?.clone();
-                    let e0 = self.map_point(fl_edge, from, p.flat);
-                    let (_, info) = b.sm_flange(e0, p).map_err(k)?;
-                    let e = geo3d::unit(geo3d::sub(info.ends[1], info.ends[0])).ok_or("aresta nula")?;
-                    let z = geo3d::mul(info.normal, -1.);
-                    let x = e;
-                    let y = fenkra_kernel::cross(z, x);
-                    // faixa ao longo da aresta, da borda para dentro (só o trecho da aba)
-                    let len = geo3d::dist(info.ends[0], info.ends[1]);
-                    let start = if geo3d::dot(y, info.out) > 0. { geo3d::sub(info.ends[0], geo3d::mul(info.out, trim)) } else { info.ends[0] };
-                    let strip = Shape::box_tool(geo3d::add(start, geo3d::mul(info.normal, 0.01)), x, z, [len, trim, p.t + 0.02]).map_err(k)?;
-                    self.apply(f.target, strip, BoolOp::Cut, f.id)?;
-                    edge = geo3d::sub(e0, geo3d::mul(info.out, trim));
-                    if p.flat != from {
-                        edge = self.map_point(edge, p.flat, from);
-                    }
-                }
-                self.miter_next = fl.miter;
-                let out = self.sheet_tool(f, edge, from, p, true)?;
-                if let (Some(w), Some(info)) = (relief, self.last_sheet) {
-                    // alívio de canto: corte retangular atrás da dobra em cada ponta recuada
-                    let depth = p.r + p.t;
-                    let e = geo3d::unit(geo3d::sub(info.ends[1], info.ends[0])).ok_or("aresta nula")?;
-                    let mut cut = Shape::empty();
-                    for (end, x, off) in [(info.ends[0], geo3d::mul(e, -1.), p.off1), (info.ends[1], e, p.off2)] {
-                        if off <= 1e-9 {
-                            continue;
-                        }
-                        let z = geo3d::mul(info.normal, -1.);
-                        let y = fenkra_kernel::cross(z, x);
-                        let o = if geo3d::dot(y, info.out) > 0. { geo3d::sub(end, geo3d::mul(info.out, depth)) } else { end };
-                        let wr = w.min(off);
-                        let bx = match fl.relief_kind {
-                            // rasgo: corte fino
-                            2 => Shape::box_tool(o, x, z, [wr.min(0.5), depth, p.t]).map_err(k)?,
-                            // redondo: retângulo com a ponta em meio círculo (oblongo)
-                            1 => {
-                                let inward = if geo3d::dot(y, info.out) > 0. { geo3d::mul(info.out, -1.) } else { info.out };
-                                let far = if geo3d::dot(y, info.out) > 0. { o } else { geo3d::add(o, geo3d::mul(info.out, -depth)) };
-                                let _ = inward;
-                                let rect = Shape::box_tool(o, x, z, [wr, depth, p.t]).map_err(k)?;
-                                let top = geo3d::add(geo3d::add(far, geo3d::mul(x, wr / 2.)), geo3d::mul(info.normal, 0.5));
-                                let cyl = Shape::hole_tool(top, z, wr, p.t + 1., HoleShape::Simple).map_err(k)?;
-                                rect.compound(&cyl)
-                            }
-                            _ => Shape::box_tool(o, x, z, [wr, depth, p.t]).map_err(k)?,
-                        };
-                        cut = if cut.is_null() { bx } else { cut.compound(&bx) };
-                    }
-                    if !cut.is_null() {
-                        self.apply(f.target, cut, BoolOp::Cut, f.id)?;
-                    }
-                }
-                Ok(out)
-            }
+            FeatureKind::SmFlange(fl) => self.run_flange(f, fl, &ExtensaoAba::Inteira, false),
+            FeatureKind::SmFlangeLoop(lp) => self.run_flange_loop(f, lp),
             FeatureKind::SmJoggle(j) => {
                 let sp = self.sheet()?;
                 let depth = ev(&j.depth, &self.vars, "desvio")?;
@@ -5433,7 +5355,8 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
 fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
     let t0 = Instant::now();
     let (vars, param_error) = match doc.eval_params() {
-        Ok(v) => (v, None),
+        // `espessura` vale em toda fórmula da chapa (raio = 1.15*espessura), do estilo ou do comando
+        Ok(v) => (doc.sheet_efetivo().map(|s| s.vars_com_espessura(&v)).unwrap_or(v), None),
         Err(e) => (HashMap::new(), Some(e.to_string())),
     };
     // outra qualidade: as malhas guardadas não servem mais (os comandos continuam valendo)
@@ -5472,7 +5395,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
     // assinatura global: só o que vale para todos (links de outras peças, chapa, coletores).
     // Parâmetros e referências entram na assinatura de quem os usa — mudar um parâmetro refaz
     // só os comandos que citam esse parâmetro (e quem depende deles).
-    let sheet_vars = serde_json::to_string(&doc.sheet).unwrap_or_default();
+    let sheet_vars = serde_json::to_string(&(&doc.sheet, &doc.sheet_styles)).unwrap_or_default();
     let global = hash_of(
         &[
             &serde_json::to_string(&doc.external).unwrap_or_default(),
@@ -6575,6 +6498,9 @@ struct SheetValues {
     method: u8,
     k0: f64,
     allowance: f64,
+    /// largura do alívio padrão do estilo (a aba herda quando não define o próprio)
+    relief: Option<f64>,
+    relief_kind: u8,
 }
 
 impl SheetValues {
@@ -6717,8 +6643,9 @@ pub fn contorno_planificado_no_sketch(doc: &Document, cut: Id) -> Result<Vec<Vec
 /// Tabela de dobras da peça de chapa (ângulo, raio, comprimento desenvolvido e dedução). Usa a
 /// mesma compensação da geometria (`chapa::compensacao`) e o fator K do raio de cada dobra.
 pub fn bend_table(doc: &Document) -> Vec<BendRow> {
-    let Some(s) = &doc.sheet else { return vec![] };
+    let Some(s) = &doc.sheet_efetivo() else { return vec![] };
     let Ok(vars) = doc.eval_params() else { return vec![] };
+    let vars = s.vars_com_espessura(&vars);
     let num = |e: &String| ev(e, &vars, "").unwrap_or(0.);
     let (t, r0) = (num(&s.thickness), num(&s.radius));
     let k0 = if s.method == 0 { num(&s.k) } else { 0.44 };
@@ -6728,6 +6655,7 @@ pub fn bend_table(doc: &Document) -> Vec<BendRow> {
         // (ângulo, raio, quantidade de dobras iguais que o comando faz)
         let (ang, r, n) = match &f.kind {
             FeatureKind::SmFlange(fl) => (num(&fl.angle), fl.radius.as_ref().map(num).unwrap_or(r0), 1),
+            FeatureKind::SmFlangeLoop(l) => (num(&l.angle), l.radius.as_ref().map(num).unwrap_or(r0), l.edges.len().max(1)),
             FeatureKind::SmHem(h) => (180., (num(&h.gap) / 2.).max(0.01), 1),
             FeatureKind::SmBend(b) => (num(&b.angle), b.radius.as_ref().map(num).unwrap_or(r0), 1),
             // abas por cadeia e por superfície também entram no mapa de dobras (ângulo e raio)
@@ -6977,6 +6905,12 @@ pub fn example_document() -> Document {
     d.feature_mut(fil).unwrap().folder = Some(fol);
     d
 }
+
+#[cfg(test)]
+mod chapa_estilo_tests;
+
+#[cfg(test)]
+mod chapa_laco_tests;
 
 #[cfg(test)]
 mod tests {
