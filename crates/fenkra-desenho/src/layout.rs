@@ -64,6 +64,8 @@ pub struct Item {
     pub width: Option<f64>,
     /// texto em negrito
     pub bold: bool,
+    /// objeto com problema (âncora quebrada): a tela pinta com a cor de erro do tema
+    pub alert: bool,
 }
 
 /// Largura aproximada do texto (fonte sem serifa).
@@ -80,6 +82,7 @@ struct Out {
     width: Option<f64>,
     tcolor: Option<[u8; 3]>,
     bold: bool,
+    alert: bool,
     arrow_kind: PmiArrow,
 }
 
@@ -91,6 +94,7 @@ impl Out {
         self.width = None;
         self.tcolor = None;
         self.bold = false;
+        self.alert = false;
         self.arrow_kind = PmiArrow::Padrao;
     }
     /// Cor, espessura (mm), negrito e setas de um estilo de anotação.
@@ -103,7 +107,7 @@ impl Out {
     }
     fn push(&mut self, prim: Prim, text: bool) {
         let color = if text { self.tcolor } else { self.color };
-        self.items.push(Item { owner: self.owner, prim, color, width: if text { None } else { self.width }, bold: text && self.bold });
+        self.items.push(Item { owner: self.owner, prim, color, width: if text { None } else { self.width }, bold: text && self.bold, alert: self.alert });
     }
     fn line(&mut self, pts: Vec<V2>, style: Style) {
         if pts.len() >= 2 {
@@ -279,7 +283,7 @@ pub fn dim_value(dm: &Dim, v: &View, p: &Proj) -> Option<(f64, Vec<V2>)> {
 
 /// Texto da cota: valor (ou texto próprio, onde "<>" vira o valor) e tolerância.
 pub fn dim_text(d: &Drawing, dm: &Dim, val: f64) -> String {
-    let n = d.num(val);
+    let n = d.num_p(val, dm.precision);
     let base = match dm.kind {
         DimKind::Radius => format!("R{n}"),
         DimKind::Diameter => format!("Ø{n}"),
@@ -287,11 +291,156 @@ pub fn dim_text(d: &Drawing, dm: &Dim, val: f64) -> String {
         _ => n,
     };
     let t = if dm.text.is_empty() { base } else { dm.text.replace("<>", &base) };
-    if dm.tol.is_empty() {
+    let tol = dm.tol_text(d);
+    if tol.is_empty() {
         t
     } else {
-        format!("{t} {}", dm.tol)
+        format!("{t} {tol}")
     }
+}
+
+/// Primitivas de uma vista (linhas, sombreado, hachura, rótulo e marcas de corte/detalhe).
+fn view_into(o: &mut Out, d: &Drawing, v: &View, p: &Proj, th: f64) {
+    o.reset(Some(v.id));
+    // sombreado (por baixo das arestas)
+    if v.render != Render::Arestas {
+        for (t, g) in &p.shade {
+            o.color = Some([*g, *g, *g]);
+            o.fill(t.iter().map(|q| to_sheet(v, p, *q)).collect());
+        }
+    }
+    o.color = v.color;
+    for (pl, k) in &p.lines {
+        let style = match k {
+            3 => Style::Hidden,
+            4 | 6 => Style::Thin,
+            5 => Style::Center,
+            _ => Style::Visible,
+        };
+        // só sombreado: sem arestas (a borda do detalhe fica)
+        if v.render == Render::Sombreado && *k != 4 {
+            continue;
+        }
+        o.width = (style == Style::Visible && v.line_width > 0.).then_some(v.line_width);
+        o.line(pl.iter().map(|q| to_sheet(v, p, *q)).collect(), style);
+    }
+    o.width = None;
+    o.color = None;
+    for (q, t) in &p.labels {
+        let s = to_sheet(v, p, *q);
+        o.text([s[0] + 1., s[1] + 1.], t.clone(), th * 0.7, 0., Align::Left);
+    }
+    // hachura: padrão, ângulo e passo da vista; no corte de montagem cada peça alterna o ângulo
+    if !p.hatch.is_empty() {
+        let loops: Vec<Vec<V2>> = p.hatch.iter().map(|lp| lp.iter().map(|q| to_sheet(v, p, *q)).collect()).collect();
+        for lp in &loops {
+            o.line(lp.clone(), Style::Visible);
+        }
+        for (a, b) in view_hatch(v, &loops, &p.hatch_group) {
+            o.seg(a, b, Style::Thin);
+        }
+    }
+    let (lo, hi) = view_rect(v, p);
+    if let Some(e) = &p.error {
+        o.text([lo[0], hi[1] + 2.], format!("! {e}"), th * 0.8, 0., Align::Left);
+    }
+    if v.label {
+        let lbl = match &v.kind {
+            ViewKind::Section { label, .. } => format!("CORTE {label}-{label} ({})", scale_text(v.scale)),
+            ViewKind::Detail { label, .. } => format!("DETALHE {label} ({})", scale_text(v.scale)),
+            _ => format!("{} ({})", v.name, scale_text(v.scale)),
+        };
+        o.text([(lo[0] + hi[0]) / 2., lo[1] - th * 1.8], lbl, th, 0., Align::Center);
+    }
+    // marcas nas vistas mãe: linha de corte e círculo de detalhe
+    for c in d.views.iter() {
+        match &c.kind {
+            ViewKind::Section { parent, a, b, label } if *parent == v.id => {
+                o.owner = Some(c.id);
+                let (sa, sb) = (to_sheet(v, p, *a), to_sheet(v, p, *b));
+                o.seg(sa, sb, Style::Center);
+                let u = v2unit(v2sub(sb, sa));
+                // seta para o lado que se vê (oposto ao observador)
+                let n = [u[1], -u[0]];
+                for (e, s) in [(sa, -1.), (sb, 1.)] {
+                    let e2 = v2add(e, v2mul(u, s * 4.));
+                    o.seg(e, e2, Style::Thick);
+                    let tail = v2add(e2, v2mul(n, -6.));
+                    o.seg(e2, tail, Style::Thin);
+                    o.arrow(e2, n, 3.);
+                    o.text(v2add(v2add(tail, v2mul(u, s * 2.5)), [0., -th / 2.]), label.clone(), th * 1.2, 0., Align::Center);
+                }
+                o.owner = Some(v.id);
+            }
+            ViewKind::Detail { parent, center, radius, label } if *parent == v.id => {
+                o.owner = Some(c.id);
+                let pts = circle(*center, *radius).into_iter().map(|q| to_sheet(v, p, q)).collect();
+                o.line(pts, Style::Thin);
+                let at = to_sheet(v, p, [center[0] + radius * 0.75, center[1] + radius * 0.75]);
+                o.text([at[0] + 1., at[1] + 1.], label.clone(), th * 1.2, 0., Align::Left);
+                o.owner = Some(v.id);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Primitivas de uma vista só (prévia/fantasma), sem moldura nem o resto da folha.
+pub fn view_items(d: &Drawing, id: Id, m: &mut Models) -> Vec<Item> {
+    let Some(v) = d.view(id) else { return vec![] };
+    let p = m.proj(d, id);
+    let mut o = Out::default();
+    view_into(&mut o, d, v, &p, d.text_height);
+    o.items
+}
+
+/// Primitivas de uma cota já medida (`val` e `pts` vêm de `dim_value`).
+fn dim_into(o: &mut Out, d: &Drawing, dm: &Dim, v: &View, p: &Proj, val: f64, pts: &[V2]) {
+    let th = d.text_height;
+    o.reset(Some(dm.id));
+    o.alert = !dm.loose && !dim_anchors_ok(dm, p).iter().all(|b| *b);
+    let st = dm.style.over(&v.ann);
+    o.style(&st);
+    let th = if st.size > 0. { st.size as f64 } else { th };
+    let text = format!("{}{}{}", st.prefix, dim_text(d, dm, val), st.suffix);
+    dimension(o, dm, pts, &text, th);
+}
+
+/// Primitivas de uma cota avulsa (prévia/fantasma): vazio se não der para medir.
+pub fn dim_items(d: &Drawing, dm: &Dim, m: &mut Models) -> Vec<Item> {
+    let Some(v) = d.view(dm.view) else { return vec![] };
+    let p = m.proj(d, v.id);
+    let Some((val, pts)) = dim_value(dm, v, &p) else { return vec![] };
+    let mut o = Out::default();
+    dim_into(&mut o, d, dm, v, &p, val, &pts);
+    o.items
+}
+
+/// Primitivas de uma tabela avulsa (prévia/fantasma).
+pub fn table_items(pos: V2, title: &str, data: &crate::source::TableData, th: f64) -> Vec<Item> {
+    let mut o = Out::default();
+    o.reset(None);
+    table(&mut o, pos, title, &data.headers, &data.rows, th * 0.8);
+    o.items
+}
+
+/// Primitivas de uma nota ou símbolo avulso (prévia/fantasma). A ponta presa à vista segue o
+/// ponto do modelo, como na folha.
+pub fn note_items(d: &Drawing, n: &Note, m: &mut Models) -> Vec<Item> {
+    let mut o = Out::default();
+    o.reset(Some(n.id));
+    let mut n2 = n.clone();
+    let view = n.view.and_then(|id| d.view(id));
+    if let (Some(v), Some(a3)) = (view, n.anchor3) {
+        let p = m.proj(d, v.id);
+        if let Some(ax) = p.axes {
+            n2.leader = Some(to_sheet(v, &p, ax.project(a3)));
+        }
+    }
+    n2.style = view.map(|v| n.style.over(&v.ann)).unwrap_or_else(|| n.style.clone());
+    o.style(&n2.style);
+    note(&mut o, &n2);
+    o.items
 }
 
 /// Todas as primitivas da folha.
@@ -304,100 +453,14 @@ pub fn sheet(d: &Drawing, sheet: Id, m: &mut Models) -> Vec<Item> {
     let views: Vec<&View> = d.views.iter().filter(|v| v.sheet == sheet).collect();
     for v in &views {
         let p = m.proj(d, v.id);
-        o.reset(Some(v.id));
-        // sombreado (por baixo das arestas)
-        if v.render != Render::Arestas {
-            for (t, g) in &p.shade {
-                o.color = Some([*g, *g, *g]);
-                o.fill(t.iter().map(|q| to_sheet(v, &p, *q)).collect());
-            }
-        }
-        o.color = v.color;
-        for (pl, k) in &p.lines {
-            let style = match k {
-                3 => Style::Hidden,
-                4 | 6 => Style::Thin,
-                5 => Style::Center,
-                _ => Style::Visible,
-            };
-            // só sombreado: sem arestas (a borda do detalhe fica)
-            if v.render == Render::Sombreado && *k != 4 {
-                continue;
-            }
-            o.width = (style == Style::Visible && v.line_width > 0.).then_some(v.line_width);
-            o.line(pl.iter().map(|q| to_sheet(v, &p, *q)).collect(), style);
-        }
-        o.width = None;
-        o.color = None;
-        for (q, t) in &p.labels {
-            let s = to_sheet(v, &p, *q);
-            o.text([s[0] + 1., s[1] + 1.], t.clone(), th * 0.7, 0., Align::Left);
-        }
-        // hachura a 45° (espaçamento fixo na folha)
-        if !p.hatch.is_empty() {
-            let loops: Vec<Vec<V2>> = p.hatch.iter().map(|lp| lp.iter().map(|q| to_sheet(v, &p, *q)).collect()).collect();
-            for lp in &loops {
-                o.line(lp.clone(), Style::Visible);
-            }
-            for (a, b) in hatch(&loops, 2.5) {
-                o.seg(a, b, Style::Thin);
-            }
-        }
-        let (lo, hi) = view_rect(v, &p);
-        if let Some(e) = &p.error {
-            o.text([lo[0], hi[1] + 2.], format!("! {e}"), th * 0.8, 0., Align::Left);
-        }
-        if v.label {
-            let lbl = match &v.kind {
-                ViewKind::Section { label, .. } => format!("CORTE {label}-{label} ({})", scale_text(v.scale)),
-                ViewKind::Detail { label, .. } => format!("DETALHE {label} ({})", scale_text(v.scale)),
-                _ => format!("{} ({})", v.name, scale_text(v.scale)),
-            };
-            o.text([(lo[0] + hi[0]) / 2., lo[1] - th * 1.8], lbl, th, 0., Align::Center);
-        }
-        // marcas nas vistas mãe: linha de corte e círculo de detalhe
-        for c in d.views.iter() {
-            match &c.kind {
-                ViewKind::Section { parent, a, b, label } if *parent == v.id => {
-                    o.owner = Some(c.id);
-                    let (sa, sb) = (to_sheet(v, &p, *a), to_sheet(v, &p, *b));
-                    o.seg(sa, sb, Style::Center);
-                    let u = v2unit(v2sub(sb, sa));
-                    // seta para o lado que se vê (oposto ao observador)
-                    let n = [u[1], -u[0]];
-                    for (e, s) in [(sa, -1.), (sb, 1.)] {
-                        let e2 = v2add(e, v2mul(u, s * 4.));
-                        o.seg(e, e2, Style::Thick);
-                        let tail = v2add(e2, v2mul(n, -6.));
-                        o.seg(e2, tail, Style::Thin);
-                        o.arrow(e2, n, 3.);
-                        o.text(v2add(v2add(tail, v2mul(u, s * 2.5)), [0., -th / 2.]), label.clone(), th * 1.2, 0., Align::Center);
-                    }
-                    o.owner = Some(v.id);
-                }
-                ViewKind::Detail { parent, center, radius, label } if *parent == v.id => {
-                    o.owner = Some(c.id);
-                    let pts = circle(*center, *radius).into_iter().map(|q| to_sheet(v, &p, q)).collect();
-                    o.line(pts, Style::Thin);
-                    let at = to_sheet(v, &p, [center[0] + radius * 0.75, center[1] + radius * 0.75]);
-                    o.text([at[0] + 1., at[1] + 1.], label.clone(), th * 1.2, 0., Align::Left);
-                    o.owner = Some(v.id);
-                }
-                _ => {}
-            }
-        }
+        view_into(&mut o, d, v, &p, th);
     }
     // cotas
     for dm in &d.dims {
         let Some(v) = d.view(dm.view).filter(|v| v.sheet == sheet) else { continue };
         let p = m.proj(d, v.id);
         let Some((val, pts)) = dim_value(dm, v, &p) else { continue };
-        o.reset(Some(dm.id));
-        let st = dm.style.over(&v.ann);
-        o.style(&st);
-        let th = if st.size > 0. { st.size as f64 } else { th };
-        let text = format!("{}{}{}", st.prefix, dim_text(d, dm, val), st.suffix);
-        dimension(&mut o, dm, &pts, &text, th);
+        dim_into(&mut o, d, dm, v, &p, val, &pts);
     }
     // notas e símbolos
     for n in d.notes.iter().filter(|n| n.sheet == sheet) {
@@ -412,6 +475,10 @@ pub fn sheet(d: &Drawing, sheet: Id, m: &mut Models) -> Vec<Item> {
             if let Some(ax) = p.axes {
                 n2.leader = Some(to_sheet(v, &p, ax.project(a3)));
             }
+        }
+        if let (Some(v), true, Some(a3)) = (view, n.snapped, n.anchor3) {
+            let p = m.proj(d, v.id);
+            o.alert = !p.error.is_some() && !point_on_geometry(&p, a3);
         }
         n2.style = view.map(|v| n.style.over(&v.ann)).unwrap_or_else(|| n.style.clone());
         o.style(&n2.style);
@@ -618,10 +685,40 @@ fn frame(o: &mut Out, d: &Drawing, sh: &Sheet, fields: &std::collections::HashMa
     o.text([sx + sw / 2., sy + 1.2], "1º diedro".to_string(), 2.2, 0., Align::Center);
 }
 
+/// Segmentos de hachura de uma vista: contornos agrupados por peça (`groups[i]` é a peça do
+/// contorno i; faltando, tudo é a peça 0), cada grupo com o ângulo/passo que o estilo da vista dá.
+pub fn view_hatch(v: &View, loops: &[Vec<V2>], groups: &[usize]) -> Vec<(V2, V2)> {
+    let ngroups = groups.iter().copied().max().map_or(1, |m| m + 1);
+    let mut out = vec![];
+    for g in 0..ngroups {
+        let mine: Vec<Vec<V2>> = loops.iter().enumerate().filter(|(i, _)| groups.get(*i).copied().unwrap_or(0) == g).map(|(_, l)| l.clone()).collect();
+        if mine.is_empty() {
+            continue;
+        }
+        let (ang, step) = v.hatch.for_group(g);
+        match v.hatch.pattern() {
+            HatchPattern::Linhas => out.extend(hatch_at(&mine, step, ang)),
+            HatchPattern::Cruzada => {
+                out.extend(hatch_at(&mine, step, ang));
+                out.extend(hatch_at(&mine, step, ang + 90.));
+            }
+            // traço denso: as linhas quase se tocam e a face lê como preenchida
+            HatchPattern::Solida => out.extend(hatch_at(&mine, 0.3, ang)),
+        }
+    }
+    out
+}
+
 /// Segmentos de hachura a 45° dentro dos contornos (regra par/ímpar).
 pub fn hatch(loops: &[Vec<V2>], step: f64) -> Vec<(V2, V2)> {
-    // gira -45° para hachurar com linhas horizontais
-    let (c, s) = (std::f64::consts::FRAC_1_SQRT_2, std::f64::consts::FRAC_1_SQRT_2);
+    hatch_at(loops, step, crate::HATCH_ANGLE)
+}
+
+/// Segmentos de hachura num ângulo qualquer (graus, anti-horário), regra par/ímpar.
+pub fn hatch_at(loops: &[Vec<V2>], step: f64, angle: f64) -> Vec<(V2, V2)> {
+    // gira -ângulo para hachurar com linhas horizontais
+    let (s, c) = angle.to_radians().sin_cos();
+    let step = step.max(0.05);
     let rot = |p: V2| [p[0] * c + p[1] * s, -p[0] * s + p[1] * c];
     let back = |p: V2| [p[0] * c - p[1] * s, p[0] * s + p[1] * c];
     let edges: Vec<(V2, V2)> = loops
@@ -654,6 +751,112 @@ pub fn hatch(loops: &[Vec<V2>], step: f64) -> Vec<(V2, V2)> {
         y += step;
     }
     out
+}
+
+/// Centro e raio de uma polilinha que é um arco (três pontos e conferência dos outros).
+pub fn arc_center(pl: &[V2]) -> Option<(V2, f64)> {
+    let n = pl.len();
+    if n < 5 {
+        return None;
+    }
+    let (a, b, c) = (pl[0], pl[n / 2], pl[n - 1]);
+    let (a, b, c) = if (a[0] - c[0]).abs() + (a[1] - c[1]).abs() < 1e-6 { (pl[0], pl[n / 3], pl[2 * n / 3]) } else { (a, b, c) };
+    let d = 2. * (a[0] * (b[1] - c[1]) + b[0] * (c[1] - a[1]) + c[0] * (a[1] - b[1]));
+    if d.abs() < 1e-9 {
+        return None;
+    }
+    let sq = |p: V2| p[0] * p[0] + p[1] * p[1];
+    let ux = (sq(a) * (b[1] - c[1]) + sq(b) * (c[1] - a[1]) + sq(c) * (a[1] - b[1])) / d;
+    let uy = (sq(a) * (c[0] - b[0]) + sq(b) * (a[0] - c[0]) + sq(c) * (b[0] - a[0])) / d;
+    let r = ((a[0] - ux).powi(2) + (a[1] - uy).powi(2)).sqrt();
+    let ok = pl.iter().all(|p| (((p[0] - ux).powi(2) + (p[1] - uy).powi(2)).sqrt() - r).abs() < r * 0.02 + 1e-3);
+    (ok && r < 1e5).then_some(([ux, uy], r))
+}
+
+/// Tolerância (mm do modelo) para dizer que uma âncora ainda cai sobre um vértice da vista.
+pub const ANCHOR_TOL: f64 = 0.02;
+
+/// Pontos a que uma cota ou balão pode se prender: extremos das polilinhas projetadas e centros
+/// de arco (mm no plano da vista). É a mesma lista do snap da folha.
+pub fn anchor_candidates(p: &Proj) -> Vec<V2> {
+    let mut out = vec![];
+    for (pl, _) in &p.lines {
+        let n = pl.len();
+        if n == 0 {
+            continue;
+        }
+        out.push(pl[0]);
+        out.push(pl[n - 1]);
+        if n > 2 {
+            if let Some((c, _)) = arc_center(pl) {
+                out.push(c);
+            }
+        }
+    }
+    out
+}
+
+fn near2(a: V2, b: V2) -> bool {
+    v2len(v2sub(a, b)) <= ANCHOR_TOL
+}
+
+/// O ponto 3D ainda projeta sobre um vértice da vista?
+pub fn point_on_geometry(p: &Proj, a3: V3) -> bool {
+    let Some(ax) = p.axes else { return false };
+    let q = ax.project(a3);
+    anchor_candidates(p).into_iter().any(|c| near2(c, q))
+}
+
+/// Quais âncoras da cota ainda caem sobre a geometria da vista. Raio e diâmetro conferem o centro
+/// de um arco e o ponto sobre ele. Sem projeção (vista com erro) todas contam como quebradas.
+pub fn dim_anchors_ok(dm: &Dim, p: &Proj) -> Vec<bool> {
+    let Some(ax) = p.axes else { return vec![false; dm.anchors.len()] };
+    let q: Vec<V2> = dm.anchors.iter().map(|a| ax.project(*a)).collect();
+    if matches!(dm.kind, DimKind::Radius | DimKind::Diameter) && q.len() >= 2 {
+        let arcs: Vec<(V2, f64)> = p.lines.iter().filter_map(|(pl, _)| arc_center(pl)).collect();
+        let center = arcs.iter().find(|(c, _)| near2(*c, q[0]));
+        let on = center.is_some_and(|(c, r)| (v2len(v2sub(q[1], *c)) - r).abs() <= ANCHOR_TOL.max(r * 0.01));
+        return vec![center.is_some(), on];
+    }
+    let cands = anchor_candidates(p);
+    q.iter().map(|a| cands.iter().any(|c| near2(*c, *a))).collect()
+}
+
+/// Os `n` candidatos de âncora mais próximos de `near` (plano da vista), do mais perto ao mais longe.
+pub fn nearest_candidates(p: &Proj, near: V2, n: usize) -> Vec<V2> {
+    let mut c = anchor_candidates(p);
+    c.sort_by(|a, b| v2len(v2sub(*a, near)).total_cmp(&v2len(v2sub(*b, near))));
+    c.dedup_by(|a, b| near2(*a, *b));
+    c.truncate(n);
+    c
+}
+
+/// Ponto 3D com a posição `q` no plano da vista e a profundidade que `old` já tinha.
+pub fn with_depth(ax: &crate::source::Axes, q: V2, old: V3) -> V3 {
+    let flat = ax.unproject(q);
+    let z = crate::source::dot(old, ax.toward);
+    crate::source::add(flat, crate::source::scale3(ax.toward, z))
+}
+
+/// Reatribui a âncora `idx` da cota ao ponto `q` (plano da vista). Raio/diâmetro: `idx` 0 move o
+/// centro; `idx` 1 recoloca o ponto do arco na direção em que estava. Devolve se a âncora existia.
+pub fn reassign_dim_anchor(d: &mut Drawing, dim: Id, idx: usize, q: V2, p: &Proj) -> bool {
+    let Some(ax) = p.axes else { return false };
+    let Some(dm) = d.dims.iter_mut().find(|x| x.id == dim) else { return false };
+    let Some(old) = dm.anchors.get(idx).copied() else { return false };
+    dm.anchors[idx] = with_depth(&ax, q, old);
+    dm.loose = false;
+    true
+}
+
+/// Reatribui a ponta presa de uma nota (balão, chamada) ao ponto `q` da vista dela.
+pub fn reassign_note_anchor(d: &mut Drawing, note: Id, q: V2, p: &Proj) -> bool {
+    let Some(ax) = p.axes else { return false };
+    let Some(n) = d.notes.iter_mut().find(|x| x.id == note) else { return false };
+    let Some(old) = n.anchor3 else { return false };
+    n.anchor3 = Some(with_depth(&ax, q, old));
+    n.snapped = true;
+    true
 }
 
 fn dot2(a: V2, b: V2) -> f64 {

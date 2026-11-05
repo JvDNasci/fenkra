@@ -88,6 +88,10 @@ pub struct DwgState {
     style_clip: Option<fenkra_core::pmi::PmiStyle>,
     /// direção da câmera do 3D para a próxima vista (para o observador, eixo x)
     cam: Option<(V3, V3)>,
+    /// estado de atualização de cada vista (refeito de tempos em tempos e a cada mudança)
+    states: std::collections::HashMap<Id, ViewState>,
+    /// recarregar sozinho quando a peça ou a montagem de origem muda no disco
+    pub auto_update: bool,
 }
 
 impl DwgState {
@@ -144,11 +148,20 @@ impl DwgState {
             drag_kind: 0,
             style_clip: None,
             cam: None,
+            states: Default::default(),
+            auto_update: true,
         }
     }
 
     fn invalidate(&mut self) {
         self.items = None;
+        self.states.clear();
+    }
+
+    /// Refaz o estado (atualizada, desatualizada, erro) de cada vista.
+    fn refresh_states(&mut self) {
+        let ids: Vec<Id> = self.d.views.iter().map(|v| v.id).collect();
+        self.states = ids.into_iter().map(|id| (id, self.models.view_state(&self.d, id))).collect();
     }
 
     /// Caminho da origem relativo à pasta do desenho (se der).
@@ -188,6 +201,33 @@ pub fn ensure(app: &mut App) {
 fn current_source(app: &App) -> Option<Source> {
     let f = app.asm.as_ref().and_then(|s| s.file.clone()).filter(|_| app.settings.bench == crate::settings::Bench::Montagem).or_else(|| app.open.file.clone())?;
     Some(Source { path: f.to_string_lossy().to_string(), display_state: String::new(), hidden: vec![] })
+}
+
+fn needs_parent(tool: u8) -> bool {
+    matches!(tool, c::PROJ | c::SECTION | c::DETAIL)
+}
+
+fn needs_source(tool: u8) -> bool {
+    matches!(tool, c::SET | c::VIEW | c::ISO | c::FLAT | c::SCHEMA | c::VIEW_CAM | c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT)
+}
+
+/// Vista selecionada que serve de mãe (o detalhe não gera outras vistas).
+fn parent_of(st: &DwgState) -> Option<Id> {
+    st.cur().filter(|s| st.d.view(*s).is_some_and(|v| !matches!(v.kind, ViewKind::Detail { .. })))
+}
+
+/// O que falta para a ferramenta armada funcionar, dito antes do clique (None = pronta).
+pub fn block_reason(st: &DwgState) -> Option<&'static str> {
+    let t = st.tool?;
+    if needs_parent(t) && parent_of(st).is_none() {
+        Some("Selecione uma vista mãe: clique nela na folha")
+    } else if needs_source(t) && st.source.is_none() {
+        Some("Falta a origem: escolha uma peça ou montagem salva")
+    } else if (c::DIM_H..=c::DIM_ANG).contains(&t) && st.d.views.iter().all(|v| v.sheet != st.sheet) {
+        Some("A folha não tem vistas para cotar")
+    } else {
+        None
+    }
 }
 
 fn hint(tool: u8, n: usize) -> &'static str {
@@ -274,24 +314,10 @@ pub fn command(app: &mut App, i: u8) {
             }
             let st = app.dwg.as_mut().unwrap();
             st.cam = cam;
-            let needs_parent = matches!(i, c::PROJ | c::SECTION | c::DETAIL);
-            let needs_view = (c::DIM_H..=c::DIM_ANG).contains(&i);
-            let needs_source = matches!(i, c::SET | c::VIEW | c::ISO | c::FLAT | c::SCHEMA | c::VIEW_CAM | c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT);
-            if needs_parent && !st.cur().is_some_and(|s| st.d.view(s).is_some_and(|v| !matches!(v.kind, ViewKind::Detail { .. }))) {
-                app.toast(tr("Selecione antes a vista de origem (clique nela na folha)"), true);
-                return;
-            }
-            if needs_source && st.source.is_none() {
-                st.props_open = true;
-                app.toast(tr("Escolha a origem (peça ou montagem salva) no painel do desenho"), true);
-                return;
-            }
-            if needs_view && st.d.views.iter().all(|v| v.sheet != st.sheet) {
-                app.toast(tr("A folha não tem vistas para cotar"), true);
-                return;
-            }
-            if needs_parent {
-                st.sel = st.cur();
+            // a ferramenta arma mesmo com pré-requisito faltando: a folha diz o motivo na hora
+            // (`block_reason`) e o clique certo resolve, em vez de um aviso depois do clique
+            if needs_parent(i) {
+                st.sel = st.cur().filter(|s| st.d.view(*s).is_some());
             }
             st.tool = Some(i);
             st.clicks.clear();
@@ -478,9 +504,11 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
         // o 3D mudou no disco? (de tempos em tempos)
         if now - st.last_check > 1.5 {
             st.last_check = now;
-            if st.models.refresh() {
+            if st.auto_update && st.models.refresh() {
                 st.invalidate();
             }
+            // sem atualização automática o arquivo pode ter mudado: o selo avisa
+            st.states.clear();
         }
         // mudanças no desenho: desfazer e recalcular a folha
         layout::align_views(&mut st.d);
@@ -532,6 +560,9 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
             let items = layout::sheet(&st.d, st.sheet, &mut st.models);
             st.boxes = layout::owner_boxes(&items);
             st.items = Some(items);
+        }
+        if st.states.is_empty() && !st.d.views.is_empty() {
+            st.refresh_states();
         }
         // seleção: menor caixa que contém o ponto
         let mouse_mm = hover.map(to_mm);
@@ -614,6 +645,11 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
                 }
             }
         }
+        // selo de estado no canto de cada vista (forma e texto, não só a cor)
+        for (id, state) in st.states.iter().filter(|(id, _)| st.d.view(**id).is_some_and(|v| v.sheet == st.sheet)) {
+            let Some((_, _, hi)) = st.boxes.iter().find(|b| b.0 == *id) else { continue };
+            seal(&painter, ui, to_scr(*hi), *state);
+        }
         // alças: texto da cota (arrastar solta o texto) e ponta da chamada
         let orange = Color32::from_rgb(255, 130, 20);
         if st.tool.is_none() {
@@ -656,7 +692,8 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
             st.boxes.iter().filter(|(id, lo, hi)| st.d.view(*id).is_some() && p[0] >= lo[0] && p[0] <= hi[0] && p[1] >= lo[1] && p[1] <= hi[1]).map(|x| x.0).next()
         };
         if let Some(tool) = st.tool {
-            painter.text(rect.center_top() + Vec2::new(0., 10.), egui::Align2::CENTER_TOP, format!("{}   (Esc {})", tr(hint(tool, st.clicks.len())), tr("cancela")), egui::FontId::proportional(14.), if dark { Color32::from_rgb(255, 210, 120) } else { Color32::from_rgb(120, 60, 0) });
+            let blocked = block_reason(st);
+            painter.text(rect.center_top() + Vec2::new(0., 10.), egui::Align2::CENTER_TOP, format!("{}   (Esc {})", tr(blocked.unwrap_or_else(|| hint(tool, st.clicks.len()))), tr("cancela")), egui::FontId::proportional(14.), if dark { Color32::from_rgb(255, 210, 120) } else { Color32::from_rgb(120, 60, 0) });
             let dim_tool = (c::DIM_H..=c::DIM_ANG).contains(&tool);
             // marcador do snap sob o mouse
             if let Some(m) = mouse_mm {
@@ -674,7 +711,16 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
             }
             if resp.clicked_by(egui::PointerButton::Primary) {
                 if let Some(m) = mouse_mm {
-                    click(app, m, &snap, &view_at);
+                    if block_reason(st).is_some() {
+                        // pré-requisito faltando: o clique numa vista a escolhe como mãe
+                        if needs_parent(tool) {
+                            if let Some(v) = view_at(st, m).filter(|v| st.d.view(*v).is_some_and(|x| !matches!(x.kind, ViewKind::Detail { .. }))) {
+                                st.sel = Some(v);
+                            }
+                        }
+                    } else {
+                        click(app, m, &snap, &view_at);
+                    }
                 }
             }
         } else {
@@ -793,6 +839,34 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
             x = r.left() - 4.;
         }
     });
+}
+
+/// Cor do estado: tokens do tema (erro, aviso, texto discreto).
+fn state_color(ui: &egui::Ui, s: ViewState) -> Color32 {
+    match s {
+        ViewState::Atualizada => ui.visuals().weak_text_color(),
+        ViewState::Desatualizada => ui.visuals().warn_fg_color,
+        ViewState::Erro => ui.visuals().error_fg_color,
+    }
+}
+
+/// Símbolo que acompanha a cor do estado (daltonismo: nunca só a cor).
+fn state_icon(s: ViewState) -> &'static str {
+    match s {
+        ViewState::Atualizada => "●",
+        ViewState::Desatualizada => "▲",
+        ViewState::Erro => "■",
+    }
+}
+
+/// Selo de estado da vista, preso ao canto superior direito dela.
+fn seal(painter: &egui::Painter, ui: &egui::Ui, corner: Pos2, s: ViewState) {
+    let col = state_color(ui, s);
+    let g = painter.layout_no_wrap(format!("{} {}", state_icon(s), tr(s.label())), egui::FontId::proportional(11.), col);
+    let r = Rect::from_min_size(corner + Vec2::new(-g.size().x - 10., -g.size().y - 8.), g.size() + Vec2::new(8., 4.));
+    painter.rect_filled(r, 3., ui.visuals().window_fill);
+    painter.rect_stroke(r, 3., Stroke::new(1., col), egui::StrokeKind::Inside);
+    painter.galley(r.min + Vec2::new(4., 2.), g, col);
 }
 
 /// Centro e raio de uma polilinha que é um arco (três pontos e conferência dos outros).
@@ -1391,9 +1465,17 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     });
     let st = app.dwg.as_mut().unwrap();
     let mut changed_src = false;
+    let mut refresh_now = false;
     if let Some(id) = st.sel {
         if let Some(v) = st.d.views.iter_mut().find(|v| v.id == id) {
             ui.heading(tr("Vista"));
+            let state = st.states.get(&id).copied().unwrap_or(ViewState::Atualizada);
+            ui.horizontal(|ui| {
+                ui.colored_label(state_color(ui, state), format!("{} {}", state_icon(state), tr(state.label())));
+                if state == ViewState::Desatualizada && ui.small_button(tr("Atualizar agora")).on_hover_text(tr("recarrega a peça ou montagem de origem")).clicked() {
+                    refresh_now = true;
+                }
+            });
             ui.horizontal(|ui| {
                 ui.label(tr("Nome"));
                 ui.text_edit_singleline(&mut v.name);
@@ -1412,6 +1494,9 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             });
             ui.label(RichText::new(tr("Arestas visíveis")).weak().small());
             color_width(ui, &mut v.color, &mut v.line_width);
+            if matches!(v.kind, ViewKind::Section { .. }) {
+                hatch_ui(ui, &mut v.hatch, id);
+            }
             match &mut v.kind {
                 ViewKind::Camera { toward, x } => {
                     ui.label(RichText::new(format!("{} {}", tr("Direção"), crate::app::p3(&*toward, 2))).weak().small());
@@ -1758,9 +1843,70 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         (t.company, t.revision, t.notes, t.style, t.density) = keep;
     }
     ui.separator();
+    crate::editor::check(ui, &mut st.auto_update, "Atualizar sozinho quando a origem mudar");
     ui.label(RichText::new(tr("Vistas associativas: quando a peça ou a montagem é salva, o desenho se atualiza sozinho (F5 força). As cotas ficam presas às posições projetadas: se a geometria mudar muito, confira as cotas.")).weak().small());
-    if changed_src {
+    if changed_src || refresh_now {
+        if refresh_now {
+            st.models.refresh();
+        }
         st.invalidate();
+    }
+}
+
+/// Linha de um valor editável: mostra o valor padrão do estilo em cinza enquanto não foi alterado e,
+/// depois de alterado, um botão que devolve só esse valor ao padrão.
+fn default_row(ui: &mut egui::Ui, label: &str, own: &mut bool, default_text: String, edit: impl FnOnce(&mut egui::Ui) -> bool) {
+    ui.horizontal(|ui| {
+        ui.label(tr(label));
+        if edit(ui) {
+            *own = true;
+        }
+        if *own {
+            if ui.small_button("↺").on_hover_text(tr("Voltar ao padrão do estilo")).clicked() {
+                *own = false;
+            }
+        } else {
+            ui.label(RichText::new(format!("{}: {default_text}", tr("padrão"))).weak().small());
+        }
+    });
+}
+
+/// Hachura da vista em corte: padrão, ângulo e passo, com o padrão do estilo em cinza.
+fn hatch_ui(ui: &mut egui::Ui, h: &mut HatchStyle, id: Id) {
+    ui.label(RichText::new(tr("Hachura")).strong());
+    let mut own = h.pattern.is_some();
+    let mut pat = h.pattern();
+    default_row(ui, "Padrão", &mut own, tr(HATCH_PATTERN.label()).to_string(), |ui| {
+        let mut ch = false;
+        egui::ComboBox::from_id_salt(("hachura_padrao", id.0)).selected_text(tr(pat.label())).show_ui(ui, |ui| {
+            for x in HatchPattern::ALL {
+                ch |= ui.selectable_value(&mut pat, x, tr(x.label())).changed();
+            }
+        });
+        ch
+    });
+    h.pattern = own.then_some(pat);
+    let mut own = h.angle.is_some();
+    let mut ang = h.angle();
+    default_row(ui, "Ângulo (°)", &mut own, dec_txt(HATCH_ANGLE), |ui| ui.add(crate::ui_ext::dv(&mut ang).range(-180.0..=180.).speed(1.)).changed());
+    h.angle = own.then_some(ang);
+    let mut own = h.step.is_some();
+    let mut step = h.step();
+    default_row(ui, "Passo (mm)", &mut own, dec_txt(HATCH_STEP), |ui| ui.add(crate::ui_ext::dv(&mut step).range(0.3..=20.).speed(0.1)).changed());
+    h.step = own.then_some(step);
+    crate::editor::check(ui, &mut h.alternate, "Alternar o ângulo entre peças vizinhas");
+    if h.custom() && ui.button(tr("Voltar ao padrão do estilo")).clicked() {
+        h.reset();
+    }
+}
+
+/// Número com o separador decimal do idioma.
+fn dec_txt(v: f64) -> String {
+    let s = format!("{v}");
+    if crate::i18n::english() {
+        s
+    } else {
+        s.replace('.', ",")
     }
 }
 
@@ -1803,4 +1949,47 @@ fn today() -> String {
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     let y = yoe + era * 400 + if m <= 2 { 1 } else { 0 };
     format!("{d:02}/{m:02}/{y}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn estado_com_vista() -> (DwgState, Id) {
+        let mut d = Drawing::new("T", Format::A3);
+        let s = d.sheets[0].id;
+        let src = Source { path: "x.fkp".into(), display_state: String::new(), hidden: vec![] };
+        let v = d.add_view(s, src, ViewKind::Standard(Dir::Frente), [100., 100.], 1.);
+        (DwgState::new(d, None), v)
+    }
+
+    #[test]
+    fn ferramenta_diz_o_que_falta_antes_do_clique() {
+        let (mut st, v) = estado_com_vista();
+        st.source = None;
+        // vista projetada sem vista mãe selecionada
+        st.tool = Some(c::PROJ);
+        assert_eq!(block_reason(&st), Some("Selecione uma vista mãe: clique nela na folha"));
+        st.sel = Some(v);
+        assert_eq!(block_reason(&st), None);
+        // vista nova sem origem
+        st.tool = Some(c::VIEW);
+        assert_eq!(block_reason(&st), Some("Falta a origem: escolha uma peça ou montagem salva"));
+        st.source = Some(Source { path: "x.fkp".into(), display_state: String::new(), hidden: vec![] });
+        assert_eq!(block_reason(&st), None);
+        // cota numa folha sem vistas
+        st.d.delete(v);
+        st.tool = Some(c::DIM_H);
+        assert_eq!(block_reason(&st), Some("A folha não tem vistas para cotar"));
+        // sem ferramenta, nada bloqueia
+        st.tool = None;
+        assert_eq!(block_reason(&st), None);
+    }
+
+    #[test]
+    fn os_textos_do_bloqueio_tem_traducao() {
+        for t in ["Selecione uma vista mãe: clique nela na folha", "Falta a origem: escolha uma peça ou montagem salva", "A folha não tem vistas para cotar", "Atualizada", "Desatualizada", "Erro"] {
+            assert!(crate::i18n::tem_traducao(t), "{t}");
+        }
+    }
 }
