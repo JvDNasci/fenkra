@@ -7,6 +7,7 @@ members = [
     "crates/fenkra-project",
     "crates/fenkra-montagem",
     "crates/fenkra-desenho",
+    "crates/fenkra-tolerancias",
     "crates/fenkra-app",
 ]
 

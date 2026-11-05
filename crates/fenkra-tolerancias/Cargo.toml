@@ -1,0 +1,10 @@
+[package]
+name = "fenkra-tolerancias"
+description = "Tolerâncias normativas: ISO 286 (graus IT, desvios, ajustes) e ISO 2768 (tolerâncias gerais), como dados e funções puras"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
