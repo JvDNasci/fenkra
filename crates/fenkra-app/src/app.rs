@@ -236,6 +236,8 @@ pub struct App {
     pub st_lib_sel: usize,
     /// B79: linhas de membro que não geraram sólido (contorno vermelho e motivo no 3D)
     pub st_falhas: Vec<fenkra_solidos::MemberFailure>,
+    /// B80: comandos da linha da lista de corte sob o mouse ou clicada (realçados no 3D)
+    pub st_cut_hi: Vec<Id>,
 }
 
 /// Edição de um comando como "ambiente": só termina com Concluir (mantém) ou Cancelar (desfaz).
@@ -360,6 +362,7 @@ impl App {
             st_lib_open: false,
             st_cut_open: false,
             st_falhas: vec![],
+            st_cut_hi: vec![],
             st_lib_sel: 0,
         };
         app.started = !app.settings.show_start;
@@ -499,6 +502,7 @@ impl App {
                 corner,
                 gap: s("0"),
                 joints: vec![],
+                material: String::new(),
             };
             d.add_feature(FeatureKind::StructMember(mk(paths, CornerMode::MeiaEsquadria, 0)));
             d.add_feature(FeatureKind::StructMember(mk(legs, CornerMode::Nenhum, 0)));
@@ -1595,6 +1599,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     corner: CornerMode::MeiaEsquadria,
                     gap: s("0"),
                     joints: vec![],
+                    material: String::new(),
                 })))
             }
             Cmd::StPlate | Cmd::StGusset => {
@@ -7064,6 +7069,7 @@ impl eframe::App for App {
                     dark_edges: !matches!(self.settings.display, crate::render::DisplayMode::Arame) || lum(self.settings.bg_bottom) > 140.,
                     tangent_edges: self.settings.tangent_edges || matches!(self.settings.display, crate::render::DisplayMode::Arame),
                     hilite: self.hover_item.or(self.session.as_ref().map(|s| s.id)),
+                    hilite_extra: &self.st_cut_hi,
                     line_w: self.settings.ref_line_width,
                     line_dash: self.settings.ref_line_dash,
                     point_style: self.settings.point_style,

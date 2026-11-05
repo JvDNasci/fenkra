@@ -864,6 +864,7 @@ mod tests {
             corner: CornerMode::MeiaEsquadria,
             gap: s("0"),
             joints: vec![],
+            material: String::new(),
         }));
         let dir = std::env::temp_dir().join("fenkra_desenho_corte_item");
         std::fs::create_dir_all(&dir).unwrap();

@@ -1,7 +1,7 @@
 //! Estrutural: painel do membro (família, medida, ancoragem, rotação, cantos), biblioteca de
 //! famílias de perfis (cadastro do usuário) e lista de corte.
 
-use crate::app::{fmt, App};
+use crate::app::{fmt, App, Sel};
 use crate::editor::{expr, icon_choice, section};
 use crate::geo_ui::Seed;
 use crate::i18n::tr;
@@ -93,8 +93,16 @@ pub fn member_panel(ui: &mut egui::Ui, doc: &Document, me: Id, m: &mut StructMem
         m.corner = [CornerMode::MeiaEsquadria, CornerMode::Aparar, CornerMode::Encaixe, CornerMode::Nenhum][i];
     }
     expr(ui, "Folga de solda", &mut m.gap, vars, "mm");
+    ui.horizontal(|ui| {
+        ui.add_sized([96., 18.], egui::Label::new(tr("Material")));
+        ui.add(egui::TextEdit::singleline(&mut m.material).desired_width(180.).hint_text(doc_material(doc))).on_hover_text(tr("Material do membro (vazio = o da peça)"));
+    });
     joints_ui(ui, doc, me, m);
     ui.label(RichText::new(tr("Tudo é associativo: mexer no esqueleto (pontos, linhas) atualiza as barras.")).weak().small());
+}
+
+fn doc_material(doc: &Document) -> String {
+    doc.props.material.clone()
 }
 
 /// Cantos encontrados no último cálculo: ((comando, linha), (comando, linha), ponto).
@@ -341,13 +349,68 @@ fn library(app: &mut App, ctx: &egui::Context) {
     }
 }
 
+/// Estado da janela da lista de corte (ordem, filtro e linha clicada), guardado na memória da interface.
+#[derive(Clone, Default)]
+struct CutUi {
+    /// coluna de ordenação: 0 perfil, 1 material, 2 comprimento, 3 ângulo 1, 4 ângulo 2, 5 quantidade
+    sort: usize,
+    desc: bool,
+    material: String,
+    /// primeiro membro da linha clicada (comando, trecho)
+    clicada: Option<(Id, usize)>,
+}
+
+fn ang_txt(a: Option<f64>) -> String {
+    a.map(|v| format!("{}°", fmt(v))).unwrap_or_else(|| "—".into())
+}
+
+/// Ordena as linhas pela coluna escolhida (estável; empate cai na ordem do item).
+fn ordenar(rows: &mut [fenkra_solidos::CutRow], col: usize, desc: bool) {
+    let num = |a: Option<f64>| a.unwrap_or(f64::MAX);
+    rows.sort_by(|a, b| {
+        let o = match col {
+            0 => a.designation.cmp(&b.designation),
+            1 => a.material.cmp(&b.material),
+            2 => a.length.total_cmp(&b.length),
+            3 => num(a.angle1).total_cmp(&num(b.angle1)),
+            4 => num(a.angle2).total_cmp(&num(b.angle2)),
+            _ => a.count.cmp(&b.count),
+        };
+        let o = if desc { o.reverse() } else { o };
+        o.then(a.item.cmp(&b.item))
+    });
+}
+
 fn cut_list(app: &mut App, ctx: &egui::Context) {
     if !app.st_cut_open {
+        if !app.st_cut_hi.is_empty() {
+            app.st_cut_hi.clear();
+            app.scene_dirty = true;
+        }
         return;
     }
-    let rows = fenkra_solidos::cut_list(app.doc());
+    let mut rows = fenkra_solidos::cut_list(app.doc());
+    let estado_id = egui::Id::new("st_cut_ui");
+    let mut ui_state: CutUi = ctx.data(|d| d.get_temp(estado_id)).unwrap_or_default();
+    let materiais: Vec<String> = {
+        let mut m: Vec<String> = rows.iter().map(|r| r.material.clone()).collect();
+        m.sort();
+        m.dedup();
+        m
+    };
+    if !ui_state.material.is_empty() && !materiais.contains(&ui_state.material) {
+        ui_state.material.clear();
+    }
+    rows.retain(|r| ui_state.material.is_empty() || r.material == ui_state.material);
+    ordenar(&mut rows, ui_state.sort, ui_state.desc);
+    // clicar o corpo no 3D seleciona a linha que o contém
+    let sel_feature = match app.sel {
+        Sel::Feature(id) => Some(id),
+        _ => None,
+    };
     let mut open = true;
     let mut export = false;
+    let mut hover_row: Option<usize> = None;
     let fechar = egui::Id::unique(("concluir_janela", "st2"));
     if ctx.data_mut(|m| m.remove_temp::<bool>(fechar)).unwrap_or(false) {
         open = false;
@@ -355,24 +418,74 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
     egui::Window::new(tr("📋 Lista de corte"))
         .id(egui::Id::unique("janela_lista_corte"))
         .open(&mut open)
-        .default_width(420.)
+        .default_width(620.)
         .show(ctx, |ui| {
             if crate::app::done_bar(ui) {
                 ui.ctx().data_mut(|m| m.insert_temp(fechar, true));
             }
-            if rows.is_empty() {
+            if rows.is_empty() && ui_state.material.is_empty() {
                 ui.label(RichText::new(tr("Nenhum membro estrutural na peça.")).weak());
                 return;
             }
+            if materiais.len() > 1 || !ui_state.material.is_empty() {
+                ui.horizontal(|ui| {
+                    ui.label(tr("Material"));
+                    egui::ComboBox::from_id_salt("st_cut_mat")
+                        .selected_text(if ui_state.material.is_empty() { tr("Todos").to_string() } else { ui_state.material.clone() })
+                        .show_ui(ui, |ui| {
+                            if ui.selectable_label(ui_state.material.is_empty(), tr("Todos")).clicked() {
+                                ui_state.material.clear();
+                            }
+                            for m in &materiais {
+                                if ui.selectable_label(ui_state.material == *m, m).clicked() {
+                                    ui_state.material = m.clone();
+                                }
+                            }
+                        });
+                });
+            }
             let stock = app.open.doc.props.stock_length.trim().to_string();
-            egui::Grid::new("lista_corte").striped(true).num_columns(4).show(ui, |ui| {
-                for h in ["Perfil", "Comprimento", "Qtd.", "Barras"] {
-                    ui.label(RichText::new(tr(h)).strong());
+            egui::Grid::new("lista_corte").striped(true).num_columns(7).show(ui, |ui| {
+                let cab = ["Perfil", "Material", "Comprimento", "Ângulo 1", "Ângulo 2", "Qtd."];
+                for (i, h) in cab.iter().enumerate() {
+                    let seta = if ui_state.sort == i {
+                        if ui_state.desc {
+                            " ▼"
+                        } else {
+                            " ▲"
+                        }
+                    } else {
+                        ""
+                    };
+                    let r = ui.add(egui::Label::new(RichText::new(format!("{}{}", tr(h), seta)).strong()).sense(egui::Sense::click())).on_hover_text(tr("Clique para ordenar"));
+                    if r.clicked() {
+                        if ui_state.sort == i {
+                            ui_state.desc = !ui_state.desc;
+                        } else {
+                            ui_state.sort = i;
+                            ui_state.desc = false;
+                        }
+                    }
                 }
+                ui.label(RichText::new(tr("Barras")).strong());
                 ui.end_row();
-                for r in &rows {
-                    ui.label(&r.designation);
-                    ui.label(format!("{} mm", fmt(r.length)));
+                for (k, r) in rows.iter().enumerate() {
+                    let primeiro = r.members.first().copied();
+                    let marcada = (primeiro.is_some() && primeiro == ui_state.clicada) || sel_feature.is_some_and(|f| r.members.iter().any(|m| m.0 == f));
+                    let resp = ui.selectable_label(marcada, &r.designation);
+                    if resp.clicked() {
+                        ui_state.clicada = primeiro;
+                    }
+                    if resp.hovered() {
+                        hover_row = Some(k);
+                    }
+                    ui.label(&r.material);
+                    let comp = ui.label(format!("{} mm", fmt(r.length)));
+                    if (r.long - r.length).abs() > 0.05 && r.item > 0 {
+                        comp.on_hover_text(format!("{}: {} mm", tr("ponta longa"), fmt(r.long)));
+                    }
+                    ui.label(ang_txt(r.angle1));
+                    ui.label(ang_txt(r.angle2));
                     ui.label(format!("{}", r.count));
                     if r.bars > 1 {
                         ui.label(RichText::new(format!("⚠ {} ({})", r.bars * r.count, tr("emenda"))).color(egui::Color32::from_rgb(240, 170, 80)))
@@ -383,6 +496,7 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
                     ui.end_row();
                 }
             });
+            ui.label(RichText::new(tr("Comprimento e ângulos são lidos do sólido (somente leitura). Ângulo 1: início da linha guia; ângulo 2: fim. 0° = corte reto.")).weak().small());
             if stock.is_empty() {
                 ui.label(RichText::new(tr("Defina o comprimento máximo da barra nas propriedades da peça para ver as emendas.")).weak().small());
             }
@@ -392,11 +506,23 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
                 export = true;
             }
         });
+    // realce no 3D: a linha sob o mouse, senão a clicada
+    let alvo: Vec<Id> = hover_row
+        .and_then(|k| rows.get(k))
+        .or_else(|| ui_state.clicada.and_then(|c| rows.iter().find(|r| r.members.first() == Some(&c))))
+        .map(|r| r.members.iter().map(|m| m.0).collect())
+        .unwrap_or_default();
+    if alvo != app.st_cut_hi {
+        app.st_cut_hi = alvo;
+        app.scene_dirty = true;
+    }
+    ctx.data_mut(|d| d.insert_temp(estado_id, ui_state));
     if export {
         if let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name("lista_de_corte.csv").save_file() {
-            let mut t = String::from("perfil;comprimento_mm;quantidade;barras_materia_prima\n");
+            let mut t = String::from("perfil;material;comprimento_mm;angulo1_graus;angulo2_graus;quantidade;barras_materia_prima\n");
+            let num = |a: Option<f64>| a.map(fmt).unwrap_or_default();
             for r in &rows {
-                t += &format!("{};{};{};{}\n", r.designation, fmt(r.length), r.count, r.bars * r.count);
+                t += &format!("{};{};{};{};{};{};{}\n", r.designation, r.material, fmt(r.length), num(r.angle1), num(r.angle2), r.count, r.bars * r.count);
             }
             match std::fs::write(&p, t) {
                 Ok(()) => app.toast(tr("Lista de corte exportada"), false),
@@ -461,6 +587,7 @@ mod tests {
             corner: CornerMode::MeiaEsquadria,
             gap: s("0"),
             joints: vec![],
+            material: String::new(),
         }));
         assert!(membro_sem_linhas(&d, id));
         if let Some(FeatureKind::StructMember(m)) = d.feature_mut(id).map(|f| &mut f.kind) {

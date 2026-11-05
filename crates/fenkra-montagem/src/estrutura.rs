@@ -135,6 +135,7 @@ mod tests {
             corner: CornerMode::MeiaEsquadria,
             gap: s("0"),
             joints: vec![],
+            material: String::new(),
         }));
         d
     }

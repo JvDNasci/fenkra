@@ -20,6 +20,7 @@ fn membro(paths: Vec<CurveRef>) -> StructMember {
         corner: CornerMode::MeiaEsquadria,
         gap: s("0"),
         joints: vec![],
+        material: String::new(),
     }
 }
 
