@@ -69,7 +69,7 @@ fn caixa_com_bolso() -> Document {
 
 fn caixa_arredondada() -> Document {
     let mut d = caixa();
-    d.add_feature(FeatureKind::Fillet(EdgeOp { value: "2".into(), edges: EdgeSel::AllOfBody, mode: EdgeMode::Constant, prop: Default::default(), keys: vec![] }));
+    d.add_feature(FeatureKind::Fillet(EdgeOp { extra: Default::default(), value: "2".into(), edges: EdgeSel::AllOfBody, mode: EdgeMode::Constant, prop: Default::default(), keys: vec![] }));
     d
 }
 
