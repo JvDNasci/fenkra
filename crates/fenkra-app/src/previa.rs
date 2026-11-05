@@ -7,7 +7,7 @@
 use crate::app::{App, Session};
 use crate::render::{LineVertex, MeshVertex};
 use eframe::egui;
-use fenkra_core::{Document, FeatureKind, Id};
+use fenkra_core::{Document, FeatureKind, Id, PlaneRef};
 use fenkra_kernel::Mesh;
 use fenkra_solidos::{BodyResult, RecomputeResult, Status};
 use glam::Vec3;
@@ -35,10 +35,37 @@ pub struct Fantasma<'a> {
     pub entrada: [u8; 3],
     /// as mesmas faces quando o comando falhou: é ali que a pessoa precisa olhar
     pub erro: [u8; 3],
+    /// volume que o comando tira (recorte, furo, revolução que remove): a parede da cavidade
+    pub retirada: [u8; 3],
+    /// corpo ferramenta da booleana
+    pub ferramenta: [u8; 3],
+    /// plano neutro da saída
+    pub neutro: [u8; 3],
     pub antes: &'a [CorpoBase],
 }
 
+/// O comando tira material do corpo? Então o que ele cria é a parede da cavidade, na cor de retirada.
+pub fn retira(k: &FeatureKind) -> bool {
+    use fenkra_core::BoolOp::Cut;
+    match k {
+        FeatureKind::Extrude(x) => x.op == Cut,
+        FeatureKind::Revolve(x) => x.op == Cut,
+        FeatureKind::Sweep(x) => x.op == Cut,
+        FeatureKind::Loft(x) => x.op == Cut,
+        FeatureKind::Primitive(x) => x.op == Cut,
+        FeatureKind::Combine(x) => x.op == Cut,
+        FeatureKind::Thickness(x) => x.remove,
+        FeatureKind::Hole(_) => true,
+        _ => false,
+    }
+}
+
 impl Fantasma<'_> {
+    /// Cor do volume do comando: o que entra na cor de destaque, o que sai na de retirada.
+    pub fn cor_de(&self, doc: &Document) -> [u8; 3] {
+        if doc.feature(self.id).is_some_and(|f| retira(&f.kind)) { self.retirada } else { self.cor }
+    }
+
     /// Corpo de antes, quando o comando refez este corpo inteiro. Se o corpo é novo, não há nada
     /// para mostrar por baixo.
     pub fn antes_de(&self, b: &BodyResult) -> Option<&CorpoBase> {
@@ -51,7 +78,16 @@ pub fn da_sessao<'a>(s: Option<&'a Session>, v: &egui::Visuals) -> Option<Fantas
     let s = s?;
     let c = crate::theme::accent(v);
     let rgb = |c: egui::Color32| [c.r(), c.g(), c.b()];
-    Some(Fantasma { id: s.id, cor: rgb(c), entrada: rgb(crate::theme::st_warn()), erro: rgb(crate::theme::st_err()), antes: &s.corpos_antes })
+    Some(Fantasma {
+        id: s.id,
+        cor: rgb(c),
+        entrada: rgb(crate::theme::st_warn()),
+        erro: rgb(crate::theme::st_err()),
+        retirada: rgb(crate::theme::papel_retirada()),
+        ferramenta: rgb(crate::theme::papel_ferramenta()),
+        neutro: rgb(crate::theme::papel_neutro()),
+        antes: &s.corpos_antes,
+    })
 }
 
 fn cor_f(c: [u8; 3]) -> [f32; 3] {
@@ -73,7 +109,7 @@ pub fn retangulo_fantasma(dst: &mut Vec<MeshVertex>, c: [Vec3; 4], n: Vec3, cor:
 
 /// Malha onde as faces escolhidas pelo comando moram: a de antes, porque a de agora pode já não ter
 /// a face (a casca abre, a espessura desloca).
-fn malha_de_entrada<'a>(r: &'a RecomputeResult, f: &'a Fantasma, alvo: Id) -> Option<&'a Mesh> {
+pub(crate) fn malha_de_entrada<'a>(r: &'a RecomputeResult, f: &'a Fantasma, alvo: Id) -> Option<&'a Mesh> {
     f.antes.iter().find(|c| c.collector == alvo).map(|c| &c.mesh).or_else(|| r.bodies.iter().find(|b| b.collector == alvo).map(|b| &b.mesh))
 }
 
@@ -97,6 +133,60 @@ pub fn decorar(doc: &Document, r: &RecomputeResult, f: &Fantasma, s: &mut crate:
             helice(h, cor_linha(f.cor), cor_linha(f.entrada), &mut s.overlay);
         }
     }
+    crate::entradas::destacar(doc, r, f, s);
+    plano_referenciado(doc, r, f, s);
+}
+
+/// B275: o plano que o comando usa como referência (neutro da saída, espelho, base da primitiva) e o
+/// papel dele no rótulo. O plano deslocado em edição tem desenho próprio na cena.
+pub fn plano_do_comando(k: &FeatureKind) -> Option<(&PlaneRef, &'static str)> {
+    match k {
+        FeatureKind::Draft(d) => Some((&d.neutral, "Plano neutro")),
+        FeatureKind::Mirror(m) => Some((&m.plane, "Plano do espelho")),
+        FeatureKind::Primitive(p) => Some((&p.plane, "Plano de base")),
+        _ => None,
+    }
+}
+
+/// Origem, eixos e normal do plano, já calculados.
+fn quadro_do_plano(r: &RecomputeResult, p: &PlaneRef) -> Option<[Vec3; 4]> {
+    let pl = r.planes.iter().find(|x| match p {
+        PlaneRef::Datum(id) => x.id == Some(*id),
+        PlaneRef::Origin(o) => x.id.is_none() && x.name == crate::scene::plane_name(*o),
+    })?;
+    let v = |a: [f64; 3]| Vec3::new(a[0] as f32, a[1] as f32, a[2] as f32);
+    let f = &pl.frame;
+    Some([v(f.origin), v(f.x), v(f.y()), v(f.normal)])
+}
+
+/// Metade do lado do retângulo do plano: cobre a peça com folga.
+fn meia_largura(r: &RecomputeResult) -> f32 {
+    r.bodies.iter().flat_map(|b| b.mesh.positions.chunks_exact(3)).fold(20f32, |a, q| a.max(q[0].abs()).max(q[1].abs()).max(q[2].abs())) * 1.3
+}
+
+/// Retângulo translúcido do plano de referência do comando aberto, com borda: o mesmo desenho do
+/// plano deslocado (B228). O neutro da saída tem cor própria; os outros usam o destaque.
+pub fn plano_referenciado(doc: &Document, r: &RecomputeResult, f: &Fantasma, s: &mut crate::render::Scene) {
+    let Some((p, papel)) = doc.feature(f.id).and_then(|x| plano_do_comando(&x.kind).map(|(p, n)| (p.clone(), n))) else { return };
+    let Some([o, x, y, n]) = quadro_do_plano(r, &p) else { return };
+    let cor = if papel == "Plano neutro" { f.neutro } else { f.cor };
+    let h = meia_largura(r);
+    let c = [o + (x + y) * h, o + (x - y) * h, o + (-x - y) * h, o + (-x + y) * h];
+    retangulo_fantasma(&mut s.ghost, c, n, cor);
+    let col = cor_linha(cor);
+    for i in 0..4 {
+        s.overlay.push(LineVertex { pos: c[i].into(), col });
+        s.overlay.push(LineVertex { pos: c[(i + 1) % 4].into(), col });
+    }
+}
+
+/// Texto e posição do rótulo do plano: papel, nome do plano e distância assinada até a origem.
+pub fn rotulo_do_plano(doc: &Document, r: &RecomputeResult, id: Id) -> Option<(Vec3, String)> {
+    let (p, papel) = plano_do_comando(&doc.feature(id)?.kind)?;
+    let [o, x, _, n] = quadro_do_plano(r, p)?;
+    let dist = o.dot(n) as f64;
+    let texto = format!("{} · {} · {} mm", crate::i18n::tr(papel), crate::scene::plane_ref_name(doc, p), crate::app::fmt(dist));
+    Some((o + x * meia_largura(r) * 0.8, texto))
 }
 
 /// Base perpendicular a um eixo unitário.
@@ -177,6 +267,19 @@ pub fn face_fantasma(dst: &mut Vec<MeshVertex>, m: &Mesh, fi: usize, cor: [u8; 3
             mat: [1., 0., 1., 0.],
         });
     }
+}
+
+/// B246: com o comando falhando, a viewport não volta ao corpo de antes: a última prévia válida
+/// continua desenhada e a causa aparece na etiqueta. Guarda a prévia de cada cálculo bom e a repõe
+/// enquanto o cálculo erra. Devolve se repôs.
+pub fn reter_ultima(guardada: &mut Vec<MeshVertex>, s: &mut crate::render::Scene, status: Option<&Status>) -> bool {
+    if matches!(status, Some(Status::Error(_))) {
+        s.ghost.extend_from_slice(guardada);
+        return !guardada.is_empty();
+    }
+    guardada.clear();
+    guardada.extend_from_slice(&s.ghost);
+    false
 }
 
 /// A prévia conta no enquadramento: a aba nova não pode ficar fora da tela.
@@ -343,7 +446,13 @@ fn rotulos(app: &App, ui: &egui::Ui, rect: egui::Rect, cam: &crate::render::Came
                 }
             }
         }
-        _ => {}
+        _ => {
+            if let Some((p, texto)) = crate::previa::rotulo_do_plano(&app.open.doc, r, id) {
+                if let Some(q) = cam.project(rect, p) {
+                    rotulo(ui, rect, q, texto, cor);
+                }
+            }
+        }
     }
 }
 
@@ -415,7 +524,7 @@ mod tests {
             line_w: 1.,
             line_dash: 0,
             point_style: 0,
-            fantasma: Some(Fantasma { id, cor: [10, 20, 30], entrada: [40, 50, 60], erro: [70, 80, 90], antes }),
+            fantasma: Some(Fantasma { id, cor: [10, 20, 30], entrada: [40, 50, 60], erro: [70, 80, 90], retirada: [100, 110, 120], ferramenta: [130, 140, 150], neutro: [160, 170, 180], antes }),
         };
         build(d, r, &o)
     }
@@ -554,6 +663,182 @@ mod tests {
         let c = cena(&d, &r, casca, &base);
         assert!(tem_cor(&c, [70, 80, 90]), "a face do comando que falhou fica na cor de erro");
         assert!(!tem_cor(&c, [40, 50, 60]));
+    }
+
+    /// Peça de teste do B246: a caixa de 40 x 40 x 20 e um plano de referência na tampa.
+    fn caixa_com_tampa() -> (Document, Id) {
+        let mut d = caixa();
+        let topo = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "20");
+        (d, topo)
+    }
+
+    fn extrusao(sk: Id, op: BoolOp, reverse: bool, extent: &str) -> FeatureKind {
+        FeatureKind::Extrude(Extrude { sketch: sk, op, extent: Extent::Blind(s(extent)), reverse, taper: s("0"), thin: None, thin_side: 0, dir: None })
+    }
+
+    /// B246: cada comando de sólido, aberto sobre a peça, aparece no fantasma, translúcido e na cor do
+    /// papel (entra ou sai), e a peça continua na tela por baixo dele.
+    #[test]
+    fn todo_comando_de_solido_gera_a_previa_na_cor_do_papel() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        const ENTRA: [u8; 3] = [10, 20, 30];
+        const SAI: [u8; 3] = [100, 110, 120];
+        let volume_inicial = 40. * 40. * 20.;
+        // (nome, peça com o comando, comando, cor esperada, o volume sobe?)
+        let mut casos: Vec<(&str, Document, FeatureKind, [u8; 3], bool)> = vec![];
+        {
+            let (mut d, topo) = caixa_com_tampa();
+            let sk = sk_rect(&mut d, PlaneRef::Datum(topo), [-5., -5.], [5., 5.]);
+            casos.push(("extrusão", d, extrusao(sk, BoolOp::Add, false, "10"), ENTRA, true));
+        }
+        {
+            let (mut d, topo) = caixa_com_tampa();
+            let sk = sk_rect(&mut d, PlaneRef::Datum(topo), [-5., -5.], [5., 5.]);
+            casos.push(("recorte", d, extrusao(sk, BoolOp::Cut, false, "6"), SAI, false));
+        }
+        {
+            let mut d = Document::new("eixo");
+            let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XZ), [10., 0.], [20., 15.]);
+            let rev = FeatureKind::Revolve(Revolve { sketch: sk, axis: AxisRef::Origin(OriginAxis::Z), angle: s("360"), symmetric: false, op: BoolOp::Add, thin: None, thin_side: 0, angle2: None });
+            casos.push(("revolução", d, rev, ENTRA, true));
+        }
+        {
+            let (mut d, topo) = caixa_com_tampa();
+            let pt = sk_pontos(&mut d, PlaneRef::Datum(topo), &[[0., 0.]]);
+            let furo = FeatureKind::Hole(Hole { sketch: pt, kind: HoleKind::Simples, diameter: s("8"), depth: Extent::Blind(s("10")), thread: None, thread_modeled: false, standard: None, points: vec![], dir: None, reverse: true, tip: None, taper: s("0"), left_hand: false });
+            casos.push(("furo", d, furo, SAI, false));
+        }
+        for (nome, modo) in [("filete", true), ("chanfro", false)] {
+            let (d, _) = caixa_com_tampa();
+            let op = EdgeOp { value: s("2"), edges: EdgeSel::AllOfBody, mode: EdgeMode::Constant, prop: Default::default(), keys: vec![] };
+            casos.push((nome, d, if modo { FeatureKind::Fillet(op) } else { FeatureKind::Chamfer(op) }, ENTRA, false));
+        }
+        casos.push(("casca", caixa(), FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: s("2"), outward: false, face_keys: vec![], closed: false }), ENTRA, false));
+        for (nome, mut d, kind, cor, sobe) in casos {
+            let antes = recompute(&d);
+            let base = corpos_base(Some(&antes));
+            let id = d.add_feature(kind);
+            let r = recompute(&d);
+            assert!(valido(r.status.get(&id)), "{nome}: {:?}", r.status.get(&id));
+            let v = r.bodies[0].mass.volume;
+            let esperado = if nome == "revolução" { v > 0. } else if sobe { v > volume_inicial + 1. } else { v < volume_inicial - 1. };
+            assert!(esperado, "{nome}: volume {v}");
+            let c = cena(&d, &r, id, &base);
+            assert!(!c.ghost.is_empty(), "{nome}: nada no fantasma");
+            assert!(c.ghost.iter().all(|x| x.col[3] < 1.), "{nome}: o fantasma tem de ser translúcido");
+            assert!(tem_cor(&c, cor), "{nome}: volume na cor do papel {cor:?}");
+            assert!(!c.indices.is_empty() || antes.bodies.is_empty(), "{nome}: a peça sumiu de baixo do fantasma");
+        }
+    }
+
+    /// B246: padrão linear: as cópias entram no fantasma, na cor de quem entra, com a peça por baixo.
+    #[test]
+    fn padrao_mostra_as_copias_no_fantasma() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let (mut d, topo) = caixa_com_tampa();
+        let sk = sk_rect(&mut d, PlaneRef::Datum(topo), [-18., -3.], [-12., 3.]);
+        let poste = d.add_feature(extrusao(sk, BoolOp::Add, false, "6"));
+        let antes = recompute(&d);
+        let v1 = antes.bodies[0].mass.volume;
+        let base = corpos_base(Some(&antes));
+        let pad = d.add_feature(FeatureKind::Pattern(Pattern {
+            kind: PatternKind::Linear { dir: AxisRef::Origin(OriginAxis::X), count: s("3"), spacing: s("12"), dir2: None, count2: s("1"), spacing2: s("0"), total: false },
+            sources: vec![poste],
+        }));
+        let r = recompute(&d);
+        assert!(valido(r.status.get(&pad)), "{:?}", r.status.get(&pad));
+        assert!(r.bodies[0].mass.volume > v1 + 100., "as cópias somam material: {} contra {v1}", r.bodies[0].mass.volume);
+        let c = cena(&d, &r, pad, &base);
+        assert!(tem_cor(&c, [10, 20, 30]), "as cópias saem na cor de quem entra");
+        assert!(!c.indices.is_empty());
+    }
+
+    /// B246: o valor que deixa a geometria inválida não apaga a prévia: a última válida continua na
+    /// tela e a causa vem do status, que a etiqueta mostra.
+    #[test]
+    fn falha_mantem_a_ultima_previa_valida() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let (mut d, topo) = caixa_com_tampa();
+        let sk = sk_rect(&mut d, PlaneRef::Datum(topo), [-5., -5.], [5., 5.]);
+        let antes = recompute(&d);
+        let base = corpos_base(Some(&antes));
+        let ext = d.add_feature(extrusao(sk, BoolOp::Add, false, "10"));
+        let mut guardada = vec![];
+        // valor bom: a prévia nasce e fica guardada
+        let r = recompute(&d);
+        assert!(valido(r.status.get(&ext)));
+        let mut boa = cena(&d, &r, ext, &base);
+        assert!(!reter_ultima(&mut guardada, &mut boa, r.status.get(&ext)));
+        let n_boa = boa.ghost.len();
+        assert!(n_boa > 0 && guardada.len() == n_boa);
+        // valor inválido: o cálculo falha e o fantasma novo vem vazio…
+        if let Some(FeatureKind::Extrude(e)) = d.feature_mut(ext).map(|f| &mut f.kind) {
+            e.extent = Extent::Blind(s("nao_existe"));
+        }
+        let r = recompute(&d);
+        let status = r.status.get(&ext);
+        assert!(matches!(status, Some(Status::Error(_))), "{status:?}");
+        let mut ruim = cena(&d, &r, ext, &base);
+        assert!(ruim.ghost.is_empty(), "sem a retenção a prévia some");
+        // …e a retenção repõe a última válida, com o erro nomeado pela etiqueta
+        assert!(reter_ultima(&mut guardada, &mut ruim, status));
+        assert_eq!(ruim.ghost.len(), n_boa);
+        assert!(ruim.ghost.iter().all(|x| x.col[3] < 1.));
+        assert!(matches!(aviso(status, false), Some(Aviso::Erro(m)) if !m.is_empty()));
+        // corrigido o valor, a prévia volta a ser a do cálculo e a guardada acompanha
+        if let Some(FeatureKind::Extrude(e)) = d.feature_mut(ext).map(|f| &mut f.kind) {
+            e.extent = Extent::Blind(s("4"));
+        }
+        let r = recompute(&d);
+        let mut nova = cena(&d, &r, ext, &base);
+        assert!(!reter_ultima(&mut guardada, &mut nova, r.status.get(&ext)));
+        assert_eq!(guardada.len(), nova.ghost.len());
+    }
+
+    /// B246: quem tira material usa a cor de retirada; quem acrescenta, a de destaque.
+    #[test]
+    fn so_o_que_tira_material_usa_a_cor_de_retirada() {
+        let sk = Id(1);
+        assert!(retira(&extrusao(sk, BoolOp::Cut, false, "5")));
+        assert!(!retira(&extrusao(sk, BoolOp::Add, false, "5")));
+        assert!(!retira(&FeatureKind::Shell(Shell { faces: vec![], thickness: s("2"), outward: false, face_keys: vec![], closed: false })));
+        assert!(retira(&FeatureKind::Thickness(Thickness { faces: vec![], value: s("2"), face_keys: vec![], remove: true })));
+    }
+
+    /// B275: o plano do espelho, o neutro da saída e a base da primitiva usam o mesmo retângulo
+    /// translúcido, com borda, e o rótulo traz papel, nome e distância.
+    #[test]
+    fn plano_de_referencia_vira_retangulo_com_rotulo() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let mut d = caixa();
+        let deslocado = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "20");
+        let src = d.features.last().map(|f| f.id).unwrap();
+        let espelho = d.add_feature(FeatureKind::Mirror(Mirror { plane: PlaneRef::Datum(deslocado), sources: vec![src] }));
+        let r = recompute(&d);
+        let base = corpos_base(Some(&r));
+        let mut c = Scene::default();
+        plano_referenciado(&d, &r, &Fantasma { id: espelho, cor: [10, 20, 30], entrada: [0; 3], erro: [0; 3], retirada: [0; 3], ferramenta: [0; 3], neutro: [160, 170, 180], antes: &base }, &mut c);
+        assert_eq!(c.ghost.len(), 6, "dois triângulos");
+        assert!(c.ghost.iter().all(|v| (v.pos[2] - 20.).abs() < 1e-3 && v.col[3] < 1. && (v.col[0] - 10. / 255.).abs() < 1e-6));
+        assert_eq!(c.overlay.len(), 8, "a borda do retângulo");
+        let (_, texto) = rotulo_do_plano(&d, &r, espelho).expect("rótulo");
+        assert!(texto.contains("espelho") && texto.contains("20 mm"), "{texto}");
+        // saída: o neutro tem cor própria
+        let saida = d.add_feature(FeatureKind::Draft(Draft { faces: vec![[20., 0., 10.]], neutral: PlaneRef::Origin(OriginPlane::XY), angle: s("3"), reverse: false, face_keys: vec![] }));
+        let r = recompute(&d);
+        let mut c = Scene::default();
+        plano_referenciado(&d, &r, &Fantasma { id: saida, cor: [10, 20, 30], entrada: [0; 3], erro: [0; 3], retirada: [0; 3], ferramenta: [0; 3], neutro: [160, 170, 180], antes: &base }, &mut c);
+        assert!(tem_cor(&c, [160, 170, 180]) && c.ghost.len() == 6);
+        let (_, texto) = rotulo_do_plano(&d, &r, saida).expect("rótulo");
+        assert!(texto.contains("neutro") && texto.contains("XY") && texto.contains("0 mm"), "{texto}");
     }
 
     #[test]

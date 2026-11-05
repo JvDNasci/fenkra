@@ -898,6 +898,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             }
             let mut target = doc.features[idx].target;
             let mut kind = doc.features[idx].kind.clone();
+            if session.map(|s| s.0) == Some(id) {
+                crate::entradas::faixa(ui, id, &kind);
+            }
             tabs_begin(ui, ("comando", kind.type_name()));
             feature_ui(ui, &doc_ro, idx, id, &mut kind, &mut target, &vars, doc, &picked, &picked_faces, &seed);
             if let FeatureKind::SmCut(c) = &kind {

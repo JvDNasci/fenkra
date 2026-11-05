@@ -573,6 +573,21 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: Camera) {
     for (i, (slot, h)) in list.into_iter().enumerate() {
         linear_handle(app, ui, rect, &cam, id, slot, i, h);
     }
+    // B275: o plano de referência do comando (espelho, saída, base) tem a seta do próprio deslocamento
+    if let Some(rid) = plano_deslocavel(&app.open.doc, id) {
+        if let Some(h) = handle_for(app, rid) {
+            linear_handle(app, ui, rect, &cam, rid, 0, 7, h);
+        }
+    }
+}
+
+/// O comando usa um plano deslocado (referência numérica)? Então arrastar a seta dele muda o valor.
+fn plano_deslocavel(doc: &Document, cmd: Id) -> Option<Id> {
+    let (p, _) = crate::previa::plano_do_comando(&doc.feature(cmd)?.kind)?;
+    match p {
+        PlaneRef::Datum(rid) if matches!(doc.reference(*rid).map(|r| &r.kind), Some(RefKind::OffsetPlane { .. })) => Some(*rid),
+        _ => None,
+    }
 }
 
 /// Uma alça linear: seta arrastável com a cota editável na ponta.
@@ -625,7 +640,7 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
     // cota editável junto da ponta
     let key = egui::Id::unique(("alca_edit", id.0, nth));
     let mut editing: Option<String> = ui.ctx().data(|m| m.get_temp(key));
-    let txt = if numeric { format!("{} mm", fmt(val)) } else { format!("🔒 {} = {}", h.expr.trim(), fmt(val)) };
+    let txt = if numeric { format!("{} {} mm", tr(h.label), fmt(val)) } else { format!("🔒 {} = {}", h.expr.trim(), fmt(val)) };
     let lp = st + n * 22. + d * 10.;
     let galley = painter.layout_no_wrap(txt, egui::FontId::proportional(13.), Color32::WHITE);
     let lr = Rect::from_min_size(lp, galley.size() + egui::vec2(10., 6.));

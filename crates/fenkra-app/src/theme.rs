@@ -470,6 +470,18 @@ pub fn st_err() -> Color32 {
     if dark_now() { Color32::from_rgb(255, 120, 100) } else { Color32::from_rgb(200, 40, 30) }
 }
 
+/// Cores por papel na seleção do comando e na prévia (B246, B247). Ficam longe do azul da peça, do
+/// aviso e do erro, para o volume que sai, a ferramenta e o plano neutro nunca se confundirem.
+pub fn papel_retirada() -> Color32 {
+    if dark_now() { Color32::from_rgb(240, 110, 170) } else { Color32::from_rgb(185, 30, 110) }
+}
+pub fn papel_ferramenta() -> Color32 {
+    if dark_now() { Color32::from_rgb(175, 140, 255) } else { Color32::from_rgb(100, 60, 190) }
+}
+pub fn papel_neutro() -> Color32 {
+    if dark_now() { Color32::from_rgb(130, 215, 195) } else { Color32::from_rgb(20, 120, 105) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

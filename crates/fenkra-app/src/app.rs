@@ -272,6 +272,8 @@ pub struct Session {
     pub is_new: bool,
     /// corpos como estavam ao abrir o comando: ficam por baixo da prévia que refaz o corpo inteiro
     pub corpos_antes: Vec<crate::previa::CorpoBase>,
+    /// última prévia que o cálculo aceitou: fica na tela enquanto o valor atual falha (B246)
+    pub ultima_valida: Vec<crate::render::MeshVertex>,
 }
 
 pub const MATERIALS: [(&str, f64); 8] = [
@@ -2327,7 +2329,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         }
         let snapshot = snapshot.unwrap_or_else(|| self.open.doc.clone());
         let corpos_antes = crate::previa::corpos_base(self.result.as_ref());
-        self.session = Some(Session { id, snapshot, is_new, corpos_antes });
+        self.session = Some(Session { id, snapshot, is_new, corpos_antes, ultima_valida: vec![] });
         self.reframe_pending = true;
         self.sel = if self.open.doc.reference(id).is_some() { Sel::Ref(id) } else { Sel::Feature(id) };
     }
@@ -6295,7 +6297,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     matches!(self.open.doc.feature(*id).map(|f| &f.kind), Some(FeatureKind::Fillet(o) | FeatureKind::Chamfer(o)) if matches!(o.edges, EdgeSel::Edges(_)))
                 });
                 // casca/saída/espessura/rosca abertos: clicar numa face a acrescenta ao comando
-                let face_cmd = self.session.as_ref().map(|x| x.id).filter(|id| self.open.doc.feature(*id).is_some_and(|f| crate::feat_ui::wants_faces(&f.kind)));
+                let face_cmd = self.session.as_ref().map(|x| x.id).filter(|id| self.open.doc.feature(*id).is_some_and(|f| crate::feat_ui::wants_faces(&f.kind) && !crate::entradas::clique_vai_para_plano(&ctx, *id, &f.kind)));
+                // booleana aberta: clicar num corpo o faz de ferramenta (B247)
+                let combine_cmd = self.session.as_ref().map(|x| x.id).filter(|id| matches!(self.open.doc.feature(*id).map(|f| &f.kind), Some(FeatureKind::Combine(_))));
                 if let (Some(fid), true, Some(crate::picking::Pick::Face { point, body, face, .. })) = (face_cmd, resp.clicked_by(egui::PointerButton::Primary), self.hover_pick) {
                     // a mesma face do corpo (pela malha atual) é tirada em vez de repetida
                     let same = |a: [f64; 3], b: [f64; 3]| crate::picking::same_face(r, body, a, b);
@@ -6303,6 +6307,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     let key = r.bodies.get(body).and_then(|b| b.face_key(face));
                     if let Some(f) = self.open.doc.feature_mut(fid) {
                         crate::feat_ui::toggle_face(&mut f.kind, point.map(|v| v as f64), key, same);
+                    }
+                } else if let (Some(cid), true, Some(crate::picking::Pick::Face { body, .. })) = (combine_cmd, resp.clicked_by(egui::PointerButton::Primary), self.hover_pick) {
+                    let coletor = r.bodies.get(body).map(|b| b.collector);
+                    if let (Some(col), Some(f)) = (coletor, self.open.doc.feature_mut(cid)) {
+                        let alvo = f.target;
+                        crate::entradas::corpo_clicado(&mut f.kind, alvo, col);
                     }
                 } else if let (Some(Some(sid)), true, Some(crate::picking::Pick::Edge { mid, .. })) = (
                     self.session.as_ref().map(|x| x.id).map(|id| self.open.doc.feature(id).filter(|f| matches!(f.kind, FeatureKind::SmFlange(_) | FeatureKind::SmHem(_))).map(|f| f.id)),
@@ -6446,27 +6456,15 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 // faces escolhidas do comando em edição
                 if let Some(Some(k)) = face_cmd.map(|id| self.open.doc.feature(id).map(|f| f.kind.clone())) {
                     let marks = crate::feat_ui::face_marks(&k);
-                    for q in &marks {
-                        if let Some(sp) = cam.project(rect, Vec3::new(q[0] as f32, q[1] as f32, q[2] as f32)) {
-                            ui.painter().circle_filled(sp, 5., Color32::from_rgb(90, 200, 255));
-                            ui.painter().circle_stroke(sp, 7., egui::Stroke::new(1.5, Color32::WHITE));
-                        }
-                    }
                     ui.painter().text(rect.center_top() + egui::vec2(0., 30.), egui::Align2::CENTER_TOP,
-                        format!("Clique nas faces para acrescentá-las · {} escolhida(s) · Enter conclui", marks.len()), egui::FontId::proportional(13.), Color32::from_rgb(90, 200, 255));
+                        format!("Clique nas faces para acrescentá-las · {} escolhida(s) · Enter conclui", marks.len()), egui::FontId::proportional(13.), crate::theme::accent(ui.visuals()));
                 }
                 // arestas escolhidas do filete/chanfro em edição
                 if let Some(Some(FeatureKind::Fillet(o) | FeatureKind::Chamfer(o))) = edge_cmd.map(|id| self.open.doc.feature(id).map(|f| &f.kind)) {
                     if let EdgeSel::Edges(list) = &o.edges {
-                        for q in list {
-                            if let Some(sp) = cam.project(rect, Vec3::new(q[0] as f32, q[1] as f32, q[2] as f32)) {
-                                ui.painter().circle_filled(sp, 5., Color32::from_rgb(255, 190, 40));
-                                ui.painter().circle_stroke(sp, 7., egui::Stroke::new(1.5, Color32::WHITE));
-                            }
-                        }
                         let n = list.len();
                         ui.painter().text(rect.center_top() + egui::vec2(0., 30.), egui::Align2::CENTER_TOP,
-                            format!("Clique nas arestas para pôr/tirar do comando · {n} escolhida(s) · Enter conclui"), egui::FontId::proportional(13.), Color32::from_rgb(255, 190, 40));
+                            format!("Clique nas arestas para pôr/tirar do comando · {n} escolhida(s) · Enter conclui"), egui::FontId::proportional(13.), crate::theme::st_warn());
                     }
                 }
                 let painter = ui.painter_at(rect);
@@ -7609,6 +7607,9 @@ impl eframe::App for App {
                     fantasma: crate::previa::da_sessao(self.session.as_ref().filter(|_| asm_view.is_none()), &ctx.global_style().visuals),
                 };
                 let mut s = scene::build(scene_doc, r, &opts);
+                if let Some(sess) = self.session.as_mut().filter(|_| asm_view.is_none()) {
+                    crate::previa::reter_ultima(&mut sess.ultima_valida, &mut s, r.status.get(&sess.id));
+                }
                 crate::asm_ui::contexto_na_cena(self.asm.as_ref(), &mut s);
                 vp.set_scene(rs, &s);
                 self.scene_dirty = false;

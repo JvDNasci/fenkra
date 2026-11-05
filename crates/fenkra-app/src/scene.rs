@@ -140,7 +140,7 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
                     continue;
                 }
                 if let (Some(f), true) = (&o.fantasma, owner.is_some() && owner == fid) {
-                    crate::previa::face_fantasma(&mut s.ghost, m, fi, f.cor);
+                    crate::previa::face_fantasma(&mut s.ghost, m, fi, f.cor_de(doc));
                     crate::previa::crescer_com_face(m, fi, &mut |p| grow(&mut bounds, p));
                     continue;
                 }
@@ -172,7 +172,7 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
                 }
             }
             if shows(!col.visible, env) {
-                let cor = o.fantasma.as_ref().map(|f| f.cor);
+                let cor = o.fantasma.as_ref().map(|f| f.cor_de(doc));
                 match (fid, cor) {
                     (Some(id), Some(c)) if face_owner.contains(&id) => crate::previa::arestas_com_fantasma(&mut s.edges, &mut s.lines, m, o.tangent_edges, edge_col, c, face_owner, id),
                     _ => push_edges(&mut s.edges, m, o.tangent_edges, edge_col),
