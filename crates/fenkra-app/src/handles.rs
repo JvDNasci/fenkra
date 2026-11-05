@@ -430,9 +430,14 @@ fn arc_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id
     let painter = ui.painter_at(rect);
     let hid = egui::Id::unique(("alca_rev", id.0));
     let hr = ui.interact(Rect::from_center_size(tip, egui::vec2(PEGA, PEGA)), hid, if numeric { egui::Sense::drag() } else { egui::Sense::hover() });
-    let col = if hr.hovered() || hr.dragged() { Color32::from_rgb(255, 190, 40) } else { Color32::from_rgb(90, 200, 255) };
-    painter.add(egui::Shape::line(pts, Stroke::new(2.5, col)));
-    painter.circle_stroke(tip, 9., Stroke::new(1.5, col));
+    let erro = matches!(app.result.as_ref().and_then(|r| r.status.get(&id)), Some(fenkra_solidos::Status::Error(_)));
+    let estado = crate::alca_estado::EstadoAlca::de(hr.hovered(), hr.dragged(), !numeric, erro);
+    let col = estado.cor(ui.visuals());
+    if let Some(d) = estado.dica_traduzida() {
+        let _ = hr.clone().on_hover_text(d);
+    }
+    painter.add(egui::Shape::line(pts, Stroke::new(estado.espessura() + 1., col)));
+    painter.circle_stroke(tip, 9., Stroke::new(estado.espessura(), col));
     painter.circle_filled(tip, 4., col);
     if hr.dragged() {
         if let Some(m) = ui.input(|i| i.pointer.interact_pos()) {
@@ -452,7 +457,7 @@ fn arc_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id
         }
     }
     let txt = if numeric { format!("{}°", fmt(ang)) } else { format!("🔒 {} = {}°", expr.trim(), fmt(ang)) };
-    let galley = painter.layout_no_wrap(txt, egui::FontId::proportional(13.), Color32::WHITE);
+    let galley = painter.layout_no_wrap(txt, egui::FontId::proportional(estado.fonte()), Color32::WHITE);
     let lr = Rect::from_min_size(tip + egui::vec2(14., -10.), galley.size() + egui::vec2(10., 6.));
     painter.rect_filled(lr, 4., Color32::from_rgba_unmultiplied(20, 60, 110, 220));
     painter.galley(lr.min + egui::vec2(5., 3.), galley, Color32::WHITE);
@@ -607,20 +612,24 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
     let axis = (s1 - sb) / ppm;
 
     let painter = ui.painter_at(rect);
-    let col = Color32::from_rgb(90, 200, 255);
-    let hot = Color32::from_rgb(255, 190, 40);
     let hid = egui::Id::unique(("alca_3d", id.0, nth));
     let hr = ui.interact(Rect::from_center_size(st, egui::vec2(PEGA, PEGA)), hid, if numeric { egui::Sense::click_and_drag() } else { egui::Sense::hover() });
-    let active = hr.hovered() || hr.dragged();
-    let c = if active { hot } else { col };
+    // B20: cinco estados (repouso, pairando, ativa, travada, erro) com a cor do tema
+    let erro = matches!(app.result.as_ref().and_then(|r| r.status.get(&id)), Some(fenkra_solidos::Status::Error(_)));
+    let estado = crate::alca_estado::EstadoAlca::de(hr.hovered(), hr.dragged(), !numeric, erro);
+    let c = estado.cor(ui.visuals());
+    if let Some(d) = estado.dica_traduzida() {
+        let _ = hr.clone().on_hover_text(d);
+    }
+    let esp = estado.espessura();
 
     // haste e ponta
-    painter.line_segment([sb, st], Stroke::new(2.5, c));
+    painter.line_segment([sb, st], Stroke::new(esp + 1., c));
     let d = if (st - sb).length() > 1. { (st - sb).normalized() } else { axis };
     let n = egui::vec2(-d.y, d.x);
     painter.add(egui::Shape::convex_polygon(vec![st + d * 14., st + n * 7., st - n * 7.], c, Stroke::new(1., Color32::from_black_alpha(120))));
     painter.circle_filled(sb, 3.5, c);
-    painter.circle_stroke(st, PEGA / 2., Stroke::new(1.5, c));
+    painter.circle_stroke(st, PEGA / 2., Stroke::new(esp, c));
 
     // arrastar ao longo do eixo
     if hr.dragged() {
@@ -644,7 +653,7 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
     let mut editing: Option<String> = ui.ctx().data(|m| m.get_temp(key));
     let txt = if numeric { format!("{} {} mm", tr(h.label), fmt(val)) } else { format!("🔒 {} = {}", h.expr.trim(), fmt(val)) };
     let lp = st + n * 22. + d * 10.;
-    let galley = painter.layout_no_wrap(txt, egui::FontId::proportional(13.), Color32::WHITE);
+    let galley = painter.layout_no_wrap(txt, egui::FontId::proportional(estado.fonte()), Color32::WHITE);
     let lr = Rect::from_min_size(lp, galley.size() + egui::vec2(10., 6.));
     painter.rect_filled(lr, 4., Color32::from_rgba_unmultiplied(20, 60, 110, 220));
     painter.rect_stroke(lr, 4., Stroke::new(1., c), egui::StrokeKind::Inside);
