@@ -3107,6 +3107,28 @@ static TABLE: &[(&str, &str)] = &[
     ("Linha e círculo/arco, dois círculos, ou spline e outra curva. Com ponto comum, a spline sai na direção da curva; sem ponto comum, ela se move até encostar.", "Line and circle/arc, two circles, or a spline and another curve. With a shared point the spline leaves in the curve's direction; without one it moves until it touches."),
     ("duas splines só ficam tangentes num ponto comum", "two splines can only be tangent at a shared point"),
     ("selecione linha + círculo/arco, dois círculos, ou spline + outra curva", "select line + circle/arc, two circles, or spline + another curve"),
+    // B247: campo ativo e papéis da seleção do comando
+    ("Campo ativo", "Active field"),
+    ("Entradas completas", "Inputs complete"),
+    ("Arestas escolhidas", "Chosen edges"),
+    ("Faces escolhidas", "Chosen faces"),
+    ("Face aberta", "Open face"),
+    ("Parede nova", "New wall"),
+    ("Aresta ou face", "Edge or face"),
+    ("clique num sketch ou curva fechada no 3D ou na árvore", "click a sketch or closed curve in the 3D view or the tree"),
+    ("clique numa aresta reta, eixo, face plana ou cilíndrica", "click a straight edge, axis, flat or cylindrical face"),
+    ("clique numa face da peça", "click a face of the part"),
+    ("clique numa aresta da peça", "click an edge of the part"),
+    ("clique no corpo que serve de ferramenta", "click the body that acts as the tool"),
+    ("clique num plano ou face plana", "click a plane or flat face"),
+    ("clique num vértice, ponto ou centro de círculo", "click a vertex, point or circle center"),
+    ("clique numa aresta ou curva", "click an edge or curve"),
+    ("clique numa face ou superfície", "click a face or surface"),
+    ("Clique numa face plana ou plano para ser o neutro", "Click a flat face or plane to be the neutral one"),
+    ("Escolher o plano neutro no 3D", "Pick the neutral plane in 3D"),
+    // B275: rótulo do plano de referência
+    ("Plano do espelho", "Mirror plane"),
+    ("Plano de base", "Base plane"),
 ];
 
 #[cfg(test)]
