@@ -216,6 +216,10 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
         }
     }
 
+    if let Some(f) = &o.fantasma {
+        crate::previa::decorar(doc, r, f, &mut s);
+    }
+
     // planos da Origem e das Referências
     for p in &r.planes {
         let (visible_flag, allowed) = match p.id {

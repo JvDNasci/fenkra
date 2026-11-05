@@ -100,7 +100,7 @@ fn walk(doc: &Document, r: &RecomputeResult, key: &str, v: &Value, out: &mut Vec
         Value::Array(a) => {
             if let Some(p) = num3(v) {
                 // coordenadas guardadas (aresta/face clicada, ponto fixo)
-                if !matches!(key, "x" | "normal" | "offset" | "anchors") && p != [0.; 3] {
+                if !matches!(key, "x" | "normal" | "normal_or_axis" | "offset" | "anchors") && p != [0.; 3] {
                     out.push((p, label(key), None));
                 }
                 return;

@@ -7,7 +7,7 @@
 use crate::app::{App, Session};
 use crate::render::{LineVertex, MeshVertex};
 use eframe::egui;
-use fenkra_core::Id;
+use fenkra_core::{Document, FeatureKind, Id};
 use fenkra_kernel::Mesh;
 use fenkra_solidos::{BodyResult, RecomputeResult, Status};
 use glam::Vec3;
@@ -31,6 +31,10 @@ pub struct Fantasma<'a> {
     pub id: Id,
     /// cor de destaque do tema
     pub cor: [u8; 3],
+    /// faces que o comando escolheu (abertas na casca, a face da rosca): cor própria do tema
+    pub entrada: [u8; 3],
+    /// as mesmas faces quando o comando falhou: é ali que a pessoa precisa olhar
+    pub erro: [u8; 3],
     pub antes: &'a [CorpoBase],
 }
 
@@ -46,11 +50,88 @@ impl Fantasma<'_> {
 pub fn da_sessao<'a>(s: Option<&'a Session>, v: &egui::Visuals) -> Option<Fantasma<'a>> {
     let s = s?;
     let c = crate::theme::accent(v);
-    Some(Fantasma { id: s.id, cor: [c.r(), c.g(), c.b()], antes: &s.corpos_antes })
+    let rgb = |c: egui::Color32| [c.r(), c.g(), c.b()];
+    Some(Fantasma { id: s.id, cor: rgb(c), entrada: rgb(crate::theme::st_warn()), erro: rgb(crate::theme::st_err()), antes: &s.corpos_antes })
 }
 
 fn cor_f(c: [u8; 3]) -> [f32; 3] {
     c.map(|x| x as f32 / 255.)
+}
+
+pub fn cor_linha(c: [u8; 3]) -> [f32; 4] {
+    let f = cor_f(c);
+    [f[0], f[1], f[2], 1.]
+}
+
+/// Malha onde as faces escolhidas pelo comando moram: a de antes, porque a de agora pode já não ter
+/// a face (a casca abre, a espessura desloca).
+fn malha_de_entrada<'a>(r: &'a RecomputeResult, f: &'a Fantasma, alvo: Id) -> Option<&'a Mesh> {
+    f.antes.iter().find(|c| c.collector == alvo).map(|c| &c.mesh).or_else(|| r.bodies.iter().find(|b| b.collector == alvo).map(|b| &b.mesh))
+}
+
+/// Tolerância para o ponto guardado cair sobre a face (mm).
+const SOBRE_A_FACE: f32 = 0.05;
+
+/// O que cada comando mostra além do resultado: as faces escolhidas, em cor própria, e a hélice da
+/// rosca. Com erro, as faces escolhidas ficam na cor de erro: mostra onde falhou em vez de só sumir.
+pub fn decorar(doc: &Document, r: &RecomputeResult, f: &Fantasma, s: &mut crate::render::Scene) {
+    let Some(feat) = doc.feature(f.id) else { return };
+    let falhou = matches!(r.status.get(&f.id), Some(Status::Error(_)));
+    if let Some(m) = malha_de_entrada(r, f, feat.target) {
+        for p in crate::feat_ui::face_marks(&feat.kind).into_iter().filter(|p| *p != [0.; 3]) {
+            if let Some((fi, _)) = crate::picking::face_e_distancia(m, p).filter(|x| x.1 < SOBRE_A_FACE) {
+                face_fantasma(&mut s.ghost, m, fi, if falhou { f.erro } else { f.entrada });
+            }
+        }
+    }
+    if matches!(feat.kind, FeatureKind::Thread(_)) && !falhou {
+        if let Some(h) = r.roscas.iter().find(|x| x.feature == f.id) {
+            helice(h, cor_linha(f.cor), cor_linha(f.entrada), &mut s.overlay);
+        }
+    }
+}
+
+/// Base perpendicular a um eixo unitário.
+fn base_do_eixo(d: Vec3) -> (Vec3, Vec3) {
+    let u = d.any_orthonormal_vector();
+    (u, d.cross(u))
+}
+
+/// Pontos da hélice simplificada: 24 por volta, no máximo 80 voltas (o desenho é um aviso, não a
+/// rosca real).
+pub fn pontos_da_helice(h: &fenkra_solidos::RoscaViz) -> Vec<Vec3> {
+    let (o, d) = (Vec3::from(h.origin.map(|x| x as f32)), Vec3::from(h.dir.map(|x| x as f32)));
+    let (u, v) = base_do_eixo(d);
+    let voltas = (h.len / h.pitch).clamp(1., 80.) as f32;
+    let n = (voltas * 24.) as usize;
+    (0..=n)
+        .map(|i| {
+            let t = i as f32 / n as f32;
+            let a = t * voltas * std::f32::consts::TAU;
+            o + d * (t * h.len as f32) + (u * a.cos() + v * a.sin()) * h.radius as f32
+        })
+        .collect()
+}
+
+/// Hélice e os anéis de início e fim, sempre visíveis: em furo a rosca fica dentro da peça.
+fn helice(h: &fenkra_solidos::RoscaViz, cor: [f32; 4], anel: [f32; 4], dst: &mut Vec<LineVertex>) {
+    let pts = pontos_da_helice(h);
+    for w in pts.windows(2) {
+        dst.push(LineVertex { pos: w[0].into(), col: cor });
+        dst.push(LineVertex { pos: w[1].into(), col: cor });
+    }
+    let (o, d) = (Vec3::from(h.origin.map(|x| x as f32)), Vec3::from(h.dir.map(|x| x as f32)));
+    let (u, v) = base_do_eixo(d);
+    for c in [o, o + d * h.len as f32] {
+        for i in 0..48 {
+            let p = |k: i32| {
+                let a = k as f32 / 48. * std::f32::consts::TAU;
+                c + (u * a.cos() + v * a.sin()) * h.radius as f32
+            };
+            dst.push(LineVertex { pos: p(i).into(), col: anel });
+            dst.push(LineVertex { pos: p(i + 1).into(), col: anel });
+        }
+    }
 }
 
 /// Acrescenta os triângulos da face `fi` à camada de fantasma.
@@ -104,11 +185,70 @@ pub fn arestas_com_fantasma(edges: &mut Vec<LineVertex>, lines: &mut Vec<LineVer
     }
 }
 
-/// Desenvolvimento: `FENKRA_DEMO_PREVIA=ultimo` tira o último comando da peça de exemplo para ele ser
-/// reaberto como comando novo assim que a peça calcular (ver `App::demo_previa`).
-pub fn demo_preparar(doc: &mut fenkra_core::Document) -> Option<fenkra_core::FeatureKind> {
+/// Comando que o modo de demonstração abre quando a peça terminar de calcular.
+pub enum DemoPrevia {
+    Comando(FeatureKind),
+    /// plano deslocado 30 mm do plano XY
+    Plano,
+}
+
+/// Desenvolvimento: `FENKRA_DEMO_PREVIA=<nome>` monta o caso e devolve o comando a abrir como novo
+/// (ver `App::demo_previa`). `ultimo` e `membro` usam a peça de exemplo; os outros criam a sua.
+pub fn demo_preparar(doc: &mut Document) -> Option<DemoPrevia> {
+    use fenkra_core::*;
     let nome = std::env::var("FENKRA_DEMO_PREVIA").ok()?;
-    (nome == "ultimo").then(|| doc.features.pop().map(|f| f.kind)).flatten()
+    let s = |x: &str| x.to_string();
+    let sketch = |d: &mut Document, plane: PlaneRef, monta: &dyn Fn(&mut SketchData, &mut dyn FnMut() -> Id)| {
+        let mut data = SketchData::default();
+        let mut n = 9_500_000u64 + d.features.len() as u64 * 1000;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        monta(&mut data, &mut al);
+        d.add_feature(FeatureKind::Sketch(Sketch { plane, data }))
+    };
+    let caixa = |d: &mut Document| {
+        let sk = sketch(d, PlaneRef::Origin(OriginPlane::XY), &|data, al| {
+            data.add_rect(&mut &mut *al, [-30., -20.], [30., 20.], false);
+        });
+        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("30")), reverse: false, taper: s("0"), thin: None, thin_side: 0, dir: None }));
+    };
+    // os casos próprios partem do zero: a placa de exemplo faria a casca falhar
+    if matches!(nome.as_str(), "casca" | "espessura" | "rosca" | "nervura") {
+        *doc = Document::new("Prévia");
+    }
+    Some(DemoPrevia::Comando(match nome.as_str() {
+        "ultimo" => doc.features.pop()?.kind,
+        "membro" => {
+            doc.features.pop();
+            doc.features.pop()?.kind
+        }
+        "plano" => return Some(DemoPrevia::Plano),
+        "casca" => {
+            caixa(doc);
+            FeatureKind::Shell(Shell { faces: vec![[0., 0., 30.]], thickness: s("3"), outward: false, face_keys: vec![], closed: false })
+        }
+        "espessura" => {
+            caixa(doc);
+            FeatureKind::Thickness(Thickness { faces: vec![[0., 0., 30.]], value: s("8"), face_keys: vec![], remove: false })
+        }
+        "rosca" => {
+            doc.add_feature(FeatureKind::Primitive(Primitive { kind: PrimKind::Cilindro, plane: PlaneRef::Origin(OriginPlane::XY), a: s("6"), b: s("40"), c: s("0"), d: s("0"), op: BoolOp::Add }));
+            FeatureKind::Thread(Thread { face: [6., 0., 20.], spec: s("M10x1.5"), length: s("20"), modeled: false, end: None, start: s("6") })
+        }
+        "nervura" => {
+            caixa(doc);
+            let topo = doc.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "30");
+            let sk = sketch(doc, PlaneRef::Datum(topo), &|data, al| {
+                let a = data.add_point(&mut &mut *al, -25., 0.);
+                let b = data.add_point(&mut &mut *al, 25., 0.);
+                data.add_curve(&mut &mut *al, fenkra_core::sketch::Curve::Line { a, b }, false);
+            });
+            FeatureKind::Stiffener(Stiffener { sketch: sk, thickness: s("4"), depth: s("15"), reverse: true, to_body: false, side: 1 })
+        }
+        _ => return None,
+    }))
 }
 
 /// O que a etiqueta da prévia diz agora.
@@ -131,12 +271,41 @@ pub fn aviso(status: Option<&Status>, calculando: bool) -> Option<Aviso> {
     }
 }
 
+/// Rótulo pequeno preso a um ponto da tela.
+fn rotulo(ui: &egui::Ui, rect: egui::Rect, at: egui::Pos2, texto: String, cor: egui::Color32) {
+    let painter = ui.painter_at(rect);
+    let g = painter.layout_no_wrap(texto, egui::FontId::proportional(12.), cor);
+    let caixa = egui::Rect::from_min_size(at + egui::vec2(10., -10.), g.size() + egui::vec2(8., 4.));
+    painter.rect_filled(caixa, 3., ui.visuals().extreme_bg_color.gamma_multiply(0.9));
+    painter.galley(caixa.min + egui::vec2(4., 2.), g, cor);
+}
+
+/// Rótulos que dependem do comando: início e fim da rosca, lado da parede da nervura.
+fn rotulos(app: &App, ui: &egui::Ui, rect: egui::Rect, cam: &crate::render::Camera, id: Id) {
+    let (Some(f), Some(r)) = (app.open.doc.feature(id), app.result.as_ref()) else { return };
+    let cor = crate::theme::accent(ui.visuals());
+    match &f.kind {
+        FeatureKind::Thread(_) => {
+            let Some(h) = r.roscas.iter().find(|x| x.feature == id) else { return };
+            let (o, d) = (Vec3::from(h.origin.map(|x| x as f32)), Vec3::from(h.dir.map(|x| x as f32)));
+            let borda = base_do_eixo(d).0 * h.radius as f32;
+            for (p, nome) in [(o + borda, "Início"), (o + borda + d * h.len as f32, "Fim")] {
+                if let Some(q) = cam.project(rect, p) {
+                    rotulo(ui, rect, q, crate::i18n::tr(nome).to_string(), crate::theme::st_warn());
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
 /// Etiqueta no topo da viewport com a causa, para quem olha o modelo e não o painel.
-pub fn overlay(app: &App, ui: &mut egui::Ui, rect: egui::Rect) {
+pub fn overlay(app: &App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::render::Camera) {
     let Some(s) = app.session.as_ref() else { return };
     if app.in_asm() {
         return;
     }
+    rotulos(app, ui, rect, cam, s.id);
     let Some(a) = aviso(app.status_of(s.id), app.calculando()) else { return };
     let (texto, cor) = match &a {
         Aviso::Erro(e) => (format!("{}: {e}", crate::i18n::tr("Prévia inválida")), crate::theme::st_err()),
@@ -179,7 +348,7 @@ mod tests {
             line_w: 1.,
             line_dash: 0,
             point_style: 0,
-            fantasma: Some(Fantasma { id, cor: [10, 20, 30], antes }),
+            fantasma: Some(Fantasma { id, cor: [10, 20, 30], entrada: [40, 50, 60], erro: [70, 80, 90], antes }),
         };
         build(d, r, &o)
     }
@@ -278,6 +447,49 @@ mod tests {
             assert!(cena.ghost.iter().all(|v| v.col[3] < 1. && (v.col[0] - 10. / 255.).abs() < 1e-6), "{nome}: fora da cor da prévia");
             assert!(!cena.indices.is_empty(), "{nome}: a peça sumiu de baixo do fantasma");
         }
+    }
+
+    fn caixa() -> Document {
+        let mut d = Document::new("caixa");
+        let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [-20., -20.], [20., 20.]);
+        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("20")), reverse: false, taper: s("0"), thin: None, thin_side: 0, dir: None }));
+        d
+    }
+
+    /// Cor da face na camada de fantasma, em u8.
+    fn tem_cor(c: &Scene, cor: [u8; 3]) -> bool {
+        c.ghost.iter().any(|v| (0..3).all(|i| (v.col[i] - cor[i] as f32 / 255.).abs() < 1e-6))
+    }
+
+    /// B05: a hélice começa e termina onde o cálculo disse, e o raio é o da face.
+    #[test]
+    fn helice_liga_inicio_e_fim_da_rosca() {
+        let h = fenkra_solidos::RoscaViz { feature: Id(1), origin: [0., 0., 5.], dir: [0., 0., 1.], radius: 4., len: 10., pitch: 1.25 };
+        let p = pontos_da_helice(&h);
+        assert_eq!(p.len(), 8 * 24 + 1);
+        assert!((p[0].z - 5.).abs() < 1e-4 && (p.last().unwrap().z - 15.).abs() < 1e-4);
+        assert!(p.iter().all(|q| (q.truncate().length() - 4.).abs() < 1e-3));
+    }
+
+    /// B05: rosca cosmética em cilindro: a face escolhida realça, a hélice aparece e a medida errada avisa.
+    #[test]
+    fn rosca_realca_a_face_e_avisa_o_diametro() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let mut d = Document::new("eixo");
+        let pr = d.add_feature(FeatureKind::Primitive(Primitive { kind: PrimKind::Cilindro, plane: PlaneRef::Origin(OriginPlane::XY), a: s("5"), b: s("30"), c: s("0"), d: s("0"), op: BoolOp::Add }));
+        let antes = recompute(&d);
+        assert!(valido(antes.status.get(&pr)), "{:?}", antes.status.get(&pr));
+        let base = corpos_base(Some(&antes));
+        let th = d.add_feature(FeatureKind::Thread(Thread { face: [5., 0., 15.], spec: s("M12x1.75"), length: s("10"), modeled: false, end: None, start: s("4") }));
+        let r = recompute(&d);
+        assert!(matches!(r.status.get(&th), Some(Status::Warning(w)) if w.contains('≠')), "{:?}", r.status.get(&th));
+        let c = cena(&d, &r, th, &base);
+        assert!(tem_cor(&c, [40, 50, 60]), "a face escolhida realça");
+        let h = r.roscas.iter().find(|x| x.feature == th).expect("posição da rosca");
+        assert!((h.radius - 5.).abs() < 1e-6 && (h.len - 10.).abs() < 1e-6);
+        assert!(c.overlay.len() > 200, "hélice e anéis");
     }
 
     /// O fantasma não é selecionável: o raio passa pela aba e acerta o que está atrás, ou nada.

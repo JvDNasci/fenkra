@@ -184,7 +184,7 @@ pub struct App {
     /// comando aberto em edição (ambiente com Concluir/Cancelar)
     pub session: Option<Session>,
     /// desenvolvimento: comando a abrir como novo quando a peça terminar de calcular
-    demo_previa: Option<FeatureKind>,
+    demo_previa: Option<crate::previa::DemoPrevia>,
     /// novo sketch esperando o clique no plano/face
     pub sketch_wait_plane: bool,
     /// árvore aberta ao lado do painel do comando
@@ -651,6 +651,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
         }
         app.demo_previa = crate::previa::demo_preparar(&mut app.open.doc);
+        app.started |= app.demo_previa.is_some();
         app.request_recompute();
         app
     }
@@ -6260,7 +6261,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 crate::asm_ui::fasteners_handles(self, ui, rect, &cam);
                 crate::feat_ui::bend_overlay(self, ui, rect, &cam);
                 crate::feat_ui::cut_overlay(self, ui, rect, &cam);
-                crate::previa::overlay(self, ui, rect);
+                crate::previa::overlay(self, ui, rect, &cam);
             }
             // seta e cota 3D do comando aberto (fast 3D)
             if self.sketch.is_none() {
@@ -7271,7 +7272,10 @@ impl eframe::App for App {
         if self.result.is_some() && !self.calculando() {
             if let Some(k) = self.demo_previa.take() {
                 let snapshot = self.open.doc.clone();
-                let id = self.open.doc.add_feature(k);
+                let id = match k {
+                    crate::previa::DemoPrevia::Comando(k) => self.open.doc.add_feature(k),
+                    crate::previa::DemoPrevia::Plano => self.open.doc.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "30"),
+                };
                 self.start_session(id, true, Some(snapshot));
             }
         }

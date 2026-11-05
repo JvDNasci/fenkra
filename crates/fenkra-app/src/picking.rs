@@ -544,6 +544,11 @@ pub fn face_at(r: &RecomputeResult, body: usize, p: [f64; 3]) -> Option<usize> {
 
 /// Face da malha mais perto do ponto.
 pub fn face_da_malha(m: &fenkra_kernel::Mesh, p: [f64; 3]) -> Option<usize> {
+    face_e_distancia(m, p).map(|x| x.0)
+}
+
+/// Face da malha mais perto do ponto e a distância até ela.
+pub fn face_e_distancia(m: &fenkra_kernel::Mesh, p: [f64; 3]) -> Option<(usize, f32)> {
     let q = Vec3::new(p[0] as f32, p[1] as f32, p[2] as f32);
     let mut best: Option<(f32, usize)> = None;
     for (ti, t) in m.indices.chunks_exact(3).enumerate() {
@@ -553,8 +558,8 @@ pub fn face_da_malha(m: &fenkra_kernel::Mesh, p: [f64; 3]) -> Option<usize> {
             best = Some((d, ti));
         }
     }
-    let (_, ti) = best?;
-    Some(m.face_ranges.partition_point(|&x| x as usize <= ti * 3).saturating_sub(1))
+    let (d, ti) = best?;
+    Some((m.face_ranges.partition_point(|&x| x as usize <= ti * 3).saturating_sub(1), d))
 }
 
 /// Os dois pontos estão na mesma face do corpo?
