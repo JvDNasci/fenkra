@@ -23,6 +23,7 @@ pub mod links;
 pub mod load;
 pub mod manipulador;
 pub mod proposta;
+pub mod pilhas;
 pub mod publicacoes;
 pub mod repeticao;
 pub mod simbolos;
@@ -485,6 +486,9 @@ pub struct Assembly {
     #[serde(default)]
     pub features: Vec<AsmFeature>,
     /// interferências ignoradas e o limite "ignorar menores que"
+    /// pilhas de fixadores: recalculáveis, ligadas aos furos (ver [`pilhas`])
+    #[serde(default)]
+    pub pilhas: Vec<pilhas::Pilha>,
     #[serde(default)]
     pub interf: interferencia::RegrasInterf,
     /// projeto relacional (peças novas fixas, posicionadas por links entre peças) × por restrições
@@ -624,7 +628,7 @@ impl Assembly {
     }
 
     pub fn new(name: &str) -> Self {
-        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], interf: Default::default(), relational: false, politicas_link: vec![], religacoes: vec![], geometria: None, esqueleto: None, contexto_livre: false, origem_oculta: false }
+        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], pilhas: vec![], interf: Default::default(), relational: false, politicas_link: vec![], religacoes: vec![], geometria: None, esqueleto: None, contexto_livre: false, origem_oculta: false }
     }
 
     pub fn alloc(&mut self) -> Id {

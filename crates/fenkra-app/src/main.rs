@@ -70,6 +70,8 @@ mod textos_montagem3;
 mod asm_inserir;
 mod asm_interf;
 mod asm_repeticao;
+mod asm_fixadores;
+mod asm_encaixe;
 mod textos_pmi;
 mod textos_superficies;
 mod sketch_fluxo;

@@ -6712,6 +6712,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 crate::biblioteca_ui::overlay(self, ui, rect, &cam);
                 crate::asm_inserir::overlay(self, ui, rect, &cam);
                 crate::asm_repeticao::overlay(self, ui, rect, &cam);
+                crate::asm_fixadores::overlay(self, ui, rect, &cam);
+                crate::asm_encaixe::overlay(self, ui, rect, &cam);
                 crate::feat_ui::bend_overlay(self, ui, rect, &cam);
                 crate::feat_ui::cut_overlay(self, ui, rect, &cam);
                 crate::previa::overlay(self, ui, rect, &cam);
@@ -7636,6 +7638,7 @@ impl eframe::App for App {
         crate::asm_interf::painel(self, ctx, area);
         crate::asm_repeticao::painel(self, ctx, area);
         crate::asm_ui::contexto_window(self, ctx);
+        crate::asm_fixadores::painel(self, ctx, area);
         crate::asm_ui::gears_window(self, ctx);
         self.sheet_window(ctx);
         crate::st_ui::windows(self, ctx);

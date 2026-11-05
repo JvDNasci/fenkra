@@ -261,6 +261,10 @@ pub struct AsmState {
     pub fasteners_open: Option<FastenersUi>,
     /// painel Biblioteca (catálogo de normas) aberto, com a inserção em andamento
     pub catalogo: Option<crate::biblioteca_ui::Estado>,
+    /// assistente de prendedores aberto (B98)
+    pub fixadores: Option<crate::asm_fixadores::Estado>,
+    /// como estava cada ponto no último recálculo das pilhas
+    pub pilhas_diag: fenkra_montagem::pilhas::Recalculo,
     /// comando Repetição aberto (B263)
     pub repeticao: Option<crate::asm_repeticao::Estado>,
     /// comando Inserir aberto, com a peça na mão (B262)
@@ -353,6 +357,8 @@ impl AsmState {
             catalogo: None,
             inserir: None,
             repeticao: None,
+            fixadores: None,
+            pilhas_diag: Default::default(),
             gears_open: None,
             anim_sel: 0,
             anim_t: 0.,
@@ -811,7 +817,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
 /// clique numa peça a seleciona na árvore.
 pub fn after_viewport(app: &mut App, ctx: &egui::Context) {
     after_view_quick(app);
-    if !crate::asm_inserir::apos_viewport(app) && !crate::asm_repeticao::apos_viewport(app) && !crate::asm_cmd::apos_viewport(app) && !crate::asm_manip::apos_viewport(app) {
+    if !crate::asm_inserir::apos_viewport(app) && !crate::asm_fixadores::apos_viewport(app) && !crate::asm_repeticao::apos_viewport(app) && !crate::asm_cmd::apos_viewport(app) && !crate::asm_manip::apos_viewport(app) {
         selecao_do_clique(app, ctx.input(|i| i.modifiers.alt));
     }
     // duplo clique numa peça: abre para editar
@@ -1018,6 +1024,10 @@ fn sair_da_peca(app: &mut App, salvar: bool) -> bool {
     st.editing_part = None;
     st.vista_contexto = st.vista_contexto_acima.take();
     st.solve();
+    // a peça pode ter mudado um furo: os prendedores dele acompanham
+    if let Some(m) = crate::asm_fixadores::apos_mudar_peca(st) {
+        st.aviso = Some((m, false));
+    }
     // o documento aberto não fica para trás: salvá-lo depois gravaria por cima do arquivo
     app.load_doc_pub(Document::new("Peça"), None);
     app.settings.bench = crate::settings::Bench::Montagem;
@@ -1416,6 +1426,10 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                         }
                     }
                 });
+                if fenkra_montagem::pilhas::da_peca(&st.asm, n.id).is_some() && ui.button(tr("Editar prendedor")).on_hover_text(tr("Abre o assistente na linha deste ponto.")).clicked() {
+                    *act = Some((n.id, 40));
+                    ui.close();
+                }
                 ui.separator();
                 if ui.button(tr("🗑 Apagar   Del")).clicked() {
                     *act = Some((n.id, 0));
@@ -1784,6 +1798,10 @@ pub fn node_action(app: &mut App, id: Id, k: u8) {
         _ => {}
     }
     st.push_undo();
+    if k == 40 {
+        let p = fenkra_montagem::pilhas::da_peca(&st.asm, id);
+        return crate::asm_fixadores::abrir(st, p);
+    }
     match k {
         0 => {
             st.asm.delete(id);
@@ -3759,6 +3777,7 @@ pub fn fasteners_window(app: &mut App, ctx: &egui::Context) {
     let Some(mut f) = st.fasteners_open.clone() else { return };
     let mut open = true;
     let (mut apply, mut close) = (false, false);
+    let mut abrir_assistente = false;
     let familias = |pred: fn(TipoFixador) -> bool| biblioteca::familias().iter().filter(|x| pred(x.tipo)).map(|x| (x.id.clone(), x.norma.clone())).collect::<Vec<_>>();
     let combo = |ui: &mut egui::Ui, id: &str, atual: &mut String, itens: &[(String, String)]| {
         let rotulo = itens.iter().find(|(i, _)| i == atual).map(|(_, n)| n.clone()).unwrap_or_else(|| atual.clone());
@@ -3771,6 +3790,9 @@ pub fn fasteners_window(app: &mut App, ctx: &egui::Context) {
     egui::Window::new(tr("🔩 Preencher furos com fixadores")).id(egui::Id::unique("janela_fixadores")).open(&mut open).default_width(400.).show(ctx, |ui| {
         if crate::app::done_bar(ui) {
             close = true;
+        }
+        if ui.button(tr("Assistente de prendedores…")).on_hover_text(tr("Tabela com cada ponto: troque família, tamanho, comprimento e pilha.")).clicked() {
+            abrir_assistente = true;
         }
         ui.label(RichText::new(tr("Os furos passantes com a folga de um tamanho métrico (e os roscados) recebem parafuso, arruela e porca da biblioteca. Furos de peças diferentes no mesmo eixo formam uma pilha só, e o comprimento sai da espessura atravessada.")).weak().small());
         crate::editor::section(ui, "Parafuso");
@@ -3873,6 +3895,9 @@ pub fn fasteners_window(app: &mut App, ctx: &egui::Context) {
             });
         }
     });
+    if abrir_assistente {
+        crate::asm_fixadores::abrir(st, None);
+    }
     if !open || close {
         st.fasteners_open = None;
         return;

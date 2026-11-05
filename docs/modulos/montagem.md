@@ -25,7 +25,7 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 - **Peça no contexto e links** (Peça no contexto, copiar geometria) — AsmNewPart, AsmLink; links com estado, política por link, transformação viva e grafo acíclico em `links.rs` (B70, ADR 0013); peças não 100% editáveis vendo as outras (DR-31). `DR-31`
 - **Recursos de montagem** (Recorte pela peça, furo entre peças) — AsmFeat(0/1) corta só a forma exibida na montagem: não grava furo nas peças, não entra no hole_table nem nos Fixadores; posição só pelo clique, Ø padrão 6. `B57`
 - **Seleção e edição na árvore** (Árvore da montagem) — Ctrl, Shift e Alt; ocultar, apagar e isolar valem para a seleção (B22). `DR-32`
-- **Fixadores automáticos** (Fixadores (preencher furos)) — preencher_furos: pilha parafuso/arruela/porca com restrições (B29) e trava de giro, 0 GDL por padrão (B62); pega medida por sondas laterais; sem editar/trocar a pilha depois. `B51`
+- **Fixadores automáticos** (Fixadores, Assistente de prendedores) — preencher_furos: pilha parafuso/arruela/porca com restrições (B29) e trava de giro, 0 GDL por padrão (B62); `pilhas.rs`, `asm_fixadores.rs`: pilha recalculável ligada ao furo, tabela, ponto manual e diagnóstico por ponto (B98, ADR 0034). `B51`
 - **Publicações e referências na montagem** (Publicação em peça (sem montagem)) — Peça publica ref/parâmetro/corpo; montagem não tem sketch, ponto, eixo, plano nem publicação. `B55`
 - **Editar peça no contexto** (Editar peça (troca de bancada)) — edit_part troca para a bancada Sólidos; outras peças só como arestas; Voltar salva sempre; links sem estado. `B54`
 

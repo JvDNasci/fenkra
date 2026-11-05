@@ -33,7 +33,7 @@ const QUADROS_POR_SEGUNDO: f64 = 24.;
 
 impl Pendente {
     fn novo(tipo: Tipo) -> Self {
-        Pendente { c: Comando::novo(tipo), picks: Default::default(), textos: Default::default(), resultado: None, resolvida: None, aviso: None, animacao: None, opcoes_animar: Default::default() }
+        Pendente { c: Comando::novo(tipo), picks: Default::default(), textos: Default::default(), resultado: None, resolvida: None, aviso: None, animacao: None, opcoes_animar: Default::default(), encaixe: Default::default(), formulas: ["0".into(), "0".into(), "0".into()] }
     }
 
     /// Peças fora do lugar agora: as da prévia ou as do quadro do Animar.
@@ -622,6 +622,15 @@ pub fn demo(st: &mut AsmState, nome: &str) {
         return;
     }
     if nome.starts_with("inserir") {
+    if nome == "fixadores" {
+        crate::asm_fixadores::demo(st);
+        return;
+    }
+    if nome == "encaixe" {
+        st.cmd = Some(Pendente::novo(Tipo::Junta(JointKind::Rigid)));
+        crate::asm_encaixe::demo(st);
+        return;
+    }
         crate::asm_inserir::demo(st, nome == "inserir_vazia");
         return;
     }
