@@ -49,7 +49,7 @@ fn menu_tipos(st: &mut AsmState, ui: &mut egui::Ui, rect: Rect) {
         return;
     }
     let e = &mut st.simbolos;
-    egui::Area::new(egui::Id::unique("asm_menu_simbolos")).order(egui::Order::Middle).fixed_pos(rect.right_bottom() + egui::vec2(-104., -62.)).show(ui.ctx(), |ui| {
+    egui::Area::new(egui::Id::unique("asm_menu_simbolos")).order(egui::Order::Middle).fixed_pos(rect.right_bottom() + egui::vec2(-104., -96.)).show(ui.ctx(), |ui| {
         ui.menu_button(tr("Símbolos"), |ui| {
             ui.checkbox(&mut e.ligado, tr("Mostrar no modelo")).on_hover_text(tr("Desenha um símbolo em cada restrição e junta, preso à geometria"));
             ui.separator();
@@ -147,7 +147,10 @@ fn cota(st: &mut AsmState, ui: &mut egui::Ui, rect: Rect, cam: &Camera, s: &Simb
             v.max(0.)
         }
     });
-    if rotulo(ui, rect, a + (b - a) / 2., &format!("{} mm", fmt(valor)), cor, ("asm_rotulo", s.id.0)).on_hover_text(tr("Clique para digitar o valor")).clicked() {
+    // ao lado da linha: o meio dela é o lugar do símbolo
+    let lado = if (b - a).length() > 1. { (b - a).normalized().rot90() } else { egui::Vec2::X };
+    let lado = if lado.x < 0. { -lado } else { lado };
+    if rotulo(ui, rect, a + (b - a) / 2. + lado * 38., &format!("{} mm", fmt(valor)), cor, ("asm_rotulo", s.id.0)).on_hover_text(tr("Clique para digitar o valor")).clicked() {
         st.simbolos.editando = Some((s.id, fmt(valor)));
     }
 }
