@@ -282,6 +282,8 @@ pub struct Externos {
     pub recalculo: Option<Result<(), String>>,
     /// substitui a conferência automática do desenho (por data de gravação)
     pub desenho_atualizado: Option<bool>,
+    /// medidas de qualidade da peça aberta (B305); `None` = não conferido
+    pub qualidade: Option<crate::qualidade_modelo::Medidas>,
 }
 
 #[cfg(test)]

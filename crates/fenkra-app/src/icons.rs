@@ -146,7 +146,8 @@ modelos!(
     "sup_revolucao", "sup_tubo", "sup_varredura", "sup_varredura_av", "sweep_corrigido", "sweep_fixo",
     "sweep_frenet", "vista_direita", "vista_frente", "vista_iso", "vista_topo", "wf_repetir", "xf_afinidade",
     "xf_escala", "xf_girar", "xf_mover", "xf_simetria", "arvore_zoom_mais", "arvore_zoom_menos",
-    "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais"
+    "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais",
+    "qualidade_modelo", "comparar_versoes"
 );
 
 // Lista gerada a partir de assets/icons (scripts/gerar_icones.py).

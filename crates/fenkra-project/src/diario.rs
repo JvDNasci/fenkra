@@ -28,6 +28,8 @@ pub enum TipoEvento {
     Revisao,
     /// referência reparada ou arquivo movido
     Reparo,
+    /// violação de regra de qualidade aceita (B305): `autor` é quem aceitou, `de` a regra, `para` a versão
+    Excecao,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
