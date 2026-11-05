@@ -12,13 +12,16 @@ pub mod engrenagens;
 pub mod estrutura;
 pub mod fixadores;
 pub mod kin;
+pub mod links;
 pub mod load;
 pub mod view;
 pub mod solve;
+pub mod subconjunto;
 
 pub use engrenagens::{calculo_par, inserir_par_engrenagens, CalculoPar, RelatorioEngrenagens};
 pub use estrutura::{estrutura_para_montagem, Gerado, GrupoGerado};
 pub use fixadores::{preencher_furos, OpcoesFixadores, RelatorioFixadores};
+pub use subconjunto::{Religacao, RelatorioExtracao};
 
 use fenkra_core::{expr, Id, Properties};
 use serde::{Deserialize, Serialize};
@@ -241,6 +244,16 @@ impl MateKind {
     }
 }
 
+/// Sentido imposto entre as normais (ou eixos) dos dois elementos de uma restrição.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum Sentido {
+    /// não impõe: vale o lado em que a peça estiver (restrições gravadas antes do B71)
+    #[default]
+    Livre,
+    Mesmo,
+    Oposto,
+}
+
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct Mate {
     pub id: Id,
@@ -250,6 +263,52 @@ pub struct Mate {
     pub b: MateRef,
     #[serde(default)]
     pub suppressed: bool,
+    /// alinhamento: sentido das normais em Distância, Ângulo e Paralelismo (a Coincidência guarda
+    /// o dela em `flip`, e o Contato é sempre oposto)
+    #[serde(default)]
+    pub sentido: Sentido,
+    /// lado: sentido da cota. A Distância é medida do lado oposto ao da normal de A
+    #[serde(default)]
+    pub lado_invertido: bool,
+}
+
+impl Mate {
+    /// "Inverter alinhamento" muda alguma coisa neste par?
+    pub fn aceita_alinhamento(&self) -> bool {
+        let iguais = matches!((self.a.geom, self.b.geom), (Geom::Plane { .. }, Geom::Plane { .. }) | (Geom::Axis { .. }, Geom::Axis { .. }));
+        match self.kind {
+            MateKind::Coincident { .. } | MateKind::Distance(_) | MateKind::Angle(_) | MateKind::Parallel => iguais,
+            MateKind::Contact => matches!((self.a.geom, self.b.geom), (Geom::Plane { .. }, Geom::Plane { .. })),
+            _ => false,
+        }
+    }
+
+    /// "Inverter lado" muda alguma coisa neste par? Só onde a cota tem sinal: medida ao longo da
+    /// normal de um plano. Entre pontos e eixos a distância é um módulo, e o ângulo entre duas
+    /// direções também não tem sinal.
+    pub fn aceita_lado(&self) -> bool {
+        matches!(self.kind, MateKind::Distance(_)) && (matches!(self.a.geom, Geom::Plane { .. }) || matches!(self.b.geom, Geom::Plane { .. }))
+    }
+}
+
+/// O par de elementos faz sentido para a restrição? Par sem sentido não gera resíduo: a restrição
+/// nasceria sem efeito nenhum.
+pub fn par_valido(kind: &MateKind, a: &Geom, b: &Geom) -> bool {
+    let ponto = |g: &Geom| matches!(g, Geom::Point(_));
+    match kind {
+        MateKind::Angle(_) | MateKind::Parallel | MateKind::Perpendicular => !ponto(a) && !ponto(b),
+        MateKind::Contact => !matches!((a, b), (Geom::Point(_), Geom::Axis { .. }) | (Geom::Axis { .. }, Geom::Point(_))),
+        _ => true,
+    }
+}
+
+/// Valor de cota com 4 casas, sem zeros à direita: 12.5, 0, -3.1416.
+pub fn valor_cota(x: f64) -> String {
+    let v = (x * 1e4).round() / 1e4;
+    if v == 0. {
+        return "0".into();
+    }
+    format!("{v:.4}").trim_end_matches('0').trim_end_matches('.').to_string()
 }
 
 /// Qualquer direção perpendicular a `d` (unitária).
@@ -364,6 +423,12 @@ pub struct Assembly {
     /// projeto relacional (peças novas fixas, posicionadas por links entre peças) × por restrições
     #[serde(default)]
     pub relational: bool,
+    /// quando cada link das peças atualiza (só os que fogem do automático)
+    #[serde(default)]
+    pub politicas_link: Vec<links::PoliticaLink>,
+    /// originais dos itens ligados ao nó de um subconjunto, para inserir de volta
+    #[serde(default)]
+    pub religacoes: Vec<Religacao>,
 }
 
 impl Assembly {
@@ -401,6 +466,76 @@ impl Assembly {
         }
     }
 
+    /// Distância e Ângulo assumem a medida de agora entre os elementos, para a peça não saltar ao
+    /// nascer: o valor, o lado e o alinhamento saem da posição atual. Devolve `false` se o par não
+    /// tem essa medida.
+    pub fn iniciar_medida(&mut self, id: Id) -> bool {
+        let Some(i) = self.mates.iter().position(|m| m.id == id) else { return false };
+        let m = self.mates[i].clone();
+        if !matches!(m.kind, MateKind::Distance(_) | MateKind::Angle(_)) {
+            return true;
+        }
+        let (Some(pa), Some(pb)) = (self.node(m.a.comp).map(|n| n.placement), self.node(m.b.comp).map(|n| n.placement)) else { return false };
+        let Some(v) = solve::medida(&m.kind, &m.a.geom, &pa, &m.b.geom, &pb) else { return false };
+        let m = &mut self.mates[i];
+        m.sentido = Sentido::Livre;
+        m.lado_invertido = false;
+        match &mut m.kind {
+            MateKind::Distance(e) => {
+                *e = valor_cota(v.abs());
+                m.lado_invertido = v < 0.;
+                if m.aceita_alinhamento() {
+                    m.sentido = solve::sentido_atual(&m.a.geom, &pa, &m.b.geom, &pb);
+                }
+            }
+            MateKind::Angle(e) => *e = valor_cota(v),
+            _ => {}
+        }
+        true
+    }
+
+    /// Inverte o sentido das normais. O Contato é a coincidência de faces opostas: invertido, vira
+    /// coincidência de faces no mesmo sentido. Devolve `false` se o par não tem alinhamento.
+    pub fn inverter_alinhamento(&mut self, id: Id) -> bool {
+        let Some(i) = self.mates.iter().position(|m| m.id == id) else { return false };
+        if !self.mates[i].aceita_alinhamento() {
+            return false;
+        }
+        let (ra, rb) = (self.mates[i].a, self.mates[i].b);
+        let atual = match (self.node(ra.comp), self.node(rb.comp)) {
+            (Some(na), Some(nb)) => solve::sentido_atual(&ra.geom, &na.placement, &rb.geom, &nb.placement),
+            _ => return false,
+        };
+        let m = &mut self.mates[i];
+        let angulo = matches!(m.kind, MateKind::Angle(_));
+        match &mut m.kind {
+            MateKind::Coincident { flip } => *flip = !*flip,
+            MateKind::Contact => m.kind = MateKind::Coincident { flip: false },
+            _ => {
+                m.sentido = match (m.sentido, atual) {
+                    (Sentido::Mesmo, _) => Sentido::Oposto,
+                    (Sentido::Oposto, _) => Sentido::Mesmo,
+                    // o ângulo livre é medido entre as normais como estão, sem olhar a posição
+                    (Sentido::Livre, _) if angulo => Sentido::Oposto,
+                    (Sentido::Livre, Sentido::Oposto) => Sentido::Mesmo,
+                    (Sentido::Livre, _) => Sentido::Oposto,
+                };
+            }
+        }
+        true
+    }
+
+    /// Passa a cota para o outro lado da referência. Devolve `false` se a cota do par não tem lado.
+    pub fn inverter_lado(&mut self, id: Id) -> bool {
+        match self.mates.iter_mut().find(|m| m.id == id) {
+            Some(m) if m.aceita_lado() => {
+                m.lado_invertido = !m.lado_invertido;
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// Recurso entre peças novo.
     pub fn add_feature(&mut self, kind: AsmFeatKind, targets: Vec<Id>) -> Id {
         let id = self.alloc();
@@ -409,67 +544,8 @@ impl Assembly {
         id
     }
 
-    /// Tira os componentes `ids` desta montagem para um subconjunto novo (mesmas posições no
-    /// mundo; o nó do subconjunto fica na origem). Leva as restrições, juntas e fixações entre
-    /// eles; as que ligavam a componentes de fora são apagadas (devolve quantas).
-    pub fn extract_subassembly(&mut self, ids: &[Id], name: &str) -> (Assembly, usize) {
-        let mut sub = Assembly::new(name);
-        let inside = |c: Id| ids.contains(&c);
-        let mut map: HashMap<Id, Id> = HashMap::new();
-        for n in self.nodes.iter().filter(|n| inside(n.id) && !matches!(n.kind, NodeKind::Group)) {
-            let nid = sub.add_component(&n.name, n.kind.clone(), n.placement, None);
-            if let Some(x) = sub.node_mut(nid) {
-                x.fixed = n.fixed;
-                x.color = n.color;
-                x.mode = n.mode;
-                x.visible = n.visible;
-            }
-            map.insert(n.id, nid);
-        }
-        let mut dropped = 0;
-        for m in &self.mates {
-            match (map.get(&m.a.comp), map.get(&m.b.comp)) {
-                (Some(a), Some(b)) => {
-                    let id = sub.alloc();
-                    sub.mates.push(Mate { id, name: m.name.clone(), kind: m.kind.clone(), a: MateRef { comp: *a, ..m.a }, b: MateRef { comp: *b, ..m.b }, suppressed: m.suppressed });
-                }
-                (None, None) => {}
-                _ => dropped += 1,
-            }
-        }
-        for j in &self.joints {
-            if let (Some(a), Some(b)) = (map.get(&j.a.comp), map.get(&j.b.comp)) {
-                let mut nj = j.clone();
-                nj.id = sub.alloc();
-                nj.a.comp = *a;
-                nj.b.comp = *b;
-                sub.joints.push(nj);
-            } else if inside(j.a.comp) || inside(j.b.comp) {
-                dropped += 1;
-            }
-        }
-        for g in &self.rigid {
-            let comps: Vec<Id> = g.comps.iter().filter_map(|c| map.get(c).copied()).collect();
-            if comps.len() >= 2 {
-                sub.add_rigid(comps);
-            }
-        }
-        // a montagem perde os componentes e o que os ligava
-        self.mates.retain(|m| !inside(m.a.comp) && !inside(m.b.comp));
-        self.joints.retain(|j| !inside(j.a.comp) && !inside(j.b.comp));
-        let jids: Vec<Id> = self.joints.iter().map(|j| j.id).collect();
-        self.couplings.retain(|c| jids.contains(&c.a) && jids.contains(&c.b));
-        for g in &mut self.rigid {
-            g.comps.retain(|c| !inside(*c));
-        }
-        self.rigid.retain(|g| g.comps.len() >= 2);
-        self.features.retain(|f| !f.targets.iter().any(|t| inside(*t)));
-        self.nodes.retain(|n| !inside(n.id));
-        (sub, dropped)
-    }
-
     pub fn new(name: &str) -> Self {
-        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], relational: false }
+        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], relational: false, politicas_link: vec![], religacoes: vec![] }
     }
 
     pub fn alloc(&mut self) -> Id {
@@ -551,7 +627,7 @@ impl Assembly {
     pub fn add_mate(&mut self, kind: MateKind, a: MateRef, b: MateRef) -> Id {
         let id = self.alloc();
         let name = self.unique(kind.label());
-        self.mates.push(Mate { id, name, kind, a, b, suppressed: false });
+        self.mates.push(Mate { id, name, kind, a, b, suppressed: false, sentido: Sentido::Livre, lado_invertido: false });
         id
     }
 

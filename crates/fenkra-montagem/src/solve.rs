@@ -41,11 +41,21 @@ fn perp(v: V3, d: V3) -> V3 {
     [v[0] - d[0] * k, v[1] - d[1] * k, v[2] - d[2] * k]
 }
 
+/// Seno abaixo disto: o ângulo pedido é 0° ou 180° (ou 90° no par plano × eixo).
+const SENO_ZERO: f64 = 1e-9;
+
 /// Resíduos de uma restrição (vetor que deve ir a zero).
-fn residuals(kind: &MateKind, a: World, b: World, vars: &HashMap<String, f64>, out: &mut Vec<f64>) {
+fn residuals(m: &Mate, a: World, b: World, vars: &HashMap<String, f64>, out: &mut Vec<f64>) {
     use World::*;
+    let kind = &m.kind;
     let num = |e: &String| expr::eval_str(e, vars).unwrap_or(0.);
-    let par = |u: V3, v: V3, out: &mut Vec<f64>| out.extend(cross(u, v));
+    // cota com sinal: "Inverter lado" é o mesmo que digitar o valor negativo
+    let cota = |e: &String| if m.lado_invertido { -num(e) } else { num(e) };
+    let par = |u: V3, v: V3, out: &mut Vec<f64>| match m.sentido {
+        Sentido::Livre => out.extend(cross(u, v)),
+        Sentido::Mesmo => out.extend([0, 1, 2].map(|i| u[i] - v[i])),
+        Sentido::Oposto => out.extend([0, 1, 2].map(|i| u[i] + v[i])),
+    };
     match (kind, a, b) {
         // ---------- coincidência
         (MateKind::Coincident { flip }, Plane(pa, na), Plane(pb, nb)) => {
@@ -85,9 +95,9 @@ fn residuals(kind: &MateKind, a: World, b: World, vars: &HashMap<String, f64>, o
         // ---------- distância
         (MateKind::Distance(e), Plane(pa, na), Plane(pb, nb)) => {
             par(na, nb, out);
-            out.push(dot(sub(pb, pa), na) - num(e));
+            out.push(dot(sub(pb, pa), na) - cota(e));
         }
-        (MateKind::Distance(e), Point(p), Plane(o, n)) | (MateKind::Distance(e), Plane(o, n), Point(p)) => out.push(dot(sub(p, o), n) - num(e)),
+        (MateKind::Distance(e), Point(p), Plane(o, n)) | (MateKind::Distance(e), Plane(o, n), Point(p)) => out.push(dot(sub(p, o), n) - cota(e)),
         (MateKind::Distance(e), Point(pa), Point(pb)) => out.push(norm(sub(pb, pa)) - num(e)),
         (MateKind::Distance(e), Axis(pa, da), Axis(pb, db)) => {
             par(da, db, out);
@@ -95,7 +105,7 @@ fn residuals(kind: &MateKind, a: World, b: World, vars: &HashMap<String, f64>, o
         }
         (MateKind::Distance(e), Axis(o, d), Plane(q, n)) | (MateKind::Distance(e), Plane(q, n), Axis(o, d)) => {
             out.push(dot(d, n));
-            out.push(dot(sub(o, q), n) - num(e));
+            out.push(dot(sub(o, q), n) - cota(e));
         }
         (MateKind::Distance(e), Point(p), Axis(o, d)) | (MateKind::Distance(e), Axis(o, d), Point(p)) => out.push(norm(perp(sub(p, o), d)) - num(e)),
         // ---------- orientação
@@ -113,14 +123,87 @@ fn residuals(kind: &MateKind, a: World, b: World, vars: &HashMap<String, f64>, o
                 MateKind::Parallel => par(u, v, out),
                 MateKind::Perpendicular if mixed => par(u, v, out),
                 MateKind::Perpendicular => out.push(dot(u, v)),
+                // cos(θ) é plano em 0° e 180°, e |sen| em plano × eixo também: nesses valores a
+                // derivada zera, o solver não sente o giro e o conta como livre. Ali vale a forma
+                // vetorial, com derivada cheia.
+                MateKind::Angle(e) if mixed => {
+                    let t = num(e).to_radians();
+                    if t.sin().abs() < SENO_ZERO {
+                        out.push(dot(u, v));
+                    } else if t.cos().abs() < SENO_ZERO {
+                        out.extend(cross(u, v));
+                    } else {
+                        out.push(dot(u, v).abs() - t.sin().abs());
+                    }
+                }
                 MateKind::Angle(e) => {
-                    let c = num(e).to_radians().cos();
-                    out.push(if mixed { dot(u, v).abs() - (std::f64::consts::FRAC_PI_2 - num(e).to_radians()).cos() } else { dot(u, v) - c });
+                    let t = num(e).to_radians();
+                    let v = if m.sentido == Sentido::Oposto { v.map(|x| -x) } else { v };
+                    if t.sin().abs() < SENO_ZERO {
+                        let c = t.cos();
+                        out.extend([0, 1, 2].map(|i| u[i] - c * v[i]));
+                    } else {
+                        out.push(dot(u, v) - t.cos());
+                    }
                 }
                 _ => {}
             }
         }
     }
+}
+
+/// Medida atual entre dois elementos, na convenção dos resíduos: é o valor que a restrição teria
+/// que ter para não mover nada. Distância com sinal quando medida ao longo de uma normal; ângulo em
+/// graus. `None` se o par não tem essa medida.
+pub fn medida(kind: &MateKind, ga: &Geom, pa: &Placement, gb: &Geom, pb: &Placement) -> Option<f64> {
+    use World::*;
+    if !par_valido(kind, ga, gb) {
+        return None;
+    }
+    let (a, b) = (world(ga, pa), world(gb, pb));
+    match kind {
+        MateKind::Distance(_) => Some(match (a, b) {
+            (Plane(pa, na), Plane(pb, _)) => dot(sub(pb, pa), na),
+            (Point(p), Plane(o, n)) | (Plane(o, n), Point(p)) => dot(sub(p, o), n),
+            (Point(pa), Point(pb)) => norm(sub(pb, pa)),
+            (Axis(pa, da), Axis(pb, _)) => norm(perp(sub(pb, pa), da)),
+            (Axis(o, _), Plane(q, n)) | (Plane(q, n), Axis(o, _)) => dot(sub(o, q), n),
+            (Point(p), Axis(o, d)) | (Axis(o, d), Point(p)) => norm(perp(sub(p, o), d)),
+        }),
+        MateKind::Angle(_) => {
+            let (u, v) = (axis_dir(a), axis_dir(b));
+            // atan2 e não acos: o acos perde metade dos dígitos perto de 0° e 180°
+            let t = norm(cross(u, v)).atan2(dot(u, v)).to_degrees();
+            let mixed = matches!((a, b), (Plane(..), Axis(..)) | (Axis(..), Plane(..)));
+            // plano × eixo: 0° = eixo deitado no plano, 90° = eixo na normal
+            Some(if mixed { (90. - t).abs() } else { t })
+        }
+        _ => None,
+    }
+}
+
+/// Como as normais (ou eixos) dos dois elementos estão agora.
+pub fn sentido_atual(ga: &Geom, pa: &Placement, gb: &Geom, pb: &Placement) -> Sentido {
+    if dot(axis_dir(world(ga, pa)), axis_dir(world(gb, pb))) < 0. {
+        Sentido::Oposto
+    } else {
+        Sentido::Mesmo
+    }
+}
+
+/// Fórmula do valor da restrição, quando ela tem uma.
+fn formulas(k: &MateKind) -> Option<&String> {
+    match k {
+        MateKind::Distance(e) | MateKind::Angle(e) => Some(e),
+        MateKind::Gear { ratio: e, .. } | MateKind::RackPinion { mm_per_rev: e, .. } => Some(e),
+        _ => None,
+    }
+}
+
+/// A fórmula da restrição não dá número? Avaliar como 0 faria a peça saltar para uma medida que
+/// ninguém pediu: ela fica fora do sistema e aparece como não satisfeita.
+fn formula_invalida(m: &Mate, vars: &HashMap<String, f64>) -> bool {
+    formulas(&m.kind).is_some_and(|e| expr::eval_str(e, vars).is_err())
 }
 
 /// Sistema montado: quais componentes se movem juntos e as incógnitas de cada corpo.
@@ -221,7 +304,7 @@ fn all_residuals(a: &Assembly, pl: &HashMap<Id, Placement>, vars: &HashMap<Strin
     let mut r = vec![];
     per.clear();
     let num = |e: &String| expr::eval_str(e, vars).unwrap_or(0.);
-    for m in a.mates.iter().filter(|m| !m.suppressed) {
+    for m in a.mates.iter().filter(|m| !m.suppressed && !formula_invalida(m, vars)) {
         let (Some(pa), Some(pb)) = (pl.get(&m.a.comp), pl.get(&m.b.comp)) else { continue };
         let s = r.len();
         let (wa, wb) = (world(&m.a.geom, pa), world(&m.b.geom, pb));
@@ -245,7 +328,7 @@ fn all_residuals(a: &Assembly, pl: &HashMap<Id, Placement>, vars: &HashMap<Strin
                     r.push(adv - num(mm_per_rev) * ga / 360.);
                 }
             }
-            k => residuals(k, wa, wb, vars, &mut r),
+            _ => residuals(m, wa, wb, vars, &mut r),
         }
         per.push((m.id, s, r.len()));
     }
@@ -264,12 +347,62 @@ fn seed_flips(a: &mut Assembly) {
     let fixed_of = |a: &Assembly, c: Id| {
         a.node(c).is_none_or(|n| n.fixed) || a.rigid.iter().any(|g| g.comps.contains(&c) && g.comps.iter().any(|x| a.node(*x).is_some_and(|n| n.fixed)))
     };
+    let mut vars = a.vars();
+    vars.entry("t".into()).or_insert(0.);
     for i in 0..a.mates.len() {
         let m = a.mates[i].clone();
         if m.suppressed {
             continue;
         }
+        if let MateKind::Angle(e) = &m.kind {
+            let t = expr::eval_str(e, &vars).unwrap_or(90.).to_radians();
+            let (Some(pa), Some(pb)) = (a.node(m.a.comp).map(|n| n.placement), a.node(m.b.comp).map(|n| n.placement)) else { continue };
+            let (wa, wb) = (world(&m.a.geom, &pa), world(&m.b.geom, &pb));
+            let (u, v) = (axis_dir(wa), axis_dir(wb));
+            // alinhados e pedindo outro ângulo: o cosseno é plano aqui e o LM não sai do lugar. Um
+            // empurrão fora das duas direções dá gradiente; o que outras restrições não deixam
+            // girar volta sozinho, e a parte livre segue até o ângulo pedido.
+            let mixed = matches!((wa, wb), (World::Plane(..), World::Axis(..)) | (World::Axis(..), World::Plane(..)));
+            let (s, c) = (norm(cross(u, v)), dot(u, v).abs());
+            let parado = if mixed { (c < 1e-7 && t.sin().abs() >= SENO_ZERO) || (s < 1e-7 && t.cos().abs() >= SENO_ZERO) } else { s < 1e-7 && t.sin().abs() >= SENO_ZERO };
+            if parado {
+                let comp = if !fixed_of(a, m.b.comp) {
+                    m.b.comp
+                } else if !fixed_of(a, m.a.comp) {
+                    m.a.comp
+                } else {
+                    continue;
+                };
+                let (e1, e2) = (any_perp(v), cross(v, any_perp(v)));
+                let w = [0, 1, 2].map(|i| 0.05 * (0.8 * e1[i] + 0.6 * e2[i]));
+                let o = a.node(comp).map(|n| n.placement.origin).unwrap_or_default();
+                let group: Vec<Id> = a.rigid.iter().find(|g| g.comps.contains(&comp)).map(|g| g.comps.clone()).unwrap_or_else(|| vec![comp]);
+                for c in group {
+                    if let Some(n) = a.node_mut(c) {
+                        n.placement = n.placement.moved([0.; 3], w, o);
+                    }
+                }
+                continue;
+            }
+        }
+        let sinal = match m.sentido {
+            Sentido::Livre => None,
+            Sentido::Mesmo => Some(1.),
+            Sentido::Oposto => Some(-1.),
+        };
         let s = match (&m.kind, m.a.geom, m.b.geom) {
+            (MateKind::Distance(_) | MateKind::Parallel, Geom::Plane { .. }, Geom::Plane { .. }) | (MateKind::Distance(_) | MateKind::Parallel, Geom::Axis { .. }, Geom::Axis { .. }) => {
+                let Some(s) = sinal else { continue };
+                s
+            }
+            // só nos extremos o ângulo vira sentido; no meio do caminho o gradiente existe
+            (MateKind::Angle(e), Geom::Plane { .. }, Geom::Plane { .. }) | (MateKind::Angle(e), Geom::Axis { .. }, Geom::Axis { .. }) => {
+                let t = expr::eval_str(e, &vars).unwrap_or(90.).to_radians();
+                if t.sin().abs() >= SENO_ZERO {
+                    continue;
+                }
+                t.cos().signum() * sinal.unwrap_or(1.)
+            }
             (MateKind::Coincident { flip }, Geom::Plane { .. }, Geom::Plane { .. }) | (MateKind::Coincident { flip }, Geom::Axis { .. }, Geom::Axis { .. }) => {
                 if *flip {
                     -1.
@@ -314,8 +447,13 @@ pub fn solve_with(a: &mut Assembly, extra: &HashMap<String, f64>) -> SolveReport
 
 /// Resolve puxando o componente `id` para `target` (peso pequeno): é o arraste que respeita as
 /// restrições — o que elas permitem acompanha o mouse, o resto fica.
+///
+/// A puxada é um resíduo a mais, então o mínimo dos quadrados divide o erro entre ela e as
+/// restrições: na rotação os pesos se igualam e uma peça sem giro livre sairia do lugar. Por isso
+/// um segundo passo, sem puxada, projeta o resultado de volta nas restrições.
 pub fn solve_toward(a: &mut Assembly, id: Id, target: Placement, weight: f64) -> SolveReport {
-    solve_inner(a, &HashMap::new(), Some((id, target, weight)))
+    solve_inner(a, &HashMap::new(), Some((id, target, weight)));
+    solve_inner(a, &HashMap::new(), None)
 }
 
 fn solve_inner(a: &mut Assembly, extra: &HashMap<String, f64>, pull: Option<(Id, Placement, f64)>) -> SolveReport {
@@ -410,6 +548,7 @@ fn solve_inner(a: &mut Assembly, extra: &HashMap<String, f64>, pull: Option<(Id,
             failed.push(*id);
         }
     }
+    failed.extend(a.mates.iter().filter(|m| !m.suppressed && formula_invalida(m, &vars)).map(|m| m.id));
     // grava as posições
     for nd in a.nodes.iter_mut() {
         if let Some(p) = pl.get(&nd.id) {
@@ -682,6 +821,215 @@ mod tests {
         let rep = solve(&mut b);
         assert!(rep.converged, "inverteu: {rep:?}");
         assert!(b.node(c).unwrap().placement.dir([0., 0., 1.])[2] < -0.99);
+    }
+
+    /// Duas placas com faces paralelas: A na origem, B 12,5 acima, girado 30° em torno de z.
+    fn duas_placas() -> (Assembly, Id, Id, MateRef, MateRef) {
+        let mut a = Assembly::new("medida");
+        let c1 = cubo(&mut a, "A", [0.; 3]);
+        let c2 = cubo(&mut a, "B", [3., 4., 22.5]);
+        let (ra, rb) = (MateRef { comp: c1, geom: topo(), pick: None }, MateRef { comp: c2, geom: base(), pick: None });
+        (a, c1, c2, ra, rb)
+    }
+
+    fn valor(a: &Assembly, id: Id) -> String {
+        match &a.mates.iter().find(|m| m.id == id).unwrap().kind {
+            MateKind::Distance(e) | MateKind::Angle(e) => e.clone(),
+            k => panic!("{k:?}"),
+        }
+    }
+
+    #[test]
+    fn distancia_nasce_com_a_medida_atual_e_nada_salta() {
+        let (mut a, _, c2, ra, rb) = duas_placas();
+        let antes = a.node(c2).unwrap().placement;
+        let id = a.add_mate(MateKind::Distance("0".into()), ra, rb);
+        assert!(a.iniciar_medida(id));
+        assert_eq!(valor(&a, id), "12.5");
+        assert_eq!(a.mates[0].sentido, Sentido::Oposto, "topo de A contra base de B");
+        let rep = solve(&mut a);
+        assert!(rep.converged, "{rep:?}");
+        assert_eq!(a.node(c2).unwrap().placement, antes, "resíduo zero: a peça fica onde estava");
+
+        // abaixo da referência: o valor segue positivo, e quem guarda o lado é a restrição
+        let (mut b, _, c2, ra, rb) = duas_placas();
+        b.node_mut(c2).unwrap().placement.origin[2] = -7.;
+        let id = b.add_mate(MateKind::Distance("0".into()), ra, rb);
+        assert!(b.iniciar_medida(id));
+        assert_eq!(valor(&b, id), "17");
+        assert!(b.mates[0].lado_invertido);
+        solve(&mut b);
+        assert!((b.node(c2).unwrap().placement.origin[2] + 7.).abs() < 1e-9);
+    }
+
+    #[test]
+    fn medida_de_cada_par_de_elementos() {
+        let (p0, p1) = (Placement::default(), Placement { origin: [3., 4., 0.], ..Default::default() });
+        let z = Geom::Axis { p: [0.; 3], d: [0., 0., 1.] };
+        let o = Geom::Point([0.; 3]);
+        let pl = Geom::Plane { p: [0.; 3], n: [1., 0., 0.] };
+        let d = MateKind::Distance("0".into());
+        assert_eq!(medida(&d, &o, &p0, &o, &p1), Some(5.));
+        assert_eq!(medida(&d, &z, &p0, &z, &p1), Some(5.));
+        assert_eq!(medida(&d, &o, &p0, &z, &p1), Some(5.));
+        assert_eq!(medida(&d, &pl, &p0, &o, &p1), Some(3.));
+        assert_eq!(medida(&d, &pl, &p1, &o, &p0), Some(-3.));
+        let t = MateKind::Angle("0".into());
+        assert_eq!(medida(&t, &pl, &p0, &o, &p1), None, "ponto não tem direção");
+        assert_eq!(medida(&t, &pl, &p0, &pl, &p1), Some(0.));
+        assert_eq!(medida(&t, &pl, &p0, &z, &p1), Some(0.), "eixo deitado no plano");
+        assert_eq!(valor_cota(12.34567), "12.3457");
+        assert_eq!(valor_cota(-0.00001), "0");
+        assert_eq!(valor_cota(30.), "30");
+    }
+
+    #[test]
+    fn angulo_nasce_com_a_medida_atual_mesmo_em_zero() {
+        // B girado 25° em torno de z, com o eixo e o contato prendendo o resto
+        let ax = Geom::Axis { p: [0., 0., 0.], d: [0., 0., 1.] };
+        let fy = Geom::Plane { p: [5., 0., 5.], n: [0., -1., 0.] };
+        for graus in [25., 0., 180.] {
+            let mut a = Assembly::new("giro");
+            let c1 = cubo(&mut a, "A", [0.; 3]);
+            let c2 = cubo(&mut a, "B", [0., 0., 10.]);
+            a.node_mut(c2).unwrap().placement = a.node(c2).unwrap().placement.moved([0.; 3], [0., 0., f64::to_radians(graus)], [0., 0., 10.]);
+            a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: c1, geom: ax, pick: None }, MateRef { comp: c2, geom: ax, pick: None });
+            a.add_mate(MateKind::Contact, MateRef { comp: c1, geom: topo(), pick: None }, MateRef { comp: c2, geom: base(), pick: None });
+            let antes = a.node(c2).unwrap().placement;
+            let id = a.add_mate(MateKind::Angle("90".into()), MateRef { comp: c1, geom: fy, pick: None }, MateRef { comp: c2, geom: fy, pick: None });
+            assert!(a.iniciar_medida(id));
+            assert_eq!(valor(&a, id), valor_cota(graus));
+            let rep = solve(&mut a);
+            assert!(rep.converged, "{graus}: {rep:?}");
+            // em 0° e 180° o cosseno era plano e o giro ficava contado como livre
+            assert_eq!(rep.dof, 0, "{graus}: o ângulo tira o giro");
+            assert!(norm(sub(a.node(c2).unwrap().placement.origin, antes.origin)) < 1e-9, "{graus}");
+            assert!(norm(sub(a.node(c2).unwrap().placement.dir([1., 0., 0.]), antes.dir([1., 0., 0.]))) < 1e-6, "{graus}");
+        }
+    }
+
+    #[test]
+    fn inverter_lado_e_inverter_alinhamento_sao_coisas_diferentes() {
+        let (mut a, _, c2, ra, rb) = duas_placas();
+        let id = a.add_mate(MateKind::Distance("0".into()), ra, rb);
+        a.iniciar_medida(id);
+        assert!(solve(&mut a).converged);
+
+        // lado: a peça passa para o outro lado da referência, sem virar
+        assert!(a.inverter_lado(id));
+        assert!(solve(&mut a).converged);
+        let p = a.node(c2).unwrap().placement;
+        assert!((p.point([5., 5., 0.])[2] - (10. - 12.5)).abs() < 1e-6, "{p:?}");
+        assert!(p.dir([0., 0., 1.])[2] > 0.99, "não virou");
+
+        // alinhamento: a peça vira, e a cota continua do mesmo lado
+        assert!(a.inverter_alinhamento(id));
+        assert_eq!(a.mates[0].sentido, Sentido::Mesmo);
+        assert!(solve(&mut a).converged);
+        let p = a.node(c2).unwrap().placement;
+        assert!((p.point([5., 5., 0.])[2] - (10. - 12.5)).abs() < 1e-6, "{p:?}");
+        assert!(p.dir([0., 0., 1.])[2] < -0.99, "virou");
+
+        // e voltam
+        assert!(a.inverter_alinhamento(id) && a.inverter_lado(id));
+        assert!(solve(&mut a).converged);
+        let p = a.node(c2).unwrap().placement;
+        assert!((p.point([5., 5., 0.])[2] - 22.5).abs() < 1e-6 && p.dir([0., 0., 1.])[2] > 0.99, "{p:?}");
+    }
+
+    #[test]
+    fn inverter_contato_vira_coincidencia_de_faces() {
+        let (mut a, _, c2, ra, rb) = duas_placas();
+        let id = a.add_mate(MateKind::Contact, ra, rb);
+        assert!(solve(&mut a).converged);
+        assert!(!a.inverter_lado(id), "contato não tem cota");
+        assert!(a.inverter_alinhamento(id));
+        assert_eq!(a.mates[0].kind, MateKind::Coincident { flip: false });
+        assert!(solve(&mut a).converged);
+        assert!(a.node(c2).unwrap().placement.dir([0., 0., 1.])[2] < -0.99);
+    }
+
+    #[test]
+    fn angulo_com_alinhamento_invertido_vira_o_suplemento() {
+        let fy = Geom::Plane { p: [5., 0., 5.], n: [0., -1., 0.] };
+        let ax = Geom::Axis { p: [0., 0., 0.], d: [0., 0., 1.] };
+        let mut a = Assembly::new("suplemento");
+        let c1 = cubo(&mut a, "A", [0.; 3]);
+        let c2 = cubo(&mut a, "B", [0., 0., 10.]);
+        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: c1, geom: ax, pick: None }, MateRef { comp: c2, geom: ax, pick: None });
+        a.add_mate(MateKind::Contact, MateRef { comp: c1, geom: topo(), pick: None }, MateRef { comp: c2, geom: base(), pick: None });
+        let id = a.add_mate(MateKind::Angle("30".into()), MateRef { comp: c1, geom: fy, pick: None }, MateRef { comp: c2, geom: fy, pick: None });
+        assert!(solve(&mut a).converged);
+        assert!(a.inverter_alinhamento(id));
+        assert!(solve(&mut a).converged);
+        let n2 = a.node(c2).unwrap().placement.dir([0., -1., 0.]);
+        assert!((dot(n2, [0., -1., 0.]) - 150f64.to_radians().cos()).abs() < 1e-6, "{n2:?}");
+    }
+
+    #[test]
+    fn angulo_digitado_sai_de_faces_alinhadas() {
+        // nasceu em 0° e a pessoa digita 30: o giro parte do ponto em que o cosseno é plano
+        let fy = Geom::Plane { p: [5., 0., 5.], n: [0., -1., 0.] };
+        // eixo x, para o empurrão não cair por sorte na direção livre
+        let ax = Geom::Axis { p: [0., 5., 5.], d: [1., 0., 0.] };
+        let lado = Geom::Plane { p: [0., 5., 5.], n: [-1., 0., 0.] };
+        let mut a = Assembly::new("alinhados");
+        let c1 = cubo(&mut a, "A", [0.; 3]);
+        let c2 = cubo(&mut a, "B", [0.; 3]);
+        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: c1, geom: ax, pick: None }, MateRef { comp: c2, geom: ax, pick: None });
+        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: c1, geom: lado, pick: None }, MateRef { comp: c2, geom: lado, pick: None });
+        let id = a.add_mate(MateKind::Angle("0".into()), MateRef { comp: c1, geom: fy, pick: None }, MateRef { comp: c2, geom: fy, pick: None });
+        a.iniciar_medida(id);
+        assert_eq!(valor(&a, id), "0");
+        assert!(solve(&mut a).converged);
+        if let MateKind::Angle(e) = &mut a.mates[2].kind {
+            *e = "30".into();
+        }
+        let rep = solve(&mut a);
+        assert!(rep.converged && rep.dof == 0, "{rep:?}");
+        let n2 = a.node(c2).unwrap().placement.dir([0., -1., 0.]);
+        assert!((dot(n2, [0., -1., 0.]) - 30f64.to_radians().cos()).abs() < 1e-6, "{n2:?}");
+    }
+
+    #[test]
+    fn formula_invalida_nao_move_a_peca_e_aparece_como_falha() {
+        let (mut a, _, c2, ra, rb) = duas_placas();
+        let id = a.add_mate(MateKind::Distance("0".into()), ra, rb);
+        a.iniciar_medida(id);
+        assert!(solve(&mut a).converged);
+        let antes = a.node(c2).unwrap().placement;
+        if let MateKind::Distance(e) = &mut a.mates[0].kind {
+            *e = "folga +".into();
+        }
+        let rep = solve(&mut a);
+        assert!(!rep.converged && rep.failed == vec![id], "{rep:?}");
+        assert_eq!(a.node(c2).unwrap().placement, antes);
+        // com o parâmetro certo a mesma fórmula funciona
+        a.params.push(AsmParam { name: "folga".into(), expr: "4".into() });
+        if let MateKind::Distance(e) = &mut a.mates[0].kind {
+            *e = "folga + 1".into();
+        }
+        assert!(solve(&mut a).converged);
+        assert!((a.node(c2).unwrap().placement.point([5., 5., 0.])[2] - 15.).abs() < 1e-6);
+    }
+
+    #[test]
+    fn pares_sem_sentido_e_compatibilidade_com_arquivos_antigos() {
+        let o = Geom::Point([0.; 3]);
+        let z = Geom::Axis { p: [0.; 3], d: [0., 0., 1.] };
+        assert!(!par_valido(&MateKind::Angle("0".into()), &o, &z));
+        assert!(!par_valido(&MateKind::Parallel, &z, &o));
+        assert!(!par_valido(&MateKind::Contact, &o, &z));
+        assert!(par_valido(&MateKind::Coincident { flip: false }, &o, &z));
+        assert!(par_valido(&MateKind::Distance("1".into()), &o, &z));
+
+        // restrição gravada sem os campos novos abre com o comportamento de antes
+        let (mut a, _, _, ra, rb) = duas_placas();
+        a.add_mate(MateKind::Distance("5".into()), ra, rb);
+        let json = a.to_json().replace("\"sentido\": \"Livre\",", "").replace("\"lado_invertido\": false", "\"lado_antigo\": 0");
+        let b = Assembly::from_json(&json).unwrap();
+        assert_eq!(b.mates[0].sentido, Sentido::Livre);
+        assert!(!b.mates[0].lado_invertido);
     }
 
     #[test]

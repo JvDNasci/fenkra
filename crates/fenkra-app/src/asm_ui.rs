@@ -11,6 +11,7 @@ use eframe::egui::{self, Color32, RichText};
 use fenkra_core::{Document, Id};
 use fenkra_montagem::load::{full_path, geom_at, PartCache};
 use fenkra_montagem::kin::{self, CouplingKind, JFrame, JRef, JointKind};
+use fenkra_montagem::links::{self, AcaoLink, Gatilho, Politica};
 use fenkra_montagem::solve::SolveReport;
 use fenkra_montagem::*;
 use fenkra_solidos::RecomputeResult;
@@ -162,6 +163,8 @@ pub struct AsmState {
     /// posição antes do arrasto do manipulador
     drag_start: Option<Placement>,
     snapshot: Option<Assembly>,
+    /// aviso de uma ação do painel, para mostrar no quadro seguinte
+    aviso: Option<(String, bool)>,
     /// junta esperando as duas seleções
     pub pending_joint: Option<u8>,
     // ---- simulação
@@ -260,6 +263,7 @@ impl AsmState {
             drag_center: None,
             contact: false,
             quick: None,
+            aviso: None,
             ctx_act: None,
             sub_rows: Default::default(),
         }
@@ -308,9 +312,28 @@ impl AsmState {
         let dir = self.dir();
         fenkra_montagem::load::refresh_refs(&mut self.asm, &mut self.cache, dir.as_deref());
         self.report = fenkra_montagem::solve::solve(&mut self.asm);
+        self.atualizar_links(Gatilho::Posicao);
         self.comp_dof = fenkra_montagem::solve::dof_per_comp(&self.asm);
         self.sub_rows.clear();
         self.dirty = true;
+    }
+
+    /// Atualiza os links das peças. Se uma peça mudou de forma, as restrições que dependem das faces
+    /// dela precisam ser reencontradas e resolvidas de novo.
+    pub fn atualizar_links(&mut self, gatilho: Gatilho) -> links::RelatorioLinks {
+        let dir = self.dir();
+        let rel = links::atualizar(&self.asm, dir.as_deref(), &mut self.cache, gatilho);
+        self.apos_links(&rel);
+        rel
+    }
+
+    fn apos_links(&mut self, rel: &links::RelatorioLinks) {
+        if !rel.pecas.is_empty() {
+            let dir = self.dir();
+            fenkra_montagem::load::refresh_refs(&mut self.asm, &mut self.cache, dir.as_deref());
+            self.report = fenkra_montagem::solve::solve(&mut self.asm);
+            self.dirty = true;
+        }
     }
 
     /// Caminho guardado para uma peça: relativo à pasta da montagem quando possível.
@@ -371,6 +394,9 @@ impl AsmState {
     }
 }
 
+const DICA_ALINHAMENTO: &str = "Troca o sentido das normais: a peça vira, e a cota continua do mesmo lado.";
+const DICA_LADO: &str = "Passa a cota para o outro lado da referência: a peça muda de lado sem virar.";
+
 /// Restrição automática: o tipo mais lógico para o par escolhido.
 fn auto_kind(a: &Geom, b: &Geom, wa: &Placement, wb: &Placement) -> MateKind {
     match (a, b) {
@@ -400,8 +426,13 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
             match std::fs::read_to_string(&p).map_err(|e| e.to_string()).and_then(|s| Assembly::from_json(&s)) {
                 Ok(a) => {
                     app.settings.add_recent_file(&p);
-                    app.asm = Some(AsmState::new(a, Some(p)));
+                    let mut st = AsmState::new(a, Some(p));
+                    let rel = st.atualizar_links(Gatilho::Abrir);
+                    app.asm = Some(st);
                     app.fit_now();
+                    if rel.pendurados > 0 {
+                        app.toast(format!("{} {}", rel.pendurados, tr("link(s) pendurado(s): a origem ou a publicação sumiu")), true);
+                    }
                 }
                 Err(e) => app.toast(format!("Não foi possível abrir: {e}"), true),
             }
@@ -429,7 +460,14 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                     let parent = st.sel.filter(|s| st.asm.node(*s).is_some_and(|n| matches!(n.kind, NodeKind::Group)));
                     // peças novas entram um pouco ao lado da última, para não ficarem sobrepostas
                     let mut x = st.view.as_ref().map(|r| r.bodies.iter().flat_map(|b| b.mesh.positions.chunks_exact(3).map(|p| p[0] as f64)).fold(0f64, f64::max)).unwrap_or(0.);
+                    let atual = st.file.clone();
+                    let mut circular = false;
                     for f in files {
+                        // a montagem não pode conter a si mesma, nem por outro subconjunto
+                        if atual.as_ref().is_some_and(|a| links::depende_de(&f, a, None)) {
+                            circular = true;
+                            continue;
+                        }
                         let name = f.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "Peça".into());
                         let path = st.rel_path(&f);
                         let kind = if sub { NodeKind::SubAssembly { path } } else { NodeKind::Part { path } };
@@ -446,6 +484,9 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                         x = st.view.as_ref().map(|r| r.bodies.iter().flat_map(|b| b.mesh.positions.chunks_exact(3).map(|p| p[0] as f64)).fold(0f64, f64::max)).unwrap_or(x);
                     }
                     app.fit_now();
+                    if circular {
+                        app.toast(tr("Referência circular: o subconjunto já contém esta montagem"), true);
+                    }
                 }
                 Cmd::AsmNewPart => {
                     // peça nova no contexto: cria o arquivo ao lado da montagem e abre para modelar
@@ -482,6 +523,10 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                         return true;
                     };
                     let Some(f) = rfd::FileDialog::new().add_filter("Peça ou montagem", &["fkp", "fka"]).pick_file() else { return true };
+                    if st.file.as_ref().is_some_and(|a| links::depende_de(&f, a, None)) {
+                        app.toast(tr("Referência circular: o subconjunto já contém esta montagem"), true);
+                        return true;
+                    }
                     st.push_undo();
                     let path = st.rel_path(&f);
                     let kind = if f.extension().is_some_and(|e| e == "fka") { NodeKind::SubAssembly { path } } else { NodeKind::Part { path } };
@@ -601,29 +646,22 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                     let name = f.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "Subconjunto".into());
                     st.push_undo();
                     let old_dir = st.dir();
-                    let (mut sub, dropped) = st.asm.extract_subassembly(&comps, &name);
+                    let path = st.rel_path(&f);
+                    let (mut sub, id, rel) = st.asm.extract_subassembly(&comps, &name, &path);
                     // caminhos das peças passam a ser relativos ao arquivo novo
                     let new_dir = f.parent().map(|p| p.to_path_buf());
-                    for n in &mut sub.nodes {
-                        if let NodeKind::Part { path } | NodeKind::SubAssembly { path } = &mut n.kind {
-                            let full = full_path(old_dir.as_deref(), path);
-                            *path = match new_dir.as_ref().and_then(|d| full.strip_prefix(d).ok()) {
-                                Some(r) => r.to_string_lossy().replace('\\', "/"),
-                                None => full.to_string_lossy().to_string(),
-                            };
-                        }
-                    }
+                    sub.trocar_caminhos(|p| caminho_relativo(old_dir.as_deref(), new_dir.as_deref(), p));
                     if let Err(e) = std::fs::write(&f, sub.to_json()) {
+                        if let Some(antes) = st.undo.pop() {
+                            st.asm = antes;
+                        }
                         app.toast(format!("{}: {e}", tr("Erro ao gravar o subconjunto")), true);
                         return true;
                     }
-                    let path = st.rel_path(&f);
-                    let id = st.asm.add_component(&name, NodeKind::SubAssembly { path }, Placement::default(), None);
                     st.sel = Some(id);
                     app.picks.clear();
                     st.solve();
-                    let extra = if dropped > 0 { format!(" · {dropped} {}", tr("restrição(ões) com peças de fora apagada(s)")) } else { String::new() };
-                    app.toast(format!("{} {name}: {} {}{extra}", tr("Subconjunto"), comps.len(), tr("componente(s)")), dropped > 0);
+                    app.toast(resumo_extracao(&name, &rel), !rel.perdidas.is_empty());
                 }
                 Cmd::AsmFeat(k) => {
                     let comps = st.comps_of(&app.picks);
@@ -705,10 +743,16 @@ fn create_mate(app: &mut App, m: MateCmd, a: Pick, b: Pick) {
     }
     let (pa, pb) = (st.asm.node(ra.comp).unwrap().placement, st.asm.node(rb.comp).unwrap().placement);
     let kind = m.kind().unwrap_or_else(|| auto_kind(&ra.geom, &rb.geom, &pa, &pb));
+    if !fenkra_montagem::par_valido(&kind, &ra.geom, &rb.geom) {
+        app.toast(format!("{}: {}", tr(kind.label()), tr("este par de elementos não define a restrição (escolha planos ou eixos)")), true);
+        return;
+    }
     st.push_undo();
     let id = st.asm.add_mate(kind, ra, rb);
     // engrenagem/cremalheira: o giro de agora é o zero
     st.asm.init_motion(id);
+    // distância e ângulo: a medida de agora, para a peça não saltar
+    st.asm.iniciar_medida(id);
     st.solve();
     if m == MateCmd::AlignOnce {
         // alinhamento instantâneo: posiciona e não deixa histórico
@@ -1224,6 +1268,10 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                         *act = Some((n.id, 6));
                         ui.close();
                     }
+                    if matches!(n.kind, NodeKind::SubAssembly { .. }) && ui.button(tr("Inserir de volta")).on_hover_text(tr("Desfaz o subconjunto: as peças voltam para esta montagem, e o que foi religado volta às peças de origem.")).clicked() {
+                        *act = Some((n.id, 16));
+                        ui.close();
+                    }
                 }
                 ui.menu_button(tr("📁 Organizar"), |ui| {
                     if ui.button(tr("▲ Subir")).clicked() {
@@ -1393,6 +1441,14 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                 hover = Some(m.a.comp);
             }
             r.context_menu(|ui| {
+                if m.aceita_alinhamento() && ui.button(tr("Inverter alinhamento")).on_hover_text(tr(DICA_ALINHAMENTO)).clicked() {
+                    act = Some((m.id, 14));
+                    ui.close();
+                }
+                if m.aceita_lado() && ui.button(tr("Inverter lado")).on_hover_text(tr(DICA_LADO)).clicked() {
+                    act = Some((m.id, 15));
+                    ui.close();
+                }
                 if ui.button(if m.suppressed { tr("Reativar") } else { tr("Suprimir") }).clicked() {
                     act = Some((m.id, 11));
                     ui.close();
@@ -1564,6 +1620,11 @@ pub fn node_action(app: &mut App, id: Id, k: u8) {
     let Some(st) = app.asm.as_mut() else { return };
     match k {
         2 => return edit_part(app, id),
+        16 => {
+            let msg = inserir_de_volta(st, id);
+            app.toast(msg.0, msg.1);
+            return;
+        }
         12 => {
             st.sel = Some(id);
             st.props = true;
@@ -1629,9 +1690,153 @@ pub fn node_action(app: &mut App, id: Id, k: u8) {
             }
             st.solve();
         }
+        14 | 15 => {
+            st.push_undo();
+            if k == 14 {
+                st.asm.inverter_alinhamento(id);
+            } else {
+                st.asm.inverter_lado(id);
+            }
+            st.solve();
+        }
         _ => {}
     }
     st.dirty = true;
+}
+
+/// Caminho `p` (relativo a `de`) visto da pasta `para`: relativo se estiver dentro dela.
+fn caminho_relativo(de: Option<&std::path::Path>, para: Option<&std::path::Path>, p: &str) -> String {
+    let full = full_path(de, p);
+    match para.and_then(|d| full.strip_prefix(d).ok()) {
+        Some(r) => r.to_string_lossy().replace('\\', "/"),
+        None => full.to_string_lossy().to_string(),
+    }
+}
+
+/// Uma linha com o que a extração fez; o que ficou de fora vem por nome.
+fn resumo_extracao(nome: &str, r: &RelatorioExtracao) -> String {
+    let mut s = format!("{} {nome}: {} {} · {} {} · {} {}", tr("Subconjunto"), r.componentes, tr("componente(s)"), r.restricoes + r.juntas, tr("ligação(ões) levada(s)"), r.religadas.len(), tr("religada(s) ao nó"));
+    if !r.perdidas.is_empty() {
+        s.push_str(&format!(" · {}: {}", tr("não atravessaram (voltam ao inserir de volta)"), r.perdidas.join("; ")));
+    }
+    s
+}
+
+/// Lê o `.fka` do subconjunto `id` e devolve as peças dele à montagem.
+fn inserir_de_volta(st: &mut AsmState, id: Id) -> (String, bool) {
+    let Some(NodeKind::SubAssembly { path }) = st.asm.node(id).map(|n| n.kind.clone()) else { return (tr("O componente não é um subconjunto").to_string(), true) };
+    let dir = st.dir();
+    let full = full_path(dir.as_deref(), &path);
+    let lido = std::fs::read_to_string(&full).map_err(|e| format!("{}: {e}", full.display())).and_then(|t| Assembly::from_json(&t));
+    let mut sub = match lido {
+        Ok(s) => s,
+        Err(e) => return (e, true),
+    };
+    let pasta = full.parent().map(|p| p.to_path_buf());
+    sub.trocar_caminhos(|p| caminho_relativo(pasta.as_deref(), dir.as_deref(), p));
+    st.push_undo();
+    match st.asm.inserir_de_volta(id, &sub) {
+        Ok(rel) => {
+            st.sel = None;
+            st.solve();
+            let mut s = format!("{}: {} {}", tr("Subconjunto desfeito"), rel.componentes, tr("componente(s)"));
+            if !rel.perdidas.is_empty() {
+                s.push_str(&format!(" · {}", rel.perdidas.join("; ")));
+            }
+            (s, !rel.perdidas.is_empty())
+        }
+        Err(e) => {
+            st.undo.pop();
+            (e, true)
+        }
+    }
+}
+
+/// Lista de links da peça, com o estado de cada um e as ações. Devolve o aviso a mostrar.
+fn links_panel(st: &mut AsmState, ui: &mut egui::Ui, comp: Id) -> Option<(String, bool)> {
+    let dir = st.dir();
+    let lista = links::links_da_peca(&st.asm, dir.as_deref(), &mut st.cache, comp);
+    if lista.is_empty() {
+        return None;
+    }
+    let Some(NodeKind::Part { path: alvo }) = st.asm.node(comp).map(|n| n.kind.clone()) else { return None };
+    crate::editor::section(ui, "Links");
+    let mut acao: Option<(Id, Option<AcaoLink>)> = None;
+    let mut politica: Option<(Id, Politica)> = None;
+    for l in &lista {
+        use links::EstadoLink as E;
+        let cor = match l.estado {
+            E::EmContexto => crate::theme::st_ok(),
+            E::Quebrado | E::Pendurado => crate::theme::st_err(),
+            _ => ui.visuals().weak_text_color(),
+        };
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(l.estado.simbolo()).monospace().color(cor)).on_hover_text(tr(l.estado.label()));
+            ui.label(RichText::new(format!("{}.{}", l.origem, l.publicacao)).small()).on_hover_text(format!("{} · {}", l.nome, tr(l.estado.label())));
+        });
+        ui.horizontal_wrapped(|ui| {
+            let vivo = !matches!(l.estado, E::Quebrado);
+            if vivo {
+                let travado = matches!(l.estado, E::Travado);
+                let (txt, dica, a) = if travado { ("Destravar", "A cópia volta a seguir a origem.", AcaoLink::Destravar) } else { ("Travar", "A cópia para de atualizar, até destravar.", AcaoLink::Travar) };
+                if ui.small_button(tr(txt)).on_hover_text(tr(dica)).clicked() {
+                    acao = Some((l.ext, Some(a)));
+                }
+                if !travado && ui.small_button(tr("Atualizar")).on_hover_text(tr("Copia agora a forma e a posição da origem.")).clicked() {
+                    acao = Some((l.ext, None));
+                }
+                if ui.small_button(tr("Quebrar")).on_hover_text(tr("Corta a ligação com a origem, sem volta. A cópia fica na lista.")).clicked() {
+                    acao = Some((l.ext, Some(AcaoLink::Quebrar)));
+                }
+            }
+            if ui.small_button(tr("Isolar")).on_hover_text(tr("A cópia vira geometria própria da peça e o link sai da lista.")).clicked() {
+                acao = Some((l.ext, Some(AcaoLink::Isolar)));
+            }
+        });
+        if !matches!(l.estado, E::Quebrado) {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(tr("Atualizar:")).small());
+                egui::ComboBox::from_id_salt(("link_politica", l.ext.0)).selected_text(tr(l.politica.label())).show_ui(ui, |ui| {
+                    for p in Politica::TODAS {
+                        if ui.selectable_label(p == l.politica, tr(p.label())).clicked() {
+                            politica = Some((l.ext, p));
+                        }
+                    }
+                });
+            });
+        }
+    }
+    if let Some((ext, p)) = politica {
+        st.push_undo();
+        st.asm.definir_politica_link(&alvo, ext, p);
+    }
+    let (ext, a) = acao?;
+    let dir = st.dir();
+    let msg = match a {
+        Some(a) => {
+            let r = links::aplicar(&st.asm, dir.as_deref(), &mut st.cache, comp, ext, a);
+            st.dirty = true;
+            match (r, a) {
+                (Err(e), _) => (e, true),
+                (Ok(()), AcaoLink::Destravar) => {
+                    let rel = links::atualizar_um(&st.asm, dir.as_deref(), &mut st.cache, comp, ext);
+                    st.apos_links(&rel);
+                    (tr("Link destravado").to_string(), false)
+                }
+                (Ok(()), _) => (tr("Link alterado").to_string(), false),
+            }
+        }
+        None => {
+            let rel = links::atualizar_um(&st.asm, dir.as_deref(), &mut st.cache, comp, ext);
+            st.apos_links(&rel);
+            if rel.pendurados > 0 {
+                (tr("Link pendurado: a origem ou a publicação sumiu").to_string(), true)
+            } else {
+                (tr("Link atualizado").to_string(), false)
+            }
+        }
+    };
+    Some(msg)
 }
 
 // ============================================================== painel
@@ -1672,6 +1877,9 @@ fn item_info(st: &AsmState, sel: Option<Id>) -> Option<(String, String, String, 
 }
 
 pub fn panel(app: &mut App, ui: &mut egui::Ui) {
+    if let Some((msg, erro)) = app.asm.as_mut().and_then(|s| s.aviso.take()) {
+        app.toast(msg, erro);
+    }
     let Some(st) = app.asm.as_mut() else {
         ui.heading(tr("Montagem"));
         ui.label(RichText::new(tr("Crie uma montagem nova ou abra uma existente pela árvore à esquerda.")).weak());
@@ -1761,6 +1969,11 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     let before = st.asm.clone();
     let mut resolve = false;
     let mut reinit: Option<Id> = None;
+    let mut aviso_links: Option<(String, bool)> = None;
+    // tipo trocado no painel que precisa medir de novo (id, tipo anterior) e inversão pedida
+    let mut remedir: Option<(Id, MateKind)> = None;
+    let mut inverter: Option<(Id, bool)> = None;
+    let vars_asm = st.asm.vars();
     let picked_comps = st.comps_of(&app.picks);
     match sel.and_then(|s| st.asm.nodes.iter().position(|n| n.id == s)) {
         Some(i) => {
@@ -1819,6 +2032,10 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     let id = st.asm.nodes[i].id;
                     edit_part(app, id);
                     return;
+                }
+                let id = st.asm.nodes[i].id;
+                if let Some(msg) = links_panel(st, ui, id) {
+                    aviso_links = Some(msg);
                 }
             }
         }
@@ -2018,20 +2235,19 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                                 if k.is_motion() {
                                     reinit = Some(m.id);
                                 }
+                                remedir = Some((m.id, m.kind.clone()));
                                 m.kind = k;
                             }
                         }
                     });
                     match &mut m.kind {
-                        MateKind::Coincident { flip } => {
-                            ui.checkbox(flip, tr("invertida"));
-                        }
-                        MateKind::Distance(e) | MateKind::Angle(e) => {
-                            ui.horizontal(|ui| {
-                                ui.label(tr("Valor"));
-                                ui.text_edit_singleline(e);
-                            });
+                        MateKind::Distance(e) => {
+                            crate::editor::expr(ui, "Valor", e, &vars_asm, "mm");
                             ui.label(RichText::new(tr("Aceita fórmulas com os parâmetros da montagem; distância negativa troca o lado.")).weak().small());
+                        }
+                        MateKind::Angle(e) => {
+                            crate::editor::expr(ui, "Valor", e, &vars_asm, "°");
+                            ui.label(RichText::new(tr("Aceita fórmulas com os parâmetros da montagem.")).weak().small());
                         }
                         MateKind::Gear { ratio, belt, .. } => {
                             crate::editor::expr(ui, "Razão", ratio, &Default::default(), "");
@@ -2043,6 +2259,16 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                             ui.label(RichText::new(tr("π × diâmetro primitivo do pinhão")).weak().small());
                         }
                         _ => {}
+                    }
+                    if m.aceita_alinhamento() || m.aceita_lado() {
+                        ui.horizontal(|ui| {
+                            if m.aceita_alinhamento() && ui.button(tr("Inverter alinhamento")).on_hover_text(tr(DICA_ALINHAMENTO)).clicked() {
+                                inverter = Some((m.id, true));
+                            }
+                            if m.aceita_lado() && ui.button(tr("Inverter lado")).on_hover_text(tr(DICA_LADO)).clicked() {
+                                inverter = Some((m.id, false));
+                            }
+                        });
                     }
                     if m.kind.is_motion() && ui.button(tr("⟲ Posição atual = giro zero")).clicked() {
                         reinit = Some(m.id);
@@ -2087,6 +2313,23 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     if let Some(id) = reinit {
         st.asm.init_motion(id);
     }
+    if let Some((id, antes)) = remedir {
+        // tipo que o par não aceita: volta ao anterior em vez de nascer sem efeito
+        let valido = st.asm.mates.iter().find(|m| m.id == id).is_some_and(|m| fenkra_montagem::par_valido(&m.kind, &m.a.geom, &m.b.geom));
+        if !valido || !st.asm.iniciar_medida(id) {
+            if let Some(m) = st.asm.mates.iter_mut().find(|m| m.id == id) {
+                m.kind = antes;
+            }
+        }
+    }
+    if let Some((id, alinhamento)) = inverter {
+        if alinhamento {
+            st.asm.inverter_alinhamento(id);
+        } else {
+            st.asm.inverter_lado(id);
+        }
+        st.solve();
+    }
     // interferências
     if !st.interf.is_empty() {
         crate::editor::section(ui, "Interferências");
@@ -2095,6 +2338,10 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         }
     }
     crate::editor::tabs_end(ui);
+    if aviso_links.is_some() {
+        st.aviso = aviso_links;
+        ui.ctx().request_repaint();
+    }
     // barra: concluir (fica), cancelar (volta ao de antes), excluir
     match (bar, sel) {
         (Some(0), _) => {
@@ -2180,18 +2427,6 @@ impl AsmState {
 }
 
 /// A peça `src` depende (por links, direta ou indiretamente) do arquivo `target`?
-fn depends_on(src: &std::path::Path, target: &std::path::Path, depth: u32) -> bool {
-    if depth > 8 {
-        return false;
-    }
-    let Some(d) = std::fs::read_to_string(src).ok().and_then(|t| Document::from_json(&t).ok()) else { return false };
-    d.external.iter().any(|e| {
-        let p = std::path::Path::new(&e.path);
-        let full = if p.is_absolute() { p.to_path_buf() } else { src.parent().map(|x| x.join(p)).unwrap_or_else(|| p.to_path_buf()) };
-        full == target || depends_on(&full, target, depth + 1)
-    })
-}
-
 /// Copia por link a face plana `pick` da peça `src` para a peça `target` (no contexto da
 /// montagem): a face vira publicação na origem (automática) e a cópia entra na outra peça já no
 /// sistema dela. Recusa referência circular.
@@ -2205,7 +2440,7 @@ fn link_in_context(st: &mut AsmState, src: Id, target: Id, pick: Pick) -> Result
     if fs == ft {
         return Err(tr("as duas são instâncias do mesmo arquivo").to_string());
     }
-    if depends_on(&fs, &ft, 0) {
+    if links::depende_de(&fs, &ft, dir.as_deref()) {
         return Err(tr("referência circular: a peça de origem já usa geometria desta").to_string());
     }
     let read = |f: &std::path::Path| std::fs::read_to_string(f).map_err(|e| format!("{}: {e}", f.display())).and_then(|t| Document::from_json(&t).map_err(|e| e.to_string()));
@@ -2812,10 +3047,12 @@ pub fn fasteners_window(app: &mut App, ctx: &egui::Context) {
                 combo(ui, "fix_porca", &mut f.op.familia_porca, &familias(|t| t == TipoFixador::Porca));
             });
         }
+        crate::editor::section(ui, "Giro");
+        crate::editor::check(ui, &mut f.op.travar_giro, "travar o giro em torno do eixo (fixador sem graus de liberdade)");
         crate::editor::section(ui, "Onde");
         crate::editor::check(ui, &mut f.only_selected, "só nos componentes selecionados (árvore ou viewport)");
         ui.add_space(4.);
-        apply = ui.add(egui::Button::new(RichText::new(tr("Preencher furos")).strong()).min_size(egui::vec2(140., 28.))).on_hover_text(tr("Insere os fixadores já na posição, com restrições de eixo e de contato, e resolve a montagem. Rodar de novo não duplica.")).clicked();
+        apply = ui.add(egui::Button::new(RichText::new(tr("Preencher furos")).strong()).min_size(egui::vec2(140., 28.))).on_hover_text(tr("Insere os fixadores já na posição, com restrições de eixo, de contato e trava de giro, e resolve a montagem. Rodar de novo não duplica.")).clicked();
         if !f.warnings.is_empty() {
             crate::editor::section(ui, "Avisos");
             egui::ScrollArea::vertical().max_height(140.).show(ui, |ui| {

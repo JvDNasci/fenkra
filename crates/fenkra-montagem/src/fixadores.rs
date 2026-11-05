@@ -11,7 +11,11 @@
 //!    comprimento é a pega + arruelas + porca + 2 passos, arredondado para cima na série da
 //!    família (em furo roscado: a profundidade útil arredondada para baixo, sem porca);
 //! 4. as peças do fixador são gravadas em `<pasta>/fixadores/` (reaproveitadas se já existirem) e
-//!    entram na montagem já na posição final, com restrições de eixo (concêntrico) e de contato.
+//!    entram na montagem já na posição final, com restrições de eixo (concêntrico) e de contato;
+//! 5. eixo e contato juntos tiram 5 dos 6 graus de liberdade: sobra o giro em torno do próprio eixo,
+//!    que nenhuma das duas enxerga. Por isso cada peça da pilha ganha uma **trava de giro** (B62),
+//!    uma restrição de paralelismo entre dois planos que contêm o eixo. A trava é uma restrição
+//!    comum: suprimir na árvore devolve o giro; `travar_giro: false` nem a cria.
 //!
 //! Convenção do fixador (ver `fenkra_solidos::fixadores`): eixo Z, face de apoio em z = 0, corpo
 //! para -Z. Com `u` o sentido de entrada do parafuso (da boca para a saída), o parafuso e as
@@ -36,6 +40,8 @@ const TOL_EIXO: f64 = 0.05;
 const TOL_ANGULO: f64 = 0.5;
 /// Nome do grupo da árvore que recebe os fixadores.
 const GRUPO: &str = "Fixadores";
+/// Nome das restrições que tiram o giro dos fixadores.
+const TRAVA: &str = "Trava de giro";
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct OpcoesFixadores {
@@ -50,11 +56,13 @@ pub struct OpcoesFixadores {
     pub folga: u8,
     /// só os furos destes componentes (vazio = todos os visíveis)
     pub componentes: Vec<Id>,
+    /// tira o giro em torno do eixo: cada peça da pilha nasce com 0 graus de liberdade
+    pub travar_giro: bool,
 }
 
 impl Default for OpcoesFixadores {
     fn default() -> Self {
-        OpcoesFixadores { familia_parafuso: "iso4762".into(), arruela: true, porca: true, familia_porca: "iso4032".into(), familia_arruela: "iso7089".into(), folga: 1, componentes: vec![] }
+        OpcoesFixadores { familia_parafuso: "iso4762".into(), arruela: true, porca: true, familia_porca: "iso4032".into(), familia_arruela: "iso7089".into(), folga: 1, componentes: vec![], travar_giro: true }
     }
 }
 
@@ -289,12 +297,20 @@ pub fn preencher_furos(asm: &mut Assembly, dir: Option<&Path>, cache: &mut PartC
         let id_parafuso = asm.add_component(&nome_parafuso, NodeKind::Part { path: arq_parafuso }, orientado(origem_parafuso, baixo), Some(pasta));
         // concêntrico ao furo de entrada
         concentrico(asm, c_ent, id_parafuso, eixo_mundo);
+        // quem gira junto com quem: o parafuso segue a peça; arruelas e porca seguem o parafuso
+        let trava = |asm: &mut Assembly, a: Id, b: Id| {
+            if op.travar_giro {
+                trava_de_giro(asm, a, b, eixo_mundo);
+            }
+        };
+        trava(asm, c_ent, id_parafuso);
         let face_entrada = (entrada, baixo); // normal de fora da peça
         let arruela_cabeca = fam_arr.zip(h1).and_then(|(f, _)| f.tamanho(&desig).map(|t| (f, t)));
         if let Some((fam_a, t_a)) = arruela_cabeca {
             let (arq, nome) = peca(fam_a, t_a, None)?;
             let id = asm.add_component(&nome, NodeKind::Part { path: arq }, orientado(entrada, cima), Some(pasta));
             concentrico(asm, id_parafuso, id, eixo_mundo);
+            trava(asm, id_parafuso, id);
             apoio(asm, c_ent, face_entrada, id, (entrada, cima));
             // cabeça sobre a face de fora da arruela
             let fora = ponto(entrada, baixo, w1);
@@ -312,6 +328,7 @@ pub fn preencher_furos(asm: &mut Assembly, dir: Option<&Path>, cache: &mut PartC
                 let (arq, nome) = peca(fam_a, t_a, None)?;
                 let id = asm.add_component(&nome, NodeKind::Part { path: arq }, orientado(saida, baixo), Some(pasta));
                 concentrico(asm, id_parafuso, id, eixo_mundo);
+                trava(asm, id_parafuso, id);
                 apoio(asm, c_sai, (saida, cima), id, (saida, baixo));
                 let fora = ponto(saida, cima, h);
                 apoio_porca = (id, (fora, cima), fora);
@@ -321,6 +338,7 @@ pub fn preencher_furos(asm: &mut Assembly, dir: Option<&Path>, cache: &mut PartC
                 let (arq, nome) = peca(fam_n, t_n, None)?;
                 let id = asm.add_component(&nome, NodeKind::Part { path: arq }, orientado(apoio_porca.2, baixo), Some(pasta));
                 concentrico(asm, id_parafuso, id, eixo_mundo);
+                trava(asm, id_parafuso, id);
                 apoio(asm, apoio_porca.0, apoio_porca.1, id, (apoio_porca.2, baixo));
                 rel.porcas += 1;
             }
@@ -357,6 +375,20 @@ fn concentrico(asm: &mut Assembly, a: Id, b: Id, eixo: (V3, V3)) {
 fn apoio(asm: &mut Assembly, a: Id, fa: (V3, V3), b: Id, fb: (V3, V3)) {
     let (ga, gb) = (plano_local(asm, a, fa.0, fa.1), plano_local(asm, b, fb.0, fb.1));
     asm.add_mate(MateKind::Contact, MateRef { comp: a, geom: ga, pick: None }, MateRef { comp: b, geom: gb, pick: None });
+}
+
+/// Tira o giro de `b` em torno do eixo, mantendo o ângulo de agora em relação a `a`. Paralelismo
+/// entre planos que contêm o eixo: o resíduo tem derivada cheia no ponto de partida, o que não
+/// acontece com um ângulo de 0° (o cosseno é plano ali, e o giro continuaria contado como livre).
+/// Planos, e não eixos, para não confundir `eixos_das_restricoes`, que procura o eixo do fixador.
+fn trava_de_giro(asm: &mut Assembly, a: Id, b: Id, eixo: (V3, V3)) {
+    let normal = any_perp(unit(eixo.1));
+    let (ga, gb) = (plano_local(asm, a, eixo.0, normal), plano_local(asm, b, eixo.0, normal));
+    let nome = asm.unique_pub(TRAVA);
+    let id = asm.add_mate(MateKind::Parallel, MateRef { comp: a, geom: ga, pick: None }, MateRef { comp: b, geom: gb, pick: None });
+    if let Some(m) = asm.mates.iter_mut().find(|m| m.id == id) {
+        m.name = nome;
+    }
 }
 
 /// Grava a peça do fixador (se ainda não existe) e devolve (caminho relativo à montagem, nome).
@@ -564,6 +596,106 @@ mod tests {
         let de_novo = preencher_furos(&mut a, Some(&dir), &mut cache, &op).unwrap();
         assert_eq!((de_novo.fixadores, de_novo.pulados), (0, 1), "{de_novo:?}");
         assert_eq!(a.nodes.len(), antes);
+    }
+
+    /// Componentes gravados em `fixadores/`.
+    fn pecas_do_fixador(a: &Assembly) -> Vec<Id> {
+        a.nodes.iter().filter(|n| matches!(&n.kind, NodeKind::Part { path } if path.starts_with("fixadores/"))).map(|n| n.id).collect()
+    }
+
+    fn comp_do_arquivo(a: &Assembly, trecho: &str) -> Id {
+        a.nodes.iter().find(|n| matches!(&n.kind, NodeKind::Part { path } if path.contains(trecho))).unwrap().id
+    }
+
+    /// A peça `c` girada `graus` em torno do eixo do furo (z, passando pela origem).
+    fn gira(a: &Assembly, c: Id, graus: f64) -> Placement {
+        a.node(c).unwrap().placement.moved([0.; 3], [0., 0., graus.to_radians()], [0.; 3])
+    }
+
+    #[test]
+    fn todo_fixador_nasce_com_zero_graus_de_liberdade() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let casos: [(&str, Document, OpcoesFixadores, usize); 4] = [
+            ("gdl_completo", placa(10., 6.4, None), OpcoesFixadores { folga: 0, ..Default::default() }, 4),
+            ("gdl_sem_arruela", placa(10., 6.6, None), OpcoesFixadores { arruela: false, ..Default::default() }, 2),
+            ("gdl_sem_porca", placa(10., 6.6, None), OpcoesFixadores { porca: false, ..Default::default() }, 2),
+            ("gdl_so_parafuso", placa(10., 6.6, None), OpcoesFixadores { arruela: false, porca: false, ..Default::default() }, 1),
+        ];
+        for (nome, doc, op, pecas) in casos {
+            let dir = pasta(nome);
+            let (mut a, _, cima) = pilha_de_placas(&dir, &doc);
+            a.node_mut(cima).unwrap().fixed = true;
+            let mut cache = PartCache::default();
+            preencher_furos(&mut a, Some(&dir), &mut cache, &op).unwrap();
+            let rep = solve::solve(&mut a);
+            assert!(rep.converged, "{nome}: {rep:?}");
+            assert_eq!(rep.dof, 0, "{nome}: a montagem inteira fica definida");
+            let gdl = solve::dof_per_comp(&a);
+            let ids = pecas_do_fixador(&a);
+            assert_eq!(ids.len(), pecas, "{nome}");
+            for c in ids {
+                assert_eq!(gdl[&c], 0, "{nome}: {}", a.name_of(c));
+            }
+        }
+        // furo roscado: parafuso e arruela, sem porca
+        let dir = pasta("gdl_roscado");
+        let mut a = Assembly::new("Rosca");
+        std::fs::write(dir.join("bloco.fkp"), placa(30., 5., Some(18.)).to_json()).unwrap();
+        a.add_component("Bloco", NodeKind::Part { path: "bloco.fkp".into() }, Placement::default(), None);
+        preencher_furos(&mut a, Some(&dir), &mut PartCache::default(), &OpcoesFixadores::default()).unwrap();
+        let rep = solve::solve(&mut a);
+        assert!(rep.converged && rep.dof == 0, "{rep:?}");
+    }
+
+    #[test]
+    fn deixar_o_giro_livre_e_opcional() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let dir = pasta("giro_livre");
+        let (mut a, _, cima) = pilha_de_placas(&dir, &placa(10., 6.6, None));
+        a.node_mut(cima).unwrap().fixed = true;
+        let op = OpcoesFixadores { travar_giro: false, ..Default::default() };
+        preencher_furos(&mut a, Some(&dir), &mut PartCache::default(), &op).unwrap();
+        assert!(!a.mates.iter().any(|m| m.name.starts_with(TRAVA)));
+        assert!(solve::solve(&mut a).converged);
+        let gdl = solve::dof_per_comp(&a);
+        for c in pecas_do_fixador(&a) {
+            assert_eq!(gdl[&c], 1, "só o giro: {}", a.name_of(c));
+        }
+    }
+
+    #[test]
+    fn suprimir_a_trava_devolve_o_giro_e_a_pilha_gira_junta() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let dir = pasta("giro_trava");
+        let (mut a, _, cima) = pilha_de_placas(&dir, &placa(10., 6.6, None));
+        a.node_mut(cima).unwrap().fixed = true;
+        preencher_furos(&mut a, Some(&dir), &mut PartCache::default(), &OpcoesFixadores::default()).unwrap();
+        assert!(solve::solve(&mut a).converged);
+        let parafuso = comp_do_arquivo(&a, "iso4762");
+        let porca = comp_do_arquivo(&a, "iso4032");
+        let x = |a: &Assembly, c: Id| a.node(c).unwrap().placement.dir([1., 0., 0.]);
+        let (x0, xp0) = (x(&a, parafuso), x(&a, porca));
+
+        // travado: puxar o parafuso em volta do eixo não o tira do lugar
+        let alvo = gira(&a, parafuso, 40.);
+        solve::solve_toward(&mut a, parafuso, alvo, 0.05);
+        assert!(norm(sub(x(&a, parafuso), x0)) < 1e-4, "{:?}", x(&a, parafuso));
+
+        // trava do parafuso suprimida: ele gira, e a porca (travada nele) vai junto
+        let trava = a.mates.iter().find(|m| m.name.starts_with(TRAVA) && m.b.comp == parafuso).unwrap().id;
+        a.mates.iter_mut().find(|m| m.id == trava).unwrap().suppressed = true;
+        assert_eq!(solve::dof(&a), 1, "a pilha inteira gira como um conjunto");
+        let alvo = gira(&a, parafuso, 40.);
+        solve::solve_toward(&mut a, parafuso, alvo, 0.05);
+        let giro = dot(x(&a, parafuso), x0);
+        assert!(giro < 0.99, "girou: {giro}");
+        assert!((dot(x(&a, porca), xp0) - giro).abs() < 1e-4, "a porca segue o parafuso");
     }
 
     #[test]
