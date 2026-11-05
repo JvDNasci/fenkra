@@ -144,7 +144,7 @@ fn loft_avisa_contornos_extras_da_secao() {
     let s0 = sk_circulos(&mut d, PlaneRef::Origin(OriginPlane::XY), &[([-10., 0.], 5.), ([15., 0.], 3.)]);
     let alto = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "20");
     let s1 = sk_circulos(&mut d, PlaneRef::Datum(alto), &[([-10., 0.], 4.)]);
-    let id = d.add_feature(FeatureKind::Loft(Loft { sections: vec![s0, s1], ruled: false, closed: false, op: BoolOp::Add }));
+    let id = d.add_feature(FeatureKind::Loft(Loft { sections: vec![s0, s1], ruled: false, closed: false, op: BoolOp::Add, torcao: vec![], inicio: Default::default(), fim: Default::default() }));
     let r = recompute(&d);
     let m = aviso(&r, id);
     assert!(m.contains("contornos descartados") && m.contains("2 contornos"), "{m}");

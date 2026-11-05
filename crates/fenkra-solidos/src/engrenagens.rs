@@ -558,7 +558,7 @@ impl Montador {
             let rot = largura * (i as f64 / trechos as f64) * beta.tan() / g.r;
             secoes.push(self.sketch_contorno(&format!("Secao_{i}"), plano, inicio, &passos, rot, None));
         }
-        let id = self.doc.add_feature(FeatureKind::Loft(Loft { sections: secoes, ruled: true, closed: false, op: BoolOp::Add }));
+        let id = self.doc.add_feature(FeatureKind::Loft(Loft { sections: secoes, ruled: true, closed: false, op: BoolOp::Add, torcao: vec![], inicio: Default::default(), fim: Default::default() }));
         if let Some(f) = self.doc.features.iter_mut().find(|f| f.id == id) {
             f.name = "Dentes_helicoidais".into();
         }

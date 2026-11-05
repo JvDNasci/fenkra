@@ -3809,9 +3809,10 @@ impl Ctx<'_> {
                 Ok((!sk.open.is_empty()).then(|| format!("{} perfil(is) aberto(s) do sketch foram descartados: só contornos fechados varrem", sk.open.len())))
             }
             FeatureKind::Loft(l) => {
-                let mut comp = Shape::empty();
                 let mut dropped: Vec<String> = vec![];
-                for id in &l.sections {
+                // (referencial, contorno) de cada seção, já com a torção aplicada
+                let mut secoes: Vec<(Frame, Vec<fenkra_kernel::Seg2>)> = vec![];
+                for (i, id) in l.sections.iter().enumerate() {
                     let (frame, sk) = &self.sketch(*id)?;
                     if sk.loops.is_empty() {
                         return Err(format!("o sketch '{}' não tem contorno fechado", self.doc.name_of(*id)));
@@ -3819,10 +3820,55 @@ impl Ctx<'_> {
                     if sk.loops.len() > 1 {
                         dropped.push(format!("a seção '{}' tem {} contornos e só o primeiro entra", self.doc.name_of(*id), sk.loops.len()));
                     }
-                    let face = Shape::face(frame, &sk.loops[..1]).map_err(k)?;
+                    let mut lacos = sk.loops[0].clone();
+                    // a alça da linha de conexão: o ponto de partida anda pelos vértices do contorno
+                    let t = l.torcao.get(i).copied().unwrap_or(0);
+                    if t != 0 && lacos.len() > 1 {
+                        let passo = t.rem_euclid(lacos.len() as i32) as usize;
+                        lacos.rotate_left(passo);
+                    }
+                    secoes.push((*frame, lacos));
+                }
+                let condicionado = !l.inicio.e_livre() || !l.fim.e_livre();
+                if condicionado && (l.ruled || l.closed) {
+                    return Err("condição de ponta só vale em loft suave e aberto: desligue 'reto' e 'fechado' ou use a condição livre".into());
+                }
+                let mut faces: Vec<Shape> = vec![];
+                let n = secoes.len();
+                for (i, (frame, lacos)) in secoes.iter().enumerate() {
+                    let face = Shape::face(frame, std::slice::from_ref(lacos)).map_err(k)?;
+                    // condição Normal: uma cópia da própria seção, afastada na normal, faz o loft
+                    // sair perpendicular; a distância é a intensidade vezes um terço do vão
+                    let (ponta, vizinha) = if i == 0 { (&l.inicio, 1) } else if i + 1 == n { (&l.fim, n.saturating_sub(2)) } else { (&PontaLoft::default(), i) };
+                    let normal_pedida = n >= 2 && (i == 0 || i + 1 == n) && ponta.condicao == CondicaoPonta::Normal;
+                    let extra = if normal_pedida {
+                        let f = ev(if ponta.intensidade.trim().is_empty() { "1" } else { &ponta.intensidade }, &self.vars, "intensidade da ponta")?;
+                        if !(0. ..=3.).contains(&f) {
+                            return Err(format!("a intensidade da ponta precisa estar entre 0 e 3 (veio {f})"));
+                        }
+                        let outra = &secoes[vizinha].0;
+                        let vao = geo3d::dist(frame.origin, outra.origin);
+                        let sinal = if geo3d::dot(frame.normal, geo3d::sub(outra.origin, frame.origin)) >= 0. { 1. } else { -1. };
+                        let d = f * vao / 3.;
+                        (d > 1e-9).then(|| face.transformed(Xform::Translate(geo3d::mul(frame.normal, sinal * d)))).transpose().map_err(k)?
+                    } else {
+                        None
+                    };
+                    if i == 0 {
+                        faces.push(face);
+                        faces.extend(extra);
+                    } else if i + 1 == n {
+                        faces.extend(extra);
+                        faces.push(face);
+                    } else {
+                        faces.push(face);
+                    }
+                }
+                let mut comp = Shape::empty();
+                for face in faces {
                     comp = if comp.is_null() { face } else { comp.compound(&face) };
                 }
-                let tool = comp.loft(l.ruled, l.closed).map_err(k)?;
+                let tool = comp.loft(l.ruled, l.closed, !l.torcao.iter().any(|t| *t != 0)).map_err(k)?;
                 self.apply(f.target, tool, l.op, f.id)?;
                 Ok((!dropped.is_empty()).then(|| format!("contornos descartados: {}", dropped.join("; "))))
             }
@@ -8158,7 +8204,7 @@ mod tests {
         let a = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [-10., -10.], [10., 10.]);
         let pl = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "20");
         let b = sk_rect(&mut d, PlaneRef::Datum(pl), [-5., -5.], [5., 5.]);
-        d.add_feature(FeatureKind::Loft(Loft { sections: vec![a, b], ruled: true, closed: false, op: BoolOp::Add }));
+        d.add_feature(FeatureKind::Loft(Loft { sections: vec![a, b], ruled: true, closed: false, op: BoolOp::Add, torcao: vec![], inicio: Default::default(), fim: Default::default() }));
         // tronco de pirâmide: h/3 (A1 + A2 + sqrt(A1 A2))
         assert!(near(vol(&d), 20. / 3. * (400. + 100. + 200.), 1e-3));
 

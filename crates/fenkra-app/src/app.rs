@@ -1691,7 +1691,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             Cmd::Loft | Cmd::LoftCut => {
                 // só o sketch pré-selecionado; os outros entram clicando na árvore
                 let sections: Vec<Id> = sketch.into_iter().collect();
-                Sel::Feature(d.add_feature(FeatureKind::Loft(Loft { sections, ruled: false, closed: false, op: if c == Cmd::LoftCut { BoolOp::Cut } else { BoolOp::Add } })))
+                Sel::Feature(d.add_feature(FeatureKind::Loft(Loft { sections, ruled: false, closed: false, op: if c == Cmd::LoftCut { BoolOp::Cut } else { BoolOp::Add }, torcao: vec![], inicio: Default::default(), fim: Default::default() })))
             }
             Cmd::Prim(kind) => {
                 let v: [&str; 4] = match kind {

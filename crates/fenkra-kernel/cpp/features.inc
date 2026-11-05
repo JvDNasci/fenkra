@@ -136,7 +136,7 @@ std::unique_ptr<Shape> sweep_tool(const Shape& face, rust::Slice<const double> s
     });
 }
 
-std::unique_ptr<Shape> loft_tool(const Shape& sections, bool ruled, bool closed) {
+std::unique_ptr<Shape> loft_tool(const Shape& sections, bool ruled, bool closed, bool alinhar) {
     return guard("multi-seções", [&] {
         std::vector<TopoDS_Wire> ws;
         for (TopExp_Explorer e(sections.s, TopAbs_FACE); e.More(); e.Next()) ws.push_back(BRepTools::OuterWire(TopoDS::Face(e.Current())));
@@ -144,7 +144,7 @@ std::unique_ptr<Shape> loft_tool(const Shape& sections, bool ruled, bool closed)
         BRepOffsetAPI_ThruSections ts(Standard_True, ruled ? Standard_True : Standard_False);
         for (auto& w : ws) ts.AddWire(w);
         if (closed) ts.AddWire(ws[0]);
-        ts.CheckCompatibility(Standard_True);
+        ts.CheckCompatibility(alinhar ? Standard_True : Standard_False);
         ts.Build();
         if (!ts.IsDone()) throw std::runtime_error("os perfis não puderam ser ligados (confira a ordem e o sentido)");
         return wrap(ts.Shape());

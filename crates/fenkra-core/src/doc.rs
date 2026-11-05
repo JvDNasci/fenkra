@@ -2590,6 +2590,40 @@ pub struct Loft {
     pub ruled: bool,
     pub closed: bool,
     pub op: BoolOp,
+    /// por seção: quantos vértices o ponto de partida avança (negativo recua); a alça da linha de
+    /// conexão no 3D muda este número e remove a torção entre perfis (B12)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub torcao: Vec<i32>,
+    /// condição da primeira seção
+    #[serde(default, skip_serializing_if = "PontaLoft::e_livre")]
+    pub inicio: PontaLoft,
+    /// condição da última seção
+    #[serde(default, skip_serializing_if = "PontaLoft::e_livre")]
+    pub fim: PontaLoft,
+}
+
+/// Condição de uma ponta do loft (B12).
+#[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
+pub struct PontaLoft {
+    pub condicao: CondicaoPonta,
+    /// intensidade (a seta no 3D): 0 a 3, fração da distância até a seção vizinha; texto de expressão
+    #[serde(default)]
+    pub intensidade: String,
+}
+
+impl PontaLoft {
+    pub fn e_livre(&self) -> bool {
+        self.condicao == CondicaoPonta::Livre
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum CondicaoPonta {
+    /// o loft chega à seção pelo caminho mais curto
+    #[default]
+    Livre,
+    /// o loft sai perpendicular ao plano da seção, com a intensidade pedida
+    Normal,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]

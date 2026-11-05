@@ -108,3 +108,61 @@ fn cancelar_para_antes_do_proximo_comando_e_o_cache_continua_valendo() {
     assert!(matches!(r.status[&topo], Status::Ok));
     assert!(volume(&r) > 40. * 30. * 10.);
 }
+
+// ------------------------------------------------------------------ B12: loft com torção e condição de ponta
+
+fn loft_de(base: [f64; 2], topo: [f64; 2], ajusta: impl FnOnce(&mut Loft)) -> (f64, Status) {
+    let mut d = Document::new("loft");
+    let s0 = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [-base[0] / 2., -base[1] / 2.], [base[0] / 2., base[1] / 2.]);
+    let alto = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "30");
+    let s1 = sk_rect(&mut d, PlaneRef::Datum(alto), [-topo[0] / 2., -topo[1] / 2.], [topo[0] / 2., topo[1] / 2.]);
+    let mut l = Loft { sections: vec![s0, s1], ruled: false, closed: false, op: BoolOp::Add, torcao: vec![], inicio: Default::default(), fim: Default::default() };
+    ajusta(&mut l);
+    let id = d.add_feature(FeatureKind::Loft(l));
+    let r = recompute(&d);
+    (volume(&r), r.status[&id].clone())
+}
+
+#[test]
+fn loft_torcao_pelo_ponto_de_partida_muda_o_solido() {
+    if !kernel_disponivel() {
+        return;
+    }
+    let (reto, st) = loft_de([40., 20.], [40., 20.], |_| {});
+    assert!(matches!(st, Status::Ok), "{st:?}");
+    assert!((reto - 40. * 20. * 30.).abs() < 1., "{reto}");
+    let (torcido, st) = loft_de([40., 20.], [40., 20.], |l| l.torcao = vec![0, 1]);
+    assert!(matches!(st, Status::Ok), "{st:?}");
+    assert!((torcido - reto).abs() > 1., "a torção de um vértice deve mudar o volume: {torcido} x {reto}");
+}
+
+#[test]
+fn loft_condicao_normal_na_ponta_e_validada() {
+    if !kernel_disponivel() {
+        return;
+    }
+    let (livre, st) = loft_de([40., 40.], [16., 16.], |_| {});
+    assert!(matches!(st, Status::Ok), "{st:?}");
+    let ponta = PontaLoft { condicao: CondicaoPonta::Normal, intensidade: "1".into() };
+    let (normal, st) = loft_de([40., 40.], [16., 16.], |l| l.inicio = ponta.clone());
+    assert!(matches!(st, Status::Ok), "{st:?}");
+    assert!(normal > livre + 1., "sair na normal enche o começo: {normal} x {livre}");
+    let (zero, st) = loft_de([40., 40.], [16., 16.], |l| l.inicio = PontaLoft { condicao: CondicaoPonta::Normal, intensidade: "0".into() });
+    assert!(matches!(st, Status::Ok) && (zero - livre).abs() < 1e-6, "{zero} x {livre}");
+    let (_, st) = loft_de([40., 40.], [16., 16.], |l| l.inicio = PontaLoft { condicao: CondicaoPonta::Normal, intensidade: "9".into() });
+    assert!(matches!(&st, Status::Error(m) if m.contains("entre 0 e 3")), "{st:?}");
+    let (_, st) = loft_de([40., 40.], [16., 16.], |l| {
+        l.ruled = true;
+        l.fim = ponta.clone();
+    });
+    assert!(matches!(&st, Status::Error(m) if m.contains("loft suave")), "{st:?}");
+}
+
+#[test]
+fn loft_antigo_sem_torcao_nem_ponta_abre() {
+    let j = r#"{"sections":[1,2],"ruled":false,"closed":false,"op":"Add"}"#;
+    let l: Loft = serde_json::from_str(j).unwrap();
+    assert!(l.torcao.is_empty() && l.inicio.e_livre() && l.fim.e_livre());
+    let volta = serde_json::to_string(&l).unwrap();
+    assert!(!volta.contains("torcao") && !volta.contains("inicio"), "{volta}");
+}
