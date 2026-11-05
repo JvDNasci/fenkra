@@ -2,7 +2,7 @@
 //! Avaliação de sketches: resolve as restrições com os parâmetros e extrai perfis fechados,
 //! pontos (centros de furo), linhas (eixos) e polilinhas para exibição.
 
-use fenkra_core::sketch::{Curve, Seg, SolveReport};
+use fenkra_core::sketch::{Curve, Seg, SketchPos, SolveReport};
 use fenkra_core::{expr, Id, SketchData};
 use fenkra_kernel::{Frame, Loop2, Seg2};
 use std::collections::HashMap;
@@ -34,6 +34,10 @@ pub struct EvalSketch {
     /// posições atuais da geometria externa (pontos e raios), para o editor sincronizar
     pub link_pts: Vec<(Id, [f64; 2])>,
     pub link_r: Vec<(Id, f64)>,
+    /// elipses externas: curva, semieixo maior, semieixo menor, t0 e t1
+    pub link_e: Vec<(Id, [f64; 2], f64, f64, f64)>,
+    /// geometria externa que perdeu a origem: fica onde estava, à espera dela
+    pub link_quebrados: Vec<Id>,
     pub warnings: Vec<String>,
     pub report: SolveReport,
 }
@@ -44,7 +48,29 @@ fn seg(s: Seg) -> Seg2 {
         Seg::Arc(a, m, b) => Seg2::Arc(a, m, b),
         Seg::Circle(c, r) => Seg2::Circle(c, r),
         Seg::Spline(p) => Seg2::Spline(p),
+        Seg::Ellipse(c, m, r, t0, t1) => Seg2::Ellipse(c, m, r, t0, t1),
     }
+}
+
+/// Plano do sketch sobre o plano-base, com a origem e a orientação próprias.
+pub fn posiciona(f: Frame, p: &SketchPos) -> Frame {
+    let (mut h, mut v) = (f.x, f.y());
+    if p.trocar {
+        std::mem::swap(&mut h, &mut v);
+    }
+    if p.inverter_h {
+        h = h.map(|x| -x);
+    }
+    if p.inverter_v {
+        v = v.map(|x| -x);
+    }
+    let normal = [h[1] * v[2] - h[2] * v[1], h[2] * v[0] - h[0] * v[2], h[0] * v[1] - h[1] * v[0]];
+    Frame { origin: f.point(p.origem[0], p.origem[1]), x: h, normal }
+}
+
+/// Plano do sketch na forma que a projeção exata usa.
+pub fn plano_do(f: &Frame) -> fenkra_core::projecao::Plano {
+    fenkra_core::projecao::Plano { origem: f.origin, h: f.x, v: f.y(), n: f.normal }
 }
 
 pub fn eval_sketch(data: &SketchData, vars: &Vars) -> Result<EvalSketch, String> {
@@ -79,6 +105,7 @@ pub fn eval_sketch(data: &SketchData, vars: &Vars) -> Result<EvalSketch, String>
                 continue;
             }
             Curve::Spline { .. } => sample(&[Seg2::Spline(sk.spline_uv(c.id))]),
+            Curve::Ellipse { c: ctr, major, minor, t0, t1, .. } => sample(&[Seg2::Ellipse(sk.pos(ctr), major, minor, t0, t1)]),
         };
         out.curves.insert(c.id, pts.clone());
         if c.construction {
@@ -105,6 +132,11 @@ pub fn sample(l: &[Seg2]) -> Vec<[f64; 2]> {
                     pts.push(a)
                 }
                 pts.push(b)
+            }
+            Seg2::Ellipse(c, m, r, t0, t1) => {
+                let v = fenkra_core::projecao::elipse_amostras(c, m, r, t0, t1);
+                let skip = usize::from(!pts.is_empty());
+                pts.extend(v.into_iter().skip(skip));
             }
             Seg2::Circle(c, r) => {
                 pts.extend((0..=64).map(|i| {

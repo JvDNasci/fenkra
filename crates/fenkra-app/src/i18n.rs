@@ -18,7 +18,7 @@ pub fn english() -> bool {
 
 fn map() -> &'static HashMap<&'static str, &'static str> {
     static M: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
-    M.get_or_init(|| TABLE.iter().chain(crate::textos_ajuda::TEXTOS.iter()).chain(crate::textos_biblioteca::TEXTOS.iter()).copied().collect())
+    M.get_or_init(|| TABLE.iter().chain(crate::textos_ajuda::TEXTOS.iter()).chain(crate::textos_biblioteca::TEXTOS.iter()).chain(crate::sketch_textos::TEXTOS.iter()).copied().collect())
 }
 
 /// Tradução do texto (ou o próprio texto, em português ou sem tradução).

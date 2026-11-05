@@ -32,6 +32,10 @@ pub enum Curve {
     Point { p: Id },
     /// Spline que passa pelos pontos, na ordem (B-spline interpolada no perfil).
     Spline { pts: Vec<Id> },
+    /// Elipse exata trazida de fora do sketch (`crate::projecao`). A forma vem da origem e o solver
+    /// não a muda. `major`: vetor do centro à ponta do semieixo maior. De `t0` a `t1`, anti-horário;
+    /// `s` e `e` são as pontas, e na elipse inteira os dois são o próprio centro.
+    Ellipse { c: Id, s: Id, e: Id, major: [f64; 2], minor: f64, t0: f64, t1: f64 },
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -66,6 +70,8 @@ pub enum Kind {
     Radius(Id, String),
     Diameter(Id, String),
     Angle(Id, Id, String),
+    /// o suplemento do ângulo entre as direções: o outro quadrante formado pelas duas linhas
+    AngleSupp(Id, Id, String),
     PointLineDistance(Id, Id, String),
     /// ângulo da linha, de `a` para `b`, com a horizontal do sketch (com sinal)
     LineAngle(Id, String),
@@ -92,7 +98,7 @@ impl Kind {
             Kind::Length(..) => "Comprimento",
             Kind::Radius(..) => "Raio",
             Kind::Diameter(..) => "Diâmetro",
-            Kind::Angle(..) => "Ângulo",
+            Kind::Angle(..) | Kind::AngleSupp(..) => "Ângulo",
             Kind::PointLineDistance(..) => "Distância ponto-linha",
             Kind::LineAngle(..) => "Ângulo com a horizontal",
         }
@@ -107,6 +113,7 @@ impl Kind {
             | Kind::Radius(_, v)
             | Kind::Diameter(_, v)
             | Kind::Angle(_, _, v)
+            | Kind::AngleSupp(_, _, v)
             | Kind::PointLineDistance(_, _, v)
             | Kind::LineAngle(_, v) => Some(v),
             _ => None,
@@ -117,7 +124,7 @@ impl Kind {
     }
     /// Cotas em que um valor negativo significa "do outro lado".
     fn has_side(&self) -> bool {
-        matches!(self, Kind::Distance(..) | Kind::DistanceX(..) | Kind::DistanceY(..) | Kind::Length(..) | Kind::Angle(..) | Kind::PointLineDistance(..))
+        matches!(self, Kind::Distance(..) | Kind::DistanceX(..) | Kind::DistanceY(..) | Kind::Length(..) | Kind::Angle(..) | Kind::AngleSupp(..) | Kind::PointLineDistance(..))
     }
     /// Ids referenciados (pontos ou curvas).
     pub fn refs(&self) -> Vec<Id> {
@@ -137,6 +144,7 @@ impl Kind {
             | Kind::DistanceX(a, b, _)
             | Kind::DistanceY(a, b, _)
             | Kind::Angle(a, b, _)
+            | Kind::AngleSupp(a, b, _)
             | Kind::PointLineDistance(a, b, _) => vec![*a, *b],
             Kind::Symmetric(a, b, c) => vec![*a, *b, *c],
         }
@@ -196,6 +204,8 @@ pub enum Seg {
     Circle([f64; 2], f64),
     /// spline pelos pontos (na ordem)
     Spline(Vec<[f64; 2]>),
+    /// centro, semieixo maior, semieixo menor, parâmetros inicial e final (`t0 > t1`: percurso invertido)
+    Ellipse([f64; 2], [f64; 2], f64, f64, f64),
 }
 
 /// Divide uma polilinha nos cantos vivos (giro > ~26°): cada trecho é uma lista de índices em
@@ -430,6 +440,12 @@ pub struct SketchData {
     /// tangentes próprias nos pontos das splines (alças Bézier)
     #[serde(default)]
     pub spline_tan: Vec<SplineTan>,
+    /// política da geometria externa nova deste sketch
+    #[serde(default)]
+    pub link_policy: LinkPolicy,
+    /// origem e orientação próprias
+    #[serde(default)]
+    pub pos: SketchPos,
 }
 
 impl SketchData {
@@ -532,6 +548,40 @@ pub enum LinkShape {
     },
     /// círculo: centro fixo e raio da curva acompanhando
     Circle { center: Id, curve: Id },
+    /// linha exata
+    Line { a: Id, b: Id, curve: Id },
+    /// arco exato
+    Arc { center: Id, s: Id, e: Id, curve: Id },
+    /// elipse exata (inteira: `s` e `e` são o centro)
+    Ellipse { center: Id, s: Id, e: Id, curve: Id },
+}
+
+/// O que a geometria externa faz quando a origem muda.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum LinkPolicy {
+    /// acompanha a origem
+    #[default]
+    Associativo,
+    /// guarda a origem, mas não acompanha: volta a acompanhar sem escolher de novo
+    Isolado,
+    /// só copia: nasce como geometria comum, sem vínculo
+    Instantaneo,
+}
+
+/// Posição própria do sketch sobre o plano-base. Mudar H ou V de um lado só troca a normal, porque
+/// H × V é sempre a normal: o sketch passa a ser visto pelo outro lado.
+#[derive(Clone, Copy, PartialEq, Debug, Default, Serialize, Deserialize)]
+pub struct SketchPos {
+    /// origem do sketch, em coordenadas do plano-base
+    #[serde(default)]
+    pub origem: [f64; 2],
+    /// H e V trocam de lugar
+    #[serde(default)]
+    pub trocar: bool,
+    #[serde(default)]
+    pub inverter_h: bool,
+    #[serde(default)]
+    pub inverter_v: bool,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -541,6 +591,8 @@ pub struct SkLink {
     /// interseção com o plano do sketch (senão: projeção ortogonal no plano)
     pub intersect: bool,
     pub shape: LinkShape,
+    #[serde(default)]
+    pub policy: LinkPolicy,
 }
 
 /// Reamostra uma polilinha em `n` pontos igualmente espaçados pelo comprimento.
@@ -634,7 +686,7 @@ impl SketchData {
             LinkShape::Poly { points: ids, closed, isolated: false }
         };
         let id = al();
-        self.links.push(SkLink { id, source, intersect, shape });
+        self.links.push(SkLink { id, source, intersect, shape, policy: self.link_policy });
         Some(id)
     }
 
@@ -655,7 +707,7 @@ impl SketchData {
             })
             .collect();
         let id = al();
-        self.links.push(SkLink { id, source, intersect: true, shape: LinkShape::Poly { points, closed: false, isolated: true } });
+        self.links.push(SkLink { id, source, intersect: true, shape: LinkShape::Poly { points, closed: false, isolated: true }, policy: self.link_policy });
         Some(id)
     }
 
@@ -696,6 +748,16 @@ impl SketchData {
                     }
                 }
             }
+            // forma exata sem fórmula na origem: só as pontas seguem a polilinha
+            LinkShape::Line { a, b, .. } | LinkShape::Arc { s: a, e: b, .. } | LinkShape::Ellipse { s: a, e: b, .. } => {
+                if let (Some(p), Some(q)) = (uv.first(), uv.last()) {
+                    for (id, r) in [(a, p), (b, q)] {
+                        if let Some(pt) = self.point_mut(id) {
+                            (pt.x, pt.y) = (r[0], r[1]);
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -726,6 +788,11 @@ impl SketchData {
             Curve::Arc { c, s, e } => vec![*c, *s, *e],
             Curve::Spline { pts } => pts.clone(),
             Curve::Point { p } => vec![*p],
+            Curve::Ellipse { c, s, e, .. } if s == c => {
+                debug_assert!(s == e);
+                vec![*c]
+            }
+            Curve::Ellipse { c, s, e, .. } => vec![*c, *s, *e],
         }
     }
 
@@ -851,7 +918,7 @@ impl SketchData {
                     swap(b)
                 }
                 Curve::Circle { c, .. } => swap(c),
-                Curve::Arc { c, s, e } => {
+                Curve::Arc { c, s, e } | Curve::Ellipse { c, s, e, .. } => {
                     swap(c);
                     swap(s);
                     swap(e)
@@ -1005,7 +1072,7 @@ impl SketchData {
                     self.move_to(b, [pb[0] + d[0], pb[1] + d[1]], fixed);
                 }
             }
-            Kind::Angle(l1, l2, _) => {
+            Kind::Angle(l1, l2, _) | Kind::AngleSupp(l1, l2, _) => {
                 let (Some((a, b)), Some((c, d))) = (ends(self, l1), ends(self, l2)) else { return };
                 // gira a segunda linha em torno da ponta comum; se ela estiver presa, gira a primeira
                 let (pa, pb, pc, pd) = (self.pos(a), self.pos(b), self.pos(c), self.pos(d));
@@ -1228,9 +1295,13 @@ impl Sys<'_> {
                 }
                 Kind::Radius(c, _) => out.push(self.radius(x, *c) - v),
                 Kind::Diameter(c, _) => out.push(2. * self.radius(x, *c) - v),
-                Kind::Angle(l1, l2, _) => {
+                Kind::Angle(l1, l2, _) | Kind::AngleSupp(l1, l2, _) => {
                     if let (Some((a, b)), Some((c, d))) = (ln(*l1), ln(*l2)) {
-                        let (u, w) = (sub(b, a), sub(d, c));
+                        let (u, mut w) = (sub(b, a), sub(d, c));
+                        // o suplemento é o ângulo com a segunda direção invertida
+                        if matches!(k, Kind::AngleSupp(..)) {
+                            w = [-w[0], -w[1]];
+                        }
                         let n = (len2(u) * len2(w)).max(1e-12);
                         let t = v.to_radians();
                         // zero quando o ângulo (sem sinal) entre as direções vale v
@@ -1545,7 +1616,7 @@ impl SketchData {
                 let p: Vec<[f64; 2]> = pts.iter().map(|q| self.pos(*q)).collect();
                 spline_tangents(&p, &self.own_tangents(curve)).get(i).copied()
             }
-            Curve::Point { .. } => None,
+            Curve::Point { .. } | Curve::Ellipse { .. } => None,
         }
     }
 
@@ -1622,6 +1693,7 @@ impl SketchData {
                 Curve::Line { a, b } => vec![*a, *b],
                 Curve::Arc { s, e, .. } => vec![*s, *e],
                 Curve::Spline { pts } if pts.len() >= 2 => vec![pts[0], pts[pts.len() - 1]],
+                Curve::Ellipse { c, s, e, .. } if s != c => vec![*s, *e],
                 _ => vec![],
             })
             .collect();
@@ -1656,12 +1728,21 @@ impl SketchData {
                     let (pc, ps, pe) = (self.pos(ctr), self.pos(s), self.pos(e));
                     edges.push((find(&mut parent, s), find(&mut parent, e), Seg::Arc(ps, Self::arc_mid(pc, ps, pe), pe)));
                 }
+                Curve::Ellipse { c: ctr, s, e, major, minor, t0, t1 } => {
+                    let seg = Seg::Ellipse(self.pos(ctr), major, minor, t0, t1);
+                    if s == ctr {
+                        loops.push(vec![seg]);
+                    } else {
+                        edges.push((find(&mut parent, s), find(&mut parent, e), seg));
+                    }
+                }
                 Curve::Point { .. } | Curve::Spline { .. } => {}
             }
         }
         let rev = |s: Seg| match s {
             Seg::Line(a, b) => Seg::Line(b, a),
             Seg::Arc(a, m, b) => Seg::Arc(b, m, a),
+            Seg::Ellipse(c, m, r, t0, t1) => Seg::Ellipse(c, m, r, t1, t0),
             Seg::Spline(mut v) => {
                 v.reverse();
                 Seg::Spline(v)
@@ -1733,11 +1814,12 @@ impl SketchData {
                 let d = sub(b, a);
                 return Some(d[1].atan2(d[0]).to_degrees());
             }
-            Kind::Angle(l1, l2, _) => {
+            Kind::Angle(l1, l2, _) | Kind::AngleSupp(l1, l2, _) => {
                 let (a, b) = sys.line(&x, *l1)?;
                 let (c, d) = sys.line(&x, *l2)?;
                 let (u, w) = (sub(b, a), sub(d, c));
-                return Some(cross(u, w).abs().atan2(dot(u, w)).to_degrees());
+                let m = cross(u, w).abs().atan2(dot(u, w)).to_degrees();
+                return Some(if matches!(k, Kind::AngleSupp(..)) { 180. - m } else { m });
             }
             _ => return None,
         };
