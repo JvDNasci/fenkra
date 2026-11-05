@@ -1,4 +1,4 @@
-# ADR 0018: fantasma de item da biblioteca desenhado pelo painter da interface
+# ADR 0020: fantasma de item da biblioteca desenhado pelo painter da interface
 
 ## Contexto
 O catálogo de normas (B241), a inserção avulsa (B242) e os candidatos do preenchimento de furos
