@@ -23,4 +23,5 @@ campo e fluxo. Em Sketch e Montagem, células que não se aplicam ficaram fora d
 elas contam como ok.
 
 Sem tabela de comandos: [Interface](interface.md), com o checklist padrão para qualquer comando, e
-[Kernel](kernel.md), com as causas de peso e o plano para PC fraco.
+[Kernel](kernel.md), com as causas de peso e o plano para PC fraco. [Estilo visual](estilo.md) registra o
+benchmark de linguagem visual e a decisão por Prancheta e Cianotipia (B311).
