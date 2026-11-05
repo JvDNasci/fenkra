@@ -130,6 +130,7 @@ pub mod bridge {
         fn fill_surface_x(flat: &[f64], ends: &[u32], orders: &[i32], weights: &[f64], support: &Shape, pts: &[f64], errs: &mut Vec<f64>) -> Result<UniquePtr<Shape>>;
         fn curve_shape(pts: &[f64]) -> Result<UniquePtr<Shape>>;
         fn sew_report(s: &Shape) -> Result<Vec<f64>>;
+        fn clip_surface(s: &Shape, cutter: &Shape, px: f64, py: f64, pz: f64, extend: bool) -> Result<UniquePtr<Shape>>;
         fn edge_pts_at(s: &Shape, px: f64, py: f64, pz: f64) -> Result<Vec<f64>>;
         fn free_edge_pts(s: &Shape, ends: &mut Vec<u32>) -> Result<Vec<f64>>;
         fn face_propagate(s: &Shape, px: f64, py: f64, pz: f64, prop: i32, complement: bool, counts: &mut Vec<u32>) -> Result<UniquePtr<Shape>>;

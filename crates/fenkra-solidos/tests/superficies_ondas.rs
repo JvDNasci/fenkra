@@ -178,8 +178,8 @@ fn juntar_faces_e_curvas_relata_dominios_bordas_e_folga() {
     let l = |d: &mut Document, a: [f64; 3], b: [f64; 3]| d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: s("0"), end: s("0") });
     let (c1, c2) = (l(&mut d, [0., 0., 0.], [10., 0., 0.]), l(&mut d, [10., 0., 0.], [20., 0., 0.]));
     let ez = AxisRef::Origin(OriginAxis::Z);
-    let f1 = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(c1), dir: ez, length: s("10"), length2: s("0") });
-    let f2 = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(c2), dir: ez, length: s("10"), length2: s("0") });
+    let f1 = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(c1), dir: ez, length: s("10"), length2: s("0"), until: None, until2: None });
+    let f2 = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(c2), dir: ez, length: s("10"), length2: s("0"), until: None, until2: None });
     let longe = l(&mut d, [0., 50., 0.], [10., 50., 0.]);
     let j = d.add_geometry(RefKind::SurfJoin { items: vec![SurfRef::Ref(f1), SurfRef::Ref(f2)], tol: s("0.01"), curves: vec![CurveRef::Ref(longe)] });
     let r = recompute(&d);
@@ -376,4 +376,82 @@ fn ponto_em_vertice_e_aresta_seguem_a_chave() {
     let c = r.curves.iter().find(|c| c.id == linha).unwrap();
     assert!(c.pts.iter().all(|q| (q[2] - (mid[2] + 20.)).abs() < 1e-6), "{:?}", c.pts);
     assert!((r.points.iter().find(|p| p.id == ponto).unwrap().p[2] - (mid[2] + 20.)).abs() < 1e-6);
+}
+
+/// Faixa plana de 20 × 30 no plano XZ, y = 0, x de 0 a 20 e z de 0 a 30.
+fn faixa(d: &mut Document) -> Id {
+    let l = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([0., 0., 0.]), b: PointRef::Fixed([20., 0., 0.]), start: s("0"), end: s("0") });
+    d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(l), dir: AxisRef::Origin(OriginAxis::Z), length: s("30"), length2: s("0"), until: None, until2: None })
+}
+
+fn plano_z(d: &mut Document, z: &str) -> SurfRef {
+    SurfRef::Plane(PlaneRef::Datum(d.add_geometry(RefKind::OffsetPlane { base: PlaneRef::Origin(OriginPlane::XY), offset: s(z) })))
+}
+
+fn caixa_de(d: &Document, id: Id) -> ([f64; 3], [f64; 3]) {
+    forma(d, id).bbox().unwrap()
+}
+
+#[test]
+fn superficie_extrudada_ate_elemento_dos_dois_lados() {
+    let mut d = Document::new("t");
+    let l = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([0., 0., 0.]), b: PointRef::Fixed([20., 0., 0.]), start: s("0"), end: s("0") });
+    let (alto, baixo) = (plano_z(&mut d, "12"), plano_z(&mut d, "-7"));
+    let z = AxisRef::Origin(OriginAxis::Z);
+    let ate = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(l), dir: z, length: s("0"), length2: s("0"), until: Some(alto), until2: Some(baixo) });
+    let misto = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(l), dir: z, length: s("0"), length2: s("5"), until: Some(alto), until2: None });
+    let r = recompute(&d);
+    ok(&r, ate);
+    ok(&r, misto);
+    let (a, b) = caixa_de(&d, ate);
+    assert!((a[2] + 7.).abs() < 1e-4 && (b[2] - 12.).abs() < 1e-4, "{a:?} {b:?}");
+    assert!((forma(&d, ate).mass().area - 20. * 19.).abs() < 1e-3);
+    assert!((forma(&d, misto).mass().area - 20. * 17.).abs() < 1e-3);
+}
+
+#[test]
+fn superficie_de_revolucao_com_dois_angulos() {
+    let mut d = Document::new("t");
+    let l = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([10., 0., 0.]), b: PointRef::Fixed([10., 0., 20.]), start: s("0"), end: s("0") });
+    let rv = d.add_geometry(RefKind::SurfRevolve { curve: CurveRef::Ref(l), axis: AxisRef::Origin(OriginAxis::Z), angle: s("90"), angle2: s("30") });
+    let demais = d.add_geometry(RefKind::SurfRevolve { curve: CurveRef::Ref(l), axis: AxisRef::Origin(OriginAxis::Z), angle: s("300"), angle2: s("100") });
+    let r = recompute(&d);
+    ok(&r, rv);
+    let area = 120f64.to_radians() * 10. * 20.;
+    assert!((forma(&d, rv).mass().area - area).abs() < 1e-3 * area);
+    // 30 graus para trás: o giro chega a y negativo
+    assert!((caixa_de(&d, rv).0[1] + 10. * 30f64.to_radians().sin()).abs() < 1e-3);
+    assert!(matches!(&r.status[&demais], Status::Error(m) if m.contains("uma volta")));
+}
+
+fn borda_de_cima() -> CurveRef {
+    CurveRef::Edge(vec![[0., 0., 30.], [20., 0., 30.]])
+}
+
+fn extrapolar(d: &mut Document, f: Id, edges: Vec<CurveRef>, len: &str, until: Option<SurfRef>, normal_edge: bool) -> Id {
+    d.add_geometry(RefKind::SurfExtrapolate { surface: SurfRef::Ref(f), near: PointRef::Origin, length: s(len), curvature: false, more: vec![], edges, until, normal_edge, tangent_prop: false })
+}
+
+#[test]
+fn extrapolar_pela_borda_clicada_estende_apara_e_vai_ate_elemento() {
+    let mut d = Document::new("t");
+    let f = faixa(&mut d);
+    let mais = extrapolar(&mut d, f, vec![borda_de_cima()], "10", None, false);
+    let menos = extrapolar(&mut d, f, vec![borda_de_cima()], "-10", None, false);
+    let alvo = plano_z(&mut d, "47");
+    let ate = extrapolar(&mut d, f, vec![borda_de_cima()], "0", Some(alvo), false);
+    let normal = extrapolar(&mut d, f, vec![borda_de_cima()], "10", None, true);
+    let longe = extrapolar(&mut d, f, vec![CurveRef::Edge(vec![[0., 40., 30.], [20., 40., 30.]])], "10", None, false);
+    let r = recompute(&d);
+    for x in [mais, menos, ate, normal] {
+        ok(&r, x);
+    }
+    let topo = |x: Id| caixa_de(&d, x).1[2];
+    assert!((topo(mais) - 40.).abs() < 1e-3, "{}", topo(mais));
+    assert!((topo(menos) - 20.).abs() < 1e-3, "{}", topo(menos));
+    // a caixa de uma face aparada em B-spline vem dos polos: quem mede o corte é a área
+    assert!((forma(&d, ate).mass().area - 940.).abs() < 1e-2, "{}", forma(&d, ate).mass().area);
+    assert!((topo(normal) - 40.).abs() < 1e-3, "{}", topo(normal));
+    assert!((forma(&d, menos).mass().area - 400.).abs() < 1e-3);
+    assert!(matches!(&r.status[&longe], Status::Error(m) if m.contains("não é borda")));
 }

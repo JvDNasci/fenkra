@@ -387,8 +387,8 @@ impl GeoKind {
             SurfFilletSS => R::SurfFillet { a: sf, b: crate::slots::surf(), flip_a: false, flip_b: false, radius: t("5"), radius2: None },
             SurfEdgeFillet => R::SurfEdgeFillet { surface: sf, edges: edge_mids(s), radius: t("3"), radius2: None },
             SurfFill => R::SurfFill { curves: if s.curves.is_empty() { vec![c(0)] } else { s.curves.clone() }, conds: vec![], points: s.points.clone(), tol: t("0.01") },
-            SurfExtrude => R::SurfExtrude { curve: c(0), dir: AxisRef::Origin(OriginAxis::Z), length: t("30"), length2: t("0") },
-            SurfRevolve => R::SurfRevolve { curve: c(0), axis: AxisRef::Origin(OriginAxis::Z), angle: t("360") },
+            SurfExtrude => R::SurfExtrude { curve: c(0), dir: AxisRef::Origin(OriginAxis::Z), length: t("30"), length2: t("0"), until: None, until2: None },
+            SurfRevolve => R::SurfRevolve { curve: c(0), axis: AxisRef::Origin(OriginAxis::Z), angle: t("360"), angle2: t("0") },
             SurfSphere => R::SurfSphere { center: p(0), radius: t("20") },
             SurfCylinder => R::SurfCylinder { point: p(0), dir: ax(OriginAxis::Z), radius: t("10"), start: t("0"), end: t("40") },
             SurfSweep => R::SurfSweep { profile: SweepProfile::Curve(c(0)), spine: c(1), mode: SweepMode::Corrigido },
@@ -405,7 +405,7 @@ impl GeoKind {
             OpMulti => R::SurfMulti { faces: vec![face_pt(s)] },
             OpPart => R::SurfPart { surface: sf, index: 0 },
             OpUntrim => R::SurfUntrim { surface: sf },
-            OpExtrapolate => R::SurfExtrapolate { surface: sf, near: p(0), length: t("10"), curvature: false, more: s.points.iter().skip(1).copied().collect() },
+            OpExtrapolate => R::SurfExtrapolate { surface: sf, near: p(0), length: t("10"), curvature: false, more: s.points.iter().skip(1).copied().collect(), edges: s.curves.clone(), until: None, normal_edge: false, tangent_prop: false },
             XfTranslate | XfRotate | XfMirror | XfScale => {
                 let (source, class) = source_of(s);
                 let xf = match self {
@@ -1039,6 +1039,19 @@ fn fill_cond_ui(ui: &mut egui::Ui, i: usize, doc: &Document, me: Id, c: &mut Fil
     }
 }
 
+/// Limite por valor ou até um elemento.
+#[allow(clippy::too_many_arguments)]
+fn limit_ui(ui: &mut egui::Ui, salt: &str, label: &str, value: &mut String, until: &mut Option<SurfRef>, doc: &Document, me: Id, vars: &HashMap<String, f64>, seed: &Seed) {
+    let mut to = until.is_some();
+    if ui.checkbox(&mut to, format!("{} · {}", tr(label), tr("até elemento"))).changed() {
+        *until = to.then(|| seed.surface.unwrap_or_default());
+    }
+    match until {
+        Some(s) => surf_slot(ui, salt, label, doc, me, s, seed),
+        None => expr(ui, label, value, vars, "mm"),
+    }
+}
+
 /// Propagação gravada no elemento. Trocar zera a contagem esperada: a nova vira a referência.
 fn prop_ui(ui: &mut egui::Ui, prop: &mut Propagation, expected: &mut Option<u32>) {
     ui.horizontal(|ui| {
@@ -1664,17 +1677,18 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             });
             ui.label(RichText::new(tr("As curvas precisam fechar um contorno.")).weak().small());
         }
-        R::SurfExtrude { curve, dir, length, length2 } => {
+        R::SurfExtrude { curve, dir, length, length2, until, until2 } => {
             curve_slot(ui, "g_c", "Curva", doc, me, curve, seed);
             axis_slot(ui, "g_d", "Direção", doc, me, dir, seed);
-            expr(ui, "Limite 1", length, vars, "mm");
-            expr(ui, "Limite 2", length2, vars, "mm");
+            limit_ui(ui, "g_l1", "Limite 1", length, until, doc, me, vars, seed);
+            limit_ui(ui, "g_l2", "Limite 2", length2, until2, doc, me, vars, seed);
             ui.label(RichText::new(tr("Limite 1 no sentido da direção; limite 2 para o outro lado.")).weak().small());
         }
-        R::SurfRevolve { curve, axis, angle } => {
+        R::SurfRevolve { curve, axis, angle, angle2 } => {
             curve_slot(ui, "g_c", "Curva", doc, me, curve, seed);
             axis_slot(ui, "g_ax", "Eixo", doc, me, axis, seed);
-            expr(ui, "Ângulo", angle, vars, "°");
+            expr(ui, "Ângulo 1", angle, vars, "°");
+            expr(ui, "Ângulo 2", angle2, vars, "°");
         }
         R::SurfSphere { center, radius } => {
             point_slot(ui, "g_p", "Centro", doc, me, center, seed);
@@ -1809,14 +1823,25 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             ui.label(RichText::new(tr("Clique numa face na viewport e use '+ face selecionada'.")).weak().small());
         }
         R::SurfUntrim { surface } => surf_slot(ui, "g_s", "Superfície", doc, me, surface, seed),
-        R::SurfExtrapolate { surface, near, length, curvature, more } => {
+        R::SurfExtrapolate { surface, near, length, curvature, more, edges, until, normal_edge, tangent_prop } => {
             surf_slot(ui, "g_s", "Superfície", doc, me, surface, seed);
-            point_slot(ui, "g_p", "Perto da borda", doc, me, near, seed);
-            if !more.is_empty() || !seed.points.is_empty() {
-                ui.label(RichText::new(tr("Mais bordas (um ponto perto de cada):")).small());
-                points_list(ui, "g_pm", doc, me, more, seed, 0);
+            curves_list(ui, "g_eb", "Borda", doc, me, edges, seed, 0);
+            // arquivos antigos: sem borda clicada, vale o ponto perto da borda
+            if edges.is_empty() {
+                point_slot(ui, "g_p", "Perto da borda", doc, me, near, seed);
+                if !more.is_empty() || !seed.points.is_empty() {
+                    ui.label(RichText::new(tr("Mais bordas (um ponto perto de cada):")).small());
+                    points_list(ui, "g_pm", doc, me, more, seed, 0);
+                }
             }
-            expr(ui, "Comprimento", length, vars, "mm");
+            limit_ui(ui, "g_el", "Comprimento", length, until, doc, me, vars, seed);
+            ui.label(RichText::new(tr("Comprimento negativo apara a borda.")).weak().small());
+            ui.horizontal(|ui| {
+                ui.label(tr("Tipo de borda"));
+                ui.radio_value(normal_edge, false, tr("tangente às vizinhas"));
+                ui.radio_value(normal_edge, true, tr("normal"));
+            });
+            ui.checkbox(tangent_prop, tr("Propagar por tangência"));
             ui.horizontal(|ui| {
                 ui.radio_value(curvature, false, tr("linear (tangente)"));
                 ui.radio_value(curvature, true, tr("mesma superfície (curvatura)"));

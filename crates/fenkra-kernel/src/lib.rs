@@ -599,6 +599,10 @@ mod imp {
             }
             out
         }
+        /// Corta pelo elemento e fica com o lado que passa por `keep`.
+        pub fn clip_surface(&self, cutter: &Shape, keep: [f64; 3], extend: bool) -> KResult<Shape> {
+            b::clip_surface(&self.0, &cutter.0, keep[0], keep[1], keep[2], extend).map(Shape).map_err(err)
+        }
         /// Polilinha da aresta mais perto do ponto.
         pub fn edge_at(&self, p: [f64; 3]) -> KResult<Vec<[f64; 3]>> {
             let v = b::edge_pts_at(&self.0, p[0], p[1], p[2]).map_err(err)?;
@@ -1005,6 +1009,9 @@ mod imp {
             no()
         }
         pub fn affinity(&self, _: Frame, _: [f64; 3]) -> KResult<Shape> {
+            no()
+        }
+        pub fn clip_surface(&self, _: &Shape, _: [f64; 3], _: bool) -> KResult<Shape> {
             no()
         }
         pub fn edge_at(&self, _: [f64; 3]) -> KResult<Vec<[f64; 3]>> {

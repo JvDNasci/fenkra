@@ -710,9 +710,22 @@ pub enum RefKind {
         /// limite 2: comprimento para o outro lado
         #[serde(default = "zero")]
         length2: String,
+        /// limite 1 até um elemento, no lugar do comprimento
+        #[serde(default)]
+        until: Option<SurfRef>,
+        /// limite 2 até um elemento, no lugar do comprimento
+        #[serde(default)]
+        until2: Option<SurfRef>,
     },
     /// Curva girada em torno de um eixo.
-    SurfRevolve { curve: CurveRef, axis: AxisRef, angle: String },
+    SurfRevolve {
+        curve: CurveRef,
+        axis: AxisRef,
+        angle: String,
+        /// ângulo 2: giro para o outro lado
+        #[serde(default = "zero")]
+        angle2: String,
+    },
 
     // ---------------- bancada de superfícies
     /// Esfera pelo centro e raio.
@@ -766,6 +779,18 @@ pub enum RefKind {
         /// mais bordas para prolongar de uma vez (ponto perto de cada uma)
         #[serde(default)]
         more: Vec<PointRef>,
+        /// bordas clicadas; com elas `near` e `more` não valem
+        #[serde(default)]
+        edges: Vec<CurveRef>,
+        /// prolonga até o elemento, no lugar do comprimento
+        #[serde(default)]
+        until: Option<SurfRef>,
+        /// prolonga na normal à borda, e não acompanhando as bordas vizinhas
+        #[serde(default)]
+        normal_edge: bool,
+        /// inclui as bordas que continuam tangentes às clicadas
+        #[serde(default)]
+        tangent_prop: bool,
     },
     /// Conectar duas superfícies pelas bordas que se olham (concordância automática).
     SurfConnect { a: SurfRef, b: SurfRef, cont: Continuity, tension: String },
@@ -1132,13 +1157,17 @@ impl RefKind {
                 }
                 exprs(tol)
             }
-            SurfExtrude { curve, dir, length, length2 } => {
+            SurfExtrude { curve, dir, length, length2, until, until2 } => {
+                for s in [until, until2].into_iter().flatten() {
+                    s.walk(ids)
+                }
                 curve.walk(ids);
                 dir.walk(ids);
                 exprs(length);
                 exprs(length2)
             }
-            SurfRevolve { curve, axis, angle } => {
+            SurfRevolve { curve, axis, angle, angle2 } => {
+                exprs(angle2);
                 curve.walk(ids);
                 axis.walk(ids);
                 exprs(angle)
@@ -1206,7 +1235,13 @@ impl RefKind {
             }
             SurfMulti { .. } => {}
             SurfPart { surface, .. } | SurfUntrim { surface } | CurveBoundary { surface, .. } => surface.walk(ids),
-            SurfExtrapolate { surface, near, length, more, .. } => {
+            SurfExtrapolate { surface, near, length, more, edges, until, .. } => {
+                for c in edges {
+                    c.walk(ids)
+                }
+                if let Some(s) = until {
+                    s.walk(ids)
+                }
                 surface.walk(ids);
                 near.walk(ids);
                 for m in more {

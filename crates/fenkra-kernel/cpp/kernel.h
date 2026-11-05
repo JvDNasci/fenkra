@@ -64,6 +64,7 @@ std::unique_ptr<Shape> fill_surface_x(rust::Slice<const double> flat, rust::Slic
                                       const Shape& support, rust::Slice<const double> pts, rust::Vec<double>& errs);
 std::unique_ptr<Shape> curve_shape(rust::Slice<const double> pts);
 rust::Vec<double> sew_report(const Shape& s);
+std::unique_ptr<Shape> clip_surface(const Shape& s, const Shape& cutter, double px, double py, double pz, bool extend);
 rust::Vec<double> edge_pts_at(const Shape& s, double px, double py, double pz);
 rust::Vec<double> free_edge_pts(const Shape& s, rust::Vec<uint32_t>& ends);
 std::unique_ptr<Shape> face_propagate(const Shape& s, double px, double py, double pz, int32_t prop, bool complement, rust::Vec<uint32_t>& counts);

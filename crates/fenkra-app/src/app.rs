@@ -406,8 +406,8 @@ impl App {
             d.add_geometry(RefKind::SurfSphere { center: PointRef::Fixed([0., 0., 40.]), radius: s("15") });
             let la = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([40., 0., 0.]), b: PointRef::Fixed([40., 40., 0.]), start: s("0"), end: s("0") });
             let lb = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([70., 0., 20.]), b: PointRef::Fixed([70., 40., 20.]), start: s("0"), end: s("0") });
-            let fa = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(la), dir: AxisRef::Origin(OriginAxis::X), length: s("-20"), length2: "0".into() });
-            let fb = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(lb), dir: AxisRef::Origin(OriginAxis::X), length: s("20"), length2: "0".into() });
+            let fa = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(la), dir: AxisRef::Origin(OriginAxis::X), length: s("-20"), length2: "0".into(), until: None, until2: None });
+            let fb = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(lb), dir: AxisRef::Origin(OriginAxis::X), length: s("20"), length2: "0".into(), until: None, until2: None });
             d.add_geometry(RefKind::SurfBlend { a: CurveRef::Ref(la), sa: Some(SurfRef::Ref(fa)), b: CurveRef::Ref(lb), sb: Some(SurfRef::Ref(fb)), cont: Continuity::G2, tension: s("1") });
             d.add_geometry(RefKind::SurfCylinder { point: PointRef::Fixed([-40., 0., 0.]), dir: AxisRef::Origin(OriginAxis::Z), radius: s("12"), start: s("0"), end: s("50") });
             app.started = true;
