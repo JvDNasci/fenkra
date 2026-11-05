@@ -9,7 +9,7 @@ use crate::render::{LineVertex, MeshVertex, Scene};
 use crate::settings::Filter;
 use eframe::egui;
 use glam::Vec3;
-use fenkra_core::{Appearance, Document, Id, OriginPlane, PlaneRef};
+use fenkra_core::{Appearance, Document, Id, OriginPlane, PlaneRef, RefKind};
 use fenkra_solidos::RecomputeResult;
 use std::collections::{HashMap, HashSet};
 
@@ -50,6 +50,40 @@ fn grow(b: &mut Option<(Vec3, Vec3)>, p: Vec3) {
     });
 }
 
+/// Cores dos eixos X, Y e Z (Origem e referencial dos pontos).
+const EIXO_COR: [[f32; 4]; 3] = [[1., 0.3, 0.3, 1.], [0.3, 0.9, 0.3, 1.], [0.35, 0.55, 1., 1.]];
+
+/// Eixos (X, Y, Z) do referencial em que o ponto foi definido: o plano de `frame` do ponto
+/// por coordenadas, ou o referencial global nos demais.
+pub fn eixos_do_ponto(doc: &Document, r: &RecomputeResult, id: Id) -> [Vec3; 3] {
+    let global = [Vec3::X, Vec3::Y, Vec3::Z];
+    let Some(RefKind::PointCoords { frame: Some(pl), .. }) = doc.reference(id).map(|x| &x.kind) else { return global };
+    let fr = match pl {
+        PlaneRef::Origin(o) => Some(fenkra_solidos::origin_frame(*o)),
+        PlaneRef::Datum(d) => r.planes.iter().find(|p| p.id == Some(*d)).map(|p| p.frame.clone()),
+    };
+    match fr {
+        Some(f) => [Vec3::from(f3(f.x)), Vec3::from(f3(f.y())), Vec3::from(f3(f.normal))],
+        None => global,
+    }
+}
+
+/// Três setas (linha e cabeça de duas barbas) saindo de `c`, uma por eixo do referencial.
+pub fn setas_do_referencial(dst: &mut Vec<LineVertex>, c: Vec3, eixos: [Vec3; 3], comp: f32) {
+    for (k, ax) in eixos.iter().enumerate() {
+        let col = EIXO_COR[k];
+        let ponta = c + *ax * comp;
+        let lado = eixos[(k + 1) % 3];
+        let cabeca = comp * 0.22;
+        dst.push(lv(c.into(), col));
+        dst.push(lv(ponta.into(), col));
+        for sinal in [1., -1.] {
+            dst.push(lv(ponta.into(), col));
+            dst.push(lv((ponta - *ax * cabeca + lado * (cabeca * 0.45 * sinal)).into(), col));
+        }
+    }
+}
+
 /// Regra de exibição: no ambiente normal mostra os visíveis; no de ocultos, só os ocultos.
 fn shows(hidden: bool, env: bool) -> bool {
     hidden == env
@@ -82,7 +116,7 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
 
     let feat_app: HashMap<Id, Appearance> = doc.features.iter().filter_map(|f| f.appearance.map(|a| (f.id, a))).collect();
     // só sketches se ocultam um a um; sólidos aparecem pelo corpo (a última feature junta tudo)
-    let feat_hidden: HashSet<Id> = doc.features.iter().filter(|f| f.hidden && matches!(f.kind, fenkra_core::FeatureKind::Sketch(_))).map(|f| f.id).collect();
+    let feat_hidden: HashSet<Id> = doc.features.iter().filter(|f| doc.sketch_hidden(f) && matches!(f.kind, fenkra_core::FeatureKind::Sketch(_))).map(|f| f.id).collect();
     let (peca_tema, aresta_tema) = crate::theme::piece_colors();
     let edge_col = if o.dark_edges { aresta_tema.map(|a| { let f = rgb(a); [f[0], f[1], f[2], 1.0] }).unwrap_or([0.06, 0.07, 0.09, 1.0]) } else { [0.85, 0.88, 0.92, 1.0] };
 
@@ -227,7 +261,7 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
     // planos da Origem e das Referências
     for p in &r.planes {
         let (visible_flag, allowed) = match p.id {
-            Some(id) => (doc.reference(id).is_some_and(|x| x.visible), o.filter.planos_ref),
+            Some(id) => (doc.reference(id).is_some_and(|x| doc.ref_shown(x)), o.filter.planos_ref),
             None => (doc.origin_visible, o.filter.planos_origem),
         };
         let selected = match (o.sel, p.id) {
@@ -270,7 +304,7 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
         for sf in &r.surfaces {
             let selected = hi(sf.id);
             let rf = doc.reference(sf.id);
-            let vis = rf.is_some_and(|x| x.visible);
+            let vis = rf.is_some_and(|x| doc.ref_shown(x));
             if !selected && !shows(!vis, env) {
                 continue;
             }
@@ -303,7 +337,7 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
     let geo_col = [0.95, 0.7, 0.3, 1.0];
     for c in &r.curves {
         let selected = hi(c.id);
-        let vis = doc.reference(c.id).is_some_and(|x| x.visible);
+        let vis = doc.reference(c.id).is_some_and(|x| doc.ref_shown(x));
         if !selected && (!o.filter.planos_ref || !shows(!vis, env)) {
             continue;
         }
@@ -330,7 +364,7 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
     if o.filter.pontos && o.point_style == 0 {
         for p in &r.points {
             let selected = hi(p.id);
-            let vis = doc.reference(p.id).is_some_and(|x| x.visible);
+            let vis = doc.reference(p.id).is_some_and(|x| doc.ref_shown(x));
             if !selected && !shows(!vis, env) {
                 continue;
             }
@@ -344,9 +378,20 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
         }
     }
 
+    // B24: setas 3D do referencial nos pontos em foco (selecionados ou sob o ponteiro)
+    if o.filter.pontos {
+        for p in &r.points {
+            let em_foco = hi(p.id) || matches!(o.sel, Sel::Ref(x) if *x == p.id);
+            let vis = doc.reference(p.id).is_some_and(|x| doc.ref_shown(x));
+            if em_foco && (vis || env) {
+                setas_do_referencial(&mut s.overlay, Vec3::from(p.p.map(|v| v as f32)), eixos_do_ponto(doc, r, p.id), size * 0.09);
+            }
+        }
+    }
+
     // eixos da Origem
     if o.filter.eixos && shows(!doc.origin_visible, env) {
-        for (ax, col) in [(Vec3::X, [1., 0.3, 0.3, 1.]), (Vec3::Y, [0.3, 0.9, 0.3, 1.]), (Vec3::Z, [0.35, 0.55, 1., 1.])] {
+        for (ax, col) in [(Vec3::X, EIXO_COR[0]), (Vec3::Y, EIXO_COR[1]), (Vec3::Z, EIXO_COR[2])] {
             s.overlay.push(lv([0.; 3], col));
             s.overlay.push(lv((ax * size * 0.25).into(), col));
         }
@@ -419,7 +464,7 @@ pub fn draw_points(painter: &egui::Painter, doc: &Document, r: &RecomputeResult,
     };
     for p in &r.points {
         let rf = doc.reference(p.id);
-        let vis = rf.is_some_and(|x| x.visible);
+        let vis = rf.is_some_and(|x| doc.ref_shown(x));
         let selected = hilite == Some(p.id) || matches!(sel, Sel::Ref(x) if *x == p.id);
         if !selected && !shows(!vis, hidden_env) {
             continue;
@@ -437,7 +482,7 @@ pub fn draw_points(painter: &egui::Painter, doc: &Document, r: &RecomputeResult,
             if Some(sk.feature) == editing {
                 continue;
             }
-            let hidden = doc.feature(sk.feature).is_some_and(|f| f.hidden);
+            let hidden = doc.feature(sk.feature).is_some_and(|f| doc.sketch_hidden(f));
             if !shows(hidden, hidden_env) {
                 continue;
             }
@@ -446,6 +491,51 @@ pub fn draw_points(painter: &egui::Painter, doc: &Document, r: &RecomputeResult,
                 draw(*p, col, style, size);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod testes_setas {
+    use super::*;
+
+    fn ponto(doc: &mut Document, frame: Option<PlaneRef>) -> Id {
+        doc.add_geometry(RefKind::PointCoords { x: "1".into(), y: "2".into(), z: "3".into(), frame })
+    }
+
+    #[test]
+    fn ponto_sem_referencial_usa_os_eixos_globais() {
+        let mut d = Document::new("t");
+        let p = ponto(&mut d, None);
+        let r = fenkra_solidos::recompute(&d);
+        assert_eq!(eixos_do_ponto(&d, &r, p), [Vec3::X, Vec3::Y, Vec3::Z]);
+    }
+
+    #[test]
+    fn ponto_no_plano_yz_mostra_as_setas_do_referencial_dele() {
+        let mut d = Document::new("t");
+        let p = ponto(&mut d, Some(PlaneRef::Origin(OriginPlane::YZ)));
+        let r = fenkra_solidos::recompute(&d);
+        // YZ: x = Y global, normal = X global, y = normal x x = Z global
+        let e = eixos_do_ponto(&d, &r, p);
+        assert!((e[0] - Vec3::Y).length() < 1e-6 && (e[1] - Vec3::Z).length() < 1e-6 && (e[2] - Vec3::X).length() < 1e-6, "{e:?}");
+    }
+
+    #[test]
+    fn ponto_num_plano_de_referencia_segue_o_plano() {
+        let mut d = Document::new("t");
+        let pl = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "5");
+        let p = ponto(&mut d, Some(PlaneRef::Datum(pl)));
+        let r = fenkra_solidos::recompute(&d);
+        let e = eixos_do_ponto(&d, &r, p);
+        assert!((e[2] - Vec3::Z).length() < 1e-6, "{e:?}");
+    }
+
+    #[test]
+    fn setas_tem_tres_eixos_cada_um_com_haste_e_duas_barbas() {
+        let mut v = vec![];
+        setas_do_referencial(&mut v, Vec3::ZERO, [Vec3::X, Vec3::Y, Vec3::Z], 10.);
+        assert_eq!(v.len(), 3 * 6);
+        assert_eq!(v[1].pos, [10., 0., 0.]);
     }
 }
 

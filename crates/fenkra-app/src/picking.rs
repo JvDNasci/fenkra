@@ -221,7 +221,7 @@ fn pickable<'a>(r: &'a RecomputeResult, doc: &Document, f: &Filter) -> Vec<(usiz
     }
     if f.planes {
         for (si, sf) in r.surfaces.iter().enumerate() {
-            let vis = doc.reference(sf.id).is_some_and(|x| x.visible);
+            let vis = doc.reference(sf.id).is_some_and(|x| doc.ref_shown(x));
             if vis != f.hidden_env && f.fantasma != Some(sf.id) {
                 out.push((SURF_BASE + si, &sf.mesh, Some(sf.id)));
             }
@@ -235,7 +235,7 @@ pub fn pick(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, pos: 
     let meshes = pickable(r, doc, f);
     let masc = mascaras(r, f);
     // referência visível agora? (o resultado traz também as ocultas)
-    let ref_ok = |id: Id| doc.reference(id).is_some_and(|x| x.visible != f.hidden_env);
+    let ref_ok = |id: Id| doc.reference(id).is_some_and(|x| doc.ref_shown(x) != f.hidden_env);
 
     // faces (também dão a profundidade para esconder o que está atrás)
     let mut best_face: Option<(f32, usize, usize)> = None;
@@ -274,7 +274,7 @@ pub fn pick(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, pos: 
         }
     }
     // sketches visíveis (exceto o em edição) — seus pontos e curvas são subelementos
-    let sk_ok = |id: Id| Some(id) != f.exclude_sketch && doc.feature(id).is_some_and(|x| x.hidden == f.hidden_env);
+    let sk_ok = |id: Id| Some(id) != f.exclude_sketch && doc.feature(id).is_some_and(|x| doc.sketch_hidden(x) == f.hidden_env);
     if f.planes {
         let mut best: Option<(f32, Pick)> = None;
         for c in r.curves.iter().filter(|c| ref_ok(c.id)) {
@@ -423,11 +423,49 @@ pub fn pick(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, pos: 
     None
 }
 
+/// Todas as faces sob o ponteiro, da mais próxima à mais distante, uma por face (B95, "Selecionar
+/// outro"). Respeita o mesmo filtro, visibilidade e prévia do `pick`.
+pub fn pilha_de_faces(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, pos: Pos2, f: &Filter) -> Vec<Pick> {
+    let (o, d) = cam.ray(rect, pos);
+    let meshes = pickable(r, doc, f);
+    let masc = mascaras(r, f);
+    let mut achados: Vec<(f32, Pick)> = vec![];
+    for (code, m, surf) in &meshes {
+        if surf.is_none() && !f.faces {
+            continue;
+        }
+        let mk = masc.get(code);
+        for (ti, t) in m.indices.chunks_exact(3).enumerate() {
+            let p = |i: u32| v3(&m.positions[i as usize * 3..i as usize * 3 + 3]);
+            let Some(dist) = ray_tri(o, d, p(t[0]), p(t[1]), p(t[2])) else { continue };
+            if mk.is_some_and(|x| x.tri(m, ti)) {
+                continue;
+            }
+            let face = m.face_ranges.partition_point(|&x| x as usize <= ti * 3).saturating_sub(1);
+            let mesma = |a: &Pick| matches!(a, Pick::Face { body, face: g, .. } if body == code && *g == face);
+            if achados.iter().any(|(bd, a)| mesma(a) && *bd <= dist) {
+                continue;
+            }
+            let owner = match surf {
+                Some(id) => *id,
+                None => r.bodies[*code].face_owner.get(face).copied().unwrap_or(Id(0)),
+            };
+            let n = (p(t[1]) - p(t[0])).cross(p(t[2]) - p(t[0])).normalize_or_zero();
+            let n = if n.dot(d) > 0. { -n } else { n };
+            let novo = Pick::Face { body: *code, face, owner, point: (o + d * dist).into(), normal: n.into() };
+            achados.retain(|(_, a)| !mesma(a));
+            achados.push((dist, novo));
+        }
+    }
+    achados.sort_by(|a, b| a.0.total_cmp(&b.0));
+    achados.into_iter().map(|(_, p)| p).collect()
+}
+
 /// Seleção em caixa: janela (`crossing = false`, só o que está inteiro dentro) ou cruzada
 /// (o que toca a caixa). Respeita o filtro de seleção e a visibilidade.
 pub fn box_select(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, b: Rect, crossing: bool, f: &Filter) -> Vec<Pick> {
     let meshes = pickable(r, doc, f);
-    let ref_ok = |id: Id| doc.reference(id).is_some_and(|x| x.visible != f.hidden_env);
+    let ref_ok = |id: Id| doc.reference(id).is_some_and(|x| doc.ref_shown(x) != f.hidden_env);
     let inside = |w: Vec3| cam.project(rect, w).is_some_and(|s| b.contains(s));
     // todos dentro (janela) ou algum dentro (cruzada)
     let take = |pts: &mut dyn Iterator<Item = Vec3>| {
