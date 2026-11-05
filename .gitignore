@@ -44,3 +44,8 @@ tools/*/target/
 
 # configuração local do Claude Code
 .claude/settings.local.json
+
+.claude/worktrees/
+.claude/settings.local.json
+ErrorReports/
+plot.log
