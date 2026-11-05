@@ -21,6 +21,14 @@ pub fn poligono(l: &Loop2) -> Vec<[f64; 2]> {
     for s in l {
         match s {
             Seg2::Line(a, _) => v.push(*a),
+            Seg2::Ellipse(c, m, r, t0, t1) => {
+                let g = m[0].hypot(m[1]).max(1e-12);
+                let (ux, uy) = (m[0] / g, m[1] / g);
+                v.extend((0..48).map(|i| {
+                    let t = t0 + (t1 - t0) * i as f64 / 48.;
+                    [c[0] + g * t.cos() * ux - r * t.sin() * uy, c[1] + g * t.cos() * uy + r * t.sin() * ux]
+                }));
+            }
             Seg2::Arc(a, b, _) => {
                 v.push(*a);
                 v.push(*b)
