@@ -40,7 +40,7 @@
 
 ## 2. Fichas por comando
 
-### F1. Modelo de anotação 3D e associatividade (CAD avançado B: FT&A, anotação semântica e não semântica / CAD avançado A: MBD, DimXpert / CAD avançado C: 3D Annotations, Tolerance Feature / CAD avançado F: GD&T Advisor / CAD avançado G: PMI / Fenkra: `Pmi`, `pmi.rs:754`)
+### F1. Modelo de anotação 3D e associatividade (CAD avançado B: FT&A, anotação semântica e não semântica / CAD avançado A: MBD, cotas automáticas / CAD avançado C: 3D Annotations, Tolerance Feature / CAD avançado F: GD&T Advisor / CAD avançado G: PMI / Fenkra: `Pmi`, `pmi.rs:754`)
 
 - **O que faz:** liga uma informação de fabricação (cota, tolerância, datum, acabamento) a uma face, aresta ou feature do modelo. A informação precisa sobreviver às edições da geometria e ser lida por máquina (CAM, inspeção).
 - **CAD avançado B — como funciona no detalhe:**
@@ -51,7 +51,7 @@
   - [V] Há *Geometry for 3D Annotations*, com **geometria construída** (pontos e linhas auxiliares) e *Geometry Connection Management*. Esses itens aparecem nos índices dos cursos.
   - [C] Quando a geometria some, a anotação fica "isolada" ou "quebrada" e o *Update Diagnosis* a lista.
 - **CAD avançado A — no detalhe:**
-  - [V] O DimXpert reconhece "features de fabricação" (furo, rasgo, boss, plano) e aplica a cota ou tolerância à feature, não ao ponto.
+  - [V] O cotas automáticas reconhece "features de fabricação" (furo, rasgo, boss, plano) e aplica a cota ou tolerância à feature, não ao ponto.
   - [V] A anotação continua ligada à feature correta mesmo depois de quebrar uma chamada combinada (artigo Engineers Rule). O artigo chama isso de associação semântica, usada por CAMWorks e CheckMate.
   - [V] A anotação "gráfica" pode ser movida e ajustada sem mudar o vínculo.
 - **CAD avançado C — no detalhe:**
@@ -84,7 +84,7 @@
     - (iv) Montagem: anotação de componente continua certa depois de mover o componente.
     - (v) Salvar e abrir mantém alvos e estado.
 
-### F2. Cota linear / de distância (CAD avançado B: Dimension, Distance / CAD avançado A: MBD Dimension, DimXpert Size/Location / CAD avançado C: General Dimension / Fenkra: `PmiKind::Linear`)
+### F2. Cota linear / de distância (CAD avançado B: Dimension, Distance / CAD avançado A: MBD Dimension, cotas automáticas Size/Location / CAD avançado C: General Dimension / Fenkra: `PmiKind::Linear`)
 
 - **O que faz:** mede e comunica uma distância entre dois elementos, com linhas de chamada e linha de cota.
 - **CAD avançado B — como funciona no detalhe:**
@@ -95,7 +95,7 @@
   - [C] O texto fica no plano de anotação ativo. As linhas de chamada saem das arestas.
 - **CAD avançado A — no detalhe:**
   - [V] *Size Dimension* dimensiona o tamanho de uma feature (ex.: furo). *Location Dimension* mede a posição da feature em relação a um datum (ex.: um plano).
-  - [V] Cotas básicas podem ser criadas por *Recreate basic dim* (clique direito numa tolerância de posição na árvore DimXpert), pela opção de documento *Create basic dimensions* ou manualmente, em estilo corrente (chain) ou de base (baseline).
+  - [V] Cotas básicas podem ser criadas por *Recreate basic dim* (clique direito numa tolerância de posição na árvore cotas automáticas), pela opção de documento *Create basic dimensions* ou manualmente, em estilo corrente (chain) ou de base (baseline).
   - [C] Cota de referência (entre parênteses) é diferente da cota dimensionante.
 - **CAD avançado C — no detalhe:**
   - [V] As cotas gerais fazem parte do grupo *General Annotations* (aba Annotate). O fluxo é igual ao do desenho: depois de posicionar ou confirmar, o comando permite colocar outro símbolo do mesmo tipo.
@@ -116,7 +116,7 @@
   - A precisão e o separador seguem a norma ativa. A precisão da cota acompanha a da tolerância (ASME exige o mesmo número de casas em tolerâncias bilaterais [C]).
   - Casos de teste: cota de espessura de placa (face-face); cota horizontal entre dois furos em vista oblíqua; precisão 2 casas com tolerância ±0,05; cota entre planos em montagem.
 
-### F3. Raio, diâmetro e cota de furo/rosca (CAD avançado B: Dimension + Thread representation / CAD avançado A: Hole callout, DimXpert Hole / CAD avançado C: Hole/Thread Note / Fenkra: `Radius`, `Diameter`)
+### F3. Raio, diâmetro e cota de furo/rosca (CAD avançado B: Dimension + Thread representation / CAD avançado A: Hole callout, cotas automáticas Hole / CAD avançado C: Hole/Thread Note / Fenkra: `Radius`, `Diameter`)
 
 - **O que faz:** cota de feature circular. Em CAD de verdade, a anotação "lê" o furo (diâmetro, profundidade, rebaixo, rosca, quantidade).
 - **CAD avançado B — como funciona no detalhe:**
@@ -142,11 +142,11 @@
   - A nota de furo pode ser gerada a partir da feature de furo: `Ø6,5 ▽12 · M8×1,25 · 4×`.
   - Casos de teste: furo cego com rosca (nota completa); padrão de 4 furos, mudar para 6, a quantidade acompanha; mudar o diâmetro do furo e a anotação acompanha.
 
-### F4. Cota angular (CAD avançado B: Angular Dimension / CAD avançado A: Angular DimXpert / CAD avançado C: Angular / Fenkra: `Angle`)
+### F4. Cota angular (CAD avançado B: Angular Dimension / CAD avançado A: Angular cotas automáticas / CAD avançado C: Angular / Fenkra: `Angle`)
 
 - **O que faz:** mede o ângulo entre duas retas ou planos.
 - **CAD avançado B — como funciona no detalhe:** [V] A caixa *Limit of Size* mostra limite superior e inferior como na janela 3D. [C] A cota angular semântica liga duas faces ou eixos.
-- **CAD avançado A — no detalhe:** [C] O DimXpert tem *Angular dimension* e a angularidade como tolerância geométrica. Para peças prismáticas, o esquema automático aplica cotas angulares onde há chanfro [C].
+- **CAD avançado A — no detalhe:** [C] O cotas automáticas tem *Angular dimension* e a angularidade como tolerância geométrica. Para peças prismáticas, o esquema automático aplica cotas angulares onde há chanfro [C].
 - **CAD avançado C — no detalhe:** [C] Cota angular como anotação geral entre duas arestas ou faces.
 - **Outros:** não relevante.
 - **Fenkra hoje:** `Angle` com três âncoras (vértice e dois pontos), `acos` do ângulo entre os vetores (`pmi.rs:814-820`), faixa 0–180°. Desenho do arco em `pmi_ui.rs:552-580`.
@@ -163,8 +163,8 @@
 - **O que faz:** acrescenta tolerância à cota: simétrica, bilateral, unilateral, limites, ajuste ISO 286 (H7, g6), ou torna a cota "básica" (sem tolerância, enquadrada, usada com GD&T).
 - **CAD avançado B — como funciona no detalhe:** [V] A tolerância semântica da cota passa por *Limit of Size Definition*. As cotas "enquadradas" (framed) são as básicas e só vivem ligadas a referências parciais, áreas restritas ou tolerâncias geométricas. [V] O Advisor oferece só os tipos permitidos para o elemento selecionado. [C] Classes ISO 286 podem ser escolhidas por tabela.
 - **CAD avançado A — no detalhe:**
-  - [V] O DimXpert tem tipos de tolerância *Plus and Minus* e *Geometric* no esquema automático. O esquema "geométrico" substitui as tolerâncias de cota por posição e cria cotas básicas (opção *Create basic dimensions*).
-  - [V] Os valores padrão vêm de *Document Properties > DimXpert > Geometric Tolerance*.
+  - [V] O cotas automáticas tem tipos de tolerância *Plus and Minus* e *Geometric* no esquema automático. O esquema "geométrico" substitui as tolerâncias de cota por posição e cria cotas básicas (opção *Create basic dimensions*).
+  - [V] Os valores padrão vêm de *Document Properties > cotas automáticas > Geometric Tolerance*.
   - [C] Tolerância geral (ISO 2768) vai na nota geral.
 - **CAD avançado C — no detalhe:** [V] Modificadores de dimensão (Continuous Feature, Statistical Tolerance, Envelope Requirement) são acrescentados ao texto da cota e aparecem na ordem de inclusão.
 - **Outros:** [V] CAD Exchanger (AP242): a cota semântica guarda valor nominal, limites ±, faixas e **classe ISO 286** (`LimitsAndFitsAttribute`) como atributos separados. [V] CAD avançado F: "Dimension is ambiguous" quando uma cota de offset não tem origem definida.
@@ -194,7 +194,7 @@
   - Nota de perfil geral: "superfícies não anotadas: perfil 0,3 em relação a A|B|C", ligada ao DRF.
   - Casos de teste: nota com duas setas; apagar um alvo mantém a nota com uma seta e aviso; campo `{material}` atualiza quando a propriedade muda.
 
-### F7. Referência (datum), alvo de referência (datum target) e sistema de referência (DRF) (CAD avançado B: Datum, Datum Target, Datum System / CAD avançado A: Datum Feature, DimXpert Datum / CAD avançado C: Datum Identifier, DRF / Fenkra: `Datum { letter }`)
+### F7. Referência (datum), alvo de referência (datum target) e sistema de referência (DRF) (CAD avançado B: Datum, Datum Target, Datum System / CAD avançado A: Datum Feature, cotas automáticas Datum / CAD avançado C: Datum Identifier, DRF / Fenkra: `Datum { letter }`)
 
 - **O que faz:** define que feature serve de referência (A, B, C) e como elas formam o sistema (DRF) usado pelas tolerâncias de orientação, posição, batimento e perfil.
 - **CAD avançado B — como funciona no detalhe:**
@@ -204,7 +204,7 @@
   - [V] **Datum targets** e **áreas restritas** (restricted areas) têm tópicos próprios no curso. [V] *Datum Targets* aparecem como anotação semântica e como filtro.
   - [V] Orientação e posição **exigem** um DRF já criado.
 - **CAD avançado A — no detalhe:**
-  - [V] No esquema automático, escolhem-se datum primário, secundário e terciário. O DimXpert valida o conjunto segundo ASME Y14.5.1M‑1994. Em versões novas dá para escolher datums que já têm símbolo (antes era preciso reselecionar a cada comando).
+  - [V] No esquema automático, escolhem-se datum primário, secundário e terciário. O cotas automáticas valida o conjunto segundo ASME Y14.5.1M‑1994. Em versões novas dá para escolher datums que já têm símbolo (antes era preciso reselecionar a cada comando).
   - [V] Superfícies cônicas passaram a ser datum válido no MBD 2017.
   - [V] Clicar com o botão direito aceita o datum e passa para a próxima caixa. Um comando de contexto aceita o datum mesmo com o mouse longe.
 - **CAD avançado C — no detalhe:**
@@ -229,7 +229,7 @@
   - Datum target: ponto (símbolo ×), linha, área; desenhados com moldura de alvo (quadro dividido com letra e número).
   - Casos de teste: DRF A|B|C com três planos ortogonais restringe 6 DOF; apagar o datum B marca o DRF como "inválido" e todas as tolerâncias que o usam recebem aviso; renomear a letra A atualiza todos os quadros.
 
-### F8. Quadro de tolerância geométrica — características e zonas (CAD avançado B: Geometrical Tolerance via Advisor / CAD avançado A: Geometric Tolerance, DimXpert / CAD avançado C: Tolerance Feature / CAD avançado F: Tolerance Feature / CAD avançado G: Feature Control Frame / Fenkra: `Gdt`)
+### F8. Quadro de tolerância geométrica — características e zonas (CAD avançado B: Geometrical Tolerance via Advisor / CAD avançado A: Geometric Tolerance, cotas automáticas / CAD avançado C: Tolerance Feature / CAD avançado F: Tolerance Feature / CAD avançado G: Feature Control Frame / Fenkra: `Gdt`)
 
 - **O que faz:** cria o quadro de controle (FCF) com característica, zona (valor e forma), modificadores e referências, ligado ao elemento tolerado.
 - **CAD avançado B — como funciona no detalhe:**
@@ -355,7 +355,7 @@
   - [V] Orienta-se o modelo (por exemplo, normal a um plano de anotação) ou usa-se uma *Named View*.
   - [V] *Show/Hide* e filtro escolhem as anotações visíveis. Para ver: botão direito na captura na árvore → *Display Capture*.
 - **CAD avançado A — no detalhe:**
-  - [V] *Capture 3D View*: nome único, **configuração**, **display state**, **vistas de anotação** e, opcionalmente, **vista de corte**. Guarda também vistas explodidas e vistas de quebra, cotas de referência, anotações DimXpert e posição de zoom.
+  - [V] *Capture 3D View*: nome único, **configuração**, **display state**, **vistas de anotação** e, opcionalmente, **vista de corte**. Guarda também vistas explodidas e vistas de quebra, cotas de referência, anotações cotas automáticas e posição de zoom.
   - [V] *Recapture View* atualiza; clicar direito renomeia ou apaga; o hover mostra configuração/estado/vistas.
   - [V] As vistas capturadas viram opções ao publicar (3D PDF, eDrawings, STEP 242).
 - **CAD avançado C — no detalhe:** [V] As *view representations* controlam visibilidade e escala das anotações, com a câmera salva. Há *section view representations* para detalhar interiores. O filtro *3D Annotations Object Visibility* liga e desliga todas.
@@ -376,7 +376,7 @@
 
 - **O que faz:** agrupa, filtra e liga/desliga anotações, para que o modelo não vire uma sopa de textos.
 - **CAD avançado B — como funciona no detalhe:** [V] O filtro de anotações aceita critério por **tipo** (não semântico), **subtipo** (texto), datums, datum targets e tolerâncias geométricas, por **elemento ou feature** e por **plano de anotação**. O padrão é ALL; também há busca por *Edit+Search*. [C] As anotações ficam sob um *Annotation Set* na árvore.
-- **CAD avançado A — no detalhe:** [V] Gerenciamento por vista de anotação; "mostrar/ocultar anotações" por vista. Árvore DimXpert com os estados (+/−).
+- **CAD avançado A — no detalhe:** [V] Gerenciamento por vista de anotação; "mostrar/ocultar anotações" por vista. Árvore cotas automáticas com os estados (+/−).
 - **CAD avançado C — no detalhe:** [V] Pasta do navegador com realce cruzado; filtro *Select Annotations* na QAT, com seleção por janela e *All in Camera*.
 - **Outros:** [V] CAD avançado G: regras lógicas de MBD aplicam e organizam anotações em lote.
 - **Fenkra hoje:** `folder: String` por anotação (`pmi.rs:778`); pastas na árvore com mostrar, ocultar e desfazer (`pmi_ui.rs:860-882`); "mostrar todas / ocultar todas" (`pmi_ui.rs:901-908`); ocultar é por anotação (`visible`).
@@ -393,7 +393,7 @@
 
 - **O que faz:** define aparência (texto, setas, molduras), a norma (ISO/ASME) e a escala de leitura.
 - **CAD avançado B — como funciona no detalhe:** [V] Cursos e guias listam configurações FTA de tolerância, exibição, geometria construída, manipuladores, dimensões, anotações e planos de vista. [V] Normas citadas nas notas: ASME Y14.41‑2003 e ISO/TC 213 WG 14.
-- **CAD avançado A — no detalhe:** [V] Normas suportadas: MIL‑STD‑31000A, ASME Y14.41, ISO 16792 e DIN ISO 16792. [V] As opções de tolerância do DimXpert ficam nas propriedades do documento.
+- **CAD avançado A — no detalhe:** [V] Normas suportadas: MIL‑STD‑31000A, ASME Y14.41, ISO 16792 e DIN ISO 16792. [V] As opções de tolerância do cotas automáticas ficam nas propriedades do documento.
 - **CAD avançado C — no detalhe:** [V] A unidade e o padrão das anotações 3D vêm de *Active Standard*. [V] **Annotation Scale** por vista (automático ou personalizado). [V] Atualização de estilos (`Manage > Update`) para a biblioteca 3DA.
 - **Outros:** [V] Y14.41 (edições 2003, 2012, 2019, 2026) e ISO 16792:2006 (modelo apenas ou modelo mais desenho).
 - **Fenkra hoje:** `PmiStyle` (`pmi.rs:547-617`) com mais de 25 campos e herança `over()` (anotação → grupo/vista → geral). `PmiStyle::apply_scale` ("o tamanho acompanha o zoom") existe. Janela de estilo geral e três predefinições (`pmi_ui.rs:1153-1178`).
@@ -435,7 +435,7 @@
   - Massa e material da montagem calculados pela soma dos componentes.
   - Casos de teste: refazer balões preserva uma nota manual no balão; adicionar componente cria só um balão novo; massa da montagem = soma.
 
-### F18. Consultor e validação do esquema de tolerâncias (CAD avançado B: Tolerancing Advisor, Check Report / CAD avançado A: Show Tolerance Status, DimXpert / CAD avançado C: Tolerance Advisor / CAD avançado F: GD&T Advisor / CAD avançado G: PMI Advisor / Fenkra: ❌, B38)
+### F18. Consultor e validação do esquema de tolerâncias (CAD avançado B: Tolerancing Advisor, Check Report / CAD avançado A: Show Tolerance Status, cotas automáticas / CAD avançado C: Tolerance Advisor / CAD avançado F: GD&T Advisor / CAD avançado G: PMI Advisor / Fenkra: ❌, B38)
 
 - **O que faz:** verifica se as informações de fabricação estão completas e coerentes: faces restringidas, DRF completo, valores consistentes.
 - **CAD avançado B — como funciona no detalhe:** [V] O Tolerancing Advisor **impede** tolerâncias inválidas (às custas de um processo mais lento, segundo a apostila NIAR). [V] O índice cita *Generating Check Report*. [V] Mostra "somente as tolerâncias permitidas" para a seleção.
@@ -466,7 +466,7 @@
 - **O que faz:** gera cotas, tolerâncias e datums de uma só vez, a partir de uma regra ou assistente.
 - **CAD avançado B — como funciona no detalhe:** [C] O FT&A tem geração semi-automática por *3D annotations on knowledge*; não confirmei um equivalente do Auto Dimension Scheme. [V] "Anotações 3D com knowledge" está no índice do curso.
 - **CAD avançado A — no detalhe:**
-  - [V] *Auto Dimension Scheme* (DimXpertManager ou *Tools > MBD Dimension*). Passos: escolher configurações de dimensão, definir as **features de referência** (datum primário, secundário, terciário), selecionar as features, revisar o resultado.
+  - [V] *Auto Dimension Scheme* (gerenciador de cotas automáticas ou *Tools > MBD Dimension*). Passos: escolher configurações de dimensão, definir as **features de referência** (datum primário, secundário, terciário), selecionar as features, revisar o resultado.
   - [V] Configurações: tipo de peça (exemplo da fonte: *Turned*; o texto de busca cita *Prismatic*), tipo de tolerância (*Plus and Minus* ou *Geometric*), tipo de dimensão de padrão (exemplo: *Linear*).
   - [V] O esquema geométrico impõe a sequência: planeza no primário; perpendicularidade no secundário em relação a A; posição no terciário em relação a A e B; e usa os valores padrão das propriedades do documento.
   - [V] Dicas: clicar com o botão direito aceita cada datum; o botão OK roda o esquema.
@@ -526,7 +526,7 @@
 - **CAD avançado A — no detalhe:**
   - [V] *Publish to 3D PDF*, *Publish to eDrawings*, *Publish STEP 242*. *3D PDF Template Editor* para os modelos de saída (por departamento: operações, manufatura, qualidade, compras).
   - [V] *3D PMI Compare* na barra do MBD (comparar PMI entre versões; não li o detalhe).
-  - [V] Importação de PMI para **desenhos 2D**: coloca as vistas 3D com as cotas DimXpert numa folha.
+  - [V] Importação de PMI para **desenhos 2D**: coloca as vistas 3D com as cotas cotas automáticas numa folha.
 - **CAD avançado C — no detalhe:** [C] Publicação em 3D PDF e STEP; não li os detalhes.
 - **Outros:** nenhum relevante.
 - **Fenkra hoje:** `fenkra-desenho` usa `PmiStyle`, `GdtChar`, `GdtExtra`, `WeldKind` e `WeldExtra`, mas **não importa a lista de PMI** do modelo para o desenho (apenas os tipos). Cotas do desenho são dos desenhos.
@@ -673,7 +673,7 @@ Ordem sugerida: **N‑PMI‑01 → 02 → 03/04** (corrigir o que dá resultado 
 - https://www.wichita.edu/industry_and_defense/NIAR/Documents/3D-Tolerancing-and-Annotation-2022x.pdf (trecho de busca; a página retornou 404 no fetch)
 - (fonte em procedencia.md) (trecho de busca)
 
-**CAD avançado A MBD / DimXpert**
+**CAD avançado A MBD / cotas automáticas**
 - https://centralinnovation.com/resources/auto-dimension-scheme
 - https://www.engineersrule.com/tips-tricks-dimensioning-managing-hole-callouts-mbd/
 - (fonte em procedencia.md)

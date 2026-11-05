@@ -2306,7 +2306,7 @@
    "inv": "Presentation",
    "fenkra": "Explodida",
    "status": "ok",
-   "nota": "Composer; teste explosao_e_animacao.",
+   "nota": "Estados de exibição; teste explosao_e_animacao.",
    "diferencas": "",
    "fontes": [
     "sw-mates"
@@ -2709,7 +2709,7 @@
    "faz": "Cotas, notas e textos no modelo.",
    "como": "Entidades → tipo → plano de anotação → vista.",
    "cb": "FT&A: Dimensions / Text",
-   "sw": "DimXpert / MBD Dimension",
+   "sw": "MBD Dimension",
    "inv": "3D Annotations",
    "fenkra": "Cota, nota",
    "status": "ok",
@@ -2782,7 +2782,7 @@
    "faz": "Verifica se a peça está totalmente cotada/tolerada.",
    "como": "Análise das features → avisos.",
    "cb": "—",
-   "sw": "DimXpert (auto dimension scheme)",
+   "sw": "Esquema automático de cotas",
    "inv": "Tolerance Advisor",
    "fenkra": "—",
    "status": "nao",

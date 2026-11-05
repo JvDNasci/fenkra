@@ -22,10 +22,10 @@ Limites da pesquisa, que afetam a confiança do que segue:
 4. **O AP242 distingue ao menos 28 tipos de cota** [V]. São 13 de localização e 15 de tamanho, mais as variantes `with path`. Os valores se expressam como nominal, qualificado min/max/médio, ±, faixa ou classe ISO 286. O Fenkra hoje só cobre `linear distance` (informal), `diameter`, `radius` e `angular`.
 5. **Rugosidade, solda, chanfro e rosca não têm entidade semântica no AP242.** Procurei no RP v4.1 (texto extraído), e as seções de tolerância, datum e datum target cobrem cotas e GD&T. Esses itens viajam como apresentação gráfica (polilinha ou tesselada) e como texto de nota [V por ausência no documento]. Chanfro e rebaixo viram **várias cotas de tamanho independentes** (RP §5.1.9) [V].
 6. **O OCCT 7.x já tem o vocabulário necessário.** `XCAFDimTolObjects_DimensionType` tem 32 valores, `DimensionModif` 24, `GeomToleranceModif` 17, `DatumSingleModif` 22 e `DatumTargetType` 5 [V]. O gargalo do Fenkra é o modelo de dados, não o kernel.
-7. **O lado de entrada, o dos dados, já existe no Fenkra.** `Hole` (`crates/fenkra-core/src/doc.rs:2552-2584`) tem diâmetro, profundidade, tipo (rebaixado, escareado, contrafurado), rosca, ponta em V, conicidade e mão. Uma cota de furo completa não exige novo reconhecimento de feature, só ler o que já está no modelo. Isso é uma vantagem sobre o DimXpert, que precisa reconhecer features em sólidos sem histórico.
+7. **O lado de entrada, o dos dados, já existe no Fenkra.** `Hole` (`crates/fenkra-core/src/doc.rs:2552-2584`) tem diâmetro, profundidade, tipo (rebaixado, escareado, contrafurado), rosca, ponta em V, conicidade e mão. Uma cota de furo completa não exige novo reconhecimento de feature, só ler o que já está no modelo. Isso é uma vantagem sobre o cotas automáticas, que precisa reconhecer features em sólidos sem histórico.
 8. **Ordem recomendada:** alvos estáveis (B82, B83), depois tolerância tipada e tabelas normativas, depois o catálogo de cotas por par de alvos, depois cota de feature, depois FCF completo, datum targets e acabamento, e por fim AP242 semântico e esquema automático (seção 3).
 
-**Legenda da matriz:** ✅ confirmado nesta rodada · ☑ provável, [C] · ➖ parcial ou indireto · ❌ não tem ou não achei · ❔ não verificado · **Desenho** indica que existe só no desenho 2D, não no PMI 3D. Colunas: CAT = CAD avançado B FT&A, CAD avançado A = CAD avançado A MBD/DimXpert, INV = CAD avançado C 3D annotations, CAD avançado F = CAD avançado F MBD + GD&T Advisor, CAD avançado G = CAD avançado G PMI, FUS = CAD avançado D, FC = FreeCAD TechDraw (2D, sem PMI 3D), FNK = Fenkra.
+**Legenda da matriz:** ✅ confirmado nesta rodada · ☑ provável, [C] · ➖ parcial ou indireto · ❌ não tem ou não achei · ❔ não verificado · **Desenho** indica que existe só no desenho 2D, não no PMI 3D. Colunas: CAT = CAD avançado B FT&A, CAD avançado A = CAD avançado A MBD/cotas automáticas, INV = CAD avançado C 3D annotations, CAD avançado F = CAD avançado F MBD + GD&T Advisor, CAD avançado G = CAD avançado G PMI, FUS = CAD avançado D, FC = FreeCAD TechDraw (2D, sem PMI 3D), FNK = Fenkra.
 
 ### 1.2 Matriz de cotas e anotações
 
@@ -40,7 +40,7 @@ Limites da pesquisa, que afetam a confiança do que segue:
 | Entre centros (círculo–círculo) | ✅ | ✅ | ☑ | ✅ | ☑ | ❌ | ✅ | `linear distance` (padrão); 11 variantes centro/interior/exterior | ➖ só por clique |
 | Mín/máx (arco a arco) | ☑ | ☑ | ❔ | ✅ 11 variantes | ☑ | ❌ | ❌ | `…centre/inner/outer × …` (Tabela 2) | ❌ |
 | Em cadeia (chain) | ✅ stacked | ❔ | ❔ | ❔ | ✅ API `ChainDimension` | ❌ | ✅ | N/A (cada cota é independente) | ❌ |
-| De base (baseline) | ✅ cumulated | ✅ DimXpert | ❔ | ❔ | ✅ API | ❌ | ✅ coordinate | idem | ❌ |
+| De base (baseline) | ✅ cumulated | ✅ cotas automáticas | ❔ | ❔ | ✅ API | ❌ | ✅ coordinate | idem | ❌ |
 | Ordenada (coordenada) | ✅ | ☑ | ❔ | ❌ Advisor não avalia | ✅ API `OrdinateDimension` | ❌ | ✅ | idem | ❌ |
 | Simétrica / meia cota | ✅ half dimensions | ☑ | ☑ | ❔ | ☑ | ❌ | ❌ | `…centre` com eixo | ❌ |
 | Curvilínea (ao longo de caminho) | ✅ | ☑ | ❔ | ❌ arc length | ❌ | ❌ | ✅ arc length | `curved distance` / `…with path` | ❌ |
@@ -144,7 +144,7 @@ Limites da pesquisa, que afetam a confiança do que segue:
 |---|---|---|---|---|---|---|---|---|---|
 | Auto cotagem | ➖ | ✅ Auto Dimension Scheme | ❌ | ✅ Create Selected | ✅ MBD logical rules | ❌ | ❌ | N/A | ❌ |
 | Verificação sub/super restringido | ✅ Check Report | ✅ Show Tolerance Status | ✅ Advisor + Face Status | ✅ Constraint State | ✅ PMI Advisor | ❌ | ❌ | N/A | ❌ (B38) |
-| Cotas a partir de features | ➖ | ✅ DimXpert | ✅ promote | ✅ | ☑ | ✅ hole notes | ❌ | N/A | ❌ |
+| Cotas a partir de features | ➖ | ✅ cotas automáticas | ✅ promote | ✅ | ☑ | ✅ hole notes | ❌ | N/A | ❌ |
 
 ---
 
@@ -155,7 +155,7 @@ Cada ficha traz: **como funciona nos melhores**, **o que o Fenkra tem**, **regra
 ### G1. Cotas lineares por par de alvos
 
 **Como funciona no melhor.**
-- **CAD avançado A:** o DimXpert tem duas famílias. O *Size* mede o tamanho de uma feature reconhecida (furo, rasgo, chanfro). O *Location* mede entre **duas features DimXpert**, em linear ou angular, e **exclui** superfície, filete, chanfro e bolsa [V]. O desvio é intencional: uma cota de localização só tem sentido entre elementos de posição bem definida.
+- **CAD avançado A:** o cotas automáticas tem duas famílias. O *Size* mede o tamanho de uma feature reconhecida (furo, rasgo, chanfro). O *Location* mede entre **duas features cotas automáticas**, em linear ou angular, e **exclui** superfície, filete, chanfro e bolsa [V]. O desvio é intencional: uma cota de localização só tem sentido entre elementos de posição bem definida.
 - **CAD avançado A:** a *Reference dimension* (Smart Dimension na barra MBD) mede entre arestas, linhas e curvas sem reconhecer feature, e por isso é só informativa [V].
 - **CAD avançado B:** a cota semântica nasce no *Tolerancing Advisor* com *Limit of Size Definition* e condição *Enveloping*. A cota **enquadrada** (framed) só é aceita se estiver ligada a referência parcial, área restrita ou tolerância [V, de `docs/pesquisa/pmi.md`].
 - **CAD avançado F:** a cota de tamanho só é avaliada **entre dois planos paralelos**; plano–cilindro e plano–esfera ficam sem suporte no Advisor, mas existem no CAD avançado F nativo [V].
@@ -197,7 +197,7 @@ Cada ficha traz: **como funciona nos melhores**, **o que o Fenkra tem**, **regra
 - **CAD avançado A:** a cota de referência angular entre arestas pode mostrar o suplemento conforme a posição do cursor; botão direito trava o valor e alterna [V].
 - **CAD avançado F:** ângulo pode aparecer no esquema mas **não é avaliado** pelo Advisor; arc length e ordinate também não [V].
 - **FreeCAD:** ângulo entre duas arestas retas; *3-point angle*; *arc length* para arestas selecionadas [V].
-- **Cone:** o DimXpert reconhece o cone e mostra o ângulo; para meio-ângulo precisa customizar [V].
+- **Cone:** o cotas automáticas reconhece o cone e mostra o ângulo; para meio-ângulo precisa customizar [V].
 
 **Fenkra hoje.** `PmiKind::Angle` com três âncoras, `acos` do ângulo entre vetores, faixa de 0° a 180° (`pmi.rs:814-820`). O desenho do arco está em `pmi_ui.rs`. No desenho 2D, `DimKind::Angle` (`lib.rs:304`) tem a mesma limitação. Não existe arco, corda nem ângulo reflexo.
 
@@ -236,7 +236,7 @@ Cada ficha traz: **como funciona nos melhores**, **o que o Fenkra tem**, **regra
 **Como funciona no melhor.**
 - **CAD avançado C:** *Hole/Thread Note* e *Chamfer Note* são comandos separados. O 2019 mostra a **quantidade** do padrão, e `QTYNOTE` liga o realce cruzado aos furos do padrão [V]. O 2027 permite anexar o identificador de datum a notas de furo e de rosca [V].
 - **Fusion:** *Hole/Thread Notes* e *Leader Notes* são o PMI nativo, com ASME e ISO [V, resultado de busca].
-- **CAD avançado A:** o *Size* do DimXpert lê furo (Ø, profundidade), escareado (Ø e ângulo), rasgo (comprimento e largura), filete (raio) e chanfro. O chanfro tem dois esquemas: **distância × ângulo** e **distância × distância** [V]. Clicar na face do chanfro basta para reconhecê-lo [V].
+- **CAD avançado A:** o *Size* do cotas automáticas lê furo (Ø, profundidade), escareado (Ø e ângulo), rasgo (comprimento e largura), filete (raio) e chanfro. O chanfro tem dois esquemas: **distância × ângulo** e **distância × distância** [V]. Clicar na face do chanfro basta para reconhecê-lo [V].
 - **CAD avançado B:** *Chamfer Dimension* oferece quatro formatos (comprimento × comprimento, comprimento × ângulo, ângulo × comprimento, só comprimento), por seleção ou detecção automática [V]. Uma ocorrência da IBM mostra a limitação em curvas: só funciona com plano/plano/plano, plano/cone/cilindro, plano/cone/cone e cilindro/cone/cilindro [V].
 - **CAD avançado F:** cria automaticamente as cotas de furos simples, eixos, rasgos, placas e furos oblongos. Chanfro, arredondamento e tubo **não são avaliados** [V]. Ao escolher um furo de padrão CAD, pergunta "padrão inteiro?" e mantém a ligação [V, de `pmi.md`].
 - **FreeCAD:** chanfro horizontal/vertical (tamanho e ângulo) e prefixo `n×` [V].
@@ -461,10 +461,10 @@ O critério é "o que dá resultado errado primeiro, depois o que destrava o res
 - [3DCS: Using the Tolerance Advisor / Useful FT&A settings](https://community.3dcs.com/help_manual/v5ftacreation.htm)
 - Ascent: CAD avançado B-6R2023 Functional Tolerancing and Annotation
 
-**CAD avançado A MBD / DimXpert** [V parcial]
+**CAD avançado A MBD / cotas automáticas** [V parcial]
 - [Engineers Rule: chanfro, cone e cota de referência no MBD](https://www.engineersrule.com/?p=1241)
-- DimXpert Size Dimension: features suportadas (resultado de busca; página não renderiza)
-- DimXpert Location Dimension
+- cotas automáticas Size Dimension: features suportadas (resultado de busca; página não renderiza)
+- cotas automáticas Location Dimension
 - CAD avançado A MBD 2023 (GoEngineer)
 - CAD avançado A 2024 What's New: MBD
 - CAD avançado A 2025: símbolos ISO 21920

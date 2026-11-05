@@ -6,13 +6,13 @@
 ## Como cada ferramenta conduz o fluxo
 
 - **CAD avançado B:** FT&A: planos de anotação, vistas e capturas; tolerâncias e datums ligados às faces.
-- **CAD avançado A:** MBD/DimXpert: esquema de cotas automático, vistas de anotação, vistas 3D com câmera e estado.
+- **CAD avançado A:** MBD: esquema de cotas automático, vistas de anotação, vistas 3D com câmera e estado.
 - **CAD avançado C:** Anotações 3D com Tolerance Advisor que verifica se a peça está totalmente definida.
 
 ## O que adotar no Fenkra
 
 - Realce das entidades da anotação e várias chamadas (DR-48).
-- Verificação de cotagem completa (Tolerance Advisor / DimXpert).
+- Verificação de cotagem completa (consultor de tolerância).
 
 ## O que evitar
 

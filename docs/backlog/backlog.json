@@ -3387,7 +3387,7 @@
    "id": "B192",
    "onda": 4,
    "prio": "P2",
-   "titulo": "PMI: esquema de cotagem automático (estilo DimXpert/Auto Dimension Scheme)",
+   "titulo": "PMI: esquema de cotagem automático (assistente de esquema automático)",
    "oque": "Assistente que escolhe o DRF primário, secundário e terciário e gera cotas, tolerâncias e datums sobre as features do modelo (furos, padrões, rasgos, chanfros), no modo Mais/Menos ou Geométrico (planeza no primário, perpendicularidade no secundário, posição no terciário). Tudo marcado como 'gerado' e regenerável sem apagar edições manuais; regras reutilizáveis por tipo de feature como as MBD logical rules do CAD avançado G. Depende de B38, B108 e dos itens de cotas.",
    "origem": [
     "PESQ-PMI"

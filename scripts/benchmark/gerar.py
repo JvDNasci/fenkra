@@ -74,9 +74,9 @@ WORKFLOW = {
   evitar=['Recarregar silenciosamente sem avisar o que mudou.']),
 'PMI 3D': dict(
   cb='FT&A: planos de anotação, vistas e capturas; tolerâncias e datums ligados às faces.',
-  sw='MBD/DimXpert: esquema de cotas automático, vistas de anotação, vistas 3D com câmera e estado.',
+  sw='MBD: esquema de cotas automático, vistas de anotação, vistas 3D com câmera e estado.',
   inv='Anotações 3D com Tolerance Advisor que verifica se a peça está totalmente definida.',
-  adotar=['Realce das entidades da anotação e várias chamadas (DR-48).', 'Verificação de cotagem completa (Tolerance Advisor / DimXpert).'],
+  adotar=['Realce das entidades da anotação e várias chamadas (DR-48).', 'Verificação de cotagem completa (consultor de tolerância).'],
   evitar=['Chamadas que atravessam o próprio quadro (DR-47).']),
 'Navegação': dict(
   cb='Botão do meio arrasta (pan); meio + outro botão gira; clique do meio num ponto recentra a órbita. Alvo estável: nunca "foge" do modelo.',

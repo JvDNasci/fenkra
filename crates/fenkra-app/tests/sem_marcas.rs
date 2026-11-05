@@ -10,9 +10,9 @@ use std::path::{Path, PathBuf};
 const ARQUIVOS_DE_FONTES: [&str; 3] = ["docs/arquitetura/procedencia.md", "docs/benchmark/fontes.md", "scripts/benchmark/fontes.py"];
 
 /// Termos sem distinção de maiúsculas (nomes que não são palavras comuns).
-const TERMOS: [&str; 22] = [
+const TERMOS: [&str; 23] = [
     "solidworks", "solid edge", "solidedge", "catia", "autodesk", "autocad", "onshape", "dassault", "siemens", "parasolid", "3dexperience",
-    "enovia", "windchill", "teamcenter", "keyshot", "ansys", "abaqus", "bricscad", "mastercam", "sketchup", "fusion 360", "hole wizard",
+    "enovia", "windchill", "teamcenter", "keyshot", "ansys", "abaqus", "bricscad", "mastercam", "sketchup", "fusion 360", "hole wizard", "dimxpert",
 ];
 
 /// Termos que só contam com a grafia de nome próprio (também são palavras comuns).

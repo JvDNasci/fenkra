@@ -452,7 +452,7 @@
 - **CAD avançado A.**
   - [V] *Model Items*: Origem Entire model ou Selected feature; filtros "Marked for drawing"/"Not marked"; `Eliminate duplicates`; "Import items into all views"; "Include items from hidden features". Para montagens: componente selecionado ou só montagem.
   - [V] Os blogs avisam que as cotas inseridas podem chegar em posições soltas e desalinhadas.
-  - [V] *Autodimension* no desenho: esquemas horizontal e vertical de **linha de base, cadeia ou ordenada**, origem escolhível (padrão: a primeira entidade em x0,y0). *DimXpert Auto Dimension Scheme* (hoje MBD Dimension) restringe completamente features de manufatura contra datums.
+  - [V] *Autodimension* no desenho: esquemas horizontal e vertical de **linha de base, cadeia ou ordenada**, origem escolhível (padrão: a primeira entidade em x0,y0). *cotas automáticas Auto Dimension Scheme* (hoje MBD Dimension) restringe completamente features de manufatura contra datums.
 - **CAD avançado C.**
   - [V] *Retrieve Model Annotations* (aba Annotate): escolhe a vista e quais cotas manter. Abas "Sketch and Feature Dimension" (Select Source/Features/Parts) e "3D Annotations" (filtros: cotas gerais, tolerância, texto de chamada, nota de furo e rosca, textura, nota geral; escolha de Design View).
   - [V] Só cotas **paralelas ao plano da vista**; editá-las muda a peça. Uma cota de modelo não aparece em duas vistas da mesma folha. Opção de preferências para recuperar todas ao colocar a vista; erros relatados por usuários.
@@ -690,7 +690,7 @@
   - [V] Escala da vista 2D é o inverso da razão da vista 3D (registro IBM).
   - [V] Planos de anotação e capturas são tópicos próprios do curso FTA.
 - **CAD avançado A.**
-  - [V] Desde 2018, uma vista 3D capturada no MBD vai para a folha arrastando-a da *View Palette*; nas opções de importação traz as anotações DimXpert/MBD e as ortogonais à vista. As vistas capturadas não são editáveis. O DimXpert foi renomeado MBD Dimension em 2019.
+  - [V] Desde 2018, uma vista 3D capturada no MBD vai para a folha arrastando-a da *View Palette*; nas opções de importação traz as anotações cotas automáticas/MBD e as ortogonais à vista. As vistas capturadas não são editáveis. O cotas automáticas foi renomeado MBD Dimension em 2019.
 - **CAD avançado C.** [V] *Retrieve Model Annotations > 3D Annotations*: filtros (cotas, tolerâncias, notas de furo, textura, nota geral) e escolha de *Design View*. Anotações 3D de um único componente podem ser recuperadas em vistas de montagem.
 - **CAD avançado H.** [V] Opção "Include PMI Dimensions from model views" ao colocar a vista.
 - **CAD avançado G.** [V] PMI no desenho depende da preferência de rastreio de localização; há registro antigo de que PMI não aparece em vistas de corte ou interrompidas.

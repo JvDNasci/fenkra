@@ -158,7 +158,7 @@ e('DES-12', DES, 'Exportação', 'PDF, DXF/DWG, SVG, imagens.', 'Folha(s) → fo
 
 # ------------------------------------------------------------------ PMI
 e('PMI-01', PMI, 'Cotas e notas 3D', 'Cotas, notas e textos no modelo.', 'Entidades → tipo → plano de anotação → vista.',
-  ('FT&A: Dimensions / Text', 'DimXpert / MBD Dimension', '3D Annotations', 'Cota, nota'), 'ok', 'Pmi(0..10).', '', ['sw-mbd', 'inv-mbd']),
+  ('FT&A: Dimensions / Text', 'MBD Dimension', '3D Annotations', 'Cota, nota'), 'ok', 'Pmi(0..10).', '', ['sw-mbd', 'inv-mbd']),
 e('PMI-02', PMI, 'GD&T, referências e rugosidade', 'Quadros de tolerância, datums, acabamento, solda.', 'Face/feature → quadro → datum.',
   ('Geometrical Tolerance / Datum / Roughness', 'Geometric Tolerance / Datum / Surface Finish', 'Tolerance Feature / Datum', 'GD&T, datum, rugosidade, solda'),
   'ok', 'NoteKind Gdt/Datum; símbolo de solda ISO 2553.', '', ['sw-mbd']),
@@ -167,7 +167,7 @@ e('PMI-03', PMI, 'Vistas e capturas', 'Vistas 3D com conjunto de anotações, c�
 e('PMI-04', PMI, 'Realce e chamadas inteligentes', 'Realçar as entidades da anotação e várias chamadas (leaders).', 'Selecionar entidades → realce → adicionar setas.',
   ('Leaders / Highlight', 'Leaders', 'Leaders', 'Seta'), 'parcial', 'Realce falha na montagem; uma seta só; seta atravessa a anotação (DR-31, DR-47, DR-48).', '', ['dr'], 'DR-48'),
 e('PMI-05', PMI, 'Consultor de tolerância', 'Verifica se a peça está totalmente cotada/tolerada.', 'Análise das features → avisos.',
-  ('—', 'DimXpert (auto dimension scheme)', 'Tolerance Advisor', '—'), 'nao', '', '', ['inv-mbd'], 'BM-PMI-01'),
+  ('—', 'Esquema automático de cotas', 'Tolerance Advisor', '—'), 'nao', '', '', ['inv-mbd'], 'BM-PMI-01'),
 
 # ------------------------------------------------------------------ NAVEGAÇÃO
 e('NAV-01', NAV, 'Órbita em torno de alvo', 'Gira a vista em torno de um ponto alvo fixo.', 'Botão/combinação → alvo → arrasto.',

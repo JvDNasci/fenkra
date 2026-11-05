@@ -466,7 +466,7 @@
   - Chamada de furo lê a norma do furo (2.5): "4× Ø6,6 ▽ 12 / M8" e atualiza com o modelo.
   - Testes: importar do recurso de furo traz a chamada correta; mudar o furo atualiza o desenho; editar a cota no desenho não altera o modelo.
 
-### 2.23 PMI automático e consultor de tolerância (CAD avançado A: DimXpert, Auto Dimension Scheme / CAD avançado B: FTA / CAD avançado C: 3D annotation / Fenkra: `Pmi(u8)`, B38)
+### 2.23 PMI automático e consultor de tolerância (CAD avançado A: cotas automáticas, Auto Dimension Scheme / CAD avançado B: FTA / CAD avançado C: 3D annotation / Fenkra: `Pmi(u8)`, B38)
 
 - **O que faz:** reconhece features de fabricação e aplica cotas e tolerâncias de forma sistemática.
 - **CAD avançado A — no detalhe:**

@@ -1144,11 +1144,11 @@
 
 | ID | Feature | CAD avançado B | CAD avançado A | CAD avançado C | Fenkra | Backlog |
 |---|---|---|---|---|---|---|
-| PMI-01 | **Cotas e notas 3D** | FT&A: Dimensions / Text | DimXpert / MBD Dimension | 3D Annotations | ✅ Cota, nota |  |
+| PMI-01 | **Cotas e notas 3D** | FT&A: Dimensions / Text | MBD Dimension | 3D Annotations | ✅ Cota, nota |  |
 | PMI-02 | **GD&T, referências e rugosidade** | Geometrical Tolerance / Datum / Roughness | Geometric Tolerance / Datum / Surface Finish | Tolerance Feature / Datum | ✅ GD&T, datum, rugosidade, solda |  |
 | PMI-03 | **Vistas e capturas** | Annotation Planes / Captures | Annotation Views / 3D Views | Model States / Views | ✅ Capturas |  |
 | PMI-04 | **Realce e chamadas inteligentes** | Leaders / Highlight | Leaders | Leaders | 🟡 Seta | DR-48 |
-| PMI-05 | **Consultor de tolerância** | — | DimXpert (auto dimension scheme) | Tolerance Advisor | ❌ — | BM-PMI-01 |
+| PMI-05 | **Consultor de tolerância** | — | Esquema automático de cotas | Tolerance Advisor | ❌ — | BM-PMI-01 |
 
 ### PMI-01 — Cotas e notas 3D
 
