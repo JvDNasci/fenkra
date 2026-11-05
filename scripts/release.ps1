@@ -68,6 +68,13 @@ New-Item -ItemType Directory -Force $out | Out-Null
 Copy-Item $exe $out
 foreach ($p in $needed.Values) { Copy-Item $p $out }
 
+# runtime C++: sem ele o app nem abre em PC que não tenha o redistribuível instalado
+foreach ($dll in 'vcruntime140.dll', 'vcruntime140_1.dll', 'msvcp140.dll') {
+    $p = Join-Path $env:WINDIR "System32\$dll"
+    if (-not (Test-Path $p)) { throw "Runtime C++ ausente: $p" }
+    Copy-Item $p $out
+}
+
 # licenças obrigatórias (LGPL-2.1: texto, aviso do OCCT e oferta de código-fonte)
 foreach ($doc in $licencas) {
     $p = Join-Path $root $doc
