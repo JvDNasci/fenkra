@@ -439,3 +439,53 @@ fn recompute_do_corpus_e_deterministico() {
         }
     }
 }
+
+// ------------------------------------------------------------------ B235: malhador padrão x Delabella
+
+/// Volume (mm³) que a malha fecha, pela soma dos tetraedros com a origem; só vale em sólido fechado.
+fn volume_da_malha(m: &fenkra_kernel::Mesh) -> f64 {
+    let p = |i: u32| {
+        let k = 3 * i as usize;
+        [m.positions[k] as f64, m.positions[k + 1] as f64, m.positions[k + 2] as f64]
+    };
+    let mut v = 0.;
+    for t in m.indices.chunks_exact(3) {
+        let (a, b, c) = (p(t[0]), p(t[1]), p(t[2]));
+        v += (a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0])) / 6.;
+    }
+    v.abs()
+}
+
+/// Faces que ficaram sem nenhum triângulo.
+fn faces_sem_malha(m: &fenkra_kernel::Mesh) -> usize {
+    let n = m.indices.len() as u32;
+    (0..m.face_ranges.len()).filter(|&i| m.face_ranges[i] == m.face_ranges.get(i + 1).copied().unwrap_or(n)).count()
+}
+
+/// Mede o malhador padrão contra o Delabella em todo o corpus (tempo, triângulos, volume fechado pela
+/// malha contra o exato, faces vazias). Não decide nada sozinho: a decisão está em
+/// `docs/arquitetura/adr/`. Rode com `-- --nocapture` para ver a tabela.
+#[test]
+#[ignore = "medição do B235: o interruptor do malhador é global; rode com --ignored --nocapture"]
+fn malhador_padrao_contra_delabella_no_corpus() {
+    precisa_kernel!();
+    let qualidades = [("Rascunho", QualidadeMalha::RASCUNHO), ("Normal", QualidadeMalha::NORMAL), ("Alta", QualidadeMalha::ALTA)];
+    eprintln!("{:<22} {:<9} {:>9} {:>9} {:>9} {:>9} {:>10} {:>10} {:>6}", "peça", "qualid.", "ms pad.", "ms dela.", "tri pad.", "tri dela.", "errvol pad", "errvol del", "vazias");
+    for d in pecas().iter() {
+        let forma = final_shape(d).expect("forma final");
+        let exato = volume_total(&recompute(d));
+        for (nome, q) in &qualidades {
+            let mut linha = [(0.0f64, 0usize, 0.0f64, 0usize); 2];
+            for (i, delabella) in [false, true].into_iter().enumerate() {
+                fenkra_kernel::definir_malhador_delabella(delabella);
+                forma.discard_mesh().unwrap();
+                let (m, t) = segundos(|| tesselar(&forma, q).expect("tesselação"));
+                let err = if exato > 0. { (volume_da_malha(&m) - exato).abs() / exato } else { 0. };
+                linha[i] = (t * 1000., m.indices.len() / 3, err, faces_sem_malha(&m));
+            }
+            fenkra_kernel::definir_malhador_delabella(false);
+            eprintln!("{:<22} {:<9} {:>9.1} {:>9.1} {:>9} {:>9} {:>10.2e} {:>10.2e} {:>3}/{:<3}", d.name, nome, linha[0].0, linha[1].0, linha[0].1, linha[1].1, linha[0].2, linha[1].2, linha[0].3, linha[1].3);
+            assert!(linha[1].1 > 0, "{}: Delabella não gerou triângulos", d.name);
+        }
+    }
+}

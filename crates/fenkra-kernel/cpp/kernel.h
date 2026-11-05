@@ -119,6 +119,8 @@ MeshData tessellate(const Shape& s, double deflection, double angle);
 void discard_mesh(const Shape& s);
 void set_mesh_threads(int32_t n);
 int32_t mesh_threads();
+void set_mesh_algo(int32_t a);
+int32_t mesh_algo();
 int32_t mesh_pool_threads();
 rust::Vec<double> bounding_box(const Shape& s);
 rust::Vec<double> mass_props(const Shape& s);

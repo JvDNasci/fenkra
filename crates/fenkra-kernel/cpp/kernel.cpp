@@ -89,6 +89,7 @@
 #include <BRepFilletAPI_MakeFillet.hxx>
 #include <BRepGProp.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
+#include <IMeshTools_MeshAlgoType.hxx>
 #include <BRepPrimAPI_MakeCone.hxx>
 #include <BRepPrimAPI_MakeCylinder.hxx>
 #include <BRepPrimAPI_MakeHalfSpace.hxx>
@@ -867,6 +868,11 @@ int32_t mesh_threads() {
 
 void set_mesh_threads(int32_t n) { g_mesh_threads.store(std::max(0, n)); }
 
+// Algoritmo do malhador (B235, só medição): 0 = padrão do OpenCASCADE, 1 = Delabella.
+static std::atomic<int32_t> g_mesh_algo{0};
+void set_mesh_algo(int32_t a) { g_mesh_algo.store(a == 1 ? 1 : 0); }
+int32_t mesh_algo() { return g_mesh_algo.load(); }
+
 int32_t mesh_pool_threads() { return OSD_ThreadPool::DefaultPool()->NbThreads(); }
 
 // Malhas em andamento seguram esta trava em modo compartilhado.
@@ -954,6 +960,7 @@ MeshData tessellate(const Shape& s, double deflection, double angle) {
         mp.Angle = angle;
         mp.InParallel = true;
         mp.AllowQualityDecrease = true;
+        if (g_mesh_algo.load() == 1) mp.MeshAlgo = IMeshTools_MeshAlgoType_Delabella;
         {
             auto gate = enter_mesher();
             BRepMesh_IncrementalMesh(s.s, mp);

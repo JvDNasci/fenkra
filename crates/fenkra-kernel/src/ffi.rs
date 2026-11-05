@@ -203,6 +203,9 @@ pub mod bridge {
         fn set_mesh_threads(n: i32);
         /// Teto de fios em vigor.
         fn mesh_threads() -> i32;
+        /// Algoritmo do malhador (só medição, B235): 0 padrão, 1 Delabella.
+        fn set_mesh_algo(a: i32);
+        fn mesh_algo() -> i32;
         /// Fios que o pool do OpenCASCADE tem agora; acompanha o teto na malha seguinte.
         fn mesh_pool_threads() -> i32;
         /// [xmin, ymin, zmin, xmax, ymax, zmax]
