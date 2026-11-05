@@ -1,0 +1,30 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
+//! Traduções do mouse 3D (B322).
+
+pub static TEXTOS: &[(&str, &str)] = &[
+    ("Mouse 3D", "3D mouse"),
+    ("usar mouse 3D quando houver um", "use a 3D mouse when one is present"),
+    ("Sem aparelho conectado nada muda. Funciona pelo HID do sistema, sem o driver do fabricante.", "With no device connected nothing changes. It works through the system HID, without the maker's driver."),
+    ("sensibilidade do movimento", "movement sensitivity"),
+    ("Quanto a vista anda para a mesma força no aparelho.", "How far the view moves for the same push on the device."),
+    ("sensibilidade da rotação", "rotation sensitivity"),
+    ("Quanto a vista gira para a mesma inclinação do aparelho.", "How far the view turns for the same tilt of the device."),
+    ("zona morta", "dead zone"),
+    ("Parte do curso ignorada em torno do repouso, para a vista não escorregar sozinha.", "Part of the travel ignored around rest, so the view does not drift on its own."),
+    ("só o eixo dominante", "dominant axis only"),
+    ("Só o eixo mais forte age de cada vez, para aproximar sem girar.", "Only the strongest axis acts at a time, to move closer without turning."),
+    ("inverter", "invert"),
+    ("mover para os lados", "move sideways"),
+    ("mover para frente", "move forward"),
+    ("subir e descer", "up and down"),
+    ("inclinar para a frente", "tilt forward"),
+    ("inclinar para o lado", "tilt sideways"),
+    ("torcer", "twist"),
+    ("botão", "button"),
+    ("nenhuma", "none"),
+    ("enquadrar tudo", "fit all"),
+    ("alternar ortogonal", "toggle orthographic"),
+    ("vista frontal", "front view"),
+    ("vista superior", "top view"),
+    ("vista isométrica", "isometric view"),
+];

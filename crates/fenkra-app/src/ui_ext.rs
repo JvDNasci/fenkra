@@ -118,12 +118,12 @@ pub fn dentes_3d(ui: &egui::Ui, resp: &egui::Response) -> f64 {
     dentes(ui, resp, true)
 }
 
-/// Passo de arrasto no 3D que segue o zoom: potência de 10 equivalente a cerca de 8 px na tela,
+/// Passo de arrasto no 3D que segue o zoom: 1, 2 ou 5 vezes uma potência de 10, o maior que cabe em 8 px na tela,
 /// vezes as teclas (Shift ×10, Ctrl ×0,1, Alt ×0,01), como nos campos dos painéis. Peça de 5 mm com
 /// zoom perto dá 0,1 mm; peça de 5 m dá 10 mm.
 pub fn passo_3d(ui: &egui::Ui, px_por_mm: f32) -> f64 {
     let ppm = (px_por_mm as f64).max(1e-6);
-    let base = 10f64.powf((8. / ppm).log10().floor()).clamp(0.001, 1000.);
+    let base = crate::camera_nav::passo_125(ppm as f32);
     base * ui.input(|i| mult_teclas(i.modifiers))
 }
 

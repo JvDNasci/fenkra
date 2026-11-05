@@ -88,6 +88,13 @@ mod param_ui;
 mod config_camadas;
 mod config_ui;
 mod textos_config;
+mod acessibilidade;
+mod camera_nav;
+mod arabesco;
+mod mouse3d;
+mod mouse3d_hid;
+mod textos_mouse3d;
+mod textos_acessibilidade;
 #[cfg(test)]
 mod padrao;
 
