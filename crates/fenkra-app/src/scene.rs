@@ -27,6 +27,8 @@ pub struct SceneOpts<'a> {
     pub tangent_edges: bool,
     /// item realçado: o que está sob o mouse na árvore, ou o comando aberto
     pub hilite: Option<Id>,
+    /// comandos realçados além de `hilite` (linha da lista de corte)
+    pub hilite_extra: &'a [Id],
     /// estilo padrão das curvas de referência (px e tipo de linha)
     pub line_w: f32,
     pub line_dash: u8,
@@ -68,6 +70,7 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
             hi_features.extend(Document::refs_of(&f.kind));
         }
     }
+    hi_features.extend(o.hilite_extra.iter().copied());
     let hi = |id: Id| o.hilite == Some(id);
 
     let feat_app: HashMap<Id, Appearance> = doc.features.iter().filter_map(|f| f.appearance.map(|a| (f.id, a))).collect();

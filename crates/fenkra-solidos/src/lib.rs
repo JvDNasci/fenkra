@@ -4065,7 +4065,11 @@ impl Ctx<'_> {
                 }
                 let mid = |g: &MemberGeom| geo3d::lerp(g.start, g.end, 0.5);
                 let mut shapes: Vec<Shape> = vec![];
+                // B79: a falha de uma linha não derruba as outras; cada uma vira um aviso com o motivo
+                let mut kept: Vec<usize> = vec![];
+                let mut falhas: Vec<(usize, String)> = vec![];
                 for (i, g) in geo.iter().enumerate() {
+                    let built: Result<Shape, String> = (|| {
                     let mut sh = self.member_shape(g)?;
                     for (p, di, dj, og, mode, first, gap) in &joints[i] {
                         match mode {
@@ -4094,7 +4098,21 @@ impl Ctx<'_> {
                             }
                         }
                     }
-                    shapes.push(sh);
+                    Ok(sh)
+                    })();
+                    match built {
+                        Ok(sh) => {
+                            shapes.push(sh);
+                            kept.push(i);
+                        }
+                        Err(e) => falhas.push((i, e)),
+                    }
+                }
+                if !falhas.is_empty() {
+                    log_member_failures(f.id, &geo, &falhas);
+                }
+                if shapes.is_empty() && !falhas.is_empty() {
+                    return Err(falhas.iter().map(|(i, e)| format!("linha {}: {e}", i + 1)).collect::<Vec<_>>().join("; "));
                 }
                 // emenda: barra maior que a matéria-prima
                 let stock = self.doc.props.stock_length.trim();
@@ -4111,13 +4129,24 @@ impl Ctx<'_> {
                         .collect();
                     (!long.is_empty() && lim > 0.).then(|| format!("⚠ emenda: barra maior que a matéria-prima de {lim:.0} mm — {}", long.join(", ")))
                 };
+                let warn = if falhas.is_empty() {
+                    warn
+                } else {
+                    let motivos = falhas.iter().map(|(i, e)| format!("linha {}: {e}", i + 1)).collect::<Vec<_>>().join("; ");
+                    let base = format!("{MEMBRO_FALHOU} {} de {} linhas não geraram sólido — {motivos}", falhas.len(), geo.len());
+                    Some(match warn {
+                        Some(w) => format!("{base} | {w}"),
+                        None => base,
+                    })
+                };
                 if logging_members() {
                     let explicit = (ev(&m.ext1, &self.vars, "")?, ev(&m.ext2, &self.vars, "")?);
                     let profile = member_profile(m, &self.vars)?;
                     let name = format!("{} {}", m.family, m.designation);
-                    for (i, (g, sh)) in geo.iter().zip(&shapes).enumerate() {
+                    for (&i, sh) in kept.iter().zip(&shapes) {
+                        let g = &geo[i];
                         let frame = Frame { origin: g.start, x: g.x, normal: g.z };
-                        log_struct(f, i, StructItem::Member, &name, profile.clone(), member_length(g, explicit), frame, sh);
+                        log_struct(f, i, StructItem::Member, &name, profile.clone(), member_length(g, explicit), frame, sh, &m.material);
                     }
                 }
                 let mut all = Shape::empty();
@@ -4139,7 +4168,7 @@ impl Ctx<'_> {
                 let y = fenkra_kernel::cross(out, g.x);
                 let corner = geo3d::sub(geo3d::sub(c, geo3d::mul(g.x, w / 2.)), geo3d::mul(y, h / 2.));
                 let plate = Shape::box_tool(corner, g.x, out, [w, h, t]).map_err(k)?;
-                log_struct(f, 0, StructItem::Plate, "Placa", "Placa".into(), 0., Frame { origin: c, x: g.x, normal: out }, &plate);
+                log_struct(f, 0, StructItem::Plate, "Placa", "Placa".into(), 0., Frame { origin: c, x: g.x, normal: out }, &plate, "");
                 self.add_separate(f, plate);
                 Ok(None)
             }
@@ -4167,7 +4196,7 @@ impl Ctx<'_> {
                     pts.push(geo3d::add(q, geo3d::mul(db, c)));
                 }
                 let plate = Shape::poly_prism(&pts, geo3d::mul(n, t)).map_err(k)?;
-                log_struct(f, 0, StructItem::Gusset, "Reforço", "Reforço".into(), 0., Frame { origin: q, x: da, normal: n }, &plate);
+                log_struct(f, 0, StructItem::Gusset, "Reforço", "Reforço".into(), 0., Frame { origin: q, x: da, normal: n }, &plate, "");
                 self.add_separate(f, plate);
                 Ok(None)
             }
@@ -5048,6 +5077,14 @@ pub struct CutRow {
     pub item: usize,
     /// membros da linha: (comando, trecho)
     pub members: Vec<(Id, usize)>,
+    /// material do item (o da peça quando o membro não define o seu)
+    pub material: String,
+    /// ângulo de corte da ponta 1 (início da linha guia) e da ponta 2 (fim), em graus: 0 = corte
+    /// reto, 45 = meia-esquadria de canto reto; `None` = ponta que não é plana (encaixe) ou sem sólido
+    pub angle1: Option<f64>,
+    pub angle2: Option<f64>,
+    /// comprimento da ponta longa (maior extensão do sólido ao longo do eixo); só leitura, vem do sólido
+    pub long: f64,
 }
 
 thread_local! {
@@ -5057,6 +5094,39 @@ thread_local! {
 
 fn logging_members() -> bool {
     MEMBER_LOG.with(|l| l.borrow().is_some())
+}
+
+/// Prefixo do aviso de um membro que perdeu linhas (a interface o usa para pedir o contorno vermelho).
+pub const MEMBRO_FALHOU: &str = "⚠ membro:";
+
+/// Linha de membro que não gerou sólido: onde fica e por quê (B79).
+#[derive(Clone, Debug, PartialEq)]
+pub struct MemberFailure {
+    pub feature: Id,
+    /// índice da linha dentro do comando (a mesma numeração da lista de corte)
+    pub line: usize,
+    pub pts: Vec<V3>,
+    pub reason: String,
+}
+
+thread_local! {
+    static FAIL_LOG: RefCell<Option<Vec<MemberFailure>>> = const { RefCell::new(None) };
+}
+
+fn log_member_failures(f: Id, geo: &[MemberGeom], falhas: &[(usize, String)]) {
+    FAIL_LOG.with(|l| {
+        if let Some(v) = l.borrow_mut().as_mut() {
+            v.extend(falhas.iter().map(|(i, e)| MemberFailure { feature: f, line: *i, pts: geo[*i].pts.clone(), reason: e.clone() }));
+        }
+    });
+}
+
+/// Linhas de membro que falharam no cálculo atual, para o contorno vermelho e o motivo no 3D.
+/// Refaz os comandos estruturais; a interface só chama quando algum deles avisou a falha.
+pub fn member_failures(doc: &Document) -> Vec<MemberFailure> {
+    FAIL_LOG.with(|l| *l.borrow_mut() = Some(vec![]));
+    let _ = final_shape(doc);
+    FAIL_LOG.with(|l| l.borrow_mut().take()).unwrap_or_default()
 }
 
 /// Tipo de item da estrutura.
@@ -5080,6 +5150,8 @@ pub struct StructSignature {
     pub volume: i64,
     /// caixa local (mín. xyz, máx. xyz) em décimos de mm
     pub bbox: [i64; 6],
+    /// material do item (vazio = o da peça); materiais diferentes nunca se agrupam (B80)
+    pub material: String,
 }
 
 impl StructSignature {
@@ -5165,7 +5237,7 @@ fn to_local(sh: &Shape, fr: &Frame) -> Result<Shape, String> {
 
 /// Registra um sólido estrutural (só durante `structural_members`).
 #[allow(clippy::too_many_arguments)]
-fn log_struct(f: &Feature, index: usize, kind: StructItem, name: &str, profile: String, length: f64, frame: Frame, shape: &Shape) {
+fn log_struct(f: &Feature, index: usize, kind: StructItem, name: &str, profile: String, length: f64, frame: Frame, shape: &Shape, material: &str) {
     if !logging_members() {
         return;
     }
@@ -5177,6 +5249,7 @@ fn log_struct(f: &Feature, index: usize, kind: StructItem, name: &str, profile: 
         length: (length * 10.).round() as i64,
         volume: local.mass().volume.round() as i64,
         bbox: [lo[0], lo[1], lo[2], hi[0], hi[1], hi[2]].map(q10),
+        material: material.trim().to_string(),
     };
     let item = MemberSolid { feature: f.id, collector: f.target, index, kind, name: name.into(), frame, shape: local, signature };
     MEMBER_LOG.with(|l| {
@@ -5247,6 +5320,50 @@ fn member_length(g: &MemberGeom, explicit: (f64, f64)) -> f64 {
     }
 }
 
+/// Ângulo de corte das duas pontas de um membro, lido do próprio sólido (referencial local, Z ao
+/// longo do eixo). Cada ponta é um plano: o ângulo é o desvio entre a normal desse plano e o eixo
+/// (0 = corte reto, 45 = meia-esquadria de um canto de 90°). Ponta de encaixe (várias normais) = `None`.
+pub fn end_angles(shape: &Shape) -> (Option<f64>, Option<f64>) {
+    let Ok(mesh) = shape.mesh_angle(0.5, 0.35) else { return (None, None) };
+    let p = |i: u32| {
+        let k = i as usize * 3;
+        [mesh.positions[k] as f64, mesh.positions[k + 1] as f64, mesh.positions[k + 2] as f64]
+    };
+    let (mut zmin, mut zmax) = (f64::MAX, f64::MIN);
+    for v in mesh.positions.chunks(3) {
+        zmin = zmin.min(v[2] as f64);
+        zmax = zmax.max(v[2] as f64);
+    }
+    let zmid = (zmin + zmax) / 2.;
+    // normais (área ponderada) das faces que não são paralelas ao eixo, por ponta
+    let mut ends: [Vec<(V3, f64)>; 2] = [vec![], vec![]];
+    for t in mesh.indices.chunks(3) {
+        let (a, b, c) = (p(t[0]), p(t[1]), p(t[2]));
+        let n = fenkra_kernel::cross(geo3d::sub(b, a), geo3d::sub(c, a));
+        let area = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt() / 2.;
+        if area < 1e-9 {
+            continue;
+        }
+        let u = geo3d::mul(n, 1. / (2. * area));
+        if u[2].abs() < 0.02 {
+            continue;
+        }
+        let sign = if u[2] < 0. { -1. } else { 1. };
+        let cz = (a[2] + b[2] + c[2]) / 3.;
+        ends[usize::from(cz >= zmid)].push((geo3d::mul(u, sign), area));
+    }
+    let ang = |v: &[(V3, f64)]| -> Option<f64> {
+        let tot: f64 = v.iter().map(|x| x.1).sum();
+        if v.is_empty() || tot <= 0. {
+            return None;
+        }
+        let mean = geo3d::unit(v.iter().fold([0.; 3], |s, (n, a)| geo3d::add(s, geo3d::mul(*n, *a))))?;
+        // ponta plana: todas as normais apontam para o mesmo lado (tolerância de 0,5°)
+        v.iter().all(|(n, _)| geo3d::dot(*n, mean) > 0.99996).then(|| (mean[2].clamp(-1., 1.).acos().to_degrees() * 10.).round() / 10.)
+    };
+    (ang(&ends[0]), ang(&ends[1]))
+}
+
 /// Lista de corte dos membros estruturais (comprimento de cada barra, agrupado por perfil e medida).
 pub fn cut_list(doc: &Document) -> Vec<CutRow> {
     let Ok(vars) = doc.eval_params() else { return vec![] };
@@ -5281,6 +5398,10 @@ pub fn cut_list(doc: &Document) -> Vec<CutRow> {
             bars: bars_of(g.signature.length_mm()),
             item: g.item,
             members: g.members.iter().map(|m| (m.feature, m.index)).collect(),
+            material: if g.signature.material.is_empty() { doc.props.material.clone() } else { g.signature.material.clone() },
+            angle1: end_angles(&g.shape).0,
+            angle2: end_angles(&g.shape).1,
+            long: (g.signature.bbox[5] - g.signature.bbox[2]) as f64 / 10.,
         })
         .collect();
     // comandos cujo sólido não foi calculado (erro no kernel) continuam na lista, só pelo comprimento
@@ -5301,7 +5422,19 @@ pub fn cut_list(doc: &Document) -> Vec<CutRow> {
                     r.count += 1;
                     r.members.push((f.id, i));
                 }
-                None => rows.push(CutRow { feature: f.id, designation: name, length: len, count: 1, bars: bars_of(len), item: 0, members: vec![(f.id, i)] }),
+                None => rows.push(CutRow {
+                    feature: f.id,
+                    designation: name,
+                    length: len,
+                    count: 1,
+                    bars: bars_of(len),
+                    item: 0,
+                    members: vec![(f.id, i)],
+                    material: if m.material.trim().is_empty() { doc.props.material.clone() } else { m.material.trim().to_string() },
+                    angle1: None,
+                    angle2: None,
+                    long: len,
+                }),
             }
         }
     }
@@ -5337,6 +5470,31 @@ pub fn member_joints(doc: &Document) -> Vec<((Id, usize), (Id, usize), [f64; 3])
         }
     }
     out
+}
+
+/// Grupos de linhas contíguas do esqueleto (B226): índices em `paths`, cada grupo com as linhas que
+/// dividem pontas entre si. Linha que não resolve fica sozinha no seu grupo.
+pub fn skeleton_groups(doc: &Document, paths: &[CurveRef]) -> Vec<Vec<usize>> {
+    let vars = doc.eval_params().unwrap_or_default();
+    let cx = Ctx {
+        doc,
+        vars,
+        qualidade: Default::default(),
+        bodies: HashMap::new(),
+        sketches: HashMap::new(),
+        status: HashMap::new(),
+        tools: HashMap::new(),
+        memo: RefCell::new(HashMap::new()),
+        body_sig: HashMap::new(),
+        last_sheet: None,
+        sheet_maps: vec![],
+        steps: HashMap::new(),
+        miter_next: false,
+        promoted: RefCell::new(None),
+    };
+    let nan = [f64::NAN; 3];
+    let ends: Vec<(V3, V3)> = paths.iter().map(|p| cx.curve(p, 0).map(|c| (c.start(), c.end())).unwrap_or((nan, nan))).collect();
+    structural::contiguous_groups(&ends, 1e-4)
 }
 
 /// Parâmetros de chapa já avaliados.
@@ -5609,6 +5767,7 @@ mod tests {
                 corner,
                 gap: s("0"),
                 joints: vec![],
+                material: String::new(),
             }));
             d
         };
@@ -5644,6 +5803,7 @@ mod tests {
             corner: CornerMode::MeiaEsquadria,
             gap: s("0"),
             joints: vec![],
+            material: String::new(),
         }));
         let v0 = vol(&d);
         d.add_feature(FeatureKind::StructPlate(StructPlate { at: [0., 0., 0.], thickness: s("8"), margin: s("5") }));
@@ -5682,6 +5842,7 @@ mod tests {
             corner: CornerMode::MeiaEsquadria,
             gap: s("0"),
             joints: vec![],
+            material: String::new(),
         }));
         // um sólido por trecho, no referencial local (Z ao longo do membro, seção centrada)
         let ms = structural_members(&d);
@@ -5731,6 +5892,7 @@ mod tests {
             corner: CornerMode::MeiaEsquadria,
             gap: s("0"),
             joints: vec![],
+            material: String::new(),
         }));
         d.add_feature(FeatureKind::StructPlate(StructPlate { at: [0., 0., 0.], thickness: s("8"), margin: s("5") }));
         d.add_feature(FeatureKind::StructGusset(StructGusset { at: [0., 0., 500.], leg: s("60"), thickness: s("6"), chamfer: s("0") }));
@@ -5830,6 +5992,7 @@ mod tests {
             corner: CornerMode::MeiaEsquadria,
             gap: s("0"),
             joints: vec![],
+            material: String::new(),
         }));
         let r = recompute(&d);
         assert!(matches!(r.status[&m], Status::Ok), "{:?}", r.status[&m]);
@@ -6089,6 +6252,7 @@ mod tests {
             corner: CornerMode::MeiaEsquadria,
             gap: s("0"),
             joints: vec![],
+            material: String::new(),
         };
         let vol = |d: &Document| recompute(d).bodies.iter().map(|b| b.mass.volume).sum::<f64>();
         let lado = |d: &mut Document, a: [f64; 3], b: [f64; 3]| CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: s("0"), end: s("0") }));

@@ -1451,6 +1451,9 @@ pub struct StructMember {
     /// cantos com regra própria (o padrão é `corner`/`gap`); ficam no comando posterior do par
     #[serde(default)]
     pub joints: Vec<StructJoint>,
+    /// material deste membro (vazio = o material da peça); separa itens iguais na lista de corte
+    #[serde(default)]
+    pub material: String,
 }
 
 /// Regra de um canto entre a linha `mine` deste membro e a linha `other_path` de outro membro
