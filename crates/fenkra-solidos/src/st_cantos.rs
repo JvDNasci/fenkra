@@ -182,7 +182,7 @@ pub fn definir_regra(doc: &mut Document, a: Linha, b: Linha, modo: Option<Corner
     let primeiro = continua.map(|c| c == late).unwrap_or(false);
     let Some(f) = doc.feature_mut(late.0) else { return false };
     let FeatureKind::StructMember(m) = &mut f.kind else { return false };
-    m.joints.push(StructJoint { mine: late.1, other: early.0, other_path: early.1, mode: modo, first: primeiro, gap: folga.filter(|g| !g.trim().is_empty()) });
+    m.joints.push(StructJoint { mine: late.1, other: early.0, other_path: early.1, mode: modo, first: primeiro, gap: folga.filter(|g| !g.trim().is_empty()), bend: None });
     true
 }
 

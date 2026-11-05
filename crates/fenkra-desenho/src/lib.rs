@@ -1015,6 +1015,68 @@ mod tests {
     }
 
     #[test]
+    fn tabela_de_dobras_do_tubo_traz_modo_raio_e_desenvolvido() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        use fenkra_core::{BendMode, CornerMode, CurveRef, FeatureKind, PointRef, RefKind, SectionKind, StructJoint, StructMember, TubeBend};
+        let s = |x: &str| x.to_string();
+        // L de tubo redondo 50 x 3, duas pernas de 300, raio de centro 100: barra reta de 557,08 mm
+        let mut doc = fenkra_core::Document::new("Tubo");
+        let mut paths = vec![];
+        for (a, b) in [([0., 0., 0.], [300., 0., 0.]), ([300., 0., 0.], [300., 300., 0.])] {
+            let l = doc.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: s("0"), end: s("0") });
+            paths.push(CurveRef::Ref(l));
+        }
+        let f = doc.add_feature(FeatureKind::StructMember(StructMember {
+            paths,
+            family: s("Tubo redondo"),
+            designation: s("50x3"),
+            kind: SectionKind::TuboRedondo,
+            dims: vec![s("50"), s("3")],
+            anchor: 0,
+            angle: s("0"),
+            off_x: s("0"),
+            off_y: s("0"),
+            ext1: s("0"),
+            ext2: s("0"),
+            corner: CornerMode::MeiaEsquadria,
+            gap: s("0"),
+            joints: vec![],
+            material: String::new(),
+            mirror: false,
+        }));
+        if let Some(FeatureKind::StructMember(m)) = doc.feature_mut(f).map(|x| &mut x.kind) {
+            m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(TubeBend { mode: BendMode::Dobradeira, radius: s("100"), ..Default::default() }) });
+        }
+        let dir = std::env::temp_dir().join("fenkra_desenho_tubo_dobrado");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("tubo.fkp"), doc.to_json()).unwrap();
+        let src = Source { path: "tubo.fkp".into(), display_state: String::new(), hidden: vec![] };
+        let mut d = Drawing::new("Tubo", Format::A3);
+        let sheet = d.sheets[0].id;
+        let tid = d.alloc();
+        d.tables.push(Table { id: tid, sheet, kind: TableKind::Bends, source: src.clone(), pos: [20., 100.], level: Default::default() });
+        let mut m = Models::new(Some(dir.clone()));
+        let t = m.table(&d.tables[0], &d);
+        assert_eq!(t.headers[1], "Tubo");
+        assert_eq!(t.rows.len(), 1, "{:?}", t.rows);
+        let r = &t.rows[0];
+        assert_eq!(r[2], "Dobradeira");
+        assert_eq!(r[3], format!("{}°", d.num(90.)));
+        assert_eq!(r[4], d.num(100.));
+        // a dobra começa a 200 mm da ponta, termina em 357,08 e a barra reta tem 557,08 mm
+        assert_eq!(r[5], d.num(200.));
+        assert_eq!(r[6], d.num(357.08));
+        assert_eq!(r[7], d.num(557.08));
+        // a lista de corte da mesma peça traz a barra pelo desenvolvido
+        d.tables.push(Table { id: tid, sheet, kind: TableKind::CutList, source: src, pos: [20., 100.], level: Default::default() });
+        let c = m.table(&d.tables[1], &d);
+        assert_eq!(c.rows.len(), 1);
+        assert_eq!(c.rows[0][2], d.num(557.1));
+    }
+
+    #[test]
     fn lista_de_corte_usa_o_numero_do_item_da_estrutura() {
         if !fenkra_kernel::AVAILABLE {
             return;

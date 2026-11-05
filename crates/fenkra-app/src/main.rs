@@ -63,6 +63,8 @@ mod textos_ajuda;
 mod textos_biblioteca;
 mod textos_desenho;
 mod textos_estrutural;
+mod textos_dobra_tubo;
+mod st_dobra_ui;
 mod st_cantos_ui;
 mod st_montagem_ui;
 mod st_alcas;

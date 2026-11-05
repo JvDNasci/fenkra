@@ -36,6 +36,7 @@ fn nome_do_modo(m: CornerMode) -> &'static str {
         CornerMode::Aparar => "Aparar",
         CornerMode::Encaixe => "Encaixe",
         CornerMode::Nenhum => "Nenhum",
+        CornerMode::Dobra => "Dobra de tubo",
     }
 }
 

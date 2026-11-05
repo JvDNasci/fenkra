@@ -55,7 +55,8 @@ pub fn member_panel(ui: &mut egui::Ui, doc: &Document, me: Id, m: &mut StructMem
         ui.add_sized([96., 18.], egui::Label::new(tr("Material")));
         ui.add(egui::TextEdit::singleline(&mut m.material).desired_width(180.).hint_text(doc_material(doc))).on_hover_text(tr("Material do membro (vazio = o da peça)"));
     });
-    joints_ui(ui, doc, me, m);
+    joints_ui(ui, doc, me, m, vars);
+    crate::st_dobra_ui::ficha_do_tubo(ui, me);
     ui.label(RichText::new(tr("Tudo é associativo: mexer no esqueleto (pontos, linhas) atualiza as barras.")).weak().small());
 }
 
@@ -69,7 +70,7 @@ pub struct JointCache(pub Vec<((Id, usize), (Id, usize), [f64; 3])>);
 
 /// Operações de canto por par: para cada encontro deste membro com outro (ou entre linhas dele),
 /// o tratamento, quem é o membro 1 (continua) e a folga.
-fn joints_ui(ui: &mut egui::Ui, doc: &Document, me: Id, m: &mut StructMember) {
+fn joints_ui(ui: &mut egui::Ui, doc: &Document, me: Id, m: &mut StructMember, vars: &HashMap<String, f64>) {
     let all = ui.ctx().data(|d| d.get_temp::<JointCache>(egui::Id::unique("st_joints"))).map(|c| c.0).unwrap_or_default();
     let mine: Vec<(usize, Id, usize, [f64; 3])> = all
         .iter()
@@ -89,6 +90,9 @@ fn joints_ui(ui: &mut egui::Ui, doc: &Document, me: Id, m: &mut StructMember) {
     section(ui, &format!("Cantos com outros membros ({})", mine.len()));
     let pos = |id: Id| doc.features.iter().position(|f| f.id == id).unwrap_or(0);
     let modes = [(None, "padrão"), (Some(CornerMode::MeiaEsquadria), "Meia-esquadria"), (Some(CornerMode::Aparar), "Aparar"), (Some(CornerMode::Encaixe), "Encaixe"), (Some(CornerMode::Nenhum), "Nenhum")];
+    // B326: a dobra de tubo só vale em tubo, entre duas linhas do mesmo comando
+    let tubo = crate::st_dobra_ui::e_tubo(m.kind);
+    let sugestao = crate::st_dobra_ui::raio_inicial(m, vars);
     egui::Grid::new("st_joints_grid").striped(true).num_columns(4).show(ui, |ui| {
         for (k, (i, other, j, p)) in mine.into_iter().enumerate() {
             let them = if other == me { format!("{} {}", tr("linha"), j + 1) } else { format!("{} · {} {}", doc.name_of(other), tr("linha"), j + 1) };
@@ -109,10 +113,12 @@ fn joints_ui(ui: &mut egui::Ui, doc: &Document, me: Id, m: &mut StructMember) {
             }
             let at = m.joints.iter().position(|x| (x.mine == i && x.other == other && x.other_path == j) || (other == me && x.mine == j && x.other == me && x.other_path == i));
             let cur = at.map(|a| m.joints[a].mode);
-            let label = modes.iter().find(|(x, _)| *x == cur).map(|(_, n)| tr(n).to_string()).unwrap_or_default();
+            let com_dobra = tubo && other == me;
+            let opcoes: Vec<(Option<CornerMode>, &str)> = modes.iter().copied().chain(com_dobra.then_some((Some(CornerMode::Dobra), "Dobra de tubo"))).collect();
+            let label = opcoes.iter().find(|(x, _)| *x == cur).map(|(_, n)| tr(n).to_string()).unwrap_or_default();
             let mut pick: Option<Option<CornerMode>> = None;
             egui::ComboBox::from_id_salt(("st_jm", k)).selected_text(label).width(110.).show_ui(ui, |ui| {
-                for (x, n) in modes {
+                for (x, n) in opcoes.iter().copied() {
                     if ui.selectable_label(cur == x, tr(n)).clicked() {
                         pick = Some(x);
                     }
@@ -124,11 +130,22 @@ fn joints_ui(ui: &mut egui::Ui, doc: &Document, me: Id, m: &mut StructMember) {
                         m.joints.remove(a);
                     }
                 }
-                Some(Some(mode)) => match at {
-                    Some(a) => m.joints[a].mode = mode,
-                    // padrão: o anterior é o membro 1
-                    None => m.joints.push(StructJoint { mine: i, other, other_path: j, mode, first: (pos(me), i) < (pos(other), j), gap: None }),
-                },
+                Some(Some(mode)) => {
+                    let bend = (mode == CornerMode::Dobra).then(|| TubeBend { radius: sugestao.clone(), ..Default::default() });
+                    match at {
+                        Some(a) => {
+                            m.joints[a].mode = mode;
+                            // sair da dobra apaga os dados dela; entrar nela ganha um raio inicial
+                            if mode != CornerMode::Dobra {
+                                m.joints[a].bend = None;
+                            } else if m.joints[a].bend.is_none() {
+                                m.joints[a].bend = bend;
+                            }
+                        }
+                        // padrão: o anterior é o membro 1
+                        None => m.joints.push(StructJoint { mine: i, other, other_path: j, mode, first: (pos(me), i) < (pos(other), j), gap: None, bend }),
+                    }
+                }
                 None => {}
             }
             let at = m.joints.iter().position(|x| x.mine == i && x.other == other && x.other_path == j);
@@ -150,6 +167,11 @@ fn joints_ui(ui: &mut egui::Ui, doc: &Document, me: Id, m: &mut StructMember) {
             ui.end_row();
         }
     });
+    // B326: editor de cada nó de dobra (modo, raio, regra, resultado)
+    let dobras: Vec<usize> = (0..m.joints.len()).filter(|k| m.joints[*k].mode == CornerMode::Dobra && m.joints[*k].other == me).collect();
+    for k in dobras {
+        crate::st_dobra_ui::editor_do_no(ui, doc, me, m, k, vars);
+    }
 }
 
 /// Cópia das famílias guardada na memória da interface (o painel não tem acesso às configurações).
@@ -163,7 +185,9 @@ pub fn windows(app: &mut App, ctx: &egui::Context) {
     if app.session.as_ref().is_some_and(|s| matches!(app.doc().feature(s.id).map(|f| &f.kind), Some(FeatureKind::StructMember(_)))) {
         let j = JointCache(fenkra_solidos::member_joints(app.doc()));
         ctx.data_mut(|d| d.insert_temp(egui::Id::unique("st_joints"), j));
+        crate::st_dobra_ui::guardar(ctx, app.doc());
     }
+    crate::st_dobra_ui::janela_regras(app, ctx);
     library(app, ctx);
     cut_list(app, ctx);
     crate::st_cantos_ui::window(app, ctx);
@@ -376,6 +400,7 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
         return;
     }
     let mut rows = fenkra_solidos::cut_list(app.doc());
+    let tubos_dobrados = fenkra_solidos::tubos_dobrados(app.doc());
     let estado_id = egui::Id::new("st_cut_ui");
     let mut ui_state: CutUi = ctx.data(|d| d.get_temp(estado_id)).unwrap_or_default();
     let materiais: Vec<String> = {
@@ -431,7 +456,7 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
                 });
             }
             let stock = app.open.doc.props.stock_length.trim().to_string();
-            egui::Grid::new("lista_corte").striped(true).num_columns(7).show(ui, |ui| {
+            egui::Grid::new("lista_corte").striped(true).num_columns(8).show(ui, |ui| {
                 let cab = ["Perfil", "Material", "Comprimento", "Ângulo 1", "Ângulo 2", "Qtd."];
                 for (i, h) in cab.iter().enumerate() {
                     let seta = if ui_state.sort == i {
@@ -454,6 +479,7 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
                     }
                 }
                 ui.label(RichText::new(tr("Barras")).strong());
+                ui.label(RichText::new(tr("Dobras")).strong());
                 ui.end_row();
                 for (k, r) in rows.iter().enumerate() {
                     let primeiro = r.members.first().copied();
@@ -467,7 +493,9 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
                     }
                     ui.label(&r.material);
                     let comp = ui.label(format!("{} mm", fmt(r.length)));
-                    if (r.long - r.length).abs() > 0.05 && r.item > 0 {
+                    if r.tubo.is_some() {
+                        comp.on_hover_text(tr("tubo dobrado: o comprimento é o desenvolvido"));
+                    } else if (r.long - r.length).abs() > 0.05 && r.item > 0 {
                         comp.on_hover_text(format!("{}: {} mm", tr("ponta longa"), fmt(r.long)));
                     }
                     ui.label(ang_txt(r.angle1));
@@ -479,9 +507,35 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
                     } else {
                         ui.label(format!("{}", r.count));
                     }
+                    match &r.tubo {
+                        Some(t) => {
+                            let modo = t.modo().map(|m| tr(fenkra_solidos::st_dobra::nome_modo(m)).to_string()).unwrap_or_default();
+                            ui.label(t.resumo()).on_hover_text(format!("{modo} · {}", tr("Comprimento de corte da barra reta, já com os ajustes de cada dobra. Alongamento e afinamento não entram aqui.")));
+                        }
+                        None => {
+                            ui.label("—");
+                        }
+                    }
                     ui.end_row();
                 }
             });
+            if !tubos_dobrados.is_empty() {
+                ui.separator();
+                ui.label(RichText::new(tr("Tubos dobrados")).strong());
+                for (n, t) in tubos_dobrados.iter().enumerate() {
+                    let modo = t.modo().map(|m| tr(fenkra_solidos::st_dobra::nome_modo(m)).to_string()).unwrap_or_default();
+                    let titulo = if t.so_corte_simples() { format!("{} {} · {} · {} mm {}", tr("Tubo"), n + 1, modo, fmt(t.soma_pernas), tr("em pernas")) } else { format!("{} {} · {} · {} {} mm", tr("Tubo"), n + 1, modo, tr("desenvolvido"), fmt(t.desenvolvido)) };
+                    ui.label(RichText::new(titulo).strong()).on_hover_text(tr("Comprimento de corte da barra reta, já com os ajustes de cada dobra. Alongamento e afinamento não entram aqui."));
+                    ui.label(RichText::new(format!("{} {} mm · {} {}", tr("pernas"), t.pernas.iter().map(|p| fmt(*p)).collect::<Vec<_>>().join(" + "), tr("dobras"), t.resumo())).weak().small());
+                    for (k, d) in t.dobras.iter().enumerate() {
+                        ui.label(RichText::new(format!("  {} {}: {} → {} mm · {}°", tr("dobra"), k + 1, fmt(d.inicio), fmt(d.fim), fmt(d.resultado.theta))).weak().small());
+                    }
+                    for e in t.erros.iter().chain(&t.avisos) {
+                        ui.label(RichText::new(format!("⚠ {e}")).color(crate::theme::st_warn()).small());
+                    }
+                }
+                ui.label(RichText::new(tr("Alongamento e afinamento são estimativas de um modelo simples, sem fonte confirmada: não são valores de engenharia.")).weak().small());
+            }
             ui.label(RichText::new(tr("Comprimento e ângulos são lidos do sólido (somente leitura). Ângulo 1: início da linha guia; ângulo 2: fim. 0° = corte reto.")).weak().small());
             if stock.is_empty() {
                 ui.label(RichText::new(tr("Defina o comprimento máximo da barra nas propriedades da peça para ver as emendas.")).weak().small());
@@ -505,10 +559,12 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
     ctx.data_mut(|d| d.insert_temp(estado_id, ui_state));
     if export {
         if let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name("lista_de_corte.csv").save_file() {
-            let mut t = String::from("perfil;material;comprimento_mm;angulo1_graus;angulo2_graus;quantidade;barras_materia_prima\n");
+            let mut t = String::from("perfil;material;comprimento_mm;angulo1_graus;angulo2_graus;quantidade;barras_materia_prima;dobras;modo_da_dobra\n");
             let num = |a: Option<f64>| a.map(fmt).unwrap_or_default();
             for r in &rows {
-                t += &format!("{};{};{};{};{};{};{}\n", r.designation, r.material, fmt(r.length), num(r.angle1), num(r.angle2), r.count, r.bars * r.count);
+                let dobras = r.tubo.as_ref().map(|t| t.resumo()).unwrap_or_default();
+                let modo = r.tubo.as_ref().and_then(|t| t.modo()).map(|m| fenkra_solidos::st_dobra::nome_modo(m)).unwrap_or_default();
+                t += &format!("{};{};{};{};{};{};{};{};{}\n", r.designation, r.material, fmt(r.length), num(r.angle1), num(r.angle2), r.count, r.bars * r.count, dobras, modo);
             }
             match std::fs::write(&p, t) {
                 Ok(()) => app.toast(tr("Lista de corte exportada"), false),
