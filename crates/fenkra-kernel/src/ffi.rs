@@ -101,7 +101,7 @@ pub mod bridge {
         /// Varre o perfil (face) ao longo da polilinha `spine` (xyz…); modo 0 Frenet corrigido, 1 fixo, 2 Frenet.
         fn sweep_tool(face: &Shape, spine: &[f64], mode: u8) -> Result<UniquePtr<Shape>>;
         /// Multi-seções pelas faces do composto (na ordem).
-        fn loft_tool(sections: &Shape, ruled: bool, closed: bool) -> Result<UniquePtr<Shape>>;
+        fn loft_tool(sections: &Shape, ruled: bool, closed: bool, alinhar: bool) -> Result<UniquePtr<Shape>>;
         /// 0 caixa, 1 cilindro, 2 esfera, 3 cone, 4 toro, 5 cunha, 6 prisma poligonal
         fn primitive(kind: u8, frame: &Frame, p: &[f64]) -> Result<UniquePtr<Shape>>;
         fn shell_t(s: &Shape, pts: &[f64], thickness: f64, outward: bool, tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;

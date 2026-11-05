@@ -431,8 +431,8 @@ mod imp {
             b::sweep_tool(&self.0, &flat, mode).map(Shape).map_err(err)
         }
         /// Multi-seções pelas faces deste composto, na ordem.
-        pub fn loft(&self, ruled: bool, closed: bool) -> KResult<Shape> {
-            b::loft_tool(&self.0, ruled, closed).map(Shape).map_err(err)
+        pub fn loft(&self, ruled: bool, closed: bool, alinhar: bool) -> KResult<Shape> {
+            b::loft_tool(&self.0, ruled, closed, alinhar).map(Shape).map_err(err)
         }
         pub fn primitive(kind: u8, f: &Frame, p: &[f64]) -> KResult<Shape> {
             b::primitive(kind, &frame(f), p).map(Shape).map_err(err)
@@ -923,7 +923,7 @@ mod imp {
         pub fn sm_chain_sweep(&self, _: &[[f64; 3]], _: [f64; 3]) -> KResult<Shape> {
             no()
         }
-        pub fn loft(&self, _: bool, _: bool) -> KResult<Shape> {
+        pub fn loft(&self, _: bool, _: bool, _: bool) -> KResult<Shape> {
             no()
         }
         pub fn primitive(_: u8, _: &Frame, _: &[f64]) -> KResult<Shape> {
