@@ -75,6 +75,7 @@ pub(super) fn scratch(st: &DwgState, slot: u64) -> Drawing {
     t.views = st.d.views.clone();
     t.text_height = st.d.text_height;
     t.decimals = st.d.decimals;
+    t.projection = st.d.projection;
     t.reserve_ids(SCRATCH + slot * 1000);
     t
 }
@@ -138,26 +139,13 @@ pub fn commit_views(st: &mut DwgState, t: &Drawing, ids: &[Id]) -> Vec<Id> {
 
 /// Direção da vista projetada pela posição do clique em relação à mãe (1º diedro: abaixo = superior,
 /// à direita = lateral esquerda).
-pub fn proj_dir(parent: &View, m: V2) -> Dir {
+pub fn proj_dir(parent: &View, m: V2, projecao: fenkra_desenho::novo::Projecao) -> Dir {
     let (dx, dy) = (m[0] - parent.pos[0], m[1] - parent.pos[1]);
     let base = match &parent.kind {
         ViewKind::Standard(d) | ViewKind::Projected { dir: d, .. } => *d,
         _ => Dir::Frente,
     };
-    if dx.abs() > dy.abs() {
-        match (base, dx > 0.) {
-            (Dir::Frente, true) => Dir::Esquerda,
-            (Dir::Frente, false) => Dir::Direita,
-            (Dir::Esquerda, true) => Dir::Tras,
-            (Dir::Direita, false) => Dir::Tras,
-            (_, true) => Dir::Esquerda,
-            (_, false) => Dir::Direita,
-        }
-    } else if dy < 0. {
-        Dir::Topo
-    } else {
-        Dir::Base
-    }
+    projecao.dir_projetada(base, dx, dy)
 }
 
 /// Vista de corte ou detalhe a partir dos dois primeiros cliques (linha de corte; centro e raio).
@@ -245,7 +233,7 @@ pub fn compute(st: &mut DwgState, m: V2, snap: &SnapFn, view_at: &ViewAt) -> Opt
         c::PROJ => {
             let parent = st.d.view(parent_of(st)?)?.clone();
             let mut t = scratch(st, 0);
-            let id = t.add_view(st.sheet, parent.source.clone(), ViewKind::Projected { parent: parent.id, dir: proj_dir(&parent, at) }, at, parent.scale);
+            let id = t.add_view(st.sheet, parent.source.clone(), ViewKind::Projected { parent: parent.id, dir: proj_dir(&parent, at, st.d.projection) }, at, parent.scale);
             apply_style(st, &mut t, &[id]);
             layout::align_views(&mut t);
             g.guides.push((parent.pos, t.view(id)?.pos));

@@ -671,19 +671,82 @@ fn frame(o: &mut Out, d: &Drawing, sh: &Sheet, fields: &std::collections::HashMa
     if t.style == TitleStyle::Ansi {
         let (bx, bh) = (x0 - 70., top);
         o.rect([bx, y0], [x0, y0 + bh], Style::Thick);
-        for (i, line) in ["UNLESS OTHERWISE SPECIFIED:", "DIMENSIONS ARE IN MILLIMETERS", "TOLERANCES: X.X ±0.1  X.XX ±0.05", "ANGLES ±0.5°", "FIRST ANGLE PROJECTION"].iter().enumerate() {
+        for (i, line) in ["UNLESS OTHERWISE SPECIFIED:", "DIMENSIONS ARE IN MILLIMETERS", "TOLERANCES: X.X ±0.1  X.XX ±0.05", "ANGLES ±0.5°", if d.projection == crate::novo::Projecao::Terceiro { "THIRD ANGLE PROJECTION" } else { "FIRST ANGLE PROJECTION" }].iter().enumerate() {
             o.text([bx + 1.5, y0 + bh - 5. - i as f64 * 5.5], line.to_string(), 2.0, 0., Align::Left);
         }
     }
     // símbolo do 1º diedro: tronco de cone de frente e de lado
     let (sx, sy, sw) = diedro.map(|(x, y, ww)| (x0 + x, y0 + y, ww)).unwrap_or((w - r - 30., y0 + top + 2., 28.));
-    let cx = sx + sw * 0.32;
+    // 1º diedro: cone à esquerda e círculos à direita; 3º diedro: trocados
+    let terceiro = d.projection == crate::novo::Projecao::Terceiro;
+    let cx = sx + sw * if terceiro { 0.68 } else { 0.32 };
     let cy = sy + 8.;
     o.line(vec![[cx - 7., cy - 3.], [cx + 3., cy - 5.], [cx + 3., cy + 5.], [cx - 7., cy + 3.], [cx - 7., cy - 3.]], Style::Visible);
-    let ex = sx + sw * 0.72;
+    let ex = sx + sw * if terceiro { 0.28 } else { 0.72 };
     o.line(crate::source::circle([ex, cy], 5.), Style::Visible);
     o.line(crate::source::circle([ex, cy], 3.), Style::Visible);
-    o.text([sx + sw / 2., sy + 1.2], "1º diedro".to_string(), 2.2, 0., Align::Center);
+    o.text([sx + sw / 2., sy + 1.2], d.projection.curto().to_string(), 2.2, 0., Align::Center);
+}
+
+/// Rugosidade com campos extras (B251), nas posições do símbolo: valor (com a amostragem) em cima da
+/// barra; método, direção das estrias e sobremedida embaixo. A direção é desenhada com linhas, não
+/// com texto, para sair igual em PDF, SVG e DXF.
+fn rough_extended(o: &mut Out, p: V2, text: &str, r: &crate::simbolos::DwgRough, s: f64) {
+    use crate::simbolos::RugTipo;
+    let h = s * 1.4;
+    let valor = crate::simbolos::rug_linha_do_valor(text, r);
+    let x0 = p[0] + h * 0.9;
+    let yb = p[1] + h * 1.6;
+    let metodo = r.metodo.trim();
+    let sob = r.sobremedida.trim();
+    // a barra cobre o valor e a linha de baixo (método + sobremedida)
+    let baixo = text_width(metodo, s) + if sob.is_empty() { 0. } else { text_width(sob, s) + s } + if r.direcao.trim().is_empty() { 0. } else { s * 1.6 };
+    let fim = x0 + text_width(&valor, s).max(baixo) + 1.;
+    match r.tipo {
+        RugTipo::Qualquer => {
+            o.line(vec![[p[0] - h * 0.6, p[1] + h * 0.6], p, [x0, yb], [fim, yb]], Style::Thin);
+            o.seg([p[0] - h * 0.6, p[1] + h * 0.6], [p[0] + h * 0.35, p[1] + h * 0.6], Style::Thin);
+        }
+        RugTipo::ComRemocao | RugTipo::SemRemocao => {
+            // triângulo fechado: as duas pernas à mesma altura, unidas pela barra
+            o.line(vec![[p[0] - h * 0.9, yb], p, [x0, yb]], Style::Thin);
+            o.seg([p[0] - h * 0.9, yb], [fim, yb], Style::Thin);
+            if r.tipo == RugTipo::SemRemocao {
+                o.line(circle([p[0], p[1] + h * 0.85], h * 0.4), Style::Thin);
+            }
+        }
+    }
+    o.text([x0 + 0.5, yb + 0.6], valor, s, 0., Align::Left);
+    let mut x = x0 + 0.5;
+    let y1 = yb - s * 1.5;
+    if !metodo.is_empty() {
+        o.text([x, y1], metodo.to_string(), s, 0., Align::Left);
+        x += text_width(metodo, s) + s * 0.5;
+    }
+    // direção das estrias: símbolo de linhas ou a letra (M, C, R)
+    let dir = r.direcao.trim();
+    if !dir.is_empty() {
+        let (cx, cy, k) = (x + s * 0.6, y1 + s * 0.35, s * 0.5);
+        match dir {
+            "=" => {
+                o.seg([cx - k, cy + k * 0.35], [cx + k, cy + k * 0.35], Style::Thin);
+                o.seg([cx - k, cy - k * 0.35], [cx + k, cy - k * 0.35], Style::Thin);
+            }
+            "⊥" => {
+                o.seg([cx - k, cy - k], [cx + k, cy - k], Style::Thin);
+                o.seg([cx, cy - k], [cx, cy + k], Style::Thin);
+            }
+            "X" => {
+                o.seg([cx - k, cy - k], [cx + k, cy + k], Style::Thin);
+                o.seg([cx - k, cy + k], [cx + k, cy - k], Style::Thin);
+            }
+            letra => o.text([cx, y1], letra.to_string(), s, 0., Align::Center),
+        }
+        x += s * 1.6;
+    }
+    if !sob.is_empty() {
+        o.text([x, y1], sob.to_string(), s, 0., Align::Left);
+    }
 }
 
 /// Segmentos de hachura de uma vista: contornos agrupados por peça (`groups[i]` é a peça do
@@ -1242,12 +1305,17 @@ fn note(o: &mut Out, n: &Note) {
             }
         }
         NoteKind::Roughness => {
-            // √ com a barra: valor em cima
             let p = n.pos;
-            let h = s * 1.4;
-            o.line(vec![[p[0] - h * 0.6, p[1] + h * 0.6], p, [p[0] + h * 0.9, p[1] + h * 1.6], [p[0] + h * 0.9 + text_width(&n.text, s) + 1., p[1] + h * 1.6]], Style::Thin);
-            o.seg([p[0] - h * 0.6, p[1] + h * 0.6], [p[0] + h * 0.35, p[1] + h * 0.6], Style::Thin);
-            o.text([p[0] + h * 0.9 + 0.5, p[1] + h * 1.6 + 0.6], n.text.clone(), s, 0., Align::Left);
+            match n.rough.as_ref().filter(|r| !r.basico()) {
+                // √ com a barra: valor em cima
+                None => {
+                    let h = s * 1.4;
+                    o.line(vec![[p[0] - h * 0.6, p[1] + h * 0.6], p, [p[0] + h * 0.9, p[1] + h * 1.6], [p[0] + h * 0.9 + text_width(&n.text, s) + 1., p[1] + h * 1.6]], Style::Thin);
+                    o.seg([p[0] - h * 0.6, p[1] + h * 0.6], [p[0] + h * 0.35, p[1] + h * 0.6], Style::Thin);
+                    o.text([p[0] + h * 0.9 + 0.5, p[1] + h * 1.6 + 0.6], n.text.clone(), s, 0., Align::Left);
+                }
+                Some(r) => rough_extended(o, p, &n.text, r, s),
+            }
             if let Some(t) = n.leader {
                 leader_line(o, vec![p, t], s, st, true);
             }
