@@ -316,8 +316,46 @@ fn rotulos(app: &App, ui: &egui::Ui, rect: egui::Rect, cam: &crate::render::Came
                 }
             }
         }
+        FeatureKind::Stiffener(st) => {
+            let Some(sk) = r.sketches.iter().find(|s| s.feature == st.sketch) else { return };
+            let t = fenkra_core::expr::eval_str(&st.thickness, &app.vars()).unwrap_or(0.);
+            let n0 = Vec3::from(sk.frame.normal.map(|x| x as f32));
+            for (i, par) in sk.lines.chunks_exact(2).take(12).enumerate() {
+                let (a, b) = (Vec3::from(par[0]), Vec3::from(par[1]));
+                let Some(lado) = (b - a).try_normalize().map(|d| n0.cross(d)) else { continue };
+                let m = (a + b) / 2.;
+                let Some(sm) = cam.project(rect, m) else { continue };
+                for sgn in sentidos_da_parede(st.side) {
+                    seta_da_parede(ui, rect, cam, m, sm, lado * sgn, cor);
+                }
+                if i == 0 {
+                    let nome = ["dois lados", "um lado", "outro lado"][st.side.min(2) as usize];
+                    let extensao = if st.to_body { format!(" · {}", crate::i18n::tr("até o corpo")) } else { String::new() };
+                    rotulo(ui, rect, sm, format!("{} {} · {}{extensao}", crate::app::fmt(t), "mm", crate::i18n::tr(nome)), cor);
+                }
+            }
+        }
         _ => {}
     }
+}
+
+/// Para onde a parede da nervura cresce a partir da linha, na convenção do cálculo: o lado 1 é o da
+/// normal do plano vezes a linha; o lado 2 é o oposto; o 0 vai para os dois.
+pub fn sentidos_da_parede(lado: u8) -> &'static [f32] {
+    match lado {
+        1 => &[1.],
+        2 => &[-1.],
+        _ => &[1., -1.],
+    }
+}
+
+/// Seta de tamanho fixo na tela: a espessura real pode ter menos de um pixel no zoom atual.
+fn seta_da_parede(ui: &egui::Ui, rect: egui::Rect, cam: &crate::render::Camera, m: Vec3, sm: egui::Pos2, dir: Vec3, cor: egui::Color32) {
+    let Some(d) = cam.project(rect, m + dir).map(|q| q - sm).filter(|v| v.length() > 1e-3).map(|v| v.normalized()) else { return };
+    let (ponta, n) = (sm + d * 30., egui::vec2(-d.y, d.x));
+    let painter = ui.painter_at(rect);
+    painter.line_segment([sm, ponta], egui::Stroke::new(2., cor));
+    painter.add(egui::Shape::convex_polygon(vec![ponta + d * 9., ponta + n * 5., ponta - n * 5.], cor, egui::Stroke::NONE));
 }
 
 /// Etiqueta no topo da viewport com a causa, para quem olha o modelo e não o painel.
@@ -565,6 +603,25 @@ mod tests {
         let c = cena(&d, &r, e, &base);
         assert!(tem_cor(&c, [10, 20, 30]) && tem_cor(&c, [40, 50, 60]));
         assert!(c.bounds.is_some_and(|(_, hi)| (hi.z - 25.).abs() < 1e-3), "a prévia entra no enquadramento");
+    }
+
+    /// B11: a seta segue a convenção do cálculo.
+    #[test]
+    fn nervura_de_um_lado_cresce_para_o_lado_da_seta() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let mut d = caixa();
+        let topo = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "20");
+        let sk = sk_linhas(&mut d, PlaneRef::Datum(topo), &[([-20., 0.], [20., 0.])], false);
+        d.add_feature(FeatureKind::Stiffener(Stiffener { sketch: sk, thickness: s("4"), depth: s("5"), reverse: true, to_body: false, side: 1 }));
+        let r = recompute(&d);
+        // normal +Z vezes linha +X dá +Y: a parede fica em y de 0 a 4
+        let ys: Vec<f32> = r.bodies[0].mesh.positions.chunks_exact(3).filter(|p| p[2] > 20.5).map(|p| p[1]).collect();
+        assert!(!ys.is_empty() && ys.iter().all(|y| *y > -1e-3 && *y < 4.001), "{ys:?}");
+        assert_eq!(sentidos_da_parede(1), &[1.]);
+        assert_eq!(sentidos_da_parede(2), &[-1.]);
+        assert_eq!(sentidos_da_parede(0).len(), 2);
     }
 
     /// O fantasma não é selecionável: o raio passa pela aba e acerta o que está atrás, ou nada.
