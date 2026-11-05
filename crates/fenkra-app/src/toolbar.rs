@@ -356,6 +356,11 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("pmi_raio", "Raio", "Cota de raio 3D", "Escolha uma aresta circular.", Cmd(C::Pmi(1))),
                 it("pmi_diametro", "Diâmetro", "Cota de diâmetro 3D", "Escolha uma aresta circular.", Cmd(C::Pmi(2))),
                 it("pmi_angulo", "Ângulo", "Cota angular 3D", "Escolha o vértice e dois pontos.", Cmd(C::Pmi(3))),
+                it("pmi_ordenada", "Ordenada", "Cota ordenada 3D", "Escolha a origem e o ponto: mede só a componente no eixo (Tab troca X, Y, Z).", Cmd(C::Pmi(11))),
+                it("pmi_cadeia", "Cadeia", "Cadeia de cotas 3D", "Clique os pontos em ordem: cada trecho ganha a sua cota. Enter conclui.", Cmd(C::Pmi(13))),
+                it("pmi_base", "Base", "Cotas a partir de uma base", "O primeiro ponto é a origem comum; cada ponto seguinte ganha uma cota empilhada. Enter conclui.", Cmd(C::Pmi(14))),
+                it("pmi_feature", "Feature", "Chamada de feature 3D", "Clique numa face de furo, rosca, chanfro, filete ou dobra: o texto (4× Ø6,5 ▽12 · M8×1,25-6H, C2, R3, esp. 2) sai dos parâmetros da feature.", Cmd(C::Pmi(15))),
+                it("pmi_arco", "Arco", "Comprimento de arco 3D", "Escolha o centro e as duas pontas do arco.", Cmd(C::Pmi(12))),
             ]),
             Family("pmi_anotacao", vec![
                 it("pmi_nota", "Nota", "Nota com chamada", "Texto livre preso a um ponto do modelo.", Cmd(C::Pmi(4))),

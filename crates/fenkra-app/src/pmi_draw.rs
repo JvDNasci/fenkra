@@ -401,13 +401,20 @@ impl Pen {
     /// patamar curto, e fica por baixo da caixa (no lugar reservado). Nunca cruza a caixa.
     /// Com o rótulo girado, o lado é escolhido no sistema da caixa.
     pub fn leader(&self, p: &Cv, slot: usize, r: Rect, anchor: Pos2) {
+        self.leader_route(p, slot, r, &[anchor]);
+    }
+
+    /// Chamada da caixa `r` até a última posição de `route`, passando pelos vértices intermediários
+    /// (B23). Sai do lado da caixa voltado para o primeiro ponto do caminho e a seta fica na ponta.
+    pub fn leader_route(&self, p: &Cv, slot: usize, r: Rect, route: &[Pos2]) {
         if !self.leader_on {
             return;
         }
+        let (Some(&anchor), Some(&tip)) = (route.first(), route.last()) else { return };
         let c = r.center();
         let a = if self.turned() { self.xf_inv(anchor, c) } else { anchor };
         let d = a - c;
-        if r.expand(2.).contains(a) {
+        if route.len() == 1 && r.expand(2.).contains(a) {
             return;
         }
         let land = self.size * 0.9;
@@ -421,8 +428,10 @@ impl Pen {
         };
         let (att, knee) = if self.turned() { (self.xf(att, c), self.xf(att + out, c)) } else { (att, att + out) };
         let st = self.leader_stroke();
-        let mut v = self.outline_shapes(&[att, knee, anchor], false, st, self.leader_dash);
-        v.extend(self.arrow_shapes(anchor, knee, st));
+        let mut pts = vec![att, knee];
+        pts.extend_from_slice(route);
+        let mut v = self.outline_shapes(&pts, false, st, self.leader_dash);
+        v.extend(self.arrow_shapes(tip, pts[pts.len() - 2], st));
         p.set(slot, egui::Shape::Vec(v));
     }
 

@@ -615,6 +615,10 @@ pub struct PmiStyle {
     pub leader_dash: u8,
     #[serde(default)]
     pub leader_color: Option<[u8; 3]>,
+    /// vértices intermediários da chamada de cada ponta (em coordenadas do modelo, do rótulo para a
+    /// ponta); vazio = chamada reta (B23, ver `pmi_leader`)
+    #[serde(default)]
+    pub leader_via: Vec<Vec<[f64; 3]>>,
 }
 
 fn centro() -> u8 {
@@ -654,6 +658,7 @@ impl PmiStyle {
             leader_width: n(self.leader_width, base.leader_width),
             leader_dash: if self.leader_dash != 0 { self.leader_dash } else { base.leader_dash },
             leader_color: self.leader_color.or(base.leader_color),
+            leader_via: self.leader_via.clone(),
         }
     }
 }
@@ -687,6 +692,7 @@ impl Default for PmiStyle {
             leader_width: 0.,
             leader_dash: 0,
             leader_color: None,
+            leader_via: vec![],
         }
     }
 }
@@ -724,6 +730,42 @@ pub enum PmiKind {
     TitleBlock { template: String },
     /// balão com o número de item (montagem)
     Balloon { item: String },
+    /// cota ordenada / ao longo de um eixo do modelo (0 = X, 1 = Y, 2 = Z): âncoras origem e ponto;
+    /// mede só a componente no eixo (B185)
+    Ordinate { axis: u8 },
+    /// distância entre dois furos/cilindros/arestas circulares: centros, interior ou exterior (B185)
+    Gap { mode: GapMode },
+    /// comprimento de arco: âncoras centro e as duas pontas (B185)
+    ArcLength,
+    /// chamada gerada da feature (furo, rosca, chanfro, filete, chapa): o texto vem dos parâmetros
+    /// dela, sem digitar (B186). `text` guarda a última versão gerada.
+    FeatureNote { feature: Id },
+}
+
+/// Qual medida de uma cota entre dois círculos.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub enum GapMode {
+    /// entre os centros
+    Centers,
+    /// entre os bordos mais próximos (centros menos os dois raios)
+    Inner,
+    /// entre os bordos mais afastados (centros mais os dois raios)
+    Outer,
+}
+
+impl GapMode {
+    pub fn label(self) -> &'static str {
+        match self {
+            GapMode::Centers => "centro a centro",
+            GapMode::Inner => "interior",
+            GapMode::Outer => "exterior",
+        }
+    }
+}
+
+/// Nome do eixo para a interface.
+pub fn axis_name(axis: u8) -> &'static str {
+    ["X", "Y", "Z"][axis.min(2) as usize]
 }
 
 impl PmiKind {
@@ -740,13 +782,52 @@ impl PmiKind {
             PmiKind::Gdt { .. } => "Tolerância geométrica",
             PmiKind::TitleBlock { .. } => "Legenda 3D",
             PmiKind::Balloon { .. } => "Balão",
+            PmiKind::Ordinate { .. } => "Cota ordenada",
+            PmiKind::Gap { .. } => "Cota entre círculos",
+            PmiKind::ArcLength => "Comprimento de arco",
+            PmiKind::FeatureNote { .. } => "Chamada de feature",
+        }
+    }
+    /// A cota se desenha como linha de cota entre duas âncoras (linear, ordenada, entre círculos).
+    pub fn is_linear_like(&self) -> bool {
+        matches!(self, PmiKind::Linear | PmiKind::Ordinate { .. } | PmiKind::Gap { .. })
+    }
+    /// Cota de medida (leva tolerância dimensional e valor medido).
+    pub fn is_dimension(&self) -> bool {
+        matches!(self, PmiKind::Linear | PmiKind::Radius | PmiKind::Diameter | PmiKind::Angle | PmiKind::Ordinate { .. } | PmiKind::Gap { .. } | PmiKind::ArcLength)
+    }
+    /// Próxima variante de medida (tecla Tab): linear -> ao longo de X, Y, Z -> entre círculos
+    /// (centros, interior, exterior) -> linear; raio <-> diâmetro.
+    pub fn next_variant(&self) -> PmiKind {
+        match self {
+            PmiKind::Linear => PmiKind::Ordinate { axis: 0 },
+            PmiKind::Ordinate { axis } if *axis < 2 => PmiKind::Ordinate { axis: axis + 1 },
+            PmiKind::Ordinate { .. } => PmiKind::Gap { mode: GapMode::Centers },
+            PmiKind::Gap { mode: GapMode::Centers } => PmiKind::Gap { mode: GapMode::Inner },
+            PmiKind::Gap { mode: GapMode::Inner } => PmiKind::Gap { mode: GapMode::Outer },
+            PmiKind::Gap { mode: GapMode::Outer } => PmiKind::Linear,
+            PmiKind::Radius => PmiKind::Diameter,
+            PmiKind::Diameter => PmiKind::Radius,
+            k => k.clone(),
+        }
+    }
+    /// Esse tipo tem mais de uma variante de medida para o Tab alternar.
+    pub fn has_variants(&self) -> bool {
+        self.next_variant() != *self
+    }
+    /// Rótulo da variante, com o eixo ou o modo.
+    pub fn variant_label(&self) -> String {
+        match self {
+            PmiKind::Ordinate { axis } => format!("{} {}", self.label(), axis_name(*axis)),
+            PmiKind::Gap { mode } => format!("{}: {}", self.label(), mode.label()),
+            k => k.label().to_string(),
         }
     }
     /// Quantas âncoras o tipo pede.
     pub fn anchors(&self) -> usize {
         match self {
-            PmiKind::Linear | PmiKind::Radius | PmiKind::Diameter => 2,
-            PmiKind::Angle => 3,
+            PmiKind::Linear | PmiKind::Radius | PmiKind::Diameter | PmiKind::Ordinate { .. } | PmiKind::Gap { .. } => 2,
+            PmiKind::Angle | PmiKind::ArcLength => 3,
             _ => 1,
         }
     }
@@ -813,6 +894,19 @@ impl Pmi {
         let d = |p: [f64; 3], q: [f64; 3]| ((p[0] - q[0]).powi(2) + (p[1] - q[1]).powi(2) + (p[2] - q[2]).powi(2)).sqrt();
         match self.kind {
             PmiKind::Linear => Some(d(*a.first()?, *a.get(1)?)),
+            PmiKind::Gap { .. } => Some(d(*a.first()?, *a.get(1)?)),
+            PmiKind::Ordinate { axis } => {
+                let (o, p) = (*a.first()?, *a.get(1)?);
+                Some((p[axis.min(2) as usize] - o[axis.min(2) as usize]).abs())
+            }
+            PmiKind::ArcLength => {
+                let (c, p, q) = (*a.first()?, *a.get(1)?, *a.get(2)?);
+                let r = (d(p, c) + d(q, c)) / 2.;
+                let (u, w) = (sub(p, c), sub(q, c));
+                let cs = dot(u, w) / (len(u) * len(w)).max(1e-12);
+                // arco menor entre as duas pontas
+                Some(r * cs.clamp(-1., 1.).acos())
+            }
             PmiKind::Radius => Some(d(*a.first()?, *a.get(1)?)),
             PmiKind::Diameter => Some(2. * d(*a.first()?, *a.get(1)?)),
             PmiKind::Angle => {
@@ -829,7 +923,7 @@ impl Pmi {
     /// Texto principal e, quando as tolerâncias são diferentes, as duas empilhadas (+a, −b).
     pub fn display_parts(&self, value: Option<f64>) -> (String, Option<(String, String)>) {
         let (p, m) = (self.tol_plus.trim(), self.tol_minus.trim());
-        let dim = matches!(self.kind, PmiKind::Linear | PmiKind::Radius | PmiKind::Diameter | PmiKind::Angle);
+        let dim = self.kind.is_dimension();
         if dim && !p.is_empty() && !m.is_empty() && p != m {
             let mut x = self.clone();
             x.tol_plus.clear();
@@ -854,7 +948,9 @@ impl Pmi {
             PmiKind::Radius => base("R", value, "") + &tol,
             PmiKind::Diameter => base("Ø", value, "") + &tol,
             PmiKind::Angle => base("", value, "°") + &tol,
-            PmiKind::Note => self.text.clone(),
+            PmiKind::Ordinate { .. } | PmiKind::Gap { .. } => base("", value, "") + &tol,
+            PmiKind::ArcLength => base("⌒ ", value, "") + &tol,
+            PmiKind::Note | PmiKind::FeatureNote { .. } => self.text.clone(),
             PmiKind::Roughness { ra, process } => format!("√ Ra {ra}{}", if process.trim().is_empty() { String::new() } else { format!(" ({process})") }),
             PmiKind::Weld { kind, size, all_around, .. } => format!("{}{} {}", if *all_around { "○ " } else { "" }, kind.symbol(), size),
             PmiKind::Datum { letter } => format!("[{letter}]"),
@@ -1133,6 +1229,22 @@ impl Pmi {
         let circ = |a: &PmiTarget| matches!(a.class, TargetClass::FaceCilindrica | TargetClass::ArestaCircular);
         match (&self.kind, r.first().copied().flatten(), r.get(1).copied().flatten()) {
             (PmiKind::Linear, Some(a), Some(b)) if a.class == TargetClass::FacePlana && b.class == TargetClass::FacePlana && len(cross(a.dir, b.dir)) < 0.005 => Some(dot(sub(b.point, a.point), a.dir).abs()),
+            (PmiKind::Gap { mode }, Some(a), Some(b)) if circ(&a) && circ(&b) => {
+                // distância entre os eixos medida no plano perpendicular ao eixo do primeiro
+                let n = a.dir;
+                let l = len(n);
+                let mut v = sub(b.point, a.point);
+                if l > 0.5 {
+                    let k = dot(v, n) / (l * l);
+                    v = [v[0] - n[0] * k, v[1] - n[1] * k, v[2] - n[2] * k];
+                }
+                let c = len(v);
+                Some(match mode {
+                    GapMode::Centers => c,
+                    GapMode::Inner => c - a.radius - b.radius,
+                    GapMode::Outer => c + a.radius + b.radius,
+                })
+            }
             (PmiKind::Diameter, Some(a), _) if circ(&a) => Some(a.radius * 2.),
             (PmiKind::Radius, Some(a), _) if circ(&a) => Some(a.radius),
             _ => None,
