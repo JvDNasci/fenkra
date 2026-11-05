@@ -1,4 +1,4 @@
-# ADR 0021: alças, símbolos guiados e assistentes do desenho
+# ADR 0031: alças, símbolos guiados e assistentes do desenho
 
 ## Contexto
 O desenho (B250 a B252) ganhou alças diretas na folha, construtores de rugosidade e solda, o assistente
