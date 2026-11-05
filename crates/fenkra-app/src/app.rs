@@ -7434,6 +7434,7 @@ impl eframe::App for App {
         } else if asm_mode {
             crate::asm_inserir::teclas(self, ctx);
             crate::asm_repeticao::teclas(self, ctx);
+            crate::asm_encaixe::teclas(self, ctx);
             crate::asm_cmd::teclas(self, ctx);
             crate::asm_selecao::teclas(self, ctx);
             if save {
@@ -7637,8 +7638,8 @@ impl eframe::App for App {
         crate::asm_inserir::painel(self, ctx, area);
         crate::asm_interf::painel(self, ctx, area);
         crate::asm_repeticao::painel(self, ctx, area);
-        crate::asm_ui::contexto_window(self, ctx);
         crate::asm_fixadores::painel(self, ctx, area);
+        crate::asm_ui::contexto_window(self, ctx);
         crate::asm_ui::gears_window(self, ctx);
         self.sheet_window(ctx);
         crate::st_ui::windows(self, ctx);

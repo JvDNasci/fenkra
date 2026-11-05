@@ -11,6 +11,7 @@ pub mod avulso;
 pub mod bom;
 pub mod contexto;
 pub mod display;
+pub mod encaixe;
 pub mod engrenagens;
 pub mod estrutura;
 pub mod fixadores;
@@ -22,8 +23,8 @@ pub mod kin;
 pub mod links;
 pub mod load;
 pub mod manipulador;
-pub mod proposta;
 pub mod pilhas;
+pub mod proposta;
 pub mod publicacoes;
 pub mod repeticao;
 pub mod simbolos;
@@ -485,10 +486,10 @@ pub struct Assembly {
     /// recursos entre peças (recortes, furos), refeitos com as posições
     #[serde(default)]
     pub features: Vec<AsmFeature>,
-    /// interferências ignoradas e o limite "ignorar menores que"
     /// pilhas de fixadores: recalculáveis, ligadas aos furos (ver [`pilhas`])
     #[serde(default)]
     pub pilhas: Vec<pilhas::Pilha>,
+    /// interferências ignoradas e o limite "ignorar menores que"
     #[serde(default)]
     pub interf: interferencia::RegrasInterf,
     /// projeto relacional (peças novas fixas, posicionadas por links entre peças) × por restrições

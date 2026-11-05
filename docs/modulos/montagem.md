@@ -4,8 +4,9 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 
 ## ✅ Pronto
 
-- **Inserir componente e fixar** (Inserir, fixar) — AsmInsert, AsmFix, modos editável/visualização.
+- **Inserir componente e fixar** (Inserir, fixar) — `asm_inserir.rs`, `insercao.rs`: painel com miniaturas, peça no cursor, uma cópia por clique, primeira fixa na origem (B262); AsmFix, modos editável/visualização.
 - **Restrições padrão** (Restrições) — MateCmd: Coincident, Contact, Distance, Angle, Parallel, Perpendicular, Auto, AlignOnce. Distância e Ângulo nascem com a medida atual; Inverter alinhamento e Inverter lado separados (B71).
+- **Pontos de encaixe** (Restrições e juntas) — `encaixe.rs`, `asm_encaixe.rs`: candidatos da face sob o cursor com sistema de eixos, tecla L trava, giro de 90°, Inverter e deslocamento com fórmula (B99).
 - **Prévia e confirmar** (Restrições e juntas) — `proposta::Comando` resolve numa cópia; fantasma na posição final, Enter aceita, Tab inverte, Esc cancela (B244, ADR 0018).
 - **Símbolos no modelo** (Restrições e juntas) — `simbolos.rs`, `asm_simbolos.rs`: ancorados na geometria, cota e arco arrastáveis, ocultar por tipo, grade para montagens grandes (B245).
 - **Origem da montagem** (Árvore) — `ORIGEM`, planos, eixos e ponto usados como referência (B22, ADR 0018).
@@ -15,8 +16,8 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 - **Juntas cinemáticas** (Juntas) — AsmJoint, kin.rs; comandos; tipo automático, modos de origem, alinhamento e Animar na criação (B260). Limites guardados, sem efeito no solucionador (B36).
 - **Acoplamentos mecânicos** (Engrenagem, cremalheira, polia, came) — MateKind Gear/RackPinion; couplings; teste came_e_seguidor.
 - **Graus de liberdade** (GDL na árvore) — dof_per_comp; selos na árvore.
-- **Padrão de componentes** (Padrão) — AsmPattern; repeticao_acompanha_a_quantidade.
-- **Interferência e colisão** (Interferência) — AsmInterf; colisão ao arrastar.
+- **Padrão de componentes** (Repetição) — `repeticao.rs`, `asm_repeticao.rs`: direção por aresta, eixo ou face, Pelos furos, vários componentes, segunda direção, fantasmas, seta e marcas para pular (B263).
+- **Interferência e colisão** (Interferência) — `interferencia.rs`, `asm_interf.rs`: painel próprio, escopo, coincidência, subconjunto como peça única, realce do volume comum, ignorados salvos na montagem (B264); colisão ao arrastar.
 - **Vista explodida** (Explodida) — Estados de exibição; teste explosao_e_animacao.
 - **Lista de materiais (BOM)** (BOM) — AsmBom; numeração de itens.
 
