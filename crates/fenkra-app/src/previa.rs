@@ -549,6 +549,24 @@ mod tests {
         assert!(c.overlay.len() > 200, "hélice e anéis");
     }
 
+    /// B07: espessura em face: o acréscimo vai para o fantasma e a face escolhida realça.
+    #[test]
+    fn espessura_em_face_aparece_no_fantasma() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let mut d = caixa();
+        let antes = recompute(&d);
+        let base = corpos_base(Some(&antes));
+        let e = d.add_feature(FeatureKind::Thickness(Thickness { faces: vec![[0., 0., 20.]], value: s("5"), face_keys: vec![], remove: false }));
+        let r = recompute(&d);
+        assert!(valido(r.status.get(&e)), "{:?}", r.status.get(&e));
+        assert!((r.bodies[0].mass.volume - 40. * 40. * 25.).abs() < 1., "{}", r.bodies[0].mass.volume);
+        let c = cena(&d, &r, e, &base);
+        assert!(tem_cor(&c, [10, 20, 30]) && tem_cor(&c, [40, 50, 60]));
+        assert!(c.bounds.is_some_and(|(_, hi)| (hi.z - 25.).abs() < 1e-3), "a prévia entra no enquadramento");
+    }
+
     /// O fantasma não é selecionável: o raio passa pela aba e acerta o que está atrás, ou nada.
     #[test]
     fn fantasma_nao_entra_na_selecao() {

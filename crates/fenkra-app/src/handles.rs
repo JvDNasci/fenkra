@@ -94,6 +94,14 @@ fn handle_for(app: &App, id: Id) -> Option<Linear> {
                 let (base, n) = surface_anchor(r, &t.surface)?;
                 Some(Linear { base, dir: n, k: 1., expr: t.t1.clone(), label: "Espessura" })
             }
+            // B07: a seta sai da face escolhida, pela normal dela na peça de antes do comando
+            FeatureKind::Thickness(t) => {
+                let p = *t.faces.first()?;
+                let antes = app.session.as_ref()?.corpos_antes.iter().find(|c| c.collector == f.target)?;
+                let info = antes.mesh.face_info.get(crate::picking::face_da_malha(&antes.mesh, p)?)?;
+                let n = v3(info.dir);
+                (info.kind == 0).then_some(Linear { base: v3(p), dir: if t.remove { -n } else { n }, k: 1., expr: t.value.clone(), label: "Espessura" })
+            }
             FeatureKind::Stiffener(s) => {
                 let (c, n) = sketch_center(r, s.sketch)?;
                 Some(Linear { base: c, dir: if s.reverse { n } else { -n }, k: 1., expr: s.depth.clone(), label: "Profundidade" })
@@ -310,6 +318,7 @@ fn write_value(app: &mut App, id: Id, value: String) {
                 _ => {}
             },
             FeatureKind::Stiffener(s) => s.depth = value,
+            FeatureKind::Thickness(t) => t.value = value,
             FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => o.value = value,
             FeatureKind::Shell(sh) => sh.thickness = value,
             FeatureKind::ThickSurface(t) => t.t1 = value,
