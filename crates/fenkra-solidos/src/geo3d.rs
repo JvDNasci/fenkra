@@ -700,6 +700,17 @@ pub fn tangent_points(c: &Curve3, dir: V3) -> Result<[V3; 2], String> {
     Ok([hi.1, lo.1])
 }
 
+/// Quantas soluções a varredura explícita tem: o círculo por três guias e a cônica têm dois arcos; o
+/// círculo por raio, quatro centros possíveis.
+pub fn solucoes_da_varredura(k: &fenkra_core::SweepKind) -> usize {
+    use fenkra_core::SweepKind as K;
+    match k {
+        K::Circle3 { .. } | K::Conic { .. } => 2,
+        K::CircleRadius { .. } => 4,
+        _ => 1,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

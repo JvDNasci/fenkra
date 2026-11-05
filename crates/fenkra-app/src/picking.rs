@@ -543,7 +543,7 @@ pub fn box_select(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect,
 }
 
 /// Ponto mais próximo de `p` no triângulo abc (Ericson).
-fn closest_on_tri(p: Vec3, a: Vec3, b: Vec3, c: Vec3) -> Vec3 {
+pub(crate) fn closest_on_tri(p: Vec3, a: Vec3, b: Vec3, c: Vec3) -> Vec3 {
     let (ab, ac, ap) = (b - a, c - a, p - a);
     let (d1, d2) = (ab.dot(ap), ac.dot(ap));
     if d1 <= 0. && d2 <= 0. {

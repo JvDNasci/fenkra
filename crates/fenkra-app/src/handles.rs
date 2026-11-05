@@ -30,7 +30,7 @@ fn v3(p: [f64; 3]) -> Vec3 {
 }
 
 /// Origem e normal de um plano já calculado.
-fn plane_of(r: &fenkra_solidos::RecomputeResult, p: &PlaneRef) -> Option<(Vec3, Vec3)> {
+pub(crate) fn plane_of(r: &fenkra_solidos::RecomputeResult, p: &PlaneRef) -> Option<(Vec3, Vec3)> {
     let f = match p {
         PlaneRef::Origin(o) => fenkra_solidos::origin_frame(*o),
         PlaneRef::Datum(id) => r.planes.iter().find(|x| x.id == Some(*id))?.frame,
@@ -368,7 +368,7 @@ fn write_slot(app: &mut App, id: Id, slot: u8, value: String) {
     }
 }
 
-fn mesh_center(m: &fenkra_kernel::Mesh) -> Vec3 {
+pub(crate) fn mesh_center(m: &fenkra_kernel::Mesh) -> Vec3 {
     let n = (m.positions.len() / 3).max(1) as f32;
     m.positions.chunks_exact(3).fold(Vec3::ZERO, |a, p| a + Vec3::new(p[0], p[1], p[2])) / n
 }
@@ -548,6 +548,7 @@ fn contour_overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, i
 
 pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: Camera) {
     let Some(id) = app.session.as_ref().map(|s| s.id) else { return };
+    crate::sup3d::overlay(app, ui, rect, &cam, id);
     if crate::gizmo::overlay(app, ui, rect, &cam, id) {
         return;
     }

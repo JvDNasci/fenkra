@@ -13,6 +13,7 @@ mod render;
 mod scene;
 mod entradas;
 mod previa;
+mod sup3d;
 mod picking;
 mod selecao;
 mod viewcube;

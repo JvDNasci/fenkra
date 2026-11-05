@@ -7621,6 +7621,7 @@ impl eframe::App for App {
                 let snapshot = self.open.doc.clone();
                 let id = match k {
                     crate::previa::DemoPrevia::Comando(k) => self.open.doc.add_feature(k),
+                    crate::previa::DemoPrevia::Ref(k) => self.open.doc.add_geometry(k),
                     crate::previa::DemoPrevia::Plano => self.open.doc.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "30"),
                 };
                 self.start_session(id, true, Some(snapshot));

@@ -1104,6 +1104,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         RefClass::Point => "Ponto de referência",
         RefClass::Curve => "Linha / curva de referência",
     });
+    crate::sup3d::legenda(ui, &crate::sup3d::de_referencia(&r.kind));
     if let Some(e) = error {
         egui::Frame::NONE.fill(Color32::from_rgb(80, 30, 28)).inner_margin(6.).corner_radius(4.).show(ui, |ui| {
             ui.label(RichText::new(format!("✖ {e}")).color(Color32::from_rgb(255, 150, 140)));
@@ -1251,10 +1252,8 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         R::PointTangent { curve, dir, which } => {
             curve_slot(ui, "g_c", "Curva planar", doc, me, curve, seed);
             axis_slot(ui, "g_d", "Direção", doc, me, dir, seed);
-            row(ui, "Solução", |ui| {
-                ui.radio_value(which, 0, tr("1"));
-                ui.radio_value(which, 1, tr("2"));
-            });
+            let _ = which;
+            crate::sup3d::dica_de_solucao(ui, note);
         }
         R::PointBetween { a, b, ratio } => {
             point_slot(ui, "g_a", "Ponto 1", doc, me, a, seed);
@@ -1405,9 +1404,8 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         R::PointCurvePlane { curve, plane, which } => {
             curve_slot(ui, "g_c", "Curva", doc, me, curve, seed);
             plane_slot(ui, "g_pl", "Plano", doc, me, plane, seed);
-            row(ui, "Solução", |ui| {
-                ui.add(crate::ui_ext::dv(which).range(0..=20));
-            });
+            let _ = which;
+            crate::sup3d::dica_de_solucao(ui, note);
         }
         R::PointCurveCurve { a, b } => {
             curve_slot(ui, "g_a", "Curva 1", doc, me, a, seed);
@@ -1593,19 +1591,8 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                     expr(ui, "ρ", rho, vars, "");
                 }
             }
-            let nsol = match kind {
-                SweepKind::Circle3 { .. } => 2,
-                SweepKind::CircleRadius { .. } => 4,
-                SweepKind::Conic { .. } => 2,
-                _ => 1,
-            };
-            if nsol > 1 {
-                row(ui, "Solução", |ui| {
-                    for k in 0..nsol {
-                        ui.selectable_value(solution, k, format!("{}", k + 1));
-                    }
-                });
-            }
+            *solution = (*solution).min(fenkra_solidos::geo3d::solucoes_da_varredura(kind) - 1);
+            crate::sup3d::dica_de_solucao(ui, note);
             let mut own_spine = spine.is_some();
             if crate::editor::check(ui, &mut own_spine, "spine própria (senão, a primeira guia)").changed() {
                 *spine = own_spine.then(crate::slots::curve);
@@ -1618,10 +1605,10 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             ui.label(RichText::new(tr("As seções ficam em planos normais à spine; as guias são cortadas nesses planos.")).weak().small());
         }
         R::SurfFillet { a, b, flip_a, flip_b, radius, radius2 } => {
+            let _ = (flip_a, flip_b);
             surf_slot(ui, "g_a", "Superfície 1", doc, me, a, seed);
-            ui.checkbox(flip_a, tr("outro lado da 1"));
             surf_slot(ui, "g_b", "Superfície 2", doc, me, b, seed);
-            ui.checkbox(flip_b, tr("outro lado da 2"));
+            crate::sup3d::dica_de_lado(ui);
             radius_ui(ui, radius, radius2, vars);
         }
         R::SurfEdgeFillet { surface, edges, radius, radius2 } => {
@@ -1770,7 +1757,6 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                 ui.horizontal(|ui| {
                     ui.vertical(|ui| {
                         surf_slot(ui, &format!("g_tm{i}"), &format!("{} {}", tr("Cortar com"), i + 2), doc, me, m, seed);
-                        ui.checkbox(&mut more_flip[i], tr("Outro lado deste corte"));
                     });
                     if ui.small_button(tr("✖")).clicked() {
                         del = Some(i);
@@ -1791,13 +1777,12 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             if let Some(c) = curve {
                 curve_slot(ui, "g_tc", "Curva de corte", doc, me, c, seed);
             }
-            ui.checkbox(flip, tr("manter o outro lado"));
+            crate::sup3d::dica_de_lado(ui);
         }
-        R::SurfTrim { a, b, flip_a, flip_b } => {
+        R::SurfTrim { a, b, .. } => {
             surf_slot(ui, "g_a", "Superfície 1", doc, me, a, seed);
-            ui.checkbox(flip_a, tr("outro lado da 1"));
             surf_slot(ui, "g_b", "Superfície 2", doc, me, b, seed);
-            ui.checkbox(flip_b, tr("outro lado da 2"));
+            crate::sup3d::dica_de_lado(ui);
         }
         R::SurfPart { surface, index: which } => {
             surf_slot(ui, "g_s", "Superfície", doc, me, surface, seed);
@@ -1889,13 +1874,8 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         R::CurveIntersect { a, b, which, near } => {
             surf_slot(ui, "g_a", "Elemento 1", doc, me, a, seed);
             surf_slot(ui, "g_b", "Elemento 2", doc, me, b, seed);
-            ui.horizontal(|ui| {
-                ui.add_sized([96., 18.], egui::Label::new(tr("Solução")));
-                // trocar o número troca a escolha: a âncora é refeita no próximo cálculo
-                if ui.add(crate::ui_ext::dv(which).range(0..=99)).changed() {
-                    *near = None;
-                }
-            });
+            let _ = which;
+            crate::sup3d::dica_de_solucao(ui, note);
             if near.is_some() {
                 ui.label(RichText::new(tr("A solução fica presa à posição no espaço.")).weak().small());
             }
@@ -1934,7 +1914,8 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             surf_slot(ui, "g_s", "Apoio", doc, me, support, seed);
             expr(ui, "Distância inicial", d1, vars, "mm");
             expr(ui, "Distância final", d2, vars, "mm");
-            ui.checkbox(flip, tr("para o outro lado"));
+            let _ = flip;
+            crate::sup3d::dica_de_lado(ui);
             ui.label(RichText::new(tr("Distâncias iguais = paralela constante; diferentes = lei linear do início ao fim.")).weak().small());
         }
         R::Linked { ext, .. } => {

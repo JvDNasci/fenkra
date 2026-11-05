@@ -438,6 +438,10 @@ pub struct RefNote {
     pub arrow: Option<(V3, V3)>,
     /// ponto da curva escolhida pelo número: vira a âncora espacial dela
     pub anchor: Option<V3>,
+    /// B276: as soluções possíveis no espaço (número, ponto): cada uma vira uma bolinha no 3D
+    pub solucoes: Vec<(usize, V3)>,
+    /// número da solução em uso
+    pub solucao: Option<usize>,
 }
 
 /// Superfície de referência exibível (malha).
@@ -1343,11 +1347,14 @@ impl Ctx<'_> {
     /// soluções é do kernel e muda quando o modelo muda.
     fn pick_curve(&self, id: Id, mut cs: Vec<Vec<V3>>, which: usize, near: Option<V3>) -> Result<Vec<V3>, String> {
         let n = cs.len();
+        let pontos: Vec<(usize, V3)> = cs.iter().enumerate().filter(|(_, c)| !c.is_empty()).map(|(i, c)| (i, c[c.len() / 2])).collect();
         if let Some(p) = near {
             let gap = |c: &Vec<V3>| Curve3::poly(c.clone(), false).map_or(f64::MAX, |k| geo3d::dist(k.nearest(p).1, p));
             let i = (0..n).min_by(|a, b| gap(&cs[*a]).total_cmp(&gap(&cs[*b]))).ok_or("sem soluções")?;
+            self.publicar_solucoes(id, pontos, Some(i));
             return Ok(cs.swap_remove(i));
         }
+        self.publicar_solucoes(id, pontos, (which < n).then_some(which));
         if which >= n {
             return Err(format!("a solução {which} não existe: há {n} (de 0 a {})", n - 1));
         }
@@ -1356,6 +1363,16 @@ impl Ctx<'_> {
             self.notes.borrow_mut().entry(id).or_default().anchor = Some(c[c.len() / 2]);
         }
         Ok(c)
+    }
+
+    /// Soluções possíveis da referência: a tela as mostra como bolinhas. Só faz sentido com mais de uma.
+    fn publicar_solucoes(&self, id: Id, pontos: Vec<(usize, V3)>, atual: Option<usize>) {
+        if pontos.len() > 1 {
+            let mut n = self.notes.borrow_mut();
+            let nota = n.entry(id).or_default();
+            nota.solucoes = pontos;
+            nota.solucao = atual;
+        }
     }
 
     /// Extração refeita a partir do ponto clicado, com a propagação gravada.
@@ -1645,7 +1662,9 @@ impl Ctx<'_> {
             PointCenter { curve } => Geo::Point(fit_circle(&self.curve(curve, d)?)?.0),
             PointTangent { curve, dir, which } => {
                 let (_, dv) = self.axis_d(dir, d)?;
-                Geo::Point(tangent_points(&self.curve(curve, d)?, dv)?[(*which).min(1)])
+                let pontos = tangent_points(&self.curve(curve, d)?, dv)?;
+                self.publicar_solucoes(id, pontos.iter().copied().enumerate().collect(), Some((*which).min(1)));
+                Geo::Point(pontos[(*which).min(1)])
             }
             PointBetween { a, b, ratio } => Geo::Point(lerp(self.point(a, d)?, self.point(b, d)?, e(ratio, "proporção")?)),
 
@@ -1741,7 +1760,9 @@ impl Ctx<'_> {
                 if hits.is_empty() {
                     return Err("a curva não cruza o plano".into());
                 }
-                Geo::Point(hits[(*which).min(hits.len() - 1)])
+                let i = (*which).min(hits.len() - 1);
+                self.publicar_solucoes(id, hits.iter().copied().enumerate().collect(), Some(i));
+                Geo::Point(hits[i])
             }
             PointCurveCurve { a, b } => {
                 let (ca, cb) = (self.curve(a, d)?, self.curve(b, d)?);
@@ -1875,7 +1896,18 @@ impl Ctx<'_> {
             }
             SurfSweepX { kind, spine, solution, smooth, sections } => {
                 let n = e(sections, "seções")?.round().clamp(4., 200.) as usize;
-                Geo::Surface(self.sweep_x(kind, spine.as_ref(), *solution, *smooth, n, d, &|s: &String, w: &str| e(s, w))?)
+                let ev = |s: &String, w: &str| e(s, w);
+                // cada solução é outra superfície: a bolinha fica sobre ela, no meio da caixa envolvente
+                let total = geo3d::solucoes_da_varredura(kind);
+                if total > 1 {
+                    let meio = |k: usize| {
+                        let sh = self.sweep_x(kind, spine.as_ref(), k, *smooth, n, d, &ev).ok()?;
+                        let (a, b) = sh.bbox()?;
+                        sh.surface_near(lerp(a, b, 0.5)).ok().map(|x| (k, x.0))
+                    };
+                    self.publicar_solucoes(id, (0..total).filter_map(meio).collect(), Some(*solution));
+                }
+                Geo::Surface(self.sweep_x(kind, spine.as_ref(), *solution, *smooth, n, d, &ev)?)
             }
             SurfFillet { a, b, flip_a, flip_b, radius, radius2 } => {
                 let (sa, sb) = (self.cut_shape(a, d)?, self.cut_shape(b, d)?);
