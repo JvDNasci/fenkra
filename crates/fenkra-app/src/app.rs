@@ -1221,6 +1221,43 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     /// ponto). Não é uma edição do usuário: não marca o documento como modificado nem entra no
     /// desfazer. Só vale para o comando que ainda é o mesmo que foi calculado (`sent_doc`); o
     /// documento calculado recebe as chaves também, para o comando não aparecer como desatualizado.
+    /// A primeira contagem de uma extração vira a referência dela: mudar depois é aviso. Os três
+    /// documentos mudam juntos, como na promoção: não é edição e não pede novo cálculo.
+    fn apply_counts(&mut self, notes: &std::collections::HashMap<Id, fenkra_solidos::RefNote>) {
+        let put = |d: &mut Document| {
+            for r in d.references.iter_mut() {
+                let n = notes.get(&r.id).and_then(|x| x.count).map(|c| c.0);
+                if let (RefKind::SurfExtract { expected, .. } | RefKind::CurveBoundary { expected, .. }, Some(n)) = (&mut r.kind, n) {
+                    if expected.is_none() {
+                        *expected = Some(n);
+                    }
+                }
+            }
+        };
+        put(&mut self.open.doc);
+        self.sent_doc.as_mut().into_iter().for_each(|d| put(d));
+        self.result_doc.as_mut().into_iter().for_each(|d| put(d));
+    }
+
+    /// Menu de contexto de um campo de superfície: cria o Extrair e o coloca no campo.
+    fn apply_extract_req(&mut self, ctx: &egui::Context) {
+        use crate::geo_ui::{swap_surface, ExtractReq, EXTRACT_REQ};
+        let key = egui::Id::unique(EXTRACT_REQ);
+        let Some(q) = ctx.data_mut(|m| {
+            let q = m.get_temp::<ExtractReq>(key);
+            m.remove::<ExtractReq>(key);
+            q
+        }) else {
+            return;
+        };
+        let target = self.session.as_ref().map(|s| s.id).or(if let Sel::Ref(id) = self.sel { Some(id) } else { None });
+        let d = &mut self.open.doc;
+        let id = d.add_geometry(RefKind::SurfExtract { face: q.face, owner: q.owner, prop: Propagation::Nenhuma, complement: q.complement, expected: None });
+        if let Some(r) = d.references.iter_mut().find(|r| Some(r.id) == target) {
+            swap_surface(&mut r.kind, q.old, SurfRef::Ref(id));
+        }
+    }
+
     fn apply_promoted(&mut self, promoted: &std::collections::HashMap<Id, fenkra_solidos::Promoted>) {
         use fenkra_solidos::Promoted;
         fn put(kind: &mut FeatureKind, p: &Promoted) {
@@ -5055,7 +5092,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             });
             ui.horizontal(|ui| {
                 ui.label(tr("Propagação"));
-                for (p, t) in [(Prop::Nenhuma, "nenhuma"), (Prop::Ponto, "ponto"), (Prop::Tangente, "tangente"), (Prop::Curvatura, "curvatura")] {
+                for (p, t) in [(Prop::Nenhuma, "nenhuma"), (Prop::Ponto, "ponto"), (Prop::Tangente, "tangente"), (Prop::Curvatura, "curvatura"), (Prop::Completo, "completo")] {
                     ui.radio_value(&mut o.prop, p, tr(t));
                 }
             });
@@ -5076,6 +5113,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
 
     fn run_extract(&mut self, o: ExtractOpts) {
         use crate::extract::{edge_pts, edge_set, face_point, face_set};
+        let mut gravadas: Vec<([f64; 3], Id)> = vec![];
         use crate::picking::Pick;
         // o resultado sai emprestado durante a coleta e volta logo depois
         let Some(r) = self.result.take() else { return };
@@ -5084,7 +5122,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let mut seen_f: Vec<(usize, usize)> = vec![];
         for p in self.picks.clone() {
             match p {
-                Pick::Face { body, face, .. } => {
+                Pick::Face { body, face, point, owner, .. } => {
+                    // face de corpo: a propagação fica gravada e o recálculo a refaz
+                    if !o.multi && body < crate::picking::SURF_BASE {
+                        gravadas.push((point.map(|v| v as f64), owner));
+                        continue;
+                    }
                     let Some(m) = crate::picking::mesh_of(&r, body) else { continue };
                     let set: Vec<[f64; 3]> = face_set(m, face, o.prop)
                         .into_iter()
@@ -5148,7 +5191,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             });
         }
         for set in faces {
-            made.push(if set.len() == 1 { d.add_geometry(RefKind::SurfExtract { face: set[0], owner: None }) } else { d.add_geometry(RefKind::SurfMulti { faces: set }) });
+            made.push(if set.len() == 1 { d.add_geometry(RefKind::SurfExtract { face: set[0], owner: None, prop: Propagation::Nenhuma, complement: false, expected: None }) } else { d.add_geometry(RefKind::SurfMulti { faces: set }) });
+        }
+        for (face, owner) in gravadas {
+            made.push(d.add_geometry(RefKind::SurfExtract { face, owner: Some(owner), prop: o.prop.gravada(), complement: false, expected: None }));
         }
         if made.is_empty() {
             self.toast("Selecione faces, arestas ou vértices na viewport e conclua a extração", true);
@@ -6697,6 +6743,10 @@ impl eframe::App for App {
                     self.wizard_open = true;
                 }
                 self.errors_prev = errs;
+                if g == self.gen_sent {
+                    self.apply_counts(&r.notes);
+                }
+                self.apply_extract_req(ctx);
                 self.result = Some(r);
                 if g == self.gen_sent {
                     self.result_doc = self.sent_doc.clone();

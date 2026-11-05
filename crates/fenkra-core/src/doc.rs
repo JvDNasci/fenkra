@@ -144,6 +144,20 @@ impl CurveRef {
     }
 }
 
+/// Até onde uma extração se propaga. Fica gravada no elemento e é refeita a cada atualização.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum Propagation {
+    /// só o que foi clicado
+    #[default]
+    Nenhuma,
+    /// tudo o que está ligado por um ponto
+    Ponto,
+    /// continua enquanto não houver canto vivo
+    Tangente,
+    /// a forma ou a borda inteira
+    Completo,
+}
+
 /// Condição de uma curva do contorno de um preenchimento.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct FillCond {
@@ -602,7 +616,18 @@ pub enum RefKind {
 
     // ---------------- superfícies
     /// Face extraída do corpo (ponto clicado).
-    SurfExtract { face: [f64; 3], owner: Option<Id> },
+    SurfExtract {
+        face: [f64; 3],
+        owner: Option<Id>,
+        #[serde(default)]
+        prop: Propagation,
+        /// fica com o resto da forma, e não com o que a propagação alcançou
+        #[serde(default)]
+        complement: bool,
+        /// faces que a extração tinha quando foi feita; mudou, vira aviso
+        #[serde(default)]
+        expected: Option<u32>,
+    },
     /// Superfície deslocada.
     SurfOffset {
         surface: SurfRef,
@@ -744,7 +769,18 @@ pub enum RefKind {
         d_other: String,
     },
     /// Contorno (borda livre) de uma superfície.
-    CurveBoundary { surface: SurfRef, which: usize },
+    CurveBoundary {
+        surface: SurfRef,
+        which: usize,
+        #[serde(default)]
+        prop: Propagation,
+        /// ponto clicado na borda; `None` = escolhe pelo número (`which`)
+        #[serde(default)]
+        near: Option<[f64; 3]>,
+        /// arestas que o contorno tinha quando foi feito; mudou, vira aviso
+        #[serde(default)]
+        expected: Option<u32>,
+    },
 
     /// Geometria vinda de outra peça por link (ver `Document.external`).
     Linked { ext: Id, class: RefClass },

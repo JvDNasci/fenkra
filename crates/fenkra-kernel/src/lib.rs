@@ -599,6 +599,19 @@ mod imp {
             }
             out
         }
+        /// Bordas livres, uma polilinha por aresta.
+        pub fn free_edges(&self) -> KResult<Vec<Vec<[f64; 3]>>> {
+            let mut ends = vec![];
+            let flat = b::free_edge_pts(&self.0, &mut ends).map_err(err)?;
+            Ok(Self::split_pts(flat, ends))
+        }
+        /// Faces alcançadas a partir da face em `p`: 0 nenhuma, 1 ponto, 2 tangente, 3 completo.
+        /// Devolve a forma, o número de faces e o de arestas.
+        pub fn face_propagate(&self, p: [f64; 3], prop: i32, complement: bool) -> KResult<(Shape, u32, u32)> {
+            let mut c = vec![];
+            let s = b::face_propagate(&self.0, p[0], p[1], p[2], prop, complement, &mut c).map(Shape).map_err(err)?;
+            Ok((s, c[0], c[1]))
+        }
         /// Bordas livres como polilinhas.
         pub fn boundary(&self) -> KResult<Vec<Vec<[f64; 3]>>> {
             let mut ends = vec![];
@@ -987,6 +1000,12 @@ mod imp {
             no()
         }
         pub fn affinity(&self, _: Frame, _: [f64; 3]) -> KResult<Shape> {
+            no()
+        }
+        pub fn free_edges(&self) -> KResult<Vec<Vec<[f64; 3]>>> {
+            no()
+        }
+        pub fn face_propagate(&self, _: [f64; 3], _: i32, _: bool) -> KResult<(Shape, u32, u32)> {
             no()
         }
         pub fn boundary(&self) -> KResult<Vec<Vec<[f64; 3]>>> {

@@ -182,7 +182,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         }
         Act::Point(p) => Sel::Ref(d.add_geometry(RefKind::PointCoords { x: fmt(p[0]), y: fmt(p[1]), z: fmt(p[2]), frame: None })),
         Act::Curve(pts) => Sel::Ref(d.add_geometry(RefKind::CurveCopy { curve: CurveRef::Edge(pts) })),
-        Act::Surface(p, owner) => Sel::Ref(d.add_geometry(RefKind::SurfExtract { face: p, owner })),
+        Act::Surface(p, owner) => Sel::Ref(d.add_geometry(RefKind::SurfExtract { face: p, owner, prop: Propagation::Nenhuma, complement: false, expected: None })),
     };
     app.sel = new;
 }

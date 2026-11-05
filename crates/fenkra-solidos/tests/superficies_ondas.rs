@@ -189,3 +189,78 @@ fn juntar_faces_e_curvas_relata_dominios_bordas_e_folga() {
     assert_eq!(rep.free_edges, 6, "{rep:?}");
     assert!((rep.open_gap - 50.).abs() < 1e-6, "{rep:?}");
 }
+
+/// Caixa com todas as arestas arredondadas: 6 faces planas, 12 de filete e 8 de canto.
+fn caixa_arredondada(d: &mut Document) -> Id {
+    d.add_feature(FeatureKind::Primitive(Primitive { kind: PrimKind::Caixa, plane: PlaneRef::Origin(OriginPlane::XY), a: s("40"), b: s("40"), c: s("40"), d: s("0"), op: BoolOp::Add }));
+    d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("5"), edges: EdgeSel::AllOfBody, mode: Default::default(), prop: Default::default(), keys: vec![] }))
+}
+
+/// Centro da face de cima do primeiro corpo.
+fn topo_de(r: &RecomputeResult) -> [f64; 3] {
+    let p = &r.bodies[0].mesh.positions;
+    let ext = |k: usize| {
+        let v = p.iter().skip(k).step_by(3).map(|x| *x as f64);
+        (v.clone().fold(f64::MAX, f64::min), v.fold(f64::MIN, f64::max))
+    };
+    let ((a, b), (c, e), (_, z)) = (ext(0), ext(1), ext(2));
+    [(a + b) / 2., (c + e) / 2., z]
+}
+
+fn extrair(d: &mut Document, face: [f64; 3], prop: Propagation, complement: bool, expected: Option<u32>) -> Id {
+    d.add_geometry(RefKind::SurfExtract { face, owner: None, prop, complement, expected })
+}
+
+#[test]
+fn extrair_refaz_a_propagacao_e_conta_as_faces() {
+    let mut d = Document::new("t");
+    caixa_arredondada(&mut d);
+    let r = recompute(&d);
+    let topo = topo_de(&r);
+    let so = extrair(&mut d, topo, Propagation::Nenhuma, false, None);
+    let tan = extrair(&mut d, topo, Propagation::Tangente, false, None);
+    let pto = extrair(&mut d, topo, Propagation::Ponto, false, None);
+    let tudo = extrair(&mut d, topo, Propagation::Completo, false, None);
+    let resto = extrair(&mut d, topo, Propagation::Nenhuma, true, None);
+    let r = recompute(&d);
+    for x in [so, tan, pto, tudo, resto] {
+        ok(&r, x);
+    }
+    let n = |x: Id| r.notes[&x].count.unwrap().0;
+    assert_eq!((n(so), n(tan), n(tudo)), (1, 26, 26));
+    assert_eq!(n(resto), 25);
+    // só a face plana de cima: 40 − 2·5 de lado
+    assert!((forma(&d, so).mass().area - 900.).abs() < 1.);
+    let area = |x: Id| forma(&d, x).mass().area;
+    assert!((area(so) + area(resto) - area(tudo)).abs() < 1e-3 * area(tudo));
+}
+
+#[test]
+fn extrair_avisa_quando_a_contagem_muda() {
+    let mut d = Document::new("t");
+    caixa_arredondada(&mut d);
+    let r = recompute(&d);
+    let topo = topo_de(&r);
+    let x = extrair(&mut d, topo, Propagation::Tangente, false, Some(30));
+    let r = recompute(&d);
+    assert!(matches!(&r.status[&x], Status::Warning(m) if m.contains("30 faces") && m.contains("26")), "{:?}", r.status[&x]);
+}
+
+#[test]
+fn contorno_propaga_por_aresta_tangente_e_laco() {
+    let mut d = Document::new("t");
+    // sketch-L extrudado não entra aqui: uma superfície plana quadrada tem 4 arestas e 4 cantos
+    let p = |x: f64, y: f64| PointRef::Fixed([x, y, 0.]);
+    let lados: Vec<CurveRef> = [(0., 0., 10., 0.), (10., 0., 10., 10.), (10., 10., 0., 10.), (0., 10., 0., 0.)]
+        .iter()
+        .map(|(a, b, c, e)| CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: p(*a, *b), b: p(*c, *e), start: s("0"), end: s("0") })))
+        .collect();
+    let f = d.add_geometry(RefKind::SurfFill { curves: lados, conds: vec![], points: vec![], tol: s("0.01") });
+    let borda = |d: &mut Document, prop| d.add_geometry(RefKind::CurveBoundary { surface: SurfRef::Ref(f), which: 0, prop, near: Some([5., 0., 0.]), expected: None });
+    let (a, b, c, e) = (borda(&mut d, Propagation::Nenhuma), borda(&mut d, Propagation::Tangente), borda(&mut d, Propagation::Ponto), borda(&mut d, Propagation::Completo));
+    let r = recompute(&d);
+    let n = |x: Id| r.notes[&x].count.unwrap().0;
+    assert_eq!((n(a), n(b), n(c), n(e)), (1, 1, 4, 4));
+    let compr = |x: Id| fenkra_solidos::geo3d::Curve3::poly(r.curves.iter().find(|c| c.id == x).unwrap().pts.clone(), false).unwrap().length();
+    assert!((compr(a) - 10.).abs() < 1e-6 && (compr(c) - 40.).abs() < 1e-6);
+}

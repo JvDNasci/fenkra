@@ -420,6 +420,8 @@ pub struct RefNote {
     pub join: Option<fenkra_kernel::SewReport>,
     /// erro de tangência medido no contorno, em graus
     pub g1_deg: Option<f64>,
+    /// o que a extração alcançou: faces (ou arestas, no contorno) e arestas
+    pub count: Option<(u32, u32)>,
 }
 
 /// Superfície de referência exibível (malha).
@@ -1057,6 +1059,56 @@ impl Ctx<'_> {
         Shape::loft_surface(&sections, cont == Continuity::G0, false, None).map_err(|x| x.0)
     }
 
+    /// Extração refeita a partir do ponto clicado, com a propagação gravada.
+    fn extract_faces(&self, p: V3, prop: Propagation, complement: bool) -> Result<(Shape, u32, u32), String> {
+        let code = match prop {
+            Propagation::Nenhuma => 0,
+            Propagation::Ponto => 1,
+            Propagation::Tangente => 2,
+            Propagation::Completo => 3,
+        };
+        for (b, _, _) in self.bodies.values() {
+            if b.surface_near(p).is_ok_and(|(q, _)| geo3d::dist(q, p) < 1e-3) {
+                return b.face_propagate(p, code, complement).map_err(|e| e.0);
+            }
+        }
+        Err("a face não existe mais no modelo — reedite".into())
+    }
+
+    /// Contorno a partir da aresta mais perto do ponto: nenhuma = só ela; ponto = o laço dela;
+    /// tangente = o trecho sem canto vivo; completo = a borda inteira, que precisa ser um laço só.
+    fn boundary_from(&self, sh: &Shape, p: V3, prop: Propagation) -> Result<(Curve3, u32), String> {
+        const TOL: f64 = 1e-3;
+        let es = sh.free_edges().map_err(|x| x.0)?;
+        let cs: Vec<Curve3> = es.into_iter().map(|e| Curve3::poly(e, false)).collect::<Result<_, _>>()?;
+        let gap = |c: &Curve3| geo3d::dist(c.nearest(p).1, p);
+        let start = (0..cs.len()).min_by(|a, b| gap(&cs[*a]).total_cmp(&gap(&cs[*b]))).ok_or("sem bordas")?;
+        let set = match prop {
+            Propagation::Nenhuma => vec![start],
+            Propagation::Ponto => geo3d::chain_indices(&cs, start, TOL),
+            Propagation::Tangente => geo3d::tangent_chain(&cs, start, TOL),
+            Propagation::Completo => {
+                let laco = geo3d::chain_indices(&cs, start, TOL);
+                if laco.len() != cs.len() {
+                    return Err(format!("a borda tem {} arestas fora do laço clicado: uma curva só não cobre a borda inteira, use 'ponto'", cs.len() - laco.len()));
+                }
+                laco
+            }
+        };
+        let n = set.len() as u32;
+        Ok((join_curves(set.into_iter().map(|i| cs[i].clone()).collect())?, n))
+    }
+
+    /// Guarda o que a extração alcançou; se mudou desde que foi feita, vira aviso.
+    fn count_note(&self, id: Id, n: u32, edges: u32, expected: Option<u32>, what: &str) {
+        let mut note = RefNote { count: Some((n, edges)), ..Default::default() };
+        if let Some(e) = expected.filter(|e| *e != n) {
+            note.warn = true;
+            note.text = format!("a extração tinha {e} {what} e agora tem {n}: confira a propagação");
+        }
+        self.notes.borrow_mut().insert(id, note);
+    }
+
     /// Preenchimento: confere o contorno, fecha as folgas dentro da tolerância e monta as condições.
     fn fill(&self, me: Id, curves: &[CurveRef], conds: &[FillCond], points: &[PointRef], tol: f64, d: u32, e: &dyn Fn(&String, &str) -> Result<f64, String>) -> Result<Shape, String> {
         let mut cs: Vec<Curve3> = curves.iter().map(|c| self.curve(c, d)).collect::<Result<_, _>>()?;
@@ -1467,7 +1519,11 @@ impl Ctx<'_> {
                 let cs: Vec<Curve3> = curves.iter().map(|c| self.curve(c, d)).collect::<Result<_, _>>()?;
                 Geo::Curve(join_curves(cs)?)
             }
-            SurfExtract { face, .. } => Geo::Surface(self.face_of_bodies(*face)?),
+            SurfExtract { face, prop, complement, expected, .. } => {
+                let (sh, nf, ne) = self.extract_faces(*face, *prop, *complement)?;
+                self.count_note(id, nf, ne, *expected, "faces");
+                Geo::Surface(sh)
+            }
             SurfOffset { surface, dist: dd, both, join } => {
                 let sh = self.surface_shape(surface, d)?;
                 let j = match join {
@@ -1764,7 +1820,13 @@ impl Ctx<'_> {
                     Geo::Curve(Curve3::poly(one, c.closed)?)
                 }
             }
-            CurveBoundary { surface, which } => {
+            CurveBoundary { surface, which, prop, near: Some(p), expected } => {
+                let _ = which;
+                let (c, n) = self.boundary_from(&self.cut_shape(surface, d)?, *p, *prop)?;
+                self.count_note(id, n, n, *expected, "arestas");
+                Geo::Curve(c)
+            }
+            CurveBoundary { surface, which, .. } => {
                 let cs = self.cut_shape(surface, d)?.boundary().map_err(|x| x.0)?;
                 let c = cs.get(*which).or(cs.last()).ok_or("sem bordas")?.clone();
                 let closed = c.len() > 2 && dist(c[0], c[c.len() - 1]) < 1e-4;
@@ -6719,7 +6781,7 @@ mod tests {
         let half = d.add_geometry(RefKind::SurfSplit { surface: SurfRef::Ref(sph), tool: xy(), flip: false, more: vec![], curve: None });
         let circ = d.add_geometry(RefKind::CurveIntersect { a: SurfRef::Ref(sph), b: xy(), which: 0 });
         let cyl = d.add_geometry(RefKind::SurfCylinder { point: PointRef::Origin, dir: AxisRef::Origin(OriginAxis::Z), radius: s("10"), start: s("0"), end: s("20") });
-        let bnd = d.add_geometry(RefKind::CurveBoundary { surface: SurfRef::Ref(cyl), which: 0 });
+        let bnd = d.add_geometry(RefKind::CurveBoundary { surface: SurfRef::Ref(cyl), which: 0, prop: Propagation::Nenhuma, near: None, expected: None });
         let moved = d.add_geometry(RefKind::GeoTransform {
             source: sph,
             class: RefClass::Surface,
@@ -6747,7 +6809,7 @@ mod tests {
             tension: s("1"),
         });
         let join = d.add_geometry(RefKind::SurfJoin { items: vec![SurfRef::Ref(fa), SurfRef::Ref(blend), SurfRef::Ref(fb)], tol: s("0.01"), curves: vec![] });
-        let bounds = d.add_geometry(RefKind::CurveBoundary { surface: SurfRef::Ref(join), which: 0 });
+        let bounds = d.add_geometry(RefKind::CurveBoundary { surface: SurfRef::Ref(join), which: 0, prop: Propagation::Nenhuma, near: None, expected: None });
         let r = recompute(&d);
         for id in [sph, half, circ, cyl, bnd, moved, pmov, tube, loft, fa, fb, blend, join, bounds] {
             assert_eq!(r.status[&id], Status::Ok, "{}: {:?}", d.name_of(id), r.status[&id]);

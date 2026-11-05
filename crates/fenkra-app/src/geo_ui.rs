@@ -377,7 +377,7 @@ impl GeoKind {
             SplineControl => R::SplineControl { points: pts(4), closed: false },
             CurveCopy => R::CurveCopy { curve: c(0) },
             CurveJoin => R::CurveJoin { curves: if s.curves.len() >= 2 { s.curves.clone() } else { vec![c(0), c(1)] } },
-            SurfExtract => R::SurfExtract { face: face_pt(s), owner: match s.surface {
+            SurfExtract => R::SurfExtract { prop: Propagation::Nenhuma, complement: false, expected: None, face: face_pt(s), owner: match s.surface {
                 Some(SurfRef::Face { owner, .. }) => owner,
                 _ => None,
             } },
@@ -401,7 +401,7 @@ impl GeoKind {
             OpHeal => R::SurfHeal { surface: sf, tol: t("0.1") },
             OpSplit => R::SurfSplit { surface: sf, tool: crate::slots::surf(), flip: false, more: vec![], curve: None },
             OpTrim => R::SurfTrim { a: sf, b: crate::slots::surf(), flip_a: false, flip_b: false },
-            OpBoundary => R::CurveBoundary { surface: sf, which: 0 },
+            OpBoundary => R::CurveBoundary { surface: sf, which: 0, prop: Propagation::Nenhuma, near: None, expected: None },
             OpMulti => R::SurfMulti { faces: vec![face_pt(s)] },
             OpPart => R::SurfPart { surface: sf, index: 0 },
             OpUntrim => R::SurfUntrim { surface: sf },
@@ -709,7 +709,7 @@ fn plane_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id
 }
 
 pub(crate) fn surf_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, s: &mut SurfRef, seed: &Seed) {
-    row(ui, label, |ui| {
+    ui.scope(|ui| row(ui, label, |ui| {
         let none = PlaneRef::Datum(Id(u64::MAX));
         let mut pl = match s {
             SurfRef::Plane(p) => *p,
@@ -737,7 +737,52 @@ pub(crate) fn surf_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docume
         if pick_button(ui, seed.surface.is_some() || !seed.planes.is_empty(), "uma face ou plano") {
             *s = seed.surface.unwrap_or_else(|| SurfRef::Plane(*seed.planes.last().unwrap()));
         }
+    }))
+    .response
+    .context_menu(|ui| {
+        // qualquer campo de superfície: a face vira um elemento Extrair, que passa a ocupar o campo
+        let SurfRef::Face { point, owner, .. } = *s else {
+            ui.label(RichText::new(tr("Escolha uma face para extrair.")).weak());
+            return;
+        };
+        for (t, complement) in [("Extrair", false), ("Extrair complementar", true)] {
+            if ui.button(tr(t)).clicked() {
+                ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique(EXTRACT_REQ), ExtractReq { old: *s, face: point, owner, complement }));
+                ui.close();
+            }
+        }
     });
+}
+
+/// Pedido do menu de contexto de um campo de superfície: o painel só lê o documento, então quem
+/// cria o elemento é o editor, logo depois de desenhar o painel.
+#[derive(Clone, Copy)]
+pub(crate) struct ExtractReq {
+    pub old: SurfRef,
+    pub face: [f64; 3],
+    pub owner: Option<Id>,
+    pub complement: bool,
+}
+pub(crate) const EXTRACT_REQ: &str = "extrair_do_campo";
+
+/// Troca, em qualquer campo do elemento, a superfície `old` pela `new`.
+pub(crate) fn swap_surface(k: &mut RefKind, old: SurfRef, new: SurfRef) {
+    fn go(v: &mut serde_json::Value, old: &serde_json::Value, new: &serde_json::Value) {
+        if v == old {
+            *v = new.clone();
+            return;
+        }
+        match v {
+            serde_json::Value::Array(a) => a.iter_mut().for_each(|x| go(x, old, new)),
+            serde_json::Value::Object(o) => o.values_mut().for_each(|x| go(x, old, new)),
+            _ => {}
+        }
+    }
+    let (Ok(mut v), Ok(o), Ok(n)) = (serde_json::to_value(&*k), serde_json::to_value(old), serde_json::to_value(new)) else { return };
+    go(&mut v, &o, &n);
+    if let Ok(x) = serde_json::from_value(v) {
+        *k = x;
+    }
 }
 
 /// Pontos médios das arestas selecionadas (para filetes de superfície).
@@ -973,6 +1018,27 @@ fn fill_cond_ui(ui: &mut egui::Ui, i: usize, doc: &Document, me: Id, c: &mut Fil
     if c.cont != Continuity::G0 {
         opt_surf(ui, &format!("g_fs{i}"), "Face de apoio", doc, me, &mut c.support, seed);
         expr(ui, "Peso", &mut c.weight, vars, "");
+    }
+}
+
+/// Propagação gravada no elemento. Trocar zera a contagem esperada: a nova vira a referência.
+fn prop_ui(ui: &mut egui::Ui, prop: &mut Propagation, expected: &mut Option<u32>) {
+    ui.horizontal(|ui| {
+        ui.label(tr("Propagação"));
+        for (p, t) in [(Propagation::Nenhuma, "nenhuma"), (Propagation::Ponto, "ponto"), (Propagation::Tangente, "tangente"), (Propagation::Completo, "completo")] {
+            if ui.radio_value(prop, p, tr(t)).changed() {
+                *expected = None;
+            }
+        }
+    });
+}
+
+/// Contagem atual e, se mudou, o botão que aceita a nova.
+fn count_ui(ui: &mut egui::Ui, note: Option<&fenkra_solidos::RefNote>, expected: &mut Option<u32>) {
+    let Some((n, e)) = note.and_then(|x| x.count) else { return };
+    ui.label(RichText::new(format!("{}: {n} · {}: {e}", tr("Elementos"), tr("Arestas"))).small());
+    if expected.is_some_and(|x| x != n) && ui.button(tr("Aceitar a nova contagem")).clicked() {
+        *expected = None;
     }
 }
 
@@ -1310,7 +1376,43 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             curve_slot(ui, "g_b", "Linha 2", doc, me, b, seed);
             expr(ui, "Comprimento", length, vars, "mm");
         }
-        R::LineAxis { face } | R::SurfExtract { face, .. } => {
+        R::SurfExtract { face, prop, complement, expected, .. } => {
+            ui.label(RichText::new(format!("{} ({}, {}, {})", tr("Face em"), fmt(face[0]), fmt(face[1]), fmt(face[2]))).small());
+            if let Some(SurfRef::Face { point, .. }) = seed.surface {
+                if ui.button(tr("⊙ Usar a face selecionada")).clicked() {
+                    *face = point;
+                    *expected = None;
+                }
+            }
+            prop_ui(ui, prop, expected);
+            if ui.checkbox(complement, tr("Complementar")).on_hover_text(tr("Fica com o resto da forma, e não com o que a propagação alcançou.")).changed() {
+                *expected = None;
+            }
+            count_ui(ui, note, expected);
+        }
+        R::CurveBoundary { surface, which, prop, near, expected } => {
+            surf_slot(ui, "g_s", "Superfície", doc, me, surface, seed);
+            match near {
+                Some(p) => {
+                    ui.label(RichText::new(format!("{} ({}, {}, {})", tr("Borda perto de"), fmt(p[0]), fmt(p[1]), fmt(p[2]))).small());
+                    prop_ui(ui, prop, expected);
+                    count_ui(ui, note, expected);
+                }
+                None => {
+                    ui.horizontal(|ui| {
+                        ui.add_sized([96., 18.], egui::Label::new(tr("Número")));
+                        ui.add(crate::ui_ext::dv(which).range(0..=999));
+                    });
+                }
+            }
+            if let Some(q) = seed.curves.iter().find_map(|c| if let CurveRef::Edge(e) = c { e.get(e.len() / 2).copied() } else { None }) {
+                if ui.button(tr("Usar a aresta selecionada")).clicked() {
+                    *near = Some(q);
+                    *expected = None;
+                }
+            }
+        }
+        R::LineAxis { face } => {
             ui.label(RichText::new(format!("Face em ({}, {}, {})", fmt(face[0]), fmt(face[1]), fmt(face[2]))).small());
             if let Some(SurfRef::Face { point, .. }) = seed.surface {
                 if ui.button(tr("⊙ Usar a face selecionada")).clicked() {
@@ -1630,7 +1732,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             surf_slot(ui, "g_b", "Superfície 2", doc, me, b, seed);
             ui.checkbox(flip_b, tr("outro lado da 2"));
         }
-        R::CurveBoundary { surface, which } | R::SurfPart { surface, index: which } => {
+        R::SurfPart { surface, index: which } => {
             surf_slot(ui, "g_s", "Superfície", doc, me, surface, seed);
             ui.horizontal(|ui| {
                 ui.add_sized([96., 18.], egui::Label::new(tr("Número")));

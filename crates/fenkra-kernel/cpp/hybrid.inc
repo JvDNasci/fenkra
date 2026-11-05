@@ -256,6 +256,98 @@ rust::Vec<double> boundary_pts(const Shape& s, rust::Vec<uint32_t>& ends) {
     });
 }
 
+// Bordas livres aresta por aresta: é a aresta, e não o fio inteiro, que a propagação escolhe.
+rust::Vec<double> free_edge_pts(const Shape& s, rust::Vec<uint32_t>& ends) {
+    return guard("contorno", [&] {
+        rust::Vec<double> out;
+        uint32_t n = 0;
+        TopoDS_Compound c = free_wires(s.s);
+        for (TopExp_Explorer x(c, TopAbs_EDGE); x.More(); x.Next()) {
+            BRepAdaptor_Curve bc(TopoDS::Edge(x.Current()));
+            GCPnts_TangentialDeflection td(bc, 0.05, 0.1, 2);
+            for (int i = 1; i <= td.NbPoints(); ++i) {
+                gp_Pnt p = td.Value(i);
+                for (double v : {p.X(), p.Y(), p.Z()}) out.push_back(v);
+                ++n;
+            }
+            ends.push_back(n);
+        }
+        if (ends.empty()) throw std::runtime_error("a superfície não tem bordas livres (é fechada)");
+        return out;
+    });
+}
+
+// A aresta é lisa entre as duas faces? Normais comparadas em três pontos, com 1 grau de folga.
+static bool smooth_across(const TopoDS_Edge& e, const TopoDS_Face& f, const TopoDS_Face& g) {
+    double a1, b1, a2, b2;
+    Handle(Geom2d_Curve) c1 = BRep_Tool::CurveOnSurface(e, f, a1, b1), c2 = BRep_Tool::CurveOnSurface(e, g, a2, b2);
+    if (c1.IsNull() || c2.IsNull()) return false;
+    for (double t : {0.25, 0.5, 0.75}) {
+        gp_Pnt2d p = c1->Value(a1 + (b1 - a1) * t), q = c2->Value(a2 + (b2 - a2) * t);
+        gp_Pnt x, y;
+        gp_Vec n, m;
+        BRepGProp_Face(f).Normal(p.X(), p.Y(), x, n);
+        BRepGProp_Face(g).Normal(q.X(), q.Y(), y, m);
+        if (n.Magnitude() < 1e-12 || m.Magnitude() < 1e-12 || n.Angle(m) > 1.0 * M_PI / 180.0) return false;
+    }
+    return true;
+}
+
+// Extração com propagação, refeita a cada recálculo a partir da face clicada. prop: 0 nenhuma,
+// 1 ponto (faces que tocam por vértice), 2 tangente (faces lisas entre si), 3 completo (a forma
+// inteira). `complement` devolve o resto. `counts` = [faces, arestas].
+std::unique_ptr<Shape> face_propagate(const Shape& s, double px, double py, double pz, int32_t prop, bool complement, rust::Vec<uint32_t>& counts) {
+    return guard("extrair", [&] {
+        TopoDS_Face start = face_near(s.s, gp_Pnt(px, py, pz), kFaceLimit);
+        TopTools_IndexedMapOfShape faces;
+        TopExp::MapShapes(s.s, TopAbs_FACE, faces);
+        TopTools_IndexedDataMapOfShapeListOfShape e2f, v2f;
+        TopExp::MapShapesAndAncestors(s.s, TopAbs_EDGE, TopAbs_FACE, e2f);
+        TopExp::MapShapesAndAncestors(s.s, TopAbs_VERTEX, TopAbs_FACE, v2f);
+        std::vector<char> in(faces.Extent() + 1, prop == 3 ? 1 : 0);
+        std::vector<int> todo{faces.FindIndex(start)};
+        in[todo[0]] = 1;
+        while (!todo.empty() && (prop == 1 || prop == 2)) {
+            TopoDS_Face f = TopoDS::Face(faces(todo.back()));
+            todo.pop_back();
+            auto visit = [&](const TopoDS_Shape& g) {
+                int k = faces.FindIndex(g);
+                if (k > 0 && !in[k]) {
+                    in[k] = 1;
+                    todo.push_back(k);
+                }
+            };
+            if (prop == 1) {
+                for (TopExp_Explorer x(f, TopAbs_VERTEX); x.More(); x.Next())
+                    for (TopTools_ListIteratorOfListOfShape it(v2f.FindFromKey(x.Current())); it.More(); it.Next()) visit(it.Value());
+            } else {
+                for (TopExp_Explorer x(f, TopAbs_EDGE); x.More(); x.Next()) {
+                    const TopoDS_Edge& e = TopoDS::Edge(x.Current());
+                    if (BRep_Tool::Degenerated(e)) continue;
+                    for (TopTools_ListIteratorOfListOfShape it(e2f.FindFromKey(e)); it.More(); it.Next())
+                        if (!it.Value().IsSame(f) && smooth_across(e, f, TopoDS::Face(it.Value()))) visit(it.Value());
+                }
+            }
+        }
+        TopoDS_Compound c;
+        BRep_Builder bb;
+        bb.MakeCompound(c);
+        TopTools_IndexedMapOfShape edges;
+        uint32_t nf = 0;
+        for (int i = 1; i <= faces.Extent(); ++i) {
+            if (bool(in[i]) == complement) continue;
+            bb.Add(c, BRepBuilderAPI_Copy(faces(i)).Shape());
+            TopExp::MapShapes(faces(i), TopAbs_EDGE, edges);
+            ++nf;
+        }
+        if (nf == 0) throw std::runtime_error("a propagação pegou a forma inteira: não sobra complemento");
+        counts.push_back(nf);
+        counts.push_back(edges.Extent());
+        if (nf == 1) return wrap(TopoDS_Iterator(c).Value());
+        return wrap(c);
+    });
+}
+
 // Curvas de interseção entre duas formas (superfícies, faces, planos).
 rust::Vec<double> section_pts(const Shape& a, const Shape& b, rust::Vec<uint32_t>& ends) {
     return guard("interseção", [&] {

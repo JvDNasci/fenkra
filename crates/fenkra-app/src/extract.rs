@@ -17,6 +17,21 @@ pub enum Prop {
     Tangente,
     /// tangente e curvatura contínuas
     Curvatura,
+    /// a forma inteira
+    Completo,
+}
+
+impl Prop {
+    /// O que fica gravado no elemento (nas faces, curvatura vale como tangente).
+    pub fn gravada(self) -> fenkra_core::Propagation {
+        use fenkra_core::Propagation as P;
+        match self {
+            Prop::Nenhuma => P::Nenhuma,
+            Prop::Ponto => P::Ponto,
+            Prop::Tangente | Prop::Curvatura => P::Tangente,
+            Prop::Completo => P::Completo,
+        }
+    }
 }
 
 fn key(p: V3) -> [i64; 3] {
@@ -95,7 +110,7 @@ pub fn edge_set(m: &Mesh, start: usize, prop: Prop) -> Vec<usize> {
                     continue;
                 }
                 let ok = match prop {
-                    Prop::Ponto => true,
+                    Prop::Ponto | Prop::Completo => true,
                     _ => {
                         // a vizinha sai do ponto comum: o oposto da tangente "para fora" dela
                         let (tn, kn) = end_props(&es[nb], nb_end);

@@ -864,6 +864,30 @@ pub fn chain_indices(cs: &[Curve3], start: usize, tol: f64) -> Vec<usize> {
     (0..cs.len()).filter(|i| seen[*i]).collect()
 }
 
+/// Como `chain_indices`, mas só passa de uma curva à seguinte onde a tangente continua. A folga de
+/// 5 graus cobre o erro de ler a tangente na corda de uma polilinha amostrada.
+pub fn tangent_chain(cs: &[Curve3], start: usize, tol: f64) -> Vec<usize> {
+    let mut seen = vec![false; cs.len()];
+    let mut todo = vec![start];
+    seen[start] = true;
+    while let Some(i) = todo.pop() {
+        for at_end in [false, true] {
+            let tip = if at_end { cs[i].end() } else { cs[i].start() };
+            let out = cs[i].end_tangent(at_end);
+            for j in 0..cs.len() {
+                for nb_end in [false, true] {
+                    let other = if nb_end { cs[j].end() } else { cs[j].start() };
+                    if !seen[j] && dist(tip, other) <= tol && dot(out, mul(cs[j].end_tangent(nb_end), -1.)) > 0.9962 {
+                        seen[j] = true;
+                        todo.push(j);
+                    }
+                }
+            }
+        }
+    }
+    (0..cs.len()).filter(|i| seen[*i]).collect()
+}
+
 /// Reamostra a curva em `n` pontos igualmente espaçados pelo comprimento.
 pub fn resample(c: &Curve3, n: usize) -> Vec<V3> {
     (0..n).map(|i| c.at_ratio(i as f64 / (n - 1).max(1) as f64).0).collect()
