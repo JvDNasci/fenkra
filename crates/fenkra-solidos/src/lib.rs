@@ -2271,13 +2271,27 @@ impl Ctx<'_> {
         Ok(SheetValues { t, r, k: fenkra_core::sheet_k(s.method, k0, t, r, allowance), flat: s.flat })
     }
 
+    /// Aresta da aba/bainha por dono + papel (ADR 0010): com chave v2, o ponto vira o ponto médio
+    /// atual da aresta lógica e some o risco de a aba cair na vizinha quando a peça muda; sem chave,
+    /// a chave é calculada (promoção) e o ponto segue como está. A chave só vale no estado da chapa
+    /// em que a aresta foi escolhida (o planificado tem outras faces); fora dele segue o ponto,
+    /// levado de um estado ao outro. Devolve o ponto e o estado (planificado?) em que ele está.
+    fn chapa_aresta(&self, what: &str, f: &Feature, p: V3, key: Option<&EdgeKey>, flat_now: bool) -> Result<(V3, bool), String> {
+        if f.flat_space != flat_now {
+            return Ok((p, f.flat_space));
+        }
+        let Some((b, owners, roles)) = self.body_owned(f.target) else { return Ok((p, f.flat_space)) };
+        let pts = self.resolve_edges(what, f, b, owners, roles, &[p], &[key.cloned()])?;
+        Ok((pts[0], flat_now))
+    }
+
     /// Aba/bainha: no estado planificado, a aresta clicada precisa existir na chapa plana — senão
     /// avisa que o planificado não é exato (aba sobre aba) em vez de inventar a geometria.
-    fn sheet_tool(&mut self, f: &Feature, edge: V3, p: fenkra_kernel::SheetFlange, colide: bool) -> Result<Option<String>, String> {
+    fn sheet_tool(&mut self, f: &Feature, edge: V3, from_flat: bool, p: fenkra_kernel::SheetFlange, colide: bool) -> Result<Option<String>, String> {
         let k = |e: KernelError| e.0;
         let b = self.body(f.target).ok_or("a aba precisa de uma parede de chapa antes")?.clone();
         // a aresta foi escolhida num estado (dobrado ou planificado): leva ao estado atual
-        let edge = self.map_point(edge, f.flat_space, p.flat);
+        let edge = self.map_point(edge, from_flat, p.flat);
         let (mut tool, info) = b.sm_flange(edge, p).map_err(k)?;
         self.last_sheet = Some(info);
         if std::mem::take(&mut self.miter_next) {
@@ -3205,12 +3219,14 @@ impl Ctx<'_> {
                 if off.abs() > 1e-12 {
                     face = face.transformed(Xform::Translate(geo3d::mul(dir, off))).map_err(k)?;
                 }
-                let tool = if w.mid { face.extrude(dir, sp.t / 2., sp.t / 2.) } else { face.extrude(dir, sp.t, 0.) }.map_err(k)?;
-                self.apply(f.target, tool, BoolOp::Add, f.id)?;
+                // com papel em cada face (tampas e laterais), as arestas da parede ganham chave v2
+                let (tool, roles) = if w.mid { face.extrude_roles(dir, sp.t / 2., sp.t / 2.) } else { face.extrude_roles(dir, sp.t, 0.) }.map_err(k)?;
+                self.apply_roles(f.target, tool, BoolOp::Add, f.id, Some(roles))?;
                 Ok(None)
             }
             FeatureKind::SmFlange(fl) => {
                 let sp = self.sheet()?;
+                let (fl_edge, from) = self.chapa_aresta("aba", f, fl.edge, fl.edge_key.as_ref(), sp.flat)?;
                 let r = match &fl.radius {
                     Some(e) => ev(e, &self.vars, "raio")?,
                     None => sp.r,
@@ -3236,10 +3252,10 @@ impl Ctx<'_> {
                     2 => p.t + p.r,
                     _ => 0.,
                 };
-                let mut edge = fl.edge;
+                let mut edge = fl_edge;
                 if trim > 1e-9 {
                     let b = self.body(f.target).ok_or("a aba precisa de uma parede de chapa antes")?.clone();
-                    let e0 = self.map_point(fl.edge, f.flat_space, p.flat);
+                    let e0 = self.map_point(fl_edge, from, p.flat);
                     let (_, info) = b.sm_flange(e0, p).map_err(k)?;
                     let e = geo3d::unit(geo3d::sub(info.ends[1], info.ends[0])).ok_or("aresta nula")?;
                     let z = geo3d::mul(info.normal, -1.);
@@ -3251,12 +3267,12 @@ impl Ctx<'_> {
                     let strip = Shape::box_tool(geo3d::add(start, geo3d::mul(info.normal, 0.01)), x, z, [len, trim, p.t + 0.02]).map_err(k)?;
                     self.apply(f.target, strip, BoolOp::Cut, f.id)?;
                     edge = geo3d::sub(e0, geo3d::mul(info.out, trim));
-                    if p.flat != f.flat_space {
-                        edge = self.map_point(edge, p.flat, f.flat_space);
+                    if p.flat != from {
+                        edge = self.map_point(edge, p.flat, from);
                     }
                 }
                 self.miter_next = fl.miter;
-                let out = self.sheet_tool(f, edge, p, true)?;
+                let out = self.sheet_tool(f, edge, from, p, true)?;
                 if let (Some(w), Some(info)) = (relief, self.last_sheet) {
                     // alívio de canto: corte retangular atrás da dobra em cada ponta recuada
                     let depth = p.r + p.t;
@@ -3711,7 +3727,11 @@ impl Ctx<'_> {
                     Some(e) => ev(e, &self.vars, "raio")?,
                     None => sp.r,
                 };
-                let pts: Vec<V3> = cf.edge.iter().map(|q| self.map_point(*q, f.flat_space, sp.flat)).collect();
+                // a chave guarda uma aresta da cadeia; a polilinha é cache e acompanha o deslocamento dela
+                let anchor = cf.edge[cf.edge.len() / 2];
+                let (now, from) = self.chapa_aresta("aba curva", f, anchor, cf.edge_key.as_ref(), sp.flat)?;
+                let shift = geo3d::sub(now, anchor);
+                let pts: Vec<V3> = cf.edge.iter().map(|q| self.map_point(geo3d::add(*q, if from == f.flat_space && geo3d::norm(shift) > 1e-9 { shift } else { [0.; 3] }), from, sp.flat)).collect();
                 self.curve_flange(f, pts, ang, r, len, cf.flip, None, cf.side)
             }
             FeatureKind::SmSurfFlange(sf) => {
@@ -3900,7 +3920,8 @@ impl Ctx<'_> {
                     flat: sp.flat,
                     k: sp.k,
                 };
-                self.sheet_tool(f, h.edge, p, false)
+                let (h_edge, from) = self.chapa_aresta("bainha", f, h.edge, h.edge_key.as_ref(), sp.flat)?;
+                self.sheet_tool(f, h_edge, from, p, false)
             }
             FeatureKind::StructMember(m) => {
                 let mut geo = self.members(m)?;
@@ -5631,7 +5652,7 @@ mod tests {
         let mut ids = vec![d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }))];
         // aresta de cima das duas retas (ponto médio com o erro de float da malha)
         for e in [[50.00001, 0., 2.], [0., 50.00001, 2.]] {
-            ids.push(d.add_feature(FeatureKind::SmFlange(SmFlange { edge: e, length: s("30"), angle: s("90"), radius: None, off1: s("5"), off2: s("5"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true })));
+            ids.push(d.add_feature(FeatureKind::SmFlange(SmFlange { edge: e, length: s("30"), angle: s("90"), radius: None, off1: s("5"), off2: s("5"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None })));
         }
         // furo retangular na aba do lado y = 0 (feito no dobrado: a aba sobe em z)
         let cut = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XZ), [40., 15.], [60., 25.]);
@@ -6128,7 +6149,7 @@ mod tests {
         assert!(near(r.bodies[0].mass.volume, 10000. + PI * 24. * 6. - PI * 25. * 2., 1e-3), "furo flangeado {}", r.bodies[0].mass.volume);
         // aba recuada 10 mm de cada lado com alívio de 3 mm
         let mut d = base();
-        d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 25., 2.], length: s("20"), angle: s("90"), radius: None, off1: s("10"), off2: s("10"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true }));
+        d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 25., 2.], length: s("20"), angle: s("90"), radius: None, off1: s("10"), off2: s("10"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None }));
         let v_sem = check(&d).bodies[0].mass.volume;
         if let FeatureKind::SmFlange(fl) = &mut d.features.last_mut().unwrap().kind {
             fl.relief = Some(s("3"));
@@ -6224,10 +6245,10 @@ mod tests {
         assert!(near(10000. - vol(&r), PI * 9. / 4. * 2., 2e-2), "alívio de canto {}", 10000. - vol(&r));
         // bainha em gota e aba com material por dentro, pontas a 45° e alívio redondo
         let mut d = base();
-        d.add_feature(FeatureKind::SmHem(SmHem { edge: [0., 25., 2.], length: s("6"), gap: s("2"), flip: false, kind: 1 }));
+        d.add_feature(FeatureKind::SmHem(SmHem { edge: [0., 25., 2.], length: s("6"), gap: s("2"), flip: false, kind: 1, edge_key: None }));
         check(&d);
         let mut d = base();
-        d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 25., 2.], length: s("20"), angle: s("90"), radius: None, off1: s("5"), off2: s("5"), flip: false, relief: Some(s("3")), relief_kind: 1, side: 2, miter: true, min_gap: true }));
+        d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 25., 2.], length: s("20"), angle: s("90"), radius: None, off1: s("5"), off2: s("5"), flip: false, relief: Some(s("3")), relief_kind: 1, side: 2, miter: true, min_gap: true, edge_key: None }));
         check(&d);
         // joggle pelo ângulo (45°) com compensação
         let mut d = base();
@@ -6261,7 +6282,7 @@ mod tests {
         d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), flat: false, ..Default::default() });
         let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [100., 50.]);
         d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
-        d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 25., 2.], length: s("20"), angle: s("90"), radius: None, off1: s("0"), off2: s("0"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true }));
+        d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 25., 2.], length: s("20"), angle: s("90"), radius: None, off1: s("0"), off2: s("0"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None }));
         let r = recompute(&d);
         for f in &d.features {
             assert!(matches!(r.status[&f.id], Status::Ok | Status::Warning(_)), "{}: {:?}", f.name, r.status[&f.id]);
@@ -6283,7 +6304,7 @@ mod tests {
         assert!((tab[0].allowance - ba).abs() < 1e-9);
         // bainha esmagada na aresta oposta (x = 0), dobrando para baixo
         d.sheet.as_mut().unwrap().flat = false;
-        d.add_feature(FeatureKind::SmHem(SmHem { edge: [0., 25., 2.], length: s("8"), gap: s("0"), flip: true, kind: 0 }));
+        d.add_feature(FeatureKind::SmHem(SmHem { edge: [0., 25., 2.], length: s("8"), gap: s("0"), flip: true, kind: 0, edge_key: None }));
         let r = recompute(&d);
         let st = &r.status[&d.features.last().unwrap().id];
         assert_eq!(*st, Status::Ok, "{st:?}");
@@ -7327,7 +7348,7 @@ mod tests_abas_vizinhas {
             data.add_rect(&mut al, [0., 0.], [50., 50.], false);
             let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
             d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
-            let fl = |e: [f64; 3]| FeatureKind::SmFlange(SmFlange { edge: e, length: s("20"), angle: s("90"), radius: None, off1: s(off), off2: s(off), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true });
+            let fl = |e: [f64; 3]| FeatureKind::SmFlange(SmFlange { edge: e, length: s("20"), angle: s("90"), radius: None, off1: s(off), off2: s(off), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None });
             d.add_feature(fl([50., 25., 2.]));
             d.add_feature(fl([25., 50., 2.]));
             for flat in [false, true] {
@@ -7374,7 +7395,7 @@ mod tests_aba_curva {
             let t = i as f64 / 24. * std::f64::consts::FRAC_PI_2;
             [50. * t.cos(), 50. * t.sin(), 2.]
         }).collect();
-        d.add_feature(FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("10"), flip: false, angle: s("90"), radius: None, side: 0 }));
+        d.add_feature(FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("10"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None }));
         let r = recompute(&d);
         for f in &d.features {
             assert_eq!(r.status[&f.id], Status::Ok, "{}: {:?}", f.name, r.status[&f.id]);
@@ -7431,7 +7452,7 @@ mod tests_filete_planificado {
         data.add_rect(&mut al, [0., 0.], [50., 50.], false);
         let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
         d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
-        let fl = |e: [f64; 3]| FeatureKind::SmFlange(SmFlange { edge: e, length: s("20"), angle: s("90"), radius: None, off1: s("0"), off2: s("0"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true });
+        let fl = |e: [f64; 3]| FeatureKind::SmFlange(SmFlange { edge: e, length: s("20"), angle: s("90"), radius: None, off1: s("0"), off2: s("0"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None });
         d.add_feature(fl([50., 25., 2.]));
         d.add_feature(fl([25., 50., 2.]));
         let r = recompute(&d);
@@ -7484,7 +7505,7 @@ mod tests_filete_planificado {
         data.add_rect(&mut al, [0., 0.], [50., 50.], false);
         let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
         d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
-        let fl = |e: [f64; 3]| FeatureKind::SmFlange(SmFlange { edge: e, length: s("20"), angle: s("90"), radius: None, off1: s("0"), off2: s("0"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true });
+        let fl = |e: [f64; 3]| FeatureKind::SmFlange(SmFlange { edge: e, length: s("20"), angle: s("90"), radius: None, off1: s("0"), off2: s("0"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None });
         d.add_feature(fl([50., 25., 2.]));
         d.add_feature(fl([25., 50., 2.]));
         let r = recompute(&d);

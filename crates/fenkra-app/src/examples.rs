@@ -87,8 +87,8 @@ fn suporte() -> Document {
     data.add_rect(&mut al, [0., 0.], [100., 60.], false);
     let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
     d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
-    d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 30., 2.], length: s("25"), angle: s("90"), radius: None, off1: s("8"), off2: s("8"), flip: false, relief: Some(s("3")), relief_kind: 1, side: 0, miter: false, min_gap: true }));
-    d.add_feature(FeatureKind::SmHem(SmHem { edge: [0., 30., 2.], length: s("8"), gap: s("0"), flip: false, kind: 0 }));
+    d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 30., 2.], length: s("25"), angle: s("90"), radius: None, off1: s("8"), off2: s("8"), flip: false, relief: Some(s("3")), relief_kind: 1, side: 0, miter: false, min_gap: true, edge_key: None }));
+    d.add_feature(FeatureKind::SmHem(SmHem { edge: [0., 30., 2.], length: s("8"), gap: s("0"), flip: false, kind: 0, edge_key: None }));
     d.add_feature(FeatureKind::SmLouver(SmLouver { a: [60., 15., 2.], b: [60., 45., 2.], width: s("12"), height: s("5"), flip: false, down: false }));
     d.hide_consumed(d.features[1].id);
     d
@@ -113,7 +113,7 @@ fn bandeja() -> Document {
             [80. * t.cos(), 80. * t.sin(), 1.5]
         })
         .collect();
-    d.add_feature(FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("18"), flip: false, angle: s("90"), radius: None, side: 0 }));
+    d.add_feature(FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("18"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None }));
     d.hide_consumed(d.features[1].id);
     d
 }

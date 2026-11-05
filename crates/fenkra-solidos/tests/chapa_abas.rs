@@ -23,7 +23,7 @@ fn base() -> Document {
 }
 
 fn aba(e: [f64; 3], len: &str, off: &str) -> FeatureKind {
-    FeatureKind::SmFlange(SmFlange { edge: e, length: s(len), angle: s("90"), radius: None, off1: s(off), off2: s(off), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true })
+    FeatureKind::SmFlange(SmFlange { edge: e, length: s(len), angle: s("90"), radius: None, off1: s(off), off2: s(off), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None })
 }
 
 fn recalcula(d: &Document, flat: bool) -> RecomputeResult {
@@ -106,7 +106,7 @@ fn aba_em_cadeia_reta_curva_reta_e_uma_feature_so() {
         edge.push([80. + 20. * t.cos(), 30. + 20. * t.sin(), 2.]);
     }
     edge.push([0., 50., 2.]);
-    d.add_feature(FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("10"), flip: false, angle: s("90"), radius: None, side: 0 }));
+    d.add_feature(FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("10"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None }));
     let dobrada = recalcula(&d, false);
     tudo_ok(&d, &dobrada, "dobrada");
     let (vd, vp) = (volume_total(&dobrada), volume_total(&recalcula(&d, true)));
