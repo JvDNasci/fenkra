@@ -13,6 +13,7 @@
 //! - Cada salvamento cria uma **versão** (RF-GPR-010).
 //! - **Liberar revisão** marca a versão atual com uma letra e a congela (RF-GPR-011).
 
+pub mod diario;
 pub mod importacao;
 pub mod plano;
 pub mod referencias;
@@ -45,6 +46,8 @@ pub enum ProjectError {
     SomenteLeitura(String),
     #[error("importação: {0}")]
     Importacao(String),
+    #[error("recusado: {0}")]
+    Recusado(String),
 }
 
 pub type PResult<T> = Result<T, ProjectError>;
@@ -71,6 +74,16 @@ pub struct Version {
     pub hash: String,
     pub time: u64,
     pub note: String,
+    /// quem gravou a versão (B25); vazio nas versões de antes do campo existir
+    #[serde(default)]
+    pub author: String,
+    /// comentário livre da versão, além da nota automática
+    #[serde(default)]
+    pub comment: String,
+    /// número (a partir de 1) da versão cujo conteúdo esta versão restaurou. O `hash` é o mesmo da
+    /// versão antiga: a restauração é uma versão nova, o histórico nunca é reescrito.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub restored_from: Option<usize>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -131,6 +144,13 @@ pub struct Project {
     pub index: Index,
     /// índice de formato mais novo que este programa entende: o projeto abre só para leitura (B64)
     pub aviso_formato: Option<String>,
+    /// quem está operando o projeto: entra em versões e no diário (B25)
+    pub autor: String,
+}
+
+/// Autor padrão: o usuário do sistema operacional.
+fn autor_do_sistema() -> String {
+    std::env::var("USERNAME").or_else(|_| std::env::var("USER")).unwrap_or_default()
 }
 
 fn now() -> u64 {
@@ -174,6 +194,7 @@ impl Project {
                 documents: vec![],
             },
             aviso_formato: None,
+            autor: autor_do_sistema(),
         };
         p.save_index()?;
         Ok(p)
@@ -185,7 +206,7 @@ impl Project {
         let s = std::fs::read_to_string(root.join(INDEX))?;
         let prep = preparar(Tipo::Indice, &s)?;
         let aviso_formato = prep.aviso(Tipo::Indice);
-        Ok(Project { root: root.into(), index: serde_json::from_value(prep.valor)?, aviso_formato })
+        Ok(Project { root: root.into(), index: serde_json::from_value(prep.valor)?, aviso_formato, autor: autor_do_sistema() })
     }
 
     fn pode_gravar(&self) -> PResult<()> {
@@ -210,21 +231,44 @@ impl Project {
         self.index.documents.iter_mut().find(|d| d.id == id).ok_or(ProjectError::NotFound)
     }
 
-    /// Numeração automática de PN (RF-GPR-005).
+    /// Numeração automática de PN (RF-GPR-005). **Consome** o número na hora: use só quando o
+    /// chamador garante a gravação; `add_document` usa [`Project::pn_previsto`] e só avança o contador
+    /// depois que o documento foi gravado (B25).
     pub fn next_pn(&mut self) -> String {
-        let pn = format!("{}{:04}", self.index.pn_prefix, self.index.next_pn);
+        let pn = self.pn_previsto();
         self.index.next_pn += 1;
         pn
     }
 
-    /// Adiciona um documento novo ao projeto e grava a primeira versão.
+    /// O próximo PN sem consumi-lo (prévia e reserva).
+    pub fn pn_previsto(&self) -> String {
+        format!("{}{:04}", self.index.pn_prefix, self.index.next_pn)
+    }
+
+    fn registrar(&self, tipo: diario::TipoEvento, doc_id: u64, de: &str, para: &str, motivo: &str) -> PResult<()> {
+        let uid = self.entry(doc_id).map(|e| e.uid.clone()).unwrap_or_default();
+        diario::acrescentar(
+            &self.root,
+            &diario::Evento { tempo: now(), autor: self.autor.clone(), tipo, doc_id, uid, de: de.into(), para: para.into(), motivo: motivo.into() },
+        )?;
+        Ok(())
+    }
+
+    /// Adiciona um documento novo ao projeto e grava a primeira versão. O contador de PN e o de IDs
+    /// só avançam se a gravação inteira deu certo: falha de disco não queima número (B25).
     pub fn add_document(&mut self, mut doc: Document) -> PResult<u64> {
-        if doc.props.pn.is_empty() {
-            doc.props.pn = self.next_pn();
+        self.pode_gravar()?;
+        let consome_pn = doc.props.pn.is_empty();
+        if consome_pn {
+            doc.props.pn = self.pn_previsto();
         }
         self.check_pn(None, &doc.props.pn)?;
+        let (next_id_antes, next_pn_antes) = (self.index.next_id, self.index.next_pn);
         let id = self.index.next_id;
         self.index.next_id += 1;
+        if consome_pn {
+            self.index.next_pn += 1;
+        }
         self.index.documents.push(DocEntry {
             id,
             uid: doc.uid.0.clone(),
@@ -237,7 +281,13 @@ impl Project {
             revisions: vec![],
             origem: doc.origem.clone(),
         });
-        self.save(id, &doc, "criado")?;
+        if let Err(e) = self.save(id, &doc, "criado") {
+            // desfaz tudo: o projeto na memória volta a ser igual ao que está no disco
+            self.index.documents.retain(|d| d.id != id);
+            self.index.next_id = next_id_antes;
+            self.index.next_pn = next_pn_antes;
+            return Err(e);
+        }
         Ok(id)
     }
 
@@ -250,7 +300,26 @@ impl Project {
 
     /// Salva o documento de trabalho e cria uma versão (se o conteúdo mudou).
     pub fn save(&mut self, id: u64, doc: &Document, note: &str) -> PResult<()> {
+        self.save_comentado(id, doc, note, "")
+    }
+
+    /// Como [`Project::save`], com um comentário livre gravado na versão nova (B25).
+    pub fn save_comentado(&mut self, id: u64, doc: &Document, note: &str, comentario: &str) -> PResult<()> {
         self.pode_gravar()?;
+        let antes = self.entry(id)?.clone();
+        match self.save_interno(id, doc, note, comentario) {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                // índice na memória volta ao que está no disco
+                if let Ok(en) = self.entry_mut(id) {
+                    *en = antes;
+                }
+                Err(e)
+            }
+        }
+    }
+
+    fn save_interno(&mut self, id: u64, doc: &Document, note: &str, comentario: &str) -> PResult<()> {
         if doc.formato_futuro() {
             return Err(ProjectError::SomenteLeitura(fenkra_core::formato::aviso_futuro(Tipo::Peca, doc.format_version)));
         }
@@ -279,19 +348,77 @@ impl Project {
         }
         let file = self.root.join(&self.entry(id)?.file);
         gravar_atomico(&file, json.as_bytes())?;
+        let autor = self.autor.clone();
         let e = self.entry_mut(id)?;
         e.uid = uid;
         e.name = doc.name.clone();
         e.pn = doc.props.pn.clone();
         e.description = doc.props.description.clone();
         e.origem = doc.origem.clone();
-        if e.versions.last().map(|v| v.hash != hash).unwrap_or(true) {
-            e.versions.push(Version { hash, time: now(), note: note.into() });
+        let mut volta_a_trabalho = false;
+        let nova = e.versions.last().map(|v| v.hash != hash).unwrap_or(true);
+        if nova {
+            e.versions.push(Version { hash: hash.clone(), time: now(), note: note.into(), author: autor, comment: comentario.into(), restored_from: None });
             if e.state == DocState::Liberado {
                 e.state = DocState::EmTrabalho;
+                volta_a_trabalho = true;
             }
         }
-        self.save_index()
+        self.save_index()?;
+        if nova {
+            self.registrar(diario::TipoEvento::Versao, id, "", &hash, note)?;
+        }
+        if volta_a_trabalho {
+            self.registrar(diario::TipoEvento::Transicao, id, DocState::Liberado.label(), DocState::EmTrabalho.label(), "automático: documento liberado foi editado")?;
+        }
+        Ok(())
+    }
+
+    /// Restaura a versão `numero` (a partir de 1): o conteúdo antigo vira o documento de trabalho e
+    /// uma versão **nova** aponta para ele. Nenhuma versão anterior é alterada ou apagada (B25).
+    pub fn restaurar_versao(&mut self, id: u64, numero: usize, motivo: &str) -> PResult<()> {
+        self.pode_gravar()?;
+        let antes = self.entry(id)?.clone();
+        let alvo = antes.versions.get(numero.wrapping_sub(1)).cloned().ok_or(ProjectError::NotFound)?;
+        if antes.versions.last().map(|v| v.hash == alvo.hash).unwrap_or(false) {
+            return Err(ProjectError::Recusado("a versão escolhida já é a atual".into()));
+        }
+        let conteudo = std::fs::read(self.root.join(VERSIONS).join(format!("{}.fkp", alvo.hash)))?;
+        match self.restaurar_interno(id, numero, &alvo.hash, &conteudo, motivo) {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                if let Ok(en) = self.entry_mut(id) {
+                    *en = antes;
+                }
+                Err(e)
+            }
+        }
+    }
+
+    fn restaurar_interno(&mut self, id: u64, numero: usize, hash: &str, conteudo: &[u8], motivo: &str) -> PResult<()> {
+        let file = self.root.join(&self.entry(id)?.file);
+        gravar_atomico(&file, conteudo)?;
+        let autor = self.autor.clone();
+        let e = self.entry_mut(id)?;
+        e.versions.push(Version {
+            hash: hash.into(),
+            time: now(),
+            note: format!("restaurada da v{numero}"),
+            author: autor,
+            comment: motivo.into(),
+            restored_from: Some(numero),
+        });
+        let antes_estado = e.state;
+        if e.state == DocState::Liberado && e.dirty_since_release() {
+            e.state = DocState::EmTrabalho;
+        }
+        let depois_estado = e.state;
+        self.save_index()?;
+        self.registrar(diario::TipoEvento::Restauracao, id, &format!("v{numero}"), hash, motivo)?;
+        if antes_estado != depois_estado {
+            self.registrar(diario::TipoEvento::Transicao, id, antes_estado.label(), depois_estado.label(), "automático: versão restaurada difere da revisão liberada")?;
+        }
+        Ok(())
     }
 
     pub fn load(&self, id: u64) -> PResult<Document> {
@@ -312,21 +439,29 @@ impl Project {
 
     /// Libera uma revisão a partir da última versão salva e a congela (RF-GPR-011).
     pub fn release(&mut self, id: u64, comment: &str) -> PResult<String> {
+        self.pode_gravar()?;
         let e = self.entry_mut(id)?;
         if !e.dirty_since_release() {
             return Err(ProjectError::NothingToRelease);
         }
         let hash = e.versions.last().unwrap().hash.clone();
         let label = next_label(e.revisions.last().map(|r| r.label.as_str()));
+        let estado_antes = e.state;
         e.revisions.push(Revision { label: label.clone(), hash, time: now(), comment: comment.into() });
         e.state = DocState::Liberado;
         self.save_index()?;
+        self.registrar(diario::TipoEvento::Revisao, id, "", &label, comment)?;
+        self.registrar(diario::TipoEvento::Transicao, id, estado_antes.label(), DocState::Liberado.label(), comment)?;
         Ok(label)
     }
 
-    pub fn set_state(&mut self, id: u64, st: DocState) -> PResult<()> {
-        self.entry_mut(id)?.state = st;
-        self.save_index()
+    pub fn set_state(&mut self, id: u64, st: DocState, motivo: &str) -> PResult<()> {
+        self.pode_gravar()?;
+        let e = self.entry_mut(id)?;
+        let antes = e.state;
+        e.state = st;
+        self.save_index()?;
+        self.registrar(diario::TipoEvento::Transicao, id, antes.label(), st.label(), motivo)
     }
 
     /// Cópia de um documento como novo item (novo ID e PN), sem histórico.
@@ -486,6 +621,126 @@ mod tests {
         a.props.pn = "X-1".into();
         p.add_document(a.clone()).unwrap();
         assert!(matches!(p.add_document(a), Err(ProjectError::DuplicatePn(_))));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn transicao_grava_autor_data_e_motivo_no_diario() {
+        let root = tmp("diario");
+        let mut p = Project::create(&root, "T").unwrap();
+        p.autor = "ana".into();
+        let id = p.add_document(Document::new("Placa")).unwrap();
+        p.set_state(id, DocState::Obsoleto, "substituída pelo modelo 2").unwrap();
+        let (ev, puladas) = diario::ler(&root);
+        assert_eq!(puladas, 0);
+        let t = ev.iter().find(|e| e.tipo == diario::TipoEvento::Transicao).expect("transição registrada");
+        assert_eq!((t.autor.as_str(), t.de.as_str(), t.para.as_str()), ("ana", "Em trabalho", "Obsoleto"));
+        assert_eq!(t.motivo, "substituída pelo modelo 2");
+        assert!(t.tempo > 0 && t.doc_id == id && t.uid.len() == 32);
+        // mudar de estado de novo só acrescenta: as linhas anteriores ficam idênticas
+        let antes = std::fs::read_to_string(diario::caminho(&root)).unwrap();
+        p.set_state(id, DocState::EmTrabalho, "voltou").unwrap();
+        assert!(std::fs::read_to_string(diario::caminho(&root)).unwrap().starts_with(&antes));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn versao_guarda_autor_e_comentario() {
+        let root = tmp("autor");
+        let mut p = Project::create(&root, "T").unwrap();
+        p.autor = "bia".into();
+        let mut d = Document::new("Placa");
+        let id = p.add_document(d.clone()).unwrap();
+        d.props.description = "mudou".into();
+        p.save_comentado(id, &d, "editado", "ajustei a espessura").unwrap();
+        let v = p.entry(id).unwrap().versions.last().unwrap().clone();
+        assert_eq!((v.author.as_str(), v.comment.as_str()), ("bia", "ajustei a espessura"));
+        // sobrevive à reabertura
+        let p2 = Project::open(&root).unwrap();
+        assert_eq!(p2.entry(id).unwrap().versions[1].author, "bia");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn restaurar_cria_versao_nova_e_nunca_reescreve_o_historico() {
+        let root = tmp("restaura");
+        let mut p = Project::create(&root, "T").unwrap();
+        p.autor = "caio".into();
+        let mut d = Document::new("Placa");
+        let id = p.add_document(d.clone()).unwrap();
+        d.props.description = "segunda".into();
+        p.save(id, &d, "v2").unwrap();
+        d.props.description = "terceira".into();
+        p.save(id, &d, "v3").unwrap();
+        let antes: Vec<(String, String)> = p.entry(id).unwrap().versions.iter().map(|v| (v.hash.clone(), v.note.clone())).collect();
+        let hash_v1 = antes[0].0.clone();
+
+        p.restaurar_versao(id, 1, "o cliente voltou atrás").unwrap();
+        let e = p.entry(id).unwrap();
+        assert_eq!(e.versions.len(), 4, "uma versão nova, nenhuma removida");
+        let depois: Vec<(String, String)> = e.versions[..3].iter().map(|v| (v.hash.clone(), v.note.clone())).collect();
+        assert_eq!(depois, antes, "as versões antigas ficam como estavam");
+        let nova = &e.versions[3];
+        assert_eq!((nova.hash.as_str(), nova.restored_from, nova.author.as_str()), (hash_v1.as_str(), Some(1), "caio"));
+        assert_eq!(nova.comment, "o cliente voltou atrás");
+        assert_eq!(p.load(id).unwrap().props.description, "", "o documento de trabalho tem o conteúdo antigo");
+        // restaurar a versão que já é a atual não faz nada
+        assert!(matches!(p.restaurar_versao(id, 4, ""), Err(ProjectError::Recusado(_))));
+        assert!(matches!(p.restaurar_versao(id, 99, ""), Err(ProjectError::NotFound)));
+        let (ev, _) = diario::ler(&root);
+        assert!(ev.iter().any(|e| e.tipo == diario::TipoEvento::Restauracao && e.para == hash_v1 && e.motivo == "o cliente voltou atrás"));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn restaurar_depois_de_liberar_volta_a_trabalho_e_registra() {
+        let root = tmp("restaura-lib");
+        let mut p = Project::create(&root, "T").unwrap();
+        let mut d = Document::new("Placa");
+        let id = p.add_document(d.clone()).unwrap();
+        d.props.description = "nova".into();
+        p.save(id, &d, "v2").unwrap();
+        p.release(id, "A").unwrap();
+        assert_eq!(p.entry(id).unwrap().state, DocState::Liberado);
+        p.restaurar_versao(id, 1, "volta").unwrap();
+        assert_eq!(p.entry(id).unwrap().state, DocState::EmTrabalho);
+        assert!(p.entry(id).unwrap().dirty_since_release());
+        // a revisão A continua congelada
+        assert_eq!(p.load_version(&p.entry(id).unwrap().revisions[0].hash).unwrap().props.description, "nova");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn falha_na_gravacao_nao_avanca_o_contador_de_pn_nem_deixa_documento_fantasma() {
+        let root = tmp("pn-falha");
+        let mut p = Project::create(&root, "T").unwrap();
+        p.add_document(Document::new("a")).unwrap();
+        assert_eq!(p.pn_previsto(), "FK-0002");
+        // um arquivo no lugar da pasta de versões faz a gravação falhar
+        std::fs::remove_dir_all(root.join(VERSIONS)).unwrap();
+        std::fs::write(root.join(VERSIONS), b"x").unwrap();
+        assert!(p.add_document(Document::new("b")).is_err());
+        assert_eq!(p.pn_previsto(), "FK-0002", "a sequência não avançou");
+        assert_eq!(p.index.documents.len(), 1, "nada ficou registrado");
+        // consertado o disco, o mesmo número é usado pelo próximo documento
+        std::fs::remove_file(root.join(VERSIONS)).unwrap();
+        std::fs::create_dir_all(root.join(VERSIONS)).unwrap();
+        let id = p.add_document(Document::new("c")).unwrap();
+        assert_eq!(p.entry(id).unwrap().pn, "FK-0002");
+        assert_eq!(p.pn_previsto(), "FK-0003");
+        // e o índice no disco concorda
+        assert_eq!(Project::open(&root).unwrap().index.next_pn, 3);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn pn_informado_pelo_usuario_nao_consome_a_sequencia() {
+        let root = tmp("pn-manual");
+        let mut p = Project::create(&root, "T").unwrap();
+        let mut d = Document::new("a");
+        d.props.pn = "MEU-1".into();
+        p.add_document(d).unwrap();
+        assert_eq!(p.pn_previsto(), "FK-0001");
         let _ = std::fs::remove_dir_all(root);
     }
 }

@@ -3107,6 +3107,9 @@ static TABLE: &[(&str, &str)] = &[
     ("Linha e círculo/arco, dois círculos, ou spline e outra curva. Com ponto comum, a spline sai na direção da curva; sem ponto comum, ela se move até encostar.", "Line and circle/arc, two circles, or a spline and another curve. With a shared point the spline leaves in the curve's direction; without one it moves until it touches."),
     ("duas splines só ficam tangentes num ponto comum", "two splines can only be tangent at a shared point"),
     ("selecione linha + círculo/arco, dois círculos, ou spline + outra curva", "select line + circle/arc, two circles, or spline + another curve"),
+    // PDM: versões, restauração (B25)
+    ("↩ restaurar", "↩ restore"),
+    ("Cria uma versão nova com o conteúdo desta; o histórico não é reescrito", "Creates a new version with this content; history is never rewritten"),
 ];
 
 #[cfg(test)]
