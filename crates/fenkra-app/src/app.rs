@@ -6456,6 +6456,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             // seta e cota 3D do comando aberto (fast 3D)
             if self.sketch.is_none() {
                 if self.settings.bench == crate::settings::Bench::Montagem && self.asm.is_some() {
+                    crate::asm_simbolos::overlay(self, ui, rect, &cam);
                     crate::asm_ui::gizmo(self, ui, rect, &cam);
                 } else {
                     crate::handles::overlay(self, ui, rect, cam);

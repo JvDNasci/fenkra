@@ -53,4 +53,14 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Rotação e avanço ligados pelo passo.", "Rotation and advance tied by the pitch."),
     ("Sem graus de liberdade entre as duas peças.", "No degrees of freedom between the two parts."),
     ("suprimida", "suppressed"),
+    // símbolos no modelo (B245)
+    ("Símbolos", "Symbols"),
+    ("Mostrar no modelo", "Show on the model"),
+    ("Desenha um símbolo em cada restrição e junta, preso à geometria", "Draws a symbol on each constraint and joint, attached to the geometry"),
+    ("Liga e desliga os símbolos por tipo", "Turns the symbols on and off by type"),
+    ("Clique para digitar o valor", "Click to type the value"),
+    ("Arraste para mudar a distância", "Drag to change the distance"),
+    ("Arraste para mudar o ângulo", "Drag to change the angle"),
+    ("O valor vem de uma fórmula: edite pelo rótulo", "The value comes from a formula: edit it from the label"),
+    ("2 cliques: editar", "Double click: edit"),
 ];

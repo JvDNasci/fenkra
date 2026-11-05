@@ -20,6 +20,7 @@ pub mod links;
 pub mod load;
 pub mod proposta;
 pub mod publicacoes;
+pub mod simbolos;
 pub mod substituicao;
 pub mod view;
 pub mod solve;
@@ -586,6 +587,11 @@ impl Assembly {
     /// Gravada por um Fenkra mais novo: abrir somente para leitura.
     pub fn formato_futuro(&self) -> bool {
         self.format_version > fenkra_core::formato::Tipo::Montagem.versao_atual()
+    }
+
+    /// PosiÃ§Ã£o de um componente.
+    pub fn lugar(&self, id: Id) -> Option<Placement> {
+        self.node(id).map(|n| n.placement)
     }
 
     pub fn node(&self, id: Id) -> Option<&Node> {

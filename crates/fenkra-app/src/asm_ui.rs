@@ -186,6 +186,8 @@ pub struct AsmState {
     pub cmd: Option<crate::asm_cmd::Pendente>,
     /// a prévia mudou: a cena precisa do fantasma novo (sem recompor as peças)
     pub fantasma_novo: bool,
+    /// símbolos de restrição e junta no modelo
+    pub simbolos: crate::asm_simbolos::Exibicao,
     /// propriedades do componente escolhido (ou da montagem, sem escolha) abertas no painel
     pub props: bool,
     pub report: SolveReport,
@@ -291,6 +293,7 @@ impl AsmState {
             sel: None,
             cmd: None,
             fantasma_novo: false,
+            simbolos: Default::default(),
             report: SolveReport { converged: true, dof: report_dof, ..Default::default() },
             errors: vec![],
             undo: vec![],
@@ -1535,7 +1538,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                 t = t.strikethrough().weak();
             }
             crate::tree_ui::marca(ui);
-            let r = ui.selectable_label(st.sel == Some(m.id), t);
+            let r = ui.selectable_label(st.sel == Some(m.id) || st.simbolos.hover == Some(m.id), t);
             if st.sel == Some(m.id) {
                 crate::tree_ui::achar(r.rect);
             }
@@ -1579,7 +1582,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                 t = t.strikethrough().weak();
             }
             crate::tree_ui::marca(ui);
-            let r = ui.selectable_label(st.sel == Some(j.id), t);
+            let r = ui.selectable_label(st.sel == Some(j.id) || st.simbolos.hover == Some(j.id), t);
             if st.sel == Some(j.id) {
                 crate::tree_ui::achar(r.rect);
             }
