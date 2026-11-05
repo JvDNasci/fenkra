@@ -61,6 +61,8 @@ mod textos_campos;
 mod midia;
 mod textos_ajuda;
 mod textos_biblioteca;
+mod textos_intercambio;
+mod textos_projeto;
 mod textos_desenho;
 mod textos_estrutural;
 mod st_cantos_ui;

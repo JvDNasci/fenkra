@@ -9,10 +9,10 @@ publish.workspace = true
 [dependencies]
 fenkra-core = { path = "../fenkra-core" }
 fenkra-kernel = { path = "../fenkra-kernel" }
+fenkra-montagem = { path = "../fenkra-montagem" }
+fenkra-solidos = { path = "../fenkra-solidos" }
 blake3 = "1"
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 
-[dev-dependencies]
-fenkra-solidos = { path = "../fenkra-solidos" }

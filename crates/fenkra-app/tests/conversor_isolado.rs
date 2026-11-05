@@ -91,6 +91,39 @@ fn importar_pelo_filho_entrega_documento_relatorio_e_miniatura() {
 }
 
 #[test]
+fn arvore_com_montagem_atravessa_o_filho_e_recalcula() {
+    use fenkra_conversor::arvore::{exportar_peca, gravar_em_pasta, Componente, Montagem};
+    let dir = pasta("arvore");
+    let d = fenkra_solidos::example_document();
+    let mut a = exportar_peca(&d).arquivo();
+    let peca = a.pecas[0].id.clone();
+    let lugar = |id: &str, x: f64| Componente { id: id.into(), nome: id.into(), peca: Some(peca.clone()), pai: None, origem: [x, 0., 0.], rotacao: [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]], fixo: false, cor: None };
+    a.montagem = Some(Montagem { nome: "Par".into(), componentes: vec![lugar("A", 0.), lugar("B", 300.)] });
+    let arquivo = dir.join("par.fkx");
+    std::fs::write(&arquivo, serde_json::to_string(&a).unwrap()).unwrap();
+
+    let i = filho(Filho::LIMITE).importar(&arquivo, OpcoesImportar::default(), &AtomicBool::new(false)).unwrap();
+    let volume = |x: &fenkra_core::Document| fenkra_solidos::recompute(x).bodies.iter().map(|b| b.mass.volume).sum::<f64>();
+    assert!((volume(&i.doc) - volume(&d)).abs() < 1e-6);
+    assert_eq!((i.relatorio.produtos, i.relatorio.instancias), (1, 2));
+    assert!(i.relatorio.avisos.is_empty(), "{:?}", i.relatorio.avisos);
+    let c = i.conjunto.expect("arquivo com montagem traz o conjunto");
+    let fka = gravar_em_pasta(&c, &dir).unwrap();
+    let m = fenkra_montagem::Assembly::from_json(&std::fs::read_to_string(fka).unwrap()).unwrap();
+    assert_eq!(m.nodes.len(), 2);
+    assert_eq!(m.nodes[1].placement.origin, [300., 0., 0.]);
+}
+
+#[test]
+fn arvore_ruim_volta_como_erro_do_filho() {
+    let dir = pasta("arvore ruim");
+    let arquivo = dir.join("ruim.fkx");
+    std::fs::write(&arquivo, r#"{"formato": "fenkra-arvore", "format_version": 1, "unidades": "mm", "pecas": []}"#).unwrap();
+    let e = filho(Filho::LIMITE).importar(&arquivo, OpcoesImportar::default(), &AtomicBool::new(false)).unwrap_err();
+    assert!(e.to_string().contains("/pecas"), "{e}");
+}
+
+#[test]
 fn queda_do_filho_vira_erro_e_nao_derruba_quem_chamou() {
     let e = filho(Filho::LIMITE).executar(Trabalho::Queda, &AtomicBool::new(false)).unwrap_err();
     assert!(matches!(e, ErroConv::Queda(_)), "{e:?}");

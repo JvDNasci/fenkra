@@ -92,6 +92,8 @@ macro_rules! modelos {
 
 // Lista gerada a partir de assets/icons2 (scripts/gerar_icones2.py).
 modelos!(
+    "comparar", "estado_conflito", "estado_editado", "estado_leitura", "estado_liberada", "estado_sem_revisao",
+    "exportar_arquivo", "liberar_revisao", "onde_usado",
     "abrir_projeto", "ajustar", "an_curvatura", "an_sombreado", "an_zebra", "aparencia", "arestas_comando",
     "arestas_selecionar", "arestas_todas", "asm_catalogo", "asm_engrenagens", "asm_fixadores", "asm_furo_pecas", "asm_grupo",
     "asm_inserir", "asm_link", "asm_lista", "asm_nova", "asm_numerar", "asm_peca_nova", "asm_recorte_peca",
@@ -150,6 +152,12 @@ modelos!(
 );
 
 // Lista gerada a partir de assets/icons (scripts/gerar_icones.py).
+/// O nome tem desenho na família nova?
+#[cfg(test)]
+pub fn tem_modelo(nome: &str) -> bool {
+    modelo(nome).is_some()
+}
+
 fn antigo(name: &str) -> ImageSource<'static> {
     match name {
         "abrir_projeto" => egui::include_image!("../../../assets/icons/abrir_projeto.svg"),

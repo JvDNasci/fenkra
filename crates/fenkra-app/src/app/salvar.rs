@@ -33,6 +33,8 @@ pub struct Estado {
     confirmar: Option<Acao>,
     /// mudança externa detectada ao salvar o documento (id do plano)
     conflito: Option<u64>,
+    /// o arquivo do documento ativo mudou por fora, visto na última checagem
+    externo: bool,
     /// plano de salvamento aberto (Ctrl+Shift+S)
     plano: Option<Plano>,
     /// assinatura do arquivo como estava quando abrimos ou salvamos
@@ -152,6 +154,19 @@ impl App {
         }
     }
 
+    pub(super) fn documento_ativo_e_peca(&self) -> bool {
+        self.documento_ativo() == PECA
+    }
+
+    pub(super) fn ativo_modificado(&self) -> bool {
+        self.modificado(self.documento_ativo())
+    }
+
+    /// Sem ler o disco: a barra pergunta a cada quadro, e a checagem periódica já olhou o arquivo.
+    pub(super) fn ativo_em_conflito(&self) -> bool {
+        self.salvar.externo || self.salvar.conflito.is_some()
+    }
+
     /// Salvar do documento ativo (menu e Ctrl+S): antes de gravar confere se o arquivo mudou por fora.
     pub fn salvar_ativo(&mut self) {
         let id = self.documento_ativo();
@@ -257,6 +272,7 @@ impl App {
         if agora - self.salvar.checado > 0.5 {
             self.salvar.checado = agora;
             self.atualizar_assinaturas(agora);
+            self.salvar.externo = self.mudanca_externa(self.documento_ativo()) != MudancaExterna::Igual;
         }
         // pedido de fechar a janela com alterações por salvar
         if ctx.input(|i| i.viewport().close_requested()) && !self.salvar.pode_fechar && self.algo_modificado() {

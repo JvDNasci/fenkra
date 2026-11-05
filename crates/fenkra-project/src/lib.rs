@@ -14,6 +14,7 @@
 //! - **Liberar revisão** marca a versão atual com uma letra e a congela (RF-GPR-011).
 
 pub mod diario;
+pub mod estado_doc;
 pub mod estados;
 pub mod importacao;
 pub mod pacote;

@@ -470,10 +470,15 @@ impl App {
     pub(super) fn painel_onde_usado(&mut self, ui: &mut egui::Ui, id: u64) {
         let Some(p) = self.project.as_ref() else { return };
         let usos = p.onde_usado(id).unwrap_or_default();
-        let mut ir = None;
-        egui::CollapsingHeader::new(format!("{} ({})", tr("Onde é usado"), usos.len())).id_salt(("onde_usado", id)).show(ui, |ui| {
-            ir = self.lista_de_usos(ui, &usos);
-        });
+        let chave = egui::Id::new(("onde_usado", id));
+        let mut aberto = ui.ctx().data(|d| d.get_temp::<bool>(chave)).unwrap_or(false);
+        let (rotulo, frase, passos) = super::estado_doc::ONDE_USADO;
+        let titulo = format!("{} ({})", tr(rotulo), usos.len());
+        if super::estado_doc::botao(ui, true, "onde_usado", &titulo, frase, passos).clicked() {
+            aberto = !aberto;
+            ui.ctx().data_mut(|d| d.insert_temp(chave, aberto));
+        }
+        let ir = if aberto { self.lista_de_usos(ui, &usos) } else { None };
         if let Some(u) = ir {
             self.ir_para_uso(&u);
         }

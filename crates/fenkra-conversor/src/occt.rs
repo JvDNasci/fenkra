@@ -7,6 +7,11 @@ use std::path::Path;
 
 pub struct ProvedorOcct;
 
+/// A árvore é receita, não forma: quem a lê é [`crate::arvore`], e nenhum provedor de geometria.
+fn sem_geometria() -> ErroConv {
+    ErroConv::Formato("árvore paramétrica não passa pelo provedor de geometria".into())
+}
+
 impl Provedor for ProvedorOcct {
     fn id(&self) -> &'static str {
         "OpenCASCADE"
@@ -27,6 +32,7 @@ impl Provedor for ProvedorOcct {
                 let nome = caminho.file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
                 Ok(ModeloNeutro::de_forma(formato, &nome, Shape::from_brep(&texto)?))
             }
+            Formato::Arvore => Err(sem_geometria()),
         }
     }
 
@@ -37,6 +43,7 @@ impl Provedor for ProvedorOcct {
                 let opcoes = OpcoesGravarXde { esquema: o.esquema.into(), unidade: o.unidade.into(), cores: o.cores, nomes: o.nomes, camadas: o.camadas, pmi: o.pmi };
                 modelo.xde.gravar(texto_do_caminho(caminho)?, opcoes).map_err(falha)
             }
+            Formato::Arvore => Err(sem_geometria()),
             // o BREP não tem estrutura: as peças vão soltas, cada uma no seu lugar
             Formato::Brep => {
                 let mut tudo: Option<Shape> = None;
