@@ -199,6 +199,8 @@ pub struct SketchEdit {
     /// último raio de filete e última distância de chanfro: o próximo canto repete
     last_fillet: Option<f64>,
     last_chamfer: Option<f64>,
+    /// texto do campo de raio ou distância do canto, no painel
+    pub(crate) texto_canto: String,
     /// cota de filete (`false`) ou chanfro (`true`) aberta para digitar
     round_dim: Option<(Id, bool)>,
     /// campos de valor junto ao cursor
@@ -211,6 +213,17 @@ pub struct SketchEdit {
     keyboard_busy: bool,
     /// quadros em que o foco que o Tab deu a outro campo é devolvido
     tab_guard: u8,
+    /// campos do passo atual, para o painel mostrar os mesmos da viewport
+    pub(crate) campos: Vec<CampoVivo>,
+    /// Enter num campo do painel confirma o passo, como na viewport
+    pub(crate) confirmar_campo: bool,
+}
+
+/// Campo de valor aberto agora: o painel lê daqui o rótulo e a medida atual.
+pub(crate) struct CampoVivo {
+    pub label: &'static str,
+    pub angle: bool,
+    pub value: f64,
 }
 
 /// Tecla que os campos de valor tratam.
@@ -259,6 +272,32 @@ impl ValueEntry {
         self.locks.push((focus, self.text.trim().to_string(), v));
         self.text.clear();
         true
+    }
+    /// Texto do campo `i`, o digitado ou o travado: o painel mostra o mesmo que a viewport.
+    pub(crate) fn texto_do_campo(&self, i: usize) -> String {
+        if i == self.focus && !self.text.is_empty() {
+            return self.text.clone();
+        }
+        self.locks.iter().find(|l| l.0 == i).map_or(String::new(), |l| l.1.clone())
+    }
+    /// O painel escreve no campo `i` como se o teclado da viewport estivesse nele; vazio destrava.
+    pub(crate) fn escrever(&mut self, i: usize, texto: &str, vars: &HashMap<String, f64>) {
+        if self.focus != i {
+            self.encerrar_digitacao(vars);
+            self.focus = i;
+        }
+        if texto.trim().is_empty() {
+            self.locks.retain(|l| l.0 != i);
+            self.text.clear();
+        } else {
+            self.text = texto.to_string();
+        }
+    }
+    /// O campo perdeu o foco: trava o que vale e larga o que ficou pela metade.
+    pub(crate) fn encerrar_digitacao(&mut self, vars: &HashMap<String, f64>) {
+        if !self.commit(vars) {
+            self.text.clear();
+        }
     }
     /// Trata a tecla: (a tecla foi usada, confirmar o passo).
     fn key(&mut self, k: EntryKey, n: usize, vars: &HashMap<String, f64>) -> (bool, bool) {
@@ -352,6 +391,43 @@ impl SketchEdit {
             keyboard_busy: false,
             tab_guard: 0,
             janela: None,
+            texto_canto: String::new(),
+            campos: vec![],
+            confirmar_campo: false,
+        }
+    }
+    /// Troca o modo do comando sem recomeçar: os cliques dados continuam valendo, salvo se o modo novo
+    /// já estaria completo com eles. Os campos recomeçam porque medem outra coisa.
+    pub fn trocar_modo(&mut self, t: Tool) {
+        self.tool = t;
+        if t.clicks_needed() > 0 && self.clicks.len() >= t.clicks_needed() {
+            self.clicks.clear();
+        }
+        self.menu = None;
+        self.entry = ValueEntry::default();
+        self.typed.clear();
+    }
+    /// Próximo modo do comando (tecla M).
+    pub fn percorrer_modo(&mut self) {
+        self.trocar_modo(crate::sketch_painel::proximo_modo(self.tool));
+    }
+    /// Botão da barra ou do painel: outro modo do mesmo comando continua o passo; o resto recomeça.
+    pub fn escolher(&mut self, t: Tool) {
+        if crate::sketch_painel::modos(self.tool).contains(&t) {
+            self.trocar_modo(t);
+        } else {
+            self.set_tool(t);
+        }
+    }
+    /// Valor que o próximo canto repete: distância do chanfro ou raio do filete.
+    pub(crate) fn valor_canto(&self, chanfro: bool) -> Option<f64> {
+        if chanfro { self.last_chamfer } else { self.last_fillet }
+    }
+    pub(crate) fn definir_canto(&mut self, chanfro: bool, v: Option<f64>) {
+        if chanfro {
+            self.last_chamfer = v;
+        } else {
+            self.last_fillet = v;
         }
     }
     /// Há um passo de desenho em andamento, com campos de valor à espera.
@@ -2403,7 +2479,15 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             direcao_inferida = None;
         }
         let pos = hover.unwrap_or(v.to_screen(at)) + egui::vec2(14., 30.);
-        draw_fields(&painter, pos, &edit.entry, &fields_at(at, &sk), &vars, ui.visuals());
+        let campos = fields_at(at, &sk);
+        draw_fields(&painter, pos, &edit.entry, &campos, &vars, ui.visuals());
+        edit.campos = campos.iter().map(|m| CampoVivo { label: m.label, angle: m.angle, value: m.value }).collect();
+    } else {
+        edit.campos.clear();
+    }
+    // Enter num campo do painel: mesmo efeito do Enter no campo do cursor
+    if std::mem::take(&mut edit.confirmar_campo) && edit.entry.active() {
+        confirm = true;
     }
     if confirm {
         primary_click = true;
@@ -3391,6 +3475,9 @@ pub fn keys(app: &mut App, ctx: &egui::Context) -> bool {
             edit.set_tool(t);
         }
     }
+    if km.pressed(ctx, K::SkModo) {
+        edit.percorrer_modo();
+    }
     if km.pressed(ctx, K::SkConstruction) {
         edit.construction = !edit.construction;
     }
@@ -3420,16 +3507,12 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     let id = edit.feature;
     let name = app.open.doc.feature(id).map(|f| f.name.clone()).unwrap_or_default();
     ui.heading(format!("✏ {name}"));
+    crate::sketch_painel::comando(app, ui);
+    let Some(edit) = app.sketch.as_mut() else { return };
+    ui.separator();
+    // estado do sketch: abaixo do comando, porque vale para o desenho todo
     let (txt, col) = status_line(&edit.report);
     ui.label(RichText::new(txt).color(col).strong());
-    let tool = edit.tool;
-    ui.label(RichText::new(tr(tool.info().3)).weak().small());
-    if tool == Tool::Polygon {
-        ui.add(crate::ui_ext::slider(&mut edit.polygon_sides, 3..=24).text(tr("lados")));
-    }
-    if matches!(tool, Tool::Line | Tool::Rect | Tool::RectCenter | Tool::Circle | Tool::Arc3 | Tool::ArcCenter | Tool::Slot | Tool::Polygon) {
-        ui.checkbox(&mut app.settings.dim_on_type, tr("Criar cota ao digitar")).on_hover_text(tr("O valor digitado no campo do cursor vira cota da curva, guardando a expressão. Desligado, ele só posiciona a geometria."));
-    }
     ui.add_space(4.);
     let mut finish = false;
     let mut remove = false;
@@ -3602,6 +3685,26 @@ pub fn begin(app: &mut App, id: Id) {
     }
     app.sketch = Some(e);
     app.sel = Sel::Feature(id);
+}
+
+#[cfg(test)]
+pub(crate) fn measures_labels(t: Tool, cliques: usize) -> Vec<&'static str> {
+    let c: Vec<[f64; 2]> = (0..cliques).map(|i| [i as f64 * 10., 0.]).collect();
+    measures(t, &c, [5., 7.]).iter().map(|m| m.label).collect()
+}
+
+#[cfg(test)]
+impl SketchEdit {
+    pub(crate) fn clique_de_teste(&mut self, uv: [f64; 2]) {
+        self.clicks.push(Snap::livre(uv));
+    }
+}
+
+#[cfg(test)]
+impl ValueEntry {
+    pub(crate) fn valor_de_teste(&self, n: usize, vars: &HashMap<String, f64>) -> Vec<Option<f64>> {
+        self.values(n, vars)
+    }
 }
 
 #[cfg(test)]

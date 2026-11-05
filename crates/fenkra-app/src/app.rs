@@ -2300,7 +2300,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
             Act::SkTool(t) => {
                 if let Some(e) = self.sketch.as_mut() {
-                    e.set_tool(t)
+                    e.escolher(t)
                 }
             }
             Act::SkConstruction => {
