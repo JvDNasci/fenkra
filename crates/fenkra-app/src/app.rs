@@ -2199,7 +2199,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             // comandos de montagem são tratados em asm_ui::command
             Cmd::AsmNew | Cmd::AsmOpen | Cmd::AsmSave | Cmd::AsmInsert | Cmd::AsmSubAsm | Cmd::AsmNewPart | Cmd::AsmGroup | Cmd::AsmReplace | Cmd::AsmMate(_) | Cmd::AsmFix | Cmd::AsmRigid
             | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmPattern | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmDisplay | Cmd::AsmBom
-            | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink | Cmd::AsmFasteners | Cmd::AsmGears => return,
+            | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink | Cmd::AsmFasteners | Cmd::AsmCatalogo | Cmd::AsmGears => return,
             Cmd::Param => {
                 let n = (1..).map(|i| format!("P{i}")).find(|n| !d.params.iter().any(|p| &p.name == n)).unwrap();
                 let _ = d.add_param(&n, "10", Unit::Comprimento);
@@ -6455,6 +6455,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 crate::asm_ui::context_overlay(self, ui, rect, &cam);
                 crate::asm_ui::fasteners_overlay(self, ui, rect, &cam);
                 crate::asm_ui::fasteners_handles(self, ui, rect, &cam);
+                crate::biblioteca_ui::candidatos_overlay(self, ui, rect, &cam);
+                crate::biblioteca_ui::overlay(self, ui, rect, &cam);
                 crate::feat_ui::bend_overlay(self, ui, rect, &cam);
                 crate::feat_ui::cut_overlay(self, ui, rect, &cam);
                 crate::previa::overlay(self, ui, rect, &cam);
@@ -6663,6 +6665,8 @@ pub enum Cmd {
     AsmLink,
     /// preencher os furos da montagem com parafuso, arruela e porca da biblioteca (janela de opções)
     AsmFasteners,
+    /// navegador do catálogo de normas (painel Biblioteca) e inserção de item avulso
+    AsmCatalogo,
     /// gerar engrenagens (par engrenado ou peça avulsa) com cálculo ao vivo (janela)
     AsmGears,
     // ---- chapa metálica
@@ -7359,6 +7363,7 @@ impl eframe::App for App {
         crate::asm_ui::display_window(self, ctx);
         crate::asm_ui::bom_window(self, ctx);
         crate::asm_ui::fasteners_window(self, ctx);
+        crate::biblioteca_ui::painel(self, ctx, area);
         crate::asm_ui::contexto_window(self, ctx);
         crate::asm_ui::gears_window(self, ctx);
         self.sheet_window(ctx);

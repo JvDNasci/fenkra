@@ -93,7 +93,7 @@ macro_rules! modelos {
 // Lista gerada a partir de assets/icons2 (scripts/gerar_icones2.py).
 modelos!(
     "abrir_projeto", "ajustar", "an_curvatura", "an_sombreado", "an_zebra", "aparencia", "arestas_comando",
-    "arestas_selecionar", "arestas_todas", "asm_engrenagens", "asm_fixadores", "asm_furo_pecas", "asm_grupo",
+    "arestas_selecionar", "arestas_todas", "asm_catalogo", "asm_engrenagens", "asm_fixadores", "asm_furo_pecas", "asm_grupo",
     "asm_inserir", "asm_link", "asm_lista", "asm_nova", "asm_numerar", "asm_peca_nova", "asm_recorte_peca",
     "asm_repeticao", "asm_sub_selecao", "asm_subconjunto", "asm_substituir", "bool_intersecao", "bool_subtrair",
     "bool_unir", "canto", "casca", "chanfro", "chanfro_dist", "chanfro_dist_angulo", "chanfro_dist_dist",

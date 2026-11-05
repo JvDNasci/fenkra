@@ -119,6 +119,8 @@ pub struct FastenersUi {
     pub previa_de: Option<OpcoesFixadores>,
     /// alça de comprimento cuja lista de valores está aberta (dois cliques na alça)
     pub lista_alca: Option<usize>,
+    /// pilhas candidatas da última prévia: o que será inserido, o que já tem e o que não entra (B248)
+    pub candidatos: Vec<fenkra_montagem::fixadores::Candidato>,
 }
 
 /// Janela "Engrenagens": parâmetros do par (o `tipo` é o do par), dentes da coroa e a última mensagem.
@@ -248,6 +250,8 @@ pub struct AsmState {
     pub bom_open: Option<fenkra_montagem::bom::BomLevel>,
     /// janela de preenchimento de furos com fixadores (opções e avisos da última aplicação)
     pub fasteners_open: Option<FastenersUi>,
+    /// painel Biblioteca (catálogo de normas) aberto, com a inserção em andamento
+    pub catalogo: Option<crate::biblioteca_ui::Estado>,
     /// janela do gerador de engrenagens (B28)
     pub gears_open: Option<GearsUi>,
     pub anim_sel: usize,
@@ -327,6 +331,7 @@ impl AsmState {
             display_open: false,
             bom_open: None,
             fasteners_open: None,
+            catalogo: None,
             gears_open: None,
             anim_sel: 0,
             anim_t: 0.,
@@ -558,7 +563,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
             let is_asm = matches!(
                 c,
                 Cmd::AsmInsert | Cmd::AsmNewPart | Cmd::AsmGroup | Cmd::AsmReplace | Cmd::AsmMate(_) | Cmd::AsmFix | Cmd::AsmRigid | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmSubAsm | Cmd::AsmPattern
-                    | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmDisplay | Cmd::AsmBom | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink | Cmd::AsmFasteners | Cmd::AsmGears
+                    | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmDisplay | Cmd::AsmBom | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink | Cmd::AsmFasteners | Cmd::AsmCatalogo | Cmd::AsmGears
             );
             let Some(st) = app.asm.as_mut() else {
                 // só os comandos de montagem avisam; os da peça seguem normalmente
@@ -720,6 +725,10 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                     if st.fasteners_open.is_none() {
                         st.fasteners_open = Some(FastenersUi::default());
                     }
+                }
+                Cmd::AsmCatalogo => {
+                    // liga e desliga: o painel Biblioteca abre só enquanto a pessoa o usa
+                    st.catalogo = if st.catalogo.is_some() { None } else { Some(crate::biblioteca_ui::Estado::default()) };
                 }
                 Cmd::AsmGears => {
                     if st.gears_open.is_none() {
@@ -3563,6 +3572,7 @@ pub fn fasteners_overlay(app: &App, ui: &mut egui::Ui, rect: egui::Rect, cam: &c
             EstadoFuro::Entra { tamanho, comprimento, .. } => (crate::theme::st_ok(), format!("{tamanho}x{}", fmt(*comprimento))),
             EstadoFuro::JaTem => (Color32::GRAY, tr("já tem fixador").to_string()),
             EstadoFuro::SemTamanho(motivo) => (crate::theme::st_warn(), motivo.split_once(": ").map(|(_, r)| r).unwrap_or(motivo).to_string()),
+            EstadoFuro::Excluido => (Color32::GRAY, tr("fora da lista").to_string()),
         };
         painter.circle_stroke(c, r + 2., egui::Stroke::new(2.5, cor));
         painter.circle_filled(c, r + 2., cor.gamma_multiply(0.18));
@@ -4138,6 +4148,40 @@ pub fn fasteners_window(app: &mut App, ctx: &egui::Context) {
             });
             ui.label(RichText::new(tr("Os furos estão marcados na viewport; o motivo de cada furo sem tamanho aparece em âmbar ao lado dele.")).weak().small());
         }
+        if !f.candidatos.is_empty() {
+            crate::editor::section(ui, "Candidatos");
+            let entram = f.candidatos.iter().filter(|c| matches!(c.estado, EstadoFuro::Entra { .. }) && !c.excluido).count();
+            ui.label(RichText::new(format!("{entram} {}", tr(if entram == 1 { "fixador será inserido" } else { "fixadores serão inseridos" }))).strong());
+            // diâmetro de folga e comprimento do exemplo: mudam ao vivo com a folga e a alça
+            if let Some(c) = f.candidatos.iter().find(|c| c.folga.is_some() && !c.excluido) {
+                let nome_folga = tr(["Fina", "Normal", "Folgada"][f.op.folga.min(2) as usize]);
+                ui.label(RichText::new(format!("{} {}: Ø{} mm ({nome_folga}) · {} {}", tr("Exemplo"), c.rotulo.split('x').next().unwrap_or(""), fmt(c.folga.unwrap_or(0.)), tr("comprimento"), c.rotulo.split('x').nth(1).map(|l| format!("{l} mm")).unwrap_or_default())).small());
+            }
+            let mut alternar: Option<String> = None;
+            egui::ScrollArea::vertical().id_salt("fix_candidatos").max_height(120.).show(ui, |ui| {
+                for c in &f.candidatos {
+                    let (texto, cor) = crate::biblioteca_ui::texto_candidato(c);
+                    ui.horizontal(|ui| {
+                        if matches!(c.estado, EstadoFuro::Entra { .. }) {
+                            let (icone, dica) = if c.excluido { ("↺", "Devolve a pilha à lista.") } else { ("✖", "Tira a pilha da lista: ela não recebe fixador.") };
+                            if ui.small_button(icone).on_hover_text(tr(dica)).clicked() {
+                                alternar = Some(c.chave.clone());
+                            }
+                        }
+                        ui.label(RichText::new(texto).small().color(cor));
+                    });
+                }
+            });
+            if let Some(chave) = alternar {
+                match f.op.excluidas.iter().position(|k| *k == chave) {
+                    Some(i) => {
+                        f.op.excluidas.remove(i);
+                    }
+                    None => f.op.excluidas.push(chave),
+                }
+            }
+            ui.label(RichText::new(tr("Nada é gravado em disco até você apertar Preencher furos. Clique num fantasma na viewport para tirar a pilha da lista.")).weak().small());
+        }
         ui.add_space(4.);
         apply = ui.add(egui::Button::new(RichText::new(tr("Preencher furos")).strong()).min_size(egui::vec2(140., 28.))).on_hover_text(tr("Insere os fixadores já na posição, com restrições de eixo, de contato e trava de giro, e resolve a montagem. Rodar de novo não duplica.")).clicked();
         if !f.warnings.is_empty() {
@@ -4172,8 +4216,12 @@ pub fn fasteners_window(app: &mut App, ctx: &egui::Context) {
                 Ok(rel) => {
                     f.marcas = rel.marcas;
                     f.warnings = rel.avisos;
+                    f.candidatos = rel.candidatos;
                 }
-                Err(_) => f.marcas.clear(),
+                Err(_) => {
+                    f.marcas.clear();
+                    f.candidatos.clear();
+                }
             }
             f.previa_de = Some(op);
         }
@@ -4214,6 +4262,7 @@ pub fn fasteners_window(app: &mut App, ctx: &egui::Context) {
                     }
                     f.warnings = rel.avisos;
                     f.previa_de = None;
+                    f.op.excluidas.clear();
                 }
                 Err(e) => {
                     if let Some(antes) = st.undo.pop() {

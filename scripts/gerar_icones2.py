@@ -507,6 +507,7 @@ def desenhos():
     ic("asm_grupo", B="M12 6H6v36h6M36 6h6v36h-6", R=CUBO(24, 8, 10, 5, 8) + CUBO(24, 26, 10, 5, 6))
     ic("asm_link", B=CUBO(14, 6, 9, 4.5, 9), R="M26 34h-4a6 6 0 0 1 0-12h10a6 6 0 0 1 6 6M30 30h4a6 6 0 0 1 0 12H24a6 6 0 0 1-6-6")
     ic("asm_fixadores", B="M6 22h10M32 22h10M6 34h10M32 34h10M16 22v12M32 22v12", R="M14 12h20v6H14zM20 18v24M28 18v24")
+    ic("asm_catalogo", B="M10 8h24a4 4 0 0 1 4 4v28H14a4 4 0 0 1-4-4zM10 36a4 4 0 0 1 4-4h24", R="M19 13h10v5H19zM22 18v10M26 18v10")
     ic("asm_engrenagens", B=ENGRENAGEM(16, 18, 11, 8, 8), R=ENGRENAGEM(33, 33, 11, 8, 8))
     ic("asm_lista", B="M20 12h22M20 24h22M20 36h22", R=C(10, 12, 4) + C(10, 24, 4) + C(10, 36, 4))
     ic("asm_numerar", B=CUBO(16, 22, 10, 5, 10), R=C(36, 14, 7) + L((31, 19), (20, 28)))
@@ -667,7 +668,7 @@ def desenhos():
 desenhos()
 
 
-SO_INTERFACE = {"arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais"}
+SO_INTERFACE = {"asm_catalogo", "arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais"}
 
 
 # ---------- saída ----------
