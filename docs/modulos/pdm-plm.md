@@ -4,7 +4,11 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 
 ## ✅ Pronto
 
-- **Versões e revisões** (Projeto em pasta) — fenkra-project: Version, Revision, next_label.
+- **Versões e revisões** (Projeto em pasta) — fenkra-project: Version (com autor e comentário), Revision, restaurar versão como versão nova, diário só-acréscimo (`.diario.jsonl`). ADR 0018.
+- **Estados com tabela de transições** — `estados::Ciclo` em JSON (modelo de três estados e modelo com aprovação), papel e motivo por transição, esquema de revisão (letras, números, prévia 0.x) e lista de conferência na liberação.
+- **Regras de part-number por máscara e ambientes** — `pn`: `{PREFIXO}`, `{ANO}`, `{TIPO}`, `{AMB}`, `{CAMPO:nome}`, `{SEQ:N}`; prévia ao vivo em cinza; o contador só avança depois de gravar.
+- **Salvar como com referências e Empacotar** — `salvar_como` (4 modos, tabela de referências, conflitos) e `pacote` (pasta ou zip, manifesto, colisões listadas, verificação reabrindo o pacote).
+- **Onde é usado e reparar links** — `relacoes`: lista de quem usa a peça (com o nó da montagem), cabeçalhos sem abrir o documento, diagnóstico e reparo de referências.
 
 ## 🟡 Parcial
 

@@ -21,6 +21,7 @@ use crate::i18n::tr;
 
 mod diag;
 mod importar;
+mod projeto;
 mod salvar;
 use salvar::Acao;
 
@@ -2941,6 +2942,18 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     }
                     if ui.button(tr("Salvar tudo…   Ctrl+Shift+S")).clicked() {
                         self.abrir_plano();
+                        ui.close();
+                    }
+                    if ui.button(tr("Salvar como com referências…")).clicked() {
+                        self.abrir_salvar_como(ui.ctx());
+                        ui.close();
+                    }
+                    if ui.button(tr("Empacotar…")).clicked() {
+                        self.abrir_empacotar(ui.ctx());
+                        ui.close();
+                    }
+                    if ui.button(tr("Reparar links…")).clicked() {
+                        self.abrir_reparar_links(ui.ctx());
                         ui.close();
                     }
                     ui.separator();
@@ -5887,12 +5900,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         ui.label(&d.name);
                     }
                 }
-                let c = match d.state {
-                    DocState::Liberado => Color32::from_rgb(120, 200, 120),
-                    DocState::Obsoleto => Color32::GRAY,
-                    DocState::EmTrabalho => Color32::from_rgb(230, 190, 90),
-                };
-                ui.label(RichText::new(d.state.label()).color(c));
+                let c = self.cor_do_estado(ui, d.state);
+                ui.label(RichText::new(tr(d.state.label())).color(c));
                 ui.label(d.current_revision().map(|r| r.label.as_str()).unwrap_or("-"));
                 ui.end_row();
             }
@@ -5943,10 +5952,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
         });
 
+        self.painel_pn(ui);
         let Some(sel) = self.project_sel else { return };
         let Ok(e) = self.project.as_ref().unwrap().entry(sel).cloned() else { return };
         ui.separator();
         ui.label(RichText::new(format!("{} — {}", e.pn, e.name)).strong());
+        self.painel_onde_usado(ui, sel);
         if !e.description.is_empty() {
             ui.label(&e.description);
         }
@@ -5962,9 +5973,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     self.toast(err.to_string(), true);
                 }
             }
-            if e.state != DocState::Obsoleto && ui.button(tr("Tornar obsoleto")).clicked() {
-                let _ = self.project.as_mut().unwrap().set_state(sel, DocState::Obsoleto);
-            }
+            self.botoes_de_transicao(ui, sel);
         });
         egui::CollapsingHeader::new(format!("Revisões ({})", e.revisions.len())).default_open(true).show(ui, |ui| {
             for r in e.revisions.iter().rev() {
@@ -5977,17 +5986,42 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 });
             }
         });
+        let mut restaurar: Option<usize> = None;
         egui::CollapsingHeader::new(format!("Versões ({})", e.versions.len())).show(ui, |ui| {
             for (i, v) in e.versions.iter().enumerate().rev().take(30) {
                 ui.horizontal(|ui| {
                     ui.label(format!("v{}", i + 1));
-                    ui.label(RichText::new(format!("{} · {}", v.note, &v.hash[..8])).weak());
+                    let mut linha = format!("{} · {}", v.note, &v.hash[..8]);
+                    if !v.author.is_empty() {
+                        linha += &format!(" · {}", v.author);
+                    }
+                    let r = ui.label(RichText::new(linha).weak());
+                    if !v.comment.is_empty() {
+                        r.on_hover_text(&v.comment);
+                    }
                     if ui.small_button(tr("abrir")).clicked() {
                         self.open_entry(sel, Some((v.hash.clone(), format!("v{}", i + 1))));
+                    }
+                    if i + 1 != e.versions.len()
+                        && ui.small_button(tr("↩ restaurar")).on_hover_text(tr("Cria uma versão nova com o conteúdo desta; o histórico não é reescrito")).clicked()
+                    {
+                        restaurar = Some(i + 1);
                     }
                 });
             }
         });
+        if let Some(n) = restaurar {
+            let reabrir = self.open.entry == Some(sel);
+            match self.project.as_mut().unwrap().restaurar_versao(sel, n, "") {
+                Ok(()) => {
+                    self.toast(format!("Versão v{n} restaurada como versão nova"), false);
+                    if reabrir {
+                        self.open_entry(sel, None);
+                    }
+                }
+                Err(err) => self.toast(err.to_string(), true),
+            }
+        }
     }
 
     /// Status em uma linha sobre o modelo, sem painel.
@@ -6561,6 +6595,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
 
     fn dialogs(&mut self, ctx: &egui::Context) {
         self.dialogos_de_gravacao(ctx);
+        self.janelas_projeto(ctx);
         self.janelas_de_diagnostico(ctx);
         if let Some(dd) = &mut self.delete_dialog {
             let doc = &self.open.doc;
@@ -6628,31 +6663,6 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
         }
 
-        if let Some((id, comment)) = &mut self.release_dialog {
-            let (id, mut done, mut cancel) = (*id, false, false);
-            egui::Modal::new(egui::Id::unique("liberar")).show(ctx, |ui| {
-                ui.heading(tr("Liberar revisão"));
-                ui.label(tr("A versão salva mais recente será congelada (somente leitura)."));
-                ui.add(egui::TextEdit::multiline(comment).hint_text(tr("Comentário da revisão")).desired_rows(3));
-                ui.horizontal(|ui| {
-                    done = ui.button(tr("🔒 Liberar")).clicked();
-                    cancel = ui.button(tr("Cancelar")).clicked();
-                });
-            });
-            if done {
-                let c = comment.clone();
-                if self.open.entry == Some(id) && self.open.modified {
-                    self.save();
-                }
-                match self.project.as_mut().unwrap().release(id, &c) {
-                    Ok(l) => self.toast(format!("Revisão {l} liberada"), false),
-                    Err(e) => self.toast(e.to_string(), true),
-                }
-            }
-            if done || cancel {
-                self.release_dialog = None;
-            }
-        }
     }
 
     fn toasts(&mut self, ctx: &egui::Context) {

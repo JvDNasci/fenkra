@@ -591,6 +591,8 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     };
     let mut sess_act: Option<u8> = None; // 0 = concluir, 1 = cancelar, 2 = abrir
     let tex_names: Vec<String> = app.open.doc.textures.iter().map(|t| t.name.clone()).collect();
+    // prévia do PN (B47): só para o documento que ainda não está no projeto
+    let pn_info = if app.open.entry.is_none() { app.project.as_ref().map(|p| (p.pn_previa(&app.open.doc).ok(), p.pn_mascara_ativa())) } else { None };
     let doc = &mut app.open.doc;
 
     if let Some(rev) = &frozen {
@@ -626,7 +628,31 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             let p = &mut doc.props;
             ui.horizontal(|ui| {
                 ui.add_sized([96., 18.], egui::Label::new(tr("PN")));
-                ui.text_edit_singleline(&mut p.pn);
+                match &pn_info {
+                    Some((Some(segs), mascara)) if p.pn.is_empty() => {
+                        // cinza enquanto há campo por preencher (hint do campo vazio é cinza)
+                        let hint = fenkra_project::pn::texto(segs);
+                        let r = ui.add(egui::TextEdit::singleline(&mut p.pn).hint_text(hint));
+                        let exemplo = fenkra_project::pn::exemplo(mascara).unwrap_or_default();
+                        r.on_hover_text(format!(
+                            "{}: {}
+{}: {}
+{}",
+                            tr("Máscara"),
+                            mascara,
+                            tr("Exemplo"),
+                            exemplo,
+                            tr("Vazio = automático. A prévia em cinza vira definitiva ao salvar no projeto.")
+                        ));
+                        let faltam: Vec<&str> = segs.iter().filter(|x| !x.preenchido).map(|x| x.texto.as_str()).collect();
+                        if !faltam.is_empty() {
+                            ui.label(RichText::new(format!("{} {}", tr("falta preencher:"), faltam.join(", "))).weak().small());
+                        }
+                    }
+                    _ => {
+                        ui.text_edit_singleline(&mut p.pn);
+                    }
+                }
             });
             ui.horizontal(|ui| {
                 ui.add_sized([96., 18.], egui::Label::new(tr("Descrição")));
