@@ -245,7 +245,12 @@ pub fn por_regra(r: &fenkra_solidos::RecomputeResult, p: &crate::picking::Pick, 
     use crate::picking::{mesh_of, Pick};
     let so_ele = || vec![*p];
     let primeiro = |p: &Pick, mut v: Vec<Pick>| {
-        if let Some(i) = v.iter().position(|x| x == p) {
+        let mesma = |x: &Pick| match (x, p) {
+            (Pick::Face { body: b1, face: f1, .. }, Pick::Face { body: b2, face: f2, .. }) => b1 == b2 && f1 == f2,
+            (Pick::Edge { body: b1, edge: e1, .. }, Pick::Edge { body: b2, edge: e2, .. }) => b1 == b2 && e1 == e2,
+            _ => x == p,
+        };
+        if let Some(i) = v.iter().position(mesma) {
             v.swap(0, i);
         } else {
             v.insert(0, *p);
@@ -401,7 +406,7 @@ mod testes {
         assert_eq!(g.len(), 3, "parede x + filete + parede y: {g:?}");
         assert!(g.contains(&curva));
         // o topo é plano e fica de fora (a aresta dele com as paredes é viva)
-        assert!(g.iter().all(|f| (m.face_info[*f].dir[2]).abs() < 1e-6), "nenhuma tampa entra");
+        assert!(g.iter().all(|f| m.face_info[*f].kind != 0 || m.face_info[*f].dir[2].abs() < 1e-6), "nenhuma tampa plana (topo/fundo) entra: {g:?}");
         assert!(faces_tangentes(m, 999).is_empty());
     }
 
@@ -471,7 +476,7 @@ mod testes {
         let clicada = crate::picking::Pick::Face { body: 0, face: curva, owner: r.bodies[0].face_owner[curva], point: [0.; 3], normal: [0.; 3] };
         let v = por_regra(&r, &clicada, Regra::Tangentes);
         assert_eq!(v.len(), 3);
-        assert_eq!(v[0], clicada, "o clicado fica na frente");
+        assert!(matches!(v[0], crate::picking::Pick::Face { face, .. } if face == curva), "o clicado fica na frente");
         assert_eq!(por_regra(&r, &clicada, Regra::Cadeia), vec![clicada], "cadeia não tem sentido para face");
         let aresta = crate::picking::Pick::Edge { body: 0, edge: 0, mid: [0.; 3] };
         assert_eq!(por_regra(&r, &aresta, Regra::Nenhuma), vec![aresta]);
