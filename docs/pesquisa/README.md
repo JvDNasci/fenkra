@@ -19,6 +19,7 @@
 | [sketch.md](sketch.md) | Sketcher | 47 |
 | [solidos.md](solidos.md) | Part Design / features de sólido | 48 |
 | [interface-e-arvore.md](interface-e-arvore.md) | Árvore, objeto de trabalho, atualização, seleção, painéis, tooltips, gráficos | 36 |
+| [acessibilidade.md](acessibilidade.md) | Modo daltônico, contraste, teclado, movimento e leitor de tela (B320) | 12 |
 | [montagem.md](montagem.md) | Montagem, edição em contexto, publicações, features de montagem | 42 |
 | [prendedores-aeronauticos.md](prendedores-aeronauticos.md) | NAS/MS/AN, Hi-Lok, Hi-Lite, lockbolts, cegos, rebites, porcas âncora, insertos; regra de pontos coloridos | 43 |
 | [prendedores-industriais.md](prendedores-industriais.md) | ISO/DIN/ASME, pinos, anéis, chavetas, insertos, rebites, PEM | 25 |
