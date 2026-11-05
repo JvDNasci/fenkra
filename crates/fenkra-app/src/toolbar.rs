@@ -410,7 +410,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
                     j("junta_came", "Came", "Junta de came", "Aresta do perfil do came e depois o seguidor (vértice ou aresta circular do rolete): o seguidor fica encostado no perfil.", 8),
                 ]),
                 One(it("mec_auto", "Do conjunto", "Mecanismo a partir das restrições", "Converte as restrições de cada par de peças em juntas equivalentes (eixo + face = revolução…).", Cmd(C::AsmAutoJoints))),
-                One(it("composer", "Exibição", "Estados de exibição, explosão e animação", "Salve o que aparece (cores, ocultos, explosão, câmera), exploda a montagem e anime por quadros-chave — os estados alimentam o detalhamento.", Cmd(C::AsmComposer))),
+                One(it("exibicao", "Exibição", "Estados de exibição, explosão e animação", "Salve o que aparece (cores, ocultos, explosão, câmera), exploda a montagem e anime por quadros-chave — os estados alimentam o detalhamento.", Cmd(C::AsmDisplay))),
                 One(it("mec_simular", "Simular", "Simulação cinemática", "Comandos por cursor ou por leis no tempo (t), quadros, velocidade e aceleração; análise de graus de liberdade.", Cmd(C::AsmSimulate))),
             ]
         }

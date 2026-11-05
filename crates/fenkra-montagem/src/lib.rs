@@ -413,7 +413,7 @@ pub struct Assembly {
     pub joints: Vec<kin::Joint>,
     #[serde(default)]
     pub couplings: Vec<kin::Coupling>,
-    /// estados de exibição salvos e animações (composer)
+    /// estados de exibição salvos e animações
     #[serde(default)]
     pub display_states: Vec<display::DisplayState>,
     #[serde(default)]

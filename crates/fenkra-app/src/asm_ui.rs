@@ -237,13 +237,13 @@ pub struct AsmState {
     pub sim_track: Option<Id>,
     /// posições antes de tocar a simulação (voltam ao fechar)
     sim_rest: Option<Vec<(Id, Placement)>>,
-    // ---- exibição (composer)
+    // ---- exibição (estados de exibição)
     /// estado de exibição em uso (visibilidade, cores, explosão)
     pub live: fenkra_montagem::display::DisplayState,
     pub explode_factor: f64,
     /// o manipulador mexe na explosão (não na posição real)
     pub explode_mode: bool,
-    pub composer_open: bool,
+    pub display_open: bool,
     /// janela da lista de peças (nível escolhido)
     pub bom_open: Option<fenkra_montagem::bom::BomLevel>,
     /// janela de preenchimento de furos com fixadores (opções e avisos da última aplicação)
@@ -324,7 +324,7 @@ impl AsmState {
             live: Default::default(),
             explode_factor: 0.,
             explode_mode: false,
-            composer_open: false,
+            display_open: false,
             bom_open: None,
             fasteners_open: None,
             gears_open: None,
@@ -558,7 +558,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
             let is_asm = matches!(
                 c,
                 Cmd::AsmInsert | Cmd::AsmNewPart | Cmd::AsmGroup | Cmd::AsmReplace | Cmd::AsmMate(_) | Cmd::AsmFix | Cmd::AsmRigid | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmSubAsm | Cmd::AsmPattern
-                    | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmComposer | Cmd::AsmBom | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink | Cmd::AsmFasteners | Cmd::AsmGears
+                    | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmDisplay | Cmd::AsmBom | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink | Cmd::AsmFasteners | Cmd::AsmGears
             );
             let Some(st) = app.asm.as_mut() else {
                 // só os comandos de montagem avisam; os da peça seguem normalmente
@@ -710,8 +710,8 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                 Cmd::AsmSimulate => {
                     st.sim_open = true;
                 }
-                Cmd::AsmComposer => {
-                    st.composer_open = true;
+                Cmd::AsmDisplay => {
+                    st.display_open = true;
                 }
                 Cmd::AsmBom => {
                     st.bom_open = Some(st.bom_open.unwrap_or_default());
@@ -3970,7 +3970,7 @@ pub fn sim_window(app: &mut App, ctx: &egui::Context) {
     }
 }
 
-// ============================================================== composer
+// ============================================================== exibição
 
 /// Centro de cada componente sem explosão (para a explosão automática).
 fn centers(st: &AsmState) -> std::collections::HashMap<Id, [f64; 3]> {
@@ -4513,11 +4513,11 @@ pub fn gears_window(app: &mut App, ctx: &egui::Context) {
     }
 }
 
-/// Janela do composer: estados de exibição, explosão e animação por quadros-chave.
-pub fn composer_window(app: &mut App, ctx: &egui::Context) {
+/// Janela de exibição: estados de exibição, explosão e animação por quadros-chave.
+pub fn display_window(app: &mut App, ctx: &egui::Context) {
     let cam_now = app.camera_get();
     let Some(st) = app.asm.as_mut() else { return };
-    if !st.composer_open {
+    if !st.display_open {
         return;
     }
     use fenkra_montagem::display::{auto_explode, Animation, Key};
@@ -4529,7 +4529,7 @@ pub fn composer_window(app: &mut App, ctx: &egui::Context) {
         open = false;
     }
     egui::Window::new(tr("🎬 Exibição e animação"))
-        .id(egui::Id::unique("janela_composer"))
+        .id(egui::Id::unique("janela_exibicao"))
         .open(&mut open)
         .default_width(470.)
         .resizable(true)
@@ -4675,7 +4675,7 @@ pub fn composer_window(app: &mut App, ctx: &egui::Context) {
         st.dirty = true;
     }
     if !open {
-        st.composer_open = false;
+        st.display_open = false;
         st.anim_play = false;
     }
     if let Some(c) = set_cam {

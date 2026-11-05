@@ -13,7 +13,7 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 - **Graus de liberdade** (GDL na árvore) — dof_per_comp; selos na árvore.
 - **Padrão de componentes** (Padrão) — AsmPattern; repeticao_acompanha_a_quantidade.
 - **Interferência e colisão** (Interferência) — AsmInterf; colisão ao arrastar.
-- **Vista explodida** (Explodida) — Composer; teste explosao_e_animacao.
+- **Vista explodida** (Explodida) — Estados de exibição; teste explosao_e_animacao.
 - **Lista de materiais (BOM)** (BOM) — AsmBom; numeração de itens.
 
 ## 🟡 Parcial

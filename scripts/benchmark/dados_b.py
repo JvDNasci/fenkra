@@ -106,7 +106,7 @@ e('MON-08', MON, 'Padrão de componentes', 'Repete componentes por padrão da fe
 e('MON-09', MON, 'Interferência e colisão', 'Detecta volumes sobrepostos; colisão ao mover.', 'Componentes → análise → lista.',
   ('Clash', 'Interference / Collision Detection', 'Analyze Interference', 'Interferência'), 'ok', 'AsmInterf; colisão ao arrastar.', '', ['sw-mech-mates']),
 e('MON-10', MON, 'Vista explodida', 'Passos de explosão e animação.', 'Componentes → direção/distância → passos.',
-  ('Explode', 'Exploded View', 'Presentation', 'Explodida'), 'ok', 'Composer; teste explosao_e_animacao.', '', ['sw-mates']),
+  ('Explode', 'Exploded View', 'Presentation', 'Explodida'), 'ok', 'Estados de exibição; teste explosao_e_animacao.', '', ['sw-mates']),
 e('MON-11', MON, 'Peça no contexto e links', 'Cria/edita peça dentro da montagem referenciando outras.', 'Editar no lugar → referências externas → controle de links.',
   ('Contextual design / Publications', 'In-context (external refs)', 'Adaptive / Derived', 'Peça no contexto, copiar geometria'),
   'parcial', 'AsmNewPart, AsmLink; peças não 100% editáveis vendo as outras (DR-31).', '', ['dr'], 'DR-31'),

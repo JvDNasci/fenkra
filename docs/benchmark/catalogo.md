@@ -967,7 +967,7 @@
 
 - **O que faz:** Passos de explosão e animação.
 - **Como funciona:** Componentes → direção/distância → passos.
-- **Fenkra:** ✅ completo. Composer; teste explosao_e_animacao.
+- **Fenkra:** ✅ completo. Estados de exibição; teste explosao_e_animacao.
 - **Fontes:** [`sw-mates`](fontes.md)
 
 ### MON-11 — Peça no contexto e links

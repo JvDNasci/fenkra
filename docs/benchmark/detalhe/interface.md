@@ -279,7 +279,7 @@ gigante (`icons.rs:7-365`) com o ícone de configurações como silêncio de err
   uma face.
 - **Variantes quase idênticas** em famílias de seis ou mais (furo_*, ext_ate_*, chanfro_*, filete_*) sem
   um sinal de diferença legível em 24 px.
-- **Metáforas de interface sem objeto** (composer, coletor, conexao, parametro) que não mostram o resultado.
+- **Metáforas de interface sem objeto** (exibicao, coletor, conexao, parametro) que não mostram o resultado.
 - **Duplicidades:** pares como prop_minima e prop_tangente têm o mesmo traço principal.
 
 ### 5.2 Regras para um ícone que diz o que faz (e é original)
@@ -308,7 +308,7 @@ confirmado na revisão visual.
 
 | # | Arquivo | Problema |
 |---|---|---|
-| 1 | composer.svg | retângulos dentro de retângulo, sem objeto reconhecível |
+| 1 | exibicao.svg | retângulos dentro de retângulo, sem objeto reconhecível |
 | 2 | coletor.svg | blocos empilhados que não dizem "coletor" |
 | 3 | conexao.svg | curva entre duas retas, confunde com spline |
 | 4 | parametro.svg | duas barras, parece menu ou ajuste |

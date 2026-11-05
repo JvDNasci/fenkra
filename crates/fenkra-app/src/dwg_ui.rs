@@ -1731,7 +1731,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     ui.label(tr("Estado de exibição"));
                     changed_src |= ui.text_edit_singleline(&mut v.source.display_state).changed();
                 });
-                ui.label(RichText::new(tr("Nome de um estado salvo no compositor (vazio = como está; ex.: vista explodida).")).weak().small());
+                ui.label(RichText::new(tr("Nome de um estado de exibição salvo (vazio = como está; ex.: vista explodida).")).weak().small());
                 // componentes visíveis só nesta vista
                 let src = v.source.clone();
                 let comps: Vec<(u64, String)> = match &st.models.load(&src).model {

@@ -36,3 +36,11 @@ docs/
 - **Requisitos:** `RF-<área>-NNN` / `RNF-NNN` (ver [requisitos](requisitos/README.md)).
 - **Fontes externas:** só documentação pública, reescrita com palavras próprias, com cada URL
   registrada em [procedência](arquitetura/procedencia.md) e em [benchmark/fontes.md](benchmark/fontes.md).
+
+## Aviso de marcas
+
+O Fenkra não é afiliado, patrocinado nem endossado por nenhum fabricante de software de CAD. Nomes de
+produtos de terceiros pertencem aos seus titulares e não aparecem no software, no código nem na
+documentação, nem como compatibilidade; só software livre confiável é citado pelo nome. As fontes
+consultadas ficam apenas em [procedência](arquitetura/procedencia.md) e em
+[benchmark/fontes.md](benchmark/fontes.md). A tela Ajuda → Sobre do programa repete este aviso.

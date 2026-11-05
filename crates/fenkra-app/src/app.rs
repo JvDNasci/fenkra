@@ -167,6 +167,8 @@ pub struct App {
     left: LeftTab,
     pub settings: Settings,
     settings_open: bool,
+    /// tela Sobre (versão, licença e créditos)
+    about_open: bool,
     /// ambiente de ocultos: mostra só o que está oculto (para reexibir)
     pub hidden_env: bool,
     /// sketch cuja vista deve ser alinhada quando o resultado chegar
@@ -332,6 +334,7 @@ impl App {
             left: LeftTab::Peca,
             settings,
             settings_open: false,
+            about_open: false,
             hidden_env: false,
             align_pending: None,
             sketch: None,
@@ -2047,7 +2050,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             Cmd::Geo(k) => Sel::Ref(d.add_geometry(k.make(&seed))),
             // comandos de montagem são tratados em asm_ui::command
             Cmd::AsmNew | Cmd::AsmOpen | Cmd::AsmSave | Cmd::AsmInsert | Cmd::AsmSubAsm | Cmd::AsmNewPart | Cmd::AsmGroup | Cmd::AsmReplace | Cmd::AsmMate(_) | Cmd::AsmFix | Cmd::AsmRigid
-            | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmPattern | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmComposer | Cmd::AsmBom
+            | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmPattern | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmDisplay | Cmd::AsmBom
             | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink | Cmd::AsmFasteners | Cmd::AsmGears => return,
             Cmd::Param => {
                 let n = (1..).map(|i| format!("P{i}")).find(|n| !d.params.iter().any(|p| &p.name == n)).unwrap();
@@ -2874,6 +2877,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         ui.close();
                     }
                 });
+                ui.menu_button(tr("Ajuda"), |ui| {
+                    if ui.button(tr("Sobre o Fenkra…")).clicked() {
+                        self.about_open = true;
+                        ui.close();
+                    }
+                });
                 ui.separator();
                 // abas de módulo (RF-UI-006)
                 use crate::settings::Bench;
@@ -3658,6 +3667,41 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 });
             });
         self.settings_open = open;
+    }
+
+    /// Tela Sobre: versão, licença, créditos e aviso de marcas (B202).
+    fn about_window(&mut self, ctx: &egui::Context) {
+        if !self.about_open {
+            return;
+        }
+        let mut open = true;
+        egui::Window::new(tr("Sobre o Fenkra"))
+            .id(egui::Id::unique("janela_sobre"))
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .default_width(460.)
+            .show(ctx, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.add(egui::Image::new(egui::include_image!("../../../assets/app/fenix-256.png")).corner_radius(16.).fit_to_exact_size(egui::vec2(88., 88.)));
+                    ui.label(RichText::new("Fenkra").size(24.).strong());
+                    ui.label(RichText::new(format!("{} {}", tr("Versão"), env!("CARGO_PKG_VERSION"))).weak());
+                    ui.label(tr(BRAND_TAGLINE));
+                });
+                ui.add_space(8.);
+                ui.separator();
+                ui.label(RichText::new(tr("Licença")).strong());
+                ui.label(tr("Software livre sob a GNU LGPL, versão 2.1 ou posterior. O texto está nos arquivos LICENSE e NOTICE que acompanham o programa."));
+                ui.add_space(6.);
+                ui.label(RichText::new(tr("Créditos")).strong());
+                for linha in ABOUT_CREDITS {
+                    ui.label(format!("•  {}", tr(linha)));
+                }
+                ui.add_space(6.);
+                ui.label(RichText::new(tr("Aviso de marcas")).strong());
+                ui.label(RichText::new(tr(ABOUT_MARCAS)).weak().small());
+            });
+        self.about_open = open;
     }
 
     fn tree(&mut self, ui: &mut egui::Ui) {
@@ -6437,7 +6481,7 @@ pub enum Cmd {
     AsmJoint(u8),
     AsmAutoJoints,
     AsmSimulate,
-    AsmComposer,
+    AsmDisplay,
     /// lista de peças por nível
     AsmBom,
     /// subconjunto novo com os componentes selecionados
@@ -7137,7 +7181,7 @@ impl eframe::App for App {
         self.props_window(ctx);
         self.wizard_window(ctx);
         crate::asm_ui::sim_window(self, ctx);
-        crate::asm_ui::composer_window(self, ctx);
+        crate::asm_ui::display_window(self, ctx);
         crate::asm_ui::bom_window(self, ctx);
         crate::asm_ui::fasteners_window(self, ctx);
         crate::asm_ui::contexto_window(self, ctx);
@@ -7146,6 +7190,7 @@ impl eframe::App for App {
         crate::st_ui::windows(self, ctx);
         self.side_toolbars(ctx, area);
         self.settings_window(ctx);
+        self.about_window(ctx);
         self.view_menu_window(ctx);
         self.dialogs(ctx);
         if self.settings.bench == crate::settings::Bench::Desenho {
@@ -7368,6 +7413,18 @@ impl eframe::App for App {
 
 /// Lema da marca (tela de carregamento e inicial).
 const BRAND_TAGLINE: &str = "Projete · Dobre · Monte · Detalhe";
+
+/// Créditos da tela Sobre: só software livre, que pode ser citado pelo nome.
+const ABOUT_CREDITS: [&str; 5] = [
+    "OpenCASCADE Technology 8.0.1: modelagem de sólidos (LGPL-2.1 com a exceção do OpenCASCADE)",
+    "egui e eframe: interface gráfica",
+    "wgpu: desenho 3D na placa de vídeo",
+    "A linguagem Rust e o ecossistema de crates abertos listados em THIRD-PARTY-LICENSES",
+    "Colaboradoras e colaboradores do Fenkra",
+];
+
+/// Aviso único de marcas (também em docs/README.md).
+const ABOUT_MARCAS: &str = "O Fenkra não é afiliado, patrocinado nem endossado por nenhum fabricante de software de CAD. Nomes de produtos de terceiros pertencem aos seus titulares e não são usados no programa.";
 
 /// Cor de destaque da marca: a do tema em uso (ou o azul da fênix).
 fn brand_accent() -> Color32 {

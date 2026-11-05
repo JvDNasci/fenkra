@@ -32,7 +32,7 @@
 | MON-07 | Graus de liberdade | ✅ | dof_per_comp; selos na árvore. |  |
 | MON-08 | Padrão de componentes | ✅ | AsmPattern; repeticao_acompanha_a_quantidade. |  |
 | MON-09 | Interferência e colisão | ✅ | AsmInterf; colisão ao arrastar. |  |
-| MON-10 | Vista explodida | ✅ | Composer; teste explosao_e_animacao. |  |
+| MON-10 | Vista explodida | ✅ | Estados de exibição; teste explosao_e_animacao. |  |
 | MON-11 | Peça no contexto e links | 🟡 | AsmNewPart, AsmLink; peças não 100% editáveis vendo as outras (DR-31). | DR-31 |
 | MON-12 | Recursos de montagem | 🟡 | AsmFeat(0/1) corta só a forma exibida na montagem: não grava furo nas peças, não entra no hole_table nem nos Fixadores; posição só pelo clique, Ø padrão 6. | B57 |
 | MON-13 | Origem da montagem | ❌ | Sem origem na montagem (DR-31). | DR-31 |

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Exibição (estilo "composer"): estados de exibição salvos (visível/oculto, cores, explosão,
+//! Exibição: estados de exibição salvos (visível/oculto, cores, explosão,
 //! câmera), vista explodida automática e animações por quadros-chave.
 //!
 //! Os estados também são os "coletores de exibição" do detalhamento: uma vista 2D/3D pode

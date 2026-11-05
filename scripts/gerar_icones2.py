@@ -239,7 +239,7 @@ def desenhos():
     ic("filtro", B="M6 9h36L30 24H18z", R="M18 24v13l12 5V24")
     ic("estilo", B=CUBO(), R=L((24, 26), (32, 22)) + L((24, 33), (40, 25)) + L((24, 40), (40, 32)))
     ic("exemplo", B="M24 13c-5-4-11-5-18-4v28c7-1 13 0 18 4 5-4 11-5 18-4V9c-7-1-13 0-18 4z", R="M24 13v28")
-    ic("composer", B=F_TOPO(24, 24, 16, 8) + L((8, 32), (8, 37), (24, 45), (40, 37), (40, 32)),
+    ic("exibicao", B=F_TOPO(24, 24, 16, 8) + L((8, 32), (8, 37), (24, 45), (40, 37), (40, 32)),
        R=F_TOPO(24, 3, 16, 8) + L((8, 11), (8, 16), (24, 24), (40, 16), (40, 11)))
     ic("coletor", B="M6 22v18h36V22", R=Q(10, 8, 11, 11) + Q(26, 12, 11, 11) + S(24, 26, 24, 36, 5))
     ic("conexao", B="M6 12h12M30 36h12", R="M18 12c14 0-2 24 12 24", pr=[(18, 12), (30, 36)])
@@ -709,7 +709,7 @@ GRUPOS = [
     ("Planos, linhas e pontos", r"plano|linha_|ponto_"),
     ("Curvas", r"circulo|conica|espiral|helice|polilinha|spline|spine|curva_|wf_|cont_|conexao"),
     ("Superfícies", r"sup_|sweep_|op_|hib_"),
-    ("Montagem", r"asm_|mec_|rest_|junta_|coletor|composer"),
+    ("Montagem", r"asm_|mec_|rest_|junta_|coletor|exibicao"),
     ("Chapa", r"sm_"),
     ("Estrutural", r"st_"),
     ("Desenho e PMI", r"des_|pmi_"),
