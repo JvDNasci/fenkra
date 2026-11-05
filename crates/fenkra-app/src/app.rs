@@ -25,6 +25,7 @@ mod gravar;
 mod roda_app;
 mod estado_doc;
 mod importar;
+mod plm;
 mod projeto;
 mod salvar;
 use salvar::Acao;
@@ -6271,17 +6272,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     if !v.comment.is_empty() {
                         r.on_hover_text(&v.comment);
                     }
-                    if ui.small_button(tr("abrir")).clicked() {
-                        self.open_entry(sel, Some((v.hash.clone(), format!("v{}", i + 1))));
-                    }
-                    if i + 1 != e.versions.len()
-                        && ui.small_button(tr("↩ restaurar")).on_hover_text(tr("Cria uma versão nova com o conteúdo desta; o histórico não é reescrito")).clicked()
-                    {
-                        restaurar = Some(i + 1);
-                    }
+                    self.menu_versao(ui, sel, i + 1, e.versions.len(), &mut restaurar);
                 });
             }
         });
+        self.secao_qualidade(ui, sel);
         if let Some(n) = restaurar {
             let reabrir = self.open.entry == Some(sel);
             match self.project.as_mut().unwrap().restaurar_versao(sel, n, "") {

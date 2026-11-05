@@ -13,6 +13,7 @@
 //! - Cada salvamento cria uma **versão** (RF-GPR-010).
 //! - **Liberar revisão** marca a versão atual com uma letra e a congela (RF-GPR-011).
 
+pub mod comparacao;
 pub mod diario;
 pub mod estado_doc;
 pub mod estados;
@@ -20,6 +21,8 @@ pub mod importacao;
 pub mod pacote;
 pub mod plano;
 pub mod pn;
+pub mod qualidade_modelo;
+pub mod qualidade_projeto;
 pub mod referencias;
 pub mod relacoes;
 pub mod salvar_como;
@@ -707,6 +710,20 @@ impl Project {
                 }
             }
         });
+        // qualidade do modelo (B305): só bloqueia o que o perfil marca como bloqueio e que não tem exceção
+        itens.push(match &ext.qualidade {
+            None => item("qualidade", "Qualidade do modelo", EstadoItem::NaoVerificado, "o documento não está aberto para medir".into()),
+            Some(m) => {
+                let r = self.avaliar_qualidade(id, m, qualidade_modelo::Momento::Revisar)?;
+                if r.dispensado {
+                    item("qualidade", "Qualidade do modelo", EstadoItem::NaoAplicavel, "o perfil não confere na revisão".into())
+                } else if r.bloqueia() {
+                    item("qualidade", "Qualidade do modelo", EstadoItem::Falha, r.resumo_bloqueios())
+                } else {
+                    item("qualidade", "Qualidade do modelo", EstadoItem::Ok, String::new())
+                }
+            }
+        });
         Ok(estados::Conferencia { itens })
     }
 
@@ -1223,7 +1240,7 @@ mod tests {
         let mut p = Project::create(&root, "T").unwrap();
         let id = p.add_document(Document::new("a")).unwrap();
         versao_manual(&mut p, id, "comref", r#"{"format_version":1,"uid":"x","name":"a","links":[{"uid":"u-alvo","caminho":"../alvo.fkp"}]}"#);
-        let ext = estados::Externos { recalculo: Some(Ok(())), desenho_atualizado: None };
+        let ext = estados::Externos { recalculo: Some(Ok(())), desenho_atualizado: None, qualidade: None };
         let conf = p.conferir_liberacao(id, &ext).unwrap();
         assert!(conf.bloqueia());
         let f = conf.falhas().next().unwrap();
@@ -1259,9 +1276,9 @@ mod tests {
         let root = tmp("lib-conf");
         let mut p = Project::create(&root, "T").unwrap();
         let id = p.add_document(Document::new("a")).unwrap();
-        let ok = estados::Externos { recalculo: Some(Ok(())), desenho_atualizado: None };
+        let ok = estados::Externos { recalculo: Some(Ok(())), desenho_atualizado: None, qualidade: None };
         // recálculo com erro
-        let ruim = estados::Externos { recalculo: Some(Err("extrusão sem perfil".into())), desenho_atualizado: None };
+        let ruim = estados::Externos { recalculo: Some(Err("extrusão sem perfil".into())), desenho_atualizado: None, qualidade: None };
         let e = p.liberar(id, "x", &ruim).unwrap_err().to_string();
         assert!(e.contains("Recalcula sem erro") && e.contains("extrusão sem perfil"), "{e}");
         // sem desenho: não se aplica
@@ -1276,7 +1293,7 @@ mod tests {
         let e = p.liberar(id, "x", &ok).unwrap_err().to_string();
         assert!(e.contains("Desenho atualizado") && e.contains("d.fkd"), "{e}");
         // quem tem o desenho aberto pode afirmar que está em dia
-        let em_dia = estados::Externos { recalculo: Some(Ok(())), desenho_atualizado: Some(true) };
+        let em_dia = estados::Externos { recalculo: Some(Ok(())), desenho_atualizado: Some(true), qualidade: None };
         assert_eq!(p.liberar(id, "x", &em_dia).unwrap(), "A");
         let _ = std::fs::remove_dir_all(root);
     }

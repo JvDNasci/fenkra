@@ -76,6 +76,7 @@ mod st_painel;
 mod st_placas_ui;
 mod biblioteca_ui;
 mod textos_montagem;
+mod textos_plm;
 mod textos_pmi;
 mod textos_superficies;
 mod textos_solidos;

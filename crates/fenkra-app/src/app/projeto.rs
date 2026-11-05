@@ -198,6 +198,7 @@ impl App {
         self.janela_reparar_links(ctx);
         self.dialogo_transicao(ctx);
         self.dialogo_liberar(ctx);
+        self.janela_comparacao(ctx);
     }
 
     fn janela_salvar_como(&mut self, ctx: &egui::Context) {
@@ -627,6 +628,7 @@ impl App {
     /// O que o programa sabe do documento aberto para a lista de conferência.
     fn externos_da_liberacao(&self, id: u64) -> Externos {
         let mut ext = Externos::default();
+        ext.qualidade = self.medidas_da_peca_aberta(id);
         if self.open.entry == Some(id) {
             if let Some(r) = &self.result {
                 let erro = r.param_error.clone().or_else(|| r.status.values().find_map(|s| if let Status::Error(e) = s { Some(e.clone()) } else { None }));
