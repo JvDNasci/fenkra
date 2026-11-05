@@ -627,6 +627,49 @@ impl App {
             app.st_cantos_open = std::env::var("FENKRA_DEMO_CANTOS").is_ok();
             app.started = true;
         }
+        // desenvolvimento: FENKRA_DEMO_DOBRA=1 abre um tubo retangular dobrado em U (duas dobras de dobradeira, a primeira
+        // com uma regra de exemplo); junto com FENKRA_EDITAR=Membro mostra o painel do nó
+        if std::env::var("FENKRA_DEMO_DOBRA").is_ok() {
+            let s = |x: &str| x.to_string();
+            let mut d = Document::new("Tubo dobrado");
+            let mut paths = vec![];
+            for (a, b) in [([0., 0., 0.], [400., 0., 0.]), ([400., 0., 0.], [400., 300., 0.]), ([400., 300., 0.], [0., 300., 0.])] {
+                let l = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: s("0"), end: s("0") });
+                paths.push(CurveRef::Ref(l));
+            }
+            d.tube_rules.push(TubeRule { name: s("Exemplo de bancada"), section: Some(SectionKind::TuboRetangular), tool: s("dobradeira"), min_radius: s("200"), springback: s("3"), max_strain: s("0.2"), source: s("valores de demonstração, não de norma"), ..Default::default() });
+            let f = d.add_feature(FeatureKind::StructMember(StructMember {
+                paths,
+                family: s("Tubo retangular"),
+                designation: s("60x30x3"),
+                kind: SectionKind::TuboRetangular,
+                dims: vec![s("60"), s("30"), s("3")],
+                anchor: 0,
+                angle: s("0"),
+                off_x: s("0"),
+                off_y: s("0"),
+                ext1: s("0"),
+                ext2: s("0"),
+                corner: CornerMode::MeiaEsquadria,
+                gap: s("0"),
+                joints: vec![],
+                material: String::new(),
+                mirror: false,
+            }));
+            if let Some(FeatureKind::StructMember(m)) = d.feature_mut(f).map(|x| &mut x.kind) {
+                let b1 = TubeBend { mode: BendMode::Dobradeira, radius: s("150"), rule: s("Exemplo de bancada"), ..Default::default() };
+                let b2 = TubeBend { mode: BendMode::Dobradeira, radius: s("100"), plane_dim: 0, ..Default::default() };
+                m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(b1) });
+                m.joints.push(StructJoint { mine: 2, other: f, other_path: 1, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(b2) });
+            }
+            for r in &mut d.references {
+                r.visible = false;
+            }
+            app.load_doc(d, None, None);
+            app.settings.bench = crate::settings::Bench::Estrutural;
+            app.st_cut_open = std::env::var("FENKRA_EDITAR").is_err();
+            app.started = true;
+        }
         // desenvolvimento: FENKRA_EDITAR=<nome> abre esse comando como ambiente ao iniciar (depois das peças de demonstração)
         if let Ok(name) = std::env::var("FENKRA_EDITAR") {
             if let Some(id) = app.open.doc.features.iter().find(|f| f.name == name).map(|f| f.id) {

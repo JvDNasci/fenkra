@@ -516,6 +516,20 @@ impl Models {
             (TableKind::Bends, Model::Part(doc)) => {
                 // tabela do mapa: mesma ordem e etiqueta das linhas de dobra da planificada
                 let linhas = fenkra_solidos::recompute(doc).bend_lines;
+                // tubo dobrado na estrutura: a tabela de dobras do tubo (B331)
+                let tubos = fenkra_solidos::tubos_dobrados(doc);
+                if linhas.is_empty() && !tubos.is_empty() {
+                    let mut rows = vec![];
+                    let mut n = 0;
+                    for (t, tubo) in tubos.iter().enumerate() {
+                        for d in &tubo.dobras {
+                            n += 1;
+                            let r = &d.resultado;
+                            rows.push(vec![n.to_string(), format!("T{}", t + 1), fenkra_solidos::st_dobra::nome_modo(r.modo).to_string(), format!("{}°", num(r.theta)), num(r.raio), num(d.inicio), num(d.fim), num(tubo.desenvolvido)]);
+                        }
+                    }
+                    return TableData { headers: ["Nº", "Tubo", "Modo", "Ângulo", "Raio", "Início", "Fim", "Desenvolvido"].map(String::from).to_vec(), rows };
+                }
                 TableData {
                     headers: ["Nº", "Etiqueta", "Dobra", "Ângulo", "Raio", "Desenvolvido", "Dedução"].map(String::from).to_vec(),
                     rows: fenkra_solidos::tabela_dobras(doc, &linhas)

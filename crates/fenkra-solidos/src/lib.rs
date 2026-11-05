@@ -12,6 +12,9 @@ pub mod mesh_io;
 pub mod structural;
 pub mod perfis_catalogo;
 pub mod st_cantos;
+pub mod st_dobra;
+mod st_dobra_geo;
+pub use st_dobra_geo::tubos_dobrados;
 pub mod hardware;
 pub mod biblioteca;
 pub mod catalogo;
@@ -4897,6 +4900,9 @@ impl Ctx<'_> {
             }
             FeatureKind::StructMember(m) => {
                 let mut geo = self.members(m)?;
+                // B326: nós de dobra de tubo (pernas encadeadas num tubo só)
+                let plano_dobra = self.plano_dobras(f, m, &geo);
+                self.aplicar_dobras(&mut geo, &plano_dobra);
                 let lines = self.all_member_lines();
                 let my_k = self.doc.features.iter().position(|g| g.id == f.id).unwrap_or(0);
                 // cantos com qualquer outra linha de membro (deste comando ou de outro)
@@ -4910,6 +4916,16 @@ impl Ctx<'_> {
                         }
                         let Some((p, di, dj)) = shared_end(&gi, og) else { continue };
                         let (mode, first, gap) = self.joint_rule((f.id, i, my_k), (*oid, *oi, *ok))?;
+                        // dobra de tubo: a dobradeira recua as pernas e põe um arco (nada a cortar); os
+                        // demais modos cortam em esquadria (os rasgos em V são os itens B328 e B333)
+                        let mode = if mode == CornerMode::Dobra {
+                            match plano_dobra.modo_do_par(i, *oi).filter(|_| *oid == f.id) {
+                                Some(BendMode::Dobradeira) | None => continue,
+                                Some(_) => CornerMode::MeiaEsquadria,
+                            }
+                        } else {
+                            mode
+                        };
                         if mode == CornerMode::Nenhum {
                             continue;
                         }
@@ -4930,10 +4946,13 @@ impl Ctx<'_> {
                 let mut falhas: Vec<(usize, String)> = vec![];
                 for (i, g) in geo.iter().enumerate() {
                     let built: Result<Shape, String> = (|| {
+                    if let Some(e) = plano_dobra.erros.get(&i) {
+                        return Err(e.clone());
+                    }
                     let mut sh = self.member_shape(g)?;
                     for (p, di, dj, og, mode, first, gap) in &joints[i] {
                         match mode {
-                            CornerMode::Nenhum => {}
+                            CornerMode::Nenhum | CornerMode::Dobra => {}
                             CornerMode::MeiaEsquadria => {
                                 let n = geo3d::unit(geo3d::sub(*di, *dj)).ok_or("membros colineares não fazem meia-esquadria")?;
                                 sh = sh.boolean(&half_space(geo3d::add(*p, geo3d::mul(n, gap / 2.)), n, self.size_hint())?, fenkra_kernel::Bool::Common).map_err(k)?;
@@ -4968,6 +4987,56 @@ impl Ctx<'_> {
                         Err(e) => falhas.push((i, e)),
                     }
                 }
+                // B326: pernas ligadas por dobradeira viram um sólido só (perna + arco + perna)
+                let mut fundidos: HashMap<usize, (f64, Frame)> = HashMap::new();
+                let mut dobra_avisos: Vec<String> = vec![];
+                for c in &plano_dobra.cadeias {
+                    for n in &c.nos {
+                        dobra_avisos.extend(n.res.avisos.iter().map(|a| format!("linhas {}–{}: {a}", n.antes + 1, n.depois + 1)));
+                    }
+                    for (run, arcos) in st_dobra_geo::blocos_fundidos(c) {
+                        if run.len() < 2 || !run.iter().all(|i| kept.contains(i)) {
+                            continue;
+                        }
+                        let fundir = || -> Result<Shape, String> {
+                            let mut sh = shapes[kept.iter().position(|x| *x == run[0]).unwrap()].clone();
+                            for (n, &k) in arcos.iter().enumerate() {
+                                let no = &c.nos[k];
+                                sh = sh.boolean(&self.arco_do_no(&geo[no.antes], no)?, fenkra_kernel::Bool::Fuse).map_err(|e| e.0)?;
+                                sh = sh.boolean(&shapes[kept.iter().position(|x| *x == run[n + 1]).unwrap()], fenkra_kernel::Bool::Fuse).map_err(|e| e.0)?;
+                            }
+                            Ok(sh)
+                        };
+                        match fundir() {
+                            Ok(sh) => {
+                                let nos: Vec<st_dobra_geo::NoDobra> = arcos.iter().map(|k| c.nos[*k].clone()).collect();
+                                let t = self.tubo_da_cadeia(f, m, &geo, &run, &nos);
+                                // o referencial é o da ponta livre da primeira perna, apontando para dentro dela
+                                let g0 = &geo[run[0]];
+                                let no0 = &nos[0];
+                                let livre = if geo3d::dist(g0.start, no0.p) < 1e-4 { g0.end } else { g0.start };
+                                let frame = Frame { origin: livre, x: no0.x_in, normal: no0.t_in };
+                                let pos = kept.iter().position(|x| *x == run[0]).unwrap();
+                                shapes[pos] = sh;
+                                fundidos.insert(run[0], (t.desenvolvido, frame));
+                                for &i in &run[1..] {
+                                    let q = kept.iter().position(|x| *x == i).unwrap();
+                                    kept.remove(q);
+                                    shapes.remove(q);
+                                }
+                            }
+                            Err(e) => {
+                                for &i in &run {
+                                    falhas.push((i, format!("dobra: {e}")));
+                                    if let Some(q) = kept.iter().position(|x| *x == i) {
+                                        kept.remove(q);
+                                        shapes.remove(q);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 if !falhas.is_empty() {
                     log_member_failures(f.id, &geo, &falhas);
                 }
@@ -4989,6 +5058,15 @@ impl Ctx<'_> {
                         .collect();
                     (!long.is_empty() && lim > 0.).then(|| format!("⚠ emenda: barra maior que a matéria-prima de {lim:.0} mm — {}", long.join(", ")))
                 };
+                let warn = if dobra_avisos.is_empty() {
+                    warn
+                } else {
+                    let d = format!("⚠ dobra de tubo: {}", dobra_avisos.join(" | "));
+                    Some(match warn {
+                        Some(w) => format!("{d} | {w}"),
+                        None => d,
+                    })
+                };
                 let warn = if falhas.is_empty() {
                     warn
                 } else {
@@ -5005,8 +5083,11 @@ impl Ctx<'_> {
                     let name = format!("{} {}", m.family, m.designation);
                     for (&i, sh) in kept.iter().zip(&shapes) {
                         let g = &geo[i];
-                        let frame = Frame { origin: g.start, x: g.x, normal: g.z };
-                        log_struct(f, i, StructItem::Member, &name, profile.clone(), member_length(g, explicit), frame, sh, &m.material);
+                        let (len, frame) = match fundidos.get(&i) {
+                            Some((len, frame)) => (*len, *frame),
+                            None => (member_length(g, explicit), Frame { origin: g.start, x: g.x, normal: g.z }),
+                        };
+                        log_struct(f, i, StructItem::Member, &name, profile.clone(), len, frame, sh, &m.material);
                     }
                 }
                 let mut all = Shape::empty();
@@ -6011,6 +6092,8 @@ pub struct CutRow {
     pub angle2: Option<f64>,
     /// comprimento da ponta longa (maior extensão do sólido ao longo do eixo); só leitura, vem do sólido
     pub long: f64,
+    /// tubo dobrado por dobradeira: `length` é o comprimento desenvolvido da barra reta (B331)
+    pub tubo: Option<st_dobra::TuboDobrado>,
 }
 
 thread_local! {
@@ -6331,8 +6414,18 @@ pub fn cut_list(doc: &Document) -> Vec<CutRow> {
             angle1: end_angles(&g.shape).0,
             angle2: end_angles(&g.shape).1,
             long: (g.signature.bbox[5] - g.signature.bbox[2]) as f64 / 10.,
+            tubo: None,
         })
         .collect();
+    // B331: o tubo dobrado em um sólido só leva as dobras, os raios e o modo na linha
+    let tubos = tubos_dobrados(doc);
+    if !tubos.is_empty() {
+        for r in rows.iter_mut() {
+            if let Some(&(f, i)) = r.members.first() {
+                r.tubo = tubos.iter().find(|t| t.fundido && t.feature == f && t.linhas.first() == Some(&i)).cloned();
+            }
+        }
+    }
     // comandos cujo sólido não foi calculado (erro no kernel) continuam na lista, só pelo comprimento
     let solid: std::collections::HashSet<Id> = groups.iter().flat_map(|g| g.members.iter().map(|m| m.feature)).collect();
     for f in doc.active_features().map(|(_, f)| f) {
@@ -6363,6 +6456,7 @@ pub fn cut_list(doc: &Document) -> Vec<CutRow> {
                     angle1: None,
                     angle2: None,
                     long: len,
+                    tubo: None,
                 }),
             }
         }
@@ -7049,7 +7143,7 @@ mod tests {
         assert_eq!(cl[0].members, vec![(f, 1), (f, 3)]);
         // outro tratamento num canto: os dois membros que ele toca deixam de ser iguais aos opostos
         if let Some(FeatureKind::StructMember(m)) = d.feature_mut(f).map(|f| &mut f.kind) {
-            m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Aparar, first: false, gap: None });
+            m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Aparar, first: false, gap: None, bend: None });
         }
         let gs2 = structural_groups(&d);
         assert!(gs2.len() > 2, "pontas diferentes separam os grupos: {}", gs2.len());
@@ -7681,13 +7775,13 @@ mod tests {
         assert_eq!(member_joints(&d).len(), 1);
         // regra própria do canto: sem tratamento → barras retas, sem sobra
         if let Some(FeatureKind::StructMember(m)) = d.feature_mut(ids[1]).map(|f| &mut f.kind) {
-            m.joints.push(StructJoint { mine: 0, other: ids[0], other_path: 0, mode: CornerMode::Nenhum, first: false, gap: None });
+            m.joints.push(StructJoint { mine: 0, other: ids[0], other_path: 0, mode: CornerMode::Nenhum, first: false, gap: None, bend: None });
         }
         let v_none = vol(&d);
         assert!(near(v_none, a * 800., 1e-3), "sem tratamento: {v_none}");
         // aparar com o posterior (linha horizontal) como membro 1
         if let Some(FeatureKind::StructMember(m)) = d.feature_mut(ids[1]).map(|f| &mut f.kind) {
-            m.joints[0] = StructJoint { mine: 0, other: ids[0], other_path: 0, mode: CornerMode::Aparar, first: true, gap: None };
+            m.joints[0] = StructJoint { mine: 0, other: ids[0], other_path: 0, mode: CornerMode::Aparar, first: true, gap: None, bend: None };
         }
         let r = recompute(&d);
         assert!(r.status.values().all(|x| !matches!(x, Status::Error(_))), "{:?}", r.status);

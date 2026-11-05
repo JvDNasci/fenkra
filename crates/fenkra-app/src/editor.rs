@@ -266,6 +266,8 @@ pub(crate) fn tabs_begin(ui: &mut egui::Ui, key: impl std::hash::Hash) {
     let key = egui::Id::unique(("abas_painel", h));
     let prev: Vec<String> = ui.ctx().data(|d| d.get_temp::<Vec<String>>(key)).unwrap_or_default();
     let active: usize = ui.ctx().data(|d| d.get_temp::<usize>(key.with("ativa"))).unwrap_or(0);
+    // desenvolvimento: FENKRA_DEMO_ABA=<n> abre o painel já na aba n (capturas sem mouse)
+    let active = std::env::var("FENKRA_DEMO_ABA").ok().and_then(|v| v.parse().ok()).unwrap_or(active);
     TABS.with(|t| *t.borrow_mut() = Some(TabRun { key, ui_id: ui.scope_id(), prev, titles: vec![], active, tabs: false, hidden: None, card: None }));
 }
 

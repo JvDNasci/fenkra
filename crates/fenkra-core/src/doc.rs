@@ -1754,6 +1754,9 @@ pub enum CornerMode {
     Aparar,
     /// recorte de encaixe: a ponta acompanha o contorno do outro membro
     Encaixe,
+    /// tubo único dobrado no nó (B326): as duas linhas viram um só tubo; os detalhes ficam em
+    /// `StructJoint.bend`
+    Dobra,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -1800,6 +1803,106 @@ pub struct StructJoint {
     pub first: bool,
     /// folga própria (vazio = a do membro)
     pub gap: Option<String>,
+    /// dobra do tubo neste nó (B326); vale quando `mode` é `Dobra`
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bend: Option<TubeBend>,
+}
+
+/// Modo de fazer a dobra de um tubo no nó (B326). Cada um tem a sua fórmula de comprimento
+/// desenvolvido; os cortes em V (B328) e do canto com gabarito (B333) ainda não geram geometria.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum BendMode {
+    /// dobra por dobradeira ou rolos: sólido curvo, uma peça
+    #[default]
+    Dobradeira,
+    /// V comum: canto vivo, rasgo em V com a parede externa de dobradiça
+    VComum,
+    /// V com raio: canto curvo pelo gabarito de serralheria
+    VComRaio,
+    /// corte em V fechado por ferramenta, com o retorno compensado
+    CorteDobradeira,
+    /// corte simples: esquadria (ou gomos no tubo redondo) e solda
+    CorteSimples,
+}
+
+impl BendMode {
+    pub const ALL: [BendMode; 5] = [BendMode::Dobradeira, BendMode::VComum, BendMode::VComRaio, BendMode::CorteDobradeira, BendMode::CorteSimples];
+}
+
+/// Dobra de um tubo no nó entre duas linhas guia (B326). Os números aceitam expressões.
+#[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
+pub struct TubeBend {
+    pub mode: BendMode,
+    /// raio do nó: raio de centro (dobradeira), raio interno da dobradiça (V comum), raio externo
+    /// (V com raio) ou raio da linha de articulações (V múltiplo)
+    pub radius: String,
+    /// nome da regra de dobra aplicada (vazio = sem regra: nenhum valor vem de tabela)
+    #[serde(default)]
+    pub rule: String,
+    /// fator K da placa externa (vazio = o da regra; sem regra, o padrão geométrico)
+    #[serde(default)]
+    pub k: String,
+    /// retorno elástico em graus (vazio = o da regra)
+    #[serde(default)]
+    pub springback: String,
+    /// tubo retangular: 0 = a largura fica no plano da dobra, 1 = a altura
+    #[serde(default)]
+    pub plane_dim: u8,
+    /// número de rasgos em V (modos de corte; B328)
+    #[serde(default)]
+    pub cuts: String,
+    /// folga de raiz da solda (B333)
+    #[serde(default)]
+    pub root_gap: String,
+    /// gomos do tubo redondo no corte simples (1 = uma esquadria)
+    #[serde(default)]
+    pub segments: String,
+}
+
+/// Regra de dobra de tubo cadastrável (B330). Todos os números são do usuário: o programa não traz
+/// tabela de material nem de norma. Campo vazio = a regra não diz nada sobre ele.
+#[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
+pub struct TubeRule {
+    pub name: String,
+    /// material a que a regra se aplica (texto livre; vazio = qualquer)
+    #[serde(default)]
+    pub material: String,
+    /// seção a que se aplica (`None` = qualquer)
+    #[serde(default)]
+    pub section: Option<SectionKind>,
+    /// ferramenta ou processo (mandril, rolos, dobradeira…)
+    #[serde(default)]
+    pub tool: String,
+    /// raio de centro mínimo em mm
+    #[serde(default)]
+    pub min_radius: String,
+    /// raio de centro mínimo como múltiplo do diâmetro (redondo) ou da altura no plano (demais)
+    #[serde(default)]
+    pub min_radius_x: String,
+    /// deslocamento da linha neutra para dentro da curva, em mm (reduz o desenvolvido)
+    #[serde(default)]
+    pub neutral_shift: String,
+    /// retorno elástico em graus (a máquina dobra além do ângulo pedido)
+    #[serde(default)]
+    pub springback: String,
+    /// folga em mm
+    #[serde(default)]
+    pub clearance: String,
+    /// alongamento admissível da fibra externa (fração: 0,25 = 25%)
+    #[serde(default)]
+    pub max_strain: String,
+    /// fator K da placa externa nos modos em V
+    #[serde(default)]
+    pub plate_k: String,
+    /// folga de raiz da solda em mm
+    #[serde(default)]
+    pub root_gap: String,
+    /// raio mínimo da linha de articulações do V múltiplo, em mm
+    #[serde(default)]
+    pub min_hinge_radius: String,
+    /// de onde vieram os valores (norma aberta, ensaio, regra interna): aparece ao lado do aviso
+    #[serde(default)]
+    pub source: String,
 }
 
 /// Lado da placa em relação à face da ponta do membro (B255).
@@ -2854,6 +2957,11 @@ impl FeatureKind {
                 for e in m.dims.iter_mut().chain([&mut m.angle, &mut m.off_x, &mut m.off_y, &mut m.ext1, &mut m.ext2, &mut m.gap]) {
                     exprs(e)
                 }
+                for b in m.joints.iter_mut().filter_map(|j| j.bend.as_mut()) {
+                    for e in [&mut b.radius, &mut b.k, &mut b.springback, &mut b.cuts, &mut b.root_gap, &mut b.segments] {
+                        exprs(e)
+                    }
+                }
             }
             StructPlate(p) => {
                 exprs(&mut p.thickness);
@@ -3503,6 +3611,9 @@ pub struct Document {
     /// estilo próprio de linha/ponto de elementos de geometria (espessura, tipo de linha, símbolo)
     #[serde(default)]
     pub line_styles: Vec<(Id, LineStyle)>,
+    /// regras de dobra de tubo cadastradas pelo usuário (B330)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tube_rules: Vec<TubeRule>,
     /// Ordem do vetor = ordem da linha de tempo.
     pub features: Vec<Feature>,
     /// Quantidade de comandos ativos (marcador de rollback, RF-ARV-051).
@@ -3561,6 +3672,7 @@ impl Document {
             pmi: vec![],
             pmi_captures: vec![],
             line_styles: vec![],
+            tube_rules: vec![],
             features: vec![],
             rollback: 0,
             atualizacao: ModoAtualizacao::Automatica,
@@ -4125,7 +4237,7 @@ impl Document {
                     continue;
                 }
                 let (late, early, first) = if a > b { (a, b, j.first) } else { (b, a, !j.first) };
-                per[late].push(StructJoint { mine: 0, other: ids[early], other_path: 0, mode: j.mode, first, gap: j.gap.clone() });
+                per[late].push(StructJoint { mine: 0, other: ids[early], other_path: 0, mode: j.mode, first, gap: j.gap.clone(), bend: j.bend.clone() });
             } else if j.mine < n {
                 per[j.mine].push(StructJoint { mine: 0, ..j.clone() });
             }
