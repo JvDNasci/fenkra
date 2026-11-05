@@ -11,6 +11,7 @@ pub mod mesh_io;
 pub mod structural;
 pub mod hardware;
 pub mod biblioteca;
+pub mod catalogo;
 pub mod fixadores;
 pub mod engrenagens;
 pub mod eixos;
