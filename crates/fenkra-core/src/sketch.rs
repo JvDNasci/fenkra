@@ -790,14 +790,14 @@ impl SketchData {
         (pc1, pc2, arc1)
     }
 
-    /// Polígono regular inscrito em círculo de construção.
-    pub fn add_polygon(&mut self, al: &mut impl FnMut() -> Id, c: [f64; 2], r: f64, n: usize) -> Id {
+    /// Polígono regular inscrito em círculo de construção, com um vértice no ângulo `a0` (radianos).
+    pub fn add_polygon(&mut self, al: &mut impl FnMut() -> Id, c: [f64; 2], r: f64, n: usize, a0: f64) -> Id {
         let n = n.max(3);
         let pc = self.add_point(al, c[0], c[1]);
         let circ = self.add_curve(al, Curve::Circle { c: pc, r }, true);
         let pts: Vec<Id> = (0..n)
             .map(|i| {
-                let a = std::f64::consts::FRAC_PI_2 + 2. * std::f64::consts::PI * i as f64 / n as f64;
+                let a = a0 + 2. * std::f64::consts::PI * i as f64 / n as f64;
                 self.add_point(al, c[0] + r * a.cos(), c[1] + r * a.sin())
             })
             .collect();
