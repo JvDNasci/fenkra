@@ -416,6 +416,15 @@ pub struct SurfaceViz {
     pub mesh: Mesh,
 }
 
+/// Contorno de um recorte de chapa nos dois estados: o desenhado no estado do comando e o levado
+/// ao outro (inclusive pelo raio da dobra), cada um como polilinhas fechadas em 3D.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CutOutline {
+    pub feature: Id,
+    pub folded: Vec<Vec<V3>>,
+    pub flat: Vec<Vec<V3>>,
+}
+
 /// Linha de dobra na chapa planificada: começo, centro e fim do arco desenvolvido.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BendLine {
@@ -466,6 +475,8 @@ pub struct RecomputeResult {
     pub kernel: String,
     /// linhas de dobra da chapa (no planificado)
     pub bend_lines: Vec<BendLine>,
+    /// contorno de cada recorte de chapa nos dois estados, para a prévia simultânea
+    pub cut_outlines: Vec<CutOutline>,
 }
 
 pub fn origin_frame(p: OriginPlane) -> Frame {
@@ -516,6 +527,8 @@ struct Ctx<'a> {
     steps: HashMap<Id, Vec<(Shape, BoolOp)>>,
     /// a próxima aba sai com as pontas em meia-esquadria
     miter_next: bool,
+    /// contorno de cada recorte de chapa nos dois estados (dobrado e planificado)
+    cut_outlines: Vec<CutOutline>,
 }
 
 /// Uma dobra: referencial da aresta (no dobrado) e o giro que leva a aba do dobrado ao plano.
@@ -534,6 +547,8 @@ struct SheetMap {
     a: f64,
     ba: f64,
     length: f64,
+    /// a dobra vai para o lado de dentro do material (para baixo da face de referência)
+    down: bool,
 }
 
 impl SheetMap {
@@ -555,6 +570,43 @@ impl SheetMap {
     }
     fn to_flat(&self, p: V3) -> V3 {
         geo3d::add(self.rot(p, -self.a), geo3d::mul(self.u, self.ba))
+    }
+    /// Ponto da zona da dobra (entre o começo e o fim do arco desenvolvido) do planificado ao
+    /// dobrado: a fibra neutra mantém o comprimento (φ = u / ρ) e a distância ao eixo é o raio
+    /// interno mais a profundidade abaixo da face. `None` fora da zona.
+    fn zone_fold(&self, p: V3) -> Option<V3> {
+        if self.ba <= 1e-9 || self.a <= 1e-9 {
+            return None;
+        }
+        let (su, se, sn) = self.local(p);
+        if su <= 1e-9 || su >= self.ba - 1e-9 || sn > 1e-6 || sn < -self.t - 1e-6 {
+            return None;
+        }
+        let phi = su / (self.ba / self.a);
+        let rad = geo3d::dist(self.o, self.c0) - sn;
+        let v = geo3d::rotate(geo3d::mul(self.n, -rad), self.axis, phi);
+        Some(geo3d::add(geo3d::add(self.o, v), geo3d::mul(self.ev, se)))
+    }
+    /// O inverso de `zone_fold`: ponto do dobrado dentro do arco da dobra volta ao planificado.
+    fn zone_unfold(&self, p: V3) -> Option<V3> {
+        if self.ba <= 1e-9 || self.a <= 1e-9 {
+            return None;
+        }
+        let q = geo3d::sub(p, self.o);
+        let se = geo3d::dot(q, self.ev);
+        let w = geo3d::sub(q, geo3d::mul(self.ev, se));
+        let rad = geo3d::norm(w);
+        if rad < 1e-9 {
+            return None;
+        }
+        let b0 = geo3d::mul(self.n, -1.);
+        let phi = geo3d::dot(fenkra_kernel::cross(b0, w), self.axis).atan2(geo3d::dot(b0, w));
+        let sn = geo3d::dist(self.o, self.c0) - rad;
+        if phi <= 1e-9 || phi >= self.a - 1e-9 || sn > 1e-6 || sn < -self.t - 1e-6 {
+            return None;
+        }
+        let su = phi * (self.ba / self.a);
+        Some(geo3d::add(geo3d::add(self.c0, geo3d::mul(self.u, su)), geo3d::add(geo3d::mul(self.ev, se), geo3d::mul(self.n, sn))))
     }
     fn to_folded(&self, p: V3) -> V3 {
         self.rot(geo3d::sub(p, geo3d::mul(self.u, self.ba)), self.a)
@@ -621,7 +673,9 @@ struct FeatEntry {
     sketch: Option<(Frame, Arc<EvalSketch>)>,
     tool: Option<(Shape, BoolOp)>,
     last_sheet: Option<fenkra_kernel::SheetEdgeInfo>,
-    sheet_map: Option<SheetMap>,
+    /// dobras que o comando registrou (uma aba registra uma; dobra por linha, várias)
+    sheet_maps: Vec<SheetMap>,
+    outlines: Vec<CutOutline>,
     steps: Vec<(Shape, BoolOp)>,
 }
 
@@ -2352,7 +2406,7 @@ impl Ctx<'_> {
         let r = ev(&s.radius, &self.vars, "raio de dobra")?;
         let k0 = if s.method == 0 { ev(&s.k, &self.vars, "fator K")? } else { 0.44 };
         let allowance = if s.method == 0 { 0. } else { ev(&s.allowance, &self.vars, "dedução/tolerância de dobra")? };
-        Ok(SheetValues { t, r, k: fenkra_core::sheet_k(s.method, k0, t, r, allowance), flat: s.flat })
+        Ok(SheetValues { t, r, flat: s.flat, method: s.method, k0, allowance })
     }
 
     /// Aresta da aba/bainha por dono + papel (ADR 0010): com chave v2, o ponto vira o ponto médio
@@ -2372,6 +2426,66 @@ impl Ctx<'_> {
             Err(_) if key.is_none() => Ok((p, flat_now)),
             Err(e) => Err(e),
         }
+    }
+
+    /// Uma dobra por linha: a linha `a`–`b` (centro da zona dobrada) numa face plana. Com `build`,
+    /// devolve também a chapa dobrada; sempre devolve o mapa da dobra no espaço de `body`. A parte
+    /// que gira anda `-ba` antes do giro: o comprimento desenvolvido sai da zona dobrada.
+    #[allow(clippy::too_many_arguments)]
+    fn bend_line(&self, body: &Shape, a: V3, b: V3, ang: f64, r: f64, kf: f64, t: f64, flip: bool, down: bool, delta: f64, build: bool) -> Result<(Option<Shape>, SheetMap), String> {
+        let k = |e: KernelError| e.0;
+        let mid = geo3d::lerp(a, b, 0.5);
+        // normal para fora da face clicada: o material fica do lado oposto
+        let (on, n) = body.surface_near(mid).map_err(k)?;
+        let e = geo3d::unit(geo3d::sub(b, a)).ok_or("os dois pontos da linha coincidem")?;
+        let mut side = geo3d::unit(fenkra_kernel::cross(n, e)).ok_or("linha normal à chapa")?;
+        if flip {
+            side = geo3d::mul(side, -1.);
+        }
+        // a linha vai para a face (um sketch pode estar afastado dela) e para o centro da zona
+        let a = geo3d::add(geo3d::sub(a, geo3d::mul(n, geo3d::dot(geo3d::sub(a, on), n))), geo3d::mul(side, delta));
+        let (lo, hi) = body.bbox().ok_or("corpo sem dimensões")?;
+        let big = geo3d::dist(lo, hi) * 2. + 10.;
+        let ba = chapa::compensacao(t, r, ang, kf).ba;
+        let half_space = |d: f64| {
+            let p = geo3d::add(a, geo3d::mul(side, d));
+            let y = fenkra_kernel::cross(side, e);
+            let o = geo3d::sub(geo3d::sub(p, geo3d::mul(e, big)), geo3d::mul(y, big));
+            Shape::box_tool(o, e, side, [2. * big, 2. * big, big])
+        };
+        let moving = body.boolean(&half_space(ba / 2.).map_err(k)?, fenkra_kernel::Bool::Common).map_err(k)?;
+        let p0 = geo3d::sub(a, geo3d::mul(side, ba / 2.));
+        let section = body.boolean(&Shape::plane_face(p0, side, big).map_err(k)?, fenkra_kernel::Bool::Common).map_err(k)?;
+        if section.is_null() || moving.is_null() {
+            return Err("a linha da dobra não atravessa a chapa".into());
+        }
+        // alcance da chapa ao longo da linha (largura da dobra) e da parte que gira (comprimento)
+        let corners = |s: &Shape| -> Vec<V3> {
+            s.bbox().map(|(l, h)| (0..8).map(|c| [if c & 1 == 0 { l[0] } else { h[0] }, if c & 2 == 0 { l[1] } else { h[1] }, if c & 4 == 0 { l[2] } else { h[2] }]).collect()).unwrap_or_default()
+        };
+        let (mut e0, mut e1) = (f64::MAX, f64::MIN);
+        for q in corners(&section) {
+            let d = geo3d::dot(geo3d::sub(q, p0), e);
+            e0 = e0.min(d);
+            e1 = e1.max(d);
+        }
+        let smax = corners(&moving).iter().map(|q| geo3d::dot(geo3d::sub(*q, p0), side)).fold(ba, f64::max);
+        let c0 = geo3d::add(p0, geo3d::mul(e, e0));
+        let map = if down {
+            SheetMap { c0: geo3d::sub(c0, geo3d::mul(n, t)), ev: e, l: e1 - e0, n: geo3d::mul(n, -1.), u: side, t, o: geo3d::sub(c0, geo3d::mul(n, t + r)), axis: fenkra_kernel::cross(n, side), a: ang.to_radians(), ba, length: smax - ba, down: true }
+        } else {
+            SheetMap { c0, ev: e, l: e1 - e0, n, u: side, t, o: geo3d::add(c0, geo3d::mul(n, r)), axis: fenkra_kernel::cross(side, n), a: ang.to_radians(), ba, length: smax - ba, down: false }
+        };
+        if !build {
+            return Ok((None, map));
+        }
+        let fixed = body.boolean(&half_space(-ba / 2.).map_err(k)?, fenkra_kernel::Bool::Cut).map_err(k)?;
+        // eixo: raio interno acima da face clicada (para cima) ou abaixo da outra face
+        let (axis_p, axis_d) = if down { (geo3d::sub(p0, geo3d::mul(n, t + r)), fenkra_kernel::cross(n, side)) } else { (geo3d::add(p0, geo3d::mul(n, r)), fenkra_kernel::cross(side, n)) };
+        let bend = section.revolve(axis_p, axis_d, ang, 0.).map_err(k)?;
+        let moved = moving.transformed(Xform::Translate(geo3d::mul(side, -ba))).map_err(k)?.transformed(Xform::Rotate(axis_p, axis_d, ang)).map_err(k)?;
+        let out = fixed.boolean(&bend, fenkra_kernel::Bool::Fuse).map_err(k)?.boolean(&moved, fenkra_kernel::Bool::Fuse).map_err(k)?;
+        Ok((Some(out), map))
     }
 
     /// Aba/bainha: no estado planificado, a aresta clicada precisa existir na chapa plana — senão
@@ -2423,8 +2537,9 @@ impl Ctx<'_> {
             o: geo3d::add(c0, geo3d::mul(n, p.r)),
             axis: fenkra_kernel::cross(u, n),
             a,
-            ba: a * (p.r + p.k * p.t),
+            ba: chapa::compensacao(p.t, p.r, p.angle, p.k).ba,
             length: p.length,
+            down: false,
         });
         // a lateral da aresta escolhida precisa ser a espessura da chapa (senão não é parede de chapa)
         if let Some(msg) = chapa::valida_lateral(info.thickness, p.t) {
@@ -2583,7 +2698,7 @@ impl Ctx<'_> {
         let a = ang.to_radians();
         if sp.flat {
             // planificada: faixa desenvolvida (arco pela linha neutra + parede) para fora
-            let dev = a * (r + sp.k * sp.t) + len;
+            let dev = chapa::compensacao(sp.t, r, ang, sp.k_for(r)).ba + len;
             let fr = Frame { origin: inner[0], x: outs[0], normal: d };
             let loc = |p: V3| {
                 let q = geo3d::sub(p, fr.origin);
@@ -2670,6 +2785,34 @@ impl Ctx<'_> {
         } else {
             for m in self.sheet_maps.iter() {
                 if m.holds(q, true) {
+                    q = m.to_folded(q);
+                }
+            }
+        }
+        q
+    }
+
+    /// Como `map_point`, mas os pontos que caem na zona de uma dobra também seguem o arco: serve a
+    /// contornos que atravessam o raio (a prévia do recorte), onde `map_point` os deixaria parados.
+    fn map_outline_point(&self, p: V3, from_flat: bool, to_flat: bool) -> V3 {
+        if from_flat == to_flat || self.sheet_maps.is_empty() {
+            return p;
+        }
+        let mut q = p;
+        if to_flat {
+            for m in self.sheet_maps.iter().rev() {
+                // a zona vem antes: `holds` trata o arco como perna reta
+                if let Some(z) = m.zone_unfold(q) {
+                    q = z;
+                } else if m.holds(q, false) {
+                    q = m.to_flat(q);
+                }
+            }
+        } else {
+            for m in self.sheet_maps.iter() {
+                if let Some(z) = m.zone_fold(q) {
+                    q = z;
+                } else if m.holds(q, true) {
                     q = m.to_folded(q);
                 }
             }
@@ -3358,7 +3501,7 @@ impl Ctx<'_> {
                     off2: ev(&fl.off2, &self.vars, "recuo 2")?.max(if fl.min_gap { 1e-4 } else { 0. }),
                     flip: fl.flip,
                     flat: sp.flat,
-                    k: sp.k,
+                    k: sp.k_for(r),
                 };
                 let relief = match &fl.relief {
                     Some(w) => Some(ev(w, &self.vars, "largura do alívio")?),
@@ -3511,10 +3654,6 @@ impl Ctx<'_> {
             }
             FeatureKind::SmBend(bd) => {
                 let sp = self.sheet()?;
-                if sp.flat {
-                    // planificada: a dobra não se aplica (a chapa continua plana)
-                    return Ok(Some("planificada: dobra desfeita".into()));
-                }
                 let ang = ev(&bd.angle, &self.vars, "ângulo")?;
                 let r = match &bd.radius {
                     Some(x) => ev(x, &self.vars, "raio")?,
@@ -3523,47 +3662,94 @@ impl Ctx<'_> {
                 if !(0.1..=179.9).contains(&ang) {
                     return Err("ângulo da dobra entre 0,1° e 179,9°".into());
                 }
-                let b = self.body(f.target).ok_or("a dobra precisa de uma chapa")?.clone();
-                let mid = geo3d::lerp(bd.a, bd.b, 0.5);
-                // normal para fora da face clicada: o material fica do lado oposto
-                let (_, n) = b.surface_near(mid).map_err(k)?;
-                let e = geo3d::unit(geo3d::sub(bd.b, bd.a)).ok_or("os dois pontos da linha coincidem")?;
-                let mut side = geo3d::unit(fenkra_kernel::cross(n, e)).ok_or("linha normal à chapa")?;
+                let b0 = self.body(f.target).ok_or("a dobra precisa de uma chapa")?.clone();
+                // linhas: as do sketch (retas; curva suave vira a corda dentro da tolerância) ou a–b
+                let mut notes: Vec<String> = vec![];
+                let raw: Vec<(V3, V3)> = match bd.sketch {
+                    Some(sid) => {
+                        let (frame, sk) = &self.sketch(sid)?;
+                        let (ls, nt) = chapa::linhas_dobra(&sk.open)?;
+                        notes.extend(nt);
+                        ls.iter().map(|(p, q)| (frame.point(p[0], p[1]), frame.point(q[0], q[1]))).collect()
+                    }
+                    None => vec![(bd.a, bd.b)],
+                };
+                // o que foi escolhido no estado em que o comando nasceu vai para o estado atual
+                let raw: Vec<(V3, V3)> = raw.iter().map(|(p, q)| (self.map_point(*p, f.flat_space, sp.flat), self.map_point(*q, f.flat_space, sp.flat))).collect();
+                let e0 = geo3d::unit(geo3d::sub(raw[0].1, raw[0].0)).ok_or("os dois pontos da linha coincidem")?;
+                let (_, n_ref) = b0.surface_near(geo3d::lerp(raw[0].0, raw[0].1, 0.5)).map_err(k)?;
+                let mut side_ref = geo3d::unit(fenkra_kernel::cross(n_ref, e0)).ok_or("linha normal à chapa")?;
                 if bd.flip {
-                    side = geo3d::mul(side, -1.);
+                    side_ref = geo3d::mul(side_ref, -1.);
                 }
-                let (lo, hi) = b.bbox().ok_or("corpo sem dimensões")?;
-                let big = geo3d::dist(lo, hi) * 2. + 10.;
-                // comprimento desenvolvido da dobra, centrado na linha
-                let ba = ang.to_radians() * (r + sp.k * sp.t);
-                let half_space = |d: f64| {
-                    let p = geo3d::add(bd.a, geo3d::mul(side, d));
-                    let y = fenkra_kernel::cross(side, e);
-                    let o = geo3d::sub(geo3d::sub(p, geo3d::mul(e, big)), geo3d::mul(y, big));
-                    Shape::box_tool(o, e, side, [2. * big, 2. * big, big])
+                // todas na mesma direção e paralelas; ordem do lado fixo para o lado que gira
+                let mut lines: Vec<(V3, V3)> = vec![];
+                for (p, q) in &raw {
+                    let e = geo3d::unit(geo3d::sub(*q, *p)).ok_or("os dois pontos da linha coincidem")?;
+                    if geo3d::norm(fenkra_kernel::cross(e, e0)) > 0.01 {
+                        return Err("as linhas de uma dobra precisam ser paralelas: faça um comando para cada direção".into());
+                    }
+                    lines.push(if geo3d::dot(e, e0) < 0. { (*q, *p) } else { (*p, *q) });
+                }
+                lines.sort_by(|x, y| geo3d::dot(geo3d::lerp(x.0, x.1, 0.5), side_ref).total_cmp(&geo3d::dot(geo3d::lerp(y.0, y.1, 0.5), side_ref)));
+                let kloc = sp.k_for(r);
+                let cmp = chapa::compensacao(sp.t, r, ang, kloc);
+                // a linha marca o centro, o começo ou o fim da zona, ou o vértice de fora
+                let delta = match bd.position {
+                    1 => cmp.ba / 2.,
+                    2 => -cmp.ba / 2.,
+                    3 => cmp.ba / 2. - cmp.ossb,
+                    _ => 0.,
                 };
-                let fixed = b.boolean(&half_space(-ba / 2.).map_err(k)?, fenkra_kernel::Bool::Cut).map_err(k)?;
-                let moving = b.boolean(&half_space(ba / 2.).map_err(k)?, fenkra_kernel::Bool::Common).map_err(k)?;
-                let p0 = geo3d::sub(bd.a, geo3d::mul(side, ba / 2.));
-                let section = b.boolean(&Shape::plane_face(p0, side, big).map_err(k)?, fenkra_kernel::Bool::Common).map_err(k)?;
-                if section.is_null() || moving.is_null() {
-                    return Err("a linha da dobra não atravessa a chapa".into());
+                for w in lines.windows(2) {
+                    let gap = geo3d::dot(geo3d::sub(geo3d::lerp(w[1].0, w[1].1, 0.5), geo3d::lerp(w[0].0, w[0].1, 0.5)), side_ref);
+                    if gap < cmp.ba - 1e-6 {
+                        return Err(format!("as linhas de dobra estão a {gap:.2} mm uma da outra, menos que a zona dobrada ({:.2} mm): afaste-as ou reduza ângulo e raio", cmp.ba));
+                    }
                 }
-                // eixo: raio interno acima da face clicada (para cima) ou abaixo da outra face
-                let (axis_p, axis_d) = if bd.down {
-                    (geo3d::sub(p0, geo3d::mul(n, sp.t + r)), fenkra_kernel::cross(n, side))
+                let mut cur = b0;
+                let mut centers: Vec<V3> = vec![];
+                let mut own: Vec<SheetMap> = vec![];
+                for (p, q) in lines.iter() {
+                    let (mut p, mut q) = (*p, *q);
+                    let c_orig = geo3d::lerp(p, q, 0.5);
+                    // com as dobras anteriores já feitas, a linha que fica além delas acompanha o giro
+                    if !sp.flat {
+                        for (m, c0) in own.iter().zip(&centers) {
+                            if geo3d::dot(geo3d::sub(c_orig, *c0), side_ref) > 0. {
+                                p = m.to_folded(p);
+                                q = m.to_folded(q);
+                            }
+                        }
+                    }
+                    let (shape, mut map) = self.bend_line(&cur, p, q, ang, r, kloc, sp.t, bd.flip, bd.down, delta, !sp.flat)?;
+                    centers.push(c_orig);
+                    if let Some(sh) = shape {
+                        cur = sh;
+                    }
+                    own.push(map);
+                    if sp.flat {
+                        // planificada: o mapa vai para o espaço dobrado, pelas dobras já registradas
+                        let back = |q: V3| self.map_point(q, true, false);
+                        let c0 = back(map.c0);
+                        let c1 = back(geo3d::add(map.c0, geo3d::mul(map.ev, map.l)));
+                        let tip = |v: V3| geo3d::sub(back(geo3d::add(map.c0, v)), c0);
+                        map.n = geo3d::unit(tip(map.n)).unwrap_or(map.n);
+                        map.u = geo3d::unit(tip(map.u)).unwrap_or(map.u);
+                        map.c0 = c0;
+                        map.ev = geo3d::unit(geo3d::sub(c1, c0)).unwrap_or(map.ev);
+                        map.l = geo3d::dist(c0, c1);
+                        map.o = geo3d::add(c0, geo3d::mul(map.n, r));
+                        map.axis = fenkra_kernel::cross(map.u, map.n);
+                    }
+                    self.sheet_maps.push(map);
+                }
+                if sp.flat {
+                    notes.insert(0, "planificada: dobra desfeita".into());
                 } else {
-                    (geo3d::add(p0, geo3d::mul(n, r)), fenkra_kernel::cross(side, n))
-                };
-                let bend = section.revolve(axis_p, axis_d, ang, 0.).map_err(k)?;
-                let moved = moving
-                    .transformed(Xform::Translate(geo3d::mul(side, -ba)))
-                    .map_err(k)?
-                    .transformed(Xform::Rotate(axis_p, axis_d, ang))
-                    .map_err(k)?;
-                let out = fixed.boolean(&bend, fenkra_kernel::Bool::Fuse).map_err(k)?.boolean(&moved, fenkra_kernel::Bool::Fuse).map_err(k)?;
-                self.bodies.insert(f.target, fresh_body(out, f.id));
-                Ok(None)
+                    self.bodies.insert(f.target, fresh_body(cur, f.id));
+                }
+                Ok((!notes.is_empty()).then(|| notes.join("; ")))
             }
             FeatureKind::SmLouver(lv) => {
                 let sp = self.sheet()?;
@@ -3774,6 +3960,18 @@ impl Ctx<'_> {
                     return Err("o recorte precisa de um perfil fechado".into());
                 }
                 let frame = *frame;
+                // contorno nos dois estados, para a prévia simultânea (dobrado e planificado)
+                {
+                    let here: Vec<Vec<V3>> = loops_points(&sk.loops).iter().map(|l| l.iter().map(|q| frame.point(q[0], q[1])).collect()).collect();
+                    let other = |from_flat: bool| -> Vec<Vec<V3>> {
+                        if c.normal_face {
+                            return here.clone();
+                        }
+                        here.iter().map(|l| l.iter().map(|q| self.map_outline_point(*q, from_flat, !from_flat)).collect()).collect()
+                    };
+                    let (folded, flat) = if f.flat_space { (other(true), here.clone()) } else { (here.clone(), other(false)) };
+                    self.cut_outlines.push(CutOutline { feature: f.id, folded, flat });
+                }
                 let mut face = Shape::face(&frame, &sk.loops).map_err(k)?;
                 let off = if c.offset.trim().is_empty() { 0. } else { ev(&c.offset, &self.vars, "folga")? };
                 if off.abs() > 1e-9 {
@@ -4037,7 +4235,7 @@ impl Ctx<'_> {
                     off2: 0.,
                     flip: h.flip,
                     flat: sp.flat,
-                    k: sp.k,
+                    k: sp.k_for(r),
                 };
                 let (h_edge, from) = self.chapa_aresta("bainha", f, h.edge, h.edge_key.as_ref(), sp.flat)?;
                 self.sheet_tool(f, h_edge, from, p, false)
@@ -4539,6 +4737,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         body_sig: HashMap::new(),
         last_sheet: None,
         sheet_maps: vec![],
+        cut_outlines: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -4654,9 +4853,8 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                     None => cx.tools.remove(&f.id),
                 };
                 cx.last_sheet = e.last_sheet;
-                if let Some(m) = e.sheet_map {
-                    cx.sheet_maps.push(m);
-                }
+                cx.sheet_maps.extend(e.sheet_maps.iter().copied());
+                cx.cut_outlines.extend(e.outlines.iter().cloned());
                 if e.steps.is_empty() {
                     cx.steps.remove(&f.id);
                 } else {
@@ -4665,6 +4863,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
             }
             None => {
                 let maps_before = cx.sheet_maps.len();
+                let outlines_before = cx.cut_outlines.len();
                 *cx.promoted.borrow_mut() = None;
                 let st = match cx.run(f) {
                     Ok(None) => Status::Ok,
@@ -4687,7 +4886,8 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                         sketch: cx.sketches.get(&f.id).cloned(),
                         tool: cx.tools.get(&f.id).cloned(),
                         last_sheet: cx.last_sheet,
-                        sheet_map: if cx.sheet_maps.len() > maps_before { cx.sheet_maps.last().copied() } else { None },
+                        sheet_maps: cx.sheet_maps[maps_before.min(cx.sheet_maps.len())..].to_vec(),
+                        outlines: cx.cut_outlines[outlines_before.min(cx.cut_outlines.len())..].to_vec(),
                         steps: cx.steps.get(&f.id).cloned().unwrap_or_default(),
                     },
                 );
@@ -4720,7 +4920,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                 let a = geo3d::add(m.c0, geo3d::mul(m.u, du));
                 [up_to(a), up_to(geo3d::add(a, geo3d::mul(m.ev, m.l)))]
             };
-            BendLine { start: line(0.), center: line(m.ba / 2.), end: line(m.ba), angle: m.a.to_degrees().abs(), radius: geo3d::dist(m.o, m.c0), up: m.a > 0. }
+            BendLine { start: line(0.), center: line(m.ba / 2.), end: line(m.ba), angle: m.a.to_degrees().abs(), radius: geo3d::dist(m.o, m.c0), up: m.a > 0. && !m.down }
         })
         .collect();
     let h = hash_of(&[&all_bodies(&cx.body_sig)], global);
@@ -4874,6 +5074,7 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         elapsed_ms: t0.elapsed().as_secs_f64() * 1000.,
         kernel: fenkra_kernel::version(),
         bend_lines,
+        cut_outlines: cx.cut_outlines,
     }
 }
 
@@ -4916,6 +5117,7 @@ pub fn publications(doc: &Document) -> Vec<(String, LinkedGeo)> {
                 body_sig: HashMap::new(),
                 last_sheet: None,
                 sheet_maps: vec![],
+        cut_outlines: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -4948,6 +5150,7 @@ fn surface_brep(doc: &Document, id: Id) -> Option<String> {
         body_sig: HashMap::new(),
         last_sheet: None,
         sheet_maps: vec![],
+        cut_outlines: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -5386,6 +5589,7 @@ pub fn cut_list(doc: &Document) -> Vec<CutRow> {
         body_sig: HashMap::new(),
         last_sheet: None,
         sheet_maps: vec![],
+        cut_outlines: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -5463,6 +5667,7 @@ pub fn member_joints(doc: &Document) -> Vec<((Id, usize), (Id, usize), [f64; 3])
         body_sig: HashMap::new(),
         last_sheet: None,
         sheet_maps: vec![],
+        cut_outlines: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -5495,6 +5700,7 @@ pub fn skeleton_groups(doc: &Document, paths: &[CurveRef]) -> Vec<Vec<usize>> {
         body_sig: HashMap::new(),
         last_sheet: None,
         sheet_maps: vec![],
+        cut_outlines: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -5509,8 +5715,19 @@ pub fn skeleton_groups(doc: &Document, paths: &[CurveRef]) -> Vec<Vec<usize>> {
 struct SheetValues {
     t: f64,
     r: f64,
-    k: f64,
     flat: bool,
+    /// dados do método de compensação, para recalcular o K com o raio de cada dobra
+    method: u8,
+    k0: f64,
+    allowance: f64,
+}
+
+impl SheetValues {
+    /// Fator K da dobra com o raio próprio dela: nos métodos por dedução ou tolerância o K muda
+    /// com o raio (a tabela vale a 90°), então o K da chapa só serve ao raio padrão.
+    fn k_for(&self, r: f64) -> f64 {
+        fenkra_core::sheet_k(self.method, self.k0, self.t, r, self.allowance)
+    }
 }
 
 thread_local! {
@@ -5594,27 +5811,55 @@ pub struct BendRow {
     pub deduction: f64,
 }
 
-/// Tabela de dobras da peça de chapa (ângulo, raio, comprimento desenvolvido e dedução).
+/// Contorno planificado de um recorte de chapa projetado (ortogonalmente) no plano do sketch dele,
+/// em coordenadas do plano: serve a "projetar a planificada no sketch" para cotar contra ela.
+pub fn contorno_planificado_no_sketch(doc: &Document, cut: Id) -> Result<Vec<Vec<[f64; 2]>>, String> {
+    let f = doc.feature(cut).ok_or("recorte não encontrado")?;
+    let FeatureKind::SmCut(c) = &f.kind else { return Err("o comando não é um recorte de chapa".into()) };
+    let r = recompute(doc);
+    let o = r.cut_outlines.iter().find(|o| o.feature == cut).ok_or("o recorte não tem contorno: ele está com erro, suprimido ou depois do marcador")?;
+    let frame = r.sketches.iter().find(|s| s.feature == c.sketch).map(|s| s.frame).ok_or("o sketch do recorte não está disponível")?;
+    let y = frame.y();
+    Ok(o.flat.iter().map(|l| l.iter().map(|p| {
+        let d = geo3d::sub(*p, frame.origin);
+        [geo3d::dot(d, frame.x), geo3d::dot(d, y)]
+    }).collect()).collect())
+}
+
+/// Tabela de dobras da peça de chapa (ângulo, raio, comprimento desenvolvido e dedução). Usa a
+/// mesma compensação da geometria (`chapa::compensacao`) e o fator K do raio de cada dobra.
 pub fn bend_table(doc: &Document) -> Vec<BendRow> {
     let Some(s) = &doc.sheet else { return vec![] };
     let Ok(vars) = doc.eval_params() else { return vec![] };
     let num = |e: &String| ev(e, &vars, "").unwrap_or(0.);
-    let (t, r0, kf) = (num(&s.thickness), num(&s.radius), num(&s.k));
+    let (t, r0) = (num(&s.thickness), num(&s.radius));
+    let k0 = if s.method == 0 { num(&s.k) } else { 0.44 };
+    let allowance = if s.method == 0 { 0. } else { num(&s.allowance) };
     let mut out = vec![];
     for f in doc.active_features().map(|(_, f)| f) {
-        let (ang, r) = match &f.kind {
-            FeatureKind::SmFlange(fl) => (num(&fl.angle), fl.radius.as_ref().map(num).unwrap_or(r0)),
-            FeatureKind::SmHem(h) => (180., (num(&h.gap) / 2.).max(0.01)),
-            FeatureKind::SmBend(b) => (num(&b.angle), b.radius.as_ref().map(num).unwrap_or(r0)),
+        // (ângulo, raio, quantidade de dobras iguais que o comando faz)
+        let (ang, r, n) = match &f.kind {
+            FeatureKind::SmFlange(fl) => (num(&fl.angle), fl.radius.as_ref().map(num).unwrap_or(r0), 1),
+            FeatureKind::SmHem(h) => (180., (num(&h.gap) / 2.).max(0.01), 1),
+            FeatureKind::SmBend(b) => (num(&b.angle), b.radius.as_ref().map(num).unwrap_or(r0), 1),
             // abas por cadeia e por superfície também entram no mapa de dobras (ângulo e raio)
-            FeatureKind::SmCurveFlange(c) => (if c.angle.trim().is_empty() { 90. } else { num(&c.angle) }, c.radius.as_ref().map(num).unwrap_or(r0)),
-            FeatureKind::SmSurfFlange(sf) => (if sf.mode == 2 { num(&sf.angle) } else { 90. }, sf.radius.as_ref().map(num).unwrap_or(r0)),
+            FeatureKind::SmCurveFlange(c) => (if c.angle.trim().is_empty() { 90. } else { num(&c.angle) }, c.radius.as_ref().map(num).unwrap_or(r0), 1),
+            FeatureKind::SmSurfFlange(sf) => (if sf.mode == 2 { num(&sf.angle) } else { 90. }, sf.radius.as_ref().map(num).unwrap_or(r0), 1),
+            // joggle: duas dobras iguais e opostas, de canto vivo (sem raio modelado)
+            FeatureKind::SmJoggle(j) => {
+                let a = match &j.angle {
+                    Some(a) => num(a),
+                    None => num(&j.depth).atan2(num(&j.run).max(1e-9)).to_degrees(),
+                };
+                (a, 0., 2)
+            }
             _ => continue,
         };
-        let a = ang.to_radians();
-        let ba = a * (r + kf * t);
-        let ossb = if ang < 179.9 { (a / 2.).tan() * (r + t) } else { r + t };
-        out.push(BendRow { feature: f.id, name: f.name.clone(), angle: ang, radius: r, allowance: ba, deduction: 2. * ossb - ba });
+        let c = chapa::compensacao(t, r, ang, fenkra_core::sheet_k(s.method, k0, t, r, allowance));
+        for i in 0..n {
+            let name = if n > 1 { format!("{} ({}/{n})", f.name, i + 1) } else { f.name.clone() };
+            out.push(BendRow { feature: f.id, name, angle: ang, radius: r, allowance: c.ba, deduction: c.deducao });
+        }
     }
     out
 }
@@ -5645,6 +5890,7 @@ pub fn export(doc: &Document, collector: Option<Id>, path: &str) -> Result<(), S
         body_sig: HashMap::new(),
         last_sheet: None,
         sheet_maps: vec![],
+        cut_outlines: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -5685,6 +5931,7 @@ pub fn final_shape(doc: &Document) -> Option<Shape> {
         body_sig: HashMap::new(),
         last_sheet: None,
         sheet_maps: vec![],
+        cut_outlines: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -6513,7 +6760,7 @@ mod tests {
         assert!((zmin + 3.).abs() < 0.01, "desvio {zmin}");
         // dobra por linha a 90°: volume conservado (comprimento desenvolvido) e a ponta sobe
         let mut d = base();
-        d.add_feature(FeatureKind::SmBend(SmBend { a: [60., 0., 2.], b: [60., 50., 2.], angle: s("90"), radius: None, flip: false, down: false }));
+        d.add_feature(FeatureKind::SmBend(SmBend { a: [60., 0., 2.], b: [60., 50., 2.], angle: s("90"), radius: None, flip: false, down: false, sketch: None, position: 0 }));
         let r = check(&d);
         assert!(near(r.bodies[0].mass.volume, 10000., 2e-3), "dobra por linha {}", r.bodies[0].mass.volume);
         let zmax = r.bodies[0].mesh.positions.chunks_exact(3).map(|p| p[2]).fold(f32::MIN, f32::max);
@@ -8010,5 +8257,118 @@ mod tests_aba_superficie {
             let zmax = r.bodies[0].mesh.positions.chunks_exact(3).map(|p| p[2]).fold(f32::MIN, f32::max) as f64;
             assert!(zmax > lo && zmax < hi, "modo {mode}: altura {zmax}");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests_dobra_sketch {
+    use super::*;
+
+    fn sk_rect(d: &mut Document, a: [f64; 2], b: [f64; 2]) -> Id {
+        let mut data = SketchData::default();
+        let mut n = 7_000_000u64;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        data.add_rect(&mut al, a, b, false);
+        d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }))
+    }
+
+    fn sk_lines(d: &mut Document, plane: PlaneRef, segs: &[([f64; 2], [f64; 2])]) -> Id {
+        let mut data = SketchData::default();
+        let mut n = 7_100_000u64 + d.features.len() as u64 * 1000;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        for (a, b) in segs {
+            let pa = data.add_point(&mut al, a[0], a[1]);
+            let pb = data.add_point(&mut al, b[0], b[1]);
+            data.add_curve(&mut al, fenkra_core::sketch::Curve::Line { a: pa, b: pb }, false);
+        }
+        d.add_feature(FeatureKind::Sketch(Sketch { plane, data }))
+    }
+
+    /// Sketch com uma spline pelos pontos dados (coordenadas do plano).
+    fn sk_spline(d: &mut Document, plane: PlaneRef, pts: &[[f64; 2]]) -> Id {
+        let mut data = SketchData::default();
+        let mut n = 3_000_000u64 + d.features.len() as u64 * 1000;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        let ids: Vec<Id> = pts.iter().map(|p| data.add_point(&mut al, p[0], p[1])).collect();
+        data.add_curve(&mut al, fenkra_core::sketch::Curve::Spline { pts: ids }, false);
+        d.add_feature(FeatureKind::Sketch(Sketch { plane, data }))
+    }
+
+    /// B03 e B77: dobra por linha com várias linhas de sketch, posição da dobra e spline quase reta;
+    /// todas registram no mapa de dobras e as linhas da planificada caem onde o desenvolvimento manda.
+    #[test]
+    fn dobra_por_linha_sketch_posicao_e_mapa() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        use std::f64::consts::PI;
+        let s = |x: &str| x.to_string();
+        let ba = PI / 2. * (2. + 0.44 * 2.);
+        let base = || {
+            let mut d = Document::new("chapa");
+            d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), flat: false, ..Default::default() });
+            let sk = sk_rect(&mut d, [0., 0.], [100., 50.]);
+            d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
+            d
+        };
+        let bend = |sketch: Option<Id>, x: f64, position: u8| SmBend { a: [x, 0., 2.], b: [x, 50., 2.], angle: s("90"), radius: None, flip: false, down: false, sketch, position };
+        let cx = |l: &BendLine| (l.center[0][0] + l.center[1][0]) / 2.;
+        // duas linhas paralelas num sketch: duas dobras, volume conservado
+        let mut d = base();
+        let sk = sk_lines(&mut d, PlaneRef::Origin(OriginPlane::XY), &[([70., 0.], [70., 50.]), ([30., 0.], [30., 50.])]);
+        let bid = d.add_feature(FeatureKind::SmBend(bend(Some(sk), 0., 0)));
+        let r = recompute(&d);
+        assert_eq!(r.status[&bid], Status::Ok, "{:?}", r.status[&bid]);
+        assert!(((r.bodies[0].mass.volume - 10000.) / 10000.).abs() < 6e-3, "volume {}", r.bodies[0].mass.volume);
+        assert_eq!(r.bend_lines.len(), 2, "uma linha de dobra por linha do sketch");
+        assert!(r.bend_lines.iter().all(|l| (l.angle - 90.).abs() < 1e-6 && (l.radius - 2.).abs() < 1e-6));
+        // planificada: as linhas voltam aos lugares do sketch (centro da zona) e a tabela soma as duas
+        d.sheet.as_mut().unwrap().flat = true;
+        let r = recompute(&d);
+        assert!(matches!(r.status[&bid], Status::Warning(_)), "{:?}", r.status[&bid]);
+        assert_eq!(r.bend_lines.len(), 2);
+        let mut xs: Vec<f64> = r.bend_lines.iter().map(cx).collect();
+        xs.sort_by(f64::total_cmp);
+        assert!((xs[0] - 30.).abs() < 0.05 && (xs[1] - 70.).abs() < 0.05, "linhas planificadas {xs:?}");
+        // posição: início da zona = a linha marca onde a dobra começa (centro recua metade do BA)
+        for (pos, esperado) in [(1u8, 60. - ba / 2.), (2, 60. + ba / 2.), (3, 60. - ba / 2. + 4.)] {
+            let mut d = base();
+            d.sheet.as_mut().unwrap().flat = true;
+            let id = d.add_feature(FeatureKind::SmBend(bend(None, 60., pos)));
+            let r = recompute(&d);
+            assert!(matches!(r.status[&id], Status::Warning(_)), "posição {pos}: {:?}", r.status[&id]);
+            assert!((cx(&r.bend_lines[0]) - esperado).abs() < 0.05, "posição {pos}: {} esperado {esperado}", cx(&r.bend_lines[0]));
+        }
+        // spline quase reta: vira a corda, com aviso, e dobra
+        let mut d = base();
+        let sk = sk_spline(&mut d, PlaneRef::Origin(OriginPlane::XY), &[[50., 0.], [50.4, 25.], [50., 50.]]);
+        let id = d.add_feature(FeatureKind::SmBend(bend(Some(sk), 0., 0)));
+        let r = recompute(&d);
+        assert!(matches!(&r.status[&id], Status::Warning(m) if m.contains("corda")), "{:?}", r.status[&id]);
+        assert_eq!(r.bend_lines.len(), 1);
+        // spline bem curva: recusa com a causa
+        let mut d = base();
+        let sk = sk_spline(&mut d, PlaneRef::Origin(OriginPlane::XY), &[[50., 0.], [65., 25.], [50., 50.]]);
+        let id = d.add_feature(FeatureKind::SmBend(bend(Some(sk), 0., 0)));
+        let r = recompute(&d);
+        assert!(matches!(&r.status[&id], Status::Error(m) if m.contains("cônica")), "{:?}", r.status[&id]);
+        // linhas coladas: a zona dobrada não cabe
+        let mut d = base();
+        let sk = sk_lines(&mut d, PlaneRef::Origin(OriginPlane::XY), &[([50., 0.], [50., 50.]), ([52., 0.], [52., 50.])]);
+        let id = d.add_feature(FeatureKind::SmBend(bend(Some(sk), 0., 0)));
+        let r = recompute(&d);
+        assert!(matches!(&r.status[&id], Status::Error(m) if m.contains("zona dobrada")), "{:?}", r.status[&id]);
+        // compensação única: a tabela de dobras usa a mesma conta
+        let c = chapa::compensacao(2., 2., 90., 0.44);
+        assert!((c.ba - ba).abs() < 1e-12 && (c.deducao - (2. * 4. - ba)).abs() < 1e-9);
     }
 }

@@ -593,11 +593,31 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 PointRef::Fixed(q) => Some(*q),
                 _ => None,
             }).collect();
-            ui.label(RichText::new(format!("linha de {} a {}", crate::app::p3(b.a, 1), crate::app::p3(b.b, 1))).small());
-            if ui.add_enabled(pts.len() >= 2, egui::Button::new(tr("⊙ Usar os dois vértices selecionados"))).clicked() {
-                b.a = pts[0];
-                b.b = pts[1];
+            let mut from_sketch = b.sketch.is_some();
+            if crate::editor::check(ui, &mut from_sketch, "linhas de um sketch (várias; curva quase reta)").changed() {
+                b.sketch = from_sketch.then_some(Id(0));
             }
+            match &mut b.sketch {
+                Some(sid) => {
+                    sketch_pick(ui, "smb_sk", "Sketch", doc, idx, sid);
+                    ui.label(RichText::new(tr("Cada reta do sketch vira uma dobra; as linhas precisam ser paralelas. Curva suave vira a corda dela, com aviso.")).weak().small());
+                }
+                None => {
+                    ui.label(RichText::new(format!("linha de {} a {}", crate::app::p3(b.a, 1), crate::app::p3(b.b, 1))).small());
+                    if ui.add_enabled(pts.len() >= 2, egui::Button::new(tr("⊙ Usar os dois vértices selecionados"))).clicked() {
+                        b.a = pts[0];
+                        b.b = pts[1];
+                    }
+                }
+            }
+            ui.horizontal(|ui| {
+                ui.add_sized([96., 18.], egui::Label::new(tr("A linha marca")));
+                egui::ComboBox::from_id_salt("smb_pos").selected_text(tr(fenkra_core::SM_BEND_POSITIONS[b.position.min(3) as usize])).width(170.).show_ui(ui, |ui| {
+                    for (i, n) in fenkra_core::SM_BEND_POSITIONS.iter().enumerate() {
+                        ui.selectable_value(&mut b.position, i as u8, tr(n));
+                    }
+                });
+            });
             expr(ui, "Ângulo", &mut b.angle, vars, "°");
             let mut own = b.radius.is_some();
             if crate::editor::check(ui, &mut own, "raio próprio (senão o da chapa)").changed() {
@@ -608,7 +628,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             }
             crate::editor::check(ui, &mut b.flip, "mover o outro lado da linha");
             crate::editor::check(ui, &mut b.down, "dobrar para o outro lado");
-            ui.label(RichText::new(tr("A linha é o centro da dobra; o comprimento desenvolvido vem do fator K. Na planificada a dobra é desfeita.")).weak().small());
+            ui.label(RichText::new(tr("O comprimento desenvolvido vem do fator K do raio da dobra. Na planificada a dobra é desfeita e a linha de dobra aparece no mapa.")).weak().small());
         }
         FeatureKind::SmLouver(l) => {
             section(ui, "Veneziana");
@@ -1155,6 +1175,42 @@ pub fn bend_overlay(app: &crate::app::App, ui: &mut egui::Ui, rect: egui::Rect, 
             }
         }
     }
+}
+
+/// Recorte de chapa aberto: o contorno nos dois estados ao mesmo tempo. O do estado que está na
+/// tela sai cheio; o do outro (dobrado ou planificado) tracejado, com o nome do estado.
+pub fn cut_overlay(app: &crate::app::App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::render::Camera) {
+    if app.in_asm() {
+        return;
+    }
+    let crate::app::Sel::Feature(id) = app.sel else { return };
+    let Some(f) = app.open.doc.feature(id) else { return };
+    let FeatureKind::SmCut(_) = &f.kind else { return };
+    let Some(r) = app.result.as_ref() else { return };
+    let Some(o) = r.cut_outlines.iter().find(|o| o.feature == id) else { return };
+    let flat_now = app.open.doc.sheet.as_ref().is_some_and(|s| s.flat);
+    let painter = ui.painter_at(rect);
+    let v = |p: [f64; 3]| glam::Vec3::new(p[0] as f32, p[1] as f32, p[2] as f32);
+    let draw = |loops: &Vec<Vec<[f64; 3]>>, col: Color32, dashed: bool, label: &str| {
+        for l in loops {
+            let pts: Vec<egui::Pos2> = l.iter().filter_map(|p| cam.project(rect, v(*p))).collect();
+            if pts.len() < 2 {
+                continue;
+            }
+            if dashed {
+                painter.extend(egui::Shape::dashed_line(&pts, egui::Stroke::new(1.6, col), 8., 4.));
+            } else {
+                painter.add(egui::Shape::line(pts.clone(), egui::Stroke::new(2., col)));
+            }
+            if let Some(p) = pts.first() {
+                painter.text(*p + egui::vec2(6., -6.), egui::Align2::LEFT_BOTTOM, label, egui::FontId::proportional(11.), col);
+            }
+        }
+    };
+    let (cur, other, cur_name, other_name) = if flat_now { (&o.flat, &o.folded, tr("planificada"), tr("dobrada")) } else { (&o.folded, &o.flat, tr("dobrada"), tr("planificada")) };
+    let cor = Color32::from_rgb(70, 160, 255);
+    draw(other, cor.gamma_multiply(0.7), true, &other_name);
+    draw(cur, cor, false, &cur_name);
 }
 
 fn edge_line(ui: &mut egui::Ui, e: &[f64; 3]) {

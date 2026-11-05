@@ -1524,7 +1524,18 @@ pub struct SmBend {
     /// dobrar para baixo (para dentro do material) em vez de para cima
     #[serde(default)]
     pub down: bool,
+    /// linhas vindas de um sketch: cada reta do sketch vira uma dobra (várias linhas na mesma
+    /// peça); curva suave (spline) vira a corda dela, dentro da tolerância. Sem sketch vale a–b.
+    #[serde(default)]
+    pub sketch: Option<Id>,
+    /// o que a linha marca na zona da dobra: 0 centro, 1 início (lado fixo), 2 fim (lado que
+    /// gira), 3 vértice externo (encontro das faces de fora, como na cotagem por fora)
+    #[serde(default)]
+    pub position: u8,
 }
+
+/// Posições da linha de dobra em relação à zona dobrada.
+pub const SM_BEND_POSITIONS: [&str; 4] = ["Linha de centro", "Início da dobra", "Fim da dobra", "Vértice externo"];
 
 /// Veneziana: corte na linha a–b e a chapa atrás dela levantada em rampa (ventilação).
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -3450,6 +3461,7 @@ impl Document {
             Extrude(e) => vec![e.sketch],
             SmWall(w) => vec![w.sketch],
             SmStamp(s) => vec![s.sketch],
+            SmBend(b) => b.sketch.into_iter().collect(),
             SmFlangedHole(h) => vec![h.sketch],
             SmCut(s) => vec![s.sketch],
             SmProfileFlange(p) => vec![p.sketch],

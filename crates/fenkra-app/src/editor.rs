@@ -863,6 +863,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             let mut kind = doc.features[idx].kind.clone();
             tabs_begin(ui, ("comando", kind.type_name()));
             feature_ui(ui, &doc_ro, idx, id, &mut kind, &mut target, &vars, doc, &picked, &picked_faces, &seed);
+            if let FeatureKind::SmCut(c) = &kind {
+                sm_cut_projecao(ui, doc, id, c.sketch);
+            }
             let f = &mut doc.features[idx];
             if f.kind != kind {
                 f.kind = kind;
@@ -1155,6 +1158,40 @@ fn params_table(ui: &mut egui::Ui, doc: &mut Document, vars: &Vars, _sink: &mut 
     if ui.button(tr("➕ Parâmetro")).clicked() {
         let n = (1..).map(|i| format!("P{i}")).find(|n| !doc.params.iter().any(|p| &p.name == n)).unwrap();
         let _ = doc.add_param(&n, "10", Unit::Comprimento);
+    }
+}
+
+/// Botão do recorte de chapa: desenha o contorno da planificada, como linhas de construção, dentro
+/// do sketch do recorte, para cotar contra ele (projeção ortogonal no plano do sketch).
+fn sm_cut_projecao(ui: &mut egui::Ui, doc: &mut Document, id: Id, sketch: Id) {
+    let key = egui::Id::new(("sm_cut_proj", id.0));
+    if ui.button(tr("⌗ Projetar a planificada no sketch")).on_hover_text(tr("Desenha o contorno da planificada como linhas de construção no sketch do recorte, para cotar contra ele.")).clicked() {
+        let msg = match fenkra_solidos::contorno_planificado_no_sketch(doc, id) {
+            Ok(loops) => {
+                let ids: Vec<Id> = (0..loops.iter().map(|l| l.len() * 2).sum::<usize>()).map(|_| doc.alloc()).collect();
+                let mut ids = ids.into_iter();
+                let mut al = || ids.next().unwrap_or(Id(0));
+                match doc.feature_mut(sketch).map(|f| &mut f.kind) {
+                    Some(FeatureKind::Sketch(s)) => {
+                        for l in &loops {
+                            // polilinha fechada: sem repetir o ponto final
+                            let pts: Vec<[f64; 2]> = if l.len() > 1 && l.first() == l.last() { l[..l.len() - 1].to_vec() } else { l.clone() };
+                            let ps: Vec<Id> = pts.iter().map(|p| s.data.add_point(&mut al, p[0], p[1])).collect();
+                            for i in 0..ps.len() {
+                                s.data.add_curve(&mut al, fenkra_core::sketch::Curve::Line { a: ps[i], b: ps[(i + 1) % ps.len()] }, true);
+                            }
+                        }
+                        String::new()
+                    }
+                    _ => tr("O sketch do recorte não está disponível.").to_string(),
+                }
+            }
+            Err(m) => m,
+        };
+        ui.ctx().data_mut(|d| d.insert_temp(key, msg));
+    }
+    if let Some(m) = ui.ctx().data(|d| d.get_temp::<String>(key)).filter(|m| !m.is_empty()) {
+        ui.label(RichText::new(m).color(crate::theme::st_err()).small());
     }
 }
 

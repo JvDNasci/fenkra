@@ -12,6 +12,78 @@ type V3 = [f64; 3];
 /// Volume comum (mm³) acima do qual a aba nova conta como colisão com a chapa ou com outra aba.
 const VOLUME_COLISAO: f64 = 1e-3;
 
+/// Compensação de uma dobra: a única conta de comprimento desenvolvido do módulo. A geometria
+/// (abas, dobra por linha, joggle), as linhas de dobra, a tabela de dobras e o DXF leem daqui, para
+/// que nenhum deles discorde dos outros.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Compensacao {
+    /// comprimento da dobra na linha neutra (bend allowance)
+    pub ba: f64,
+    /// recuo externo (distância do vértice das faces de fora ao começo da dobra)
+    pub ossb: f64,
+    /// dedução de dobra: 2 × recuo externo − ba
+    pub deducao: f64,
+}
+
+/// `ang` em graus (o sinal não importa), `r` raio interno, `k` fator K já resolvido para esse raio
+/// (veja `SheetValues::k_for`). Perto de 180° o recuo externo tende ao infinito e é limitado a r + t.
+pub fn compensacao(t: f64, r: f64, ang: f64, k: f64) -> Compensacao {
+    let ang = ang.abs();
+    let a = ang.to_radians();
+    let ba = a * (r + k * t);
+    let ossb = if ang < 179.9 { (a / 2.).tan() * (r + t) } else { r + t };
+    Compensacao { ba, ossb, deducao: 2. * ossb - ba }
+}
+
+/// Linhas de dobra de um sketch (cadeias abertas): cada reta é uma linha. Curva suave (arco ou
+/// spline) vira a corda dela se o desvio for pequeno (até 1 % da corda, no mínimo 0,1 mm), com
+/// aviso; mais que isso exigiria uma dobra cônica, que o comando ainda não faz, e vira erro.
+pub fn linhas_dobra(open: &[Vec<[f64; 2]>]) -> Result<(Vec<([f64; 2], [f64; 2])>, Vec<String>), String> {
+    let mut linhas = vec![];
+    let mut avisos = vec![];
+    let desvio = |pts: &[[f64; 2]]| -> f64 {
+        let (a, b) = (pts[0], *pts.last().unwrap());
+        let c = (b[0] - a[0]).hypot(b[1] - a[1]).max(1e-12);
+        pts.iter().map(|p| ((p[0] - a[0]) * (b[1] - a[1]) - (p[1] - a[1]) * (b[0] - a[0])).abs() / c).fold(0., f64::max)
+    };
+    for cadeia in open.iter().filter(|c| c.len() >= 2) {
+        for seg in chain_segs(cadeia) {
+            let (pts, curva): (Vec<[f64; 2]>, bool) = match seg {
+                // uma curva suave amostrada cabe toda no limite de "reta" de `chain_segs` (desvio por
+                // vértice pequeno): os pontos originais entre as pontas decidem se ainda é reta
+                Seg2::Line(a, b) => {
+                    let i0 = cadeia.iter().position(|q| *q == a);
+                    let i1 = cadeia.iter().rposition(|q| *q == b);
+                    match (i0, i1) {
+                        (Some(i), Some(j)) if j > i + 1 => (cadeia[i..=j].to_vec(), desvio(&cadeia[i..=j]) > 1e-3),
+                        _ => (vec![a, b], false),
+                    }
+                }
+                Seg2::Arc(a, m, b) => (vec![a, m, b], true),
+                Seg2::Spline(p) => (p, true),
+                Seg2::Circle(..) => continue,
+            };
+            let (a, b) = (pts[0], *pts.last().unwrap());
+            let corda = (b[0] - a[0]).hypot(b[1] - a[1]);
+            if corda < 1e-6 {
+                continue;
+            }
+            if curva {
+                let d = desvio(&pts);
+                if d > (corda * 0.01).max(0.1) {
+                    return Err(format!("a linha de dobra curva desvia {d:.2} mm da corda de {corda:.1} mm: uma dobra em curva forte pede peça cônica, ainda sem suporte. Use retas ou uma curva quase reta"));
+                }
+                avisos.push(format!("linha curva aproximada pela corda (desvio de {d:.2} mm)"));
+            }
+            linhas.push((a, b));
+        }
+    }
+    if linhas.is_empty() {
+        return Err("o sketch da dobra precisa de linhas abertas (retas ou curva quase reta)".into());
+    }
+    Ok((linhas, avisos))
+}
+
 /// A lateral da aresta escolhida (a face de ponta) tem a espessura da chapa? `None` = sim.
 pub fn valida_lateral(medida: f64, t: f64) -> Option<String> {
     if medida <= 0. || (medida - t).abs() <= 0.02 * t.max(1.) {

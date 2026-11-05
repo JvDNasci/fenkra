@@ -473,7 +473,7 @@ impl App {
             d.add_feature(FeatureKind::SmHem(SmHem { edge: [0., 30., 2.], length: s("8"), gap: s("0"), flip: false, kind: 0, edge_key: None }));
             if std::env::var("FENKRA_DEMO_CHAPA").is_ok_and(|v| v == "linha") {
                 d.add_feature(FeatureKind::SmLouver(SmLouver { a: [60., 15., 2.], b: [60., 45., 2.], width: s("12"), height: s("5"), flip: false, down: false }));
-                d.add_feature(FeatureKind::SmBend(SmBend { a: [20., 0., 2.], b: [20., 60., 2.], angle: s("45"), radius: None, flip: false, down: false }));
+                d.add_feature(FeatureKind::SmBend(SmBend { a: [20., 0., 2.], b: [20., 60., 2.], angle: s("45"), radius: None, flip: false, down: false, sketch: None, position: 0 }));
             }
             d.hide_consumed(d.features[1].id);
             app.load_doc(d, None, None);
@@ -1769,6 +1769,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         radius: None,
                         flip: false,
                         down: false,
+                        sketch: None,
+                        position: 0,
                     }),
                     Cmd::SmLouver => FeatureKind::SmLouver(SmLouver {
                         a: verts.first().copied().unwrap_or([0.; 3]),
@@ -6086,6 +6088,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 crate::asm_ui::fasteners_overlay(self, ui, rect, &cam);
                 crate::asm_ui::fasteners_handles(self, ui, rect, &cam);
                 crate::feat_ui::bend_overlay(self, ui, rect, &cam);
+                crate::feat_ui::cut_overlay(self, ui, rect, &cam);
             }
             // seta e cota 3D do comando aberto (fast 3D)
             if self.sketch.is_none() {
