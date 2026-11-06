@@ -460,7 +460,7 @@ pub fn etiqueta_de_erro(ui: &egui::Ui, rect: egui::Rect, at: egui::Pos2, msg: &s
     let cor = crate::theme::st_err();
     let painter = ui.painter_at(rect);
     let texto = format!("{}: {msg}", crate::i18n::tr("Prévia inválida"));
-    let g = painter.layout(texto, egui::FontId::proportional(12.), cor, 260.);
+    let g = painter.layout(texto, egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), cor, 260.);
     let mut caixa = egui::Rect::from_min_size(at, g.size() + egui::vec2(10., 6.));
     // dentro da viewport: se a etiqueta passar da borda, volta para dentro
     let (dx, dy) = ((rect.right() - 6. - caixa.right()).min(0.), (rect.bottom() - 6. - caixa.bottom()).min(0.));
