@@ -301,6 +301,8 @@ pub struct AsmState {
     pub inserir: Option<crate::asm_inserir::Estado>,
     /// janela do gerador de engrenagens (B28)
     pub gears_open: Option<GearsUi>,
+    /// comando Gerar elemento de transmissão (B340)
+    pub trans_open: Option<crate::transmissao_ui::TransUi>,
     pub anim_sel: usize,
     pub anim_t: f64,
     pub anim_play: bool,
@@ -400,6 +402,7 @@ impl AsmState {
             fixadores: None,
             pilhas_diag: Default::default(),
             gears_open: None,
+            trans_open: None,
             anim_sel: 0,
             anim_t: 0.,
             anim_play: false,
@@ -822,8 +825,8 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                     st.catalogo = if st.catalogo.is_some() { None } else { Some(crate::biblioteca_ui::Estado::default()) };
                 }
                 Cmd::AsmGears => {
-                    if st.gears_open.is_none() {
-                        st.gears_open = Some(GearsUi::default());
+                    if st.trans_open.is_none() {
+                        st.trans_open = Some(crate::transmissao_ui::TransUi::default());
                     }
                 }
                 Cmd::AsmSubFromSel => {

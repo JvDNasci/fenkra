@@ -34,6 +34,7 @@ pub mod substituicao;
 pub mod view;
 pub mod solve;
 pub mod subconjunto;
+pub mod transmissao;
 
 pub use engrenagens::{calculo_par, inserir_par_engrenagens, CalculoPar, RelatorioEngrenagens};
 pub use estrutura::{estrutura_para_montagem, plano_do_documento, Gerado, GrupoGerado, GrupoPlano, Plano};
@@ -525,6 +526,9 @@ pub struct Assembly {
     /// configuração (da tabela de projeto da peça) escolhida por componente, pelo nome (B102)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub configs: Vec<ConfigComp>,
+    /// elementos de transmissão gerados (B340): os parâmetros ficam aqui para editar depois
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub transmissoes: Vec<transmissao::RegistroTransmissao>,
 }
 
 /// Qual configuração da peça um componente usa. O nome precisa existir na tabela da peça: se não
@@ -649,7 +653,7 @@ impl Assembly {
     }
 
     pub fn new(name: &str) -> Self {
-        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], explosoes: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], pilhas: vec![], interf: Default::default(), relational: false, politicas_link: vec![], religacoes: vec![], geometria: None, esqueleto: None, contexto_livre: false, origem_oculta: false, configs: vec![] }
+        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], explosoes: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], pilhas: vec![], interf: Default::default(), relational: false, politicas_link: vec![], religacoes: vec![], geometria: None, esqueleto: None, contexto_livre: false, origem_oculta: false, configs: vec![], transmissoes: vec![] }
     }
 
     /// Configuração escolhida para o componente (vazio = a ativa da própria peça).

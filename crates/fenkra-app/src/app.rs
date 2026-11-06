@@ -8323,6 +8323,7 @@ impl eframe::App for App {
         crate::asm_fixadores::painel(self, ctx, area);
         crate::asm_ui::contexto_window(self, ctx);
         crate::asm_ui::gears_window(self, ctx);
+        crate::transmissao_ui::janela(self, ctx);
         self.sheet_window(ctx);
         crate::chapa_fab_ui::janela(ctx, &self.open.doc);
         crate::st_ui::windows(self, ctx);
@@ -8537,6 +8538,7 @@ impl eframe::App for App {
                 crate::asm_repeticao::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
                 crate::engrenagens_ui::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
                 crate::eixo_ui::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
+                crate::transmissao_ui::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
                 importar::defeitos_na_cena(self.importar_relatorio.as_ref(), self.importar_defeito, &mut s);
                 features::na_cena(self.features.as_ref(), &ctx.global_style().visuals, &mut s);
                 crate::medir_quadros::valor("bytes_faces", (std::mem::size_of_val(s.mesh.as_slice()) + std::mem::size_of_val(s.indices.as_slice())) as f64);
