@@ -268,7 +268,7 @@ mod testes {
 
     fn doc_com(g: Gaiola, continuidade: u8) -> (Document, Id) {
         let mut d = Document::new("forma");
-        let id = d.add_feature(FeatureKind::Forma(Forma { gaiola: g, niveis: 3, congelada: false, conversao: Some(ConversaoForma { continuidade, tol: "0.01".into(), pausada: false }) }));
+        let id = d.add_feature(FeatureKind::Forma(Forma { gaiola: g, niveis: 3, congelada: false, conversao: Some(ConversaoForma { continuidade, tol: "0.01".into(), pausada: false }), vinculos: Default::default() }));
         (d, id)
     }
 

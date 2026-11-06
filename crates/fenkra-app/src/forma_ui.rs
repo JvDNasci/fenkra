@@ -6,6 +6,7 @@
 use crate::app::{fmt, App};
 use crate::editor::section;
 use crate::forma_edit::{self as fe, Elem, Espaco, Ferramenta, ModoVista, Tela};
+use crate::forma_vinculo_ui as fv;
 use crate::i18n::tr;
 use crate::render::{Camera, MeshVertex, Scene};
 use crate::settings::Bench;
@@ -108,6 +109,10 @@ pub struct Estado {
     /// peso usado pelo chip Vinco
     pub peso: f64,
     pub alcance: Alcance,
+    /// vínculo esperando o clique no modelo
+    pub pedido: Option<fv::Pedido>,
+    /// distância da fusão no plano de simetria
+    fusao: f64,
     arraste: Option<Arraste>,
     /// valores do manipulador no arraste atual
     off: [f64; 3],
@@ -130,7 +135,7 @@ fn aberta(app: &App) -> Option<Id> {
     matches!(app.open.doc.feature(id)?.kind, FeatureKind::Forma(_)).then_some(id)
 }
 
-fn gaiola(app: &App, id: Id) -> Option<&Gaiola> {
+pub(crate) fn gaiola(app: &App, id: Id) -> Option<&Gaiola> {
     match &app.open.doc.feature(id)?.kind {
         FeatureKind::Forma(f) => Some(&f.gaiola),
         _ => None,
@@ -148,14 +153,14 @@ fn congelada(app: &App, id: Id) -> bool {
     matches!(app.open.doc.feature(id).map(|f| &f.kind), Some(FeatureKind::Forma(f)) if f.congelada)
 }
 
-fn forma(app: &App, id: Id) -> Option<&Forma> {
+pub(crate) fn forma(app: &App, id: Id) -> Option<&Forma> {
     match &app.open.doc.feature(id)?.kind {
         FeatureKind::Forma(f) => Some(f),
         _ => None,
     }
 }
 
-fn forma_mut(app: &mut App, id: Id) -> Option<&mut Forma> {
+pub(crate) fn forma_mut(app: &mut App, id: Id) -> Option<&mut Forma> {
     match &mut app.open.doc.feature_mut(id)?.kind {
         FeatureKind::Forma(f) => Some(f),
         _ => None,
@@ -309,6 +314,33 @@ pub fn na_cena(doc: &Document, r: &RecomputeResult, oculta: Option<Id>, s: &mut 
     }
 }
 
+/// Distância do raio até a malha, para o duplo clique achar a forma, que não é corpo do modelo.
+pub fn raio_na_malha(o: Vec3, d: Vec3, m: &fenkra_core::subd::MalhaLisa) -> Option<f32> {
+    let mut melhor: Option<f32> = None;
+    for t in &m.tris {
+        let [a, b, c] = t.map(|i| v3(m.pos[i as usize]));
+        let (e1, e2) = (b - a, c - a);
+        let p = d.cross(e2);
+        let det = e1.dot(p);
+        if det.abs() < 1e-9 {
+            continue;
+        }
+        let s = o - a;
+        let (u, q) = (s.dot(p) / det, s.cross(e1));
+        let (v, w) = (d.dot(q) / det, e2.dot(q) / det);
+        if u >= 0. && v >= 0. && u + v <= 1. && w > 0. && melhor.is_none_or(|x| w < x) {
+            melhor = Some(w);
+        }
+    }
+    melhor
+}
+
+/// Forma livre sob o mouse: a mais perto entre as que ainda são superfície.
+pub fn forma_sob_o_mouse(r: &RecomputeResult, cam: &Camera, rect: Rect, m: Pos2) -> Option<Id> {
+    let (o, d) = cam.ray(rect, m);
+    r.formas.iter().filter_map(|f| raio_na_malha(o, d, &f.malha).map(|w| (w, f.id))).min_by(|a, b| a.0.total_cmp(&b.0)).map(|x| x.1)
+}
+
 /// Forma cuja superfície fica escondida na cena.
 pub fn oculta(app: &App) -> Option<Id> {
     aberta(app).filter(|_| app.forma.modo == ModoVista::Gaiola)
@@ -355,7 +387,10 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, fundo
         barra_do_relatorio(app, ui, rect, id);
         return;
     }
-    let Some(g) = gaiola(app, id).cloned() else { return };
+    if app.forma.arraste.is_none() {
+        fv::sincronizar(app, id);
+    }
+    let Some(g) = fv::gaiola_vista(app, id) else { return };
     let inteira = g.inteira();
     let so_leitura = congelada(app, id);
     let mouse = ui.input(|i| i.pointer.latest_pos()).filter(|p| rect.contains(*p));
@@ -363,6 +398,13 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, fundo
     if !so_leitura {
         raio_pela_roda(app, ui, id);
         desenhar_alcance(app, ui, rect, cam, &g);
+    }
+    fv::desenhar(app, ui, rect, cam, id, &g);
+    if app.forma.pedido.is_some() {
+        fv::atender(app, ui, rect, id);
+        app.forma.hover = None;
+        barra(app, ui, rect, id, so_leitura);
+        return;
     }
 
     // o que está sob o mouse, salvo durante um arraste de alça
@@ -685,6 +727,7 @@ fn alvo_do_mouse(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
                     a.aplicar(g);
                 }
                 app.forma.arraste = Some(a);
+                fv::deslizar(app, id);
             }
         }
     }
@@ -758,6 +801,7 @@ fn gesto(app: &mut App, id: Id, g: Gesto) {
         a.aplicar(x);
     }
     app.forma.arraste = Some(a);
+    fv::deslizar(app, id);
 }
 
 /// A roda está mudando o raio, e não o zoom: arraste em andamento com a influência ligada.
@@ -784,6 +828,7 @@ fn raio_pela_roda(app: &mut App, ui: &egui::Ui, id: Id) {
         *x = a.base.clone();
         a.aplicar(x);
     }
+    fv::deslizar(app, id);
 }
 
 /// Círculo do alcance em volta da seleção, com o gradiente da curva de queda, e o peso de cada nó.
@@ -943,6 +988,10 @@ fn barra(app: &mut App, ui: &mut egui::Ui, rect: Rect, id: Id, so_leitura: bool)
     let tipo = fe::tipo_da_selecao(g, &sel);
     let gaiola_custo = fe::custo_da_conversao(g, st.alerta.unwrap_or(1));
     let simetria = g.simetria;
+    let (fusao, pedido) = (st.fusao, st.pedido.clone());
+    let caminho = fe::caminho_da_selecao(g, &sel).ok();
+    let tem_no = !fe::nos_de(g, &sel).is_empty();
+    let presos = forma(app, id).map_or(vec![], |f| fv::presos_na_selecao(f, &sel));
     let tem_face = !fe::faces_de(&sel).is_empty();
     let extrudar = st.extrudar;
     let alerta = st.alerta;
@@ -1063,6 +1112,53 @@ fn barra(app: &mut App, ui: &mut egui::Ui, rect: Rect, id: Id, so_leitura: bool)
                     }
                 });
             }
+            if !so_leitura && (tem_no || simetria.is_some()) {
+                ui.horizontal(|ui| {
+                    if tem_no {
+                        if chip(ui, pedido == Some(fv::Pedido::No), None, "Vincular", "Prende os nós selecionados a um ponto, curva, plano ou face da peça: eles seguem a referência e deslizam nela") {
+                            acao = Some(Box::new(|a: &mut App| pedir(a, fv::Pedido::No)));
+                        }
+                        if chip(ui, pedido == Some(fv::Pedido::Cota), None, "Cota ao plano", "A distância do nó a um plano vira uma cota, que aceita parâmetro no painel") {
+                            acao = Some(Box::new(|a: &mut App| pedir(a, fv::Pedido::Cota)));
+                        }
+                    }
+                    if let Some(c) = &caminho {
+                        ui.label(tr("Casar borda"));
+                        for (k, nome, dica) in [
+                            (0u8, "G0", "A borda passa pela aresta da peça"),
+                            (1, "G1", "Também sai tangente à face vizinha"),
+                            (2, "G2", "Também casa a curvatura: vale onde a face não curva através da aresta, e o aviso diz quando não deu"),
+                        ] {
+                            if chip(ui, false, None, nome, dica) {
+                                let nos = c.clone();
+                                acao = Some(Box::new(move |a: &mut App| pedir(a, fv::Pedido::Borda { nos, continuidade: k, aresta: None })));
+                            }
+                        }
+                    }
+                    if !presos.is_empty() {
+                        let p = presos.clone();
+                        if chip(ui, false, None, "Soltar", "Tira os vínculos da seleção: os nós ficam onde estão") {
+                            acao = Some(Box::new(move |a: &mut App| {
+                                if let Some(f) = forma_mut(a, id) {
+                                    fv::soltar(f, &p);
+                                }
+                            }));
+                        }
+                    }
+                    if simetria.is_some() {
+                        ui.separator();
+                        let mut d = if fusao > 0. { fusao } else { 0.5 };
+                        if ui.add(crate::ui_ext::dv(&mut d).speed(0.05).range(0.001..=1000.).dica("Distância até o plano em que a beira da forma funde com o reflexo")).changed() {
+                            acao = Some(Box::new(move |a: &mut App| a.forma.fusao = d));
+                        }
+                        if chip(ui, false, None, "Fundir no plano", "Leva ao plano os nós da beira que estão a menos dessa distância, e as metades soldam") {
+                            acao = Some(Box::new(move |a: &mut App| {
+                                editar(a, id, |g| g.fundir_no_plano(d).map(|_| ()));
+                            }));
+                        }
+                    }
+                });
+            }
             if let (Some((t, w)), false) = (tipo, so_leitura) {
                 ui.horizontal(|ui| {
                     for (tp, nome, dica) in [
@@ -1114,8 +1210,14 @@ fn barra(app: &mut App, ui: &mut egui::Ui, rect: Rect, id: Id, so_leitura: bool)
     }
 }
 
+/// Começa a esperar o clique no modelo. O que já estava escolhido não pode responder ao pedido.
+fn pedir(app: &mut App, p: fv::Pedido) {
+    app.picks.clear();
+    app.forma.pedido = Some(p);
+}
+
 /// Painel do comando: só o que não tem gesto no 3D.
-pub fn painel(ui: &mut egui::Ui, f: &mut Forma) {
+pub fn painel(ui: &mut egui::Ui, doc: &Document, f: &mut Forma, vars: &std::collections::HashMap<String, f64>) {
     section(ui, "Superfície");
     let mut n = f.niveis as u32;
     ui.horizontal(|ui| {
@@ -1131,6 +1233,7 @@ pub fn painel(ui: &mut egui::Ui, f: &mut Forma) {
         ui.label(RichText::new(tr("Há faces que não são quadriláteros: a superfície funciona, mas com mais nós irregulares.")).weak().small());
     }
     if ui.checkbox(&mut f.congelada, tr("Congelar")).on_hover_text(tr("Guarda a gaiola e trava a edição, para não mexer sem querer")).changed() {}
+    fv::painel(ui, doc, f, vars);
 }
 
 /// Criação por arraste no plano.
@@ -1174,13 +1277,32 @@ fn criar(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
 /// Põe a forma na árvore e abre a edição.
 pub fn criar_feature(app: &mut App, gaiola: Gaiola) -> Id {
     let snapshot = app.open.doc.clone();
-    let id = app.open.doc.add_feature(FeatureKind::Forma(Forma { gaiola, niveis: 3, congelada: false, conversao: None }));
+    let id = app.open.doc.add_feature(FeatureKind::Forma(Forma { gaiola, niveis: 3, congelada: false, conversao: None, vinculos: Default::default() }));
     app.start_session(id, true, Some(snapshot));
     app.forma.sel.clear();
     app.forma.ferramenta = Ferramenta::Selecionar;
     app.request_recompute();
     app.scene_dirty = true;
     id
+}
+
+/// Desenvolvimento: um nó preso a um plano deslocado, um à origem e uma cota, para ver os elos no 3D.
+fn demo_vinculos(app: &mut App, id: Id) -> Option<Id> {
+    let pai = app.open.doc.add_geometry(RefKind::OffsetPlane { base: PlaneRef::Origin(OriginPlane::XY), offset: "70".into() });
+    let plano = PlaneRef::Datum(pai);
+    let f = forma_mut(app, id)?;
+    use fenkra_core::subd_vinculo::*;
+    let topo = f.gaiola.nos.iter().find(|n| n.p[2] > 60.).map(|n| n.id);
+    let lado = f.gaiola.nos.iter().find(|n| n.p[0] > 29. && n.p[2] > 29. && n.p[1].abs() < 1.).map(|n| n.id);
+    if let Some(no) = topo {
+        f.vinculos.definir_no(VinculoNo { no, alvo: AlvoNo::Plano { plano, uv: None } });
+    }
+    if let Some(no) = lado {
+        f.vinculos.definir_cota(CotaNo { no, plano: PlaneRef::Origin(OriginPlane::XY), expr: "45".into() });
+    }
+    app.forma.sel.clear();
+    app.request_recompute();
+    Some(pai)
 }
 
 /// Desenvolvimento: `FENKRA_DEMO_FORMA=1` abre a cúpula em edição, com o nó do topo selecionado.
@@ -1208,6 +1330,22 @@ pub fn demo(app: &mut App, modo: &str) {
         "suave" => {
             app.forma.alcance = Alcance { ligado: true, raio: 45., ..Alcance::default() };
         }
+        "selecao" => {
+            let g = gaiola(app, id).cloned().unwrap_or_default();
+            if let Some(&(a, b)) = g.arestas().iter().find(|(a, b)| [a, b].iter().all(|n| g.pos(**n).is_some_and(|p| p[2] > 29. && p[2] < 31.))) {
+                app.forma.sel = crate::forma_sel::laco(&g, &[Elem::Aresta(a, b)]).unwrap_or_default();
+            }
+        }
+        "vinculos" => {
+            demo_vinculos(app, id);
+        }
+        "perdido" => {
+            // o pai some: o estado de erro aparece na árvore e a forma fica onde estava
+            if let Some(pai) = demo_vinculos(app, id) {
+                app.open.doc.delete(pai, false);
+                app.request_recompute();
+            }
+        }
         "converter" | "g2" | "g0" => {
             let k = match modo {
                 "g2" => 2,
@@ -1219,5 +1357,20 @@ pub fn demo(app: &mut App, modo: &str) {
             }
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod testes {
+    use super::*;
+
+    #[test]
+    fn raio_acha_a_superficie_da_forma_e_erra_fora_dela() {
+        let m = Gaiola::caixa([0.; 3], [20.; 3], [2, 2, 2]).lisa(2).unwrap();
+        let d = Vec3::new(0., 0., -1.);
+        let w = raio_na_malha(Vec3::new(0., 0., 50.), d, &m).expect("acerta o topo");
+        assert!(w > 35. && w < 45., "{w}");
+        assert!(raio_na_malha(Vec3::new(30., 0., 50.), d, &m).is_none());
+        assert!(raio_na_malha(Vec3::new(0., 0., 50.), -d, &m).is_none(), "para trás não conta");
     }
 }

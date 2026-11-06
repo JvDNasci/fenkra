@@ -42,7 +42,7 @@ pub fn peca(nome: &str) -> Option<(Document, Bench)> {
 fn forma_suave() -> Document {
     let mut d = Document::new("Forma suave");
     let gaiola = Gaiola::primitiva(PrimitivaForma::Caixa, [0., 0., 15.], [60., 40., 30.]);
-    d.add_feature(FeatureKind::Forma(Forma { gaiola, niveis: 3, congelada: false, conversao: None }));
+    d.add_feature(FeatureKind::Forma(Forma { gaiola, niveis: 3, congelada: false, conversao: None, vinculos: Default::default() }));
     d
 }
 

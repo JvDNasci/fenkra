@@ -50,6 +50,7 @@ pub fn member_frames(doc: &Document, id: Id) -> Vec<MemberFrame> {
         cut_outlines: vec![],
         roscas: vec![],
         relatorios_forma: vec![],
+        formas_resolvidas: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),

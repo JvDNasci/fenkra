@@ -118,6 +118,7 @@ mod arestas_ui;
 mod textos_forma;
 mod forma_edit;
 mod forma_sel;
+mod forma_vinculo_ui;
 mod forma_ui;
 mod sketch_fluxo;
 mod sketch_cadeia;

@@ -6745,7 +6745,16 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     }
                 }
             }
-            if (resp.double_clicked() && self.sketch.is_none() && self.hover_pick.is_none()) || self.fit_pending {
+            // duplo clique numa forma livre abre a forma, e não ajusta a vista
+            let forma_clicada = if resp.double_clicked() && self.sketch.is_none() && self.session.is_none() {
+                self.result.as_ref().zip(resp.interact_pointer_pos()).and_then(|(r, m)| crate::forma_ui::forma_sob_o_mouse(r, &vp.camera, rect, m))
+            } else {
+                None
+            };
+            if let Some(id) = forma_clicada {
+                self.open_pending = Some(id);
+            }
+            if (resp.double_clicked() && self.sketch.is_none() && self.hover_pick.is_none() && forma_clicada.is_none()) || self.fit_pending {
                 if let Some(b) = vp.bounds {
                     let before = vp.camera;
                     vp.camera.fit(b);

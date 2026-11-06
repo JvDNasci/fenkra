@@ -6,6 +6,7 @@
 
 pub mod erro;
 pub mod forma_brep;
+pub mod forma_vinculo;
 pub mod geo3d;
 pub mod regioes;
 pub mod analise;
@@ -644,6 +645,8 @@ pub struct RecomputeResult {
     pub formas: Vec<FormaViz>,
     /// relatório de cada forma convertida
     pub relatorios_forma: Vec<(Id, forma_brep::RelatorioForma)>,
+    /// gaiolas com os vínculos aplicados (B303)
+    pub formas_resolvidas: Vec<forma_vinculo::FormaResolvida>,
     pub status: HashMap<Id, Status>,
     pub params: HashMap<String, f64>,
     pub param_error: Option<String>,
@@ -724,6 +727,7 @@ struct Ctx<'a> {
     cut_outlines: Vec<CutOutline>,
     roscas: Vec<RoscaViz>,
     relatorios_forma: Vec<(Id, forma_brep::RelatorioForma)>,
+    formas_resolvidas: Vec<forma_vinculo::FormaResolvida>,
 }
 
 /// Uma dobra: referencial da aresta (no dobrado) e o giro que leva a aba do dobrado ao plano.
@@ -875,6 +879,7 @@ struct FeatEntry {
     outlines: Vec<CutOutline>,
     roscas: Vec<RoscaViz>,
     relatorios_forma: Vec<(Id, forma_brep::RelatorioForma)>,
+    formas_resolvidas: Vec<forma_vinculo::FormaResolvida>,
     steps: Vec<(Shape, BoolOp)>,
 }
 
@@ -5523,11 +5528,16 @@ impl Ctx<'_> {
                 Ok(None)
             }
             FeatureKind::Forma(fm) => {
-                fm.gaiola.inteira().topologia()?;
-                let Some(c) = fm.conversao.as_ref().filter(|c| !c.pausada) else { return Ok(None) };
+                let (resolvida, aviso_vinculo) = self.resolver_forma(f.id, fm)?;
+                let gaiola = resolvida.gaiola.clone();
+                gaiola.inteira().topologia()?;
+                if !fm.vinculos.vazio() {
+                    self.formas_resolvidas.push(resolvida);
+                }
+                let Some(c) = fm.conversao.as_ref().filter(|c| !c.pausada) else { return Ok(aviso_vinculo) };
                 let tol = ev(&c.tol, &self.vars, "tolerância")?;
-                let (sh, nomes, rel) = forma_brep::converter(&fm.gaiola, c.continuidade, tol)?;
-                let aviso = forma_brep::resumo(&rel);
+                let (sh, nomes, rel) = forma_brep::converter(&gaiola, c.continuidade, tol)?;
+                let aviso = [aviso_vinculo, forma_brep::resumo(&rel)].into_iter().flatten().reduce(|a, b| format!("{a}; {b}"));
                 self.relatorios_forma.push((f.id, rel));
                 if sh.is_solid() {
                     self.apply_roles(f.target, sh, BoolOp::Add, f.id, Some(nomes))?;
@@ -5687,12 +5697,19 @@ impl Ctx<'_> {
 
 /// Recalcula o documento inteiro. Roda fora da thread da interface (RNF-001).
 /// Superfície de cada forma livre que calculou. Fica fora do cache: a subdivisão leva menos que a busca.
-fn formas_visiveis(doc: &Document, status: &HashMap<Id, Status>) -> Vec<FormaViz> {
+fn formas_visiveis(doc: &Document, status: &HashMap<Id, Status>, resolvidas: &[forma_vinculo::FormaResolvida]) -> Vec<FormaViz> {
     doc.features
         .iter()
-        .filter(|f| matches!(status.get(&f.id), Some(Status::Ok | Status::Warning(_))))
         .filter_map(|f| match &f.kind {
-            FeatureKind::Forma(fm) if fm.conversao.as_ref().is_none_or(|c| c.pausada) => fm.gaiola.lisa(fm.niveis as u32).ok().map(|malha| FormaViz { id: f.id, malha }),
+            FeatureKind::Forma(fm) if fm.conversao.as_ref().is_none_or(|c| c.pausada) => {
+                // vínculo perdido é erro, mas a forma fica na tela onde estava: sumir seria mexer nela
+                let ok = matches!(status.get(&f.id), Some(Status::Ok | Status::Warning(_)));
+                if !ok && (fm.vinculos.vazio() || !matches!(status.get(&f.id), Some(Status::Error(_)))) {
+                    return None;
+                }
+                let g = resolvidas.iter().find(|x| x.id == f.id).map_or(&fm.gaiola, |x| &x.gaiola);
+                g.lisa(fm.niveis as u32).ok().map(|malha| FormaViz { id: f.id, malha })
+            }
             _ => None,
         })
         .collect()
@@ -5750,6 +5767,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         cut_outlines: vec![],
         roscas: vec![],
         relatorios_forma: vec![],
+        formas_resolvidas: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -5859,6 +5877,8 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         }
         let mut touched = vec![f.target];
         let mut all = ["\"Face\"", "\"Vertex\""].iter().any(|k| js.contains(k)) && !matches!(f.kind, FeatureKind::Sketch(_));
+        // forma com vínculo lê a peça, inclusive aresta com chave, que nenhuma das palavras acima pega
+        all |= matches!(&f.kind, FeatureKind::Forma(fm) if !fm.vinculos.vazio());
         if let FeatureKind::Sketch(sk) = &f.kind {
             // sketch: lê corpos se o plano ou a geometria externa vierem de faces/arestas
             let ext = serde_json::to_string(&sk.data.links).unwrap_or_default();
@@ -5910,6 +5930,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                 cx.cut_outlines.extend(e.outlines.iter().cloned());
                 cx.roscas.extend(e.roscas.iter().cloned());
                 cx.relatorios_forma.extend(e.relatorios_forma.iter().cloned());
+                cx.formas_resolvidas.extend(e.formas_resolvidas.iter().cloned());
                 if e.steps.is_empty() {
                     cx.steps.remove(&f.id);
                 } else {
@@ -5921,6 +5942,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                 let outlines_before = cx.cut_outlines.len();
                 let roscas_before = cx.roscas.len();
                 let relatorios_before = cx.relatorios_forma.len();
+                let resolvidas_before = cx.formas_resolvidas.len();
                 *cx.promoted.borrow_mut() = None;
                 let st = match cx.run(f) {
                     Ok(None) => Status::Ok,
@@ -5956,6 +5978,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                         outlines: cx.cut_outlines[outlines_before.min(cx.cut_outlines.len())..].to_vec(),
                         roscas: cx.roscas[roscas_before.min(cx.roscas.len())..].to_vec(),
                         relatorios_forma: cx.relatorios_forma[relatorios_before.min(cx.relatorios_forma.len())..].to_vec(),
+                        formas_resolvidas: cx.formas_resolvidas[resolvidas_before.min(cx.formas_resolvidas.len())..].to_vec(),
                         steps: cx.steps.get(&f.id).cloned().unwrap_or_default(),
                     },
                 );
@@ -6143,7 +6166,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         }
     }
     cache.limitar(&vivas, &fills_vivos, TETO_CACHE_MALHAS);
-    let formas = formas_visiveis(doc, &cx.status);
+    let formas = formas_visiveis(doc, &cx.status, &cx.formas_resolvidas);
 
     RecomputeResult {
         notes: cache.notes.clone(),
@@ -6166,6 +6189,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         cancelado,
         roscas: cx.roscas,
         relatorios_forma: cx.relatorios_forma,
+        formas_resolvidas: cx.formas_resolvidas,
     }
 }
 
@@ -6212,6 +6236,7 @@ pub fn publications(doc: &Document) -> Vec<(String, LinkedGeo)> {
         cut_outlines: vec![],
         roscas: vec![],
         relatorios_forma: vec![],
+        formas_resolvidas: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -6248,6 +6273,7 @@ pub fn surface_brep(doc: &Document, id: Id) -> Option<String> {
         cut_outlines: vec![],
         roscas: vec![],
         relatorios_forma: vec![],
+        formas_resolvidas: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -6699,6 +6725,7 @@ pub fn cut_list(doc: &Document) -> Vec<CutRow> {
         cut_outlines: vec![],
         roscas: vec![],
         relatorios_forma: vec![],
+        formas_resolvidas: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -6791,6 +6818,7 @@ pub fn member_joints(doc: &Document) -> Vec<((Id, usize), (Id, usize), [f64; 3])
         cut_outlines: vec![],
         roscas: vec![],
         relatorios_forma: vec![],
+        formas_resolvidas: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -6813,6 +6841,7 @@ pub fn member_corners(doc: &Document) -> Vec<st_cantos::Canto> {
     let Ok(vars) = doc.eval_params() else { return vec![] };
     let cx = Ctx {
         relatorios_forma: vec![],
+        formas_resolvidas: vec![],
         doc,
         vars,
         qualidade: Default::default(),
@@ -6884,6 +6913,7 @@ pub fn skeleton_groups(doc: &Document, paths: &[CurveRef]) -> Vec<Vec<usize>> {
         cut_outlines: vec![],
         roscas: vec![],
         relatorios_forma: vec![],
+        formas_resolvidas: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -7165,6 +7195,7 @@ pub fn export_com_preset(doc: &Document, collector: Option<Id>, path: &str, pres
         cut_outlines: vec![],
         roscas: vec![],
         relatorios_forma: vec![],
+        formas_resolvidas: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -7218,6 +7249,7 @@ pub fn final_shape(doc: &Document) -> Option<Shape> {
         cut_outlines: vec![],
         roscas: vec![],
         relatorios_forma: vec![],
+        formas_resolvidas: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),

@@ -84,7 +84,7 @@ impl AxisRef {
 }
 
 impl PlaneRef {
-    fn walk(&mut self, ids: &mut dyn FnMut(&mut Id)) {
+    pub(crate) fn walk(&mut self, ids: &mut dyn FnMut(&mut Id)) {
         if let PlaneRef::Datum(x) = self {
             ids(x)
         }
@@ -115,7 +115,7 @@ impl Default for PointRef {
 }
 
 impl PointRef {
-    fn walk(&mut self, ids: &mut dyn FnMut(&mut Id)) {
+    pub(crate) fn walk(&mut self, ids: &mut dyn FnMut(&mut Id)) {
         match self {
             PointRef::Ref(x) => ids(x),
             PointRef::SketchPoint { sketch, .. } => ids(sketch),
@@ -150,7 +150,7 @@ impl Default for CurveRef {
 }
 
 impl CurveRef {
-    fn walk(&mut self, ids: &mut dyn FnMut(&mut Id)) {
+    pub(crate) fn walk(&mut self, ids: &mut dyn FnMut(&mut Id)) {
         match self {
             CurveRef::Ref(x) => ids(x),
             CurveRef::SketchLine { sketch, .. } | CurveRef::SketchCurve { sketch, .. } => ids(sketch),
@@ -231,7 +231,7 @@ impl Default for SurfRef {
 }
 
 impl SurfRef {
-    fn walk(&mut self, ids: &mut dyn FnMut(&mut Id)) {
+    pub(crate) fn walk(&mut self, ids: &mut dyn FnMut(&mut Id)) {
         match self {
             SurfRef::Plane(p) => p.walk(ids),
             SurfRef::Ref(x) => ids(x),
@@ -1836,6 +1836,9 @@ pub struct Forma {
     /// com isto a forma vira corpo B-rep; sem isto, é só superfície de desenho
     #[serde(default)]
     pub conversao: Option<ConversaoForma>,
+    /// nós e bordas presos à peça (B303)
+    #[serde(default)]
+    pub vinculos: crate::subd_vinculo::Vinculos,
 }
 
 /// Como a forma vira B-rep (B179).
@@ -3007,7 +3010,7 @@ impl FeatureKind {
     pub fn walk(&mut self, ids: &mut dyn FnMut(&mut Id), exprs: &mut dyn FnMut(&mut String)) {
         use FeatureKind::*;
         match self {
-            Forma(_) => {}
+            Forma(f) => f.vinculos.walk(ids, exprs),
             Sketch(s) => {
                 s.plane.walk(ids);
                 for v in s.data.exprs_mut() {
