@@ -713,6 +713,8 @@ c('B345', 4, 'P1', 'Elementos de máquina de catálogo, prontos para personaliza
   ['USR-TRANSMISSAO'], [], 250, 'Auto + Visual', 'Biblioteca de normas', status='em andamento'),
 c('B346', 2, 'P0', 'Polimento visual: superfície lisa independente dos triângulos', 'A superfície mostra as facetas dos triângulos, sobretudo na zebra e na curvatura, enquanto softwares de modelagem CAD avançados mostram uma superfície polida mesmo com poucos triângulos. Separar representação de malha: sombreamento por pixel com normais da superfície exata, zebra e isofotas calculadas por pixel, curvatura amostrada na superfície e não nos vértices, refino adaptativo por curvatura e silhueta lisa. Aceite: esfera, cilindro e superfície livre com poucos triângulos sem faceta visível em sombreado, zebra e curvatura.',
   ['USR-RENDER', 'B10'], [], 450, 'Auto + Visual', 'Interface', status='em andamento'),
+c('B347', 2, 'P0', 'Fluidez: regressão de quadros e limite de FPS configurável', 'O app ficou com sensação de 20 quadros por segundo depois das últimas entregas. Medir o tempo de quadro, achar o que roda a cada quadro sem precisar e voltar à fluidez anterior, com teste de orçamento de quadro. Nova opção nas configurações gráficas: limite de quadros em 30, 60, 120, 144 ou sem limite, e sincronismo vertical, com contador opcional de quadros na tela.',
+  ['USR-FPS'], [], 250, 'Auto + Visual', 'Interface', status='em andamento'),
 ]
 def main():
     for x in B:
