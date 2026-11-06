@@ -723,6 +723,10 @@ c('B350', 2, 'P0', 'Sólidos: varredura em guia com cantos gira a seção certo'
   ['USR-BUG'], [], 250, 'Auto + Visual', 'Sólidos', status='em andamento'),
 c('B351', 2, 'P0', 'Rosca: furo roscado corrigido, prévia leve e cosmética com textura', 'Furo com rosca não funciona direito, com ou sem escareado, e a prévia demora. A prévia passa a ser só linhas que simulam a rosca, sem gerar superfície. Rosca cosmética, interna ou externa, aparece pintada com textura de rosca, sem geometria. A superfície real só é construída ao confirmar com a opção modelada ligada.',
   ['USR-TESTE'], [], 300, 'Auto + Visual', 'Sólidos', status='em andamento'),
+c('B352', 2, 'P1', 'Desenho: sketch na vista e na folha', 'Criar sketch dentro de uma vista, preso a ela e à sua escala, ou solto na folha, com as ferramentas do sketch, para detalhe a mais e geometria de apoio que não vem do 3D. Linhas com tipo e cota, entram na exportação.',
+  ['USR-TESTE'], [], 300, 'Auto + Visual', 'Desenho técnico'),
+c('B353', 3, 'P0', 'Projeto-teste: produto completo modelado no Fenkra para validar as bancadas', 'Modelar um produto real de ponta a ponta usando quase todas as bancadas: esqueleto estrutural com tubos dobrados, chapa, sólidos, superfícies e forma livre, transmissão, fixadores, montagem, desenho, PMI e PLM. Feito por comandos reproduzíveis, cada falha vira item do backlog. O conjunto fica como exemplo e teste de regressão.',
+  ['USR-TESTE'], [], 600, 'Auto + Visual', 'Geral'),
 ]
 def main():
     for x in B:

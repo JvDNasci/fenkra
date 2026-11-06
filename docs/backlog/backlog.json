@@ -1,6 +1,6 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 91480,
+ "tokens_total_k": 92380,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
@@ -12,25 +12,25 @@
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 11610,
-   "pct": 12.7
+   "pct": 12.6
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
-   "tokens_k": 20130,
-   "pct": 22.0
+   "tokens_k": 20430,
+   "pct": 22.1
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
-   "tokens_k": 21590,
-   "pct": 23.6
+   "tokens_k": 22190,
+   "pct": 24.0
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
    "tokens_k": 30970,
-   "pct": 33.9
+   "pct": 33.5
   }
  },
  "itens": [
@@ -5737,7 +5737,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "feito",
-   "pct": 0.7
+   "pct": 0.6
   },
   {
    "id": "B339",
@@ -5947,6 +5947,38 @@
    "area": "Sólidos",
    "status": "em andamento",
    "pct": 0.3
+  },
+  {
+   "id": "B352",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Desenho: sketch na vista e na folha",
+   "oque": "Criar sketch dentro de uma vista, preso a ela e à sua escala, ou solto na folha, com as ferramentas do sketch, para detalhe a mais e geometria de apoio que não vem do 3D. Linhas com tipo e cota, entram na exportação.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Desenho técnico",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B353",
+   "onda": 3,
+   "prio": "P0",
+   "titulo": "Projeto-teste: produto completo modelado no Fenkra para validar as bancadas",
+   "oque": "Modelar um produto real de ponta a ponta usando quase todas as bancadas: esqueleto estrutural com tubos dobrados, chapa, sólidos, superfícies e forma livre, transmissão, fixadores, montagem, desenho, PMI e PLM. Feito por comandos reproduzíveis, cada falha vira item do backlog. O conjunto fica como exemplo e teste de regressão.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 600,
+   "teste": "Auto + Visual",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.6
   }
  ]
 }
