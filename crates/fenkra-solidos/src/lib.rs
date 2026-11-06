@@ -53,7 +53,7 @@ pub mod chapa_linha;
 mod chapa_flat;
 mod arestas;
 mod chapa_laco;
-mod chapa_canto;
+pub mod chapa_canto;
 pub mod chapa_desdobra;
 pub mod chapa_converte;
 mod chapa_perfis;
