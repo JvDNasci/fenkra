@@ -8,6 +8,7 @@
 #include <functional>
 #include <map>
 #include <atomic>
+#include <cstdio>
 #include <cmath>
 #include <fstream>
 #include <limits>
@@ -87,6 +88,8 @@
 #include <TColgp_HArray1OfPnt.hxx>
 #include <Geom_BSplineCurve.hxx>
 #include <GeomFill_Trihedron.hxx>
+#include <GeomLProp_CLProps.hxx>
+#include <GProp_PEquation.hxx>
 #include <TColgp_Array1OfPnt.hxx>
 #include <TopoDS_Vertex.hxx>
 #include <gp_Cylinder.hxx>
@@ -168,6 +171,8 @@
 
 namespace fenkra {
 
+#include <chrono>
+
 namespace {
 
 // Cancelamento (B259): a thread de cálculo registra a bandeira do pedido em andamento; as operações
@@ -175,24 +180,46 @@ namespace {
 // a bandeira sobe. Fora de uma thread registrada nada muda (a faixa é vazia).
 thread_local const std::atomic<bool>* g_cancelar = nullptr;
 
-bool cancelado_agora() { return g_cancelar && g_cancelar->load(std::memory_order_relaxed); }
+// Limite de tempo (B337): mesma saída do cancelamento, para o comando que pode demorar sem fim útil.
+using Relogio = std::chrono::steady_clock;
+thread_local bool g_tem_prazo = false;
+thread_local Relogio::time_point g_prazo;
+thread_local double g_prazo_s = 0;
 
+bool cancelado_agora() { return g_cancelar && g_cancelar->load(std::memory_order_relaxed); }
+bool prazo_vencido() { return g_tem_prazo && Relogio::now() >= g_prazo; }
+
+// A booleana chama `UserBreak` também dos seus fios paralelos, onde os `thread_local` acima estão
+// vazios: por isso o indicador guarda a própria cópia da bandeira e do prazo.
 class IndicadorCancelavel : public Message_ProgressIndicator {
 public:
-    bool UserBreak() override { return cancelado_agora(); }
+    const std::atomic<bool>* bandeira = nullptr;
+    bool tem_prazo = false;
+    Relogio::time_point prazo;
+    bool UserBreak() override {
+        return (bandeira && bandeira->load(std::memory_order_relaxed)) || (tem_prazo && Relogio::now() >= prazo);
+    }
     void Show(const Message_ProgressScope&, const bool) override {}
 };
 
 Message_ProgressRange faixa_cancelavel() {
-    if (!g_cancelar) return Message_ProgressRange();
-    thread_local Handle(Message_ProgressIndicator) ind;
+    if (!g_cancelar && !g_tem_prazo) return Message_ProgressRange();
+    thread_local Handle(IndicadorCancelavel) ind;
     if (ind.IsNull()) ind = new IndicadorCancelavel();
+    ind->bandeira = g_cancelar;
+    ind->tem_prazo = g_tem_prazo;
+    ind->prazo = g_prazo;
     return ind->Start();
 }
 
 // Depois de uma operação com faixa: se foi interrompida, o resultado (parcial) não pode seguir.
 void falhar_se_cancelado() {
     if (cancelado_agora()) throw std::runtime_error("cancelado");
+    if (prazo_vencido()) {
+        char m[120];
+        std::snprintf(m, sizeof m, "limite de tempo: a operação passou de %.0f s e foi interrompida; simplifique a geometria", g_prazo_s);
+        throw std::runtime_error(m);
+    }
 }
 
 // Converte exceções do OCCT em std::runtime_error (que o cxx transforma em Err no Rust).
@@ -210,6 +237,7 @@ auto guard(const char* what, F&& f) -> decltype(f()) {
 // violação de acesso, não exceção C++, e nem `guard` nem o cxx a enxergam, então o processo morreria.
 // `sem_violacao` devolve false nesse caso; outras exceções (C++ inclusive) seguem o caminho normal.
 #if defined(_MSC_VER)
+constexpr bool kViolacaoProtegida = true;
 bool sem_violacao(void (*f)(void*), void* ctx) {
     __try {
         f(ctx);
@@ -219,6 +247,9 @@ bool sem_violacao(void (*f)(void*), void* ctx) {
     }
 }
 #else
+// Sem proteção aqui: a violação derruba o processo. Quem pode evitar o caminho arriscado deve evitar.
+// A saída no Linux é `OSD::SetSignal` com `OCC_CATCH_SIGNALS`, ainda não escrita por falta de como testar.
+constexpr bool kViolacaoProtegida = false;
 bool sem_violacao(void (*f)(void*), void* ctx) {
     f(ctx);
     return true;
@@ -997,6 +1028,12 @@ int32_t mesh_threads() {
 
 void set_mesh_threads(int32_t n) { g_mesh_threads.store(std::max(0, n)); }
 void set_cancel_flag(size_t p) { g_cancelar = reinterpret_cast<const std::atomic<bool>*>(p); }
+
+void set_deadline(double segundos) {
+    g_tem_prazo = segundos >= 0;
+    g_prazo_s = segundos;
+    if (g_tem_prazo) g_prazo = Relogio::now() + std::chrono::duration_cast<Relogio::duration>(std::chrono::duration<double>(segundos));
+}
 
 // Algoritmo do malhador (B235, só medição): 0 = padrão do OpenCASCADE, 1 = Delabella.
 static std::atomic<int32_t> g_mesh_algo{0};

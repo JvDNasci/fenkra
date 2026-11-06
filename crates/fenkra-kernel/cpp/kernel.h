@@ -150,6 +150,8 @@ void discard_mesh(const Shape& s);
 void set_mesh_threads(int32_t n);
 /// Registra (endereço de uma bandeira atômica, ou 0) o cancelamento da thread atual.
 void set_cancel_flag(size_t p);
+/// Limite de tempo da thread atual, em segundos a partir de agora (negativo limpa).
+void set_deadline(double segundos);
 int32_t mesh_threads();
 void set_mesh_algo(int32_t a);
 int32_t mesh_algo();

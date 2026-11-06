@@ -327,6 +327,8 @@ pub mod bridge {
         fn set_mesh_threads(n: i32);
         /// Registra o endereço de uma bandeira de cancelamento (0 limpa) para a thread atual (B259).
         fn set_cancel_flag(p: usize);
+        /// Limite de tempo da thread atual, em segundos a partir de agora; negativo limpa (B337).
+        fn set_deadline(segundos: f64);
         /// Teto de fios em vigor.
         fn mesh_threads() -> i32;
         /// Algoritmo do malhador (só medição, B235): 0 padrão, 1 Delabella.

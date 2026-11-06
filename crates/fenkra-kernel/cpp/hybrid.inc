@@ -123,6 +123,9 @@ std::unique_ptr<Shape> sweep_surface(rust::Slice<const double> profile, rust::Sl
         mk.Add(p, Standard_False, Standard_False);
         mk.Build();
         if (!mk.IsDone()) throw std::runtime_error("não foi possível varrer o perfil ao longo da guia");
+        // `IsDone` não garante o resultado: a aproximação pode sair longe da varredura exata
+        if (mk.ErrorOnSurface() > kErroVarredura || !BRepCheck_Analyzer(mk.Shape()).IsValid())
+            throw std::runtime_error("varredura de superfície: o resultado saiu inválido; simplifique a guia ou divida em trechos");
         return wrap(mk.Shape());
     });
 }
