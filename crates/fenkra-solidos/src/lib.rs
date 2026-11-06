@@ -56,6 +56,7 @@ mod chapa_laco;
 pub mod chapa_canto;
 pub mod chapa_desdobra;
 pub mod chapa_converte;
+mod chapa_converte_mapa;
 mod chapa_perfis;
 #[cfg(test)]
 mod chapa_canto_tests;

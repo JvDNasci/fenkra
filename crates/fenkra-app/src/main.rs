@@ -29,6 +29,7 @@ mod keymap;
 mod feat_ui;
 mod varredura_ui;
 mod demo_solidos;
+mod demo_chapa;
 mod edicao_direta_ui;
 mod handles;
 mod chapa_manip;

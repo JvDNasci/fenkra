@@ -680,6 +680,9 @@ impl App {
                     let id = d.add_feature(FeatureKind::SmConvert(SmConvert { face: [50., 30., 2.], thickness: String::new() }));
                     d.feature_mut(id).map(|f| f.name = "ConverterEmChapa".into());
                 }
+                // converter em chapa sobre um canal de fora, sem comando de chapa (B35): o mapa de
+                // dobras e, com FENKRA_DEMO_PLANA=1, o corpo desdobrado
+                "canal" => d = crate::demo_chapa::canal_convertido(std::env::var("FENKRA_DEMO_PLANA").is_ok()),
                 _ => {}
             }
             d.hide_consumed(d.features[1].id);
