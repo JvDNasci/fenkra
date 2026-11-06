@@ -79,6 +79,11 @@ pub fn controles(ui: &mut egui::Ui, t: &mut Table, todas: &[String], vistas: &[(
         ui.label(tr("Linhas por bloco")).on_hover_text(tr("0 mostra a tabela inteira; mais que isso divide em blocos lado a lado"));
         ui.add(crate::ui_ext::dv(&mut cfg.dividir).range(0..=200).speed(0.2));
     });
+    ui.add_enabled_ui(cfg.dividir > 0, |ui| {
+        crate::editor::check(ui, &mut cfg.em_folhas, "Cada bloco numa folha");
+    })
+    .response
+    .on_hover_text(tr("Com linhas por bloco, o primeiro bloco fica nesta folha e os outros nas folhas seguintes (criadas se faltarem)"));
     crate::editor::check(ui, &mut cfg.renumerar, "Renumerar na ordem mostrada");
     if t.kind == TableKind::Holes {
         ui.separator();
@@ -102,16 +107,43 @@ pub fn controles(ui: &mut egui::Ui, t: &mut Table, todas: &[String], vistas: &[(
     }
 }
 
+/// Com "cada bloco numa folha" ligado, cria as folhas de continuação que faltarem (mesmo formato da
+/// folha da tabela). Devolve `true` se criou alguma.
+pub fn garantir_folhas(st: &mut DwgState, id: Id) -> bool {
+    let Some(t) = st.d.tables.iter().find(|t| t.id == id).cloned() else { return false };
+    if !t.cfg.em_folhas || t.cfg.dividir == 0 {
+        return false;
+    }
+    let total = tabela::n_blocos(tabela::dados(&mut st.models, &t, &st.d).data.rows.len(), t.cfg.dividir);
+    let Some(i0) = st.d.sheets.iter().position(|s| s.id == t.sheet) else { return false };
+    let (formato, retrato) = (st.d.sheets[i0].format, st.d.sheets[i0].portrait);
+    let mut criou = false;
+    while st.d.sheets.len() < i0 + total {
+        let nova = st.d.add_sheet(formato);
+        if let Some(sh) = st.d.sheets.iter_mut().find(|s| s.id == nova) {
+            sh.portrait = retrato;
+        }
+        criou = true;
+    }
+    if criou {
+        st.modified = true;
+    }
+    criou
+}
+
 /// Clique na folha (sem ferramenta): num cabeçalho de tabela selecionada ordena por ele; numa
 /// etiqueta de furo seleciona a tabela e destaca a linha. `true` se o clique foi usado.
 pub fn clique(st: &mut DwgState, q: V2) -> bool {
     let th = st.d.text_height * 0.8;
-    let ids: Vec<Id> = st.d.tables.iter().filter(|t| t.sheet == st.sheet).map(|t| t.id).collect();
+    let ids: Vec<Id> = st.d.tables.iter().filter(|t| t.sheet == st.sheet || t.cfg.em_folhas).map(|t| t.id).collect();
     // cabeçalho da tabela já selecionada
     if let Some(id) = st.sel.filter(|s| ids.contains(s)) {
         let t = st.d.tables.iter().find(|t| t.id == id).cloned().unwrap();
         let fin = tabela::dados(&mut st.models, &t, &st.d);
-        if let Some(col) = layout::cabecalho_em(t.pos, t.kind.label(), &fin, &t.cfg, th, q) {
+        if let Some(col) = {
+            let total = tabela::n_blocos(fin.data.rows.len(), t.cfg.dividir);
+            tabela::blocos_na_folha(&st.d, &t, st.sheet, total).and_then(|f| layout::cabecalho_em(t.pos, t.kind.label(), &fin, &t.cfg, th, q, f))
+        } {
             if let Some(tm) = st.d.tables.iter_mut().find(|x| x.id == id) {
                 tabela::alterna_ordem(&mut tm.cfg, &col);
             }

@@ -16,11 +16,14 @@ pub struct NovoUi {
     models: Models,
     /// miniatura em cache: a configuração de que veio, as primitivas e o tamanho da folha
     miniatura: Option<(NovoDesenho, Vec<Item>, V2)>,
+    /// quadros desde a abertura: nos primeiros a janela é recentrada (a tela pode ainda não ter
+    /// tamanho e o tamanho da janela só se conhece depois do primeiro desenho); depois fica livre
+    quadros: u8,
 }
 
 impl NovoUi {
     pub fn new(origem: Option<Source>) -> Self {
-        NovoUi { cfg: NovoDesenho::padrao(&tr("Desenho"), origem), models: Models::new(None), miniatura: None }
+        NovoUi { cfg: NovoDesenho::padrao(&tr("Desenho"), origem), models: Models::new(None), miniatura: None, quadros: 0 }
     }
 }
 
@@ -33,13 +36,15 @@ pub struct ExportUi {
     /// folha mostrada na prévia
     previa: usize,
     cache: Option<(Opcoes, usize, Vec<Item>, V2)>,
+    /// quadros desde a abertura (a janela é recentrada nos primeiros; ver `NovoUi`)
+    quadros: u8,
 }
 
 impl ExportUi {
     pub fn new(ext: &'static str, d: &Drawing, atual: Id) -> Self {
         let marcadas = d.sheets.iter().map(|s| s.id == atual).collect();
         let previa = d.sheets.iter().position(|s| s.id == atual).unwrap_or(0);
-        ExportUi { ext, cfg: Opcoes::default(), marcadas, previa, cache: None }
+        ExportUi { ext, cfg: Opcoes::default(), marcadas, previa, cache: None, quadros: 0 }
     }
 
     fn opcoes(&self, d: &Drawing) -> Opcoes {
@@ -67,7 +72,12 @@ fn miniatura(ui: &mut egui::Ui, items: &[Item], tam: V2, largura: f32) {
         match &it.prim {
             Prim::Line { pts, style } => {
                 let w = (it.width.unwrap_or(style.width()) as f32 * z * 2.).clamp(0.5, 3.);
-                pintor.add(egui::Shape::line(pts.iter().map(|p| to(*p)).collect(), Stroke::new(w, cor)));
+                // segmento a segmento: nas curvas finas a junção em ângulo agudo do traçado contínuo
+                // vira espinho; a prévia é pequena e a falta de junção não aparece
+                let pts: Vec<Pos2> = pts.iter().map(|p| to(*p)).collect();
+                for par in pts.windows(2) {
+                    pintor.line_segment([par[0], par[1]], Stroke::new(w, cor));
+                }
             }
             Prim::Fill { pts } => super::simbolos::preencher(&pintor, pts.iter().map(|p| to(*p)).collect(), cor),
             Prim::Text { pos, text, size, align, .. } => {
@@ -100,7 +110,13 @@ fn janela_novo(ctx: &egui::Context, novo: &mut Option<NovoUi>, aberta: Option<So
     let n = novo.as_mut()?;
     let (mut open, mut criar, mut cancelar) = (true, false, false);
     let centro = ctx.content_rect().center();
-    egui::Window::new(tr("Novo desenho")).default_pos(centro - Vec2::new(340., 180.)).open(&mut open).collapsible(false).resizable(false).show(ctx, |ui| {
+    let mut janela = egui::Window::new(tr("Novo desenho")).pivot(egui::Align2::CENTER_CENTER).default_pos(centro);
+    if n.quadros < 4 {
+        janela = janela.anchor(egui::Align2::CENTER_CENTER, [0., 0.]);
+        n.quadros += 1;
+        ctx.request_repaint();
+    }
+    janela.open(&mut open).collapsible(false).resizable(false).show(ctx, |ui| {
         ui.horizontal_top(|ui| {
             ui.vertical(|ui| {
                 ui.set_width(340.);
@@ -209,7 +225,13 @@ fn janela_exportar(ctx: &egui::Context, st: &mut DwgState) -> Option<(String, bo
     let (mut open, mut exportar, mut cancelar) = (true, false, false);
     let nomes: Vec<String> = st.d.sheets.iter().map(|s| s.name.clone()).collect();
     let centro = ctx.content_rect().center();
-    egui::Window::new(format!("{} {}", tr("Exportar"), ex.ext.to_uppercase())).default_pos(centro - Vec2::new(300., 200.)).open(&mut open).collapsible(false).resizable(false).show(ctx, |ui| {
+    let mut janela = egui::Window::new(format!("{} {}", tr("Exportar"), ex.ext.to_uppercase())).pivot(egui::Align2::CENTER_CENTER).default_pos(centro);
+    if ex.quadros < 4 {
+        janela = janela.anchor(egui::Align2::CENTER_CENTER, [0., 0.]);
+        ex.quadros += 1;
+        ctx.request_repaint();
+    }
+    janela.open(&mut open).collapsible(false).resizable(false).show(ctx, |ui| {
         ui.horizontal_top(|ui| {
             ui.vertical(|ui| {
                 ui.set_width(250.);

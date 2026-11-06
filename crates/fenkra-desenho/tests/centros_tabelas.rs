@@ -128,3 +128,42 @@ fn tabela_de_furos_reflui_ao_tirar_coluna_e_a_etiqueta_aponta_a_linha() {
     assert_eq!(f.data.rows.len(), cheia.data.rows.len());
     assert!(layout::sheet(&d, s, &mut m).len() > 50);
 }
+
+#[test]
+fn tabela_dividida_em_folhas_manda_cada_bloco_para_uma_folha() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    let dir = std::env::temp_dir().join("fenkra_desenho_tabela_folhas");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("placa.fkp"), fenkra_solidos::example_document().to_json()).unwrap();
+    let src = Source { path: "placa.fkp".into(), display_state: String::new(), hidden: vec![] };
+    let mut d = Drawing::new("Placa", Format::A3);
+    let s1 = d.sheets[0].id;
+    let tid = d.alloc();
+    d.tables.push(Table { id: tid, sheet: s1, kind: TableKind::Holes, source: src, pos: [25., 200.], level: Default::default(), cfg: ConfigTabela { dividir: 2, ..Default::default() } });
+    let mut m = Models::new(Some(dir));
+    let linhas = tabela::dados(&mut m, &d.tables[0], &d).data.rows.len();
+    let total = tabela::n_blocos(linhas, 2);
+    assert!(total >= 2, "furos {linhas}");
+    // lado a lado: tudo na folha 1
+    let lado = layout::sheet(&d, s1, &mut m).len();
+    assert!(lado > 0);
+    // em folhas: o bloco 1 fica na folha 1, os outros vão para as seguintes
+    d.tables[0].cfg.em_folhas = true;
+    let mut outras = vec![];
+    for _ in 1..total {
+        outras.push(d.add_sheet(Format::A3));
+    }
+    let na1 = layout::sheet(&d, s1, &mut m).len();
+    assert!(na1 < lado, "a primeira folha ficou só com o primeiro bloco: {na1} contra {lado}");
+    for (k, o) in outras.iter().enumerate() {
+        let itens = layout::sheet(&d, *o, &mut m);
+        assert!(itens.iter().any(|i| i.owner == Some(tid)), "bloco {} na folha seguinte", k + 2);
+        let marca = format!("({}/{total})", k + 2);
+        assert!(itens.iter().any(|i| matches!(&i.prim, layout::Prim::Text { text, .. } if text.contains(&marca))), "título com a numeração");
+    }
+    // sem a opção, as outras folhas ficam sem tabela
+    d.tables[0].cfg.em_folhas = false;
+    assert!(!layout::sheet(&d, outras[0], &mut m).iter().any(|i| i.owner == Some(tid)));
+}

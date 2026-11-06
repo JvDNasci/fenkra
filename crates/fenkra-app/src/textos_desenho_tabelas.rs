@@ -36,6 +36,8 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("nenhuma", "none"),
     ("crescente ou decrescente (clicar no cabeçalho na folha também ordena)", "ascending or descending (clicking the header on the sheet also sorts)"),
     ("Linhas por bloco", "Rows per block"),
+    ("Cada bloco numa folha", "Each block on its own sheet"),
+    ("Com linhas por bloco, o primeiro bloco fica nesta folha e os outros nas folhas seguintes (criadas se faltarem)", "With rows per block, the first block stays on this sheet and the others go on the next sheets (created if missing)"),
     ("0 mostra a tabela inteira; mais que isso divide em blocos lado a lado", "0 shows the whole table; above that it splits into blocks side by side"),
     ("Renumerar na ordem mostrada", "Renumber in the displayed order"),
     ("Vista de origem", "Source view"),

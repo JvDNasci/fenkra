@@ -66,6 +66,8 @@ fn seta_gorda(painter: &egui::Painter, tip: Pos2, dir: Vec2, cor: Color32) {
 
 /// Desenha e trata as alças da vista em foco. `to_mm` converte tela → folha.
 pub(super) fn show(ui: &egui::Ui, painter: &egui::Painter, st: &mut DwgState, to_scr: &dyn Fn(V2) -> Pos2, to_mm: &dyn Fn(Pos2) -> V2, z: f32) {
+    // Ctrl solta o corte do alinhamento com a mãe enquanto se arrasta
+    st.ctrl_livre = ui.ctx().input(|i| i.modifiers.ctrl);
     let Some(id) = st.cur() else { return };
     let Some(v) = st.d.view(id).cloned() else { return };
     if v.sheet != st.sheet {
