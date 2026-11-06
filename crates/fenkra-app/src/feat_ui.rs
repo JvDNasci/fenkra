@@ -1257,7 +1257,7 @@ pub fn bend_overlay(app: &crate::app::App, ui: &mut egui::Ui, rect: egui::Rect, 
         if let Some([a, c]) = seg(b.center) {
             painter.extend(egui::Shape::dashed_line(&[a, c], egui::Stroke::new(1.6, col), 10., 4.));
             let m = a + (c - a) * 0.5;
-            let g = painter.layout_no_wrap(b.label(), egui::FontId::proportional(12.), col);
+            let g = painter.layout_no_wrap(b.label(), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), col);
             let rr = egui::Rect::from_min_size(m + egui::vec2(6., -g.size().y - 6.), g.size() + egui::vec2(8., 4.));
             painter.rect_filled(rr, 3., Color32::from_rgba_unmultiplied(20, 20, 24, 200));
             painter.galley(rr.min + egui::vec2(4., 2.), g, col);
@@ -1296,7 +1296,7 @@ pub fn cut_overlay(app: &crate::app::App, ui: &mut egui::Ui, rect: egui::Rect, c
                 painter.add(egui::Shape::line(pts.clone(), egui::Stroke::new(2., col)));
             }
             if let Some(p) = pts.first() {
-                painter.text(*p + egui::vec2(6., -6.), egui::Align2::LEFT_BOTTOM, label, egui::FontId::proportional(11.), col);
+                painter.text(*p + egui::vec2(6., -6.), egui::Align2::LEFT_BOTTOM, label, egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), col);
             }
         }
     };

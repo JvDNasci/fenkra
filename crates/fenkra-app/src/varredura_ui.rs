@@ -104,7 +104,7 @@ fn ponta(painter: &egui::Painter, de: Pos2, para: Pos2, cor: egui::Color32, larg
 
 fn texto(ui: &egui::Ui, rect: egui::Rect, at: Pos2, t: String, cor: egui::Color32) {
     let painter = ui.painter_at(rect);
-    let g = painter.layout_no_wrap(t, egui::FontId::proportional(12.), cor);
+    let g = painter.layout_no_wrap(t, egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), cor);
     let caixa = egui::Rect::from_min_size(at + egui::vec2(10., -10.), g.size() + egui::vec2(8., 4.));
     painter.rect_filled(caixa, 3., ui.visuals().extreme_bg_color.gamma_multiply(0.9));
     painter.galley(caixa.min + egui::vec2(4., 2.), g, cor);

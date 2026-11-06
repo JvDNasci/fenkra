@@ -662,11 +662,17 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
     painter.circle_filled(sb, 3.5, c);
     painter.circle_stroke(st, PEGA / 2., Stroke::new(esp, c));
 
+    // captura do B17: o salto real desta seta, com o zoom real desta vista
+    if std::env::var_os("FENKRA_DEMO_PASSO").is_some() {
+        let p = crate::ui_ext::passo_3d(ui, ppm);
+        painter.text(st + egui::vec2(16., 20.), egui::Align2::LEFT_TOP, format!("{} mm = {:.1} px", fmt(p), p * ppm as f64), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), ui.visuals().strong_text_color());
+    }
+
     // arrastar ao longo do eixo
     if hr.dragged() {
         if let Some(m) = ui.input(|i| i.pointer.interact_pos()) {
             let t = (m - sb).dot(axis) / ppm;
-            // passo segue o zoom (potência de 10 de ~8 px) e as teclas do painel
+            // passo segue o zoom (série 1-2-5, até 8 px) e as teclas do painel
             let step = (crate::ui_ext::passo_3d(ui, ppm) * h.k as f64) as f32;
             let mut v = ((t * h.k) / step).round() * step;
             if v.abs() < step {

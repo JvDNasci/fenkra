@@ -120,7 +120,7 @@ fn alca(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id, nth:
     let txt = if numerico { format!("{} {}{}", tr(m.campo.rotulo()), fmt(val), m.campo.unidade()) } else { format!("{} = {}{}", m.expr.trim(), fmt(val), m.campo.unidade()) };
     let fundo = ui.visuals().extreme_bg_color;
     let tcol = ui.visuals().text_color();
-    let g = painter.layout_no_wrap(txt, egui::FontId::proportional(12.), tcol);
+    let g = painter.layout_no_wrap(txt, egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), tcol);
     let lr = Rect::from_min_size(rot_pos, g.size() + egui::vec2(10., 6.));
     painter.rect_filled(lr, 4., fundo);
     painter.rect_stroke(lr, 4., Stroke::new(1., normal), egui::StrokeKind::Inside);
@@ -276,7 +276,7 @@ fn linha_overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
                 }
             }
         }
-        let g = painter.layout_no_wrap(dica.to_string(), egui::FontId::proportional(13.), ui.visuals().text_color());
+        let g = painter.layout_no_wrap(dica.to_string(), egui::FontId::proportional(crate::acessibilidade::fonte_3d(13.)), ui.visuals().text_color());
         let r = Rect::from_center_size(rect.center_top() + egui::vec2(0., 40.), g.size() + egui::vec2(16., 8.));
         painter.rect_filled(r, 4., ui.visuals().extreme_bg_color);
         painter.rect_stroke(r, 4., Stroke::new(1., normal_cor), egui::StrokeKind::Inside);

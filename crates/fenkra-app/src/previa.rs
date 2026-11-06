@@ -448,7 +448,7 @@ pub fn aviso(status: Option<&Status>, calculando: bool) -> Option<Aviso> {
 /// Rótulo pequeno preso a um ponto da tela.
 fn rotulo(ui: &egui::Ui, rect: egui::Rect, at: egui::Pos2, texto: String, cor: egui::Color32) {
     let painter = ui.painter_at(rect);
-    let g = painter.layout_no_wrap(texto, egui::FontId::proportional(12.), cor);
+    let g = painter.layout_no_wrap(texto, egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), cor);
     let caixa = egui::Rect::from_min_size(at + egui::vec2(10., -10.), g.size() + egui::vec2(8., 4.));
     painter.rect_filled(caixa, 3., ui.visuals().extreme_bg_color.gamma_multiply(0.9));
     painter.galley(caixa.min + egui::vec2(4., 2.), g, cor);
@@ -533,7 +533,7 @@ pub fn overlay(app: &App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::rend
         Aviso::Calculando => (crate::i18n::tr("Atualizando a prévia…").to_string(), crate::theme::accent(ui.visuals())),
     };
     let painter = ui.painter_at(rect);
-    let g = painter.layout(texto, egui::FontId::proportional(13.), cor, (rect.width() - 260.).clamp(200., 620.));
+    let g = painter.layout(texto, egui::FontId::proportional(crate::acessibilidade::fonte_3d(13.)), cor, (rect.width() - 260.).clamp(200., 620.));
     let caixa = egui::Rect::from_center_size(rect.center_top() + egui::vec2(0., 62. + g.size().y / 2.), g.size() + egui::vec2(16., 8.));
     painter.rect_filled(caixa, 4., ui.visuals().extreme_bg_color.gamma_multiply(0.92));
     painter.rect_stroke(caixa, 4., egui::Stroke::new(1., cor), egui::StrokeKind::Inside);

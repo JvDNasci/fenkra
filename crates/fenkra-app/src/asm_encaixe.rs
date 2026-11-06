@@ -72,7 +72,7 @@ fn eixos(p: &egui::Painter, rect: Rect, cam: &Camera, c: &Candidato, v: &egui::V
         let Some((_, na_tela, _)) = crate::gizmo::screen_axis(cam, rect, v3(c.p), v3(d)) else { continue };
         let ponta = o + na_tela * EIXO_PX;
         crate::gizmo::arrow(p, o, ponta, cor);
-        p.text(ponta + na_tela * 8., egui::Align2::CENTER_CENTER, nome, egui::FontId::proportional(11.), cor);
+        p.text(ponta + na_tela * 8., egui::Align2::CENTER_CENTER, nome, egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), cor);
     }
 }
 
@@ -110,7 +110,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
         eixos(&painter, rect, cam, &c, &v);
         if let Some(s) = cam.project(rect, v3(c.p)) {
             painter.circle_filled(s, 5., cor);
-            painter.text(s + egui::vec2(12., 14.), egui::Align2::LEFT_TOP, format!("{}  ·  {}", tr(c.tipo.label()), tr("L trava")), egui::FontId::proportional(12.), cor);
+            painter.text(s + egui::vec2(12., 14.), egui::Align2::LEFT_TOP, format!("{}  ·  {}", tr(c.tipo.label()), tr("L trava")), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), cor);
         }
     }
     if let Some((_, c)) = e.travado {
@@ -119,7 +119,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
             let aviso = crate::theme::st_warn();
             painter.circle_filled(s, 6., aviso);
             painter.circle_stroke(s, 10., Stroke::new(2., aviso));
-            painter.text(s + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, format!("{} {}", tr(c.tipo.label()), tr("travado: clique para usar, L solta")), egui::FontId::proportional(12.), aviso);
+            painter.text(s + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, format!("{} {}", tr(c.tipo.label()), tr("travado: clique para usar, L solta")), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), aviso);
         }
     }
 }

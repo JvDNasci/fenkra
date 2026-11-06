@@ -244,7 +244,7 @@ pub fn overlay(app: &App, ui: &egui::Ui, rect: Rect, cam: &Camera, id: Id) {
     let pintor = ui.painter_at(rect);
     let cor = crate::theme::st_err();
     pintor.circle_stroke(q, 7., egui::Stroke::new(2., cor));
-    let t = pintor.layout_no_wrap(n.text.clone(), egui::FontId::proportional(12.), cor);
+    let t = pintor.layout_no_wrap(n.text.clone(), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), cor);
     // a etiqueta fica sempre dentro da vista: o pior caso perto da borda a deixava cortada
     let tam = t.size() + egui::vec2(8., 4.);
     let canto = q + egui::vec2(12., -8.);

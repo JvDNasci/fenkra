@@ -3534,7 +3534,7 @@ pub fn fasteners_overlay(app: &App, ui: &mut egui::Ui, rect: egui::Rect, cam: &c
         };
         painter.circle_stroke(c, r + 2., egui::Stroke::new(2.5, cor));
         painter.circle_filled(c, r + 2., cor.gamma_multiply(0.18));
-        let font = egui::FontId::proportional(11.);
+        let font = egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.));
         let galeria = painter.layout_no_wrap(texto, font, cor);
         let canto = c + egui::vec2(r + 6., -galeria.size().y / 2.);
         painter.rect_filled(egui::Rect::from_min_size(canto, galeria.size()).expand(2.), 3., Color32::from_black_alpha(150));
@@ -3580,7 +3580,7 @@ pub fn fasteners_handles(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam
             crate::alca_cota::desenhar(&p, h, c, *atual, serie, crate::theme::accent(v), v.window_fill().gamma_multiply(0.85), format!("L {}", fmt(*atual)));
         }
         if resp.hovered() || resp.dragged() {
-            p.text(c + egui::vec2(12., -12.), egui::Align2::LEFT_BOTTOM, format!("L {}", fmt(*atual)), egui::FontId::proportional(12.), cor);
+            p.text(c + egui::vec2(12., -12.), egui::Align2::LEFT_BOTTOM, format!("L {}", fmt(*atual)), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), cor);
         }
         if resp.drag_started() {
             ctx.data_mut(|d| d.insert_temp(id, *atual));

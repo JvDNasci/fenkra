@@ -161,7 +161,7 @@ fn alca(ui: &mut egui::Ui, painter: &egui::Painter, at: Pos2, id: egui::Id, form
 }
 
 fn valor(painter: &egui::Painter, at: Pos2, txt: String) {
-    painter.text(at + egui::vec2(14., -18.), egui::Align2::LEFT_BOTTOM, txt, egui::FontId::proportional(12.), HL);
+    painter.text(at + egui::vec2(14., -18.), egui::Align2::LEFT_BOTTOM, txt, egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), HL);
 }
 
 /// Alças de uma cota de linha (linear, ordenada, entre círculos) selecionada. `lbl` é o retângulo
