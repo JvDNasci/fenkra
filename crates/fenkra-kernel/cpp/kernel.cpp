@@ -53,6 +53,11 @@
 #include <GeomAPI_ProjectPointOnSurf.hxx>
 #include <Geom_Surface.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
+#include <BRepTopAdaptor_FClass2d.hxx>
+#include <GeomAPI_Interpolate.hxx>
+#include <Geom_BSplineCurve.hxx>
+#include <Geom_BSplineSurface.hxx>
+#include <GeomLProp_SLProps.hxx>
 #include <BRepBuilderAPI_MakeVertex.hxx>
 #include <BRepBuilderAPI_MakePolygon.hxx>
 #include <BRepOffsetAPI_MakePipe.hxx>
@@ -1088,6 +1093,10 @@ MeshData tessellate(const Shape& s, double deflection, double angle) {
             }
             std::optional<BRepAdaptor_Surface> su;
             if (tri->HasUVNodes()) su.emplace(face);
+            // o plano não tem o que medir, e é a face mais comum
+            const bool curva = su && su->GetType() != GeomAbs_Plane;
+            std::optional<GeomLProp_SLProps> props;
+            if (curva) props.emplace(BRep_Tool::Surface(face), 2, 1e-7);
             for (int i = 0; i < nn; ++i) {
                 m.positions.push_back(float(pts[i].X()));
                 m.positions.push_back(float(pts[i].Y()));
@@ -1107,6 +1116,18 @@ MeshData tessellate(const Shape& s, double deflection, double angle) {
                 m.normals.push_back(float(n.X()));
                 m.normals.push_back(float(n.Y()));
                 m.normals.push_back(float(n.Z()));
+                // curvaturas principais da superfície: dependem só da geometria, nunca da malha ou do zoom
+                float k1 = 0, k2 = 0;
+                if (curva) {
+                    const gp_Pnt2d uv = tri->UVNode(i + 1);
+                    props->SetParameters(uv.X(), uv.Y());
+                    if (props->IsCurvatureDefined()) {
+                        k1 = float(props->MaxCurvature());
+                        k2 = float(props->MinCurvature());
+                    }
+                }
+                m.curvature.push_back(k1);
+                m.curvature.push_back(k2);
             }
         }
 

@@ -87,6 +87,10 @@ std::unique_ptr<Shape> face_propagate(const Shape& s, double px, double py, doub
 std::unique_ptr<Shape> extrude_curve(rust::Slice<const double> pts, double dx, double dy, double dz, double len);
 std::unique_ptr<Shape> revolve_curve(rust::Slice<const double> pts, double ox, double oy, double oz, double dx, double dy, double dz, double angle_deg);
 rust::Vec<double> surface_near(const Shape& s, double px, double py, double pz);
+std::unique_ptr<Shape> grid_surface(rust::Slice<const double> flat, uint32_t nu, uint32_t nv);
+rust::Vec<double> connect_check(const Shape& a, const Shape& b, uint32_t samples, double max_gap);
+rust::Vec<double> signed_distances(const Shape& s, rust::Slice<const double> flat);
+rust::Vec<double> iso_curves(const Shape& s, uint32_t n, rust::Vec<uint32_t>& ends);
 rust::Vec<double> face_props(const Shape& s, double px, double py, double pz);
 std::unique_ptr<Shape> extrude_to_next(const Shape& face, double dx, double dy, double dz, double len, const Shape& body);
 std::unique_ptr<Shape> clip_until(const Shape& tool, const Shape& cutter, double px, double py, double pz, bool extend);

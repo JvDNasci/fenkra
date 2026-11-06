@@ -464,7 +464,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 Family("sup_basica", vec![g(GeoKind::SurfExtrude), g(GeoKind::SurfRevolve), g(GeoKind::SurfSphere), g(GeoKind::SurfCylinder)]),
                 One(g(GeoKind::SurfOffset)),
                 Family("sup_varrer", vec![g(GeoKind::SurfSweep), g(GeoKind::SurfSweepX), g(GeoKind::SurfTube)]),
-                Family("sup_multi", vec![g(GeoKind::SurfLoft), g(GeoKind::SurfBlend), g(GeoKind::SurfConnect)]),
+                Family("sup_multi", vec![g(GeoKind::SurfLoft), g(GeoKind::SurfRuled), g(GeoKind::SurfBlend), g(GeoKind::SurfConnect)]),
                 Family("sup_filete", vec![g(GeoKind::SurfFilletSS), g(GeoKind::SurfEdgeFillet)]),
                 One(g(GeoKind::SurfFill)),
             ]
@@ -506,8 +506,12 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("importar_arquivo", TEXTO_IMPORTAR.0, TEXTO_IMPORTAR.1, TEXTO_IMPORTAR.2, Cmd(C::ImportarArquivo))),
         ],
         Group::Analise => vec![
+            // comandos que ficam na árvore, ao lado dos modos de exibição
             One(it("an_zebra", "Zebra", "Listras zebra (reflexo)", "Faixas de reflexo: onde elas quebram há só posição (G0); dobram = tangência (G1); contínuas = curvatura (G2).", Display(DisplayMode::Zebra))),
-            One(it("an_curvatura", "Curvatura", "Mapa de curvatura", "Azul = plano, verde/amarelo = curvatura média, vermelho = raio pequeno.", Display(DisplayMode::Curvatura))),
+            One(it("an_curvatura", "Curvatura", "Mapa de curvatura", "Cor pela curvatura da superfície, do plano até o raio escolhido na escala; não muda com o zoom.", Display(DisplayMode::Curvatura))),
+            One(geo_analise(GeoKind::AnConexao)),
+            One(geo_analise(GeoKind::AnDesvio)),
+            One(geo_analise(GeoKind::AnPente)),
             One(it("an_sombreado", "Normal", "Voltar ao sombreado com arestas", "Sai da análise.", Display(DisplayMode::SombreadoArestas))),
         ],
         Group::Organizacao => vec![
@@ -825,4 +829,10 @@ pub fn groups_at(s: &Settings, d: Dock, sketching: bool) -> Vec<Group> {
         .filter(|g| *g != Group::SkRestricoes)
         .filter(|g| if sketching { g.sketch_only() || *g == Group::Vista } else { !g.sketch_only() && g.in_bench(s.bench) })
         .collect()
+}
+
+/// Item de análise: um comando de geometria com o nome e a dica dele.
+fn geo_analise(k: GeoKind) -> Item {
+    let (i, n, b, a) = k.info();
+    it(i, n, b, a, Act::Cmd(Cmd::Geo(k)))
 }

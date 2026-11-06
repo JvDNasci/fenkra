@@ -8038,6 +8038,7 @@ impl eframe::App for App {
         };
         if active {
             self.painel_comando(ctx, area);
+            crate::sup_analise::painel_curvatura(self, ctx, area);
         }
         self.painel_importar(ctx, area);
         self.painel_exportar(ctx, area);
@@ -8255,6 +8256,7 @@ impl eframe::App for App {
                     point_style: self.settings.point_style,
                     fantasma: crate::previa::da_sessao(self.session.as_ref().filter(|_| asm_view.is_none()), &ctx.global_style().visuals),
                     forma_oculta,
+                    curvatura: crate::sup_analise::escala_da_tela(&self.settings, &ctx.global_style().visuals),
                 };
                 let mut s = scene::build(scene_doc, r, &opts);
                 if let Some(sess) = self.session.as_mut().filter(|_| asm_view.is_none()) {

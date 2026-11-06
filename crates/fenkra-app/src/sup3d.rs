@@ -132,7 +132,10 @@ pub fn de_referencia(k: &RefKind) -> Vec<Suporte> {
             v
         }
         R::SurfSweepX { kind, spine, .. } => kind.guides().into_iter().map(|c| cur(Papel::Curva, c)).chain(spine.iter().map(|c| cur(Papel::Guia, c))).collect(),
-        R::SurfLoft { sections, guide, .. } => sections.iter().map(|c| cur(Papel::Curva, c)).chain(guide.iter().map(|c| cur(Papel::Guia, c))).collect(),
+        R::SurfLoft { sections, guide, opts, .. } => sections.iter().map(|c| cur(Papel::Curva, c)).chain(guide.iter().chain(&opts.guides).map(|c| cur(Papel::Guia, c))).collect(),
+        R::SurfRuled { curves, support, .. } => curves.iter().map(|c| cur(Papel::Curva, c)).chain(support.iter().map(|s| sup(Papel::Base, s))).collect(),
+        R::SurfCheck { mode: CheckMode::Pente, curve, .. } => vec![cur(Papel::Curva, curve)],
+        R::SurfCheck { a, b, .. } => vec![sup(Papel::Base, a), sup(Papel::Ferramenta, b)],
         _ => {
             let s = crate::geo_ui::inputs_of(k);
             let mut v: Vec<Suporte> = s.surface.iter().map(|x| sup(Papel::Base, x)).collect();
@@ -270,6 +273,16 @@ pub fn setas_de_lado(doc: &Document, r: &RecomputeResult, id: Id) -> Vec<SetaDeL
                 out.extend(seta_de_corte(r, 1, a, *flip_b, centro(r, b), "Fica da superfície 2"));
             }
             RefKind::CurveParallel { curve, support, flip, .. } => out.extend(seta_da_paralela(r, curve, support, *flip)),
+            RefKind::SurfRuled { curves, .. } => {
+                // da curva para o meio da faixa: o clique troca o lado
+                let base = curves.first().and_then(|c| crate::picking::curve_pts(r, c)).and_then(|p| meio_da_curva(&p)).map(|x| x.0);
+                let faixa = r.surfaces.iter().find(|x| x.id == id).map(|x| crate::handles::mesh_center(&x.mesh));
+                if let (Some(b), Some(m)) = (base, faixa) {
+                    if let Some(dir) = (m - b).try_normalize() {
+                        out.push(SetaDeLado { campo: 0, base: b, dir, rotulo: "Sentido da faixa" });
+                    }
+                }
+            }
             _ => {}
         }
         return out;
@@ -336,7 +349,7 @@ pub fn inverter_lado(doc: &mut Document, id: Id, campo: u8) {
                 let f = if campo == 0 { flip_a } else { flip_b };
                 *f = !*f;
             }
-            RefKind::CurveParallel { flip, .. } => *flip = !*flip,
+            RefKind::CurveParallel { flip, .. } | RefKind::SurfRuled { flip, .. } => *flip = !*flip,
             _ => {}
         }
         return;
@@ -461,6 +474,8 @@ fn contorno(m: &Mesh, col: [f32; 4], s: &mut Scene) {
 
 /// Realce das entradas na cena, cada uma na cor do seu papel.
 pub fn decorar(doc: &Document, r: &RecomputeResult, f: &crate::previa::Fantasma, s: &mut Scene) {
+    let f4 = |c: [u8; 3]| c.map(|x| x as f32 / 255.);
+    crate::sup_analise::decorar(r, f.id, &[f4(f.cor), f4(f.neutro), f4(f.entrada), f4(f.erro)], s);
     let cobre = cobre_a_entrada(doc, f.id);
     pintar_regioes(r, f, s);
     let tem_regioes = !regioes(r, f.id).is_empty();
@@ -543,6 +558,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: I
     if app.in_asm() {
         return;
     }
+    crate::sup_analise::overlay(app, ui, rect, cam, id);
     let Some(r) = app.result.as_ref() else { return };
     let doc = &app.open.doc;
     let destaque = crate::theme::accent(ui.visuals());
@@ -648,6 +664,48 @@ pub fn dica_de_lado(ui: &mut egui::Ui) {
     ui.label(RichText::new(tr("A seta do 3D aponta o lado que fica. Clique nela para inverter.")).weak().small());
 }
 
+/// Casos do B34: multi-seções com guias, regrada e as análises.
+fn demo_b34(nome: &str, doc: &mut Document) -> crate::previa::DemoPrevia {
+    use crate::previa::DemoPrevia::Ref;
+    let t = |x: &str| x.to_string();
+    let fx = PointRef::Fixed;
+    let curva = |d: &mut Document, p: &[[f64; 3]]| CurveRef::Ref(d.add_geometry(RefKind::Spline { points: p.iter().map(|q| fx(*q)).collect(), closed: false }));
+    let onda = |d: &mut Document, z: f64| {
+        let c = curva(d, &[[-40., 0., 0. + z], [0., 12., z], [40., 0., z]]);
+        SurfRef::Ref(d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Y), length: t("50"), length2: t("0"), until: None, until2: None }))
+    };
+    match nome {
+        "sup_guias" => {
+            let s1 = curva(doc, &[[-40., 0., 0.], [0., 10., 0.], [40., 0., 0.]]);
+            let s2 = curva(doc, &[[-30., 0., 70.], [0., 16., 70.], [30., 0., 70.]]);
+            let g1 = curva(doc, &[[-40., 0., 0.], [-55., 0., 35.], [-30., 0., 70.]]);
+            let g2 = curva(doc, &[[40., 0., 0.], [52., 0., 35.], [30., 0., 70.]]);
+            Ref(RefKind::SurfLoft { sections: vec![s1, s2], guide: None, ruled: false, closed: false, opts: LoftOpts { guides: vec![g1, g2], ..Default::default() } })
+        }
+        "sup_regrada" => {
+            let s = onda(doc, 0.);
+            let borda = curva(doc, &[[-40., 0., 0.], [0., 12., 0.], [40., 0., 0.]]);
+            Ref(RefKind::SurfRuled { curves: vec![borda], support: Some(s), mode: RuledMode::Normal, dir: AxisRef::Origin(OriginAxis::Z), length: t("25"), flip: false })
+        }
+        "sup_conexao" => {
+            let a = onda(doc, 0.);
+            let c = curva(doc, &[[-40., 0., 0.], [0., 12., 0.], [40., 0., 0.]]);
+            let b = SurfRef::Ref(doc.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Z), length: t("40"), length2: t("0"), until: None, until2: None }));
+            Ref(RefKind::SurfCheck { mode: CheckMode::Conexao, a, b, curve: CurveRef::default(), samples: t("24"), scale: t("1") })
+        }
+        "sup_desvio" => {
+            let a = onda(doc, 0.);
+            let c = curva(doc, &[[-40., 0., 6.], [0., 12., 0.], [40., 0., 2.]]);
+            let b = SurfRef::Ref(doc.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Y), length: t("50"), length2: t("0"), until: None, until2: None }));
+            Ref(RefKind::SurfCheck { mode: CheckMode::Desvio, a, b, curve: CurveRef::default(), samples: t("2"), scale: t("1") })
+        }
+        _ => {
+            let c = curva(doc, &[[-40., 0., 0.], [-15., 20., 0.], [10., -10., 0.], [40., 10., 0.]]);
+            Ref(RefKind::SurfCheck { mode: CheckMode::Pente, a: SurfRef::default(), b: SurfRef::default(), curve: c, samples: t("64"), scale: t("400") })
+        }
+    }
+}
+
 /// Desenvolvimento: casos de `FENKRA_DEMO_PREVIA=sup_*`, um por comando, para as capturas.
 pub fn demo(nome: &str, doc: &mut Document) -> Option<crate::previa::DemoPrevia> {
     use crate::previa::DemoPrevia::{Comando, Ref};
@@ -697,6 +755,7 @@ pub fn demo(nome: &str, doc: &mut Document) -> Option<crate::previa::DemoPrevia>
             let g2 = reta(doc, [40., 0., 0.], [40., 0., 80.]);
             Ref(RefKind::SurfSweepX { kind: SweepKind::CircleRadius { guide1: g1, guide2: g2, radius: t("25") }, spine: None, solution: 0, smooth: false, sections: t("12") })
         }
+        "sup_guias" | "sup_regrada" | "sup_conexao" | "sup_desvio" | "sup_pente" => return Some(demo_b34(nome, doc)),
         "sup_engrossar" => {
             let f = folha(doc, [-40., 0., 0.], [40., 0., 0.]);
             Comando(FeatureKind::ThickSurface(ThickSurface { surface: f, t1: t("6"), t2: t("0"), op: BoolOp::Add }))
@@ -737,7 +796,7 @@ mod tests {
 
     fn cena(d: &Document, r: &RecomputeResult, id: Id) -> Scene {
         let (sel, filtro) = (crate::app::Sel::None, Filter::default());
-        let o = SceneOpts { forma_oculta: None, editing: None, sel: &sel, filter: &filtro, hidden_env: false, dark_edges: true, tangent_edges: false, hilite: None, hilite_extra: &[], line_w: 1., line_dash: 0, point_style: 0, fantasma: Some(fantasma(id, &[])) };
+        let o = SceneOpts { forma_oculta: None, editing: None, sel: &sel, filter: &filtro, hidden_env: false, dark_edges: true, tangent_edges: false, hilite: None, hilite_extra: &[], line_w: 1., line_dash: 0, point_style: 0, curvatura: None, fantasma: Some(fantasma(id, &[])) };
         build(d, r, &o)
     }
 

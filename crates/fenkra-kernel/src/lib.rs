@@ -187,10 +187,25 @@ fn pairs(flat: &[u32]) -> Vec<[u32; 2]> {
     flat.chunks_exact(2).map(|v| [v[0], v[1]]).collect()
 }
 
+/// Uma amostra da junção de duas superfícies.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AmostraConexao {
+    pub ponto: [f64; 3],
+    /// distância até a outra superfície, em mm
+    pub folga: f64,
+    /// quanto as superfícies dobram ao cruzar a junção, em graus: zero é tangente
+    pub angulo: f64,
+    /// curvatura de cada lado na direção que atravessa a borda, em 1/mm, com a mesma referência de sinal
+    pub curvatura: [f64; 2],
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Mesh {
     pub positions: Vec<f32>,
     pub normals: Vec<f32>,
+    /// curvaturas principais (máxima, mínima) de cada vértice, em 1/mm, medidas na superfície exata:
+    /// não mudam com a malha nem com o zoom. Vazia em malha que não veio do kernel.
+    pub curvature: Vec<f32>,
     pub indices: Vec<u32>,
     pub edges: Vec<f32>,
     /// início (em `indices`) dos triângulos de cada face
@@ -636,6 +651,36 @@ mod imp {
             let g: Vec<f64> = guide.unwrap_or(&[]).iter().flatten().copied().collect();
             b::loft_surface(&flat, &ends, ruled, closed, &g).map(Shape).map_err(err)
         }
+        /// Superfície que passa por todos os pontos da grade; as linhas têm o mesmo tamanho.
+        pub fn grid_surface(rows: &[Vec<[f64; 3]>]) -> KResult<Shape> {
+            let nv = rows.first().map_or(0, Vec::len) as u32;
+            let flat: Vec<f64> = rows.iter().flatten().flatten().copied().collect();
+            b::grid_surface(&flat, rows.len() as u32, nv).map(Shape).map_err(err)
+        }
+        /// Amostras da junção com `other`, ver [`AmostraConexao`].
+        pub fn connect_check(&self, other: &Shape, samples: u32, max_gap: f64) -> KResult<Vec<AmostraConexao>> {
+            let v = b::connect_check(&self.0, &other.0, samples, max_gap).map_err(err)?;
+            Ok(v.chunks_exact(7).map(|c| AmostraConexao { ponto: [c[0], c[1], c[2]], folga: c[3], angulo: c[4], curvatura: [c[5], c[6]] }).collect())
+        }
+        /// Distância com sinal de cada ponto até a forma: positiva do lado da normal.
+        pub fn signed_distances(&self, pts: &[[f64; 3]]) -> KResult<Vec<f64>> {
+            let flat: Vec<f64> = pts.iter().flatten().copied().collect();
+            b::signed_distances(&self.0, &flat).map_err(err)
+        }
+        /// Isocurvas das faces, `n` por direção.
+        pub fn iso_curves(&self, n: u32) -> KResult<Vec<Vec<[f64; 3]>>> {
+            let mut ends = vec![];
+            let flat = b::iso_curves(&self.0, n, &mut ends).map_err(err)?;
+            let mut start = 0;
+            Ok(ends
+                .iter()
+                .map(|e| {
+                    let c = flat[start * 3..*e as usize * 3].chunks_exact(3).map(|q| [q[0], q[1], q[2]]).collect();
+                    start = *e as usize;
+                    c
+                })
+                .collect())
+        }
         pub fn sewn(&self, tol: f64) -> KResult<Shape> {
             b::sew_shapes(&self.0, tol).map(Shape).map_err(err)
         }
@@ -823,6 +868,7 @@ mod imp {
             Ok(Mesh {
                 positions: m.positions,
                 normals: m.normals,
+                curvature: m.curvature,
                 indices: m.indices,
                 edges: m.edges,
                 face_ranges: m.face_ranges,
@@ -1119,6 +1165,18 @@ mod imp {
             no()
         }
         pub fn sweep_surface(_: &[[f64; 3]], _: &[[f64; 3]], _: u8) -> KResult<Shape> {
+            no()
+        }
+        pub fn grid_surface(_: &[Vec<[f64; 3]>]) -> KResult<Shape> {
+            no()
+        }
+        pub fn connect_check(&self, _: &Shape, _: u32, _: f64) -> KResult<Vec<AmostraConexao>> {
+            no()
+        }
+        pub fn signed_distances(&self, _: &[[f64; 3]]) -> KResult<Vec<f64>> {
+            no()
+        }
+        pub fn iso_curves(&self, _: u32) -> KResult<Vec<Vec<[f64; 3]>>> {
             no()
         }
         pub fn loft_surface(_: &[Vec<[f64; 3]>], _: bool, _: bool, _: Option<&[[f64; 3]]>) -> KResult<Shape> {

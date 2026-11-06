@@ -150,6 +150,189 @@ std::unique_ptr<Shape> loft_surface(rust::Slice<const double> flat, rust::Slice<
     });
 }
 
+namespace {
+
+// Cúbica pelos pontos, em passos iguais de parâmetro.
+Handle(Geom_BSplineCurve) cubica_pelos_pontos(const std::vector<gp_Pnt>& p) {
+    const int n = int(p.size());
+    occ::handle<NCollection_HArray1<gp_Pnt>> pts = new NCollection_HArray1<gp_Pnt>(1, n);
+    occ::handle<NCollection_HArray1<double>> par = new NCollection_HArray1<double>(1, n);
+    for (int i = 0; i < n; ++i) {
+        pts->SetValue(i + 1, p[size_t(i)]);
+        par->SetValue(i + 1, double(i) / (n - 1));
+    }
+    GeomAPI_Interpolate g(pts, par, false, 1e-9);
+    g.Perform();
+    if (!g.IsDone()) throw std::runtime_error("pontos coincidentes na grade da superfície");
+    return g.Curve();
+}
+
+}  // namespace
+
+// Superfície B-spline cúbica que passa por toda a grade, por produto tensorial: interpola cada linha e
+// depois cada coluna de polos, todas com os mesmos parâmetros e portanto os mesmos nós. A interpolação
+// de grade pronta do kernel ondula a borda perto dos cantos, mesmo com os pontos todos no mesmo plano.
+std::unique_ptr<Shape> grid_surface(rust::Slice<const double> flat, uint32_t nu, uint32_t nv) {
+    return guard("superfície por grade", [&] {
+        if (nu < 4 || nv < 4 || flat.size() != size_t(nu) * nv * 3) throw std::runtime_error("grade de pontos incompleta");
+        std::vector<Handle(Geom_BSplineCurve)> linhas;
+        for (uint32_t i = 0; i < nu; ++i) {
+            std::vector<gp_Pnt> p;
+            for (uint32_t j = 0; j < nv; ++j) {
+                const double* q = flat.data() + 3 * (size_t(i) * nv + j);
+                p.emplace_back(q[0], q[1], q[2]);
+            }
+            linhas.push_back(cubica_pelos_pontos(p));
+        }
+        const int np = linhas[0]->NbPoles();
+        std::vector<Handle(Geom_BSplineCurve)> colunas;
+        for (int j = 1; j <= np; ++j) {
+            std::vector<gp_Pnt> p;
+            for (auto& l : linhas) p.push_back(l->Pole(j));
+            colunas.push_back(cubica_pelos_pontos(p));
+        }
+        const int mp = colunas[0]->NbPoles();
+        NCollection_Array2<gp_Pnt> polos(1, mp, 1, np);
+        for (int j = 1; j <= np; ++j)
+            for (int i = 1; i <= mp; ++i) polos(i, j) = colunas[size_t(j - 1)]->Pole(i);
+        Handle(Geom_BSplineSurface) s = new Geom_BSplineSurface(polos, colunas[0]->Knots(), linhas[0]->Knots(), colunas[0]->Multiplicities(), linhas[0]->Multiplicities(), colunas[0]->Degree(), linhas[0]->Degree());
+        return wrap(BRepBuilderAPI_MakeFace(s, 1e-6).Face());
+    });
+}
+
+namespace {
+
+// Um lado da junção no ponto `p`: normal, direção que entra na face e curvatura nessa direção.
+struct LadoDaJuncao {
+    gp_Vec normal, entra;
+    double curvatura = 0;
+};
+
+LadoDaJuncao lado_da_juncao(const TopoDS_Face& f, const gp_Pnt& p, const gp_Vec& tangente) {
+    Handle(Geom_Surface) gs = BRep_Tool::Surface(f);
+    GeomAPI_ProjectPointOnSurf pr(p, gs);
+    if (pr.NbPoints() == 0) throw std::runtime_error("não foi possível projetar a borda na superfície");
+    double u, v;
+    pr.LowerDistanceParameters(u, v);
+    GeomLProp_SLProps sl(gs, u, v, 2, 1e-7);
+    LadoDaJuncao r;
+    r.normal = sl.IsNormalDefined() ? gp_Vec(sl.Normal()) : gp_Vec(0, 0, 1);
+    r.entra = r.normal.Crossed(tangente);
+    if (r.entra.Magnitude() < 1e-12) throw std::runtime_error("a borda é perpendicular à superfície");
+    r.entra.Normalize();
+    if (r.entra.Dot(gp_Vec(p, center_of(f))) < 0) r.entra.Reverse();
+    if (sl.IsCurvatureDefined()) {
+        if (sl.IsUmbilic()) r.curvatura = sl.MaxCurvature();
+        else {
+            // Euler: a curvatura numa direção vem das principais
+            gp_Dir d1, d2;
+            sl.CurvatureDirections(d1, d2);
+            const double c = r.entra.Dot(gp_Vec(d1)), s = r.entra.Dot(gp_Vec(d2));
+            r.curvatura = sl.MaxCurvature() * c * c + sl.MinCurvature() * s * s;
+        }
+    }
+    return r;
+}
+
+}  // namespace
+
+// Junção entre as bordas livres de `a` e a superfície `b`. O ângulo vem das direções que entram em cada
+// face, e não das normais: as duas superfícies podem ter normais opostas sem haver dobra nenhuma.
+rust::Vec<double> connect_check(const Shape& a, const Shape& b, uint32_t samples, double max_gap) {
+    return guard("análise de conexão", [&] {
+        rust::Vec<double> out;
+        TopTools_IndexedDataMapOfShapeListOfShape e2f;
+        TopExp::MapShapesAndAncestors(a.s, TopAbs_EDGE, TopAbs_FACE, e2f);
+        std::vector<TopoDS_Face> faces_b;
+        for (TopExp_Explorer x(b.s, TopAbs_FACE); x.More(); x.Next()) faces_b.push_back(TopoDS::Face(x.Current()));
+        const int n = int(std::max(samples, 2u));
+        for (int i = 1; i <= e2f.Extent(); ++i) {
+            const TopoDS_Edge& e = TopoDS::Edge(e2f.FindKey(i));
+            if (e2f(i).Extent() != 1 || BRep_Tool::Degenerated(e)) continue;
+            BRepExtrema_DistShapeShape perto(e, b.s);
+            if (!perto.IsDone() || perto.Value() > max_gap) continue;
+            const TopoDS_Face fa = TopoDS::Face(e2f(i).First());
+            BRepAdaptor_Curve c(e);
+            for (int k = 0; k < n; ++k) {
+                const double t = c.FirstParameter() + (c.LastParameter() - c.FirstParameter()) * (k + 0.5) / n;
+                gp_Pnt p;
+                gp_Vec tan;
+                c.D1(t, p, tan);
+                if (tan.Magnitude() < 1e-12) continue;
+                const TopoDS_Vertex vx = BRepBuilderAPI_MakeVertex(p).Vertex();
+                double gap = 1e300;
+                gp_Pnt q;
+                TopoDS_Face fb;
+                for (const TopoDS_Face& f : faces_b) {
+                    BRepExtrema_DistShapeShape d(f, vx);
+                    if (d.IsDone() && d.NbSolution() > 0 && d.Value() < gap) gap = d.Value(), q = d.PointOnShape1(1), fb = f;
+                }
+                if (fb.IsNull() || gap > max_gap) continue;
+                const LadoDaJuncao la = lado_da_juncao(fa, p, tan), lb = lado_da_juncao(fb, q, tan);
+                const double ang = std::acos(std::clamp(-la.entra.Dot(lb.entra), -1.0, 1.0)) * 180.0 / M_PI;
+                const double sinal = la.normal.Dot(lb.normal) < 0 ? -1 : 1;
+                for (double x : {p.X(), p.Y(), p.Z(), gap, ang, la.curvatura, lb.curvatura * sinal}) out.push_back(x);
+            }
+        }
+        return out;
+    });
+}
+
+rust::Vec<double> signed_distances(const Shape& s, rust::Slice<const double> flat) {
+    return guard("mapa de desvio", [&] {
+        rust::Vec<double> out;
+        for (size_t i = 0; i + 2 < flat.size(); i += 3) {
+            const gp_Pnt p(flat[i], flat[i + 1], flat[i + 2]);
+            gp_Pnt q;
+            gp_Vec n;
+            near_normal(s.s, p, q, n);
+            const double d = p.Distance(q);
+            out.push_back(gp_Vec(q, p).Dot(n) < 0 ? -d : d);
+        }
+        return out;
+    });
+}
+
+// Linhas de u e v constantes de cada face, cortadas onde saem da parte aparada.
+rust::Vec<double> iso_curves(const Shape& s, uint32_t n, rust::Vec<uint32_t>& ends) {
+    return guard("isocurvas", [&] {
+        rust::Vec<double> out;
+        const int passos = 40;
+        for (TopExp_Explorer x(s.s, TopAbs_FACE); x.More(); x.Next()) {
+            const TopoDS_Face f = TopoDS::Face(x.Current());
+            double u0, u1, v0, v1;
+            BRepTools::UVBounds(f, u0, u1, v0, v1);
+            BRepAdaptor_Surface su(f);
+            BRepTopAdaptor_FClass2d dentro(f, 1e-7);
+            std::vector<gp_Pnt> linha;
+            auto fecha = [&]() {
+                // ponto solto não é linha
+                if (linha.size() > 1) {
+                    for (const gp_Pnt& p : linha)
+                        for (double c : {p.X(), p.Y(), p.Z()}) out.push_back(c);
+                    ends.push_back(uint32_t(out.size() / 3));
+                }
+                linha.clear();
+            };
+            for (int dir = 0; dir < 2; ++dir)
+                for (uint32_t i = 1; i <= n; ++i) {
+                    const double fixo = double(i) / (n + 1);
+                    for (int k = 0; k <= passos; ++k) {
+                        const double corre = double(k) / passos;
+                        const double u = u0 + (u1 - u0) * (dir == 0 ? fixo : corre), v = v0 + (v1 - v0) * (dir == 0 ? corre : fixo);
+                        if (dentro.Perform(gp_Pnt2d(u, v)) == TopAbs_OUT) {
+                            fecha();
+                            continue;
+                        }
+                        linha.push_back(su.Value(u, v));
+                    }
+                    fecha();
+                }
+        }
+        return out;
+    });
+}
+
 std::unique_ptr<Shape> sew_shapes(const Shape& s, double tol) {
     return guard("juntar", [&] { return wrap(sewn(s.s, std::max(tol, 1e-6))); });
 }
