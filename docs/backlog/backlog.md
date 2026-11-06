@@ -4,15 +4,15 @@ Consolidado do [design review](../contextos/design-review.md), dos [contextos](.
 Versão visual (kanban + comparador): [painel.html](painel.html), gerada por `scripts/benchmark/pagina.py`.
 Gerado por `scripts/benchmark/backlog.py`; o estado de cada item é atualizado aqui a cada entrega.
 
-**Estimativa total:** ≈ 90.9 M tokens (≈ 303 mil linhas de código, pela média das últimas versões).
+**Estimativa total:** ≈ 91.2 M tokens (≈ 304 mil linhas de código, pela média das últimas versões).
 
 | Onda | Versão | Itens | Tokens | % |
 |---|---|---|---|---|
 | Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes) | `0.1.0-alpha.28 a .30` | 36 | ≈ 7180 k | 7.9% |
-| Onda 1 — bugs do design review | `0.1.0-alpha.31` | 58 | ≈ 11610 k | 12.8% |
-| Onda 2 — filosofia base + VPM local | `0.1.0-alpha.32` | 78 | ≈ 19580 k | 21.5% |
+| Onda 1 — bugs do design review | `0.1.0-alpha.31` | 58 | ≈ 11610 k | 12.7% |
+| Onda 2 — filosofia base + VPM local | `0.1.0-alpha.32` | 79 | ≈ 19830 k | 21.7% |
 | Onda 3 — módulos novos e lacunas do benchmark | `0.1.0-alpha.33+` | 80 | ≈ 21590 k | 23.7% |
-| Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…) | `0.2.x` | 97 | ≈ 30970 k | 34.1% |
+| Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…) | `0.2.x` | 97 | ≈ 30970 k | 34.0% |
 
 Prioridade: **P0** quebra o uso · **P1** importante · **P2** desejável · **P3** futuro.
 Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = captura do app com `FENKRA_DEMO_*` · **Manual** = usuário.
@@ -137,6 +137,7 @@ Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = 
 | B346 | P0 | **Polimento visual: superfície lisa independente dos triângulos** — A superfície mostra as facetas dos triângulos, sobretudo na zebra e na curvatura, enquanto softwares de modelagem CAD avançados mostram uma superfície polida mesmo com poucos triângulos. Separar representação de malha: sombreamento por pixel com normais da superfície exata, zebra e isofotas calculadas por pixel, curvatura amostrada na superfície e não nos vértices, refino adaptativo por curvatura e silhueta lisa. Aceite: esfera, cilindro e superfície livre com poucos triângulos sem faceta visível em sombreado, zebra e curvatura. | USR-RENDER, B10 |  | 450 k | 0.5% | Auto + Visual | feito |
 | B347 | P0 | **Fluidez: regressão de quadros e limite de FPS configurável** — O app ficou com sensação de 20 quadros por segundo depois das últimas entregas. Medir o tempo de quadro, achar o que roda a cada quadro sem precisar e voltar à fluidez anterior, com teste de orçamento de quadro. Nova opção nas configurações gráficas: limite de quadros em 30, 60, 120, 144 ou sem limite, e sincronismo vertical, com contador opcional de quadros na tela. | USR-FPS |  | 250 k | 0.3% | Auto + Visual | em andamento |
 | B349 | P0 | **Zebra e análises não pegam o sombreado de sketch** — Nas análises de superfície (zebra, curvatura, isofotas, inclinação) a sombra do perfil do sketch não entra no cálculo nem é pintada pelo modo de análise. | USR-TESTE |  | 60 k | 0.1% | Auto + Visual | em andamento |
+| B350 | P0 | **Sólidos: varredura em guia com cantos gira a seção certo** — Varredura em guia com cantos sai com a seção sem girar, com volume errado e aprovada pela checagem: L dá 628 em vez de 1257, U dá zero. Hoje só há aviso em varredura e nervura de chapa. Refazer a junção de canto e dar aviso também em membro e no tubo do filete. Muda documentos salvos, então precisa de migração. | USR-BUG |  | 250 k | 0.3% | Auto + Visual | em andamento |
 | B86 | P0 | **Chapa: planificação exata, Check Overlapping e DXF com camadas** — Nenhuma feature some na planificada (perfil, louver, estampos) e sobreposições são listadas; DXF 1:1 com camadas fixas (contorno, furos, dobra para cima/baixo, ferramenta). Tabela de dobras do mapa com ordem e etiquetas iguais às da vista; propriedades blank, área, massa e número de dobras. | PESQ-CHP, PESQ-DES |  | 300 k | 0.3% | Auto + Visual | em andamento |
 | B87 | P0 | **Conversor: crate fenkra-conversor e ponte XDE** — Crate com trait Provedor, opções serializáveis, relatório e processo filho fenkra-conv que isola falhas do OCCT. read_xcaf/write_xcaf via STEPCAFControl com AP203/214/242, nomes, cores, camadas e estrutura; ida e volta preserva volume, área e centroide em 1e-6. Deixar o gancho para PMI (XCAFDoc_DimTolTool, write.step.schema AP242, SetDimTolMode) que o item de AP242 semântico preenche. | PESQ-CNV, PESQ-PMI |  | 300 k | 0.3% | Auto | feito |
 | B88 | P0 | **Conversor: importar STEP e BREP na interface** — Acrescentar ao aceite: antes de confirmar, o diálogo mostra miniatura 3D, caixa envolvente em mm, contagem de corpos e faces e aviso de unidade suspeita (peça com mais de 10 000 mm ou menos de 0,1 mm); depois da importação, relatório copiável com faces reparadas, sólidos que não fecharam e o que o formato não carrega. Dica por campo em cada opção, ícone do conjunto e tooltip em dois estágios. O documento recebe o selo de origem (item novo de selo e vínculo). | PESQ-CNV, PESQ-MAC |  | 300 k | 0.3% | Auto + Visual | feito |

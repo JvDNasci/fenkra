@@ -719,6 +719,8 @@ c('B348', 2, 'P1', 'Sketch: clicar no perfil sombreado seleciona as entidades qu
   ['USR-TESTE'], [], 150, 'Auto + Visual', 'Sketch', status='em andamento'),
 c('B349', 2, 'P0', 'Zebra e análises não pegam o sombreado de sketch', 'Nas análises de superfície (zebra, curvatura, isofotas, inclinação) a sombra do perfil do sketch não entra no cálculo nem é pintada pelo modo de análise.',
   ['USR-TESTE'], [], 60, 'Auto + Visual', 'Interface', status='em andamento'),
+c('B350', 2, 'P0', 'Sólidos: varredura em guia com cantos gira a seção certo', 'Varredura em guia com cantos sai com a seção sem girar, com volume errado e aprovada pela checagem: L dá 628 em vez de 1257, U dá zero. Hoje só há aviso em varredura e nervura de chapa. Refazer a junção de canto e dar aviso também em membro e no tubo do filete. Muda documentos salvos, então precisa de migração.',
+  ['USR-BUG'], [], 250, 'Auto + Visual', 'Sólidos', status='em andamento'),
 ]
 def main():
     for x in B:
