@@ -106,7 +106,7 @@ fn corpus(dir: &Path, quantas: usize, distintas: bool) -> PathBuf {
             camera: None,
             linhas: vec![],
         });
-        a.display_states.push(DisplayState { name: "Só a primeira".into(), hidden: ids[1..].to_vec(), colors: vec![], offsets: vec![], camera: None, linhas: vec![] });
+        a.display_states.push(DisplayState { explosao: Default::default(), name: "Só a primeira".into(), hidden: ids[1..].to_vec(), colors: vec![], offsets: vec![], camera: None, linhas: vec![] });
     }
     let f = dir.join(format!("conjunto_{quantas}{}.fka", if distintas { "d" } else { "" }));
     std::fs::write(&f, a.to_json()).unwrap();
