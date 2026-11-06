@@ -35,6 +35,7 @@ pub mod refs;
 pub mod chapa;
 pub mod massa;
 pub mod termino;
+mod edicao_direta;
 pub mod padrao;
 pub mod furo_norma;
 pub mod chapa_linha;
@@ -4207,7 +4208,17 @@ impl Ctx<'_> {
                 };
                 let tool = face.sweep(&spine.pts, mode).map_err(k)?;
                 self.apply(f.target, tool, w.op, f.id)?;
-                Ok((!sk.open.is_empty()).then(|| format!("{} perfil(is) aberto(s) do sketch foram descartados: só contornos fechados varrem", sk.open.len())))
+                let mut avisos: Vec<String> = vec![];
+                if !sk.open.is_empty() {
+                    avisos.push(format!("{} perfil(is) aberto(s) do sketch foram descartados: só contornos fechados varrem", sk.open.len()));
+                }
+                // B301: o perfil deve estar normal à curva no início; o ângulo fora disso entra no aviso
+                if let Some(desvio) = varredura_desvio(&frame.normal, &spine.pts) {
+                    if desvio > 3. {
+                        avisos.push(format!("o perfil não está normal à curva guia (desvio de {desvio:.0}° no início): crie um plano normal à curva e desenhe o perfil nele"));
+                    }
+                }
+                Ok((!avisos.is_empty()).then(|| avisos.join("; ")))
             }
             FeatureKind::Loft(l) => {
                 let mut dropped: Vec<String> = vec![];
@@ -4288,6 +4299,8 @@ impl Ctx<'_> {
             FeatureKind::Shell(sh) if sh.faces.is_empty() && !sh.closed => Ok(Some("escolha na viewport as faces a remover — até lá a casca não é aplicada".into())),
             FeatureKind::Draft(d) if d.faces.is_empty() => Ok(Some("escolha na viewport as faces que recebem a saída — até lá nada é aplicado".into())),
             FeatureKind::Thickness(t) if t.faces.is_empty() => Ok(Some("escolha na viewport as faces a engrossar — até lá nada é aplicado".into())),
+            FeatureKind::DirectEdit(d) if d.faces.is_empty() => Ok(Some("escolha na viewport as faces a editar — até lá nada é aplicado".into())),
+            FeatureKind::DirectEdit(d) => self.edicao_direta(f, d),
             FeatureKind::Shell(sh) => {
                 let t = ev(&sh.thickness, &self.vars, "espessura")?;
                 let (b, owners, roles) = self.body_owned(f.target).ok_or("não há corpo para esvaziar")?;
@@ -5656,7 +5669,29 @@ impl Ctx<'_> {
                     }
                     None => None,
                 };
+                // B49: pontos de controle do filete variável (posição em % -> 0 a 1; raio em mm)
+                let mut controles: Vec<[f64; 2]> = vec![];
+                if mode_code == Some(0) {
+                    for (i, c) in o.extra.controls.iter().enumerate() {
+                        let pos = ev(&c.at, &self.vars, &format!("posição do ponto {}", i + 1))?;
+                        let raio = ev(&c.radius, &self.vars, &format!("raio do ponto {}", i + 1))?;
+                        if !(pos > 0. && pos < 100.) {
+                            return Err(format!("o ponto de controle {} fica em {pos}%: use um valor entre 0 e 100 (exclusive)", i + 1));
+                        }
+                        if raio <= 0. {
+                            return Err(format!("o ponto de controle {} precisa de raio maior que zero", i + 1));
+                        }
+                        controles.push([pos / 100., raio]);
+                    }
+                    controles.sort_by(|a, c| a[0].total_cmp(&c[0]));
+                }
                 let run = |val: f64, val2: f64| match (&picked, mode_code) {
+                    (Some(mids), Some(0)) if !controles.is_empty() => {
+                        // a medida de apoio escala junto (quando o raio tentado é menor, os pontos também)
+                        let fator = if v.abs() > 1e-12 { val / v } else { 1. };
+                        let c: Vec<[f64; 2]> = controles.iter().map(|p| [p[0], p[1] * fator]).collect();
+                        b.fillet_variable_tagged(val, val2, &c, o.extra.smooth, mids, tol, &tags)
+                    }
                     (Some(mids), Some(m)) => b.edges_mode_tagged(m, val, val2, mids, &o.extra.flips, tol, &tags),
                     (Some(mids), None) => b.edges_tagged(val, mids, tol, chamfer, &tags),
                     (None, _) if chamfer => b.chamfer_tagged(val, &tags),
@@ -5684,6 +5719,14 @@ impl Ctx<'_> {
             }
         }
     }
+}
+
+/// Ângulo (graus) entre a normal do plano do perfil e a tangente da guia no primeiro trecho (B301).
+fn varredura_desvio(normal: &[f64; 3], pts: &[[f64; 3]]) -> Option<f64> {
+    let (a, b) = (pts.first()?, pts.iter().skip(1).find(|p| geo3d::dist(**p, pts[0]) > 1e-9)?);
+    let t = geo3d::unit(geo3d::sub(*b, *a))?;
+    let n = geo3d::unit(*normal)?;
+    Some(geo3d::dot(n, t).abs().clamp(0., 1.).acos().to_degrees())
 }
 
 /// Recalcula o documento inteiro. Roda fora da thread da interface (RNF-001).

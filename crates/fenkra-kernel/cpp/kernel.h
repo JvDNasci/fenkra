@@ -63,6 +63,11 @@ std::unique_ptr<Shape> shell_t(const Shape& s, rust::Slice<const double> pts, do
 std::unique_ptr<Shape> draft_t(const Shape& s, rust::Slice<const double> pts, double dx, double dy, double dz, double angle_deg,
                                double ox, double oy, double oz, double nx, double ny, double nz, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
 std::unique_ptr<Shape> faces_offset_tool(const Shape& s, rust::Slice<const double> pts, double value);
+bool shape_valid(const Shape& s);
+std::unique_ptr<Shape> fillet_var_t(const Shape& s, double r0, double r1, rust::Slice<const double> ctrl, bool smooth, rust::Slice<const double> mids, double tol,
+                                    rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
+std::unique_ptr<Shape> defeature_t(const Shape& s, rust::Slice<const double> pts, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
+std::unique_ptr<Shape> face_offset_t(const Shape& s, rust::Slice<const double> pts, double value, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
 std::unique_ptr<Shape> extrude_taper(const Shape& face, double dx, double dy, double dz, double len, double angle_deg);
 std::unique_ptr<Shape> thin_profile(const Shape& face, double t);
 std::unique_ptr<Shape> thick_segments(rust::Slice<const double> segs, double nx, double ny, double nz, double t);

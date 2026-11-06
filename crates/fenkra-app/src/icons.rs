@@ -92,6 +92,7 @@ macro_rules! modelos {
 
 // Lista gerada a partir de assets/icons2 (scripts/gerar_icones2.py).
 modelos!(
+    "edit_mover_face", "edit_apagar_face", "edit_deslocar_face", "edit_raio_filete",
     "curso", "mapa_macro", "perfil_fluxo", "comparar", "estado_conflito", "estado_editado", "estado_leitura", "estado_liberada", "estado_sem_revisao",
     "conversao_lote", "formatos_suportados", "exportar_arquivo", "liberar_revisao", "onde_usado", "des_cota_inteligente",
     "forma", "forma_caixa", "forma_esfera", "forma_cilindro", "forma_plano", "forma_extrudar", "forma_laco", "forma_aresta", "forma_borda", "forma_tangencia", "forma_simetria", "forma_converter",

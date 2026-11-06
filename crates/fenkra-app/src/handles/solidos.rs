@@ -31,6 +31,15 @@ pub(super) const SAIDA: u8 = 18;
 /// Ângulo de uma rotação do corpo.
 pub(super) const GIRAR: u8 = 19;
 
+/// Deslocamento X, Y e Z da edição direta (20, 21 e 22) e o valor dela (23): distância ou raio.
+pub(super) const EDICAO_X: u8 = 20;
+pub(super) const EDICAO_VALOR: u8 = 23;
+
+/// Raio de cada ponto de controle do filete variável (30 a 39, B49).
+pub(super) const CONTROLE_RAIO: u8 = 30;
+/// Quantos pontos de controle ganham seta.
+const MAX_CONTROLES: usize = 10;
+
 /// Limite do arco do ângulo de saída, em graus.
 const LIM_SAIDA: (f64, f64) = (-45., 45.);
 
@@ -117,6 +126,119 @@ pub(super) fn alcas(r: &fenkra_solidos::RecomputeResult, doc: &Document, id: Id)
     }
 }
 
+/// Normal de saída do material na face do `ponto`, lida da malha (vale para plano, cilindro, esfera…).
+pub(super) fn normal_da_face(m: &fenkra_kernel::Mesh, ponto: [f64; 3]) -> Option<Vec3> {
+    let fi = crate::picking::face_da_malha(m, ponto)?;
+    normal_do_indice(m, fi, ponto)
+}
+
+/// Normal de saída do material na face de índice `fi`, no vértice dela mais perto do `ponto`.
+pub(super) fn normal_do_indice(m: &fenkra_kernel::Mesh, fi: usize, ponto: [f64; 3]) -> Option<Vec3> {
+    let i0 = *m.face_ranges.get(fi)? as usize;
+    let i1 = m.face_ranges.get(fi + 1).map(|x| *x as usize).unwrap_or(m.indices.len());
+    let p = v3(ponto);
+    let (mut melhor, mut n) = (f32::MAX, None);
+    for i in &m.indices[i0..i1] {
+        let k = *i as usize * 3;
+        let q = Vec3::new(m.positions[k], m.positions[k + 1], m.positions[k + 2]);
+        let d = (q - p).length();
+        if d < melhor {
+            melhor = d;
+            n = Some(Vec3::new(m.normals[k], m.normals[k + 1], m.normals[k + 2]));
+        }
+    }
+    n.and_then(|v| v.try_normalize())
+}
+
+/// Alças da edição direta (B33): mover tem uma seta por eixo; deslocar, uma seta pela normal da
+/// face; raio do filete, uma seta do ponto da face para dentro (o comprimento é o raio, e a ponta
+/// cai no centro do arco quando o raio é o atual). A malha vem de antes do comando, porque a face
+/// escolhida pode já não existir depois dele.
+pub(super) fn alcas_edicao(app: &App, id: Id) -> Vec<(u8, Linear)> {
+    let Some(f) = app.open.doc.feature(id) else { return vec![] };
+    let FeatureKind::DirectEdit(e) = &f.kind else { return vec![] };
+    let Some(p) = e.faces.first().copied() else { return vec![] };
+    let base = v3(p);
+    match e.op {
+        OpDireta::Mover => {
+            let eixos = [(Vec3::X, "Deslocamento X"), (Vec3::Y, "Deslocamento Y"), (Vec3::Z, "Deslocamento Z")];
+            eixos.into_iter().enumerate().map(|(i, (dir, label))| (EDICAO_X + i as u8, Linear { base, dir, k: 1., expr: e.delta[i].clone(), label })).collect()
+        }
+        OpDireta::Deslocar | OpDireta::RaioFilete => {
+            let malha = app
+                .session
+                .as_ref()
+                .and_then(|s| s.corpos_antes.iter().find(|c| c.collector == f.target).map(|c| &c.mesh))
+                .or_else(|| app.result.as_ref().and_then(|r| r.bodies.iter().find(|b| b.collector == f.target).map(|b| &b.mesh)));
+            let Some(n) = malha.and_then(|m| normal_da_face(m, p)) else { return vec![] };
+            if e.op == OpDireta::Deslocar {
+                vec![(EDICAO_VALOR, Linear { base, dir: n, k: 1., expr: e.value.clone(), label: "Distância" })]
+            } else {
+                vec![(EDICAO_VALOR, Linear { base, dir: -n, k: 1., expr: e.value.clone(), label: "Raio novo" })]
+            }
+        }
+        OpDireta::Apagar => vec![],
+    }
+}
+
+/// Ponto da aresta `e` a `u` (0 a 1) do comprimento, medido ao longo da polilinha da malha.
+pub(super) fn ponto_na_aresta(m: &fenkra_kernel::Mesh, e: usize, u: f32) -> Option<Vec3> {
+    let nseg = m.edges.len() / 6;
+    let s0 = *m.edge_ranges.get(e)? as usize;
+    let s1 = m.edge_ranges.get(e + 1).map(|x| *x as usize).unwrap_or(nseg);
+    let segs: Vec<(Vec3, Vec3)> = (s0..s1).map(|s| {
+        let q = &m.edges[s * 6..s * 6 + 6];
+        (Vec3::new(q[0], q[1], q[2]), Vec3::new(q[3], q[4], q[5]))
+    }).collect();
+    let total: f32 = segs.iter().map(|(a, b)| (*b - *a).length()).sum();
+    if segs.is_empty() || total < 1e-6 {
+        return None;
+    }
+    let mut falta = u.clamp(0., 1.) * total;
+    for (a, b) in &segs {
+        let l = (*b - *a).length();
+        if falta <= l {
+            return Some(*a + (*b - *a) * if l > 1e-9 { falta / l } else { 0. });
+        }
+        falta -= l;
+    }
+    segs.last().map(|s| s.1)
+}
+
+/// Alças dos pontos de controle do filete variável (B49): uma seta por ponto, partindo da aresta
+/// para dentro do material (a bissetriz das duas faces), com o raio do ponto como comprimento.
+pub(super) fn alcas_filete(app: &App, id: Id) -> Vec<(u8, Linear)> {
+    let Some(f) = app.open.doc.feature(id) else { return vec![] };
+    let FeatureKind::Fillet(o) = &f.kind else { return vec![] };
+    if !matches!(o.mode, EdgeMode::Variable(_)) || o.extra.controls.is_empty() {
+        return vec![];
+    }
+    let EdgeSel::Edges(mids) = &o.edges else { return vec![] };
+    let Some(mid) = mids.first() else { return vec![] };
+    let malha = app
+        .session
+        .as_ref()
+        .and_then(|s| s.corpos_antes.iter().find(|c| c.collector == f.target).map(|c| &c.mesh))
+        .or_else(|| app.result.as_ref().and_then(|r| r.bodies.iter().find(|b| b.collector == f.target).map(|b| &b.mesh)));
+    let Some(m) = malha else { return vec![] };
+    let Some((e, d)) = crate::entradas::aresta_perto(m, *mid) else { return vec![] };
+    let Some([fa, fb]) = m.edge_faces.get(e).copied().filter(|p| p[0] != fenkra_kernel::NO_FACE && p[1] != fenkra_kernel::NO_FACE) else { return vec![] };
+    if d > 1.0 {
+        return vec![];
+    }
+    let vars = app.vars();
+    let mut out = vec![];
+    for (i, c) in o.extra.controls.iter().enumerate().take(MAX_CONTROLES) {
+        let Ok(pos) = fenkra_core::expr::eval_str(&c.at, &vars) else { continue };
+        let Some(p) = ponto_na_aresta(m, e, (pos / 100.) as f32) else { continue };
+        let pd = [p.x as f64, p.y as f64, p.z as f64];
+        let (Some(na), Some(nb)) = (normal_do_indice(m, fa as usize, pd), normal_do_indice(m, fb as usize, pd)) else { continue };
+        let Some(dir) = (-(na + nb)).try_normalize() else { continue };
+        out.push((CONTROLE_RAIO + i as u8, Linear { base: p, dir, k: 1., expr: c.radius.clone(), label: "Raio do ponto" }));
+    }
+    out
+}
+
 /// Grava o valor de uma alça extra no campo certo. `false` = o campo não existe nesse comando.
 pub(super) fn aplicar(doc: &mut Document, id: Id, slot: u8, valor: String) -> bool {
     let Some(f) = doc.feature_mut(id) else { return false };
@@ -130,6 +252,12 @@ pub(super) fn aplicar(doc: &mut Document, id: Id, slot: u8, valor: String) -> bo
             _ => return false,
         },
         (FeatureKind::Extrude(e), SAIDA) => e.taper = valor,
+        (FeatureKind::DirectEdit(e), s @ EDICAO_X..=22) => e.delta[(s - EDICAO_X) as usize] = valor,
+        (FeatureKind::DirectEdit(e), EDICAO_VALOR) => e.value = valor,
+        (FeatureKind::Fillet(o), s @ CONTROLE_RAIO..=39) => match o.extra.controls.get((s - CONTROLE_RAIO) as usize) {
+            Some(_) => o.extra.controls[(s - CONTROLE_RAIO) as usize].radius = valor,
+            None => return false,
+        },
         (FeatureKind::Primitive(p), BASE_A) => p.a = valor,
         (FeatureKind::Primitive(p), BASE_B) => p.b = valor,
         (FeatureKind::MoveBody(m), MOVER) => match &mut m.xf {
@@ -170,6 +298,64 @@ fn geometria_saida(r: &fenkra_solidos::RecomputeResult, e: &Extrude) -> Option<(
     // ângulo positivo fecha a parede (a peça afina para o fim da extrusão): gira para dentro
     let eixo = fora.cross(dir).try_normalize()?;
     Some((pivo, eixo, partida))
+}
+
+/// Término "até" que a seta de encaixe controla: até face, até plano, até o próximo e até o último.
+fn termino_ate(e: &Extent) -> bool {
+    matches!(e, Extent::UpToSurface(_) | Extent::UpTo(_) | Extent::UpToNext | Extent::UpToLast)
+}
+
+/// Término "até face" que o arraste da seta produz quando o cursor está sobre `pick` (B89). Faces do
+/// próprio comando não valem: a ferramenta não pode parar nela mesma.
+pub(super) fn ate_face_sob_cursor(pick: &crate::picking::Pick, comando: Id, chave: Option<FaceKey>) -> Option<Extent> {
+    match pick {
+        crate::picking::Pick::Face { owner, point, normal, body, .. } if *owner != comando && *body < crate::picking::SURF_BASE => Some(Extent::UpToSurface(SurfRef::Face {
+            point: point.map(|v| v as f64),
+            normal: normal.map(|v| v as f64),
+            owner: Some(*owner),
+            key: chave,
+        })),
+        _ => None,
+    }
+}
+
+/// Seta do término "até face" (B89): fica na ponta do perfil e, ao ser arrastada, encaixa na face
+/// sob o cursor. O rótulo troca "Distância" por "Até face" (e diz de quem é a face).
+pub(super) fn seta_ate_face(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id) {
+    let Some(r) = app.result.as_ref() else { return };
+    let Some(f) = app.open.doc.feature(id) else { return };
+    let FeatureKind::Extrude(e) = &f.kind else { return };
+    if !termino_ate(&e.extent) {
+        return;
+    }
+    let Some((base, dir)) = base_da_extrusao(r, e) else { return };
+    // comprimento: até a face escolhida, ou um valor de convite quando ainda não há face
+    let (alvo, rotulo) = match &e.extent {
+        Extent::UpToSurface(SurfRef::Face { point, owner, .. }) => (((v3(*point) - base).dot(dir)).max(2.), format!("{} · {}", tr("Até face"), owner.map(|o| app.open.doc.name_of(o)).unwrap_or_default())),
+        _ => (30., tr("Até face").to_string()),
+    };
+    let ponta = base + dir * alvo;
+    let (Some(sb), Some(st)) = (cam.project(rect, base), cam.project(rect, ponta)) else { return };
+    let cor = crate::theme::accent(ui.visuals());
+    let hr = ui.interact(Rect::from_center_size(st, egui::vec2(PEGA, PEGA)), egui::Id::new(("ate_face", id.0)), egui::Sense::drag());
+    let painter = ui.painter_at(rect);
+    painter.line_segment([sb, st], Stroke::new(2.5, cor));
+    painter.circle_stroke(st, PEGA / 2., Stroke::new(2., cor));
+    painter.circle_filled(sb, 3.5, cor);
+    let g = painter.layout_no_wrap(rotulo, egui::FontId::proportional(12.), Color32::WHITE);
+    let caixa = Rect::from_min_size(st + egui::vec2(18., -10.), g.size() + egui::vec2(10., 6.));
+    painter.rect_filled(caixa, 4., Color32::from_rgba_unmultiplied(20, 60, 110, 220));
+    painter.galley(caixa.min + egui::vec2(5., 3.), g, Color32::WHITE);
+    hr.clone().on_hover_text(tr("Arraste a seta até uma face do modelo: o término encaixa nela."));
+    if hr.dragged() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+        let novo = app.hover_pick.as_ref().and_then(|p| ate_face_sob_cursor(p, id, app.face_key_of(Some(p))));
+        if let (Some(novo), Some(f)) = (novo, app.open.doc.feature_mut(id)) {
+            if let FeatureKind::Extrude(e) = &mut f.kind {
+                e.extent = novo;
+            }
+        }
+    }
 }
 
 /// Arcos do comando aberto: ângulo de saída da extrusão e rotação do corpo.
@@ -368,6 +554,44 @@ mod tests {
         let girado = glam::Quat::from_axis_angle(eixo, 5f32.to_radians()) * partida;
         assert!(girado.dot(fora) < 0., "o arco precisa girar para dentro com ângulo positivo");
         assert!(v < v0, "ângulo positivo afina a peça (volume {v} × {v0})");
+    }
+
+    /// B33 e B49: a normal da face e o ponto sobre a aresta saem da malha, com o material como referência.
+    #[test]
+    fn normal_da_face_e_ponto_na_aresta_leem_a_malha() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let (d, _) = base_com_extrusao(Extent::Blind(t("20")), "0");
+        let r = recompute(&d);
+        let m = &r.bodies[0].mesh;
+        let n_topo = normal_da_face(m, [0., 0., 20.]).expect("normal do topo");
+        let n_lado = normal_da_face(m, [10., 0., 10.]).expect("normal do lado");
+        assert!((n_topo - Vec3::Z).length() < 1e-3 && (n_lado - Vec3::X).length() < 1e-3, "{n_topo:?} {n_lado:?}");
+        // a aresta de cima da frente vai de x = -10 a 10 em (y = -10, z = 20): a 25% está em x = -5
+        let (e, dist) = crate::entradas::aresta_perto(m, [0., -10., 20.]).expect("aresta");
+        assert!(dist < 1e-3);
+        let meio = ponto_na_aresta(m, e, 0.5).expect("meio");
+        assert!((meio - Vec3::new(0., -10., 20.)).length() < 1e-3, "{meio:?}");
+        let quarto = ponto_na_aresta(m, e, 0.25).expect("quarto");
+        assert!((quarto.y + 10.).abs() < 1e-3 && (quarto.z - 20.).abs() < 1e-3 && (quarto.x.abs() - 5.).abs() < 1e-3, "{quarto:?}");
+    }
+
+    /// B89: o arraste da seta "até" encaixa na face sob o cursor, menos nas faces do próprio comando.
+    #[test]
+    fn seta_ate_face_encaixa_na_face_sob_o_cursor() {
+        use crate::picking::Pick;
+        let outra = Pick::Face { body: 0, face: 3, owner: Id(7), point: [1., 2., 3.], normal: [0., 0., 1.] };
+        match ate_face_sob_cursor(&outra, Id(9), None) {
+            Some(Extent::UpToSurface(SurfRef::Face { point, normal, owner, .. })) => {
+                assert_eq!((point, normal, owner), ([1., 2., 3.], [0., 0., 1.], Some(Id(7))));
+            }
+            o => panic!("esperava até face, veio {o:?}"),
+        }
+        let propria = Pick::Face { body: 0, face: 1, owner: Id(9), point: [0.; 3], normal: [0., 0., 1.] };
+        assert!(ate_face_sob_cursor(&propria, Id(9), None).is_none(), "a ferramenta não para nela mesma");
+        assert!(ate_face_sob_cursor(&Pick::Plane(PlaneRef::Origin(OriginPlane::XY)), Id(9), None).is_none());
+        assert!(termino_ate(&Extent::UpToNext) && termino_ate(&Extent::UpTo(PlaneRef::Origin(OriginPlane::XY))) && !termino_ate(&Extent::ThroughAll));
     }
 
     #[test]

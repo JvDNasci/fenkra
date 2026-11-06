@@ -444,6 +444,7 @@ pub fn icone_comando(k: &FeatureKind) -> &'static str {
         Shell(_) => "casca",
         Draft(_) => "saida",
         Thickness(_) => "espessura",
+        DirectEdit(d) => crate::edicao_direta_ui::icone(d.op),
         Pattern(_) => "padrao_linear",
         Mirror(_) => "espelho",
         Scale(_) => "escala",

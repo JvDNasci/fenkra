@@ -1747,6 +1747,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 (FeatureKind::Shell(s), Promoted::Faces(k)) if s.faces.len() == k.len() => s.face_keys = k.clone(),
                 (FeatureKind::Draft(d), Promoted::Faces(k)) if d.faces.len() == k.len() => d.face_keys = k.clone(),
                 (FeatureKind::Thickness(t), Promoted::Faces(k)) if t.faces.len() == k.len() => t.face_keys = k.clone(),
+                (FeatureKind::DirectEdit(t), Promoted::Faces(k)) if t.faces.len() == k.len() => t.face_keys = k.clone(),
                 _ => {}
             }
         }
@@ -1794,7 +1795,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     /// Plano a usar para um novo sketch/plano: o selecionado, ou XY.
     /// Plano para um novo sketch/plano: o plano ou a face clicada na viewport, senão o da árvore.
     /// Chave v2 da face escolhida, se ela for de um corpo e tiver papel conhecido.
-    fn face_key_of(&self, p: Option<&crate::picking::Pick>) -> Option<FaceKey> {
+    pub(crate) fn face_key_of(&self, p: Option<&crate::picking::Pick>) -> Option<FaceKey> {
         let crate::picking::Pick::Face { body, face, .. } = *p? else { return None };
         self.result.as_ref()?.bodies.get(body)?.face_key(face)
     }
@@ -2427,6 +2428,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             Cmd::Shell => Sel::Feature(d.add_feature(FeatureKind::Shell(Shell { faces: faces.clone(), thickness: s("2"), outward: false, face_keys: face_keys.clone(), closed: false }))),
             Cmd::Draft => Sel::Feature(d.add_feature(FeatureKind::Draft(Draft { faces: faces.clone(), neutral: opt_plane, angle: s("3"), reverse: false, face_keys: face_keys.clone() }))),
             Cmd::Thickness => Sel::Feature(d.add_feature(FeatureKind::Thickness(Thickness { faces: faces.clone(), value: s("2"), face_keys: face_keys.clone(), remove: false }))),
+            Cmd::DirectEdit(i) => {
+                let mut e = fenkra_core::DirectEdit::novo(fenkra_core::OpDireta::ALL[i as usize % fenkra_core::OpDireta::ALL.len()]);
+                e.faces = faces.clone();
+                e.face_keys = face_keys.clone();
+                Sel::Feature(d.add_feature(FeatureKind::DirectEdit(e)))
+            }
             Cmd::Thread => Sel::Feature(d.add_feature(FeatureKind::Thread(Thread { face: faces.last().copied().unwrap_or([0.; 3]), spec: s("M10x1.5"), length: s("15"), modeled: false, end: None, start: String::new() }))),
             Cmd::PatternLinear | Cmd::PatternCircular | Cmd::PatternPoints | Cmd::Mirror => {
                 let sources: Vec<Id> = match sel_now {
@@ -7041,7 +7048,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 // casca/saída/espessura/rosca abertos: clicar numa face a acrescenta ao comando
                 let face_cmd = self.session.as_ref().map(|x| x.id).filter(|id| self.open.doc.feature(*id).is_some_and(|f| crate::feat_ui::wants_faces(&f.kind) && !crate::entradas::clique_vai_para_plano(&ctx, *id, &f.kind)));
                 // booleana aberta: clicar num corpo o faz de ferramenta (B247)
-                let combine_cmd = self.session.as_ref().map(|x| x.id).filter(|id| matches!(self.open.doc.feature(*id).map(|f| &f.kind), Some(FeatureKind::Combine(_))));
+                let combine_cmd = self.session.as_ref().map(|x| x.id).filter(|id| self.open.doc.feature(*id).is_some_and(|f| crate::entradas::escolhe_corpos(&f.kind)));
                 // corte por região aberto: clicar num pedaço troca entre ficar e sair (B277)
                 let regiao = self.session.as_ref().map(|x| x.id).zip(resp.hover_pos()).and_then(|(id, h)| crate::sup3d::regiao_sob(r, id, &cam, rect, h).map(|i| (id, i)));
                 if regiao.is_some() {
@@ -7064,8 +7071,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 } else if let (Some(cid), true, Some(crate::picking::Pick::Face { body, .. })) = (combine_cmd, resp.clicked_by(egui::PointerButton::Primary), self.hover_pick) {
                     let coletor = r.bodies.get(body).map(|b| b.collector);
                     if let (Some(col), Some(f)) = (coletor, self.open.doc.feature_mut(cid)) {
-                        let alvo = f.target;
-                        crate::entradas::corpo_clicado(&mut f.kind, alvo, col);
+                        // B300: o primeiro clique escolhe o alvo, o segundo a ferramenta
+                        let papel = crate::entradas::papel_do_clique(&ctx, cid);
+                        let mut alvo = f.target;
+                        if let Some(dado) = crate::entradas::clique_no_corpo(&mut f.kind, &mut alvo, col, papel) {
+                            f.target = alvo;
+                            let prox = crate::entradas::depois_do_clique(&f.kind, dado);
+                            crate::entradas::definir_papel_do_clique(&ctx, cid, prox);
+                        }
                     }
                 } else if let (Some(Some(sid)), true, Some(crate::picking::Pick::Edge { mid, .. })) = (
                     self.session.as_ref().map(|x| x.id).map(|id| self.open.doc.feature(id).filter(|f| matches!(f.kind, FeatureKind::SmFlange(_) | FeatureKind::SmHem(_))).map(|f| f.id)),
@@ -7505,6 +7518,8 @@ pub enum Cmd {
     Dwg(u8),
     /// mover o corpo: 0 translação, 1 rotação, 2 simetria, 3 afinidade
     MoveBody(u8),
+    /// edição direta de faces (B33): 0 mover, 1 apagar, 2 deslocar, 3 raio do filete
+    DirectEdit(u8),
     /// extrusão com ângulo de saída e filetes num clique
     ExtrudeDraftFillet,
     SplitBody,

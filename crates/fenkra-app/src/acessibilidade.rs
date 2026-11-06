@@ -163,6 +163,11 @@ pub fn cor_papel(papel: Papel, escuro: bool, segura: bool) -> [u8; 3] {
         (Papel::Ferramenta, true, false) => [70, 50, 170],
         (Papel::Neutro, true, true) => [110, 220, 190],
         (Papel::Neutro, true, false) => [0, 115, 110],
+        // corpo alvo da booleana, da divisão e do mover (B300): verde-limão, longe do rosa, do roxo e do verde-água
+        (Papel::Alvo, false, true) => [190, 225, 70],
+        (Papel::Alvo, false, false) => [85, 115, 0],
+        (Papel::Alvo, true, true) => [235, 235, 130],
+        (Papel::Alvo, true, false) => [105, 90, 45],
     }
 }
 
@@ -171,6 +176,7 @@ pub enum Papel {
     Retirada,
     Ferramenta,
     Neutro,
+    Alvo,
 }
 
 /// Deficiências simuladas.
@@ -313,7 +319,7 @@ mod tests {
     #[test]
     fn paleta_segura_separa_os_papeis_e_o_par_acrescenta_remove() {
         for escuro in [true, false] {
-            let papeis = [cor_papel(Papel::Retirada, escuro, true), cor_papel(Papel::Ferramenta, escuro, true), cor_papel(Papel::Neutro, escuro, true)];
+            let papeis = [cor_papel(Papel::Retirada, escuro, true), cor_papel(Papel::Ferramenta, escuro, true), cor_papel(Papel::Neutro, escuro, true), cor_papel(Papel::Alvo, escuro, true)];
             assert!(pior_distancia(&papeis) >= 10., "papéis (escuro={escuro})");
             let par = [cor_estado(Estado::Acrescenta, escuro, true), cor_estado(Estado::Remove, escuro, true)];
             assert!(pior_distancia(&par) >= 10., "acrescenta x remove (escuro={escuro})");
@@ -336,7 +342,7 @@ mod tests {
                         let r = contraste(cor_estado(e, t.dark, segura), fundo);
                         assert!(r >= 3.0, "{} (segura={segura}): {e:?} sobre o fundo tem contraste {r:.2}", t.name);
                     }
-                    for p in [Papel::Retirada, Papel::Ferramenta, Papel::Neutro] {
+                    for p in [Papel::Retirada, Papel::Ferramenta, Papel::Neutro, Papel::Alvo] {
                         let r = contraste(cor_papel(p, t.dark, segura), fundo);
                         assert!(r >= 3.0, "{} (segura={segura}): {p:?} tem contraste {r:.2}", t.name);
                     }

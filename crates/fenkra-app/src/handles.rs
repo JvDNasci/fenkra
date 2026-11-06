@@ -601,10 +601,16 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: Camera) {
     if let Some(r) = app.result.as_ref() {
         list.extend(solidos::alcas(r, &app.open.doc, id));
     }
+    // B33: edição direta (mover tem uma seta por eixo; deslocar e raio, uma pela normal da face)
+    list.extend(solidos::alcas_edicao(app, id));
+    // B49: uma seta por ponto de controle do filete variável
+    list.extend(solidos::alcas_filete(app, id));
     for (i, (slot, h)) in list.into_iter().enumerate() {
         linear_handle(app, ui, rect, &cam, id, slot, i, h);
     }
     solidos::arcos(app, ui, rect, &cam, id);
+    // B89: o término "até" encaixa na face sob o cursor
+    solidos::seta_ate_face(app, ui, rect, &cam, id);
     // B275: o plano de referência do comando (espelho, saída, base) tem a seta do próprio deslocamento
     if let Some(rid) = plano_deslocavel(&app.open.doc, id) {
         if let Some(h) = handle_for(app, rid) {

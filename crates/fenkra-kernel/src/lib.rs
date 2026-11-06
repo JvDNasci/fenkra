@@ -524,6 +524,34 @@ mod imp {
             let flat: Vec<f64> = faces.iter().flatten().copied().collect();
             b::faces_offset_tool(&self.0, &flat, value).map(Shape).map_err(err)
         }
+        /// A análise do kernel aprova a topologia e a geometria do corpo.
+        pub fn is_valid(&self) -> bool {
+            b::shape_valid(&self.0)
+        }
+        /// Filete variável (B49): raio `r0` no começo da aresta, `r1` no fim e `ctrl` = pares (posição
+        /// relativa 0 a 1, raio) no meio. `smooth`: spline suave pelos pontos; senão, retas entre eles.
+        #[allow(clippy::too_many_arguments)]
+        pub fn fillet_variable_tagged(&self, r0: f64, r1: f64, ctrl: &[[f64; 2]], smooth: bool, mids: &[[f64; 3]], tol: f64, tags: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            let flat: Vec<f64> = mids.iter().flatten().copied().collect();
+            let c: Vec<f64> = ctrl.iter().flatten().copied().collect();
+            let mut out = vec![];
+            let s = b::fillet_var_t(&self.0, r0, r1, &c, smooth, &flat, tol, tags, &mut out).map_err(err)?;
+            Ok((Shape(s), out))
+        }
+        /// Edição direta (B33): apaga as faces e as vizinhas se estendem até se encontrar.
+        pub fn defeature_tagged(&self, faces: &[[f64; 3]], tags: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            let flat: Vec<f64> = faces.iter().flatten().copied().collect();
+            let mut out = vec![];
+            let s = b::defeature_t(&self.0, &flat, tags, &mut out).map_err(err)?;
+            Ok((Shape(s), out))
+        }
+        /// Edição direta (B33): desloca as faces `value` ao longo da normal (também muda raios).
+        pub fn face_offset_tagged(&self, faces: &[[f64; 3]], value: f64, tags: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            let flat: Vec<f64> = faces.iter().flatten().copied().collect();
+            let mut out = vec![];
+            let s = b::face_offset_t(&self.0, &flat, value, tags, &mut out).map_err(err)?;
+            Ok((Shape(s), out))
+        }
         pub fn extrude_taper(&self, dir: [f64; 3], len: f64, angle_deg: f64) -> KResult<Shape> {
             b::extrude_taper(&self.0, dir[0], dir[1], dir[2], len, angle_deg).map(Shape).map_err(err)
         }
@@ -1093,6 +1121,19 @@ mod imp {
             no()
         }
         pub fn draft_tagged(&self, _: &[[f64; 3]], _: [f64; 3], _: f64, _: &Frame, _: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            no()
+        }
+        pub fn is_valid(&self) -> bool {
+            false
+        }
+        #[allow(clippy::too_many_arguments)]
+        pub fn fillet_variable_tagged(&self, _: f64, _: f64, _: &[[f64; 2]], _: bool, _: &[[f64; 3]], _: f64, _: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            no()
+        }
+        pub fn defeature_tagged(&self, _: &[[f64; 3]], _: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            no()
+        }
+        pub fn face_offset_tagged(&self, _: &[[f64; 3]], _: f64, _: &[i32]) -> KResult<(Shape, Vec<i32>)> {
             no()
         }
         pub fn faces_offset_tool(&self, _: &[[f64; 3]], _: f64) -> KResult<Shape> {

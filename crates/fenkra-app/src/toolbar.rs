@@ -149,7 +149,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             ]),
             Family("varredura", vec![
                 it("nervura", "Nervura", "Varrer o perfil ao longo de uma curva (Rib)", "O perfil do sketch percorre uma curva guia (linha, spline, hélice, aresta) acrescentando material.", Cmd(C::Rib)),
-                it("rasgo_varrido", "Rasgo", "Remover varrendo ao longo de uma curva (Slot)", "O perfil percorre a curva guia removendo material.", Cmd(C::Slot)),
+                it("rasgo_varrido", "Rasgo varrido", "Remover varrendo o perfil ao longo de uma curva (não é o rasgo de chapa)", "O perfil percorre a curva guia removendo material. Para um rasgo em chapa metálica use o recorte da bancada Chapa.", Cmd(C::Slot)),
             ]),
             Family("multisecoes", vec![
                 it("multisecoes", "Multi-seções", "Sólido por vários perfis (loft)", "Transição suave entre dois ou mais perfis em planos diferentes.", Cmd(C::Loft)),
@@ -194,6 +194,12 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("casca", "Casca", "Esvaziar o sólido (Shell)", "Abre as faces escolhidas e deixa paredes com espessura uniforme.", Cmd(C::Shell))),
             One(it("saida", "Saída", "Ângulo de saída (Draft)", "Inclina as faces escolhidas a partir de um plano neutro, para desmoldar.", Cmd(C::Draft))),
             One(it("espessura", "Espessura", "Engrossar ou afinar faces (Thickness)", "Acrescenta ou remove material nas faces planas escolhidas.", Cmd(C::Thickness))),
+            Family("edit_direta", vec![
+                it("edit_mover_face", "Mover face", "Mover faces (edição direta)", "Leva o relevo formado pelas faces escolhidas (boss, furo, rasgo) para outro lugar, sem histórico.", Cmd(C::DirectEdit(0))),
+                it("edit_apagar_face", "Apagar face", "Apagar faces com cura (edição direta)", "Apaga as faces e as vizinhas se estendem até se encontrar.", Cmd(C::DirectEdit(1))),
+                it("edit_deslocar_face", "Deslocar face", "Deslocar faces (edição direta)", "Empurra ou puxa as faces pela normal; em cilindro e esfera muda o raio.", Cmd(C::DirectEdit(2))),
+                it("edit_raio_filete", "Raio do filete", "Trocar o raio de um filete (edição direta)", "Escolha a face curva de um filete existente e dê o raio novo; zero desfaz o filete.", Cmd(C::DirectEdit(3))),
+            ]),
             One(it("rosca", "Rosca", "Rosca em eixo ou furo (Thread/Tap)", "Rosca cosmética ou modelada numa face cilíndrica, por norma.", Cmd(C::Thread))),
         ],
         Group::Padroes => vec![

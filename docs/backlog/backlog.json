@@ -826,7 +826,7 @@
    "tokens_k": 200,
    "teste": "Auto",
    "area": "Sólidos",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -1015,7 +1015,7 @@
    "tokens_k": 120,
    "teste": "Auto + Visual",
    "area": "Sólidos",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -5128,7 +5128,7 @@
    "tokens_k": 200,
    "teste": "Auto + Visual",
    "area": "Sólidos",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -5144,7 +5144,7 @@
    "tokens_k": 160,
    "teste": "Visual",
    "area": "Sólidos",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {

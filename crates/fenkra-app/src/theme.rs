@@ -509,6 +509,10 @@ pub fn papel_ferramenta() -> Color32 {
 pub fn papel_neutro() -> Color32 {
     c(cor_papel(Papel::Neutro, dark_now(), paleta_segura()))
 }
+/// Corpo alvo da booleana, da divisão e do mover (B300).
+pub fn papel_alvo() -> Color32 {
+    c(cor_papel(Papel::Alvo, dark_now(), paleta_segura()))
+}
 
 #[cfg(test)]
 mod tests {
