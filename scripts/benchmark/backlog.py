@@ -727,6 +727,8 @@ c('B352', 2, 'P1', 'Desenho: sketch na vista e na folha', 'Criar sketch dentro d
   ['USR-TESTE'], [], 300, 'Auto + Visual', 'Desenho técnico'),
 c('B353', 3, 'P0', 'Projeto-teste: produto completo modelado no Fenkra para validar as bancadas', 'Modelar um produto real de ponta a ponta usando quase todas as bancadas: esqueleto estrutural com tubos dobrados, chapa, sólidos, superfícies e forma livre, transmissão, fixadores, montagem, desenho, PMI e PLM. Feito por comandos reproduzíveis, cada falha vira item do backlog. O conjunto fica como exemplo e teste de regressão.',
   ['USR-TESTE'], [], 600, 'Auto + Visual', 'Geral'),
+c('B354', 3, 'P1', 'Biblioteca: correntes de kart 219 e 428', 'Acrescentar as correntes 219 e 428 à biblioteca de transmissão, com dados conferidos em duas fontes gratuitas. Necessária para a etapa de transmissão do kart de teste (B353).',
+  ['USR-TESTE'], [], 60, 'Auto', 'Biblioteca de normas'),
 ]
 def main():
     for x in B:

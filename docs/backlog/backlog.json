@@ -1,6 +1,6 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 92380,
+ "tokens_total_k": 92440,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
@@ -23,8 +23,8 @@
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
-   "tokens_k": 22190,
-   "pct": 24.0
+   "tokens_k": 22250,
+   "pct": 24.1
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
@@ -5979,6 +5979,22 @@
    "area": "Geral",
    "status": "a fazer",
    "pct": 0.6
+  },
+  {
+   "id": "B354",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Biblioteca: correntes de kart 219 e 428",
+   "oque": "Acrescentar as correntes 219 e 428 à biblioteca de transmissão, com dados conferidos em duas fontes gratuitas. Necessária para a etapa de transmissão do kart de teste (B353).",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 60,
+   "teste": "Auto",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 0.1
   }
  ]
 }

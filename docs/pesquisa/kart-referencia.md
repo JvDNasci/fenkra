@@ -353,3 +353,10 @@ direito autoral incerto.
 3. **Motor.** Manter volume simplificado, como proposto, ou projetar um motor próprio, o que aumentaria
    bastante o número de peças.
 4. **Tubo principal.** Confirmar Ø30 × 2,4 mm ou preferir Ø32 × 2,0 mm.
+
+## Decisões do usuário (06/11/2026)
+
+- Corrente 219, com item próprio para conferir os dados em duas fontes (B354).
+- Carroceria na bancada Forma livre.
+- Motor como volume simplificado.
+- Tubo do chassi Ø30 × 2,4.
