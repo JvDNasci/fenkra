@@ -731,7 +731,7 @@ c('B354', 3, 'P1', 'Biblioteca: correntes de kart 219 e 428', 'Acrescentar as co
   ['USR-TESTE'], [], 60, 'Auto', 'Biblioteca de normas'),
 c('B355', 2, 'P0', 'Recurso recém-criado não fica selecionado nem laranja', 'Ao terminar um recurso, a peça fica laranja até o próximo comando, porque o último item da árvore fica selecionado. Ao confirmar, a seleção é limpa e a peça volta à cor normal. A árvore não mantém seleção permanente.',
   ['USR-TESTE'], [], 60, 'Auto + Visual', 'Interface', status='em andamento'),
-c('B356', 2, 'P1', 'Prévia leve de superfícies e splines, reconstruída ao confirmar', 'Durante a edição, splines e superfícies mostram só arame ou uma superfície grosseira sem detalhe, e a geometria final é feita ao confirmar, para o comando responder na hora.',
+c('B356', 2, 'P1', 'Prévia leve em todos os comandos, com o cálculo real só ao confirmar', 'Vale para todos os comandos. Durante a edição, o comando mostra uma prévia simples, como arame ou forma grosseira sem detalhe, e a geometria final só é calculada ao confirmar. O comando responde na hora e o programa fica mais leve.',
   ['USR-TESTE'], [], 250, 'Auto + Visual', 'Interface'),
 c('B357', 2, 'P0', 'Janelas de análise abrem e fecham certo, com reteste completo', 'As janelas de análise de curvatura e de superfície abrem e não fecham. Corrigir e retestar todas as análises.',
   ['USR-TESTE'], [], 80, 'Auto + Visual', 'Interface', status='em andamento'),
@@ -743,6 +743,10 @@ c('B360', 2, 'P1', 'Painel de comando em hierarquia, em vez de abas e caixas', '
   ['USR-TESTE'], [], 450, 'Auto + Visual', 'Interface'),
 c('B361', 2, 'P1', 'Realce de face por contorno externo', 'Clicar numa face realça só o contorno dela, sem brilhar a área inteira nem as arestas internas. Aresta e ponto continuam brilhando só eles.',
   ['USR-TESTE'], [], 150, 'Auto + Visual', 'Interface', status='em andamento'),
+c('B362', 2, 'P0', 'Abrir peça a partir da montagem sem travar', 'Abrir uma peça de dentro da montagem está dando problema. Reproduzir, corrigir e testar a ida e a volta, com alterações por salvar.',
+  ['USR-TESTE'], [], 120, 'Auto + Visual', 'Interface'),
+c('B363', 2, 'P1', 'Documentos abertos: alternar rápido entre peças e abrir em janela nova', 'Barra e atalho para ver e trocar entre os documentos abertos, sem perder o estado de cada um, com opção de abrir em nova janela, refinando a lista de peças do rodapé.',
+  ['USR-TESTE'], [], 300, 'Auto + Visual', 'Interface'),
 ]
 def main():
     for x in B:

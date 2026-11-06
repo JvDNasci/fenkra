@@ -1,6 +1,6 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 93880,
+ "tokens_total_k": 94300,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
@@ -12,25 +12,25 @@
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 11610,
-   "pct": 12.4
+   "pct": 12.3
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
-   "tokens_k": 21870,
-   "pct": 23.3
+   "tokens_k": 22290,
+   "pct": 23.6
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
    "tokens_k": 22250,
-   "pct": 23.7
+   "pct": 23.6
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
    "tokens_k": 30970,
-   "pct": 33.0
+   "pct": 32.8
   }
  },
  "itens": [
@@ -5081,7 +5081,7 @@
    "teste": "Auto + Visual",
    "area": "Interface",
    "status": "em andamento",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B298",
@@ -6016,8 +6016,8 @@
    "id": "B356",
    "onda": 2,
    "prio": "P1",
-   "titulo": "Prévia leve de superfícies e splines, reconstruída ao confirmar",
-   "oque": "Durante a edição, splines e superfícies mostram só arame ou uma superfície grosseira sem detalhe, e a geometria final é feita ao confirmar, para o comando responder na hora.",
+   "titulo": "Prévia leve em todos os comandos, com o cálculo real só ao confirmar",
+   "oque": "Vale para todos os comandos. Durante a edição, o comando mostra uma prévia simples, como arame ou forma grosseira sem detalhe, e a geometria final só é calculada ao confirmar. O comando responde na hora e o programa fica mais leve.",
    "origem": [
     "USR-TESTE"
    ],
@@ -6107,6 +6107,38 @@
    "area": "Interface",
    "status": "em andamento",
    "pct": 0.2
+  },
+  {
+   "id": "B362",
+   "onda": 2,
+   "prio": "P0",
+   "titulo": "Abrir peça a partir da montagem sem travar",
+   "oque": "Abrir uma peça de dentro da montagem está dando problema. Reproduzir, corrigir e testar a ida e a volta, com alterações por salvar.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 120,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B363",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Documentos abertos: alternar rápido entre peças e abrir em janela nova",
+   "oque": "Barra e atalho para ver e trocar entre os documentos abertos, sem perder o estado de cada um, com opção de abrir em nova janela, refinando a lista de peças do rodapé.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.3
   }
  ]
 }
