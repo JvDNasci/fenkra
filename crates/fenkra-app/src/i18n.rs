@@ -22,6 +22,7 @@ fn map() -> &'static HashMap<&'static str, &'static str> {
         TABLE.iter()
             .chain(crate::textos_ajuda::TEXTOS.iter())
             .chain(crate::textos_biblioteca::TEXTOS.iter())
+            .chain(crate::textos_biblioteca3::TEXTOS.iter())
             .chain(crate::textos_intercambio::TEXTOS.iter())
             .chain(crate::textos_projeto::TEXTOS.iter())
             .chain(crate::textos_desenho::TEXTOS.iter())

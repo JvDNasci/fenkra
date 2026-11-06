@@ -113,6 +113,7 @@ enum Acao {
     Porca(Id, bool),
     Opcao(usize, bool),
     Engajamento(f64),
+    RoscaAlem(f64),
     Mover(Id, V3),
     Apagar(Id),
     Recalcular,
@@ -220,6 +221,11 @@ fn opcoes(ui: &mut egui::Ui, st: &AsmState, acao: &mut Option<Acao>) {
     if r.changed() {
         *acao = Some(Acao::Engajamento(g));
     }
+    let mut a = auto.first().map_or(fenkra_montagem::fixadores::ROSCA_ALEM_PORCA_PADRAO, |p| p.rosca_alem_porca);
+    let r = ui.add(crate::ui_ext::dv(&mut a).speed(0.1).range(0.0..=10.).suffix(" × passo").rotulo(tr("Rosca além da porca")).dica(tr("Quantos passos de rosca devem sobrar depois da porca. O comprimento sai do próximo valor da série que cobre pega, arruelas, porca e essa sobra.")));
+    if r.changed() {
+        *acao = Some(Acao::RoscaAlem(a));
+    }
 }
 
 /// Painel do assistente.
@@ -305,6 +311,7 @@ fn aplicar(st: &mut AsmState, e: &Estado, a: Acao) -> Option<String> {
             _ => p.trocar_junto = v,
         }),
         Acao::Engajamento(g) => mudar(st, &todas, move |p| p.engajamento = g),
+        Acao::RoscaAlem(a) => mudar(st, &todas, move |p| p.rosca_alem_porca = a),
         Acao::Mover(id, q) => {
             let dir = st.dir()?;
             st.push_undo();

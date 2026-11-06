@@ -408,6 +408,50 @@ pub fn engrenagem_documento(p: &ParamEngrenagem) -> Result<Document, String> {
     Ok(m.doc)
 }
 
+/// Contorno da engrenagem externa (reta ou helicoidal, plano transversal) como polilinha fechada
+/// anti-horária, sem repetir o primeiro ponto: o dente 0 fica centrado em +X. Serve ao esquema do
+/// dente e à prévia; a peça de verdade usa splines pelos mesmos pontos. `por_flanco` é o número de
+/// segmentos de cada flanco da evolvente e `por_arco` o de cada arco de topo e de raiz.
+pub fn contorno_pontos(p: &ParamEngrenagem, por_flanco: usize, por_arco: usize) -> Result<Vec<[f64; 2]>, String> {
+    if !matches!(p.tipo, TipoEngrenagem::Reta | TipoEngrenagem::Helicoidal) {
+        return Err("o esquema do dente vale para engrenagem externa".into());
+    }
+    calculo(p)?;
+    let g = dente_externo(p);
+    let l = g.limites()?;
+    let (nf, na) = (por_flanco.max(2), por_arco.max(1));
+    let passo = 2. * PI / g.z as f64;
+    let abaixo = g.rf < g.rb;
+    let r_de = |th: f64| g.rb * (1. + th * th).sqrt();
+    let arco = |r: f64, a0: f64, a1: f64, n: usize, dst: &mut Vec<[f64; 2]>| {
+        for i in 1..=n {
+            dst.push(polar(r, a0 + (a1 - a0) * i as f64 / n as f64));
+        }
+    };
+    let mut pts = vec![polar(g.rf, -l.psi0)];
+    for k in 0..g.z {
+        let fi = passo * k as f64;
+        if abaixo {
+            pts.push(polar(g.rb, fi - l.psi0));
+        }
+        for i in 1..=nf {
+            let th = l.th0 + (l.th1 - l.th0) * i as f64 / nf as f64;
+            pts.push(polar(r_de(th), fi - g.meio_angulo(th)));
+        }
+        arco(g.ra, fi - l.psia, fi + l.psia, na, &mut pts);
+        for i in (0..nf).rev() {
+            let th = l.th0 + (l.th1 - l.th0) * i as f64 / nf as f64;
+            pts.push(polar(r_de(th), fi + g.meio_angulo(th)));
+        }
+        if abaixo {
+            pts.push(polar(g.rf, fi + l.psi0));
+        }
+        arco(g.rf, fi + l.psi0, fi + passo - l.psi0, na, &mut pts);
+    }
+    pts.pop(); // o último ponto fecha no primeiro
+    Ok(pts)
+}
+
 /// Passo máximo de torção entre seções do loft da helicoidal (graus).
 const PASSO_TORCAO: f64 = 4.;
 /// Máximo de trechos do loft.
@@ -614,6 +658,25 @@ mod tests {
 
     fn perto(a: f64, b: f64, tol: f64) -> bool {
         (a - b).abs() <= tol
+    }
+
+    #[test]
+    fn contorno_fica_entre_raiz_e_topo_e_o_dente_zero_esta_em_x() {
+        let p = ParamEngrenagem { dentes: 20, ..Default::default() };
+        let c = calculo(&p).unwrap();
+        let pts = contorno_pontos(&p, 8, 3).unwrap();
+        let rs: Vec<f64> = pts.iter().map(|q| q[0].hypot(q[1])).collect();
+        let (lo, hi) = (rs.iter().cloned().fold(f64::MAX, f64::min), rs.iter().cloned().fold(0., f64::max));
+        assert!(perto(lo, c.diametro_raiz / 2., 1e-9) && perto(hi, c.diametro_externo / 2., 1e-9), "{lo} {hi}");
+        // o ponto de maior raio mais perto de +X está no eixo do dente 0 (simétrico em y)
+        let topo: Vec<&[f64; 2]> = pts.iter().filter(|q| q[0] > 0. && q[0].hypot(q[1]) > c.diametro_externo / 2. - 1e-9).collect();
+        let soma: f64 = topo.iter().map(|q| q[1]).sum();
+        assert!(soma.abs() < 1e-9, "dente 0 centrado em +X: {soma}");
+        // área do polígono entre o círculo de raiz e o de topo (dentes ocupam cerca da metade do passo)
+        let area: f64 = pts.iter().zip(pts.iter().cycle().skip(1)).map(|(a, b)| a[0] * b[1] - b[0] * a[1]).sum::<f64>() / 2.;
+        let (rf, ra) = (c.diametro_raiz / 2., c.diametro_externo / 2.);
+        assert!(area > PI * rf * rf && area < PI * ra * ra, "{area}");
+        assert!(contorno_pontos(&ParamEngrenagem { tipo: TipoEngrenagem::Interna, ..p }, 8, 3).is_err());
     }
 
     #[test]
