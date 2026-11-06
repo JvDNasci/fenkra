@@ -750,7 +750,7 @@ pub fn demo(st: &mut AsmState, nome: &str) {
         st.dirty = true;
         return;
     }
-    if matches!(nome, "explosao" | "explosao_anim" | "exibicao") {
+    if matches!(nome, "explosao" | "explosao_anim" | "explosao_muda" | "exibicao") {
         crate::asm_exibicao::demo(st, nome);
         return;
     }

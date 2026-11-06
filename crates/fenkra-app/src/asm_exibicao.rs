@@ -46,6 +46,12 @@ pub struct Exibicao {
     pub alca: Option<f64>,
     /// refaz a explosão quando a malha chegar: sem ela não há centro de peça
     pub reaplicar: bool,
+    /// a vista mostra a explosão escolhida: quando uma peça muda, ela se refaz
+    pub ao_vivo: bool,
+    /// centros usados na última conta, para saber quando refazer
+    centros: HashMap<Id, V3>,
+    /// `FENKRA_DEMO_ASM=explosao_muda`: peça que anda depois da explosão aplicada
+    demo_mover: Option<Id>,
 }
 
 fn v3(p: V3) -> Vec3 {
@@ -67,7 +73,32 @@ pub fn aplicar(st: &mut AsmState) {
     if let Some(e) = st.asm.explosoes.get(st.exibicao.explosao) {
         st.live.offsets = e.offsets(&c);
         st.live.linhas = if e.linhas { e.linhas(&c) } else { vec![] };
+        st.live.explosao = Some(e.nome.clone());
+        st.exibicao.ao_vivo = true;
+        st.exibicao.centros = c;
         st.dirty = true;
+    }
+}
+
+/// O centro saiu do lugar além do arredondamento da malha?
+fn mudaram(a: &HashMap<Id, V3>, b: &HashMap<Id, V3>) -> bool {
+    a.len() != b.len() || a.iter().any(|(id, p)| b.get(id).is_none_or(|q| (0..3).any(|k| (p[k] - q[k]).abs() > 1e-4)))
+}
+
+/// A vista nova chegou: peça que mudou de forma ou de lugar muda de centro, e as linhas e os estados
+/// guardados saem dele. A explosão se refaz aqui, sem a pessoa pedir, e o desenho lê o estado em dia.
+pub fn acompanhar(st: &mut AsmState) {
+    let c = centros(st);
+    if !mudaram(&c, &st.exibicao.centros) {
+        return;
+    }
+    if st.asm.refazer_estados(&c) {
+        st.modified = true;
+    }
+    if st.exibicao.ao_vivo {
+        aplicar(st);
+    } else {
+        st.exibicao.centros = c;
     }
 }
 
@@ -198,6 +229,7 @@ fn aba_estados(ui: &mut egui::Ui, st: &mut AsmState, cam: Option<Cam>, cam_nova:
         let mut s = st.asm.snapshot_state(&format!("{} {}", tr("Estado"), st.asm.display_states.len() + 1));
         s.offsets = st.live.offsets.clone();
         s.linhas = st.live.linhas.clone();
+        s.explosao = st.live.explosao.clone();
         s.camera = cam;
         st.asm.display_states.push(s);
         st.modified = true;
@@ -308,6 +340,8 @@ fn aba_explosao(ui: &mut egui::Ui, st: &mut AsmState, selecao: &[Id]) {
         if ui.button(tr("Juntar tudo (sem explosão)")).clicked() {
             st.live.offsets.clear();
             st.live.linhas.clear();
+            st.live.explosao = None;
+            st.exibicao.ao_vivo = false;
             st.explode_factor = 0.;
             st.dirty = true;
         }
@@ -473,6 +507,11 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
     if st.exibicao.reaplicar && st.view.is_some() {
         st.exibicao.reaplicar = false;
         aplicar(st);
+        // sem chamar `aplicar` de novo: quem refaz as linhas é a vista nova chegando
+        if let Some(n) = st.exibicao.demo_mover.take().and_then(|id| st.asm.node_mut(id)) {
+            n.placement.origin[1] += 60.;
+            st.dirty = true;
+        }
     }
     let before = st.live.clone();
     let mut cam_nova = None;
@@ -588,6 +627,7 @@ pub fn demo(st: &mut AsmState, nome: &str) {
     st.asm.explosoes.push(e);
     st.display_open = true;
     st.exibicao.reaplicar = true;
+    st.exibicao.demo_mover = (nome == "explosao_muda").then_some(tampa);
     st.exibicao.passo = Some(1);
     st.exibicao.aba = match nome {
         "exibicao" => Aba::Estados,

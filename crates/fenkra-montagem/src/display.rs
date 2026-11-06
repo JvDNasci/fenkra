@@ -36,6 +36,9 @@ pub struct DisplayState {
     pub offsets: Vec<(Id, V3)>,
     #[serde(default)]
     pub camera: Option<Cam>,
+    /// nome da explosão que gerou os deslocamentos e as linhas: o estado se refaz por ela
+    #[serde(default)]
+    pub explosao: Option<String>,
     /// linhas de explosão no mundo, já prontas para o 3D e para o desenho
     #[serde(default)]
     pub linhas: Vec<LinhaExplosao>,
@@ -256,6 +259,7 @@ impl Explosao {
         let mut s = base.clone();
         s.offsets = self.offsets(centros);
         s.linhas = if self.linhas { self.linhas(centros) } else { vec![] };
+        s.explosao = Some(self.nome.clone());
         s
     }
 
@@ -398,8 +402,43 @@ impl Assembly {
             offsets: vec![],
             camera: None,
             linhas: vec![],
+            explosao: None,
         }
     }
+
+    /// Refaz os estados que vieram de uma explosão, com os `centros` de agora. Peça que mudou de forma
+    /// ou de lugar muda o centro; as linhas e o que o radial calculou saem dele. Devolve se algo mudou.
+    pub fn refazer_estados(&mut self, centros: &HashMap<Id, V3>) -> bool {
+        let mut mudou = false;
+        for k in 0..self.display_states.len() {
+            let Some(e) = self.display_states[k].explosao.as_ref().and_then(|n| self.explosoes.iter().find(|e| e.nome == *n)) else { continue };
+            let novo = e.no_estado(&self.display_states[k], centros);
+            mudou |= novo != self.display_states[k];
+            self.display_states[k] = novo;
+        }
+        mudou
+    }
+}
+
+/// Centro de cada peça montada, a partir dos corpos já posicionados pelo estado `offsets`. As peças de
+/// um mesmo componente pesam pelo número de pontos da malha.
+pub fn centros_dos_corpos<'a>(corpos: impl Iterator<Item = (Id, &'a [f32])>, offsets: impl Fn(Id) -> V3) -> HashMap<Id, V3> {
+    let mut somas: HashMap<Id, (V3, f64)> = HashMap::new();
+    for (id, pontos) in corpos {
+        let s = somas.entry(id).or_insert(([0.; 3], 0.));
+        for q in pontos.chunks_exact(3) {
+            s.0 = [s.0[0] + q[0] as f64, s.0[1] + q[1] as f64, s.0[2] + q[2] as f64];
+            s.1 += 1.;
+        }
+    }
+    somas
+        .into_iter()
+        .filter(|(_, s)| s.1 > 0.)
+        .map(|(id, (c, n))| {
+            let o = offsets(id);
+            (id, [c[0] / n - o[0], c[1] / n - o[1], c[2] / n - o[2]])
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -479,6 +518,32 @@ mod tests {
         assert_eq!(deslocamento(&o, a), [0., 0., 10.]);
         assert_eq!(deslocamento(&o, b), [0., 0., 20.]);
         assert_eq!(deslocamento(&o, t), [0., 0., 30.]);
+    }
+
+    #[test]
+    fn estado_acompanha_a_peca_que_mudou() {
+        let (mut a, mut c, ids) = pilha();
+        let mut e = Explosao::nova("E");
+        e.passo_da_seta(vec![ids[2]], [0., 0., 30.]);
+        let estado = e.no_estado(&a.snapshot_state("Explodida"), &c);
+        assert_eq!(estado.explosao.as_deref(), Some("E"));
+        a.explosoes.push(e);
+        a.display_states.push(estado);
+        a.display_states.push(DisplayState { name: "Solto".into(), linhas: vec![LinhaExplosao { comp: ids[0], pontos: vec![[9.; 3]] }], ..Default::default() });
+        assert!(!a.refazer_estados(&c), "nada mudou, nada a refazer");
+        // a peça cresceu: o centro subiu 4 mm, e a linha sai do centro novo
+        c.insert(ids[2], [0., 0., 24.]);
+        assert!(a.refazer_estados(&c));
+        assert_eq!(a.display_states[0].linhas[0].pontos, vec![[0., 0., 24.], [0., 0., 54.]]);
+        assert_eq!(a.display_states[1].linhas[0].pontos, vec![[9.; 3]], "estado sem explosão fica como foi guardado");
+    }
+
+    #[test]
+    fn centro_desconta_o_deslocamento_do_estado() {
+        let id = Id(7);
+        let corpo = [0f32, 0., 10., 0., 0., 20.];
+        let c = centros_dos_corpos([(id, &corpo[..])].into_iter(), |_| [0., 0., 5.]);
+        assert_eq!(c[&id], [0., 0., 10.]);
     }
 
     #[test]

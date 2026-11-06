@@ -6,7 +6,7 @@ use crate::*;
 use fenkra_core::Document;
 use fenkra_kernel::Shape;
 use fenkra_montagem::load::{full_path, PartCache};
-use fenkra_montagem::view::{placed_shape, shown};
+use fenkra_montagem::view::{compose, placed_shape, shown};
 use fenkra_montagem::{Assembly, NodeKind};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
@@ -231,8 +231,19 @@ impl Models {
         };
         let dir = full.parent().map(|p| p.to_path_buf());
         let estado = a.display_states.iter().find(|s| s.name == state);
-        let mut shown_asm = estado.map_or_else(|| a.clone(), |st| a.with_state(st));
         let vista = |c: fenkra_core::Id| !hidden.contains(&c.0);
+        // a peça pode ter mudado depois que a montagem foi salva: as linhas saem das malhas de agora
+        let mut refeito = None;
+        if let Some(st) = estado.filter(|s| s.explosao.is_some()) {
+            let mut copia = a.clone();
+            let (_, r) = compose(&copia.with_state(st), dir.as_deref(), &mut self.parts, &mut vec![]);
+            let corpos = r.bodies.iter().map(|b| (b.collector, &b.mesh.positions[..]));
+            let centros = fenkra_montagem::display::centros_dos_corpos(corpos, |id| st.offset(id));
+            copia.refazer_estados(&centros);
+            refeito = copia.display_states.into_iter().find(|s| s.name == state);
+        }
+        let estado = refeito.as_ref().or(estado);
+        let mut shown_asm = estado.map_or_else(|| a.clone(), |st| a.with_state(st));
         let linhas: Vec<Vec<V3>> = estado.map_or(vec![], |st| st.linhas.iter().filter(|l| vista(l.comp) && !st.hidden.contains(&l.comp)).map(|l| l.pontos.clone()).collect());
         // componentes escondidos só nesta vista
         for n in &mut shown_asm.nodes {

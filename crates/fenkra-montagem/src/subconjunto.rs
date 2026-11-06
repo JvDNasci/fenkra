@@ -164,6 +164,7 @@ fn estado_de_dentro(s: &display::DisplayState, dentro: &HashSet<Id>) -> display:
         offsets: s.offsets.iter().copied().filter(|(c, _)| dentro.contains(c)).collect(),
         camera: s.camera,
         linhas: s.linhas.iter().filter(|l| dentro.contains(&l.comp)).cloned().collect(),
+        explosao: s.explosao.clone(),
     }
 }
 
@@ -740,7 +741,7 @@ mod tests {
         a.add_rigid(vec![ca, cc]);
         a.add_feature(AsmFeatKind::Cut { tool: cc, clearance: "0".into() }, vec![cb]);
 
-        a.display_states.push(display::DisplayState { name: "Limpo".into(), hidden: vec![ca, cc], colors: vec![(cb, [9, 9, 9])], offsets: vec![(ca, [0., 0., 5.])], camera: None, linhas: vec![] });
+        a.display_states.push(display::DisplayState { name: "Limpo".into(), hidden: vec![ca, cc], colors: vec![(cb, [9, 9, 9])], offsets: vec![(ca, [0., 0., 5.])], camera: None, linhas: vec![], explosao: None });
         a.animations.push(display::Animation { name: "Giro".into(), keys: vec![display::Key { t: 1., state: display::DisplayState { name: "k".into(), hidden: vec![cb], ..Default::default() } }] });
         a.items.push(bom::ItemNo { key: "A.fkp".into(), no: 7 });
         a.items.push(bom::ItemNo { key: "C.fkp".into(), no: 8 });

@@ -505,6 +505,7 @@ impl AsmState {
         self.instancias = c.instancias;
         self.caixas = c.caixas;
         self.contornos.clear();
+        crate::asm_exibicao::acompanhar(self);
     }
 
     /// Recompõe a vista agora, nesta thread, se preciso. Serve a quem precisa da vista em dia para
@@ -3871,16 +3872,8 @@ pub fn sim_window(app: &mut App, ctx: &egui::Context) {
 
 /// Centro de cada componente sem explosão (para a explosão automática).
 pub(crate) fn centers(st: &AsmState) -> std::collections::HashMap<Id, [f64; 3]> {
-    let mut out = std::collections::HashMap::new();
-    if let Some(r) = &st.view {
-        for b in &r.bodies {
-            let k = (b.mesh.positions.len() / 3).max(1) as f64;
-            let c = b.mesh.positions.chunks_exact(3).fold([0f64; 3], |a, q| [a[0] + q[0] as f64, a[1] + q[1] as f64, a[2] + q[2] as f64]);
-            let o = st.live.offset(b.collector);
-            out.insert(b.collector, [c[0] / k - o[0], c[1] / k - o[1], c[2] / k - o[2]]);
-        }
-    }
-    out
+    let corpos = st.view.iter().flat_map(|r| r.bodies.iter()).map(|b| (b.collector, &b.mesh.positions[..]));
+    fenkra_montagem::display::centros_dos_corpos(corpos, |id| st.live.offset(id))
 }
 
 /// Lista de peças da montagem no nível escolhido, com os números de item fixos.
