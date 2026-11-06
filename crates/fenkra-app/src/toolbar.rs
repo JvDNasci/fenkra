@@ -516,6 +516,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("malha_booleana", "Booleana de malha", "Booleana de malha", "Une, subtrai ou intersecta dois corpos fechados sem passar pelo B-rep.", Cmd(C::Malha(crate::malha_ui::AcaoMalha::Booleana))),
                 it("malha_solido", "Malha para sólido", "Malha para sólido", "Transforma o corpo de malha em B-rep facetado, até 200 mil triângulos.", Cmd(C::Malha(crate::malha_ui::AcaoMalha::ParaBrep))),
                 it("solido_malha", "Sólido para malha", "Sólido para malha", "Transforma o corpo B-rep do coletor em corpo de malha.", Cmd(C::Malha(crate::malha_ui::AcaoMalha::DeBrep))),
+                it("impressao_mesa", "Impressão", "Preparar impressão", "Põe os corpos na mesa, confere se imprimem e grava 3MF ou STL.", Cmd(C::Impressao)),
             ]),
             One(it("importar_arquivo", TEXTO_IMPORTAR.0, TEXTO_IMPORTAR.1, TEXTO_IMPORTAR.2, Cmd(C::ImportarArquivo))),
         ],

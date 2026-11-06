@@ -468,6 +468,51 @@ pub fn malhas_do_documento(doc: &Document, desvio: f64, angulo: f64) -> Result<V
     .ok_or("o documento não pôde ser calculado")?
 }
 
+/// Corpo com a malha separada por cor.
+pub struct CorpoColorido {
+    pub coletor: Id,
+    pub nome: String,
+    pub partes: Vec<(Malha, [u8; 3])>,
+}
+
+/// Malha de um corpo B-rep, partida pela cor de cada face. A cor é a do comando que criou a face, ou a
+/// do coletor. A partição é por face, e a solda das partes devolve a casca inteira.
+fn partes_por_cor(s: &Shape, donos: &[Id], doc: &Document, cor: [u8; 3], desvio: f64, angulo: f64) -> Result<Vec<(Malha, [u8; 3])>, String> {
+    let k = s.mesh_angle(desvio, angulo).map_err(|e| e.0)?;
+    let pos: Vec<[f64; 3]> = k.positions.chunks_exact(3).map(|p| [f64::from(p[0]), f64::from(p[1]), f64::from(p[2])]).collect();
+    let mut grupos: Vec<([u8; 3], Vec<[u32; 3]>)> = Vec::new();
+    for (i, inicio) in k.face_ranges.iter().enumerate() {
+        let fim = k.face_ranges.get(i + 1).copied().unwrap_or(k.indices.len() as u32);
+        let propria = donos.get(i).and_then(|d| doc.features.iter().find(|f| f.id == *d)).and_then(|f| f.appearance.as_ref()).map(|a| a.color).unwrap_or(cor);
+        let g = match grupos.iter().position(|(c, _)| *c == propria) {
+            Some(g) => g,
+            None => {
+                grupos.push((propria, Vec::new()));
+                grupos.len() - 1
+            }
+        };
+        grupos[g].1.extend(k.indices[*inicio as usize..fim as usize].chunks_exact(3).map(|t| [t[0], t[1], t[2]]));
+    }
+    Ok(grupos.into_iter().map(|(c, tris)| (Malha { pos: pos.clone(), tris, ..Default::default() }.soldada(), c)).collect())
+}
+
+/// Corpos do documento para impressão, B-rep pela tesselação pedida e malha como está.
+pub fn corpos_coloridos(doc: &Document, desvio: f64, angulo: f64) -> Result<Vec<CorpoColorido>, String> {
+    com_contexto(doc, |cx| -> Result<Vec<CorpoColorido>, String> {
+        let mut v = Vec::new();
+        for c in cx.doc.collectors.iter().filter(|c| c.visible) {
+            if let Some((s, donos, _)) = cx.body_owned(c.id) {
+                v.push(CorpoColorido { coletor: c.id, nome: c.name.clone(), partes: partes_por_cor(s, donos, cx.doc, c.color, desvio, angulo)? });
+            }
+            if let Some(m) = cx.malhas.get(&c.id) {
+                v.push(CorpoColorido { coletor: c.id, nome: c.name.clone(), partes: vec![(m.entrada.malha.clone(), c.color)] });
+            }
+        }
+        Ok(v)
+    })
+    .ok_or("o documento não pôde ser calculado")?
+}
+
 /// STL com corpo de malha: corpo B-rep sai pela malha do preset, corpo de malha sai como está.
 pub(crate) fn exportar_stl(cx: &Ctx, coletor: Option<Id>, forma: &Shape, path: &str, preset: PresetStl) -> Result<(), String> {
     let mut partes: Vec<Malha> = cx.doc.collectors.iter().filter(|c| coletor.is_none_or(|x| x == c.id)).filter_map(|c| cx.malhas.get(&c.id)).map(|m| m.entrada.malha.clone()).collect();

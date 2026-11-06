@@ -80,6 +80,7 @@ mod textos_conversor;
 mod textos_formatos;
 mod textos_malha;
 mod malha_ui;
+mod impressao_ui;
 mod textos_intercambio;
 mod textos_projeto;
 mod textos_desenho;

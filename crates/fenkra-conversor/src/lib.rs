@@ -12,6 +12,7 @@ mod documento;
 mod dxf;
 mod formato;
 mod importar;
+pub mod impressao;
 pub mod lote;
 pub mod malha;
 mod matriz;

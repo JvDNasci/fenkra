@@ -13,6 +13,8 @@ pub mod decimar;
 pub mod desvio;
 pub mod diagnostico;
 pub mod embutir;
+pub mod impressao;
+pub mod miniatura;
 pub mod obj;
 pub mod ply;
 pub mod reparo;

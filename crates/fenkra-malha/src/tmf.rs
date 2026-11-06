@@ -10,9 +10,20 @@ use std::collections::HashMap;
 use std::fmt::Write as _;
 
 const TIPOS: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>"#;
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/><Default Extension="png" ContentType="image/png"/></Types>"#;
 const RELACOES: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>"#;
+const RELACOES_COM_MINIATURA: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/><Relationship Target="/Metadata/thumbnail.png" Id="rel1" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail"/></Relationships>"#;
+
+/// O que o pacote leva além da geometria.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct OpcoesTmf {
+    /// nome e valor, com os nomes da especificação (Title, Designer, Description...)
+    pub metadados: Vec<(String, String)>,
+    /// imagem PNG
+    pub miniatura: Option<Vec<u8>>,
+}
 
 /// A matriz do 3MF multiplica vetor linha: a rotação sai transposta e o deslocamento na última linha.
 fn transformacao(m: &[f64; 12], mm: f64) -> String {
@@ -78,6 +89,45 @@ impl Saida<'_> {
         Some(id)
     }
 
+    /// Várias malhas de um nó sem filhos num objeto só, com a cor em cada triângulo. Separar por cor em
+    /// componentes deixaria cada pedaço aberto, e o fatiador recusa objeto que não fecha.
+    fn objeto_colorido(&mut self, i: usize, malhas: &[usize]) -> Option<usize> {
+        let mut chaves: HashMap<[u64; 3], u32> = HashMap::new();
+        let mut pos: Vec<[f64; 3]> = Vec::new();
+        let mut tris: Vec<([u32; 3], Option<usize>)> = Vec::new();
+        for m in malhas.iter().filter_map(|m| self.cena.malhas.get(*m)) {
+            for t in &m.tris {
+                let v = t.map(|k| {
+                    let p = m.pos[k as usize];
+                    *chaves.entry(p.map(|x| (x + 0.).to_bits())).or_insert_with(|| {
+                        pos.push(p);
+                        (pos.len() - 1) as u32
+                    })
+                });
+                if v[0] != v[1] && v[1] != v[2] && v[0] != v[2] {
+                    tris.push((v, m.material));
+                }
+            }
+        }
+        if tris.is_empty() {
+            return None;
+        }
+        let id = self.id();
+        let padrao = tris.iter().find_map(|t| t.1);
+        let cor = padrao.map(|k| format!(r#" pid="{}" pindex="{k}""#, self.grupo)).unwrap_or_default();
+        let _ = write!(self.texto, r#"<object id="{id}" type="model" name="{}"{cor}><mesh><vertices>"#, xml(&self.cena.nos[i].nome));
+        for p in &pos {
+            let _ = write!(self.texto, r#"<vertex x="{}" y="{}" z="{}"/>"#, p[0] / self.mm, p[1] / self.mm, p[2] / self.mm);
+        }
+        self.texto.push_str("</vertices><triangles>");
+        for (t, m) in &tris {
+            let propria = m.map(|k| format!(r#" pid="{}" p1="{k}""#, self.grupo)).unwrap_or_default();
+            let _ = write!(self.texto, r#"<triangle v1="{}" v2="{}" v3="{}"{propria}/>"#, t[0], t[1], t[2]);
+        }
+        self.texto.push_str("</triangles></mesh></object>\n");
+        Some(id)
+    }
+
     fn no(&mut self, i: usize, pilha: &mut Vec<usize>) -> Option<usize> {
         if let Some(id) = self.nos.get(&i) {
             return Some(*id);
@@ -88,6 +138,12 @@ impl Saida<'_> {
         let no = self.cena.nos.get(i)?;
         if no.filhos.is_empty() && no.malhas.len() == 1 {
             let id = self.malha(no.malhas[0])?;
+            self.nos.insert(i, id);
+            return Some(id);
+        }
+        if no.filhos.is_empty() && no.malhas.len() > 1 {
+            let malhas = no.malhas.clone();
+            let id = self.objeto_colorido(i, &malhas)?;
             self.nos.insert(i, id);
             return Some(id);
         }
@@ -115,6 +171,12 @@ impl Saida<'_> {
 }
 
 pub fn gravar(cena: &Cena, mm: f64, unidade: &str) -> Result<Vec<u8>, ErroConv> {
+    let o = OpcoesTmf { metadados: vec![("Title".into(), cena.nome.clone()), ("Application".into(), "Fenkra".into())], miniatura: None };
+    gravar_com(cena, mm, unidade, &o)
+}
+
+/// Pacote com metadados e miniatura.
+pub fn gravar_com(cena: &Cena, mm: f64, unidade: &str, o: &OpcoesTmf) -> Result<Vec<u8>, ErroConv> {
     let mut s = Saida { cena, texto: String::new(), malhas: HashMap::new(), nos: HashMap::new(), proximo: 1, grupo: 1, mm };
     if !cena.materiais.is_empty() {
         s.texto.push_str(r#"<basematerials id="1">"#);
@@ -129,12 +191,16 @@ pub fn gravar(cena: &Cena, mm: f64, unidade: &str) -> Result<Vec<u8>, ErroConv> 
             let _ = write!(itens, r#"<item objectid="{id}" transform="{}"/>"#, transformacao(&cena.nos[r].local, mm));
         }
     }
+    let metadados: String = o.metadados.iter().map(|(n, v)| format!("<metadata name=\"{}\">{}</metadata>", xml(n), xml(v))).collect();
     let modelo = format!(
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<model unit=\"{unidade}\" xml:lang=\"pt-BR\" xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\"><metadata name=\"Title\">{}</metadata><metadata name=\"Application\">Fenkra</metadata>\n<resources>\n{}</resources><build>{itens}</build></model>\n",
-        xml(&cena.nome),
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<model unit=\"{unidade}\" xml:lang=\"pt-BR\" xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">{metadados}\n<resources>\n{}</resources><build>{itens}</build></model>\n",
         s.texto
     );
-    zip::gravar(&[("[Content_Types].xml", TIPOS.as_bytes()), ("_rels/.rels", RELACOES.as_bytes()), ("3D/3dmodel.model", modelo.as_bytes())], false)
+    let mut partes: Vec<(&str, &[u8])> = vec![("[Content_Types].xml", TIPOS.as_bytes()), ("_rels/.rels", if o.miniatura.is_some() { RELACOES_COM_MINIATURA.as_bytes() } else { RELACOES.as_bytes() }), ("3D/3dmodel.model", modelo.as_bytes())];
+    if let Some(png) = &o.miniatura {
+        partes.push(("Metadata/thumbnail.png", png));
+    }
+    zip::gravar(&partes, false)
 }
 
 fn numero(n: roxmltree::Node, nome: &str) -> Result<f64, ErroConv> {

@@ -11,7 +11,7 @@ const LOCAL: u32 = 0x0403_4b50;
 const CENTRAL: u32 = 0x0201_4b50;
 const FIM: u32 = 0x0605_4b50;
 
-fn crc32(dados: &[u8]) -> u32 {
+pub fn crc32(dados: &[u8]) -> u32 {
     let mut c = !0u32;
     for b in dados {
         c ^= u32::from(*b);
