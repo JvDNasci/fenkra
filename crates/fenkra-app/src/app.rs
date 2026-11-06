@@ -23,6 +23,7 @@ mod arvore;
 mod diag;
 mod gravar;
 mod roda_app;
+mod demo_janelas;
 mod estado_doc;
 mod exportar;
 mod importar;
@@ -1082,6 +1083,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         self.gen_done < self.gen_sent
     }
 
+    /// Geração do último cálculo concluído (para quem guarda resultados derivados do documento).
+    pub fn geracao(&self) -> u64 {
+        self.gen_done
+    }
+
     /// A geometria mudou desde o último pedido de cálculo?
     fn needs_recompute(&self) -> bool {
         match &self.sent_doc {
@@ -1384,7 +1390,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let fade = if ready { (1. - (el - min_time) / 0.25).clamp(0., 1.) } else { 1. };
         egui::CentralPanel::default().frame(egui::Frame::NONE).show(root, |ui| {
             let rect = ui.max_rect();
-            paint_backdrop(ui.painter(), rect, true, el, accent);
+            paint_backdrop(ui.painter(), rect, true, el, accent, None);
             let painter = ui.painter().with_clip_rect(rect);
             let c = rect.center() - egui::vec2(0., 40.);
             let appear = ease_out((el / 0.6).min(1.));
@@ -1430,6 +1436,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let mut example: Option<usize> = None;
         let dark = root.ctx().global_style().visuals.dark_mode;
         let accent = brand_accent();
+        // tema Fênix: o fundo da tela inicial sai do próprio tema (o degradê azul padrão destoava do creme e do acento)
+        let fundo_do_tema = (self.settings.theme_name == crate::theme::FENIX).then(|| root.ctx().global_style().visuals.panel_fill);
         let (now, dt) = root.ctx().input(|i| (i.time, i.stable_dt.min(0.1)));
         let t0 = *self.start_t0.get_or_insert(now);
         let el_real = (now - t0) as f32;
@@ -1438,7 +1446,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let el = el_real.min(entrada);
         let ex_meta: Vec<(&'static str, &'static str, crate::settings::Bench)> = crate::examples::all().into_iter().map(|e| (e.name, e.desc, e.bench)).collect();
         egui::CentralPanel::default().frame(egui::Frame::NONE.inner_margin(12.)).show(root, |ui| {
-            paint_backdrop(ui.painter(), ui.max_rect().expand(12.), dark, el, accent);
+            paint_backdrop(ui.painter(), ui.max_rect().expand(12.), dark, el, accent, fundo_do_tema);
             // tudo entra deslizando de leve
             let k_in = ease_out((el / 0.7).min(1.));
             ui.set_opacity(k_in);
@@ -2354,6 +2362,15 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             Cmd::Stiffener => {
                 let sk = sk_or_unset;
                 Sel::Feature(d.add_feature(FeatureKind::Stiffener(Stiffener { sketch: sk, thickness: s("3"), depth: s("20"), reverse: false, to_body: false, side: 0 })))
+            }
+            Cmd::StWeld => {
+                // as faces já selecionadas formam o conjunto 1; o próximo clique entra no conjunto 2
+                let mut w = StructWeld::novo("5");
+                for (i, p) in faces.iter().enumerate() {
+                    w.adicionar(*p, face_keys.get(i).cloned().flatten());
+                }
+                w.picking_b = !w.faces.is_empty();
+                Sel::Feature(d.add_feature(FeatureKind::StructWeld(w)))
             }
             Cmd::Shell => Sel::Feature(d.add_feature(FeatureKind::Shell(Shell { faces: faces.clone(), thickness: s("2"), outward: false, face_keys: face_keys.clone(), closed: false }))),
             Cmd::Draft => Sel::Feature(d.add_feature(FeatureKind::Draft(Draft { faces: faces.clone(), neutral: opt_plane, angle: s("3"), reverse: false, face_keys: face_keys.clone() }))),
@@ -4319,7 +4336,17 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         }
         let (componentes, restricoes) = self.asm.as_ref().map_or((0, 0), |s| (s.asm.nodes.len(), s.asm.mates.len()));
         let (folhas, vistas, cotas, tabelas) = self.dwg.as_ref().map_or((0, 0, 0, 0), |s| (s.d.sheets.len(), s.d.views.len(), s.d.dims.len(), s.d.tables.len()));
-        let cx = crate::curso::Contexto { doc: &self.open.doc, componentes, restricoes, folhas, vistas, cotas, tabelas };
+        let (notas, vistas_planas, tabelas_dobras, carimbo) = self.dwg.as_ref().map_or((0, 0, 0, false), |s| {
+            (
+                s.d.notes.len(),
+                s.d.views.iter().filter(|v| matches!(v.kind, fenkra_desenho::ViewKind::Flat)).count(),
+                s.d.tables.iter().filter(|t| matches!(t.kind, fenkra_desenho::TableKind::Bends)).count(),
+                !s.d.title.title.trim().is_empty() || !s.d.title.drawn_by.trim().is_empty(),
+            )
+        });
+        let usados = self.curso_ui.usados.clone();
+        let nomes = [self.asm.as_ref().map_or("", |s| s.asm.name.as_str()), self.dwg.as_ref().map_or("", |s| s.d.name.as_str())];
+        let cx = crate::curso::Contexto { doc: &self.open.doc, componentes, restricoes, folhas, vistas, cotas, tabelas, notas, vistas_planas, tabelas_dobras, carimbo, nomes, usados: &usados };
         let a = crate::curso_ui::painel(ctx, area, &mut self.curso_ui, &mut self.settings, &cx);
         let b = crate::curso_ui::pergunta_inicial(ctx, &mut self.curso_ui, &mut self.settings);
         for saida in [a, b] {
@@ -6944,8 +6971,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     let same = |a: [f64; 3], b: [f64; 3]| crate::picking::same_face(r, body, a, b);
                     // referência v2: o picking sabe a face; o resultado sabe o dono e o papel dela
                     let key = r.bodies.get(body).and_then(|b| b.face_key(face));
+                    let tira = ctx.input(|i| i.modifiers.shift);
                     if let Some(f) = self.open.doc.feature_mut(fid) {
-                        crate::feat_ui::toggle_face(&mut f.kind, point.map(|v| v as f64), key, same);
+                        // cordão de solda: Shift+clique só tira a face; sem Shift o clique alterna
+                        if !(tira && crate::st_solda_ui::tirar_face(&mut f.kind, point.map(|v| v as f64), same)) {
+                            crate::feat_ui::toggle_face(&mut f.kind, point.map(|v| v as f64), key, same);
+                        }
                     }
                 } else if let (Some(cid), true, Some(crate::picking::Pick::Face { body, .. })) = (combine_cmd, resp.clicked_by(egui::PointerButton::Primary), self.hover_pick) {
                     let coletor = r.bodies.get(body).map(|b| b.collector);
@@ -7150,6 +7181,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 crate::asm_encaixe::overlay(self, ui, rect, &cam);
                 crate::feat_ui::bend_overlay(self, ui, rect, &cam);
                 crate::feat_ui::cut_overlay(self, ui, rect, &cam);
+                crate::st_solda_ui::overlay(self, ui, rect, &cam);
                 crate::previa::overlay(self, ui, rect, &cam);
                 crate::forma_ui::overlay(self, ui, rect, &cam, &resp);
             }
@@ -7167,6 +7199,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
 
     fn dialogs(&mut self, ctx: &egui::Context) {
         self.dialogos_de_gravacao(ctx);
+        self.demo_janela(ctx);
         self.janelas_projeto(ctx);
         self.janelas_de_diagnostico(ctx);
         if let Some(dd) = &mut self.delete_dialog {
@@ -7377,6 +7410,8 @@ pub enum Cmd {
     StMember,
     StPlate,
     StGusset,
+    /// cordão de solda por conjuntos de faces (B285)
+    StWeld,
     StLibrary,
     StCutList,
     StCorners,
@@ -8534,8 +8569,12 @@ fn example_card(ui: &mut egui::Ui, key: &str, name: &str, desc: &str, bench: cra
 
 /// Fundo com profundidade (degradê, brilho, grade em perspectiva correndo e partículas) para a
 /// tela inicial e o carregamento.
-fn paint_backdrop(p: &egui::Painter, rect: Rect, dark: bool, t: f32, accent: Color32) {
-    let (top, bot) = if dark { (Color32::from_rgb(16, 30, 58), Color32::from_rgb(8, 11, 20)) } else { (Color32::from_rgb(232, 241, 252), Color32::from_rgb(196, 214, 238)) };
+fn paint_backdrop(p: &egui::Painter, rect: Rect, dark: bool, t: f32, accent: Color32, base: Option<Color32>) {
+    let (top, bot) = match base {
+        Some(f) => (f, f.lerp_to_gamma(if dark { Color32::WHITE } else { Color32::BLACK }, 0.05)),
+        None if dark => (Color32::from_rgb(16, 30, 58), Color32::from_rgb(8, 11, 20)),
+        None => (Color32::from_rgb(232, 241, 252), Color32::from_rgb(196, 214, 238)),
+    };
     let top = top.lerp_to_gamma(accent, 0.08);
     let mut m = egui::Mesh::default();
     m.colored_vertex(rect.left_top(), top);
@@ -8554,7 +8593,11 @@ fn paint_backdrop(p: &egui::Painter, rect: Rect, dark: bool, t: f32, accent: Col
         p.circle_filled(glow, r, Color32::from_rgba_unmultiplied(ar, ag, ab, if dark { 2 } else { 3 }));
     }
     // grade em perspectiva na parte de baixo (chão de CAD), andando devagar para a frente
-    let line = if dark { Color32::from_rgba_unmultiplied(120, 170, 255, 18) } else { Color32::from_rgba_unmultiplied(30, 80, 160, 22) };
+    let line = match base {
+        Some(_) => Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 20),
+        None if dark => Color32::from_rgba_unmultiplied(120, 170, 255, 18),
+        None => Color32::from_rgba_unmultiplied(30, 80, 160, 22),
+    };
     let horizon = rect.top() + rect.height() * 0.62;
     let vp = egui::pos2(rect.center().x, horizon - rect.height() * 0.25);
     for i in -14..=14 {

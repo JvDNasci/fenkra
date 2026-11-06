@@ -29,6 +29,7 @@ impl App {
     /// Anota o comando executado para aprender os próximos prováveis.
     pub(super) fn roda_registrar(&mut self, a: Act) {
         if let Some(i) = roda::icone_da_acao(a) {
+            self.curso_ui.usou(i);
             self.settings.roda.uso.registrar(i);
         }
     }

@@ -15,6 +15,7 @@ pub mod layout;
 pub mod novo;
 pub mod opcoes;
 pub mod simbolos;
+pub mod solda_cordao;
 pub mod source;
 
 use fenkra_core::Id;

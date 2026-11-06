@@ -51,6 +51,8 @@ pub mod planificada;
 pub use chapa_flat::{passos_planificados, PassoPlanificado};
 pub mod st_frames;
 mod st_placas;
+pub mod st_solda;
+pub use st_solda::{weld_beads, CaminhoCordao, CordaoCalculado, TrechoCordao};
 
 pub use engrenagens::{calculo as calculo_engrenagem, engrenagem_documento, CalculoEngrenagem, ParamEngrenagem, TipoEngrenagem};
 pub use eixos::{chaveta_documento, eixo_documento, ParamEixo, RasgoChaveta, TrechoEixo};
@@ -5352,6 +5354,7 @@ impl Ctx<'_> {
             }
             FeatureKind::StructPlate(pl) => self.struct_plate(f, pl),
             FeatureKind::StructGusset(gs) => self.struct_gusset(f, gs),
+            FeatureKind::StructWeld(w) => self.struct_weld(f, w),
             FeatureKind::MoveBody(m) => {
                 let (b, owners, roles) = self.body_owned(f.target).ok_or("não há corpo para mover")?;
                 let rigid = match &m.xf {
@@ -6446,6 +6449,8 @@ pub enum StructItem {
     Member,
     Plate,
     Gusset,
+    /// cordão de solda sólido (B285)
+    Weld,
 }
 
 /// Assinatura de um item: peças com a mesma assinatura são iguais (mesmo perfil, comprimento,
@@ -6573,7 +6578,7 @@ fn log_struct(f: &Feature, index: usize, kind: StructItem, name: &str, profile: 
 /// Um sólido por trecho de membro (com os cortes de canto e juntas), mais as placas e reforços,
 /// cada um no seu referencial local.
 pub fn structural_members(doc: &Document) -> Vec<MemberSolid> {
-    if !doc.active_features().any(|(_, f)| matches!(f.kind, FeatureKind::StructMember(_) | FeatureKind::StructPlate(_) | FeatureKind::StructGusset(_))) {
+    if !doc.active_features().any(|(_, f)| matches!(f.kind, FeatureKind::StructMember(_) | FeatureKind::StructPlate(_) | FeatureKind::StructGusset(_) | FeatureKind::StructWeld(_))) {
         return vec![];
     }
     MEMBER_LOG.with(|l| *l.borrow_mut() = Some(vec![]));

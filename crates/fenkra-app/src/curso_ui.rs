@@ -39,6 +39,57 @@ pub struct CursoUi {
     t_aula: f64,
     /// capturas de desenvolvimento (`FENKRA_DEMO*`): a pergunta inicial não aparece sozinha
     pub sem_auto: bool,
+    /// ícones dos comandos acionados nesta sessão (passos que não deixam rastro no modelo)
+    pub usados: Vec<&'static str>,
+}
+
+impl CursoUi {
+    /// Anota que o comando foi acionado; o passo "Comando" da aula em andamento passa a valer.
+    pub fn usou(&mut self, icone: &'static str) {
+        if !self.usados.contains(&icone) {
+            self.usados.push(icone);
+        }
+    }
+}
+
+// ------------------------------------------------------------------ destaque na barra (B297)
+
+/// O comando que o passo atual pede: a barra desenha um anel pulsante sobre o botão dele.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Destaque {
+    pub icone: &'static str,
+    /// pulsar (desligado com animações paradas ou "reduzir movimento")
+    pub animar: bool,
+}
+
+fn id_destaque() -> egui::Id {
+    egui::Id::new("curso_destaque_do_passo")
+}
+
+/// Destaque do quadro anterior, se a aula aberta pede um comando.
+pub fn destaque(ctx: &egui::Context) -> Option<Destaque> {
+    ctx.data(|d| d.get_temp::<Destaque>(id_destaque()))
+}
+
+/// Anel de destaque ao redor do botão. A cor vem do tema; a pulsação some com animações paradas.
+pub fn pintar_destaque(ui: &egui::Ui, rect: egui::Rect, d: Destaque) {
+    let t = ui.ctx().input(|i| i.time) as f32;
+    let pulso = if d.animar { 0.5 + 0.5 * (t * 3.).sin() } else { 1. };
+    let cor = theme::accent(ui.visuals());
+    let cor = cor.gamma_multiply((110. + 145. * pulso) / 255.);
+    ui.painter().rect_stroke(rect.expand(1. + 1.5 * pulso), 7., Stroke::new(2.5, cor), egui::StrokeKind::Outside);
+    if d.animar {
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(60));
+    }
+}
+
+/// Para botões de família: o comando pedido pode estar numa variação que não é a mostrada.
+pub fn destaque_em_familia(ui: &egui::Ui, rect: egui::Rect, icones: &[&str], mostrado: &str) {
+    if let Some(d) = destaque(ui.ctx()) {
+        if d.icone != mostrado && icones.contains(&d.icone) {
+            pintar_destaque(ui, rect, d);
+        }
+    }
 }
 
 /// O que a tela pede ao aplicativo.
@@ -175,6 +226,8 @@ fn barra(ui: &mut egui::Ui, feitos: usize, total: usize) {
 /// Desenha o painel do curso, quando aberto. Chame uma vez por quadro, depois da viewport.
 pub fn painel(ctx: &egui::Context, area: egui::Rect, st: &mut CursoUi, s: &mut Settings, cx: &Contexto) -> Saida {
     let mut out = Saida::default();
+    // o destaque do passo vale só enquanto a aula está à vista; `aula_aberta` o põe de novo
+    ctx.data_mut(|d| d.remove::<Destaque>(id_destaque()));
     if !st.aberto {
         return out;
     }
@@ -400,11 +453,16 @@ fn aula_aberta(ui: &mut egui::Ui, a: &'static Aula, st: &mut CursoUi, s: &mut Se
             ui.label(t);
         });
         if m == Marca::Atual {
+            if !p.icone.is_empty() && p.icone != "exemplo" {
+                let animar = s.animacoes && !s.acessibilidade.reduzir_movimento;
+                ui.ctx().data_mut(|d| d.insert_temp(id_destaque(), Destaque { icone: p.icone, animar }));
+            }
             ui.horizontal_wrapped(|ui| {
                 ui.add_space(22.);
                 if !p.icone.is_empty() && p.icone != "exemplo" {
                     botao_comando(ui, p.icone, out);
                     ui.label(RichText::new(tr("Mostre-me")).weak().small());
+                    ui.label(RichText::new(tr("O botão pulsa na barra")).weak().small());
                 }
                 if p.cond == curso::Cond::Manual && ui.button(tr("Já fiz")).on_hover_text(tr("Este passo não deixa rastro no modelo; confirme quando terminar")).clicked() {
                     s.curso.confirmar(a, i);

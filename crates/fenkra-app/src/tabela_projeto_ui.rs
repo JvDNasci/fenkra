@@ -72,7 +72,7 @@ pub fn tabela_projeto(ui: &mut egui::Ui, doc: &mut Document) {
                     ui.add(egui::TextEdit::singleline(&mut l.nome).desired_width(90.));
                     l.celulas.resize(ncol, String::new());
                     for c in &mut l.celulas {
-                        ui.add(egui::TextEdit::singleline(c).desired_width(70.));
+                        ui.add(egui::TextEdit::singleline(c).desired_width(84.));
                     }
                     if ui.small_button("🗑").on_hover_text(tr("Apagar esta configuração")).clicked() {
                         tirar_linha = Some(li);

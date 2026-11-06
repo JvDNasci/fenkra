@@ -157,7 +157,25 @@ fn escrever(app: &mut App, id: Id, c: Campo, v: f64) {
 fn leitura(ui: &egui::Ui, rect: Rect, at: egui::Pos2, texto: String, cor: Color32) {
     let painter = ui.painter_at(rect);
     let g = painter.layout_no_wrap(texto, egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), ui.visuals().strong_text_color());
-    let r = Rect::from_min_size(at, g.size() + egui::vec2(10., 6.));
+    let mut r = Rect::from_min_size(at, g.size() + egui::vec2(10., 6.));
+    // as leituras de deslocamento, rotação e prolongamento nascem juntas no mesmo ponto: cada uma desce até não cobrir outra
+    thread_local! {
+        static USADAS: std::cell::RefCell<(u64, Vec<Rect>)> = const { std::cell::RefCell::new((0, Vec::new())) };
+    }
+    let quadro = ui.ctx().cumulative_pass_nr();
+    USADAS.with(|u| {
+        let mut u = u.borrow_mut();
+        if u.0 != quadro {
+            *u = (quadro, Vec::new());
+        }
+        for _ in 0..10 {
+            if !u.1.iter().any(|o| o.intersects(r)) {
+                break;
+            }
+            r = r.translate(egui::vec2(0., r.height() + 2.));
+        }
+        u.1.push(r);
+    });
     painter.rect_filled(r, 4., ui.visuals().extreme_bg_color);
     painter.rect_stroke(r, 4., Stroke::new(1., cor), egui::StrokeKind::Inside);
     painter.galley(r.min + egui::vec2(5., 3.), g, ui.visuals().strong_text_color());
@@ -279,10 +297,11 @@ fn alcas_de_prolongar(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera
 
 /// Botões de espelhar a seção e alinhar a uma aresta, junto do centro do membro.
 fn botoes(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id, m: &StructMember, fr: &MemberFrame) {
-    let c = (v3(fr.start) + v3(fr.end)) * 0.5;
-    let Some(s) = cam.project(rect, c) else { return };
+    let _ = (cam, fr);
+    // fixos no canto do viewport: junto do centro do membro caíam em cima das leituras de deslocamento e rotação
+    let canto = egui::pos2(rect.right() - 100., rect.bottom() - 74.);
     let fg = ui.visuals().strong_text_color();
-    let espelhar = crate::handles::tag(ui, rect, s + egui::vec2(70., -40.), format!("⇋ {}{}", tr("Espelhar a seção"), if m.mirror { " ✓" } else { "" }), fg, ("st_espelhar", id.0))
+    let espelhar = crate::handles::tag(ui, rect, canto + egui::vec2(0., -24.), format!("⇋ {}{}", tr("Espelhar a seção"), if m.mirror { " ✓" } else { "" }), fg, ("st_espelhar", id.0))
         .on_hover_text(tr("Inverte a seção de lado (perfis U, L e T): o contorno vira imagem no espelho em torno do eixo vertical da seção."));
     if espelhar.clicked() {
         if let Some(FeatureKind::StructMember(mm)) = app.open.doc.feature_mut(id).map(|f| &mut f.kind) {
@@ -290,7 +309,7 @@ fn botoes(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id, m:
         }
     }
     let arestas = direcoes_das_arestas(app);
-    let alinhar = crate::handles::tag(ui, rect, s + egui::vec2(70., -16.), format!("∥ {}", tr("Alinhar à aresta")), if arestas.is_empty() { ui.visuals().weak_text_color() } else { fg }, ("st_alinhar", id.0))
+    let alinhar = crate::handles::tag(ui, rect, canto, format!("∥ {}", tr("Alinhar à aresta")), if arestas.is_empty() { ui.visuals().weak_text_color() } else { fg }, ("st_alinhar", id.0))
         .on_hover_text(tr("Gira a seção para o eixo X dela ficar paralelo à aresta selecionada no 3D. Selecione uma aresta e clique."));
     if alinhar.clicked() {
         match arestas.first().and_then(|e| align_angle(fr.z, fr.x0, *e)) {

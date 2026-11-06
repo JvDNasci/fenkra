@@ -195,10 +195,15 @@ impl Pasta {
         let provisorio =
             caminho.with_extension(format!("fenkra-{}-{n}.{extensao}", std::process::id()));
         let feito = escrever(&provisorio).and_then(|()| {
-            fs::rename(&provisorio, &caminho).map_err(|e| {
+            renomear_com_tentativas(&provisorio, &caminho).map_err(|e| {
+                let motivo = if bloqueio_temporario(&e) {
+                    format!("{e}; o arquivo continuou bloqueado (em uso ou sem permissão) após várias tentativas, tente de novo")
+                } else {
+                    e.to_string()
+                };
                 ErroApi::novo(
                     "gravacao",
-                    format!("não foi possível gravar '{texto}': {e}"),
+                    format!("não foi possível gravar '{texto}': {motivo}"),
                 )
             })
         });
@@ -368,5 +373,56 @@ mod testes {
             "caminho_fora"
         );
         assert!(!alvo.raiz().join("novo.fkx").exists());
+    }
+}
+
+/// Bloqueio breve do Windows: 32 (arquivo em uso), 33 (trecho travado) e 5 (acesso negado, que a
+/// troca de nome devolve quando o destino está aberto por outro processo; num arquivo realmente
+/// protegido o erro persiste e volta claro depois das tentativas). Antivírus, indexador e
+/// outro processo abrem o arquivo recém-criado por instantes, e a troca de nome falha nesse intervalo.
+fn bloqueio_temporario(e: &std::io::Error) -> bool {
+    cfg!(windows) && matches!(e.raw_os_error(), Some(5) | Some(32) | Some(33))
+}
+
+/// Troca o nome tentando de novo só quando o bloqueio é temporário (até 8 vezes, ~0,6 s no total).
+/// O provisório continua intacto até a troca dar certo, então nenhum dado se perde; outros erros
+/// voltam na hora.
+fn renomear_com_tentativas(de: &Path, para: &Path) -> std::io::Result<()> {
+    let mut espera = 10u64;
+    for _ in 0..8 {
+        match fs::rename(de, para) {
+            Err(e) if bloqueio_temporario(&e) => {
+                std::thread::sleep(std::time::Duration::from_millis(espera));
+                espera = (espera * 2).min(160);
+            }
+            r => return r,
+        }
+    }
+    fs::rename(de, para)
+}
+
+#[cfg(all(test, windows))]
+mod testes_bloqueio {
+    use super::*;
+    use std::os::windows::fs::OpenOptionsExt;
+
+    #[test]
+    fn troca_de_nome_vence_bloqueio_breve_do_destino() {
+        let d = std::env::temp_dir().join(format!("fenkra-pasta-bloqueio-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(&d).unwrap();
+        let (prov, alvo) = (d.join("p.tmp"), d.join("b.step"));
+        fs::write(&prov, b"conteudo").unwrap();
+        fs::write(&alvo, b"").unwrap();
+        // outro processo (antivírus, indexador) segura o destino por instantes
+        let seg = OpenOptions::new().read(true).share_mode(0).open(&alvo).unwrap();
+        let t = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            drop(seg);
+        });
+        renomear_com_tentativas(&prov, &alvo).unwrap();
+        t.join().unwrap();
+        assert_eq!(fs::read(&alvo).unwrap(), b"conteudo");
+        let _ = fs::remove_dir_all(&d);
     }
 }

@@ -22,7 +22,7 @@ pub fn is_shape(k: &FeatureKind) -> bool {
 
 /// Comandos em que clicar numa face na viewport (com o comando aberto) acrescenta a face.
 pub fn wants_faces(k: &FeatureKind) -> bool {
-    matches!(k, FeatureKind::Shell(_) | FeatureKind::Draft(_) | FeatureKind::Thickness(_) | FeatureKind::Thread(_) | FeatureKind::StructPlate(_) | FeatureKind::SmCornerRelief(_) | FeatureKind::SmCornerClose(_) | FeatureKind::SmConvert(_) | FeatureKind::SmArcSlot(_) | FeatureKind::SmSurfFlange(_))
+    matches!(k, FeatureKind::Shell(_) | FeatureKind::Draft(_) | FeatureKind::Thickness(_) | FeatureKind::Thread(_) | FeatureKind::StructPlate(_) | FeatureKind::StructWeld(_) | FeatureKind::SmCornerRelief(_) | FeatureKind::SmCornerClose(_) | FeatureKind::SmConvert(_) | FeatureKind::SmArcSlot(_) | FeatureKind::SmSurfFlange(_))
         || matches!(k, FeatureKind::SmFlangedHole(h) if crate::slots::is_unset(h.sketch) || !h.points.is_empty())
         || matches!(k, FeatureKind::Fillet(o) if matches!(o.mode, EdgeMode::FaceFace(..) | EdgeMode::FullRound { .. }))
 }
@@ -36,6 +36,7 @@ pub fn add_face(k: &mut FeatureKind, p: [f64; 3]) {
         FeatureKind::Thread(t) => t.face = p,
         // B255: o clique na face da ponta grava o ponto dela; o recálculo acha a ponta que a tem
         FeatureKind::StructPlate(pl) => pl.at = p,
+        FeatureKind::StructWeld(w) => w.adicionar(p, None),
         FeatureKind::SmFlangedHole(h) => h.points.push(p),
         FeatureKind::SmCornerRelief(c) => c.at = p,
         FeatureKind::SmCornerClose(c) => c.at = p,
@@ -63,6 +64,11 @@ pub fn add_face(k: &mut FeatureKind, p: [f64; 3]) {
 /// `key` é a chave v2 da face clicada (o picking sabe o dono e o papel dela); as chaves das outras
 /// faces da lista acompanham os pontos delas.
 pub fn toggle_face(k: &mut FeatureKind, p: [f64; 3], key: Option<FaceKey>, same: impl Fn([f64; 3], [f64; 3]) -> bool) {
+    // cordão de solda: duas listas numa só, o clique vai para o conjunto ativo
+    if let FeatureKind::StructWeld(w) = k {
+        crate::st_solda_ui::alternar_face(w, p, key, same);
+        return;
+    }
     let list = match k {
         FeatureKind::Shell(s) => Some((&mut s.faces, &mut s.face_keys)),
         FeatureKind::Draft(d) => Some((&mut d.faces, &mut d.face_keys)),
@@ -98,6 +104,7 @@ pub fn face_marks(k: &FeatureKind) -> Vec<[f64; 3]> {
         FeatureKind::Thickness(t) => t.faces.clone(),
         FeatureKind::Thread(t) => vec![t.face],
         FeatureKind::StructPlate(pl) => vec![pl.at],
+        FeatureKind::StructWeld(w) => w.faces.clone(),
         FeatureKind::Fillet(o) => match o.mode {
             EdgeMode::FaceFace(a, b) => vec![a, b],
             EdgeMode::FullRound { mid, a, b } => vec![mid, a, b],
@@ -487,6 +494,9 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         }
         FeatureKind::StructGusset(g) => {
             crate::st_placas_ui::reforco_panel(ui, g, vars, seed);
+        }
+        FeatureKind::StructWeld(w) => {
+            crate::st_solda_ui::solda_panel(ui, doc, me, w, vars, seed);
         }
         FeatureKind::SmWall(w) => {
             section(ui, "Parede base");

@@ -1814,6 +1814,8 @@ pub enum FeatureKind {
     StructPlate(StructPlate),
     /// Estrutural: reforço (cantoneira/gusset) entre dois membros.
     StructGusset(StructGusset),
+    /// Estrutural: cordão de solda entre dois conjuntos de faces (cosmético ou sólido).
+    StructWeld(StructWeld),
 }
 
 fn niveis_padrao() -> u8 {
@@ -2171,6 +2173,134 @@ impl StructGusset {
             repeat: GussetRepeat::Nenhuma,
             count: String::new(),
             spacing: String::new(),
+        }
+    }
+}
+
+/// Como o cordão de solda existe no modelo (B285).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum BeadMode {
+    /// só os caminhos e os comprimentos: não gera material e alimenta o símbolo do desenho
+    #[default]
+    Cosmetico,
+    /// gera o metal depositado: entra na massa e na lista de itens
+    Solido,
+}
+
+/// Perfil do cordão de filete: plano (triângulo), convexo (abaulado) ou côncavo (cavado).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum BeadShape {
+    #[default]
+    Plano,
+    Convexo,
+    Concavo,
+}
+
+/// Contínuo ou intermitente. O vão é a distância livre entre dois trechos; o passo, a distância de
+/// início a início (passo = comprimento + vão).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum BeadPattern {
+    #[default]
+    Continuo,
+    ComprimentoEVao,
+    ComprimentoEPasso,
+}
+
+/// Cordão de solda por conjuntos de faces (B285): os caminhos são as curvas onde as faces do
+/// conjunto 1 encontram as do conjunto 2.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct StructWeld {
+    /// pontos das faces escolhidas: as `split` primeiras são o conjunto 1, o resto o conjunto 2
+    pub faces: Vec<[f64; 3]>,
+    /// referência v2 de cada face (paralelo a `faces`; `None` = só o ponto)
+    #[serde(default)]
+    pub face_keys: Vec<Option<FaceKey>>,
+    pub split: usize,
+    /// o próximo clique na viewport entra no conjunto 2
+    #[serde(default)]
+    pub picking_b: bool,
+    /// cada face escolhida leva junto a cadeia de faces tangentes a ela
+    #[serde(default)]
+    pub tangent: bool,
+    /// perna do filete (mm)
+    pub leg: String,
+    #[serde(default)]
+    pub shape: BeadShape,
+    #[serde(default)]
+    pub mode: BeadMode,
+    #[serde(default)]
+    pub pattern: BeadPattern,
+    /// comprimento de cada trecho do cordão intermitente
+    #[serde(default)]
+    pub seg_len: String,
+    /// vão ou passo, conforme `pattern`
+    #[serde(default)]
+    pub spacing: String,
+    /// intermitente alternado: os caminhos de índice ímpar começam meio passo depois
+    #[serde(default)]
+    pub staggered: bool,
+    /// o cordão termina neste plano
+    #[serde(default)]
+    pub end_plane: Option<PlaneRef>,
+    /// fica com o lado do plano para onde a normal aponta (senão, o lado oposto)
+    #[serde(default)]
+    pub end_keep_front: bool,
+    /// material do metal de adição (vazio = o da peça)
+    #[serde(default)]
+    pub material: String,
+}
+
+impl StructWeld {
+    pub fn novo(leg: &str) -> Self {
+        StructWeld {
+            faces: vec![],
+            face_keys: vec![],
+            split: 0,
+            picking_b: false,
+            tangent: false,
+            leg: leg.into(),
+            shape: BeadShape::Plano,
+            mode: BeadMode::Cosmetico,
+            pattern: BeadPattern::Continuo,
+            seg_len: String::new(),
+            spacing: String::new(),
+            staggered: false,
+            end_plane: None,
+            end_keep_front: false,
+            material: String::new(),
+        }
+    }
+
+    /// Faces do conjunto 1 e do conjunto 2.
+    pub fn conjuntos(&self) -> (&[[f64; 3]], &[[f64; 3]]) {
+        let n = self.split.min(self.faces.len());
+        self.faces.split_at(n)
+    }
+
+    /// Acrescenta a face ao conjunto ativo.
+    pub fn adicionar(&mut self, p: [f64; 3], key: Option<FaceKey>) {
+        self.face_keys.resize(self.faces.len(), None);
+        if self.picking_b {
+            self.faces.push(p);
+            self.face_keys.push(key);
+        } else {
+            let i = self.split.min(self.faces.len());
+            self.faces.insert(i, p);
+            self.face_keys.insert(i, key);
+            self.split = i + 1;
+        }
+    }
+
+    /// Tira a face da posição `i` (Shift+clique ou botão), mantendo a divisão dos conjuntos.
+    pub fn remover(&mut self, i: usize) {
+        if i >= self.faces.len() {
+            return;
+        }
+        self.face_keys.resize(self.faces.len(), None);
+        self.faces.remove(i);
+        self.face_keys.remove(i);
+        if i < self.split {
+            self.split -= 1;
         }
     }
 }
@@ -2807,6 +2937,7 @@ impl FeatureKind {
             StructMember(_) => "Membro",
             StructPlate(_) => "Placa",
             StructGusset(_) => "Reforço",
+            StructWeld(_) => "Cordão de solda",
             MoveBody(m) => match m.xf {
                 BodyXf::Translate { .. } => "Translação",
                 BodyXf::Rotate { .. } => "Rotação",
@@ -2868,6 +2999,7 @@ impl FeatureKind {
             StructMember(_) => "⌶",
             StructPlate(_) => "▬",
             StructGusset(_) => "◺",
+            StructWeld(_) => "≋",
         }
     }
 
@@ -3191,6 +3323,14 @@ impl FeatureKind {
                 for q in &mut g.poly {
                     exprs(&mut q[0]);
                     exprs(&mut q[1])
+                }
+            }
+            StructWeld(w) => {
+                if let Some(p) = &mut w.end_plane {
+                    p.walk(ids)
+                }
+                for e in [&mut w.leg, &mut w.seg_len, &mut w.spacing] {
+                    exprs(e)
                 }
             }
             SmHem(h) => {
