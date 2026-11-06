@@ -297,6 +297,8 @@ pub const ANGULO_PADRAO: f64 = 0.35;
 mod ffi;
 
 pub mod xde;
+pub mod pmi_xde;
+pub use pmi_xde::{AlvoDatumXde, AlvoXde, AnotacaoXde, DadoXde, MaterialXde, ModToleranciaXde, ModZonaXde, TipoDimensaoXde, TipoToleranciaXde, ZonaXde};
 pub use xde::{DefeitoForma, EsquemaStep, InfoReparo, InstanciaXde, ModeloXde, OpcoesGravarIges, OpcoesGravarXde, OpcoesLerXde, ProdutoXde, TipoDefeito, UnidadeStep, IDENTIDADE};
 
 #[cfg(occt)]

@@ -235,8 +235,10 @@ impl Modif {
     /// Vazio quando a troca não tem valor próprio (vai por outra entidade, como a zona projetada).
     pub fn step_nome(self) -> &'static str {
         match self {
-            Modif::Mmc => "maximum_material_condition",
-            Modif::Lmc => "least_material_condition",
+            // na tolerância o nome é *_requirement (o *_condition é do limite de uma cota); é o que o
+            // gravador do OpenCASCADE escreve no arquivo (conferido em B191)
+            Modif::Mmc => "maximum_material_requirement",
+            Modif::Lmc => "least_material_requirement",
             Modif::Projetada => "",
             Modif::EstadoLivre => "free_state",
             Modif::PlanoTangente => "tangent_plane",
@@ -1172,7 +1174,7 @@ mod tests {
     fn mapeamento_para_a_troca_de_dados() {
         assert_eq!(Zona::Diametro.step_forma(), "cylindrical or circular");
         assert_eq!(Zona::Esfera.step_forma(), "spherical");
-        assert_eq!(Modif::Mmc.step_nome(), "maximum_material_condition");
+        assert_eq!(Modif::Mmc.step_nome(), "maximum_material_requirement");
         assert_eq!(GdtChar::Posicao.step_nome(), "position_tolerance");
     }
 }

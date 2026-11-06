@@ -51,6 +51,8 @@ struct XdeDoc::Impl {
     occ::handle<XCAFDoc_LayerTool> layers;
     occ::handle<XCAFDoc_DimTolTool> dimtol;
     std::vector<TDF_Label> labels;
+    // datums gravados por `xde_pmi_add`, na ordem do `id` que a ponte recebeu
+    std::vector<TDF_Label> pmi_datums;
     std::map<std::string, uint32_t> index;
     std::vector<uint32_t> roots;
     std::string schema, units;

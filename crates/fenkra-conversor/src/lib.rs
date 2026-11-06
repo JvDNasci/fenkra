@@ -21,6 +21,7 @@ mod occt;
 mod opcoes;
 mod plano;
 pub mod processo;
+mod pmi_step;
 mod provedor;
 mod relatorio;
 mod sonda;
@@ -33,6 +34,7 @@ pub use occt::ProvedorOcct;
 pub use opcoes::{Destino, EsquemaSaida, Estrutura, ModoIges, OpcoesExportar, OpcoesImportar, Reparo, UnidadeArquivo, UnidadeSaida};
 pub use malha::{Cena, OpcoesMalha, ProvedorMalha};
 pub use matriz::{Capacidades, LinhaMatriz};
+pub use pmi_step::{anotacoes_do_documento, face_do_alvo, SaidaPmi, NOTAS_PMI};
 pub use provedor::{Provedor, Registro};
 pub use relatorio::{Contagem, Defeito, LinhaReparo, Nota, Relatorio, TipoDefeito, NOTAS};
 

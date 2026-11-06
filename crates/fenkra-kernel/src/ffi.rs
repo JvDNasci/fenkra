@@ -122,6 +122,36 @@ pub mod bridge {
         segs: Vec<f64>,
     }
 
+    /// Uma anotação semântica do XCAF (B191). `kind`: 0 dimensão, 1 tolerância geométrica, 2 datum.
+    /// `ty` é o enum do OCCT do tipo (`XCAFDimTolObjects_DimensionType` ou `..._GeomToleranceType`).
+    /// `faces`/`faces2` são índices na ordem de `TopExp::MapShapes` do produto; vazios = o corpo todo.
+    /// Datums vão antes na lista; `id` é o número do datum e `datums` lista os ids de uma tolerância.
+    struct XdePmi {
+        kind: u8,
+        product: u32,
+        name: String,
+        ty: u32,
+        value: f64,
+        lower: f64,
+        upper: f64,
+        has_tol: bool,
+        faces: Vec<u32>,
+        faces2: Vec<u32>,
+        zone: u32,
+        mat: u32,
+        zone_mod: u32,
+        zone_val: f64,
+        mods: Vec<u32>,
+        datums: Vec<u32>,
+        id: u32,
+        position: u32,
+        target: bool,
+        target_type: u32,
+        target_number: u32,
+        target_length: f64,
+        target_width: f64,
+    }
+
     unsafe extern "C++" {
         include!("kernel.h");
 
@@ -320,6 +350,8 @@ pub mod bridge {
         fn xde_add(d: Pin<&mut XdeDoc>, p: &XdeProduct, s: &Shape) -> Result<u32>;
         fn xde_add_component(d: Pin<&mut XdeDoc>, assembly: u32, c: &XdeInst) -> Result<()>;
         fn xde_write(d: Pin<&mut XdeDoc>, path: &str, o: &XdeWriteOpts) -> Result<()>;
+        fn xde_pmi_add(d: Pin<&mut XdeDoc>, m: &XdePmi) -> Result<()>;
+        fn xde_pmi_read(d: &XdeDoc) -> Result<Vec<XdePmi>>;
         fn xde_write_iges(d: Pin<&mut XdeDoc>, path: &str, o: &XdeIgesOpts) -> Result<()>;
         /// `m`: matriz 3x4 por linhas
         fn xde_moved(s: &Shape, m: &[f64]) -> Result<UniquePtr<Shape>>;

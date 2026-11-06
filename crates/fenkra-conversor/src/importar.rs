@@ -395,6 +395,7 @@ impl Registro {
             Some(f) if f.e_2d() => crate::plano::gravar(doc, f, destino),
             Some(f) if f.e_malha() && fenkra_solidos::corpo_malha::tem_corpo_de_malha(doc) => crate::malha::corpo::gravar_documento(doc, f, destino, saida),
             _ if fenkra_solidos::corpo_malha::tem_corpo_de_malha(doc) && fenkra_solidos::final_shape(doc).is_none() => Err(ErroConv::Gravacao("corpo de malha não tem geometria exata: converta em sólido antes de gravar neste formato".into())),
+            Some(Formato::Step) if saida.pmi && saida.esquema == crate::EsquemaSaida::Ap242 => self.gravar(&ModeloNeutro::de_documento_pmi(doc)?.0, destino, saida),
             _ => self.gravar(&ModeloNeutro::de_documento(doc)?, destino, saida),
         }
     }

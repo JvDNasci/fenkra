@@ -111,6 +111,8 @@ pub struct ModeloXde {
     pub unidades: String,
     /// PMI semântico no arquivo: dimensões, tolerâncias geométricas e datums
     pub pmi: [u32; 3],
+    /// as anotações semânticas, lidas do arquivo ou a gravar (B191); datums antes das tolerâncias
+    pub anotacoes: Vec<crate::pmi_xde::AnotacaoXde>,
     /// tipo de cada entidade do arquivo que a leitura não traduziu (só IGES)
     pub ignoradas: Vec<String>,
 }
@@ -187,16 +189,16 @@ mod ponte {
         /// Lê um STEP. A geometria sai em milímetros, qualquer que seja a unidade do arquivo.
         pub fn ler(caminho: &str, o: OpcoesLerXde) -> KResult<ModeloXde> {
             let opcoes = b::XdeReadOpts { colors: o.cores, names: o.nomes, layers: o.camadas, gdt: o.pmi };
-            Self::do_documento(&b::xde_read(caminho, &opcoes).map_err(err)?)
+            Self::do_documento(&b::xde_read(caminho, &opcoes).map_err(err)?, o.pmi)
         }
 
         /// Lê um IGES, em milímetros como o STEP. Cada raiz do arquivo vira um produto solto.
         pub fn ler_iges(caminho: &str, o: OpcoesLerXde) -> KResult<ModeloXde> {
             let opcoes = b::XdeReadOpts { colors: o.cores, names: o.nomes, layers: o.camadas, gdt: false };
-            Self::do_documento(&b::xde_read_iges(caminho, &opcoes).map_err(err)?)
+            Self::do_documento(&b::xde_read_iges(caminho, &opcoes).map_err(err)?, false)
         }
 
-        fn do_documento(doc: &cxx::UniquePtr<b::XdeDoc>) -> KResult<ModeloXde> {
+        fn do_documento(doc: &cxx::UniquePtr<b::XdeDoc>, o_pmi: bool) -> KResult<ModeloXde> {
             let info = b::xde_info(doc);
             let mut produtos = Vec::new();
             for (i, p) in b::xde_products(doc).map_err(err)?.into_iter().enumerate() {
@@ -222,6 +224,7 @@ mod ponte {
                 esquema: info.schema,
                 unidades: info.units,
                 pmi: [info.dims, info.tols, info.datums],
+                anotacoes: if o_pmi { Self::ler_anotacoes(doc)? } else { vec![] },
                 ignoradas: info.skipped,
             })
         }
@@ -253,7 +256,157 @@ mod ponte {
                     b::xde_add_component(doc.pin_mut(), *rotulo, &inst).map_err(err)?;
                 }
             }
+            self.gravar_anotacoes(&mut doc)?;
             Ok(doc)
+        }
+
+        /// Entrega as anotações ao documento XCAF: datums primeiro, para as tolerâncias os referenciarem.
+        fn gravar_anotacoes(&self, doc: &mut cxx::UniquePtr<b::XdeDoc>) -> KResult<()> {
+            use crate::pmi_xde::DadoXde;
+            let em_branco = |a: &crate::pmi_xde::AnotacaoXde, kind: u8| b::XdePmi {
+                kind,
+                product: a.produto as u32,
+                name: a.nome.clone(),
+                ty: 0,
+                value: 0.,
+                lower: 0.,
+                upper: 0.,
+                has_tol: false,
+                faces: a.faces.clone(),
+                faces2: vec![],
+                zone: 0,
+                mat: 0,
+                zone_mod: 0,
+                zone_val: 0.,
+                mods: vec![],
+                datums: vec![],
+                id: 0,
+                position: 0,
+                target: false,
+                target_type: 0,
+                target_number: 0,
+                target_length: 0.,
+                target_width: 0.,
+            };
+            // id do datum = ordem de entrada entre os datums
+            let mut ids = std::collections::HashMap::new();
+            for (i, a) in self.anotacoes.iter().enumerate() {
+                if let DadoXde::Datum { letra, posicao, alvo } = &a.dado {
+                    let mut m = em_branco(a, 2);
+                    m.name = letra.clone();
+                    m.id = ids.len() as u32;
+                    m.position = *posicao;
+                    if let Some(al) = alvo {
+                        m.target = true;
+                        m.target_type = al.tipo as u32;
+                        m.target_number = al.numero;
+                        m.target_length = al.comprimento;
+                        m.target_width = al.largura;
+                    }
+                    ids.insert(i, m.id);
+                    b::xde_pmi_add(doc.pin_mut(), &m).map_err(err)?;
+                }
+            }
+            for a in &self.anotacoes {
+                match &a.dado {
+                    DadoXde::Dimensao { tipo, valor, tolerancia, faces2 } => {
+                        if !tipo.atravessa() {
+                            return Err(KernelError(format!("o tipo de dimensão {tipo:?} não é gravado pelo OpenCASCADE")));
+                        }
+                        let mut m = em_branco(a, 0);
+                        m.ty = *tipo as u32;
+                        // em graus na interface; o gravador espera radianos (o leitor devolve graus)
+                        m.value = if tipo.e_angulo() { valor.to_radians() } else { *valor };
+                        m.faces2 = faces2.clone();
+                        if let Some((inf, sup)) = tolerancia {
+                            m.has_tol = true;
+                            m.lower = *inf;
+                            m.upper = *sup;
+                        }
+                        b::xde_pmi_add(doc.pin_mut(), &m).map_err(err)?;
+                    }
+                    DadoXde::Tolerancia { tipo, valor, zona, material, mod_zona, valor_zona, modificadores, datums } => {
+                        let mut m = em_branco(a, 1);
+                        m.ty = *tipo as u32;
+                        m.value = *valor;
+                        m.zone = *zona as u32;
+                        m.mat = *material as u32;
+                        m.zone_mod = *mod_zona as u32;
+                        m.zone_val = *valor_zona;
+                        m.mods = modificadores.iter().map(|k| *k as u32).collect();
+                        for d in datums {
+                            m.datums.push(*ids.get(d).ok_or_else(|| KernelError(format!("a anotação {d} não é um datum")))?);
+                        }
+                        b::xde_pmi_add(doc.pin_mut(), &m).map_err(err)?;
+                    }
+                    DadoXde::Datum { .. } => {}
+                }
+            }
+            Ok(())
+        }
+
+        /// Lê as anotações do documento: datums primeiro, como na gravação.
+        fn ler_anotacoes(doc: &cxx::UniquePtr<b::XdeDoc>) -> KResult<Vec<crate::pmi_xde::AnotacaoXde>> {
+            use crate::pmi_xde::*;
+            let lidas = b::xde_pmi_read(doc).map_err(err)?;
+            let mut datum_de = std::collections::HashMap::new();
+            let mut out = Vec::new();
+            // O leitor do OCCT cria um datum novo a cada tolerância que o referencia (e um por alvo): aqui
+            // eles voltam a ser um só, pela letra, as faces e o alvo.
+            let mut unicos: Vec<(String, usize, Vec<u32>, Option<(u32, u32)>)> = Vec::new();
+            for m in lidas.iter().filter(|m| m.kind == 2) {
+                let chave = (m.name.clone(), m.product as usize, m.faces.clone(), m.target.then_some((m.target_type, m.target_number)));
+                let ja = unicos.iter().position(|c| *c == chave);
+                datum_de.insert(m.id, (ja.unwrap_or(out.len()), m.target));
+                if ja.is_some() {
+                    continue;
+                }
+                unicos.push(chave);
+                let alvo = m.target.then(|| AlvoXde { tipo: AlvoDatumXde::de_numero(m.target_type).unwrap_or(AlvoDatumXde::Ponto), numero: m.target_number, comprimento: m.target_length, largura: m.target_width });
+                out.push(AnotacaoXde { produto: m.product as usize, nome: m.name.clone(), faces: m.faces.clone(), dado: DadoXde::Datum { letra: m.name.clone(), posicao: m.position, alvo } });
+            }
+            for m in lidas.iter().filter(|m| m.kind != 2) {
+                let dado = if m.kind == 0 {
+                    let Some(tipo) = TipoDimensaoXde::de_numero(m.ty) else { continue };
+                    DadoXde::Dimensao { tipo, valor: m.value, tolerancia: m.has_tol.then_some((m.lower, m.upper)), faces2: m.faces2.clone() }
+                } else {
+                    let Some(tipo) = TipoToleranciaXde::de_numero(m.ty) else { continue };
+                    DadoXde::Tolerancia {
+                        tipo,
+                        valor: m.value,
+                        zona: match m.zone {
+                            1 => ZonaXde::Diametro,
+                            2 => ZonaXde::Esfera,
+                            _ => ZonaXde::Largura,
+                        },
+                        material: match m.mat {
+                            1 => MaterialXde::Maximo,
+                            2 => MaterialXde::Minimo,
+                            _ => MaterialXde::Nenhum,
+                        },
+                        mod_zona: match m.zone_mod {
+                            1 => ModZonaXde::Projetada,
+                            2 => ModZonaXde::Batimento,
+                            3 => ModZonaXde::NaoUniforme,
+                            _ => ModZonaXde::Nenhum,
+                        },
+                        valor_zona: m.zone_val,
+                        modificadores: m.mods.iter().filter_map(|k| ModToleranciaXde::de_numero(*k)).collect(),
+                        datums: {
+                            // alvos pertencem ao datum da letra; a tolerância cita só o datum
+                            let mut v: Vec<usize> = Vec::new();
+                            for (i, alvo) in m.datums.iter().filter_map(|d| datum_de.get(d).copied()) {
+                                if !alvo && !v.contains(&i) {
+                                    v.push(i);
+                                }
+                            }
+                            v
+                        },
+                    }
+                };
+                out.push(AnotacaoXde { produto: m.product as usize, nome: m.name.clone(), faces: m.faces.clone(), dado });
+            }
+            Ok(out)
         }
 
         /// Grava o modelo num STEP.

@@ -128,6 +128,7 @@ mod mapa_macro;
 mod compat;
 mod curso_ui;
 mod textos_pmi;
+mod textos_pmi_step;
 mod textos_superficies;
 mod textos_solidos;
 mod textos_edicao_direta;
