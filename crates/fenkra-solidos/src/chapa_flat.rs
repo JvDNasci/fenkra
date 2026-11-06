@@ -270,6 +270,7 @@ pub fn passos_planificados(doc: &Document) -> Vec<PassoPlanificado> {
         last_sheet: None,
         sheet_maps: vec![],
         cut_outlines: vec![],
+        malhas: HashMap::new(),
         roscas: vec![],
         relatorios_forma: vec![],
         formas_resolvidas: vec![],

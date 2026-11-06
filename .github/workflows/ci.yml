@@ -69,6 +69,15 @@ jobs:
           C:/vcpkg-fenkra/vcpkg.exe install opencascade:x64-windows-release
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace
+      # o 3MF é escrito por nós: quem diz se ele vale é a lib3mf, o leitor de referência
+      - name: Validar o 3MF com a lib3mf
+        shell: bash
+        env:
+          FENKRA_3MF_SAIDA: ${{ runner.temp }}/amostras-3mf
+        run: |
+          cargo test -p fenkra-conversor --test impressao amostras
+          python -m pip install lib3mf
+          python -I scripts/validar_3mf.py "$FENKRA_3MF_SAIDA"
 
   licencas:
     name: Licenças

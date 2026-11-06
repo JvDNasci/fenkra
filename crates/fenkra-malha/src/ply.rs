@@ -2,8 +2,8 @@
 //! PLY: vértices com propriedades e faces em lista, em texto ou binário. Sem nomes, unidade nem árvore;
 //! a cor vai por vértice, e por isso as peças podem ter cores diferentes num arquivo só.
 
-use super::{erro, Cena, Malha};
-use crate::ErroConv;
+use crate::{erro, Cena, Malha};
+use crate::Erro as ErroConv;
 use std::fmt::Write as _;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -141,7 +141,7 @@ fn cabecalho(b: &[u8]) -> Result<(Vec<Elemento>, Codigo, usize, Vec<String>), Er
     Ok((els, codigo.ok_or_else(|| erro("PLY", "sem linha de formato"))?, i, comentarios))
 }
 
-pub(crate) fn ler(b: &[u8]) -> Result<Cena, ErroConv> {
+pub fn ler(b: &[u8]) -> Result<Cena, ErroConv> {
     let (elementos, codigo, inicio, comentarios) = cabecalho(b)?;
     let mut corpo = Corpo { b, i: inicio, codigo };
     let mut m = Malha::default();
@@ -237,7 +237,7 @@ fn juntar(cena: &Cena) -> (Malha, bool) {
     (j, com_cor)
 }
 
-pub(crate) fn gravar(cena: &Cena, binario: bool, mm: f64) -> Vec<u8> {
+pub fn gravar(cena: &Cena, binario: bool, mm: f64) -> Vec<u8> {
     let (m, com_cor) = juntar(cena);
     let mut h = String::from("ply\n");
     h.push_str(if binario { "format binary_little_endian 1.0\n" } else { "format ascii 1.0\n" });

@@ -12,6 +12,7 @@ mod documento;
 mod dxf;
 mod formato;
 mod importar;
+pub mod impressao;
 pub mod lote;
 pub mod malha;
 mod matriz;
@@ -53,6 +54,17 @@ pub enum ErroConv {
     Cancelado,
     #[error("programa do conversor não encontrado: {0}")]
     Ausente(String),
+}
+
+impl From<fenkra_malha::Erro> for ErroConv {
+    fn from(e: fenkra_malha::Erro) -> Self {
+        use fenkra_malha::Erro;
+        match e {
+            Erro::Formato(t) => ErroConv::Formato(t),
+            Erro::Leitura(t) | Erro::Operacao(t) => ErroConv::Leitura(t),
+            Erro::Gravacao(t) => ErroConv::Gravacao(t),
+        }
+    }
 }
 
 impl From<fenkra_kernel::KernelError> for ErroConv {

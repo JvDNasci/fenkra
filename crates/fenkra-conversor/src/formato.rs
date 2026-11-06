@@ -120,7 +120,7 @@ impl Formato {
         }
     }
 
-    pub(crate) fn por_extensao(caminho: &Path) -> Option<Formato> {
+    pub fn por_extensao(caminho: &Path) -> Option<Formato> {
         let e = caminho.extension()?.to_string_lossy().to_lowercase();
         Formato::TODOS.into_iter().find(|f| f.extensoes().contains(&e.as_str()))
     }

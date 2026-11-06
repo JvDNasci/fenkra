@@ -410,6 +410,12 @@ impl Graficos {
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
+    /// últimas opções do preparo de impressão
+    #[serde(default)]
+    pub impressao: fenkra_conversor::impressao::OpcoesImpressao,
+    /// programa do fatiador externo
+    #[serde(default)]
+    pub fatiador: String,
     /// últimas opções do painel de importação
     #[serde(default)]
     pub opcoes_importar: fenkra_conversor::OpcoesImportar,
@@ -559,6 +565,8 @@ pub struct CustomGroup {
 impl Default for Settings {
     fn default() -> Self {
         Settings {
+            impressao: Default::default(),
+            fatiador: String::new(),
             opcoes_importar: Default::default(),
             opcoes_exportar: Default::default(),
             theme: Theme::Claro,

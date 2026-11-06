@@ -195,6 +195,7 @@ pub struct App {
     /// painel Features encontradas (B143), aberto só enquanto a pessoa analisa
     features: Option<features::Estado>,
     exportar_dialogo: Option<exportar::Dialogo>,
+    pub impressao: Option<crate::impressao_ui::Painel>,
     /// tela "Formatos suportados" aberta
     formatos_aberto: bool,
     lote_painel: Option<lote::Painel>,
@@ -238,7 +239,7 @@ pub struct App {
     pub forma: crate::forma_ui::Estado,
     pub(crate) hover_pick: Option<crate::picking::Pick>,
     /// já passou da tela inicial
-    started: bool,
+    pub(crate) started: bool,
     /// a tela inicial foi aberta pelo menu (há trabalho aberto para onde voltar)
     inicio_pelo_menu: bool,
     /// comando aberto em edição (ambiente com Concluir/Cancelar)
@@ -408,6 +409,7 @@ impl App {
             importar_defeito: None,
             features: None,
             exportar_dialogo: None,
+            impressao: None,
             formatos_aberto: false,
             lote_painel: None,
             comparacao: None,
@@ -830,6 +832,17 @@ impl App {
                 app.start_session(id, false, None);
                 app.started = true;
             }
+        }
+        // desenvolvimento: FENKRA_DEMO_MALHA=<importar|reparar|decimar|booleana> abre um corpo de malha com o comando
+        if let Ok(modo) = std::env::var("FENKRA_DEMO_MALHA") {
+            if let Some(id) = crate::malha_ui::demo_preparar(&mut app.open.doc, &modo) {
+                app.start_session(id, false, None);
+                app.started = true;
+            }
+        }
+        // desenvolvimento: FENKRA_DEMO_IMPRESSAO=1 abre o preparo de impressão com a peça aberta
+        if std::env::var("FENKRA_DEMO_IMPRESSAO").is_ok() {
+            app.abrir_impressao();
         }
         // desenvolvimento: FENKRA_DEMO_PMI=1 anota a placa de exemplo (cota, nota, tolerância, rugosidade)
         if std::env::var("FENKRA_DEMO_PMI").is_ok() {
@@ -2534,9 +2547,26 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 return;
             }
             Cmd::MeshImport => {
-                let Some(p) = rfd::FileDialog::new().add_filter("Malha", &["stl", "obj"]).pick_file() else { return };
-                Sel::Feature(d.add_feature(FeatureKind::MeshImport(MeshImport { path: p.to_string_lossy().into(), solid: true })))
+                let Some(p) = rfd::FileDialog::new().add_filter(tr("Malha"), &["stl", "obj", "ply", "3mf"]).pick_file() else { return };
+                match crate::malha_ui::importar_para_doc(d, &p) {
+                    Ok(id) => Sel::Feature(id),
+                    Err(e) => {
+                        self.toast(e, true);
+                        return;
+                    }
+                }
             }
+            Cmd::Impressao => {
+                self.abrir_impressao();
+                return;
+            }
+            Cmd::Malha(a) => match crate::malha_ui::nova_op(a, d) {
+                Ok(op) => Sel::Feature(d.add_feature(FeatureKind::MeshOp(fenkra_core::malha::MeshOp { op }))),
+                Err(e) => {
+                    self.toast(tr(e), true);
+                    return;
+                }
+            },
             Cmd::Combine(op) => {
                 let active = d.active_collector;
                 let Some(tool) = d.collectors.iter().find(|c| c.id != active).map(|c| c.id) else {
@@ -3411,6 +3441,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     }
                     if ui.button(tr("Exportar IGES…")).clicked() {
                         self.abrir_painel_exportar(fenkra_conversor::Formato::Iges);
+                        ui.close();
+                    }
+                    if ui.button(tr("Preparar impressão…")).on_hover_text(tr("Põe os corpos na mesa, confere se imprimem e grava 3MF ou STL.")).clicked() {
+                        self.abrir_impressao();
                         ui.close();
                     }
                     if ui.button(tr("Exportar malha…")).on_hover_text(tr("Grava em formatos abertos de malha e visualização: 3MF, OBJ, PLY, glTF, USD e outros, com desvio, cor e estrutura.")).clicked() {
@@ -7583,6 +7617,10 @@ pub enum Cmd {
     CloseSurface,
     SewSurface,
     BoundaryFill,
+    /// painel de preparo de impressão
+    Impressao,
+    /// comando sobre o corpo de malha
+    Malha(crate::malha_ui::AcaoMalha),
     MeshImport,
     ImportarArquivo,
     Param,
@@ -8267,6 +8305,7 @@ impl eframe::App for App {
         self.painel_importar(ctx, area);
         self.painel_features(ctx, area);
         self.painel_exportar(ctx, area);
+        self.painel_impressao(ctx, area);
         self.painel_lote(ctx, area);
         crate::pmi_baloes_ui::janela(self, ctx, area);
         if let Some(id) = ctx.data(|m| m.get_temp::<Id>(egui::Id::unique("fenkra_props"))) {
@@ -8492,6 +8531,7 @@ impl eframe::App for App {
                 if let Some(sess) = self.session.as_mut().filter(|_| asm_view.is_none()) {
                     crate::previa::reter_ultima(&mut sess.ultima_valida, &mut s, r.status.get(&sess.id));
                 }
+                crate::impressao_ui::na_cena(self.impressao.as_ref(), &mut s);
                 crate::asm_ui::contexto_na_cena(self.asm.as_ref(), &mut s);
                 crate::asm_cmd::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, ctx.input(|i| i.time), &mut s);
                 crate::asm_interf::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);

@@ -428,6 +428,7 @@ impl<'a> Ctx<'a> {
             last_sheet: None,
             sheet_maps: vec![],
             cut_outlines: vec![],
+            malhas: HashMap::new(),
             roscas: vec![],
             steps: HashMap::new(),
             miter_next: false,

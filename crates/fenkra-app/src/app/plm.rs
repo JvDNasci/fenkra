@@ -371,7 +371,7 @@ mod tests {
     #[test]
     fn contagem_de_malha_e_rosca_ignora_o_suprimido() {
         let mut d = Document::new("P");
-        let id = d.add_feature(FeatureKind::MeshImport(fenkra_core::MeshImport { path: "x.stl".into(), solid: false }));
+        let id = d.add_feature(FeatureKind::MeshImport(fenkra_core::MeshImport { path: "x.stl".into(), ..Default::default() }));
         let r = fenkra_solidos::recompute(&d);
         assert_eq!(medidas_do_resultado(&r, &d).malhas_importadas, 1);
         d.features.iter_mut().find(|f| f.id == id).unwrap().suppressed = true;
