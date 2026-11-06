@@ -23,6 +23,7 @@ pub mod interferencia;
 pub mod kin;
 pub mod links;
 pub mod load;
+pub mod lod;
 pub mod manipulador;
 pub mod pilhas;
 pub mod proposta;
@@ -177,6 +178,10 @@ pub struct Node {
     /// cor de destaque do componente (sobrepõe a da peça)
     #[serde(default)]
     pub color: Option<[u8; 3]>,
+    /// versão simplificada: o componente fica sempre na malha mais grossa, de qualquer distância.
+    /// Só muda o desenho; volume, massa e seleção continuam os da peça
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub simplificada: bool,
 }
 
 fn yes() -> bool {
@@ -733,7 +738,7 @@ impl Assembly {
     pub fn add_group(&mut self, name: &str, parent: Option<Id>) -> Id {
         let id = self.alloc();
         let name = self.unique(name);
-        self.nodes.push(Node { id, name, number: 0, kind: NodeKind::Group, parent, placement: Placement::default(), fixed: false, visible: true, mode: LoadMode::Editavel, color: None });
+        self.nodes.push(Node { id, name, number: 0, kind: NodeKind::Group, parent, placement: Placement::default(), fixed: false, visible: true, mode: LoadMode::Editavel, color: None, simplificada: false });
         id
     }
 
@@ -743,7 +748,7 @@ impl Assembly {
         let name = self.unique(name);
         let first = !self.nodes.iter().any(|n| !matches!(n.kind, NodeKind::Group));
         let number = self.nodes.iter().map(|n| n.number).max().unwrap_or(0) + 1;
-        self.nodes.push(Node { id, name, number, kind, parent, placement, fixed: first, visible: true, mode: LoadMode::Editavel, color: None });
+        self.nodes.push(Node { id, name, number, kind, parent, placement, fixed: first, visible: true, mode: LoadMode::Editavel, color: None, simplificada: false });
         id
     }
 

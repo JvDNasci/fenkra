@@ -280,6 +280,7 @@ fn realcar(a: &Achado, demais: Demais, vista: &fenkra_solidos::RecomputeResult, 
     s.mesh.clear();
     s.indices.clear();
     s.edges.clear();
+    s.lotes.clear();
     s.ghost.clear();
     for b in &vista.bodies {
         let lado = [(a.a.comp, cor_a), (a.b.comp, cor_b)].into_iter().find(|(c, _)| *c == b.collector).map(|x| x.1);

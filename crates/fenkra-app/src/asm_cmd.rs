@@ -674,6 +674,17 @@ pub fn demo(st: &mut AsmState, nome: &str) {
         st.dirty = true;
         return;
     }
+    if let Some(n) = nome.strip_prefix("variado").and_then(|x| x.parse::<usize>().ok()) {
+        // peças todas diferentes para a placa de vídeo: nenhuma cópia divide malha com outra
+        let Some(dir) = st.dir() else { return };
+        for k in 2..n {
+            let path = format!("placa_{k}.fkp");
+            let _ = std::fs::copy(dir.join("placa.fkp"), dir.join(&path));
+            st.asm.add_component("Placa", NodeKind::Part { path }, Placement { origin: [(k % 10) as f64 * 150., (k / 10) as f64 * 100., 0.], ..Default::default() }, None);
+        }
+        st.dirty = true;
+        return;
+    }
     if matches!(nome, "explosao" | "explosao_anim" | "exibicao") {
         crate::asm_exibicao::demo(st, nome);
         return;
@@ -683,7 +694,7 @@ pub fn demo(st: &mut AsmState, nome: &str) {
         return;
     }
     if nome.starts_with("inserir") {
-        crate::asm_inserir::demo(st, nome == "inserir_vazia");
+        crate::asm_inserir::demo(st, nome);
         return;
     }
     let ids: Vec<fenkra_core::Id> = st.asm.nodes.iter().filter(|n| !matches!(n.kind, NodeKind::Group)).map(|n| n.id).collect();

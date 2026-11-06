@@ -20,6 +20,7 @@ use eframe::egui::{self, Pos2, Rect, RichText, Sense, Stroke};
 use fenkra_core::Id;
 use fenkra_montagem::insercao::{self, Escolha};
 use fenkra_montagem::{links, Assembly, Placement, V3};
+use fenkra_project::qualidade_modelo::{self, Medidas, Perfil, PreviaInsercao};
 use glam::Vec3;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -38,6 +39,8 @@ pub struct NaMao {
     pub malha: Arc<Malha>,
     /// ponto da peça que fica sob o cursor: centro da caixa em X e Y, base em Z
     pub apoio: V3,
+    /// triângulos que cada cópia soma à montagem
+    pub triangulos: u64,
 }
 
 /// Comando Inserir aberto.
@@ -56,11 +59,15 @@ pub struct Estado {
     pub ultima: Option<Id>,
     /// posição fixa do cursor, em fração da vista: captura de tela sem mouse (`FENKRA_DEMO_ASM`)
     pub cursor_demo: Option<[f32; 2]>,
+    /// perfil de qualidade do projeto, lido ao abrir o painel (B305)
+    pub perfil: Option<Perfil>,
+    /// as próximas cópias entram na versão simplificada (B125)
+    pub simplificada: bool,
 }
 
 impl Estado {
     pub fn novo(sub: bool, pai: Option<Id>) -> Self {
-        Estado { sub, pai, filtro: String::new(), mao: None, fila: vec![], colocadas: 0, ultima: None, cursor_demo: None }
+        Estado { sub, pai, filtro: String::new(), mao: None, fila: vec![], colocadas: 0, ultima: None, cursor_demo: None, perfil: None, simplificada: false }
     }
 }
 
@@ -134,19 +141,29 @@ fn malha_de<'a>(malhas: impl Iterator<Item = &'a fenkra_kernel::Mesh>) -> Option
     (!tris.is_empty()).then(|| Malha { tris, normais, segs, centro: (lo + hi) / 2., raio: ((hi - lo) / 2.).length().max(1e-3) })
 }
 
+fn triangulos_de<'a>(corpos: impl Iterator<Item = &'a fenkra_solidos::BodyResult>) -> u64 {
+    corpos.map(|b| b.mesh.indices.len() as u64 / 3).sum()
+}
+
+/// Quanto a montagem soma com mais uma cópia da peça na mão, e se passa do teto do perfil.
+fn previa_de(st: &crate::asm_ui::AsmState, perfil: &Perfil, mao: &NaMao) -> PreviaInsercao {
+    let atuais = st.view.as_ref().map_or(0, |v| triangulos_de(v.bodies.iter()));
+    qualidade_modelo::previa_insercao(perfil, atuais, &Medidas { triangulos: mao.triangulos, ..Default::default() }, 1)
+}
+
 /// Lê o arquivo e monta a malha: a peça pelo cache da montagem, o subconjunto compondo a vista dele.
-fn carregar(st: &mut crate::asm_ui::AsmState, arquivo: &Path, sub: bool) -> Result<Malha, String> {
-    let malha = if sub {
+fn carregar(st: &mut crate::asm_ui::AsmState, arquivo: &Path, sub: bool) -> Result<(Malha, u64), String> {
+    let (malha, triangulos) = if sub {
         let txt = std::fs::read_to_string(arquivo).map_err(|e| e.to_string())?;
         let a = Assembly::from_json(&txt)?;
         let mut erros = vec![];
         let (_, r) = fenkra_montagem::view::compose(&a, arquivo.parent(), &mut st.cache, &mut erros);
-        malha_de(r.bodies.iter().map(|b| &b.mesh))
+        (malha_de(r.bodies.iter().map(|b| &b.mesh)), triangulos_de(r.bodies.iter()))
     } else {
         let lp = st.cache.get(arquivo, false)?;
-        malha_de(lp.result.bodies.iter().map(|b| &b.mesh))
+        (malha_de(lp.result.bodies.iter().map(|b| &b.mesh)), triangulos_de(lp.result.bodies.iter()))
     };
-    malha.ok_or_else(|| format!("{}: {}", nome_do(arquivo), tr("sem corpo para mostrar")))
+    malha.map(|m| (m, triangulos)).ok_or_else(|| format!("{}: {}", nome_do(arquivo), tr("sem corpo para mostrar")))
 }
 
 /// Põe o arquivo na mão.
@@ -154,13 +171,14 @@ pub fn pegar(st: &mut crate::asm_ui::AsmState, est: &mut Estado, arquivo: &Path)
     if est.sub && st.file.as_ref().is_some_and(|a| links::depende_de(arquivo, a, None)) {
         return Err(tr("Referência circular: o subconjunto já contém esta montagem").to_string());
     }
-    let malha = carregar(st, arquivo, est.sub)?;
+    let (malha, triangulos) = carregar(st, arquivo, est.sub)?;
     let (c, raio) = (malha.centro, malha.raio);
     let base = malha.tris.iter().flatten().map(|p| p.z).fold(f32::MAX, f32::min).min(c.z + raio);
     est.mao = Some(NaMao {
         escolha: Escolha { path: st.rel_path(arquivo), nome: nome_do(arquivo), sub: est.sub },
         malha: Arc::new(malha),
         apoio: [c.x as f64, c.y as f64, base as f64],
+        triangulos,
     });
     Ok(())
 }
@@ -170,6 +188,9 @@ pub fn colocar_copia(st: &mut crate::asm_ui::AsmState, est: &mut Estado, origem:
     let e = est.mao.as_ref()?.escolha.clone();
     st.push_undo();
     let id = insercao::colocar(&mut st.asm, &e, origem, est.pai);
+    if let Some(n) = st.asm.node_mut(id) {
+        n.simplificada = est.simplificada;
+    }
     st.dirty = true;
     est.colocadas += 1;
     est.ultima = Some(id);
@@ -296,6 +317,8 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
     let posicao = app.settings.painel(PAINEL, Encaixe::Esquerda);
     let (recentes, pasta) = listar(&app.settings.recent_files, st.dir().as_deref(), st.file.as_deref(), est.sub, &est.filtro);
     let primeira = insercao::fixa_na_origem(&st.asm);
+    let perfil = est.perfil.get_or_insert_with(|| app.project.as_ref().map_or_else(Perfil::padrao, |p| p.perfil_qualidade())).clone();
+    let previa = est.mao.as_ref().map(|m| previa_de(st, &perfil, m));
     let mut acao = None;
     let previas = &app.previews;
     let saida = paineis::mostrar(ctx, area, &cfg, posicao, |ui| {
@@ -316,6 +339,13 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
             }
             None => {
                 ui.label(RichText::new(tr("Clique em uma miniatura para pegar a peça.")).small().weak());
+            }
+        }
+        if let Some(p) = previa.as_ref().filter(|p| p.oferecer_simplificada) {
+            ui.label(RichText::new(format!("{}: {:.0} {} ({} {:.0})", tr("A montagem passa do limite de triângulos do perfil"), p.soma_triangulos, tr("triângulos"), tr("limite"), p.limite)).small().color(crate::theme::st_warn()));
+            let rotulo = if est.simplificada { tr("Inserir versão completa") } else { tr("Inserir versão simplificada") };
+            if ui.button(rotulo).on_hover_text(tr("As próximas cópias entram com a malha mais grossa. A peça é a mesma: muda só o desenho.")).clicked() {
+                est.simplificada = !est.simplificada;
             }
         }
         if primeira {
@@ -450,8 +480,10 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     }
 }
 
-/// `FENKRA_DEMO_ASM=inserir|inserir_vazia`: peça na mão, com o cursor parado para a captura.
-pub fn demo(st: &mut crate::asm_ui::AsmState, vazia: bool) {
+/// `FENKRA_DEMO_ASM=inserir|inserir_vazia|inserir_limite`: peça na mão, com o cursor parado para a
+/// captura. Em `inserir_limite` o perfil tem teto baixo, para o aviso aparecer.
+pub fn demo(st: &mut crate::asm_ui::AsmState, nome: &str) {
+    let vazia = nome == "inserir_vazia";
     let Some(dir) = st.dir() else { return };
     for (i, e) in crate::examples::all().into_iter().take(5).enumerate() {
         let _ = std::fs::write(dir.join(format!("exemplo_{i}.fkp")), e.doc.to_json());
@@ -464,6 +496,9 @@ pub fn demo(st: &mut crate::asm_ui::AsmState, vazia: bool) {
     let Some(mut est) = st.inserir.take() else { return };
     let _ = pegar(st, &mut est, &dir.join("placa.fkp"));
     est.cursor_demo = Some([0.72, 0.62]);
+    if nome == "inserir_limite" {
+        est.perfil = Some(Perfil { montagem_triangulos: 1000., ..Perfil::padrao() });
+    }
     st.inserir = Some(est);
 }
 
@@ -473,6 +508,24 @@ mod tests {
     use crate::asm_ui::AsmState;
     use egui::{pos2, vec2};
     use fenkra_montagem::NodeKind;
+
+    #[test]
+    fn passar_do_teto_oferece_a_versao_simplificada_e_a_copia_nasce_com_ela() {
+        let (mut st, d) = montagem("teto");
+        let mut est = Estado::novo(false, None);
+        pegar(&mut st, &mut est, &d.join("placa.fkp")).unwrap();
+        let mao = est.mao.as_ref().unwrap();
+        assert!(mao.triangulos > 0);
+        let folgado = Perfil { montagem_triangulos: mao.triangulos as f64 * 10., ..Perfil::padrao() };
+        let apertado = Perfil { montagem_triangulos: mao.triangulos as f64 / 2., ..Perfil::padrao() };
+        assert!(!previa_de(&st, &folgado, mao).oferecer_simplificada);
+        assert!(previa_de(&st, &apertado, mao).oferecer_simplificada);
+        let completa = colocar_copia(&mut st, &mut est, [0.; 3]).unwrap();
+        est.simplificada = true;
+        let simples = colocar_copia(&mut st, &mut est, [200., 0., 0.]).unwrap();
+        assert!(!st.asm.node(completa).unwrap().simplificada);
+        assert!(st.asm.node(simples).unwrap().simplificada);
+    }
 
     fn montagem(nome: &str) -> (AsmState, PathBuf) {
         let d = std::env::temp_dir().join(format!("fenkra_inserir_{nome}_{}", std::process::id()));

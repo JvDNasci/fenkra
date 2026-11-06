@@ -227,7 +227,7 @@ mod tests {
 
     fn part(a: &mut Assembly, path: &str) {
         let id = a.alloc();
-        a.nodes.push(Node { id, name: path.into(), number: 0, kind: NodeKind::Part { path: path.into() }, parent: None, placement: Default::default(), fixed: false, visible: true, mode: Default::default(), color: None });
+        a.nodes.push(Node { id, name: path.into(), number: 0, kind: NodeKind::Part { path: path.into() }, parent: None, placement: Default::default(), fixed: false, visible: true, mode: Default::default(), color: None, simplificada: false });
     }
 
     #[test]

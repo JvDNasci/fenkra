@@ -191,6 +191,27 @@ struct LOut { @builtin(position) clip: vec4<f32>, @location(0) col: vec4<f32>, @
     o.clip = p; o.col = v.col; o.wp = v.pos;
     return o;
 }
+// ---------- cópias da montagem: a malha é a do protótipo e a posição vem por cópia (B125)
+struct IIn {
+    @location(2) m0: vec4<f32>, @location(3) m1: vec4<f32>, @location(4) m2: vec4<f32>,
+    @location(5) col: vec4<f32>, @location(6) mat: vec4<f32>, @location(7) aresta: vec4<f32>,
+};
+fn posto(i: IIn, p: vec4<f32>) -> vec3<f32> { return vec3<f32>(dot(i.m0, p), dot(i.m1, p), dot(i.m2, p)); }
+@vertex fn vs_mesh_i(@location(0) pos: vec3<f32>, @location(1) nrm: vec3<f32>, i: IIn) -> MOut {
+    var o: MOut;
+    let w = posto(i, vec4<f32>(pos, 1.0));
+    o.clip = u.view_proj * vec4<f32>(w, 1.0);
+    o.n = posto(i, vec4<f32>(nrm, 0.0)); o.col = i.col; o.wp = w; o.mat = i.mat;
+    return o;
+}
+@vertex fn vs_line_i(@location(0) pos: vec3<f32>, i: IIn) -> LOut {
+    var o: LOut;
+    let w = posto(i, vec4<f32>(pos, 1.0));
+    var p = u.view_proj * vec4<f32>(w, 1.0);
+    p.z = p.z - u.params.w;
+    o.clip = p; o.col = i.aresta; o.wp = w;
+    return o;
+}
 @fragment fn fs_line(i: LOut) -> @location(0) vec4<f32> {
     if (cortado(i.wp)) { discard; }
     return i.col;
@@ -335,6 +356,8 @@ pub struct ViewStyle {
     /// "Simplificar ao girar" ligado: enquanto `navegando`, desenha sem anti-serrilhamento
     pub simplificar: bool,
     pub navegando: bool,
+    /// modo leve (B236): a montagem aceita um erro maior antes de pedir a malha fina
+    pub leve: bool,
     /// iluminação realista no sombreado (três pontos, ambiente hemisférico, gama)
     pub realista: bool,
     /// plano de corte da prévia: normal (unitária) e distância; o lado positivo some
@@ -418,6 +441,10 @@ pub struct Scene {
     /// prévia do comando aberto (triângulos sem índice): translúcida, nunca entra na seleção
     pub ghost: Vec<MeshVertex>,
     pub bounds: Option<(Vec3, Vec3)>,
+    /// cópias da montagem: a malha sobe uma vez por protótipo, não entra em `mesh` nem em `edges` (B125)
+    pub lotes: Vec<crate::instancias::Lote>,
+    /// as cópias desenham também as arestas de tangência
+    pub tangentes: bool,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -460,6 +487,11 @@ impl Camera {
             glam::camera::rh::proj::directx::perspective(FOV, aspect, self.dist * 0.01, self.dist * 50.)
         };
         proj * view
+    }
+    /// Pixels por milímetro a `distancia` do olho, numa vista de `altura_px` de altura.
+    pub fn px_por_mm(&self, distancia: f32, altura_px: f32) -> f32 {
+        let d = if self.ortho { self.dist } else { distancia.max(self.dist * 0.01) };
+        altura_px / (2. * d * (FOV / 2.).tan())
     }
     /// Quanto as arestas são puxadas para a câmera (em unidades de clip): o equivalente a
     /// `ARESTA_PX` pixels de profundidade na distância de cada aresta. Na perspectiva isso dá um valor
@@ -549,6 +581,11 @@ struct Pipes {
     /// só, a mais próxima, sem depender da ordem dos triângulos.
     ghost_z: wgpu::RenderPipeline,
     ghost: wgpu::RenderPipeline,
+    /// os mesmos desenhos para as cópias da montagem
+    mesh_i: wgpu::RenderPipeline,
+    xray_i: wgpu::RenderPipeline,
+    line_i: wgpu::RenderPipeline,
+    overlay_i: wgpu::RenderPipeline,
 }
 
 type Buf = Option<(wgpu::Buffer, u32)>;
@@ -580,6 +617,8 @@ pub struct Viewport {
     pub bounds: Option<(Vec3, Vec3)>,
     /// a última cena passou do maior buffer que a placa aceita e ficou sem as faces
     pub cena_grande: bool,
+    /// cópias da montagem na placa (B125)
+    pub inst: crate::instancias::Instanciador,
     /// último movimento de câmera (órbita, pan, zoom, animação) para "Simplificar ao girar"
     ultimo_giro: Option<std::time::Instant>,
     /// transições de câmera ligadas (desligadas no modo leve: a vista salta direto)
@@ -648,6 +687,33 @@ fn make_pipes(dev: &wgpu::Device, module: &wgpu::ShaderModule, layout: &wgpu::Pi
     };
     let ms = std::mem::size_of::<MeshVertex>();
     let ls = std::mem::size_of::<LineVertex>();
+    // cópias: posição e normal em buffers próprios, direto da malha, e uma entrada por cópia
+    let inst_attrs = wgpu::vertex_attr_array![2 => Float32x4, 3 => Float32x4, 4 => Float32x4, 5 => Float32x4, 6 => Float32x4, 7 => Float32x4];
+    let pos_attr = wgpu::vertex_attr_array![0 => Float32x3];
+    let nrm_attr = wgpu::vertex_attr_array![1 => Float32x3];
+    let copia = |vs: &str, fs: &str, topo: T, cmp, write, faces: bool| {
+        let vb = |attributes| wgpu::VertexBufferLayout { array_stride: 12, step_mode: wgpu::VertexStepMode::Vertex, attributes };
+        let ib = wgpu::VertexBufferLayout { array_stride: std::mem::size_of::<crate::instancias::InstanciaGpu>() as u64, step_mode: wgpu::VertexStepMode::Instance, attributes: &inst_attrs };
+        let com_normal = [Some(vb(&pos_attr)), Some(vb(&nrm_attr)), Some(ib.clone())];
+        let so_posicao = [Some(vb(&pos_attr)), Some(ib)];
+        dev.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some(vs),
+            layout: Some(layout),
+            vertex: wgpu::VertexState { module, entry_point: Some(vs), buffers: if faces { &com_normal } else { &so_posicao }, compilation_options: Default::default() },
+            fragment: Some(wgpu::FragmentState { module, entry_point: Some(fs), targets: &target, compilation_options: Default::default() }),
+            primitive: wgpu::PrimitiveState { topology: topo, ..Default::default() },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH,
+                depth_write_enabled: Some(write),
+                depth_compare: Some(cmp),
+                stencil: Default::default(),
+                bias: if faces { wgpu::DepthBiasState { constant: 2, slope_scale: 0.0, clamp: 0.0 } } else { Default::default() },
+            }),
+            multisample: wgpu::MultisampleState { count: samples, ..Default::default() },
+            multiview_mask: None,
+            cache: None,
+        })
+    };
     // sem o recuo das faces: o fantasma coincidente com a peça fica sempre por cima dela
     let fantasma = |writes: wgpu::ColorWrites, cmp, write| {
         let buffers = [Some(wgpu::VertexBufferLayout { array_stride: ms as u64, step_mode: wgpu::VertexStepMode::Vertex, attributes: &mesh_attrs })];
@@ -674,6 +740,10 @@ fn make_pipes(dev: &wgpu::Device, module: &wgpu::ShaderModule, layout: &wgpu::Pi
         wide: pipe("vs_wide", "fs_wide", &wide_attrs, std::mem::size_of::<WideVertex>(), T::LineStrip, C::LessEqual, false),
         ghost_z: fantasma(wgpu::ColorWrites::empty(), C::Less, true),
         ghost: fantasma(wgpu::ColorWrites::ALL, C::LessEqual, false),
+        mesh_i: copia("vs_mesh_i", "fs_mesh", T::TriangleList, C::Less, true, true),
+        xray_i: copia("vs_mesh_i", "fs_mesh", T::TriangleList, C::Less, false, true),
+        line_i: copia("vs_line_i", "fs_line", T::LineList, C::LessEqual, false, false),
+        overlay_i: copia("vs_line_i", "fs_line", T::LineList, C::Always, false, false),
     }
 }
 
@@ -831,6 +901,7 @@ impl Viewport {
             last: None,
             scene_gen: 0,
             cena_grande: false,
+            inst: Default::default(),
             bounds: None,
         }
     }
@@ -853,7 +924,8 @@ impl Viewport {
         let lines = |v: &Vec<LineVertex>| (!v.is_empty()).then(|| (mk(bytemuck::cast_slice(v), wgpu::BufferUsages::VERTEX), v.len() as u32));
         // além do que a placa aceita, criar o buffer derruba o programa: a cena fica sem as faces e avisa
         let cabe = (std::mem::size_of_val(s.mesh.as_slice()) as u64) <= dev.limits().max_buffer_size;
-        self.cena_grande = !cabe;
+        self.cena_grande = !cabe || self.inst.grande_demais;
+        self.inst.definir(s.lotes.clone(), s.tangentes);
         self.vb = (!s.indices.is_empty() && cabe).then(|| {
             (
                 mk(bytemuck::cast_slice(&s.mesh), wgpu::BufferUsages::VERTEX),
@@ -933,10 +1005,14 @@ impl Viewport {
         let amostras = if style.simplificar && style.navegando { 1 } else { repouso };
         self.ensure_targets(rs, size, &usar);
         let key = (self.camera, size, self.scene_gen, style);
-        let t = self.targets.as_ref().unwrap();
-        if self.last == Some(key) {
-            return t.tex_id;
+        if self.last == Some(key) && !self.inst.subindo {
+            return self.targets.as_ref().unwrap().tex_id;
         }
+        if self.inst.tem_lotes() {
+            let limiar = fenkra_montagem::lod::LIMIAR_PX * if style.simplificar && style.navegando { 4. } else { 1. } * if style.leve { 2. } else { 1. };
+            crate::medir_quadros::fase("preparar", || self.inst.preparar(&rs.device, &rs.queue, &crate::instancias::Quadro { camera: self.camera, tamanho: size, limiar_px: limiar }));
+        }
+        let t = self.targets.as_ref().unwrap();
         let vp = self.camera.view_proj(size[0] as f32 / size[1] as f32);
         let e = self.camera.eye();
         let mut bottom = lin(style.bg_bottom);
@@ -997,6 +1073,10 @@ impl Viewport {
                 pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
                 pass.draw_indexed(0..*n, 0, 0..1);
             }
+            if faces {
+                pass.set_pipeline(if m == DisplayMode::RaioX { &p.xray_i } else { &p.mesh_i });
+                self.inst.faces(&mut pass);
+            }
             if let (false, Some((fb, n))) = (m == DisplayMode::LinhasOcultas, &self.fb) {
                 pass.set_pipeline(&p.xray);
                 pass.set_vertex_buffer(0, fb.slice(..));
@@ -1014,6 +1094,10 @@ impl Viewport {
             }
             lines(&self.lb, &p.line);
             lines(&self.wb, &p.wide);
+            if edges {
+                pass.set_pipeline(if edges_always { &p.overlay_i } else { &p.line_i });
+                self.inst.arestas(&mut pass);
+            }
             // o fantasma vem depois de tudo que é opaco e antes das marcas sempre visíveis
             if let Some((gb, n)) = &self.gb {
                 pass.set_vertex_buffer(0, gb.slice(..));

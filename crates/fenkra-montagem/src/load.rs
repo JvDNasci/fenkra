@@ -2,11 +2,14 @@
 //! Carregamento das peças da montagem: lê o arquivo, calcula (com cache por data de modificação)
 //! e entrega a malha e a forma para exibição, seleção e restrições.
 
+use crate::lod::{self, Prototipo};
 use crate::*;
 use fenkra_core::{Document, QualidadeMalha};
 use fenkra_kernel::Shape;
 use fenkra_solidos::RecomputeResult;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 use std::time::SystemTime;
 
 /// Peça calculada.
@@ -15,6 +18,8 @@ pub struct LoadedPart {
     pub result: RecomputeResult,
     /// forma final (para achar faces e eixos); `None` no modo só visualização
     pub shape: Option<Shape>,
+    /// malha da peça, compartilhada pelas cópias, nos níveis de detalhe gerados
+    pub prototipo: Arc<Prototipo>,
     stamp: Option<SystemTime>,
 }
 
@@ -28,6 +33,18 @@ pub struct PartCache {
     pendentes: HashMap<PathBuf, Document>,
     /// peças calculadas numa configuração da tabela de projeto, por caminho e nome (B102)
     configs: HashMap<(PathBuf, String), LoadedPart>,
+    /// gera os níveis grossos e não guarda formas por conta própria: é o cache da thread de composição
+    niveis: bool,
+    /// bandeira do pedido em andamento: o cálculo da peça para e nada fica guardado pela metade
+    pub cancelar: Option<Arc<AtomicBool>>,
+    /// peças esquecidas desde a última vez que alguém perguntou
+    esquecidas: Vec<PathBuf>,
+    /// peças calculadas desde a última vez que alguém perguntou
+    recem: Vec<PathBuf>,
+    /// documentos lidos sem calcular: a árvore precisa da lista de comandos, não do sólido
+    documentos: HashMap<PathBuf, (Option<SystemTime>, Document)>,
+    /// protótipo de cada subconjunto e a assinatura do que entrou nele
+    pub(crate) subconjuntos: HashMap<(PathBuf, String), (u64, Arc<Prototipo>)>,
 }
 
 /// Caminho completo de um componente (relativo à pasta da montagem ou absoluto).
@@ -40,6 +57,96 @@ pub fn full_path(asm_dir: Option<&Path>, path: &str) -> PathBuf {
 }
 
 impl PartCache {
+    /// Cache da thread de composição (B125): com níveis de detalhe e sem guardar formas à toa.
+    pub fn com_niveis() -> Self {
+        PartCache { niveis: true, ..Default::default() }
+    }
+
+    /// Este cache é o da thread de composição?
+    pub fn gera_niveis(&self) -> bool {
+        self.niveis
+    }
+
+    /// Calcula a peça e monta o protótipo. A troca de qualidade só re-tessela: os comandos ficam no
+    /// cache do cálculo, então os níveis grossos custam só a malha.
+    fn calcular(&self, doc: &Document) -> Result<(RecomputeResult, Arc<Prototipo>), String> {
+        let mut c = fenkra_solidos::Cache::com_qualidade(self.qualidade);
+        c.cancelar = self.cancelar.clone();
+        let result = fenkra_solidos::recompute_cached(doc, &mut c);
+        if result.cancelado {
+            return Err("cancelado".into());
+        }
+        let mut malhas = vec![(crate::view::malha_unica(&result), self.qualidade)];
+        if self.niveis {
+            for q in lod::qualidades(self.qualidade).into_iter().skip(1) {
+                c.qualidade = q;
+                let r = fenkra_solidos::recompute_cached(doc, &mut c);
+                if r.cancelado {
+                    return Err("cancelado".into());
+                }
+                malhas.push((crate::view::malha_unica(&r), q));
+            }
+        }
+        Ok((result, Prototipo::novo(malhas)))
+    }
+
+    /// Documento da peça, sem calcular nada: é o que a thread da interface pode pedir a cada quadro.
+    pub fn documento(&mut self, full: &Path) -> Result<&Document, String> {
+        let stamp = std::fs::metadata(full).and_then(|m| m.modified()).ok();
+        if self.parts.get(full).is_some_and(|p| p.stamp == stamp) {
+            return Ok(&self.parts[full].doc);
+        }
+        if self.pendentes.contains_key(full) {
+            return Ok(&self.pendentes[full]);
+        }
+        if self.documentos.get(full).is_none_or(|(s, _)| *s != stamp) {
+            let txt = std::fs::read_to_string(full).map_err(|e| format!("{}: {e}", full.display()))?;
+            let doc = Document::from_json(&txt).map_err(|e| e.to_string())?;
+            self.documentos.insert(full.to_path_buf(), (stamp, doc));
+        }
+        Ok(&self.documentos[full].1)
+    }
+
+    /// Documento que já está na memória, sem tocar no disco: serve à árvore, que redesenha todo quadro.
+    pub fn documento_pronto(&self, full: &Path) -> Option<&Document> {
+        self.parts.get(full).map(|p| &p.doc).or_else(|| self.pendentes.get(full)).or_else(|| self.documentos.get(full).map(|(_, d)| d))
+    }
+
+    /// Guarda um documento que outra thread já leu.
+    pub fn semear_documento(&mut self, full: PathBuf, doc: Document) {
+        self.documentos.insert(full, (None, doc));
+    }
+
+    /// Documentos das peças calculadas desde a última chamada.
+    pub fn tirar_recem(&mut self) -> Vec<(PathBuf, Document)> {
+        let lista = std::mem::take(&mut self.recem);
+        lista.into_iter().filter_map(|f| self.parts.get(&f).map(|p| (f.clone(), p.doc.clone()))).collect()
+    }
+
+    /// Peças que só existem na memória, como a interface as vê agora.
+    pub fn pendentes(&self) -> Vec<(PathBuf, Document)> {
+        self.pendentes.iter().map(|(p, d)| (p.clone(), d.clone())).collect()
+    }
+
+    /// Acerta as peças da memória com a lista da interface; a que mudou é calculada de novo.
+    pub fn sincronizar_pendentes(&mut self, lista: Vec<(PathBuf, Document)>) {
+        let novas: HashMap<PathBuf, Document> = lista.into_iter().collect();
+        for f in self.pendentes.keys().filter(|f| !novas.contains_key(*f)).cloned().collect::<Vec<_>>() {
+            self.parts.remove(&f);
+        }
+        for (f, d) in &novas {
+            if self.pendentes.get(f).is_none_or(|x| x.to_json() != d.to_json()) {
+                self.parts.remove(f);
+            }
+        }
+        self.pendentes = novas;
+    }
+
+    /// Peças esquecidas desde a última chamada: quem tem outro cache precisa esquecer também.
+    pub fn tirar_esquecidas(&mut self) -> Vec<PathBuf> {
+        std::mem::take(&mut self.esquecidas)
+    }
+
     pub fn qualidade(&self) -> QualidadeMalha {
         self.qualidade
     }
@@ -72,9 +179,10 @@ impl PartCache {
                     Document::from_json(&txt).map_err(|e| e.to_string())?
                 }
             };
-            let result = fenkra_solidos::recompute_cached(&doc, &mut fenkra_solidos::Cache::com_qualidade(self.qualidade));
+            let (result, prototipo) = self.calcular(&doc)?;
             let shape = if with_shape { fenkra_solidos::final_shape(&doc) } else { None };
-            self.parts.insert(full.to_path_buf(), LoadedPart { doc, result, shape, stamp });
+            self.parts.insert(full.to_path_buf(), LoadedPart { doc, result, shape, prototipo, stamp });
+            self.recem.push(full.to_path_buf());
         }
         Ok(self.parts.get(full).unwrap())
     }
@@ -95,9 +203,9 @@ impl PartCache {
         if fresh {
             let base = self.get(full, false)?.doc.clone();
             let doc = base.com_configuracao(cfg).map_err(|e| e.to_string())?;
-            let result = fenkra_solidos::recompute_cached(&doc, &mut fenkra_solidos::Cache::com_qualidade(self.qualidade));
+            let (result, prototipo) = self.calcular(&doc)?;
             let shape = if with_shape { fenkra_solidos::final_shape(&doc) } else { None };
-            self.configs.insert(chave.clone(), LoadedPart { doc, result, shape, stamp });
+            self.configs.insert(chave.clone(), LoadedPart { doc, result, shape, prototipo, stamp });
         }
         Ok(self.configs.get(&chave).unwrap())
     }
@@ -150,6 +258,7 @@ impl PartCache {
     pub fn forget(&mut self, full: &Path) {
         self.parts.remove(full);
         self.configs.retain(|(p, _), _| p != full);
+        self.esquecidas.push(full.to_path_buf());
     }
 
     /// Peça já carregada (sem ler o disco).
