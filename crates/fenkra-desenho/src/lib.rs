@@ -1012,6 +1012,17 @@ mod tests {
         export::save(&d, s, &mut m, dx.to_str().unwrap()).unwrap();
         let txt = std::fs::read_to_string(&dx).unwrap();
         assert!(txt.contains("LINE") && txt.trim_end().ends_with("EOF"));
+        // R2000 com entidades de verdade: o furo volta a ser círculo, a seta é hachura, o texto é MTEXT
+        let lido = fenkra_dxf::ler(txt.as_bytes()).unwrap();
+        assert_eq!((lido.versao.as_str(), lido.unidade), ("AC1015", fenkra_dxf::Unidade::Milimetro));
+        assert!(lido.ignorados.is_empty(), "{:?}", lido.ignorados);
+        let conta = |f: &dyn Fn(&fenkra_dxf::Entidade) -> bool| lido.itens.iter().filter(|i| f(&i.entidade)).count();
+        use fenkra_dxf::Entidade as E;
+        assert!(conta(&|e| matches!(e, E::Circulo { .. })) > 0, "nenhum CIRCLE");
+        assert!(conta(&|e| matches!(e, E::Hachura { .. })) > 0, "nenhum HATCH");
+        assert!(conta(&|e| matches!(e, E::Texto { .. })) > 0, "nenhum MTEXT");
+        assert!(lido.itens.iter().any(|i| matches!(&i.entidade, E::Texto { texto, .. } if texto.starts_with("CORTE A-A"))));
+        assert!(lido.camadas.iter().any(|c| c.nome == "OCULTA" && c.tipo_linha == "HIDDEN"));
     }
 
     #[test]

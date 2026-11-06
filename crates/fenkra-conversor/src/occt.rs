@@ -8,9 +8,9 @@ use std::path::Path;
 
 pub struct ProvedorOcct;
 
-/// A árvore é receita, não forma: quem a lê é [`crate::arvore`], e nenhum provedor de geometria.
+/// Árvore é receita e DXF é 2D: quem lê os dois é o próprio conversor, e nenhum provedor de geometria.
 fn sem_geometria() -> ErroConv {
-    ErroConv::Formato("árvore paramétrica não passa pelo provedor de geometria".into())
+    ErroConv::Formato("árvore paramétrica e DXF não passam pelo provedor de geometria".into())
 }
 
 impl Provedor for ProvedorOcct {
@@ -40,7 +40,7 @@ impl Provedor for ProvedorOcct {
                 let nome = caminho.file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
                 Ok(ModeloNeutro::de_forma(formato, &nome, Shape::from_brep(&texto)?))
             }
-            Formato::Arvore => Err(sem_geometria()),
+            Formato::Arvore | Formato::Dxf => Err(sem_geometria()),
         }
     }
 
@@ -55,7 +55,7 @@ impl Provedor for ProvedorOcct {
                 let opcoes = OpcoesGravarIges { brep: o.iges == ModoIges::Brep, unidade: o.unidade.into(), cores: o.cores, nomes: o.nomes, camadas: o.camadas };
                 modelo.xde.gravar_iges(texto_do_caminho(caminho)?, opcoes).map_err(falha)
             }
-            Formato::Arvore => Err(sem_geometria()),
+            Formato::Arvore | Formato::Dxf => Err(sem_geometria()),
             // o BREP não tem estrutura: as peças vão soltas, cada uma no seu lugar
             Formato::Brep => {
                 let mut tudo: Option<Shape> = None;

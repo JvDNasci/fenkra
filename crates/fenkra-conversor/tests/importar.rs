@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! B87: importação pela ponte XDE até o documento recalculado.
 
-use fenkra_conversor::{ErroConv, Formato, ModeloNeutro, ModoIges, OpcoesExportar, OpcoesImportar, Registro, Relatorio, Reparo, TipoDefeito, UnidadeArquivo, UnidadeSaida};
+use fenkra_conversor::{Destino, ErroConv, Formato, ModeloNeutro, ModoIges, OpcoesExportar, OpcoesImportar, Registro, Relatorio, Reparo, TipoDefeito, UnidadeArquivo, UnidadeSaida};
 use fenkra_core::Document;
 use fenkra_kernel::{Frame, InstanciaXde, ModeloXde, ProdutoXde, Seg2, Shape, IDENTIDADE};
 use std::path::{Path, PathBuf};
@@ -46,6 +46,10 @@ fn gravar(modelo: &ModeloNeutro, caminho: &Path, o: OpcoesExportar) {
     Registro::default().gravar(modelo, caminho, &o).unwrap();
 }
 
+fn uma_peca() -> OpcoesImportar {
+    OpcoesImportar { destino: Destino::UmaPeca, ..Default::default() }
+}
+
 /// Recalcula e devolve volume somado e a caixa do documento.
 fn recalcular(doc: &Document) -> (f64, [f64; 3], [f64; 3]) {
     let r = fenkra_solidos::recompute(doc);
@@ -73,7 +77,7 @@ fn montagem_vira_corpos_nomeados_e_coloridos_no_lugar_certo() {
     let arquivo = dir.join("conjunto de teste.step");
     gravar(&montagem(), &arquivo, OpcoesExportar::default());
 
-    let i = Registro::default().importar(&arquivo, &OpcoesImportar::default()).unwrap();
+    let i = Registro::default().importar(&arquivo, &uma_peca()).unwrap();
     let r = &i.relatorio;
     assert_eq!((r.produtos, r.instancias, r.corpos, r.solidos, r.faces), (3, 3, 3, 3, 18), "{r:?}");
     assert!(perto(r.volume, 60_000. + 2. * 4_000.), "{}", r.volume);
@@ -107,7 +111,7 @@ fn documento_importado_sobrevive_ao_json_e_abre_sem_o_arquivo() {
     let dir = pasta("json");
     let arquivo = dir.join("peça.step");
     gravar(&montagem(), &arquivo, OpcoesExportar::default());
-    let i = Registro::default().importar(&arquivo, &OpcoesImportar::default()).unwrap();
+    let i = Registro::default().importar(&arquivo, &uma_peca()).unwrap();
     let doc = Document::from_json(&i.doc.to_json()).unwrap();
     std::fs::remove_file(&arquivo).unwrap();
     let (volume, ..) = recalcular(&doc);
@@ -292,7 +296,7 @@ fn relatorio_fica_embutido_no_documento_e_sobrevive_ao_arquivo() {
     let dir = pasta("embutido");
     let arquivo = dir.join("peça.step");
     gravar(&montagem(), &arquivo, OpcoesExportar::default());
-    let i = Registro::default().importar(&arquivo, &OpcoesImportar::default()).unwrap();
+    let i = Registro::default().importar(&arquivo, &uma_peca()).unwrap();
     let doc = Document::from_json(&i.doc.to_json()).unwrap();
     std::fs::remove_file(&arquivo).unwrap();
     let embutido = doc.origem.as_ref().and_then(|o| o.relatorio.as_deref()).expect("relatório no selo");

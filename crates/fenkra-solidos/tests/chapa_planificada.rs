@@ -107,9 +107,14 @@ fn planificada_exata_com_aba_furo_e_dxf_em_camadas() {
     for camada in [CAMADA_CONTORNO, CAMADA_FUROS, CAMADA_DOBRA_CIMA] {
         assert!(texto.contains(&format!("8\n{camada}\n")), "falta a camada {camada}");
     }
-    assert!(texto.contains("0\nCIRCLE\n") && texto.contains("0\nTEXT\n"));
+    assert!(texto.contains("0\nCIRCLE\n") && texto.contains("0\nMTEXT\n"));
     // 1:1: o furo tem raio 5 em milímetros
     assert!(texto.contains("40\n5.0000\n"), "raio do furo");
+    // R2000 de verdade: lê de volta com as mesmas camadas, em milímetros, e o rótulo guarda o símbolo
+    let lido = fenkra_dxf::ler(texto.as_bytes()).unwrap();
+    assert_eq!((lido.versao.as_str(), lido.unidade), ("AC1015", fenkra_dxf::Unidade::Milimetro));
+    assert!(lido.itens.iter().any(|i| i.camada == CAMADA_FUROS && matches!(i.entidade, fenkra_dxf::Entidade::Circulo { raio, .. } if (raio - 5.).abs() < 1e-4)));
+    assert!(lido.itens.iter().any(|i| matches!(&i.entidade, fenkra_dxf::Entidade::Texto { texto, .. } if texto.contains('°'))), "o rótulo perdeu o símbolo");
     assert!(texto.ends_with("0\nEOF\n"));
 }
 

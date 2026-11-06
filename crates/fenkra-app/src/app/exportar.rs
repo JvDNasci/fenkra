@@ -4,7 +4,7 @@
 //! kernel. O STL segue pelo menu, que não tem opção além do preset.
 
 use super::*;
-use fenkra_conversor::{EsquemaSaida, Formato, ModeloNeutro, ModoIges, OpcoesExportar, Registro, UnidadeSaida};
+use fenkra_conversor::{EsquemaSaida, Estrutura, Formato, ModeloNeutro, ModoIges, OpcoesExportar, Registro, UnidadeSaida};
 
 const LARGURA: f32 = 300.;
 
@@ -31,6 +31,13 @@ fn dica_modo(m: ModoIges) -> &'static str {
     }
 }
 
+fn dica_estrutura(e: Estrutura) -> &'static str {
+    match e {
+        Estrutura::Arvore => "Grava produtos e instâncias, como na árvore. A peça repetida vai uma vez só.",
+        Estrutura::Achatada => "Grava um produto só, com todas as peças no lugar. Serve a quem lê o arquivo sem árvore.",
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Acao {
     Nada,
@@ -42,11 +49,13 @@ enum Acao {
 pub struct Dialogo {
     formato: Formato,
     opcoes: OpcoesExportar,
+    /// exporta a montagem aberta, não a peça
+    montagem: bool,
 }
 
 impl Dialogo {
-    fn novo(formato: Formato, opcoes: OpcoesExportar) -> Dialogo {
-        Dialogo { formato, opcoes }
+    fn novo(formato: Formato, opcoes: OpcoesExportar, montagem: bool) -> Dialogo {
+        Dialogo { formato, opcoes, montagem }
     }
 
     fn ui(&mut self, ui: &mut egui::Ui) -> Acao {
@@ -71,6 +80,14 @@ impl Dialogo {
                     ui.selectable_value(&mut o.iges, m, tr(m.nome())).on_hover_text(tr(dica_modo(m)));
                 }
             }).response.on_hover_text(tr(dica_modo(o.iges)));
+        }
+        if self.montagem {
+            ui.label(tr("Estrutura"));
+            egui::ComboBox::from_id_salt("exportar_estrutura").selected_text(tr(o.estrutura.nome())).width(LARGURA - 40.).show_ui(ui, |ui| {
+                for e in Estrutura::TODAS {
+                    ui.selectable_value(&mut o.estrutura, e, tr(e.nome())).on_hover_text(tr(dica_estrutura(e)));
+                }
+            }).response.on_hover_text(tr(dica_estrutura(o.estrutura)));
         }
         ui.label(tr("Unidade do arquivo"));
         egui::ComboBox::from_id_salt("exportar_unidade").selected_text(tr(nome_unidade(o.unidade))).width(LARGURA - 40.).show_ui(ui, |ui| {
@@ -99,7 +116,7 @@ impl Dialogo {
 
 impl App {
     pub(super) fn abrir_painel_exportar(&mut self, formato: Formato) {
-        self.exportar_dialogo = Some(Dialogo::novo(formato, self.settings.opcoes_exportar));
+        self.exportar_dialogo = Some(Dialogo::novo(formato, self.settings.opcoes_exportar, self.in_asm()));
     }
 
     pub(super) fn painel_exportar(&mut self, ctx: &egui::Context, area: Rect) {
@@ -121,10 +138,20 @@ impl App {
 
     fn gravar_exportacao(&mut self, d: Dialogo) {
         self.settings.opcoes_exportar = d.opcoes;
-        let nome = self.open.doc.name.clone();
+        let montagem = self.asm.as_ref().filter(|_| d.montagem);
+        // as peças são lidas dos arquivos da montagem: sem pasta, os caminhos não levam a lugar nenhum
+        let pasta = montagem.and_then(|s| s.file.as_ref()).and_then(|p| p.parent()).map(|p| p.to_path_buf());
+        if d.montagem && pasta.is_none() {
+            return self.toast(tr("Salve a montagem antes de exportar: as peças são lidas dos arquivos dela.").to_string(), true);
+        }
+        let nome = montagem.map(|s| s.asm.name.clone()).unwrap_or_else(|| self.open.doc.name.clone());
         let extensao = d.formato.extensoes()[0];
         let Some(caminho) = rfd::FileDialog::new().add_filter(d.formato.nome(), d.formato.extensoes()).set_file_name(format!("{nome}.{extensao}")).save_file() else { return };
-        let r = ModeloNeutro::de_documento(&self.open.doc).and_then(|m| Registro::default().gravar(&m, &caminho, &d.opcoes));
+        let modelo = match (self.asm.as_ref().filter(|_| d.montagem), &pasta) {
+            (Some(s), Some(pasta)) => ModeloNeutro::da_montagem(&s.asm, pasta),
+            _ => ModeloNeutro::de_documento(&self.open.doc),
+        };
+        let r = modelo.and_then(|m| Registro::default().gravar(&m, &caminho, &d.opcoes));
         match r {
             Ok(()) => self.toast(format!("Exportado: {}", caminho.display()), false),
             Err(e) => self.toast(format!("Falha ao exportar: {e}"), true),
@@ -155,12 +182,24 @@ mod testes {
 
     #[test]
     fn modo_do_iges_so_aparece_no_iges_e_esquema_so_no_step() {
-        let mut d = Dialogo::novo(Formato::Iges, OpcoesExportar::default());
+        let mut d = Dialogo::novo(Formato::Iges, OpcoesExportar::default(), false);
         let t = textos(&mut d).join("\n");
         assert!(t.contains("Modo do IGES") && t.contains("BRep") && !t.contains("Esquema"), "{t}");
         d.formato = Formato::Step;
         let t = textos(&mut d).join("\n");
         assert!(t.contains("Esquema") && t.contains("AP214") && !t.contains("Modo do IGES"), "{t}");
+    }
+
+    #[test]
+    fn estrutura_so_aparece_na_montagem() {
+        let mut d = Dialogo::novo(Formato::Step, OpcoesExportar::default(), false);
+        assert!(!textos(&mut d).join("\n").contains("Estrutura"));
+        d.montagem = true;
+        let t = textos(&mut d).join("\n");
+        assert!(t.contains("Estrutura") && t.contains("Com estrutura"), "{t}");
+        for e in Estrutura::TODAS {
+            assert!(crate::i18n::tem_traducao(e.nome()) && crate::i18n::tem_traducao(dica_estrutura(e)));
+        }
     }
 
     #[test]

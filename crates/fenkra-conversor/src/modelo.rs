@@ -25,7 +25,7 @@ pub struct Ocorrencia {
 }
 
 /// `a` depois de `b`, com as matrizes 3x4 por linhas.
-fn compor(a: &[f64; 12], b: &[f64; 12]) -> [f64; 12] {
+pub(crate) fn compor(a: &[f64; 12], b: &[f64; 12]) -> [f64; 12] {
     let mut r = [0.; 12];
     for i in 0..3 {
         for j in 0..4 {
@@ -36,12 +36,12 @@ fn compor(a: &[f64; 12], b: &[f64; 12]) -> [f64; 12] {
     r
 }
 
-fn cor_de(c: [u8; 3]) -> [f32; 4] {
+pub(crate) fn cor_de(c: [u8; 3]) -> [f32; 4] {
     [c[0] as f32 / 255., c[1] as f32 / 255., c[2] as f32 / 255., 1.]
 }
 
 /// Limite de profundidade: um arquivo com ciclo de montagens não pode travar o conversor.
-const PROFUNDIDADE: usize = 64;
+pub(crate) const PROFUNDIDADE: usize = 64;
 
 impl ModeloNeutro {
     /// Modelo de uma forma só, para formatos sem estrutura.
@@ -59,7 +59,7 @@ impl ModeloNeutro {
     }
 
     /// Nome de uma ocorrência: a instância quando o arquivo nomeou, senão o produto.
-    fn nome_da_instancia(&self, i: &InstanciaXde) -> String {
+    pub(crate) fn nome_da_instancia(&self, i: &InstanciaXde) -> String {
         let automatico = i.nome.is_empty() || i.nome.starts_with("=>") || i.nome.starts_with("NAUO");
         if automatico {
             self.xde.produtos.get(i.produto).map(|p| p.nome.clone()).unwrap_or_default()
@@ -129,7 +129,7 @@ impl ModeloNeutro {
 
 /// Uma peça com as superfícies dadas. O composto cresce em árvore equilibrada: em fila, mil superfícies
 /// virariam mil níveis de composto para o explorador do kernel descer a cada consulta.
-fn superficies(soltas: Vec<ProdutoXde>, nome: &str) -> ProdutoXde {
+pub(crate) fn superficies(soltas: Vec<ProdutoXde>, nome: &str) -> ProdutoXde {
     let mut p = ProdutoXde { nome: nome.into(), ..Default::default() };
     let (mut formas, mut base) = (Vec::with_capacity(soltas.len()), 0);
     for s in soltas {

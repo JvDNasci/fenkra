@@ -40,6 +40,9 @@ pub(crate) const FORA_PMI: &str = "PMI: {0} dimensões, {1} tolerâncias e {2} d
 pub(crate) const FORA_COR_FACE: &str = "Cor por face: {0} faces; o documento guarda uma cor por corpo.";
 pub(crate) const FORA_CAMADAS: &str = "Camadas ({0}): o documento não tem camadas.";
 pub(crate) const FORA_MONTAGEM: &str = "Estrutura de montagem: as peças viraram corpos de um documento, com o caminho no nome.";
+pub(crate) const FORA_DXF: &str = "Fora do sketch: {0}.";
+pub(crate) const AV_DXF_SEM_UNIDADE: &str = "O DXF não declara a unidade: os números foram lidos como milímetros. Confira a caixa e escolha a unidade do arquivo.";
+pub(crate) const AV_DXF_JUNTADOS: &str = "{0} pontas a menos de {1} mm viraram o mesmo ponto.";
 pub(crate) const FORA_IGES: &str = "Entidades que o leitor de IGES não traduziu: {0}.";
 pub(crate) const AV_SUPERFICIES: &str = "{0} ficou como superfície de referência: o reparo não chegou a um sólido fechado.";
 pub(crate) const AV_DEFEITOS_FORA: &str = "Defeitos demais para listar: {0} de {1} estão na lista.";
@@ -61,6 +64,9 @@ pub const NOTAS: &[&str] = &[
     FORA_COR_FACE,
     FORA_CAMADAS,
     FORA_MONTAGEM,
+    FORA_DXF,
+    AV_DXF_SEM_UNIDADE,
+    AV_DXF_JUNTADOS,
     FORA_IGES,
     AV_SUPERFICIES,
     AV_DEFEITOS_FORA,
@@ -185,6 +191,9 @@ pub struct Relatorio {
     /// o que sobrou depois do reparo, até o limite da lista
     #[serde(default)]
     pub defeitos: Vec<Defeito>,
+    /// DXF: cada camada lida e quantas curvas entraram
+    #[serde(default)]
+    pub camadas: Vec<(String, usize)>,
     /// o que o arquivo tinha ou podia ter e não chegou ao documento
     pub nao_carrega: Vec<Nota>,
     pub avisos: Vec<Nota>,
@@ -232,6 +241,7 @@ impl Relatorio {
             let corpo: String = itens.iter().map(|i| format!("- {i}\n")).collect();
             format!("\n{}:\n{corpo}", tr(titulo))
         };
+        s.push_str(&lista("Camadas lidas", self.camadas.iter().map(|(c, n)| format!("{c}: {n}")).collect()));
         s.push_str(&lista("Sólidos que não fecharam", self.nao_fecharam.clone()));
         let defeitos = self.defeitos.iter().map(|d| {
             let c = d.centro();
@@ -310,6 +320,7 @@ impl Relatorio {
             let corpo: String = itens.iter().map(|i| format!("<li>{}</li>\n", escapar(i))).collect();
             format!("<h2>{}</h2>\n<ul>\n{corpo}</ul>\n", escapar(tr(titulo)))
         };
+        s.push_str(&lista("Camadas lidas", self.camadas.iter().map(|(c, n)| format!("{c}: {n}")).collect()));
         s.push_str(&lista("Sólidos que não fecharam", self.nao_fecharam.clone()));
         s.push_str(&lista("O que o formato não carrega", self.nao_carrega.iter().map(|n| n.texto(tr)).collect()));
         s.push_str(&lista("Avisos", self.avisos.iter().map(|n| n.texto(tr)).collect()));
@@ -407,7 +418,7 @@ mod testes {
     #[test]
     fn relatorio_antigo_sem_os_campos_novos_ainda_le() {
         let mut v = serde_json::to_value(Relatorio::default()).unwrap();
-        for campo in ["antes", "depois", "reparo_pecas", "defeitos"] {
+        for campo in ["antes", "depois", "reparo_pecas", "defeitos", "camadas"] {
             v.as_object_mut().unwrap().remove(campo);
         }
         assert_eq!(serde_json::from_value::<Relatorio>(v).unwrap(), Relatorio::default());

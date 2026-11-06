@@ -12,6 +12,7 @@ use fenkra_core::{Document, RefKind};
 use std::path::{Path, PathBuf};
 
 const ORIGINAIS: &str = ".originais";
+const MONTAGENS: &str = "montagens";
 
 /// O que reimportar um arquivo significa para o projeto.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -69,6 +70,38 @@ impl Project {
         let hash = doc.origem.as_ref().map(|o| o.hash.clone()).unwrap_or_default();
         self.guardar_original(original, &hash, relatorio)?;
         self.add_document(doc)
+    }
+
+    /// Adiciona as peças de um arquivo de montagem. Cada uma ganha PN do motor, uma vez por peça: as
+    /// ocorrências dela não são documentos. Devolve o nome de cada peça no conjunto e o caminho dela
+    /// relativo à pasta das montagens, que é o que os nós da montagem guardam.
+    pub fn adicionar_pecas_importadas(&mut self, original: &Path, pecas: Vec<(String, Document)>, relatorio: &str) -> PResult<Vec<(String, String)>> {
+        let hash = pecas.first().and_then(|(_, d)| d.origem.as_ref()).map(|o| o.hash.clone()).unwrap_or_default();
+        if !hash.is_empty() {
+            self.guardar_original(original, &hash, relatorio)?;
+        }
+        let mut saida = Vec::with_capacity(pecas.len());
+        for (nome, doc) in pecas {
+            let id = self.add_document(doc)?;
+            saida.push((nome, format!("../{}", self.entry(id)?.file)));
+        }
+        Ok(saida)
+    }
+
+    /// Caminho que uma montagem importada com este nome de arquivo tem no projeto.
+    pub fn montagem_importada(&self, arquivo: &str) -> PathBuf {
+        self.root.join(MONTAGENS).join(arquivo)
+    }
+
+    /// Grava a montagem de um arquivo importado na pasta das montagens.
+    pub fn gravar_montagem_importada(&self, arquivo: &str, texto: &str) -> PResult<PathBuf> {
+        self.pode_gravar()?;
+        let destino = self.montagem_importada(arquivo);
+        if let Some(pasta) = destino.parent() {
+            std::fs::create_dir_all(pasta)?;
+        }
+        gravar_atomico(&destino, texto.as_bytes())?;
+        Ok(destino)
     }
 
     /// Cria um documento novo a partir do arquivo mudado, ligado ao documento `de`, que fica como está.

@@ -3105,7 +3105,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         ui.close();
                     }
                     ui.separator();
-                    let importar = ui.add(egui::Button::image_and_text(crate::icons::get("importar_arquivo"), tr("Importar STEP, IGES, BREP ou árvore…")));
+                    let importar = ui.add(egui::Button::image_and_text(crate::icons::get("importar_arquivo"), tr("Importar STEP, IGES, BREP, DXF ou árvore…")));
                     let (nome, frase, passos) = crate::toolbar::TEXTO_IMPORTAR;
                     if crate::icons::hover_help(ui, importar, tr(nome), tr(frase), tr(passos)).clicked() {
                         self.com_confirmacao(Acao::Importar);

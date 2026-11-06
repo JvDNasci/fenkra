@@ -59,7 +59,7 @@ pub struct Item {
 /// Nome, frase e passo a passo de Importar, que aparece na barra e no menu Arquivo.
 pub const TEXTO_IMPORTAR: (&str, &str, &str) = (
     "Importar",
-    "Importar arquivo STEP, IGES ou BREP",
+    "Importar arquivo STEP, IGES, BREP ou DXF",
     "Escolha o arquivo. Confira a miniatura, a caixa envolvente e os avisos. Ajuste a unidade e o reparo. Confirme e leia o relatório.",
 );
 

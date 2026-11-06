@@ -45,12 +45,54 @@ impl App {
         }
     }
 
-    /// Arquivo com várias peças não cabe em um documento: elas viram arquivos numa pasta escolhida.
-    pub(super) fn receber_conjunto(&mut self, conjunto: Conjunto) {
-        self.toast(tr("Este arquivo tem várias peças ou uma montagem: escolha uma pasta para elas.").to_string(), false);
-        let Some(pasta) = rfd::FileDialog::new().set_title(tr("Pasta para as peças do arquivo")).pick_folder() else { return };
+    /// Arquivo com várias peças não cabe em um documento. Com projeto, elas entram nele com PN do motor e
+    /// a montagem vai para a pasta das montagens; sem projeto, viram arquivos numa pasta escolhida.
+    pub(super) fn receber_conjunto(&mut self, original: &std::path::Path, conjunto: Conjunto, relatorio: &str) {
+        self.started = true;
+        if self.project.is_some() {
+            return self.conjunto_no_projeto(original, conjunto, relatorio);
+        }
+        // desenvolvimento: FENKRA_DEMO_PASTA=<pasta> grava sem perguntar, para capturar a montagem
+        let pasta = std::env::var("FENKRA_DEMO_PASTA").ok().map(std::path::PathBuf::from).or_else(|| {
+            self.toast(tr("Este arquivo tem várias peças ou uma montagem: escolha uma pasta para elas.").to_string(), false);
+            rfd::FileDialog::new().set_title(tr("Pasta para as peças do arquivo")).pick_folder()
+        });
+        let Some(pasta) = pasta else { return };
         match gravar_em_pasta(&conjunto, &pasta) {
             Ok(caminho) => self.open_path(&caminho),
+            Err(e) => self.toast(e.to_string(), true),
+        }
+    }
+
+    fn conjunto_no_projeto(&mut self, original: &std::path::Path, mut conjunto: Conjunto, relatorio: &str) {
+        use fenkra_project::importacao::Reimportacao;
+        let Some(p) = self.project.as_mut() else { return };
+        let arquivo = conjunto.arquivo_da_montagem();
+        let selo = conjunto.pecas.first().and_then(|(_, d)| d.origem.clone());
+        let situacao = selo.map(|s| p.reimportacao(&s.nome, &s.hash));
+        if let (Some(Reimportacao::Igual { .. }), Some(a)) = (&situacao, &arquivo) {
+            let existente = p.montagem_importada(a);
+            if existente.is_file() {
+                self.toast(tr("Conjunto igual ao já importado.").to_string(), false);
+                return self.open_path(&existente);
+            }
+        }
+        if matches!(situacao, Some(Reimportacao::Mudou { .. })) {
+            self.toast(tr("O arquivo mudou: entra como um conjunto novo, com peças novas.").to_string(), false);
+        }
+        let Some(p) = self.project.as_mut() else { return };
+        let pecas = std::mem::take(&mut conjunto.pecas);
+        let r = p.adicionar_pecas_importadas(original, pecas, relatorio).and_then(|novos| {
+            conjunto.reapontar(&novos.into_iter().collect());
+            match (&conjunto.montagem, &arquivo) {
+                (Some(m), Some(a)) => p.gravar_montagem_importada(a, &m.to_json()).map(Some),
+                _ => Ok(None),
+            }
+        });
+        self.left = LeftTab::Projeto;
+        match r {
+            Ok(Some(caminho)) => self.open_path(&caminho),
+            Ok(None) => {}
             Err(e) => self.toast(e.to_string(), true),
         }
     }

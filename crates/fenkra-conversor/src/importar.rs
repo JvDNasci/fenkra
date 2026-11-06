@@ -3,7 +3,7 @@
 //! a miniatura. Roda dentro do processo filho; o resultado é só dado.
 
 use crate::relatorio::*;
-use crate::{detectar, montar_documento, texto_do_caminho, Contagem, Defeito, ErroConv, Formato, LinhaReparo, ModeloNeutro, OpcoesImportar, Registro, Relatorio, TipoDefeito};
+use crate::{detectar, montar_documento, texto_do_caminho, Contagem, Defeito, Destino, ErroConv, Formato, LinhaReparo, ModeloNeutro, OpcoesImportar, Registro, Relatorio, TipoDefeito};
 use fenkra_core::{Document, SeloOrigem};
 use fenkra_kernel::{version, InfoReparo, Xform};
 use serde::{Deserialize, Serialize};
@@ -181,7 +181,7 @@ fn medir(modelo: &ModeloNeutro, r: &mut Relatorio) -> Result<(), ErroConv> {
     Ok(())
 }
 
-fn o_que_fica_fora(modelo: &ModeloNeutro, r: &mut Relatorio) {
+fn o_que_fica_fora(modelo: &ModeloNeutro, conjunto: bool, r: &mut Relatorio) {
     let xde = &modelo.xde;
     if modelo.formato == Formato::Brep {
         r.nao_carrega.push(Nota::nova(FORA_BREP, &[]));
@@ -203,7 +203,7 @@ fn o_que_fica_fora(modelo: &ModeloNeutro, r: &mut Relatorio) {
     if !camadas.is_empty() {
         r.nao_carrega.push(Nota::nova(FORA_CAMADAS, &[camadas.join(", ")]));
     }
-    if modelo.tem_montagem() {
+    if modelo.tem_montagem() && !conjunto {
         r.nao_carrega.push(Nota::nova(FORA_MONTAGEM, &[]));
     }
     if !xde.ignoradas.is_empty() {
@@ -278,6 +278,9 @@ impl Registro {
         if formato == Formato::Arvore {
             return crate::arvore::importar(caminho, &bytes, extensao_diverge);
         }
+        if formato == Formato::Dxf {
+            return crate::dxf::importar(caminho, &bytes, o, extensao_diverge);
+        }
         let provedor = self.provedor(formato)?;
         let mut modelo = provedor.ler(formato, caminho, o)?;
 
@@ -320,7 +323,8 @@ impl Registro {
                 None => {}
             }
         }
-        o_que_fica_fora(&modelo, &mut r);
+        let conjunto = o.destino == Destino::Montagem && modelo.pede_conjunto();
+        o_que_fica_fora(&modelo, conjunto, &mut r);
 
         let selo = SeloOrigem {
             nome: nome_arquivo,
@@ -332,13 +336,28 @@ impl Registro {
             relatorio: None,
         };
         // o documento antes da miniatura: a malha fica na forma e iria junto para o B-rep
-        let (mut doc, corpos) = montar_documento(&modelo, &nome_doc, texto, selo)?;
-        r.corpos = corpos;
+        let (mut doc, mut pecas) = if conjunto {
+            let (c, corpos) = modelo.para_conjunto(&nome_doc, texto, &selo)?;
+            r.corpos = corpos;
+            let primeira = c.pecas.first().map(|(_, d)| d.clone()).ok_or_else(|| ErroConv::Leitura("arquivo sem peças".into()))?;
+            (primeira, Some(c))
+        } else {
+            let (d, corpos) = montar_documento(&modelo, &nome_doc, texto, selo)?;
+            r.corpos = corpos;
+            (d, None)
+        };
+        // só na primeira peça: em todas, mil peças levariam mil cópias do relatório
+        let embutido = serde_json::to_string(&r).ok();
         if let Some(s) = &mut doc.origem {
-            s.relatorio = serde_json::to_string(&r).ok();
+            s.relatorio.clone_from(&embutido);
+        }
+        if let Some((_, primeira)) = pecas.as_mut().and_then(|c| c.pecas.first_mut()) {
+            if let Some(s) = &mut primeira.origem {
+                s.relatorio = embutido;
+            }
         }
         let previa = previa(&modelo, &r)?;
-        Ok(Importado { doc, relatorio: r, previa, conjunto: None })
+        Ok(Importado { doc, relatorio: r, previa, conjunto: pecas })
     }
 
     /// Lê e grava noutro formato, sem passar por documento.

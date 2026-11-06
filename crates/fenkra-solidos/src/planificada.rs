@@ -13,7 +13,6 @@ use crate::geo3d::{self, V3};
 use crate::{final_shape, passos_planificados, recompute, tabela_dobras, BendRow, Status};
 use fenkra_core::{BoolOp, Document, FeatureKind, Id};
 use fenkra_kernel::{Bool, Seg2};
-use std::fmt::Write as _;
 
 /// Volume comum (mm³) acima do qual duas partes da planificada contam como sobrepostas.
 pub const VOLUME_SOBREPOSTO: f64 = 0.01;
@@ -435,131 +434,44 @@ pub fn planificar(doc: &Document) -> Result<Planificada, String> {
     })
 }
 
-/// Etiqueta da dobra em ASCII para o DXF (R12 não tem acento nem seta): "↑ 90° R2" vira
-/// "CIMA 90%%d R2".
-fn rotulo_dxf(rotulo: &str) -> String {
-    rotulo.replace('↑', "CIMA").replace('↓', "BAIXO").replace('°', "%%d")
+fn entidade_dxf(e: &Entidade) -> fenkra_dxf::Entidade {
+    use fenkra_dxf::{Entidade as D, Vertice};
+    match e {
+        Entidade::Linha(a, b) => D::Linha(*a, *b),
+        Entidade::Circulo { centro, raio } => D::Circulo { centro: *centro, raio: *raio },
+        Entidade::Arco { centro, raio, ini, fim } => D::Arco { centro: *centro, raio: *raio, ini: *ini, fim: *fim },
+        Entidade::Polilinha(pts, fechada) => D::Polilinha { vertices: pts.iter().map(|p| Vertice { p: *p, bojo: 0. }).collect(), fechada: *fechada },
+    }
 }
 
-/// DXF R12 da planificada: 1:1, em milímetros, com camadas fixas (`CAMADA_*`).
+/// DXF R2000 da planificada: 1:1, em milímetros, com camadas fixas (`CAMADA_*`). As entidades já saem
+/// exatas de `chapa::chain_segs`; o que sobra amostrado é spline, em polilinha.
 pub fn dxf(p: &Planificada) -> String {
-    let mut s = String::new();
-    let mut par = |c: i32, v: &str| {
-        let _ = write!(s, "{c}\n{v}\n");
+    use fenkra_dxf::{Anexo, Camada, Desenho, Entidade as D, Item, TipoLinha, Unidade};
+    let mut d = Desenho {
+        unidade: Unidade::Milimetro,
+        tipos_linha: vec![TipoLinha { nome: "DASHED".into(), padrao: vec![6., -3.] }],
+        camadas: vec![
+            Camada::nova(CAMADA_CONTORNO, 7, "Continuous"),
+            Camada::nova(CAMADA_FUROS, 3, "Continuous"),
+            Camada::nova(CAMADA_DOBRA_CIMA, 1, "DASHED"),
+            Camada::nova(CAMADA_DOBRA_BAIXO, 5, "DASHED"),
+            Camada::nova(CAMADA_FERRAMENTA, 6, "Continuous"),
+            Camada::nova(CAMADA_ROTULOS, 2, "Continuous"),
+        ],
+        ..Default::default()
     };
-    par(0, "SECTION");
-    par(2, "HEADER");
-    par(9, "$ACADVER");
-    par(1, "AC1009");
-    par(0, "ENDSEC");
-    par(0, "SECTION");
-    par(2, "TABLES");
-    par(0, "TABLE");
-    par(2, "LTYPE");
-    par(70, "2");
-    for (nome, pad) in [("CONTINUOUS", vec![]), ("DASHED", vec![6., -3.])] {
-        par(0, "LTYPE");
-        par(2, nome);
-        par(70, "0");
-        par(3, nome);
-        par(72, "65");
-        par(73, &pad.len().to_string());
-        par(40, &format!("{}", pad.iter().map(|x: &f64| x.abs()).sum::<f64>()));
-        for x in pad {
-            par(49, &x.to_string());
-        }
+    for (camada, lista) in [(CAMADA_CONTORNO, &p.contorno), (CAMADA_FUROS, &p.furos), (CAMADA_FERRAMENTA, &p.ferramenta)] {
+        d.itens.extend(lista.iter().map(|e| Item::novo(camada, entidade_dxf(e))));
     }
-    par(0, "ENDTAB");
-    par(0, "TABLE");
-    par(2, "LAYER");
-    par(70, "6");
-    for (nome, cor, lt) in [
-        (CAMADA_CONTORNO, "7", "CONTINUOUS"),
-        (CAMADA_FUROS, "3", "CONTINUOUS"),
-        (CAMADA_DOBRA_CIMA, "1", "DASHED"),
-        (CAMADA_DOBRA_BAIXO, "5", "DASHED"),
-        (CAMADA_FERRAMENTA, "6", "CONTINUOUS"),
-        (CAMADA_ROTULOS, "2", "CONTINUOUS"),
-    ] {
-        par(0, "LAYER");
-        par(2, nome);
-        par(70, "0");
-        par(62, cor);
-        par(6, lt);
+    for dobra in &p.dobras {
+        let camada = if dobra.cima { CAMADA_DOBRA_CIMA } else { CAMADA_DOBRA_BAIXO };
+        d.itens.push(Item::novo(camada, D::Linha(dobra.a, dobra.b)));
+        let meio = [(dobra.a[0] + dobra.b[0]) / 2. + 1., (dobra.a[1] + dobra.b[1]) / 2. + 1.];
+        let texto = format!("{} {}", dobra.ordem, dobra.rotulo);
+        d.itens.push(Item::novo(CAMADA_ROTULOS, D::Texto { pos: meio, altura: 2.5, angulo: 0., anexo: Anexo::Esquerda, texto }));
     }
-    par(0, "ENDTAB");
-    par(0, "ENDSEC");
-    par(0, "SECTION");
-    par(2, "ENTITIES");
-    let n = |v: f64| format!("{v:.4}");
-    let ent = |camada: &str, e: &Entidade, par: &mut dyn FnMut(i32, &str)| match e {
-        Entidade::Linha(a, b) => {
-            par(0, "LINE");
-            par(8, camada);
-            par(10, &n(a[0]));
-            par(20, &n(a[1]));
-            par(30, "0");
-            par(11, &n(b[0]));
-            par(21, &n(b[1]));
-            par(31, "0");
-        }
-        Entidade::Circulo { centro, raio } => {
-            par(0, "CIRCLE");
-            par(8, camada);
-            par(10, &n(centro[0]));
-            par(20, &n(centro[1]));
-            par(30, "0");
-            par(40, &n(*raio));
-        }
-        Entidade::Arco { centro, raio, ini, fim } => {
-            par(0, "ARC");
-            par(8, camada);
-            par(10, &n(centro[0]));
-            par(20, &n(centro[1]));
-            par(30, "0");
-            par(40, &n(*raio));
-            par(50, &n(*ini));
-            par(51, &n(*fim));
-        }
-        Entidade::Polilinha(pts, fechada) => {
-            par(0, "POLYLINE");
-            par(8, camada);
-            par(66, "1");
-            par(70, if *fechada { "1" } else { "0" });
-            for q in pts {
-                par(0, "VERTEX");
-                par(8, camada);
-                par(10, &n(q[0]));
-                par(20, &n(q[1]));
-                par(30, "0");
-            }
-            par(0, "SEQEND");
-            par(8, camada);
-        }
-    };
-    let emite = |camada: &str, es: &[Entidade], par: &mut dyn FnMut(i32, &str)| {
-        for e in es {
-            ent(camada, e, par);
-        }
-    };
-    emite(CAMADA_CONTORNO, &p.contorno, &mut par);
-    emite(CAMADA_FUROS, &p.furos, &mut par);
-    emite(CAMADA_FERRAMENTA, &p.ferramenta, &mut par);
-    for d in &p.dobras {
-        let camada = if d.cima { CAMADA_DOBRA_CIMA } else { CAMADA_DOBRA_BAIXO };
-        ent(camada, &Entidade::Linha(d.a, d.b), &mut par);
-        let m = [(d.a[0] + d.b[0]) / 2., (d.a[1] + d.b[1]) / 2.];
-        par(0, "TEXT");
-        par(8, CAMADA_ROTULOS);
-        par(10, &n(m[0] + 1.));
-        par(20, &n(m[1] + 1.));
-        par(30, "0");
-        par(40, "2.5");
-        par(1, &format!("{} {}", d.ordem, rotulo_dxf(&d.rotulo)));
-    }
-    par(0, "ENDSEC");
-    par(0, "EOF");
-    s
+    fenkra_dxf::gravar(&d)
 }
 
 /// Grava o DXF da planificada em `caminho`. Recusa gravar se a planificada tem sobreposição ou

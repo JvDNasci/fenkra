@@ -11,7 +11,7 @@ use super::*;
 use crate::examples::{paint_preview, preview_na_tela, Preview};
 use crate::ui_ext::dv;
 use fenkra_conversor::processo::Filho;
-use fenkra_conversor::{unidade_suspeita, ErroConv, Importado, OpcoesImportar, Previa, Relatorio, Reparo, Suspeita, UnidadeArquivo};
+use fenkra_conversor::{unidade_suspeita, Destino, ErroConv, Importado, OpcoesImportar, Previa, Relatorio, Reparo, Suspeita, UnidadeArquivo};
 use fenkra_project::importacao::Reimportacao;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
@@ -60,7 +60,9 @@ enum Acao {
 
 /// Miniatura pronta para desenhar. Peça sem cor no arquivo usa `cor_padrao`, a mesma do documento.
 fn miniatura(p: &Previa, cor_padrao: [u8; 3]) -> Preview {
-    let radius = p.pos.iter().map(|q| (q[0] * q[0] + q[1] * q[1] + q[2] * q[2]).sqrt()).fold(0., f32::max).max(1e-3);
+    let raio = |q: &[f32; 3]| (q[0] * q[0] + q[1] * q[1] + q[2] * q[2]).sqrt();
+    // o DXF só tem arestas, e o tamanho da miniatura vem delas
+    let radius = p.pos.iter().chain(p.arestas.iter().flatten()).map(raio).fold(0., f32::max).max(1e-3);
     Preview {
         pos: p.pos.clone(),
         nrm: p.nrm.clone(),
@@ -77,6 +79,13 @@ fn aviso_de_unidade(medidas: [f64; 3]) -> Option<&'static str> {
     match unidade_suspeita(medidas)? {
         Suspeita::Grande => Some("Peça com mais de 10 000 mm: confira a unidade do arquivo."),
         Suspeita::Pequena => Some("Peça com menos de 0,1 mm: confira a unidade do arquivo."),
+    }
+}
+
+fn dica_destino(d: Destino) -> &'static str {
+    match d {
+        Destino::Montagem => "Cada peça vira um documento, e cada ocorrência um componente. A peça repetida existe uma vez só.",
+        Destino::UmaPeca => "Tudo vira um documento só, com um corpo por ocorrência.",
     }
 }
 
@@ -153,30 +162,54 @@ impl Dialogo {
         self.caminho.extension().is_some_and(|e| e.eq_ignore_ascii_case("fkx"))
     }
 
+    fn e_dxf(&self) -> bool {
+        self.caminho.extension().is_some_and(|e| e.eq_ignore_ascii_case("dxf"))
+    }
+
+    /// Vale perguntar o destino: o arquivo tem mais de uma ocorrência, lido em qualquer um dos dois.
+    fn tem_varias_pecas(&self) -> bool {
+        matches!(&self.leitura, Leitura::Pronta(i, _) if i.conjunto.is_some() || i.relatorio.instancias > 1 || i.relatorio.produtos > 1)
+    }
+
     fn pode_confirmar(&self) -> bool {
         self.mudou_em.is_none() && matches!(self.leitura, Leitura::Pronta(..))
     }
 
     fn opcoes_ui(&mut self, ui: &mut egui::Ui) {
+        let (dxf, varias) = (self.e_dxf(), self.tem_varias_pecas());
         let o = &mut self.opcoes;
         let antes = *o;
         ui.horizontal_wrapped(|ui| {
+            if dxf {
+                ui.checkbox(&mut o.camadas, tr("Camadas")).on_hover_text(tr("Um sketch por camada, com o nome dela. Desligado, tudo entra em um sketch só."));
+                return;
+            }
             ui.checkbox(&mut o.cores, tr("Cores")).on_hover_text(tr("Traz a cor de cada peça. A cor por face fica de fora: o documento guarda uma por corpo."));
             ui.checkbox(&mut o.nomes, tr("Nomes")).on_hover_text(tr("Usa os nomes do arquivo nos corpos. Desligado, eles ficam numerados."));
             ui.checkbox(&mut o.camadas, tr("Camadas")).on_hover_text(tr("Lê as camadas para o relatório. O documento ainda não tem camadas."));
         });
+        if varias {
+            ui.label(tr("Destino"));
+            egui::ComboBox::from_id_salt("importar_destino").selected_text(tr(o.destino.nome())).width(LARGURA - 40.).show_ui(ui, |ui| {
+                for d in Destino::TODOS {
+                    ui.selectable_value(&mut o.destino, d, tr(d.nome())).on_hover_text(tr(dica_destino(d)));
+                }
+            }).response.on_hover_text(tr(dica_destino(o.destino)));
+        }
         ui.label(tr("Unidade do arquivo"));
         egui::ComboBox::from_id_salt("importar_unidade").selected_text(tr(o.unidade.nome())).width(LARGURA - 40.).show_ui(ui, |ui| {
             for u in UnidadeArquivo::TODAS {
                 ui.selectable_value(&mut o.unidade, u, tr(u.nome()));
             }
         }).response.on_hover_text(tr("Como ler os números do arquivo. Troque quando o tamanho da peça não fizer sentido."));
-        ui.label(tr("Reparo"));
-        egui::ComboBox::from_id_salt("importar_reparo").selected_text(tr(o.reparo.nome())).width(LARGURA - 40.).show_ui(ui, |ui| {
-            for r in Reparo::TODOS {
-                ui.selectable_value(&mut o.reparo, r, tr(r.nome())).on_hover_text(tr(nome_reparo_dica(r)));
-            }
-        }).response.on_hover_text(tr(nome_reparo_dica(o.reparo)));
+        if !dxf {
+            ui.label(tr("Reparo"));
+            egui::ComboBox::from_id_salt("importar_reparo").selected_text(tr(o.reparo.nome())).width(LARGURA - 40.).show_ui(ui, |ui| {
+                for r in Reparo::TODOS {
+                    ui.selectable_value(&mut o.reparo, r, tr(r.nome())).on_hover_text(tr(nome_reparo_dica(r)));
+                }
+            }).response.on_hover_text(tr(nome_reparo_dica(o.reparo)));
+        }
         ui.add(
             dv(&mut o.tolerancia)
                 .range(0.0001..=1.0)
@@ -184,7 +217,7 @@ impl Dialogo {
                 .max_decimals(4)
                 .suffix(" mm")
                 .rotulo(tr("Tolerância"))
-                .dica(tr("Maior folga entre faces que o reparo e a costura aceitam fechar.")),
+                .dica(tr(if dxf { "Folga que ainda junta duas pontas no mesmo ponto." } else { "Maior folga entre faces que o reparo e a costura aceitam fechar." })),
         );
         if *o != antes {
             let agora = ui.input(|i| i.time);
@@ -210,6 +243,13 @@ impl Dialogo {
                 ui.painter().rect_filled(rect, 4., ui.visuals().extreme_bg_color);
                 let pintor = ui.painter().with_clip_rect(rect);
                 paint_preview(&pintor, rect, mini, *giro);
+                // o DXF só tem curvas, na cor do texto: a tinta das arestas some no fundo escuro
+                let traco = egui::Stroke::new(1., ui.visuals().text_color());
+                if mini.tris.is_empty() {
+                    for e in &mini.edges {
+                        pintor.line_segment([preview_na_tela(rect, mini, *giro, e[0]), preview_na_tela(rect, mini, *giro, e[1])], traco);
+                    }
+                }
                 pintar_defeitos(&pintor, rect, mini, *giro, &i.relatorio);
                 *giro += r.drag_delta().x * 0.012;
                 r.on_hover_text(tr("Arraste para girar a miniatura."));
@@ -223,8 +263,17 @@ impl Dialogo {
                         ui.colored_label(ui.visuals().warn_fg_color, tr(aviso));
                     }
                 }
-                ui.label(format!("{}: {}   {}: {}", tr("Corpos"), rel.corpos, tr("Faces"), rel.faces));
-                ui.label(RichText::new(format!("{} {}", rel.formato, rel.esquema)).weak().small());
+                if !rel.camadas.is_empty() {
+                    let curvas: usize = rel.camadas.iter().map(|c| c.1).sum();
+                    ui.label(tr("Curvas: {0}   Camadas: {1}").replace("{0}", &curvas.to_string()).replace("{1}", &rel.camadas.len().to_string()));
+                } else {
+                    ui.label(format!("{}: {}   {}: {}", tr("Corpos"), rel.corpos, tr("Faces"), rel.faces));
+                }
+                if let Some(c) = &i.conjunto {
+                    ui.label(tr("Peças: {0}   Ocorrências: {1}").replace("{0}", &c.pecas.len().to_string()).replace("{1}", &rel.instancias.to_string()));
+                }
+                let origem = if rel.esquema.starts_with(&rel.formato) { rel.esquema.clone() } else { format!("{} {}", rel.formato, rel.esquema) };
+                ui.label(RichText::new(origem).weak().small());
                 if !rel.nao_fecharam.is_empty() {
                     ui.colored_label(ui.visuals().warn_fg_color, format!("{}: {}", tr("Sólidos que não fecharam"), rel.nao_fecharam.len()));
                 }
@@ -346,7 +395,7 @@ fn relatorio_ui(ui: &mut egui::Ui, rel: &Relatorio, realce: Option<usize>) -> Sa
 
 impl App {
     pub(super) fn importar_arquivo(&mut self) {
-        let dialogo = rfd::FileDialog::new().add_filter("STEP, IGES, BREP", &["step", "stp", "igs", "iges", "brep"]).add_filter(tr("Árvore paramétrica"), &["fkx"]).add_filter(tr("Todos os arquivos"), &["*"]);
+        let dialogo = rfd::FileDialog::new().add_filter("STEP, IGES, BREP, DXF", &["step", "stp", "igs", "iges", "brep", "dxf"]).add_filter(tr("Árvore paramétrica"), &["fkx"]).add_filter(tr("Todos os arquivos"), &["*"]);
         let Some(caminho) = dialogo.pick_file() else { return };
         self.abrir_painel_importar(caminho);
     }
@@ -434,8 +483,10 @@ impl App {
         self.settings.opcoes_importar = opcoes;
         let Importado { doc, relatorio, conjunto, .. } = *i;
         if let Some(c) = conjunto {
+            let texto = relatorio.texto_pt();
             self.importar_relatorio = Some(relatorio);
-            self.receber_conjunto(c);
+            self.importar_defeito = None;
+            self.receber_conjunto(&caminho, c, &texto);
             return;
         }
         let documento = Documento { doc, relatorio: relatorio.texto_pt() };
@@ -591,6 +642,25 @@ mod testes {
         assert_eq!(m.radius, 2.);
     }
 
+    #[test]
+    fn dxf_nao_pergunta_reparo_e_miniatura_so_de_arestas_tem_tamanho() {
+        let mut d = Dialogo::novo("perfil.dxf".into(), OpcoesImportar::default());
+        let t = textos_do_painel(&mut d).0.join("\n");
+        assert!(!t.contains("Reparo") && t.contains("Camadas") && t.contains("Unidade do arquivo"), "{t}");
+        let p = Previa { arestas: vec![[[-3., -4., 0.], [3., 4., 0.]]], ..Default::default() };
+        assert_eq!(miniatura(&p, [9, 9, 9]).radius, 5.);
+    }
+
+    #[test]
+    fn destino_so_aparece_com_varias_pecas() {
+        let mut d = Dialogo::novo("peça.step".into(), OpcoesImportar::default());
+        d.receber(Ok(importado([10., 10., 10.], "destino")));
+        assert!(!textos_do_painel(&mut d).0.join("\n").contains("Destino"));
+        let Leitura::Pronta(i, _) = &mut d.leitura else { panic!() };
+        i.relatorio.instancias = 3;
+        assert!(textos_do_painel(&mut d).0.join("\n").contains("Destino"));
+    }
+
     fn com_defeitos() -> Relatorio {
         let segmentos = vec![[[0., 0., 0.], [10., 0., 0.]]];
         let d = |tipo, peca: &str| Defeito { tipo, peca: peca.into(), indice: 0, segmentos: segmentos.clone() };
@@ -634,7 +704,9 @@ mod testes {
             "Arquivo", "Tamanho", "Formato", "Esquema", "Unidades lidas", "Convertido por", "Produtos", "Instâncias", "Corpos", "Faces", "Sólidos", "Volume", "Área", "Caixa envolvente",
             "Reparo", "Faces reparadas", "Faces costuradas", "Faces ainda inválidas", "Sólidos que não fecharam", "O que o formato não carrega", "Avisos", "Antes e depois do reparo", "Antes", "Depois", "Peça",
             "Defeitos", "Tipo", "Posição", "Relatório da importação", "Nenhum defeito depois do reparo.", "Texto completo", "Salvar HTML…", "Salvar JSON…", "Relatório gravado: {0}",
-            "Importar STEP, IGES, BREP ou árvore…", "Importar arquivo STEP, IGES ou BREP", "Relatório da importação…", "Exportar IGES…",
+            "Importar STEP, IGES, BREP, DXF ou árvore…", "Importar arquivo STEP, IGES, BREP ou DXF", "Relatório da importação…", "Exportar IGES…", "Destino", "Peças: {0}   Ocorrências: {1}", "Curvas: {0}   Camadas: {1}",
+            "Camadas lidas", "Conjunto igual ao já importado.", "O arquivo mudou: entra como um conjunto novo, com peças novas.", "Folga que ainda junta duas pontas no mesmo ponto.",
+            "Um sketch por camada, com o nome dela. Desligado, tudo entra em um sketch só.",
             "Grava o relatório numa página para abrir em qualquer navegador.", "Grava o relatório em dados, para outro programa ler.", "Clique para realçar o defeito na peça e levar a câmera até ele.",
             "Abre o relatório guardado neste documento, mesmo sem o arquivo de origem.",
         ];
@@ -652,6 +724,9 @@ mod testes {
         }
         for u in UnidadeArquivo::TODAS {
             assert!(crate::i18n::tem_traducao(u.nome()), "{}", u.nome());
+        }
+        for d in Destino::TODOS {
+            assert!(crate::i18n::tem_traducao(d.nome()) && crate::i18n::tem_traducao(dica_destino(d)), "{}", d.nome());
         }
     }
 }

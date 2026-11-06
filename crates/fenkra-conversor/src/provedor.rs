@@ -56,6 +56,9 @@ impl Registro {
             .into_iter()
             .find(|f| f.extensoes().contains(&extensao.as_str()))
             .ok_or_else(|| ErroConv::Formato(format!("extensão desconhecida: '{extensao}'")))?;
+        if opcoes.estrutura == crate::Estrutura::Achatada && modelo.tem_montagem() {
+            return self.provedor(formato)?.gravar(formato, &modelo.achatado()?, caminho, opcoes);
+        }
         self.provedor(formato)?.gravar(formato, modelo, caminho, opcoes)
     }
 }
