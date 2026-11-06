@@ -736,7 +736,7 @@ c('B356', 2, 'P1', 'Prévia leve em todos os comandos, com o cálculo real só a
 c('B357', 2, 'P0', 'Janelas de análise abrem e fecham certo, com reteste completo', 'As janelas de análise de curvatura e de superfície abrem e não fecham. Corrigir e retestar todas as análises.',
   ['USR-TESTE'], [], 80, 'Auto + Visual', 'Interface', status='em andamento'),
 c('B358', 2, 'P0', 'Painéis como janelas: minimizar, expandir, fechar e encaixe com sombra', 'Todo painel ganha minimizar, expandir e fechar, reabre pelo menu, e ao arrastar mostra a sombra de onde vai encaixar, nas laterais, em cima e embaixo. O conjunto do menu lateral direito encaixa inteiro, e dá para redimensionar nos quatro lados e cantos.',
-  ['USR-TESTE'], [], 400, 'Auto + Visual', 'Interface', status='em andamento'),
+  ['USR-TESTE'], [], 400, 'Auto + Visual', 'Interface', status='feito'),
 c('B359', 2, 'P1', 'Barra superior e seta da interface na proporção certa', 'A barra de cima está grande demais e a seta fora de proporção. Reduzir mantendo a área de clique e a escala de interface.',
   ['USR-TESTE'], [], 50, 'Visual', 'Interface', status='em andamento'),
 c('B360', 2, 'P1', 'Painel de comando em hierarquia, em vez de abas e caixas', 'Em recurso curto, Elemento, Tipo e Definição viram um fluxo só. Ao escolher o tipo, os campos dele aparecem logo abaixo, em hierarquia que acompanha a decisão: no furo, tipo, depois escareado, rosca e diâmetro. Sem depender de abas. Estudar como softwares de modelagem CAD avançados organizam esses painéis, sem copiar.',
