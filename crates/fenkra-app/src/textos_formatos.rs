@@ -100,4 +100,8 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Só uma peça do Fenkra tem a receita que este formato guarda.", "Only a Fenkra part has the recipe this format stores."),
     ("Este formato é 2D: a entrada precisa ser uma peça com esboços ou um desenho.", "This format is 2D: the input must be a part with sketches or a drawing."),
     ("A entrada é um desenho 2D: ela só vai para formatos 2D.", "The input is a 2D drawing: it only goes to 2D formats."),
+    ("sólido paramétrico sem malha pronta", "parametric solid with no ready mesh"),
+    ("furo em face", "hole in a face"),
+    ("Grava os esboços da peça em milímetros, uma camada por esboço.", "Writes the part sketches in millimeters, one layer per sketch."),
+    ("Linha de construção fica de fora. Cada esboço sai nas coordenadas dele.", "Construction lines are left out. Each sketch comes out in its own coordinates."),
 ];

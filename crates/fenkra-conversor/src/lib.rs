@@ -18,6 +18,7 @@ mod matriz;
 mod modelo;
 mod occt;
 mod opcoes;
+mod plano;
 pub mod processo;
 mod provedor;
 mod relatorio;

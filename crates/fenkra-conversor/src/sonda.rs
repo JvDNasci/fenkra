@@ -16,14 +16,18 @@ use std::path::Path;
 const LADO: f64 = 20.;
 const CAMADA: &str = "Sonda";
 
-/// Uma caixa usada duas vezes, com cor e camada.
+/// Uma caixa usada três vezes, com cor e camada: duas num subconjunto e uma ao lado dele. Sem o
+/// subconjunto, quem só repete a peça passaria por quem guarda a árvore.
 fn modelo_de_prova() -> Result<ModeloNeutro, ErroConv> {
     let forma = Shape::box_tool([0., 0., 0.], [1., 0., 0.], [0., 0., 1.], [LADO; 3])?;
     let peca = ProdutoXde { nome: "Peca".into(), forma: Some(forma), cor: Some([0.8, 0.2, 0.2, 1.]), camadas: vec![CAMADA.into()], ..Default::default() };
     let longe = [1., 0., 0., 100., 0., 1., 0., 0., 0., 0., 1., 0.];
+    let mais_longe = [1., 0., 0., 300., 0., 1., 0., 0., 0., 0., 1., 0.];
     let filhos = vec![InstanciaXde { produto: 0, nome: "A".into(), local: IDENTIDADE, cor: None }, InstanciaXde { produto: 0, nome: "B".into(), local: longe, cor: None }];
+    let sub = ProdutoXde { nome: "Sub".into(), filhos, ..Default::default() };
+    let filhos = vec![InstanciaXde { produto: 1, nome: "S".into(), local: IDENTIDADE, cor: None }, InstanciaXde { produto: 0, nome: "C".into(), local: mais_longe, cor: None }];
     let topo = ProdutoXde { nome: "Conjunto".into(), filhos, ..Default::default() };
-    Ok(ModeloNeutro { formato: Formato::Step, xde: ModeloXde { produtos: vec![peca, topo], raizes: vec![1], ..Default::default() } })
+    Ok(ModeloNeutro { formato: Formato::Step, xde: ModeloXde { produtos: vec![peca, sub, topo], raizes: vec![2], ..Default::default() } })
 }
 
 fn com_forma(m: &ModeloNeutro) -> Vec<&Shape> {
@@ -39,7 +43,8 @@ fn medir(lido: &ModeloNeutro) -> Result<Capacidades, ErroConv> {
     let faces = forma.map(|f| f.face_count()).unwrap_or(0) / solidos;
     let cor = lido.xde.produtos.iter().any(|p| p.cor.is_some() || !p.cores_faces.is_empty() || p.filhos.iter().any(|f| f.cor.is_some()));
     let camadas = lido.xde.produtos.iter().any(|p| p.camadas.iter().any(|c| c == CAMADA));
-    let montagem = lido.tem_montagem() && lido.instancias() == 2 && formas.len() == 1;
+    let aninhada = lido.xde.produtos.iter().any(|p| p.filhos.iter().any(|f| lido.xde.produtos.get(f.produto).is_some_and(|q| !q.filhos.is_empty())));
+    let montagem = aninhada && lido.ocorrencias().len() == 3 && formas.len() == 1;
     // a peça foi gravada em polegadas: quem declara a unidade traz a medida de volta
     let medida = formas.first().and_then(|f| f.bbox()).map(|(a, b)| b[1] - a[1]).unwrap_or(0.);
     let unidade = !lido.xde.unidades.is_empty() && (medida - LADO).abs() < 1e-3;
@@ -54,7 +59,7 @@ fn inspecionar(caminho: &Path, formato: Formato) -> Result<Capacidades, ErroConv
     Ok(Capacidades {
         malha: t.contains("point3f[] points"),
         cor: t.contains("primvars:displayColor") && t.contains("UsdPreviewSurface"),
-        montagem: t.matches("def Mesh").count() == 1 && t.matches("references = ").count() == 2,
+        montagem: t.matches("def Mesh").count() == 1 && t.matches("references = ").count() == 3 && t.contains("def Xform \"S\""),
         unidade: t.contains("metersPerUnit = 0.0254"),
         ..Default::default()
     })
@@ -86,31 +91,14 @@ fn sondar_arvore(registro: &Registro, pasta: &Path) -> Result<Capacidades, ErroC
     })
 }
 
-/// DXF só se lê por aqui: a prova é um círculo numa camada, com a unidade declarada.
-fn sondar_dxf(registro: &Registro, pasta: &Path) -> Result<Capacidades, ErroConv> {
-    use fenkra_core::sketch::Curve;
-    use fenkra_core::FeatureKind;
-    use fenkra_dxf::{Camada, Desenho, Entidade, Item, Unidade};
-    let d = Desenho { unidade: Unidade::Milimetro, camadas: vec![Camada::nova(CAMADA, 7, "Continuous")], itens: vec![Item::novo(CAMADA, Entidade::Circulo { centro: [0., 0.], raio: LADO })], ..Default::default() };
-    let caminho = pasta.join("sonda.dxf");
-    std::fs::write(&caminho, fenkra_dxf::gravar(&d)).map_err(|e| ErroConv::Gravacao(e.to_string()))?;
-    let lido = registro.importar(&caminho, &OpcoesImportar::default())?;
-    let esboco = lido.doc.features.iter().find_map(|f| match &f.kind {
-        FeatureKind::Sketch(s) => Some((f.name.as_str(), &s.data)),
-        _ => None,
-    });
-    let exata = esboco.is_some_and(|(_, s)| s.curves.iter().any(|c| matches!(c.geom, Curve::Circle { .. })));
-    Ok(Capacidades { ler: true, exata, camadas: esboco.is_some_and(|(n, _)| n == CAMADA), unidade: lido.relatorio.avisos.is_empty(), ..Default::default() })
-}
-
 impl Registro {
     /// Mede o que o formato faz de verdade, gravando e lendo em `pasta`.
     pub fn sondar(&self, formato: Formato, pasta: &Path) -> Result<Capacidades, ErroConv> {
         if formato == Formato::Arvore {
             return sondar_arvore(self, pasta);
         }
-        if formato == Formato::Dxf {
-            return sondar_dxf(self, pasta);
+        if formato.e_2d() {
+            return crate::plano::sondar(self, formato, pasta);
         }
         let caminho = pasta.join(format!("sonda.{}", formato.extensoes()[0]));
         let saida = OpcoesExportar { unidade: UnidadeSaida::Polegada, ..Default::default() };

@@ -61,7 +61,7 @@ pub struct LinhaMatriz {
 fn internas(f: Formato) -> Option<Capacidades> {
     match f {
         Formato::Arvore => Some(Capacidades { ler: true, gravar: true, cor: true, montagem: true, parametros: true, unidade: true, ..Default::default() }),
-        Formato::Dxf => Some(Capacidades { ler: true, exata: true, camadas: true, unidade: true, ..Default::default() }),
+        Formato::Dxf | Formato::Svg => Some(Capacidades { ler: true, gravar: true, exata: true, camadas: true, unidade: true, ..Default::default() }),
         _ => None,
     }
 }

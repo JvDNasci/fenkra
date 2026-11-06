@@ -13,6 +13,7 @@ mod amf;
 mod cena;
 mod collada;
 mod gltf;
+mod ifc;
 mod nos3d;
 pub(crate) mod obj;
 mod ply;
@@ -54,6 +55,8 @@ pub const ITENS_FORA: &[&str] = &[
     "orientação de escala",
     "cor por face",
     "protótipo",
+    "sólido paramétrico sem malha pronta",
+    "furo em face",
     "cavidade interna que ficou como sólido à parte",
     "peça com vários materiais, que ficou com a cor do maior",
 ];
@@ -92,6 +95,7 @@ pub(crate) fn ler_cena(formato: Formato, caminho: &Path) -> Result<Cena, ErroCon
         Formato::Vrml => vrml::ler(&bytes),
         Formato::X3d => x3d::ler(&bytes),
         Formato::Collada => collada::ler(&bytes),
+        Formato::Ifc => ifc::ler(&bytes),
         _ => Err(ErroConv::Formato(format!("o Fenkra grava {} mas não lê", formato.nome()))),
     }?;
     if cena.nome.is_empty() {
@@ -120,6 +124,7 @@ pub(crate) fn gravar_cena(formato: Formato, cena: &Cena, caminho: &Path, o: &Opc
         Formato::Collada => escrever(caminho, collada::gravar(cena, mm, nome).as_bytes()),
         Formato::Usda => escrever(caminho, usd::gravar_texto(cena, mm).as_bytes()),
         Formato::Usdz => escrever(caminho, &usd::gravar_pacote(cena, mm)?),
+        Formato::Ifc => escrever(caminho, ifc::gravar(cena, mm, caminho).as_bytes()),
         _ => Err(ErroConv::Formato(format!("{} não é formato de malha", formato.nome()))),
     }
 }
@@ -156,7 +161,7 @@ fn erro(formato: &str, motivo: impl std::fmt::Display) -> ErroConv {
 }
 
 /// Texto seguro para XML, em atributo ou corpo.
-fn xml(t: &str) -> String {
+pub(crate) fn xml(t: &str) -> String {
     t.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
@@ -179,6 +184,7 @@ impl Provedor for ProvedorMalha {
             Formato::Obj | Formato::Ply => Capacidades { cor: true, ..base },
             Formato::Tmf | Formato::Amf | Formato::Gltf | Formato::Glb | Formato::Vrml | Formato::X3d | Formato::Collada => Capacidades { cor: true, montagem: true, unidade: true, ..base },
             Formato::Usda | Formato::Usdz => Capacidades { ler: false, cor: true, montagem: true, unidade: true, ..base },
+            Formato::Ifc => Capacidades { cor: true, unidade: true, ..base },
             _ => Capacidades::default(),
         }
     }

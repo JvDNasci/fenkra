@@ -293,6 +293,10 @@ impl Registro {
         if formato == Formato::Dxf {
             return crate::dxf::importar(caminho, &bytes, o, extensao_diverge);
         }
+        if formato == Formato::Svg {
+            let d = crate::plano::ler_svg(&bytes)?;
+            return crate::dxf::importar_desenho(caminho, &bytes, d, Formato::Svg, o, extensao_diverge);
+        }
         let provedor = self.provedor(formato)?;
         let mut modelo = provedor.ler(formato, caminho, o)?;
 
@@ -385,6 +389,7 @@ impl Registro {
                 let texto = serde_json::to_string_pretty(&arquivo).map_err(|e| ErroConv::Gravacao(e.to_string()))?;
                 std::fs::write(destino, texto).map_err(|e| ErroConv::Gravacao(format!("não foi possível gravar '{}': {e}", destino.display())))
             }
+            Some(f) if f.e_2d() => crate::plano::gravar(doc, f, destino),
             _ => self.gravar(&ModeloNeutro::de_documento(doc)?, destino, saida),
         }
     }

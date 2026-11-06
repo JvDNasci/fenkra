@@ -30,18 +30,24 @@ pub enum Formato {
     Usda,
     /// pacote USDZ; só gravação
     Usdz,
+    /// IFC4 facetado: STEP físico, mas de outro esquema
+    Ifc,
+    /// desenho 2D: vira sketches, como o DXF
+    Svg,
 }
 
 impl Formato {
     /// Formatos de malha e visualização, que passam pela cena de [`crate::malha`].
-    pub const MALHA: [Formato; 12] = [Formato::Stl, Formato::Obj, Formato::Ply, Formato::Tmf, Formato::Amf, Formato::Gltf, Formato::Glb, Formato::Vrml, Formato::X3d, Formato::Collada, Formato::Usda, Formato::Usdz];
+    pub const MALHA: [Formato; 13] = [Formato::Stl, Formato::Obj, Formato::Ply, Formato::Tmf, Formato::Amf, Formato::Gltf, Formato::Glb, Formato::Vrml, Formato::X3d, Formato::Collada, Formato::Usda, Formato::Usdz, Formato::Ifc];
 
     /// Todos os formatos que o conversor conhece, na ordem da tela.
-    pub const TODOS: [Formato; 17] = [
+    pub const TODOS: [Formato; 19] = [
         Formato::Step,
         Formato::Iges,
         Formato::Brep,
         Formato::Dxf,
+        Formato::Svg,
+        Formato::Ifc,
         Formato::Arvore,
         Formato::Stl,
         Formato::Obj,
@@ -63,7 +69,7 @@ impl Formato {
 
     /// Formato de desenho plano, que vive de esboços e não de sólidos.
     pub fn e_2d(self) -> bool {
-        self == Formato::Dxf
+        matches!(self, Formato::Dxf | Formato::Svg)
     }
 
     pub fn nome(self) -> &'static str {
@@ -85,6 +91,8 @@ impl Formato {
             Formato::Collada => "Collada",
             Formato::Usda => "USD",
             Formato::Usdz => "USDZ",
+            Formato::Ifc => "IFC",
+            Formato::Svg => "SVG",
         }
     }
 
@@ -107,6 +115,8 @@ impl Formato {
             Formato::Collada => &["dae"],
             Formato::Usda => &["usda", "usd"],
             Formato::Usdz => &["usdz"],
+            Formato::Ifc => &["ifc"],
+            Formato::Svg => &["svg"],
         }
     }
 
@@ -119,7 +129,7 @@ impl Formato {
         let texto = String::from_utf8_lossy(&conteudo[..conteudo.len().min(512)]);
         let texto = texto.trim_start_matches('\u{feff}').trim_start();
         if texto.starts_with("ISO-10303-21") {
-            Some(Formato::Step)
+            Some(if e_ifc(conteudo) { Formato::Ifc } else { Formato::Step })
         } else if texto.starts_with("DBRep_DrawableShape") || texto.starts_with("CASCADE Topology") {
             Some(Formato::Brep)
         } else if texto.starts_with('{') && tem_marca_da_arvore(conteudo) {
@@ -132,6 +142,12 @@ impl Formato {
             por_conteudo_de_malha(conteudo)
         }
     }
+}
+
+/// IFC é STEP físico: quem diz o que ele é, é o esquema do cabeçalho.
+fn e_ifc(conteudo: &[u8]) -> bool {
+    let texto = String::from_utf8_lossy(&conteudo[..conteudo.len().min(4096)]).to_uppercase();
+    texto.split_once("FILE_SCHEMA").is_some_and(|(_, resto)| resto.trim_start().trim_start_matches(['(', '\'', ' ']).starts_with("IFC"))
 }
 
 /// Primeira etiqueta de um XML, sem declaração, comentário nem doctype.
@@ -177,7 +193,11 @@ fn por_conteudo_de_malha(conteudo: &[u8]) -> Option<Formato> {
     if conteudo.starts_with(b"ply\n") || conteudo.starts_with(b"ply\r") {
         return Some(Formato::Ply);
     }
-    match etiqueta_xml(conteudo).as_deref() {
+    let etiqueta = etiqueta_xml(conteudo);
+    if crate::plano::parece_svg(etiqueta.as_deref()) {
+        return Some(Formato::Svg);
+    }
+    match etiqueta.as_deref() {
         Some("amf") => return Some(Formato::Amf),
         Some("X3D") => return Some(Formato::X3d),
         Some("COLLADA") => return Some(Formato::Collada),
@@ -271,6 +291,15 @@ mod testes {
         for (conteudo, f) in casos {
             assert_eq!(detectar(Path::new("a.dat"), conteudo).unwrap(), (f, true), "{}", f.nome());
         }
+    }
+
+    #[test]
+    fn ifc_se_separa_do_step_pelo_esquema_e_svg_pela_etiqueta() {
+        let ifc = b"ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('IFC4'));\nENDSEC;";
+        assert_eq!(detectar(Path::new("a.ifc"), ifc).unwrap(), (Formato::Ifc, false));
+        let step = b"ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('AUTOMOTIVE_DESIGN'));\nENDSEC;";
+        assert_eq!(detectar(Path::new("a.step"), step).unwrap(), (Formato::Step, false));
+        assert_eq!(detectar(Path::new("a.svg"), b"<?xml version=\"1.0\"?>\n<svg xmlns=\"x\"/>").unwrap(), (Formato::Svg, false));
     }
 
     #[test]

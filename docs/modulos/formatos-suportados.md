@@ -8,7 +8,9 @@
 | STEP | step, stp | sim | sim | sim | – | sim | sim | sim | – | – | sim | OpenCASCADE |
 | IGES | igs, iges | sim | sim | sim | – | sim | – | – | – | – | sim | OpenCASCADE |
 | BREP | brep | sim | sim | sim | – | – | – | – | – | – | – | OpenCASCADE |
-| DXF | dxf | sim | – | sim | – | – | sim | – | – | – | sim | Fenkra |
+| DXF | dxf | sim | sim | sim | – | – | sim | – | – | – | sim | Fenkra |
+| SVG | svg | sim | sim | sim | – | – | sim | – | – | – | sim | Fenkra |
+| IFC | ifc | sim | sim | – | sim | sim | – | – | – | – | sim | Fenkra |
 | Árvore paramétrica | fkx | sim | sim | – | – | sim | – | sim | – | sim | sim | Fenkra |
 | STL | stl | sim | sim | – | sim | – | – | – | – | – | – | Fenkra |
 | OBJ | obj | sim | sim | – | sim | sim | – | – | – | – | – | Fenkra |

@@ -82,7 +82,7 @@ pub(super) fn opcoes_ui(ui: &mut egui::Ui, formato: Formato, o: &mut OpcoesExpor
                     ui.selectable_value(&mut o.esquema, e, nome_esquema(e));
                 }
             }).response.on_hover_text(tr("AP214 leva cores e camadas; AP203 não; AP242 é o mais novo."));
-        } else {
+        } else if formato == Formato::Iges {
             ui.label(tr("Modo do IGES"));
             egui::ComboBox::from_id_salt("exportar_modo_iges").selected_text(tr(o.iges.nome())).width(LARGURA - 40.).show_ui(ui, |ui| {
                 for m in ModoIges::TODOS {
@@ -106,6 +106,8 @@ pub(super) fn opcoes_ui(ui: &mut egui::Ui, formato: Formato, o: &mut OpcoesExpor
         }
         if unidade_fixa(formato) {
             ui.small(tr("Este formato é sempre gravado em metros, como a norma dele manda.")).on_hover_text(tr("O tamanho da peça não muda: quem abre o arquivo vê a medida certa."));
+        } else if formato.e_2d() {
+            ui.small(tr("Grava os esboços da peça em milímetros, uma camada por esboço.")).on_hover_text(tr("Linha de construção fica de fora. Cada esboço sai nas coordenadas dele."));
         } else {
             ui.label(tr("Unidade do arquivo"));
             egui::ComboBox::from_id_salt("exportar_unidade").selected_text(tr(nome_unidade(o.unidade))).width(LARGURA - 40.).show_ui(ui, |ui| {
@@ -201,11 +203,15 @@ impl App {
         // desenvolvimento: FENKRA_DEMO_EXPORTAR_ARQUIVO=<arquivo> grava sem perguntar, para conferir a saída
         let demo = std::env::var("FENKRA_DEMO_EXPORTAR_ARQUIVO").ok().map(std::path::PathBuf::from);
         let Some(caminho) = demo.or_else(|| rfd::FileDialog::new().add_filter(d.formato.nome(), d.formato.extensoes()).set_file_name(format!("{nome}.{extensao}")).save_file()) else { return };
-        let modelo = match (self.asm.as_ref().filter(|_| d.montagem), &pasta) {
-            (Some(s), Some(pasta)) => ModeloNeutro::da_montagem(&s.asm, pasta),
-            _ => ModeloNeutro::de_documento(&self.open.doc),
+        let r = if d.formato.e_2d() {
+            Registro::default().gravar_documento(&self.open.doc, &caminho, &d.opcoes)
+        } else {
+            let modelo = match (self.asm.as_ref().filter(|_| d.montagem), &pasta) {
+                (Some(s), Some(pasta)) => ModeloNeutro::da_montagem(&s.asm, pasta),
+                _ => ModeloNeutro::de_documento(&self.open.doc),
+            };
+            modelo.and_then(|m| Registro::default().gravar(&m, &caminho, &d.opcoes))
         };
-        let r = modelo.and_then(|m| Registro::default().gravar(&m, &caminho, &d.opcoes));
         match r {
             Ok(()) => self.toast(format!("Exportado: {}", caminho.display()), false),
             Err(e) => self.toast(format!("Falha ao exportar: {e}"), true),
@@ -262,6 +268,13 @@ mod testes {
         for t in fenkra_conversor::malha::ITENS_FORA {
             assert!(crate::i18n::tem_traducao(t), "sem tradução: {t}");
         }
+    }
+
+    #[test]
+    fn formato_2d_nao_mostra_opcao_de_solido() {
+        let mut d = Dialogo::novo(Formato::Svg, OpcoesExportar::default(), false);
+        let t = textos(&mut d).join("\n");
+        assert!(t.contains("esboços") && !t.contains("Modo do IGES") && !t.contains("Desvio") && !t.contains("Unidade do arquivo"), "{t}");
     }
 
     #[test]
