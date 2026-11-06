@@ -20,7 +20,7 @@ use eframe::egui::{self, Pos2, Rect, RichText, Sense, Stroke};
 use fenkra_core::Id;
 use fenkra_montagem::insercao::{self, Escolha};
 use fenkra_montagem::{links, Assembly, Placement, V3};
-use fenkra_project::qualidade_modelo::{self, Medidas, Perfil, PreviaInsercao};
+use fenkra_project::qualidade_modelo::{self, Medidas, Momento, Perfil, PreviaInsercao, Relatorio};
 use glam::Vec3;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -41,6 +41,10 @@ pub struct NaMao {
     pub apoio: V3,
     /// triângulos que cada cópia soma à montagem
     pub triangulos: u64,
+    /// medidas da peça pelo recálculo, para o checador de qualidade do PLM (B305); vazio em subconjunto
+    pub medidas: Option<Medidas>,
+    /// identidade do documento da peça, para achar as exceções dela no projeto
+    pub uid: String,
 }
 
 /// Comando Inserir aberto.
@@ -63,11 +67,13 @@ pub struct Estado {
     pub perfil: Option<Perfil>,
     /// as próximas cópias entram na versão simplificada (B125)
     pub simplificada: bool,
+    /// motivo pelo qual o perfil de qualidade do projeto barra a peça da mão (B305); vazio = pode entrar
+    pub bloqueada: Option<String>,
 }
 
 impl Estado {
     pub fn novo(sub: bool, pai: Option<Id>) -> Self {
-        Estado { sub, pai, filtro: String::new(), mao: None, fila: vec![], colocadas: 0, ultima: None, cursor_demo: None, perfil: None, simplificada: false }
+        Estado { sub, pai, filtro: String::new(), mao: None, fila: vec![], colocadas: 0, ultima: None, cursor_demo: None, perfil: None, simplificada: false, bloqueada: None }
     }
 }
 
@@ -151,6 +157,17 @@ fn previa_de(st: &crate::asm_ui::AsmState, perfil: &Perfil, mao: &NaMao) -> Prev
     qualidade_modelo::previa_insercao(perfil, atuais, &Medidas { triangulos: mao.triangulos, ..Default::default() }, 1)
 }
 
+/// O checador de qualidade do PLM para a peça da mão, "ao inserir na montagem" (B305). Com a peça no
+/// projeto, valem as exceções dela (nome e motivo, no diário); fora dele, só o perfil.
+pub fn relatorio_da_mao(projeto: Option<&fenkra_project::Project>, perfil: &Perfil, mao: &NaMao) -> Option<Relatorio> {
+    let medidas = mao.medidas.as_ref()?;
+    let id = projeto.and_then(|p| p.index.documents.iter().find(|d| !mao.uid.is_empty() && d.uid == mao.uid).map(|d| d.id));
+    match (projeto, id) {
+        (Some(p), Some(id)) => p.avaliar_qualidade(id, medidas, Momento::InserirNaMontagem).ok(),
+        _ => Some(qualidade_modelo::avaliar(perfil, medidas, Momento::InserirNaMontagem, &[])),
+    }
+}
+
 /// Lê o arquivo e monta a malha: a peça pelo cache da montagem, o subconjunto compondo a vista dele.
 fn carregar(st: &mut crate::asm_ui::AsmState, arquivo: &Path, sub: bool) -> Result<(Malha, u64), String> {
     let (malha, triangulos) = if sub {
@@ -172,6 +189,8 @@ pub fn pegar(st: &mut crate::asm_ui::AsmState, est: &mut Estado, arquivo: &Path)
         return Err(tr("Referência circular: o subconjunto já contém esta montagem").to_string());
     }
     let (malha, triangulos) = carregar(st, arquivo, est.sub)?;
+    // medidas da peça para o checador do PLM; o subconjunto só conta triângulos (as peças dele já passaram)
+    let (medidas, uid) = if est.sub { (None, String::new()) } else { st.cache.get(arquivo, false).map(|lp| (Some(crate::app::medidas_do_resultado(&lp.result, &lp.doc)), lp.doc.uid.0.clone())).unwrap_or((None, String::new())) };
     let (c, raio) = (malha.centro, malha.raio);
     let base = malha.tris.iter().flatten().map(|p| p.z).fold(f32::MAX, f32::min).min(c.z + raio);
     est.mao = Some(NaMao {
@@ -179,12 +198,19 @@ pub fn pegar(st: &mut crate::asm_ui::AsmState, est: &mut Estado, arquivo: &Path)
         malha: Arc::new(malha),
         apoio: [c.x as f64, c.y as f64, base as f64],
         triangulos,
+        medidas,
+        uid,
     });
+    est.bloqueada = None;
     Ok(())
 }
 
 /// Coloca uma cópia, com um passo de desfazer só dela.
 pub fn colocar_copia(st: &mut crate::asm_ui::AsmState, est: &mut Estado, origem: V3) -> Option<Id> {
+    // o perfil de qualidade do projeto barrou a peça: nada entra até haver exceção registrada (B305)
+    if est.bloqueada.is_some() {
+        return None;
+    }
     let e = est.mao.as_ref()?.escolha.clone();
     st.push_undo();
     let id = insercao::colocar(&mut st.asm, &e, origem, est.pai);
@@ -319,6 +345,8 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
     let primeira = insercao::fixa_na_origem(&st.asm);
     let perfil = est.perfil.get_or_insert_with(|| app.project.as_ref().map_or_else(Perfil::padrao, |p| p.perfil_qualidade())).clone();
     let previa = est.mao.as_ref().map(|m| previa_de(st, &perfil, m));
+    let qualidade = est.mao.as_ref().and_then(|m| relatorio_da_mao(app.project.as_ref(), &perfil, m));
+    est.bloqueada = qualidade.as_ref().filter(|r| r.bloqueia()).map(|r| r.resumo_bloqueios());
     let mut acao = None;
     let previas = &app.previews;
     let saida = paineis::mostrar(ctx, area, &cfg, posicao, |ui| {
@@ -339,6 +367,23 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
             }
             None => {
                 ui.label(RichText::new(tr("Clique em uma miniatura para pegar a peça.")).small().weak());
+            }
+        }
+        if let Some(r) = qualidade.as_ref().filter(|r| !r.dispensado && !r.violacoes.is_empty()) {
+            for v in &r.violacoes {
+                let cor = match v.efetiva() {
+                    qualidade_modelo::Gravidade::Bloqueia => ui.visuals().error_fg_color,
+                    qualidade_modelo::Gravidade::Avisa => crate::theme::st_warn(),
+                    qualidade_modelo::Gravidade::Informa => ui.visuals().weak_text_color(),
+                };
+                let mut linha = format!("{} {} ({:.0} / {:.0})", tr(v.efetiva().rotulo()), tr(v.regra.rotulo()), v.medido, v.limite);
+                if let Some(e) = &v.excecao {
+                    linha += &format!(" · {} {} ({})", tr("exceção de"), e.nome, e.motivo);
+                }
+                ui.label(RichText::new(linha).small().color(cor));
+            }
+            if est.bloqueada.is_some() {
+                ui.label(RichText::new(tr("O perfil de qualidade do projeto barra esta peça. Registre uma exceção com nome e motivo no painel do projeto para inseri-la.")).small().color(ui.visuals().error_fg_color));
             }
         }
         if let Some(p) = previa.as_ref().filter(|p| p.oferecer_simplificada) {
@@ -525,6 +570,42 @@ mod tests {
         let simples = colocar_copia(&mut st, &mut est, [200., 0., 0.]).unwrap();
         assert!(!st.asm.node(completa).unwrap().simplificada);
         assert!(st.asm.node(simples).unwrap().simplificada);
+    }
+
+    /// B305: o perfil de qualidade do projeto roda "ao inserir na montagem". Peça acima do limite
+    /// bloqueante é barrada; a exceção com nome e motivo, gravada no diário, a libera.
+    #[test]
+    fn perfil_do_projeto_barra_a_peca_pesada_e_a_excecao_registrada_libera() {
+        use fenkra_project::qualidade_modelo::{Gravidade, Regra};
+        let (mut st, d) = montagem("perfil_barra");
+        let mut p = fenkra_project::Project::create(&d.join("proj"), "P").unwrap();
+        let id = p.add_document(fenkra_solidos::example_document()).unwrap();
+        // a peça da montagem é o documento do projeto (mesmo uid), como numa pasta de trabalho real
+        std::fs::write(d.join("placa.fkp"), p.load(id).unwrap().to_json()).unwrap();
+        let mut est = Estado::novo(false, None);
+        pegar(&mut st, &mut est, &d.join("placa.fkp")).unwrap();
+        assert!(est.mao.as_ref().unwrap().medidas.is_some_and(|m| m.triangulos > 0));
+        let mut rig = Perfil::rigoroso();
+        let l = rig.regras.iter_mut().find(|l| l.regra == Regra::Triangulos).unwrap();
+        l.limite = 1.;
+        l.gravidade = Gravidade::Bloqueia;
+        p.definir_perfil_qualidade(rig.clone()).unwrap();
+        let r = relatorio_da_mao(Some(&p), &rig, est.mao.as_ref().unwrap()).unwrap();
+        assert!(r.bloqueia(), "a peça passa de 1 triângulo");
+        est.bloqueada = Some(r.resumo_bloqueios());
+        assert!(colocar_copia(&mut st, &mut est, [0.; 3]).is_none(), "barrada pelo perfil");
+        assert_eq!(pecas(&st), 0);
+        // exceção com nome e motivo: libera e continua visível no relatório
+        p.conceder_excecao_qualidade(id, Regra::Triangulos, "Ana", "peça de catálogo").unwrap();
+        let r = relatorio_da_mao(Some(&p), &rig, est.mao.as_ref().unwrap()).unwrap();
+        assert!(!r.bloqueia());
+        assert_eq!(r.violacoes[0].excecao.as_ref().map(|e| e.nome.as_str()), Some("Ana"));
+        est.bloqueada = None;
+        assert!(colocar_copia(&mut st, &mut est, [0.; 3]).is_some());
+        assert_eq!(pecas(&st), 1);
+        // fora do projeto não há exceção: só o perfil decide
+        let sem = relatorio_da_mao(None, &rig, est.mao.as_ref().unwrap()).unwrap();
+        assert!(sem.bloqueia());
     }
 
     fn montagem(nome: &str) -> (AsmState, PathBuf) {

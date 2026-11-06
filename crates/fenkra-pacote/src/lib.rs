@@ -9,13 +9,14 @@
 //!
 //! A geração é função pura do documento: o mesmo documento dá o mesmo pacote, byte a byte.
 
+mod analise;
 mod folhas;
 mod glb;
 mod pagina;
 mod pontos;
 mod tipos;
 
-pub use pagina::pagina_html;
+pub use pagina::{pagina_html, pagina_html_completa};
 
 use fenkra_core::pmi::Pmi;
 use fenkra_core::Document;
@@ -42,11 +43,13 @@ pub struct Opcoes {
     pub decimar: Option<f64>,
     /// grava os pontos de captura exatos (centros, raios, pontas e pontos médios)
     pub capturas: bool,
+    /// calcula interferências e folgas da montagem e as grava no manifesto (B339); a página só lista
+    pub analise: bool,
 }
 
 impl Default for Opcoes {
     fn default() -> Self {
-        Opcoes { decimar: None, capturas: true }
+        Opcoes { decimar: None, capturas: true, analise: true }
     }
 }
 
@@ -353,6 +356,9 @@ pub fn de_montagem(asm: &Assembly, pasta: &Path, opc: &Opcoes) -> Result<Pacote,
     m["pmi"] = json!(json_pmi(&asm.pmi, None));
     m["capturas"] = json!(json_capturas(&asm.pmi_captures));
     m["estados"] = json!(asm.display_states.iter().map(tipos::estado).collect::<Vec<_>>());
+    if opc.analise {
+        m["analise"] = analise::analisar_montagem(asm, pasta);
+    }
     m["lista"] = json!(fenkra_montagem::bom::bom(asm, Some(pasta), fenkra_montagem::bom::BomLevel::Pecas)
         .iter()
         .map(|r| json!({"item": r.item, "quantidade": r.qty, "nome": r.name, "arquivo": r.key}))

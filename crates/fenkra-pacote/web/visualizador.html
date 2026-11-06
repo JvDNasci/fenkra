@@ -9,13 +9,13 @@
 :root{
   --fundo:#1b1d21; --janela:#202227; --campo:#0e0f12; --texto:#e1e4ea; --suave:#9aa3b2;
   --destaque:#468ce6; --linha:#33363d; --faixa:#282b32; --erro:#e5604f; --ok:#52b788;
-  --vp-topo:#4a5464; --vp-base:#1a1d22; --aresta:#0d0f12; --papel:#23262d; --tinta:#e1e4ea;
+  --aviso:#e0a43a; --vp-topo:#4a5464; --vp-base:#1a1d22; --aresta:#0d0f12; --papel:#23262d; --tinta:#e1e4ea;
   --peca:#b2b4e2; --sombra:rgba(0,0,0,.45); --raio:6px;
 }
 :root[data-tema="claro"]{
   --fundo:#eef0f3; --janela:#f8f9fb; --campo:#ffffff; --texto:#181c22; --suave:#5b6573;
   --destaque:#1e6edc; --linha:#cfd5de; --faixa:#e4e7ec; --erro:#c0392b; --ok:#1f8a5b;
-  --vp-topo:#d6dee8; --vp-base:#9eaaba; --aresta:#2a3140; --papel:#ffffff; --tinta:#181c22;
+  --aviso:#b9770e; --vp-topo:#d6dee8; --vp-base:#9eaaba; --aresta:#2a3140; --papel:#ffffff; --tinta:#181c22;
   --peca:#767aaa; --sombra:rgba(30,40,60,.25);
 }
 *{box-sizing:border-box}
@@ -62,6 +62,10 @@ main.com-painel #painel{display:flex}
 #aviso p{color:var(--suave);margin:6px 0}
 #soltar{outline:2px dashed var(--destaque);outline-offset:-8px}
 .fila{display:flex;gap:6px;margin:0 0 8px}
+.zgrade{display:grid;grid-template-columns:auto 1fr 1fr;gap:6px;align-items:center;margin:0 0 8px}
+.zgrade input[type=number],.fila input[type=number]{background:var(--campo);border:1px solid var(--linha);border-radius:var(--raio);padding:0 8px;min-height:40px;width:100%;min-width:0}
+.item small{white-space:pre-line}
+#plm{font-size:12px;color:var(--suave);padding:2px 8px;border:1px solid var(--linha);border-radius:999px;white-space:nowrap}
 ul.arv{list-style:none;margin:0;padding:0}
 ul.arv ul{list-style:none;margin:0;padding-left:16px;border-left:1px solid var(--linha)}
 .lin{display:flex;align-items:center;gap:4px;min-height:38px;border-radius:var(--raio);padding-right:4px}
@@ -96,6 +100,7 @@ h3{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--suav
 <div id="app">
   <header>
     <h1 id="titulo">Visualizador Fenkra</h1>
+    <span id="plm" hidden></span>
     <div class="seg" id="modos" role="tablist" hidden>
       <button id="m3d" role="tab" aria-pressed="true" data-t="3D">3D</button>
       <button id="mfolha" role="tab" aria-pressed="false" data-t="folhas">Folhas</button>
@@ -121,6 +126,8 @@ h3{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--suav
 </div>
 <!-- O pacote embutido: base64 de um .fkv (vazio quando a página serve de componente). -->
 <script id="fkv-dados" type="application/octet-stream">/*@PACOTE@*/</script>
+<script id="fkv-dados-b" type="application/octet-stream">/*@PACOTE_B@*/</script>
+<script id="fkv-meta" type="application/json">/*@META@*/</script>
 <script>/*@THREE@*/</script>
 <script>
 "use strict";
@@ -143,7 +150,14 @@ const TX = {
   diam:"Diâmetro", erro:"Não foi possível abrir o pacote", sem_nav:"Este navegador não descomprime o pacote (falta DecompressionStream). Use uma versão recente do Chromium, Firefox ou Safari.",
   folha:"Folha", ajuste:"Ajustar à tela", papel:"Papel", escala:"Escala", mm_papel:"no papel", mm_modelo:"no modelo", resultados:"Resultados", nenhum:"Nada encontrado.",
   item:"Item", qtd:"Qtd", arquivo:"Arquivo", sem_corpo:"sem corpo", decimado:"malha simplificada", mostrar:"Mostrar", ocultar:"Ocultar", sel_alvo:"Alvo da anotação", cena_t:"Cena",
-  limpar:"Limpar", tipo:"Tipo", valor:"Valor" },
+  limpar:"Limpar", tipo:"Tipo", valor:"Valor",
+  zonas:"Zonas", montagem:"Montagem", comparar:"Comparar", regiao:"Região do produto (mm)", modo_zona:"Modo da região", z_dentro:"Peças totalmente dentro", z_toca:"Peças que tocam a região",
+  todos_mat:"Todos os materiais", minimo:"Mínimo", maximo:"Máximo", isolar_res:"Isolar resultado", destacar:"Destacar", redefinir:"Redefinir", por_zona:"Peças por zona", faixas:"Faixas",
+  resumo:"Resumo", interferencias:"Interferências", nao_calc:"Não calculadas neste pacote", sem_interf:"Nenhuma interferência.", folgas:"Folgas",
+  folga_nota:"Menor distância entre peças que não interferem, até {n} mm (aproximada, pelos vértices).", onde_usado:"Onde é usado", raiz:"Raiz",
+  abrir_outro:"Abrir outro pacote para comparar", cmp_dica:"Abra outro .fkv do mesmo documento (outra versão) para ver o que mudou.", nova:"nova", antiga:"antiga", aberto:"Aberto",
+  trocar_lado:"Trocar lados", cmp_igual:"Nenhuma diferença encontrada.", totais:"Totais", adicionados:"Adicionados", removidos:"Removidos", movidos:"Movidos", alterados:"Alterados",
+  so_no_outro:"só no outro pacote", girou:"girou", visivel:"Visível", estado:"Estado", versao:"Versão" },
  en:{ "3D":"3D", folhas:"Sheets", painel:"Panel", abrir:"Open", tema:"Theme",
   vazio_t:"Open a .fkv package", vazio_p:"Choose the file or drop it here. Nothing leaves your device.",
   arvore:"Tree", dados:"Data", pmi:"PMI", vistas:"Views", estados:"States", lista:"List",
@@ -157,13 +171,20 @@ const TX = {
   diam:"Diameter", erro:"Could not open the package", sem_nav:"This browser cannot decompress the package (no DecompressionStream). Use a recent Chromium, Firefox or Safari.",
   folha:"Sheet", ajuste:"Fit to screen", papel:"Paper", escala:"Scale", mm_papel:"on paper", mm_modelo:"on model", resultados:"Results", nenhum:"Nothing found.",
   item:"Item", qtd:"Qty", arquivo:"File", sem_corpo:"no body", decimado:"simplified mesh", mostrar:"Show", ocultar:"Hide", sel_alvo:"Annotation target", cena_t:"Scene",
-  limpar:"Clear", tipo:"Type", valor:"Value" }
+  limpar:"Clear", tipo:"Type", valor:"Value",
+  zonas:"Zones", montagem:"Assembly", comparar:"Compare", regiao:"Product region (mm)", modo_zona:"Region mode", z_dentro:"Parts fully inside", z_toca:"Parts touching the region",
+  todos_mat:"All materials", minimo:"Minimum", maximo:"Maximum", isolar_res:"Isolate result", destacar:"Highlight", redefinir:"Reset", por_zona:"Parts by zone", faixas:"Bands",
+  resumo:"Summary", interferencias:"Interferences", nao_calc:"Not computed in this package", sem_interf:"No interference.", folgas:"Clearances",
+  folga_nota:"Shortest distance between parts that do not interfere, up to {n} mm (approximate, from vertices).", onde_usado:"Where used", raiz:"Root",
+  abrir_outro:"Open another package to compare", cmp_dica:"Open another .fkv of the same document (another version) to see what changed.", nova:"new", antiga:"old", aberto:"Open",
+  trocar_lado:"Swap sides", cmp_igual:"No differences found.", totais:"Totals", adicionados:"Added", removidos:"Removed", movidos:"Moved", alterados:"Changed",
+  so_no_outro:"only in the other package", girou:"rotated", visivel:"Visible", estado:"State", versao:"Version" }
 };
 const IDIOMA = (navigator.language||"pt").toLowerCase().startsWith("en") ? "en" : "pt";
 const T = k => (TX[IDIOMA][k] ?? TX.pt[k] ?? k);
 const $ = s => document.querySelector(s);
 const el = (tag, attrs, ...filhos) => { const e = document.createElement(tag); for (const [k,v] of Object.entries(attrs||{})) { if (k==="class") e.className=v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else if (v===true) e.setAttribute(k,""); else if (v!==false && v!=null) e.setAttribute(k,v);} for (const f of filhos.flat()) if (f!=null) e.append(f.nodeType?f:document.createTextNode(f)); return e; };
-const num = (v, d=3) => { if (typeof v!=="number") return String(v); const s = v.toFixed(d).replace(/\.?0+$/,""); return (IDIOMA==="pt"? s.replace(".",",") : s); };
+const num = (v, d=3) => { if (typeof v!=="number") return String(v); let s = v.toFixed(d); if (s.includes(".")) s = s.replace(/\.?0+$/,""); return (IDIOMA==="pt"? s.replace(".",",") : s); };
 
 /* ---------------- tema ---------------- */
 function corCSS(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
@@ -608,18 +629,19 @@ function isolarSelecionado(){
 function mostrarTudo(){ P.isolado=null; for (const [k,v] of P.base) P.entradas.get(k).vis=true; aplicarVisibilidade(); V3.ajustar(); }
 
 /* ---------------- painéis ---------------- */
-const ABAS = ["arvore","dados","pmi","vistas","estados","lista"];
+const ABAS = ["arvore","dados","pmi","vistas","estados","lista","zonas","montagem","comparar"];
 function montarAbas(){
   const m = P.m, ab = $("#abas"); ab.replaceChildren();
-  const tem = { arvore:m.arvore.length>0, dados:true, pmi:true, vistas:true, estados:m.estados.length>0, lista:(m.lista&&m.lista.length>0)||(m.tabelas&&m.tabelas.length>0) };
+  const tem = { arvore:m.arvore.length>0, dados:true, pmi:true, vistas:true, estados:m.estados.length>0, lista:(m.lista&&m.lista.length>0)||(m.tabelas&&m.tabelas.length>0), zonas:!!m.cena&&m.arvore.length>0, montagem:m.tipo==="montagem", comparar:!!m.cena&&m.arvore.length>0 };
   ABAS.filter(a=>tem[a] && !(a==="arvore"&&!m.arvore.length)).forEach(a=>ab.append(el("button",{role:"tab","data-aba":a,"aria-pressed":"false",onclick:()=>mostrarAba(a)},T(a))));
 }
 function mostrarAba(a, abrir){
   if (abrir) $("#main").classList.add("com-painel"), $("#bpainel").setAttribute("aria-pressed","true");
+  if (P.aba==="comparar" && a!=="comparar" && P.cores.size){ P.cores.clear(); V3.pronto && V3.tema(); }
   P.aba = a;
   document.querySelectorAll("#abas button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.aba===a)));
   const c = $("#conteudo"); c.replaceChildren();
-  ({arvore:abaArvore,dados:abaDados,pmi:abaPmi,vistas:abaVistas,estados:abaEstados,lista:abaLista}[a])(c);
+  ({arvore:abaArvore,dados:abaDados,pmi:abaPmi,vistas:abaVistas,estados:abaEstados,lista:abaLista,zonas:abaZonas,montagem:abaMontagem,comparar:abaComparar}[a])(c);
   V3.pronto && V3.tamanho();
 }
 function abaArvore(c){
@@ -737,6 +759,225 @@ function abaLista(c){
     tb.linhas.forEach(l=>t.append(el("tr",{},l.map(x=>el("td",{},x))))); c.append(t);
   });
   if (!c.childNodes.length) c.append(el("div",{class:"nada"},T("sem_lista")));
+}
+
+/* ---------------- análise: zonas, montagem e comparação (B339) ---------------- */
+const rgbDe = h => { const n = parseInt(String(h).replace("#",""),16); return [n>>16&255,n>>8&255,n&255]; };
+function folhasDe(e){ const o=[]; (function f(x){ if (x.malhaObj) o.push(x); x.filhos.forEach(f); })(e); return o; }
+/* uma "peça" para a análise: o nó de peça, ou o corpo solto quando não há peça por cima */
+function unidades(){
+  const o=[]; for (const e of P.entradas.values()){
+    if (e.tipo==="peca" || (e.tipo==="corpo" && !(e.pai && P.entradas.get(e.pai) && P.entradas.get(e.pai).tipo==="peca"))) o.push(e);
+  }
+  return o;
+}
+function caixaDe(e){
+  const b = new THREE.Box3(), v = new THREE.Vector3();
+  for (const f of folhasDe(e)){
+    const m=f.malhaObj; m.updateWorldMatrix(true,false); const bb=m.geometry.boundingBox;
+    for (let i=0;i<8;i++){ v.set(i&1?bb.max.x:bb.min.x, i&2?bb.max.y:bb.min.y, i&4?bb.max.z:bb.min.z).applyMatrix4(m.matrixWorld); b.expandByPoint(v); }
+  }
+  return b;
+}
+function caminhoDe(e){ const n=[]; for (let p=e;p;p=P.entradas.get(p.pai)) n.unshift(p.nome); return n.join(" › "); }
+function pintarLista(ids, token){
+  P.cores.clear(); const c = rgbDe(corCSS(token));
+  ids.forEach(id=>{ const e=P.entradas.get(id); if (e) folhasDe(e).forEach(f=>P.cores.set(f.id,c)); });
+  V3.tema();
+}
+function isolarLista(ids){
+  const set = new Set();
+  ids.forEach(id=>{ const e=P.entradas.get(id); if(!e) return; (function d(x){set.add(x.id);x.filhos.forEach(d);})(e); for (let p=P.entradas.get(e.pai);p;p=P.entradas.get(p.pai)) set.add(p.id); });
+  for (const e of P.entradas.values()) e.vis = set.has(e.id);
+  P.isolado = null; aplicarVisibilidade(); V3.ajustar();
+}
+function limparDestaque(){ P.cores.clear(); mostrarTudo(); V3.tema(); if (Z.helper) { V3.s.remove(Z.helper); Z.helper=null; V3.precisa=true; } }
+
+/* --- zonas: peças por volume ou região do produto --- */
+const Z = { reg:null, modo:"dentro", volMin:"", volMax:"", texto:"", material:"", eixo:2, faixas:3, helper:null, res:[], un:null };
+function zonaPreparar(){
+  V3.grupo.updateMatrixWorld(true);
+  Z.un = unidades().map(e=>({ e, caixa:caixaDe(e), vol:e.atributos && typeof e.atributos.volume_mm3==="number" ? e.atributos.volume_mm3 : null, mat:(e.atributos&&e.atributos.material)||"" })).filter(u=>!u.caixa.isEmpty());
+  const t = new THREE.Box3(); Z.un.forEach(u=>t.union(u.caixa));
+  Z.total = t; if (!Z.reg) Z.reg = t.clone();
+}
+function zonaCalcular(){
+  const r = Z.reg, q = Z.texto.toLowerCase(), vmin = Z.volMin===""?null:+Z.volMin, vmax = Z.volMax===""?null:+Z.volMax;
+  Z.res = Z.un.filter(u=>{
+    if (Z.modo==="dentro" ? !r.containsBox(u.caixa) : !r.intersectsBox(u.caixa)) return false;
+    if ((vmin!=null||vmax!=null) && u.vol==null) return false;
+    if (vmin!=null && u.vol<vmin) return false;
+    if (vmax!=null && u.vol>vmax) return false;
+    if (Z.material && u.mat!==Z.material) return false;
+    if (q && !texto_busca(u.e).includes(q)) return false;
+    return true;
+  });
+}
+function zonaHelper(){
+  if (!V3.pronto) return;
+  if (Z.helper) V3.s.remove(Z.helper);
+  Z.helper = new THREE.Box3Helper(Z.reg.clone(), new THREE.Color(corCSS("--destaque")));
+  Z.helper.material.depthTest=false; Z.helper.renderOrder=9; V3.s.add(Z.helper); V3.precisa=true;
+}
+function fm(v){ return v==null?"-":num(v,v>=100?0:2); }
+function abaZonas(c){
+  if (!Z.un) zonaPreparar();
+  const eixos=["X","Y","Z"], b=Z.total;
+  const caixa = el("div",{class:"zgrade"});
+  [0,1,2].forEach(k=>{
+    const campo = (nome,i)=>{ const v = (i?Z.reg.max:Z.reg.min)["xyz"[k]];
+      return el("input",{type:"number",step:"any",value:String(+v.toFixed(3)),"aria-label":eixos[k]+" "+nome,onchange:ev=>{ const x=parseFloat(ev.target.value); if(!isNaN(x)){ (i?Z.reg.max:Z.reg.min)["xyz"[k]]=x; zonaAtualizar(); } }}); };
+    caixa.append(el("span",{},eixos[k]), campo("min",0), campo("max",1));
+  });
+  const modo = el("select",{"aria-label":T("modo_zona"),onchange:ev=>{Z.modo=ev.target.value;zonaAtualizar();}}, el("option",{value:"dentro",selected:Z.modo==="dentro"},T("z_dentro")), el("option",{value:"toca",selected:Z.modo==="toca"},T("z_toca")));
+  const vol = (rot,k)=>el("input",{type:"number",min:"0",step:"any",placeholder:rot,"aria-label":rot,value:Z[k],onchange:ev=>{Z[k]=ev.target.value;zonaAtualizar();}});
+  const mats = [...new Set(Z.un.map(u=>u.mat).filter(Boolean))].sort();
+  const sel = el("select",{"aria-label":T("material"),onchange:ev=>{Z.material=ev.target.value;zonaAtualizar();}}, el("option",{value:""},T("todos_mat")), mats.map(m=>el("option",{value:m,selected:m===Z.material},m)));
+  const txt = el("input",{type:"search",placeholder:T("buscar"),"aria-label":T("buscar"),value:Z.texto,oninput:ev=>{Z.texto=ev.target.value.trim();zonaAtualizar(true);}});
+  c.append(el("h3",{},T("regiao")), caixa, el("div",{class:"fila"},modo),
+    el("h3",{},T("volume_mm3")), el("div",{class:"fila"},vol(T("minimo"),"volMin"),vol(T("maximo"),"volMax")),
+    el("div",{class:"fila"},sel), el("div",{class:"fila"},txt),
+    el("div",{class:"fila"}, el("button",{onclick:()=>{ if(Z.res.length) isolarLista(Z.res.map(u=>u.e.id)); }},T("isolar_res")),
+      el("button",{onclick:()=>{ pintarLista(Z.res.map(u=>u.e.id),"--destaque"); }},T("destacar")),
+      el("button",{onclick:()=>{ Z.reg=Z.total.clone(); Z.volMin=Z.volMax=Z.texto=Z.material=""; limparDestaque(); mostrarAba("zonas"); }},T("redefinir"))),
+    el("div",{id:"zres"}), el("h3",{},T("por_zona")),
+    el("div",{class:"fila"}, el("select",{"aria-label":T("eixo"),onchange:ev=>{Z.eixo=+ev.target.value;zonaFaixas();}},eixos.map((n,i)=>el("option",{value:i,selected:i===Z.eixo},n))),
+      el("input",{type:"number",min:"2",max:"12",value:String(Z.faixas),"aria-label":T("faixas"),onchange:ev=>{Z.faixas=Math.max(2,Math.min(12,parseInt(ev.target.value)||3));zonaFaixas();}})),
+    el("div",{id:"zfaixas"}));
+  zonaHelper(); zonaResultado(); zonaFaixas();
+}
+function zonaAtualizar(soLista){ zonaCalcular(); if(!soLista) zonaHelper(); zonaResultado(); zonaFaixas(); }
+function zonaResultado(){
+  const raiz=$("#zres"); if(!raiz) return; zonaCalcular();
+  const massa = Z.res.reduce((s,u)=>s+(u.e.atributos&&u.e.atributos.massa_kg||0),0), vol=Z.res.reduce((s,u)=>s+(u.vol||0),0);
+  raiz.replaceChildren(el("h3",{},T("resultados")+" ("+Z.res.length+"/"+Z.un.length+")"),
+    el("p",{class:"nada"},T("massa_kg")+": "+num(massa,3)+" · "+T("volume_mm3")+": "+fm(vol)));
+  Z.res.slice(0,400).forEach(u=>raiz.append(el("button",{class:"item",onclick:()=>selecionar(u.e.id)},u.e.nome, el("small",{},[u.e.atributos&&u.e.atributos.pn, u.mat, u.vol!=null?fm(u.vol)+" mm³":null].filter(Boolean).join(" · ")))));
+  if (!Z.res.length) raiz.append(el("div",{class:"nada"},T("nenhum")));
+}
+function zonaFaixas(){
+  const raiz=$("#zfaixas"); if(!raiz) return; const k=Z.eixo, n=Z.faixas, lo=Z.total.min["xyz"[k]], hi=Z.total.max["xyz"[k]], w=(hi-lo)/n;
+  raiz.replaceChildren();
+  for (let i=0;i<n;i++){
+    const a=lo+i*w, b=a+w;
+    const dentro=Z.un.filter(u=>{ const c=(u.caixa.min["xyz"[k]]+u.caixa.max["xyz"[k]])/2; return c>=a && (c<b || i===n-1); });
+    raiz.append(el("button",{class:"item",onclick:()=>{ Z.reg=Z.total.clone(); Z.reg.min["xyz"[k]]=a; Z.reg.max["xyz"[k]]=b; Z.modo="toca"; mostrarAba("zonas"); }},
+      "XYZ"[k]+" "+num(a,1)+" … "+num(b,1), el("small",{},dentro.length+" "+T("pecas").toLowerCase())));
+  }
+}
+
+/* --- análise da montagem: já calculada pelo Fenkra; a página lista e destaca --- */
+function chaveDeUso(e){ const f=folhasDe(e)[0]; return (e.atributos&&e.atributos.pn) || (f&&f.malha&&f.malha.id) || e.nome; }
+function abaMontagem(c){
+  const m=P.m, a=m.analise, s=m.estatisticas||{};
+  const t = el("table",{class:"dados"});
+  [["pecas",s.pecas_unicas],["instancias",s.instancias],["triangulos",s.triangulos],["massa_kg",m.atributos&&m.atributos.massa_kg]].forEach(([l,v])=>v!=null&&t.append(el("tr",{},el("th",{},T(l)),el("td",{},typeof v==="number"?num(v,4):String(v)))));
+  c.append(el("h3",{},T("resumo")), t);
+  c.append(el("h3",{},T("interferencias")+(a&&a.calculada?" ("+a.interferencias.length+")":"")));
+  if (!a || !a.calculada) c.append(el("div",{class:"nada"},T("nao_calc")+(a&&a.motivo?": "+a.motivo:"")));
+  else if (!a.interferencias.length) c.append(el("div",{class:"nada"},T("sem_interf")));
+  else a.interferencias.forEach(x=>c.append(el("button",{class:"item",onclick:()=>{ isolarLista([x.a,x.b]); pintarLista([x.a,x.b],"--erro"); }}, x.nome_a+" × "+x.nome_b, el("small",{},num(x.volume_mm3,3)+" mm³"))));
+  c.append(el("h3",{},T("folgas")+(a&&a.calculada?" ("+a.folgas.length+")":"")));
+  if (a&&a.calculada){
+    c.append(el("p",{class:"nada"},T("folga_nota").replace("{n}",String(a.limite_folga_mm))));
+    a.folgas.slice(0,200).forEach(x=>c.append(el("button",{class:"item",onclick:()=>{ isolarLista([x.a,x.b]); pintarLista([x.a,x.b],"--destaque"); }}, x.nome_a+" ↔ "+x.nome_b, el("small",{},"≈ "+num(x.distancia_mm,3)+" mm"))));
+    if (!a.folgas.length) c.append(el("div",{class:"nada"},T("nenhum")));
+  }
+  c.append(el("h3",{},T("onde_usado")));
+  const campo = el("input",{type:"search",placeholder:T("buscar"),"aria-label":T("buscar"),value:P.usoBusca||"",oninput:ev=>{P.usoBusca=ev.target.value.trim().toLowerCase();usoLista();}});
+  c.append(el("div",{class:"fila"},campo), el("div",{id:"uso"}));
+  usoLista();
+}
+function usoLista(){
+  const raiz=$("#uso"); if(!raiz) return; raiz.replaceChildren();
+  const base = P.sel ? P.entradas.get(P.sel) : null, q = P.usoBusca||"";
+  const todas = unidades(); let alvo=null;
+  if (q) alvo = todas.filter(e=>texto_busca(e).includes(q)); else if (base) alvo = todas.filter(e=>chaveDeUso(e)===chaveDeUso(base)||(e.id===base.id));
+  if (!alvo||!alvo.length){ raiz.append(el("div",{class:"nada"},q?T("nenhum"):T("sem_sel"))); return; }
+  const grupos = new Map(); alvo.forEach(e=>{ const k=chaveDeUso(e); (grupos.get(k)||grupos.set(k,[]).get(k)).push(e); });
+  [...grupos].slice(0,60).forEach(([k,lista])=>{
+    raiz.append(el("h3",{},lista[0].nome+" · "+lista.length+"×"));
+    lista.forEach(e=>raiz.append(el("button",{class:"item",onclick:()=>{selecionar(e.id); isolarLista(lista.map(x=>x.id)); pintarLista(lista.map(x=>x.id),"--destaque");}}, e.pai?caminhoDe(P.entradas.get(e.pai)):T("raiz"), el("small",{},e.nome))));
+  });
+}
+
+/* --- comparar versões: o pacote aberto contra outro, pelos IDs estáveis --- */
+async function prepararOutro(buf){
+  const zip = await lerZip(buf);
+  const m = JSON.parse(new TextDecoder().decode(await zip.ler("pacote.json")));
+  if (m.formato!=="fenkra-visualizacao" || m.versao>1) throw new Error("formato");
+  let glb=null; if (m.cena) glb = lerGLB(await zip.ler(m.cena)).json;
+  return { buf, m, glb };
+}
+const CAMPOS_CMP = ["nome","pn","descricao","material","tipo_de_peca","massa_kg","volume_mm3","area_mm2"];
+function matrizDe(glb, no){ const n = glb && glb.nodes && glb.nodes[no]; return n && n.matrix ? n.matrix : null; }
+function compararPacotes(){
+  const A = P.outro, mA = A.m, mB = P.m;
+  /* o pacote aberto é o "papel" dele (B = novo, A = antigo); o outro é o oposto */
+  const aqui = new Map(mB.arvore.map(x=>[x.id,x])), la = new Map(mA.arvore.map(x=>[x.id,x]));
+  const out = { so_aqui:[], so_la:[], movidos:[], alterados:[] };
+  for (const [id,x] of aqui){
+    const y = la.get(id); if (!y){ if (x.tipo!=="corpo") out.so_aqui.push({id,nome:x.nome}); continue; }
+    const mx = matrizDe(P.glb.json,x.no), my = matrizDe(A.glb,y.no);
+    if (mx && my){
+      const d = Math.hypot(mx[12]-my[12],mx[13]-my[13],mx[14]-my[14]);
+      let r=0; for (let i=0;i<12;i++) if (i!==3&&i!==7) r=Math.max(r,Math.abs(mx[i]-my[i]));
+      if (d>1e-4 || r>1e-6) out.movidos.push({id,nome:x.nome,d,gira:r>1e-6});
+    }
+    const mud=[]; const ax=x.atributos||{}, ay=y.atributos||{};
+    CAMPOS_CMP.forEach(k=>{ const p=ay[k], q=ax[k]; if (p!==q && !(typeof p==="number"&&typeof q==="number"&&Math.abs(p-q)<=1e-6*Math.max(1,Math.abs(p)))) mud.push({k,de:p,para:q}); });
+    const tx = x.malha ? (mB.malhas.find(m=>m.id===x.malha)||{}).triangulos : null, ty = y.malha ? (mA.malhas.find(m=>m.id===y.malha)||{}).triangulos : null;
+    if (tx!==ty && tx!=null && ty!=null) mud.push({k:"triangulos",de:ty,para:tx});
+    if (x.visivel!==y.visivel) mud.push({k:"visivel",de:y.visivel,para:x.visivel});
+    if (mud.length) out.alterados.push({id,nome:x.nome,mud});
+  }
+  for (const [id,y] of la) if (!aqui.has(id) && y.tipo!=="corpo") out.so_la.push({id,nome:y.nome});
+  /* análise: interferências que apareceram ou sumiram */
+  const par = i => [i.a,i.b].sort().join("|"), ia = new Set(((mA.analise&&mA.analise.interferencias)||[]).map(par)), ib = new Set(((mB.analise&&mB.analise.interferencias)||[]).map(par));
+  out.interf_novas = ((mB.analise&&mB.analise.interferencias)||[]).filter(i=>!ia.has(par(i)));
+  out.interf_fim = ((mA.analise&&mA.analise.interferencias)||[]).filter(i=>!ib.has(par(i)));
+  /* totais */
+  const at = (m,k)=>m.atributos&&m.atributos[k];
+  out.totais = ["massa_kg","volume_mm3"].map(k=>({k,de:at(mA,k),para:at(mB,k)})).filter(t=>t.de!=null&&t.para!=null&&t.de!==t.para);
+  return out;
+}
+function fraseMud(x){ const f=v=>v==null||v===""?"∅":(typeof v==="number"?num(v,4):String(v)); return T(x.k==="triangulos"?"triangulos":x.k==="visivel"?"visivel":x.k)+": "+f(x.de)+" → "+f(x.para); }
+function colorirComparacao(r){
+  P.cores.clear();
+  const poe = (ids,tok)=>{ const c=rgbDe(corCSS(tok)); ids.forEach(id=>{ const e=P.entradas.get(id); if(e) folhasDe(e).forEach(f=>P.cores.set(f.id,c)); }); };
+  poe(r.alterados.map(x=>x.id),"--destaque"); poe(r.movidos.map(x=>x.id),"--aviso");
+  poe(r.so_aqui.map(x=>x.id), P.papel==="B"?"--ok":"--erro");
+  V3.tema();
+}
+async function abaComparar(c){
+  const sel = el("input",{type:"file",accept:".fkv,application/zip",hidden:true,onchange:async ev=>{ const f=ev.target.files[0]; if(!f) return; try{ P.outro=await prepararOutro(await f.arrayBuffer()); P.outro.nome=f.name; P.papel=P.papel||"B"; mostrarAba("comparar"); }catch(e){ mostrarErro(String(e.message||e)); } ev.target.value=""; }});
+  c.append(el("div",{class:"fila"}, el("button",{onclick:()=>sel.click()},T("abrir_outro")), sel));
+  if (!P.outro){ c.append(el("div",{class:"nada"},T("cmp_dica"))); return; }
+  const r = compararPacotes(), aqui=P.papel==="B"?T("nova"):T("antiga");
+  const rot = (P.meta&&P.meta.comparando) || {};
+  c.append(el("p",{class:"nada"},T("aberto")+": "+aqui+(P.papel==="B"&&rot.depois?" ("+rot.depois+")":P.papel!=="B"&&rot.antes?" ("+rot.antes+")":"")+" · "+P.outro.m.nome),
+    el("div",{class:"fila"}, el("button",{onclick:trocarLado},T("trocar_lado")), el("button",{onclick:()=>{ P.cores.clear(); V3.tema(); }},T("limpar"))));
+  const nada = !r.so_aqui.length&&!r.so_la.length&&!r.movidos.length&&!r.alterados.length&&!r.interf_novas.length&&!r.interf_fim.length&&!r.totais.length;
+  if (nada) c.append(el("div",{class:"nada"},T("cmp_igual")));
+  if (r.totais.length){ const t=el("table",{class:"dados"}); r.totais.forEach(x=>t.append(el("tr",{},el("th",{},T(x.k)),el("td",{},num(x.de,4)+" → "+num(x.para,4))))); c.append(el("h3",{},T("totais")),t); }
+  const secao = (tit,lista,tok,desc)=>{ if(!lista.length) return; c.append(el("h3",{style:"color:var("+tok+")"},tit+" ("+lista.length+")")); lista.slice(0,300).forEach(x=>c.append(el("button",{class:"item",onclick:()=>{ if (P.entradas.has(x.id)) selecionar(x.id); }}, x.nome, desc?el("small",{},desc(x)):null))); };
+  const aq = P.papel==="B", [tOnly,tOther] = aq ? [T("adicionados"),T("removidos")] : [T("removidos"),T("adicionados")];
+  secao(tOnly, r.so_aqui, aq?"--ok":"--erro", null);
+  secao(tOther, r.so_la, aq?"--erro":"--ok", x=>T("so_no_outro"));
+  secao(T("movidos"), r.movidos, "--aviso", x=>num(x.d,3)+" mm"+(x.gira?" · "+T("girou"):""));
+  secao(T("alterados"), r.alterados, "--destaque", x=>x.mud.map(fraseMud).join("\n"));
+  if (r.interf_novas.length||r.interf_fim.length){
+    c.append(el("h3",{},T("interferencias")));
+    r.interf_novas.forEach(i=>c.append(el("div",{class:"nada"},"＋ "+i.nome_a+" × "+i.nome_b)));
+    r.interf_fim.forEach(i=>c.append(el("div",{class:"nada"},"－ "+i.nome_a+" × "+i.nome_b)));
+  }
+  colorirComparacao(r);
+}
+async function trocarLado(){
+  const o = P.outro, atual = {buf:P.bytes}; if (!o) return;
+  const papel = P.papel==="B"?"A":"B", meta = P.meta;
+  await carregar(o.buf, {outro:atual, papel, meta});
+  mostrarAba("comparar");
 }
 
 /* ---------------- barra de ferramentas ---------------- */
@@ -887,10 +1128,15 @@ async function definirModo(m){
   if (folha && !Folha.svg) await Folha.abrir(Folha.i);
   montarBarra(); if (folha) { Folha.medida(); Folha.ajustar(); } else if (V3.pronto) { V3.medidaAtualizar(); V3.tamanho(); }
 }
+function montarPlm(){
+  const c=$("#plm"), m=P.meta; if (!c) return;
+  const partes = m ? [m.estado, m.revisao?("Rev "+m.revisao):null, m.versao].filter(Boolean) : [];
+  c.hidden = !partes.length; c.textContent = partes.join(" · ");
+}
 function mostrarErro(msg){
   const a=$("#aviso"); a.classList.add("on"); a.querySelector("h2").textContent=T("erro"); a.querySelector("p").textContent=msg;
 }
-async function carregar(fonte){
+async function carregar(fonte, opcoes){
   try{
     let buf;
     if (typeof fonte==="string"){ const r = await fetch(fonte); if(!r.ok) throw new Error(fonte+": "+r.status); buf = await r.arrayBuffer(); }
@@ -902,7 +1148,8 @@ async function carregar(fonte){
     const m = JSON.parse(new TextDecoder().decode(await zip.ler("pacote.json")));
     if (m.formato!=="fenkra-visualizacao") throw new Error("formato");
     if (m.versao>1) throw new Error("versão "+m.versao+" > 1");
-    Object.assign(P,{zip,m,sel:null,isolado:null,pmiFiltro:null,pmiSel:null,capAtiva:null,estadoAtivo:null,aba:null});
+    Object.assign(P,{zip,m,sel:null,isolado:null,pmiFiltro:null,pmiSel:null,capAtiva:null,estadoAtivo:null,aba:null,bytes:buf,outro:null,papel:(opcoes&&opcoes.papel)||"B",meta:(opcoes&&opcoes.meta)||P.meta||null,usoBusca:""});
+    if (Z.helper&&V3.pronto){ V3.s.remove(Z.helper); } Object.assign(Z,{un:null,reg:null,helper:null,res:[]});
     P.cores.clear(); Folha.dados=[]; Folha.svg=null; Folha.i=0; Folha.medindo=false;
     indexar(m); $("#titulo").textContent = m.nome;
     document.title = m.nome+" · "+"Fenkra";
@@ -911,8 +1158,10 @@ async function carregar(fonte){
     $("#modos").hidden = !(tem3d&&temFolha);
     if (tem3d){ V3.init(); P.glb = lerGLB(await zip.ler(m.cena)); V3.construir(); aplicarVisibilidade(); V3.ajustar(false); V3.anotar(); }
     else { V3.pronto && V3.grupo.clear(); }
+    if (opcoes&&opcoes.outro){ try{ P.outro = await prepararOutro(opcoes.outro.buf); }catch(e){ console.error(e); } }
+    montarPlm();
     montarAbas();
-    mostrarAba(m.arvore.length?"arvore":"dados");
+    mostrarAba(P.outro?"comparar":(m.arvore.length?"arvore":"dados"));
     await definirModo(tem3d?"3d":"folha");
     if (window.matchMedia("(max-width:760px)").matches) { /* painel recolhido só se o usuário pedir; começa aberto na metade de baixo */ }
     window.__fkv = {P,V3,Folha};
@@ -934,11 +1183,16 @@ function ligar(){
   ["dragenter","dragover"].forEach(t=>addEventListener(t,e=>{e.preventDefault();pal.id="palco";document.body.id="soltar";}));
   ["dragleave","drop"].forEach(t=>addEventListener(t,e=>{e.preventDefault();document.body.id="";}));
   addEventListener("drop",e=>{ const f=e.dataTransfer&&e.dataTransfer.files[0]; if(f) carregar(f); });
-  addEventListener("message",e=>{ const d=e.data; if(d&&d.fkv) carregar(d.fkv); });
+  addEventListener("message",async e=>{ const d=e.data; if(!d||!d.fkv) return; const o={meta:d.meta||null,papel:"B"}; if (d.comparar){ try{ o.outro={buf: typeof d.comparar==="string"?await (await fetch(d.comparar)).arrayBuffer():d.comparar}; }catch(x){ console.error(x); } } carregar(d.fkv,o); });
   const q = new URLSearchParams(location.search), src = q.get("src") || (location.hash.startsWith("#src=")?decodeURIComponent(location.hash.slice(5)):null);
   const emb = $("#fkv-dados").textContent.trim();
-  if (emb){ const b=atob(emb), u=new Uint8Array(b.length); for(let i=0;i<b.length;i++) u[i]=b.charCodeAt(i); carregar(u); }
-  else if (src) carregar(src);
+  const deB64 = t=>{ const b=atob(t), u=new Uint8Array(b.length); for(let i=0;i<b.length;i++) u[i]=b.charCodeAt(i); return u; };
+  let meta=null; try{ const t=$("#fkv-meta").textContent.trim(); if (t) meta=JSON.parse(t); }catch(x){ console.error(x); }
+  const embB = $("#fkv-dados-b").textContent.trim(), cmp = q.get("cmp");
+  const opc = { meta, papel:"B" };
+  if (embB) opc.outro = { buf: deB64(embB).buffer };
+  if (emb){ carregar(deB64(emb), opc); }
+  else if (src){ (async()=>{ if (cmp){ try{ opc.outro={buf:await (await fetch(cmp)).arrayBuffer()}; }catch(x){ console.error(x); } } carregar(src,opc); })(); }
   addEventListener("resize",()=>{ Folha.svg&&Folha.ativo&&0; });
 }
 ligar();

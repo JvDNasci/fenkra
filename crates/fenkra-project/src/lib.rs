@@ -28,6 +28,8 @@ pub mod referencias;
 pub mod relacoes;
 pub mod salvar_como;
 pub mod seguro;
+pub mod sobreposicao;
+pub mod visualizacao;
 
 use fenkra_core::formato::{preparar, Tipo, APP_VERSION};
 use seguro::gravar_atomico;

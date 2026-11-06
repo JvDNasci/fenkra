@@ -32,6 +32,8 @@ mod importar;
 mod features;
 mod lote;
 mod plm;
+pub(crate) use plm::medidas_do_resultado;
+mod visualizador_plm;
 mod projeto;
 mod ramos_ui;
 mod salvar;
@@ -1386,6 +1388,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     self.open.modified = false;
                     let n = p.entry(id).map(|e| e.versions.len()).unwrap_or(0);
                     self.toast(format!("Versão {n} salva no projeto"), false);
+                    self.visualizacao_ao_salvar(id);
                 }
                 Err(e) => self.toast(e.to_string(), true),
             }
@@ -6822,6 +6825,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         });
         self.secao_ramos(ui, sel);
         self.secao_qualidade(ui, sel);
+        self.secao_visualizador(ui, sel);
         if let Some(n) = restaurar {
             let reabrir = self.open.entry == Some(sel);
             match self.project.as_mut().unwrap().restaurar_versao(sel, n, "") {
@@ -8692,6 +8696,7 @@ impl eframe::App for App {
                 crate::transmissao_ui::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
                 importar::defeitos_na_cena(self.importar_relatorio.as_ref(), self.importar_defeito, &mut s);
                 features::na_cena(self.features.as_ref(), &ctx.global_style().visuals, &mut s);
+                crate::camada3d::na_cena(&ctx.global_style().visuals, &mut s);
                 crate::medir_quadros::valor("bytes_faces", (std::mem::size_of_val(s.mesh.as_slice()) + std::mem::size_of_val(s.indices.as_slice())) as f64);
                 crate::medir_quadros::valor("bytes_arestas", std::mem::size_of_val(s.edges.as_slice()) as f64);
                 crate::medir_quadros::fase("subir", || vp.set_scene(rs, &s));

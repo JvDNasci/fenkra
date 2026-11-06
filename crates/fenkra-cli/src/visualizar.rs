@@ -23,7 +23,7 @@ pub fn visualizar(pasta: &Pasta, p: &Pedido) -> Result<Value, ErroApi> {
         }
     }
     let caminho = pasta.para_ler(p.arquivo, &["fkp", "fka", "fkd"])?;
-    let opc = Opcoes { decimar: p.decimar, capturas: p.decimar.is_none() };
+    let opc = Opcoes { decimar: p.decimar, capturas: p.decimar.is_none(), ..Default::default() };
     let pacote = de_arquivo(&caminho, &opc).map_err(|e| ErroApi::novo("leitura", e))?;
     pacote.validar().map_err(|e| ErroApi::novo("formato", e))?;
     let bytes = pacote.bytes().map_err(|e| ErroApi::novo("gravacao", e))?;

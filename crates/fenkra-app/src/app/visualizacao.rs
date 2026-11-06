@@ -27,7 +27,7 @@ impl App {
 
     /// `simplificada` ligada decima a malha e tira os pontos de captura exatos: protege a geometria.
     pub(super) fn exportar_visualizacao(&mut self, simplificada: bool) {
-        let o = if simplificada { Opcoes { decimar: Some(SIMPLIFICADA), capturas: false } } else { Opcoes::default() };
+        let o = if simplificada { Opcoes { decimar: Some(SIMPLIFICADA), capturas: false, ..Default::default() } } else { Opcoes::default() };
         let (pacote, nome) = match self.pacote_do_que_esta_aberto(&o) {
             Ok(x) => x,
             Err(e) => return self.toast(format!("{}: {e}", tr("Falha ao exportar")), true),
