@@ -84,7 +84,16 @@ pub fn inverter_corte(d: &mut Drawing, id: Id) -> bool {
     let Some(v) = d.views.iter_mut().find(|v| v.id == id) else { return false };
     match &mut v.kind {
         ViewKind::Section { a, b, .. } => {
-            std::mem::swap(a, b);
+            if v.corte.pontos.is_empty() {
+                std::mem::swap(a, b);
+            } else {
+                // linha com vários segmentos: percorre o caminho ao contrário
+                let mut p = crate::corte::caminho(*a, *b, &v.corte.pontos);
+                p.reverse();
+                *a = p[0];
+                *b = p[1];
+                v.corte.pontos = p[2..].to_vec();
+            }
             true
         }
         _ => false,

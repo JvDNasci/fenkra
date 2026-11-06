@@ -176,6 +176,20 @@ pub fn bar(ctx: &egui::Context, st: &mut DwgState, rect: Rect, cur: Option<Sourc
                     ui.label(tr("Rótulo"));
                     ui.add(egui::TextEdit::singleline(&mut st.new_label).desired_width(110.).hint_text(tr("automático")));
                 }
+                if tool == c::SECTION {
+                    corte_ui::barra(ui, st);
+                }
+                if tool == c::DETAIL {
+                    ui.separator();
+                    ui.label(tr("Contorno"));
+                    let antes = st.detalhe_perfil;
+                    ui.selectable_value(&mut st.detalhe_perfil, false, tr("Círculo"));
+                    ui.selectable_value(&mut st.detalhe_perfil, true, tr("Perfil livre"));
+                    if antes != st.detalhe_perfil {
+                        st.clicks.clear();
+                        st.corte_pronto = false;
+                    }
+                }
             });
             if let Some(reason) = block_reason(st) {
                 ui.separator();

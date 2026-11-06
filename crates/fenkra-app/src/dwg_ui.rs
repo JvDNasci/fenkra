@@ -14,9 +14,13 @@ use std::path::PathBuf;
 
 mod alcas;
 mod assistentes;
+mod cota_inteligente;
+mod corte_ui;
 mod ghost;
 mod options;
 mod simbolos;
+#[cfg(test)]
+mod testes_corte_cota;
 
 /// Comandos (índice do `Cmd::Dwg`).
 pub mod c {
@@ -41,6 +45,7 @@ pub mod c {
     pub const DIM_R: u8 = 23;
     pub const DIM_D: u8 = 24;
     pub const DIM_ANG: u8 = 25;
+    pub const DIM_SMART: u8 = 26;
     pub const NOTE: u8 = 30;
     pub const BALLOON: u8 = 31;
     pub const ROUGH: u8 = 32;
@@ -120,6 +125,16 @@ pub struct DwgState {
     novo: Option<assistentes::NovoUi>,
     export: Option<assistentes::ExportUi>,
     toast: Option<(String, bool)>,
+    /// linha de corte (ou contorno do detalhe) concluída: o próximo clique posiciona a vista (B106)
+    corte_pronto: bool,
+    /// Ctrl pressionado: solta a vista em corte do alinhamento com a mãe
+    ctrl_livre: bool,
+    /// detalhe em perfil livre em vez de círculo
+    detalhe_perfil: bool,
+    /// opções do próximo corte (profundidade, fatia, borda)
+    corte_novo: fenkra_desenho::corte::CorteOpcoes,
+    /// cota inteligente (B107): seleção, tipo e chamada do furo
+    ci: cota_inteligente::Estado,
 }
 
 impl DwgState {
@@ -191,6 +206,11 @@ impl DwgState {
             novo: None,
             export: None,
             toast: None,
+            corte_pronto: false,
+            ctrl_livre: false,
+            detalhe_perfil: false,
+            corte_novo: Default::default(),
+            ci: Default::default(),
         }
     }
 
@@ -270,8 +290,36 @@ pub fn ensure(app: &mut App) {
 pub fn demo_ajustar(st: &mut DwgState) {
     let alca = std::env::var("FENKRA_DEMO_DWG_ALCA").unwrap_or_default();
     let achar = |st: &DwgState, f: &dyn Fn(&ViewKind) -> bool| st.d.views.iter().find(|v| f(&v.kind)).map(|v| v.id);
+    // B106: variantes do corte para captura (degraus, fatia, serrilhada, profundidade) e detalhe em perfil
+    if let (Some(id), true) = (achar(st, &|k| matches!(k, ViewKind::Section { .. })), alca.starts_with("corte_")) {
+        let pts = fenkra_desenho::corte::caminho_da_vista(&st.d, id);
+        if pts.len() >= 2 {
+            let (a, b) = (pts[0], pts[1]);
+            let xm = (a[0] + b[0]) / 2.;
+            if alca == "corte_degraus" {
+                fenkra_desenho::corte::definir_caminho(&mut st.d, id, &[a, [xm, a[1]], [xm, a[1] + 9.], [b[0], a[1] + 9.]]);
+            }
+            if let Some(v) = st.d.views.iter_mut().find(|v| v.id == id) {
+                match alca.as_str() {
+                    "corte_fatia" => v.corte.fatia = true,
+                    "corte_serrilhada" => v.corte.borda = fenkra_desenho::corte::Borda::Serrilhada,
+                    "corte_profundidade" => v.corte.profundidade = Some(6.),
+                    _ => {}
+                }
+            }
+        }
+    }
+    if alca == "detalhe_perfil" {
+        if let Some(id) = achar(st, &|k| matches!(k, ViewKind::Detail { .. })) {
+            if let Some(ViewKind::Detail { center, radius, .. }) = st.d.view(id).map(|v| v.kind.clone()) {
+                let (c, r) = (center, radius);
+                fenkra_desenho::corte::definir_contorno_detalhe(&mut st.d, id, vec![[c[0] - r, c[1] - r * 0.4], [c[0] + r * 0.2, c[1] - r], [c[0] + r, c[1] + r * 0.3], [c[0] - r * 0.3, c[1] + r]]);
+            }
+        }
+    }
     st.sel = match alca.as_str() {
-        "corte" => achar(st, &|k| matches!(k, ViewKind::Section { .. })),
+        a if a.starts_with("corte") => achar(st, &|k| matches!(k, ViewKind::Section { .. })),
+        "detalhe_perfil" => achar(st, &|k| matches!(k, ViewKind::Detail { .. })),
         "detalhe" => achar(st, &|k| matches!(k, ViewKind::Detail { .. })),
         "projetada" => achar(st, &|k| matches!(k, ViewKind::Projected { .. })),
         _ => None,
@@ -290,6 +338,14 @@ pub fn demo_ajustar(st: &mut DwgState) {
     match std::env::var("FENKRA_DEMO_DWG_DIALOGO").unwrap_or_default().as_str() {
         "novo" => assistentes::abrir_novo(st, Some(fonte)),
         "exportar" => assistentes::abrir_exportar(st, "pdf"),
+        // B107: caixa de edição da primeira cota, com as opções de exibição ligadas
+        "cota" => {
+            if let Some(dm) = st.d.dims.first_mut() {
+                dm.opcoes = fenkra_desenho::cotas::DimOpcoes { como_diametro: true, parenteses: false, inspecao: true, precisao_tol: Some(3) };
+                dm.tol = "±0,1".into();
+                st.dim_edit = Some(dm.id);
+            }
+        }
         _ => {}
     }
 }
@@ -320,7 +376,7 @@ pub fn block_reason(st: &DwgState) -> Option<&'static str> {
         Some("Selecione uma vista mãe: clique nela na folha")
     } else if needs_source(t) && st.source.is_none() {
         Some("Falta a origem: escolha uma peça ou montagem salva")
-    } else if (c::DIM_H..=c::DIM_ANG).contains(&t) && st.d.views.iter().all(|v| v.sheet != st.sheet) {
+    } else if ((c::DIM_H..=c::DIM_ANG).contains(&t) || t == c::DIM_SMART) && st.d.views.iter().all(|v| v.sheet != st.sheet) {
         Some("A folha não tem vistas para cotar")
     } else {
         None
@@ -415,6 +471,8 @@ pub fn command(app: &mut App, i: u8) {
             st.tool_view = None;
             st.loose = false;
             st.reassign = None;
+            st.corte_pronto = false;
+            st.ci.limpar();
         }
     }
 }
@@ -565,6 +623,8 @@ pub fn keys(app: &mut App, ctx: &egui::Context, save_k: bool, undo: bool, redo: 
     }
     if !typing && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
         st.tool = None;
+        st.corte_pronto = false;
+        st.ci.limpar();
         st.clicks.clear();
         st.loose = false;
         st.reassign = None;
@@ -814,9 +874,16 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
         };
         if let Some(target) = st.reassign {
             reassign_pass(st, ui, &painter, rect, &resp, mouse_mm, &to_scr, target);
+        } else if st.tool == Some(c::DIM_SMART) {
+            let dica = block_reason(st);
+            if let Some(r) = dica {
+                painter.text(rect.center_top() + Vec2::new(0., 10.), egui::Align2::CENTER_TOP, tr(r), egui::FontId::proportional(14.), ui.visuals().warn_fg_color);
+            } else {
+                cota_inteligente::tratar(ui, &painter, st, &resp, mouse_mm, &to_scr, &snap, &view_at, rect);
+            }
         } else if let Some(tool) = st.tool {
             let blocked = block_reason(st);
-            painter.text(rect.center_top() + Vec2::new(0., 10.), egui::Align2::CENTER_TOP, format!("{}   (Esc {})", tr(blocked.unwrap_or_else(|| hint(tool, st.clicks.len()))), tr("cancela")), egui::FontId::proportional(14.), if dark { Color32::from_rgb(255, 210, 120) } else { Color32::from_rgb(120, 60, 0) });
+            painter.text(rect.center_top() + Vec2::new(0., 10.), egui::Align2::CENTER_TOP, format!("{}   (Esc {})", tr(blocked.unwrap_or_else(|| corte_ui::dica(st).unwrap_or_else(|| hint(tool, st.clicks.len())))), tr("cancela")), egui::FontId::proportional(14.), if dark { Color32::from_rgb(255, 210, 120) } else { Color32::from_rgb(120, 60, 0) });
             let dim_tool = (c::DIM_H..=c::DIM_ANG).contains(&tool);
             // marcador do snap sob o mouse
             if let Some(m) = mouse_mm {
@@ -831,8 +898,10 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
                 if let Some(last) = st.clicks.last() {
                     painter.line_segment([to_scr(*last), to_scr(m)], Stroke::new(1., Color32::from_rgb(255, 120, 0)));
                 }
+                corte_ui::guia(&painter, st, &to_scr, m, crate::theme::accent(ui.visuals()));
             }
             // fantasma preso ao cursor (nada é criado antes da confirmação)
+            st.ctrl_livre = ui.ctx().input(|i| i.modifiers.ctrl);
             if let Some(m) = mouse_mm.filter(|_| blocked.is_none()) {
                 if let Some(g) = ghost::compute(st, m, &snap, &view_at) {
                     ghost::paint(ui, &painter, &g, &to_scr, z);
@@ -841,7 +910,9 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
             options::bar(ui.ctx(), st, rect, cur_src.clone());
             // Enter confirma na posição do cursor, como o clique
             let enter = !ui.ctx().egui_wants_keyboard_input() && ui.ctx().input(|i| i.key_pressed(egui::Key::Enter));
-            if resp.clicked_by(egui::PointerButton::Primary) || (enter && resp.hovered()) {
+            if enter && corte_ui::terminar(st) {
+                // Enter conclui a linha de corte (ou o contorno do detalhe): o clique seguinte posiciona
+            } else if resp.clicked_by(egui::PointerButton::Primary) || (enter && resp.hovered()) {
                 if let Some(m) = mouse_mm {
                     let m = ghost::placed(st, tool, m);
                     if block_reason(st).is_some() {
@@ -1081,6 +1152,22 @@ fn dim_edit_window(ctx: &egui::Context, st: &mut DwgState) {
             }
         });
         ui.horizontal(|ui| {
+            let mut propria = dm.opcoes.precisao_tol.is_some();
+            if crate::editor::check(ui, &mut propria, "Precisão própria da tolerância").changed() {
+                dm.opcoes.precisao_tol = propria.then(|| dm.precision.unwrap_or(decimals));
+            }
+            if let Some(pr) = dm.opcoes.precisao_tol.as_mut() {
+                ui.add(crate::ui_ext::dv(pr).range(0..=4));
+            }
+        });
+        ui.horizontal_wrapped(|ui| {
+            if matches!(dm.kind, DimKind::Horizontal | DimKind::Vertical | DimKind::Aligned) {
+                crate::editor::check(ui, &mut dm.opcoes.como_diametro, "Como diâmetro (Ø)");
+            }
+            crate::editor::check(ui, &mut dm.opcoes.parenteses, "Entre parênteses (referência)");
+            crate::editor::check(ui, &mut dm.opcoes.inspecao, "Inspeção (oval)");
+        });
+        ui.horizontal(|ui| {
             ui.label(tr("Tolerância"));
             egui::ComboBox::from_id_salt(("tol_modo", id.0)).selected_text(tr(dm.tol_mode.label())).show_ui(ui, |ui| {
                 for m in TolMode::ALL {
@@ -1265,15 +1352,8 @@ fn click(app: &mut App, m: V2, snap: &SnapFn, view_at: &ViewAt) {
             done(st, id);
         }
         c::SECTION | c::DETAIL => {
-            let Some(parent) = st.cur().and_then(|s| st.d.view(s).cloned()) else { return };
-            st.clicks.push(m);
-            if st.clicks.len() < 3 {
-                return;
-            }
-            let Some((kind, sc)) = ghost::section_kind(st, tool, &parent) else { return };
-            let id = st.d.add_view(sheet, parent.source.clone(), kind, st.clicks[2], sc);
-            style_new(st, id);
-            done(st, id);
+            // linha de vários pontos, fantasma alinhado e criação: `corte_ui`
+            corte_ui::clique(st, m);
         }
         c::DIM_H | c::DIM_V | c::DIM_A | c::DIM_ANG => {
             let hit = snap(st, m, st.tool_view);
@@ -1739,6 +1819,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             if matches!(v.kind, ViewKind::Section { .. }) {
                 hatch_ui(ui, &mut v.hatch, id);
             }
+            let nomes_pecas: Vec<String> = { let src = v.source.clone(); st.models.load(&src).piece_names.clone() };
             match &mut v.kind {
                 ViewKind::Camera { toward, x } => {
                     ui.label(RichText::new(format!("{} {}", tr("Direção"), crate::app::p3(&*toward, 2))).weak().small());
@@ -1756,12 +1837,19 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                         }
                     });
                 }
-                ViewKind::Section { label, .. } => {
+                ViewKind::Section { label, a, b, .. } => {
                     ui.horizontal(|ui| {
                         ui.label(tr("Letra do corte"));
                         ui.add(egui::TextEdit::singleline(label).desired_width(40.));
                     });
-                    ui.label(RichText::new(tr("Para inverter o lado visto, apague e trace a linha no sentido oposto.")).weak().small());
+                    if ui.button(tr("⇄ Inverter o lado visto")).on_hover_text(tr("troca o sentido da linha de corte: a vista passa a olhar para o lado oposto")).clicked() {
+                        let mut p = fenkra_desenho::corte::caminho(*a, *b, &v.corte.pontos);
+                        p.reverse();
+                        *a = p[0];
+                        *b = p[1];
+                        v.corte.pontos = p[2..].to_vec();
+                    }
+                    corte_ui::painel(ui, &mut v.corte, id, &nomes_pecas);
                 }
                 ViewKind::Detail { label, radius, .. } => {
                     ui.horizontal(|ui| {

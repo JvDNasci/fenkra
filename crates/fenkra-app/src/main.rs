@@ -64,6 +64,7 @@ mod textos_biblioteca;
 mod textos_intercambio;
 mod textos_projeto;
 mod textos_desenho;
+mod textos_desenho_cotas;
 mod textos_estrutural;
 mod st_cantos_ui;
 mod st_montagem_ui;

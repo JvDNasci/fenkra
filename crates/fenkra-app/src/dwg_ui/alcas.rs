@@ -128,17 +128,22 @@ pub(super) fn show(ui: &egui::Ui, painter: &egui::Painter, st: &mut DwgState, to
         }
     }
 
-    // corte: setas gordas nas pontas da linha de corte
-    if let ViewKind::Section { parent, a, b, .. } = &v.kind {
+    // corte: setas gordas nas pontas da linha de corte (cada ponta olha para o seu segmento)
+    if let ViewKind::Section { parent, .. } = &v.kind {
         if let Some(pv) = st.d.view(*parent).cloned() {
             let pp = st.models.proj(&st.d, pv.id);
-            let (sa, sb) = (layout::to_sheet(&pv, &pp, *a), layout::to_sheet(&pv, &pp, *b));
-            let len = ((sb[0] - sa[0]).powi(2) + (sb[1] - sa[1]).powi(2)).sqrt();
-            if len > 1e-9 {
-                let u = [(sb[0] - sa[0]) / len, (sb[1] - sa[1]) / len];
-                let n = [u[1], -u[0]];
-                let ns = Vec2::new(n[0] as f32, -(n[1] as f32));
-                for (e, s) in [(sa, -1.), (sb, 1.)] {
+            let path: Vec<V2> = fenkra_desenho::corte::caminho_da_vista(&st.d, id).into_iter().map(|q| layout::to_sheet(&pv, &pp, q)).collect();
+            let n = path.len();
+            if n >= 2 {
+                let dir = |a: V2, b: V2| {
+                    let l = ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2)).sqrt();
+                    (l > 1e-9).then(|| [(b[0] - a[0]) / l, (b[1] - a[1]) / l])
+                };
+                let pontas = [(path[0], dir(path[0], path[1]), -1.), (path[n - 1], dir(path[n - 2], path[n - 1]), 1.)];
+                for (e, u, s) in pontas {
+                    let Some(u) = u else { continue };
+                    let nn = [u[1], -u[0]];
+                    let ns = Vec2::new(nn[0] as f32, -(nn[1] as f32));
                     let e2 = [e[0] + u[0] * s * 4., e[1] + u[1] * s * 4.];
                     let tip = to_scr(e2) + ns * 14.;
                     seta_gorda(painter, tip, ns, cor);
@@ -149,10 +154,16 @@ pub(super) fn show(ui: &egui::Ui, painter: &egui::Painter, st: &mut DwgState, to
                 }
             }
         }
+        // vértices e pontos do meio da linha (B106)
+        corte_ui::vertices(ui, painter, st, id, to_scr, to_mm, z);
     }
 
-    // detalhe: pega de raio no círculo
-    if let ViewKind::Detail { parent, center, radius, .. } = &v.kind {
+    // detalhe em perfil livre: vértices do contorno arrastáveis (B106)
+    if matches!(v.kind, ViewKind::Detail { .. }) && !v.detalhe.contorno.is_empty() {
+        corte_ui::vertices_detalhe(ui, painter, st, id, to_scr, to_mm);
+    }
+    // detalhe: pega de raio no círculo (o perfil livre não tem raio)
+    if let (ViewKind::Detail { parent, center, radius, .. }, true) = (&v.kind, v.detalhe.contorno.is_empty()) {
         if let Some(pv) = st.d.view(*parent).cloned() {
             let pp = st.models.proj(&st.d, pv.id);
             let s0 = layout::to_sheet(&pv, &pp, *center);

@@ -291,6 +291,7 @@ pub fn dim_text(d: &Drawing, dm: &Dim, val: f64) -> String {
         DimKind::Angle => format!("{n}°"),
         _ => n,
     };
+    let base = crate::cotas::envolver(&dm.opcoes, dm.kind, base);
     let t = if dm.text.is_empty() { base } else { dm.text.replace("<>", &base) };
     let tol = dm.tol_text(d);
     if tol.is_empty() {
@@ -334,8 +335,24 @@ fn view_into(o: &mut Out, d: &Drawing, v: &View, p: &Proj, th: f64) {
     // hachura: padrão, ângulo e passo da vista; no corte de montagem cada peça alterna o ângulo
     if !p.hatch.is_empty() {
         let loops: Vec<Vec<V2>> = p.hatch.iter().map(|lp| lp.iter().map(|q| to_sheet(v, p, *q)).collect()).collect();
+        let ang = v.corte.borda == crate::corte::Borda::Serrilhada;
         for lp in &loops {
-            o.line(lp.clone(), Style::Visible);
+            if ang {
+                // borda serrilhada: traço de ruptura fino em volta da face cortada
+                o.line(crate::corte::serrilhar(lp, th.max(2.), (th * 0.3).max(0.8)), Style::Thin);
+            } else if p.seams.is_empty() {
+                o.line(lp.clone(), Style::Visible);
+            } else {
+                // corte em degraus: o contorno não passa sobre a junção entre segmentos
+                let sx: Vec<f64> = p.seams.iter().map(|x| to_sheet(v, p, [*x, 0.])[0]).collect();
+                for i in 0..lp.len() {
+                    let (a, b) = (lp[i], lp[(i + 1) % lp.len()]);
+                    if (a[0] - b[0]).abs() < 1e-6 && sx.iter().any(|x| (x - a[0]).abs() < 1e-6) {
+                        continue;
+                    }
+                    o.seg(a, b, Style::Visible);
+                }
+            }
         }
         for (a, b) in view_hatch(v, &loops, &p.hatch_group) {
             o.seg(a, b, Style::Thin);
@@ -358,14 +375,28 @@ fn view_into(o: &mut Out, d: &Drawing, v: &View, p: &Proj, th: f64) {
         match &c.kind {
             ViewKind::Section { parent, a, b, label } if *parent == v.id => {
                 o.owner = Some(c.id);
-                let (sa, sb) = (to_sheet(v, p, *a), to_sheet(v, p, *b));
-                o.seg(sa, sb, Style::Center);
-                let u = v2unit(v2sub(sb, sa));
-                // seta para o lado que se vê (oposto ao observador)
-                let n = [u[1], -u[0]];
-                for (e, s) in [(sa, -1.), (sb, 1.)] {
-                    let e2 = v2add(e, v2mul(u, s * 4.));
-                    o.seg(e, e2, Style::Thick);
+                let path: Vec<V2> = crate::corte::caminho(*a, *b, &c.corte.pontos).into_iter().map(|q| to_sheet(v, p, q)).collect();
+                for w in path.windows(2) {
+                    o.seg(w[0], w[1], Style::Center);
+                }
+                let n_seg = path.len() - 1;
+                // pontas e viradas da linha em traço grosso; a seta de cada ponta olha para o lado visto
+                for (i, e) in path.iter().enumerate() {
+                    let u_in = (i > 0).then(|| v2unit(v2sub(*e, path[i - 1])));
+                    let u_out = (i < n_seg).then(|| v2unit(v2sub(path[i + 1], *e)));
+                    if let Some(u) = u_out {
+                        o.seg(*e, v2add(*e, v2mul(u, 4.)), Style::Thick);
+                    }
+                    if let Some(u) = u_in {
+                        o.seg(*e, v2add(*e, v2mul(u, -4.)), Style::Thick);
+                    }
+                    if i != 0 && i != n_seg {
+                        continue;
+                    }
+                    let (u, s) = if i == 0 { (u_out.unwrap(), -1.) } else { (u_in.unwrap(), 1.) };
+                    let n = [u[1], -u[0]];
+                    let e2 = v2add(*e, v2mul(u, s * 4.));
+                    o.seg(*e, e2, Style::Thick);
                     let tail = v2add(e2, v2mul(n, -6.));
                     o.seg(e2, tail, Style::Thin);
                     o.arrow(e2, n, 3.);
@@ -375,9 +406,21 @@ fn view_into(o: &mut Out, d: &Drawing, v: &View, p: &Proj, th: f64) {
             }
             ViewKind::Detail { parent, center, radius, label } if *parent == v.id => {
                 o.owner = Some(c.id);
-                let pts = circle(*center, *radius).into_iter().map(|q| to_sheet(v, p, q)).collect();
+                let base: Vec<V2> = if c.detalhe.contorno.len() >= 3 {
+                    let mut f = c.detalhe.contorno.clone();
+                    f.push(f[0]);
+                    f
+                } else {
+                    circle(*center, *radius)
+                };
+                let pts = base.into_iter().map(|q| to_sheet(v, p, q)).collect();
                 o.line(pts, Style::Thin);
-                let at = to_sheet(v, p, [center[0] + radius * 0.75, center[1] + radius * 0.75]);
+                let at = if c.detalhe.contorno.len() >= 3 {
+                    let m = c.detalhe.contorno.iter().fold([f64::MIN; 2], |a, q| [a[0].max(q[0]), a[1].max(q[1])]);
+                    to_sheet(v, p, m)
+                } else {
+                    to_sheet(v, p, [center[0] + radius * 0.75, center[1] + radius * 0.75])
+                };
                 o.text([at[0] + 1., at[1] + 1.], label.clone(), th * 1.2, 0., Align::Left);
                 o.owner = Some(v.id);
             }
@@ -404,7 +447,11 @@ fn dim_into(o: &mut Out, d: &Drawing, dm: &Dim, v: &View, p: &Proj, val: f64, pt
     o.style(&st);
     let th = if st.size > 0. { st.size as f64 } else { th };
     let text = format!("{}{}{}", st.prefix, dim_text(d, dm, val), st.suffix);
+    let antes = o.items.len();
     dimension(o, dm, pts, &text, th);
+    if dm.opcoes.inspecao {
+        inspecao(o, antes, th);
+    }
 }
 
 /// Primitivas de uma cota avulsa (prévia/fantasma): vazio se não der para medir.
@@ -1473,4 +1520,35 @@ pub fn owner_boxes(items: &[Item]) -> Vec<(Id, V2, V2)> {
         }
     }
     out
+}
+
+/// Cota de inspeção: um oval em volta do texto da cota (o que `dimension` acabou de desenhar).
+fn inspecao(o: &mut Out, desde: usize, th: f64) {
+    let Some((pos, w, angle)) = o.items[desde..].iter().find_map(|it| match &it.prim {
+        Prim::Text { pos, text, size, angle, align } => {
+            let w = text.chars().count() as f64 * size * 0.55;
+            let (s, c) = angle.to_radians().sin_cos();
+            // centro do texto ao longo da linha de base
+            let desl = match align {
+                Align::Left => w / 2.,
+                Align::Center => 0.,
+                Align::Right => -w / 2.,
+            };
+            Some(([pos[0] + c * desl, pos[1] + s * desl], w, *angle))
+        }
+        _ => None,
+    }) else {
+        return;
+    };
+    let (rx, ry) = (w / 2. + th * 0.6, th * 0.85);
+    let (s, c) = angle.to_radians().sin_cos();
+    let centro = [pos[0] - s * th * 0.35, pos[1] + c * th * 0.35];
+    let pts: Vec<V2> = (0..=32)
+        .map(|i| {
+            let t = i as f64 / 32. * std::f64::consts::TAU;
+            let (x, y) = (rx * t.cos(), ry * t.sin());
+            [centro[0] + x * c - y * s, centro[1] + x * s + y * c]
+        })
+        .collect();
+    o.line(pts, Style::Thin);
 }
