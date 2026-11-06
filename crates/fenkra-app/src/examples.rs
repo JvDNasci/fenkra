@@ -238,6 +238,16 @@ pub fn preview_of(doc: &Document) -> Preview {
 /// Desenha a prévia girando em torno de Z (vista isométrica, luz de cima), num retângulo.
 /// Triângulos e arestas (faixas finas) vão ordenados pela profundidade numa só malha: as
 /// arestas de trás ficam escondidas pelas faces, como na viewport.
+/// Ponto da miniatura na tela, com a mesma câmera de [`paint_preview`].
+pub fn preview_na_tela(rect: egui::Rect, pv: &Preview, angle: f32, q: [f32; 3]) -> egui::Pos2 {
+    let (sa, ca) = angle.sin_cos();
+    let (se, ce) = 0.72f32.sin_cos();
+    let s = rect.width().min(rect.height()) * 0.46 / pv.radius;
+    let y = q[0] * sa + q[1] * ca;
+    let (x, zv) = (q[0] * ca - q[1] * sa, y * se + q[2] * ce);
+    egui::pos2(rect.center().x + x * s, rect.center().y - zv * s)
+}
+
 pub fn paint_preview(p: &egui::Painter, rect: egui::Rect, pv: &Preview, angle: f32) {
     use egui::{pos2, Color32};
     if pv.tris.is_empty() {

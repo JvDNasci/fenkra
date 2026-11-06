@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Importar STEP e BREP (B88, B229). O arquivo é lido no processo filho e o painel mostra miniatura,
-//! caixa, contagens e aviso de unidade antes de a pessoa confirmar; depois fica o relatório.
+//! Importar STEP, IGES e BREP (B88, B229, B104). O arquivo é lido no processo filho e o painel mostra
+//! miniatura, caixa, contagens, defeitos e aviso de unidade antes de a pessoa confirmar; depois fica o
+//! relatório, que realça cada defeito na viewport e grava em HTML ou JSON.
 //! Com projeto aberto, o original vai para o cofre e reimportar o mesmo nome compara o hash; sem
 //! projeto, o documento só abre, já com o selo de origem.
 //!
 //! A decisão sobre o arquivo mudado vive em `fenkra_project::importacao`; aqui fica só a pergunta.
 
 use super::*;
-use crate::examples::{paint_preview, Preview};
+use crate::examples::{paint_preview, preview_na_tela, Preview};
 use crate::ui_ext::dv;
 use fenkra_conversor::processo::Filho;
 use fenkra_conversor::{unidade_suspeita, ErroConv, Importado, OpcoesImportar, Previa, Relatorio, Reparo, Suspeita, UnidadeArquivo};
@@ -207,7 +208,9 @@ impl Dialogo {
             Leitura::Pronta(i, mini) => {
                 let (rect, r) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 190.), egui::Sense::drag());
                 ui.painter().rect_filled(rect, 4., ui.visuals().extreme_bg_color);
-                paint_preview(&ui.painter().with_clip_rect(rect), rect, mini, *giro);
+                let pintor = ui.painter().with_clip_rect(rect);
+                paint_preview(&pintor, rect, mini, *giro);
+                pintar_defeitos(&pintor, rect, mini, *giro, &i.relatorio);
                 *giro += r.drag_delta().x * 0.012;
                 r.on_hover_text(tr("Arraste para girar a miniatura."));
                 if i.previa.incompleta {
@@ -224,6 +227,9 @@ impl Dialogo {
                 ui.label(RichText::new(format!("{} {}", rel.formato, rel.esquema)).weak().small());
                 if !rel.nao_fecharam.is_empty() {
                     ui.colored_label(ui.visuals().warn_fg_color, format!("{}: {}", tr("Sólidos que não fecharam"), rel.nao_fecharam.len()));
+                }
+                if !rel.defeitos.is_empty() {
+                    ui.colored_label(ui.visuals().warn_fg_color, format!("{}: {}", tr("Defeitos"), rel.defeitos.len()));
                 }
             }
         }
@@ -254,25 +260,93 @@ impl Dialogo {
     }
 }
 
-/// Janela do relatório: o texto pode ser selecionado, e o botão copia tudo.
-fn relatorio_ui(ui: &mut egui::Ui, rel: &Relatorio) -> bool {
-    let texto = rel.texto(&|s| tr(s));
-    egui::ScrollArea::vertical().max_height(320.).show(ui, |ui| {
-        ui.add(egui::TextEdit::multiline(&mut texto.as_str()).desired_width(f32::INFINITY).font(egui::TextStyle::Small));
+/// Traço dos defeitos na miniatura, que é centrada na caixa da peça.
+fn pintar_defeitos(pintor: &egui::Painter, rect: Rect, mini: &Preview, giro: f32, rel: &Relatorio) {
+    let Some((a, b)) = rel.caixa else { return };
+    let centro = [0, 1, 2].map(|i| ((a[i] + b[i]) / 2.) as f32);
+    let traco = egui::Stroke::new(1.6, crate::theme::st_err());
+    for s in rel.defeitos.iter().flat_map(|d| &d.segmentos) {
+        let ponto = |p: [f32; 3]| preview_na_tela(rect, mini, giro, [p[0] - centro[0], p[1] - centro[1], p[2] - centro[2]]);
+        pintor.line_segment([ponto(s[0]), ponto(s[1])], traco);
+    }
+}
+
+/// Defeitos na viewport enquanto o relatório está aberto: todos em aviso e o escolhido em erro, por cima
+/// das faces, porque um defeito costuma estar atrás de alguma coisa.
+pub(super) fn defeitos_na_cena(rel: Option<&Relatorio>, escolhido: Option<usize>, s: &mut crate::render::Scene) {
+    let Some(rel) = rel else { return };
+    let rgba = |c: egui::Color32| [c.r() as f32 / 255., c.g() as f32 / 255., c.b() as f32 / 255., 1.];
+    let (aviso, erro) = (rgba(crate::theme::st_warn()), rgba(crate::theme::st_err()));
+    for (i, d) in rel.defeitos.iter().enumerate() {
+        let col = if escolhido == Some(i) { erro } else { aviso };
+        s.overlay.extend(d.segmentos.iter().flatten().map(|p| crate::render::LineVertex { pos: *p, col }));
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct SaidaRelatorio {
+    fechar: bool,
+    /// linha da lista de defeitos em que a pessoa clicou
+    escolhido: Option<usize>,
+    /// extensão que a pessoa pediu para gravar
+    gravar: Option<&'static str>,
+}
+
+/// Painel do relatório: antes e depois, defeitos clicáveis e o texto inteiro para selecionar.
+fn relatorio_ui(ui: &mut egui::Ui, rel: &Relatorio, realce: Option<usize>) -> SaidaRelatorio {
+    let mut saida = SaidaRelatorio::default();
+    ui.label(RichText::new(tr("Antes e depois do reparo")).strong());
+    egui::Grid::new("relatorio_antes_depois").striped(true).show(ui, |ui| {
+        ui.label("");
+        ui.label(RichText::new(tr("Antes")).weak());
+        ui.label(RichText::new(tr("Depois")).weak());
+        ui.end_row();
+        for (rotulo, antes, depois) in rel.linhas_antes_depois() {
+            ui.label(tr(rotulo));
+            ui.label(antes);
+            ui.label(depois);
+            ui.end_row();
+        }
     });
-    let mut fechar = false;
-    ui.horizontal(|ui| {
+    ui.add_space(6.);
+    if rel.defeitos.is_empty() {
+        ui.label(tr("Nenhum defeito depois do reparo."));
+    } else {
+        ui.label(RichText::new(format!("{} ({})", tr("Defeitos"), rel.defeitos.len())).strong());
+        egui::ScrollArea::vertical().id_salt("relatorio_defeitos").max_height(130.).show(ui, |ui| {
+            for (i, d) in rel.defeitos.iter().enumerate() {
+                let linha = ui.selectable_label(realce == Some(i), format!("{} · {}", tr(d.tipo.nome()), d.peca));
+                if linha.on_hover_text(tr("Clique para realçar o defeito na peça e levar a câmera até ele.")).clicked() {
+                    saida.escolhido = Some(i);
+                }
+            }
+        });
+    }
+    ui.add_space(6.);
+    let texto = rel.texto(&|s| tr(s));
+    egui::CollapsingHeader::new(tr("Texto completo")).show(ui, |ui| {
+        egui::ScrollArea::vertical().id_salt("relatorio_texto").max_height(240.).show(ui, |ui| {
+            ui.add(egui::TextEdit::multiline(&mut texto.as_str()).desired_width(f32::INFINITY).font(egui::TextStyle::Small));
+        });
+    });
+    ui.horizontal_wrapped(|ui| {
         if ui.button(tr("Copiar")).on_hover_text(tr("Copia o relatório inteiro.")).clicked() {
             ui.ctx().copy_text(texto.clone());
         }
-        fechar = ui.button(tr("Fechar")).clicked();
+        if ui.button(tr("Salvar HTML…")).on_hover_text(tr("Grava o relatório numa página para abrir em qualquer navegador.")).clicked() {
+            saida.gravar = Some("html");
+        }
+        if ui.button(tr("Salvar JSON…")).on_hover_text(tr("Grava o relatório em dados, para outro programa ler.")).clicked() {
+            saida.gravar = Some("json");
+        }
+        saida.fechar = ui.button(tr("Fechar")).clicked();
     });
-    fechar
+    saida
 }
 
 impl App {
     pub(super) fn importar_arquivo(&mut self) {
-        let dialogo = rfd::FileDialog::new().add_filter("STEP, BREP", &["step", "stp", "brep"]).add_filter(tr("Árvore paramétrica"), &["fkx"]).add_filter(tr("Todos os arquivos"), &["*"]);
+        let dialogo = rfd::FileDialog::new().add_filter("STEP, IGES, BREP", &["step", "stp", "igs", "iges", "brep"]).add_filter(tr("Árvore paramétrica"), &["fkx"]).add_filter(tr("Todos os arquivos"), &["*"]);
         let Some(caminho) = dialogo.pick_file() else { return };
         self.abrir_painel_importar(caminho);
     }
@@ -306,14 +380,52 @@ impl App {
             let padrao = paineis::ao_lado_da_arvore(area);
             let cfg = Painel { nome: "relatorio_importacao".into(), titulo: tr("Relatório da importação").to_string(), padrao, largura: 420., redimensiona: true };
             let posicao = self.settings.painel("relatorio_importacao", Encaixe::Livre);
-            let saida = paineis::mostrar(ctx, area, &cfg, posicao, |ui| relatorio_ui(ui, &rel));
+            let realce = self.importar_defeito;
+            let saida = paineis::mostrar(ctx, area, &cfg, posicao, |ui| relatorio_ui(ui, &rel, realce));
             if let Some(p) = saida.movido {
                 self.settings.guardar_painel("relatorio_importacao", p);
             }
-            if saida.conteudo != Some(true) {
+            let acao = saida.conteudo.unwrap_or_default();
+            if let Some(i) = acao.escolhido {
+                self.realcar_defeito(&rel, i);
+            }
+            if let Some(extensao) = acao.gravar {
+                self.gravar_relatorio(&rel, extensao);
+            }
+            if acao.fechar {
+                self.importar_defeito = None;
+                self.scene_dirty = true;
+            } else {
                 self.importar_relatorio = Some(rel);
             }
         }
+    }
+
+    /// Realça o defeito e leva a câmera até ele, sem mexer na distância: quem clica quer ver onde está.
+    fn realcar_defeito(&mut self, rel: &Relatorio, i: usize) {
+        self.importar_defeito = Some(i);
+        self.scene_dirty = true;
+        if let (Some(d), Some(v)) = (rel.defeitos.get(i), self.viewport.as_mut()) {
+            v.camera.target = glam::Vec3::from(d.centro());
+        }
+    }
+
+    fn gravar_relatorio(&mut self, rel: &Relatorio, extensao: &str) {
+        let nome = std::path::Path::new(&rel.arquivo).file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        let Some(caminho) = rfd::FileDialog::new().add_filter(extensao.to_uppercase(), &[extensao]).set_file_name(format!("{nome}-relatorio.{extensao}")).save_file() else { return };
+        let texto = if extensao == "html" { rel.html(&|s| tr(s)) } else { rel.json() };
+        match std::fs::write(&caminho, texto) {
+            Ok(()) => self.toast(tr("Relatório gravado: {0}").replace("{0}", &caminho.display().to_string()), false),
+            Err(e) => self.toast(e.to_string(), true),
+        }
+    }
+
+    /// Reabre o relatório guardado no selo do documento.
+    pub(super) fn abrir_relatorio_embutido(&mut self) {
+        let texto = self.open.doc.origem.as_ref().and_then(|o| o.relatorio.as_deref());
+        self.importar_relatorio = texto.and_then(Relatorio::de_json);
+        self.importar_defeito = None;
+        self.scene_dirty = true;
     }
 
     fn confirmar_importacao(&mut self, d: Dialogo) {
@@ -328,6 +440,7 @@ impl App {
         }
         let documento = Documento { doc, relatorio: relatorio.texto_pt() };
         self.importar_relatorio = Some(relatorio);
+        self.importar_defeito = std::env::var("FENKRA_DEMO_DEFEITO").ok().and_then(|n| n.parse().ok());
         self.receber_importacao(caminho, documento);
     }
 
@@ -397,7 +510,7 @@ impl App {
 #[cfg(test)]
 mod testes {
     use super::*;
-    use fenkra_conversor::{Formato, ModeloNeutro, OpcoesExportar, Registro, NOTAS};
+    use fenkra_conversor::{Defeito, Formato, ModeloNeutro, OpcoesExportar, Registro, TipoDefeito, NOTAS};
     use fenkra_kernel::Shape;
 
     fn importado(l: [f64; 3], teste: &str) -> Importado {
@@ -478,12 +591,59 @@ mod testes {
         assert_eq!(m.radius, 2.);
     }
 
+    fn com_defeitos() -> Relatorio {
+        let segmentos = vec![[[0., 0., 0.], [10., 0., 0.]]];
+        let d = |tipo, peca: &str| Defeito { tipo, peca: peca.into(), indice: 0, segmentos: segmentos.clone() };
+        Relatorio { defeitos: vec![d(TipoDefeito::ArestaLivre, "Tampa"), d(TipoDefeito::FaceInvalida, "Base")], ..Default::default() }
+    }
+
+    #[test]
+    fn relatorio_mostra_antes_depois_e_a_lista_de_defeitos() {
+        let rel = com_defeitos();
+        let ctx = egui::Context::default();
+        let entrada = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(500., 800.))), ..Default::default() };
+        let mut saida = ctx.run_ui(entrada, |ui| {
+            let s = relatorio_ui(ui, &rel, Some(1));
+            assert_eq!(s, SaidaRelatorio::default());
+        });
+        saida.textures_delta.clear();
+        let tudo: Vec<String> = saida.shapes.iter().filter_map(|s| match &s.shape {
+            egui::epaint::Shape::Text(t) => Some(t.galley.text().to_string()),
+            _ => None,
+        }).collect();
+        let tudo = tudo.join("\n");
+        assert!(tudo.contains("Antes e depois do reparo") && tudo.contains("Arestas livres"), "{tudo}");
+        assert!(tudo.contains("Defeitos (2)") && tudo.contains("Aresta livre · Tampa") && tudo.contains("Face inválida · Base"), "{tudo}");
+    }
+
+    #[test]
+    fn defeitos_vao_para_a_cena_e_o_escolhido_muda_de_cor() {
+        let rel = com_defeitos();
+        let mut cena = crate::render::Scene::default();
+        defeitos_na_cena(Some(&rel), Some(1), &mut cena);
+        assert_eq!(cena.overlay.len(), 4, "dois pontos por segmento");
+        assert_ne!(cena.overlay[0].col, cena.overlay[2].col, "o escolhido se destaca dos outros");
+        let mut vazia = crate::render::Scene::default();
+        defeitos_na_cena(None, None, &mut vazia);
+        assert!(vazia.overlay.is_empty());
+    }
+
     #[test]
     fn frases_do_relatorio_tem_traducao() {
         let rotulos = [
             "Arquivo", "Tamanho", "Formato", "Esquema", "Unidades lidas", "Convertido por", "Produtos", "Instâncias", "Corpos", "Faces", "Sólidos", "Volume", "Área", "Caixa envolvente",
-            "Reparo", "Faces reparadas", "Faces costuradas", "Faces ainda inválidas", "Sólidos que não fecharam", "O que o formato não carrega", "Avisos",
+            "Reparo", "Faces reparadas", "Faces costuradas", "Faces ainda inválidas", "Sólidos que não fecharam", "O que o formato não carrega", "Avisos", "Antes e depois do reparo", "Antes", "Depois", "Peça",
+            "Defeitos", "Tipo", "Posição", "Relatório da importação", "Nenhum defeito depois do reparo.", "Texto completo", "Salvar HTML…", "Salvar JSON…", "Relatório gravado: {0}",
+            "Importar STEP, IGES, BREP ou árvore…", "Importar arquivo STEP, IGES ou BREP", "Relatório da importação…", "Exportar IGES…",
+            "Grava o relatório numa página para abrir em qualquer navegador.", "Grava o relatório em dados, para outro programa ler.", "Clique para realçar o defeito na peça e levar a câmera até ele.",
+            "Abre o relatório guardado neste documento, mesmo sem o arquivo de origem.",
         ];
+        for (rotulo, ..) in Relatorio::default().linhas_antes_depois() {
+            assert!(crate::i18n::tem_traducao(rotulo), "sem tradução: {rotulo}");
+        }
+        for t in [TipoDefeito::FaceInvalida, TipoDefeito::ArestaLivre, TipoDefeito::FaceSolta] {
+            assert!(crate::i18n::tem_traducao(t.nome()), "{}", t.nome());
+        }
         for s in NOTAS.iter().chain(rotulos.iter()) {
             assert!(crate::i18n::tem_traducao(s), "sem tradução: {s}");
         }

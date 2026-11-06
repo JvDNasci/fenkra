@@ -12,21 +12,33 @@
 #include <BRepCheck_Analyzer.hxx>
 #include <BRep_Tool.hxx>
 #include <DESTEP_Parameters.hxx>
+#include <IGESCAFControl_Reader.hxx>
+#include <IGESCAFControl_Writer.hxx>
+#include <IGESControl_Controller.hxx>
+#include <IGESData_GlobalSection.hxx>
+#include <IGESData_IGESEntity.hxx>
+#include <IGESData_IGESModel.hxx>
+#include <Interface_Static.hxx>
 #include <Quantity_ColorRGBA.hxx>
 #include <STEPCAFControl_Controller.hxx>
 #include <STEPCAFControl_Reader.hxx>
 #include <STEPCAFControl_Writer.hxx>
+#include <ShapeAnalysis_ShapeTolerance.hxx>
 #include <ShapeBuild_ReShape.hxx>
 #include <TDF_Tool.hxx>
 #include <TDataStd_Name.hxx>
 #include <TDocStd_Document.hxx>
 #include <TopoDS_Iterator.hxx>
+#include <Transfer_Binder.hxx>
+#include <Transfer_TransientProcess.hxx>
 #include <XCAFApp_Application.hxx>
 #include <XCAFDoc_ColorTool.hxx>
 #include <XCAFDoc_DimTolTool.hxx>
 #include <XCAFDoc_DocumentTool.hxx>
 #include <XCAFDoc_LayerTool.hxx>
 #include <XCAFDoc_ShapeTool.hxx>
+#include <XSControl_TransferReader.hxx>
+#include <XSControl_WorkSession.hxx>
 #include <map>
 #include <vector>
 
@@ -42,6 +54,8 @@ struct XdeDoc::Impl {
     std::map<std::string, uint32_t> index;
     std::vector<uint32_t> roots;
     std::string schema, units;
+    // o que o arquivo trazia e a leitura deixou para trás; só o IGES preenche
+    std::vector<std::string> skipped;
 
     Impl() {
         auto app = XCAFApp_Application::GetApplication();
@@ -184,6 +198,62 @@ std::unique_ptr<XdeDoc> xde_read(rust::Str path, const XdeReadOpts& o) {
     });
 }
 
+namespace {
+
+// Número da versão no cabeçalho do IGES (campo 23 da seção global) para o nome que as pessoas usam.
+std::string iges_schema(int version) {
+    switch (version) {
+        case 8: return "IGES 5.0";
+        case 9: return "IGES 5.1";
+        case 10: return "IGES 5.2";
+        case 11: return "IGES 5.3";
+        default: return "IGES";
+    }
+}
+
+}  // namespace
+
+// Lê IGES para o mesmo documento XCAF do STEP. O IGES não tem árvore de produtos: cada raiz do
+// arquivo vira um rótulo solto, e quem junta as superfícies numa peça é o conversor.
+// Tudo atrás de `g_step_gate`: o tradutor de IGES não é reentrante e usa os mesmos `Interface_Static`.
+std::unique_ptr<XdeDoc> xde_read_iges(rust::Str path, const XdeReadOpts& o) {
+    return guard("IGES", [&] {
+        auto d = xde_new();
+        std::lock_guard<std::mutex> gate(g_step_gate);
+        XdeDoc::Impl& x = *d->p;
+        IGESControl_Controller::Init();
+        IGESCAFControl_Reader r;
+        r.SetColorMode(o.colors);
+        r.SetNameMode(o.names);
+        r.SetLayerMode(o.layers);
+        if (r.ReadFile(to_std(path).c_str()) != IFSelect_RetDone) throw std::runtime_error("não foi possível ler o IGES");
+        occ::handle<IGESData_IGESModel> model = r.IGESModel();
+        if (model.IsNull()) throw std::runtime_error("não foi possível ler o IGES");
+        const IGESData_GlobalSection& g = model->GlobalSection();
+        x.schema = iges_schema(g.IGESVersion());
+        if (!g.UnitName().IsNull()) x.units = g.UnitName()->ToCString();
+        const int roots = r.NbRootsForTransfer();
+        std::vector<occ::handle<Standard_Transient>> entities;
+        for (int i = 1; i <= roots; ++i) entities.push_back(r.RootForTransfer(i));
+        if (!r.Transfer(x.doc)) throw std::runtime_error("o IGES não tem geometria");
+        occ::handle<Transfer_TransientProcess> tp = r.WS()->TransferReader()->TransientProcess();
+        for (const occ::handle<Standard_Transient>& e : entities) {
+            occ::handle<Transfer_Binder> b = tp.IsNull() ? occ::handle<Transfer_Binder>() : tp->Find(e);
+            if (b.IsNull() || !b->HasResult()) x.skipped.push_back(e->DynamicType()->Name());
+        }
+        // cotas e notas (tipos 202 a 230) nem chegam às raízes transferíveis: contam por fora
+        for (int i = 1; i <= model->NbEntities(); ++i) {
+            occ::handle<IGESData_IGESEntity> e = model->Entity(i);
+            if (!e.IsNull() && e->TypeNumber() >= 202 && e->TypeNumber() <= 230) x.skipped.push_back(e->DynamicType()->Name());
+        }
+        NCollection_Sequence<TDF_Label> free;
+        x.shapes->GetFreeShapes(free);
+        for (const TDF_Label& l : free) x.roots.push_back(x.visit(l));
+        if (x.labels.empty()) throw std::runtime_error("o IGES não tem geometria");
+        return d;
+    });
+}
+
 XdeInfo xde_info(const XdeDoc& d) {
     const XdeDoc::Impl& x = *d.p;
     NCollection_Sequence<TDF_Label> dims, tols, datums;
@@ -194,6 +264,7 @@ XdeInfo xde_info(const XdeDoc& d) {
     i.schema = rust::String(x.schema);
     i.units = rust::String(x.units);
     for (uint32_t r : x.roots) i.roots.push_back(r);
+    for (const std::string& k : x.skipped) i.skipped.push_back(rust::String(k));
     i.dims = uint32_t(dims.Length());
     i.tols = uint32_t(tols.Length());
     i.datums = uint32_t(datums.Length());
@@ -313,6 +384,32 @@ void xde_write(XdeDoc& d, rust::Str path, const XdeWriteOpts& o) {
     });
 }
 
+// `brep`: entidades 186 e 514 (sólido com topologia) em vez de faces aparadas soltas (144). O modo e a
+// unidade só existem como `Interface_Static`, lidos no construtor do gravador: por isso vêm antes dele.
+void xde_write_iges(XdeDoc& d, rust::Str path, const XdeIgesOpts& o) {
+    guard("IGES", [&] {
+        std::lock_guard<std::mutex> gate(g_step_gate);
+        XdeDoc::Impl& x = *d.p;
+        x.shapes->UpdateAssemblies();
+        IGESControl_Controller::Init();
+        const char* unit = nullptr;
+        switch (o.unit) {
+            case 0: unit = "MM"; break;
+            case 1: unit = "INCH"; break;
+            case 2: unit = "M"; break;
+            default: throw std::runtime_error("unidade desconhecida");
+        }
+        if (!Interface_Static::SetCVal("write.iges.unit", unit)) throw std::runtime_error("unidade recusada pelo gravador IGES");
+        Interface_Static::SetIVal("write.iges.brep.mode", o.brep ? 1 : 0);
+        IGESCAFControl_Writer w;
+        w.SetColorMode(o.colors);
+        w.SetNameMode(o.names);
+        w.SetLayerMode(o.layers);
+        if (!w.Transfer(x.doc)) throw std::runtime_error("falha ao converter para IGES");
+        if (!w.Write(to_std(path).c_str())) throw std::runtime_error("falha ao gravar o arquivo IGES");
+    });
+}
+
 // Coloca a forma numa posição sem copiar a geometria: a matriz vira localização.
 std::unique_ptr<Shape> xde_moved(const Shape& s, rust::Slice<const double> m) {
     return guard("XDE", [&] {
@@ -341,9 +438,21 @@ std::unique_ptr<Shape> xde_solid_at(const Shape& s, uint32_t i) {
 namespace {
 
 struct Survey {
-    int faces = 0, bad_faces = 0, solids = 0, open_shells = 0, loose_faces = 0;
+    int faces = 0, bad_faces = 0, solids = 0, open_shells = 0, loose_faces = 0, free_edges = 0;
+    double tolerance = 0;
     bool defect() const { return bad_faces > 0 || open_shells > 0 || loose_faces > 0; }
 };
+
+// Arestas de borda de uma casca: as que só uma face usa. A costura de uma face consigo mesma aparece
+// duas vezes na lista de ancestrais, e aresta degenerada (polo de esfera) não é borda.
+void free_edges_of(const TopoDS_Shape& shell, std::vector<TopoDS_Edge>& out) {
+    TopTools_IndexedDataMapOfShapeListOfShape e2f;
+    TopExp::MapShapesAndAncestors(shell, TopAbs_EDGE, TopAbs_FACE, e2f);
+    for (int i = 1; i <= e2f.Extent(); ++i) {
+        const TopoDS_Edge& e = TopoDS::Edge(e2f.FindKey(i));
+        if (e2f(i).Extent() == 1 && !BRep_Tool::Degenerated(e)) out.push_back(e);
+    }
+}
 
 // Fotografia dos defeitos: `BRepCheck` julga cada face, e a casca fechada é a que usa cada aresta
 // duas vezes. Casca que não forma sólido conta como aberta, mesmo fechada: ainda não é volume.
@@ -361,6 +470,10 @@ Survey survey(const TopoDS_Shape& s) {
     for (TopExp_Explorer e(s, TopAbs_SHELL, TopAbs_SOLID); e.More(); e.Next())
         if (BRep_Tool::IsClosed(e.Current())) ++v.open_shells;
     for (TopExp_Explorer e(s, TopAbs_FACE, TopAbs_SHELL); e.More(); e.Next()) ++v.loose_faces;
+    std::vector<TopoDS_Edge> borders;
+    for (TopExp_Explorer e(s, TopAbs_SHELL); e.More(); e.Next()) free_edges_of(e.Current(), borders);
+    v.free_edges = int(borders.size());
+    v.tolerance = v.faces > 0 ? ShapeAnalysis_ShapeTolerance().Tolerance(s, 1) : 0;
     return v;
 }
 
@@ -388,6 +501,8 @@ TopoDS_Shape sew_loose(const TopoDS_Shape& s, double tol, int& sewn) {
         b.Add(out, fx->Solid());
     }
     for (TopExp_Explorer e(sewed, TopAbs_FACE, TopAbs_SHELL); e.More(); e.Next(), ++parts) b.Add(out, e.Current());
+    // curvas soltas não entram na costura, mas continuam na peça: o IGES costuma trazê-las junto
+    for (TopExp_Explorer e(s, TopAbs_EDGE, TopAbs_FACE); e.More(); e.Next(), ++parts) b.Add(out, e.Current());
     if (parts == 1) return TopoDS_Iterator(out).Value();
     return out;
 }
@@ -396,7 +511,8 @@ TopoDS_Shape sew_loose(const TopoDS_Shape& s, double tol, int& sewn) {
 
 // `level`: 0 só analisa, 1 repara na tolerância dada, 2 deixa o reparo subir a tolerância em 100 vezes.
 // Forma sã sai intacta: reparar sem defeito só arriscaria a fidelidade da ida e volta.
-// `stats`: faces, faces ruins, sólidos, abertas, faces soltas (antes e depois), faces tocadas e costuradas.
+// `stats`: faces, faces ruins, sólidos, abertas, faces soltas, arestas livres e tolerância máxima (antes
+// e depois), faces tocadas e costuradas.
 std::unique_ptr<Shape> xde_heal(const Shape& s, uint8_t level, double tol, rust::Vec<double>& stats) {
     return guard("reparo", [&] {
         const Survey before = survey(s.s);
@@ -416,10 +532,60 @@ std::unique_ptr<Shape> xde_heal(const Shape& s, uint8_t level, double tol, rust:
         }
         const Survey after = level > 0 && before.defect() ? survey(r) : before;
         for (const Survey* v : {&before, &after})
-            for (int n : {v->faces, v->bad_faces, v->solids, v->open_shells, v->loose_faces}) stats.push_back(n);
+            for (double n : {double(v->faces), double(v->bad_faces), double(v->solids), double(v->open_shells), double(v->loose_faces), double(v->free_edges), v->tolerance}) stats.push_back(n);
         stats.push_back(touched);
         stats.push_back(sewn);
         return wrap(r);
+    });
+}
+
+namespace {
+
+// Traço de uma aresta em segmentos, para realçar na tela: 6 números por segmento. Aresta só com
+// curva no espaço da face ainda tem traço, porque `BRepAdaptor_Curve` avalia pela face.
+void trace_edge(const TopoDS_Edge& e, int samples, rust::Vec<double>& out) {
+    if (BRep_Tool::Degenerated(e)) return;
+    BRepAdaptor_Curve c(e);
+    const double a = c.FirstParameter(), b = c.LastParameter();
+    gp_Pnt prev = c.Value(a);
+    for (int i = 1; i <= samples; ++i) {
+        const gp_Pnt p = c.Value(a + (b - a) * i / samples);
+        for (double v : {prev.X(), prev.Y(), prev.Z(), p.X(), p.Y(), p.Z()}) out.push_back(v);
+        prev = p;
+    }
+}
+
+void trace_face(const TopoDS_Shape& f, rust::Vec<double>& out) {
+    int edges = 0;
+    for (TopExp_Explorer e(f, TopAbs_EDGE); e.More() && edges < 64; e.Next(), ++edges) trace_edge(TopoDS::Edge(e.Current()), 8, out);
+}
+
+}  // namespace
+
+// Lista de defeitos que a tela realça, até `limit`. `kind`: 0 face inválida, 1 aresta livre (borda de
+// casca aberta), 2 face solta. O total pode passar do limite: a contagem vem de `xde_heal`.
+rust::Vec<XdeDefect> xde_defects(const Shape& s, uint32_t limit) {
+    return guard("reparo", [&] {
+        rust::Vec<XdeDefect> out;
+        BRepCheck_Analyzer an(s.s);
+        TopTools_IndexedMapOfShape faces;
+        TopExp::MapShapes(s.s, TopAbs_FACE, faces);
+        auto add = [&](uint8_t kind, uint32_t index, const TopoDS_Shape& f) {
+            XdeDefect d;
+            d.kind = kind;
+            d.index = index;
+            if (f.ShapeType() == TopAbs_EDGE) trace_edge(TopoDS::Edge(f), 12, d.segs);
+            else trace_face(f, d.segs);
+            out.push_back(std::move(d));
+        };
+        for (int i = 1; i <= faces.Extent() && out.size() < limit; ++i)
+            if (!an.IsValid(faces(i))) add(0, uint32_t(i - 1), faces(i));
+        for (TopExp_Explorer e(s.s, TopAbs_FACE, TopAbs_SHELL); e.More() && out.size() < limit; e.Next())
+            add(2, uint32_t(faces.FindIndex(e.Current()) - 1), e.Current());
+        std::vector<TopoDS_Edge> borders;
+        for (TopExp_Explorer e(s.s, TopAbs_SHELL); e.More(); e.Next()) free_edges_of(e.Current(), borders);
+        for (size_t i = 0; i < borders.size() && out.size() < limit; ++i) add(1, uint32_t(i), borders[i]);
+        return out;
     });
 }
 

@@ -60,6 +60,24 @@ impl Default for OpcoesGravarXde {
     }
 }
 
+/// Como gravar um IGES.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct OpcoesGravarIges {
+    /// topologia completa (entidades 186 e 514); desligado, faces aparadas soltas (144), que todo
+    /// programa antigo lê, mas chegam como superfícies
+    pub brep: bool,
+    pub unidade: UnidadeStep,
+    pub cores: bool,
+    pub nomes: bool,
+    pub camadas: bool,
+}
+
+impl Default for OpcoesGravarIges {
+    fn default() -> Self {
+        OpcoesGravarIges { brep: true, unidade: UnidadeStep::default(), cores: true, nomes: true, camadas: true }
+    }
+}
+
 /// Ocorrência de um produto numa montagem.
 #[derive(Clone, Debug, PartialEq)]
 pub struct InstanciaXde {
@@ -93,21 +111,28 @@ pub struct ModeloXde {
     pub unidades: String,
     /// PMI semântico no arquivo: dimensões, tolerâncias geométricas e datums
     pub pmi: [u32; 3],
+    /// tipo de cada entidade do arquivo que a leitura não traduziu (só IGES)
+    pub ignoradas: Vec<String>,
 }
 
 /// O que o reparo achou e fez numa forma. "Abertas" são cascas que não formam sólido.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct InfoReparo {
     pub faces_antes: u32,
     pub faces_ruins_antes: u32,
     pub solidos_antes: u32,
     pub abertas_antes: u32,
     pub soltas_antes: u32,
+    pub arestas_livres_antes: u32,
+    /// maior tolerância da forma, em mm
+    pub tolerancia_antes: f64,
     pub faces: u32,
     pub faces_ruins: u32,
     pub solidos: u32,
     pub abertas: u32,
     pub soltas: u32,
+    pub arestas_livres: u32,
+    pub tolerancia: f64,
     /// faces que o reparo alterou
     pub faces_tocadas: u32,
     /// faces soltas que passaram pela costura
@@ -118,6 +143,26 @@ impl InfoReparo {
     pub fn tem_defeito(&self) -> bool {
         self.faces_ruins > 0 || self.abertas > 0 || self.soltas > 0
     }
+}
+
+/// De que tipo é um defeito que a tela pode realçar.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TipoDefeito {
+    /// o `BRepCheck` reprovou a face
+    FaceInvalida,
+    /// só uma face usa a aresta: é borda de uma casca aberta
+    ArestaLivre,
+    /// face fora de qualquer casca
+    FaceSolta,
+}
+
+/// Um defeito e o traço dele, em segmentos no espaço da forma.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DefeitoForma {
+    pub tipo: TipoDefeito,
+    /// índice da face na ordem do kernel, ou da aresta na lista de bordas
+    pub indice: u32,
+    pub segmentos: Vec<[[f64; 3]; 2]>,
 }
 
 #[cfg(occt)]
@@ -142,11 +187,20 @@ mod ponte {
         /// Lê um STEP. A geometria sai em milímetros, qualquer que seja a unidade do arquivo.
         pub fn ler(caminho: &str, o: OpcoesLerXde) -> KResult<ModeloXde> {
             let opcoes = b::XdeReadOpts { colors: o.cores, names: o.nomes, layers: o.camadas, gdt: o.pmi };
-            let doc = b::xde_read(caminho, &opcoes).map_err(err)?;
-            let info = b::xde_info(&doc);
+            Self::do_documento(&b::xde_read(caminho, &opcoes).map_err(err)?)
+        }
+
+        /// Lê um IGES, em milímetros como o STEP. Cada raiz do arquivo vira um produto solto.
+        pub fn ler_iges(caminho: &str, o: OpcoesLerXde) -> KResult<ModeloXde> {
+            let opcoes = b::XdeReadOpts { colors: o.cores, names: o.nomes, layers: o.camadas, gdt: false };
+            Self::do_documento(&b::xde_read_iges(caminho, &opcoes).map_err(err)?)
+        }
+
+        fn do_documento(doc: &cxx::UniquePtr<b::XdeDoc>) -> KResult<ModeloXde> {
+            let info = b::xde_info(doc);
             let mut produtos = Vec::new();
-            for (i, p) in b::xde_products(&doc).map_err(err)?.into_iter().enumerate() {
-                let forma = if p.is_assembly { None } else { Some(Shape::da_ponte(b::xde_shape(&doc, i as u32).map_err(err)?)) };
+            for (i, p) in b::xde_products(doc).map_err(err)?.into_iter().enumerate() {
+                let forma = if p.is_assembly { None } else { Some(Shape::da_ponte(b::xde_shape(doc, i as u32).map_err(err)?)) };
                 let filhos = p.comps.iter().map(|c| InstanciaXde {
                     produto: c.product as usize,
                     nome: c.name.clone(),
@@ -168,11 +222,12 @@ mod ponte {
                 esquema: info.schema,
                 unidades: info.units,
                 pmi: [info.dims, info.tols, info.datums],
+                ignoradas: info.skipped,
             })
         }
 
-        /// Grava o modelo num STEP. Todos os produtos entram antes dos componentes, que os referenciam.
-        pub fn gravar(&self, caminho: &str, o: OpcoesGravarXde) -> KResult<()> {
+        /// Monta o documento XCAF. Todos os produtos entram antes dos componentes, que os referenciam.
+        fn para_documento(&self) -> KResult<cxx::UniquePtr<b::XdeDoc>> {
             let mut doc = b::xde_new().map_err(err)?;
             let sem_forma = Shape::empty();
             let mut rotulos = Vec::with_capacity(self.produtos.len());
@@ -198,6 +253,12 @@ mod ponte {
                     b::xde_add_component(doc.pin_mut(), *rotulo, &inst).map_err(err)?;
                 }
             }
+            Ok(doc)
+        }
+
+        /// Grava o modelo num STEP.
+        pub fn gravar(&self, caminho: &str, o: OpcoesGravarXde) -> KResult<()> {
+            let mut doc = self.para_documento()?;
             let opcoes = b::XdeWriteOpts {
                 schema: o.esquema as u8,
                 unit: o.unidade as u8,
@@ -207,6 +268,13 @@ mod ponte {
                 gdt: o.pmi,
             };
             b::xde_write(doc.pin_mut(), caminho, &opcoes).map_err(err)
+        }
+
+        /// Grava o modelo num IGES.
+        pub fn gravar_iges(&self, caminho: &str, o: OpcoesGravarIges) -> KResult<()> {
+            let mut doc = self.para_documento()?;
+            let opcoes = b::XdeIgesOpts { brep: o.brep, unit: o.unidade as u8, colors: o.cores, names: o.nomes, layers: o.camadas };
+            b::xde_write_iges(doc.pin_mut(), caminho, &opcoes).map_err(err)
         }
     }
 
@@ -225,12 +293,46 @@ mod ponte {
         pub fn reparar(&self, nivel: u8, tolerancia: f64) -> KResult<(Shape, InfoReparo)> {
             let mut s = Vec::new();
             let r = b::xde_heal(self.ponte(), nivel, tolerancia, &mut s).map_err(err)?;
-            let n: Vec<u32> = s.iter().map(|v| *v as u32).collect();
-            let [faces_antes, faces_ruins_antes, solidos_antes, abertas_antes, soltas_antes, faces, faces_ruins, solidos, abertas, soltas, faces_tocadas, faces_costuradas] = n[..] else {
+            let [faces_antes, faces_ruins_antes, solidos_antes, abertas_antes, soltas_antes, arestas_livres_antes, tolerancia_antes, faces, faces_ruins, solidos, abertas, soltas, arestas_livres, tolerancia, faces_tocadas, faces_costuradas] = s[..] else {
                 return Err(KernelError("reparo: resposta incompleta do kernel".into()));
             };
-            let info = InfoReparo { faces_antes, faces_ruins_antes, solidos_antes, abertas_antes, soltas_antes, faces, faces_ruins, solidos, abertas, soltas, faces_tocadas, faces_costuradas };
+            let n = |v: f64| v as u32;
+            let info = InfoReparo {
+                faces_antes: n(faces_antes),
+                faces_ruins_antes: n(faces_ruins_antes),
+                solidos_antes: n(solidos_antes),
+                abertas_antes: n(abertas_antes),
+                soltas_antes: n(soltas_antes),
+                arestas_livres_antes: n(arestas_livres_antes),
+                tolerancia_antes,
+                faces: n(faces),
+                faces_ruins: n(faces_ruins),
+                solidos: n(solidos),
+                abertas: n(abertas),
+                soltas: n(soltas),
+                arestas_livres: n(arestas_livres),
+                tolerancia,
+                faces_tocadas: n(faces_tocadas),
+                faces_costuradas: n(faces_costuradas),
+            };
             Ok((Shape::da_ponte(r), info))
+        }
+
+        /// Defeitos que a tela pode realçar, até `limite`, com o traço de cada um.
+        pub fn defeitos(&self, limite: u32) -> KResult<Vec<DefeitoForma>> {
+            let lista = b::xde_defects(self.ponte(), limite).map_err(err)?;
+            Ok(lista
+                .into_iter()
+                .map(|d| DefeitoForma {
+                    tipo: match d.kind {
+                        0 => TipoDefeito::FaceInvalida,
+                        1 => TipoDefeito::ArestaLivre,
+                        _ => TipoDefeito::FaceSolta,
+                    },
+                    indice: d.index,
+                    segmentos: d.segs.chunks_exact(6).map(|q| [[q[0], q[1], q[2]], [q[3], q[4], q[5]]]).collect(),
+                })
+                .collect())
         }
     }
 }
@@ -251,6 +353,12 @@ mod ponte {
         pub fn gravar(&self, _: &str, _: OpcoesGravarXde) -> KResult<()> {
             no()
         }
+        pub fn ler_iges(_: &str, _: OpcoesLerXde) -> KResult<ModeloXde> {
+            no()
+        }
+        pub fn gravar_iges(&self, _: &str, _: OpcoesGravarIges) -> KResult<()> {
+            no()
+        }
     }
 
     impl Shape {
@@ -261,6 +369,9 @@ mod ponte {
             no()
         }
         pub fn reparar(&self, _: u8, _: f64) -> KResult<(Shape, InfoReparo)> {
+            no()
+        }
+        pub fn defeitos(&self, _: u32) -> KResult<Vec<DefeitoForma>> {
             no()
         }
     }
@@ -463,6 +574,97 @@ mod testes {
         assert!(perto(s[1].mass().volume, 8.));
         let (a, _) = s[1].bbox().unwrap();
         assert!(perto(a[0], 10.), "{a:?}");
+    }
+
+    #[test]
+    fn defeitos_apontam_face_solta_e_borda_de_casca_com_traco_no_lugar() {
+        let soltas = faces_soltas(1).defeitos(100).unwrap();
+        assert_eq!(soltas.len(), 5);
+        assert!(soltas.iter().all(|d| d.tipo == TipoDefeito::FaceSolta && !d.segmentos.is_empty()));
+
+        // as mesmas cinco faces costuradas: a casca abre numa borda de quatro arestas, em z = 0
+        let (casca, info) = faces_soltas(1).reparar(1, 1e-3).unwrap();
+        assert_eq!((info.soltas, info.arestas_livres, info.arestas_livres_antes), (0, 4, 0), "{info:?}");
+        let bordas = casca.defeitos(100).unwrap();
+        assert_eq!(bordas.len(), 4, "{bordas:?}");
+        for d in &bordas {
+            assert_eq!(d.tipo, TipoDefeito::ArestaLivre);
+            assert!(d.segmentos.iter().flatten().all(|p| p[2].abs() < 1e-9), "{d:?}");
+        }
+        assert_eq!(casca.defeitos(3).unwrap().len(), 3, "o limite vale");
+        assert!(caixa([1., 2., 3.]).defeitos(10).unwrap().is_empty(), "forma sã não tem defeito");
+    }
+
+    #[test]
+    fn reparo_guarda_as_curvas_soltas_ao_costurar() {
+        let curva = Shape::curve_shape(&[[0., 0., 50.], [10., 0., 50.]]).unwrap();
+        let (r, info) = faces_soltas(0).compound(&curva).reparar(1, 1e-3).unwrap();
+        assert_eq!(info.solidos, 1, "{info:?}");
+        let (_, alto) = r.bbox().unwrap();
+        assert!(alto[2] > 49., "a curva sumiu na costura: {alto:?}");
+    }
+
+    #[test]
+    fn iges_ida_e_volta_nos_dois_modos_e_unidade() {
+        let dir = pasta("iges ç");
+        let forma = caixa([10., 20., 30.]);
+        let m = ModeloXde { produtos: vec![peca("Bloco", forma)], raizes: vec![0], ..Default::default() };
+
+        let brep = dir.join("brep.igs");
+        m.gravar_iges(brep.to_str().unwrap(), OpcoesGravarIges::default()).unwrap();
+        let lido = ModeloXde::ler_iges(brep.to_str().unwrap(), OpcoesLerXde::default()).unwrap();
+        assert!(lido.esquema.starts_with("IGES"), "{}", lido.esquema);
+        assert_eq!(lido.unidades.to_uppercase(), "MM");
+        let s = lido.produtos[0].forma.as_ref().unwrap();
+        assert!(s.is_solid() || s.solidos().unwrap().len() == 1, "o modo BRep leva o sólido");
+        assert!(perto(s.mass().volume, 6000.), "{}", s.mass().volume);
+
+        let faces = dir.join("faces.igs");
+        m.gravar_iges(faces.to_str().unwrap(), OpcoesGravarIges { brep: false, ..Default::default() }).unwrap();
+        let texto_faces = std::fs::read_to_string(&faces).unwrap();
+        let texto_brep = std::fs::read_to_string(&brep).unwrap();
+        let tem = |t: &str, tipo: &str| t.lines().any(|l| l.ends_with(|c: char| c.is_ascii_digit()) && l.len() >= 73 && &l[72..73] == "D" && l[..8].trim() == tipo);
+        assert!(tem(&texto_brep, "186") && !tem(&texto_faces, "186"), "só o modo BRep grava sólido (186)");
+        assert!(tem(&texto_faces, "144"), "o modo Faces grava superfície aparada (144)");
+        let lido = ModeloXde::ler_iges(faces.to_str().unwrap(), OpcoesLerXde::default()).unwrap();
+        let area: f64 = lido.produtos.iter().filter_map(|p| p.forma.as_ref()).map(|f| f.mass().area).sum();
+        assert!(perto(area, 2. * (200. + 300. + 600.)), "{area}");
+        assert!(lido.produtos.iter().filter_map(|p| p.forma.as_ref()).all(|f| !f.is_solid()), "o modo Faces chega como superfícies");
+
+        let pol = dir.join("pol.igs");
+        m.gravar_iges(pol.to_str().unwrap(), OpcoesGravarIges { unidade: UnidadeStep::Polegada, ..Default::default() }).unwrap();
+        let lido = ModeloXde::ler_iges(pol.to_str().unwrap(), OpcoesLerXde::default()).unwrap();
+        assert!(lido.unidades.to_uppercase().starts_with("IN"), "{}", lido.unidades);
+        let (a, b) = lido.produtos[0].forma.as_ref().unwrap().bbox().unwrap();
+        assert!((b[1] - a[1] - 20.).abs() < 1e-3, "polegada volta em milímetros: {a:?} {b:?}");
+    }
+
+    #[test]
+    fn iges_em_paralelo_nao_corrompe() {
+        let dir = pasta("iges paralelo");
+        let fios: Vec<_> = (0..4)
+            .map(|i| {
+                let dir = dir.clone();
+                std::thread::spawn(move || {
+                    let l = 10. + i as f64;
+                    let m = ModeloXde { produtos: vec![peca("Bloco", caixa([l, l, l]))], raizes: vec![0], ..Default::default() };
+                    let alvo = dir.join(format!("{i}.igs"));
+                    for rodada in 0..3 {
+                        // cada gravação liga um modo diferente: o estado global não pode vazar entre fios
+                        let brep = (i + rodada) % 2 == 0;
+                        m.gravar_iges(alvo.to_str().unwrap(), OpcoesGravarIges { brep, ..Default::default() }).unwrap();
+                        let lido = ModeloXde::ler_iges(alvo.to_str().unwrap(), OpcoesLerXde::default()).unwrap();
+                        let area: f64 = lido.produtos.iter().filter_map(|p| p.forma.as_ref()).map(|f| f.mass().area).sum();
+                        assert!(perto(area, 6. * l * l), "{area} em {l}");
+                        let solidos: usize = lido.produtos.iter().filter_map(|p| p.forma.as_ref()).map(|f| f.solidos().unwrap().len()).sum();
+                        assert_eq!(solidos == 1, brep, "modo trocado em outro fio");
+                    }
+                })
+            })
+            .collect();
+        for f in fios {
+            f.join().unwrap();
+        }
     }
 
     #[test]

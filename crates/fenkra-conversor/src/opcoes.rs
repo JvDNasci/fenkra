@@ -123,6 +123,27 @@ impl From<UnidadeSaida> for UnidadeStep {
     }
 }
 
+/// Como o IGES leva a geometria.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ModoIges {
+    /// topologia completa: o sólido chega sólido em quem lê BRep
+    #[default]
+    Brep,
+    /// faces aparadas soltas: o que todo programa antigo lê, e chega como superfícies
+    Faces,
+}
+
+impl ModoIges {
+    pub const TODOS: [ModoIges; 2] = [ModoIges::Brep, ModoIges::Faces];
+
+    pub fn nome(self) -> &'static str {
+        match self {
+            ModoIges::Brep => "BRep",
+            ModoIges::Faces => "Faces",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct OpcoesExportar {
@@ -133,11 +154,12 @@ pub struct OpcoesExportar {
     pub camadas: bool,
     /// liga a escrita de PMI do gravador; exige AP242 para ser semântico
     pub pmi: bool,
+    pub iges: ModoIges,
 }
 
 impl Default for OpcoesExportar {
     fn default() -> Self {
-        OpcoesExportar { esquema: EsquemaSaida::default(), unidade: UnidadeSaida::default(), cores: true, nomes: true, camadas: true, pmi: false }
+        OpcoesExportar { esquema: EsquemaSaida::default(), unidade: UnidadeSaida::default(), cores: true, nomes: true, camadas: true, pmi: false, iges: ModoIges::default() }
     }
 }
 

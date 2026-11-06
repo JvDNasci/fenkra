@@ -2,7 +2,8 @@
 //! Provedor padrão: STEP pela ponte XDE do kernel e BREP pelo texto nativo do OpenCASCADE.
 
 use crate::{texto_do_caminho, ErroConv, Formato, ModeloNeutro, OpcoesExportar, OpcoesImportar, Provedor};
-use fenkra_kernel::{ModeloXde, OpcoesGravarXde, OpcoesLerXde, Shape};
+use crate::opcoes::ModoIges;
+use fenkra_kernel::{ModeloXde, OpcoesGravarIges, OpcoesGravarXde, OpcoesLerXde, Shape};
 use std::path::Path;
 
 pub struct ProvedorOcct;
@@ -18,7 +19,7 @@ impl Provedor for ProvedorOcct {
     }
 
     fn formatos(&self) -> &'static [Formato] {
-        &[Formato::Step, Formato::Brep]
+        &[Formato::Step, Formato::Iges, Formato::Brep]
     }
 
     fn ler(&self, formato: Formato, caminho: &Path, o: &OpcoesImportar) -> Result<ModeloNeutro, ErroConv> {
@@ -26,6 +27,13 @@ impl Provedor for ProvedorOcct {
             Formato::Step => {
                 let opcoes = OpcoesLerXde { cores: o.cores, nomes: o.nomes, camadas: o.camadas, pmi: true };
                 Ok(ModeloNeutro { formato, xde: ModeloXde::ler(texto_do_caminho(caminho)?, opcoes)? })
+            }
+            Formato::Iges => {
+                let opcoes = OpcoesLerXde { cores: o.cores, nomes: o.nomes, camadas: o.camadas, pmi: false };
+                let mut modelo = ModeloNeutro { formato, xde: ModeloXde::ler_iges(texto_do_caminho(caminho)?, opcoes)? };
+                let nome = caminho.file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                modelo.juntar_soltas(&nome)?;
+                Ok(modelo)
             }
             Formato::Brep => {
                 let texto = std::fs::read_to_string(caminho).map_err(|e| ErroConv::Leitura(format!("não foi possível ler o BREP: {e}")))?;
@@ -42,6 +50,10 @@ impl Provedor for ProvedorOcct {
             Formato::Step => {
                 let opcoes = OpcoesGravarXde { esquema: o.esquema.into(), unidade: o.unidade.into(), cores: o.cores, nomes: o.nomes, camadas: o.camadas, pmi: o.pmi };
                 modelo.xde.gravar(texto_do_caminho(caminho)?, opcoes).map_err(falha)
+            }
+            Formato::Iges => {
+                let opcoes = OpcoesGravarIges { brep: o.iges == ModoIges::Brep, unidade: o.unidade.into(), cores: o.cores, nomes: o.nomes, camadas: o.camadas };
+                modelo.xde.gravar_iges(texto_do_caminho(caminho)?, opcoes).map_err(falha)
             }
             Formato::Arvore => Err(sem_geometria()),
             // o BREP não tem estrutura: as peças vão soltas, cada uma no seu lugar

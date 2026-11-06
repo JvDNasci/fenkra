@@ -22,9 +22,9 @@ pub use formato::{detectar, Formato};
 pub use importar::{unidade_suspeita, Importado, Previa, Suspeita};
 pub use modelo::{InstanciaNeutra, ModeloNeutro, Ocorrencia, ProdutoNeutro};
 pub use occt::ProvedorOcct;
-pub use opcoes::{EsquemaSaida, OpcoesExportar, OpcoesImportar, Reparo, UnidadeArquivo, UnidadeSaida};
+pub use opcoes::{EsquemaSaida, ModoIges, OpcoesExportar, OpcoesImportar, Reparo, UnidadeArquivo, UnidadeSaida};
 pub use provedor::{Provedor, Registro};
-pub use relatorio::{Nota, Relatorio, NOTAS};
+pub use relatorio::{Contagem, Defeito, LinhaReparo, Nota, Relatorio, TipoDefeito, NOTAS};
 
 /// Por que uma conversão não terminou.
 #[derive(Clone, Debug, PartialEq, thiserror::Error, serde::Serialize, serde::Deserialize)]

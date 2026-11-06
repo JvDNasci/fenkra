@@ -61,6 +61,7 @@ mod textos_campos;
 mod midia;
 mod textos_ajuda;
 mod textos_biblioteca;
+mod textos_conversor;
 mod textos_intercambio;
 mod textos_projeto;
 mod textos_desenho;

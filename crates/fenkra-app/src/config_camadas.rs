@@ -38,6 +38,7 @@ use Classe::*;
 /// Toda opção de [`Settings`] está aqui; o teste confere que nenhuma ficou de fora.
 pub const CLASSIFICACAO: &[(&str, Classe)] = &[
     ("opcoes_importar", Sessao),
+    ("opcoes_exportar", Sessao),
     ("theme", Interface),
     ("ui_scale", Interface),
     ("gradient", Interface),
