@@ -680,6 +680,121 @@ impl Pen {
         r
     }
 
+    /// Caminhos vetoriais do núcleo (unidades de `h`, y para cima) → tela, com a origem em `o`.
+    fn caminhos(&self, p: &Cv, paths: &[(Vec<[f64; 2]>, bool)], o: Pos2, k: f32, st: Stroke) -> Rect {
+        let mut r = Rect::from_center_size(o, egui::vec2(1., 1.));
+        for (pts, fecha) in paths {
+            let mut v: Vec<Pos2> = pts.iter().map(|q| o + egui::vec2(q[0] as f32 * k, -(q[1] as f32) * k)).collect();
+            v.iter().for_each(|q| r.extend_with(*q));
+            if *fecha && v.len() > 2 {
+                v.push(v[0]);
+            }
+            p.add(egui::Shape::line(v, st));
+        }
+        r
+    }
+
+    /// Alvo de referência (B189): quadro redondo dividido (dimensão em cima, letra e número embaixo)
+    /// em `at`, marca da forma sobre o ponto `anchor` e, para o alvo móvel, a seta do curso até
+    /// `curso`. Devolve o retângulo do quadro.
+    pub fn datum_target(&self, p: &Cv, at: Pos2, anchor: Pos2, curso: Option<Pos2>, alvo: &fenkra_core::pmi_alvos::AlvoRef) -> Rect {
+        use fenkra_core::pmi_alvos::FormaAlvo;
+        let rad = self.size * 1.35;
+        let c = at + self.nudge;
+        let col = if self.sel { HL } else { self.line };
+        // chamada do quadro até o ponto
+        let d = (anchor - c).normalized();
+        if d.x.is_finite() && (anchor - c).length() > rad {
+            p.extend(self.outline_shapes(&[c + d * rad, anchor], false, self.leader_stroke(), self.leader_dash));
+        }
+        // marca da forma sobre a superfície
+        let k = self.size * 0.55;
+        let h = 2.0;
+        let dim = match alvo.forma {
+            FormaAlvo::Circulo | FormaAlvo::CirculoCurva => [3.2, 0.],
+            FormaAlvo::Linha => [4.5, 0.],
+            _ => [4.5, 3.],
+        };
+        let st = Stroke::new(if self.sel { self.width + 1. } else { self.width.max(1.2) }, col);
+        let ext = self.caminhos(p, &fenkra_core::pmi_alvos::simbolo(alvo.forma, h, dim), anchor, k, st);
+        if alvo.restrita {
+            // área restrita: contorno tracejado em volta da marca
+            let pts = [ext.left_top(), ext.right_top(), ext.right_bottom(), ext.left_bottom(), ext.left_top()].map(|q| q + (q - ext.center()).normalized() * 3.);
+            p.extend(self.outline_shapes(&pts, true, self.leader_stroke(), 2));
+        }
+        if let Some(fim) = curso {
+            p.line_segment([anchor, fim], st);
+            self.arrow_into(p, fim, anchor, st);
+            self.arrow_into(p, anchor, fim, st);
+        }
+        // quadro dividido
+        let fill = self.fill(PmiBg::Branco);
+        if let Some(f) = fill {
+            p.circle_filled(c, rad, f);
+        }
+        p.circle_stroke(c, rad, self.frame_stroke());
+        p.line_segment([c - egui::vec2(rad, 0.), c + egui::vec2(rad, 0.)], self.frame_stroke());
+        let tc = self.text_col(fill);
+        let (cima, baixo) = (alvo.texto_dimensoes(), alvo.identificador());
+        let mut texto = |t: &str, y: f32| {
+            let g = p.layout_no_wrap(t.to_string(), self.font(0.8), tc);
+            let tl = Pos2::new(c.x - g.size().x / 2., c.y + y - g.size().y / 2.);
+            p.galley(tl, g, tc);
+        };
+        if !cima.is_empty() {
+            texto(&cima, -rad * 0.5);
+        }
+        texto(&baixo, rad * 0.5);
+        Rect::from_center_size(c, egui::vec2(rad * 2., rad * 2.))
+    }
+
+    fn arrow_into(&self, p: &Cv, tip: Pos2, from: Pos2, st: Stroke) {
+        p.extend(self.arrow_shapes(tip, from, st));
+    }
+
+    /// Rugosidade estruturada (B190): símbolo vetorial do núcleo (remoção, contorno, textura de área)
+    /// com os campos nas posições da norma. Devolve o retângulo e o vértice de baixo (onde a chamada
+    /// encosta).
+    pub fn roughness_ext(&self, p: &Cv, at: Pos2, l: &fenkra_core::pmi_acabamento::RugLinhas, x: &fenkra_core::pmi_acabamento::RugExtra) -> (Rect, Pos2) {
+        let v = at + self.nudge;
+        let k = self.size * 1.15;
+        let col = if self.sel { HL } else { self.line };
+        let st = Stroke::new(if self.sel { self.width + 1. } else { self.width }, col);
+        let fill = self.fill(PmiBg::Nenhum);
+        let tc = self.text_col(fill);
+        let mut r = self.caminhos(p, &fenkra_core::pmi_acabamento::simbolo(x, 1.0), v, k, st);
+        // barra: x de 1,0 a 4,0 (em h); y = 2,0
+        let barra_esq = v + egui::vec2(1.0 * k, -2.0 * k);
+        let barra_dir = v + egui::vec2(4.0 * k, -2.0 * k);
+        let mut texto = |t: &str, tl: Pos2| {
+            let g = p.layout_no_wrap(t.to_string(), self.font(0.85), tc);
+            let b = Rect::from_min_size(tl, g.size());
+            r = r.union(b);
+            p.galley(tl, g, tc);
+        };
+        // valores em cima da barra, do último para o primeiro, subindo
+        let alt = self.size * 0.95;
+        for (i, t) in l.valores.iter().rev().enumerate() {
+            texto(t, barra_esq + egui::vec2(self.size * 0.2, -alt * (i as f32 + 1.) - 1.));
+        }
+        if !l.metodo.is_empty() {
+            texto(&l.metodo, barra_esq + egui::vec2(self.size * 0.2, 2.));
+        }
+        if !l.lay.is_empty() {
+            texto(&l.lay, barra_dir + egui::vec2(self.size * 0.3, 2.));
+        }
+        if !l.sobremetal.is_empty() {
+            texto(&l.sobremetal, v + egui::vec2(-k * 1.6, -k * 0.2));
+        }
+        if !l.amostragem.is_empty() {
+            texto(&l.amostragem, barra_dir + egui::vec2(self.size * 0.3, -alt - 1.));
+        }
+        if self.sel {
+            p.rect_stroke(r.expand(2.), 2., Stroke::new(1., HL), egui::StrokeKind::Outside);
+        }
+        (r, v)
+    }
+
     /// Balão de item; devolve o retângulo e o raio.
     pub fn balloon(&self, p: &Cv, at: Pos2, item: &str) -> (Rect, f32) {
         let rad = self.size * 1.0 + 3.5 * item.chars().count().saturating_sub(1) as f32;

@@ -44,6 +44,8 @@ mod pmi_ui;
 mod pmi_smart;
 mod pmi_handles;
 mod pmi_minibar;
+mod pmi_baloes_ui;
+mod pmi_alvos_ui;
 mod pmi_gdt_ui;
 mod slots;
 mod geom_fit;

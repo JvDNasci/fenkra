@@ -191,7 +191,7 @@ fn campos(ui: &mut egui::Ui, pm: &mut Pmi, foco: bool, mudou: &mut bool, outras:
     if tem_valor {
         let r = match &mut pm.kind {
             PmiKind::Roughness { ra, .. } => Some((tr("Ra"), ra)),
-            PmiKind::Balloon { item } => Some((tr("Item"), item)),
+            PmiKind::Balloon { item, .. } => Some((tr("Item"), item)),
             PmiKind::Weld { size, .. } => Some((tr("Medida"), size)),
             _ => None,
         };
