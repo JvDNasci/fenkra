@@ -1,6 +1,6 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 89570,
+ "tokens_total_k": 90020,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
@@ -12,25 +12,25 @@
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 11610,
-   "pct": 13.0
+   "pct": 12.9
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
    "tokens_k": 18670,
-   "pct": 20.8
+   "pct": 20.7
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
    "tokens_k": 21590,
-   "pct": 24.1
+   "pct": 24.0
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
-   "tokens_k": 30520,
-   "pct": 34.1
+   "tokens_k": 30970,
+   "pct": 34.4
   }
  },
  "itens": [
@@ -5814,6 +5814,38 @@
    ],
    "catalogo": [],
    "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B344",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Engrenagem espinha de peixe, para não escapar no eixo",
+   "oque": "Engrenagem de dupla hélice em V, que se trava axialmente sem elemento de retenção no eixo, muito usada em peças impressas em 3D. Ângulo da hélice, folga para impressão e par com montagem sem trava axial.",
+   "origem": [
+    "USR-TRANSMISSAO"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B345",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Elementos de máquina de catálogo, prontos para personalizar com usinagem",
+   "oque": "Todo elemento de transmissão gerado sai pronto para adaptar: furo do eixo, rasgo de chaveta, cubo, rebaixo, furos de alívio e parafuso de fixação como usinagens editáveis sobre a peça padronizada, mantendo o vínculo com o catálogo.",
+   "origem": [
+    "USR-TRANSMISSAO"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
    "status": "a fazer",

@@ -707,6 +707,10 @@ c('B342', 4, 'P1', 'Corrente, coroa e pinhão, com biblioteca de transmissão', 
   ['USR-TRANSMISSAO'], [], 400, 'Auto + Visual', 'Biblioteca de normas'),
 c('B343', 4, 'P1', 'Cálculo de transmissão ao vivo: relação, torque, velocidade e perdas', 'Painel que mostra enquanto edita: relação de transmissão e de voltas, velocidade angular, torque de entrada e saída, potência, rendimento e perda por par, com fórmulas de elementos de máquinas e fonte citada, cálculo preliminar. Cadeia de vários estágios soma o resultado, e o valor segue para a simulação da montagem.',
   ['USR-TRANSMISSAO'], [], 300, 'Auto + Visual', 'Biblioteca de normas'),
+c('B344', 4, 'P1', 'Engrenagem espinha de peixe, para não escapar no eixo', 'Engrenagem de dupla hélice em V, que se trava axialmente sem elemento de retenção no eixo, muito usada em peças impressas em 3D. Ângulo da hélice, folga para impressão e par com montagem sem trava axial.',
+  ['USR-TRANSMISSAO'], [], 200, 'Auto + Visual', 'Biblioteca de normas'),
+c('B345', 4, 'P1', 'Elementos de máquina de catálogo, prontos para personalizar com usinagem', 'Todo elemento de transmissão gerado sai pronto para adaptar: furo do eixo, rasgo de chaveta, cubo, rebaixo, furos de alívio e parafuso de fixação como usinagens editáveis sobre a peça padronizada, mantendo o vínculo com o catálogo.',
+  ['USR-TRANSMISSAO'], [], 250, 'Auto + Visual', 'Biblioteca de normas'),
 ]
 def main():
     for x in B:

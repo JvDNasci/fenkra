@@ -4,15 +4,15 @@ Consolidado do [design review](../contextos/design-review.md), dos [contextos](.
 Versão visual (kanban + comparador): [painel.html](painel.html), gerada por `scripts/benchmark/pagina.py`.
 Gerado por `scripts/benchmark/backlog.py`; o estado de cada item é atualizado aqui a cada entrega.
 
-**Estimativa total:** ≈ 89.6 M tokens (≈ 299 mil linhas de código, pela média das últimas versões).
+**Estimativa total:** ≈ 90.0 M tokens (≈ 300 mil linhas de código, pela média das últimas versões).
 
 | Onda | Versão | Itens | Tokens | % |
 |---|---|---|---|---|
 | Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes) | `0.1.0-alpha.28 a .30` | 36 | ≈ 7180 k | 8.0% |
-| Onda 1 — bugs do design review | `0.1.0-alpha.31` | 58 | ≈ 11610 k | 13.0% |
-| Onda 2 — filosofia base + VPM local | `0.1.0-alpha.32` | 74 | ≈ 18670 k | 20.8% |
-| Onda 3 — módulos novos e lacunas do benchmark | `0.1.0-alpha.33+` | 80 | ≈ 21590 k | 24.1% |
-| Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…) | `0.2.x` | 95 | ≈ 30520 k | 34.1% |
+| Onda 1 — bugs do design review | `0.1.0-alpha.31` | 58 | ≈ 11610 k | 12.9% |
+| Onda 2 — filosofia base + VPM local | `0.1.0-alpha.32` | 74 | ≈ 18670 k | 20.7% |
+| Onda 3 — módulos novos e lacunas do benchmark | `0.1.0-alpha.33+` | 80 | ≈ 21590 k | 24.0% |
+| Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…) | `0.2.x` | 97 | ≈ 30970 k | 34.4% |
 
 Prioridade: **P0** quebra o uso · **P1** importante · **P2** desejável · **P3** futuro.
 Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = captura do app com `FENKRA_DEMO_*` · **Manual** = usuário.
@@ -332,6 +332,8 @@ Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = 
 | B341 | P1 | **Engrenagens cônicas a 90 graus, sem-fim e coroa** — Engrenagens cônicas retas para eixos a 90 graus, em par e em diferencial, para mudar a direção da carga, além de sem-fim e coroa, com geometria do dente, prévia e junta de relação no ângulo certo. | USR-TRANSMISSAO |  | 400 k | 0.4% | Auto + Visual | a fazer |
 | B342 | P1 | **Corrente, coroa e pinhão, com biblioteca de transmissão** — Biblioteca de correntes padronizadas (passo, rolo, largura), coroa e pinhão gerados a partir da corrente, número de elos e distância entre centros corrigida, e corrente desenhada no 3D com movimento. Biblioteca com correias e transmissões afins. Dados normativos só de fonte gratuita conferida em duas fontes. | USR-TRANSMISSAO |  | 400 k | 0.4% | Auto + Visual | a fazer |
 | B343 | P1 | **Cálculo de transmissão ao vivo: relação, torque, velocidade e perdas** — Painel que mostra enquanto edita: relação de transmissão e de voltas, velocidade angular, torque de entrada e saída, potência, rendimento e perda por par, com fórmulas de elementos de máquinas e fonte citada, cálculo preliminar. Cadeia de vários estágios soma o resultado, e o valor segue para a simulação da montagem. | USR-TRANSMISSAO |  | 300 k | 0.3% | Auto + Visual | a fazer |
+| B344 | P1 | **Engrenagem espinha de peixe, para não escapar no eixo** — Engrenagem de dupla hélice em V, que se trava axialmente sem elemento de retenção no eixo, muito usada em peças impressas em 3D. Ângulo da hélice, folga para impressão e par com montagem sem trava axial. | USR-TRANSMISSAO |  | 200 k | 0.2% | Auto + Visual | a fazer |
+| B345 | P1 | **Elementos de máquina de catálogo, prontos para personalizar com usinagem** — Todo elemento de transmissão gerado sai pronto para adaptar: furo do eixo, rasgo de chaveta, cubo, rebaixo, furos de alívio e parafuso de fixação como usinagens editáveis sobre a peça padronizada, mantendo o vínculo com o catálogo. | USR-TRANSMISSAO |  | 250 k | 0.3% | Auto + Visual | a fazer |
 | B111 | P2 | **Calculadora de rolamento, engrenagem e estriado** — Vida L10 e verificação de engrenagem. Dados do fabricante como camada. (BN01b; módulo Cálculo mecânico; depende de BN01, B44). | PESQ-MOD |  | 250 k | 0.3% | Auto | a fazer |
 | B115 | P2 | **Verificação por norma de barras (aço)** — Utilização por NBR 8800 / EN 1993 / AISC. Relatório. (BN03b; módulo Estrutural; depende de BN03). | PESQ-MOD |  | 300 k | 0.3% | Auto | a fazer |
 | B120 | P2 | **Lattice e preenchimento implícito** — Lattice e preenchimento implícito sobre corpo de malha: TPMS uniforme (giroide, Schwarz-P, diamante) intersectado com o corpo e casca externa, fração de volume como alvo, parede mínima por processo, superfície por marching cubes ou dual contouring sobre grade esparsa (OpenVDB Apache-2.0 ou grade própria em Rust). Vigas, 3MF Beam Lattice e gradiente por campo ficam em item separado. | PESQ-MOD |  | 450 k | 0.5% | Auto | a fazer |
