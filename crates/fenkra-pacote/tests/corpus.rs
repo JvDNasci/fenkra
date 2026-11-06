@@ -99,6 +99,7 @@ fn corpus(dir: &Path, quantas: usize, distintas: bool) -> PathBuf {
     }
     if quantas >= 2 {
         a.display_states.push(DisplayState {
+            explosao: Default::default(),
             name: "Explodido".into(),
             hidden: vec![],
             colors: vec![(ids[0], [200, 80, 60])],

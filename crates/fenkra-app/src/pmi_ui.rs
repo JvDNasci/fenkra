@@ -31,7 +31,7 @@ pub fn kind_of(i: u8) -> PmiKind {
         11 => PmiKind::Ordinate { axis: 0 },
         12 => PmiKind::ArcLength,
         13 | 14 => PmiKind::Linear,
-        15 => PmiKind::FeatureNote { feature: Id(0) },
+        15 => PmiKind::FeatureNote { feature: Id(0), comp: Id(0) },
         16 => PmiKind::Note,
         17 => PmiKind::Linear,
         _ => PmiKind::Gdt { ch: GdtChar::Planeza, tol: "0,05".into(), datums: String::new(), extra: Default::default() },
@@ -118,10 +118,9 @@ fn anchors(app: &App, kind: &PmiKind, picks: &[Pick]) -> Option<(Vec<[f64; 3]>, 
         }
         PmiKind::FeatureNote { .. } => {
             // uma face gerada por furo, rosca, chanfro, filete ou dobra: a âncora é o ponto clicado
-            let Some(p @ Pick::Face { owner, .. }) = picks.first() else { return None };
-            if app.in_asm() || fenkra_core::pmi_feature::callout(&app.open.doc, *owner, true).is_none() {
-                return None;
-            }
+            let Some(p @ Pick::Face { .. }) = picks.first() else { return None };
+            let (comp, feature) = crate::pmi_feat_asm::dono_do_pick(app, p)?;
+            crate::pmi_feat_asm::chamada_de(app, comp, feature, true)?;
             Some((vec![pt(p)?], vec![r.and_then(|r| pick_target(r, p))]))
         }
         PmiKind::Angle if picks.len() == 2 && picks.iter().all(|p| matches!(p, Pick::Edge { .. })) => {
@@ -131,6 +130,17 @@ fn anchors(app: &App, kind: &PmiKind, picks: &[Pick]) -> Option<(Vec<[f64; 3]>, 
             let (s1, s2) = (segs.first()?.seg?, segs.get(1)?.seg?);
             let a = fenkra_core::pmi_infer::angle_from_segments(s1, s2)?;
             Some((a.to_vec(), vec![None, None, None]))
+        }
+        PmiKind::Angle if picks.len() == 2 && picks.iter().all(|p| matches!(p, Pick::Face { .. })) => {
+            // duas faces planas concorrentes: o diedro, com o vértice na reta de interseção (B268)
+            let r = r?;
+            let (a, b) = (pick_target(r, &picks[0])?, pick_target(r, &picks[1])?);
+            if a.class != TargetClass::FacePlana || b.class != TargetClass::FacePlana {
+                return None;
+            }
+            let v = fenkra_core::pmi_infer::angle_from_planes(pt(&picks[0])?, a.dir, pt(&picks[1])?, b.dir)?;
+            // os dois alvos são as faces: a cota refaz o vértice e as pernas a cada quadro
+            Some((v.to_vec(), vec![Some(a), Some(b)]))
         }
         PmiKind::Gap { .. } => {
             // dois furos, cilindros ou arestas circulares: a cota vai de eixo a eixo
@@ -353,10 +363,11 @@ fn create(app: &mut App, kind: PmiKind, a: Vec<[f64; 3]>, targets: Vec<Option<Pm
     set_variant(None);
     // chamada de feature: amarra a feature dona da face e grava o texto gerado
     let (kind, gen_text) = match (&kind, picks.first()) {
-        (PmiKind::FeatureNote { .. }, Some(Pick::Face { owner, .. })) => {
+        (PmiKind::FeatureNote { .. }, Some(p @ Pick::Face { .. })) => {
             let internal = targets.first().copied().flatten().is_none_or(|t| t.concave);
-            let text = fenkra_core::pmi_feature::callout(&app.open.doc, *owner, internal).map(|c| c.text).unwrap_or_default();
-            (PmiKind::FeatureNote { feature: *owner }, text)
+            let (comp, feature) = crate::pmi_feat_asm::dono_do_pick(app, p).unwrap_or((Id(0), Id(0)));
+            let text = crate::pmi_feat_asm::chamada_de(app, comp, feature, internal).map(|c| c.text).unwrap_or_default();
+            (PmiKind::FeatureNote { feature, comp }, text)
         }
         _ => (kind, String::new()),
     };
@@ -480,6 +491,10 @@ pub fn after_viewport(app: &mut App) {
     if is_multi(i) {
         return;
     }
+    // chamada de feature na montagem: a peça do corpo escolhido precisa estar no cache (B186)
+    if let (15, true, Some(Pick::Face { body, .. })) = (i, app.in_asm(), app.picks.last().copied()) {
+        crate::pmi_feat_asm::aquecer(app, body);
+    }
     if i == crate::pmi_smart::SMART {
         smart_step(app, false);
         return;
@@ -567,11 +582,11 @@ fn holes_found(r: &RecomputeResult, owner: Id, dia: f64) -> usize {
 /// de cada parte (forma que o AP242 exige). As novas ficam numa pasta e a chamada composta sai.
 fn split_feature(app: &mut App, id: Id) {
     let Some(pm) = list(app).iter().find(|p| p.id == id).cloned() else { return };
-    let PmiKind::FeatureNote { feature } = pm.kind else { return };
+    let PmiKind::FeatureNote { feature, comp } = pm.kind else { return };
     let Some(&a0) = pm.anchors.first() else { return };
     let tgt = pm.targets.first().copied().flatten();
     let internal = tgt.is_none_or(|t| t.concave);
-    let Some(c) = fenkra_core::pmi_feature::callout(&app.open.doc, feature, internal) else { return };
+    let Some(c) = crate::pmi_feat_asm::chamada_de(app, comp, feature, internal) else { return };
     let folder = format!("{} ({})", pm.name, tr("cotas simples"));
     let mut novas: Vec<Pmi> = vec![];
     for (k, part) in c.parts.iter().enumerate() {
@@ -1130,9 +1145,10 @@ fn pending_preview(app: &App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, r: &R
         };
         let plane = chosen_plane(app, &ps, &a);
         let (kind, text) = match (&kind, ps.first()) {
-            (PmiKind::FeatureNote { .. }, Some(Pick::Face { owner, .. })) => {
+            (PmiKind::FeatureNote { .. }, Some(p @ Pick::Face { .. })) => {
                 let internal = t.first().copied().flatten().is_none_or(|x| x.concave);
-                (PmiKind::FeatureNote { feature: *owner }, fenkra_core::pmi_feature::callout(&app.open.doc, *owner, internal).map(|c| c.text).unwrap_or_default())
+                let (comp, feature) = crate::pmi_feat_asm::dono_do_pick(app, p).unwrap_or((Id(0), Id(0)));
+                (PmiKind::FeatureNote { feature, comp }, crate::pmi_feat_asm::chamada_de(app, comp, feature, internal).map(|c| c.text).unwrap_or_default())
             }
             _ => (kind.clone(), String::new()),
         };
@@ -1210,10 +1226,10 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     for pm in all {
         let is_ghost = ghost.as_ref().is_some_and(|g| std::ptr::eq(g, pm));
         // chamada de feature: o texto é regerado dos parâmetros a cada quadro (muda o furo, muda a nota)
-        let live = match (&pm.kind, is_ghost || app.in_asm()) {
-            (PmiKind::FeatureNote { feature }, false) => {
+        let live = match (&pm.kind, is_ghost) {
+            (PmiKind::FeatureNote { feature, comp }, false) => {
                 let internal = pm.targets.first().copied().flatten().is_none_or(|t| t.concave);
-                fenkra_core::pmi_feature::callout(&app.open.doc, *feature, internal)
+                crate::pmi_feat_asm::chamada_de(app, *comp, *feature, internal)
             }
             _ => None,
         };
@@ -1226,7 +1242,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
         };
         // a contagem n× vem do padrão: se a geometria tem outra quantidade, a chamada fica ambígua
         let diag = match (&pm.kind, &live) {
-            (PmiKind::FeatureNote { feature }, Some(c)) => match (c.count, c.hole_diameter) {
+            // na montagem a contagem não é conferida: a vista não guarda a feature de cada face
+            (PmiKind::FeatureNote { feature, .. }, Some(c)) if !app.in_asm() => match (c.count, c.hole_diameter) {
                 (Some(n), Some(d)) => {
                     let (state, message) = fenkra_core::pmi_feature::count_state(n, holes_found(r, *feature, d));
                     if state == PmiState::Ok { diag } else { Some(PmiDiag { state, failed: Some(0), message, resolved: diag.map(|x| x.resolved).unwrap_or_default() }) }
@@ -1249,6 +1266,16 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                 }
             })
             .collect();
+        // ângulo entre dois planos: o vértice e as pernas saem das faces de agora, não de pontos
+        // guardados (que não são vértices do modelo e não podem ser reencaixados)
+        if pm.kind == PmiKind::Angle && pm.targets.len() == 2 {
+            let res: Vec<Option<PmiTarget>> = diag.as_ref().map(|d| d.resolved.clone()).unwrap_or_else(|| pm.targets.clone());
+            if let (Some(Some(x)), Some(Some(y))) = (res.first(), res.get(1)) {
+                if let Some(v) = fenkra_core::pmi_infer::angle_from_planes(x.point, x.dir, y.point, y.dir) {
+                    a = v.to_vec();
+                }
+            }
+        }
         fenkra_core::pmi_cotas::project_to_axis(&pm.kind, &mut a);
         if let Some(d) = &diag {
             fix_pair(&pm.kind, &mut a, &d.resolved);
@@ -1372,7 +1399,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                 painter.line_segment([sv, s1], thin);
                 painter.line_segment([sv, s2], thin);
                 let (d1, d2) = ((s1 - sv).normalized(), (s2 - sv).normalized());
-                let rad = 34.;
+                let rad = crate::pmi_handles::arc_radius_px(cam, rect, pm, &a);
                 let pts: Vec<Pos2> = (0..=20).map(|k| {
                     let t = k as f32 / 20.;
                     sv + (d1 * (1. - t) + d2 * t).normalized() * rad
@@ -1460,6 +1487,12 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                 painter.circle_stroke(sp, 10., Stroke::new(2.5, crate::theme::st_err()));
                 painter.line_segment([sp + egui::vec2(-6., -6.), sp + egui::vec2(6., 6.)], Stroke::new(2., crate::theme::st_err()));
                 painter.line_segment([sp + egui::vec2(-6., 6.), sp + egui::vec2(6., -6.)], Stroke::new(2., crate::theme::st_err()));
+            }
+        }
+        // legibilidade ao girar (B23): chamada que se cruza ou texto deitado de perfil nesta vista
+        if !is_ghost && diag.as_ref().is_none_or(|d| d.ok()) {
+            if let Some(av) = crate::pmi_legivel::aviso(cam, rect, pm, &a) {
+                painter.text(rect_lbl.left_bottom() + egui::vec2(0., 3.), egui::Align2::LEFT_TOP, format!("⚠ {}", tr(av.mensagem())), egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), crate::theme::st_warn());
             }
         }
         // rótulo girado na tela: a área de clique envolve o rótulo girado
@@ -1553,8 +1586,19 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
         // alças da linha de cota, das linhas de apoio e do texto (B269): por cima do rótulo
         if is_sel && pm.kind.is_linear_like() && !matches!(diag.as_ref(), Some(d) if !d.ok()) {
             crate::pmi_handles::linear(ui, &painter, cam, rect, pm, &a, rect_lbl, &mut hout);
+        } else if is_sel && matches!(pm.kind, PmiKind::Angle | PmiKind::ArcLength) {
+            crate::pmi_handles::arco(ui, &painter, cam, rect, pm, &a, &mut hout);
+        } else if is_sel && !matches!(pm.kind, PmiKind::TitleBlock { .. } | PmiKind::Balloon { .. }) {
+            crate::pmi_handles::posicao(ui, &painter, cam, rect, pm, &a, rect_lbl, &mut hout);
         }
-        // arrastar o rótulo: move o texto no plano da anotação (ou de frente para a tela)
+        // arrastar o rótulo: move o texto no plano da anotação (ou de frente para a tela); o gesto
+        // inteiro vira um passo de desfazer
+        if resp.drag_started() {
+            hout.begin = true;
+        }
+        if resp.drag_stopped() {
+            hout.end = true;
+        }
         if resp.dragged() {
             if let Some(m) = resp.interact_pointer_pos() {
                 let base = v3(first) + off;
@@ -1715,7 +1759,13 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     }
     if let Some((id, off)) = drag {
         if let Some(p) = list_mut(app).iter_mut().find(|p| p.id == id) {
-            p.offset = off;
+            if p.offset != off {
+                p.offset = off;
+                crate::pmi_handles::mark();
+                if app.in_asm() {
+                    app.asm.as_mut().unwrap().modified = true;
+                }
+            }
         }
         clicked = Some(id);
     }

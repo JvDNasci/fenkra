@@ -11,6 +11,14 @@ impl App {
         static FEITO: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
         let Ok(nome) = std::env::var("FENKRA_DEMO_JANELA") else { return };
         self.demo_diagnostico_acao(ctx);
+        // a vista da montagem compõe fora da thread da interface: tenta a cada quadro até a chamada nascer
+        if nome == "pmi_feature_asm" {
+            static CRIADA: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+            if ctx.input(|i| i.time) > 3. && !CRIADA.load(std::sync::atomic::Ordering::Relaxed) && self.demo_feature_montagem() {
+                CRIADA.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+            return;
+        }
         if ctx.input(|i| i.time) < 2. || FEITO.swap(true, std::sync::atomic::Ordering::Relaxed) {
             return;
         }
@@ -50,6 +58,9 @@ impl App {
                     }
                 }
             }
+            // balões automáticos e legenda 3D: o diálogo de confirmação, com `FENKRA_DEMO_ASM=1` (balões)
+            "pmi_baloes" => crate::pmi_ui::command(self, 10),
+            "pmi_legenda" => crate::pmi_ui::command(self, 9),
             "daltonico" => self.settings.acessibilidade.paleta_segura = true,
             "diagnostico" => self.demo_diagnostico(),
             "roda_editor" => crate::roda::ui::pedir_abrir(ctx),

@@ -27,6 +27,8 @@ pub enum Req {
     Ext(Id, f64),
     /// nova posição do texto ao longo da linha (mm a partir do meio)
     Text(Id, f64),
+    /// novo raio do arco da cota angular ou de arco (mm)
+    ArcR(Id, f64),
 }
 
 /// Resultado de um quadro: pedidos e marcas do gesto.
@@ -105,6 +107,7 @@ pub fn apply(list: &mut [Pmi], reqs: &[Req]) -> bool {
             Req::Offset(id, o) => (id, Box::new(move |p| std::mem::replace(&mut p.offset, o) != o)),
             Req::Ext(id, e) => (id, Box::new(move |p| std::mem::replace(&mut p.style.ext_over, e) != e)),
             Req::Text(id, t) => (id, Box::new(move |p| std::mem::replace(&mut p.style.text_along, t) != t)),
+            Req::ArcR(id, r) => (id, Box::new(move |p| std::mem::replace(&mut p.style.arc_r, r) != r)),
         };
         if let Some(p) = list.iter_mut().find(|p| p.id == id) {
             mudou |= f(p);
@@ -235,6 +238,76 @@ pub fn linear(ui: &mut egui::Ui, painter: &egui::Painter, cam: &Camera, rect: Re
     }
 }
 
+/// Raio do arco de uma cota angular ou de arco, em px: `arc_r` mm medidos a partir do vértice ao
+/// longo da bissetriz, ou o padrão de 34 px.
+pub fn arc_radius_px(cam: &Camera, rect: Rect, pm: &Pmi, a: &[[f64; 3]]) -> f32 {
+    const PADRAO: f32 = 34.;
+    if pm.style.arc_r <= 0. || a.len() < 3 {
+        return PADRAO;
+    }
+    let (v, p, q) = (v3(a[0]), v3(a[1]), v3(a[2]));
+    let bis = ((p - v).normalize_or_zero() + (q - v).normalize_or_zero()).normalize_or_zero();
+    match (cam.project(rect, v), cam.project(rect, v + bis * pm.style.arc_r as f32)) {
+        (Some(s), Some(t)) if (t - s).length() > 6. => (t - s).length(),
+        _ => PADRAO,
+    }
+}
+
+/// Alças de uma cota angular ou de arco: o raio do arco, arrastado ao longo da bissetriz, em mm
+/// inteiros (Shift solta).
+pub fn arco(ui: &mut egui::Ui, painter: &egui::Painter, cam: &Camera, rect: Rect, pm: &Pmi, a: &[[f64; 3]], out: &mut Out) {
+    if a.len() < 3 {
+        return;
+    }
+    let (v, p, q) = (v3(a[0]), v3(a[1]), v3(a[2]));
+    let (Some(sv), Some(s1), Some(s2)) = (cam.project(rect, v), cam.project(rect, p), cam.project(rect, q)) else { return };
+    let rad = arc_radius_px(cam, rect, pm, a);
+    let mid = sv + ((s1 - sv).normalized() + (s2 - sv).normalized()).normalized() * rad;
+    let shift = ui.input(|i| i.modifiers.shift);
+    let r = alca(ui, painter, mid, egui::Id::unique(("pmi_alca_arco", pm.id.0)), 1, egui::CursorIcon::ResizeNeSw, "arraste para mudar o raio do arco da cota (1 mm; Shift solta)");
+    if r.drag_started() {
+        out.begin = true;
+    }
+    if let (true, Some(m)) = (r.dragged(), r.interact_pointer_pos()) {
+        let n = (p - v).cross(q - v).normalize_or_zero();
+        if let Some(hit) = plane_hit(cam, rect, m, v, if n.length() > 0.5 { n } else { -cam.ray(rect, rect.center()).1 }) {
+            let mm = pmi_snap::snap_mm((hit - v).length() as f64, shift).max(1.);
+            out.reqs.push(Req::ArcR(pm.id, mm));
+            valor(painter, m, format!("{} {} mm", tr("raio do arco"), fenkra_core::pmi::num(mm)));
+        }
+    }
+    if r.drag_stopped() {
+        out.end = true;
+    }
+}
+
+/// Alça de posição das demais anotações (raio, diâmetro, nota, rugosidade, solda, quadro, datum):
+/// arrasta o rótulo no plano da anotação, com o comprimento em 1 mm e o ângulo em 15° a partir da
+/// âncora (Shift solta). Também fica desfazível, como as outras alças.
+pub fn posicao(ui: &mut egui::Ui, painter: &egui::Painter, cam: &Camera, rect: Rect, pm: &Pmi, a: &[[f64; 3]], lbl: Rect, out: &mut Out) {
+    let Some(&first) = a.first() else { return };
+    let shift = ui.input(|i| i.modifiers.shift);
+    let r = alca(ui, painter, lbl.left_center() - egui::vec2(14., 0.), egui::Id::unique(("pmi_alca_pos", pm.id.0)), 0, egui::CursorIcon::Grab, "arraste para mover o rótulo; encaixa em 1 mm e 15° a partir da âncora (Shift solta)");
+    if r.drag_started() {
+        out.begin = true;
+    }
+    if let (true, Some(m)) = (r.dragged(), r.interact_pointer_pos()) {
+        let n = match pm.plane {
+            Some((n, _)) => v3(n).normalize_or_zero(),
+            None => -cam.ray(rect, rect.center()).1,
+        };
+        if let Some(hit) = plane_hit(cam, rect, m, v3(first) + v3(pm.offset), n) {
+            let sn = pmi_snap::snap_polar(first, arr(hit), arr(n), shift);
+            let o = [sn[0] - first[0], sn[1] - first[1], sn[2] - first[2]];
+            out.reqs.push(Req::Offset(pm.id, o));
+            valor(painter, m, format!("{} mm", fenkra_core::pmi::num(o.iter().map(|x| x * x).sum::<f64>().sqrt())));
+        }
+    }
+    if r.drag_stopped() {
+        out.end = true;
+    }
+}
+
 /// Vértice da chamada arrastado até `hit` (no plano da vista): encaixa em 1 mm e 15°.
 pub fn snap_via(prev: [f64; 3], hit: Vec3, n: Vec3, shift: bool) -> [f64; 3] {
     pmi_snap::snap_polar(prev, arr(hit), arr(n), shift)
@@ -260,6 +333,14 @@ mod tests {
         assert!(!apply(&mut l, &[Req::Ext(Id(99), 1.)]));
         // quem mudou marca o gesto para virar passo de desfazer
         assert!(MUDOU.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn alca_do_arco_grava_o_raio_e_desfaz_como_as_outras() {
+        let mut l = vec![cota()];
+        assert!(apply(&mut l, &[Req::ArcR(Id(7), 25.)]));
+        assert_eq!(l[0].style.arc_r, 25.);
+        assert!(!apply(&mut l, &[Req::ArcR(Id(7), 25.)]));
     }
 
     #[test]
