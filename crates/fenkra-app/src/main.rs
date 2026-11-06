@@ -102,6 +102,7 @@ mod asm_encaixe;
 mod textos_plm;
 mod textos_curso;
 mod curso;
+mod curso_exemplos;
 mod mapa_macro;
 mod compat;
 mod curso_ui;

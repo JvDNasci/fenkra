@@ -4315,7 +4315,17 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         }
         let (componentes, restricoes) = self.asm.as_ref().map_or((0, 0), |s| (s.asm.nodes.len(), s.asm.mates.len()));
         let (folhas, vistas, cotas, tabelas) = self.dwg.as_ref().map_or((0, 0, 0, 0), |s| (s.d.sheets.len(), s.d.views.len(), s.d.dims.len(), s.d.tables.len()));
-        let cx = crate::curso::Contexto { doc: &self.open.doc, componentes, restricoes, folhas, vistas, cotas, tabelas };
+        let (notas, vistas_planas, tabelas_dobras, carimbo) = self.dwg.as_ref().map_or((0, 0, 0, false), |s| {
+            (
+                s.d.notes.len(),
+                s.d.views.iter().filter(|v| matches!(v.kind, fenkra_desenho::ViewKind::Flat)).count(),
+                s.d.tables.iter().filter(|t| matches!(t.kind, fenkra_desenho::TableKind::Bends)).count(),
+                !s.d.title.title.trim().is_empty() || !s.d.title.drawn_by.trim().is_empty(),
+            )
+        });
+        let usados = self.curso_ui.usados.clone();
+        let nomes = [self.asm.as_ref().map_or("", |s| s.asm.name.as_str()), self.dwg.as_ref().map_or("", |s| s.d.name.as_str())];
+        let cx = crate::curso::Contexto { doc: &self.open.doc, componentes, restricoes, folhas, vistas, cotas, tabelas, notas, vistas_planas, tabelas_dobras, carimbo, nomes, usados: &usados };
         let a = crate::curso_ui::painel(ctx, area, &mut self.curso_ui, &mut self.settings, &cx);
         let b = crate::curso_ui::pergunta_inicial(ctx, &mut self.curso_ui, &mut self.settings);
         for saida in [a, b] {
