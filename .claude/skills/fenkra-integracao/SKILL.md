@@ -35,3 +35,5 @@ Antes de comitar: `git grep -E '^(<<<<<<< |>>>>>>> )' -- crates docs scripts` de
 - Redirecione a saída para um log e leia o log. Não use `| head` no pipe do `cargo test`, porque corta a execução.
 - Use `git add` por pasta (`crates docs`), nunca `-A`: há arquivos locais do usuário.
 - Só marque feito no backlog depois que o merge entrou no develop.
+
+Conflito no arquivo inteiro em `lib.rs` ou `app.rs` é fim de linha (CRLF contra LF): extraia as três versões com `git show :1:`, `:2:`, `:3:`, normalize para LF e rode `git merge-file`.
