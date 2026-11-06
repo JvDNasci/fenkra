@@ -300,6 +300,64 @@ fn geometria_saida(r: &fenkra_solidos::RecomputeResult, e: &Extrude) -> Option<(
     Some((pivo, eixo, partida))
 }
 
+/// Término "até" que a seta de encaixe controla: até face, até plano, até o próximo e até o último.
+fn termino_ate(e: &Extent) -> bool {
+    matches!(e, Extent::UpToSurface(_) | Extent::UpTo(_) | Extent::UpToNext | Extent::UpToLast)
+}
+
+/// Término "até face" que o arraste da seta produz quando o cursor está sobre `pick` (B89). Faces do
+/// próprio comando não valem: a ferramenta não pode parar nela mesma.
+pub(super) fn ate_face_sob_cursor(pick: &crate::picking::Pick, comando: Id, chave: Option<FaceKey>) -> Option<Extent> {
+    match pick {
+        crate::picking::Pick::Face { owner, point, normal, body, .. } if *owner != comando && *body < crate::picking::SURF_BASE => Some(Extent::UpToSurface(SurfRef::Face {
+            point: point.map(|v| v as f64),
+            normal: normal.map(|v| v as f64),
+            owner: Some(*owner),
+            key: chave,
+        })),
+        _ => None,
+    }
+}
+
+/// Seta do término "até face" (B89): fica na ponta do perfil e, ao ser arrastada, encaixa na face
+/// sob o cursor. O rótulo troca "Distância" por "Até face" (e diz de quem é a face).
+pub(super) fn seta_ate_face(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id) {
+    let Some(r) = app.result.as_ref() else { return };
+    let Some(f) = app.open.doc.feature(id) else { return };
+    let FeatureKind::Extrude(e) = &f.kind else { return };
+    if !termino_ate(&e.extent) {
+        return;
+    }
+    let Some((base, dir)) = base_da_extrusao(r, e) else { return };
+    // comprimento: até a face escolhida, ou um valor de convite quando ainda não há face
+    let (alvo, rotulo) = match &e.extent {
+        Extent::UpToSurface(SurfRef::Face { point, owner, .. }) => (((v3(*point) - base).dot(dir)).max(2.), format!("{} · {}", tr("Até face"), owner.map(|o| app.open.doc.name_of(o)).unwrap_or_default())),
+        _ => (30., tr("Até face").to_string()),
+    };
+    let ponta = base + dir * alvo;
+    let (Some(sb), Some(st)) = (cam.project(rect, base), cam.project(rect, ponta)) else { return };
+    let cor = crate::theme::accent(ui.visuals());
+    let hr = ui.interact(Rect::from_center_size(st, egui::vec2(PEGA, PEGA)), egui::Id::new(("ate_face", id.0)), egui::Sense::drag());
+    let painter = ui.painter_at(rect);
+    painter.line_segment([sb, st], Stroke::new(2.5, cor));
+    painter.circle_stroke(st, PEGA / 2., Stroke::new(2., cor));
+    painter.circle_filled(sb, 3.5, cor);
+    let g = painter.layout_no_wrap(rotulo, egui::FontId::proportional(12.), Color32::WHITE);
+    let caixa = Rect::from_min_size(st + egui::vec2(18., -10.), g.size() + egui::vec2(10., 6.));
+    painter.rect_filled(caixa, 4., Color32::from_rgba_unmultiplied(20, 60, 110, 220));
+    painter.galley(caixa.min + egui::vec2(5., 3.), g, Color32::WHITE);
+    hr.clone().on_hover_text(tr("Arraste a seta até uma face do modelo: o término encaixa nela."));
+    if hr.dragged() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+        let novo = app.hover_pick.as_ref().and_then(|p| ate_face_sob_cursor(p, id, app.face_key_of(Some(p))));
+        if let (Some(novo), Some(f)) = (novo, app.open.doc.feature_mut(id)) {
+            if let FeatureKind::Extrude(e) = &mut f.kind {
+                e.extent = novo;
+            }
+        }
+    }
+}
+
 /// Arcos do comando aberto: ângulo de saída da extrusão e rotação do corpo.
 pub(super) fn arcos(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id) {
     let Some(r) = app.result.as_ref() else { return };

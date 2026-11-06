@@ -1738,7 +1738,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     /// Plano a usar para um novo sketch/plano: o selecionado, ou XY.
     /// Plano para um novo sketch/plano: o plano ou a face clicada na viewport, senão o da árvore.
     /// Chave v2 da face escolhida, se ela for de um corpo e tiver papel conhecido.
-    fn face_key_of(&self, p: Option<&crate::picking::Pick>) -> Option<FaceKey> {
+    pub(crate) fn face_key_of(&self, p: Option<&crate::picking::Pick>) -> Option<FaceKey> {
         let crate::picking::Pick::Face { body, face, .. } = *p? else { return None };
         self.result.as_ref()?.bodies.get(body)?.face_key(face)
     }

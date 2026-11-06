@@ -986,6 +986,15 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 f.kind = kind;
             }
             f.target = target;
+            // B90: o nome automático do furo acompanha os valores ("Furo M8 roscado x 20"); nome escolhido à mão fica
+            if let FeatureKind::Hole(h) = &f.kind {
+                if fenkra_solidos::furo_norma::nome_e_automatico(&f.name) {
+                    let novo = fenkra_solidos::furo_norma::nome_do_furo(h, &vars);
+                    if novo != f.name {
+                        f.name = novo;
+                    }
+                }
+            }
 
             section(ui, "Relações");
             used_by(ui, &doc_ro, id, &mut new_sel);
