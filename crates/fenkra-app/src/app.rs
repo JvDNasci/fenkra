@@ -26,6 +26,7 @@ mod roda_app;
 mod estado_doc;
 mod exportar;
 mod importar;
+mod lote;
 mod plm;
 mod projeto;
 mod salvar;
@@ -187,6 +188,9 @@ pub struct App {
     /// defeito do relatório realçado na viewport
     importar_defeito: Option<usize>,
     exportar_dialogo: Option<exportar::Dialogo>,
+    /// tela "Formatos suportados" aberta
+    formatos_aberto: bool,
+    lote_painel: Option<lote::Painel>,
     /// documento comparado, rótulo da revisão e o que mudou desde ela (B279)
     comparacao: Option<(u64, String, fenkra_project::estado_doc::Diferencas)>,
     /// diagnóstico e pais/filhos (B69)
@@ -396,6 +400,8 @@ impl App {
             importar_relatorio: None,
             importar_defeito: None,
             exportar_dialogo: None,
+            formatos_aberto: false,
+            lote_painel: None,
             comparacao: None,
             diag: Default::default(),
             selecao_ciclo: Default::default(),
@@ -507,6 +513,13 @@ impl App {
             let formato = fenkra_conversor::Formato::TODOS.into_iter().find(|q| q.extensoes().contains(&f.as_str()));
             app.abrir_painel_exportar(formato.unwrap_or(fenkra_conversor::Formato::Step));
             app.started = true;
+        }
+        // desenvolvimento: FENKRA_DEMO_FORMATOS=1 abre a matriz; FENKRA_DEMO_LOTE=<pasta>, um lote já simulado
+        if std::env::var("FENKRA_DEMO_FORMATOS").is_ok() {
+            app.abrir_formatos();
+        }
+        if let Ok(pasta) = std::env::var("FENKRA_DEMO_LOTE") {
+            app.demo_lote(pasta.into());
         }
         // desenvolvimento: FENKRA_DEMO_IMPORTAR=<arquivo> abre o painel de importação com esse arquivo
         if let Ok(arquivo) = std::env::var("FENKRA_DEMO_IMPORTAR") {
@@ -3289,6 +3302,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     }
                     if ui.button(tr("Exportar malha…")).on_hover_text(tr("Grava em formatos abertos de malha e visualização: 3MF, OBJ, PLY, glTF, USD e outros, com desvio, cor e estrutura.")).clicked() {
                         self.abrir_painel_exportar(fenkra_conversor::Formato::Glb);
+                        ui.close();
+                    }
+                    if ui.add(egui::Button::image_and_text(crate::icons::get("conversao_lote"), tr("Conversão em lote…"))).on_hover_text(tr("Converte arquivos, pastas e documentos do projeto para vários formatos de uma vez, com simulação antes de gravar.")).clicked() {
+                        self.abrir_painel_lote();
+                        ui.close();
+                    }
+                    if ui.add(egui::Button::image_and_text(crate::icons::get("formatos_suportados"), tr("Formatos suportados…"))).on_hover_text(tr("Mostra o que o Fenkra lê e grava, e o que atravessa em cada formato.")).clicked() {
+                        self.abrir_formatos();
                         ui.close();
                     }
                     if ui.button(tr("Exportar árvore paramétrica…")).on_hover_text(tr("Grava a receita da peça ou da montagem em JSON aberto: esboços, cotas, comandos, nomes e cores. Não leva a geometria pronta.")).clicked() {
@@ -8064,6 +8085,7 @@ impl eframe::App for App {
         }
         self.painel_importar(ctx, area);
         self.painel_exportar(ctx, area);
+        self.painel_lote(ctx, area);
         if let Some(id) = ctx.data(|m| m.get_temp::<Id>(egui::Id::unique("fenkra_props"))) {
             ctx.data_mut(|m| m.remove::<Id>(egui::Id::unique("fenkra_props")));
             self.props_target = Some(if self.open.doc.reference(id).is_some() { AppTarget::Ref(id) } else { AppTarget::Feature(id) });

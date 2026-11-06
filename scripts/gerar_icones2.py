@@ -231,6 +231,8 @@ def desenhos():
     ic("salvar", B="M8 8h25l7 7v25H8z", R="M16 8v10h14V8M14 40V26h20v14")
     ic("importar_arquivo", B=CUBO(24, 20, 12, 6, 10), R="M24 5v12M18 11l6 6 6-6")
     ic("exportar_arquivo", B=CUBO(24, 20, 12, 6, 10), R="M24 17V5M18 11l6-6 6 6")
+    ic("conversao_lote", B=Q(6, 6, 18, 24) + "M12 30v8h18V34", R="M30 18h12M37 13l5 5-5 5")
+    ic("formatos_suportados", B=Q(6, 8, 36, 32) + "M6 19h36M6 30h36M19 8v32", R=CHECK(30, 24, 4))
     ic("liberar_revisao", B=Q(8, 6, 24, 34), R=CADEADO(34, 34))
     ic("onde_usado", B=CUBO(20, 6, 12, 6, 12), R=C(32, 32, 7) + "M37 37l6 6")
     ic("curso", B=Z((6, 12), (24, 18), (42, 12), (42, 34), (24, 40), (6, 34)) + "M24 18V40", R=CHECK(34, 8, 4))
@@ -712,7 +714,7 @@ ic("forma_tangencia", B="M6 36c10-14 26-14 36 0", R=L((8, 25), (40, 25)) + S(24,
 ic("forma_simetria", b="M24 4v40", R="M20 10c-16 2-16 26 0 28M28 10c16 2 16 26 0 28")
 ic("forma_converter", b=Q(6, 12, 18, 24), R=CUBO(32, 12, 10, 5, 12) + "M18 24h4", pb=[(6, 12), (24, 12), (24, 36), (6, 36)])
 
-SO_INTERFACE = {"sm_aba_perfis", "sm_desdobrar_parcial", "sm_redobrar_parcial", "sm_converter_chapa", "sm_aba_laco", "sm_fecha_canto", "sm_canto_topo", "sm_canto_sobreposto", "sm_canto_sob", "importar_arquivo", "asm_catalogo", "arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais", "exportar_arquivo", "liberar_revisao", "onde_usado", "comparar", "estado_sem_revisao", "estado_liberada", "estado_editado", "estado_leitura", "estado_conflito", "forma", "forma_caixa", "forma_esfera", "forma_cilindro", "forma_plano", "forma_extrudar", "forma_laco", "forma_aresta", "forma_borda", "forma_tangencia", "forma_simetria", "forma_converter", "des_cota_inteligente", "curso", "mapa_macro", "perfil_fluxo", "an_conexao", "an_desvio", "an_pente", "sup_regrada"}
+SO_INTERFACE = {"conversao_lote", "formatos_suportados", "sm_aba_perfis", "sm_desdobrar_parcial", "sm_redobrar_parcial", "sm_converter_chapa", "sm_aba_laco", "sm_fecha_canto", "sm_canto_topo", "sm_canto_sobreposto", "sm_canto_sob", "importar_arquivo", "asm_catalogo", "arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais", "exportar_arquivo", "liberar_revisao", "onde_usado", "comparar", "estado_sem_revisao", "estado_liberada", "estado_editado", "estado_leitura", "estado_conflito", "forma", "forma_caixa", "forma_esfera", "forma_cilindro", "forma_plano", "forma_extrudar", "forma_laco", "forma_aresta", "forma_borda", "forma_tangencia", "forma_simetria", "forma_converter", "des_cota_inteligente", "curso", "mapa_macro", "perfil_fluxo", "an_conexao", "an_desvio", "an_pente", "sup_regrada"}
 
 
 # ---------- saída ----------

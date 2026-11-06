@@ -12,6 +12,7 @@ mod documento;
 mod dxf;
 mod formato;
 mod importar;
+pub mod lote;
 pub mod malha;
 mod matriz;
 mod modelo;
@@ -20,6 +21,7 @@ mod opcoes;
 pub mod processo;
 mod provedor;
 mod relatorio;
+mod sonda;
 
 pub use documento::montar_documento;
 pub use formato::{detectar, Formato};

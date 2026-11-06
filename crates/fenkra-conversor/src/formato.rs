@@ -61,6 +61,11 @@ impl Formato {
         Self::MALHA.contains(&self)
     }
 
+    /// Formato de desenho plano, que vive de esboços e não de sólidos.
+    pub fn e_2d(self) -> bool {
+        self == Formato::Dxf
+    }
+
     pub fn nome(self) -> &'static str {
         match self {
             Formato::Step => "STEP",
@@ -105,7 +110,7 @@ impl Formato {
         }
     }
 
-    fn por_extensao(caminho: &Path) -> Option<Formato> {
+    pub(crate) fn por_extensao(caminho: &Path) -> Option<Formato> {
         let e = caminho.extension()?.to_string_lossy().to_lowercase();
         Formato::TODOS.into_iter().find(|f| f.extensoes().contains(&e.as_str()))
     }

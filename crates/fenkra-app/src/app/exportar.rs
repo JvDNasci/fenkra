@@ -62,6 +62,74 @@ enum Acao {
     Cancelar,
 }
 
+/// Suporte, modo, parâmetros e avançado de um formato. O lote usa o mesmo painel em cada perfil.
+pub(super) fn opcoes_ui(ui: &mut egui::Ui, formato: Formato, o: &mut OpcoesExportar, montagem: bool) {
+        let suporte = Registro::default().capacidades(formato);
+        ui.small(format!("{}: {}", tr("Leva"), lista(&suporte.leva()))).on_hover_text(tr("O que este formato carrega, conferido na matriz de formatos."));
+        let falta = suporte.nao_leva();
+        if !falta.is_empty() {
+            ui.small(format!("{}: {}", tr("Não leva"), lista(&falta))).on_hover_text(tr("O que fica para trás ao gravar neste formato."));
+        }
+        ui.add_space(4.);
+                if formato.e_malha() {
+            if tem_codificacao(formato) {
+                ui.checkbox(&mut o.malha.binario, tr("Binário")).on_hover_text(tr("Arquivo menor e sem perda de leitura. Desligado grava em texto, que se abre em qualquer editor."));
+            }
+        } else if formato == Formato::Step {
+            ui.label(tr("Esquema"));
+            egui::ComboBox::from_id_salt("exportar_esquema").selected_text(nome_esquema(o.esquema)).width(LARGURA - 40.).show_ui(ui, |ui| {
+                for e in [EsquemaSaida::Ap203, EsquemaSaida::Ap214, EsquemaSaida::Ap242] {
+                    ui.selectable_value(&mut o.esquema, e, nome_esquema(e));
+                }
+            }).response.on_hover_text(tr("AP214 leva cores e camadas; AP203 não; AP242 é o mais novo."));
+        } else {
+            ui.label(tr("Modo do IGES"));
+            egui::ComboBox::from_id_salt("exportar_modo_iges").selected_text(tr(o.iges.nome())).width(LARGURA - 40.).show_ui(ui, |ui| {
+                for m in ModoIges::TODOS {
+                    ui.selectable_value(&mut o.iges, m, tr(m.nome())).on_hover_text(tr(dica_modo(m)));
+                }
+            }).response.on_hover_text(tr(dica_modo(o.iges)));
+        }
+        if montagem {
+            ui.label(tr("Estrutura"));
+            egui::ComboBox::from_id_salt("exportar_estrutura").selected_text(tr(o.estrutura.nome())).width(LARGURA - 40.).show_ui(ui, |ui| {
+                for e in Estrutura::TODAS {
+                    ui.selectable_value(&mut o.estrutura, e, tr(e.nome())).on_hover_text(tr(dica_estrutura(e)));
+                }
+            }).response.on_hover_text(tr(dica_estrutura(o.estrutura)));
+        }
+        if formato.e_malha() {
+            ui.label(tr("Desvio da malha"));
+            ui.add(dv(&mut o.malha.desvio).speed(0.005).range(0.001..=10.).suffix(" mm").dica(tr("Quanto a malha pode se afastar da superfície exata. Menor é mais fiel e mais pesado.")));
+            ui.label(tr("Ângulo da malha"));
+            ui.add(dv(&mut o.malha.angulo).speed(0.5).range(1.0..=60.).suffix(" °").dica(tr("Ângulo máximo entre triângulos vizinhos numa superfície curva. Menor deixa a curva mais lisa.")));
+        }
+        if unidade_fixa(formato) {
+            ui.small(tr("Este formato é sempre gravado em metros, como a norma dele manda.")).on_hover_text(tr("O tamanho da peça não muda: quem abre o arquivo vê a medida certa."));
+        } else {
+            ui.label(tr("Unidade do arquivo"));
+            egui::ComboBox::from_id_salt("exportar_unidade").selected_text(tr(nome_unidade(o.unidade))).width(LARGURA - 40.).show_ui(ui, |ui| {
+                for u in [UnidadeSaida::Milimetro, UnidadeSaida::Polegada, UnidadeSaida::Metro] {
+                    ui.selectable_value(&mut o.unidade, u, tr(nome_unidade(u)));
+                }
+            }).response.on_hover_text(tr("Em que unidade os números vão escritos. O tamanho da peça não muda."));
+            if !suporte.unidade {
+                ui.small(tr("O arquivo não diz a unidade: quem abrir precisa saber qual é.")).on_hover_text(tr("Este formato guarda só os números. Milímetro é o que a maioria dos programas supõe."));
+            }
+        }
+        let malha = formato.e_malha();
+        egui::CollapsingHeader::new(tr("Avançado")).id_salt("exportar_avancado").default_open(!malha).show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.add_enabled(suporte.cor, egui::Checkbox::new(&mut o.cores, tr("Cores"))).on_hover_text(tr("Grava a cor da peça."));
+                ui.checkbox(&mut o.nomes, tr("Nomes")).on_hover_text(tr("Grava os nomes das peças."));
+                ui.add_enabled(suporte.camadas, egui::Checkbox::new(&mut o.camadas, tr("Camadas"))).on_hover_text(tr("Grava as camadas que a peça tiver."));
+                if malha {
+                    ui.checkbox(&mut o.malha.normais, tr("Normais")).on_hover_text(tr("Grava a normal de cada vértice nos formatos que têm esse campo: a superfície curva aparece lisa."));
+                }
+            });
+        });
+}
+
 /// Painel aberto durante o comando.
 pub struct Dialogo {
     formato: Formato,
@@ -83,71 +151,7 @@ impl Dialogo {
                 ui.selectable_value(&mut self.formato, f, f.nome());
             }
         }).response.on_hover_text(tr("STEP leva a árvore de produtos e é o padrão atual. IGES serve a quem só lê superfícies."));
-        let suporte = registro.capacidades(self.formato);
-        ui.small(format!("{}: {}", tr("Leva"), lista(&suporte.leva()))).on_hover_text(tr("O que este formato carrega, conferido na matriz de formatos."));
-        let falta = suporte.nao_leva();
-        if !falta.is_empty() {
-            ui.small(format!("{}: {}", tr("Não leva"), lista(&falta))).on_hover_text(tr("O que fica para trás ao gravar neste formato."));
-        }
-        ui.add_space(4.);
-        let o = &mut self.opcoes;
-        if self.formato.e_malha() {
-            if tem_codificacao(self.formato) {
-                ui.checkbox(&mut o.malha.binario, tr("Binário")).on_hover_text(tr("Arquivo menor e sem perda de leitura. Desligado grava em texto, que se abre em qualquer editor."));
-            }
-        } else if self.formato == Formato::Step {
-            ui.label(tr("Esquema"));
-            egui::ComboBox::from_id_salt("exportar_esquema").selected_text(nome_esquema(o.esquema)).width(LARGURA - 40.).show_ui(ui, |ui| {
-                for e in [EsquemaSaida::Ap203, EsquemaSaida::Ap214, EsquemaSaida::Ap242] {
-                    ui.selectable_value(&mut o.esquema, e, nome_esquema(e));
-                }
-            }).response.on_hover_text(tr("AP214 leva cores e camadas; AP203 não; AP242 é o mais novo."));
-        } else {
-            ui.label(tr("Modo do IGES"));
-            egui::ComboBox::from_id_salt("exportar_modo_iges").selected_text(tr(o.iges.nome())).width(LARGURA - 40.).show_ui(ui, |ui| {
-                for m in ModoIges::TODOS {
-                    ui.selectable_value(&mut o.iges, m, tr(m.nome())).on_hover_text(tr(dica_modo(m)));
-                }
-            }).response.on_hover_text(tr(dica_modo(o.iges)));
-        }
-        if self.montagem {
-            ui.label(tr("Estrutura"));
-            egui::ComboBox::from_id_salt("exportar_estrutura").selected_text(tr(o.estrutura.nome())).width(LARGURA - 40.).show_ui(ui, |ui| {
-                for e in Estrutura::TODAS {
-                    ui.selectable_value(&mut o.estrutura, e, tr(e.nome())).on_hover_text(tr(dica_estrutura(e)));
-                }
-            }).response.on_hover_text(tr(dica_estrutura(o.estrutura)));
-        }
-        if self.formato.e_malha() {
-            ui.label(tr("Desvio da malha"));
-            ui.add(dv(&mut o.malha.desvio).speed(0.005).range(0.001..=10.).suffix(" mm").dica(tr("Quanto a malha pode se afastar da superfície exata. Menor é mais fiel e mais pesado.")));
-            ui.label(tr("Ângulo da malha"));
-            ui.add(dv(&mut o.malha.angulo).speed(0.5).range(1.0..=60.).suffix(" °").dica(tr("Ângulo máximo entre triângulos vizinhos numa superfície curva. Menor deixa a curva mais lisa.")));
-        }
-        if unidade_fixa(self.formato) {
-            ui.small(tr("Este formato é sempre gravado em metros, como a norma dele manda.")).on_hover_text(tr("O tamanho da peça não muda: quem abre o arquivo vê a medida certa."));
-        } else {
-            ui.label(tr("Unidade do arquivo"));
-            egui::ComboBox::from_id_salt("exportar_unidade").selected_text(tr(nome_unidade(o.unidade))).width(LARGURA - 40.).show_ui(ui, |ui| {
-                for u in [UnidadeSaida::Milimetro, UnidadeSaida::Polegada, UnidadeSaida::Metro] {
-                    ui.selectable_value(&mut o.unidade, u, tr(nome_unidade(u)));
-                }
-            }).response.on_hover_text(tr("Em que unidade os números vão escritos. O tamanho da peça não muda."));
-            if !suporte.unidade {
-                ui.small(tr("O arquivo não diz a unidade: quem abrir precisa saber qual é.")).on_hover_text(tr("Este formato guarda só os números. Milímetro é o que a maioria dos programas supõe."));
-            }
-        }
-        let malha = self.formato.e_malha();
-        egui::CollapsingHeader::new(tr("Avançado")).id_salt("exportar_avancado").default_open(!malha).show(ui, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                ui.add_enabled(suporte.cor, egui::Checkbox::new(&mut o.cores, tr("Cores"))).on_hover_text(tr("Grava a cor da peça."));
-                ui.checkbox(&mut o.nomes, tr("Nomes")).on_hover_text(tr("Grava os nomes das peças."));
-                ui.add_enabled(suporte.camadas, egui::Checkbox::new(&mut o.camadas, tr("Camadas"))).on_hover_text(tr("Grava as camadas que a peça tiver."));
-                if malha {
-                    ui.checkbox(&mut o.malha.normais, tr("Normais")).on_hover_text(tr("Grava a normal de cada vértice nos formatos que têm esse campo: a superfície curva aparece lisa."));
-                }
-            });
-        });
+        opcoes_ui(ui, self.formato, &mut self.opcoes, self.montagem);
         ui.add_space(6.);
         let mut acao = Acao::Nada;
         ui.horizontal(|ui| {

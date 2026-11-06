@@ -2,7 +2,7 @@
 //! O que atravessa cada formato. Cada provedor declara as suas [`Capacidades`], e a tela e o diálogo só
 //! leem o que ele declarou; nenhuma lista à parte pode ficar velha.
 
-use crate::{Formato, Provedor, Registro};
+use crate::{Formato, Registro};
 use serde::{Deserialize, Serialize};
 
 /// Uma linha da matriz: o que um formato lê, grava e carrega.
@@ -86,6 +86,23 @@ impl Registro {
     /// Extensões de tudo o que se pode ler, para o filtro do seletor de arquivo.
     pub fn extensoes_de_leitura(&self) -> Vec<&'static str> {
         self.matriz().into_iter().filter(|l| l.capacidades.ler).flat_map(|l| l.formato.extensoes().iter().copied()).collect()
+    }
+
+    /// A matriz em Markdown, para `docs/modulos/formatos-suportados.md`. Um teste confere se o arquivo
+    /// publicado é este texto.
+    pub fn matriz_em_texto(&self) -> String {
+        let matriz = self.matriz();
+        let mut t = String::from("# Formatos suportados\n\n> Gerado de `Registro::matriz`; não edite à mão. Cada célula é conferida gravando e lendo um\n> modelo de prova em `crates/fenkra-conversor/tests/matriz.rs`. Para regravar: `FENKRA_ATUALIZAR_MATRIZ=1 cargo test -p fenkra-conversor --test matriz`.\n\n");
+        let colunas = matriz.first().map(|l| l.capacidades.colunas().map(|(n, _)| n).to_vec()).unwrap_or_default();
+        t.push_str(&format!("| Formato | Extensões | Ler | Gravar | {} | Provedor |\n", colunas.join(" | ")));
+        t.push_str(&format!("|---|---|---|---|{}---|\n", "---|".repeat(colunas.len())));
+        let marca = |v: bool| if v { "sim" } else { "–" };
+        for l in &matriz {
+            let c = &l.capacidades;
+            let celulas: Vec<&str> = c.colunas().iter().map(|(_, v)| marca(*v)).collect();
+            t.push_str(&format!("| {} | {} | {} | {} | {} | {} |\n", l.formato.nome(), l.formato.extensoes().join(", "), marca(c.ler), marca(c.gravar), celulas.join(" | "), l.provedor));
+        }
+        t
     }
 
     /// Formatos em que se pode gravar uma peça, na ordem da tela.

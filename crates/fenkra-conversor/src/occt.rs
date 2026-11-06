@@ -26,7 +26,8 @@ impl Provedor for ProvedorOcct {
         let base = Capacidades { ler: true, gravar: true, exata: true, ..Default::default() };
         match formato {
             Formato::Step => Capacidades { cor: true, camadas: true, montagem: true, unidade: true, ..base },
-            Formato::Iges => Capacidades { cor: true, camadas: true, unidade: true, ..base },
+            // o nível do IGES é um número: o nome da camada não volta
+            Formato::Iges => Capacidades { cor: true, unidade: true, ..base },
             _ => base,
         }
     }

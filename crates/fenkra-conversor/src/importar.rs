@@ -375,10 +375,48 @@ impl Registro {
         Ok(Importado { doc, relatorio: r, previa, conjunto: pecas })
     }
 
-    /// Lê e grava noutro formato, sem passar por documento.
+    /// Grava um documento. Formatos de receita saem da árvore, e os outros da forma recalculada.
+    pub fn gravar_documento(&self, doc: &Document, destino: &Path, saida: &crate::OpcoesExportar) -> Result<(), ErroConv> {
+        match Formato::por_extensao(destino) {
+            Some(Formato::Arvore) => {
+                let mut d = doc.clone();
+                crate::arvore::atualizar_pontos(&mut d);
+                let arquivo = crate::arvore::exportar_peca(&d).arquivo();
+                let texto = serde_json::to_string_pretty(&arquivo).map_err(|e| ErroConv::Gravacao(e.to_string()))?;
+                std::fs::write(destino, texto).map_err(|e| ErroConv::Gravacao(format!("não foi possível gravar '{}': {e}", destino.display())))
+            }
+            _ => self.gravar(&ModeloNeutro::de_documento(doc)?, destino, saida),
+        }
+    }
+
+    /// Lê e grava noutro formato. Só passa por documento quem precisa dele: a peça do Fenkra, a árvore e
+    /// o desenho. Malha para malha nem sobe ao B-rep.
     pub fn converter(&self, origem: &Path, destino: &Path, o: &OpcoesImportar, saida: &crate::OpcoesExportar) -> Result<(), ErroConv> {
         let bytes = std::fs::read(origem).map_err(|e| ErroConv::Leitura(format!("não foi possível ler '{}': {e}", origem.display())))?;
+        let extensao = origem.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+        let texto = || String::from_utf8_lossy(&bytes).to_string();
+        match extensao.as_str() {
+            "fkp" => {
+                let doc = Document::from_json(&texto()).map_err(|e| ErroConv::Leitura(format!("peça ilegível: {e}")))?;
+                return self.gravar_documento(&doc, destino, saida);
+            }
+            "fka" => {
+                let asm = fenkra_montagem::Assembly::from_json(&texto()).map_err(|e| ErroConv::Leitura(format!("montagem ilegível: {e}")))?;
+                let pasta = origem.parent().unwrap_or(Path::new("."));
+                if Formato::por_extensao(destino) == Some(Formato::Arvore) {
+                    let arquivo = crate::arvore::exportar_montagem(&asm, pasta)?;
+                    let json = serde_json::to_string_pretty(&arquivo).map_err(|e| ErroConv::Gravacao(e.to_string()))?;
+                    return std::fs::write(destino, json).map_err(|e| ErroConv::Gravacao(e.to_string()));
+                }
+                return self.gravar(&ModeloNeutro::da_montagem(&asm, pasta)?, destino, saida);
+            }
+            _ => {}
+        }
         let (formato, _) = detectar(origem, &bytes)?;
+        if formato == Formato::Arvore || formato.e_2d() {
+            let i = self.importar(origem, o)?;
+            return self.gravar_documento(&i.doc, destino, saida);
+        }
         let saida_formato = self.formato_de_saida(destino)?;
         if formato.e_malha() && saida_formato.e_malha() {
             return crate::malha::converter(formato, origem, saida_formato, destino, o, saida);
