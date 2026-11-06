@@ -557,7 +557,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         }
         FeatureKind::SmFlange(fl) => {
             section(ui, "Parâmetros");
-            crate::editor::expr_lim(ui, "Comprimento reto", &mut fl.length, vars, "mm", Some((0.01, f64::INFINITY)));
+            crate::editor::expr_lim(ui, "Comprimento reto", &mut fl.length, vars, "mm", Some((0., f64::INFINITY)));
             crate::editor::expr_lim(ui, "Ângulo", &mut fl.angle, vars, "°", Some((0.01, 180.)));
             let mut own = fl.radius.is_some();
             ui.horizontal(|ui| {

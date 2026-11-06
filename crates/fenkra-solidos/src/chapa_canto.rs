@@ -247,12 +247,55 @@ pub fn cantos_das_abas(abas: &[AbaCanto]) -> Vec<Canto> {
     v
 }
 
+/// A aba de 90° de uma linha de dobra (no espaço dobrado); `None` para outras dobras. O
+/// comprimento reto não se conhece aqui e fica zero: serve para achar o canto e a alça, não para
+/// montar as peças.
+pub fn aba_da_linha(b: &BendLine, t: f64) -> Option<AbaCanto> {
+    let e = b.eixo.as_ref()?;
+    if !b.up || (b.angle - 90.).abs() > 1e-3 {
+        return None;
+    }
+    let d = geo3d::sub(e.b, e.a);
+    Some(AbaCanto { c0: e.a, ev: geo3d::unit(d)?, l: geo3d::norm(d), n: e.normal, u: e.saida, t, r: b.radius, ba: b.allowance, comp: 0. })
+}
+
+/// Alça 3D da folga do canto: `(base, direção, k)`, com o valor da folga = distância ao longo de
+/// `direção` a partir de `base`, vezes `k`. A base fica na face que não anda quando a folga muda
+/// (a face da aba coberta, nos tipos sobreposto e sob; o meio da diagonal, no topo, onde as duas
+/// pontas recuam meia folga cada). `at` escolhe o canto, como no comando.
+pub fn alca_da_folga(abas: &[AbaCanto], at: V3, kind: u8, invert: bool) -> Option<(V3, V3, f64)> {
+    let cantos = cantos_das_abas(abas);
+    let perto = |c: &Canto| {
+        let d = geo3d::sub(at, c.k);
+        let no_plano = geo3d::sub(d, geo3d::mul(c.a.n, geo3d::dot(d, c.a.n)));
+        geo3d::norm(no_plano)
+    };
+    let c = ordenar(*cantos.iter().min_by(|a, b| perto(a).total_cmp(&perto(b)))?, invert);
+    let (a, b) = (c.a, c.b);
+    let (xa0, xa1, yb0, yb1) = (a.r, a.r + a.t, b.r, b.r + b.t);
+    let z = a.r + 1.5 * a.t;
+    Some(match kind {
+        1 => (ponto(&c, xa0, (yb0 + yb1) / 2., z), geo3d::mul(a.u, -1.), 1.),
+        2 => (ponto(&c, (xa0 + xa1) / 2., yb0, z), geo3d::mul(b.u, -1.), 1.),
+        _ => {
+            let (dx, dy) = (xa1 - xa0, yb1 - yb0);
+            let h = dx.hypot(dy);
+            if h < 1e-9 {
+                return None;
+            }
+            // normal da diagonal, no referencial do canto, levada ao espaço
+            let n = geo3d::add(geo3d::mul(a.u, dy / h), geo3d::mul(b.u, -dx / h));
+            (ponto(&c, (xa0 + xa1) / 2., (yb0 + yb1) / 2., z), n, 2.)
+        }
+    })
+}
+
 impl Ctx<'_> {
     /// Fecha o canto escolhido (ou todos, com propagação) entre abas de 90°.
     pub(super) fn run_corner_close(&mut self, f: &Feature, cc: &SmCornerClose) -> Result<Option<String>, String> {
         let k = |e: KernelError| e.0;
         let sp = self.sheet()?;
-        let p = ParamsCanto { kind: cc.kind, gap: ev(&cc.gap, &self.vars, "folga")?, ratio: ev(&cc.ratio, &self.vars, "razão de sobreposição")?, narrow: cc.narrow };
+        let p = ParamsCanto { kind: cc.kind, gap: super::chapa_laco::ev_faixa(&cc.gap, &self.vars, "folga do canto", 0., 10., "mm")?, ratio: super::chapa_laco::ev_faixa(&cc.ratio, &self.vars, "razão de sobreposição", 0., 1., "")?, narrow: cc.narrow };
         let abas: Vec<AbaCanto> = self.sheet_maps.iter().filter_map(aba_de_mapa).collect();
         if abas.len() < 2 {
             return Err("o fechamento de canto precisa de duas abas de 90° antes dele".into());

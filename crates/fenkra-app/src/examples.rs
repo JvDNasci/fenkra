@@ -284,11 +284,11 @@ pub fn paint_preview(p: &egui::Painter, rect: egui::Rect, pv: &Preview, angle: f
         let d = (rn[0] * light[0] + rn[1] * light[1] + rn[2] * light[2]).abs();
         let k = 0.42 + 0.58 * d;
         let spec = d.powf(24.) * 40.;
-        Color32::from_rgb(
+        crate::theme::cor_rgb([
             (base[0] * k + spec).min(255.) as u8,
             (base[1] * k + spec).min(255.) as u8,
             (base[2] * k + spec).min(255.) as u8,
-        )
+        ])
     };
     let sc = |v: (f32, f32, f32)| pos2(c.x + v.0 * s, c.y - v.1 * s);
     // itens: (profundidade, tri ou aresta)
@@ -306,7 +306,7 @@ pub fn paint_preview(p: &egui::Painter, rect: egui::Rect, pv: &Preview, angle: f
     let mut m = egui::Mesh::default();
     // cor da peça e das arestas vêm do tema quando o corpo usa a cor padrão (como na viewport)
     let (peca_tema, aresta_tema) = crate::theme::piece_colors();
-    let ink = aresta_tema.map_or(Color32::from_rgb(18, 18, 26), |a| Color32::from_rgb(a[0], a[1], a[2]));
+    let ink = aresta_tema.map_or(Color32::from_gray(20), crate::theme::cor_rgb);
     for (_, i, is_edge) in items {
         if is_edge {
             let e = ev[i as usize];

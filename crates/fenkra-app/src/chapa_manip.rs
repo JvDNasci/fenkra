@@ -29,6 +29,8 @@ pub enum Campo {
     Rampa,
     /// folga da bainha
     Folga,
+    /// folga entre as faces no fechamento de canto
+    FolgaCanto,
 }
 
 impl Campo {
@@ -42,6 +44,7 @@ impl Campo {
             Campo::Desvio => "Desvio",
             Campo::Rampa => "Rampa",
             Campo::Folga => "Folga da bainha",
+            Campo::FolgaCanto => "Folga do canto",
         }
     }
     pub fn unidade(self) -> &'static str {
@@ -82,6 +85,7 @@ pub fn expr_do_campo(doc: &Document, k: &FeatureKind, c: Campo) -> Option<String
         (FeatureKind::SmFlange(x), Campo::Recuo1) => Some(x.off1.clone()),
         (FeatureKind::SmFlange(x), Campo::Recuo2) => Some(x.off2.clone()),
         (FeatureKind::SmHem(x), Campo::Folga) => Some(x.gap.clone()),
+        (FeatureKind::SmCornerClose(x), Campo::FolgaCanto) => Some(x.gap.clone()),
         (FeatureKind::SmBend(x), Campo::Angulo) => Some(x.angle.clone()),
         (FeatureKind::SmBend(x), Campo::Raio) => x.radius.clone().or_else(chapa_r),
         (FeatureKind::SmJoggle(x), Campo::Desvio) => Some(x.depth.clone()),
@@ -100,6 +104,7 @@ fn escreve(k: &mut FeatureKind, c: Campo, v: String) -> bool {
         (FeatureKind::SmFlange(x), Campo::Recuo1) => x.off1 = v,
         (FeatureKind::SmFlange(x), Campo::Recuo2) => x.off2 = v,
         (FeatureKind::SmHem(x), Campo::Folga) => x.gap = v,
+        (FeatureKind::SmCornerClose(x), Campo::FolgaCanto) => x.gap = v,
         (FeatureKind::SmBend(x), Campo::Angulo) => x.angle = v,
         (FeatureKind::SmBend(x), Campo::Raio) => x.radius = Some(v),
         (FeatureKind::SmJoggle(x), Campo::Desvio) => x.depth = v,
@@ -192,6 +197,14 @@ pub fn manipuladores(doc: &Document, r: &RecomputeResult, id: Id, vars: &HashMap
             }
             if let Some(x) = ex(Campo::Rampa) {
                 out.push(Manip { campo: Campo::Rampa, expr: x, forma: Forma::Seta { base: mid, dir: side, k: 1. } });
+            }
+        }
+        FeatureKind::SmCornerClose(cc) => {
+            // as abas de 90° do documento, no espaço dobrado, e o canto mais perto do ponto escolhido
+            let abas: Vec<_> = r.bend_lines.iter().filter_map(|b| fenkra_solidos::chapa_canto::aba_da_linha(b, t)).collect();
+            let at = cc.at;
+            if let (Some(x), Some((base, dir, k))) = (ex(Campo::FolgaCanto), fenkra_solidos::chapa_canto::alca_da_folga(&abas, at, cc.kind, cc.invert)) {
+                out.push(Manip { campo: Campo::FolgaCanto, expr: x, forma: Forma::Seta { base, dir, k } });
             }
         }
         FeatureKind::SmLouver(l) => {
@@ -373,6 +386,42 @@ mod tests {
         assert!(digitar(&mut d, a, Campo::Recuo1, "ang_x +", &vars).is_err());
         // campo que o comando não tem
         assert!(aplicar(&mut d, a, Campo::Largura, 4., &vars).is_none());
+    }
+
+    /// B293: o fechamento de canto tem a alça da folga nos três tipos. A seta sai da face que não
+    /// anda e a ponta cai na face da peça que fecha: arrastar a folga recalcula o canto e o volume
+    /// que fecha o vão diminui (a peça recua), sem perder a variável.
+    #[test]
+    fn fechamento_de_canto_tem_a_alca_da_folga() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        for tipo in [0u8, 1, 2] {
+            let mut d = base();
+            d.add_param("folga_c", "0.5", Unit::Comprimento).unwrap_or_else(|e| panic!("{e:?}"));
+            for e in [[100., 25., 2.], [50., 50., 2.]] {
+                d.add_feature(FeatureKind::SmFlange(SmFlange { edge: e, length: s("20"), angle: s("90"), radius: None, off1: s("0"), off2: s("0"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None }));
+            }
+            let id = d.add_feature(FeatureKind::SmCornerClose(SmCornerClose { at: [100., 50., 2.], kind: tipo, gap: s("folga_c"), ratio: s("1"), narrow: false, propagate: false, invert: false }));
+            let r = recompute_ok(&d);
+            let vars = r.params.clone();
+            let m = manipuladores(&d, &r, id, &vars);
+            assert_eq!(campos(&m), vec![Campo::FolgaCanto], "tipo {tipo}");
+            let Forma::Seta { base, dir, k } = &m[0].forma else { panic!("a folga é seta") };
+            assert!((geo3d::norm(*dir) - 1.).abs() < 1e-9, "direção unitária");
+            // a base fica junto ao canto (100, 50), do lado de fora do vão
+            assert!(geo3d::dist(*base, [100., 50., base[2]]) < 6., "tipo {tipo}: base {base:?}");
+            let antes = r.bodies[0].mass.volume;
+            let nova = aplicar(&mut d, id, Campo::FolgaCanto, 2., &vars).unwrap();
+            assert_eq!(nova, "folga_c + 1.5", "tipo {tipo}: a variável fica e só o termo numérico muda");
+            let r2 = recompute_ok(&d);
+            assert!((r2.params["folga_c"] - 0.5).abs() < 1e-9, "o parâmetro não foi tocado");
+            assert!(r2.bodies[0].mass.volume < antes - 1e-3, "tipo {tipo}: folga maior recua as peças ({} contra {antes})", r2.bodies[0].mass.volume);
+            // a ponta da seta, com a folga nova, fica a 2 mm da base na direção da alça
+            let m2 = manipuladores(&d, &r2, id, &r2.params.clone());
+            let Forma::Seta { base: b2, dir: d2, k: k2 } = &m2[0].forma else { panic!() };
+            assert!(geo3d::dist(*base, *b2) < 1e-6 && geo3d::dot(*dir, *d2) > 0.999 && (k - k2).abs() < 1e-9, "a seta não muda de lugar quando a folga muda");
+        }
     }
 
     /// O arco do ângulo: o ponto sob o mouse dá o ângulo, e o ponto do arco volta ao mesmo lugar.
