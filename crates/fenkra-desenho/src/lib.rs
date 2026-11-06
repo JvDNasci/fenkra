@@ -8,6 +8,7 @@
 //! - [`export`]: PDF, SVG e DXF.
 
 pub mod alcas;
+pub mod centros;
 pub mod corte;
 pub mod cotas;
 pub mod export;
@@ -16,6 +17,7 @@ pub mod novo;
 pub mod opcoes;
 pub mod simbolos;
 pub mod solda_cordao;
+pub mod tabela;
 pub mod source;
 
 use fenkra_core::Id;
@@ -634,6 +636,9 @@ pub struct Table {
     /// nível da lista de peças/corte de montagem
     #[serde(default)]
     pub level: fenkra_montagem::bom::BomLevel,
+    /// colunas, ordem, divisão e etiquetas (B295)
+    #[serde(default)]
+    pub cfg: tabela::ConfigTabela,
 }
 
 /// Legenda (carimbo).
@@ -699,6 +704,12 @@ pub struct Drawing {
     pub notes: Vec<Note>,
     #[serde(default)]
     pub tables: Vec<Table>,
+    /// marcas de centro associativas (B294)
+    #[serde(default)]
+    pub centers: Vec<centros::MarcaCentro>,
+    /// vistas que escondem todas as suas marcas de centro
+    #[serde(default)]
+    pub centros_ocultos: Vec<Id>,
     #[serde(default)]
     pub title: TitleBlock,
     /// altura do texto das cotas (mm) e casas decimais
@@ -727,6 +738,8 @@ impl Drawing {
             dims: vec![],
             notes: vec![],
             tables: vec![],
+            centers: vec![],
+            centros_ocultos: vec![],
             title: TitleBlock::default(),
             text_height: 3.5,
             decimals: 1,
@@ -813,6 +826,7 @@ impl Drawing {
         self.dims.retain(|d| !kill.contains(&d.id) && !kill.contains(&d.view));
         self.notes.retain(|n| n.id != id && !n.view.is_some_and(|v| kill.contains(&v)));
         self.tables.retain(|t| t.id != id);
+        self.centers.retain(|c| c.id != id && !kill.contains(&c.view));
         if self.sheets.len() > 1 && self.sheets.iter().any(|s| s.id == id) {
             self.sheets.retain(|s| s.id != id);
             let first = self.sheets[0].id;
@@ -962,9 +976,9 @@ mod tests {
         let nid = d.alloc();
         d.notes.push(Note { id: nid, sheet: s, kind: NoteKind::Balloon, pos: [250., 260.], leader: Some([200., 220.]), text: "1".into(), size: 3.5, weld: None, ..Default::default() });
         let tid = d.alloc();
-        d.tables.push(Table { id: tid, sheet: s, kind: TableKind::Holes, source: src.clone(), pos: [25., 120.], level: Default::default() });
+        d.tables.push(Table { id: tid, sheet: s, kind: TableKind::Holes, source: src.clone(), pos: [25., 120.], level: Default::default(), cfg: Default::default() });
         let tid2 = d.alloc();
-        d.tables.push(Table { id: tid2, sheet: s, kind: TableKind::Bom, source: src, pos: [25., 60.], level: Default::default() });
+        d.tables.push(Table { id: tid2, sheet: s, kind: TableKind::Bom, source: src, pos: [25., 60.], level: Default::default(), cfg: Default::default() });
         let t = m.table(&d.tables[1], &d);
         assert_eq!(t.rows.len(), 1);
         // GD&T presa à vista, referência, nota com moldura e cota com texto solto
@@ -1079,7 +1093,7 @@ mod tests {
         let mut d = Drawing::new("Tubo", Format::A3);
         let sheet = d.sheets[0].id;
         let tid = d.alloc();
-        d.tables.push(Table { id: tid, sheet, kind: TableKind::Bends, source: src.clone(), pos: [20., 100.], level: Default::default() });
+        d.tables.push(Table { id: tid, sheet, kind: TableKind::Bends, source: src.clone(), pos: [20., 100.], level: Default::default(), cfg: Default::default() });
         let mut m = Models::new(Some(dir.clone()));
         let t = m.table(&d.tables[0], &d);
         assert_eq!(t.headers[1], "Tubo");
@@ -1093,7 +1107,7 @@ mod tests {
         assert_eq!(r[6], d.num(357.08));
         assert_eq!(r[7], d.num(557.08));
         // a lista de corte da mesma peça traz a barra pelo desenvolvido
-        d.tables.push(Table { id: tid, sheet, kind: TableKind::CutList, source: src, pos: [20., 100.], level: Default::default() });
+        d.tables.push(Table { id: tid, sheet, kind: TableKind::CutList, source: src, pos: [20., 100.], level: Default::default(), cfg: Default::default() });
         let c = m.table(&d.tables[1], &d);
         assert_eq!(c.rows.len(), 1);
         assert_eq!(c.rows[0][2], d.num(557.1));
@@ -1139,7 +1153,7 @@ mod tests {
         let mut d = Drawing::new("Quadro", Format::A3);
         let sheet = d.sheets[0].id;
         let tid = d.alloc();
-        d.tables.push(Table { id: tid, sheet, kind: TableKind::CutList, source: src, pos: [20., 100.], level: Default::default() });
+        d.tables.push(Table { id: tid, sheet, kind: TableKind::CutList, source: src, pos: [20., 100.], level: Default::default(), cfg: Default::default() });
         let mut m = Models::new(Some(dir));
         let t = m.table(&d.tables[0], &d);
 

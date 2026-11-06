@@ -11,7 +11,7 @@ const PRESETS: [f64; 10] = [10., 5., 2., 1., 0.5, 0.2, 0.1, 0.05, 0.02, 0.01];
 
 /// Ferramentas que mostram a barra.
 pub fn has_bar(tool: u8) -> bool {
-    matches!(tool, c::SET | c::VIEW | c::PROJ | c::SECTION | c::DETAIL | c::ISO | c::FLAT | c::SCHEMA | c::VIEW_CAM | c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT)
+    matches!(tool, c::SET | c::VIEW | c::PROJ | c::SECTION | c::DETAIL | c::ISO | c::FLAT | c::SCHEMA | c::VIEW_CAM | c::CENTER | c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT)
 }
 
 fn tool_name(tool: u8) -> &'static str {
@@ -25,6 +25,7 @@ fn tool_name(tool: u8) -> &'static str {
         c::FLAT => "Vista planificada",
         c::SCHEMA => "Esquema cinemático",
         c::VIEW_CAM => "Vista pela câmera do 3D",
+        c::CENTER => "Marca de centro",
         c::T_BOM => "Lista de peças",
         c::T_HOLES => "Tabela de furos",
         c::T_BENDS => "Tabela de dobras",
@@ -162,7 +163,9 @@ pub fn bar(ctx: &egui::Context, st: &mut DwgState, rect: Rect, cur: Option<Sourc
                 if matches!(tool, c::VIEW | c::SCHEMA) {
                     dir_menu(ui, &mut st.new_dir);
                 }
-                if !(c::T_BOM..=c::T_CUT).contains(&tool) {
+                if tool == c::CENTER {
+                    centros_ui::barra(ui, st);
+                } else if !(c::T_BOM..=c::T_CUT).contains(&tool) {
                     scale_ui(ui, st, tool);
                     ui.separator();
                     ui.label(tr("Estilo"));

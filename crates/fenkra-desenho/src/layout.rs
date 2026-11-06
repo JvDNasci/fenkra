@@ -464,6 +464,76 @@ pub fn dim_items(d: &Drawing, dm: &Dim, m: &mut Models) -> Vec<Item> {
     o.items
 }
 
+/// Largura de cada coluna e da tabela (a tabela nunca é mais estreita que o título).
+fn tabela_larguras(title: &str, headers: &[String], rows: &[Vec<String>], s: f64) -> (Vec<f64>, f64) {
+    let ncol = headers.len().max(rows.iter().map(|r| r.len()).max().unwrap_or(0));
+    let mut w = vec![0f64; ncol];
+    for r in std::iter::once(headers).chain(rows.iter().map(|r| r.as_slice())) {
+        for (i, c) in r.iter().enumerate() {
+            w[i] = w[i].max(text_width(c, s) + 3.);
+        }
+    }
+    let total: f64 = w.iter().sum::<f64>().max(text_width(title, s) + 4.);
+    let k = total / w.iter().sum::<f64>().max(1e-9);
+    for x in &mut w {
+        *x *= k;
+    }
+    (w, total)
+}
+
+/// Espaço entre blocos de uma tabela dividida (mm).
+const VAO_BLOCOS: f64 = 4.;
+
+/// Tabela configurada (B295): colunas já escolhidas, linhas divididas em blocos lado a lado e a
+/// linha em destaque (clique numa etiqueta de furo) com contorno de alerta.
+fn tabela_cfg(o: &mut Out, pos: V2, title: &str, fin: &crate::tabela::TabelaFinal, cfg: &crate::tabela::ConfigTabela, s: f64) -> V2 {
+    let n = if cfg.dividir == 0 { fin.data.rows.len().max(1) } else { cfg.dividir };
+    let mut x = pos[0];
+    let mut altura = 0f64;
+    let rh = s * 1.9;
+    for (b, bloco) in crate::tabela::blocos(&fin.data.rows, cfg.dividir).into_iter().enumerate() {
+        let tam = table(o, [x, pos[1]], title, &fin.data.headers, bloco, s);
+        // linha em destaque dentro deste bloco
+        if let Some(k) = cfg.linha_sel.and_then(|r| fin.origem.iter().position(|o| *o == r)) {
+            if k / n == b && !fin.data.headers.is_empty() {
+                let i = k % n;
+                let y1 = pos[1] - rh * (i + 2) as f64;
+                let al = o.alert;
+                o.alert = true;
+                o.rect([x, y1 - rh], [x + tam[0], y1], Style::Visible);
+                o.alert = al;
+            }
+        }
+        x += tam[0] + VAO_BLOCOS;
+        altura = altura.max(tam[1]);
+    }
+    [x - VAO_BLOCOS - pos[0], altura]
+}
+
+/// Nome da coluna cujo cabeçalho está debaixo do ponto `q` da folha (para ordenar pelo clique).
+pub fn cabecalho_em(pos: V2, title: &str, fin: &crate::tabela::TabelaFinal, cfg: &crate::tabela::ConfigTabela, s: f64, q: V2) -> Option<String> {
+    let rh = s * 1.9;
+    // o cabeçalho é a segunda faixa (a primeira é o título)
+    if q[1] > pos[1] - rh || q[1] < pos[1] - 2. * rh {
+        return None;
+    }
+    let mut x = pos[0];
+    for bloco in crate::tabela::blocos(&fin.data.rows, cfg.dividir) {
+        let (w, total) = tabela_larguras(title, &fin.data.headers, bloco, s);
+        if q[0] >= x && q[0] <= x + total {
+            let mut cx = x;
+            for (i, cw) in w.iter().enumerate() {
+                if q[0] <= cx + cw {
+                    return fin.data.headers.get(i).cloned();
+                }
+                cx += cw;
+            }
+        }
+        x += total + VAO_BLOCOS;
+    }
+    None
+}
+
 /// Primitivas de uma tabela avulsa (prévia/fantasma).
 pub fn table_items(pos: V2, title: &str, data: &crate::source::TableData, th: f64) -> Vec<Item> {
     let mut o = Out::default();
@@ -491,6 +561,32 @@ pub fn note_items(d: &Drawing, n: &Note, m: &mut Models) -> Vec<Item> {
     o.items
 }
 
+/// Linhas de uma marca de centro na folha (quebrada = avisa em vermelho como as cotas).
+fn centro_into(o: &mut Out, mc: &crate::centros::MarcaCentro, v: &View, p: &Proj) {
+    let t = crate::centros::tracos(mc, p, v.scale);
+    o.alert = t.quebrada;
+    for (a, b) in &t.segs {
+        let (a, b) = (to_sheet(v, p, *a), to_sheet(v, p, *b));
+        // do centro da cruz para fora: o traço começa no meio, como a linha de centro
+        let mid = [(a[0] + b[0]) / 2., (a[1] + b[1]) / 2.];
+        o.seg(mid, a, Style::Center);
+        o.seg(mid, b, Style::Center);
+    }
+    for (c, r) in &t.circulos {
+        o.line(circle(to_sheet(v, p, *c), r * v.scale), Style::Center);
+    }
+}
+
+/// Primitivas de uma marca de centro avulsa (prévia/fantasma).
+pub fn centro_items(d: &Drawing, mc: &crate::centros::MarcaCentro, m: &mut Models) -> Vec<Item> {
+    let Some(v) = d.view(mc.view) else { return vec![] };
+    let p = m.proj(d, v.id);
+    let mut o = Out::default();
+    o.reset(Some(mc.id));
+    centro_into(&mut o, mc, v, &p);
+    o.items
+}
+
 /// Todas as primitivas da folha.
 pub fn sheet(d: &Drawing, sheet: Id, m: &mut Models) -> Vec<Item> {
     let mut o = Out::default();
@@ -509,6 +605,16 @@ pub fn sheet(d: &Drawing, sheet: Id, m: &mut Models) -> Vec<Item> {
         let p = m.proj(d, v.id);
         let Some((val, pts)) = dim_value(dm, v, &p) else { continue };
         dim_into(&mut o, d, dm, v, &p, val, &pts);
+    }
+    // marcas de centro (B294): projetadas de novo na vista a cada desenho
+    for mc in &d.centers {
+        let Some(v) = d.view(mc.view).filter(|v| v.sheet == sheet) else { continue };
+        if !mc.visivel || d.centros_ocultos.contains(&v.id) {
+            continue;
+        }
+        let p = m.proj(d, v.id);
+        o.reset(Some(mc.id));
+        centro_into(&mut o, mc, v, &p);
     }
     // notas e símbolos
     for n in d.notes.iter().filter(|n| n.sheet == sheet) {
@@ -535,8 +641,16 @@ pub fn sheet(d: &Drawing, sheet: Id, m: &mut Models) -> Vec<Item> {
     // tabelas
     for t in d.tables.iter().filter(|t| t.sheet == sheet) {
         o.reset(Some(t.id));
-        let data = m.table(t, d);
-        table(&mut o, t.pos, t.kind.label(), &data.headers, &data.rows, th * 0.8);
+        let fin = crate::tabela::dados(m, t, d);
+        tabela_cfg(&mut o, t.pos, t.kind.label(), &fin, &t.cfg, th * 0.8);
+        // etiquetas dos furos nas vistas (A1, A2…), com chamada até o furo
+        o.reset(None);
+        for e in crate::tabela::etiquetas(m, d, t, &fin) {
+            o.alert = t.cfg.linha_sel == Some(e.linha);
+            o.seg(e.furo, [e.pos[0] - 0.3, e.pos[1] + 0.3], Style::Thin);
+            o.text(e.pos, e.texto.clone(), th * 0.8, 0., Align::Left);
+        }
+        o.alert = false;
     }
     o.items
 }
@@ -1565,17 +1679,7 @@ fn table(o: &mut Out, pos: V2, title: &str, headers: &[String], rows: &[Vec<Stri
     if ncol == 0 {
         return [0., 0.];
     }
-    let mut w = vec![0f64; ncol];
-    for r in std::iter::once(headers).chain(rows.iter().map(|r| r.as_slice())) {
-        for (i, c) in r.iter().enumerate() {
-            w[i] = w[i].max(text_width(c, s) + 3.);
-        }
-    }
-    let total: f64 = w.iter().sum::<f64>().max(text_width(title, s) + 4.);
-    let k = total / w.iter().sum::<f64>();
-    for x in &mut w {
-        *x *= k;
-    }
+    let (w, total) = tabela_larguras(title, headers, rows, s);
     let rh = s * 1.9;
     let nrow = rows.len() + 2;
     let h = rh * nrow as f64;

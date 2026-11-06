@@ -855,7 +855,7 @@ lado oposto");
                 v.render = Render::SombreadoArestas;
             }
             let id = d.alloc();
-            d.tables.push(Table { id, sheet: sh, kind: TableKind::Holes, source: src.clone(), pos: [270., 150.], level: Default::default() });
+            d.tables.push(Table { id, sheet: sh, kind: TableKind::Holes, source: src.clone(), pos: [270., 150.], level: Default::default(), cfg: Default::default() });
             let id = d.alloc();
             d.notes.push(Note { id, sheet: sh, kind: NoteKind::Text, pos: [25., 25.], leader: None, text: "Quebrar cantos vivos 0,5x45°
 Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_core::pmi::PmiStyle { anchor: 6, frame: fenkra_core::pmi::PmiFrame::Caixa, ..Default::default() }, ..Default::default() });

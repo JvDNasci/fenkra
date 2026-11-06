@@ -577,6 +577,14 @@ impl Models {
         }
     }
 
+    /// Furos da peça de origem (vazio para montagem).
+    pub fn furos(&mut self, src: &Source) -> Vec<fenkra_solidos::HoleRow> {
+        match &self.load(src).model {
+            Model::Part(doc) => fenkra_solidos::hole_table(doc),
+            Model::Asm(_) => vec![],
+        }
+    }
+
     /// Propriedades da origem (para preencher a legenda).
     pub fn props(&mut self, src: &Source) -> Option<(String, String, String)> {
         match &self.load(src).model {
