@@ -78,6 +78,7 @@ mod eixo_ui;
 mod textos_biblioteca3;
 mod textos_conversor;
 mod textos_formatos;
+mod textos_visualizacao;
 mod textos_malha;
 mod malha_ui;
 mod impressao_ui;

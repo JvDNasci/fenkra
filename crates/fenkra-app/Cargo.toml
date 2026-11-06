@@ -25,6 +25,7 @@ fenkra-solidos = { path = "../fenkra-solidos" }
 fenkra-project = { path = "../fenkra-project" }
 fenkra-montagem = { path = "../fenkra-montagem" }
 fenkra-desenho = { path = "../fenkra-desenho" }
+fenkra-pacote = { path = "../fenkra-pacote" }
 eframe = { version = "0.37", features = ["wgpu", "persistence"] }
 glam.workspace = true
 bytemuck.workspace = true

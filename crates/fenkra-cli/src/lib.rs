@@ -18,6 +18,7 @@ pub mod saida;
 mod sessao;
 pub mod features;
 pub mod topologia;
+pub mod visualizar;
 
 pub use registro::{ler_comandos, Registro};
 pub use sessao::{Isolamento, Sessao, COMANDOS, COMANDOS_DE_MODELO};

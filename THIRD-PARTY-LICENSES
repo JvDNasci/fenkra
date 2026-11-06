@@ -13,6 +13,7 @@ mas que não estavam no cache local (alvos Linux, macOS, Android e web) e ainda 
   2. Fontes embutidas
   3. Crates Rust (licença declarada em cada Cargo.toml)
   4. Textos de licença dos crates Rust
+  5. Visualizador web: three.js (MIT), embutido na página gerada pelo `fenkra-pacote`
 
 ==============================================================================
 1. BIBLIOTECAS NATIVAS (vcpkg x64-windows-release)
@@ -12015,3 +12016,32 @@ freely, subject to the following restrictions:
    misrepresented as being the original software.
 3. This notice may not be removed or altered from any source distribution.
 
+==============================================================================
+5. VISUALIZADOR WEB (B338)
+==============================================================================
+three.js r149 (MIT). Arquivo: crates/fenkra-pacote/web/three.min.js, inalterado, embutido na página do
+visualizador (`fenkra-pacote`) e nos arquivos .html que ela gera. A página funciona sem rede. O aviso
+abaixo acompanha toda cópia, como a licença pede (o cabeçalho do próprio arquivo também a mantém).
+Origem: https://github.com/mrdoob/three.js (pacote npm `three@0.149.0`, build/three.min.js).
+------------------------------------------------------------------------------
+The MIT License
+
+Copyright © 2010-2023 three.js authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.

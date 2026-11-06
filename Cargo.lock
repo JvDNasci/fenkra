@@ -1309,6 +1309,7 @@ dependencies = [
  "fenkra-kernel",
  "fenkra-malha",
  "fenkra-montagem",
+ "fenkra-pacote",
  "fenkra-project",
  "fenkra-solidos",
  "glam",
@@ -1327,6 +1328,7 @@ dependencies = [
  "fenkra-conversor",
  "fenkra-core",
  "fenkra-kernel",
+ "fenkra-pacote",
  "fenkra-solidos",
  "serde_json",
 ]
@@ -1412,6 +1414,20 @@ version = "0.1.0-alpha.29"
 dependencies = [
  "fenkra-core",
  "fenkra-kernel",
+ "fenkra-solidos",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fenkra-pacote"
+version = "0.1.0-alpha.29"
+dependencies = [
+ "fenkra-core",
+ "fenkra-desenho",
+ "fenkra-kernel",
+ "fenkra-malha",
+ "fenkra-montagem",
  "fenkra-solidos",
  "serde",
  "serde_json",
