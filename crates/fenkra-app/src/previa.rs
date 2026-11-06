@@ -875,7 +875,7 @@ mod tests {
             let op = EdgeOp { value: s(valor), edges: EdgeSel::Edges(vec![[0., -20., 20.]]), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: Default::default() };
             if chanfro { FeatureKind::Chamfer(op) } else { FeatureKind::Fillet(op) }
         };
-        let casca = |t: &str| FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: s(t), outward: false, face_keys: vec![], closed: false });
+        let casca = |t: &str| FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: s(t), outward: false, face_keys: vec![], closed: false });
         let mut casos: Vec<(&str, Document, FeatureKind, FeatureKind)> = vec![];
         {
             let (mut d, topo) = caixa_com_tampa();
