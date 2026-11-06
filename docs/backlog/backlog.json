@@ -5064,7 +5064,7 @@
    "tokens_k": 160,
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -5640,7 +5640,7 @@
    "tokens_k": 200,
    "teste": "Auto",
    "area": "Estrutural e soldas",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {
