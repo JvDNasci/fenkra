@@ -155,7 +155,7 @@ pub fn validar_recursos(p: &ParamEixo, recursos: &[RecursoEixo]) -> Result<(), S
 
 /// Plano que passa pelo eixo Z, girado de `graus` a partir do YZ (a normal gira de +X). Sem rotação
 /// devolve o próprio plano YZ da Origem.
-fn plano_girado(m: &mut Montador, nome: &str, graus: f64) -> PlaneRef {
+pub(crate) fn plano_girado(m: &mut Montador, nome: &str, graus: f64) -> PlaneRef {
     if graus.abs() < 1e-9 {
         return PlaneRef::Origin(OriginPlane::YZ);
     }

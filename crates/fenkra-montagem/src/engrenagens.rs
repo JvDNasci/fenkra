@@ -178,7 +178,7 @@ fn girado(o: V3, rho: f64) -> Placement {
 /// Grava a peça (se ainda não existe) e devolve (caminho relativo à montagem, nome).
 fn gravar_peca(dir: &Path, p: &ParamEngrenagem) -> Result<(String, String), String> {
     let doc = engrenagem_documento(p)?;
-    let base = p.chave();
+    let base = p.chave_arquivo();
     let destino = dir.join("engrenagens").join(format!("{base}.fkp"));
     if !destino.exists() {
         std::fs::create_dir_all(dir.join("engrenagens")).map_err(|e| format!("{}: {e}", dir.join("engrenagens").display()))?;
