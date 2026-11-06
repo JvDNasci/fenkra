@@ -355,6 +355,9 @@ fn mix(a: [u8; 3], b: [u8; 3], k: f32) -> Color32 {
 /// Aplica o tema na interface: cores, cantos, contornos, densidade, sombra e fontes.
 /// As fontes só são trocadas quando o conjunto muda (nunca por quadro).
 pub fn apply(ctx: &egui::Context, def: &ThemeDef) {
+    // o egui guarda um estilo para o tema claro e outro para o escuro e escolhe pelo do sistema:
+    // sem fixar a preferência, o tema escolhido podia cair no estilo que a tela não usa (B335)
+    ctx.set_theme(if def.dark { egui::ThemePreference::Dark } else { egui::ThemePreference::Light });
     let mut v = if def.dark { egui::Visuals::dark() } else { egui::Visuals::light() };
     let linha = def.linha.unwrap_or_else(|| mixa(def.panel, def.text, 0.16));
     let linha_fraca = if def.linha.is_some() { linha } else { mixa(def.panel, def.text, 0.12) };

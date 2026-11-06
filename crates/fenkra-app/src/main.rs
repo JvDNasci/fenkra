@@ -155,6 +155,8 @@ mod textos_config;
 mod acessibilidade;
 mod camera_nav;
 mod arabesco;
+mod inicio_tema;
+mod props_geometria;
 mod asm_fundo;
 mod instancias;
 mod medir_quadros;
