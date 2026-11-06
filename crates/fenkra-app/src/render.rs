@@ -359,6 +359,11 @@ impl DisplayMode {
             DisplayMode::Dfm => tr("Análise: fabricação"),
         }
     }
+    /// O modo mede a superfície. O que não é superfície do modelo fica de fora: o shader de análise
+    /// devolve cor opaca, então uma sombra translúcida viraria uma chapa pintada por cima da peça.
+    pub fn e_analise(self) -> bool {
+        matches!(self, DisplayMode::Zebra | DisplayMode::Curvatura | DisplayMode::Inclinacao | DisplayMode::Isofotas | DisplayMode::Dfm)
+    }
     fn code(self) -> f32 {
         match self {
             DisplayMode::SombreadoArestas => 0.,

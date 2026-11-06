@@ -8189,6 +8189,12 @@ fn setup_fonts(_ctx: &egui::Context) {
 }
 
 impl eframe::App for App {
+    fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
+        if let Some(g) = self.sketch.as_mut().and_then(|e| e.gesto.as_mut()) {
+            g.eventos(raw);
+        }
+    }
+
     fn ui(&mut self, root: &mut egui::Ui, frame: &mut eframe::Frame) {
         crate::demo_foto::quadro(root.ctx());
         crate::partida::contar_quadro();
@@ -8707,6 +8713,7 @@ impl eframe::App for App {
                     point_style: self.settings.point_style,
                     fantasma: crate::previa::da_sessao(self.session.as_ref().filter(|_| asm_view.is_none()), &ctx.global_style().visuals),
                     forma_oculta,
+                    sombra_perfil: !self.settings.display.e_analise(),
                     curvatura: crate::sup_inclinacao::escala_do_mapa(&self.settings, &ctx.global_style().visuals),
                     instancias: self.asm.as_ref().filter(|_| asm_view.is_some()).map_or(&[], |s| s.instancias.as_slice()),
                 };

@@ -716,9 +716,9 @@ c('B346', 2, 'P0', 'Polimento visual: superfície lisa independente dos triângu
 c('B347', 2, 'P0', 'Fluidez: regressão de quadros e limite de FPS configurável', 'O app ficou com sensação de 20 quadros por segundo depois das últimas entregas. Medir o tempo de quadro, achar o que roda a cada quadro sem precisar e voltar à fluidez anterior, com teste de orçamento de quadro. Nova opção nas configurações gráficas: limite de quadros em 30, 60, 120, 144 ou sem limite, e sincronismo vertical, com contador opcional de quadros na tela.',
   ['USR-FPS'], [], 250, 'Auto + Visual', 'Interface', status='em andamento'),
 c('B348', 2, 'P1', 'Sketch: clicar no perfil sombreado seleciona as entidades que o formam', 'Clicar dentro da sombra de um perfil fechado seleciona todas as curvas que formam a região, incluindo laços internos: um quadrado dentro de outro seleciona os dois. Evita selecionar elemento por elemento em sketch grande. Conferir junto a seleção por janela arrastando.',
-  ['USR-TESTE'], [], 150, 'Auto + Visual', 'Sketch', status='em andamento'),
+  ['USR-TESTE'], [], 150, 'Auto + Visual', 'Sketch', status='feito'),
 c('B349', 2, 'P0', 'Zebra e análises não pegam o sombreado de sketch', 'Nas análises de superfície (zebra, curvatura, isofotas, inclinação) a sombra do perfil do sketch não entra no cálculo nem é pintada pelo modo de análise.',
-  ['USR-TESTE'], [], 60, 'Auto + Visual', 'Interface', status='em andamento'),
+  ['USR-TESTE'], [], 60, 'Auto + Visual', 'Interface', status='feito'),
 c('B350', 2, 'P0', 'Sólidos: varredura em guia com cantos gira a seção certo', 'Varredura em guia com cantos sai com a seção sem girar, com volume errado e aprovada pela checagem: L dá 628 em vez de 1257, U dá zero. Hoje só há aviso em varredura e nervura de chapa. Refazer a junção de canto e dar aviso também em membro e no tubo do filete. Muda documentos salvos, então precisa de migração.',
   ['USR-BUG'], [], 250, 'Auto + Visual', 'Sólidos', status='em andamento'),
 ]

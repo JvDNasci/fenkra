@@ -1865,6 +1865,17 @@ impl SketchData {
 
     /// Perfis fechados e cadeias abertas (de ponta a ponta, na ordem).
     pub fn chains(&self) -> (Vec<Vec<Seg>>, Vec<Vec<Seg>>) {
+        let (l, o) = self.percursos();
+        (l.into_iter().map(|x| x.0).collect(), o)
+    }
+
+    /// Laços fechados com as curvas de cada um, na mesma ordem de `loops`: quem clica numa região
+    /// precisa voltar do contorno às entidades que o formam.
+    pub fn loops_com_curvas(&self) -> Vec<(Vec<Seg>, Vec<Id>)> {
+        self.percursos().0
+    }
+
+    fn percursos(&self) -> (Vec<(Vec<Seg>, Vec<Id>)>, Vec<Vec<Seg>>) {
         // une pontos ligados por restrição de coincidência
         let mut parent: HashMap<Id, Id> = HashMap::new();
         fn find(p: &mut HashMap<Id, Id>, x: Id) -> Id {
@@ -1913,29 +1924,29 @@ impl SketchData {
             }
         }
         let mut loops = vec![];
-        // arestas: (extremo1, extremo2, segmento)
-        let mut edges: Vec<(Id, Id, Seg)> = vec![];
+        // arestas: (extremo1, extremo2, segmento, curva)
+        let mut edges: Vec<(Id, Id, Seg, Id)> = vec![];
         for c in self.curves.iter().filter(|c| !c.construction) {
             if let Curve::Spline { pts } = &c.geom {
                 if pts.len() >= 2 {
                     let v: Vec<[f64; 2]> = self.spline_uv(c.id);
-                    edges.push((find(&mut parent, pts[0]), find(&mut parent, pts[pts.len() - 1]), Seg::Spline(v)));
+                    edges.push((find(&mut parent, pts[0]), find(&mut parent, pts[pts.len() - 1]), Seg::Spline(v), c.id));
                 }
                 continue;
             }
             match c.geom {
-                Curve::Circle { c: ctr, r } => loops.push(vec![Seg::Circle(self.pos(ctr), r)]),
-                Curve::Line { a, b } => edges.push((find(&mut parent, a), find(&mut parent, b), Seg::Line(self.pos(a), self.pos(b)))),
+                Curve::Circle { c: ctr, r } => loops.push((vec![Seg::Circle(self.pos(ctr), r)], vec![c.id])),
+                Curve::Line { a, b } => edges.push((find(&mut parent, a), find(&mut parent, b), Seg::Line(self.pos(a), self.pos(b)), c.id)),
                 Curve::Arc { c: ctr, s, e } => {
                     let (pc, ps, pe) = (self.pos(ctr), self.pos(s), self.pos(e));
-                    edges.push((find(&mut parent, s), find(&mut parent, e), Seg::Arc(ps, Self::arc_mid(pc, ps, pe), pe)));
+                    edges.push((find(&mut parent, s), find(&mut parent, e), Seg::Arc(ps, Self::arc_mid(pc, ps, pe), pe), c.id));
                 }
                 Curve::Ellipse { c: ctr, s, e, major, minor, t0, t1 } => {
                     let seg = Seg::Ellipse(self.pos(ctr), major, minor, t0, t1);
                     if s == ctr {
-                        loops.push(vec![seg]);
+                        loops.push((vec![seg], vec![c.id]));
                     } else {
-                        edges.push((find(&mut parent, s), find(&mut parent, e), seg));
+                        edges.push((find(&mut parent, s), find(&mut parent, e), seg, c.id));
                     }
                 }
                 Curve::Point { .. } | Curve::Spline { .. } => {}
@@ -1952,13 +1963,15 @@ impl SketchData {
             c => c,
         };
         let mut open = vec![];
-        while let Some((s, e, seg)) = edges.pop() {
+        while let Some((s, e, seg, id)) = edges.pop() {
             let mut lp = vec![seg];
+            let mut curvas = vec![id];
             let mut end = e;
             let mut closed = s == e;
             while !closed {
-                let Some(i) = edges.iter().position(|(a, b, _)| *a == end || *b == end) else { break };
-                let (a, b, sg) = edges.swap_remove(i);
+                let Some(i) = edges.iter().position(|(a, b, ..)| *a == end || *b == end) else { break };
+                let (a, b, sg, id) = edges.swap_remove(i);
+                curvas.push(id);
                 if a == end {
                     lp.push(sg);
                     end = b;
@@ -1969,12 +1982,12 @@ impl SketchData {
                 closed = end == s;
             }
             if closed {
-                loops.push(lp);
+                loops.push((lp, curvas));
             } else {
                 // aberta: cresce também pelo começo
                 let mut start = s;
-                while let Some(i) = edges.iter().position(|(a, b, _)| *a == start || *b == start) {
-                    let (a, b, sg) = edges.swap_remove(i);
+                while let Some(i) = edges.iter().position(|(a, b, ..)| *a == start || *b == start) {
+                    let (a, b, sg, _) = edges.swap_remove(i);
                     if b == start {
                         lp.insert(0, sg);
                         start = a;
@@ -2040,6 +2053,35 @@ mod tests {
             n += 1;
             Id(n)
         }
+    }
+
+    #[test]
+    fn laco_sabe_as_curvas_que_o_formam() {
+        let mut n = 0u64;
+        let mut al = move || {
+            n += 1;
+            Id(n)
+        };
+        let mut s = SketchData::default();
+        let (_, l) = s.add_rect(&mut al, [0., 0.], [40., 40.], false);
+        let c = s.add_point(&mut al, 20., 20.);
+        let circ = s.add_curve(&mut al, Curve::Circle { c, r: 5. }, false);
+        // aberta e de construção não fazem laço
+        let (a, b) = (s.add_point(&mut al, 50., 0.), s.add_point(&mut al, 60., 0.));
+        s.add_curve(&mut al, Curve::Line { a, b }, false);
+        let d = s.add_point(&mut al, 20., 20.);
+        s.add_curve(&mut al, Curve::Circle { c: d, r: 9. }, true);
+
+        let v = s.loops_com_curvas();
+        assert_eq!(v.iter().map(|x| x.0.clone()).collect::<Vec<_>>(), s.loops().0, "mesmos laços, na mesma ordem");
+        let mut grupos: Vec<Vec<Id>> = v.into_iter().map(|x| x.1).collect();
+        grupos.iter_mut().for_each(|g| g.sort());
+        grupos.sort();
+        let mut quadrado = l.to_vec();
+        quadrado.sort();
+        let mut esperado = vec![quadrado, vec![circ]];
+        esperado.sort();
+        assert_eq!(grupos, esperado);
     }
 
     #[test]
