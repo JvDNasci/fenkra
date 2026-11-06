@@ -16,6 +16,7 @@ pub mod pasta;
 mod registro;
 pub mod saida;
 mod sessao;
+pub mod features;
 pub mod topologia;
 
 pub use registro::{ler_comandos, Registro};

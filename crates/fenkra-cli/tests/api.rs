@@ -272,6 +272,25 @@ fn peca_com_comando_fora_do_formato_mede_mas_nao_recebe_item() {
 }
 
 #[test]
+fn features_infere_os_furos_da_placa_depois_do_step() {
+    precisa_kernel!();
+    let d = pasta_limpa("features");
+    final_shape(&placa(20.))
+        .unwrap()
+        .export_step(d.join("p.step").to_str().unwrap())
+        .unwrap();
+    let mut s = sessao(&d);
+    let f = s
+        .executar("features", &json!({ "arquivo": "p.step" }))
+        .unwrap();
+    assert!(f["aviso"].as_str().unwrap().contains("não é o histórico original"));
+    assert_eq!(f["contagem"]["furos_passantes"].as_u64().unwrap() + f["contagem"]["furos_cegos"].as_u64().unwrap(), 2, "{f}");
+    for x in f["features"].as_array().unwrap() {
+        assert!((x["diametro"].as_f64().unwrap() - 6.).abs() < 1e-6, "{x}");
+    }
+}
+
+#[test]
 fn topologia_acha_planos_cilindros_e_furos_depois_do_step() {
     precisa_kernel!();
     let d = pasta_limpa("topologia");

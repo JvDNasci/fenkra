@@ -46,7 +46,8 @@ pub fn importar_step(caminho: &str) -> Result<Importacao, String> {
         relatorio: None,
     };
     let m = forma.mass();
-    let relatorio = format!(
+    let inferidas = crate::reconhece::analisar(&forma).resumo();
+    let mut relatorio = format!(
         "Relatório de conversão\nArquivo: {}\nHash: {}\nTamanho: {} bytes\nEsquema: {}\nUnidades lidas: {}\nFaces: {}\nVolume: {:.3} mm³\nÁrea: {:.3} mm²\n",
         selo.nome,
         selo.hash,
@@ -57,6 +58,7 @@ pub fn importar_step(caminho: &str) -> Result<Importacao, String> {
         m.volume,
         m.area,
     );
+    relatorio.push_str(&inferidas);
     doc.origem = Some(selo);
     Ok(Importacao { doc, relatorio })
 }

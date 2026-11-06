@@ -15,7 +15,7 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 
 /// Todos os comandos que existem. Nada fora desta lista roda, e nenhum deles interpreta código.
-pub const COMANDOS: [&str; 23] = [
+pub const COMANDOS: [&str; 24] = [
     "versao",
     "comandos",
     "nova_peca",
@@ -36,6 +36,7 @@ pub const COMANDOS: [&str; 23] = [
     "recalcular",
     "medir",
     "topologia",
+    "features",
     "comparar",
     "reproduzir",
     "registro",
@@ -216,6 +217,7 @@ impl Sessao {
             "recalcular" => self.recalcular(),
             "medir" => self.medir(),
             "topologia" => self.topologia(args),
+            "features" => self.features(args),
             "comparar" => self.comparar(args),
             "reproduzir" => self.reproduzir(args),
             "registro" => Ok(self.registro_json()),
@@ -667,6 +669,17 @@ impl Sessao {
             .map_or(topologia::LIMITE_PADRAO, |n| n as usize);
         let referencias: Vec<&str> = secoes.iter().map(String::as_str).collect();
         Ok(topologia::analisar(&forma)?.json(&referencias, limite))
+    }
+
+    fn features(&mut self, args: &Value) -> Result<Value, ErroApi> {
+        if let (Isolamento::Processo(p), false) = (&self.isolamento, args["arquivo"].is_null()) {
+            return self.no_filho(p.clone(), "features", args);
+        }
+        let forma = match args["arquivo"].as_str() {
+            Some(a) => self.forma_do_arquivo(a)?,
+            None => self.forma()?,
+        };
+        Ok(crate::features::features(&forma))
     }
 
     fn comparar(&mut self, args: &Value) -> Result<Value, ErroApi> {
