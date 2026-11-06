@@ -1257,7 +1257,7 @@ checksum = "b97b65636e5b9ef369943878ac74335ba1c55c1cb6adbf1e2c293c624248d693"
 
 [[package]]
 name = "fenkra-app"
-version = "0.1.0-alpha.28"
+version = "0.1.0-alpha.29"
 dependencies = [
  "bytemuck",
  "eframe",
@@ -1280,7 +1280,7 @@ dependencies = [
 
 [[package]]
 name = "fenkra-cli"
-version = "0.1.0-alpha.28"
+version = "0.1.0-alpha.29"
 dependencies = [
  "fenkra-conversor",
  "fenkra-core",
@@ -1291,7 +1291,7 @@ dependencies = [
 
 [[package]]
 name = "fenkra-conversor"
-version = "0.1.0-alpha.28"
+version = "0.1.0-alpha.29"
 dependencies = [
  "blake3",
  "fenkra-core",
@@ -1307,7 +1307,7 @@ dependencies = [
 
 [[package]]
 name = "fenkra-core"
-version = "0.1.0-alpha.28"
+version = "0.1.0-alpha.29"
 dependencies = [
  "serde",
  "serde_json",
@@ -1316,7 +1316,7 @@ dependencies = [
 
 [[package]]
 name = "fenkra-desenho"
-version = "0.1.0-alpha.28"
+version = "0.1.0-alpha.29"
 dependencies = [
  "fenkra-core",
  "fenkra-dxf",
@@ -1329,11 +1329,11 @@ dependencies = [
 
 [[package]]
 name = "fenkra-dxf"
-version = "0.1.0-alpha.28"
+version = "0.1.0-alpha.29"
 
 [[package]]
 name = "fenkra-kernel"
-version = "0.1.0-alpha.28"
+version = "0.1.0-alpha.29"
 dependencies = [
  "cxx",
  "cxx-build",
@@ -1342,7 +1342,7 @@ dependencies = [
 
 [[package]]
 name = "fenkra-mcp"
-version = "0.1.0-alpha.28"
+version = "0.1.0-alpha.29"
 dependencies = [
  "fenkra-cli",
  "fenkra-core",
@@ -1353,7 +1353,7 @@ dependencies = [
 
 [[package]]
 name = "fenkra-montagem"
-version = "0.1.0-alpha.28"
+version = "0.1.0-alpha.29"
 dependencies = [
  "fenkra-core",
  "fenkra-kernel",
@@ -1364,7 +1364,7 @@ dependencies = [
 
 [[package]]
 name = "fenkra-project"
-version = "0.1.0-alpha.28"
+version = "0.1.0-alpha.29"
 dependencies = [
  "blake3",
  "fenkra-core",
@@ -1377,7 +1377,7 @@ dependencies = [
 
 [[package]]
 name = "fenkra-solidos"
-version = "0.1.0-alpha.28"
+version = "0.1.0-alpha.29"
 dependencies = [
  "blake3",
  "fenkra-core",
@@ -1389,7 +1389,7 @@ dependencies = [
 
 [[package]]
 name = "fenkra-tolerancias"
-version = "0.1.0-alpha.28"
+version = "0.1.0-alpha.29"
 dependencies = [
  "serde",
 ]
