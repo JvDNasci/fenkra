@@ -4,15 +4,15 @@ Consolidado do [design review](../contextos/design-review.md), dos [contextos](.
 Versão visual (kanban + comparador): [painel.html](painel.html), gerada por `scripts/benchmark/pagina.py`.
 Gerado por `scripts/benchmark/backlog.py`; o estado de cada item é atualizado aqui a cada entrega.
 
-**Estimativa total:** ≈ 96.5 M tokens (≈ 322 mil linhas de código, pela média das últimas versões).
+**Estimativa total:** ≈ 96.9 M tokens (≈ 323 mil linhas de código, pela média das últimas versões).
 
 | Onda | Versão | Itens | Tokens | % |
 |---|---|---|---|---|
 | Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes) | `0.1.0-alpha.28 a .30` | 36 | ≈ 7180 k | 7.4% |
 | Onda 1 — bugs do design review | `0.1.0-alpha.31` | 58 | ≈ 11610 k | 12.0% |
-| Onda 2 — filosofia base + VPM local | `0.1.0-alpha.32` | 97 | ≈ 23990 k | 24.9% |
-| Onda 3 — módulos novos e lacunas do benchmark | `0.1.0-alpha.33+` | 82 | ≈ 22250 k | 23.1% |
-| Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…) | `0.2.x` | 99 | ≈ 31470 k | 32.6% |
+| Onda 2 — filosofia base + VPM local | `0.1.0-alpha.32` | 98 | ≈ 24390 k | 25.2% |
+| Onda 3 — módulos novos e lacunas do benchmark | `0.1.0-alpha.33+` | 82 | ≈ 22250 k | 23.0% |
+| Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…) | `0.2.x` | 99 | ≈ 31470 k | 32.5% |
 
 Prioridade: **P0** quebra o uso · **P1** importante · **P2** desejável · **P3** futuro.
 Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = captura do app com `FENKRA_DEMO_*` · **Manual** = usuário.
@@ -145,6 +145,7 @@ Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = 
 | B362 | P0 | **Abrir peça a partir da montagem sem travar** — Abrir uma peça de dentro da montagem está dando problema. Reproduzir, corrigir e testar a ida e a volta, com alterações por salvar. | USR-TESTE |  | 120 k | 0.1% | Auto + Visual | a fazer |
 | B367 | P0 | **Realce sem pintar a peça, árvore travada e comando não terminado que some** — A peça mantém a cor: só as arestas do item acendem. A árvore fica no lugar, com menu discreto para soltar, minimizar e fechar, e o recurso arrasta para outra posição. O X do painel cancela o comando, e comando novo com erro não sobra na árvore ao sair sem concluir. | USR-TESTE |  | 100 k | 0.1% | Auto + Visual | feito |
 | B368 | P0 | **PMI: capturas no detalhamento, ancoragem de setas, F2 e saída no HTML** — Criar captura fica junto do detalhamento 3D. Ctrl e Shift selecionam como nas peças e F2 renomeia capturas, legendas e notas. Cada seta de nota ou legenda tem sua ancoragem (esquerda, direita, topo, base), com várias setas por nota. PMI e capturas chegam ao HTML, que mostra as capturas em sequência, como etapas. | USR-TESTE |  | 350 k | 0.4% | Auto + Visual | a fazer |
+| B373 | P0 | **Furo e rosca: fluxo novo e rosca modelada de verdade** — Rever o painel de furo e rosca, com rosca cosmética e modelada num fluxo claro. A rosca modelada corta como a física, contínua e sem faces soltas, do início do furo em diante, e serve para impressão 3D. Entrada da rosca editável (chanfro e folga em cima e embaixo, em medida ou porcentagem) e ângulo de início em relação a uma referência. Ponta, rosca e folga no fundo não podem falhar com a mensagem de que a rosca não cabe quando o corte passa do sólido. | USR-TESTE |  | 400 k | 0.4% | Auto + Visual | a fazer |
 | B86 | P0 | **Chapa: planificação exata, Check Overlapping e DXF com camadas** — Nenhuma feature some na planificada (perfil, louver, estampos) e sobreposições são listadas; DXF 1:1 com camadas fixas (contorno, furos, dobra para cima/baixo, ferramenta). Tabela de dobras do mapa com ordem e etiquetas iguais às da vista; propriedades blank, área, massa e número de dobras. | PESQ-CHP, PESQ-DES |  | 300 k | 0.3% | Auto + Visual | em andamento |
 | B87 | P0 | **Conversor: crate fenkra-conversor e ponte XDE** — Crate com trait Provedor, opções serializáveis, relatório e processo filho fenkra-conv que isola falhas do OCCT. read_xcaf/write_xcaf via STEPCAFControl com AP203/214/242, nomes, cores, camadas e estrutura; ida e volta preserva volume, área e centroide em 1e-6. Deixar o gancho para PMI (XCAFDoc_DimTolTool, write.step.schema AP242, SetDimTolMode) que o item de AP242 semântico preenche. | PESQ-CNV, PESQ-PMI |  | 300 k | 0.3% | Auto | feito |
 | B88 | P0 | **Conversor: importar STEP e BREP na interface** — Acrescentar ao aceite: antes de confirmar, o diálogo mostra miniatura 3D, caixa envolvente em mm, contagem de corpos e faces e aviso de unidade suspeita (peça com mais de 10 000 mm ou menos de 0,1 mm); depois da importação, relatório copiável com faces reparadas, sólidos que não fecharam e o que o formato não carrega. Dica por campo em cada opção, ícone do conjunto e tooltip em dois estágios. O documento recebe o selo de origem (item novo de selo e vínculo). | PESQ-CNV, PESQ-MAC |  | 300 k | 0.3% | Auto + Visual | feito |

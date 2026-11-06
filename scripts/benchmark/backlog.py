@@ -765,6 +765,8 @@ c('B371', 2, 'P1', 'Importar anotações do 3D para o desenho', 'A vista recebe 
   ['USR-TESTE'], [], 350, 'Auto + Visual', 'Desenho técnico'),
 c('B372', 2, 'P1', 'Roleta de comandos pensada no fluxo de cada bancada', 'Revisar os fluxos de modelagem de todas as bancadas e montar o conteúdo padrão da roleta: em cada bancada e modo, os comandos que fazem sentido, e conforme a seleção os de face, aresta, vértice ou superfície. A pessoa continua podendo personalizar.',
   ['USR-TESTE'], [], 250, 'Auto + Visual', 'Interface'),
+c('B373', 2, 'P0', 'Furo e rosca: fluxo novo e rosca modelada de verdade', 'Rever o painel de furo e rosca, com rosca cosmética e modelada num fluxo claro. A rosca modelada corta como a física, contínua e sem faces soltas, do início do furo em diante, e serve para impressão 3D. Entrada da rosca editável (chanfro e folga em cima e embaixo, em medida ou porcentagem) e ângulo de início em relação a uma referência. Ponta, rosca e folga no fundo não podem falhar com a mensagem de que a rosca não cabe quando o corte passa do sólido.',
+  ['USR-TESTE'], [], 400, 'Auto + Visual', 'Sólidos'),
 ]
 def main():
     for x in B:
