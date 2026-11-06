@@ -1,4 +1,4 @@
-# ADR 0052: cópias compartilhadas e nível de detalhe na montagem
+# ADR 0053: cópias compartilhadas e nível de detalhe na montagem
 
 Data: 2026-11-06. Item: B125. Liga com B259 (trabalho fora da interface), B61 (presets de malha),
 B236 (modo leve) e B305 (prévia de inserção).
