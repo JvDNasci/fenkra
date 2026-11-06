@@ -21,6 +21,8 @@ pub mod biblioteca;
 pub mod catalogo;
 pub mod fixadores;
 pub mod engrenagens;
+pub mod engrenagens_dim;
+pub mod eixos_recursos;
 pub mod eixos;
 pub mod profile;
 pub mod refs;

@@ -626,6 +626,21 @@ pub fn demo(st: &mut AsmState, nome: &str) {
         crate::asm_fixadores::demo(st);
         return;
     }
+    if nome == "engrenagens" || nome == "eixo" {
+        // janela de engrenagens aberta (prévia do par) ou com o eixo gráfico ligado
+        let mut g = crate::asm_ui::GearsUi::default();
+        if nome == "eixo" {
+            g.eixo_grafico = true;
+            g.trecho_sel = Some(1);
+            g.recursos = vec![
+                fenkra_solidos::eixos_recursos::RecursoEixo { trecho: 1, borda: fenkra_solidos::eixos_recursos::Borda::Esquerda, posicao: 8., tipo: fenkra_solidos::eixos_recursos::TipoRecurso::Rasgo { comprimento: 30., rotacao: 0. } },
+                fenkra_solidos::eixos_recursos::RecursoEixo { trecho: 1, borda: fenkra_solidos::eixos_recursos::Borda::Direita, posicao: 6., tipo: fenkra_solidos::eixos_recursos::TipoRecurso::Anel { largura: 1.5, profundidade: 0.8 } },
+            ];
+        }
+        st.gears_open = Some(g);
+        st.fantasma_novo = true;
+        return;
+    }
     if nome == "encaixe" {
         st.cmd = Some(Pendente::novo(Tipo::Junta(JointKind::Rigid)));
         crate::asm_encaixe::demo(st);

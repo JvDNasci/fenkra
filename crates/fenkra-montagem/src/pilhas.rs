@@ -33,6 +33,10 @@ fn engajamento_padrao() -> f64 {
     ENGAJAMENTO_PADRAO
 }
 
+fn rosca_alem_padrao() -> f64 {
+    crate::fixadores::ROSCA_ALEM_PORCA_PADRAO
+}
+
 /// De onde a pilha sai, no sistema da peça da âncora.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct Ancora {
@@ -80,6 +84,9 @@ pub struct Pilha {
     /// múltiplos do diâmetro de rosca engajada em furo roscado
     #[serde(default = "engajamento_padrao")]
     pub engajamento: f64,
+    /// passos de rosca que sobram além da porca
+    #[serde(default = "rosca_alem_padrao")]
+    pub rosca_alem_porca: f64,
     /// espessura presa no ponto manual
     #[serde(default)]
     pub pega_manual: f64,
@@ -135,6 +142,7 @@ impl Pilha {
             comprimento: (!self.atualizar_comprimento).then_some(self.comprimento),
             tam_acessorios: self.tam_acessorios.clone(),
             engajamento: self.engajamento,
+            rosca_alem_porca: self.rosca_alem_porca,
             ..Default::default()
         }
     }
@@ -181,6 +189,7 @@ pub(crate) fn registrar(a: &mut Assembly, furos: &[Furo], md: &Medida, tamanho: 
         atualizar_comprimento: op.comprimento.is_none(),
         trocar_junto: op.tam_acessorios.is_none(),
         engajamento: op.engajamento,
+        rosca_alem_porca: op.rosca_alem_porca,
         pega_manual: 0.,
         assinatura: String::new(),
     };
@@ -282,6 +291,7 @@ pub fn adicionar_manual(a: &mut Assembly, dir: &Path, lib: &Biblioteca, comp: Id
         atualizar_comprimento: false,
         trocar_junto: true,
         engajamento: op.engajamento,
+        rosca_alem_porca: op.rosca_alem_porca,
         pega_manual: pega,
         assinatura: String::new(),
     };

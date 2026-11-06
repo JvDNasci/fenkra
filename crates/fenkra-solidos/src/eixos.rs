@@ -174,7 +174,7 @@ pub(crate) fn extrusao_cega(m: &mut Montador, nome: &str, sketch: Id, prof: &str
 }
 
 /// Contorno de "estádio" (duas retas e dois semicírculos de raio `r`) entre os centros `a` e `b`.
-fn estadio(m: &mut Montador, nome: &str, plano: PlaneRef, a: [f64; 2], b: [f64; 2], r: f64) -> Id {
+pub(crate) fn estadio(m: &mut Montador, nome: &str, plano: PlaneRef, a: [f64; 2], b: [f64; 2], r: f64) -> Id {
     let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
     let n = dx.hypot(dy);
     let nv = [-dy / n * r, dx / n * r];

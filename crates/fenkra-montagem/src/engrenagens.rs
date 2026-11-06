@@ -98,24 +98,7 @@ pub fn inserir_par_engrenagens(asm: &mut Assembly, dir: Option<&Path>, pinhao: &
     };
 
     let a = par.distancia_centros;
-    let (pl1, pl2) = match pinhao.tipo {
-        TipoEngrenagem::Reta | TipoEngrenagem::Helicoidal => {
-            // dente 0 do pinhão (+X) aponta para a coroa; ali a coroa precisa de um vão (dentes em
-            // ρ + 2πk/z2, vão centrado em π): ρ = π(1 + 1/z2)
-            let rho = PI * (1. + 1. / dentes_coroa as f64);
-            (Placement::default(), girado([a, 0., 0.], rho))
-        }
-        // o vão 0 da coroa interna está em +X; o centro dela fica atrás do pinhão
-        TipoEngrenagem::Interna => (Placement::default(), girado([-a, 0., 0.], 0.)),
-        TipoEngrenagem::Cremalheira => {
-            // o pinhão fica sobre um vão central da cremalheira, com o dente 0 virado para ela (-Y)
-            let passo = PI * par.coroa.modulo;
-            let n = (par.coroa.comprimento_cremalheira / passo).floor();
-            let c0 = (par.coroa.comprimento_cremalheira - (n - 1.) * passo) / 2.;
-            let x = c0 + ((n / 2.).floor() - 0.5) * passo;
-            (girado([x, a, 0.], -PI / 2.), Placement::default())
-        }
-    };
+    let (pl1, pl2) = posicoes_do_par(&par, dentes_coroa);
     let id1 = asm.add_component(&nome1, NodeKind::Part { path: arq1 }, pl1, Some(pasta));
     let id2 = asm.add_component(&nome2, NodeKind::Part { path: arq2 }, pl2, Some(pasta));
 
@@ -135,6 +118,56 @@ pub fn inserir_par_engrenagens(asm: &mut Assembly, dir: Option<&Path>, pinhao: &
     };
     asm.init_motion(restricao);
     Ok(RelatorioEngrenagens { pinhao: id1, coroa: id2, restricao, distancia_centros: a, razao, avisos: par.avisos })
+}
+
+/// Onde cada peça do par fica na montagem: pinhão e coroa (ou cremalheira). A inserção e a prévia
+/// usam esta mesma conta, então o fantasma está sempre onde as peças vão entrar.
+pub fn posicoes_do_par(par: &CalculoPar, dentes_coroa: u32) -> (Placement, Placement) {
+    let a = par.distancia_centros;
+    match par.coroa.tipo {
+        TipoEngrenagem::Reta | TipoEngrenagem::Helicoidal => {
+            // dente 0 do pinhão (+X) aponta para a coroa; ali a coroa precisa de um vão (dentes em
+            // ρ + 2πk/z2, vão centrado em π): ρ = π(1 + 1/z2)
+            let rho = PI * (1. + 1. / dentes_coroa as f64);
+            (Placement::default(), girado([a, 0., 0.], rho))
+        }
+        // o vão 0 da coroa interna está em +X; o centro dela fica atrás do pinhão
+        TipoEngrenagem::Interna => (Placement::default(), girado([-a, 0., 0.], 0.)),
+        TipoEngrenagem::Cremalheira => {
+            // o pinhão fica sobre um vão central da cremalheira, com o dente 0 virado para ela (-Y)
+            let passo = PI * par.coroa.modulo;
+            let n = (par.coroa.comprimento_cremalheira / passo).floor();
+            let c0 = (par.coroa.comprimento_cremalheira - (n - 1.) * passo) / 2.;
+            let x = c0 + ((n / 2.).floor() - 0.5) * passo;
+            (girado([x, a, 0.], -PI / 2.), Placement::default())
+        }
+    }
+}
+
+/// Prévia do par (B280): tudo o que o fantasma 3D e as anotações precisam, sem gravar nem inserir
+/// nada. As medidas vêm de [`calculo_par`] e as posições de [`posicoes_do_par`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct PreviaPar {
+    pub par: CalculoPar,
+    pub lugar_pinhao: Placement,
+    pub lugar_coroa: Placement,
+}
+
+impl PreviaPar {
+    /// Distância entre os centros das duas peças, medida nas posições da prévia (cremalheira: do
+    /// centro do pinhão à linha primitiva, que passa pela origem da barra).
+    pub fn distancia_medida(&self) -> f64 {
+        if self.par.coroa.tipo == TipoEngrenagem::Cremalheira {
+            return self.lugar_pinhao.origin[1] - self.lugar_coroa.origin[1];
+        }
+        norm(sub(self.lugar_pinhao.origin, self.lugar_coroa.origin))
+    }
+}
+
+pub fn previa_par(pinhao: &ParamEngrenagem, dentes_coroa: u32) -> Result<PreviaPar, String> {
+    let par = calculo_par(pinhao, dentes_coroa)?;
+    let (lugar_pinhao, lugar_coroa) = posicoes_do_par(&par, dentes_coroa);
+    Ok(PreviaPar { par, lugar_pinhao, lugar_coroa })
 }
 
 /// Componente com a origem em `o` e girado de `rho` radianos em torno de Z.
@@ -172,6 +205,28 @@ mod tests {
 
     fn dist(a: &Assembly, i: Id, j: Id) -> f64 {
         norm(sub(a.node(i).unwrap().placement.origin, a.node(j).unwrap().placement.origin))
+    }
+
+    #[test]
+    fn previa_bate_com_a_insercao_e_nao_grava_nada() {
+        let dir = pasta("previa");
+        let livre = dir.join("nada_aqui");
+        for (tipo, z2) in [(TipoEngrenagem::Reta, 40), (TipoEngrenagem::Interna, 60), (TipoEngrenagem::Cremalheira, 0)] {
+            let p = ParamEngrenagem { tipo, dentes: 20, ..Default::default() };
+            let pv = previa_par(&p, z2).unwrap();
+            assert!(!livre.exists(), "a prévia não cria pasta");
+            let mut a = Assembly::new("x");
+            let r = inserir_par_engrenagens(&mut a, Some(&dir), &p, z2).unwrap();
+            // mesma distância entre centros e mesma razão
+            assert!((pv.par.distancia_centros - r.distancia_centros).abs() < 1e-12 && (pv.par.razao - r.razao).abs() < 1e-12, "{tipo:?}");
+            assert!((pv.distancia_medida() - r.distancia_centros).abs() < 1e-9, "{tipo:?}: {}", pv.distancia_medida());
+            // e as mesmas posições das peças inseridas
+            assert_eq!(a.node(r.pinhao).unwrap().placement, pv.lugar_pinhao);
+            assert_eq!(a.node(r.coroa).unwrap().placement, pv.lugar_coroa);
+        }
+        // m2 z20/z40: centros a 60 e razão -1/2
+        let pv = previa_par(&ParamEngrenagem::default(), 40).unwrap();
+        assert!((pv.distancia_medida() - 60.).abs() < 1e-9 && (pv.par.razao + 0.5).abs() < 1e-12);
     }
 
     #[test]

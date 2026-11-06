@@ -131,11 +131,22 @@ pub struct GearsUi {
     pub msg: Vec<String>,
     /// eixo escalonado e chaveta (seção "Eixo e chaveta")
     pub eixo: fenkra_solidos::ParamEixo,
+    /// malhas da prévia 3D do par (B280), refeitas quando os parâmetros mudam
+    pub malhas: Option<std::sync::Arc<crate::engrenagens_ui::MalhasPar>>,
+    /// modo Dimensionar: distância entre centros e razão pedidas
+    pub dimensionar: bool,
+    pub dim_a: f64,
+    pub dim_i: f64,
+    /// recursos de seção do eixo gráfico (B281) e o trecho selecionado no desenho
+    pub recursos: Vec<fenkra_solidos::eixos_recursos::RecursoEixo>,
+    pub trecho_sel: Option<usize>,
+    pub eixo_grafico: bool,
+    pub malha_eixo: Option<std::sync::Arc<crate::eixo_ui::MalhaEixo>>,
 }
 
 impl Default for GearsUi {
     fn default() -> Self {
-        GearsUi { p: fenkra_solidos::ParamEngrenagem { furo: 8., ..Default::default() }, dentes_coroa: 40, msg: vec![], eixo: Default::default() }
+        GearsUi { p: fenkra_solidos::ParamEngrenagem { furo: 8., ..Default::default() }, dentes_coroa: 40, msg: vec![], eixo: Default::default(), malhas: None, dimensionar: false, dim_a: 90., dim_i: 2., recursos: vec![], trecho_sel: Some(0), eixo_grafico: false, malha_eixo: None }
     }
 }
 
@@ -3404,6 +3415,12 @@ pub fn fasteners_handles(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam
         let p = ui.painter_at(rect);
         p.circle_filled(c, 6.5, cor);
         p.circle_stroke(c, 6.5, egui::Stroke::new(1.5, Color32::from_black_alpha(160)));
+        // cota ao lado do parafuso, sempre visível, com um traço em cada valor da série (B282)
+        let cabeca = [0, 1, 2].map(|k| ponta[k] - eixo[k] * *atual);
+        if let Some(h) = cam.project(rect, v3(cabeca)) {
+            let v = ui.visuals();
+            crate::alca_cota::desenhar(&p, h, c, *atual, serie, crate::theme::accent(v), v.window_fill().gamma_multiply(0.85), format!("L {}", fmt(*atual)));
+        }
         if resp.hovered() || resp.dragged() {
             p.text(c + egui::vec2(12., -12.), egui::Align2::LEFT_BOTTOM, format!("L {}", fmt(*atual)), egui::FontId::proportional(12.), cor);
         }
@@ -3411,10 +3428,9 @@ pub fn fasteners_handles(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam
             ctx.data_mut(|d| d.insert_temp(id, *atual));
         }
         if resp.dragged() && px_por_mm > 1e-3 {
-            let delta = resp.drag_delta().dot(na_tela / na_tela.length()) / px_por_mm;
-            let alvo = ctx.data(|d| d.get_temp::<f64>(id)).unwrap_or(*atual) + delta as f64;
+            let alvo = crate::alca_cota::alvo_do_arrasto(ctx.data(|d| d.get_temp::<f64>(id)).unwrap_or(*atual), resp.drag_delta(), na_tela, px_por_mm);
             ctx.data_mut(|d| d.insert_temp(id, alvo));
-            if let Some(v) = fenkra_montagem::fixadores::mais_proximo(serie, alvo) {
+            if let Some(v) = crate::alca_cota::parar_na_serie(serie, alvo) {
                 if (v - *atual).abs() > 1e-9 {
                     novo = Some(v);
                 }
@@ -3822,6 +3838,9 @@ pub fn fasteners_window(app: &mut App, ctx: &egui::Context) {
         if !serie.is_empty() {
             ui.label(RichText::new(tr("Na viewport, arraste a alça na ponta do parafuso (ou dê dois cliques nela) para escolher o comprimento: só aparecem valores que existem na família.")).weak().small());
         }
+        crate::editor::section(ui, "Regras do comprimento");
+        ui.add(crate::ui_ext::dv(&mut f.op.engajamento).speed(0.05).range(0.1..=5.).suffix(" × d").rotulo(tr("Engajamento mínimo de rosca")).dica(tr("Em furo roscado, quanto do parafuso precisa entrar na rosca, em múltiplos do diâmetro.")));
+        ui.add(crate::ui_ext::dv(&mut f.op.rosca_alem_porca).speed(0.1).range(0.0..=10.).suffix(" × passo").rotulo(tr("Rosca além da porca")).dica(tr("Quantos passos de rosca devem sobrar depois da porca. O comprimento sai do próximo valor da série que cobre pega, arruelas, porca e essa sobra.")));
         crate::editor::section(ui, "Arruela e porca");
         crate::editor::check(ui, &mut f.op.arruela, "arruela sob a cabeça (e sob a porca)");
         if f.op.arruela {
@@ -4037,6 +4056,8 @@ pub fn gears_window(app: &mut App, ctx: &egui::Context) {
                 ui.selectable_value(&mut g.p.tipo, t, tr(t.rotulo()));
             }
         });
+        crate::editor::section(ui, "Modo");
+        crate::engrenagens_ui::painel_dimensionar(ui, &mut g);
         crate::editor::section(ui, "Medidas");
         campo(ui, "Módulo", &mut g.p.modulo, 0.1..=50., " mm", 0.05);
         if tipo != TipoEngrenagem::Cremalheira {
@@ -4086,6 +4107,9 @@ pub fn gears_window(app: &mut App, ctx: &egui::Context) {
             Ok(c) => {
                 let v = |x: f64| if x == 0. { "—".to_string() } else { fmt(x) };
                 let rack = tipo == TipoEngrenagem::Cremalheira;
+                if matches!(tipo, TipoEngrenagem::Reta | TipoEngrenagem::Helicoidal) {
+                    crate::engrenagens_ui::esquema(ui, &c.pinhao, &c.calc_pinhao);
+                }
                 egui::Grid::new("grade_engrenagens").num_columns(3).spacing([14., 3.]).show(ui, |ui| {
                     ui.label("");
                     ui.label(RichText::new(tr("Pinhão")).strong());
@@ -4100,7 +4124,9 @@ pub fn gears_window(app: &mut App, ctx: &egui::Context) {
                         ("Espessura do dente", c.calc_pinhao.espessura_dente, c.calc_coroa.espessura_dente),
                         ("Altura do dente", c.calc_pinhao.altura_dente, c.calc_coroa.altura_dente),
                     ] {
-                        ui.label(tr(rotulo));
+                        if ui.label(tr(rotulo)).hovered() {
+                            crate::engrenagens_ui::marcar(ui.ctx(), rotulo);
+                        }
                         ui.label(v(a));
                         ui.label(v(b));
                         ui.end_row();
@@ -4146,6 +4172,11 @@ pub fn gears_window(app: &mut App, ctx: &egui::Context) {
 
         crate::editor::section(ui, "Eixo e chaveta");
         ui.label(RichText::new(tr("Eixo escalonado ao longo de Z (a partir de z = 0), com chanfros e rasgos de chaveta DIN 6885 forma A cortados em +X. A chaveta vem da tabela pelo diâmetro de cada trecho.")).weak().small());
+        ui.horizontal(|ui| {
+            ui.selectable_value(&mut g.eixo_grafico, false, tr("Tabela"));
+            ui.selectable_value(&mut g.eixo_grafico, true, tr("Gráfico")).on_hover_text(tr("Mostra o eixo no 3D com alças nas arestas dos trechos: arraste uma alça para mudar L ou Ø e a grade acompanha."));
+        });
+        crate::eixo_ui::perfil_lateral(ui, &mut g);
         let mut remover: Option<usize> = None;
         egui::Grid::new("grade_eixo").num_columns(8).spacing([8., 3.]).show(ui, |ui| {
             for h in ["Ø", "L", "Chanfro", "Rasgo", "L rasgo", "Início", "Chaveta", ""] {
@@ -4186,6 +4217,8 @@ pub fn gears_window(app: &mut App, ctx: &egui::Context) {
         if let Some(i) = remover {
             if g.eixo.trechos.len() > 1 {
                 g.eixo.trechos.remove(i);
+                crate::eixo_ui::remover_trecho(&mut g.recursos, i);
+                g.trecho_sel = Some(i.saturating_sub(1).min(g.eixo.trechos.len() - 1));
             }
         }
         ui.horizontal_wrapped(|ui| {
@@ -4196,7 +4229,13 @@ pub fn gears_window(app: &mut App, ctx: &egui::Context) {
             }
             ui.checkbox(&mut g.eixo.furo_centro, tr("Furos de centro nas pontas"));
         });
-        let eixo_ok = g.eixo.validar();
+        ui.horizontal_wrapped(|ui| {
+            for k in 0..g.eixo.trechos.len() {
+                ui.selectable_value(&mut g.trecho_sel, Some(k), format!("{} {}", tr("Trecho"), k + 1));
+            }
+        });
+        crate::eixo_ui::recursos_do_trecho(ui, &mut g);
+        let eixo_ok = g.eixo.validar().and_then(|c| fenkra_solidos::eixos_recursos::validar_recursos(&g.eixo, &g.recursos).map(|_| c));
         if let Err(e) = &eixo_ok {
             ui.label(RichText::new(format!("⚠ {e}")).color(Color32::from_rgb(220, 90, 60)));
         }
@@ -4217,7 +4256,11 @@ pub fn gears_window(app: &mut App, ctx: &egui::Context) {
     });
     if !open || close {
         st.gears_open = None;
+        st.fantasma_novo = true;
         return;
+    }
+    if crate::engrenagens_ui::atualizar_malhas(&mut g, ctx) | crate::eixo_ui::atualizar_malha(&mut g, ctx) {
+        st.fantasma_novo = true;
     }
     let mut aviso: Option<(String, bool)> = None;
     let mut gravar: Option<(fenkra_solidos::ParamEngrenagem, Option<PathBuf>)> = None;
@@ -4250,7 +4293,7 @@ pub fn gears_window(app: &mut App, ctx: &egui::Context) {
         }
     }
     let dir_peca = st.dir();
-    let eixo_doc = salvar_eixo.then(|| fenkra_solidos::eixo_documento(&g.eixo).map(|d| (d, g.eixo.chave())));
+    let eixo_doc = salvar_eixo.then(|| fenkra_solidos::eixos_recursos::eixo_documento_com_recursos(&g.eixo, &g.recursos).map(|d| (d, if g.recursos.is_empty() { g.eixo.chave() } else { format!("{}-{}rec", g.eixo.chave(), g.recursos.len()) })));
     let chaveta_doc = salvar_chaveta.map(|(d, l)| fenkra_solidos::chaveta_documento(d, l).map(|doc| (doc, format!("chaveta-din6885a-d{d}-l{l}"))));
     st.gears_open = Some(g);
     if let Some((msg, erro)) = aviso {

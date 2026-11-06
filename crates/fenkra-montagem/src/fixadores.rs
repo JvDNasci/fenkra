@@ -44,6 +44,8 @@ const TOL_ANGULO: f64 = 0.5;
 pub(crate) const GRUPO: &str = "Fixadores";
 /// Engajamento mínimo de rosca: uma vez o diâmetro nominal, a regra usual para aço em aço.
 pub const ENGAJAMENTO_PADRAO: f64 = 1.;
+/// Rosca que sobra além da porca, em passos: dois filetes completos aparecem depois dela.
+pub const ROSCA_ALEM_PORCA_PADRAO: f64 = 2.;
 /// Nome das restrições que tiram o giro dos fixadores.
 const TRAVA: &str = "Trava de giro";
 
@@ -73,11 +75,13 @@ pub struct OpcoesFixadores {
     pub tam_acessorios: Option<String>,
     /// engajamento mínimo da rosca em furo roscado, em múltiplos do diâmetro nominal
     pub engajamento: f64,
+    /// rosca que deve sobrar além da porca, em passos da rosca (furo passante com porca)
+    pub rosca_alem_porca: f64,
 }
 
 impl Default for OpcoesFixadores {
     fn default() -> Self {
-        OpcoesFixadores { familia_parafuso: "iso4762".into(), arruela: true, porca: true, familia_porca: "iso4032".into(), familia_arruela: "iso7089".into(), folga: 1, componentes: vec![], travar_giro: true, so_previa: false, comprimento: None, excluidas: vec![], tam_acessorios: None, engajamento: ENGAJAMENTO_PADRAO }
+        OpcoesFixadores { familia_parafuso: "iso4762".into(), arruela: true, porca: true, familia_porca: "iso4032".into(), familia_arruela: "iso7089".into(), folga: 1, componentes: vec![], travar_giro: true, so_previa: false, comprimento: None, excluidas: vec![], tam_acessorios: None, engajamento: ENGAJAMENTO_PADRAO, rosca_alem_porca: ROSCA_ALEM_PORCA_PADRAO }
     }
 }
 
@@ -404,7 +408,7 @@ pub(crate) fn medir(pilha: &[Furo], fam_p: &Familia, t_p: &Tamanho, desig: &str,
             }
         }
     } else {
-        let precisa = pega + w1 + w2 + m + 2. * passo;
+        let precisa = pega + w1 + w2 + m + op.rosca_alem_porca.max(0.) * passo;
         match serie.iter().copied().find(|l| *l >= precisa - 1e-9) {
             Some(l) => l,
             None => {
@@ -1320,6 +1324,88 @@ pub(crate) mod tests {
         let op = OpcoesFixadores { comprimento: Some(40.), ..Default::default() };
         let real = preencher_furos(&mut a, Some(&dir), &mut PartCache::default(), &op).unwrap();
         assert_eq!(real.por_tamanho, vec![("M6x40".to_string(), 1)], "{real:?}");
+    }
+
+    /// Comprimento escolhido pela prévia (única marca de entrada) e as mensagens dela.
+    fn escolhido(a: &mut Assembly, dir: &Path, op: OpcoesFixadores) -> (f64, Vec<String>) {
+        let rel = preencher_furos(a, Some(dir), &mut PartCache::default(), &OpcoesFixadores { so_previa: true, ..op }).unwrap();
+        match &rel.marcas[0].estado {
+            EstadoFuro::Entra { comprimento, .. } => (*comprimento, rel.avisos),
+            e => panic!("{e:?} {:?}", rel.avisos),
+        }
+    }
+
+    #[test]
+    fn furo_passante_escolhe_o_proximo_acima_e_a_rosca_alem_da_porca_e_configuravel() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let dir = pasta("alem_porca");
+        let (mut a, _, _) = pilha_de_placas(&dir, &placa(10., 6.6, None));
+        // pega 20 + arruelas 1,6 + 1,6 + porca 5,2 = 28,4; o passo do M6 é 1 mm
+        let com = |alem: f64| OpcoesFixadores { rosca_alem_porca: alem, ..Default::default() };
+        assert_eq!(escolhido(&mut a, &dir, com(2.)).0, 35., "padrão: 30,4 sobe para 35");
+        assert_eq!(escolhido(&mut a, &dir, com(0.)).0, 30., "28,4 sobe para 30");
+        assert_eq!(escolhido(&mut a, &dir, com(1.6)).0, 30., "30,0 cabe exato em 30");
+        assert_eq!(escolhido(&mut a, &dir, com(1.7)).0, 35., "30,1 já passa de 30");
+        assert_eq!(escolhido(&mut a, &dir, com(8.)).0, 40., "36,4 sobe para 40");
+        // nunca abaixo do necessário: o comprimento automático cobre pega + arruelas + porca
+        for alem in [0., 0.5, 1., 2., 3., 5., 7.9] {
+            let (l, _) = escolhido(&mut a, &dir, com(alem));
+            assert!(l >= 28.4 + alem - 1e-9, "alem {alem}: L{l}");
+        }
+        // a pilha gravada guarda a regra e a repete ao recalcular
+        let real = preencher_furos(&mut a, Some(&dir), &mut PartCache::default(), &com(0.)).unwrap();
+        assert_eq!(real.por_tamanho, vec![("M6x30".to_string(), 1)], "{real:?}");
+        assert!((a.pilhas[0].rosca_alem_porca - 0.).abs() < 1e-12);
+    }
+
+    #[test]
+    fn furo_cego_escolhe_o_proximo_abaixo_e_o_engajamento_minimo_avisa() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let dir = pasta("cego_engaja");
+        // profundidade útil 18 + arruela 1,6 = 19,6 → o último abaixo é 16
+        let mut a = Assembly::new("Cego");
+        std::fs::write(dir.join("bloco.fkp"), placa(30., 5., Some(18.)).to_json()).unwrap();
+        a.add_component("Bloco", NodeKind::Part { path: "bloco.fkp".into() }, Placement::default(), None);
+        let (l, avisos) = escolhido(&mut a, &dir, OpcoesFixadores::default());
+        assert_eq!(l, 16.);
+        assert!(avisos.is_empty(), "{avisos:?}");
+        // engajado = 16 - 1,6 = 14,4 mm: vale até 2,4 × d (14,4 mm); acima disso avisa
+        let (_, ok) = escolhido(&mut a, &dir, OpcoesFixadores { engajamento: 2.4, ..Default::default() });
+        assert!(ok.is_empty(), "{ok:?}");
+        let (l, avisos) = escolhido(&mut a, &dir, OpcoesFixadores { engajamento: 3., ..Default::default() });
+        assert_eq!(l, 16., "o aviso não troca o comprimento sozinho");
+        assert!(avisos.iter().any(|m| m.contains("engaja")), "{avisos:?}");
+        // outras profundidades: sempre um valor da série que não passa da profundidade útil
+        for (prof, esperado) in [(16., 16.), (20., 20.), (22., 20.), (26.5, 25.)] {
+            let mut b = Assembly::new("Cego");
+            std::fs::write(dir.join("bloco.fkp"), placa(30., 5., Some(prof)).to_json()).unwrap();
+            b.add_component("Bloco", NodeKind::Part { path: "bloco.fkp".into() }, Placement::default(), None);
+            let (l, _) = escolhido(&mut b, &dir, OpcoesFixadores::default());
+            assert_eq!(l, esperado, "profundidade {prof}");
+            assert!(l <= prof + 1.6 + 1e-9);
+        }
+    }
+
+    #[test]
+    fn arrastar_a_alca_nunca_sai_da_serie() {
+        let fam = biblioteca::familia("iso4762").expect("família");
+        let serie = fam.comprimentos_de(fam.tamanho("M6").expect("M6"));
+        assert!(serie.len() > 5);
+        // varre do negativo até além do maior, em passos de 0,1 mm, como um arrasto contínuo
+        let mut alvo = -20.;
+        let mut anterior = mais_proximo(&serie, alvo).unwrap();
+        while alvo < serie.last().unwrap() + 40. {
+            let l = mais_proximo(&serie, alvo).unwrap();
+            assert!(serie.iter().any(|s| (s - l).abs() < 1e-12), "alvo {alvo}: L{l} fora da série");
+            assert!(l >= anterior, "o arrasto para a frente nunca encolhe o parafuso");
+            anterior = l;
+            alvo += 0.1;
+        }
+        assert_eq!(anterior, *serie.last().unwrap());
     }
 
     #[test]
