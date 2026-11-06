@@ -77,6 +77,9 @@ struct ExcecaoUi {
 #[derive(Clone)]
 struct ComparacaoUi {
     id: u64,
+    /// números das versões comparadas (a partir de 1), na ordem em que a pessoa pediu
+    a: usize,
+    b: usize,
     resultado: ComparacaoVersoes,
 }
 
@@ -212,9 +215,14 @@ impl App {
     pub(super) fn menu_versao(&mut self, ui: &mut egui::Ui, sel: u64, numero: usize, total: usize, restaurar: &mut Option<usize>) {
         let hash = self.project.as_ref().and_then(|p| p.entry(sel).ok()).and_then(|e| e.versions.get(numero - 1).map(|v| v.hash.clone()));
         let Some(hash) = hash else { return };
+        let hash_atual = self.project.as_ref().and_then(|p| p.entry(sel).ok()).and_then(|e| e.versions.last().map(|v| v.hash.clone()));
         let r = ui.menu_button("⋯", |ui| {
             if ui.button(tr("Abrir somente leitura")).clicked() {
                 self.open_entry(sel, Some((hash.clone(), format!("v{numero}"))));
+                ui.close();
+            }
+            if ui.button(tr("Ver no navegador")).on_hover_text(tr("Abre esta versão no visualizador, sem abrir o Fenkra")).clicked() {
+                self.visualizar_versao(sel, &hash, None);
                 ui.close();
             }
             if numero != total && ui.button(tr("Restaurar como nova versão")).on_hover_text(tr("Cria uma versão nova com o conteúdo desta; o histórico não é reescrito")).clicked() {
@@ -225,6 +233,12 @@ impl App {
             if numero != total && ui.button(tr("Comparar com a atual")).clicked() {
                 self.abrir_comparacao(ui.ctx(), sel, numero, total);
                 ui.close();
+            }
+            if let (true, Some(atual)) = (numero != total, hash_atual.as_ref()) {
+                if ui.button(tr("Comparar no navegador com a atual")).on_hover_text(tr("Abre as duas versões no visualizador: o que foi adicionado, removido, movido e alterado")).clicked() {
+                    self.visualizar_versao(sel, atual, Some(&hash));
+                    ui.close();
+                }
             }
             if total > 1 {
                 ui.menu_button(tr("Comparar com outra"), |ui| {
@@ -240,10 +254,30 @@ impl App {
         r.response.on_hover_text(tr("Abrir, restaurar ou comparar esta versão"));
     }
 
+    /// Sobrepõe no 3D duas versões (B214): abre a mais nova como o corpo da vista e põe por cima, em
+    /// cores do tema, o que existe só numa delas. O cálculo roda em segundo plano.
+    pub(super) fn sobrepor_no_3d(&mut self, id: u64, a: usize, b: usize) {
+        let (antes, depois) = (a.min(b), a.max(b));
+        let Some(p) = self.project.as_ref() else { return };
+        let total = p.entry(id).map(|e| e.versions.len()).unwrap_or(0);
+        let (Ok(ha), Ok(hb)) = (p.hash_da_versao(id, antes), p.hash_da_versao(id, depois)) else { return };
+        let (da, db) = match (p.load_version(&ha), p.load_version(&hb)) {
+            (Ok(x), Ok(y)) => (x, y),
+            (Err(e), _) | (_, Err(e)) => return self.toast(e.to_string(), true),
+        };
+        let rotulo = format!("v{depois}");
+        let aberta = self.open.entry == Some(id) && if depois == total { self.open.frozen.is_none() } else { self.open.frozen.as_deref() == Some(rotulo.as_str()) };
+        if !aberta {
+            self.open_entry(id, if depois == total { None } else { Some((hb, rotulo.clone())) });
+        }
+        crate::camada3d::calcular_sobreposicao(da, db, format!("v{antes}"), rotulo);
+        self.toast(tr("Calculando a sobreposição…"), false);
+    }
+
     fn abrir_comparacao(&mut self, ctx: &egui::Context, id: u64, a: usize, b: usize) {
         match self.project.as_ref().unwrap().comparar_versoes(id, a, b) {
             Ok(resultado) => ctx.data_mut(|d| {
-                d.insert_temp(id_comparacao(), Some(ComparacaoUi { id, resultado }));
+                d.insert_temp(id_comparacao(), Some(ComparacaoUi { id, a, b, resultado }));
             }),
             Err(e) => self.toast(e.to_string(), true),
         }
@@ -254,6 +288,7 @@ impl App {
         let Some(st) = ctx.data(|d| d.get_temp::<Option<ComparacaoUi>>(id_comparacao())).flatten() else { return };
         let c = &st.resultado;
         let mut aberta = true;
+        let mut sobrepor = false;
         egui::Window::new(format!("{} {} ↔ {}", tr("Comparar versões"), c.antes.rotulo, c.depois.rotulo)).id(id_comparacao()).open(&mut aberta).default_width(460.).show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.add(egui::Image::new(crate::icons::get("comparar_versoes")).fit_to_exact_size(egui::vec2(20., 20.)));
@@ -265,6 +300,7 @@ impl App {
             if c.mesmo_conteudo {
                 ui.label(tr("As duas versões têm o mesmo conteúdo."));
             }
+            sobrepor = ui.button(tr("Sobrepor no 3D")).on_hover_text(tr("Mostra no 3D o que existe só numa das versões: vermelho no que saiu, verde no que entrou")).clicked();
             if !c.metadados.is_empty() {
                 ui.label(RichText::new(tr("Metadados")).strong());
                 for d in &c.metadados {
@@ -308,7 +344,9 @@ impl App {
         if !aberta {
             ctx.data_mut(|d| d.insert_temp(id_comparacao(), None::<ComparacaoUi>));
         }
-        let _ = st.id;
+        if sobrepor {
+            self.sobrepor_no_3d(st.id, st.a, st.b);
+        }
     }
 }
 

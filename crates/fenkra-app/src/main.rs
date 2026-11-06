@@ -164,6 +164,7 @@ mod perfil;
 mod relatorio;
 mod param_ui;
 mod config_camadas;
+mod camada3d;
 mod config_ui;
 mod textos_config;
 mod acessibilidade;

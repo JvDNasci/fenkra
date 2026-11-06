@@ -265,6 +265,24 @@ impl App {
         }
     }
 
+    /// Prévia lado a lado no 3D de um conflito (B130): o documento mesclado ficando com a principal e
+    /// ficando com o ramo, as duas escolhas só neste conflito e as demais como já estão na janela.
+    fn previa_lado_a_lado(&mut self, st: &MesclaUi, feature: Option<u64>, chave: &str, rotulo: &str) {
+        let Some(p) = self.project.as_ref() else { return };
+        let com = |l: Lado| {
+            let mut e = st.escolhas.clone();
+            e.insert(chave.to_string(), l);
+            p.previa_mesclagem(st.id, &st.nome, &e).map(|m| m.documento)
+        };
+        match (com(Lado::Nossa), com(Lado::Deles)) {
+            (Ok(nossa), Ok(deles)) => {
+                crate::camada3d::calcular_lado_a_lado(nossa, deles, feature, rotulo.to_string());
+                self.toast(tr("Calculando a prévia lado a lado…"), false);
+            }
+            (Err(e), _) | (_, Err(e)) => self.toast(e.to_string(), true),
+        }
+    }
+
     /// Janela de mesclagem: o que o ramo mudou e, para cada conflito, os dois valores lado a lado.
     pub(super) fn janela_mescla(&mut self, ctx: &egui::Context) {
         let Some(mut st) = ctx.data(|d| d.get_temp::<Option<MesclaUi>>(id_mescla())).flatten() else { return };
@@ -272,6 +290,7 @@ impl App {
         let previa: Result<Mescla, String> = p.previa_mesclagem(st.id, &st.nome, &st.escolhas).map_err(|e| e.to_string());
         let mudou = p.comparar_ramo(st.id, &st.nome).ok();
         let (mut aberta, mut confirmar) = (true, false);
+        let mut ver_no_3d: Option<(Option<u64>, String, String)> = None;
         egui::Window::new(format!("{} '{}'", tr("Mesclar o ramo"), st.nome)).id(id_mescla()).open(&mut aberta).default_pos([420., 120.]).default_width(560.).show(ctx, |ui| {
             if let Some(c) = &mudou {
                 ui.label(RichText::new(format!("{}: {}", tr("O ramo mudou"), c.total())).strong());
@@ -289,11 +308,12 @@ impl App {
                 }
                 Ok(m) => {
                     ui.label(RichText::new(format!("{} ({})", tr("Conflitos"), m.conflitos.len())).strong());
-                    egui::Grid::new("grade_conflitos").striped(true).num_columns(4).show(ui, |ui| {
+                    egui::Grid::new("grade_conflitos").striped(true).num_columns(5).show(ui, |ui| {
                         ui.label(RichText::new(tr("Onde")).weak());
                         ui.label(RichText::new(tr("Principal")).weak());
                         ui.label(RichText::new(tr("Ramo")).weak());
                         ui.label(RichText::new(tr("Fica com")).weak());
+                        ui.label(RichText::new(tr("No 3D")).weak());
                         ui.end_row();
                         for c in &m.conflitos {
                             ui.label(&c.rotulo).on_hover_text(format!("{}: {}", tr("Valor de partida"), c.base));
@@ -309,6 +329,10 @@ impl App {
                                     st.escolhas.insert(c.chave.clone(), Lado::Deles);
                                 }
                             });
+                            let r = ui.small_button(tr("Ver lado a lado")).on_hover_text(tr("Mostra no 3D o resultado ficando com a principal e ficando com o ramo, um ao lado do outro, com as faces deste conflito em destaque"));
+                            if r.clicked() {
+                                ver_no_3d = Some((c.feature, c.chave.clone(), c.rotulo.clone()));
+                            }
                             ui.end_row();
                         }
                     });
@@ -323,6 +347,9 @@ impl App {
                 ui.label(RichText::new(tr("O resultado fica como versão nova; o histórico não é reescrito.")).weak().small());
             });
         });
+        if let Some((feature, chave, rotulo)) = ver_no_3d {
+            self.previa_lado_a_lado(&st, feature, &chave, &rotulo);
+        }
         if confirmar {
             let (id, nome, escolhas) = (st.id, st.nome.clone(), st.escolhas.clone());
             let r = self.project.as_mut().unwrap().mesclar_ramo(id, &nome, &escolhas, &verificar_recalculo);
