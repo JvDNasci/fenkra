@@ -1020,6 +1020,17 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         app.sel = s;
     }
     aplicar_acao(app, sess_act, sel);
+    if let Some(id) = ui.ctx().data_mut(|m| {
+        let k = egui::Id::unique("fenkra_editar_sketch");
+        let v = m.get_temp::<Id>(k);
+        m.remove::<Id>(k);
+        v
+    }) {
+        app.begin_sketch(id);
+    }
+    if let Some(id) = delete {
+        app.ask_delete(id);
+    }
 }
 
 /// Concluir, Cancelar e Excluir fora da rolagem: ficam à vista em comando de qualquer tamanho.
@@ -1052,17 +1063,6 @@ fn aplicar_acao(app: &mut App, sess_act: Option<u8>, sel: Sel) {
         }
         (Some(2), Sel::Feature(id) | Sel::Ref(id)) => app.start_session(id, false, None),
         _ => {}
-    }
-    if let Some(id) = ui.ctx().data_mut(|m| {
-        let k = egui::Id::unique("fenkra_editar_sketch");
-        let v = m.get_temp::<Id>(k);
-        m.remove::<Id>(k);
-        v
-    }) {
-        app.begin_sketch(id);
-    }
-    if let Some(id) = delete {
-        app.ask_delete(id);
     }
 }
 
