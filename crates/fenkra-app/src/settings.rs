@@ -591,7 +591,7 @@ impl Default for Settings {
             incl_eixo: eixo_da_inclinacao(),
             incl_inverte: false,
             incl_min: minimo_da_inclinacao(),
-            edges_in_render: false,
+            edges_in_render: true,
             tangent_edges: false,
             ortho: false,
             filter: Filter::default(),
