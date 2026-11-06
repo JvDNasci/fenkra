@@ -61,6 +61,7 @@ pub mod dfm_geo;
 pub mod padrao;
 pub mod furo_norma;
 pub mod rosca_furo;
+pub mod previa_leve;
 pub mod chapa_linha;
 mod chapa_dobra_curva;
 mod chapa_flat;
@@ -706,6 +707,8 @@ pub struct RecomputeResult {
     pub cancelado: bool,
     /// posição de cada rosca, para a prévia
     pub roscas: Vec<RoscaViz>,
+    /// prévia leve dos comandos pesados em edição (B356)
+    pub previas: Vec<previa_leve::PreviaViz>,
 }
 
 impl RecomputeResult {
@@ -770,6 +773,7 @@ struct Ctx<'a> {
     /// corpos de malha por coletor; ficam ao lado de `bodies`, sem `Shape`
     malhas: HashMap<Id, corpo_malha::CorpoMalha>,
     roscas: Vec<RoscaViz>,
+    previas: Vec<previa_leve::PreviaViz>,
     /// comando em edição: a rosca modelada dele vira só linhas, sem construir a hélice (B351)
     leve: Option<Id>,
     relatorios_forma: Vec<(Id, forma_brep::RelatorioForma)>,
@@ -924,6 +928,7 @@ struct FeatEntry {
     sheet_maps: Vec<SheetMap>,
     outlines: Vec<CutOutline>,
     roscas: Vec<RoscaViz>,
+    previas: Vec<previa_leve::PreviaViz>,
     relatorios_forma: Vec<(Id, forma_brep::RelatorioForma)>,
     formas_resolvidas: Vec<forma_vinculo::FormaResolvida>,
     steps: Vec<(Shape, BoolOp)>,
@@ -4021,6 +4026,9 @@ impl Ctx<'_> {
     }
 
     fn run_feature(&mut self, f: &Feature) -> Result<Option<String>, String> {
+        if let Some(r) = self.previa_leve(f) {
+            return r;
+        }
         let k = |e: KernelError| e.0;
         match &f.kind {
             FeatureKind::Sketch(s) => {
@@ -4566,52 +4574,8 @@ impl Ctx<'_> {
                 Ok(None)
             }
             FeatureKind::Pattern(pt) => {
-                let mut xs: Vec<Xform> = vec![];
                 // B91: posição (i, j) de cada instância, para pular por posição e não por ordem
-                let mut keys: Vec<(u32, u32)> = vec![];
-                match &pt.kind {
-                    PatternKind::Linear { dir, count, spacing, dir2, count2, spacing2, total } => {
-                        let n1 = ev(count, &self.vars, "quantidade")?.round().max(1.) as usize;
-                        let mut d1 = ev(spacing, &self.vars, "espaçamento")?;
-                        if *total && n1 > 1 {
-                            // instâncias e comprimento total
-                            d1 /= (n1 - 1) as f64;
-                        }
-                        let (_, u1) = self.axis(dir)?;
-                        let (n2, d2, u2) = match dir2 {
-                            Some(a) => (ev(count2, &self.vars, "quantidade 2")?.round().max(1.) as usize, ev(spacing2, &self.vars, "espaçamento 2")?, self.axis(a)?.1),
-                            None => (1, 0., [0.; 3]),
-                        };
-                        for i in 0..n1 {
-                            for j in 0..n2 {
-                                if i + j == 0 {
-                                    continue;
-                                }
-                                xs.push(Xform::Translate([0, 1, 2].map(|c| u1[c] * d1 * i as f64 + u2[c] * d2 * j as f64)));
-                                keys.push((i as u32, j as u32));
-                            }
-                        }
-                    }
-                    PatternKind::Circular { axis, count, angle } => {
-                        let n = ev(count, &self.vars, "quantidade")?.round().max(1.) as usize;
-                        let total = ev(angle, &self.vars, "ângulo")?;
-                        let (o, d) = self.axis(axis)?;
-                        // volta completa: divide por n; arco: divide por n-1 (primeira e última nas pontas)
-                        let step = if (total.abs() - 360.).abs() < 1e-6 { total / n as f64 } else { total / (n.max(2) - 1) as f64 };
-                        for i in 1..n {
-                            xs.push(Xform::Rotate(o, d, step * i as f64));
-                            keys.push((i as u32, 0));
-                        }
-                    }
-                    PatternKind::Points { points, base } => {
-                        let b0 = self.point(base, 0)?;
-                        for (i, q) in points.iter().enumerate() {
-                            let p = self.point(q, 0)?;
-                            xs.push(Xform::Translate([p[0] - b0[0], p[1] - b0[1], p[2] - b0[2]]));
-                            keys.push((i as u32, 0));
-                        }
-                    }
-                }
+                let (xs, keys) = self.instancias(&pt.kind)?;
                 if xs.is_empty() {
                     return Ok(Some("padrão com uma só instância".into()));
                 }
@@ -6135,6 +6099,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         cut_outlines: vec![],
         malhas: HashMap::new(),
         roscas: vec![],
+        previas: vec![],
         leve: cache.leve,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
@@ -6221,7 +6186,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         f.kind.clone().walk(&mut |x| ids.push(*x), &mut |_| {});
         let mut parts: Vec<String> = vec![js.clone(), vars_sig(&js, &cx.vars), format!("t{}", cx.body_sig.get(&f.target).copied().unwrap_or(0)), format!("{:?}", cx.last_sheet)];
         // rosca modelada em edição: o resultado leve não pode ser confundido com o completo
-        if cache.leve == Some(f.id) && rosca_furo::modelada(&f.kind) {
+        if cache.leve == Some(f.id) && (rosca_furo::modelada(&f.kind) || previa_leve::cobre(&f.kind)) {
             parts.push("leve".into());
         }
         // desdobrar parcial: a mesma aba muda de resultado quando outro comando a desdobra
@@ -6304,6 +6269,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                 cx.sheet_maps.extend(e.sheet_maps.iter().copied());
                 cx.cut_outlines.extend(e.outlines.iter().cloned());
                 cx.roscas.extend(e.roscas.iter().cloned());
+                cx.previas.extend(e.previas.iter().cloned());
                 cx.relatorios_forma.extend(e.relatorios_forma.iter().cloned());
                 cx.formas_resolvidas.extend(e.formas_resolvidas.iter().cloned());
                 if e.steps.is_empty() {
@@ -6316,6 +6282,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                 let maps_before = cx.sheet_maps.len();
                 let outlines_before = cx.cut_outlines.len();
                 let roscas_before = cx.roscas.len();
+                let previas_before = cx.previas.len();
                 let relatorios_before = cx.relatorios_forma.len();
                 let resolvidas_before = cx.formas_resolvidas.len();
                 *cx.promoted.borrow_mut() = None;
@@ -6352,6 +6319,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                         sheet_maps: cx.sheet_maps[maps_before.min(cx.sheet_maps.len())..].to_vec(),
                         outlines: cx.cut_outlines[outlines_before.min(cx.cut_outlines.len())..].to_vec(),
                         roscas: cx.roscas[roscas_before.min(cx.roscas.len())..].to_vec(),
+                        previas: cx.previas[previas_before.min(cx.previas.len())..].to_vec(),
                         relatorios_forma: cx.relatorios_forma[relatorios_before.min(cx.relatorios_forma.len())..].to_vec(),
                         formas_resolvidas: cx.formas_resolvidas[resolvidas_before.min(cx.formas_resolvidas.len())..].to_vec(),
                         steps: cx.steps.get(&f.id).cloned().unwrap_or_default(),
@@ -6363,8 +6331,13 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         feat_out.insert(f.id, sig);
         // o sketch não muda corpo nenhum: quem usa o sketch já lê a assinatura dele
         if !matches!(f.kind, FeatureKind::Sketch(_)) {
+            // prévia leve (B356): o corpo passou intacto, então a assinatura dele não depende dos campos do
+            // comando; assim a malha em cache vale enquanto a pessoa edita, e o resultado leve continua
+            // distinto do final para os comandos de depois
+            let leve = cache.leve == Some(f.id) && previa_leve::cobre(&f.kind);
             for b in &touched {
-                cx.body_sig.insert(*b, sig);
+                let nova = if leve { cx.body_sig.get(b).copied().unwrap_or(0).wrapping_mul(1_000_003).wrapping_add(0x1EE) } else { sig };
+                cx.body_sig.insert(*b, nova);
             }
         }
     }
@@ -6582,6 +6555,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         desatualizados,
         cancelado,
         roscas: cx.roscas,
+        previas: cx.previas,
         relatorios_forma: cx.relatorios_forma,
         formas_resolvidas: cx.formas_resolvidas,
     }
@@ -6630,6 +6604,7 @@ pub fn publications(doc: &Document) -> Vec<(String, LinkedGeo)> {
         cut_outlines: vec![],
         malhas: HashMap::new(),
         roscas: vec![],
+        previas: vec![],
         leve: None,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
@@ -6669,6 +6644,7 @@ pub fn surface_brep(doc: &Document, id: Id) -> Option<String> {
         cut_outlines: vec![],
         malhas: HashMap::new(),
         roscas: vec![],
+        previas: vec![],
         leve: None,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
@@ -7123,6 +7099,7 @@ pub fn cut_list(doc: &Document) -> Vec<CutRow> {
         cut_outlines: vec![],
         malhas: HashMap::new(),
         roscas: vec![],
+        previas: vec![],
         leve: None,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
@@ -7218,6 +7195,7 @@ pub fn member_joints(doc: &Document) -> Vec<((Id, usize), (Id, usize), [f64; 3])
         cut_outlines: vec![],
         malhas: HashMap::new(),
         roscas: vec![],
+        previas: vec![],
         leve: None,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
@@ -7259,6 +7237,7 @@ pub fn member_corners(doc: &Document) -> Vec<st_cantos::Canto> {
         cut_outlines: vec![],
         malhas: HashMap::new(),
         roscas: vec![],
+        previas: vec![],
         leve: None,
         steps: HashMap::new(),
         miter_next: false,
@@ -7317,6 +7296,7 @@ pub fn skeleton_groups(doc: &Document, paths: &[CurveRef]) -> Vec<Vec<usize>> {
         cut_outlines: vec![],
         malhas: HashMap::new(),
         roscas: vec![],
+        previas: vec![],
         leve: None,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
@@ -7601,6 +7581,7 @@ pub fn export_com_preset(doc: &Document, collector: Option<Id>, path: &str, pres
         cut_outlines: vec![],
         malhas: HashMap::new(),
         roscas: vec![],
+        previas: vec![],
         leve: None,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
@@ -7664,6 +7645,7 @@ pub fn final_shape(doc: &Document) -> Option<Shape> {
         cut_outlines: vec![],
         malhas: HashMap::new(),
         roscas: vec![],
+        previas: vec![],
         leve: None,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],

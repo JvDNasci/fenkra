@@ -265,6 +265,7 @@ pub(crate) fn resultado_de(bodies: Vec<BodyResult>) -> RecomputeResult {
         desatualizados: vec![],
         cancelado: false,
         roscas: vec![],
+        previas: vec![],
     }
 }
 

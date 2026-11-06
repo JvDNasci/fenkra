@@ -2867,7 +2867,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let corpos_antes = crate::previa::corpos_base(self.result.as_ref());
         self.session = Some(Session { id, snapshot, is_new, corpos_antes, ultima_valida: vec![] });
         // rosca modelada aberta para edição: refaz já na versão leve (só linhas), sem esperar a primeira alteração
-        if self.open.doc.feature(id).is_some_and(|f| fenkra_solidos::rosca_furo::modelada(&f.kind)) {
+        if self.open.doc.feature(id).is_some_and(|f| fenkra_solidos::rosca_furo::modelada(&f.kind) || fenkra_solidos::previa_leve::cobre(&f.kind)) {
             self.request_recompute();
         }
         self.reframe_pending = true;
@@ -2899,7 +2899,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 self.toast(format!("{} membros separados (um por linha)", parts.len()), false);
             }
             // concluir sempre atualiza (também no modo manual); a rosca modelada só vira sulco aqui (B351)
-            if self.needs_recompute() || self.open.doc.feature(s.id).is_some_and(|f| fenkra_solidos::rosca_furo::modelada(&f.kind)) {
+            if self.needs_recompute() || self.open.doc.feature(s.id).is_some_and(|f| fenkra_solidos::rosca_furo::modelada(&f.kind) || fenkra_solidos::previa_leve::cobre(&f.kind)) {
                 self.request_recompute();
             }
             self.scene_dirty = true;
