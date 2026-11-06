@@ -108,15 +108,13 @@ fn barra(ui: &mut egui::Ui, p: &[[f32; 3]; 4], ini: &str, fim: &str) {
 
 /// Painel livre da escala, aberto só enquanto a tela está no mapa de curvatura.
 pub fn painel_curvatura(app: &mut App, ctx: &egui::Context, area: Rect) {
-    use crate::paineis::{self, Encaixe, Painel, Posicao};
+    use crate::paineis::{self, Painel};
     if app.settings.display != crate::render::DisplayMode::Curvatura {
         return;
     }
     let cfg = Painel { nome: "escala_curvatura".into(), titulo: tr("Escala de curvatura").to_string(), padrao: paineis::abaixo_do_cubo(area, 220.), largura: 220., redimensiona: false };
-    let posicao = app.settings.painel(&cfg.nome, Encaixe::Livre);
     let p = paradas(&ctx.global_style().visuals);
-    let s = &mut app.settings;
-    let saida = paineis::mostrar(ctx, area, &cfg, posicao, |ui| {
+    crate::analise_janela::janela(ctx, area, &cfg, &mut app.settings, |ui, s| {
         ui.horizontal(|ui| {
             for t in TipoCurvatura::TODOS {
                 ui.selectable_value(&mut s.curv_tipo, t, tr(t.rotulo()));
@@ -125,9 +123,6 @@ pub fn painel_curvatura(app: &mut App, ctx: &egui::Context, area: Rect) {
         ui.add(crate::ui_ext::slider(&mut s.curv_raio, 0.5..=2000.).logarithmic(true).suffix(" mm").text(tr("Raio"))).on_hover_text(tr("Raio que recebe a última cor. A medida vem da superfície: não muda com o zoom nem com a malha."));
         barra(ui, &p, tr("plano"), &format!("R {} mm", crate::app::fmt(s.curv_raio as f64)));
     });
-    if let Some(m) = saida.movido {
-        app.settings.guardar_painel(&cfg.nome, Posicao { ..m });
-    }
 }
 
 fn v3(p: [f64; 3]) -> Vec3 {

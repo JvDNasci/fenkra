@@ -111,15 +111,13 @@ pub fn escala_do_mapa(s: &crate::settings::Settings, v: &egui::Visuals) -> Optio
 
 /// Painel livre da escala, aberto só enquanto a tela está no mapa de inclinação.
 pub fn painel_inclinacao(app: &mut App, ctx: &egui::Context, area: Rect) {
-    use crate::paineis::{self, Encaixe, Painel, Posicao};
+    use crate::paineis::{self, Painel};
     if app.settings.display != crate::render::DisplayMode::Inclinacao {
         return;
     }
     let cfg = Painel { nome: "escala_inclinacao".into(), titulo: tr("Mapa de inclinação").to_string(), padrao: paineis::abaixo_do_cubo(area, 240.), largura: 240., redimensiona: false };
-    let posicao = app.settings.painel(&cfg.nome, Encaixe::Livre);
     let p = paradas(&ctx.global_style().visuals);
-    let s = &mut app.settings;
-    let saida = paineis::mostrar(ctx, area, &cfg, posicao, |ui| {
+    crate::analise_janela::janela(ctx, area, &cfg, &mut app.settings, |ui, s| {
         ui.label(RichText::new(tr("Direção de abertura")).small());
         ui.horizontal(|ui| {
             for (i, n) in ["X", "Y", "Z"].iter().enumerate() {
@@ -139,9 +137,6 @@ pub fn painel_inclinacao(app: &mut App, ctx: &egui::Context, area: Rect) {
             });
         }
     });
-    if let Some(m) = saida.movido {
-        app.settings.guardar_painel(&cfg.nome, Posicao { ..m });
-    }
 }
 
 #[cfg(test)]

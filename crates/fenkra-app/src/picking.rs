@@ -777,21 +777,20 @@ pub fn draw(painter: &egui::Painter, r: &RecomputeResult, cam: &Camera, rect: Re
     let fillc = if strong { Color32::from_rgba_unmultiplied(255, 190, 40, 90) } else { Color32::from_rgba_unmultiplied(120, 220, 255, 60) };
     match *p {
         Pick::Face { body, face, .. } => {
+            // B361: só o contorno externo da face brilha, sem encher a área nem acender as arestas
+            // de dentro (ver realce_face)
             let Some(m) = mesh_of(r, body) else { return };
-            let Some(&start) = m.face_ranges.get(face) else { return };
-            let end = m.face_ranges.get(face + 1).map(|x| *x as usize).unwrap_or(m.indices.len());
-            let mut mesh = egui::Mesh::default();
-            for t in m.indices[start as usize..end].chunks_exact(3) {
-                let pts: Vec<Option<Pos2>> = t.iter().map(|i| cam.project(rect, v3(&m.positions[*i as usize * 3..*i as usize * 3 + 3]))).collect();
-                if let [Some(a), Some(b2), Some(c)] = pts[..] {
-                    let base = mesh.vertices.len() as u32;
-                    for q in [a, b2, c] {
-                        mesh.colored_vertex(q, fillc);
-                    }
-                    mesh.add_triangle(base, base + 1, base + 2);
+            let mut laco = crate::realce_face::contorno_externo(m, face);
+            if laco.is_empty() {
+                laco = crate::realce_face::contorno_da_malha(m, face);
+            }
+            let grossura = if strong { 3.5 } else { 2.5 };
+            for pol in &laco {
+                let pts: Vec<Pos2> = pol.iter().filter_map(|p| cam.project(rect, Vec3::from(*p))).collect();
+                if pts.len() >= 2 {
+                    painter.add(egui::Shape::line(pts, Stroke::new(grossura, col)));
                 }
             }
-            painter.add(egui::Shape::mesh(mesh));
         }
         Pick::Edge { body, edge, .. } => {
             let Some(m) = mesh_of(r, body) else { return };

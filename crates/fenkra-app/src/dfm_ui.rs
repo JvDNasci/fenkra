@@ -106,15 +106,14 @@ fn varre(app: &App, e: &mut Estado) {
 
 /// Painel livre da análise de fabricação.
 pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
-    use crate::paineis::{self, Encaixe, Painel, Posicao};
+    use crate::paineis::{self, Painel};
     if app.settings.display != crate::render::DisplayMode::Dfm {
         return;
     }
     let cfg = Painel { nome: "analise_dfm".into(), titulo: tr("Análise de fabricação").to_string(), padrao: paineis::abaixo_do_cubo(area, 330.), largura: 330., redimensiona: false };
-    let posicao = app.settings.painel(&cfg.nome, Encaixe::Livre);
     let pal = paradas(&ctx.global_style().visuals);
     let mut pedir = false;
-    let saida = ST.with(|st| {
+    ST.with(|st| {
         let mut e = st.borrow_mut();
         carrega(&mut e);
         // captura sem mouse: FENKRA_DEMO_DFM=<parte do nome do perfil> escolhe o perfil, liga o mapa e varre
@@ -129,7 +128,7 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
                 pedir = true;
             }
         }
-        paineis::mostrar(ctx, area, &cfg, posicao, |ui| {
+        crate::analise_janela::janela(ctx, area, &cfg, &mut app.settings, |ui, _| {
             if e.perfis.is_empty() {
                 ui.label(tr("Nenhum perfil de processo."));
                 return;
@@ -241,9 +240,6 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
             let mut e = st.borrow_mut();
             varre(app, &mut e);
         });
-    }
-    if let Some(m) = saida.movido {
-        app.settings.guardar_painel(&cfg.nome, Posicao { ..m });
     }
 }
 

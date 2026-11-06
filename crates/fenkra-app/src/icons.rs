@@ -536,7 +536,7 @@ pub fn tool_button(ui: &mut egui::Ui, icon: &str, label: &str, size: f32, show_l
     let text_w = galley.as_ref().map(|g| g.size().x).unwrap_or(0.);
     let text_h = galley.as_ref().map(|g| g.size().y + 2.).unwrap_or(0.);
     let w = (size + 10.).max(text_w + 10.);
-    let h = size + 8. + text_h;
+    let h = size + 6. + text_h;
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(w, h), egui::Sense::click());
     let resp = hover_help_cmd(ui, resp, icon, label, brief, advanced);
     if ui.is_rect_visible(rect) {
@@ -549,7 +549,7 @@ pub fn tool_button(ui: &mut egui::Ui, icon: &str, label: &str, size: f32, show_l
             egui::Color32::TRANSPARENT
         };
         ui.painter().rect_filled(rect, 6., fill);
-        let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.center().x, rect.top() + 4. + size / 2.), egui::vec2(size, size));
+        let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.center().x, rect.top() + 3. + size / 2.), egui::vec2(size, size));
         egui::Image::new(get(icon)).paint_at(ui, icon_rect);
         // o passo atual do curso aponta este comando (B297)
         if let Some(d) = crate::curso_ui::destaque(ui.ctx()) {
