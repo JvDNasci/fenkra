@@ -55,6 +55,16 @@ pub const MAPAS: &[Mapa] = &[
         ],
     },
     Mapa {
+        bancada: Bench::FormaLivre,
+        resumo: "Da gaiola de nós à superfície lisa, e dela ao corpo sólido.",
+        etapas: &[
+            e("ff_primeira", "Criar uma caixa, esfera, cilindro ou plano de forma arrastando no plano.", &["forma_caixa", "forma_esfera", "forma_cilindro", "forma_plano"]),
+            e("ff_moldar", "Puxar os nós da gaiola e alternar entre a gaiola e a superfície lisa.", &["forma_caixa", "forma_plano"]),
+            e("ff_vincos", "Dar peso a um vinco para endurecer uma aresta sem perder a superfície lisa.", &["forma_caixa"]),
+            e("ff_converter", "Converter a forma em corpo B-rep e seguir com filetes e furos.", &["forma_cilindro", "forma_esfera"]),
+        ],
+    },
+    Mapa {
         bancada: Bench::Montagem,
         resumo: "Inserir, restringir, verificar e documentar um conjunto de peças.",
         etapas: &[
@@ -129,7 +139,7 @@ pub fn nome_da_bancada(b: Bench) -> &'static str {
     }
 }
 
-pub const BANCADAS: [Bench; 6] = [Bench::Solidos, Bench::Superficies, Bench::Montagem, Bench::Chapa, Bench::Estrutural, Bench::Desenho];
+pub const BANCADAS: [Bench; 7] = [Bench::Solidos, Bench::Superficies, Bench::FormaLivre, Bench::Montagem, Bench::Chapa, Bench::Estrutural, Bench::Desenho];
 
 #[cfg(test)]
 mod testes {
@@ -138,7 +148,6 @@ mod testes {
     #[test]
     fn toda_bancada_tem_mapa_e_toda_etapa_leva_a_uma_aula_e_a_comandos_que_existem() {
         let icones: Vec<&str> = crate::ajuda_cmd::comandos().iter().map(|i| i.icon).collect();
-        let exemplos = crate::examples::all();
         for b in BANCADAS {
             let m = mapa(b);
             assert!(m.etapas.len() >= 4, "{b:?}: mapa curto demais");
@@ -150,7 +159,7 @@ mod testes {
                     assert!(icones.contains(c), "{}: comando {c} não existe na barra", et.aula);
                 }
                 if let Some(ex) = et.exemplo() {
-                    assert!(exemplos.iter().any(|e| e.name == ex), "{}: exemplo {ex}", et.aula);
+                    assert!(crate::curso_exemplos::existe(ex), "{}: exemplo {ex}", et.aula);
                 }
             }
         }

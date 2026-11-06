@@ -653,7 +653,10 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, title: String, list: Vec<Entr
                     let i = items[cur];
                     let any_sel = items.iter().any(|x| is_selected(x.act, s, st));
                     let sel = is_selected(i.act, s, st) || any_sel;
-                    if tool_button(ui, i.icon, i.name, size, labels, sel, i.brief, i.advanced).clicked() {
+                    let r = tool_button(ui, i.icon, i.name, size, labels, sel, i.brief, i.advanced);
+                    let icones: Vec<&str> = items.iter().map(|x| x.icon).collect();
+                    crate::curso_ui::destaque_em_familia(ui, r.rect, &icones, i.icon);
+                    if r.clicked() {
                         acts.push(i.act);
                     }
                     // setinha: abre as variações da família

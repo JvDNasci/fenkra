@@ -548,6 +548,12 @@ pub fn tool_button(ui: &mut egui::Ui, icon: &str, label: &str, size: f32, show_l
         ui.painter().rect_filled(rect, 6., fill);
         let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.center().x, rect.top() + 4. + size / 2.), egui::vec2(size, size));
         egui::Image::new(get(icon)).paint_at(ui, icon_rect);
+        // o passo atual do curso aponta este comando (B297)
+        if let Some(d) = crate::curso_ui::destaque(ui.ctx()) {
+            if d.icone == icon {
+                crate::curso_ui::pintar_destaque(ui, rect, d);
+            }
+        }
         if let Some(g) = galley {
             let pos = egui::pos2(rect.center().x - g.size().x / 2., icon_rect.bottom() + 2.);
             ui.painter().galley(pos, g, v.text_color());

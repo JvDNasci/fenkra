@@ -47,8 +47,28 @@ pub enum Cond {
     Vistas(usize),
     Cotas(usize),
     Tabelas(usize),
-    /// a peça aberta tem este nome (peça de exemplo)
+    /// a peça, a montagem ou o desenho aberto tem este nome (exemplo)
     Exemplo(&'static str),
+    /// algum sketch tem uma cota (restrição dimensional que comanda a geometria)
+    CotaSketch,
+    /// a chapa está planificada (desdobrada)
+    Planificada,
+    /// pelo menos `n` superfícies resultantes de "Juntar"
+    SuperficieJuntada(usize),
+    /// alguma forma livre tem um vinco
+    FormaVinco,
+    /// alguma forma livre já vira corpo B-rep
+    FormaConvertida,
+    Notas(usize),
+    /// vistas da chapa planificada no desenho
+    VistasPlanas(usize),
+    /// tabelas de dobras no desenho
+    TabelasDobras(usize),
+    /// o carimbo do desenho tem título ou desenhista
+    Carimbo,
+    /// o comando com este ícone foi acionado nesta sessão (passo cujo rastro não fica no modelo,
+    /// como abrir a lista de peças ou exportar)
+    Comando(&'static str),
     /// sem rastro no documento: a pessoa confirma
     Manual,
 }
@@ -102,7 +122,7 @@ pub const AULAS: &[Aula] = &[
     // ---- Sólidos
     a("sol_esboco", "Esboço do perfil", "Todo sólido começa num desenho 2D fechado sobre um plano.", Solidos, Iniciante, None, None, &[
         p("Crie um sketch no plano frontal e desenhe um retângulo fechado.", "sketch", Feature("sketch", 1)),
-        p("Cote o retângulo: cada medida vira um parâmetro que você pode mudar depois.", "sk_cota", Manual),
+        p("Cote o retângulo: cada medida vira um parâmetro que você pode mudar depois.", "sk_cota", CotaSketch),
     ]),
     a("sol_volume", "Dar volume ao esboço", "A extrusão empurra o perfil e cria o primeiro sólido.", Solidos, Iniciante, None, Some("extrusao"), &[
         p("Extrude o perfil fechado por uma distância.", "extrusao", Feature("extrusao", 1)),
@@ -129,39 +149,57 @@ pub const AULAS: &[Aula] = &[
         p("Crie uma curva guia, como uma spline por pontos.", "spline", Referencias(1)),
         p("Ajuste os pontos até a curva ficar suave, sem ondulação.", "", Manual),
     ]),
-    a("sup_criar", "Superfícies a partir de curvas", "Extrusão, varredura e seções geram superfícies a partir das curvas.", Superficies, Intermediario, None, None, &[
+    a("sup_criar", "Superfícies a partir de curvas", "Extrusão, varredura e seções geram superfícies a partir das curvas.", Superficies, Intermediario, Some("Superfícies de exemplo"), None, &[
         p("Crie uma superfície extrudada a partir de uma curva.", "sup_extrudada", NSuperficies(1)),
         p("Crie uma segunda superfície por seções entre duas curvas.", "sup_multisecoes", NSuperficies(2)),
     ]),
-    a("sup_juntar", "Juntar e engrossar", "Superfícies que se tocam são juntadas e podem virar um sólido.", Superficies, Avancado, Some("Placa simples"), None, &[
-        p("Junte as superfícies que se tocam numa só.", "op_juntar", Manual),
+    a("sup_juntar", "Juntar e engrossar", "Superfícies que se tocam são juntadas e podem virar um sólido.", Superficies, Avancado, Some("Superfícies de exemplo"), None, &[
+        p("Junte as superfícies que se tocam numa só.", "op_juntar", SuperficieJuntada(1)),
         p("Engrosse a superfície para obter um sólido.", "hib_engrossar", Feature("volume_de_superficie", 1)),
     ]),
-    a("sup_verificar", "Verificar a continuidade", "Zebra e curvatura mostram se a transição entre superfícies é suave.", Superficies, Avancado, None, None, &[
-        p("Ligue a zebra: listras que se quebram indicam só encontro de posição.", "an_zebra", Manual),
-        p("Confira o mapa de curvatura: cor contínua indica transição suave.", "an_curvatura", Manual),
+    a("sup_verificar", "Verificar a continuidade", "Zebra e curvatura mostram se a transição entre superfícies é suave.", Superficies, Avancado, Some("Superfícies de exemplo"), None, &[
+        p("Ligue a zebra: listras que se quebram indicam só encontro de posição.", "an_zebra", Comando("an_zebra")),
+        p("Confira o mapa de curvatura: cor contínua indica transição suave.", "an_curvatura", Comando("an_curvatura")),
+    ]),
+    // ---- Forma livre
+    a("ff_primeira", "Primeira forma", "A forma livre nasce de uma gaiola de nós; a superfície lisa aparece por dentro dela.", FormaLivre, Iniciante, None, None, &[
+        p("Crie uma caixa de forma: clique no plano e arraste o tamanho.", "forma_caixa", Feature("forma", 1)),
+        p("Clique num nó da gaiola e puxe: a superfície lisa acompanha.", "", Manual),
+    ]),
+    a("ff_moldar", "Moldar a gaiola", "Poucos nós bem postos dão uma superfície limpa; alterne entre a gaiola e o liso para conferir.", FormaLivre, Iniciante, Some("Forma suave"), None, &[
+        p("Abra a peça de exemplo Forma suave.", "exemplo", Exemplo("Forma suave")),
+        p("Arraste dois ou três nós e alterne entre a gaiola e a superfície lisa.", "", Manual),
+    ]),
+    a("ff_vincos", "Vincos e arestas vivas", "Um vinco endurece uma aresta: o peso vai de suave (0) a viva (1).", FormaLivre, Intermediario, Some("Forma suave"), None, &[
+        p("Abra a peça de exemplo Forma suave.", "exemplo", Exemplo("Forma suave")),
+        p("Dê peso a um vinco numa aresta da gaiola para deixá-la viva.", "", FormaVinco),
+    ]),
+    a("ff_converter", "Da forma ao sólido", "Converter a forma em corpo B-rep deixa usar filetes, furos e o resto da modelagem.", FormaLivre, Avancado, Some("Forma suave"), None, &[
+        p("Abra a peça de exemplo Forma suave.", "exemplo", Exemplo("Forma suave")),
+        p("Converta a forma em corpo: escolha a continuidade e a tolerância.", "", FormaConvertida),
+        p("Arredonde uma aresta do corpo convertido com um filete.", "arestas_selecionar", Feature("filete", 1)),
     ]),
     // ---- Montagem
     a("mon_inserir", "Inserir peças", "A montagem começa trazendo as peças para o mesmo espaço.", Montagem, Iniciante, None, None, &[
         p("Insira a primeira peça na montagem.", "asm_inserir", Componentes(1)),
         p("Insira a segunda peça.", "asm_inserir", Componentes(2)),
     ]),
-    a("mon_restringir", "Restringir", "Restrições dizem como uma peça se posiciona em relação à outra.", Montagem, Iniciante, None, None, &[
+    a("mon_restringir", "Restringir", "Restrições dizem como uma peça se posiciona em relação à outra.", Montagem, Iniciante, Some("Conjunto de exemplo"), None, &[
         p("Aplique uma coincidência entre duas faces.", "rest_coincidencia", Restricoes(1)),
         p("Aplique uma segunda restrição, como distância ou paralelismo.", "rest_distancia", Restricoes(2)),
     ]),
-    a("mon_verificar", "Verificar a montagem", "Antes de documentar, procure peças que se atravessam.", Montagem, Intermediario, None, None, &[
-        p("Rode a verificação de interferências e leia o resultado.", "rest_interferencia", Manual),
+    a("mon_verificar", "Verificar a montagem", "Antes de documentar, procure peças que se atravessam.", Montagem, Intermediario, Some("Conjunto de exemplo"), None, &[
+        p("Rode a verificação de interferências e leia o resultado.", "rest_interferencia", Comando("rest_interferencia")),
         p("Mova uma peça e confira se as restrições seguram o resto.", "", Manual),
     ]),
-    a("mon_documentar", "Documentar a montagem", "Lista de peças e balões saem direto da estrutura da montagem.", Montagem, Intermediario, None, None, &[
-        p("Gere a lista de peças.", "asm_lista", Manual),
-        p("Numere os itens da montagem.", "asm_numerar", Manual),
+    a("mon_documentar", "Documentar a montagem", "Lista de peças e balões saem direto da estrutura da montagem.", Montagem, Intermediario, Some("Conjunto de exemplo"), None, &[
+        p("Gere a lista de peças.", "asm_lista", Comando("asm_lista")),
+        p("Numere os itens da montagem.", "asm_numerar", Comando("asm_numerar")),
     ]),
     // ---- Chapa
     a("ch_base", "Chapa base", "A parede base define espessura, raio de dobra e fator K de toda a peça.", Chapa, Iniciante, None, Some("espessura"), &[
         p("Crie a parede base a partir de um perfil fechado.", "sm_parede", Feature("sm_parede", 1)),
-        p("Confira espessura, raio e fator K nos parâmetros da chapa.", "sm_parametros", Manual),
+        p("Confira espessura, raio e fator K nos parâmetros da chapa.", "sm_parametros", Comando("sm_parametros")),
     ]),
     a("ch_abas", "Abas e dobras", "Aba e bainha dobram a borda da chapa com o raio certo.", Chapa, Iniciante, Some("Suporte de chapa"), None, &[
         p("Abra a peça de exemplo Suporte de chapa.", "exemplo", Exemplo("Suporte de chapa")),
@@ -170,15 +208,15 @@ pub const AULAS: &[Aula] = &[
     ]),
     a("ch_recortes", "Recortes e alívios", "Recortes normais à chapa e alívios de canto evitam rasgos na dobra.", Chapa, Intermediario, None, None, &[
         p("Faça um recorte normal à chapa.", "sm_recorte", Feature("sm_recorte", 1)),
-        p("Confira o alívio de canto onde duas dobras se encontram.", "sm_alivio_canto", Manual),
+        p("Faça um alívio de canto onde duas dobras se encontram.", "sm_alivio_canto", Feature("sm_alivio", 1)),
     ]),
     a("ch_planificar", "Planificação", "Desdobrar mostra a chapa plana que vai para o corte.", Chapa, Intermediario, Some("Bandeja curva"), None, &[
         p("Abra a peça de exemplo Bandeja curva.", "exemplo", Exemplo("Bandeja curva")),
-        p("Desdobre a chapa e leia o comprimento planificado.", "sm_desdobrar", Manual),
+        p("Desdobre a chapa e leia o comprimento planificado.", "sm_desdobrar", Planificada),
     ]),
     a("ch_desenho", "Mapa de dobras e desenho", "A chapa planificada vira vista de desenho com a tabela de dobras.", Chapa, Avancado, None, None, &[
-        p("Crie uma vista planificada da peça no desenho.", "des_planificada", Manual),
-        p("Insira a tabela de dobras na folha.", "des_tab_dobras", Manual),
+        p("Crie uma vista planificada da peça no desenho.", "des_planificada", VistasPlanas(1)),
+        p("Insira a tabela de dobras na folha.", "des_tab_dobras", TabelasDobras(1)),
     ]),
     // ---- Estrutural
     a("est_membros", "Membros sobre o esqueleto", "Cada linha do esqueleto vira um perfil com a seção escolhida.", Estrutural, Iniciante, None, None, &[
@@ -194,25 +232,25 @@ pub const AULAS: &[Aula] = &[
         p("Coloque um reforço entre dois membros.", "st_reforco", Feature("st_reforco", 1)),
     ]),
     a("est_corte", "Lista de corte e montagem", "A lista de corte sai da estrutura e a montagem separa cada membro.", Estrutural, Avancado, None, None, &[
-        p("Gere a lista de corte com comprimentos e ângulos.", "st_corte", Manual),
-        p("Gere a montagem com um componente por membro.", "st_montagem", Manual),
+        p("Gere a lista de corte com comprimentos e ângulos.", "st_corte", Comando("st_corte")),
+        p("Gere a montagem com um componente por membro.", "st_montagem", Comando("st_montagem")),
     ]),
     // ---- Desenho
     a("des_folha", "Folha e carimbo", "O desenho nasce numa folha com formato, escala e carimbo.", Desenho, Iniciante, None, None, &[
         p("Crie um desenho novo; ele nasce com uma folha.", "des_novo", Folhas(1)),
-        p("Escolha o formato da folha e preencha o carimbo.", "des_folha", Manual),
+        p("Preencha o carimbo: título e desenhista.", "", Carimbo),
     ]),
-    a("des_vistas", "Vistas", "As vistas projetam o modelo 3D e continuam ligadas a ele.", Desenho, Iniciante, Some("Placa paramétrica"), None, &[
+    a("des_vistas", "Vistas", "As vistas projetam o modelo 3D e continuam ligadas a ele.", Desenho, Iniciante, Some("Folha da placa"), None, &[
         p("Insira a vista principal da peça.", "des_vista", Vistas(1)),
         p("Insira as três vistas ortogonais.", "des_tres_vistas", Vistas(3)),
     ]),
-    a("des_cotas", "Cotas e anotações", "Cotas leem a medida do modelo; notas e símbolos explicam o resto.", Desenho, Intermediario, None, None, &[
+    a("des_cotas", "Cotas e anotações", "Cotas leem a medida do modelo; notas e símbolos explicam o resto.", Desenho, Intermediario, Some("Folha da placa"), None, &[
         p("Coloque uma cota horizontal.", "des_cota_h", Cotas(1)),
-        p("Acrescente uma nota ou um símbolo.", "des_nota", Manual),
+        p("Acrescente uma nota ou um símbolo.", "des_nota", Notas(1)),
     ]),
-    a("des_tabelas", "Tabelas e exportação", "Tabelas leem o documento; a exportação gera o arquivo que vai para a fábrica.", Desenho, Intermediario, None, None, &[
+    a("des_tabelas", "Tabelas e exportação", "Tabelas leem o documento; a exportação gera o arquivo que vai para a fábrica.", Desenho, Intermediario, Some("Folha da placa"), None, &[
         p("Insira uma tabela de materiais.", "des_bom", Tabelas(1)),
-        p("Exporte a folha em PDF.", "des_pdf", Manual),
+        p("Exporte a folha em PDF.", "des_pdf", Comando("des_pdf")),
     ]),
 ];
 
@@ -220,6 +258,7 @@ pub const TRILHAS: &[Trilha] = &[
     Trilha { id: "primeiros_passos", titulo: "Primeiros passos", resumo: "Do esboço ao sólido acabado, em quatro aulas curtas.", nivel: Iniciante, aulas: &["sol_esboco", "sol_volume", "sol_furo", "sol_acabamento"] },
     Trilha { id: "solidos", titulo: "Modelagem sólida", resumo: "Tudo o que a bancada de sólidos faz, na ordem em que se usa.", nivel: Intermediario, aulas: &["sol_esboco", "sol_volume", "sol_furo", "sol_acabamento", "sol_repetir", "sol_casca"] },
     Trilha { id: "superficies", titulo: "Superfícies", resumo: "Curvas, superfícies, união e verificação de continuidade.", nivel: Avancado, aulas: &["sup_curvas", "sup_criar", "sup_juntar", "sup_verificar"] },
+    Trilha { id: "forma_livre", titulo: "Forma livre", resumo: "Gaiola de nós, superfície lisa, vincos e conversão em sólido.", nivel: Intermediario, aulas: &["ff_primeira", "ff_moldar", "ff_vincos", "ff_converter"] },
     Trilha { id: "montagem", titulo: "Montagens", resumo: "Inserir, restringir, verificar e documentar.", nivel: Intermediario, aulas: &["mon_inserir", "mon_restringir", "mon_verificar", "mon_documentar"] },
     Trilha { id: "chapa", titulo: "Chapa metálica", resumo: "Da chapa base à planificação e ao desenho de fabricação.", nivel: Intermediario, aulas: &["ch_base", "ch_abas", "ch_recortes", "ch_planificar", "ch_desenho"] },
     Trilha { id: "estrutural", titulo: "Estruturas soldadas", resumo: "Esqueleto, perfis, cantos, placas e lista de corte.", nivel: Intermediario, aulas: &["est_membros", "est_cantos", "est_placas", "est_corte"] },
@@ -250,7 +289,7 @@ pub fn trilha_da_bancada(b: Bench) -> &'static Trilha {
     let id = match b {
         Bench::Solidos => "solidos",
         Bench::Superficies => "superficies",
-        Bench::FormaLivre => "superficies",
+        Bench::FormaLivre => "forma_livre",
         Bench::Montagem => "montagem",
         Bench::Chapa => "chapa",
         Bench::Estrutural => "estrutural",
@@ -270,12 +309,32 @@ pub struct Contexto<'a> {
     pub vistas: usize,
     pub cotas: usize,
     pub tabelas: usize,
+    pub notas: usize,
+    pub vistas_planas: usize,
+    pub tabelas_dobras: usize,
+    /// o carimbo do desenho tem título ou desenhista
+    pub carimbo: bool,
+    /// nomes da montagem e do desenho abertos (peças de exemplo compostas)
+    pub nomes: [&'a str; 2],
+    /// ícones dos comandos acionados nesta sessão
+    pub usados: &'a [&'static str],
 }
 
 impl<'a> Contexto<'a> {
     pub fn so_documento(doc: &'a Document) -> Self {
-        Contexto { doc, componentes: 0, restricoes: 0, folhas: 0, vistas: 0, cotas: 0, tabelas: 0 }
+        Contexto { doc, componentes: 0, restricoes: 0, folhas: 0, vistas: 0, cotas: 0, tabelas: 0, notas: 0, vistas_planas: 0, tabelas_dobras: 0, carimbo: false, nomes: ["", ""], usados: &[] }
     }
+}
+
+fn tem_cota_de_sketch(doc: &Document) -> bool {
+    doc.features.iter().filter(|f| !f.suppressed).any(|f| matches!(&f.kind, FeatureKind::Sketch(s) if s.data.constraints.iter().any(|c| !c.reference && c.kind.is_dimension())))
+}
+
+fn formas(doc: &Document) -> impl Iterator<Item = &fenkra_core::Forma> {
+    doc.features.iter().filter(|f| !f.suppressed).filter_map(|f| match &f.kind {
+        FeatureKind::Forma(x) => Some(x),
+        _ => None,
+    })
 }
 
 /// Etiqueta curta do tipo de comando, a que o curso reconhece. O que o curso não usa vira "outro".
@@ -297,6 +356,8 @@ pub fn etiqueta(k: &FeatureKind) -> &'static str {
         F::SmFlange(_) | F::SmProfileFlange(_) | F::SmCurveFlange(_) | F::SmFlangeLoop(_) | F::SmSurfFlange(_) => "sm_aba",
         F::SmHem(_) => "sm_bainha",
         F::SmCut(_) | F::SmArcSlot(_) => "sm_recorte",
+        F::SmCornerRelief(_) | F::SmCornerClose(_) => "sm_alivio",
+        F::Forma(_) => "forma",
         F::StructMember(_) => "st_membro",
         F::StructPlate(_) => "st_placa",
         F::StructGusset(_) => "st_reforco",
@@ -335,7 +396,17 @@ impl Cond {
             Vistas(n) => c.vistas >= n,
             Cotas(n) => c.cotas >= n,
             Tabelas(n) => c.tabelas >= n,
-            Exemplo(nome) => c.doc.name == nome,
+            Exemplo(nome) => c.doc.name == nome || c.nomes.contains(&nome),
+            CotaSketch => tem_cota_de_sketch(c.doc),
+            Planificada => c.doc.sheet.as_ref().is_some_and(|s| s.flat),
+            SuperficieJuntada(n) => c.doc.references.iter().filter(|r| variante(r) == "SurfJoin").count() >= n,
+            FormaVinco => formas(c.doc).any(|f| !f.gaiola.vincos.is_empty()),
+            FormaConvertida => formas(c.doc).any(|f| f.conversao.is_some()),
+            Notas(n) => c.notas >= n,
+            VistasPlanas(n) => c.vistas_planas >= n,
+            TabelasDobras(n) => c.tabelas_dobras >= n,
+            Carimbo => c.carimbo,
+            Comando(icone) => c.usados.contains(&icone),
             Manual => false,
         }
     }
@@ -497,7 +568,7 @@ mod testes {
     use super::*;
 
     fn doc_do_exemplo(nome: &str) -> Document {
-        crate::examples::all().into_iter().find(|e| e.name == nome).unwrap_or_else(|| panic!("exemplo {nome}")).doc
+        crate::curso_exemplos::peca(nome).unwrap_or_else(|| panic!("exemplo {nome}")).0
     }
 
     #[test]
@@ -517,7 +588,7 @@ mod testes {
 
     #[test]
     fn toda_bancada_tem_trilha_com_aulas_da_propria_bancada() {
-        for b in [Bench::Solidos, Bench::Superficies, Bench::Montagem, Bench::Chapa, Bench::Estrutural, Bench::Desenho] {
+        for b in [Bench::Solidos, Bench::Superficies, Bench::FormaLivre, Bench::Montagem, Bench::Chapa, Bench::Estrutural, Bench::Desenho] {
             let t = trilha_da_bancada(b);
             assert!(!t.aulas.is_empty());
             assert_eq!(aulas_da_trilha(t).len(), aulas_da_bancada(b).len(), "{b:?}");
@@ -527,12 +598,11 @@ mod testes {
 
     #[test]
     fn exemplos_icones_e_midias_citados_existem() {
-        let exemplos: Vec<_> = crate::examples::all();
         let icones: Vec<&str> = crate::ajuda_cmd::comandos().iter().map(|i| i.icon).collect();
         let roteiros = std::fs::read_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs/media/roteiros")).unwrap().filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().trim_end_matches(".json").to_string()).collect::<Vec<_>>();
         for a in AULAS {
             if let Some(ex) = a.exemplo {
-                assert!(exemplos.iter().any(|e| e.name == ex), "{}: exemplo {ex} não existe", a.id);
+                assert!(crate::curso_exemplos::existe(ex), "{}: exemplo {ex} não existe", a.id);
             }
             if let Some(m) = a.midia {
                 assert!(roteiros.iter().any(|r| r == m), "{}: roteiro de mídia {m} não existe", a.id);
@@ -542,8 +612,9 @@ mod testes {
                     assert!(icones.contains(&p.icone), "{} passo {i}: ícone {} não é de nenhum comando", a.id, p.icone);
                 }
                 if let Exemplo(n) = p.cond {
-                    assert!(exemplos.iter().any(|e| e.doc.name == n), "{} passo {i}: nenhuma peça de exemplo se chama {n}", a.id);
-                    assert_eq!(a.exemplo.and_then(|x| exemplos.iter().find(|e| e.name == x)).map(|e| e.doc.name.as_str()), Some(n), "{}: a peça do passo é a do exemplo da aula", a.id);
+                    let doc = crate::curso_exemplos::peca(n).map(|(d, _)| d.name);
+                    assert_eq!(doc.as_deref(), Some(n), "{} passo {i}: nenhuma peça de exemplo se chama {n}", a.id);
+                    assert_eq!(a.exemplo, Some(n), "{}: a peça do passo é a do exemplo da aula", a.id);
                 }
             }
         }
@@ -685,6 +756,107 @@ mod testes {
         c.vistas = 3;
         e.sincronizar(des, &c);
         assert!(e.concluida(des), "três vistas cumprem a vista principal e as três vistas");
+    }
+
+    /// Todo passo da tabela que hoje depende de "Já fiz" tem de ser um que realmente não deixa rastro.
+    #[test]
+    fn so_ficam_manuais_os_passos_sem_rastro_reconhecivel() {
+        let manuais: Vec<String> = AULAS.iter().flat_map(|a| a.passos.iter().enumerate().filter(|(_, p)| p.cond == Manual).map(move |(i, _)| format!("{}:{i}", a.id))).collect();
+        // olhar, ajustar, conferir ou mover: só a pessoa sabe
+        let esperados = ["sol_volume:1", "sol_casca:1", "sup_curvas:1", "mon_verificar:1", "est_cantos:1", "ff_primeira:1", "ff_moldar:1"];
+        for m in &manuais {
+            assert!(esperados.contains(&m.as_str()), "passo manual inesperado: {m}");
+        }
+        for id in ["mon_documentar", "mon_verificar", "sup_verificar", "sup_juntar", "ch_desenho", "des_tabelas", "des_cotas", "est_corte", "ch_planificar"] {
+            let a = aula(id).unwrap();
+            assert!(a.passos.iter().any(|p| p.cond != Manual), "{id} ainda é todo manual");
+        }
+    }
+
+    #[test]
+    fn condicoes_novas_leem_o_documento_e_o_contexto() {
+        use fenkra_core::{Forma, RefKind};
+        // chapa planificada
+        let mut chapa = doc_do_exemplo("Suporte de chapa");
+        let c = Contexto::so_documento(&chapa);
+        assert!(!Planificada.reconhecida(&c));
+        assert!(Feature("sm_aba", 1).reconhecida(&c));
+        chapa.sheet.as_mut().unwrap().flat = true;
+        assert!(Planificada.reconhecida(&Contexto::so_documento(&chapa)));
+        // alívio de canto
+        assert!(!Feature("sm_alivio", 1).reconhecida(&Contexto::so_documento(&chapa)));
+        // cota de sketch: o retângulo do exemplo não tem; com uma cota passa
+        let mut doc = doc_do_exemplo("Placa simples");
+        assert!(!CotaSketch.reconhecida(&Contexto::so_documento(&doc)));
+        for f in doc.features.iter_mut() {
+            if let FeatureKind::Sketch(s) = &mut f.kind {
+                let alvo = s.data.curves[0].id;
+                s.data.constraints.push(fenkra_core::sketch::Constraint { id: fenkra_core::Id(9_900_001), kind: fenkra_core::sketch::Kind::Length(alvo, "50".into()), label: None, reference: false, flipped: false });
+            }
+        }
+        assert!(CotaSketch.reconhecida(&Contexto::so_documento(&doc)));
+        // cota de referência não comanda a geometria: não conta
+        for f in doc.features.iter_mut() {
+            if let FeatureKind::Sketch(s) = &mut f.kind {
+                s.data.constraints.iter_mut().for_each(|c| c.reference = true);
+            }
+        }
+        assert!(!CotaSketch.reconhecida(&Contexto::so_documento(&doc)));
+        // superfície juntada: o exemplo tem duas soltas
+        let (mut sup, _) = crate::curso_exemplos::peca("Superfícies de exemplo").unwrap();
+        assert!(!SuperficieJuntada(1).reconhecida(&Contexto::so_documento(&sup)));
+        let ids: Vec<_> = sup.references.iter().filter(|r| variante(r).starts_with("Surf")).map(|r| r.id).collect();
+        sup.add_geometry(RefKind::SurfJoin { items: ids.into_iter().map(fenkra_core::SurfRef::Ref).collect(), tol: "0.01".into(), curves: vec![] });
+        assert!(SuperficieJuntada(1).reconhecida(&Contexto::so_documento(&sup)));
+        // forma: vinco e conversão
+        let (mut forma, _) = crate::curso_exemplos::peca("Forma suave").unwrap();
+        assert!(Feature("forma", 1).reconhecida(&Contexto::so_documento(&forma)));
+        for f in forma.features.iter_mut() {
+            if let FeatureKind::Forma(Forma { gaiola, conversao, .. }) = &mut f.kind {
+                let (a, b) = (gaiola.faces[0].nos[0], gaiola.faces[0].nos[1]);
+                gaiola.vincos.push(fenkra_core::subd::Vinco { a: a.min(b), b: a.max(b), peso: 1. });
+                assert!(conversao.is_none());
+            }
+        }
+        assert!(FormaVinco.reconhecida(&Contexto::so_documento(&forma)));
+        assert!(!FormaConvertida.reconhecida(&Contexto::so_documento(&forma)));
+        for f in forma.features.iter_mut() {
+            if let FeatureKind::Forma(x) = &mut f.kind {
+                x.conversao = Some(fenkra_core::ConversaoForma { continuidade: 1, tol: "0.01".into(), pausada: false });
+            }
+        }
+        assert!(FormaConvertida.reconhecida(&Contexto::so_documento(&forma)));
+        // contagens do desenho e comandos usados
+        let vazio = Document::new("V");
+        let usados = ["asm_lista"];
+        let c = Contexto { notas: 1, vistas_planas: 1, tabelas_dobras: 1, carimbo: true, usados: &usados, ..Contexto::so_documento(&vazio) };
+        assert!(Notas(1).reconhecida(&c) && VistasPlanas(1).reconhecida(&c) && TabelasDobras(1).reconhecida(&c) && Carimbo.reconhecida(&c));
+        assert!(Comando("asm_lista").reconhecida(&c) && !Comando("asm_numerar").reconhecida(&c));
+        assert!(!Notas(2).reconhecida(&c));
+    }
+
+    #[test]
+    fn aula_de_comando_avanca_em_ordem_quando_o_comando_e_usado() {
+        let a = aula("mon_documentar").unwrap();
+        let doc = Document::new("M");
+        let mut e = EstadoCurso::default();
+        // numerar antes de gerar a lista não pula o primeiro passo
+        let c = Contexto { usados: &["asm_numerar"], ..Contexto::so_documento(&doc) };
+        assert!(!e.sincronizar(a, &c));
+        assert_eq!(e.proximo_passo(a), Some(0));
+        let c = Contexto { usados: &["asm_numerar", "asm_lista"], ..Contexto::so_documento(&doc) };
+        assert!(e.sincronizar(a, &c));
+        assert!(e.concluida(a), "com os dois comandos usados a aula se conclui sozinha");
+    }
+
+    #[test]
+    fn aulas_da_forma_livre_estao_na_trilha_da_bancada() {
+        let t = trilha_da_bancada(Bench::FormaLivre);
+        assert_eq!(t.id, "forma_livre");
+        assert_eq!(aulas_da_trilha(t).len(), 4);
+        assert!(aulas_da_trilha(t).iter().all(|a| a.bancada == Bench::FormaLivre));
+        // a trilha de superfícies não carrega mais as aulas da forma livre
+        assert!(aulas_da_trilha(trilha_da_bancada(Bench::Superficies)).iter().all(|a| a.bancada == Bench::Superficies));
     }
 
     #[test]
