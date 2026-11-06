@@ -1,0 +1,36 @@
+{
+  "nome": "Chapa metálica",
+  "processo": "chapa",
+  "direcao": [
+    0,
+    0,
+    1
+  ],
+  "regras": [
+    {
+      "id": "chapa.espessura",
+      "entidade": "chapa",
+      "medida": "espessura",
+      "severidade": "aviso",
+      "texto": "Espessura de {valor} mm fora da faixa de {limite} mm do processo.",
+      "min": 0.5,
+      "max": 6.0
+    },
+    {
+      "id": "chapa.dobra.raio",
+      "entidade": "chapa",
+      "medida": "raio_dobra_espessura",
+      "severidade": "aviso",
+      "texto": "Raio de dobra {valor} vezes a espessura; abaixo de {limite} o material trinca.",
+      "min": 1.0
+    },
+    {
+      "id": "chapa.furo.diametro",
+      "entidade": "chapa",
+      "medida": "furo_espessura",
+      "severidade": "aviso",
+      "texto": "Furo de {valor} vezes a espessura; o punção pede ao menos {limite}.",
+      "min": 1.0
+    }
+  ]
+}

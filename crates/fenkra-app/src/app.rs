@@ -558,6 +558,9 @@ impl App {
         match std::env::var("FENKRA_EXIBIR").as_deref() {
             Ok("zebra") => app.settings.display = crate::render::DisplayMode::Zebra,
             Ok("curvatura") => app.settings.display = crate::render::DisplayMode::Curvatura,
+            Ok("inclinacao") => app.settings.display = crate::render::DisplayMode::Inclinacao,
+            Ok("isofotas") => app.settings.display = crate::render::DisplayMode::Isofotas,
+            Ok("dfm") => app.settings.display = crate::render::DisplayMode::Dfm,
             _ => {}
         }
         if std::env::var("FENKRA_DEMO_SUP").is_ok() {
@@ -8300,6 +8303,8 @@ impl eframe::App for App {
             self.painel_comando(ctx, area);
             crate::sup_analise::painel_curvatura(self, ctx, area);
         }
+        crate::sup_inclinacao::painel_inclinacao(self, ctx, area);
+        crate::dfm_ui::painel(self, ctx, area);
         self.painel_importar(ctx, area);
         self.painel_features(ctx, area);
         self.painel_exportar(ctx, area);
@@ -8523,10 +8528,11 @@ impl eframe::App for App {
                     point_style: self.settings.point_style,
                     fantasma: crate::previa::da_sessao(self.session.as_ref().filter(|_| asm_view.is_none()), &ctx.global_style().visuals),
                     forma_oculta,
-                    curvatura: crate::sup_analise::escala_da_tela(&self.settings, &ctx.global_style().visuals),
+                    curvatura: crate::sup_inclinacao::escala_do_mapa(&self.settings, &ctx.global_style().visuals),
                     instancias: self.asm.as_ref().filter(|_| asm_view.is_some()).map_or(&[], |s| s.instancias.as_slice()),
                 };
                 let mut s = crate::medir_quadros::fase("cena", || scene::build(scene_doc, r, &opts));
+                crate::dfm_ui::decorar(&self.settings, r, &ctx.global_style().visuals, &mut s);
                 if let Some(sess) = self.session.as_mut().filter(|_| asm_view.is_none()) {
                     crate::previa::reter_ultima(&mut sess.ultima_valida, &mut s, r.status.get(&sess.id));
                 }

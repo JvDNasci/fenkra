@@ -123,6 +123,16 @@ struct MOut {
     var alpha = i.mat.z * i.col.a;
 
     var c: vec3<f32>;
+    if (mode > 7.5 && mode < 8.5) {
+        // isofotas: linhas onde o ângulo entre a normal e a luz é o mesmo; a luz fica presa ao mundo
+        let l = normalize(vec3<f32>(0.35, -0.45, 0.82));
+        let s = dot(n, l) * 14.0;
+        let w = max(fwidth(s), 1e-4);
+        let linha = 1.0 - smoothstep(0.0, 1.5 * w + 0.06, abs(fract(s + 0.5) - 0.5));
+        let d = abs(dot(n, v));
+        let fundo = vec3<f32>(0.82, 0.84, 0.88) * (0.70 + 0.30 * d);
+        return vec4<f32>(mix(fundo, vec3<f32>(0.05, 0.06, 0.09), linha), 1.0);
+    }
     if (mode > 6.5) {
         // curvatura: a cena já traz a cor por vértice, medida na superfície (B34); aqui só o relevo
         let d = abs(dot(n, v));
@@ -274,10 +284,16 @@ pub enum DisplayMode {
     Zebra,
     /// análise: mapa de curvatura
     Curvatura,
+    /// análise: ângulo de saída de cada face para a direção de abertura (B180, B197)
+    Inclinacao,
+    /// análise: isofotas, linhas de mesmo ângulo com a luz (B180)
+    Isofotas,
+    /// análise de fabricação: o painel de DFM varre a peça e a cena realça as faces (B112, B113, B197)
+    Dfm,
 }
 
 impl DisplayMode {
-    pub const ALL: [DisplayMode; 8] = [
+    pub const ALL: [DisplayMode; 11] = [
         DisplayMode::SombreadoArestas,
         DisplayMode::Sombreado,
         DisplayMode::LinhasOcultas,
@@ -286,6 +302,9 @@ impl DisplayMode {
         DisplayMode::SemiRenderizado,
         DisplayMode::Zebra,
         DisplayMode::Curvatura,
+        DisplayMode::Inclinacao,
+        DisplayMode::Isofotas,
+        DisplayMode::Dfm,
     ];
     pub fn label(self) -> &'static str {
         match self {
@@ -297,6 +316,9 @@ impl DisplayMode {
             DisplayMode::SemiRenderizado => tr("Semi-renderizado"),
             DisplayMode::Zebra => tr("Análise: zebra"),
             DisplayMode::Curvatura => tr("Análise: curvatura"),
+            DisplayMode::Inclinacao => tr("Análise: inclinação"),
+            DisplayMode::Isofotas => tr("Análise: isofotas"),
+            DisplayMode::Dfm => tr("Análise: fabricação"),
         }
     }
     fn code(self) -> f32 {
@@ -308,7 +330,11 @@ impl DisplayMode {
             DisplayMode::RaioX => 4.,
             DisplayMode::SemiRenderizado => 5.,
             DisplayMode::Zebra => 6.,
+            // a inclinação usa a cor por vértice da curvatura; o DFM sombreia como o modo comum
             DisplayMode::Curvatura => 7.,
+            DisplayMode::Inclinacao => 7.,
+            DisplayMode::Isofotas => 8.,
+            DisplayMode::Dfm => 0.,
         }
     }
 }

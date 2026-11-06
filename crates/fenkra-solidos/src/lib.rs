@@ -43,6 +43,8 @@ pub mod massa;
 pub mod termino;
 mod edicao_direta;
 pub mod reconhece;
+pub mod dfm;
+pub mod dfm_geo;
 pub mod padrao;
 pub mod furo_norma;
 pub mod chapa_linha;

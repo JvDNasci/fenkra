@@ -38,7 +38,7 @@ pub struct SceneOpts<'a> {
     /// forma livre cuja superfície não aparece (modo Gaiola)
     pub forma_oculta: Option<Id>,
     /// mapa de curvatura: a cor de cada vértice vem da curvatura medida pelo kernel
-    pub curvatura: Option<crate::sup_analise::EscalaCurvatura>,
+    pub curvatura: Option<crate::sup_inclinacao::EscalaMapa>,
     /// prévia do comando aberto
     pub fantasma: Option<crate::previa::Fantasma<'a>>,
     /// cópias da montagem: esses corpos vão para os lotes, sem repetir a malha na cena (B125)

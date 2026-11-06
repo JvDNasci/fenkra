@@ -524,6 +524,9 @@ pub fn entries(g: Group) -> Vec<Entry> {
             // comandos que ficam na árvore, ao lado dos modos de exibição
             One(it("an_zebra", "Zebra", "Listras zebra (reflexo)", "Faixas de reflexo: onde elas quebram há só posição (G0); dobram = tangência (G1); contínuas = curvatura (G2).", Display(DisplayMode::Zebra))),
             One(it("an_curvatura", "Curvatura", "Mapa de curvatura", "Cor pela curvatura da superfície, do plano até o raio escolhido na escala; não muda com o zoom.", Display(DisplayMode::Curvatura))),
+            One(it("an_inclinacao", "Inclinação", "Mapa de inclinação (saída)", "Cor de cada face pelo ângulo de saída para a direção de abertura: sem saída, justa, suficiente ou perpendicular.", Display(DisplayMode::Inclinacao))),
+            One(it("an_isofotas", "Isofotas", "Isofotas (linhas de mesmo ângulo com a luz)", "Linhas onde a superfície faz o mesmo ângulo com uma luz fixa: curvas que se quebram ou se apertam mostram onde a suavidade falha.", Display(DisplayMode::Isofotas))),
+            One(it("an_dfm", "Fabricação", "Análise de fabricação (DFM)", "Mede espessura, saliência, canto vivo, saída e undercut contra o perfil de um processo e realça as faces com problema.", Display(DisplayMode::Dfm))),
             One(geo_analise(GeoKind::AnConexao)),
             One(geo_analise(GeoKind::AnDesvio)),
             One(geo_analise(GeoKind::AnPente)),

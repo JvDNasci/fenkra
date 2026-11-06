@@ -84,6 +84,7 @@ preferências do usuário.
 | `FENKRA_DEMO_ASM=<nome>` | montagem de exemplo com: `mec` (mecanismo), `cmd` (restrição com fantasma), `junta` (junta automática), `simbolos` (cota e junta no modelo), `manip` (manipulador numa dobradiça), `duzentas` (200 restrições) |
 | `FENKRA_DEMO_MALHA=<modo>` | acrescenta um corpo de malha ondulado à peça e abre o comando: `importar`, `reparar` (calota aberta), `decimar`, `booleana` |
 | `FENKRA_DEMO_IMPRESSAO=1` | abre o preparo de impressão com a peça aberta; `FENKRA_DEMO_IMPRESSAO_ARQUIVO=<arquivo>` grava o 3MF sem perguntar |
+| `FENKRA_EXIBIR=inclinacao\|isofotas\|dfm` | abre já no modo de análise (além de `zebra` e `curvatura`); com `dfm`, `FENKRA_DEMO_DFM=<parte do nome do perfil>` escolhe o processo (`fresagem`, `chapa`, `inje`, `3d`), liga o mapa de espessura e varre sozinho |
 | `FENKRA_DEMO_FOTO=<arquivo.png>` | grava a janela depois de 9 s e fecha o programa |
 | `FENKRA_DEMO_JANELA=<nome>` | abre no segundo quadro o que só o mouse abriria: `salvar_como`, `empacotar`, `reparar` (gravam a peça numa pasta temporária com dois links), `liberar` (com `FENKRA_DEMO_PROJETO=1`; cria uma montagem que usa a peça), `resumo` (com `FENKRA_DEMO_EST=1`), `roda`, `roda_editor`, `tabela`, `pmi_barra` e `pmi_fcf` (com `FENKRA_DEMO_PMI=1`), `daltonico` (liga a paleta segura) |
 | `FENKRA_DEMO_SIMULAR=<protanopia\|deuteranopia\|tritanopia>` | com `FENKRA_DEMO_FOTO`, grava a captura como essa visão a veria |
