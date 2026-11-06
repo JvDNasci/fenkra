@@ -1,6 +1,6 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 86670,
+ "tokens_total_k": 86920,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
@@ -23,14 +23,14 @@
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
-   "tokens_k": 21340,
-   "pct": 24.6
+   "tokens_k": 21590,
+   "pct": 24.8
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
    "tokens_k": 27870,
-   "pct": 32.2
+   "pct": 32.1
   }
  },
  "itens": [
@@ -5706,6 +5706,22 @@
    "area": "Interface",
    "status": "em andamento",
    "pct": 0.1
+  },
+  {
+   "id": "B337",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Sólidos: varredura robusta com guia suave",
+   "oque": "Guia suave com muitos pontos hoje dá erro nomeado em vez de varrer: 48 de 120 splines de 8 a 25 pontos. Dividir a guia em arestas baixa isso. Também tratar varredura que sai inválida sem erro e nervura de chapa que passa de 60 s sem resposta.",
+   "origem": [
+    "USR-BUG"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto",
+   "area": "Sólidos",
+   "status": "em andamento",
+   "pct": 0.3
   }
  ]
 }

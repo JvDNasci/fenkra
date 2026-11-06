@@ -693,6 +693,8 @@ c('B335', 2, 'P1', 'Tela inicial no tema escolhido, com animação mais presente
   ['USR-UI'], [], 120, 'Auto + Visual', 'Interface', status='em andamento'),
 c('B336', 2, 'P1', 'Contador de vértices e volume sai da viewport e vai para as propriedades', 'A informação de vértices, faces e volume do canto inferior direito não ajuda durante a modelagem. Ela sai da viewport e passa às propriedades do objeto, em propriedades de massa e de geometria.',
   ['USR-UI'], [], 80, 'Auto + Visual', 'Interface', status='em andamento'),
+c('B337', 3, 'P1', 'Sólidos: varredura robusta com guia suave', 'Guia suave com muitos pontos hoje dá erro nomeado em vez de varrer: 48 de 120 splines de 8 a 25 pontos. Dividir a guia em arestas baixa isso. Também tratar varredura que sai inválida sem erro e nervura de chapa que passa de 60 s sem resposta.',
+  ['USR-BUG'], [], 250, 'Auto', 'Sólidos', status='em andamento'),
 ]
 def main():
     for x in B:
