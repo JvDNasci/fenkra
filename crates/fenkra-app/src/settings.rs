@@ -429,6 +429,13 @@ pub struct Settings {
     /// B34: raio que recebe a última cor do mapa, em mm
     #[serde(default = "raio_da_curvatura")]
     pub curv_raio: f32,
+    /// B180: direção de abertura do mapa de inclinação (0 X, 1 Y, 2 Z), o sentido e o ângulo mínimo
+    #[serde(default = "eixo_da_inclinacao")]
+    pub incl_eixo: u8,
+    #[serde(default)]
+    pub incl_inverte: bool,
+    #[serde(default = "minimo_da_inclinacao")]
+    pub incl_min: f32,
     pub edges_in_render: bool,
     /// arestas de tangência visíveis (padrão: escondidas, como numa peça real)
     pub tangent_edges: bool,
@@ -569,6 +576,9 @@ impl Default for Settings {
             display: DisplayMode::SombreadoArestas,
             curv_tipo: Default::default(),
             curv_raio: raio_da_curvatura(),
+            incl_eixo: eixo_da_inclinacao(),
+            incl_inverte: false,
+            incl_min: minimo_da_inclinacao(),
             edges_in_render: false,
             tangent_edges: false,
             ortho: false,
@@ -645,6 +655,14 @@ pub const BACKGROUNDS: [(&str, [u8; 3], [u8; 3]); 6] = [
 
 fn raio_da_curvatura() -> f32 {
     10.
+}
+
+fn eixo_da_inclinacao() -> u8 {
+    2
+}
+
+fn minimo_da_inclinacao() -> f32 {
+    1.
 }
 
 impl Settings {

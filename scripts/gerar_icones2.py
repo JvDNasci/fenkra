@@ -268,6 +268,9 @@ def desenhos():
        R=L((12, 30), (7, 20)) + L((20, 24), (15, 11)) + L((28, 19), (24, 7)) + L((36, 17), (35, 9))
        + "M7 20c2-4 5-7 8-9s6-3 9-4 7-1 11 2")
     ic("an_sombreado", B=C(24, 24, 18), R="M30 7a18 18 0 0 1 0 34a24 24 0 0 0 0-34z")
+    ic("an_inclinacao", B="M6 40h36", R=L((13, 40), (18, 10)) + L((18, 10), (30, 10)) + L((30, 10), (35, 40)))
+    ic("an_isofotas", B=C(24, 24, 18), R="M12 28a12 12 0 0 1 24 0M17 28a7 7 0 0 1 14 0M22 28a2 2 0 0 1 4 0M10 18c4-5 24-5 28 0")
+    ic("an_dfm", B=Q(8, 12, 32, 24), R=L((15, 25), (21, 31), (33, 17)) + L((8, 40), (40, 40)))
     ic("an_conexao", B="M6 30c6-10 12-10 16-10M42 30c-6-10-12-10-16-10", R="M24 10v28M18 14l6-4 6 4M18 34l6 4 6-4")
     ic("an_desvio", B="M6 34c10-12 26-12 36 0", R="M6 22c10-12 26-12 36 0M14 17v9M24 14v9M34 17v9")
     ic("an_pente", B="M6 38c8-14 26-20 36-20", R="M10 32l-5-7M17 26l-4-9M25 22l-2-12M33 19l1-9M41 18l3-5")
@@ -721,6 +724,8 @@ ic("forma_simetria", b="M24 4v40", R="M20 10c-16 2-16 26 0 28M28 10c16 2 16 26 0
 ic("forma_converter", b=Q(6, 12, 18, 24), R=CUBO(32, 12, 10, 5, 12) + "M18 24h4", pb=[(6, 12), (24, 12), (24, 36), (6, 36)])
 
 SO_INTERFACE = {"sm_aba_perfis", "sm_desdobrar_parcial", "sm_redobrar_parcial", "sm_converter_chapa", "sm_aba_laco", "sm_fecha_canto", "sm_canto_topo", "sm_canto_sobreposto", "sm_canto_sob", "importar_arquivo", "asm_catalogo", "arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais", "exportar_arquivo", "liberar_revisao", "onde_usado", "comparar", "estado_sem_revisao", "estado_liberada", "estado_editado", "estado_leitura", "estado_conflito", "forma", "forma_caixa", "forma_esfera", "forma_cilindro", "forma_plano", "forma_extrudar", "forma_laco", "forma_aresta", "forma_borda", "forma_tangencia", "forma_simetria", "forma_converter", "des_cota_inteligente", "curso", "mapa_macro", "perfil_fluxo", "an_conexao", "an_desvio", "an_pente", "sup_regrada", "st_solda", "conversao_lote", "formatos_suportados", "edit_mover_face", "edit_apagar_face", "edit_deslocar_face", "edit_raio_filete"}
+
+SO_INTERFACE |= {"an_inclinacao", "an_isofotas", "an_dfm"}
 
 
 # ---------- saída ----------
