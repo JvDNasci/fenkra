@@ -65,7 +65,7 @@ fn caixa() -> Document {
     data.add_slot(&mut al, [-30., 0.], [30., 0.], 25.);
     let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
     d.add_feature(ext(sk, "35"));
-    d.add_feature(FeatureKind::Shell(Shell { faces: vec![[0., 0., 35.]], thickness: s("2.5"), outward: false, face_keys: vec![], closed: false }));
+    d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 35.]], thickness: s("2.5"), outward: false, face_keys: vec![], closed: false }));
     d
 }
 
@@ -284,11 +284,11 @@ pub fn paint_preview(p: &egui::Painter, rect: egui::Rect, pv: &Preview, angle: f
         let d = (rn[0] * light[0] + rn[1] * light[1] + rn[2] * light[2]).abs();
         let k = 0.42 + 0.58 * d;
         let spec = d.powf(24.) * 40.;
-        Color32::from_rgb(
+        crate::theme::cor_rgb([
             (base[0] * k + spec).min(255.) as u8,
             (base[1] * k + spec).min(255.) as u8,
             (base[2] * k + spec).min(255.) as u8,
-        )
+        ])
     };
     let sc = |v: (f32, f32, f32)| pos2(c.x + v.0 * s, c.y - v.1 * s);
     // itens: (profundidade, tri ou aresta)
@@ -304,7 +304,9 @@ pub fn paint_preview(p: &egui::Painter, rect: egui::Rect, pv: &Preview, angle: f
     }
     items.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
     let mut m = egui::Mesh::default();
-    let ink = Color32::from_rgb(18, 18, 26);
+    // cor da peça e das arestas vêm do tema quando o corpo usa a cor padrão (como na viewport)
+    let (peca_tema, aresta_tema) = crate::theme::piece_colors();
+    let ink = aresta_tema.map_or(Color32::from_gray(20), crate::theme::cor_rgb);
     for (_, i, is_edge) in items {
         if is_edge {
             let e = ev[i as usize];
@@ -326,6 +328,7 @@ pub fn paint_preview(p: &egui::Painter, rect: egui::Rect, pv: &Preview, angle: f
             let k = m.vertices.len() as u32;
             for j in t {
                 let cor = pv.cores.get(j as usize).copied().unwrap_or(pv.color);
+                let cor = if cor == crate::theme::PECA_PADRAO { peca_tema.unwrap_or(cor) } else { cor };
                 m.colored_vertex(sc(vs[j as usize]), shade(pv.nrm[j as usize], cor));
             }
             m.add_triangle(k, k + 1, k + 2);

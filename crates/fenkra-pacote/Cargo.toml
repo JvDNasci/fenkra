@@ -1,0 +1,17 @@
+[package]
+name = "fenkra-pacote"
+description = "Pacote de visualização .fkv: malha glTF, árvore, atributos, PMI, capturas e folhas 2D vetoriais, mais o visualizador web que o abre"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+fenkra-core = { path = "../fenkra-core" }
+fenkra-kernel = { path = "../fenkra-kernel" }
+fenkra-malha = { path = "../fenkra-malha" }
+fenkra-solidos = { path = "../fenkra-solidos" }
+fenkra-montagem = { path = "../fenkra-montagem" }
+fenkra-desenho = { path = "../fenkra-desenho" }
+serde.workspace = true
+serde_json.workspace = true

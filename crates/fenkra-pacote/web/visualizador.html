@@ -1,0 +1,947 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Visualizador Fenkra</title>
+<style>
+/* Cores do tema: as paletas Escuro e Claro do Fenkra. Nenhuma cor fora desta lista. */
+:root{
+  --fundo:#1b1d21; --janela:#202227; --campo:#0e0f12; --texto:#e1e4ea; --suave:#9aa3b2;
+  --destaque:#468ce6; --linha:#33363d; --faixa:#282b32; --erro:#e5604f; --ok:#52b788;
+  --vp-topo:#4a5464; --vp-base:#1a1d22; --aresta:#0d0f12; --papel:#23262d; --tinta:#e1e4ea;
+  --peca:#b2b4e2; --sombra:rgba(0,0,0,.45); --raio:6px;
+}
+:root[data-tema="claro"]{
+  --fundo:#eef0f3; --janela:#f8f9fb; --campo:#ffffff; --texto:#181c22; --suave:#5b6573;
+  --destaque:#1e6edc; --linha:#cfd5de; --faixa:#e4e7ec; --erro:#c0392b; --ok:#1f8a5b;
+  --vp-topo:#d6dee8; --vp-base:#9eaaba; --aresta:#2a3140; --papel:#ffffff; --tinta:#181c22;
+  --peca:#767aaa; --sombra:rgba(30,40,60,.25);
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--fundo);color:var(--texto);
+  font:14px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
+button,input,select{font:inherit;color:inherit}
+button{background:var(--faixa);border:1px solid var(--linha);border-radius:var(--raio);padding:0 10px;min-height:40px;min-width:40px;cursor:pointer;touch-action:manipulation}
+button:hover{border-color:var(--destaque)}
+button[aria-pressed="true"],button.ativo{background:var(--destaque);border-color:var(--destaque);color:#fff}
+button:focus-visible,input:focus-visible,select:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--destaque);outline-offset:1px}
+input[type=search],input[type=text],select{background:var(--campo);border:1px solid var(--linha);border-radius:var(--raio);padding:0 10px;min-height:40px;width:100%;min-width:0}
+#app{display:grid;grid-template-rows:auto 1fr;height:100%;height:100dvh;width:100%}
+header{display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--janela);border-bottom:1px solid var(--linha);min-width:0;flex-wrap:wrap}
+header h1{font-size:15px;margin:0 4px 0 2px;font-weight:600;flex:1 1 90px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.seg{display:flex;gap:0}
+.seg button{border-radius:0}
+.seg button:first-child{border-radius:var(--raio) 0 0 var(--raio)}
+.seg button:last-child{border-radius:0 var(--raio) var(--raio) 0}
+main{display:grid;grid-template-columns:minmax(0,1fr);min-height:0;position:relative}
+main.com-painel{grid-template-columns:340px minmax(0,1fr)}
+#painel{display:none;flex-direction:column;background:var(--janela);border-right:1px solid var(--linha);min-height:0;min-width:0}
+main.com-painel #painel{display:flex}
+#abas{display:flex;gap:2px;padding:6px;scrollbar-width:none;border-bottom:1px solid var(--linha);overflow-x:auto;flex:none}
+#abas button{flex:1 1 auto;padding:0 5px;min-height:36px;font-size:13px}
+#conteudo{flex:1;overflow:auto;padding:8px;min-height:0;-webkit-overflow-scrolling:touch}
+#palco{position:relative;min-width:0;min-height:0;overflow:hidden;background:linear-gradient(var(--vp-topo),var(--vp-base))}
+#cena3d,#folha{position:absolute;inset:0}
+#cena3d canvas{display:block;width:100%;height:100%;touch-action:none}
+#folha{background:var(--fundo);display:none;touch-action:none}
+#folha svg{width:100%;height:100%;display:block;touch-action:none;user-select:none}
+#barra button{min-width:0}
+#barra{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);display:flex;flex-wrap:wrap;gap:4px;justify-content:center;
+  padding:4px;background:var(--janela);border:1px solid var(--linha);border-radius:10px;box-shadow:0 4px 16px var(--sombra);max-width:calc(100% - 16px)}
+#flutuantes{position:absolute;left:8px;right:8px;top:8px;display:flex;flex-direction:column;gap:6px;align-items:flex-start;pointer-events:none}
+#flutuantes>*{pointer-events:auto}
+#corte{display:none;gap:6px;align-items:center;padding:6px;background:var(--janela);border:1px solid var(--linha);border-radius:10px;box-shadow:0 4px 16px var(--sombra);flex-wrap:wrap;max-width:100%;width:460px}
+#corte input[type=range]{flex:1 1 140px;min-width:100px;height:32px}
+#medida{max-width:100%;display:none;padding:6px 10px;background:var(--janela);border:1px solid var(--destaque);border-radius:var(--raio);box-shadow:0 2px 10px var(--sombra);font-variant-numeric:tabular-nums}
+#aviso{position:absolute;inset:0;display:none;align-items:center;justify-content:center;text-align:center;padding:24px;background:var(--fundo)}
+#aviso.on{display:flex}
+#aviso .caixa{max-width:420px}
+#aviso h2{margin:0 0 8px;font-size:18px}
+#aviso p{color:var(--suave);margin:6px 0}
+#soltar{outline:2px dashed var(--destaque);outline-offset:-8px}
+.fila{display:flex;gap:6px;margin:0 0 8px}
+ul.arv{list-style:none;margin:0;padding:0}
+ul.arv ul{list-style:none;margin:0;padding-left:16px;border-left:1px solid var(--linha)}
+.lin{display:flex;align-items:center;gap:4px;min-height:38px;border-radius:var(--raio);padding-right:4px}
+.lin:hover{background:var(--faixa)}
+.lin.sel{background:color-mix(in srgb,var(--destaque) 28%,transparent);outline:1px solid var(--destaque)}
+.lin .nome{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;padding:8px 2px}
+.lin .nome small{color:var(--suave);margin-left:6px}
+.lin .seta{width:28px;min-width:28px;min-height:32px;padding:0;border:0;background:none}
+.lin input[type=checkbox]{width:22px;height:22px;flex:none;accent-color:var(--destaque)}
+.lin .vazio{width:28px;flex:none}
+table.dados{width:100%;border-collapse:collapse}
+table.dados td,table.dados th{padding:6px 4px;border-bottom:1px solid var(--linha);text-align:left;vertical-align:top;overflow-wrap:anywhere}
+table.dados th{color:var(--suave);font-weight:500;width:42%}
+.item{display:block;width:100%;text-align:left;margin:0 0 4px;padding:8px 10px;min-height:44px;height:auto}
+.item small{display:block;color:var(--suave)}
+.item[aria-pressed="true"] small{color:#fff}
+h3{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--suave);margin:12px 0 6px}
+.nada{color:var(--suave);padding:8px 2px}
+.rotulo3d{position:absolute;pointer-events:none;transform:translate(-50%,-120%);background:var(--janela);border:1px solid var(--destaque);border-radius:4px;padding:1px 6px;font-size:12px;white-space:nowrap;font-variant-numeric:tabular-nums}
+#tip{position:absolute;pointer-events:none;display:none;background:var(--janela);border:1px solid var(--linha);border-radius:4px;padding:2px 6px;font-size:12px;z-index:3}
+@media (max-width:760px){
+  main.com-painel{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(0,46%)}
+  main.com-painel #palco{grid-row:1}
+  main.com-painel #painel{grid-row:2;border-right:0;border-top:1px solid var(--linha);box-shadow:0 -6px 20px var(--sombra);border-radius:12px 12px 0 0;z-index:2}
+  header h1{flex-basis:100%;order:-1}
+  #barra button{padding:0 7px;min-height:38px;font-size:13px}
+  #barra{gap:3px;bottom:6px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1 id="titulo">Visualizador Fenkra</h1>
+    <div class="seg" id="modos" role="tablist" hidden>
+      <button id="m3d" role="tab" aria-pressed="true" data-t="3D">3D</button>
+      <button id="mfolha" role="tab" aria-pressed="false" data-t="folhas">Folhas</button>
+    </div>
+    <button id="bpainel" aria-pressed="true" data-t="painel">Painel</button>
+    <button id="babrir" data-t="abrir">Abrir</button>
+    <button id="btema" data-t="tema">Tema</button>
+    <input id="arquivo" type="file" accept=".fkv,application/zip" hidden>
+  </header>
+  <main id="main" class="com-painel">
+    <aside id="painel">
+      <div id="abas" role="tablist"></div>
+      <div id="conteudo"></div>
+    </aside>
+    <section id="palco">
+      <div id="cena3d"></div>
+      <div id="folha"></div>
+      <div id="barra" role="toolbar"></div>
+      <div id="flutuantes"><div id="corte"></div><div id="medida" role="status" aria-live="polite"></div></div>
+      <div id="aviso" class="on"><div class="caixa"><h2 data-t="vazio_t">Abra um pacote .fkv</h2><p data-t="vazio_p">Escolha o arquivo ou arraste-o para cá. Nada sai do seu aparelho.</p><button id="babrir2" data-t="abrir">Abrir</button></div></div>
+    </section>
+  </main>
+</div>
+<!-- O pacote embutido: base64 de um .fkv (vazio quando a página serve de componente). -->
+<script id="fkv-dados" type="application/octet-stream">/*@PACOTE@*/</script>
+<script>/*@THREE@*/</script>
+<script>
+"use strict";
+/* ========================================================================================
+   Visualizador Fenkra (B338). Lê o pacote .fkv (ver docs/formatos/pacote-visualizacao.md).
+   Como componente: FenkraVisualizador.abrir(fonte) com fonte = URL, ArrayBuffer, Uint8Array
+   ou File; ?src=URL; ou postMessage({fkv: URL | ArrayBuffer}).
+   ======================================================================================== */
+const TX = {
+ pt:{ "3D":"3D", folhas:"Folhas", painel:"Painel", abrir:"Abrir", tema:"Tema",
+  vazio_t:"Abra um pacote .fkv", vazio_p:"Escolha o arquivo ou arraste-o para cá. Nada sai do seu aparelho.",
+  arvore:"Árvore", dados:"Dados", pmi:"PMI", vistas:"Vistas", estados:"Estados", lista:"Lista",
+  buscar:"Buscar peça, código ou material", ajustar:"Ajustar", isolar:"Isolar", tudo:"Tudo", cortar:"Cortar", medir:"Medir", orto:"Orto", persp:"Persp.",
+  sem_sel:"Toque numa peça para ver os dados.", nome:"Nome", pn:"Código", descricao:"Descrição", material:"Material", tipo_de_peca:"Tipo",
+  massa_kg:"Massa (kg)", volume_mm3:"Volume (mm³)", area_mm2:"Área (mm²)", dimensoes_mm:"Dimensões (mm)", centro_de_massa_mm:"Centro de massa (mm)",
+  caixa_mm:"Caixa (mm)", personalizados:"Personalizados", titulo:"Título", revisao:"Revisão", projecao:"Projeção",
+  sem_pmi:"Este pacote não tem anotações 3D.", sem_vistas:"Sem capturas nem vistas salvas.", sem_estados:"Sem estados de exibição.", sem_lista:"Sem lista.",
+  todas_pmi:"Mostrar todas as anotações", restaurar:"Restaurar", alvo:"Alvo", face:"Face", triangulos:"Triângulos", pecas:"Peças", instancias:"Instâncias",
+  eixo:"Eixo", inverter:"Inverter", ponto1:"Toque no primeiro ponto.", ponto2:"Toque no segundo ponto.", dist:"Distância", exato:"exato", aprox:"aproximado",
+  diam:"Diâmetro", erro:"Não foi possível abrir o pacote", sem_nav:"Este navegador não descomprime o pacote (falta DecompressionStream). Use uma versão recente do Chromium, Firefox ou Safari.",
+  folha:"Folha", ajuste:"Ajustar à tela", papel:"Papel", escala:"Escala", mm_papel:"no papel", mm_modelo:"no modelo", resultados:"Resultados", nenhum:"Nada encontrado.",
+  item:"Item", qtd:"Qtd", arquivo:"Arquivo", sem_corpo:"sem corpo", decimado:"malha simplificada", mostrar:"Mostrar", ocultar:"Ocultar", sel_alvo:"Alvo da anotação", cena_t:"Cena",
+  limpar:"Limpar", tipo:"Tipo", valor:"Valor" },
+ en:{ "3D":"3D", folhas:"Sheets", painel:"Panel", abrir:"Open", tema:"Theme",
+  vazio_t:"Open a .fkv package", vazio_p:"Choose the file or drop it here. Nothing leaves your device.",
+  arvore:"Tree", dados:"Data", pmi:"PMI", vistas:"Views", estados:"States", lista:"List",
+  buscar:"Search part, code or material", ajustar:"Fit", isolar:"Isolate", tudo:"All", cortar:"Section", medir:"Measure", orto:"Ortho", persp:"Persp.",
+  sem_sel:"Tap a part to see its data.", nome:"Name", pn:"Part no.", descricao:"Description", material:"Material", tipo_de_peca:"Type",
+  massa_kg:"Mass (kg)", volume_mm3:"Volume (mm³)", area_mm2:"Area (mm²)", dimensoes_mm:"Size (mm)", centro_de_massa_mm:"Center of mass (mm)",
+  caixa_mm:"Box (mm)", personalizados:"Custom", titulo:"Title", revisao:"Revision", projecao:"Projection",
+  sem_pmi:"This package has no 3D annotations.", sem_vistas:"No captures or saved views.", sem_estados:"No display states.", sem_lista:"No list.",
+  todas_pmi:"Show all annotations", restaurar:"Restore", alvo:"Target", face:"Face", triangulos:"Triangles", pecas:"Parts", instancias:"Instances",
+  eixo:"Axis", inverter:"Flip", ponto1:"Tap the first point.", ponto2:"Tap the second point.", dist:"Distance", exato:"exact", aprox:"approximate",
+  diam:"Diameter", erro:"Could not open the package", sem_nav:"This browser cannot decompress the package (no DecompressionStream). Use a recent Chromium, Firefox or Safari.",
+  folha:"Sheet", ajuste:"Fit to screen", papel:"Paper", escala:"Scale", mm_papel:"on paper", mm_modelo:"on model", resultados:"Results", nenhum:"Nothing found.",
+  item:"Item", qtd:"Qty", arquivo:"File", sem_corpo:"no body", decimado:"simplified mesh", mostrar:"Show", ocultar:"Hide", sel_alvo:"Annotation target", cena_t:"Scene",
+  limpar:"Clear", tipo:"Type", valor:"Value" }
+};
+const IDIOMA = (navigator.language||"pt").toLowerCase().startsWith("en") ? "en" : "pt";
+const T = k => (TX[IDIOMA][k] ?? TX.pt[k] ?? k);
+const $ = s => document.querySelector(s);
+const el = (tag, attrs, ...filhos) => { const e = document.createElement(tag); for (const [k,v] of Object.entries(attrs||{})) { if (k==="class") e.className=v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else if (v===true) e.setAttribute(k,""); else if (v!==false && v!=null) e.setAttribute(k,v);} for (const f of filhos.flat()) if (f!=null) e.append(f.nodeType?f:document.createTextNode(f)); return e; };
+const num = (v, d=3) => { if (typeof v!=="number") return String(v); const s = v.toFixed(d).replace(/\.?0+$/,""); return (IDIOMA==="pt"? s.replace(".",",") : s); };
+
+/* ---------------- tema ---------------- */
+function corCSS(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function aplicarTema(t){
+  document.documentElement.dataset.tema = t;
+  try{ localStorage.setItem("fkv-tema", t); }catch(e){}
+  if (V3.pronto) V3.tema();
+  if (Folha.svg) Folha.desenhar();
+}
+(function(){
+  let t=null; try{ t=localStorage.getItem("fkv-tema"); }catch(e){}
+  if(!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "claro":"escuro";
+  document.documentElement.dataset.tema = t;
+})();
+
+/* ---------------- zip e glb ---------------- */
+async function inflar(dados){
+  if (typeof DecompressionStream==="undefined") throw new Error(T("sem_nav"));
+  const s = new Blob([dados]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  return new Uint8Array(await new Response(s).arrayBuffer());
+}
+async function lerZip(buf){
+  const u8 = new Uint8Array(buf), dv = new DataView(buf);
+  let e = -1;
+  for (let i = u8.length-22; i >= Math.max(0,u8.length-65558); i--) if (dv.getUint32(i,true)===0x06054b50){ e=i; break; }
+  if (e<0) throw new Error("zip");
+  const n = dv.getUint16(e+10,true); let p = dv.getUint32(e+16,true);
+  const dec = new TextDecoder(), mapa = new Map();
+  for (let i=0;i<n;i++){
+    if (dv.getUint32(p,true)!==0x02014b50) throw new Error("zip");
+    const metodo=dv.getUint16(p+10,true), cs=dv.getUint32(p+20,true), nl=dv.getUint16(p+28,true), el=dv.getUint16(p+30,true), cl=dv.getUint16(p+32,true), lo=dv.getUint32(p+42,true);
+    const nome = dec.decode(u8.subarray(p+46,p+46+nl));
+    const ini = lo+30+dv.getUint16(lo+26,true)+dv.getUint16(lo+28,true);
+    mapa.set(nome,{metodo,ini,cs});
+    p += 46+nl+el+cl;
+  }
+  return { nomes:[...mapa.keys()], async ler(nome){
+    const m = mapa.get(nome); if(!m) return null;
+    const bruto = u8.subarray(m.ini,m.ini+m.cs);
+    return m.metodo===0 ? bruto : inflar(bruto);
+  }};
+}
+function lerGLB(u8){
+  const dv = new DataView(u8.buffer,u8.byteOffset,u8.byteLength);
+  if (dv.getUint32(0,true)!==0x46546c67) throw new Error("glb");
+  const lj = dv.getUint32(12,true);
+  const json = JSON.parse(new TextDecoder().decode(u8.subarray(20,20+lj)));
+  const bin = 20+lj+8;
+  return { json, bin, buf: u8.buffer.slice(u8.byteOffset, u8.byteOffset+u8.byteLength) };
+}
+
+/* ---------------- estado do pacote ---------------- */
+const P = { zip:null, m:null, glb:null, entradas:new Map(), raizes:[], sel:null, isolado:null, base:null,
+  pmiFiltro:null, pmiSel:null, capAtiva:null, estadoAtivo:null, offsets:new Map(), cores:new Map() };
+
+/* ---------------- 3D ---------------- */
+const V3 = {
+  pronto:false, cam:{alvo:[0,0,0],yaw:-0.785,pitch:0.6,dist:300,orto:false}, raio:100,
+  precisa:true, corte:{on:false,eixo:2,valor:0,inv:false,min:-1,max:1}, medindo:false, pts:[], cenaRaiz:null, geoms:new Map(),
+  init(){
+    if (this.pronto) return;
+    const cont = $("#cena3d");
+    this.r = new THREE.WebGLRenderer({antialias:true, alpha:true, preserveDrawingBuffer:true});
+    this.r.setPixelRatio(Math.min(devicePixelRatio||1,2));
+    this.r.localClippingEnabled = true;
+    this.r.setClearColor(0x000000,0);
+    cont.append(this.r.domElement);
+    this.s = new THREE.Scene();
+    this.persp = new THREE.PerspectiveCamera(34.4,1,1,1000);
+    this.ortoCam = new THREE.OrthographicCamera(-1,1,1,-1,0.1,1000);
+    this.c = this.persp;
+    this.s.add(new THREE.HemisphereLight(0xffffff,0x667080,0.55));
+    this.luz = new THREE.DirectionalLight(0xffffff,0.55); this.s.add(this.luz); this.s.add(this.luz.target);
+    this.grupo = new THREE.Group(); this.s.add(this.grupo);
+    this.anot = new THREE.Group(); this.s.add(this.anot);
+    this.mark = new THREE.Group(); this.s.add(this.mark);
+    this.plano = new THREE.Plane(new THREE.Vector3(0,0,1),0);
+    this.ray = new THREE.Raycaster();
+    new ResizeObserver(()=>this.tamanho()).observe(cont);
+    this.controles();
+    this.pronto = true;
+    this.tamanho();
+    const laco = ()=>{ requestAnimationFrame(laco); if (this.anim) this.anim(); if (this.precisa){ this.precisa=false; this.desenhar(); } };
+    laco();
+  },
+  tamanho(){
+    const cont=$("#cena3d"), w=Math.max(1,cont.clientWidth), h=Math.max(1,cont.clientHeight);
+    this.r.setSize(w,h,false); this.w=w; this.h=h; this.cameraAtualizar(); this.precisa=true;
+  },
+  tema(){
+    for (const e of P.entradas.values()) if (e.malhaObj) this.pintar(e);
+    this.anotar(); this.precisa=true;
+  },
+  /* A peça precisa ficar sempre distinta do fundo: clareia ou escurece a cor até haver diferença. */
+  corVisivel(rgb){
+    const lum = c => (0.2126*c[0]+0.7152*c[1]+0.0722*c[2])/255;
+    const fundo = [corCSS("--vp-topo"),corCSS("--vp-base")].map(h=>{const n=parseInt(h.slice(1),16);return [n>>16&255,n>>8&255,n&255];});
+    const lf = (lum(fundo[0])+lum(fundo[1]))/2, claro = lf>0.5;
+    let c = rgb.slice();
+    for (let i=0;i<12 && Math.abs(lum(c)-lf)<0.28;i++) c = c.map(v=> claro ? v*0.82 : Math.min(255,v*1.18+8));
+    return new THREE.Color(c[0]/255,c[1]/255,c[2]/255);
+  },
+  pintar(e){
+    const cor = P.cores.get(e.id) || e.cor || [178,180,226];
+    const m = e.malhaObj.material; m.color.copy(this.corVisivel(cor));
+    if (e.malhaObj.userData.arestas) e.malhaObj.userData.arestas.material.color.set(corCSS("--aresta"));
+    const sel = P.sel && (P.sel===e.id || e.id.startsWith(P.sel+"/"));
+    m.emissive.set(sel ? corCSS("--destaque") : "#000000"); m.emissiveIntensity = sel ? 0.22 : 1;
+  },
+  construir(){
+    const g = P.glb, J = g.json;
+    const cache = new Map();
+    const geometria = i => {
+      if (cache.has(i)) return cache.get(i);
+      const prim = J.meshes[i].primitives[0], geo = new THREE.BufferGeometry();
+      const acc = k => {
+        const a = J.accessors[k], v = J.bufferViews[a.bufferView];
+        const T_ = {5126:Float32Array,5120:Int8Array,5123:Uint16Array,5125:Uint32Array}[a.componentType];
+        const nc = {SCALAR:1,VEC3:3}[a.type], off = g.bin+(v.byteOffset||0)+(a.byteOffset||0);
+        return { a, T_, nc, off, stride: v.byteStride||0 };
+      };
+      const pos = acc(prim.attributes.POSITION);
+      geo.setAttribute("position", new THREE.BufferAttribute(new pos.T_(g.buf,pos.off,pos.a.count*3),3));
+      if (prim.attributes.NORMAL!=null){
+        const n = acc(prim.attributes.NORMAL);
+        const ib = new THREE.InterleavedBuffer(new Int8Array(g.buf,n.off,n.a.count*(n.stride||3)),n.stride||3);
+        geo.setAttribute("normal", new THREE.InterleavedBufferAttribute(ib,3,0,true));
+      } else { geo.userData.semNormal=true; }
+      const ix = acc(prim.indices);
+      geo.setIndex(new THREE.BufferAttribute(new ix.T_(g.buf,ix.off,ix.a.count),1));
+      geo.computeBoundingBox(); geo.computeBoundingSphere();
+      cache.set(i,geo); return geo;
+    };
+    const objs = [];
+    const nos = J.nodes.map((n,i)=>{
+      const o = new THREE.Object3D(); o.name = n.name||"";
+      if (n.matrix){ o.matrix.fromArray(n.matrix); o.matrixAutoUpdate=false; o.userData.base = o.matrix.clone(); }
+      objs.push(o); return o;
+    });
+    J.nodes.forEach((n,i)=>{
+      for (const c of n.children||[]) if (!(J.nodes[i].extras&&J.nodes[i].extras.fkv_raiz)) nos[i].add(nos[c]);
+      if (n.mesh!=null){
+        const geo = geometria(n.mesh);
+        const mat = new THREE.MeshPhongMaterial({color:0xcccccc, shininess:30, specular:0x222222, side:THREE.DoubleSide, flatShading: !!geo.userData.semNormal});
+        const m = new THREE.Mesh(geo,mat); nos[i].add(m); nos[i].userData.malha = m;
+        if (geo.userData.semNormal) geo.computeVertexNormals();
+      }
+    });
+    const raiz = J.nodes.findIndex(n=>n.extras&&n.extras.fkv_raiz);
+    this.grupo.clear();
+    for (const c of (J.nodes[raiz]||{children:[]}).children||[]) this.grupo.add(nos[c]);
+    for (const e of P.entradas.values()){
+      e.obj = nos[e.no];
+      const m = e.obj && e.obj.userData.malha;
+      if (m){ e.malhaObj = m; m.userData.entrada = e;
+        if (m.geometry.index.count/3 < 150000){
+          const l = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry,28), new THREE.LineBasicMaterial({color:0x000000}));
+          m.add(l); m.userData.arestas = l; }
+      }
+    }
+    this.grupo.updateMatrixWorld(true);
+    this.corteAplicar();
+    this.tema();
+  },
+  caixa(visiveis=true){
+    const b = new THREE.Box3(), t = new THREE.Box3(), v = new THREE.Vector3();
+    for (const e of P.entradas.values()){
+      const m = e.malhaObj; if (!m) continue;
+      if (visiveis && !this.visivelDeFato(m)) continue;
+      m.updateWorldMatrix(true,false);
+      const bb = m.geometry.boundingBox;
+      for (let i=0;i<8;i++){ v.set(i&1?bb.max.x:bb.min.x, i&2?bb.max.y:bb.min.y, i&4?bb.max.z:bb.min.z).applyMatrix4(m.matrixWorld); b.expandByPoint(v); }
+    }
+    return b;
+  },
+  visivelDeFato(o){ for (let p=o;p;p=p.parent) if(!p.visible) return false; return true; },
+  ajustar(animar=true){
+    const b = this.caixa(true); if (b.isEmpty()) return;
+    const c = b.getCenter(new THREE.Vector3()), s = b.getSize(new THREE.Vector3());
+    const r = Math.max(0.5*s.length(),1);
+    this.raio = r;
+    this.irPara({alvo:[c.x,c.y,c.z], yaw:this.cam.yaw, pitch:this.cam.pitch, dist: r/Math.sin(0.3)*1.05, orto:this.cam.orto}, animar);
+    this.corte.min = [b.min.x,b.min.y,b.min.z]; this.corte.max=[b.max.x,b.max.y,b.max.z];
+  },
+  irPara(c, animar=true){
+    const de = JSON.parse(JSON.stringify(this.cam)), para = {alvo:c.alvo, yaw:c.yaw, pitch:c.pitch, dist:c.dist, orto:!!c.orto};
+    let dy = para.yaw - de.yaw; dy = ((dy+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI; para.yaw = de.yaw+dy;
+    if (!animar){ this.cam = para; this.cameraAtualizar(); return; }
+    const t0 = performance.now(), dur=380;
+    this.anim = ()=>{
+      let k = Math.min(1,(performance.now()-t0)/dur); k = k*k*(3-2*k);
+      this.cam = { alvo:de.alvo.map((v,i)=>v+(para.alvo[i]-v)*k), yaw:de.yaw+(para.yaw-de.yaw)*k, pitch:de.pitch+(para.pitch-de.pitch)*k,
+        dist:de.dist+(para.dist-de.dist)*k, orto:para.orto };
+      this.cameraAtualizar(); if (k>=1) this.anim=null;
+    };
+  },
+  cameraAtualizar(){
+    const c = this.cam, cp=Math.cos(c.pitch), sp=Math.sin(c.pitch);
+    this.c = c.orto ? this.ortoCam : this.persp;
+    const cam = this.c;
+    cam.up.set(0,0,1);
+    cam.position.set(c.alvo[0]+c.dist*cp*Math.cos(c.yaw), c.alvo[1]+c.dist*cp*Math.sin(c.yaw), c.alvo[2]+c.dist*sp);
+    cam.lookAt(c.alvo[0],c.alvo[1],c.alvo[2]);
+    const R = Math.max(this.raio,1);
+    cam.near = Math.max(R*0.002,0.01); cam.far = (c.dist+R)*4;
+    if (c.orto){ const hh = c.dist*Math.tan(0.3), ww = hh*this.w/this.h; Object.assign(cam,{left:-ww,right:ww,top:hh,bottom:-hh}); }
+    else cam.aspect = this.w/this.h;
+    cam.updateProjectionMatrix(); cam.updateMatrixWorld(true);
+    this.luz.position.copy(cam.position).add(new THREE.Vector3(0.3,0.4,0.6).multiplyScalar(c.dist)); this.luz.target.position.set(...c.alvo);
+    this.precisa = true;
+  },
+  desenhar(){ this.r.render(this.s,this.c); this.rotulos(); },
+  /* controles de toque e mouse */
+  controles(){
+    const cv = this.r.domElement, ptr = new Map(); let toque=null, ult=null;
+    const pan = (dx,dy)=>{
+      const c=this.cam, cam=this.c, esc = c.orto ? (2*c.dist*Math.tan(0.3))/this.h : (2*c.dist*Math.tan(0.3))/this.h;
+      const dir = new THREE.Vector3(); cam.getWorldDirection(dir);
+      const dir_ = dir.clone(), dir2 = new THREE.Vector3().crossVectors(dir_,cam.up).normalize(), up = new THREE.Vector3().crossVectors(dir2,dir_).normalize();
+      for (let i=0;i<3;i++) c.alvo[i] += (-dx*dir2.getComponent(i)+dy*up.getComponent(i))*esc;
+      this.cameraAtualizar();
+    };
+    const zoom = f=>{ this.cam.dist = Math.min(Math.max(this.cam.dist*f,this.raio*0.02),this.raio*60); this.cameraAtualizar(); };
+    cv.addEventListener("pointerdown",e=>{
+      try{cv.setPointerCapture(e.pointerId);}catch(_){} this.anim=null;
+      ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});
+      toque = ptr.size===1 ? {x:e.clientX,y:e.clientY,t:performance.now(),mov:0,b:e.button} : toque && Object.assign(toque,{mov:99});
+      ult = this.dois(ptr);
+    });
+    cv.addEventListener("pointermove",e=>{
+      const p = ptr.get(e.pointerId);
+      if (!p){ this.pairar(e); return; }
+      const dx=e.clientX-p.x, dy=e.clientY-p.y; p.x=e.clientX; p.y=e.clientY;
+      if (ptr.size===1){
+        if (toque) toque.mov += Math.abs(dx)+Math.abs(dy);
+        if (e.buttons&6 || e.shiftKey || (toque&&toque.b===1)) pan(dx,dy);
+        else { this.cam.yaw -= dx*0.008; this.cam.pitch = Math.max(-1.5,Math.min(1.5,this.cam.pitch+dy*0.008)); this.cameraAtualizar(); }
+      } else if (ptr.size===2){
+        const d = this.dois(ptr);
+        if (ult){ if (d.dist>0 && ult.dist>0) zoom(ult.dist/d.dist); pan(d.cx-ult.cx,d.cy-ult.cy); }
+        ult = d;
+      }
+    });
+    const fim = e=>{
+      const tinha = ptr.delete(e.pointerId);
+      if (tinha && toque && ptr.size===0 && toque.mov<8 && performance.now()-toque.t<500 && toque.b===0) this.tocar(e.clientX,e.clientY);
+      if (ptr.size===0) toque=null; ult=this.dois(ptr);
+    };
+    cv.addEventListener("pointerup",fim); cv.addEventListener("pointercancel",e=>{ptr.delete(e.pointerId);toque=null;});
+    cv.addEventListener("wheel",e=>{ e.preventDefault(); zoom(Math.exp(e.deltaY*0.0012)); },{passive:false});
+    cv.addEventListener("contextmenu",e=>e.preventDefault());
+    cv.addEventListener("dblclick",()=>this.ajustar());
+  },
+  dois(ptr){ const a=[...ptr.values()]; if(a.length<2) return null; return {dist:Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y), cx:(a[0].x+a[1].x)/2, cy:(a[0].y+a[1].y)/2}; },
+  pairar(e){ /* sem dica no hover; o toque não tem hover */ },
+  raioDe(x,y){
+    const r = this.r.domElement.getBoundingClientRect();
+    this.ray.setFromCamera(new THREE.Vector2((x-r.left)/r.width*2-1, -((y-r.top)/r.height*2-1)), this.c);
+    return this.ray;
+  },
+  malhasVisiveis(){ const l=[]; for (const e of P.entradas.values()) if (e.malhaObj && this.visivelDeFato(e.malhaObj)) l.push(e.malhaObj); return l; },
+  acertar(x,y){
+    const ray = this.raioDe(x,y);
+    let hits = ray.intersectObjects(this.malhasVisiveis(),false);
+    if (this.corte.on) hits = hits.filter(h=>this.plano.distanceToPoint(h.point)>=0);
+    return hits[0]||null;
+  },
+  tocar(x,y){
+    const h = this.acertar(x,y);
+    if (this.medindo){ this.medirToque(h,x,y); return; }
+    if (!h){ selecionar(null); return; }
+    const e = h.object.userData.entrada;
+    const pai = P.entradas.get(e.pai);
+    selecionar(pai && pai.tipo==="peca" && pai.filhos.length===1 ? pai.id : e.id, {face: faceDe(e,h.faceIndex)});
+  },
+  /* corte */
+  corteAplicar(){
+    const c = this.corte, n=[0,0,0]; n[c.eixo] = c.inv ? -1 : 1;
+    this.plano.normal.set(...n); this.plano.constant = -(c.inv?-1:1)*c.valor;
+    const planos = c.on ? [this.plano] : [];
+    for (const e of P.entradas.values()){ const m=e.malhaObj; if(!m) continue; m.material.clippingPlanes = planos; m.material.needsUpdate = true;
+      if (m.userData.arestas){ m.userData.arestas.material.clippingPlanes = planos; m.userData.arestas.material.needsUpdate=true; } }
+    this.precisa = true;
+  },
+  /* medição 3D */
+  /* Captura em espaço de tela: o ponto exato mais perto do toque, sem estar escondido atrás da peça.
+     Centro de furo ganha dos vértices, e estes dos pontos médios. */
+  perto(h, x, y, px){
+    const r = this.r.domElement.getBoundingClientRect(), cam = this.c;
+    const ppx = this.c.isOrthographicCamera ? (2*this.cam.dist*Math.tan(0.3))/this.h : 2*h.distance*Math.tan(0.3)/this.h;
+    const tol = ppx*px*1.5, ray = this.ray;
+    let melhor=null, ms=1e30; const v = new THREE.Vector3(), de = new THREE.Vector3();
+    for (const e of P.entradas.values()){
+      const m = e.malhaObj, cap = e.malha && e.malha.capturas; if (!m||!cap||!this.visivelDeFato(m)) continue;
+      const sph = m.geometry.boundingSphere, cw = sph.center.clone().applyMatrix4(m.matrixWorld);
+      if (Math.sqrt(ray.ray.distanceSqToPoint(cw)) > sph.radius*1.01+tol) continue;
+      const M = m.matrixWorld.elements;
+      const ap = p=>[M[0]*p[0]+M[4]*p[1]+M[8]*p[2]+M[12], M[1]*p[0]+M[5]*p[1]+M[9]*p[2]+M[13], M[2]*p[0]+M[6]*p[1]+M[10]*p[2]+M[14]];
+      const teste = (q,tipo)=>{
+        v.set(q[0],q[1],q[2]); const prof = de.copy(v).sub(ray.ray.origin).dot(ray.ray.direction);
+        if (prof > h.distance + tol*1.5 + 1e-6) return null;
+        const n = v.clone().project(cam), sx = r.left+(n.x+1)/2*r.width, sy = r.top+(1-n.y)/2*r.height;
+        const d = Math.hypot(sx-x, sy-y); if (d>px) return null;
+        return d + (tipo===2?-px*0.4:tipo===0?0:px*0.25);
+      };
+      const centros = [];
+      for (const p of cap.pontos){ const q=ap(p), sc=teste(q,p[3]); if (sc!==null && sc<ms){ ms=sc; melhor={w:q,tipo:p[3],e}; } }
+      if (melhor && melhor.e===e && melhor.tipo===2){ for (const c of cap.circulos){ const q=ap(c); if (Math.hypot(melhor.w[0]-q[0],melhor.w[1]-q[1],melhor.w[2]-q[2])<1e-6){ melhor.r=c[3]; break; } } }
+    }
+    return melhor;
+  },
+  medirToque(h,x,y){
+    if (!h) return;
+    if (this.pts.length>=2) this.pts=[];
+    const s = this.perto(h, x, y, 18);
+    this.pts.push(s ? {w:s.w, exato:true, r:s.r, tipo:s.tipo} : {w:[h.point.x,h.point.y,h.point.z], exato:false});
+    this.medidaAtualizar();
+  },
+  medidaAtualizar(){
+    const box = $("#medida"), p=this.pts;
+    this.mark.clear();
+    const bol = q=>{ const sp = new THREE.Sprite(new THREE.SpriteMaterial({color:new THREE.Color(corCSS("--destaque")),depthTest:false,sizeAttenuation:false})); sp.scale.set(0.022,0.022,1); sp.position.set(...q.w); sp.renderOrder=10; this.mark.add(sp); };
+    p.forEach(bol);
+    if (p.length===2){
+      const g = new THREE.BufferGeometry().setFromPoints(p.map(q=>new THREE.Vector3(...q.w)));
+      const l = new THREE.Line(g,new THREE.LineBasicMaterial({color:new THREE.Color(corCSS("--destaque")),depthTest:false})); l.renderOrder=9; this.mark.add(l);
+    }
+    box.style.display = (this.medindo ? "block":"none");
+    if (!this.medindo) { this.precisa=true; return; }
+    if (p.length===0) box.textContent = T("ponto1");
+    else if (p.length===1){ box.textContent = T("ponto2") + (p[0].r?` (${T("diam")} ${num(p[0].r*2)} mm)`:""); }
+    else {
+      const d = [0,1,2].map(i=>p[1].w[i]-p[0].w[i]), dist = Math.hypot(...d), ex = p[0].exato&&p[1].exato;
+      box.replaceChildren(el("strong",{},`${T("dist")}: ${num(dist,4)} mm`), el("div",{}, `ΔX ${num(d[0])}  ΔY ${num(d[1])}  ΔZ ${num(d[2])}`),
+        el("small",{style:"color:var(--suave)"}, ex?T("exato"):T("aprox"), p[0].r?` · ${T("diam")} ${num(p[0].r*2)} mm`:"", p[1].r?` · ${T("diam")} ${num(p[1].r*2)} mm`:""));
+      window.__ultimaMedida = {dist, d, exato:ex, a:p[0].w, b:p[1].w};
+    }
+    this.precisa=true;
+  },
+  /* anotações 3D */
+  anotar(){
+    const g = this.anot; g.clear();
+    const m = P.m; if (!m) return;
+    const mostrar = P.pmiFiltro ? m.pmi.filter(p=>P.pmiFiltro.has(p.id)) : m.pmi.filter(p=>p.visivel);
+    const cd = corCSS("--destaque"), ct = corCSS("--texto");
+    for (const p of mostrar){
+      const ativa = P.pmiSel===p.id, cor = ativa ? cd : ct;
+      const A = p.ancoras.map(a=>new THREE.Vector3(...a));
+      if (A.length>=2 && ["Linear","Gap","Diameter","Radius","Ordinate"].some(k=>p.tipo.startsWith(k)||p.dimensional)){
+        const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(A),new THREE.LineBasicMaterial({color:cor,depthTest:false})); l.renderOrder=8; g.add(l);
+      }
+      const base = A[0] ? A[0].clone().add(new THREE.Vector3(...p.deslocamento)) : null;
+      if (base){
+        if (A[0]){ const l=new THREE.Line(new THREE.BufferGeometry().setFromPoints([A[0],base]),new THREE.LineBasicMaterial({color:cor,depthTest:false,transparent:true,opacity:.6})); l.renderOrder=8; g.add(l); }
+        const sp = this.texto(p.texto||p.nome, cor); sp.position.copy(base); g.add(sp);
+      }
+      p.alvos.forEach(a=>{ if (a) g.add(this.alvo(a, cor)); });
+    }
+    this.precisa = true;
+  },
+  texto(t,cor){
+    const cv = document.createElement("canvas"), cx = cv.getContext("2d"), f = 28;
+    cx.font = `600 ${f}px system-ui,sans-serif`; const w = Math.ceil(cx.measureText(t).width)+20; cv.width=w; cv.height=f+16;
+    cx.font = `600 ${f}px system-ui,sans-serif`; cx.fillStyle = corCSS("--janela"); cx.globalAlpha=.9; cx.fillRect(0,0,w,f+16); cx.globalAlpha=1;
+    cx.strokeStyle = cor; cx.lineWidth=2; cx.strokeRect(1,1,w-2,f+14); cx.fillStyle=cor; cx.textBaseline="middle"; cx.fillText(t,10,(f+16)/2+1);
+    const tex = new THREE.CanvasTexture(cv);
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:tex,depthTest:false,sizeAttenuation:false,transparent:true}));
+    sp.scale.set(0.045*w/(f+16)*1.0, 0.045, 1); sp.renderOrder=11; return sp;
+  },
+  alvo(a, cor){
+    const p = new THREE.Vector3(...a.ponto), d = new THREE.Vector3(...a.direcao);
+    const mat = new THREE.LineBasicMaterial({color:cor,depthTest:false});
+    let o;
+    if (a.classe==="vertice"||a.classe==="aresta"){
+      o = new THREE.Sprite(new THREE.SpriteMaterial({color:new THREE.Color(cor),depthTest:false,sizeAttenuation:false})); o.scale.set(.016,.016,1);
+    } else {
+      const R = a.raio>0 ? a.raio : this.raio*0.05, pts=[];
+      if (a.classe==="face_plana"||a.classe==="face") for (const [x,y] of [[-1,-1],[1,-1],[1,1],[-1,1],[-1,-1]]) pts.push(new THREE.Vector3(x*R,y*R,0));
+      else for (let i=0;i<=48;i++) pts.push(new THREE.Vector3(Math.cos(i/48*6.2832)*R,Math.sin(i/48*6.2832)*R,0));
+      o = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),mat);
+      if (d.lengthSq()>0.5) o.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),d.normalize());
+    }
+    o.position.copy(p); o.renderOrder=8; return o;
+  },
+  rotulos(){},
+};
+
+/* mapa de faces: início dos triângulos de cada face (em índices) */
+function faceDe(e, tri){
+  const f = e.malha && e.malha.faces; if (!f||tri==null) return null;
+  const k = tri*3; let lo=0, hi=f.length-1;
+  while (lo<hi){ const mid=(lo+hi+1)>>1; if (f[mid]<=k) lo=mid; else hi=mid-1; }
+  const t = e.malha.tipos_de_face && e.malha.tipos_de_face[lo];
+  return t ? {n:lo+1, tipo:["plana","cilíndrica","cônica","esférica","toroidal","livre"][t[0]]||"?", area:t[1]} : null;
+}
+
+/* ---------------- árvore, seleção e visibilidade ---------------- */
+function indexar(m){
+  P.entradas.clear(); P.raizes=[];
+  m.arvore.forEach(a=>{ const e = Object.assign({filhos:[],vis:a.visivel!==false,aberto:true},a); e.malha = a.malha ? m.malhas.find(x=>x.id===a.malha) : null; P.entradas.set(a.id,e); });
+  for (const e of P.entradas.values()){ if (e.pai && P.entradas.has(e.pai)) P.entradas.get(e.pai).filhos.push(e); else P.raizes.push(e); }
+  P.base = new Map([...P.entradas].map(([k,e])=>[k,e.vis]));
+}
+function aplicarVisibilidade(){
+  const iso = P.isolado; let ok=null;
+  if (iso){ ok = new Set(); const e=P.entradas.get(iso); const desc = x=>{ok.add(x.id);x.filhos.forEach(desc);}; if(e){ desc(e); for (let p=e;p;p=P.entradas.get(p.pai)) ok.add(p.id);} }
+  for (const e of P.entradas.values()) if (e.obj) e.obj.visible = e.vis && (!ok || ok.has(e.id));
+  V3.precisa = true; $("#isolar") && $("#isolar").setAttribute("aria-pressed", String(!!iso));
+  refrescarArvore();
+}
+function selecionar(id, extra){
+  P.sel = id; P.selExtra = extra||null;
+  for (const e of P.entradas.values()) if (e.malhaObj) V3.pintar(e);
+  V3.precisa = true; refrescarArvore();
+  if (id) mostrarAba("dados", true); else refrescarDados();
+  refrescarDados();
+}
+const texto_busca = e => [e.nome, e.atributos && e.atributos.pn, e.atributos && e.atributos.material, e.atributos && e.atributos.descricao].filter(Boolean).join(" ").toLowerCase();
+let consulta = "";
+function casa(e){ return !consulta || texto_busca(e).includes(consulta) || e.filhos.some(casa); }
+function linhaArvore(e){
+  if (!casa(e)) return null;
+  // peça de um corpo só: o corpo não aparece, a peça já o representa
+  const filhos = (e.tipo==="peca" && e.filhos.length===1) ? [] : e.filhos;
+  const li = el("li");
+  const seta = filhos.length ? el("button",{class:"seta","aria-label":e.aberto?"-":"+","aria-expanded":String(e.aberto),onclick:()=>{e.aberto=!e.aberto;refrescarArvore();}},e.aberto?"▾":"▸") : el("span",{class:"vazio"});
+  const cx = el("input",{type:"checkbox",checked:e.vis,"aria-label":T("mostrar")+" "+e.nome,onchange:ev=>{ e.vis=ev.target.checked; if(e.tipo==="peca"&&e.filhos.length===1) e.filhos[0].vis=e.vis; aplicarVisibilidade(); }});
+  const pn = e.atributos && e.atributos.pn;
+  const lin = el("div",{class:"lin"+(P.sel===e.id?" sel":"")}, seta, cx,
+    el("span",{class:"nome",tabindex:0,role:"button",onclick:()=>selecionar(e.id),onkeydown:ev=>{if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();selecionar(e.id);}}}, e.nome, pn?el("small",{},pn):null));
+  li.append(lin);
+  if (filhos.length && e.aberto){ const ul = el("ul"); filhos.forEach(f=>{const l=linhaArvore(f); if(l) ul.append(l);}); li.append(ul); }
+  return li;
+}
+function refrescarArvore(){ if (P.aba!=="arvore") return; const raiz = $("#lista-arvore"); if(!raiz) return; const ul=el("ul",{class:"arv"}); P.raizes.forEach(r=>{const l=linhaArvore(r); if(l) ul.append(l);}); raiz.replaceChildren(ul);
+  if (!ul.childNodes.length) raiz.append(el("div",{class:"nada"},T("nenhum"))); }
+
+function isolarSelecionado(){
+  if (P.isolado){ P.isolado=null; } else if (P.sel){ P.isolado=P.sel; } else return;
+  aplicarVisibilidade(); V3.ajustar();
+}
+function mostrarTudo(){ P.isolado=null; for (const [k,v] of P.base) P.entradas.get(k).vis=true; aplicarVisibilidade(); V3.ajustar(); }
+
+/* ---------------- painéis ---------------- */
+const ABAS = ["arvore","dados","pmi","vistas","estados","lista"];
+function montarAbas(){
+  const m = P.m, ab = $("#abas"); ab.replaceChildren();
+  const tem = { arvore:m.arvore.length>0, dados:true, pmi:true, vistas:true, estados:m.estados.length>0, lista:(m.lista&&m.lista.length>0)||(m.tabelas&&m.tabelas.length>0) };
+  ABAS.filter(a=>tem[a] && !(a==="arvore"&&!m.arvore.length)).forEach(a=>ab.append(el("button",{role:"tab","data-aba":a,"aria-pressed":"false",onclick:()=>mostrarAba(a)},T(a))));
+}
+function mostrarAba(a, abrir){
+  if (abrir) $("#main").classList.add("com-painel"), $("#bpainel").setAttribute("aria-pressed","true");
+  P.aba = a;
+  document.querySelectorAll("#abas button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.aba===a)));
+  const c = $("#conteudo"); c.replaceChildren();
+  ({arvore:abaArvore,dados:abaDados,pmi:abaPmi,vistas:abaVistas,estados:abaEstados,lista:abaLista}[a])(c);
+  V3.pronto && V3.tamanho();
+}
+function abaArvore(c){
+  const bus = el("input",{type:"search",placeholder:T("buscar"),"aria-label":T("buscar"),value:consulta,oninput:ev=>{consulta=ev.target.value.trim().toLowerCase(); refrescarArvore(); Folha.buscar(consulta);},
+    onkeydown:ev=>{ if(ev.key==="Enter"){ const e=[...P.entradas.values()].find(x=>x.tipo!=="corpo"&&texto_busca(x).includes(consulta)); if(e&&consulta) selecionar(e.id);} }});
+  c.append(el("div",{class:"fila"},bus), el("div",{id:"lista-arvore"}), el("div",{id:"res-folha"}));
+  refrescarArvore(); Folha.buscar(consulta);
+}
+const ORDEM = ["nome","pn","descricao","material","tipo_de_peca","massa_kg","volume_mm3","area_mm2","dimensoes_mm","centro_de_massa_mm","titulo","revisao","projecao"];
+function fmt(v){ if (Array.isArray(v)) return v.map(x=>Array.isArray(x)?"("+x.map(y=>num(y,2)).join("; ")+")":num(x,2)).join(" × ").replace(/ × \(/g," – ("); if (typeof v==="number") return num(v,4); if (v&&typeof v==="object") return Object.entries(v).map(([k,x])=>k+": "+x).join("\n"); return String(v); }
+function tabelaAttr(attr){
+  const t = el("table",{class:"dados"});
+  const chaves = ORDEM.filter(k=>attr[k]!=null&&attr[k]!=="").concat(Object.keys(attr).filter(k=>!ORDEM.includes(k)&&attr[k]!=null&&attr[k]!==""&&k!=="caixa_mm"));
+  for (const k of chaves) t.append(el("tr",{},el("th",{},TX[IDIOMA][k]||k), el("td",{},k==="personalizados"?fmt(attr[k]):fmt(attr[k]))));
+  return t;
+}
+function refrescarDados(){ if (P.aba==="dados"){ const c=$("#conteudo"); c.replaceChildren(); abaDados(c);} }
+function abaDados(c){
+  const e = P.sel && P.entradas.get(P.sel);
+  const m = P.m;
+  if (!e){
+    c.append(el("h3",{},m.nome), m.atributos?tabelaAttr(m.atributos):null);
+    const s = m.estatisticas||{}; const t = el("table",{class:"dados"});
+    [["pecas","pecas_unicas"],["instancias","instancias"],["triangulos","triangulos"]].forEach(([l,k])=>s[k]!=null&&t.append(el("tr",{},el("th",{},T(l)),el("td",{},String(s[k])))));
+    c.append(t); if (m.decimado) c.append(el("p",{class:"nada"},T("decimado")+" ("+Math.round(m.decimado*100)+"%)"));
+    if (m.arvore.length) c.append(el("p",{class:"nada"},T("sem_sel")));
+    return;
+  }
+  c.append(el("h3",{},e.nome), tabelaAttr(e.atributos||{nome:e.nome}));
+  if (e.malha) c.append(el("table",{class:"dados"}, el("tr",{},el("th",{},T("triangulos")),el("td",{},String(e.malha.triangulos)))));
+  const fx = P.selExtra && P.selExtra.face;
+  if (fx) c.append(el("h3",{},T("face")), el("table",{class:"dados"}, el("tr",{},el("th",{},"#"),el("td",{},fx.n+" · "+fx.tipo)), el("tr",{},el("th",{},T("area_mm2")),el("td",{},num(fx.area,3)))));
+  const tmp = P.pmiSel && m.pmi.find(p=>p.id===P.pmiSel);
+  if (tmp) c.append(el("h3",{},T("sel_alvo")), el("table",{class:"dados"}, ...tmp.alvos.filter(Boolean).map(a=>el("tr",{},el("th",{},a.classe),el("td",{},(a.raio?"R "+num(a.raio)+" · ":"")+a.ponto.map(x=>num(x,2)).join("; "))))));
+}
+function corpoDoPonto(pt){
+  const v = new THREE.Vector3(...pt); let melhor=null, md=1e30;
+  for (const e of P.entradas.values()){ const m=e.malhaObj; if(!m) continue;
+    const bb = m.geometry.boundingBox.clone().applyMatrix4(m.matrixWorld); const d = bb.distanceToPoint(v); if (d<md){md=d;melhor=e;} }
+  return melhor;
+}
+function abaPmi(c){
+  const m=P.m;
+  if (!m.pmi.length){ c.append(el("div",{class:"nada"},T("sem_pmi"))); return; }
+  c.append(el("button",{class:"item",onclick:()=>{P.pmiFiltro=null;P.capAtiva=null;V3.anotar();mostrarAba("pmi");}},T("todas_pmi")));
+  const lista = P.pmiFiltro ? m.pmi.filter(p=>P.pmiFiltro.has(p.id)) : m.pmi;
+  for (const p of lista){
+    c.append(el("button",{class:"item","aria-pressed":String(P.pmiSel===p.id),onclick:()=>focarPmi(p)}, p.texto||p.nome, el("small",{},p.tipo+(p.alvos.some(Boolean)?" · "+T("alvo")+": "+p.alvos.filter(Boolean).map(a=>a.classe).join(", "):""))));
+  }
+}
+function focarPmi(p){
+  P.pmiSel = (P.pmiSel===p.id) ? null : p.id; V3.anotar();
+  if (P.pmiSel && p.ancoras.length){
+    const A = p.ancoras, c = [0,1,2].map(i=>A.reduce((s,a)=>s+a[i],0)/A.length);
+    const ext = Math.max(1,...A.map(a=>Math.hypot(a[0]-c[0],a[1]-c[1],a[2]-c[2])));
+    V3.irPara({alvo:c,yaw:V3.cam.yaw,pitch:V3.cam.pitch,dist:Math.min(V3.cam.dist,Math.max(ext*5,V3.raio*0.4)),orto:V3.cam.orto});
+    const t = p.alvos.find(Boolean); const corpo = corpoDoPonto(t?t.ponto:A[0]);
+    if (corpo){ const pai = P.entradas.get(corpo.pai); P.sel = pai && pai.tipo==="peca" ? pai.id : corpo.id; for (const e of P.entradas.values()) if (e.malhaObj) V3.pintar(e); }
+  }
+  mostrarAba("pmi");
+}
+function aplicarCamera(c, animar=true){ V3.irPara({alvo:c.alvo,yaw:c.yaw,pitch:c.pitch,dist:c.distancia,orto:c.ortografica},animar); }
+function abaVistas(c){
+  const m=P.m;
+  if (!m.capturas.length && !m.vistas.length){ c.append(el("div",{class:"nada"},T("sem_vistas"))); return; }
+  c.append(el("button",{class:"item",onclick:restaurar},T("restaurar")));
+  if (m.capturas.length) c.append(el("h3",{},"Capturas"));
+  m.capturas.forEach(k=>c.append(el("button",{class:"item","aria-pressed":String(P.capAtiva===k.id),onclick:()=>aplicarCaptura(k)},k.nome,el("small",{},k.pmi.length+" PMI"))));
+  if (m.vistas.length) c.append(el("h3",{},T("vistas")));
+  m.vistas.forEach(v=>c.append(el("button",{class:"item",onclick:()=>aplicarCamera(v.camera)},v.nome)));
+}
+function idsDe(num){
+  const out=[]; for (const e of P.entradas.values()) if (e.id==="n"+num || e.id.endsWith("/n"+num) || e.id.endsWith("/c"+num)) out.push(e);
+  return out;
+}
+function restaurar(){
+  for (const [k,v] of P.base) P.entradas.get(k).vis=v;
+  P.isolado=null; P.capAtiva=null; P.estadoAtivo=null; P.pmiFiltro=null; P.pmiSel=null; P.offsets.clear(); P.cores.clear();
+  for (const e of P.entradas.values()) if (e.obj && e.obj.userData.base) e.obj.matrix.copy(e.obj.userData.base);
+  V3.grupo.updateMatrixWorld(true); aplicarVisibilidade(); V3.anotar(); V3.tema(); mostrarAba(P.aba);
+}
+function aplicarCaptura(k){
+  for (const [id,v] of P.base) P.entradas.get(id).vis=v;
+  P.capAtiva=k.id; P.pmiFiltro=new Set(k.pmi); P.pmiSel=null;
+  if (k.com_modelo) for (const n of k.ocultos) idsDe(n).forEach(e=>e.vis=false);
+  aplicarVisibilidade(); V3.anotar(); aplicarCamera(k.camera); mostrarAba("vistas");
+}
+function abaEstados(c){
+  c.append(el("button",{class:"item",onclick:restaurar},T("restaurar")));
+  P.m.estados.forEach((s,i)=>c.append(el("button",{class:"item","aria-pressed":String(P.estadoAtivo===i),onclick:()=>aplicarEstado(i)},s.nome,
+    el("small",{},`${s.ocultos.length} ${T("ocultar").toLowerCase()} · ${s.deslocamentos.length} →`))));
+}
+function aplicarEstado(i){
+  const s = P.m.estados[i]; P.estadoAtivo=i;
+  for (const [id,v] of P.base) P.entradas.get(id).vis=v;
+  for (const e of P.entradas.values()) if (e.obj && e.obj.userData.base) e.obj.matrix.copy(e.obj.userData.base);
+  P.cores.clear();
+  s.ocultos.forEach(id=>{const e=P.entradas.get(id); if(e) e.vis=false;});
+  s.cores.forEach(({id,cor})=>{ const e=P.entradas.get(id); if(e) (function pt(x){ if(x.malhaObj) P.cores.set(x.id,cor); x.filhos.forEach(pt); })(e); });
+  s.deslocamentos.forEach(({id,d})=>{ const e=P.entradas.get(id); if(e&&e.obj){ e.obj.matrix.premultiply(new THREE.Matrix4().makeTranslation(d[0],d[1],d[2])); } });
+  V3.grupo.updateMatrixWorld(true); aplicarVisibilidade(); V3.tema();
+  if (s.camera) aplicarCamera(s.camera); else V3.ajustar(false);
+  mostrarAba("estados");
+}
+function abaLista(c){
+  const m=P.m;
+  if (m.lista && m.lista.length){
+    const t = el("table",{class:"dados"}, el("tr",{},el("th",{},T("item")),el("th",{},T("qtd")),el("th",{},T("nome"))));
+    m.lista.forEach(r=>t.append(el("tr",{},el("td",{},r.item),el("td",{},String(r.quantidade)),el("td",{},r.nome))));
+    c.append(t);
+  }
+  (m.tabelas||[]).forEach(tb=>{
+    c.append(el("h3",{},tb.titulo));
+    const t = el("table",{class:"dados"}); if (tb.cabecalho.length) t.append(el("tr",{}, tb.cabecalho.map(h=>el("th",{style:"width:auto"},h))));
+    tb.linhas.forEach(l=>t.append(el("tr",{},l.map(x=>el("td",{},x))))); c.append(t);
+  });
+  if (!c.childNodes.length) c.append(el("div",{class:"nada"},T("sem_lista")));
+}
+
+/* ---------------- barra de ferramentas ---------------- */
+function montarBarra(){
+  const b = $("#barra"); b.replaceChildren();
+  const tem3d = !!P.m.cena;
+  $("#barra").style.display = "flex";
+  if (Folha.ativo){
+    b.append(el("button",{onclick:()=>Folha.ajustar()},T("ajuste")), el("button",{id:"fmedir","aria-pressed":String(Folha.medindo),onclick:()=>{Folha.medindo=!Folha.medindo;Folha.pts=[];Folha.medida();$("#fmedir").setAttribute("aria-pressed",String(Folha.medindo));}},T("medir")),
+      el("button",{id:"fpapel",onclick:()=>{Folha.papelBranco=!Folha.papelBranco;Folha.desenhar();}},T("papel")));
+    if (P.m.folhas.length>1){ const s = el("select",{"aria-label":T("folha"),style:"width:auto;max-width:150px",onchange:ev=>Folha.abrir(+ev.target.value)}, P.m.folhas.map((f,i)=>el("option",{value:i,selected:i===Folha.i},f.nome))); b.append(s); }
+    return;
+  }
+  if (!tem3d) return;
+  b.append(el("button",{onclick:()=>V3.ajustar()},T("ajustar")),
+    el("button",{id:"isolar","aria-pressed":String(!!P.isolado),onclick:isolarSelecionado},T("isolar")),
+    el("button",{onclick:mostrarTudo},T("tudo")),
+    el("button",{id:"bcorte","aria-pressed":String(V3.corte.on),onclick:alternarCorte},T("cortar")),
+    el("button",{id:"bmedir","aria-pressed":String(V3.medindo),onclick:()=>{V3.medindo=!V3.medindo;V3.pts=[];V3.medidaAtualizar();$("#bmedir").setAttribute("aria-pressed",String(V3.medindo));}},T("medir")),
+    el("button",{id:"borto","aria-pressed":String(V3.cam.orto),onclick:()=>{V3.cam.orto=!V3.cam.orto;V3.cameraAtualizar();$("#borto").setAttribute("aria-pressed",String(V3.cam.orto));}},T("orto")));
+}
+function alternarCorte(){
+  const c=V3.corte; c.on=!c.on; $("#bcorte").setAttribute("aria-pressed",String(c.on));
+  const box=$("#corte"); box.style.display = c.on?"flex":"none";
+  if (c.on) montarCorte();
+  V3.corteAplicar();
+}
+function montarCorte(){
+  const c=V3.corte, box=$("#corte"); box.replaceChildren();
+  const mn=c.min[c.eixo], mx=c.max[c.eixo]; if (c.valor<mn||c.valor>mx||c.valor===0) c.valor=(mn+mx)/2;
+  box.append(el("span",{},T("eixo")), ...["X","Y","Z"].map((n,i)=>el("button",{"aria-pressed":String(c.eixo===i),onclick:()=>{c.eixo=i;c.valor=(c.min[i]+c.max[i])/2;montarCorte();V3.corteAplicar();}},n)),
+    el("input",{type:"range","aria-label":T("cortar"),min:mn,max:mx,step:(mx-mn)/500||1,value:c.valor,oninput:ev=>{c.valor=+ev.target.value;V3.corteAplicar();}}),
+    el("button",{"aria-pressed":String(c.inv),onclick:()=>{c.inv=!c.inv;montarCorte();V3.corteAplicar();}},T("inverter")));
+}
+
+/* ---------------- folhas 2D ---------------- */
+const Folha = {
+  ativo:false, i:0, dados:[], svg:null, vb:null, medindo:false, pts:[], papelBranco:false, achados:[],
+  async abrir(i){
+    this.i=i; const f = P.m.folhas[i];
+    if (!this.dados[i]){ const b = await P.zip.ler(f.arquivo); this.dados[i] = JSON.parse(new TextDecoder().decode(b)); this.indexar(i); }
+    this.pts=[]; this.achados=[]; this.vb={x:0,y:0,w:f.largura,h:f.altura}; this.desenhar(); this.ajustar();
+    if (this.ativo) montarBarra();
+  },
+  indexar(i){
+    const d = this.dados[i], pts=[];
+    for (const it of d.itens) if (it.t==="l"||it.t==="f") for (let k=0;k<it.p.length;k+=2) pts.push(it.p[k],it.p[k+1]);
+    d.pts = pts; d.textos = d.itens.filter(x=>x.t==="x");
+  },
+  cor(it){ if (it.er) return "var(--erro)"; if (it.c){ const l=(it.c[0]*.3+it.c[1]*.59+it.c[2]*.11); if (l<70) return "var(--tinta)"; return `rgb(${it.c[0]},${it.c[1]},${it.c[2]})`; } return "var(--tinta)"; },
+  desenhar(){
+    const d = this.dados[this.i]; if (!d) return;
+    const H = d.altura, W = d.largura, esc = s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    const larg = [0.5,0.25,0.25,0.25,0.7], tr = [null,null,"3 1.5","8 1.5 1 1.5",null];
+    const f = n=>(Math.round(n*1000)/1000);
+    const partes = [`<rect x="0" y="0" width="${W}" height="${H}" fill="${this.papelBranco?"#fff":"var(--papel)"}" stroke="var(--linha)" stroke-width="0.4"/>`];
+    const tintaPapel = this.papelBranco ? "#000" : null;
+    d.itens.forEach((it,k)=>{
+      const cor = tintaPapel && this.cor(it)==="var(--tinta)" ? tintaPapel : this.cor(it);
+      if (it.t==="l"){
+        let p=""; for (let j=0;j<it.p.length;j+=2) p+=f(it.p[j])+","+f(H-it.p[j+1])+" ";
+        const e = it.e||0;
+        partes.push(`<polyline points="${p}" fill="none" stroke="${cor}" stroke-width="${it.w||larg[e]}" stroke-linecap="round" stroke-linejoin="round"${tr[e]?` stroke-dasharray="${tr[e]}"`:""}/>`);
+      } else if (it.t==="f"){
+        let p=""; for (let j=0;j<it.p.length;j+=2) p+=f(it.p[j])+","+f(H-it.p[j+1])+" "; partes.push(`<polygon points="${p}" fill="${cor}"/>`);
+      } else {
+        const x=f(it.p[0]), y=f(H-it.p[1]);
+        partes.push(`<text data-k="${k}" x="${x}" y="${y}" font-family="system-ui,Arial,sans-serif" font-size="${it.h}" fill="${cor}"${it.b?' font-weight="700"':""} text-anchor="${["start","middle","end"][it.al||0]}"${it.a?` transform="rotate(${-it.a} ${x} ${y})"`:""}>${esc(it.s)}</text>`);
+      }
+    });
+    this.achados.forEach(k=>{ const it=d.itens[k]; const w=it.s.length*it.h*0.62; const x0=[it.p[0],it.p[0]-w/2,it.p[0]-w][it.al||0];
+      partes.push(`<rect x="${f(x0-1)}" y="${f(H-it.p[1]-it.h*1.05)}" width="${f(w+2)}" height="${f(it.h*1.4)}" fill="none" stroke="var(--destaque)" stroke-width="0.5"/>`); });
+    const r = this.raioPx();
+    this.pts.forEach(p=>partes.push(`<circle cx="${f(p[0])}" cy="${f(H-p[1])}" r="${f(r*5)}" fill="none" stroke="var(--destaque)" stroke-width="${f(r*1.5)}"/>`));
+    if (this.pts.length===2) partes.push(`<line x1="${f(this.pts[0][0])}" y1="${f(H-this.pts[0][1])}" x2="${f(this.pts[1][0])}" y2="${f(H-this.pts[1][1])}" stroke="var(--destaque)" stroke-width="${f(r*1.5)}"/>`);
+    const alvo = $("#folha");
+    alvo.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(d.nome)}"><g>${partes.join("")}</g></svg>`;
+    this.svg = alvo.firstChild; this.aplicarVB(); this.eventos();
+  },
+  raioPx(){ const s=$("#folha"); return this.vb? this.vb.w/Math.max(1,s.clientWidth):0.3; },
+  aplicarVB(){ const v=this.vb; if(this.svg&&v) this.svg.setAttribute("viewBox",`${v.x} ${v.y} ${v.w} ${v.h}`); },
+  ajustar(){
+    const d=this.dados[this.i]; if(!d) return; const c=$("#folha"), W=Math.max(1,c.clientWidth), Hh=Math.max(1,c.clientHeight), m=d.largura*0.02;
+    let w=d.largura+2*m, h=d.altura+2*m; const ar=W/Hh; if (w/h<ar) w=h*ar; else h=w/ar;
+    this.vb={x:d.largura/2-w/2,y:d.altura/2-h/2,w,h}; this.aplicarVB();
+  },
+  pontoSVG(x,y){ const r=this.svg.getBoundingClientRect(), v=this.vb, s=Math.max(v.w/r.width, v.h/r.height);
+    // preserveAspectRatio meet: centraliza
+    const ox = v.x+(v.w-r.width*s)/2, oy = v.y+(v.h-r.height*s)/2; return [ox+(x-r.left)*s, oy+(y-r.top)*s, s]; },
+  eventos(){
+    const sv=this.svg, ptr=new Map(); let ult=null, toque=null;
+    const zoom=(f,cx,cy)=>{ const [sx,sy]=this.pontoSVG(cx,cy), v=this.vb; v.x=sx-(sx-v.x)*f; v.y=sy-(sy-v.y)*f; v.w*=f; v.h*=f; this.aplicarVB(); };
+    const mover=(dx,dy)=>{ const [,,s]=this.pontoSVG(0,0); this.vb.x-=dx*s; this.vb.y-=dy*s; this.aplicarVB(); };
+    sv.addEventListener("wheel",e=>{e.preventDefault(); zoom(Math.exp(e.deltaY*0.0015),e.clientX,e.clientY);},{passive:false});
+    sv.addEventListener("pointerdown",e=>{ try{sv.setPointerCapture(e.pointerId);}catch(_){} ptr.set(e.pointerId,{x:e.clientX,y:e.clientY}); toque = ptr.size===1?{x:e.clientX,y:e.clientY,t:performance.now(),mov:0}:(toque&&(toque.mov=99,toque)); ult=V3.dois(ptr); });
+    sv.addEventListener("pointermove",e=>{ const p=ptr.get(e.pointerId); if(!p) return; const dx=e.clientX-p.x, dy=e.clientY-p.y; p.x=e.clientX; p.y=e.clientY;
+      if (ptr.size===1){ if(toque) toque.mov+=Math.abs(dx)+Math.abs(dy); mover(dx,dy); }
+      else if (ptr.size===2){ const d=V3.dois(ptr); if(ult){ if(d.dist>0&&ult.dist>0) zoom(ult.dist/d.dist,d.cx,d.cy); mover(d.cx-ult.cx,d.cy-ult.cy);} ult=d; } });
+    const fim=e=>{ const t=ptr.delete(e.pointerId); if(t&&toque&&ptr.size===0&&toque.mov<8&&performance.now()-toque.t<500) this.tocar(e.clientX,e.clientY); if(!ptr.size) toque=null; ult=V3.dois(ptr); };
+    sv.addEventListener("pointerup",fim); sv.addEventListener("pointercancel",e=>{ptr.delete(e.pointerId);toque=null;});
+    sv.addEventListener("dblclick",()=>this.ajustar());
+  },
+  tocar(x,y){
+    if (!this.medindo) return;
+    const d=this.dados[this.i], [sx,sy,s]=this.pontoSVG(x,y); const py=d.altura-sy;
+    let melhor=null, md=(16*s)**2;
+    for (let k=0;k<d.pts.length;k+=2){ const dd=(d.pts[k]-sx)**2+(d.pts[k+1]-py)**2; if (dd<md){md=dd;melhor=[d.pts[k],d.pts[k+1]];} }
+    if (!melhor) return;
+    if (this.pts.length>=2) this.pts=[];
+    this.pts.push(melhor); this.desenhar(); this.medida();
+  },
+  medida(){
+    const box=$("#medida"); box.style.display=this.medindo?"block":"none"; if(!this.medindo){ this.desenhar(); return; }
+    const p=this.pts; if(p.length<2){ box.textContent = p.length?T("ponto2"):T("ponto1"); return; }
+    const d=this.dados[this.i], dist=Math.hypot(p[1][0]-p[0][0],p[1][1]-p[0][1]);
+    const dentro=(v,q)=>q[0]>=v.caixa[0]-.01&&q[0]<=v.caixa[2]+.01&&q[1]>=v.caixa[1]-.01&&q[1]<=v.caixa[3]+.01;
+    const v=(d.vistas||[]).find(v=>dentro(v,p[0])&&dentro(v,p[1]));
+    box.replaceChildren(el("strong",{},`${num(dist,3)} mm ${T("mm_papel")}`), v&&v.escala?el("div",{},`${num(dist/v.escala,3)} mm ${T("mm_modelo")} (${T("escala")} ${v.escala>=1?num(v.escala,3)+":1":"1:"+num(1/v.escala,3)})`):null,
+      el("small",{style:"color:var(--suave)"},`ΔX ${num(p[1][0]-p[0][0])}  ΔY ${num(p[1][1]-p[0][1])}`));
+    window.__ultimaMedida2d={dist,modelo:v?dist/v.escala:null};
+  },
+  buscar(q){
+    const alvo=$("#res-folha"); this.achados=[];
+    if (!alvo) return;
+    alvo.replaceChildren(); const d=this.dados[this.i]; if(!P.m||!q||!P.m.folhas.length) { if(d&&this.svg) this.desenhar(); return; }
+    (async()=>{
+      for (let i=0;i<P.m.folhas.length;i++){ if(!this.dados[i]){ const b=await P.zip.ler(P.m.folhas[i].arquivo); this.dados[i]=JSON.parse(new TextDecoder().decode(b)); this.indexar(i);} }
+      const res=[]; this.dados.forEach((fd,i)=>fd.itens.forEach((it,k)=>{ if(it.t==="x"&&it.s.toLowerCase().includes(q)) res.push({i,k,it}); }));
+      alvo.replaceChildren(el("h3",{},T("resultados")+" ("+res.length+")"), ...(res.length?res.slice(0,40).map(r=>el("button",{class:"item",onclick:()=>this.ir(r)},r.it.s,el("small",{},P.m.folhas[r.i].nome))):[el("div",{class:"nada"},T("nenhum"))]));
+    })();
+  },
+  async ir(r){
+    await definirModo("folha"); if (this.i!==r.i) await this.abrir(r.i);
+    this.achados=[r.k]; this.desenhar();
+    const it=r.it, d=this.dados[this.i], c=$("#folha"), ar=c.clientWidth/Math.max(1,c.clientHeight), w=Math.max(it.s.length*it.h*4,d.largura*0.25), h=w/ar;
+    this.vb={x:it.p[0]-w/2,y:d.altura-it.p[1]-h/2,w,h}; this.aplicarVB();
+  }
+};
+
+/* ---------------- abertura do pacote ---------------- */
+async function definirModo(m){
+  const folha = m==="folha";
+  Folha.ativo = folha;
+  $("#cena3d").style.display = folha?"none":"block"; $("#folha").style.display = folha?"block":"none";
+  $("#m3d").setAttribute("aria-pressed",String(!folha)); $("#mfolha").setAttribute("aria-pressed",String(folha));
+  $("#corte").style.display = (!folha&&V3.corte.on)?"flex":"none";
+  $("#medida").style.display = "none";
+  if (folha && !Folha.svg) await Folha.abrir(Folha.i);
+  montarBarra(); if (folha) { Folha.medida(); Folha.ajustar(); } else if (V3.pronto) { V3.medidaAtualizar(); V3.tamanho(); }
+}
+function mostrarErro(msg){
+  const a=$("#aviso"); a.classList.add("on"); a.querySelector("h2").textContent=T("erro"); a.querySelector("p").textContent=msg;
+}
+async function carregar(fonte){
+  try{
+    let buf;
+    if (typeof fonte==="string"){ const r = await fetch(fonte); if(!r.ok) throw new Error(fonte+": "+r.status); buf = await r.arrayBuffer(); }
+    else if (fonte instanceof Blob) buf = await fonte.arrayBuffer();
+    else if (fonte instanceof ArrayBuffer) buf = fonte;
+    else if (ArrayBuffer.isView(fonte)) buf = fonte.buffer.slice(fonte.byteOffset,fonte.byteOffset+fonte.byteLength);
+    else throw new Error("fonte");
+    const zip = await lerZip(buf);
+    const m = JSON.parse(new TextDecoder().decode(await zip.ler("pacote.json")));
+    if (m.formato!=="fenkra-visualizacao") throw new Error("formato");
+    if (m.versao>1) throw new Error("versão "+m.versao+" > 1");
+    Object.assign(P,{zip,m,sel:null,isolado:null,pmiFiltro:null,pmiSel:null,capAtiva:null,estadoAtivo:null,aba:null});
+    P.cores.clear(); Folha.dados=[]; Folha.svg=null; Folha.i=0; Folha.medindo=false;
+    indexar(m); $("#titulo").textContent = m.nome;
+    document.title = m.nome+" · "+"Fenkra";
+    $("#aviso").classList.remove("on");
+    const tem3d = !!m.cena, temFolha = m.folhas.length>0;
+    $("#modos").hidden = !(tem3d&&temFolha);
+    if (tem3d){ V3.init(); P.glb = lerGLB(await zip.ler(m.cena)); V3.construir(); aplicarVisibilidade(); V3.ajustar(false); V3.anotar(); }
+    else { V3.pronto && V3.grupo.clear(); }
+    montarAbas();
+    mostrarAba(m.arvore.length?"arvore":"dados");
+    await definirModo(tem3d?"3d":"folha");
+    if (window.matchMedia("(max-width:760px)").matches) { /* painel recolhido só se o usuário pedir; começa aberto na metade de baixo */ }
+    window.__fkv = {P,V3,Folha};
+    return m;
+  }catch(e){ console.error(e); mostrarErro(String(e.message||e)); }
+}
+window.FenkraVisualizador = { abrir: carregar, versao: 1, estado: ()=>P };
+
+function ligar(){
+  document.querySelectorAll("[data-t]").forEach(n=>n.textContent=T(n.dataset.t));
+  document.documentElement.lang = IDIOMA==="en"?"en":"pt-BR";
+  const abrir = ()=>$("#arquivo").click();
+  $("#babrir").onclick = $("#babrir2").onclick = abrir;
+  $("#arquivo").onchange = e=>{ if(e.target.files[0]) carregar(e.target.files[0]); e.target.value=""; };
+  $("#btema").onclick = ()=>aplicarTema(document.documentElement.dataset.tema==="claro"?"escuro":"claro");
+  $("#bpainel").onclick = ()=>{ const m=$("#main"); m.classList.toggle("com-painel"); $("#bpainel").setAttribute("aria-pressed",String(m.classList.contains("com-painel"))); setTimeout(()=>{V3.pronto&&V3.tamanho(); Folha.svg&&Folha.ajustar();},30); };
+  $("#m3d").onclick = ()=>definirModo("3d"); $("#mfolha").onclick = ()=>definirModo("folha");
+  const pal=$("#palco");
+  ["dragenter","dragover"].forEach(t=>addEventListener(t,e=>{e.preventDefault();pal.id="palco";document.body.id="soltar";}));
+  ["dragleave","drop"].forEach(t=>addEventListener(t,e=>{e.preventDefault();document.body.id="";}));
+  addEventListener("drop",e=>{ const f=e.dataTransfer&&e.dataTransfer.files[0]; if(f) carregar(f); });
+  addEventListener("message",e=>{ const d=e.data; if(d&&d.fkv) carregar(d.fkv); });
+  const q = new URLSearchParams(location.search), src = q.get("src") || (location.hash.startsWith("#src=")?decodeURIComponent(location.hash.slice(5)):null);
+  const emb = $("#fkv-dados").textContent.trim();
+  if (emb){ const b=atob(emb), u=new Uint8Array(b.length); for(let i=0;i<b.length;i++) u[i]=b.charCodeAt(i); carregar(u); }
+  else if (src) carregar(src);
+  addEventListener("resize",()=>{ Folha.svg&&Folha.ativo&&0; });
+}
+ligar();
+</script>
+</body>
+</html>

@@ -210,7 +210,7 @@ pub fn previa(app: &App, ui: &egui::Ui, rect: Rect, cam: &Camera) {
             painter.circle_filled(a, 3., acento);
             painter.circle_filled(t, r, ui.visuals().window_fill().gamma_multiply(0.9));
             painter.circle_stroke(t, r, Stroke::new(2., acento));
-            painter.text(t, egui::Align2::CENTER_CENTER, &c.item, egui::FontId::proportional(13.), ui.visuals().strong_text_color());
+            painter.text(t, egui::Align2::CENTER_CENTER, &c.item, egui::FontId::proportional(crate::acessibilidade::fonte_3d(13.)), ui.visuals().strong_text_color());
         }
     }
     if let Some(l) = travar(&LEGENDA).as_ref() {

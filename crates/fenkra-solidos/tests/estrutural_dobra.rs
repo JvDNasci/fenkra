@@ -331,3 +331,32 @@ fn salvar_e_abrir_preserva_a_dobra_e_as_regras() {
     let lido: StructJoint = serde_json::from_str(&txt).unwrap();
     assert_eq!(lido, antigo);
 }
+
+#[test]
+fn gomos_do_tubo_redondo_aparecem_no_3d_como_pecas_do_meio() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    // D 50 x 3, 90 graus, raio de centro 100, três esquadrias de 30 graus: as pernas recuam
+    // R(1 - tan 15) = 73,205 do nó e há duas peças do meio de 2R tan 15 = 53,590
+    let mut b = bend(BendMode::CorteSimples, "100");
+    b.segments = s("3");
+    let (d, f) = l_dobrado(SectionKind::TuboRedondo, &["50", "3"], b, vec![]);
+    let r = recompute(&d);
+    assert_eq!(r.status[&f], Status::Ok, "{:?}", r.status[&f]);
+    let itens = fenkra_solidos::structural_members(&d);
+    assert_eq!(itens.len(), 4, "duas pernas e duas peças do meio: {:?}", itens.iter().map(|i| &i.name).collect::<Vec<_>>());
+    let area = std::f64::consts::PI * (25f64.powi(2) - 22f64.powi(2));
+    let t15 = 15f64.to_radians().tan();
+    let recuo = 100. * (1. - t15);
+    let meio = 200. * t15;
+    let esperado = area * (2. * (300. - recuo) + 2. * meio);
+    assert!(perto(volume(&r), esperado, 0.004 * esperado), "volume {} contra {esperado}", volume(&r));
+    // as peças do meio entram na lista de corte com 53,6 mm de eixo
+    let rows = cut_list(&d);
+    assert!(rows.iter().any(|x| perto(x.length, meio, 0.06)), "{:?}", rows.iter().map(|x| x.length).collect::<Vec<_>>());
+    // as pernas seguem retas até o raio externo (x 325 e y -25); nada passa do canto do polígono
+    let (lo, hi) = caixa(&r);
+    assert!(perto(hi[0], 325., 0.5) && perto(lo[1], -25., 0.5), "{lo:?} {hi:?}");
+    assert!(hi[1] < 301., "y máx {}", hi[1]);
+}

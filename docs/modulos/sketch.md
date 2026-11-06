@@ -9,7 +9,7 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 - **Restrições geométricas** (Restrições) — Kind: Coincident, Horizontal, Vertical, Parallel, Perpendicular, Equal, Tangent, Concentric, Midpoint, PointOnCurve, Fixed, Symmetric…
 - **Cotas (restrições dimensionais)** (Cota (smart)) — Tool::Dimension (+H, V, ângulo, raio, diâmetro); expressões com parâmetros e vírgula decimal.
 - **Solver e estado do sketch** (Solver com estado) — Teste sub_restrito_e_conflito; arrastar_ponto_preso_mantem_restricoes. `BM-SKT-04`
-- **Snaps e inferência** (todas as ferramentas de desenho) — Glifo por tipo de snap, também ao arrastar; linhas de inferência H, V, ⊥, ∥ e alinhamento; cota troca raio e diâmetro e ângulo e suplemento pela posição (`sketch_snap.rs`, `sketch_cota.rs`).
+- **Snaps e inferência** (todas as ferramentas de desenho) — Glifo por tipo de snap, também ao arrastar; linhas de inferência H, V, ⊥, ∥ e alinhamento; cota troca raio e diâmetro e ângulo e suplemento pela posição (`sketch_snap.rs`, `sketch_cota.rs`). Opções "Snap vira restrição" e "Juntar pontos ao soltar", ligadas de início; Ctrl no arraste ignora os snaps, e junção que criaria conflito é desfeita.
 - **Painel do comando** (todas as ferramentas) — Estado do passo, modo, parâmetros e avançado; Retângulo, Círculo, Arco e Canto são comandos com modo, a tecla M percorre e os campos são os da viewport (`sketch_painel.rs`).
 - **Arraste direto** (Selecionar) — Arco e spline pelo corpo, mantendo restrições; setas de grau de liberdade vindas do espaço nulo do Jacobiano; pega de valor em filete, offset e offset de cadeia, que leva a cadeia inteira (`sketch_arraste.rs`).
 - **Barra de restrições** (Selecionar) — Abre ao selecionar e fica aberta; fantasma resolvido, vermelho se conflitar, com orçamento de tempo (`sketch_barra.rs`).
@@ -17,7 +17,7 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 - **Offset de curvas** (Offset) — Tool::Offset.
 - **Espelhar e simetria** (Espelhar) — Tool::Mirror.
 - **Filete e chanfro de sketch** (Filete, chanfro) — Tool::Fillet, Chamfer. Cantos seguidos de mesmo valor ficam iguais ao primeiro, com uma cota só; chanfro com distâncias iguais, duas distâncias ou distância e ângulo; manter canto deixa um ponto com as cotas do canto antigo (`sketch_canto.rs`). `BM-SKT-06`
-- **Projetar / converter arestas 3D** (Converter) — Tool::Convert reconhece linha, arco, círculo e elipse exatos pela fórmula da aresta (`projecao.rs`, ADR 0018); política associativa, isolada ou instantânea e estado do vínculo no painel.
+- **Projetar / converter arestas 3D** (Converter) — Tool::Convert reconhece linha, arco, círculo e elipse exatos pela fórmula da aresta (`projecao.rs`, ADR 0024); política associativa, isolada ou instantânea e estado do vínculo no painel. Se a origem muda de tipo ou de número de pontos, o vínculo refaz a forma sozinho (`vinculo.rs`).
 
 ## 🟡 Parcial
 

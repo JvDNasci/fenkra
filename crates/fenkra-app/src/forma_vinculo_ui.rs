@@ -140,7 +140,7 @@ pub fn atender(app: &mut App, ui: &egui::Ui, rect: Rect, id: Id) {
         Pedido::Borda { aresta: None, .. } => "Clique na aresta do modelo que a borda da forma vai seguir. Esc desiste.",
         Pedido::Borda { .. } => "Clique na face vizinha, a que a forma continua. Esc desiste.",
     };
-    ui.painter_at(rect).text(rect.center_top() + egui::vec2(0., 34.), egui::Align2::CENTER_TOP, tr(dica), egui::FontId::proportional(13.), ui.visuals().text_color());
+    ui.painter_at(rect).text(rect.center_top() + egui::vec2(0., 34.), egui::Align2::CENTER_TOP, tr(dica), egui::FontId::proportional(crate::acessibilidade::fonte_3d(13.)), ui.visuals().text_color());
     let Some(p) = app.picks.last().copied() else { return };
     app.picks.clear();
     let sel = gaiola(app, id).map_or(vec![], |g| fe::nos_de(g, &app.forma.sel));
@@ -217,7 +217,7 @@ pub fn desenhar(app: &App, ui: &egui::Ui, rect: Rect, cam: &Camera, id: Id, g: &
     if let Some(r) = resolvida(app, id) {
         for (no, _, d) in &r.cotas {
             let Some(s) = tela(*no) else { continue };
-            p.text(s + egui::vec2(10., -8.), egui::Align2::LEFT_BOTTOM, format!("{} mm", fmt(*d)), egui::FontId::proportional(11.), ui.visuals().text_color());
+            p.text(s + egui::vec2(10., -8.), egui::Align2::LEFT_BOTTOM, format!("{} mm", fmt(*d)), egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), ui.visuals().text_color());
         }
     }
     for (k, b) in f.vinculos.bordas.iter().enumerate() {
@@ -234,7 +234,7 @@ pub fn desenhar(app: &App, ui: &egui::Ui, rect: Rect, cam: &Camera, id: Id, g: &
             None => format!("G{}", b.continuidade),
         };
         let v = ui.visuals();
-        let gal = p.layout_no_wrap(texto, egui::FontId::proportional(11.), v.text_color());
+        let gal = p.layout_no_wrap(texto, egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), v.text_color());
         let caixa = Rect::from_center_size(s + egui::vec2(0., 16.), gal.size() + Vec2::new(8., 4.));
         p.rect_filled(caixa, 3., v.window_fill);
         p.rect_stroke(caixa, 3., Stroke::new(1., cor), egui::StrokeKind::Inside);

@@ -294,6 +294,9 @@ impl Dialogo {
             ui.separator();
             self.opcoes_ui(ui);
         }
+        if fenkra_conversor::Formato::por_extensao(&self.caminho).is_some_and(|f| f.e_malha()) && ui.checkbox(&mut self.opcoes.malha_em_solido, tr("Converter em sólido")).on_hover_text(tr("Liga: cada triângulo vira face plana, até 200 mil triângulos. Desligado: entra como corpo de malha, sem teto.")).changed() {
+            self.mudou_em = Some(ui.input(|i| i.time));
+        }
         ui.add_space(6.);
         let mut acao = Acao::Nada;
         ui.horizontal(|ui| {

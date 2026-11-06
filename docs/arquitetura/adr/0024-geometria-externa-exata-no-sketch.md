@@ -31,13 +31,25 @@ cálculo.
    plano-base. A normal é sempre H × V, para o plano seguir com orientação direta. Inverter um eixo
    só vira a normal, e a extrusão passa para o outro lado.
 
+6. **A forma acompanha a origem, sem quebrar.** O cálculo trabalha numa cópia do sketch e não pode
+   alocar ids no documento, então pede a mudança com `OpVinculo` (`fenkra-core::vinculo`) e os ids
+   novos saem do id do vínculo, numa faixa só deles (`1 << 62`). Assim quem calcula sozinho, sem o
+   editor, já recebe a forma certa, e o editor reaplica o mesmo pedido no documento sem que a
+   geometria mude de nome. Copiar a cópia para o documento não serviria: o resultado pode estar um
+   quadro atrás do que acabou de ser desenhado. O pedido pode ser repetido sem efeito.
+   - **Tipo:** pontas, centro e curva mantêm o id quando o papel existe na forma nova. Restrição que
+     perde o sentido (comprimento num arco) sai, com aviso. Raio passa de círculo para arco.
+   - **Travessias:** cada ponto segue a travessia mais perto da sua, a travessia nova nasce como
+     ponto, e ponto sem travessia sai, a menos que algo dependa dele; aí fica, com aviso.
+   - **Polilinha:** com os mesmos cantos, cada ponto vai ao seu canto. Com outros cantos, ou quando
+     a origem ganha fórmula, ela é refeita, mas só se nada se apoiar nos trechos: eles deixariam de
+     existir e a restrição do usuário vale mais que o canto novo.
+
 ## Consequências
 
 - Arquivos antigos abrem: os campos novos têm padrão, e vínculos antigos continuam polilinhas.
-- Se a origem mudar de tipo (círculo que vira elipse ao inclinar o plano), o vínculo fica quebrado
-  com o motivo, porque os pontos guardados não servem à forma nova. Recriar o vínculo resolve.
+- Se a origem mudar de tipo (círculo que vira elipse ao inclinar o plano), o vínculo troca de forma
+  sozinho: ver a decisão 6.
 - A aresta ainda é reencontrada pelo ponto médio, com folga de 5 mm. Nomeação topológica no vínculo
   fica para depois.
-- Quantidade de pontos de interseção é fixada ao criar: se o 3D passar a cortar em mais pontos, os
-  novos não nascem sozinhos.
 - Elipse não apara, não estende e não espelha.

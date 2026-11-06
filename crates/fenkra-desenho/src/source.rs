@@ -349,7 +349,36 @@ impl Models {
                         fenkra_solidos::final_shape(&flat)
                     }
                     None => {
-                        out.error = Some("a peça não é de chapa: não há planificação".into());
+                        // B331: tubo dobrado na estrutura: a "planificada" é o tubo reto com as marcas
+                        let tubos = fenkra_solidos::tubos_dobrados(doc);
+                        let Some(tubo) = tubos.iter().find(|t| !t.dobras.is_empty()) else {
+                            out.error = Some("a peça não é de chapa nem tem tubo dobrado: não há planificação".into());
+                            return out;
+                        };
+                        match fenkra_solidos::st_dobra_vista::vista_reta(tubo) {
+                            Ok(dv) => {
+                                use fenkra_solidos::st_dobra_corte::Camada;
+                                for t in &dv.tracos {
+                                    let estilo = match t.camada {
+                                        Camada::Dobra | Camada::Marcacao => 3,
+                                        _ => 0,
+                                    };
+                                    let mut pts: Vec<V2> = t.pts.clone();
+                                    if t.fechado {
+                                        if let Some(p0) = pts.first().copied() {
+                                            pts.push(p0);
+                                        }
+                                    }
+                                    out.lines.push((pts, estilo));
+                                }
+                                for r in &dv.rotulos {
+                                    out.labels.push((r.pos, r.texto.clone()));
+                                }
+                                out.bounds();
+                                out.center = [(out.lo[0] + out.hi[0]) / 2., (out.lo[1] + out.hi[1]) / 2.];
+                            }
+                            Err(e) => out.error = Some(e),
+                        }
                         return out;
                     }
                 }
@@ -456,7 +485,11 @@ impl Models {
         // planificada: linhas de dobra (5 = centro, 6 = limites do arco) e o rótulo de cada uma
         for b in &bends {
             let pr = |q: [V3; 2]| vec![axes.project(q[0]), axes.project(q[1])];
-            out.lines.push((pr(b.center), 5));
+            if b.curva.len() > 2 {
+                out.lines.push((b.curva.iter().map(|q| axes.project(*q)).collect(), 5));
+            } else {
+                out.lines.push((pr(b.center), 5));
+            }
             out.lines.push((pr(b.start), 6));
             out.lines.push((pr(b.end), 6));
             let m = [(b.center[0][0] + b.center[1][0]) / 2., (b.center[0][1] + b.center[1][1]) / 2., (b.center[0][2] + b.center[1][2]) / 2.];
@@ -489,11 +522,14 @@ impl Models {
                             None => (String::new(), r.name.clone(), String::new()),
                         }
                     } else {
-                        match self.parts.get(&r.path, false) {
+                        // B102: o código e o material são os da configuração do componente; configuração
+                        // que a peça não tem mostra o motivo no lugar do código
+                        match self.parts.get_config(&r.path, false, &r.config) {
                             Ok(p) => {
                                 let pr = &p.doc.props;
                                 (pr.pn.clone(), if pr.description.is_empty() { p.doc.name.clone() } else { pr.description.clone() }, pr.material.clone())
                             }
+                            Err(e) if !r.config.is_empty() => (format!("⚠ {e}"), r.name.clone(), String::new()),
                             Err(_) => (String::new(), r.name.clone(), String::new()),
                         }
                     };

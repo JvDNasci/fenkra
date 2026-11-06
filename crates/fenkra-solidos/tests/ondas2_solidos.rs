@@ -439,7 +439,7 @@ fn b48_casca_de_corpo_com_furo_escareado_nao_falha() {
     for (nome, depth, lado, face, espessura) in casos {
         for ang in ["82", "90", "120"] {
             let mut d = bloco_escareado_prof(ang, depth.clone());
-            let sh = d.add_feature(FeatureKind::Shell(Shell { faces: vec![face], thickness: s(espessura), outward: false, face_keys: vec![], closed: false }));
+            let sh = d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![face], thickness: s(espessura), outward: false, face_keys: vec![], closed: false }));
             let r = recompute(&d);
             assert_eq!(r.status[&sh], Status::Ok, "casca ({lado}) com escareado {ang}° {nome}: {:?}", r.status[&sh]);
             let v = volume_total(&r);
@@ -448,17 +448,32 @@ fn b48_casca_de_corpo_com_furo_escareado_nao_falha() {
     }
 }
 
-/// B48 parcial: abrir a face de cima, onde fica o escareado de um furo cego, ainda falha no kernel: o
-/// deslocador de faces do OpenCASCADE não fecha a casca em volta do cone com o fundo plano e o plano B
-/// (deslocar o sólido inteiro e subtrair) recebe uma cavidade inválida. Fica registrado aqui.
+/// B48: abrir a face de cima, onde fica o escareado de um furo cego. O deslocador de faces do
+/// OpenCASCADE não fecha a casca em volta do cone com o fundo plano; o kernel então cobre a face aberta
+/// com uma tampa de material, desloca o corpo estendido para dentro e subtrai (casca por booleana).
 #[test]
-#[ignore = "B48 parcial: casca abrindo a face do escareado de furo cego ainda falha no kernel"]
 fn b48_casca_abrindo_a_face_do_escareado_de_furo_cego() {
     if !kernel_disponivel() {
         return;
     }
-    let mut d = bloco_escareado_prof("90", Extent::Blind(s("12")));
-    let sh = d.add_feature(FeatureKind::Shell(Shell { faces: vec![[20., 15., 20.]], thickness: s("3"), outward: false, face_keys: vec![], closed: false }));
-    let r = recompute(&d);
-    assert_eq!(r.status[&sh], Status::Ok, "{:?}", r.status[&sh]);
+    for ang in ["82", "90", "100", "120"] {
+        let mut d = bloco_escareado_prof(ang, Extent::Blind(s("12")));
+        let sh = d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[20., 15., 20.]], thickness: s("3"), outward: false, face_keys: vec![], closed: false }));
+        let r = recompute(&d);
+        assert_eq!(r.status[&sh], Status::Ok, "{ang}°: {:?}", r.status[&sh]);
+        let v = volume_total(&r);
+        // bloco 50 × 40 × 20 aberto em cima com parede de 3: o oco tem 44 × 34 × 17 e o furo ganha parede própria.
+        // Sem a parede do furo seria 14 568; com a casca fechada em cima, mais 6 000.
+        assert!(v > 14_000. && v < 18_500., "{ang}°: volume da casca {v}");
+        // a caixa envolvente continua a do bloco: a casca não cresce nem encolhe por fora
+        let b = &r.bodies[0];
+        let (lo, hi) = b.mesh.positions.chunks_exact(3).fold(([f32::MAX; 3], [f32::MIN; 3]), |(mut lo, mut hi), p| {
+            for i in 0..3 {
+                lo[i] = lo[i].min(p[i]);
+                hi[i] = hi[i].max(p[i]);
+            }
+            (lo, hi)
+        });
+        assert!((hi[0] - lo[0] - 50.).abs() < 0.01 && (hi[1] - lo[1] - 40.).abs() < 0.01 && (hi[2] - lo[2] - 20.).abs() < 0.01, "{ang}°: caixa {lo:?} {hi:?}");
+    }
 }

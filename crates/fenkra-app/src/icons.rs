@@ -92,10 +92,12 @@ macro_rules! modelos {
 
 // Lista gerada a partir de assets/icons2 (scripts/gerar_icones2.py).
 modelos!(
+    "asm_chaveta", "asm_calculo",
     "edit_mover_face", "edit_apagar_face", "edit_deslocar_face", "edit_raio_filete",
     "curso", "mapa_macro", "perfil_fluxo", "comparar", "estado_conflito", "estado_editado", "estado_leitura", "estado_liberada", "estado_sem_revisao",
     "conversao_lote", "formatos_suportados", "exportar_arquivo", "liberar_revisao", "onde_usado", "des_cota_inteligente",
     "forma", "forma_caixa", "forma_esfera", "forma_cilindro", "forma_plano", "forma_extrudar", "forma_laco", "forma_aresta", "forma_borda", "forma_tangencia", "forma_simetria", "forma_converter",
+    "an_inclinacao", "an_isofotas", "an_dfm",
     "abrir_projeto", "ajustar", "an_conexao", "an_curvatura", "an_desvio", "an_pente", "an_sombreado", "an_zebra", "aparencia", "arestas_comando",
     "arestas_selecionar", "arestas_todas", "asm_catalogo", "asm_engrenagens", "asm_fixadores", "asm_furo_pecas", "asm_grupo",
     "asm_inserir", "asm_link", "asm_lista", "asm_nova", "asm_numerar", "asm_peca_nova", "asm_recorte_peca",
@@ -114,7 +116,7 @@ modelos!(
     "extrair", "extrusao", "filete", "filete_assimetrico", "filete_completo", "filete_face_face", "filete_variavel", "filtro", "furo",
     "furo_cego", "furo_contrafurado", "furo_escareado", "furo_passante", "furo_rebaixado", "furo_roscado",
     "furo_simples", "helice", "hib_costurar", "hib_dividir", "hib_engrossar", "hib_fechar", "hib_malha",
-    "hib_preencher", "idioma", "importar_arquivo", "junta_came", "junta_cilindrica", "junta_esferica", "junta_parafuso",
+    "hib_preencher", "idioma", "impressao_mesa", "importar_arquivo", "malha_booleana", "malha_decimar", "malha_reparar", "malha_solido", "solido_malha", "junta_came", "junta_cilindrica", "junta_esferica", "junta_parafuso",
     "junta_planar", "junta_ponto_curva", "junta_prismatica", "junta_revolucao", "junta_rigida", "linha_angulo",
     "linha_bissetriz", "linha_direcao", "linha_eixo", "linha_normal", "linha_planos", "linha_pontos",
     "linha_tangente", "macro", "mec_auto", "mec_simular", "mostrar", "multisecoes", "multisecoes_remover",

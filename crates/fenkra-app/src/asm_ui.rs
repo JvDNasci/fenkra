@@ -293,6 +293,12 @@ pub struct AsmState {
     pub catalogo: Option<crate::biblioteca_ui::Estado>,
     /// assistente de prendedores aberto (B98)
     pub fixadores: Option<crate::asm_fixadores::Estado>,
+    /// comando Chaveta aberto (B292)
+    pub chaveta: Option<crate::asm_chaveta::Estado>,
+    /// calculadoras de projeto abertas (B110)
+    pub calculo: Option<crate::calculo_ui::Estado>,
+    /// componentes que abriram sem bater uid e caminho: esperam a janela Resolver (B66)
+    pub referencias: Vec<crate::asm_resolver::Pendencia>,
     /// como estava cada ponto no último recálculo das pilhas
     pub pilhas_diag: fenkra_montagem::pilhas::Recalculo,
     /// comando Repetição aberto (B263)
@@ -301,6 +307,8 @@ pub struct AsmState {
     pub inserir: Option<crate::asm_inserir::Estado>,
     /// janela do gerador de engrenagens (B28)
     pub gears_open: Option<GearsUi>,
+    /// comando Gerar elemento de transmissão (B340)
+    pub trans_open: Option<crate::transmissao_ui::TransUi>,
     pub anim_sel: usize,
     pub anim_t: f64,
     pub anim_play: bool,
@@ -398,8 +406,12 @@ impl AsmState {
             inserir: None,
             repeticao: None,
             fixadores: None,
+            chaveta: None,
+            calculo: None,
+            referencias: vec![],
             pilhas_diag: Default::default(),
             gears_open: None,
+            trans_open: None,
             anim_sel: 0,
             anim_t: 0.,
             anim_play: false,
@@ -704,9 +716,18 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                 Ok(a) => {
                     app.settings.add_recent_file(&p);
                     let mut st = AsmState::new(a, Some(p));
+                    let mut movidos = 0;
+                    if let Some(dir) = st.dir() {
+                        let (pendencias, m) = crate::asm_resolver::conferir(&mut st.asm, &dir, std::slice::from_ref(&dir));
+                        st.referencias = pendencias;
+                        movidos = m;
+                    }
                     let rel = st.atualizar_links(Gatilho::Abrir);
                     app.asm = Some(st);
                     app.fit_now();
+                    if movidos > 0 {
+                        app.toast(format!("{movidos} {}", tr("componente(s) achado(s) em outro lugar pela identidade")), false);
+                    }
                     if rel.pendurados > 0 {
                         app.toast(format!("{} {}", rel.pendurados, tr("link(s) pendurado(s): a origem ou a publicação sumiu")), true);
                     }
@@ -719,7 +740,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
             let is_asm = matches!(
                 c,
                 Cmd::AsmInsert | Cmd::AsmNewPart | Cmd::AsmGroup | Cmd::AsmReplace | Cmd::AsmMate(_) | Cmd::AsmFix | Cmd::AsmRigid | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmSubAsm | Cmd::AsmPattern
-                    | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmDisplay | Cmd::AsmBom | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink | Cmd::AsmFasteners | Cmd::AsmCatalogo | Cmd::AsmGears
+                    | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmDisplay | Cmd::AsmBom | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink | Cmd::AsmFasteners | Cmd::AsmCatalogo | Cmd::AsmGears | Cmd::AsmChaveta | Cmd::AsmCalculo
             );
             let Some(st) = app.asm.as_mut() else {
                 // só os comandos de montagem avisam; os da peça seguem normalmente
@@ -821,9 +842,17 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                     // liga e desliga: o painel Biblioteca abre só enquanto a pessoa o usa
                     st.catalogo = if st.catalogo.is_some() { None } else { Some(crate::biblioteca_ui::Estado::default()) };
                 }
+                Cmd::AsmCalculo => crate::calculo_ui::abrir(st),
+                Cmd::AsmChaveta => {
+                    if st.chaveta.is_some() {
+                        st.chaveta = None;
+                    } else {
+                        crate::asm_chaveta::abrir(st, &app.picks);
+                    }
+                }
                 Cmd::AsmGears => {
-                    if st.gears_open.is_none() {
-                        st.gears_open = Some(GearsUi::default());
+                    if st.trans_open.is_none() {
+                        st.trans_open = Some(crate::transmissao_ui::TransUi::default());
                     }
                 }
                 Cmd::AsmSubFromSel => {
@@ -946,7 +975,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
 /// clique numa peça a seleciona na árvore.
 pub fn after_viewport(app: &mut App, ctx: &egui::Context) {
     after_view_quick(app);
-    if !crate::asm_inserir::apos_viewport(app) && !crate::asm_fixadores::apos_viewport(app) && !crate::asm_repeticao::apos_viewport(app) && !crate::asm_cmd::apos_viewport(app) && !crate::asm_manip::apos_viewport(app) {
+    if !crate::asm_inserir::apos_viewport(app) && !crate::asm_fixadores::apos_viewport(app) && !crate::asm_chaveta::apos_viewport(app) && !crate::asm_repeticao::apos_viewport(app) && !crate::asm_cmd::apos_viewport(app) && !crate::asm_manip::apos_viewport(app) {
         selecao_do_clique(app, ctx.input(|i| i.modifiers.alt));
     }
     // duplo clique numa peça: abre para editar
@@ -3520,7 +3549,7 @@ pub fn fasteners_overlay(app: &App, ui: &mut egui::Ui, rect: egui::Rect, cam: &c
         };
         painter.circle_stroke(c, r + 2., egui::Stroke::new(2.5, cor));
         painter.circle_filled(c, r + 2., cor.gamma_multiply(0.18));
-        let font = egui::FontId::proportional(11.);
+        let font = egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.));
         let galeria = painter.layout_no_wrap(texto, font, cor);
         let canto = c + egui::vec2(r + 6., -galeria.size().y / 2.);
         painter.rect_filled(egui::Rect::from_min_size(canto, galeria.size()).expand(2.), 3., Color32::from_black_alpha(150));
@@ -3566,7 +3595,7 @@ pub fn fasteners_handles(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam
             crate::alca_cota::desenhar(&p, h, c, *atual, serie, crate::theme::accent(v), v.window_fill().gamma_multiply(0.85), format!("L {}", fmt(*atual)));
         }
         if resp.hovered() || resp.dragged() {
-            p.text(c + egui::vec2(12., -12.), egui::Align2::LEFT_BOTTOM, format!("L {}", fmt(*atual)), egui::FontId::proportional(12.), cor);
+            p.text(c + egui::vec2(12., -12.), egui::Align2::LEFT_BOTTOM, format!("L {}", fmt(*atual)), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), cor);
         }
         if resp.drag_started() {
             ctx.data_mut(|d| d.insert_temp(id, *atual));
@@ -3873,8 +3902,8 @@ pub fn bom_window(app: &mut App, ctx: &egui::Context) {
             }
         });
         egui::ScrollArea::vertical().max_height(360.).show(ui, |ui| {
-            egui::Grid::new("asm_bom").striped(true).num_columns(3).show(ui, |ui| {
-                for h in ["Item", "Componente", "Qtd."] {
+            egui::Grid::new("asm_bom").striped(true).num_columns(4).show(ui, |ui| {
+                for h in ["Item", "Componente", "PN", "Qtd."] {
                     ui.label(RichText::new(tr(h)).strong());
                 }
                 ui.end_row();
@@ -3882,7 +3911,17 @@ pub fn bom_window(app: &mut App, ctx: &egui::Context) {
                     let fixed = st.asm.item_of(&r.key).is_some() || r.depth > 0;
                     let item = RichText::new(&r.item);
                     ui.label(if fixed { item } else { item.italics().weak() }).on_hover_text(if fixed { tr("número fixo") } else { tr("número provisório: fica fixo ao salvar a montagem") });
-                    ui.label(format!("{}{}{}", "    ".repeat(r.depth), if r.sub { "▣ " } else { "" }, r.name));
+                    // B102: a configuração do componente aparece no nome; o PN é o da linha dela
+                    let cfg = if r.config.is_empty() { String::new() } else { format!(" [{}]", r.config) };
+                    ui.label(format!("{}{}{}{}", "    ".repeat(r.depth), if r.sub { "▣ " } else { "" }, r.name, cfg));
+                    match &r.erro {
+                        Some(e) => {
+                            ui.label(RichText::new(tr("configuração inexistente")).color(crate::theme::st_err())).on_hover_text(e);
+                        }
+                        None => {
+                            ui.label(&r.pn);
+                        }
+                    }
                     ui.label(r.qty.to_string());
                     ui.end_row();
                 }
@@ -3906,9 +3945,9 @@ pub fn bom_window(app: &mut App, ctx: &egui::Context) {
     }
     if export {
         if let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name("lista_de_pecas.csv").save_file() {
-            let mut t = String::from("item;componente;quantidade\n");
+            let mut t = String::from("item;componente;configuração;pn;quantidade\n");
             for r in &rows {
-                t += &format!("{};{};{}\n", r.item, r.name, r.qty);
+                t += &format!("{};{};{};{};{}\n", r.item, r.name, r.config, r.pn, r.qty);
             }
             if let Err(e) = std::fs::write(&p, t) {
                 app.toast(format!("Erro: {e}"), true);

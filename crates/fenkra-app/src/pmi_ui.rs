@@ -414,27 +414,29 @@ fn auto_balloons(app: &mut App) {
     let st = app.asm.as_mut().unwrap();
     let dir = st.dir();
     let rows = fenkra_montagem::bom::bom(&st.asm, dir.as_deref(), fenkra_montagem::bom::BomLevel::Topo);
-    let nodes: Vec<(Id, String)> = st
+    let nodes: Vec<(Id, String, String)> = st
         .asm
         .nodes
         .iter()
         .filter(|n| n.visible)
         .filter_map(|n| match &n.kind {
-            fenkra_montagem::NodeKind::Part { path } | fenkra_montagem::NodeKind::SubAssembly { path } => Some((n.id, path.clone())),
+            fenkra_montagem::NodeKind::Part { path } | fenkra_montagem::NodeKind::SubAssembly { path } => Some((n.id, path.clone(), st.asm.config_de(n.id).to_string())),
             _ => None,
         })
         .collect();
     let mut seen: Vec<String> = vec![];
     let mut found: Vec<([f64; 3], String, f64)> = vec![];
-    for (id, path) in nodes {
-        if seen.contains(&path) {
+    for (id, path, cfg) in nodes {
+        // B102: a mesma peça em duas configurações é dois itens, com dois balões
+        let chave = if cfg.is_empty() { path.clone() } else { format!("{path}#{cfg}") };
+        if seen.contains(&chave) {
             continue;
         }
-        seen.push(path.clone());
+        seen.push(chave);
         let Some(sh) = fenkra_montagem::view::placed_shape(&st.asm, id, dir.as_deref(), &mut st.cache) else { continue };
         let Some((l, h)) = sh.bbox() else { continue };
         let fp = fenkra_montagem::load::full_path(dir.as_deref(), &path);
-        let item = rows.iter().find(|r| r.path == fp).map(|r| r.item.clone()).unwrap_or_else(|| seen.len().to_string());
+        let item = rows.iter().find(|r| r.path == fp && r.config == cfg).map(|r| r.item.clone()).unwrap_or_else(|| seen.len().to_string());
         let size = ((h[0] - l[0]).powi(2) + (h[1] - l[1]).powi(2)).sqrt();
         // âncora numa face visível: o triângulo mais voltado para a câmera (e maior), não o CG
         let mut anchor = [(l[0] + h[0]) / 2., (l[1] + h[1]) / 2., h[2]];
@@ -799,7 +801,7 @@ pub fn status(app: &App, ui: &mut egui::Ui) {
 
 /// Caixa de dica junto ao cursor: linhas (texto, cor) sobre fundo da janela.
 fn tip(p: &egui::Painter, at: Pos2, lines: &[(String, Color32)], bg: Color32) {
-    let gs: Vec<_> = lines.iter().map(|(t, c)| p.layout_no_wrap(t.clone(), egui::FontId::proportional(12.), *c)).collect();
+    let gs: Vec<_> = lines.iter().map(|(t, c)| p.layout_no_wrap(t.clone(), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), *c)).collect();
     let w = gs.iter().map(|g| g.size().x).fold(0., f32::max) + 12.;
     let h = gs.iter().map(|g| g.size().y).sum::<f32>() + 8.;
     p.rect_filled(Rect::from_min_size(at, egui::vec2(w, h)), 4., bg);
@@ -1172,7 +1174,7 @@ fn pending_preview(app: &App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, r: &R
         rect.center_bottom() + egui::vec2(0., -52.),
         egui::Align2::CENTER_BOTTOM,
         format!("{}: {}{}  ·  {}", tr("Plano"), name, if pf.align { format!(" ({})", tr("texto alinhado")) } else { String::new() }, tr(if has_var { "Espaço troca o plano · F troca a face base · Tab troca a medida · T alinha o texto · Backspace volta · Esc cancela" } else { "Espaço troca o plano · F troca a face base · Tab alinha o texto · Backspace volta · Esc cancela" })),
-        egui::FontId::proportional(12.),
+        egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)),
         crate::theme::st_warn(),
     );
     (ghost, cancel, pop, finish)
@@ -1453,7 +1455,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
         // estado com problema: explicação curta junto ao rótulo e anel na âncora que falhou
         if let Some(d) = diag.as_ref().filter(|d| !d.ok()) {
             let txt = format!("⚠ {} · {}", tr(d.state.label()), tr(&d.message));
-            painter.text(rect_lbl.left_bottom() + egui::vec2(0., 3.), egui::Align2::LEFT_TOP, txt, egui::FontId::proportional(11.), crate::theme::st_err());
+            painter.text(rect_lbl.left_bottom() + egui::vec2(0., 3.), egui::Align2::LEFT_TOP, txt, egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), crate::theme::st_err());
             if let Some(sp) = d.failed.and_then(|k| a.get(k)).and_then(|q| cam.project(rect, v3(*q))) {
                 painter.circle_stroke(sp, 10., Stroke::new(2.5, crate::theme::st_err()));
                 painter.line_segment([sp + egui::vec2(-6., -6.), sp + egui::vec2(6., 6.)], Stroke::new(2., crate::theme::st_err()));
@@ -1491,7 +1493,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                     }
                     painter.circle_stroke(m, 7., Stroke::new(2., if tg.is_some() { crate::theme::st_ok() } else { crate::theme::st_err() }));
                     if let Some(t) = &tg {
-                        painter.text(m + egui::vec2(12., 12.), egui::Align2::LEFT_TOP, target_label(t), egui::FontId::proportional(12.), crate::theme::st_ok());
+                        painter.text(m + egui::vec2(12., 12.), egui::Align2::LEFT_TOP, target_label(t), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), crate::theme::st_ok());
                     }
                 }
                 if h.drag_stopped() {
@@ -1531,7 +1533,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                             let prev = if i == 0 { arr3(v3(pm.anchors.first().copied().unwrap_or([0.; 3])) + off) } else { via[i - 1] };
                             let shift = ui.input(|s| s.modifiers.shift);
                             let sn = crate::pmi_handles::snap_via(prev, hit, n, shift);
-                            painter.text(m + egui::vec2(14., -18.), egui::Align2::LEFT_BOTTOM, format!("{} mm", fenkra_core::pmi::num(((sn[0] - prev[0]).powi(2) + (sn[1] - prev[1]).powi(2) + (sn[2] - prev[2]).powi(2)).sqrt())), egui::FontId::proportional(12.), HL);
+                            painter.text(m + egui::vec2(14., -18.), egui::Align2::LEFT_BOTTOM, format!("{} mm", fenkra_core::pmi::num(((sn[0] - prev[0]).powi(2) + (sn[1] - prev[1]).powi(2) + (sn[2] - prev[2]).powi(2)).sqrt())), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), HL);
                             via_req = Some((pm.id, k, i, sn));
                         }
                     }

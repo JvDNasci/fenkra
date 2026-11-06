@@ -106,6 +106,10 @@ pub enum PointRef {
     CurveVertex { curve: Id, index: usize },
     /// ponta de uma aresta do modelo: segue a aresta; `point` escolhe a ponta e serve de reserva
     Vertex { point: [f64; 3], edge: EdgeKey },
+    /// centro de uma aresta circular do modelo: segue a aresta; `point` é a última posição
+    Center { point: [f64; 3], edge: EdgeKey },
+    /// ponto clicado numa face: acompanha a face; `point` é a posição clicada
+    OnFace { point: [f64; 3], key: FaceKey },
 }
 
 impl Default for PointRef {
@@ -120,7 +124,7 @@ impl PointRef {
             PointRef::Ref(x) => ids(x),
             PointRef::SketchPoint { sketch, .. } => ids(sketch),
             PointRef::CurveVertex { curve, .. } => ids(curve),
-            PointRef::Origin | PointRef::Fixed(_) | PointRef::Vertex { .. } => {}
+            PointRef::Origin | PointRef::Fixed(_) | PointRef::Vertex { .. } | PointRef::Center { .. } | PointRef::OnFace { .. } => {}
         }
     }
 }
@@ -562,6 +566,8 @@ pub enum RefKind {
     PlaneParallelPoint { base: PlaneRef, point: PointRef },
     /// Por três pontos não colineares.
     PlaneThreePoints { a: PointRef, b: PointRef, c: PointRef },
+    /// Sistema de eixos: origem, direção de X e de Z. Vale onde vale um plano (o XY dele).
+    AxisSystem { origin: PointRef, x: AxisRef, z: AxisRef },
     /// Por duas linhas coplanares (ou paralelas).
     PlaneTwoLines { a: CurveRef, b: CurveRef },
     /// Por um ponto e uma linha.
@@ -979,7 +985,7 @@ impl RefKind {
     pub fn class(&self) -> RefClass {
         use RefKind::*;
         match self {
-            OffsetPlane { .. } | AnglePlane { .. } | FacePlane { .. } | PlaneParallelPoint { .. } | PlaneThreePoints { .. } | PlaneTwoLines { .. }
+            OffsetPlane { .. } | AnglePlane { .. } | FacePlane { .. } | PlaneParallelPoint { .. } | PlaneThreePoints { .. } | AxisSystem { .. } | PlaneTwoLines { .. }
             | PlanePointLine { .. } | PlaneCurve { .. } | PlaneNormalCurve { .. } | PlaneTangentSurface { .. } | PlaneEquation { .. }
             | PlaneMeanPoints { .. } => RefClass::Plane,
             PlanePointNormal { .. } | PlaneMid { .. } => RefClass::Plane,
@@ -1019,6 +1025,11 @@ impl RefKind {
                 for p in [a, b, c] {
                     p.walk(ids)
                 }
+            }
+            AxisSystem { origin, x, z } => {
+                origin.walk(ids);
+                x.walk(ids);
+                z.walk(ids);
             }
             PlaneTwoLines { a, b } => {
                 a.walk(ids);
@@ -1764,8 +1775,10 @@ pub enum FeatureKind {
     SewSurface(SewSurface),
     /// Preencher fronteiras: volumes fechados por superfícies e planos (Boundary Fill).
     BoundaryFill(BoundaryFill),
-    /// Malha STL/OBJ convertida em B-rep.
+    /// Malha importada: fica corpo de malha, ou vira B-rep nos documentos antigos.
     MeshImport(MeshImport),
+    /// Operação sobre o corpo de malha do coletor (B170).
+    MeshOp(crate::malha::MeshOp),
     /// Corpo sólido vindo de um elemento Linked/Isolated (peça gerada a partir de outra).
     LinkedBody(LinkedBody),
     /// Mover o corpo inteiro: translação, rotação, simetria ou afinidade.
@@ -2857,12 +2870,18 @@ pub struct BoundaryFill {
     pub op: BoolOp,
 }
 
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, PartialEq, Debug, Serialize, Deserialize)]
 pub struct MeshImport {
-    /// arquivo .stl ou .obj (relativo à pasta do projeto ou absoluto)
+    /// arquivo de malha (relativo à pasta do projeto ou absoluto)
     pub path: String,
     /// tenta fechar em sólido (senão fica superfície/casca)
     pub solid: bool,
+    /// fica corpo de malha, sem virar B-rep e sem teto de triângulos (B170)
+    #[serde(default)]
+    pub corpo: bool,
+    /// chave da malha em `Document::malhas`; vazia lê `path` a cada cálculo
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub dados: String,
 }
 
 /// Insere no coletor de destino o corpo guardado num elemento Linked/Isolated (B-rep fechado).
@@ -2914,6 +2933,7 @@ impl FeatureKind {
             Forma(_) => "Forma",
             BoundaryFill(_) => "PreencherFronteiras",
             MeshImport(_) => "Malha",
+            MeshOp(m) => m.op.nome(),
             LinkedBody(_) => "CorpoLink",
             SmWall(_) => "ParedeBase",
             SmFlange(_) => "Aba",
@@ -2981,7 +3001,7 @@ impl FeatureKind {
             SewSurface(_) => "⧉",
             Forma(_) => "◍",
             BoundaryFill(_) => "▦",
-            MeshImport(_) => "△",
+            MeshImport(_) | MeshOp(_) => "△",
             LinkedBody(_) => "🔗",
             MoveBody(_) => "✥",
             SmWall(_) => "▭",
@@ -3123,7 +3143,10 @@ impl FeatureKind {
                     exprs(e)
                 }
             }
-            Shell(sh) => exprs(&mut sh.thickness),
+            Shell(sh) => {
+                exprs(&mut sh.thickness);
+                sh.espessuras.iter_mut().for_each(|e| exprs(&mut e.valor));
+            }
             Draft(d) => {
                 d.neutral.walk(ids);
                 exprs(&mut d.angle)
@@ -3202,6 +3225,7 @@ impl FeatureKind {
                 }
             }
             MeshImport(_) => {}
+            MeshOp(m) => m.op.walk(ids, exprs),
             LinkedBody(b) => ids(&mut b.geo),
             SmWall(w) => ids(&mut w.sketch),
             SmFlange(f) => {
@@ -3552,7 +3576,16 @@ pub struct Primitive {
 
 /// Casca: esvazia o sólido abrindo as faces escolhidas (pontos clicados).
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct EspessuraFace {
+    pub ponto: [f64; 3],
+    pub valor: String,
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct Shell {
+    /// faces com parede própria, diferente de `thickness`
+    #[serde(default)]
+    pub espessuras: Vec<EspessuraFace>,
     pub faces: Vec<[f64; 3]>,
     pub thickness: String,
     pub outward: bool,
@@ -3999,6 +4032,10 @@ pub struct Document {
     /// origem do documento importado; fora do arquivo nos demais, para não mudar o hash das versões
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub origem: Option<SeloOrigem>,
+    /// malhas embutidas pelo hash: o corpo de malha abre sem o arquivo de origem, e o comando na árvore
+    /// guarda só a chave, para o cálculo e o desfazer não carregarem megabytes a cada passo
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub malhas: std::collections::BTreeMap<String, crate::malha::MalhaEmbutida>,
     /// Aparência da peça inteira (sobrepõe a cor dos coletores).
     #[serde(default)]
     pub appearance: Option<Appearance>,
@@ -4109,6 +4146,7 @@ impl Document {
             rollback: 0,
             atualizacao: ModoAtualizacao::Automatica,
             origem: None,
+            malhas: Default::default(),
         };
         let c = d.add_collector("Corpo principal");
         d.active_collector = c;

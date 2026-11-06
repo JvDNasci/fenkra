@@ -9,13 +9,33 @@ use crate::app::App;
 use crate::i18n::tr;
 use eframe::egui::{self, RichText};
 use fenkra_core::sketch::{Curve, LinkPolicy, LinkSrc};
+use fenkra_core::vinculo::OpVinculo;
 use fenkra_core::{FeatureKind, Id};
+
+/// A origem mudou de tipo ou de número de pontos: o documento recebe o mesmo pedido que o cálculo fez
+/// na cópia dele. Não se copia a cópia: o resultado pode estar um quadro atrás do que se desenhou.
+fn aplica_estrutura(app: &mut App, id: Id, ops: &[OpVinculo]) {
+    if ops.is_empty() {
+        return;
+    }
+    let Some(FeatureKind::Sketch(s)) = app.open.doc.feature(id).map(|f| &f.kind) else { return };
+    let mut novo = s.data.clone();
+    for op in ops {
+        novo.aplica_vinculo(op);
+    }
+    if novo != s.data {
+        if let Some(FeatureKind::Sketch(s)) = app.open.doc.feature_mut(id).map(|f| &mut f.kind) {
+            s.data = novo;
+        }
+    }
+}
 
 /// A geometria externa do documento acompanha o último cálculo. Só escreve o que mudou, para não
 /// marcar o documento como alterado a cada quadro.
 pub fn sincroniza(app: &mut App, id: Id) {
     let Some(v) = app.result.as_ref().and_then(|r| r.sketches.iter().find(|v| v.feature == id)) else { return };
-    let (lp, lr, le) = (v.link_pts.clone(), v.link_r.clone(), v.link_e.clone());
+    let (lp, lr, le, ops) = (v.link_pts.clone(), v.link_r.clone(), v.link_e.clone(), v.link_ops.clone());
+    aplica_estrutura(app, id, &ops);
     let dados = match app.open.doc.feature(id).map(|f| &f.kind) {
         Some(FeatureKind::Sketch(s)) => &s.data,
         _ => return,
@@ -82,7 +102,7 @@ pub fn painel(app: &mut App, ui: &mut egui::Ui) {
     let d = &mut s.data;
     let mut acao = None;
     let titulo = if quebrados.is_empty() { tr("Geometria externa e posição").to_string() } else { format!("{} (→✕ {})", tr("Geometria externa e posição"), quebrados.len()) };
-    egui::CollapsingHeader::new(titulo).id_salt("sk_vinculos").default_open(!quebrados.is_empty()).show(ui, |ui| {
+    egui::CollapsingHeader::new(titulo).id_salt("sk_vinculos").default_open(!quebrados.is_empty() || crate::sketch_demo::abre_vinculos()).show(ui, |ui| {
         ui.label(RichText::new(tr("Política da geometria nova")).strong());
         ui.horizontal_wrapped(|ui| {
             for (p, n, dica) in [

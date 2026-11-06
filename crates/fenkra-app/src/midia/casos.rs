@@ -51,7 +51,7 @@ pub fn montar(caso: &str) -> Option<(Document, FeatureKind)> {
         }
         "casca" => {
             caixa(&mut d);
-            FeatureKind::Shell(Shell { faces: vec![[0., 0., 30.]], thickness: s("1"), outward: false, face_keys: vec![], closed: false })
+            FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 30.]], thickness: s("1"), outward: false, face_keys: vec![], closed: false })
         }
         "espessura" => {
             caixa(&mut d);

@@ -22,6 +22,10 @@ pub struct ConfigTabela {
     /// linhas por bloco; os blocos ficam lado a lado (0 = tabela inteira)
     #[serde(default)]
     pub dividir: usize,
+    /// com `dividir`, cada bloco vai para uma folha (a da tabela e as seguintes) em vez de ficar
+    /// ao lado; o título ganha "(1/3)"
+    #[serde(default)]
+    pub em_folhas: bool,
     /// numera de novo a primeira coluna (Item, Nº, Furo) na ordem mostrada
     #[serde(default)]
     pub renumerar: bool,
@@ -126,6 +130,22 @@ pub fn blocos(rows: &[Vec<String>], n: usize) -> Vec<&[Vec<String>]> {
         return vec![rows];
     }
     rows.chunks(n).collect()
+}
+
+/// Quantos blocos a tabela tem (um bloco só quando `dividir` é 0 ou cabe tudo).
+pub fn n_blocos(linhas: usize, dividir: usize) -> usize {
+    if dividir == 0 || linhas <= dividir { 1 } else { linhas.div_ceil(dividir) }
+}
+
+/// Blocos que a tabela desenha na folha `sheet`: todos lado a lado na folha dela, ou, com
+/// `em_folhas`, o bloco `k` na k-ésima folha a partir da dela. `None` se nada vai nessa folha.
+pub fn blocos_na_folha(d: &Drawing, t: &Table, sheet: Id, total: usize) -> Option<std::ops::Range<usize>> {
+    if !t.cfg.em_folhas || t.cfg.dividir == 0 {
+        return (t.sheet == sheet).then_some(0..total);
+    }
+    let i0 = d.sheets.iter().position(|s| s.id == t.sheet)?;
+    let i = d.sheets.iter().position(|s| s.id == sheet)?;
+    (i >= i0 && i - i0 < total).then(|| (i - i0)..(i - i0 + 1))
 }
 
 /// Etiqueta de furo: o "A3" da linha crua `i`, ou da posição mostrada quando renumerada.

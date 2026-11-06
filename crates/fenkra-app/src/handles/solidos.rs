@@ -96,6 +96,13 @@ pub(super) fn alcas(r: &fenkra_solidos::RecomputeResult, doc: &Document, id: Id)
                 PrimKind::Prisma => vec![(BASE_B, lin(x, 1., &p.b, "Raio"))],
             }
         }
+        // Escala uniforme: a seta sai do centro e a ponta fica na extremidade do corpo vezes o fator
+        FeatureKind::Scale(sc) => {
+            let Some((lo, hi)) = caixa_do_corpo(r, f.target) else { return vec![] };
+            let centro = super::point_of(r, &sc.center).unwrap_or((lo + hi) * 0.5);
+            let ext = [lo, hi].iter().map(|p| (*p - centro).x.abs()).fold(0f32, f32::max).max(1.);
+            vec![(super::padrao::ESCALA, Linear { base: centro, dir: Vec3::X, k: 1. / ext, expr: sc.factor.clone(), label: "Escala" })]
+        }
         FeatureKind::MoveBody(m) => {
             let Some((lo, hi)) = caixa_do_corpo(r, f.target) else { return vec![] };
             let centro = (lo + hi) * 0.5;
@@ -133,7 +140,7 @@ pub(super) fn normal_da_face(m: &fenkra_kernel::Mesh, ponto: [f64; 3]) -> Option
 }
 
 /// Normal de saída do material na face de índice `fi`, no vértice dela mais perto do `ponto`.
-pub(super) fn normal_do_indice(m: &fenkra_kernel::Mesh, fi: usize, ponto: [f64; 3]) -> Option<Vec3> {
+pub(crate) fn normal_do_indice(m: &fenkra_kernel::Mesh, fi: usize, ponto: [f64; 3]) -> Option<Vec3> {
     let i0 = *m.face_ranges.get(fi)? as usize;
     let i1 = m.face_ranges.get(fi + 1).map(|x| *x as usize).unwrap_or(m.indices.len());
     let p = v3(ponto);
@@ -258,6 +265,29 @@ pub(super) fn aplicar(doc: &mut Document, id: Id, slot: u8, valor: String) -> bo
             Some(_) => o.extra.controls[(s - CONTROLE_RAIO) as usize].radius = valor,
             None => return false,
         },
+        // B91: espaçamento nas duas direções do padrão linear e ângulo total do circular
+        (FeatureKind::Scale(sc), super::padrao::ESCALA) => sc.factor = valor,
+        // B289: início e fim do trecho parcial do filete e do chanfro
+        (FeatureKind::Fillet(o) | FeatureKind::Chamfer(o), super::aresta::TRECHO_INICIO) => match &mut o.extra.partial {
+            Some([a, _]) => *a = valor,
+            None => return false,
+        },
+        (FeatureKind::Fillet(o) | FeatureKind::Chamfer(o), super::aresta::TRECHO_FIM) => match &mut o.extra.partial {
+            Some([_, b]) => *b = valor,
+            None => return false,
+        },
+        (FeatureKind::Pattern(p), super::padrao::ESPACO) => match &mut p.kind {
+            PatternKind::Linear { spacing, .. } => *spacing = valor,
+            _ => return false,
+        },
+        (FeatureKind::Pattern(p), super::padrao::ESPACO2) => match &mut p.kind {
+            PatternKind::Linear { spacing2, dir2: Some(_), .. } => *spacing2 = valor,
+            _ => return false,
+        },
+        (FeatureKind::Pattern(p), super::padrao::ARCO) => match &mut p.kind {
+            PatternKind::Circular { angle, .. } => *angle = valor,
+            _ => return false,
+        },
         (FeatureKind::Primitive(p), BASE_A) => p.a = valor,
         (FeatureKind::Primitive(p), BASE_B) => p.b = valor,
         (FeatureKind::MoveBody(m), MOVER) => match &mut m.xf {
@@ -342,7 +372,7 @@ pub(super) fn seta_ate_face(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &
     painter.line_segment([sb, st], Stroke::new(2.5, cor));
     painter.circle_stroke(st, PEGA / 2., Stroke::new(2., cor));
     painter.circle_filled(sb, 3.5, cor);
-    let g = painter.layout_no_wrap(rotulo, egui::FontId::proportional(12.), Color32::WHITE);
+    let g = painter.layout_no_wrap(rotulo, egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), Color32::WHITE);
     let caixa = Rect::from_min_size(st + egui::vec2(18., -10.), g.size() + egui::vec2(10., 6.));
     painter.rect_filled(caixa, 4., Color32::from_rgba_unmultiplied(20, 60, 110, 220));
     painter.galley(caixa.min + egui::vec2(5., 3.), g, Color32::WHITE);
@@ -592,6 +622,28 @@ mod tests {
         assert!(ate_face_sob_cursor(&propria, Id(9), None).is_none(), "a ferramenta não para nela mesma");
         assert!(ate_face_sob_cursor(&Pick::Plane(PlaneRef::Origin(OriginPlane::XY)), Id(9), None).is_none());
         assert!(termino_ate(&Extent::UpToNext) && termino_ate(&Extent::UpTo(PlaneRef::Origin(OriginPlane::XY))) && !termino_ate(&Extent::ThroughAll));
+    }
+
+    /// B288: a escala uniforme tem a seta de fator saindo do centro; arrastar grava o fator.
+    #[test]
+    fn escala_uniforme_tem_seta_de_fator_e_grava_o_valor() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let (mut d, _ex) = base_com_extrusao(Extent::Blind(t("10")), "0");
+        let sc = d.add_feature(FeatureKind::Scale(Scale { center: PointRef::Origin, factor: t("1") }));
+        let r = recompute(&d);
+        let hs = alcas(&r, &d, sc);
+        assert_eq!(hs.len(), 1);
+        let (slot, h) = &hs[0];
+        assert_eq!(*slot, super::super::padrao::ESCALA);
+        // com fator 1 a ponta da seta fica na extremidade do corpo (x = 10)
+        assert!((h.base + h.dir * (1. / h.k) - Vec3::new(10., 0., 0.)).length() < 0.1, "{:?} {:?} {}", h.base, h.dir, h.k);
+        // levar a ponta a x = 20 grava fator 2 e o corpo dobra em cada eixo
+        assert!((valor_no_ponto(h, Vec3::new(20., 0., 0.)) - 2.).abs() < 1e-3);
+        assert!(aplicar(&mut d, sc, *slot, "2".into()));
+        let v: f64 = recompute(&d).bodies.iter().map(|b| b.mass.volume).sum();
+        assert!((v - 20. * 20. * 10. * 8.).abs() < 1.0, "{v}");
     }
 
     #[test]

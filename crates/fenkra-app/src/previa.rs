@@ -401,7 +401,7 @@ pub fn demo_preparar(doc: &mut Document) -> Option<DemoPrevia> {
         "reforco" => FeatureKind::StructGusset(StructGusset::novo([0., 0., 700.], "80", "6", "10")),
         "casca" => {
             caixa(doc);
-            FeatureKind::Shell(Shell { faces: vec![[0., 0., 30.]], thickness: s("3"), outward: false, face_keys: vec![], closed: false })
+            FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 30.]], thickness: s("3"), outward: false, face_keys: vec![], closed: false })
         }
         "espessura" => {
             caixa(doc);
@@ -448,10 +448,26 @@ pub fn aviso(status: Option<&Status>, calculando: bool) -> Option<Aviso> {
 /// Rótulo pequeno preso a um ponto da tela.
 fn rotulo(ui: &egui::Ui, rect: egui::Rect, at: egui::Pos2, texto: String, cor: egui::Color32) {
     let painter = ui.painter_at(rect);
-    let g = painter.layout_no_wrap(texto, egui::FontId::proportional(12.), cor);
+    let g = painter.layout_no_wrap(texto, egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), cor);
     let caixa = egui::Rect::from_min_size(at + egui::vec2(10., -10.), g.size() + egui::vec2(8., 4.));
     painter.rect_filled(caixa, 3., ui.visuals().extreme_bg_color.gamma_multiply(0.9));
     painter.galley(caixa.min + egui::vec2(4., 2.), g, cor);
+}
+
+/// Etiqueta de erro ao lado da seta que o causou (B246): fundo do tema, borda e texto na cor de erro,
+/// quebrada em linhas para não passar da viewport.
+pub fn etiqueta_de_erro(ui: &egui::Ui, rect: egui::Rect, at: egui::Pos2, msg: &str) {
+    let cor = crate::theme::st_err();
+    let painter = ui.painter_at(rect);
+    let texto = format!("{}: {msg}", crate::i18n::tr("Prévia inválida"));
+    let g = painter.layout(texto, egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), cor, 260.);
+    let mut caixa = egui::Rect::from_min_size(at, g.size() + egui::vec2(10., 6.));
+    // dentro da viewport: se a etiqueta passar da borda, volta para dentro
+    let (dx, dy) = ((rect.right() - 6. - caixa.right()).min(0.), (rect.bottom() - 6. - caixa.bottom()).min(0.));
+    caixa = caixa.translate(egui::vec2(dx, dy));
+    painter.rect_filled(caixa, 4., ui.visuals().extreme_bg_color.gamma_multiply(0.95));
+    painter.rect_stroke(caixa, 4., egui::Stroke::new(1., cor), egui::StrokeKind::Inside);
+    painter.galley(caixa.min + egui::vec2(5., 3.), g, cor);
 }
 
 /// Rótulos que dependem do comando: início e fim da rosca, lado da parede da nervura.
@@ -533,7 +549,7 @@ pub fn overlay(app: &App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::rend
         Aviso::Calculando => (crate::i18n::tr("Atualizando a prévia…").to_string(), crate::theme::accent(ui.visuals())),
     };
     let painter = ui.painter_at(rect);
-    let g = painter.layout(texto, egui::FontId::proportional(13.), cor, (rect.width() - 260.).clamp(200., 620.));
+    let g = painter.layout(texto, egui::FontId::proportional(crate::acessibilidade::fonte_3d(13.)), cor, (rect.width() - 260.).clamp(200., 620.));
     let caixa = egui::Rect::from_center_size(rect.center_top() + egui::vec2(0., 62. + g.size().y / 2.), g.size() + egui::vec2(16., 8.));
     painter.rect_filled(caixa, 4., ui.visuals().extreme_bg_color.gamma_multiply(0.92));
     painter.rect_stroke(caixa, 4., egui::Stroke::new(1., cor), egui::StrokeKind::Inside);
@@ -693,7 +709,7 @@ mod tests {
         let mut d = caixa();
         let antes = recompute(&d);
         let base = corpos_base(Some(&antes));
-        let casca = d.add_feature(FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: s("2"), outward: false, face_keys: vec![], closed: false }));
+        let casca = d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: s("2"), outward: false, face_keys: vec![], closed: false }));
         let r = recompute(&d);
         assert!(valido(r.status.get(&casca)), "{:?}", r.status.get(&casca));
         let v = r.bodies[0].mass.volume;
@@ -762,7 +778,7 @@ mod tests {
             let op = EdgeOp { value: s("2"), edges: EdgeSel::AllOfBody, mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: Default::default() };
             casos.push((nome, d, if modo { FeatureKind::Fillet(op) } else { FeatureKind::Chamfer(op) }, ENTRA, false));
         }
-        casos.push(("casca", caixa(), FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: s("2"), outward: false, face_keys: vec![], closed: false }), ENTRA, false));
+        casos.push(("casca", caixa(), FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: s("2"), outward: false, face_keys: vec![], closed: false }), ENTRA, false));
         for (nome, mut d, kind, cor, sobe) in casos {
             let antes = recompute(&d);
             let base = corpos_base(Some(&antes));
@@ -848,13 +864,82 @@ mod tests {
         assert_eq!(guardada.len(), nova.ghost.len());
     }
 
+    /// B246: o mesmo vale para cada comando de sólido: com um valor que a geometria não aceita, o
+    /// status vira erro nomeado e a retenção repõe a última prévia válida.
+    #[test]
+    fn falha_de_cada_comando_de_solido_mantem_a_ultima_previa() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let aresta = |valor: &str, chanfro: bool| {
+            let op = EdgeOp { value: s(valor), edges: EdgeSel::Edges(vec![[0., -20., 20.]]), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: Default::default() };
+            if chanfro { FeatureKind::Chamfer(op) } else { FeatureKind::Fillet(op) }
+        };
+        let casca = |t: &str| FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: s(t), outward: false, face_keys: vec![], closed: false });
+        let mut casos: Vec<(&str, Document, FeatureKind, FeatureKind)> = vec![];
+        {
+            let (mut d, topo) = caixa_com_tampa();
+            let sk = sk_rect(&mut d, PlaneRef::Datum(topo), [-5., -5.], [5., 5.]);
+            casos.push(("extrusão", d, extrusao(sk, BoolOp::Add, false, "10"), extrusao(sk, BoolOp::Add, false, "nao_existe")));
+        }
+        {
+            let (mut d, topo) = caixa_com_tampa();
+            let sk = sk_rect(&mut d, PlaneRef::Datum(topo), [-5., -5.], [5., 5.]);
+            casos.push(("recorte", d, extrusao(sk, BoolOp::Cut, false, "6"), extrusao(sk, BoolOp::Cut, false, "nao_existe")));
+        }
+        {
+            let mut d = Document::new("eixo");
+            let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XZ), [10., 0.], [20., 15.]);
+            let rev = |ang: &str| FeatureKind::Revolve(Revolve { sketch: sk, axis: AxisRef::Origin(OriginAxis::Z), angle: s(ang), symmetric: false, op: BoolOp::Add, thin: None, thin_side: 0, angle2: None });
+            casos.push(("revolução", d, rev("360"), rev("nao_existe")));
+        }
+        {
+            let (mut d, topo) = caixa_com_tampa();
+            let pt = sk_pontos(&mut d, PlaneRef::Datum(topo), &[[0., 0.]]);
+            let furo = |diam: &str| FeatureKind::Hole(Hole { sketch: pt, kind: HoleKind::Simples, diameter: s(diam), depth: Extent::Blind(s("10")), thread: None, thread_modeled: false, extra: Default::default(), standard: None, points: vec![], dir: None, reverse: true, tip: None, taper: s("0"), left_hand: false });
+            casos.push(("furo", d, furo("8"), furo("nao_existe")));
+        }
+        casos.push(("filete", caixa(), aresta("2", false), aresta("nao_existe", false)));
+        casos.push(("chanfro", caixa(), aresta("2", true), aresta("nao_existe", true)));
+        casos.push(("casca", caixa(), casca("2"), casca("nao_existe")));
+        {
+            let (mut d, topo) = caixa_com_tampa();
+            let sk = sk_rect(&mut d, PlaneRef::Datum(topo), [-18., -3.], [-12., 3.]);
+            let poste = d.add_feature(extrusao(sk, BoolOp::Add, false, "6"));
+            let pad = |n: &str| FeatureKind::Pattern(Pattern { kind: PatternKind::Linear { dir: AxisRef::Origin(OriginAxis::X), count: s(n), spacing: s("12"), dir2: None, count2: s("1"), spacing2: s("0"), total: false }, sources: vec![poste], skip: Default::default() });
+            casos.push(("padrão", d, pad("3"), pad("nao_existe")));
+        }
+        for (nome, mut d, bom, ruim) in casos {
+            let antes = recompute(&d);
+            let base = corpos_base(Some(&antes));
+            let id = d.add_feature(bom);
+            let r = recompute(&d);
+            assert!(valido(r.status.get(&id)), "{nome}: {:?}", r.status.get(&id));
+            let mut guardada = vec![];
+            let mut boa = cena(&d, &r, id, &base);
+            assert!(!reter_ultima(&mut guardada, &mut boa, r.status.get(&id)));
+            assert!(!guardada.is_empty(), "{nome}: a prévia boa não ficou guardada");
+            // valor que a geometria não aceita
+            d.feature_mut(id).unwrap().kind = ruim;
+            let r = recompute(&d);
+            let status = r.status.get(&id);
+            assert!(matches!(status, Some(Status::Error(m)) if !m.is_empty()), "{nome}: {status:?}");
+            let mut c = cena(&d, &r, id, &base);
+            let sem = c.ghost.len();
+            assert!(reter_ultima(&mut guardada, &mut c, status), "{nome}: a retenção não repôs a prévia");
+            assert_eq!(c.ghost.len(), sem + guardada.len(), "{nome}: a última prévia válida volta inteira");
+            assert!(c.ghost.iter().all(|x| x.col[3] < 1.), "{nome}: a prévia retida tem de ser translúcida");
+            assert!(matches!(aviso(status, false), Some(Aviso::Erro(m)) if !m.is_empty()), "{nome}");
+        }
+    }
+
     /// B246: quem tira material usa a cor de retirada; quem acrescenta, a de destaque.
     #[test]
     fn so_o_que_tira_material_usa_a_cor_de_retirada() {
         let sk = Id(1);
         assert!(retira(&extrusao(sk, BoolOp::Cut, false, "5")));
         assert!(!retira(&extrusao(sk, BoolOp::Add, false, "5")));
-        assert!(!retira(&FeatureKind::Shell(Shell { faces: vec![], thickness: s("2"), outward: false, face_keys: vec![], closed: false })));
+        assert!(!retira(&FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![], thickness: s("2"), outward: false, face_keys: vec![], closed: false })));
         assert!(retira(&FeatureKind::Thickness(Thickness { faces: vec![], value: s("2"), face_keys: vec![], remove: true })));
     }
 

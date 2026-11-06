@@ -636,13 +636,66 @@ fn alternar_animacao(app: &mut App, agora: f64) {
     }
 }
 
+/// `FENKRA_DEMO_ASM=bom_config` (B102): uma barra com duas configurações (Curta e Longa) usada três
+/// vezes, uma delas com uma configuração que a peça não tem; a lista de peças abre mostrando o PN de
+/// cada configuração e o erro da inexistente.
+fn demo_bom_configuracoes(st: &mut AsmState) {
+    use fenkra_core::configuracoes::{Coluna, Linha};
+    use fenkra_core::{BoolOp, Document, Extent, Extrude, FeatureKind, OriginPlane, PlaneRef, Sketch, SketchData, Unit};
+    let Some(dir) = st.dir() else { return };
+    let mut d = Document::new("Barra");
+    let _ = d.add_param("L", "100", Unit::Comprimento);
+    let mut data = SketchData::default();
+    {
+        let mut al = || d.alloc();
+        data.add_rect(&mut al, [0., 0.], [10., 10.], false);
+    }
+    let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
+    d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind("L".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
+    d.nova_coluna_config(Coluna::Parametro("L".into()));
+    d.nova_coluna_config(Coluna::Pn);
+    d.tabela.linhas.push(Linha { nome: "Curta".into(), celulas: vec!["50".into(), "B-050".into()] });
+    d.tabela.linhas.push(Linha { nome: "Longa".into(), celulas: vec!["200".into(), "B-200".into()] });
+    let _ = std::fs::write(dir.join("barra.fkp"), d.to_json());
+    let mut a = Assembly::new("Conjunto de barras");
+    for (i, cfg) in ["Curta", "Longa", "Longa", "Media"].iter().enumerate() {
+        let id = a.add_component(&format!("Barra {}", i + 1), NodeKind::Part { path: "barra.fkp".into() }, Placement { origin: [0., 20. * i as f64, 0.], ..Default::default() }, None);
+        a.definir_config(id, cfg);
+    }
+    st.asm = a;
+    st.bom_open = Some(fenkra_montagem::bom::BomLevel::Topo);
+    st.dirty = true;
+}
+
 /// `FENKRA_DEMO_ASM=cmd|junta|simbolos|manip|duzentas`: abre o comando ou os símbolos nas placas de exemplo.
 pub fn demo(st: &mut AsmState, nome: &str) {
+    if nome == "resolver" {
+        crate::asm_resolver::demo(st);
+    }
     if nome == "fixadores" {
         crate::asm_fixadores::demo(st);
         return;
     }
-    if nome == "engrenagens" || nome == "eixo" {
+    if nome == "engrenagens" || nome == "transmissao" {
+        // comando Gerar elemento de transmissão aberto (prévia 3D do par e cálculo ao vivo)
+        let mut t = crate::transmissao_ui::TransUi::default();
+        if let Ok(v) = std::env::var("FENKRA_DEMO_TRANS") {
+            t.tipo = match v.as_str() {
+                "helicoidais" => crate::transmissao_ui::Tipo::Helicoidais,
+                "espinha" => crate::transmissao_ui::Tipo::EspinhaDePeixe,
+                "conicas" => crate::transmissao_ui::Tipo::Conicas,
+                "diferencial" => crate::transmissao_ui::Tipo::Diferencial,
+                "semfim" => crate::transmissao_ui::Tipo::SemFim,
+                "corrente" => crate::transmissao_ui::Tipo::Corrente,
+                "correia" => crate::transmissao_ui::Tipo::Correia,
+                _ => crate::transmissao_ui::Tipo::Retas,
+            };
+        }
+        st.trans_open = Some(t);
+        st.fantasma_novo = true;
+        return;
+    }
+    if nome == "eixo" || nome == "engrenagens_classico" {
         // janela de engrenagens aberta (prévia do par) ou com o eixo gráfico ligado
         let mut g = crate::asm_ui::GearsUi::default();
         if nome == "eixo" {
@@ -657,6 +710,14 @@ pub fn demo(st: &mut AsmState, nome: &str) {
         st.fantasma_novo = true;
         return;
     }
+    if nome.starts_with("calculo") {
+        crate::calculo_ui::demo(st, nome);
+        return;
+    }
+    if nome.starts_with("chaveta") {
+        crate::asm_chaveta::demo(st, nome);
+        return;
+    }
     if nome == "encaixe" {
         st.cmd = Some(Pendente::novo(Tipo::Junta(JointKind::Rigid)));
         crate::asm_encaixe::demo(st);
@@ -664,6 +725,10 @@ pub fn demo(st: &mut AsmState, nome: &str) {
     }
     if nome == "repeticao" {
         crate::asm_repeticao::demo(st);
+        return;
+    }
+    if nome == "bom_config" {
+        demo_bom_configuracoes(st);
         return;
     }
     if let Some(n) = nome.strip_prefix("grade").and_then(|x| x.parse::<usize>().ok()) {
@@ -861,7 +926,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::
         }
     }
     if let (Some(a), true) = (alvo, previa.is_some_and(|p| p.falhou())) {
-        let t = painter.layout_no_wrap(tr("Sem solução").to_string(), egui::FontId::proportional(12.), crate::theme::st_err());
+        let t = painter.layout_no_wrap(tr("Sem solução").to_string(), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), crate::theme::st_err());
         painter.galley(a + egui::vec2(10., 10.), t, crate::theme::st_err());
     }
     if let Some(p) = previa.filter(|p| p.falhou()) {
@@ -880,7 +945,7 @@ fn conflito_no_modelo(painter: &egui::Painter, rect: egui::Rect, cam: &crate::re
         painter.line_segment([pa, pb], egui::Stroke::new(if quente { 3.4 } else { 2. }, erro));
         painter.circle_filled(pa, 4., erro);
         painter.circle_filled(pb, 4., erro);
-        let g = painter.layout_no_wrap(a.name_of(s.id), egui::FontId::proportional(12.), erro);
+        let g = painter.layout_no_wrap(a.name_of(s.id), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), erro);
         painter.galley(pa + (pb - pa) / 2. + egui::vec2(8., -16.), g, erro);
     }
 }

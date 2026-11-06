@@ -102,13 +102,13 @@ pub(crate) fn gravar_texto(cena: &Cena, mm: f64) -> String {
 
 pub(crate) fn gravar_pacote(cena: &Cena, mm: f64) -> Result<Vec<u8>, ErroConv> {
     let texto = gravar_texto(cena, mm);
-    zip::gravar(&[("modelo.usda", texto.as_bytes())], true)
+    Ok(zip::gravar(&[("modelo.usda", texto.as_bytes())], true)?)
 }
 
 #[cfg(test)]
 mod testes {
     use super::*;
-    use crate::malha::cena::testes::cubo;
+    use fenkra_malha::cena::cubo;
 
     #[test]
     fn nome_de_prim_nao_comeca_por_numero_nem_leva_acento() {

@@ -700,41 +700,7 @@ impl SketchData {
         if uv.is_empty() {
             return None;
         }
-        let shape = if let Some((c, r)) = fit_circle2(uv) {
-            let center = self.add_point(al, c[0], c[1]);
-            if let Some(p) = self.point_mut(center) {
-                p.fixed = true;
-            }
-            let curve = self.add_curve(al, Curve::Circle { c: center, r }, construction);
-            LinkShape::Circle { center, curve }
-        } else {
-            let closed = uv.len() > 2 && ((uv[0][0] - uv[uv.len() - 1][0]).powi(2) + (uv[0][1] - uv[uv.len() - 1][1]).powi(2)).sqrt() < 1e-4;
-            let open: Vec<[f64; 2]> = if closed { uv[..uv.len() - 1].to_vec() } else { uv.to_vec() };
-            let ids: Vec<Id> = open
-                .iter()
-                .map(|q| {
-                    let id = self.add_point(al, q[0], q[1]);
-                    if let Some(p) = self.point_mut(id) {
-                        p.fixed = true;
-                    }
-                    id
-                })
-                .collect();
-            if ids.len() == 1 {
-                self.add_curve(al, Curve::Point { p: ids[0] }, construction);
-            }
-            // trechos suaves (arcos, splines convertidas) viram spline; cantos e retas, linhas
-            for run in smooth_runs(&open, closed && ids.len() > 2) {
-                if run.len() >= 4 {
-                    self.add_curve(al, Curve::Spline { pts: run.iter().map(|i| ids[*i]).collect() }, construction);
-                } else {
-                    for w in run.windows(2) {
-                        self.add_curve(al, Curve::Line { a: ids[w[0]], b: ids[w[1]] }, construction);
-                    }
-                }
-            }
-            LinkShape::Poly { points: ids, closed, isolated: false }
-        };
+        let shape = self.monta_poli(al, uv, Default::default(), construction);
         let id = al();
         self.links.push(SkLink { id, source, intersect, shape, policy: self.link_policy });
         Some(id)
@@ -1565,9 +1531,12 @@ impl SketchData {
                 x0.push(p.y);
             }
         }
+        // o raio do círculo externo vem da origem: não é incógnita, senão sobraria um grau de liberdade
+        let externos: HashSet<Id> = self.links.iter().filter_map(|l| if let LinkShape::Circle { curve, .. } = l.shape { Some(curve) } else { None }).collect();
         let mut rvar = HashMap::new();
         for c in &self.curves {
-            if let Curve::Circle { r, .. } = c.geom {
+            if let (Curve::Circle { r, .. }, false) = (&c.geom, externos.contains(&c.id)) {
+                let r = *r;
                 rvar.insert(c.id, x0.len());
                 x0.push(r);
             }

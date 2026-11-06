@@ -16,12 +16,16 @@
 use super::*;
 use fenkra_kernel::Mesh;
 
-/// Uma dobra reconhecida: raio interno, ângulo (graus) e largura ao longo do eixo.
+/// Uma dobra reconhecida: raio interno, ângulo (graus) e largura ao longo do eixo, mais o eixo
+/// (direção, um ponto dele na coordenada axial zero e a faixa axial coberta) para o mapa de dobras.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DobraReconhecida {
     pub raio: f64,
     pub angulo: f64,
     pub largura: f64,
+    pub eixo: V3,
+    pub origem: V3,
+    pub faixa: [f64; 2],
 }
 
 /// O que se reconheceu do corpo.
@@ -50,7 +54,7 @@ impl AnaliseChapa {
     }
 }
 
-fn pontos_da_face(m: &Mesh, f: usize) -> Vec<V3> {
+pub(super) fn pontos_da_face(m: &Mesh, f: usize) -> Vec<V3> {
     let ini = m.face_ranges.get(f).copied().unwrap_or(0) as usize;
     let fim = m.face_ranges.get(f + 1).copied().map(|x| x as usize).unwrap_or(m.indices.len());
     let mut v: Vec<V3> = vec![];
@@ -105,6 +109,7 @@ struct Cil {
     raio: f64,
     area: f64,
     largura: f64,
+    faixa: [f64; 2],
 }
 
 /// Reconhece a chapa na malha de um corpo de `volume` mm³. Erra com o motivo quando o corpo não
@@ -175,7 +180,7 @@ pub fn analisar_malha(m: &Mesh, volume: f64) -> Result<AnaliseChapa, String> {
             lo = lo.min(s);
             hi = hi.max(s);
         }
-        cils.push((i, Cil { eixo, centro, raio, area: info[i].area, largura: hi - lo }));
+        cils.push((i, Cil { eixo, centro, raio, area: info[i].area, largura: hi - lo, faixa: [lo, hi] }));
     }
     // dobras: pares coaxiais com raios que diferem de t
     let mut dobras: Vec<DobraReconhecida> = vec![];
@@ -194,7 +199,8 @@ pub fn analisar_malha(m: &Mesh, volume: f64) -> Result<AnaliseChapa, String> {
                 usados[a] = true;
                 usados[b] = true;
                 area_cil += ci.area + ce.area;
-                dobras.push(DobraReconhecida { raio: ci.raio, angulo: (ci.area / (ci.raio * ci.largura.max(1e-9))).to_degrees(), largura: ci.largura });
+                let origem = geo3d::sub(ci.centro, geo3d::mul(ci.eixo, geo3d::dot(ci.centro, ci.eixo)));
+                dobras.push(DobraReconhecida { raio: ci.raio, angulo: (ci.area / (ci.raio * ci.largura.max(1e-9))).to_degrees(), largura: ci.largura, eixo: ci.eixo, origem, faixa: ci.faixa });
             }
         }
     }
@@ -217,7 +223,7 @@ impl Ctx<'_> {
         let malha = tesselar(&corpo, &self.qualidade).map_err(k)?;
         let a = analisar_malha(&malha, corpo.mass().volume)?;
         if !c.thickness.trim().is_empty() {
-            let pedida = ev(&c.thickness, &self.vars, "espessura")?;
+            let pedida = super::chapa_laco::ev_faixa(&c.thickness, &self.vars, "espessura esperada", 0.01, f64::INFINITY, "mm")?;
             if (pedida - a.espessura).abs() > 0.02 * pedida.max(1e-6) {
                 return Err(format!("o corpo tem {:.2} mm de espessura, e não os {pedida:.2} mm pedidos", a.espessura));
             }
@@ -231,7 +237,34 @@ impl Ctx<'_> {
                 return Err("a face fixa precisa ser uma face plana da chapa (não a lateral da espessura)".into());
             }
         }
-        let aviso = a.resumo();
+        let mut aviso = a.resumo();
+        // mapa de dobras (B35): cada dobra reconhecida vira um `SheetMap`, como as de uma aba, e na
+        // chapa planificada o corpo é desdobrado por elas. Corpo que já veio de comandos de chapa
+        // tem o mapa deles e não é mapeado de novo.
+        if !a.dobras.is_empty() && self.sheet_maps.is_empty() {
+            let (lo, hi) = corpo.bbox().ok_or("corpo sem dimensões")?;
+            let grande = geo3d::dist(lo, hi) + 10.;
+            let sp = self.sheet().ok();
+            let kf = |r: f64| sp.as_ref().map_or(0.44, |s| s.k_for(r));
+            let plano = sp.as_ref().is_some_and(|s| s.flat);
+            match super::chapa_converte_mapa::mapear(&malha, &a, c.face, &kf, grande) {
+                Ok(mapa) => {
+                    if plano {
+                        let plana = super::chapa_converte_mapa::planificar(&corpo, &mapa.maps)?;
+                        let esperado = corpo.mass().volume - mapa.arcos + mapa.tiras;
+                        let obtido = plana.mass().volume;
+                        if plana.is_null() || (obtido - esperado).abs() > 0.01 * esperado {
+                            return Err(format!("não consegui planificar o corpo: o volume plano deu {obtido:.0} mm³ e a conta dá {esperado:.0} mm³ (alguma parte é mais larga que a dobra que a prende?)"));
+                        }
+                        self.bodies.insert(f.target, fresh_body(plana, f.id));
+                    }
+                    aviso = format!("{aviso}; {} dobra(s) no mapa de dobras", mapa.maps.len());
+                    self.sheet_maps.extend(mapa.maps);
+                }
+                Err(e) if plano => return Err(format!("o corpo não se planifica: {e}")),
+                Err(e) => aviso = format!("{aviso}; sem mapa de dobras ({e})"),
+            }
+        }
         // o parâmetro de espessura da chapa deve combinar com o corpo
         if let Some(sp) = self.doc.sheet_efetivo() {
             let t = ev(&sp.thickness, &self.vars, "espessura da chapa")?;

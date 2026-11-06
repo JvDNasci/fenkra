@@ -2,6 +2,11 @@
 //! Traduções da bancada Sólidos (filete, chanfro e alças 3D), à parte de `i18n.rs`.
 
 pub static TEXTOS: &[(&str, &str)] = &[
+    ("Livre", "Free"),
+    ("Clique para o perfil começar neste vértice e desfazer a torção.", "Click for the profile to start at this vertex and undo the twist."),
+    ("Normal ao perfil", "Normal to profile"),
+    ("Intensidade", "Strength"),
+    ("Clique nos vértices do 3D para desfazer a torção; arraste a seta para mudar a intensidade.", "Click the 3D vertices to undo the twist; drag the arrow to change the strength."),
     ("Assimétrico", "Asymmetric"),
     ("Um raio em cada face da aresta (reta, entre planos); a seta inverte o lado", "One radius on each face of the edge (straight, between planes); the arrow flips the side"),
     ("Inverter por aresta", "Flip per edge"),
@@ -29,4 +34,11 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Troca a tabela pelo CSV. Cabeçalho: Configuração; PN; nome de parâmetro; suprimir:<nome do comando>.", "Replaces the table with the CSV. Header: Configuration; PN; parameter name; suprimir:<command name>."),
     ("Gravado em", "Saved to"),
     ("Importado de", "Imported from"),
+    // fechamento dos parciais de Sólidos (B90, B91, B102, B246)
+    ("PN", "PN"),
+    ("configuração inexistente", "configuration not found"),
+    ("Instância pulada: clique para restaurar", "Skipped instance: click to restore"),
+    ("Clique para pular esta instância", "Click to skip this instance"),
+    ("clique para furar aqui", "click to drill here"),
+    ("Esta seta aponta para a face que recebe a primeira medida. Clique para trocar de face.", "This arrow points to the face that gets the first measure. Click to swap faces."),
 ];

@@ -9,6 +9,7 @@
 
 pub mod avulso;
 pub mod bom;
+pub mod chaveta;
 pub mod conflito;
 pub mod contexto;
 pub mod display;
@@ -34,6 +35,7 @@ pub mod substituicao;
 pub mod view;
 pub mod solve;
 pub mod subconjunto;
+pub mod transmissao;
 
 pub use engrenagens::{calculo_par, inserir_par_engrenagens, CalculoPar, RelatorioEngrenagens};
 pub use estrutura::{estrutura_para_montagem, plano_do_documento, Gerado, GrupoGerado, GrupoPlano, Plano};
@@ -163,6 +165,9 @@ pub struct Node {
     #[serde(default)]
     pub number: u32,
     pub kind: NodeKind,
+    /// uid do documento do componente; vazio até a primeira conferência
+    #[serde(default)]
+    pub doc_uid: String,
     /// grupo/subconjunto pai na árvore (só organização: não muda a geometria)
     #[serde(default)]
     pub parent: Option<Id>,
@@ -458,6 +463,9 @@ pub struct AsmParam {
 pub struct Assembly {
     pub format_version: u32,
     pub name: String,
+    /// identidade estável do documento; arquivo antigo ganha uma ao abrir
+    #[serde(default)]
+    pub uid: fenkra_core::formato::UidDoc,
     #[serde(default)]
     pub props: Properties,
     next_id: u64,
@@ -525,6 +533,9 @@ pub struct Assembly {
     /// configuração (da tabela de projeto da peça) escolhida por componente, pelo nome (B102)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub configs: Vec<ConfigComp>,
+    /// elementos de transmissão gerados (B340): os parâmetros ficam aqui para editar depois
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub transmissoes: Vec<transmissao::RegistroTransmissao>,
 }
 
 /// Qual configuração da peça um componente usa. O nome precisa existir na tabela da peça: se não
@@ -649,7 +660,7 @@ impl Assembly {
     }
 
     pub fn new(name: &str) -> Self {
-        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], explosoes: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], pilhas: vec![], interf: Default::default(), relational: false, politicas_link: vec![], religacoes: vec![], geometria: None, esqueleto: None, contexto_livre: false, origem_oculta: false, configs: vec![] }
+        Assembly { format_version: 1, name: name.into(), uid: fenkra_core::formato::UidDoc::novo(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], explosoes: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], pilhas: vec![], interf: Default::default(), relational: false, politicas_link: vec![], religacoes: vec![], geometria: None, esqueleto: None, contexto_livre: false, origem_oculta: false, configs: vec![], transmissoes: vec![] }
     }
 
     /// Configuração escolhida para o componente (vazio = a ativa da própria peça).
@@ -678,7 +689,9 @@ impl Assembly {
     /// Abre qualquer versão antiga pela cadeia de migração (B64).
     pub fn from_json(s: &str) -> Result<Self, String> {
         let p = fenkra_core::formato::preparar(fenkra_core::formato::Tipo::Montagem, s).map_err(|e| e.to_string())?;
-        serde_json::from_value(p.valor).map_err(|e| e.to_string())
+        let mut a: Assembly = serde_json::from_value(p.valor).map_err(|e| e.to_string())?;
+        a.uid.garantir();
+        Ok(a)
     }
     /// Gravada por um Fenkra mais novo: abrir somente para leitura.
     pub fn formato_futuro(&self) -> bool {
@@ -738,7 +751,7 @@ impl Assembly {
     pub fn add_group(&mut self, name: &str, parent: Option<Id>) -> Id {
         let id = self.alloc();
         let name = self.unique(name);
-        self.nodes.push(Node { id, name, number: 0, kind: NodeKind::Group, parent, placement: Placement::default(), fixed: false, visible: true, mode: LoadMode::Editavel, color: None, simplificada: false });
+        self.nodes.push(Node { id, name, number: 0, kind: NodeKind::Group, doc_uid: String::new(), parent, placement: Placement::default(), fixed: false, visible: true, mode: LoadMode::Editavel, color: None, simplificada: false });
         id
     }
 
@@ -748,7 +761,7 @@ impl Assembly {
         let name = self.unique(name);
         let first = !self.nodes.iter().any(|n| !matches!(n.kind, NodeKind::Group));
         let number = self.nodes.iter().map(|n| n.number).max().unwrap_or(0) + 1;
-        self.nodes.push(Node { id, name, number, kind, parent, placement, fixed: first, visible: true, mode: LoadMode::Editavel, color: None, simplificada: false });
+        self.nodes.push(Node { id, name, number, kind, doc_uid: String::new(), parent, placement, fixed: first, visible: true, mode: LoadMode::Editavel, color: None, simplificada: false });
         id
     }
 

@@ -48,6 +48,7 @@ pub fn member_frames(doc: &Document, id: Id) -> Vec<MemberFrame> {
         last_sheet: None,
         sheet_maps: vec![],
         cut_outlines: vec![],
+        malhas: HashMap::new(),
         roscas: vec![],
         relatorios_forma: vec![],
         formas_resolvidas: vec![],

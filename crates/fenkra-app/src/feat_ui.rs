@@ -24,6 +24,8 @@ pub fn is_shape(k: &FeatureKind) -> bool {
 pub fn wants_faces(k: &FeatureKind) -> bool {
     matches!(k, FeatureKind::Shell(_) | FeatureKind::Draft(_) | FeatureKind::Thickness(_) | FeatureKind::DirectEdit(_) | FeatureKind::Thread(_) | FeatureKind::StructPlate(_) | FeatureKind::StructWeld(_) | FeatureKind::SmCornerRelief(_) | FeatureKind::SmCornerClose(_) | FeatureKind::SmConvert(_) | FeatureKind::SmArcSlot(_) | FeatureKind::SmSurfFlange(_))
         || matches!(k, FeatureKind::SmFlangedHole(h) if crate::slots::is_unset(h.sketch) || !h.points.is_empty())
+        // B90: furo sem centros do sketch posiciona-se clicando na face
+        || matches!(k, FeatureKind::Hole(h) if crate::handles::furo_espera_clique(h))
         || matches!(k, FeatureKind::Fillet(o) if matches!(o.mode, EdgeMode::FaceFace(..) | EdgeMode::FullRound { .. }))
 }
 
@@ -39,6 +41,14 @@ pub fn add_face(k: &mut FeatureKind, p: [f64; 3]) {
         FeatureKind::StructPlate(pl) => pl.at = p,
         FeatureKind::StructWeld(w) => w.adicionar(p, None),
         FeatureKind::SmFlangedHole(h) => h.points.push(p),
+        // B90: cada clique na face é um furo novo, normal à superfície no ponto clicado
+        FeatureKind::Hole(h) => {
+            h.points.retain(|q| !matches!(q, PointRef::Origin));
+            h.points.push(PointRef::Fixed(p));
+            if crate::slots::is_unset(h.sketch) {
+                h.sketch = Id(0);
+            }
+        }
         FeatureKind::SmCornerRelief(c) => c.at = p,
         FeatureKind::SmCornerClose(c) => c.at = p,
         FeatureKind::SmConvert(c) => c.face = p,
@@ -266,6 +276,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             }
             crate::editor::check(ui, &mut l.ruled, "faces retas entre perfis (regrada)");
             crate::editor::check(ui, &mut l.closed, "fechada (volta ao primeiro perfil)");
+            crate::loft_3d::painel(ui, l, vars);
         }
         FeatureKind::Primitive(p) => {
             section(ui, "Forma");
@@ -298,6 +309,23 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 faces_ui(ui, &mut s.faces, picked_faces);
                 s.face_keys = carry_keys(&before, &s.face_keys, &s.faces);
                 ui.label(RichText::new(tr("As faces escolhidas ficam abertas; o resto vira parede com a espessura.")).weak().small());
+                ui.label(RichText::new(tr("Espessura por face")).strong());
+                let mut tirar = None;
+                for (i, e) in s.espessuras.iter_mut().enumerate() {
+                    ui.horizontal(|ui| {
+                        expr(ui, "Face", &mut e.valor, vars, "mm");
+                        if ui.small_button("✖").on_hover_text(tr("A face volta à espessura geral.")).clicked() {
+                            tirar = Some(i);
+                        }
+                    });
+                }
+                if let Some(i) = tirar {
+                    s.espessuras.remove(i);
+                }
+                let nova = picked_faces.iter().rev().find(|p| !s.faces.contains(p) && !s.espessuras.iter().any(|e| e.ponto == **p)).copied();
+                if ui.add_enabled(nova.is_some(), egui::Button::new(tr("+ Face selecionada"))).on_hover_text(tr("Selecione uma face de parede: ela ganha espessura própria.")).clicked() {
+                    s.espessuras.extend(nova.map(|ponto| EspessuraFace { ponto, valor: s.thickness.clone() }));
+                }
             }
             let chave = crate::previa::chave_secao();
             let mut corte = ui.ctx().data(|d| d.get_temp::<bool>(chave)).unwrap_or(false);
@@ -529,7 +557,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         }
         FeatureKind::SmFlange(fl) => {
             section(ui, "Parâmetros");
-            crate::editor::expr_lim(ui, "Comprimento reto", &mut fl.length, vars, "mm", Some((0.01, f64::INFINITY)));
+            crate::editor::expr_lim(ui, "Comprimento reto", &mut fl.length, vars, "mm", Some((0., f64::INFINITY)));
             crate::editor::expr_lim(ui, "Ângulo", &mut fl.angle, vars, "°", Some((0.01, 180.)));
             let mut own = fl.radius.is_some();
             ui.horizontal(|ui| {
@@ -631,13 +659,13 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         FeatureKind::SmBend(b) => {
             section(ui, "Dobra por linha");
             let mut from_sketch = b.sketch.is_some();
-            if crate::editor::check(ui, &mut from_sketch, "linhas de um sketch (várias; curva quase reta)").changed() {
+            if crate::editor::check(ui, &mut from_sketch, "linhas de um sketch (várias retas ou uma curva)").changed() {
                 b.sketch = from_sketch.then_some(Id(0));
             }
             match &mut b.sketch {
                 Some(sid) => {
                     sketch_pick(ui, "smb_sk", "Sketch", doc, idx, sid);
-                    ui.label(RichText::new(tr("Cada reta do sketch vira uma dobra; as linhas precisam ser paralelas. Curva suave vira a corda dela, com aviso.")).weak().small());
+                    ui.label(RichText::new(tr("Cada reta do sketch vira uma dobra; as linhas precisam ser paralelas. Uma curva sozinha levanta uma parede ao longo dela.")).weak().small());
                 }
                 None => {
                     ui.label(RichText::new(format!("linha de {} a {}", crate::app::p3(b.a, 1), crate::app::p3(b.b, 1))).small());
@@ -999,6 +1027,8 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             ui.label(RichText::new(tr("Todas as células fechadas entram; para tirar uma, selecione um vértice/ponto dentro dela.")).weak().small());
             hyb_op(ui, &mut bf.op);
         }
+        FeatureKind::MeshOp(m) => crate::malha_ui::painel(ui, doc, me, m, vars),
+        FeatureKind::MeshImport(m) if m.corpo => crate::malha_ui::painel_importar(ui, doc, me, m),
         FeatureKind::MeshImport(m) => {
             section(ui, "Malha → B-rep");
             ui.label(RichText::new(&m.path).small());
@@ -1252,10 +1282,18 @@ pub fn bend_overlay(app: &crate::app::App, ui: &mut egui::Ui, rect: egui::Rect, 
             (Some(a), Some(c)) => Some([a, c]),
             _ => None,
         };
-        if let Some([a, c]) = seg(b.center) {
+        // dobra curva: a linha acompanha a curva; as marcas de começo e fim ficam só nas pontas
+        if b.curva.len() > 2 {
+            for w in b.curva.windows(2) {
+                if let Some([a, c]) = seg([w[0], w[1]]) {
+                    painter.line_segment([a, c], egui::Stroke::new(1.6, col));
+                }
+            }
+        }
+        if let Some([a, c]) = seg(b.center).filter(|_| b.curva.len() <= 2) {
             painter.extend(egui::Shape::dashed_line(&[a, c], egui::Stroke::new(1.6, col), 10., 4.));
             let m = a + (c - a) * 0.5;
-            let g = painter.layout_no_wrap(b.label(), egui::FontId::proportional(12.), col);
+            let g = painter.layout_no_wrap(b.label(), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), col);
             let rr = egui::Rect::from_min_size(m + egui::vec2(6., -g.size().y - 6.), g.size() + egui::vec2(8., 4.));
             painter.rect_filled(rr, 3., Color32::from_rgba_unmultiplied(20, 20, 24, 200));
             painter.galley(rr.min + egui::vec2(4., 2.), g, col);
@@ -1294,7 +1332,7 @@ pub fn cut_overlay(app: &crate::app::App, ui: &mut egui::Ui, rect: egui::Rect, c
                 painter.add(egui::Shape::line(pts.clone(), egui::Stroke::new(2., col)));
             }
             if let Some(p) = pts.first() {
-                painter.text(*p + egui::vec2(6., -6.), egui::Align2::LEFT_BOTTOM, label, egui::FontId::proportional(11.), col);
+                painter.text(*p + egui::vec2(6., -6.), egui::Align2::LEFT_BOTTOM, label, egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), col);
             }
         }
     };

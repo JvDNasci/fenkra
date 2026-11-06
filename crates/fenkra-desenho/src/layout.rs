@@ -486,13 +486,18 @@ const VAO_BLOCOS: f64 = 4.;
 
 /// Tabela configurada (B295): colunas já escolhidas, linhas divididas em blocos lado a lado e a
 /// linha em destaque (clique numa etiqueta de furo) com contorno de alerta.
-fn tabela_cfg(o: &mut Out, pos: V2, title: &str, fin: &crate::tabela::TabelaFinal, cfg: &crate::tabela::ConfigTabela, s: f64) -> V2 {
+fn tabela_cfg(o: &mut Out, pos: V2, title: &str, fin: &crate::tabela::TabelaFinal, cfg: &crate::tabela::ConfigTabela, s: f64, faixa: std::ops::Range<usize>) -> V2 {
     let n = if cfg.dividir == 0 { fin.data.rows.len().max(1) } else { cfg.dividir };
+    let total = crate::tabela::n_blocos(fin.data.rows.len(), cfg.dividir);
     let mut x = pos[0];
     let mut altura = 0f64;
     let rh = s * 1.9;
     for (b, bloco) in crate::tabela::blocos(&fin.data.rows, cfg.dividir).into_iter().enumerate() {
-        let tam = table(o, [x, pos[1]], title, &fin.data.headers, bloco, s);
+        if !faixa.contains(&b) {
+            continue;
+        }
+        let titulo = if cfg.em_folhas && total > 1 { format!("{title} ({}/{total})", b + 1) } else { title.to_string() };
+        let tam = table(o, [x, pos[1]], &titulo, &fin.data.headers, bloco, s);
         // linha em destaque dentro deste bloco
         if let Some(k) = cfg.linha_sel.and_then(|r| fin.origem.iter().position(|o| *o == r)) {
             if k / n == b && !fin.data.headers.is_empty() {
@@ -507,18 +512,21 @@ fn tabela_cfg(o: &mut Out, pos: V2, title: &str, fin: &crate::tabela::TabelaFina
         x += tam[0] + VAO_BLOCOS;
         altura = altura.max(tam[1]);
     }
-    [x - VAO_BLOCOS - pos[0], altura]
+    [(x - VAO_BLOCOS - pos[0]).max(0.), altura]
 }
 
 /// Nome da coluna cujo cabeçalho está debaixo do ponto `q` da folha (para ordenar pelo clique).
-pub fn cabecalho_em(pos: V2, title: &str, fin: &crate::tabela::TabelaFinal, cfg: &crate::tabela::ConfigTabela, s: f64, q: V2) -> Option<String> {
+pub fn cabecalho_em(pos: V2, title: &str, fin: &crate::tabela::TabelaFinal, cfg: &crate::tabela::ConfigTabela, s: f64, q: V2, faixa: std::ops::Range<usize>) -> Option<String> {
     let rh = s * 1.9;
     // o cabeçalho é a segunda faixa (a primeira é o título)
     if q[1] > pos[1] - rh || q[1] < pos[1] - 2. * rh {
         return None;
     }
     let mut x = pos[0];
-    for bloco in crate::tabela::blocos(&fin.data.rows, cfg.dividir) {
+    for (b, bloco) in crate::tabela::blocos(&fin.data.rows, cfg.dividir).into_iter().enumerate() {
+        if !faixa.contains(&b) {
+            continue;
+        }
         let (w, total) = tabela_larguras(title, &fin.data.headers, bloco, s);
         if q[0] >= x && q[0] <= x + total {
             let mut cx = x;
@@ -638,19 +646,30 @@ pub fn sheet(d: &Drawing, sheet: Id, m: &mut Models) -> Vec<Item> {
         o.style(&n2.style);
         note(&mut o, &n2);
     }
-    // tabelas
-    for t in d.tables.iter().filter(|t| t.sheet == sheet) {
-        o.reset(Some(t.id));
-        let fin = crate::tabela::dados(m, t, d);
-        tabela_cfg(&mut o, t.pos, t.kind.label(), &fin, &t.cfg, th * 0.8);
-        // etiquetas dos furos nas vistas (A1, A2…), com chamada até o furo
-        o.reset(None);
-        for e in crate::tabela::etiquetas(m, d, t, &fin) {
-            o.alert = t.cfg.linha_sel == Some(e.linha);
-            o.seg(e.furo, [e.pos[0] - 0.3, e.pos[1] + 0.3], Style::Thin);
-            o.text(e.pos, e.texto.clone(), th * 0.8, 0., Align::Left);
+    // tabelas (com `em_folhas`, os blocos seguintes caem nas folhas seguintes)
+    for t in &d.tables {
+        if t.sheet != sheet && !t.cfg.em_folhas {
+            continue;
         }
-        o.alert = false;
+        let fin = crate::tabela::dados(m, t, d);
+        let total = crate::tabela::n_blocos(fin.data.rows.len(), t.cfg.dividir);
+        if let Some(faixa) = crate::tabela::blocos_na_folha(d, t, sheet, total) {
+            o.reset(Some(t.id));
+            tabela_cfg(&mut o, t.pos, t.kind.label(), &fin, &t.cfg, th * 0.8, faixa);
+        }
+        // etiquetas dos furos nas vistas (A1, A2…), com chamada até o furo
+        if t.cfg.etiquetas {
+            o.reset(None);
+            for e in crate::tabela::etiquetas(m, d, t, &fin) {
+                if d.view(e.view).is_none_or(|v| v.sheet != sheet) {
+                    continue;
+                }
+                o.alert = t.cfg.linha_sel == Some(e.linha);
+                o.seg(e.furo, [e.pos[0] - 0.3, e.pos[1] + 0.3], Style::Thin);
+                o.text(e.pos, e.texto.clone(), th * 0.8, 0., Align::Left);
+            }
+            o.alert = false;
+        }
     }
     o.items
 }

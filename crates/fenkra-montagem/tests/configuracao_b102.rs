@@ -96,3 +96,33 @@ fn montagem_mostra_o_erro_do_componente_com_configuracao_inexistente() {
     assert!((volume(&r) - 100. * (50. + 200. + 50. + 100.)).abs() < 1e-3);
     std::fs::remove_dir_all(&dir).ok();
 }
+
+/// A lista de peças traz uma linha por configuração, com o PN da linha da tabela; configuração que a
+/// peça não tem aparece com o erro em vez de herdar o PN da primeira.
+#[test]
+fn lista_de_pecas_traz_o_pn_da_configuracao() {
+    use fenkra_montagem::bom::{bom, BomLevel};
+    let dir = pasta("bom");
+    std::fs::write(dir.join("barra.fkp"), barra().to_json()).unwrap();
+    let mut a = Assembly::new("Conjunto");
+    for (i, nome) in ["Curta", "Longa", "Longa", "Media", ""].iter().enumerate() {
+        let id = a.add_component(&format!("Barra {i}"), NodeKind::Part { path: "barra.fkp".into() }, Placement::default(), None);
+        a.definir_config(id, nome);
+    }
+    for nivel in [BomLevel::Topo, BomLevel::Pecas] {
+        let linhas = bom(&a, Some(&dir), nivel);
+        // Curta, Longa (x2), Media e a configuração padrão da peça: quatro itens distintos
+        assert_eq!(linhas.len(), 4, "{nivel:?}: {linhas:?}");
+        let de = |cfg: &str| linhas.iter().find(|l| l.config == cfg).unwrap_or_else(|| panic!("sem linha {cfg}"));
+        assert_eq!((de("Curta").pn.as_str(), de("Curta").qty), ("B-50", 1));
+        assert_eq!((de("Longa").pn.as_str(), de("Longa").qty), ("B-200", 2));
+        assert!(de("Media").erro.as_deref().is_some_and(|e| e.contains("'Media'")) && de("Media").pn.is_empty());
+        assert_eq!(de("").pn, "");
+        // cada configuração tem a própria chave e o próprio número de item
+        let mut chaves: Vec<_> = linhas.iter().map(|l| l.key.clone()).collect();
+        chaves.sort();
+        chaves.dedup();
+        assert_eq!(chaves.len(), 4);
+    }
+    std::fs::remove_dir_all(&dir).ok();
+}

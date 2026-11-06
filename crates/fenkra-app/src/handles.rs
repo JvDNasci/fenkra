@@ -11,7 +11,16 @@ use glam::Vec3;
 use fenkra_core::*;
 use crate::i18n::tr;
 
-mod solidos;
+mod aresta;
+mod furo;
+mod limites;
+mod padrao;
+pub(crate) mod solidos;
+
+/// O comando Furo espera o clique numa face para posicionar o furo (B90)?
+pub(crate) fn furo_espera_clique(h: &Hole) -> bool {
+    furo::espera_clique(h)
+}
 
 /// Tamanho da pega das alças na tela, igual em toda seta (B228): um alvo que o mouse acerta sem mira.
 pub(crate) const PEGA: f32 = 28.;
@@ -364,6 +373,14 @@ fn write_slot(app: &mut App, id: Id, slot: u8, value: String) {
     if slot == 0 {
         return write_value(app, id, value);
     }
+    if let Some(FeatureKind::Loft(l)) = app.open.doc.feature_mut(id).map(|f| &mut f.kind) {
+        match slot {
+            crate::loft_3d::CAMPO_INICIO => l.inicio.intensidade = value,
+            crate::loft_3d::CAMPO_FIM => l.fim.intensidade = value,
+            _ => {}
+        }
+        return;
+    }
     // B288: alças extras da bancada Sólidos têm os campos em handles/solidos.rs
     if slot >= solidos::PRIMEIRO {
         solidos::aplicar(&mut app.open.doc, id, slot, value);
@@ -570,12 +587,21 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: Camera) {
     // chapa: linha de dobra na face e alças de ângulo, raio, largura e recuos (B243 e B249)
     crate::chapa_manip_ui::overlay(app, ui, rect, &cam, id);
     // B253: o Membro tem as próprias alças (deslocamento, rotação com ímã de 45°, prolongar, espelhar)
-    if matches!(app.open.doc.feature(id).map(|f| &f.kind), Some(FeatureKind::StructMember(_))) {
+    if let Some(FeatureKind::StructMember(m)) = app.open.doc.feature(id).map(|f| f.kind.clone()) {
+        crate::st_esqueleto::overlay(app, ui, rect, &cam, &m);
         crate::st_alcas::overlay(app, ui, rect, &cam, id);
         return;
     }
     if matches!(app.open.doc.reference(id).map(|r| &r.kind), Some(RefKind::SurfFill { .. })) {
         contour_overlay(app, ui, rect, &cam, id);
+        return;
+    }
+    if let Some(FeatureKind::Loft(l)) = app.open.doc.feature(id).map(|f| f.kind.clone()) {
+        crate::loft_3d::overlay(app, ui, rect, &cam, id);
+        let setas = app.result.as_ref().map(|r| crate::loft_3d::setas(r, &l)).unwrap_or_default();
+        for (i, (campo, base, dir, mm, expr)) in setas.into_iter().enumerate() {
+            linear_handle(app, ui, rect, &cam, id, campo, i, Linear { base, dir, k: 1. / mm, expr, label: "Intensidade" });
+        }
         return;
     }
     if matches!(app.open.doc.feature(id).map(|f| &f.kind), Some(FeatureKind::Revolve(_))) {
@@ -605,10 +631,20 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: Camera) {
     list.extend(solidos::alcas_edicao(app, id));
     // B49: uma seta por ponto de controle do filete variável
     list.extend(solidos::alcas_filete(app, id));
+    // B91: setas de espaçamento do padrão linear
+    list.extend(padrao::alcas(app, id));
+    // B289: início e fim do trecho parcial do filete e do chanfro
+    list.extend(aresta::alcas_trecho(app, id));
     for (i, (slot, h)) in list.into_iter().enumerate() {
         linear_handle(app, ui, rect, &cam, id, slot, i, h);
     }
     solidos::arcos(app, ui, rect, &cam, id);
+    // B91: ponto clicável por instância do padrão e arco do ângulo do circular
+    padrao::overlay(app, ui, rect, &cam, id);
+    // B289: seta que troca a face da primeira medida
+    aresta::inverter(app, ui, rect, &cam, id);
+    // B90: furo-guia que segue o cursor sobre a face
+    furo::guia(app, ui, rect, &cam, id);
     // B89: o término "até" encaixa na face sob o cursor
     solidos::seta_ate_face(app, ui, rect, &cam, id);
     // B275: o plano de referência do comando (espelho, saída, base) tem a seta do próprio deslocamento
@@ -662,11 +698,17 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
     painter.circle_filled(sb, 3.5, c);
     painter.circle_stroke(st, PEGA / 2., Stroke::new(esp, c));
 
+    // captura do B17: o salto real desta seta, com o zoom real desta vista
+    if std::env::var_os("FENKRA_DEMO_PASSO").is_some() {
+        let p = crate::ui_ext::passo_3d(ui, ppm);
+        painter.text(st + egui::vec2(16., 20.), egui::Align2::LEFT_TOP, format!("{} mm = {:.1} px", fmt(p), p * ppm as f64), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), ui.visuals().strong_text_color());
+    }
+
     // arrastar ao longo do eixo
     if hr.dragged() {
         if let Some(m) = ui.input(|i| i.pointer.interact_pos()) {
             let t = (m - sb).dot(axis) / ppm;
-            // passo segue o zoom (potência de 10 de ~8 px) e as teclas do painel
+            // passo segue o zoom (série 1-2-5, até 8 px) e as teclas do painel
             let step = (crate::ui_ext::passo_3d(ui, ppm) * h.k as f64) as f32;
             let mut v = ((t * h.k) / step).round() * step;
             if v.abs() < step {
@@ -677,6 +719,10 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
     } else if hr.hovered() && numeric {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+    }
+    // B14: a seta que passa sobre um elemento o propõe como limite
+    if hr.dragged() || hr.drag_stopped() {
+        limites::propor(app, ui, rect, id, slot, st, hr.drag_stopped());
     }
 
     // cota editável junto da ponta
@@ -689,6 +735,13 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
     painter.rect_filled(lr, 4., Color32::from_rgba_unmultiplied(20, 60, 110, 220));
     painter.rect_stroke(lr, 4., Stroke::new(1., c), egui::StrokeKind::Inside);
     painter.galley(lr.min + egui::vec2(5., 3.), galley, Color32::WHITE);
+    // B246: com o valor que deixa a geometria inválida, a causa aparece junto da seta que o arrasta,
+    // e a prévia anterior continua na tela
+    if nth == 0 {
+        if let Some(fenkra_solidos::Status::Error(msg)) = app.result.as_ref().and_then(|r| r.status.get(&id)) {
+            crate::previa::etiqueta_de_erro(ui, rect, lr.left_bottom() + egui::vec2(0., 4.), msg);
+        }
+    }
     let lresp = ui.interact(lr, egui::Id::unique(("alca_cota", id.0, nth)), if numeric { egui::Sense::click_and_drag() } else { egui::Sense::click() });
     let lresp = lresp.on_hover_text(format!("{} · {}", h.label, tr("arraste a seta ou este rótulo, gire a roda, ou clique para digitar (aceita expressão). Shift ×10, Ctrl ×0,1, Alt ×0,01")));
     if numeric {
@@ -713,6 +766,7 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
     }
     if let Some(mut text) = editing.take() {
         let mut done: Option<bool> = None;
+        let mut desvincular = false;
         egui::Area::new(egui::Id::unique(("alca_area", id.0, nth))).fixed_pos(lr.left_bottom() + egui::vec2(0., 4.)).order(egui::Order::Foreground).show(ui.ctx(), |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.label(RichText::new(h.label).small());
@@ -722,6 +776,10 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
                 if !ok {
                     ui.label(RichText::new(tr("expressão inválida")).small().color(crate::theme::st_err()));
                 }
+                // valor ligado a parâmetro: o rótulo diz qual e deixa soltar o vínculo
+                if !numeric && ui.small_button(tr("Desvincular")).on_hover_text(tr("Troca a expressão pelo valor de agora; a seta volta a arrastar.")).clicked() {
+                    desvincular = true;
+                }
                 let (enter, esc) = ui.input(|i| (i.key_pressed(egui::Key::Enter), i.key_pressed(egui::Key::Escape)));
                 if enter && ok {
                     done = Some(true);
@@ -730,6 +788,10 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
                 }
             });
         });
+        if desvincular {
+            write_slot(app, id, slot, fmt(val));
+            done = Some(false);
+        }
         match done {
             Some(true) => {
                 // a cota guarda o comprimento total; a seta do plano médio mostra metade

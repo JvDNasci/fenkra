@@ -72,7 +72,7 @@ pub fn linhas_dobra(open: &[Vec<[f64; 2]>]) -> Result<(Vec<([f64; 2], [f64; 2])>
             if curva {
                 let d = desvio(&pts);
                 if d > (corda * 0.01).max(0.1) {
-                    return Err(format!("a linha de dobra curva desvia {d:.2} mm da corda de {corda:.1} mm: uma dobra em curva forte pede peça cônica, ainda sem suporte. Use retas ou uma curva quase reta"));
+                    return Err(format!("a linha de dobra curva desvia {d:.2} mm da corda de {corda:.1} mm: faça um comando para cada curva, sem retas junto"));
                 }
                 avisos.push(format!("linha curva aproximada pela corda (desvio de {d:.2} mm)"));
             }
@@ -83,6 +83,13 @@ pub fn linhas_dobra(open: &[Vec<[f64; 2]>]) -> Result<(Vec<([f64; 2], [f64; 2])>
         return Err("o sketch da dobra precisa de linhas abertas (retas ou curva quase reta)".into());
     }
     Ok((linhas, avisos))
+}
+
+/// A cadeia aberta inteira, quando o sketch tem só ela e ela é curva de verdade: é a dobra em curva.
+/// Curva quase reta continua sendo corda em `linhas_dobra`, e várias linhas ficam com ela também.
+pub fn cadeia_curva(open: &[Vec<[f64; 2]>]) -> Option<Vec<[f64; 2]>> {
+    let [c] = open else { return None };
+    (c.len() >= 3 && linhas_dobra(open).is_err()).then(|| c.clone())
 }
 
 /// A lateral da aresta escolhida (a face de ponta) tem a espessura da chapa? `None` = sim.

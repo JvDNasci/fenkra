@@ -125,3 +125,33 @@ fn clique_no_cabecalho_ordena_e_na_etiqueta_destaca_a_linha() {
     assert!(!tabelas_ui::clique(&mut st, [5., 5.]));
     assert_eq!(st.d.tables[0].cfg.linha_sel, None);
 }
+
+#[test]
+fn cota_inteligente_pega_o_centro_da_marca_e_mede_entre_furos() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    use fenkra_desenho::cotas::Alvo;
+    let (mut st, v) = estado_topo("fenkra_dwg_ui_cota_centro");
+    let f = furos_na_folha(&mut st, v);
+    assert!(f.len() >= 4);
+    st.tool = Some(c::CENTER);
+    st.centro.modo = ModoCentro::Linear;
+    assert_eq!(centros_ui::clicar(&mut st, f[0]), Ok(None));
+    centros_ui::clicar(&mut st, f[1]).unwrap().expect("marca linear entre dois furos");
+    st.tool = None;
+    st.zoom = 3.78;
+    let snap = |_: &mut DwgState, _: V2, _: Option<Id>| None;
+    let vista = |_: &DwgState, _: V2| Some(v);
+    let (vid, a) = cota_inteligente::alvo_sob(&mut st, f[0], &snap, &vista).expect("âncora");
+    assert_eq!(vid, v);
+    let Alvo::Ponto(a) = a else { panic!("esperava ponto, veio {a:?}") };
+    st.ci.view = Some(v);
+    let (_, b) = cota_inteligente::alvo_sob(&mut st, f[1], &snap, &vista).expect("segundo centro");
+    let Alvo::Ponto(b) = b else { panic!("esperava ponto") };
+    // os furos vizinhos ficam a 96 mm no eixo x (±48)
+    assert!(((a[0] - b[0]).hypot(a[1] - b[1]) - 96.).abs() < 0.1, "distância {a:?} {b:?}");
+    // furo sem marca continua dando o arco
+    let (_, c3) = cota_inteligente::alvo_sob(&mut st, f[2], &snap, &vista).expect("arco");
+    assert!(matches!(c3, Alvo::Arco { .. }), "{c3:?}");
+}

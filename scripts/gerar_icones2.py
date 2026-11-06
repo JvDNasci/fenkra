@@ -268,6 +268,9 @@ def desenhos():
        R=L((12, 30), (7, 20)) + L((20, 24), (15, 11)) + L((28, 19), (24, 7)) + L((36, 17), (35, 9))
        + "M7 20c2-4 5-7 8-9s6-3 9-4 7-1 11 2")
     ic("an_sombreado", B=C(24, 24, 18), R="M30 7a18 18 0 0 1 0 34a24 24 0 0 0 0-34z")
+    ic("an_inclinacao", B="M6 40h36", R=L((13, 40), (18, 10)) + L((18, 10), (30, 10)) + L((30, 10), (35, 40)))
+    ic("an_isofotas", B=C(24, 24, 18), R="M12 28a12 12 0 0 1 24 0M17 28a7 7 0 0 1 14 0M22 28a2 2 0 0 1 4 0M10 18c4-5 24-5 28 0")
+    ic("an_dfm", B=Q(8, 12, 32, 24), R=L((15, 25), (21, 31), (33, 17)) + L((8, 40), (40, 40)))
     ic("an_conexao", B="M6 30c6-10 12-10 16-10M42 30c-6-10-12-10-16-10", R="M24 10v28M18 14l6-4 6 4M18 34l6 4 6-4")
     ic("an_desvio", B="M6 34c10-12 26-12 36 0", R="M6 22c10-12 26-12 36 0M14 17v9M24 14v9M34 17v9")
     ic("an_pente", B="M6 38c8-14 26-20 36-20", R="M10 32l-5-7M17 26l-4-9M25 22l-2-12M33 19l1-9M41 18l3-5")
@@ -525,6 +528,15 @@ def desenhos():
        R=Z((6, 38), (14, 12), (30, 8), (42, 22), (36, 40)))
     ic("hib_preencher", B=Z((8, 12), (40, 8), (42, 38), (10, 42)), R="M12 22l10-10M12 34L32 13M18 38l21-22M30 37l10-10")
 
+    # ---------- corpo de malha ----------
+    MALHA = Z((6, 38), (14, 12), (30, 8), (42, 22), (36, 40)) + L((14, 12), (22, 28), (30, 8)) + L((6, 38), (22, 28), (36, 40))
+    ic("malha_reparar", B=MALHA, R="M30 26l10 10M26 30l10 10M26 30l4-4")
+    ic("malha_decimar", B=Z((6, 38), (14, 12), (30, 8), (42, 22), (36, 40)), R=L((14, 12), (36, 40)) + L((30, 8), (6, 38)))
+    ic("malha_booleana", B=Z((6, 30), (14, 10), (28, 14), (24, 36)), R=Z((20, 18), (34, 12), (42, 30), (28, 40)))
+    ic("malha_solido", B=Z((6, 36), (10, 16), (22, 12), (22, 38)) + L((10, 16), (22, 38)), R=CUBO(34, 18, 8, 4, 10) + "M23 24h4")
+    ic("solido_malha", B=CUBO(13, 18, 8, 4, 10), R=Z((26, 36), (30, 16), (42, 12), (42, 38)) + L((30, 16), (42, 38)) + "M21 24h4")
+    ic("impressao_mesa", B="M6 38h36M12 42h24", R="M16 36l4-22h8l4 22M24 6v8M19 14h10")
+
     # ---------- montagem ----------
     ic("asm_nova", B=CUBO(14, 8, 9, 4.5, 9) + CUBO(28, 16, 9, 4.5, 9), R=MAIS(38, 13, 6))
     ic("asm_inserir", B="M6 28v14h36V28", R=CUBO(24, 16, 10, 5, 10) + S(24, 3, 24, 13, 4.5))
@@ -534,6 +546,8 @@ def desenhos():
     ic("asm_fixadores", B="M6 22h10M32 22h10M6 34h10M32 34h10M16 22v12M32 22v12", R="M14 12h20v6H14zM20 18v24M28 18v24")
     ic("asm_catalogo", B="M10 8h24a4 4 0 0 1 4 4v28H14a4 4 0 0 1-4-4zM10 36a4 4 0 0 1 4-4h24", R="M19 13h10v5H19zM22 18v10M26 18v10")
     ic("asm_engrenagens", B=ENGRENAGEM(16, 18, 11, 8, 8), R=ENGRENAGEM(33, 33, 11, 8, 8))
+    ic("asm_chaveta", B="M6 30v12h36V30H34M14 30H6", R="M14 20h20a4 4 0 0 1 0 8H14a4 4 0 0 1 0-8z")
+    ic("asm_calculo", B=Q(8, 6, 32, 36), R=Q(13, 11, 22, 8) + "M14 26h4M22 26h4M30 26h4M14 34h4M22 34h4M30 34h4")
     ic("asm_lista", B="M20 12h22M20 24h22M20 36h22", R=C(10, 12, 4) + C(10, 24, 4) + C(10, 36, 4))
     ic("asm_numerar", B=CUBO(16, 22, 10, 5, 10), R=C(36, 14, 7) + L((31, 19), (20, 28)))
     ic("asm_recorte_peca", B=CUBO(24, 16, 18, 9, 12), R="M14 21V6h20v15M14 21l10 5 10-5")
@@ -721,6 +735,10 @@ ic("forma_simetria", b="M24 4v40", R="M20 10c-16 2-16 26 0 28M28 10c16 2 16 26 0
 ic("forma_converter", b=Q(6, 12, 18, 24), R=CUBO(32, 12, 10, 5, 12) + "M18 24h4", pb=[(6, 12), (24, 12), (24, 36), (6, 36)])
 
 SO_INTERFACE = {"sm_aba_perfis", "sm_desdobrar_parcial", "sm_redobrar_parcial", "sm_converter_chapa", "sm_aba_laco", "sm_fecha_canto", "sm_canto_topo", "sm_canto_sobreposto", "sm_canto_sob", "importar_arquivo", "asm_catalogo", "arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais", "exportar_arquivo", "liberar_revisao", "onde_usado", "comparar", "estado_sem_revisao", "estado_liberada", "estado_editado", "estado_leitura", "estado_conflito", "forma", "forma_caixa", "forma_esfera", "forma_cilindro", "forma_plano", "forma_extrudar", "forma_laco", "forma_aresta", "forma_borda", "forma_tangencia", "forma_simetria", "forma_converter", "des_cota_inteligente", "curso", "mapa_macro", "perfil_fluxo", "an_conexao", "an_desvio", "an_pente", "sup_regrada", "st_solda", "conversao_lote", "formatos_suportados", "edit_mover_face", "edit_apagar_face", "edit_deslocar_face", "edit_raio_filete"}
+
+SO_INTERFACE |= {"filete_assimetrico"}
+SO_INTERFACE |= {"an_inclinacao", "an_isofotas", "an_dfm"}
+SO_INTERFACE |= {"asm_chaveta", "asm_calculo"}
 
 
 # ---------- saída ----------

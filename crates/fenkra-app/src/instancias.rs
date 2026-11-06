@@ -430,7 +430,7 @@ mod tests {
 
     fn cena(st: &crate::asm_ui::AsmState, curvatura: Option<crate::sup_analise::EscalaCurvatura>, hilite: Option<fenkra_core::Id>) -> crate::render::Scene {
         let (sel, filtro) = (crate::app::Sel::None, crate::settings::Filter::default());
-        let o = crate::scene::SceneOpts { instancias: &st.instancias, forma_oculta: None, editing: None, sel: &sel, filter: &filtro, hidden_env: false, dark_edges: true, tangent_edges: false, hilite, hilite_extra: &[], line_w: 1., line_dash: 0, point_style: 0, curvatura, fantasma: None };
+        let o = crate::scene::SceneOpts { instancias: &st.instancias, forma_oculta: None, editing: None, sel: &sel, filter: &filtro, hidden_env: false, dark_edges: true, tangent_edges: false, hilite, hilite_extra: &[], line_w: 1., line_dash: 0, point_style: 0, curvatura: curvatura.map(Into::into), fantasma: None };
         crate::scene::build(&st.view_doc, st.view.as_ref().unwrap(), &o)
     }
 

@@ -171,6 +171,32 @@ impl Ctx<'_> {
         Ok(Some("planificada: estampo marcado pelo contorno da ferramenta".into()))
     }
 
+    /// Estampo por punção na planificada: o copo não existe na chapa plana. A pegada do punção
+    /// (a seção dele pelo plano da chapa) vai para as marcas de ferramenta, como nos outros estampos.
+    pub(super) fn puncao_planificado(&mut self, f: &Feature, punch: &Shape, chapa: &Shape) -> Result<Option<String>, String> {
+        let k = |e: KernelError| e.0;
+        // o punção desenhado com a chapa dobrada acompanha as dobras até a planificada
+        let punch = self.map_tool(punch.clone(), f.flat_space, true)?;
+        let (plo, phi) = punch.bbox().ok_or("punção sem dimensões")?;
+        let (on, n) = chapa.surface_near(geo3d::lerp(plo, phi, 0.5)).map_err(k)?;
+        let meia = geo3d::dist(plo, phi) + 10.;
+        let mut laços: Vec<Vec<V3>> = vec![];
+        for mut l in punch.section_loops(on, n, meia).map_err(k)? {
+            if l.len() < 3 {
+                continue;
+            }
+            if l.first() != l.last() {
+                l.push(l[0]);
+            }
+            laços.push(l);
+        }
+        if laços.is_empty() {
+            return Err("o punção não toca a chapa: não há pegada para marcar na planificada".into());
+        }
+        self.marca_ferramenta(f, laços);
+        Ok(Some("planificada: punção marcado pela pegada na chapa".into()))
+    }
+
     /// Aba por perfil na planificada: cada cadeia vira uma tira reta com o comprimento
     /// desenvolvido (trechos retos mais o comprimento neutro de cada canto), na espessura da
     /// chapa, saindo do ponto inicial do perfil para fora da chapa. A largura segue o
@@ -186,7 +212,10 @@ impl Ctx<'_> {
         let dir = geo3d::unit(fenkra_kernel::cross(frame.normal, n)).ok_or("o plano do perfil é paralelo à chapa: desenhe o perfil num plano que corte a chapa")?;
         let w = geo3d::unit(frame.normal).ok_or("plano do perfil sem normal")?;
         if geo3d::dot(w, n).abs() > 1e-6 {
-            return Err("a planificação exata pede o perfil num plano perpendicular à chapa".into());
+            // a aba é extrudada pela normal do plano do perfil e só prende na aresta da chapa quando
+            // essa normal fica no plano da chapa; inclinada, a faixa sai do plano e não tem linha de
+            // dobra com a chapa para desenvolver
+            return Err(format!("o plano do perfil está {:.1}° fora da perpendicular à chapa: a planificação exata pede o perfil num plano perpendicular a ela (o plano que contém a normal da chapa)", geo3d::dot(w, n).abs().min(1.).asin().to_degrees()));
         }
         let k_para = |ri: f64| sp.k_for(ri);
         let largura = l1 + l2;
@@ -232,6 +261,7 @@ impl Ctx<'_> {
                     allowance: c.ba,
                     deduction: deducao(c, sp.t),
                     eixo: None,
+                    curva: vec![],
                 };
                 self.cut_outlines.push(CutOutline { feature: f.id, folded: vec![], flat: vec![], dobra: Some(bl) });
             }
@@ -270,6 +300,7 @@ pub fn passos_planificados(doc: &Document) -> Vec<PassoPlanificado> {
         last_sheet: None,
         sheet_maps: vec![],
         cut_outlines: vec![],
+        malhas: HashMap::new(),
         roscas: vec![],
         relatorios_forma: vec![],
         formas_resolvidas: vec![],

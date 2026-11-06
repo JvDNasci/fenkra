@@ -16,7 +16,6 @@ const CORES_FIXAS: &[(&str, usize)] = &[
     ("asm_ui.rs", 13),
     ("dwg_ui.rs", 12),
     ("editor.rs", 10),
-    ("examples.rs", 2),
     ("feat_ui.rs", 4),
     ("geo_ui.rs", 5),
     ("gizmo.rs", 7),

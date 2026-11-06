@@ -47,13 +47,20 @@ fn aplica(x: &Xform, p: V3) -> V3 {
 /// Instâncias do padrão `id` (a original primeiro), com a posição de cada uma e se está pulada.
 /// A prévia desenha um ponto clicável em cada uma; clicar acrescenta a chave a `Pattern::skip`.
 pub fn instancias_do_padrao(doc: &Document, id: Id) -> Vec<InstanciaPadrao> {
-    let Some(Feature { kind: FeatureKind::Pattern(pt), .. }) = doc.feature(id) else { return vec![] };
+    let Some(Feature { kind: FeatureKind::Pattern(_), .. }) = doc.feature(id) else { return vec![] };
     // sem o próprio padrão no cálculo, o corpo é só a origem das cópias: o centro dele é o das instâncias
     let mut d = doc.clone();
     if let Some(f) = d.feature_mut(id) {
         f.suppressed = true;
     }
     let centro0 = origem_do_padrao(&d).unwrap_or([0.; 3]);
+    instancias_a_partir_de(doc, id, centro0)
+}
+
+/// Como `instancias_do_padrao`, mas com o centro da origem já conhecido: a interface o tira da malha
+/// de antes do comando e desenha as instâncias a cada quadro sem recalcular o documento.
+pub fn instancias_a_partir_de(doc: &Document, id: Id, centro0: V3) -> Vec<InstanciaPadrao> {
+    let Some(Feature { kind: FeatureKind::Pattern(pt), .. }) = doc.feature(id) else { return vec![] };
     let Some(chaves_xs) = transformacoes(doc, pt) else { return vec![] };
     let mut v = vec![InstanciaPadrao { chave: (0, 0), centro: centro0, pulada: false }];
     for (k, x) in chaves_xs {
@@ -154,6 +161,7 @@ fn contexto_vazio<'a>(doc: &'a Document, vars: Vars) -> Ctx<'a> {
         last_sheet: None,
         sheet_maps: vec![],
         cut_outlines: vec![],
+        malhas: HashMap::new(),
         roscas: vec![],
         relatorios_forma: vec![],
         formas_resolvidas: vec![],

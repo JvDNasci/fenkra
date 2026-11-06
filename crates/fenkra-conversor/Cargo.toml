@@ -10,6 +10,7 @@ publish.workspace = true
 fenkra-core = { path = "../fenkra-core" }
 fenkra-dxf = { path = "../fenkra-dxf" }
 fenkra-kernel = { path = "../fenkra-kernel" }
+fenkra-malha = { path = "../fenkra-malha" }
 fenkra-montagem = { path = "../fenkra-montagem" }
 fenkra-solidos = { path = "../fenkra-solidos" }
 blake3 = "1"

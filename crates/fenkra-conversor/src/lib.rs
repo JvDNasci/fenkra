@@ -12,6 +12,7 @@ mod documento;
 mod dxf;
 mod formato;
 mod importar;
+pub mod impressao;
 pub mod lote;
 pub mod malha;
 mod matriz;
@@ -20,6 +21,7 @@ mod occt;
 mod opcoes;
 mod plano;
 pub mod processo;
+mod pmi_step;
 mod provedor;
 mod relatorio;
 mod sonda;
@@ -32,6 +34,7 @@ pub use occt::ProvedorOcct;
 pub use opcoes::{Destino, EsquemaSaida, Estrutura, ModoIges, OpcoesExportar, OpcoesImportar, Reparo, UnidadeArquivo, UnidadeSaida};
 pub use malha::{Cena, OpcoesMalha, ProvedorMalha};
 pub use matriz::{Capacidades, LinhaMatriz};
+pub use pmi_step::{anotacoes_do_documento, face_do_alvo, SaidaPmi, NOTAS_PMI};
 pub use provedor::{Provedor, Registro};
 pub use relatorio::{Contagem, Defeito, LinhaReparo, Nota, Relatorio, TipoDefeito, NOTAS};
 
@@ -53,6 +56,17 @@ pub enum ErroConv {
     Cancelado,
     #[error("programa do conversor não encontrado: {0}")]
     Ausente(String),
+}
+
+impl From<fenkra_malha::Erro> for ErroConv {
+    fn from(e: fenkra_malha::Erro) -> Self {
+        use fenkra_malha::Erro;
+        match e {
+            Erro::Formato(t) => ErroConv::Formato(t),
+            Erro::Leitura(t) | Erro::Operacao(t) => ErroConv::Leitura(t),
+            Erro::Gravacao(t) => ErroConv::Gravacao(t),
+        }
+    }
 }
 
 impl From<fenkra_kernel::KernelError> for ErroConv {

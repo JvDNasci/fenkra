@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/fenkra-core",
+    "crates/fenkra-malha",
     "crates/fenkra-kernel",
     "crates/fenkra-dxf",
     "crates/fenkra-conversor",
@@ -11,6 +12,7 @@ members = [
     "crates/fenkra-project",
     "crates/fenkra-montagem",
     "crates/fenkra-desenho",
+    "crates/fenkra-pacote",
     "crates/fenkra-tolerancias",
     "crates/fenkra-app",
 ]

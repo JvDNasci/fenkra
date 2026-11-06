@@ -122,11 +122,14 @@ pub struct OpcoesImportar {
     pub tolerancia: f64,
     pub unidade: UnidadeArquivo,
     pub destino: Destino,
+    /// malha vira sólido facetado, com teto de triângulos, em vez de corpo de malha
+    #[serde(default)]
+    pub malha_em_solido: bool,
 }
 
 impl Default for OpcoesImportar {
     fn default() -> Self {
-        OpcoesImportar { cores: true, nomes: true, camadas: true, reparo: Reparo::default(), tolerancia: 0.01, unidade: UnidadeArquivo::default(), destino: Destino::default() }
+        OpcoesImportar { cores: true, nomes: true, camadas: true, reparo: Reparo::default(), tolerancia: 0.01, unidade: UnidadeArquivo::default(), destino: Destino::default(), malha_em_solido: false }
     }
 }
 

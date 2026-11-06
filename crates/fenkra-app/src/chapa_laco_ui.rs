@@ -75,7 +75,7 @@ pub fn painel(ui: &mut egui::Ui, doc: &Document, lp: &mut SmFlangeLoop, vars: &V
     if !matches!(lp.extent, ExtensaoAba::Inteira | ExtensaoAba::Entre { .. }) {
         check(ui, &mut lp.invert, "medir a partir da outra ponta").on_hover_text(tr("A medida começa na ponta de menor X (depois Y, Z) de cada aresta; ligado, começa na outra."));
     }
-    crate::editor::expr_lim(ui, "Comprimento reto", &mut lp.length, vars, "mm", Some((0.01, f64::INFINITY)));
+    crate::editor::expr_lim(ui, "Comprimento reto", &mut lp.length, vars, "mm", Some((0., f64::INFINITY)));
     crate::editor::expr_lim(ui, "Ângulo", &mut lp.angle, vars, "°", Some((0.01, 180.)));
     let mut own = lp.radius.is_some();
     ui.horizontal(|ui| {

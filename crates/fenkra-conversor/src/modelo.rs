@@ -58,6 +58,16 @@ impl ModeloNeutro {
         Ok(m)
     }
 
+    /// Modelo da peça aberta com o PMI semântico (cotas, tolerâncias, referências e alvos) ligado às
+    /// faces. Devolve junto as notas do que o STEP não leva. Sem PMI no documento, sai como `de_documento`.
+    pub fn de_documento_pmi(doc: &fenkra_core::Document) -> Result<(ModeloNeutro, Vec<crate::Nota>), ErroConv> {
+        let mut m = Self::de_documento(doc)?;
+        let Some(forma) = m.xde.produtos[0].forma.as_ref() else { return Ok((m, vec![])) };
+        let saida = crate::pmi_step::anotacoes_do_documento(doc, forma);
+        m.xde.anotacoes = saida.anotacoes;
+        Ok((m, saida.fora))
+    }
+
     /// Nome de uma ocorrência: a instância quando o arquivo nomeou, senão o produto.
     pub(crate) fn nome_da_instancia(&self, i: &InstanciaXde) -> String {
         let automatico = i.nome.is_empty() || i.nome.starts_with("=>") || i.nome.starts_with("NAUO");

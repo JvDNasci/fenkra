@@ -25,7 +25,7 @@ use fenkra_core::sketch::Curve;
 use fenkra_core::*;
 use std::f64::consts::PI;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, serde::Serialize, serde::Deserialize)]
 pub enum TipoEngrenagem {
     Reta,
     Helicoidal,
@@ -47,7 +47,8 @@ impl TipoEngrenagem {
 }
 
 /// Entradas do gerador. Ângulos em graus, medidas em mm.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct ParamEngrenagem {
     pub tipo: TipoEngrenagem,
     /// módulo normal m
@@ -69,6 +70,14 @@ pub struct ParamEngrenagem {
     pub comprimento_cremalheira: f64,
     /// rasgo de chaveta no cubo (DIN 6885 forma A pelo diâmetro do furo); só reta/helicoidal com furo > 0
     pub rasgo_cubo: bool,
+    /// dupla hélice em V (espinha de peixe), só helicoidal: duas metades de hélice contrária que
+    /// travam o par no sentido axial sem anel nem colar no eixo (B344)
+    pub espinha_peixe: bool,
+    /// folga extra para impressão 3D (mm, do par): cada peça perde metade dela na espessura do dente
+    /// e o pé do dente fica mais fundo pela folga inteira, para os dentes não prenderem na camada (B344)
+    pub folga_impressao: f64,
+    /// usinagens editáveis sobre a peça padronizada (B345): cubo, rebaixo, alívio, parafuso, furo, rasgo
+    pub usinagens: Vec<crate::usinagens::Usinagem>,
 }
 
 impl Default for ParamEngrenagem {
@@ -85,6 +94,9 @@ impl Default for ParamEngrenagem {
             furo: 0.,
             comprimento_cremalheira: 100.,
             rasgo_cubo: false,
+            espinha_peixe: false,
+            folga_impressao: 0.,
+            usinagens: vec![],
         }
     }
 }
@@ -95,16 +107,23 @@ impl ParamEngrenagem {
         let m = self.modulo;
         match self.tipo {
             TipoEngrenagem::Reta => format!("Engrenagem reta m{m} z{}", self.dentes),
+            TipoEngrenagem::Helicoidal if self.espinha_peixe => format!("Engrenagem espinha de peixe m{m} z{} β{}", self.dentes, self.angulo_helice),
             TipoEngrenagem::Helicoidal => format!("Engrenagem helicoidal m{m} z{} β{}", self.dentes, self.angulo_helice),
             TipoEngrenagem::Interna => format!("Engrenagem interna m{m} z{}", self.dentes),
             TipoEngrenagem::Cremalheira => format!("Cremalheira m{m} L{}", self.comprimento_cremalheira),
         }
     }
 
-    /// Nome de arquivo (sem extensão) que identifica o conjunto de parâmetros que mudam a peça.
+    /// Chave do arquivo da peça: a do catálogo mais o sufixo das usinagens (peças usinadas não colidem
+    /// com a padronizada).
+    pub fn chave_arquivo(&self) -> String {
+        format!("{}{}", self.chave(), crate::usinagens::sufixo_de_chave(&self.usinagens))
+    }
+
+    /// Chave da peça **padronizada** do catálogo (sem usinagens): é o vínculo gravado na peça.
     pub fn chave(&self) -> String {
         let base = format!("m{}-a{}-b{}-f{}", self.modulo, self.angulo_pressao, self.largura, self.folga_dentes);
-        let rasgo = if self.rasgo_cubo && self.furo > 0. { "-k" } else { "" };
+        let rasgo = format!("{}{}{}", if self.rasgo_cubo && self.furo > 0. { "-k" } else { "" }, if self.espinha_peixe && self.tipo == TipoEngrenagem::Helicoidal { "-v" } else { "" }, if self.folga_impressao > 0. && matches!(self.tipo, TipoEngrenagem::Reta | TipoEngrenagem::Helicoidal) { format!("-p{}", self.folga_impressao) } else { String::new() });
         match self.tipo {
             TipoEngrenagem::Reta => format!("engrenagem-reta-{base}-z{}-x{}-d{}{rasgo}", self.dentes, self.coef_correcao, self.furo),
             TipoEngrenagem::Helicoidal => format!("engrenagem-helicoidal-{base}-z{}-x{}-d{}-h{}{rasgo}", self.dentes, self.coef_correcao, self.furo, self.angulo_helice),
@@ -139,20 +158,21 @@ pub struct CalculoEngrenagem {
 
 /// Dimensões de um dente em evolvente (plano transversal). Na interna descreve o **vão** entre dois
 /// dentes, que tem o mesmo desenho de um dente externo.
-struct Dente {
-    r: f64,
-    rb: f64,
-    ra: f64,
-    rf: f64,
+pub(crate) struct Dente {
+    pub(crate) r: f64,
+    pub(crate) rb: f64,
+    pub(crate) ra: f64,
+    pub(crate) rf: f64,
     /// espessura em arco no círculo primitivo
-    sp: f64,
+    pub(crate) sp: f64,
     /// ângulo de pressão transversal (rad)
-    alfa: f64,
-    z: u32,
+    pub(crate) alfa: f64,
+    pub(crate) z: u32,
 }
 
 /// Passo do contorno: o ponto final (a spline traz todos os pontos depois do início).
-enum Passo {
+#[derive(Debug)]
+pub(crate) enum Passo {
     Linha([f64; 2]),
     Arco([f64; 2]),
     Spline(Vec<[f64; 2]>),
@@ -162,19 +182,20 @@ fn inv(t: f64) -> f64 {
     t - t.atan()
 }
 
-fn polar(r: f64, a: f64) -> [f64; 2] {
+pub(crate) fn polar(r: f64, a: f64) -> [f64; 2] {
     [r * a.cos(), r * a.sin()]
 }
 
 /// Parâmetros do dente da reta/helicoidal.
-fn dente_externo(p: &ParamEngrenagem) -> Dente {
+pub(crate) fn dente_externo(p: &ParamEngrenagem) -> Dente {
     let beta = if p.tipo == TipoEngrenagem::Helicoidal { p.angulo_helice.to_radians() } else { 0. };
     let (m, x) = (p.modulo, p.coef_correcao);
     let alfa_n = p.angulo_pressao.to_radians();
     let cb = beta.cos();
     let alfa = (alfa_n.tan() / cb).atan();
     let r = m / cb * p.dentes as f64 / 2.;
-    Dente { r, rb: r * alfa.cos(), ra: r + m * (1. + x), rf: r - m * (1.25 - x), sp: (m * (PI / 2. + 2. * x * alfa_n.tan()) - p.folga_dentes) / cb, alfa, z: p.dentes }
+    let fi = p.folga_impressao;
+    Dente { r, rb: r * alfa.cos(), ra: r + m * (1. + x), rf: r - m * (1.25 - x) - fi, sp: (m * (PI / 2. + 2. * x * alfa_n.tan()) - p.folga_dentes - fi / 2.) / cb, alfa, z: p.dentes }
 }
 
 /// Vão da engrenagem interna: topo do vão na raiz da interna (r + 1,25m), fundo no topo dos dentes
@@ -186,24 +207,24 @@ fn dente_interno(p: &ParamEngrenagem) -> Dente {
 }
 
 /// Limites do flanco: (θ no pé, θ no topo, meio ângulo do dente no pé, meio ângulo no topo).
-struct Limites {
-    th0: f64,
-    th1: f64,
-    psi0: f64,
-    psia: f64,
+pub(crate) struct Limites {
+    pub(crate) th0: f64,
+    pub(crate) th1: f64,
+    pub(crate) psi0: f64,
+    pub(crate) psia: f64,
 }
 
 impl Dente {
-    fn theta(&self, r: f64) -> f64 {
+    pub(crate) fn theta(&self, r: f64) -> f64 {
         ((r / self.rb).powi(2) - 1.).max(0.).sqrt()
     }
 
     /// Meio ângulo do dente (do eixo do dente ao flanco) no ponto θ da evolvente.
-    fn meio_angulo(&self, theta: f64) -> f64 {
+    pub(crate) fn meio_angulo(&self, theta: f64) -> f64 {
         self.sp / (2. * self.r) + inv(self.alfa.tan()) - inv(theta)
     }
 
-    fn limites(&self) -> Result<Limites, String> {
+    pub(crate) fn limites(&self) -> Result<Limites, String> {
         if self.ra <= self.rb * 1.0001 {
             return Err("o círculo de topo não passa do círculo base — aumente o número de dentes".into());
         }
@@ -259,7 +280,7 @@ fn num(v: f64, nome: &str) -> Result<(), String> {
 
 /// Valida as entradas e calcula as dimensões da engrenagem.
 pub fn calculo(p: &ParamEngrenagem) -> Result<CalculoEngrenagem, String> {
-    for (v, n) in [(p.modulo, "módulo"), (p.angulo_pressao, "ângulo de pressão"), (p.angulo_helice, "ângulo de hélice"), (p.largura, "largura"), (p.folga_dentes, "folga"), (p.coef_correcao, "coeficiente de correção"), (p.furo, "furo"), (p.comprimento_cremalheira, "comprimento")] {
+    for (v, n) in [(p.modulo, "módulo"), (p.angulo_pressao, "ângulo de pressão"), (p.angulo_helice, "ângulo de hélice"), (p.largura, "largura"), (p.folga_dentes, "folga"), (p.folga_impressao, "folga de impressão"), (p.coef_correcao, "coeficiente de correção"), (p.furo, "furo"), (p.comprimento_cremalheira, "comprimento")] {
         num(v, n)?;
     }
     if p.modulo <= 0. || p.modulo > 100. {
@@ -270,6 +291,9 @@ pub fn calculo(p: &ParamEngrenagem) -> Result<CalculoEngrenagem, String> {
     }
     if p.largura <= 0. {
         return Err("a largura precisa ser positiva".into());
+    }
+    if p.folga_impressao < 0. || p.folga_impressao > p.modulo {
+        return Err("a folga de impressão precisa estar entre 0 e um módulo".into());
     }
     if p.folga_dentes < 0. || p.folga_dentes > 0.5 * p.modulo {
         return Err("a folga precisa estar entre 0 e metade do módulo".into());
@@ -355,6 +379,7 @@ pub fn calculo(p: &ParamEngrenagem) -> Result<CalculoEngrenagem, String> {
                     return Err(format!("o rasgo do cubo (furo + {:.1} mm) passa da raiz: aumente o módulo ou os dentes", k.t2));
                 }
             }
+            crate::usinagens::validar(&crate::usinagens::GeoBase { largura: p.largura, raio_raiz: c.diametro_raiz / 2., furo: p.furo, cubo_proprio: None }, &p.usinagens)?;
             let z_min = 2. * (1. - p.coef_correcao) / g.alfa.sin().powi(2);
             if (p.dentes as f64) < z_min.floor() {
                 c.avisos.push(format!(
@@ -385,7 +410,7 @@ pub fn engrenagem_documento(p: &ParamEngrenagem) -> Result<Document, String> {
     match p.tipo {
         TipoEngrenagem::Reta => m.reta(&dente_externo(p))?,
         TipoEngrenagem::Helicoidal if p.angulo_helice.abs() < 1e-6 => m.reta(&dente_externo(p))?,
-        TipoEngrenagem::Helicoidal => m.helicoidal(&dente_externo(p), p.angulo_helice.to_radians(), p.largura)?,
+        TipoEngrenagem::Helicoidal => m.helicoidal(&dente_externo(p), p.angulo_helice.to_radians(), p.largura, p.espinha_peixe)?,
         TipoEngrenagem::Interna => m.interna(&dente_interno(p), calculo(p)?.diametro_anel)?,
         TipoEngrenagem::Cremalheira => m.cremalheira(p)?,
     }
@@ -405,6 +430,11 @@ pub fn engrenagem_documento(p: &ParamEngrenagem) -> Result<Document, String> {
             crate::eixos::extrusao_cega(&mut m, "Rasgo_chaveta", sk, "kt2+1", BoolOp::Cut, true);
         }
     }
+    if matches!(p.tipo, TipoEngrenagem::Reta | TipoEngrenagem::Helicoidal) && !p.usinagens.is_empty() {
+        let c = calculo(p)?;
+        crate::usinagens::aplicar(&mut m, &crate::usinagens::GeoBase { largura: p.largura, raio_raiz: c.diametro_raiz / 2., furo: p.furo, cubo_proprio: None }, &p.usinagens)?;
+    }
+    crate::usinagens::registrar_vinculo(&mut m.doc, &p.chave(), &p.usinagens);
     Ok(m.doc)
 }
 
@@ -457,7 +487,7 @@ const PASSO_TORCAO: f64 = 4.;
 /// Máximo de trechos do loft.
 const MAX_TRECHOS: usize = 24;
 /// Pontos por flanco: mais dentes, menos pontos.
-fn pontos_flanco(z: u32) -> usize {
+pub(crate) fn pontos_flanco(z: u32) -> usize {
     if z > 60 {
         6
     } else {
@@ -476,6 +506,9 @@ impl Montador {
         def(self, "alpha", p.angulo_pressao.to_string(), a)?;
         if p.tipo == TipoEngrenagem::Helicoidal {
             def(self, "beta", p.angulo_helice.to_string(), a)?;
+        }
+        if p.folga_impressao > 0. {
+            def(self, "folga_impressao", p.folga_impressao.to_string(), Unit::Comprimento)?;
         }
         def(self, "b", p.largura.to_string(), Unit::Comprimento)?;
         def(self, "folga", p.folga_dentes.to_string(), Unit::Comprimento)?;
@@ -506,7 +539,7 @@ impl Montador {
     }
 
     /// Sketch com o contorno (e o círculo externo, se `anel`): `rot` gira o desenho em torno de Z.
-    fn sketch_contorno(&mut self, nome: &str, plano: PlaneRef, inicio: [f64; 2], passos: &[Passo], rot: f64, anel: Option<f64>) -> Id {
+    pub(crate) fn sketch_contorno(&mut self, nome: &str, plano: PlaneRef, inicio: [f64; 2], passos: &[Passo], rot: f64, anel: Option<f64>) -> Id {
         let (c, s) = (rot.cos(), rot.sin());
         let rotar = |p: [f64; 2]| [p[0] * c - p[1] * s, p[0] * s + p[1] * c];
         let mut data = SketchData::default();
@@ -559,7 +592,7 @@ impl Montador {
         id
     }
 
-    fn extrusao(&mut self, nome: &str, sketch: Id) {
+    pub(crate) fn extrusao(&mut self, nome: &str, sketch: Id) {
         let id = self.doc.add_feature(FeatureKind::Extrude(Extrude {
             sketch,
             op: BoolOp::Add,
@@ -592,14 +625,19 @@ impl Montador {
     }
 
     /// Loft reto entre seções giradas de `z·tan β / r`.
-    fn helicoidal(&mut self, g: &Dente, beta: f64, largura: f64) -> Result<(), String> {
+    /// Com `espinha`, a hélice vai até a metade da largura e volta (V): o giro da seção é
+    /// `min(z, b − z) tan β / r`, e cada metade usa a mesma quantidade de trechos.
+    fn helicoidal(&mut self, g: &Dente, beta: f64, largura: f64, espinha: bool) -> Result<(), String> {
         let (inicio, passos) = g.contorno(pontos_flanco(g.z))?;
-        let torcao = (largura * beta.tan() / g.r).abs().to_degrees();
-        let trechos = ((torcao / PASSO_TORCAO).ceil() as usize).clamp(1, MAX_TRECHOS);
+        let util = if espinha { largura / 2. } else { largura };
+        let torcao = (util * beta.tan() / g.r).abs().to_degrees();
+        let meio = ((torcao / PASSO_TORCAO).ceil() as usize).clamp(1, if espinha { MAX_TRECHOS / 2 } else { MAX_TRECHOS });
+        let trechos = if espinha { 2 * meio } else { meio };
         let mut secoes = vec![];
         for i in 0..=trechos {
             let plano = if i == 0 { PlaneRef::Origin(OriginPlane::XY) } else { self.plano(&format!("Plano_secao_{i}"), &format!("b*{i}/{trechos}"))? };
-            let rot = largura * (i as f64 / trechos as f64) * beta.tan() / g.r;
+            let frac = if espinha { (i.min(trechos - i)) as f64 / meio as f64 } else { i as f64 / trechos as f64 };
+            let rot = util * frac * beta.tan() / g.r;
             secoes.push(self.sketch_contorno(&format!("Secao_{i}"), plano, inicio, &passos, rot, None));
         }
         let id = self.doc.add_feature(FeatureKind::Loft(Loft { sections: secoes, ruled: true, closed: false, op: BoolOp::Add, torcao: vec![], inicio: Default::default(), fim: Default::default() }));
@@ -805,5 +843,33 @@ mod tests {
         let (v, lo, hi) = medir(&engrenagem_documento(&r).unwrap());
         assert!(perto(lo[0], 0., 1e-3) && perto(hi[0], 100., 1e-3) && perto(lo[1], -7.5, 1e-3) && perto(hi[1], 2., 1e-3), "{lo:?} {hi:?}");
         assert!(v > 100. * 5. * 10. && v < 100. * 9.5 * 10., "cremalheira {v}");
+    }
+
+    #[test]
+    fn espinha_de_peixe_tem_o_volume_da_helicoidal_e_dobra_na_metade() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let h = ParamEngrenagem { tipo: TipoEngrenagem::Helicoidal, angulo_helice: 20., largura: 20., ..Default::default() };
+        let v = ParamEngrenagem { espinha_peixe: true, ..h.clone() };
+        let (vh, ..) = medir(&engrenagem_documento(&h).unwrap());
+        let (vv, lo, hi) = medir(&engrenagem_documento(&v).unwrap());
+        // a mesma seção transversal em cada altura: o volume fica dentro de 2% do da helicoidal
+        assert!((vv - vh).abs() / vh < 0.02, "V {vv} contra helicoidal {vh}");
+        assert!(perto(lo[2], 0., 1e-3) && perto(hi[2], 20., 1e-3));
+        // o dente na face inferior e na superior está no mesmo ângulo (a hélice volta a zero), e no meio gira
+        // o dobro da metade: a caixa envolvente em x não muda, mas a descrição e a chave distinguem a peça
+        assert!(engrenagem_documento(&v).unwrap().props.description.contains("espinha de peixe"));
+        assert_ne!(h.chave(), v.chave());
+        // folga de impressão: o dente fica mais fino e o pé mais fundo, então o volume cai e o topo não muda
+        let imp = ParamEngrenagem { folga_impressao: 0.3, ..v.clone() };
+        let (vi, _, hi_i) = medir(&engrenagem_documento(&imp).unwrap());
+        assert!(vi < vv && perto(hi_i[0].max(hi_i[1]), hi[0].max(hi[1]), 0.05), "{vi} {vv}");
+        let c0 = calculo(&v).unwrap();
+        let ci = calculo(&imp).unwrap();
+        assert!(ci.diametro_raiz < c0.diametro_raiz - 0.5 && perto(ci.diametro_externo, c0.diametro_externo, 1e-9));
+        assert!(ci.espessura_dente < c0.espessura_dente - 0.1);
+        assert!(calculo(&ParamEngrenagem { folga_impressao: -1., ..v.clone() }).is_err());
+        assert!(calculo(&ParamEngrenagem { folga_impressao: 5., ..v }).is_err());
     }
 }

@@ -1,0 +1,35 @@
+{
+  "nome": "Impressão 3D (FDM)",
+  "processo": "aditivo",
+  "direcao": [
+    0,
+    0,
+    1
+  ],
+  "regras": [
+    {
+      "id": "fdm.parede.min",
+      "entidade": "parede",
+      "medida": "espessura",
+      "severidade": "aviso",
+      "texto": "Parede de {valor} mm abaixo de {limite} mm: menos de dois filetes do bico.",
+      "min": 0.8
+    },
+    {
+      "id": "fdm.saliencia",
+      "entidade": "saliencia",
+      "medida": "angulo",
+      "severidade": "aviso",
+      "texto": "Face com {valor} graus de saliência (limite {limite}): precisa de suporte.",
+      "max": 45.0
+    },
+    {
+      "id": "fdm.furo.diametro",
+      "entidade": "furo",
+      "medida": "diametro",
+      "severidade": "info",
+      "texto": "Furo de {valor} mm tende a fechar na impressão (mínimo {limite} mm).",
+      "min": 1.5
+    }
+  ]
+}

@@ -20,10 +20,12 @@ path = "src/bin/fenkra_conv.rs"
 fenkra-core = { path = "../fenkra-core" }
 fenkra-kernel = { path = "../fenkra-kernel" }
 fenkra-conversor = { path = "../fenkra-conversor" }
+fenkra-malha = { path = "../fenkra-malha" }
 fenkra-solidos = { path = "../fenkra-solidos" }
 fenkra-project = { path = "../fenkra-project" }
 fenkra-montagem = { path = "../fenkra-montagem" }
 fenkra-desenho = { path = "../fenkra-desenho" }
+fenkra-pacote = { path = "../fenkra-pacote" }
 eframe = { version = "0.37", features = ["wgpu", "persistence"] }
 glam.workspace = true
 bytemuck.workspace = true

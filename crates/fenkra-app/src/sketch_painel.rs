@@ -153,7 +153,9 @@ pub fn comando(app: &mut App, ui: &mut egui::Ui) {
                 if let Some(k) = &tecla {
                     dica = format!("{dica}\n{k}: {}", tr("percorre os modos"));
                 }
-                if ui.add(egui::Button::image_and_text(img, tr(nome_modo(m))).selected(m == tool)).on_hover_text(dica).clicked() {
+                // Shift segurado troca aparar e estender: o painel mostra o que o clique vai fazer
+                let vale = crate::sketch_relimita::efetiva(tool, ui.input(|i| i.modifiers.shift) || edit.demo_shift);
+                if ui.add(egui::Button::image_and_text(img, tr(nome_modo(m))).selected(m == vale)).on_hover_text(dica).clicked() {
                     edit.escolher(m);
                 }
             }
@@ -253,6 +255,8 @@ pub fn comando(app: &mut App, ui: &mut egui::Ui) {
                 ui.checkbox(&mut s.auto_constraints, tr("Restrições automáticas")).on_hover_text(tr(DICA_AUTO_REST));
                 ui.checkbox(&mut s.auto_dims, tr("Cotas automáticas")).on_hover_text(tr(DICA_AUTO_COTA));
                 ui.checkbox(&mut s.snaps, tr("Snaps")).on_hover_text(tr(DICA_SNAPS));
+                ui.checkbox(&mut s.snap_restringe, tr("Snap vira restrição")).on_hover_text(tr(crate::sketch_snap::DICA_RESTRINGE));
+                ui.checkbox(&mut s.juntar_ao_soltar, tr("Juntar pontos ao soltar")).on_hover_text(tr(crate::sketch_snap::DICA_JUNTAR));
             }
         });
     }
@@ -336,7 +340,7 @@ mod tests {
         for d in ["Inscrito", "Circunscrito", DICA_INSCRITO, DICA_CIRCUNSCRITO, DICA_SEGUNDA, DICA_ANGULO_CANTO, DICA_MANTER, "manter canto", "2ª distância"] {
             assert!(tem_traducao(d), "{d}");
         }
-        for d in [DICA_ESPERA, DICA_LADOS, DICA_RAIO_CANTO, DICA_DIST_CANTO, DICA_CONSTRUCAO, DICA_COTA_DIGITAR, DICA_AUTO_REST, DICA_AUTO_COTA, DICA_SNAPS] {
+        for d in [DICA_ESPERA, DICA_LADOS, DICA_RAIO_CANTO, DICA_DIST_CANTO, DICA_CONSTRUCAO, DICA_COTA_DIGITAR, DICA_AUTO_REST, DICA_AUTO_COTA, DICA_SNAPS, crate::sketch_snap::DICA_RESTRINGE, crate::sketch_snap::DICA_JUNTAR] {
             assert!(tem_traducao(d), "{d}");
         }
         for m in [Tool::Rect, Tool::RectCenter, Tool::Circle, Tool::Circle3, Tool::Arc3, Tool::ArcCenter, Tool::Fillet, Tool::Chamfer] {

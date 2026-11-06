@@ -47,6 +47,8 @@ pub struct DobraPlana {
     pub angulo: f64,
     pub raio: f64,
     pub desenvolvido: f64,
+    /// pontos da linha quando a dobra é curva; vazio na dobra reta de `a` a `b`
+    pub curva: Vec<[f64; 2]>,
 }
 
 /// Dois comandos que ocupam o mesmo lugar na chapa plana.
@@ -381,7 +383,7 @@ pub fn planificar(doc: &Document) -> Result<Planificada, String> {
         .bend_lines
         .iter()
         .zip(&tabela)
-        .map(|(b, row)| DobraPlana { ordem: row.ordem, rotulo: row.rotulo.clone(), a: p2(b.center[0]), b: p2(b.center[1]), cima: b.up, angulo: b.angle, raio: b.radius, desenvolvido: b.allowance })
+        .map(|(b, row)| DobraPlana { ordem: row.ordem, rotulo: row.rotulo.clone(), a: p2(b.center[0]), b: p2(b.center[1]), cima: b.up, angulo: b.angle, raio: b.radius, desenvolvido: b.allowance, curva: b.curva.iter().map(|q| p2(*q)).collect() })
         .collect();
 
     // sobreposição: duas ferramentas que somam material no mesmo lugar da chapa plana
@@ -470,7 +472,11 @@ pub fn dxf(p: &Planificada) -> String {
     }
     for dobra in &p.dobras {
         let camada = if dobra.cima { CAMADA_DOBRA_CIMA } else { CAMADA_DOBRA_BAIXO };
-        d.itens.push(Item::novo(camada, D::Linha(dobra.a, dobra.b)));
+        if dobra.curva.len() > 2 {
+            d.itens.extend(dobra.curva.windows(2).map(|w| Item::novo(camada, D::Linha(w[0], w[1]))));
+        } else {
+            d.itens.push(Item::novo(camada, D::Linha(dobra.a, dobra.b)));
+        }
         let meio = [(dobra.a[0] + dobra.b[0]) / 2. + 1., (dobra.a[1] + dobra.b[1]) / 2. + 1.];
         let texto = format!("{} {}", dobra.ordem, dobra.rotulo);
         d.itens.push(Item::novo(CAMADA_ROTULOS, D::Texto { pos: meio, altura: 2.5, angulo: 0., anexo: Anexo::Esquerda, texto }));

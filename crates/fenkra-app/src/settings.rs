@@ -410,6 +410,12 @@ impl Graficos {
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
+    /// últimas opções do preparo de impressão
+    #[serde(default)]
+    pub impressao: fenkra_conversor::impressao::OpcoesImpressao,
+    /// programa do fatiador externo
+    #[serde(default)]
+    pub fatiador: String,
     /// últimas opções do painel de importação
     #[serde(default)]
     pub opcoes_importar: fenkra_conversor::OpcoesImportar,
@@ -429,6 +435,13 @@ pub struct Settings {
     /// B34: raio que recebe a última cor do mapa, em mm
     #[serde(default = "raio_da_curvatura")]
     pub curv_raio: f32,
+    /// B180: direção de abertura do mapa de inclinação (0 X, 1 Y, 2 Z), o sentido e o ângulo mínimo
+    #[serde(default = "eixo_da_inclinacao")]
+    pub incl_eixo: u8,
+    #[serde(default)]
+    pub incl_inverte: bool,
+    #[serde(default = "minimo_da_inclinacao")]
+    pub incl_min: f32,
     pub edges_in_render: bool,
     /// arestas de tangência visíveis (padrão: escondidas, como numa peça real)
     pub tangent_edges: bool,
@@ -461,6 +474,10 @@ pub struct Settings {
     pub grid_step: f32,
     pub snaps: bool,
     pub auto_constraints: bool,
+    /// o apoio de um snap (meio, sobre a curva, quadrante, interseção) vira restrição
+    pub snap_restringe: bool,
+    /// ponto solto sobre outro ponto vira um ponto só
+    pub juntar_ao_soltar: bool,
     pub auto_dims: bool,
     /// valor digitado no campo do cursor vira cota
     pub dim_on_type: bool,
@@ -559,6 +576,8 @@ pub struct CustomGroup {
 impl Default for Settings {
     fn default() -> Self {
         Settings {
+            impressao: Default::default(),
+            fatiador: String::new(),
             opcoes_importar: Default::default(),
             opcoes_exportar: Default::default(),
             theme: Theme::Claro,
@@ -569,6 +588,9 @@ impl Default for Settings {
             display: DisplayMode::SombreadoArestas,
             curv_tipo: Default::default(),
             curv_raio: raio_da_curvatura(),
+            incl_eixo: eixo_da_inclinacao(),
+            incl_inverte: false,
+            incl_min: minimo_da_inclinacao(),
             edges_in_render: false,
             tangent_edges: false,
             ortho: false,
@@ -593,6 +615,8 @@ impl Default for Settings {
             grid_step: 10.,
             snaps: true,
             auto_constraints: true,
+            snap_restringe: true,
+            juntar_ao_soltar: true,
             auto_dims: false,
             dim_on_type: true,
             keys: Default::default(),
@@ -645,6 +669,14 @@ pub const BACKGROUNDS: [(&str, [u8; 3], [u8; 3]); 6] = [
 
 fn raio_da_curvatura() -> f32 {
     10.
+}
+
+fn eixo_da_inclinacao() -> u8 {
+    2
+}
+
+fn minimo_da_inclinacao() -> f32 {
+    1.
 }
 
 impl Settings {

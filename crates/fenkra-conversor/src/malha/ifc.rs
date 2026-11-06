@@ -649,7 +649,7 @@ pub(crate) fn gravar(cena: &Cena, mm: f64, caminho: &Path) -> String {
 #[cfg(test)]
 mod testes {
     use super::*;
-    use crate::malha::cena::testes::cubo;
+    use fenkra_malha::cena::cubo;
 
     #[test]
     fn acento_vai_e_volta_pelo_formato_do_step() {

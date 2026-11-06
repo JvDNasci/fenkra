@@ -112,7 +112,7 @@ fn motivo(t: Trava) -> String {
 fn cadeado(ui: &egui::Ui, rect: Rect, c: Pos2, t: Trava) {
     let v = ui.visuals();
     let p = ui.painter_at(rect);
-    let g = p.layout_no_wrap(format!("🔒 {}", motivo(t)), egui::FontId::proportional(12.5), v.text_color());
+    let g = p.layout_no_wrap(format!("🔒 {}", motivo(t)), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.5)), v.text_color());
     let caixa = Rect::from_min_size(c + egui::vec2(14., -10.), g.size() + egui::vec2(12., 6.));
     p.rect_filled(caixa, 4., v.window_fill.gamma_multiply(0.92));
     p.rect_stroke(caixa, 4., Stroke::new(1., crate::theme::st_warn()), egui::StrokeKind::Inside);
@@ -251,7 +251,7 @@ fn colide(st: &mut AsmState, a: &Assembly, id: Id, picks: &[Id]) -> bool {
 /// Pílula clicável de uma alça.
 fn pilula(ui: &mut egui::Ui, rect: Rect, at: Pos2, txt: &str, cor: egui::Color32, chave: (&str, u64, usize), dica: &str) -> bool {
     let v = ui.visuals().clone();
-    let g = ui.painter().layout_no_wrap(txt.to_string(), egui::FontId::proportional(11.), v.text_color());
+    let g = ui.painter().layout_no_wrap(txt.to_string(), egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), v.text_color());
     let caixa = Rect::from_center_size(at, g.size() + egui::vec2(8., 4.));
     let r = ui.interact(caixa, egui::Id::unique(chave), egui::Sense::click()).on_hover_text(tr(dica));
     let p = ui.painter_at(rect);
@@ -446,7 +446,7 @@ pub fn desenhar(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
         st.contact = false;
     }
     if st.contact {
-        ui.painter_at(rect).text(cs + egui::vec2(18., 18.), egui::Align2::LEFT_TOP, tr("⛔ contato — o movimento parou na colisão"), egui::FontId::proportional(13.), crate::theme::st_err());
+        ui.painter_at(rect).text(cs + egui::vec2(18., 18.), egui::Align2::LEFT_TOP, tr("⛔ contato — o movimento parou na colisão"), egui::FontId::proportional(crate::acessibilidade::fonte_3d(13.)), crate::theme::st_err());
     }
 }
 

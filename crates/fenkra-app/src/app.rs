@@ -24,8 +24,10 @@ mod diag;
 mod gravar;
 mod roda_app;
 mod demo_janelas;
+mod demo_estrutural;
 mod estado_doc;
 mod exportar;
+mod visualizacao;
 mod importar;
 mod features;
 mod lote;
@@ -81,6 +83,8 @@ type PedidoCalculo = (u64, Document, bool, fenkra_core::QualidadeMalha);
 
 struct Worker {
     fila: fenkra_core::trabalho::Fila<PedidoCalculo, (u64, RecomputeResult)>,
+    /// controle do último pedido: é por ele que o Cancelar da barra de status para o cálculo
+    ultimo: std::cell::RefCell<Option<fenkra_core::trabalho::Controle>>,
 }
 
 impl Worker {
@@ -112,11 +116,18 @@ impl Worker {
             },
             move || ctx.request_repaint(),
         );
-        Worker { fila }
+        Worker { fila, ultimo: Default::default() }
     }
 
     fn enviar(&self, pedido: PedidoCalculo) {
-        self.fila.enviar(pedido);
+        *self.ultimo.borrow_mut() = Some(self.fila.enviar(pedido));
+    }
+
+    /// Para o cálculo em andamento; o que já terminou fica no cache.
+    fn cancelar(&self) {
+        if let Some(c) = self.ultimo.borrow().as_ref() {
+            c.cancelar();
+        }
     }
 
     fn receber(&self) -> Option<(u64, RecomputeResult)> {
@@ -195,6 +206,7 @@ pub struct App {
     /// painel Features encontradas (B143), aberto só enquanto a pessoa analisa
     features: Option<features::Estado>,
     exportar_dialogo: Option<exportar::Dialogo>,
+    pub impressao: Option<crate::impressao_ui::Painel>,
     /// tela "Formatos suportados" aberta
     formatos_aberto: bool,
     lote_painel: Option<lote::Painel>,
@@ -238,7 +250,7 @@ pub struct App {
     pub forma: crate::forma_ui::Estado,
     pub(crate) hover_pick: Option<crate::picking::Pick>,
     /// já passou da tela inicial
-    started: bool,
+    pub(crate) started: bool,
     /// a tela inicial foi aberta pelo menu (há trabalho aberto para onde voltar)
     inicio_pelo_menu: bool,
     /// comando aberto em edição (ambiente com Concluir/Cancelar)
@@ -408,6 +420,7 @@ impl App {
             importar_defeito: None,
             features: None,
             exportar_dialogo: None,
+            impressao: None,
             formatos_aberto: false,
             lote_painel: None,
             comparacao: None,
@@ -556,6 +569,9 @@ impl App {
         match std::env::var("FENKRA_EXIBIR").as_deref() {
             Ok("zebra") => app.settings.display = crate::render::DisplayMode::Zebra,
             Ok("curvatura") => app.settings.display = crate::render::DisplayMode::Curvatura,
+            Ok("inclinacao") => app.settings.display = crate::render::DisplayMode::Inclinacao,
+            Ok("isofotas") => app.settings.display = crate::render::DisplayMode::Isofotas,
+            Ok("dfm") => app.settings.display = crate::render::DisplayMode::Dfm,
             _ => {}
         }
         if std::env::var("FENKRA_DEMO_SUP").is_ok() {
@@ -674,6 +690,9 @@ impl App {
                     let id = d.add_feature(FeatureKind::SmConvert(SmConvert { face: [50., 30., 2.], thickness: String::new() }));
                     d.feature_mut(id).map(|f| f.name = "ConverterEmChapa".into());
                 }
+                // converter em chapa sobre um canal de fora, sem comando de chapa (B35): o mapa de
+                // dobras e, com FENKRA_DEMO_PLANA=1, o corpo desdobrado
+                "canal" => d = crate::demo_chapa::canal_convertido(std::env::var("FENKRA_DEMO_PLANA").is_ok()),
                 _ => {}
             }
             d.hide_consumed(d.features[1].id);
@@ -732,7 +751,7 @@ impl App {
             app.load_doc(d, None, None);
             app.settings.bench = crate::settings::Bench::Estrutural;
             app.st_cut_open = true;
-            app.st_cantos_open = std::env::var("FENKRA_DEMO_CANTOS").is_ok();
+            app.st_cantos_open = std::env::var("FENKRA_DEMO_CANTOS").is_ok() || std::env::var("FENKRA_DEMO_LIMITE").is_ok();
             app.started = true;
         }
         // desenvolvimento: FENKRA_DEMO_ENCAIXE=1 abre um tubo redondo oblíquo encaixado noutro (B155) com o
@@ -824,12 +843,25 @@ impl App {
             app.st_cut_open = std::env::var("FENKRA_EDITAR").is_err();
             app.started = true;
         }
+        // desenvolvimento: FENKRA_DEMO_GOMOS e FENKRA_DEMO_SOLDA (casos da bancada Estrutural)
+        app.demo_estrutural();
         // desenvolvimento: FENKRA_EDITAR=<nome> abre esse comando como ambiente ao iniciar (depois das peças de demonstração)
         if let Ok(name) = std::env::var("FENKRA_EDITAR") {
             if let Some(id) = app.open.doc.features.iter().find(|f| f.name == name).map(|f| f.id) {
                 app.start_session(id, false, None);
                 app.started = true;
             }
+        }
+        // desenvolvimento: FENKRA_DEMO_MALHA=<importar|reparar|decimar|booleana> abre um corpo de malha com o comando
+        if let Ok(modo) = std::env::var("FENKRA_DEMO_MALHA") {
+            if let Some(id) = crate::malha_ui::demo_preparar(&mut app.open.doc, &modo) {
+                app.start_session(id, false, None);
+                app.started = true;
+            }
+        }
+        // desenvolvimento: FENKRA_DEMO_IMPRESSAO=1 abre o preparo de impressão com a peça aberta
+        if std::env::var("FENKRA_DEMO_IMPRESSAO").is_ok() {
+            app.abrir_impressao();
         }
         // desenvolvimento: FENKRA_DEMO_PMI=1 anota a placa de exemplo (cota, nota, tolerância, rugosidade)
         if std::env::var("FENKRA_DEMO_PMI").is_ok() {
@@ -1065,6 +1097,16 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
 
     pub fn request_recompute(&mut self) {
         self.send_recompute(false);
+    }
+
+    /// Atualizar esta feature: calcula só até o comando; os de depois seguem desatualizados.
+    fn atualizar_ate(&mut self, id: Id) {
+        let Some(i) = self.open.doc.feature_index(id) else { return };
+        let mut d = self.open.doc.clone();
+        d.rollback = d.rollback.min(i + 1);
+        self.gen_sent += 1;
+        self.sent_doc = Some(d.clone());
+        self.worker.enviar((self.gen_sent, d, false, self.qualidade_malha));
     }
 
     /// Pede o cálculo; `fresh` descarta o cache (reconstruir tudo do zero).
@@ -1328,6 +1370,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         if crate::asm_ui::salvar_peca_pendente(self) {
             return;
         }
+        if self.open.doc.retrocedida() {
+            self.toast(tr("Peça salva retrocedida: os comandos depois do objeto em trabalho ficam inativos até você voltar ao fim."), false);
+        }
         if self.open.frozen.is_some() {
             self.toast("Revisão congelada não pode ser salva. Abra a versão de trabalho.", true);
             return;
@@ -1480,11 +1525,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             return false;
         }
         let accent = brand_accent();
+        let tx = crate::inicio_tema::Paleta::atual().texto;
         // some suavemente no fim
         let fade = if ready { (1. - (el - min_time) / 0.25).clamp(0., 1.) } else { 1. };
         egui::CentralPanel::default().frame(egui::Frame::NONE).show(root, |ui| {
             let rect = ui.max_rect();
-            paint_backdrop(ui.painter(), rect, true, el, accent, None);
+            paint_backdrop(ui.painter(), rect, el, false);
             let painter = ui.painter().with_clip_rect(rect);
             let c = rect.center() - egui::vec2(0., 40.);
             let appear = ease_out((el / 0.6).min(1.));
@@ -1496,15 +1542,15 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
             // anéis girando em sentidos opostos
             ring(&painter, c, 118., el * 1.4, 1.6, 2.5, accent.gamma_multiply(0.9 * fade));
-            ring(&painter, c, 132., -el * 0.9 + 1., 0.9, 1.5, Color32::from_white_alpha((90. * fade) as u8));
+            ring(&painter, c, 132., -el * 0.9 + 1., 0.9, 1.5, tx.gamma_multiply(90. / 255. * fade));
             ring(&painter, c, 104., -el * 2.1, 0.5, 1.2, accent.gamma_multiply(0.5 * fade));
             let sz = 150. * (0.85 + 0.15 * appear);
-            let img = egui::Image::new(egui::include_image!("../../../assets/app/fenix-256.png")).corner_radius(26.).tint(Color32::from_white_alpha((255. * appear * fade) as u8));
+            let img = egui::Image::new(egui::include_image!("../../../assets/app/fenix-256.png")).corner_radius(26.).tint(Color32::WHITE.gamma_multiply(appear * fade));
             img.paint_at(ui, Rect::from_center_size(c, egui::vec2(sz, sz)));
-            wordmark(&painter, c + egui::vec2(0., 160.), 34., Color32::from_white_alpha((255. * fade) as u8), accent.gamma_multiply(fade));
-            painter.text(c + egui::vec2(0., 192.), egui::Align2::CENTER_CENTER, tr(BRAND_TAGLINE), egui::FontId::proportional(13.5), Color32::from_white_alpha((160. * fade) as u8));
+            wordmark(&painter, c + egui::vec2(0., 160.), 34., tx.gamma_multiply(255. / 255. * fade), accent.gamma_multiply(fade));
+            painter.text(c + egui::vec2(0., 192.), egui::Align2::CENTER_CENTER, tr(BRAND_TAGLINE), egui::FontId::proportional(13.5), tx.gamma_multiply(160. / 255. * fade));
             let bar = Rect::from_center_size(c + egui::vec2(0., 226.), egui::vec2(340., 5.));
-            painter.rect_filled(bar, 3., Color32::from_white_alpha((28. * fade) as u8));
+            painter.rect_filled(bar, 3., tx.gamma_multiply(28. / 255. * fade));
             let mut fill = bar;
             fill.set_width(bar.width() * p);
             painter.rect_filled(fill, 3., accent.gamma_multiply(fade));
@@ -1512,11 +1558,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             let sx = fill.left() + ((el * 0.9).fract()) * (fill.width() + 80.) - 40.;
             let sh = Rect::from_min_max(egui::pos2(sx.max(fill.left()), fill.top()), egui::pos2((sx + 40.).min(fill.right()), fill.bottom()));
             if sh.width() > 0. {
-                painter.rect_filled(sh, 3., Color32::from_white_alpha((120. * fade) as u8));
+                painter.rect_filled(sh, 3., tx.gamma_multiply(120. / 255. * fade));
             }
             let stage = if p < 0.3 { "Iniciando o kernel OpenCASCADE…" } else if p < 0.6 { "Carregando ferramentas e ícones…" } else if p < 0.95 { "Calculando a peça…" } else { "Pronto" };
-            painter.text(bar.center_bottom() + egui::vec2(0., 16.), egui::Align2::CENTER_CENTER, tr(stage), egui::FontId::proportional(12.), Color32::from_white_alpha((140. * fade) as u8));
-            painter.text(rect.right_bottom() - egui::vec2(16., 14.), egui::Align2::RIGHT_BOTTOM, concat!("v", env!("CARGO_PKG_VERSION")), egui::FontId::monospace(11.), Color32::from_white_alpha((90. * fade) as u8));
+            painter.text(bar.center_bottom() + egui::vec2(0., 16.), egui::Align2::CENTER_CENTER, tr(stage), egui::FontId::proportional(12.), tx.gamma_multiply(140. / 255. * fade));
+            painter.text(rect.right_bottom() - egui::vec2(16., 14.), egui::Align2::RIGHT_BOTTOM, concat!("v", env!("CARGO_PKG_VERSION")), egui::FontId::monospace(11.), tx.gamma_multiply(90. / 255. * fade));
         });
         root.ctx().request_repaint();
         true
@@ -1528,19 +1574,19 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let mut recent_open: Option<String> = None;
         let mut file_open: Option<String> = None;
         let mut example: Option<usize> = None;
-        let dark = root.ctx().global_style().visuals.dark_mode;
-        let accent = brand_accent();
-        // tema Fênix: o fundo da tela inicial sai do próprio tema (o degradê azul padrão destoava do creme e do acento)
-        let fundo_do_tema = (self.settings.theme_name == crate::theme::FENIX).then(|| root.ctx().global_style().visuals.panel_fill);
+        let pal = crate::inicio_tema::Paleta::atual();
+        let accent = pal.destaque;
+        // B335: movimento contínuo só sem "reduzir movimento", sem modo leve e com animações ligadas
+        let animar = crate::inicio_tema::movimento_permitido(self.settings.animacoes, self.settings.acessibilidade.reduzir_movimento, self.settings.modo_leve);
         let (now, dt) = root.ctx().input(|i| (i.time, i.stable_dt.min(0.1)));
         let t0 = *self.start_t0.get_or_insert(now);
         let el_real = (now - t0) as f32;
         // B222: a entrada anima por um tempo limitado e depois congela; parada, a tela não pede mais quadros
         let entrada = 0.25 + 0.07 * crate::examples::all().len() as f32 + 0.8;
-        let el = el_real.min(entrada);
+        let el = if animar { el_real } else { el_real.min(entrada) };
         let ex_meta: Vec<(&'static str, &'static str, crate::settings::Bench)> = crate::examples::all().into_iter().map(|e| (e.name, e.desc, e.bench)).collect();
         egui::CentralPanel::default().frame(egui::Frame::NONE.inner_margin(12.)).show(root, |ui| {
-            paint_backdrop(ui.painter(), ui.max_rect().expand(12.), dark, el, accent, fundo_do_tema);
+            paint_backdrop(ui.painter(), ui.max_rect().expand(12.), el, animar);
             // tudo entra deslizando de leve
             let k_in = ease_out((el / 0.7).min(1.));
             ui.set_opacity(k_in);
@@ -1670,8 +1716,13 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 ui.add_space(24.);
             });
         });
-        if el_real < entrada {
+        if el_real < entrada && !animar {
             root.ctx().request_repaint();
+        } else if animar {
+            // deriva lenta a 30 quadros por segundo; janela sem foco ou minimizada não pede quadro
+            if root.ctx().input(|i| i.viewport().focused.unwrap_or(true) && !i.viewport().minimized.unwrap_or(false)) {
+                root.ctx().request_repaint_after(std::time::Duration::from_millis(crate::inicio_tema::QUADRO_MS));
+            }
         }
         if let Some(r) = recent_open {
             self.open_project_at(std::path::Path::new(&r));
@@ -1756,7 +1807,25 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
 
     /// Menu de contexto de um campo de superfície: cria o Extrair e o coloca no campo.
     fn apply_extract_req(&mut self, ctx: &egui::Context) {
-        use crate::geo_ui::{swap_surface, ExtractReq, EXTRACT_REQ};
+        use crate::geo_ui::{swap_ref, ExtractReq, EXTRACT_CURVE_REQ, EXTRACT_REQ};
+        let target = self.session.as_ref().map(|s| s.id).or(match self.sel {
+            Sel::Ref(id) | Sel::Feature(id) => Some(id),
+            _ => None,
+        });
+        let chave = egui::Id::unique(EXTRACT_CURVE_REQ);
+        if let Some(old) = ctx.data_mut(|m| {
+            let q = m.get_temp::<CurveRef>(chave);
+            m.remove::<CurveRef>(chave);
+            q
+        }) {
+            let d = &mut self.open.doc;
+            let new = CurveRef::Ref(d.add_geometry(RefKind::CurveCopy { curve: old.clone() }));
+            if let Some(r) = d.references.iter_mut().find(|r| Some(r.id) == target) {
+                swap_ref(&mut r.kind, &old, &new);
+            } else if let Some(f) = target.and_then(|t| d.feature_mut(t)) {
+                swap_ref(&mut f.kind, &old, &new);
+            }
+        }
         let key = egui::Id::unique(EXTRACT_REQ);
         let Some(q) = ctx.data_mut(|m| {
             let q = m.get_temp::<ExtractReq>(key);
@@ -1765,12 +1834,13 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         }) else {
             return;
         };
-        let target = self.session.as_ref().map(|s| s.id).or(if let Sel::Ref(id) = self.sel { Some(id) } else { None });
         let d = &mut self.open.doc;
         let key = if let SurfRef::Face { key, .. } = q.old { key } else { None };
         let id = d.add_geometry(RefKind::SurfExtract { face: q.face, owner: q.owner, prop: Propagation::Nenhuma, complement: q.complement, expected: None, key });
         if let Some(r) = d.references.iter_mut().find(|r| Some(r.id) == target) {
-            swap_surface(&mut r.kind, q.old, SurfRef::Ref(id));
+            swap_ref(&mut r.kind, &q.old, &SurfRef::Ref(id));
+        } else if let Some(f) = target.and_then(|t| d.feature_mut(t)) {
+            swap_ref(&mut f.kind, &q.old, &SurfRef::Ref(id));
         }
     }
 
@@ -2467,7 +2537,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 w.picking_b = !w.faces.is_empty();
                 Sel::Feature(d.add_feature(FeatureKind::StructWeld(w)))
             }
-            Cmd::Shell => Sel::Feature(d.add_feature(FeatureKind::Shell(Shell { faces: faces.clone(), thickness: s("2"), outward: false, face_keys: face_keys.clone(), closed: false }))),
+            Cmd::Shell => Sel::Feature(d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: faces.clone(), thickness: s("2"), outward: false, face_keys: face_keys.clone(), closed: false }))),
             Cmd::Draft => Sel::Feature(d.add_feature(FeatureKind::Draft(Draft { faces: faces.clone(), neutral: opt_plane, angle: s("3"), reverse: false, face_keys: face_keys.clone() }))),
             Cmd::Thickness => Sel::Feature(d.add_feature(FeatureKind::Thickness(Thickness { faces: faces.clone(), value: s("2"), face_keys: face_keys.clone(), remove: false }))),
             Cmd::DirectEdit(i) => {
@@ -2534,9 +2604,26 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 return;
             }
             Cmd::MeshImport => {
-                let Some(p) = rfd::FileDialog::new().add_filter("Malha", &["stl", "obj"]).pick_file() else { return };
-                Sel::Feature(d.add_feature(FeatureKind::MeshImport(MeshImport { path: p.to_string_lossy().into(), solid: true })))
+                let Some(p) = rfd::FileDialog::new().add_filter(tr("Malha"), &["stl", "obj", "ply", "3mf"]).pick_file() else { return };
+                match crate::malha_ui::importar_para_doc(d, &p) {
+                    Ok(id) => Sel::Feature(id),
+                    Err(e) => {
+                        self.toast(e, true);
+                        return;
+                    }
+                }
             }
+            Cmd::Impressao => {
+                self.abrir_impressao();
+                return;
+            }
+            Cmd::Malha(a) => match crate::malha_ui::nova_op(a, d) {
+                Ok(op) => Sel::Feature(d.add_feature(FeatureKind::MeshOp(fenkra_core::malha::MeshOp { op }))),
+                Err(e) => {
+                    self.toast(tr(e), true);
+                    return;
+                }
+            },
             Cmd::Combine(op) => {
                 let active = d.active_collector;
                 let Some(tool) = d.collectors.iter().find(|c| c.id != active).map(|c| c.id) else {
@@ -2607,7 +2694,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             // comandos de montagem são tratados em asm_ui::command
             Cmd::AsmNew | Cmd::AsmOpen | Cmd::AsmSave | Cmd::AsmInsert | Cmd::AsmSubAsm | Cmd::AsmNewPart | Cmd::AsmGroup | Cmd::AsmReplace | Cmd::AsmMate(_) | Cmd::AsmFix | Cmd::AsmRigid
             | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmPattern | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmDisplay | Cmd::AsmBom
-            | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink | Cmd::AsmFasteners | Cmd::AsmCatalogo | Cmd::AsmGears => return,
+            | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink | Cmd::AsmFasteners | Cmd::AsmCatalogo | Cmd::AsmGears | Cmd::AsmChaveta | Cmd::AsmCalculo => return,
             Cmd::Param => {
                 let n = (1..).map(|i| format!("P{i}")).find(|n| !d.params.iter().any(|p| &p.name == n)).unwrap();
                 let _ = d.add_param(&n, "10", Unit::Comprimento);
@@ -3413,8 +3500,20 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         self.abrir_painel_exportar(fenkra_conversor::Formato::Iges);
                         ui.close();
                     }
+                    if ui.button(tr("Preparar impressão…")).on_hover_text(tr("Põe os corpos na mesa, confere se imprimem e grava 3MF ou STL.")).clicked() {
+                        self.abrir_impressao();
+                        ui.close();
+                    }
                     if ui.button(tr("Exportar malha…")).on_hover_text(tr("Grava em formatos abertos de malha e visualização: 3MF, OBJ, PLY, glTF, USD e outros, com desvio, cor e estrutura.")).clicked() {
                         self.abrir_painel_exportar(fenkra_conversor::Formato::Glb);
+                        ui.close();
+                    }
+                    if ui.button(tr("Exportar visualização…")).on_hover_text(tr("Grava o pacote .fkv ou uma página web autocontida que abre a peça, a montagem ou o desenho no navegador do computador ou do celular, sem instalar nada.")).clicked() {
+                        self.exportar_visualizacao(false);
+                        ui.close();
+                    }
+                    if ui.button(tr("Exportar visualização simplificada…")).on_hover_text(tr("Igual à anterior, com a malha reduzida e sem os pontos de medição exatos: protege a geometria e pesa menos.")).clicked() {
+                        self.exportar_visualizacao(true);
                         ui.close();
                     }
                     if ui.add(egui::Button::image_and_text(crate::icons::get("conversao_lote"), tr("Conversão em lote…"))).on_hover_text(tr("Converte arquivos, pastas e documentos do projeto para vários formatos de uma vez, com simulação antes de gravar.")).clicked() {
@@ -4265,6 +4364,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     if ui.button(tr("Exportar DXF…")).on_hover_text(tr("DXF 1:1 em milímetros, com camadas fixas: contorno, furos, dobra para cima, dobra para baixo e ferramenta.")).clicked() {
                         ui.ctx().data_mut(|m| m.insert_temp(egui::Id::new("planificada_pedido"), 2u8));
                     }
+                    if ui.button(tr("Nesting e dobra…")).on_hover_text(tr("Abre a janela de fabricação: nesting em chapas comerciais e simulação da sequência de dobra.")).clicked() {
+                        crate::chapa_fab_ui::abrir(ui.ctx());
+                    }
                 });
                 match &blank {
                     Some(Ok(p)) => {
@@ -4704,7 +4806,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     }
                     resp.context_menu(|ui| {
                         ui.label(RichText::new(&c.name).strong());
-                        if ui.button(tr("✎ Renomear   F2")).clicked() {
+            if ui.button(tr("✎ Renomear   F2")).clicked() {
                             actions.push(TreeAction::StartRename(c.id));
                             ui.close();
                         }
@@ -4724,6 +4826,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         }
                         if ui.button(tr("🗀 Nova pasta de comandos")).clicked() {
                             actions.push(TreeAction::NewCommandFolder);
+                            ui.close();
+                        }
+                        if ui.button(tr("Novo contêiner ordenado")).on_hover_text(tr("Os comandos de dentro consomem um ao outro, na ordem.")).clicked() {
+                            actions.push(TreeAction::NovoConteiner(OrdemConteiner::Ordenado));
+                            ui.close();
+                        }
+                        if ui.button(tr("Novo contêiner não ordenado")).on_hover_text(tr("Os comandos de dentro só referenciam, sem depender uns dos outros.")).clicked() {
+                            actions.push(TreeAction::NovoConteiner(OrdemConteiner::NaoOrdenado));
                             ui.close();
                         }
                         if ui.button(tr("Marcador no fim")).clicked() {
@@ -5360,6 +5470,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     ui.painter().circle_filled(r.center(), 4., Color32::from_rgb(a.color[0], a.color[1], a.color[2]));
                 }
                 crate::tree_ui::icone(ui, crate::tree_ui::icone_comando(&f.kind));
+                // o objeto em trabalho vem sublinhado: é depois dele que o próximo comando entra
+                let text = if doc.objeto_em_trabalho() == Some(f.id) { text.underline() } else { text };
                 self.row_label(ui, f.id, &f.name, self.sel == Sel::Feature(f.id), text, actions)
             })
             .inner;
@@ -5377,6 +5489,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         }
         resp.context_menu(|ui| {
             ui.label(RichText::new(&f.name).strong());
+            if !free && ui.button(tr("Definir como objeto em trabalho")).clicked() {
+                actions.push(TreeAction::ObjetoTrabalho(f.id));
+                ui.close();
+            }
+            if !free && ui.button(tr("Atualizar esta feature")).clicked() {
+                actions.push(TreeAction::AtualizarAte(f.id));
+                ui.close();
+            }
             if ui.button(tr("✏ Editar   (duplo clique)")).clicked() {
                 actions.push(TreeAction::EditSketch(f.id));
                 ui.close();
@@ -5393,6 +5513,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 if is_sketch {
                     if ui.button(if f.hidden { tr("Mostrar   H") } else { tr("Ocultar   H") }).clicked() {
                         actions.push(TreeAction::Hide(f.id, !f.hidden));
+                        ui.close();
+                    }
+                    if ui.button(tr("Publicar sketch para outras peças")).clicked() {
+                        actions.push(TreeAction::SketchPublish(f.id));
                         ui.close();
                     }
                     if ui.button(tr("Alinhar vista ao sketch   N")).clicked() {
@@ -5590,6 +5714,19 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 let n = format!("Geometria {}", d.folders.iter().filter(|f| f.kind == FolderKind::Geometria).count() + 1);
                 self.sel = Sel::Folder(d.add_geometry_folder(&n));
             }
+            TreeAction::ObjetoTrabalho(id) => {
+                if let Err(e) = d.definir_objeto_em_trabalho(id) {
+                    self.toast(format!("{e:?}"), true);
+                }
+            }
+            TreeAction::AtualizarAte(id) => self.atualizar_ate(id),
+            TreeAction::NovoConteiner(ordem) => {
+                let n = format!("{} {}", tr("Contêiner"), d.folders.len() + 1);
+                match d.add_conteiner(&n, ordem, None) {
+                    Ok(id) => self.sel = Sel::Folder(id),
+                    Err(e) => self.toast(format!("{e:?}"), true),
+                }
+            }
             TreeAction::NewCommandFolder => {
                 let n = format!("Pasta {}", d.folders.len() + 1);
                 self.sel = Sel::Folder(d.add_folder(&n));
@@ -5714,6 +5851,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 if let Some(c) = d.collectors.iter_mut().find(|c| c.id == id) {
                     c.published = on;
                 }
+            }
+            TreeAction::SketchPublish(id) => {
+                let n = fenkra_montagem::publicacoes::publicar_sketch(d, id);
+                self.toast(format!("{n} {}", tr("curva(s) publicada(s)")), false);
             }
             TreeAction::OpenPublications => self.pub_open = true,
             TreeAction::SelRegra(p, regra) => self.selecionar_por_regra(p, regra),
@@ -6117,25 +6258,38 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 Pick::Edge { body, edge, .. } => {
                     let pts = crate::picking::edge_polyline(r, body, edge);
                     if let Some((ctr, n, _)) = geom_fit::circle(&pts) {
-                        c.alt_points.push_back(PointRef::Fixed(ctr));
-                        c.alt_axes.push_back(AxisRef::Fixed { origin: ctr, dir: n });
+                        // com chave, centro e eixo seguem a aresta circular
+                        match self.edge_key_of(body, edge) {
+                            Some(k) => {
+                                c.alt_points.push_back(PointRef::Center { point: ctr, edge: k });
+                                c.alt_axes.push_back(AxisRef::Edge { mid: pts[pts.len() / 2], key: Some(k) });
+                            }
+                            None => {
+                                c.alt_points.push_back(PointRef::Fixed(ctr));
+                                c.alt_axes.push_back(AxisRef::Fixed { origin: ctr, dir: n });
+                            }
+                        }
                     }
                 }
                 Pick::Face { body, face, point, .. } => {
                     let pt = point.map(|v| v as f64);
+                    let chave = self.face_key_of(Some(p));
                     if let Some(m) = crate::picking::mesh_of(r, body) {
                         let s1 = m.face_ranges.get(face + 1).map(|x| *x as usize).unwrap_or(m.indices.len()).min(m.indices.len());
                         let s0 = (m.face_ranges.get(face).copied().unwrap_or(0) as usize).min(s1);
                         match geom_fit::face(&m.positions, &m.normals, &m.indices[s0..s1]) {
-                            FaceKind::Plane(n) => c.alt_axes.push_back(AxisRef::Fixed { origin: pt, dir: n }),
-                            FaceKind::Axis(o, d) => c.alt_axes.push_back(match self.face_key_of(Some(p)) {
+                            FaceKind::Plane(n) => c.alt_axes.push_back(match chave {
+                                Some(k) => AxisRef::Face { point: pt, key: Some(k) },
+                                None => AxisRef::Fixed { origin: pt, dir: n },
+                            }),
+                            FaceKind::Axis(o, d) => c.alt_axes.push_back(match chave {
                                 Some(k) => AxisRef::Face { point: pt, key: Some(k) },
                                 None => AxisRef::Fixed { origin: o, dir: d },
                             }),
                             FaceKind::Other => {}
                         }
                     }
-                    c.alt_points.push_back(PointRef::Fixed(pt));
+                    c.alt_points.push_back(chave.map_or(PointRef::Fixed(pt), |key| PointRef::OnFace { point: pt, key }));
                 }
                 Pick::SkCurve { sketch, .. } | Pick::SkPoint { sketch, .. } => {
                     if let Some(p) = plane_of(sketch) {
@@ -6190,7 +6344,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         use crate::picking::Pick;
         // o resultado sai emprestado durante a coleta e volta logo depois
         let Some(r) = self.result.take() else { return };
-        let (mut edges, mut faces, mut made): (Vec<Vec<Vec<[f64; 3]>>>, Vec<Vec<[f64; 3]>>, Vec<Id>) = (vec![], vec![], vec![]);
+        let (mut edges, mut faces, mut made): (Vec<Vec<CurveRef>>, Vec<Vec<[f64; 3]>>, Vec<Id>) = (vec![], vec![], vec![]);
         let mut seen_e: Vec<(usize, usize)> = vec![];
         let mut seen_f: Vec<(usize, usize)> = vec![];
         for p in self.picks.clone() {
@@ -6219,7 +6373,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 }
                 Pick::Edge { body, edge, .. } => {
                     let Some(m) = crate::picking::mesh_of(&r, body) else { continue };
-                    let set: Vec<Vec<[f64; 3]>> = edge_set(m, edge, o.prop)
+                    let set: Vec<CurveRef> = edge_set(m, edge, o.prop)
                         .into_iter()
                         .filter(|e| {
                             let new = !seen_e.contains(&(body, *e));
@@ -6228,8 +6382,13 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                             }
                             new
                         })
-                        .map(|e| edge_pts(m, e))
-                        .filter(|p| p.len() >= 2)
+                        .map(|e| (e, edge_pts(m, e)))
+                        .filter(|(_, p)| p.len() >= 2)
+                        // aresta de corpo vai por dono e papel (ADR 0010); a polilinha fica de reserva
+                        .map(|(e, pts)| match r.bodies.get(body).and_then(|b| b.edge_key(e)) {
+                            Some(key) => CurveRef::BodyEdge { pts, key },
+                            None => CurveRef::Edge(pts),
+                        })
                         .collect();
                     if !set.is_empty() {
                         edges.push(set);
@@ -6246,7 +6405,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         }
         self.result = Some(r);
         if o.multi {
-            let all_e: Vec<Vec<[f64; 3]>> = edges.drain(..).flatten().collect();
+            let all_e: Vec<CurveRef> = edges.drain(..).flatten().collect();
             if !all_e.is_empty() {
                 edges.push(all_e);
             }
@@ -6258,9 +6417,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let d = &mut self.open.doc;
         for set in edges {
             made.push(if set.len() == 1 {
-                d.add_geometry(RefKind::CurveCopy { curve: CurveRef::Edge(set.into_iter().next().unwrap()) })
+                d.add_geometry(RefKind::CurveCopy { curve: set.into_iter().next().unwrap() })
             } else {
-                d.add_geometry(RefKind::CurveJoin { curves: set.into_iter().map(CurveRef::Edge).collect() })
+                d.add_geometry(RefKind::CurveJoin { curves: set })
             });
         }
         for set in faces {
@@ -6713,9 +6872,23 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 };
                 ui.label(RichText::new(txt).small().color(col));
                 ui.separator();
-                ui.checkbox(&mut self.settings.auto_update, RichText::new(tr("auto")).small()).on_hover_text(tr("atualizar automaticamente a cada mudança"));
+                if busy && ui.small_button(tr("✖ Cancelar")).on_hover_text(tr("para o cálculo; o que já terminou fica guardado")).clicked() {
+                    self.worker.cancelar();
+                }
+                // o modo fica no documento: cada peça lembra o seu
+                let mut auto = self.open.doc.atualizacao == ModoAtualizacao::Automatica;
+                if ui.checkbox(&mut auto, RichText::new(tr("auto")).small()).on_hover_text(tr("atualizar automaticamente a cada mudança")).changed() {
+                    self.open.doc.atualizacao = if auto { ModoAtualizacao::Automatica } else { ModoAtualizacao::Manual };
+                }
                 if ui.small_button(tr("⟳ Atualizar")).on_hover_text(tr("recalcula o que mudou (F5)")).clicked() {
                     self.send_recompute(false);
+                }
+                if let Some(nome) = self.open.doc.objeto_em_trabalho().map(|id| self.open.doc.name_of(id)) {
+                    ui.separator();
+                    ui.label(RichText::new(format!("{}: {nome}", tr("Em trabalho"))).small());
+                }
+                if self.open.doc.retrocedida() && ui.small_button(tr("Voltar ao fim da peça")).clicked() {
+                    self.open.doc.voltar_ao_fim_da_peca();
                 }
                 if ui.small_button(tr("⟲ Reconstruir")).on_hover_text(tr("reconstrói tudo do zero, sem cache (Ctrl+F5)")).clicked() {
                     self.send_recompute(true);
@@ -6963,13 +7136,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     let size = vp.bounds.map(|(a, b)| (b - a).max_element().max(20.) * 0.6).unwrap_or(60.);
                     let corner = at + (Vec3::from(f.x.map(|v| v as f32)) + Vec3::from(f.y().map(|v| v as f32))) * size * 0.45;
                     if let Some(pos) = vp.project(rect, corner) {
-                        ui.painter().text(pos, egui::Align2::LEFT_BOTTOM, &name, egui::FontId::proportional(11.), ink);
+                        ui.painter().text(pos, egui::Align2::LEFT_BOTTOM, &name, egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), ink);
                     }
                 }
             }
 
             crate::st_ui::draw_falhas(ui, rect, &vp, &self.st_falhas);
             crate::st_cantos_ui::draw(ui, rect, &vp, &self.st_cantos, &mut self.st_cantos_sel);
+            crate::st_limite_ui::draw(ui, rect, &vp);
 
             // rótulos de pontos e curvas de referência
             if let (Some(r), true) = (&self.result, self.settings.filter.rotulos) {
@@ -6978,7 +7152,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 for p in &r.points {
                     let Some(name) = vis(p.id).filter(|_| self.settings.filter.pontos) else { continue };
                     if let Some(pos) = vp.project(rect, Vec3::from(p.p.map(|v| v as f32))) {
-                        ui.painter().text(pos + egui::vec2(6., -4.), egui::Align2::LEFT_BOTTOM, &name, egui::FontId::proportional(11.), ink);
+                        ui.painter().text(pos + egui::vec2(6., -4.), egui::Align2::LEFT_BOTTOM, &name, egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), ink);
                     }
                 }
                 for c in &r.curves {
@@ -6988,7 +7162,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     }
                     let m = c.pts[c.pts.len() / 2];
                     if let Some(pos) = vp.project(rect, Vec3::from(m.map(|v| v as f32))) {
-                        ui.painter().text(pos + egui::vec2(6., -4.), egui::Align2::LEFT_BOTTOM, &name, egui::FontId::proportional(11.), ink);
+                        ui.painter().text(pos + egui::vec2(6., -4.), egui::Align2::LEFT_BOTTOM, &name, egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), ink);
                     }
                 }
             }
@@ -7023,7 +7197,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 self.settings.display.label()
             );
             let color = if self.hidden_env { Color32::from_rgb(255, 190, 80) } else { ink };
-            ui.painter().text(rect.center_top() + egui::vec2(0., 8.), egui::Align2::CENTER_TOP, info, egui::FontId::proportional(12.), color);
+            ui.painter().text(rect.center_top() + egui::vec2(0., 8.), egui::Align2::CENTER_TOP, info, egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), color);
             if self.hidden_env {
                 ui.painter().rect_stroke(rect.shrink(2.), 0., egui::Stroke::new(3., Color32::from_rgb(255, 170, 60)), egui::StrokeKind::Inside);
             }
@@ -7033,20 +7207,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     rect.center_top() + egui::vec2(0., 40.),
                     egui::Align2::CENTER_TOP,
                     "Kernel geométrico indisponível — compile com o OpenCASCADE instalado para ver os sólidos",
-                    egui::FontId::proportional(14.),
+                    egui::FontId::proportional(crate::acessibilidade::fonte_3d(14.)),
                     Color32::from_rgb(255, 180, 90),
                 );
-            }
-            if let Some(r) = &self.result {
-                let mass: Vec<String> = r
-                    .bodies
-                    .iter()
-                    .map(|b| {
-                        let name = self.open.doc.collectors.iter().find(|c| c.id == b.collector).map(|c| c.name.as_str()).unwrap_or("");
-                        format!("{name}: {:.0} mm³ · {} faces", b.mass.volume, b.faces)
-                    })
-                    .collect();
-                ui.painter().text(rect.right_bottom() - egui::vec2(10., 30.), egui::Align2::RIGHT_BOTTOM, mass.join("\n"), egui::FontId::proportional(11.), ink);
             }
             // cubo de vistas no canto superior direito
             let cube_area = Rect::from_min_size(egui::pos2(rect.right() - 120., rect.top() + 8.), egui::vec2(112., 112.));
@@ -7087,7 +7250,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         let outro = self.selecao_ciclo.escolher(h, passo_ciclo, || crate::picking::pilha_de_faces(r, doc, &cam, rect, h, &filt));
                         if let (Some(_), Some((i, n))) = (outro, self.selecao_ciclo.posicao()) {
                             let cor = ui.visuals().text_color();
-                            ui.painter().text(h + egui::vec2(14., 18.), egui::Align2::LEFT_TOP, format!("{i}/{n}  {}", tr("Alt + roda: selecionar outro")), egui::FontId::proportional(12.), cor);
+                            ui.painter().text(h + egui::vec2(14., 18.), egui::Align2::LEFT_TOP, format!("{i}/{n}  {}", tr("Alt + roda: selecionar outro")), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), cor);
                         }
                         let caixas = self.asm.as_ref().filter(|_| self.in_asm()).map(|s| s.caixas.as_slice());
                         outro.or_else(|| crate::picking::pick_com_caixas(r, doc, &cam, rect, h, &filt, caixas))
@@ -7249,7 +7412,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     } else {
                         ui.painter().rect_stroke(b, 0., stroke, egui::StrokeKind::Middle);
                     }
-                    ui.painter().text(now + egui::vec2(10., 10.), egui::Align2::LEFT_TOP, if crossing { "cruzada (toca)" } else { "janela (inteiro dentro)" }, egui::FontId::proportional(11.), stroke.color);
+                    ui.painter().text(now + egui::vec2(10., 10.), egui::Align2::LEFT_TOP, if crossing { "cruzada (toca)" } else { "janela (inteiro dentro)" }, egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), stroke.color);
                     if !ctx.input(|i| i.pointer.primary_down()) {
                         let mut got = if laco {
                             crate::picking::laco_select(r, &self.open.doc, &cam, rect, &self.selecao_extra.laco, crossing, &filt)
@@ -7290,14 +7453,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 if let Some(Some(k)) = face_cmd.map(|id| self.open.doc.feature(id).map(|f| f.kind.clone())) {
                     let marks = crate::feat_ui::face_marks(&k);
                     ui.painter().text(rect.center_top() + egui::vec2(0., 30.), egui::Align2::CENTER_TOP,
-                        format!("Clique nas faces para acrescentá-las · {} escolhida(s) · Enter conclui", marks.len()), egui::FontId::proportional(13.), crate::theme::accent(ui.visuals()));
+                        format!("Clique nas faces para acrescentá-las · {} escolhida(s) · Enter conclui", marks.len()), egui::FontId::proportional(crate::acessibilidade::fonte_3d(13.)), crate::theme::accent(ui.visuals()));
                 }
                 // arestas escolhidas do filete/chanfro em edição
                 if let Some(Some(FeatureKind::Fillet(o) | FeatureKind::Chamfer(o))) = edge_cmd.map(|id| self.open.doc.feature(id).map(|f| &f.kind)) {
                     if let EdgeSel::Edges(list) = &o.edges {
                         let n = list.len();
                         ui.painter().text(rect.center_top() + egui::vec2(0., 30.), egui::Align2::CENTER_TOP,
-                            format!("Clique nas arestas para pôr/tirar do comando · {n} escolhida(s) · Enter conclui"), egui::FontId::proportional(13.), crate::theme::st_warn());
+                            format!("Clique nas arestas para pôr/tirar do comando · {n} escolhida(s) · Enter conclui"), egui::FontId::proportional(crate::acessibilidade::fonte_3d(13.)), crate::theme::st_warn());
                     }
                 }
                 let painter = ui.painter_at(rect);
@@ -7312,7 +7475,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 if !self.picks.is_empty() {
                     let n = self.picks.len();
                     let txt = if n == 1 { self.picks[0].label(&self.open.doc) } else { format!("{n} itens selecionados") };
-                    ui.painter().text(rect.center_bottom() + egui::vec2(0., -32.), egui::Align2::CENTER_BOTTOM, format!("Seleção: {txt}  ·  Esc limpa"), egui::FontId::proportional(12.), crate::theme::st_warn());
+                    ui.painter().text(rect.center_bottom() + egui::vec2(0., -32.), egui::Align2::CENTER_BOTTOM, format!("Seleção: {txt}  ·  Esc limpa"), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), crate::theme::st_warn());
                 }
             }
             if self.sketch.is_none() {
@@ -7324,6 +7487,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 crate::asm_ui::fasteners_overlay(self, ui, rect, &cam);
                 crate::asm_ui::fasteners_handles(self, ui, rect, &cam);
                 crate::engrenagens_ui::overlay(self, ui, rect, &cam);
+                crate::transmissao_ui::overlay(self, ui, rect, &cam);
                 crate::eixo_ui::alcas(self, ui, rect, &cam);
                 crate::biblioteca_ui::candidatos_overlay(self, ui, rect, &cam);
                 crate::biblioteca_ui::overlay(self, ui, rect, &cam);
@@ -7331,6 +7495,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 crate::asm_repeticao::overlay(self, ui, rect, &cam);
                 crate::asm_fixadores::overlay(self, ui, rect, &cam);
                 crate::asm_encaixe::overlay(self, ui, rect, &cam);
+                crate::asm_chaveta::overlay(self, ui, rect, &cam);
                 crate::feat_ui::bend_overlay(self, ui, rect, &cam);
                 crate::feat_ui::cut_overlay(self, ui, rect, &cam);
                 crate::st_solda_ui::overlay(self, ui, rect, &cam);
@@ -7525,6 +7690,10 @@ pub enum Cmd {
     AsmCatalogo,
     /// gerar engrenagens (par engrenado ou peça avulsa) com cálculo ao vivo (janela)
     AsmGears,
+    /// pareia eixo e cubo e insere a chaveta restrita aos rasgos (painel + fantasma)
+    AsmChaveta,
+    /// calculadoras de projeto: parafuso, ajuste forçado, mola e viga (painel)
+    AsmCalculo,
     // ---- chapa metálica
     SmParams,
     SmWall,
@@ -7583,6 +7752,10 @@ pub enum Cmd {
     CloseSurface,
     SewSurface,
     BoundaryFill,
+    /// painel de preparo de impressão
+    Impressao,
+    /// comando sobre o corpo de malha
+    Malha(crate::malha_ui::AcaoMalha),
     MeshImport,
     ImportarArquivo,
     Param,
@@ -7665,6 +7838,10 @@ fn eye(ui: &mut egui::Ui, hidden: bool) -> bool {
 }
 
 enum TreeAction {
+    ObjetoTrabalho(Id),
+    AtualizarAte(Id),
+    NovoConteiner(OrdemConteiner),
+    SketchPublish(Id),
     ParentsChildren(Id),
     ApplyView(usize),
     NewGeometryFolder,
@@ -8264,9 +8441,12 @@ impl eframe::App for App {
             self.painel_comando(ctx, area);
             crate::sup_analise::painel_curvatura(self, ctx, area);
         }
+        crate::sup_inclinacao::painel_inclinacao(self, ctx, area);
+        crate::dfm_ui::painel(self, ctx, area);
         self.painel_importar(ctx, area);
         self.painel_features(ctx, area);
         self.painel_exportar(ctx, area);
+        self.painel_impressao(ctx, area);
         self.painel_lote(ctx, area);
         crate::pmi_baloes_ui::janela(self, ctx, area);
         if let Some(id) = ctx.data(|m| m.get_temp::<Id>(egui::Id::unique("fenkra_props"))) {
@@ -8284,9 +8464,16 @@ impl eframe::App for App {
         crate::asm_repeticao::painel(self, ctx, area);
         crate::asm_exibicao::painel(self, ctx, area);
         crate::asm_fixadores::painel(self, ctx, area);
+        crate::asm_chaveta::painel(self, ctx, area);
+        crate::calculo_ui::painel(self, ctx, area);
+        if let Some(st) = self.asm.as_mut() {
+            crate::asm_resolver::janela(st, ctx);
+        }
         crate::asm_ui::contexto_window(self, ctx);
         crate::asm_ui::gears_window(self, ctx);
+        crate::transmissao_ui::janela(self, ctx);
         self.sheet_window(ctx);
+        crate::chapa_fab_ui::janela(ctx, &self.open.doc);
         crate::st_ui::windows(self, ctx);
         self.side_toolbars(ctx, area);
         self.settings_window(ctx);
@@ -8358,7 +8545,8 @@ impl eframe::App for App {
         // feitas fora deste trecho, como Del, desfazer, assistentes e janelas)
         // com um comando aberto calcula sempre: a prévia é o motivo de ele estar aberto, e o cálculo
         // fica no fio de trás, então o modo manual não ganha nada em segurar
-        if (self.settings.auto_update || self.session.is_some()) && self.open.frozen.is_none() && self.needs_recompute() {
+        let automatica = self.settings.auto_update && self.open.doc.atualizacao == ModoAtualizacao::Automatica;
+        if (automatica || self.session.is_some()) && self.open.frozen.is_none() && self.needs_recompute() {
             self.request_recompute();
         }
         let link_key = egui::Id::unique("fenkra_link_acao");
@@ -8485,19 +8673,23 @@ impl eframe::App for App {
                     point_style: self.settings.point_style,
                     fantasma: crate::previa::da_sessao(self.session.as_ref().filter(|_| asm_view.is_none()), &ctx.global_style().visuals),
                     forma_oculta,
-                    curvatura: crate::sup_analise::escala_da_tela(&self.settings, &ctx.global_style().visuals),
+                    curvatura: crate::sup_inclinacao::escala_do_mapa(&self.settings, &ctx.global_style().visuals),
                     instancias: self.asm.as_ref().filter(|_| asm_view.is_some()).map_or(&[], |s| s.instancias.as_slice()),
                 };
                 let mut s = crate::medir_quadros::fase("cena", || scene::build(scene_doc, r, &opts));
+                crate::dfm_ui::decorar(&self.settings, r, &ctx.global_style().visuals, &mut s);
                 if let Some(sess) = self.session.as_mut().filter(|_| asm_view.is_none()) {
                     crate::previa::reter_ultima(&mut sess.ultima_valida, &mut s, r.status.get(&sess.id));
                 }
+                crate::impressao_ui::na_cena(self.impressao.as_ref(), &mut s);
                 crate::asm_ui::contexto_na_cena(self.asm.as_ref(), &mut s);
                 crate::asm_cmd::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, ctx.input(|i| i.time), &mut s);
                 crate::asm_interf::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
                 crate::asm_repeticao::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
                 crate::engrenagens_ui::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
+                crate::asm_chaveta::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
                 crate::eixo_ui::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
+                crate::transmissao_ui::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
                 importar::defeitos_na_cena(self.importar_relatorio.as_ref(), self.importar_defeito, &mut s);
                 features::na_cena(self.features.as_ref(), &ctx.global_style().visuals, &mut s);
                 crate::medir_quadros::valor("bytes_faces", (std::mem::size_of_val(s.mesh.as_slice()) + std::mem::size_of_val(s.indices.as_slice())) as f64);
@@ -8689,7 +8881,8 @@ fn example_card(ui: &mut egui::Ui, key: &str, name: &str, desc: &str, bench: cra
     painter.rect_filled(r, 12., v.window_fill.gamma_multiply(op));
     // área da prévia com degradê
     let pr = Rect::from_min_size(r.min + egui::vec2(8., 8.), egui::vec2(r.width() - 16., 128.));
-    let (a, b) = if v.dark_mode { (Color32::from_rgb(56, 64, 84), Color32::from_rgb(24, 27, 36)) } else { (Color32::from_rgb(236, 241, 250), Color32::from_rgb(196, 206, 224)) };
+    let pal = crate::inicio_tema::Paleta::atual();
+    let (a, b) = (pal.mini_topo, pal.mini_base);
     let mut m = egui::Mesh::default();
     m.colored_vertex(pr.left_top(), a.gamma_multiply(op));
     m.colored_vertex(pr.right_top(), a.gamma_multiply(op));
@@ -8733,61 +8926,8 @@ fn example_card(ui: &mut egui::Ui, key: &str, name: &str, desc: &str, bench: cra
 
 /// Fundo com profundidade (degradê, brilho, grade em perspectiva correndo e partículas) para a
 /// tela inicial e o carregamento.
-fn paint_backdrop(p: &egui::Painter, rect: Rect, dark: bool, t: f32, accent: Color32, base: Option<Color32>) {
-    let (top, bot) = match base {
-        Some(f) => (f, f.lerp_to_gamma(if dark { Color32::WHITE } else { Color32::BLACK }, 0.05)),
-        None if dark => (Color32::from_rgb(16, 30, 58), Color32::from_rgb(8, 11, 20)),
-        None => (Color32::from_rgb(232, 241, 252), Color32::from_rgb(196, 214, 238)),
-    };
-    let top = top.lerp_to_gamma(accent, 0.08);
-    let mut m = egui::Mesh::default();
-    m.colored_vertex(rect.left_top(), top);
-    m.colored_vertex(rect.right_top(), top);
-    m.colored_vertex(rect.right_bottom(), bot);
-    m.colored_vertex(rect.left_bottom(), bot);
-    m.add_triangle(0, 1, 2);
-    m.add_triangle(0, 2, 3);
-    p.add(egui::Shape::mesh(m));
-    // brilho atrás do logo, respirando
-    let glow = rect.center_top() + egui::vec2((t * 0.3).sin() * 30., rect.height() * 0.3);
-    let breathe = 1. + 0.04 * (t * 0.8).sin();
-    let [ar, ag, ab, _] = accent.to_array();
-    for k in 0..24 {
-        let r = (460. - k as f32 * 17.) * breathe;
-        p.circle_filled(glow, r, Color32::from_rgba_unmultiplied(ar, ag, ab, if dark { 2 } else { 3 }));
-    }
-    // grade em perspectiva na parte de baixo (chão de CAD), andando devagar para a frente
-    let line = match base {
-        Some(_) => Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 20),
-        None if dark => Color32::from_rgba_unmultiplied(120, 170, 255, 18),
-        None => Color32::from_rgba_unmultiplied(30, 80, 160, 22),
-    };
-    let horizon = rect.top() + rect.height() * 0.62;
-    let vp = egui::pos2(rect.center().x, horizon - rect.height() * 0.25);
-    for i in -14..=14 {
-        let x = rect.center().x + i as f32 * rect.width() / 14.;
-        let b = egui::pos2(x, rect.bottom());
-        let tt = (horizon - vp.y) / (b.y - vp.y);
-        p.line_segment([vp + (b - vp) * tt, b], egui::Stroke::new(1., line));
-    }
-    let shift = (t * 0.12).fract();
-    for k in 0..10 {
-        let f = ((k as f32 + shift) / 10.).powf(1.8);
-        let y = horizon + (rect.bottom() - horizon) * f;
-        p.line_segment([egui::pos2(rect.left(), y), egui::pos2(rect.right(), y)], egui::Stroke::new(1., line));
-    }
-    // partículas subindo (poeira de luz)
-    for i in 0..36 {
-        let h = (i as f32 * 12.9898).sin() * 43758.547;
-        let fx = h.fract().abs();
-        let speed = 0.015 + 0.03 * ((i * 7 % 11) as f32 / 11.);
-        let fy = 1. - ((t * speed + fx * 3.7).fract());
-        let x = rect.left() + rect.width() * fx + (t * 0.5 + i as f32).sin() * 12.;
-        let y = rect.top() + rect.height() * fy;
-        let a = (fy * (1. - fy) * 4.).clamp(0., 1.);
-        let size = 1. + (i % 3) as f32 * 0.7;
-        p.circle_filled(egui::pos2(x, y), size, Color32::from_rgba_unmultiplied(ar, ag, ab, (a * if dark { 70. } else { 90. }) as u8));
-    }
+fn paint_backdrop(p: &egui::Painter, rect: Rect, t: f32, animar: bool) {
+    crate::inicio_tema::fundo(p, rect, &crate::inicio_tema::Paleta::atual(), t, animar);
 }
 
 /// Conteúdo de cada página da janela de configurações.
@@ -9115,6 +9255,8 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
                 ui.add(crate::ui_ext::slider(&mut s.grid_step, 1.0..=50.0).text("passo da grade (mm)"));
                 ui.checkbox(&mut s.snaps, tr("snaps"));
                 ui.checkbox(&mut s.auto_constraints, tr("restrições automáticas"));
+                ui.checkbox(&mut s.snap_restringe, tr("Snap vira restrição")).on_hover_text(tr(crate::sketch_snap::DICA_RESTRINGE));
+                ui.checkbox(&mut s.juntar_ao_soltar, tr("Juntar pontos ao soltar")).on_hover_text(tr(crate::sketch_snap::DICA_JUNTAR));
                 ui.checkbox(&mut s.auto_dims, tr("cotas automáticas"));
                 ui.label(RichText::new(tr("Aplicado pelo editor de sketch interativo (próxima alpha).")).weak().small());
             }

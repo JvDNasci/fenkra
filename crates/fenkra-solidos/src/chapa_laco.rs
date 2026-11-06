@@ -132,6 +132,23 @@ pub fn laco_de_malha(mesh: &Mesh, semente: usize) -> Vec<V3> {
         .collect()
 }
 
+/// Avalia um campo e exige a faixa válida do comando. É a mesma faixa que o painel pinta de vermelho
+/// (B31): fora dela o recálculo falha com o limite escrito, em vez de o selo mostrar OK com a chapa
+/// errada ou sumida.
+pub(super) fn ev_faixa(src: &str, vars: &Vars, campo: &str, min: f64, max: f64, unidade: &str) -> Result<f64, String> {
+    let v = ev(src, vars, campo)?;
+    if v < min - 1e-9 || v > max + 1e-9 {
+        let lim = if max.is_finite() { format!("entre {} e {} {unidade}", fmt_lim(min), fmt_lim(max)) } else { format!("{} {unidade} ou mais", fmt_lim(min)) };
+        return Err(format!("{campo} fora da faixa válida ({} {unidade}): precisa ficar {}", fmt_lim(v), lim.trim_end()));
+    }
+    Ok(v)
+}
+
+fn fmt_lim(v: f64) -> String {
+    let t = format!("{v:.4}");
+    t.trim_end_matches('0').trim_end_matches('.').replace('.', ",")
+}
+
 impl Ctx<'_> {
     /// Aba de aresta. `ext` escolhe o trecho da aresta que recebe a aba; com `Inteira` valem os
     /// recuos `off1`/`off2` do comando.
@@ -140,14 +157,14 @@ impl Ctx<'_> {
         let sp = self.sheet()?;
         let (fl_edge, from) = self.chapa_aresta("aba", f, fl.edge, fl.edge_key.as_ref(), sp.flat)?;
         let r = match &fl.radius {
-            Some(e) => ev(e, &self.vars, "raio")?,
+            Some(e) => ev_faixa(e, &self.vars, "raio interno", 0.01, f64::INFINITY, "mm")?,
             None => sp.r,
         };
         let mut p = fenkra_kernel::SheetFlange {
             t: sp.t,
             r,
-            angle: ev(&fl.angle, &self.vars, "ângulo")?,
-            length: ev(&fl.length, &self.vars, "comprimento")?,
+            angle: ev_faixa(&fl.angle, &self.vars, "ângulo", 0.01, 180., "°")?,
+            length: ev_faixa(&fl.length, &self.vars, "comprimento reto", 0., f64::INFINITY, "mm")?,
             off1: ev(&fl.off1, &self.vars, "recuo 1")?.max(if fl.min_gap { 1e-4 } else { 0. }),
             off2: ev(&fl.off2, &self.vars, "recuo 2")?.max(if fl.min_gap { 1e-4 } else { 0. }),
             flip: fl.flip,

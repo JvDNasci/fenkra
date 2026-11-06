@@ -375,12 +375,29 @@ pub fn destacar(doc: &Document, r: &RecomputeResult, f: &Fantasma, s: &mut Scene
             let EdgeSel::Edges(lista) = &o.edges else { return };
             let Some(m) = crate::previa::malha_de_entrada(r, f, feat.target) else { return };
             let col = crate::previa::cor_linha(f.entrada);
+            let falhou = matches!(r.status.get(&f.id), Some(fenkra_solidos::Status::Error(_)));
+            let tangente = o.prop == EdgeProp::Tangente;
+            let chanfro = matches!(feat.kind, FeatureKind::Chamfer(_));
+            let valor = doc.eval_params().ok().and_then(|v| fenkra_core::expr::eval_str(&o.value, &v).ok());
             for p in lista.iter().filter(|p| **p != [0.; 3]) {
                 if let Some((e, _)) = aresta_perto(m, *p).filter(|x| x.1 < SOBRE_A_ARESTA) {
                     aresta_inteira(&mut s.overlay, m, e, col);
                     // o traço grosso acompanha a aresta ponto a ponto
                     let pts: Vec<[f32; 3]> = s.overlay[s.overlay.len() - pontos_da_aresta(m, e)..].iter().map(|v| v.pos).collect();
                     crate::render::push_wide(&mut s.wide, &pts, col, 3.5, 0);
+                    // B289: com a propagação tangente ligada, a cadeia toda é realçada (mais fina)
+                    if tangente {
+                        let suave = [col[0], col[1], col[2], 0.65];
+                        for ec in crate::arestas_previa::cadeia_tangente(m, e) {
+                            aresta_inteira(&mut s.overlay, m, ec, suave);
+                            let pts: Vec<[f32; 3]> = s.overlay[s.overlay.len() - pontos_da_aresta(m, ec)..].iter().map(|v| v.pos).collect();
+                            crate::render::push_wide(&mut s.wide, &pts, suave, 2.5, 0);
+                        }
+                    }
+                    // B289: o valor não coube: desenha a superfície que o comando tentou, em cor de erro
+                    if let (true, Some(valor)) = (falhou, valor) {
+                        crate::arestas_previa::empurrar(&mut s.overlay, &crate::arestas_previa::superficie_tentada(m, e, valor, chanfro), crate::previa::cor_linha(f.erro));
+                    }
                 }
             }
         }
@@ -422,7 +439,7 @@ mod tests {
     }
 
     fn casca() -> FeatureKind {
-        FeatureKind::Shell(Shell { faces: vec![], thickness: s("2"), outward: false, face_keys: vec![], closed: false })
+        FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![], thickness: s("2"), outward: false, face_keys: vec![], closed: false })
     }
 
     /// Casca, espessura e rosca esperam a face; depois do clique o campo some e o contador sobe.

@@ -35,6 +35,17 @@ pub struct Estado {
     pub adicionando: bool,
     /// tamanho e comprimento do próximo ponto manual
     pub novo: (String, f64),
+    /// primeiro passo do ponto manual: componente, posição e plano inicial (normal), já clicados
+    pub posicao: Option<(Id, [f64; 3], [f64; 3])>,
+    /// segundo passo: o que entra na pilha além do parafuso
+    pub nova_arruela: bool,
+    pub nova_porca: bool,
+}
+
+/// Linhas da pilha do ponto novo, de cima para baixo: nome e se já está na pilha. O que ainda não
+/// entrou aparece como "Clique para adicionar".
+pub fn linhas_da_pilha(e: &Estado) -> [(&'static str, bool); 3] {
+    [("Parafuso", true), ("Arruela", e.nova_arruela), ("Porca", e.nova_porca)]
 }
 
 /// Abre o assistente, na linha pedida, e já diagnostica.
@@ -106,6 +117,7 @@ fn sinal(d: Option<&Diagnostico>) -> (&'static str, Color32) {
 }
 
 enum Acao {
+    Inserir,
     Familia(Id, String),
     Tamanho(Id, String),
     Comprimento(Id, f64),
@@ -252,11 +264,8 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
             if ui.button(tr("Recalcular")).on_hover_text(tr("Confere todos os pontos com os furos de agora.")).clicked() {
                 acao = Some(Acao::Recalcular);
             }
-            let t = if e.adicionando { tr("Clique numa face…") } else { tr("Adicionar ponto") };
-            if ui.selectable_label(e.adicionando, t).on_hover_text(tr("Modo manual: o prendedor fica no ponto clicado e o automático não mexe nele.")).clicked() {
-                e.adicionando = !e.adicionando;
-            }
         });
+        ordem_guiada(ui, &mut e, &mut acao);
     });
     if let Some(p) = saida.movido {
         app.settings.guardar_painel(PAINEL, p);
@@ -267,12 +276,56 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
     }
     let mut erro = None;
     if let Some(a) = acao {
-        erro = aplicar(st, &e, a);
+        erro = if matches!(a, Acao::Inserir) { inserir(st, &mut e).err().map(|m| tr(&m).to_string()) } else { aplicar(st, &e, a) };
     }
     st.fixadores = Some(e);
     if let Some(m) = erro {
         app.toast(m, true);
     }
+}
+
+/// Ponto novo em ordem: primeiro a posição e o plano inicial, depois a pilha, linha por linha.
+fn ordem_guiada(ui: &mut egui::Ui, e: &mut Estado, acao: &mut Option<Acao>) {
+    ui.separator();
+    ui.label(RichText::new(tr("Novo ponto")).strong()).on_hover_text(tr("Modo manual: o prendedor fica no ponto clicado e o automático não mexe nele."));
+    ui.label(RichText::new(format!("1. {}", tr("Posição e plano inicial"))).small());
+    match e.posicao {
+        Some((_, p, _)) => {
+            ui.horizontal(|ui| {
+                ui.label(crate::app::p3(p, 1));
+                if ui.small_button(tr("Trocar")).clicked() {
+                    e.posicao = None;
+                    e.adicionando = true;
+                }
+            });
+        }
+        None => {
+            let t = if e.adicionando { tr("Clique numa face…") } else { tr("Clique para adicionar") };
+            if ui.selectable_label(e.adicionando, t).clicked() {
+                e.adicionando = !e.adicionando;
+            }
+        }
+    }
+    ui.add_enabled_ui(e.posicao.is_some(), |ui| {
+        ui.label(RichText::new(format!("2. {}", tr("Pilha"))).small());
+        for (i, (nome, tem)) in linhas_da_pilha(e).into_iter().enumerate() {
+            ui.horizontal(|ui| {
+                ui.label(tr(nome));
+                if i == 0 {
+                    ui.label(format!("{} × {}", e.novo.0, crate::app::fmt(e.novo.1)));
+                    return;
+                }
+                let t = if tem { tr("Tirar") } else { tr("Clique para adicionar") };
+                if ui.selectable_label(tem, t).clicked() {
+                    let v = if i == 1 { &mut e.nova_arruela } else { &mut e.nova_porca };
+                    *v = !*v;
+                }
+            });
+        }
+        if ui.button(tr("Inserir prendedor")).clicked() {
+            *acao = Some(Acao::Inserir);
+        }
+    });
 }
 
 fn aplicar(st: &mut AsmState, e: &Estado, a: Acao) -> Option<String> {
@@ -325,6 +378,7 @@ fn aplicar(st: &mut AsmState, e: &Estado, a: Acao) -> Option<String> {
             pilhas::apagar(&mut st.asm, id);
             st.solve();
         }
+        Acao::Inserir => {}
         Acao::Recalcular => {
             atualizar(st);
         }
@@ -340,11 +394,20 @@ fn adicionar(st: &mut AsmState, e: &mut Estado, p: Pick) -> Result<(), String> {
     let dir = st.dir().ok_or("salve a montagem antes: as peças dos fixadores são gravadas na pasta dela")?;
     let local = pl.to_local(point.map(|v| v as f64));
     let n = pl.inverse().dir(normal.map(|v| -v as f64));
-    let op = OpcoesFixadores { porca: false, ..Default::default() };
+    e.posicao = Some((comp, local, n));
+    e.adicionando = false;
+    Ok(())
+}
+
+/// Segundo passo pronto: cria o prendedor na posição escolhida, com a pilha montada.
+fn inserir(st: &mut AsmState, e: &mut Estado) -> Result<(), String> {
+    let (comp, local, n) = e.posicao.ok_or("clique numa face")?;
+    let dir = st.dir().ok_or("salve a montagem antes: as peças dos fixadores são gravadas na pasta dela")?;
+    let op = OpcoesFixadores { arruela: e.nova_arruela, porca: e.nova_porca, ..Default::default() };
     st.push_undo();
     let id = pilhas::adicionar_manual(&mut st.asm, &dir, biblioteca::publica(), comp, local, n, &op.familia_parafuso.clone(), &e.novo.0, e.novo.1, &op, 0.)?;
     e.sel = Some(id);
-    e.adicionando = false;
+    e.posicao = None;
     st.solve();
     Ok(())
 }
@@ -399,6 +462,8 @@ pub fn demo(st: &mut AsmState) {
         });
         if let Some(e) = st.fixadores.as_mut() {
             e.sel = Some(p);
+            e.posicao = Some((ids[1], [10., 10., 12.], [0., 0., -1.]));
+            e.nova_arruela = true;
         }
     }
 }
@@ -406,6 +471,14 @@ pub fn demo(st: &mut AsmState) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pilha_nova_comeca_so_com_o_parafuso_e_as_linhas_pedem_clique() {
+        let mut e = Estado::default();
+        assert_eq!(linhas_da_pilha(&e).map(|l| l.1), [true, false, false]);
+        e.nova_porca = true;
+        assert_eq!(linhas_da_pilha(&e).map(|l| l.1), [true, false, true]);
+    }
     use fenkra_montagem::{Assembly, NodeKind, Placement};
     use fenkra_core::{sketch::Curve, BoolOp, Document, Extent, Extrude, FeatureKind, Hole, HoleKind, OriginPlane, PlaneRef, Sketch, SketchData};
     use std::path::PathBuf;

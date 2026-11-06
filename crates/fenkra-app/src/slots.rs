@@ -157,7 +157,10 @@ fn walk_fill(v: &mut Value, c: &mut Cands, changed: &mut bool) {
 fn circle_axis(c: &CurveRef) -> Option<AxisRef> {
     let p = c.edge_pts()?;
     let (ctr, n, _) = crate::geom_fit::circle(p)?;
-    Some(AxisRef::Fixed { origin: ctr, dir: n })
+    Some(match c {
+        CurveRef::BodyEdge { key, .. } => AxisRef::Edge { mid: p[p.len() / 2], key: Some(*key) },
+        _ => AxisRef::Fixed { origin: ctr, dir: n },
+    })
 }
 
 /// Preenche os campos vazios com os candidatos. Devolve se mudou algo.

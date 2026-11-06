@@ -82,6 +82,9 @@ pub(super) fn opcoes_ui(ui: &mut egui::Ui, formato: Formato, o: &mut OpcoesExpor
                     ui.selectable_value(&mut o.esquema, e, nome_esquema(e));
                 }
             }).response.on_hover_text(tr("AP214 leva cores e camadas; AP203 não; AP242 é o mais novo."));
+            if o.esquema == EsquemaSaida::Ap242 {
+                ui.checkbox(&mut o.pmi, tr("Anotações semânticas (PMI)")).on_hover_text(tr("Grava as cotas com tolerância, os quadros de tolerância geométrica, as referências e os alvos ligados às faces. Rugosidade, solda e notas ainda ficam de fora."));
+            }
         } else if formato == Formato::Iges {
             ui.label(tr("Modo do IGES"));
             egui::ComboBox::from_id_salt("exportar_modo_iges").selected_text(tr(o.iges.nome())).width(LARGURA - 40.).show_ui(ui, |ui| {
@@ -203,16 +206,27 @@ impl App {
         // desenvolvimento: FENKRA_DEMO_EXPORTAR_ARQUIVO=<arquivo> grava sem perguntar, para conferir a saída
         let demo = std::env::var("FENKRA_DEMO_EXPORTAR_ARQUIVO").ok().map(std::path::PathBuf::from);
         let Some(caminho) = demo.or_else(|| rfd::FileDialog::new().add_filter(d.formato.nome(), d.formato.extensoes()).set_file_name(format!("{nome}.{extensao}")).save_file()) else { return };
-        let r = if d.formato.e_2d() {
+        // PMI semântico: só na peça aberta, em STEP AP242 e com a opção ligada; o que não vai vira aviso
+        let mut fora_do_step = vec![];
+        let r = if d.formato.e_2d() || (!d.montagem && fenkra_solidos::corpo_malha::tem_corpo_de_malha(&self.open.doc)) {
             Registro::default().gravar_documento(&self.open.doc, &caminho, &d.opcoes)
         } else {
+            let com_pmi = d.formato == Formato::Step && d.opcoes.pmi && d.opcoes.esquema == EsquemaSaida::Ap242 && !d.montagem;
             let modelo = match (self.asm.as_ref().filter(|_| d.montagem), &pasta) {
                 (Some(s), Some(pasta)) => ModeloNeutro::da_montagem(&s.asm, pasta),
+                _ if com_pmi => ModeloNeutro::de_documento_pmi(&self.open.doc).map(|(m, fora)| {
+                    fora_do_step = fora;
+                    m
+                }),
                 _ => ModeloNeutro::de_documento(&self.open.doc),
             };
             modelo.and_then(|m| Registro::default().gravar(&m, &caminho, &d.opcoes))
         };
         match r {
+            Ok(()) if !fora_do_step.is_empty() => {
+                let itens: Vec<String> = fora_do_step.iter().map(|n| n.texto(&|s| tr(s))).collect();
+                self.toast(format!("{} {}: {}", tr("Exportado"), caminho.display(), itens.join(" ")), false)
+            }
             Ok(()) => self.toast(format!("Exportado: {}", caminho.display()), false),
             Err(e) => self.toast(format!("Falha ao exportar: {e}"), true),
         }

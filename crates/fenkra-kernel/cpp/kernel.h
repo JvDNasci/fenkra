@@ -18,6 +18,7 @@ struct XdeReadOpts;
 struct XdeWriteOpts;
 struct XdeIgesOpts;
 struct XdeDefect;
+struct XdePmi;
 
 struct Shape {
     TopoDS_Shape s;
@@ -59,6 +60,7 @@ std::unique_ptr<Shape> transform_t(const Shape& s, uint8_t kind, rust::Slice<con
 std::unique_ptr<Shape> sweep_tool(const Shape& face, rust::Slice<const double> spine, uint8_t mode);
 std::unique_ptr<Shape> loft_tool(const Shape& sections, bool ruled, bool closed, bool alinhar);
 std::unique_ptr<Shape> primitive(uint8_t kind, const Frame& fr, rust::Slice<const double> p);
+std::unique_ptr<Shape> shell_faces_t(const Shape& s, rust::Slice<const double> pts, double thickness, bool outward, rust::Slice<const double> fpts, rust::Slice<const double> vals, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
 std::unique_ptr<Shape> shell_t(const Shape& s, rust::Slice<const double> pts, double thickness, bool outward, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
 std::unique_ptr<Shape> draft_t(const Shape& s, rust::Slice<const double> pts, double dx, double dy, double dz, double angle_deg,
                                double ox, double oy, double oz, double nx, double ny, double nz, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
@@ -169,6 +171,8 @@ std::unique_ptr<Shape> xde_shape(const XdeDoc& d, uint32_t i);
 uint32_t xde_add(XdeDoc& d, const XdeProduct& p, const Shape& s);
 void xde_add_component(XdeDoc& d, uint32_t assembly, const XdeInst& c);
 void xde_write(XdeDoc& d, rust::Str path, const XdeWriteOpts& o);
+void xde_pmi_add(XdeDoc& d, const XdePmi& m);
+rust::Vec<XdePmi> xde_pmi_read(const XdeDoc& d);
 void xde_write_iges(XdeDoc& d, rust::Str path, const XdeIgesOpts& o);
 std::unique_ptr<Shape> xde_moved(const Shape& s, rust::Slice<const double> m);
 uint32_t xde_solid_count(const Shape& s);
