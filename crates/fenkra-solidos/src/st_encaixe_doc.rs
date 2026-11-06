@@ -100,6 +100,7 @@ pub fn encaixes_da_estrutura(doc: &Document, opc: &Opcoes) -> Vec<MembroComEncai
         roscas: vec![],
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
+        malhas: HashMap::new(),
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
