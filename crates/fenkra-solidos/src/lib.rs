@@ -60,6 +60,7 @@ pub mod dfm;
 pub mod dfm_geo;
 pub mod padrao;
 pub mod furo_norma;
+pub mod rosca_furo;
 pub mod chapa_linha;
 mod chapa_dobra_curva;
 mod chapa_flat;
@@ -603,6 +604,12 @@ pub struct RoscaViz {
     pub radius: f64,
     pub len: f64,
     pub pitch: f64,
+    /// rosca à esquerda: a hélice gira ao contrário
+    pub esquerda: bool,
+    /// face interna (furo) ou externa (eixo)
+    pub interna: bool,
+    /// com sulco real no corpo; sem ele (cosmética, ou prévia leve) a face leva só a textura de rosca
+    pub modelada: bool,
 }
 
 /// Linha de dobra na chapa planificada: começo, centro e fim do arco desenvolvido.
@@ -763,6 +770,8 @@ struct Ctx<'a> {
     /// corpos de malha por coletor; ficam ao lado de `bodies`, sem `Shape`
     malhas: HashMap<Id, corpo_malha::CorpoMalha>,
     roscas: Vec<RoscaViz>,
+    /// comando em edição: a rosca modelada dele vira só linhas, sem construir a hélice (B351)
+    leve: Option<Id>,
     relatorios_forma: Vec<(Id, forma_brep::RelatorioForma)>,
     formas_resolvidas: Vec<forma_vinculo::FormaResolvida>,
 }
@@ -949,6 +958,10 @@ pub struct Cache {
     /// Atualizar esta feature (B59): calcula só até este comando (inclusive); os de depois ficam
     /// listados em `desatualizados`. Vale para o próximo cálculo e é limpo ao terminar.
     pub ate: Option<Id>,
+    /// Comando aberto para edição (B351): a rosca modelada dele não constrói a hélice, só devolve a
+    /// posição (`RecomputeResult::roscas`) para a prévia desenhar linhas. Ao concluir, o app zera
+    /// isto e o cálculo seguinte faz o sulco de verdade.
+    pub leve: Option<Id>,
     /// malha de tela: o que a vista pede e o que já foi feito (B346)
     pub polir: polimento::Estado,
 }
@@ -3849,6 +3862,35 @@ impl Ctx<'_> {
         })
     }
 
+    /// Subtrai o sulco da rosca. A booleana do kernel pode falhar, ou devolver o corpo sem o sulco, sem
+    /// erro (varredura de hélice contra o cilindro do furo): cada tentativa é conferida pelo volume e,
+    /// se não cortou, desfeita e refeita no degrau seguinte da [`rosca_furo::ESCADA`]. Devolve `false`
+    /// quando nenhum degrau cortou (o corpo fica como estava, sem sulco).
+    fn corta_rosca(&mut self, target: Id, fid: Id, ferramenta: &dyn Fn(usize) -> Result<Shape, String>) -> bool {
+        for degrau in 0..rosca_furo::ESCADA.len() {
+            let Ok(tool) = ferramenta(degrau) else { continue };
+            let (corpo, ferr, passos) = (self.bodies.get(&target).cloned(), self.tools.get(&fid).cloned(), self.steps.get(&fid).cloned());
+            let antes = corpo.as_ref().map_or(0., |b| b.0.mass().volume);
+            if self.apply(target, tool, BoolOp::Cut, fid).is_ok() && antes - self.body(target).map_or(0., |b| b.mass().volume) >= 1e-6 {
+                return true;
+            }
+            // desfaz a tentativa: corpo, ferramenta guardada e passos voltam ao que eram
+            match corpo {
+                Some(c) => self.bodies.insert(target, c),
+                None => self.bodies.remove(&target),
+            };
+            match ferr {
+                Some(x) => self.tools.insert(fid, x),
+                None => self.tools.remove(&fid),
+            };
+            match passos {
+                Some(x) => self.steps.insert(fid, x),
+                None => self.steps.remove(&fid),
+            };
+        }
+        false
+    }
+
     /// Comprimento de ferramenta que certamente passa da superfície de corte.
     fn reach(&self, cut: &Shape, from: V3, target: Id) -> f64 {
         let mut len = self.through(target).unwrap_or(0.);
@@ -4273,12 +4315,23 @@ impl Ctx<'_> {
                 }
                 self.apply(f.target, tool, BoolOp::Cut, f.id)?;
                 let Some(t) = &h.thread else { return Ok(None) };
-                if !h.thread_modeled {
+                // B351: onde a rosca fica em cada furo. Cosmética e prévia leve só registram a posição
+                // (linhas e textura); o sulco helicoidal só é construído ao concluir
+                let Some(spec) = hardware::thread(t) else {
+                    if h.thread_modeled {
+                        return Err(format!("rosca '{t}' não encontrada na tabela de normas"));
+                    }
                     return Ok(Some(format!("rosca cosmética {t}{}", if h.left_hand { " (esquerda)" } else { "" })));
-                }
-                // rosca modelada: sulco helicoidal subtraído em cada furo, até a espessura do material
-                let spec = hardware::thread(t).ok_or_else(|| format!("rosca '{t}' não encontrada na tabela de normas"))?;
+                };
+                let sulco = h.thread_modeled && self.leve != Some(f.id);
                 let (lo, hi) = self.body(f.target).and_then(|b| b.bbox()).ok_or("corpo sem dimensões")?;
+                let passante = !matches!(h.depth, Extent::Blind(_) | Extent::Symmetric(_) | Extent::TwoSides(..));
+                let mut avisos: Vec<String> = vec![];
+                if (d - spec.tap_drill).abs() > 0.3 * spec.pitch {
+                    avisos.push(format!("Ø do furo {d:.2} ≠ {:.2} da broca de rosca {}", spec.tap_drill, spec.name));
+                }
+                let mut sem_espaco = 0;
+                let mut sem_sulco = 0;
                 for ((o, dir), depth) in seats.iter().zip(depths) {
                     let (o, dir) = (*o, *dir);
                     // extensão do material a partir do ponto, nos dois sentidos do eixo do furo:
@@ -4292,28 +4345,58 @@ impl Ctx<'_> {
                     }
                     let (tdir, ext) = if fwd >= back { (dir, fwd) } else { (dir.map(|x| -x), back) };
                     // a rosca começa abaixo do rebaixo/escareado (começar no vazio faz a booleana falhar)
-                    let s0 = if fwd >= back { shape.head_depth(d) } else { 0. };
+                    let cabeca = if fwd >= back { shape.head_depth(d) } else { 0. };
                     let lim = depth.min(ext);
-                    if rosca_prof.is_some_and(|p| p > lim + 1e-9) {
+                    if sulco && rosca_prof.is_some_and(|p| p > lim + 1e-9) {
                         return Err(format!("a profundidade da rosca ({}) passa da profundidade do furo ({})", rosca_prof.unwrap_or(0.), lim));
                     }
-                    let len = furo_norma::comprimento_de_rosca(lim, rosca_prof, rosca_folga, spec.pitch) - s0;
-                    if len < spec.pitch {
+                    let plano = rosca_furo::plano(spec, cabeca, lim, ext, rosca_prof, rosca_folga, passante);
+                    // cosmética: a parede cilíndrica inteira que a norma manda roscar, colada no escareado;
+                    // modelada (e a prévia dela): o trecho onde o sulco de fato fica
+                    let (inicio, visivel) = if h.thread_modeled {
+                        match plano {
+                            Some(p) => (p.inicio, p.comprimento.min((lim - p.inicio).max(0.))),
+                            None => (0., 0.),
+                        }
+                    } else {
+                        (cabeca, furo_norma::comprimento_de_rosca(lim, rosca_prof, rosca_folga, spec.pitch) - cabeca)
+                    };
+                    if visivel < spec.pitch {
+                        sem_espaco += 1;
                         continue;
                     }
-                    let o = [0, 1, 2].map(|i| o[i] + tdir[i] * s0);
-                    let mut tool = Shape::thread_tool(o, tdir, spec.major, spec.pitch, len, spec.angle).map_err(k)?;
-                    if h.left_hand {
-                        // espelhar por um plano que contém o eixo troca o sentido da hélice
-                        tool = tool.transformed(Xform::Mirror(o, geo3d::any_perp(tdir))).map_err(k)?;
+                    let o = [0, 1, 2].map(|i| o[i] + tdir[i] * inicio);
+                    self.roscas.push(RoscaViz { feature: f.id, origin: o, dir: tdir, radius: d / 2., len: visivel, pitch: spec.pitch, esquerda: h.left_hand, interna: true, modelada: sulco });
+                    let Some(plano) = plano.filter(|_| sulco) else { continue };
+                    let o = [0, 1, 2].map(|i| o[i] + tdir[i] * (plano.inicio - inicio));
+                    let esquerda = h.left_hand;
+                    let ferramenta = |degrau: usize| -> Result<Shape, String> {
+                        let mut tool = rosca_furo::ferramenta_no_degrau(o, tdir, spec, plano.comprimento, true, degrau)?;
+                        if esquerda {
+                            // espelhar por um plano que contém o eixo troca o sentido da hélice
+                            tool = tool.transformed(Xform::Mirror(o, geo3d::any_perp(tdir))).map_err(k)?;
+                        }
+                        if let Some((c, ext)) = &cut {
+                            // a rosca para na mesma superfície do furo
+                            tool = tool.clip_until(c, o, *ext).map_err(k)?;
+                        }
+                        Ok(tool)
+                    };
+                    // a booleana pode falhar ou devolver o corpo sem o sulco, e sem erro: confere e tenta de novo
+                    if !self.corta_rosca(f.target, f.id, &ferramenta) {
+                        sem_sulco += 1;
                     }
-                    if let Some((c, ext)) = &cut {
-                        // a rosca para na mesma superfície do furo
-                        tool = tool.clip_until(c, o, *ext).map_err(k)?;
-                    }
-                    self.apply(f.target, tool, BoolOp::Cut, f.id)?;
                 }
-                Ok(None)
+                if sem_sulco > 0 {
+                    avisos.push(format!("a rosca {} não removeu material em {sem_sulco} furo(s): confira o diâmetro do furo e a profundidade", spec.name));
+                }
+                if sem_espaco > 0 {
+                    avisos.push(format!("a rosca {} não cabe em {sem_espaco} furo(s): menos de um passo depois do escareado e da folga", spec.name));
+                }
+                if !sulco && self.leve != Some(f.id) {
+                    avisos.insert(0, format!("rosca cosmética {t}{}", if h.left_hand { " (esquerda)" } else { "" }));
+                }
+                Ok((!avisos.is_empty()).then(|| avisos.join("; ")))
             }
             FeatureKind::Sweep(w) => {
                 let (frame, sk) = &self.sketch(w.sketch)?;
@@ -5694,28 +5777,36 @@ impl Ctx<'_> {
                 let nominal = if cyl.internal { spec.tap_drill } else { spec.major };
                 let note = ((d - nominal).abs() > 0.3 * spec.pitch).then(|| format!("Ø da face {d:.2} ≠ {nominal:.2} da rosca {}", spec.name));
                 let o = [0, 1, 2].map(|i| cyl.origin[i] + cyl.dir[i] * (cyl.h0 + start));
-                self.roscas.push(RoscaViz { feature: f.id, origin: o, dir: cyl.dir, radius: cyl.radius, len, pitch: spec.pitch });
+                let sulco = t.modeled && self.leve != Some(f.id);
+                self.roscas.push(RoscaViz { feature: f.id, origin: o, dir: cyl.dir, radius: cyl.radius, len, pitch: spec.pitch, esquerda: false, interna: cyl.internal, modelada: sulco });
                 if !t.modeled {
                     return Ok(Some(note.unwrap_or_else(|| format!("rosca cosmética {}", spec.name))));
+                }
+                // prévia da edição: só a posição (linhas); o sulco é construído ao concluir
+                if !sulco {
+                    return Ok(note);
                 }
                 if len < spec.pitch {
                     return Err("comprimento menor que um passo".into());
                 }
-                let tool = if cyl.internal {
-                    Shape::thread_tool(o, cyl.dir, spec.major, spec.pitch, len, spec.angle)
-                } else {
-                    Shape::thread_tool_ext(o, cyl.dir, spec.major, spec.pitch, len, spec.angle)
-                }
-                .map_err(k)?;
                 let cut = match &t.end {
                     Some(e) => self.end_cutter(e, f.target)?,
                     None => None,
                 };
-                let tool = match cut {
-                    Some((c, ext)) => tool.clip_until(&c, o, ext).map_err(k)?,
-                    None => tool,
+                let ferramenta = |degrau: usize| -> Result<Shape, String> {
+                    let tool = rosca_furo::ferramenta_no_degrau(o, cyl.dir, spec, len, cyl.internal, degrau)?;
+                    match &cut {
+                        Some((c, ext)) => tool.clip_until(c, o, *ext).map_err(k),
+                        None => Ok(tool),
+                    }
                 };
-                self.apply(f.target, tool, BoolOp::Cut, f.id)?;
+                if !self.corta_rosca(f.target, f.id, &ferramenta) {
+                    let aviso = format!("a rosca {} não removeu material: confira o diâmetro da face e o comprimento", spec.name);
+                    return Ok(Some(match note {
+                        Some(n) => format!("{n}; {aviso}"),
+                        None => aviso,
+                    }));
+                }
                 Ok(note)
             }
             FeatureKind::Combine(c) => {
@@ -6044,6 +6135,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         cut_outlines: vec![],
         malhas: HashMap::new(),
         roscas: vec![],
+        leve: cache.leve,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
         steps: HashMap::new(),
@@ -6128,6 +6220,10 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         let mut ids = vec![];
         f.kind.clone().walk(&mut |x| ids.push(*x), &mut |_| {});
         let mut parts: Vec<String> = vec![js.clone(), vars_sig(&js, &cx.vars), format!("t{}", cx.body_sig.get(&f.target).copied().unwrap_or(0)), format!("{:?}", cx.last_sheet)];
+        // rosca modelada em edição: o resultado leve não pode ser confundido com o completo
+        if cache.leve == Some(f.id) && rosca_furo::modelada(&f.kind) {
+            parts.push("leve".into());
+        }
         // desdobrar parcial: a mesma aba muda de resultado quando outro comando a desdobra
         if doc.features.iter().any(|g| matches!(g.kind, FeatureKind::SmUnfoldPartial(_))) {
             parts.push(format!("d{}", chapa_desdobra::desdobradas(doc).contains(&f.id)));
@@ -6534,6 +6630,7 @@ pub fn publications(doc: &Document) -> Vec<(String, LinkedGeo)> {
         cut_outlines: vec![],
         malhas: HashMap::new(),
         roscas: vec![],
+        leve: None,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
         steps: HashMap::new(),
@@ -6572,6 +6669,7 @@ pub fn surface_brep(doc: &Document, id: Id) -> Option<String> {
         cut_outlines: vec![],
         malhas: HashMap::new(),
         roscas: vec![],
+        leve: None,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
         steps: HashMap::new(),
@@ -7025,6 +7123,7 @@ pub fn cut_list(doc: &Document) -> Vec<CutRow> {
         cut_outlines: vec![],
         malhas: HashMap::new(),
         roscas: vec![],
+        leve: None,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
         steps: HashMap::new(),
@@ -7119,6 +7218,7 @@ pub fn member_joints(doc: &Document) -> Vec<((Id, usize), (Id, usize), [f64; 3])
         cut_outlines: vec![],
         malhas: HashMap::new(),
         roscas: vec![],
+        leve: None,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
         steps: HashMap::new(),
@@ -7159,6 +7259,7 @@ pub fn member_corners(doc: &Document) -> Vec<st_cantos::Canto> {
         cut_outlines: vec![],
         malhas: HashMap::new(),
         roscas: vec![],
+        leve: None,
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
@@ -7216,6 +7317,7 @@ pub fn skeleton_groups(doc: &Document, paths: &[CurveRef]) -> Vec<Vec<usize>> {
         cut_outlines: vec![],
         malhas: HashMap::new(),
         roscas: vec![],
+        leve: None,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
         steps: HashMap::new(),
@@ -7499,6 +7601,7 @@ pub fn export_com_preset(doc: &Document, collector: Option<Id>, path: &str, pres
         cut_outlines: vec![],
         malhas: HashMap::new(),
         roscas: vec![],
+        leve: None,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
         steps: HashMap::new(),
@@ -7561,6 +7664,7 @@ pub fn final_shape(doc: &Document) -> Option<Shape> {
         cut_outlines: vec![],
         malhas: HashMap::new(),
         roscas: vec![],
+        leve: None,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
         steps: HashMap::new(),

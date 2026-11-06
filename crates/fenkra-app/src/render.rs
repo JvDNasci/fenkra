@@ -219,11 +219,42 @@ struct MOut {
     return vec4<f32>(c, alpha);
 }
 
+// ---------- textura de rosca (B351): o vértice leva o eixo vezes o comprimento (n), a origem (mat.xyz) e o passo
+// (mat.w, negativo à esquerda). O filete é uma faixa helicoidal por pixel: sem malha de rosca.
+fn rosca_textura(i: MOut, v: vec3<f32>, dh: f32, dwp: vec3<f32>) -> vec4<f32> {
+    let comp = length(i.n);
+    let eixo = i.n / max(comp, 1e-6);
+    let passo = abs(i.mat.w);
+    let rel = i.wp - i.mat.xyz;
+    let h = dot(rel, eixo);
+    let rad = rel - eixo * h;
+    let r = max(length(rad), 1e-4);
+    var a0 = vec3<f32>(1.0, 0.0, 0.0);
+    if (abs(eixo.x) > 0.9) { a0 = vec3<f32>(0.0, 1.0, 0.0); }
+    let bu = normalize(cross(eixo, a0));
+    let bv = cross(eixo, bu);
+    let ang = atan2(dot(rad, bv), dot(rad, bu)) / 6.2831853;
+    let fase = h / passo - sign(i.mat.w) * ang;
+    let d = abs(fract(fase + 0.5) - 0.5);
+    // largura do pixel na fase, sem o salto do atan2: só as derivadas de h e do vetor radial
+    let aa = max(dh / passo + length(dwp) / (r * 6.2831853), 1e-4);
+    let crista = 1.0 - smoothstep(0.17 - aa, 0.17 + aa, d);
+    // só dentro do comprimento da rosca
+    let fora = smoothstep(0.0, passo * 0.1, h) * (1.0 - smoothstep(comp - passo * 0.1, comp, h));
+    let luz = 0.62 + 0.38 * abs(dot(rad / r, v));
+    let cor = mix(i.col.rgb * 0.5, i.col.rgb, crista) * luz;
+    return vec4<f32>(cor, mix(0.30, i.col.a, crista) * fora);
+}
+
 // ---------- fantasma: prévia do comando, na cor que a cena mandou. A borda sai mais densa para o
 // contorno aparecer mesmo com a malha quase transparente de frente.
 @fragment fn fs_ghost(i: MOut) -> @location(0) vec4<f32> {
+    // derivadas antes de qualquer desvio dependente do pixel (exigência de uniformidade do WGSL)
+    let dwp = fwidth(i.wp);
+    let dh = fwidth(dot(i.wp - i.mat.xyz, normalize(i.n)));
     if (cortado(i.wp)) { discard; }
     let v = normalize(u.eye.xyz - i.wp);
+    if (abs(i.mat.w) > 1e-6) { return rosca_textura(i, v, dh, dwp); }
     let d = abs(dot(normalize(i.n), v));
     let a = i.col.a * (1.0 + 1.2 * pow(1.0 - d, 2.0));
     return vec4<f32>(i.col.rgb * (0.72 + 0.28 * d), clamp(a, 0.0, 0.9));

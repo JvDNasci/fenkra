@@ -135,8 +135,10 @@ pub fn decorar(doc: &Document, r: &RecomputeResult, f: &Fantasma, s: &mut crate:
             }
         }
     }
-    if matches!(feat.kind, FeatureKind::Thread(_)) && !falhou {
-        if let Some(h) = r.roscas.iter().find(|x| x.feature == f.id) {
+    // B351: a rosca do comando (Rosca ou Furo) é só linhas: hélice com o passo e o comprimento certos,
+    // sem construir a superfície; o sulco real nasce ao concluir, com a opção modelada ligada
+    if matches!(feat.kind, FeatureKind::Thread(_) | FeatureKind::Hole(_)) && !falhou {
+        for h in r.roscas.iter().filter(|x| x.feature == f.id) {
             helice(h, cor_linha(f.cor), cor_linha(f.entrada), &mut s.overlay);
         }
     }
@@ -213,17 +215,19 @@ fn base_do_eixo(d: Vec3) -> (Vec3, Vec3) {
     (u, d.cross(u))
 }
 
-/// Pontos da hélice simplificada: 24 por volta, no máximo 80 voltas (o desenho é um aviso, não a
+/// Pontos da hélice simplificada: 24 por volta e o passo da rosca (o desenho é um aviso, não a
 /// rosca real).
 pub fn pontos_da_helice(h: &fenkra_solidos::RoscaViz) -> Vec<Vec3> {
     let (o, d) = (Vec3::from(h.origin.map(|x| x as f32)), Vec3::from(h.dir.map(|x| x as f32)));
     let (u, v) = base_do_eixo(d);
-    let voltas = (h.len / h.pitch).clamp(1., 80.) as f32;
-    let n = (voltas * 24.) as usize;
+    let voltas = (h.len / h.pitch).clamp(0.05, 400.) as f32;
+    let n = ((voltas * 24.).ceil() as usize).max(4);
+    // rosca à esquerda gira ao contrário
+    let sentido = if h.esquerda { -1. } else { 1. };
     (0..=n)
         .map(|i| {
             let t = i as f32 / n as f32;
-            let a = t * voltas * std::f32::consts::TAU;
+            let a = sentido * t * voltas * std::f32::consts::TAU;
             o + d * (t * h.len as f32) + (u * a.cos() + v * a.sin()) * h.radius as f32
         })
         .collect()
@@ -367,6 +371,9 @@ pub fn demo_preparar(doc: &mut Document) -> Option<DemoPrevia> {
         return Some(d);
     }
     if let Some(d) = crate::demo_solidos::demo(&nome, doc) {
+        return Some(d);
+    }
+    if let Some(d) = crate::demo_rosca::demo(&nome, doc) {
         return Some(d);
     }
     let s = |x: &str| x.to_string();
@@ -985,7 +992,7 @@ mod tests {
     /// B05: a hélice começa e termina onde o cálculo disse, e o raio é o da face.
     #[test]
     fn helice_liga_inicio_e_fim_da_rosca() {
-        let h = fenkra_solidos::RoscaViz { feature: Id(1), origin: [0., 0., 5.], dir: [0., 0., 1.], radius: 4., len: 10., pitch: 1.25 };
+        let h = fenkra_solidos::RoscaViz { feature: Id(1), origin: [0., 0., 5.], dir: [0., 0., 1.], radius: 4., len: 10., pitch: 1.25, esquerda: false, interna: true, modelada: false };
         let p = pontos_da_helice(&h);
         assert_eq!(p.len(), 8 * 24 + 1);
         assert!((p[0].z - 5.).abs() < 1e-4 && (p.last().unwrap().z - 15.).abs() < 1e-4);

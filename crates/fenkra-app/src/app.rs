@@ -112,6 +112,7 @@ impl Worker {
                     cache.qualidade = job.3;
                     cache.polir.alvo = job.4.alvo;
                     cache.polir.agora = job.4.agora;
+                    cache.leve = job.4.leve;
                     cache.cancelar = Some(ctl.bandeira());
                     cache.progresso = Some(ctl.clone());
                     let r = fenkra_solidos::recompute_cached(&job.1, &mut cache);
@@ -1128,6 +1129,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         self.send_recompute(false);
     }
 
+    /// O que acompanha cada pedido de quem edita: o comando aberto, para a rosca modelada dele não
+    /// construir a hélice a cada alteração (B351).
+    fn pedido_de_edicao(&self) -> polir::Pedido {
+        polir::Pedido { leve: self.session.as_ref().map(|s| s.id), ..self.polir.pedido_de_edicao() }
+    }
+
     /// Atualizar esta feature: calcula só até o comando; os de depois seguem desatualizados.
     fn atualizar_ate(&mut self, id: Id) {
         let Some(i) = self.open.doc.feature_index(id) else { return };
@@ -1135,14 +1142,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         d.rollback = d.rollback.min(i + 1);
         self.gen_sent += 1;
         self.sent_doc = Some(d.clone());
-        self.worker.enviar((self.gen_sent, d, false, self.qualidade_malha, self.polir.pedido_de_edicao()));
+        self.worker.enviar((self.gen_sent, d, false, self.qualidade_malha, self.pedido_de_edicao()));
     }
 
     /// Pede o cálculo; `fresh` descarta o cache (reconstruir tudo do zero).
     fn send_recompute(&mut self, fresh: bool) {
         self.gen_sent += 1;
         self.sent_doc = Some(self.open.doc.clone());
-        self.worker.enviar((self.gen_sent, self.open.doc.clone(), fresh, self.qualidade_malha, self.polir.pedido_de_edicao()));
+        self.worker.enviar((self.gen_sent, self.open.doc.clone(), fresh, self.qualidade_malha, self.pedido_de_edicao()));
     }
 
     /// A qualidade da malha mudou nas configurações: re-tessela a peça aberta e a montagem sem
@@ -1168,7 +1175,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             let doc = self.sent_doc.clone().unwrap_or_else(|| self.open.doc.clone());
             self.gen_sent += 1;
             self.sent_doc = Some(doc.clone());
-            self.worker.enviar((self.gen_sent, doc, false, q, self.polir.pedido_de_edicao()));
+            self.worker.enviar((self.gen_sent, doc, false, q, self.pedido_de_edicao()));
         }
     }
 
@@ -2851,6 +2858,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let snapshot = snapshot.unwrap_or_else(|| self.open.doc.clone());
         let corpos_antes = crate::previa::corpos_base(self.result.as_ref());
         self.session = Some(Session { id, snapshot, is_new, corpos_antes, ultima_valida: vec![] });
+        // rosca modelada aberta para edição: refaz já na versão leve (só linhas), sem esperar a primeira alteração
+        if self.open.doc.feature(id).is_some_and(|f| fenkra_solidos::rosca_furo::modelada(&f.kind)) {
+            self.request_recompute();
+        }
         self.reframe_pending = true;
         self.sel = if self.open.doc.reference(id).is_some() { Sel::Ref(id) } else { Sel::Feature(id) };
     }
@@ -2876,8 +2887,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             if parts.len() > 1 {
                 self.toast(format!("{} membros separados (um por linha)", parts.len()), false);
             }
-            // concluir sempre atualiza (também no modo manual)
-            if self.needs_recompute() {
+            // concluir sempre atualiza (também no modo manual); a rosca modelada só vira sulco aqui (B351)
+            if self.needs_recompute() || self.open.doc.feature(s.id).is_some_and(|f| fenkra_solidos::rosca_furo::modelada(&f.kind)) {
                 self.request_recompute();
             }
             self.scene_dirty = true;
@@ -8687,6 +8698,10 @@ impl eframe::App for App {
                     crate::previa::DemoPrevia::Plano => self.open.doc.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "30"),
                 };
                 self.start_session(id, true, Some(snapshot));
+                // desenvolvimento: `FENKRA_DEMO_CONCLUIR=1` conclui o comando logo depois de aberto
+                if std::env::var_os("FENKRA_DEMO_CONCLUIR").is_some() {
+                    self.conclude_session();
+                }
                 if std::env::var("FENKRA_DEMO_SECAO").is_ok() {
                     ctx.data_mut(|d| d.insert_temp(crate::previa::chave_secao(), true));
                 }
