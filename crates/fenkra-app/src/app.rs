@@ -4083,9 +4083,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         ui.set_clip_rect(regiao);
         tree_ui::estilo(&mut ui, zoom);
         // travada por padrão, para o arraste ser do recurso; solta, o fundo desloca a árvore
-        if self.settings.arvore_solta && zona.is_positive() {
+        // a área fica mesmo travada: senão o arraste sobre a árvore vaza para o 3D e gira a vista
+        if zona.is_positive() {
             let arrasto = ui.interact(zona, egui::Id::unique("arvore_mover"), egui::Sense::drag());
-            self.arvore.pan += arrasto.drag_delta();
+            if self.settings.arvore_solta {
+                self.arvore.pan += arrasto.drag_delta();
+            }
         }
         let contorno = Contorno::reservar(&ui, regiao);
         match self.left {
