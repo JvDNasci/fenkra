@@ -91,7 +91,7 @@ pub fn setas(doc: &Document, r: &RecomputeResult, id: Id) -> Vec<Seta> {
 
 /// A tensão é um múltiplo da corda, não um comprimento: a cota dela sai sem "mm".
 pub fn sem_unidade(rotulo: &str) -> bool {
-    matches!(rotulo, "Tensão 1" | "Tensão 2")
+    matches!(rotulo, "Tensão 1" | "Tensão 2" | "Intensidade")
 }
 
 /// Grava o valor da seta. Devolve se o campo era daqui.

@@ -88,7 +88,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: I
                 troca = Some((i, k));
             }
         }
-        if let Some(q) = cam.project(rect, c) {
+        // ao lado do centro: a seta da ponta nasce nele
+        if let Some(q) = cam.project(rect, c).map(|q| q + egui::vec2(-22., -22.)) {
             pintor.circle_filled(q, 11., fundo);
             pintor.circle_stroke(q, 11., Stroke::new(2., cor));
             pintor.text(q, egui::Align2::CENTER_CENTER, format!("{}", i + 1), egui::FontId::proportional(12.), ui.visuals().strong_text_color());
