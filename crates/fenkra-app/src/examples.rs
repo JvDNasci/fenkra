@@ -304,7 +304,9 @@ pub fn paint_preview(p: &egui::Painter, rect: egui::Rect, pv: &Preview, angle: f
     }
     items.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
     let mut m = egui::Mesh::default();
-    let ink = Color32::from_rgb(18, 18, 26);
+    // cor da peça e das arestas vêm do tema quando o corpo usa a cor padrão (como na viewport)
+    let (peca_tema, aresta_tema) = crate::theme::piece_colors();
+    let ink = aresta_tema.map_or(Color32::from_rgb(18, 18, 26), |a| Color32::from_rgb(a[0], a[1], a[2]));
     for (_, i, is_edge) in items {
         if is_edge {
             let e = ev[i as usize];
@@ -326,6 +328,7 @@ pub fn paint_preview(p: &egui::Painter, rect: egui::Rect, pv: &Preview, angle: f
             let k = m.vertices.len() as u32;
             for j in t {
                 let cor = pv.cores.get(j as usize).copied().unwrap_or(pv.color);
+                let cor = if cor == crate::theme::PECA_PADRAO { peca_tema.unwrap_or(cor) } else { cor };
                 m.colored_vertex(sc(vs[j as usize]), shade(pv.nrm[j as usize], cor));
             }
             m.add_triangle(k, k + 1, k + 2);

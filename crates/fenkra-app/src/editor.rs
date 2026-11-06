@@ -614,6 +614,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     let doc_ro = app.open.doc.clone();
     let frozen = app.open.frozen.clone();
     let bodies: Vec<(Id, f64, f64)> = app.result.as_ref().map(|r| r.bodies.iter().map(|b| (b.collector, b.mass.volume, b.mass.area)).collect()).unwrap_or_default();
+    let geo: Vec<crate::props_geometria::Geometria> = app.result.as_ref().map(|r| r.bodies.iter().map(crate::props_geometria::Geometria::de).collect()).unwrap_or_default();
     let picked = app.picked_edges();
     let picked_faces = app.picked_faces();
     let session = app.session.as_ref().map(|s| (s.id, s.is_new));
@@ -751,6 +752,16 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             }
             if bodies.is_empty() {
                 ui.label(RichText::new(tr("sem corpos")).weak());
+            }
+            // B336: o que antes ficava no canto da viewport
+            section(ui, "Propriedades de geometria");
+            for ((cid, _, _), g) in bodies.iter().zip(&geo) {
+                let name = doc.collectors.iter().find(|c| c.id == *cid).map(|c| c.name.clone()).unwrap_or_default();
+                ui.label(format!("{name}: {} {} · {} {} · {} {}", g.faces, tr("faces"), g.arestas, tr("arestas"), g.vertices, tr("vértices"))).on_hover_text(tr("Contagens do corpo calculado; a caixa envolve a malha de exibição."));
+                ui.label(RichText::new(format!("{}: {} {}", tr("malha"), g.triangulos, tr("triângulos da malha"))).weak().small());
+                if let Some(d) = g.dimensoes() {
+                    ui.label(RichText::new(format!("{}: {}", tr("caixa envolvente"), crate::app::loc(format!("{:.2} × {:.2} × {:.2} mm", d[0], d[1], d[2])))).weak().small());
+                }
             }
             section(ui, "Aparência da peça");
             ui.label(RichText::new(tr("Sobrepõe a cor dos coletores; comandos com aparência própria têm prioridade.")).weak().small());

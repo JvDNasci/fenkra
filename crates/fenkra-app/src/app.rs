@@ -1493,11 +1493,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             return false;
         }
         let accent = brand_accent();
+        let tx = crate::inicio_tema::Paleta::atual().texto;
         // some suavemente no fim
         let fade = if ready { (1. - (el - min_time) / 0.25).clamp(0., 1.) } else { 1. };
         egui::CentralPanel::default().frame(egui::Frame::NONE).show(root, |ui| {
             let rect = ui.max_rect();
-            paint_backdrop(ui.painter(), rect, true, el, accent, None);
+            paint_backdrop(ui.painter(), rect, el, false);
             let painter = ui.painter().with_clip_rect(rect);
             let c = rect.center() - egui::vec2(0., 40.);
             let appear = ease_out((el / 0.6).min(1.));
@@ -1509,15 +1510,15 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
             // anéis girando em sentidos opostos
             ring(&painter, c, 118., el * 1.4, 1.6, 2.5, accent.gamma_multiply(0.9 * fade));
-            ring(&painter, c, 132., -el * 0.9 + 1., 0.9, 1.5, Color32::from_white_alpha((90. * fade) as u8));
+            ring(&painter, c, 132., -el * 0.9 + 1., 0.9, 1.5, tx.gamma_multiply(90. / 255. * fade));
             ring(&painter, c, 104., -el * 2.1, 0.5, 1.2, accent.gamma_multiply(0.5 * fade));
             let sz = 150. * (0.85 + 0.15 * appear);
-            let img = egui::Image::new(egui::include_image!("../../../assets/app/fenix-256.png")).corner_radius(26.).tint(Color32::from_white_alpha((255. * appear * fade) as u8));
+            let img = egui::Image::new(egui::include_image!("../../../assets/app/fenix-256.png")).corner_radius(26.).tint(Color32::WHITE.gamma_multiply(appear * fade));
             img.paint_at(ui, Rect::from_center_size(c, egui::vec2(sz, sz)));
-            wordmark(&painter, c + egui::vec2(0., 160.), 34., Color32::from_white_alpha((255. * fade) as u8), accent.gamma_multiply(fade));
-            painter.text(c + egui::vec2(0., 192.), egui::Align2::CENTER_CENTER, tr(BRAND_TAGLINE), egui::FontId::proportional(13.5), Color32::from_white_alpha((160. * fade) as u8));
+            wordmark(&painter, c + egui::vec2(0., 160.), 34., tx.gamma_multiply(255. / 255. * fade), accent.gamma_multiply(fade));
+            painter.text(c + egui::vec2(0., 192.), egui::Align2::CENTER_CENTER, tr(BRAND_TAGLINE), egui::FontId::proportional(13.5), tx.gamma_multiply(160. / 255. * fade));
             let bar = Rect::from_center_size(c + egui::vec2(0., 226.), egui::vec2(340., 5.));
-            painter.rect_filled(bar, 3., Color32::from_white_alpha((28. * fade) as u8));
+            painter.rect_filled(bar, 3., tx.gamma_multiply(28. / 255. * fade));
             let mut fill = bar;
             fill.set_width(bar.width() * p);
             painter.rect_filled(fill, 3., accent.gamma_multiply(fade));
@@ -1525,11 +1526,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             let sx = fill.left() + ((el * 0.9).fract()) * (fill.width() + 80.) - 40.;
             let sh = Rect::from_min_max(egui::pos2(sx.max(fill.left()), fill.top()), egui::pos2((sx + 40.).min(fill.right()), fill.bottom()));
             if sh.width() > 0. {
-                painter.rect_filled(sh, 3., Color32::from_white_alpha((120. * fade) as u8));
+                painter.rect_filled(sh, 3., tx.gamma_multiply(120. / 255. * fade));
             }
             let stage = if p < 0.3 { "Iniciando o kernel OpenCASCADE…" } else if p < 0.6 { "Carregando ferramentas e ícones…" } else if p < 0.95 { "Calculando a peça…" } else { "Pronto" };
-            painter.text(bar.center_bottom() + egui::vec2(0., 16.), egui::Align2::CENTER_CENTER, tr(stage), egui::FontId::proportional(12.), Color32::from_white_alpha((140. * fade) as u8));
-            painter.text(rect.right_bottom() - egui::vec2(16., 14.), egui::Align2::RIGHT_BOTTOM, concat!("v", env!("CARGO_PKG_VERSION")), egui::FontId::monospace(11.), Color32::from_white_alpha((90. * fade) as u8));
+            painter.text(bar.center_bottom() + egui::vec2(0., 16.), egui::Align2::CENTER_CENTER, tr(stage), egui::FontId::proportional(12.), tx.gamma_multiply(140. / 255. * fade));
+            painter.text(rect.right_bottom() - egui::vec2(16., 14.), egui::Align2::RIGHT_BOTTOM, concat!("v", env!("CARGO_PKG_VERSION")), egui::FontId::monospace(11.), tx.gamma_multiply(90. / 255. * fade));
         });
         root.ctx().request_repaint();
         true
@@ -1541,19 +1542,19 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let mut recent_open: Option<String> = None;
         let mut file_open: Option<String> = None;
         let mut example: Option<usize> = None;
-        let dark = root.ctx().global_style().visuals.dark_mode;
-        let accent = brand_accent();
-        // tema Fênix: o fundo da tela inicial sai do próprio tema (o degradê azul padrão destoava do creme e do acento)
-        let fundo_do_tema = (self.settings.theme_name == crate::theme::FENIX).then(|| root.ctx().global_style().visuals.panel_fill);
+        let pal = crate::inicio_tema::Paleta::atual();
+        let accent = pal.destaque;
+        // B335: movimento contínuo só sem "reduzir movimento", sem modo leve e com animações ligadas
+        let animar = crate::inicio_tema::movimento_permitido(self.settings.animacoes, self.settings.acessibilidade.reduzir_movimento, self.settings.modo_leve);
         let (now, dt) = root.ctx().input(|i| (i.time, i.stable_dt.min(0.1)));
         let t0 = *self.start_t0.get_or_insert(now);
         let el_real = (now - t0) as f32;
         // B222: a entrada anima por um tempo limitado e depois congela; parada, a tela não pede mais quadros
         let entrada = 0.25 + 0.07 * crate::examples::all().len() as f32 + 0.8;
-        let el = el_real.min(entrada);
+        let el = if animar { el_real } else { el_real.min(entrada) };
         let ex_meta: Vec<(&'static str, &'static str, crate::settings::Bench)> = crate::examples::all().into_iter().map(|e| (e.name, e.desc, e.bench)).collect();
         egui::CentralPanel::default().frame(egui::Frame::NONE.inner_margin(12.)).show(root, |ui| {
-            paint_backdrop(ui.painter(), ui.max_rect().expand(12.), dark, el, accent, fundo_do_tema);
+            paint_backdrop(ui.painter(), ui.max_rect().expand(12.), el, animar);
             // tudo entra deslizando de leve
             let k_in = ease_out((el / 0.7).min(1.));
             ui.set_opacity(k_in);
@@ -1683,8 +1684,13 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 ui.add_space(24.);
             });
         });
-        if el_real < entrada {
+        if el_real < entrada && !animar {
             root.ctx().request_repaint();
+        } else if animar {
+            // deriva lenta a 30 quadros por segundo; janela sem foco ou minimizada não pede quadro
+            if root.ctx().input(|i| i.viewport().focused.unwrap_or(true) && !i.viewport().minimized.unwrap_or(false)) {
+                root.ctx().request_repaint_after(std::time::Duration::from_millis(crate::inicio_tema::QUADRO_MS));
+            }
         }
         if let Some(r) = recent_open {
             self.open_project_at(std::path::Path::new(&r));
@@ -7071,17 +7077,6 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     Color32::from_rgb(255, 180, 90),
                 );
             }
-            if let Some(r) = &self.result {
-                let mass: Vec<String> = r
-                    .bodies
-                    .iter()
-                    .map(|b| {
-                        let name = self.open.doc.collectors.iter().find(|c| c.id == b.collector).map(|c| c.name.as_str()).unwrap_or("");
-                        format!("{name}: {:.0} mm³ · {} faces", b.mass.volume, b.faces)
-                    })
-                    .collect();
-                ui.painter().text(rect.right_bottom() - egui::vec2(10., 30.), egui::Align2::RIGHT_BOTTOM, mass.join("\n"), egui::FontId::proportional(11.), ink);
-            }
             // cubo de vistas no canto superior direito
             let cube_area = Rect::from_min_size(egui::pos2(rect.right() - 120., rect.top() + 8.), egui::vec2(112., 112.));
             let (dir, drag) = crate::viewcube::cube(ui, cube_area, &cam, "canto", false);
@@ -8729,7 +8724,8 @@ fn example_card(ui: &mut egui::Ui, key: &str, name: &str, desc: &str, bench: cra
     painter.rect_filled(r, 12., v.window_fill.gamma_multiply(op));
     // área da prévia com degradê
     let pr = Rect::from_min_size(r.min + egui::vec2(8., 8.), egui::vec2(r.width() - 16., 128.));
-    let (a, b) = if v.dark_mode { (Color32::from_rgb(56, 64, 84), Color32::from_rgb(24, 27, 36)) } else { (Color32::from_rgb(236, 241, 250), Color32::from_rgb(196, 206, 224)) };
+    let pal = crate::inicio_tema::Paleta::atual();
+    let (a, b) = (pal.mini_topo, pal.mini_base);
     let mut m = egui::Mesh::default();
     m.colored_vertex(pr.left_top(), a.gamma_multiply(op));
     m.colored_vertex(pr.right_top(), a.gamma_multiply(op));
@@ -8773,61 +8769,8 @@ fn example_card(ui: &mut egui::Ui, key: &str, name: &str, desc: &str, bench: cra
 
 /// Fundo com profundidade (degradê, brilho, grade em perspectiva correndo e partículas) para a
 /// tela inicial e o carregamento.
-fn paint_backdrop(p: &egui::Painter, rect: Rect, dark: bool, t: f32, accent: Color32, base: Option<Color32>) {
-    let (top, bot) = match base {
-        Some(f) => (f, f.lerp_to_gamma(if dark { Color32::WHITE } else { Color32::BLACK }, 0.05)),
-        None if dark => (Color32::from_rgb(16, 30, 58), Color32::from_rgb(8, 11, 20)),
-        None => (Color32::from_rgb(232, 241, 252), Color32::from_rgb(196, 214, 238)),
-    };
-    let top = top.lerp_to_gamma(accent, 0.08);
-    let mut m = egui::Mesh::default();
-    m.colored_vertex(rect.left_top(), top);
-    m.colored_vertex(rect.right_top(), top);
-    m.colored_vertex(rect.right_bottom(), bot);
-    m.colored_vertex(rect.left_bottom(), bot);
-    m.add_triangle(0, 1, 2);
-    m.add_triangle(0, 2, 3);
-    p.add(egui::Shape::mesh(m));
-    // brilho atrás do logo, respirando
-    let glow = rect.center_top() + egui::vec2((t * 0.3).sin() * 30., rect.height() * 0.3);
-    let breathe = 1. + 0.04 * (t * 0.8).sin();
-    let [ar, ag, ab, _] = accent.to_array();
-    for k in 0..24 {
-        let r = (460. - k as f32 * 17.) * breathe;
-        p.circle_filled(glow, r, Color32::from_rgba_unmultiplied(ar, ag, ab, if dark { 2 } else { 3 }));
-    }
-    // grade em perspectiva na parte de baixo (chão de CAD), andando devagar para a frente
-    let line = match base {
-        Some(_) => Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 20),
-        None if dark => Color32::from_rgba_unmultiplied(120, 170, 255, 18),
-        None => Color32::from_rgba_unmultiplied(30, 80, 160, 22),
-    };
-    let horizon = rect.top() + rect.height() * 0.62;
-    let vp = egui::pos2(rect.center().x, horizon - rect.height() * 0.25);
-    for i in -14..=14 {
-        let x = rect.center().x + i as f32 * rect.width() / 14.;
-        let b = egui::pos2(x, rect.bottom());
-        let tt = (horizon - vp.y) / (b.y - vp.y);
-        p.line_segment([vp + (b - vp) * tt, b], egui::Stroke::new(1., line));
-    }
-    let shift = (t * 0.12).fract();
-    for k in 0..10 {
-        let f = ((k as f32 + shift) / 10.).powf(1.8);
-        let y = horizon + (rect.bottom() - horizon) * f;
-        p.line_segment([egui::pos2(rect.left(), y), egui::pos2(rect.right(), y)], egui::Stroke::new(1., line));
-    }
-    // partículas subindo (poeira de luz)
-    for i in 0..36 {
-        let h = (i as f32 * 12.9898).sin() * 43758.547;
-        let fx = h.fract().abs();
-        let speed = 0.015 + 0.03 * ((i * 7 % 11) as f32 / 11.);
-        let fy = 1. - ((t * speed + fx * 3.7).fract());
-        let x = rect.left() + rect.width() * fx + (t * 0.5 + i as f32).sin() * 12.;
-        let y = rect.top() + rect.height() * fy;
-        let a = (fy * (1. - fy) * 4.).clamp(0., 1.);
-        let size = 1. + (i % 3) as f32 * 0.7;
-        p.circle_filled(egui::pos2(x, y), size, Color32::from_rgba_unmultiplied(ar, ag, ab, (a * if dark { 70. } else { 90. }) as u8));
-    }
+fn paint_backdrop(p: &egui::Painter, rect: Rect, t: f32, animar: bool) {
+    crate::inicio_tema::fundo(p, rect, &crate::inicio_tema::Paleta::atual(), t, animar);
 }
 
 /// Conteúdo de cada página da janela de configurações.
