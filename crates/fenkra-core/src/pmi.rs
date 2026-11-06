@@ -157,9 +157,41 @@ pub enum WeldContour {
     Concavo,
 }
 
-/// Dados completos do símbolo de solda ISO 2553 (sistema A, linha tracejada de identificação).
+/// Sistema do símbolo de solda (B190): como a linha de referência diz de que lado está a junta.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum SistemaSolda {
+    /// ISO 2553, sistema A: linha cheia (lado da seta, em cima) e tracejada de identificação
+    #[default]
+    A,
+    /// sistema B: linha de referência dupla, as duas cheias; lado da seta em cima da de cima
+    B,
+    /// padrão americano de símbolos de solda: uma linha só, lado da seta embaixo e o outro em cima
+    Aws,
+}
+
+impl SistemaSolda {
+    pub const ALL: [SistemaSolda; 3] = [SistemaSolda::A, SistemaSolda::B, SistemaSolda::Aws];
+    pub fn label(self) -> &'static str {
+        match self {
+            SistemaSolda::A => "Sistema A (linha tracejada)",
+            SistemaSolda::B => "Sistema B (linha dupla)",
+            SistemaSolda::Aws => "AWS A2.4 (lado da seta embaixo)",
+        }
+    }
+}
+
+/// Dados completos do símbolo de solda (sistema A por padrão, ou B e AWS).
 #[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
 pub struct WeldExtra {
+    /// sistema do símbolo
+    #[serde(default)]
+    pub sistema: SistemaSolda,
+    /// letra do método de acabamento do contorno (G esmerilhado, C usinado, M, R laminado, H martelado…)
+    #[serde(default)]
+    pub acabamento: String,
+    /// penetração total (meia-lua cheia do lado oposto ao da junta)
+    #[serde(default)]
+    pub penetracao: bool,
     /// símbolo do outro lado (solda dos dois lados); `None` = só um lado
     #[serde(default)]
     pub other: Option<WeldKind>,
@@ -303,6 +335,8 @@ pub fn weld_symbol(kind: WeldKind, size: &str, all_around: bool, x: &WeldExtra, 
     let mut out = vec![];
     let dash_y = -0.8 * h;
     let both = x.other.is_some();
+    let dupla = x.sistema == SistemaSolda::B;
+    let aws = x.sistema == SistemaSolda::Aws;
     let x0 = (text_w(size, h) + 0.6 * h).max(1.6 * h);
     // lado da seta: acima da linha cheia; outro lado: abaixo da tracejada
     let (base_y, s) = if !both && x.other_side { (dash_y, -1.) } else { (0., 1.) };
@@ -313,19 +347,44 @@ pub fn weld_symbol(kind: WeldKind, size: &str, all_around: bool, x: &WeldExtra, 
     }
     let mut right = x0 + w;
     if let Some(o) = x.other {
-        let w2 = elem(&mut out, o, x0, 0., -1., h) * h;
+        let w2 = elem(&mut out, o, x0, if dupla { dash_y } else { 0. }, -1., h) * h;
         right = right.max(x0 + w2);
         if !size.trim().is_empty() {
-            out.push(Text([x0 - 0.3 * h, -1.05 * h], size.trim().to_string(), -1));
+            out.push(Text([x0 - 0.3 * h, if dupla { dash_y - 1.05 * h } else { -1.05 * h }], size.trim().to_string(), -1));
         }
+    }
+    if !x.acabamento.trim().is_empty() && x.contour != WeldContour::Nenhum {
+        // letra do método de acabamento sobre o símbolo de contorno
+        out.push(Text([x0 + w * 0.5, base_y + s * 1.6 * h - if s > 0. { 0. } else { 0.8 * h }], x.acabamento.trim().to_string(), 0));
+    }
+    if x.penetracao {
+        // meia-lua cheia do lado oposto ao da junta
+        let c = [x0 + w + 0.6 * h, base_y - s * 0.45 * h];
+        let mut m = arc(c, 0.4 * h, 0., 180.);
+        if s > 0. {
+            m = m.iter().map(|q| [q[0], 2. * c[1] - q[1]]).collect();
+        }
+        out.push(Fill(m));
+        right = right.max(c[0] + 0.5 * h);
     }
     if !x.length.trim().is_empty() {
         out.push(Text([right + 0.4 * h, base_y + if s > 0. { 0.15 * h } else { -1.05 * h }], x.length.trim().to_string(), 1));
         right += 0.4 * h + text_w(x.length.trim(), h);
     }
+    if aws {
+        // um traço de referência só, com a junta do lado da seta embaixo: espelha o que já está feito
+        for pr in out.iter_mut() {
+            match pr {
+                WeldPrim::Line(p) | WeldPrim::Dashed(p) | WeldPrim::Fill(p) => p.iter_mut().for_each(|q| q[1] = -q[1]),
+                WeldPrim::Text(q, _, _) => q[1] = -0.9 * h - q[1],
+            }
+        }
+    }
     let len = (right + 0.8 * h).max(5. * h);
     out.push(Line(vec![[0., 0.], [len, 0.]]));
-    if !both {
+    if dupla {
+        out.push(Line(vec![[0., dash_y], [len, dash_y]]));
+    } else if !both && !aws {
         out.push(Dashed(vec![[0.3 * h, dash_y], [len, dash_y]]));
     }
     if all_around {
@@ -756,7 +815,15 @@ pub enum PmiKind {
     Angle,
     Note,
     /// rugosidade: Ra e processo
-    Roughness { ra: String, process: String },
+    Roughness {
+        ra: String,
+        process: String,
+        /// campos estruturados: remoção, limites, amostragem, estrias, sobremetal, norma (B190)
+        #[serde(default)]
+        extra: crate::pmi_acabamento::RugExtra,
+    },
+    /// alvo de referência (datum target): ponto, linha ou área de contato (B189)
+    DatumTarget { alvo: crate::pmi_alvos::AlvoRef },
     Weld {
         kind: WeldKind,
         size: String,
@@ -777,7 +844,12 @@ pub enum PmiKind {
     /// legenda 3D: texto com campos da peça ({nome}, {codigo}, {descricao}, {material}, {massa}…)
     TitleBlock { template: String },
     /// balão com o número de item (montagem)
-    Balloon { item: String },
+    Balloon {
+        item: String,
+        /// criado à mão: os balões automáticos preservam e não repõem
+        #[serde(default)]
+        manual: bool,
+    },
     /// cota ordenada / ao longo de um eixo do modelo (0 = X, 1 = Y, 2 = Z): âncoras origem e ponto;
     /// mede só a componente no eixo (B185)
     Ordinate { axis: u8 },
@@ -825,6 +897,7 @@ impl PmiKind {
             PmiKind::Angle => "Ângulo",
             PmiKind::Note => "Nota",
             PmiKind::Roughness { .. } => "Rugosidade",
+            PmiKind::DatumTarget { .. } => "Alvo de referência",
             PmiKind::Weld { .. } => "Solda",
             PmiKind::Datum { .. } => "Referência",
             PmiKind::Gdt { .. } => "Tolerância geométrica",
@@ -999,7 +1072,9 @@ impl Pmi {
             PmiKind::Ordinate { .. } | PmiKind::Gap { .. } => base("", value, "") + &tol,
             PmiKind::ArcLength => base("⌒ ", value, "") + &tol,
             PmiKind::Note | PmiKind::FeatureNote { .. } => self.text.clone(),
-            PmiKind::Roughness { ra, process } => format!("√ Ra {ra}{}", if process.trim().is_empty() { String::new() } else { format!(" ({process})") }),
+            PmiKind::Roughness { ra, process, extra } if extra.basico() => format!("√ Ra {ra}{}", if process.trim().is_empty() { String::new() } else { format!(" ({process})") }),
+            PmiKind::Roughness { ra, process, extra } => crate::pmi_acabamento::resumo(ra, process, extra),
+            PmiKind::DatumTarget { alvo } => alvo.rotulo(),
             PmiKind::Weld { kind, size, all_around, .. } => format!("{}{} {}", if *all_around { "○ " } else { "" }, kind.symbol(), size),
             PmiKind::Datum { letter } => format!("[{letter}]"),
             PmiKind::Gdt { ch, tol, datums, extra } => {
@@ -1021,7 +1096,7 @@ impl Pmi {
 {corpo}") }
             }
             PmiKind::TitleBlock { template } => template.clone(),
-            PmiKind::Balloon { item } => item.clone(),
+            PmiKind::Balloon { item, .. } => item.clone(),
         }
     }
 }

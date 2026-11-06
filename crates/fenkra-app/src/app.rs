@@ -802,7 +802,7 @@ impl App {
                 p.plane = Some(([0., 0., 1.], [1., 0., 0.]));
             }
             mk(d, PmiKind::Gdt { ch: GdtChar::Planeza, tol: s("0,05"), datums: s(""), extra: Default::default() }, vec![[-40., 20., 8.]], [-30., 30., 30.], "");
-            mk(d, PmiKind::Roughness { ra: s("1,6"), process: s("fresado") }, vec![[30., 20., 8.]], [20., 25., 25.], "");
+            mk(d, PmiKind::Roughness { ra: s("1,6"), process: s("fresado"), extra: Default::default() }, vec![[30., 20., 8.]], [20., 25., 25.], "");
             // molduras e propriedades de texto (exemplos)
             mk(d, PmiKind::Note, vec![[-60., 35., 8.]], [-30., 40., 35.], "Ver detalhe A
 lado oposto");
@@ -813,7 +813,7 @@ lado oposto");
             if let Some(p) = d.pmi.last_mut() {
                 p.style = PmiStyle { frame: PmiFrame::CirculoRiscado, angle: 15., anchor: 1, frame_color: Some([200, 40, 40]), ..Default::default() };
             }
-            let we = WeldExtra { other: None, other_side: false, length: s("4×30 (60)"), field: true, contour: WeldContour::Plano, process: s("135") };
+            let we = WeldExtra { other: None, other_side: false, length: s("4×30 (60)"), field: true, contour: WeldContour::Plano, process: s("135"), ..Default::default() };
             mk(d, PmiKind::Weld { kind: WeldKind::Filete, size: s("a5"), all_around: true, extra: we }, vec![[60., 35., 0.]], [30., 30., 25.], "");
             mk(d, PmiKind::Gdt { ch: GdtChar::Posicao, tol: s("0,1"), datums: s("A B C"), extra: GdtExtra { zone_dia: true, modifier: s("Ⓜ"), second: Some((s("0,05"), s("A"))), ..Default::default() } }, vec![[-50., -25., 8.]], [-40., -30., 25.], "");
             mk(d, PmiKind::TitleBlock { template: TITLE_TEMPLATE.into() }, vec![[60., 35., 8.]], [50., -60., 0.], "");
@@ -830,6 +830,38 @@ lado oposto");
             if let Some(p) = d.pmi.last_mut() {
                 p.tol_plus = s("0,1");
                 p.tol_minus = s("0,05");
+            }
+            // FENKRA_DEMO_PMI=alvos / acabamento: exemplos de alvos de referência (B189) e de rugosidade e solda por sistema (B190)
+            let modo = std::env::var("FENKRA_DEMO_PMI").unwrap_or_default();
+            if modo == "alvos" {
+                use fenkra_core::pmi_alvos::*;
+                d.pmi.clear();
+                mk(d, PmiKind::Datum { letter: s("A") }, vec![[-62., 0., 4.]], [-10., -10., 0.], "");
+                mk(d, PmiKind::Datum { letter: s("B") }, vec![[0., -37., 4.]], [0., -10., 8.], "");
+                let lista = [
+                    (FormaAlvo::Ponto, "A", 1, [-40., -25., 8.], [0.; 2], None, false),
+                    (FormaAlvo::Linha, "A", 2, [40., -25., 8.], [20., 0.], None, false),
+                    (FormaAlvo::Circulo, "A", 3, [0., 25., 8.], [12., 0.], None, true),
+                    (FormaAlvo::Retangulo, "B", 1, [-60., 10., 4.], [16., 8.], None, false),
+                    (FormaAlvo::Ponto, "B", 2, [-60., -15., 4.], [0.; 2], Some(AlvoMovel { direcao: [1., 0., 0.], curso: 8. }), false),
+                ];
+                for (f, l, n, a, dim, movel, restrita) in lista {
+                    mk(d, PmiKind::DatumTarget { alvo: AlvoRef { forma: f, letra: s(l), numero: n, dim, movel, restrita, ..Default::default() } }, vec![a], [8., -10., 14.], "");
+                }
+            }
+            if modo == "acabamento" {
+                use fenkra_core::pmi_acabamento::*;
+                d.pmi.clear();
+                let r1 = RugExtra { remocao: Remocao::Obrigatoria, limite_inf: s("0,8"), amostragem: s("2,5"), lay: Lay::Perpendicular, sobremetal: s("0,3"), todo_contorno: true, ..Default::default() };
+                mk(d, PmiKind::Roughness { ra: s("3,2"), process: s("fresado"), extra: r1 }, vec![[-40., 20., 8.]], [-30., 25., 28.], "");
+                let r2 = RugExtra { remocao: Remocao::Proibida, param: s("Rz"), maximo: true, norma: NormaRug::Iso21920, ..Default::default() };
+                mk(d, PmiKind::Roughness { ra: s("12,5"), process: s(""), extra: r2 }, vec![[20., 20., 8.]], [25., 25., 28.], "");
+                let r3 = RugExtra { area: true, ..Default::default() };
+                mk(d, PmiKind::Roughness { ra: s("0,5"), process: s(""), extra: r3 }, vec![[50., -20., 8.]], [50., -30., 28.], "");
+                for (i, sis) in [SistemaSolda::A, SistemaSolda::B, SistemaSolda::Aws].into_iter().enumerate() {
+                    let we = WeldExtra { sistema: sis, length: s("4×30 (60)"), contour: WeldContour::Convexo, acabamento: s("G"), penetracao: i == 2, ..Default::default() };
+                    mk(d, PmiKind::Weld { kind: WeldKind::Filete, size: s("a5"), all_around: i == 0, extra: we }, vec![[-50. + i as f64 * 45., -30., 8.]], [0., -12., 22.], "");
+                }
             }
             app.started = true;
         }
@@ -8157,6 +8189,7 @@ impl eframe::App for App {
         self.painel_importar(ctx, area);
         self.painel_exportar(ctx, area);
         self.painel_lote(ctx, area);
+        crate::pmi_baloes_ui::janela(self, ctx, area);
         if let Some(id) = ctx.data(|m| m.get_temp::<Id>(egui::Id::unique("fenkra_props"))) {
             ctx.data_mut(|m| m.remove::<Id>(egui::Id::unique("fenkra_props")));
             self.props_target = Some(if self.open.doc.reference(id).is_some() { AppTarget::Ref(id) } else { AppTarget::Feature(id) });

@@ -22,9 +22,11 @@ pub fn kind_of(i: u8) -> PmiKind {
         2 => PmiKind::Diameter,
         3 => PmiKind::Angle,
         4 => PmiKind::Note,
-        5 => PmiKind::Roughness { ra: "1,6".into(), process: String::new() },
+        5 => PmiKind::Roughness { ra: "1,6".into(), process: String::new(), extra: Default::default() },
+        19 => PmiKind::DatumTarget { alvo: Default::default() },
         6 => PmiKind::Weld { kind: WeldKind::Filete, size: "a4".into(), all_around: false, extra: Default::default() },
         7 => PmiKind::Datum { letter: "A".into() },
+        18 => PmiKind::Balloon { item: "1".into(), manual: true },
         9 => PmiKind::TitleBlock { template: TITLE_TEMPLATE.into() },
         11 => PmiKind::Ordinate { axis: 0 },
         12 => PmiKind::ArcLength,
@@ -275,6 +277,14 @@ pub fn command(app: &mut App, i: u8) {
         auto_balloons(app);
         return;
     }
+    if i == 20 {
+        if app.in_asm() {
+            app.toast(tr("A solda dos cordões vem da peça: abra a peça com o cordão"), true);
+        } else {
+            crate::pmi_alvos_ui::solda_dos_cordoes(app);
+        }
+        return;
+    }
     set_variant(None);
     let kind = kind_of(i);
     if i == crate::pmi_smart::SMART {
@@ -288,25 +298,26 @@ pub fn command(app: &mut App, i: u8) {
         app.toast(format!("{}: {}", tr(if i == 13 { "Cadeia de cotas" } else { "Cotas a partir de uma base" }), tr("clique os pontos em ordem e conclua com Enter")), false);
         return;
     }
-    // legenda 3D: não precisa de seleção (fica no canto do modelo)
+    // legenda 3D: não precisa de seleção; o diálogo deixa escolher o canto ou o ponto onde ela nasce (B299)
     if let PmiKind::TitleBlock { .. } = kind {
-        let corner = app
-            .result
-            .as_ref()
-            .and_then(|r| {
-                let mut hi: Option<[f64; 3]> = None;
-                for b in &r.bodies {
-                    for v in b.mesh.positions.chunks_exact(3) {
-                        let h = hi.get_or_insert([v[0] as f64, v[1] as f64, v[2] as f64]);
-                        for k in 0..3 {
-                            h[k] = h[k].max(v[k] as f64);
-                        }
+        let (mut lo, mut hi): (Option<[f64; 3]>, Option<[f64; 3]>) = (None, None);
+        if let Some(r) = app.result.as_ref() {
+            for b in &r.bodies {
+                for v in b.mesh.positions.chunks_exact(3) {
+                    let v = [v[0] as f64, v[1] as f64, v[2] as f64];
+                    let (l, h) = (lo.get_or_insert(v), hi.get_or_insert(v));
+                    for k in 0..3 {
+                        l[k] = l[k].min(v[k]);
+                        h[k] = h[k].max(v[k]);
                     }
                 }
-                hi
-            })
-            .unwrap_or([0.; 3]);
-        create(app, kind, vec![corner], vec![], &[]);
+            }
+        }
+        let ponto = app.picks.iter().find_map(|p| match *p {
+            Pick::Vertex { pos, .. } => Some(pos.map(|v| v as f64)),
+            _ => None,
+        });
+        crate::pmi_baloes_ui::abrir_legenda(lo.unwrap_or([0.; 3]), hi.unwrap_or([0.; 3]), ponto);
         return;
     }
     let picks = app.picks.clone();
@@ -324,6 +335,20 @@ pub fn command(app: &mut App, i: u8) {
     }
 }
 
+/// Legenda 3D nascida no ponto escolhido no diálogo, com um passo de desfazer (B299).
+pub fn criar_legenda(app: &mut App, ponto: [f64; 3], off: [f64; 3]) {
+    if app.in_asm() {
+        app.asm.as_mut().unwrap().push_undo();
+    } else {
+        let antes = app.open.doc.clone();
+        app.push_undo_pub(antes);
+    }
+    create(app, PmiKind::TitleBlock { template: TITLE_TEMPLATE.into() }, vec![ponto], vec![], &[]);
+    if let Some(p) = list_mut(app).last_mut() {
+        p.offset = off;
+    }
+}
+
 fn create(app: &mut App, kind: PmiKind, a: Vec<[f64; 3]>, targets: Vec<Option<PmiTarget>>, picks: &[Pick]) {
     set_variant(None);
     // chamada de feature: amarra a feature dona da face e grava o texto gerado
@@ -335,9 +360,23 @@ fn create(app: &mut App, kind: PmiKind, a: Vec<[f64; 3]>, targets: Vec<Option<Pm
         }
         _ => (kind, String::new()),
     };
+    // alvo novo: pertence à última referência criada e recebe o próximo número dela
+    let kind = match kind {
+        PmiKind::DatumTarget { mut alvo } => {
+            alvo.letra = list(app).iter().rev().find_map(|p| if let PmiKind::Datum { letter } = &p.kind { Some(letter.clone()) } else { None }).unwrap_or_else(|| "A".into());
+            alvo.numero = fenkra_core::pmi_alvos::proximo_numero(list(app), &alvo.letra);
+            PmiKind::DatumTarget { alvo }
+        }
+        k => k,
+    };
     // referência nova recebe a próxima letra livre (nunca I, O ou Q)
     let kind = match kind {
         PmiKind::Datum { .. } => PmiKind::Datum { letter: crate::pmi_gdt_ui::proxima(list(app)) },
+        k => k,
+    };
+    // balão à mão: nasce com o próximo número livre e marcado para os automáticos não o trocarem
+    let kind = match kind {
+        PmiKind::Balloon { .. } => PmiKind::Balloon { item: fenkra_core::pmi_baloes::proximo_item(list(app)), manual: true },
         k => k,
     };
     let plane = chosen_plane(app, picks, &a);
@@ -428,35 +467,9 @@ fn auto_balloons(app: &mut App) {
         app.toast(tr("A montagem não tem componentes visíveis"), true);
         return;
     }
-    let n = found.len() as f64;
-    let gc = [0, 1, 2].map(|k| found.iter().map(|f| f.0[k]).sum::<f64>() / n);
-    st.asm.pmi.retain(|p| !matches!(p.kind, PmiKind::Balloon { .. }));
-    st.modified = true;
-    let count = found.len();
-    for (c, item, size) in found {
-        let d = [c[0] - gc[0], c[1] - gc[1]];
-        let l = (d[0] * d[0] + d[1] * d[1]).sqrt();
-        let u = if l > 1e-6 { [d[0] / l, d[1] / l] } else { [1., 0.] };
-        let k = size * 0.35 + 25.;
-        let id = Id(app.next_pmi_id());
-        let pm = Pmi {
-            id,
-            name: format!("{} {item}", tr("Balão")),
-            kind: PmiKind::Balloon { item },
-            anchors: vec![c],
-            offset: [u[0] * k, u[1] * k, 20.],
-            text: String::new(),
-            tol_plus: String::new(),
-            tol_minus: String::new(),
-            visible: true,
-            plane: None,
-            style: Default::default(),
-            folder: tr("Balões").to_string(),
-            targets: vec![],
-        };
-        app.asm.as_mut().unwrap().asm.pmi.push(pm);
-    }
-    app.toast(format!("{count} {}", tr("balão(ões) criados com os números da lista de peças")), false);
+    // nada muda ainda: o diálogo mostra a prévia e as contagens, e só a confirmação aplica (B299)
+    let cands = found.into_iter().map(|(ancora, item, tamanho)| fenkra_core::pmi_baloes::Candidato { item, ancora, tamanho }).collect();
+    crate::pmi_baloes_ui::abrir_baloes(cands);
 }
 
 /// Seleções feitas com uma anotação pendente.
@@ -937,7 +950,7 @@ fn draw_kind(cv: &Cv, pen: &Pen, pm: &Pmi, st: Pos2, s0: Pos2, s1: Option<Pos2>,
             pen.arrow(cv, s0, st);
             weld_draw(cv, st, *kind, size, *all_around, extra, pen)
         }
-        PmiKind::Balloon { item } => {
+        PmiKind::Balloon { item, .. } => {
             let dir = (s0 - st).normalized();
             let rad = pen.size + pen.size * 0.27 * item.chars().count().saturating_sub(1) as f32;
             cv.line_segment([st + dir * rad, s0], stroke);
@@ -953,7 +966,16 @@ fn draw_kind(cv: &Cv, pen: &Pen, pm: &Pmi, st: Pos2, s0: Pos2, s1: Option<Pos2>,
             fr
         }
         PmiKind::Datum { letter } => pen.datum(cv, s0, st, letter),
-        PmiKind::Roughness { ra, process } => {
+        PmiKind::Roughness { ra, process, extra } if !extra.basico() => {
+            let linhas = fenkra_core::pmi_acabamento::linhas(ra, process, extra);
+            let slot = Pen::reserve(cv);
+            let (rr, tip) = pen.roughness_ext(cv, st, &linhas, extra);
+            cv.set(slot, egui::Shape::line_segment([tip, s0], stroke));
+            pen.arrow(cv, s0, tip);
+            rr
+        }
+        PmiKind::DatumTarget { alvo } => pen.datum_target(cv, st, s0, s1.filter(|_| alvo.movel.is_some()), alvo),
+        PmiKind::Roughness { ra, process, .. } => {
             let txt = if process.trim().is_empty() { format!("Ra {ra}") } else { format!("{}\nRa {ra}", process.trim()) };
             let slot = Pen::reserve(cv);
             let (rr, tip) = pen.roughness(cv, st, &txt);
@@ -1169,12 +1191,14 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     let editing = if app.in_asm() { app.asm.as_ref().and_then(|s| s.sel) } else if let Sel::Pmi(i) = app.sel { Some(i) } else { None };
     let focus = app.pmi_focus;
     let painter = ui.painter_at(rect);
+    crate::pmi_baloes_ui::previa(app, ui, rect, cam);
     let mut edit_req: Option<Id> = None;
     let mut anchor_req: Option<(Id, usize, [f64; 3], Option<PmiTarget>)> = None;
     let mut refresh: Vec<(Id, Vec<[f64; 3]>, Vec<Option<PmiTarget>>)> = vec![];
     let pick_filter = crate::picking::Filter { faces: true, edges: true, vertices: true, planes: false, hidden_env: false, exclude_sketch: None, fantasma: None };
     let mut clicked = None;
     let fields = title_fields(app);
+    let enquadradas = fenkra_core::pmi_alvos::ids_enquadrados(list(app));
     let gstyle = app.settings.pmi_style.clone();
     let ctx = ui.ctx().clone();
     // comando de anotação aberto: hover tipado, fantasma, plano de anotação e teclas
@@ -1234,7 +1258,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
         let Some(first) = a.first().copied() else { continue };
         let val = diag.as_ref().and_then(|d| pm.measure_targets(&d.resolved)).or_else(|| pm.measure(&a));
         let is_sel = editing == Some(pm.id) || focus == Some(pm.id);
-        let mut pen = Pen::new(&pm.style, &gstyle, is_sel);
+        let estilo_vivo = if enquadradas.contains(&pm.id) && pm.style.frame == PmiFrame::Padrao { PmiStyle { frame: PmiFrame::Caixa, ..pm.style.clone() } } else { pm.style.clone() };
+        let mut pen = Pen::new(&estilo_vivo, &gstyle, is_sel);
         if pen.apply_scale {
             // tamanho em mm no modelo: texto de `size` pt tem size·0,35 mm de altura
             let (rt, _) = cam.basis();
@@ -1372,7 +1397,11 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
             _ => {
                 let lab = v3(first) + off;
                 let anchor = v3(first);
-                let second = a.get(1).map(|q| v3(*q));
+                let second = match &pm.kind {
+                    // alvo móvel: o segundo ponto é o fim do curso, na direção dada
+                    PmiKind::DatumTarget { alvo } => alvo.movel.map(|m| anchor + v3(m.direcao).normalize_or_zero() * m.curso as f32),
+                    _ => a.get(1).map(|q| v3(*q)),
+                };
                 // nota com várias pontas e/ou vértices intermediários: caminho de cada ponta no modelo
                 let multi = matches!(pm.kind, PmiKind::Note | PmiKind::FeatureNote { .. }) && (a.len() > 1 || pm.style.leader_via.iter().any(|v| !v.is_empty()));
                 let routes3: Vec<Vec<Vec3>> = if multi {
@@ -1432,7 +1461,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
             }
         }
         // rótulo girado na tela: a área de clique envolve o rótulo girado
-        let rect_lbl = if plane.is_none() && !matches!(pm.kind, PmiKind::Datum { .. } | PmiKind::Balloon { .. } | PmiKind::Weld { .. } | PmiKind::Roughness { .. }) { pen.outer(rect_lbl) } else { rect_lbl };
+        let rect_lbl = if plane.is_none() && !matches!(pm.kind, PmiKind::Datum { .. } | PmiKind::Balloon { .. } | PmiKind::Weld { .. } | PmiKind::Roughness { .. } | PmiKind::DatumTarget { .. }) { pen.outer(rect_lbl) } else { rect_lbl };
         // anotação realçada/em edição: as âncoras viram alças (arraste e solte numa face, aresta ou vértice)
         if (is_sel || bad) && !matches!(pm.kind, PmiKind::TitleBlock { .. }) {
             for (k, q) in a.iter().enumerate() {
@@ -1876,7 +1905,7 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui, com_pmi: bool, com_captura
     let h = h.on_hover_text(tr("Cotas, notas, rugosidade, solda e tolerâncias no modelo 3D (grupo Detalhamento 3D)."));
     h.context_menu(|ui| {
         ui.label(RichText::new(tr("Nova anotação 3D")).strong());
-        for (i, n) in [(17u8, "◎ Cota inteligente"), (0u8, "↔ Cota linear"), (1, "R Raio"), (2, "Ø Diâmetro"), (3, "∠ Ângulo"), (4, "✎ Nota"), (5, "√ Rugosidade"), (6, "⌒ Solda"), (7, "▭ Referência (datum)"), (8, "⊞ Tolerância geométrica"), (9, "▤ Legenda 3D"), (11, "⊢ Cota ordenada"), (12, "⌒ Comprimento de arco"), (13, "⇔ Cadeia de cotas"), (14, "⇥ Cotas a partir de uma base"), (15, "ƒ Chamada de feature")] {
+        for (i, n) in [(17u8, "◎ Cota inteligente"), (0u8, "↔ Cota linear"), (1, "R Raio"), (2, "Ø Diâmetro"), (3, "∠ Ângulo"), (4, "✎ Nota"), (5, "√ Rugosidade"), (6, "⌒ Solda"), (7, "▭ Referência (datum)"), (8, "⊞ Tolerância geométrica"), (9, "▤ Legenda 3D"), (11, "⊢ Cota ordenada"), (12, "⌒ Comprimento de arco"), (13, "⇔ Cadeia de cotas"), (14, "⇥ Cotas a partir de uma base"), (15, "ƒ Chamada de feature"), (18, "① Balão à mão"), (19, "⊕ Alvo de referência"), (20, "⌒ Solda dos cordões da bancada Estrutural")] {
             if ui.button(tr(n)).clicked() {
                 create = Some(i);
                 ui.close();
@@ -2207,17 +2236,14 @@ fn panel_inner(app: &mut App, ui: &mut egui::Ui, id: Id, style_req: &mut bool) -
             ui.label(RichText::new(tr("O texto vem dos parâmetros da feature e se atualiza sozinho.")).weak().small());
             ui.label(RichText::new(&p.text).strong());
         }
-        PmiKind::Roughness { ra, process } => {
-            ui.horizontal(|ui| {
-                ui.label("Ra");
-                ui.text_edit_singleline(ra);
-            });
-            ui.horizontal(|ui| {
-                ui.label(tr("Processo"));
-                ui.text_edit_singleline(process);
-            });
+        PmiKind::Roughness { ra, process, extra } => crate::pmi_alvos_ui::rugosidade_ui(ui, ra, process, extra),
+        PmiKind::DatumTarget { alvo } => {
+            crate::pmi_alvos_ui::alvo_ui(ui, alvo, &todas, id);
         }
-        PmiKind::Weld { kind, size, all_around, extra } => weld_ui(ui, "pmi", kind, size, all_around, extra),
+        PmiKind::Weld { kind, size, all_around, extra } => {
+            weld_ui(ui, "pmi", kind, size, all_around, extra);
+            crate::pmi_alvos_ui::solda_sistema_ui(ui, extra);
+        }
         PmiKind::Datum { letter } => {
             ui.horizontal(|ui| {
                 ui.label(tr("Letra"));
@@ -2241,11 +2267,12 @@ fn panel_inner(app: &mut App, ui: &mut egui::Ui, id: Id, style_req: &mut bool) -
             }
             ui.label(RichText::new(tr("Propriedades personalizadas da peça também valem, pelo nome em minúsculas: {revisao}, {cliente}…")).weak().small());
         }
-        PmiKind::Balloon { item } => {
+        PmiKind::Balloon { item, manual } => {
             ui.horizontal(|ui| {
                 ui.label(tr("Item"));
                 ui.add(egui::TextEdit::singleline(item).desired_width(60.));
             });
+            ui.checkbox(manual, tr("Feito à mão (os balões automáticos preservam)")).on_hover_text(tr("Marcado: o comando Balões automáticos não troca este balão e não cria outro com o mesmo número."));
         }
         PmiKind::Gdt { ch, tol, datums, extra } => {
             gdt_ui(ui, "pmi_gdt", ch, tol, datums, extra);
