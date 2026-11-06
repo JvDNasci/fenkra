@@ -29,6 +29,7 @@ mod exportar;
 mod importar;
 mod plm;
 mod projeto;
+mod ramos_ui;
 mod salvar;
 use salvar::Acao;
 
@@ -57,6 +58,8 @@ pub struct OpenDoc {
     pub frozen: Option<String>,
     pub file: Option<PathBuf>,
     pub modified: bool,
+    /// ramo (B130) em que o documento está sendo editado; `None` = linha principal
+    pub ramo: Option<String>,
 }
 
 pub struct DeleteDialog {
@@ -355,7 +358,7 @@ impl App {
             v.camera.ortho = settings.ortho;
         }
         let mut app = App {
-            open: OpenDoc { doc: fenkra_solidos::example_document(), entry: None, frozen: None, file: None, modified: false },
+            open: OpenDoc { doc: fenkra_solidos::example_document(), entry: None, frozen: None, file: None, modified: false, ramo: None },
             project: None,
             project_sel: None,
             sel: Sel::None,
@@ -1223,7 +1226,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     }
 
     fn load_doc(&mut self, doc: Document, entry: Option<u64>, frozen: Option<String>) {
-        self.open = OpenDoc { doc, entry, frozen, file: None, modified: false };
+        self.open = OpenDoc { doc, entry, frozen, file: None, modified: false, ramo: None };
         self.sel = Sel::None;
         self.hist.limpar();
         self.salvar.esquecer();
@@ -1239,6 +1242,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         }
         if self.open.frozen.is_some() {
             self.toast("Revisão congelada não pode ser salva. Abra a versão de trabalho.", true);
+            return;
+        }
+        if self.salvar_no_ramo_ativo() {
             return;
         }
         if let (Some(p), Some(id)) = (self.project.as_mut(), self.open.entry) {
@@ -6543,6 +6549,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 });
             }
         });
+        self.secao_ramos(ui, sel);
         self.secao_qualidade(ui, sel);
         if let Some(n) = restaurar {
             let reabrir = self.open.entry == Some(sel);

@@ -2,7 +2,7 @@
 //! Desenvolvimento: `FENKRA_DEMO_JANELA=<nome>` abre, no segundo quadro, uma janela ou painel que só o
 //! mouse abriria, para a captura (`FENKRA_DEMO_FOTO`). Nomes: `salvar_como`, `empacotar`, `reparar`,
 //! `liberar` (combine com `FENKRA_DEMO_PROJETO=1`), `resumo` (com `FENKRA_DEMO_EST=1`), `roda`, `roda_editor`,
-//! `tabela` (parâmetros com a tabela de projeto preenchida).
+//! `ramos` (com `FENKRA_DEMO_PROJETO=1`: ramo em conflito e janela de mesclagem), `tabela` (parâmetros com a tabela de projeto preenchida).
 
 use super::*;
 
@@ -16,6 +16,9 @@ impl App {
         if matches!(nome.as_str(), "salvar_como" | "empacotar" | "reparar") && self.open.file.is_none() {
             self.demo_arquivo();
         }
+        if nome == "ramos" {
+            self.demo_ramos();
+        }
         if nome == "liberar" {
             self.demo_conjunto_que_usa();
         }
@@ -28,6 +31,7 @@ impl App {
                     self.release_dialog = Some((id, String::new()));
                 }
             }
+            "ramos" => self.demo_abrir_mescla(ctx),
             "resumo" => crate::st_montagem_ui::abrir(self),
             "roda" => {
                 let r = ctx.content_rect();

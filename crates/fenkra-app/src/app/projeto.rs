@@ -199,6 +199,7 @@ impl App {
         self.dialogo_transicao(ctx);
         self.dialogo_liberar(ctx);
         self.janela_comparacao(ctx);
+        self.janela_mescla(ctx);
     }
 
     fn janela_salvar_como(&mut self, ctx: &egui::Context) {
@@ -665,6 +666,10 @@ impl App {
         let Some(p) = self.project.as_ref() else { return };
         let Ok(e) = p.entry(st.id).cloned() else { return };
         let regra = p.index.ciclo.verificar(e.state, st.para, &p.papeis, &st.motivo);
+        // checador de qualidade (B305) ao mudar de estado: só mede a peça aberta, já recalculada
+        let medidas = self.medidas_da_peca_aberta(st.id);
+        let qualidade = medidas.as_ref().and_then(|m| self.project.as_ref().and_then(|p| p.avaliar_qualidade(st.id, m, fenkra_project::qualidade_modelo::Momento::MudarEstado).ok()));
+        let barrado = qualidade.as_ref().is_some_and(|q| q.bloqueia());
         let (mut confirmar, mut cancelar) = (false, false);
         let mut ir: Option<Uso> = None;
         egui::Modal::new(egui::Id::new("fenkra_transicao_modal")).show(ctx, |ui| {
@@ -676,13 +681,16 @@ impl App {
                 ui.label(RichText::new(tr("Estes documentos continuarão apontando para ela. Confira antes de confirmar.")).weak().small());
                 ir = self.lista_de_usos(ui, &st.usos);
             }
+            if let Some(q) = &qualidade {
+                self.linhas_qualidade(ui, q);
+            }
             ui.add(egui::TextEdit::multiline(&mut st.motivo).hint_text(tr("Motivo")).desired_rows(2).desired_width(380.));
             if let Err(m) = &regra {
                 // sem motivo ainda não é erro de verdade: a dica já diz o que falta
                 ui.label(RichText::new(m).color(ui.visuals().error_fg_color).small());
             }
             ui.horizontal(|ui| {
-                confirmar = ui.add_enabled(regra.is_ok(), egui::Button::new(tr("Confirmar"))).clicked();
+                confirmar = ui.add_enabled(regra.is_ok() && !barrado, egui::Button::new(tr("Confirmar"))).on_disabled_hover_text(if barrado { tr("A qualidade do modelo bloqueia a mudança de estado. Corrija a peça ou registre uma exceção.") } else { "" }).clicked();
                 cancelar = ui.button(tr("Cancelar")).clicked();
             });
         });

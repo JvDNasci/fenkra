@@ -1,0 +1,399 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
+//! Interface dos ramos e da mesclagem (B130): lista de ramos no painel do projeto, criar, trocar,
+//! pedir mesclagem, aprovar, e a resolução de conflito lado a lado, feature por feature.
+//! A decisão mora em `fenkra_project::ramos`; aqui ficam a tela e o gancho `verificar`, que roda o
+//! recálculo real do documento mesclado (status, volume e referências) antes de qualquer aprovação
+//! ou mesclagem. Cores só por tema; o estado das janelas fica na memória temporária do egui.
+
+use super::*;
+use fenkra_project::ramos::{EstadoPedido, EstadoRamo, Lado, Mescla, Ramo, PRINCIPAL};
+use std::collections::HashMap;
+
+/// Conferência do documento mesclado com o recálculo real. Vazio = pode entrar.
+/// - status: nenhum comando ativo com erro (a causa vem do classificador, não do texto);
+/// - referências: nenhuma referência perdida;
+/// - volume: todo corpo sólido com volume finito e positivo.
+pub(crate) fn verificar_recalculo(doc: &Document) -> Vec<String> {
+    use fenkra_solidos::erro::ErrorKind;
+    use fenkra_solidos::Status;
+    let r = fenkra_solidos::recompute(doc);
+    let mut p = vec![];
+    if let Some(e) = &r.param_error {
+        p.push(format!("parâmetro com erro: {e}"));
+    }
+    let tipos = r.tipos_de_erro(doc);
+    for f in doc.features.iter().filter(|f| !f.suppressed) {
+        if let Some(Status::Error(msg)) = r.status.get(&f.id) {
+            let causa = match tipos.get(&f.id) {
+                Some(ErrorKind::ReferenciaPerdida { .. }) | Some(ErrorKind::GeometriaPerdida) => "referência perdida",
+                Some(ErrorKind::PaiFalhou { .. }) => "depende de um comando que falhou",
+                _ => "erro",
+            };
+            p.push(format!("{} ({causa}): {msg}", f.name));
+        }
+    }
+    for b in &r.bodies {
+        if !b.mass.volume.is_finite() || (b.faces > 0 && b.mass.volume <= 0.) {
+            p.push(format!("corpo sem volume válido ({:.3})", b.mass.volume));
+        }
+    }
+    p
+}
+
+#[derive(Clone, Default)]
+struct RamosUi {
+    novo: String,
+    mensagem: String,
+    motivo: String,
+}
+
+#[derive(Clone)]
+struct MesclaUi {
+    id: u64,
+    nome: String,
+    escolhas: HashMap<String, Lado>,
+}
+
+fn id_mescla() -> egui::Id {
+    egui::Id::new("fenkra_mescla_ramo")
+}
+
+fn cor_pedido(ui: &egui::Ui, e: EstadoPedido) -> egui::Color32 {
+    match e {
+        EstadoPedido::Aprovado => ui.visuals().hyperlink_color,
+        EstadoPedido::Recusado => ui.visuals().error_fg_color,
+        EstadoPedido::Aberto => ui.visuals().warn_fg_color,
+    }
+}
+
+fn rotulo_pedido(e: EstadoPedido) -> &'static str {
+    match e {
+        EstadoPedido::Aberto => "pedido aberto",
+        EstadoPedido::Aprovado => "aprovado",
+        EstadoPedido::Recusado => "recusado",
+    }
+}
+
+enum AcaoRamo {
+    Criar(String),
+    Trocar(String),
+    Principal,
+    Pedir(String),
+    Aprovar(String),
+    Recusar(String),
+    Mesclar(String),
+    Descartar(String),
+}
+
+impl App {
+    /// Grava no ramo ativo em vez de na principal. Devolve `true` se tratou o salvamento.
+    pub(super) fn salvar_no_ramo_ativo(&mut self) -> bool {
+        let (Some(id), Some(nome)) = (self.open.entry, self.open.ramo.clone()) else { return false };
+        let Some(p) = self.project.as_mut() else { return false };
+        match p.salvar_no_ramo(id, &nome, &self.open.doc, "salvo no ramo") {
+            Ok(()) => {
+                self.open.modified = false;
+                self.toast(format!("{} '{nome}'", tr("Trabalho salvo no ramo")), false);
+            }
+            Err(e) => self.toast(e.to_string(), true),
+        }
+        true
+    }
+
+    /// Desenvolvimento (`FENKRA_DEMO_JANELA=ramos` com `FENKRA_DEMO_PROJETO=1`): monta um ramo que
+    /// conflita com a principal, aprova o pedido e abre a janela de mesclagem.
+    pub(super) fn demo_ramos(&mut self) {
+        let (Some(id), Some(p)) = (self.project_sel, self.project.as_mut()) else { return };
+        let mut montar = || -> fenkra_project::PResult<()> {
+            p.criar_ramo(id, "variante")?;
+            let mut d = p.carregar_ramo(id, "variante")?;
+            if let Some(q) = d.params.iter_mut().find(|q| q.name == "esp") {
+                q.expr = "20".into();
+            }
+            p.salvar_no_ramo(id, "variante", &d, "mais grossa")?;
+            let mut dp = p.load(id)?;
+            if let Some(q) = dp.params.iter_mut().find(|q| q.name == "esp") {
+                q.expr = "16".into();
+            }
+            p.save(id, &dp, "principal mudou a espessura")?;
+            p.pedir_mesclagem(id, "variante", "Espessura maior para a versão reforçada")?;
+            p.revisar_pedido(id, "variante", true, "", &verificar_recalculo)
+        };
+        if let Err(e) = montar() {
+            self.toast(e.to_string(), true);
+        }
+    }
+
+    /// Abre a janela de mesclagem do primeiro ramo aberto (desenvolvimento).
+    pub(super) fn demo_abrir_mescla(&mut self, ctx: &egui::Context) {
+        let (Some(id), Some(p)) = (self.project_sel, self.project.as_ref()) else { return };
+        if let Some(r) = p.ramos(id).into_iter().find(|r| r.estado == EstadoRamo::Aberto) {
+            ctx.data_mut(|d| d.insert_temp(id_mescla(), Some(MesclaUi { id, nome: r.nome, escolhas: HashMap::new() })));
+        }
+    }
+
+    /// Seção "Ramos" do painel do projeto: lista, criar, trocar, pedir mesclagem e aprovar (B130).
+    pub(super) fn secao_ramos(&mut self, ui: &mut egui::Ui, sel: u64) {
+        let Some(p) = self.project.as_ref() else { return };
+        let ramos: Vec<Ramo> = p.ramos(sel).into_iter().filter(|r| r.estado == EstadoRamo::Aberto).collect();
+        let avisos = p.avisos_de_sobreposicao(sel).unwrap_or_default();
+        let aprovador = p.papeis.iter().any(|x| x == "aprovador");
+        let ativo = if self.open.entry == Some(sel) { self.open.ramo.clone() } else { None };
+        let mut st: RamosUi = ui.ctx().data(|d| d.get_temp(egui::Id::new(("ramos_ui", sel)))).unwrap_or_default();
+        let mut acao: Option<AcaoRamo> = None;
+
+        let cab = ui.horizontal(|ui| {
+            ui.add(egui::Image::new(crate::icons::get("comparar_versoes")).fit_to_exact_size(egui::vec2(18., 18.)));
+            ui.label(RichText::new(format!("{} ({})", tr("Ramos"), ramos.len())).strong());
+        });
+        cab.response.on_hover_text(tr("Em vez de travar a peça, cada pessoa trabalha num ramo. A linha principal só recebe um ramo depois de um pedido de mesclagem aprovado."));
+        egui::CollapsingHeader::new(tr("Ramos e mesclagem")).id_salt(("ramos", sel)).default_open(!ramos.is_empty()).show(ui, |ui| {
+            // linha principal, sempre presente
+            ui.horizontal(|ui| {
+                let na_principal = ativo.is_none();
+                ui.label(RichText::new(format!("{} {PRINCIPAL}", if na_principal { "●" } else { "○" })).strong());
+                ui.label(RichText::new(tr("protegida")).weak().small()).on_hover_text(tr("Só recebe ramos com pedido de mesclagem aprovado por quem tem o papel de aprovador."));
+                if !na_principal && ui.small_button(tr("Voltar à principal")).on_hover_text(tr("Salva o ramo e abre a versão de trabalho da principal")).clicked() {
+                    acao = Some(AcaoRamo::Principal);
+                }
+            });
+            for r in &ramos {
+                ui.horizontal_wrapped(|ui| {
+                    let aqui = ativo.as_deref() == Some(r.nome.as_str());
+                    ui.label(RichText::new(format!("{} {}", if aqui { "●" } else { "○" }, r.nome)).strong());
+                    ui.label(RichText::new(format!("{} · {} {}", r.autor, r.versoes.len(), tr("versões"))).weak().small());
+                    if let Some(pd) = &r.pedido {
+                        ui.label(RichText::new(tr(rotulo_pedido(pd.estado))).small().color(cor_pedido(ui, pd.estado))).on_hover_text(if pd.motivo.is_empty() { pd.mensagem.clone() } else { format!("{}\n{}", pd.mensagem, pd.motivo) });
+                    }
+                    if !aqui && ui.small_button(tr("Trocar")).on_hover_text(tr("Abre o ramo para editar; a principal não muda")).clicked() {
+                        acao = Some(AcaoRamo::Trocar(r.nome.clone()));
+                    }
+                    let estado = r.pedido.as_ref().map(|x| x.estado);
+                    if estado != Some(EstadoPedido::Aberto) && estado != Some(EstadoPedido::Aprovado) && ui.small_button(tr("Pedir mesclagem")).on_hover_text(tr("Pede a entrada deste ramo na linha principal, com a mensagem abaixo")).clicked() {
+                        acao = Some(AcaoRamo::Pedir(r.nome.clone()));
+                    }
+                    if estado == Some(EstadoPedido::Aberto) {
+                        let dica = if aprovador { tr("Confere o resultado da mesclagem com o recálculo e aprova") } else { tr("Falta o papel de aprovador") };
+                        if ui.add_enabled(aprovador, egui::Button::new(tr("Aprovar")).small()).on_hover_text(dica).clicked() {
+                            acao = Some(AcaoRamo::Aprovar(r.nome.clone()));
+                        }
+                        if ui.add_enabled(aprovador, egui::Button::new(tr("Recusar")).small()).on_hover_text(tr("Recusa o pedido; o motivo abaixo fica no diário")).clicked() {
+                            acao = Some(AcaoRamo::Recusar(r.nome.clone()));
+                        }
+                    }
+                    if estado == Some(EstadoPedido::Aprovado) && ui.add_enabled(aprovador, egui::Button::new(tr("Mesclar…")).small()).on_hover_text(tr("Mostra os conflitos lado a lado e entra na principal")).clicked() {
+                        acao = Some(AcaoRamo::Mesclar(r.nome.clone()));
+                    }
+                    if ui.small_button("✖").on_hover_text(tr("Descartar o ramo (as versões continuam guardadas)")).clicked() {
+                        acao = Some(AcaoRamo::Descartar(r.nome.clone()));
+                    }
+                });
+            }
+            for a in &avisos {
+                let contra = if a.contra == PRINCIPAL { tr("a principal").to_string() } else { format!("{} '{}'", tr("o ramo"), a.contra) };
+                ui.label(RichText::new(format!("⚠ {} '{}' {} {} ({} {})", tr("O ramo"), a.ramo, tr("mexeu nas mesmas features que"), contra, a.features.len(), tr("feature(s)"))).small().color(ui.visuals().warn_fg_color));
+            }
+            ui.add(egui::TextEdit::singleline(&mut st.mensagem).hint_text(tr("Mensagem do pedido de mesclagem")).desired_width(260.));
+            ui.add(egui::TextEdit::singleline(&mut st.motivo).hint_text(tr("Motivo da revisão (opcional)")).desired_width(260.));
+            ui.horizontal(|ui| {
+                ui.add(egui::TextEdit::singleline(&mut st.novo).hint_text(tr("Nome do novo ramo")).desired_width(160.));
+                let ok = !st.novo.trim().is_empty();
+                if ui.add_enabled(ok, egui::Button::new(tr("Criar ramo"))).on_hover_text(tr("Abre um ramo a partir da versão atual da principal")).clicked() {
+                    acao = Some(AcaoRamo::Criar(st.novo.trim().to_string()));
+                }
+            });
+        });
+
+        if let Some(a) = acao {
+            self.executar_acao_ramo(ui.ctx(), sel, a, &mut st);
+        }
+        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(("ramos_ui", sel)), st));
+    }
+
+    fn executar_acao_ramo(&mut self, ctx: &egui::Context, sel: u64, acao: AcaoRamo, st: &mut RamosUi) {
+        // trabalho em andamento não se perde ao trocar de linha
+        let precisa_salvar = matches!(acao, AcaoRamo::Trocar(_) | AcaoRamo::Principal | AcaoRamo::Mesclar(_)) && self.open.modified && self.open.entry == Some(sel) && self.open.frozen.is_none();
+        if precisa_salvar {
+            if self.open.ramo.is_some() {
+                self.salvar_no_ramo_ativo();
+            } else {
+                self.save();
+            }
+        }
+        let Some(p) = self.project.as_mut() else { return };
+        let r: Result<String, String> = match acao {
+            AcaoRamo::Criar(nome) => {
+                let r = p.criar_ramo(sel, &nome).map(|_| format!("{} '{nome}'", tr("Ramo criado"))).map_err(|e| e.to_string());
+                if r.is_ok() {
+                    st.novo.clear();
+                }
+                r
+            }
+            AcaoRamo::Trocar(nome) => match p.carregar_ramo(sel, &nome) {
+                Ok(d) => {
+                    self.load_doc(d, Some(sel), None);
+                    self.open.ramo = Some(nome.clone());
+                    Ok(format!("{} '{nome}'", tr("Editando o ramo")))
+                }
+                Err(e) => Err(e.to_string()),
+            },
+            AcaoRamo::Principal => {
+                self.open_entry(sel, None);
+                Ok(tr("De volta à linha principal").to_string())
+            }
+            AcaoRamo::Pedir(nome) => {
+                let msg = if st.mensagem.trim().is_empty() { format!("{} {nome}", tr("Mesclar")) } else { st.mensagem.trim().to_string() };
+                p.pedir_mesclagem(sel, &nome, &msg).map(|_| tr("Pedido de mesclagem enviado").to_string()).map_err(|e| e.to_string())
+            }
+            AcaoRamo::Aprovar(nome) => p.revisar_pedido(sel, &nome, true, st.motivo.trim(), &verificar_recalculo).map(|_| tr("Pedido aprovado: o resultado recalcula sem erro").to_string()).map_err(|e| e.to_string()),
+            AcaoRamo::Recusar(nome) => p.revisar_pedido(sel, &nome, false, st.motivo.trim(), &verificar_recalculo).map(|_| tr("Pedido recusado").to_string()).map_err(|e| e.to_string()),
+            AcaoRamo::Mesclar(nome) => {
+                ctx.data_mut(|d| d.insert_temp(id_mescla(), Some(MesclaUi { id: sel, nome, escolhas: HashMap::new() })));
+                return;
+            }
+            AcaoRamo::Descartar(nome) => {
+                let r = p.descartar_ramo(sel, &nome).map(|_| format!("{} '{nome}'", tr("Ramo descartado"))).map_err(|e| e.to_string());
+                if r.is_ok() && self.open.ramo.as_deref() == Some(nome.as_str()) {
+                    self.open_entry(sel, None);
+                }
+                r
+            }
+        };
+        match r {
+            Ok(m) => self.toast(m, false),
+            Err(e) => self.toast(e, true),
+        }
+    }
+
+    /// Janela de mesclagem: o que o ramo mudou e, para cada conflito, os dois valores lado a lado.
+    pub(super) fn janela_mescla(&mut self, ctx: &egui::Context) {
+        let Some(mut st) = ctx.data(|d| d.get_temp::<Option<MesclaUi>>(id_mescla())).flatten() else { return };
+        let Some(p) = self.project.as_ref() else { return };
+        let previa: Result<Mescla, String> = p.previa_mesclagem(st.id, &st.nome, &st.escolhas).map_err(|e| e.to_string());
+        let mudou = p.comparar_ramo(st.id, &st.nome).ok();
+        let (mut aberta, mut confirmar) = (true, false);
+        egui::Window::new(format!("{} '{}'", tr("Mesclar o ramo"), st.nome)).id(id_mescla()).open(&mut aberta).default_pos([420., 120.]).default_width(560.).show(ctx, |ui| {
+            if let Some(c) = &mudou {
+                ui.label(RichText::new(format!("{}: {}", tr("O ramo mudou"), c.total())).strong());
+                for f in c.features.iter().take(12) {
+                    ui.label(RichText::new(format!("{} {} ({})", f.frase(), f.nome, f.tipo)).small());
+                }
+            }
+            ui.separator();
+            match &previa {
+                Err(e) => {
+                    ui.label(RichText::new(e).color(ui.visuals().error_fg_color));
+                }
+                Ok(m) if m.limpa() => {
+                    ui.label(RichText::new(tr("Sem conflitos: as mudanças entram sozinhas.")).color(ui.visuals().hyperlink_color));
+                }
+                Ok(m) => {
+                    ui.label(RichText::new(format!("{} ({})", tr("Conflitos"), m.conflitos.len())).strong());
+                    egui::Grid::new("grade_conflitos").striped(true).num_columns(4).show(ui, |ui| {
+                        ui.label(RichText::new(tr("Onde")).weak());
+                        ui.label(RichText::new(tr("Principal")).weak());
+                        ui.label(RichText::new(tr("Ramo")).weak());
+                        ui.label(RichText::new(tr("Fica com")).weak());
+                        ui.end_row();
+                        for c in &m.conflitos {
+                            ui.label(&c.rotulo).on_hover_text(format!("{}: {}", tr("Valor de partida"), c.base));
+                            let atual = st.escolhas.get(&c.chave).copied();
+                            let marca = |l: Lado| if atual == Some(l) { "● " } else { "" };
+                            ui.label(format!("{}{}", marca(Lado::Nossa), c.nossa));
+                            ui.label(format!("{}{}", marca(Lado::Deles), c.deles));
+                            ui.horizontal(|ui| {
+                                if ui.selectable_label(atual == Some(Lado::Nossa), tr("Principal")).clicked() {
+                                    st.escolhas.insert(c.chave.clone(), Lado::Nossa);
+                                }
+                                if ui.selectable_label(atual == Some(Lado::Deles), tr("Ramo")).clicked() {
+                                    st.escolhas.insert(c.chave.clone(), Lado::Deles);
+                                }
+                            });
+                            ui.end_row();
+                        }
+                    });
+                }
+            }
+            ui.separator();
+            let resolvido = previa.as_ref().is_ok_and(|m| m.conflitos.iter().all(|c| st.escolhas.contains_key(&c.chave)));
+            ui.horizontal(|ui| {
+                let r = ui.add_enabled(resolvido, egui::Button::new(tr("Mesclar na principal")));
+                r.clone().on_hover_text(if resolvido { tr("Recalcula o resultado e só entra se status, volume e referências estiverem em ordem") } else { tr("Escolha um lado em cada conflito") });
+                confirmar = r.clicked();
+                ui.label(RichText::new(tr("O resultado fica como versão nova; o histórico não é reescrito.")).weak().small());
+            });
+        });
+        if confirmar {
+            let (id, nome, escolhas) = (st.id, st.nome.clone(), st.escolhas.clone());
+            let r = self.project.as_mut().unwrap().mesclar_ramo(id, &nome, &escolhas, &verificar_recalculo);
+            match r {
+                Ok(_) => {
+                    self.toast(format!("{} '{nome}'", tr("Ramo mesclado na principal")), false);
+                    self.open_entry(id, None);
+                    aberta = false;
+                }
+                Err(e) => self.toast(e.to_string(), true),
+            }
+        }
+        ctx.data_mut(|d| d.insert_temp(id_mescla(), if aberta { Some(st) } else { None }));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fenkra_core::{BoolOp, FeatureKind, OriginPlane, PlaneRef, PrimKind, Primitive};
+
+    fn caixa(d: &mut Document, a: &str) -> fenkra_core::Id {
+        let s = |x: &str| x.to_string();
+        d.add_feature(FeatureKind::Primitive(Primitive { kind: PrimKind::Caixa, plane: PlaneRef::Origin(OriginPlane::XY), a: s(a), b: s("20"), c: s("5"), d: s("0"), op: BoolOp::Add }))
+    }
+
+    /// Fluxo inteiro com o gancho real: o ramo que quebra o modelo não é aprovado; o ramo são
+    /// é aprovado, mescla e a principal passa a ter o volume novo.
+    #[test]
+    fn gancho_real_barra_ramo_quebrado_e_deixa_entrar_o_sao() {
+        let raiz = std::env::temp_dir().join(format!("plm6_ramos_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&raiz);
+        let mut p = fenkra_project::Project::create(&raiz, "Teste").unwrap();
+        p.autor = "ana".into();
+        let mut d = Document::new("Placa");
+        caixa(&mut d, "40");
+        let id = p.add_document(d).unwrap();
+
+        let editar = |p: &mut fenkra_project::Project, ramo: &str, largura: &str| {
+            let mut doc = p.carregar_ramo(id, ramo).unwrap();
+            if let FeatureKind::Primitive(pr) = &mut doc.features[0].kind {
+                pr.a = largura.to_string();
+            }
+            p.salvar_no_ramo(id, ramo, &doc, "largura").unwrap();
+        };
+        p.criar_ramo(id, "quebrado").unwrap();
+        editar(&mut p, "quebrado", "0");
+        p.pedir_mesclagem(id, "quebrado", "teste").unwrap();
+        let e = p.revisar_pedido(id, "quebrado", true, "", &verificar_recalculo).unwrap_err();
+        assert!(e.to_string().contains("volume") || e.to_string().contains("erro"), "{e}");
+
+        p.criar_ramo(id, "largo").unwrap();
+        editar(&mut p, "largo", "60");
+        p.pedir_mesclagem(id, "largo", "mais largo").unwrap();
+        p.revisar_pedido(id, "largo", true, "", &verificar_recalculo).unwrap();
+        p.mesclar_ramo(id, "largo", &HashMap::new(), &verificar_recalculo).unwrap();
+        let principal = p.load(id).unwrap();
+        let vol = fenkra_solidos::recompute(&principal).bodies[0].mass.volume;
+        assert!((vol - 60. * 20. * 5.).abs() < 1e-6, "volume da principal depois da mescla: {vol}");
+        let _ = std::fs::remove_dir_all(raiz);
+    }
+
+    #[test]
+    fn verificacao_aceita_documento_sao_e_barra_o_quebrado() {
+        let mut d = Document::new("Placa");
+        caixa(&mut d, "40");
+        assert!(verificar_recalculo(&d).is_empty(), "{:?}", verificar_recalculo(&d));
+        // dimensão zero: o kernel não gera sólido válido
+        let mut ruim = Document::new("Ruim");
+        caixa(&mut ruim, "0");
+        let p = verificar_recalculo(&ruim);
+        assert!(!p.is_empty(), "caixa de largura zero não pode passar");
+    }
+}
