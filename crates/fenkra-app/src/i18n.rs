@@ -30,6 +30,7 @@ fn map() -> &'static HashMap<&'static str, &'static str> {
             .chain(crate::textos_desenho_cotas::TEXTOS.iter())
             .chain(crate::sketch_textos::TEXTOS.iter())
             .chain(crate::textos_estrutural::TEXTOS.iter())
+            .chain(crate::textos_st_corte::TEXTOS.iter())
             .chain(crate::textos_solda::TEXTOS.iter())
             .chain(crate::textos_chapa::TEXTOS.iter())
             .chain(crate::textos_dobra_tubo::TEXTOS.iter())
