@@ -736,11 +736,9 @@ ic("forma_converter", b=Q(6, 12, 18, 24), R=CUBO(32, 12, 10, 5, 12) + "M18 24h4"
 
 SO_INTERFACE = {"sm_aba_perfis", "sm_desdobrar_parcial", "sm_redobrar_parcial", "sm_converter_chapa", "sm_aba_laco", "sm_fecha_canto", "sm_canto_topo", "sm_canto_sobreposto", "sm_canto_sob", "importar_arquivo", "asm_catalogo", "arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais", "exportar_arquivo", "liberar_revisao", "onde_usado", "comparar", "estado_sem_revisao", "estado_liberada", "estado_editado", "estado_leitura", "estado_conflito", "forma", "forma_caixa", "forma_esfera", "forma_cilindro", "forma_plano", "forma_extrudar", "forma_laco", "forma_aresta", "forma_borda", "forma_tangencia", "forma_simetria", "forma_converter", "des_cota_inteligente", "curso", "mapa_macro", "perfil_fluxo", "an_conexao", "an_desvio", "an_pente", "sup_regrada", "st_solda", "conversao_lote", "formatos_suportados", "edit_mover_face", "edit_apagar_face", "edit_deslocar_face", "edit_raio_filete"}
 
-<<<<<<< HEAD
+SO_INTERFACE |= {"filete_assimetrico"}
 SO_INTERFACE |= {"an_inclinacao", "an_isofotas", "an_dfm"}
-=======
 SO_INTERFACE |= {"asm_chaveta", "asm_calculo"}
->>>>>>> worktree-agent-a522f3f9c8e11b4ff
 
 
 # ---------- saída ----------
