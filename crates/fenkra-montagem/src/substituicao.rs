@@ -204,7 +204,7 @@ mod tests {
         let base = a.add_component("Base", NodeKind::Part { path: "base.fkp".into() }, Placement::default(), None);
         let c = a.add_component("Bloco", NodeKind::Part { path: "v.fkp".into() }, Placement::default(), None);
         let topo = [0., 0., 10.];
-        a.add_mate(MateKind::Contact, MateRef { comp: base, geom: Geom::Plane { p: [0., 0., 0.], n: [0., 0., -1.] }, pick: Some([0., 0., 0.]) }, MateRef { comp: c, geom: Geom::Plane { p: topo, n: [0., 0., 1.] }, pick: Some(topo) });
+        a.add_mate(MateKind::Contact, MateRef { comp: base, geom: Geom::Plane { p: [0., 0., 0.], n: [0., 0., -1.] }, pick: Some([0., 0., 0.]), viva: None }, MateRef { comp: c, geom: Geom::Plane { p: topo, n: [0., 0., 1.] }, pick: Some(topo), viva: None });
         (dir, a, PartCache::default(), base, c)
     }
 

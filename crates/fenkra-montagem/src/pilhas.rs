@@ -583,7 +583,7 @@ mod tests {
     fn manual(a: &mut Assembly, parafuso: Id) -> Id {
         let comp = a.nodes.iter().find(|n| n.name == "A").unwrap().id;
         let g = Geom::Plane { p: [0.; 3], n: [1., 0., 0.] };
-        a.add_mate(MateKind::Parallel, MateRef { comp, geom: g, pick: Some([1., 0., 0.]) }, MateRef { comp: parafuso, geom: g, pick: Some([1., 0., 0.]) })
+        a.add_mate(MateKind::Parallel, MateRef { comp, geom: g, pick: Some([1., 0., 0.]), viva: None }, MateRef { comp: parafuso, geom: g, pick: Some([1., 0., 0.]), viva: None })
     }
 
     #[test]

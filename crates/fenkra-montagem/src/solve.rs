@@ -319,7 +319,7 @@ fn all_residuals(a: &Assembly, pl: &HashMap<Id, Placement>, vars: &HashMap<Strin
     for m in e.mates.iter().map(|i| &a.mates[*i]).filter(|m| !m.suppressed && !formula_invalida(m, vars)) {
         let (Some(pa), Some(pb)) = (pl.get(&m.a.comp), pl.get(&m.b.comp)) else { continue };
         let s = r.len();
-        let (wa, wb) = (world(&m.a.geom, pa), world(&m.b.geom, pb));
+        let (wa, wb) = (world(&m.geom_a(vars), pa), world(&m.b.geom, pb));
         match &m.kind {
             // engrenagem/polia: giro de B = razão × giro de A
             MateKind::Gear { ratio, refs, .. } => {
@@ -1112,8 +1112,8 @@ mod tests {
 
     /// Peça presa à `alvo` por eixo, face e trava de giro: 0 GDL entre as duas.
     fn travar(a: &mut Assembly, alvo: Id, peca: Id) {
-        let eixo = |comp| MateRef { comp, geom: Geom::Axis { p: [0.; 3], d: [0., 0., 1.] }, pick: None };
-        let plano = |comp, n: V3| MateRef { comp, geom: Geom::Plane { p: [0.; 3], n }, pick: None };
+        let eixo = |comp| MateRef { comp, geom: Geom::Axis { p: [0.; 3], d: [0., 0., 1.] }, pick: None, viva: None };
+        let plano = |comp, n: V3| MateRef { comp, geom: Geom::Plane { p: [0.; 3], n }, pick: None, viva: None };
         a.add_mate(MateKind::Coincident { flip: false }, eixo(alvo), eixo(peca));
         a.add_mate(MateKind::Coincident { flip: false }, plano(alvo, [0., 0., 1.]), plano(peca, [0., 0., 1.]));
         a.add_mate(MateKind::Parallel, plano(alvo, [1., 0., 0.]), plano(peca, [1., 0., 0.]));
@@ -1126,8 +1126,8 @@ mod tests {
         a.node_mut(base).unwrap().fixed = true;
         let (p1, p2) = (cubo(&mut a, "P1", [0., 0., 30.]), cubo(&mut a, "P2", [0., 0., 60.]));
         cubo(&mut a, "Solta", [0., 90., 0.]);
-        a.add_mate(MateKind::Contact, MateRef { comp: base, geom: topo(), pick: None }, MateRef { comp: p1, geom: super::tests::base(), pick: None });
-        a.add_mate(MateKind::Contact, MateRef { comp: base, geom: topo(), pick: None }, MateRef { comp: p2, geom: super::tests::base(), pick: None });
+        a.add_mate(MateKind::Contact, MateRef { comp: base, geom: topo(), pick: None, viva: None }, MateRef { comp: p1, geom: super::tests::base(), pick: None, viva: None });
+        a.add_mate(MateKind::Contact, MateRef { comp: base, geom: topo(), pick: None, viva: None }, MateRef { comp: p2, geom: super::tests::base(), pick: None, viva: None });
         let rep = solve(&mut a);
         assert!(rep.converged, "{rep:?}");
         assert_eq!(rep.aglomerados, 2, "a base fixa não liga P1 a P2, e a solta não tem conta");
@@ -1188,7 +1188,7 @@ mod tests {
         a.node_mut(base).unwrap().fixed = true;
         let (placa, f) = (cubo(&mut a, "Placa", [0.; 3]), cubo(&mut a, "F", [0.; 3]));
         travar(&mut a, placa, f);
-        let d = a.add_mate(MateKind::Distance("0".into()), MateRef { comp: base, geom: topo(), pick: None }, MateRef { comp: placa, geom: topo(), pick: None });
+        let d = a.add_mate(MateKind::Distance("0".into()), MateRef { comp: base, geom: topo(), pick: None, viva: None }, MateRef { comp: placa, geom: topo(), pick: None, viva: None });
         a.mates.iter_mut().find(|m| m.id == d).unwrap().sentido = Sentido::Mesmo;
         assert!(solve(&mut a).converged);
         if let MateKind::Distance(e) = &mut a.mates.iter_mut().find(|m| m.id == d).unwrap().kind {
@@ -1218,12 +1218,12 @@ mod tests {
         let c2 = cubo(&mut a, "B", [30., 7., 3.]);
         // B girado um pouco
         a.node_mut(c2).unwrap().placement = a.node(c2).unwrap().placement.moved([0.; 3], [0.1, 0.2, 0.3], [30., 7., 3.]);
-        a.add_mate(MateKind::Contact, MateRef { comp: c1, geom: topo(), pick: None }, MateRef { comp: c2, geom: base(), pick: None });
+        a.add_mate(MateKind::Contact, MateRef { comp: c1, geom: topo(), pick: None, viva: None }, MateRef { comp: c2, geom: base(), pick: None, viva: None });
         // faces laterais coplanares (x = 0 e y = 0)
         let fx = Geom::Plane { p: [0., 5., 5.], n: [-1., 0., 0.] };
         let fy = Geom::Plane { p: [5., 0., 5.], n: [0., -1., 0.] };
-        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: c1, geom: fx, pick: None }, MateRef { comp: c2, geom: fx, pick: None });
-        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: c1, geom: fy, pick: None }, MateRef { comp: c2, geom: fy, pick: None });
+        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: c1, geom: fx, pick: None, viva: None }, MateRef { comp: c2, geom: fx, pick: None, viva: None });
+        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: c1, geom: fy, pick: None, viva: None }, MateRef { comp: c2, geom: fy, pick: None, viva: None });
         let rep = solve(&mut a);
         assert!(rep.converged, "{rep:?}");
         assert_eq!(rep.dof, 0, "totalmente restrito");
@@ -1238,12 +1238,12 @@ mod tests {
         let c1 = cubo(&mut a, "A", [0.; 3]);
         let c2 = cubo(&mut a, "B", [20., 5., 1.]);
         let ax = Geom::Axis { p: [5., 5., 0.], d: [0., 0., 1.] };
-        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: c1, geom: ax, pick: None }, MateRef { comp: c2, geom: ax, pick: None });
+        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: c1, geom: ax, pick: None, viva: None }, MateRef { comp: c2, geom: ax, pick: None, viva: None });
         let rep = solve(&mut a);
         assert!(rep.converged, "{rep:?}");
         assert_eq!(rep.dof, 2, "gira e desliza no eixo");
         // distância entre topo de A e base de B: 4 mm de folga (planos paralelos)
-        a.add_mate(MateKind::Distance("4".into()), MateRef { comp: c1, geom: topo(), pick: None }, MateRef { comp: c2, geom: Geom::Plane { p: [5., 5., 0.], n: [0., 0., 1.] }, pick: None });
+        a.add_mate(MateKind::Distance("4".into()), MateRef { comp: c1, geom: topo(), pick: None, viva: None }, MateRef { comp: c2, geom: Geom::Plane { p: [5., 5., 0.], n: [0., 0., 1.] }, pick: None, viva: None });
         let rep = solve(&mut a);
         assert!(rep.converged && rep.dof == 1, "{rep:?}");
         assert!((a.node(c2).unwrap().placement.origin[2] - 14.).abs() < 1e-6);
@@ -1256,14 +1256,14 @@ mod tests {
         let c2 = cubo(&mut a, "B", [20., 0., 0.]);
         let c3 = cubo(&mut a, "C", [40., 0., 0.]);
         a.add_rigid(vec![c2, c3]);
-        a.add_mate(MateKind::Contact, MateRef { comp: c1, geom: topo(), pick: None }, MateRef { comp: c2, geom: base(), pick: None });
+        a.add_mate(MateKind::Contact, MateRef { comp: c1, geom: topo(), pick: None, viva: None }, MateRef { comp: c2, geom: base(), pick: None, viva: None });
         let rep = solve(&mut a);
         assert!(rep.converged);
         // C acompanha B (mesma distância relativa)
         let (p2, p3) = (a.node(c2).unwrap().placement, a.node(c3).unwrap().placement);
         assert!((norm(sub(p3.origin, p2.origin)) - 20.).abs() < 1e-6);
         // conflito: duas distâncias diferentes entre os mesmos planos
-        a.add_mate(MateKind::Distance("5".into()), MateRef { comp: c1, geom: topo(), pick: None }, MateRef { comp: c2, geom: Geom::Plane { p: [5., 5., 0.], n: [0., 0., 1.] }, pick: None });
+        a.add_mate(MateKind::Distance("5".into()), MateRef { comp: c1, geom: topo(), pick: None, viva: None }, MateRef { comp: c2, geom: Geom::Plane { p: [5., 5., 0.], n: [0., 0., 1.] }, pick: None, viva: None });
         let rep = solve(&mut a);
         assert!(!rep.converged && !rep.failed.is_empty(), "{rep:?}");
     }
@@ -1279,17 +1279,17 @@ mod tests {
         let ax1 = Geom::Axis { p: [0., 0., 0.], d: [0., 0., 1.] };
         let ax2 = Geom::Axis { p: [30., 0., 0.], d: [0., 0., 1.] };
         let own = Geom::Axis { p: [0., 0., 0.], d: [0., 0., 1.] };
-        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: base, geom: ax1, pick: None }, MateRef { comp: g1, geom: own, pick: None });
-        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: base, geom: ax2, pick: None }, MateRef { comp: g2, geom: own, pick: None });
+        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: base, geom: ax1, pick: None, viva: None }, MateRef { comp: g1, geom: own, pick: None, viva: None });
+        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: base, geom: ax2, pick: None, viva: None }, MateRef { comp: g2, geom: own, pick: None, viva: None });
         let z0 = Geom::Plane { p: [0., 0., 0.], n: [0., 0., 1.] };
-        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: base, geom: z0, pick: None }, MateRef { comp: g1, geom: z0, pick: None });
-        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: base, geom: z0, pick: None }, MateRef { comp: g2, geom: z0, pick: None });
+        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: base, geom: z0, pick: None, viva: None }, MateRef { comp: g1, geom: z0, pick: None, viva: None });
+        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: base, geom: z0, pick: None, viva: None }, MateRef { comp: g2, geom: z0, pick: None, viva: None });
         assert!(solve(&mut a).converged);
         let dofs = dof_per_comp(&a);
         assert_eq!(dofs[&g1], 1, "só gira");
         assert_eq!(dofs[&base], 0);
         // engrenagem 1:−2 (G2 gira metade, ao contrário)
-        let gid = a.add_mate(MateKind::Gear { ratio: "-0.5".into(), belt: false, refs: [[0.; 3]; 4] }, MateRef { comp: g1, geom: own, pick: None }, MateRef { comp: g2, geom: own, pick: None });
+        let gid = a.add_mate(MateKind::Gear { ratio: "-0.5".into(), belt: false, refs: [[0.; 3]; 4] }, MateRef { comp: g1, geom: own, pick: None, viva: None }, MateRef { comp: g2, geom: own, pick: None, viva: None });
         a.init_motion(gid);
         // gira G1 40° e resolve puxando G1 para lá
         let p1 = a.node(g1).unwrap().placement;
@@ -1300,13 +1300,13 @@ mod tests {
         assert!(t1 > 10., "G1 girou: {t1}");
         assert!((t2 + 0.5 * t1).abs() < 0.5, "G2 = −G1/2: {t1} {t2}");
         // inverter a coincidência dos planos: a peça vira de verdade
-        let flip = a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: base, geom: Geom::Plane { p: [0., 0., 0.], n: [1., 0., 0.] }, pick: None }, MateRef { comp: g2, geom: Geom::Plane { p: [0., 0., 0.], n: [1., 0., 0.] }, pick: None });
+        let flip = a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: base, geom: Geom::Plane { p: [0., 0., 0.], n: [1., 0., 0.] }, pick: None, viva: None }, MateRef { comp: g2, geom: Geom::Plane { p: [0., 0., 0.], n: [1., 0., 0.] }, pick: None, viva: None });
         let _ = flip;
         let mut b = Assembly::new("virar");
         let f = cubo(&mut b, "F", [0.; 3]);
         b.node_mut(f).unwrap().fixed = true;
         let c = cubo(&mut b, "C", [20., 0., 0.]);
-        let m = b.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: f, geom: topo(), pick: None }, MateRef { comp: c, geom: topo(), pick: None });
+        let m = b.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: f, geom: topo(), pick: None, viva: None }, MateRef { comp: c, geom: topo(), pick: None, viva: None });
         assert!(solve(&mut b).converged);
         if let MateKind::Coincident { flip } = &mut b.mates.iter_mut().find(|x| x.id == m).unwrap().kind {
             *flip = true;
@@ -1321,7 +1321,7 @@ mod tests {
         let mut a = Assembly::new("medida");
         let c1 = cubo(&mut a, "A", [0.; 3]);
         let c2 = cubo(&mut a, "B", [3., 4., 22.5]);
-        let (ra, rb) = (MateRef { comp: c1, geom: topo(), pick: None }, MateRef { comp: c2, geom: base(), pick: None });
+        let (ra, rb) = (MateRef { comp: c1, geom: topo(), pick: None, viva: None }, MateRef { comp: c2, geom: base(), pick: None, viva: None });
         (a, c1, c2, ra, rb)
     }
 
@@ -1386,10 +1386,10 @@ mod tests {
             let c1 = cubo(&mut a, "A", [0.; 3]);
             let c2 = cubo(&mut a, "B", [0., 0., 10.]);
             a.node_mut(c2).unwrap().placement = a.node(c2).unwrap().placement.moved([0.; 3], [0., 0., f64::to_radians(graus)], [0., 0., 10.]);
-            a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: c1, geom: ax, pick: None }, MateRef { comp: c2, geom: ax, pick: None });
-            a.add_mate(MateKind::Contact, MateRef { comp: c1, geom: topo(), pick: None }, MateRef { comp: c2, geom: base(), pick: None });
+            a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: c1, geom: ax, pick: None, viva: None }, MateRef { comp: c2, geom: ax, pick: None, viva: None });
+            a.add_mate(MateKind::Contact, MateRef { comp: c1, geom: topo(), pick: None, viva: None }, MateRef { comp: c2, geom: base(), pick: None, viva: None });
             let antes = a.node(c2).unwrap().placement;
-            let id = a.add_mate(MateKind::Angle("90".into()), MateRef { comp: c1, geom: fy, pick: None }, MateRef { comp: c2, geom: fy, pick: None });
+            let id = a.add_mate(MateKind::Angle("90".into()), MateRef { comp: c1, geom: fy, pick: None, viva: None }, MateRef { comp: c2, geom: fy, pick: None, viva: None });
             assert!(a.iniciar_medida(id));
             assert_eq!(valor(&a, id), valor_cota(graus));
             let rep = solve(&mut a);
@@ -1449,9 +1449,9 @@ mod tests {
         let mut a = Assembly::new("suplemento");
         let c1 = cubo(&mut a, "A", [0.; 3]);
         let c2 = cubo(&mut a, "B", [0., 0., 10.]);
-        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: c1, geom: ax, pick: None }, MateRef { comp: c2, geom: ax, pick: None });
-        a.add_mate(MateKind::Contact, MateRef { comp: c1, geom: topo(), pick: None }, MateRef { comp: c2, geom: base(), pick: None });
-        let id = a.add_mate(MateKind::Angle("30".into()), MateRef { comp: c1, geom: fy, pick: None }, MateRef { comp: c2, geom: fy, pick: None });
+        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: c1, geom: ax, pick: None, viva: None }, MateRef { comp: c2, geom: ax, pick: None, viva: None });
+        a.add_mate(MateKind::Contact, MateRef { comp: c1, geom: topo(), pick: None, viva: None }, MateRef { comp: c2, geom: base(), pick: None, viva: None });
+        let id = a.add_mate(MateKind::Angle("30".into()), MateRef { comp: c1, geom: fy, pick: None, viva: None }, MateRef { comp: c2, geom: fy, pick: None, viva: None });
         assert!(solve(&mut a).converged);
         assert!(a.inverter_alinhamento(id));
         assert!(solve(&mut a).converged);
@@ -1469,9 +1469,9 @@ mod tests {
         let mut a = Assembly::new("alinhados");
         let c1 = cubo(&mut a, "A", [0.; 3]);
         let c2 = cubo(&mut a, "B", [0.; 3]);
-        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: c1, geom: ax, pick: None }, MateRef { comp: c2, geom: ax, pick: None });
-        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: c1, geom: lado, pick: None }, MateRef { comp: c2, geom: lado, pick: None });
-        let id = a.add_mate(MateKind::Angle("0".into()), MateRef { comp: c1, geom: fy, pick: None }, MateRef { comp: c2, geom: fy, pick: None });
+        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: c1, geom: ax, pick: None, viva: None }, MateRef { comp: c2, geom: ax, pick: None, viva: None });
+        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: c1, geom: lado, pick: None, viva: None }, MateRef { comp: c2, geom: lado, pick: None, viva: None });
+        let id = a.add_mate(MateKind::Angle("0".into()), MateRef { comp: c1, geom: fy, pick: None, viva: None }, MateRef { comp: c2, geom: fy, pick: None, viva: None });
         a.iniciar_medida(id);
         assert_eq!(valor(&a, id), "0");
         assert!(solve(&mut a).converged);
@@ -1532,9 +1532,9 @@ mod tests {
         let c2 = cubo(&mut a, "B", [20., 0., 0.]);
         let fy = Geom::Plane { p: [5., 0., 5.], n: [0., -1., 0.] };
         let ax = Geom::Axis { p: [0., 0., 0.], d: [0., 0., 1.] };
-        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: c1, geom: ax, pick: None }, MateRef { comp: c2, geom: ax, pick: None });
-        a.add_mate(MateKind::Contact, MateRef { comp: c1, geom: topo(), pick: None }, MateRef { comp: c2, geom: base(), pick: None });
-        a.add_mate(MateKind::Angle("30".into()), MateRef { comp: c1, geom: fy, pick: None }, MateRef { comp: c2, geom: fy, pick: None });
+        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: c1, geom: ax, pick: None, viva: None }, MateRef { comp: c2, geom: ax, pick: None, viva: None });
+        a.add_mate(MateKind::Contact, MateRef { comp: c1, geom: topo(), pick: None, viva: None }, MateRef { comp: c2, geom: base(), pick: None, viva: None });
+        a.add_mate(MateKind::Angle("30".into()), MateRef { comp: c1, geom: fy, pick: None, viva: None }, MateRef { comp: c2, geom: fy, pick: None, viva: None });
         let rep = solve(&mut a);
         assert!(rep.converged, "{rep:?}");
         let n2 = a.node(c2).unwrap().placement.dir([0., -1., 0.]);

@@ -102,7 +102,7 @@ pub fn inserir_par_engrenagens(asm: &mut Assembly, dir: Option<&Path>, pinhao: &
     let id1 = asm.add_component(&nome1, NodeKind::Part { path: arq1 }, pl1, Some(pasta));
     let id2 = asm.add_component(&nome2, NodeKind::Part { path: arq2 }, pl2, Some(pasta));
 
-    let ref_a = |comp: Id, geom: Geom| MateRef { comp, geom, pick: None };
+    let ref_a = |comp: Id, geom: Geom| MateRef { comp, geom, pick: None, viva: None };
     let eixo = Geom::Axis { p: [0.; 3], d: [0., 0., 1.] };
     let (restricao, razao) = if pinhao.tipo == TipoEngrenagem::Cremalheira {
         // centro do pinhão a `a` da linha primitiva (plano y = 0 da cremalheira), eixos paralelos

@@ -278,29 +278,8 @@ pub fn geom_at(shape: &Shape, local: V3) -> Result<Geom, String> {
     })
 }
 
-/// Reencontra a geometria das restrições depois que a peça mudou (pelo ponto clicado).
+/// Reencontra a geometria das restrições e juntas depois que a peça mudou.
 pub fn refresh_refs(a: &mut Assembly, cache: &mut PartCache, asm_dir: Option<&Path>) {
-    let paths: HashMap<Id, PathBuf> = a
-        .nodes
-        .iter()
-        .filter_map(|n| match &n.kind {
-            NodeKind::Part { path } => Some((n.id, full_path(asm_dir, path))),
-            _ => None,
-        })
-        .collect();
-    for m in &mut a.mates {
-        for r in [&mut m.a, &mut m.b] {
-            let (Some(pick), Some(path)) = (r.pick, paths.get(&r.comp)) else { continue };
-            let Ok(p) = cache.get(path, true) else { continue };
-            if let Some(sh) = &p.shape {
-                if let Ok(g) = geom_at(sh, pick) {
-                    // mantém o tipo escolhido (um ponto continua ponto)
-                    if std::mem::discriminant(&g) == std::mem::discriminant(&r.geom) {
-                        r.geom = g;
-                    }
-                }
-            }
-        }
-    }
+    crate::releitura::reler_montagem(a, cache, asm_dir);
     crate::repeticao::sincronizar(a, cache, asm_dir);
 }

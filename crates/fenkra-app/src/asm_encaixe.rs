@@ -61,7 +61,9 @@ pub fn mais_perto(lista: &[Candidato], projetar: impl Fn(Vec3) -> Option<egui::P
 pub fn elemento(st: &AsmState, corpo: usize, c: &Candidato) -> Option<Elemento> {
     let comp = st.comp_de(corpo)?;
     let pl = st.asm.node(comp)?.placement;
-    Some(Elemento::novo(MateRef { comp, geom: encaixe::geom_local(c, &pl), pick: None }, Classe::Face))
+    // o tipo do candidato é o que deixa reencontrar o ponto quando a peça mudar
+    let viva = Some(fenkra_montagem::releitura::Viva::Encaixe { tipo: c.tipo });
+    Some(Elemento::novo(MateRef { comp, geom: encaixe::geom_local(c, &pl), pick: None, viva }, Classe::Face))
 }
 
 fn eixos(p: &egui::Painter, rect: Rect, cam: &Camera, c: &Candidato, v: &egui::Visuals) {

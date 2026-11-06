@@ -54,8 +54,40 @@ impl ItemOrigem {
             ItemOrigem::Eixo(a) => (Geom::Axis { p: [0.; 3], d: fenkra_solidos::origin_axis(a) }, Classe::ArestaReta),
             ItemOrigem::Ponto => (Geom::Point([0.; 3]), Classe::Vertice),
         };
-        Elemento::novo(MateRef { comp: ORIGEM, geom, pick: None }, classe)
+        Elemento::novo(MateRef { comp: ORIGEM, geom, pick: None, viva: None }, classe)
     }
+}
+
+/// Planos, pontos e linhas da geometria da montagem, como a árvore os lista.
+fn itens_de_geometria(st: &AsmState) -> Vec<(&'static str, String, crate::picking::Pick)> {
+    use crate::picking::Pick;
+    let Some(r) = st.view.as_ref().filter(|_| st.asm.geometria.is_some()) else { return vec![] };
+    let planos = r.planes.iter().filter_map(|p| Some(("plano", p.name.clone(), Pick::Plane(fenkra_core::PlaneRef::Datum(p.id?)))));
+    let pontos = r.points.iter().map(|p| ("ponto_centro", p.name.clone(), Pick::Geo(p.id)));
+    let linhas = r.curves.iter().map(|c| ("linha_eixo", c.name.clone(), Pick::Geo(c.id)));
+    planos.chain(pontos).chain(linhas).collect()
+}
+
+/// `FENKRA_DEMO_ASM=geometria`: um plano e uma linha da montagem, com o comando de contato já preso ao
+/// plano, para ver o grupo da árvore e a peça encostar na geometria.
+pub fn demo_geometria(st: &mut AsmState) {
+    use fenkra_core::{OriginPlane, PlaneRef};
+    let plano = st.asm.geometria_mut().add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "40");
+    st.dirty = true;
+    st.refresh();
+    let ids: Vec<Id> = st.asm.nodes.iter().filter(|n| !matches!(n.kind, NodeKind::Group)).map(|n| n.id).collect();
+    let [base, tampa] = ids[..] else { return };
+    if let Some(n) = st.asm.node_mut(base) {
+        n.fixed = true;
+    }
+    st.cmd_abrir_para_demo(proposta_contato(plano, tampa));
+}
+
+fn proposta_contato(plano: Id, tampa: Id) -> [Elemento; 2] {
+    use fenkra_montagem::releitura::Viva;
+    let g = MateRef { comp: ORIGEM, geom: Geom::Plane { p: [0., 0., 40.], n: [0., 0., 1.] }, pick: None, viva: Some(Viva::Geometria { id: plano }) };
+    let t = MateRef { comp: tampa, geom: Geom::Plane { p: [40., 20., 0.], n: [0., 0., -1.] }, pick: Some([40., 20., 0.]), viva: None };
+    [Elemento::novo(g, Classe::Face), Elemento::novo(t, Classe::Face)]
 }
 
 /// Nó "Origem" da árvore: planos, eixos e ponto, para usar como referência das restrições.
@@ -74,6 +106,21 @@ pub fn arvore(st: &mut AsmState, ui: &mut egui::Ui) {
         crate::tree_ui::marca(ui);
         trocou = ui.checkbox(&mut ver, tr("mostrar origem")).changed();
     });
+    let geometria = itens_de_geometria(st);
+    let mut da_geometria = None;
+    if !geometria.is_empty() {
+        let _ = crate::tree_ui::grupo(ui, "asm_arvore_geometria", Some("plano"), tr("Geometria da montagem"), false).corpo(ui, |ui| {
+            for (icone, nome, pick) in &geometria {
+                let r = crate::tree_ui::linha(ui, icone, false, nome.clone()).on_hover_text(tr("Com o comando aberto, clique aqui: a restrição fica ligada a esta geometria e a segue quando ela mudar"));
+                if r.clicked() {
+                    da_geometria = Some(*pick);
+                }
+            }
+        });
+    }
+    if let Some(p) = da_geometria.filter(|_| st.cmd.is_some()) {
+        crate::asm_cmd::receber_pick(st, p);
+    }
     if trocou {
         st.push_undo();
         st.asm.origem_oculta = !ver;

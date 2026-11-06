@@ -588,7 +588,7 @@ pub fn demo(st: &mut AsmState) {
     st.refresh();
     abrir(st);
     let Some(e) = st.repeticao.as_mut() else { return };
-    e.r.ref1 = Some(MateRef { comp: ids[0], geom: Geom::Axis { p: [0.; 3], d: [1., 0., 0.] }, pick: None });
+    e.r.ref1 = Some(MateRef { comp: ids[0], geom: Geom::Axis { p: [0.; 3], d: [1., 0., 0.] }, pick: None, viva: None });
     e.nomes[0] = st.asm.name_of(ids[0]);
     e.r.kind = PatternKind::Linear { dir: [1., 0., 0.], count: "4".into(), spacing: "100".into(), dir2: None, count2: "2".into(), spacing2: "0".into() };
     e.r.pular = vec![(2, 0)];
@@ -611,7 +611,7 @@ mod tests {
 
     fn com_direcao(st: &mut AsmState, g: Id) {
         let e = st.repeticao.as_mut().unwrap();
-        e.r.ref1 = Some(MateRef { comp: g, geom: Geom::Axis { p: [0.; 3], d: [1., 0., 0.] }, pick: None });
+        e.r.ref1 = Some(MateRef { comp: g, geom: Geom::Axis { p: [0.; 3], d: [1., 0., 0.] }, pick: None, viva: None });
         if let PatternKind::Linear { spacing, .. } = &mut e.r.kind {
             *spacing = "40".into();
         }

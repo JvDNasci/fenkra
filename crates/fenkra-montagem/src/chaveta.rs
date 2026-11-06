@@ -272,7 +272,7 @@ pub fn inserir_chaveta(asm: &mut Assembly, dir: Option<&Path>, cache: &mut PartC
         None => asm.add_group(GRUPO, None),
     };
     let id = asm.add_component(&doc.props.description, NodeKind::Part { path: format!("chavetas/{base}.fkp") }, col.lugar, Some(pasta));
-    let ref_a = |comp: Id, geom: Geom| MateRef { comp, geom, pick: None };
+    let ref_a = |comp: Id, geom: Geom| MateRef { comp, geom, pick: None, viva: None };
     let mut ids = [Id(0); 3];
     for (k, (kind, a, b)) in col.restricoes.iter().enumerate() {
         ids[k] = asm.add_mate(kind.clone(), ref_a(id, *a), ref_a(eixo, *b));

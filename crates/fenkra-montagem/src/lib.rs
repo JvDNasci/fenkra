@@ -14,6 +14,7 @@ pub mod conflito;
 pub mod contexto;
 pub mod display;
 pub mod encaixe;
+pub mod releitura;
 pub mod engrenagens;
 pub mod estrutura;
 pub mod fixadores;
@@ -211,6 +212,9 @@ pub struct MateRef {
     pub geom: Geom,
     #[serde(default)]
     pub pick: Option<V3>,
+    /// como se reencontrar quando a peça muda, para o que não é a face clicada (B99, B263, B55)
+    #[serde(default)]
+    pub viva: Option<releitura::Viva>,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -302,9 +306,30 @@ pub struct Mate {
     /// lado: sentido da cota. A Distância é medida do lado oposto ao da normal de A
     #[serde(default)]
     pub lado_invertido: bool,
+    /// deslocamento em X, Y e Z nos eixos do elemento A, com fórmula (B99). Vazio conta como zero
+    #[serde(default)]
+    pub desloc: [String; 3],
 }
 
 impl Mate {
+    /// Elemento A com o deslocamento aplicado: é o que o solucionador vê.
+    pub fn geom_a(&self, vars: &HashMap<String, f64>) -> Geom {
+        let (d, _) = encaixe::avaliar_desloc(&self.desloc, vars);
+        if d == [0.; 3] {
+            return self.a.geom;
+        }
+        let mover = |p: V3, z: V3| {
+            let f = kin::JFrame::from_axis(p, z);
+            let y = cross(f.z, f.x);
+            [0, 1, 2].map(|i| p[i] + f.x[i] * d[0] + y[i] * d[1] + f.z[i] * d[2])
+        };
+        match self.a.geom {
+            Geom::Plane { p, n } => Geom::Plane { p: mover(p, n), n },
+            Geom::Axis { p, d } => Geom::Axis { p: mover(p, d), d },
+            Geom::Point(p) => Geom::Point(mover(p, [0., 0., 1.])),
+        }
+    }
+
     /// "Inverter alinhamento" muda alguma coisa neste par?
     pub fn aceita_alinhamento(&self) -> bool {
         let iguais = matches!((self.a.geom, self.b.geom), (Geom::Plane { .. }, Geom::Plane { .. }) | (Geom::Axis { .. }, Geom::Axis { .. }));
@@ -768,7 +793,7 @@ impl Assembly {
     pub fn add_mate(&mut self, kind: MateKind, a: MateRef, b: MateRef) -> Id {
         let id = self.alloc();
         let name = self.unique(kind.label());
-        self.mates.push(Mate { id, name, kind, a, b, suppressed: false, sentido: Sentido::Livre, lado_invertido: false });
+        self.mates.push(Mate { id, name, kind, a, b, suppressed: false, sentido: Sentido::Livre, lado_invertido: false, desloc: Default::default() });
         id
     }
 

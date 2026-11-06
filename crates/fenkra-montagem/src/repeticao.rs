@@ -12,7 +12,7 @@
 //! 3. no modo Pelos furos, os pontos vêm de um padrão de furos da peça. Quem decide quais furos existem
 //!    é a peça, e por isso uma instância pulada no padrão dela não recebe cópia aqui.
 
-use crate::load::{full_path, geom_at, PartCache};
+use crate::load::{full_path, PartCache};
 use crate::*;
 use fenkra_core::{Document, Feature, FeatureKind};
 use fenkra_solidos::padrao;
@@ -188,19 +188,19 @@ pub fn sincronizar(a: &mut Assembly, cache: &mut PartCache, dir: Option<&Path>) 
         Some(NodeKind::Part { path }) => Some(full_path(dir, path)),
         _ => None,
     };
-    for k in 0..a.patterns.len() {
-        for lado in 0..2 {
-            let p = &a.patterns[k];
-            let r = if lado == 0 { p.ref1.as_ref() } else { p.ref2.as_ref() };
-            let Some((pick, comp)) = r.and_then(|r| Some((r.pick?, r.comp))) else { continue };
-            let Some(arq) = caminho(a, comp) else { continue };
-            let Some(g) = cache.get(&arq, true).ok().and_then(|lp| lp.shape.as_ref().and_then(|s| geom_at(s, pick).ok())) else { continue };
-            let p = &mut a.patterns[k];
-            let r = if lado == 0 { p.ref1.as_mut() } else { p.ref2.as_mut() };
-            if let Some(r) = r.filter(|r| std::mem::discriminant(&r.geom) == std::mem::discriminant(&g)) {
-                r.geom = g;
-            }
+    // face, aresta ou vértice: cada referência sabe como se reencontrar
+    let mut refs: Vec<MateRef> = a.patterns.iter().flat_map(|p| [p.ref1, p.ref2]).flatten().collect();
+    let mut leitor = crate::releitura::Leitor::novo(a, cache, dir);
+    refs.iter_mut().for_each(|r| {
+        leitor.reler(r);
+    });
+    let mut lidas = refs.into_iter();
+    for p in &mut a.patterns {
+        for r in [&mut p.ref1, &mut p.ref2].into_iter().flatten() {
+            *r = lidas.next().unwrap_or(*r);
         }
+    }
+    for k in 0..a.patterns.len() {
         if let PatternKind::Furos { comp, feature, .. } = a.patterns[k].kind.clone() {
             let Some(arq) = caminho(a, comp) else { continue };
             let Ok(lp) = cache.get(&arq, false) else { continue };
@@ -211,6 +211,54 @@ pub fn sincronizar(a: &mut Assembly, cache: &mut PartCache, dir: Option<&Path>) 
         }
     }
     a.update_patterns();
+}
+
+#[cfg(test)]
+mod testes_aresta {
+    use super::*;
+    use crate::releitura::Viva;
+
+    fn chapa(de: [f64; 2], ate: [f64; 2]) -> Document {
+        use fenkra_core::{BoolOp, Extent, Extrude, OriginPlane, PlaneRef, SketchData};
+        let mut d = Document::new("Chapa");
+        let mut n = 7_900_000u64;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        let mut s = SketchData::default();
+        s.add_rect(&mut al, de, ate, false);
+        let sk = d.add_feature(FeatureKind::Sketch(fenkra_core::Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data: s }));
+        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind("5".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
+        d
+    }
+
+    #[test]
+    fn repeticao_por_aresta_muda_de_direcao_com_a_peca() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let dir = std::env::temp_dir().join("fenkra_repeticao_aresta");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let f = dir.join("g.fkp");
+        std::fs::write(&f, chapa([0., 0.], [40., 40.]).to_json()).unwrap();
+        let mut a = Assembly::new("A");
+        let guia = a.add_component("Guia", NodeKind::Part { path: "g.fkp".into() }, Placement::default(), None);
+        let peca = a.add_component("P", NodeKind::Part { path: "p.fkp".into() }, Placement::default(), None);
+        a.node_mut(guia).unwrap().fixed = true;
+        let id = a.add_pattern(peca, PatternKind::linear([1., 0., 0.], "3", "20"));
+        a.patterns[0].ref1 = Some(MateRef { comp: guia, geom: Geom::Axis { p: [0., 0., 0.], d: [1., 0., 0.] }, pick: None, viva: Some(Viva::Aresta { ponto: [30., 1., 0.] }) });
+        let mut cache = PartCache::default();
+        crate::load::refresh_refs(&mut a, &mut cache, Some(&dir));
+        let copia = |a: &Assembly| a.patterns.iter().find(|p| p.id == id).unwrap().instances.iter().map(|i| a.node(*i).unwrap().placement.origin).fold([0f64; 3], |m, o| [m[0].max(o[0].abs()), m[1].max(o[1].abs()), 0.]);
+        assert!(copia(&a)[0] > 30. && copia(&a)[1] < 1e-6, "{:?}", copia(&a));
+        // a chapa ficou estreita: a aresta mais perto do ponto guardado, o meio da de antes, corre em Y
+        std::fs::write(&f, chapa([0., -10.], [15., 40.]).to_json()).unwrap();
+        cache.forget(&f);
+        crate::load::refresh_refs(&mut a, &mut cache, Some(&dir));
+        assert!(copia(&a)[1] > 30. && copia(&a)[0] < 1e-6, "{:?}", copia(&a));
+    }
 }
 
 #[cfg(test)]
@@ -312,7 +360,7 @@ mod tests {
         let guia = componente(&mut a, "Guia", [100., 0., 0.]);
         let s = componente(&mut a, "S", [0.; 3]);
         let mut r = CompPattern::rascunho(s, linear("2", "10"));
-        r.ref1 = Some(MateRef { comp: guia, geom: Geom::Axis { p: [0.; 3], d: [1., 0., 0.] }, pick: None });
+        r.ref1 = Some(MateRef { comp: guia, geom: Geom::Axis { p: [0.; 3], d: [1., 0., 0.] }, pick: None, viva: None });
         let id = a.gravar_repeticao(&r, None);
         assert!((origens(&a, id)[0][0] - 10.).abs() < 1e-9);
         // a peça de referência gira 90° em Z: a direção vai junto
@@ -329,7 +377,7 @@ mod tests {
         let guia = componente(&mut a, "Guia", [50., 0., 0.]);
         let s = componente(&mut a, "S", [60., 0., 0.]);
         let mut r = CompPattern::rascunho(s, PatternKind::Circular { origin: [0.; 3], axis: [1., 0., 0.], count: "4".into(), angle: "360".into() });
-        r.ref1 = Some(MateRef { comp: guia, geom: Geom::Axis { p: [0.; 3], d: [0., 0., 1.] }, pick: None });
+        r.ref1 = Some(MateRef { comp: guia, geom: Geom::Axis { p: [0.; 3], d: [0., 0., 1.] }, pick: None, viva: None });
         let id = a.gravar_repeticao(&r, None);
         let o = origens(&a, id)[0];
         assert!((o[0] - 50.).abs() < 1e-9 && (o[1] - 10.).abs() < 1e-9, "gira em volta do eixo da peça: {o:?}");
@@ -348,7 +396,7 @@ mod tests {
         let mut c = PartCache::default();
         // o ponto (50, 30, 5) está na face de cima da chapa, normal +Z
         let mut r = CompPattern::rascunho(s, linear("2", "10"));
-        r.ref1 = Some(MateRef { comp: guia, geom: Geom::Plane { p: [50., 30., 5.], n: [0., 0., 1.] }, pick: Some([50., 30., 5.]) });
+        r.ref1 = Some(MateRef { comp: guia, geom: Geom::Plane { p: [50., 30., 5.], n: [0., 0., 1.] }, pick: Some([50., 30., 5.]), viva: None });
         let id = a.gravar_repeticao(&r, None);
         sincronizar(&mut a, &mut c, Some(&d));
         assert!((origens(&a, id)[0][2] - 60.).abs() < 1e-9);

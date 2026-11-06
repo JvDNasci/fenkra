@@ -122,6 +122,9 @@ pub struct Joint {
     /// posição no plano (x, y) e na trajetória, medidas na criação: o zero dos limites desses graus
     #[serde(default)]
     pub zero: [f64; 3],
+    /// de onde cada lado veio: quando a peça muda, o sistema da junta anda com o elemento (B99)
+    #[serde(default)]
+    pub fontes: [Option<MateRef>; 2],
 }
 
 /// Um extremo da faixa. Desligar não apaga o valor: ligar de novo volta ao que estava.
@@ -460,7 +463,7 @@ impl Assembly {
         let id = self.alloc();
         let name = self.unique_pub(kind.label());
         let pl = |c: Id| self.node(c).map(|n| n.placement).unwrap_or_default();
-        let mut j = Joint { id, name, kind, a, b, angle0: 0., len0: 0., drive_angle: None, drive_len: None, suppressed: false, limites: Limites::default(), zero: [0.; 3] };
+        let mut j = Joint { id, name, kind, a, b, angle0: 0., len0: 0., drive_angle: None, drive_len: None, suppressed: false, limites: Limites::default(), zero: [0.; 3], fontes: [None, None] };
         j.angle0 = angle_of(&j, &pl(a.comp), &pl(b.comp));
         j.len0 = len_of(&j, &pl(a.comp), &pl(b.comp));
         j.zero = posicao_crua(&j, &pl(a.comp), &pl(b.comp));
@@ -809,7 +812,7 @@ mod tests {
         a.node_mut(a.nodes[0].id).unwrap().fixed = true;
         com_limite(&mut a, j, -30., 30.);
         // o braço precisa ficar a 90°: o eixo x dele contra o x do mundo
-        let n = |comp, v: V3| MateRef { comp, geom: Geom::Plane { p: [0.; 3], n: v }, pick: None };
+        let n = |comp, v: V3| MateRef { comp, geom: Geom::Plane { p: [0.; 3], n: v }, pick: None, viva: None };
         let m = a.add_mate(MateKind::Angle("90".into()), n(a.nodes[0].id, [1., 0., 0.]), n(braco, [1., 0., 0.]));
         let rep = solve_with(&mut a, &HashMap::new());
         assert!(!rep.converged, "{rep:?}");
@@ -877,6 +880,55 @@ mod tests {
         let alvo = Placement { origin: [40., 0., 0.], ..Default::default() };
         assert!(crate::solve::solve_toward(&mut a, c, alvo, 0.05).converged);
         assert!((a.node(c).unwrap().placement.origin[0] - 25.).abs() < 1e-4, "{:?}", a.node(c).unwrap().placement.origin);
+    }
+
+    #[test]
+    fn trajeto_leva_ao_valor_para_no_limite_e_marca_anda_na_curva() {
+        let mut a = Assembly::new("trilho curvo");
+        let b = a.add_component("Base", NodeKind::Part { path: "b".into() }, Placement { origin: [0., 0., 7.], ..Default::default() }, None);
+        a.node_mut(b).unwrap().fixed = true;
+        let c = a.add_component("Cursor", NodeKind::Part { path: "c".into() }, Placement { origin: [10., 0., 7.], ..Default::default() }, None);
+        let f = JFrame::from_axis([0.; 3], [0., 0., 1.]);
+        let id = a.add_joint(JointKind::PointCurve { curve: vec![[0., 0., 0.], [50., 0., 0.], [50., 50., 0.]] }, JRef { comp: b, frame: f }, JRef { comp: c, frame: f });
+        a.joints[0].limites.trajeto = Faixa::nova(-5., 60.);
+        assert!(aceita_levar(&a.joints[0], Grau::Trajeto));
+        // dobra a curva: 10 + 55 = 65 mm andados, 15 depois do canto
+        assert!(levar_a(&mut a, id, Grau::Trajeto, 55.).converged);
+        let o = a.node(c).unwrap().placement.origin;
+        assert!(norm(sub(o, [50., 15., 7.])) < 1e-3, "{o:?}");
+        // além do limite para no batente, sem falhar
+        let rep = levar_a(&mut a, id, Grau::Trajeto, 500.);
+        assert!(rep.converged && rep.no_limite.contains(&id), "{rep:?}");
+        let o = a.node(c).unwrap().placement.origin;
+        assert!(norm(sub(o, [50., 20., 7.])) < 1e-3, "{o:?}");
+        // a marca do trajeto é a curva no mundo, com o mesmo zero da junta
+        let m = crate::simbolos::marcas_limite(&a, &a.joints[0]);
+        assert_eq!(m.len(), 1);
+        assert_eq!(m[0].grau, Grau::Trajeto);
+        assert!(norm(sub(m[0].ponto(-5., 0.), [5., 0., 7.])) < 1e-9);
+        assert!(norm(sub(m[0].ponto(60., 0.), [50., 20., 7.])) < 1e-9);
+        assert!((m[0].atual - 60.).abs() < 1e-3);
+    }
+
+    #[test]
+    fn animar_o_ponto_em_curva_fica_entre_os_limites() {
+        use crate::proposta::{animar, Classe, Comando, Elemento, OpcoesAnimar, Tipo};
+        let mut a = Assembly::new("trilho curvo");
+        let b = a.add_component("Base", NodeKind::Part { path: "b".into() }, Placement::default(), None);
+        a.node_mut(b).unwrap().fixed = true;
+        let c = a.add_component("Cursor", NodeKind::Part { path: "c".into() }, Placement { origin: [10., 0., 0.], ..Default::default() }, None);
+        let curva = vec![[0., 0., 0.], [50., 0., 0.], [50., 50., 0.]];
+        let mut trilho = Elemento::novo(MateRef { comp: b, geom: Geom::Axis { p: [0.; 3], d: [1., 0., 0.] }, pick: None, viva: None }, Classe::ArestaCurva { circular: false });
+        trilho.curva = curva;
+        let mut cmd = Comando::novo(Tipo::Junta(JointKind::PointCurve { curve: vec![] }));
+        cmd.receber(trilho);
+        cmd.receber(Elemento::novo(MateRef { comp: c, geom: Geom::Point([0.; 3]), pick: None, viva: None }, Classe::Vertice));
+        cmd.limites.trajeto = Faixa::nova(-4., 20.);
+        let previa = cmd.resolver(&a).unwrap();
+        let quadros = animar(&a, &previa, &OpcoesAnimar::default()).unwrap();
+        let xs: Vec<f64> = quadros.iter().flat_map(|q| q.iter().filter(|m| m.comp == c).map(|m| m.depois.origin[0])).collect();
+        let (lo, hi) = xs.iter().fold((f64::MAX, f64::MIN), |(l, h), x| (l.min(*x), h.max(*x)));
+        assert!((lo - 6.).abs() < 0.2 && (hi - 30.).abs() < 0.2, "{lo} {hi}");
     }
 
     #[test]
@@ -1003,8 +1055,8 @@ mod tests {
         let c1 = a.add_component("A", NodeKind::Part { path: "a".into() }, Placement::default(), None);
         let c2 = a.add_component("B", NodeKind::Part { path: "b".into() }, Placement::default(), None);
         let ax = Geom::Axis { p: [0.; 3], d: [0., 0., 1.] };
-        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: c1, geom: ax, pick: None }, MateRef { comp: c2, geom: ax, pick: None });
-        a.add_mate(MateKind::Contact, MateRef { comp: c1, geom: Geom::Plane { p: [0., 0., 5.], n: [0., 0., 1.] }, pick: None }, MateRef { comp: c2, geom: Geom::Plane { p: [0., 0., 5.], n: [0., 0., -1.] }, pick: None });
+        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: c1, geom: ax, pick: None, viva: None }, MateRef { comp: c2, geom: ax, pick: None, viva: None });
+        a.add_mate(MateKind::Contact, MateRef { comp: c1, geom: Geom::Plane { p: [0., 0., 5.], n: [0., 0., 1.] }, pick: None, viva: None }, MateRef { comp: c2, geom: Geom::Plane { p: [0., 0., 5.], n: [0., 0., -1.] }, pick: None, viva: None });
         let js = a.joints_from_mates();
         assert_eq!(js.len(), 1);
         assert!(a.mates.is_empty());

@@ -185,8 +185,9 @@ fn da_junta(a: &Assembly, j: &Joint) -> Option<Simbolo> {
     })
 }
 
-/// Faixa de um grau de liberdade no 3D: um arco em volta de `eixo`, ou um trilho ao longo dele.
-#[derive(Clone, Copy, PartialEq, Debug)]
+/// Faixa de um grau de liberdade no 3D: um arco em volta de `eixo`, um trilho ao longo dele, ou a
+/// própria trajetória.
+#[derive(Clone, PartialEq, Debug)]
 pub struct MarcaLimite {
     pub grau: Grau,
     /// centro do arco, ou o ponto do trilho onde o grau vale zero
@@ -219,8 +220,8 @@ impl MarcaLimite {
     }
 }
 
-/// Marcas dos graus limitados da junta, nas posições de agora. A trajetória não entra: ela já é a
-/// própria curva, e não um arco nem um trilho.
+/// Marcas dos graus limitados da junta, nas posições de agora. A trajetória usa a curva da junta como
+/// trilho, levada para o mundo.
 pub fn marcas_limite(a: &Assembly, j: &Joint) -> Vec<MarcaLimite> {
     let (Some(pa), Some(pb)) = (a.lugar(j.a.comp), a.lugar(j.b.comp)) else { return vec![] };
     let (oa, za, xa) = j.a.frame.world(&pa);
@@ -325,7 +326,7 @@ mod tests {
     }
 
     fn plano(comp: Id, z: f64, n: f64) -> MateRef {
-        MateRef { comp, geom: Geom::Plane { p: [0., 0., z], n: [0., 0., n] }, pick: Some([1., 2., z]) }
+        MateRef { comp, geom: Geom::Plane { p: [0., 0., z], n: [0., 0., n] }, pick: Some([1., 2., z]), viva: None }
     }
 
     #[test]
@@ -357,7 +358,7 @@ mod tests {
     #[test]
     fn distancia_entre_pontos_e_modulo() {
         let (mut a, f, m) = par();
-        a.add_mate(MateKind::Distance("5".into()), MateRef { comp: f, geom: Geom::Point([0.; 3]), pick: None }, MateRef { comp: m, geom: Geom::Point([3., 0., -26.]), pick: None });
+        a.add_mate(MateKind::Distance("5".into()), MateRef { comp: f, geom: Geom::Point([0.; 3]), pick: None, viva: None }, MateRef { comp: m, geom: Geom::Point([3., 0., -26.]), pick: None, viva: None });
         let Some(Medida::Distancia { sinal, sentido, ate, .. }) = simbolos(&a, &[])[0].medida.clone() else { panic!() };
         assert!(!sinal);
         assert_eq!(ate, [3., 0., 4.]);
@@ -367,7 +368,7 @@ mod tests {
     #[test]
     fn angulo_vira_arco_entre_as_direcoes() {
         let (mut a, f, m) = par();
-        let (ra, rb) = (MateRef { comp: f, geom: Geom::Plane { p: [0.; 3], n: [1., 0., 0.] }, pick: None }, MateRef { comp: m, geom: Geom::Plane { p: [0.; 3], n: [0., 1., 0.] }, pick: None });
+        let (ra, rb) = (MateRef { comp: f, geom: Geom::Plane { p: [0.; 3], n: [1., 0., 0.] }, pick: None, viva: None }, MateRef { comp: m, geom: Geom::Plane { p: [0.; 3], n: [0., 1., 0.] }, pick: None, viva: None });
         a.add_mate(MateKind::Angle("90".into()), ra, rb);
         let Some(Medida::Angulo { u, v, valor, .. }) = simbolos(&a, &[])[0].medida.clone() else { panic!() };
         assert_eq!((u, v, valor), ([1., 0., 0.], [0., 1., 0.], 90.));

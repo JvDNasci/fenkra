@@ -19,7 +19,7 @@ const MIN_ARESTA: f64 = 1e-3;
 /// Dois candidatos mais perto que isto são o mesmo (mm).
 const MESMO_PONTO: f64 = 1e-3;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum TipoEncaixe {
     CentroFace,
     MeioAresta,
@@ -64,7 +64,7 @@ fn dist(a: V3, b: V3) -> f64 {
 }
 
 /// Polilinha da aresta `e`.
-fn polilinha(m: &Mesh, e: usize) -> Vec<V3> {
+pub(crate) fn polilinha(m: &Mesh, e: usize) -> Vec<V3> {
     let nseg = m.edges.len() / 6;
     let (s0, s1) = (m.edge_ranges[e] as usize, m.edge_ranges.get(e + 1).map_or(nseg, |x| *x as usize));
     let mut pts = vec![];
@@ -83,7 +83,7 @@ fn comprimento(p: &[V3]) -> f64 {
 }
 
 /// Ponto a meio caminho da polilinha.
-fn meio(p: &[V3]) -> V3 {
+pub(crate) fn meio(p: &[V3]) -> V3 {
     let alvo = comprimento(p) / 2.;
     let mut andou = 0.;
     for w in p.windows(2) {
@@ -319,7 +319,7 @@ mod tests {
         a.node_mut(base).unwrap().fixed = true;
         let ca = Candidato { tipo: TipoEncaixe::CentroFuro, p: [20., 10., 10.], z: [0., 0., 1.], x: [1., 0., 0.] };
         let cb = Candidato { tipo: TipoEncaixe::CentroFuro, p: [105., 5., 0.], z: [0., 0., 1.], x: [1., 0., 0.] };
-        let el = |comp: Id, c: &Candidato| Elemento::novo(MateRef { comp, geom: geom_local(c, &a.node(comp).unwrap().placement), pick: None }, Classe::Face);
+        let el = |comp: Id, c: &Candidato| Elemento::novo(MateRef { comp, geom: geom_local(c, &a.node(comp).unwrap().placement), pick: None, viva: None }, Classe::Face);
         let mut c = Comando::novo(Tipo::Junta(JointKind::Rigid));
         c.receber(el(base, &ca));
         c.receber(el(peca, &cb));
@@ -341,6 +341,106 @@ mod tests {
         let r = c.resolver(&a).unwrap();
         let z = r.copia.node(peca).unwrap().placement.dir([0., 0., 1.]);
         assert!(z[2] < -0.999, "inverteu o eixo principal: {z:?}");
+    }
+
+    /// Peça solta a 100 mm da base fixa, com o par de pontos da proposta.
+    fn par_de_pontos(a: &mut Assembly) -> (Id, crate::proposta::Comando) {
+        use crate::proposta::{Classe, Comando, Elemento, Tipo};
+        let base = a.add_component("A", NodeKind::Part { path: "a.fkp".into() }, Placement::default(), None);
+        let peca = a.add_component("B", NodeKind::Part { path: "b.fkp".into() }, Placement { origin: [100., 0., 0.], ..Default::default() }, None);
+        a.node_mut(base).unwrap().fixed = true;
+        let el = |comp, g| Elemento::novo(MateRef { comp, geom: g, pick: None, viva: None }, Classe::Vertice);
+        let mut c = Comando::novo(Tipo::Restricao(MateKind::Coincident { flip: false }));
+        c.receber(el(base, Geom::Point([0., 0., 10.])));
+        c.receber(el(peca, Geom::Point([5., 0., 0.])));
+        (peca, c)
+    }
+
+    #[test]
+    fn restricao_gira_de_90_em_90_e_vira_a_peca() {
+        let mut a = Assembly::new("t");
+        let (peca, mut c) = par_de_pontos(&mut a);
+        let x = |c: &crate::proposta::Comando| c.resolver(&a).unwrap().copia.node(peca).unwrap().placement.dir([1., 0., 0.]);
+        c.alinhamento.angulo = 90.;
+        let v = x(&c);
+        assert!(v[1].abs() > 0.999, "girou 90° em volta de Z: {v:?}");
+        c.alinhamento.angulo = 0.;
+        // ponto em ponto não tem alinhamento nem lado: o Tab vira a própria peça
+        let p = c.resolver(&a).unwrap();
+        assert!(!p.aceita_alinhamento && !p.aceita_lado);
+        assert!(c.inverter(Some(&p)));
+        let r = c.resolver(&a).unwrap();
+        let d = r.copia.node(peca).unwrap().placement;
+        assert!(!r.falhou() && dist(d.point([5., 0., 0.]), [0., 0., 10.]) < 1e-5, "o ponto continua no ponto");
+        assert!(dot(d.dir([0., 0., 1.]), [0., 0., 1.]) < -0.999 || dot(d.dir([1., 0., 0.]), [1., 0., 0.]) < -0.999, "virou");
+    }
+
+    #[test]
+    fn giro_de_faces_em_contato_fica_na_restricao_aceita() {
+        use crate::proposta::{Classe, Comando, Elemento, Tipo};
+        let mut a = Assembly::new("t");
+        let base = a.add_component("A", NodeKind::Part { path: "a.fkp".into() }, Placement::default(), None);
+        let peca = a.add_component("B", NodeKind::Part { path: "b.fkp".into() }, Placement { origin: [0., 0., 30.], ..Default::default() }, None);
+        a.node_mut(base).unwrap().fixed = true;
+        let el = |comp, n: f64, z: f64| Elemento::novo(MateRef { comp, geom: Geom::Plane { p: [0., 0., z], n: [0., 0., n] }, pick: None, viva: None }, Classe::Face);
+        let mut c = Comando::novo(Tipo::Restricao(MateKind::Contact));
+        c.receber(el(base, 1., 10.));
+        c.receber(el(peca, -1., 0.));
+        c.alinhamento.angulo = 90.;
+        let r = c.resolver(&a).unwrap();
+        assert!(!r.falhou());
+        let mut depois = r.copia.clone();
+        assert!(crate::solve::solve(&mut depois).converged);
+        let p = depois.node(peca).unwrap().placement;
+        assert!((p.origin[2] - 10.).abs() < 1e-5, "{:?}", p.origin);
+        assert!(p.dir([1., 0., 0.])[1].abs() > 0.999, "o giro fica depois de resolver de novo: {:?}", p.dir([1., 0., 0.]));
+    }
+
+    #[test]
+    fn deslocamento_da_restricao_vale_a_formula_viva() {
+        let mut a = Assembly::new("t");
+        a.params.push(AsmParam { name: "folga".into(), expr: "4".into() });
+        let (peca, mut c) = par_de_pontos(&mut a);
+        c.formulas = ["folga*2".into(), "".into(), "3".into()];
+        let r = c.resolver(&a).unwrap();
+        assert!(!r.falhou());
+        let ponto = |m: &Assembly| m.node(peca).unwrap().placement.point([5., 0., 0.]);
+        let inicio = ponto(&r.copia);
+        assert!((dist(inicio, [0., 0., 10.]) - (64f64 + 9.).sqrt()).abs() < 1e-5, "{inicio:?}");
+        assert!((inicio[2] - 13.).abs() < 1e-5, "Z do elemento: {inicio:?}");
+        // mudar o parâmetro move a peça sem refazer a restrição
+        let mut b = r.copia.clone();
+        b.params[0].expr = "10".into();
+        assert!(crate::solve::solve(&mut b).converged);
+        assert!((dist(ponto(&b), [0., 0., 10.]) - (400f64 + 9.).sqrt()).abs() < 1e-5);
+        let volta = Assembly::from_json(&b.to_json()).unwrap();
+        assert_eq!(volta.mates[0].desloc, b.mates[0].desloc);
+    }
+
+    #[test]
+    fn junta_guarda_de_onde_veio_cada_lado() {
+        use crate::kin::JointKind;
+        use crate::proposta::{Classe, Comando, Elemento, ModoOrigem, Tipo};
+        let mut a = Assembly::new("t");
+        let base = a.add_component("A", NodeKind::Part { path: "a.fkp".into() }, Placement::default(), None);
+        let peca = a.add_component("B", NodeKind::Part { path: "b.fkp".into() }, Placement { origin: [100., 0., 0.], ..Default::default() }, None);
+        a.node_mut(base).unwrap().fixed = true;
+        let viva = Some(crate::releitura::Viva::Encaixe { tipo: TipoEncaixe::CentroFuro });
+        let furo = |comp| Elemento::novo(MateRef { comp, geom: Geom::Axis { p: [0.; 3], d: [0., 0., 1.] }, pick: None, viva }, Classe::Face);
+        let mut c = Comando::novo(Tipo::Junta(JointKind::Revolute));
+        c.receber(furo(base));
+        c.receber(furo(peca));
+        let r = c.resolver(&a).unwrap();
+        assert_eq!(r.copia.joints[0].fontes.map(|f| f.map(|r| r.viva)), [Some(viva), Some(viva)]);
+        // origem entre duas faces é feita de dois elementos: não há um só para seguir
+        let plano = |z: f64| Elemento::novo(MateRef { comp: base, geom: Geom::Plane { p: [0., 0., z], n: [0., 0., 1.] }, pick: None, viva: None }, Classe::Face);
+        let mut c = Comando::novo(Tipo::Junta(JointKind::Revolute));
+        c.trocar_modo_origem(0, ModoOrigem::EntreFaces);
+        c.receber(plano(0.));
+        c.receber(plano(10.));
+        c.receber(furo(peca));
+        let r = c.resolver(&a).unwrap();
+        assert!(r.copia.joints[0].fontes[0].is_none() && r.copia.joints[0].fontes[1].is_some());
     }
 
     #[test]

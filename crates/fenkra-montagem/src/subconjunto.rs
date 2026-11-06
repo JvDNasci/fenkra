@@ -67,7 +67,7 @@ fn geom_em(g: &Geom, p: &Placement) -> Geom {
 /// Lado de uma restrição agora no nó: as referências de giro são locais à peça e mudam de sistema.
 fn religar_mate(m: &mut Mate, lado_a: bool, no: Id, pl: &Placement) {
     let r = if lado_a { &mut m.a } else { &mut m.b };
-    *r = MateRef { comp: no, geom: geom_em(&r.geom, pl), pick: None };
+    *r = MateRef { comp: no, geom: geom_em(&r.geom, pl), pick: None, viva: None };
     match &mut m.kind {
         MateKind::Gear { refs, .. } => {
             let i = if lado_a { 0 } else { 2 };
@@ -591,7 +591,7 @@ impl Assembly {
                 if r.comp == no {
                     match primeira {
                         Some((id, pl)) => {
-                            *r = MateRef { comp: id, geom: geom_em(&r.geom, &pl.inverse().then(&p)), pick: None };
+                            *r = MateRef { comp: id, geom: geom_em(&r.geom, &pl.inverse().then(&p)), pick: None, viva: None };
                             rel.perdidas.push(format!("{}: criada no subconjunto, foi para a primeira peça", m.name));
                         }
                         None => rel.perdidas.push(format!("{}: subconjunto vazio", m.name)),
@@ -700,12 +700,12 @@ mod tests {
     }
 
     fn r(comp: Id, geom: Geom) -> MateRef {
-        MateRef { comp, geom, pick: None }
+        MateRef { comp, geom, pick: None, viva: None }
     }
 
     fn junta(a: &mut Assembly, nome: &str, ca: Id, cb: Id, f: JFrame) -> Id {
         let id = a.alloc();
-        a.joints.push(Joint { id, name: nome.into(), kind: JointKind::Revolute, a: JRef { comp: ca, frame: f }, b: JRef { comp: cb, frame: f }, angle0: 0., len0: 0., drive_angle: None, drive_len: None, suppressed: false, limites: Default::default(), zero: [0.; 3] });
+        a.joints.push(Joint { id, name: nome.into(), kind: JointKind::Revolute, a: JRef { comp: ca, frame: f }, b: JRef { comp: cb, frame: f }, angle0: 0., len0: 0., drive_angle: None, drive_len: None, suppressed: false, limites: Default::default(), zero: [0.; 3], fontes: [None, None] });
         id
     }
 

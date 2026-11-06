@@ -90,7 +90,7 @@ mod tests {
     }
 
     fn plano(comp: Id, n: f64) -> MateRef {
-        MateRef { comp, geom: Geom::Plane { p: [0.; 3], n: [0., 0., n] }, pick: None }
+        MateRef { comp, geom: Geom::Plane { p: [0.; 3], n: [0., 0., n] }, pick: None, viva: None }
     }
 
     /// Base fixa, placa presa a 10 mm dela e outras duas peças soltas ligadas à placa.
@@ -108,7 +108,7 @@ mod tests {
     fn nucleo_aponta_as_duas_distancias_e_poupa_a_inocente() {
         let (mut a, base, placa, d) = base_e_placa();
         // inocente: orienta a placa em relação à base, sem tocar na altura
-        let eixo = |c| MateRef { comp: c, geom: Geom::Axis { p: [0.; 3], d: [0., 0., 1.] }, pick: None };
+        let eixo = |c| MateRef { comp: c, geom: Geom::Axis { p: [0.; 3], d: [0., 0., 1.] }, pick: None, viva: None };
         let inocente = a.add_mate(MateKind::Coincident { flip: false }, eixo(base), eixo(placa));
         assert!(solve::solve(&mut a).converged);
         let nova = a.add_mate(MateKind::Distance("25".into()), plano(base, 1.), plano(placa, 1.));

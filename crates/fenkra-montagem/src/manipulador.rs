@@ -164,7 +164,7 @@ mod tests {
     #[test]
     fn contato_deixa_deslizar_e_girar_no_plano() {
         let (mut a, f, m) = par();
-        let (ra, rb) = (MateRef { comp: f, geom: Geom::Plane { p: [0.; 3], n: Z }, pick: None }, MateRef { comp: m, geom: Geom::Plane { p: [0.; 3], n: [0., 0., -1.] }, pick: None });
+        let (ra, rb) = (MateRef { comp: f, geom: Geom::Plane { p: [0.; 3], n: Z }, pick: None, viva: None }, MateRef { comp: m, geom: Geom::Plane { p: [0.; 3], n: [0., 0., -1.] }, pick: None, viva: None });
         a.add_mate(MateKind::Contact, ra, rb);
         let l = liberdade(&a, m, [X, Y, Z]);
         assert_eq!(l.mover, [true, true, false]);

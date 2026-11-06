@@ -644,13 +644,13 @@ fn plano_local(a: &Assembly, comp: Id, p: V3, n: V3) -> Geom {
 /// Restrição concêntrica entre `a` e `b` pelo eixo (ponto, direção) do mundo.
 pub(crate) fn concentrico(asm: &mut Assembly, a: Id, b: Id, eixo: (V3, V3)) {
     let (ga, gb) = (eixo_local(asm, a, eixo.0, eixo.1), eixo_local(asm, b, eixo.0, eixo.1));
-    asm.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: a, geom: ga, pick: None }, MateRef { comp: b, geom: gb, pick: None });
+    asm.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: a, geom: ga, pick: None, viva: None }, MateRef { comp: b, geom: gb, pick: None, viva: None });
 }
 
 /// Contato entre a face de `a` (ponto, normal de fora do sólido) e a de `b`, de frente uma para a outra.
 pub(crate) fn apoio(asm: &mut Assembly, a: Id, fa: (V3, V3), b: Id, fb: (V3, V3)) {
     let (ga, gb) = (plano_local(asm, a, fa.0, fa.1), plano_local(asm, b, fb.0, fb.1));
-    asm.add_mate(MateKind::Contact, MateRef { comp: a, geom: ga, pick: None }, MateRef { comp: b, geom: gb, pick: None });
+    asm.add_mate(MateKind::Contact, MateRef { comp: a, geom: ga, pick: None, viva: None }, MateRef { comp: b, geom: gb, pick: None, viva: None });
 }
 
 /// Tira o giro de `b` em torno do eixo, mantendo o ângulo de agora em relação a `a`. Paralelismo
@@ -661,7 +661,7 @@ pub(crate) fn trava_de_giro(asm: &mut Assembly, a: Id, b: Id, eixo: (V3, V3)) {
     let normal = any_perp(unit(eixo.1));
     let (ga, gb) = (plano_local(asm, a, eixo.0, normal), plano_local(asm, b, eixo.0, normal));
     let nome = asm.unique_pub(TRAVA);
-    let id = asm.add_mate(MateKind::Parallel, MateRef { comp: a, geom: ga, pick: None }, MateRef { comp: b, geom: gb, pick: None });
+    let id = asm.add_mate(MateKind::Parallel, MateRef { comp: a, geom: ga, pick: None, viva: None }, MateRef { comp: b, geom: gb, pick: None, viva: None });
     if let Some(m) = asm.mates.iter_mut().find(|m| m.id == id) {
         m.name = nome;
     }

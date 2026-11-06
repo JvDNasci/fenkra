@@ -480,7 +480,7 @@ mod tests {
         let c = [(lo[0] + hi[0]) / 2. + 30., (lo[1] + hi[1]) / 2., hi[2]];
         let top = crate::load::geom_at(&sh, c).unwrap();
         let bot = crate::load::geom_at(&sh, [c[0], c[1], lo[2]]).unwrap();
-        a.add_mate(MateKind::Contact, MateRef { comp: p1, geom: bot, pick: None }, MateRef { comp: p2, geom: top, pick: None });
+        a.add_mate(MateKind::Contact, MateRef { comp: p1, geom: bot, pick: None, viva: None }, MateRef { comp: p2, geom: top, pick: None, viva: None });
         let rep = crate::solve::solve(&mut a);
         assert!(rep.converged, "{rep:?}");
         let z = a.node(p2).unwrap().placement.origin[2];

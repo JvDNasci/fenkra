@@ -262,7 +262,7 @@ pub struct AsmState {
     pub(crate) drag_start: Option<Placement>,
     pub(crate) snapshot: Option<Assembly>,
     /// aviso de uma ação do painel, para mostrar no quadro seguinte
-    aviso: Option<(String, bool)>,
+    pub(crate) aviso: Option<(String, bool)>,
     // ---- simulação
     pub sim_open: bool,
     pub sim_frames: Vec<kin::Frame>,
@@ -649,13 +649,20 @@ impl AsmState {
 
     /// Elemento da restrição a partir de uma seleção da viewport.
     pub(crate) fn mate_ref(&mut self, p: Pick) -> Result<MateRef, String> {
-        // plano da origem ou da geometria da montagem: referência no sistema da montagem
-        if let Pick::Plane(pr) = p {
-            let f = match pr {
-                fenkra_core::PlaneRef::Origin(o) => fenkra_solidos::origin_frame(o),
-                fenkra_core::PlaneRef::Datum(id) => self.view.as_ref().and_then(|r| r.planes.iter().find(|x| x.id == Some(id))).map(|x| x.frame).ok_or("plano não encontrado")?,
-            };
-            return Ok(MateRef { comp: ORIGEM, geom: Geom::Plane { p: f.origin, n: f.normal }, pick: None });
+        // origem e geometria da montagem: referência no sistema da montagem
+        if let Pick::Plane(fenkra_core::PlaneRef::Origin(o)) = p {
+            let f = fenkra_solidos::origin_frame(o);
+            return Ok(MateRef { comp: ORIGEM, geom: Geom::Plane { p: f.origin, n: f.normal }, pick: None, viva: None });
+        }
+        let geometria = match p {
+            Pick::Plane(fenkra_core::PlaneRef::Datum(id)) | Pick::Geo(id) => Some((id, None)),
+            Pick::SkPoint { sketch, pos, .. } => Some((sketch, Some(Geom::Point(pos.map(|v| v as f64))))),
+            Pick::SkCurve { sketch, at, .. } => Some((sketch, Some(Geom::Axis { p: at.map(|v| v as f64), d: [0.; 3] }))),
+            _ => None,
+        };
+        if let Some((id, antes)) = geometria {
+            let geom = self.view.as_ref().and_then(|r| fenkra_montagem::releitura::ler_geometria(r, id, antes.as_ref())).ok_or("esta geometria da montagem não serve de referência")?;
+            return Ok(MateRef { comp: ORIGEM, geom, pick: None, viva: Some(fenkra_montagem::releitura::Viva::Geometria { id }) });
         }
         let (body, world) = match p {
             Pick::Face { body, point, .. } => (body, point.map(|v| v as f64)),
@@ -695,7 +702,12 @@ impl AsmState {
                 geom_at(sh, local)?
             }
         };
-        Ok(MateRef { comp, geom, pick: matches!(p, Pick::Face { .. }).then_some(local) })
+        let viva = match p {
+            Pick::Edge { .. } => Some(fenkra_montagem::releitura::Viva::Aresta { ponto: local }),
+            Pick::Vertex { .. } => Some(fenkra_montagem::releitura::Viva::Vertice),
+            _ => None,
+        };
+        Ok(MateRef { comp, geom, pick: matches!(p, Pick::Face { .. }).then_some(local), viva })
     }
 }
 

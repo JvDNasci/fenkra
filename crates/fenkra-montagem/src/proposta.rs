@@ -164,11 +164,13 @@ pub struct Comando {
     /// nome pedido no avançado (vazio: nome automático)
     pub nome: String,
     pub suprimida: bool,
+    /// deslocamento da restrição em X, Y e Z, com fórmula; a junta usa `alinhamento.desloc`
+    pub formulas: [String; 3],
 }
 
 impl Comando {
     pub fn novo(tipo: Tipo) -> Self {
-        Comando { tipo, caixas: [None, None], segundos: [None, None], modos: Default::default(), alinhamento: Default::default(), limites: Default::default(), ativa: 0, valor: None, inv_alinhamento: false, inv_lado: false, nome: String::new(), suprimida: false }
+        Comando { tipo, caixas: [None, None], segundos: [None, None], modos: Default::default(), alinhamento: Default::default(), limites: Default::default(), ativa: 0, valor: None, inv_alinhamento: false, inv_lado: false, nome: String::new(), suprimida: false, formulas: Default::default() }
     }
 
     /// A trajetória e o seguidor se reconhecem pelo tipo: o clique vale em qualquer ordem.
@@ -266,7 +268,8 @@ impl Comando {
         *self = Comando::novo(self.tipo.clone());
     }
 
-    /// Inverte pela tecla: o alinhamento, se o par tiver; se não, o lado. Devolve se mudou algo.
+    /// Inverte pela tecla: o alinhamento, se o par tiver; se não, o lado; e, sem nenhum dos dois (um
+    /// ponto em outro, por exemplo), vira a própria peça. Devolve se mudou algo.
     pub fn inverter(&mut self, previa: Option<&Previa>) -> bool {
         if self.tipo.e_junta() {
             self.alinhamento.inverter = !self.alinhamento.inverter;
@@ -275,7 +278,8 @@ impl Comando {
         match previa {
             Some(p) if p.aceita_alinhamento => self.inv_alinhamento = !self.inv_alinhamento,
             Some(p) if p.aceita_lado => self.inv_lado = !self.inv_lado,
-            _ => return false,
+            Some(_) => self.alinhamento.inverter = !self.alinhamento.inverter,
+            None => return false,
         }
         true
     }
@@ -337,6 +341,7 @@ impl Comando {
             return Err("este par de elementos não define a restrição (escolha planos ou eixos)".into());
         }
         let id = c.add_mate(kind, a.r, b.r);
+        self.posicionar_restricao(c, id);
         // engrenagem e cremalheira: o giro de agora é o zero
         c.init_motion(id);
         // distância e ângulo: a medida de agora, para a peça não saltar
@@ -365,6 +370,49 @@ impl Comando {
 }
 
 impl Comando {
+    /// Giro, virada e deslocamento da restrição. O solucionador só cuida do que a restrição prende: o
+    /// giro em volta do eixo do elemento fica livre, então ele vale pela posição de saída, e a peça
+    /// sai dali já girada. O deslocamento fica na restrição, com a fórmula, e aqui só adianta a posição
+    /// para valer também nas direções que ela não prende.
+    fn posicionar_restricao(&self, c: &mut Assembly, id: Id) {
+        let al = self.alinhamento;
+        let vars = c.vars();
+        let Some(m) = c.mates.iter_mut().find(|m| m.id == id) else { return };
+        m.desloc = self.formulas.clone();
+        let virar = al.inverter && !m.aceita_alinhamento() && !m.aceita_lado();
+        let (ra, rb, ga, m_kind) = (m.a, m.b, m.geom_a(&vars), m.kind.clone());
+        let lugar = |c: &Assembly, id: Id| c.lugar(id).unwrap_or_default();
+        let (pa, pb) = (lugar(c, ra.comp), lugar(c, rb.comp));
+        let no_mundo = |g: &Geom, p: &Placement| match *g {
+            Geom::Plane { p: o, n: d } | Geom::Axis { p: o, d } => (p.point(o), Some(unit(p.dir(d)))),
+            Geom::Point(o) => (p.point(o), None),
+        };
+        let ((oa, za), (ob, zb)) = (no_mundo(&ra.geom, &pa), no_mundo(&rb.geom, &pb));
+        let eixo = zb.or(za).unwrap_or([0., 0., 1.]);
+        let presa = |id: Id| id == ORIGEM || c.node(id).is_none_or(|n| n.fixed);
+        let (movel, sinal, em) = match (presa(ra.comp), presa(rb.comp)) {
+            (true, true) => return,
+            (_, false) => (rb.comp, 1., ob),
+            (false, true) => (ra.comp, -1., oa),
+        };
+        let andou = sub(no_mundo(&ga, &pa).0, oa);
+        // com giro pedido, a peça vai antes para o lugar: o solucionador divide o caminho entre as seis
+        // incógnitas, e a parte dele em giro somaria um ângulo que ninguém pediu
+        let encosta = (virar || al.angulo != 0.) && matches!(m_kind, MateKind::Coincident { .. } | MateKind::Contact);
+        let falta = if encosta { sub(oa, ob) } else { [0.; 3] };
+        let Some(n) = c.node_mut(movel) else { return };
+        n.placement = n.placement.moved(falta.map(|v| v * sinal), [0.; 3], em);
+        let em = if sinal > 0. { oa } else { ob };
+        let em = if encosta { em } else if sinal > 0. { ob } else { oa };
+        if virar {
+            n.placement = n.placement.moved([0.; 3], any_perp(eixo).map(|v| v * std::f64::consts::PI * sinal), em);
+        }
+        if al.angulo != 0. {
+            n.placement = n.placement.moved([0.; 3], eixo.map(|v| v * al.angulo.to_radians() * sinal), em);
+        }
+        n.placement = n.placement.moved(andou.map(|v| v * sinal), [0.; 3], em);
+    }
+
     /// Geometria da origem da caixa `k`, no sistema da peça dela.
     fn geom_da_origem(&self, k: usize) -> Result<Geom, String> {
         let a = self.caixas[k].as_ref().ok_or("faltam elementos")?;
@@ -449,8 +497,11 @@ impl Comando {
             k => k.clone(),
         };
         let id = c.add_joint(kind, JRef { comp: a.r.comp, frame: fa }, JRef { comp: b.r.comp, frame: fb });
+        // a origem feita de duas referências não tem um elemento só para seguir
+        let fonte = |i: usize, e: &Elemento| self.segundos[i].is_none().then_some(e.r);
         if let Some(j) = c.joints.iter_mut().find(|j| j.id == id) {
             j.limites = self.limites;
+            j.fontes = [fonte(ia, a), fonte(ib, b)];
         }
         Ok(id)
     }
@@ -654,7 +705,7 @@ mod testes_conflito {
     use super::*;
 
     fn plano(comp: Id, z: f64, n: f64) -> Elemento {
-        Elemento::novo(MateRef { comp, geom: Geom::Plane { p: [0., 0., z], n: [0., 0., n] }, pick: None }, Classe::Face)
+        Elemento::novo(MateRef { comp, geom: Geom::Plane { p: [0., 0., z], n: [0., 0., n] }, pick: None, viva: None }, Classe::Face)
     }
 
     fn montagem() -> (Assembly, Id, Id, Id) {
@@ -698,7 +749,7 @@ mod testes_conflito {
         assert!(!p.falhou());
         assert!(p.redundante(), "{} {}", p.gdl_antes, p.report.dof);
         // um eixo tira quatro
-        let eixo = |comp| Elemento::novo(MateRef { comp, geom: Geom::Axis { p: [0.; 3], d: [0., 0., 1.] }, pick: None }, Classe::Face);
+        let eixo = |comp| Elemento::novo(MateRef { comp, geom: Geom::Axis { p: [0.; 3], d: [0., 0., 1.] }, pick: None, viva: None }, Classe::Face);
         let p = proposta(Tipo::Restricao(MateKind::Coincident { flip: false }), eixo(base), eixo(tampa)).resolver(&a).unwrap();
         assert!(!p.falhou() && !p.redundante());
         assert_eq!(p.gdl_antes, 3);
@@ -729,11 +780,11 @@ mod tests {
     }
 
     fn face(comp: Id, p: V3, n: V3) -> Elemento {
-        Elemento::novo(MateRef { comp, geom: Geom::Plane { p, n }, pick: None }, Classe::Face)
+        Elemento::novo(MateRef { comp, geom: Geom::Plane { p, n }, pick: None, viva: None }, Classe::Face)
     }
 
     fn eixo(comp: Id, p: V3, d: V3) -> Elemento {
-        Elemento::novo(MateRef { comp, geom: Geom::Axis { p, d }, pick: None }, Classe::ArestaCurva { circular: true })
+        Elemento::novo(MateRef { comp, geom: Geom::Axis { p, d }, pick: None, viva: None }, Classe::ArestaCurva { circular: true })
     }
 
     fn contato(f: Id, m: Id) -> Comando {
@@ -811,7 +862,7 @@ mod tests {
         let (a, f, m) = par();
         let mut c = Comando::novo(Tipo::Restricao(MateKind::Distance("0".into())));
         c.receber(face(f, [0., 0., 10.], [0., 0., 1.]));
-        c.receber(Elemento::novo(MateRef { comp: m, geom: Geom::Point([0., 0., 0.]), pick: None }, Classe::Vertice));
+        c.receber(Elemento::novo(MateRef { comp: m, geom: Geom::Point([0., 0., 0.]), pick: None, viva: None }, Classe::Vertice));
         c.valor = Some("20".into());
         let p0 = c.resolver(&a).unwrap();
         assert!(!p0.aceita_alinhamento && p0.aceita_lado);
@@ -859,7 +910,7 @@ mod tests {
     fn par_sem_sentido_e_mesma_peca_recusam() {
         let (a, f, m) = par();
         let mut c = Comando::novo(Tipo::Restricao(MateKind::Parallel));
-        c.receber(Elemento::novo(MateRef { comp: f, geom: Geom::Point([0.; 3]), pick: None }, Classe::Vertice));
+        c.receber(Elemento::novo(MateRef { comp: f, geom: Geom::Point([0.; 3]), pick: None, viva: None }, Classe::Vertice));
         c.receber(face(m, [0.; 3], [0., 0., 1.]));
         assert!(c.resolver(&a).is_err());
         let mut c = Comando::novo(Tipo::Automatica);
@@ -906,7 +957,7 @@ mod tests {
         let (a, f, m) = par();
         let mut c = Comando::novo(Tipo::Junta(JointKind::PointCurve { curve: vec![] }));
         c.receber(eixo(f, [0.; 3], [0., 0., 1.]));
-        c.receber(Elemento::novo(MateRef { comp: m, geom: Geom::Point([0.; 3]), pick: None }, Classe::Vertice));
+        c.receber(Elemento::novo(MateRef { comp: m, geom: Geom::Point([0.; 3]), pick: None, viva: None }, Classe::Vertice));
         assert!(c.resolver(&a).is_err());
     }
 
@@ -943,7 +994,7 @@ mod tests {
     }
 
     fn peca(comp: Id, classe: Classe, geom: Geom) -> Elemento {
-        Elemento::novo(MateRef { comp, geom, pick: None }, classe)
+        Elemento::novo(MateRef { comp, geom, pick: None, viva: None }, classe)
     }
 
     fn revolucao_entre_furos(f: Id, m: Id) -> Comando {

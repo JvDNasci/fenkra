@@ -135,8 +135,9 @@ fn descrever(e: &Elemento, nome: &str) -> String {
 /// Elemento a partir do clique na viewport.
 fn elemento_de(st: &mut AsmState, p: Pick) -> Result<Elemento, String> {
     let r = st.mate_ref(p)?;
-    let mut e = Elemento::novo(r, match p {
-        Pick::Vertex { .. } => Classe::Vertice,
+    let mut e = Elemento::novo(r, match (p, r.geom) {
+        (Pick::Vertex { .. }, _) | (_, Geom::Point(_)) => Classe::Vertice,
+        (Pick::Geo(_) | Pick::SkCurve { .. }, Geom::Axis { .. }) => Classe::ArestaReta,
         _ => Classe::Face,
     });
     if let Pick::Edge { body, edge, mid } = p {
@@ -190,7 +191,7 @@ fn receber(st: &mut AsmState, p: Pick) {
     if let Some(c) = st.cmd.as_mut() {
         c.encaixe.travado = None;
     }
-    let nome = achado.as_ref().map(|e| st.asm.name_of(e.r.comp)).unwrap_or_default();
+    let nome = achado.as_ref().map(|e| if e.r.comp == ORIGEM { tr("Geometria da montagem").to_string() } else { st.asm.name_of(e.r.comp) }).unwrap_or_default();
     let Some(pen) = st.cmd.as_mut() else { return };
     match achado {
         Ok(e) => {
@@ -201,6 +202,25 @@ fn receber(st: &mut AsmState, p: Pick) {
         }
         Err(e) => pen.aviso = Some(e),
     }
+}
+
+impl AsmState {
+    /// Abre o comando de contato com os dois elementos já escolhidos.
+    pub fn cmd_abrir_para_demo(&mut self, els: [Elemento; 2]) {
+        let mut pen = Pendente::novo(Tipo::Restricao(MateKind::Contact));
+        for e in els {
+            pen.c.receber(e);
+        }
+        pen.textos = [vec![tr("Geometria da montagem").to_string()], vec![tr("Face plana").to_string()]];
+        self.cmd = Some(pen);
+        atualizar(self);
+    }
+}
+
+/// Elemento vindo da árvore: a geometria da montagem entra no comando como um clique no 3D.
+pub fn receber_pick(st: &mut AsmState, p: Pick) {
+    receber(st, p);
+    atualizar(st);
 }
 
 /// Refaz a prévia se a proposta mudou.
@@ -563,6 +583,29 @@ pub fn painel(app: &mut App, ui: &mut egui::Ui) {
             crate::asm_limites::painel(ui, "asm_cmd_limites_graus", graus, &mut pen.c.limites, medida, |_| false);
         });
     }
+    // restrição: o que ela não prende vale pela posição de saída
+    let posiciona = matches!(pen.c.tipo, Tipo::Automatica | Tipo::Alinhar | Tipo::Restricao(MateKind::Coincident { .. } | MateKind::Contact | MateKind::Distance(_) | MateKind::Angle(_) | MateKind::Parallel | MateKind::Perpendicular));
+    if posiciona {
+        let al = &mut pen.c.alinhamento;
+        ui.horizontal(|ui| {
+            ui.label(tr("Ângulo inicial"));
+            ui.add(crate::ui_ext::dv(&mut al.angulo).speed(1.).suffix("°").dica("Gira a peça em volta do eixo do elemento antes de aceitar"));
+            if ui.button(tr("Girar 90°")).on_hover_text(tr("Gira a peça de 90 em 90 graus em volta do eixo principal.")).clicked() {
+                al.angulo = (al.angulo + 90.) % 360.;
+            }
+            if !aceita_alin && !aceita_lado && ui.selectable_label(al.inverter, tr("Inverter")).on_hover_text(tr("Tab: a peça vira, e o eixo dela passa a apontar ao contrário")).clicked() {
+                al.inverter = !al.inverter;
+            }
+        });
+        for (k, l) in ["Deslocamento X", "Deslocamento Y", "Deslocamento Z"].into_iter().enumerate() {
+            crate::editor::expr(ui, l, &mut pen.formulas[k], &vars, "mm");
+        }
+        if fenkra_montagem::encaixe::avaliar_desloc(&pen.formulas, &vars).1.is_some() {
+            ui.label(RichText::new(tr("Fórmula inválida: conta como zero")).small().color(crate::theme::st_err()));
+        }
+        pen.c.formulas = pen.formulas.clone();
+        ui.label(RichText::new(tr("Na vista: passe o mouse numa face para ver os pontos de encaixe; a tecla L trava o ponto.")).weak().small());
+    }
     if aceita_alin || aceita_lado {
         ui.horizontal(|ui| {
             if aceita_alin && ui.selectable_label(pen.c.inv_alinhamento, tr("Inverter alinhamento")).on_hover_text(tr(crate::asm_ui::DICA_ALINHAMENTO)).clicked() {
@@ -749,6 +792,18 @@ pub fn demo(st: &mut AsmState, nome: &str) {
         crate::asm_chaveta::demo(st, nome);
         return;
     }
+    if nome == "encaixe_restricao" {
+        // mesma peça e mesmos pontos, no comando de restrição com o giro de 90° pedido
+        let mut pen = Pendente::novo(Tipo::Restricao(MateKind::Coincident { flip: false }));
+        pen.c.alinhamento.angulo = 90.;
+        st.cmd = Some(pen);
+        crate::asm_encaixe::demo(st);
+        return;
+    }
+    if nome == "geometria" {
+        crate::asm_selecao::demo_geometria(st);
+        return;
+    }
     if nome == "encaixe" {
         st.cmd = Some(Pendente::novo(Tipo::Junta(JointKind::Rigid)));
         crate::asm_encaixe::demo(st);
@@ -796,7 +851,7 @@ pub fn demo(st: &mut AsmState, nome: &str) {
     let ids: Vec<fenkra_core::Id> = st.asm.nodes.iter().filter(|n| !matches!(n.kind, NodeKind::Group)).map(|n| n.id).collect();
     let [base, tampa] = ids[..] else { return };
     st.asm.node_mut(base).unwrap().fixed = true;
-    let plano = |comp, z: f64, n: f64| MateRef { comp, geom: Geom::Plane { p: [40., 20., z], n: [0., 0., n] }, pick: Some([40., 20., z]) };
+    let plano = |comp, z: f64, n: f64| MateRef { comp, geom: Geom::Plane { p: [40., 20., z], n: [0., 0., n] }, pick: Some([40., 20., z]), viva: None };
     if nome == "duzentas" {
         // grade de peças fixas com 200 restrições: a conta da tela, sem peso no solucionador
         let path = "placa.fkp".to_string();
@@ -818,7 +873,7 @@ pub fn demo(st: &mut AsmState, nome: &str) {
         }
         st.dirty = true;
     }
-    let eixo = |comp| Elemento::novo(MateRef { comp, geom: Geom::Axis { p: [48., 24., 0.], d: [0., 0., 1.] }, pick: None }, Classe::Face);
+    let eixo = |comp| Elemento::novo(MateRef { comp, geom: Geom::Axis { p: [48., 24., 0.], d: [0., 0., 1.] }, pick: None, viva: None }, Classe::Face);
     match nome {
         "cmd" => {
             let mut pen = Pendente::novo(Tipo::Restricao(MateKind::Contact));
@@ -1037,7 +1092,7 @@ mod tests {
         r.bodies[0].collector = tampa;
         st.view = Some(r);
         let mut pen = Pendente::novo(Tipo::Restricao(MateKind::Contact));
-        let face = |comp, z: f64, n: f64| Elemento::novo(MateRef { comp, geom: Geom::Plane { p: [0., 0., z], n: [0., 0., n] }, pick: None }, Classe::Face);
+        let face = |comp, z: f64, n: f64| Elemento::novo(MateRef { comp, geom: Geom::Plane { p: [0., 0., z], n: [0., 0., n] }, pick: None, viva: None }, Classe::Face);
         pen.c.receber(face(base, 10., 1.));
         pen.c.receber(face(tampa, 0., -1.));
         st.cmd = Some(pen);
@@ -1070,8 +1125,8 @@ mod tests {
         // a tampa pode girar, mas um contato com a base numa altura impossível: fixa em outra face
         let extra = st.asm.add_mate(
             MateKind::Distance("50".into()),
-            MateRef { comp: st.asm.nodes[0].id, geom: Geom::Plane { p: [0., 0., 10.], n: [0., 0., 1.] }, pick: None },
-            MateRef { comp: tampa, geom: Geom::Plane { p: [0.; 3], n: [0., 0., -1.] }, pick: None },
+            MateRef { comp: st.asm.nodes[0].id, geom: Geom::Plane { p: [0., 0., 10.], n: [0., 0., 1.] }, pick: None, viva: None },
+            MateRef { comp: tampa, geom: Geom::Plane { p: [0.; 3], n: [0., 0., -1.] }, pick: None, viva: None },
         );
         assert!(st.asm.mates.iter().any(|m| m.id == extra));
         st.report = solve::solve(&mut st.asm);
@@ -1090,7 +1145,7 @@ mod tests {
     fn animar_troca_o_fantasma_a_cada_quadro_sem_tocar_a_montagem() {
         let (mut st, tampa) = estado_com_contato();
         let base = st.asm.nodes[0].id;
-        let eixo = |comp| Elemento::novo(MateRef { comp, geom: Geom::Axis { p: [20., 0., 0.], d: [0., 0., 1.] }, pick: None }, Classe::Face);
+        let eixo = |comp| Elemento::novo(MateRef { comp, geom: Geom::Axis { p: [20., 0., 0.], d: [0., 0., 1.] }, pick: None, viva: None }, Classe::Face);
         let mut pen = Pendente::novo(Tipo::JuntaAutomatica);
         pen.c.receber(eixo(base));
         pen.c.receber(eixo(tampa));
