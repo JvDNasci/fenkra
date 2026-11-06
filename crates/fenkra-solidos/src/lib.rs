@@ -3805,7 +3805,8 @@ impl Ctx<'_> {
     fn apply_roles(&mut self, target: Id, tool: Shape, op: BoolOp, fid: Id, tool_roles: Option<Vec<i32>>) -> Result<(), String> {
         let k = |e: KernelError| e.0;
         // a ferramenta levada entre o dobrado e o planificado perde a correspondência com os papéis
-        let (tool, tool_roles) = match self.sheet_mismatch(fid) {
+        let mismatch = self.sheet_mismatch(fid);
+        let (tool, tool_roles) = match mismatch {
             Some((from, to)) => (self.map_tool(tool, from, to)?, None),
             None => (tool, tool_roles),
         };
@@ -3830,6 +3831,16 @@ impl Ctx<'_> {
                     BoolOp::Intersect => Bool::Common,
                 };
                 let (s, out, src) = b.boolean_tagged_src(&tool, kop, &tags_for(owners)).map_err(k)?;
+                // recorte desenhado no outro estado da chapa que não achou material depois de levado
+                // para este (a aba por perfil não tem mapa de dobras): erro com o motivo, em vez de
+                // sumir da planificada sem aviso (B86)
+                if let (Some((from, to)), BoolOp::Cut) = (mismatch, op) {
+                    if b.mass().volume - s.mass().volume < 1e-6 {
+                        let onde = if to { "planificada" } else { "dobrada" };
+                        let de = if from { "planificada" } else { "dobrada" };
+                        return Err(format!("o recorte foi desenhado na chapa {de} e não encontrou material na chapa {onde}: a parte da chapa onde ele cai não tem mapa de dobras (aba por perfil, por exemplo). Refaça o recorte com a chapa {onde}"));
+                    }
+                }
                 let own = remap(owners, &out, fid);
                 // face do corpo: leva o papel que já tinha; face que veio da ferramenta: o papel dela
                 let tool_roles = tool_roles.unwrap_or_default();
@@ -4676,6 +4687,10 @@ impl Ctx<'_> {
                     let pid = st.punch.ok_or("escolha o coletor com o corpo do punção")?;
                     let punch = self.body(pid).ok_or("o coletor do punção não tem corpo (ou vem depois)")?.clone();
                     let b = self.body(f.target).ok_or("o estampo precisa de uma chapa")?.clone();
+                    // planificada: a chapa plana não leva o copo; a pegada do punção fica marcada
+                    if sp.flat {
+                        return self.puncao_planificado(f, &punch, &b);
+                    }
                     let (plo, phi) = punch.bbox().ok_or("punção sem dimensões")?;
                     let pc = geo3d::lerp(plo, phi, 0.5);
                     let (on, n) = b.surface_near(pc).map_err(k)?;
@@ -7432,6 +7447,8 @@ mod chapa_laco_tests;
 
 #[cfg(test)]
 mod chapa_b35_tests;
+#[cfg(test)]
+mod chapa_fecha_tests;
 
 #[cfg(test)]
 mod tests {
