@@ -5022,7 +5022,7 @@ impl Ctx<'_> {
                 }
                 // B326: pernas ligadas por dobradeira viram um sólido só (perna + arco + perna)
                 let mut fundidos: HashMap<usize, (f64, Frame)> = HashMap::new();
-                let mut dobra_avisos: Vec<String> = vec![];
+                let mut dobra_avisos: Vec<(String, Vec<String>)> = vec![];
                 // B328, B333: nós com rasgo em V ou canto com gabarito recortam as duas pernas e
                 // trazem os corpos que as ligam (dobradiça, peças do meio, setores)
                 let mut extras_v: HashMap<(usize, usize), Vec<Shape>> = HashMap::new();
@@ -5051,7 +5051,14 @@ impl Ctx<'_> {
                 }
                 for c in &plano_dobra.cadeias {
                     for n in &c.nos {
-                        dobra_avisos.extend(n.res.avisos.iter().map(|a| format!("linhas {}–{}: {a}", n.antes + 1, n.depois + 1)));
+                        for a in &n.res.avisos {
+                            // o mesmo aviso em vários nós aparece uma vez, com a lista das linhas
+                            let nos = format!("{}–{}", n.antes + 1, n.depois + 1);
+                            match dobra_avisos.iter_mut().find(|(t, _)| t == a) {
+                                Some((_, l)) => l.push(nos),
+                                None => dobra_avisos.push((a.clone(), vec![nos])),
+                            }
+                        }
                     }
                     for (run, arcos) in st_dobra_geo::blocos_fundidos(c) {
                         if run.len() < 2 || !run.iter().all(|i| kept.contains(i)) {
@@ -5126,7 +5133,8 @@ impl Ctx<'_> {
                 let warn = if dobra_avisos.is_empty() {
                     warn
                 } else {
-                    let d = format!("⚠ dobra de tubo: {}", dobra_avisos.join(" | "));
+                    let juntos: Vec<String> = dobra_avisos.iter().map(|(a, l)| format!("linhas {}: {a}", l.join(", "))).collect();
+                    let d = format!("⚠ dobra de tubo: {}", juntos.join(" | "));
                     Some(match warn {
                         Some(w) => format!("{d} | {w}"),
                         None => d,

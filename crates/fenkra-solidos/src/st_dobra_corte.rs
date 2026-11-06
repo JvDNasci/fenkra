@@ -488,8 +488,8 @@ pub fn gabarito(t: &TuboDobrado) -> Result<Desenho, String> {
         return Err("nenhuma dobra do tubo tem corte para marcar (V comum, V múltiplo ou canto com gabarito)".into());
     }
     barra_de_escala(&mut g, 10., y + 4.);
-    g.texto(Camada::Cota, [10., y + 14.], 4.5, format!("Gabarito de marcação · {} · {}", t.designacao, t.material));
-    g.texto(Camada::Cota, [10., y + 9.], 2.8, format!("Imprima a 100% (tamanho real), sem 'ajustar à página'. {}.", AVISO_DERIVADA));
+    g.texto(Camada::Cota, [10., y + 21.], 4.5, format!("Gabarito de marcação · {} · {}", t.designacao, t.material));
+    g.texto(Camada::Cota, [10., y + 14.], 2.8, format!("Imprima a 100% (tamanho real), sem 'ajustar à página'. {}.", AVISO_DERIVADA));
     Ok(g)
 }
 
@@ -529,6 +529,28 @@ mod tests {
             s += a[0] * b[1] - b[0] * a[1];
         }
         s.abs() / 2.
+    }
+
+    /// Dois rótulos que se cruzam no mesmo trecho de X não podem ficar a menos que a altura do maior de distância em Y.
+    fn rotulos_se_sobrepoem(d: &Desenho) -> Option<(String, String)> {
+        for (i, a) in d.rotulos.iter().enumerate() {
+            for b in &d.rotulos[i + 1..] {
+                let (xa, xb) = (a.pos[0]..a.pos[0] + largura_texto(&a.texto, a.altura), b.pos[0]..b.pos[0] + largura_texto(&b.texto, b.altura));
+                let cruzam_x = xa.start < xb.end && xb.start < xa.end;
+                if cruzam_x && (a.pos[1] - b.pos[1]).abs() < a.altura.max(b.altura) * 0.95 {
+                    return Some((a.texto.clone(), b.texto.clone()));
+                }
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn gabarito_do_30x30x1_2_tem_rotulos_sem_sobreposicao() {
+        for (modo, raio) in [(BendMode::VComRaio, 30.), (BendMode::VComum, 1.8)] {
+            let g = gabarito(&tubo(&entrada(modo, raio, 1), [200., 150.])).unwrap();
+            assert_eq!(rotulos_se_sobrepoem(&g), None, "{modo:?}");
+        }
     }
 
     #[test]
