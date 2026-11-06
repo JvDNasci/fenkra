@@ -292,7 +292,7 @@ c('B141', 4, 'P2', 'Pacote de liberação e exportação de BOM/ECO', 'STEP+PDF+
 c('B142', 4, 'P3', 'Importar placa (STEP/IDX)', 'Contorno e furos para sketch. IDX quando o suporte amadurecer. (BN23; módulo ECAD–MCAD; depende de B88, B105).',
   ['PESQ-MOD'], [], 200, 'Auto', 'Geral'),
 c('B143', 3, 'P1', 'Reconhecimento de features', 'Dividir em fases com aceite próprio. Fase 1 analisa e marca sem alterar o corpo: grafo de faces com convexidade das arestas, painel Features encontradas (furo cego e passante com Ø e profundidade, escareado, filete de raio constante, bolso) que seleciona no 3D. Fase 2 converte a pedido em feature do Fenkra só se o checador de similaridade confirmar volume, área e centroide dentro de 1e-6 relativo; senão o corpo permanece. Só superfícies analíticas; B-splines ficam como corpo e são relatadas. Textos da interface dizem estrutura inferida, nunca histórico restaurado. Aceite no corpus: exportar para STEP e reimportar reconhece 90% dos furos e filetes de raio constante.',
-  ['PESQ-MOD'], [], 300, 'Auto', 'Geral'),
+  ['PESQ-MOD'], [], 300, 'Auto', 'Geral', status='em andamento'),
 c('B144', 4, 'P2', 'Desenho automático por regras', 'Vistas padrão, cotas de contorno e furo, tabela e carimbo. (BN25; módulo Desenho; depende de B30, B106, B107, B81).',
   ['PESQ-MOD'], [], 400, 'Auto', 'Desenho técnico'),
 c('B145', 4, 'P2', 'Interface para agentes (JSON/ferramentas)', 'Esquema versionado do CLI. Servidor de ferramentas opcional. (BN25b; módulo IA / automação; depende de B39).',
