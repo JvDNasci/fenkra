@@ -150,7 +150,8 @@ fn allen(m: &mut Montador, fam: &Familia, t: &Tamanho, l: f64) -> Result<(), Str
     m.param("dk", &dk.to_string())?;
     m.param("k", &k.to_string())?;
     m.param("s", &s.to_string())?;
-    m.param("b", &medida(fam, t, "b")?.to_string())?;
+    // sem "b" na norma (cabeça abaulada), a rosca de referência é o corpo inteiro
+    m.param("b", &t.valor("b").unwrap_or(l).to_string())?;
     m.param("prof", "k/2")?;
     let topo = PlaneRef::Origin(OriginPlane::XY);
     m.prim("Cabeca", PrimKind::Cilindro, topo, ["dk/2", "k", "0", "0"], BoolOp::Add)?;
@@ -422,6 +423,28 @@ mod tests {
         assert!((hi[1] - lo[1] - 17.).abs() < 1e-3 && (hi[2] - 6.4).abs() < 1e-3 && (lo[2] + 30.).abs() < 1e-3);
         let (_, lo, hi) = medir(&fixador_documento("iso4017", "M10", Some(30.)).unwrap());
         assert!((hi[1] - lo[1] - 16.).abs() < 1e-3);
+    }
+
+    #[test]
+    fn familias_do_b51_geram_com_as_cotas_da_norma() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        // ISO 4014 M10x40: cabeça s = 16 e k = 6,4, haste 40 abaixo da face de apoio
+        let (_, lo, hi) = medir(&fixador_documento("iso4014", "M10", Some(40.)).unwrap());
+        assert!((hi[1] - lo[1] - 16.).abs() < 1e-3 && (hi[2] - 6.4).abs() < 1e-3 && (lo[2] + 40.).abs() < 1e-3, "{lo:?} {hi:?}");
+        // comprimento igual ou menor que b não é rosca parcial: fora da série
+        assert!(fixador_documento("iso4014", "M10", Some(20.)).is_err());
+        // ISO 4035 M12: baixa, 6 mm de altura contra 10,8 da ISO 4032, mesma abertura s = 18
+        let (v, lo, hi) = medir(&fixador_documento("iso4035", "M12", None).unwrap());
+        assert!((hi[2] - lo[2] - 6.).abs() < 1e-3 && (hi[1] - lo[1] - 18.).abs() < 1e-3, "{lo:?} {hi:?}");
+        let esperado = (3_f64.sqrt() / 2. * 324. - PI / 4. * 144.) * 6.;
+        assert!((v - esperado).abs() / esperado < 0.01, "volume {v} vs {esperado}");
+        // ISO 7380-1 M8x20 (sem "b"): cabeça Ø14 x 4,4 e haste 20
+        let d = fixador_documento("iso7380_1", "M8", Some(20.)).unwrap();
+        let (_, lo, hi) = medir(&d);
+        assert!((hi[2] - 4.4).abs() < 1e-3 && (lo[2] + 20.).abs() < 1e-3 && (hi[0] - lo[0] - 14.).abs() < 0.2, "{lo:?} {hi:?}");
+        assert!(fixador_documento("iso7380_1", "M8", Some(8.)).is_err(), "abaixo da série de M8 (10)");
     }
 
     #[test]
