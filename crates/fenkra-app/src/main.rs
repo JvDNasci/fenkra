@@ -51,6 +51,8 @@ mod pmi_ui;
 mod pmi_smart;
 mod pmi_handles;
 mod pmi_minibar;
+mod pmi_legivel;
+mod pmi_feat_asm;
 mod pmi_baloes_ui;
 mod pmi_alvos_ui;
 mod pmi_gdt_ui;

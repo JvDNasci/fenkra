@@ -4,7 +4,7 @@
 //! A decisão é função pura dos alvos (`PmiTarget`) e, para arestas retas, do segmento delas:
 //! - uma aresta circular ou face cilíndrica pede diâmetro (Tab alterna com raio);
 //! - dois círculos pedem a distância entre eles (Tab: centros, interior, exterior);
-//! - duas faces planas paralelas pedem a distância entre os planos;
+//! - duas faces planas paralelas pedem a distância entre os planos; concorrentes, o ângulo entre elas;
 //! - duas arestas retas concorrentes pedem o ângulo entre elas; paralelas, a distância;
 //! - dois ou três vértices: distância (Tab: ao longo de X, Y, Z); o terceiro vértice vira ângulo,
 //!   com vértice no 1º clique e pontos 1 e 2 nos seguintes.
@@ -134,6 +134,44 @@ pub fn angle_from_segments(a: (P, P), b: (P, P)) -> Option<[P; 3]> {
     Some([v, far(a), far(b)])
 }
 
+/// Âncoras (`vértice, ponto 1, ponto 2`) do ângulo diedro entre dois planos não paralelos. O
+/// vértice fica na reta de interseção, o mais perto do meio dos dois pontos de face dados; cada
+/// ponto sai do vértice dentro do seu plano, perpendicular à reta e do lado da face escolhida,
+/// de modo que o ângulo medido é o da região entre as duas faces. `None` se são paralelos.
+pub fn angle_from_planes(p1: P, n1: P, p2: P, n2: P) -> Option<[P; 3]> {
+    let (n1, n2) = (norm(n1)?, norm(n2)?);
+    let l = cross(n1, n2);
+    if len(l) < 1e-3 {
+        return None;
+    }
+    let ul = norm(l)?;
+    let m = [(p1[0] + p2[0]) / 2., (p1[1] + p2[1]) / 2., (p1[2] + p2[2]) / 2.];
+    // ponto da reta mais perto de m: resolve n1.x = h1, n2.x = h2, l.x = l.m
+    let (h1, h2, hm) = (dot(n1, p1), dot(n2, p2), dot(ul, m));
+    let det = dot(n1, cross(n2, ul));
+    if det.abs() < 1e-9 {
+        return None;
+    }
+    let (a, b, c) = (cross(n2, ul), cross(ul, n1), cross(n1, n2));
+    let v = [0, 1, 2].map(|i| (h1 * a[i] + h2 * b[i] + hm * c[i]) / det);
+    // dentro de cada plano, perpendicular à reta, apontando para o ponto da face
+    let leg = |n: P, p: P| {
+        let mut d = norm(cross(ul, n))?;
+        let t = dot(sub(p, v), d);
+        if t < 0. {
+            d = [-d[0], -d[1], -d[2]];
+        }
+        let reach = t.abs().max(10.);
+        Some([v[0] + d[0] * reach, v[1] + d[1] * reach, v[2] + d[2] * reach])
+    };
+    Some([v, leg(n1, p1)?, leg(n2, p2)?])
+}
+
+fn norm(a: P) -> Option<P> {
+    let l = len(a);
+    (l > 1e-12).then(|| [a[0] / l, a[1] / l, a[2] / l])
+}
+
 fn parallel_segments(a: (P, P), b: (P, P)) -> bool {
     let (d1, d2) = (sub(a.1, a.0), sub(b.1, b.0));
     len(cross(d1, d2)) / (len(d1) * len(d2)).max(1e-12) < 1e-3
@@ -164,7 +202,8 @@ pub fn infer(items: &[Item]) -> Inference {
                 return out(Verdict::Complete, vec![PmiKind::Gap { mode: GapMode::Centers }, PmiKind::Gap { mode: GapMode::Inner }, PmiKind::Gap { mode: GapMode::Outer }]);
             }
             if ca == FacePlana && cb == FacePlana {
-                return if dot(a.t.dir, b.t.dir).abs() > 0.99995 { out(Verdict::Complete, vec![PmiKind::Linear]) } else { bad(Reason::PlanesNotParallel) };
+                // paralelas: distância entre os planos; concorrentes: ângulo diedro
+                return if dot(a.t.dir, b.t.dir).abs() > 0.99995 { out(Verdict::Complete, vec![PmiKind::Linear]) } else { out(Verdict::Complete, vec![PmiKind::Angle]) };
             }
             if let (Aresta, Aresta, Some(s1), Some(s2)) = (ca, cb, a.seg, b.seg) {
                 if parallel_segments(s1, s2) {
@@ -228,12 +267,31 @@ mod tests {
     }
 
     #[test]
-    fn faces_paralelas_dao_distancia_e_nao_paralelas_sao_invalidas() {
+    fn faces_paralelas_dao_distancia_e_concorrentes_dao_angulo() {
         let r = infer(&[plano(0., [0., 0., -1.]), plano(5., [0., 0., 1.])]);
         assert_eq!((r.verdict, r.kind(0)), (Verdict::Complete, Some(PmiKind::Linear)));
         let r = infer(&[plano(0., [0., 0., 1.]), plano(5., [1., 0., 0.])]);
-        assert_eq!(r.verdict, Verdict::Invalid(Reason::PlanesNotParallel));
-        assert!(r.kind(0).is_none());
+        assert_eq!((r.verdict, r.kind(0)), (Verdict::Complete, Some(PmiKind::Angle)));
+    }
+
+    #[test]
+    fn angulo_entre_planos_mede_o_diedro_da_regiao_entre_as_faces() {
+        // piso z=0 (normal +Z) e parede x=0 (normal +X): diedro de 90 graus, aresta no eixo Y
+        let a = angle_from_planes([30., 5., 0.], [0., 0., 1.], [0., 8., 20.], [1., 0., 0.]).unwrap();
+        let ang = |a: &[P; 3]| {
+            let (u, w) = (sub(a[1], a[0]), sub(a[2], a[0]));
+            (dot(u, w) / (len(u) * len(w))).acos().to_degrees()
+        };
+        assert!(a[0][0].abs() < 1e-9 && a[0][2].abs() < 1e-9, "vértice na reta de interseção: {:?}", a[0]);
+        assert!((ang(&a) - 90.).abs() < 1e-6);
+        // parede aberta a 120 graus do piso (sobe para -X): o diedro da região entre as faces é 120
+        let (sn, cs) = (120f64.to_radians().sin(), 120f64.to_radians().cos());
+        let b = angle_from_planes([40., 0., 0.], [0., 0., 1.], [10. * cs, 0., 10. * sn], [sn, 0., -cs]).unwrap();
+        assert!((ang(&b) - 120.).abs() < 1e-6, "{}", ang(&b));
+        // planos paralelos não têm diedro
+        assert!(angle_from_planes([0.; 3], [0., 0., 1.], [0., 0., 5.], [0., 0., -1.]).is_none());
+        // as pernas ficam do lado das faces escolhidas
+        assert!(a[1][0] > 0. && a[2][2] > 0.);
     }
 
     #[test]

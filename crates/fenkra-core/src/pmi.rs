@@ -720,6 +720,13 @@ pub struct PmiStyle {
     /// casas decimais do valor medido; `None` = o padrão (até 2, sem zeros sobrando) (B270)
     #[serde(default)]
     pub decimals: Option<u8>,
+    /// raio do arco de uma cota angular ou de arco (mm no modelo); 0 = o padrão da tela (B269)
+    #[serde(default)]
+    pub arc_r: f64,
+}
+
+fn sem_componente() -> Id {
+    Id(0)
 }
 
 fn centro() -> u8 {
@@ -763,6 +770,7 @@ impl PmiStyle {
             ext_over: self.ext_over,
             text_along: self.text_along,
             decimals: self.decimals.or(base.decimals),
+            arc_r: self.arc_r,
         }
     }
 }
@@ -800,6 +808,7 @@ impl Default for PmiStyle {
             ext_over: 0.,
             text_along: 0.,
             decimals: None,
+            arc_r: 0.,
         }
     }
 }
@@ -859,7 +868,12 @@ pub enum PmiKind {
     ArcLength,
     /// chamada gerada da feature (furo, rosca, chanfro, filete, chapa): o texto vem dos parâmetros
     /// dela, sem digitar (B186). `text` guarda a última versão gerada.
-    FeatureNote { feature: Id },
+    FeatureNote {
+        feature: Id,
+        /// componente da montagem dono da feature; `Id(0)` na peça (B186)
+        #[serde(default = "sem_componente")]
+        comp: Id,
+    },
 }
 
 /// Qual medida de uma cota entre dois círculos.

@@ -626,10 +626,11 @@ impl Pen {
     /// vértice de baixo (onde a chamada encosta).
     pub fn roughness(&self, p: &Cv, at: Pos2, txt: &str) -> (Rect, Pos2) {
         let at = at + self.nudge;
-        let h = self.size * 1.3;
+        // o V acompanha o texto na proporção da norma (cerca de 2,5 vezes a altura do texto)
+        let h = self.size * 1.8;
         let fill = self.fill(PmiBg::Nenhum);
         let tc = self.text_col(fill);
-        let g = self.layout(p, txt, 0.9, tc);
+        let g = self.layout(p, txt, 1.0, tc);
         let v = at + egui::vec2(-h * 0.25, h * 0.55);
         let l = v + egui::vec2(-h * 0.45, -h * 0.55);
         let top = v + egui::vec2(h * 0.6, -h * 1.45);
@@ -757,7 +758,8 @@ impl Pen {
     /// encosta).
     pub fn roughness_ext(&self, p: &Cv, at: Pos2, l: &fenkra_core::pmi_acabamento::RugLinhas, x: &fenkra_core::pmi_acabamento::RugExtra) -> (Rect, Pos2) {
         let v = at + self.nudge;
-        let k = self.size * 1.15;
+        // unidade do símbolo: o V tem 2 unidades de altura, então 1,6 do tamanho dá cerca de 3,2 vezes o texto
+        let k = self.size * 1.6;
         let col = if self.sel { HL } else { self.line };
         let st = Stroke::new(if self.sel { self.width + 1. } else { self.width }, col);
         let fill = self.fill(PmiBg::Nenhum);
@@ -767,15 +769,17 @@ impl Pen {
         let barra_esq = v + egui::vec2(1.0 * k, -2.0 * k);
         let barra_dir = v + egui::vec2(4.0 * k, -2.0 * k);
         let mut texto = |t: &str, tl: Pos2| {
-            let g = p.layout_no_wrap(t.to_string(), self.font(0.85), tc);
+            let g = p.layout_no_wrap(t.to_string(), self.font(1.0), tc);
             let b = Rect::from_min_size(tl, g.size());
             r = r.union(b);
             p.galley(tl, g, tc);
         };
         // valores em cima da barra, do último para o primeiro, subindo
-        let alt = self.size * 0.95;
+        // com o segundo traço da ISO 21920 (0,25 unidade acima da barra) o texto sobe mais um pouco
+        let alt = self.size * 1.3;
+        let folga = if x.norma == fenkra_core::pmi_acabamento::NormaRug::Iso21920 { 0.3 * k } else { 0. };
         for (i, t) in l.valores.iter().rev().enumerate() {
-            texto(t, barra_esq + egui::vec2(self.size * 0.2, -alt * (i as f32 + 1.) - 1.));
+            texto(t, barra_esq + egui::vec2(self.size * 0.2, -alt * (i as f32 + 1.) - 1. - folga));
         }
         if !l.metodo.is_empty() {
             texto(&l.metodo, barra_esq + egui::vec2(self.size * 0.2, 2.));

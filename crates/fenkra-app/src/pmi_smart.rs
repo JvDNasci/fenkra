@@ -179,7 +179,7 @@ mod tests_selecao_real {
     }
 
     #[test]
-    fn faces_paralelas_dao_distancia_e_perpendiculares_sao_recusadas() {
+    fn faces_paralelas_dao_distancia_e_perpendiculares_dao_angulo_de_90() {
         let r = exemplo("Placa simples");
         let planas = faces(&r, TargetClass::FacePlana);
         let dir = |p: &Pick| crate::pmi_ui::pick_target(&r, p).unwrap().dir;
@@ -196,8 +196,16 @@ mod tests_selecao_real {
         }
         let inf = infer(&items(&r, &paralelo.expect("a placa tem faces paralelas")));
         assert_eq!((inf.verdict, kind_tab(&inf, 0)), (Verdict::Complete, PmiKind::Linear));
-        let inf = infer(&items(&r, &obliquo.expect("a placa tem faces perpendiculares")));
-        assert_eq!(inf.verdict, Verdict::Invalid(Reason::PlanesNotParallel));
+        let obliquo = Some(obliquo.expect("a placa tem faces perpendiculares"));
+        let inf = infer(&items(&r, &obliquo.unwrap()));
+        assert_eq!((inf.verdict, kind_tab(&inf, 0)), (Verdict::Complete, PmiKind::Angle));
+        // as âncoras criadas medem 90 graus de fato
+        let alvo = obliquo.unwrap();
+        let (a, b) = (crate::pmi_ui::pick_target(&r, &alvo[0]).unwrap(), crate::pmi_ui::pick_target(&r, &alvo[1]).unwrap());
+        let v = fenkra_core::pmi_infer::angle_from_planes(a.point, a.dir, b.point, b.dir).unwrap();
+        let (u, w) = ([v[1][0] - v[0][0], v[1][1] - v[0][1], v[1][2] - v[0][2]], [v[2][0] - v[0][0], v[2][1] - v[0][1], v[2][2] - v[0][2]]);
+        let cos = (u[0] * w[0] + u[1] * w[1] + u[2] * w[2]) / (u.iter().map(|x| x * x).sum::<f64>().sqrt() * w.iter().map(|x| x * x).sum::<f64>().sqrt());
+        assert!(cos.abs() < 1e-6, "{cos}");
     }
 
     #[test]

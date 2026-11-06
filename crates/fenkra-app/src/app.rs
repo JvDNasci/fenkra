@@ -24,6 +24,7 @@ mod diag;
 mod gravar;
 mod roda_app;
 mod demo_janelas;
+mod demo_pmi;
 mod demo_estrutural;
 mod estado_doc;
 mod exportar;
@@ -967,6 +968,7 @@ lado oposto");
                     mk(d, PmiKind::Weld { kind: WeldKind::Filete, size: s("a5"), all_around: i == 0, extra: we }, vec![[-50. + i as f64 * 45., -30., 8.]], [0., -12., 22.], "");
                 }
             }
+            app.demo_pmi_caso(&modo);
             app.started = true;
         }
         // desenvolvimento: FENKRA_DEMO_DWG=1 abre um desenho da placa de exemplo (3 vistas, corte, detalhe, cotas, tabela)
