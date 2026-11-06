@@ -623,7 +623,7 @@ pub fn draw_falhas(ui: &egui::Ui, rect: egui::Rect, vp: &crate::render::Viewport
         ui.painter().add(egui::Shape::line(pts.clone(), egui::Stroke::new(5., cor)));
         let meio = pts[pts.len() / 2];
         let texto = format!("{} {}: {}", tr("linha"), f.line + 1, f.reason);
-        let galley = ui.painter().layout_no_wrap(texto, egui::FontId::proportional(12.), egui::Color32::WHITE);
+        let galley = ui.painter().layout_no_wrap(texto, egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), egui::Color32::WHITE);
         let caixa = egui::Rect::from_min_size(meio + egui::vec2(8., -8.), galley.size()).expand2(egui::vec2(4., 2.));
         ui.painter().rect_filled(caixa, 3., cor);
         ui.painter().galley(caixa.min + egui::vec2(4., 2.), galley, egui::Color32::WHITE);

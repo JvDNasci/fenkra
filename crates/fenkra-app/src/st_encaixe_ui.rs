@@ -202,7 +202,7 @@ pub fn cartao(ui: &mut egui::Ui, app: &App, c: &Canto) {
 }
 
 fn rotulo(ui: &egui::Ui, pos: egui::Pos2, texto: &str) {
-    let fonte = egui::FontId::proportional(12.);
+    let fonte = egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.));
     let g = ui.painter().layout_no_wrap(texto.to_string(), fonte, ui.visuals().text_color());
     let r = egui::Rect::from_min_size(pos, g.size()).expand(4.);
     ui.painter().rect_filled(r, 3., ui.visuals().extreme_bg_color.gamma_multiply(0.92));

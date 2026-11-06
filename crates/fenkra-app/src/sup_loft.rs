@@ -185,7 +185,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: I
             let cor = if hr.hovered() { forte } else { crate::theme::st_ok() };
             pintor.circle_filled(n, 10., fundo);
             pintor.circle_stroke(n, 10., Stroke::new(2., cor));
-            pintor.text(n, egui::Align2::CENTER_CENTER, format!("{}", i + 1), egui::FontId::proportional(12.), cor);
+            pintor.text(n, egui::Align2::CENTER_CENTER, format!("{}", i + 1), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), cor);
             if hr.on_hover_text(tr("Seção na ordem do comando. Clique para inverter o sentido dela.")).on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
                 inverter = Some(i);
             }
@@ -224,7 +224,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: I
         // etiqueta de continuidade no meio da ponte
         if let (Some(c), [a, b, ..]) = (continuidade(doc, id), n.tensoes.as_slice()) {
             if let Some(q) = cam.project(rect, (v3(a.0) + v3(b.0)) / 2.) {
-                let t = pintor.layout_no_wrap(tr(nome_da_continuidade(c)).to_string(), egui::FontId::proportional(12.), destaque);
+                let t = pintor.layout_no_wrap(tr(nome_da_continuidade(c)).to_string(), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), destaque);
                 let caixa = Rect::from_center_size(q, t.size() + Vec2::new(12., 6.));
                 let hr = ui.interact(caixa, egui::Id::unique(("cont_3d", id.0)), egui::Sense::click());
                 pintor.rect_filled(caixa, 4., fundo);

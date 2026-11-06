@@ -859,7 +859,7 @@ fn desenhar_alcance(app: &App, ui: &egui::Ui, rect: Rect, cam: &Camera, g: &Gaio
     }
     p.add(egui::Shape::mesh(m));
     p.circle_stroke(s, raio, Stroke::new(1.5, cor));
-    p.text(s + egui::vec2(0., -raio - 6.), egui::Align2::CENTER_BOTTOM, format!("{} {} mm", tr("Raio"), fmt(inf.raio)), egui::FontId::proportional(11.), ui.visuals().text_color());
+    p.text(s + egui::vec2(0., -raio - 6.), egui::Align2::CENTER_BOTTOM, format!("{} {} mm", tr("Raio"), fmt(inf.raio)), egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), ui.visuals().text_color());
     for (n, w) in base.pesos_influencia(&nos, &inf) {
         let Some(q) = g.pos(n).and_then(|q| cam.project(rect, v3(q))) else { continue };
         p.circle_filled(q, 2. + 3. * w as f32, crate::theme::st_warn().gamma_multiply(0.35 + 0.65 * w as f32));
@@ -868,7 +868,7 @@ fn desenhar_alcance(app: &App, ui: &egui::Ui, rect: Rect, cam: &Camera, g: &Gaio
 
 fn pilula(ui: &mut egui::Ui, rect: Rect, at: Pos2, txt: &str, cor: Color32, k: usize, dica: &str) -> bool {
     let v = ui.visuals().clone();
-    let g = ui.painter().layout_no_wrap(txt.to_string(), egui::FontId::proportional(11.), v.text_color());
+    let g = ui.painter().layout_no_wrap(txt.to_string(), egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), v.text_color());
     let caixa = Rect::from_center_size(at, g.size() + egui::vec2(8., 4.));
     let r = ui.interact(caixa, egui::Id::unique(("forma_rotulo", k)), egui::Sense::click()).on_hover_text(tr(dica));
     let p = ui.painter_at(rect);
@@ -967,7 +967,7 @@ fn disco_de_tangencia(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera
             }
         }
     }
-    pinta.text(ponta + egui::vec2(10., -6.), egui::Align2::LEFT_BOTTOM, format!("{} {}", tr("Tensão"), fmt(tensao)), egui::FontId::proportional(11.), ui.visuals().text_color());
+    pinta.text(ponta + egui::vec2(10., -6.), egui::Align2::LEFT_BOTTOM, format!("{} {}", tr("Tensão"), fmt(tensao)), egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), ui.visuals().text_color());
 }
 
 fn chip(ui: &mut egui::Ui, ligado: bool, icone: Option<&str>, texto: &str, dica: &str) -> bool {
@@ -1253,13 +1253,13 @@ fn criar(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
         let origem = ui.input(|i| i.pointer.press_origin()).and_then(|m| no_plano(cam, rect, m, &c.plano));
         c.inicio = origem.or(ponto);
     }
-    pinta.text(rect.center_top() + egui::vec2(0., 34.), egui::Align2::CENTER_TOP, tr("Arraste no plano para dar o tamanho. Esc desiste."), egui::FontId::proportional(13.), texto);
+    pinta.text(rect.center_top() + egui::vec2(0., 34.), egui::Align2::CENTER_TOP, tr("Arraste no plano para dar o tamanho. Esc desiste."), egui::FontId::proportional(crate::acessibilidade::fonte_3d(13.)), texto);
     if let (Some(a), Some(b)) = (c.inicio, ponto) {
         let ((u0, v0), (u1, v1)) = (coord(&c.plano, a), coord(&c.plano, b));
         let cantos: Vec<Pos2> = [(u0, v0), (u1, v0), (u1, v1), (u0, v1)].iter().filter_map(|(u, v)| cam.project(rect, v3(no_quadro(&c.plano, *u, *v, 0.)))).collect();
         if cantos.len() == 4 {
             pinta.add(egui::Shape::closed_line(cantos.clone(), Stroke::new(2., cor)));
-            pinta.text(cantos[2] + egui::vec2(8., 0.), egui::Align2::LEFT_CENTER, format!("{} × {} mm", fmt((u1 - u0).abs()), fmt((v1 - v0).abs())), egui::FontId::proportional(12.), texto);
+            pinta.text(cantos[2] + egui::vec2(8., 0.), egui::Align2::LEFT_CENTER, format!("{} × {} mm", fmt((u1 - u0).abs()), fmt((v1 - v0).abs())), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), texto);
         }
     }
     let solto = r.drag_stopped_by(egui::PointerButton::Primary) || r.clicked_by(egui::PointerButton::Primary);

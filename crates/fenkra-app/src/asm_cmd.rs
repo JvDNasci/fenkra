@@ -904,7 +904,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::
         }
     }
     if let (Some(a), true) = (alvo, previa.is_some_and(|p| p.falhou())) {
-        let t = painter.layout_no_wrap(tr("Sem solução").to_string(), egui::FontId::proportional(12.), crate::theme::st_err());
+        let t = painter.layout_no_wrap(tr("Sem solução").to_string(), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), crate::theme::st_err());
         painter.galley(a + egui::vec2(10., 10.), t, crate::theme::st_err());
     }
     if let Some(p) = previa.filter(|p| p.falhou()) {
@@ -923,7 +923,7 @@ fn conflito_no_modelo(painter: &egui::Painter, rect: egui::Rect, cam: &crate::re
         painter.line_segment([pa, pb], egui::Stroke::new(if quente { 3.4 } else { 2. }, erro));
         painter.circle_filled(pa, 4., erro);
         painter.circle_filled(pb, 4., erro);
-        let g = painter.layout_no_wrap(a.name_of(s.id), egui::FontId::proportional(12.), erro);
+        let g = painter.layout_no_wrap(a.name_of(s.id), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), erro);
         painter.galley(pa + (pb - pa) / 2. + egui::vec2(8., -16.), g, erro);
     }
 }

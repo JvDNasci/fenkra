@@ -31,6 +31,7 @@ pub mod pmi_leader;
 pub mod pmi_infer;
 pub mod pmi_snap;
 pub mod projecao;
+pub mod vinculo;
 pub mod qualidade;
 pub mod regras;
 pub mod sketch;

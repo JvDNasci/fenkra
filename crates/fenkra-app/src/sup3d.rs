@@ -549,7 +549,7 @@ fn pintar_seta(p: &egui::Painter, s: Pos2, d: Vec2, comprimento: f32, cor: Color
 
 /// Etiqueta depois da ponta da seta, sempre para o lado de fora: nunca em cima da própria seta.
 fn etiqueta(p: &egui::Painter, ui: &egui::Ui, ponta: Pos2, d: Vec2, texto: &str, cor: Color32) {
-    let g = p.layout_no_wrap(texto.to_string(), egui::FontId::proportional(12.), cor);
+    let g = p.layout_no_wrap(texto.to_string(), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), cor);
     let tam = g.size() + egui::vec2(8., 4.);
     let centro = ponta + d * 14. + egui::vec2(d.x.signum() * tam.x / 2., d.y * tam.y / 2.);
     let caixa = Rect::from_center_size(centro, tam);
@@ -637,7 +637,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: I
         }
         pintor.circle_stroke(q, 10., Stroke::new(2., cor));
         let texto = if esta { ui.visuals().extreme_bg_color } else { cor };
-        pintor.text(q, egui::Align2::CENTER_CENTER, format!("{}", k + 1), egui::FontId::proportional(12.), texto);
+        pintor.text(q, egui::Align2::CENTER_CENTER, format!("{}", k + 1), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), texto);
         if hr.on_hover_text(tr("Clique para ficar com esta solução.")).on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
             escolha = Some((*k, *p));
         }
@@ -646,7 +646,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: I
     for (i, g) in regioes(r, id).iter().enumerate() {
         let Some(q) = cam.project(rect, v3(g.ponto)) else { continue };
         let (nome, cor) = if g.fica { ("Fica", destaque) } else { ("Sai", crate::theme::papel_retirada()) };
-        let t = pintor.layout_no_wrap(tr(nome).to_string(), egui::FontId::proportional(12.), cor);
+        let t = pintor.layout_no_wrap(tr(nome).to_string(), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), cor);
         let caixa = Rect::from_center_size(q, t.size() + egui::vec2(12., 6.));
         let hr = ui.interact(caixa, egui::Id::unique(("regiao_3d", id.0, i)), egui::Sense::click());
         pintor.rect_filled(caixa, 4., ui.visuals().extreme_bg_color);

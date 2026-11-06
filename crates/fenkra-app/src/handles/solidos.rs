@@ -372,7 +372,7 @@ pub(super) fn seta_ate_face(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &
     painter.line_segment([sb, st], Stroke::new(2.5, cor));
     painter.circle_stroke(st, PEGA / 2., Stroke::new(2., cor));
     painter.circle_filled(sb, 3.5, cor);
-    let g = painter.layout_no_wrap(rotulo, egui::FontId::proportional(12.), Color32::WHITE);
+    let g = painter.layout_no_wrap(rotulo, egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), Color32::WHITE);
     let caixa = Rect::from_min_size(st + egui::vec2(18., -10.), g.size() + egui::vec2(10., 6.));
     painter.rect_filled(caixa, 4., Color32::from_rgba_unmultiplied(20, 60, 110, 220));
     painter.galley(caixa.min + egui::vec2(5., 3.), g, Color32::WHITE);

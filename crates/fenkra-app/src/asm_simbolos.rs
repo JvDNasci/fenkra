@@ -72,7 +72,7 @@ fn menu_tipos(st: &mut AsmState, ui: &mut egui::Ui, rect: Rect) {
 /// Pílula de valor, clicável.
 fn rotulo(ui: &mut egui::Ui, rect: Rect, centro: Pos2, txt: &str, cor: Color32, chave: (&str, u64)) -> egui::Response {
     let v = ui.visuals().clone();
-    let g = ui.painter().layout_no_wrap(txt.to_string(), egui::FontId::proportional(12.), v.text_color());
+    let g = ui.painter().layout_no_wrap(txt.to_string(), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), v.text_color());
     let caixa = Rect::from_center_size(centro, g.size() + egui::vec2(10., 5.));
     let p = ui.painter_at(rect);
     p.rect_filled(caixa, 4., v.window_fill.gamma_multiply(0.92));
@@ -327,7 +327,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
         let quente = r.hovered() || destaque(i);
         p.circle_filled(*c, if quente { 11. } else { 9. }, v.window_fill.gamma_multiply(0.9));
         p.circle_stroke(*c, if quente { 11. } else { 9. }, Stroke::new(if quente { 2. } else { 1.2 }, cor));
-        p.text(*c, egui::Align2::CENTER_CENTER, s.icone, egui::FontId::proportional(12.), cor);
+        p.text(*c, egui::Align2::CENTER_CENTER, s.icone, egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), cor);
         if r.hovered() {
             novo_hover = Some(s.id);
         }
@@ -342,7 +342,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     }
     let p = ui.painter_at(rect);
     for (i, n) in &arr.grupos {
-        p.text(vis[*i].1 + egui::vec2(10., 9.), egui::Align2::LEFT_TOP, format!("+{n}"), egui::FontId::proportional(10.), v.weak_text_color());
+        p.text(vis[*i].1 + egui::vec2(10., 9.), egui::Align2::LEFT_TOP, format!("+{n}"), egui::FontId::proportional(crate::acessibilidade::fonte_3d(10.)), v.weak_text_color());
     }
     let alvo = novo_hover.or(st.simbolos.arrasto.map(|a| a.0));
     st.simbolos.hover = alvo;

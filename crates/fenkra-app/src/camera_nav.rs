@@ -71,6 +71,31 @@ mod tests {
         }
     }
 
+    /// Módulos que pintam rótulos sobre a vista 3D com tamanho escrito à mão.
+    const ROTULOS_3D: &[(&str, &str)] = &[
+        ("handles", include_str!("handles.rs")),
+        ("gizmo", include_str!("gizmo.rs")),
+        ("previa", include_str!("previa.rs")),
+        ("feat_ui", include_str!("feat_ui.rs")),
+        ("sup3d", include_str!("sup3d.rs")),
+        ("pmi_handles", include_str!("pmi_handles.rs")),
+        ("asm_manip", include_str!("asm_manip.rs")),
+        ("asm_simbolos", include_str!("asm_simbolos.rs")),
+        ("chapa_manip_ui", include_str!("chapa_manip_ui.rs")),
+        ("forma_ui", include_str!("forma_ui.rs")),
+        ("sketch_snap", include_str!("sketch_snap.rs")),
+    ];
+
+    #[test]
+    fn rotulo_3d_acompanha_a_escala_da_fonte() {
+        for (nome, fonte) in ROTULOS_3D {
+            for l in fonte.lines().filter(|l| !l.trim_start().starts_with("//")) {
+                let cru = l.match_indices("FontId::proportional(").any(|(i, m)| l[i + m.len()..].starts_with(|c: char| c.is_ascii_digit()));
+                assert!(!cru, "{nome}: rótulo fora de `fonte_3d`: {}", l.trim());
+            }
+        }
+    }
+
     #[test]
     fn peca_de_5_mm_e_de_5_m_dao_o_mesmo_salto_na_tela() {
         // a peça ocupa ~400 px na tela: 80 px/mm para 5 mm e 0,08 px/mm para 5 m

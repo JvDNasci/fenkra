@@ -38,6 +38,8 @@ pub struct EvalSketch {
     pub link_e: Vec<(Id, [f64; 2], f64, f64, f64)>,
     /// geometria externa que perdeu a origem: fica onde estava, à espera dela
     pub link_quebrados: Vec<Id>,
+    /// geometria externa que mudou de estrutura neste cálculo
+    pub link_ops: Vec<fenkra_core::vinculo::OpVinculo>,
     pub warnings: Vec<String>,
     pub report: SolveReport,
 }

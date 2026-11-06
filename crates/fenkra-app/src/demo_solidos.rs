@@ -144,6 +144,15 @@ fn furo_escareado(d: &mut Document, depth: Extent) {
 }
 
 pub fn demo(nome: &str, doc: &mut Document) -> Option<DemoPrevia> {
+    // B17: `passo_<lado em mm>`, caixa desse tamanho com a extrusão aberta (com `FENKRA_DEMO_PASSO`)
+    if let Some(lado) = nome.strip_prefix("passo_").and_then(|t| t.parse::<f64>().ok()) {
+        *doc = Document::new("Passo");
+        let sk = sketch(doc, PlaneRef::Origin(OriginPlane::XY), &|data, al| {
+            data.add_rect(&mut &mut *al, [-lado / 2., -lado / 2.], [lado / 2., lado / 2.], false);
+        });
+        // baixa, para a seta caber na vista de qualquer tamanho
+        return Some(DemoPrevia::Comando(extrude(sk, BoolOp::Add, &(lado / 5.).to_string())));
+    }
     Some(match nome {
         // B91: padrão linear com a terceira cópia pulada (ponto com X) e as setas de espaçamento
         "padrao_pontos" => {
