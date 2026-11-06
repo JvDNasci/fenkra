@@ -8,6 +8,7 @@
 //! Os contornos viram faixas horizontais pela regra par-ímpar. Isso resolve contornos côncavos e furos
 //! de uma vez: furo é a região com número par de bordas à esquerda, igual ao que o perfil faz no sólido.
 
+use crate::sketch_ui::Ent;
 use eframe::egui::{self, epaint, Color32, Pos2};
 use fenkra_core::sketch::{LinkShape, Seg};
 use fenkra_core::{Id, SketchData};
@@ -148,6 +149,82 @@ fn faixas_de(polis: &[Vec<P>]) -> Vec<[P; 4]> {
     v
 }
 
+/// O ponto está dentro do polígono? Par-ímpar, a mesma regra que pinta as faixas.
+fn dentro(q: &[P], p: P) -> bool {
+    let mut d = false;
+    for (i, a) in q.iter().enumerate() {
+        let b = q[(i + 1) % q.len()];
+        if (a[1] > p[1]) != (b[1] > p[1]) && p[0] < a[0] + (b[0] - a[0]) * (p[1] - a[1]) / (b[1] - a[1]) {
+            d = !d;
+        }
+    }
+    d
+}
+
+fn area_de(q: &[P]) -> f64 {
+    let dobro: f64 = q.iter().enumerate().map(|(i, a)| a[0] * q[(i + 1) % q.len()][1] - q[(i + 1) % q.len()][0] * a[1]).sum();
+    dobro.abs() / 2.
+}
+
+/// Distância do ponto à borda do polígono.
+fn ate_a_borda(q: &[P], p: P) -> f64 {
+    let lado = |a: P, b: P| {
+        let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+        let t = (((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy).max(1e-30)).clamp(0., 1.);
+        (a[0] + t * dx - p[0]).hypot(a[1] + t * dy - p[1])
+    };
+    q.iter().enumerate().map(|(i, a)| lado(*a, q[(i + 1) % q.len()])).fold(f64::MAX, f64::min)
+}
+
+/// `b` entra em `a`? Basta um vértice bem dentro: laço que só encosta num canto fica de fora, e laço
+/// que cruza a borda de `a` conta, porque também limita a região.
+fn entra(a: &[P], b: &[P]) -> bool {
+    b.iter().any(|p| dentro(a, *p) && ate_a_borda(a, *p) > 1e-7)
+}
+
+/// Laços que limitam a região sob `p`, pelos índices em `polis`. Fora da sombra não há nenhum.
+///
+/// A sombra é par-ímpar: `p` está nela quando um número ímpar de laços o cerca. O menor deles é a borda
+/// de fora da região, e os laços logo abaixo dele são os furos. O que está dentro de um furo é outra
+/// região: três quadrados encaixados dão duas regiões, a de fora com os dois maiores e a do meio só
+/// com o menor.
+fn regiao_de(polis: &[Vec<P>], p: P) -> Vec<usize> {
+    let cercam: Vec<usize> = (0..polis.len()).filter(|i| dentro(&polis[*i], p)).collect();
+    if cercam.len() % 2 == 0 {
+        return vec![];
+    }
+    let Some(borda) = cercam.iter().copied().min_by(|a, b| area_de(&polis[*a]).total_cmp(&area_de(&polis[*b]))) else { return vec![] };
+    let abaixo: Vec<usize> = (0..polis.len()).filter(|i| !cercam.contains(i) && entra(&polis[borda], &polis[*i])).collect();
+    let furo = |i: &usize| !abaixo.iter().any(|j| j != i && area_de(&polis[*j]) > area_de(&polis[*i]) && entra(&polis[*j], &polis[*i]));
+    let mut v = vec![borda];
+    v.extend(abaixo.iter().copied().filter(|i| furo(i)));
+    v
+}
+
+/// Curvas que formam a região sombreada sob `uv`, com os laços internos. Sai dos mesmos laços que
+/// `faixas` pinta, então só existe região onde existe sombra.
+pub fn regiao_em(sk: &SketchData, uv: P) -> Vec<Id> {
+    let lacos: Vec<(Vec<P>, Vec<Id>)> = sk.loops_com_curvas().into_iter().map(|(l, c)| (poligono(&l), c)).filter(|l| l.0.len() >= 3).collect();
+    let polis: Vec<Vec<P>> = lacos.iter().map(|l| l.0.clone()).collect();
+    regiao_de(&polis, uv).into_iter().flat_map(|i| lacos[i].1.iter().copied()).collect()
+}
+
+/// Clique fora de qualquer curva: a região sob o cursor troca a seleção, Shift soma e Ctrl tira. Sem
+/// região, o clique limpo esvazia a seleção e o com tecla não muda nada.
+pub fn clique_na_regiao(sel: &mut Vec<Ent>, regiao: &[Id], shift: bool, ctrl: bool) {
+    if ctrl {
+        sel.retain(|e| !matches!(e, Ent::Cv(c) if regiao.contains(c)));
+    } else if shift {
+        for e in regiao.iter().copied().map(Ent::Cv) {
+            if !sel.contains(&e) {
+                sel.push(e);
+            }
+        }
+    } else {
+        *sel = regiao.iter().copied().map(Ent::Cv).collect();
+    }
+}
+
 /// Pinta as faixas num desenho só, sem emendas translúcidas sobrepostas.
 pub fn desenha(painter: &egui::Painter, tela: &dyn Fn(P) -> Pos2, f: &[[P; 4]], cor: Color32) {
     let mut m = epaint::Mesh::default();
@@ -271,6 +348,106 @@ mod tests {
         let _ = ocultos(&s, &e);
         let _ = faixas(&s);
         assert_eq!(serde_json::to_string(&s).unwrap(), antes);
+    }
+
+    /// Quadrado de lado 2m centrado em (c, c), como linhas ligadas.
+    fn quadrado(s: &mut SketchData, al: &mut impl FnMut() -> Id, c: f64, m: f64) -> Vec<Id> {
+        s.add_rect(al, [c - m, c - m], [c + m, c + m], false).1.to_vec()
+    }
+
+    fn mesmas(mut a: Vec<Id>, b: &[&[Id]]) -> bool {
+        let mut e: Vec<Id> = b.concat();
+        a.sort();
+        e.sort();
+        a == e
+    }
+
+    #[test]
+    fn quadrado_dentro_de_quadrado_seleciona_os_dois() {
+        let mut al = ids();
+        let mut s = SketchData::default();
+        let fora = quadrado(&mut s, &mut al, 0., 40.);
+        let dentro = quadrado(&mut s, &mut al, 0., 15.);
+        assert!(mesmas(regiao_em(&s, [30., 0.]), &[&fora, &dentro]));
+        assert!(regiao_em(&s, [0., 0.]).is_empty(), "o furo não tem sombra");
+        assert!(regiao_em(&s, [90., 0.]).is_empty(), "fora do perfil não há região");
+    }
+
+    #[test]
+    fn encaixe_triplo_separa_as_regioes() {
+        let mut al = ids();
+        let mut s = SketchData::default();
+        let a = quadrado(&mut s, &mut al, 0., 40.);
+        let b = quadrado(&mut s, &mut al, 0., 25.);
+        let c = quadrado(&mut s, &mut al, 0., 10.);
+        assert!(mesmas(regiao_em(&s, [30., 0.]), &[&a, &b]), "o menor pertence à região de dentro");
+        assert!(regiao_em(&s, [18., 0.]).is_empty(), "entre o segundo e o terceiro é furo");
+        assert!(mesmas(regiao_em(&s, [0., 0.]), &[&c]));
+    }
+
+    #[test]
+    fn dois_furos_entram_e_vizinho_fica_de_fora() {
+        let mut al = ids();
+        let mut s = SketchData::default();
+        let fora = quadrado(&mut s, &mut al, 0., 40.);
+        let furo = quadrado(&mut s, &mut al, -20., 8.);
+        let c = s.add_point(&mut al, 20., 20.);
+        let circ = s.add_curve(&mut al, Curve::Circle { c, r: 8. }, false);
+        let vizinho = quadrado(&mut s, &mut al, 100., 10.);
+        assert!(mesmas(regiao_em(&s, [0., 0.]), &[&fora, &furo, &[circ]]));
+        assert!(mesmas(regiao_em(&s, [100., 100.]), &[&vizinho]));
+    }
+
+    #[test]
+    fn laco_que_so_encosta_no_canto_nao_e_furo() {
+        let polis = vec![vec![[0., 0.], [10., 0.], [10., 10.], [0., 10.]], vec![[10., 10.], [20., 10.], [20., 20.], [10., 20.]]];
+        assert_eq!(regiao_de(&polis, [5., 5.]), vec![0]);
+    }
+
+    #[test]
+    fn construcao_e_cadeia_aberta_nao_fazem_regiao() {
+        let mut al = ids();
+        let mut s = SketchData::default();
+        s.add_rect(&mut al, [0., 0.], [10., 10.], true);
+        let p: Vec<Id> = [[20., 0.], [30., 0.], [30., 10.]].iter().map(|q| s.add_point(&mut al, q[0], q[1])).collect();
+        s.add_curve(&mut al, Curve::Line { a: p[0], b: p[1] }, false);
+        s.add_curve(&mut al, Curve::Line { a: p[1], b: p[2] }, false);
+        assert!(regiao_em(&s, [5., 5.]).is_empty());
+        assert!(regiao_em(&s, [28., 2.]).is_empty());
+    }
+
+    #[test]
+    fn regiao_acompanha_o_arco() {
+        let mut al = ids();
+        let mut s = SketchData::default();
+        // meio disco: arco de cima fechado por uma linha
+        let (c, a, b) = (s.add_point(&mut al, 0., 0.), s.add_point(&mut al, 10., 0.), s.add_point(&mut al, -10., 0.));
+        let arc = s.add_curve(&mut al, Curve::Arc { c, s: a, e: b }, false);
+        let lin = s.add_curve(&mut al, Curve::Line { a: b, b: a }, false);
+        assert!(mesmas(regiao_em(&s, [0., 5.]), &[&[arc, lin]]));
+        assert!(regiao_em(&s, [0., -5.]).is_empty(), "abaixo da linha não há sombra");
+        assert!(regiao_em(&s, [9., 9.]).is_empty(), "no canto, fora do arco");
+    }
+
+    #[test]
+    fn clique_troca_shift_soma_e_ctrl_tira() {
+        let (a, b, c) = (Id(1), Id(2), Id(3));
+        let mut sel = vec![Ent::Cv(c), Ent::Pt(Id(9))];
+        clique_na_regiao(&mut sel, &[a, b], false, false);
+        assert_eq!(sel, vec![Ent::Cv(a), Ent::Cv(b)], "clique simples troca a seleção");
+
+        clique_na_regiao(&mut sel, &[b, c], true, false);
+        assert_eq!(sel, vec![Ent::Cv(a), Ent::Cv(b), Ent::Cv(c)], "Shift não repete o que já está");
+
+        sel.push(Ent::Pt(Id(9)));
+        clique_na_regiao(&mut sel, &[a, b], false, true);
+        assert_eq!(sel, vec![Ent::Cv(c), Ent::Pt(Id(9))], "Ctrl tira só as curvas da região");
+
+        clique_na_regiao(&mut sel, &[], true, false);
+        clique_na_regiao(&mut sel, &[], false, true);
+        assert_eq!(sel.len(), 2, "com tecla, clicar fora da sombra não perde a seleção");
+        clique_na_regiao(&mut sel, &[], false, false);
+        assert!(sel.is_empty(), "clique limpo fora da sombra esvazia");
     }
 
     #[test]

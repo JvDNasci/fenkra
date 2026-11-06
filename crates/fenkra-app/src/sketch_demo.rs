@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Desenvolvimento: `FENKRA_DEMO_SKETCH=<caso>` abre um sketch pronto, com o estado que só o mouse
 //! produziria, para conferir por captura. Casos: `retangulo` e `canto` (painel do comando), `setas`,
-//! `pegas`, `barra`, `conflito` (fantasma das restrições), `sombra`, `oculto`, `fatia`, `poligono`,
+//! `pegas`, `barra`, `conflito` (fantasma das restrições), `sombra`, `regiao`, `oculto`, `fatia`, `poligono`,
 //! `chanfro` e `copia`. Relimitar: `aparar`, `estender`, `aparar_shift`. Seleção: `janela`, `cruzada`,
 //! `cadeia`, `cadeia_offset`. Snaps: `snap`, `arraste`, `arraste_ctrl`, `inferencia`, `perpendicular`.
 //! Cotas: `cota_raio`, `cota_diametro`, `cota_angulo`, `cota_suplemento`. Vínculos: `vinculo_tipo`,
@@ -116,6 +116,14 @@ pub fn preparar(doc: &mut Document) -> Option<Id> {
                 s.add_constraint(&mut al, Kind::Vertical(l[1]));
             }
         }
+        "regiao" => {
+            // quadrado dentro do retângulo, vizinho ao lado e cadeia aberta que não faz região
+            s.add_rect(&mut al, [-15., -10.], [15., 10.], false);
+            s.add_rect(&mut al, [60., -15.], [90., 15.], false);
+            let q: Vec<Id> = [[-40., 40.], [0., 55.], [40., 40.]].iter().map(|u| s.add_point(&mut al, u[0], u[1])).collect();
+            s.add_curve(&mut al, Curve::Line { a: q[0], b: q[1] }, false);
+            s.add_curve(&mut al, Curve::Line { a: q[1], b: q[2] }, false);
+        }
         "sombra" | "oculto" | "fatia" => {
             let c = s.add_point(&mut al, 0., 0.);
             s.add_curve(&mut al, Curve::Circle { c, r: 12. }, false);
@@ -150,6 +158,7 @@ pub fn preparar(doc: &mut Document) -> Option<Id> {
 /// Põe o editor no estado do caso.
 pub fn aplicar(e: &mut SketchEdit, sk: &SketchData) {
     let Ok(caso) = std::env::var("FENKRA_DEMO_SKETCH") else { return };
+    e.gesto = crate::sketch_gesto::Gesto::do_ambiente();
     let linhas: Vec<Id> = sk.curves.iter().filter(|c| matches!(c.geom, Curve::Line { .. })).map(|c| c.id).collect();
     match caso.as_str() {
         "retangulo" => {

@@ -46,7 +46,7 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Pare o cursor no trecho: ele fica vermelho tracejado e os cortes aparecem. Clique para remover. Vale para linha, arco, círculo e spline. Shift estende; clique no vazio, botão direito ou Esc encerra.", "Rest the cursor on a segment: it turns dashed red and the cut points appear. Click to remove it. Works on lines, arcs, circles and splines. Shift extends; click empty space, right-click or Esc finishes."),
     ("Pare o cursor perto da ponta de uma linha ou arco: a prévia vai até a próxima curva no caminho. Clique para estender. Shift apara; clique no vazio, botão direito ou Esc encerra.", "Rest the cursor near the end of a line or arc: the preview runs to the next curve in its path. Click to extend. Shift trims; click empty space, right-click or Esc finishes."),
     // seleção e cadeia (B19)
-    ("clique ou arraste para selecionar; duplo clique pega a cadeia; Shift soma", "click or drag to select; double-click takes the chain; Shift adds"),
+    ("clique ou arraste para selecionar; clique na sombra pega o perfil; duplo clique pega a cadeia; Shift soma, Ctrl tira", "click or drag to select; click the shading to take the profile; double-click takes the chain; Shift adds, Ctrl removes"),
     ("clique na curva; duplo clique pega a cadeia", "click the curve; double-click takes the chain"),
     ("clique no canto, ou numa linha perto dele; duplo clique faz a cadeia", "click the corner, or a line near it; double-click does the whole chain"),
     ("a seleção não forma uma cadeia", "the selection does not form a chain"),
@@ -114,7 +114,7 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("O cursor procura pontos, curvas e alinhamentos antes da grade.", "The cursor looks for points, curves and alignments before the grid."),
     // arraste direto (B272)
     ("a cota usa expressão", "the dimension uses an expression"),
-    ("Clique para selecionar (Shift soma). Arraste pontos, linhas, arcos, splines ou a borda de círculos: o solver mantém as restrições. Passe o mouse para ver as setas do que ainda pode se mover. Delete apaga a seleção.", "Click to select (Shift adds). Drag points, lines, arcs, splines or the edge of circles: the solver keeps the constraints. Hover to see arrows showing what can still move. Delete removes the selection."),
+    ("Clique para selecionar (Shift soma). Clique na sombra de um perfil fechado para pegar todas as curvas da região, com os laços internos; Shift soma, Ctrl tira. Arraste pontos, linhas, arcos, splines ou a borda de círculos: o solver mantém as restrições. Passe o mouse para ver as setas do que ainda pode se mover. Delete apaga a seleção.", "Click to select (Shift adds). Click the shading of a closed profile to take every curve of the region, inner loops included; Shift adds, Ctrl removes. Drag points, lines, arcs, splines or the edge of circles: the solver keeps the constraints. Hover to see arrows showing what can still move. Delete removes the selection."),
     // barra de restrições (B273)
     ("conflita com as restrições do sketch", "conflicts with the sketch constraints"),
     ("sketch grande: a prévia só destaca", "large sketch: the preview only highlights"),

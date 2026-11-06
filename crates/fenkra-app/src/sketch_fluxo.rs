@@ -55,7 +55,7 @@ pub fn cota(t: Tool) -> bool {
 /// Texto de cada passo da ferramenta, na ordem (sem traduzir: passe por `tr`).
 pub fn passos(t: Tool) -> Vec<&'static str> {
     match t {
-        Tool::Select => vec!["clique ou arraste para selecionar; duplo clique pega a cadeia; Shift soma"],
+        Tool::Select => vec!["clique ou arraste para selecionar; clique na sombra pega o perfil; duplo clique pega a cadeia; Shift soma, Ctrl tira"],
         Tool::Line => vec!["clique no ponto inicial", "clique no próximo ponto; no 1º ponto fecha o perfil"],
         Tool::Rect | Tool::RectCenter | Tool::Circle | Tool::Circle3 | Tool::Arc3 | Tool::ArcCenter | Tool::Slot | Tool::Polygon | Tool::Point => {
             (0..t.clicks_needed().max(1)).map(|n| shape_hint(t, n)).collect()

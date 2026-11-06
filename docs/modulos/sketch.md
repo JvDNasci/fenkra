@@ -13,7 +13,7 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 - **Painel do comando** (todas as ferramentas) — Estado do passo, modo, parâmetros e avançado; Retângulo, Círculo, Arco e Canto são comandos com modo, a tecla M percorre e os campos são os da viewport (`sketch_painel.rs`).
 - **Arraste direto** (Selecionar) — Arco e spline pelo corpo, mantendo restrições; setas de grau de liberdade vindas do espaço nulo do Jacobiano; pega de valor em filete, offset e offset de cadeia, que leva a cadeia inteira (`sketch_arraste.rs`).
 - **Barra de restrições** (Selecionar) — Abre ao selecionar e fica aberta; fantasma resolvido, vermelho se conflitar, com orçamento de tempo (`sketch_barra.rs`).
-- **Perfil sombreado e o que mostrar** (painel, Mostrar) — Contorno fechado sombreado por `loops`; caixas de perfil, pontos, cotas, restrições, construção e projetadas; fatiar corpos no plano só na tela (`sketch_sombra.rs`).
+- **Perfil sombreado e o que mostrar** (painel, Mostrar) — Contorno fechado sombreado por `loops`; caixas de perfil, pontos, cotas, restrições, construção e projetadas; fatiar corpos no plano só na tela (`sketch_sombra.rs`). Clicar na sombra seleciona as curvas da região com os laços internos; Shift soma, Ctrl tira. A sombra não entra nos modos de análise.
 - **Offset de curvas** (Offset) — Tool::Offset.
 - **Espelhar e simetria** (Espelhar) — Tool::Mirror.
 - **Filete e chanfro de sketch** (Filete, chanfro) — Tool::Fillet, Chamfer. Cantos seguidos de mesmo valor ficam iguais ao primeiro, com uma cota só; chanfro com distâncias iguais, duas distâncias ou distância e ângulo; manter canto deixa um ponto com as cotas do canto antigo (`sketch_canto.rs`). `BM-SKT-06`

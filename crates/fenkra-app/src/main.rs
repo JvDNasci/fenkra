@@ -160,6 +160,7 @@ mod forma_vinculo_ui;
 mod forma_ui;
 mod sketch_fluxo;
 mod sketch_cadeia;
+mod sketch_gesto;
 mod sketch_canto;
 mod sketch_cota;
 mod sketch_relimita;

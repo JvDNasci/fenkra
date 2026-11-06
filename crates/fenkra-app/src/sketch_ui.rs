@@ -12,7 +12,7 @@ use glam::Vec3;
 use fenkra_core::sketch::{Curve, Kind, LinkSrc, SolveReport};
 use fenkra_core::{FeatureKind, Id, PlaneRef, SketchData};
 use fenkra_kernel::Frame;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use crate::i18n::tr;
 use crate::sketch_canto::{Canto, ModoChanfro, Pedido};
 use crate::sketch_snap::TipoSnap;
@@ -83,7 +83,7 @@ impl Tool {
     /// (ícone, nome curto, descrição breve, descrição avançada)
     pub fn info(self) -> (&'static str, &'static str, &'static str, &'static str) {
         match self {
-            Tool::Select => ("sk_selecionar", "Selecionar", "Selecionar e arrastar", "Clique para selecionar (Shift soma). Arraste pontos, linhas, arcos, splines ou a borda de círculos: o solver mantém as restrições. Passe o mouse para ver as setas do que ainda pode se mover. Delete apaga a seleção."),
+            Tool::Select => ("sk_selecionar", "Selecionar", "Selecionar e arrastar", "Clique para selecionar (Shift soma). Clique na sombra de um perfil fechado para pegar todas as curvas da região, com os laços internos; Shift soma, Ctrl tira. Arraste pontos, linhas, arcos, splines ou a borda de círculos: o solver mantém as restrições. Passe o mouse para ver as setas do que ainda pode se mover. Delete apaga a seleção."),
             Tool::Line => ("sk_polilinha", "Linha", "Linha / polilinha  (L)", "Cada clique cria um segmento ligado ao anterior. Clique no primeiro ponto para fechar o perfil; Esc ou botão direito termina. Linhas quase horizontais/verticais recebem a restrição automaticamente."),
             Tool::Rect => ("sk_retangulo", "Retângulo", "Retângulo por 2 cantos  (R)", "Clique em dois cantos opostos. Cria 4 linhas com restrições horizontal/vertical; com cotas automáticas, recebe largura e altura."),
             Tool::RectCenter => ("sk_retangulo_centro", "Ret. centro", "Retângulo pelo centro", "Clique no centro e depois num canto. O centro fica preso à diagonal (ponto médio), ótimo para peças simétricas na origem."),
@@ -265,6 +265,8 @@ pub struct SketchEdit {
     pub(crate) demo_ctrl: bool,
     /// `FENKRA_DEMO_SKETCH`: canto de onde a janela de seleção foi puxada
     pub(crate) demo_janela: Option<[f64; 2]>,
+    /// `FENKRA_DEMO_SKETCH_GESTO`: eventos de ponteiro simulados
+    pub(crate) gesto: Option<crate::sketch_gesto::Gesto>,
 }
 
 /// Campo de valor aberto agora: o painel lê daqui o rótulo e a medida atual.
@@ -460,6 +462,7 @@ impl SketchEdit {
             demo_shift: false,
             demo_ctrl: false,
             demo_janela: None,
+            gesto: None,
         }
     }
     /// Plano de corte dos corpos para o renderizador, com o olho em `olho`.
@@ -2106,6 +2109,55 @@ fn norm_ponto(e: Ent, sk: &SketchData) -> Ent {
     }
 }
 
+/// Janela de seleção em curso. Para a direita pega o que está dentro; para a esquerda, também o que
+/// ela toca. Ao soltar, entra na seleção o que a tela mostra.
+#[allow(clippy::too_many_arguments)]
+fn janela_em_curso(edit: &mut SketchEdit, painter: &egui::Painter, resp: &egui::Response, sk: &SketchData, tela: &dyn Fn([f64; 2]) -> Pos2, ocultas: (&HashSet<Id>, &HashSet<Id>), fim: Option<Pos2>, shift: bool) {
+    let (Some(ini), Some(fim)) = (edit.janela, fim) else {
+        if resp.drag_stopped() {
+            edit.janela = None;
+        }
+        return;
+    };
+    let r = Rect::from_two_pos(ini, fim);
+    let cruzada = crate::sketch_cadeia::e_cruzada(ini, fim);
+    painter.rect_filled(r, 0., SEL.gamma_multiply(0.08));
+    let borda: Vec<Pos2> = vec![r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom(), r.left_top()];
+    if cruzada {
+        painter.extend(egui::Shape::dashed_line(&borda, Stroke::new(1., SEL), 6., 4.));
+    } else {
+        painter.add(egui::Shape::line(borda, Stroke::new(1., SEL)));
+    }
+    if resp.drag_stopped() {
+        let achados = crate::sketch_cadeia::na_janela(sk, tela, r, cruzada);
+        if !shift {
+            edit.sel.clear();
+        }
+        for e in achados {
+            let oculto = match e {
+                Ent::Cv(c) => ocultas.0.contains(&c),
+                Ent::Pt(p) => ocultas.1.contains(&p),
+                Ent::Cs(_) => false,
+            };
+            if !oculto && !edit.sel.contains(&e) {
+                edit.sel.push(e);
+            }
+        }
+        edit.janela = None;
+    }
+}
+
+/// Clique que não pegou curva nem ponto. `uv` só vem quando há sombra visível para clicar: a curva que
+/// a tela esconde continua fora da seleção, mesmo fazendo parte do contorno.
+fn clique_fora_das_curvas(edit: &mut SketchEdit, sk: &SketchData, uv: Option<[f64; 2]>, ocultas: &HashSet<Id>, shift: bool, ctrl: bool) {
+    let mut regiao = uv.map(|q| crate::sketch_sombra::regiao_em(sk, q)).unwrap_or_default();
+    regiao.retain(|c| !ocultas.contains(c));
+    if regiao.is_empty() && (shift || ctrl) {
+        return;
+    }
+    crate::sketch_sombra::clique_na_regiao(&mut edit.sel, &regiao, shift, ctrl);
+}
+
 pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Response, cam: Camera) {
     let Some(f) = frame(app) else { return };
     let Some(mut sk) = data(app).cloned() else {
@@ -2356,6 +2408,10 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
     let hover = edit.demo_cursor.map(|q| v.to_screen(q)).or(resp.hover_pos());
     if let Some(q) = edit.demo_janela {
         edit.janela = Some(v.to_screen(q));
+    }
+    if let Some(mut g) = edit.gesto.take() {
+        g.quadro(ui.input(|i| i.time), &|q| v.to_screen(q), &edit.sel);
+        edit.gesto = Some(g);
     }
     let mut cursor_uv = hover.and_then(|p| v.to_uv(p));
 
@@ -2697,37 +2753,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                     _ => {}
                 }
             }
-            // janela para a direita pega o que está dentro; para a esquerda, também o que ela toca
-            if let (Some(ini), Some(fim)) = (edit.janela, hover.or(ui.input(|i| i.pointer.latest_pos()))) {
-                let r = Rect::from_two_pos(ini, fim);
-                let cruzada = crate::sketch_cadeia::e_cruzada(ini, fim);
-                painter.rect_filled(r, 0., SEL.gamma_multiply(0.08));
-                let borda: Vec<Pos2> = vec![r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom(), r.left_top()];
-                if cruzada {
-                    painter.extend(egui::Shape::dashed_line(&borda, Stroke::new(1., SEL), 6., 4.));
-                } else {
-                    painter.add(egui::Shape::line(borda, Stroke::new(1., SEL)));
-                }
-                if resp.drag_stopped() {
-                    let achados = crate::sketch_cadeia::na_janela(&sk, &|q| v.to_screen(q), r, cruzada);
-                    if !shift {
-                        edit.sel.clear();
-                    }
-                    for e in achados {
-                        let oculto = match e {
-                            Ent::Cv(c) => curvas_ocultas.contains(&c),
-                            Ent::Pt(p) => pontos_ocultos.contains(&p),
-                            Ent::Cs(_) => false,
-                        };
-                        if !oculto && !edit.sel.contains(&e) {
-                            edit.sel.push(e);
-                        }
-                    }
-                    edit.janela = None;
-                }
-            } else if resp.drag_stopped() {
-                edit.janela = None;
-            }
+            let fim = hover.or(ui.input(|i| i.pointer.latest_pos()));
+            janela_em_curso(edit, &painter, resp, &sk, &|q| v.to_screen(q), (&curvas_ocultas, &pontos_ocultos), fim, shift);
             if let (Some(Drag { corpo: Some(k), .. }), true, Some(uv)) = (&edit.drag, resp.dragged_by(egui::PointerButton::Primary), cursor_uv) {
                 // sem solução a curva para onde estava: quebrar a restrição seria pior que não seguir
                 let rep = match *k {
@@ -2833,11 +2860,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                             }
                         }
                     }
-                    None => {
-                        if !shift {
-                            edit.sel.clear()
-                        }
-                    }
+                    None => clique_fora_das_curvas(edit, &sk, hover.and_then(|p| v.to_uv(p)).filter(|_| sombra_visivel), &curvas_ocultas, shift, ctrl),
                 }
             }
         }
@@ -3949,6 +3972,168 @@ impl ValueEntry {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Viewport de mentira com a tela igual ao plano do sketch, recebendo os eventos crus do egui como
+    /// a de verdade: mesmo sentido do retângulo, mesma regra de início da janela.
+    struct Vista {
+        ctx: egui::Context,
+        edit: SketchEdit,
+        sk: SketchData,
+        teclas: egui::Modifiers,
+    }
+
+    impl Vista {
+        fn nova(sk: SketchData) -> Self {
+            let mut v = Vista { ctx: egui::Context::default(), edit: SketchEdit::new(Id(1), false), sk, teclas: egui::Modifiers::NONE };
+            v.quadro(vec![]);
+            v
+        }
+
+        fn quadro(&mut self, evs: Vec<egui::Event>) {
+            let tela = Rect::from_min_size(Pos2::ZERO, egui::vec2(1000., 700.));
+            let mut eventos = vec![egui::Event::ModifiersChanged(self.teclas)];
+            eventos.extend(evs);
+            let raw = egui::RawInput { screen_rect: Some(tela), events: eventos, ..Default::default() };
+            let (edit, sk, teclas) = (&mut self.edit, &self.sk, self.teclas);
+            let vazio = HashSet::new();
+            let mut saida = self.ctx.run_ui(raw, |ui| {
+                let resp = ui.allocate_rect(tela, egui::Sense::click_and_drag());
+                if resp.drag_started_by(egui::PointerButton::Primary) {
+                    edit.janela = ui.input(|i| i.pointer.press_origin());
+                }
+                let fim = resp.hover_pos().or(ui.input(|i| i.pointer.latest_pos()));
+                janela_em_curso(edit, ui.painter(), &resp, sk, &|q| Pos2::new(q[0] as f32, q[1] as f32), (&vazio, &vazio), fim, teclas.shift);
+                if resp.clicked_by(egui::PointerButton::Primary) {
+                    let uv = resp.hover_pos().map(|p| [p.x as f64, p.y as f64]);
+                    clique_fora_das_curvas(edit, sk, uv, &vazio, teclas.shift, teclas.command);
+                }
+            });
+            saida.textures_delta.clear();
+        }
+
+        fn botao(&self, p: Pos2, pressed: bool) -> egui::Event {
+            egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed, modifiers: self.teclas }
+        }
+
+        fn clique(&mut self, p: [f32; 2], teclas: egui::Modifiers) {
+            self.teclas = teclas;
+            let q = Pos2::new(p[0], p[1]);
+            self.quadro(vec![egui::Event::PointerMoved(q)]);
+            self.quadro(vec![self.botao(q, true)]);
+            self.quadro(vec![self.botao(q, false)]);
+            self.quadro(vec![]);
+            self.teclas = egui::Modifiers::NONE;
+        }
+
+        fn arrasto(&mut self, de: [f32; 2], ate: [f32; 2], teclas: egui::Modifiers) {
+            self.teclas = teclas;
+            let (a, b) = (Pos2::new(de[0], de[1]), Pos2::new(ate[0], ate[1]));
+            self.quadro(vec![egui::Event::PointerMoved(a)]);
+            self.quadro(vec![self.botao(a, true)]);
+            self.quadro(vec![egui::Event::PointerMoved(a.lerp(b, 0.5))]);
+            assert!(self.edit.janela.is_some(), "arrasto no vazio abre a janela");
+            self.quadro(vec![egui::Event::PointerMoved(b)]);
+            self.quadro(vec![self.botao(b, false)]);
+            self.quadro(vec![]);
+            self.teclas = egui::Modifiers::NONE;
+        }
+
+        fn curvas(&self) -> Vec<Id> {
+            let mut v: Vec<Id> = self.edit.sel.iter().filter_map(|e| if let Ent::Cv(c) = e { Some(*c) } else { None }).collect();
+            v.sort();
+            v
+        }
+    }
+
+    /// Quadrado 100..300 com outro 150..250 dentro e um vizinho 400..500.
+    fn encaixados() -> (SketchData, Vec<Id>, Vec<Id>, Vec<Id>) {
+        let mut n = 500u64;
+        let mut al = move || {
+            n += 1;
+            Id(n)
+        };
+        let mut sk = SketchData::default();
+        let fora = sk.add_rect(&mut al, [100., 100.], [300., 300.], false).1.to_vec();
+        let dentro = sk.add_rect(&mut al, [150., 150.], [250., 250.], false).1.to_vec();
+        let vizinho = sk.add_rect(&mut al, [400., 100.], [500., 200.], false).1.to_vec();
+        (sk, fora, dentro, vizinho)
+    }
+
+    fn juntas(v: &[&[Id]]) -> Vec<Id> {
+        let mut e = v.concat();
+        e.sort();
+        e
+    }
+
+    #[test]
+    fn janela_para_a_direita_pega_o_que_esta_inteiro_dentro() {
+        let (sk, fora, dentro, vizinho) = encaixados();
+        let mut v = Vista::nova(sk);
+        v.arrasto([90., 90.], [310., 310.], egui::Modifiers::NONE);
+        assert_eq!(v.curvas(), juntas(&[&fora, &dentro]));
+        assert!(v.edit.janela.is_none(), "soltar fecha a janela");
+        // cobre a metade do vizinho: só o lado esquerdo está inteiro dentro
+        v.arrasto([390., 90.], [450., 210.], egui::Modifiers::NONE);
+        assert_eq!(v.curvas(), juntas(&[&vizinho[3..]]));
+    }
+
+    #[test]
+    fn janela_para_a_esquerda_pega_tambem_o_que_toca() {
+        let (sk, fora, dentro, _) = encaixados();
+        let mut v = Vista::nova(sk);
+        // faixa x 240..450, y 210..240: corta o lado direito dos dois quadrados e passa por cima do
+        // vizinho, que termina em y = 200
+        v.arrasto([450., 240.], [240., 210.], egui::Modifiers::NONE);
+        assert_eq!(v.curvas(), juntas(&[&fora[1..2], &dentro[1..2]]));
+    }
+
+    #[test]
+    fn janela_com_shift_soma_e_sem_shift_troca() {
+        let (sk, fora, dentro, vizinho) = encaixados();
+        let mut v = Vista::nova(sk);
+        v.arrasto([90., 90.], [310., 310.], egui::Modifiers::NONE);
+        v.arrasto([390., 90.], [510., 210.], egui::Modifiers::SHIFT);
+        assert_eq!(v.curvas(), juntas(&[&fora, &dentro, &vizinho]));
+        v.arrasto([390., 90.], [510., 210.], egui::Modifiers::NONE);
+        assert_eq!(v.curvas(), juntas(&[&vizinho]));
+    }
+
+    #[test]
+    fn clique_curto_nao_abre_janela_e_pega_a_regiao() {
+        let (sk, fora, dentro, vizinho) = encaixados();
+        let mut v = Vista::nova(sk);
+        v.clique([120., 200.], egui::Modifiers::NONE);
+        assert!(v.edit.janela.is_none());
+        assert_eq!(v.curvas(), juntas(&[&fora, &dentro]), "quadrado dentro de quadrado seleciona os dois");
+
+        v.clique([450., 150.], egui::Modifiers::SHIFT);
+        assert_eq!(v.curvas(), juntas(&[&fora, &dentro, &vizinho]), "Shift soma");
+
+        v.clique([120., 200.], egui::Modifiers::COMMAND);
+        assert_eq!(v.curvas(), juntas(&[&vizinho]), "Ctrl tira");
+
+        v.clique([200., 200.], egui::Modifiers::SHIFT);
+        assert_eq!(v.curvas(), juntas(&[&vizinho]), "no furo não há sombra: Shift não muda nada");
+        v.clique([700., 500.], egui::Modifiers::NONE);
+        assert!(v.curvas().is_empty(), "clique limpo no vazio esvazia");
+    }
+
+    #[test]
+    fn sem_sombra_visivel_clicar_no_perfil_nao_seleciona() {
+        let (sk, ..) = encaixados();
+        let mut edit = SketchEdit::new(Id(1), false);
+        clique_fora_das_curvas(&mut edit, &sk, None, &HashSet::new(), false, false);
+        assert!(edit.sel.is_empty());
+    }
+
+    #[test]
+    fn curva_oculta_nao_entra_pela_regiao() {
+        let (sk, fora, dentro, _) = encaixados();
+        let mut edit = SketchEdit::new(Id(1), false);
+        let ocultas: HashSet<Id> = dentro.iter().copied().collect();
+        clique_fora_das_curvas(&mut edit, &sk, Some([120., 200.]), &ocultas, false, false);
+        assert_eq!(edit.sel.len(), fora.len());
+    }
 
     /// Duas linhas soltas: o ponto `b` da primeira é arrastado até `c`, ponta da segunda.
     fn duas_linhas() -> (SketchData, impl FnMut() -> Id, Id, Id) {
