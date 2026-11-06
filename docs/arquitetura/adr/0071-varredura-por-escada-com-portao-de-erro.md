@@ -1,4 +1,4 @@
-# ADR 0069: varredura por escada de tentativas, com portão no erro da superfície (B337)
+# ADR 0071: varredura por escada de tentativas, com portão no erro da superfície (B337)
 
 ## Contexto
 
