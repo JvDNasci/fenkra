@@ -805,7 +805,6 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 ui.label(tr("Referência não existe mais."));
                 return;
             };
-            command_bar(ui, session.map(|s| s.0) == Some(id), &mut sess_act);
             tabs_begin(ui, ("elemento", format!("{:?}", crate::geo_ui::GeoKind::of(&r.kind))));
             // "Definição" já é uma seção do geo_ui::panel: com o mesmo nome aqui o painel mostrava duas abas iguais
             section(ui, "Elemento");
@@ -923,9 +922,6 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 ui.label(tr("Comando não existe mais."));
                 return;
             };
-            if session.map(|s| s.0) == Some(id) {
-                command_bar(ui, true, &mut sess_act);
-            }
             let names: Vec<String> = doc.params.iter().map(|p| p.name.clone()).chain(doc.references.iter().map(|r| r.name.clone())).collect();
             {
                 let f = &mut doc.features[idx];
@@ -1023,6 +1019,24 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     if let Some(s) = new_sel {
         app.sel = s;
     }
+    aplicar_acao(app, sess_act, sel);
+}
+
+/// Concluir, Cancelar e Excluir fora da rolagem: ficam à vista em comando de qualquer tamanho.
+pub fn barra_fixa(app: &mut App, ui: &mut egui::Ui) {
+    let sel = app.sel;
+    let aberto = app.session.as_ref().map(|s| s.id);
+    let editando = match sel {
+        Sel::Ref(id) if app.open.doc.reference(id).is_some() => aberto == Some(id),
+        Sel::Feature(id) if aberto == Some(id) => true,
+        _ => return,
+    };
+    let mut acao = None;
+    command_bar(ui, editando, &mut acao);
+    aplicar_acao(app, acao, sel);
+}
+
+fn aplicar_acao(app: &mut App, sess_act: Option<u8>, sel: Sel) {
     match (sess_act, sel) {
         (Some(0), _) if app.session.is_some() => app.conclude_session(),
         (Some(0), _) => app.sel = Sel::None,

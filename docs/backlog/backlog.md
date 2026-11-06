@@ -4,15 +4,15 @@ Consolidado do [design review](../contextos/design-review.md), dos [contextos](.
 Versão visual (kanban + comparador): [painel.html](painel.html), gerada por `scripts/benchmark/pagina.py`.
 Gerado por `scripts/benchmark/backlog.py`; o estado de cada item é atualizado aqui a cada entrega.
 
-**Estimativa total:** ≈ 96.2 M tokens (≈ 321 mil linhas de código, pela média das últimas versões).
+**Estimativa total:** ≈ 96.5 M tokens (≈ 322 mil linhas de código, pela média das últimas versões).
 
 | Onda | Versão | Itens | Tokens | % |
 |---|---|---|---|---|
-| Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes) | `0.1.0-alpha.28 a .30` | 36 | ≈ 7180 k | 7.5% |
-| Onda 1 — bugs do design review | `0.1.0-alpha.31` | 58 | ≈ 11610 k | 12.1% |
-| Onda 2 — filosofia base + VPM local | `0.1.0-alpha.32` | 96 | ≈ 23740 k | 24.7% |
+| Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes) | `0.1.0-alpha.28 a .30` | 36 | ≈ 7180 k | 7.4% |
+| Onda 1 — bugs do design review | `0.1.0-alpha.31` | 58 | ≈ 11610 k | 12.0% |
+| Onda 2 — filosofia base + VPM local | `0.1.0-alpha.32` | 97 | ≈ 23990 k | 24.9% |
 | Onda 3 — módulos novos e lacunas do benchmark | `0.1.0-alpha.33+` | 82 | ≈ 22250 k | 23.1% |
-| Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…) | `0.2.x` | 99 | ≈ 31470 k | 32.7% |
+| Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…) | `0.2.x` | 99 | ≈ 31470 k | 32.6% |
 
 Prioridade: **P0** quebra o uso · **P1** importante · **P2** desejável · **P3** futuro.
 Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = captura do app com `FENKRA_DEMO_*` · **Manual** = usuário.
@@ -210,6 +210,7 @@ Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = 
 | B369 | P1 | **Solda no PMI com cordão visível** — A linha realçada da solda ganha uma representação engrossada do tamanho do cordão, que pode ser mostrada ou ocultada. | USR-TESTE |  | 150 k | 0.2% | Auto + Visual | a fazer |
 | B370 | P1 | **Desenho: setas de notas iguais às do PMI** — As notas e legendas da folha ganham o mesmo modelo de setas do PMI: ancoragem por seta, várias setas por nota, moldura que acompanha e edição das propriedades da seta. | USR-TESTE |  | 150 k | 0.2% | Auto + Visual | a fazer |
 | B371 | P1 | **Importar anotações do 3D para o desenho** — A vista recebe as anotações do 3D com reconhecimento do que vem e como vem: cotas, soldas e notas chegam ligadas ao modelo e atualizam com ele; o que não cabe na folha, como bloco de notas, fica de fora. A pessoa confere a lista antes de importar. | USR-TESTE |  | 350 k | 0.4% | Auto + Visual | a fazer |
+| B372 | P1 | **Roleta de comandos pensada no fluxo de cada bancada** — Revisar os fluxos de modelagem de todas as bancadas e montar o conteúdo padrão da roleta: em cada bancada e modo, os comandos que fazem sentido, e conforme a seleção os de face, aresta, vértice ou superfície. A pessoa continua podendo personalizar. | USR-TESTE |  | 250 k | 0.3% | Auto + Visual | a fazer |
 | B47 | P1 | **PNEngine: regras de part-number e ambientes** — Acrescentar ao aceite de interação: campo de PN com prévia ao vivo em cinza enquanto os campos são preenchidos, tooltip por máscara com exemplo e teste de falha (se a gravação falhar, a sequência não avança). | CTX-PN | PLM-06 | 120 k | 0.1% | Auto | feito |
 | B48 | P1 | **Furo: ângulo do escareado e casca com escareado** — Ângulo do escareado editável (82°, 90°, 100°, 120°) e por norma; casca deixa de falhar quando o corpo tem furo escareado. | DR-02, BM-SOL | SOL-06 | 80 k | 0.1% | Auto | feito |
 | B93 | P1 | **Salvar como com referências e Empacotar** — Salvar como em 4 modos (renomear/mover, cópia e continuar, cópia e abrir, novo documento) com tabela editável de referências, prefixo/sufixo e conflitos. Empacotar para pasta ou zip (plano/hierárquico, desenhos, linkados, derivados, pular bibliotecas) com manifesto, colisões renomeadas e listadas e verificação reabrindo o pacote. | PESQ-PLM, PESQ-MAC |  | 300 k | 0.3% | Auto | feito |

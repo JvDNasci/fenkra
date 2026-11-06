@@ -3824,6 +3824,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let cfg = Painel { nome: "comando".into(), titulo, padrao, largura: LARGURA, redimensiona: true };
         let saida = paineis::mostrar(ctx, area, &cfg, posicao, |ui| {
             self.conclude_bar(ui);
+            if !matches!(self.settings.bench, crate::settings::Bench::Desenho | crate::settings::Bench::Montagem) && self.sketch.is_none() {
+                editor::barra_fixa(self, ui);
+            }
             // desenvolvimento: FENKRA_DEMO_ROLAR=<px> abre o painel já rolado, para capturar o que fica abaixo da dobra
             let mut rolagem = egui::ScrollArea::vertical();
             if let Some(px) = std::env::var("FENKRA_DEMO_ROLAR").ok().and_then(|v| v.parse::<f32>().ok()) {

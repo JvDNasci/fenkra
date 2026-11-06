@@ -763,6 +763,8 @@ c('B370', 2, 'P1', 'Desenho: setas de notas iguais às do PMI', 'As notas e lege
   ['USR-TESTE'], [], 150, 'Auto + Visual', 'Desenho técnico'),
 c('B371', 2, 'P1', 'Importar anotações do 3D para o desenho', 'A vista recebe as anotações do 3D com reconhecimento do que vem e como vem: cotas, soldas e notas chegam ligadas ao modelo e atualizam com ele; o que não cabe na folha, como bloco de notas, fica de fora. A pessoa confere a lista antes de importar.',
   ['USR-TESTE'], [], 350, 'Auto + Visual', 'Desenho técnico'),
+c('B372', 2, 'P1', 'Roleta de comandos pensada no fluxo de cada bancada', 'Revisar os fluxos de modelagem de todas as bancadas e montar o conteúdo padrão da roleta: em cada bancada e modo, os comandos que fazem sentido, e conforme a seleção os de face, aresta, vértice ou superfície. A pessoa continua podendo personalizar.',
+  ['USR-TESTE'], [], 250, 'Auto + Visual', 'Interface'),
 ]
 def main():
     for x in B:
