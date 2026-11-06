@@ -161,7 +161,9 @@ pub fn traco(sk: &SketchData, id: Id) -> Option<Traco> {
             let v = gira(a1 - a0);
             Traco::Arco { c: pc, r: dist(ps, pc), a0, varre: if v < 1e-12 { TAU } else { v } }
         }
-        Curve::Spline { .. } => Traco::poli(spline_eval(&sk.spline_uv(id), &sk.own_tangents(id), POR_TRECHO)),
+        // pelos nós, não por `spline_uv`: com tangente própria ela já devolve a curva amostrada, e as
+        // tangentes, que são uma por nó, cairiam nas primeiras amostras
+        Curve::Spline { pts } => Traco::poli(spline_eval(&pts.iter().map(|q| sk.pos(*q)).collect::<Vec<_>>(), &sk.own_tangents(id), POR_TRECHO)),
         Curve::Ellipse { c, major, minor, t0, t1, .. } => Traco::poli(fenkra_core::projecao::elipse_amostras(sk.pos(*c), *major, *minor, *t0, *t1)),
         Curve::Point { .. } => return None,
     })
@@ -508,7 +510,7 @@ pub fn plano_estender(sk: &SketchData, curva: Id, cursor: P) -> Result<PlanoEste
             (ponta, Traco::Reta { a: para, b: [para[0] + (para[0] - de[0]) * k, para[1] + (para[1] - de[1]) * k] })
         }
         Some(Curve::Arc { s, e, .. }) => {
-            let Some(Traco::Arco { c, r, a0, varre }) = traco(sk, curva) else { return Err("estender funciona em linha e arco") };
+            let Some(Traco::Arco { c, r, a0, varre }) = traco(sk, curva) else { return Err("estender funciona em linha, arco e spline") };
             let (ps, pe) = (sk.pos(*s), sk.pos(*e));
             // o que falta para fechar a volta, no sentido da ponta
             let falta = TAU - varre;
@@ -518,7 +520,20 @@ pub fn plano_estender(sk: &SketchData, curva: Id, cursor: P) -> Result<PlanoEste
                 (*s, Traco::Arco { c, r, a0, varre: -falta })
             }
         }
-        _ => return Err("estender funciona em linha e arco"),
+        Some(Curve::Spline { pts }) => {
+            let (Some(&ini), Some(&fim)) = (pts.first(), pts.last()) else { return Err("estender funciona em linha, arco e spline") };
+            if ini == fim {
+                return Err("spline fechada não tem ponta para estender");
+            }
+            let m = spline_tangents(&pts.iter().map(|q| sk.pos(*q)).collect::<Vec<_>>(), &sk.own_tangents(curva));
+            // segue reta na direção em que a curva chega à ponta: é o que mantém a tangência nela
+            let ultima = dist(cursor, sk.pos(fim)) < dist(cursor, sk.pos(ini));
+            let (ponta, d) = if ultima { (fim, m[m.len() - 1]) } else { (ini, [-m[0][0], -m[0][1]]) };
+            let de = sk.pos(ponta);
+            let k = alcance(sk, de) / d[0].hypot(d[1]).max(1e-12);
+            (ponta, Traco::Reta { a: de, b: [de[0] + d[0] * k, de[1] + d[1] * k] })
+        }
+        _ => return Err("estender funciona em linha, arco e spline"),
     };
     let f = caminho.folga_u();
     let Some(alvo) = cortes_em(sk, &caminho, curva).into_iter().find(|c| c.u > f) else {
@@ -540,10 +555,33 @@ pub fn estender(sk: &mut SketchData, al: &mut impl FnMut() -> Id, curva: Id, cur
             let (ns, ne) = if e == plano.ponta { (s, n) } else { (n, e) };
             troca_geom(sk, curva, Curve::Arc { c, s: ns, e: ne });
         }
+        Some(Curve::Spline { pts }) => estender_spline(sk, curva, &pts, plano.ponta, n),
         _ => {}
     }
     limpa_soltos(sk);
     Ok(())
+}
+
+/// A spline ganha o ponto `novo` depois da ponta. As tangentes de quem já existia são gravadas, porque
+/// a tangente automática depende dos vizinhos e mexeria na forma que já estava lá. No trecho novo a
+/// tangente da ponta fica limitada a três vezes a corda: acima disso a cúbica de Hermite passa do
+/// destino e volta, mesmo com tudo sobre a mesma reta. Só extensão curta chega a esse limite.
+fn estender_spline(sk: &mut SketchData, curva: Id, pts: &[Id], ponta: Id, novo: Id) {
+    let uv: Vec<P> = pts.iter().map(|q| sk.pos(*q)).collect();
+    let m = spline_tangents(&uv, &sk.own_tangents(curva));
+    let ultima = pts.last() == Some(&ponta);
+    let i = if ultima { pts.len() - 1 } else { 0 };
+    let corda = dist(uv[i], sk.pos(novo));
+    let tam = m[i][0].hypot(m[i][1]).max(1e-12);
+    let k = (3. * corda / tam).min(1.);
+    for (j, (p, t)) in pts.iter().zip(&m).enumerate() {
+        let t = if j == i { [t[0] * k, t[1] * k] } else { *t };
+        sk.set_spline_tangent(curva, *p, Some(t));
+    }
+    sk.set_spline_tangent(curva, novo, Some([m[i][0] * corda / tam, m[i][1] * corda / tam]));
+    let mut ids = pts.to_vec();
+    ids.insert(if ultima { ids.len() } else { 0 }, novo);
+    troca_geom(sk, curva, Curve::Spline { pts: ids });
 }
 
 /// Com Shift segurado, Aparar age como Estender e Estender como Aparar.
@@ -769,6 +807,79 @@ mod testes {
         estender(&mut sk, &mut al, a, [1., 10.]).unwrap();
         let t = traco(&sk, a).unwrap();
         assert!(perto(t.em(1.), [-10., 0.]) && (t.comprimento() - 10. * std::f64::consts::PI).abs() < 1e-6);
+    }
+
+    /// Spline de três pontos, indo para a direita.
+    fn spline(sk: &mut SketchData, al: &mut impl FnMut() -> Id) -> (Id, Vec<Id>) {
+        let pts: Vec<Id> = [[0., 0.], [10., 5.], [20., 0.]].iter().map(|q| sk.add_point(al, q[0], q[1])).collect();
+        (sk.add_curve(al, Curve::Spline { pts: pts.clone() }, false), pts)
+    }
+
+    /// A curva amostrada entre dois nós não muda de lugar: distância de cada ponto de `a` a `b`.
+    fn desvio(a: &Traco, b: &Traco) -> f64 {
+        (0..=200).map(|i| a.em(i as f64 / 200.)).map(|q| dist(q, b.em(b.param(q).clamp(0., 1.)))).fold(0., f64::max)
+    }
+
+    #[test]
+    fn estender_spline_segue_a_tangente_da_ponta_e_nao_mexe_no_resto() {
+        let (mut sk, mut al) = (SketchData::default(), ids());
+        let (s, pts) = spline(&mut sk, &mut al);
+        let antes = traco(&sk, s).unwrap();
+        let m = spline_tangents(&pts.iter().map(|q| sk.pos(*q)).collect::<Vec<_>>(), &sk.own_tangents(s));
+        let d = m[2];
+        // parede vertical no caminho da ponta final
+        let w = linha(&mut sk, &mut al, [40., -60.], [40., 60.]);
+        let p = plano_estender(&sk, s, [19., 0.]).unwrap();
+        assert_eq!((p.alvo, p.ponta), (w, pts[2]));
+        let y = d[1] / d[0] * 20.;
+        assert!(perto(p.destino, [40., y]), "{:?}", p.destino);
+        assert!(perto(p.novo[0], [20., 0.]) && perto(*p.novo.last().unwrap(), [40., y]));
+        estender(&mut sk, &mut al, s, [19., 0.]).unwrap();
+        let Some(Curve::Spline { pts: novos }) = sk.curve(s).map(|c| c.geom.clone()) else { panic!() };
+        assert_eq!(novos.len(), 4);
+        assert_eq!(novos[..3], pts[..]);
+        assert!(sk.constraints.iter().any(|k| matches!(k.kind, Kind::PointOnCurve(q, x) if q == novos[3] && x == w)));
+        let depois = traco(&sk, s).unwrap();
+        assert!(desvio(&antes, &depois) < 1e-6, "a parte que existia ficou como estava");
+        assert!(perto(depois.em(1.), [40., y]));
+        // a chegada ao destino é reta: o meio da extensão está sobre a tangente da ponta
+        let meio = depois.em(depois.param([30., y / 2.]).clamp(0., 1.));
+        assert!(dist(meio, [30., y / 2.]) < 1e-6, "{meio:?}");
+        assert!(sk.solve(&HashMap::new(), &[]).converged);
+    }
+
+    #[test]
+    fn estender_spline_pela_ponta_inicial_mantem_o_sentido() {
+        let (mut sk, mut al) = (SketchData::default(), ids());
+        let (s, pts) = spline(&mut sk, &mut al);
+        let antes = traco(&sk, s).unwrap();
+        linha(&mut sk, &mut al, [-20., -60.], [-20., 60.]);
+        estender(&mut sk, &mut al, s, [1., 0.]).unwrap();
+        let Some(Curve::Spline { pts: novos }) = sk.curve(s).map(|c| c.geom.clone()) else { panic!() };
+        assert_eq!(novos[1..], pts[..], "o ponto novo entra no começo");
+        let depois = traco(&sk, s).unwrap();
+        assert!((depois.em(0.)[0] + 20.).abs() < 1e-6, "{:?}", depois.em(0.));
+        assert!(desvio(&antes, &depois) < 1e-6);
+    }
+
+    #[test]
+    fn extensao_curta_de_spline_nao_passa_do_destino() {
+        let (mut sk, mut al) = (SketchData::default(), ids());
+        let (s, _) = spline(&mut sk, &mut al);
+        // a tangente da ponta é bem maior que os 0,5 que faltam até a parede
+        linha(&mut sk, &mut al, [20.5, -60.], [20.5, 60.]);
+        estender(&mut sk, &mut al, s, [19., 0.]).unwrap();
+        let t = traco(&sk, s).unwrap();
+        let fim = t.em(1.)[0];
+        assert!((0..=400).map(|i| t.em(i as f64 / 400.)[0]).all(|x| x <= fim + 1e-9), "a curva não passa da parede");
+    }
+
+    #[test]
+    fn spline_fechada_nao_estende() {
+        let (mut sk, mut al) = (SketchData::default(), ids());
+        let p: Vec<Id> = [[0., 0.], [10., 0.], [5., 8.]].iter().map(|q| sk.add_point(&mut al, q[0], q[1])).collect();
+        let s = sk.add_curve(&mut al, Curve::Spline { pts: vec![p[0], p[1], p[2], p[0]] }, false);
+        assert!(plano_estender(&sk, s, [1., 0.]).is_err());
     }
 
     #[test]
