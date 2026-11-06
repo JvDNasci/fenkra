@@ -4152,7 +4152,17 @@ impl Ctx<'_> {
                 };
                 let tool = face.sweep(&spine.pts, mode).map_err(k)?;
                 self.apply(f.target, tool, w.op, f.id)?;
-                Ok((!sk.open.is_empty()).then(|| format!("{} perfil(is) aberto(s) do sketch foram descartados: só contornos fechados varrem", sk.open.len())))
+                let mut avisos: Vec<String> = vec![];
+                if !sk.open.is_empty() {
+                    avisos.push(format!("{} perfil(is) aberto(s) do sketch foram descartados: só contornos fechados varrem", sk.open.len()));
+                }
+                // B301: o perfil deve estar normal à curva no início; o ângulo fora disso entra no aviso
+                if let Some(desvio) = varredura_desvio(&frame.normal, &spine.pts) {
+                    if desvio > 3. {
+                        avisos.push(format!("o perfil não está normal à curva guia (desvio de {desvio:.0}° no início): crie um plano normal à curva e desenhe o perfil nele"));
+                    }
+                }
+                Ok((!avisos.is_empty()).then(|| avisos.join("; ")))
             }
             FeatureKind::Loft(l) => {
                 let mut dropped: Vec<String> = vec![];
@@ -5652,6 +5662,14 @@ impl Ctx<'_> {
             }
         }
     }
+}
+
+/// Ângulo (graus) entre a normal do plano do perfil e a tangente da guia no primeiro trecho (B301).
+fn varredura_desvio(normal: &[f64; 3], pts: &[[f64; 3]]) -> Option<f64> {
+    let (a, b) = (pts.first()?, pts.iter().skip(1).find(|p| geo3d::dist(**p, pts[0]) > 1e-9)?);
+    let t = geo3d::unit(geo3d::sub(*b, *a))?;
+    let n = geo3d::unit(*normal)?;
+    Some(geo3d::dot(n, t).abs().clamp(0., 1.).acos().to_degrees())
 }
 
 /// Recalcula o documento inteiro. Roda fora da thread da interface (RNF-001).

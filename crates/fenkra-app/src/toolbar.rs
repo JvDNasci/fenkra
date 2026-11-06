@@ -149,7 +149,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             ]),
             Family("varredura", vec![
                 it("nervura", "Nervura", "Varrer o perfil ao longo de uma curva (Rib)", "O perfil do sketch percorre uma curva guia (linha, spline, hélice, aresta) acrescentando material.", Cmd(C::Rib)),
-                it("rasgo_varrido", "Rasgo", "Remover varrendo ao longo de uma curva (Slot)", "O perfil percorre a curva guia removendo material.", Cmd(C::Slot)),
+                it("rasgo_varrido", "Rasgo varrido", "Remover varrendo o perfil ao longo de uma curva (não é o rasgo de chapa)", "O perfil percorre a curva guia removendo material. Para um rasgo em chapa metálica use o recorte da bancada Chapa.", Cmd(C::Slot)),
             ]),
             Family("multisecoes", vec![
                 it("multisecoes", "Multi-seções", "Sólido por vários perfis (loft)", "Transição suave entre dois ou mais perfis em planos diferentes.", Cmd(C::Loft)),

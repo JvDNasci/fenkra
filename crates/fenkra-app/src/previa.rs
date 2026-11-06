@@ -366,6 +366,9 @@ pub fn demo_preparar(doc: &mut Document) -> Option<DemoPrevia> {
     if let Some(d) = crate::sup3d::demo(&nome, doc) {
         return Some(d);
     }
+    if let Some(d) = crate::demo_solidos::demo(&nome, doc) {
+        return Some(d);
+    }
     let s = |x: &str| x.to_string();
     let sketch = |d: &mut Document, plane: PlaneRef, monta: &dyn Fn(&mut SketchData, &mut dyn FnMut() -> Id)| {
         let mut data = SketchData::default();
@@ -466,6 +469,8 @@ fn rotulos(app: &App, ui: &egui::Ui, rect: egui::Rect, cam: &crate::render::Came
                 }
             }
         }
+        // B301: nervura e rasgo varridos mostram a guia, o perfil no início e a orientação
+        FeatureKind::Sweep(_) => crate::varredura_ui::desenhar(app, ui, rect, cam, id),
         FeatureKind::Stiffener(st) => {
             let Some(sk) = r.sketches.iter().find(|s| s.feature == st.sketch) else { return };
             let t = fenkra_core::expr::eval_str(&st.thickness, &app.vars()).unwrap_or(0.);
