@@ -7122,16 +7122,18 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             let (shift, ctrl, scroll, ppp, right_down, left_down) = ctx.input(|i| {
                 (i.modifiers.shift, i.modifiers.command, i.smooth_scroll_delta.y, i.pixels_per_point, i.pointer.secondary_down(), i.pointer.primary_down())
             });
-            let scroll = if arvore_com_roda || crate::forma_ui::roda_no_raio(&self.forma) { 0. } else { scroll };
+            // roda de comandos aberta: a câmera fica parada, a rolagem e o mouse são dela
+            let roda_aberta = self.roda.aberta();
+            let scroll = if arvore_com_roda || roda_aberta || crate::forma_ui::roda_no_raio(&self.forma) { 0. } else { scroll };
             // B95: Alt + roda percorre o que está sob o ponteiro em vez de dar zoom
             let alt_roda = ctx.input(|i| i.modifiers.alt) && resp.hovered() && !ctrl;
             let passo_ciclo = if alt_roda { self.selecao_ciclo.roda(scroll) } else { 0 } + std::mem::take(&mut self.selecao_extra.avancar);
             let scroll = if alt_roda { 0. } else { scroll };
-            let delta = resp.drag_delta();
+            let delta = if roda_aberta { egui::Vec2::ZERO } else { resp.drag_delta() };
             let (left, mid, right) = (
-                resp.dragged_by(egui::PointerButton::Primary),
-                resp.dragged_by(egui::PointerButton::Middle),
-                resp.dragged_by(egui::PointerButton::Secondary),
+                !roda_aberta && resp.dragged_by(egui::PointerButton::Primary),
+                !roda_aberta && resp.dragged_by(egui::PointerButton::Middle),
+                !roda_aberta && resp.dragged_by(egui::PointerButton::Secondary),
             );
             let sketching = self.sketch.is_some();
             use crate::settings::NavStyle as N;
