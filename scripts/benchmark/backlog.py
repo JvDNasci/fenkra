@@ -226,7 +226,7 @@ c('B109', 0, 'P0', 'Bug: riscos das arestas de trás ao afastar a câmera', 'Ava
   ['USR-BUG'], ['GER-06'], 10, 'Visual', 'Navegação', 'feito'),
 # ---------------------------------------------------------------- onda 4 — módulos novos (docs/pesquisa/modulos-novos.md)
 c('B110', 4, 'P1', 'Calculadoras de projeto: parafuso, ajuste forçado, mola, viga', 'Painel de cálculo com fatores de segurança. Insere ou ajusta o componente. (BN01; módulo Cálculo mecânico; depende de B28, B52, B42, B90).',
-  ['PESQ-MOD'], [], 300, 'Auto', 'Biblioteca de normas'),
+  ['PESQ-MOD'], [], 300, 'Auto', 'Biblioteca de normas', status='em andamento'),
 c('B111', 4, 'P2', 'Calculadora de rolamento, engrenagem e estriado', 'Vida L10 e verificação de engrenagem. Dados do fabricante como camada. (BN01b; módulo Cálculo mecânico; depende de BN01, B44).',
   ['PESQ-MOD'], [], 250, 'Auto', 'Biblioteca de normas'),
 c('B112', 4, 'P1', 'Perfil de regras DFM (furo, bolso, chapa)', 'Motor de regras DFM com perfis JSON por processo (furo, bolso, chapa, injeção, aditivo), cada regra com identificador, tipo de entidade, limites, severidade e texto; varredura devolve violações com referência estável à face e realce 3D; limites editáveis sem recompilar. É a base de B113, B166 e B167. Referências: CAD avançado A DFMXpress, Protolabs, DFMPro.',
@@ -600,7 +600,7 @@ c('B290', 3, 'P1', 'Conectores de loft e tensão arrastáveis', 'Multi-seções 
 c('B291', 3, 'P1', 'Spline 3D editável na viewport', 'Spline, Spline controle e Polilinha são criadas por cliques em sequência e têm pontos arrastáveis com o gizmo, alça de tangente por ponto, polígono de controle visível e pente de curvatura. Ponto vindo de referência fica preso com ícone de vínculo. Aceite: arrastar um ponto, fixar tangência e voltar reproduz a curva original; salvar e abrir preserva tangentes.',
   ['PESQ-DETALHE'], [], 180, 'Auto + Visual', 'Superfícies e wireframe', status='feito'),
 c('B292', 3, 'P2', 'Comando Chaveta: pareia eixo e cubo e insere a peça restrita', 'Selecionar eixo e cubo, achar os dois rasgos, escolher o comprimento na série e inserir a chaveta restrita aos rasgos, com fantasma no 3D. Avisa quando b, t1 ou t2 não casam entre eixo e cubo ou o diâmetro está fora da tabela. Aceite: chaveta entra com GDL zero e o conjunto passa na verificação de interferência.',
-  ['PESQ-DETALHE'], [], 200, 'Auto + Visual', 'Biblioteca de normas'),
+  ['PESQ-DETALHE'], [], 200, 'Auto + Visual', 'Biblioteca de normas', status='feito'),
 c('B293', 3, 'P2', 'Chapa: fechamento de canto com tipo, folga e razão', 'Comando que fecha o canto entre duas abas com tipo topo, sobreposto ou sob, folga entre as faces e razão de sobreposição, com opções de canto estreito e propagação automática. Hoje só existe alívio de canto. Aceite: três tipos geram geometria válida, a planificada não sobrepõe material e o teste confere volume e folga mínima.',
   ['PESQ-DETALHE'], [], 240, 'Auto + Visual', 'Chapa metálica', status='em andamento'),
 c('B294', 3, 'P2', 'Desenho: marcas de centro modo simples, circular e linear', 'Marca de centro com três modos: simples, circular (seleciona os furos de um círculo de furos e traça o círculo e as cruzes) e linear (eixo entre dois furos), associativas à vista e visíveis ou ocultas por vista. Também funcionam a partir de arestas ocultas por corte automático pelo centro. Aceite: teste com flange de 6 furos gera uma marca circular e atualiza ao mudar o diâmetro do círculo.',
