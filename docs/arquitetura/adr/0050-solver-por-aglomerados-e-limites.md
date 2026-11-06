@@ -1,4 +1,4 @@
-# ADR 0046 — Solver de montagem por aglomerados, batentes e núcleo de conflito
+# ADR 0050 — Solver de montagem por aglomerados, batentes e núcleo de conflito
 
 ## Contexto
 
