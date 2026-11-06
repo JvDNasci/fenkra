@@ -2543,8 +2543,10 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             if let Some(q) = r.interact_pointer_pos().and_then(|x| v.to_uv(x)) {
                 let valor = crate::sketch_arraste::valor_da_pega(&pega, q);
                 let antes = sk.clone();
-                if let Some(t) = sk.constraints.iter_mut().find(|c| c.id == pega.cota).and_then(|c| c.kind.value_mut()) {
-                    *t = fmt(valor);
+                for (id, x) in crate::sketch_arraste::cotas_da_pega(&pega, valor) {
+                    if let Some(t) = sk.constraints.iter_mut().find(|c| c.id == id).and_then(|c| c.kind.value_mut()) {
+                        *t = fmt(x);
+                    }
                 }
                 for (id, q) in crate::sketch_arraste::posicoes_da_pega(&pega, valor) {
                     if let Some(p) = sk.point_mut(id) {

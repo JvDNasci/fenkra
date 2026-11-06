@@ -73,6 +73,12 @@ pub fn desenha_seta(painter: &egui::Painter, tela: &dyn Fn(P) -> Pos2, s: Seta, 
     }
 }
 
+/// Menor valor que a pega deixa uma cota ter.
+const MINIMO: f64 = 0.01;
+/// Duas curvas da cadeia seguem o mesmo offset: as medidas vêm da geometria resolvida, com o resíduo
+/// do solver, então a comparação não pode ser exata.
+const MESMA_DISTANCIA: f64 = 1e-3;
+
 /// Como o cursor vira valor da cota.
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Regra {
@@ -95,7 +101,19 @@ pub struct Pega {
     pub trancada: bool,
     /// pontos que ficam parados enquanto o valor muda
     pub apoios: Vec<Id>,
+    /// offset de cadeia: as curvas que andam juntas; vazio quando a cota é só a de `cota`
+    membros: Vec<Membro>,
     regra: Regra,
+}
+
+/// Curva de um offset de cadeia. Cada curva da cadeia guarda a sua cota, e com a distância `d` do
+/// offset ela vale `base + sinal * d`: `d` nas linhas, o raio da origem mais ou menos `d` nos arcos.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Membro {
+    curva: Id,
+    cota: Id,
+    base: f64,
+    sinal: f64,
 }
 
 fn cota_de(sk: &SketchData, teste: impl Fn(&Kind) -> bool) -> Option<(Id, bool)> {
@@ -146,6 +164,7 @@ fn pega_filete(sk: &SketchData, arco: Id) -> Option<Pega> {
         trancada,
         apoios: vec![l1, l2],
         // a linha mais curta limita o recuo r/tan(θ/2)
+        membros: vec![],
         regra: Regra::Filete { v, abas: [a1, a2], meio, maximo: len(sub(f1, v)).min(len(sub(f2, v))) * meio.tan(), pts: [t1, t2, c] },
     })
 }
@@ -167,6 +186,7 @@ fn pega_offset(sk: &SketchData, c: Id) -> Option<Pega> {
                 rotulo: "distância",
                 trancada,
                 apoios: vec![o1, o2],
+                membros: vec![],
                 regra: Regra::Linha { o: sk.pos(o1), d: unit(sub(sk.pos(o2), sk.pos(o1))) },
             })
         }
@@ -175,28 +195,96 @@ fn pega_offset(sk: &SketchData, c: Id) -> Option<Pega> {
             sk.curves.iter().find(|k| k.id != c && matches!(k.geom, Curve::Circle { c: x, .. } | Curve::Arc { c: x, .. } if x == ctr))?;
             let (cota, trancada) = cota_de(sk, |k| matches!(k, Kind::Diameter(x, _) if *x == c))?;
             let o = sk.pos(ctr);
-            Some(Pega { cota, at: [o[0] + r, o[1]], rotulo: "diâmetro", trancada, apoios: vec![ctr], regra: Regra::Centro { o, k: 2. } })
+            Some(Pega { cota, at: [o[0] + r, o[1]], rotulo: "diâmetro", trancada, apoios: vec![ctr], membros: vec![], regra: Regra::Centro { o, k: 2. } })
         }
         Curve::Arc { c: ctr, s, e } => {
             sk.curves.iter().find(|k| k.id != c && matches!(k.geom, Curve::Circle { c: x, .. } | Curve::Arc { c: x, .. } if x == ctr))?;
             let (cota, trancada) = cota_de(sk, |k| matches!(k, Kind::Radius(x, _) if *x == c))?;
             let o = sk.pos(ctr);
-            Some(Pega { cota, at: SketchData::arc_mid(o, sk.pos(s), sk.pos(e)), rotulo: "raio", trancada, apoios: vec![ctr], regra: Regra::Centro { o, k: 1. } })
+            Some(Pega { cota, at: SketchData::arc_mid(o, sk.pos(s), sk.pos(e)), rotulo: "raio", trancada, apoios: vec![ctr], membros: vec![], regra: Regra::Centro { o, k: 1. } })
         }
         _ => None,
     }
 }
 
-/// Pega da curva selecionada, se ela for um filete ou um offset. Só com uma curva selecionada: com
-/// mais de uma, não há um valor só para mudar.
+/// Raios dos outros arcos de mesmo centro: entre eles está a origem do offset de um arco.
+fn raios_vizinhos(sk: &SketchData, arco: Id, ctr: Id) -> Vec<f64> {
+    sk.curves.iter().filter(|k| k.id != arco && matches!(k.geom, Curve::Arc { c, .. } if c == ctr)).filter_map(|k| sk.radius_of(k.id)).collect()
+}
+
+/// Distância da curva à sua origem de offset. No arco, a origem é o vizinho mais perto.
+fn distancia_do_offset(sk: &SketchData, c: Id) -> Option<f64> {
+    match sk.curve(c)?.geom {
+        Curve::Line { .. } => {
+            let p = pega_offset(sk, c)?;
+            sk.constraints.iter().find(|k| k.id == p.cota).and_then(|k| sk.measure(&k.kind))
+        }
+        Curve::Arc { c: ctr, .. } => {
+            let r = sk.radius_of(c)?;
+            raios_vizinhos(sk, c, ctr).into_iter().map(|b| (r - b).abs()).min_by(f64::total_cmp)
+        }
+        _ => None,
+    }
+}
+
+/// A curva como membro de um offset à distância `d`.
+fn membro(sk: &SketchData, c: Id, d: f64) -> Option<Membro> {
+    if (distancia_do_offset(sk, c)? - d).abs() > MESMA_DISTANCIA {
+        return None;
+    }
+    let cota = pega_offset(sk, c)?.cota;
+    match sk.curve(c)?.geom {
+        Curve::Arc { c: ctr, .. } => {
+            let r = sk.radius_of(c)?;
+            let base = raios_vizinhos(sk, c, ctr).into_iter().find(|b| ((r - b).abs() - d).abs() <= MESMA_DISTANCIA)?;
+            Some(Membro { curva: c, cota, base, sinal: if r > base { 1. } else { -1. } })
+        }
+        _ => Some(Membro { curva: c, cota, base: 0., sinal: 1. }),
+    }
+}
+
+/// Offset de cadeia: a pega da curva, levando junto as curvas ligadas a ela que estão à mesma
+/// distância. Sem isso a pega moveria um lado só, e o contorno deixaria de ser paralelo.
+fn pega_cadeia(sk: &SketchData, c: Id) -> Option<Pega> {
+    let d = distancia_do_offset(sk, c)?;
+    let mut pega = pega_offset(sk, c)?;
+    let curvas = crate::sketch_cadeia::cadeia(sk, c).curvas();
+    pega.membros = curvas.iter().filter_map(|x| membro(sk, *x, d)).collect();
+    if pega.membros.len() < 2 {
+        return None;
+    }
+    for m in &pega.membros {
+        let p = pega_offset(sk, m.curva)?;
+        pega.trancada |= p.trancada;
+        pega.apoios.extend(p.apoios);
+    }
+    pega.apoios.sort();
+    pega.apoios.dedup();
+    Some(pega)
+}
+
+/// Pega da seleção, se ela for um filete, um offset ou um offset de cadeia. Com mais de uma curva só
+/// a cadeia tem pega: fora dela, não há um valor só para mudar.
 pub fn pega_da_selecao(sk: &SketchData, sel: &[Ent]) -> Option<Pega> {
-    let [Ent::Cv(c)] = sel else { return None };
-    pega_filete(sk, *c).or_else(|| pega_offset(sk, *c))
+    let curvas: Vec<Id> = sel.iter().filter_map(|e| if let Ent::Cv(c) = e { Some(*c) } else { None }).collect();
+    match curvas[..] {
+        [c] if sel.len() == 1 => pega_filete(sk, c).or_else(|| pega_cadeia(sk, c)).or_else(|| pega_offset(sk, c)),
+        [c, ..] if curvas.len() == sel.len() => pega_cadeia(sk, c).filter(|p| curvas.iter().all(|x| p.membros.iter().any(|m| m.curva == *x))),
+        _ => None,
+    }
+}
+
+/// Cotas que mudam com a pega no valor `valor`: a dela e, na cadeia, a de cada curva que anda junto.
+/// A distância não passa do que deixa raio em todo arco que encolhe.
+pub fn cotas_da_pega(p: &Pega, valor: f64) -> Vec<(Id, f64)> {
+    let Some(m) = p.membros.iter().find(|m| m.cota == p.cota) else { return vec![(p.cota, valor)] };
+    let teto = p.membros.iter().filter(|m| m.sinal < 0.).map(|m| m.base - MINIMO).fold(f64::INFINITY, f64::min);
+    let d = ((valor - m.base) * m.sinal).min(teto).max(MINIMO);
+    p.membros.iter().map(|m| (m.cota, m.base + m.sinal * d)).collect()
 }
 
 /// Valor da cota com a pega em `q`.
 pub fn valor_da_pega(p: &Pega, q: P) -> f64 {
-    const MINIMO: f64 = 0.01;
     match p.regra {
         Regra::Filete { v, abas, meio, maximo, .. } => {
             // na bissetriz, o centro fica a r/sen(θ/2) do canto e o arco, r antes disso
@@ -314,6 +402,72 @@ mod tests {
         let externo = s.curves.last().unwrap().id;
         let pega = pega_da_selecao(&s, &[Ent::Cv(externo)]).unwrap();
         assert!((valor_da_pega(&pega, pega.at) - 30.).abs() < 1e-6, "o diâmetro no lugar da pega");
+    }
+
+    /// Reta, arco e reta, com o offset do lado de dentro do arco a 2 de distância.
+    fn cadeia_com_offset(al: &mut impl FnMut() -> Id) -> (SketchData, Vec<Id>) {
+        use crate::sketch_cadeia as ca;
+        let mut s = SketchData::default();
+        let p: Vec<Id> = [[0., 0.], [20., 0.], [20., 10.], [30., 10.], [30., 30.]].iter().map(|q| s.add_point(al, q[0], q[1])).collect();
+        let l1 = s.add_curve(al, Curve::Line { a: p[0], b: p[1] }, false);
+        s.add_curve(al, Curve::Arc { c: p[2], s: p[1], e: p[3] }, false);
+        s.add_curve(al, Curve::Line { a: p[3], b: p[4] }, false);
+        let cam = ca::cadeia(&s, l1);
+        assert_eq!(cam.passos.len(), 3);
+        // a origem fica no lugar: a medida de cada paralela é até ela
+        for q in &p {
+            s.add_constraint(al, Kind::Fixed(*q));
+        }
+        // à esquerda de quem anda: para dentro do arco
+        let novas = ca::offset_caminho(&mut s, al, &cam, 2., false).unwrap();
+        (s, novas)
+    }
+
+    #[test]
+    fn pega_do_offset_de_cadeia_leva_a_cadeia_inteira() {
+        let mut al = ids();
+        let (mut s, novas) = cadeia_com_offset(&mut al);
+        let vars = HashMap::new();
+        assert!(s.solve(&vars, &[]).converged);
+        let linha = *novas.iter().find(|c| matches!(s.curve(**c).unwrap().geom, Curve::Line { .. })).unwrap();
+        let arco = *novas.iter().find(|c| matches!(s.curve(**c).unwrap().geom, Curve::Arc { .. })).unwrap();
+        assert!((s.radius_of(arco).unwrap() - 8.).abs() < 1e-6);
+        // qualquer curva da cadeia dá a pega, sozinha ou com a cadeia inteira selecionada
+        let pega = pega_da_selecao(&s, &[Ent::Cv(linha)]).expect("linha da cadeia");
+        assert_eq!(pega.membros.len(), 3);
+        let toda: Vec<Ent> = novas.iter().map(|c| Ent::Cv(*c)).collect();
+        assert_eq!(pega_da_selecao(&s, &toda).unwrap().membros.len(), 3);
+        assert_eq!(pega_da_selecao(&s, &[Ent::Cv(arco)]).unwrap().membros.len(), 3);
+        // a origem não tem pega nem misturada com a cadeia
+        let base = s.curves.iter().find(|c| !novas.contains(&c.id)).unwrap().id;
+        assert!(pega_da_selecao(&s, &[Ent::Cv(base)]).is_none());
+        assert!(pega_da_selecao(&s, &[Ent::Cv(linha), Ent::Cv(base)]).is_none());
+
+        let v = valor_da_pega(&pega, [pega.at[0], pega.at[1] + 2.]);
+        assert!((v - 4.).abs() < 1e-6, "{v}");
+        let cotas = cotas_da_pega(&pega, v);
+        assert_eq!(cotas.len(), 3);
+        for (id, x) in cotas {
+            *s.constraints.iter_mut().find(|c| c.id == id).unwrap().kind.value_mut().unwrap() = x.to_string();
+        }
+        let rep = s.solve(&vars, &pega.apoios);
+        assert!(rep.converged && rep.failing.is_empty(), "{rep:?}");
+        assert!((s.radius_of(arco).unwrap() - 6.).abs() < 1e-6, "o arco interno encolhe junto");
+        let dist_da = |c: Id| distancia_do_offset(&s, c).unwrap();
+        assert!(novas.iter().all(|c| (dist_da(*c) - 4.).abs() < 1e-6), "a cadeia segue paralela");
+        // o arco de dentro não some: a distância para antes do raio da origem
+        assert!(cotas_da_pega(&pega, 500.).iter().all(|x| x.1 > MINIMO / 2.));
+    }
+
+    #[test]
+    fn curva_da_cadeia_a_outra_distancia_fica_fora_da_pega() {
+        let mut al = ids();
+        let (mut s, novas) = cadeia_com_offset(&mut al);
+        let linhas: Vec<Id> = novas.iter().copied().filter(|c| matches!(s.curve(*c).unwrap().geom, Curve::Line { .. })).collect();
+        let cota = pega_da_selecao(&s, &[Ent::Cv(linhas[1])]).unwrap().cota;
+        *s.constraints.iter_mut().find(|c| c.id == cota).unwrap().kind.value_mut().unwrap() = "3".into();
+        assert!(s.solve(&HashMap::new(), &[]).converged);
+        assert_eq!(pega_da_selecao(&s, &[Ent::Cv(linhas[0])]).unwrap().membros.len(), 2, "só as que seguem a 2");
     }
 
     #[test]
