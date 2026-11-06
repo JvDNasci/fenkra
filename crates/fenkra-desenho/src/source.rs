@@ -4,7 +4,7 @@
 
 use crate::*;
 use fenkra_core::Document;
-use fenkra_kernel::{Bool, Shape};
+use fenkra_kernel::Shape;
 use fenkra_montagem::load::{full_path, PartCache};
 use fenkra_montagem::view::{placed_shape, shown};
 use fenkra_montagem::{Assembly, NodeKind};
@@ -26,6 +26,8 @@ pub struct Loaded {
     pub shape: Option<Shape>,
     /// montagem: cada peça posicionada (para hachurar cada uma com o seu ângulo no corte)
     pub pieces: Vec<Shape>,
+    /// nome de cada peça de `pieces` (para marcar as que o corte não atravessa)
+    pub piece_names: Vec<String>,
     /// arquivos de que depende (para saber quando recarregar)
     files: Vec<(PathBuf, Option<SystemTime>)>,
     pub error: Option<String>,
@@ -67,6 +69,9 @@ pub struct Proj {
     /// peça a que cada contorno de `hatch` pertence (0, 1, 2… só entre as peças cortadas): no corte
     /// de montagem cada peça recebe o seu ângulo
     pub hatch_group: Vec<usize>,
+    /// x (na vista) das junções entre segmentos de um corte em degraus: o contorno da hachura não é
+    /// traçado sobre elas (B106)
+    pub seams: Vec<f64>,
     /// triângulos sombreados (do fundo para a frente) e o tom de cinza
     pub shade: Vec<([V2; 3], u8)>,
     /// textos presos à vista (ex.: "↑ 90° R2" nas linhas de dobra da planificada)
@@ -173,6 +178,22 @@ impl Models {
         self.parts = PartCache::default();
     }
 
+    /// Chamada do furo (`4× Ø6,5 ▽12 · M8×1,25-6H`) cujo diâmetro é `diametro`, gerada pelas
+    /// features da peça com o mesmo gerador do 3D (`pmi_feature`), para a folha e o 3D nunca
+    /// divergirem. Serve ao arco clicado na vista: a ligação é pelo diâmetro, e vários furos de
+    /// mesmo diâmetro e formas diferentes pegam o primeiro. `None` se a origem não é uma peça ou
+    /// nenhum furo tem esse diâmetro.
+    pub fn chamada_furo(&mut self, src: &Source, diametro: f64) -> Option<fenkra_core::pmi_feature::Callout> {
+        let Model::Part(doc) = &self.load(src).model else { return None };
+        doc.features.iter().filter(|f| matches!(f.kind, fenkra_core::FeatureKind::Hole(_))).find_map(|f| {
+            let c = fenkra_core::pmi_feature::callout(doc, f.id, true)?;
+            // o círculo do furo ou o do rebaixo/escareado (a borda de fora)
+            let bate = |d: f64| (d - diametro).abs() < 0.01;
+            let fora = c.parts.iter().any(|p| matches!(p.label, "rebaixo" | "escareado") && p.value.is_some_and(bate));
+            (c.hole_diameter.is_some_and(bate) || fora).then_some(c)
+        })
+    }
+
     pub fn load(&mut self, src: &Source) -> &Loaded {
         let full = self.full(&src.path);
         let key = (full.clone(), format!("{}|{:?}", src.display_state, src.hidden));
@@ -185,7 +206,7 @@ impl Models {
 
     fn read(&mut self, full: &Path, state: &str, hidden: &[u64]) -> Loaded {
         let mut files = vec![(full.to_path_buf(), stamp(full))];
-        let fail = |files, e: String| Loaded { model: Model::Part(Box::new(Document::new("?"))), shape: None, pieces: vec![], files, error: Some(e) };
+        let fail = |files, e: String| Loaded { model: Model::Part(Box::new(Document::new("?"))), shape: None, pieces: vec![], piece_names: vec![], files, error: Some(e) };
         let txt = match std::fs::read_to_string(full) {
             Ok(t) => t,
             Err(e) => return fail(files, format!("{}: {e}", full.display())),
@@ -196,7 +217,7 @@ impl Models {
                 Ok(doc) => {
                     let shape = fenkra_solidos::final_shape(&doc);
                     let error = shape.is_none().then(|| "a peça não tem corpo visível".to_string());
-                    Loaded { model: Model::Part(Box::new(doc)), shape, pieces: vec![], files, error }
+                    Loaded { model: Model::Part(Box::new(doc)), shape, pieces: vec![], piece_names: vec![], files, error }
                 }
                 Err(e) => fail(files, e.to_string()),
             };
@@ -218,6 +239,7 @@ impl Models {
         }
         let mut all = Shape::empty();
         let mut pieces: Vec<Shape> = vec![];
+        let mut piece_names: Vec<String> = vec![];
         for n in &shown_asm.nodes {
             let NodeKind::Part { path } = &n.kind else { continue };
             let fp = full_path(dir.as_deref(), path);
@@ -228,11 +250,12 @@ impl Models {
             if let Some(s) = placed_shape(&shown_asm, n.id, dir.as_deref(), &mut self.parts) {
                 all = if all.is_null() { s.clone() } else { all.compound(&s) };
                 pieces.push(s);
+                piece_names.push(n.name.clone());
             }
         }
         let shape = (!all.is_null()).then_some(all);
         let error = shape.is_none().then(|| "a montagem não tem peças visíveis".to_string());
-        Loaded { model: Model::Asm(Box::new(a)), shape, pieces, files, error }
+        Loaded { model: Model::Asm(Box::new(a)), shape, pieces, piece_names, files, error }
     }
 
     /// Projeção da vista (calcula só quando a vista, a mãe ou o arquivo mudam).
@@ -244,7 +267,7 @@ impl Models {
         };
         let parent_proj = parent.map(|p| self.proj(d, p));
         let mut h = DefaultHasher::new();
-        serde_json::to_string(&(&v.source, &v.kind, v.hidden_lines, v.tangent_edges, v.render)).unwrap_or_default().hash(&mut h);
+        serde_json::to_string(&(&v.source, &v.kind, v.hidden_lines, v.tangent_edges, v.render, &v.corte, &v.detalhe)).unwrap_or_default().hash(&mut h);
         if let Some(pp) = &parent_proj {
             format!("{:?}{:?}", pp.axes, pp.center).hash(&mut h);
             pp.lines.len().hash(&mut h);
@@ -274,15 +297,26 @@ impl Models {
             let Some(pp) = parent else { return out };
             out.axes = pp.axes;
             out.center = *center;
+            // contorno livre (perfil) quando existe; senão o círculo
+            let perfil = &v.detalhe.contorno;
+            let recorte = |pl: &[V2]| if perfil.len() >= 3 { crate::corte::recortar_poligono(pl, perfil) } else { clip_circle(pl, *center, *radius) };
             for (pl, k) in &pp.lines {
-                for piece in clip_circle(pl, *center, *radius) {
+                for piece in recorte(pl) {
                     out.lines.push((piece, *k));
                 }
             }
             for lp in &pp.hatch {
-                for piece in clip_circle(lp, *center, *radius) {
+                for piece in recorte(lp) {
                     out.lines.push((piece, 0));
                 }
+            }
+            if perfil.len() >= 3 {
+                let mut fecha = perfil.clone();
+                fecha.push(perfil[0]);
+                out.lines.push((fecha, 4));
+                out.center = perfil.iter().fold([0., 0.], |a, p| [a[0] + p[0] / perfil.len() as f64, a[1] + p[1] / perfil.len() as f64]);
+                out.bounds();
+                return out;
             }
             out.lines.push((circle(*center, *radius), 4));
             out.bounds();
@@ -359,42 +393,26 @@ impl Models {
         };
         out.axes = Some(axes);
         out.center = axes.project(c3);
-        let target = if let ViewKind::Section { a, .. } = &v.kind {
-            // remove o lado do observador e hachura a face cortada
+        let target = if let ViewKind::Section { a, b, .. } = &v.kind {
+            // remove o lado do observador (prisma em degraus para linhas com vários segmentos) e
+            // hachura a face cortada de cada segmento (módulo `corte`)
             let pa = parent.and_then(|p| p.axes).unwrap();
-            let o = pa.unproject(*a);
-            // ponto do plano no meio da peça (a profundidade da linha na vista mãe é livre)
-            let o = add(o, scale3(pa.toward, dot(sub(c3, o), pa.toward)));
-            let (x, n) = (axes.x, axes.toward);
-            let y = cross(n, x);
-            let corner = sub(sub(o, scale3(x, big)), scale3(y, big));
-            match Shape::box_tool(corner, x, n, [2. * big, 2. * big, big]).and_then(|b| shape.boolean(&b, Bool::Cut)) {
-                Ok(s) => {
-                    // montagem: contornos peça a peça (cada uma ganha o seu ângulo); peça única
-                    // ou falha por peça: contornos do conjunto, todos no grupo 0
-                    let mut group = 0;
-                    for piece in &pieces {
-                        if let Ok(loops) = piece.section_loops(o, n, big) {
-                            if loops.is_empty() {
-                                continue;
-                            }
-                            for lp in &loops {
-                                out.hatch.push(lp.iter().map(|p| axes.project(*p)).collect());
-                                out.hatch_group.push(group);
-                            }
-                            group += 1;
-                        }
+            let pts = crate::corte::caminho(*a, *b, &v.corte.pontos);
+            match crate::corte::cortar(&shape, &pieces, &pa, &axes, &pts, &v.corte, c3, big) {
+                Ok(c) => {
+                    out.hatch = c.hachura;
+                    out.hatch_group = c.grupo;
+                    out.seams = c.costuras;
+                    if v.corte.fatia {
+                        // fatia: só a face cortada, sem o que está atrás
+                        out.lines = out.hatch.iter().map(|lp| (lp.iter().copied().chain(lp.first().copied()).collect(), 0u8)).collect();
+                        out.bounds();
+                        return out;
                     }
-                    if out.hatch.is_empty() {
-                        if let Ok(loops) = shape.section_loops(o, n, big) {
-                            out.hatch = loops.iter().map(|lp| lp.iter().map(|p| axes.project(*p)).collect()).collect();
-                            out.hatch_group = vec![0; out.hatch.len()];
-                        }
-                    }
-                    s
+                    c.alvo
                 }
                 Err(e) => {
-                    out.error = Some(format!("corte: {}", e.0));
+                    out.error = Some(format!("corte: {e}"));
                     shape
                 }
             }

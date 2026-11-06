@@ -595,6 +595,8 @@ def desenhos():
     ic("des_cota_ang", B=L((8, 42), (42, 42)) + L((8, 42), (30, 14)), R=SA2(8, 42, 26, -50, -3, 4.5))
     ic("des_cota_d", B=Q(6, 12, 36, 30) + C(24, 27, 10), R=S2(14, 27, 34, 27, 4))
     ic("des_cota_r", B="M6 42V22a16 16 0 0 1 16-16h20", R=S(24, 24, 11, 11, 5), pr=[(24, 24)])
+    # cota inteligente (B107): a peça com furo, a cota linear em cima e a seta do diâmetro
+    ic("des_cota_inteligente", B=Q(6, 18, 36, 24) + C(17, 30, 5), R="M6 18V7M42 18V7" + S2(7, 11, 41, 11, 4.5) + S(38, 40, 24, 33, 4.5))
 
     # PMI: as mesmas ideias sobre a peça em 3D
     ic("pmi_linear", B=CUBO(24, 4, 15, 7.5, 16), R=S2(6, 33, 21, 41, 4))
@@ -692,7 +694,7 @@ ic("forma_tangencia", B="M6 36c10-14 26-14 36 0", R=L((8, 25), (40, 25)) + S(24,
 ic("forma_simetria", b="M24 4v40", R="M20 10c-16 2-16 26 0 28M28 10c16 2 16 26 0 28")
 ic("forma_converter", b=Q(6, 12, 18, 24), R=CUBO(32, 12, 10, 5, 12) + "M18 24h4", pb=[(6, 12), (24, 12), (24, 36), (6, 36)])
 
-SO_INTERFACE = {"importar_arquivo", "asm_catalogo", "arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais", "exportar_arquivo", "liberar_revisao", "onde_usado", "comparar", "estado_sem_revisao", "estado_liberada", "estado_editado", "estado_leitura", "estado_conflito", "forma", "forma_caixa", "forma_esfera", "forma_cilindro", "forma_plano", "forma_extrudar", "forma_laco", "forma_aresta", "forma_borda", "forma_tangencia", "forma_simetria", "forma_converter"}
+SO_INTERFACE = {"importar_arquivo", "asm_catalogo", "arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais", "exportar_arquivo", "liberar_revisao", "onde_usado", "comparar", "estado_sem_revisao", "estado_liberada", "estado_editado", "estado_leitura", "estado_conflito", "forma", "forma_caixa", "forma_esfera", "forma_cilindro", "forma_plano", "forma_extrudar", "forma_laco", "forma_aresta", "forma_borda", "forma_tangencia", "forma_simetria", "forma_converter", "des_cota_inteligente"}
 
 
 # ---------- saída ----------

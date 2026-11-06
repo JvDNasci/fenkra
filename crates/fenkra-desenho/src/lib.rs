@@ -8,6 +8,8 @@
 //! - [`export`]: PDF, SVG e DXF.
 
 pub mod alcas;
+pub mod corte;
+pub mod cotas;
 pub mod export;
 pub mod layout;
 pub mod novo;
@@ -296,6 +298,12 @@ pub struct View {
     /// hachura da face cortada (campos vazios herdam o padrão do estilo)
     #[serde(default)]
     pub hatch: HatchStyle,
+    /// opções do corte (B106): vértices extras da linha, profundidade, fatia, peças sem corte, borda
+    #[serde(default)]
+    pub corte: corte::CorteOpcoes,
+    /// contorno livre do detalhe (B106)
+    #[serde(default)]
+    pub detalhe: corte::DetalheOpcoes,
 }
 
 /// Padrão da hachura da face cortada.
@@ -461,6 +469,9 @@ pub struct Dim {
     pub tol_a: f64,
     #[serde(default)]
     pub tol_b: f64,
+    /// diâmetro, entre parênteses, inspeção e precisão da tolerância (B107)
+    #[serde(default)]
+    pub opcoes: cotas::DimOpcoes,
 }
 
 /// Como a tolerância da cota é escrita.
@@ -489,7 +500,7 @@ impl TolMode {
 impl Dim {
     /// Texto da tolerância (vazio = sem tolerância).
     pub fn tol_text(&self, d: &Drawing) -> String {
-        let n = |v: f64| d.num_p(v, self.precision);
+        let n = |v: f64| d.num_p(v, self.opcoes.precisao_tol.or(self.precision));
         match self.tol_mode {
             TolMode::Livre => self.tol.clone(),
             TolMode::Simetrica if self.tol_a > 0. => format!("±{}", n(self.tol_a)),
@@ -501,7 +512,7 @@ impl Dim {
 
 impl Default for Dim {
     fn default() -> Self {
-        Dim { id: Id(0), view: Id(0), kind: DimKind::Horizontal, anchors: vec![], offset: 8., text: String::new(), tol: String::new(), style: Default::default(), text_pos: None, arrows: 0, loose: false, precision: None, tol_mode: TolMode::Livre, tol_a: 0., tol_b: 0. }
+        Dim { id: Id(0), view: Id(0), kind: DimKind::Horizontal, anchors: vec![], offset: 8., text: String::new(), tol: String::new(), style: Default::default(), text_pos: None, arrows: 0, loose: false, precision: None, tol_mode: TolMode::Livre, tol_a: 0., tol_b: 0., opcoes: Default::default() }
     }
 }
 
@@ -761,7 +772,7 @@ impl Drawing {
             ViewKind::Schematic(_) => "Esquema cinemático".into(),
             ViewKind::Camera { .. } => "Vista da câmera".into(),
         };
-        self.views.push(View { id, sheet, name, source, kind, pos, scale, hidden_lines: false, tangent_edges: true, label: true, render: Render::Arestas, color: None, line_width: 0., ann: Default::default(), hatch: HatchStyle::default() });
+        self.views.push(View { id, sheet, name, source, kind, pos, scale, hidden_lines: false, tangent_edges: true, label: true, render: Render::Arestas, color: None, line_width: 0., ann: Default::default(), hatch: HatchStyle::default(), corte: Default::default(), detalhe: Default::default() });
         id
     }
 

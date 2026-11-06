@@ -22,7 +22,8 @@ pub struct Ghost {
 pub fn places(tool: u8, n: usize) -> bool {
     match tool {
         c::SET | c::VIEW | c::ISO | c::FLAT | c::SCHEMA | c::VIEW_CAM | c::NOTE | c::CENTER | c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT => true,
-        c::SECTION | c::DETAIL => n == 2,
+        // a linha do corte e o contorno do detalhe têm posicionamento próprio (`corte_ui`)
+        c::SECTION | c::DETAIL => false,
         c::BALLOON | c::ROUGH | c::WELD | c::GDT | c::DATUM => n == 1,
         _ => false,
     }
@@ -81,7 +82,7 @@ pub(super) fn scratch(st: &DwgState, slot: u64) -> Drawing {
 }
 
 /// Estilo escolhido na barra de opções (renderização, ocultas, rótulo) nas vistas novas.
-fn apply_style(st: &DwgState, t: &mut Drawing, ids: &[Id]) {
+pub(super) fn apply_style(st: &DwgState, t: &mut Drawing, ids: &[Id]) {
     for (k, id) in ids.iter().enumerate() {
         if let Some(v) = t.views.iter_mut().find(|v| v.id == *id) {
             v.render = st.new_render;
@@ -146,24 +147,6 @@ pub fn proj_dir(parent: &View, m: V2, projecao: fenkra_desenho::novo::Projecao) 
         _ => Dir::Frente,
     };
     projecao.dir_projetada(base, dx, dy)
-}
-
-/// Vista de corte ou detalhe a partir dos dois primeiros cliques (linha de corte; centro e raio).
-pub fn section_kind(st: &mut DwgState, tool: u8, parent: &View) -> Option<(ViewKind, f64)> {
-    if st.clicks.len() < 2 {
-        return None;
-    }
-    let p = st.models.proj(&st.d, parent.id);
-    let a = layout::from_sheet(parent, &p, st.clicks[0]);
-    let b = layout::from_sheet(parent, &p, st.clicks[1]);
-    let label = st.next_label();
-    let kind = if tool == c::SECTION {
-        ViewKind::Section { parent: parent.id, a, b, label }
-    } else {
-        let r = ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2)).sqrt().max(1.);
-        ViewKind::Detail { parent: parent.id, center: a, radius: r, label }
-    };
-    Some((kind, options::scale_for(st, tool)))
 }
 
 /// Arco ou círculo mais perto do clique (a menos de 4 mm na folha): vista, centro e um ponto dele.
@@ -239,20 +222,7 @@ pub fn compute(st: &mut DwgState, m: V2, snap: &SnapFn, view_at: &ViewAt) -> Opt
             g.guides.push((parent.pos, t.view(id)?.pos));
             g.items.extend(layout::view_items(&t, id, &mut st.models));
         }
-        c::SECTION | c::DETAIL => {
-            let parent = st.d.view(parent_of(st)?)?.clone();
-            if tool == c::DETAIL && n == 1 {
-                // raio do detalhe seguindo o cursor
-                let r = ((m[0] - st.clicks[0][0]).powi(2) + (m[1] - st.clicks[0][1]).powi(2)).sqrt();
-                g.items.push(layout::Item { owner: None, prim: layout::Prim::Line { pts: fenkra_desenho::source::circle(st.clicks[0], r), style: Style::Thin }, color: None, width: None, bold: false, alert: false });
-            } else if n == 2 {
-                let (kind, sc) = section_kind(st, tool, &parent)?;
-                let mut t = scratch(st, 0);
-                let id = t.add_view(st.sheet, parent.source.clone(), kind, at, sc);
-                apply_style(st, &mut t, &[id]);
-                g.items.extend(layout::view_items(&t, id, &mut st.models));
-            }
-        }
+        c::SECTION | c::DETAIL => return super::corte_ui::fantasma(st, m),
         c::DIM_H | c::DIM_V | c::DIM_A | c::DIM_ANG => {
             let need = if tool == c::DIM_ANG { 3 } else { 2 };
             if n + 1 != need {
