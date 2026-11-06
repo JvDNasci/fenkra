@@ -410,6 +410,12 @@ impl Graficos {
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
+    /// árvore solta: arrastar o fundo a desloca (travada por padrão)
+    pub arvore_solta: bool,
+    /// da árvore só ficam os controles do topo
+    pub arvore_minimizada: bool,
+    /// árvore fora da tela até voltar pelo menu Exibir
+    pub arvore_fechada: bool,
     /// últimas opções do preparo de impressão
     #[serde(default)]
     pub impressao: fenkra_conversor::impressao::OpcoesImpressao,
@@ -582,6 +588,9 @@ pub struct CustomGroup {
 impl Default for Settings {
     fn default() -> Self {
         Settings {
+            arvore_solta: false,
+            arvore_minimizada: false,
+            arvore_fechada: false,
             impressao: Default::default(),
             fatiador: String::new(),
             opcoes_importar: Default::default(),

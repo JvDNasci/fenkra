@@ -753,6 +753,12 @@ c('B365', 4, 'P0', 'Abrir o .fkv sem esforço: página no pacote, duplo clique e
   ['USR-TESTE'], [], 150, 'Auto + Visual', 'Geral', status='feito'),
 c('B366', 2, 'P1', 'Painéis em outro monitor: arrastar para fora da janela', 'Painéis e janelas de comando podem sair da janela principal e ficar em outra tela, como janela nativa, voltando ao encaixe ao arrastar de volta. O layout lembra em qual monitor cada painel estava.',
   ['USR-TESTE'], [], 350, 'Auto + Visual', 'Interface', status='em andamento'),
+c('B367', 2, 'P0', 'Realce sem pintar a peça, árvore travada e comando não terminado que some', 'A peça mantém a cor: só as arestas do item acendem. A árvore fica no lugar, com menu discreto para soltar, minimizar e fechar, e o recurso arrasta para outra posição. O X do painel cancela o comando, e comando novo com erro não sobra na árvore ao sair sem concluir.',
+  ['USR-TESTE'], [], 100, 'Auto + Visual', 'Interface', status='feito'),
+c('B368', 2, 'P0', 'PMI: capturas no detalhamento, ancoragem de setas, F2 e saída no HTML', 'Criar captura fica junto do detalhamento 3D. Ctrl e Shift selecionam como nas peças e F2 renomeia capturas, legendas e notas. Cada seta de nota ou legenda tem sua ancoragem (esquerda, direita, topo, base), com várias setas por nota. PMI e capturas chegam ao HTML, que mostra as capturas em sequência, como etapas.',
+  ['USR-TESTE'], [], 350, 'Auto + Visual', 'PMI 3D'),
+c('B369', 2, 'P1', 'Solda no PMI com cordão visível', 'A linha realçada da solda ganha uma representação engrossada do tamanho do cordão, que pode ser mostrada ou ocultada.',
+  ['USR-TESTE'], [], 150, 'Auto + Visual', 'PMI 3D'),
 ]
 def main():
     for x in B:
