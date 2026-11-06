@@ -48,9 +48,9 @@ pub fn raio_inicial(m: &StructMember, vars: &HashMap<String, f64>) -> String {
 fn modo_dica(m: BendMode) -> &'static str {
     match m {
         BendMode::Dobradeira => "Dobra por dobradeira ou rolos: o tubo vira um sólido curvo, de uma peça só.",
-        BendMode::VComum => "V comum: canto vivo, rasgo em V com a parede externa de dobradiça. O rasgo ainda não é desenhado (B328).",
-        BendMode::VComRaio => "V com raio: canto curvo pelo gabarito de serralheria. O contorno do corte ainda não é desenhado (B333).",
-        BendMode::CorteDobradeira => "Corte em V fechado por ferramenta, com o retorno elástico compensado. O rasgo ainda não é desenhado (B328).",
+        BendMode::VComum => "V comum: canto vivo, rasgo em V com a parede externa de dobradiça. O 3D mostra o tubo fechado; os rasgos estão no tubo aberto.",
+        BendMode::VComRaio => "V com raio: canto curvo pelo gabarito de serralheria. O 3D mostra o tubo fechado; o contorno do corte está no tubo aberto.",
+        BendMode::CorteDobradeira => "Corte em V fechado por ferramenta, com o retorno elástico compensado. O 3D mostra o tubo fechado; os rasgos estão no tubo aberto.",
         BendMode::CorteSimples => "Corte simples: esquadria nas duas pontas (gomos no tubo redondo) e solda. Gera dois membros.",
     }
 }
@@ -179,7 +179,12 @@ pub fn editor_do_no(ui: &mut egui::Ui, doc: &Document, me: Id, m: &mut StructMem
         }
     });
     match &calc {
-        Some(c) => resultado_ui(ui, &c.resultado, c.inicio, c.fim),
+        Some(c) => {
+            resultado_ui(ui, &c.resultado, c.inicio, c.fim);
+            if let Some(t) = tubo {
+                crate::st_dobra_corte_ui::painel(ui, t, c, joint);
+            }
+        }
         None => {
             ui.label(RichText::new(tr("Sem cálculo ainda: preencha o raio.")).weak());
         }

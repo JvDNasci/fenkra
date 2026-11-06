@@ -15,6 +15,9 @@ pub mod perfis_catalogo;
 pub mod st_cantos;
 pub mod st_dobra;
 mod st_dobra_geo;
+pub mod st_dobra_corte;
+pub mod st_dobra_saida;
+mod st_dobra_v;
 pub use st_dobra_geo::tubos_dobrados;
 pub mod hardware;
 pub mod biblioteca;
@@ -4935,9 +4938,23 @@ impl Ctx<'_> {
                         // dobra de tubo: a dobradeira recua as pernas e põe um arco (nada a cortar); os
                         // demais modos cortam em esquadria (os rasgos em V são os itens B328 e B333)
                         let mode = if mode == CornerMode::Dobra {
-                            match plano_dobra.modo_do_par(i, *oi).filter(|_| *oid == f.id) {
-                                Some(BendMode::Dobradeira) | None => continue,
-                                Some(_) => CornerMode::MeiaEsquadria,
+                            match plano_dobra.no_do_par(i, *oi).filter(|_| *oid == f.id) {
+                                None => continue,
+                                Some(no) => match no.bend.mode {
+                                    BendMode::Dobradeira => continue,
+                                    // V múltiplo: as esquadrias ficam nos planos das articulações (B328);
+                                    // a perna só ganha sobra na ponta
+                                    BendMode::VComum | BendMode::CorteDobradeira if no.res.rasgos > 1 && no.res.erros.is_empty() => {
+                                        let e = diag(&gi).max(diag(og));
+                                        if geo3d::dist(p, gi.start) < 1e-4 {
+                                            geo[i].ext.0 = geo[i].ext.0.max(e);
+                                        } else {
+                                            geo[i].ext.1 = geo[i].ext.1.max(e);
+                                        }
+                                        continue;
+                                    }
+                                    _ => CornerMode::MeiaEsquadria,
+                                },
                             }
                         } else {
                             mode
@@ -5006,6 +5023,32 @@ impl Ctx<'_> {
                 // B326: pernas ligadas por dobradeira viram um sólido só (perna + arco + perna)
                 let mut fundidos: HashMap<usize, (f64, Frame)> = HashMap::new();
                 let mut dobra_avisos: Vec<String> = vec![];
+                // B328, B333: nós com rasgo em V ou canto com gabarito recortam as duas pernas e
+                // trazem os corpos que as ligam (dobradiça, peças do meio, setores)
+                let mut extras_v: HashMap<(usize, usize), Vec<Shape>> = HashMap::new();
+                for c in &plano_dobra.cadeias {
+                    for no in c.nos.iter().filter(|n| st_dobra_geo::no_fundivel(n) && n.bend.mode != BendMode::Dobradeira) {
+                        let (Some(pa), Some(pd)) = (kept.iter().position(|x| *x == no.antes), kept.iter().position(|x| *x == no.depois)) else { continue };
+                        match self.tratar_no_v(&geo, no, &shapes[pa], &shapes[pd]) {
+                            Ok(t) => {
+                                shapes[pa] = t.antes;
+                                shapes[pd] = t.depois;
+                                extras_v.insert((no.antes, no.depois), t.extras);
+                            }
+                            Err(e) => {
+                                for i in [no.antes, no.depois] {
+                                    falhas.push((i, format!("dobra: {e}")));
+                                }
+                                for i in [no.antes, no.depois] {
+                                    if let Some(q) = kept.iter().position(|x| *x == i) {
+                                        kept.remove(q);
+                                        shapes.remove(q);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 for c in &plano_dobra.cadeias {
                     for n in &c.nos {
                         dobra_avisos.extend(n.res.avisos.iter().map(|a| format!("linhas {}–{}: {a}", n.antes + 1, n.depois + 1)));
@@ -5018,7 +5061,13 @@ impl Ctx<'_> {
                             let mut sh = shapes[kept.iter().position(|x| *x == run[0]).unwrap()].clone();
                             for (n, &k) in arcos.iter().enumerate() {
                                 let no = &c.nos[k];
-                                sh = sh.boolean(&self.arco_do_no(&geo[no.antes], no)?, fenkra_kernel::Bool::Fuse).map_err(|e| e.0)?;
+                                if no.bend.mode == BendMode::Dobradeira {
+                                    sh = sh.boolean(&self.arco_do_no(&geo[no.antes], no)?, fenkra_kernel::Bool::Fuse).map_err(|e| e.0)?;
+                                } else {
+                                    for extra in extras_v.get(&(no.antes, no.depois)).into_iter().flatten() {
+                                        sh = sh.boolean(extra, fenkra_kernel::Bool::Fuse).map_err(|e| e.0)?;
+                                    }
+                                }
                                 sh = sh.boolean(&shapes[kept.iter().position(|x| *x == run[n + 1]).unwrap()], fenkra_kernel::Bool::Fuse).map_err(|e| e.0)?;
                             }
                             Ok(sh)

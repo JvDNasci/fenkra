@@ -241,19 +241,20 @@ fn corte_simples_e_dois_membros_em_esquadria() {
 }
 
 #[test]
-fn modos_em_v_ficam_preparados_e_avisam() {
+fn modos_em_v_geram_um_tubo_so_e_avisam_que_a_geometria_e_derivada() {
     if !fenkra_kernel::AVAILABLE {
         return;
     }
-    for (modo, raio, quem) in [(BendMode::VComum, "2", "B328"), (BendMode::VComRaio, "40", "B333"), (BendMode::CorteDobradeira, "2", "B328")] {
+    for (modo, raio) in [(BendMode::VComum, "2"), (BendMode::VComRaio, "40"), (BendMode::CorteDobradeira, "2")] {
         let (d, f) = l_dobrado(SectionKind::TuboQuadrado, &["40", "3"], bend(modo, raio), vec![]);
         let r = recompute(&d);
         match &r.status[&f] {
-            Status::Warning(w) => assert!(w.contains(quem), "{modo:?}: {w}"),
+            Status::Warning(w) => assert!(w.contains("a validar em peça real"), "{modo:?}: {w}"),
             outro => panic!("{modo:?}: {outro:?}"),
         }
-        // o canto vivo aparece (duas pernas em esquadria): nada de rasgo ainda
-        assert_eq!(fenkra_solidos::structural_members(&d).len(), 2, "{modo:?}");
+        // pernas, dobradiça (ou placa e setores) viram um sólido e uma linha da lista de corte
+        assert_eq!(fenkra_solidos::structural_members(&d).len(), 1, "{modo:?}");
+        assert_eq!(r.bodies.len(), 1, "{modo:?}");
     }
     // tubo redondo não faz V
     let (d, f) = l_dobrado(SectionKind::TuboRedondo, &["40", "3"], bend(BendMode::VComum, "2"), vec![]);

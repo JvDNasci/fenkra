@@ -48,18 +48,29 @@ pub(crate) struct PlanoDobra {
 }
 
 impl PlanoDobra {
+    /// Nó entre duas pernas, se houver.
+    pub fn no_do_par(&self, a: usize, b: usize) -> Option<&NoDobra> {
+        self.cadeias.iter().flat_map(|c| &c.nos).find(|n| (n.antes == a && n.depois == b) || (n.antes == b && n.depois == a))
+    }
+
     /// Modo do nó entre duas pernas, se houver.
     pub fn modo_do_par(&self, a: usize, b: usize) -> Option<BendMode> {
         self.cadeias.iter().flat_map(|c| &c.nos).find(|n| (n.antes == a && n.depois == b) || (n.antes == b && n.depois == a)).map(|n| n.bend.mode)
     }
 }
 
-/// Pernas fundidas por nós de dobradeira: (índices em ordem, nós entre elas).
+/// O nó vira geometria própria? Dobradeira (arco) e os modos em V (rasgo fechado, B328 e B333);
+/// só o corte simples deixa as pernas como membros separados.
+pub(crate) fn no_fundivel(no: &NoDobra) -> bool {
+    no.bend.mode != BendMode::CorteSimples && no.res.erros.is_empty()
+}
+
+/// Pernas fundidas por nós com geometria própria: (índices em ordem, nós entre elas).
 pub(crate) fn blocos_fundidos(c: &CadeiaDobra) -> Vec<(Vec<usize>, Vec<usize>)> {
     let mut out: Vec<(Vec<usize>, Vec<usize>)> = vec![];
     let mut run = (vec![c.pernas[0]], vec![]);
     for (k, no) in c.nos.iter().enumerate() {
-        if no.bend.mode == BendMode::Dobradeira && no.res.erros.is_empty() {
+        if no_fundivel(no) {
             run.0.push(no.depois);
             run.1.push(k);
         } else {
@@ -332,7 +343,7 @@ impl Ctx<'_> {
             soma_pernas: soma,
             avisos,
             erros,
-            fundido: !nos.is_empty() && nos.iter().all(|n| n.bend.mode == BendMode::Dobradeira && n.res.erros.is_empty()),
+            fundido: !nos.is_empty() && nos.iter().all(no_fundivel),
         }
     }
 }
