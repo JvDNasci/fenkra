@@ -10,7 +10,7 @@ use fenkra_core::{Document, Id};
 use fenkra_desenho::{Dim, DimKind, Drawing, Format, Source, Table, TableKind, ViewKind};
 use fenkra_montagem::display::DisplayState;
 use fenkra_montagem::{Assembly, NodeKind, Placement};
-use fenkra_pacote::{de_arquivo, de_desenho, de_montagem, de_peca, pagina_html, Opcoes, Pacote};
+use fenkra_pacote::{de_arquivo, de_desenho, de_montagem, de_peca, pagina_html, pagina_html_completa, Opcoes, Pacote};
 use std::path::{Path, PathBuf};
 
 fn pasta(nome: &str) -> PathBuf {
@@ -218,7 +218,7 @@ fn tamanho_do_pacote_de_cem_pecas() {
     let compartilhada = de_arquivo(&corpus(&dir, 100, false), &Opcoes::default()).unwrap();
     let distintas = de_arquivo(&corpus(&dir, 100, true), &Opcoes::default()).unwrap();
     let (a, b) = (compartilhada.bytes().unwrap().len(), distintas.bytes().unwrap().len());
-    let dec = de_arquivo(&dir.join("conjunto_100d.fka"), &Opcoes { decimar: Some(0.3), capturas: false }).unwrap().bytes().unwrap().len();
+    let dec = de_arquivo(&dir.join("conjunto_100d.fka"), &Opcoes { decimar: Some(0.3), capturas: false, ..Default::default() }).unwrap().bytes().unwrap().len();
     eprintln!("100 instâncias de 1 peça: {a} bytes; 100 peças distintas: {b} bytes; distintas decimadas a 30%: {dec} bytes");
     assert_eq!(distintas.manifesto["estatisticas"]["pecas_unicas"], 100);
     assert!(a < b);
@@ -230,7 +230,7 @@ fn tamanho_do_pacote_de_cem_pecas() {
 fn decimar_reduz_a_malha_e_tira_os_pontos_exatos() {
     let doc = placa();
     let cheio = de_peca(&doc, &Opcoes::default()).unwrap();
-    let leve = de_peca(&doc, &Opcoes { decimar: Some(0.4), capturas: false }).unwrap();
+    let leve = de_peca(&doc, &Opcoes { decimar: Some(0.4), capturas: false, ..Default::default() }).unwrap();
     leve.validar().unwrap();
     let t = |p: &Pacote| p.manifesto["malhas"][0]["triangulos"].as_u64().unwrap();
     assert!(t(&leve) < t(&cheio), "{} !< {}", t(&leve), t(&cheio));
@@ -250,6 +250,73 @@ fn pagina_e_autocontida_e_sem_rede() {
     }
     let vazia = pagina_html(None);
     assert!(vazia.len() < h.len());
+}
+
+/// B339: a análise de montagem vai calculada no manifesto, para a página só listar.
+#[test]
+fn analise_da_montagem_traz_interferencias_e_folgas_ja_calculadas() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    let dir = pasta("analise");
+    std::fs::write(dir.join("placa.fkp"), placa().to_json()).unwrap();
+    let mut a = Assembly::new("Conjunto");
+    let parte = || NodeKind::Part { path: "placa.fkp".into() };
+    let p1 = a.add_component("A", parte(), Placement::default(), None);
+    // B se sobrepõe a A (5 mm de deslocamento numa placa de 120 mm); C fica afastada de B
+    let p2 = a.add_component("B", parte(), Placement { origin: [5., 0., 0.], ..Default::default() }, None);
+    let p3 = a.add_component("C", parte(), Placement { origin: [130., 0., 0.], ..Default::default() }, None);
+    let pac = de_montagem(&a, &dir, &Opcoes::default()).unwrap();
+    pac.validar().unwrap();
+    let an = &pac.manifesto["analise"];
+    assert_eq!(an["calculada"], true, "{an}");
+    let interf = an["interferencias"].as_array().unwrap();
+    assert_eq!(interf.len(), 1, "só A e B se tocam em volume: {interf:?}");
+    let (ia, ib) = (format!("n{}", p1.0), format!("n{}", p2.0));
+    let par = [interf[0]["a"].as_str().unwrap(), interf[0]["b"].as_str().unwrap()];
+    assert!(par.contains(&ia.as_str()) && par.contains(&ib.as_str()), "{par:?}");
+    assert!(interf[0]["volume_mm3"].as_f64().unwrap() > 100., "o volume comum é o de uma placa quase inteira");
+    // folgas: B–C a 5 mm e A–C a 10 mm; o par que interfere não entra
+    let folgas = an["folgas"].as_array().unwrap();
+    assert_eq!(folgas.len(), 2, "{folgas:?}");
+    let c = format!("n{}", p3.0);
+    for f in folgas {
+        assert!(f["a"] == c || f["b"] == c, "toda folga envolve a placa C: {f}");
+        assert_eq!(f["metodo"], "vertices");
+    }
+    let d: Vec<f64> = folgas.iter().map(|f| f["distancia_mm"].as_f64().unwrap()).collect();
+    assert!((d[0] - 5.).abs() < 0.5 && (d[1] - 10.).abs() < 0.5, "folgas {d:?}");
+    // a opção desliga a análise: o pacote não leva o campo
+    let sem = de_montagem(&a, &dir, &Opcoes { analise: false, ..Default::default() }).unwrap();
+    assert!(sem.manifesto.get("analise").is_none());
+    // a geração continua determinística com a análise
+    assert_eq!(pac.bytes().unwrap(), de_montagem(&a, &dir, &Opcoes::default()).unwrap().bytes().unwrap());
+    saida("analise", &pac);
+}
+
+/// B339: a página do PLM leva o pacote novo, o antigo (comparação) e o estado do documento.
+#[test]
+fn pagina_do_plm_embute_os_dois_pacotes_e_o_estado_sem_fechar_a_marca() {
+    let nova = de_peca(&placa(), &Opcoes::default()).unwrap().bytes().unwrap();
+    let mut d = placa();
+    d.params.iter_mut().find(|p| p.name == "esp").unwrap().expr = "12".into();
+    let antiga = de_peca(&d, &Opcoes::default()).unwrap().bytes().unwrap();
+    let h = pagina_html_completa(Some(&nova), Some(&antiga), Some(r#"{"estado":"Em trabalho","versao":"v2","nome":"</script><img src=x>"}"#));
+    assert!(!h.contains("/*@PACOTE@*/") && !h.contains("/*@PACOTE_B@*/") && !h.contains("/*@META@*/"));
+    assert!(h.contains("Em trabalho"));
+    assert!(!h.contains("</script><img"), "o JSON do PLM não pode fechar a marca da página");
+    // os dois pacotes entram em marcas diferentes e são diferentes
+    let trecho = |id: &str| {
+        let i = h.find(&format!("id=\"{id}\"")).unwrap();
+        let ini = h[i..].find('>').unwrap() + i + 1;
+        let fim = h[ini..].find("</script>").unwrap() + ini;
+        h[ini..fim].to_string()
+    };
+    let (a, b) = (trecho("fkv-dados"), trecho("fkv-dados-b"));
+    assert!(!a.is_empty() && !b.is_empty() && a != b);
+    // sem comparação, a marca do segundo pacote fica vazia
+    let so = pagina_html_completa(Some(&nova), None, None);
+    assert!(so.contains("id=\"fkv-dados-b\" type=\"application/octet-stream\"></script>"));
 }
 
 #[test]

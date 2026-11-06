@@ -59,6 +59,7 @@ Campos de topo:
 | `capturas` | lista | capturas de vista das anotações |
 | `vistas` | lista | câmeras salvas |
 | `estados` | lista | estados de exibição da montagem |
+| `analise` | objeto | interferências e folgas da montagem já calculadas (abaixo); só em `montagem` |
 | `lista` | lista | lista de peças da montagem (item, quantidade, nome, arquivo) |
 | `folhas` | lista | folhas do desenho (id, nome, arquivo, largura, altura, formato) |
 | `tabelas` | lista | texto das tabelas do desenho (cabeçalho e linhas) |
@@ -102,6 +103,19 @@ Saem da fórmula de cada aresta do B-rep, não da malha. Por isso a medida entre
 `direcao`, `raio`, `furo`), `no`, `visivel`, `pasta`. Quadros de tolerância, referências, rugosidade e
 solda levam o texto pronto em `texto`.
 
+### `analise` (montagem)
+
+Calculada pelo Fenkra na hora de gerar, porque o navegador não tem kernel. Campos: `calculada`
+(`false` com `motivo` quando não deu: sem kernel ou mais de 150 componentes de topo), `tolerancia_mm3`,
+`limite_folga_mm`, `interferencias` e `folgas`.
+
+- Interferência: `a` e `b` (ids da árvore), `nome_a`, `nome_b` e `volume_mm3` do sólido comum.
+- Folga: `a`, `b`, `nome_a`, `nome_b`, `distancia_mm` e `metodo`. Vale entre peças que não interferem e
+  estão a menos de `limite_folga_mm`. O método `vertices` mede uma amostra de vértices de cada peça contra
+  o sólido da outra: é um limite superior da folga real, exato entre faces planas e cilindros.
+
+Só entram componentes de topo (id `n<id>`); um subconjunto conta como uma peça.
+
 ### `capturas`, `vistas`, `estados`
 
 - Câmera: `alvo`, `yaw`, `pitch` (radianos), `distancia`, `ortografica`. A câmera olha o alvo de
@@ -124,6 +138,22 @@ imagem. Campos: `id`, `nome`, `largura`, `altura`, `formato`, `vistas` (id, nome
 
 Opcionais em qualquer item: `c` cor própria, `o` id do objeto do desenho, `er` objeto com problema. Cotas,
 carimbo e tabelas já vêm como linhas e textos.
+
+## O visualizador no PLM (B339)
+
+A página `visualizador.html` tem, além do que está acima, as abas Zonas, Montagem e Comparar:
+
+- **Zonas**: região do produto em caixa (modo "totalmente dentro" ou "toca"), faixa de volume, material,
+  texto; lista com massa e volume somados; isolar e destacar o resultado; peças por faixa de um eixo.
+- **Montagem** (só em `tipo` `montagem`): resumo, interferências e folgas de `analise`, e onde é usado
+  (peças com o mesmo código ou a mesma malha, com o caminho na árvore).
+- **Comparar**: dois pacotes pelos IDs estáveis. Lista adicionados, removidos, movidos (matriz do nó),
+  alterados (nome, código, material, massa, volume, área, triângulos, visibilidade), mudança nos totais e
+  interferências que surgiram ou sumiram. Pinta o que o pacote aberto tem de diferente e troca de lado.
+
+Entradas extras da página: segundo pacote embutido (`pagina_html_completa`), `?cmp=URL` junto com
+`?src=`, e `postMessage({fkv, comparar, meta})`. `meta` é opcional e leva `estado`, `revisao`, `versao`,
+`pn` e `comparando`; aparece ao lado do título. Ele não vai no pacote porque o estado muda depois.
 
 ## Segurança
 
