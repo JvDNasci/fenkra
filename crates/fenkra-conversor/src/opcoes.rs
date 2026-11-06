@@ -187,7 +187,7 @@ impl ModoIges {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct OpcoesExportar {
     pub esquema: EsquemaSaida,
@@ -199,11 +199,13 @@ pub struct OpcoesExportar {
     pub pmi: bool,
     pub iges: ModoIges,
     pub estrutura: Estrutura,
+    /// desvio, ângulo e codificação dos formatos de malha
+    pub malha: crate::OpcoesMalha,
 }
 
 impl Default for OpcoesExportar {
     fn default() -> Self {
-        OpcoesExportar { esquema: EsquemaSaida::default(), unidade: UnidadeSaida::default(), cores: true, nomes: true, camadas: true, pmi: false, iges: ModoIges::default(), estrutura: Estrutura::default() }
+        OpcoesExportar { esquema: EsquemaSaida::default(), unidade: UnidadeSaida::default(), cores: true, nomes: true, camadas: true, pmi: false, iges: ModoIges::default(), estrutura: Estrutura::default(), malha: crate::OpcoesMalha::default() }
     }
 }
 

@@ -11,7 +11,7 @@ use super::*;
 use crate::examples::{paint_preview, preview_na_tela, Preview};
 use crate::ui_ext::dv;
 use fenkra_conversor::processo::Filho;
-use fenkra_conversor::{unidade_suspeita, Destino, ErroConv, Importado, OpcoesImportar, Previa, Relatorio, Reparo, Suspeita, UnidadeArquivo};
+use fenkra_conversor::{unidade_suspeita, Destino, ErroConv, Importado, OpcoesImportar, Previa, Registro, Relatorio, Reparo, Suspeita, UnidadeArquivo};
 use fenkra_project::importacao::Reimportacao;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
@@ -395,7 +395,8 @@ fn relatorio_ui(ui: &mut egui::Ui, rel: &Relatorio, realce: Option<usize>) -> Sa
 
 impl App {
     pub(super) fn importar_arquivo(&mut self) {
-        let dialogo = rfd::FileDialog::new().add_filter("STEP, IGES, BREP, DXF", &["step", "stp", "igs", "iges", "brep", "dxf"]).add_filter(tr("Árvore paramétrica"), &["fkx"]).add_filter(tr("Todos os arquivos"), &["*"]);
+        let malhas: Vec<&str> = fenkra_conversor::Formato::MALHA.iter().filter(|f| Registro::default().capacidades(**f).ler).flat_map(|f| f.extensoes().iter().copied()).collect();
+        let dialogo = rfd::FileDialog::new().add_filter(tr("Todos os formatos"), &Registro::default().extensoes_de_leitura()).add_filter("STEP, IGES, BREP, DXF", &["step", "stp", "igs", "iges", "brep", "dxf"]).add_filter(tr("Malha"), &malhas).add_filter(tr("Árvore paramétrica"), &["fkx"]).add_filter(tr("Todos os arquivos"), &["*"]);
         let Some(caminho) = dialogo.pick_file() else { return };
         self.abrir_painel_importar(caminho);
     }
@@ -561,7 +562,7 @@ impl App {
 #[cfg(test)]
 mod testes {
     use super::*;
-    use fenkra_conversor::{Defeito, Formato, ModeloNeutro, OpcoesExportar, Registro, TipoDefeito, NOTAS};
+    use fenkra_conversor::{Defeito, Formato, ModeloNeutro, OpcoesExportar, TipoDefeito, NOTAS};
     use fenkra_kernel::Shape;
 
     fn importado(l: [f64; 3], teste: &str) -> Importado {

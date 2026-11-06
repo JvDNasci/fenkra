@@ -13,6 +13,8 @@ fenkra-kernel = { path = "../fenkra-kernel" }
 fenkra-montagem = { path = "../fenkra-montagem" }
 fenkra-solidos = { path = "../fenkra-solidos" }
 blake3 = "1"
+miniz_oxide = "0.9"
+roxmltree = "0.21"
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

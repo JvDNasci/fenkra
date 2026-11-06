@@ -504,7 +504,8 @@ impl App {
         }
         // desenvolvimento: FENKRA_DEMO_EXPORTAR=iges abre o painel de exportação nesse formato
         if let Ok(f) = std::env::var("FENKRA_DEMO_EXPORTAR") {
-            app.abrir_painel_exportar(if f == "iges" { fenkra_conversor::Formato::Iges } else { fenkra_conversor::Formato::Step });
+            let formato = fenkra_conversor::Formato::TODOS.into_iter().find(|q| q.extensoes().contains(&f.as_str()));
+            app.abrir_painel_exportar(formato.unwrap_or(fenkra_conversor::Formato::Step));
             app.started = true;
         }
         // desenvolvimento: FENKRA_DEMO_IMPORTAR=<arquivo> abre o painel de importação com esse arquivo
@@ -3284,6 +3285,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     }
                     if ui.button(tr("Exportar IGES…")).clicked() {
                         self.abrir_painel_exportar(fenkra_conversor::Formato::Iges);
+                        ui.close();
+                    }
+                    if ui.button(tr("Exportar malha…")).on_hover_text(tr("Grava em formatos abertos de malha e visualização: 3MF, OBJ, PLY, glTF, USD e outros, com desvio, cor e estrutura.")).clicked() {
+                        self.abrir_painel_exportar(fenkra_conversor::Formato::Glb);
                         ui.close();
                     }
                     if ui.button(tr("Exportar árvore paramétrica…")).on_hover_text(tr("Grava a receita da peça ou da montagem em JSON aberto: esboços, cotas, comandos, nomes e cores. Não leva a geometria pronta.")).clicked() {

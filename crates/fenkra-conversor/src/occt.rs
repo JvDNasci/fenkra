@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Provedor padrão: STEP pela ponte XDE do kernel e BREP pelo texto nativo do OpenCASCADE.
 
-use crate::{texto_do_caminho, ErroConv, Formato, ModeloNeutro, OpcoesExportar, OpcoesImportar, Provedor};
+use crate::{texto_do_caminho, Capacidades, ErroConv, Formato, ModeloNeutro, OpcoesExportar, OpcoesImportar, Provedor};
 use crate::opcoes::ModoIges;
 use fenkra_kernel::{ModeloXde, OpcoesGravarIges, OpcoesGravarXde, OpcoesLerXde, Shape};
 use std::path::Path;
 
 pub struct ProvedorOcct;
 
-/// Árvore é receita e DXF é 2D: quem lê os dois é o próprio conversor, e nenhum provedor de geometria.
+/// Árvore é receita, DXF é 2D e malha tem provedor próprio: nada disso passa por aqui.
 fn sem_geometria() -> ErroConv {
-    ErroConv::Formato("árvore paramétrica e DXF não passam pelo provedor de geometria".into())
+    ErroConv::Formato("este formato não passa pelo provedor de geometria exata".into())
 }
 
 impl Provedor for ProvedorOcct {
@@ -20,6 +20,15 @@ impl Provedor for ProvedorOcct {
 
     fn formatos(&self) -> &'static [Formato] {
         &[Formato::Step, Formato::Iges, Formato::Brep]
+    }
+
+    fn capacidades(&self, formato: Formato) -> Capacidades {
+        let base = Capacidades { ler: true, gravar: true, exata: true, ..Default::default() };
+        match formato {
+            Formato::Step => Capacidades { cor: true, camadas: true, montagem: true, unidade: true, ..base },
+            Formato::Iges => Capacidades { cor: true, camadas: true, unidade: true, ..base },
+            _ => base,
+        }
     }
 
     fn ler(&self, formato: Formato, caminho: &Path, o: &OpcoesImportar) -> Result<ModeloNeutro, ErroConv> {
@@ -40,7 +49,7 @@ impl Provedor for ProvedorOcct {
                 let nome = caminho.file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
                 Ok(ModeloNeutro::de_forma(formato, &nome, Shape::from_brep(&texto)?))
             }
-            Formato::Arvore | Formato::Dxf => Err(sem_geometria()),
+            _ => Err(sem_geometria()),
         }
     }
 
@@ -55,7 +64,6 @@ impl Provedor for ProvedorOcct {
                 let opcoes = OpcoesGravarIges { brep: o.iges == ModoIges::Brep, unidade: o.unidade.into(), cores: o.cores, nomes: o.nomes, camadas: o.camadas };
                 modelo.xde.gravar_iges(texto_do_caminho(caminho)?, opcoes).map_err(falha)
             }
-            Formato::Arvore | Formato::Dxf => Err(sem_geometria()),
             // o BREP não tem estrutura: as peças vão soltas, cada uma no seu lugar
             Formato::Brep => {
                 let mut tudo: Option<Shape> = None;
@@ -70,6 +78,7 @@ impl Provedor for ProvedorOcct {
                 let tudo = tudo.ok_or_else(|| ErroConv::Gravacao("o modelo não tem forma para gravar".into()))?;
                 std::fs::write(caminho, tudo.to_brep().map_err(falha)?).map_err(|e| ErroConv::Gravacao(format!("não foi possível gravar o BREP: {e}")))
             }
+            _ => Err(sem_geometria()),
         }
     }
 }

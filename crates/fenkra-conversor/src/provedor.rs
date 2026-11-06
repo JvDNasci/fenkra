@@ -2,12 +2,16 @@
 //! Interface de provedor: quem sabe ler e gravar um formato. O OpenCASCADE é o provedor padrão; outro
 //! provedor entra no registro sem mudar diálogos nem relatórios.
 
-use crate::{ErroConv, Formato, ModeloNeutro, OpcoesExportar, OpcoesImportar, ProvedorOcct};
+use crate::{Capacidades, ErroConv, Formato, ModeloNeutro, OpcoesExportar, OpcoesImportar, ProvedorMalha, ProvedorOcct};
 use std::path::Path;
 
 pub trait Provedor: Send + Sync {
     fn id(&self) -> &'static str;
     fn formatos(&self) -> &'static [Formato];
+    /// O que cada formato deste provedor lê, grava e carrega. É daqui que sai a matriz de formatos.
+    fn capacidades(&self, _formato: Formato) -> Capacidades {
+        Capacidades::default()
+    }
     /// Lê o arquivo, com a geometria em milímetros na unidade que ele declara.
     fn ler(&self, formato: Formato, caminho: &Path, opcoes: &OpcoesImportar) -> Result<ModeloNeutro, ErroConv>;
     fn gravar(&self, formato: Formato, modelo: &ModeloNeutro, caminho: &Path, opcoes: &OpcoesExportar) -> Result<(), ErroConv>;
@@ -20,7 +24,7 @@ pub struct Registro {
 
 impl Default for Registro {
     fn default() -> Self {
-        Registro { provedores: vec![Box::new(ProvedorOcct)] }
+        Registro { provedores: vec![Box::new(ProvedorOcct), Box::new(ProvedorMalha)] }
     }
 }
 
@@ -47,15 +51,16 @@ impl Registro {
             .ok_or_else(|| ErroConv::Formato(format!("nenhum provedor lê {}", formato.nome())))
     }
 
+    /// Formato de saída pela extensão do destino.
+    pub(crate) fn formato_de_saida(&self, caminho: &Path) -> Result<Formato, ErroConv> {
+        let extensao = caminho.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+        self.formatos().into_iter().find(|f| f.extensoes().contains(&extensao.as_str())).ok_or_else(|| ErroConv::Formato(format!("extensão desconhecida: '{extensao}'")))
+    }
+
     /// Grava no formato pedido pela extensão do destino. Extensão desconhecida é erro: gravar STEP em
     /// `.xyz` faria o outro programa falhar sem dizer por quê.
     pub fn gravar(&self, modelo: &ModeloNeutro, caminho: &Path, opcoes: &OpcoesExportar) -> Result<(), ErroConv> {
-        let extensao = caminho.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
-        let formato = self
-            .formatos()
-            .into_iter()
-            .find(|f| f.extensoes().contains(&extensao.as_str()))
-            .ok_or_else(|| ErroConv::Formato(format!("extensão desconhecida: '{extensao}'")))?;
+        let formato = self.formato_de_saida(caminho)?;
         if opcoes.estrutura == crate::Estrutura::Achatada && modelo.tem_montagem() {
             return self.provedor(formato)?.gravar(formato, &modelo.achatado()?, caminho, opcoes);
         }
@@ -95,7 +100,9 @@ mod testes {
 
     #[test]
     fn registro_padrao_lista_formatos_e_registro_vazio_explica() {
-        assert_eq!(Registro::default().formatos(), vec![Formato::Step, Formato::Iges, Formato::Brep]);
+        let formatos = Registro::default().formatos();
+        assert_eq!(formatos[..3], [Formato::Step, Formato::Iges, Formato::Brep]);
+        assert!(Formato::MALHA.iter().all(|f| formatos.contains(f)));
         let e = Registro::vazio().provedor(Formato::Step).err().unwrap();
         assert!(e.to_string().contains("nenhum provedor"), "{e}");
     }
