@@ -138,6 +138,7 @@ mod sup_inclinacao;
 mod textos_features;
 mod tabela_projeto_ui;
 mod arestas_ui;
+mod arestas_previa;
 mod textos_forma;
 mod forma_edit;
 mod forma_sel;

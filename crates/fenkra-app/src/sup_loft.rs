@@ -89,9 +89,9 @@ pub fn setas(doc: &Document, r: &RecomputeResult, id: Id) -> Vec<Seta> {
     }
 }
 
-/// A tensão é um múltiplo da corda, não um comprimento: a cota dela sai sem "mm".
+/// A tensão é um múltiplo da corda e a escala é um fator, não comprimentos: a cota delas sai sem "mm".
 pub fn sem_unidade(rotulo: &str) -> bool {
-    matches!(rotulo, "Tensão 1" | "Tensão 2")
+    matches!(rotulo, "Tensão 1" | "Tensão 2" | "Escala" | "Escala X" | "Escala Y" | "Escala Z")
 }
 
 /// Grava o valor da seta. Devolve se o campo era daqui.

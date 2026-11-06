@@ -11,7 +11,15 @@ use glam::Vec3;
 use fenkra_core::*;
 use crate::i18n::tr;
 
-mod solidos;
+mod aresta;
+mod furo;
+mod padrao;
+pub(crate) mod solidos;
+
+/// O comando Furo espera o clique numa face para posicionar o furo (B90)?
+pub(crate) fn furo_espera_clique(h: &Hole) -> bool {
+    furo::espera_clique(h)
+}
 
 /// Tamanho da pega das alças na tela, igual em toda seta (B228): um alvo que o mouse acerta sem mira.
 pub(crate) const PEGA: f32 = 28.;
@@ -605,10 +613,20 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: Camera) {
     list.extend(solidos::alcas_edicao(app, id));
     // B49: uma seta por ponto de controle do filete variável
     list.extend(solidos::alcas_filete(app, id));
+    // B91: setas de espaçamento do padrão linear
+    list.extend(padrao::alcas(app, id));
+    // B289: início e fim do trecho parcial do filete e do chanfro
+    list.extend(aresta::alcas_trecho(app, id));
     for (i, (slot, h)) in list.into_iter().enumerate() {
         linear_handle(app, ui, rect, &cam, id, slot, i, h);
     }
     solidos::arcos(app, ui, rect, &cam, id);
+    // B91: ponto clicável por instância do padrão e arco do ângulo do circular
+    padrao::overlay(app, ui, rect, &cam, id);
+    // B289: seta que troca a face da primeira medida
+    aresta::inverter(app, ui, rect, &cam, id);
+    // B90: furo-guia que segue o cursor sobre a face
+    furo::guia(app, ui, rect, &cam, id);
     // B89: o término "até" encaixa na face sob o cursor
     solidos::seta_ate_face(app, ui, rect, &cam, id);
     // B275: o plano de referência do comando (espelho, saída, base) tem a seta do próprio deslocamento
@@ -689,6 +707,13 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
     painter.rect_filled(lr, 4., Color32::from_rgba_unmultiplied(20, 60, 110, 220));
     painter.rect_stroke(lr, 4., Stroke::new(1., c), egui::StrokeKind::Inside);
     painter.galley(lr.min + egui::vec2(5., 3.), galley, Color32::WHITE);
+    // B246: com o valor que deixa a geometria inválida, a causa aparece junto da seta que o arrasta,
+    // e a prévia anterior continua na tela
+    if nth == 0 {
+        if let Some(fenkra_solidos::Status::Error(msg)) = app.result.as_ref().and_then(|r| r.status.get(&id)) {
+            crate::previa::etiqueta_de_erro(ui, rect, lr.left_bottom() + egui::vec2(0., 4.), msg);
+        }
+    }
     let lresp = ui.interact(lr, egui::Id::unique(("alca_cota", id.0, nth)), if numeric { egui::Sense::click_and_drag() } else { egui::Sense::click() });
     let lresp = lresp.on_hover_text(format!("{} · {}", h.label, tr("arraste a seta ou este rótulo, gire a roda, ou clique para digitar (aceita expressão). Shift ×10, Ctrl ×0,1, Alt ×0,01")));
     if numeric {

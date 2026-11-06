@@ -692,8 +692,18 @@ pub fn same_face(r: &RecomputeResult, body: usize, a: [f64; 3], b: [f64; 3]) -> 
 /// mesma direção): reta e curva concordantes viram uma polilinha só.
 pub fn tangent_chain(r: &RecomputeResult, body: usize, edge: usize) -> Vec<[f64; 3]> {
     let Some(m) = mesh_of(r, body) else { return vec![] };
+    tangent_chain_mesh(m, edge)
+}
+
+/// Cadeia tangente (e as arestas que a formam, na ordem em que foram achadas, a escolhida primeiro)
+/// numa malha qualquer: a prévia usa a malha de antes do comando, onde as arestas ainda existem.
+pub fn tangent_chain_mesh(m: &fenkra_kernel::Mesh, edge: usize) -> Vec<[f64; 3]> {
+    tangent_edges_mesh(m, edge).0
+}
+
+pub fn tangent_edges_mesh(m: &fenkra_kernel::Mesh, edge: usize) -> (Vec<[f64; 3]>, Vec<usize>) {
     let ne = m.edge_ranges.len();
-    let poly = |e: usize| edge_polyline(r, body, e);
+    let poly = |e: usize| edge_polyline_mesh(m, e);
     let d = |a: [f64; 3], b: [f64; 3]| ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt();
     let unit = |a: [f64; 3], b: [f64; 3]| {
         let l = d(a, b).max(1e-12);
@@ -701,7 +711,7 @@ pub fn tangent_chain(r: &RecomputeResult, body: usize, edge: usize) -> Vec<[f64;
     };
     let mut chain = poly(edge);
     if chain.len() < 2 {
-        return chain;
+        return (chain, vec![edge]);
     }
     let mut used = vec![edge];
     for _ in 0..2 {
@@ -737,12 +747,16 @@ pub fn tangent_chain(r: &RecomputeResult, body: usize, edge: usize) -> Vec<[f64;
         // depois para o outro lado
         chain.reverse();
     }
-    chain
+    (chain, used)
 }
 
 /// Polilinha de uma aresta do corpo (na ordem dos segmentos da malha).
 pub fn edge_polyline(r: &RecomputeResult, body: usize, edge: usize) -> Vec<[f64; 3]> {
     let Some(m) = mesh_of(r, body) else { return vec![] };
+    edge_polyline_mesh(m, edge)
+}
+
+pub fn edge_polyline_mesh(m: &fenkra_kernel::Mesh, edge: usize) -> Vec<[f64; 3]> {
     let Some(&s0) = m.edge_ranges.get(edge) else { return vec![] };
     let s1 = m.edge_ranges.get(edge + 1).map(|x| *x as usize).unwrap_or(m.edges.len() / 6);
     let mut out: Vec<[f64; 3]> = vec![];
