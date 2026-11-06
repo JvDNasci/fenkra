@@ -740,7 +740,40 @@ pub enum RefKind {
     /// Varredura: perfil explícito ou circular ao longo da guia.
     SurfSweep { profile: SweepProfile, spine: CurveRef, mode: SweepMode },
     /// Multi-seções por curvas, com guia opcional.
-    SurfLoft { sections: Vec<CurveRef>, guide: Option<CurveRef>, ruled: bool, closed: bool },
+    SurfLoft {
+        sections: Vec<CurveRef>,
+        guide: Option<CurveRef>,
+        ruled: bool,
+        closed: bool,
+        /// guias que a superfície toca, conectores, sentido por seção e tangência nas pontas
+        #[serde(default)]
+        opts: LoftOpts,
+    },
+    /// Superfície regrada: faixa reta que sai das curvas para a normal, a tangente do apoio ou um vetor.
+    SurfRuled {
+        curves: Vec<CurveRef>,
+        /// superfície de apoio; sem ela, vale a que tem essa borda
+        #[serde(default)]
+        support: Option<SurfRef>,
+        mode: RuledMode,
+        /// direção do modo `Vetor`
+        dir: AxisRef,
+        length: String,
+        #[serde(default)]
+        flip: bool,
+    },
+    /// Análise que fica na árvore: conexão entre superfícies, desvio entre elas ou pente de uma curva.
+    /// O resultado é o ponto do pior caso; os números e o mapa saem na nota da referência.
+    SurfCheck {
+        mode: CheckMode,
+        a: SurfRef,
+        b: SurfRef,
+        curve: CurveRef,
+        /// amostras por aresta (conexão) ou ao longo da curva (pente)
+        samples: String,
+        /// conexão: maior folga aceita para duas bordas contarem como junção; pente: mm por 1/mm
+        scale: String,
+    },
     /// Concordância entre duas bordas, com continuidade G0/G1/G2 às superfícies de apoio.
     SurfBlend { a: CurveRef, sa: Option<SurfRef>, b: CurveRef, sb: Option<SurfRef>, cont: Continuity, tension: String },
     /// Juntar superfícies (costura) numa só.
@@ -925,11 +958,11 @@ impl RefKind {
             PlanePointNormal { .. } | PlaneMid { .. } => RefClass::Plane,
             PointCoords { .. } | PointOnCurve { .. } | PointOnPlane { .. } | PointOnSurface { .. } | PointCenter { .. } | PointTangent { .. }
             | PointBetween { .. } | PointCurvePlane { .. } | PointCurveCurve { .. } | PointProject { .. } | PointProjectCurve { .. }
-            | PointOffset { .. } => RefClass::Point,
+            | PointOffset { .. } | SurfCheck { .. } => RefClass::Point,
             SurfExtract { .. } | SurfOffset { .. } | SurfFill { .. } | SurfExtrude { .. } | SurfRevolve { .. } => RefClass::Surface,
             SurfSphere { .. } | SurfCylinder { .. } | SurfSweep { .. } | SurfLoft { .. } | SurfBlend { .. } | SurfJoin { .. } | SurfHeal { .. }
             | SurfSplit { .. } | SurfTrim { .. } | SurfRegions { .. } | SurfMulti { .. } | SurfPart { .. } | SurfUntrim { .. } | SurfExtrapolate { .. } => RefClass::Surface,
-            SurfConnect { .. } | SurfSweepX { .. } | SurfFillet { .. } | SurfEdgeFillet { .. } => RefClass::Surface,
+            SurfConnect { .. } | SurfSweepX { .. } | SurfFillet { .. } | SurfEdgeFillet { .. } | SurfRuled { .. } => RefClass::Surface,
             GeoTransform { class, .. } => *class,
             Linked { class, .. } => *class,
             Isolated { geo } => geo.class(),
@@ -1229,13 +1262,28 @@ impl RefKind {
                 }
                 spine.walk(ids)
             }
-            SurfLoft { sections, guide, .. } => {
-                for c in sections {
+            SurfLoft { sections, guide, opts, .. } => {
+                for c in sections.iter_mut().chain(guide.iter_mut()).chain(opts.guides.iter_mut()) {
                     c.walk(ids)
                 }
-                if let Some(g) = guide {
-                    g.walk(ids)
+                opts.tangents.iter_mut().for_each(&mut *exprs);
+            }
+            SurfRuled { curves, support, dir, length, .. } => {
+                for c in curves {
+                    c.walk(ids)
                 }
+                if let Some(s) = support {
+                    s.walk(ids)
+                }
+                dir.walk(ids);
+                exprs(length)
+            }
+            SurfCheck { a, b, curve, samples, scale, .. } => {
+                a.walk(ids);
+                b.walk(ids);
+                curve.walk(ids);
+                exprs(samples);
+                exprs(scale)
             }
             SurfBlend { a, sa, b, sb, tension, .. } => {
                 a.walk(ids);
@@ -3059,6 +3107,50 @@ fn extent_walk(e: &mut Extent, ids: &mut dyn FnMut(&mut Id), exprs: &mut dyn FnM
     }
 }
 
+/// Para onde a faixa regrada sai da curva.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum RuledMode {
+    /// na normal da superfície de apoio
+    #[default]
+    Normal,
+    /// no plano tangente do apoio, continuando a superfície para fora da borda
+    Tangente,
+    /// num vetor fixo
+    Vetor,
+}
+
+/// O que a análise mede.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum CheckMode {
+    /// folga, ângulo e diferença de curvatura ao longo da junção de duas superfícies
+    #[default]
+    Conexao,
+    /// distância de cada ponto da primeira superfície até a segunda
+    Desvio,
+    /// pente de curvatura de uma curva
+    Pente,
+}
+
+/// Opções da superfície multi-seções. Vazias, o cálculo é o de sempre, pelo kernel.
+#[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
+pub struct LoftOpts {
+    /// curvas que a superfície toca, cruzando todas as seções
+    #[serde(default)]
+    pub guides: Vec<CurveRef>,
+    /// cada conector liga um ponto de cada seção: a fração (0 a 1) do comprimento, uma por seção
+    #[serde(default)]
+    pub connectors: Vec<Vec<f64>>,
+    /// seção percorrida ao contrário
+    #[serde(default)]
+    pub reversed: Vec<bool>,
+    /// tamanho da seta de tangência na primeira e na última seção, em mm; vazio ou zero deixa a ponta livre
+    #[serde(default)]
+    pub tangents: [String; 2],
+    /// isocurvas por direção que aparecem no 3D; zero esconde
+    #[serde(default)]
+    pub iso: u32,
+}
+
 /// Como o perfil é orientado ao longo da curva guia.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
 pub enum SweepMode {
@@ -4404,7 +4496,9 @@ impl Document {
                     v
                 }
                 SurfSweepX { kind, spine, .. } => kind.guides().into_iter().chain(spine.as_ref()).filter_map(cref).collect(),
-                SurfLoft { sections, guide, .. } => sections.iter().chain(guide.as_ref()).filter_map(cref).collect(),
+                SurfLoft { sections, guide, opts, .. } => sections.iter().chain(guide.as_ref()).chain(opts.guides.iter()).filter_map(cref).collect(),
+                SurfRuled { curves, support, .. } => curves.iter().filter_map(cref).chain(support.iter().filter_map(sref)).collect(),
+                SurfCheck { a, b, curve, .. } => [sref(a), sref(b), cref(curve)].into_iter().flatten().collect(),
                 SurfBlend { a, b, .. } => [cref(a), cref(b)].into_iter().flatten().collect(),
                 SurfConnect { a, b, .. } | SurfFillet { a, b, .. } => [sref(a), sref(b)].into_iter().flatten().collect(),
                 SurfEdgeFillet { surface, .. } => sref(surface).into_iter().collect(),

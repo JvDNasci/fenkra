@@ -17,6 +17,8 @@ pub fn transformed(m: &Mesh, p: &Placement) -> Mesh {
     Mesh {
         positions: m.positions.chunks_exact(3).flat_map(pt).collect(),
         normals: m.normals.chunks_exact(3).flat_map(dir).collect(),
+        // o posicionamento é rígido: a curvatura não muda
+        curvature: m.curvature.clone(),
         indices: m.indices.clone(),
         edges: m.edges.chunks_exact(3).flat_map(pt).collect(),
         face_ranges: m.face_ranges.clone(),

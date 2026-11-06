@@ -37,6 +37,8 @@ pub struct SceneOpts<'a> {
     pub point_style: u8,
     /// forma livre cuja superfície não aparece (modo Gaiola)
     pub forma_oculta: Option<Id>,
+    /// mapa de curvatura: a cor de cada vértice vem da curvatura medida pelo kernel
+    pub curvatura: Option<crate::sup_analise::EscalaCurvatura>,
     /// prévia do comando aberto
     pub fantasma: Option<crate::previa::Fantasma<'a>>,
 }
@@ -166,7 +168,10 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
                         s.mesh.push(MeshVertex {
                             pos: p,
                             nrm: [m.normals[k], m.normals[k + 1], m.normals[k + 2]],
-                            col: [c[0], c[1], c[2], 1.0],
+                            col: {
+                                let c = o.curvatura.and_then(|e| e.cor_da_malha(m, vi as usize)).unwrap_or(c);
+                                [c[0], c[1], c[2], 1.0]
+                            },
                             mat: [rough, metal, alpha, app.texture.filter(|t| (*t as u32) < crate::render::TEX_LAYERS).map(|t| t as f32 + 1.).unwrap_or(0.)],
                         });
                         (s.mesh.len() - 1) as u32
@@ -335,6 +340,7 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
             for k in (0..m.positions.len()).step_by(3) {
                 let p = [m.positions[k], m.positions[k + 1], m.positions[k + 2]];
                 grow(&mut bounds, Vec3::from(p));
+                let c = o.curvatura.and_then(|e| e.cor_da_malha(m, k / 3)).unwrap_or(c);
                 s.mesh.push(MeshVertex { pos: p, nrm: [m.normals[k], m.normals[k + 1], m.normals[k + 2]], col: [c[0], c[1], c[2], 1.0], mat: [rough, metal, alpha, 0.] });
             }
             s.indices.extend(m.indices.iter().map(|i| base + i));

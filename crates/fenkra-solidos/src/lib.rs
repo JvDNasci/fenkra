@@ -8,6 +8,8 @@ pub mod erro;
 pub mod forma_brep;
 pub mod geo3d;
 pub mod regioes;
+pub mod analise;
+pub mod loft;
 pub mod importacao;
 pub mod mesh_io;
 pub mod structural;
@@ -300,6 +302,35 @@ pub struct CurveViz {
     pub verts: Vec<[f64; 3]>,
 }
 
+/// Faixa regrada que sai da curva. Com apoio, a normal e a tangente saem da superfície em cada ponto.
+fn regrada(c: &geo3d::Curve3, apoio: Option<&Shape>, modo: RuledMode, vetor: Option<V3>, l: f64) -> Result<Shape, String> {
+    use geo3d::*;
+    if l == 0. {
+        return Err("o comprimento precisa ser diferente de zero".into());
+    }
+    // reta tem dois pontos, e o apoio curvo pede mais
+    let pts = if c.pts.len() < 24 { resample(c, 24) } else { c.pts.clone() };
+    let curva = Curve3::poly(pts.clone(), false)?;
+    let fora = apoio.map(|s| s.mass().center);
+    let mut saida = vec![];
+    for p in &pts {
+        let w = match (modo, vetor, apoio) {
+            (RuledMode::Vetor, Some(v), _) => v,
+            (_, _, None) => return Err("este modo precisa da superfície de apoio".into()),
+            (RuledMode::Normal, _, Some(s)) => s.surface_near(*p).map_err(|x| x.0)?.1,
+            (_, _, Some(s)) => {
+                let n = s.surface_near(*p).map_err(|x| x.0)?.1;
+                let t = curva.at_dist(curva.nearest(*p).0).1;
+                let w = unit(cross(n, t)).ok_or("borda perpendicular à superfície")?;
+                // para fora da borda: a faixa continua a superfície
+                if dot(w, sub(*p, fora.unwrap_or(*p))) < 0. { mul(w, -1.) } else { w }
+            }
+        };
+        saida.push(add(*p, mul(w, l)));
+    }
+    Shape::loft_surface(&[pts, saida], true, false, None).map_err(|x| x.0)
+}
+
 /// Borda de `sh` que "olha" para `other`: a borda livre é dividida nos cantos vivos e fica o
 /// trecho com a menor distância média até a outra superfície.
 fn facing_edge(sh: &Shape, other: &Shape) -> Result<Vec<V3>, String> {
@@ -462,6 +493,10 @@ pub struct RefNote {
     pub solucao: Option<usize>,
     /// B277: pedaços do corte, com o que fica e o que sai
     pub regioes: Vec<regioes::RegiaoNota>,
+    /// B34: números e mapa da análise
+    pub analise: Option<analise::Analise>,
+    /// B290: isocurvas pedidas no multi-seções
+    pub iso: Vec<Vec<V3>>,
 }
 
 /// Superfície de referência exibível (malha).
@@ -2044,13 +2079,88 @@ impl Ctx<'_> {
                 };
                 Geo::Surface(Shape::sweep_surface(&prof, &sp.pts, m).map_err(|x| x.0)?)
             }
-            SurfLoft { sections, guide, ruled, closed } => {
-                let cs: Vec<Vec<V3>> = sections.iter().map(|c| self.curve(c, d).map(|c| c.pts)).collect::<Result<_, _>>()?;
-                let g = match guide {
-                    Some(g) => Some(self.curve(g, d)?.pts),
+            SurfLoft { sections, guide, ruled, closed, opts } => {
+                let mut curvas = vec![];
+                for c in sections {
+                    curvas.push(self.curve(c, d)?);
+                }
+                let mut tangentes = [0.; 2];
+                for (t, x) in tangentes.iter_mut().zip(&opts.tangents) {
+                    *t = if x.trim().is_empty() { 0. } else { e(x, "tangência")? };
+                }
+                let mut guias = vec![];
+                for g in &opts.guides {
+                    guias.push(self.curve(g, d)?);
+                }
+                let controle = !guias.is_empty() || !opts.connectors.is_empty() || opts.reversed.iter().any(|x| *x) || tangentes.iter().any(|t| *t != 0.);
+                let sh = if controle {
+                    loft::superficie(&loft::Entrada { secoes: curvas, guias, conectores: opts.connectors.clone(), invertidas: opts.reversed.clone(), regrada: *ruled, fechar: *closed, tangentes })?
+                } else {
+                    let cs: Vec<Vec<V3>> = curvas.into_iter().map(|c| c.pts).collect();
+                    let g = match guide {
+                        Some(g) => Some(self.curve(g, d)?.pts),
+                        None => None,
+                    };
+                    Shape::loft_surface(&cs, *ruled, *closed, g.as_deref()).map_err(|x| x.0)?
+                };
+                if opts.iso > 0 {
+                    let iso = sh.iso_curves(opts.iso).map_err(|x| x.0)?;
+                    self.notes.borrow_mut().entry(id).or_default().iso = iso;
+                }
+                Geo::Surface(sh)
+            }
+            SurfRuled { curves, support, mode, dir, length, flip } => {
+                let l = e(length, "comprimento")? * if *flip { -1. } else { 1. };
+                let apoio = match support {
+                    Some(s) => Some(self.cut_shape(s, d)?),
                     None => None,
                 };
-                Geo::Surface(Shape::loft_surface(&cs, *ruled, *closed, g.as_deref()).map_err(|x| x.0)?)
+                let vetor = match mode {
+                    RuledMode::Vetor => Some(unit(self.axis_d(dir, d)?.1).ok_or("direção nula")?),
+                    _ => None,
+                };
+                let mut acc: Option<Shape> = None;
+                for c in curves {
+                    let faixa = regrada(&self.curve(c, d)?, apoio.as_ref(), *mode, vetor, l)?;
+                    acc = Some(match acc {
+                        Some(a) => a.compound(&faixa),
+                        None => faixa,
+                    });
+                }
+                Geo::Surface(acc.ok_or("escolha pelo menos uma curva")?.sewn(1e-3).map_err(|x| x.0)?)
+            }
+            SurfCheck { mode, a, b, curve, samples, scale } => {
+                let n = e(samples, "amostras")?.round().clamp(2., 2000.);
+                let esc = e(scale, "escala")?;
+                let (res, pior, texto) = match mode {
+                    CheckMode::Conexao => {
+                        let (sa, sb) = (self.cut_shape(a, d)?, self.cut_shape(b, d)?);
+                        let am = sa.connect_check(&sb, n as u32, esc).map_err(|x| x.0)?;
+                        let c = analise::Conexao::de(am).ok_or_else(|| format!("nenhuma borda da primeira superfície chega a {esc} mm da segunda"))?;
+                        let t = format!("folga {:.4} mm · ângulo {:.3}° · Δcurvatura {:.5} 1/mm", c.folga, c.angulo, c.dif_curvatura);
+                        // o pior caso é o que mais passa da tolerância
+                        let p = if c.folga > analise::TOL_FOLGA { c.onde[0] } else if c.angulo > analise::TOL_ANGULO { c.onde[1] } else { c.onde[2] };
+                        (analise::Analise::Conexao(c), p, t)
+                    }
+                    CheckMode::Desvio => {
+                        let (sa, sb) = (self.cut_shape(a, d)?, self.cut_shape(b, d)?);
+                        let m = tesselar(&sa, &self.qualidade).map_err(|x| x.0)?;
+                        let x = analise::Desvio::medir(m, &sb)?;
+                        let (t, p) = (format!("desvio de {:.4} a {:.4} mm · RMS {:.4} mm", x.min, x.max, x.rms), x.pior);
+                        (analise::Analise::Desvio(x), p, t)
+                    }
+                    CheckMode::Pente => {
+                        let dentes = analise::pente(&self.curve(curve, d)?, n as usize, esc);
+                        let top = analise::pico(&dentes).ok_or("curva sem pontos")?;
+                        let (t, p) = (format!("maior curvatura {:.5} 1/mm", top.k), top.base);
+                        (analise::Analise::Pente(dentes), p, t)
+                    }
+                };
+                let mut notas = self.notes.borrow_mut();
+                let nota = notas.entry(id).or_default();
+                nota.analise = Some(res);
+                nota.text = texto;
+                Geo::Point(pior)
             }
             SurfBlend { a, sa, b, sb, cont, tension } => Geo::Surface(self.blend(a, sa.as_ref(), b, sb.as_ref(), *cont, e(tension, "tensão")?, d)?),
             SurfJoin { items, tol, curves } => {
@@ -8375,7 +8485,7 @@ mod tests {
         let la = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([0., 0., 0.]), b: PointRef::Fixed([0., 30., 0.]), start: s("0"), end: s("0") });
         let lb = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([20., 0., 10.]), b: PointRef::Fixed([20., 30., 10.]), start: s("0"), end: s("0") });
         let tube = d.add_geometry(RefKind::SurfSweep { profile: SweepProfile::Circle(s("2")), spine: CurveRef::Ref(la), mode: SweepMode::Corrigido });
-        let loft = d.add_geometry(RefKind::SurfLoft { sections: vec![CurveRef::Ref(la), CurveRef::Ref(lb)], guide: None, ruled: false, closed: false });
+        let loft = d.add_geometry(RefKind::SurfLoft { sections: vec![CurveRef::Ref(la), CurveRef::Ref(lb)], guide: None, ruled: false, closed: false, opts: Default::default() });
         let fa = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(la), dir: AxisRef::Origin(OriginAxis::X), length: s("-10"), length2: "0".into(), until: None, until2: None });
         let fb = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(lb), dir: AxisRef::Origin(OriginAxis::X), length: s("10"), length2: "0".into(), until: None, until2: None });
         let blend = d.add_geometry(RefKind::SurfBlend {

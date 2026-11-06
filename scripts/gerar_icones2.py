@@ -263,6 +263,9 @@ def desenhos():
        R=L((12, 30), (7, 20)) + L((20, 24), (15, 11)) + L((28, 19), (24, 7)) + L((36, 17), (35, 9))
        + "M7 20c2-4 5-7 8-9s6-3 9-4 7-1 11 2")
     ic("an_sombreado", B=C(24, 24, 18), R="M30 7a18 18 0 0 1 0 34a24 24 0 0 0 0-34z")
+    ic("an_conexao", B="M6 30c6-10 12-10 16-10M42 30c-6-10-12-10-16-10", R="M24 10v28M18 14l6-4 6 4M18 34l6 4 6-4")
+    ic("an_desvio", B="M6 34c10-12 26-12 36 0", R="M6 22c10-12 26-12 36 0M14 17v9M24 14v9M34 17v9")
+    ic("an_pente", B="M6 38c8-14 26-20 36-20", R="M10 32l-5-7M17 26l-4-9M25 22l-2-12M33 19l1-9M41 18l3-5")
     ic("canto", B="M24 26v18M24 26L8 16M24 26l16-10", R="M16 21c4-5 12-5 16 0c0 6-3 10-8 14c-5-4-8-8-8-14z")
 
     # ---------- sketch ----------
@@ -480,6 +483,7 @@ def desenhos():
     ic("sup_multisecoes", B="M6 40c5-5 10-5 14 0M16 24c5-5 10-5 14 0M28 10c5-5 10-5 14 0", R=L((6, 40), (28, 10)) + L((20, 40), (42, 10)))
     ic("sup_concordancia", B="M8 10v16M40 22v16", R="M8 10c14 0 18 12 32 12M8 26c14 0 18 12 32 12")
     ic("sup_conectar", B=Q(4, 8, 14, 18) + Q(30, 22, 14, 18), R="M18 8c8 0 4 14 12 14M18 26c8 0 4 14 12 14")
+    ic("sup_regrada", B="M6 34c10-8 26-8 36 0", R="M6 34V14M15 29V9M24 27V7M33 29V9M42 34V14M6 14c10-8 26-8 36 0")
     ic("sup_deslocada", B=PATCH(6, 28), R=ONDA(6, 12) + "M6 12v8M42 12v8" + S2(24, 12, 24, 26, 3.5))
     ic("sup_preenchida", B=Z((8, 14), (38, 8), (42, 34), (10, 40)), R="M9 27l31-6M23 11l3 26M16 13l2 25M31 9l3 26")
     ic("sup_extraida", B=CUBO(20, 18, 14, 7, 14), R=F_TOPO(26, 2, 14, 7))
@@ -694,7 +698,7 @@ ic("forma_tangencia", B="M6 36c10-14 26-14 36 0", R=L((8, 25), (40, 25)) + S(24,
 ic("forma_simetria", b="M24 4v40", R="M20 10c-16 2-16 26 0 28M28 10c16 2 16 26 0 28")
 ic("forma_converter", b=Q(6, 12, 18, 24), R=CUBO(32, 12, 10, 5, 12) + "M18 24h4", pb=[(6, 12), (24, 12), (24, 36), (6, 36)])
 
-SO_INTERFACE = {"importar_arquivo", "asm_catalogo", "arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais", "exportar_arquivo", "liberar_revisao", "onde_usado", "comparar", "estado_sem_revisao", "estado_liberada", "estado_editado", "estado_leitura", "estado_conflito", "forma", "forma_caixa", "forma_esfera", "forma_cilindro", "forma_plano", "forma_extrudar", "forma_laco", "forma_aresta", "forma_borda", "forma_tangencia", "forma_simetria", "forma_converter", "des_cota_inteligente"}
+SO_INTERFACE = {"importar_arquivo", "asm_catalogo", "arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais", "exportar_arquivo", "liberar_revisao", "onde_usado", "comparar", "estado_sem_revisao", "estado_liberada", "estado_editado", "estado_leitura", "estado_conflito", "forma", "forma_caixa", "forma_esfera", "forma_cilindro", "forma_plano", "forma_extrudar", "forma_laco", "forma_aresta", "forma_borda", "forma_tangencia", "forma_simetria", "forma_converter", "des_cota_inteligente", "an_conexao", "an_desvio", "an_pente", "sup_regrada"}
 
 
 # ---------- saída ----------

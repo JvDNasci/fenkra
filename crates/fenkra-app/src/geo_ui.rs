@@ -100,6 +100,10 @@ pub enum GeoKind {
     CurveIntersect,
     CurveProjSurf,
     CurveParallel,
+    SurfRuled,
+    AnConexao,
+    AnDesvio,
+    AnPente,
 }
 
 use GeoKind::*;
@@ -111,7 +115,8 @@ pub const POINTS: [GeoKind; 12] = [PtCoords, PtOnCurve, PtOnPlane, PtOnSurface, 
 pub const LINES: [GeoKind; 9] = [LinePts, LineDir, LineAngle, LineTangent, LineNormal, LinePlanes, LineBisector, LineAxis, Polyline];
 pub const CURVES: [GeoKind; 17] =
     [Circle, Circle3, Spline, SplineControl, Helix, Spiral, Conic, Connect, Corner, Spine, CurveProject, CurveIntersect, CurveProjSurf, CurveParallel, OpBoundary, CurveCopy, CurveJoin];
-pub const SURFACES: [GeoKind; 13] = [SurfExtrude, SurfRevolve, SurfSphere, SurfCylinder, SurfOffset, SurfSweep, SurfSweepX, SurfTube, SurfLoft, SurfBlend, SurfConnect, SurfFill, SurfExtract];
+pub const SURFACES: [GeoKind; 14] = [SurfExtrude, SurfRevolve, SurfSphere, SurfCylinder, SurfOffset, SurfSweep, SurfSweepX, SurfTube, SurfLoft, SurfRuled, SurfBlend, SurfConnect, SurfFill, SurfExtract];
+pub const ANALISES: [GeoKind; 3] = [AnConexao, AnDesvio, AnPente];
 /// Operações sobre superfícies (resultado é superfície).
 pub const OPERATIONS: [GeoKind; 9] = [OpJoin, OpHeal, OpCut, SurfFilletSS, SurfEdgeFillet, OpMulti, OpPart, OpUntrim, OpExtrapolate];
 /// Transformações de qualquer elemento (ponto, curva, plano, superfície).
@@ -181,6 +186,10 @@ impl GeoKind {
             SurfCylinder => ("sup_cilindro", "Cilindro", "Superfície cilíndrica", "Face lateral de um cilindro: ponto, direção, raio e comprimento para cada lado."),
             SurfSweep => ("sup_varredura", "Varredura", "Varredura de perfil explícito", "O perfil (curva) percorre a guia, com Frenet corrigido, orientação fixa ou Frenet."),
             SurfTube => ("sup_tubo", "Tubo", "Varredura circular (tubo)", "Círculo de raio dado, normal à guia, percorrendo-a."),
+            SurfRuled => ("sup_regrada", "Regrada", "Superfície regrada", "Faixa reta que sai de curvas ou bordas: na normal da superfície de apoio, na tangente dela ou num vetor."),
+            AnConexao => ("an_conexao", "Conexão", "Análise de conexão", "Mede folga, ângulo e diferença de curvatura ao longo da junção de duas superfícies."),
+            AnDesvio => ("an_desvio", "Desvio", "Mapa de desvio", "Pinta a primeira superfície pela distância até a segunda, com mínimo, máximo e RMS."),
+            AnPente => ("an_pente", "Pente", "Pente de curvatura", "Dentes perpendiculares à curva, do tamanho da curvatura em cada ponto; serve para curvas e arestas."),
             SurfLoft => ("sup_multisecoes", "Multi-seções", "Superfície por seções (loft)", "Transição suave entre duas ou mais curvas; com guia, as seções seguem a guia."),
             SurfBlend => ("sup_concordancia", "Concordância", "Concordância entre bordas (blend)", "Liga duas bordas com continuidade G0 (reta), G1 (tangente) ou G2 (curvatura) às superfícies de apoio."),
             OpJoin => ("op_juntar", "Juntar", "Juntar superfícies (join)", "Costura superfícies que se tocam numa só: bordas comuns viram uma."),
@@ -213,6 +222,8 @@ impl GeoKind {
             &LINES
         } else if SURFACES.contains(&self) {
             &SURFACES
+        } else if ANALISES.contains(&self) {
+            &ANALISES
         } else if OPERATIONS.contains(&self) {
             &OPERATIONS
         } else if TRANSFORMS.contains(&self) {
@@ -288,6 +299,12 @@ impl GeoKind {
             R::SurfSweep { profile: SweepProfile::Circle(_), .. } => SurfTube,
             R::SurfSweep { .. } => SurfSweep,
             R::SurfLoft { .. } => SurfLoft,
+            R::SurfRuled { .. } => SurfRuled,
+            R::SurfCheck { mode, .. } => match mode {
+                CheckMode::Conexao => AnConexao,
+                CheckMode::Desvio => AnDesvio,
+                CheckMode::Pente => AnPente,
+            },
             R::SurfBlend { .. } => SurfBlend,
             R::SurfConnect { .. } => SurfConnect,
             R::SurfSweepX { .. } => SurfSweepX,
@@ -397,8 +414,12 @@ impl GeoKind {
             SurfCylinder => R::SurfCylinder { point: p(0), dir: ax(OriginAxis::Z), radius: t("10"), start: t("0"), end: t("40") },
             SurfSweep => R::SurfSweep { profile: SweepProfile::Curve(c(0)), spine: c(1), mode: SweepMode::Corrigido },
             SurfTube => R::SurfSweep { profile: SweepProfile::Circle(t("5")), spine: c(0), mode: SweepMode::Corrigido },
-            SurfLoft => R::SurfLoft { sections: if s.curves.len() >= 2 { s.curves.clone() } else { vec![c(0), c(1)] }, guide: None, ruled: false, closed: false },
+            SurfLoft => R::SurfLoft { sections: if s.curves.len() >= 2 { s.curves.clone() } else { vec![c(0), c(1)] }, guide: None, ruled: false, closed: false, opts: Default::default() },
             SurfBlend => R::SurfBlend { a: c(0), sa: None, b: c(1), sb: None, cont: Continuity::G1, tension: t("1") },
+            SurfRuled => R::SurfRuled { curves: if s.curves.is_empty() { vec![c(0)] } else { s.curves.clone() }, support: s.surface, mode: RuledMode::Normal, dir: AxisRef::Origin(OriginAxis::Z), length: t("20"), flip: false },
+            AnConexao => R::SurfCheck { mode: CheckMode::Conexao, a: sf, b: crate::slots::surf(), curve: CurveRef::default(), samples: t("16"), scale: t("1") },
+            AnDesvio => R::SurfCheck { mode: CheckMode::Desvio, a: sf, b: crate::slots::surf(), curve: CurveRef::default(), samples: t("2"), scale: t("1") },
+            AnPente => R::SurfCheck { mode: CheckMode::Pente, a: SurfRef::default(), b: SurfRef::default(), curve: c(0), samples: t("64"), scale: t("200") },
             // só curvas: a junção é uma curva; com faces, as curvas entram ao lado delas
             OpJoin if s.surface.is_none() && !s.curves.is_empty() => R::CurveJoin { curves: s.curves.clone() },
             OpJoin => R::SurfJoin { items: vec![sf], tol: t("0.01"), curves: s.curves.clone() },
@@ -553,6 +574,12 @@ pub fn inputs_of(k: &RefKind) -> Seed {
             s.curves.push(spine.clone())
         }
         R::SurfLoft { sections, .. } => s.curves.extend(sections.iter().cloned()),
+        R::SurfRuled { curves, support, .. } => {
+            s.curves.extend(curves.iter().cloned());
+            s.surface = *support;
+        }
+        R::SurfCheck { mode: CheckMode::Pente, curve, .. } => s.curves.push(curve.clone()),
+        R::SurfCheck { a, .. } => s.surface = Some(*a),
         R::SurfBlend { a, b, .. } => s.curves.extend([a.clone(), b.clone()]),
         R::SurfJoin { items, curves, .. } => {
             s.surface = items.first().copied();
@@ -1711,19 +1738,61 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                 *mode = [SweepMode::Corrigido, SweepMode::Fixo, SweepMode::Frenet][i];
             }
         }
-        R::SurfLoft { sections, guide, ruled, closed } => {
+        R::SurfLoft { sections, guide, ruled, closed, opts } => {
             curves_list(ui, "g_sec", "Seção", doc, me, sections, seed, 2);
+            curves_list(ui, "g_gds", "Guia", doc, me, &mut opts.guides, seed, 0);
+            if !opts.guides.is_empty() {
+                ui.label(RichText::new(tr("A superfície toca todas as guias; cada guia cruza todas as seções.")).weak().small());
+            }
             let mut has = guide.is_some();
-            if crate::editor::check(ui, &mut has, "com curva guia").changed() {
+            if opts.guides.is_empty() && crate::editor::check(ui, &mut has, "seções percorrem um caminho").changed() {
                 *guide = has.then(|| seed.curves.last().cloned().unwrap_or(CurveRef::Axis(OriginAxis::Z)));
             }
             if let Some(g) = guide {
-                curve_slot(ui, "g_gd", "Guia", doc, me, g, seed);
-                ui.label(RichText::new(tr("As seções devem cruzar a guia, na ordem.")).weak().small());
+                curve_slot(ui, "g_gd", "Caminho", doc, me, g, seed);
+                ui.label(RichText::new(tr("As seções devem cruzar o caminho, na ordem.")).weak().small());
             } else {
                 ui.checkbox(ruled, tr("regrada (faces retas entre seções)"));
                 ui.checkbox(closed, tr("fechar (volta à primeira seção)"));
             }
+        }
+        R::SurfRuled { curves, support, mode, dir, length, .. } => {
+            curves_list(ui, "g_rc", "Curva", doc, me, curves, seed, 1);
+            let opts = [
+                ("sup_regrada", "Normal", "Sai na normal da superfície de apoio", *mode == RuledMode::Normal),
+                ("sup_regrada", "Tangente", "Continua a superfície para fora da borda", *mode == RuledMode::Tangente),
+                ("sup_regrada", "Vetor", "Sai numa direção fixa", *mode == RuledMode::Vetor),
+            ];
+            if let Some(i) = crate::editor::icon_choice(ui, &opts) {
+                *mode = [RuledMode::Normal, RuledMode::Tangente, RuledMode::Vetor][i];
+            }
+            if *mode == RuledMode::Vetor {
+                axis_slot(ui, "g_rd", "Direção", doc, me, dir, seed);
+            } else {
+                opt_surf(ui, "g_rs", "Apoio", doc, me, support, seed);
+            }
+            expr(ui, "Comprimento", length, vars, "mm");
+            crate::sup3d::dica_de_lado(ui);
+        }
+        R::SurfCheck { mode, a, b, curve, samples, scale } => {
+            match mode {
+                CheckMode::Pente => {
+                    curve_slot(ui, "g_pc", "Curva", doc, me, curve, seed);
+                    expr(ui, "Dentes", samples, vars, "");
+                    expr(ui, "Escala", scale, vars, "mm · mm");
+                }
+                CheckMode::Conexao => {
+                    surf_slot(ui, "g_a", "Superfície 1", doc, me, a, seed);
+                    surf_slot(ui, "g_b", "Superfície 2", doc, me, b, seed);
+                    expr(ui, "Amostras por borda", samples, vars, "");
+                    expr(ui, "Folga máxima da junção", scale, vars, "mm");
+                }
+                CheckMode::Desvio => {
+                    surf_slot(ui, "g_a", "Pintada", doc, me, a, seed);
+                    surf_slot(ui, "g_b", "Referência", doc, me, b, seed);
+                }
+            }
+            crate::sup_analise::resumo(ui, note.and_then(|n| n.analise.as_ref()));
         }
         R::SurfBlend { a, sa, b, sb, cont, tension } => {
             curve_slot(ui, "g_a", "Borda 1", doc, me, a, seed);
@@ -1979,7 +2048,6 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             surf_slot(ui, "g_s", "Apoio", doc, me, support, seed);
             expr(ui, "Distância inicial", d1, vars, "mm");
             expr(ui, "Distância final", d2, vars, "mm");
-            let _ = flip;
             crate::sup3d::dica_de_lado(ui);
             ui.label(RichText::new(tr("Distâncias iguais = paralela constante; diferentes = lei linear do início ao fim.")).weak().small());
         }

@@ -479,6 +479,12 @@ fn dark_now() -> bool {
 
 /// Cores de estado legíveis no tema em uso (ok, aviso, erro). Com a paleta segura (B321) saem do
 /// par azul x laranja, que as três deficiências de cor separam; o símbolo do estado acompanha a cor.
+/// Cor calculada numa escala de análise, a partir de paradas do tema.
+pub fn cor_da_escala(c: [f32; 3]) -> Color32 {
+    let [r, g, b] = c.map(|x| (x.clamp(0., 1.) * 255.) as u8);
+    Color32::from_rgb(r, g, b)
+}
+
 pub fn st_ok() -> Color32 {
     estado(Estado::Ok)
 }

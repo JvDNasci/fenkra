@@ -124,15 +124,9 @@ struct MOut {
 
     var c: vec3<f32>;
     if (mode > 6.5) {
-        // curvatura ≈ variação da normal / variação da posição na tela (1/mm)
-        let k = dn / dp;
-        let t = clamp(log2(1.0 + k * 50.0) / 6.0, 0.0, 1.0);
-        let ramp = array<vec3<f32>, 5>(vec3<f32>(0.15, 0.30, 0.95), vec3<f32>(0.10, 0.80, 0.95), vec3<f32>(0.20, 0.85, 0.30), vec3<f32>(0.98, 0.85, 0.15), vec3<f32>(0.95, 0.20, 0.15));
-        let x = t * 4.0;
-        let j = min(i32(floor(x)), 3);
-        let col = mix(ramp[j], ramp[j + 1], x - f32(j));
+        // curvatura: a cena já traz a cor por vértice, medida na superfície (B34); aqui só o relevo
         let d = abs(dot(n, v));
-        return vec4<f32>(col * (0.55 + 0.45 * d), 1.0);
+        return vec4<f32>(i.col.rgb * (0.55 + 0.45 * d), 1.0);
     }
     if (mode > 5.5) {
         // zebra: faixas do reflexo de um ambiente de listras horizontais

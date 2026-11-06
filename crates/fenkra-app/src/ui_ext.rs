@@ -324,6 +324,10 @@ pub struct Deslizante<'a, N: egui::emath::Numeric> {
 }
 
 impl<'a, N: egui::emath::Numeric> Deslizante<'a, N> {
+    pub fn logarithmic(mut self, l: bool) -> Self {
+        self.sl = self.sl.logarithmic(l);
+        self
+    }
     pub fn text(mut self, t: impl Into<egui::WidgetText>) -> Self {
         self.sl = self.sl.text(t);
         self

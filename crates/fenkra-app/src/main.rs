@@ -14,6 +14,7 @@ mod scene;
 mod entradas;
 mod previa;
 mod sup3d;
+mod sup_analise;
 mod picking;
 mod selecao;
 mod selecao_regras;

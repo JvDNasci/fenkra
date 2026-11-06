@@ -420,6 +420,12 @@ pub struct Settings {
     pub bg_top: [u8; 3],
     pub bg_bottom: [u8; 3],
     pub display: DisplayMode,
+    /// B34: o que o mapa de curvatura pinta
+    #[serde(default)]
+    pub curv_tipo: crate::sup_analise::TipoCurvatura,
+    /// B34: raio que recebe a última cor do mapa, em mm
+    #[serde(default = "raio_da_curvatura")]
+    pub curv_raio: f32,
     pub edges_in_render: bool,
     /// arestas de tangência visíveis (padrão: escondidas, como numa peça real)
     pub tangent_edges: bool,
@@ -555,6 +561,8 @@ impl Default for Settings {
             bg_top: crate::theme::default_def().bg_top,
             bg_bottom: crate::theme::default_def().bg_bottom,
             display: DisplayMode::SombreadoArestas,
+            curv_tipo: Default::default(),
+            curv_raio: raio_da_curvatura(),
             edges_in_render: false,
             tangent_edges: false,
             ortho: false,
@@ -627,6 +635,10 @@ pub const BACKGROUNDS: [(&str, [u8; 3], [u8; 3]); 6] = [
     ("Papel", [250, 250, 248], [250, 250, 248]),
     ("Preto", [0, 0, 0], [0, 0, 0]),
 ];
+
+fn raio_da_curvatura() -> f32 {
+    10.
+}
 
 impl Settings {
     fn path() -> Option<PathBuf> {

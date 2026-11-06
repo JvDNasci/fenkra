@@ -709,7 +709,7 @@ fn superficie_ligada_entre_duas_linhas_e_um_retangulo() {
     param(&mut d, "dy", "10");
     let a = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([0., 0., 0.]), b: PointRef::Fixed([20., 0., 0.]), start: s("0"), end: s("0") });
     let b = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([0., 10., 0.]), b: PointRef::Fixed([20., 10., 0.]), start: s("0"), end: s("0") });
-    let id = d.add_geometry(RefKind::SurfLoft { sections: vec![CurveRef::Ref(a), CurveRef::Ref(b)], guide: None, ruled: true, closed: false });
+    let id = d.add_geometry(RefKind::SurfLoft { sections: vec![CurveRef::Ref(a), CurveRef::Ref(b)], guide: None, ruled: true, closed: false, opts: Default::default() });
     let res = recompute(&d);
     ok(&res, id);
     assert!((forma(&d, id).mass().area - 200.).abs() < 1e-3);

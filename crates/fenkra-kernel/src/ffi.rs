@@ -34,6 +34,8 @@ pub mod bridge {
         /// xyz por vértice
         positions: Vec<f32>,
         normals: Vec<f32>,
+        /// curvaturas principais (máxima, mínima) por vértice, em 1/mm
+        curvature: Vec<f32>,
         indices: Vec<u32>,
         /// pares de pontos (segmentos de linha) das arestas
         edges: Vec<f32>,
@@ -199,6 +201,15 @@ pub mod bridge {
         fn cylinder_surface(ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64, r: f64, h0: f64, h1: f64) -> Result<UniquePtr<Shape>>;
         fn sweep_surface(profile: &[f64], spine: &[f64], mode: u8) -> Result<UniquePtr<Shape>>;
         fn loft_surface(flat: &[f64], ends: &[u32], ruled: bool, closed: bool, guide: &[f64]) -> Result<UniquePtr<Shape>>;
+        /// Superfície que passa pela grade de `nu` × `nv` pontos (linha a linha).
+        fn grid_surface(flat: &[f64], nu: u32, nv: u32) -> Result<UniquePtr<Shape>>;
+        /// Amostras da junção de `a` com `b`, 7 números por amostra: x, y, z, folga, ângulo em graus e
+        /// as curvaturas de cada lado na direção que atravessa a borda.
+        fn connect_check(a: &Shape, b: &Shape, samples: u32, max_gap: f64) -> Result<Vec<f64>>;
+        /// Distância com sinal de cada ponto até a forma: positiva do lado da normal.
+        fn signed_distances(s: &Shape, flat: &[f64]) -> Result<Vec<f64>>;
+        /// Isocurvas das faces: `n` por direção; `ends` marca o fim de cada uma, em pontos.
+        fn iso_curves(s: &Shape, n: u32, ends: &mut Vec<u32>) -> Result<Vec<f64>>;
         fn sew_shapes(s: &Shape, tol: f64) -> Result<UniquePtr<Shape>>;
         fn heal_shape(s: &Shape, tol: f64) -> Result<UniquePtr<Shape>>;
         fn split_side(s: &Shape, tool: &Shape, keep_pos: bool, extend: bool) -> Result<UniquePtr<Shape>>;
