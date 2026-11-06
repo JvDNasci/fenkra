@@ -701,7 +701,7 @@ mod testes_malha_de_tela {
 
     fn cena(d: &Document, r: &RecomputeResult, curvatura: Option<EscalaMapa>, fantasma: Option<crate::previa::Fantasma>) -> Scene {
         let (sel, filtro) = (Sel::None, Filter::default());
-        let o = SceneOpts { instancias: &[], forma_oculta: None, editing: None, sel: &sel, filter: &filtro, hidden_env: false, dark_edges: true, tangent_edges: false, hilite: None, hilite_extra: &[], line_w: 1., line_dash: 0, point_style: 0, curvatura, fantasma };
+        let o = SceneOpts { sombra_perfil: true, instancias: &[], forma_oculta: None, editing: None, sel: &sel, filter: &filtro, hidden_env: false, dark_edges: true, tangent_edges: false, hilite: None, hilite_extra: &[], line_w: 1., line_dash: 0, point_style: 0, curvatura, fantasma };
         build(d, r, &o)
     }
 
