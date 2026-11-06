@@ -69,9 +69,9 @@ pub const MAPAS: &[Mapa] = &[
         resumo: "Da chapa base à peça plana pronta para o corte e para o desenho de fabricação.",
         etapas: &[
             e("ch_base", "Definir espessura, raio e fator K e criar a parede base de um perfil fechado.", &["sm_parametros", "sm_parede"]),
-            e("ch_abas", "Dobrar bordas com abas, bainhas, abas por perfil ou em aresta curva.", &["sm_aba", "sm_bainha", "sm_aba_curva"]),
-            e("ch_recortes", "Recortar a chapa e aliviar os cantos onde as dobras se encontram.", &["sm_recorte", "sm_alivio_canto", "sm_rasgo_circular"]),
-            e("ch_planificar", "Desdobrar e dobrar de novo para ler o comprimento planificado.", &["sm_desdobrar"]),
+            e("ch_abas", "Dobrar bordas com abas, bainhas, abas por perfil ou em aresta curva.", &["sm_aba", "sm_bainha"]),
+            e("ch_recortes", "Recortar a chapa e aliviar os cantos onde as dobras se encontram.", &["sm_recorte", "sm_alivio_canto", "sm_fecha_canto", "sm_rasgo_circular"]),
+            e("ch_planificar", "Desdobrar e dobrar de novo para ler o comprimento planificado.", &["sm_desdobrar", "sm_desdobrar_parcial"]),
             e("ch_desenho", "Levar a chapa planificada e a tabela de dobras para a folha de desenho.", &["des_planificada", "des_tab_dobras", "des_tab_furos"]),
         ],
     },

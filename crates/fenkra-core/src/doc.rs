@@ -1717,6 +1717,14 @@ pub enum FeatureKind {
     SmFlangeLoop(SmFlangeLoop),
     /// Chapa: alívio de canto.
     SmCornerRelief(SmCornerRelief),
+    /// Chapa: fechamento do canto entre duas abas (topo, sobreposto ou sob, com folga).
+    SmCornerClose(SmCornerClose),
+    /// Chapa: aba entre dois perfis (lofted): funis e adaptadores.
+    SmLoftFlange(SmLoftFlange),
+    /// Chapa: desdobrar ou redobrar só algumas abas.
+    SmUnfoldPartial(SmUnfoldPartial),
+    /// Chapa: reconhece um sólido de espessura constante como chapa.
+    SmConvert(SmConvert),
     /// Chapa: rasgo circular.
     SmArcSlot(SmArcSlot),
     /// Chapa: aba por superfície (suporte).
@@ -2337,6 +2345,65 @@ pub struct SmSurfFlange {
     pub angle: String,
 }
 
+/// Fechamento de canto (B293): fecha o vão que fica no canto entre duas abas de 90° da mesma
+/// chapa. `at` é o vértice do canto da chapa. A "primeira" aba é a que chega ao canto andando
+/// com o interior da chapa à esquerda (sentido anti-horário visto de cima); `invert` troca.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct SmCornerClose {
+    pub at: [f64; 3],
+    /// 0 topo (as duas pontas se encontram numa diagonal), 1 sobreposto (a primeira cobre a
+    /// ponta da segunda), 2 sob (a segunda cobre a ponta da primeira)
+    pub kind: u8,
+    /// folga entre as faces que se encontram (mm)
+    pub gap: String,
+    /// razão de sobreposição (0 a 1): quanto da espessura da aba coberta a de cima cobre
+    pub ratio: String,
+    /// canto estreito: a cobertura nunca passa de metade da espessura
+    #[serde(default)]
+    pub narrow: bool,
+    /// propaga o mesmo fechamento a todos os cantos da chapa entre abas de 90°
+    #[serde(default)]
+    pub propagate: bool,
+    /// troca qual aba é a primeira
+    #[serde(default)]
+    pub invert: bool,
+}
+
+/// Aba entre dois perfis (lofted): a chapa passa de um perfil fechado ao outro, como num funil ou
+/// adaptador. O primeiro perfil é a superfície de referência da chapa; a espessura vem dos
+/// parâmetros da chapa. `ruled` faz a transição facetada (dobradeira, lados retos entre os vértices
+/// correspondentes); desligado, a transição é lisa (estampada).
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct SmLoftFlange {
+    pub a: Id,
+    pub b: Id,
+    #[serde(default)]
+    pub ruled: bool,
+    /// a espessura cresce para o outro lado dos perfis (para dentro, em vez de para fora)
+    #[serde(default)]
+    pub flip: bool,
+}
+
+/// Desdobrar ou redobrar só algumas abas (B35). `features` são as abas (ou laços) a mudar de estado;
+/// `refold` redobra as que um comando anterior desdobrou. O estado final de cada aba vem de todos
+/// os comandos deste tipo, na ordem da árvore.
+#[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
+pub struct SmUnfoldPartial {
+    pub features: Vec<Id>,
+    #[serde(default)]
+    pub refold: bool,
+}
+
+/// Converter sólido em chapa (B35): reconhece a espessura constante e as dobras do corpo. A face
+/// fixa é a face de referência; `thickness` vazio mede a espessura do corpo, e preenchido confere
+/// que o corpo tem essa espessura.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct SmConvert {
+    pub face: [f64; 3],
+    #[serde(default)]
+    pub thickness: String,
+}
+
 /// Alívio de canto: corte no encontro de abas.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct SmCornerRelief {
@@ -2648,6 +2715,16 @@ impl FeatureKind {
             SmCurveFlange(_) => "AbaCurva",
             SmFlangeLoop(_) => "AbaLaço",
             SmCornerRelief(_) => "AlívioCanto",
+            SmCornerClose(_) => "FechaCanto",
+            SmLoftFlange(_) => "AbaEntrePerfis",
+            SmUnfoldPartial(p) => {
+                if p.refold {
+                    "RedobrarParcial"
+                } else {
+                    "DesdobrarParcial"
+                }
+            }
+            SmConvert(_) => "ConverterEmChapa",
             SmArcSlot(_) => "RasgoCircular",
             SmSurfFlange(_) => "AbaSuperfície",
             StructMember(_) => "Membro",
@@ -2705,6 +2782,10 @@ impl FeatureKind {
             SmCurveFlange(_) => "⌒",
             SmFlangeLoop(_) => "⌐",
             SmCornerRelief(_) => "◔",
+            SmCornerClose(_) => "◰",
+            SmLoftFlange(_) => "⏢",
+            SmUnfoldPartial(_) => "⇋",
+            SmConvert(_) => "⟲",
             SmArcSlot(_) => "◠",
             SmSurfFlange(_) => "⌓",
             StructMember(_) => "⌶",
@@ -2975,6 +3056,20 @@ impl FeatureKind {
                 }
             }
             SmCornerRelief(p) => exprs(&mut p.size),
+            SmCornerClose(p) => {
+                exprs(&mut p.gap);
+                exprs(&mut p.ratio)
+            }
+            SmLoftFlange(p) => {
+                ids(&mut p.a);
+                ids(&mut p.b)
+            }
+            SmUnfoldPartial(p) => {
+                for i in p.features.iter_mut() {
+                    ids(i)
+                }
+            }
+            SmConvert(p) => exprs(&mut p.thickness),
             SmSurfFlange(p) => {
                 exprs(&mut p.length);
                 if let Some(r) = &mut p.radius {
@@ -4428,6 +4523,8 @@ impl Document {
             SmFlangedHole(h) => vec![h.sketch],
             SmCut(s) => vec![s.sketch],
             SmProfileFlange(p) => vec![p.sketch],
+            SmLoftFlange(l) => vec![l.a, l.b],
+            SmUnfoldPartial(p) => p.features.clone(),
             Revolve(r) => vec![r.sketch],
             Sweep(w) => vec![w.sketch],
             Loft(l) => l.sections.clone(),

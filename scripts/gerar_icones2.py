@@ -641,10 +641,21 @@ def desenhos():
     # ---------- chapa: perfil de lado, a dobra é o resultado ----------
     ic("sm_parede", b=F_TOPO(24, 8, 19, 9.5), R=F_TOPO(24, 12, 19, 9.5) + L((5, 21.5), (5, 25), (24, 34.5), (43, 25), (43, 21.5)) + "M24 31v3.5")
     ic("sm_aba", B="M6 36h22", R="M28 36a8 8 0 0 0 8-8V10")
+    ic("sm_aba_laco", B=Q(14, 16, 20, 16), R="M24 16V6M24 32v10M14 24H4M34 24h10")
     ic("sm_aba_curva", B="M6 38c4-14 18-18 36-18", R="M6 38V26c4-14 18-18 36-18M42 8v12")
     ic("sm_aba_perfil", B="M6 38h16", R="M22 38a6 6 0 0 0 6-6V22l8-6h6V8")
     ic("sm_aba_superficie", B="M6 38h14M44 8c-2 14-10 24-20 30", R="M20 38c8 0 12-14 12-24")
     ic("sm_alivio_canto", B="M6 24h11M24 31v11", b="M6 14h28v28", R=C(24, 24, 7))
+    # fechamento de canto (B293): vista de cima, duas paredes e a peça que fecha o vão
+    ic("sm_fecha_canto", B="M8 42V26M24 8h18", R="M8 26V8h16")
+    ic("sm_canto_topo", B="M8 42V28M26 8h16", R="M8 28V14l6-6h12", b="M14 14l8-8")
+    ic("sm_canto_sobreposto", B="M8 42V28M30 8h12", R="M8 28V8h22", b="M14 14h10")
+    ic("sm_canto_sob", B="M8 42V28M30 8h12", R="M30 8H14V28", b="M8 14h12")
+    # B35: aba entre perfis, desdobrar/redobrar parcial e converter em chapa
+    ic("sm_aba_perfis", B="M6 40h36M16 10h16", R="M6 40L16 10M42 40L32 10")
+    ic("sm_desdobrar_parcial", B="M6 12v20h14", R="M20 32h22", b="M42 32v-18")
+    ic("sm_redobrar_parcial", B="M6 12v20h14", R="M20 32h14a6 6 0 0 0 6-6V12")
+    ic("sm_converter_chapa", B=Q(6, 14, 18, 18), R="M28 12h14v30H12v-6")
     ic("sm_bainha", B="M6 28h26", R="M32 28a6 6 0 0 0 0-12H16")
     ic("sm_desdobrar", B="M6 32h16a6 6 0 0 0 6-6V8", r="M28 32h16", R=SA(28, 32, 16, -80, -10, 5))
     ic("sm_dobra_linha", B=Z((4, 34), (14, 20), (26, 20), (16, 34)), R=L((26, 20), (16, 34)) + L((26, 20), (40, 6), (44, 20), (16, 34)))
@@ -697,7 +708,7 @@ ic("forma_tangencia", B="M6 36c10-14 26-14 36 0", R=L((8, 25), (40, 25)) + S(24,
 ic("forma_simetria", b="M24 4v40", R="M20 10c-16 2-16 26 0 28M28 10c16 2 16 26 0 28")
 ic("forma_converter", b=Q(6, 12, 18, 24), R=CUBO(32, 12, 10, 5, 12) + "M18 24h4", pb=[(6, 12), (24, 12), (24, 36), (6, 36)])
 
-SO_INTERFACE = {"importar_arquivo", "asm_catalogo", "arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais", "exportar_arquivo", "liberar_revisao", "onde_usado", "comparar", "estado_sem_revisao", "estado_liberada", "estado_editado", "estado_leitura", "estado_conflito", "forma", "forma_caixa", "forma_esfera", "forma_cilindro", "forma_plano", "forma_extrudar", "forma_laco", "forma_aresta", "forma_borda", "forma_tangencia", "forma_simetria", "forma_converter", "des_cota_inteligente", "curso", "mapa_macro", "perfil_fluxo"}
+SO_INTERFACE = {"sm_aba_perfis", "sm_desdobrar_parcial", "sm_redobrar_parcial", "sm_converter_chapa", "sm_aba_laco", "sm_fecha_canto", "sm_canto_topo", "sm_canto_sobreposto", "sm_canto_sob", "importar_arquivo", "asm_catalogo", "arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais", "exportar_arquivo", "liberar_revisao", "onde_usado", "comparar", "estado_sem_revisao", "estado_liberada", "estado_editado", "estado_leitura", "estado_conflito", "forma", "forma_caixa", "forma_esfera", "forma_cilindro", "forma_plano", "forma_extrudar", "forma_laco", "forma_aresta", "forma_borda", "forma_tangencia", "forma_simetria", "forma_converter", "des_cota_inteligente", "curso", "mapa_macro", "perfil_fluxo"}
 
 
 # ---------- saída ----------

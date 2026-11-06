@@ -583,8 +583,67 @@ impl App {
                 d.add_feature(FeatureKind::SmLouver(SmLouver { a: [60., 15., 2.], b: [60., 45., 2.], width: s("12"), height: s("5"), flip: false, down: false }));
                 d.add_feature(FeatureKind::SmBend(SmBend { a: [20., 0., 2.], b: [20., 60., 2.], angle: s("45"), radius: None, flip: false, down: false, sketch: None, position: 0 }));
             }
+            // variantes de capa para as capturas dos comandos de chapa (B283, B284, B293, B35, B31)
+            let variante = std::env::var("FENKRA_DEMO_CHAPA").unwrap_or_default();
+            let mut abre_janela = false;
+            match variante.as_str() {
+                // janela de estilos com um estilo escolhido e um campo sobrescrito
+                "estilos" => {
+                    if let Some(sp) = d.sheet.as_mut() {
+                        sp.radius = s("1.15*espessura");
+                    }
+                    d.salva_estilo_chapa("Aço leve 2 mm");
+                    if let Some(sp) = d.sheet.as_mut() {
+                        sp.k = s("0.40");
+                        sp.overrides.push(s("k"));
+                    }
+                    abre_janela = true;
+                }
+                // aba por laço: quatro abas com mitra a partir de uma aresta
+                "laco" => {
+                    d.features.truncate(2);
+                    let mut f = SmFlangeLoop { edges: vec![[100., 30., 2.]], edge_keys: vec![], loop_all: true, extent: ExtensaoAba::Inteira, invert: false, length: s("20"), angle: s("90"), radius: None, flip: false, side: 0, miter: true, relief: None, relief_kind: 0 };
+                    d.add_feature(FeatureKind::SmFlangeLoop(f));
+                }
+                // fechamento de canto entre duas abas (B293); o tipo vem de FENKRA_DEMO_CANTO
+                "canto" => {
+                    d.features.truncate(2);
+                    for e in [[100., 30., 2.], [50., 60., 2.]] {
+                        d.add_feature(FeatureKind::SmFlange(SmFlange { edge: e, length: s("22"), angle: s("90"), radius: None, off1: s("0"), off2: s("0"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None }));
+                    }
+                    let tipo = std::env::var("FENKRA_DEMO_CANTO").ok().and_then(|v| v.parse().ok()).unwrap_or(1u8);
+                    let id = d.add_feature(FeatureKind::SmCornerClose(SmCornerClose { at: [100., 60., 2.], kind: tipo, gap: s("0.6"), ratio: s("1"), narrow: false, propagate: false, invert: false }));
+                    d.feature_mut(id).map(|f| f.name = "FechaCanto".into());
+                }
+                // comando de aba unificado (B31): a aba de aresta com o painel em quatro seções
+                "aba" | "abaerro" => {
+                    d.features.truncate(2);
+                    let erro = variante == "abaerro";
+                    let id = d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 30., 2.], length: s(if erro { "-5" } else { "25" }), angle: s(if erro { "200" } else { "90" }), radius: Some(s("1.5*espessura")), off1: s("8"), off2: s("8"), flip: false, relief: Some(s("3")), relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None }));
+                    d.feature_mut(id).map(|f| f.name = "AbaUnificada".into());
+                }
+                // desdobrar parcial (B35): uma das duas abas planificada
+                "parcial" => {
+                    d.features.truncate(2);
+                    let a1 = d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 30., 2.], length: s("25"), angle: s("90"), radius: None, off1: s("0"), off2: s("0"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None }));
+                    let a2 = d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [0., 30., 2.], length: s("25"), angle: s("90"), radius: None, off1: s("0"), off2: s("0"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None }));
+                    let _ = a1;
+                    d.add_feature(FeatureKind::SmUnfoldPartial(SmUnfoldPartial { features: vec![a2], refold: false }));
+                }
+                // converter em chapa (B35): o corpo dobrado reconhecido
+                "converter" => {
+                    d.features.truncate(2);
+                    d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 30., 2.], length: s("25"), angle: s("90"), radius: None, off1: s("0"), off2: s("0"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None }));
+                    let id = d.add_feature(FeatureKind::SmConvert(SmConvert { face: [50., 30., 2.], thickness: String::new() }));
+                    d.feature_mut(id).map(|f| f.name = "ConverterEmChapa".into());
+                }
+                _ => {}
+            }
             d.hide_consumed(d.features[1].id);
             app.load_doc(d, None, None);
+            if abre_janela {
+                app.sheet_open = true;
+            }
             app.settings.bench = crate::settings::Bench::Chapa;
             app.started = true;
         }
@@ -2096,6 +2155,21 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 self.toast(msg, false);
                 return;
             }
+            Cmd::SmLoftFlange | Cmd::SmUnfoldPartial(_) | Cmd::SmConvert => {
+                if d.sheet.is_none() {
+                    d.sheet = Some(SheetParams::default());
+                }
+                let face = self.picks.iter().find_map(|p| match p {
+                    crate::picking::Pick::Face { point, .. } => Some(point.map(|v| v as f64)),
+                    _ => None,
+                });
+                let d = &mut self.open.doc;
+                Sel::Feature(d.add_feature(match c {
+                    Cmd::SmLoftFlange => FeatureKind::SmLoftFlange(SmLoftFlange { a: crate::slots::UNSET_SKETCH, b: crate::slots::UNSET_SKETCH, ruled: true, flip: false }),
+                    Cmd::SmUnfoldPartial(refold) => FeatureKind::SmUnfoldPartial(SmUnfoldPartial { features: vec![], refold }),
+                    _ => FeatureKind::SmConvert(SmConvert { face: face.unwrap_or([0.; 3]), thickness: String::new() }),
+                }))
+            }
             Cmd::SmWall | Cmd::SmStamp | Cmd::SmFlangedHole | Cmd::SmCut | Cmd::SmProfileFlange => {
                 if d.sheet.is_none() {
                     d.sheet = Some(SheetParams::default());
@@ -2136,7 +2210,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 let d = &mut self.open.doc;
                 Sel::Feature(d.add_feature(FeatureKind::SmSurfFlange(SmSurfFlange { support, face: face.unwrap_or([0.; 3]), length: s("20"), radius: None, flip: false, keep_base: false, mode: 0, angle: "90".into() })))
             }
-            Cmd::SmCurveFlange | Cmd::SmCornerRelief | Cmd::SmArcSlot => {
+            Cmd::SmCurveFlange | Cmd::SmCornerRelief | Cmd::SmCornerClose | Cmd::SmArcSlot => {
                 if d.sheet.is_none() {
                     d.sheet = Some(SheetParams::default());
                 }
@@ -2158,6 +2232,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 Sel::Feature(d.add_feature(match c {
                     Cmd::SmCurveFlange => FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("15"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None }),
                     Cmd::SmArcSlot => FeatureKind::SmArcSlot(SmArcSlot { center: at.unwrap_or([0.; 3]), radius: s("20"), width: s("6"), start: s("0"), sweep: s("90") }),
+                    Cmd::SmCornerClose => FeatureKind::SmCornerClose(SmCornerClose { at: at.unwrap_or([0.; 3]), kind: 1, gap: s("0.5"), ratio: s("1"), narrow: false, propagate: false, invert: false }),
                     // o tamanho padrão do canto vem do estilo da chapa, quando ele define um
                     _ => {
                         let tam = d.sheet_efetivo().map(|e| e.corner).filter(|c| !c.trim().is_empty()).unwrap_or_else(|| s("4"));
@@ -2182,6 +2257,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     Pick::Vertex { pos, .. } => Some(pos.map(|v| v as f64)),
                     _ => None,
                 }).collect();
+                // comando de aba unificado (B31): várias arestas escolhidas já abrem no modo laço
+                let c = if c == Cmd::SmFlange && edges.len() >= 2 { Cmd::SmFlangeLoop } else { c };
                 let d = &mut self.open.doc;
                 Sel::Feature(d.add_feature(match c {
                     Cmd::SmFlange => FeatureKind::SmFlange(SmFlange {
@@ -7229,6 +7306,14 @@ pub enum Cmd {
     SmFlangeLoop,
     /// alívio de canto
     SmCornerRelief,
+    /// fechamento de canto entre duas abas (topo, sobreposto ou sob)
+    SmCornerClose,
+    /// aba entre dois perfis (lofted)
+    SmLoftFlange,
+    /// desdobrar (false) ou redobrar (true) só algumas abas
+    SmUnfoldPartial(bool),
+    /// converter sólido em chapa
+    SmConvert,
     /// rasgo circular
     SmArcSlot,
     /// aba por superfície (suporte)

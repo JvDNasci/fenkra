@@ -8,6 +8,7 @@
 //! Princípio de edição não destrutiva (RF-NUC-020): todo objeto tem um [`Id`] estável;
 //! editar altera o objeto no lugar e as referências apontam para o `Id`, nunca para posições.
 
+pub mod aba_unif;
 pub mod config;
 pub mod configuracoes;
 pub mod doc;

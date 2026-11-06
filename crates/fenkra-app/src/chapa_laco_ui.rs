@@ -37,10 +37,9 @@ fn troca_modo(atual: &ExtensaoAba, i: usize) -> ExtensaoAba {
 }
 
 pub fn painel(ui: &mut egui::Ui, doc: &Document, lp: &mut SmFlangeLoop, vars: &Vars) {
-    section(ui, "Arestas da aba");
-    ui.label(RichText::new(format!("{} {}", lp.edges.len(), tr("aresta(s) escolhida(s)"))).small());
-    check(ui, &mut lp.loop_all, "usar o laço da face inteira").on_hover_text(tr("Liga: a partir da primeira aresta escolhida, cria uma aba em cada aresta reta do contorno da face. Desliga: só as arestas escolhidas."));
-    section(ui, "Extensão lateral");
+    // o suporte (arestas escolhidas e laço da face) está no painel de modos: `chapa_unif_ui::suporte`
+    section(ui, "Parâmetros");
+    ui.label(RichText::new(tr("Extensão lateral")).weak());
     let mut m = modo(&lp.extent);
     ui.horizontal_wrapped(|ui| {
         for (i, (nome, _)) in MODOS.iter().enumerate() {
@@ -76,20 +75,19 @@ pub fn painel(ui: &mut egui::Ui, doc: &Document, lp: &mut SmFlangeLoop, vars: &V
     if !matches!(lp.extent, ExtensaoAba::Inteira | ExtensaoAba::Entre { .. }) {
         check(ui, &mut lp.invert, "medir a partir da outra ponta").on_hover_text(tr("A medida começa na ponta de menor X (depois Y, Z) de cada aresta; ligado, começa na outra."));
     }
-    section(ui, "Aba");
-    expr(ui, "Comprimento reto", &mut lp.length, vars, "mm");
-    expr(ui, "Ângulo", &mut lp.angle, vars, "°");
+    crate::editor::expr_lim(ui, "Comprimento reto", &mut lp.length, vars, "mm", Some((0.01, f64::INFINITY)));
+    crate::editor::expr_lim(ui, "Ângulo", &mut lp.angle, vars, "°", Some((0.01, 180.)));
     let mut own = lp.radius.is_some();
     ui.horizontal(|ui| {
         if check(ui, &mut own, "raio próprio (senão o da chapa)").changed() {
-            lp.radius = own.then(|| "2".to_string());
+            lp.radius = own.then(|| crate::chapa_unif_ui::raio_da_regra(doc));
         }
         if crate::chapa_estilo_ui::cadeado_comando(ui, doc, lp.radius.is_some()) {
             lp.radius = None;
         }
     });
     if let Some(r) = &mut lp.radius {
-        expr(ui, "Raio interno", r, vars, "mm");
+        crate::editor::expr_lim(ui, "Raio interno", r, vars, "mm", Some((0.01, f64::INFINITY)));
     }
     ui.horizontal_wrapped(|ui| {
         ui.label(tr("Lado do material"));
@@ -97,7 +95,8 @@ pub fn painel(ui: &mut egui::Ui, doc: &Document, lp: &mut SmFlangeLoop, vars: &V
             ui.selectable_value(&mut lp.side, k, tr(n));
         }
     });
-    check(ui, &mut lp.flip, "dobrar para o outro lado");
+    crate::chapa_unif_ui::inverter(ui, &mut lp.flip);
+    section(ui, "Avançado");
     check(ui, &mut lp.miter, "pontas em meia-esquadria (45°) para a aba vizinha");
     let mut rel = lp.relief.is_some();
     ui.horizontal(|ui| {

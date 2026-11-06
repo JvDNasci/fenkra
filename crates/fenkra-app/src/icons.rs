@@ -150,7 +150,8 @@ modelos!(
     "sweep_frenet", "vista_direita", "vista_frente", "vista_iso", "vista_topo", "wf_repetir", "xf_afinidade",
     "xf_escala", "xf_girar", "xf_mover", "xf_simetria", "arvore_zoom_mais", "arvore_zoom_menos",
     "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais",
-    "qualidade_modelo", "comparar_versoes"
+    "qualidade_modelo", "comparar_versoes",
+    "sm_aba_perfis", "sm_desdobrar_parcial", "sm_redobrar_parcial", "sm_converter_chapa", "sm_aba_laco", "sm_fecha_canto", "sm_canto_topo", "sm_canto_sobreposto", "sm_canto_sob"
 );
 
 // Lista gerada a partir de assets/icons (scripts/gerar_icones.py).
