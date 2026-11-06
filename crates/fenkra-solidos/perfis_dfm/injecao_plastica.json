@@ -1,0 +1,51 @@
+{
+  "nome": "Injeção de plástico",
+  "processo": "injecao",
+  "direcao": [
+    0,
+    0,
+    1
+  ],
+  "regras": [
+    {
+      "id": "inj.parede.min",
+      "entidade": "parede",
+      "medida": "espessura",
+      "severidade": "erro",
+      "texto": "Parede de {valor} mm abaixo de {limite} mm: o plástico não enche.",
+      "min": 0.8
+    },
+    {
+      "id": "inj.parede.max",
+      "entidade": "parede",
+      "medida": "espessura",
+      "severidade": "aviso",
+      "texto": "Parede de {valor} mm acima de {limite} mm: chupagem e ciclo longo.",
+      "max": 4.0
+    },
+    {
+      "id": "inj.saida.angulo",
+      "entidade": "saida",
+      "medida": "angulo",
+      "severidade": "aviso",
+      "texto": "Face com saída de {valor} graus; o molde pede ao menos {limite}.",
+      "min": 1.0
+    },
+    {
+      "id": "inj.undercut",
+      "entidade": "undercut",
+      "medida": "area",
+      "severidade": "erro",
+      "texto": "Face em undercut ({valor} mm² bloqueados): pede gaveta ou muda a abertura.",
+      "max": 0.0
+    },
+    {
+      "id": "inj.canto.raio",
+      "entidade": "canto",
+      "medida": "raio_interno",
+      "severidade": "aviso",
+      "texto": "Canto interno vivo ou com raio {valor} mm; use ao menos {limite} mm.",
+      "min": 0.5
+    }
+  ]
+}

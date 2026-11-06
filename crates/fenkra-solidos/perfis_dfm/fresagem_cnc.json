@@ -1,0 +1,51 @@
+{
+  "nome": "Fresagem CNC 3 eixos",
+  "processo": "cnc",
+  "direcao": [
+    0,
+    0,
+    1
+  ],
+  "regras": [
+    {
+      "id": "cnc.furo.diametro_min",
+      "entidade": "furo",
+      "medida": "diametro",
+      "severidade": "aviso",
+      "texto": "Furo de {valor} mm abaixo do mínimo de {limite} mm: broca muito frágil.",
+      "min": 1.0
+    },
+    {
+      "id": "cnc.furo.profundidade",
+      "entidade": "furo",
+      "medida": "profundidade_diametro",
+      "severidade": "aviso",
+      "texto": "Furo {valor} vezes mais fundo que largo (limite {limite}): a broca sai torta e o cavaco não escapa.",
+      "max": 10.0
+    },
+    {
+      "id": "cnc.canto.raio",
+      "entidade": "canto",
+      "medida": "raio_interno",
+      "severidade": "erro",
+      "texto": "Canto interno com raio {valor} mm; a fresa mínima pede {limite} mm.",
+      "min": 1.5
+    },
+    {
+      "id": "cnc.bolso.profundidade",
+      "entidade": "bolso",
+      "medida": "profundidade_raio",
+      "severidade": "aviso",
+      "texto": "Bolso fundo demais para o raio do canto ({valor} vezes, limite {limite}): ferramenta longa vibra.",
+      "max": 8.0
+    },
+    {
+      "id": "cnc.parede.espessura",
+      "entidade": "parede",
+      "medida": "espessura",
+      "severidade": "aviso",
+      "texto": "Parede de {valor} mm abaixo de {limite} mm: vibra e empena ao usinar.",
+      "min": 0.8
+    }
+  ]
+}
