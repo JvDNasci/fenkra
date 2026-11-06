@@ -199,10 +199,21 @@ pub struct Estado {
     ultima: Option<Settings>,
 }
 
+impl Estado {
+    /// Estado de quem ainda não carregou nada: sem empresa nem projeto, mas com a base já resolvida.
+    /// Um `Estado::default()` puro deixa `base` vazia, e `texto_do_usuario` trata base vazia como
+    /// "nenhuma opção é padrão": grava o arquivo inteiro em vez de só o que mudou.
+    fn novo() -> Estado {
+        let mut e = Estado::default();
+        recalcular_base(&mut e);
+        e
+    }
+}
+
 static ESTADO: std::sync::OnceLock<Mutex<Estado>> = std::sync::OnceLock::new();
 
 fn estado() -> MutexGuard<'static, Estado> {
-    ESTADO.get_or_init(|| Mutex::new(Estado::default())).lock().unwrap_or_else(|p| p.into_inner())
+    ESTADO.get_or_init(|| Mutex::new(Estado::novo())).lock().unwrap_or_else(|p| p.into_inner())
 }
 
 pub fn tirar_avisos() -> Vec<String> {
@@ -506,9 +517,23 @@ mod tests {
         assert_eq!(s.graficos.preset, fenkra_core::PresetMalha::Alta);
     }
 
+    /// Causa do defeito intermitente de `gravar_so_o_que_mudou_e_recarregar_da_o_mesmo`: o estado é
+    /// global e nasce com a base vazia. Quem gravava antes de qualquer `carregar_de` (o que dependia de
+    /// qual teste pegava o cadeado primeiro) via todas as opções como "mudadas" e gravava o arquivo todo.
+    #[test]
+    fn estado_novo_ja_tem_a_base_resolvida() {
+        let vazio = Estado::default();
+        let atual = mapa_de(&Settings::default());
+        assert_eq!(config::diferenca(&atual, &vazio.base).len(), atual.len(), "base vazia faz tudo parecer mudança");
+        let novo = Estado::novo();
+        assert!(config::diferenca(&atual, &novo.base).is_empty(), "com a base resolvida, o padrão não grava nada");
+    }
+
     #[test]
     fn gravar_so_o_que_mudou_e_recarregar_da_o_mesmo() {
         let _x = exclusivo();
+        // não depende de qual teste rodou antes: parte do estado limpo, como o programa ao abrir
+        carregar_de(None, None);
         let d = pasta("grava");
         let arq = d.join("config.json");
         let mut s = Settings::default();
