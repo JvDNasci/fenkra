@@ -30,6 +30,8 @@ pub struct Pendente {
     pub encaixe: crate::asm_encaixe::Encaixe,
     /// deslocamento em X, Y e Z, com fórmula
     formulas: [String; 3],
+    /// restrição do conflito apontada no painel: ela acende no 3D
+    conflito_sob_mouse: Option<fenkra_core::Id>,
 }
 
 /// Quadros por segundo do Animar.
@@ -37,7 +39,7 @@ const QUADROS_POR_SEGUNDO: f64 = 24.;
 
 impl Pendente {
     fn novo(tipo: Tipo) -> Self {
-        Pendente { c: Comando::novo(tipo), picks: Default::default(), textos: Default::default(), resultado: None, resolvida: None, aviso: None, animacao: None, opcoes_animar: Default::default(), encaixe: Default::default(), formulas: ["0".into(), "0".into(), "0".into()] }
+        Pendente { c: Comando::novo(tipo), picks: Default::default(), textos: Default::default(), resultado: None, resolvida: None, aviso: None, animacao: None, opcoes_animar: Default::default(), encaixe: Default::default(), formulas: ["0".into(), "0".into(), "0".into()], conflito_sob_mouse: None }
     }
 
     /// Peças fora do lugar agora: as da prévia ou as do quadro do Animar.
@@ -357,8 +359,7 @@ pub fn painel(app: &mut App, ui: &mut egui::Ui) {
     let mut acao = None;
     let Some(st) = app.asm.as_mut() else { return };
     let vars = st.asm.vars();
-    let nomes_falha: Vec<String> = st.cmd.as_ref().and_then(|p| p.previa()).map(|p| p.novas_falhas.iter().map(|f| p.copia.name_of(*f)).collect()).unwrap_or_default();
-    let dof = st.cmd.as_ref().and_then(|p| p.previa()).map(|p| p.report.dof);
+    let nomes_conflito: Vec<(fenkra_core::Id, String)> = st.cmd.as_ref().and_then(|p| p.previa()).map(|p| p.conflito.envolvidas.iter().map(|f| (*f, p.copia.name_of(*f))).collect()).unwrap_or_default();
     let Some(pen) = st.cmd.as_mut() else { return };
     let visuais = ui.visuals().clone();
     let acc = crate::theme::accent(&visuais);
@@ -381,6 +382,23 @@ pub fn painel(app: &mut App, ui: &mut egui::Ui) {
         ui.label(RichText::new(tr(pen.c.tipo.label())).strong());
         ui.label(tr(etapa_texto(&pen.c)));
     });
+    // ---- resultado da prévia: no topo, porque é a primeira coisa a ler quando não fecha
+    match &pen.resultado {
+        Some(Err(e)) => {
+            ui.label(RichText::new(tr(e)).color(crate::theme::st_err()));
+        }
+        Some(Ok(p)) if p.falhou() => {
+            quadro_de_conflito(ui, p, &nomes_conflito, &mut pen.conflito_sob_mouse);
+            ui.label(RichText::new(format!("{} {}", p.report.dof, tr("GDL restariam com a proposta"))).small());
+        }
+        Some(Ok(p)) => {
+            ui.label(RichText::new(format!("{} {} ({} {})", p.report.dof, tr("GDL livres depois de aceitar"), p.gdl_antes, tr("agora"))).color(crate::theme::st_ok()));
+            if p.redundante() {
+                ui.label(RichText::new(tr("Não tira grau de liberdade: repete o que já está restrito.")).small().color(crate::theme::st_warn()));
+            }
+        }
+        None => {}
+    }
     // ---- suporte: duas caixas, com a cor das setas do 3D
     crate::editor::section(ui, "Suporte");
     for k in 0..2 {
@@ -497,7 +515,11 @@ pub fn painel(app: &mut App, ui: &mut egui::Ui) {
     }
     if junta {
         let reconhecida = pen.previa().and_then(|p| p.id.and_then(|id| p.copia.joints.iter().find(|j| j.id == id)));
-        let (giro, curso) = reconhecida.map_or((false, false), |j| j.kind.drives());
+        let graus = reconhecida.map_or(&[][..], |j| j.kind.graus());
+        let medidas: Vec<(kin::Grau, f64)> = pen.previa().zip(reconhecida).map_or(vec![], |(p, j)| {
+            let lugar = |id| p.copia.lugar(id).unwrap_or_default();
+            graus.iter().map(|g| (*g, kin::medir_grau(j, *g, &lugar(j.a.comp), &lugar(j.b.comp)))).collect()
+        });
         if let (Tipo::JuntaAutomatica, Some(j)) = (&pen.c.tipo, reconhecida) {
             ui.label(RichText::new(format!("{} {}", tr("Reconhecida:"), tr(j.kind.label()))).strong());
         }
@@ -535,26 +557,10 @@ pub fn painel(app: &mut App, ui: &mut egui::Ui) {
                 pen.animacao = None;
             }
         });
-        // limites guardados na junta (o solucionador ainda não os impõe)
+        // faixa de movimento: o solucionador a impõe, e a prévia já respeita
         egui::CollapsingHeader::new(tr("Limites")).id_salt("asm_cmd_limites").show(ui, |ui| {
-            for (rotulo, ligado, faixa, unidade, padrao) in [("Ângulo", giro, &mut pen.c.limites.angulo, "°", (-90., 90.)), ("Curso", curso, &mut pen.c.limites.curso, " mm", (-50., 50.))] {
-                if !ligado {
-                    continue;
-                }
-                ui.horizontal(|ui| {
-                    let mut on = faixa.is_some();
-                    if ui.checkbox(&mut on, tr(rotulo)).on_hover_text(tr("Liga a faixa de movimento deste grau de liberdade")).changed() {
-                        *faixa = on.then_some(padrao);
-                    }
-                    if let Some((lo, hi)) = faixa {
-                        ui.add(crate::ui_ext::dv(lo).speed(1.).suffix(unidade).dica("Mínimo"));
-                        ui.add(crate::ui_ext::dv(hi).speed(1.).suffix(unidade).dica("Máximo"));
-                    }
-                });
-            }
-            if !giro && !curso {
-                ui.label(RichText::new(tr("Esta junta não tem curso nem ângulo para limitar.")).weak().small());
-            }
+            let medida = |g| medidas.iter().find(|m| m.0 == g).map(|m| m.1);
+            crate::asm_limites::painel(ui, "asm_cmd_limites_graus", graus, &mut pen.c.limites, medida, |_| false);
         });
     }
     if aceita_alin || aceita_lado {
@@ -566,19 +572,6 @@ pub fn painel(app: &mut App, ui: &mut egui::Ui) {
                 pen.c.inv_lado = !pen.c.inv_lado;
             }
         });
-    }
-    // ---- resultado da prévia
-    match &pen.resultado {
-        Some(Err(e)) => {
-            ui.label(RichText::new(tr(e)).color(crate::theme::st_err()));
-        }
-        Some(Ok(p)) if p.falhou() => {
-            ui.label(RichText::new(format!("{} {}", tr("✖ Sem solução; a montagem não muda. Em conflito:"), nomes_falha.join(", "))).color(crate::theme::st_err()));
-        }
-        Some(Ok(_)) => {
-            ui.label(RichText::new(format!("{} {}", dof.unwrap_or(0), tr("GDL livres depois de aceitar"))).color(crate::theme::st_ok()));
-        }
-        None => {}
     }
     // ---- avançado
     egui::CollapsingHeader::new(tr("Avançado")).id_salt("asm_cmd_avancado").show(ui, |ui| {
@@ -598,6 +591,29 @@ pub fn painel(app: &mut App, ui: &mut egui::Ui) {
             alternar_animacao(app, agora);
         }
         _ => {}
+    }
+}
+
+/// Por que a proposta não fecha, com cada restrição do conflito em vermelho.
+fn quadro_de_conflito(ui: &mut egui::Ui, p: &Previa, nomes: &[(fenkra_core::Id, String)], sob_mouse: &mut Option<fenkra_core::Id>) {
+    let erro = crate::theme::st_err();
+    ui.label(RichText::new(tr("✖ Sem solução; a montagem não muda.")).color(erro));
+    *sob_mouse = None;
+    if p.conflito.sozinho {
+        ui.label(RichText::new(tr("Não fecha nem sozinha: confira as peças fixas e o valor pedido.")).small().color(erro));
+    } else if nomes.is_empty() {
+        ui.label(RichText::new(tr("O solucionador não achou o caminho: tente aproximar as peças.")).small().color(erro));
+    } else {
+        ui.label(RichText::new(tr("Em conflito com:")).small().color(erro));
+        for (id, nome) in nomes {
+            let r = ui.label(RichText::new(format!("  ✖ {nome}")).color(erro)).on_hover_text(tr("Tirar ou mudar esta restrição resolve o conflito"));
+            if r.hovered() {
+                *sob_mouse = Some(*id);
+            }
+        }
+        if !p.conflito.minimo {
+            ui.label(RichText::new(tr("A lista pode ter restrições a mais: a montagem é grande para testar uma a uma.")).small().weak());
+        }
     }
 }
 
@@ -658,6 +674,10 @@ pub fn demo(st: &mut AsmState, nome: &str) {
         st.dirty = true;
         return;
     }
+    if matches!(nome, "explosao" | "explosao_anim" | "exibicao") {
+        crate::asm_exibicao::demo(st, nome);
+        return;
+    }
     if nome.starts_with("interf") {
         crate::asm_interf::demo(st, nome);
         return;
@@ -715,6 +735,41 @@ pub fn demo(st: &mut AsmState, nome: &str) {
             let fr = fenkra_montagem::kin::JFrame::from_axis([48., 24., 0.], [0., 0., 1.]);
             st.asm.add_joint(JointKind::Revolute, fenkra_montagem::kin::JRef { comp: base, frame: fr }, fenkra_montagem::kin::JRef { comp: tampa, frame: fr });
             st.solve();
+        }
+        "limites" => {
+            // cilíndrica: arco e trilho na mesma junta, com um dos extremos desligado
+            let fr = fenkra_montagem::kin::JFrame::from_axis([48., 24., 0.], [0., 0., 1.]);
+            let id = st.asm.add_joint(JointKind::Cylindrical, fenkra_montagem::kin::JRef { comp: base, frame: fr }, fenkra_montagem::kin::JRef { comp: tampa, frame: fr });
+            if let Some(j) = st.asm.joints.iter_mut().find(|j| j.id == id) {
+                j.limites.angulo = kin::Faixa::nova(-40., 75.);
+                j.limites.curso = kin::Faixa::nova(0., 30.);
+                j.limites.curso.min.ligado = false;
+            }
+            st.solve();
+            st.sel = Some(id);
+        }
+        "limites_cmd" => {
+            let mut pen = Pendente::novo(Tipo::Junta(JointKind::Revolute));
+            pen.c.receber(eixo(base));
+            pen.c.receber(eixo(tampa));
+            pen.c.limites.angulo = kin::Faixa::nova(-30., 110.);
+            pen.textos = [vec![tr("Eixo").to_string()], vec![tr("Eixo").to_string()]];
+            st.cmd = Some(pen);
+            atualizar(st);
+        }
+        "conflito" => {
+            // duas distâncias já gravadas e a proposta pedindo outra: ela mesma e a primeira brigam
+            let d = st.asm.add_mate(MateKind::Distance("30".into()), plano(base, 12., 1.), plano(tampa, 0., -1.));
+            if let Some(m) = st.asm.mates.iter_mut().find(|m| m.id == d) {
+                m.sentido = fenkra_montagem::Sentido::Oposto;
+            }
+            st.solve();
+            let mut pen = Pendente::novo(Tipo::Restricao(MateKind::Contact));
+            pen.c.receber(Elemento::novo(plano(base, 12., 1.), Classe::Face));
+            pen.c.receber(Elemento::novo(plano(tampa, 0., -1.), Classe::Face));
+            pen.textos = [vec![tr("Face plana").to_string()], vec![tr("Face plana").to_string()]];
+            st.cmd = Some(pen);
+            atualizar(st);
         }
         "manip" => {
             let fr = fenkra_montagem::kin::JFrame::from_axis([48., 24., 0.], [0., 0., 1.]);
@@ -797,6 +852,25 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::
     if let (Some(a), true) = (alvo, previa.is_some_and(|p| p.falhou())) {
         let t = painter.layout_no_wrap(tr("Sem solução").to_string(), egui::FontId::proportional(12.), crate::theme::st_err());
         painter.galley(a + egui::vec2(10., 10.), t, crate::theme::st_err());
+    }
+    if let Some(p) = previa.filter(|p| p.falhou()) {
+        conflito_no_modelo(&painter, rect, cam, &st.asm, &p.conflito.envolvidas, pen.conflito_sob_mouse);
+    }
+}
+
+/// Liga as duas referências de cada restrição do conflito, com o nome em vermelho. O símbolo sai da
+/// montagem de verdade: a cópia da prévia tem as peças num meio-termo que não vale nada.
+fn conflito_no_modelo(painter: &egui::Painter, rect: egui::Rect, cam: &crate::render::Camera, a: &Assembly, ids: &[fenkra_core::Id], sob_mouse: Option<fenkra_core::Id>) {
+    let v3 = |p: [f64; 3]| glam::Vec3::new(p[0] as f32, p[1] as f32, p[2] as f32);
+    let erro = crate::theme::st_err();
+    for s in fenkra_montagem::simbolos::simbolos(a, ids).iter().filter(|s| ids.contains(&s.id)) {
+        let (Some(pa), Some(pb)) = (cam.project(rect, v3(s.a)), cam.project(rect, v3(s.b))) else { continue };
+        let quente = sob_mouse == Some(s.id);
+        painter.line_segment([pa, pb], egui::Stroke::new(if quente { 3.4 } else { 2. }, erro));
+        painter.circle_filled(pa, 4., erro);
+        painter.circle_filled(pb, 4., erro);
+        let g = painter.layout_no_wrap(a.name_of(s.id), egui::FontId::proportional(12.), erro);
+        painter.galley(pa + (pb - pa) / 2. + egui::vec2(8., -16.), g, erro);
     }
 }
 
@@ -881,7 +955,10 @@ mod tests {
         assert!(st.asm.mates.iter().any(|m| m.id == extra));
         st.report = solve::solve(&mut st.asm);
         atualizar(&mut st);
-        assert!(st.cmd.as_ref().unwrap().previa().unwrap().falhou());
+        let p = st.cmd.as_ref().unwrap().previa().unwrap();
+        assert!(p.falhou());
+        assert_eq!(p.conflito.envolvidas, vec![extra], "aponta a restrição que briga com a proposta");
+        assert!(st.em_conflito(extra));
         let mut cena = crate::render::Scene::default();
         na_cena(Some(&st), &egui::Visuals::dark(), 0., &mut cena);
         let erro = crate::theme::st_err();

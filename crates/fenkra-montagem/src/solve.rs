@@ -3,6 +3,10 @@
 //! rotação em torno do próprio centro); as restrições viram resíduos e o Levenberg–Marquardt
 //! leva todos a zero. Componentes fixos não entram como incógnita; uma fixação conjunta põe
 //! várias peças no mesmo corpo.
+//!
+//! A montagem não vai inteira para o sistema: ela é dividida em aglomerados, os grupos de corpos que
+//! se influenciam, e cada um resolve sozinho. Dentro do aglomerado, o que já está travado entre si
+//! vira um corpo só antes de começar (B103, ADR 0046).
 
 use crate::*;
 use std::collections::HashMap;
@@ -18,6 +22,12 @@ pub struct SolveReport {
     /// restrições não satisfeitas (impossíveis ou em conflito)
     pub failed: Vec<Id>,
     pub converged: bool,
+    /// juntas paradas num limite: não é falha, e sim o batente segurando a peça
+    pub no_limite: Vec<Id>,
+    /// partes independentes da montagem que tiveram conta para fazer
+    pub aglomerados: usize,
+    /// incógnitas somadas de todos os sistemas, depois de reunir o que já está travado
+    pub incognitas: usize,
 }
 
 /// Geometria no mundo.
@@ -302,11 +312,11 @@ fn axis_dir(w: World) -> V3 {
     }
 }
 
-fn all_residuals(a: &Assembly, pl: &HashMap<Id, Placement>, vars: &HashMap<String, f64>, drives: bool, per: &mut Vec<(Id, usize, usize)>) -> Vec<f64> {
+fn all_residuals(a: &Assembly, pl: &HashMap<Id, Placement>, vars: &HashMap<String, f64>, drives: bool, per: &mut Vec<(Id, usize, usize)>, e: &Escopo) -> Vec<f64> {
     let mut r = vec![];
     per.clear();
     let num = |e: &String| expr::eval_str(e, vars).unwrap_or(0.);
-    for m in a.mates.iter().filter(|m| !m.suppressed && !formula_invalida(m, vars)) {
+    for m in e.mates.iter().map(|i| &a.mates[*i]).filter(|m| !m.suppressed && !formula_invalida(m, vars)) {
         let (Some(pa), Some(pb)) = (pl.get(&m.a.comp), pl.get(&m.b.comp)) else { continue };
         let s = r.len();
         let (wa, wb) = (world(&m.a.geom, pa), world(&m.b.geom, pb));
@@ -334,7 +344,7 @@ fn all_residuals(a: &Assembly, pl: &HashMap<Id, Placement>, vars: &HashMap<Strin
         }
         per.push((m.id, s, r.len()));
     }
-    crate::kin::residuals(a, pl, vars, drives, &mut r, per);
+    crate::kin::residuals(a, pl, vars, drives, &mut r, per, e);
     r
 }
 
@@ -460,17 +470,310 @@ pub fn solve_toward(a: &mut Assembly, id: Id, target: Placement, weight: f64) ->
 
 fn solve_inner(a: &mut Assembly, extra: &HashMap<String, f64>, pull: Option<(Id, Placement, f64)>) -> SolveReport {
     seed_flips(a);
-    let b = bodies(a);
-    let n = 6 * b.rel.len();
     let mut vars = a.vars();
     vars.extend(extra.iter().map(|(k, v)| (k.clone(), *v)));
     vars.entry("t".into()).or_insert(0.);
-    let mut x = vec![0.; n];
-    let mut per = vec![];
-    let res = |x: &[f64], per: &mut Vec<(Id, usize, usize)>| {
-        let pl = place(&b, a, x);
-        let mut r = all_residuals(a, &pl, &vars, true, per);
-        if let Some((id, t, w)) = pull {
+    let (mut novos, mut custo, mut iteracoes, mut dof, mut incognitas) = (HashMap::new(), 0., 0, 0, 0);
+    let b = bodies(a);
+    let grupos = aglomerados(a, &b, pull.and_then(|p| b.of.get(&p.0).copied().flatten()));
+    let dentro: usize = grupos.iter().map(|g| g.corpos.len()).sum();
+    // corpo solto de tudo: seis graus de liberdade e nenhuma conta a fazer
+    dof += 6 * (b.rel.len() - dentro);
+    for g in &grupos {
+        let s = Sistema::reduzido(a, &b, &vars, g, pull);
+        let (x, c, it) = s.minimizar();
+        custo += c;
+        iteracoes = iteracoes.max(it);
+        incognitas += x.len();
+        dof += s.gdl(&x);
+        novos.extend(s.lugares(&x));
+    }
+    novos.remove(&ORIGEM);
+    for nd in a.nodes.iter_mut() {
+        if let Some(p) = novos.get(&nd.id) {
+            nd.placement = *p;
+        }
+    }
+    // a conferência vê a montagem inteira: o que o sistema reduzido deixou de fora entra aqui
+    let mut pl: HashMap<Id, Placement> = a.nodes.iter().map(|n| (n.id, n.placement)).collect();
+    pl.insert(ORIGEM, Placement::default());
+    let (tudo, mut per) = (Escopo::tudo(a), vec![]);
+    let mut r2 = all_residuals(a, &pl, &vars, true, &mut per, &tudo);
+    crate::kin::residuos_limite(a, &pl, &mut r2, &mut per, &tudo.juntas);
+    let mut failed = vec![];
+    for (id, s, e) in &per {
+        if r2[*s..*e].iter().any(|v| v.abs() > 1e-6) && !failed.contains(id) {
+            failed.push(*id);
+        }
+    }
+    failed.extend(a.mates.iter().filter(|m| !m.suppressed && formula_invalida(m, &vars)).map(|m| m.id));
+    // as repetições acompanham os originais nas posições novas
+    a.update_patterns();
+    let no_limite = a.joints.iter().filter(|j| crate::kin::no_batente(j, &pl)).map(|j| j.id).collect();
+    SolveReport { residual: f64::sqrt(custo), iterations: iteracoes, dof, failed: failed.clone(), converged: failed.is_empty(), no_limite, aglomerados: grupos.len(), incognitas }
+}
+
+/// Restrições, juntas e acoplamentos de um pedaço da montagem (posições nas listas dela).
+#[derive(Clone, Debug, Default)]
+pub(crate) struct Escopo {
+    pub mates: Vec<usize>,
+    pub juntas: Vec<usize>,
+    pub acoplamentos: Vec<usize>,
+}
+
+impl Escopo {
+    pub fn tudo(a: &Assembly) -> Self {
+        Escopo { mates: (0..a.mates.len()).collect(), juntas: (0..a.joints.len()).collect(), acoplamentos: (0..a.couplings.len()).collect() }
+    }
+
+    fn vazio(&self) -> bool {
+        self.mates.is_empty() && self.juntas.is_empty() && self.acoplamentos.is_empty()
+    }
+
+    fn ids(&self, a: &Assembly) -> Vec<Id> {
+        let m = self.mates.iter().map(|i| a.mates[*i].id);
+        let j = self.juntas.iter().map(|i| a.joints[*i].id);
+        m.chain(j).chain(self.acoplamentos.iter().map(|i| a.couplings[*i].id)).collect()
+    }
+}
+
+/// Um item do sistema e os componentes que ele prende.
+enum Item {
+    Mate(usize),
+    Junta(usize),
+    Acoplamento(usize),
+}
+
+impl Item {
+    fn entrar(&self, e: &mut Escopo) {
+        match self {
+            Item::Mate(i) => e.mates.push(*i),
+            Item::Junta(i) => e.juntas.push(*i),
+            Item::Acoplamento(i) => e.acoplamentos.push(*i),
+        }
+    }
+}
+
+/// O que entra no sistema, com os componentes de cada item. Item suprimido, ou com fórmula que não
+/// dá número, não gera resíduo: ele não pode ligar um corpo ao outro.
+fn itens(a: &Assembly, e: &Escopo, vars: &HashMap<String, f64>) -> Vec<(Item, Vec<Id>)> {
+    let mut out = vec![];
+    for i in &e.mates {
+        let m = &a.mates[*i];
+        if !m.suppressed && !formula_invalida(m, vars) {
+            out.push((Item::Mate(*i), vec![m.a.comp, m.b.comp]));
+        }
+    }
+    for i in &e.juntas {
+        let j = &a.joints[*i];
+        if !j.suppressed {
+            out.push((Item::Junta(*i), vec![j.a.comp, j.b.comp]));
+        }
+    }
+    for i in &e.acoplamentos {
+        let c = &a.couplings[*i];
+        let comps: Vec<Id> = a.joints.iter().filter(|j| j.id == c.a || j.id == c.b).flat_map(|j| [j.a.comp, j.b.comp]).collect();
+        out.push((Item::Acoplamento(*i), comps));
+    }
+    out
+}
+
+/// Corpos que se influenciam e o que os liga. Um componente fixo não transmite movimento: duas peças
+/// presas à mesma base resolvem cada uma por si.
+struct Aglomerado {
+    corpos: Vec<usize>,
+    escopo: Escopo,
+}
+
+fn raiz(uf: &mut [usize], mut i: usize) -> usize {
+    while uf[i] != i {
+        uf[i] = uf[uf[i]];
+        i = uf[i];
+    }
+    i
+}
+
+fn aglomerados_de(a: &Assembly, b: &Bodies, vars: &HashMap<String, f64>, puxado: Option<usize>) -> Vec<Aglomerado> {
+    let corpo = |c: &Id| b.of.get(c).copied().flatten();
+    let lista = itens(a, &Escopo::tudo(a), vars);
+    let mut uf: Vec<usize> = (0..b.rel.len()).collect();
+    for (_, comps) in &lista {
+        let mut corpos = comps.iter().filter_map(corpo);
+        if let Some(c0) = corpos.next() {
+            for c in corpos {
+                let (x, y) = (raiz(&mut uf, c0), raiz(&mut uf, c));
+                uf[x] = y;
+            }
+        }
+    }
+    let mut mapa: std::collections::BTreeMap<usize, Aglomerado> = Default::default();
+    for k in 0..b.rel.len() {
+        let r = raiz(&mut uf, k);
+        mapa.entry(r).or_insert_with(|| Aglomerado { corpos: vec![], escopo: Escopo::default() }).corpos.push(k);
+    }
+    for (item, comps) in &lista {
+        if let Some(c) = comps.iter().find_map(corpo) {
+            let r = raiz(&mut uf, c);
+            if let Some(g) = mapa.get_mut(&r) {
+                item.entrar(&mut g.escopo);
+            }
+        }
+    }
+    let puxado = puxado.map(|p| raiz(&mut uf, p));
+    mapa.into_iter().filter(|(r, g)| !g.escopo.vazio() || Some(*r) == puxado).map(|(_, g)| g).collect()
+}
+
+fn aglomerados(a: &Assembly, b: &Bodies, puxado: Option<usize>) -> Vec<Aglomerado> {
+    let mut vars = a.vars();
+    vars.entry("t".into()).or_insert(0.);
+    aglomerados_de(a, b, &vars, puxado)
+}
+
+/// Itens que dividem o aglomerado com `item`: só eles podem estar em conflito com ele. Se todas as
+/// peças do item estão fixas, não há aglomerado e a lista vem vazia.
+pub fn vizinhos_de(a: &Assembly, item: Id) -> Vec<Id> {
+    let b = bodies(a);
+    aglomerados(a, &b, None).iter().map(|g| g.escopo.ids(a)).find(|ids| ids.contains(&item)).map(|ids| ids.into_iter().filter(|i| *i != item).collect()).unwrap_or_default()
+}
+
+/// Corpos que andam como um só: seis incógnitas para todos.
+struct Bloco {
+    corpos: Vec<usize>,
+    pivo: V3,
+}
+
+/// Dono de um corpo no sistema reduzido: o bloco, ou nenhum se ficou preso ao que está fixo.
+const PRESO: usize = usize::MAX;
+
+/// Sistema de um aglomerado.
+struct Sistema<'a> {
+    a: &'a Assembly,
+    b: &'a Bodies,
+    vars: &'a HashMap<String, f64>,
+    blocos: Vec<Bloco>,
+    /// lugar de partida de tudo que o sistema enxerga
+    parados: HashMap<Id, Placement>,
+    escopo: Escopo,
+    puxada: Option<(Id, Placement, f64)>,
+}
+
+impl<'a> Sistema<'a> {
+    fn novo(a: &'a Assembly, b: &'a Bodies, vars: &'a HashMap<String, f64>, blocos: Vec<Bloco>, escopo: Escopo, puxada: Option<(Id, Placement, f64)>) -> Self {
+        let mut parados: HashMap<Id, Placement> = HashMap::new();
+        for (_, comps) in itens(a, &escopo, vars) {
+            for c in comps {
+                if let Some(p) = a.lugar(c) {
+                    parados.insert(c, p);
+                }
+            }
+        }
+        for bl in &blocos {
+            for k in &bl.corpos {
+                for (c, _) in &b.rel[*k] {
+                    if let Some(p) = a.lugar(*c) {
+                        parados.insert(*c, p);
+                    }
+                }
+            }
+        }
+        Sistema { a, b, vars, blocos, parados, escopo, puxada }
+    }
+
+    /// Sistema do aglomerado com os pares já travados entre si reunidos num corpo só.
+    ///
+    /// Se as restrições diretas entre dois corpos estão satisfeitas e têm posto 6, nenhum movimento
+    /// relativo sobra: os dois são um corpo rígido, e a solução deles é conhecida antes de começar.
+    /// Reunir tira seis incógnitas e as linhas desse par, e é isso que deixa barata uma montagem cheia
+    /// de fixadores. O mesmo vale contra o que está fixo: o corpo sai do sistema.
+    fn reduzido(a: &'a Assembly, b: &'a Bodies, vars: &'a HashMap<String, f64>, g: &Aglomerado, puxada: Option<(Id, Placement, f64)>) -> Self {
+        let mut dono: HashMap<usize, usize> = g.corpos.iter().map(|k| (*k, *k)).collect();
+        let quem = |dono: &HashMap<usize, usize>, c: &Id| -> usize { b.of.get(c).copied().flatten().map_or(PRESO, |k| dono[&k]) };
+        loop {
+            let mut pares: std::collections::BTreeMap<(usize, usize), Escopo> = Default::default();
+            for (item, comps) in itens(a, &g.escopo, vars) {
+                let mut donos: Vec<usize> = comps.iter().map(|c| quem(&dono, c)).collect();
+                donos.sort_unstable();
+                donos.dedup();
+                if let [i, j] = donos[..] {
+                    item.entrar(pares.entry((i, j)).or_default());
+                }
+            }
+            let mut mudou = false;
+            let mut usados = std::collections::HashSet::new();
+            for ((i, j), e) in pares {
+                if usados.contains(&i) || usados.contains(&j) || !Self::travados(a, b, vars, &dono, i, e) {
+                    continue;
+                }
+                // j é sempre o maior: PRESO absorve, e entre dois blocos tanto faz
+                dono.values_mut().filter(|d| **d == i).for_each(|d| *d = j);
+                usados.extend([i, j]);
+                mudou = true;
+            }
+            if !mudou {
+                break;
+            }
+        }
+        let mut donos: Vec<usize> = dono.values().copied().filter(|d| *d != PRESO).collect();
+        donos.sort_unstable();
+        donos.dedup();
+        let blocos = donos.iter().map(|d| {
+            let corpos: Vec<usize> = g.corpos.iter().copied().filter(|k| dono[k] == *d).collect();
+            Bloco { pivo: b.base[corpos[0]].origin, corpos }
+        });
+        let blocos: Vec<Bloco> = blocos.collect();
+        // o que ficou dentro de um bloco está satisfeito e assim continua: sai das contas
+        let mut escopo = Escopo::default();
+        for (item, comps) in itens(a, &g.escopo, vars) {
+            let mut d: Vec<usize> = comps.iter().map(|c| quem(&dono, c)).collect();
+            d.sort_unstable();
+            d.dedup();
+            if d.len() > 1 {
+                item.entrar(&mut escopo);
+            }
+        }
+        // a peça puxada precisa estar à vista mesmo sem nenhuma linha
+        Sistema::novo(a, b, vars, blocos, escopo, puxada)
+    }
+
+    /// As restrições `e`, entre o bloco `i` e outro, já estão satisfeitas e não deixam movimento?
+    fn travados(a: &'a Assembly, b: &'a Bodies, vars: &'a HashMap<String, f64>, dono: &HashMap<usize, usize>, i: usize, e: Escopo) -> bool {
+        let corpos: Vec<usize> = dono.iter().filter(|(_, d)| **d == i).map(|(k, _)| *k).collect();
+        let pivo = b.base[corpos[0]].origin;
+        let s = Sistema::novo(a, b, vars, vec![Bloco { corpos, pivo }], e, None);
+        let (x, mut per) = (vec![0.; 6], vec![]);
+        if s.residuos(&x, &mut per).iter().any(|v| v.abs() > 1e-9) {
+            return false;
+        }
+        let r = s.igualdades(&x, &mut per);
+        r.len() >= 6 && matrix_rank(&jacobian(&|x, per| s.igualdades(x, per), &x, &r), r.len(), 6) == 6
+    }
+
+    fn lugares(&self, x: &[f64]) -> HashMap<Id, Placement> {
+        let mut pl = self.parados.clone();
+        for (k, bl) in self.blocos.iter().enumerate() {
+            let q = &x[6 * k..6 * k + 6];
+            for c in &bl.corpos {
+                let bp = self.b.base[*c].moved([q[0], q[1], q[2]], [q[3], q[4], q[5]], bl.pivo);
+                for (id, rel) in &self.b.rel[*c] {
+                    pl.insert(*id, bp.then(rel));
+                }
+            }
+        }
+        pl.insert(ORIGEM, Placement::default());
+        pl
+    }
+
+    /// Só as igualdades: é o que conta para o posto.
+    fn igualdades(&self, x: &[f64], per: &mut Vec<(Id, usize, usize)>) -> Vec<f64> {
+        all_residuals(self.a, &self.lugares(x), self.vars, true, per, &self.escopo)
+    }
+
+    /// Tudo que o mínimos quadrados leva a zero: igualdades, batentes e a puxada do arraste.
+    fn residuos(&self, x: &[f64], per: &mut Vec<(Id, usize, usize)>) -> Vec<f64> {
+        let pl = self.lugares(x);
+        let mut r = all_residuals(self.a, &pl, self.vars, true, per, &self.escopo);
+        crate::kin::residuos_limite(self.a, &pl, &mut r, per, &self.escopo.juntas);
+        if let Some((id, t, w)) = self.puxada {
             if let Some(p) = pl.get(&id) {
                 r.extend((0..3).map(|i| (p.origin[i] - t.origin[i]) * w));
                 for e in [[1., 0., 0.], [0., 1., 0.]] {
@@ -480,21 +783,37 @@ fn solve_inner(a: &mut Assembly, extra: &HashMap<String, f64>, pull: Option<(Id,
             }
         }
         r
-    };
-    let mut r = res(&x, &mut per);
-    let cost = |r: &[f64]| r.iter().map(|v| v * v).sum::<f64>();
-    let mut c = cost(&r);
-    let mut lambda = 1e-3;
-    let mut it = 0;
-    let mut rank = 0;
-    if n > 0 && !r.is_empty() {
+    }
+
+    /// Graus de liberdade na posição `x`. O batente e a puxada não tiram nenhum.
+    fn gdl(&self, x: &[f64]) -> usize {
+        let mut per = vec![];
+        let r = self.igualdades(x, &mut per);
+        if x.is_empty() || r.is_empty() {
+            return x.len();
+        }
+        x.len().saturating_sub(matrix_rank(&jacobian(&|x, per| self.igualdades(x, per), x, &r), r.len(), x.len()))
+    }
+
+    /// Levenberg–Marquardt: devolve as incógnitas, o custo final e as iterações.
+    fn minimizar(&self) -> (Vec<f64>, f64, usize) {
+        let n = 6 * self.blocos.len();
+        let mut per = vec![];
+        let mut x = vec![0.; n];
+        let mut r = self.residuos(&x, &mut per);
+        let cost = |r: &[f64]| r.iter().map(|v| v * v).sum::<f64>();
+        let mut c = cost(&r);
+        let mut lambda = 1e-3;
+        let mut it = 0;
+        if n == 0 || r.is_empty() {
+            return (x, c, it);
+        }
         for k in 0..200 {
             it = k + 1;
             if c < 1e-20 {
                 break;
             }
-            let j = jacobian(&res, &x, &r);
-            rank = matrix_rank(&j, r.len(), n);
+            let j = jacobian(&|x, per| self.residuos(x, per), &x, &r);
             // (JᵀJ + λ diag) dx = -Jᵀ r
             let mut jtj = vec![0.; n * n];
             let mut jtr = vec![0.; n];
@@ -518,7 +837,7 @@ fn solve_inner(a: &mut Assembly, extra: &HashMap<String, f64>, pull: Option<(Id,
                 }
                 let Some(dx) = solve_linear(m, jtr.iter().map(|v| -v).collect(), n) else { break };
                 let xn: Vec<f64> = x.iter().zip(&dx).map(|(a, d)| a + d).collect();
-                let rn = res(&xn, &mut per);
+                let rn = self.residuos(&xn, &mut per);
                 let cn = cost(&rn);
                 if cn < c {
                     x = xn;
@@ -534,32 +853,8 @@ fn solve_inner(a: &mut Assembly, extra: &HashMap<String, f64>, pull: Option<(Id,
                 break;
             }
         }
-    } else if !r.is_empty() {
-        rank = 0;
+        (x, c, it)
     }
-    if rank == 0 && n > 0 && !r.is_empty() {
-        rank = matrix_rank(&jacobian(&res, &x, &r), r.len(), n);
-    }
-    // restrições que ficaram de fora (conflito)
-    let pl = place(&b, a, &x);
-    let mut failed = vec![];
-    let r2 = all_residuals(a, &pl, &vars, true, &mut per);
-    let _ = &res;
-    for (id, s, e) in &per {
-        if r2[*s..*e].iter().any(|v| v.abs() > 1e-6) {
-            failed.push(*id);
-        }
-    }
-    failed.extend(a.mates.iter().filter(|m| !m.suppressed && formula_invalida(m, &vars)).map(|m| m.id));
-    // grava as posições
-    for nd in a.nodes.iter_mut() {
-        if let Some(p) = pl.get(&nd.id) {
-            nd.placement = *p;
-        }
-    }
-    // as repetições acompanham os originais nas posições novas
-    a.update_patterns();
-    SolveReport { residual: c.sqrt(), iterations: it, dof: n.saturating_sub(rank), failed: failed.clone(), converged: failed.is_empty() }
 }
 
 /// Graus de liberdade de cada componente (os outros parados): 0 = totalmente definido, 6 = solto.
@@ -574,7 +869,8 @@ pub fn dof_per_comp(a: &Assembly) -> HashMap<Id, usize> {
     let mut vars = a.vars();
     vars.entry("t".into()).or_insert(0.);
     let mut per = vec![];
-    let res = |x: &[f64], per: &mut Vec<(Id, usize, usize)>| all_residuals(a, &place(&b, a, x), &vars, true, per);
+    let tudo = Escopo::tudo(a);
+    let res = |x: &[f64], per: &mut Vec<(Id, usize, usize)>| all_residuals(a, &place(&b, a, x), &vars, true, per, &tudo);
     let x = vec![0.; n];
     let r = res(&x, &mut per);
     let j = if r.is_empty() { vec![] } else { jacobian(&res, &x, &r) };
@@ -623,7 +919,8 @@ pub fn liberdade(a: &Assembly, id: Id, eixos: [V3; 3], centro: V3) -> Option<Lib
     let mut vars = a.vars();
     vars.entry("t".into()).or_insert(0.);
     let mut per = vec![];
-    let res = |x: &[f64], per: &mut Vec<(Id, usize, usize)>| all_residuals(a, &place(&b, a, x), &vars, true, per);
+    let tudo = Escopo::tudo(a);
+    let res = |x: &[f64], per: &mut Vec<(Id, usize, usize)>| all_residuals(a, &place(&b, a, x), &vars, true, per, &tudo);
     let x = vec![0.; n];
     let r = res(&x, &mut per);
     if r.is_empty() {
@@ -702,7 +999,8 @@ pub fn dof_with(a: &Assembly, drives: bool) -> usize {
     let mut vars = a.vars();
     vars.entry("t".into()).or_insert(0.);
     let mut per = vec![];
-    let res = |x: &[f64], per: &mut Vec<(Id, usize, usize)>| all_residuals(a, &place(&b, a, x), &vars, drives, per);
+    let tudo = Escopo::tudo(a);
+    let res = |x: &[f64], per: &mut Vec<(Id, usize, usize)>| all_residuals(a, &place(&b, a, x), &vars, drives, per, &tudo);
     let x = vec![0.; n];
     let r = res(&x, &mut per);
     if r.is_empty() {
@@ -810,6 +1108,107 @@ mod tests {
     }
     fn base() -> Geom {
         Geom::Plane { p: [5., 5., 0.], n: [0., 0., -1.] }
+    }
+
+    /// Peça presa à `alvo` por eixo, face e trava de giro: 0 GDL entre as duas.
+    fn travar(a: &mut Assembly, alvo: Id, peca: Id) {
+        let eixo = |comp| MateRef { comp, geom: Geom::Axis { p: [0.; 3], d: [0., 0., 1.] }, pick: None };
+        let plano = |comp, n: V3| MateRef { comp, geom: Geom::Plane { p: [0.; 3], n }, pick: None };
+        a.add_mate(MateKind::Coincident { flip: false }, eixo(alvo), eixo(peca));
+        a.add_mate(MateKind::Coincident { flip: false }, plano(alvo, [0., 0., 1.]), plano(peca, [0., 0., 1.]));
+        a.add_mate(MateKind::Parallel, plano(alvo, [1., 0., 0.]), plano(peca, [1., 0., 0.]));
+    }
+
+    #[test]
+    fn peca_fixa_separa_os_aglomerados() {
+        let mut a = Assembly::new("t");
+        let base = cubo(&mut a, "Base", [0.; 3]);
+        a.node_mut(base).unwrap().fixed = true;
+        let (p1, p2) = (cubo(&mut a, "P1", [0., 0., 30.]), cubo(&mut a, "P2", [0., 0., 60.]));
+        cubo(&mut a, "Solta", [0., 90., 0.]);
+        a.add_mate(MateKind::Contact, MateRef { comp: base, geom: topo(), pick: None }, MateRef { comp: p1, geom: super::tests::base(), pick: None });
+        a.add_mate(MateKind::Contact, MateRef { comp: base, geom: topo(), pick: None }, MateRef { comp: p2, geom: super::tests::base(), pick: None });
+        let rep = solve(&mut a);
+        assert!(rep.converged, "{rep:?}");
+        assert_eq!(rep.aglomerados, 2, "a base fixa não liga P1 a P2, e a solta não tem conta");
+        assert_eq!(rep.incognitas, 12);
+        assert_eq!(rep.dof, 3 + 3 + 6, "cada contato deixa 3, e a solta segue com 6");
+    }
+
+    #[test]
+    fn par_travado_vira_um_bloco_e_o_gdl_nao_muda() {
+        let mut a = Assembly::new("fixadores");
+        let placa = cubo(&mut a, "Placa", [0.; 3]);
+        a.node_mut(placa).unwrap().fixed = false;
+        // a placa fica solta de propósito, com vinte fixadores travados nela
+        let ids: Vec<Id> = (0..20).map(|k| cubo(&mut a, &format!("F{k}"), [0.; 3])).collect();
+        for f in &ids {
+            travar(&mut a, placa, *f);
+        }
+        let completo = dof_with(&a, true);
+        let rep = solve(&mut a);
+        assert!(rep.converged, "{rep:?}");
+        assert_eq!(rep.incognitas, 6, "vinte e um corpos, um bloco só");
+        assert_eq!(rep.dof, completo, "reunir não muda o que sobra de liberdade");
+        assert_eq!(rep.dof, 6);
+    }
+
+    #[test]
+    fn travado_na_peca_fixa_sai_do_sistema() {
+        let mut a = Assembly::new("t");
+        let base = cubo(&mut a, "Base", [0.; 3]);
+        a.node_mut(base).unwrap().fixed = true;
+        let f1 = cubo(&mut a, "F1", [0.; 3]);
+        let f2 = cubo(&mut a, "F2", [0.; 3]);
+        travar(&mut a, base, f1);
+        travar(&mut a, f1, f2);
+        let rep = solve(&mut a);
+        assert!(rep.converged, "{rep:?}");
+        assert_eq!((rep.incognitas, rep.dof), (0, 0));
+    }
+
+    #[test]
+    fn par_fora_do_lugar_nao_e_reunido() {
+        // as restrições travam, mas a peça ainda precisa andar até elas: é conta, não atalho
+        let mut a = Assembly::new("t");
+        let base = cubo(&mut a, "Base", [0.; 3]);
+        a.node_mut(base).unwrap().fixed = true;
+        let p = cubo(&mut a, "P", [7., 3., 11.]);
+        travar(&mut a, base, p);
+        let rep = solve(&mut a);
+        assert!(rep.converged, "{rep:?}");
+        assert_eq!(rep.incognitas, 6);
+        assert!(norm(a.node(p).unwrap().placement.origin) < 1e-6);
+    }
+
+    #[test]
+    fn mover_a_peca_leva_o_bloco_inteiro() {
+        let mut a = Assembly::new("t");
+        let base = cubo(&mut a, "Base", [0.; 3]);
+        a.node_mut(base).unwrap().fixed = true;
+        let (placa, f) = (cubo(&mut a, "Placa", [0.; 3]), cubo(&mut a, "F", [0.; 3]));
+        travar(&mut a, placa, f);
+        let d = a.add_mate(MateKind::Distance("0".into()), MateRef { comp: base, geom: topo(), pick: None }, MateRef { comp: placa, geom: topo(), pick: None });
+        a.mates.iter_mut().find(|m| m.id == d).unwrap().sentido = Sentido::Mesmo;
+        assert!(solve(&mut a).converged);
+        if let MateKind::Distance(e) = &mut a.mates.iter_mut().find(|m| m.id == d).unwrap().kind {
+            *e = "15".into();
+        }
+        let rep = solve(&mut a);
+        assert!(rep.converged, "{rep:?}");
+        let (zp, zf) = (a.node(placa).unwrap().placement.origin[2], a.node(f).unwrap().placement.origin[2]);
+        assert!((zp - 15.).abs() < 1e-6 && (zf - 15.).abs() < 1e-6, "{zp} {zf}");
+    }
+
+    #[test]
+    fn puxar_peca_sem_restricao_ainda_move() {
+        let mut a = Assembly::new("t");
+        let base = cubo(&mut a, "Base", [0.; 3]);
+        a.node_mut(base).unwrap().fixed = true;
+        let p = cubo(&mut a, "P", [0.; 3]);
+        let alvo = Placement { origin: [5., 0., 0.], ..Default::default() };
+        solve_inner(&mut a, &HashMap::new(), Some((p, alvo, 1.)));
+        assert!((a.node(p).unwrap().placement.origin[0] - 5.).abs() < 1e-6);
     }
 
     #[test]

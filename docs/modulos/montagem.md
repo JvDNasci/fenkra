@@ -8,17 +8,20 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 - **Restrições padrão** (Restrições) — MateCmd: Coincident, Contact, Distance, Angle, Parallel, Perpendicular, Auto, AlignOnce. Distância e Ângulo nascem com a medida atual; Inverter alinhamento e Inverter lado separados (B71).
 - **Pontos de encaixe** (Restrições e juntas) — `encaixe.rs`, `asm_encaixe.rs`: candidatos da face sob o cursor com sistema de eixos, tecla L trava, giro de 90°, Inverter e deslocamento com fórmula (B99).
 - **Prévia e confirmar** (Restrições e juntas) — `proposta::Comando` resolve numa cópia; fantasma na posição final, Enter aceita, Tab inverte, Esc cancela (B244, ADR 0018).
+- **Diagnóstico de conflito** (Restrições e juntas) — `conflito.rs`: sem solução, a prévia fica vermelha e aponta o menor conjunto de restrições em conflito, no painel, na árvore e no 3D; o painel mostra os GDL antes e depois (B103, ADR 0046).
+- **Solver por aglomerados** (Restrições e juntas) — `solve.rs`: a montagem se divide em grupos independentes, e o que já está travado entre si vira um corpo só antes da conta (B103, ADR 0046).
 - **Símbolos no modelo** (Restrições e juntas) — `simbolos.rs`, `asm_simbolos.rs`: ancorados na geometria, cota e arco arrastáveis, ocultar por tipo, grade para montagens grandes (B245).
 - **Origem da montagem** (Árvore) — `ORIGEM`, planos, eixos e ponto usados como referência (B22, ADR 0018).
 - **Manipulador** (Mover e girar) — `manipulador.rs`, `solve::liberdade`: referência, pivô, passo, colisão com escopo, alças só do que as restrições deixam, valor digitado (B261).
 - **Subconjunto da seleção** (Subconjunto) — extract_subassembly leva o que é de dentro, religa ao nó o que liga com o exterior e relata o resto; inserir_de_volta desfaz sem perda (B73).
 - **Restrição rápida / inteligente** (Restrição rápida) — quick_options, after_view_quick.
-- **Juntas cinemáticas** (Juntas) — AsmJoint, kin.rs; comandos; tipo automático, modos de origem, alinhamento e Animar na criação (B260). Limites guardados, sem efeito no solucionador (B36).
+- **Juntas cinemáticas** (Juntas) — AsmJoint, kin.rs; comandos; tipo automático, modos de origem, alinhamento e Animar na criação (B260).
+- **Limites de junta** (Juntas) — `kin.rs`, `asm_limites.rs`: Mínimo, Atual e Máximo por grau de liberdade, caixa por extremo que guarda o valor, marca na árvore, arco e trilho arrastáveis no 3D. O solucionador impõe a faixa: comando e arraste param no batente, sem contar como falha (B36).
 - **Acoplamentos mecânicos** (Engrenagem, cremalheira, polia, came) — MateKind Gear/RackPinion; couplings; teste came_e_seguidor.
 - **Graus de liberdade** (GDL na árvore) — dof_per_comp; selos na árvore.
 - **Padrão de componentes** (Repetição) — `repeticao.rs`, `asm_repeticao.rs`: direção por aresta, eixo ou face, Pelos furos, vários componentes, segunda direção, fantasmas, seta e marcas para pular (B263).
 - **Interferência e colisão** (Interferência) — `interferencia.rs`, `asm_interf.rs`: painel próprio, escopo, coincidência, subconjunto como peça única, realce do volume comum, ignorados salvos na montagem (B264); colisão ao arrastar.
-- **Vista explodida** (Explodida) — Estados de exibição; teste explosao_e_animacao.
+- **Vista explodida** (Exibição) — `display.rs`, `asm_exibicao.rs`: painel com Estados, Explosão e Animação; lista de passos reordenável (linear, radial, espaçamento automático, suprimível), a seta do manipulador cria o passo, linhas pontilhadas automáticas que seguem para o desenho, quadros-chave arrastáveis (B286).
 - **Lista de materiais (BOM)** (BOM) — AsmBom; numeração de itens.
 
 ## 🟡 Parcial
@@ -32,6 +35,6 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 
 ## ❌ Ainda não existe
 
-- **Restrições avançadas** (—) — Sem largura, simetria ou caminho. `BM-MON-01`
+- **Restrições avançadas** (—) — Sem largura, simetria ou caminho; o limite existe nas juntas, não em Distância e Ângulo. `BM-MON-01`
 - **Origem da montagem** (—) — Sem origem na montagem (DR-31). `DR-31`
 - **Conexão parafusada** (—) — Fixadores só preenchem furos já existentes. `B58`

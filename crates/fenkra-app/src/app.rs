@@ -7102,6 +7102,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 crate::pmi_ui::overlay(self, ui, rect, &cam);
                 crate::asm_ui::context_overlay(self, ui, rect, &cam);
                 crate::asm_cmd::overlay(self, ui, rect, &cam);
+                crate::asm_limites::overlay(self, ui, rect, &cam);
+                crate::asm_exibicao::overlay(self, ui, rect, &cam);
                 crate::asm_ui::fasteners_overlay(self, ui, rect, &cam);
                 crate::asm_ui::fasteners_handles(self, ui, rect, &cam);
                 crate::engrenagens_ui::overlay(self, ui, rect, &cam);
@@ -8046,13 +8048,13 @@ impl eframe::App for App {
         self.props_window(ctx);
         self.wizard_window(ctx);
         crate::asm_ui::sim_window(self, ctx);
-        crate::asm_ui::display_window(self, ctx);
         crate::asm_ui::bom_window(self, ctx);
         crate::asm_ui::fasteners_window(self, ctx);
         crate::biblioteca_ui::painel(self, ctx, area);
         crate::asm_inserir::painel(self, ctx, area);
         crate::asm_interf::painel(self, ctx, area);
         crate::asm_repeticao::painel(self, ctx, area);
+        crate::asm_exibicao::painel(self, ctx, area);
         crate::asm_fixadores::painel(self, ctx, area);
         crate::asm_ui::contexto_window(self, ctx);
         crate::asm_ui::gears_window(self, ctx);

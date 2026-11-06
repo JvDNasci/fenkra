@@ -314,13 +314,13 @@ fn view_into(o: &mut Out, d: &Drawing, v: &View, p: &Proj, th: f64) {
     o.color = v.color;
     for (pl, k) in &p.lines {
         let style = match k {
-            3 => Style::Hidden,
+            3 | 7 => Style::Hidden,
             4 | 6 => Style::Thin,
             5 => Style::Center,
             _ => Style::Visible,
         };
-        // só sombreado: sem arestas (a borda do detalhe fica)
-        if v.render == Render::Sombreado && *k != 4 {
+        // só sombreado: sem arestas (a borda do detalhe e as linhas de explosão ficam)
+        if v.render == Render::Sombreado && *k != 4 && *k != 7 {
             continue;
         }
         o.width = (style == Style::Visible && v.line_width > 0.).then_some(v.line_width);

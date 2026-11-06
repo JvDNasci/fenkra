@@ -9,6 +9,7 @@
 
 pub mod avulso;
 pub mod bom;
+pub mod conflito;
 pub mod contexto;
 pub mod display;
 pub mod encaixe;
@@ -474,6 +475,9 @@ pub struct Assembly {
     pub display_states: Vec<display::DisplayState>,
     #[serde(default)]
     pub animations: Vec<display::Animation>,
+    /// explosões por passos: a entrada das instruções de montagem e da simulação de sequência
+    #[serde(default)]
+    pub explosoes: Vec<display::Explosao>,
     /// anotações 3D (PMI) deste nível de montagem
     #[serde(default)]
     pub pmi: Vec<fenkra_core::pmi::Pmi>,
@@ -640,7 +644,7 @@ impl Assembly {
     }
 
     pub fn new(name: &str) -> Self {
-        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], pilhas: vec![], interf: Default::default(), relational: false, politicas_link: vec![], religacoes: vec![], geometria: None, esqueleto: None, contexto_livre: false, origem_oculta: false, configs: vec![] }
+        Assembly { format_version: 1, name: name.into(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], explosoes: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], pilhas: vec![], interf: Default::default(), relational: false, politicas_link: vec![], religacoes: vec![], geometria: None, esqueleto: None, contexto_livre: false, origem_oculta: false, configs: vec![] }
     }
 
     /// Configuração escolhida para o componente (vazio = a ativa da própria peça).
