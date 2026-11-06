@@ -3579,6 +3579,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         self.settings.restaurar_paineis();
                         ui.close();
                     }
+                    ui.menu_button(tr("Painéis"), |ui| crate::paineis::menu(ui, &mut self.settings));
                     ui.menu_button(tr("Estilo de exibição"), |ui| {
                         for m in crate::render::DisplayMode::ALL {
                             ui.radio_value(&mut self.settings.display, m, m.label());
@@ -3755,7 +3756,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         // quem preferia o painel à direita continua abrindo nela enquanto não mover
         let direita = !self.settings.editor_left;
         let padrao = if direita { paineis::abaixo_do_cubo(area, LARGURA) } else { paineis::ao_lado_da_arvore(area) };
-        let posicao = self.settings.painel("comando", if direita { Encaixe::Direita } else { Encaixe::Livre });
+        // encaixado desde o início: ele se afasta das barras da mesma borda em vez de cobri-las
+        let posicao = self.settings.painel("comando", if direita { Encaixe::Direita } else { Encaixe::Esquerda });
         let titulo = if self.sketch.is_some() {
             tr("Sketch").to_string()
         } else if let Some(s) = &self.session {
@@ -3791,24 +3793,46 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         }
     }
 
-    /// Barra de comandos numa lateral: painel livre com os grupos daquela doca.
+    /// Barra de comandos numa borda: painel livre com os grupos daquela doca. Encaixada em cima ou
+    /// embaixo, os grupos se deitam em fila; nas laterais, ficam em coluna.
     #[allow(clippy::too_many_arguments)]
     fn barra_livre(&mut self, ctx: &egui::Context, area: Rect, nome: &str, grupos: &[crate::settings::Group], encaixe: crate::paineis::Encaixe, padrao: egui::Pos2, acts: &mut Vec<Act>) {
-        use crate::paineis::{self, Painel};
+        use crate::paineis::{self, Opcoes, Painel};
         let ts = self.tool_state();
-        let cfg = Painel { nome: nome.to_string(), titulo: "···".to_string(), padrao, largura: 62., redimensiona: true };
         let posicao = self.settings.painel(nome, encaixe);
-        let saida = paineis::mostrar(ctx, area, &cfg, posicao, |ui| {
-            egui::ScrollArea::vertical().id_salt(nome).show(ui, |ui| {
-                for (i, g) in grupos.iter().enumerate() {
-                    if i > 0 {
-                        ui.separator();
+        let deitada = matches!(posicao.encaixe, paineis::Encaixe::Topo | paineis::Encaixe::Base);
+        let titulo = if nome == "barra_lateral" { tr("Barra esquerda") } else { tr("Barra direita") };
+        let largura = if deitada { (area.width() * 0.6).clamp(320., 900.) } else { 62. };
+        let cfg = Painel { nome: nome.to_string(), titulo: titulo.to_string(), padrao, largura, redimensiona: true };
+        let saida = paineis::mostrar_com(ctx, area, &cfg, posicao, Opcoes { persiste: true, variante: deitada as u8 }, |ui| {
+            if deitada {
+                egui::ScrollArea::horizontal().id_salt(nome).show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        for (i, g) in grupos.iter().enumerate() {
+                            if i > 0 {
+                                ui.separator();
+                            }
+                            acts.extend(toolbar::show_group(ui, *g, &mut self.settings, &ts, false));
+                        }
+                    });
+                });
+            } else {
+                egui::ScrollArea::vertical().id_salt(nome).show(ui, |ui| {
+                    for (i, g) in grupos.iter().enumerate() {
+                        if i > 0 {
+                            ui.separator();
+                        }
+                        acts.extend(toolbar::show_group(ui, *g, &mut self.settings, &ts, true));
                     }
-                    acts.extend(toolbar::show_group(ui, *g, &mut self.settings, &ts, true));
-                }
-            });
+                });
+            }
         });
-        if let Some(p) = saida.movido {
+        if let Some(mut p) = saida.movido {
+            // mudar de lateral para o topo ou a base troca o formato da barra: o tamanho antigo não serve
+            if matches!(p.encaixe, paineis::Encaixe::Topo | paineis::Encaixe::Base) != deitada {
+                p.largura = None;
+                p.altura = None;
+            }
             self.settings.guardar_painel(nome, p);
         }
     }
@@ -3874,7 +3898,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     None => {
                         // flutuante exatamente onde soltou
                         let q = p - dd.grab;
-                        self.settings.guardar_painel(&nome_do_grupo(dd.group), Posicao { encaixe: Encaixe::Livre, pos: Some([q.x, q.y]) });
+                        self.settings.guardar_painel(&nome_do_grupo(dd.group), Posicao { encaixe: Encaixe::Livre, pos: Some([q.x, q.y]), ..Default::default() });
                         acts.push(Act::Dock(dd.group, Dock::Flutuante));
                     }
                 }
@@ -3888,7 +3912,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             let padrao = paineis::ao_lado_da_arvore(area) + egui::vec2(0., 120. * i as f32);
             let cfg = Painel { nome: nome.clone(), titulo: g.label().to_string(), padrao, largura: 220., redimensiona: false };
             let posicao = self.settings.painel(&nome, Encaixe::Livre);
-            let saida = paineis::mostrar(ctx, area, &cfg, posicao, |ui| {
+            let saida = paineis::mostrar_com(ctx, area, &cfg, posicao, paineis::Opcoes { persiste: true, variante: 0 }, |ui| {
                 acts.extend(toolbar::show_group(ui, g, &mut self.settings, &ts, false));
             });
             // soltar perto do topo ou de uma lateral devolve o grupo à barra daquela borda
@@ -3897,8 +3921,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 Some(Encaixe::Esquerda) => acts.push(Act::Dock(g, Dock::Lateral)),
                 Some(Encaixe::Direita) => acts.push(Act::Dock(g, Dock::Direita)),
                 _ => {
+                    // solto embaixo ou no meio: fica onde foi solto, encaixado se for na base
                     if let Some(p) = saida.movido {
-                        self.settings.guardar_painel(&nome, Posicao { encaixe: Encaixe::Livre, ..p });
+                        self.settings.guardar_painel(&nome, p);
                     }
                 }
             }
@@ -8206,6 +8231,7 @@ fn setup_fonts(_ctx: &egui::Context) {
 
 impl eframe::App for App {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
+        crate::paineis_demo::eventos(raw);
         if let Some(g) = self.sketch.as_mut().and_then(|e| e.gesto.as_mut()) {
             g.eventos(raw);
         }
