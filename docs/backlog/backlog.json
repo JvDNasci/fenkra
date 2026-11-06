@@ -910,7 +910,7 @@
    "tokens_k": 150,
    "teste": "Auto",
    "area": "Estrutural e soldas",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -4376,7 +4376,7 @@
    "tokens_k": 320,
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.4
   },
   {
@@ -4392,7 +4392,7 @@
    "tokens_k": 260,
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -5624,7 +5624,7 @@
    "tokens_k": 120,
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.1
   },
   {
