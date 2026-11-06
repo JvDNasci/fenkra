@@ -360,3 +360,6 @@ direito autoral incerto.
 - Carroceria na bancada Forma livre.
 - Motor como volume simplificado.
 - Tubo do chassi Ø30 × 2,4.
+- Modelo bem paramétrico e editável: desenho mestre com parâmetros dirigindo conjuntos e subconjuntos.
+- Conjuntos e subconjuntos com PMI, mesmo genérico: número da peça, lista de peças e balões nas peças filhas.
+- Peça filha com nota simples e bloco de título.

@@ -725,7 +725,7 @@ c('B351', 2, 'P0', 'Rosca: furo roscado corrigido, prévia leve e cosmética com
   ['USR-TESTE'], [], 300, 'Auto + Visual', 'Sólidos', status='em andamento'),
 c('B352', 2, 'P1', 'Desenho: sketch na vista e na folha', 'Criar sketch dentro de uma vista, preso a ela e à sua escala, ou solto na folha, com as ferramentas do sketch, para detalhe a mais e geometria de apoio que não vem do 3D. Linhas com tipo e cota, entram na exportação.',
   ['USR-TESTE'], [], 300, 'Auto + Visual', 'Desenho técnico'),
-c('B353', 3, 'P0', 'Projeto-teste: produto completo modelado no Fenkra para validar as bancadas', 'Modelar um produto real de ponta a ponta usando quase todas as bancadas: esqueleto estrutural com tubos dobrados, chapa, sólidos, superfícies e forma livre, transmissão, fixadores, montagem, desenho, PMI e PLM. Feito por comandos reproduzíveis, cada falha vira item do backlog. O conjunto fica como exemplo e teste de regressão.',
+c('B353', 3, 'P0', 'Projeto-teste: produto completo modelado no Fenkra para validar as bancadas', 'Modelar um produto real de ponta a ponta usando quase todas as bancadas: esqueleto estrutural com tubos dobrados, chapa, sólidos, superfícies e forma livre, transmissão, fixadores, montagem, desenho, PMI e PLM. Bem paramétrico e editável: desenho mestre com parâmetros dirigindo os conjuntos e subconjuntos. Cada conjunto e subconjunto tem PMI, mesmo genérico, com número da peça, lista de peças e balões nas peças filhas; cada peça filha tem nota simples e bloco de título. Feito por comandos reproduzíveis, cada falha vira item do backlog. O conjunto fica como exemplo e teste de regressão.',
   ['USR-TESTE'], [], 600, 'Auto + Visual', 'Geral'),
 c('B354', 3, 'P1', 'Biblioteca: correntes de kart 219 e 428', 'Acrescentar as correntes 219 e 428 à biblioteca de transmissão, com dados conferidos em duas fontes gratuitas. Necessária para a etapa de transmissão do kart de teste (B353).',
   ['USR-TESTE'], [], 60, 'Auto', 'Biblioteca de normas'),
@@ -747,6 +747,8 @@ c('B362', 2, 'P0', 'Abrir peça a partir da montagem sem travar', 'Abrir uma pe�
   ['USR-TESTE'], [], 120, 'Auto + Visual', 'Interface'),
 c('B363', 2, 'P1', 'Documentos abertos: alternar rápido entre peças e abrir em janela nova', 'Barra e atalho para ver e trocar entre os documentos abertos, sem perder o estado de cada um, com opção de abrir em nova janela, refinando a lista de peças do rodapé.',
   ['USR-TESTE'], [], 300, 'Auto + Visual', 'Interface'),
+c('B364', 4, 'P1', 'PLM: árvore navegável do produto com miniatura, PN e estado', 'Além da lista em linhas, o projeto mostra uma árvore navegável do produto em forma de grafo: cada nó com miniatura simples da peça e PN. Ao passar o mouse o nó expande e mostra PN, nome e estado, com regra de cor por estado (liberado ou não). Dá para abrir conjunto grande e navegar nos níveis, com a pré-visualização vinda do pacote .fkv.',
+  ['USR-TESTE'], [], 350, 'Auto + Visual', 'PDM / PLM'),
 ]
 def main():
     for x in B:

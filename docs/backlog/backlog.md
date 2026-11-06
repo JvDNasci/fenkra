@@ -4,15 +4,15 @@ Consolidado do [design review](../contextos/design-review.md), dos [contextos](.
 Versão visual (kanban + comparador): [painel.html](painel.html), gerada por `scripts/benchmark/pagina.py`.
 Gerado por `scripts/benchmark/backlog.py`; o estado de cada item é atualizado aqui a cada entrega.
 
-**Estimativa total:** ≈ 94.3 M tokens (≈ 314 mil linhas de código, pela média das últimas versões).
+**Estimativa total:** ≈ 94.7 M tokens (≈ 316 mil linhas de código, pela média das últimas versões).
 
 | Onda | Versão | Itens | Tokens | % |
 |---|---|---|---|---|
 | Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes) | `0.1.0-alpha.28 a .30` | 36 | ≈ 7180 k | 7.6% |
 | Onda 1 — bugs do design review | `0.1.0-alpha.31` | 58 | ≈ 11610 k | 12.3% |
-| Onda 2 — filosofia base + VPM local | `0.1.0-alpha.32` | 90 | ≈ 22290 k | 23.6% |
-| Onda 3 — módulos novos e lacunas do benchmark | `0.1.0-alpha.33+` | 82 | ≈ 22250 k | 23.6% |
-| Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…) | `0.2.x` | 97 | ≈ 30970 k | 32.8% |
+| Onda 2 — filosofia base + VPM local | `0.1.0-alpha.32` | 90 | ≈ 22290 k | 23.5% |
+| Onda 3 — módulos novos e lacunas do benchmark | `0.1.0-alpha.33+` | 82 | ≈ 22250 k | 23.5% |
+| Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…) | `0.2.x` | 98 | ≈ 31320 k | 33.1% |
 
 Prioridade: **P0** quebra o uso · **P1** importante · **P2** desejável · **P3** futuro.
 Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = captura do app com `FENKRA_DEMO_*` · **Manual** = usuário.
@@ -220,7 +220,7 @@ Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = 
 
 | ID | P | Item | Origem | Catálogo | Tokens | % | Teste | Estado |
 |---|---|---|---|---|---|---|---|---|
-| B353 | P0 | **Projeto-teste: produto completo modelado no Fenkra para validar as bancadas** — Modelar um produto real de ponta a ponta usando quase todas as bancadas: esqueleto estrutural com tubos dobrados, chapa, sólidos, superfícies e forma livre, transmissão, fixadores, montagem, desenho, PMI e PLM. Feito por comandos reproduzíveis, cada falha vira item do backlog. O conjunto fica como exemplo e teste de regressão. | USR-TESTE |  | 600 k | 0.6% | Auto + Visual | a fazer |
+| B353 | P0 | **Projeto-teste: produto completo modelado no Fenkra para validar as bancadas** — Modelar um produto real de ponta a ponta usando quase todas as bancadas: esqueleto estrutural com tubos dobrados, chapa, sólidos, superfícies e forma livre, transmissão, fixadores, montagem, desenho, PMI e PLM. Bem paramétrico e editável: desenho mestre com parâmetros dirigindo os conjuntos e subconjuntos. Cada conjunto e subconjunto tem PMI, mesmo genérico, com número da peça, lista de peças e balões nas peças filhas; cada peça filha tem nota simples e bloco de título. Feito por comandos reproduzíveis, cada falha vira item do backlog. O conjunto fica como exemplo e teste de regressão. | USR-TESTE |  | 600 k | 0.6% | Auto + Visual | a fazer |
 | B102 | P1 | **Tabela de projeto e configurações** — Objeto da árvore com linhas = variantes e colunas = parâmetros, supressão e PN; configuração ativa; a montagem referencia a configuração por nome. Configuração inexistente gera erro visível (nunca 'a primeira'); importa e exporta CSV sem exigir Excel. | PESQ-SOL, PESQ-FI, PESQ-MAC |  | 350 k | 0.4% | Auto | feito |
 | B103 | P1 | **Montagem: solver por aglomerados e diagnóstico de conflito** — Acrescentar: quando a prévia de uma restrição ou junta não convergir, ficar em vermelho e apontar a restrição em conflito antes de aceitar, sem alterar a montagem. A contagem de GDL que restam aparece no painel durante a prévia. | PESQ-MON |  | 400 k | 0.4% | Auto | feito |
 | B104 | P1 | **Conversor: relatório, reparo de importação e IGES** — Relatório de conversão embutido e exportável (HTML/JSON); reparo em níveis Nenhum/Padrão/Agressivo (check → ShapeFix → costura → sólido) com antes/depois e lista de defeitos realçáveis. IGES importa como superfícies e exporta BRep/Faces, serializado. | PESQ-CNV, PESQ-MAC |  | 400 k | 0.4% | Auto + Visual | feito |
@@ -352,6 +352,7 @@ Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = 
 | B343 | P1 | **Cálculo de transmissão ao vivo: relação, torque, velocidade e perdas** — Painel que mostra enquanto edita: relação de transmissão e de voltas, velocidade angular, torque de entrada e saída, potência, rendimento e perda por par, com fórmulas de elementos de máquinas e fonte citada, cálculo preliminar. Cadeia de vários estágios soma o resultado, e o valor segue para a simulação da montagem. | USR-TRANSMISSAO |  | 300 k | 0.3% | Auto + Visual | em andamento |
 | B344 | P1 | **Engrenagem espinha de peixe, para não escapar no eixo** — Engrenagem de dupla hélice em V, que se trava axialmente sem elemento de retenção no eixo, muito usada em peças impressas em 3D. Ângulo da hélice, folga para impressão e par com montagem sem trava axial. | USR-TRANSMISSAO |  | 200 k | 0.2% | Auto + Visual | feito |
 | B345 | P1 | **Elementos de máquina de catálogo, prontos para personalizar com usinagem** — Todo elemento de transmissão gerado sai pronto para adaptar: furo do eixo, rasgo de chaveta, cubo, rebaixo, furos de alívio e parafuso de fixação como usinagens editáveis sobre a peça padronizada, mantendo o vínculo com o catálogo. | USR-TRANSMISSAO |  | 250 k | 0.3% | Auto + Visual | em andamento |
+| B364 | P1 | **PLM: árvore navegável do produto com miniatura, PN e estado** — Além da lista em linhas, o projeto mostra uma árvore navegável do produto em forma de grafo: cada nó com miniatura simples da peça e PN. Ao passar o mouse o nó expande e mostra PN, nome e estado, com regra de cor por estado (liberado ou não). Dá para abrir conjunto grande e navegar nos níveis, com a pré-visualização vinda do pacote .fkv. | USR-TESTE |  | 350 k | 0.4% | Auto + Visual | a fazer |
 | B111 | P2 | **Calculadora de rolamento, engrenagem e estriado** — Vida L10 e verificação de engrenagem. Dados do fabricante como camada. (BN01b; módulo Cálculo mecânico; depende de BN01, B44). | PESQ-MOD |  | 250 k | 0.3% | Auto | a fazer |
 | B115 | P2 | **Verificação por norma de barras (aço)** — Utilização por NBR 8800 / EN 1993 / AISC. Relatório. (BN03b; módulo Estrutural; depende de BN03). | PESQ-MOD |  | 300 k | 0.3% | Auto | a fazer |
 | B120 | P2 | **Lattice e preenchimento implícito** — Lattice e preenchimento implícito sobre corpo de malha: TPMS uniforme (giroide, Schwarz-P, diamante) intersectado com o corpo e casca externa, fração de volume como alvo, parede mínima por processo, superfície por marching cubes ou dual contouring sobre grade esparsa (OpenVDB Apache-2.0 ou grade própria em Rust). Vigas, 3MF Beam Lattice e gradiente por campo ficam em item separado. | PESQ-MOD |  | 450 k | 0.5% | Auto | a fazer |
