@@ -222,6 +222,37 @@ fn laco_de_malha_acha_o_contorno_da_face_de_topo() {
     }
 }
 
+/// B31: valor fora da faixa que o painel pinta de vermelho não pode deixar o selo em OK. O
+/// recálculo falha com o limite escrito, na aba de aresta e no laço.
+#[test]
+fn aba_com_valor_fora_da_faixa_vira_erro_com_o_limite() {
+    for (campo, valor, trecho) in [("angle", "0", "ângulo"), ("angle", "200", "180"), ("length", "-3", "comprimento"), ("radius", "0", "raio")] {
+        let mut d = placa();
+        let mut a = aba([100., 25., 2.], "0", "0", false);
+        if let FeatureKind::SmFlange(f) = &mut a {
+            match campo {
+                "angle" => f.angle = s(valor),
+                "length" => f.length = s(valor),
+                _ => f.radius = Some(s(valor)),
+            }
+        }
+        let id = d.add_feature(a);
+        match &recompute(&d).status[&id] {
+            Status::Error(m) => assert!(m.contains(trecho) && m.contains("faixa"), "{campo}={valor}: {m}"),
+            o => panic!("{campo}={valor}: esperava erro, veio {o:?}"),
+        }
+    }
+    let mut d = placa();
+    let FeatureKind::SmFlangeLoop(mut l) = laco(vec![[100., 25., 2.]], ExtensaoAba::Inteira, false, false) else { panic!() };
+    l.angle = s("181");
+    let id = d.add_feature(FeatureKind::SmFlangeLoop(l));
+    assert!(matches!(&recompute(&d).status[&id], Status::Error(m) if m.contains("ângulo")));
+    // dentro da faixa segue OK
+    let mut d = placa();
+    let id = d.add_feature(aba([100., 25., 2.], "0", "0", false));
+    assert!(matches!(recompute(&d).status[&id], Status::Ok | Status::Warning(_)));
+}
+
 #[test]
 fn aba_laco_sobrevive_a_salvar_e_abrir() {
     let mut d = placa();
