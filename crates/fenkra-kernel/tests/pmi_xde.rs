@@ -19,10 +19,17 @@ fn peca(anot: Vec<AnotacaoXde>) -> ModeloXde {
     ModeloXde { produtos: vec![p], raizes: vec![0], anotacoes: anot, ..Default::default() }
 }
 
-fn gravar(m: &ModeloXde, nome: &str, esquema: EsquemaStep, pmi: bool) -> String {
+/// Caminho só deste uso: os testes rodam em paralelo na mesma pasta, e dois com o mesmo nome leriam o
+/// arquivo um do outro (um AP214 "com PMI", um AP242 "sem cota").
+fn caminho(nome: &str) -> std::path::PathBuf {
+    static PROXIMO: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
     let dir = std::env::temp_dir().join(format!("fenkra_b191_{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let c = dir.join(nome);
+    dir.join(format!("{}_{nome}", PROXIMO.fetch_add(1, std::sync::atomic::Ordering::Relaxed)))
+}
+
+fn gravar(m: &ModeloXde, nome: &str, esquema: EsquemaStep, pmi: bool) -> String {
+    let c = caminho(nome);
     m.gravar(c.to_str().unwrap(), OpcoesGravarXde { esquema, pmi, ..Default::default() }).unwrap();
     c.to_str().unwrap().to_string()
 }
@@ -98,9 +105,7 @@ fn tipos_de_dimensao_que_atravessam_e_os_que_sao_recusados() {
     for tipo in TipoDimensaoXde::TODOS.into_iter().filter(|t| *t != TipoDimensaoXde::Nenhum) {
         let valor = if tipo.e_angulo() { 30. } else { 12.5 };
         let m = peca(vec![dim(tipo, valor, None, 2, Some(3))]);
-        let dir = std::env::temp_dir().join(format!("fenkra_b191_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let c = dir.join("d.step");
+        let c = caminho("d.step");
         let r = m.gravar(c.to_str().unwrap(), OpcoesGravarXde { esquema: EsquemaStep::Ap242, pmi: true, ..Default::default() });
         if !tipo.atravessa() {
             assert!(r.is_err(), "{tipo:?} devia ser recusado");
@@ -232,14 +237,36 @@ fn sem_ap242_ou_sem_a_chave_nao_sai_pmi() {
     assert_eq!(ler(&gravar(&peca(anot), "e.step", EsquemaStep::Ap203, true)).pmi, [0, 0, 0]);
 }
 
+/// O esquema é de cada gravação: gravar AP214 e AP242 ao mesmo tempo não troca um pelo outro.
+#[test]
+fn gravacoes_em_paralelo_nao_trocam_o_esquema() {
+    if !kernel_ok() {
+        return;
+    }
+    let fios: Vec<_> = (0..4)
+        .map(|f| {
+            std::thread::spawn(move || {
+                for i in 0..6 {
+                    let anot = vec![datum("A", 1, 0, None), tol(TipoToleranciaXde::Planeza, 0.1, ZonaXde::Largura, MaterialXde::Nenhum, ModZonaXde::Nenhum, 0., vec![], vec![0], 1)];
+                    let ap242 = (f + i) % 2 == 0;
+                    let esquema = if ap242 { EsquemaStep::Ap242 } else { EsquemaStep::Ap214 };
+                    let pmi = ler(&gravar(&peca(anot), "p.step", esquema, true)).pmi;
+                    assert_eq!(pmi.iter().sum::<u32>() > 0, ap242, "fio {f}, rodada {i}: {pmi:?}");
+                }
+            })
+        })
+        .collect();
+    for f in fios {
+        f.join().unwrap();
+    }
+}
+
 #[test]
 fn anotacao_com_referencia_inexistente_ou_face_fora_da_peca_e_erro_e_nao_queda() {
     if !kernel_ok() {
         return;
     }
-    let dir = std::env::temp_dir().join(format!("fenkra_b191_{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let c = dir.join("x.step");
+    let c = caminho("x.step");
     let o = OpcoesGravarXde { esquema: EsquemaStep::Ap242, pmi: true, ..Default::default() };
     let face_fora = peca(vec![dim(TipoDimensaoXde::TamanhoDiametro, 5., None, 99, None)]);
     assert!(face_fora.gravar(c.to_str().unwrap(), o).is_err());
