@@ -188,6 +188,7 @@ pub fn relatorio_massa(doc: &Document) -> RelatorioMassa {
         cut_outlines: vec![],
         malhas: HashMap::new(),
         roscas: vec![],
+        previas: vec![],
         leve: None,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],

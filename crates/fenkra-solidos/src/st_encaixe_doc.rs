@@ -98,6 +98,7 @@ pub fn encaixes_da_estrutura(doc: &Document, opc: &Opcoes) -> Vec<MembroComEncai
         sheet_maps: vec![],
         cut_outlines: vec![],
         roscas: vec![],
+        previas: vec![],
         leve: None,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],

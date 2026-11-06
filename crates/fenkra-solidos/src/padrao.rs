@@ -163,6 +163,7 @@ fn contexto_vazio<'a>(doc: &'a Document, vars: Vars) -> Ctx<'a> {
         cut_outlines: vec![],
         malhas: HashMap::new(),
         roscas: vec![],
+        previas: vec![],
         leve: None,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
