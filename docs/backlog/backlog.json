@@ -71,7 +71,7 @@
    "tokens_k": 60,
    "teste": "Auto",
    "area": "Chapa metálica",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -148,7 +148,7 @@
    "tokens_k": 110,
    "teste": "Auto",
    "area": "Sólidos",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -205,7 +205,7 @@
    "tokens_k": 140,
    "teste": "Auto",
    "area": "Superfícies e wireframe",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -261,7 +261,7 @@
    "tokens_k": 110,
    "teste": "Auto",
    "area": "Sólidos",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -280,7 +280,7 @@
    "tokens_k": 60,
    "teste": "Auto",
    "area": "Superfícies e wireframe",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -299,7 +299,7 @@
    "tokens_k": 60,
    "teste": "Auto",
    "area": "Superfícies e wireframe",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -1193,7 +1193,7 @@
    "tokens_k": 450,
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.5
   },
   {
@@ -1344,7 +1344,7 @@
    "tokens_k": 300,
    "teste": "Auto",
    "area": "PDM / PLM",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -1516,7 +1516,7 @@
    "tokens_k": 450,
    "teste": "Auto",
    "area": "Superfícies e wireframe",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.5
   },
   {
@@ -1532,7 +1532,7 @@
    "tokens_k": 400,
    "teste": "Auto",
    "area": "Chapa metálica",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.4
   },
   {
@@ -1548,7 +1548,7 @@
    "tokens_k": 300,
    "teste": "Auto",
    "area": "Chapa metálica",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -3944,7 +3944,7 @@
    "tokens_k": 380,
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.4
   },
   {
@@ -4168,7 +4168,7 @@
    "tokens_k": 120,
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.1
   },
   {
