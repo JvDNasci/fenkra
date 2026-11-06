@@ -117,6 +117,7 @@ preferências do usuário.
 | `FENKRA_DEMO_PREVIA=passo_<mm>` e `FENKRA_DEMO_PASSO=1` | caixa com esse lado e a extrusão aberta; a seta mostra o salto do arrasto em mm e em pixels |
 | `FENKRA_DEMO_SKETCH_CURSOR=x,y` | com `FENKRA_DEMO_SKETCH`, põe o cursor nessas coordenadas do plano do sketch |
 | `FENKRA_DEMO_SKETCH_GESTO=<passos>` | com `FENKRA_DEMO_SKETCH`, manda eventos de ponteiro crus para o app, no caminho do mouse de verdade: `clique:x,y`, `shift:x,y`, `ctrl:x,y` e `arrasto:x0,y0,x1,y1`, separados por `;`, em coordenadas do plano do sketch. Começa 5 s depois de abrir; a seleção de cada passo sai na saída de erro |
+| `FENKRA_DEMO_PAINEL=<passos>` | manda eventos de ponteiro crus, em pontos da janela, para mexer nos painéis como o mouse mexeria (B358): `clique:x,y`, `arrasto:x0,y0,x1,y1` (aperta, move e solta) e `segura:x0,y0,x1,y1` (deixa o botão apertado, para capturar a sombra do encaixe ou um redimensionamento em andamento), separados por `;`. Começa 4 s depois de abrir |
 | `FENKRA_DEMO_ENCAIXE=1` | abre um tubo redondo oblíquo encaixado noutro (B155), com a janela de cantos e o cartão do encaixe abertos; `=folga` mostra também o rótulo flutuante da folga |
 | `FENKRA_DEMO_LIMITE=<x\|y\|z>:<mm>[:estender]` | com `FENKRA_DEMO_EST=1`, abre a janela de cantos com a seção de aparar/estender até limite (B37) e o plano escolhido |
 | `FENKRA_DEMO_GOMOS=1` | L de tubo redondo com corte simples em quatro gomos (B326); com `FENKRA_EDITAR=Membro` abre o painel do nó |
