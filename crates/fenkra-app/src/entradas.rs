@@ -165,6 +165,68 @@ pub fn corpo_clicado(k: &mut FeatureKind, alvo: Id, collector: Id) -> bool {
     }
 }
 
+/// Papel que o próximo clique num corpo vai dar (B300): o primeiro escolhe o alvo, o segundo a
+/// ferramenta. Comando sem corpo ferramenta (mover, dividir) só tem alvo.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum PapelCorpo {
+    Alvo,
+    Ferramenta,
+}
+
+/// O comando escolhe corpos clicando neles (booleanas, dividir corpo, mover corpo)?
+pub fn escolhe_corpos(k: &FeatureKind) -> bool {
+    matches!(k, FeatureKind::Combine(_) | FeatureKind::MoveBody(_) | FeatureKind::SplitBody(_))
+}
+
+/// Papel do clique seguinte a um clique que deu `dado`: Alvo e Ferramenta se alternam na booleana.
+pub fn depois_do_clique(k: &FeatureKind, dado: PapelCorpo) -> PapelCorpo {
+    match (k, dado) {
+        (FeatureKind::Combine(_), PapelCorpo::Alvo) => PapelCorpo::Ferramenta,
+        _ => PapelCorpo::Alvo,
+    }
+}
+
+/// Clique no corpo do coletor `coletor` com o papel `papel`. `alvo` é o coletor onde o resultado
+/// fica (o `target` do comando). Devolve o papel que o corpo recebeu, ou `None` se o clique não
+/// vale (a ferramenta não pode ser o próprio alvo). Escolher como alvo o corpo que já era a
+/// ferramenta troca os dois, para a booleana nunca ficar com um corpo só.
+pub fn clique_no_corpo(k: &mut FeatureKind, alvo: &mut Id, coletor: Id, papel: PapelCorpo) -> Option<PapelCorpo> {
+    match (k, papel) {
+        (FeatureKind::Combine(c), PapelCorpo::Ferramenta) => {
+            if coletor == *alvo {
+                return None;
+            }
+            c.tool = coletor;
+            Some(PapelCorpo::Ferramenta)
+        }
+        (FeatureKind::Combine(c), PapelCorpo::Alvo) => {
+            if c.tool == coletor {
+                c.tool = *alvo;
+            }
+            *alvo = coletor;
+            Some(PapelCorpo::Alvo)
+        }
+        (FeatureKind::MoveBody(_) | FeatureKind::SplitBody(_), _) => {
+            *alvo = coletor;
+            Some(PapelCorpo::Alvo)
+        }
+        _ => None,
+    }
+}
+
+fn chave_papel_corpo(id: Id) -> egui::Id {
+    egui::Id::new(("entradas_papel_corpo", id.0))
+}
+
+/// Papel do próximo clique num corpo do comando `id` (Alvo até alguém mudar).
+pub fn papel_do_clique(ctx: &egui::Context, id: Id) -> PapelCorpo {
+    ctx.data(|d| d.get_temp::<PapelCorpo>(chave_papel_corpo(id))).unwrap_or(PapelCorpo::Alvo)
+}
+
+pub fn definir_papel_do_clique(ctx: &egui::Context, id: Id, p: PapelCorpo) {
+    ctx.data_mut(|d| d.insert_temp(chave_papel_corpo(id), p));
+}
+
 /// A saída espera o plano neutro: depois das faces, o próximo clique numa face plana o escolhe.
 pub fn espera_plano_neutro(k: &FeatureKind) -> bool {
     matches!(k, FeatureKind::Draft(d) if !d.faces.is_empty() && matches!(d.neutral, PlaneRef::Datum(p) if crate::slots::is_unset(p)))
@@ -228,6 +290,23 @@ pub fn faixa(ui: &mut egui::Ui, id: Id, k: &FeatureKind) {
                     ui.label(RichText::new(crate::i18n::tr(t)).small());
                 }
             });
+        }
+        // B300: booleana, dividir e mover escolhem os corpos clicando neles (alvo primeiro, depois a ferramenta)
+        if escolhe_corpos(k) {
+            if matches!(k, FeatureKind::Combine(_)) {
+                let atual = papel_do_clique(ui.ctx(), id);
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(RichText::new(crate::i18n::tr("Próximo clique num corpo escolhe:")).small());
+                    for (p, t, c) in [(PapelCorpo::Alvo, "Alvo", crate::theme::papel_alvo()), (PapelCorpo::Ferramenta, "Ferramenta", crate::theme::papel_ferramenta())] {
+                        if ui.selectable_label(atual == p, RichText::new(crate::i18n::tr(t)).color(c)).clicked() {
+                            definir_papel_do_clique(ui.ctx(), id, p);
+                        }
+                    }
+                });
+                ui.label(RichText::new(crate::i18n::tr("Clique em dois corpos: o primeiro vira o alvo (onde o resultado fica), o segundo a ferramenta.")).weak().small());
+            } else {
+                ui.label(RichText::new(crate::i18n::tr("Clique num corpo para escolher o alvo do comando.")).weak().small());
+            }
         }
         // a saída pede faces e depois o plano neutro: o botão muda o destino do clique
         if espera_plano_neutro(k) {
@@ -305,6 +384,19 @@ pub fn destacar(doc: &Document, r: &RecomputeResult, f: &Fantasma, s: &mut Scene
                 }
             }
         }
+        FeatureKind::Combine(_) | FeatureKind::MoveBody(_) | FeatureKind::SplitBody(_) => {
+            // o corpo alvo de antes, na cor do papel: a pessoa vê qual corpo o comando vai alterar
+            let cor = crate::previa::cor_de_papel_alvo();
+            let m = f.antes.iter().find(|b| b.collector == feat.target).map(|b| &b.mesh);
+            if let Some(m) = m {
+                for fi in 0..m.face_ranges.len() {
+                    crate::previa::face_fantasma(&mut s.ghost, m, fi, cor);
+                }
+            }
+        }
+        _ => {}
+    }
+    match &feat.kind {
         FeatureKind::Combine(c) => {
             // o corpo ferramenta de antes: depois da operação ele some do resultado
             let m = f.antes.iter().find(|b| b.collector == c.tool).map(|b| &b.mesh).or_else(|| r.bodies.iter().find(|b| b.collector == c.tool).map(|b| &b.mesh));
@@ -413,6 +505,129 @@ mod tests {
         assert!(corpo_clicado(&mut k, Id(1), Id(7)));
         assert!(matches!(&k, FeatureKind::Combine(c) if c.tool == Id(7)));
         assert_eq!(campo_ativo(&k), None);
+    }
+
+    /// Dois coletores: a caixa 40x40x20 (z de 0 a 20) e uma ferramenta 20x20x40 no meio, que a atravessa.
+    fn dois_corpos() -> (Document, Id, Id) {
+        let mut d = caixa();
+        let a = d.active_collector;
+        let b = d.add_collector("Ferramenta");
+        d.active_collector = b;
+        let mut data = SketchData::default();
+        let mut n = 7_100_000u64;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        data.add_rect(&mut al, [-10., -10.], [10., 10.], false);
+        let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
+        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("40")), reverse: false, taper: s("0"), thin: None, thin_side: 0, dir: None, ends: Default::default() }));
+        d.active_collector = a;
+        (d, a, b)
+    }
+
+    fn volume_e_caixa(d: &Document) -> (f64, [f64; 3], [f64; 3], usize) {
+        let r = recompute(d);
+        let v = r.bodies.iter().map(|b| b.mass.volume).sum();
+        let (lo, hi) = fenkra_solidos::final_shape(d).and_then(|s| s.bbox()).unwrap_or(([0.; 3], [0.; 3]));
+        (v, lo, hi, r.bodies.len())
+    }
+
+    /// B300: sem abrir o combo, dois cliques (alvo e depois ferramenta) fazem a booleana esperada.
+    #[test]
+    fn dois_cliques_escolhem_alvo_e_ferramenta_e_subtraem() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let (mut d, a, b) = dois_corpos();
+        // o comando nasce com os papéis trocados (alvo = ferramenta pequena): o resultado errado
+        d.active_collector = b;
+        let id = d.add_feature(FeatureKind::Combine(Combine { tool: a, op: BoolOp::Cut, keep_tool: false }));
+        let (v_errado, _, _, _) = volume_e_caixa(&d);
+        assert!((v_errado - 20. * 20. * 20.).abs() < 1., "só sobra a ponta da ferramenta alta: {v_errado}");
+        // o primeiro clique no corpo grande o faz alvo (e a ferramenta antiga, que era ele, vira o outro)
+        let f = d.feature_mut(id).unwrap();
+        let mut alvo = f.target;
+        let dado = clique_no_corpo(&mut f.kind, &mut alvo, a, PapelCorpo::Alvo).expect("o clique vale");
+        assert_eq!(dado, PapelCorpo::Alvo);
+        f.target = alvo;
+        let prox = depois_do_clique(&f.kind, dado);
+        assert_eq!(prox, PapelCorpo::Ferramenta, "depois do alvo vem a ferramenta");
+        // o segundo clique, no corpo pequeno, é a ferramenta
+        let mut alvo = f.target;
+        assert_eq!(clique_no_corpo(&mut f.kind, &mut alvo, b, prox), Some(PapelCorpo::Ferramenta));
+        assert_eq!(depois_do_clique(&f.kind, PapelCorpo::Ferramenta), PapelCorpo::Alvo, "alterna");
+        assert_eq!((f.target, matches!(&f.kind, FeatureKind::Combine(c) if c.tool == b)), (a, true));
+        let (v, lo, hi, n) = volume_e_caixa(&d);
+        assert!((v - (32000. - 20. * 20. * 20.)).abs() < 1., "volume {v}");
+        assert!((lo[0] + 20.).abs() < 1e-3 && (hi[0] - 20.).abs() < 1e-3 && lo[2].abs() < 1e-3 && (hi[2] - 20.).abs() < 1e-3, "{lo:?} {hi:?}");
+        assert_eq!(n, 1, "a ferramenta some do resultado");
+    }
+
+    #[test]
+    fn unir_interseccao_e_manter_ferramenta_pelos_mesmos_dois_cliques() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        for (op, esperado) in [(BoolOp::Add, 32000. + 20. * 20. * 20.), (BoolOp::Intersect, 20. * 20. * 20.)] {
+            let (mut d, a, b) = dois_corpos();
+            let id = d.add_feature(FeatureKind::Combine(Combine { tool: a, op, keep_tool: false }));
+            let f = d.feature_mut(id).unwrap();
+            let mut alvo = f.target;
+            clique_no_corpo(&mut f.kind, &mut alvo, a, PapelCorpo::Alvo).unwrap();
+            f.target = alvo;
+            clique_no_corpo(&mut f.kind, &mut alvo, b, PapelCorpo::Ferramenta).unwrap();
+            let (v, lo, hi, _) = volume_e_caixa(&d);
+            assert!((v - esperado).abs() < 1., "{op:?}: volume {v} contra {esperado}");
+            if op == BoolOp::Add {
+                assert!((hi[2] - 40.).abs() < 1e-3 && lo[2].abs() < 1e-3, "{lo:?} {hi:?}");
+            } else {
+                assert!((hi[0] - 10.).abs() < 1e-3 && (lo[0] + 10.).abs() < 1e-3 && (hi[2] - 20.).abs() < 1e-3, "{lo:?} {hi:?}");
+            }
+        }
+        // manter a ferramenta: o corpo pequeno continua no documento
+        let (mut d, a, b) = dois_corpos();
+        let id = d.add_feature(FeatureKind::Combine(Combine { tool: b, op: BoolOp::Cut, keep_tool: true }));
+        assert_eq!(d.feature(id).unwrap().target, a);
+        let (v, _, _, n) = volume_e_caixa(&d);
+        assert_eq!(n, 2, "alvo e ferramenta continuam");
+        assert!((v - (24000. + 16000.)).abs() < 1., "volume {v}");
+    }
+
+    #[test]
+    fn a_ferramenta_nao_pode_ser_o_alvo_e_mover_e_dividir_so_tem_alvo() {
+        let mut k = FeatureKind::Combine(Combine { tool: Id(5), op: BoolOp::Cut, keep_tool: false });
+        let mut alvo = Id(1);
+        assert_eq!(clique_no_corpo(&mut k, &mut alvo, Id(1), PapelCorpo::Ferramenta), None, "o alvo não é a ferramenta");
+        let mut mv = FeatureKind::MoveBody(MoveBody { xf: BodyXf::Translate { dir: AxisRef::Origin(OriginAxis::X), dist: s("5") } });
+        let mut alvo = Id(1);
+        assert_eq!(clique_no_corpo(&mut mv, &mut alvo, Id(9), PapelCorpo::Ferramenta), Some(PapelCorpo::Alvo));
+        assert_eq!(alvo, Id(9));
+        assert_eq!(depois_do_clique(&mv, PapelCorpo::Alvo), PapelCorpo::Alvo);
+        assert!(escolhe_corpos(&mv) && escolhe_corpos(&k) && !escolhe_corpos(&casca()));
+    }
+
+    /// O corpo alvo aparece inteiro na cor do papel enquanto o comando está aberto.
+    #[test]
+    fn corpo_alvo_aparece_na_cor_do_papel_alvo() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let (mut d, a, b) = dois_corpos();
+        let antes = recompute(&d);
+        let base = crate::previa::corpos_base(Some(&antes));
+        let id = d.add_feature(FeatureKind::Combine(Combine { tool: b, op: BoolOp::Cut, keep_tool: false }));
+        assert_eq!(d.feature(id).unwrap().target, a);
+        let r = recompute(&d);
+        let mut cena = Scene::default();
+        destacar(&d, &r, &fantasma(id, &base), &mut cena);
+        let alvo = crate::previa::cor_de_papel_alvo();
+        assert!(tem(&cena, alvo), "falta o alvo na cor do papel");
+        assert!(tem(&cena, [130, 140, 150]), "falta a ferramenta na cor do papel");
+        assert_ne!(alvo, [130, 140, 150]);
+        let n_alvo = cena.ghost.iter().filter(|v| (0..3).all(|i| (v.col[i] - alvo[i] as f32 / 255.).abs() < 1e-6)).count();
+        let corpo_a = antes.bodies.iter().find(|x| x.collector == a).unwrap();
+        assert_eq!(n_alvo, corpo_a.mesh.indices.len(), "todas as faces do corpo alvo");
     }
 
     fn sk_quadrado(d: &mut Document) -> Id {

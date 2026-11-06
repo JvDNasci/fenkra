@@ -6944,7 +6944,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 // casca/saída/espessura/rosca abertos: clicar numa face a acrescenta ao comando
                 let face_cmd = self.session.as_ref().map(|x| x.id).filter(|id| self.open.doc.feature(*id).is_some_and(|f| crate::feat_ui::wants_faces(&f.kind) && !crate::entradas::clique_vai_para_plano(&ctx, *id, &f.kind)));
                 // booleana aberta: clicar num corpo o faz de ferramenta (B247)
-                let combine_cmd = self.session.as_ref().map(|x| x.id).filter(|id| matches!(self.open.doc.feature(*id).map(|f| &f.kind), Some(FeatureKind::Combine(_))));
+                let combine_cmd = self.session.as_ref().map(|x| x.id).filter(|id| self.open.doc.feature(*id).is_some_and(|f| crate::entradas::escolhe_corpos(&f.kind)));
                 // corte por região aberto: clicar num pedaço troca entre ficar e sair (B277)
                 let regiao = self.session.as_ref().map(|x| x.id).zip(resp.hover_pos()).and_then(|(id, h)| crate::sup3d::regiao_sob(r, id, &cam, rect, h).map(|i| (id, i)));
                 if regiao.is_some() {
@@ -6963,8 +6963,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 } else if let (Some(cid), true, Some(crate::picking::Pick::Face { body, .. })) = (combine_cmd, resp.clicked_by(egui::PointerButton::Primary), self.hover_pick) {
                     let coletor = r.bodies.get(body).map(|b| b.collector);
                     if let (Some(col), Some(f)) = (coletor, self.open.doc.feature_mut(cid)) {
-                        let alvo = f.target;
-                        crate::entradas::corpo_clicado(&mut f.kind, alvo, col);
+                        // B300: o primeiro clique escolhe o alvo, o segundo a ferramenta
+                        let papel = crate::entradas::papel_do_clique(&ctx, cid);
+                        let mut alvo = f.target;
+                        if let Some(dado) = crate::entradas::clique_no_corpo(&mut f.kind, &mut alvo, col, papel) {
+                            f.target = alvo;
+                            let prox = crate::entradas::depois_do_clique(&f.kind, dado);
+                            crate::entradas::definir_papel_do_clique(&ctx, cid, prox);
+                        }
                     }
                 } else if let (Some(Some(sid)), true, Some(crate::picking::Pick::Edge { mid, .. })) = (
                     self.session.as_ref().map(|x| x.id).map(|id| self.open.doc.feature(id).filter(|f| matches!(f.kind, FeatureKind::SmFlange(_) | FeatureKind::SmHem(_))).map(|f| f.id)),

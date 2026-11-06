@@ -44,6 +44,12 @@ pub struct Fantasma<'a> {
     pub antes: &'a [CorpoBase],
 }
 
+/// Cor do corpo alvo no tema atual (B300).
+pub fn cor_de_papel_alvo() -> [u8; 3] {
+    let c = crate::theme::papel_alvo();
+    [c.r(), c.g(), c.b()]
+}
+
 /// O comando tira material do corpo? Então o que ele cria é a parede da cavidade, na cor de retirada.
 pub fn retira(k: &FeatureKind) -> bool {
     use fenkra_core::BoolOp::Cut;
